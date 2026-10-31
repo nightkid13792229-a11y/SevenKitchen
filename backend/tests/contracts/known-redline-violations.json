@@ -17,18 +17,19 @@
   ],
   "gd01_status_writes": {
     "title": "后端直接写定制单状态（应只经状态机）",
-    "why": "状态流转表现已收敛到 domain/custom-recipe/custom-recipe.state.ts（批次 1.2），但仍有若干路径直接 update。交付服务现有 4 处（2026-10-21 多份首次交付 + 按份重新交付各新增 1 处），**都走状态机**，属于本守卫正则的已知误报范围。",
-    "clearAt": "不计划清零 —— 见 why。2026-10-16 批次 5.7 从 17 降到 16（删掉死方法 `deliverExistingRecipe` 时带走 1 处）。2026-10-21 多份交付新增 2 处（`deliverBatch`、`redeliverBatchItems`，先过 `assertBatchDeliverable` / `assertBatchRedeliverable` 与 `assertTransition`）后为 18",
+    "why": "状态流转表现已收敛到 domain/custom-recipe/custom-recipe.state.ts（批次 1.2），但仍有若干路径直接 update。交付服务现有 4 处（2026-10-21 多份首次交付 + 按份重新交付各新增 1 处），**都走状态机**，属于本守卫正则的已知误报范围。2026-10-31 微信虚拟发货上传新增 1 处：只写 `wechatShippingUploadedAt` 幂等时间戳，不写 status，属于同一类正则误报。",
+    "clearAt": "不计划清零 —— 见 why。2026-10-16 批次 5.7 从 17 降到 16（删掉死方法 `deliverExistingRecipe` 时带走 1 处）。2026-10-21 多份交付新增 2 处（`deliverBatch`、`redeliverBatchItems`，先过 `assertBatchDeliverable` / `assertBatchRedeliverable` 与 `assertTransition`）后为 18；2026-10-31 微信虚拟发货上传 +1、同期旧违规 -1，仍为 18",
     "maxTotal": 18,
     "files": {
-      "backend/src/application/custom-recipe/custom-recipe.service.ts": 9,
+      "backend/src/application/custom-recipe/custom-recipe.service.ts": 8,
       "backend/src/application/payment/wechat-payment.service.ts": 3,
       "backend/src/interfaces/controllers/admin.controller.ts": 1,
       "backend/src/interfaces/controllers/auth.controller.ts": 1,
-      "backend/src/application/custom-recipe/custom-recipe-delivery.service.ts": 4
+      "backend/src/application/custom-recipe/custom-recipe-delivery.service.ts": 4,
+      "backend/src/application/shipping/wechat-shipping-upload.service.ts": 1
     },
     "notes": {
-      "_review": "2026-10-16 批次 5.7 **逐处复核过**，结论：剩下的都是合法写法，不是漏网之鱼。\n  · 交付服务那 4 处：**都先调了 `assertTransition`**（老 `deliver()` / `confirmReceipt()` / `deliverBatch()` / 新 `redeliverBatchItems()`），只是写的时候用 `timestampFieldFor` 取时间戳字段，所以正则仍然命中。\n  · `custom-recipe.service.ts` 的 9 处里有 2 处是**条件更新**（`where: { id, status: PENDING_PAYMENT }`）—— 那是防\"支付回调与关单互相覆盖\"的正确写法（2026-10-04 修过\"钱收了单被关\"），不能改成状态机。\n  · 其余为支付回调、级联更新等按 id 写入的路径。\n复核方法：把清单里的每一处逐个数出来看前文有没有 `assertTransition` 或条件 where。\n\n2026-10-21 多份交付复核：`deliverBatch` 写入订单状态前先过 `assertBatchDeliverable` —— 它显式拒绝 DELIVERED / COMPLETED（首次交付口径），其余状态交给 `assertTransition` 判定。按份重新交付的 `redeliverBatchItems` 反过来：`assertBatchRedeliverable` 只放过 DELIVERED / COMPLETED，其余状态先过 `assertTransition`、再显式拒绝 PAID / IN_PROGRESS（没有批次可派生）。两处都属于与老 `deliver()` 同一类的合法写法，因此交付服务基线 3 → 4、清单 17 → 18。"
+      "_review": "2026-10-16 批次 5.7 **逐处复核过**，结论：剩下的都是合法写法，不是漏网之鱼。\n  · 交付服务那 4 处：**都先调了 `assertTransition`**（老 `deliver()` / `confirmReceipt()` / `deliverBatch()` / 新 `redeliverBatchItems()`），只是写的时候用 `timestampFieldFor` 取时间戳字段，所以正则仍然命中。\n  · `custom-recipe.service.ts` 的 8 处里有 2 处是**条件更新**（`where: { id, status: PENDING_PAYMENT }`）—— 那是防\"支付回调与关单互相覆盖\"的正确写法（2026-10-04 修过\"钱收了单被关\"），不能改成状态机。\n  · 其余为支付回调、级联更新等按 id 写入的路径。\n复核方法：把清单里的每一处逐个数出来看前文有没有 `assertTransition` 或条件 where。\n\n2026-10-21 多份交付复核：`deliverBatch` 写入订单状态前先过 `assertBatchDeliverable` —— 它显式拒绝 DELIVERED / COMPLETED（首次交付口径），其余状态交给 `assertTransition` 判定。按份重新交付的 `redeliverBatchItems` 反过来：`assertBatchRedeliverable` 只放过 DELIVERED / COMPLETED，其余状态先过 `assertTransition`、再显式拒绝 PAID / IN_PROGRESS（没有批次可派生）。两处都属于与老 `deliver()` 同一类的合法写法，因此交付服务基线 3 → 4、清单 17 → 18。\n\n2026-10-31 复核：`wechat-shipping-upload.service.ts` 的唯一命中是 `uploadVirtualForCustomRecipeOrder()` 写 `wechatShippingUploadedAt` 幂等标记，不涉及订单状态。"
     }
   },
   "gd02_status_maps": {

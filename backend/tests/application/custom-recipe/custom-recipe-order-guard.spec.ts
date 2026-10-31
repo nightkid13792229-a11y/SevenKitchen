@@ -113,6 +113,10 @@ describe('CustomRecipeService · 自动排期与名额抢占', () => {
 
     service = module.get(CustomRecipeService);
     jest.clearAllMocks();
+    // 自动排期会跳过周末；测试必须钉死在一个工作日（2026-10-28 周三），
+    // 否则周六/周日跑这一组会红（2026-10-31 本次修复）。
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-10-28T04:00:00.000Z'));
     dateHelpers.isPublicHoliday.mockResolvedValue(false);
 
     mockPrismaService.$transaction.mockImplementation(async (cb: any) =>
@@ -145,6 +149,10 @@ describe('CustomRecipeService · 自动排期与名额抢占', () => {
       orderId: 'CR202610040001',
       ...data,
     }));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   const submit = (overrides: Record<string, unknown> = {}) =>

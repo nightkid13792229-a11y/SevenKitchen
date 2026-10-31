@@ -36,14 +36,17 @@ function caseRow(overrides: any = {}) {
 }
 
 function orderRow(overrides: any = {}) {
+  // 售后窗口按 packedAt / shippedAt 倒推天数，夹具不能用固定历史日期，
+  // 否则测试会在窗口过期后自然变红（2026-10-31 本次修复）。
+  const recent = new Date(Date.now() - 60 * 60 * 1000);
   return {
     id: 'o1',
     orderNo: 'SP20261019-001',
     userId: 'u1',
     status: 'SHIPPED',
     amountTotal: 100,
-    shippedAt: new Date('2026-10-19T00:00:00Z'),
-    items: [{ packedAt: new Date('2026-10-19T00:00:00Z') }],
+    shippedAt: recent,
+    items: [{ packedAt: recent }],
     ...overrides,
   };
 }

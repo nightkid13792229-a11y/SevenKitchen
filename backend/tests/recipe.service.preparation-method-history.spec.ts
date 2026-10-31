@@ -21,7 +21,7 @@ describe('RecipeService preparation method behavior', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     history.getHistory.mockResolvedValue([]);
-    service = new RecipeService(prisma, undefined, history as any);
+    service = new RecipeService(prisma, undefined, undefined, history as any);
   });
 
   it('translates legacy preparation methods in admin recipe detail', async () => {

@@ -263,43 +263,67 @@ export class LabelV10Service {
 
     // 烹饪
     h += mm(1.7) + mm(this.F.section * 1.2) + mm(1.0);
-    h += specs.length * (lh(this.F.cook) + mm(0.6));
+    const cookingLayouts = specs.map((spec) =>
+      this.layoutCookingRow(ctx, spec, contentW),
+    );
+    // 一行放不下就换行（100g 以上的规格：10–12 分钟 + 低温慢煮 45 分钟会超宽），
+    // 不能像以前那样直接判"放不下"——那会让整张标签打不出来。
+    if (cookingLayouts.some((layout) => !layout.fits)) {
+      return { height: Number.POSITIVE_INFINITY };
+    }
+    h +=
+      cookingLayouts.reduce((sum, layout) => sum + layout.lines.length, 0) *
+        lh(this.F.cook) +
+      specs.length * mm(0.6);
     h += mm(0.4) + lh(this.F.ban);
     h += mm(1.2) + lh(this.F.warn);
 
-    // 烹饪行是单行横排，超宽会被裁掉；这里换算成高度惩罚，让字号自动降档
-    const widest = this.cookingRowWidth(ctx, specs);
-    const overWidth = widest > contentW;
-
-    return { height: overWidth ? Number.POSITIVE_INFINITY : h };
+    return { height: h };
   }
 
-  private cookingRowWidth(
+  /**
+   * 烹饪行排版：`100克/袋  蒸 10–12 分钟  炖 10–12 分钟  低温慢煮 45 分钟`
+   * 放不下时按整段换行（续行顶格），而不是缩小到看不清或直接报错。
+   */
+  private layoutCookingRow(
     ctx: CanvasRenderingContext2D,
-    specs: Spec[],
-  ): number {
-    const methodNames = ['蒸', '炖', '低温慢煮'];
-    const methods: Array<'steam' | 'stew' | 'sousvide'> = [
-      'steam',
-      'stew',
-      'sousvide',
+    spec: Spec,
+    contentW: number,
+  ): { lines: string[][]; fits: boolean } {
+    const times = this.cookingTimesFor(spec.packageSpecG);
+    const label = `${spec.packageSpecG}克/袋`;
+    const methods = [
+      `蒸 ${times.steam}`,
+      `炖 ${times.stew}`,
+      `低温慢煮 ${times.sousvide}`,
     ];
-    let widest = 0;
-    for (const spec of specs) {
-      const times = this.cookingTimesFor(spec.packageSpecG);
-      ctx.font = `bold ${mm(this.F.cook)}px "Chinese-Bold"`;
-      let width = ctx.measureText(`${spec.packageSpecG}克/袋`).width;
-      ctx.font = `${mm(this.F.cook)}px "Chinese"`;
-      width += mm(12) - mm(4);
-      methods.forEach((key, index) => {
-        width += ctx.measureText(`${methodNames[index]} ${times[key]}`).width;
-        if (index < methods.length - 1) {
-          width += mm(2);
-        }
-      });
-      widest = Math.max(widest, width);
+    const gap = mm(2);
+    const labelColW = mm(12);
+
+    ctx.font = `bold ${mm(this.F.cook)}px "Chinese-Bold"`;
+    const labelWidth = ctx.measureText(label).width;
+    const firstLineStart = Math.max(labelColW, labelWidth + gap);
+
+    const lines: string[][] = [[label]];
+    let cursor = firstLineStart;
+    let fits = true;
+
+    ctx.font = `${mm(this.F.cook)}px "Chinese"`;
+    for (const text of methods) {
+      const width = ctx.measureText(text).width;
+      if (width > contentW) {
+        fits = false;
+      }
+      if (cursor > 0 && cursor + width > contentW) {
+        lines.push([text]);
+        cursor = width + gap;
+      } else {
+        lines[lines.length - 1].push(text);
+        cursor += width + gap;
+      }
     }
-    return widest;
+
+    return { lines, fits };
   }
 
   private ingredientHeight(
@@ -513,23 +537,28 @@ export class LabelV10Service {
       lineHeight,
     );
     const labelColW = mm(12);
-    const methods: Array<'steam' | 'stew' | 'sousvide'> = ['steam', 'stew', 'sousvide'];
-    const methodNames = ['蒸', '炖', '低温慢煮'];
+    const methodsGap = mm(2);
 
     specs.forEach((spec) => {
-      const times = this.cookingTimesFor(spec.packageSpecG);
-      ctx.font = `bold ${mm(this.F.cook)}px "Chinese-Bold"`;
-      ctx.fillStyle = '#111111';
-      ctx.fillText(`${spec.packageSpecG}克/袋`, left, y);
-
-      ctx.font = `${mm(this.F.cook)}px "Chinese"`;
-      let x = left + labelColW;
-      methods.forEach((key, index) => {
-        const text = `${methodNames[index]} ${times[key]}`;
-        ctx.fillText(text, x, y);
-        x += ctx.measureText(text).width + mm(2);
+      const layout = this.layoutCookingRow(ctx, spec, contentW);
+      layout.lines.forEach((line, lineIndex) => {
+        let x = left;
+        let pieces = line;
+        if (lineIndex === 0) {
+          ctx.font = `bold ${mm(this.F.cook)}px "Chinese-Bold"`;
+          ctx.fillStyle = '#111111';
+          ctx.fillText(line[0], left, y);
+          x = left + Math.max(labelColW, ctx.measureText(line[0]).width + methodsGap);
+          pieces = line.slice(1);
+        }
+        ctx.font = `${mm(this.F.cook)}px "Chinese"`;
+        for (const text of pieces) {
+          ctx.fillText(text, x, y);
+          x += ctx.measureText(text).width + methodsGap;
+        }
+        y += lh(this.F.cook);
       });
-      y += lh(this.F.cook) + mm(0.6);
+      y += mm(0.6);
     });
 
     y += mm(0.4);

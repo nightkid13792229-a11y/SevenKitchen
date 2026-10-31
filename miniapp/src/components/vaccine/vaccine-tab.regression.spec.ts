@@ -969,3 +969,26 @@ describe('疫苗 · 视觉 token 一处分定义（硬约束 4）', () => {
     }
   })
 })
+
+describe('疫苗 · 2026-10-31 验收修复', () => {
+  it('抗体保存先提示再重拉（与记录保存同序）', () => {
+    const tab = read('VaccineTab.vue')
+    const start = tab.indexOf('async function onSaveTest')
+    const end = tab.indexOf('async function onRemoveFromEditor', start)
+    const block = tab.slice(start, end)
+    const toast = block.indexOf("uni.showToast({ title: '已保存'")
+    const refresh = block.indexOf('await refreshAfterWrite()')
+    expect(toast).toBeGreaterThan(-1)
+    expect(refresh).toBeGreaterThan(toast)
+  })
+
+  it('开关失败页保留书签 + 页内重试', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+    expect(page).toContain('疫苗板块暂时没打开')
+    expect(page).toContain('retryVaccineFeature')
+    expect(page).toContain('vaccineFeature.failed')
+  })
+})

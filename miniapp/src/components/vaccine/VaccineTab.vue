@@ -571,13 +571,18 @@ async function onSaveTest(payload: AntibodyTestPayload, testId: string) {
     if (testId) await vaccineApi.antibodyTests.update(props.dogId, testId, payload)
     else await vaccineApi.antibodyTests.create(props.dogId, payload)
     closeEditor()
+    /*
+     * 2026-10-31（验收）：原来先 await refreshAfterWrite()、后 toast，
+     * 实测抗体保存后页面停在旧计划（数据已写入，重进才新）。
+     * 与 onSaveRecord 对齐：先给“已保存”，再重拉整屏。
+     */
+    uni.showToast({ title: '已保存', icon: 'success' })
     await refreshAfterWrite()
     // 这份报告还有页没录 → 直接接上下一条（别让家长自己想起来）
     if (!testId && openNextAntibodyInQueue()) {
       uni.showToast({ title: '已保存，接着录下一页', icon: 'none' })
       return
     }
-    uni.showToast({ title: '已保存', icon: 'success' })
   } catch (error: any) {
     uni.showToast({ title: error?.message || '没保存成功，再试一次', icon: 'none' })
   } finally {

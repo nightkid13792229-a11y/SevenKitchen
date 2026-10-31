@@ -78,15 +78,15 @@ payload.searchReport: Array<{
 
 ```
 分子 = 营养字段目录中「有数值且 ≠ 0」的字段数
-分母 = 营养字段目录字段总数
+分母 = 营养字段目录字段总数（当前 60）
 覆盖率 = round(分子 / 分母 × 1000) / 10   // 一位小数
 ```
 
 使用点：`getRecord`、方案候选表补数。完全没值的记录覆盖率为 0。
 
 **口径只此一套，不碰导入审计**：`auditNutritionProfileForImport` 里的
-`essentialCoveragePercent`（FEDIAF 必需营养素 49 项、0 算已填）继续给导入管线与 selfCheck 用，
-语义不同、不要合并。为免混淆，候选表列头写「字段覆盖率（64 项）」，
+`essentialCoveragePercent`（FEDIAF 必需营养素 46 项、0 算已填）继续给导入管线与 selfCheck 用，
+语义不同、不要合并。为免混淆，候选表列头写「字段覆盖率（60 项）」，
 selfCheck 仍叫「必需营养素覆盖率」。
 
 ### 4.4 方案数据结构 v2
@@ -105,7 +105,7 @@ interface SearchPlanCandidate {
   sourceType: string;
   state: string;      // 展示用：生 / 熟 / 干 / 未标生熟 …
   profileState: 'RAW' | 'COOKED' | null; // 写入档案用的状态；模型必须给
-  coverage: number;   // 系统计算（64 项目录，0 不计入）
+  coverage: number;   // 系统计算（60 项目录，0 不计入）
   reason: string;     // 一句话入选原因
 }
 
@@ -155,7 +155,7 @@ interface SearchPlan {
 |---|---|---|---|---|---|
 
 - 行来自 `plan.candidates`，默认全不勾（人自己选）；
-- 覆盖率显示为百分比，列头写「字段覆盖率（64 项）」；
+- 覆盖率显示为百分比，列头写「字段覆盖率（60 项）」；
 - **同一来源库 + 同一状态只能勾一条**：勾了之后，其余同库同状态的行置灰，
   提示“同一来源库、同一状态只能选一条”（避免正式档案名与唯一键冲突）；
 - 确认按钮在“至少勾一条”时可用；勾 0 条时提示“没有可写档案”。

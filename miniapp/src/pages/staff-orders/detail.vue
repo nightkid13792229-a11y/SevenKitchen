@@ -1022,17 +1022,33 @@ const settlementAdjustments = computed(
 const settlementSuggestedRefundAmount = computed(() =>
   Math.abs(toNumber(financialSummary.value?.shortageAdjustmentAmount)),
 )
-const settlementPendingText = computed(() => {
-  const summary = financialSummary.value?.adjustmentSummary
-  if (!summary) return ''
-  if (toNumber(summary.pendingRefundAmount) > 0) {
-    return `待退 ¥${formatAmount(summary.pendingRefundAmount)}`
-  }
-  if (toNumber(summary.pendingExtraPaymentAmount) > 0) {
-    return `待补 ¥${formatAmount(summary.pendingExtraPaymentAmount)}`
-  }
+function sumPendingAdjustments(onlyVisible: boolean): { refund: number; extra: number } {
+  return settlementAdjustments.value
+    .filter(
+      (adjustment) =>
+        adjustment.status === 'PENDING' &&
+        (!onlyVisible || adjustment.visibleToCustomer),
+    )
+    .reduce(
+      (total, adjustment) => {
+        const amount = toNumber(adjustment.amount)
+        if (amount < 0) total.refund += Math.abs(amount)
+        if (amount > 0) total.extra += amount
+        return total
+      },
+      { refund: 0, extra: 0 },
+    )
+}
+
+function pendingAdjustmentText(onlyVisible: boolean): string {
+  const pending = sumPendingAdjustments(onlyVisible)
+  if (pending.refund > 0) return `待退 ¥${formatAmount(pending.refund)}`
+  if (pending.extra > 0) return `待补 ¥${formatAmount(pending.extra)}`
   return ''
-})
+}
+
+/** 顾客端真正会看到的待处理金额（仅顾客可见的记录） */
+const settlementPendingText = computed(() => pendingAdjustmentText(true))
 const settlementHint = computed(() => {
   if (!financialSummary.value) return ''
   if (settlementPendingText.value) {
@@ -1041,6 +1057,10 @@ const settlementHint = computed(() => {
         ? `缺口 ${settlementShortageG.value}g`
         : `余量 ${settlementSurplusG.value}g`
     return `顾客端显示：${settlementPendingText.value}（${delta}）`
+  }
+  const internalPending = pendingAdjustmentText(false)
+  if (internalPending) {
+    return `内部记录：${internalPending}（顾客不可见）`
   }
   if (settlementShortageG.value > 0) {
     return `缺口 ${settlementShortageG.value}g，建议退 ¥${formatAmount(

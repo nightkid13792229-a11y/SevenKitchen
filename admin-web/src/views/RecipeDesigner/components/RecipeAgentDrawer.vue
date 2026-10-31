@@ -44,6 +44,10 @@
         </div>
       </div>
 
+      <div v-if="session?.lastError" class="agent-error">
+        {{ session.lastError }}
+      </div>
+
       <div class="agent-compose">
         <el-input
           v-model="input"
@@ -239,6 +243,14 @@ watch(
   margin: 4px 0 0;
   white-space: pre-wrap;
   word-break: break-all;
+}
+.agent-error {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
 }
 .agent-compose {
   border-top: 1px solid var(--el-border-color-lighter);

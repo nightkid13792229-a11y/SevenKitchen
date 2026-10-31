@@ -13,6 +13,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  type OnModuleInit,
 } from '@nestjs/common';
 
 import { PrismaService } from '../../../infrastructure/prisma.service';
@@ -43,7 +44,7 @@ const MAX_RUN_MS = 6 * 60 * 1000;
 const HISTORY_MESSAGES = 30;
 
 @Injectable()
-export class RecipeAgentService {
+export class RecipeAgentService implements OnModuleInit {
   /** 一个草稿同一时间只允许一次运行。 */
   private readonly active = new Set<string>();
   private readonly stopped = new Set<string>();
@@ -54,6 +55,24 @@ export class RecipeAgentService {
     private readonly designer: RecipeDesignerService,
     private readonly knowledgeBase: KnowledgeBaseService,
   ) {}
+
+  /**
+   * 进程启动时把上次留在 RUNNING 的会话标成 INTERRUPTED。
+   *
+   * 为什么必须有：部署会重启进程，正在跑的那次运行就断了，但库里还是
+   * RUNNING —— 抽屉看到 RUNNING 就一直禁用输入框、只轮询不给你打字，
+   * 表现就是"对话框点不了"（2026-11-01 实测）。
+   */
+  async onModuleInit(): Promise<void> {
+    await this.prisma.recipeDesignAgentSession.updateMany({
+      where: { status: 'RUNNING' },
+      data: {
+        status: 'INTERRUPTED',
+        endedAt: new Date(),
+        lastError: '服务重启，本次运行中断',
+      },
+    });
+  }
 
   private accessFor(actor: RecipeAgentActor) {
     return {
@@ -90,9 +109,8 @@ export class RecipeAgentService {
       });
       let sessionId: string;
       if (existing) {
-        if (existing.status === 'RUNNING') {
-          throw new ConflictException('会话正在运行');
-        }
+        // 不因为库里写着 RUNNING 就拒绝：真正的并发由前面的 active 锁保证。
+        // 库里残留的 RUNNING 是上次进程被重启留下的，必须能接着用。
         await this.prisma.recipeDesignAgentSession.update({
           where: { id: existing.id },
           data: { status: 'RUNNING', lastError: null, endedAt: null },

@@ -48,23 +48,9 @@ export const AGENT_PURPOSES: AgentPurposeMeta[] = [
   },
   {
     purpose: 'RECIPE_DESIGN',
-    label: 'AI 食谱设计（共享兜底）',
-    description:
-      '两条流程都没单独配置时使用的兜底模型。正常情况下不该用它 —— ' +
-      '产品线与定制订单各有自己的配置',
-    defaultModel: 'deepseek-v4-pro',
-  },
-  {
-    purpose: 'RECIPE_DESIGN_CATALOG',
-    label: 'AI 食谱设计 · 产品线',
-    description: '橱窗食谱的设计对话：不绑订单、不绑顾客狗狗，按目录与生命阶段设计',
-    defaultModel: 'deepseek-v4-pro',
-  },
-  {
-    purpose: 'RECIPE_DESIGN_ORDER',
-    label: 'AI 食谱设计 · 定制订单',
-    description: '定制订单的设计对话：绑订单与狗狗档案，按过敏与备注设计',
-    defaultModel: 'deepseek-v4-pro',
+    label: 'AI 食谱设计',
+    description: '产品线与定制订单各一套配置（点开左侧箭头分别设置）',
+    defaultModel: 'deepseek-flash',
   },
   {
     purpose: 'INGREDIENT_INTAKE',

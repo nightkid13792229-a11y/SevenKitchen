@@ -14,7 +14,7 @@
         </div>
       </template>
 
-      <el-table :data="purposeRows" size="default" :loading="loading" row-key="purpose">
+      <el-table :data="purposeRows" size="default" :loading="loading" row-key="purpose" default-expand-all>
         <el-table-column label="用途" min-width="200">
           <template #default="{ row }">
             <div class="purpose-name">{{ row.label }}</div>
@@ -25,23 +25,26 @@
         <el-table-column label="配置状态" width="180">
           <template #default="{ row }">
             <el-tag
-              :type="row.isDefault ? 'info' : row.configured ? 'success' : 'warning'"
+              :type="row.composite ? 'info' : row.isDefault ? 'info' : row.configured ? 'success' : 'warning'"
               effect="plain"
             >
-              {{ row.isDefault ? '全局默认' : row.configured ? '已独立配置' : '使用默认' }}
+              {{ row.composite
+                ? '含 2 套配置'
+                : row.isDefault ? '全局默认' : row.configured ? '已独立配置' : '使用默认' }}
             </el-tag>
           </template>
         </el-table-column>
 
         <el-table-column label="模型" width="180">
           <template #default="{ row }">
-            {{ row.settings?.model || row.defaultModel }}
+            {{ row.composite ? '—' : row.settings?.model || row.defaultModel }}
           </template>
         </el-table-column>
 
         <el-table-column label="启用" width="90">
           <template #default="{ row }">
-            <el-tag v-if="row.isDefault" :type="row.settings?.enabled ? 'success' : 'info'" effect="plain">
+            <span v-if="row.composite" class="muted">—</span>
+            <el-tag v-else-if="row.isDefault" :type="row.settings?.enabled ? 'success' : 'info'" effect="plain">
               {{ row.settings?.enabled ? '启用' : '停用' }}
             </el-tag>
             <span v-else :class="{ 'muted': !row.settings?.enabled }">
@@ -52,7 +55,13 @@
 
         <el-table-column label="操作" width="90" align="right">
           <template #default="{ row }">
-            <el-button size="small" text type="primary" @click="openConfig(row)">
+            <el-button
+              v-if="!row.composite"
+              size="small"
+              text
+              type="primary"
+              @click="openConfig(row)"
+            >
               配置
             </el-button>
           </template>
@@ -148,6 +157,9 @@ interface PurposeRow {
   isDefault: boolean
   configured: boolean
   settings: AgentProviderSettings | null
+  /** 组合行（AI 食谱设计）：自身无配置，下面挂产品线与定制订单两套 */
+  composite?: boolean
+  children?: PurposeRow[]
 }
 
 const loading = ref(false)
@@ -176,11 +188,37 @@ const drawerLoading = ref(false)
 const drawerSaving = ref(false)
 const drawerTesting = ref(false)
 
+/** AI 食谱设计：一个入口，下挂产品线与定制订单两套配置 */
+const RECIPE_DESIGN_FLOWS = [
+  {
+    purpose: 'RECIPE_DESIGN_CATALOG',
+    label: '产品线',
+    description: '橱窗食谱：不绑订单、不绑顾客狗狗'
+  },
+  {
+    purpose: 'RECIPE_DESIGN_ORDER',
+    label: '定制订单',
+    description: '定制订单：绑订单与狗狗档案'
+  }
+] as const
+
 /** 生图用途走下面的「智谱封面图」卡片；DeepSeek 列表里不再出现，避免点错配置抽屉 */
 const purposeRows = computed(() =>
   AGENT_PURPOSES.filter((meta) => meta.purpose !== 'RECIPE_COVER_IMAGE')
-    .map((meta) => rows.value[meta.purpose]!)
-    .filter(Boolean)
+    .map((meta) => {
+      const row = rows.value[meta.purpose]
+      if (!row) return null
+      if (meta.purpose === 'RECIPE_DESIGN') {
+        return {
+          ...row,
+          children: RECIPE_DESIGN_FLOWS.map(
+            (flow) => rows.value[flow.purpose]
+          ).filter(Boolean)
+        } as PurposeRow
+      }
+      return row
+    })
+    .filter((row): row is PurposeRow => Boolean(row))
 )
 
 const zhipuSettings = ref<ZhipuImageSettings | null>(null)
@@ -286,24 +324,51 @@ async function clearZhipuKey() {
 async function loadAll() {
   loading.value = true
   try {
-    const defaultSettings = await nutritionGovernanceApi.getAgentSettings(AGENT_DEFAULT_PURPOSE)
+    // 并发取：原来是一次一条串行请求，11 个用途排队，页面要卡好几秒
+    const purposes = Array.from(
+      new Set([
+        AGENT_DEFAULT_PURPOSE,
+        ...AGENT_PURPOSES.map((meta) => meta.purpose),
+        ...RECIPE_DESIGN_FLOWS.map((flow) => flow.purpose)
+      ])
+    )
+    const loaded = await Promise.all(
+      purposes.map(async (purpose) => {
+        try {
+          return [purpose, await nutritionGovernanceApi.getAgentSettings(purpose)] as const
+        } catch {
+          return [purpose, null] as const
+        }
+      })
+    )
+    const settingsMap = new Map(loaded)
+
     const map: Record<string, PurposeRow> = {}
     for (const meta of AGENT_PURPOSES) {
-      if (meta.purpose === 'RECIPE_COVER_IMAGE') continue
-      let settings: AgentProviderSettings | null = null
-      try {
-        settings = await nutritionGovernanceApi.getAgentSettings(meta.purpose)
-      } catch {
-        settings = null
-      }
+      const isComposite = meta.purpose === 'RECIPE_DESIGN'
       map[meta.purpose] = {
         purpose: meta.purpose,
         label: meta.label,
         description: meta.description,
         defaultModel: meta.defaultModel,
         isDefault: meta.purpose === AGENT_DEFAULT_PURPOSE,
-        configured: meta.purpose === AGENT_DEFAULT_PURPOSE || Boolean(settings),
-        settings: meta.purpose === AGENT_DEFAULT_PURPOSE ? defaultSettings : settings
+        composite: isComposite,
+        configured: isComposite
+          ? RECIPE_DESIGN_FLOWS.every((flow) => Boolean(settingsMap.get(flow.purpose)))
+          : meta.purpose === AGENT_DEFAULT_PURPOSE ||
+            Boolean(settingsMap.get(meta.purpose)),
+        settings: settingsMap.get(meta.purpose) ?? null
+      }
+    }
+    for (const flow of RECIPE_DESIGN_FLOWS) {
+      map[flow.purpose] = {
+        purpose: flow.purpose,
+        label: flow.label,
+        description: flow.description,
+        defaultModel: 'deepseek-flash',
+        isDefault: false,
+        configured: Boolean(settingsMap.get(flow.purpose)),
+        settings: settingsMap.get(flow.purpose) ?? null
       }
     }
     rows.value = map

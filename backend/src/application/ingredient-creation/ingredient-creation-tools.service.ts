@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { isIngredientCardFieldKey } from '../../domain/ingredient-creation/ingredient-card-fields';
+import { computeCatalogCoverage } from '../../domain/ingredient/nutrition-coverage';
 import { IngredientSkillService } from './ingredient-skill.service';
 import {
   classifyCookingMethod,
@@ -49,6 +50,7 @@ import type {
   PendingQuestion,
   PendingQuestionOption,
   ProfileDraft,
+  SearchReportEntry,
 } from './ingredient-creation.types';
 
 /**
@@ -958,6 +960,31 @@ function readCatalogFieldValue(
  * - 目录字段超过 80 个时截断，并返回 truncated / omittedFieldCount
  *   （当前目录 60 个字段，这条是目录增长后的防御）。
  */
+/** 把检索流水按库折叠成「每库一行」：词去重、总数取最后一轮。 */
+function aggregateLibraryReports(
+  entries: readonly SearchReportEntry[],
+): Array<{ library: string; terms: string[]; total: number; rounds: number }> {
+  const byLibrary = new Map<
+    string,
+    { library: string; terms: string[]; total: number; rounds: number }
+  >();
+
+  for (const entry of entries) {
+    const current = byLibrary.get(entry.library) ?? {
+      library: entry.library,
+      terms: [],
+      total: 0,
+      rounds: 0,
+    };
+    current.terms = [...new Set([...current.terms, ...entry.terms])];
+    current.total = entry.total;
+    current.rounds += 1;
+    byLibrary.set(entry.library, current);
+  }
+
+  return [...byLibrary.values()];
+}
+
 function collectNutritionRecordValues(profile: unknown): {
   values: NutritionRecordValue[];
   missing: string[];
@@ -2711,12 +2738,30 @@ export class IngredientCreationToolsService {
     draftId: string,
     args: Record<string, unknown>,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
-    const built = buildPendingSearchPlan(args);
+    const draft = await this.draftService.get(draftId);
+    const report = Array.isArray(draft.payload.searchReport)
+      ? draft.payload.searchReport
+      : [];
+    if (report.length === 0) {
+      return this.error(
+        '还没有按库检索过：先调用 searchLibraries 查库，再交方案。',
+      );
+    }
+
+    const enriched = await this.enrichPlanCandidates(args.candidates);
+    if (!enriched.ok) {
+      return this.error(enriched.error);
+    }
+
+    const built = buildPendingSearchPlan({
+      ...args,
+      candidates: enriched.candidates,
+      libraryReports: aggregateLibraryReports(report),
+    });
     if (!built.ok) {
       return this.error(built.error);
     }
 
-    const draft = await this.draftService.get(draftId);
     await this.draftService.patch(draftId, draft.step, {
       searchPlan: built.plan,
     });
@@ -2729,6 +2774,69 @@ export class IngredientCreationToolsService {
       }),
       pendingPlan: built.plan,
     };
+  }
+
+  /** 候选只认真实、启用的记录；来源库与覆盖率由服务端补，模型给的不作数。 */
+  private async enrichPlanCandidates(
+    raw: unknown,
+  ): Promise<
+    { ok: true; candidates: unknown[] } | { ok: false; error: string }
+  > {
+    if (raw === undefined) {
+      return { ok: true, candidates: [] };
+    }
+    if (!Array.isArray(raw)) {
+      return { ok: false, error: 'candidates 必须是数组。' };
+    }
+
+    const candidates: unknown[] = [];
+    for (const item of raw) {
+      if (!isRecord(item)) {
+        return { ok: false, error: 'candidates 的每一项必须是对象。' };
+      }
+      const recordId = normalizeText(item.recordId);
+      if (!recordId) {
+        return { ok: false, error: 'candidates 每一项都要有 recordId。' };
+      }
+      const profileState = normalizeText(item.profileState).toUpperCase();
+      if (profileState !== 'RAW' && profileState !== 'COOKED') {
+        return {
+          ok: false,
+          error: `候选 ${recordId} 缺少 profileState（RAW / COOKED）：来源推不出生熟时也要先定一个，再交方案。`,
+        };
+      }
+
+      const record = await this.prisma.nutritionSourceRecord.findUnique({
+        where: { id: recordId },
+        select: {
+          id: true,
+          status: true,
+          sourceType: true,
+          foodName: true,
+          normalizedNutrition: true,
+        },
+      });
+      if (!record) {
+        return {
+          ok: false,
+          error: `来源记录 ${recordId} 不存在；候选只能从 searchLibraries 返回的记录里挑。`,
+        };
+      }
+      if (record.status !== 'ACTIVE') {
+        return { ok: false, error: `来源记录 ${recordId} 已停用，不能进候选。` };
+      }
+
+      candidates.push({
+        ...item,
+        recordId,
+        profileState,
+        sourceType: record.sourceType,
+        name: normalizeText(item.name) || record.foodName,
+        coverage: computeCatalogCoverage(record.normalizedNutrition).percent,
+      });
+    }
+
+    return { ok: true, candidates };
   }
 
   /**

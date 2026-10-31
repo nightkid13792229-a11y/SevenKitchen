@@ -37,7 +37,17 @@ function createHarness(
     name: '鸡蛋清',
     type: 'FOOD',
     step: 'INTAKE',
-    payload,
+    payload: {
+      searchReport: [
+        {
+          library: 'USDA',
+          terms: ['egg white'],
+          total: 1,
+          at: '2026-10-29T00:00:00.000Z',
+        },
+      ],
+      ...payload,
+    },
     createdBy: 'admin-1',
     createdAt: new Date('2026-10-29T00:00:00.000Z'),
     updatedAt: new Date('2026-10-29T00:00:00.000Z'),
@@ -147,6 +157,61 @@ describe('IngredientCreationToolsService · 检索方案', () => {
         searchPlan: expect.objectContaining({ status: 'PENDING' }),
       }),
     );
+  });
+
+  it('没有按库检索过 → 拒绝交方案', async () => {
+    const { tools } = createHarness({ searchReport: [] });
+
+    const result = await call(tools, 'proposeSearchPlan', VALID_ARGS);
+
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toContain('searchLibraries');
+  });
+
+  it('候选记录不存在 → 拒绝', async () => {
+    const { tools, prisma } = createHarness();
+    (
+      prisma.nutritionSourceRecord.findUnique as jest.Mock
+    ).mockResolvedValueOnce(null);
+
+    const result = await call(tools, 'proposeSearchPlan', VALID_ARGS);
+
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toContain('不存在');
+  });
+
+  it('来源库与覆盖率由服务端补，模型给的不作数', async () => {
+    const { tools, prisma } = createHarness();
+    (
+      prisma.nutritionSourceRecord.findUnique as jest.Mock
+    ).mockResolvedValueOnce({
+      id: 'd6705357-d14b-48c0-81b0-d6cd347f7a88',
+      status: 'ACTIVE',
+      sourceType: 'USDA',
+      foodName: 'Egg, white, raw, fresh',
+      normalizedNutrition: { macros: { crudeProtein: 10 } },
+    });
+
+    const result = await call(tools, 'proposeSearchPlan', {
+      ...VALID_ARGS,
+      candidates: [
+        {
+          ...VALID_ARGS.candidates[0],
+          sourceType: 'CFCT',
+          coverage: 99,
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.pendingPlan).toMatchObject({
+      candidates: [
+        expect.objectContaining({
+          sourceType: 'USDA',
+          coverage: 1.7,
+        }),
+      ],
+    });
   });
 
   it('目标库不在白名单 → 拒绝，且不写草稿', async () => {

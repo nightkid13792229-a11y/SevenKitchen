@@ -103,7 +103,16 @@ function createDraft(
     name: '鸡肝',
     type: 'FOOD',
     step: 'INTAKE',
-    payload: {},
+    payload: {
+      searchReport: [
+        {
+          library: 'CFCT',
+          terms: ['鸡肝'],
+          total: 2,
+          at: '2026-10-23T00:00:00.000Z',
+        },
+      ],
+    },
     createdBy: 'admin-1',
     createdAt: new Date('2026-10-23T00:00:00.000Z'),
     updatedAt: new Date('2026-10-23T00:00:00.000Z'),

@@ -242,7 +242,9 @@ export class LabelV10Service {
 
     // 原料
     h += mm(1.7) + mm(this.F.section) + mm(0.75) + mm(0.9);
-    h += this.ingredientHeight(ctx, ingredientItems, contentW, lineHeight);
+    h +=
+      this.layoutIngredientParagraph(ctx, ingredientItems, contentW).length *
+      lh(this.F.ingredient);
 
     // 添加剂
     if (additiveItems.length > 0) {
@@ -292,11 +294,15 @@ export class LabelV10Service {
   ): { lines: string[][]; fits: boolean } {
     const times = this.cookingTimesFor(spec.packageSpecG);
     const label = `${spec.packageSpecG}克/袋`;
-    const methods = [
-      `蒸 ${times.steam}`,
-      `炖 ${times.stew}`,
-      `低温慢煮 ${times.sousvide}`,
-    ];
+    // 蒸和炖用的是同一档时间，合成一项，省一行宽度
+    const methods =
+      times.steam === times.stew
+        ? [`蒸/炖 ${times.steam}`, `低温慢煮 ${times.sousvide}`]
+        : [
+            `蒸 ${times.steam}`,
+            `炖 ${times.stew}`,
+            `低温慢煮 ${times.sousvide}`,
+          ];
     const gap = mm(2);
     const labelColW = mm(12);
 
@@ -326,60 +332,40 @@ export class LabelV10Service {
     return { lines, fits };
   }
 
-  private ingredientHeight(
+  /** 原料组成：整段排（名称 + 加粗占比），放不下整条换行 */
+  private layoutIngredientParagraph(
     ctx: CanvasRenderingContext2D,
     items: string[],
     contentW: number,
-    lineHeight: number,
-  ): number {
-    if (items.length === 0) {
-      return 0;
+  ): Array<Array<{ name: string; detail: string }>> {
+    const gap = mm(0.6);
+    const separator = '、';
+    const lines: Array<Array<{ name: string; detail: string }>> = [[]];
+    let cursor = 0;
+
+    for (const item of items) {
+      const matched = item.match(/^(.+?)(\d+(?:\.\d+)?%)$/);
+      const name = (matched ? matched[1] : item).trim();
+      const detail = matched
+        ? `${Number(matched[2].replace('%', '')).toFixed(1)}%`
+        : '';
+
+      ctx.font = `${mm(this.F.ingredient)}px "Chinese"`;
+      const nameWidth = ctx.measureText(name).width;
+      ctx.font = `bold ${mm(this.F.ingredient)}px "Chinese-Bold"`;
+      const detailWidth = detail ? gap + ctx.measureText(detail).width : 0;
+      ctx.font = `${mm(this.F.ingredient)}px "Chinese"`;
+      const width = nameWidth + detailWidth + ctx.measureText(separator).width;
+
+      if (cursor > 0 && cursor + width > contentW) {
+        lines.push([]);
+        cursor = 0;
+      }
+      lines[lines.length - 1].push({ name, detail });
+      cursor += width;
     }
-    const rows = this.buildIngredientRows(ctx, items, contentW, lineHeight);
-    return rows.reduce((sum, row) => sum + row.lines * mm(this.F.ingredient * lineHeight) + mm(0.18), 0);
-  }
 
-  /** 三列排版：每个格子里「名称 + 占比」，名称过长时换行 */
-  private buildIngredientRows(
-    ctx: CanvasRenderingContext2D,
-    items: string[],
-    contentW: number,
-    _lineHeight: number,
-  ) {
-    const columns = 3;
-    const colGap = 2;
-    const colW = (contentW - mm(colGap) * (columns - 1)) / columns;
-    ctx.font = `${mm(this.F.ingredient)}px "Chinese"`;
-
-    const cells = items.map((item) => {
-      const { name, detail } = this.parseItem(item);
-      const detailW = detail
-        ? ctx.measureText(detail).width + mm(0.6)
-        : 0;
-      const nameW = Math.max(mm(1), colW - detailW);
-      const nameLines = this.wrapByWidth(ctx, name, nameW);
-      return { nameLines, detail, detailW };
-    });
-
-    const rows: Array<{ cells: typeof cells; lines: number }> = [];
-    for (let i = 0; i < cells.length; i += columns) {
-      const slice = cells.slice(i, i + columns);
-      rows.push({
-        cells: slice,
-        lines: Math.max(1, ...slice.map((cell) => cell.nameLines.length)),
-      });
-    }
-    return rows;
-  }
-
-  private parseItem(item: string): { name: string; detail: string } {
-    const matched = item.match(/^(.+?)(\d+(?:\.\d+)?%)$/);
-    if (matched) {
-      const pct = Number(matched[2].replace('%', ''));
-      const detail = Number.isFinite(pct) ? `${pct.toFixed(1)}%` : matched[2];
-      return { name: matched[1].trim(), detail };
-    }
-    return { name: item, detail: '' };
+    return lines;
   }
 
   // ---------------- 绘制 ----------------
@@ -454,33 +440,45 @@ export class LabelV10Service {
     y = this.drawSection(
       ctx,
       '原料组成',
-      '按加入量降序',
+      '',
       y,
       left,
       contentW,
       lineHeight,
     );
-    const rows = this.buildIngredientRows(ctx, ingredientItems, contentW, lineHeight);
-    const columns = 3;
-    const colGap = 2;
-    const colW = (contentW - mm(colGap) * (columns - 1)) / columns;
-    for (const row of rows) {
-      row.cells.forEach((cell, index) => {
-        const x = left + index * (colW + mm(colGap));
-        ctx.font = `${mm(this.F.ingredient)}px "Chinese"`;
+    const ingredientLines = this.layoutIngredientParagraph(
+      ctx,
+      ingredientItems,
+      contentW,
+    );
+    const pctGap = mm(0.6);
+    let drawnTokens = 0;
+    const totalTokens = ingredientLines.reduce(
+      (count, line) => count + line.length,
+      0,
+    );
+    ingredientLines.forEach((tokens, lineIndex) => {
+      let x = left;
+      const lineY = y + lineIndex * lh(this.F.ingredient);
+      tokens.forEach((token) => {
+        drawnTokens += 1;
         ctx.fillStyle = '#111111';
-        cell.nameLines.forEach((line, lineIndex) => {
-          ctx.fillText(line, x, y + lineIndex * lh(this.F.ingredient));
-        });
-        if (cell.detail) {
+        ctx.font = `${mm(this.F.ingredient)}px "Chinese"`;
+        ctx.fillText(token.name, x, lineY);
+        x += ctx.measureText(token.name).width;
+        if (token.detail) {
           ctx.font = `bold ${mm(this.F.ingredient)}px "Chinese-Bold"`;
-          ctx.textAlign = 'right';
-          ctx.fillText(cell.detail, x + colW, y);
-          ctx.textAlign = 'left';
+          ctx.fillText(token.detail, x + pctGap, lineY);
+          x += pctGap + ctx.measureText(token.detail).width;
+        }
+        if (drawnTokens < totalTokens) {
+          ctx.font = `${mm(this.F.ingredient)}px "Chinese"`;
+          ctx.fillText('、', x, lineY);
+          x += ctx.measureText('、').width;
         }
       });
-      y += row.lines * lh(this.F.ingredient) + mm(0.18);
-    }
+    });
+    y += ingredientLines.length * lh(this.F.ingredient);
 
     // 添加剂组成
     if (additiveItems.length > 0) {
@@ -509,7 +507,7 @@ export class LabelV10Service {
     y = this.drawSection(
       ctx,
       '产品成分分析保证值',
-      '原样（湿基）',
+      '',
       y,
       left,
       contentW,

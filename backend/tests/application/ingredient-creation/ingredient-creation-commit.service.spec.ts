@@ -1117,19 +1117,23 @@ describe('IngredientCreationCommitService', () => {
     expect(prisma.ingredient.create).not.toHaveBeenCalled();
   });
 
-  it('同一生熟状态出现两份档案 → BadRequest，且不写任何数据', async () => {
+  it('同一生熟状态两份档案 → 允许提交，档案名带来源区分', async () => {
     const { service, prisma } = await createHarness();
     const profiles = [
       rawProfile,
       { ...rawProfile, sourceRecordId: 'src-nzfcd-cooked' },
     ];
 
-    await expect(
-      service.commit({ ...baseInput, profiles }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    await service.commit({ ...baseInput, profiles });
 
-    expect(prisma.$transaction).not.toHaveBeenCalled();
-    expect(prisma.nutritionFood.create).not.toHaveBeenCalled();
+    expect(prisma.nutritionFood.create).toHaveBeenCalledTimes(2);
+    const names = prisma.nutritionFood.create.mock.calls.map(
+      (call) => (call[0] as { data: { name: string } }).data.name,
+    );
+    expect(new Set(names).size).toBe(2);
+    for (const name of names) {
+      expect(name).toContain('生 · ');
+    }
   });
 
   it('entries 的 finalValue 是字符串 / undefined → BadRequest；显式 null 放行（缺失≠0）', async () => {

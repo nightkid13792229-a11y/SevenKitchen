@@ -581,6 +581,12 @@ export class IngredientCreationCommitService {
         input.draftId,
         primaryNutritionData,
       );
+      const stateCounts = new Map<string, number>();
+      for (const prepared of preparedProfiles) {
+        const state = prepared.profile.preparationState;
+        stateCounts.set(state, (stateCounts.get(state) ?? 0) + 1);
+      }
+
       const nutritionFoodIds: string[] = [];
       for (const [index, prepared] of preparedProfiles.entries()) {
         let nutritionFood: { id: string };
@@ -591,6 +597,7 @@ export class IngredientCreationCommitService {
               prepared,
               input.draftId,
               input.userId,
+              stateCounts,
             ),
           });
         } catch (error) {
@@ -673,7 +680,6 @@ export class IngredientCreationCommitService {
       throw new BadRequestException('提交至少需要一份营养档案');
     }
 
-    const seenStates = new Set<PreparationState>();
     profiles.forEach((profile, index) => {
       if (!Array.isArray(profile.entries) || profile.entries.length === 0) {
         throw new BadRequestException(
@@ -687,12 +693,6 @@ export class IngredientCreationCommitService {
           `第 ${index + 1} 份营养档案的状态必须是 RAW 或 COOKED`,
         );
       }
-      // 设计每次创建只有「生」「熟」各一份档案，重复状态说明调用方传错了。
-      if (seenStates.has(state)) {
-        throw new BadRequestException(`生熟状态 ${state} 只能有一份营养档案`);
-      }
-      seenStates.add(state);
-
       profile.entries.forEach((entry, entryIndex) => {
         const finalValue: unknown = entry?.finalValue;
         // 显式 null = 这个字段没有值（缺失），与 0 是两件事，放行；
@@ -923,8 +923,14 @@ export class IngredientCreationCommitService {
     prepared: PreparedProfile,
     draftId: string,
     createdBy: string,
+    stateCounts: Map<string, number>,
   ): Prisma.NutritionFoodUncheckedCreateInput {
     const label = PREPARATION_STATE_LABELS[prepared.profile.preparationState];
+    // 同状态只有一份时保持「原料名（生）」；多份时带来源，避免同名撞唯一键。
+    const nameSuffix =
+      (stateCounts.get(prepared.profile.preparationState) ?? 1) > 1
+        ? `${label} · ${prepared.sourceRecord.sourceType}`
+        : label;
     const sourceKey = prepared.sourceRecord.sourceKey;
     // external_id 只有 100 长度：超长必须截断（否则 P2000 500），截断事实留在 notes。
     const externalId = sourceKey.slice(0, EXTERNAL_ID_MAX_LENGTH);
@@ -937,7 +943,7 @@ export class IngredientCreationCommitService {
     }${truncationNote}`;
 
     return {
-      name: `${ingredient.name}（${label}）`,
+      name: `${ingredient.name}（${nameSuffix}）`,
       // 原料卡上人工核对过的英文名优先；没填才回退来源记录的英文名。
       nameEn: ingredient.nameEn?.trim() || prepared.sourceRecord.foodNameEn,
       category: 'OTHER',

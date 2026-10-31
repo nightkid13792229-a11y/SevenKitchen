@@ -85,6 +85,7 @@ describe('POST /admin/ingredient-creation/drafts/:id/search-plan/confirm', () =>
       .send({
         keywords: [{ term: '蛋清', language: 'zh' }],
         libraries: ['USDA'],
+        selectedRecordIds: ['rec-1'],
       })
       .expect(201);
 
@@ -93,8 +94,7 @@ describe('POST /admin/ingredient-creation/drafts/:id/search-plan/confirm', () =>
       {
         keywords: [{ term: '蛋清', language: 'zh' }],
         libraries: ['USDA'],
-        chosenRecordId: undefined,
-        chosenRecordName: undefined,
+        selectedRecordIds: ['rec-1'],
       },
       { userId: 'admin-1' },
     );

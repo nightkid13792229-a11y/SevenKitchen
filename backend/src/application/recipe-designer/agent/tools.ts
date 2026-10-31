@@ -37,7 +37,10 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
     function: {
       name: 'read_taxonomy',
       description:
-        '查看现有产品线的需求分类（只读）。不带参数：有哪些分类、各自多少节点多少道；给 kind：这个分类下的节点；给 nodeId：这个节点下的食谱（最多 20 条）。',
+        '查看产品线的需求分类（只读）。产品线按 5 个分类维度划分：主蛋白、健康需求、场景、季节、工艺形态。' +
+        '第一步**不带参数**调用，拿到这 5 个分类各自多少节点、挂了多少道；' +
+        '再给 kind 看该分类下的节点；再给 nodeId 看该节点下的食谱（最多 20 条）。' +
+        '不要把「需求分类」当成「健康需求」一个维度 —— 健康需求只是其中之一。',
       parameters: {
         type: 'object',
         properties: {

@@ -363,7 +363,7 @@ export type SeriesReleaseState =
 /** 发布问题归属：系列级设置 / 产品展示 / 单个生命阶段 */
 export type SeriesReleaseIssueScope = 'SERIES' | 'PRESENTATION' | 'STAGE'
 
-/** 阻断发布的问题（2026-10-26 起只剩封面图 / 一句话卖点两个门槛） */
+/** 阻断发布的问题：封面图 / 一句话卖点 / 需求分类（2026-10-31 起归类只在整系列发布时检查） */
 export type SeriesReleaseBlockerCode =
   | 'COVER_IMAGE_REQUIRED'
   | 'SELLING_POINT_REQUIRED'

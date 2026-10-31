@@ -250,6 +250,9 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     recipeDesignAgentSnapshot: {
       findFirst: jest.fn(),
     },
+    recipeSeriesTaxonomy: {
+      count: jest.fn(),
+    },
     $transaction: jest.fn(),
   } as any;
 
@@ -644,6 +647,17 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
         (warning) => warning.code === 'TARGET_HEALTH_TAGS_MISSING',
       ),
     ).toBe(false);
+  });
+
+  it('keeps catalog stage drafts ready even when the series has no taxonomy links', async () => {
+    // 2026-10-31：归类是系列级资料，只在「发布 / 更新」的整系列门槛检查；
+    // 阶段入库不再因为它被拦住（否则检查抽屉就成了第二个维护入口）。
+    prisma.recipeSeriesTaxonomy.count.mockResolvedValueOnce(0);
+
+    const readiness = await readinessFor();
+
+    expect(readiness.ready).toBe(true);
+    expect(readiness.blockers).toEqual([]);
   });
 
   it('still blocks order stage drafts without cover image or title', async () => {

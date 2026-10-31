@@ -166,11 +166,6 @@ const LAUNCH_PASSED_CHECK_DEFINITIONS: Array<
     scope: 'CATALOG'
   },
   {
-    code: 'TAXONOMY_REQUIRED',
-    label: '已归类（至少一个需求分类）',
-    scope: 'CATALOG'
-  },
-  {
     code: 'SELLING_POINT_REQUIRED',
     label: '一句话卖点已填写',
     scope: 'CATALOG'

@@ -54,47 +54,36 @@ describe('AI 命名字段', () => {
   })
 })
 
-import launchReadinessSource from '@/utils/recipeDesigner/launchReadiness.ts?raw'
-
-describe('上线检查里的「已归类」项', () => {
-  it('通过时有中文标签，且只在产品线分支出现', () => {
-    expect(launchReadinessSource).toContain("code: 'TAXONOMY_REQUIRED'")
-    expect(launchReadinessSource).toContain('已归类（至少一个需求分类）')
-    const block = launchReadinessSource.slice(
-      launchReadinessSource.indexOf("code: 'TAXONOMY_REQUIRED'"),
-      launchReadinessSource.indexOf("code: 'TAXONOMY_REQUIRED'") + 160
-    )
-    expect(block).toContain("scope: 'CATALOG'")
-  })
-})
-
 import drawerSource from '@/views/RecipeDesigner/components/LaunchReadinessDrawer.vue?raw'
 import quickSource from '@/views/RecipeDesigner/components/QuickTaxonomyPicker.vue?raw'
+import releaseDrawerSource from '@/views/RecipeDesigner/components/SeriesReleaseDrawer.vue?raw'
 
-describe('上线检查抽屉里的命名与归类', () => {
-  it('抽屉里有 AI 命名字段，且按系列操作', () => {
-    expect(drawerSource).toContain('AiNameField')
-    expect(drawerSource).toContain(':series-id="readiness.seriesId"')
-  })
-
-  it('没有系列的历史草稿不显示这一整块', () => {
-    expect(drawerSource).toContain('v-if="readiness.seriesId"')
-  })
-
-  it('定制设计不显示归类面板', () => {
-    expect(drawerSource).toContain("v-if=\"readiness.designMode !== 'ORDER'\"")
-  })
-
-  it('快速归类按分类逐行挂，并说明双拼菜可留空主蛋白', () => {
+describe('系列级资料的维护入口', () => {
+  it('产品线的命名与归类只在发布 / 更新里维护', () => {
+    // 2026-10-31：上线检查是阶段门槛，不再提供系列级编辑
+    expect(drawerSource).not.toContain('QuickTaxonomyPicker')
+    expect(releaseDrawerSource).toContain('QuickTaxonomyPicker')
     expect(quickSource).toContain('快速归类')
     expect(quickSource).toContain('replaceLinks')
     expect(quickSource).toContain('双拼')
   })
+
+  it('定制设计没有发布抽屉，名称仍在检查抽屉里改', () => {
+    expect(drawerSource).toContain('AiNameField')
+    expect(drawerSource).toContain(
+      "v-if=\"readiness.seriesId && readiness.designMode === 'ORDER'\""
+    )
+    expect(drawerSource).toContain(':series-id="readiness.seriesId"')
+  })
+
+  it('上线检查的系列资料只读展示，并给出去发布 / 更新的入口', () => {
+    expect(drawerSource).toContain('系列资料（共用）')
+    expect(drawerSource).toContain('去发布 / 更新')
+    expect(drawerSource).toContain('go-to-series-list')
+  })
 })
 
-import releaseDrawerSource from '@/views/RecipeDesigner/components/SeriesReleaseDrawer.vue?raw'
-
-describe('系列发布抽屉里的命名', () => {
+describe('系列发布抽屉里的命名与归类', () => {
   it('发布设置里有「食谱名称」，用的是同一个 AI 字段', () => {
     expect(releaseDrawerSource).toContain('食谱名称')
     expect(releaseDrawerSource).toContain('AiNameField')
@@ -105,5 +94,11 @@ describe('系列发布抽屉里的命名', () => {
     expect(releaseDrawerSource).not.toContain('保存名称')
     expect(releaseDrawerSource).toContain("emit('saved')")
     expect(releaseDrawerSource).toContain('@saved="onNameAdopted"')
+  })
+
+  it('快速归类放在发布设置里，保存后重算整系列门槛', () => {
+    expect(releaseDrawerSource).toContain('<QuickTaxonomyPicker')
+    expect(releaseDrawerSource).toContain(':show-title="false"')
+    expect(releaseDrawerSource).toContain('@saved="refreshReadiness"')
   })
 })

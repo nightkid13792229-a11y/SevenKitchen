@@ -483,6 +483,28 @@ function openSeriesReleaseDrawer(card: RecipeDesignerSeriesCard): void {
   releaseDrawerVisible.value = true
 }
 
+/**
+ * 从编辑器「上线检查」跳过来时，直接打开对应系列的发布 / 更新抽屉。
+ *
+ * 地址栏带着 `releaseSeriesId` / `releaseSeriesName`；打开后立刻把这两个参数
+ * 从地址栏去掉，避免刷新页面又弹一次。系列可能不在当前页（列表分页），
+ * 所以不依赖卡片，直接按 id 打开，抽屉自己会拉门槛数据。
+ */
+function openReleaseDrawerFromQuery(): void {
+  const seriesIdFromQuery = String(route.query.releaseSeriesId ?? '').trim()
+  if (!seriesIdFromQuery) return
+  releaseDrawerSeriesId.value = seriesIdFromQuery
+  releaseDrawerSeriesName.value = String(
+    route.query.releaseSeriesName ?? ''
+  ).trim()
+  releaseDrawerVisible.value = true
+
+  const query = { ...route.query }
+  delete query.releaseSeriesId
+  delete query.releaseSeriesName
+  void router.replace({ query })
+}
+
 /** 发布成功后刷新列表：卡片状态与阶段进度立即反映整系列已发布 */
 async function handleSeriesReleased(): Promise<void> {
   await loadSeries(filters.page)
@@ -896,6 +918,7 @@ function openDogHealth(dogId: string) {
 onMounted(async () => {
   // 地址栏里可能带着 page=3：按恢复的页码加载
   await loadSeries(filters.page)
+  openReleaseDrawerFromQuery()
   void applyEntryQuery()
   // 健康信息变更提醒（2026-10-04 第四期）。
   // 不 await：它是辅助信息，不该拖慢设计系列列表的首屏。

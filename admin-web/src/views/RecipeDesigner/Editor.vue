@@ -1947,14 +1947,22 @@ async function openLaunchReadiness() {
   }
 }
 
-/** 打开发布 / 更新抽屉（仅产品线系列；订单设计沿用本单交付流程） */
 /**
- * 上线检查 → 去食谱列表发布 / 更新。
- * 发布是整条系列的动作，统一收在按系列组织的列表页，编辑器不再提供第二个入口。
+ * 上线检查 → 去食谱列表的「发布 / 更新」。
+ *
+ * 发布是整条系列的动作，统一收在按系列组织的列表页，编辑器不提供第二个入口；
+ * 这里把系列 id / 名称带过去，列表页打开后直接弹出对应系列的抽屉，
+ * 不让管理员自己在一堆卡片里找。
  */
 function goToSeriesListFromCheck(): void {
   launchReadinessVisible.value = false
-  void router.push('/recipe-designer')
+  const query: Record<string, string> = {}
+  if (seriesId) query.releaseSeriesId = seriesId
+  const name = String(
+    draft.value?.series?.name || draft.value?.name || ''
+  ).trim()
+  if (name) query.releaseSeriesName = name
+  void router.push({ path: '/recipe-designer', query })
 }
 
 function backToOrderWorkspace() {

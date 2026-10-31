@@ -62,8 +62,7 @@ export type LaunchReadinessBlockerCode =
   | 'SELLING_POINT_REQUIRED'
   | 'ORDER_ID_REQUIRED'
   | 'ORDER_QUANTITY_INVALID'
-  | 'CUSTOMER_DOG_REQUIRED'
-  | 'TAXONOMY_REQUIRED';
+  | 'CUSTOMER_DOG_REQUIRED';
 
 export type LaunchReadinessWarningCode =
   | 'REVIEW_REQUIRED'
@@ -202,11 +201,6 @@ export interface BuildDraftLaunchReadinessInput {
    * 订单（ORDER）设计必须传 `true` —— 阶段草稿进入「待提交」前就要有封面。
    */
   requirePresentation?: boolean;
-  /**
-   * 该草稿所属系列挂了几条需求分类（2026-10-27）。
-   * 只数条数：双拼菜不挂主蛋白、只挂场景，也算已归类。
-   */
-  taxonomyLinkCount?: number;
 }
 
 const normalizeText = (value: unknown): string =>
@@ -367,23 +361,11 @@ export const buildDraftLaunchReadiness = (
    */
   const requirePresentation = input.requirePresentation !== false;
   const presentation = input.presentation ?? {};
-  // 需求分类门禁（2026-10-27）：只卡产品线。
-  // 订单定制是某只狗的私有版本，不进橱窗、不参与货架分组，因此不计算这条。
-  // 只在调用方明确传了计数时才检查：老调用点/老测试没有这个字段，
-  // 让它们保持原行为，避免一条新门禁把所有历史结论都打成阻断。
-  if (
-    input.designMode !== 'ORDER' &&
-    typeof input.taxonomyLinkCount === 'number' &&
-    input.taxonomyLinkCount <= 0
-  ) {
-    blockers.push({
-      code: 'TAXONOMY_REQUIRED',
-      scope: 'CATALOG',
-      field: 'taxonomy',
-      message:
-        '这道菜还没有任何需求分类，发布后它进不了货架分组。在「快速归类」里挂一个即可',
-    });
-  }
+  /**
+   * 需求分类不再卡阶段入库（2026-10-31）：
+   * 归类是系列级资料，只在整系列发布的 `series-release-readiness.ts` 里检查；
+   * 阶段检查抽屉不再提供归类编辑，避免同一份资料出现两个维护入口。
+   */
 
   if (requirePresentation && !normalizeText(presentation.coverImageUrl)) {
     blockers.push({

@@ -87,8 +87,16 @@
         class="launch-readiness__content"
       >
 
-        <!-- 2026-10-27：名称与归类都要按系列操作，历史独立草稿没有系列就整块不显示 -->
-        <div v-if="readiness.seriesId" class="launch-readiness__series-block">
+        <!--
+          2026-10-31：产品线的名称 / 归类 / 封面 / 卖点 / 角标都是系列级资料，
+          统一在「发布 / 更新」里维护；这里只为订单定制保留改名入口
+         （订单没有发布抽屉，名称只能在这里改）。
+          历史独立草稿没有系列就整块不显示。
+        -->
+        <div
+          v-if="readiness.seriesId && readiness.designMode === 'ORDER'"
+          class="launch-readiness__series-block"
+        >
           <div class="launch-readiness__series-row">
             <span class="launch-readiness__series-k">食谱名称</span>
             <AiNameField
@@ -97,12 +105,6 @@
               @saved="(name: string) => { nameDraft = name; loadReadiness() }"
             />
           </div>
-
-          <QuickTaxonomyPicker
-            v-if="readiness.designMode !== 'ORDER'"
-            :series-id="readiness.seriesId"
-            @saved="loadReadiness"
-          />
         </div>
         <div
           class="launch-readiness__overview"
@@ -138,7 +140,14 @@
               type="primary"
               plain
               @click="emit('go-to-series-list')"
-            >去食谱列表发布 / 更新</el-button>
+            >去发布 / 更新</el-button>
+          </div>
+
+          <div class="launch-readiness__series-row">
+            <span class="launch-readiness__series-label">食谱名称</span>
+            <span class="launch-readiness__series-value">
+              {{ draftName || '未命名' }}
+            </span>
           </div>
 
           <div v-if="seriesLoading" class="launch-readiness__series-loading">
@@ -153,6 +162,13 @@
             :description="seriesError"
           />
           <div v-else-if="seriesReadiness" class="launch-readiness__series">
+            <div class="launch-readiness__series-row">
+              <span class="launch-readiness__series-label">快速归类</span>
+              <span
+                class="launch-readiness__series-value"
+                :class="seriesTaxonomyReady ? 'is-success' : 'is-danger'"
+              >{{ seriesTaxonomyReady ? '✓ 已归类' : '✗ 未归类' }}</span>
+            </div>
             <div class="launch-readiness__series-row">
               <span class="launch-readiness__series-label">封面图</span>
               <span
@@ -174,7 +190,8 @@
               </span>
             </div>
             <div class="launch-readiness__series-hint">
-              系列资料由整条系列共用；保存后顾客立即看到，不需要重新发布阶段。
+              名称、归类、封面、卖点和角标都由整条系列共用；这里只读，
+              修改请点「去发布 / 更新」。保存后立即对已上线阶段生效。
             </div>
           </div>
         </section>
@@ -461,7 +478,6 @@ import {
 } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import AiNameField from './AiNameField.vue'
-import QuickTaxonomyPicker from './QuickTaxonomyPicker.vue'
 import { useUserStore } from '@/store/user'
 import { orderRecipeDesignApi } from '@/api/orderRecipeDesign'
 import ProductionStepsEditor from './ProductionStepsEditor.vue'
@@ -506,11 +522,8 @@ const visible = computed({
   set: (value: boolean) => emit('update:modelValue', value)
 })
 
-/** 名称草稿：改完点「保存名称」才写库 */
+/** 名称草稿：订单定制在这里改名；采用候选或失焦即写库 */
 const nameDraft = ref('')
-const nameDirty = computed(
-  () => nameDraft.value.trim() !== String(props.draftName ?? '').trim()
-)
 
 // 抽屉打开或切换草稿时，把当前名称灌进草稿值
 watch(
@@ -561,6 +574,18 @@ const seriesCoverBadgeText = computed(() => {
     ? badges.join(' · ')
     : '未设置（封面左下角为空）'
 })
+
+/**
+ * 整系列归类状态（只读）。
+ * 归类已不在阶段门槛里检查，但上线检查仍要告诉人「系列还差什么」；
+ * 真正的编辑入口在「发布 / 更新」的快速归类。
+ */
+const seriesTaxonomyReady = computed(
+  () =>
+    !(seriesReadiness.value?.blockers ?? []).some(
+      (blocker) => blocker.code === 'TAXONOMY_REQUIRED'
+    )
+)
 
 /** 概要里的「完整营养报告」不是纯文本，而是按报告状态给出的动作 */
 const reportAction = computed(() =>

@@ -10,7 +10,7 @@
  *
  * 因此本文件把「系列能不能发布」算成一份 **与前端无关、可单测** 的结论：
  *  · 逐阶段状态 EMPTY / DRAFT / READY / PUBLIC；
- *  · 问题按归属标注 SERIES / PRESENTATION / STAGE（本期阻断项都在 PRESENTATION）；
+ *  · 问题按归属标注 SERIES / PRESENTATION / STAGE（阻断项在 SERIES / PRESENTATION）；
  *  · 封面角标只提醒（没配角标时封面左下角没有文字，仍可上线）。
  *
  * 本文件是纯函数：阶段快照、展示资料由调用方（RecipeDesignerService）查库后传入，
@@ -67,7 +67,7 @@ export type SeriesReleaseState = (typeof SERIES_RELEASE_STATES)[number];
 /** 问题归属：系列级设置 / 产品展示 / 单个生命阶段。 */
 export type SeriesReleaseIssueScope = 'SERIES' | 'PRESENTATION' | 'STAGE';
 
-/** 阻断发布的问题（封面图 / 卖点是唯一的发布门槛）。 */
+/** 阻断发布的问题（封面图 / 一句话卖点 / 需求分类）。 */
 export type SeriesReleaseBlockerCode =
   | 'COVER_IMAGE_REQUIRED'
   | 'SELLING_POINT_REQUIRED'

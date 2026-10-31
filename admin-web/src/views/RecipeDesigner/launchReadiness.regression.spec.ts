@@ -152,7 +152,7 @@ describe('上线检查抽屉 · 加载 / 刷新 / 状态', () => {
     expect(clean(helperSource)).toContain('上架文案')
   })
 
-  it('CATALOG 抽屉只读展示系列资料，并提示去食谱列表发布 / 更新', () => {
+  it('CATALOG 抽屉只读展示系列资料，并提示去发布 / 更新', () => {
     expect(drawer).toContain('seriesId?: string')
     // 真正决定是否拉系列资料的是加载函数里的 guard，不是 ORDER 提交按钮
     expect(drawer).toContain('if (!props.seriesId || props.orderId)')
@@ -170,7 +170,7 @@ describe('上线检查抽屉 · 加载 / 刷新 / 状态', () => {
     expect(drawer).toContain('presentation.coverImageUrl')
     expect(drawer).toContain('presentation.sellingPoint')
     expect(drawer).toContain('presentation.coverBadges')
-    expect(drawer).toContain('去食谱列表发布 / 更新')
+    expect(drawer).toContain('去发布 / 更新')
     expect(drawer).toContain('未设置（封面左下角为空）')
     expect(drawer).toContain('✓')
     expect(drawer).toContain('✗')

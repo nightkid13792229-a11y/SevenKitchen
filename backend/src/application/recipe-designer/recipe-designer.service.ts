@@ -9201,10 +9201,6 @@ export class RecipeDesignerService {
         orderQuantity: draft.series?.orderQuantity,
         customerDogId: draft.customerDogId,
       },
-      // 没有系列（历史独立草稿）就没有分类可挂，跳过这条门禁而不是判它阻断
-      taxonomyLinkCount: draft.seriesId
-        ? await this.countSeriesTaxonomyLinks(draft.seriesId)
-        : undefined,
     });
 
     return { readiness, assessment };

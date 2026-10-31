@@ -1,7 +1,7 @@
 <template>
   <div class="quick-taxonomy">
     <div class="quick-head">
-      <span class="quick-title">快速归类</span>
+      <span v-if="showTitle !== false" class="quick-title">快速归类</span>
       <el-tag v-if="missingCount > 0" size="small" type="danger" effect="plain">
         缺 {{ missingCount }} 项
       </el-tag>
@@ -62,6 +62,8 @@ import type { TaxonomyKindView, TaxonomyNodeView } from '@/types/recipeDesigner'
 
 const props = defineProps<{
   seriesId: string | null
+  /** 外层已经有「快速归类」标签时，隐藏组件自己的标题 */
+  showTitle?: boolean
 }>()
 
 const emit = defineEmits<{ (event: 'saved'): void }>()

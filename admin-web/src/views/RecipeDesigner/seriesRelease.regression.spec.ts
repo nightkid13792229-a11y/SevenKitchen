@@ -152,11 +152,13 @@ describe('系列发布抽屉', () => {
     expect(drawer).toContain('readiness.summary.publishableStageCount')
   })
 
-  it('edits cover, badge and selling point only, with upload-only cover', () => {
+  it('edits series-level taxonomy, cover, badge and selling point, with upload-only cover', () => {
     // 封面只读展示（封面框 + 顾客预览），只能通过 el-upload 上传
     expect(drawer).toContain(':src="form.coverImageUrl"')
     expect(drawer).toContain('v-model="form.sellingPoint"')
     expect(drawer).toContain('v-model="form.coverBadgeHealthTagIds"')
+    expect(drawer).toContain('series-release__taxonomy')
+    expect(drawer).toContain('QuickTaxonomyPicker')
     expect(drawer).toContain('eligibleHealthTags')
     expect(drawer).toContain('coverBadgeEligible')
     expect(drawer).toContain('hiddenBadges')
@@ -401,7 +403,7 @@ describe('编辑器 · 发布入口收口到食谱列表', () => {
     )
     expect(editor).not.toContain('seriesReleaseVisible')
     expect(editor).not.toContain('handleSeriesReleased')
-    expect(editor).not.toContain('发布 / 更新')
+
   })
 
   it('列表页仍是系列发布的唯一入口', () => {
@@ -417,7 +419,16 @@ describe('编辑器 · 发布入口收口到食谱列表', () => {
     const fnEnd = editor.indexOf('\n}\n', fnStart)
     const handler = editor.slice(fnStart, fnEnd)
     expect(handler).toContain('launchReadinessVisible.value = false')
-    expect(handler).toContain("router.push('/recipe-designer')")
+    expect(handler).toContain("path: '/recipe-designer'")
+    expect(handler).toContain('releaseSeriesId')
+    expect(handler).toContain('releaseSeriesName')
     expect(handler).not.toContain('loadDraft')
+  })
+
+  it('从编辑器跳过来时直接打开对应系列的发布 / 更新抽屉', () => {
+    expect(list).toContain('openReleaseDrawerFromQuery')
+    expect(list).toContain('releaseSeriesId')
+    expect(list).toContain('releaseDrawerVisible.value = true')
+    expect(list).toContain('openReleaseDrawerFromQuery()')
   })
 })

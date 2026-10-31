@@ -248,6 +248,18 @@
               </div>
             </el-form-item>
 
+            <!-- 2026-10-31：归类是系列级资料，和名称 / 封面 / 卖点 / 角标同一个维护入口 -->
+            <el-form-item label="快速归类" class="series-release__taxonomy">
+              <QuickTaxonomyPicker
+                :series-id="seriesId"
+                :show-title="false"
+                @saved="refreshReadiness"
+              />
+              <div class="series-release__hint">
+                归类是整条系列共用的；至少挂一个，发布后才会进货架分组。
+              </div>
+            </el-form-item>
+
             <el-form-item label="封面图" required>
               <div class="series-release__cover">
                 <el-upload
@@ -653,6 +665,7 @@ import {
 import { nutritionGovernanceApi } from '@/api/nutritionGovernance'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import AiNameField from './AiNameField.vue'
+import QuickTaxonomyPicker from './QuickTaxonomyPicker.vue'
 import { recipeApi } from '@/api/recipes'
 import {
   recipeHealthTagApi,
@@ -1767,6 +1780,14 @@ watch(
   font-size: 12px;
   line-height: 1.6;
   color: #909399;
+}
+
+.series-release__taxonomy {
+  margin-bottom: 14px;
+}
+
+.series-release__taxonomy :deep(.quick-taxonomy) {
+  margin-bottom: 0;
 }
 
 .series-release__form :deep(.el-form-item__label) {

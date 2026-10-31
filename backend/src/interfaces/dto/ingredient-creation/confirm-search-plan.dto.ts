@@ -1,6 +1,7 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayNotEmpty,
   IsArray,
   IsIn,
   IsOptional,
@@ -49,15 +50,13 @@ export class ConfirmSearchPlanDto {
   @IsIn([...SEARCH_PLAN_LIBRARIES], { each: true })
   libraries?: string[];
 
-  @ApiPropertyOptional({ description: '改后的来源记录 id' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(64)
-  chosenRecordId?: string;
-
-  @ApiPropertyOptional({ description: '改后的来源记录名' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  chosenRecordName?: string;
+  @ApiProperty({
+    description: '勾选的候选记录 id（可多条，每条各写一份档案）',
+    type: [String],
+  })
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  @MaxLength(64, { each: true })
+  selectedRecordIds!: string[];
 }

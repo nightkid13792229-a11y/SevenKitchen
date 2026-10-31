@@ -1,6 +1,10 @@
 import { createHash } from 'crypto';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { isIngredientCardFieldKey } from '../../domain/ingredient-creation/ingredient-card-fields';
+import {
+  computeCatalogCoverage,
+  readCatalogFieldValue,
+} from '../../domain/ingredient/nutrition-coverage';
 import { IngredientSkillService } from './ingredient-skill.service';
 import {
   classifyCookingMethod,
@@ -18,6 +22,7 @@ import {
   hasApprovedSearchPlan,
   type SearchPlan,
   type SearchPlanLibrary,
+  readSearchPlan,
 } from '../../domain/ingredient-creation/search-plan';
 import { normalizeUnit } from '../../domain/ingredient-creation/unit-guard';
 import {
@@ -49,6 +54,7 @@ import type {
   PendingQuestion,
   PendingQuestionOption,
   ProfileDraft,
+  SearchReportEntry,
 } from './ingredient-creation.types';
 
 /**
@@ -154,7 +160,7 @@ const SEARCH_LIBRARIES_TOOL: AgentToolDefinition = {
   function: {
     name: 'searchLibraries',
     description:
-      '按**指定营养库**检索原料名（只读）。每个库交一组检索词，代码只在该库里查；不做语种分流、不做同义扩展、不合并同名。返回每个库的命中总数与前 20 条（id / 名字 / 来源 key / 已填营养项）。某库命中为 0 或偏少时，看别的库返回的名字，换词再查一次。',
+      '按**指定营养库**检索原料名（只读）。每个库交一组检索词，代码只在该库里查；不做语种分流、不做同义扩展、不合并同名。返回每个库的命中总数与前 100 条（id / 名字 / 来源 key）。某库命中为 0 或偏少时，看别的库返回的名字，换词再查一次。',
     parameters: {
       type: 'object',
       properties: {
@@ -324,7 +330,7 @@ const GET_RECORD_TOOL: AgentToolDefinition = {
   function: {
     name: 'getRecord',
     description:
-      '读取某条来源记录里真实存在的全部营养素值（只读）。返回按营养字段目录输出的 fieldPath / value / unit、目录里缺的字段与生熟状态；coverage 是目录字段中有值的比例（%）。拿到值之后用 writeNutrition 把要写的字段一次性批量写入草稿（fieldPath 与 unit 原样照抄；单次最多 70 条）。没有值的字段不要编造、不要推算。',
+      '读取某条来源记录里真实存在的全部营养素值（只读）。返回按营养字段目录输出的 fieldPath / value / unit、目录里缺的字段与生熟状态；coverage 是目录字段中有值且不为 0 的比例（%，60 项口径）。拿到值之后用 writeNutrition 把要写的字段一次性批量写入草稿（fieldPath 与 unit 原样照抄；单次最多 70 条）。没有值的字段不要编造、不要推算。',
     parameters: {
       type: 'object',
       properties: {
@@ -354,6 +360,12 @@ const WRITE_NUTRITION_TOOL: AgentToolDefinition = {
           minimum: 0,
           description:
             '营养档案下标，从 0 开始。省略时按草稿已有档案与来源自动判断；等于当前档案数时按来源新建一份。',
+        },
+        preparationState: {
+          type: 'string',
+          enum: ['RAW', 'COOKED'],
+          description:
+            '新建档案时的生熟状态。来源记录推不出生熟时必须由方案指定；写入已有档案时忽略。',
         },
         entries: {
           type: 'array',
@@ -593,7 +605,7 @@ const PROPOSE_SEARCH_PLAN_TOOL: AgentToolDefinition = {
   function: {
     name: 'proposeSearchPlan',
     description:
-      '把「最终要怎么查、想用哪条记录」交给用户确认。提交后本轮立刻结束，等用户确认或修改。**查到候选之后必须用它，不要用 askUser 问「要哪一条」**——候选放进 candidates，让用户在方案卡里选。写原料卡 / 写营养之前必须先提交并获得确认；只读的查库、汇总、读来源不需要先确认。通常先查一轮拿到命中情况再提交，findings 才不会空；用户要求调整时重新提交一份新方案。',
+      '把「最终怎么查、候选有哪些」交给用户确认。提交后本轮立刻结束，等用户确认或修改。**查到候选之后必须用它，不要用 askUser 问「要哪一条」**——候选放进 candidates，用户会在方案卡里勾一条或多条。写原料卡 / 写营养之前必须先提交并获得确认；只读的查库、汇总、读来源不需要先确认。提交前必须已经用 searchLibraries 查过库（汇报块由系统记录）。用户要求调整时重新提交一份新方案。',
     parameters: {
       type: 'object',
       properties: {
@@ -632,31 +644,39 @@ const PROPOSE_SEARCH_PLAN_TOOL: AgentToolDefinition = {
         },
         candidates: {
           type: 'array',
-          maxItems: 5,
+          minItems: 1,
+          maxItems: 12,
           description:
-            '列给用户挑的候选来源记录（最多 5 条），按推荐程度排序；主选也放进 chosenRecordId。',
+            '列给用户勾的候选来源记录（1–12 条），按推荐程度排序；用户会勾一条或多条，每条各写一份档案。',
           items: {
             type: 'object',
             properties: {
-              recordId: { type: 'string', description: '来源记录 id（可选）。' },
-              name: { type: 'string', description: '记录名，最多 100 字。' },
-              sourceType: {
+              recordId: {
                 type: 'string',
-                description: '来源库，例如 USDA / TFDA。',
+                description: '来源记录 id，必须来自 searchLibraries 的返回。',
               },
-              state: { type: 'string', description: '生 / 熟，不知道就省略。' },
+              name: {
+                type: 'string',
+                description: '来源库里的原名，最多 100 字；不要拼编号/库名。',
+              },
+              state: {
+                type: 'string',
+                description: '展示用状态：生 / 熟 / 干 / 未标生熟 等。',
+              },
+              profileState: {
+                type: 'string',
+                enum: ['RAW', 'COOKED'],
+                description:
+                  '写档案用的状态：要生档案就 RAW，要熟档案就 COOKED；来源推不出时也要先定一个。',
+              },
+              reason: {
+                type: 'string',
+                description: '一句话入选原因，最多 120 字。',
+              },
             },
-            required: ['name'],
+            required: ['recordId', 'name', 'state', 'profileState', 'reason'],
             additionalProperties: false,
           },
-        },
-        chosenRecordId: {
-          type: 'string',
-          description: '打算用的来源记录 id；还没定就省略。',
-        },
-        chosenRecordName: {
-          type: 'string',
-          description: '打算用的记录名，方便用户认；还没定就省略。',
         },
         rationale: {
           type: 'string',
@@ -935,22 +955,6 @@ interface NutritionRecordValue {
   unit: string;
 }
 
-/** 按目录读一个字段：只认有限数字（含数字字符串），null / 缺失都算没有值。 */
-function readCatalogFieldValue(
-  profile: unknown,
-  fieldPath: string,
-): number | null {
-  if (!isRecord(profile)) {
-    return null;
-  }
-  const [tabKey, fieldKey] = fieldPath.split('.');
-  const tab = tabKey ? profile[tabKey] : undefined;
-  if (!isRecord(tab) || !fieldKey) {
-    return null;
-  }
-  return readFiniteNumber(tab[fieldKey]);
-}
-
 /**
  * 把 `normalizedNutrition` 压成「只带真实值」的清单。
  *
@@ -958,6 +962,31 @@ function readCatalogFieldValue(
  * - 目录字段超过 80 个时截断，并返回 truncated / omittedFieldCount
  *   （当前目录 60 个字段，这条是目录增长后的防御）。
  */
+/** 把检索流水按库折叠成「每库一行」：词去重、总数取最后一轮。 */
+function aggregateLibraryReports(
+  entries: readonly SearchReportEntry[],
+): Array<{ library: string; terms: string[]; total: number; rounds: number }> {
+  const byLibrary = new Map<
+    string,
+    { library: string; terms: string[]; total: number; rounds: number }
+  >();
+
+  for (const entry of entries) {
+    const current = byLibrary.get(entry.library) ?? {
+      library: entry.library,
+      terms: [],
+      total: 0,
+      rounds: 0,
+    };
+    current.terms = [...new Set([...current.terms, ...entry.terms])];
+    current.total = entry.total;
+    current.rounds += 1;
+    byLibrary.set(entry.library, current);
+  }
+
+  return [...byLibrary.values()];
+}
+
 function collectNutritionRecordValues(profile: unknown): {
   values: NutritionRecordValue[];
   missing: string[];
@@ -1436,7 +1465,7 @@ export class IngredientCreationToolsService {
 
     switch (input.name) {
       case 'searchLibraries':
-        return this.searchLibraries(input.args);
+        return this.searchLibraries(input.args, input.draftId);
       case 'loadSkill':
         return this.loadSkill(input.args);
       case 'summarizeByKeyword':
@@ -1465,6 +1494,7 @@ export class IngredientCreationToolsService {
   /** 按库检索：只按模型给的库与词查，不做任何扩展。 */
   private async searchLibraries(
     args: Record<string, unknown>,
+    draftId: string,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
     const rawGroups = args.groups;
     if (!Array.isArray(rawGroups) || rawGroups.length === 0) {
@@ -1521,6 +1551,26 @@ export class IngredientCreationToolsService {
       ),
     );
 
+    // 汇报数据由系统记录，不让模型复述：同一库多轮就留多条。
+    const draft = await this.draftService.get(draftId);
+    if (draft?.payload) {
+      const previous = Array.isArray(draft.payload.searchReport)
+        ? draft.payload.searchReport
+        : [];
+      const at = new Date().toISOString();
+      await this.draftService.patch(draftId, draft.step, {
+        searchReport: [
+          ...previous,
+          ...groups.map((group, index) => ({
+            library: group.library,
+            terms: group.terms,
+            total: results[index]?.total ?? 0,
+            at,
+          })),
+        ],
+      });
+    }
+
     const empty = results
       .filter((result) => result.total === 0)
       .map((result) => result.library);
@@ -1533,19 +1583,10 @@ export class IngredientCreationToolsService {
           total: result.total,
           hits: result.hits,
         })),
-        // 扁平视图：模型写方案、回话时常用；与 groups 是同一批数据。
+        // 扁平汇总：只给数字与词，行数据只在 groups 里，避免同一批数据传两遍。
         total: results.reduce((sum, result) => sum + result.total, 0),
         found: results.some((result) => result.total > 0),
-        keywords: [
-          ...new Set(groups.flatMap((group) => group.terms)),
-        ],
-        names: results.flatMap((result) =>
-          result.hits.map((hit) => ({
-            id: hit.id,
-            name: hit.name,
-            sourceType: hit.sourceType,
-          })),
-        ),
+        keywords: [...new Set(groups.flatMap((group) => group.terms))],
         hint:
           empty.length === 0
             ? '每库都命中了；同名多条是不同版本，逐条看，不要按名字合并。'
@@ -1965,13 +2006,8 @@ export class IngredientCreationToolsService {
 
     const { values, missing, truncated, omittedFieldCount } =
       collectNutritionRecordValues(record.normalizedNutrition);
-    const presentFieldCount = values.length + omittedFieldCount;
-    const coverage =
-      NUTRITION_FIELD_CATALOG.length === 0
-        ? 0
-        : Math.round(
-            (presentFieldCount / NUTRITION_FIELD_CATALOG.length) * 1000,
-          ) / 10;
+    // 与候选表同一口径：60 项目录、0 值不计入。
+    const coverage = computeCatalogCoverage(record.normalizedNutrition).percent;
 
     return {
       ok: true,
@@ -2040,6 +2076,28 @@ export class IngredientCreationToolsService {
       return this.error('entries 不能为空：至少提供 1 条营养字段。');
     }
 
+    const rawState = normalizeText(args.preparationState).toUpperCase();
+    if (rawState && rawState !== 'RAW' && rawState !== 'COOKED') {
+      return this.error('preparationState 只能是 RAW 或 COOKED。');
+    }
+    const explicitState =
+      rawState === 'RAW' || rawState === 'COOKED'
+        ? (rawState as PreparationState)
+        : null;
+
+    const entrySourceIds = new Set(
+      args.entries
+        .map((entry) =>
+          isRecord(entry) ? normalizeText(entry.sourceRecordId) : '',
+        )
+        .filter((id) => id.length > 0),
+    );
+    if (entrySourceIds.size > 1) {
+      return this.error(
+        '一份档案只能有一个来源：这批 entries 里出现了多个 sourceRecordId，请按来源分份写入。',
+      );
+    }
+
     const draft = await this.draftService.get(draftId);
     let profiles = readProfiles(draft);
 
@@ -2054,6 +2112,23 @@ export class IngredientCreationToolsService {
         return this.error(
           `草稿有 ${profiles.length} 份营养档案，无法自动判断写哪一份；请传 profileIndex（0..${profiles.length - 1}），或让 entries 里的 sourceRecordId 与其中一份档案一致。`,
         );
+      }
+    }
+
+    // 新建档案时，来源必须是用户在方案里勾中的记录；避免按名字重新挑到同库另一版。
+    if (profileIndex >= profiles.length) {
+      const plan = readSearchPlan(draft.payload.searchPlan);
+      const allowed = new Set(
+        (plan?.selections ?? []).map((selection) => selection.recordId),
+      );
+      if (allowed.size > 0) {
+        for (const sourceId of entrySourceIds) {
+          if (!allowed.has(sourceId)) {
+            return this.error(
+              `新档案的来源必须是检索方案里勾选的记录：${sourceId} 不在已确认的候选里。`,
+            );
+          }
+        }
       }
     }
 
@@ -2088,6 +2163,7 @@ export class IngredientCreationToolsService {
         fieldPath: validation.fieldPath,
         value: validation.value,
         sourceRecordId: validation.sourceRecordId,
+        explicitState,
         sourceCache,
       });
       if (!write.ok) {
@@ -2358,6 +2434,7 @@ export class IngredientCreationToolsService {
     fieldPath: string;
     value: number;
     sourceRecordId: string;
+    explicitState: PreparationState | null;
     sourceCache: Map<string, SourceRecordRow | null>;
   }): Promise<
     | {
@@ -2416,6 +2493,30 @@ export class IngredientCreationToolsService {
         };
       }
 
+      if (
+        input.explicitState &&
+        input.explicitState !== current.preparationState
+      ) {
+        return {
+          ok: false,
+          error: `第 ${profileIndex} 份档案是 ${
+            current.preparationState === 'RAW' ? '生' : '熟'
+          }，与方案里指定的 ${
+            input.explicitState === 'RAW' ? '生' : '熟'
+          } 不一致；要另写一份就新建档案（profileIndex = ${profiles.length}）。`,
+        };
+      }
+
+      if (
+        current.sourceRecordId &&
+        current.sourceRecordId !== input.sourceRecordId
+      ) {
+        return {
+          ok: false,
+          error: `一份档案只能有一个来源：第 ${profileIndex} 份档案来自 ${current.sourceRecordId}，不能写入 ${input.sourceRecordId} 的值。`,
+        };
+      }
+
       const existing = current.entries.find(
         (candidate) => candidate.fieldPath === fieldPath,
       );
@@ -2443,8 +2544,8 @@ export class IngredientCreationToolsService {
     }
 
     if (profileIndex === profiles.length) {
-      // 新草稿没有任何档案：第一次写入时按来源记录自动建一份（状态不猜）。
-      const state = derivePreparationStateFromSource(sourceRecord);
+      // 新建档案：优先用方案里指定的状态；没给才按来源推导（状态不猜）。
+      const state = input.explicitState ?? derivePreparationStateFromSource(sourceRecord);
       if (!state) {
         return {
           ok: false,
@@ -2690,25 +2791,30 @@ export class IngredientCreationToolsService {
     draftId: string,
     args: Record<string, unknown>,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
-    const built = buildPendingSearchPlan(args);
+    const draft = await this.draftService.get(draftId);
+    const report = Array.isArray(draft.payload.searchReport)
+      ? draft.payload.searchReport
+      : [];
+    if (report.length === 0) {
+      return this.error(
+        '还没有按库检索过：先调用 searchLibraries 查库，再交方案。',
+      );
+    }
+
+    const enriched = await this.enrichPlanCandidates(args.candidates);
+    if (!enriched.ok) {
+      return this.error(enriched.error);
+    }
+
+    const built = buildPendingSearchPlan({
+      ...args,
+      candidates: enriched.candidates,
+      libraryReports: aggregateLibraryReports(report),
+    });
     if (!built.ok) {
       return this.error(built.error);
     }
 
-    // 想指定的来源记录必须真实存在，否则确认后写营养会被这条 id 卡住。
-    if (built.plan.chosenRecordId) {
-      const record = await this.prisma.nutritionSourceRecord.findUnique({
-        where: { id: built.plan.chosenRecordId },
-        select: { id: true, status: true },
-      });
-      if (!record || record.status !== 'ACTIVE') {
-        return this.error(
-          `来源记录 ${built.plan.chosenRecordId} 不存在或已停用；先 getRecord 确认后再写进方案。`,
-        );
-      }
-    }
-
-    const draft = await this.draftService.get(draftId);
     await this.draftService.patch(draftId, draft.step, {
       searchPlan: built.plan,
     });
@@ -2721,6 +2827,70 @@ export class IngredientCreationToolsService {
       }),
       pendingPlan: built.plan,
     };
+  }
+
+  /** 候选只认真实、启用的记录；来源库与覆盖率由服务端补，模型给的不作数。 */
+  private async enrichPlanCandidates(
+    raw: unknown,
+  ): Promise<
+    { ok: true; candidates: unknown[] } | { ok: false; error: string }
+  > {
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return {
+        ok: false,
+        error:
+          '方案至少要有一条候选记录：全库 0 命中就换词重查，或如实告诉用户没有找到可用的营养档案。',
+      };
+    }
+
+    const candidates: unknown[] = [];
+    for (const item of raw) {
+      if (!isRecord(item)) {
+        return { ok: false, error: 'candidates 的每一项必须是对象。' };
+      }
+      const recordId = normalizeText(item.recordId);
+      if (!recordId) {
+        return { ok: false, error: 'candidates 每一项都要有 recordId。' };
+      }
+      const profileState = normalizeText(item.profileState).toUpperCase();
+      if (profileState !== 'RAW' && profileState !== 'COOKED') {
+        return {
+          ok: false,
+          error: `候选 ${recordId} 缺少 profileState（RAW / COOKED）：来源推不出生熟时也要先定一个，再交方案。`,
+        };
+      }
+
+      const record = await this.prisma.nutritionSourceRecord.findUnique({
+        where: { id: recordId },
+        select: {
+          id: true,
+          status: true,
+          sourceType: true,
+          foodName: true,
+          normalizedNutrition: true,
+        },
+      });
+      if (!record) {
+        return {
+          ok: false,
+          error: `来源记录 ${recordId} 不存在；候选只能从 searchLibraries 返回的记录里挑。`,
+        };
+      }
+      if (record.status !== 'ACTIVE') {
+        return { ok: false, error: `来源记录 ${recordId} 已停用，不能进候选。` };
+      }
+
+      candidates.push({
+        ...item,
+        recordId,
+        profileState,
+        sourceType: record.sourceType,
+        name: normalizeText(item.name) || record.foodName,
+        coverage: computeCatalogCoverage(record.normalizedNutrition).percent,
+      });
+    }
+
+    return { ok: true, candidates };
   }
 
   /**

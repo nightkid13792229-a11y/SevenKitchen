@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { IngredientSkillService } from '../../../src/application/ingredient-creation/ingredient-skill.service';
 
 /**
@@ -31,7 +33,7 @@ describe('IngredientSkillService · 仓库里的真实技能文件', () => {
     expect(body).toContain('必须选覆盖率高的');
     expect(body).toContain('未标生熟');
     // 候选名只写原名，不拼来源 key。
-    expect(body).toContain('不要拼来源 key');
+    expect(body).toContain('不拼编号');
   });
 
   it('名字扩展：简繁两种写法要同时给 CFCT 和 TFDA', () => {
@@ -48,5 +50,22 @@ describe('IngredientSkillService · 仓库里的真实技能文件', () => {
     // 按需加载的技能会留在上下文里，每多 100 字都会在后续每一轮重复计费。
     expect(record.length).toBeLessThan(1400);
     expect(expansion.length).toBeLessThan(1000);
+  });
+
+  it('core 明确要求交方案前先用按库检索查过', () => {
+    const body = service.load('core')?.body ?? '';
+
+    expect(body).toContain('searchLibraries');
+    expect(body).toContain('proposeSearchPlan');
+    expect(body).toContain('每条');
+  });
+
+  it('仓库里那份写着旧工具名的技能文档已删除', () => {
+    const legacy = resolve(
+      __dirname,
+      '../../../../skills/ingredient-agent/SKILL.md',
+    );
+
+    expect(existsSync(legacy)).toBe(false);
   });
 });

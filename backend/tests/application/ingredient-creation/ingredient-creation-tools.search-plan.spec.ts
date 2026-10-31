@@ -14,8 +14,17 @@ const VALID_ARGS = {
   ],
   libraries: ['CFCT', 'USDA'],
   findings: 'CFCT 0 条；USDA 3 条（raw / dried）',
-  chosenRecordId: 'd6705357-d14b-48c0-81b0-d6cd347f7a88',
-  chosenRecordName: 'Egg, white, raw, fresh',
+  candidates: [
+    {
+      recordId: 'd6705357-d14b-48c0-81b0-d6cd347f7a88',
+      name: 'Egg, white, raw, fresh',
+      sourceType: 'USDA',
+      state: '生',
+      profileState: 'RAW',
+      coverage: 52,
+      reason: '英文名统一',
+    },
+  ],
   rationale: '英文名在 USDA 更统一',
 };
 
@@ -28,7 +37,17 @@ function createHarness(
     name: '鸡蛋清',
     type: 'FOOD',
     step: 'INTAKE',
-    payload,
+    payload: {
+      searchReport: [
+        {
+          library: 'USDA',
+          terms: ['egg white'],
+          total: 1,
+          at: '2026-10-29T00:00:00.000Z',
+        },
+      ],
+      ...payload,
+    },
     createdBy: 'admin-1',
     createdAt: new Date('2026-10-29T00:00:00.000Z'),
     updatedAt: new Date('2026-10-29T00:00:00.000Z'),
@@ -107,8 +126,9 @@ const APPROVED_PLAN = {
   keywords: [{ term: '鸡蛋清', language: 'zh' }],
   libraries: ['USDA'],
   findings: '',
-  chosenRecordId: null,
-  chosenRecordName: null,
+  libraryReports: [],
+  candidates: [],
+  selections: [],
   rationale: '',
   proposedAt: '2026-10-29T00:00:00.000Z',
   approvedAt: '2026-10-29T00:00:01.000Z',
@@ -126,7 +146,9 @@ describe('IngredientCreationToolsService · 检索方案', () => {
     expect(result.pendingPlan).toMatchObject({
       status: 'PENDING',
       libraries: ['CFCT', 'USDA'],
-      chosenRecordName: 'Egg, white, raw, fresh',
+      candidates: [
+        expect.objectContaining({ name: 'Egg, white, raw, fresh' }),
+      ],
     });
     expect(draftService.patch).toHaveBeenCalledWith(
       DRAFT_ID,
@@ -135,6 +157,81 @@ describe('IngredientCreationToolsService · 检索方案', () => {
         searchPlan: expect.objectContaining({ status: 'PENDING' }),
       }),
     );
+  });
+
+  it('工具定义要求每条候选带 profileState 与 reason，且不再有单主选字段', () => {
+    const { tools } = createHarness();
+    const definition = tools
+      .getDefinitions()
+      .find((tool) => tool.function.name === 'proposeSearchPlan');
+
+    const parameters = definition?.function.parameters as {
+      properties: Record<string, any>;
+    };
+    const candidates = parameters.properties.candidates;
+
+    expect(candidates.maxItems).toBe(12);
+    expect(candidates.items.required).toEqual(
+      expect.arrayContaining(['recordId', 'name', 'state', 'profileState', 'reason']),
+    );
+    expect(candidates.items.properties.profileState.enum).toEqual(['RAW', 'COOKED']);
+    expect(parameters.properties.chosenRecordId).toBeUndefined();
+    expect(parameters.properties.chosenRecordName).toBeUndefined();
+  });
+
+  it('没有按库检索过 → 拒绝交方案', async () => {
+    const { tools } = createHarness({ searchReport: [] });
+
+    const result = await call(tools, 'proposeSearchPlan', VALID_ARGS);
+
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toContain('searchLibraries');
+  });
+
+  it('候选记录不存在 → 拒绝', async () => {
+    const { tools, prisma } = createHarness();
+    (
+      prisma.nutritionSourceRecord.findUnique as jest.Mock
+    ).mockResolvedValueOnce(null);
+
+    const result = await call(tools, 'proposeSearchPlan', VALID_ARGS);
+
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toContain('不存在');
+  });
+
+  it('来源库与覆盖率由服务端补，模型给的不作数', async () => {
+    const { tools, prisma } = createHarness();
+    (
+      prisma.nutritionSourceRecord.findUnique as jest.Mock
+    ).mockResolvedValueOnce({
+      id: 'd6705357-d14b-48c0-81b0-d6cd347f7a88',
+      status: 'ACTIVE',
+      sourceType: 'USDA',
+      foodName: 'Egg, white, raw, fresh',
+      normalizedNutrition: { macros: { crudeProtein: 10 } },
+    });
+
+    const result = await call(tools, 'proposeSearchPlan', {
+      ...VALID_ARGS,
+      candidates: [
+        {
+          ...VALID_ARGS.candidates[0],
+          sourceType: 'CFCT',
+          coverage: 99,
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.pendingPlan).toMatchObject({
+      candidates: [
+        expect.objectContaining({
+          sourceType: 'USDA',
+          coverage: 1.7,
+        }),
+      ],
+    });
   });
 
   it('目标库不在白名单 → 拒绝，且不写草稿', async () => {
@@ -147,7 +244,11 @@ describe('IngredientCreationToolsService · 检索方案', () => {
 
     expect(result.ok).toBe(false);
     expect(String(result.error)).toContain('GOOGLE');
-    expect(draftService.patch).not.toHaveBeenCalled();
+    // 零命中不记「查到过候选」的记号，但检索流水照样要记（汇报块要用）。
+    const patches = draftService.patch.mock.calls.map(
+      (call) => call[2] as Record<string, unknown>,
+    );
+    expect(patches.some((payload) => 'searchProbe' in payload)).toBe(false);
   });
 
   it('没有方案就写原料卡 → 拒绝，且不动草稿', async () => {
@@ -159,7 +260,11 @@ describe('IngredientCreationToolsService · 检索方案', () => {
 
     expect(result.ok).toBe(false);
     expect(String(result.error)).toContain('检索方案');
-    expect(draftService.patch).not.toHaveBeenCalled();
+    // 零命中不记「查到过候选」的记号，但检索流水照样要记（汇报块要用）。
+    const patches = draftService.patch.mock.calls.map(
+      (entry) => entry[2] as Record<string, unknown>,
+    );
+    expect(patches.some((payload) => 'searchProbe' in payload)).toBe(false);
   });
 
   it('方案还是待确认 → 同样拒绝写原料卡', async () => {
@@ -238,7 +343,11 @@ describe('IngredientCreationToolsService · 查到候选后不许用提问代替
       groups: [{ library: 'CFCT', terms: ['不存在的名字'] }],
     });
 
-    expect(draftService.patch).not.toHaveBeenCalled();
+    // 零命中不记「查到过候选」的记号，但检索流水照样要记（汇报块要用）。
+    const patches = draftService.patch.mock.calls.map(
+      (entry) => entry[2] as Record<string, unknown>,
+    );
+    expect(patches.some((payload) => 'searchProbe' in payload)).toBe(false);
   });
 
   it('查到候选、还没交方案 → 拒绝提问', async () => {

@@ -118,11 +118,21 @@ describe('reduceAgentEvents · 检索方案', () => {
         keywords: [{ term: '鸡蛋清', language: 'zh' }],
         libraries: ['CFCT', 'USDA'],
         findings: 'CFCT 0 条',
-        candidates: [
-          { recordId: 'rec-1', name: 'Egg, white, raw', sourceType: 'USDA', state: 'RAW' }
+        libraryReports: [
+          { library: 'CFCT', terms: ['鸡蛋清'], total: 0, rounds: 1 }
         ],
-        chosenRecordId: null,
-        chosenRecordName: null,
+        candidates: [
+          {
+            recordId: 'rec-1',
+            name: 'Egg, white, raw',
+            sourceType: 'USDA',
+            state: '生',
+            profileState: 'RAW',
+            coverage: 52,
+            reason: '英文名统一'
+          }
+        ],
+        selections: [],
         rationale: '',
         proposedAt: '2026-10-29T00:00:00.000Z',
         approvedAt: null,
@@ -136,7 +146,15 @@ describe('reduceAgentEvents · 检索方案', () => {
       libraries: ['CFCT', 'USDA']
     })
     expect(state.pendingPlan?.candidates).toEqual([
-      { recordId: 'rec-1', name: 'Egg, white, raw', sourceType: 'USDA', state: 'RAW' }
+      {
+        recordId: 'rec-1',
+        name: 'Egg, white, raw',
+        sourceType: 'USDA',
+        state: '生',
+        profileState: 'RAW',
+        coverage: 52,
+        reason: '英文名统一'
+      }
     ])
     expect(state.draftId).toBe('draft-1')
     expect(state.done).toBe(false)

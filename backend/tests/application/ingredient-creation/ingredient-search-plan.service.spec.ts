@@ -12,8 +12,19 @@ function pendingPlan(overrides: Record<string, unknown> = {}) {
     keywords: [{ term: '鸡蛋清', language: 'zh' }],
     libraries: ['CFCT', 'USDA'],
     findings: 'CFCT 0 条；USDA 3 条',
-    chosenRecordId: null,
-    chosenRecordName: null,
+    libraryReports: [],
+    candidates: [
+      {
+        recordId: 'r1',
+        name: '鸡蛋清',
+        sourceType: 'CFCT',
+        state: '生',
+        profileState: 'RAW',
+        coverage: 60,
+        reason: '',
+      },
+    ],
+    selections: [],
     rationale: '英文名更统一',
     proposedAt: NOW.toISOString(),
     approvedAt: null,
@@ -60,7 +71,7 @@ describe('IngredientSearchPlanService', () => {
 
     const plan = await service.confirm(
       DRAFT_ID,
-      {},
+      { selectedRecordIds: ['r1'] },
       { userId: 'admin-1', now: NOW },
     );
 
@@ -83,7 +94,10 @@ describe('IngredientSearchPlanService', () => {
 
     const plan = await service.confirm(
       DRAFT_ID,
-      { keywords: [{ term: '蛋清', language: 'zh' }] },
+      {
+        keywords: [{ term: '蛋清', language: 'zh' }],
+        selectedRecordIds: ['r1'],
+      },
       { userId: 'admin-1', now: NOW },
     );
 
@@ -91,11 +105,51 @@ describe('IngredientSearchPlanService', () => {
     expect(plan.editedByUser).toBe(true);
   });
 
+  it('多选两条（不同库）→ selections 两条', async () => {
+    const { service } = createHarness(
+      pendingPlan({
+        candidates: [
+          {
+            recordId: 'r1',
+            name: '鸡蛋清',
+            sourceType: 'CFCT',
+            state: '生',
+            profileState: 'RAW',
+            coverage: 60,
+            reason: '',
+          },
+          {
+            recordId: 'r2',
+            name: '卵白',
+            sourceType: 'MEXT',
+            state: '生',
+            profileState: 'RAW',
+            coverage: 78.3,
+            reason: '',
+          },
+        ],
+      }),
+    );
+
+    const plan = await service.confirm(
+      DRAFT_ID,
+      { selectedRecordIds: ['r1', 'r2'] },
+      { userId: 'admin-1', now: NOW },
+    );
+
+    expect(plan.selections.map((item) => item.recordId)).toEqual(['r1', 'r2']);
+    expect(plan.status).toBe('APPROVED');
+  });
+
   it('没有待确认的方案 → 400 中文原因', async () => {
     const { service, patch } = createHarness(null);
 
     await expect(
-      service.confirm(DRAFT_ID, {}, { userId: 'admin-1', now: NOW }),
+      service.confirm(
+        DRAFT_ID,
+        { selectedRecordIds: ['r1'] },
+        { userId: 'admin-1', now: NOW },
+      ),
     ).rejects.toThrow(BadRequestException);
     expect(patch).not.toHaveBeenCalled();
   });
@@ -106,7 +160,11 @@ describe('IngredientSearchPlanService', () => {
     );
 
     await expect(
-      service.confirm(DRAFT_ID, {}, { userId: 'admin-1', now: NOW }),
+      service.confirm(
+        DRAFT_ID,
+        { selectedRecordIds: ['r1'] },
+        { userId: 'admin-1', now: NOW },
+      ),
     ).rejects.toThrow(BadRequestException);
     expect(patch).not.toHaveBeenCalled();
   });
@@ -117,7 +175,7 @@ describe('IngredientSearchPlanService', () => {
     await expect(
       service.confirm(
         DRAFT_ID,
-        { libraries: ['GOOGLE'] },
+        { libraries: ['GOOGLE'], selectedRecordIds: ['r1'] },
         { userId: 'admin-1', now: NOW },
       ),
     ).rejects.toThrow(BadRequestException);

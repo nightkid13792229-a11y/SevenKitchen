@@ -382,6 +382,13 @@ export function toProfileRows(
     usable.map((item) => [item.profile, item.index] as const)
   )
 
+  // 同一状态有多份档案时，标签要带来源才分得清（生 · CFCT / 生 · MEXT）。
+  const stateCounts = new Map<string, number>()
+  for (const item of usable) {
+    const state = item.profile.preparationState
+    stateCounts.set(state, (stateCounts.get(state) ?? 0) + 1)
+  }
+
   return sortProfilesByState(usable.map((item) => item.profile))
     .map((profile) => {
       const entryByPath = new Map(
@@ -421,13 +428,19 @@ export function toProfileRows(
       })
 
       const preparationState = profile.preparationState
+      const sourceLabel = formatSourceLabel(profile.sourceRecordId, sourceNames)
+      const baseStateLabel = PREPARATION_STATE_LABELS[preparationState]
+      const stateLabel =
+        (stateCounts.get(preparationState) ?? 0) > 1
+          ? `${baseStateLabel} · ${sourceLabel}`
+          : baseStateLabel
 
       return {
         profileIndex: indexByProfile.get(profile) ?? 0,
         preparationState,
-        stateLabel: PREPARATION_STATE_LABELS[preparationState],
+        stateLabel,
         sourceRecordId: profile.sourceRecordId,
-        sourceLabel: formatSourceLabel(profile.sourceRecordId, sourceNames),
+        sourceLabel,
         rows,
         pendingCount: rows.filter((row) => row.status === 'PENDING').length
       }

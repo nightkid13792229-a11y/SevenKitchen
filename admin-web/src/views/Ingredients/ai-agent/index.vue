@@ -410,31 +410,62 @@
           <p class="agent-plan__hint">
             查库阶段已经跑完。确认之后我才开始写原料卡和营养档案；要改就直接在下面说，我会重新提一份。
           </p>
+          <div
+            v-if="state.pendingPlan.libraryReports.length > 0"
+            class="agent-plan__report"
+          >
+            <div
+              v-for="report in state.pendingPlan.libraryReports"
+              :key="report.library"
+              class="agent-plan__report-row"
+            >
+              <b>{{ report.library }}</b>
+              <span class="agent-plan__report-terms">
+                {{ report.terms.join('、') }}
+              </span>
+              <span class="agent-plan__meta">命中 {{ report.total }} 条</span>
+              <span v-if="report.rounds > 1" class="agent-plan__meta">
+                查了 {{ report.rounds }} 轮
+              </span>
+            </div>
+          </div>
+
           <p v-if="state.pendingPlan.findings" class="agent-plan__findings">
-            已查到：{{ state.pendingPlan.findings }}
+            AI 判断：{{ state.pendingPlan.findings }}
           </p>
 
           <div
             v-if="state.pendingPlan.candidates.length > 0"
-            class="agent-plan__row"
+            class="agent-plan__row agent-plan__row--table"
           >
-            <span class="agent-plan__label">用哪条</span>
-            <el-radio-group v-model="chosenRecordKey" class="agent-plan__radios">
-              <el-radio
-                v-for="candidate in state.pendingPlan.candidates"
-                :key="candidate.recordId || candidate.name"
-                :value="candidate.recordId || candidate.name"
-              >
-                {{ candidate.name }}
-                <span v-if="candidate.sourceType" class="agent-plan__meta">
-                  {{ candidate.sourceType }}
-                </span>
-                <span v-if="candidate.state" class="agent-plan__meta">
-                  {{ candidate.state }}
-                </span>
-              </el-radio>
-            </el-radio-group>
+            <span class="agent-plan__label">候选档案</span>
+            <el-table
+              :data="state.pendingPlan.candidates"
+              size="small"
+              class="agent-plan__table"
+            >
+              <el-table-column width="44">
+                <template #default="{ row }">
+                  <el-checkbox
+                    :model-value="selectedRecordIds.includes(row.recordId)"
+                    :disabled="isCandidateDisabled(row)"
+                    :aria-label="`选择 ${row.name}`"
+                    @change="toggleCandidate(row)"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column prop="name" label="词条名称" min-width="150" />
+              <el-table-column prop="sourceType" label="来源库" width="88" />
+              <el-table-column prop="state" label="状态" width="90" />
+              <el-table-column label="字段覆盖率（60 项）" width="140">
+                <template #default="{ row }">{{ row.coverage }}%</template>
+              </el-table-column>
+              <el-table-column prop="reason" label="入选原因" min-width="200" />
+            </el-table>
           </div>
+          <p v-else class="agent-plan__empty">
+            这次没有可选的营养档案：可以继续补检索词重查，或告诉我改去线上补充。
+          </p>
 
           <div class="agent-plan__row">
             <span class="agent-plan__label">搜索词</span>
@@ -1168,8 +1199,8 @@ const planDraft = reactive<{ keywords: SearchPlanKeyword[]; libraries: string[] 
   { keywords: [], libraries: [] }
 )
 const planConfirming = ref(false)
-/** 方案卡里选中的候选记录（key = recordId 或名字）。 */
-const chosenRecordKey = ref('')
+/** 方案卡里勾中的候选记录 id（可多条，每条各写一份档案）。 */
+const selectedRecordIds = ref<string[]>([])
 
 watch(
   () => state.pendingPlan,
@@ -1179,16 +1210,43 @@ watch(
     }
     planDraft.keywords = plan.keywords.map((item) => ({ ...item }))
     planDraft.libraries = [...plan.libraries]
-    chosenRecordKey.value =
-      plan.chosenRecordId ?? plan.candidates[0]?.recordId ?? ''
+    selectedRecordIds.value = plan.selections.map((item) => item.recordId)
   },
   { immediate: true }
 )
+
+const selectedCandidates = computed(() =>
+  (state.pendingPlan?.candidates ?? []).filter((candidate) =>
+    selectedRecordIds.value.includes(candidate.recordId)
+  )
+)
+
+/** 同一来源库 + 同一状态下已经有别的记录被勾中 → 这一条不能再勾。 */
+function isCandidateDisabled(candidate: any) {
+  if (selectedRecordIds.value.includes(candidate.recordId)) {
+    return false
+  }
+  return selectedCandidates.value.some(
+    (picked) =>
+      picked.sourceType === candidate.sourceType &&
+      picked.profileState === candidate.profileState
+  )
+}
+
+function toggleCandidate(candidate: any) {
+  const index = selectedRecordIds.value.indexOf(candidate.recordId)
+  if (index >= 0) {
+    selectedRecordIds.value.splice(index, 1)
+  } else {
+    selectedRecordIds.value.push(candidate.recordId)
+  }
+}
 
 const planCanConfirm = computed(
   () =>
     planDraft.keywords.some((item) => item.term.trim().length > 0) &&
     planDraft.libraries.length > 0 &&
+    selectedRecordIds.value.length > 0 &&
     !planConfirming.value
 )
 
@@ -1208,10 +1266,6 @@ async function confirmPlan() {
     return
   }
 
-  const picked = (plan.candidates ?? []).find(
-    (item) => (item.recordId || item.name) === chosenRecordKey.value
-  )
-
   planConfirming.value = true
   try {
     await ingredientCreationApi.confirmSearchPlan(draftId, {
@@ -1222,11 +1276,11 @@ async function confirmPlan() {
         }))
         .filter((item) => item.term.length > 0),
       libraries: [...planDraft.libraries],
-      ...(picked?.recordId ? { chosenRecordId: picked.recordId } : {}),
-      ...(picked?.name ? { chosenRecordName: picked.name } : {})
+      selectedRecordIds: [...selectedRecordIds.value]
     })
     state.pendingPlan = null
-    inputText.value = '检索方案已确认，请按方案继续。'
+    const count = selectedRecordIds.value.length
+    inputText.value = `检索方案已确认：选中的 ${count} 条记录各写一份营养档案，profileIndex 从当前草稿的档案数开始递增，每条只用它自己的来源记录；写完调用 selfCheck。`
     await handleRun()
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error, '确认失败，请稍后重试'))

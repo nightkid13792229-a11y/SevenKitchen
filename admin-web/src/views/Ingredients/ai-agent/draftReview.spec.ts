@@ -236,6 +236,27 @@ describe('审核页 · 营养档案映射', () => {
     })
   })
 
+  it('同一状态多份档案时，标签带来源才分得清', () => {
+    const raw = (payload.profiles ?? []).find(
+      (profile) => profile.preparationState === 'RAW'
+    )!
+    const groups = toProfileRows(
+      {
+        ...payload,
+        profiles: [
+          raw,
+          { ...raw, sourceRecordId: 'src-mext', entries: [] },
+        ],
+      },
+      new Map([...SOURCE_NAMES, ['src-mext', '卵白 生']])
+    )
+
+    expect(groups.map((group) => group.stateLabel)).toEqual([
+      '生 · Chicken, liver, raw',
+      '生 · 卵白 生',
+    ])
+  })
+
   it('每份档案都铺满字段目录，状态映射成 直接 / 补位 / 人工 / 待补', () => {
     const [raw] = toProfileRows(payload, SOURCE_NAMES)
 

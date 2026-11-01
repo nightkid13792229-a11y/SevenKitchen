@@ -161,10 +161,39 @@ Merck 的 5 个页面各存了 `.html` 和 `.txt` 两份。**.txt 是正文，.h
 
 ---
 
-## 十、执行记录
+## 十、执行记录（2026-11-01）
 
-1. **异宠 3 章（仓鼠/爬行/鸟）** 直接删，还是也留着标"无关"？
-2. 作废版本（AAHA 2014、ACVIM 2010、WSAVA 疫苗 2015）**标历史保留**，还是直接删？
-3. 新增 7 份里，第 7 份（中国宠物食品国标）要不要一起补？取决于我们出不出产品标签。
+### 已执行
 
-> 你点头后，我按这张表执行：删 13、标历史 5、替换 1、补正文 2，并把新来源的获取清单列出来。
+| 项 | 结果 |
+|---|---|
+| 本地删除 | **18 份**，170 → **152 个来源文件 / 646 MB** |
+| 生产删除 | 同样 18 份，生产现存 **152 份**（与本地一致） |
+| 生产补传 | 补传了此前缺失的 `ACVIM-2019-犬MMVD-官方摘要卡片.pdf` |
+| manifest 重建 | 152 行，与磁盘逐一对齐；已同步到本地、生产、仓库三处 |
+| 引用修复 | `weight-management.ts`：11 处指向 AAHA 2014 的出处删除、1 处换成 AAHA 2021；`lab-urine-imaging.ts`：2 处 ACVIM 2010 → 2023 |
+| 正文标注 | `weight-management.ts` 中 **19 处** `AAHA 2014：…` 改为 `AAHA 2014（已停用）：…`，文件头写明待复核规则 |
+| 代码登记表 | `AAHA-2014-WEIGHT`、`WSAVA-VACC-2015` 的 `local` 改为 `false` 并注明已停用 |
+| 校验 | `tsc --noEmit` 改动文件 0 报错；知识库启动校验通过（健康条目 189 条，0 硬问题） |
+
+### 删除清单（18 份，SHA256 已记录）
+
+| # | 文件 | 大小 | 类别 |
+|---:|---|---:|---|
+| 1 | `sacn5/chapters/SACN5_70.pdf` | 2.32 MB | 异宠 |
+| 2 | `sacn5/chapters/SACN5_71.pdf` | 8.02 MB | 异宠 |
+| 3 | `sacn5/chapters/SACN5_72.pdf` | 1.24 MB | 异宠 |
+| 4-8 | `merck/*.html`（临床生化、血液学、肝功能、皮肤病维生素与矿物质、营养性皮肤病） | 1.42 MB | 重复形态 |
+| 9-10 | `wsava/gastrointestinal/forms/Final_{Lower,Upper}_Endoscopy_Report_Form.pdf` | 0.12 MB | 非知识 |
+| 11 | `wsava/nutrition/manifest.csv` | — | 非知识 |
+| 12 | `wsava/renal/Renal-Standardization-Brochure.pdf` | 2.06 MB | 空壳（0 字符扫描件） |
+| 13 | `aaha/AAHA-2019-Dental-Care-Guidelines-mirror.pdf` | 0.52 MB | 空壳（1 页残件） |
+| 14-15 | `wsava/vaccination/WSAVA-{Vaccination-Guidelines-2015,2015疫苗接种指南-中文}.pdf` | 1.78 MB | 作废版本 |
+| 16 | `acvim/ACVIM-2010-钩端螺旋体病-历史版本.xml` | 0.19 MB | 作废版本 |
+| 17-18 | `aaha/AAHA-2014-Weight-Management-{Guidelines,Implementation-Toolkit}.pdf` | 5.04 MB | 作废版本 |
+
+### 遗留待办
+
+1. **19 处「AAHA 2014（已停用）」数值待复核**——SACN5 第 27 章能支撑的（1%/周、2.5%/周等）改引 SACN5；支撑不了的降级或删除。
+2. **10 份新来源待获取**（见第九节）。
+3. **WSAVA 疼痛中文扫描件待替换**为英文正本。

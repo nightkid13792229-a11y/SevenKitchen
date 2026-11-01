@@ -40,8 +40,8 @@ export const KNOWLEDGE_SOURCES: readonly KnowledgeSourceRecord[] = [
     name: 'WSAVA 疫苗接种指南（历史版）',
     version: '2015',
     tier: 'A',
-    local: true,
-    role: '对照历史口径；不作为首选依据',
+    local: false,
+    role: '⚠️ 2026-11-01 已停用并删除原件（被 2024 版取代）；不再作为依据',
   },
   {
     id: 'AAHA-VACC-2022',
@@ -114,8 +114,8 @@ export const KNOWLEDGE_SOURCES: readonly KnowledgeSourceRecord[] = [
     name: 'AAHA 体重管理指南',
     version: '2014',
     tier: 'A',
-    local: true,
-    role: '⚠️ 已被 2021 版取代，降级为历史来源，不再作首选',
+    local: false,
+    role: '⚠️ 2026-11-01 已停用并删除原件（被 2021 版取代）；引用它的数值待复核',
   },
 
   // ── 检查指标解读 ────────────────────────────────────────

@@ -3,6 +3,7 @@ import {
   DEFAULT_ORDER_CYCLE_DAYS,
   MIN_PACKAGE_SPEC_G,
   buildDefaultPackagePlan,
+  getPackagePlanTotal,
   type PackagePlanItem,
 } from '@/utils/order-package-plan'
 
@@ -72,23 +73,9 @@ export function usePackagePlan(options: {
    * 所以用回调把"改完之后要做什么"交还给页面。
    */
   onPlanChanged?: () => void
-  /**
-   * 进入「自定义分装」时是否**清空天数选择**（默认 `false`）。
-   *
-   * ⚠️ 这是两个页面**真实的产品差异**，不是实现细节：
-   *
-   * · **成品订购页要清** —— 顾客既然自己定每袋多少克、多少袋，
-   *   "按 7 天配送"就不再是约束条件了，留着会让人以为还按天数算
-   * · **DIY 配置页不清** —— 那页的天数还参与饭量/用量换算
-   *
-   * 一开始我把两个页面的 `togglePackageEditor` 当成"一字不差"合并了，
-   * 结果订购页少了这一句 —— 表现为**进入自定义分装后天数还显示着**，容易误导。
-   */
-  clearCycleOnCustom?: boolean
 }) {
   // 参数解构（链式调用会被项目守卫误读成 `options()`，见 useLifeStageVersion 里的同类说明）
-  const { dailyIntakeG, mealsPerDay, dogId, perMealG, onPlanChanged, clearCycleOnCustom } =
-    options
+  const { dailyIntakeG, mealsPerDay, dogId, perMealG, onPlanChanged } = options
 
   /** 配送周期（7 / 15 / 30 天） */
   const selectedCycleDays = ref<number | null>(DEFAULT_ORDER_CYCLE_DAYS)
@@ -168,10 +155,9 @@ export function usePackagePlan(options: {
 
     lastSelectedCycleDays.value =
       selectedCycleDays.value || lastSelectedCycleDays.value
-    if (clearCycleOnCustom) {
-      // 顾客自己定分装，天数不再是约束 —— 清掉，免得看着以为还按天数算
-      selectedCycleDays.value = null
-    }
+    // 2026-11-01：天数已不参与任何计算（制作单/补剂都不用），两页统一清空，
+    // 免得顾客看着"7 天"以为还按天数算。
+    selectedCycleDays.value = null
     isCustomPackagePlan.value = true
     showPackageEditor.value = true
     // 进入自定义后分装变了（要按默认重建），价格得重算
@@ -244,6 +230,42 @@ export function usePackagePlan(options: {
     ),
   )
 
+  /**
+   * 以下五个是「两个页面 + 展示组件」都要用的派生值（2026-11-01 收进 composable）。
+   *
+   * 以前每个页面各写一遍：
+   *   normalizedPackagePlan / totalGrams / totalPackages / 校验文案 / 摘要文案
+   * 两份实现迟早会漂移（比如摘要里一个写"约N天"一个不写，最后就是漂了）。
+   * 审核口径只有一份，页面与组件都从这里取。
+   */
+  const normalizedPackagePlan = computed(() =>
+    packagePlan.value.map((row) => normalizePackagePlanRow(row)),
+  )
+  const packagePlanTotal = computed(() =>
+    getPackagePlanTotal(normalizedPackagePlan.value),
+  )
+  const totalGrams = computed(() => packagePlanTotal.value.totalGrams)
+  const totalPackages = computed(() => packagePlanTotal.value.totalPackages)
+
+  /** 每袋克数低于下限时为 true（0 表示还没填，也算不合法） */
+  const hasInvalidPackageSpec = computed(() =>
+    normalizedPackagePlan.value.some((row) => row.packageSpecG < MIN_PACKAGE_SPEC_G),
+  )
+  const validationMessage = computed(() =>
+    hasInvalidPackageSpec.value
+      ? `每袋重量不能少于 ${MIN_PACKAGE_SPEC_G}g`
+      : '',
+  )
+
+  /** 摘要只讲这一单的物理规格：每袋多少 / 共几袋 / 总净重（不谈"能吃几天"） */
+  const inlineSummaryText = computed(() => {
+    const specs = Array.from(
+      new Set(normalizedPackagePlan.value.map((row) => `${row.packageSpecG}g`)),
+    )
+    const specText = specs.length > 0 ? specs.join('、') : '-'
+    return `每袋 ${specText} / 共${totalPackages.value}袋 / 总净重 ${Math.round(totalGrams.value)}g`
+  })
+
   return {
     selectedCycleDays,
     lastSelectedCycleDays,
@@ -252,6 +274,12 @@ export function usePackagePlan(options: {
     showPackageEditor,
     isCustomPackagePlan,
     packagePlanTotalG,
+    normalizedPackagePlan,
+    totalGrams,
+    totalPackages,
+    hasInvalidPackageSpec,
+    validationMessage,
+    inlineSummaryText,
     normalizePackageSpecValue,
     normalizePackagePlanRow,
     rebuildPackagePlan,

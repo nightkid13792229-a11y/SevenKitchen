@@ -31,7 +31,7 @@ describe('usePackagePlan · 分装计划公共状态', () => {
 
   it('★ 参数是函数（响应式来源），且先解构', () => {
     expect(source).toContain('dailyIntakeG: () => number | null | undefined')
-    expect(source).toContain('const { dailyIntakeG, mealsPerDay, dogId, perMealG, onPlanChanged, clearCycleOnCustom } =')
+    expect(source).toContain('const { dailyIntakeG, mealsPerDay, dogId, perMealG, onPlanChanged } =')
   })
 
   it('★ 取消自定义有二次确认（会丢顾客填的内容）', () => {
@@ -56,5 +56,21 @@ describe('usePackagePlan · 分装计划公共状态', () => {
 
   it('★ 取消自定义会退回上一次的周期，而不是一律回 7 天', () => {
     expect(source).toContain('selectedCycleDays.value = lastSelectedCycleDays.value')
+  })
+
+  it('★ 进自定义一律清空天数（两页统一，不再有 per-page 开关）', () => {
+    // 2026-11-01：天数已不参与任何计算，订购页/DIY 页统一清空
+    expect(source).not.toContain('clearCycleOnCustom')
+    expect(source).toContain('selectedCycleDays.value = null')
+  })
+
+  it('★ 摘要 / 校验 / 总量只有一份口径（页面与组件都从这里取）', () => {
+    expect(source).toContain('const normalizedPackagePlan = computed(')
+    expect(source).toContain('const totalGrams = computed(')
+    expect(source).toContain('const totalPackages = computed(')
+    expect(source).toContain('const validationMessage = computed(')
+    expect(source).toContain('const inlineSummaryText = computed(')
+    // 自定义分装不谈"约可吃几天"
+    expect(source).not.toContain('约可吃')
   })
 })

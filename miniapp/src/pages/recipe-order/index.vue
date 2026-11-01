@@ -163,73 +163,20 @@
         <text class="title-text">快速选择备餐天数</text>
       </view>
 
-      <view class="cycle-options">
-        <view
-          v-for="days in ORDER_CYCLE_OPTIONS"
-          :key="days"
-          class="cycle-option"
-          :class="{ active: !isCustomPackagePlan && selectedCycleDays === days, disabled: isCustomPackagePlan }"
-          @tap="selectCycle(days)"
-        >
-          <text class="cycle-text">{{ days }}天</text>
-        </view>
-      </view>
-
-      <view v-if="isCustomPackagePlan" class="package-plan-mode-hint">
-        <text class="package-plan-mode-hint-text">已启用自定义分装，上方天数选择暂不生效</text>
-      </view>
-
-      <view class="package-plan-toolbar">
-        <text class="package-plan-inline-summary">{{ packagePlanInlineSummaryText }}</text>
-        <button class="package-edit-button" @tap="togglePackageEditor">
-          {{ showPackageEditor ? '取消自定义' : '自定义分装' }}
-        </button>
-      </view>
-
-      <view v-if="packagePlanValidationMessage" class="min-order-warning">
-        <text class="warning-text">{{ packagePlanValidationMessage }}</text>
-      </view>
-
-      <view v-else-if="!minimumOrderMet" class="min-order-warning">
-        <text class="warning-text">当前 {{ Math.round(totalGrams) }}g，最低订购量为 1000g</text>
-      </view>
-
-      <view v-if="showPackageEditor" class="package-plan-list">
-        <view
-          v-for="(row, index) in packagePlan"
-          :key="index"
-          class="package-plan-row"
-        >
-          <view class="package-input-group">
-            <text class="package-input-label">每袋</text>
-            <input
-              class="package-input"
-              type="number"
-              :value="row.packageSpecG"
-              @input="updatePackagePlanRow(index, 'packageSpecG', $event.detail.value)"
-            />
-            <text class="package-input-unit">g</text>
-          </view>
-          <view class="package-input-group">
-            <text class="package-input-label">袋数</text>
-            <input
-              class="package-input"
-              type="number"
-              :value="row.packageCount"
-              @input="updatePackagePlanRow(index, 'packageCount', $event.detail.value)"
-            />
-            <text class="package-input-unit">袋</text>
-          </view>
-          <button
-            class="btn-remove-row"
-            :disabled="packagePlan.length <= 1"
-            @tap="removePackagePlanRow(index)"
-          >
-            删除
-          </button>
-        </view>
-        <button class="btn-add-row" @tap="addPackagePlanRow">添加多个分装规格</button>
-      </view>
+      <QuickCyclePackagePlan
+        ref="packagePlanSection"
+        :cycle-days="selectedCycleDays"
+        :package-plan="packagePlan"
+        :is-custom="isCustomPackagePlan"
+        :editor-open="showPackageEditor"
+        :summary-text="packagePlanInlineSummaryText"
+        :warnings="packagePlanWarnings"
+        @select-cycle="selectCycle"
+        @toggle-custom="togglePackageEditor"
+        @add-row="addPackagePlanRow"
+        @update-row="updatePackagePlanRow"
+        @remove-row="removePackagePlanRow"
+      />
     </view>
 
     <view class="section ingredient-source-section" v-if="selectedDog">
@@ -543,11 +490,9 @@ import { usePackagePlan } from '@/composables/usePackagePlan'
 import { useLifeStageVersion } from '@/composables/useLifeStageVersion'
 import {
   DEFAULT_ORDER_CYCLE_DAYS,
-  MIN_PACKAGE_SPEC_G,
   ORDER_CYCLE_OPTIONS,
   buildDefaultPackagePlan,
   estimateFeedDays,
-  getPackagePlanTotal,
   getSourcePlanLabel,
   isMinimumOrderMet,
   type IngredientSourcePlanCode,
@@ -559,6 +504,7 @@ import {
   buildIngredientPurchaseChannelText,
 } from './ingredientDisplay'
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue'
+import QuickCyclePackagePlan from '@/components/package-plan/QuickCyclePackagePlan.vue'
 import { trackFunnelEvent } from '../../utils/funnel'
 import { navigateToDogCreate } from '../../utils/dog-profile-entry'
 
@@ -800,6 +746,11 @@ const {
   packagePlanDogId,
   showPackageEditor,
   isCustomPackagePlan,
+  normalizedPackagePlan,
+  totalGrams,
+  totalPackages,
+  inlineSummaryText: packagePlanInlineSummaryText,
+  validationMessage: packagePlanValidationMessage,
   normalizePackageSpecValue,
   normalizePackagePlanRow,
   rebuildPackagePlan,
@@ -826,13 +777,9 @@ const {
     invalidatePackagePlanPricingPreview()
     schedulePricePreview()
   },
-  /**
-   * 本页进自定义分装时要**清掉天数** —— 顾客自己定分装后，
-   * "按 7 天配送"不再是约束，留着容易误导。
-   * （DIY 配置页不清：那页的天数还参与换算。这是真实产品差异。）
-   */
-  clearCycleOnCustom: true,
 })
+/** 分装区组件实例：提交订单前调 commitAll()，不丢没失焦的输入 */
+const packagePlanSection = ref<{ commitAll: () => void } | null>(null)
 const dogCalcResult = ref<CalcResult | null>(null)
 
 // 生命阶段校验
@@ -976,9 +923,6 @@ const healthTagUuidLabelMap = ref<Record<string, string>>({})
 /** 狗狗需要的食谱生命阶段（后端算出来的），用于推荐"切换到 XX" */
 
 
-const normalizedPackagePlan = computed(() =>
-  packagePlan.value.map(row => normalizePackagePlanRow(row))
-)
 const isPackagePlanReadyForDog = computed(() =>
   Boolean(
     selectedDogId.value
@@ -987,19 +931,23 @@ const isPackagePlanReadyForDog = computed(() =>
     && displayDailyIntakeG.value > 0,
   )
 )
-const packagePlanTotal = computed(() => getPackagePlanTotal(normalizedPackagePlan.value))
-const totalGrams = computed(() => packagePlanTotal.value.totalGrams)
-const totalPackages = computed(() => packagePlanTotal.value.totalPackages)
 const estimatedFeedDays = computed(() =>
   estimateFeedDays(totalGrams.value, displayDailyIntakeG.value),
 )
 const minimumOrderMet = computed(() => isMinimumOrderMet(totalGrams.value))
-const hasInvalidPackageSpec = computed(() =>
-  normalizedPackagePlan.value.some(row => row.packageSpecG < MIN_PACKAGE_SPEC_G)
-)
-const packagePlanValidationMessage = computed(() => (
-  hasInvalidPackageSpec.value ? `每袋重量不能少于 ${MIN_PACKAGE_SPEC_G}g` : ''
-))
+
+/**
+ * 分装区当前的问题清单：有几个列几个。
+ * 以前"每袋不足 30g"和"总重不足 1000g"是二选一显示，改完一个又冒一个。
+ */
+const packagePlanWarnings = computed(() => {
+  const list: string[] = []
+  if (packagePlanValidationMessage.value) list.push(packagePlanValidationMessage.value)
+  if (!minimumOrderMet.value) {
+    list.push(`当前 ${Math.round(totalGrams.value)}g，最低订购量为 1000g`)
+  }
+  return list
+})
 const hasSelectedCycleOrCustomPackagePlan = computed(() => Boolean(
   selectedCycleDays.value || isCustomPackagePlan.value,
 ))
@@ -1092,18 +1040,6 @@ const perMealIntakeText = computed(() => {
   if (!perMealG.value) return '计算中'
   return `${Math.round(perMealG.value)}g`
 })
-const packagePlanInlineSummaryText = computed(() => {
-  const specs = Array.from(new Set(
-    normalizedPackagePlan.value.map(row => `${row.packageSpecG}g`)
-  ))
-  const specText = specs.length > 0 ? specs.join('、') : '-'
-
-  // 只讲这一单的物理规格（每袋多少 / 共几袋 / 总净重），不再重复"可吃几天"：
-  // 默认分装时天数就是顾客刚选的数字，是回声；自定义分装时也没必要再算一遍，
-  // 底栏已经有"每餐约¥X"这个真正对决策有用的数字。
-  return `每袋 ${specText} / 共${totalPackages.value}袋 / 总净重 ${Math.round(totalGrams.value)}g`
-})
-
 const averagePricePerPackage = computed(() => {
   if (!pricePreview.value || totalPackages.value <= 0) return 0
   return pricePreview.value.amountTotal / totalPackages.value
@@ -1833,6 +1769,8 @@ async function loadPricePreview() {
 }
 
 async function buyNow() {
+  // 顾客可能打完数字直接点按钮（没失焦），先提交，别把这次输入丢掉
+  packagePlanSection.value?.commitAll()
   if (!canBuyNow.value) return
 
   // 生命阶段不匹配：**每次下单都确认一次**，并留痕作为"已明确告知"的凭证。
@@ -2424,150 +2362,6 @@ onShow(() => {
   font-weight: bold;
 }
 
-/* 订购周期 */
-.cycle-options {
-  display: flex;
-  gap: 12rpx;
-}
-
-.cycle-option {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20rpx 12rpx;
-  border: 2rpx solid #e5e8d4;
-  border-radius: 12rpx;
-}
-
-.cycle-option.active {
-  border-color: #1e3a2f;
-  background-color: #eef2e4;
-}
-
-.cycle-option.disabled {
-  opacity: 0.5;
-}
-
-.cycle-text {
-  font-size: 28rpx;
-  font-weight: bold;
-  color: #26261f;
-}
-
-.cycle-desc {
-  font-size: 24rpx;
-  color: #6b6653;
-}
-
-.total-summary {
-  display: flex;
-  justify-content: space-between;
-  padding: 20rpx;
-  background-color: #fbfcf7;
-  border-radius: 12rpx;
-  gap: 24rpx;
-}
-
-.summary-item {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-}
-
-.summary-label {
-  font-size: 28rpx;
-  color: #26261f;
-}
-
-.summary-value {
-  font-size: 30rpx;
-  font-weight: bold;
-  color: #26261f;
-}
-
-.package-plan-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-}
-
-.package-plan-row {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  padding: 16rpx;
-  background-color: #fbfcf7;
-  border-radius: 12rpx;
-}
-
-.package-input-group {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  min-width: 0;
-}
-
-.package-input-label,
-.package-input-unit {
-  font-size: 24rpx;
-  color: #26261f;
-  flex-shrink: 0;
-}
-
-.package-input {
-  width: 120rpx;
-  height: 60rpx;
-  text-align: center;
-  border: 2rpx solid #e5e8d4;
-  border-radius: 8rpx;
-  font-size: 28rpx;
-  color: #26261f;
-  background-color: #fbfcf7;
-}
-
-.btn-add-row {
-  min-width: 112rpx;
-  height: 56rpx;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  padding: 0 20rpx;
-  background-color: #1e3a2f;
-  color: #f3eddd;
-  border: none;
-  border-radius: 8rpx;
-  font-size: 24rpx;
-}
-
-.btn-remove-row {
-  min-width: 96rpx;
-  height: 56rpx;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  padding: 0 16rpx;
-  background-color: #fbfcf7;
-  color: #b4553f;
-  border: 2rpx solid #e5e8d4;
-  border-radius: 8rpx;
-  font-size: 24rpx;
-}
-
-.btn-remove-row[disabled] {
-  color: #968f6d;
-  border-color: #eef1e2;
-}
-
-.package-summary {
-  margin-top: 20rpx;
-}
-
 .product-intro-section {
   padding: 0;
   overflow: hidden;
@@ -2576,27 +2370,6 @@ onShow(() => {
 .product-intro-image {
   display: block;
   width: 100%;
-}
-
-.min-order-warning {
-  margin-top: 16rpx;
-  padding: 16rpx 20rpx;
-  background-color: var(--sk-danger-soft, #f7e9e3);
-  border: 2rpx solid var(--sk-danger, #b4553f);
-  border-radius: 12rpx;
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
-.warning-icon {
-  font-size: 32rpx;
-}
-
-.warning-text {
-  font-size: 26rpx;
-  color: var(--sk-danger, #b4553f);
-  line-height: 1.4;
 }
 
 /* 保质期说明 */
@@ -3790,264 +3563,6 @@ onShow(() => {
   padding: 10rpx 14rpx;
   color: #1e3a2f;
   background-color: #eef2e4;
-}
-
-.cycle-options {
-  display: flex;
-  gap: 12rpx;
-}
-
-.cycle-option {
-  flex: 1;
-  padding: 18rpx 12rpx;
-  border: 2rpx solid #e5e8d4;
-  border-radius: 8rpx;
-  text-align: center;
-  background-color: #fbfcf7;
-}
-
-.cycle-option.active {
-  border-color: #1e3a2f;
-  background-color: #eef2e4;
-}
-
-.cycle-option.disabled {
-  opacity: 0.5;
-}
-
-.cycle-text {
-  font-size: 28rpx;
-  color: #26261f;
-  font-weight: 700;
-}
-
-.package-plan-mode-hint {
-  margin-top: 14rpx;
-  padding: 12rpx 18rpx;
-  background-color: #f6efe0;
-  border: 1rpx solid rgba(176, 141, 79, 0.35);
-  border-radius: 12rpx;
-}
-
-.package-plan-mode-hint-text {
-  font-size: 22rpx;
-  color: #8a6b33;
-}
-
-.package-plan-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18rpx;
-  margin-top: 24rpx;
-}
-
-.package-plan-inline-summary {
-  flex: 1;
-  min-width: 0;
-  font-size: 26rpx;
-  font-weight: 700;
-  color: #26261f;
-  line-height: 1.45;
-}
-
-.package-edit-button {
-  flex: 0 0 auto;
-  height: 64rpx;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 26rpx;
-  margin: 0;
-  border: 1rpx solid rgba(216, 188, 133, 0.6);
-  border-radius: 999rpx;
-  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
-  color: #d8bc85;
-  font-size: 24rpx;
-  font-weight: 600;
-}
-
-.package-plan-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-  margin-top: 16rpx;
-}
-
-.package-preview-row {
-  padding: 18rpx;
-  border-radius: 8rpx;
-  background-color: #fbfcf7;
-}
-
-.package-preview-main {
-  font-size: 28rpx;
-  color: #26261f;
-  font-weight: 700;
-}
-
-.package-preview-sub {
-  font-size: 24rpx;
-  color: #6b6653;
-}
-
-.total-summary {
-  display: flex;
-  justify-content: space-between;
-  gap: 12rpx;
-  margin-top: 18rpx;
-  padding: 18rpx;
-  background-color: #fbfcf7;
-  border-radius: 8rpx;
-}
-
-.summary-item {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6rpx;
-}
-
-.min-order-warning {
-  margin-top: 16rpx;
-  padding: 16rpx 18rpx;
-  background-color: var(--sk-danger-soft, #f7e9e3);
-  border: 1rpx solid var(--sk-danger, #b4553f);
-  border-radius: 8rpx;
-}
-
-.warning-card {
-  margin: 0 0 20rpx;
-  padding: 24rpx 28rpx;
-  background-color: var(--sk-danger-soft, #f7e9e3);
-  border-left: 6rpx solid #b08d4f;
-}
-
-.warning-title {
-  font-size: 30rpx;
-  font-weight: 800;
-  color: var(--sk-danger, #b4553f);
-}
-
-.warning-text {
-  display: block;
-  margin-bottom: 12rpx;
-  font-size: 26rpx;
-  color: var(--sk-danger, #b4553f);
-  line-height: 1.5;
-}
-
-.warning-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-  margin-top: 14rpx;
-}
-
-.btn-switch-stage,
-.btn-continue {
-  width: 100%;
-  padding: 16rpx;
-  margin: 0;
-  line-height: 1.2;
-  border-radius: 8rpx;
-  font-size: 28rpx;
-  border: none;
-}
-
-.btn-switch-stage {
-  background-color: #1e3a2f;
-  color: #f3eddd;
-}
-
-.btn-continue {
-  background-color: var(--sk-danger, #b4553f);
-  color: #fff;
-}
-
-.btn-secondary-full {
-  width: 100%;
-  height: 76rpx;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  margin-top: 20rpx;
-}
-
-.package-plan-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14rpx;
-  margin-top: 18rpx;
-}
-
-.package-plan-row {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  padding: 16rpx;
-  border-radius: 8rpx;
-  background-color: #fbfcf7;
-}
-
-.package-input-group {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  min-width: 0;
-}
-
-.package-input-label,
-.package-input-unit {
-  font-size: 24rpx;
-  color: #6b6653;
-}
-
-.package-input {
-  width: 116rpx;
-  height: 58rpx;
-  text-align: center;
-  border: 1rpx solid #e5e8d4;
-  border-radius: 8rpx;
-  font-size: 28rpx;
-  color: #26261f;
-  background-color: #fbfcf7;
-}
-
-.btn-add-row,
-.btn-remove-row {
-  min-width: 118rpx;
-  height: 60rpx;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  padding: 0 16rpx;
-  border-radius: 8rpx;
-  font-size: 24rpx;
-}
-
-.btn-add-row {
-  align-self: flex-start;
-  color: #f3eddd;
-  background-color: #1e3a2f;
-  border: none;
-}
-
-.btn-remove-row {
-  color: #b4553f;
-  background-color: #fbfcf7;
-  border: 1rpx solid #e5e8d4;
-}
-
-.btn-remove-row[disabled] {
-  color: #968f6d;
-  border-color: #e5e8d4;
 }
 
 .source-plan-options {

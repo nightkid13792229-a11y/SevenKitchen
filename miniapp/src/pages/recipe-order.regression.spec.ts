@@ -8,6 +8,11 @@ describe('recipe-order phase one UI contract', () => {
     'utf-8',
   );
   const templateSource = source.slice(0, source.indexOf('<script setup'));
+  /** 2026-11-01：天数/分装的界面搬进了共享组件，界面断言跟着去那边 */
+  const packagePlanComponentSource = readFileSync(
+    resolve(process.cwd(), 'src/components/package-plan/QuickCyclePackagePlan.vue'),
+    'utf-8',
+  );
   const pagesJsonSource = readFileSync(
     resolve(process.cwd(), 'src/pages.json'),
     'utf-8',
@@ -42,9 +47,11 @@ describe('recipe-order phase one UI contract', () => {
 
   it('uses normalized package rows for totals, preview, and checkout storage', () => {
     expect(source).toContain('normalizedPackagePlan');
-    expect(source).toContain('getPackagePlanTotal(normalizedPackagePlan.value)');
     expect(source).toContain('packagePlan: normalizedPackagePlan.value');
     expect(source).not.toContain('packagePlan: packagePlan.value,');
+    // 2026-11-01：总量、摘要、校验文案统一在 composable 里算（两页一份口径）
+    expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
+      .toContain('getPackagePlanTotal(normalizedPackagePlan.value)');
   });
 
   it('sends legacy pricing preview fields alongside packagePlan for production API compatibility', () => {
@@ -225,22 +232,22 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain("label: '每日饭量'");
     expect(templateSource).not.toContain('主食能量');
     expect(templateSource).toContain('packagePlanInlineSummaryText');
-    expect(source).toContain('自定义分装');
     expect(source).toContain('isCustomPackagePlan');
     expect(source).toContain('cancelCustomPackagePlan');
     expect(source).toContain('请先取消自定义分装后再选择天数');
-    expect(source).toContain('MIN_PACKAGE_SPEC_G');
-    expect(source).toContain('hasInvalidPackageSpec');
     expect(source).toContain('packagePlanValidationMessage');
-    expect(source).toContain('每袋重量不能少于 ${MIN_PACKAGE_SPEC_G}g');
     expect(source).toContain('if (packagePlanValidationMessage.value) return');
     // 2026-10-18：新增行的默认克数在 composable 里
     expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
       .toContain('Math.max(MIN_PACKAGE_SPEC_G');
-    expect(templateSource).toContain("{{ showPackageEditor ? '取消自定义' : '自定义分装' }}");
-    expect(templateSource).toContain(':class="{ active: !isCustomPackagePlan && selectedCycleDays === days, disabled: isCustomPackagePlan }"');
-    expect(templateSource).toContain('v-if="packagePlanValidationMessage"');
-    expect(templateSource).toContain('{{ packagePlanValidationMessage }}');
+    // 2026-11-01：界面在共享组件里（两页同一份）
+    expect(packagePlanComponentSource).toContain("{{ editorOpen ? '取消自定义' : '自定义分装' }}");
+    expect(packagePlanComponentSource).toContain(':class="{ active: !isCustom && cycleDays === days, disabled: isCustom }"');
+    expect(packagePlanComponentSource).toContain('v-if="warnings.length > 0"');
+    expect(packagePlanComponentSource).toContain('{{ warning }}');
+    // 校验口径（每袋下限）在 composable 里，组件只负责显示
+    expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
+      .toContain('每袋重量不能少于 ${MIN_PACKAGE_SPEC_G}g');
     expect(source).not.toContain('packageSpecG: Math.max(MIN_PACKAGE_SPEC_G, Math.floor(Number(row.packageSpecG) || MIN_PACKAGE_SPEC_G))');
     expect(templateSource).toContain('order-dog-scroll');
     expect(templateSource).toContain('order-dog-chip');
@@ -262,9 +269,11 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('.standard-card');
     expect(source).toContain('align-items: center;');
     expect(source).toContain('text-align: center;');
-    expect(templateSource).toContain('>添加多个分装规格</button>');
+    // 2026-11-01：按钮文案改成顾客话术，且搬进共享组件
+    expect(packagePlanComponentSource).toContain('>再加一种分装</button>');
     expect(templateSource).not.toContain('>添加规格</button>');
-    expect(source).toContain('当前 {{ Math.round(totalGrams) }}g，最低订购量为 1000g');
+    // 起订量提示改为在 script 里拼成一条 warning（不再写死在模板）
+    expect(source).toContain('最低订购量为 1000g');
     expect(source).toContain('getNutritionStandardExplain');
     expect(source).toContain('calculateDogAgeText');
     expect(source).toContain("MALE: '弟弟'");
@@ -304,11 +313,12 @@ describe('recipe-order phase one UI contract', () => {
     expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
       .toContain('const lastSelectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)');
     /**
-     * 2026-10-18：进自定义分装要清天数 —— 这条**是真实产品差异**。
-     * 成品订购页清（顾客自己定分装后天数不再是约束），DIY 配置页不清（天数还参与换算）。
-     * 所以断言盯「本页开启了 clearCycleOnCustom」+「composable 里真的清」。
+     * 2026-11-01：两页**统一**进自定义就清天数（天数已不参与任何计算），
+     * per-page 开关 `clearCycleOnCustom` 已删除，口径收进 composable。
      */
-    expect(source).toContain('clearCycleOnCustom: true');
+    expect(source).not.toContain('clearCycleOnCustom');
+    expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
+      .not.toContain('clearCycleOnCustom');
     expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
       .toContain('selectedCycleDays.value = null');
     expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
@@ -317,7 +327,6 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('selectedCycleDays.value || isCustomPackagePlan.value');
     expect(source).toContain('&& hasSelectedCycleOrCustomPackagePlan.value');
     expect(source).toContain('cycleDays: selectedCycleDays.value || undefined');
-    expect(templateSource).toContain(':class="{ active: !isCustomPackagePlan && selectedCycleDays === days, disabled: isCustomPackagePlan }"');
   });
 
   it('removes the source plan selector and keeps the ingredient detail list', () => {
@@ -588,8 +597,8 @@ describe('recipe-order phase one UI contract', () => {
 
   it('keeps the custom-plan state hint but drops the per-package meal conversion', () => {
     // 自定义分装启用时给出常驻状态说明（原来只在点击天数时弹 toast）
-    expect(source).toContain('已启用自定义分装，上方天数选择暂不生效');
-    expect(templateSource).toContain('v-if="isCustomPackagePlan"');
+    expect(packagePlanComponentSource).toContain('已启用自定义分装，上方天数选择暂不生效');
+    expect(packagePlanComponentSource).toContain('v-if="isCustom"');
     // 每袋餐数换算按产品要求不再展示
     expect(source).not.toContain('formatPackageSpecMealHint');
     expect(templateSource).not.toContain('package-spec-meal-hint');

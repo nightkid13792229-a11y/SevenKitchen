@@ -316,7 +316,7 @@
 |---|---|
 | 实时匹配 | **移除**（不再调 `life-stage-match`） |
 | 版本展示 | 固定一行"版本：成犬版"（来自制作单记录） |
-| 生成时的结论 | 制作单创建时把 `matchType` / `riskLevel` 写进单子；若当时不匹配，下面加一行灰字："生成时已提示：这一版与旺财的生命阶段不一致" |
+| 版本来源 | 制作单页本来就会加载它指向的那一版菜谱（`recipeId` 是具体版本），直接用返回里的 `selectedLifeStage` / `selectedLifeStageLabel`，**不需要新表字段** |
 | 匹配时 | 只显示版本行，不加任何提示 |
 | 打印 / 分享 | 标题下加"版本：X"，与页面一致 |
 | 为什么 | 顾客已经确认过、也留了痕；在结果页再算一次只会前后矛盾 |
@@ -452,9 +452,9 @@ lifeStageMatch: {
 - `RecipeSnapshot` 增加 `series_life_stage?: string`、`series_life_stage_label?: string`。
 - 由 `buildProductionRecipeSnapshot` 从菜谱对象写入；订单与试吃装共用，保持形状一致。
 - 历史订单无该字段：详情页按 `recipeId` 回查菜谱；查不到就不显示。
-- 制作单（DIY）：`diy_sheet` 增加三列（可空）`selected_life_stage`、`life_stage_match_type`、`life_stage_risk`，在**创建时**由页面写入。版本名从 `selected_life_stage` 映射，**不 join 菜谱**——菜谱的 `series_life_stage` 理论上可被改，join 会漂移。
-  - 这样制作单上写的是"生成时发生了什么"，而不是"现在再算一遍"，两者不会打架。
-  - 需要一条 Prisma migration；老单为空，不显示那行灰字。
+- 制作单（DIY）：**不改表**。制作单页按 `recipeId`（具体版本）取菜谱，返回里已有 `selectedLifeStage` / `selectedLifeStageLabel`；页面直接展示。
+  - 这样写的是"这张单用的是哪一版"，不是"现在再算一遍"。
+  - 菜谱行是版本化的，历史单指向的版本不会变；极端情况下菜谱被删，就退回显示 `recipeName`。
 
 ### 6.5 下单时"确认的那一版"就是"买到的那一版"
 
@@ -562,7 +562,7 @@ lifeStageMatch: {
 
 ## 10. 交付物清单
 
-- 后端：`recipes.controller.ts`（选版/风险/NO_DOG/manual）、`recipe-series.ts`（风险函数 + 统一的版本中文名）、`production-recipe-snapshot.ts`（快照字段）、`dogs.controller.ts`（阶段跨越）、`diy-sheet-storage.service.ts` + migration（生成时结论）。
+- 后端：`recipes.controller.ts`（选版/风险/NO_DOG/manual）、`recipe-series.ts`（风险函数 + 统一的版本中文名）、`production-recipe-snapshot.ts`（快照字段）、`dogs.controller.ts`（阶段跨越）、`diy-sheet` 读接口（补版本字段）。
 - 小程序：`LifeStageVersionBar.vue`、`LifeStageVersionSheet.vue`、`useLifeStageVersion.ts`（八态映射）、详情/订购/DIY 三页接入 + 制作单版本行、订单展示、首页筛选、收藏角标、埋点。
 - 测试：后端单测、前端回归 spec 更新、版本中文名前后端一致性测试、手工验收脚本。
 - 文档：本设计稿 + 上线说明（文案变更、口径变更）。

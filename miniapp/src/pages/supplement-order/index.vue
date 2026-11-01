@@ -146,6 +146,7 @@
               :class="{ 'portion-option-active': opt.multiplier === portionMultiplier }"
               @tap="selectPortion(opt.multiplier)"
             >
+              <text v-if="opt.freeShipping" class="portion-badge">已包邮</text>
               <text class="portion-option-num">{{ opt.multiplier }} 袋</text>
               <text class="portion-option-price">{{ opt.priceLabel }}</text>
             </view>
@@ -488,7 +489,7 @@ const portionOptionCards = computed(() => {
   }
   return list.map((opt) => ({
     multiplier: opt.multiplier,
-    priceLabel: `¥${Number(opt.goodsSubtotal).toFixed(2)}`,
+    priceLabel: `¥${Number(opt.total).toFixed(2)}`,
     freeShipping: opt.freeShipping
   }))
 })
@@ -1185,6 +1186,20 @@ function readErrorMessage(error: unknown): string {
 .portion-option-active .portion-option-price {
   color: #fbfcf7;
   font-weight: 600;
+}
+
+/* 包邮角标：贴在卡片右上角，不占正文位置 */
+.portion-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0 8rpx;
+  font-size: 17rpx;
+  line-height: 1.5;
+  color: #fbfcf7;
+  background-color: #b08d4f;
+  border-top-right-radius: 12rpx;
+  border-bottom-left-radius: 8rpx;
 }
 
 /* ---- 地址 ---- */

@@ -92,10 +92,14 @@ describe('supplement purchase regressions', () => {
       expect(template).not.toContain('prepack-collapse')
     })
 
-    it('袋数选项直接显示服务端算好的总价', () => {
+    it('袋数选项显示的是含运费的合计，且包邮档带角标', () => {
       expect(template).toContain('portionOptionCards')
       expect(template).toContain('portion-option-price')
-      expect(source).toContain('opt.goodsSubtotal')
+      // 2026-11-02：卡片金额改成"合计"（含服务费/运费），不是商品金额
+      expect(source).toContain('opt.total')
+      expect(source).not.toContain('opt.goodsSubtotal')
+      expect(template).toContain('portion-badge')
+      expect(template).toContain('已包邮')
       // 前端不做乘法
       expect(source).not.toMatch(/summary\.value\.supplementPrice\s*\*/)
     })

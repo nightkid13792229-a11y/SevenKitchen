@@ -45,6 +45,8 @@ export interface SupplementShopConfigDto {
    * 字段保留只为兼容后台配置页与历史数据；不要再用它做份数/效期判断。
    */
   maxTotalDays: number;
+  /** 单笔分装袋数超过这个值，下单页提示"发货会顺延"（只提示，不拦单） */
+  bulkBagThreshold: number;
   /** 补剂订单支付超时（分钟）；0 = 不自动关单。与鲜食订单独立 */
   paymentTimeoutMinutes: number;
   /** 截单时间 HH:mm（Asia/Shanghai） */
@@ -294,6 +296,13 @@ export class SupplementShopConfigService {
       }
     }
 
+    if (dto.bulkBagThreshold !== undefined) {
+      const value = dto.bulkBagThreshold;
+      if (!Number.isInteger(value) || value < 1 || value > 500) {
+        throw new BadRequestException('大单提示袋数必须是 1~500 的整数');
+      }
+    }
+
     // ---- 支付超时 ----
     if (dto.paymentTimeoutMinutes !== undefined) {
       const value = dto.paymentTimeoutMinutes;
@@ -336,6 +345,9 @@ export class SupplementShopConfigService {
       }),
       ...(dto.maxTotalDays !== undefined && {
         maxTotalDays: dto.maxTotalDays,
+      }),
+      ...(dto.bulkBagThreshold !== undefined && {
+        bulkBagThreshold: dto.bulkBagThreshold,
       }),
       ...(dto.paymentTimeoutMinutes !== undefined && {
         paymentTimeoutMinutes: dto.paymentTimeoutMinutes,
@@ -416,6 +428,7 @@ export class SupplementShopConfigService {
     roundUpUsage: boolean;
     maxPortionMultiplier: number;
     maxTotalDays: number;
+    bulkBagThreshold: number;
     paymentTimeoutMinutes: number;
     dailyCutoffTime: string;
     dailyPackingCapacity: number;
@@ -452,6 +465,7 @@ export class SupplementShopConfigService {
       roundUpUsage: row.roundUpUsage,
       maxPortionMultiplier: Number(row.maxPortionMultiplier),
       maxTotalDays: Number(row.maxTotalDays),
+      bulkBagThreshold: Number(row.bulkBagThreshold),
       paymentTimeoutMinutes: Number(row.paymentTimeoutMinutes),
       dailyCutoffTime: row.dailyCutoffTime,
       dailyPackingCapacity: Number(row.dailyPackingCapacity),

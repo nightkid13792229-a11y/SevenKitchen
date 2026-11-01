@@ -19,6 +19,7 @@ function buildRow(overrides: Record<string, unknown> = {}) {
     roundUpUsage: true,
     maxPortionMultiplier: 3,
     maxTotalDays: 90,
+    bulkBagThreshold: 60,
     paymentTimeoutMinutes: 30,
     dailyCutoffTime: '17:00',
     dailyPackingCapacity: 30,
@@ -170,6 +171,41 @@ describe('SupplementShopConfigService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
       service.updateConfig({ solidShelfLifeMonths: 61 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('大单提示袋数默认 60，能读能写，且必须是 1~500 的整数', async () => {
+    mockPrismaService.supplementShopConfig.findUnique.mockResolvedValue(null);
+    mockPrismaService.supplementShopConfig.create.mockResolvedValue(
+      buildRow({ bulkBagThreshold: 60 }),
+    );
+    const created = await service.getConfig();
+    expect(created.bulkBagThreshold).toBe(60);
+    expect(mockPrismaService.supplementShopConfig.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ bulkBagThreshold: 60 }),
+    });
+
+    mockPrismaService.supplementShopConfig.findUnique.mockResolvedValue(
+      buildRow({ bulkBagThreshold: 120 }),
+    );
+    expect((await service.getConfig()).bulkBagThreshold).toBe(120);
+
+    mockPrismaService.supplementShopConfig.upsert.mockResolvedValue(
+      buildRow({ bulkBagThreshold: 120 }),
+    );
+    const updated = await service.updateConfig({ bulkBagThreshold: 120 });
+    expect(updated.bulkBagThreshold).toBe(120);
+    expect(mockPrismaService.supplementShopConfig.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ bulkBagThreshold: 120 }),
+      }),
+    );
+
+    await expect(
+      service.updateConfig({ bulkBagThreshold: 0 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.updateConfig({ bulkBagThreshold: 501 }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 

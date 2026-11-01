@@ -25,6 +25,7 @@ function config(
     roundUpUsage: true,
     maxPortionMultiplier: 3,
     maxTotalDays: 90,
+    bulkBagThreshold: 60,
     shippingMode: 'FLAT_RATE',
     flatShippingFee: 8,
     shippingTemplateId: null,

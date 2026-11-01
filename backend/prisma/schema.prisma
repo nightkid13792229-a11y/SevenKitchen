@@ -4514,6 +4514,8 @@ model SupplementShopConfig {
   /// 一次购买覆盖的总天数上限。效期安全红线：粉剂分装效期 6 个月 = 180 天，
   /// 默认 90 天正好用一半，留足余量。
   maxTotalDays              Int                          @default(90) @map("max_total_days")
+  /// 单笔分装袋数超过这个值，下单页提示"发货会顺延"（只提示，不拦单、不改排期）
+  bulkBagThreshold          Int                          @default(60) @map("bulk_bag_threshold")
 
   // ---- 支付超时（2026-09-24 与鲜食解耦）----
   /// 补剂订单的支付超时（分钟）。**与鲜食订单各自独立**：

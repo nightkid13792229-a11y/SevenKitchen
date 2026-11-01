@@ -5464,3 +5464,113 @@ model CoverTrash {
   @@index([deleteAfter])
   @@map("cover_trash")
 }
+
+// ---------------------------------------------------------------------------
+// 知识库原文层（2026-11-02）
+//
+// 由 docs/knowledge-base/source-layer/*.json 导入。段落 id 稳定
+//（如 sacn5-chapters-SACN5-40-p00055），知识条目的出处直接引用它。
+// 导入脚本：backend/scripts/import-knowledge-source-layer.ts（幂等，可重跑）。
+// ---------------------------------------------------------------------------
+
+model SourceDocument {
+  id        String   @id @db.VarChar(80)
+  sourceId  String?  @map("source_id") @db.VarChar(64)
+  title     String?  @db.VarChar(500)
+  path      String   @db.VarChar(500)
+  pageCount Int?     @map("page_count")
+  charCount Int?     @map("char_count")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sections   SourceSection[]
+  paragraphs SourceParagraph[]
+  tables     SourceTable[]
+  figures    SourceFigure[]
+
+  @@map("source_document")
+}
+
+model SourceSection {
+  id         String  @id @db.VarChar(120)
+  documentId String  @map("document_id") @db.VarChar(80)
+  title      String  @db.Text
+  pageNo     Int?    @map("page_no")
+  sortOrder  Int     @default(0) @map("sort_order")
+
+  document   SourceDocument    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  paragraphs SourceParagraph[]
+
+  @@index([documentId])
+  @@map("source_section")
+}
+
+model SourceParagraph {
+  id         String @id @db.VarChar(120)
+  documentId String @map("document_id") @db.VarChar(80)
+  sectionId  String @map("section_id") @db.VarChar(120)
+  text       String @db.Text
+  pageStart  Int?   @map("page_start")
+  pageEnd    Int?   @map("page_end")
+  charCount  Int    @map("char_count")
+
+  document SourceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  section  SourceSection  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId])
+  @@index([documentId])
+  @@map("source_paragraph")
+}
+
+model SourceTable {
+  id         String  @id @db.VarChar(40)
+  documentId String  @map("document_id") @db.VarChar(80)
+  pageNo     Int?    @map("page_no")
+  caption    String  @db.Text
+  columns    Json    @db.JsonB
+  rows       Json    @db.JsonB
+  verify     Json?   @db.JsonB
+  method     String? @db.VarChar(24)
+  rowCount   Int     @default(0) @map("row_count")
+
+  document SourceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("source_table")
+}
+
+model SourceFigure {
+  id         String  @id @db.VarChar(200)
+  documentId String  @map("document_id") @db.VarChar(80)
+  pageNo     Int?    @map("page_no")
+  path       String  @db.VarChar(400)
+  caption    String? @db.Text
+  width      Int?
+  height     Int?
+
+  document SourceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("source_figure")
+}
+
+/// 知识条目的出处锚点。条目本身仍在代码里（backend/src/.../data/*.ts），
+/// 这里只存 entryId 做软关联。
+model KnowledgeCitationAnchor {
+  id           String   @id @default(cuid())
+  entryId      String   @map("entry_id") @db.VarChar(64)
+  sourceName   String?  @map("source_name") @db.VarChar(200)
+  locator      String?  @db.Text
+  documentId   String?  @map("document_id") @db.VarChar(80)
+  sectionId    String?  @map("section_id") @db.VarChar(120)
+  paragraphIds String[] @map("paragraph_ids")
+  tableIds     String[] @map("table_ids")
+  precision    String   @db.VarChar(16)
+  confidence   String   @db.VarChar(16)
+  score        Float    @default(0)
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([entryId])
+  @@index([documentId])
+  @@map("knowledge_citation_anchor")
+}

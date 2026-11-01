@@ -20,11 +20,18 @@ import { ProcurementSkuDraftNoticeException } from './procurement-sku-draft.erro
 export const DAILY_DRAFT_LIMIT_PER_USER = 30;
 export const MONTHLY_DRAFT_LIMIT_SYSTEM = 3000;
 
+/**
+ * 取「本地日历上的今天」，但用 UTC 零点表示。
+ *
+ * 为什么不能直接 `new Date(y, m, d)`：`used_on` 是 DATE 列，Prisma 会把这一刻转成
+ * UTC 再取日期部分 —— 东八区的本地零点 = 前一天 16:00Z，写进 DATE 就**退回前一天**。
+ * 线上实测：11-01 晚上用掉的次数记成了 10-31，日额度会在早上 8 点而不是零点重置。
+ */
 const startOfLocalDay = (now: Date): Date =>
-  new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 
 const startOfLocalMonth = (now: Date): Date =>
-  new Date(now.getFullYear(), now.getMonth(), 1);
+  new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
 
 @Injectable()
 export class ProcurementSkuDraftQuotaService {

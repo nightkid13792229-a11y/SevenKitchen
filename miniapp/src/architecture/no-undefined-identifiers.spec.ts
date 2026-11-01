@@ -273,6 +273,15 @@ function collectCalled(
     if (form === 'access' && boundNames.has(name)) return
     const before = text.slice(Math.max(0, index - 1), index)
     if (before === '.' || before === "'" || before === '"' || before === '`') return
+    /*
+     * ③ URL 里的域名（2026-11-01 补）。
+     *
+     * `'https://img.sevenkitchen.cloud/…'` 里的 `img.` 会被点号规则当成
+     * "访问了没定义的对象 img" —— 和上面 logo.png 同一类误报，只是这次是域名。
+     * 域名永远不可能是代码标识符，所以"前面紧跟 //"一律跳过；
+     * 真正的漏定义（`dogApi.vaccinePlan(`）前面不是 //，照样被抓。
+     */
+    if (text.slice(Math.max(0, index - 2), index) === '//') return
     called.set(name, (called.get(name) || 0) + 1)
   }
 

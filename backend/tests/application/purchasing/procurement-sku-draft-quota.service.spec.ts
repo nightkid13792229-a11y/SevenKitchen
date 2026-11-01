@@ -57,16 +57,21 @@ describe('ProcurementSkuDraftQuotaService', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('计数按当天零点归集（跨天重新计次）', async () => {
+  it('存进库的是「本地日历日期」，不会因为时差退回前一天', async () => {
     prisma.procurementSkuDraftUsage.upsert.mockResolvedValue({ count: 1 });
 
-    await service.consume('user-1', new Date('2026-11-02T01:00:00'));
+    const now = new Date('2026-11-02T01:00:00');
+    await service.consume('user-1', now);
 
     const arg = prisma.procurementSkuDraftUsage.upsert.mock.calls[0][0];
     const usedOn: Date = arg.where.userId_usedOn.usedOn;
-    expect(usedOn.getHours()).toBe(0);
-    expect(usedOn.getMinutes()).toBe(0);
-    expect(usedOn.getSeconds()).toBe(0);
+
+    // DATE 列存的是这一刻的 UTC 日历日；必须等于**本地**的今天，
+    // 否则东八区会在早上 8 点前把日期记成昨天（2026-11-01 线上实测踩到）
+    const expectedDate = new Date(
+      Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()),
+    );
+    expect(usedOn.toISOString()).toBe(expectedDate.toISOString());
     expect(arg.where.userId_usedOn.userId).toBe('user-1');
   });
 });

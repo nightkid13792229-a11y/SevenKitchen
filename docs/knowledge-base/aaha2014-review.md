@@ -2,28 +2,53 @@
 
 **日期**：2026-11-01
 **背景**：AAHA 2014 体重管理指南已停用并删除原件。`weight-management.ts` 里有 19 处正文数值原引自它。
-**复核依据**：SACN5 第 27 章「肥胖」（2010，第 5 版）。
-**结果**：**6 处可改引 SACN5（已完成），13 处标「（已停用）」待核。**
+**复核依据**：以 **AAHA 2021**（AAHA 自己的最新版）为准；AAHA 2021 未覆盖的，再看 SACN5 第 27 章。
+**结果**：**5 处改引 AAHA 2021（已完成），12 处标「（已停用）」待核。**
 
 ---
 
-## 一、已改引 SACN5 的 6 处
+## 〇、一处重要更正：AAHA 2021 并不"取代"2014，而是"指回"2014
 
-| 条目 | 原表述（AAHA 2014） | 现在的表述（SACN5 第 27 章） |
+老板 2026-11-01 指出：旧版应由 **AAHA 最新版**接替，不该拿 SACN5 顶上。我照此重查 AAHA 2021 全文，发现两条事实：
+
+**① AAHA 2021 自己写明「详细方案请看 2014」**（原文）：
+
+> "In 2014, AAHA published comprehensive weight management guidelines, including a **detailed protocol for safe weight reduction**. Because weight loss is a critical aspect..., the 2021 ... Guidelines include an **abbreviated overview** of this topic. **We encourage readers to consult the 2014 Weight Management Guidelines for more complete information**..."
+>
+> "The **overall design process** is reviewed in the 2014 Weight Management Guidelines."
+> "Use the 2014 Weight Management Guidelines for things to consider with an activity plan."
+> "The 2014 Weight Management Guidelines outline **monitoring and maintenance** options."
+
+也就是说：**2021 是总纲、2014 是详细方案，两者是配套关系**。我们按"作废"把 2014 删了，删掉的正好是 2021 指定要给读者看的细节——这是当时判断错的地方。
+
+**② 但 2021 确实覆盖了一部分**，这些应当改引 2021（已改）：
+
+| 条目 | 2021 原文依据 |
+|---|---|
+| weight-001 / 002 | "each BCS ≥5/9 is equivalent to being 10% overweight"；BCS 每升 1 分 ≈ 体脂率 +5% |
+| weight-007 | "treats and other food items make up ≤10%"、"maintain all additional item intake to ≤10% total daily" |
+| weight-008 | "Puzzle toys and automated feeders... consider collaborating with a rehabilitation practitioner" |
+| weight-009 | "reach out to the owner within the first couple days... post-appointment contact" |
+
+---
+---
+
+## 一、已改引 AAHA 2021 的 5 处
+
+| 条目 | 原表述（AAHA 2014） | 现在的表述（AAHA 2021） |
 |---|---|---|
-| weight-003 | 按理想体重 RER 的 80% 供能有效；多数犬可耐受低至 60% | 减重期供能约为理想体重 RER 的 **70%–80%** |
-| weight-004 | 期望减重速率 1%–2%/周 | 犬减重速率约 **1%/周**；部分方案以 **2.5%/周** 为目标（按初始体重计） |
-| weight-006 | 纤维饱腹证据不一；粗纤维分析低估真实纤维 | 纤维通过增加饱腹感帮助限食；但「饱腹感」**缺乏客观测量方法**，证据有限且存在个体差异 |
-| weight-007 | 零食 >10% 总热量需警惕；≤10% 计入 | 零食不应超过每日总热量的 **10%**，须计入减重计划 |
-| weight-008 | 运动 + 行为矫正 + 环境丰容 | 运动干预需与**环境丰容、行为管理**结合，并考虑季节与天气 |
-| weight-009 | 达标后每 2 周复查至稳定，此后每月 | 减重期与达标后都需**按月复查**；仍继续掉重则上调热量转维持 |
+| weight-001 | 肥胖定义为 BCS ≥8/9；每个 ≥5/9 相当于超重 10% | 9 分制 BCS 每升 1 分 ≈ 体脂率 +5%；BCS ≥5/9 时每 1 分相当超重 10% |
+| weight-002 | 病史法查 BCS 5/9 对应历史体重 | 按「BCS ≥5/9 每 1 分相当超重 10%」由当前体重反推理想体重 |
+| weight-007 | 零食 >10% 总热量需警惕 | 零食等额外食物控制在每日总热量 **10% 以内**并计入计划 |
+| weight-008 | 运动 + 行为矫正 + 环境丰容 | 活动计划结合**益智玩具、自动喂食器、环境丰容**，必要时转诊康复专科 |
+| weight-009 | 达标后每 2 周复查→每月 | 启动后**头几天主动联系**主人，之后按监测持续随访 |
 
 > **注意**：原 AAHA 2014 的「1%–2%/周」与 SACN5 的「1%–2.5%/周」不是同一出处，故按 SACN5 重新表述，不套用原文数字。
 > 「60% RER 下限」在 SACN5 未找到支撑，**已从 weight-003 移除**，相关风险表述保留在 weight-012（标注待核）。
 
 ---
 
-## 二、仍待核的 13 处（正文保留数值，标「（已停用）」）
+## 二、仍待核的 12 处（正文保留数值，标「（已停用）」）
 
 | # | 条目 | 待核内容 | 为什么 SACC5 支持不了 |
 |---:|---|---|---|
@@ -43,11 +68,11 @@
 
 ---
 
-## 三、这 13 处怎么办（三条路，按成本排）
+## 三、这 12 处怎么办（三条路，按成本排）
 
 | 方案 | 做法 | 成本 |
 |---|---|---|
-| A | 找 AAHA 2022 疼痛/营养类新指南或兽医营养专科教材（如 Tufts/UC Davis 的自制膳食研究）补依据 | 要新来源 |
+| A | **重新拿回 AAHA 2014**——它是 AAHA 2021 指定的详细方案来源，不是"作废文件" | 需订阅或人工下载 |
 | B | 用 SACN5 其他章节（第 12–17 章、第 25 章）继续找 | 半天 |
 | C | 降级为「经验性建议」，不再声称有文献依据 | 最小，但要接受证据等级下降 |
 

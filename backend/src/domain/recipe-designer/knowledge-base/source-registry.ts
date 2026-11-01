@@ -223,7 +223,7 @@ export const KNOWLEDGE_SOURCES: readonly KnowledgeSourceRecord[] = [
     version: '2023',
     tier: 'A',
     local: true,
-    role: '老年犬的检查节奏与常见问题（归档的是工具包，正文未取得）',
+    role: '老年犬的检查节奏与常见问题（2026-11-01 已补入 JAAHA 指南全文，工具包同时保留）',
   },
   {
     id: 'AAHA-LIFE-STAGE-2019',
@@ -232,6 +232,14 @@ export const KNOWLEDGE_SOURCES: readonly KnowledgeSourceRecord[] = [
     tier: 'A',
     local: true,
     role: '各生命阶段该做什么检查、多久一次',
+  },
+  {
+    id: 'AAHA-PAIN-2022',
+    name: 'AAHA 犬猫疼痛管理指南',
+    version: '2022',
+    tier: 'A',
+    local: true,
+    role: '疼痛识别、评估与多模式管理；补 WSAVA 疼痛指南中文扫描件不可读的空缺',
   },
   {
     id: 'AAHA-DENTAL-2019',

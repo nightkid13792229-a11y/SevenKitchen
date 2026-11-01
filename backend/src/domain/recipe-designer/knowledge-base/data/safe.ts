@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -16,6 +19,7 @@ export const SAFE_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'safe-001',
     domain: 'SAFE',
+    questionType: 'SAFETY',
     title: '食源性疾病的概念与宠物食源性疾病的现状',
     keywords: [
       '食品安全', '食源性疾病', '食物中毒', '食物感染', '食源性',
@@ -38,11 +42,16 @@ export const SAFE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第11章 食品安全', note: 'INTRODUCTION、图11-1 食源性疾病分类、宠物发生率' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第11章 食品安全' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'safe-002',
     domain: 'SAFE',
+    questionType: 'SAFETY',
     title: '宠物食物中毒的常见原因',
     keywords: [
       '食物中毒', '中毒原因', '药物', '杀虫剂', '植物', '灭鼠药', '清洁剂',
@@ -65,11 +74,16 @@ export const SAFE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第11章 食品安全', note: '表11-1 犬猫中毒原因、家庭暴露、诊断询问' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第11章 食品安全' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'safe-003',
     domain: 'SAFE',
+    questionType: 'SAFETY',
     title: '生食（生肉/骨/蛋）的风险与 FDA 立场',
     keywords: [
       '生食', '生肉', '生骨', '生蛋', '病原体', '沙门氏菌', '大肠杆菌',
@@ -92,11 +106,16 @@ export const SAFE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第11章 食品安全', note: 'RAW INGREDIENT DIETS、FDA 立场、生食病原体与生骨风险' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第11章 食品安全' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'safe-004',
     domain: 'SAFE',
+    questionType: 'SAFETY',
     title: '宠物食品的风险排序与食品安全存储要领',
     keywords: [
       '风险排序', '食物存储', '保质期', '温度', '水分', '罐头', '干粮',
@@ -119,11 +138,16 @@ export const SAFE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第11章 食品安全', note: 'Risk Factors、食物存储、风险排序、存储三要素' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第11章 食品安全' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'safe-005',
     domain: 'SAFE',
+    questionType: 'SAFETY',
     title: '霉菌毒素（黄曲霉毒素、呕吐毒素）的风险',
     keywords: [
       '霉菌毒素', '黄曲霉毒素', '呕吐毒素', '脱氧雪腐镰刀菌烯醇', '肝毒', '谷物',
@@ -146,11 +170,16 @@ export const SAFE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第11章 食品安全', note: 'Mycotoxins、黄曲霉毒素、呕吐毒素、FDA 行动水平' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第11章 食品安全' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'safe-006',
     domain: 'SAFE',
+    questionType: 'SAFETY',
     title: '关键食物病原体与预防措施',
     keywords: [
       '沙门氏菌', '肉毒杆菌', '葡萄球菌', '大肠杆菌', '蜡样芽孢杆菌', '鲑鱼中毒',
@@ -174,11 +203,16 @@ export const SAFE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第11章 食品安全', note: '细菌与立克次体、各病原体致病与预防、鲑鱼中毒病' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第11章 食品安全' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'safe-007',
     domain: 'SAFE',
+    questionType: 'SAFETY',
     title: '自制宠粮的食品安全要点',
     keywords: [
       '自制粮', '家庭制作', '交叉污染', '烹饪温度', '即做即食', '原料',
@@ -200,6 +234,10 @@ export const SAFE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第11章 食品安全', note: 'HOME-PREPARED FOODS、原料污染与制作要点' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第11章 食品安全' },
     ],
     priority: 'MEDIUM',
   },

@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -18,6 +21,7 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'weight-001',
     domain: 'WEIGHT',
+    questionType: 'DEFINITION',
     title: '肥胖的定义与 BCS / 体脂率评估',
     keywords: [
       '肥胖', '超重', '体况评分', '体脂率', 'obesity', 'overweight', 'body condition score',
@@ -45,11 +49,19 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       { source: 'AAHA 营养与体重管理指南 2021' },
       { source: 'WSAVA 营养指南与工具包' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2014-WEIGHT', locator: '全文（AAHA 2021 指定的详细减重方案）' },
+      { sourceId: 'SACN5', locator: '第27章 肥胖' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '' },
+      { sourceId: 'WSAVA-NUTRITION', locator: '' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'weight-002',
     domain: 'WEIGHT',
+    questionType: 'NUTRITION',
     title: '理想体重的估算方法',
     keywords: [
       '理想体重', '目标体重', 'ideal body weight', 'target weight', 'optimal weight', '瘦体重',
@@ -74,11 +86,18 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       { source: 'AAHA 营养与体重管理指南 2021' },
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2014-WEIGHT', locator: '全文（AAHA 2021 指定的详细减重方案）' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '' },
+      { sourceId: 'SACN5', locator: '第27章 肥胖' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'weight-003',
     domain: 'WEIGHT',
+    questionType: 'NUTRITION',
     title: '减重能量摄入：按理想体重 RER 计算及限制幅度',
     keywords: [
       '能量摄入', '热量限制', 'RER', '静息能量需要', '减重热量', 'calorie restriction',
@@ -105,11 +124,18 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
       { source: 'AAHA 营养与体重管理指南 2021' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2014-WEIGHT', locator: '全文（AAHA 2021 指定的详细减重方案）' },
+      { sourceId: 'SACN5', locator: '第27章 肥胖' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'weight-004',
     domain: 'WEIGHT',
+    questionType: 'NUTRITION',
     title: '减重速度：每周减重百分比',
     keywords: [
       '减重速度', '每周减重', 'rate of weight loss', 'weekly weight loss', '1-2%', '0.5-1%',
@@ -134,11 +160,17 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       { source: 'AAHA 体重管理指南 2014', chapter: '全文（AAHA 2021 指定的详细减重方案）' },
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2014-WEIGHT', locator: '全文（AAHA 2021 指定的详细减重方案）' },
+      { sourceId: 'SACN5', locator: '第27章 肥胖' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'weight-005',
     domain: 'WEIGHT',
+    questionType: 'NUTRITION',
     title: '减重期蛋白质保留策略（高蛋白低能量）',
     keywords: [
       '蛋白质', '瘦体重', '肌肉流失', '高蛋白', 'protein', 'lean body mass', 'muscle mass',
@@ -165,11 +197,18 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
       { source: 'AAHA 营养与体重管理指南 2021' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2014-WEIGHT', locator: '全文（AAHA 2021 指定的详细减重方案）' },
+      { sourceId: 'SACN5', locator: '第27章 肥胖' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'weight-006',
     domain: 'WEIGHT',
+    questionType: 'NUTRITION',
     title: '膳食纤维与饱腹感',
     keywords: [
       '纤维', '膳食纤维', '饱腹感', '能量密度', 'fiber', 'satiety', 'energy density',
@@ -195,11 +234,18 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
       { source: 'AAHA 营养与体重管理指南 2021' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2014-WEIGHT', locator: '全文（AAHA 2021 指定的详细减重方案）' },
+      { sourceId: 'SACN5', locator: '第27章 肥胖' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'weight-007',
     domain: 'WEIGHT',
+    questionType: 'NUTRITION',
     title: '零食与加餐热量计入（≤10%）',
     keywords: [
       '零食', '加餐', '人食', '热量计入', 'treats', 'snacks', 'table food', '10%',
@@ -223,11 +269,18 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       { source: 'AAHA 营养与体重管理指南 2021' },
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2014-WEIGHT', locator: '全文（AAHA 2021 指定的详细减重方案）' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '' },
+      { sourceId: 'SACN5', locator: '第27章 肥胖' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'weight-008',
     domain: 'WEIGHT',
+    questionType: 'NUTRITION',
     title: '运动配合与活动管理',
     keywords: [
       '运动', '活动量', '散步', '遛狗', 'exercise', 'walking', 'activity', 'environmental enrichment',
@@ -251,11 +304,18 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
       { source: 'AAHA 营养与体重管理指南 2021' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2014-WEIGHT', locator: '全文（AAHA 2021 指定的详细减重方案）' },
+      { sourceId: 'SACN5', locator: '第27章 肥胖' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'weight-009',
     domain: 'WEIGHT',
+    questionType: 'NUTRITION',
     title: '减重监测频率（体重 / BCS 定期复查）',
     keywords: [
       '监测', '复查', '体重复查', 'monitoring', 'recheck', 'weigh-in', 'follow-up',
@@ -280,11 +340,18 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
       { source: 'AAHA 营养与体重管理指南 2021' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2014-WEIGHT', locator: '全文（AAHA 2021 指定的详细减重方案）' },
+      { sourceId: 'SACN5', locator: '第27章 肥胖' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'weight-010',
     domain: 'WEIGHT',
+    questionType: 'NUTRITION',
     title: '减重后维持期与防反弹',
     keywords: [
       '维持期', '防反弹', '维持热量', 'weight maintenance', 'weight regain', 'maintenance energy',
@@ -309,11 +376,19 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       { source: 'AAHA 营养与体重管理指南 2021' },
       { source: 'WSAVA 营养指南与工具包' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2014-WEIGHT', locator: '全文（AAHA 2021 指定的详细减重方案）' },
+      { sourceId: 'SACN5', locator: '第27章 肥胖' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '' },
+      { sourceId: 'WSAVA-NUTRITION', locator: '' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'weight-011',
     domain: 'WEIGHT',
+    questionType: 'NUTRITION',
     title: '增重场景：低体重犬的能量与营养策略',
     keywords: [
       '增重', '低体重', '偏瘦', '体重不足', 'weight gain', 'underweight', 'thin', 'cachexia',
@@ -337,11 +412,18 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       { source: 'AAHA 营养与体重管理指南 2021' },
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2014-WEIGHT', locator: '全文（AAHA 2021 指定的详细减重方案）' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '' },
+      { sourceId: 'SACN5', locator: '第27章 肥胖' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'weight-012',
     domain: 'WEIGHT',
+    questionType: 'NUTRITION',
     title: '常见误区与风险：极端节食与肝脏脂质沉积',
     keywords: [
       '误区', '极端节食', '饥饿', '肝脏脂质沉积', 'hepatic lipidosis', 'starvation', '急速减重',
@@ -363,6 +445,11 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: 'AAHA 体重管理指南 2014', chapter: '全文（AAHA 2021 指定的详细减重方案）' },
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2014-WEIGHT', locator: '全文（AAHA 2021 指定的详细减重方案）' },
+      { sourceId: 'SACN5', locator: '第27章 肥胖' },
     ],
     priority: 'HIGH',
   },

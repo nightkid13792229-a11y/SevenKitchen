@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -24,6 +27,7 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'general-001',
     domain: 'GENERAL',
+    questionType: 'NUTRITION',
     title: '成年犬维持期能量需求：RER 计算与 DER 活动系数',
     keywords: [
       '能量需求', '每日能量需求', '静息能量', 'DER', 'RER', '活动系数', '能量密度',
@@ -49,11 +53,17 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第13章 青年成年犬饲养：中年前期', note: 'Energy 节、表13-2、绝育犬能量建议；RER 与 NRC 2006 数值经本章转引（NRC 原书表15-5 成犬维持）' },
       { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '7.2.4.1 犬每日能量摄入建议', note: '表 VII-6 各年龄 MER、表 VII-7 活动量与品种差异' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第13章 青年成年犬饲养：中年前期' },
+      { sourceId: 'FEDIAF-2025', locator: '7.2.4.1 犬每日能量摄入建议' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'general-002',
     domain: 'GENERAL',
+    questionType: 'NUTRITION',
     title: '蛋白质需求与优质蛋白选择：维持期最低量与推荐量',
     keywords: [
       '蛋白质', '蛋白', '粗蛋白', '氨基酸', '蛋白质量', 'protein', 'crude protein',
@@ -79,11 +89,18 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第10章 家庭自制宠物食品', note: '自制粮蛋白/磷过量的常见问题' },
       { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '3.2.2 犬全价粮推荐营养水平', note: '表 III-3a 成年犬粗蛋白与氨基酸最低水平' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第13章 青年成年犬饲养：中年前期' },
+      { sourceId: 'SACN5', locator: '第10章 家庭自制宠物食品' },
+      { sourceId: 'FEDIAF-2025', locator: '3.2.2 犬全价粮推荐营养水平' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'general-003',
     domain: 'GENERAL',
+    questionType: 'NUTRITION',
     title: '脂肪需求与必需脂肪酸：亚油酸、α-亚麻酸与 EPA/DHA',
     keywords: [
       '脂肪', '必需脂肪酸', '亚油酸', '亚麻酸', '鱼油', 'EPA', 'DHA', 'omega-3', 'omega-6',
@@ -109,11 +126,18 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬饲养', note: '中老年犬脂肪推荐 7-15% DM' },
       { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '3.2.2 犬全价粮推荐营养水平', note: '表 III-3a 成年犬脂肪与亚油酸最低水平' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第13章 青年成年犬饲养：中年前期' },
+      { sourceId: 'SACN5', locator: '第14章 中老年犬饲养' },
+      { sourceId: 'FEDIAF-2025', locator: '3.2.2 犬全价粮推荐营养水平' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'general-004',
     domain: 'GENERAL',
+    questionType: 'NUTRITION',
     title: '钙磷与钙磷比：骨骼健康的平衡要点',
     keywords: [
       '钙', '磷', '钙磷比', '矿物质', '骨骼', '钙磷', 'calcium', 'phosphorus',
@@ -139,11 +163,19 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第10章 家庭自制宠物食品', note: '自制粮钙磷失衡与纠正方法' },
       { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '3.2.2 犬全价粮推荐营养水平', note: '表 III-3a 成年犬钙磷最低水平与钙磷比' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第12章 正常犬饲养导论' },
+      { sourceId: 'SACN5', locator: '第13章 青年成年犬饲养：中年前期' },
+      { sourceId: 'SACN5', locator: '第10章 家庭自制宠物食品' },
+      { sourceId: 'FEDIAF-2025', locator: '3.2.2 犬全价粮推荐营养水平' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'general-005',
     domain: 'GENERAL',
+    questionType: 'NUTRITION',
     title: '其他常量与微量矿物质：钠、钾、镁、锌、铜、铁、碘等',
     keywords: [
       '矿物质', '钠', '钾', '镁', '锌', '铜', '铁', '碘', '硒', '锰', '微量元素',
@@ -170,11 +202,18 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第13章 青年成年犬饲养：中年前期', note: 'Sodium and Chloride 节、硒最低需要；NRC 2006 数值经本章转引（NRC 原书表15-5 成犬维持 RA）' },
       { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '3.2.2 犬全价粮推荐营养水平', note: '表 III-3a 成年犬矿物质与微量元素最低水平及上限' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第12章 正常犬饲养导论' },
+      { sourceId: 'SACN5', locator: '第13章 青年成年犬饲养：中年前期' },
+      { sourceId: 'FEDIAF-2025', locator: '3.2.2 犬全价粮推荐营养水平' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'general-006',
     domain: 'GENERAL',
+    questionType: 'NUTRITION',
     title: '维生素：脂溶性（A、D、E、K）与水溶性（B 族、胆碱）',
     keywords: [
       '维生素', '脂溶性维生素', '水溶性维生素', '维生素A', '维生素D', '维生素E', '维生素K',
@@ -200,11 +239,18 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第10章 家庭自制宠物食品', note: '自制粮维生素缺乏与补充原则' },
       { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '3.2.2 犬全价粮推荐营养水平', note: '表 III-3a 成年犬维生素最低水平及上限' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第13章 青年成年犬饲养：中年前期' },
+      { sourceId: 'SACN5', locator: '第10章 家庭自制宠物食品' },
+      { sourceId: 'FEDIAF-2025', locator: '3.2.2 犬全价粮推荐营养水平' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'general-007',
     domain: 'GENERAL',
+    questionType: 'NUTRITION',
     title: '饮水与水分需求：水是最重要的营养素',
     keywords: [
       '水', '饮水', '水分', '脱水', 'water', 'hydration', 'drinking water', '饮水需求',
@@ -227,11 +273,16 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第13章 青年成年犬饲养：中年前期', note: 'Water 节' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第13章 青年成年犬饲养：中年前期' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'general-008',
     domain: 'GENERAL',
+    questionType: 'NUTRITION',
     title: '喂养方式与餐数：自由采食 vs 定时定量',
     keywords: [
       '喂养方式', '自由采食', '定时定量', '餐数', '分餐', '换粮', 'feeding method',
@@ -256,11 +307,18 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第12章 正常犬饲养导论', note: '犬一次 1-2 餐摄入日能量需要的进食行为' },
       { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '7.2.4.1 犬每日能量摄入建议', note: '维持 BCS 4-5/9 的喂养目标' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第14章 中老年犬饲养' },
+      { sourceId: 'SACN5', locator: '第12章 正常犬饲养导论' },
+      { sourceId: 'FEDIAF-2025', locator: '7.2.4.1 犬每日能量摄入建议' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'general-009',
     domain: 'GENERAL',
+    questionType: 'NUTRITION',
     title: '体重与体况评分（BCS）监测：维持理想体况',
     keywords: [
       '体况评分', 'BCS', '体重监测', '理想体重', '体况', '超重预防', 'body condition score',
@@ -285,11 +343,18 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬饲养', note: 'Reassessment 节：6-12 个月评估' },
       { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '7.2.4.1 犬每日能量摄入建议', note: 'BCS 4-5/9 维持建议（Kealy 2002）' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第13章 青年成年犬饲养：中年前期' },
+      { sourceId: 'SACN5', locator: '第14章 中老年犬饲养' },
+      { sourceId: 'FEDIAF-2025', locator: '7.2.4.1 犬每日能量摄入建议' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'general-010',
     domain: 'GENERAL',
+    questionType: 'NUTRITION',
     title: '鲜食/自制粮的均衡性原则：全营养、配方化、多样化的正确理解',
     keywords: [
       '自制粮', '鲜食', '均衡', '全价', '配方', '多样化', '补充剂', 'homemade food',
@@ -316,11 +381,18 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第12章 正常犬饲养导论', note: '表12-5 纯肉饮食不均衡' },
       { source: '小动物临床营养学（第5版）', chapter: '第11章 食品安全', note: '生食/未煮熟原料的致病菌风险' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第10章 家庭自制宠物食品' },
+      { sourceId: 'SACN5', locator: '第12章 正常犬饲养导论' },
+      { sourceId: 'SACN5', locator: '第11章 食品安全' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'general-011',
     domain: 'GENERAL',
+    questionType: 'NUTRITION',
     title: '常见误区：高蛋白伤肾、犬是杂食动物、生食与人类食物禁忌',
     keywords: [
       '误区', '高蛋白伤肾', '肉食动物', '杂食动物', '生食', '葡萄', '巧克力', '洋葱',
@@ -348,11 +420,19 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第11章 食品安全', note: '生食与致病菌风险' },
       { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '7.7 常见人食风险', note: '葡萄/葡萄干、巧克力、洋葱大蒜毒性' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第13章 青年成年犬饲养：中年前期' },
+      { sourceId: 'SACN5', locator: '第12章 正常犬饲养导论' },
+      { sourceId: 'SACN5', locator: '第11章 食品安全' },
+      { sourceId: 'FEDIAF-2025', locator: '7.7 常见人食风险' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'general-012',
     domain: 'GENERAL',
+    questionType: 'NUTRITION',
     title: '零食与热量占比控制（≤10%）',
     keywords: [
       '零食', '加餐', '人食', '热量占比', 'treats', 'snacks', 'table food', '10%',
@@ -374,6 +454,11 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬饲养', note: '零食 <10% 总饮食、零食与营养结构' },
       { source: '小动物临床营养学（第5版）', chapter: '第10章 家庭自制宠物食品', note: '人食超过每日干物质摄入 10% 的关注阈值' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第14章 中老年犬饲养' },
+      { sourceId: 'SACN5', locator: '第10章 家庭自制宠物食品' },
     ],
     priority: 'MEDIUM',
   },

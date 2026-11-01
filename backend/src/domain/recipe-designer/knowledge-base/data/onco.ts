@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -16,6 +19,7 @@ export const ONCO_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'onco-001',
     domain: 'ONCO',
+    questionType: 'DEFINITION',
     title: '癌症患者营养管理的总体原则与分期',
     keywords: [
       '癌症', '肿瘤', '癌症营养', '营养管理', '恶病质', '分型',
@@ -38,11 +42,16 @@ export const ONCO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第30章 癌症', note: 'CLINICAL IMPORTANCE、表30-1 癌症患者分期、营养支持目标' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第30章 癌症' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'onco-002',
     domain: 'ONCO',
+    questionType: 'NUTRITION',
     title: '癌症患者的可消化碳水化合物目标（≤25% DM）',
     keywords: [
       '可消化碳水', '碳水化合物', '糖酵解', 'Warburg', '乳酸', '高血糖',
@@ -64,11 +73,16 @@ export const ONCO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第30章 癌症', note: 'Digestible Carbohydrate、Warburg 效应、高乳酸血症、碳水目标' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第30章 癌症' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'onco-003',
     domain: 'ONCO',
+    questionType: 'NUTRITION',
     title: '癌症患者的脂肪与 omega-3 目标（脂肪 25-40%、omega-3 >5%）',
     keywords: [
       '脂肪', 'omega-3', '脂肪酸', 'omega-6', '抗炎', '高脂', '淋巴瘤',
@@ -91,11 +105,16 @@ export const ONCO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第30章 癌症', note: 'Fat and Fatty Acids、omega-3、表30-5 脂肪与omega-3目标' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第30章 癌症' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'onco-004',
     domain: 'ONCO',
+    questionType: 'NUTRITION',
     title: '癌症患者的蛋白质与精氨酸目标（蛋白犬 30-45%、精氨酸>2%）',
     keywords: [
       '蛋白质', '精氨酸', '氨基酸', '蛋白需求', '低白蛋白', '负氮平衡',
@@ -117,11 +136,16 @@ export const ONCO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第30章 癌症', note: 'Protein and Amino Acids、表30-5 蛋白/精氨酸目标、恶病质' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第30章 癌症' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'onco-005',
     domain: 'ONCO',
+    questionType: 'NUTRITION',
     title: '癌症恶病质（cancer cachexia）的识别与营养管理',
     keywords: [
       '恶病质', '癌症恶病质', '体重下降', '肌肉消耗', '低白蛋白', '衰弱',
@@ -144,11 +168,16 @@ export const ONCO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第30章 癌症', note: 'Cancer Cachexia、图30-2、体重与恶病质' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第30章 癌症' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'onco-006',
     domain: 'ONCO',
+    questionType: 'NUTRITION',
     title: '化疗与放疗的副作用及营养支持',
     keywords: [
       '化疗', '放疗', '副作用', '口腔炎', '黏膜炎', '味觉嗅觉', '辅助喂养',
@@ -171,11 +200,16 @@ export const ONCO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第30章 癌症', note: 'Chemotherapy、Radiation、表30-4 放疗副作用、辅助喂养' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第30章 癌症' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'onco-007',
     domain: 'ONCO',
+    questionType: 'NUTRITION',
     title: '癌症患者的补充剂使用注意事项',
     keywords: [
       '补充剂', '抗氧化剂', '化疗交互', '维生素', '草药', '自由基',
@@ -198,11 +232,16 @@ export const ONCO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第30章 癌症', note: '补充剂注意事项、抗氧化剂与化疗、草药与药代动力学' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第30章 癌症' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'onco-008',
     domain: 'ONCO',
+    questionType: 'NUTRITION',
     title: '癌症预防相关的营养因素',
     keywords: [
       '癌症预防', '风险因素', '肥胖', '蔬菜', '红肉', '膀胱癌', '乳腺肿瘤',
@@ -223,6 +262,10 @@ export const ONCO_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第30章 癌症', note: 'Risk Factors、肥胖与乳腺/膀胱癌、蔬菜与红肉' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第30章 癌症' },
     ],
     priority: 'LOW',
   },

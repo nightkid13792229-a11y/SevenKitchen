@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -16,6 +19,7 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'skin-001',
     domain: 'SKIN',
+    questionType: 'NUTRITION',
     title: '食物不良反应：食物过敏与食物不耐受的区分',
     keywords: ['食物过敏', '食物不耐受', '食物不良反应', 'food allergy', 'food intolerance', 'adverse food reaction'],
     applicableTo: ['food-allergy', 'skin', 'itching', 'pruritus', 'GI'],
@@ -35,11 +39,16 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第31章 食物不良反应' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第31章 食物不良反应' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'skin-002',
     domain: 'SKIN',
+    questionType: 'NUTRITION',
     title: '食物不良反应的皮肤与耳部表现',
     keywords: ['瘙痒', '皮肤病变', '外耳炎', '脓皮病', 'pruritus', 'dermatitis', 'otitis externa', 'pyoderma'],
     applicableTo: ['skin', 'itching', 'pruritus', 'otitis', 'food-allergy'],
@@ -59,11 +68,16 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第31章 食物不良反应' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第31章 食物不良反应' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'skin-003',
     domain: 'SKIN',
+    questionType: 'NUTRITION',
     title: '饮食排除试验：诊断食物不良反应的金标准方法',
     keywords: ['排除试验', '排除饮食', '激发试验', '新奇蛋白', '水解蛋白', 'elimination trial', 'elimination diet', 'challenge', 'novel protein', 'hydrolyzed protein'],
     applicableTo: ['food-allergy', 'elimination-diet', 'skin', 'GI'],
@@ -86,11 +100,16 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第31章 食物不良反应' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第31章 食物不良反应' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'skin-004',
     domain: 'SKIN',
+    questionType: 'NUTRITION',
     title: '排除试验期间的严格管理：零食、药物与饮食日记',
     keywords: ['排除试验管理', '零食', '咀嚼药物', '饮食日记', 'treats', 'chewable medication', 'food diary', 'heartworm preventive'],
     applicableTo: ['food-allergy', 'elimination-diet', 'skin'],
@@ -109,11 +128,16 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第31章 食物不良反应' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第31章 食物不良反应' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'skin-005',
     domain: 'SKIN',
+    questionType: 'NUTRITION',
     title: '犬常见致敏食物成分',
     keywords: ['牛肉', '乳制品', '小麦', '鸡肉', '鸡蛋', '大豆', '鱼', 'beef', 'dairy', 'wheat', 'chicken', 'egg', 'soy', 'common allergens'],
     applicableTo: ['food-allergy', 'skin'],
@@ -132,11 +156,16 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第31章 食物不良反应' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第31章 食物不良反应' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'skin-006',
     domain: 'SKIN',
+    questionType: 'NUTRITION',
     title: '皮肤被毛问题的营养鉴别诊断：先排除非营养因素',
     keywords: ['鉴别诊断', '皮肤检查', '毛发检查', '皮肤活检', 'differential diagnosis', 'skin biopsy', 'trichography', '营养性皮肤病'],
     applicableTo: ['skin', 'coat', 'dermatitis', 'diagnosis'],
@@ -156,11 +185,16 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第32章 皮肤与毛发疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'skin-007',
     domain: 'SKIN',
+    questionType: 'NUTRITION',
     title: '必需脂肪酸（LA/ALA/EPA/DHA）与皮肤屏障及缺乏表现',
     keywords: ['亚油酸', '必需脂肪酸', 'LA', 'ALA', 'EPA', 'DHA', '皮肤屏障', '经皮失水', 'linoleic acid', 'essential fatty acid', 'skin barrier', 'seborrhea sicca'],
     applicableTo: ['skin', 'coat', 'fatty-acid', 'seborrhea'],
@@ -183,11 +217,16 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第32章 皮肤与毛发疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'skin-008',
     domain: 'SKIN',
+    questionType: 'NUTRITION',
     title: '锌与皮肤：锌反应性皮肤病与品种易感',
     keywords: ['锌', '锌反应性皮肤病', '西伯利亚雪橇犬', '阿拉斯加雪橇犬', '牛头梗', 'zinc', 'zinc-responsive dermatosis', 'Siberian husky', 'malamute', 'acrodermatitis'],
     applicableTo: ['skin', 'zinc', 'coat'],
@@ -211,11 +250,17 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
       { source: '皮肤被毛功能目标笔记（内部整理，无文献依据）', note: '锌按 FEDIAF/NRC 满足为主，避免超过最低值约 2 倍，优先食物满足' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第32章 皮肤与毛发疾病' },
+      { sourceId: 'INTERNAL-SKIN-TARGET', locator: '' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'skin-009',
     domain: 'SKIN',
+    questionType: 'NUTRITION',
     title: '铜与被毛色素及矿物质交互',
     keywords: ['铜', '被毛色素', '毛色变浅', 'copper', 'coat pigment', 'mineral interaction'],
     applicableTo: ['skin', 'coat', 'copper', 'trace-mineral'],
@@ -236,11 +281,17 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
       { source: '皮肤被毛功能目标笔记（内部整理，无文献依据）', note: '铜优先满足 FEDIAF 下限并远离上限拥挤' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第32章 皮肤与毛发疾病' },
+      { sourceId: 'INTERNAL-SKIN-TARGET', locator: '' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'skin-010',
     domain: 'SKIN',
+    questionType: 'NUTRITION',
     title: '维生素 A 与皮肤：维A反应性皮肤病与类视黄醇',
     keywords: ['维生素A', '视黄醇', '类视黄醇', '维A反应性皮肤病', '皮脂溢', 'vitamin A', 'retinol', 'retinoid', 'seborrhea', 'keratinization'],
     applicableTo: ['skin', 'vitamin-a', 'seborrhea', 'keratinization'],
@@ -264,11 +315,17 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
       { source: 'NRC《犬猫营养需要》(2006)', note: '维A最低推荐量数值' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第32章 皮肤与毛发疾病' },
+      { sourceId: 'NRC-2006', locator: '' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'skin-011',
     domain: 'SKIN',
+    questionType: 'NUTRITION',
     title: '维生素 E 与皮肤：抗氧化作用与 PUFA 需求关系',
     keywords: ['维生素E', '生育酚', '抗氧化', 'PUFA', '脂膜炎', 'vitamin E', 'tocopherol', 'antioxidant', 'steatitis'],
     applicableTo: ['skin', 'vitamin-e', 'PUFA'],
@@ -291,11 +348,17 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
       { source: 'NRC《犬猫营养需要》(2006)', note: '维E成年维持最低推荐量数值' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第32章 皮肤与毛发疾病' },
+      { sourceId: 'NRC-2006', locator: '' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'skin-012',
     domain: 'SKIN',
+    questionType: 'NUTRITION',
     title: '蛋白质-能量营养与皮肤被毛：角蛋白与毛发生长',
     keywords: ['蛋白质', '能量', '角蛋白', '毛发生长', '含硫氨基酸', 'protein', 'keratin', 'hair growth', 'protein-energy malnutrition', 'telogen defluxion'],
     applicableTo: ['skin', 'coat', 'protein', 'wound-healing'],
@@ -318,11 +381,17 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
       { source: '皮肤被毛功能目标笔记（内部整理，无文献依据）', note: '蛋白质/脂肪供能关系为项目内部规则' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第32章 皮肤与毛发疾病' },
+      { sourceId: 'INTERNAL-SKIN-TARGET', locator: '' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'skin-013',
     domain: 'SKIN',
+    questionType: 'NUTRITION',
     title: '营养性皮肤病的评估流程与换粮指征',
     keywords: ['营养评估', '换粮', '营养性皮肤病', '营养敏感性疾病', 'nutritional assessment', 'food change', 'nutrient-responsive dermatosis'],
     applicableTo: ['skin', 'coat', 'diagnosis'],
@@ -343,11 +412,16 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第32章 皮肤与毛发疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'skin-014',
     domain: 'SKIN',
+    questionType: 'NUTRITION',
     title: '脂肪酸补充剂在炎症性皮肤病中的证据边界',
     keywords: ['omega-3', '鱼油', 'GLA', '止痒', '补充剂证据', 'fish oil', 'fatty acid supplement', 'pruritus', 'antiinflammatory'],
     applicableTo: ['skin', 'itching', 'pruritus', 'atopy', 'fatty-acid', 'supplement'],
@@ -371,6 +445,11 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
       { source: '皮肤被毛功能目标笔记（内部整理，无文献依据）', note: 'EPA+DHA 超过 1.0 g/1000 kcal 为项目内部复盘线，非官方标准' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第32章 皮肤与毛发疾病' },
+      { sourceId: 'INTERNAL-SKIN-TARGET', locator: '' },
     ],
     priority: 'MEDIUM',
   },

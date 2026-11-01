@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -21,6 +24,7 @@ export const ENDOCRINE_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'endocrine-001',
     domain: 'ENDOCRINE',
+    questionType: 'NUTRITION',
     title: '犬糖尿病的分型与营养管理总体目标',
     keywords: [
       '糖尿病', '血糖', '胰岛素', '糖尿病饮食', 'IDDM', 'NIDDM', 'diabetes',
@@ -44,11 +48,16 @@ export const ENDOCRINE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第29章 内分泌疾病', note: 'DIABETES MELLITUS 概述、犬糖尿病分型、营养管理总目标' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第29章 内分泌疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'endocrine-002',
     domain: 'ENDOCRINE',
+    questionType: 'NUTRITION',
     title: '糖尿病犬的易感因素与危险犬种',
     keywords: [
       '糖尿病易感犬种', '糖尿病危险因素', '雪纳瑞', '比熊', '贵宾', '萨摩耶',
@@ -71,11 +80,16 @@ export const ENDOCRINE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第29章 内分泌疾病', note: 'Risk Factors 节、表29-1 糖尿病可能病因、表29-2 高血糖鉴别诊断' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第29章 内分泌疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'endocrine-003',
     domain: 'ENDOCRINE',
+    questionType: 'NUTRITION',
     title: '糖尿病犬的碳水化合物目标（≤55% DM，含纤维更佳）',
     keywords: [
       '糖尿病碳水', '碳水化合物', '可消化碳水', '复合碳水', '简单糖', '升糖',
@@ -97,11 +111,16 @@ export const ENDOCRINE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第29章 内分泌疾病', note: '糖尿病碳水目标、图29-2 半湿粮与餐后血糖、果糖注意事项' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第29章 内分泌疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'endocrine-004',
     domain: 'ENDOCRINE',
+    questionType: 'NUTRITION',
     title: '糖尿病犬的纤维目标（约 7-18% DM）',
     keywords: [
       '糖尿病纤维', '膳食纤维', '可溶纤维', '不溶纤维', '可发酵纤维', '纤维',
@@ -123,11 +142,16 @@ export const ENDOCRINE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第29章 内分泌疾病', note: 'FIBER 节、纤维机制与目标、注意事项' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第29章 内分泌疾病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'endocrine-005',
     domain: 'ENDOCRINE',
+    questionType: 'NUTRITION',
     title: '糖尿病犬的脂肪与蛋白目标（脂肪 <25% DM、蛋白 15-35% DM）',
     keywords: [
       '糖尿病脂肪', '糖尿病蛋白', '低脂', '高蛋白', '脂肪百分比', '蛋白百分比',
@@ -149,11 +173,16 @@ export const ENDOCRINE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第29章 内分泌疾病', note: 'FAT 节、PROTEIN 节、电解质与磷镁注意' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第29章 内分泌疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'endocrine-006',
     domain: 'ENDOCRINE',
+    questionType: 'NUTRITION',
     title: '糖尿病犬的饮食管理关键词：一致性与餐后控糖',
     keywords: [
       '糖尿病饮食管理', '一致性', '定时定量', '餐后血糖', '分次喂食', '能量稳定',
@@ -175,11 +204,16 @@ export const ENDOCRINE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第29章 内分泌疾病', note: '营养计划与一致性、运动作用、血清果糖胺监测' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第29章 内分泌疾病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'endocrine-007',
     domain: 'ENDOCRINE',
+    questionType: 'NUTRITION',
     title: '糖尿病犬的电解质与微量营养素考量',
     keywords: [
       '糖尿病电解质', '钾', '磷', '镁', '锌', '铬', '微量营养素', '维生素',
@@ -200,11 +234,16 @@ export const ENDOCRINE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第29章 内分泌疾病', note: 'ELECTROLYTES 节、Box29-1 糖尿病微量元素与维生素' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第29章 内分泌疾病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'endocrine-008',
     domain: 'ENDOCRINE',
+    questionType: 'NUTRITION',
     title: '甲状腺功能减退（甲减）与营养：能量下降与高脂血症',
     keywords: [
       '甲减', '甲状腺功能减退', '甲状腺', '高胆固醇', '高甘油三酯', '高脂血症', '能量消耗',
@@ -226,11 +265,16 @@ export const ENDOCRINE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第29章 内分泌疾病', note: 'HYPOTHYROIDISM 节、能量消耗与高脂血症、饮食建议' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第29章 内分泌疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'endocrine-009',
     domain: 'ENDOCRINE',
+    questionType: 'NUTRITION',
     title: '甲状腺功能亢进（甲亢）营养管理要点',
     keywords: [
       '甲亢', '甲状腺功能亢进', '甲状腺肿', '高代谢', '营养管理', '增重',
@@ -252,11 +296,16 @@ export const ENDOCRINE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第29章 内分泌疾病', note: 'HYPERTHYROIDISM 节、喂食与治疗计划、图29-8/表29-11、Box29-3 碘硒' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第29章 内分泌疾病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'endocrine-010',
     domain: 'ENDOCRINE',
+    questionType: 'NUTRITION',
     title: '甲状腺与碘/硒的相互关系（避免过量碘/硒）',
     keywords: [
       '碘', '硒', '甲状腺', '致甲状腺肿', '海藻', '罐头', 'goitrogenic', 'iodine',
@@ -279,11 +328,16 @@ export const ENDOCRINE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第29章 内分泌疾病', note: 'Box29-3 硒与碘过量、表29-11 致甲状腺肿因素' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第29章 内分泌疾病' },
+    ],
     priority: 'LOW',
   },
   {
     id: 'endocrine-011',
     domain: 'ENDOCRINE',
+    questionType: 'NUTRITION',
     title: '糖尿病酮症酸中毒（DKA）的危重营养管理',
     keywords: [
       '酮症酸中毒', 'DKA', '尿酮', '代谢性酸中毒', '危重', '酮尿', '电解质纠正',
@@ -305,11 +359,16 @@ export const ENDOCRINE_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第29章 内分泌疾病', note: 'DKA 定义、诱因、电解质与酸碱紊乱' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第29章 内分泌疾病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'endocrine-012',
     domain: 'ENDOCRINE',
+    questionType: 'NUTRITION',
     title: '内分泌疾病鉴别：糖尿病、甲状腺与肾上腺疾病的相互影响',
     keywords: [
       '内分泌鉴别', '库欣', '肾上腺皮质功能亢进', '阿狄森', '并发内分泌病', '胰岛素抵抗',
@@ -330,6 +389,10 @@ export const ENDOCRINE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第29章 内分泌疾病', note: '鉴别诊断（表29-2/29-9）、胰岛素抵抗、尿比重与并发库欣' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第29章 内分泌疾病' },
     ],
     priority: 'MEDIUM',
   },

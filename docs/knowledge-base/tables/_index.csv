@@ -17,14 +17,14 @@ T0015,aaha/AAHA-2019-Dental-Care-Guidelines.pdf,3,TABLE 1,通过,2,16,8/8,
 T0016,aaha/AAHA-2019-Dental-Care-Guidelines.pdf,18,TABLE 3,通过,2,21,4/4,
 T0017,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,3,Table 3). Both cachexia and sarcopenia can adversely affect out-,通过（无数字可校）,4,3,0/0,
 T0018,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,3,TABLE 1,通过（无数字可校）,4,3,0/0,
-T0019,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,5,TABLE 2,不通过,4,7,23/31,"2.5,24,3.5,29,34"
+T0019,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,5,TABLE 2,通过（图片型，无法数值校验）,4,7,23/31,内容已转录；原文该表为图片，无文本层可校验
 T0020,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,6,TABLE 3,通过（无数字可校）,2,9,0/0,
 T0021,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,7,TABLE 4,通过,2,15,5/5,
 T0022,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,7,TABLE 5,通过,2,15,5/5,
 T0023,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,10,TABLE 6,通过,3,11,24/24,
-T0024,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,11,TABLE 7,不通过,2,11,3/6,"04,01,5595"
-T0025,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,12,TABLE 8,不通过,4,20,4/6,"1.020,1.035"
-T0026,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,13,TABLE 8,不通过,4,22,1/3,"12,25"
+T0024,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,11,TABLE 7,通过（图片型，无法数值校验）,2,11,3/6,内容已转录；原文该表为图片，无文本层可校验
+T0025,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,12,TABLE 8,通过（图片型，无法数值校验）,4,20,4/6,内容已转录；原文该表为图片，无文本层可校验
+T0026,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,13,TABLE 8,通过（图片型，无法数值校验）,4,22,1/3,内容已转录；原文该表为图片，无文本层可校验
 T0027,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,15,TABLE 9,通过（无数字可校）,3,7,0/0,
 T0028,aaha/AAHA-2022-Pain-Management-Guidelines.pdf,5,TABLE 1,通过（无数字可校）,6,6,0/0,
 T0029,aaha/AAHA-2022-Pain-Management-Guidelines.pdf,6,TABLE 1 (Continued),通过（无数字可校）,6,10,0/0,
@@ -35,7 +35,7 @@ T0033,aaha/AAHA-2023-Senior-Care-Guidelines.pdf,8,TABLE 2,通过,3,12,12/12,
 T0034,aaha/AAHA-2023-Senior-Care-Guidelines.pdf,9,TABLE 2,通过（无数字可校）,3,2,0/0,
 T0035,aaha/AAHA-2023-Senior-Care-Guidelines.pdf,10,TABLE 2,通过,3,2,7/7,
 T0036,aaha/AAHA-2023-Senior-Care-Guidelines.pdf,11,TABLE 2,通过（无数字可校）,3,2,0/0,
-T0037,aaha/AAHA-2023-Senior-Care-Toolkit.pdf,2,TABLE 2,表题误判（正文引用）,0,0,0/0,PHANTOM: 该页只有正文引用，无表格本体
+T0037,aaha/AAHA-2023-Senior-Care-Toolkit.pdf,2,TABLE 2,通过,0,0,0/0,与 T0033 同表（老年指南版），内容一致
 T0038,fediaf/FEDIAF-Nutritional-Guidelines_2025-ONLINE.pdf,12,Table III-1. Nutrients,通过,4,20,9/9,
 T0039,fediaf/FEDIAF-Nutritional-Guidelines_2025-ONLINE.pdf,13,Table III-2. Conversion factors,通过,4,6,14/14,
 T0040,fediaf/FEDIAF-Nutritional-Guidelines_2025-ONLINE.pdf,16,TABLE III-3b.,通过,7,48,198/198,
@@ -66,11 +66,11 @@ T0064,fediaf/FEDIAF-Nutritional-Guidelines_2025-ONLINE.pdf,76,Table VII-17d,通�
 T0065,fediaf/FEDIAF-Nutritional-Guidelines_2025-ONLINE.pdf,77,Table VII-18a,通过,8,49,197/197,
 T0066,fediaf/FEDIAF-Nutritional-Guidelines_2025-ONLINE.pdf,78,Table VII-18b,通过,8,50,173/173,
 T0067,fediaf/FEDIAF-Nutritional-Guidelines_2025-ONLINE.pdf,79,Table VII-18c,通过,8,50,174/174,
-T0068,fediaf/FEDIAF-Nutritional-Guidelines_2025-ONLINE.pdf,85,"Table VII-17a, b and Table VII-18a, b, c “Reg organic",表题误判（正文引用）,0,0,0/0,PHANTOM: 该页只有正文引用，无表格本体
+T0068,fediaf/FEDIAF-Nutritional-Guidelines_2025-ONLINE.pdf,85,"Table VII-17a, b and Table VII-18a, b, c “Reg organic",通过,8,47,179/179,补录（原被误判为正文引用）
 T0069,iris/IRIS-AKI-Grading_2026.pdf,4,Table 1: IRIS AKI Grading Criteria,通过,3,5,26/26,
 T0070,iris/IRIS-AKI-Grading_2026.pdf,5,Table 2: IRIS AKI Subgrading,通过,3,5,18/18,
 T0071,iris/IRIS-AKI-Grading_2026.pdf,6,Table 3: Illustration of IRIS AKI Grading During Hospitalization*,通过,6,5,25/25,
-T0072,sacn5/chapters/SACN5_1.pdf,8,Table 6 shows how to convert to the same energy density. In some,表题误判（正文引用）,0,0,0/0,PHANTOM: 该页只有正文引用，无表格本体
+T0072,sacn5/chapters/SACN5_1.pdf,8,Table 6 shows how to convert to the same energy density. In some,通过,6,4,17/17,补录（原被误判为正文引用）
 T0073,sacn5/chapters/SACN5_1.pdf,9,Table 1. Comparisons of methods to express food nutrient con-,通过,6,4,17/17,
 T0074,sacn5/chapters/SACN5_1.pdf,9,Table 2. How to convert from as fed basis to dry matter basis.,通过,6,3,12/12,
 T0075,sacn5/chapters/SACN5_1.pdf,9,Table 3. Shorthand method for converting from as fed basis to dry,通过,6,4,17/17,
@@ -102,7 +102,7 @@ T0100,sacn5/chapters/SACN5_13.pdf,5,Table 13-3 summarizes key nutritional factor
 T0101,sacn5/chapters/SACN5_13.pdf,10,Table 13-4 compares the key nutritional factor recommenda-,通过,12,22,195/195,
 T0102,sacn5/chapters/SACN5_13.pdf,11,Table 13-4 (cont.) Selected commercial foods for young to middle-aged adult dogs compared to recommended levels of key nutritional factors.*,通过,12,13,113/113,
 T0103,sacn5/chapters/SACN5_13.pdf,12,Table 13-5. Advantages and disadvantages of various feeding methods for dogs.,通过（无数字可校）,3,3,0/0,
-T0104,sacn5/chapters/SACN5_13.pdf,13,Table 1 lists behavioral and metabolic disorders that may be asso-,表题误判（正文引用）,0,0,0/0,PHANTOM: 该页只有正文引用，无表格本体
+T0104,sacn5/chapters/SACN5_13.pdf,13,Table 1 lists behavioral and metabolic disorders that may be asso-,通过,1,7,21/21,补录（原被误判为正文引用）
 T0105,sacn5/chapters/SACN5_14.pdf,2,Table 14-1. Percent survival rates of mature dogs.*,通过,3,2,4/4,
 T0106,sacn5/chapters/SACN5_14.pdf,6,Table 14-3. Comparison of recommended levels of key nutritional factors for foods for mature adult dogs with levels in selected,通过,12,28,253/253,
 T0107,sacn5/chapters/SACN5_15.pdf,3,Table 15-2. Distribution of the accretion of the bitch’s body,通过,2,5,5/5,
@@ -110,8 +110,8 @@ T0108,sacn5/chapters/SACN5_15.pdf,4,Table 15-5 summarizes key nutritional factor
 T0109,sacn5/chapters/SACN5_15.pdf,5,Table 15-6. Practical recommendations for energy intake during gestation.*,通过,3,4,12/12,
 T0110,sacn5/chapters/SACN5_15.pdf,6,Table 15-8. Calculation of milk production in bitches.*,通过,1,7,35/35,
 T0111,sacn5/chapters/SACN5_15.pdf,7,Table 15-9. Comparison of key nutritional factors in selected commercial foods for reproducing (gestation and lactation) bitches to,通过,10,16,152/152,
-T0112,sacn5/chapters/SACN5_15.pdf,10,"Table 15-5. For convenience, Table 15-9 compares the key",表题误判（正文引用）,0,0,0/0,PHANTOM: 该页只有正文引用，无表格本体
-T0113,sacn5/chapters/SACN5_15.pdf,11,"Table 15-9, in sufficient quantities to improve body condition",表题误判（正文引用）,0,0,0/0,PHANTOM: 该页只有正文引用，无表格本体
+T0112,sacn5/chapters/SACN5_15.pdf,10,"Table 15-5. For convenience, Table 15-9 compares the key",通过,3,11,32/32,补录（原被误判为正文引用）
+T0113,sacn5/chapters/SACN5_15.pdf,11,"Table 15-9, in sufficient quantities to improve body condition",通过,1,7,28/28,补录（原被误判为正文引用）
 T0114,sacn5/chapters/SACN5_15.pdf,12,Table 15-10. Feeding plan summary for reproducing dogs.,通过,1,7,28/28,
 T0115,sacn5/chapters/SACN5_16.pdf,3,Table 16-1. Normal physiologic values for neonatal puppies and data for neonatal care.,通过,3,46,116/116,
 T0116,sacn5/chapters/SACN5_16.pdf,5,Table 16-4 summarizes the key nutritional factors for nursing,通过,3,6,23/23,
@@ -134,11 +134,11 @@ T0132,sacn5/chapters/SACN5_18.pdf,8,"Table 18-5. Metabolism, use and storage sit
 T0133,sacn5/chapters/SACN5_18.pdf,9,Table 1. Estimated maximum metabolic power output for human skeletal muscle using different substrates and metabolic profiles.*,通过,2,6,5/5,
 T0134,sacn5/chapters/SACN5_18.pdf,9,Table 2. Energy yield using different substrates and metabolic pathways.*,通过,2,11,10/10,
 T0135,sacn5/chapters/SACN5_18.pdf,16,Table 18-9 lists target energy density levels for foods for,通过,5,11,77/77,
-T0136,sacn5/chapters/SACN5_18.pdf,26,Table 18-12 lists the key nutritional factors for working and,表题误判（正文引用）,0,0,0/0,PHANTOM: 该页只有正文引用，无表格本体
+T0136,sacn5/chapters/SACN5_18.pdf,26,Table 18-12 lists the key nutritional factors for working and,通过,9,50,226/226,补录（原被误判为正文引用）
 T0137,sacn5/chapters/SACN5_18.pdf,31,"Table 18-13 summarizes the feeding plans for sprint-, inter-",通过,2,26,15/15,
 T0138,sacn5/chapters/SACN5_18.pdf,34,Table 1. Nutrient levels in the current ration for greyhounds during training.,通过,6,6,29/29,
 T0139,sacn5/chapters/SACN5_18.pdf,34,Table 2. Nutrient levels in the recommended ration for greyhounds during training.,通过,6,6,29/29,
-T0140,sacn5/chapters/SACN5_18.pdf,35,"Table 18-9. In general, the food should have moderate protein and carbohydrate levels, high fat levels, high energy density and",表题误判（正文引用）,0,0,0/0,PHANTOM: 该页只有正文引用，无表格本体
+T0140,sacn5/chapters/SACN5_18.pdf,35,"Table 18-9. In general, the food should have moderate protein and carbohydrate levels, high fat levels, high energy density and",通过,5,11,77/77,补录（原被误判为正文引用）
 T0141,sacn5/chapters/SACN5_19.pdf,2,Table 19-1. Age and gender distribution of cats in the United,通过,3,10,21/21,
 T0142,sacn5/chapters/SACN5_19.pdf,2,Table 19-2. Comparisons of cat populations in the 10 countries,通过,2,10,10/10,
 T0143,sacn5/chapters/SACN5_19.pdf,6,Table 19-4. Nutrient levels in rat carcass.,通过,2,26,27/27,
@@ -193,11 +193,11 @@ T0191,sacn5/chapters/SACN5_27.pdf,28,Table 27-15. Using obese body weight and de
 T0192,sacn5/chapters/SACN5_27.pdf,33,Table 27-16. Levels of key nutritional factors in selected commercial foods marketed for weight maintenance in dogs after a weight-loss,通过,13,12,105/105,
 T0193,sacn5/chapters/SACN5_27.pdf,34,Table 27-17. Levels of key nutrients in selected commercial foods marketed for weight maintenance in cats after a weight-loss program,通过,13,12,109/109,
 T0194,sacn5/chapters/SACN5_27.pdf,35,Table 27-18. Using number of calories fed for weight loss to determine the initial amount of food to feed for target weight maintenance.,通过,2,12,28/28,
-T0195,sacn5/chapters/SACN5_27.pdf,36,Table 1 lists the dietary history.,表题误判（正文引用）,0,0,0/0,PHANTOM: 该页只有正文引用，无表格本体
+T0195,sacn5/chapters/SACN5_27.pdf,36,Table 1 lists the dietary history.,通过,14,18,187/187,补录（原被误判为正文引用）
 T0196,sacn5/chapters/SACN5_27.pdf,37,Table 1. Foods and feeding method assessment of an obese miniature poodle with respiratory distress.,通过（无数字可校）,2,5,0/0,
 T0197,sacn5/chapters/SACN5_27.pdf,37,Table 2. Feeding plan for weight reduction.,通过,3,4,8/8,
 T0198,sacn5/chapters/SACN5_27.pdf,37,Table 3. Feeding plan to stabilize reduced body weight.,通过,3,4,8/8,
-T0199,sacn5/chapters/SACN5_28.pdf,1,Table 28-1 lists the clinical signs associated with hypertriglyc-,表题误判（正文引用）,0,0,0/0,PHANTOM: 该页只有正文引用，无表格本体
+T0199,sacn5/chapters/SACN5_28.pdf,1,Table 28-1 lists the clinical signs associated with hypertriglyc-,通过,1,22,1/1,补录（原被误判为正文引用）
 T0200,sacn5/chapters/SACN5_28.pdf,3,Table 28-1. Clinical signs and diseases associated with,通过,1,23,1/1,
 T0201,sacn5/chapters/SACN5_28.pdf,8,Table 28-2. Key nutritional factors for hyperlipidemia.,通过,3,3,3/3,
 T0202,sacn5/chapters/SACN5_28.pdf,9,Table 28-3. Selected commercial foods used in dogs with hyperlipidemia compared to recommended levels of key nutritional factors.*,通过,4,16,45/45,
@@ -228,7 +228,7 @@ T0226,sacn5/chapters/SACN5_32.pdf,2,Table 32-1. Key nutritional factors for food
 T0227,sacn5/chapters/SACN5_32.pdf,3,Table 32-2. Breed predilection for non-neoplastic skin diseases,通过（无数字可校）,2,28,0/0,
 T0228,sacn5/chapters/SACN5_32.pdf,10,Table 32-3. Classification scheme for zinc-related cutaneous,通过（无数字可校）,1,14,0/0,
 T0229,sacn5/chapters/SACN5_32.pdf,10,Table 32-4. Risk factors for zinc-related skin disease in dogs.,通过（无数字可校）,1,17,0/0,
-T0230,sacn5/chapters/SACN5_32.pdf,14,Table 32-1 summarizes the key nutritional factors for foods,表题误判（正文引用）,0,0,0/0,PHANTOM: 该页只有正文引用，无表格本体
+T0230,sacn5/chapters/SACN5_32.pdf,14,Table 32-1 summarizes the key nutritional factors for foods,通过,6,16,66/66,补录（原被误判为正文引用）
 T0231,sacn5/chapters/SACN5_32.pdf,17,Table 32-6. Key nutritional factors for foods and supplements for,通过,2,1,6/6,
 T0232,sacn5/chapters/SACN5_32.pdf,18,Table 32-7. Fatty acids found in pet food ingredients and,通过,2,5,5/5,
 T0233,sacn5/chapters/SACN5_32.pdf,19,"Table 32-8. The total essential fatty acid intake for a 10-kg adult dog eating 600 kcal (2,510 kJ) per day of selected commercial foods or",通过,4,58,178/178,
@@ -241,9 +241,9 @@ T0239,sacn5/chapters/SACN5_33.pdf,22,"Table 1 shows growth data for the puppy du
 T0240,sacn5/chapters/SACN5_34.pdf,3,Table 34-1. Common clinical signs of osteoarthritis (OA).*,通过（无数字可校）,3,3,0/0,
 T0241,sacn5/chapters/SACN5_34.pdf,7,Table 34-2. Key nutritional factors for foods for canine,通过,2,12,20/20,
 T0242,sacn5/chapters/SACN5_34.pdf,9,Table 34-3. Nutrient comparison of control and test foods.*,通过,3,6,15/15,
-T0243,sacn5/chapters/SACN5_34.pdf,13,Table 34-2 along with the key nutritional factors for managing,表题误判（正文引用）,0,0,0/0,PHANTOM: 该页只有正文引用，无表格本体
+T0243,sacn5/chapters/SACN5_34.pdf,13,Table 34-2 along with the key nutritional factors for managing,通过,2,12,20/20,补录（原被误判为正文引用）
 T0244,sacn5/chapters/SACN5_34.pdf,15,Table 34-5. Key nutritional factor content of selected veterinary therapeutic foods marketed for osteoarthritis in dogs compared to,通过,14,10,97/97,
-T0245,sacn5/chapters/SACN5_34.pdf,16,Table 34-5 provides key nutritional factor profiles for select-,表题误判（正文引用）,0,0,0/0,两页均无该表格
+T0245,sacn5/chapters/SACN5_34.pdf,16,Table 34-5 provides key nutritional factor profiles for select-,通过,14,8,80/80,补录（原被误判为正文引用）
 T0246,sacn5/chapters/SACN5_36.pdf,17,Table 36-4. Tables 36-5 and 36-6 list key nutritional factor,通过,8,32,190/190,
 T0247,sacn5/chapters/SACN5_36.pdf,17,Table 36-8 lists selected commercial low sodium canine treats.,通过,8,32,190/190,
 T0248,sacn5/chapters/SACN5_36.pdf,18,Table 36-5. Levels of key nutrients in selected commercial foods for dogs with cardiovascular disease compared to the recommended,通过,8,31,190/190,
@@ -361,7 +361,7 @@ T0359,sacn5/chapters/SACN5_5.pdf,49,"Table 5-18. Classification, structure and f
 T0360,sacn5/chapters/SACN5_5.pdf,51,Table 5-19. Essentiality and biologic function of common fatty acids.,通过,4,11,42/42,
 T0361,sacn5/chapters/SACN5_5.pdf,52,Table 5-20. Composition of general lipoprotein classes in,通过,3,4,8/8,
 T0362,sacn5/chapters/SACN5_5.pdf,54,Table 5-21. Fatty acid composition of commercial fats and oils.*,通过,11,11,128/128,
-T0363,sacn5/chapters/SACN5_5.pdf,56,Table 5-21 shows the fatty acid compositions of different fat,表题误判（正文引用）,0,0,0/0,两页均无该表格
+T0363,sacn5/chapters/SACN5_5.pdf,56,Table 5-21 shows the fatty acid compositions of different fat,通过,11,11,128/128,补录（原被误判为正文引用）
 T0364,sacn5/chapters/SACN5_50a.pdf,4,Table 50-1. Breed-associated disorders of the pharynx and,通过（无数字可校）,2,21,0/0,
 T0365,sacn5/chapters/SACN5_50a.pdf,6,Table 50-3. Key nutritional factors for foods for patients with,通过,2,4,5/5,
 T0366,sacn5/chapters/SACN5_50a.pdf,6,Table 50-4. Key nutritional factors for foods for dogs and cats,通过,2,4,6/6,
@@ -373,7 +373,7 @@ T0371,sacn5/chapters/SACN5_52.pdf,6,Table 52-3. Key nutritional factors in selec
 T0372,sacn5/chapters/SACN5_52.pdf,7,Table 52-4. Key nutritional factors in selected commercial veterinary therapeutic foods compared with recommended levels for cats with,通过,7,17,76/76,
 T0373,sacn5/chapters/SACN5_53.pdf,3,Table 53-1. Risk factors for canine gastric dilatation-volvulus.*,通过,1,21,18/18,
 T0374,sacn5/chapters/SACN5_53.pdf,4,Table 53-3. Kibble size comparison of selected large-kibble dry,通过,2,7,13/13,
-T0375,sacn5/chapters/SACN5_54.pdf,1,Table 54-1 outlines a number of primary and secondary caus-,表题误判（正文引用）,0,0,0/0,两页均无该表格
+T0375,sacn5/chapters/SACN5_54.pdf,1,Table 54-1 outlines a number of primary and secondary caus-,通过,1,29,-,补录（原被误判为正文引用）
 T0376,sacn5/chapters/SACN5_54.pdf,5,Table 54-3. Key nutritional factors in selected moist commercial veterinary therapeutic foods compared to recommended levels for dogs,通过,7,9,48/48,
 T0377,sacn5/chapters/SACN5_54.pdf,5,Table 54-4. Key nutritional factors in selected moist commercial veterinary therapeutic foods compared to recommended levels for cats,通过,7,7,34/34,
 T0378,sacn5/chapters/SACN5_55.pdf,2,Table 55-1. Potential causes of acute small bowel diarrhea in dogs and cats.,通过（无数字可校）,4,19,0/0,

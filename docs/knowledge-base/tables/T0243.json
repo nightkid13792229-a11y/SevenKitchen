@@ -1,1 +1,64 @@
-{"tableId":"T0243","caption":"","columns":[],"rows":[],"note":"PHANTOM: 该页只有正文引用，无表格本体"}
+{
+ "tableId": "T0243",
+ "caption": "Table 34-2. Key nutritional factors for foods for canine osteoarthritis patients.*",
+ "columns": [
+  "Factors",
+  "Dietary recommendations"
+ ],
+ "rows": [
+  [
+   "Total omega-3 fatty acids",
+   "3.5 to 4.0%"
+  ],
+  [
+   "Eicosapentaenoic acid",
+   "0.4 to 1.1%"
+  ],
+  [
+   "Omega-6:omega-3 fatty acid ratio",
+   "<1:1"
+  ],
+  [
+   "L-carnitine",
+   "≥300 mg/kg"
+  ],
+  [
+   "Glucosamine HCl",
+   "≤0.10%"
+  ],
+  [
+   "Chondroitin sulfate",
+   "≤0.08%"
+  ],
+  [
+   "Antioxidants",
+   ""
+  ],
+  [
+   "Vitamin E",
+   "≥400 IU/kg"
+  ],
+  [
+   "Vitamin C",
+   "≥100 mg/kg"
+  ],
+  [
+   "Selenium",
+   "0.5 to 1.3 mg/kg"
+  ],
+  [
+   "Phosphorus**",
+   "0.3 to 0.7%"
+  ],
+  [
+   "Sodium**",
+   "0.2 to 0.4%"
+  ]
+ ],
+ "verify": {
+  "numbers": 20,
+  "found": 20,
+  "misses": []
+ },
+ "method": "视觉"
+}

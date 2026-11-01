@@ -50,6 +50,7 @@ import {
   ReimbursementStatus,
 } from '../../domain/purchasing';
 import { AuthGuard } from '../auth';
+import { StaffGuard } from '../guards/role.guard';
 import { UserId, UserRole } from '../auth/user.decorator';
 import { Put, Delete } from '@nestjs/common';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
@@ -59,7 +60,9 @@ import { CreateStaffProcurementSkuDto } from '../dto/staff/procurement-sku-creat
 
 @ApiTags('Staff Purchasing')
 @Controller('api/v1/staff/purchasing')
-@UseGuards(AuthGuard)
+// 2026-11-01 补上 StaffGuard：AuthGuard 放行任何有效 JWT（含顾客），
+// 而这里全是员工的写操作（建采购商品、传图、记采购记录），顾客不该能调。
+@UseGuards(AuthGuard, StaffGuard)
 @ApiSecurity('bearer')
 @UsePipes(
   new ValidationPipe({
@@ -141,7 +144,13 @@ export class StaffPurchasingController {
 
       return ApiResponseDto.success({ draft, degraded: false });
     } catch (error) {
-      // 老板定的 A2：识别失败一律降级为手填，绝不卡住员工
+      // 「这张图不是商品详情页」「配额用完了」是**给员工看的说明**，必须原样抛出去：
+      // 降级成含糊的"没认出来"会让他反复重传同一张图，或不知道为什么突然不能识别了。
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      // 其余（模型超时、网络、解析失败）按老板定的 A2 降级为手填，绝不卡住员工
       this.logger.warn(
         `采购商品识别失败，降级为手填：${
           error instanceof Error ? error.message : String(error)

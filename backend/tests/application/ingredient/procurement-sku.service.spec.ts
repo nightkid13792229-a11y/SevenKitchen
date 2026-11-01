@@ -937,9 +937,11 @@ describe('ProcurementSkuService', () => {
       const args = mockPrismaService.procurementSku.findMany.mock.calls[0][0];
       expect(args.skip).toBe(40);
       expect(args.take).toBe(20);
+      // 日期按**本地**零点取边界：界面显示的是本地时间，
+      // 用 UTC 边界会把早上 8 点前的条目漏掉（采购恰好都在早上）
       expect(args.where.createdAt).toEqual({
-        gte: new Date('2026-10-01T00:00:00.000Z'),
-        lte: new Date('2026-11-01T23:59:59.999Z'),
+        gte: new Date('2026-10-01T00:00:00'),
+        lte: new Date('2026-11-01T23:59:59.999'),
       });
     });
   });

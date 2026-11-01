@@ -53,7 +53,9 @@
         </view>
         <view v-else-if="procurementSkuOptions.length === 0" class="sku-empty">
           <text class="empty-title">这道原料下还没有采购商品</text>
-          <text class="empty-desc">把这次买的商品加进去，以后大家都能选</text>
+          <!-- 补剂、包材不开放新增（老板 2026-11-01 定），保持原来那句联系管理员 -->
+          <text v-if="canAddNewProcurementSku" class="empty-desc">把这次买的商品加进去，以后大家都能选</text>
+          <text v-else class="empty-desc">请联系管理员在该标准原料下新增采购 SKU 后再记录采购。</text>
           <view v-if="canAddNewProcurementSku" class="sku-add-btn" @tap="openCreateProcurementSku">
             <text>＋ 新增一个采购商品</text>
           </view>

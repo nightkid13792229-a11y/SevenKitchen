@@ -1106,10 +1106,11 @@ export class ProcurementSkuService {
 
     const createdAtRange: Record<string, Date> = {};
     if (query.createdFrom) {
-      createdAtRange.gte = new Date(`${query.createdFrom}T00:00:00.000Z`);
+      // 用本地时间构造：界面按本地时间显示，用 UTC 边界会漏掉早上 8 点前的条目
+      createdAtRange.gte = new Date(`${query.createdFrom}T00:00:00`);
     }
     if (query.createdTo) {
-      createdAtRange.lte = new Date(`${query.createdTo}T23:59:59.999Z`);
+      createdAtRange.lte = new Date(`${query.createdTo}T23:59:59.999`);
     }
     if (Object.keys(createdAtRange).length > 0) {
       where.createdAt = createdAtRange;

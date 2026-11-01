@@ -11,6 +11,10 @@
     </view>
 
     <template v-else>
+      <view v-if="draftMissing.length > 0" class="draft-notice">
+        <text>已按截图填好，其中 {{ draftMissing.length }} 项没认出来（红色那几格），补完就能存</text>
+      </view>
+
       <view class="upload-card" @tap="handlePickImage">
         <text class="upload-icon">📷</text>
         <text class="upload-title">
@@ -125,6 +129,9 @@
             placeholder="单件填 1；整箱填箱规，如 24"
             placeholder-class="ph"
           />
+          <view v-if="draftMissing.includes('packCount')" class="error-text">
+            截图里没看清一箱几件，请看一下包装补上（这里填错，库存会差几十倍）
+          </view>
         </view>
 
         <view class="field">
@@ -193,6 +200,7 @@ import {
   computePurchaseToBaseRatio,
   validateProcurementSkuForm,
 } from './procurement-sku-form';
+import { applyDraftToForm } from './procurement-sku-draft-apply';
 
 const BASE_UNIT_TEXT: Record<string, string> = {
   G: '克',
@@ -227,6 +235,8 @@ const unitPriceText = ref('');
 
 const uploadedScreenshotUrl = ref('');
 const aiFilled = ref<Record<string, boolean>>({});
+/** AI 明确说没认出来的字段：一进来就标红，不等点保存 */
+const draftMissing = ref<string[]>([]);
 const confidence = ref<Record<string, 'high' | 'low'>>({});
 const submitted = ref(false);
 
@@ -268,6 +278,8 @@ const errors = computed(() => {
 const canSubmit = computed(() => errors.value.length === 0);
 
 const hasError = (field: string) => {
+  // AI 明确说没认出来的字段，从填完那一刻就标红，不必等点保存
+  if (draftMissing.value.includes(field)) return true;
   if (!submitted.value) return false;
   return errors.value.some((error) => error.field === field);
 };
@@ -354,34 +366,41 @@ const handlePickImage = async () => {
 };
 
 const applyDraft = (draft: any, screenshotUrl: string) => {
+  console.log('[ProcurementSkuCreate] draft applied', { missing: draft?.missing });
+  const result = applyDraftToForm(draft, {
+    purchaseUnits: purchaseUnits.value,
+  });
+
   const filled: Record<string, boolean> = {};
 
-  if (draft.name) {
-    form.value.name = draft.name;
+  if (result.patch.name) {
+    form.value.name = result.patch.name;
     filled.name = true;
   }
-  if (draft.purchaseChannel) {
-    form.value.purchaseChannel = draft.purchaseChannel;
+  if (result.patch.purchaseChannel) {
+    form.value.purchaseChannel = result.patch.purchaseChannel;
     filled.purchaseChannel = true;
   }
-  if (draft.purchaseUnit && purchaseUnits.value.includes(draft.purchaseUnit)) {
-    form.value.purchaseUnit = draft.purchaseUnit;
+  if (result.patch.purchaseUnit) {
+    form.value.purchaseUnit = result.patch.purchaseUnit;
+    filled.purchaseUnit = true;
   }
-  if (typeof draft.packCount === 'number') {
-    packCountText.value = String(draft.packCount);
-    filled.packCount = true;
+  if (typeof result.patch.packCountText === 'string') {
+    packCountText.value = result.patch.packCountText;
+    filled.packCount = result.patch.packCountText.length > 0;
   }
-  if (typeof draft.netContentPerPack === 'number') {
-    netContentText.value = String(draft.netContentPerPack);
+  if (typeof result.patch.netContentText === 'string') {
+    netContentText.value = result.patch.netContentText;
     filled.netContentPerPack = true;
   }
-  if (typeof draft.unitPrice === 'number') {
-    unitPriceText.value = String(draft.unitPrice);
+  if (typeof result.patch.unitPriceText === 'string') {
+    unitPriceText.value = result.patch.unitPriceText;
     filled.currentPurchasePrice = true;
   }
 
   aiFilled.value = filled;
-  confidence.value = draft.confidence || {};
+  draftMissing.value = result.missing;
+  confidence.value = result.confidence;
   uploadedScreenshotUrl.value = screenshotUrl;
 };
 
@@ -466,6 +485,17 @@ const handleSubmit = async () => {
   margin-left: auto;
   font-size: 11px;
   color: #9a9384;
+}
+
+.draft-notice {
+  background: #fdf3ee;
+  border: 1px solid #e8cfc4;
+  border-radius: 10px;
+  padding: 9px 11px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: #b4553f;
+  line-height: 1.6;
 }
 
 .upload-card {

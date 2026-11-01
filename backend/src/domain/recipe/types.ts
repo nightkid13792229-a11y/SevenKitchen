@@ -17,6 +17,9 @@ export interface RecipeSnapshot {
   production_loss_rate: number; // CRITICAL: Captured at order time
   energy_density_kcal_per_kg: number; // CRITICAL: Captured at order time for dailyIntakeG calculation
   nutrition_standard: string;
+  /** 这一单用的是哪个生命阶段版本（2026-11-02 起写入，历史单可能没有） */
+  series_life_stage?: string;
+  series_life_stage_label?: string;
   nutrition_detailed_data?: NutritionDetailedData; // 添加营养成分详细数据（可选）
   items: RecipeSnapshotItem[]; // List of ingredients
 }

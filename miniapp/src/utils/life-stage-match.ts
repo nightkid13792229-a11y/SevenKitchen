@@ -27,6 +27,7 @@ export { getLifeStageLabel };
 
 /** 后端给出的匹配结论类型（与 backend RecipeLifeStageMatchDto 对齐） */
 export type LifeStageMatchType =
+  | 'NO_DOG'
   | 'MATCHED'
   | 'MANUAL_MISMATCH'
   | 'FALLBACK_ADULT'
@@ -44,6 +45,10 @@ export interface LifeStageMatchVerdict {
   /** 后端按权威实现算出的「狗狗需要的食谱生命阶段」 */
   dogLifeStage?: string;
   dogLifeStageLabel?: string;
+  /** 后端算出的风险等级（幼犬/繁殖期 ↔ 其他 = HIGH；成犬↔老年 = LOW） */
+  riskLevel?: 'HIGH' | 'LOW' | 'NONE';
+  /** 顾客主动选的版本（没有就不返回） */
+  manualLifeStage?: string;
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   buildNutritionSourceKey,
   scoreIngredientSourceNameMatch,
 } from '../../domain/nutrition-governance/nutrition-governance.utils';
+import { findOnlineSearchLibrary } from '../../domain/nutrition-governance/nutrition-source-registry';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
   auditNutritionProfileForImport,
@@ -429,6 +430,57 @@ export class IngredientCreationOnlineService {
       candidates: candidates.sort(compareOnlineCandidates),
       attemptedHosts: [...new Set(report.attemptedHosts)],
       rejectedHosts: [...new Set(report.rejectedHosts)],
+      discoveryStatus: report.discoveryStatus,
+    };
+  }
+
+  /**
+   * 指定库 + 模型给的关键词，逐站点搜该库的线上页面。
+   *
+   * 与 `searchOnline` 的区别：库和词都由调用方定，不做自动发现、不按名字缓存。
+   */
+  async searchOnlineLibrary(input: {
+    library: string;
+    terms: readonly string[];
+    state: PreparationState;
+  }): Promise<OnlineSearchResult> {
+    const library = findOnlineSearchLibrary(input.library);
+    const terms = input.terms
+      .map((term) => term.trim())
+      .filter(Boolean)
+      .slice(0, 6);
+
+    if (!library || terms.length === 0) {
+      return {
+        candidates: [],
+        attemptedHosts: [],
+        rejectedHosts: [],
+        discoveryStatus: 'UNAVAILABLE',
+      };
+    }
+
+    const searchInput: SearchOnlineInput = { name: terms[0], state: input.state };
+    const report = await this.trustedNutritionWebSearchService.searchLibrary({
+      ingredientName: terms[0],
+      hosts: library.onlineHosts,
+      terms,
+    });
+
+    const queryKey = buildQueryKey(searchInput);
+    const candidates: OnlineCandidateRow[] = [];
+    for (const source of report.sources) {
+      const row = await this.persistSource(searchInput, queryKey, source);
+      if (!row) continue;
+      const candidate = toOnlineCandidate(row, searchInput);
+      if (candidate) {
+        candidates.push(candidate);
+      }
+    }
+
+    return {
+      candidates: candidates.sort(compareOnlineCandidates),
+      attemptedHosts: [...new Set(report.attemptedHosts)],
+      rejectedHosts: [],
       discoveryStatus: report.discoveryStatus,
     };
   }

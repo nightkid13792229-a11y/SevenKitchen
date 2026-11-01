@@ -38,7 +38,7 @@ function createHarness(
     {} as unknown as PrismaService,
     undefined,
     undefined,
-    { searchOnline } as unknown as IngredientCreationOnlineService,
+    { searchOnline, searchOnlineLibrary: searchOnline } as unknown as IngredientCreationOnlineService,
   );
 
   return { tools, draftService };
@@ -69,20 +69,24 @@ describe('searchOnline · 本地 0 命中时的线上兜底', () => {
       runId: RUN_ID,
       draftId: DRAFT_ID,
       name: 'searchOnline',
-      args: { name: '兔肝', state: 'RAW' },
+      args: {
+        groups: [{ library: 'USDA', terms: ['兔肝', 'rabbit liver'] }],
+        state: 'RAW',
+      },
     });
 
     expect(result.ok).toBe(true);
     expect(searchOnline).toHaveBeenCalledWith({
-      name: '兔肝',
+      library: 'USDA',
+      terms: ['兔肝', 'rabbit liver'],
       state: 'RAW',
     });
     const body = JSON.parse(result.content) as {
       total: number;
-      matches: Array<{ id: string; name: string }>;
+      groups: Array<{ library: string; matches: Array<{ id: string; name: string }> }>;
     };
     expect(body.total).toBe(1);
-    expect(body.matches[0]).toMatchObject({
+    expect(body.groups[0].matches[0]).toMatchObject({
       id: 'online-1',
       name: 'Rabbit, liver, raw',
     });
@@ -91,7 +95,12 @@ describe('searchOnline · 本地 0 命中时的线上兜底', () => {
       'INTAKE',
       expect.objectContaining({
         onlineReport: [
-          expect.objectContaining({ name: '兔肝', total: 1, state: 'RAW' }),
+          expect.objectContaining({
+            library: 'USDA',
+            name: '兔肝',
+            total: 1,
+            state: 'RAW',
+          }),
         ],
       }),
     );
@@ -110,11 +119,14 @@ describe('searchOnline · 本地 0 命中时的线上兜底', () => {
       runId: RUN_ID,
       draftId: DRAFT_ID,
       name: 'searchOnline',
-      args: { name: '兔肝', state: 'RAW' },
+      args: {
+        groups: [{ library: 'USDA', terms: ['兔肝', 'rabbit liver'] }],
+        state: 'RAW',
+      },
     });
 
     expect(result.ok).toBe(true);
-    expect(result.content).toContain('先问用户');
+    expect(result.content).toContain('不要拿近似原料凑数');
   });
 
   it('线上通道不可用 → 明确说“不可用”，不能当成 0 命中', async () => {
@@ -130,7 +142,10 @@ describe('searchOnline · 本地 0 命中时的线上兜底', () => {
       runId: RUN_ID,
       draftId: DRAFT_ID,
       name: 'searchOnline',
-      args: { name: '兔肝', state: 'RAW' },
+      args: {
+        groups: [{ library: 'USDA', terms: ['兔肝', 'rabbit liver'] }],
+        state: 'RAW',
+      },
     });
 
     expect(result.ok).toBe(true);
@@ -146,7 +161,10 @@ describe('searchOnline · 本地 0 命中时的线上兜底', () => {
       runId: RUN_ID,
       draftId: DRAFT_ID,
       name: 'searchOnline',
-      args: { name: '兔肝', state: 'DRY' },
+      args: {
+        groups: [{ library: 'USDA', terms: ['兔肝'] }],
+        state: 'DRY',
+      },
     });
 
     expect(result.ok).toBe(false);

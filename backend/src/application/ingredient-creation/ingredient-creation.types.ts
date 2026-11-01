@@ -452,6 +452,8 @@ export interface IngredientCreationDraftPayload {
 }
 
 export interface OnlineSearchEntry {
+  /** 线上库代码（USDA / CNF / ...）；旧记录没有这个字段。 */
+  library?: string;
   name: string;
   state: 'RAW' | 'COOKED';
   total: number;

@@ -418,7 +418,7 @@
           >
             <el-table-column label="营养库" width="102">
               <template #default="{ row }">
-                {{ row.kind === 'ONLINE' ? '线上白名单' : row.library }}
+                {{ row.kind === 'ONLINE' ? `${row.library}（线上）` : row.library }}
               </template>
             </el-table-column>
             <el-table-column label="搜索词" min-width="220">

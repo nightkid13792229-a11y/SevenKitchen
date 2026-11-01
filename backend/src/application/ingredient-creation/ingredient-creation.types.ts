@@ -442,6 +442,13 @@ export interface IngredientCreationDraftPayload {
    */
   searchProbe?: { hitAt: string } | null;
   /**
+   * 方案因为「一条候选都没有」被拒的时间。
+   *
+   * 有这个记号时允许 askUser：说明模型已经试过交方案、确实凑不出候选，
+   * 此时问用户「换原料/接受近似」是合理的，不能再拿「查到候选不许问」拦它。
+   */
+  planEmptyAt?: string | null;
+  /**
    * 每轮按库检索的流水：库、用的词、命中数。
    *
    * 汇报块由它生成，不让模型复述数字；同一库多轮（换词重查）会有多条。

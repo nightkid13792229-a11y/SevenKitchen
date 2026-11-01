@@ -370,6 +370,29 @@ describe('IngredientCreationToolsService · 查到候选后不许用提问代替
     expect(patches.some((payload) => 'searchProbe' in payload)).toBe(false);
   });
 
+  it('没有候选的方案被拒后留下记号，随后允许提问（避免死锁）', async () => {
+    const { tools, draftService } = createHarness({
+      searchProbe: { hitAt: '2026-11-02T00:00:00.000Z' },
+    });
+
+    const proposed = await call(tools, 'proposeSearchPlan', {
+      ...VALID_ARGS,
+      candidates: [],
+    });
+    expect(proposed.ok).toBe(false);
+    expect(draftService.patch).toHaveBeenCalledWith(
+      DRAFT_ID,
+      'INTAKE',
+      expect.objectContaining({ planEmptyAt: expect.any(String) }),
+    );
+
+    const asked = await call(tools, 'askUser', {
+      question: '库里没有兔肝，只能查到兔肉；你想换原料还是接受近似？',
+      options: ['换原料', '接受近似'],
+    });
+    expect(asked.ok).toBe(true);
+  });
+
   it('查到候选、还没交方案 → 拒绝提问', async () => {
     const { tools, draftService } = createHarness({
       searchProbe: { hitAt: '2026-10-29T00:00:00.000Z' },

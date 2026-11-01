@@ -720,7 +720,7 @@ const SEARCH_ONLINE_TOOL: AgentToolDefinition = {
   function: {
     name: 'searchOnline',
     description:
-      '本地库 0 命中时，到白名单线上库检索（只读；命中结果会落库，下次本地也能查到）。**按库给词**：每个库一组 terms，复用你刚查本地库时扩展出来的词，并按该库语言挑最可能命中的写法。代码会逐库、逐站点用 site: 搜索并抓取解析。可一次给多个库；全部库都查不到才如实说“线上没有”，不要拿近似原料凑数。',
+      '本地库 0 命中时，到白名单线上库检索（只读；命中结果会落库，下次本地也能查到）。**按库给词**：每个库一组 terms，复用你刚查本地库时扩展出来的词，并按该库语言挑最可能命中的写法。代码会逐库、逐站点用 site: 搜索并抓取解析。**一次把 14 个可搜库全部列上，不要自己挑几个**；全部库都查不到才如实说“线上没有”，不要拿近似原料凑数。',
     parameters: {
       type: 'object',
       properties: {
@@ -1545,7 +1545,12 @@ export class IngredientCreationToolsService {
     if (input.name === 'askUser') {
       const draft = await this.draftService.get(input.draftId);
       const probed = Boolean(draft.payload.searchProbe);
-      if (probed && !hasApprovedSearchPlan(draft.payload.searchPlan)) {
+      const planEmpty = Boolean(draft.payload.planEmptyAt);
+      if (
+        probed &&
+        !planEmpty &&
+        !hasApprovedSearchPlan(draft.payload.searchPlan)
+      ) {
         return this.error(ASK_AFTER_SEARCH_MESSAGE);
       }
     }
@@ -3009,6 +3014,11 @@ export class IngredientCreationToolsService {
 
     const enriched = await this.enrichPlanCandidates(args.candidates);
     if (!enriched.ok) {
+      if (enriched.error.includes('至少要有一条候选')) {
+        await this.draftService.patch(draftId, draft.step, {
+          planEmptyAt: new Date().toISOString(),
+        });
+      }
       return this.error(enriched.error);
     }
 
@@ -3054,6 +3064,7 @@ export class IngredientCreationToolsService {
 
     await this.draftService.patch(draftId, draft.step, {
       searchPlan: built.plan,
+      planEmptyAt: null,
     });
 
     return {

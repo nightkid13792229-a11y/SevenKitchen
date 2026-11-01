@@ -456,6 +456,7 @@ export interface OnlineSearchEntry {
   state: 'RAW' | 'COOKED';
   total: number;
   attemptedHosts: string[];
+  discoveryStatus?: 'OK' | 'UNAVAILABLE';
   at: string;
 }
 

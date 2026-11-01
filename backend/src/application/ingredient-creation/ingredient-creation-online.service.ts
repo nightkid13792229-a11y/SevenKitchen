@@ -70,6 +70,8 @@ export interface OnlineSearchResult {
   attemptedHosts: string[];
   /** 被白名单直接拒绝的主机；这些网址从未被抓取。 */
   rejectedHosts: string[];
+  /** OK = 搜索通道可用；UNAVAILABLE = 通道连不上，结果不能当作“线上没有”。 */
+  discoveryStatus: 'OK' | 'UNAVAILABLE';
 }
 
 interface PersistedOnlineSource {
@@ -380,7 +382,12 @@ export class IngredientCreationOnlineService {
       state: input.state,
     };
     if (!normalizedInput.name) {
-      return { candidates: [], attemptedHosts: [], rejectedHosts: [] };
+      return {
+        candidates: [],
+        attemptedHosts: [],
+        rejectedHosts: [],
+        discoveryStatus: 'UNAVAILABLE',
+      };
     }
 
     const queryKey = buildQueryKey(normalizedInput);
@@ -399,7 +406,12 @@ export class IngredientCreationOnlineService {
       });
     } catch {
       // 白名单抓取是兜底能力：网络/解析异常都不该让整个 ② 站 500。
-      return { candidates: [], attemptedHosts: [], rejectedHosts: [] };
+      return {
+        candidates: [],
+        attemptedHosts: [],
+        rejectedHosts: [],
+        discoveryStatus: 'UNAVAILABLE',
+      };
     }
 
     const candidates: OnlineCandidateRow[] = [];
@@ -417,6 +429,7 @@ export class IngredientCreationOnlineService {
       candidates: candidates.sort(compareOnlineCandidates),
       attemptedHosts: [...new Set(report.attemptedHosts)],
       rejectedHosts: [...new Set(report.rejectedHosts)],
+      discoveryStatus: report.discoveryStatus,
     };
   }
 
@@ -471,6 +484,7 @@ export class IngredientCreationOnlineService {
       candidates: candidates.sort(compareOnlineCandidates),
       attemptedHosts: [...attemptedHosts],
       rejectedHosts: [],
+      discoveryStatus: 'OK',
     };
   }
 

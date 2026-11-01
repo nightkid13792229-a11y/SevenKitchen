@@ -249,6 +249,7 @@ describe('IngredientCreationOnlineService', () => {
         sources: [buildTrustedSource()],
         attemptedHosts: ['foodstandards.gov.au'],
         rejectedHosts: [],
+        discoveryStatus: 'OK',
       }),
     };
     const { service, prisma } = await createService(trusted);
@@ -297,6 +298,7 @@ describe('IngredientCreationOnlineService', () => {
         sources: [buildTrustedSource()],
         attemptedHosts: ['foodstandards.gov.au'],
         rejectedHosts: [],
+        discoveryStatus: 'OK',
       }),
     };
     const { service, prisma } = await createService(trusted);
@@ -329,6 +331,7 @@ describe('IngredientCreationOnlineService', () => {
       candidates: [],
       attemptedHosts: ['foodstandards.gov.au'],
       rejectedHosts: [],
+      discoveryStatus: 'OK',
     });
   });
 
@@ -347,6 +350,8 @@ describe('IngredientCreationOnlineService', () => {
       candidates: [],
       attemptedHosts: [],
       rejectedHosts: [],
+      discoveryStatus: 'OK',
+      discoveryStatus: 'UNAVAILABLE',
     });
   });
 
@@ -357,6 +362,7 @@ describe('IngredientCreationOnlineService', () => {
         sources: [buildTrustedSource()],
         attemptedHosts: ['foodstandards.gov.au'],
         rejectedHosts: [],
+        discoveryStatus: 'OK',
       }),
     };
     const { service } = await createService(trusted);
@@ -399,6 +405,7 @@ describe('IngredientCreationOnlineService', () => {
         sources: [buildTrustedSource({ foodName: 'Quail egg cooked' })],
         attemptedHosts: ['foodstandards.gov.au'],
         rejectedHosts: [],
+        discoveryStatus: 'OK',
       }),
     };
     const { service, prisma } = await createService(trusted);
@@ -420,6 +427,7 @@ describe('IngredientCreationOnlineService', () => {
         sources: [buildTrustedSource({ foodName: 'Beef liver raw' })],
         attemptedHosts: ['foodstandards.gov.au'],
         rejectedHosts: [],
+        discoveryStatus: 'OK',
       }),
     };
     const { service, prisma } = await createService(trusted);

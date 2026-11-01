@@ -61,6 +61,7 @@ describe('searchOnline · 本地 0 命中时的线上兜底', () => {
       ],
       attemptedHosts: ['example.test'],
       rejectedHosts: [],
+      discoveryStatus: 'OK' as const,
     }));
     const { tools, draftService } = createHarness(searchOnline);
 
@@ -101,6 +102,7 @@ describe('searchOnline · 本地 0 命中时的线上兜底', () => {
       candidates: [],
       attemptedHosts: ['example.test'],
       rejectedHosts: [],
+      discoveryStatus: 'OK' as const,
     }));
     const { tools } = createHarness(searchOnline);
 
@@ -113,6 +115,27 @@ describe('searchOnline · 本地 0 命中时的线上兜底', () => {
 
     expect(result.ok).toBe(true);
     expect(result.content).toContain('先问用户');
+  });
+
+  it('线上通道不可用 → 明确说“不可用”，不能当成 0 命中', async () => {
+    const searchOnline = jest.fn(async () => ({
+      candidates: [],
+      attemptedHosts: [],
+      rejectedHosts: [],
+      discoveryStatus: 'UNAVAILABLE' as const,
+    }));
+    const { tools } = createHarness(searchOnline);
+
+    const result = await tools.execute({
+      runId: RUN_ID,
+      draftId: DRAFT_ID,
+      name: 'searchOnline',
+      args: { name: '兔肝', state: 'RAW' },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.content).toContain('不可用');
+    expect(result.content).not.toContain('线上白名单也没有找到');
   });
 
   it('state 不是 RAW/COOKED → 拒绝', async () => {

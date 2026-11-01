@@ -71,6 +71,18 @@ function readEntries(payload: unknown): unknown[] {
     for (const key of ['results', 'items', 'value']) {
       if (Array.isArray(data[key])) return data[key] as unknown[];
     }
+    const nestedPages = data.webPages ?? data.web_pages;
+    if (isRecord(nestedPages)) {
+      for (const key of ['value', 'results']) {
+        if (Array.isArray(nestedPages[key])) return nestedPages[key] as unknown[];
+      }
+    }
+  }
+  const webPages = payload.webPages ?? payload.web_pages;
+  if (isRecord(webPages)) {
+    for (const key of ['value', 'results']) {
+      if (Array.isArray(webPages[key])) return webPages[key] as unknown[];
+    }
   }
   return [];
 }

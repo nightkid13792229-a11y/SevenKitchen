@@ -256,20 +256,44 @@ export class TrustedNutritionWebSearchService {
     let discoveryStatus: 'OK' | 'UNAVAILABLE' = 'OK';
     if (!hasExplicitUrl && isWhitelistWebSearchEnabled()) {
       const client = await this.resolveWebSearchClient();
-      let discovery: { urls: string[]; attemptedHosts: string[]; channelOk: boolean };
+      let discovery: {
+        urls: string[];
+        attemptedHosts: string[];
+        channelOk: boolean;
+        resultCount: number;
+        sampleHosts: string[];
+      };
       try {
         discovery = client
           ? await discoverTrustedSourceUrls(input, client)
-          : { urls: [], attemptedHosts: [], channelOk: false };
+          : {
+              urls: [],
+              attemptedHosts: [],
+              channelOk: false,
+              resultCount: 0,
+              sampleHosts: [],
+            };
       } catch (error) {
         this.logger.warn(
           `[trusted-web-search] DeepSeek 搜索失败：${
             error instanceof Error ? error.message : String(error)
           }`,
         );
-        discovery = { urls: [], attemptedHosts: [], channelOk: false };
+        discovery = {
+          urls: [],
+          attemptedHosts: [],
+          channelOk: false,
+          resultCount: 0,
+          sampleHosts: [],
+        };
       }
       discoveryStatus = discovery.channelOk ? 'OK' : 'UNAVAILABLE';
+      if (discovery.channelOk && discovery.urls.length === 0) {
+        this.logger.warn(
+          `[trusted-web-search] 搜索返回 ${discovery.resultCount} 条，但没有白名单域名；` +
+            `域名样本：${discovery.sampleHosts.join('、') || '（空）'}`,
+        );
+      }
       for (const host of discovery.attemptedHosts) {
         attemptedHosts.add(host);
       }
@@ -334,10 +358,22 @@ function isWhitelistWebSearchEnabled(): boolean {
 async function discoverTrustedSourceUrls(
   input: TrustedNutritionWebSearchInput,
   client: WebSearchPort,
-): Promise<{ urls: string[]; attemptedHosts: string[]; channelOk: boolean }> {
+): Promise<{
+  urls: string[];
+  attemptedHosts: string[];
+  channelOk: boolean;
+  resultCount: number;
+  sampleHosts: string[];
+}> {
   const queryText = buildDiscoveryQueryText(input);
   if (!queryText) {
-    return { urls: [], attemptedHosts: [], channelOk: false };
+    return {
+      urls: [],
+      attemptedHosts: [],
+      channelOk: false,
+      resultCount: 0,
+      sampleHosts: [],
+    };
   }
 
   const result = await client.search({
@@ -347,7 +383,13 @@ async function discoverTrustedSourceUrls(
 
   const urls: string[] = [];
   const hosts = new Set<string>();
+  const sampleHosts = new Set<string>();
   for (const item of result.results) {
+    try {
+      sampleHosts.add(new URL(item.url).host);
+    } catch {
+      // 非法 URL 直接忽略
+    }
     const trustedHost = resolveTrustedHost(item.url);
     if (!trustedHost) continue;
     urls.push(item.url);
@@ -359,6 +401,8 @@ async function discoverTrustedSourceUrls(
     urls,
     attemptedHosts: [...hosts],
     channelOk: true,
+    resultCount: result.results.length,
+    sampleHosts: [...sampleHosts].slice(0, 8),
   };
 }
 

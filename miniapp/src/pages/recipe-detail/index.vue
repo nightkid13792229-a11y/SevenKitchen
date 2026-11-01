@@ -103,13 +103,21 @@
         原来这一块在四个页面各写了一遍（共 21 个 computed + 13 个函数），
         同一个 matchType 四个页面可能给出四种说法。
       -->
-      <LifeStageVersionCard
-        :match-type="recipe.lifeStageMatch?.matchType"
-        :message="recipe.lifeStageMatch?.message"
-        :selected-label="selectedLifeStageLabel"
+      <LifeStageVersionBar
+        v-if="recipe.id"
+        :state="lifeStageState"
+        :dog-name="selectedDogName"
+        :dog-stage="dogStage"
+        :dog-stage-label="dogStageLabel"
+        :current-label="selectedLifeStageLabel"
+        :suggested-label="suggestedVersionLabel"
+        :suggested-stage="suggestedVersionStage"
         :version-count="recipe.availableLifeStageVersions?.length || 0"
-        :dog-name="recipe.lifeStageMatch?.dogName"
         @open-selector="openLifeStageSelector"
+        @select="selectLifeStageVersionByStage"
+        @see-suitable="goSuitableRecipes"
+        @retry="loadRecipeDetail"
+        @add-dog="goCreateDog"
       />
 
     </view>
@@ -390,39 +398,14 @@
       </view>
     </view>
 
-    <view
-      v-if="lifeStageSelectorVisible"
-      class="life-stage-sheet-mask"
-      @tap="closeLifeStageSelector"
-    >
-      <view class="life-stage-sheet" @tap.stop>
-        <view class="life-stage-sheet-header">
-          <text class="life-stage-sheet-title">切换生命阶段版本</text>
-          <text class="life-stage-sheet-close" @tap="closeLifeStageSelector">×</text>
-        </view>
-        <view
-          v-for="version in recipe.availableLifeStageVersions"
-          :key="version.recipeId || version.lifeStage"
-          :class="['life-stage-version-option', { active: isLifeStageVersionSelected(version) }]"
-          @tap="selectLifeStageVersion(version)"
-        >
-          <view class="life-stage-version-option-main">
-            <text class="life-stage-version-option-title">
-              {{ version.label || getLifeStageLabel(version.lifeStage) }}
-            </text>
-          </view>
-          <view class="life-stage-version-option-side">
-            <text
-              v-if="getVersionReferencePrice(version)"
-              class="life-stage-version-option-price"
-            >约¥{{ formatReferencePrice(getVersionReferencePrice(version)) }}/100g</text>
-            <text v-if="isLifeStageVersionSelected(version)" class="life-stage-version-selected">
-              当前
-            </text>
-          </view>
-        </view>
-      </view>
-    </view>
+    <LifeStageVersionSheet
+      :visible="lifeStageSelectorVisible"
+      :versions="lifeStageVersionOptions"
+      :current-stage="recipe.selectedLifeStage || ''"
+      :matched-stage="dogStage"
+      @close="closeLifeStageSelector"
+      @select="selectLifeStageVersionByStage"
+    />
     </block>
   </view>
 </template>
@@ -430,8 +413,10 @@
 <!-- 普通script：定义分享函数 -->
 <script lang="ts">
 import { CURRENT_SHARE_CONFIG } from '@/utils/config'
-// 2026-10-18：生命阶段卡改用它 —— 四页共用一份，不再各写一遍
-import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
+// 2026-11-02：版本条 + 版本面板，详情/订购/DIY 共用
+import LifeStageVersionBar from '@/components/recipe/LifeStageVersionBar.vue'
+import LifeStageVersionSheet from '@/components/recipe/LifeStageVersionSheet.vue'
+import { resolveLifeStageUiState } from '@/utils/life-stage-ui'
 import { useDogSelection } from '@/composables/useDogSelection'
 
 // 模块级变量，存储当前食谱信息
@@ -843,6 +828,42 @@ const selectedLifeStageLabel = computed(() => {
   return matchedVersion?.label || getLifeStageLabel(selectedStage)
 })
 
+const lifeStageState = computed(() =>
+  resolveLifeStageUiState({
+    hasDog: Boolean(selectedDogId.value || dogId.value),
+    verdict: recipe.value.lifeStageMatch,
+  }),
+)
+
+const dogStage = computed(() => recipe.value.lifeStageMatch?.dogLifeStage || '')
+const dogStageLabel = computed(() => recipe.value.lifeStageMatch?.dogLifeStageLabel || '')
+const selectedDogName = computed(
+  () => dogs.value.find((dog) => dog.id === selectedDogId.value)?.name || '',
+)
+const suggestedVersion = computed(() => {
+  const versions = recipe.value.availableLifeStageVersions || []
+  const current = recipe.value.selectedLifeStage || selectedManualLifeStage.value
+  return versions.find(
+    (version) => version.lifeStage === dogStage.value && version.lifeStage !== current,
+  ) || null
+})
+const suggestedVersionLabel = computed(() => {
+  const version = suggestedVersion.value
+  return version ? version.label || getLifeStageLabel(version.lifeStage) : ''
+})
+const suggestedVersionStage = computed(() => suggestedVersion.value?.lifeStage || '')
+const lifeStageVersionOptions = computed(() =>
+  (recipe.value.availableLifeStageVersions || []).map((version) => {
+    const price = getVersionReferencePrice(version)
+    return {
+      lifeStage: version.lifeStage,
+      label: version.label || getLifeStageLabel(version.lifeStage),
+      recipeId: version.recipeId,
+      note: price ? `约¥${formatReferencePrice(price)}/100g` : '',
+    }
+  }),
+)
+
 const hasResolvedLifeStageMatch = computed(() => {
   const match = recipe.value.lifeStageMatch
   return Boolean(
@@ -917,6 +938,7 @@ function loadRecipeDetail() {
   if (selectedManualLifeStage.value) {
     data.lifeStage = selectedManualLifeStage.value
   }
+  data.manual = selectedManualLifeStage.value ? 'true' : 'false'
 
   request({
     url: `/recipes/${recipeId.value}`,
@@ -1147,8 +1169,9 @@ function buildOrderRoute(): string {
   if (selectedDogId.value) {
     query.push(`dogId=${encodeURIComponent(selectedDogId.value)}`)
   }
-  if (recipe.value.selectedLifeStage) {
-    query.push(`lifeStage=${encodeURIComponent(recipe.value.selectedLifeStage)}`)
+  if (selectedManualLifeStage.value) {
+    query.push(`lifeStage=${encodeURIComponent(selectedManualLifeStage.value)}`)
+    query.push('manual=true')
   }
   return `/pages/recipe-order/index?${query.join('&')}`
 }
@@ -1268,11 +1291,19 @@ function isLifeStageVersionSelected(version: RecipeLifeStageVersion): boolean {
   )
 }
 
-function selectLifeStageVersion(version: RecipeLifeStageVersion) {
-  if (!version.lifeStage) return
+function selectLifeStageVersionByStage(lifeStage: string) {
+  if (!lifeStage) return
+  const version = (recipe.value.availableLifeStageVersions || []).find(
+    (item) => item.lifeStage === lifeStage,
+  )
+  if (!version) return
   selectedManualLifeStage.value = version.lifeStage
   lifeStageSelectorVisible.value = false
   loadRecipeDetail()
+}
+
+function goSuitableRecipes() {
+  uni.reLaunch({ url: '/pages/home/index' })
 }
 
 

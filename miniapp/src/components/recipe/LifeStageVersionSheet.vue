@@ -20,6 +20,7 @@
             <text class="life-stage-sheet__subtitle">
               {{ buildVersionOptionSubtitle(option.lifeStage) }}
             </text>
+            <text v-if="option.note" class="life-stage-sheet__note">{{ option.note }}</text>
           </view>
           <text v-if="option.lifeStage === matchedStage" class="life-stage-sheet__tag">
             按档案匹配
@@ -47,7 +48,7 @@ import { buildVersionOptionLabel, buildVersionOptionSubtitle } from '@/utils/lif
 const props = withDefaults(
   defineProps<{
     visible: boolean
-    versions: Array<{ lifeStage: string; label?: string | null; recipeId?: string | null }>
+    versions: Array<{ lifeStage: string; label?: string | null; recipeId?: string | null; note?: string | null }>
     currentStage?: string | null
     matchedStage?: string | null
   }>(),
@@ -149,6 +150,13 @@ function confirm() {
   display: block;
   font-size: 22rpx;
   color: #8a7a66;
+  margin-top: 4rpx;
+}
+
+.life-stage-sheet__note {
+  display: block;
+  font-size: 21rpx;
+  color: #b45309;
   margin-top: 4rpx;
 }
 

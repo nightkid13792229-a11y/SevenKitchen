@@ -254,6 +254,12 @@ import { WeightGoalPlanService } from './application/weight-goal-plan/weight-goa
 import { WeightGoalPlanController } from './interfaces/controllers/weight-goal-plan.controller';
 import { AdminWeightGoalPlanController } from './interfaces/controllers/admin-weight-goal-plan.controller';
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
+import {
+  ProcurementSkuDraftService,
+  PROCUREMENT_SKU_DRAFT_MODEL,
+} from './application/purchasing/procurement-sku-draft.service';
+import { ProcurementSkuDraftQuotaService } from './application/purchasing/procurement-sku-draft-quota.service';
+import { callDeepSeekJson } from './application/recipe-designer/deepseek-chat';
 import { AdminSupplementShopController } from './interfaces/controllers/admin-supplement-shop.controller';
 import { AdminSupplementEquivalenceController } from './interfaces/controllers/admin-supplement-equivalence.controller';
 import { TastingPackConfigService } from './application/tasting-pack/tasting-pack-config.service';
@@ -930,6 +936,12 @@ validatePrismaConfig();
     ProductFunnelAnalyticsService,
     WeightGoalPlanService,
     ProcurementSkuService,
+    ProcurementSkuDraftQuotaService,
+    ProcurementSkuDraftService,
+    {
+      provide: PROCUREMENT_SKU_DRAFT_MODEL,
+      useValue: { callDeepSeekJson },
+    },
     SupplementCatalogService,
     SupplementShopConfigService,
     SupplementDosageService,

@@ -1769,7 +1769,7 @@ describe('RecipesController (e2e)', () => {
           selectedLifeStage: 'PUPPY_UNDER_14_WEEKS',
           matchType: 'MANUAL_MISMATCH',
           message:
-            '草莓的档案对应普通成年犬，当前手动展示小于 14 周幼犬版本，请确认是否适合。',
+            '草莓的档案对应成犬版，当前手动展示幼犬版（14 周内）版本，请确认是否适合。',
         }),
       );
     });

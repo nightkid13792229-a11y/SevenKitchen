@@ -5,6 +5,7 @@ import {
   resolveDefaultSeriesLifeStage,
   resolveSeriesLifeStageRisk,
   selectLatestPublishedSeriesLifeStageVersions,
+  SERIES_LIFE_STAGE_LABELS,
 } from '../../../src/domain/recipe/recipe-series';
 
 describe('recipe series life-stage helpers', () => {
@@ -173,5 +174,15 @@ describe('resolveSeriesLifeStageRisk', () => {
     expect(resolveSeriesLifeStageRisk('HIGH_ACTIVITY_ADULT', 'HIGH_ACTIVITY_ADULT')).toBe('NONE');
     expect(resolveSeriesLifeStageRisk(null, 'HIGH_ACTIVITY_ADULT')).toBe('NONE');
     expect(resolveSeriesLifeStageRisk('HIGH_ACTIVITY_ADULT', 'SOMETHING_ELSE')).toBe('NONE');
+  });
+});
+
+describe('SERIES_LIFE_STAGE_LABELS', () => {
+  it('版本中文名与前端约定逐字一致', () => {
+    expect(SERIES_LIFE_STAGE_LABELS.PUPPY_UNDER_14_WEEKS).toBe('幼犬版（14 周内）');
+    expect(SERIES_LIFE_STAGE_LABELS.PUPPY_14_WEEKS_PLUS).toBe('幼犬版（14 周以上）');
+    expect(SERIES_LIFE_STAGE_LABELS.HIGH_ACTIVITY_ADULT).toBe('成犬版');
+    expect(SERIES_LIFE_STAGE_LABELS.LOW_ACTIVITY_ADULT_OR_SENIOR).toBe('低活动 / 老年版');
+    expect(SERIES_LIFE_STAGE_LABELS.REPRODUCTION).toBe('繁殖期版');
   });
 });

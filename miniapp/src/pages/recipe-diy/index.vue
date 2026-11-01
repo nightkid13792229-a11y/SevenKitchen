@@ -179,70 +179,20 @@
         <text class="title-text">快速选择备餐天数</text>
       </view>
 
-      <view class="cycle-options">
-        <view
-          v-for="days in ORDER_CYCLE_OPTIONS"
-          :key="days"
-          class="cycle-option"
-          :class="{ active: !isCustomPackagePlan && selectedCycleDays === days, disabled: isCustomPackagePlan }"
-          @tap="selectCycle(days)"
-        >
-          <text class="cycle-text">{{ days }}天</text>
-        </view>
-      </view>
-
-      <!-- 互斥条件当场说明：不再等顾客点了变灰的天数才弹提示 -->
-      <view v-if="isCustomPackagePlan" class="package-plan-mode-hint">
-        <text class="package-plan-mode-hint-text">已启用自定义分装，上方天数选择暂不生效</text>
-      </view>
-
-      <view class="package-plan-toolbar">
-        <text class="package-plan-inline-summary">{{ packagePlanInlineSummaryText }}</text>
-        <button class="package-edit-button" @tap="togglePackageEditor">
-          {{ showPackageEditor ? '取消自定义' : '自定义分装' }}
-        </button>
-      </view>
-
-      <view v-if="packagePlanValidationMessage" class="min-order-warning">
-        <text class="warning-text">{{ packagePlanValidationMessage }}</text>
-      </view>
-
-      <view v-if="showPackageEditor" class="package-plan-list">
-        <view
-          v-for="(row, index) in packagePlan"
-          :key="index"
-          class="package-plan-row"
-        >
-          <view class="package-input-group">
-            <text class="package-input-label">每袋</text>
-            <input
-              class="package-input"
-              type="number"
-              :value="row.packageSpecG"
-              @input="updatePackagePlanRow(index, 'packageSpecG', $event.detail.value)"
-            />
-            <text class="package-input-unit">g</text>
-          </view>
-          <view class="package-input-group">
-            <text class="package-input-label">袋数</text>
-            <input
-              class="package-input"
-              type="number"
-              :value="row.packageCount"
-              @input="updatePackagePlanRow(index, 'packageCount', $event.detail.value)"
-            />
-            <text class="package-input-unit">袋</text>
-          </view>
-          <button
-            class="btn-remove-row"
-            :disabled="packagePlan.length <= 1"
-            @tap="removePackagePlanRow(index)"
-          >
-            删除
-          </button>
-        </view>
-        <button class="btn-add-row" @tap="addPackagePlanRow">添加多个分装规格</button>
-      </view>
+      <QuickCyclePackagePlan
+        ref="packagePlanSection"
+        :cycle-days="selectedCycleDays"
+        :package-plan="packagePlan"
+        :is-custom="isCustomPackagePlan"
+        :editor-open="showPackageEditor"
+        :summary-text="packagePlanInlineSummaryText"
+        :warnings="packagePlanWarnings"
+        @select-cycle="selectCycle"
+        @toggle-custom="togglePackageEditor"
+        @add-row="addPackagePlanRow"
+        @update-row="updatePackagePlanRow"
+        @remove-row="removePackagePlanRow"
+      />
     </view>
 
     <!-- 底部操作按钮 -->
@@ -302,15 +252,14 @@ import {
 } from '../../utils/life-stage-match'
 import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
 import CustomerServiceInlineButton from '@/components/CustomerServiceInlineButton.vue'
+import QuickCyclePackagePlan from '@/components/package-plan/QuickCyclePackagePlan.vue'
 import { useDogSelection } from '@/composables/useDogSelection'
 import { usePackagePlan } from '@/composables/usePackagePlan'
 import { useLifeStageVersion } from '@/composables/useLifeStageVersion'
 import {
   DEFAULT_ORDER_CYCLE_DAYS,
-  MIN_PACKAGE_SPEC_G,
   ORDER_CYCLE_OPTIONS,
   buildDefaultPackagePlan,
-  getPackagePlanTotal,
   type PackagePlanItem,
 } from '../../utils/order-package-plan'
 
@@ -516,28 +465,15 @@ const perMealIntakeText = computed(() => {
   if (!perMealG.value) return '计算中'
   return `${Math.round(perMealG.value)}g`
 })
-const normalizedPackagePlan = computed(() =>
-  packagePlan.value.map(row => normalizePackagePlanRow(row))
+/**
+ * 分装区当前的问题清单。
+ *
+ * DIY 页只生成制作单、不涉及下单，所以**不显示 1000g 起订量**提示 ——
+ * 在这里提"起订量"会让人以为现在买不了。
+ */
+const packagePlanWarnings = computed(() =>
+  packagePlanValidationMessage.value ? [packagePlanValidationMessage.value] : [],
 )
-const packagePlanTotal = computed(() => getPackagePlanTotal(normalizedPackagePlan.value))
-const totalGrams = computed(() => packagePlanTotal.value.totalGrams)
-const totalPackages = computed(() => packagePlanTotal.value.totalPackages)
-const hasInvalidPackageSpec = computed(() =>
-  normalizedPackagePlan.value.some(row => row.packageSpecG < MIN_PACKAGE_SPEC_G)
-)
-const packagePlanValidationMessage = computed(() => (
-  hasInvalidPackageSpec.value ? `每袋重量不能少于 ${MIN_PACKAGE_SPEC_G}g` : ''
-))
-const packagePlanInlineSummaryText = computed(() => {
-  const specs = Array.from(new Set(
-    normalizedPackagePlan.value.map(row => `${row.packageSpecG}g`)
-  ))
-  const specText = specs.length > 0 ? specs.join('、') : '-'
-
-  // 和成品订购页同一口径：只说这一单的物理规格（每袋 / 几袋 / 总净重）。
-  // 自定义分装下不谈"约可吃几天"——袋规是顾客自己定的，天数不再参与计算。
-  return `每袋 ${specText} / 共${totalPackages.value}袋 / 总净重 ${Math.round(totalGrams.value)}g`
-})
 const canGenerateSheet = computed(() => Boolean(
   selectedDogId.value
   && displayDailyIntakeG.value > 0
@@ -598,6 +534,11 @@ const {
   packagePlanDogId,
   showPackageEditor,
   isCustomPackagePlan,
+  normalizedPackagePlan,
+  totalGrams,
+  totalPackages,
+  inlineSummaryText: packagePlanInlineSummaryText,
+  validationMessage: packagePlanValidationMessage,
   normalizePackageSpecValue,
   normalizePackagePlanRow,
   rebuildPackagePlan,
@@ -614,6 +555,9 @@ const {
   dogId: () => selectedDogId.value,
   perMealG: () => perMealG.value,
 })
+
+/** 分装区组件实例：生成制作单前调 commitAll()，不丢没失焦的输入 */
+const packagePlanSection = ref<{ commitAll: () => void } | null>(null)
 
 // 「每日饭量是怎么算的？」展开状态
 const feedingNoteExpanded = ref(false)
@@ -1029,6 +973,8 @@ function selectCycle(days: number) {
 }
 
 async function generateSheet() {
+  // 顾客可能打完数字直接点按钮（没失焦），先提交，别把这次输入丢掉
+  packagePlanSection.value?.commitAll()
   if (isGeneratingSheet.value) {
     return
   }
@@ -1601,157 +1547,6 @@ function getHealthTagLabel(tagOrUuid: string): string {
 }
 
 /* 周期选择 */
-.cycle-and-custom-row {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  margin-bottom: 20rpx;
-}
-
-.cycle-options {
-  display: flex;
-  gap: 12rpx;
-}
-
-.cycle-option {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20rpx 12rpx;
-  border: 2rpx solid #e5e8d4;
-  border-radius: 12rpx;
-}
-
-.cycle-option.active {
-  border-color: #1e3a2f;
-  background-color: #eef2e4;
-}
-
-.cycle-option.disabled {
-  opacity: 0.5;
-}
-
-.cycle-text {
-  font-size: 28rpx;
-  font-weight: bold;
-  color: #26261f;
-}
-
-.package-plan-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18rpx;
-  margin-top: 24rpx;
-}
-
-.package-plan-inline-summary {
-  flex: 1;
-  min-width: 0;
-  font-size: 26rpx;
-  font-weight: 700;
-  color: #26261f;
-  line-height: 1.45;
-}
-
-.package-edit-button {
-  flex: 0 0 auto;
-  height: 64rpx;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 26rpx;
-  margin: 0;
-  border: 1rpx solid rgba(216, 188, 133, 0.6);
-  border-radius: 999rpx;
-  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
-  color: #d8bc85;
-  font-size: 24rpx;
-  font-weight: 600;
-}
-
-.min-order-warning {
-  margin-top: 16rpx;
-  padding: 16rpx 18rpx;
-  background-color: var(--sk-danger-soft, #f7e9e3);
-  border: 1rpx solid var(--sk-danger, #b4553f);
-  border-radius: 8rpx;
-}
-
-.package-plan-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14rpx;
-  margin-top: 18rpx;
-}
-
-.package-plan-row {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  padding: 16rpx;
-  border-radius: 8rpx;
-  background-color: #fbfcf7;
-}
-
-.package-input-group {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  min-width: 0;
-}
-
-.package-input-label,
-.package-input-unit {
-  font-size: 24rpx;
-  color: #6b6653;
-}
-
-.package-input {
-  width: 116rpx;
-  height: 58rpx;
-  text-align: center;
-  border: 1rpx solid #e5e8d4;
-  border-radius: 8rpx;
-  font-size: 28rpx;
-  color: #26261f;
-  background-color: #fbfcf7;
-}
-
-.btn-add-row,
-.btn-remove-row {
-  min-width: 118rpx;
-  height: 60rpx;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  padding: 0 16rpx;
-  border-radius: 8rpx;
-  font-size: 24rpx;
-}
-
-.btn-add-row {
-  width: 100%;
-  border: 1rpx dashed #1e3a2f;
-  color: #1e3a2f;
-  background-color: #fbfcf7;
-}
-
-.btn-remove-row {
-  border: none;
-  color: #6b6653;
-  background-color: #eef2e4;
-}
-
-.btn-remove-row[disabled] {
-  color: #968f6d;
-}
-
 .custom-cycle-inline {
   display: flex;
   align-items: center;
@@ -1998,20 +1793,6 @@ function getHealthTagLabel(tagOrUuid: string): string {
 .feeding-adjustment-line--tip {
   margin-top: 10rpx;
   color: #6b6653;
-}
-
-/* 自定义分装与天数互斥：常驻说明，不再靠点击失败解释 */
-.package-plan-mode-hint {
-  margin-top: 14rpx;
-  padding: 12rpx 18rpx;
-  background-color: #f6efe0;
-  border: 1rpx solid rgba(176, 141, 79, 0.35);
-  border-radius: 12rpx;
-}
-
-.package-plan-mode-hint-text {
-  font-size: 22rpx;
-  color: #8a6b33;
 }
 
 .bottom-bar {

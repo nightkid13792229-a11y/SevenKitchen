@@ -219,7 +219,9 @@ describe('recipe diy regressions', () => {
 
     expect(source).toContain('ORDER_CYCLE_OPTIONS')
     expect(source).toContain('buildDefaultPackagePlan')
-    expect(source).toContain('getPackagePlanTotal(normalizedPackagePlan.value)')
+    // 2026-11-01：总量与摘要口径统一在 composable 里
+    expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
+      .toContain('getPackagePlanTotal(normalizedPackagePlan.value)')
     expect(source).toContain('packagePlanInlineSummaryText')
     expect(source).toContain('isCustomPackagePlan')
     expect(source).toContain('cancelCustomPackagePlan')
@@ -228,9 +230,14 @@ describe('recipe diy regressions', () => {
     expect(source).toContain('packageCount: totalPackages.value')
     expect(source).toContain('packageSpecG: getPrimaryPackageSpecG(normalizedPackagePlan.value)')
     expect(templateSource).toContain('快速选择备餐天数')
-    expect(templateSource).toContain("{{ showPackageEditor ? '取消自定义' : '自定义分装' }}")
-    expect(templateSource).toContain('v-for="(row, index) in packagePlan"')
-    expect(templateSource).toContain('添加多个分装规格')
+    // 2026-11-01：界面搬进共享组件（两页同一份）
+    const packagePlanComponentSource = readFileSync(
+      resolve(process.cwd(), 'src/components/package-plan/QuickCyclePackagePlan.vue'),
+      'utf-8',
+    )
+    expect(packagePlanComponentSource).toContain("{{ editorOpen ? '取消自定义' : '自定义分装' }}")
+    expect(packagePlanComponentSource).toContain('v-for="(row, index) in packagePlan"')
+    expect(packagePlanComponentSource).toContain('再加一种分装')
     expect(source).not.toContain('/orders/pricing/preview')
     expect(source).not.toContain('pricePreview')
     expect(source).not.toContain('minimumOrderMet')
@@ -381,7 +388,12 @@ describe('recipe diy regressions', () => {
     // ⚠️ cancelText 必须 ≤4 个汉字，否则微信既不显示弹窗也不报错（点了没反应）
     expect(packagePlanComposable).toContain('继续编辑')
     // 互斥说明常驻，不靠点击失败解释
-    const templateSource = source.slice(0, source.indexOf('<script setup'))
-    expect(templateSource).toContain('已启用自定义分装，上方天数选择暂不生效')
+    // 2026-11-01：常驻说明随界面搬进共享组件
+    expect(
+      readFileSync(
+        resolve(process.cwd(), 'src/components/package-plan/QuickCyclePackagePlan.vue'),
+        'utf-8',
+      ),
+    ).toContain('已启用自定义分装，上方天数选择暂不生效')
   })
 })

@@ -121,6 +121,24 @@ function paramNames(text: string): string[] {
   return names
 }
 
+/**
+ * `const { a, b: c, d = 1 } = ...` 里的**本地名**。
+ *
+ * 别名要取冒号右边（`b: c` 声明的是 c），默认值取等号左边。
+ * 函数参数的 `a: string` 含义相反（声明的是 a），所以不能复用 paramNames。
+ */
+function destructuredNames(text: string): string[] {
+  const names: string[] = []
+  const body = text.replace(/^\s*[{[]/, '').replace(/[}\]]$/, '')
+  for (const raw of body.split(',')) {
+    const part = raw.trim()
+    if (!part) continue
+    const nm = part.split(':').pop()!.split('=')[0].trim()
+    if (nm && IDENT.test(nm) && nm === IDENT.exec(nm)![0]) names.push(nm)
+  }
+  return names
+}
+
 /** 真正干活的那一层：给定一段脚本源码，返回无法解析的 X.value */
 export function findUnresolvedRefAccesses(code: string): string[] {
   const clean = stripLiterals(code)
@@ -137,10 +155,13 @@ export function findUnresolvedRefAccesses(code: string): string[] {
 
   for (const m of clean.matchAll(/(?:const|let|var)\s+/g)) {
     const start = m.index! + m[0].length
-    const seg = clean.slice(start, start + 400)
+    // 窗口要够大：composable 的解构动辄 20+ 个名字（`usePackagePlan` 就有 20 个），
+    // 400 字符会把整段解构截断、`indexOf('}')` 找不到闭合，于是**整块名字都没登记**，
+    // 表现为一片假报错。给 2000 字符的余量。
+    const seg = clean.slice(start, start + 2000)
     if (seg.trimStart().startsWith('{')) {
       const close = seg.indexOf('}')
-      if (close !== -1) add(m.index!, paramNames(seg.slice(0, close + 1)))
+      if (close !== -1) add(m.index!, destructuredNames(seg.slice(0, close + 1)))
       continue
     }
     add(m.index!, paramNames(seg.split('\n')[0].split('=')[0]))

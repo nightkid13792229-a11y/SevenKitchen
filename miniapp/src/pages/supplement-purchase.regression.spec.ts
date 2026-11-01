@@ -254,12 +254,13 @@ describe('supplement purchase regressions', () => {
       expect(source).toContain('canEditUsage')
     })
 
-    it('加量：报价与下单都要把份数和制作单天数传给服务端', () => {
+    it('加量：报价与下单只传份数，不再传制作单天数', () => {
       // 金额一律服务端算，前端不做乘法
       expect(source).toContain('portionMultiplier: portionMultiplier.value')
-      expect(source).toContain('cycleDays: cycleDays.value || undefined')
       // 下单时也要带上，否则订单落库的份数永远是 1
       expect(source).toMatch(/portionMultiplier:\s*portionMultiplier\.value/)
+      // 2026-11-01：补剂不再有"天"，报价/下单都不许再带 cycleDays
+      expect(source).not.toContain('cycleDays')
     })
 
     it('加量：标题是「选择份数」，副标题是包邮门槛', () => {
@@ -292,9 +293,10 @@ describe('supplement purchase regressions', () => {
       expect(template).not.toContain('portion-option-ship')
     })
 
-    it('天数仍由服务端算（用于效期校验），只是不给用户看', () => {
-      // 内部保留、外部去掉：效期安全红线还需要它
-      expect(source).toContain('cycleDays: cycleDays.value')
+    it('★ 页面彻底不出现"天"：不显示、也不传', () => {
+      // 2026-11-01 老板决定：补剂不再用天数的说法，效期也不再计算/展现。
+      expect(source).not.toContain('cycleDays')
+      expect(template).not.toContain('天用量')
       expect(source).toContain('portionMultiplier: portionMultiplier.value')
     })
 

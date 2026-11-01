@@ -29,7 +29,8 @@
               <text class="recipe-emoji">🍖</text>
               <view class="recipe-info">
                 <text class="recipe-name">{{ sheet.recipeName }}</text>
-                <text class="sheet-meta">{{ sheet.cycleDays }}天周期</text>
+                <!-- 2026-11-01：制作单不再有"天数"，卡片改用事实「共几袋」 -->
+                <text v-if="sheetBagCount(sheet) > 0" class="sheet-meta">共 {{ sheetBagCount(sheet) }} 袋</text>
               </view>
             </view>
             <text class="card-arrow">›</text>
@@ -90,7 +91,8 @@ interface DIYSheet {
   recipeName: string
   dogId: string
   dogName: string
-  cycleDays: number
+  /** @deprecated 2026-11-01 起新单为 null；只用于还原没有 packagePlan 的老单 */
+  cycleDays?: number | null
   perMealG: number
   dailyIntakeG: number
   packagePlan?: PackagePlanItem[]
@@ -129,6 +131,13 @@ async function loadSheetList() {
   }
 }
 
+function sheetBagCount(sheet: DIYSheet): number {
+  return (sheet.packagePlan || []).reduce(
+    (sum, row) => sum + (Number(row.packageCount) || 0),
+    0,
+  )
+}
+
 function viewSheet(sheetId: string) {
   // 查找对应的制作单
   const sheet = sheetList.value.find(s => s.id === sheetId)
@@ -141,18 +150,31 @@ function viewSheet(sheetId: string) {
     return
   }
 
-  // 跳转到DIY制作单页面，传递必要的参数
+  // 跳转到DIY制作单页面，传递必要的参数。
+  // 2026-11-01：新单不再带天数（制作单的单位是袋和克）；
+  // 只有"没有包规"的早期制作单才需要天数来还原总净重，属于老单兼容。
+  const hasPackagePlan = (sheet.packagePlan || []).length > 0
   const params = {
     recipeId: sheet.recipeId,
     dogId: sheet.dogId,
-    cycleDays: String(sheet.cycleDays),
     perMealG: String(sheet.perMealG),
     dailyIntakeG: String(sheet.dailyIntakeG),
     packagePlan: JSON.stringify(sheet.packagePlan || []),
   }
 
+  const query = [
+    `recipeId=${encodeURIComponent(params.recipeId)}`,
+    `dogId=${encodeURIComponent(params.dogId)}`,
+    `perMealG=${encodeURIComponent(params.perMealG)}`,
+    `dailyIntakeG=${encodeURIComponent(params.dailyIntakeG)}`,
+    `packagePlan=${encodeURIComponent(params.packagePlan)}`,
+  ]
+  if (!hasPackagePlan && sheet.cycleDays) {
+    query.push(`cycleDays=${sheet.cycleDays}`)
+  }
+
   uni.navigateTo({
-    url: `/pages/diy-sheet/index?recipeId=${encodeURIComponent(params.recipeId)}&dogId=${encodeURIComponent(params.dogId)}&cycleDays=${encodeURIComponent(params.cycleDays)}&perMealG=${encodeURIComponent(params.perMealG)}&dailyIntakeG=${encodeURIComponent(params.dailyIntakeG)}&packagePlan=${encodeURIComponent(params.packagePlan)}`
+    url: `/pages/diy-sheet/index?${query.join('&')}`
   })
 }
 

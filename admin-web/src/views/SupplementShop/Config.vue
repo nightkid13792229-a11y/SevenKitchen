@@ -133,21 +133,6 @@
           </span>
         </el-form-item>
 
-        <el-form-item label="加量总天数上限">
-          <el-input-number
-            v-model="form.maxTotalDays"
-            :min="1"
-            :max="365"
-            :step="10"
-            style="width: 220px"
-          />
-          <span class="form-tip">
-            一次购买覆盖的总天数上限（份数 × 制作单天数）。这是<b>效期安全红线</b>：
-            粉剂分装效期 6 个月 = 180 天，默认 90 天正好用一半。
-            例：制作单 40 天量时，最多只能买 2 份（3 份就是 120 天，超线）。
-          </span>
-        </el-form-item>
-
         <el-divider content-position="left">支付超时</el-divider>
 
         <el-form-item label="补剂订单支付超时">
@@ -583,7 +568,6 @@ const form = ref<SupplementShopConfig>({
   minOrderAmount: 0,
   roundUpUsage: true,
   maxPortionMultiplier: 3,
-  maxTotalDays: 90,
   paymentTimeoutMinutes: 30,
   dailyCutoffTime: '17:00',
   dailyPackingCapacity: 30,
@@ -686,7 +670,6 @@ async function handleSave() {
       minOrderAmount: form.value.minOrderAmount,
       roundUpUsage: form.value.roundUpUsage,
       maxPortionMultiplier: form.value.maxPortionMultiplier,
-      maxTotalDays: form.value.maxTotalDays,
       paymentTimeoutMinutes: form.value.paymentTimeoutMinutes,
       dailyCutoffTime: form.value.dailyCutoffTime,
       dailyPackingCapacity: form.value.dailyPackingCapacity,

@@ -46,7 +46,6 @@
         <view class="card-title">制作单快照</view>
         <view class="info"><text class="label">食谱</text><text>{{ snapshot.snapshot.sheet?.recipeName || '—' }}</text></view>
         <view class="info"><text class="label">狗狗</text><text>{{ snapshot.snapshot.sheet?.dogName || '—' }}</text></view>
-        <view class="info"><text class="label">周期</text><text>{{ snapshot.snapshot.sheet?.cycleDays || '—' }} 天</text></view>
         <view class="info"><text class="label">冻结</text><text>{{ formatTime(snapshot.snapshotAt || '') }}</text></view>
         <text class="snapshot-tip">下单时冻结，后续改食谱不影响已购补剂。</text>
       </view>
@@ -256,7 +255,6 @@ function repurchase() {
     recipeName: order.value.recipeName || undefined,
     dogId: order.value.dogId || undefined,
     dogName: order.value.dogName || undefined,
-    cycleDays: order.value.cycleDays || undefined,
     portionMultiplier: order.value.portionMultiplier || 1,
     reorderFromOrderNo: order.value.orderNo,
   })

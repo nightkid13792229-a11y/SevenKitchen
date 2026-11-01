@@ -2273,7 +2273,8 @@ model DIYSheet {
   recipeName      String   @map("recipe_name") @db.VarChar(200)
   dogId           String   @map("dog_id")
   dogName         String   @map("dog_name") @db.VarChar(100)
-  cycleDays       Int      @map("cycle_days")
+  /// 已废弃（2026-11-01）：制作单以袋/克为单位，不再有天数；老单仍可能有值
+  cycleDays       Int?     @map("cycle_days")
   perMealG        Float    @map("per_meal_g")
   dailyIntakeG    Float    @map("daily_intake_g")
   packagePlan     Json?    @map("package_plan")

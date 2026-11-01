@@ -690,6 +690,13 @@ const recipeId = ref('')
 const orderId = ref('')
 const shareToken = ref('')
 const dogId = ref('')
+/**
+ * 老制作单的天数（2026-11-01 起不再产生新值）。
+ *
+ * 只服务两种历史场景：老分享链接里带的 `cycleDays`、以及没有 `packagePlan`
+ * 的早期制作单（用它反推总净重）。**新单不读、不存、不显示**；
+ * 不要再用它做任何"这批能吃几天"的计算。
+ */
 const cycleDays = ref(7)
 const perMealG = ref(0)
 const dailyIntakeG = ref(0)
@@ -794,43 +801,6 @@ const printCanvasStyle = computed(() => ({
 const packagePlanTotal = computed(() => getPackagePlanTotal(packagePlan.value))
 const totalFoodNetWeightG = computed(() => packagePlanTotal.value.totalGrams || dailyIntakeG.value * cycleDays.value)
 
-/**
- * 这一批实际覆盖多少天（2026-09-24）。
- *
- * 为什么不能直接用 cycleDays：
- *   启用「自定义分装」后，食物总量由**包规**决定，recipe-diy 页也明确提示
- *   「上方天数选择暂不生效」。此时 cycleDays 只是用户之前选的一个数，
- *   **跟这批食物没关系**。而补剂用量是按**整批食物总重**配的
- *   （见 supplementNutrientBaseWeightG），所以天数必须按这批的实际消耗反推，
- *   否则补剂下单页会显示错误的天量，服务端「总天数 ≤ 效期安全线」也会算错。
- *
- * 口径：**总袋数 ÷ 狗狗每天餐数**（默认一餐一袋）。
- *
- * ⚠️ 这里踩过一次坑，别再改回「总重 ÷ 每日摄入」：
- *   那个口径隐含"用户会按配方建议的每餐克数喂"，但自定义分装的意义恰恰是
- *   用户自己定袋规。实测案例：30 袋 × 100g = 3000g，配方建议 140g/餐（日摄入 280g），
- *   按总重口径算出 11 天；但用户是按"每天 2 袋"喂的，实际能吃 3000 ÷ 200 = 15 天。
- *   补剂配的是那 3000g 食物，食物吃多久补剂就吃多久 —— **15 才是对的**。
- *
- * 用「袋数 ÷ 餐数」还有一个好处：包规默认每袋 = perMealG，所以默认情况下
- * 它算出来正好等于用户选的天数，不会凭空变化。
- */
-const effectiveCycleDays = computed(() => {
-  const bags = packagePlanTotal.value.totalPackages
-  // 餐数一律从狗狗档案取。这里曾经写成 mealsPerDay.value —— 本文件根本没有这个
-  // 绑定，取值时直接抛 ReferenceError，导致「一键购买补剂」点了没反应。
-  const meals = Number(dog.value?.mealsPerDay) || 0
-  if (bags > 0 && meals > 0) {
-    const days = Math.round(bags / meals)
-    if (days > 0) return days
-  }
-
-  // 没有包规（普通模式）：总量就是"每日摄入 × 天数"，反推即天数
-  const intake = Number(dailyIntakeG.value) || 0
-  if (intake <= 0) return cycleDays.value
-  const days = Math.round(totalFoodNetWeightG.value / intake)
-  return days > 0 ? days : cycleDays.value
-})
 const packagePlanSummaryText = computed(() => {
   if (packagePlan.value.length === 0) {
     return `${Math.round(perMealG.value)}g×${Math.max(1, Math.round(totalFoodNetWeightG.value / Math.max(perMealG.value, 1)))}袋`
@@ -877,20 +847,19 @@ const dogPurchaseFacts = computed(() => {
 })
 
 /**
- * 制作信息：只留三个顾客真正要用的数 —— 每餐多重、一共几餐、总共多少克。
- * 制作周期 / 每日 / 分装规格 / 采购量都不再重复出现在这里。
+ * 制作信息：只留三个**事实** —— 每餐多重、一共几袋、总共多少克。
+ *
+ * 2026-11-01 去掉了"共几餐"（原来按 餐次 × 天数 推算）。制作单的单位是袋和克，
+ * 天数不参与它的任何计算；一张单做了几袋，是确定的，不需要推算。
  */
-const totalMealCount = computed(() => {
-  const mealsPerDay = Number(dog.value?.mealsPerDay || 0)
-  if (!mealsPerDay || !cycleDays.value) return 0
-  return mealsPerDay * cycleDays.value
+const makingPurchaseFacts = computed(() => {
+  const bags = packagePlanTotal.value.totalPackages
+  return [
+    { label: '每餐重量', value: `${Math.round(perMealG.value)}g` },
+    { label: '总袋数', value: bags > 0 ? `${bags}袋` : '-' },
+    { label: '总净重', value: `${Math.round(totalFoodNetWeightG.value)}g` },
+  ]
 })
-
-const makingPurchaseFacts = computed(() => [
-  { label: '每餐重量', value: `${Math.round(perMealG.value)}g` },
-  { label: '总餐数', value: totalMealCount.value > 0 ? `${totalMealCount.value}餐` : '-' },
-  { label: '总净重', value: `${Math.round(totalFoodNetWeightG.value)}g` },
-])
 
 /** 底部固定栏是否展示「购买预分装补剂」 */
 const canBuySupplements = computed(
@@ -1316,8 +1285,6 @@ async function handleBuySupplements() {
     recipeName: recipe.value && recipe.value.name,
     dogId: dogId.value,
     dogName: dog.value && dog.value.name,
-    // 用实际覆盖天数，而不是用户选的天数 —— 自定义分装下两者不一样
-    cycleDays: effectiveCycleDays.value,
     diySheetId
   })
 
@@ -1408,7 +1375,6 @@ async function autoSaveDiySheet(): Promise<string> {
         recipeId: recipeId.value,
         recipeName: recipe.value.name,
         dogId: dogId.value,
-        cycleDays: cycleDays.value,
         perMealG: perMealG.value,
         dailyIntakeG: dailyIntakeG.value,
         packagePlan: packagePlan.value,
@@ -1581,7 +1547,6 @@ async function loadPricePreview() {
           packageCount: pkgCount,
           packageSpecG: pkgSpecG,
           packagePlan: packagePlan.value,
-          cycleDays: cycleDays.value,
           dailyIntakeG: dailyIntakeG.value
         }]
       }
@@ -1735,7 +1700,7 @@ async function handlePrint() {
         avatarPath: dog.value?.avatarUrl ? normalizeImageUrl(dog.value.avatarUrl) : undefined,
         backgroundImage: headerBackground,
         title: recipe.value.name,
-        subtitle: dog.value ? `${dog.value.name} 的 ${cycleDays.value} 天鲜食计划` : `${cycleDays.value} 天鲜食计划`,
+        subtitle: dog.value ? `${dog.value.name} 的鲜食制作单` : '鲜食制作单',
         sellingPoint: recipe.value.sellingPoint || ''
       })
 
@@ -1980,7 +1945,6 @@ async function handleSave() {
       recipeId: recipeId.value,
       recipeName: recipe.value.name,
       dogId: dogId.value,
-      cycleDays: cycleDays.value,
       perMealG: perMealG.value,
       dailyIntakeG: dailyIntakeG.value,
       packagePlan: packagePlan.value,
@@ -2028,7 +1992,7 @@ const shareTokenQueryParam = computed(() =>
   shareToken.value ? `&shareToken=${encodeURIComponent(shareToken.value)}` : ''
 )
 const sharePath = computed(() => {
-  return `/pages/diy-sheet/index?recipeId=${recipeId.value}&dogId=${dogId.value}&cycleDays=${cycleDays.value}&perMealG=${perMealG.value}&dailyIntakeG=${dailyIntakeG.value}&${packagePlanQueryParam.value}${shareTokenQueryParam.value}`
+  return `/pages/diy-sheet/index?recipeId=${recipeId.value}&dogId=${dogId.value}&perMealG=${perMealG.value}&dailyIntakeG=${dailyIntakeG.value}&${packagePlanQueryParam.value}${shareTokenQueryParam.value}`
 })
 
 const shareTitle = computed(() => {
@@ -2345,7 +2309,7 @@ onShareAppMessage(() => {
 onShareTimeline(() => {
   return {
     title: shareTitle.value,
-    query: `recipeId=${recipeId.value}&dogId=${dogId.value}&cycleDays=${cycleDays.value}&perMealG=${perMealG.value}&dailyIntakeG=${dailyIntakeG.value}&${packagePlanQueryParam.value}${shareTokenQueryParam.value}`,
+    query: `recipeId=${recipeId.value}&dogId=${dogId.value}&perMealG=${perMealG.value}&dailyIntakeG=${dailyIntakeG.value}&${packagePlanQueryParam.value}${shareTokenQueryParam.value}`,
     imageUrl: normalizeImageUrl(recipe.value.coverImageUrl) || ''
   }
 })

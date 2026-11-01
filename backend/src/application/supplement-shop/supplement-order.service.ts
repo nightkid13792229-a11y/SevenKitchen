@@ -391,10 +391,11 @@ export class SupplementOrderService {
           dogId: request.dogId ?? null,
           dogName: request.dogName ?? null,
           diySheetId: request.diySheetId ?? null,
+          // 2026-11-01：天数已从补剂里去掉。cycleDays 只做历史兼容（老客户端仍可能传），
+          // totalDays 不再计算，落库为 null。
           cycleDays: request.cycleDays ?? null,
           reorderFromOrderNo: request.reorderFromOrderNo ?? null,
-          // 加量信息：份数取报价里已校验收敛过的值，总天数用报价算出来的那个
-          // （它已经把 cycleDays 与份数乘好了，且受效期上限约束）。
+          // 加量信息：份数取报价里已校验收敛过的值
           portionMultiplier: quote.portionMultiplier,
           totalDays: quote.totalDays,
           remark: request.remark ?? null,
@@ -1887,11 +1888,10 @@ export class SupplementOrderService {
      * 如果它仍然传来一个越界值，那是 bug 或篡改 —— 静默改成 3 份会让用户
      * 看到的金额与实际下单金额不一致。直接报错最清楚。
      */
-    const cycleDays =
-      Number.isFinite(Number(request.cycleDays)) &&
-      Number(request.cycleDays) > 0
-        ? Math.floor(Number(request.cycleDays))
-        : null;
+    /**
+     * 2026-11-01：补剂不再有"天数"，份数上限只看配置里的 `maxPortionMultiplier`
+     * （`request.cycleDays` 保留在 DTO 里只为兼容老客户端，已不参与任何计算）。
+     */
     const requestedMultiplier = request.portionMultiplier;
     if (requestedMultiplier !== undefined && requestedMultiplier !== null) {
       if (
@@ -1900,15 +1900,10 @@ export class SupplementOrderService {
       ) {
         throw new BadRequestException('加量份数必须是不小于 1 的整数');
       }
-      const maxPortionMultiplier = resolveMaxPortionMultiplier(
-        config,
-        cycleDays,
-      );
+      const maxPortionMultiplier = resolveMaxPortionMultiplier(config);
       if (requestedMultiplier > maxPortionMultiplier) {
         throw new BadRequestException(
-          cycleDays === null
-            ? `加量份数最多 ${maxPortionMultiplier} 份`
-            : `这张制作单是 ${cycleDays} 天量，最多只能买 ${maxPortionMultiplier} 份（分装效期所限）`,
+          `加量份数最多 ${maxPortionMultiplier} 份`,
         );
       }
     }
@@ -1917,7 +1912,6 @@ export class SupplementOrderService {
       lines: available,
       totalWeightG: this.estimateWeightG(available),
       portionMultiplier: requestedMultiplier ?? 1,
-      cycleDays,
     });
 
     return { quote, unavailable, config, meta, dosage };

@@ -310,7 +310,6 @@ import {
   MIN_PACKAGE_SPEC_G,
   ORDER_CYCLE_OPTIONS,
   buildDefaultPackagePlan,
-  estimateFeedDays,
   getPackagePlanTotal,
   type PackagePlanItem,
 } from '../../utils/order-package-plan'
@@ -523,9 +522,6 @@ const normalizedPackagePlan = computed(() =>
 const packagePlanTotal = computed(() => getPackagePlanTotal(normalizedPackagePlan.value))
 const totalGrams = computed(() => packagePlanTotal.value.totalGrams)
 const totalPackages = computed(() => packagePlanTotal.value.totalPackages)
-const estimatedFeedDays = computed(() =>
-  estimateFeedDays(totalGrams.value, displayDailyIntakeG.value)
-)
 const hasInvalidPackageSpec = computed(() =>
   normalizedPackagePlan.value.some(row => row.packageSpecG < MIN_PACKAGE_SPEC_G)
 )
@@ -538,7 +534,9 @@ const packagePlanInlineSummaryText = computed(() => {
   ))
   const specText = specs.length > 0 ? specs.join('、') : '-'
 
-  return `每袋 ${specText} / 共${totalPackages.value}袋 / 总净重 ${Math.round(totalGrams.value)}g / 约${estimatedFeedDays.value}天`
+  // 和成品订购页同一口径：只说这一单的物理规格（每袋 / 几袋 / 总净重）。
+  // 自定义分装下不谈"约可吃几天"——袋规是顾客自己定的，天数不再参与计算。
+  return `每袋 ${specText} / 共${totalPackages.value}袋 / 总净重 ${Math.round(totalGrams.value)}g`
 })
 const canGenerateSheet = computed(() => Boolean(
   selectedDogId.value
@@ -1127,7 +1125,7 @@ function navigateToSheet() {
   const params = {
     recipeId: recipeId.value,
     dogId: selectedDogId.value,
-    cycleDays: selectedCycleDays.value,
+    // 2026-11-01：制作单不再有天数（单位只有袋和克），不再往下传
     perMealG: Math.round(perMealG.value),
     isPerMealModified: isPerMealModified.value,
     dailyIntakeG: Math.round(displayDailyIntakeG.value),

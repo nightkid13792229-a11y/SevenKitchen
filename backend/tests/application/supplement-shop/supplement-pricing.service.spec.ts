@@ -460,33 +460,30 @@ describe('SupplementPricingService', () => {
     ];
     const shipping = { fee: 8, description: '一口价' };
 
-    describe('份数上限规则', () => {
+    describe('份数上限规则（2026-11-01 起不再看天数）', () => {
       const cfg = buildConfig({ maxPortionMultiplier: 3, maxTotalDays: 90 });
 
-      it('短周期制作单受份数上限约束', () => {
-        // 7 天 × 3 = 21 天，远没到 90 天，所以是份数上限说了算
-        expect(resolveMaxPortionMultiplier(cfg, 7)).toBe(3);
+      it('★ 份数上限只看配置，与制作单多少天无关', () => {
+        // 以前 40 天会算成 2 份（90÷40）；现在天数整个概念都从补剂里去掉了
+        expect(resolveMaxPortionMultiplier(cfg)).toBe(3);
+        expect(
+          resolveMaxPortionMultiplier(
+            buildConfig({ maxPortionMultiplier: 2, maxTotalDays: 90 }),
+          ),
+        ).toBe(2);
       });
 
-      it('长周期制作单受总天数上限约束', () => {
-        // 40 天：90 ÷ 40 = 2.25 → 只能买 2 份（3 份就是 120 天，贴到效期红线）
-        expect(resolveMaxPortionMultiplier(cfg, 40)).toBe(2);
-      });
-
-      it('正好整除时取整（90 天制作单只能买 1 份）', () => {
-        expect(resolveMaxPortionMultiplier(cfg, 90)).toBe(1);
-        expect(resolveMaxPortionMultiplier(cfg, 45)).toBe(2);
-        expect(resolveMaxPortionMultiplier(cfg, 30)).toBe(3);
-      });
-
-      it('制作单本身超过天数上限时，至少还能按原量买 1 份', () => {
-        // 不能因为"超标"就把用户卡死买不了 —— 兜底 1 份
-        expect(resolveMaxPortionMultiplier(cfg, 200)).toBe(1);
-      });
-
-      it('没有制作单天数时只受份数上限约束', () => {
-        expect(resolveMaxPortionMultiplier(cfg, null)).toBe(3);
-        expect(resolveMaxPortionMultiplier(cfg, undefined)).toBe(3);
+      it('★ 配置为 0/负数时兜底 1 份，顾客至少能按原量买', () => {
+        expect(
+          resolveMaxPortionMultiplier(
+            buildConfig({ maxPortionMultiplier: 0, maxTotalDays: 90 }),
+          ),
+        ).toBe(1);
+        expect(
+          resolveMaxPortionMultiplier(
+            buildConfig({ maxPortionMultiplier: -5, maxTotalDays: 90 }),
+          ),
+        ).toBe(1);
       });
     });
 
@@ -494,11 +491,9 @@ describe('SupplementPricingService', () => {
       it('成本与售价按份数翻倍', () => {
         const one = service.calculateQuote(buildConfig(), lines, shipping, {
           portionMultiplier: 1,
-          cycleDays: 30,
         });
         const three = service.calculateQuote(buildConfig(), lines, shipping, {
           portionMultiplier: 3,
-          cycleDays: 30,
         });
 
         // 第一行（海藻粉 23 平勺 × 0.035452）单份成本 0.8154
@@ -513,7 +508,6 @@ describe('SupplementPricingService', () => {
       it('袋数 = 补剂种数 × 份数', () => {
         const q = service.calculateQuote(buildConfig(), lines, shipping, {
           portionMultiplier: 3,
-          cycleDays: 30,
         });
         expect(q.lines[0].bags).toBe(3);
         expect(q.lines[1].bags).toBe(3);
@@ -523,11 +517,9 @@ describe('SupplementPricingService', () => {
       it('服务费不随份数变 —— 这正是加量的全部意义', () => {
         const one = service.calculateQuote(buildConfig(), lines, shipping, {
           portionMultiplier: 1,
-          cycleDays: 30,
         });
         const three = service.calculateQuote(buildConfig(), lines, shipping, {
           portionMultiplier: 3,
-          cycleDays: 30,
         });
         expect(one.serviceFee).toBe(9.9);
         expect(three.serviceFee).toBe(9.9);
@@ -539,39 +531,26 @@ describe('SupplementPricingService', () => {
         // 分装工单会印出物理上装不下的用量。
         const one = service.calculateQuote(buildConfig(), lines, shipping, {
           portionMultiplier: 1,
-          cycleDays: 30,
         });
         const three = service.calculateQuote(buildConfig(), lines, shipping, {
           portionMultiplier: 3,
-          cycleDays: 30,
         });
         expect(three.lines[0].packedAmount).toBe(one.lines[0].packedAmount);
         expect(three.lines[1].packedAmount).toBe(one.lines[1].packedAmount);
       });
 
-      it('每天成本随份数下降（界面靠它讲"多买更划算"）', () => {
+      it('★ 不再计算总天数与每天成本（字段恒为 null，只为兼容老客户端）', () => {
         const one = service.calculateQuote(buildConfig(), lines, shipping, {
           portionMultiplier: 1,
-          cycleDays: 30,
         });
         const three = service.calculateQuote(buildConfig(), lines, shipping, {
           portionMultiplier: 3,
-          cycleDays: 30,
         });
 
-        expect(one.totalDays).toBe(30);
-        expect(three.totalDays).toBe(90);
-        expect(one.perDayCost).not.toBeNull();
-        expect(three.perDayCost).not.toBeNull();
-        expect(three.perDayCost!).toBeLessThan(one.perDayCost!);
-      });
-
-      it('没有 cycleDays 时不算每天成本', () => {
-        const q = service.calculateQuote(buildConfig(), lines, shipping, {
-          portionMultiplier: 2,
-        });
-        expect(q.totalDays).toBeNull();
-        expect(q.perDayCost).toBeNull();
+        expect(one.totalDays).toBeNull();
+        expect(three.totalDays).toBeNull();
+        expect(one.perDayCost).toBeNull();
+        expect(three.perDayCost).toBeNull();
       });
 
       it('超上限时收敛到上限并给出警告（纯函数兜底，界面侧由 order service 直接拒绝）', () => {
@@ -579,7 +558,7 @@ describe('SupplementPricingService', () => {
           buildConfig({ maxPortionMultiplier: 3, maxTotalDays: 90 }),
           lines,
           shipping,
-          { portionMultiplier: 9, cycleDays: 30 },
+          { portionMultiplier: 9 },
         );
         expect(q.portionMultiplier).toBe(3);
         expect(q.warnings.some((w) => w.includes('超出上限'))).toBe(true);
@@ -589,7 +568,6 @@ describe('SupplementPricingService', () => {
         for (const bad of [0, -2, 1.7, Number.NaN]) {
           const q = service.calculateQuote(buildConfig(), lines, shipping, {
             portionMultiplier: bad,
-            cycleDays: 30,
           });
           expect(q.portionMultiplier).toBe(1);
         }
@@ -600,11 +578,12 @@ describe('SupplementPricingService', () => {
           buildConfig({ maxPortionMultiplier: 3, maxTotalDays: 90 }),
           lines,
           shipping,
-          { portionMultiplier: 1, cycleDays: 30 },
+          { portionMultiplier: 1 },
         );
 
         expect(q.portionOptions.map((o) => o.multiplier)).toEqual([1, 2, 3]);
-        expect(q.portionOptions.map((o) => o.totalDays)).toEqual([30, 60, 90]);
+        // 天数已不再计算，每个档位都是 null
+        expect(q.portionOptions.map((o) => o.totalDays)).toEqual([null, null, null]);
       });
 
       it('选项里的金额与真正下单时一致（同源同逻辑）', () => {
@@ -612,18 +591,15 @@ describe('SupplementPricingService', () => {
         const cfg = buildConfig({ maxPortionMultiplier: 3, maxTotalDays: 90 });
         const asTwo = service.calculateQuote(cfg, lines, shipping, {
           portionMultiplier: 2,
-          cycleDays: 30,
         });
         const asOne = service.calculateQuote(cfg, lines, shipping, {
           portionMultiplier: 1,
-          cycleDays: 30,
         });
 
         const option2 = asOne.portionOptions.find((o) => o.multiplier === 2)!;
         expect(option2.total).toBe(asTwo.total);
         expect(option2.goodsSubtotal).toBe(asTwo.goodsSubtotal);
         expect(option2.freeShipping).toBe(asTwo.freeShipping);
-        expect(option2.perDayCost).toBe(asTwo.perDayCost);
       });
 
       it('选项会标出哪一档开始包邮，顾客零点击就能看到', () => {
@@ -632,7 +608,7 @@ describe('SupplementPricingService', () => {
           buildConfig({ maxPortionMultiplier: 3, maxTotalDays: 90, freeShippingThreshold: null }),
           lines,
           shipping,
-          { portionMultiplier: 3, cycleDays: 30 },
+          { portionMultiplier: 3 },
         );
         const q = service.calculateQuote(
           buildConfig({
@@ -642,7 +618,7 @@ describe('SupplementPricingService', () => {
           }),
           lines,
           shipping,
-          { portionMultiplier: 1, cycleDays: 30 },
+          { portionMultiplier: 1 },
         );
 
         expect(q.portionOptions[0].freeShipping).toBe(false);
@@ -656,25 +632,36 @@ describe('SupplementPricingService', () => {
         );
       });
 
-      it('只有一档可选时也返回一条选项，界面据此决定是否展示控件', () => {
-        // 90 天制作单只能买 1 份
+      it('份数上限为 1 时只返回一条选项，界面据此隐藏控件', () => {
         const q = service.calculateQuote(
-          buildConfig({ maxPortionMultiplier: 3, maxTotalDays: 90 }),
+          buildConfig({ maxPortionMultiplier: 1, maxTotalDays: 90 }),
           lines,
           shipping,
-          { portionMultiplier: 1, cycleDays: 90 },
+          { portionMultiplier: 1 },
         );
         expect(q.portionOptions.map((o) => o.multiplier)).toEqual([1]);
       });
 
-      it('把当前上限回传给客户端，界面据此渲染选项', () => {
+      it('把份数上限回传给客户端，界面据此渲染选项', () => {
         const q = service.calculateQuote(
           buildConfig({ maxPortionMultiplier: 3, maxTotalDays: 90 }),
           lines,
           shipping,
-          { portionMultiplier: 1, cycleDays: 40 },
+          { portionMultiplier: 1 },
         );
-        expect(q.maxPortionMultiplier).toBe(2);
+        expect(q.maxPortionMultiplier).toBe(3);
+      });
+
+      it('★ 老客户端仍传 cycleDays，也不影响报价（字段已被忽略）', () => {
+        const withDays = service.calculateQuote(buildConfig(), lines, shipping, {
+          portionMultiplier: 2,
+          cycleDays: 30,
+        } as any);
+        const withoutDays = service.calculateQuote(buildConfig(), lines, shipping, {
+          portionMultiplier: 2,
+        });
+        expect(withDays.total).toBe(withoutDays.total);
+        expect(withDays.totalDays).toBeNull();
       });
     });
   });

@@ -3,7 +3,8 @@
  *
  * 口径与小程序 `getPackagePlanTotal` 一致：
  *   1. 包规 rows 的 `packageSpecG × packageCount` 求和；
- *   2. 包规为空时用 `dailyIntakeG × cycleDays`；
+ *   2. 包规为空时用 `dailyIntakeG × cycleDays` —— **仅老单兼容**
+ *      （2026-11-01 起新制作单不再写天数，也一定有包规）；
  *   3. 都取不到返回 0（调用方决定是否 400，不能按 0 静默算）。
  */
 export function computeSheetTotalWeightG(sheet: {

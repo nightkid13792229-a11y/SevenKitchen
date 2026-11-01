@@ -181,3 +181,34 @@ export function selectLatestPublishedSeriesLifeStageVersions<
     return leftIndex - rightIndex;
   });
 }
+
+export type SeriesLifeStageRisk = 'HIGH' | 'LOW' | 'NONE';
+
+const PUPPY_SERIES_STAGES = new Set<string>([
+  'PUPPY_UNDER_14_WEEKS',
+  'PUPPY_14_WEEKS_PLUS',
+]);
+
+/**
+ * 生命阶段不匹配的风险等级（2026-11-02）。
+ *
+ * 幼犬与非幼犬、繁殖期与非繁殖期之间是**配方级差异**（钙磷比例、能量密度），
+ * 记 HIGH；成犬与低活动/老年之间只是能量档差异，记 LOW。
+ * 前端只读这个结论，不自己判断。
+ */
+export function resolveSeriesLifeStageRisk(
+  dogLifeStage?: string | null,
+  recipeLifeStage?: string | null,
+): SeriesLifeStageRisk {
+  if (!dogLifeStage || !recipeLifeStage) return 'NONE';
+  const known = new Set<string>(ORDERED_RECIPE_SERIES_LIFE_STAGES);
+  if (!known.has(dogLifeStage) || !known.has(recipeLifeStage)) return 'NONE';
+  if (dogLifeStage === recipeLifeStage) return 'NONE';
+  if (PUPPY_SERIES_STAGES.has(dogLifeStage) !== PUPPY_SERIES_STAGES.has(recipeLifeStage)) {
+    return 'HIGH';
+  }
+  if ((dogLifeStage === 'REPRODUCTION') !== (recipeLifeStage === 'REPRODUCTION')) {
+    return 'HIGH';
+  }
+  return 'LOW';
+}

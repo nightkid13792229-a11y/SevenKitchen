@@ -3,6 +3,7 @@ import {
   mapDogProfileToSeriesLifeStage,
   mapScenarioToSeriesLifeStage,
   resolveDefaultSeriesLifeStage,
+  resolveSeriesLifeStageRisk,
   selectLatestPublishedSeriesLifeStageVersions,
 } from '../../../src/domain/recipe/recipe-series';
 
@@ -151,5 +152,26 @@ describe('selectLatestPublishedSeriesLifeStageVersions', () => {
     ]);
 
     expect(selected.map((item) => item.id)).toEqual(['has-timestamp']);
+  });
+});
+
+describe('resolveSeriesLifeStageRisk', () => {
+  it('幼犬与非幼犬 → HIGH，双向都成立', () => {
+    expect(resolveSeriesLifeStageRisk('PUPPY_14_WEEKS_PLUS', 'HIGH_ACTIVITY_ADULT')).toBe('HIGH');
+    expect(resolveSeriesLifeStageRisk('HIGH_ACTIVITY_ADULT', 'PUPPY_UNDER_14_WEEKS')).toBe('HIGH');
+  });
+
+  it('繁殖期与非繁殖期 → HIGH', () => {
+    expect(resolveSeriesLifeStageRisk('REPRODUCTION', 'LOW_ACTIVITY_ADULT_OR_SENIOR')).toBe('HIGH');
+  });
+
+  it('成犬与低活动/老年 → LOW', () => {
+    expect(resolveSeriesLifeStageRisk('HIGH_ACTIVITY_ADULT', 'LOW_ACTIVITY_ADULT_OR_SENIOR')).toBe('LOW');
+  });
+
+  it('同版、缺值、未知阶段 → NONE', () => {
+    expect(resolveSeriesLifeStageRisk('HIGH_ACTIVITY_ADULT', 'HIGH_ACTIVITY_ADULT')).toBe('NONE');
+    expect(resolveSeriesLifeStageRisk(null, 'HIGH_ACTIVITY_ADULT')).toBe('NONE');
+    expect(resolveSeriesLifeStageRisk('HIGH_ACTIVITY_ADULT', 'SOMETHING_ELSE')).toBe('NONE');
   });
 });

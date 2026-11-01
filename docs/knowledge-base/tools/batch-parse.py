@@ -33,7 +33,9 @@ def split_long(text):
 
 
 def doc_id(rel):
-    return re.sub(r'[^A-Za-z0-9]+', '-', rel.rsplit('.', 1)[0]).strip('-')[:60]
+    base = rel.rsplit('.', 1)[0]
+    slug = re.sub(r'[^A-Za-z0-9\u4e00-\u9fff]+', '-', base).strip('-')[:60]
+    return slug
 
 
 def parse_pdf(path, did):

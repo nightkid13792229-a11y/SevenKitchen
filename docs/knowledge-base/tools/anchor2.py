@@ -15,9 +15,31 @@ should could would about after before during between both each other using used 
 two one three four five six seven eight nine ten per day days'''.split())
 
 
+CJK = re.compile(r'[\u4e00-\u9fff]')
+
+
+def cn_terms(text):
+    t = ''.join(CJK.findall(text or ''))
+    return {t[i:i + 2] for i in range(len(t) - 1)}
+
+
 def en_terms(text):
     return {w.lower() for w in WORD.findall(text or '')
             if w.lower() not in STOP and len(w) >= 3}
+
+
+def load_table_map():
+    rows = list(__import__('csv').DictReader(open(os.path.join(HERE, '..', 'tables', '_index.csv'),
+                                                 encoding='utf-8-sig')))
+    def docid(p):
+        return re.sub(r'[^A-Za-z0-9\u4e00-\u9fff]+', '-', p.rsplit('.', 1)[0]).strip('-')[:60]
+    m = {}
+    for r in rows:
+        num = re.search(r'(?:TABLE|Table)\s*([A-Z]{0,3}[-–]?\d+(?:[-–]\d+)?[a-z]?)', r['表题'])
+        if num:
+            key = (docid(r['文档']), num.group(1).replace('–', '-').lower())
+            m.setdefault(key, []).append((r['表号ID'], int(r['页码'])))
+    return m
 
 
 def load_layer():
@@ -113,10 +135,14 @@ KEYW = re.compile(r"keywords:\s*\[([^\]]*)\]")
 
 def main():
     docs = load_layer()
+    tmap = load_table_map()
     # 预建索引
-    idx = {}
+    idx, idx_cn, is_cn = {}, {}, {}
     for k, v in docs.items():
         idx[k] = [(p['id'], p['sectionId'], en_terms(p['text'])) for p in v['paragraphs']]
+        idx_cn[k] = [(p['id'], p['sectionId'], cn_terms(p['text'])) for p in v['paragraphs']]
+        sample = ' '.join(p['text'] for p in v['paragraphs'][:20])
+        is_cn[k] = len(CJK.findall(sample)) > len(sample) * 0.2
 
     out = []
     for f in sorted(glob.glob(os.path.join(DATA, '*.ts'))):
@@ -142,24 +168,29 @@ def main():
                 elif src:
                     cites.append((src.group(1), loc.group(1) if loc else '', None))
             for src, ch, sid in cites:
+                terms2 = terms | en_terms(ch)
                 cands = pick_docs_by_id(sid, ch, docs) if sid else pick_docs(src, ch, docs)
                 if not cands:
                     out.append({'entry': eid, 'source': src or sid, 'chapter': ch,
                                 'doc': None, 'paragraphs': [], 'score': 0,
-                                'reason': '无候选文档'})
+                                'tableIds': [], 'reason': '无候选文档'})
                     continue
                 # 章节里如果写了表号，记下来供表格锚定
-                tbl = re.search(r'表\s*([A-Z]{0,2}[-–]?\d+[-–]\d+)', ch or '')
+                tbl = re.search(r'(?:表|Table|TABLE)\s*([A-Z]{0,2}[-–]?\d+(?:[-–]\d+)?)', ch or '')
                 best = (0.0, None, [], None)
+                q_cn = cn_terms(head) | cn_terms(ch)
                 for cand in cands:
                     sec_score = {}
-                    for pid, sec_id, pt in idx[cand]:
+                    use_cn = is_cn.get(cand) and len(q_cn) >= 5
+                    table_idx = idx_cn[cand] if use_cn else idx[cand]
+                    q_use = q_cn if use_cn else terms2
+                    for pid, sec_id, pt in table_idx:
                         if not pt:
                             continue
-                        inter = len(terms & pt)
+                        inter = len(q_use & pt)
                         if not inter:
                             continue
-                        cov = inter / len(terms)
+                        cov = inter / max(len(q_use), 1)
                         sec_score[sec_id] = sec_score.get(sec_id, 0) + cov
                         if cov > best[0]:
                             best = (cov, cand, [pid], sec_id)
@@ -168,12 +199,29 @@ def main():
                         best = (0.0, cand, [], top)
                 conf = ('high' if best[0] >= 0.5 else
                         'medium' if best[0] >= 0.3 else
-                        'low' if best[1] else 'none')
+                        'chapter' if best[1] else 'none')
+                # 只到章节级时，锚到该文档的首个小节，明确表示"精度只到章"
+                if conf == 'chapter' and best[1] and not best[3]:
+                    secs = docs[best[1]]['sections']
+                    best = (best[0], best[1], [], secs[0]['id'] if secs else None)
+                table_ids, table_pages = [], []
+                if tbl and best[1]:
+                    hits = tmap.get((best[1], tbl.group(1).replace('–', '-').lower()), [])
+                    table_ids = [h[0] for h in hits]
+                    table_pages = [h[1] for h in hits]
+                if conf == 'chapter' and table_pages and best[1]:
+                    want = set(table_pages) | {p - 1 for p in table_pages} | {p + 1 for p in table_pages}
+                    near = [p['id'] for p in docs[best[1]]['paragraphs']
+                            if p.get('pageStart') in want]
+                    if near:
+                        best = (max(best[0], 0.35), best[1], near[:3], best[3])
+                        conf = 'medium'
                 out.append({'entry': eid, 'source': src or sid, 'chapter': ch,
                             'doc': best[1], 'paragraphs': best[2],
                             'section': best[3], 'confidence': conf,
                             'score': round(best[0], 3),
                             'table': tbl.group(1).replace('–', '-') if tbl else None,
+                            'tableIds': table_ids,
                             'reason': '' if best[1] else '匹配不到段落'})
     json.dump(out, open(os.path.join(HERE, '..', 'citation-anchors.json'), 'w'),
               ensure_ascii=False, indent=1)

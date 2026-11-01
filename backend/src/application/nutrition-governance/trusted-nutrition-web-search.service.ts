@@ -199,6 +199,8 @@ export class TrustedNutritionWebSearchService {
       .slice(0, 6);
     const urls = new Set<string>();
     const attemptedHosts = new Set<string>();
+    const sampleHosts = new Set<string>();
+    let resultCount = 0;
     let channelOk = false;
 
     for (const host of input.hosts) {
@@ -210,7 +212,13 @@ export class TrustedNutritionWebSearchService {
             count: 5,
           });
           channelOk = true;
+          resultCount += result.results.length;
           for (const item of result.results) {
+            try {
+              sampleHosts.add(new URL(item.url).host);
+            } catch {
+              // 忽略非法 URL
+            }
             if (resolveTrustedHost(item.url)) {
               urls.add(item.url);
             }
@@ -234,6 +242,10 @@ export class TrustedNutritionWebSearchService {
     const sources = channelOk
       ? await this.fetchAndExtract(candidates, input.ingredientName)
       : [];
+
+    this.logger.log(
+      `[trusted-web-search] 库=${input.hosts.join(',')} 搜索命中=${resultCount} 白名单URL=${urls.size} 解析来源=${sources.length} 域名样本=${[...sampleHosts].slice(0, 6).join('、') || '（空）'}`,
+    );
 
     return {
       sources,

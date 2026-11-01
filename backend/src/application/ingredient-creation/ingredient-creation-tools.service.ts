@@ -2704,6 +2704,7 @@ export class IngredientCreationToolsService {
         state,
         total: result.candidates.length,
         attemptedHosts: result.attemptedHosts,
+        discoveryStatus: result.discoveryStatus,
         at: new Date().toISOString(),
       };
       await this.draftService.patch(draftId, draft.step, {
@@ -2725,9 +2726,11 @@ export class IngredientCreationToolsService {
         attemptedHosts: result.attemptedHosts,
         rejectedHosts: result.rejectedHosts,
         hint:
-          result.candidates.length === 0
-            ? '线上白名单也没有找到：不要再拿近似原料凑数，先问用户换原料 / 接受近似。'
-            : '这些是线上来源，已落库；可放进候选（会标“线上”），仍要用户确认。',
+          result.discoveryStatus === 'UNAVAILABLE'
+            ? '线上检索通道当前不可用（搜索接口连不上）：不能据此判断“线上没有”，请如实告诉用户稍后重试或换原料。'
+            : result.candidates.length === 0
+              ? '线上白名单也没有找到：不要再拿近似原料凑数，先问用户换原料 / 接受近似。'
+              : '这些是线上来源，已落库；可放进候选（会标“线上”），仍要用户确认。',
       }),
     };
   }

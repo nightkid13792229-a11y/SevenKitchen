@@ -1,0 +1,79 @@
+﻿条目ID,领域,标题,严重程度,问题出处标签,可用出处,该条出处总数,文件
+behav-001,BEHAVIOR,老年认知障碍（CDS）的早期信号：DISHAA 六类表现,部分依赖不足依据,AAHA 老年（只有工具包）,2,6,behavior.ts
+behav-002,BEHAVIOR,"""老了就这样""是最大的误区：行为变化不是正常衰老",部分依赖不足依据,AAHA 老年（只有工具包）；WSAVA 疼痛（主文件是扫描件）,2,8,behavior.ts
+behav-003,BEHAVIOR,行为变了先查身体：疼痛、感官退化、牙病与内科病,部分依赖不足依据,AAHA 老年（只有工具包）；WSAVA 疼痛（主文件是扫描件）,3,10,behavior.ts
+behav-005,BEHAVIOR,环境改造与安全：防滑、楼梯、家具摆放与离家安排,部分依赖不足依据,AAHA 老年（只有工具包）,2,6,behavior.ts
+behav-006,BEHAVIOR,老年犬睡眠节律变化：夜里转圈、叫唤、白天睡得多,部分依赖不足依据,AAHA 老年（只有工具包）,1,4,behavior.ts
+behav-007,BEHAVIOR,食欲与行为的联动：吃不下、吃法变了也是信号,部分依赖不足依据,AAHA 老年（只有工具包）；WSAVA 疼痛（主文件是扫描件）,1,6,behavior.ts
+behav-008,BEHAVIOR,老年犬的焦虑与分离问题：黏人、夜里不安、破坏与叫唤,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,3,8,behavior.ts
+behav-009,BEHAVIOR,怎么记行为日志：记频率、记场景，才有判断价值,部分依赖不足依据,AAHA 老年（只有工具包）,3,8,behavior.ts
+behav-010,BEHAVIOR,什么时候该看医生：行为变化的就医时机,部分依赖不足依据,AAHA 老年（只有工具包）；WSAVA 疼痛（主文件是扫描件）,3,10,behavior.ts
+breed-001,BREEDRISK,髋关节与肘关节发育不良：大型犬的品种相关骨科筛查（拉布拉多、金毛、德牧等）,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,2,6,breed-risk.ts
+breed-002,BREEDRISK,椎间盘疾病：软骨发育不良型品种（腊肠犬、法国斗牛犬）,部分依赖不足依据,AAHA 老年（只有工具包）,3,8,breed-risk.ts
+breed-003,BREEDRISK,膝关节与后肢跛行：品种相关骨科筛查原则（本条不含品种名单）,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,3,8,breed-risk.ts
+breed-005,BREEDRISK,二尖瓣退变（心内膜病）：骑士查理王小猎犬与小型犬的品种相关心脏筛查,部分依赖不足依据,AAHA 老年（只有工具包）,3,8,breed-risk.ts
+breed-006,BREEDRISK,扩张型心肌病：杜宾、拳师与大型犬的品种相关心脏风险,部分依赖不足依据,AAHA 老年（只有工具包）,3,8,breed-risk.ts
+breed-012,BREEDRISK,糖尿病与甲状腺功能减退的品种倾向：萨摩耶、澳洲梗、杜宾等,部分依赖不足依据,AAHA 老年（只有工具包）,3,8,breed-risk.ts
+breed-016,BREEDRISK,肿瘤的品种倾向与筛查原则：金毛、拳师、苏格兰梗等,部分依赖不足依据,AAHA 老年（只有工具包）,3,8,breed-risk.ts
+clinical-037,CLINICAL,"体重不明原因下降：先看""掉得快不快""，再看伴随表现",部分依赖不足依据,AAHA 老年（只有工具包）,2,7,clinical-common.ts
+clinical-041,CLINICAL,跛行与不愿起身：先按疼痛处理,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,1,4,clinical-common.ts
+clinical-042,CLINICAL,"僵硬与起身困难：别急着说""老了就这样""",部分依赖不足依据,AAHA 老年（只有工具包）；WSAVA 疼痛（主文件是扫描件）,1,6,clinical-common.ts
+clinical-046,CLINICAL,眼分泌物与红眼：有些情况当天就要看,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,1,4,clinical-common.ts
+clinical-050,CLINICAL,"精神状态变差：""就是不太对劲""值得认真对待",部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,2,6,clinical-common.ts
+clinical-051,CLINICAL,老年犬的行为与体力变化：该不该当病看,部分依赖不足依据,AAHA 老年（只有工具包）；WSAVA 疼痛（主文件是扫描件）,1,6,clinical-common.ts
+clinical-016,CLINICAL,呼吸费力、张嘴喘、牙龈发紫：按分钟算的急症,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,1,4,clinical-redflag.ts
+clinical-017,CLINICAL,抽搐超过 5 分钟，或一次接一次停不下来：急救级别,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,1,4,clinical-redflag.ts
+clinical-018,CLINICAL,后腿突然拖行、脚趾被掐也没反应：这是最急的一种,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,1,4,clinical-redflag.ts
+clinical-020,CLINICAL,被车撞、从高处摔下、被大狗咬过：没有伤口也要去医院,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,1,4,clinical-redflag.ts
+clinical-022,CLINICAL,肚子突然胀大 + 干呕却吐不出东西：不要等，直接走急诊,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,1,4,clinical-redflag.ts
+clinical-024,CLINICAL,公狗反复蹲着却尿不出来：尿道堵塞，拖不得,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,1,4,clinical-redflag.ts
+clinical-027,CLINICAL,眼睛被撞到、突然看不见、眼球看起来不对：按急症走,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,1,4,clinical-redflag.ts
+clinical-032,CLINICAL,牙龈发白、四肢发凉、叫不太应：休克前兆,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,2,6,clinical-redflag.ts
+clinical-001,CLINICAL,这些情况不要等：需要立刻就医的红旗信号,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,1,4,clinical.ts
+clinical-002,CLINICAL,狗不会喊痛：疼痛要看行为变化,部分依赖不足依据,WSAVA 疼痛（主文件是扫描件）,1,4,clinical.ts
+clinical-006,CLINICAL,体重在掉但饭量没变：值得查一查,部分依赖不足依据,AAHA 老年（只有工具包）,1,4,clinical.ts
+clinical-012,CLINICAL,"老年犬的""变老""里，有多少其实是病",部分依赖不足依据,AAHA 老年（只有工具包）,1,4,clinical.ts
+gi-014,GI,需要兽医指导的边界：诊断、药物与安全底线,部分依赖不足依据,内部笔记（无原文）,3,4,gi.ts
+immune-007,IMMUNE,老年犬还要不要打疫苗,部分依赖不足依据,AAHA 老年（只有工具包）,1,4,immune.ts
+lab-056,LAB,采尿方式决定结果：尿培养的要求比尿检更严,部分依赖不足依据,ACVIM 2010 钩端螺旋体（已被 2023 取代）,2,4,lab-urine-imaging.ts
+nurse-004,NURSING,"耳朵多久清一次：多数时候""能不管就不管""",部分依赖不足依据,AAHA 老年（只有工具包）,2,6,nursing.ts
+nurse-005,NURSING,清耳手法与边界：什么时候绝对不能自己掏,部分依赖不足依据,AAHA 老年（只有工具包）,2,6,nursing.ts
+nurse-009,NURSING,剪指甲：按长度而不是按天数，血线看不清就别硬剪,部分依赖不足依据,AAHA 老年（只有工具包）,1,4,nursing.ts
+nurse-010,NURSING,"指甲过长对步态的影响：别把变化都当成""老了""",部分依赖不足依据,AAHA 老年（只有工具包）,1,4,nursing.ts
+nurse-011,NURSING,足垫与趾间护理：最容易被忽略的高发区,部分依赖不足依据,AAHA 老年（只有工具包）,1,4,nursing.ts
+nurse-014,NURSING,肛周与尾部护理：先看排便，再看局部,部分依赖不足依据,AAHA 老年（只有工具包）,1,4,nursing.ts
+nurse-015,NURSING,老年犬卧床护理：减压、干燥、每天查皮肤,部分依赖不足依据,AAHA 老年（只有工具包）,1,4,nursing.ts
+nurse-016,NURSING,慢性病犬的居家观察记录：饮水、尿量、体重怎么记,部分依赖不足依据,AAHA 老年（只有工具包）,2,5,nursing.ts
+nurse-018,NURSING,防滑与环境改造：老年犬与术后犬的居家安全,部分依赖不足依据,AAHA 老年（只有工具包）,2,6,nursing.ts
+nurse-020,NURSING,皮肤与被毛：什么算异常、什么情况要看医生,部分依赖不足依据,AAHA 老年（只有工具包）,1,4,nursing.ts
+pancreatitis-010,PANCREATITIS,自制低脂膳食的风险：必需脂肪酸与营养充足性,仅靠不足依据,内部笔记（无原文）,0,2,pancreatitis.ts
+prev-003,PREVENTION,什么年龄算老年：为什么老年犬至少要半年查一次,部分依赖不足依据,AAHA 老年（只有工具包）,3,8,prevention.ts
+prev-004,PREVENTION,老年犬专项筛查包含哪些系统,部分依赖不足依据,AAHA 老年（只有工具包）,1,4,prevention.ts
+prev-011,PREVENTION,术前 / 麻醉前检查：为什么没有统一套餐，为什么仍要谈,部分依赖不足依据,AAHA 老年（只有工具包）,2,6,prevention.ts
+prev-012,PREVENTION,家里该做哪些定期自查：从头到脚一张清单,仅靠不足依据,AAHA 老年（只有工具包）,0,2,prevention.ts
+prev-014,PREVENTION,疼痛的定期评估：老年犬最容易被漏掉的一项,部分依赖不足依据,AAHA 老年（只有工具包）；WSAVA 疼痛（主文件是扫描件）,1,6,prevention.ts
+renal-001,RENAL,CKD 分期概念与营养干预时机：按 IRIS 分期决定何时开始营养管理,部分依赖不足依据,内部笔记（无原文）,1,2,renal.ts
+renal-002,RENAL,磷限制：CKD 营养管理的关键营养素，控制血磷与生存期直接相关,部分依赖不足依据,内部笔记（无原文）,2,3,renal.ts
+renal-003,RENAL,蛋白质管理：早期犬一般不限制蛋白，晚期才考虑适度限制并保证优质蛋白,部分依赖不足依据,内部笔记（无原文）,2,3,renal.ts
+renal-010,RENAL,监测与复查：肌酐/尿素/血磷/电解质/尿检/UPC/血压，按分期定频率,部分依赖不足依据,内部笔记（无原文）,1,2,renal.ts
+renal-011,RENAL,自制肾病膳食需专业配方：多数网络/书籍食谱不均衡，钙磷比与维生素 D 有风险,部分依赖不足依据,内部笔记（无原文）,2,3,renal.ts
+skin-008,SKIN,锌与皮肤：锌反应性皮肤病与品种易感,部分依赖不足依据,内部笔记（无原文）,1,2,skin.ts
+skin-009,SKIN,铜与被毛色素及矿物质交互,部分依赖不足依据,内部笔记（无原文）,1,2,skin.ts
+skin-012,SKIN,蛋白质-能量营养与皮肤被毛：角蛋白与毛发生长,部分依赖不足依据,内部笔记（无原文）,1,2,skin.ts
+skin-014,SKIN,脂肪酸补充剂在炎症性皮肤病中的证据边界,部分依赖不足依据,内部笔记（无原文）,1,2,skin.ts
+visit-001,VISITPREP,"就诊前先记""可观察事实""，不要记主人的判断",部分依赖不足依据,AAHA 老年（只有工具包）,2,6,visit-prep.ts
+visit-002,VISITPREP,去医院带上这五样：免疫记录、既往报告、用药清单、照片视频、现在吃的粮,部分依赖不足依据,AAHA 老年（只有工具包）,3,8,visit-prep.ts
+visit-004,VISITPREP,医生通常会先问这几件事：食欲、饮水、排尿排便、精神、体重、有没有误食,部分依赖不足依据,AAHA 老年（只有工具包）,2,6,visit-prep.ts
+visit-005,VISITPREP,急诊先说三句：最危急的表现、开始时间、基础病与正在用的药,部分依赖不足依据,AAHA 老年（只有工具包）,2,6,visit-prep.ts
+weight-001,WEIGHT,肥胖的定义与 BCS / 体脂率评估,部分依赖不足依据,AAHA 2014 体重管理（已被 2021 取代）,3,4,weight-management.ts
+weight-002,WEIGHT,理想体重的估算方法,部分依赖不足依据,AAHA 2014 体重管理（已被 2021 取代）,1,2,weight-management.ts
+weight-003,WEIGHT,减重能量摄入：按理想体重 RER 计算及限制幅度,部分依赖不足依据,AAHA 2014 体重管理（已被 2021 取代）,2,3,weight-management.ts
+weight-004,WEIGHT,减重速度：每周减重百分比,部分依赖不足依据,AAHA 2014 体重管理（已被 2021 取代）,1,2,weight-management.ts
+weight-005,WEIGHT,减重期蛋白质保留策略（高蛋白低能量）,部分依赖不足依据,AAHA 2014 体重管理（已被 2021 取代）,2,3,weight-management.ts
+weight-006,WEIGHT,膳食纤维与饱腹感,部分依赖不足依据,AAHA 2014 体重管理（已被 2021 取代）,2,3,weight-management.ts
+weight-007,WEIGHT,零食与加餐热量计入（≤10%）,部分依赖不足依据,AAHA 2014 体重管理（已被 2021 取代）,2,3,weight-management.ts
+weight-008,WEIGHT,运动配合与活动管理,部分依赖不足依据,AAHA 2014 体重管理（已被 2021 取代）,2,3,weight-management.ts
+weight-009,WEIGHT,减重监测频率（体重 / BCS 定期复查）,部分依赖不足依据,AAHA 2014 体重管理（已被 2021 取代）,2,3,weight-management.ts
+weight-010,WEIGHT,减重后维持期与防反弹,部分依赖不足依据,AAHA 2014 体重管理（已被 2021 取代）,3,4,weight-management.ts
+weight-011,WEIGHT,增重场景：低体重犬的能量与营养策略,部分依赖不足依据,AAHA 2014 体重管理（已被 2021 取代）,2,3,weight-management.ts
+weight-012,WEIGHT,常见误区与风险：极端节食与肝脏脂质沉积,部分依赖不足依据,AAHA 2014 体重管理（已被 2021 取代）,1,2,weight-management.ts

@@ -114,8 +114,8 @@ export const KNOWLEDGE_SOURCES: readonly KnowledgeSourceRecord[] = [
     name: 'AAHA 体重管理指南',
     version: '2014',
     tier: 'A',
-    local: false,
-    role: '⚠️ 2026-11-01 已停用并删除原件（被 2021 版取代）；引用它的数值待复核',
+    local: true,
+    role: '减重详细方案：供能、速率、蛋白、监测与维持的总纲；AAHA 2021 版明确指向本文件',
   },
 
   // ── 检查指标解读 ────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { createEmptyNutritionProfile } from '../../domain/ingredient/nutrition-profile.utils';
 import type { NutritionProfileV2 } from '../../domain/ingredient/types';
@@ -8,6 +8,11 @@ import {
   NUTRITION_LIBRARIES,
   ONLINE_TRUSTED_HOSTS,
 } from '../../domain/nutrition-governance/nutrition-source-registry';
+import { AgentProviderConfigService } from './agent-provider-config.service';
+import {
+  DeepSeekWebSearchClient,
+  type WebSearchPort,
+} from './deepseek-web-search.client';
 
 /**
  * 线上可信域名唯一来源是登记表（`ONLINE_TRUSTED_HOSTS`）。
@@ -124,8 +129,18 @@ export interface TrustedNutritionWebSearchReport {
   discoveryStatus: 'OK' | 'UNAVAILABLE';
 }
 
+export const TRUSTED_WEB_SEARCH_PORT = 'TRUSTED_WEB_SEARCH_PORT';
+
 @Injectable()
 export class TrustedNutritionWebSearchService {
+  constructor(
+    @Optional()
+    private readonly providerConfig?: AgentProviderConfigService,
+    @Optional()
+    @Inject(TRUSTED_WEB_SEARCH_PORT)
+    private readonly webSearch?: WebSearchPort,
+  ) {}
+
   async search(
     input: TrustedNutritionWebSearchInput,
   ): Promise<NutritionSourceInput[]> {
@@ -174,6 +189,29 @@ export class TrustedNutritionWebSearchService {
     };
   }
 
+  /** 测试可注入；生产用 provider 配置里的 Key 现建一个客户端。 */
+  private async resolveWebSearchClient(): Promise<WebSearchPort | null> {
+    if (this.webSearch) {
+      return this.webSearch;
+    }
+    try {
+      const config = await this.providerConfig?.getEnabledDeepSeekRuntimeConfig({
+        fallbackToDefault: true,
+      });
+      if (!config?.baseUrl || !config?.apiKey) {
+        return null;
+      }
+      return new DeepSeekWebSearchClient({
+        baseUrl: config.baseUrl,
+        apiKey: config.apiKey,
+        requestTimeoutMs: config.requestTimeoutMs,
+        retryCount: config.retryCount,
+      });
+    } catch {
+      return null;
+    }
+  }
+
   private async resolveCandidateUrls(
     input: TrustedNutritionWebSearchInput,
   ): Promise<{
@@ -205,7 +243,10 @@ export class TrustedNutritionWebSearchService {
 
     let discoveryStatus: 'OK' | 'UNAVAILABLE' = 'OK';
     if (!hasExplicitUrl && isWhitelistWebSearchEnabled()) {
-      const discovery = await discoverTrustedSourceUrls(input);
+      const client = await this.resolveWebSearchClient();
+      const discovery = client
+        ? await discoverTrustedSourceUrls(input, client)
+        : { urls: [], attemptedHosts: [], channelOk: false };
       discoveryStatus = discovery.channelOk ? 'OK' : 'UNAVAILABLE';
       for (const host of discovery.attemptedHosts) {
         attemptedHosts.add(host);
@@ -270,32 +311,39 @@ function isWhitelistWebSearchEnabled(): boolean {
 
 async function discoverTrustedSourceUrls(
   input: TrustedNutritionWebSearchInput,
+  client: WebSearchPort,
 ): Promise<{ urls: string[]; attemptedHosts: string[]; channelOk: boolean }> {
   const queryText = buildDiscoveryQueryText(input);
   if (!queryText) {
     return { urls: [], attemptedHosts: [], channelOk: false };
   }
 
-  const urls = new Set<string>();
-  const attemptedHosts: string[] = [];
-  let channelOk = false;
-  for (const host of getDiscoveryHosts()) {
-    attemptedHosts.push(host);
-    const discovered = await fetchSearchResultUrls(
-      `${queryText} nutrition composition site:${host}`,
-    );
-    if (discovered.ok) {
-      channelOk = true;
-    }
-    for (const url of discovered.urls) {
-      urls.add(url);
-      if (urls.size >= MAX_DISCOVERED_SOURCE_URLS) {
-        return { urls: [...urls], attemptedHosts, channelOk };
-      }
-    }
+  let result;
+  try {
+    result = await client.search({
+      query: `${queryText} nutrition composition`,
+      count: 20,
+    });
+  } catch {
+    // 通道本身失败：调用方据此报“不可用”，不能当成“线上没有”。
+    return { urls: [], attemptedHosts: [], channelOk: false };
   }
 
-  return { urls: [...urls], attemptedHosts, channelOk };
+  const urls: string[] = [];
+  const hosts = new Set<string>();
+  for (const item of result.results) {
+    const trustedHost = resolveTrustedHost(item.url);
+    if (!trustedHost) continue;
+    urls.push(item.url);
+    hosts.add(trustedHost);
+    if (urls.length >= MAX_DISCOVERED_SOURCE_URLS) break;
+  }
+
+  return {
+    urls,
+    attemptedHosts: [...hosts],
+    channelOk: true,
+  };
 }
 
 function buildDiscoveryQueryText(input: TrustedNutritionWebSearchInput): string {

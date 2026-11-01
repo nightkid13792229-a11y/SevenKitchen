@@ -35,6 +35,8 @@ export interface SearchPlanLibraryReport {
   /** 最后一轮的命中总数（截断前）。 */
   total: number;
   rounds: number;
+  /** 模型对这个库的一句判断（数据质量 / 为什么用这些词），显示在汇报表里。 */
+  note: string;
 }
 
 /** 方案里列给人挑的候选来源记录（由模型挑，代码只补事实列）。 */
@@ -108,6 +110,7 @@ const STATE_MAX = 20;
 const REASON_MAX = 120;
 const CANDIDATES_MAX = 12;
 const REPORT_TERMS_MAX = 30;
+const REPORT_NOTE_MAX = 80;
 
 const LIBRARY_SET = new Set<string>(SEARCH_PLAN_LIBRARIES);
 
@@ -227,7 +230,13 @@ function readLibraryReports(input: unknown): SearchPlanLibraryReport[] {
       raw.rounds >= 1
         ? Math.floor(raw.rounds)
         : 1;
-    reports.push({ library: library as SearchPlanLibrary, terms, total, rounds });
+    reports.push({
+      library: library as SearchPlanLibrary,
+      terms,
+      total,
+      rounds,
+      note: readText(raw.note, REPORT_NOTE_MAX),
+    });
   }
 
   return reports;

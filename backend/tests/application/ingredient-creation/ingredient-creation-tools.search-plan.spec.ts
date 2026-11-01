@@ -159,6 +159,26 @@ describe('IngredientCreationToolsService · 检索方案', () => {
     );
   });
 
+  it('每个库的判断写进 libraryNotes，显示在汇报表里', async () => {
+    const { tools } = createHarness();
+
+    const result = await call(tools, 'proposeSearchPlan', {
+      ...VALID_ARGS,
+      libraryNotes: [{ library: 'USDA', note: '英文名统一，只有一条' }],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.pendingPlan).toMatchObject({
+      libraryReports: [
+        expect.objectContaining({
+          library: 'USDA',
+          total: 1,
+          note: '英文名统一，只有一条',
+        }),
+      ],
+    });
+  });
+
   it('工具定义要求每条候选带 profileState 与 reason，且不再有单主选字段', () => {
     const { tools } = createHarness();
     const definition = tools

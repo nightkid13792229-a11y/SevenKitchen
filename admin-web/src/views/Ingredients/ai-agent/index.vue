@@ -410,111 +410,57 @@
           <p class="agent-plan__hint">
             查库阶段已经跑完。确认之后我才开始写原料卡和营养档案；要改就直接在下面说，我会重新提一份。
           </p>
-          <div
+          <el-table
             v-if="state.pendingPlan.libraryReports.length > 0"
-            class="agent-plan__report"
+            :data="state.pendingPlan.libraryReports"
+            size="small"
+            class="agent-plan__table"
           >
-            <div
-              v-for="report in state.pendingPlan.libraryReports"
-              :key="report.library"
-              class="agent-plan__report-row"
-            >
-              <b>{{ report.library }}</b>
-              <span class="agent-plan__report-terms">
-                {{ report.terms.join('、') }}
-              </span>
-              <span class="agent-plan__meta">命中 {{ report.total }} 条</span>
-              <span v-if="report.rounds > 1" class="agent-plan__meta">
-                查了 {{ report.rounds }} 轮
-              </span>
-            </div>
-          </div>
+            <el-table-column prop="library" label="营养库" width="92" />
+            <el-table-column label="搜索词" min-width="220">
+              <template #default="{ row }">
+                {{ row.terms.join('、') }}
+              </template>
+            </el-table-column>
+            <el-table-column label="命中" width="84">
+              <template #default="{ row }">{{ row.total }} 条</template>
+            </el-table-column>
+            <el-table-column label="轮次" width="72">
+              <template #default="{ row }">{{ row.rounds }} 轮</template>
+            </el-table-column>
+            <el-table-column label="AI 判断" min-width="220">
+              <template #default="{ row }">{{ row.note || '—' }}</template>
+            </el-table-column>
+          </el-table>
 
-          <p v-if="state.pendingPlan.findings" class="agent-plan__findings">
-            AI 判断：{{ state.pendingPlan.findings }}
-          </p>
-
-          <div
+          <p class="agent-plan__section-title">候选档案</p>
+          <el-table
             v-if="state.pendingPlan.candidates.length > 0"
-            class="agent-plan__row agent-plan__row--table"
+            :data="state.pendingPlan.candidates"
+            size="small"
+            class="agent-plan__table"
           >
-            <span class="agent-plan__label">候选档案</span>
-            <el-table
-              :data="state.pendingPlan.candidates"
-              size="small"
-              class="agent-plan__table"
-            >
-              <el-table-column width="44">
-                <template #default="{ row }">
-                  <el-checkbox
-                    :model-value="selectedRecordIds.includes(row.recordId)"
-                    :disabled="isCandidateDisabled(row)"
-                    :aria-label="`选择 ${row.name}`"
-                    @change="toggleCandidate(row)"
-                  />
-                </template>
-              </el-table-column>
-              <el-table-column prop="name" label="词条名称" min-width="150" />
-              <el-table-column prop="sourceType" label="来源库" width="88" />
-              <el-table-column prop="state" label="状态" width="90" />
-              <el-table-column label="字段覆盖率（60 项）" width="140">
-                <template #default="{ row }">{{ row.coverage }}%</template>
-              </el-table-column>
-              <el-table-column prop="reason" label="入选原因" min-width="200" />
-            </el-table>
-          </div>
+            <el-table-column width="44">
+              <template #default="{ row }">
+                <el-checkbox
+                  :model-value="selectedRecordIds.includes(row.recordId)"
+                  :disabled="isCandidateDisabled(row)"
+                  :aria-label="`选择 ${row.name}`"
+                  @change="toggleCandidate(row)"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column prop="name" label="词条名称" min-width="150" />
+            <el-table-column prop="sourceType" label="来源库" width="88" />
+            <el-table-column prop="state" label="状态" width="90" />
+            <el-table-column label="字段覆盖率（60 项）" width="140">
+              <template #default="{ row }">{{ row.coverage }}%</template>
+            </el-table-column>
+            <el-table-column prop="reason" label="入选原因" min-width="200" />
+          </el-table>
           <p v-else class="agent-plan__empty">
             这次没有可选的营养档案：可以继续补检索词重查，或告诉我改去线上补充。
           </p>
-
-          <div class="agent-plan__row">
-            <span class="agent-plan__label">搜索词</span>
-            <div class="agent-plan__keywords">
-              <div
-                v-for="(item, index) in planDraft.keywords"
-                :key="`kw-${index}`"
-                class="agent-plan__keyword"
-              >
-                <el-input
-                  v-model="item.language"
-                  class="agent-plan__lang"
-                  size="small"
-                  maxlength="10"
-                  aria-label="语种"
-                />
-                <el-input
-                  v-model="item.term"
-                  size="small"
-                  maxlength="40"
-                  aria-label="搜索词"
-                />
-                <el-button
-                  link
-                  type="danger"
-                  :disabled="planDraft.keywords.length <= 1"
-                  @click="removePlanKeyword(index)"
-                >
-                  删
-                </el-button>
-              </div>
-              <el-button link type="primary" @click="addPlanKeyword">
-                加一个词
-              </el-button>
-            </div>
-          </div>
-
-          <div class="agent-plan__row">
-            <span class="agent-plan__label">目标库</span>
-            <el-checkbox-group v-model="planDraft.libraries">
-              <el-checkbox
-                v-for="library in SEARCH_PLAN_LIBRARIES"
-                :key="library"
-                :value="library"
-              >
-                {{ library }}
-              </el-checkbox>
-            </el-checkbox-group>
-          </div>
 
           <p v-if="state.pendingPlan.rationale" class="agent-plan__why">
             理由：{{ state.pendingPlan.rationale }}
@@ -1080,10 +1026,8 @@ import type {
   IngredientCreationDraftPayload,
   IngredientDraftChecksView,
   ProfileDraft,
-  SearchPlan,
-  SearchPlanKeyword
+  SearchPlan
 } from '@/types/ingredientCreation'
-import { SEARCH_PLAN_LIBRARIES } from '@/types/ingredientCreation'
 import {
   applyProfileCellEdit,
   countPendingRows,
@@ -1195,9 +1139,6 @@ const state = reactive({
  * 不能直接改 `state.pendingPlan`：那份是服务端推来的快照，确认时要拿它做
  * 「人改过没有」的对比，页面只改副本、提交时把副本发回去。
  */
-const planDraft = reactive<{ keywords: SearchPlanKeyword[]; libraries: string[] }>(
-  { keywords: [], libraries: [] }
-)
 const planConfirming = ref(false)
 /** 方案卡里勾中的候选记录 id（可多条，每条各写一份档案）。 */
 const selectedRecordIds = ref<string[]>([])
@@ -1208,8 +1149,6 @@ watch(
     if (!plan) {
       return
     }
-    planDraft.keywords = plan.keywords.map((item) => ({ ...item }))
-    planDraft.libraries = [...plan.libraries]
     selectedRecordIds.value = plan.selections.map((item) => item.recordId)
   },
   { immediate: true }
@@ -1243,20 +1182,8 @@ function toggleCandidate(candidate: any) {
 }
 
 const planCanConfirm = computed(
-  () =>
-    planDraft.keywords.some((item) => item.term.trim().length > 0) &&
-    planDraft.libraries.length > 0 &&
-    selectedRecordIds.value.length > 0 &&
-    !planConfirming.value
+  () => selectedRecordIds.value.length > 0 && !planConfirming.value
 )
-
-function addPlanKeyword() {
-  planDraft.keywords.push({ term: '', language: 'en' })
-}
-
-function removePlanKeyword(index: number) {
-  planDraft.keywords.splice(index, 1)
-}
 
 /** 人确认方案 → 落库 → 自动继续一轮，让 AI 开始写。 */
 async function confirmPlan() {
@@ -1269,13 +1196,6 @@ async function confirmPlan() {
   planConfirming.value = true
   try {
     await ingredientCreationApi.confirmSearchPlan(draftId, {
-      keywords: planDraft.keywords
-        .map((item) => ({
-          term: item.term.trim(),
-          language: item.language.trim() || 'zh'
-        }))
-        .filter((item) => item.term.length > 0),
-      libraries: [...planDraft.libraries],
       selectedRecordIds: [...selectedRecordIds.value]
     })
     state.pendingPlan = null
@@ -3422,6 +3342,16 @@ function goBackToList() {
   font-size: 12px;
   line-height: 1.6;
   color: var(--el-text-color-regular);
+}
+
+.agent-plan__section-title {
+  margin: 16px 0 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.agent-plan__table {
+  margin-top: 10px;
 }
 
 .agent-plan__row {

@@ -22,10 +22,13 @@ describe('AI 添加原料 · 检索方案确认', () => {
     expect(page).toContain('确认并按方案继续')
   })
 
-  it('人可以在确认前改关键词与目标库', () => {
-    expect(page).toContain('planDraft')
-    expect(page).toContain('SEARCH_PLAN_LIBRARIES')
-    expect(page).toContain('addPlanKeyword')
+  it('汇报与候选都用表格展示，且不再重复展示搜索词/目标库编辑区', () => {
+    expect(page).toContain('营养库')
+    expect(page).toContain('命中')
+    expect(page).toContain('轮次')
+    expect(page).toContain('候选档案')
+    expect(page).not.toContain('addPlanKeyword')
+    expect(page).not.toContain('目标库')
   })
 
   it('候选记录在卡里以表格多选呈现，并显示汇报与事实列', () => {

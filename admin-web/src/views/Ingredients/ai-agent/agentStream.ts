@@ -370,7 +370,8 @@ export function readSearchPlan(value: unknown): SearchPlan | null {
               ? item.terms.map((term) => readText(term)).filter(Boolean)
               : [],
             total: typeof item.total === 'number' ? item.total : 0,
-            rounds: typeof item.rounds === 'number' ? item.rounds : 1
+            rounds: typeof item.rounds === 'number' ? item.rounds : 1,
+            note: readText(item.note)
           }))
           .filter((item) => item.library.length > 0)
       : [],

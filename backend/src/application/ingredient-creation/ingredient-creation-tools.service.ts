@@ -678,6 +678,21 @@ const PROPOSE_SEARCH_PLAN_TOOL: AgentToolDefinition = {
             additionalProperties: false,
           },
         },
+        libraryNotes: {
+          type: 'array',
+          maxItems: 7,
+          description:
+            '给每个库一句判断（数据质量、为什么命中这么多/这么少），会显示在汇报表；没有就不传。',
+          items: {
+            type: 'object',
+            properties: {
+              library: { type: 'string', enum: [...SEARCH_PLAN_LIBRARIES] },
+              note: { type: 'string', description: '最多 80 字。' },
+            },
+            required: ['library', 'note'],
+            additionalProperties: false,
+          },
+        },
         rationale: {
           type: 'string',
           description: '为什么这么查，一句话；最多 120 字。',
@@ -2806,10 +2821,27 @@ export class IngredientCreationToolsService {
       return this.error(enriched.error);
     }
 
+    const reports = aggregateLibraryReports(report);
+    const notes = new Map<string, string>();
+    if (Array.isArray(args.libraryNotes)) {
+      for (const raw of args.libraryNotes) {
+        if (isRecord(raw)) {
+          const library = normalizeText(raw.library).toUpperCase();
+          const note = normalizeText(raw.note);
+          if (library && note) {
+            notes.set(library, note);
+          }
+        }
+      }
+    }
+
     const built = buildPendingSearchPlan({
       ...args,
       candidates: enriched.candidates,
-      libraryReports: aggregateLibraryReports(report),
+      libraryReports: reports.map((entry) => ({
+        ...entry,
+        note: notes.get(entry.library) ?? '',
+      })),
     });
     if (!built.ok) {
       return this.error(built.error);

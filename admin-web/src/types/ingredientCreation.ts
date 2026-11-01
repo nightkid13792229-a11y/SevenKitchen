@@ -507,6 +507,7 @@ export interface SearchPlanLibraryReport {
   terms: string[]
   total: number
   rounds: number
+  note: string
 }
 
 export type SearchPlanProfileState = 'RAW' | 'COOKED'

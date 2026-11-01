@@ -586,6 +586,7 @@ onMounted(async () => {
   shareToken.value = options.shareToken || ''
   initialDogId.value = routeDogId.value || options.dogId || ''
   selectedLifeStage.value = options.lifeStage || ''
+  manualLifeStage.value = options.lifeStage || ''
   console.log('[食谱ID]', recipeId.value, '[订单]', orderId.value)
 
   /**
@@ -619,8 +620,12 @@ onShow(() => {
 })
 
 
+let recipeRequestSeq = 0
+
 async function loadRecipe() {
   console.log('[RecipeDiy] loadRecipe 开始, recipeId:', recipeId.value)
+  const requestSeq = ++recipeRequestSeq
+  const requestDogId = selectedDogId.value
 
   try {
     const requestData: Record<string, string> = {}
@@ -645,6 +650,9 @@ async function loadRecipe() {
       data: requestData
     })
 
+    if (requestSeq !== recipeRequestSeq || requestDogId !== selectedDogId.value) {
+      return
+    }
     console.log('[RecipeDiy] loadRecipe API响应:', res)
 
     if (res.code === 0 && res.data) {
@@ -778,7 +786,10 @@ async function selectDog(dogId: string) {
   await loadDogCalc(dog.id)
 }
 
+let dogCalcRequestSeq = 0
+
 async function loadDogCalc(dogId: string) {
+  const requestSeq = ++dogCalcRequestSeq
   console.log('========== [RecipeDiy] loadDogCalc 开始 ==========')
   console.log('[调用参数]', { dogId, recipeId: recipeId.value })
 
@@ -794,6 +805,9 @@ async function loadDogCalc(dogId: string) {
 
     console.log('[API响应]', res)
 
+    if (requestSeq !== dogCalcRequestSeq) {
+      return
+    }
     if (res.code === 0 && res.data) {
       dogCalcResult.value = res.data
       displayDailyIntakeG.value = res.data.dailyIntakeG
@@ -994,8 +1008,14 @@ async function generateSheet() {
       verdict: recipe.value.lifeStageMatch || null,
       source: 'diy',
       dogName: selectedDog.value?.name,
+      dogAgeText: (selectedDog.value as any)?.ageText || '',
+      dogStage: dogLifeStage.value,
+      currentVersionLabel: selectedLifeStageLabel.value,
     })
-    if (!confirmed) return
+    if (!confirmed) {
+      goSuitableRecipes()
+      return
+    }
     acknowledgedForSheet.value = true
   }
 
@@ -1022,6 +1042,7 @@ async function generateAndNavigateToSheet() {
     })
 
     uni.setStorageSync(HOME_RECIPE_STATS_DIRTY_KEY, '1')
+    acknowledgedForSheet.value = false
     navigateToSheet()
   } catch (error) {
     console.error('[RecipeDiy] Generate sheet error:', error)

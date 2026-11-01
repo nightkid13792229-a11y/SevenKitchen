@@ -587,4 +587,26 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).toContain('bottom-total');
     expect(source).toContain('amountTotal');
   });
+
+  it('guards the recipe reload against out-of-order dog switches', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-order/index.vue'),
+      'utf-8',
+    )
+    expect(source).toContain('let recipeDetailRequestSeq = 0')
+    expect(source).toContain('requestSeq !== recipeDetailRequestSeq')
+    expect(source).toContain('requestDogId !== selectedDogId.value')
+  });
+
+  it('resets the acknowledgement after handing off to checkout', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-order/index.vue'),
+      'utf-8',
+    )
+    const submit = source.match(/async function continueBuyNow\(\)[\s\S]*?\n}\n/)?.[0] || ''
+    expect(submit).toContain('acknowledgedForOrder.value = false')
+    expect(submit.indexOf('acknowledgedForOrder.value = false')).toBeLessThan(
+      submit.indexOf('/pages/checkout/index'),
+    )
+  });
 });

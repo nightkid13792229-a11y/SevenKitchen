@@ -1320,7 +1320,11 @@ async function loadHealthTagMapping() {
   }
 }
 
+let recipeDetailRequestSeq = 0
+
 async function loadRecipeDetail() {
+  const requestSeq = ++recipeDetailRequestSeq
+  const requestDogId = selectedDogId.value
   try {
     const data: Record<string, string> = {}
     if (manualLifeStage.value) {
@@ -1335,6 +1339,10 @@ async function loadRecipeDetail() {
       method: 'GET',
       data,
     })
+    // 连点换狗：旧请求的回包直接丢弃，避免"版本是 A 的、价格是 B 的"
+    if (requestSeq !== recipeDetailRequestSeq || requestDogId !== selectedDogId.value) {
+      return
+    }
     if (res.code === 0 && res.data) {
       pageLoadError.value = ''
       recipe.value = res.data
@@ -1794,6 +1802,9 @@ async function buyNow() {
       verdict: recipe.value.lifeStageMatch || null,
       source: 'order',
       dogName: selectedDog.value?.name,
+      dogAgeText: (selectedDog.value as any)?.ageText || '',
+      dogStage: selectedDogRecipeLifeStage.value,
+      currentVersionLabel: selectedLifeStageLabel.value,
     })
     trackFunnelEvent({
       eventName: 'life_stage_confirm_result',
@@ -1802,7 +1813,10 @@ async function buyNow() {
       dogId: selectedDogId.value,
       properties: { accepted: confirmed, riskLevel: lifeStageRisk.value },
     })
-    if (!confirmed) return
+    if (!confirmed) {
+      goSuitableRecipes()
+      return
+    }
     acknowledgedForOrder.value = true
   }
 
@@ -1844,6 +1858,8 @@ async function continueBuyNow() {
     amountTotal: pricePreview.value?.amountTotal || 0,
   }
 
+  // 交棒给结算页后，本次确认作废：从结算页返回再买，属于新的一次下单
+  acknowledgedForOrder.value = false
   uni.setStorageSync('direct_buy_order_config', orderConfig)
 
   uni.navigateTo({

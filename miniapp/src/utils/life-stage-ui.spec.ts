@@ -75,3 +75,18 @@ describe('life-stage-ui', () => {
     expect(buildVersionOptionSubtitle('UNKNOWN')).toBe('');
   });
 });
+
+describe('life-stage-ui · 繁殖期文案', () => {
+  it('繁殖期回退时不说幼犬台词', async () => {
+    const { buildLifeStageBarCopy } = await import('./life-stage-ui');
+    const copy = buildLifeStageBarCopy('fallback_high', {
+      dogName: '旺财',
+      dogStage: 'REPRODUCTION',
+      dogStageLabel: '繁殖期版',
+      currentLabel: '成犬版',
+    });
+    expect(copy.subtitle).toContain('繁殖期配方');
+    expect(copy.subtitle).not.toContain('幼犬');
+    expect(copy.actionLabel).toBe('看看繁殖期的菜');
+  });
+});

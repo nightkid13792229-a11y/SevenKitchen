@@ -451,4 +451,26 @@ describe('recipe detail nutrition report regressions', () => {
     // 无卖点时整块不渲染（不出现空占位）
     expect(templateSource).not.toContain('class="recipe-selling-point" v-else')
   });
+
+  it('carries a manually chosen version into the DIY route too', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const diySource = source.match(/function buildDiyRoute\(\)[\s\S]*?\n}\n/)?.[0] || ''
+    expect(diySource).toContain('selectedManualLifeStage.value')
+    expect(diySource).toContain('manual=true')
+  })
+
+  it('loads the dog list before the recipe so the first render has a dog', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const mounted = source.match(/onMounted\(async \(\) => \{[\s\S]*?\n}\)/)?.[0] || ''
+    expect(mounted.indexOf('await loadDogsForDetail()')).toBeGreaterThan(-1)
+    expect(mounted.indexOf('await loadDogsForDetail()')).toBeLessThan(
+      mounted.indexOf('loadRecipeDetail()'),
+    )
+  })
 })

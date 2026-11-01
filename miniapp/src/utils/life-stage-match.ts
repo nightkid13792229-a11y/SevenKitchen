@@ -21,6 +21,7 @@
 
 import { request } from './api';
 import { getLifeStageLabel } from './label-mapping';
+import { buildRiskConfirmCopy } from './life-stage-ui';
 
 // 中文名统一由 label-mapping 提供，本文件不再维护第二份
 export { getLifeStageLabel };
@@ -190,22 +191,35 @@ export async function confirmLifeStageMismatch(params: {
   verdict: LifeStageMatchVerdict | null;
   source: 'order' | 'diy' | 'diy_sheet';
   dogName?: string;
+  dogAgeText?: string;
+  dogStage?: string;
+  currentVersionLabel?: string;
 }): Promise<boolean> {
-  const content =
-    params.verdict?.message ||
-    `当前狗狗的生命阶段与这份食谱的适用阶段不一致${
-      params.dogName ? `（${params.dogName}）` : ''
-    }。`;
+  // 2026-11-02：文案统一走 life-stage-ui（禁用"不匹配/手动展示"，按钮 ≤4 字），
+  // 不再直接下发后端的 message —— 那句话是给系统看的，不是给顾客看的。
+  const currentVersionLabel =
+    params.currentVersionLabel ||
+    params.verdict?.selectedLifeStageLabel ||
+    (params.verdict?.selectedLifeStage
+      ? getLifeStageLabel(params.verdict.selectedLifeStage)
+      : '') ||
+    '当前版本';
+  const copy = buildRiskConfirmCopy({
+    dogName: params.dogName || '当前狗狗',
+    dogAgeText: params.dogAgeText,
+    dogStage: params.dogStage || params.verdict?.dogLifeStage,
+    currentVersionLabel,
+  });
 
   const confirmed = await new Promise<boolean>((resolve) => {
     uni.showModal({
-      title: '生命阶段提醒',
-      content: `${content}\n\n继续表示您已知晓并自行决定；如狗狗有明确诊断或正在遵医嘱饮食，请先咨询执业兽医。`,
+      title: copy.title,
+      content: copy.content,
       // ⚠️ 微信限制：confirmText / cancelText 最多 4 个汉字。
       //    超过 4 字时 showModal 既不显示也不报错，fail 回调把确认当成"未确认"，
       //    调用方（生成制作单 / 确认订单）会直接 return —— 表现就是「点了没反应」。
-      confirmText: '我已知晓',
-      cancelText: '再看看',
+      confirmText: copy.confirmText,
+      cancelText: copy.cancelText,
       success: (res) => resolve(Boolean(res.confirm)),
       fail: () => resolve(false),
     });

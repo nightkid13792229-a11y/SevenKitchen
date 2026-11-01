@@ -888,8 +888,11 @@ onMounted(async () => {
   dogId.value = initialDogId.value || uni.getStorageSync('dogId') || null
 
   if (recipeId.value) {
-    loadDogsForDetail()
-    loadRecipeDetail()
+    // 2026-11-02：先定狗再取菜谱，避免首屏先按"无狗"渲染一版再跳
+    await loadDogsForDetail()
+    if (!dogs.value.length) {
+      loadRecipeDetail()
+    }
   }
 })
 
@@ -1172,6 +1175,10 @@ function buildDiyRoute(): string {
   }
   if (shareToken.value) {
     query.push(`shareToken=${encodeURIComponent(shareToken.value)}`)
+  }
+  if (selectedManualLifeStage.value) {
+    query.push(`lifeStage=${encodeURIComponent(selectedManualLifeStage.value)}`)
+    query.push('manual=true')
   }
   return `/pages/recipe-diy/index?${query.join('&')}`
 }

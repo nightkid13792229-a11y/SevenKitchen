@@ -156,3 +156,36 @@ describe('life-stage display helpers', () => {
     ).toContain('尚未配置适用生命阶段');
   });
 });
+
+describe('confirmLifeStageMismatch · 高风险确认文案', () => {
+  it('用风险说明与 4 字按钮，且不下发系统词', async () => {
+    const { confirmLifeStageMismatch } = await import('./life-stage-match');
+    const showModal = vi.fn((options: any) => options.success({ confirm: false }));
+    ;(globalThis as any).uni = { showModal };
+
+    const confirmed = await confirmLifeStageMismatch({
+      recipeId: 'recipe-1',
+      dogId: 'dog-1',
+      verdict: {
+        matchType: 'FALLBACK_ADULT',
+        riskLevel: 'HIGH',
+        selectedLifeStage: 'HIGH_ACTIVITY_ADULT',
+        dogLifeStage: 'PUPPY_14_WEEKS_PLUS',
+      },
+      source: 'order',
+      dogName: '旺财',
+      dogAgeText: '3个月',
+      dogStage: 'PUPPY_14_WEEKS_PLUS',
+      currentVersionLabel: '成犬版',
+    });
+
+    expect(confirmed).toBe(false);
+    const options = showModal.mock.calls[0][0];
+    expect(options.content).toContain('钙磷比例');
+    expect(options.content).toContain('成犬版');
+    expect(options.content).not.toContain('没有完全匹配');
+    expect(options.content).not.toContain('手动展示');
+    expect(options.confirmText.length).toBeLessThanOrEqual(4);
+    expect(options.cancelText).toBe('看合适版');
+  });
+});

@@ -115,13 +115,17 @@ export function buildLifeStageBarCopy(
         action: 'suitable',
         actionLabel: '看看适合的菜',
       };
-    case 'fallback_high':
+    case 'fallback_high': {
+      const repro = ctx.dogStage === 'REPRODUCTION';
       return {
         title: current,
-        subtitle: `这道菜没有适合${dog}（${dogStageLabel}）的版本，幼犬配方与成犬不同`,
+        subtitle: repro
+          ? `这道菜没有适合${dog}（${dogStageLabel}）的版本，繁殖期配方与成犬不同`
+          : `这道菜没有适合${dog}（${dogStageLabel}）的版本，幼犬配方与成犬不同`,
         action: 'suitable',
-        actionLabel: '看看幼犬的菜',
+        actionLabel: repro ? '看看繁殖期的菜' : '看看幼犬的菜',
       };
+    }
     case 'unknown':
       return {
         title: '暂时无法确认',

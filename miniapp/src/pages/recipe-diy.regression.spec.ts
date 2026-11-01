@@ -370,4 +370,16 @@ describe('recipe diy regressions', () => {
       ),
     ).toContain('已启用自定义分装，上方天数选择暂不生效')
   })
-})
+
+  it('guards reloads and reads a manually chosen version from the route', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-diy/index.vue'),
+      'utf-8',
+    )
+    expect(source).toContain('let recipeRequestSeq = 0')
+    expect(source).toContain('requestSeq !== recipeRequestSeq')
+    expect(source).toContain('let dogCalcRequestSeq = 0')
+    expect(source).toContain('manualLifeStage.value = options.lifeStage')
+    expect(source).toContain('acknowledgedForSheet.value = false')
+  });
+});

@@ -80,6 +80,11 @@ export interface ProcurementSkuSummary {
   safetyStock: number | null;
   reorderPoint: number | null;
   targetStock: number | null;
+  /** 谁加的（后台原料页给员工新增的卡片标一行小字用） */
+  createdById?: string | null;
+  createdSource?: string | null;
+  createdByName?: string | null;
+  createdAt?: string | null;
 }
 
 export interface ProcurementSkuPriceHistoryView {
@@ -314,6 +319,10 @@ const toSummary = (sku: ProcurementSkuRecord): ProcurementSkuSummary => ({
   safetyStock: sku.safetyStock ?? null,
   reorderPoint: sku.reorderPoint ?? null,
   targetStock: sku.targetStock ?? null,
+  createdById: (sku as any).createdById ?? null,
+  createdSource: (sku as any).createdSource ?? null,
+  createdByName: (sku as any).createdBy?.nickname ?? null,
+  createdAt: sku.createdAt ? sku.createdAt.toISOString() : null,
 });
 
 const toPriceHistoryView = (
@@ -773,6 +782,7 @@ export class ProcurementSkuService {
   ): Promise<ProcurementSkuSummary[]> {
     const skus = await this.prisma.procurementSku.findMany({
       where: { ingredientId },
+      include: { createdBy: { select: { nickname: true } } },
       orderBy: [{ createdAt: 'asc' }],
     });
 

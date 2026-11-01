@@ -195,7 +195,12 @@ export const adminMenuGroups: AdminMenuGroup[] = [
         path: '/ingredients',
         icon: Goods,
         keywords: ['原料', '食材', '营养治理', '标签', 'AI 添加原料'],
-        aliases: ['/ingredients/', '/nutrition-governance', '/ingredient-tags'],
+        aliases: [
+          '/ingredients/',
+          '/nutrition-governance',
+          '/ingredient-tags',
+          '/ingredients/staff-procurement-skus',
+        ],
       },
       {
         key: 'nutrition-standards',

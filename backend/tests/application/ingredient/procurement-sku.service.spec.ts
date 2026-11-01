@@ -665,6 +665,47 @@ describe('ProcurementSkuService', () => {
     });
   });
 
+  describe('findByIngredientId', () => {
+    it('带出是谁加的，员工新增的卡片才能标注', async () => {
+      mockPrismaService.procurementSku.findMany.mockResolvedValue([
+        {
+          id: 'sku-1',
+          ingredientId: 'ing-1',
+          name: '沃集鲜 糙米 1kg',
+          brand: null,
+          productModel: null,
+          purchaseChannel: '沃尔玛',
+          supplierName: null,
+          purchaseUnit: '袋',
+          purchaseToBaseRatio: 1000,
+          currentPurchasePrice: null,
+          referencePurchasePrice: null,
+          referencePricePerPurchaseUnit: null,
+          sourceTier: null,
+          notes: null,
+          isDefault: false,
+          isActive: true,
+          sortOrder: 0,
+          safetyStock: null,
+          reorderPoint: null,
+          targetStock: null,
+          createdAt: new Date('2026-11-01T11:12:00.000Z'),
+          createdSource: 'STAFF_APP',
+          createdById: 'user-1',
+          createdBy: { nickname: '张三' },
+        },
+      ]);
+
+      const result = await service.findByIngredientId('ing-1');
+
+      expect(result[0]).toMatchObject({
+        createdSource: 'STAFF_APP',
+        createdById: 'user-1',
+        createdByName: '张三',
+      });
+    });
+  });
+
   describe('getFormOptions', () => {
     it('返回该原料基准单位下允许的采购单位', async () => {
       mockPrismaService.ingredient.findUnique.mockResolvedValue({

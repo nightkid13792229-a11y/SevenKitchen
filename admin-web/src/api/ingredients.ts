@@ -14,6 +14,37 @@ import type {
   RecommendedProductForm
 } from '@/types/ingredient'
 
+
+export interface StaffCreatedProcurementSku {
+  id: string
+  ingredientId: string
+  ingredientName: string | null
+  baseUnit: string | null
+  name: string
+  brand: string | null
+  productModel: string | null
+  purchaseChannel: string | null
+  purchaseUnit: string | null
+  purchaseToBaseRatio: number | null
+  currentPurchasePrice: number | null
+  isActive: boolean
+  createdById: string | null
+  createdByName: string | null
+  createdSource: string | null
+  createdAt: string
+  sourceScreenshotUrl: string | null
+}
+
+export interface StaffCreatedProcurementSkuQuery {
+  ingredientId?: string
+  createdById?: string
+  createdFrom?: string
+  createdTo?: string
+  keyword?: string
+  page?: number
+  pageSize?: number
+}
+
 export const ingredientApi = {
   /**
    * 获取所有原料列表
@@ -177,6 +208,17 @@ export const ingredientApi = {
    */
   rollbackProcurementSkuPrice: (ingredientId: string, id: string, historyId: string): Promise<ProcurementSku> =>
     api.post(`/admin/ingredients/${ingredientId}/procurement-skus/${id}/price-history/${historyId}/rollback`),
+
+
+  /**
+   * 员工新增的采购商品清单（跨原料，2026-11-01）
+   *
+   * 后端固定只看 createdSource = STAFF_APP 的行，前台不传这个条件。
+   */
+  listStaffCreatedProcurementSkus: (
+    params: StaffCreatedProcurementSkuQuery
+  ): Promise<{ items: StaffCreatedProcurementSku[]; total: number }> =>
+    api.get('/admin/procurement-skus', { params }),
 
   /**
    * 删除生产采购 SKU

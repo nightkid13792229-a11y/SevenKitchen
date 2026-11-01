@@ -120,6 +120,8 @@ export interface TrustedNutritionWebSearchReport {
   sources: NutritionSourceInput[];
   attemptedHosts: string[];
   rejectedHosts: string[];
+  /** OK = 搜索通道可用；UNAVAILABLE = 通道本身连不上（不能据此说“线上没有”）。 */
+  discoveryStatus: 'OK' | 'UNAVAILABLE';
 }
 
 @Injectable()
@@ -140,7 +142,7 @@ export class TrustedNutritionWebSearchService {
   async searchWithReport(
     input: TrustedNutritionWebSearchInput,
   ): Promise<TrustedNutritionWebSearchReport> {
-    const { candidates, attemptedHosts, rejectedHosts } =
+    const { candidates, attemptedHosts, rejectedHosts, discoveryStatus } =
       await this.resolveCandidateUrls(input);
     const records: NutritionSourceInput[] = [];
     const attempted = new Set(attemptedHosts);
@@ -168,6 +170,7 @@ export class TrustedNutritionWebSearchService {
       sources: records.slice(0, 8),
       attemptedHosts: [...attempted],
       rejectedHosts,
+      discoveryStatus,
     };
   }
 
@@ -177,6 +180,7 @@ export class TrustedNutritionWebSearchService {
     candidates: TrustedUrlCandidate[];
     attemptedHosts: string[];
     rejectedHosts: string[];
+    discoveryStatus: 'OK' | 'UNAVAILABLE';
   }> {
     const candidates = new Map<string, TrustedUrlCandidate>();
     const attemptedHosts = new Set<string>();
@@ -199,8 +203,10 @@ export class TrustedNutritionWebSearchService {
       rejectedHosts,
     );
 
+    let discoveryStatus: 'OK' | 'UNAVAILABLE' = 'OK';
     if (!hasExplicitUrl && isWhitelistWebSearchEnabled()) {
       const discovery = await discoverTrustedSourceUrls(input);
+      discoveryStatus = discovery.channelOk ? 'OK' : 'UNAVAILABLE';
       for (const host of discovery.attemptedHosts) {
         attemptedHosts.add(host);
       }
@@ -218,6 +224,7 @@ export class TrustedNutritionWebSearchService {
       candidates: [...candidates.values()],
       attemptedHosts: [...attemptedHosts],
       rejectedHosts: [...rejectedHosts],
+      discoveryStatus,
     };
   }
 }
@@ -263,28 +270,32 @@ function isWhitelistWebSearchEnabled(): boolean {
 
 async function discoverTrustedSourceUrls(
   input: TrustedNutritionWebSearchInput,
-): Promise<{ urls: string[]; attemptedHosts: string[] }> {
+): Promise<{ urls: string[]; attemptedHosts: string[]; channelOk: boolean }> {
   const queryText = buildDiscoveryQueryText(input);
   if (!queryText) {
-    return { urls: [], attemptedHosts: [] };
+    return { urls: [], attemptedHosts: [], channelOk: false };
   }
 
   const urls = new Set<string>();
   const attemptedHosts: string[] = [];
+  let channelOk = false;
   for (const host of getDiscoveryHosts()) {
     attemptedHosts.push(host);
-    const discoveredUrls = await fetchSearchResultUrls(
+    const discovered = await fetchSearchResultUrls(
       `${queryText} nutrition composition site:${host}`,
     );
-    for (const url of discoveredUrls) {
+    if (discovered.ok) {
+      channelOk = true;
+    }
+    for (const url of discovered.urls) {
       urls.add(url);
       if (urls.size >= MAX_DISCOVERED_SOURCE_URLS) {
-        return { urls: [...urls], attemptedHosts };
+        return { urls: [...urls], attemptedHosts, channelOk };
       }
     }
   }
 
-  return { urls: [...urls], attemptedHosts };
+  return { urls: [...urls], attemptedHosts, channelOk };
 }
 
 function buildDiscoveryQueryText(input: TrustedNutritionWebSearchInput): string {
@@ -307,14 +318,18 @@ function getDiscoveryHosts(): string[] {
   ].slice(0, MAX_DISCOVERY_HOSTS);
 }
 
-async function fetchSearchResultUrls(query: string): Promise<string[]> {
+async function fetchSearchResultUrls(
+  query: string,
+): Promise<{ urls: string[]; ok: boolean }> {
   const searchUrl = new URL(TRUSTED_WEB_SEARCH_URL);
   searchUrl.searchParams.set('q', query);
 
   const html = await fetchTrustedText(searchUrl.toString());
-  if (!html) return [];
+  if (!html) {
+    return { urls: [], ok: false };
+  }
 
-  return extractSearchResultUrls(html);
+  return { urls: extractSearchResultUrls(html), ok: true };
 }
 
 function extractSearchResultUrls(html: string): string[] {

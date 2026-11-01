@@ -155,7 +155,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'Merck 兽医手册 · 临床生化', chapter: '肝酶解读' },
-      { source: 'ACVIM 犬慢性肝炎诊断与治疗共识 2019', chapter: '肝功能评估' },
+      { source: 'ACVIM 犬慢性肝炎共识 2019', chapter: '肝功能评估' },
     ],
     sources: [
       { sourceId: 'MERCK-CLINICAL-BIOCHEM', locator: '肝酶段落', note: 'ALT/ALP 的影响因素与特异性差异' },
@@ -185,7 +185,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'Merck 兽医手册 · 临床血液学', chapter: '血常规指标解读' },
-      { source: 'ACVIM 犬猫免疫介导性溶血性贫血诊断共识 2019', chapter: '贫血的分类与鉴别' },
+      { source: 'ACVIM 免疫介导性溶血性贫血诊断共识 2019', chapter: '贫血的分类与鉴别' },
     ],
     sources: [
       { sourceId: 'MERCK-HEME', locator: '血常规解读', note: '三类细胞的意义' },

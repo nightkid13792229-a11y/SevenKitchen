@@ -49,7 +49,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: 'ACVIM 2026 慢性肠病共识 · 消化道症状的评估',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 51 章：呕吐的时间口径与营养管理时机',
       },
       {
@@ -105,7 +105,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: 'ACVIM 2026 慢性肠病共识 · 慢性肠道症状的定义与诊断流程',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 56 章：危及生命的急性胃肠炎表现；第 61 章：大肠疾病的表现',
       },
       {
@@ -165,7 +165,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '个体化营养评估中的食欲询问',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 25 章：厌食、恶病质与营养摄入不足的后果',
       },
     ],
@@ -221,7 +221,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '体况评分与肌况评分工具',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 25 章：体重变化的临床意义',
       },
     ],
@@ -447,7 +447,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '退行性关节病与慢性疼痛的识别',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 34 章：犬骨关节炎的临床表现与疼痛评估',
       },
       {
@@ -503,7 +503,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '皮肤与被毛的营养评估',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 31 章《食物不良反应》：非季节性瘙痒性皮炎与排除性饮食试验',
       },
       {
@@ -555,7 +555,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 31 章《食物不良反应》：外耳炎与食物不良反应',
       },
     ],
@@ -691,7 +691,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '营养筛查风险因子（含肠胃胀气、便秘）与饮食史记录',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 64 章《便秘》：定义与不同情况下的纤维方向',
       },
     ],
@@ -734,7 +734,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 65 章《肠胃胀气》：风险因素、饮食因素与复查思路',
       },
       {
@@ -781,7 +781,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'ACVIM 犬尿失禁诊断与管理共识 2024',
+        source: 'ACVIM 犬尿失禁共识 2024',
         chapter: '排尿异常的评估方向与排尿模式记录',
       },
       {

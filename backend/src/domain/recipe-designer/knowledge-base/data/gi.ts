@@ -39,7 +39,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第57章 炎症性肠病（IBD）',
       },
       {
-        source: 'ACVIM 慢性肠病（CIE）共识声明（2026）',
+        source: 'ACVIM 犬慢性肠病共识 2026',
         note: '本地仅存摘要（dog-ibd-cie-functional-targets.md）',
       },
     ],
@@ -129,11 +129,11 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第57章 炎症性肠病（IBD）',
       },
       {
-        source: 'ACVIM 慢性肠病（CIE）共识声明（2026）',
+        source: 'ACVIM 犬慢性肠病共识 2026',
         note: '本地仅存摘要（dog-ibd-cie-functional-targets.md）：稳定患犬饮食试验优先',
       },
       {
-        source: 'AAHA 犬猫营养与体重管理指南（2021）',
+        source: 'AAHA 营养与体重管理指南 2021',
         note: '本地仅存摘要（dog-ibd-cie-functional-targets.md）：有限抗原、新奇/水解蛋白',
       },
     ],
@@ -221,7 +221,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第58章 蛋白丢失性肠病（PLE）',
       },
       {
-        source: 'AAHA 犬猫营养与体重管理指南（2021）',
+        source: 'AAHA 营养与体重管理指南 2021',
         note: '本地仅存摘要（dog-ibd-cie-functional-targets.md）：可选低脂',
       },
     ],
@@ -578,7 +578,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第56章 急性胃肠炎与肠炎',
       },
       {
-        source: 'AAHA 犬猫营养与体重管理指南（2021）',
+        source: 'AAHA 营养与体重管理指南 2021',
         note: '本地仅存摘要（dog-ibd-cie-functional-targets.md）：评估钴胺素/叶酸',
       },
     ],
@@ -629,7 +629,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第58章 蛋白丢失性肠病（PLE）',
       },
       {
-        source: 'IBD/CIE 功能目标表（本地整理笔记）',
+        source: 'IBD/CIE 功能目标表（内部整理，无文献依据）',
         note: 'dog-ibd-cie-functional-targets.md：ADF/FEDIAF 合规为硬标准',
       },
     ],

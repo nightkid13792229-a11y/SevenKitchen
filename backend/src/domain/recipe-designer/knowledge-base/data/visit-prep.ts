@@ -311,7 +311,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
         note: '面诊时应询问当前使用的药物、补充剂、营养保健品与草药',
       },
       {
-        source: 'WSAVA 动物福利指南 2018',
+        source: 'WSAVA 动物福利指南',
         chapter: '第 3 章 就诊相关的福利需求（到院前准备与到院时分诊）',
         note: '到院前应做准备，到院时由前台／分诊人员先行判断',
       },
@@ -490,7 +490,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'WSAVA 动物福利指南 2018',
+        source: 'WSAVA 动物福利指南',
         chapter: '第 3 章 就诊相关的福利需求 · 记录保存',
         note: '检查、治疗与反应应准确及时记录，便于随访与交接',
       },

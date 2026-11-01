@@ -309,10 +309,10 @@ describe('知识库结构升级', () => {
       // 不是「新版取代旧版」，所以出处里不应再出现「已被 2021 版取代」。
       const citations = service.getAll().flatMap((entry) => entry.citations)
       const aaha2014 = citations.filter((citation) =>
-        citation.source.includes('AAHA 2014'),
+        citation.source.includes('AAHA 体重管理指南 2014'),
       )
       const aaha2021 = citations.filter((citation) =>
-        citation.source.includes('AAHA 2021'),
+        citation.source.includes('AAHA 营养与体重管理指南 2021'),
       )
 
       expect(aaha2014.length).toBeGreaterThan(0)

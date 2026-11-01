@@ -319,11 +319,11 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: '项目整理笔记：犬低脂/肝胆/尿素谨慎复盘目标表',
+        source: '项目整理笔记：犬低脂/肝胆/尿素谨慎复盘目标表（内部整理，无文献依据）',
         note: '低脂（约10% DM）与蛋白（<40% DM）目标、原料选择、声明边界与安全刹车',
       },
       {
-        source: 'NRC《犬猫营养需要》（2006）使用规则（项目整理笔记）',
+        source: 'NRC《犬猫营养需要》（2006）使用规则（项目整理笔记）（内部整理，无文献依据）',
         note: 'NRC 为营养需要与安全上限的参考来源，不替代 FEDIAF/ADF 执行标准',
       },
     ],

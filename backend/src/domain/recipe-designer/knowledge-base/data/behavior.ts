@@ -51,12 +51,12 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
         note: '定向、社交互动、活动、焦虑、食欲、睡眠、学习与记忆各类表现',
       },
       {
-        source: 'AAHA 2023 老年犬猫护理指南（工具包收录的指南摘要与缩写表）',
+        source: 'AAHA 老年犬猫护理工具包 2023',
         chapter: '摘要（ABSTRACT）与缩写表',
         note: 'DISHAA 的官方缩写写法；CADES 为犬痴呆量表、CCD 为犬认知功能障碍',
       },
       {
-        source: 'AAHA 2019 犬生命阶段指南',
+        source: 'AAHA 犬生命阶段指南 2019',
         chapter: '行为（Behavior）· 老年犬',
         note: '建议对老年犬常规评估认知变化与功能障碍并跟踪记录',
       },
@@ -104,7 +104,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'AAHA 2023 老年犬猫护理指南（工具包收录的指南摘要）',
+        source: 'AAHA 老年犬猫护理工具包 2023',
         chapter: '摘要（ABSTRACT）',
         note: '"old age is not a disease"与家长对衰老的认知误区',
       },
@@ -114,7 +114,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
         note: '不应接受健康不佳与年老同义；主人因误解而漏报；22%/48% 随访数据',
       },
       {
-        source: 'AAHA 2019 犬生命阶段指南',
+        source: 'AAHA 犬生命阶段指南 2019',
         chapter: '行为（Behavior）',
         note: '行为问题是遗弃与安乐死的重要原因，行为评估应纳入每次就诊',
       },
@@ -191,17 +191,17 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
         note: 'CDS 为排除性判断；50 例会诊回顾的排查清单；出现新征象需尽快再评估',
       },
       {
-        source: 'AAHA 2023 老年犬猫护理指南（工具包 · 居家监测指南 Your Senior Pet: From Head to Toe）',
+        source: 'AAHA 老年犬猫护理工具包 2023',
         chapter: '口腔 / 泌尿与肾脏 / 内分泌 / 肌肉关节骨骼 各部分',
         note: '需要联系兽医与需要立即就医的具体信号',
       },
       {
-        source: 'AAHA 2019 犬生命阶段指南',
+        source: 'AAHA 犬生命阶段指南 2019',
         chapter: '安全（Safety）· 老年犬；行为（Behavior）',
         note: '老年犬活动力、视力、听力、认知下降；听不到靠近会受惊咬人',
       },
       {
-        source: 'WSAVA 动物福利指南（2018）',
+        source: 'WSAVA 动物福利指南',
         chapter: '五项动物福利需求 · 第5项（免于疼痛、痛苦、伤害与疾病）',
         note: '老年动物存在关节炎等疼痛时应获得充分镇痛',
       },
@@ -279,12 +279,12 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
         note: '环境丰富化方案、与食品的协同效果、6–12 周评估窗口',
       },
       {
-        source: 'WSAVA 动物福利指南（2018）',
+        source: 'WSAVA 动物福利指南',
         chapter: '五项动物福利需求（The Five Animal Welfare Needs）',
         note: '合适的环境、正常行为表现、排泄与活动安排',
       },
       {
-        source: 'AAHA 2019 犬生命阶段指南',
+        source: 'AAHA 犬生命阶段指南 2019',
         chapter: '安全（Safety）',
         note: '每日运动与精神刺激',
       },
@@ -342,17 +342,17 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'AAHA 2019 犬生命阶段指南',
+        source: 'AAHA 犬生命阶段指南 2019',
         chapter: '安全（Safety）· 老年犬',
         note: '防滑地面与楼梯、减少杂物、听力下降风险、身份标识与照护安排、约束与自由游走风险',
       },
       {
-        source: 'AAHA 2023 老年犬猫护理指南（工具包 · 居家监测指南）',
+        source: 'AAHA 老年犬猫护理工具包 2023',
         chapter: '肌肉、关节与骨骼（Muscles, Joints, and Bones）',
         note: '矫形床垫与冷热床垫的安全提醒',
       },
       {
-        source: 'WSAVA 动物福利指南（2018）',
+        source: 'WSAVA 动物福利指南',
         chapter: '五项动物福利需求 · 第1项（合适的环境）',
         note: '环境需提供保护、舒适、安静休息处与活动空间',
       },
@@ -414,7 +414,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
         note: '睡眠-觉醒周期条目、夜间徘徊的对应关系、行为专科门诊主诉',
       },
       {
-        source: 'AAHA 2023 老年犬猫护理指南（工具包 · 居家监测指南）',
+        source: 'AAHA 老年犬猫护理工具包 2023',
         chapter: '脑、脊髓与神经系统（Brain, Spinal Cord, and Nervous System）',
         note: '需要立即就医的神经表现',
       },
@@ -475,7 +475,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
         note: '食欲增加/下降与食盆前的焦虑-冲突行为',
       },
       {
-        source: 'AAHA 2023 老年犬猫护理指南（工具包 · 居家监测指南）',
+        source: 'AAHA 老年犬猫护理工具包 2023',
         chapter: '口腔牙齿牙龈与咽喉；胃、肠、肝与胆囊',
         note: '口腔与进食相关信号、食欲下降的居家尝试、立即就医的信号',
       },
@@ -542,12 +542,12 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
         note: '行为专科门诊主诉与 50 例会诊回顾中的焦虑相关表现',
       },
       {
-        source: 'WSAVA 动物福利指南（2018）',
+        source: 'WSAVA 动物福利指南',
         chapter: '行为对压力的反应（Behavioural responses to stress）与恐惧、应激的行为表现',
         note: '攻击常源于恐惧；逃跑/攻击/僵住/替代行为四种反应',
       },
       {
-        source: 'AAHA 2019 犬生命阶段指南',
+        source: 'AAHA 犬生命阶段指南 2019',
         chapter: '行为（Behavior）',
         note: '慢性压力影响健康；分离焦虑属于导致遗弃或安乐死的问题之一',
       },
@@ -614,7 +614,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'WSAVA 动物福利指南（2018）',
+        source: 'WSAVA 动物福利指南',
         chapter: '行为对压力的反应（Behavioural responses to stress）；质量与福利评估',
         note: '行为必须在发生的场景中理解；主人是行为变化的重要信息来源',
       },
@@ -624,12 +624,12 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
         note: '行为评估的类别框架；变化间歇、细微、只在诊室外出现',
       },
       {
-        source: 'AAHA 2019 犬生命阶段指南',
+        source: 'AAHA 犬生命阶段指南 2019',
         chapter: '行为（Behavior）· 老年犬',
         note: '把认知变化记录进病历并跟踪趋势',
       },
       {
-        source: 'AAHA 2023 老年犬猫护理指南（工具包 · 居家监测指南）',
+        source: 'AAHA 老年犬猫护理工具包 2023',
         chapter: 'Your Senior Pet: From Head to Toe',
         note: '建立定期居家健康检查习惯，发现异常尽快联系兽医',
       },
@@ -692,7 +692,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'WSAVA 动物福利指南（2018）',
+        source: 'WSAVA 动物福利指南',
         chapter: '疼痛识别（Recognition of animal pain）与结论',
         note: '行为改变常是疼痛与健康问题的最早线索；主人是最重要的信息来源',
       },
@@ -702,12 +702,12 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
         note: '行为变化起病细微；征象加重或出现新征象应尽快重新评估',
       },
       {
-        source: 'AAHA 2023 老年犬猫护理指南（工具包 · 居家监测指南）',
+        source: 'AAHA 老年犬猫护理工具包 2023',
         chapter: '胃、肠、肝与胆囊；脑、脊髓与神经系统',
         note: '需要立即就医的信号清单',
       },
       {
-        source: 'AAHA 2019 犬生命阶段指南',
+        source: 'AAHA 犬生命阶段指南 2019',
         chapter: '行为（Behavior）',
         note: '攻击与遗弃风险；预防犬只咬伤是兽医职责',
       },
@@ -784,7 +784,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
         note: '药物治疗被列为行为变化的可能影响因素之一',
       },
       {
-        source: 'AAHA 2019 犬生命阶段指南',
+        source: 'AAHA 犬生命阶段指南 2019',
         chapter: '表2 生命阶段检查清单（Canine Life Stage Guidelines Checklist）· 用药与补充剂',
         note: '就诊时应询问当前使用的药物与补充剂、保健品、草药',
       },
@@ -844,7 +844,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
         note: '22%/48% 随访数据；6–12 周评估窗口；AAHA 老年护理工作组的筛查频率',
       },
       {
-        source: 'AAHA 2019 犬生命阶段指南',
+        source: 'AAHA 犬生命阶段指南 2019',
         chapter: '生命阶段评估与就诊频率（老年犬至少每半年一次）',
         note: '老年犬至少每半年一次体检与基础检查；跟踪临床指标趋势',
       },

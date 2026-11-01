@@ -43,11 +43,11 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '居家照护－主动式居家照护：刷牙技巧与频率（中文版 E121）',
       },
       {
-        source: 'AAHA 牙科护理指南',
+        source: 'AAHA 牙科护理指南 2019',
         chapter: 'Recommending Home Oral Hygiene and Products（JAAHA 55(2):17）',
       },
       {
-        source: 'WSAVA 全球牙科委员会刷牙工具包',
+        source: 'WSAVA 全球牙科指南',
         chapter: 'STEP 1–5：从触碰脸部到过渡到牙刷',
       },
     ],
@@ -136,7 +136,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '牙周疾病的臨床特徵（中文版 E53）、重點整理（中文版 E56）',
       },
       {
-        source: 'AAHA 牙科护理指南',
+        source: 'AAHA 牙科护理指南 2019',
         chapter: 'Addressing Pain（p.15）、Nonanesthetic Scaling of Teeth（p.17）',
       },
     ],
@@ -183,11 +183,11 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: 'Principles of Wellness－Principles of Dermatology（2025，p.8）',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 31 章 食物不良反应－马拉色菌与耳道、外耳炎的诊断',
       },
       {
-        source: 'AAHA 老年犬猫护理指南',
+        source: 'AAHA 老年犬猫护理指南 2023',
         chapter: 'Your Senior Pet From Head to Toe：Inner and Outer Ear Flaps, Skin, Fur（Home Monitoring Tips p.3–4）',
       },
     ],
@@ -235,7 +235,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 31 章 食物不良反应－外耳炎的诊断（耳镜检查与耳道分泌物压片）',
       },
       {
@@ -243,7 +243,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: 'Principles of Wellness－Principles of Dermatology（2025，p.8）',
       },
       {
-        source: 'AAHA 老年犬猫护理指南',
+        source: 'AAHA 老年犬猫护理指南 2023',
         chapter: 'Home Monitoring Tips：Brain, Spinal Cord, and Nervous System（Seek immediate veterinary care）',
       },
     ],
@@ -333,7 +333,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 31 章 食物不良反应－马拉色菌皮炎：潮湿、贴合的皮肤面',
       },
       {
@@ -393,7 +393,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: 'Principles of Wellness－Principles of Dermatology：Additional Guidance（2025，p.8）',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 32 章 犬猫皮肤与毛发疾病－Box 32-1 毛囊结构与毛发周期',
       },
     ],
@@ -436,7 +436,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'AAHA 老年犬猫护理指南',
+        source: 'AAHA 老年犬猫护理指南 2023',
         chapter: 'Your Senior Pet From Head to Toe：Nails, Nail Beds（Home Monitoring Tips p.3–4）',
       },
       {
@@ -483,11 +483,11 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'AAHA 老年犬猫护理指南',
+        source: 'AAHA 老年犬猫护理指南 2023',
         chapter: 'Home Monitoring Tips：Muscles, Joints, and Bones；Brain, Spinal Cord, and Nervous System',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 34 章 骨关节炎－疼痛、活动与体重控制',
       },
     ],
@@ -530,11 +530,11 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 31 章 食物不良反应－潮湿贴合皮肤面；第 32 章 犬猫皮肤与毛发疾病－脚垫病变',
       },
       {
-        source: 'AAHA 老年犬猫护理指南',
+        source: 'AAHA 老年犬猫护理指南 2023',
         chapter: 'Table 2 Integument：Do not forget nails, nail beds, and interdigital spaces（p.2）',
       },
     ],
@@ -577,7 +577,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 32 章 犬猫皮肤与毛发疾病－被毛色素异常与外部来源（唾液染色等）',
       },
       {
@@ -624,7 +624,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 31 章 食物不良反应－马拉色菌皮炎：唇褶、鼻褶等贴合皮肤面',
       },
       {
@@ -680,11 +680,11 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 64 章 便秘与排便障碍－会阴与肛周疾病、风险因素',
       },
       {
-        source: 'AAHA 老年犬猫护理指南',
+        source: 'AAHA 老年犬猫护理指南 2023',
         chapter: 'Home Monitoring Tips：Stomach, Intestines, Liver, and Gall Bladder',
       },
     ],
@@ -727,7 +727,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'AAHA 老年犬猫护理指南',
+        source: 'AAHA 老年犬猫护理指南 2023',
         chapter: 'Home Monitoring Tips：Muscles, Joints, and Bones；Inner and Outer Ear Flaps, Skin, Fur',
       },
       {
@@ -782,7 +782,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: 'WSAVA 全球营养准则－营养评估准则：监测（中文版 p.13）',
       },
       {
-        source: 'AAHA 老年犬猫护理指南',
+        source: 'AAHA 老年犬猫护理指南 2023',
         chapter: 'Home Monitoring Tips：Urinary Tract and Kidneys／Endocrine Glands',
       },
     ],
@@ -833,7 +833,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: 'WSAVA 全球营养准则－BCS 与 MCS（中文版 p.4–5）',
       },
       {
-        source: 'AAHA 营养与体重管理指南',
+        source: 'AAHA 营养与体重管理指南 2021',
         chapter: '2021－BCS 与 MCS 的定义与判读阈值（JAAHA 57(4):155–157）',
       },
     ],
@@ -880,11 +880,11 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: 'The need for a suitable environment（2018，p.36）',
       },
       {
-        source: 'AAHA 犬生命阶段指南',
+        source: 'AAHA 犬生命阶段指南 2019',
         chapter: '2019－Table 2：Environmental adaptations for mobility, sight, and hearing',
       },
       {
-        source: 'AAHA 老年犬猫护理指南',
+        source: 'AAHA 老年犬猫护理指南 2023',
         chapter: 'Home Monitoring Tips：Muscles, Joints, and Bones',
       },
     ],
@@ -932,7 +932,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'AAHA 犬生命阶段指南',
+        source: 'AAHA 犬生命阶段指南 2019',
         chapter: '2019－Table 2：Behavior／Environment（Puppy 列）',
       },
       {
@@ -940,7 +940,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: 'Principles of Wellness－Principles of Nutrition：换粮 7–10 天（2025，p.10）',
       },
       {
-        source: 'WSAVA 全球牙科委员会刷牙工具包',
+        source: 'WSAVA 全球牙科指南',
         chapter: '开始刷牙的时机与训练起点',
       },
     ],
@@ -992,7 +992,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: 'Principles of Wellness－Principles of Dermatology（2025，p.8）',
       },
       {
-        source: 'AAHA 老年犬猫护理指南',
+        source: 'AAHA 老年犬猫护理指南 2023',
         chapter: 'Home Monitoring Tips：Inner and Outer Ear Flaps, Skin, Fur, Nails, and Nail Beds；Muscles, Joints, and Bones',
       },
     ],

@@ -115,7 +115,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'ACVIM 犬胸腰段椎间盘突出诊断与管理共识 2022',
+        source: 'ACVIM 犬胸腰段椎间盘突出共识 2022',
         chapter: 'Introduction / 手术后再发率',
         note: 'FGF4 逆转录基因与软骨发育不良型品种；腊肠约 25%、法国斗牛犬约 44% 的再发率',
       },
@@ -264,7 +264,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
         note: 'brachycephaly 与 skin folds 属致病解剖特征；选育应向温和结构',
       },
       {
-        source: 'WSAVA 动物福利指南 2018',
+        source: 'WSAVA 动物福利指南',
         chapter: 'Chapter 4 · Selective breeding of companion animals',
         note: '为极端性状选育带来的福利问题；饲养器具需适配短头颅体型',
       },
@@ -568,7 +568,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'ACVIM 犬慢性肝炎诊断与治疗共识 2019',
+        source: 'ACVIM 犬慢性肝炎共识 2019',
         chapter: 'Definition of chronic hepatitis / Copper-associated CH',
         note: 'CuCH 可发生于任何品种但贝灵顿梗、达尔马提亚犬、拉布拉多、杜宾、西高地白梗易感',
       },
@@ -773,7 +773,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'ACVIM 犬慢性肝炎诊断与治疗共识 2019',
+        source: 'ACVIM 犬慢性肝炎共识 2019',
         chapter: '肝活检前的凝血评估（vWF 活性表与易感品种表注）',
         note: '易感品种清单与"建议在易感品种中检测血管性血友病"',
       },
@@ -1016,7 +1016,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'ACVIM 犬慢性肠病诊断与治疗共识 2026',
+        source: 'ACVIM 犬慢性肠病共识 2026',
         chapter: '品种易感性与诊断路径',
         note: '德国牧羊犬、软毛麦色梗、中国沙皮犬等易感品种',
       },

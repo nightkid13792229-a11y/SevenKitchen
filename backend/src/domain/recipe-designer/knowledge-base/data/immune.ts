@@ -127,7 +127,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'WSAVA 疫苗接种指南 2024', chapter: 'Effects of maternally derived antibodies / 26+ weeks 讨论' },
-      { source: 'AAHA 犬免疫指南 2022（2024 更新）', chapter: '幼犬免疫程序' },
+      { source: 'AAHA 犬免疫指南 2022', chapter: '幼犬免疫程序' },
     ],
     sources: [
       { sourceId: 'WSAVA-VACC-2024', locator: 'MDA 章节与 Fig 1', note: '6–8 周起、每 2–4 周、至 16 周或更大；26 周龄以上的讨论' },
@@ -369,7 +369,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'WSAVA 疫苗接种指南 2024', chapter: 'Different types of vaccine / 非核心疫苗' },
-      { source: 'AAHA 犬免疫指南 2022（2024 更新）', chapter: '非核心疫苗建议' },
+      { source: 'AAHA 犬免疫指南 2022', chapter: '非核心疫苗建议' },
     ],
     sources: [
       { sourceId: 'WSAVA-VACC-2024', locator: '非核心疫苗段落', note: '按生活方式与地方流行率逐只评估' },

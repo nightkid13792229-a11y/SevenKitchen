@@ -42,7 +42,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'WSAVA 疼痛识别、评估与治疗指南 2022', chapter: '疼痛与痛苦的识别' },
-      { source: 'ACVIM 犬癫痫持续状态与集群发作共识 2024', chapter: '急症识别' },
+      { source: 'ACVIM 癫痫持续状态与集群发作共识 2024', chapter: '急症识别' },
     ],
     sources: [
       { sourceId: 'WSAVA-PAIN-2022', locator: '疼痛与痛苦识别', note: '动物不会叫痛，行为变化是主要线索' },
@@ -263,7 +263,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
       '出现大面积迅速脱毛、皮肤破溃流脓、或伴随精神食欲异常，应尽快就医。',
     ],
     citations: [
-      { source: 'WSAVA 全球营养指南与工具包', chapter: '皮肤与被毛的营养评估' },
+      { source: 'WSAVA 营养指南与工具包', chapter: '皮肤与被毛的营养评估' },
       { source: '小动物临床营养学（第5版）', chapter: '皮肤病的鉴别思路' },
     ],
     sources: [
@@ -323,7 +323,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
       '本条目只做分诊提示，不给处理与用药建议。',
     ],
     citations: [
-      { source: 'WSAVA 动物福利指南 2018', chapter: '高温环境下的动物福利' },
+      { source: 'WSAVA 动物福利指南', chapter: '高温环境下的动物福利' },
     ],
     sources: [
       { sourceId: 'WSAVA-WELFARE', locator: '环境与福利', note: '高温环境对犬只的风险' },
@@ -353,7 +353,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
       '本条目只做分诊提示，不给催吐、解毒或用药建议。',
     ],
     citations: [
-      { source: 'WSAVA 全球营养委员会立场声明', chapter: '食品安全与有毒食物' },
+      { source: 'WSAVA 立场声明', chapter: '食品安全与有毒食物' },
       { source: 'Merck 兽医手册 · 临床生化', chapter: '中毒的初步识别' },
     ],
     sources: [

@@ -53,6 +53,7 @@ import {
   ORDERED_RECIPE_SERIES_LIFE_STAGES,
   RecipeSeriesLifeStage,
   resolveDefaultSeriesLifeStage,
+  resolveSeriesLifeStageRisk,
   selectLatestPublishedSeriesLifeStageVersions,
   SERIES_LIFE_STAGE_LABELS,
 } from '../../domain/recipe/recipe-series';
@@ -105,6 +106,8 @@ const SERIES_FALLBACK_MESSAGE =
 
 type ResolvedSeriesLifeStageRequest = {
   requestedLifeStage?: string;
+  manualLifeStage?: string;
+  hasDog: boolean;
   dogId?: string;
   dogLifeStage?: RecipeSeriesLifeStage;
   dogName?: string;
@@ -1249,9 +1252,12 @@ export class RecipesController {
     manualLifeStage?: string,
     dogId?: string,
     req?: any,
+    manual = false,
   ): Promise<ResolvedSeriesLifeStageRequest> {
     const result: ResolvedSeriesLifeStageRequest = {
       requestedLifeStage: manualLifeStage || undefined,
+      ...(manual && manualLifeStage ? { manualLifeStage } : {}),
+      hasDog: false,
     };
 
     if (!dogId) {
@@ -1300,11 +1306,17 @@ export class RecipesController {
       ...dog,
       breed,
     });
+    const requestedLifeStage =
+      manual && manualLifeStage ? manualLifeStage : dogLifeStage;
     return {
-      requestedLifeStage: result.requestedLifeStage ?? dogLifeStage,
+      requestedLifeStage,
+      hasDog: true,
       dogId: dog.id,
       dogLifeStage,
       dogName: dog.name,
+      ...(manual && manualLifeStage && manualLifeStage !== dogLifeStage
+        ? { manualLifeStage }
+        : {}),
     };
   }
 
@@ -1313,6 +1325,7 @@ export class RecipesController {
     manualLifeStage?: string,
     dogId?: string,
     req?: any,
+    manual = false,
   ): Promise<{
     recipe: Recipe;
     lifeStageMatch: RecipeLifeStageMatchDto;
@@ -1329,6 +1342,7 @@ export class RecipesController {
       manualLifeStage,
       dogId,
       req,
+      manual,
     );
     const requestedLifeStage = lifeStageRequest.requestedLifeStage;
     const configuredStages = seriesRecipes.map(
@@ -1354,22 +1368,24 @@ export class RecipesController {
       ) ??
       seriesRecipes[0];
     const selectedLifeStage = selectedRecipe.seriesLifeStage;
-    const isManualLifeStageMismatch = Boolean(
-      manualLifeStage &&
-        lifeStageRequest.dogLifeStage &&
-        exactMatch &&
-        selectedLifeStage !== lifeStageRequest.dogLifeStage,
-    );
+    const hasDog = lifeStageRequest.hasDog;
+    const dogLifeStage = lifeStageRequest.dogLifeStage;
+    const matchedManually = Boolean(lifeStageRequest.manualLifeStage && exactMatch);
     const matchType: RecipeLifeStageMatchDto['matchType'] =
-      exactMatch && isManualLifeStageMismatch
-        ? 'MANUAL_MISMATCH'
-        : exactMatch
-          ? 'MATCHED'
-          : concreteRecipeMatch
+      !hasDog
+        ? 'NO_DOG'
+        : matchedManually
+          ? 'MANUAL_MISMATCH'
+          : selectedLifeStage === dogLifeStage
             ? 'MATCHED'
-            : selectedLifeStage === 'HIGH_ACTIVITY_ADULT'
-              ? 'FALLBACK_ADULT'
-              : 'FALLBACK_FIRST';
+            : concreteRecipeMatch
+              ? 'MATCHED'
+              : selectedLifeStage === 'HIGH_ACTIVITY_ADULT'
+                ? 'FALLBACK_ADULT'
+                : 'FALLBACK_FIRST';
+    const riskLevel = hasDog
+      ? resolveSeriesLifeStageRisk(dogLifeStage, selectedLifeStage)
+      : 'NONE';
     const message =
       matchType === 'MANUAL_MISMATCH'
         ? this.buildManualLifeStageMismatchMessage(
@@ -1410,6 +1426,10 @@ export class RecipesController {
           : {}),
         selectedLifeStage,
         matchType,
+        riskLevel,
+        ...(lifeStageRequest.manualLifeStage
+          ? { manualLifeStage: lifeStageRequest.manualLifeStage }
+          : {}),
         ...(message ? { message } : {}),
       },
       availableLifeStageVersions,
@@ -1815,18 +1835,27 @@ export class RecipesController {
     required: false,
     description: 'Manually selected series life stage',
   })
+  @ApiQuery({
+    name: 'manual',
+    required: false,
+    description: 'true 表示顾客主动选的版本；缺省时按是否传 lifeStage 兼容旧版',
+  })
   @ApiResponse({ status: 200, description: 'Life stage match verdict' })
   async getLifeStageMatch(
     @Param('id') id: string,
     @Query('dogId') dogId?: string,
     @Query('lifeStage') lifeStage?: string,
+    @Query('manual') manual?: string,
     @Req() req?: any,
   ): Promise<ApiResponseDto<RecipeLifeStageMatchDto>> {
+    const manualSelection =
+      manual === undefined ? Boolean(lifeStage) : manual === 'true';
     const selection = await this.resolvePublicSeriesSelection(
       id,
       lifeStage,
       dogId,
       req,
+      manualSelection,
     );
 
     // 非公开系列 / 没有任何生命阶段版本：结论为 LEGACY，
@@ -1952,10 +1981,13 @@ export class RecipesController {
     @Query('shareToken') shareToken?: string,
     @Query('dogId') dogId?: string,
     @Query('lifeStage') lifeStage?: string,
+    @Query('manual') manual?: string,
     @Query('orderId') orderId?: string,
     @Req() req?: any,
   ): Promise<ApiResponseDto<RecipeDetailDto> | ApiResponseDto<null>> {
     const pinnedOrderId = String(orderId ?? '').trim();
+    const manualSelection =
+      manual === undefined ? Boolean(lifeStage) : manual === 'true';
     const accessibleRecipe = await this.getAccessibleRecipe(
       id,
       shareToken,
@@ -1987,6 +2019,7 @@ export class RecipesController {
       lifeStage,
       dogId,
       req,
+      manualSelection,
     );
     if (seriesSelection) {
       return ApiResponseDto.success(

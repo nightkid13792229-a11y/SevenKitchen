@@ -19,12 +19,15 @@ export interface RecipeLifeStageVersionDto {
 
 export interface RecipeLifeStageMatchDto {
   requestedLifeStage?: string;
+  manualLifeStage?: string;
+  riskLevel?: 'HIGH' | 'LOW' | 'NONE';
   dogId?: string;
   dogName?: string;
   dogLifeStage?: string;
   dogLifeStageLabel?: string;
   selectedLifeStage?: string;
   matchType:
+    | 'NO_DOG'
     | 'MATCHED'
     | 'MANUAL_MISMATCH'
     | 'FALLBACK_ADULT'

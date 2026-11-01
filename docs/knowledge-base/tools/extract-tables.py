@@ -18,12 +18,34 @@ Y_TOL = 4.0        # 同一行的 y 容差
 MIN_ROWS = 3
 
 
+def detect_gutter(page):
+    """找页面中部的竖向空白带（双栏页才有）；没有就返回 None（通栏）"""
+    W = page.rect.width
+    bins = [0] * int(W // 6 + 1)
+    for w in page.get_text('words'):
+        x0, x1 = w[0], w[2]
+        for b in range(int(max(x0, 0) // 6), min(int(x1 // 6) + 1, len(bins))):
+            bins[b] += 1
+    lo, hi = int(W * 0.3 // 6), int(W * 0.7 // 6)
+    run = 0
+    for b in range(lo, hi):
+        if bins[b] == 0:
+            run += 1
+            if run >= 4:              # 连续 24pt 空白 → 认定是栏间距
+                return (b - run + 1) * 6
+        else:
+            run = 0
+    return None
+
+
 def column_bounds(page, cap_x0):
-    """粗判表在左栏还是右栏，返回 (x0, x1)"""
-    mid = page.rect.width / 2
-    if cap_x0 < mid:
-        return 40, mid - 8
-    return mid + 8, page.rect.width - 30
+    """按页面实际版式决定表格的横向范围"""
+    gutter = detect_gutter(page)
+    if gutter is None:
+        return 30, page.rect.width - 25          # 通栏表
+    if cap_x0 < gutter:
+        return 30, gutter - 4                    # 左栏
+    return gutter + 4, page.rect.width - 25      # 右栏
 
 
 GAP = 10.0   # 同一行内，词间距 > GAP 就切成新单元格
@@ -67,7 +89,7 @@ def merge_cells(rows):
 def extract(doc, page_no, cap_rect):
     page = doc[page_no - 1]
     x0, x1 = column_bounds(page, cap_rect.x0)
-    clip = fitz.Rect(x0, cap_rect.y1 - 2, x1, page.rect.y1 - 30)
+    clip = fitz.Rect(x0, cap_rect.y1 - 2, x1, page.rect.y1 - 25)
     words = page.get_text('words', clip=clip)
     return merge_wrapped(rows_from_words(words))
 

@@ -12,6 +12,7 @@ describe('ProcurementSkuService', () => {
       create: jest.fn(),
       findUnique: jest.fn(),
       findFirst: jest.fn(),
+      count: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
     },
@@ -831,6 +832,74 @@ describe('ProcurementSkuService', () => {
           netContentPerPack: 1000,
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+  describe('listStaffCreated', () => {
+    const staffRow = (overrides: Record<string, unknown> = {}) => ({
+      id: 'sku-1',
+      ingredientId: 'ing-1',
+      name: '沃集鲜 糙米 1kg',
+      brand: null,
+      productModel: '1kg',
+      purchaseChannel: '沃尔玛',
+      purchaseUnit: '袋',
+      purchaseToBaseRatio: 1000,
+      currentPurchasePrice: 14.99,
+      isActive: true,
+      createdSource: 'STAFF_APP',
+      createdById: 'user-1',
+      createdAt: new Date('2026-11-01T11:12:00.000Z'),
+      sourceScreenshotUrl: 'https://img.example.com/a.jpg',
+      ingredient: { name: '糙米', baseUnit: 'G' },
+      createdBy: { nickname: '张三' },
+      ...overrides,
+    });
+
+    it('只查员工新增的行', async () => {
+      mockPrismaService.procurementSku.findMany.mockResolvedValue([staffRow()]);
+      mockPrismaService.procurementSku.count.mockResolvedValue(1);
+
+      await service.listStaffCreated({});
+
+      const where = mockPrismaService.procurementSku.findMany.mock.calls[0][0]
+        .where;
+      expect(where.createdSource).toBe('STAFF_APP');
+    });
+
+    it('把原料名、基准单位和添加人一起带出来', async () => {
+      mockPrismaService.procurementSku.findMany.mockResolvedValue([staffRow()]);
+      mockPrismaService.procurementSku.count.mockResolvedValue(1);
+
+      const result = await service.listStaffCreated({});
+
+      expect(result.total).toBe(1);
+      expect(result.items[0]).toMatchObject({
+        id: 'sku-1',
+        ingredientName: '糙米',
+        baseUnit: 'G',
+        createdByName: '张三',
+        createdSource: 'STAFF_APP',
+      });
+    });
+
+    it('按时间范围过滤并分页', async () => {
+      mockPrismaService.procurementSku.findMany.mockResolvedValue([]);
+      mockPrismaService.procurementSku.count.mockResolvedValue(0);
+
+      await service.listStaffCreated({
+        createdFrom: '2026-10-01',
+        createdTo: '2026-11-01',
+        page: 3,
+        pageSize: 20,
+      });
+
+      const args = mockPrismaService.procurementSku.findMany.mock.calls[0][0];
+      expect(args.skip).toBe(40);
+      expect(args.take).toBe(20);
+      expect(args.where.createdAt).toEqual({
+        gte: new Date('2026-10-01T00:00:00.000Z'),
+        lte: new Date('2026-11-01T23:59:59.999Z'),
+      });
     });
   });
 });

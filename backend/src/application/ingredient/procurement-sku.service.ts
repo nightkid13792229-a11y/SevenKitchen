@@ -97,6 +97,27 @@ export interface ProcurementSkuPriceHistoryView {
   createdAt: string;
 }
 
+/** 后台「员工新增的采购商品」清单的一行 */
+export interface StaffCreatedProcurementSkuView {
+  id: string;
+  ingredientId: string;
+  ingredientName: string | null;
+  baseUnit: string | null;
+  name: string;
+  brand: string | null;
+  productModel: string | null;
+  purchaseChannel: string | null;
+  purchaseUnit: string | null;
+  purchaseToBaseRatio: number | null;
+  currentPurchasePrice: number | null;
+  isActive: boolean;
+  createdById: string | null;
+  createdByName: string | null;
+  createdSource: string | null;
+  createdAt: string;
+  sourceScreenshotUrl: string | null;
+}
+
 export interface CreateProcurementSkuDto {
   name: string;
   brand?: string | null;
@@ -572,6 +593,30 @@ export class ProcurementSkuService {
   }
 
   /**
+   * 小程序「新增采购商品」页要用的选项：这道原料的基准单位 + 这个基准单位下允许的采购单位。
+   *
+   * 为什么不把白名单抄一份到前端：前台抄一份就必然和后台漂移，
+   * 员工就会看到"选了却被服务端拒掉"的死路（2026-11-01 定的单一事实来源）。
+   */
+  async getFormOptions(ingredientId: string): Promise<{
+    baseUnit: BaseUnit;
+    purchaseUnits: string[];
+  }> {
+    const ingredient = await this.prisma.ingredient.findUnique({
+      where: { id: ingredientId },
+      select: { id: true, type: true, baseUnit: true },
+    });
+    this.assertFoodIngredientCanOwnProcurementSkus(ingredient);
+
+    const baseUnit = ingredient!.baseUnit as BaseUnit;
+
+    return {
+      baseUnit,
+      purchaseUnits: [...ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT[baseUnit]],
+    };
+  }
+
+  /**
    * 员工在小程序里新增采购商品（2026-11-01）。
    *
    * 与后台 `create()` 的区别，都是老板定过的规矩：
@@ -1019,6 +1064,91 @@ export class ProcurementSkuService {
     await this.prisma.procurementSku.delete({
       where: { id },
     });
+  }
+
+  /**
+   * 后台「原料管理 › 员工新增的采购商品」清单（2026-11-01）。
+   *
+   * `createdSource` 固定写死 `STAFF_APP`，不接受前端传 —— 否则前台传个空就把全部
+   * 历史 SKU 都算成"员工新增"了。
+   */
+  async listStaffCreated(query: {
+    ingredientId?: string;
+    createdById?: string;
+    createdFrom?: string;
+    createdTo?: string;
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ items: StaffCreatedProcurementSkuView[]; total: number }> {
+    const page = Math.max(1, Math.trunc(query.page ?? 1));
+    const pageSize = Math.min(200, Math.max(1, Math.trunc(query.pageSize ?? 20)));
+
+    const where: Record<string, unknown> = { createdSource: 'STAFF_APP' };
+
+    if (query.ingredientId) {
+      where.ingredientId = query.ingredientId;
+    }
+
+    if (query.createdById) {
+      where.createdById = query.createdById;
+    }
+
+    const createdAtRange: Record<string, Date> = {};
+    if (query.createdFrom) {
+      createdAtRange.gte = new Date(`${query.createdFrom}T00:00:00.000Z`);
+    }
+    if (query.createdTo) {
+      createdAtRange.lte = new Date(`${query.createdTo}T23:59:59.999Z`);
+    }
+    if (Object.keys(createdAtRange).length > 0) {
+      where.createdAt = createdAtRange;
+    }
+
+    const keyword = query.keyword?.trim();
+    if (keyword) {
+      where.OR = [
+        { name: { contains: keyword, mode: 'insensitive' } },
+        { purchaseChannel: { contains: keyword, mode: 'insensitive' } },
+      ];
+    }
+
+    const [rows, total] = await Promise.all([
+      this.prisma.procurementSku.findMany({
+        where,
+        include: {
+          ingredient: { select: { name: true, baseUnit: true } },
+          createdBy: { select: { nickname: true } },
+        },
+        orderBy: [{ createdAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.procurementSku.count({ where }),
+    ]);
+
+    return {
+      items: rows.map((row: any) => ({
+        id: row.id,
+        ingredientId: row.ingredientId,
+        ingredientName: row.ingredient?.name ?? null,
+        baseUnit: row.ingredient?.baseUnit ?? null,
+        name: row.name,
+        brand: row.brand ?? null,
+        productModel: row.productModel ?? null,
+        purchaseChannel: row.purchaseChannel ?? null,
+        purchaseUnit: row.purchaseUnit ?? null,
+        purchaseToBaseRatio: row.purchaseToBaseRatio ?? null,
+        currentPurchasePrice: toNullableNumber(row.currentPurchasePrice),
+        isActive: row.isActive,
+        createdById: row.createdById ?? null,
+        createdByName: row.createdBy?.nickname ?? null,
+        createdSource: row.createdSource ?? null,
+        createdAt: row.createdAt.toISOString(),
+        sourceScreenshotUrl: row.sourceScreenshotUrl ?? null,
+      })),
+      total,
+    };
   }
 
   async listBrands(): Promise<string[]> {

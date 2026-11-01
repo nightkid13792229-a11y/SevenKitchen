@@ -242,6 +242,7 @@ import {
 } from './application/nutrition-governance/nutrition-candidate-review.provider';
 import { RecommendedProductController } from './interfaces/controllers/recommended-product.controller';
 import { ProcurementSkuController } from './interfaces/controllers/procurement-sku.controller';
+import { AdminProcurementSkuListController } from './interfaces/controllers/admin-procurement-sku-list.controller';
 import { RecommendedProductService } from './application/ingredient/recommended-product.service';
 import { ReviewsController } from './interfaces/controllers/reviews.controller';
 import { FeedbackController } from './interfaces/controllers/feedback.controller';
@@ -474,6 +475,7 @@ validatePrismaConfig();
     ReviewsController,
     FeedbackController,
     ProcurementSkuController,
+    AdminProcurementSkuListController,
     AdminSupplementShopController,
     AdminSupplementEquivalenceController,
     AdminTastingPackController,

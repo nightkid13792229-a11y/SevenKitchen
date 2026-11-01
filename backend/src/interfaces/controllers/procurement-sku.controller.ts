@@ -21,7 +21,7 @@ import type {
 } from '../../application/ingredient/procurement-sku.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
-import { StaffGuard } from '../guards/role.guard';
+import { AdminGuard, StaffGuard } from '../guards/role.guard';
 
 @ApiTags('Admin Procurement Skus')
 @UseGuards(AuthGuard, StaffGuard)
@@ -51,6 +51,8 @@ export class ProcurementSkuController {
   }
 
   @Put(':id')
+  // 2026-11-01 老板定：员工只能新增采购商品，不能改、不能删
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Update a procurement sku' })
   async update(
     @Param('id') id: string,
@@ -75,6 +77,8 @@ export class ProcurementSkuController {
   }
 
   @Post(':id/price-history/:historyId/rollback')
+  // 改价同样只允许管理员：否则"员工不能改商品"这条会被绕开（改价也是改账）
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Rollback procurement sku current purchase price to a history row' })
   async rollbackPrice(
     @Param('id') id: string,
@@ -91,6 +95,7 @@ export class ProcurementSkuController {
   }
 
   @Delete(':id')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Delete a procurement sku' })
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string) {

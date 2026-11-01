@@ -42,10 +42,12 @@ describe('QuickCyclePackagePlan · 共享分装组件', () => {
     expect(source).not.toContain('packagePlan.value =')
   })
 
-  it('★ 输入用草稿：打字期间不被归一化，失焦才提交', () => {
+  it('★ 输入用草稿显示，模型跟着走，失焦再归一化', () => {
     expect(source).toContain('const drafts = reactive')
     expect(source).toContain('function inputValue(')
     expect(source).toContain('@blur="commitField(')
+    // 每次输入都同步给页面：否则改完数字立刻点下单，价格还是旧的
+    expect(source).toMatch(/drafts\[draftKey\(index, field\)\] = raw\n\s+emit\('update-row'/)
     expect(source).toContain('function commitAll()')
     // 页面在提交订单前能拿到未失焦的值
     expect(source).toContain('defineExpose({ commitAll })')

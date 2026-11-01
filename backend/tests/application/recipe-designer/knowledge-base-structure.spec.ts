@@ -470,15 +470,23 @@ describe('知识库结构升级', () => {
       expect(hemoWithAcvim.length).toBeGreaterThanOrEqual(4)
     })
 
-    it('AAHA 2014 体重指南被明确标注为历史来源', () => {
-      const downgraded = service
-        .getAll()
-        .flatMap((entry) => entry.citations)
-        .filter((citation) => citation.source.includes('AAHA 2014'))
+    it('AAHA 2014 与 2021 版并用，且 2014 不再被描述为「已被取代」', () => {
+      // 2026-11-01 更正：AAHA 2021 原文写明「详细减重方案请参阅 2014 指南」
+      // （"We encourage readers to consult the 2014 Weight Management Guidelines
+      //  for more complete information"）。2021 只是概览，二者是配套关系，
+      // 不是「新版取代旧版」，所以出处里不应再出现「已被 2021 版取代」。
+      const citations = service.getAll().flatMap((entry) => entry.citations)
+      const aaha2014 = citations.filter((citation) =>
+        citation.source.includes('AAHA 2014'),
+      )
+      const aaha2021 = citations.filter((citation) =>
+        citation.source.includes('AAHA 2021'),
+      )
 
-      expect(downgraded.length).toBeGreaterThan(0)
-      for (const citation of downgraded) {
-        expect(citation.source).toContain('已被 2021 版取代')
+      expect(aaha2014.length).toBeGreaterThan(0)
+      expect(aaha2021.length).toBeGreaterThan(0)
+      for (const citation of aaha2014) {
+        expect(citation.source).not.toContain('已被 2021 版取代')
       }
     })
   })

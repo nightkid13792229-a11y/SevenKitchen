@@ -30,7 +30,10 @@ export type SearchPlanProfileState = 'RAW' | 'COOKED';
 
 /** 每个库的检索汇报：用了哪些词、命中多少条、查了几轮。 */
 export interface SearchPlanLibraryReport {
-  library: SearchPlanLibrary;
+  /** 本地库用白名单代码；线上兜底统一记 `ONLINE`。 */
+  library: string;
+  /** LOCAL = 7 个本地库；ONLINE = 白名单线上兜底。 */
+  kind: 'LOCAL' | 'ONLINE';
   terms: string[];
   /** 最后一轮的命中总数（截断前）。 */
   total: number;
@@ -52,6 +55,8 @@ export interface SearchPlanCandidate {
   coverage: number;
   /** 一句话入选原因。 */
   reason: string;
+  /** true = 来自线上白名单兜底（记录 dataType 为 ONLINE_TRUSTED_WEB）。 */
+  isOnline: boolean;
 }
 
 /** 人确认时勾中的候选，原样冻结下来作为写入依据。 */
@@ -62,6 +67,7 @@ export interface SearchPlanSelection {
   state: string;
   profileState: SearchPlanProfileState;
   coverage: number;
+  isOnline: boolean;
 }
 
 export interface SearchPlan {
@@ -207,8 +213,12 @@ function readLibraryReports(input: unknown): SearchPlanLibraryReport[] {
     if (!isRecord(raw)) {
       continue;
     }
+    const kind = raw.kind === 'ONLINE' ? 'ONLINE' : 'LOCAL';
     const library = readText(raw.library, 20).toUpperCase();
-    if (!LIBRARY_SET.has(library)) {
+    if (kind === 'LOCAL' && !LIBRARY_SET.has(library)) {
+      continue;
+    }
+    if (kind === 'ONLINE' && !library) {
       continue;
     }
     const terms = Array.isArray(raw.terms)
@@ -231,7 +241,8 @@ function readLibraryReports(input: unknown): SearchPlanLibraryReport[] {
         ? Math.floor(raw.rounds)
         : 1;
     reports.push({
-      library: library as SearchPlanLibrary,
+      library,
+      kind,
       terms,
       total,
       rounds,
@@ -275,6 +286,7 @@ function readCandidates(input: unknown): SearchPlanCandidate[] {
       profileState,
       coverage,
       reason: readText(raw.reason, REASON_MAX),
+      isOnline: raw.isOnline === true,
     });
   }
 
@@ -435,6 +447,7 @@ export function approveSearchPlan(
       state: candidate.state,
       profileState: candidate.profileState,
       coverage: candidate.coverage,
+      isOnline: candidate.isOnline,
     });
   }
 
@@ -506,6 +519,7 @@ export function readSearchPlan(value: unknown): SearchPlan | null {
         state: candidate.state,
         profileState: candidate.profileState,
         coverage: candidate.coverage,
+        isOnline: candidate.isOnline,
       })),
     findings: readText(value.findings, FINDINGS_MAX),
     rationale: readText(value.rationale, RATIONALE_MAX),

@@ -7,6 +7,10 @@ import {
 } from '../../domain/ingredient/nutrition-coverage';
 import { IngredientSkillService } from './ingredient-skill.service';
 import {
+  IngredientCreationOnlineService,
+  ONLINE_FALLBACK_DATA_TYPE,
+} from './ingredient-creation-online.service';
+import {
   classifyCookingMethod,
   normalizePreparationState,
   type PreparationState,
@@ -55,6 +59,7 @@ import type {
   PendingQuestionOption,
   ProfileDraft,
   SearchReportEntry,
+  OnlineSearchEntry,
 } from './ingredient-creation.types';
 
 /**
@@ -704,6 +709,36 @@ const PROPOSE_SEARCH_PLAN_TOOL: AgentToolDefinition = {
   },
 };
 
+/** 本地 0 命中时的白名单线上兜底。 */
+const SEARCH_ONLINE_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'searchOnline',
+    description:
+      '本地库对目标原料/部位 0 命中时，到白名单线上来源兜底检索（只读；命中结果会落库，下次本地也能查到）。要指定生/熟状态。返回命中记录 id / 名称 / 来源库 / 来源网址；仍然 0 命中就如实告诉用户，不要拿近似原料凑数。',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: '要查的中文名，例如 兔肝；最多 100 字。',
+        },
+        nameEn: {
+          type: 'string',
+          description: '英文名（有就填，白名单页面多为英文，匹配更准）。',
+        },
+        state: {
+          type: 'string',
+          enum: ['RAW', 'COOKED'],
+          description: '要找生档案还是熟档案。',
+        },
+      },
+      required: ['name', 'state'],
+      additionalProperties: false,
+    },
+  },
+};
+
 /**
  * 原子工具 7：问人。
  *
@@ -980,15 +1015,28 @@ interface NutritionRecordValue {
 /** 把检索流水按库折叠成「每库一行」：词去重、总数取最后一轮。 */
 function aggregateLibraryReports(
   entries: readonly SearchReportEntry[],
-): Array<{ library: string; terms: string[]; total: number; rounds: number }> {
+): Array<{
+  library: string;
+  kind: 'LOCAL' | 'ONLINE';
+  terms: string[];
+  total: number;
+  rounds: number;
+}> {
   const byLibrary = new Map<
     string,
-    { library: string; terms: string[]; total: number; rounds: number }
+    {
+      library: string;
+      kind: 'LOCAL' | 'ONLINE';
+      terms: string[];
+      total: number;
+      rounds: number;
+    }
   >();
 
   for (const entry of entries) {
     const current = byLibrary.get(entry.library) ?? {
       library: entry.library,
+      kind: 'LOCAL' as const,
       terms: [],
       total: 0,
       rounds: 0,
@@ -1382,6 +1430,8 @@ export class IngredientCreationToolsService {
     private readonly nameClassifierService?: IngredientNameClassifierService,
     @Optional()
     private readonly skillService?: IngredientSkillService,
+    @Optional()
+    private readonly onlineService?: IngredientCreationOnlineService,
   ) {}
 
   getDefinitions(): readonly AgentToolDefinition[] {
@@ -1393,6 +1443,7 @@ export class IngredientCreationToolsService {
       WRITE_NUTRITION_TOOL,
       WRITE_INGREDIENT_TOOL,
       SELF_CHECK_TOOL,
+      SEARCH_ONLINE_TOOL,
       ASK_USER_TOOL,
       PROPOSE_SEARCH_PLAN_TOOL,
       FINISH_TOOL,
@@ -1493,6 +1544,8 @@ export class IngredientCreationToolsService {
         return this.writeIngredient(input.draftId, input.args);
       case 'selfCheck':
         return this.selfCheck(input.draftId);
+      case 'searchOnline':
+        return this.searchOnline(input.args, input.draftId);
       case 'askUser':
         return this.askUser(input.draftId, input.args);
       case 'proposeSearchPlan':
@@ -2617,6 +2670,68 @@ export class IngredientCreationToolsService {
     return record ?? null;
   }
 
+  /** 线上白名单兜底：本地 0 命中时才该调用。 */
+  private async searchOnline(
+    args: Record<string, unknown>,
+    draftId: string,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const name = normalizeText(args.name);
+    if (!name) {
+      return this.error('searchOnline 需要非空的 name。');
+    }
+    const state = normalizeText(args.state).toUpperCase();
+    if (state !== 'RAW' && state !== 'COOKED') {
+      return this.error('searchOnline 的 state 只能是 RAW 或 COOKED。');
+    }
+    if (!this.onlineService) {
+      return this.error('线上检索未启用。');
+    }
+
+    const nameEn = normalizeText(args.nameEn);
+    const result = await this.onlineService.searchOnline({
+      name,
+      ...(nameEn ? { nameEn } : {}),
+      state,
+    });
+
+    const draft = await this.draftService.get(draftId);
+    if (draft?.payload) {
+      const previous = Array.isArray(draft.payload.onlineReport)
+        ? draft.payload.onlineReport
+        : [];
+      const entry: OnlineSearchEntry = {
+        name,
+        state,
+        total: result.candidates.length,
+        attemptedHosts: result.attemptedHosts,
+        at: new Date().toISOString(),
+      };
+      await this.draftService.patch(draftId, draft.step, {
+        onlineReport: [...previous, entry],
+      });
+    }
+
+    return {
+      ok: true,
+      content: okContent({
+        matches: result.candidates.map((candidate) => ({
+          id: candidate.sourceRecordId,
+          name: candidate.foodName,
+          sourceType: candidate.sourceType,
+          state: candidate.preparationState,
+          sourceUrl: candidate.sourceUrl,
+        })),
+        total: result.candidates.length,
+        attemptedHosts: result.attemptedHosts,
+        rejectedHosts: result.rejectedHosts,
+        hint:
+          result.candidates.length === 0
+            ? '线上白名单也没有找到：不要再拿近似原料凑数，先问用户换原料 / 接受近似。'
+            : '这些是线上来源，已落库；可放进候选（会标“线上”），仍要用户确认。',
+      }),
+    };
+  }
+
   /** 工具 6：跑现有终检服务，只返回三档摘要；服务报错也变成错误文本。 */
   private async selfCheck(
     draftId: string,
@@ -2835,13 +2950,27 @@ export class IngredientCreationToolsService {
       }
     }
 
+    const onlineReports = (
+      Array.isArray(draft.payload.onlineReport) ? draft.payload.onlineReport : []
+    ).map((entry) => ({
+      library: 'ONLINE',
+      kind: 'ONLINE' as const,
+      terms: [entry.name],
+      total: entry.total,
+      rounds: 1,
+      note: '',
+    }));
+
     const built = buildPendingSearchPlan({
       ...args,
       candidates: enriched.candidates,
-      libraryReports: reports.map((entry) => ({
-        ...entry,
-        note: notes.get(entry.library) ?? '',
-      })),
+      libraryReports: [
+        ...reports.map((entry) => ({
+          ...entry,
+          note: notes.get(entry.library) ?? '',
+        })),
+        ...onlineReports,
+      ],
     });
     if (!built.ok) {
       return this.error(built.error);
@@ -2899,6 +3028,7 @@ export class IngredientCreationToolsService {
           status: true,
           sourceType: true,
           foodName: true,
+          dataType: true,
           normalizedNutrition: true,
         },
       });
@@ -2919,6 +3049,7 @@ export class IngredientCreationToolsService {
         sourceType: record.sourceType,
         name: normalizeText(item.name) || record.foodName,
         coverage: computeCatalogCoverage(record.normalizedNutrition).percent,
+        isOnline: record.dataType === ONLINE_FALLBACK_DATA_TYPE,
       });
     }
 

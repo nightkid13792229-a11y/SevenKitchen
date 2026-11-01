@@ -129,7 +129,8 @@ describe('reduceAgentEvents · 检索方案', () => {
             state: '生',
             profileState: 'RAW',
             coverage: 52,
-            reason: '英文名统一'
+            reason: '英文名统一',
+            isOnline: false
           }
         ],
         selections: [],
@@ -153,7 +154,8 @@ describe('reduceAgentEvents · 检索方案', () => {
         state: '生',
         profileState: 'RAW',
         coverage: 52,
-        reason: '英文名统一'
+        reason: '英文名统一',
+        isOnline: false
       }
     ])
     expect(state.draftId).toBe('draft-1')

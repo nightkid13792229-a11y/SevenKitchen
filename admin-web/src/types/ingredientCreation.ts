@@ -504,6 +504,8 @@ export type SearchPlanStatus = 'PENDING' | 'APPROVED'
 /** 每个库的检索汇报：用了哪些词、命中多少条、查了几轮。 */
 export interface SearchPlanLibraryReport {
   library: string
+  /** LOCAL = 本地营养库；ONLINE = 白名单线上兜底。 */
+  kind: 'LOCAL' | 'ONLINE'
   terms: string[]
   total: number
   rounds: number
@@ -521,6 +523,8 @@ export interface SearchPlanCandidate {
   profileState: SearchPlanProfileState
   coverage: number
   reason: string
+  /** 来自线上白名单兜底。 */
+  isOnline: boolean
 }
 
 /** 人勾中的候选。 */
@@ -531,6 +535,7 @@ export interface SearchPlanSelection {
   state: string
   profileState: SearchPlanProfileState
   coverage: number
+  isOnline: boolean
 }
 
 /**

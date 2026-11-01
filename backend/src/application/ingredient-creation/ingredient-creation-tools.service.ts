@@ -1,7 +1,6 @@
 import { createHash } from 'crypto';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { isIngredientCardFieldKey } from '../../domain/ingredient-creation/ingredient-card-fields';
-import { getOnlineSearchLibraries } from '../../domain/nutrition-governance/nutrition-source-registry';
 import {
   computeCatalogCoverage,
   readCatalogFieldValue,
@@ -60,7 +59,6 @@ import type {
   PendingQuestionOption,
   ProfileDraft,
   SearchReportEntry,
-  OnlineSearchEntry,
 } from './ingredient-creation.types';
 
 /**
@@ -161,10 +159,6 @@ const NAME_SUMMARY_CACHE_MAX_ENTRIES = 200;
  * 决定下一步（summarizeByKeyword / askUser）。
  */
 /** 按库检索：模型给「库 + 该库的词组」，代码只按库查。 */
-const ONLINE_SEARCH_LIBRARY_CODES = getOnlineSearchLibraries().map(
-  (library) => library.key.toUpperCase(),
-);
-
 const SEARCH_LIBRARIES_TOOL: AgentToolDefinition = {
   type: 'function',
   function: {
@@ -709,52 +703,6 @@ const PROPOSE_SEARCH_PLAN_TOOL: AgentToolDefinition = {
         },
       },
       required: ['keywords', 'libraries'],
-      additionalProperties: false,
-    },
-  },
-};
-
-/** 本地 0 命中时的白名单线上兜底（按库给词）。 */
-const SEARCH_ONLINE_TOOL: AgentToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'searchOnline',
-    description:
-      '本地库 0 命中时，到白名单线上库检索（只读；命中结果会落库，下次本地也能查到）。**按库给词**：每个库一组 terms，复用你刚查本地库时扩展出来的词，并按该库语言挑最可能命中的写法。代码会逐库、逐站点用 site: 搜索并抓取解析。**一次把 14 个可搜库全部列上，不要自己挑几个**；全部库都查不到才如实说“线上没有”，不要拿近似原料凑数。',
-    parameters: {
-      type: 'object',
-      properties: {
-        groups: {
-          type: 'array',
-          minItems: 1,
-          description: '每个库一组；同一个库只出现一次。',
-          items: {
-            type: 'object',
-            properties: {
-              library: {
-                type: 'string',
-                enum: [...ONLINE_SEARCH_LIBRARY_CODES],
-                description: '要查的线上库。',
-              },
-              terms: {
-                type: 'array',
-                minItems: 1,
-                maxItems: 6,
-                items: { type: 'string' },
-                description: '该库要用的检索词（正名、俗称、该库语言的写法）。',
-              },
-            },
-            required: ['library', 'terms'],
-            additionalProperties: false,
-          },
-        },
-        state: {
-          type: 'string',
-          enum: ['RAW', 'COOKED'],
-          description: '要找生档案还是熟档案。',
-        },
-      },
-      required: ['groups', 'state'],
       additionalProperties: false,
     },
   },
@@ -1464,7 +1412,6 @@ export class IngredientCreationToolsService {
       WRITE_NUTRITION_TOOL,
       WRITE_INGREDIENT_TOOL,
       SELF_CHECK_TOOL,
-      SEARCH_ONLINE_TOOL,
       ASK_USER_TOOL,
       PROPOSE_SEARCH_PLAN_TOOL,
       FINISH_TOOL,
@@ -1570,8 +1517,6 @@ export class IngredientCreationToolsService {
         return this.writeIngredient(input.draftId, input.args);
       case 'selfCheck':
         return this.selfCheck(input.draftId);
-      case 'searchOnline':
-        return this.searchOnline(input.args, input.draftId);
       case 'askUser':
         return this.askUser(input.draftId, input.args);
       case 'proposeSearchPlan':
@@ -2696,123 +2641,6 @@ export class IngredientCreationToolsService {
     return record ?? null;
   }
 
-  /** 线上白名单兜底：模型按库给词，代码逐库逐站点搜。 */
-  private async searchOnline(
-    args: Record<string, unknown>,
-    draftId: string,
-  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
-    const rawGroups = args.groups;
-    if (!Array.isArray(rawGroups) || rawGroups.length === 0) {
-      return this.error('searchOnline 需要 groups 数组，至少一组。');
-    }
-    const state = normalizeText(args.state).toUpperCase();
-    if (state !== 'RAW' && state !== 'COOKED') {
-      return this.error('searchOnline 的 state 只能是 RAW 或 COOKED。');
-    }
-    if (!this.onlineService) {
-      return this.error('线上检索未启用。');
-    }
-
-    const seen = new Set<string>();
-    const groups: Array<{ library: string; terms: string[] }> = [];
-    for (const raw of rawGroups) {
-      if (!isRecord(raw)) {
-        return this.error('groups 的每一项必须是 { library, terms }。');
-      }
-      const library = normalizeText(raw.library).toUpperCase();
-      if (!(ONLINE_SEARCH_LIBRARY_CODES as readonly string[]).includes(library)) {
-        return this.error(
-          `线上库「${library || String(raw.library)}」不在白名单；可选：${ONLINE_SEARCH_LIBRARY_CODES.join('、')}。`,
-        );
-      }
-      if (seen.has(library)) {
-        return this.error(`线上库「${library}」重复出现，每组只写一次。`);
-      }
-      seen.add(library);
-      if (!Array.isArray(raw.terms)) {
-        return this.error(`线上库「${library}」的 terms 必须是数组。`);
-      }
-      const terms = [
-        ...new Set(
-          raw.terms
-            .map((term) => normalizeText(term))
-            .filter((term) => term.length > 0),
-        ),
-      ].slice(0, 6);
-      if (terms.length === 0) {
-        return this.error(`线上库「${library}」至少要有一个检索词。`);
-      }
-      groups.push({ library, terms });
-    }
-
-    const results = await Promise.all(
-      groups.map(async (group) => ({
-        group,
-        result: await this.onlineService!.searchOnlineLibrary({
-          library: group.library,
-          terms: group.terms,
-          state,
-        }),
-      })),
-    );
-
-    const draft = await this.draftService.get(draftId);
-    if (draft?.payload) {
-      const previous = Array.isArray(draft.payload.onlineReport)
-        ? draft.payload.onlineReport
-        : [];
-      const at = new Date().toISOString();
-      await this.draftService.patch(draftId, draft.step, {
-        onlineReport: [
-          ...previous,
-          ...results.map(({ group, result }) => ({
-            library: group.library,
-            name: group.terms[0],
-            state: state as 'RAW' | 'COOKED',
-            total: result.candidates.length,
-            attemptedHosts: result.attemptedHosts,
-            discoveryStatus: result.discoveryStatus,
-            at,
-          })),
-        ],
-      });
-    }
-
-    const unavailable = results
-      .filter(({ result }) => result.discoveryStatus === 'UNAVAILABLE')
-      .map(({ group }) => group.library);
-    const empty = results
-      .filter(({ result }) => result.candidates.length === 0)
-      .map(({ group }) => group.library);
-
-    return {
-      ok: true,
-      content: okContent({
-        groups: results.map(({ group, result }) => ({
-          library: group.library,
-          total: result.candidates.length,
-          matches: result.candidates.map((candidate) => ({
-            id: candidate.sourceRecordId,
-            name: candidate.foodName,
-            sourceType: candidate.sourceType,
-            state: candidate.preparationState,
-            sourceUrl: candidate.sourceUrl,
-          })),
-        })),
-        total: results.reduce(
-          (sum, { result }) => sum + result.candidates.length,
-          0,
-        ),
-        hint:
-          unavailable.length === results.length
-            ? '线上检索通道当前不可用（搜索接口连不上）：不能据此判断“线上没有”，请如实告诉用户稍后重试或换原料。'
-            : empty.length === 0
-              ? '每库都有线上命中；可放进候选（会标“线上”），仍要用户确认。'
-              : `${empty.join('、')} 没有找到；全部库都查不到才说“线上没有”，不要拿近似原料凑数。`,
-      }),
-    };
-  }
-
   /** 工具 6：跑现有终检服务，只返回三档摘要；服务报错也变成错误文本。 */
   private async selfCheck(
     draftId: string,
@@ -3036,27 +2864,13 @@ export class IngredientCreationToolsService {
       }
     }
 
-    const onlineReports = (
-      Array.isArray(draft.payload.onlineReport) ? draft.payload.onlineReport : []
-    ).map((entry) => ({
-      library: entry.library ?? 'ONLINE',
-      kind: 'ONLINE' as const,
-      terms: [entry.name],
-      total: entry.total,
-      rounds: 1,
-      note: '',
-    }));
-
     const built = buildPendingSearchPlan({
       ...args,
       candidates: enriched.candidates,
-      libraryReports: [
-        ...reports.map((entry) => ({
-          ...entry,
-          note: notes.get(entry.library) ?? '',
-        })),
-        ...onlineReports,
-      ],
+      libraryReports: reports.map((entry) => ({
+        ...entry,
+        note: notes.get(entry.library) ?? '',
+      })),
     });
     if (!built.ok) {
       return this.error(built.error);

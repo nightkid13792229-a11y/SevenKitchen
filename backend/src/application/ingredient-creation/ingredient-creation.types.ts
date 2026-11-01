@@ -454,19 +454,6 @@ export interface IngredientCreationDraftPayload {
    * 汇报块由它生成，不让模型复述数字；同一库多轮（换词重查）会有多条。
    */
   searchReport?: SearchReportEntry[];
-  /** 线上兜底检索的流水（本地 0 命中时才会出现）。 */
-  onlineReport?: OnlineSearchEntry[];
-}
-
-export interface OnlineSearchEntry {
-  /** 线上库代码（USDA / CNF / ...）；旧记录没有这个字段。 */
-  library?: string;
-  name: string;
-  state: 'RAW' | 'COOKED';
-  total: number;
-  attemptedHosts: string[];
-  discoveryStatus?: 'OK' | 'UNAVAILABLE';
-  at: string;
 }
 
 export interface SearchReportEntry {

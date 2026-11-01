@@ -416,11 +416,7 @@
             size="small"
             class="agent-plan__table"
           >
-            <el-table-column label="营养库" width="102">
-              <template #default="{ row }">
-                {{ row.kind === 'ONLINE' ? `${row.library}（线上）` : row.library }}
-              </template>
-            </el-table-column>
+            <el-table-column prop="library" label="营养库" width="102" />
             <el-table-column label="搜索词" min-width="220">
               <template #default="{ row }">
                 {{ row.terms.join('、') }}
@@ -454,14 +450,7 @@
                 />
               </template>
             </el-table-column>
-            <el-table-column label="词条名称" min-width="170">
-              <template #default="{ row }">
-                {{ row.name }}
-                <el-tag v-if="row.isOnline" size="small" effect="plain">
-                  线上
-                </el-tag>
-              </template>
-            </el-table-column>
+            <el-table-column prop="name" label="词条名称" min-width="170" />
             <el-table-column prop="sourceType" label="来源库" width="88" />
             <el-table-column prop="state" label="状态" width="90" />
             <el-table-column label="字段覆盖率（60 项）" width="140">

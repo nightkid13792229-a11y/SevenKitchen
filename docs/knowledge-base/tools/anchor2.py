@@ -200,10 +200,15 @@ def main():
                 conf = ('high' if best[0] >= 0.5 else
                         'medium' if best[0] >= 0.3 else
                         'chapter' if best[1] else 'none')
-                # 只到章节级时，锚到该文档的首个小节，明确表示"精度只到章"
-                if conf == 'chapter' and best[1] and not best[3]:
+                # 只到章节级时：锚到该小节，并把该小节的段落范围一起给出
+                if conf == 'chapter' and best[1]:
                     secs = docs[best[1]]['sections']
-                    best = (best[0], best[1], [], secs[0]['id'] if secs else None)
+                    if not best[3]:
+                        best = (best[0], best[1], [], secs[0]['id'] if secs else None)
+                    if best[3]:
+                        rng = [p['id'] for p in docs[best[1]]['paragraphs']
+                               if p['sectionId'] == best[3]][:40]
+                        best = (best[0], best[1], rng, best[3])
                 table_ids, table_pages = [], []
                 if tbl and best[1]:
                     hits = tmap.get((best[1], tbl.group(1).replace('–', '-').lower()), [])
@@ -219,6 +224,7 @@ def main():
                 out.append({'entry': eid, 'source': src or sid, 'chapter': ch,
                             'doc': best[1], 'paragraphs': best[2],
                             'section': best[3], 'confidence': conf,
+                            'precision': 'paragraph' if conf in ('high','medium') else 'section',
                             'score': round(best[0], 3),
                             'table': tbl.group(1).replace('–', '-') if tbl else None,
                             'tableIds': table_ids,

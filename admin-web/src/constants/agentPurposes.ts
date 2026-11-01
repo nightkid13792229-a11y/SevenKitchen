@@ -80,6 +80,14 @@ export const AGENT_PURPOSES: AgentPurposeMeta[] = [
     defaultModel: 'deepseek-flash',
   },
   {
+    purpose: 'PROCUREMENT_SKU_DRAFT',
+    label: '采购 · 商品截图识别（看图）',
+    description:
+      '员工在小程序新增采购商品时，从商超 App 的商品详情页截图里读出名称、净含量和单价。' +
+      '必须用**能读图**的模型（deepseek-flash）；未单独配置时回退全局默认',
+    defaultModel: 'deepseek-flash',
+  },
+  {
     purpose: 'HEALTH_ANALYSIS',
     label: '健康 · AI 分析（七项）',
     description:

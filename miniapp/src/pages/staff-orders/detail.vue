@@ -115,6 +115,11 @@
               <!-- 总净重跟规格同一行、同一种写法（2026-10-31 老板要求） -->
               <text class="spec">总净重 {{ formatGrams(totalQuantityG) }}</text>
             </view>
+            <!-- 顾客下单时自己填的备注：客服与制作都要看得到 -->
+            <view v-if="customerNoteText" class="customer-note">
+              <text class="customer-note-label">顾客备注</text>
+              <text class="customer-note-text">{{ customerNoteText }}</text>
+            </view>
           </view>
         </view>
 
@@ -1324,6 +1329,17 @@ const orderItems = computed<OrderItemDetail[]>(() => {
 })
 
 const firstOrderItem = computed(() => orderItems.value[0] || null)
+
+/**
+ * 顾客在确认订单页填的备注（存在每条明细的 customRequirements）。
+ * 多条明细可能重复同一条，去重后再合并展示。
+ */
+const customerNoteText = computed(() => {
+  const notes = orderItems.value
+    .map((item) => (item.customRequirements || '').trim())
+    .filter((note, index, all) => Boolean(note) && all.indexOf(note) === index)
+  return notes.join('；')
+})
 
 const orderCustomerName = computed(() => {
   return order.value?.customerName || order.value?.customer?.nickname || order.value?.address?.recipientName || ''
@@ -3525,6 +3541,20 @@ async function saveAddressForm() {
 .product-link { padding: 0 12rpx; border-radius: 16rpx; background: #eef2ef; color: #2b5040; font-size: 20rpx; }
 .specs { display: flex; flex-wrap: wrap; gap: 10rpx; margin-top: 12rpx; }
 .spec { padding: 4rpx 14rpx; border-radius: 10rpx; background: #f4f6f5; color: #5a6560; font-size: 20rpx; }
+
+/* 顾客备注：提醒客服别漏看，所以给个浅黄底 */
+.customer-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  margin-top: 14rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 12rpx;
+  background: #fff8e6;
+  border-left: 6rpx solid #e6a23c;
+}
+.customer-note-label { flex: none; font-size: 22rpx; font-weight: 600; color: #9a6a00; }
+.customer-note-text { flex: 1; min-width: 0; font-size: 22rpx; line-height: 1.6; color: #4a3a12; word-break: break-word; }
 
 .usage { display: flex; margin-top: 22rpx; padding-top: 20rpx; border-top: 1rpx solid #f2f3f5; }
 .usage .usage-stat { flex: 1; text-align: center; }

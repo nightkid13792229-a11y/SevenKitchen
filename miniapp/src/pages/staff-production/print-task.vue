@@ -52,8 +52,13 @@
                   </view>
                 </view>
                 <view v-if="order.adminRemark" class="order-remark">
-                  <text class="field-label">备注</text>
+                  <text class="field-label">内部备注</text>
                   <text class="remark-text">{{ order.adminRemark }}</text>
+                </view>
+                <!-- 顾客下单时填的备注：过敏、分装要求都在这里，不能截断 -->
+                <view v-if="order.customerNote" class="order-remark">
+                  <text class="field-label">顾客备注</text>
+                  <text class="remark-text customer-note-text">{{ order.customerNote }}</text>
                 </view>
               </view>
             </view>
@@ -120,6 +125,8 @@ interface PrintData {
     recipientName?: string;
     recipientCity?: string;
     adminRemark?: string;
+    /** 顾客在确认订单页填的备注（只读） */
+    customerNote?: string | null;
   }>;
   recipeSnapshot: any;
   createdBy?: string;
@@ -681,6 +688,14 @@ const handlePrint = async () => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* 顾客备注整段显示：过敏提醒被截掉比版面难看严重得多 */
+.customer-note-text {
+  display: block;
+  -webkit-line-clamp: unset;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .ingredients-section {

@@ -68,6 +68,17 @@
         </el-descriptions>
       </el-card>
 
+      <!-- 顾客备注：顾客在小程序确认订单页自己填的，客服与制作都要看到。
+           与下面的「管理员备注」是两回事，不能混在一起。 -->
+      <el-card class="info-card customer-note-card" shadow="never">
+        <template #header>
+          <span class="card-title">顾客备注</span>
+        </template>
+        <div v-if="customerNoteText" class="customer-note-text">{{ customerNoteText }}</div>
+        <div v-else class="customer-note-empty">顾客未填写备注</div>
+        <div class="remark-hint">顾客在下单页填写，只读；内部沟通请用下面的管理员备注。</div>
+      </el-card>
+
       <el-card class="info-card" shadow="never">
         <template #header>
           <div class="card-header-with-action">
@@ -673,6 +684,18 @@ const isRemarkDirty = computed(() => {
   return normalizedRemarkDraft.value !== currentRemark
 })
 
+/**
+ * 顾客在确认订单页填的备注（存在每条订单明细的 customRequirements 上）。
+ * 一个订单可能有多条明细，同一条备注会重复，所以去重后再合并展示。
+ */
+const customerNoteText = computed(() => {
+  const notes = (order.value?.items ?? [])
+    .map((item) => (item.customRequirements ?? '').trim())
+    .filter((note, index, all) => Boolean(note) && all.indexOf(note) === index)
+
+  return notes.join('；')
+})
+
 // 快递公司配置
 const carriers: Record<string, string> = {
   SF: '顺丰速运',
@@ -1195,6 +1218,24 @@ onMounted(() => {
 .remark-hint {
   margin-top: 10px;
   font-size: 13px;
+  color: #909399;
+}
+
+/* 顾客备注：整段可换行，比内部备注更醒目一点，避免被漏看 */
+.customer-note-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #303133;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background-color: #f5f7fa;
+  border-left: 3px solid #e6a23c;
+}
+
+.customer-note-empty {
+  font-size: 14px;
   color: #909399;
 }
 

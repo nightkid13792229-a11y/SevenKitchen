@@ -339,3 +339,16 @@ describe('staff order detail · 成品调整', () => {
     expect(detailSource).toContain('requestId: settlementRequestId.value');
   });
 });
+
+describe('staff order detail · 顾客备注', () => {
+  it('展示顾客在确认订单页填的备注，不只显示内部备注', () => {
+    expect(detailSource).toContain('customerNoteText');
+    expect(detailSource).toContain('customRequirements');
+    expect(detailSource).toContain('顾客备注');
+    expect(detailSource).toContain("join('；')");
+  });
+
+  it('同一单多条明细重复的备注只显示一次', () => {
+    expect(detailSource).toContain('indexOf(note) === index');
+  });
+});

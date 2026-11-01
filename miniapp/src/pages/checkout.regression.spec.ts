@@ -121,4 +121,13 @@ describe('checkout direct-buy storage contract', () => {
     expect(source).toContain('totalAmount')
     expect(source).toContain('已含冷链配送费')
   })
+
+  it('把顾客在确认订单页填的备注随下单请求一起提交', () => {
+    // 备注是在结算页才填的，价格快照里不会带着它，
+    // 只送去算价的话客服/制作永远收不到 —— 必须放进下单请求体。
+    expect(source).toContain('customerNote: customerNote.value.trim() || undefined')
+    expect(source).toContain('const customerNote = ref(')
+    expect(source).toContain("placeholder=\"可填写过敏提醒、分装标签、配送时间等特殊要求\"")
+    expect(source).toContain('maxlength="200"')
+  })
 })

@@ -197,10 +197,15 @@ export class TrustedNutritionWebSearchService {
       return this.webSearch;
     }
     try {
+      // 没有 DEFAULT 用途的配置：回退到任意一条已启用的 DeepSeek（同一个 Key）。
       const config = await this.providerConfig?.getEnabledDeepSeekRuntimeConfig({
         fallbackToDefault: true,
+        fallbackToAnyPurpose: true,
       });
       if (!config?.baseUrl || !config?.apiKey) {
+        this.logger.warn(
+          '[trusted-web-search] 没有可用的 DeepSeek 配置，线上检索不可用',
+        );
         return null;
       }
       return new DeepSeekWebSearchClient({
@@ -209,7 +214,12 @@ export class TrustedNutritionWebSearchService {
         requestTimeoutMs: config.requestTimeoutMs,
         retryCount: config.retryCount,
       });
-    } catch {
+    } catch (error) {
+      this.logger.warn(
+        `[trusted-web-search] 读取 DeepSeek 配置失败：${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
       return null;
     }
   }

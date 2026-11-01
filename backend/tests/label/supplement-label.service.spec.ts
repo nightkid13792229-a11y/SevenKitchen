@@ -75,7 +75,7 @@ async function measureInk(imageBase64: string) {
 }
 
 describe('补剂分装标签 · 文案拼装', () => {
-  it('按打样版式给出完整字段：前三行居中加粗，其余左对齐', () => {
+  it('2026-11-02 定版：从上到下只有这 8 行', () => {
     const lines = buildSupplementLabelLines(
       createLabel(),
       'SP20260918-004',
@@ -84,99 +84,62 @@ describe('补剂分装标签 · 文案拼装', () => {
 
     expect(textsOf(lines)).toEqual([
       '赛文的食堂',
-      '海藻粉',
-      '23平勺',
+      '预分装补剂',
       '分装日期 2026-09-18',
-      '有效期至 2027-03-18',
-      '储存 避光、密封、阴凉干燥处保存',
-      '批号 B2609-01   订单 SP20260918-004',
-      '原品 NOW FOODS · 227g/瓶',
-      '用法 每日 23平勺',
-      '分装者 赛文的食堂',
+      '有效期 2027-03-18',
+      '储存注意事项 避光、密封、阴凉干燥处保存',
+      '订单编号 SP20260918-004',
+      '原品名称 海藻粉',
       '分装小样，非直接食用；内含干燥剂，请勿食用',
     ]);
 
-    // 第 4 行是分隔线，不承载文字
-    expect(lines[3]).toMatchObject({ divider: true, text: '' });
-
-    expect(lines[0]).toMatchObject({ fontSizeMm: 2.5, bold: false, align: 'center' });
-    expect(lines[1]).toMatchObject({ fontSizeMm: 4.2, bold: true, align: 'center' });
-    expect(lines[2]).toMatchObject({ fontSizeMm: 3.4, bold: true, align: 'center' });
-    expect(lines[4]).toMatchObject({ fontSizeMm: 2.4, bold: false, align: 'left' });
-    // 有效期是最关键的安全信息：必须比同段的其它行更大更粗
-    expect(lines[5]).toMatchObject({ fontSizeMm: 3.0, bold: true, align: 'left' });
-    expect(lines[6]).toMatchObject({ fontSizeMm: 2.1, bold: false, align: 'left' });
-    expect(lines[7]).toMatchObject({ fontSizeMm: 2.2, bold: false, align: 'left' });
-    expect(lines[8]).toMatchObject({ fontSizeMm: 2.3, bold: false, align: 'left' });
-    expect(lines[9]).toMatchObject({ fontSizeMm: 2.1, bold: false, align: 'left' });
-    expect(lines[10]).toMatchObject({ fontSizeMm: 2.0, bold: false, align: 'left' });
-    expect(lines[11]).toMatchObject({ fontSizeMm: 2.0, bold: false, align: 'left' });
+    expect(lines).toHaveLength(8);
+    expect(lines[0]).toMatchObject({ bold: false, align: 'center' });
+    expect(lines[1]).toMatchObject({ bold: true, align: 'center' });
+    // 有效期是最关键的安全信息：必须加粗
+    expect(lines[3]).toMatchObject({ bold: true, align: 'left' });
+    // 没提到的字段一个都不许再上标签
+    const text = textsOf(lines).join('|');
+    for (const removed of [
+      '23平勺',
+      '1/3',
+      '批号',
+      'NOW FOODS',
+      '227g/瓶',
+      '每日',
+      '分装者',
+    ]) {
+      expect(text).not.toContain(removed);
+    }
   });
 
-  it('只有一袋时不写「1/1」，加量后才带「第几袋 / 共几袋」', () => {
-    const single = textsOf(
-      buildSupplementLabelLines(createLabel(), 'SP20260918-004', '赛文的食堂'),
-    );
-
-    expect(single[2]).toBe('23平勺');
-    expect(single.join('|')).not.toContain('1/1');
-
-    const thirdBag = textsOf(
+  it('同一补剂的多袋标签内容完全相同（袋号不再上标签）', () => {
+    const first = textsOf(
       buildSupplementLabelLines(
-        createLabel({ bagIndex: 2, bagTotal: 3 }),
+        createLabel({ bagIndex: 1, bagTotal: 3 }),
+        'SP20260918-004',
+        '赛文的食堂',
+      ),
+    );
+    const third = textsOf(
+      buildSupplementLabelLines(
+        createLabel({ bagIndex: 3, bagTotal: 3 }),
         'SP20260918-004',
         '赛文的食堂',
       ),
     );
 
-    expect(thirdBag[2]).toBe('23平勺  2/3');
-    // 用量本身不随袋号变化：加量乘的是成本，不是每袋的量
-    expect(thirdBag[2]).toContain('23平勺');
+    expect(third).toEqual(first);
   });
 
-  it('批号为空时只显示订单号，不出现空的「批号」标签', () => {
-    const withoutBatch = textsOf(
-      buildSupplementLabelLines(
-        createLabel({ batchNo: null }),
-        'SP20260918-004',
-        '赛文的食堂',
-      ),
-    );
-
-    expect(withoutBatch).toContain('订单 SP20260918-004');
-    expect(withoutBatch.join('|')).not.toContain('批号');
-
-    const withBlankBatch = textsOf(
-      buildSupplementLabelLines(
-        createLabel({ batchNo: '   ' }),
-        'SP20260918-004',
-        '赛文的食堂',
-      ),
-    );
-
-    expect(withBlankBatch).toContain('订单 SP20260918-004');
-    expect(withBlankBatch.join('|')).not.toContain('批号');
-  });
-
-  it('没有原品信息时整行省略，把高度让给安全提示', () => {
-    const lines = buildSupplementLabelLines(
-      createLabel({ sourceProduct: '' }),
-      'SP20260918-004',
-      '赛文的食堂',
-    );
-
-    expect(textsOf(lines).join('|')).not.toContain('原品');
-    expect(lines).toHaveLength(11);
-  });
-
-  it('品牌名缺失时不留一条空白占位行', () => {
+  it('品牌名缺失时从「预分装补剂」开始，不留空白占位行', () => {
     const lines = buildSupplementLabelLines(
       createLabel(),
       'SP20260918-004',
       '   ',
     );
 
-    expect(lines[0].text).toBe('海藻粉');
+    expect(lines[0].text).toBe('预分装补剂');
     expect(lines[0].align).toBe('center');
   });
 });
@@ -207,7 +170,7 @@ describe('补剂分装标签 · 图片渲染', () => {
     expect(ink.inkCount).toBeGreaterThan(0);
   });
 
-  it('每袋渲染出的图片各不相同（袋号进了画面）', () => {
+  it('同一补剂多袋渲染出的图片相同（袋号不再上标签）', () => {
     const service = new SupplementLabelService();
     const firstBag = service.generateLabelImage(
       createLabel({ labelId: 'item-kelp#1', bagIndex: 1, bagTotal: 3 }),
@@ -220,7 +183,7 @@ describe('补剂分装标签 · 图片渲染', () => {
       '赛文的食堂',
     );
 
-    expect(secondBag).not.toBe(firstBag);
+    expect(secondBag).toBe(firstBag);
     expect(secondBag.length).toBeGreaterThan(0);
   });
 
@@ -280,36 +243,5 @@ describe('补剂分装标签 · 图片渲染', () => {
     const ink = await measureInk(imageBase64);
     expect(ink.minX).toBeGreaterThanOrEqual(mmToPx(2) - 1);
     expect(ink.maxX).toBeLessThanOrEqual(mmToPx(58));
-  });
-
-  it('分隔线贯穿左右边距', async () => {
-    const service = new SupplementLabelService();
-    const imageBase64 = service.generateLabelImage(
-      createLabel(),
-      'SP20260918-004',
-      '赛文的食堂',
-    );
-
-    const ink = await measureInk(imageBase64);
-    // 分隔线只占 1px 高，找到它的那一行即可确认横跨范围
-    const image = await loadImage(Buffer.from(imageBase64, 'base64'));
-    const canvas = createCanvas(image.width, image.height);
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(image, 0, 0);
-    const dividerY = mmToPx(4.25 + 5.15 + 4.35 + 1.65);
-    const row = ctx.getImageData(0, dividerY, image.width, 1).data;
-    let rowMinX = Number.POSITIVE_INFINITY;
-    let rowMaxX = -1;
-    for (let x = 0; x < image.width; x += 1) {
-      const offset = x * 4;
-      if ((row[offset] + row[offset + 1] + row[offset + 2]) / 3 < 160) {
-        rowMinX = Math.min(rowMinX, x);
-        rowMaxX = Math.max(rowMaxX, x);
-      }
-    }
-
-    expect(rowMinX).toBe(mmToPx(2));
-    expect(rowMaxX).toBe(mmToPx(38) - 1);
-    expect(ink.inkCount).toBeGreaterThan(0);
   });
 });

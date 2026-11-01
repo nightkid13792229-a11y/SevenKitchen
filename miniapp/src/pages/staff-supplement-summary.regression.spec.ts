@@ -10,8 +10,8 @@ const pagesConfig = JSON.parse(
   readFileSync(resolve(__dirname, '../pages.json'), 'utf8'),
 )
 
-describe('分装备料页 · 从汇总变成可执行的订单入口', () => {
-  it('仍然按分装日取汇总，接口不变', () => {
+describe('分装备料页 · 订单清单只负责查看和进详情', () => {
+  it('仍然按发货日取汇总，接口不变', () => {
     // 这个接口已经会返回 orders[]，不要为了列表另开一个重复接口
     expect(source).toContain("url: '/admin/supplement-shop/packing-summary'")
     expect(source).toContain('data: { date: date.value }')
@@ -24,21 +24,22 @@ describe('分装备料页 · 从汇总变成可执行的订单入口', () => {
     expect(source).toContain('{{ order.bagCount }}')
   })
 
-  it('待发货订单能直接打标签和发货，不再有「开始分装」', () => {
-    expect(source).toContain('打印标签')
-    expect(source).toContain('去发货')
+  it('这一页不再放打印标签/去发货按钮，功能只留在订单详情页', () => {
+    expect(source).not.toContain('打印标签')
+    expect(source).not.toContain('去发货')
+    expect(source).not.toContain('openLabels')
+    expect(source).not.toContain('openShip')
     expect(source).not.toContain('开始分装')
     expect(source).not.toContain('继续分装')
     expect(source).not.toContain('openPack')
   })
 
-  it('跳转路径与现有详情页、标签页一致', () => {
+  it('点订单行进补剂订单详情；不再直接跳标签页/发货弹窗', () => {
     // 路径写错不会编译报错，只会线上点不动 —— 所以钉死
     expect(source).toContain('/pages/staff-supplement-orders/detail?id=')
-    expect(source).toContain('/pages/staff-supplement-orders/labels?id=')
     expect(source).toContain('/pages/staff-supplement-orders/index')
-    // 去发货要自动打开发货框，和订单中心保持同一个参数
-    expect(source).toContain('&action=ship')
+    expect(source).not.toContain('/pages/staff-supplement-orders/labels?id=')
+    expect(source).not.toContain('&action=ship')
   })
 
   it('没有当天订单时，给出「全部补剂订单」的兜底入口', () => {

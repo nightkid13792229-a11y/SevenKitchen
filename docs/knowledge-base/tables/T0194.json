@@ -1,0 +1,58 @@
+{
+  "tableId": "T0194",
+  "caption": "Table 27-18. Using number of calories fed for weight loss to determine the initial amount of food to feed for target weight maintenance.",
+  "columns": [
+    "Step",
+    "Description"
+  ],
+  "rows": [
+    [
+      "",
+      "The amount of food fed for weight loss at the time the target weight was achieved is the basis for a method of determining the amount of food to feed initially to avoid weight regain. The following steps are involved in this process:"
+    ],
+    [
+      "1.",
+      "First, the daily number of calories fed for weight loss is calculated by multiplying the amount of the weight-loss food fed (usually a volume measure) by its caloric density. Caloric density can be obtained from Tables 27-16 (dogs) or 27-17 (cats) or from product information."
+    ],
+    [
+      "2.",
+      "Next, increase the number of calories by 10% to determine the estimated daily number of calories to feed (initially at least) to maintain the target weight."
+    ],
+    [
+      "3.",
+      "Finally, divide the daily number of calories by the energy density of the food selected for weight maintenance to determine the amount of this food to feed per day."
+    ],
+    [
+      "",
+      "An example case follows:"
+    ],
+    [
+      "",
+      "Through a well-executed weight-loss program, a previously obese dog achieved the target weight of 25 kg. It was being fed 3.5 cups of an appropriate energy-restricted food formulated for weight loss. The energy density of the weight-loss food is 220 kcal/cup. The amount of food fed is multiplied by the energy density of the food (3.5 cups x 220 kcal/cup) to yield approximately 770 kcal/day.*"
+    ],
+    [
+      "",
+      "The daily number of calories fed for weight loss is increased by 10% (10% x 770 kcal = 77 kcal; 770 kcal + 77 kcal = 847 kcal) to yield the number of calories to feed as a starting point for weight maintenance."
+    ],
+    [
+      "",
+      "The selected weight-maintenance food provides 243 kcal/cup (obtained from product information). The daily calories for weight maintenance are divided by the energy density of the weight-maintenance food to yield the daily amount to feed (847 kcal/day / 243 kcal/cup = 3.5 cups/day)."
+    ],
+    [
+      "",
+      "Note that this is the same volume of food that was being fed for weight loss. This is because the weight-maintenance food contains 10% more calories/cup than the weight-loss food."
+    ],
+    [
+      "",
+      "This calculation assumes that if treats were fed during the weight-loss program that the same amount or fewer are fed during the weight-maintenance program. The same is true for the amount of exercise."
+    ],
+    [
+      "",
+      "At least three days should be spent transitioning to the new food. Body weight should be rechecked every week or two for four to six weeks. Adjustments in increments of 10% should be made until body weight stabilizes at the target weight."
+    ],
+    [
+      "",
+      "*To convert to kJ, multiply kcal by 4.184."
+    ]
+  ]
+}

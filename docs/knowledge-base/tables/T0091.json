@@ -1,0 +1,15 @@
+{
+  "tableId": "T0091",
+  "caption": "Table 11-3. Procedures for the collection, transfer and preservation of physical evidence.*",
+  "columns": ["Procedure"],
+  "rows": [
+    ["Collect, package and identify all samples according to the procedures listed in Table 11-4."],
+    ["Maintain a record of every person who had custody of any sample(s) or other evidence from the time that it was collected until presented in court (\"chain of custody\") by keeping a written log or diary of all relevant facts and sample transfers."],
+    ["Write notes documenting the time, place, description and circumstances of all samples entered in the log. Describe in detail how the samples were identified (numbered), processed, packaged, stored and shipped."],
+    ["If possible, photograph any apparent pathologic lesions, mold growth, foreign matter in the food, etc. Number the photographs consecutively and describe each photograph in the written notes."],
+    ["Write notes about all telephone conversations related to the case in the log, including the date, time and content of the conversation."],
+    ["Date all new entries in the log and have the person writing in the log initial the entry."],
+    ["Retain and store all relevant product labels in a safe place."],
+    ["Use a shipping method that expedites delivery of the samples to the laboratory. Keep copies of all shipping records. Hand carry the samples to the laboratory if possible. Obtain written proof of delivery (e.g., receipt)."]
+  ]
+}

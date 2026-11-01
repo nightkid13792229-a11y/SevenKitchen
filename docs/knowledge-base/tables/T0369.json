@@ -1,0 +1,106 @@
+{
+ "tableId": "T0369",
+ "caption": "Table 51-1. Breed-associated gastric disorders.",
+ "columns": [
+  "Disorders",
+  "Breeds"
+ ],
+ "rows": [
+  [
+   "Atrophic gastritis",
+   "Lundehund"
+  ],
+  [
+   "Chronic hypertrophic gastritis",
+   "Basenji"
+  ],
+  [
+   "",
+   "Drentse patrijshond"
+  ],
+  [
+   "Chronic hypertrophic pyloric gastropathy",
+   "Lhaso apso"
+  ],
+  [
+   "",
+   "Maltese dog"
+  ],
+  [
+   "",
+   "Pekingese"
+  ],
+  [
+   "",
+   "Shih Tzu"
+  ],
+  [
+   "Gastric dilatation-volvulus",
+   "Basset hound"
+  ],
+  [
+   "",
+   "Doberman pinscher"
+  ],
+  [
+   "",
+   "Gordon setter"
+  ],
+  [
+   "",
+   "Great Dane"
+  ],
+  [
+   "",
+   "Irish setter"
+  ],
+  [
+   "",
+   "Saint Bernard"
+  ],
+  [
+   "",
+   "Weimaraner"
+  ],
+  [
+   "Gastric neoplasia",
+   "Beagle"
+  ],
+  [
+   "",
+   "Belgian shepherd"
+  ],
+  [
+   "",
+   "Rough collie"
+  ],
+  [
+   "",
+   "Staffordshire bull terrier"
+  ],
+  [
+   "Hemorrhagic gastroenteritis",
+   "Dachshund"
+  ],
+  [
+   "",
+   "Miniature schnauzer"
+  ],
+  [
+   "",
+   "Toy poodle"
+  ],
+  [
+   "Pyloric stenosis",
+   "Boston terrier"
+  ],
+  [
+   "",
+   "Boxer"
+  ],
+  [
+   "",
+   "Siamese cat"
+  ]
+ ]
+}

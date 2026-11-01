@@ -1,0 +1,37 @@
+{
+  "tableId": "T0483",
+  "caption": "Table 4. Core vaccines for cats in shelters",
+  "columns": [
+    "Vaccines",
+    "<5 months old",
+    "≥5 months old",
+    "Comments"
+  ],
+  "note": "表格下方为正文段落，已忽略",
+  "rows": [
+    [
+      "FPV+FHV+FCV (MLV, parenteral)",
+      "Administer immediately upon admission starting as early as 1 month of age\nRepeat every 2 to 3 weeks until 5 months of age",
+      "Administer immediately upon admission\nRepeat in 2 to 3 weeks",
+      "Use combination vaccines containing modified-live viruses for rapid onset of immunity"
+    ],
+    [
+      "FPV (MLV, intranasal)",
+      "",
+      "",
+      "Intranasal FPV vaccines are not recommended for use in shelters as they do not provide reliable protection against FPV"
+    ],
+    [
+      "FHV+FCV (MLV, intranasal)",
+      "",
+      "",
+      "Intranasal vaccines containing modified-live FHV+FCV can be used for more rapid onset of immunity"
+    ],
+    [
+      "Rabies Virus (inactivated, parenteral)",
+      "Follow local laws for minimum age for vaccination. Administer at discharge for short-term stay shelters or at admission for long-term stay shelters",
+      "",
+      "Rabies-endemic countries only.\nAdminister according to local laws or regulations"
+    ]
+  ]
+}

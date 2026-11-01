@@ -1,0 +1,112 @@
+{
+  "tableId": "T0359",
+  "caption": "Table 5-18. Classification, structure and function of general lipids.",
+  "columns": [
+    "Classification",
+    "Structure",
+    "Function"
+  ],
+  "rows": [
+    [
+      "Hydrocarbons",
+      "-CH3, -CH2, -CH",
+      "Building blocks"
+    ],
+    [
+      "Nonesterified fatty acids",
+      "CH3(CH2)n(CH1)nCOOH",
+      ""
+    ],
+    [
+      "Saturated",
+      "Stearic, palmitic",
+      "Energy, membrane fluidity"
+    ],
+    [
+      "Monounsaturated",
+      "Oleic, palmitoleic",
+      "Energy, membrane fluidity"
+    ],
+    [
+      "Polyunsaturated",
+      "Omega-3, omega-6",
+      "Precursors of eicosanoids and prostaglandins"
+    ],
+    [
+      "Simple lipids",
+      "Fatty acid + alcohol in ester bond",
+      "Energy storage, insulation"
+    ],
+    [
+      "Triglycerides",
+      "Glycerol + three fatty acids",
+      ""
+    ],
+    [
+      "Complex lipids",
+      "",
+      ""
+    ],
+    [
+      "Phospholipids",
+      "Diacyl glycerol 3' phosphate",
+      "Membrane lipids"
+    ],
+    [
+      "Lecithin",
+      "3' phosphocholine",
+      "Emulsifying agent"
+    ],
+    [
+      "Cephalin",
+      "3' phosphoserine/ethanolamine",
+      "CNS membrane"
+    ],
+    [
+      "Inositol",
+      "Carbohydrate (3' phosphoinositol)",
+      "2nd messenger"
+    ],
+    [
+      "Ceramide",
+      "Sphingosine + fatty acid",
+      "CNS membrane"
+    ],
+    [
+      "Sphingomyelin",
+      "Ceramide + phosphocholine",
+      "Myelin"
+    ],
+    [
+      "Glycolipids",
+      "Sphingomyelin + carbohydrate",
+      "CNS membrane/recognition"
+    ],
+    [
+      "Cerebroside",
+      "Ceramide + monosaccharide",
+      ""
+    ],
+    [
+      "Ganglioside",
+      "Ceramide + oligosaccharide",
+      ""
+    ],
+    [
+      "Prostaglandins",
+      "20-carbon polyunsaturated fatty acids",
+      "Paracrine and autocrine action"
+    ],
+    [
+      "Sterols and steroids",
+      "Four-ring hydrocarbon structures",
+      "Bile acids, hormones, membranes, lipoproteins, cholesterol, cholesterol esters"
+    ],
+    [
+      "Fat-soluble vitamins",
+      "See vitamins",
+      "See vitamins"
+    ]
+  ],
+  "note": "原表中 Saturated/Monounsaturated/Polyunsaturated 为 Nonesterified fatty acids 的缩进子项，Lecithin/Cephalin/Inositol 为 Phospholipids 的子项，Cerebroside/Ganglioside 为 Glycolipids 的子项；缩进未保留在单元格文本中"
+}

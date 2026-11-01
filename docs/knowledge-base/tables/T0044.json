@@ -1,0 +1,90 @@
+{
+ "tableId": "T0044",
+ "caption": "TABLE V-1. NON-EXHAUSTIVE LIST OF ANALYTICAL METHODS",
+ "columns": [
+  "Nutrient",
+  "Method Reference(S)"
+ ],
+ "rows": [
+  [
+   "Sampling",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54\nISO/DIS 6497"
+  ],
+  [
+   "Moisture",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54\nISO /DIS 6496"
+  ],
+  [
+   "Protein (crude)",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54"
+  ],
+  [
+   "Arginine",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54"
+  ],
+  [
+   "Histidine",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54"
+  ],
+  [
+   "Isoleucine",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54"
+  ],
+  [
+   "Lysine",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54"
+  ],
+  [
+   "Methionine",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54"
+  ],
+  [
+   "Cystine/Cystein",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54"
+  ],
+  [
+   "Phenylalanine",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54"
+  ],
+  [
+   "Tyrosine",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54"
+  ],
+  [
+   "Threonine",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54"
+  ],
+  [
+   "Valine",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54"
+  ],
+  [
+   "Tryptophan",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54\n2nd ISO/CD 13904"
+  ],
+  [
+   "Fat (crude)",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54"
+  ],
+  [
+   "Linoleic Acid",
+   "VDLUFA method 5.6.2\nB.S.I method BS684; section 2.34 :\nISO 5509-1997\nAOAC 15th ed. (1990) 969.33 & 963.22"
+  ],
+  [
+   "Arachidonic Acid",
+   "VDLUFA method 5.6.2\nB.S.I method BS684; section 2.34 :\nISO 5509-1997\nAOAC 15th ed. (1990) 969.33 & 963.22"
+  ],
+  [
+   "Fiber (crude)",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54"
+  ],
+  [
+   "Ash (crude)",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54"
+  ],
+  [
+   "Calcium",
+   "Regulation (EC) 152/2009 O.J. 26/02/2009 L 54\nISO/DIS 6869"
+  ]
+ ]
+}

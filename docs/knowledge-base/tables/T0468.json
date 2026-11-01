@@ -1,0 +1,41 @@
+{
+  "tableId": "T0468",
+  "caption": "Table 10. Health detriments of sterilisation with loss of gonadal steroid hormones in cats",
+  "columns": [
+    "Condition",
+    "Occurrence (%)",
+    "Substantial morbidity*",
+    "Breeds at risk†",
+    "Influencing factors"
+  ],
+  "rows": [
+    [
+      "Obesity and diabetes mellitus",
+      "Frequent",
+      "Yes",
+      "No",
+      "Sexual status (male>female), feeding"
+    ],
+    [
+      "Epiphyseal fractures",
+      "Frequent",
+      "No",
+      "No",
+      "Sexual status (male>female), prepubertal age at gonadectomy"
+    ],
+    [
+      "Tumours",
+      "4.43- to 6.47-fold odds compared to intact cats",
+      "Yes",
+      "No",
+      "Age at gonadectomy"
+    ],
+    [
+      "Lower urinary tract disease",
+      "–",
+      "Yes",
+      "Yes‡",
+      "Overweight"
+    ]
+  ]
+}

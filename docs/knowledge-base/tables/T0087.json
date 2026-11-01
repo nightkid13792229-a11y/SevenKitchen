@@ -1,0 +1,41 @@
+{
+  "tableId": "T0087",
+  "caption": "Table 10-8. Balanced generic homemade daily formulation for a healthy 4.5-kg (10-lb) adult cat that meets AAFCO allowances.*",
+  "columns": [
+    "Ingredients",
+    "Grams",
+    "Percent"
+  ],
+  "rows": [
+    [
+      "Carbohydrate, cooked**",
+      "60",
+      "50"
+    ],
+    [
+      "Meat, cooked***",
+      "40",
+      "34"
+    ],
+    [
+      "Fat†",
+      "10",
+      "8"
+    ],
+    [
+      "Bone meal††",
+      "1.2",
+      "-"
+    ],
+    [
+      "Salts (NaCl/KCl)†††",
+      "1.0",
+      "-"
+    ],
+    [
+      "Taurine",
+      "0.5",
+      "-"
+    ]
+  ]
+}

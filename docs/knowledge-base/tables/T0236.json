@@ -1,0 +1,46 @@
+{
+ "tableId": "T0236",
+ "caption": "Table 32-11. Summary of clinical studies using fatty acid supplements in cats with dermatologic disease.",
+ "columns": [
+  "Reference*",
+  "Cats (no.)",
+  "Type of trial",
+  "Duration of therapy (weeks)",
+  "Control of pruritus (%)**",
+  "Control of clinical signs***"
+ ],
+ "rows": [
+  [
+   "Harvey, 1991",
+   "8",
+   "Open",
+   "6",
+   "75",
+   "+"
+  ],
+  [
+   "Harvey, 1993",
+   "11",
+   "Open",
+   "12",
+   "100",
+   "+"
+  ],
+  [
+   "Harvey, 1993a",
+   "14",
+   "Open",
+   "12",
+   "78",
+   "+"
+  ],
+  [
+   "Miller et al, 1993",
+   "28",
+   "Open",
+   "6",
+   "57",
+   "–"
+  ]
+ ]
+}

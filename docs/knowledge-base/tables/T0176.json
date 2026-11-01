@@ -1,0 +1,70 @@
+{
+ "tableId": "T0176",
+ "caption": "Table 26-6. Drugs compatible with total nutrient admixtures.*",
+ "columns": [
+  "Drug"
+ ],
+ "rows": [
+  [
+   "Aminophylline"
+  ],
+  [
+   "Ampicillin"
+  ],
+  [
+   "Cefazolin"
+  ],
+  [
+   "Chloramphenicol"
+  ],
+  [
+   "Cimetidine"
+  ],
+  [
+   "Clindamycin"
+  ],
+  [
+   "Digoxin"
+  ],
+  [
+   "Diphenhydramine"
+  ],
+  [
+   "Dopamine"
+  ],
+  [
+   "Erythromycin"
+  ],
+  [
+   "Furosemide"
+  ],
+  [
+   "Gentamicin"
+  ],
+  [
+   "Heparin"
+  ],
+  [
+   "Insulin (regular)"
+  ],
+  [
+   "Lidocaine"
+  ],
+  [
+   "Metoclopramide"
+  ],
+  [
+   "Penicillin G"
+  ],
+  [
+   "Phytonadione"
+  ],
+  [
+   "Ranitidine"
+  ],
+  [
+   "Ticarcillin"
+  ]
+ ],
+ "note": "原表为双栏药名清单（无表头）：左栏 Aminophylline–Erythromycin 共10项，右栏 Furosemide–Ticarcillin 共10项；此处按左栏自上而下、再右栏自上而下的阅读顺序单列转录。表下注：*Dickerson RN, Brown RO, White KG. Parenteral nutrition solutions. In: Rombeau JL, Caldwell MD, eds. Clinical Nutrition; Parenteral Nutrition, 2nd ed. Philadelphia, PA: WB Saunders Co, 1993; 310-333."
+}

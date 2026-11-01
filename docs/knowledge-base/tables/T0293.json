@@ -1,0 +1,71 @@
+{
+ "tableId": "T0293",
+ "caption": "Table 41-5. Problem-specific database for dogs suspected of having calcium phosphate uroliths.",
+ "columns": [
+  "",
+  ""
+ ],
+ "rows": [
+  [
+   "Blood, serum and plasma tests",
+   ""
+  ],
+  [
+   "Urea nitrogen and creatinine",
+   "Calcium"
+  ],
+  [
+   "Phosphorus",
+   "Sodium"
+  ],
+  [
+   "Chloride",
+   "Potassium"
+  ],
+  [
+   "Blood gases or total CO2",
+   "Intact parathyroid hormone"
+  ],
+  [
+   "25-hydroxy-vitamin D",
+   "Magnesium"
+  ],
+  [
+   "",
+   "Low dose dexamethasone suppression or corticotrophin stimulation test"
+  ],
+  [
+   "Urine tests",
+   ""
+  ],
+  [
+   "Complete urinalysis, including careful evaluation of pH and crystals",
+   ""
+  ],
+  [
+   "Quantitative urine culture",
+   ""
+  ],
+  [
+   "Consider 24-hour urine collection for:",
+   ""
+  ],
+  [
+   "Volume",
+   "Creatinine"
+  ],
+  [
+   "Calcium",
+   "Phosphorus"
+  ],
+  [
+   "Magnesium",
+   "Citric acid"
+  ],
+  [
+   "Oxalic acid",
+   ""
+  ]
+ ],
+ "note": "原文无表头行，为两栏测试项目列表；表格位于该对第二页，本文件仅转录该表。"
+}

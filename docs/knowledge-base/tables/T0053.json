@@ -1,0 +1,28 @@
+{
+ "tableId": "T0053",
+ "caption": "Table VII-9. Average daily energy requirements of adult cats",
+ "columns": [
+  "Gender - Activity",
+  "kcal ME per kg BW0.67",
+  "kcal ME per kg BW (4 kg cat)",
+  "kJ ME per kg BW0.67",
+  "kJ ME per kg BW (4 kg cat)"
+ ],
+ "rows": [
+  [
+   "Neutered and/or indoor cats",
+   "52 - 75",
+   "35 - 45",
+   "215 - 314",
+   "145 - 190"
+  ],
+  [
+   "Active cats",
+   "100",
+   "60 - 65",
+   "418",
+   "250 - 270"
+  ]
+ ],
+ "note": "图中还包含第二张表 Table VII-10（Average energy requirements during growth and reproduction in cats），未并入本结果"
+}

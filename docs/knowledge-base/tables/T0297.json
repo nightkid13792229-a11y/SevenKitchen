@@ -1,0 +1,31 @@
+{
+  "tableId": "T0297",
+  "caption": "Table 41-7. Summary of recommendations for managing canine calcium phosphate uroliths.",
+  "columns": [
+    "Recommendations"
+  ],
+  "rows": [
+    [
+      "1. Surgery remains the most reliable way to remove active calcium phosphate uroliths from the urinary tract. However, surgery may be unnecessary for clinically inactive calcium phosphate uroliths. Small urocystoliths may be nonsurgically removed by lithotripsy, voiding urohydropropulsion (Figure 38-5 and Table 38-7) or by aspiration through a urinary catheter (Figure 38-6). Medical therapy of patients with recurrent calcium phosphate uroliths should then be directed at removing or minimizing risk factors that contribute to supersaturation of urine with calcium phosphate."
+    ],
+    [
+      "2. Patients with hypercalcemia and primary hyperparathyroidism usually require surgery. Parathyroidectomy may result in dissolution of uroliths and prevent recurrence in cases that have been properly managed."
+    ],
+    [
+      "3. Several different medical protocols have been reported to be of value in people with normocalcemic hypercalciuria. Ideally, the choice of therapy should be based on the cause of idiopathic hypercalciuria."
+    ],
+    [
+      "a. There has been little clinical experience with the use of drugs in dogs and cats with calcium phosphate uroliths. However, medications that can enhance urine calcium excretion such as glucocorticoids, furosemide and those containing large quantities of sodium should be avoided (if possible)."
+    ],
+    [
+      "b. Foods designed to avoid excessive protein, sodium, calcium and vitamin D may be of benefit. Excessive restriction or supplementation of dietary phosphorus should probably be avoided. Enhancing urine volume by feeding a moist food (and/or a protein-restricted food to dogs to reduce renal medullary urea concentrations) and encouraging water consumption may be of benefit. Although understandably difficult to accomplish in some patients, fluid intake should be encouraged throughout the day to promote a constantly high urine volume. In people, some high-fiber diets reduce intestinal absorption and urinary excretion of calcium."
+    ],
+    [
+      "c. With the exception of brushite, calcium phosphates tend to be less soluble in alkaline urine. Whether or not patients with such mineral types would benefit from appropriate dosages of urine acidifiers is unknown. Acidification tends to enhance urine calcium excretion and is a risk factor for calcium oxalate urolith formation. Pending further studies, routine use of urine acidifiers for patients with calcium phosphate urolithiasis is not recommended."
+    ],
+    [
+      "4. Medical dissolution of calcium phosphate uroliths has not been attempted in dogs with distal renal tubular acidosis (RTA). Foods designed to dissolve struvite uroliths would generally not be expected to promote dissolution of calcium phosphate uroliths, in part because they may tend to promote acidemia and aciduria, thus potentially enhancing hypercalciuria and hypocitraturia. However, correction of hypercalciuria, hyperphosphaturia and hypocitraturia by alkalinization therapy with potassium citrate might promote dissolution of these uroliths in patients with complete or incomplete distal RTA. Long-term alkalinization therapy appears to be beneficial in preventing calcium phosphate urolith formation in people with distal RTA. Alkalinization of urine has been advocated for human patients with complete or incomplete forms of distal RTA because it decreases urolith formation and nephrocalcinosis and increases urine citrate concentration. Oral administration of sodium chloride, long recommended for all forms of urolithiasis, may promote hypercalciuria and calcium phosphate urolith formation. Therefore, oral salt therapy is not recommended to promote diuresis in dogs with uroliths containing calcium salts."
+    ]
+  ],
+  "note": "原文为单栏编号条目（1、2、3、a、b、c、4），无表头行。"
+}

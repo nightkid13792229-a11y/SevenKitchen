@@ -1,0 +1,48 @@
+{
+ "tableId": "T0056",
+ "caption": "Table VII-12. Impact of energy requirement on nutrient intake and minimum recommendations — Example: Impact of energy requirement on dry matter and nutrient intake",
+ "columns": [
+  "",
+  "4 kg cat",
+  "4 kg cat",
+  "15 kg dog",
+  "15 kg dog"
+ ],
+ "rows": [
+  [
+   "MER",
+   "100 x kg BW0.67",
+   "75 x kg BW0.67",
+   "110 x kg BW0.75",
+   "95 x kg BW0.75"
+  ],
+  [
+   "Daily energy intake",
+   "253 kcal",
+   "189 kcal",
+   "838 kcal",
+   "724 kcal"
+  ],
+  [
+   "DM intake (400 kcal/100 g DM)",
+   "63 g",
+   "47 g",
+   "210 g",
+   "181 g"
+  ],
+  [
+   "Total daily Zn requirement",
+   "4.75 mg",
+   "",
+   "15 mg",
+   ""
+  ],
+  [
+   "Adequate Zn level",
+   "7.5 mg per 100 g DM",
+   "10.0 mg per 100 g DM",
+   "7.2 mg per 100 g DM",
+   "8.34 mg per 100 g DM"
+  ]
+ ]
+}

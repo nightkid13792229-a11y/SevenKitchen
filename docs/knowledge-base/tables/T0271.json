@@ -1,0 +1,94 @@
+{
+  "tableId": "T0271",
+  "caption": "Table 38-10. Problem-specific and therapeutic-specific database for diagnosis and management of urolithiasis.",
+  "columns": [
+    "Problem-specific and therapeutic-specific database for diagnosis and management of urolithiasis"
+  ],
+  "rows": [
+    [
+      "1. Obtain appropriate history and perform physical examination, including a rectal examination of the urethra."
+    ],
+    [
+      "2. Perform complete urinalysis; save aliquots of urine for possible determination of mineral concentration."
+    ],
+    [
+      "3. Obtain quantitative urine culture and determine urease activity; test for antimicrobial susceptibility if bacterial pathogens are identified. Consider attempts to isolate ureaplasmas if urease-positive urine is bacteriologically sterile."
+    ],
+    [
+      "4. Perform a complete blood cell count."
+    ],
+    [
+      "5. Freeze an aliquot of serum collected at the time the sample was obtained for the complete blood cell count for possible determination of urea nitrogen, creatinine, calcium and/or uric acid concentrations."
+    ],
+    [
+      "6. Obtain radiographs."
+    ],
+    [
+      "a. Take survey radiographs of the entire urinary system."
+    ],
+    [
+      "b. Consider intravenous urography for patients with renal or ureteral uroliths."
+    ],
+    [
+      "c. Consider intravenous urography or contrast cystography for patients with bladder uroliths."
+    ],
+    [
+      "d. Consider contrast urethrography for patients with urethral uroliths."
+    ],
+    [
+      "e. Ultrasonography is recommended if equipment is available."
+    ],
+    [
+      "7. Determine mineral composition of uroliths."
+    ],
+    [
+      "a. Submit uroliths passed during micturition or retrieved during diagnostic procedures for quantitative analysis."
+    ],
+    [
+      "b. Use results obtained from the history, physical examination, laboratory examination and radiography to determine probable mineral composition of uroliths."
+    ],
+    [
+      "8. Initiate therapy to eradicate urinary tract infection, if present."
+    ],
+    [
+      "9. Initiate therapy for urolithiasis."
+    ],
+    [
+      "a. Initiate therapy to promote dissolution of uroliths if amenable to dietary and medical therapy."
+    ],
+    [
+      "Formulate followup protocol to monitor dissolution of uroliths."
+    ],
+    [
+      "Formulate alternative treatment options if uroliths do not dissolve or if problems such as recurrent outflow obstruction occur."
+    ],
+    [
+      "b. Remove uroliths by voiding urohydropropulsion."
+    ],
+    [
+      "c. Remove uroliths by nephrotomy or cystotomy."
+    ],
+    [
+      "Obtain bladder or kidney biopsy specimens for microscopic examination during surgical procedure."
+    ],
+    [
+      "Correct any anatomic defects, if present."
+    ],
+    [
+      "Compare number of uroliths removed during surgery with the number identified by radiography."
+    ],
+    [
+      "Obtain postsurgical radiographs to evaluate completeness of urolith removal."
+    ],
+    [
+      "Submit uroliths for quantitative analysis."
+    ],
+    [
+      "10. After uroliths are surgically removed or medically dissolved, initiate therapy to prevent recurrence."
+    ],
+    [
+      "11. Formulate followup protocol with clients."
+    ]
+  ],
+  "note": "该表为无表头的单列编号条目框（含 a. b. c. 子项及部分无编号续行），按单列记录。"
+}

@@ -1,0 +1,79 @@
+{
+  "tableId": "T0273",
+  "caption": "Table 39-2. Some potential risk factors for canine purine uroliths.",
+  "columns": [
+    "Food",
+    "Urine",
+    "Metabolic",
+    "Drugs"
+  ],
+  "rows": [
+    [
+      "High purine content (Table 39-3.)",
+      "Hyperuricuria",
+      "Males",
+      "Urine acidifiers"
+    ],
+    [
+      "Acidifying potential",
+      "Hyperammonuria",
+      "Breed",
+      "Salicylates"
+    ],
+    [
+      "Low moisture content",
+      "Acidic pH",
+      "Dalmatians",
+      "Chemotherapeutice agents (especially 6-mercaptopurine)"
+    ],
+    [
+      "Ascorbic acid?",
+      "Urine concentration",
+      "English bulldogs",
+      ""
+    ],
+    [
+      "",
+      "Urine retention",
+      "Miniature schnauzers",
+      ""
+    ],
+    [
+      "",
+      "Urease-producing microburia",
+      "Yorkshire terriers",
+      ""
+    ],
+    [
+      "",
+      "Increased promoters?",
+      "Shih Tzus",
+      ""
+    ],
+    [
+      "",
+      "Decreased inhibitors?",
+      "Hyperuricemia",
+      ""
+    ],
+    [
+      "",
+      "",
+      "Hyperammonuria",
+      ""
+    ],
+    [
+      "",
+      "",
+      "Hepatic dysfunction",
+      ""
+    ],
+    [
+      "",
+      "",
+      "Neoplasia with rapid cell destruction",
+      ""
+    ]
+  ],
+  "note": "四列各自为无表头的分类清单，列内条目数不同，较短的列以空字符串补齐；Metabolic 列下缩进项（Dalmatians、English bulldogs 等）为 Breed 的子项，已依次填入同一列。"
+}

@@ -1,0 +1,36 @@
+{
+  "tableId": "T0069",
+  "caption": "Table 1: IRIS AKI Grading Criteria",
+  "columns": [
+    "AKI Grade",
+    "Blood Creatinine",
+    "Clinical Description"
+  ],
+  "rows": [
+    [
+      "Grade I",
+      "<1.6 mg/dL\n<140 μmol/L",
+      "Nonazotemic AKI:\na. Documented AKI: (historical, clinical, laboratory, or imaging evidence of AKI, clinical oliguria/anuria, volume responsiveness‡)\nb. Progressive nonazotemic increase in blood creatinine: > 0.3 mg/dL (> 26.4 μmol/l) within 48 h\nc. Measured oliguria (<1 ml/kg/h) or anuria over 6h"
+    ],
+    [
+      "Grade II",
+      "1.7 - 2.5 mg/dL\n141 - 220 μmol/L",
+      "Mild AKI:\na. Documented AKI and static or progressive azotemia\nb. Progressive azotemia: increase in blood creatinine > 0.3 mg/dL (> 26.4 μmol/l) within 48 h), or volume responsiveness\nc. Measured oliguria (<1 ml/kg/h) or anuria over 6h"
+    ],
+    [
+      "Grade III",
+      "2.6 - 5.0 mg/dL\n221 – 439 μmol/L",
+      "Moderate to Severe AKI: Documented AKI and increasing severities of azotemia and functional renal failure"
+    ],
+    [
+      "Grade IV",
+      "5.1 - 10.0 mg/dL\n440 - 880 μmol/L",
+      ""
+    ],
+    [
+      "Grade V",
+      ">10.0 mg/dL\n>880 μmol/L",
+      ""
+    ]
+  ]
+}

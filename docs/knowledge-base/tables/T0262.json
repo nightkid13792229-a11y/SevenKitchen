@@ -1,0 +1,75 @@
+{
+ "tableId": "T0262",
+ "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+ "columns": [
+  ""
+ ],
+ "rows": [
+  [
+   "Physical examination"
+  ],
+  [
+   "Abdominal palpation (size and contour of kidneys, presence of ascites)"
+  ],
+  [
+   "Blood pressure measurement"
+  ],
+  [
+   "Body condition/muscle mass"
+  ],
+  [
+   "Body weight"
+  ],
+  [
+   "Fundic examination (retinal hemorrhage, detached retina)"
+  ],
+  [
+   "Hair and coat quality"
+  ],
+  [
+   "Hydration status"
+  ],
+  [
+   "Oral examination (uremic odor, ulcers, mucous membrane color)"
+  ],
+  [
+   "Laboratory evaluation"
+  ],
+  [
+   "Serum biochemistries (urea nitrogen, creatinine, albumin, phosphorus)"
+  ],
+  [
+   "Serum electrolytes (calcium, potassium, chloride, sodium, magnesium)"
+  ],
+  [
+   "Total serum carbon dioxide or venous blood gases (blood pH, bicarbonate, base excess) to evaluate acid-base status"
+  ],
+  [
+   "Urinalysis"
+  ],
+  [
+   "Microscopic sediment exam (pyuria or bacteriuria may indicate urinary tract infection)"
+  ],
+  [
+   "Urine specific gravity (crude index of tubulointerstitial function)"
+  ],
+  [
+   "pH (very crude index of acid-base status)"
+  ],
+  [
+   "Urine protein-creatinine ratio (assess proteinuria and response to treatment)"
+  ],
+  [
+   "Diagnostic imaging"
+  ],
+  [
+   "Abdominal radiographs (assess kidney shape and size, reference L2 vertebra on ventrodorsal view)"
+  ],
+  [
+   "Excretory urogram (assess obstruction due to nephroliths)"
+  ],
+  [
+   "Ultrasound (assess kidney and prostate gland, presence of hydronephrosis, hydroureter, uroliths)"
+  ]
+ ]
+}

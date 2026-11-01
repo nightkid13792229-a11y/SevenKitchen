@@ -1,0 +1,22 @@
+{
+  "tableId": "T0172",
+  "caption": "Table 26-1. Patient criteria for administration of parenteral nutrition.",
+  "columns": [
+    ""
+  ],
+  "rows": [
+    [
+      "1. The patient is hemodynamically stable and major electrolyte and acid-base abnormalities, severe tachycardia, hypotension and volume deficits have been corrected."
+    ],
+    [
+      "2. Actual or anticipated food intake is less than calculated resting energy requirement for more than three days."
+    ],
+    [
+      "3. Concurrent small intestinal disorder is known or suspected to be present, or a safe enteral nutritional access cannot be established."
+    ],
+    [
+      "4. The patient is expected to be hospitalized for at least the next three days."
+    ]
+  ],
+  "note": "表内无表头行，整张表为单列方框，按 1-4 条逐条成行。"
+}

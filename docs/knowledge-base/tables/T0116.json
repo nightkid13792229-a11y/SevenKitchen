@@ -1,0 +1,42 @@
+{
+  "tableId": "T0116",
+  "caption": "Table 16-3. Optimal environmental temperatures for orphaned puppies.",
+  "columns": [
+    "Age",
+    "°Centigrade Immediate environment/incubator for orphans",
+    "°Fahrenheit"
+  ],
+  "rows": [
+    [
+      "Week 1",
+      "29-32",
+      "84-90"
+    ],
+    [
+      "Week 2",
+      "26-29",
+      "79-84"
+    ],
+    [
+      "Week 3",
+      "23-26",
+      "73-79"
+    ],
+    [
+      "Week 4",
+      "23",
+      "73"
+    ],
+    [
+      "Environment around litter",
+      "",
+      ""
+    ],
+    [
+      "Week 1",
+      "24-27",
+      "75-81"
+    ]
+  ],
+  "note": "同一页上方另有一张被裁切的 Table 16-2 片段（Breeds 后半段，表头与表题不在本页），未转录；此处转录完整可见的 Table 16-3。"
+}

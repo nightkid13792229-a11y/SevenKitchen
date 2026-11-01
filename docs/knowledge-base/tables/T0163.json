@@ -1,0 +1,121 @@
+{
+  "tableId": "T0163",
+  "caption": "Table 25-4. Laboratory data of a dog after four months of starvation.",
+  "columns": [
+    "Tests",
+    "Results",
+    "Reference ranges"
+  ],
+  "rows": [
+    [
+      "Complete blood cell count*",
+      "",
+      ""
+    ],
+    [
+      "RBC (x 10⁶/mm³)",
+      "2.73",
+      "4.62-8.3"
+    ],
+    [
+      "HGB (g/dl)",
+      "6.5",
+      "11.6-20.6"
+    ],
+    [
+      "HCT (%)",
+      "18.2",
+      "33.1-66.4"
+    ],
+    [
+      "Reticulocyte (%)",
+      "0.0",
+      "0-3"
+    ],
+    [
+      "WBC (x 10³/mm³)",
+      "3.4",
+      "4.8-16.2"
+    ],
+    [
+      "Fibrinogen (mg/dl)",
+      "430",
+      "88-380"
+    ],
+    [
+      "Serum biochemistry profile**",
+      "",
+      ""
+    ],
+    [
+      "Glucose (mg/dl)",
+      "172",
+      "65-110"
+    ],
+    [
+      "AST (U/l)",
+      "79",
+      "9-43"
+    ],
+    [
+      "ALT (U/l)",
+      "75",
+      "14-50"
+    ],
+    [
+      "Alkaline phosphatase (U/l)",
+      "230",
+      "5-125"
+    ],
+    [
+      "Total protein (g/dl)",
+      "4.0",
+      "4.6-7.0"
+    ],
+    [
+      "Albumin (g/dl)",
+      "2.1",
+      "2.6-4.2"
+    ],
+    [
+      "Calcium (mg/dl)",
+      "8.5",
+      "8.9-11.1"
+    ],
+    [
+      "Phosphorus (mg/dl)",
+      "2.9",
+      "3.0-5.9"
+    ],
+    [
+      "BUN (mg/dl)",
+      "28",
+      "7.0-25.0"
+    ],
+    [
+      "Creatinine (mg/dl)",
+      "0.2",
+      "0.6-1.6"
+    ],
+    [
+      "Urinalysis",
+      "",
+      ""
+    ],
+    [
+      "Specific gravity",
+      "1.052",
+      "1.015-1.045"
+    ],
+    [
+      "pH",
+      "7.0",
+      "6.0-7.5"
+    ],
+    [
+      "Ketones",
+      "Trace",
+      "-"
+    ]
+  ]
+}

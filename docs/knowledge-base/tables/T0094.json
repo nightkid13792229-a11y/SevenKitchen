@@ -1,0 +1,51 @@
+{
+ "tableId": "T0094",
+ "caption": "Table 12-1. Comparisons of dog populations in selected countries.",
+ "columns": [
+  "Country",
+  "Pet dog population"
+ ],
+ "rows": [
+  [
+   "USA",
+   "61,080,000"
+  ],
+  [
+   "Brazil",
+   "30,051,000"
+  ],
+  [
+   "China",
+   "22,908,000"
+  ],
+  [
+   "Japan",
+   "9,600,000"
+  ],
+  [
+   "Russia",
+   "9,600,000"
+  ],
+  [
+   "South Africa",
+   "9,100,000"
+  ],
+  [
+   "France",
+   "8,150,000"
+  ],
+  [
+   "Italy",
+   "7,600,000"
+  ],
+  [
+   "Poland",
+   "7,520,000"
+  ],
+  [
+   "Thailand",
+   "6,900,000"
+  ]
+ ],
+ "note": "同一张图下方还有 Table 12-2，此处只转录 Table 12-1；表下注释 \"*Source: Infobase Pvt. Ltd.\" 未计入数据行。"
+}

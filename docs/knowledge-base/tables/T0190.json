@@ -1,0 +1,22 @@
+{
+  "tableId": "T0190",
+  "caption": "Table 27-13. Two alternative methods for estimating resting energy requirement (RER).*",
+  "columns": [
+    "Method",
+    "Formula and notes"
+  ],
+  "rows": [
+    [
+      "1)",
+      "RER (kcal/day) = 70(BWkg)^0.75. This calculation can be performed with a calculator that has a fractional exponent key or by cubing the body weight and taking its square root twice."
+    ],
+    [
+      "2)",
+      "RER (kcal/day) = 30(BWkg) + 70. Results using this formula correlate well with results derived from Formula 1 above for body weights greater than 2 kg. Alternatively Table 5-2 provides this information for dogs weighing up to 70 kg."
+    ],
+    [
+      "",
+      "*Table 27-3 provides RER estimates without requiring calculations."
+    ]
+  ]
+}

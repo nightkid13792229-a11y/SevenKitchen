@@ -1,0 +1,38 @@
+{
+ "tableId": "T0374",
+ "caption": "Table 53-3. Kibble size comparison of selected large-kibble dry commercial foods to consider for feeding medium-, large- and giant-breed dogs to reduce the risk of gastric dilatation and volvulus.*",
+ "columns": [
+  "Factor",
+  "Kibble cross sectional dimension(s)**"
+ ],
+ "rows": [
+  [
+   "Recommendation",
+   ">30 mm for giant-breed dogs\nSomewhat smaller kibbles (<30 mm) may be effective in medium- and large-breed dogs as long as the kibble is sufficiently large to prevent rapid eating"
+  ],
+  [
+   "Hill's Prescription Diet t/d Canine",
+   "28.3 x 26.4 mm"
+  ],
+  [
+   "Medi-Cal Dental Formula",
+   "23.3 x 20.3 mm"
+  ],
+  [
+   "Purina Veterinary Diets DH Dental Health",
+   "21.9 x 21.2 mm"
+  ],
+  [
+   "Royal Canin Giant Adult 28",
+   "29.72 x 28.88 mm"
+  ],
+  [
+   "*For additional key nutritional factors of importance for canine maintenance, see appropriate lifestyle recommendations (Chapters 13 through 17).",
+   ""
+  ],
+  [
+   "**Kibble size represents the mean of measurements (diameter or width X thickness) made on three randomly selected kibbles from one bag of each product listed.",
+   ""
+  ]
+ ]
+}

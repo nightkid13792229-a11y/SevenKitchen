@@ -1,0 +1,26 @@
+{
+  "tableId": "T0103",
+  "caption": "Table 13-5. Advantages and disadvantages of various feeding methods for dogs.",
+  "columns": [
+    "Method",
+    "Advantages",
+    "Disadvantages"
+  ],
+  "rows": [
+    [
+      "Free-choice feeding",
+      "Less labor intensive\nLess knowledge required\nQuieting effect in a kennel\nLess dominant dogs have a better chance to get their share",
+      "Less control over food intake\nPredisposes to obesity\nLess monitoring of individual changes in food intake"
+    ],
+    [
+      "Meal-restricted feeding",
+      "Better control of food dose\nEarly detection of altered appetite\nBetter control of body weight",
+      "Intermediate labor intensive\nMost knowledge required for food dose calculation"
+    ],
+    [
+      "Time-restricted feeding",
+      "Intermediate control of food dose\nSome monitoring of appetite possible",
+      "Inaccurate control of food intake\nRisk of obesity similar to free choice\nMost labor intensive"
+    ]
+  ]
+}

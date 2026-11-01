@@ -1,0 +1,56 @@
+{
+ "tableId": "T0393",
+ "caption": "Table 58-2. Summary of digestion and absorption of long- and medium-chain triglycerides.",
+ "columns": [
+  "Characteristics",
+  "Long-chain triglycerides",
+  "Medium-chain triglycerides"
+ ],
+ "rows": [
+  [
+   "Digestion",
+   "",
+   ""
+  ],
+  [
+   "Hydrolysis by gastric lipase",
+   "Slow",
+   "Fast"
+  ],
+  [
+   "Hydrolysis by pancreatic lipase",
+   "Fast",
+   "Very fast"
+  ],
+  [
+   "Luminal transport",
+   "",
+   ""
+  ],
+  [
+   "Paracellular absorption",
+   "None",
+   "Some"
+  ],
+  [
+   "Re-esterification and chylomicron formation",
+   "Yes",
+   "No"
+  ],
+  [
+   "Requires bile acid micellization",
+   "Yes",
+   "No"
+  ],
+  [
+   "Transport route from gut",
+   "Lymphatics",
+   "Portal blood; some via lymphatics"
+  ],
+  [
+   "Water solubility of essential fatty acids",
+   "Low",
+   "High"
+  ]
+ ]
+}

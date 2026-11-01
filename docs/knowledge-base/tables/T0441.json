@@ -1,0 +1,28 @@
+{
+  "tableId": "T0441",
+  "caption": "Table 69-4. Dietary factors that may affect drug metabolism and excretion, principally through induction of phase I biotransformation.",
+  "columns": ["Macronutrients", "Micronutrients", "Non-nutrients"],
+  "rows": [
+    ["Protein", "Vitamins", "Antioxidants (BHA, BHT)"],
+    ["", "", "Coumarins"],
+    ["Carbohydrate", "Minerals", "Flavonoids"],
+    ["Fat", "Essential fatty acids", "Indoles"],
+    ["Fiber", "", "Methylxanthines"],
+    ["", "", "Organonitriles"],
+    ["", "", "Phenols"],
+    ["", "", "Pyrolysis by-products"],
+    ["", "", "Terpenoids"],
+    ["Examples of drugs whose metabolism and excretion is altered by these dietary factors", "", ""],
+    ["Acetaminophen", "", "Morphine"],
+    ["Allopurinol", "", "Oxazepam"],
+    ["Aminophylline", "", "Penicillin"],
+    ["Cefoxitin", "", "Pentobarbital"],
+    ["Chloramphenicol", "", "Phenobarbital"],
+    ["Chloroquine", "", "Phenytoin"],
+    ["Diazepam", "", "Prednisolone"],
+    ["Estradiol", "", "Propranolol"],
+    ["Hexobarbital", "", "Theophylline"],
+    ["Isoniazid", "", "Zoxazolamine"],
+    ["Meperidine", "", ""]
+  ]
+}

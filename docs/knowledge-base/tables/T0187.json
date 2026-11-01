@@ -1,0 +1,39 @@
+{
+  "tableId": "T0187",
+  "caption": "Table 27-11. Methods for determining ideal/optimal body weight.",
+  "columns": [
+    "#",
+    "Method"
+  ],
+  "rows": [
+    [
+      "1",
+      "Consult the patient's medical record to determine if a body condition score (BCS) of 3/5 was recorded with a simultaneous ideal body weight."
+    ],
+    [
+      "2",
+      "Consult the patient's medical record to see if the patient's body weight was recorded at about the time the patient reached one year of age. Such a body weight would likely be near ideal (but not always). Thus, this method might not be as reliable as Method 1 above."
+    ],
+    [
+      "3",
+      "Consult Table 27-3 in this text."
+    ],
+    [
+      "a.",
+      "Determine patient's current BCS and obtain current body weight."
+    ],
+    [
+      "b.",
+      "Locate the current BCS and body weight in Table 27-3."
+    ],
+    [
+      "c.",
+      "Note the weight in Table 27-3 that coincides with a BCS of 3/5 in the same column."
+    ],
+    [
+      "4",
+      "Consult web-based programs (Box-27-10)."
+    ]
+  ],
+  "note": "该页（p.527）有两张表：Table 27-11 与 Table 27-12，本文件转录编号靠前的 Table 27-11；Table 27-12 见 T0188。表格为编号条目式，原文无表头，按“序号/内容”两列输出。"
+}

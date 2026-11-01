@@ -1,0 +1,16 @@
+{
+  "tableId": "T0407",
+  "caption": "Table 62-1. Key nutritional factors for dogs and cats with colitis.*",
+  "columns": [
+    "Factors",
+    "Recommended levels"
+  ],
+  "rows": [
+    ["Protein", "Adult dogs: 15 to 30%\nGrowing puppies: 22 to 32%\nAdult cats: 30 to 45%\nGrowing kittens: 35 to 50%\nOption: consider elimination foods or protein hydrolysates (Table 31-5 for dogs and Table 31-6 for cats)"],
+    ["Fat", "Dogs: 8 to 15%\nCats: 9 to 25%"],
+    ["Digestibility", "Highly digestible foods: ≥87% for protein and ≥90% for fat and digestible carbohydrate\nFiber-enhanced foods: ≥80% for protein and fat and ≥90% for digestible carbohydrate"],
+    ["Fiber", "Highly digestible foods: ≤5%\nFiber-enhanced foods: ≥7%"],
+    ["Electrolytes", "Sodium: 0.3 to 0.5%\nChloride: 0.5 to 1.3%\nPotassium: 0.8 to 1.1%"],
+    ["*All values expressed on a dry matter basis.", ""]
+  ]
+}

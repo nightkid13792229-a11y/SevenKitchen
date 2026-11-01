@@ -1,0 +1,90 @@
+{
+ "tableId": "T0272",
+ "caption": "Table 38-11. Predicting mineral composition of common canine uroliths.",
+ "columns": [
+  "Mineral types",
+  "Urinary pH",
+  "Crystal appearance",
+  "Urine culture",
+  "Radiographic density",
+  "Predictors Radiographic contour",
+  "Serum abnormalities",
+  "Breed predisposition",
+  "Gender predisposition",
+  "Common ages"
+ ],
+ "rows": [
+  [
+   "Magnesium ammonium phosphate",
+   "Neutral to alkaline",
+   "Three- to eight-sided colorless prisms",
+   "Urease-producing bacteria (staphylococci, Proteus spp., Ureaplasma spp.)",
+   "1+ to 4+ (sometimes laminated)",
+   "Smooth, round or faceted May assume shape of renal pelvis, ureter, bladder or urethra",
+   "None",
+   "Miniature schnauzer, miniature poodle, Bichon Frise, cocker spaniel",
+   "Females (>80%)",
+   "2 to 9 years"
+  ],
+  [
+   "Calcium oxalate",
+   "Acidic to neutral",
+   "Colorless envelope or octahedral shape (dihydrate salt) Spindles or dumbbell shape (monohydrate salt)",
+   "Negative",
+   "2+ to 4+",
+   "Rough or speculated (dihydrate salt) Small, smooth, round (monohydrate salt) Sometimes jackstone",
+   "Usually normocalcemic, occasionally hypercalcemic",
+   "Miniature schnauzer, standard schnauzer, Lhasa apso, Yorkshire terrier, miniature poodle, Shih Tzu, Bichon Frise",
+   "Males (>70%)",
+   "5 to 12 years"
+  ],
+  [
+   "Urate",
+   "Acidic to neutral",
+   "Yellow-brown amorphous shapes (ammonium urate)",
+   "Negative",
+   "0 to 2+",
+   "Smooth (occasionally irregular) round or oval",
+   "Low serum urea nitrogen and albumin values In dogs with hepatic portosystemic shunts",
+   "Dalmatian, English bulldog, miniature schnauzer, Yorkshire terrier, Shih Tzu",
+   "Males (>90%)",
+   "1 to 5 years"
+  ],
+  [
+   "Calcium phosphate",
+   "Alkaline to neutral (brushite forms in acidic urine)",
+   "Amorphous or long thin prisms",
+   "Negative",
+   "2+ to 4+",
+   "Smooth or irregular, round or faceted",
+   "Occasionally hypercalcemic",
+   "Yorkshire terrier, miniature schnauzer, Shih Tzu",
+   "Males (>55%)",
+   "<1 year, 6 to 10 years"
+  ],
+  [
+   "Cystine",
+   "Acidic to neutral",
+   "Flat colorless hexagonal plates",
+   "Negative",
+   "1+ to 2+",
+   "Smooth (occasionally irregular) round or oval",
+   "None",
+   "English bulldog, dachshund, basset hound, Newfoundland",
+   "Males (>98%)",
+   "1 to 7 years"
+  ],
+  [
+   "Silica",
+   "Acidic to neutral",
+   "None observed",
+   "Negative",
+   "2+ to 3+",
+   "Round center with radial spoke-like projections (jackstone)",
+   "None",
+   "German shepherd, golden retriever, Labrador retriever, miniature schnauzer, cavalier King Charles spaniel",
+   "Males (95%)",
+   "3 to 10 years"
+  ]
+ ]
+}

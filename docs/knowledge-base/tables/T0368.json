@@ -1,0 +1,125 @@
+{
+ "tableId": "T0368",
+ "caption": "Table 50-6. Key nutritional factor content of selected commercial veterinary therapeutic foods for cats with esophagitis/gastroesophageal reflux compared to recommended levels.*",
+ "columns": [
+  "",
+  "Energy density (kcal/cup)**",
+  "Energy density (kcal/g)",
+  "Fat (%)",
+  "Protein (%)"
+ ],
+ "rows": [
+  [
+   "Dry foods",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "–",
+   "≥4",
+   "≤20",
+   "≥35"
+  ],
+  [
+   "Hill's Prescription Diet i/d Feline",
+   "483",
+   "4.3",
+   "20.2",
+   "40.3"
+  ],
+  [
+   "Iams Veterinary Formula Intestinal Low-Residue",
+   "348",
+   "3.9",
+   "13.7",
+   "35.8"
+  ],
+  [
+   "Medi-Cal Hypoallergenic/Gastro",
+   "350",
+   "na",
+   "11.5",
+   "29.8"
+  ],
+  [
+   "Purina Veterinary Diets EN GastroENteric Formula",
+   "572",
+   "4.4",
+   "18.4",
+   "56.2"
+  ],
+  [
+   "Royal Canin Veterinary Diet Intestinal HE 30",
+   "396",
+   "4.4",
+   "23.7",
+   "34.4"
+  ],
+  [
+   "Moist foods",
+   "Energy density (kcal/can)**",
+   "Energy density (kcal/g)",
+   "Fat (%)",
+   "Protein (%)"
+  ],
+  [
+   "Recommended levels",
+   "–",
+   "≥4",
+   "≤20",
+   "≥35"
+  ],
+  [
+   "Hill's Prescription Diet i/d Feline",
+   "161/5.5 oz.",
+   "4.2",
+   "24.1",
+   "37.6"
+  ],
+  [
+   "Iams Veterinary Formula Intestinal Low-Residue",
+   "169/6 oz.",
+   "4.0",
+   "11.7",
+   "38.4"
+  ],
+  [
+   "Medi-Cal Hypoallergenic/Gastro",
+   "184/170 g",
+   "na",
+   "35.9",
+   "35.5"
+  ],
+  [
+   "Medi-Cal Sensitivity CR",
+   "162/165 g",
+   "na",
+   "35.1",
+   "34.5"
+  ],
+  [
+   "Key: na = information not available from manufacturer.",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "*From manufacturers' published information or calculated from manufacturers' published as-fed values; all values are on a dry matter basis unless otherwise stated.",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "**Energy density values are listed on an as fed basis and are useful for determining the amount to feed; cup = 8-oz. measuring cup. To convert to kJ, multiply kcal by 4.184.",
+   "",
+   "",
+   "",
+   ""
+  ]
+ ]
+}

@@ -1,0 +1,102 @@
+{
+ "tableId": "T0282",
+ "caption": "Table 40-2. Some potential risk factors for canine calcium oxalate uroliths.",
+ "columns": [
+  "Diet",
+  "Urine",
+  "Metabolic status",
+  "Drugs"
+ ],
+ "rows": [
+  [
+   "Acidifying potential",
+   "Hypercalciuria",
+   "Chronic metabolic acidosis",
+   "Urine acidifiers"
+  ],
+  [
+   "High protein content",
+   "Hyperoxaluria",
+   "Males",
+   "Furosemide"
+  ],
+  [
+   "High sodium content",
+   "Hypocitraturia?",
+   "Breed",
+   "Glucocorticoids"
+  ],
+  [
+   "Excessive calcium content",
+   "Hypomagnesuria?",
+   "Miniature schnauzers",
+   "Sodium chloride"
+  ],
+  [
+   "Excessive restriction of calcium",
+   "Hyperuricuria?",
+   "Miniature poodles",
+   "Vitamin D"
+  ],
+  [
+   "Low moisture content",
+   "Increased crystal promoters",
+   "Lhasa apsos",
+   "Ascorbic acid"
+  ],
+  [
+   "Excessive phosphorus restriction",
+   "Decreased crystal inhibitors",
+   "Yorkshire terriers",
+   ""
+  ],
+  [
+   "Excessive magnesium content",
+   "Urine concentration",
+   "Shih Tzus",
+   ""
+  ],
+  [
+   "Excessive magnesium restriction",
+   "Urine retention",
+   "Bichon Frises",
+   ""
+  ],
+  [
+   "Excessive vitamin D content",
+   "",
+   "Older age",
+   ""
+  ],
+  [
+   "Excessive vitamin C content",
+   "",
+   "Hypercalcemia",
+   ""
+  ],
+  [
+   "Deficient pyridoxine?",
+   "",
+   "Glucocorticoid excess",
+   ""
+  ],
+  [
+   "High oxalate content",
+   "",
+   "Hypophosphatemia",
+   ""
+  ],
+  [
+   "",
+   "",
+   "Hyperoxalemia?",
+   ""
+  ],
+  [
+   "",
+   "",
+   "Osteolysis?",
+   ""
+  ]
+ ]
+}

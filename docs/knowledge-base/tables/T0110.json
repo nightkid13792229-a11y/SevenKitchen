@@ -1,0 +1,30 @@
+{
+  "tableId": "T0110",
+  "caption": "Table 15-8. Calculation of milk production in bitches.*",
+  "columns": [
+    ""
+  ],
+  "rows": [
+    [
+      "TP (liters) = (BWkg x k) + [(n−4) x (0.1 x BWkg)]"
+    ],
+    [
+      "Peak milk production (Weeks 3 to 4) = TP x 0.04."
+    ],
+    [
+      "Example = 30-kg bitch with 8 puppies"
+    ],
+    [
+      "TP = (30 x 2) + [(8−4) x (0.1 x 30)] = 60 + (4 x 3) = 72 liters milk"
+    ],
+    [
+      "Peak milk production (Weeks 3 to 4) = 72 x 0.04 = 2.9 liters/day"
+    ],
+    [
+      "Key: TP = total milk production through Day 45 of lactation, n = number of puppies, k = 1.6 for bitches ≤8 kg BW, 1.8 for bitches >8 to ≤25 kg BW and 2.0 for bitches ≥25 kg BW, BW = bitch's body weight."
+    ],
+    [
+      "*Adapted from Grandjean D, Paragon B-M, Grandjean R. Rationnement alimentaire et prévention chez le chien 1. Le Point Vétérinaire 1986; 18: 519-524."
+    ]
+  ]
+}

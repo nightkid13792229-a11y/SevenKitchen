@@ -1,0 +1,43 @@
+{
+  "tableId": "T0452",
+  "caption": "Table 9-9. Information found in the statutory statements of European pet food labels.",
+  "columns": [
+    ""
+  ],
+  "rows": [
+    [
+      "Additives"
+    ],
+    [
+      "Address of person (company) responsible for the accuracy of declarations"
+    ],
+    [
+      "Complete/complementary food"
+    ],
+    [
+      "Expiration date and reference to manufacturing date"
+    ],
+    [
+      "Ingredient list"
+    ],
+    [
+      "Instructions for use"
+    ],
+    [
+      "Net weight and/or volume"
+    ],
+    [
+      "Reference (batch) number"
+    ],
+    [
+      "Registration number of the plant"
+    ],
+    [
+      "Species/category"
+    ],
+    [
+      "Typical analysis"
+    ]
+  ],
+  "note": "原表为单列清单、无表头，列名留空。"
+}

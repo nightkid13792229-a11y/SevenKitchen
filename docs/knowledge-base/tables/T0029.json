@@ -1,0 +1,94 @@
+{
+ "tableId": "T0029",
+ "caption": "TABLE 1 (Continued)",
+ "columns": [
+  "TOOL",
+  "ACUTE OR CHRONIC PAIN",
+  "USER",
+  "EASE OF USE",
+  "PURPOSE",
+  "VALIDITY*"
+ ],
+ "rows": [
+  [
+   "CLINICAL METROLOGY INSTRUMENTS (CMIS)",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Colorado Acute Pain Scale Felineᵃ",
+   "Acute",
+   "Veterinarian and veterinary technician",
+   "Simple",
+   "Monitoring",
+   "Not validated"
+  ],
+  [
+   "Glasgow Composite Measure Pain Scale—felineᵇ",
+   "Acute",
+   "Veterinarian and veterinary technician",
+   "Moderate",
+   "Monitoring",
+   "Moderately validated"
+  ],
+  [
+   "UNESP-Botucatu Multidimensional Composite Pain Scaleᶜ",
+   "Acute",
+   "Veterinarian and veterinary technician",
+   "Moderate",
+   "Monitoring",
+   "Valid"
+  ],
+  [
+   "Feline Grimace Scaleᵈ",
+   "Acute",
+   "Veterinarian and veterinary technician",
+   "Simple",
+   "Screening, monitoring",
+   "Valid"
+  ],
+  [
+   "Musculoskeletal Pain Screening Checklist (MiPSC)ᵉ",
+   "Chronic, osteoarthritis",
+   "Owner",
+   "Simple",
+   "Screening",
+   "Valid"
+  ],
+  [
+   "Feline Musculoskeletal Pain Index (FMPI)ᶠ",
+   "Chronic, osteoarthritis",
+   "Owner",
+   "Simple",
+   "Monitoring",
+   "Valid"
+  ],
+  [
+   "Montreal Instrument for Cat Arthritis Testing—Caretaker (MICAT-C)ᵍ",
+   "Chronic, osteoarthritis",
+   "Owner",
+   "Simple",
+   "Monitoring",
+   "Moderately validated"
+  ],
+  [
+   "Client-specific outcome measuresʰ",
+   "Chronic, osteoarthritis",
+   "Owner",
+   "Moderate",
+   "Monitoring",
+   "Moderately validated"
+  ],
+  [
+   "Health-related quality of life (HRQoL)ⁱ",
+   "Chronic",
+   "Owner",
+   "Simple",
+   "Monitoring",
+   "Moderately valid (not specific to pain)"
+  ]
+ ]
+}

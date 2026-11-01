@@ -1,0 +1,59 @@
+{
+  "tableId": "T0416",
+  "caption": "Table 65-1. Key nutritional factors for foods, treats and snacks for dogs and cats with excessive flatulence.*",
+  "columns": [
+    "Factors",
+    "Recommendations"
+  ],
+  "rows": [
+    [
+      "Digestibility",
+      "Increased digestibility; Fat and carbohydrate digestibility ≥90%; Protein digestibility ≥87%"
+    ],
+    [
+      "Carbohydrate",
+      "Change source: rice is preferred"
+    ],
+    [
+      "Protein",
+      "Avoid high-protein foods; Adult dogs: limit to ≤30% or less; Adult cats: limit to ≤40% or less; Avoid legumes (see below)"
+    ],
+    [
+      "Fiber",
+      "Dogs and cats: limit to ≤5% fiber (most important aspect regarding fiber); Avoid high-fiber foods, especially soluble/fermentable and mixed fibers (soy fiber, soybean hulls, pea fiber, psyllium, pectin, carrageenan, guar gum, bran and beet pulp)"
+    ],
+    [
+      "Legumes",
+      "Avoid all beans (including soybeans), peas, lentils, peanuts"
+    ],
+    [
+      "Lactose sources",
+      "Avoid milk, ice cream, cheese, yogurt"
+    ],
+    [
+      "Sulfur-containing vegetables",
+      "Avoid broccoli, cauliflower, Brussels sprouts, cabbage"
+    ],
+    [
+      "Onions",
+      "Avoid"
+    ],
+    [
+      "Nuts",
+      "Avoid"
+    ],
+    [
+      "Spices",
+      "Avoid"
+    ],
+    [
+      "Fructose",
+      "Avoid fruits and high-fructose corn syrup"
+    ],
+    [
+      "Vitamin-mineral supplements",
+      "Avoid; unnecessary with most commercial foods"
+    ]
+  ],
+  "note": "表格在 b 页（第 1129 页）；表格脚注 “*Nutrient values are on a dry matter basis.” 未计入 rows"
+}

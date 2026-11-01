@@ -30,7 +30,7 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂（Feeding Mature Adult Dogs: Middle Aged and Older）', note: '成熟犬定义、衰老与疾病的关系、个体差异' },
       { source: '小动物临床营养学（第5版）', chapter: '第35章 犬认知功能障碍（Cognitive Dysfunction in Dogs）', note: '7 岁以上老年犬群体规模数据' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '营养评估（Nutritional Assessment）', note: '高龄（advancing age）是改变能量与营养素需求的脆弱生命阶段' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '营养评估（Nutritional Assessment）', note: '高龄（advancing age）是改变能量与营养素需求的脆弱生命阶段' },
     ],
     priority: 'HIGH',
   },
@@ -58,7 +58,7 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '常见疾病、肾病/高血压筛查、钠与磷关键因子、牙周病' },
       { source: '小动物临床营养学（第5版）', chapter: '第35章 犬认知功能障碍', note: '行为改变的医学排查、多病优先级的食品选择原则' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '营养风险因素与治疗性食品', note: '慢性病（CKD、糖尿病、骨关节炎）营养管理是整体医疗计划的核心' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '营养风险因素与治疗性食品', note: '慢性病（CKD、糖尿病、骨关节炎）营养管理是整体医疗计划的核心' },
     ],
     priority: 'HIGH',
   },
@@ -83,7 +83,7 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '蛋白质争议、15-23% DM 建议、高蛋白与肾病关系、免疫与氮平衡研究' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '体重管理 / 老年生命阶段', note: '高蛋白限能饮食保留瘦体重；老年期瘦体重流失' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '体重管理 / 老年生命阶段', note: '高蛋白限能饮食保留瘦体重；老年期瘦体重流失' },
     ],
     priority: 'HIGH',
   },
@@ -110,7 +110,7 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '能量需求下降 12-13%、1.4×RER、能量密度与脂肪推荐范围、高龄消瘦犬' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '预防肥胖（Prevention of Obesity）', note: '中年能量需求下降但结果不一致、老年期瘦体重与体重下降、减重摄入数据' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '预防肥胖（Prevention of Obesity）', note: '中年能量需求下降但结果不一致、老年期瘦体重与体重下降、减重摄入数据' },
     ],
     priority: 'HIGH',
   },
@@ -134,7 +134,7 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
       '营养评估与筛查属于兽医诊疗行为，本条目用于指导评估内容与频率，不能替代兽医检查。',
     ],
     citations: [
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '如何进行完整营养评估（How to Perform a Complete Nutritional Assessment）', note: '筛查/扩展评估、BCS/MCS、风险因素' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '如何进行完整营养评估（How to Perform a Complete Nutritional Assessment）', note: '筛查/扩展评估、BCS/MCS、风险因素' },
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '评估频率 6-12 个月、营养监测的重要性' },
       { source: '小动物临床营养学（第5版）', chapter: '第35章 犬认知功能障碍', note: '引述 AAHA 老年护理工作组：老年犬每年两次筛查' },
     ],
@@ -159,7 +159,7 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
       'BCS/MCS 评分建议由兽医或受过训练的人员执行或核实，主人自查结果需专业人员确认。',
     ],
     citations: [
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '营养评估：BCS 与 MCS', note: '9 分制 BCS 与体脂关系、MCS 评估与验证' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '营养评估：BCS 与 MCS', note: '9 分制 BCS 与体脂关系、MCS 评估与验证' },
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '理想体况 BCS 2.5/5-3.5/5' },
     ],
     priority: 'MEDIUM',
@@ -184,7 +184,7 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '便秘、纤维稀释热量与餐后血糖、表14-2 纤维推荐' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '治疗性减重食品', note: '添加纤维的饱腹效应与降低能量密度作用' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '治疗性减重食品', note: '添加纤维的饱腹效应与降低能量密度作用' },
     ],
     priority: 'MEDIUM',
   },
@@ -260,7 +260,7 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '3-7 天过渡期、高脂提高适口性、零食 <10%、喂养方法' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '个性化营养建议（Individualized Nutritional Recommendations）', note: '4-7 天过渡、额外食品 ≤10% 总热量' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '个性化营养建议（Individualized Nutritional Recommendations）', note: '4-7 天过渡、额外食品 ≤10% 总热量' },
     ],
     priority: 'MEDIUM',
   },
@@ -303,7 +303,7 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '热量限制 20%-30% 与衰老、疾病风险' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '预防肥胖（Prevention of Obesity）', note: '引述饮食限制延长寿命与骨关节炎研究（Kealy 等）' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '预防肥胖（Prevention of Obesity）', note: '引述饮食限制延长寿命与骨关节炎研究（Kealy 等）' },
     ],
     priority: 'LOW',
   },

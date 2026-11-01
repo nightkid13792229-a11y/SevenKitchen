@@ -1,0 +1,31 @@
+{
+  "tableId": "T0109",
+  "caption": "Table 15-6. Practical recommendations for energy intake during gestation.*",
+  "columns": [
+    "Week of gestation",
+    "kcal ME/day**",
+    "kJ ME/day**"
+  ],
+  "rows": [
+    [
+      "1-4",
+      "DER***",
+      "DER***"
+    ],
+    [
+      "5",
+      "DER + 18 kcal ME/kg BW",
+      "DER + 75 kJ ME/kg BW"
+    ],
+    [
+      "6-8",
+      "DER + 36 kcal ME/kg BW",
+      "DER + 150 kJ ME/kg BW"
+    ],
+    [
+      "9",
+      "DER + 18 kcal ME/kg BW",
+      "DER + 75 kJ ME/kg BW"
+    ]
+  ]
+}

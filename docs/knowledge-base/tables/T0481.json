@@ -1,0 +1,69 @@
+{
+  "tableId": "T0481",
+  "caption": "Table 2. (Continued)",
+  "columns": [
+    "Vaccine",
+    "Kittens ≤16 weeks",
+    "Cats >16 weeks",
+    "Revaccination",
+    "Comments and recommendations"
+  ],
+  "rows": [
+    [
+      "Rabies: recombinant and inactivated",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Rabies (canarypoxvirus-vectored recombinant, non-adjuvanted, parenteral)",
+      "Follow local regulations as a priority. If there are no regulations, follow the product leaflet",
+      "Follow local regulations as a priority. If there are no regulations, follow the product leaflet",
+      "Revaccination as required by local regulations or as per licensed duration of immunity (DOI)/product leaflet",
+      "Core in areas where the disease is endemic"
+    ],
+    [
+      "Rabies (1- and 3-year DOI inactivated, adjuvanted products, parenteral)",
+      "Follow local regulations as a priority. If there are no regulations, follow the product leaflet",
+      "Follow local regulations as a priority. If there are no regulations, follow the product leaflet",
+      "Revaccination as required by local regulations or as per licensed duration of immunity (DOI)/product leaflet",
+      "Core in areas where the disease is endemic"
+    ],
+    [
+      "FeLV: recombinant and inactivated",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "FeLV (recombinant, adjuvanted, parenteral)",
+      "Start as early as 8 weeks of age\nA second dose to be administered 3 to 4 weeks later",
+      "Two doses, 3 to 4 weeks apart",
+      "Revaccinate 1 year following the last dose of the initial series Thereafter, annually revaccinate cats at continuing high risk of exposure to other, FeLV infected cats (indoors or outdoors)",
+      "FeLV vaccines are core for young cats <1 year old that live in regions where FeLV infection is prevalent and in older cats that have continuing risk of exposure, e.g. adult cats that have regular, unsupervised outdoor access in areas where FeLV is endemic Avoiding exposure is the best way to prevent FeLV infection Only FeLV-negative cats should be vaccinated. FeLV testing should be performed prior to vaccine administration Further research is warranted to determine how frequently adult cats at continuing high risk of being bitten by potentially FeLV-infected cats should be revaccinated against FeLV"
+    ],
+    [
+      "FeLV (inactivated, adjuvanted, parenteral)",
+      "Start as early as 8 weeks of age\nA second dose to be administered 3 to 4 weeks later",
+      "Two doses, 3 to 4 weeks apart",
+      "Revaccinate 1 year following the last dose of the initial series Thereafter, annually revaccinate cats at continuing high risk of exposure to FeLV infected cats (indoors or outdoors) Revaccinate according to product leaflet (e.g. every 2 or 3 years) those cats at low risk of exposure to potentially FeLV-infected cats",
+      ""
+    ],
+    [
+      "Non-core vaccines for pet cats",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Feline immunodeficiency virus (FIV; killed, adjuvanted, parenteral)",
+      "Three doses are required to immunise\nThe initial dose is administered as early as 8 weeks of age; two subsequent doses should be administered at intervals of 2 to 3 weeks",
+      "Three doses are required Each dose is administered 2 to 3 weeks apart",
+      "A single dose 1 year following the last dose of the initial series, then annually in cats determined to be at sustained risk of exposure",
+      "Avoiding exposure is the best way to prevent FIV infection This vaccine is currently only available in Japan, Australia and New Zealand. Reports of its efficacy vary widely. Vaccination will induce production of antibodies used for diagnosis of infection. However, some in-practice diagnostic test kits can reliably discriminate between vaccinated, uninfected cats and infected cats. Validated, reliable PCR diagnostic tests are also becoming more widely available"
+    ]
+  ]
+}

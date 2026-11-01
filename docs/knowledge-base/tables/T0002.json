@@ -1,0 +1,70 @@
+{
+  "tableId": "T0002",
+  "caption": "Table 3 Useful Websites for Client and Staff Education",
+  "columns": [
+    "Source",
+    "Website"
+  ],
+  "rows": [
+    [
+      "1. AAFCO—Association of American Feed Control Officials (profiles, feeding, trials, ingredients)",
+      "http://www.aafco.org"
+    ],
+    [
+      "2. AAHA — American Animal Hospital Association",
+      "http://www.aahanet.org"
+    ],
+    [
+      "3. ACVN—American College of Veterinary Nutrition (specialty college for board certification; list of institutions that provide consultation; continual updates of links to resources for diet formulation and analysis)",
+      "http://www.acvn.org"
+    ],
+    [
+      "4. AVNT—Academy of Veterinary Nutritional Technicians (pending approval in 2010)",
+      "Website under construction\nInfo: email to nutritiontechs@aol.com"
+    ],
+    [
+      "5. FDA Center for Food Safety and Applied Nutrition (regulatory and safety issues, adverse event reporting, meetings, industry information)",
+      "http://www.fda.gov/aboutfda/centersoffices/cfsan/default.htm"
+    ],
+    [
+      "6. FDA Pet Food Site (information, links, food safety issues, recalls, pet food labels, selecting nutritious foods, handling raw foods)",
+      "http://www.fda.gov/AnimalVeterinary/Products/AnimalFoodFeeds/PetFood/default.htm\nand\nhttp://www.fda.gov/AnimalVeterinary/NewsEvents/CVMUpdates/ucm048030.htm"
+    ],
+    [
+      "7. Indoor Pet Initiative (comprehensive recommendations for environmental enrichment for dogs and cats)",
+      "http://indoorpet.osu.edu\nhttp://vet.osu.edu/indoorcat.htm"
+    ],
+    [
+      "8. NRC—National Research Council (nutrient requirements of dogs and cats)",
+      "http://www.nap.edu/catalog.php?record_id=10668#toc"
+    ],
+    [
+      "9. Downloadable booklets for pet owners\nYour Cat's Nutritional Needs\nYour Dog's Nutritional Needs",
+      "http://dels.nas.edu/banr/petdoor.html"
+    ],
+    [
+      "10. NIH Office of Dietary Supplements (evaluating supplements, Internet health info, and more)",
+      "http://dietary-supplements.info.nih.gov/Health_Information/Health_Information.aspx"
+    ],
+    [
+      "11. UC Davis Nutritional History Form (downloadable Word document)",
+      "http://www.vetmed.ucdavis.edu/vmth/small_animal/nutrition/newsletters.cfm"
+    ],
+    [
+      "12. Pet Food Institute (information on ingredient definitions, labeling regulations, etc.)",
+      "http://www.petfoodinstitute.org/Index.cfm?Page=Consumers"
+    ],
+    [
+      "13. United States Pharmacopeia Dietary Supplement Verification Program (voluntary program)",
+      "www.usp-dsvp.org"
+    ],
+    [
+      "14. USDA Food and Nutrition Information Center (general supplement and nutrition information, links to various dietary supplement websites)",
+      "http://www.nal.usda.gov/fnic/etext/000015.html"
+    ],
+    [
+      "15. USDA Nutrient Database (full nutrient profiles on thousands of human foods)",
+      "http://www.nal.usda.gov/fnic/foodcomp/search/"
+    ]
+  ]
+}

@@ -27,7 +27,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
  *      不许自己发挥。
  *
  *   ② **未审核的知识不进顾客侧**
- *      `buildPromptContext(audience:'customer')` 只放 APPROVED 的条目。
+ *      （2026-11-01：知识库去掉了审核状态字段，不再按受众过滤；顾客侧入口本身是隐藏的。）
  *      新补的免疫/化验/就医时机条目目前**全部是待审**，所以顾客侧
  *      实际上拿不到这些内容 —— 这也是顾客侧默认关闭的原因之一。
  *
@@ -422,7 +422,6 @@ export class HealthAnalysisService {
     for (const section of HEALTH_ANALYSIS_SECTIONS) {
       const tags = [...profileTags, ...SECTION_TAGS[section]];
       const context = this.knowledgeBaseService.buildPromptContext(tags, [], {
-        audience,
         purpose: 'health',
         // 每项只取 6 条：七项加起来仍在上限之内，也不会把提示词撑爆
         limit: 6,

@@ -1,0 +1,427 @@
+{
+ "tableId": "T0090",
+ "caption": "Table 10-10. Cooked ingredient substitution lists.",
+ "columns": [
+  "Ingredients",
+  "Major nutrient",
+  "18-kg (40-lb) dog",
+  "4.5-kg (10-lb) cat"
+ ],
+ "rows": [
+  [
+   "Starch, cooked",
+   "Carbohydrate",
+   "60 g",
+   "12 g"
+  ],
+  [
+   "Meat, cooked",
+   "Protein",
+   "28 g",
+   "9 g"
+  ],
+  [
+   "Fat",
+   "Fat",
+   "10 g",
+   "10 g"
+  ],
+  [
+   "Fiber",
+   "Dietary fiber",
+   "10 g (max)",
+   "5 g (max)"
+  ],
+  [
+   "Starch: These foods in these amounts yield 15 g carbohydrate with 3 g protein, trace fat and 80 kcal",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Bread",
+   "25 g",
+   "Breadsticks, raisin, rye, whole wheat, white",
+   ""
+  ],
+  [
+   "",
+   "30 g",
+   "Bagel, English muffins, buns, rolls, pita, tortilla",
+   ""
+  ],
+  [
+   "Cereal",
+   "20 g",
+   "Ready to eat cereals",
+   ""
+  ],
+  [
+   "",
+   "25 g",
+   "Bran cereals, shredded wheat",
+   ""
+  ],
+  [
+   "",
+   "30 g",
+   "Bran flakes, Chex",
+   ""
+  ],
+  [
+   "",
+   "100 g",
+   "Cooked cereals and grits",
+   ""
+  ],
+  [
+   "Grains",
+   "20 g",
+   "Cornmeal, flour, cornstarch, popcorn, tapioca",
+   ""
+  ],
+  [
+   "",
+   "75 g",
+   "Rice",
+   ""
+  ],
+  [
+   "",
+   "100 g",
+   "Barley, pasta",
+   ""
+  ],
+  [
+   "Vegetables",
+   "50 g",
+   "Baked beans, sweet potato",
+   ""
+  ],
+  [
+   "",
+   "75 g",
+   "Beans, peas, lentils, plantain",
+   ""
+  ],
+  [
+   "",
+   "80 g",
+   "Corn",
+   ""
+  ],
+  [
+   "",
+   "100 g",
+   "Corn on the cob, lima beans, green peas, potato, yam",
+   ""
+  ],
+  [
+   "",
+   "150 g",
+   "Squash, parsnips",
+   ""
+  ],
+  [
+   "",
+   "200 g",
+   "Pumpkin",
+   ""
+  ],
+  [
+   "Protein: Should be weighed after cooking and after bone, skin and excess fat have been removed",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Low fat: These foods in these amounts yield 7 g protein with 3 g fat and 55 kcal",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Beef",
+   "30 g",
+   "Baby beef, chipped beef, flank tenderloin, plate ribs, round (bottom, top), all rump cuts, lean spareribs, tripe, ground beef (>90% lean) and USDA good and choice",
+   ""
+  ],
+  [
+   "Dairy",
+   "30 g",
+   "Cottage cheese",
+   ""
+  ],
+  [
+   "",
+   "45 g",
+   "Cheeses (low fat 3 g or less/oz.)",
+   ""
+  ],
+  [
+   "Fish",
+   "30 g",
+   "Any fresh or frozen, tuna or mackerel canned in water",
+   ""
+  ],
+  [
+   "Mixed meats",
+   "30 g",
+   "Low-fat luncheon meats with 3 g fat or less /oz., >90% lean",
+   ""
+  ],
+  [
+   "Pork",
+   "30 g",
+   "Leg, tenderloin, ham, Canadian bacon",
+   ""
+  ],
+  [
+   "Poultry",
+   "30 g",
+   "Chicken or turkey meat without skin",
+   ""
+  ],
+  [
+   "",
+   "90 g",
+   "Egg whites",
+   ""
+  ],
+  [
+   "Seafood",
+   "30 g",
+   "Clams, crab, lobster",
+   ""
+  ],
+  [
+   "",
+   "50 g",
+   "Scallops",
+   ""
+  ],
+  [
+   "",
+   "60 g",
+   "Shrimp",
+   ""
+  ],
+  [
+   "",
+   "90 g",
+   "Oysters",
+   ""
+  ],
+  [
+   "Veal",
+   "30 g",
+   "Leg, loin, rib, shank, shoulder",
+   ""
+  ],
+  [
+   "Wild game",
+   "30 g",
+   "Venison, rabbit, squirrel, pheasant, goose without skin",
+   ""
+  ],
+  [
+   "Medium fat: These foods in these amounts yield 7 g protein with 5 g fat and 73 kcal",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Beef",
+   "30 g",
+   "Ground beef (>80% lean), corned beef, ribeye",
+   ""
+  ],
+  [
+   "Dairy",
+   "30 g",
+   "Cheese: mozzarella, ricotta, farmer",
+   ""
+  ],
+  [
+   "Fish",
+   "30 g",
+   "Tuna, salmon canned in oil, drained",
+   ""
+  ],
+  [
+   "Lamb",
+   "30 g",
+   "Leg, rib, sirloin, loin, shank, shoulder",
+   ""
+  ],
+  [
+   "Mixed meats",
+   "30 g",
+   "Low-fat luncheon meats with 3\\u20135 g fat/oz., 85\\u201390% lean",
+   ""
+  ],
+  [
+   "Organ meats",
+   "30 g",
+   "Liver, kidney, heart, sweetbreads",
+   ""
+  ],
+  [
+   "Pork",
+   "30 g",
+   "Loin, shoulder arm and blade, butt",
+   ""
+  ],
+  [
+   "Poultry",
+   "30 g",
+   "Chicken or turkey meat with skin, duck and goose well-drained of fat",
+   ""
+  ],
+  [
+   "",
+   "50 g",
+   "Egg whole",
+   ""
+  ],
+  [
+   "Veal",
+   "30 g",
+   "Cutlet",
+   ""
+  ],
+  [
+   "Vegetable",
+   "120 g",
+   "Tofu",
+   ""
+  ],
+  [
+   "High fat: These foods in these amounts yield 7 g protein with 8 g fat and 100 kcal",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Beef",
+   "30 g",
+   "Ground beef (<80% lean), brisket, chuck, ribs, USDA prime",
+   ""
+  ],
+  [
+   "Dairy",
+   "30 g",
+   "Cheese spreads, all regular American, blue, cheddar, Monterey, Swiss",
+   ""
+  ],
+  [
+   "Lamb",
+   "30 g",
+   "Breast, ground",
+   ""
+  ],
+  [
+   "Mixed meats",
+   "30 g",
+   "Cold cuts, sausages",
+   ""
+  ],
+  [
+   "",
+   "45 g",
+   "Frankfurter",
+   ""
+  ],
+  [
+   "Pork",
+   "30 g",
+   "Spareribs, back ribs, ground, country style and deviled ham, sausage",
+   ""
+  ],
+  [
+   "Veal",
+   "30 g",
+   "Breast",
+   ""
+  ],
+  [
+   "Vegetable",
+   "30 g",
+   "Peanut butter",
+   ""
+  ],
+  [
+   "Fats: These foods in these amounts yield 5 g fat with 45 kcal",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Monounsaturated",
+   "5 g",
+   "Margarine with soybean, cottonseed, partially hydrogenated oils, peanut oil, olive oil",
+   ""
+  ],
+  [
+   "Polyunsaturated",
+   "5 g",
+   "Soft tub margarine, oil (safflower, corn, sunflower, cottonseed, sesame)",
+   ""
+  ],
+  [
+   "",
+   "15 g",
+   "Diet margarine with safflower, corn, sunflower oil",
+   ""
+  ],
+  [
+   "Saturated",
+   "5 g",
+   "Chicken fat, beef fat, bacon fat, lard, butter, shortening",
+   ""
+  ],
+  [
+   "",
+   "15 g",
+   "Heavy cream, cream cheese",
+   ""
+  ],
+  [
+   "",
+   "30 g",
+   "Sour cream, nondairy substitutes, gravy",
+   ""
+  ],
+  [
+   "",
+   "45 g",
+   "Light cream, half & half",
+   ""
+  ],
+  [
+   "Fiber: Grams of dietary fiber per 100 g of these foods",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Low (0-2 g)",
+   "",
+   "Asparagus, cucumber, lettuce, zucchini, alfalfa sprouts, eggplant, mushrooms, celery, green pepper, tomatoes",
+   ""
+  ],
+  [
+   "Medium (2-4 g)",
+   "",
+   "Bamboo shoots, carrots, peas, string beans, bean sprouts, chickpea, pinto beans, summer squash, broccoli, cauliflower, pumpkin, turnips, cabbage, kidney beans, spinach, watercress",
+   ""
+  ],
+  [
+   "High (5 g or more)",
+   "",
+   "Beans (white, red, lima, black, broad, soy)",
+   ""
+  ]
+ ],
+ "note": "该表为分块式清单：除开头四行的 18-kg/4.5-kg 用量外，各分块（Starch/Protein/Low fat/Medium fat/High fat/Fats/Fiber）按「分类、用量、食物描述」排列，分别落在第 1、2、3 列；分块标题整行置于第 1 列。"
+}

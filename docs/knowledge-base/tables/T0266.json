@@ -1,0 +1,114 @@
+{
+ "tableId": "T0266",
+ "caption": "Table 38-6. Protocol for measuring 24-hour urinary excretion of various substances associated with urolithiasis.",
+ "columns": [
+  ""
+ ],
+ "rows": [
+  [
+   "Technique"
+  ],
+  [
+   "1. To allow for food acclimation, feed the patient either the food it was consuming just before urolith formation or a standard food at home for 10 to 14 days. We commonly use Prescription Diet k/d Canine® as the standard food."
+  ],
+  [
+   "2. If possible, house and feed the dog in the urine collection cage for at least one day before urine collection. As dogs become acclimated to their new environment, they are more likely to consume quantities of food and water similar to that consumed in their home environment."
+  ],
+  [
+   "3. Begin each 24-hour urine collection period by removing urine from the urinary bladder by transurethral catheterization. This urine is discarded. Record the actual time that urine collection is initiated."
+  ],
+  [
+   "4. Weigh the dog."
+  ],
+  [
+   "5. Then feed the dog its food as if at home. Water should be continuously available for consumption."
+  ],
+  [
+   "6. Begin administering a broad-spectrum antibiotic that achieves high concentrations in urine to prevent catheter-induced urinary tract infection. The dosage, dosing interval and route of administration should be based on manufacturer recommendations."
+  ],
+  [
+   "7. Keep the patient in the collection cage during urine collection. When using metabolism cages designed for urine collection, catheterization of the urinary tract is unnecessary except at the end of the 24 hours. House-trained dogs may not voluntarily void in their cage. Bladder catheterization may be necessary to obtain urine from these dogs. Dogs may be catheterized as often as necessary to keep them comfortable (usually every six to eight hours)."
+  ],
+  [
+   "8. Catheterize the urinary bladder at the end of 24 hours to remove all urine. Save this urine."
+  ],
+  [
+   "9. Record the exact time of collection termination."
+  ],
+  [
+   "10. Pool all urine collected during the 24-hour period in a single container and measure its volume."
+  ],
+  [
+   "11. Thoroughly mix the pooled urine before removing aliquots for analysis."
+  ],
+  [
+   "Preservation"
+  ],
+  [
+   "1. Preservatives have different roles, but are often used to minimize bacterial growth, reduce chemical decomposition, solubilize constituents that might otherwise precipitate out of solution, or decrease atmospheric oxidation of unstable compounds."
+  ],
+  [
+   "2. The method of preservation may vary depending on the substances being measured and the tests used to measure them. Consult the laboratory to determine the recommended method of preservation."
+  ],
+  [
+   "3. Preservatives should not be added to some specimens because of possible interference with analytical methods."
+  ],
+  [
+   "4. Refrigeration is a common method for preserving urine collected for analysis. Urine removed by intermittent catheterization can be stored in a refrigerator in clean containers with screw top lids. Containers used for continuous collection beneath metabolism cages can be surrounded by ice packs and then insulated. Refrigeration causes some minerals to precipitate out of solution."
+  ],
+  [
+   "5. Specimens can be acidified (add 10 ml of 1 N hydrochloric acid per liter to achieve a pH of 3 or less) to preserve oxalate and calcium for analysis. However, acidified urine is unsuitable for measuring uric acid because it precipitates in acidic solutions."
+  ],
+  [
+   "Storage of selected analytes in urine"
+  ],
+  [
+   "1. No single preservative is ideal if multiple substances in urine are to be analyzed. To minimize degradation, we routinely collect urine under conditions of refrigeration. Immediately following urine collection, preservatives are added to appropriate aliquots of urine for storage until analysis."
+  ],
+  [
+   "2. Uric acid and xanthine: Aliquots of urine should be diluted (1 ml of urine with 19 ml of distilled water) to preserve uric acid and xanthine. This mixture can then be frozen."
+  ],
+  [
+   "3. Ammonia: Aliquots of urine (3 to 5 ml) may be frozen for up to 30 days."
+  ],
+  [
+   "4. Oxalate: Aliquots of urine (2 ml) are diluted with 1 N hydrochloric acid (1.66 ml) and then frozen."
+  ],
+  [
+   "Calculations"
+  ],
+  [
+   "1. Calculating 24-hour urine volume"
+  ],
+  [
+   "a. Although 24-hour urine specimens are recommended to minimize the effects of short-term biologic variations in mineral excretion, collecting perfectly timed 24-hour samples may be difficult. The following formula can be used to adjust actual urine volume to a 24-hour period: 1,440 ÷ actual time interval (minutes) x urine volume (1,440 = number of minutes in 24 hours)."
+  ],
+  [
+   "b. Example: A 24-hour urine collection was started at 9:30 a.m. and ended the following day at 8:30 a.m. A total of 350 ml of urine were collected during this period. What is the 24-hour urine volume? 1,440 ÷ 1,380 x 350 = 356.2 ml."
+  ],
+  [
+   "2. Converting mmol/l to mg/dl"
+  ],
+  [
+   "a. Scientists are striving to adopt a uniform system of measurement termed the System International d 'Unites to standardize measurements. In this system, concentration is often expressed as moles, millimoles or micromoles of a substance per liter of fluid. Most normal values in the United States are expressed as mg/dl. The following formula can be used to convert mmol/l to mg/dl: mmol/l x atomic weight of substance ÷ 10. The atomic weights of elements can be found in the periodic tables of general chemistry books."
+  ],
+  [
+   "b. Example: The concentration of calcium from a 24-hour urine sample was 1.35 mmol/l. Convert this value to mg/dl for comparison with normal values. The atomic weight of calcium is 40.08. 1.35 mmol/l x 40.08 ÷ 10 = 5.4 mg/dl."
+  ],
+  [
+   "3. Calculating mg/kg/24-hour or mEq/kg/24-hour excretion"
+  ],
+  [
+   "a. Excretion of metabolites is often expressed on a per kg basis to standardize excretion for dogs of different weights. The following formula can be used to standardize excretion rates: Concentration of substance x 24-hour urine volume ÷ body weight in kg. The units used to express the volume of urine and the concentration of the substance evaluated must be the same."
+  ],
+  [
+   "b. Example: The concentration of calcium in a 24-hour urine sample was 5.4 mg/dl. A total of 356.2 ml of urine was collected. The dog weighed 10 kg. What is the daily calcium excretion on a per kg basis? First, express the volume of urine collected in the same units as the concentration of the substance measured. The 356.2 ml = 3.562 dl; therefore, 5.4 mg/dl x 3.562 dl ÷ 10 kg = 1.92 mg/kg/24 hours."
+  ],
+  [
+   "Additional considerations"
+  ],
+  [
+   "1. Midpoint blood samples. Evaluation of blood during the midpoint of a 24-hour urine collection may help determine if changes in urine concentration reflect changes in serum or plasma concentration of analytes. This information can help detect underlying causes and mechanisms of abnormal mineral excretion. Likewise, evaluation of blood concentrations of some hormones (i.e., parathyroid hormone, calcitriol, etc.) may be helpful in determining the role of hormones in the regulation of mineral excretion."
+  ]
+ ]
+}

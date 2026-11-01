@@ -1,0 +1,76 @@
+{
+  "tableId": "T0046",
+  "caption": "Guide to 9-point and 5-point Body Condition Scores in cats",
+  "columns": [
+    "Score (9-point)",
+    "Score (5-point)",
+    "Location Feature",
+    "Estimated body fat (%)",
+    "% BW below or above BCS 5"
+  ],
+  "rows": [
+    [
+      "1.\nEmancipated",
+      "1",
+      "Ribs and bony prominences are visible and easily palpable with no fat cover. Severe abdominal tuck when viewed from the side and an exaggerated hourglass shape when viewed from above.",
+      "≤10%",
+      "-≥40%"
+    ],
+    [
+      "2.\nVery Thin",
+      "",
+      "Ribs and bony prominences are visible on shorthaired cats and easily palpable with no fat cover. Severe abdominal tuck, when viewed from the side and a marked hourglass shape when viewed from above.",
+      "5 - 15%",
+      "-30 -40%"
+    ],
+    [
+      "3.\nThin",
+      "2",
+      "Ribs and bony prominences are easily palpable with minimal fat cover. Marked abdominal tuck when viewed from the side and an obvious waist when viewed from above.",
+      "10 -20%",
+      "-20 -30%"
+    ],
+    [
+      "4.*\nSlightly underweight",
+      "",
+      "Ribs and bony prominences are easily palpable with minimal fat cover. Abdominal tuck when viewed from the side, and a well proportioned waist when viewed from above.",
+      "15 -25%",
+      "-10 - 15%"
+    ],
+    [
+      "5.*\nIdeal",
+      "3",
+      "Ribs and bony prominences are palpable with a slight fat cover. Abdominal tuck is present when viewed from the side, and a well proportioned waist when viewed from above.",
+      "20 -30%",
+      "0%"
+    ],
+    [
+      "6.\nSlightly overweight",
+      "",
+      "Ribs and bony prominences can be felt under a moderate fat cover. Abdominal tuck and waist are less pronounced. A mild abdominal fat pad may be palpable.",
+      "25 -35%",
+      "+10 -15%"
+    ],
+    [
+      "7.\nOverweight",
+      "4",
+      "Ribs and bony prominences can be felt under a moderate fat cover. No abdominal tuck but a moderate abdominal fat pad is visible when viewed from the side and no waist when viewed from above.",
+      "30 -40%",
+      "+20 -30%"
+    ],
+    [
+      "8.\nObese",
+      "",
+      "Ribs and bony prominences are difficult to palpate, under a thick fat cover. Pendulous ventral bulge with some abdominal fat deposits, when viewed from the side. Broadened back when viewed from above.",
+      "35 -45%",
+      "+30 -40%"
+    ],
+    [
+      "9.\nGrossly Obese",
+      "5",
+      "Ribs and bony prominences are very difficult to feel under a thick fat cover. Large pendulous ventral bulge with extensive abdominal fat deposits, when viewed from the side. Markedly broadened back when viewed from above. Fat deposits around face, neck and limbs.",
+      ">45%",
+      "+>40%"
+    ]
+  ]
+}

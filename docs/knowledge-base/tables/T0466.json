@@ -1,0 +1,84 @@
+{
+  "tableId": "T0466",
+  "caption": "Table 8. Health detriments of sterilisation with loss of gonadal steroid hormones in female dogs",
+  "columns": [
+    "Condition",
+    "Occurrence (%)",
+    "Further influencing factors",
+    "Breeds at risk*"
+  ],
+  "rows": [
+    [
+      "Mast cell tumour",
+      "0.24 to 0.29 Among skin tumours: 20",
+      "BW, age, age at gonadectomy",
+      "Yes†"
+    ],
+    [
+      "TCC",
+      "1",
+      "Age",
+      "No"
+    ],
+    [
+      "Osteosarcoma",
+      "0.2 to 8.9",
+      "BW, age, size, sex, age at gonadectomy",
+      "Yes‡"
+    ],
+    [
+      "Lymphoma",
+      "0.02 to 0.1",
+      "Age at gonadectomy",
+      "Yes§"
+    ],
+    [
+      "Haemangiosarcoma",
+      "5% of all non-dermal primary malignant tumours",
+      "Age at gonadectomy",
+      "Yes¶"
+    ],
+    [
+      "Urinary sphincter mechanism incompetence",
+      "5 to 20",
+      "BW, age, size, sex, age at gonadectomy, short urethra",
+      "Yes‖"
+    ],
+    [
+      "Orthopaedic diseases",
+      "0 to 22; dependent on disease and influencing factors",
+      "BW, age, age at gonadectomy",
+      "Yes††"
+    ],
+    [
+      "Hypothyroidism",
+      "2.05",
+      "Environment, age",
+      "Yes‡‡"
+    ],
+    [
+      "Hypoadrenocorticism",
+      "0.4",
+      "Age",
+      "Yes§§"
+    ],
+    [
+      "Obesity",
+      "Increasing with age",
+      "Feeding, physical activity, sexual status, age and breed size",
+      "Yes¶¶"
+    ],
+    [
+      "Behaviour: Increased reactivity in some breeds, increasing fear/shyness depending on age at gonadectomy",
+      "Dependent on influencing factors",
+      "Age at gonadectomy, housing, training, experiences…",
+      "Not proven"
+    ],
+    [
+      "Life expectancy: questionable, some indication in female Rottweilers",
+      "Dependent on influencing factors",
+      "Diseases, especially cancer",
+      "Not proven"
+    ]
+  ]
+}

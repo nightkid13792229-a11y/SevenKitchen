@@ -1,0 +1,66 @@
+{
+  "tableId": "T0004",
+  "caption": "Websites for Additional Information",
+  "columns": [
+    "Website",
+    "URL",
+    "Information on website"
+  ],
+  "rows": [
+    [
+      "American Animal Hospital Association",
+      "www.aahanet.org\nhttps://www.aahanet.org/Library/GuidelinesTerms.aspx",
+      "Nutritional assessment guidelines; canine and feline life stage guidelines; nutritional assessment tools."
+    ],
+    [
+      "American Association of Feline Practitioners",
+      "www.catvets.com",
+      "Feline life stage guidelines; feline behavior guidelines; feline environmental needs guidelines; environmental enrichment tips."
+    ],
+    [
+      "American Veterinary Medical Association",
+      "https://ebusiness.avma.org/EBusiness50/ProductCatalog/ProductCategory.aspx?ID=132",
+      "Client brochures, including “Your Pet’s Healthy Weight.”"
+    ],
+    [
+      "Association for Pet Obesity Prevention",
+      "www.PetObesityPrevention.org",
+      "Weight loss tools, pet food information."
+    ],
+    [
+      "Association of American Feed Control Officials (AAFCO)",
+      "http://www.petfood.aafco.org/LabelingLabelingRequirements.aspx\nhttp://www.petfood.aafco.org/Presentations.aspx",
+      "General information about pet food label regulations; pet food regulations label review checklist, including specific term definitions for weight management and calorie claims (see part IX, pages 169–200)."
+    ],
+    [
+      "Catalyst Council",
+      "http://catalystcouncil.org/resources/health_welfare/",
+      "List of links and resources, including environmental enrichment and exercise ideas for vets and cat owners."
+    ],
+    [
+      "Indoor Pet Initiative",
+      "www.Indoorpet.osu.edu",
+      "Indoor pet initiative to increase environmental enrichment."
+    ],
+    [
+      "Partnership for Healthy Pets",
+      "http://www.partnersforhealthypets.org/practice_resources_overview.aspx",
+      "Practice resources and tools."
+    ],
+    [
+      "Pet Nutrition Alliance",
+      "http://www.petnutritionalliance.org/About_Us.aspx",
+      "Comprehensive nonbranded site providing tools and nutrition resources for health care professionals and clients."
+    ],
+    [
+      "Texas A & M University",
+      "http://www.vetmedicine.org/vetmednet/index.php?pageid=5013",
+      "Weight reduction calculator."
+    ],
+    [
+      "World Small Animal Veterinary Association",
+      "http://wsava.org/nutrition-toolkit",
+      "Nutrition toolkit: simple and extended diet history form template; pet food selection handout, including how to select a pet food."
+    ]
+  ]
+}

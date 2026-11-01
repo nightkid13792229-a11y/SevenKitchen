@@ -1,0 +1,27 @@
+{
+  "tableId": "T0219",
+  "caption": "Table 30-4. Effects of radiation therapy that may have nutritional implications for cancer patients.",
+  "columns": [
+    "Treatment areas",
+    "Acute effects",
+    "Chronic effects"
+  ],
+  "rows": [
+    [
+      "Head and neck",
+      "Mucositis of mouth, tongue, esophagus",
+      "Dry mouth\nDental disease\nAlterations in smell\nAlterations in taste\nEsophageal fistula\nEsophageal stricture\nIntestinal obstruction\nFistula formation\nChronic enteritis"
+    ],
+    [
+      "Thorax",
+      "Esophagitis",
+      ""
+    ],
+    [
+      "Abdomen",
+      "Nausea, vomiting\nEnteritis, diarrhea\nMalabsorption",
+      ""
+    ]
+  ],
+  "note": "Chronic effects 列为跨 “Head and neck”“Thorax”“Abdomen” 三行的合并单元格，全部条目填入首行，其余两行留空。图中另含 Table 30-5（Key nutritional factors for foods for canine and feline cancer patients.，两列：Factors / Dietary recommendations），按“每图主表”约定未转录；单元格内换行以 \\n 保留。"
+}

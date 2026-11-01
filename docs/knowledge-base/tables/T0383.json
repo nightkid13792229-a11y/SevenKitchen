@@ -1,0 +1,66 @@
+{
+  "tableId": "T0383",
+  "caption": "Table 56-3. Selected commercial oral rehydration solutions available for use in dogs and cats.",
+  "columns": [
+    "Products (manufacturers)",
+    "Na",
+    "K",
+    "Cl",
+    "Mg",
+    "Ca",
+    "P",
+    "Citrate",
+    "ME (kcal/l)",
+    "Comments"
+  ],
+  "rows": [
+    [
+      "Electramine (Life Science Products)",
+      "69.8",
+      "15.4",
+      "69.7",
+      "–",
+      "–",
+      "–",
+      "–",
+      "–",
+      "Contains glycine"
+    ],
+    [
+      "Enfamil Enfaltyte (Mead Johnson)",
+      "50",
+      "25",
+      "45",
+      "–",
+      "–",
+      "–",
+      "34",
+      "126",
+      "mOsm/l = 167"
+    ],
+    [
+      "Pedialyte Solution unflavored (Abbott Nutrition)",
+      "45",
+      "20",
+      "35",
+      "–",
+      "–",
+      "–",
+      "30",
+      "100",
+      "mOsm/l = 250-270"
+    ],
+    [
+      "Rebound OES (Virbac)",
+      "52.2-65.2",
+      "20.5-25.6",
+      "10-20",
+      "–",
+      "–",
+      "–",
+      "–",
+      "253",
+      "–"
+    ]
+  ]
+}

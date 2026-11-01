@@ -1,0 +1,66 @@
+{
+  "tableId": "T0096",
+  "caption": "Table 12-4. Taxonomy and natural feeding behavior of the order Carnivora. (printed in two stacked blocks of families)",
+  "columns": [
+    "Family",
+    "Canidae",
+    "Ursidae",
+    "Procyonidae",
+    "Ailuropodidae",
+    "Mustelidae",
+    "Viverridae",
+    "Herpestidae",
+    "Hyaenidae",
+    "Felidae",
+    "Otariidae",
+    "Odobenidae",
+    "Phocidae"
+  ],
+  "rows": [
+    [
+      "Feeding behavior",
+      "Omnivores",
+      "Omnivores, Carnivores",
+      "Omnivores",
+      "Herbivores",
+      "Carnivores, Omnivores",
+      "Omnivores",
+      "Carnivores, Omnivores",
+      "Carnivores",
+      "Carnivores",
+      "Carnivores",
+      "Carnivores",
+      "Carnivores"
+    ],
+    [
+      "No. of species",
+      "35",
+      "7",
+      "13",
+      "2",
+      "63",
+      "35",
+      "37",
+      "4",
+      "36",
+      "14",
+      "1",
+      "19"
+    ],
+    [
+      "Examples",
+      "Dogs, Jackals, Coyotes, Foxes, Wolves",
+      "Bears",
+      "Raccoons, Coatis, Kinkajou, Oligos",
+      "Pandas",
+      "Weasels, Polecats, Mink, Ferrets, Martens, Wolverine, Badgers, Skunks, Otters",
+      "Genets, Civets, Linsangs",
+      "Mongooses, Meerkats",
+      "Hyenas",
+      "Leopards, Pumas, Cats, Ocelots, Serval, Jaguars, Lynx, Bobcats, Lions, Tigers, Cheetahs",
+      "Eared seals, Sea lions",
+      "Walrus",
+      "Earless seals"
+    ]
+  ]
+}

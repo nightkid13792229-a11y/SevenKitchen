@@ -1,0 +1,66 @@
+{
+  "tableId": "T0434",
+  "caption": "Table 68-8. Key nutritional factors for dogs and cats with hepatobiliary disease.*",
+  "columns": [
+    "Factors",
+    "Dogs",
+    "Cats"
+  ],
+  "rows": [
+    [
+      "Energy density (kcal/g)",
+      "≥4.0",
+      "≥4.2"
+    ],
+    [
+      "Energy density (kJ/g)",
+      "≥16.7",
+      "≥17.6"
+    ],
+    [
+      "Protein (%)",
+      "15-20**",
+      "30-35**"
+    ],
+    [
+      "Arginine (%)",
+      "–",
+      "1.5 to 2.0"
+    ],
+    [
+      "Taurine (%)",
+      "≥0.1",
+      "≥0.3"
+    ],
+    [
+      "Sodium (%)",
+      "0.08 to 0.25",
+      "0.07 to 0.3"
+    ],
+    [
+      "Copper (mg/kg)",
+      "≤5",
+      "–"
+    ],
+    [
+      "Zinc (mg/kg)",
+      ">200",
+      ">200"
+    ],
+    [
+      "Iron (mg/kg)",
+      "80 to 140",
+      "80 to 140"
+    ],
+    [
+      "Vitamin E (IU/kg)",
+      "≥400",
+      "≥500"
+    ],
+    [
+      "Vitamin C (mg/kg)",
+      "≥100",
+      "100 to 200"
+    ]
+  ]
+}

@@ -1,0 +1,61 @@
+{
+ "tableId": "T0049",
+ "caption": "Table VII-4. Abbreviations",
+ "columns": [
+  "Abbreviation",
+  "Meaning",
+  "Abbreviation",
+  "Meaning"
+ ],
+ "rows": [
+  [
+   "BCS",
+   "Body condition score (lean, ideal, overweight, obese)",
+   "kJ",
+   "Kilojoule"
+  ],
+  [
+   "BMR",
+   "Basal metabolic rate",
+   "ME",
+   "Metabolisable energy"
+  ],
+  [
+   "BW",
+   "Body weight",
+   "MJ",
+   "Megajoule"
+  ],
+  [
+   "DE",
+   "Digestible energy",
+   "MER",
+   "Maintenance energy requirements"
+  ],
+  [
+   "DER",
+   "Daily energy requirements",
+   "NFE",
+   "Nitrogen free extract"
+  ],
+  [
+   "DM",
+   "Dry matter",
+   "TNZ",
+   "Thermo-neutral zone"
+  ],
+  [
+   "GE",
+   "Gross energy",
+   "UCT",
+   "Upper critical temperature"
+  ],
+  [
+   "kcal",
+   "Kilocalorie",
+   "",
+   ""
+  ]
+ ],
+ "note": "原表无表头行，abbreviation/meaning 为左右两组成对排列"
+}

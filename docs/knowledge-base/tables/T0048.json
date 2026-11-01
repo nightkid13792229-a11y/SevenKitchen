@@ -1,0 +1,27 @@
+{
+ "tableId": "T0048",
+ "caption": "Table VII-3. 4-point muscle mass scoring system",
+ "columns": [
+  "Score",
+  "Description"
+ ],
+ "rows": [
+  [
+   "0",
+   "On palpation over the spine, scapulae, skull, or wings of the ilia, muscle mass is severely wasted."
+  ],
+  [
+   "1",
+   "On palpation over the spine, scapulae, skull, or wings of the ilia, muscle mass is moderately wasted."
+  ],
+  [
+   "2",
+   "On palpation over the spine, scapulae, skull, or wings of the ilia, muscle mass is mildly wasted as evidenced by slight but discernible decreased muscle mass."
+  ],
+  [
+   "3",
+   "On palpation over the spine, scapulae, skull, or wings of the ilia, muscle mass is normal."
+  ]
+ ],
+ "note": "原表无表头行，列名为推断所得（左列为分值、右列为描述）"
+}

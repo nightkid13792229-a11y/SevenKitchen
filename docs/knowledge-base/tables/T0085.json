@@ -1,0 +1,54 @@
+{
+ "tableId": "T0085",
+ "caption": "Table 10-6. A balanced low-residue homemade formula for adult dogs with gastrointestinal disease (daily food formulation for an 18-kg (40-lb) dog, as fed).*/**/***",
+ "columns": [
+  "Ingredients",
+  "Grams",
+  "Nutrient content (% dry matter)\\u2020",
+  ""
+ ],
+ "rows": [
+  [
+   "Rice, white, cooked",
+   "232",
+   "Dry matter",
+   "27.7"
+  ],
+  [
+   "Cottage cheese",
+   "232",
+   "Protein",
+   "30.4"
+  ],
+  [
+   "Egg, large, boiled",
+   "116",
+   "Fat",
+   "15.6"
+  ],
+  [
+   "Oil, vegetable",
+   "2.0",
+   "Fiber",
+   "0.71"
+  ],
+  [
+   "Salt, substitute (KCl)",
+   "1.0",
+   "Calcium",
+   "0.42"
+  ],
+  [
+   "Calcium carbonate",
+   "1.0",
+   "Phosphorus",
+   "0.39"
+  ],
+  [
+   "Total",
+   "585",
+   "Energy (kcal/100 g)",
+   "450"
+  ]
+ ]
+}

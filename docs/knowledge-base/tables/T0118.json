@@ -1,0 +1,41 @@
+{
+  "tableId": "T0118",
+  "caption": "Table 16-3. Optimal environmental temperatures for orphaned puppies.",
+  "columns": [
+    "Age",
+    "°Centigrade Immediate environment/incubator for orphans",
+    "°Fahrenheit"
+  ],
+  "rows": [
+    [
+      "Week 1",
+      "29-32",
+      "84-90"
+    ],
+    [
+      "Week 2",
+      "26-29",
+      "79-84"
+    ],
+    [
+      "Week 3",
+      "23-26",
+      "73-79"
+    ],
+    [
+      "Week 4",
+      "23",
+      "73"
+    ],
+    [
+      "Environment around litter",
+      "",
+      ""
+    ],
+    [
+      "Week 1",
+      "24-27",
+      "75-81"
+    ]
+  ]
+}

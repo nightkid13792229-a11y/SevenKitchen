@@ -1,0 +1,22 @@
+{
+  "tableId": "T0343",
+  "caption": "Table 48-2. Potential dietary influences on the gastrointestinal tract.*",
+  "columns": [
+    "Category",
+    "Dietary influence"
+  ],
+  "rows": [
+    [
+      "Food may alter:",
+      "Absorption\nCellular turnover rate\nLuminal ammonia concentration\nLuminal volatile fatty acid content\nMicroflora\nMotility\nSecretory rate\nVillous height"
+    ],
+    [
+      "Food may be a source of:",
+      "Chemical/bacterial toxins\nDietary antigens"
+    ],
+    [
+      "Food may correct:",
+      "Nutritional deficiencies"
+    ]
+  ]
+}

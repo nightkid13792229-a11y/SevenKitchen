@@ -1,0 +1,61 @@
+{
+ "tableId": "T0051",
+ "caption": "Table VII-8b. Average energy requirements during growth and reproduction in dogs",
+ "columns": [
+  "Puppies",
+  "Age",
+  "kcal",
+  "kJ"
+ ],
+ "rows": [
+  [
+   "Puppies",
+   "Newborn puppies",
+   "25 x (g BW/100)",
+   "105 x (g BW/100)"
+  ],
+  [
+   "Puppies",
+   "8 weeks to 1 year*",
+   "[254.1 – 135.0 x (actual kg BW/expected mature kg BW)] x actual kg BW^0.75",
+   "[1063 – 565 x (actual kg BW/expected mature kg BW)] x actual kg BW^0.75"
+  ],
+  [
+   "Bitches",
+   "Reproduction phase",
+   "kcal",
+   "kJ"
+  ],
+  [
+   "Gestation**",
+   "first 4 weeks of gestation",
+   "132 x kg BW^0.75",
+   "550 x kg BW^0.75"
+  ],
+  [
+   "Gestation**",
+   "last 5 weeks of gestation",
+   "132 x kg BW^0.75 + 26 x kg BW",
+   "550 x kg BW^0.75 + 110 x kg BW"
+  ],
+  [
+   "Lactation***",
+   "Lactating bitch:",
+   "kcal",
+   "kJ"
+  ],
+  [
+   "Lactation***",
+   "1 to 4 puppies",
+   "145 x kg BW^0.75 + 24 n x kg BW x L",
+   "607 x kg BW^0.75 + 100 n x kg BW x L"
+  ],
+  [
+   "Lactation***",
+   "5 to 8 puppies",
+   "145 x kg BW^0.75 + [96+ 12 (n-4)] x kg BW x L",
+   "607 x kg BW^0.75 + [400+ 50 (n-4)] x kg BW x L"
+  ]
+ ],
+ "note": "原表分为 Puppies / Bitches / Lactation 三段，各有自己的段头行；段头行保留在 rows 中"
+}

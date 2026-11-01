@@ -7,14 +7,10 @@ import type { KnowledgeEntry } from '../types';
  * **哪些表现等不得**（立即就医）、哪些要尽快、哪些可以先观察。
  *
  * ── 本领域的硬规矩 ────────────────────────────────────────────
- *   1. 全部走新结构：`questionType: 'TRIAGE'` + **必填 `urgency`**
+
  *      （IMMEDIATE 立即就医 / SOON 尽快就医 / OBSERVE 可先观察）。
  *   2. **不做诊断**，只写"看到什么、最可能是什么方向、该多快去"。
  *   3. 高风险结论必须有 ≥2 个不同机构的来源（校验会拦）。
- *
- * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
- * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
- *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -40,7 +36,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
       '途中保持安静、通风、减少搬动，尽快到院；如果狗已经不能站立或意识模糊，按最高紧急处理。',
     ],
     citations: [
-      { source: 'ACVIM 肺动脉高压诊断、分类、治疗与监测共识 2020', chapter: '提示肺动脉高压的临床线索' },
+      { source: 'ACVIM 肺动脉高压共识 2020', chapter: '提示肺动脉高压的临床线索' },
       { source: 'WSAVA 疼痛识别、评估与治疗指南 2022', chapter: '疼痛与痛苦的识别；生命体征评估' },
     ],
     sources: [
@@ -57,10 +53,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-017',
@@ -83,7 +76,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
       '本条目只做分诊提示，不判断抽搐的病因，也不给任何抗癫痫用药建议。',
     ],
     citations: [
-      { source: 'ACVIM 犬猫癫痫持续状态与集群发作管理共识 2024', chapter: '癫痫持续状态的定义与紧急处理时点' },
+      { source: 'ACVIM 癫痫持续状态与集群发作共识 2024', chapter: '癫痫持续状态的定义与紧急处理时点' },
       { source: 'WSAVA 疼痛识别、评估与治疗指南 2022', chapter: '疼痛与痛苦的识别' },
     ],
     sources: [
@@ -100,10 +93,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-018',
@@ -127,7 +117,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
       '本条目只做分诊提示，不判断病因，也不给治疗与用药建议。',
     ],
     citations: [
-      { source: 'ACVIM 犬急性胸腰段椎间盘突出诊断与管理共识 2022', chapter: '神经功能分级与急诊评估' },
+      { source: 'ACVIM 犬胸腰段椎间盘突出共识 2022', chapter: '神经功能分级与急诊评估' },
       { source: 'WSAVA 疼痛识别、评估与治疗指南 2022', chapter: '急性疼痛与神经损伤' },
     ],
     sources: [
@@ -144,10 +134,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-019',
@@ -189,10 +176,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-020',
@@ -233,10 +217,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-021',
@@ -259,7 +240,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
       '**不要因为"它好像缓过来了"就取消就医**：中暑可能造成多器官损伤，需要专业评估。',
     ],
     citations: [
-      { source: 'WSAVA 动物福利指南 2018', chapter: '环境与高温下的动物福利' },
+      { source: 'WSAVA 动物福利指南', chapter: '环境与高温下的动物福利' },
       { source: 'Merck 兽医手册 · 临床生化', chapter: '急症状态下的生化改变（背景与警示）' },
     ],
     sources: [
@@ -276,10 +257,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-022',
@@ -319,10 +297,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-023',
@@ -363,10 +338,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-024',
@@ -406,10 +378,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-025',
@@ -434,7 +403,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2026 慢性肠病共识 · 消化道症状的评估' },
-      { source: 'WSAVA 营养评估指南 2011', chapter: '营养筛查与再评估的时机' },
+      { source: 'WSAVA 营养指南与工具包', chapter: '营养筛查与再评估的时机' },
     ],
     sources: [
       {
@@ -450,10 +419,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-026',
@@ -494,10 +460,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-027',
@@ -537,10 +500,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-028',
@@ -580,10 +540,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-029',
@@ -607,7 +564,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
       '热环境下出现的高热，请优先参考中暑条目的处理与禁忌（不要冰水浸泡、不要灌水）。',
     ],
     citations: [
-      { source: 'ACVIM 犬猫癫痫持续状态与集群发作管理共识 2024', chapter: '癫痫持续状态的并发症（体温升高、代谢紊乱）' },
+      { source: 'ACVIM 癫痫持续状态与集群发作共识 2024', chapter: '癫痫持续状态的并发症（体温升高、代谢紊乱）' },
       { source: 'Merck 兽医手册 · 临床生化', chapter: '急症与全身状态下的生化改变（背景与警示）' },
     ],
     sources: [
@@ -624,10 +581,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-030',
@@ -650,8 +604,8 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
       '本条目**不提供任何血糖数值与喂食量**：幼犬的低血糖判断与处理必须由兽医根据个体情况决定。',
     ],
     citations: [
-      { source: 'WSAVA 营养评估指南 2011', chapter: '生长阶段动物的营养筛查与监测' },
-      { source: 'ACVIM 犬猫癫痫持续状态与集群发作管理共识 2024', chapter: '抽搐的诱因排查（低血糖、电解质紊乱）' },
+      { source: 'WSAVA 营养指南与工具包', chapter: '生长阶段动物的营养筛查与监测' },
+      { source: 'ACVIM 癫痫持续状态与集群发作共识 2024', chapter: '抽搐的诱因排查（低血糖、电解质紊乱）' },
     ],
     sources: [
       {
@@ -667,10 +621,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-031',
@@ -711,10 +662,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-032',
@@ -761,10 +709,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-033',
@@ -789,7 +734,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'WSAVA 营养指南与工具包', chapter: 'WSAVA 犬零食指南（2025）· 对犬有毒的食物成分清单' },
-      { source: 'ACVIM 犬钩端螺旋体病更新共识 2023', chapter: '疫苗相关的急性不良反应（过敏样反应）' },
+      { source: 'ACVIM 犬钩端螺旋体病共识 2023', chapter: '疫苗相关的急性不良反应（过敏样反应）' },
       { source: 'Merck 兽医手册 · 临床生化', chapter: '中毒的初步识别（背景与警示）' },
     ],
     sources: [
@@ -811,9 +756,6 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
 ];

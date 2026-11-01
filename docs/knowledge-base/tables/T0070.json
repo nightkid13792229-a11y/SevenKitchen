@@ -1,0 +1,37 @@
+{
+  "tableId": "T0070",
+  "caption": "Table 2: IRIS AKI Subgrading",
+  "columns": [
+    "AKI Grade",
+    "Blood Creatinine",
+    "Subgrade"
+  ],
+  "rows": [
+    [
+      "Grade I",
+      "<1.6 mg/dL\n<140 μmol/L",
+      ""
+    ],
+    [
+      "Grade II",
+      "1.7 - 2.5 mg/dL\n141 - 220 μmol/L",
+      "Each grade of AKI is further subgraded as:\n1. Non oliguric (NO) or oligo-anuric (O)\n2. Requiring renal replacement therapy (RRT)"
+    ],
+    [
+      "Grade III",
+      "2.6 - 5.0 mg/dL\n221 – 439 μmol/L",
+      ""
+    ],
+    [
+      "Grade IV",
+      "5.1 - 10.0 mg/dL\n440 - 880 μmol/L",
+      ""
+    ],
+    [
+      "Grade V",
+      ">10.0 mg/dL\n>880 μmol/L",
+      ""
+    ]
+  ],
+  "note": "Subgrade 为跨 Grade II–V 的合并单元格，内容填入其起始行 Grade II；Grade I 该单元格留空"
+}

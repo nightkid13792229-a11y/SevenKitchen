@@ -1,0 +1,109 @@
+{
+  "tableId": "T0358",
+  "caption": "Table 5-17. Summary of protein quality of common pet food ingredients.",
+  "columns": [
+    "Ingredient",
+    "Protein (%)*",
+    "Amino acid (protein) quality**",
+    "Other comments"
+  ],
+  "rows": [
+    [
+      "Egg (dried)",
+      "45-49",
+      "Good\nHigh quality, the standard to which many other sources are compared\nCS = 100, BV = 94, NPU = 94, PER = 3.92",
+      "Also contains lecithin"
+    ],
+    [
+      "Casein",
+      "80",
+      "Good\nHigh tryptophan, lysine\nCS = 58, BV = 80, NPU = 72, PER = 2.86",
+      ""
+    ],
+    [
+      "Whey",
+      "12",
+      "Good\nHigh lysine, isoleucine, threonine, tryptophan",
+      ""
+    ],
+    [
+      "Beef, lamb, pork, chicken",
+      "29",
+      "Good\nLow tryptophan\nCS = 69, BV = 74, NPU = 67, PER = 2.30",
+      "May be variable in fat and connective tissue content"
+    ],
+    [
+      "Liver",
+      "20",
+      "Good",
+      "Also a good source of vitamin A"
+    ],
+    [
+      "Fish meal",
+      "59",
+      "Good\nHigh tryptophan, lysine, methionine",
+      "Highly variable"
+    ],
+    [
+      "Meat and bone meal",
+      "45-50",
+      "Good",
+      "Highly variable, may contain high levels of bone that contribute to excess calcium, phosphorus and magnesium in food"
+    ],
+    [
+      "Lamb meal",
+      "55",
+      "Good",
+      "Highly variable, may contain high levels of bone that contribute to excess calcium, phosphorus and magnesium in food"
+    ],
+    [
+      "Chicken/poultry by-product meal",
+      "58",
+      "Good\nHigh lysine, methionine",
+      "Mineral levels can be variable"
+    ],
+    [
+      "Soybean meal",
+      "48",
+      "Good\nHigh tryptophan, lysine\nCS = 47, BV = 73, NPU = 61, PER = 2.32",
+      "Good complementary protein source for meats, fish meal and corn"
+    ],
+    [
+      "Corn gluten meal",
+      "60",
+      "Good",
+      "Good complementary protein source for meats and fish meal"
+    ],
+    [
+      "Corn (whole)",
+      "8",
+      "Adequate\nLow tryptophan, lysine, methionine\nCS = 41, BV = 59, NPU = 51, PER = 1.12",
+      "Also good source of linoleic acid"
+    ],
+    [
+      "Rice (white)",
+      "7",
+      "Adequate\nCS = 56, BV = 64, NPU = 57, PER = 2.18",
+      "Low-mineral levels"
+    ],
+    [
+      "Wheat",
+      "14",
+      "Adequate\nLow tryptophan, lysine\nCS = 43, BV = 65, NPU = 40, PER = 1.53",
+      "Contains gliadin"
+    ],
+    [
+      "Barley",
+      "12",
+      "Adequate\nLow tryptophan, methionine",
+      "Contains gliadin"
+    ],
+    [
+      "Collagen (gelatin)",
+      "88",
+      "Poor\nTotally deficient in tryptophan\nCS = 0, BV = 0, NPU = 0, PER = 0",
+      ""
+    ]
+  ],
+  "note": "表下脚注（Key: CS/BV/NPU/PER 缩写说明，*Feedstuffs Ingredient Analysis Table: 1996 Edition，(As is basis)，**Adapted from Brody T. Protein 等文献）未计入 rows"
+}

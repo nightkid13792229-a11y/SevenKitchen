@@ -1,0 +1,54 @@
+{
+  "tableId": "T0354",
+  "caption": "Table 5-11. Glucogenic and ketogenic amino acids.",
+  "columns": [
+    "",
+    ""
+  ],
+  "rows": [
+    [
+      "Exclusively ketogenic",
+      "Leucine, lysine"
+    ],
+    [
+      "Exclusively glucogenic",
+      "Alanine, serine, glycine, cysteine, aspartate, asparagine, glutamate, glutamine, arginine, histidine, valine, threonine, methionine, proline"
+    ],
+    [
+      "Ketogenic and glucogenic",
+      "Isoleucine, phenylalanine, tyrosine, tryptophan"
+    ]
+  ],
+  "extraTables": [
+    {
+      "caption": "Table 5-12. Factors for converting nitrogen to crude protein.",
+      "columns": [
+        "Food protein",
+        "Nitrogen (g/kg)",
+        "Conversion factor"
+      ],
+      "rows": [
+        [
+          "Barley, oats, wheat",
+          "171.5",
+          "5.83"
+        ],
+        [
+          "Corn, eggs, meat",
+          "160.0",
+          "6.25"
+        ],
+        [
+          "Milk",
+          "156.8",
+          "6.38"
+        ],
+        [
+          "Soybeans",
+          "175.1",
+          "5.71"
+        ]
+      ]
+    }
+  ]
+}

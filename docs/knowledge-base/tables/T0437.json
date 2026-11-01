@@ -1,0 +1,62 @@
+{
+  "tableId": "T0437",
+  "caption": "Table 1. Laboratory data from a miniature poodle with steroid hepatopathy.",
+  "columns": [
+    "Parameters",
+    "Day 0",
+    "Day 12",
+    "Day 19",
+    "Day 56",
+    "Day 110",
+    "Day 142",
+    "Day 214",
+    "Reference values"
+  ],
+  "rows": [
+    [
+      "Alkaline phosphatase (IU/l)",
+      "4,990",
+      "4,960",
+      "3,080",
+      ">400",
+      "313",
+      "106",
+      "26",
+      "10-80"
+    ],
+    [
+      "Alanine aminotransferase (IU/l)",
+      "1,380",
+      "1,600",
+      "1,450",
+      ">500",
+      "184",
+      "236",
+      "45",
+      "10-70"
+    ],
+    [
+      "Cortisol, resting (μg/dl)",
+      "na",
+      "na",
+      "0.3",
+      "<1.0",
+      "1.8",
+      "1.4",
+      "12.3",
+      "0.5-4.0"
+    ],
+    [
+      "Cortisol, post-ACTH (μg/dl)",
+      "na",
+      "na",
+      "0.5",
+      "<1.0",
+      "1.9",
+      "1.7",
+      "17.5",
+      "8.0-20.0"
+    ]
+  ],
+  "note": "表格在 b 页（第 1185 页 CASE 68-2 内）；表下说明 “Key: na = information not available.” 未计入 rows"
+}

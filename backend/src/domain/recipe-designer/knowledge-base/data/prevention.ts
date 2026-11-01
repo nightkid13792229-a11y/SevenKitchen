@@ -12,10 +12,6 @@ import type { KnowledgeEntry } from '../types';
  *   2. 只写"该做什么、多久一次、为什么"，不写具体数值区间（区间归 LAB 领域）。
  *   3. 涉及"多久一次"的结论要注明来源，不要凭印象写。
  *
- * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
- * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
- *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
- *
  * 建立日期：2026-10-01
  */
 export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
@@ -50,9 +46,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-002',
@@ -87,9 +81,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-003',
@@ -126,9 +118,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-004',
@@ -161,9 +151,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-005',
@@ -198,9 +186,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-006',
@@ -233,9 +219,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-007',
@@ -268,9 +252,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'FOLLOWUP',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-008',
@@ -303,9 +285,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'IMMUNE',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-009',
@@ -338,9 +318,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-010',
@@ -373,9 +351,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-011',
@@ -410,9 +386,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-012',
@@ -443,9 +417,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-013',
@@ -478,9 +450,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-014',
@@ -514,9 +484,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'FOLLOWUP',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-015',
@@ -551,8 +519,6 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'FOLLOWUP',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
 ];

@@ -1,0 +1,54 @@
+{
+ "tableId": "T0460",
+ "caption": "Table 1. Wound classification system described by the National Research Council",
+ "columns": [
+  ""
+ ],
+ "rows": [
+  [
+   "Clean"
+  ],
+  [
+   "• Non-traumatic, non-inflamed wound with no entry into the urogenital, gastrointestinal or respiratory tracts"
+  ],
+  [
+   "• No break in aseptic technique"
+  ],
+  [
+   "Clean contaminated"
+  ],
+  [
+   "• Entry into the gastrointestinal, urogenital or respiratory tracts under controlled conditions without unusual contamination"
+  ],
+  [
+   "• A clean surgical procedure with a minor break in aseptic technique or drain placed"
+  ],
+  [
+   "Contaminated"
+  ],
+  [
+   "• Fresh traumatic wounds (<4-hour old)"
+  ],
+  [
+   "• Spillage from the gastrointestinal or urogenital tracts"
+  ],
+  [
+   "• Major break in aseptic technique"
+  ],
+  [
+   "Dirty (infected)"
+  ],
+  [
+   "• Traumatic wound >4-hour old or with devitalized tissue or foreign bodies"
+  ],
+  [
+   "• Perforated viscus encountered"
+  ],
+  [
+   "• Acute bacterial inflammation or pus encountered"
+  ],
+  [
+   "• Clean tissues transected for access to an abscess"
+  ]
+ ]
+}

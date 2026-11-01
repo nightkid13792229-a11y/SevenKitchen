@@ -1,0 +1,62 @@
+{
+  "tableId": "T0480",
+  "caption": "Table 2. Vaccines for pet cats (non-shelter)",
+  "columns": [
+    "Vaccine",
+    "Kittens ≤16 weeks",
+    "Cats >16 weeks",
+    "Revaccination",
+    "Comments and recommendations"
+  ],
+  "rows": [
+    [
+      "Core vaccines for pet cats",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "FPV+FCV+FHV: parenteral, live attenuated",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Feline panleukopenia virus (FPV)+feline herpesvirus-1 (FHV)+feline calicivirus (FCV)",
+      "Start no earlier than 6 weeks of age and revaccinate every 3 to 4 weeks until 16 weeks of age\nIn especially high-risk situations continue until 20 weeks of age and consider vaccinating every 2 to 3 weeks",
+      "Two doses 2 to 4 weeks apart are generally recommended although a single dose can be expected to protect many cats",
+      "Consider revaccinating at about 6 months of age, rather than waiting until the cat is 12 to 16 months of age. This will narrow the window of susceptibility for any kittens that failed to mount an active immune response earlier Thereafter, revaccinate “low risk” cats at 3 years of age and then no more frequently than every 3 years",
+      "Core worldwide The live attenuated FPV component provides rapid, potent, long-lasting protection More frequent revaccination (up to annually) should be considered for cats at higher risk. For example, cats that go into boarding catteries or visit other high-stress, high-risk environments should be revaccinated 1 to 2 weeks before exposure Pregnant queens and kittens <4 weeks of age should not be vaccinated with live attenuated vaccines Signs of upper respiratory tract disease may be seen following inadvertent aerosolisation of this vaccine or if there is excessive leakage from the injection site"
+    ],
+    [
+      "FPV+FCV+FHV: parenteral, inactivated",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Feline panleukopenia virus (FPV)+feline herpesvirus-1 (FHV)+feline calicivirus (FCV)",
+      "Start no earlier than 6 weeks of age and revaccinate every 3 to 4 weeks until 16 weeks of age\nIn especially high-risk situations continue until 20 weeks of age and consider vaccinating every 2 to 3 weeks",
+      "Two doses 2 to 4 weeks apart",
+      "Consider revaccinating at about 6 months of age, rather than waiting until the cat is 12 to 16 months of age. This will narrow the window of susceptibility for any kittens that failed to mount an active immune response earlier Thereafter, revaccinate “low risk” cats at 3 years of age and then every 3 years Annual revaccination is advised for cats at higher risk",
+      "Core worldwide Inactivated, parenteral FPV vaccines do not generally provide such rapid-onset, potent, long-lasting protection as do MLV FPV vaccines Non-adjuvanted options are available Considered safer than MLV vaccines for use in pregnant queens Vaccination should not be avoided in retrovirus-infected cats. Inactivated vaccines may be preferable to MLV vaccines in some retrovirus-infected cats Dual-strain (bivalent) inactivated FCV vaccines are intended to provide broader protection More frequent revaccination (up to annually) should be considered for cats at higher risk. For example, cats that go into boarding catteries or visit other high-stress, high-risk environments can be revaccinated 1 to 2 weeks before exposure"
+    ],
+    [
+      "FHV+FCV ±FPV: intranasal, live attenuated",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "FPV+FHV+FCV or FHV+FCV",
+      "Follow product leaflet",
+      "A single dose",
+      "Annually",
+      "Intranasal FPV vaccination is not as effective as parenteral vaccination. Even if a trivalent intranasal vaccine is used, vaccinate concurrently with a parenteral (subcutaneous) FPV vaccine Signs of upper respiratory tract disease may be seen following use Rapid onset of protection against FHV and FCV Concurrent use of intranasal and parenteral FHV/FCV vaccine may provide enhanced protection Cats that go into boarding catteries or visit other high-stress, high-risk environments can be revaccinated 1 to 2 weeks before exposure"
+    ]
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "tableId": "T0449",
+  "caption": "Table 9-1. Major governing agencies and organizations for commercial pet food manufacturers.",
+  "columns": [
+    "Agency",
+    "Key functions"
+  ],
+  "rows": [
+    [
+      "Association of American Feed Control Officials (AAFCO)",
+      "Sets nutrient standards for substantiation of claims\nProvides model regulations for the states\nProvides ingredient definitions"
+    ],
+    [
+      "U.S. Food and Drug Administration (FDA)",
+      "Specifies some label requirements\nRegulates health claims\nEnsures food safety\nApproves food additives"
+    ],
+    [
+      "U.S. Department of Agriculture (USDA)",
+      "Regulates some pet food ingredients\nInspects animal research facilities"
+    ],
+    [
+      "State Department of Agriculture (or similar agency)",
+      "Adopts and enforces animal food regulations"
+    ],
+    [
+      "National Research Council (NRC)",
+      "Evaluates and compiles nutrition research\nMakes nutrient recommendations"
+    ],
+    [
+      "Pet Food Institute (PFI)",
+      "Trade organization that represents major pet food manufacturers in the United States"
+    ],
+    [
+      "Canadian Veterinary Medical Association (CVMA)",
+      "Administers voluntary product certification in Canada"
+    ],
+    [
+      "European Commission",
+      "The main legislative body in the European Union responsible for creating new directives and regulations"
+    ],
+    [
+      "European Council of Ministers",
+      "Approves directives and regulations\nCreates basic laws"
+    ],
+    [
+      "National Government (Ministry of Agriculture)",
+      "Implements European legislation and controls its application\nHouses national experts"
+    ],
+    [
+      "European Federation of the Pet Food Industry (FEDIAF = Fédération Européenne de l'Industrie des Aliments pour Animaux Familiers)",
+      "Trade organization that represents major pet food manufacturers in Europe"
+    ],
+    [
+      "Confederation of the Food and Drink Industries of the EU (CIAA = Confédération des Industries Agro-Alimentaires de l'UE)",
+      "Trade organization that represents human food manufacturers in Europe\nWorks closely with FEDIAF on matters of mutual interest"
+    ]
+  ],
+  "note": "同一机构对应多条 Key functions 时以换行合并到同一单元格。"
+}

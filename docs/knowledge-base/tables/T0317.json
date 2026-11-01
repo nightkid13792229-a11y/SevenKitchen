@@ -1,0 +1,87 @@
+{
+ "tableId": "T0317",
+ "caption": "Table 1. Urinalyses of an immature male, mixed-breed dog with dysuria.*",
+ "columns": [
+  "Factors",
+  "Day 1**",
+  "Day 10",
+  "Day 25",
+  "Day 39",
+  "Day 73",
+  "Day 226"
+ ],
+ "rows": [
+  [
+   "Specific gravity",
+   "1.021",
+   "1.005",
+   "1.042",
+   "1.050",
+   "1.030",
+   "1.052"
+  ],
+  [
+   "pH",
+   "6.5",
+   "5.5",
+   "6.0",
+   "6.0",
+   "7.0",
+   "6.5"
+  ],
+  [
+   "Protein***",
+   "3+",
+   "Trace",
+   "1+",
+   "1+",
+   "Neg",
+   "1+"
+  ],
+  [
+   "RBC†",
+   "TNTC",
+   "20-30",
+   "20-30",
+   "TNTC",
+   "0",
+   "0"
+  ],
+  [
+   "WBC†",
+   "TNTC",
+   "0",
+   "2-3",
+   "20-25",
+   "0",
+   "0"
+  ],
+  [
+   "Bacteria†",
+   "Many cocci",
+   "0",
+   "0",
+   "0",
+   "0",
+   "0"
+  ],
+  [
+   "Crystals††",
+   "0",
+   "0",
+   "0",
+   "0",
+   "0",
+   "0"
+  ],
+  [
+   "Culture",
+   "S. intermedius",
+   "Neg",
+   "Neg",
+   "Neg",
+   "Neg",
+   "Neg"
+  ]
+ ]
+}

@@ -1,0 +1,62 @@
+{
+  "tableId": "T0477",
+  "caption": "Table 1. Vaccines for pet dogs (non-shelter)",
+  "columns": [
+    "Vaccine",
+    "Puppies ≤16 weeks",
+    "Dogs >16 weeks",
+    "Revaccination",
+    "Comments and recommendations"
+  ],
+  "rows": [
+    [
+      "Core vaccines for pet dogs, all parenteral",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Canine parvovirus-2 (modified live virus, MLV)+canine distemper virus (MLV or recombinant)+canine adenovirus-2 (CAV-2, MLV)",
+      "Start no earlier than 6 weeks of age. Revaccinate every 3 to 4 weeks until 16 weeks of age\nIn especially high-risk situations continue until 20 weeks of age and consider vaccinating every 2 to 3 weeks",
+      "Two doses 2 to 4 weeks apart are recommended by some manufacturers However, a single dose of MLV or recombinant vaccine will likely protect most dogs",
+      "Consider revaccinating at about 6 months of age, rather than waiting until the dog is 12 to 16 months of age. This will narrow the window of susceptibility for any puppies that failed to mount an active immune response earlier Thereafter, revaccinate at 3 years of age and thereafter no more frequently than every 3 years",
+      "These core vaccines are among the most important received by puppies and dogs. The aim should be to vaccinate as large as possible a proportion of the entire population Careful socialisation of puppies (during their sensitive period for socialisation) can begin before the completion of this vaccination series"
+    ],
+    [
+      "Canine parvovirus-2 (recombinant)+canine distemper virus (MLV)",
+      "Administer a single dose from 4 weeks of age before commencing routine primary vaccinations",
+      "",
+      "",
+      "This recently introduced product is aimed specifically at young puppies, likely to have interfering MDA, rather than for revaccination of older dogs"
+    ],
+    [
+      "Rabies (inactivated)",
+      "Follow any local laws or regulations as a priority. Follow the product leaflets of locally manufactured vaccines. In some countries, the first dose is generally not given before 12 weeks of age",
+      "Follow any local laws or regulations as a priority. Follow the product leaflets of locally manufactured vaccines",
+      "Follow any local laws or regulations as a priority. Follow the product leaflets of locally manufactured vaccines. Revaccination at 1 year of age (or in some countries 1 year after the primary vaccination) is required. Canine rabies vaccines with either a 1- or 3-year DOI are available. Timing of boosters is determined by the licensed DOI, but in some areas may be dictated by law",
+      "Core where the disease is endemic or wherever local laws or regulations require"
+    ],
+    [
+      "Leptospira spp. (killed bacterin). The serogroups included in vaccines depend on the geographical region. Most vaccines include at least two serogroups, but some are monovalent, some trivalent and some quadrivalent",
+      "Initial dose is usually from 8 weeks of age. Follow the advice in the product leaflet about when to start. A second dose is given 2 to 4 weeks later",
+      "Two doses 2 to 4 weeks apart",
+      "Annually",
+      "Core for dogs in regions where canine leptospirosis is endemic, implicated serogroups are known and suitable vaccines that include implicated serovars are commercially available"
+    ],
+    [
+      "Non-core vaccines for pet dogs",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Canine Parainfluenza Virus (CPIV, MLV, parenteral)",
+      "Administer from 6 weeks of age onwards, then every 2 to 4 weeks until 16 weeks of age or older",
+      "Two doses 2 to 4 weeks apart are generally recommended by manufacturers",
+      "Annually",
+      "Non-core The duration of immunity provided in pet dogs is uncertain. Use of CPIV (MLV-mucosal) in combination with Bordetella bronchiseptica may be preferable as CPIV is not broadly available as a single antigen product"
+    ]
+  ]
+}

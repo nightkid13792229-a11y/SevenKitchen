@@ -1,0 +1,52 @@
+{
+ "tableId": "T0304",
+ "caption": "Table 42-5. Managing cystine uroliths refractory to complete dissolution.",
+ "columns": [
+  "Causes",
+  "Identification",
+  "Therapeutic goal"
+ ],
+ "rows": [
+  [
+   "Client and patient factors",
+   "",
+   ""
+  ],
+  [
+   "Inadequate dietary compliance",
+   "Question owner\nPersistent cystine crystalluria\nUrea nitrogen >10-17 mg/dl\nUrine specific gravity >1.010-1.020\nUrinary pH <7.0-7.5 during treatment with Prescription Diet u/d Canine* (use lower values for the moist food)",
+   "Emphasize value of feeding dissolution food"
+  ],
+  [
+   "Inadequate 2-MPG** administration",
+   "Question owner\nCount remaining pills",
+   "Emphasize value of giving the full dose of medication\nDetermine if owner is capable and willing to administer medication\nIf necessary, demonstrate a variety of methods to administer medication"
+  ],
+  [
+   "Clinician factors",
+   "",
+   ""
+  ],
+  [
+   "Incorrect prediction of mineral type",
+   "Analysis of retrieved urolith",
+   "Adjust therapy based on correct identification of mineral type"
+  ],
+  [
+   "Inadequate 2-MPG dose for degree of diuresis",
+   "No change in urolith size after two months of appropriate therapy",
+   "Increase 2-MPG dose to 20 mg/kg body weight q12h"
+  ],
+  [
+   "Disease factors",
+   "",
+   ""
+  ],
+  [
+   "Compound urolith",
+   "Radiographic density of nucleus and outer layer(s) of urolith are different\nAnalysis of retrieved urolith",
+   "Adjust therapy based on identification of new mineral type\nUroliths not causing clinical signs should be monitored for potentially adverse consequences(obstruction, urinary tract infection, etc.)\nClinically active uroliths may require surgical removal\nRemove small uroliths by voiding urohydropropulsion (Figure 38-5 and Table 38-7); consider removing urethroliths by lithotripsy"
+  ]
+ ],
+ "note": "脚注 *Hill's Pet Nutrition, Inc., Topeka, KS, USA. 与 **2-MPG = N-(2-mercaptopropionyl)-glycine. Thiola. Mission Pharmacal, San Antonio, TX, USA. 未计入数据行"
+}

@@ -1,0 +1,35 @@
+{
+  "tableId": "T0445",
+  "caption": "Table 8-7. Wet protein sources used in commercial pet foods and their typical protein ranges (as fed).",
+  "columns": [
+    "Ingredient",
+    "Protein (%)"
+  ],
+  "rows": [
+    [
+      "Liver (pork, beef, turkey, sheep)",
+      "17-22"
+    ],
+    [
+      "Meat by-products (lungs, spleen, kidneys)",
+      "15-20"
+    ],
+    [
+      "Beef (carcass)",
+      "18-22"
+    ],
+    [
+      "Chicken (whole, backs, necks)",
+      "10-12"
+    ],
+    [
+      "Fish (freshwater)",
+      "12-15"
+    ],
+    [
+      "Fish (ocean)",
+      "20-27"
+    ]
+  ],
+  "note": "图中另含 Table 8-8（Common fiber ingredients...），已按本图主表 Table 8-7 转录。"
+}

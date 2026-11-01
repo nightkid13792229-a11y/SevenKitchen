@@ -1,0 +1,27 @@
+{
+ "tableId": "T0144",
+ "caption": "Table 19-3. Comparison of small intestinal length to body length in selected species.",
+ "columns": [
+  "Species",
+  "Ratio"
+ ],
+ "rows": [
+  [
+   "Cat",
+   "4:1"
+  ],
+  [
+   "Dog",
+   "6:1"
+  ],
+  [
+   "Rabbit",
+   "10:1"
+  ],
+  [
+   "Pig",
+   "14:1"
+  ]
+ ],
+ "note": "图中另含表19-4（Nutrient levels in rat carcass.），未在此单表内转录"
+}

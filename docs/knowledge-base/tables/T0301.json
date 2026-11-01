@@ -1,0 +1,49 @@
+{
+ "tableId": "T0301",
+ "caption": "Table 42-3. Summary of recommendations for combined dietary and medical/surgical treatment and prevention of canine cystine uroliths.",
+ "columns": [
+  "Recommendations"
+ ],
+ "rows": [
+  [
+   "1. Perform appropriate diagnostic studies including complete urinalysis, quantitative urine culture and diagnostic radiography and/or ultrasonography. Determine precise location, size and number of uroliths. The size and number of uroliths are not a reliable index of probable therapeutic efficacy."
+  ],
+  [
+   "2. If uroliths are available, determine their mineral composition. If they are unavailable, determine their composition by evaluation of appropriate clinical data."
+  ],
+  [
+   "3. Consider surgical correction if uroliths obstruct urine outflow and/or if correctable abnormalities predisposing the patient to recurrent urinary tract infection are identified by radiography or other means. Small urocystoliths may be removed by voiding urohydropropulsion (Figure 38-5 and Table 38-7). Urethroliths may be removed by lithotripsy."
+  ],
+  [
+   "4. Initiate therapy with an appropriate litholytic food (Table 42-2). For optimal results, no other food or mineral supplements should be fed to the patient. Compliance with dietary recommendation is suggested by a reduction in urea nitrogen concentration (usually <10 mg/dl)."
+  ],
+  [
+   "5. Initiate therapy with N-(2-mercaptopropionyl)-glycine (2-MPG)* at a daily dosage of approximately 30 mg/kg body weight, divided into two equal subdoses."
+  ],
+  [
+   "6. If necessary, administer potassium citrate orally to eliminate aciduria. Strive for a urinary pH of approximately 7.5 (range = 7.1 to 7.7)."
+  ],
+  [
+   "7. If necessary, eradicate or control urinary tract infections with appropriate antimicrobial agents."
+  ],
+  [
+   "8. Devise a protocol for followup therapy."
+  ],
+  [
+   "a. Try to avoid diagnostic followup studies that require urinary catheterization. If they are required, give appropriate peri-catheterization antimicrobial agents to prevent iatrogenic urinary tract infection."
+  ],
+  [
+   "b. Perform serial urinalyses. Urinary pH, specific gravity and microscopic examination of sediment for crystals are especially important. Remember, crystals formed in urine stored at room or refrigeration temperatures may represent in vitro artifacts."
+  ],
+  [
+   "c. Perform serial radiography monthly to evaluate urolith location(s), number, size, density and shape. Intravenous urography may be used to identify radiolucent uroliths in the kidneys, ureters and urinary bladder. Antegrade contrast cystourethrography may be required for radiolucent uroliths located in the bladder and urethra."
+  ],
+  [
+   "9. Continue litholytic food, 2-MPG and alkalinizing therapy for approximately one month after disappearance of uroliths as detected by radiography."
+  ],
+  [
+   "10. Prevention. Feeding a low-protein food that promotes alkaline urine (Table 42-2) has been effective in minimizing cystine urolith recurrence. If necessary, low doses of 2-MPG may also be given."
+  ]
+ ],
+ "note": "图中为表框内的条目式清单，无表头列，按单列逐条转录；脚注 *Thiola, Mission Pharmaceutical, San Antonio, TX, USA. 未计入数据行"
+}

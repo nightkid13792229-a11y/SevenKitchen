@@ -1,0 +1,39 @@
+{
+  "tableId": "T0433",
+  "caption": "Table 68-7. Key nutritional factors for cats with hepatic lipidosis or cholangitis.*",
+  "columns": [
+    "Factors",
+    "Recommended levels"
+  ],
+  "rows": [
+    [
+      "Energy density (kcal/g)",
+      "≥4.4"
+    ],
+    [
+      "Energy density (kJ/g)",
+      "≥18.4"
+    ],
+    [
+      "Protein (%)",
+      "30 to 45"
+    ],
+    [
+      "Arginine (%)",
+      "1.5 to 2.0"
+    ],
+    [
+      "Taurine (%)",
+      "≥0.3"
+    ],
+    [
+      "Potassium (%)",
+      "0.8 to 1.0"
+    ],
+    [
+      "L-Carnitine (%)",
+      "≥0.02"
+    ]
+  ],
+  "note": "原图同页另有 Table 68-8，本文件转录的是 Table 68-7。"
+}

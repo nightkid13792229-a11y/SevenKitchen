@@ -1,0 +1,39 @@
+{
+  "tableId": "T0128",
+  "caption": "Table 17-3. Feeding plan summary for growing puppies.",
+  "columns": [
+    "No.",
+    "Recommendation"
+  ],
+  "rows": [
+    [
+      "1",
+      "Estimate adult body weight for determination of the recommended calcium range (>25 kg adult weight, use large-/giant-breed recommendation)."
+    ],
+    [
+      "2",
+      "Using Table 17-4 (or manufacturer's information), select a food with the recommended levels of key nutritional factors; ensure the selected food has been approved for puppy growth by a credible regulatory agency (e.g., AAFCO)."
+    ],
+    [
+      "3",
+      "Avoid free-choice feeding; use food-restricted meal feeding, dividing the amount fed into two to four daily feedings."
+    ],
+    [
+      "4",
+      "Estimate the initial amount to feed from recommendations on product package or by calculation (Table 17-5). Remember, such recommendations and calculations should be used as guidelines or starting points and not as absolute requirements."
+    ],
+    [
+      "5",
+      "Teach owners to perform body condition scoring and have them monitor body condition at least every two weeks and adjust the amount fed by 10% increments to maintain a BCS of 2.5/5 to 3/5."
+    ],
+    [
+      "6",
+      "Veterinarians should assess body condition and weight of puppies in conjunction with routine vaccinations and more frequently if any indication of under- or overnutrition is detected. The feeding plan, including food dosage, should be modified as necessary."
+    ],
+    [
+      "7",
+      "Underfeeding through the growth phase is healthier than overfeeding and results in the same mature size."
+    ]
+  ],
+  "note": "原表为单栏编号列表（无表格线、无列标题），按编号整理为 No./Recommendation 两列；末尾 Key：AAFCO = Association of American Feed Control Officials, BCS = body condition score；图下部 Box 17-1 为正文专栏，非表格"
+}

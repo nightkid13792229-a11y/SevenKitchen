@@ -1,0 +1,23 @@
+{
+  "tableId": "T0422",
+  "caption": "Table 67-3. Key nutritional factors for foods for canine and feline patients with pancreatitis.*",
+  "columns": [
+    "Factors",
+    "Recommended levels"
+  ],
+  "rows": [
+    [
+      "Fat",
+      "≤15% for non-obese and non-hypertriglyceridemic dogs\n≤ 25% for non-obese and non-hypertriglyceridemic cats\n≤10% for obese and/or hypertriglyceridemic dogs\n≤15% for obese and/or hypertriglyceridemic cats"
+    ],
+    [
+      "Protein",
+      "15 to 30% for dogs\n30 to 40% for cats"
+    ],
+    [
+      "",
+      "*Nutrients expressed on a dry matter basis."
+    ]
+  ],
+  "note": "图中另含 Table 67-2（单栏条目列表，无列头），未转录"
+}

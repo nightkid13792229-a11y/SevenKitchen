@@ -1,0 +1,41 @@
+{
+  "tableId": "T0349",
+  "caption": "Table 5-5. Nutritional classification of starch.",
+  "columns": [
+    "Type of starch",
+    "Example of occurrence",
+    "Probable digestion in the small intestine"
+  ],
+  "rows": [
+    [
+      "Rapidly digestible starch",
+      "Freshly cooked starchy food",
+      "Rapid and complete"
+    ],
+    [
+      "Slowly digestible starch",
+      "Most raw cereals",
+      "Slow and complete"
+    ],
+    [
+      "Resistant starch",
+      "",
+      ""
+    ],
+    [
+      "Physically inaccessible starch",
+      "Partly milled grain and seeds",
+      "Resistant"
+    ],
+    [
+      "Resistant starch granules",
+      "Raw potato and banana",
+      "Resistant"
+    ],
+    [
+      "Recrystallized starch",
+      "Cooked, cooked potato, bread and cornflakes",
+      "Resistant"
+    ]
+  ]
+}

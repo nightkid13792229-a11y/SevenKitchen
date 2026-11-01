@@ -13,10 +13,6 @@ import type { KnowledgeEntry } from '../types';
  *      品种只是概率因素，不能变成对某一只狗的判决。
  *   3. 品种名用中文常用名，括号里给英文名，便于对照 WSAVA 遗传病立场文件。
  *
- * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
- * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
- *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
- *
  * 建立日期：2026-10-01
  *
  * ── 本批 16 条的取源纪律（2026-10-01 第二批） ──────────────
@@ -92,9 +88,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-002',
@@ -121,7 +115,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'ACVIM 犬胸腰段椎间盘突出诊断与管理共识 2022',
+        source: 'ACVIM 犬胸腰段椎间盘突出共识 2022',
         chapter: 'Introduction / 手术后再发率',
         note: 'FGF4 逆转录基因与软骨发育不良型品种；腊肠约 25%、法国斗牛犬约 44% 的再发率',
       },
@@ -165,9 +159,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-003',
@@ -240,9 +232,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-004',
@@ -274,7 +264,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
         note: 'brachycephaly 与 skin folds 属致病解剖特征；选育应向温和结构',
       },
       {
-        source: 'WSAVA 动物福利指南 2018',
+        source: 'WSAVA 动物福利指南',
         chapter: 'Chapter 4 · Selective breeding of companion animals',
         note: '为极端性状选育带来的福利问题；饲养器具需适配短头颅体型',
       },
@@ -333,9 +323,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-005',
@@ -408,9 +396,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-006',
@@ -481,9 +467,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-007',
@@ -554,9 +538,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-008',
@@ -586,7 +568,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'ACVIM 犬慢性肝炎诊断与治疗共识 2019',
+        source: 'ACVIM 犬慢性肝炎共识 2019',
         chapter: 'Definition of chronic hepatitis / Copper-associated CH',
         note: 'CuCH 可发生于任何品种但贝灵顿梗、达尔马提亚犬、拉布拉多、杜宾、西高地白梗易感',
       },
@@ -620,9 +602,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-009',
@@ -691,9 +671,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-010',
@@ -766,9 +744,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-011',
@@ -797,7 +773,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'ACVIM 犬慢性肝炎诊断与治疗共识 2019',
+        source: 'ACVIM 犬慢性肝炎共识 2019',
         chapter: '肝活检前的凝血评估（vWF 活性表与易感品种表注）',
         note: '易感品种清单与"建议在易感品种中检测血管性血友病"',
       },
@@ -821,9 +797,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-012',
@@ -896,9 +870,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-013',
@@ -949,9 +921,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-014',
@@ -1019,9 +989,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-015',
@@ -1048,7 +1016,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'ACVIM 犬慢性肠病诊断与治疗共识 2026',
+        source: 'ACVIM 犬慢性肠病共识 2026',
         chapter: '品种易感性与诊断路径',
         note: '德国牧羊犬、软毛麦色梗、中国沙皮犬等易感品种',
       },
@@ -1087,9 +1055,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-016',
@@ -1163,8 +1129,6 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
 ];

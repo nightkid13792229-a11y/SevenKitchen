@@ -1,0 +1,72 @@
+{
+  "tableId": "T0314",
+  "caption": "Table 43-8. Managing magnesium ammonium phosphate uroliths refractory to complete dissolution.",
+  "columns": [
+    "Causes",
+    "Identification",
+    "Therapeutic goal"
+  ],
+  "rows": [
+    [
+      "Client and patient factors",
+      "",
+      ""
+    ],
+    [
+      "Inadequate dietary compliance",
+      "Question owner\nPersistent struvite crystalluria\nUrea nitrogen >8-12 mg/dl\nUrine specific gravity >1.010-1.015\nUrinary pH is alkaline during treatment with the litholytic food*",
+      "Emphasize need to feed dissolution food exclusively"
+    ],
+    [
+      "Inadequate antibiotic administration",
+      "Question owner\nCount remaining antibiotic pills",
+      "Emphasize need to administer the full dose of antibiotics\nDetermine if owner is capable and willing to administer medication\nDemonstrate a variety of methods to administer medication"
+    ],
+    [
+      "Clinician factors",
+      "",
+      ""
+    ],
+    [
+      "Incorrect prediction of mineral type",
+      "Analysis of retrieved urolith",
+      "Alter therapy based on identification of mineral type"
+    ],
+    [
+      "Inappropriate antibiotic choice",
+      "Positive urine culture with poor susceptibility for chosen antibiotic",
+      "Choose antibiotics based on susceptibility testing"
+    ],
+    [
+      "Inappropriate antibiotic dose for degree of diuresis",
+      "Positive quantitative urine culture with same bacterial species and same susceptibility; number of bacteria may be lower (See text.)",
+      "Administer antibiotic at the higher recommended dose or consider a higher dose than recommended"
+    ],
+    [
+      "Premature discontinuation of antibiotic",
+      "Discontinuing antibiotic before complete urolith dissolution\nPositive urine culture with same bacterial species and the same susceptibility (See text.)",
+      "Prescribe full antibiotic dose for the entire period of urolith dissolution"
+    ],
+    [
+      "Disease factors",
+      "",
+      ""
+    ],
+    [
+      "Change in bacterial susceptibility",
+      "Positive urine culture with susceptibility results different from those of previous culture",
+      "Choose antibiotic based on susceptibility testing"
+    ],
+    [
+      "New bacterial infection",
+      "Positive urine culture identifying new bacterial species",
+      "Choose antibiotic effective against both bacteria\nAvoid procedures requiring urinary tract catheterization"
+    ],
+    [
+      "Compound urolith",
+      "Radiographic density of nucleus and outer layer(s) of urolith is different\nAnalysis of retrieved urolith",
+      "Alter therapy based on identification of new mineral type\nUroliths not causing clinical signs should be monitored for potentially adverse consequences (obstruction, urinary tract infection, etc.)\nClinically active uroliths may require removal\nRemove small uroliths by voiding urohydropropulsion or lithotripsy"
+    ]
+  ],
+  "note": "“Client and patient factors”/“Clinician factors”/“Disease factors”为表内分组标题行，仅首列有值；“*See Table 43-5.”为表下脚注，未作为数据行转录。"
+}

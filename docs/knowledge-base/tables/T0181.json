@@ -1,0 +1,54 @@
+{
+  "tableId": "T0181",
+  "caption": "Table 27-6. Key nutritional factors for metabolic-control cat foods for weight loss.",
+  "columns": [
+    "Factors",
+    "Dietary recommendations (dry matter basis)"
+  ],
+  "rows": [
+    [
+      "Carbohydrate",
+      "≤20%"
+    ],
+    [
+      "Protein",
+      "At least 47% but not exceed 55%"
+    ],
+    [
+      "Fat",
+      "≤25%"
+    ],
+    [
+      "Fiber",
+      "≥5%"
+    ],
+    [
+      "L-carnitine",
+      "≥500 ppm"
+    ],
+    [
+      "Antioxidants",
+      "Foods for weight loss and prevention of weight regain should contain:"
+    ],
+    [
+      "Vitamin E",
+      "≥500 IU vitamin E/kg"
+    ],
+    [
+      "Vitamin C",
+      "100 to 200 mg vitamin C/kg"
+    ],
+    [
+      "Selenium",
+      "0.5 to 1.3 mg selenium/kg"
+    ],
+    [
+      "Sodium",
+      "Foods for weight loss should contain between 0.2 to 0.6%"
+    ],
+    [
+      "Phosphorus",
+      "Foods for weight loss should contain between 0.5 to 0.8%"
+    ]
+  ]
+}

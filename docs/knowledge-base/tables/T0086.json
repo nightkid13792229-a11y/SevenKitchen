@@ -1,0 +1,41 @@
+{
+  "tableId": "T0086",
+  "caption": "Table 10-7. Balanced generic homemade daily formulation for a healthy 18-kg (40-lb) adult dog that meets AAFCO allowances.*",
+  "columns": [
+    "Ingredients",
+    "Grams",
+    "Percent"
+  ],
+  "rows": [
+    [
+      "Carbohydrate, cooked**",
+      "240",
+      "58"
+    ],
+    [
+      "Meat, cooked***",
+      "120",
+      "29"
+    ],
+    [
+      "Fat†",
+      "10",
+      "2"
+    ],
+    [
+      "Fiber††",
+      "30",
+      "7"
+    ],
+    [
+      "Bone meal†††",
+      "4.0",
+      "-"
+    ],
+    [
+      "Potassium chloride‖",
+      "1.0",
+      "-"
+    ]
+  ]
+}

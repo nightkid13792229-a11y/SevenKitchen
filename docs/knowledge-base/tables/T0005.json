@@ -1,0 +1,66 @@
+{
+ "tableId": "T0005",
+ "caption": "TABLE 1 Insulin Products Commonly Used in Dogs and Cats",
+ "columns": [
+  "Insulin Products",
+  "Product Description",
+  "Brand Name (Manufacturer)",
+  "Veterinary FDA Approval Status",
+  "Peak Action (Nadir) and Duration of Effect",
+  "Starting Dose",
+  "Concentration",
+  "Comments"
+ ],
+ "rows": [
+  [
+   "Lente (intermediate-acting)",
+   "Porcine insulin zinc suspension",
+   "Vetsulin (Merck Animal Health)",
+   "Dogs, cats",
+   "Cats Nadir 2–8 hr. Duration 8–14 hr.19 Dogs Nadir 1–10 hr.20 Duration 10–24 hr.20",
+   "Cats 0.25–0.5 U/kg q 12 hr (not to exceed 3 U per cat).5 Dogs 0.25–0.5 U/kg q 12 hr.",
+   "U-40",
+   "Commonly used in dogs; injection pens (in either 0.5 U or 1 U increments) available for dogs and cats. Shaking insulin bottle is required. NOTE: In dogs, the manufacturer recommends a starting dose of 0.5 U/kg q 24 hr."
+  ],
+  [
+   "Glargine (long-acting)",
+   "Recombinant DNA origin human insulin",
+   "Lantus (Sanofi)",
+   "Not approved",
+   "Cats Nadir 12–14 hr. Duration 12–24 hr. Dogs Nadir 6–10 hr.21 Duration 12–20 hr.",
+   "Cats 0.5 U/kg q 12 hr if BG > 360 mg/dL and 0.25 U/kg q 12 hr if BG < 360 mg/dL. Dogs 0.3 U/kg q 12 hr.",
+   "U-100, U-300",
+   "Commonly used in cats; use only U-100 (U-300 available); potential option in dogs"
+  ],
+  [
+   "PZI (long-acting)",
+   "Recombinant DNA origin human insulin",
+   "Prozinc (Boehringer Ingelheim Animal Health)",
+   "Cats",
+   "Cats Nadir 5–7 hr. Duration 8–24 hr.14 Dogs Nadir 8–12 hr.22",
+   "Cats 1–2 U per cat q 12 hr. Dogs 0.25–0.5 U/kg q 12 hr.22",
+   "U-40",
+   "Commonly used in cats; not commonly used in dogs. Some clinicians believe that for dogs, a starting dose of 0.25 U/kg is appropriate and 0.5 U/kg should be reserved for potentially challenging diabetics."
+  ],
+  [
+   "NPH (intermediate-acting)",
+   "Recombinant human insulin",
+   "Novolin (Novo Nordisk) Humulin (Lilly)",
+   "Not approved",
+   "Dogs Nadir 0.5–8.5 hr.15 Duration 4–10 hr.",
+   "Dogs 0.25–0.5 U/kg q 12 hr.15",
+   "U-100",
+   "Option for dogs; rarely recommended for cats due to short duration of effect. Consider using the lower end of the starting dose for a large dog and higher end for a small dog."
+  ],
+  [
+   "Detemir (long-acting)",
+   "Recombinant DNA origin human insulin",
+   "Levemir (Novo Nordisk)",
+   "Not approved",
+   "Cats Nadir 12–14 hr. Duration 12–24 hr.16,17",
+   "Cats 0.5 U/kg q 12 hr if BG > 360 mg/dL, and 0.25 U/kg q 12 hr if BG < 360 mg/dL.17 Dogs 0.10 U/kg q 12 hr.18",
+   "U-100",
+   "Very potent in dogs (caution required); used in dogs and cats; suitable for dogs in which NPH and lente have short duration of activity."
+  ]
+ ]
+}

@@ -1,0 +1,139 @@
+{
+  "tableId": "T0311",
+  "caption": "Table 43-6. Characteristic clinical findings before and after initiation of dietary and medical therapy, or dietary therapy alone, to dissolve struvite uroliths in nonazotemic dogs.",
+  "columns": [
+    "Factors",
+    "Pre-therapy",
+    "During therapy",
+    "After successful therapy"
+  ],
+  "rows": [
+    [
+      "Polyuria",
+      "±",
+      "1+ to 3+",
+      "Negative"
+    ],
+    [
+      "Pollakiuria",
+      "1+ to 4+",
+      "Transient ↑; subsequent ↓",
+      "Negative"
+    ],
+    [
+      "Gross hematuria",
+      "0 to 4+",
+      "↓ by 5 to 10 days",
+      "Negative"
+    ],
+    [
+      "Abnormal urine odor",
+      "0 to 4+",
+      "↓ by 5 to 10 days",
+      "Negative"
+    ],
+    [
+      "Small uroliths voided",
+      "±",
+      "Common in females",
+      "Negative"
+    ],
+    [
+      "Urine specific gravity",
+      "Variable",
+      "1.004 to 1.014",
+      "Normal"
+    ],
+    [
+      "Urinary pH",
+      "≥7",
+      "Decreased (usually acidic)",
+      "Variable"
+    ],
+    [
+      "Urine protein",
+      "1+ to 4+",
+      "Decreased to absent",
+      "Negative"
+    ],
+    [
+      "Urine RBC",
+      "1+ to 4+",
+      "Decreased to absent",
+      "Negative"
+    ],
+    [
+      "Urine WBC",
+      "1+ to 4+",
+      "Decreased to absent",
+      "Negative"
+    ],
+    [
+      "Struvite crystals",
+      "0 to 4+",
+      "Usually absent",
+      "Variable"
+    ],
+    [
+      "Other crystals",
+      "Variable",
+      "May persist",
+      "May persist"
+    ],
+    [
+      "Bacteriuria",
+      "0 to 4+",
+      "Decreased to absent",
+      "Negative"
+    ],
+    [
+      "Quantitative bacterial urine culture",
+      "0 to 4+",
+      "Decreased to absent",
+      "Negative"
+    ],
+    [
+      "Serum urea nitrogen",
+      ">15 mg/dl",
+      "<10 mg/dl",
+      "Dependent on food"
+    ],
+    [
+      "Serum creatinine",
+      "Normal",
+      "Normal",
+      "Normal"
+    ],
+    [
+      "Serum alkaline phosphatase",
+      "Normal",
+      "↑ by 2 to 5 times",
+      "Normal"
+    ],
+    [
+      "Serum albumin",
+      "Normal",
+      "↓ by 0.5 to 1 g/dl",
+      "Normal"
+    ],
+    [
+      "Serum phosphorus",
+      "Normal",
+      "Slight decrease",
+      "Normal"
+    ],
+    [
+      "Urolith size (radiographic)",
+      "Small to large",
+      "Progressive decrease",
+      "Negative"
+    ],
+    [
+      "Hemogram",
+      "Normal",
+      "Normal",
+      "Normal"
+    ]
+  ],
+  "note": "表下两行脚注（UTI 说明、*All forms of therapy withdrawn）为表格注释，未作为数据行转录。"
+}

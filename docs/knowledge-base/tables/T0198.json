@@ -1,0 +1,31 @@
+{
+ "tableId": "T0198",
+ "caption": "Table 3. Feeding plan to stabilize reduced body weight.",
+ "columns": [
+  "Foods",
+  "Feeding method",
+  "kcal (kJ)"
+ ],
+ "rows": [
+  [
+   "Science Diet Canine Maintenance, moist",
+   "One-half can, once daily",
+   "278 (1,163)"
+  ],
+  [
+   "Science Diet Canine Maintenance, dry",
+   "One cup, once daily",
+   "327 (1,368)"
+  ],
+  [
+   "Milk-Bone treats (small)",
+   "Four treats, daily",
+   "80 (335)"
+  ],
+  [
+   "Total = 685 kcal/day (2.87 MJ)",
+   "",
+   ""
+  ]
+ ]
+}

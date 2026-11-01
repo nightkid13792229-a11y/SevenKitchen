@@ -1,0 +1,76 @@
+{
+  "tableId": "T0424",
+  "caption": "Table 67-5. Key nutritional factors in selected commercial veterinary therapeutic foods for cats with pancreatitis compared to recommended levels.* (See Table 67-7 if patient is obese or hypertriglyceridemic.)",
+  "columns": [
+    "",
+    "Fat (%)",
+    "Protein (%)"
+  ],
+  "rows": [
+    [
+      "Moist foods",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≤25",
+      "30–40"
+    ],
+    [
+      "Hill's Prescription Diet i/d Feline",
+      "24.1",
+      "37.6"
+    ],
+    [
+      "Iams Veterinary Formula Intestinal Low-Residue",
+      "11.7",
+      "38.4"
+    ],
+    [
+      "Medi-Cal HYPOallergenic/Gastro",
+      "35.9",
+      "35.5"
+    ],
+    [
+      "Medi-Cal Sensitivity CR",
+      "35.1",
+      "34.5"
+    ],
+    [
+      "Dry foods",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≤25",
+      "30–40"
+    ],
+    [
+      "Hill's Prescription Diet i/d Feline",
+      "20.2",
+      "40.3"
+    ],
+    [
+      "Iams Veterinary Formula Intestinal Low-Residue",
+      "13.7",
+      "35.8"
+    ],
+    [
+      "Medi-Cal HYPOallergenic/Gastro",
+      "11.5",
+      "29.8"
+    ],
+    [
+      "Purina Veterinary Diets EN GastroENteric",
+      "18.4",
+      "56.2"
+    ],
+    [
+      "Royal Canin Veterinary Diet Intestinal HE 30",
+      "23.7",
+      "34.4"
+    ]
+  ]
+}

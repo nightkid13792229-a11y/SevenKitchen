@@ -8,13 +8,9 @@ import type { KnowledgeEntry } from '../types';
  *
  * ── 本领域的硬规矩 ────────────────────────────────────────────
  *   1. 走新结构：`questionType` 用 `TRIAGE`（要不要去医院）或
- *      `INTERPRET`（这个表现意味着什么）；TRIAGE 必填 `urgency`。
+
  *   2. **不做诊断**，只写"看到什么、可能的方向、该多快去"。
  *   3. 高风险结论必须有 ≥2 个不同机构的来源。
- *
- * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
- * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
- *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -53,7 +49,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: 'ACVIM 2026 慢性肠病共识 · 消化道症状的评估',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 51 章：呕吐的时间口径与营养管理时机',
       },
       {
@@ -80,10 +76,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-035',
@@ -112,7 +105,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: 'ACVIM 2026 慢性肠病共识 · 慢性肠道症状的定义与诊断流程',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 56 章：危及生命的急性胃肠炎表现；第 61 章：大肠疾病的表现',
       },
       {
@@ -139,10 +132,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-036',
@@ -175,7 +165,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '个体化营养评估中的食欲询问',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 25 章：厌食、恶病质与营养摄入不足的后果',
       },
     ],
@@ -198,9 +188,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-037',
@@ -233,7 +221,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '体况评分与肌况评分工具',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 25 章：体重变化的临床意义',
       },
     ],
@@ -261,10 +249,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-038',
@@ -311,9 +296,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-039',
@@ -351,10 +334,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'MEDIUM',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-040',
@@ -392,10 +372,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'TRIAGE',
-    riskLevel: 'MEDIUM',
-    urgency: 'OBSERVE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-041',
@@ -442,10 +419,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-042',
@@ -473,7 +447,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '退行性关节病与慢性疼痛的识别',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 34 章：犬骨关节炎的临床表现与疼痛评估',
       },
       {
@@ -500,9 +474,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-043',
@@ -531,7 +503,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '皮肤与被毛的营养评估',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 31 章《食物不良反应》：非季节性瘙痒性皮炎与排除性饮食试验',
       },
       {
@@ -558,9 +530,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-044',
@@ -585,7 +555,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 31 章《食物不良反应》：外耳炎与食物不良反应',
       },
     ],
@@ -598,10 +568,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'TRIAGE',
-    riskLevel: 'MEDIUM',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-045',
@@ -648,10 +615,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'TRIAGE',
-    riskLevel: 'MEDIUM',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-046',
@@ -698,10 +662,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-047',
@@ -730,7 +691,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '营养筛查风险因子（含肠胃胀气、便秘）与饮食史记录',
       },
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 64 章《便秘》：定义与不同情况下的纤维方向',
       },
     ],
@@ -748,10 +709,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'TRIAGE',
-    riskLevel: 'MEDIUM',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-048',
@@ -776,7 +734,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: '小动物临床营养学（第 5 版）',
+        source: '小动物临床营养学（第5版）',
         chapter: '第 65 章《肠胃胀气》：风险因素、饮食因素与复查思路',
       },
       {
@@ -798,9 +756,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'LOW',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-049',
@@ -825,7 +781,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'ACVIM 犬尿失禁诊断与管理共识 2024',
+        source: 'ACVIM 犬尿失禁共识 2024',
         chapter: '排尿异常的评估方向与排尿模式记录',
       },
       {
@@ -856,10 +812,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-050',
@@ -915,10 +868,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-051',
@@ -982,8 +932,6 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
 ];

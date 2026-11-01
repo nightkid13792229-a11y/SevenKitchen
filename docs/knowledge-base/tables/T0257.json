@@ -1,0 +1,11 @@
+{
+  "tableId": "T0257",
+  "caption": "Table 37-6. Distinguishing between acute and chronic kidney disease in dogs and cats on the basis of clinical and laboratory findings.*",
+  "columns": ["Findings", "Acute kidney disease", "Chronic kidney disease"],
+  "rows": [
+    ["Clinical findings", "Acute onset of clinical signs (usually <seven days)\nUsually moderately to severely depressed\nUrine volume often decreased\nOften good body condition", "Vague onset of clinical signs (often over weeks to months)\nAlert, responsive or only slightly depressed\nPolyuria/polydipsia more likely\nMay be thin"],
+    ["Laboratory and diagnostic imaging findings", "Kidneys enlarged, painful or may be normal\nNormal or increased hematocrit; anemia may result from blood loss (e.g., gastrointestinal hemorrhage)\nSerum urea nitrogen and creatinine previously normal but increase progressively\nNormal to increased serum potassium\nModerate to severe metabolic acidosis\nUrinary casts in some patients\nProteinuria or glucosuria may result from acute tubular necrosis\nBone density normal", "Kidneys small, irregular or may be normal\nNonregenerative anemia typical; hematocrit decreases progressively over time\nSerum urea nitrogen and creatinine previously increased and typically remain stable\nNormal to decreased serum potassium, especially in cats\nMild to moderate metabolic acidosis\nUsually no urinary casts\nProteinuria often present, more likely due to glomerular disease\nBone density may be decreased"],
+    ["*Modified from Vaden SL. Differentiation of acute from chronic renal failure. In: Bonagura JD. Kirk's Current Veterinary Therapy XIII. Philadelphia, PA: WB Saunders Co, 2000: 856-858.", "", ""]
+  ],
+  "note": "图中另含 Table 37-7（单列清单，题为 Potential mechanisms in the pathogenesis of chronic kidney disease），列结构与 Table 37-6 不同，未并入本表。"
+}

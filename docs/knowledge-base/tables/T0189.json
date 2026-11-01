@@ -1,0 +1,59 @@
+{
+  "tableId": "T0189",
+  "caption": "Table 27-15. Using obese body weight and desired rate of weight loss to determine initial amount to feed for controlled weight loss.",
+  "columns": [
+    "Step",
+    "Description"
+  ],
+  "rows": [
+    [
+      "1",
+      "Obtain current (obese) body weight."
+    ],
+    [
+      "2",
+      "Calculate DER for current body weight = estimated current daily energy intake."
+    ],
+    [
+      "3",
+      "Calculate the energy content of body fat (7,920 kcal/kg adipose tissue) to be lost weekly, assuming a target weight loss of between 0.5 to 2% initial body weight per week."
+    ],
+    [
+      "4",
+      "Divide the weekly amount of adipose calories by 7 to obtain desired daily calorie deficit."
+    ],
+    [
+      "5",
+      "Subtract the daily calorie deficit from the DER to obtain the number of calories to feed per day."
+    ],
+    [
+      "6",
+      "Divide the number of calories to feed per day by the energy density of the selected food to determine the amount of food to feed per day."
+    ],
+    [
+      "Example",
+      "An obese dog has a body weight of 30 kg and a BCS of 5/5. The DER for the dog's obese weight is calculated using the formula DER = RER x 1.4. RER (kcal/day) = 30(BWkg) + 70. RER = 30(30 kg) + 70 = 970 kcal/day. DER = 1.4 x RER = 1.4 x 970 = 1,358 kcal/day. RER can also be obtained directly from Table 27-3."
+    ],
+    [
+      "Example (cont.)",
+      "A targeted weight loss of 1.5% of the dog's obese weight per week would be 0.45 kg/week."
+    ],
+    [
+      "Example (cont.)",
+      "The energy density of adipose tissue is 7,920 kcal/kg; 7,920 kcal/kg x 0.45 kg = 3,564 kcal/week or 509 kcal/day (3,564 kcal/week ÷ 7 days/week)."
+    ],
+    [
+      "Example (cont.)",
+      "The calculated daily energy intake for this rate of weight loss = 1,358 kcal/day – 509 kcal = 849 kcal/day."
+    ],
+    [
+      "Example (cont.)",
+      "The food selected for weight loss provides 220 kcal/cup; 849 kcal/day ÷ 220 kcal/cup = 3 and 7/8 cups/day. This amount is a starting point and may need to be modified to achieve the desired weight loss. Recheck body weight after two to three weeks."
+    ],
+    [
+      "Key",
+      "DER = daily energy requirement, BCS = body condition score (Figures 1-2 and 1-3), RER = resting energy requirement, BW = body weight."
+    ]
+  ],
+  "note": "该页（p.528）含 Table 27-13、27-14、27-15 三张表；T0190 已转录 27-13、T0191 已转录 27-14，本文件补全同页的 Table 27-15。"
+}

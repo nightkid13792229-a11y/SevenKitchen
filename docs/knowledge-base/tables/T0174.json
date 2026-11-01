@@ -1,0 +1,87 @@
+{
+  "tableId": "T0174",
+  "caption": "Table 26-3. Nutritional comparison of parenteral products.",
+  "columns": [
+    "Products",
+    "Caloric density (kcal/ml)",
+    "Osmolarity (mOsm/l)",
+    "Amino acids (g/100 ml)",
+    "Fat (g/100 ml)",
+    "Carbohydrate (g/100 ml)",
+    "Electrolytes (kcal/ml)",
+    "Comments"
+  ],
+  "rows": [
+    [
+      "Amino acids 8.5% without electrolytes",
+      "na",
+      "785-860",
+      "8.5",
+      "0",
+      "0",
+      "Few",
+      "Contains all essential amino acids except taurine, nitrogen 1.3 g/100 ml, pH 5.3-6.5, available in 500- and 1,000-ml sizes."
+    ],
+    [
+      "Amino acids 8.5% with electrolytes",
+      "na",
+      "1,160",
+      "8.5",
+      "0",
+      "0",
+      "Yes",
+      "Contains all essential amino acids except taurine, nitrogen 1.3 g/100 ml, pH 5.3-6.5, electrolytes Na, K, Mg, Cl, PO4, available in 500- and 1,000-ml sizes."
+    ],
+    [
+      "ProcalAmine",
+      "0.25",
+      "735",
+      "3",
+      "0",
+      "3",
+      "Yes",
+      "Contains 3% glycerol and 3% amino acids, nitrogen 4.6 g/1,000 ml, pH 6.5-7.0, electrolytes Na, K, Mg, Cl, PO4, available in 500- and 1,000-ml sizes. Contains 13 nonprotein kcal/ml and 22.5 g amino acids/100 nonprotein kcal as is. Mix 775 ml ProcalAmine with 300 ml 20% lipid to get 1,075 ml of a 3.2 g protein/100 nonprotein kcal solution."
+    ],
+    [
+      "Lipid 10%",
+      "1.1",
+      "268",
+      "0",
+      "10",
+      "0",
+      "No",
+      "Contains soybean and/or safflower oil, glycerin, linoleic and linolenic acids, egg yolk as phospholipid emulsifier, pH 6.0-8.9, available in 50-, 100-, 250- and 500-ml sizes."
+    ],
+    [
+      "Lipid 20%",
+      "2",
+      "268",
+      "0",
+      "20",
+      "0",
+      "No",
+      "Contains soybean and/or safflower oil, glycerin, linoleic and linolenic acids, egg yolk as phospholipid emulsifier, pH 6.0-8.9, available in 50-, 100-, 250- and 500-ml sizes."
+    ],
+    [
+      "Dextrose 2.5-70%",
+      "0.09-2.4",
+      "126-3,535",
+      "0",
+      "0",
+      "2.5-70",
+      "No",
+      "Contains hydrolyzed (various) cornstarch, pH 3.5-5.5, available in 50- and 500-ml sizes."
+    ],
+    [
+      "Key: na = not available.",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "note": "表末 Key 行为表格内的脚注，置于第一列，其余列留空。"
+}

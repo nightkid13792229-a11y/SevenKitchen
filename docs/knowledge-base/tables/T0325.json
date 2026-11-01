@@ -1,0 +1,136 @@
+{
+  "tableId": "T0325",
+  "caption": "Table 46-19. Comparison of key nutritional factors in selected commercial veterinary therapeutic foods for reducing the recurrence of feline idiopathic cystitis, struvite disease (uroliths or urethral plugs) and/or calcium oxalate uroliths in cats.*",
+  "columns": [
+    "",
+    "Mg (%)",
+    "P (%)",
+    "Ca (%)",
+    "Protein (%)",
+    "Na (%)",
+    "Urinary pH",
+    "Total omega 3 (%)"
+  ],
+  "rows": [
+    [
+      "Moist foods**",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "0.07-0.14",
+      "0.5-0.9",
+      "0.6-1.0",
+      "32-45",
+      "0.3-0.6",
+      "6.2-6.4",
+      "0.35-1.0"
+    ],
+    [
+      "Hill's Prescription Diet c/d Multicare with Chicken Feline",
+      "0.052",
+      "0.68",
+      "0.72",
+      "43.8",
+      "0.32",
+      "6.35",
+      "0.96"
+    ],
+    [
+      "Hill's Prescription Diet c/d Multicare with Seafood Feline",
+      "0.054",
+      "0.71",
+      "0.62",
+      "44.8",
+      "0.33",
+      "6.4",
+      "0.62"
+    ],
+    [
+      "Medi-Cal Urinary SO",
+      "na",
+      "1.20",
+      "1.20",
+      "43.5",
+      "1.1",
+      "6.4",
+      "na"
+    ],
+    [
+      "Purina Veterinary Diets UR Urinary St/Ox Feline Formula",
+      "0.07",
+      "0.97",
+      "0.96",
+      "50.6",
+      "0.62",
+      "6.0-6.4",
+      "na"
+    ],
+    [
+      "Royal Canin Veterinary Diet Urinary SO in gel",
+      "0.10",
+      "1.36",
+      "1.02",
+      "41.3",
+      "1.02",
+      "6.0-6.3",
+      "na"
+    ],
+    [
+      "Dry foods",
+      "Mg (%)",
+      "P (%)",
+      "Ca (%)",
+      "Protein (%)",
+      "Na (%)",
+      "Urinary pH",
+      "Total omega 3 (%)"
+    ],
+    [
+      "Recommended levels",
+      "0.07-0.14",
+      "0.5-0.9",
+      "0.6-1.0",
+      "32-45",
+      "0.3-0.6",
+      "6.2-6.4",
+      "0.35-1.0"
+    ],
+    [
+      "Hill's Prescription Diet c/d Multicare Feline",
+      "0.06",
+      "0.65",
+      "0.74",
+      "36.1",
+      "0.35",
+      "6.3",
+      "0.65"
+    ],
+    [
+      "Hill's Prescription Diet c/d Multicare with Chicken Feline",
+      "0.06",
+      "0.65",
+      "0.76",
+      "34.6",
+      "0.33",
+      "6.3",
+      "0.64"
+    ],
+    [
+      "Purina Veterinary Diets UR Urinary St/Ox Feline Formula",
+      "0.07",
+      "1.08",
+      "1.1",
+      "44.9",
+      "1.17",
+      "6.0-6.4",
+      "na"
+    ]
+  ]
+}

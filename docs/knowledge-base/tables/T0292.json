@@ -1,0 +1,73 @@
+{
+  "tableId": "T0292",
+  "caption": "Table 41-3. Some potential risk factors for canine calcium phosphate uroliths.",
+  "columns": [
+    "Food",
+    "Urine",
+    "Metabolic",
+    "Drugs"
+  ],
+  "rows": [
+    [
+      "Alkalinizing potential",
+      "Alkaline pH",
+      "Hypercalcemia",
+      "Urine alkalinizing drugs"
+    ],
+    [
+      "High calcium content",
+      "Hypercalciuria",
+      "Distal renal tubular acidosis",
+      "Furosemide"
+    ],
+    [
+      "High sodium content",
+      "High phosphate ion concentration",
+      "",
+      "Glucocorticoids"
+    ],
+    [
+      "High phosphorus content?",
+      "Increased concentration of promoters",
+      "",
+      "Sodium chloride"
+    ],
+    [
+      "Low-moisture content",
+      "Decreased concentration of inhibitors",
+      "",
+      "Vitamin D"
+    ],
+    [
+      "Excessive vitamin D content",
+      "Hypocitraturia",
+      "",
+      ""
+    ],
+    [
+      "High protein content",
+      "Hypomagnesuria",
+      "",
+      ""
+    ],
+    [
+      "Low magnesium content",
+      "Blood clots in renal pelvis or bladder lumen",
+      "",
+      ""
+    ],
+    [
+      "",
+      "Urine concentration",
+      "",
+      ""
+    ],
+    [
+      "",
+      "Urine retention",
+      "",
+      ""
+    ]
+  ],
+  "note": "图中下方另有 Table 41-4（Diagnostic characteristics of disorders that predispose to calcium phosphate uroliths），本文件仅转录该图首个表格。"
+}

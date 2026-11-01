@@ -1,0 +1,30 @@
+{
+  "tableId": "T0344",
+  "caption": "Table 49-1. Breed-associated oral disorders.",
+  "columns": [
+    "Disorders",
+    "Breeds"
+  ],
+  "rows": [
+    [
+      "Cleft palate",
+      "Brachycephalic dogs and cats"
+    ],
+    [
+      "Epulides",
+      "Boxer"
+    ],
+    [
+      "Gingivitis/stomatitis",
+      "Maltese dog\nSiberian husky"
+    ],
+    [
+      "Lymphoplasmacytic stomatitis",
+      "Abyssinian cat\nBurmese cat\nHimalayan cat\nMaltese cat\nPersian cat\nSiamese cat"
+    ],
+    [
+      "Neoplasia",
+      "Cocker spaniel\nGerman shepherd dog\nGerman shorthaired pointer\nGolden retriever\nWeimaraner"
+    ]
+  ]
+}

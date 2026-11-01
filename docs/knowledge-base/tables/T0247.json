@@ -1,0 +1,336 @@
+{
+ "tableId": "T0247",
+ "caption": "Table 36-5. Levels of key nutrients in selected commercial foods for dogs with cardiovascular disease compared to the recommended levels.*",
+ "columns": [
+  "",
+  "Energy density (kcal/cup)***",
+  "Na (%)",
+  "Taurine (%)†",
+  "Carnitine (%)†",
+  "P (%)",
+  "K (%)†",
+  "Mg (%)†"
+ ],
+ "rows": [
+  [
+   "Dry foods for Class Ia patients**",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "–",
+   "0.15-0.25",
+   "≥0.1",
+   "≥0.02",
+   "0.2-0.7",
+   "≥0.4",
+   "≥0.06"
+  ],
+  [
+   "Hill's Prescription Diet g/d Canine",
+   "358",
+   "0.21",
+   "0.1",
+   "na",
+   "0.41",
+   "0.61",
+   "0.068"
+  ],
+  [
+   "Hill's Prescription Diet j/d Canine",
+   "356",
+   "0.17",
+   "0.13",
+   "0.04",
+   "0.54",
+   "0.83",
+   "0.139"
+  ],
+  [
+   "Hill's Prescription Diet k/d Canine",
+   "396",
+   "0.23",
+   "0.12",
+   "na",
+   "0.24",
+   "0.67",
+   "0.107"
+  ],
+  [
+   "Hill's Science Diet Mature Adult Active Longevity Original",
+   "363",
+   "0.18",
+   "0.13",
+   "na",
+   "0.58",
+   "0.83",
+   "0.109"
+  ],
+  [
+   "Hill's Science Diet Mature Adult Large Breed",
+   "357",
+   "0.17",
+   "0.13",
+   "0.03",
+   "0.59",
+   "0.82",
+   "0.108"
+  ],
+  [
+   "Hill's Science Diet Mature Adult Small Bites",
+   "363",
+   "0.18",
+   "0.13",
+   "na",
+   "0.58",
+   "0.83",
+   "0.109"
+  ],
+  [
+   "Medi-Cal Early Cardiac",
+   "300",
+   "0.3",
+   "0.2",
+   "0.1",
+   "0.8",
+   "0.8",
+   "0.1"
+  ],
+  [
+   "Purina Veterinary Diets NF KidNey Function",
+   "459",
+   "0.22",
+   "na",
+   "na",
+   "0.29",
+   "0.86",
+   "0.070"
+  ],
+  [
+   "Royal Canin Veterinary Diet Early Cardiac EC 22",
+   "291",
+   "0.19",
+   "0.22",
+   "na",
+   "0.77",
+   "0.82",
+   "0.077"
+  ],
+  [
+   "Moist foods for Class Ia patients**",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "–",
+   "0.15-0.25",
+   "≥0.1",
+   "≥0.02",
+   "0.2-0.7",
+   "≥0.4",
+   "≥0.06"
+  ],
+  [
+   "Hill's Prescription Diet g/d Canine",
+   "377/13 oz.",
+   "0.22",
+   "0.11",
+   "na",
+   "0.41",
+   "0.78",
+   "0.067"
+  ],
+  [
+   "Hill's Prescription Diet j/d Canine",
+   "498/13 oz.",
+   "0.19",
+   "0.12",
+   "0.03",
+   "0.56",
+   "0.81",
+   "0.112"
+  ],
+  [
+   "Hill's Prescription Diet k/d Canine",
+   "458/13 oz.",
+   "0.19",
+   "0.11",
+   "na",
+   "0.22",
+   "0.37",
+   "0.141"
+  ],
+  [
+   "Hill's Science Diet Mature Adult Active Longevity Gourmet Beef Entrée",
+   "164/5.8 oz.; 368/13 oz.",
+   "0.16",
+   "0.12",
+   "0.02",
+   "0.52",
+   "0.76",
+   "0.104"
+  ],
+  [
+   "Hill's Science Diet Mature Adult Active Longevity Savory Chicken Entrée",
+   "155/5.8 oz.; 347/13 oz.",
+   "0.16",
+   "0.12",
+   "na",
+   "0.57",
+   "0.7",
+   "0.111"
+  ],
+  [
+   "Hills Science Diet Mature Adult Active Longevity Gourmet Turkey Entrée",
+   "369/13 oz.",
+   "0.17",
+   "0.12",
+   "na",
+   "0.62",
+   "0.83",
+   "0.107"
+  ],
+  [
+   "Iams Veterinary Formula Stress/Weight Gain Formula Maximum-Calorie",
+   "333/6 oz.",
+   "0.24",
+   "0.33",
+   "na",
+   "0.83",
+   "1.01",
+   "0.089"
+  ],
+  [
+   "Medi-Cal Renal MP",
+   "532/380 g",
+   "0.2",
+   "na",
+   "na",
+   "0.4",
+   "1.5",
+   "na"
+  ],
+  [
+   "Purina Veterinary Diet NF KidNey Function Formula",
+   "498/12.5 oz.",
+   "0.24",
+   "na",
+   "na",
+   "0.30",
+   "0.72",
+   "0.080"
+  ],
+  [
+   "Dry foods for Class Ib, II and III patients",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "–",
+   "0.08-0.15",
+   "≥0.1",
+   "≥0.02",
+   "0.2-0.7",
+   "≥0.4",
+   "≥0.06"
+  ],
+  [
+   "Hill's Prescription Diet h/d Canine",
+   "407",
+   "0.08",
+   "0.14",
+   "0.03",
+   "0.54",
+   "0.8",
+   "0.122"
+  ],
+  [
+   "Medi-Cal Renal LP",
+   "283",
+   "0.1",
+   "na",
+   "na",
+   "0.3",
+   "0.7",
+   "na"
+  ],
+  [
+   "Medi-Cal Renal MP",
+   "336",
+   "0.1",
+   "na",
+   "na",
+   "0.4",
+   "0.7",
+   "na"
+  ],
+  [
+   "Moist foods for Class Ib, II and III patients",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "–",
+   "0.08-0.15",
+   "≥0.1",
+   "≥0.02",
+   "0.2-0.7",
+   "≥0.4",
+   "≥0.06"
+  ],
+  [
+   "Hill's Prescription Diet h/d Canine",
+   "480/13 oz.",
+   "0.11",
+   "0.21",
+   "0.03",
+   "0.57",
+   "0.81",
+   "0.131"
+  ],
+  [
+   "Medi-Cal Renal LP",
+   "643/385 g",
+   "0.1",
+   "na",
+   "na",
+   "0.2",
+   "1.0",
+   "na"
+  ],
+  [
+   "Purina Veterinary Diet CV Cardiovascular Formula",
+   "638/12.5 oz.",
+   "0.12",
+   "0.24",
+   "na",
+   "0.40",
+   "1.21",
+   "0.060"
+  ]
+ ]
+}

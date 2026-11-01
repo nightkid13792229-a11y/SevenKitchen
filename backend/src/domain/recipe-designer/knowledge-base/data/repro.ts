@@ -201,9 +201,9 @@ export const REPRO_KNOWLEDGE: KnowledgeEntry[] = [
       '存在疾病或产科的异常情况，应由兽医处理。',
     ],
     citations: [
-      { source: 'FEDIAF 犬猫营养指南', chapter: '生长与繁殖 / 表 VII-8b', note: '2025 年 9 月原版（波兰文官方译本）逐格核对' },
+      { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '生长与繁殖 / 表 VII-8b', note: '2025 年 9 月原版（波兰文官方译本）逐格核对' },
       { source: 'Gesellschaft für Ernährungsphysiologie (GfE)', note: '1989，妊娠公式出处' },
-      { source: 'NRC 犬猫营养需要 (2006)', note: '2006b / 2006h，哺乳公式出处' },
+      { source: 'NRC《犬猫营养需要》(2006)', note: '2006b / 2006h，哺乳公式出处' },
     ],
     priority: 'HIGH',
   },

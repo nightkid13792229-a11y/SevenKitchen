@@ -1,0 +1,47 @@
+{
+  "tableId": "T0188",
+  "caption": "Table 27-12. Using ideal body weight to determine initial food dosage for controlled weight loss.",
+  "columns": [
+    "Step",
+    "Description"
+  ],
+  "rows": [
+    [
+      "1",
+      "Determine the patient's current weight and BCS."
+    ],
+    [
+      "2",
+      "Consult Table 27-3: for current BCS, find current weight and read associated ideal weight (BCS 3/5) from same column."
+    ],
+    [
+      "3",
+      "Determine RER for ideal weight (also from Table 27-3, immediately below ideal weight) = initial estimated daily energy intake."
+    ],
+    [
+      "4",
+      "Divide RER by the as fed energy density of selected food = initial daily food dose."
+    ],
+    [
+      "Example",
+      "An obese dog weighs 30 kg and has a BCS of 5/5. Consulting Table 27-3, we determine that the dog's ideal body weight (BCS 3/5) is 22.5 kg. In Table 27-3, the RER for a 22.5-kg dog is located immediately below the weight. In this case it is 723 kcal/day."
+    ],
+    [
+      "Example (cont.)",
+      "The food selected for weight loss provides 220 kcal/cup; 723 kcal/day ÷ 220 kcal/cup = 3.3 cups/day. This amount is a starting point and may need to be modified to achieve the desired weight loss."
+    ],
+    [
+      "Example (cont.)",
+      "Recheck body weight after two to three weeks. The weight-loss target should be between 0.5 and 2% per week of initial obese body weight."
+    ],
+    [
+      "Key",
+      "BCS = body condition score (Figures 1-2 and 1-3), RER = resting energy requirement."
+    ],
+    [
+      "Footnote",
+      "*To convert to kJ, multiply kcal by 4.184."
+    ]
+  ],
+  "note": "该页（p.527）同时含 Table 27-11 与 Table 27-12；T0187 与 T0188 指向同一整页图，本文件转录 Table 27-12，Table 27-11 见 T0187。"
+}

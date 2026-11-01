@@ -1,0 +1,48 @@
+{
+  "tableId": "T0039",
+  "caption": "Table III-2. Conversion factors",
+  "columns": [
+    "",
+    "",
+    "",
+    ""
+  ],
+  "rows": [
+    [
+      "Units/100 g DM",
+      "x 2.5",
+      "=",
+      "units/1000 kcal"
+    ],
+    [
+      "Units/100 g DM",
+      "x 0.598",
+      "=",
+      "units/MJ"
+    ],
+    [
+      "Units/1000 kcal",
+      "x 0.4",
+      "=",
+      "units/100 g DM"
+    ],
+    [
+      "Units/1000 kcal",
+      "x 0.239",
+      "=",
+      "units/MJ"
+    ],
+    [
+      "Units/MJ",
+      "x 1.6736",
+      "=",
+      "units/100 g DM"
+    ],
+    [
+      "Units/MJ",
+      "x 4.184",
+      "=",
+      "units/1000 kcal"
+    ]
+  ]
+}

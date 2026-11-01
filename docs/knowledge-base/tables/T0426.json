@@ -1,0 +1,76 @@
+{
+  "tableId": "T0426",
+  "caption": "Table 67-7. Key nutritional factors in selected commercial veterinary therapeutic foods for obese or hypertriglyceridemic cats with pancreatitis compared to recommended levels.*",
+  "columns": [
+    "",
+    "Fat (%)",
+    "Protein (%)"
+  ],
+  "rows": [
+    [
+      "Moist foods",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≤15",
+      "30–40"
+    ],
+    [
+      "Hill's Prescription Diet w/d Feline with Chicken",
+      "16.6",
+      "39.6"
+    ],
+    [
+      "Medi-Cal Fibre Formula",
+      "17.1",
+      "40.0"
+    ],
+    [
+      "Purina Veterinary Diets OM Overweight Management Formula",
+      "14.6",
+      "44.6"
+    ],
+    [
+      "Royal Canin Veterinary Diets Calorie Control CC High Fiber",
+      "21.3",
+      "33.5"
+    ],
+    [
+      "Dry foods",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≤15",
+      "30–40"
+    ],
+    [
+      "Hill's Prescription Diet w/d Feline",
+      "9.8",
+      "39.0"
+    ],
+    [
+      "Hill's Prescription Diet w/d Feline with Chicken",
+      "9.9",
+      "39.9"
+    ],
+    [
+      "Medi-Cal Fibre Formula",
+      "12.2",
+      "34.2"
+    ],
+    [
+      "Purina Veterinary Diets OM Overweight Management Formula",
+      "8.5",
+      "56.2"
+    ],
+    [
+      "Royal Canin Veterinary Diets Calorie Control CC 29 High Fiber",
+      "10.2",
+      "33.5"
+    ]
+  ]
+}

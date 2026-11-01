@@ -1,0 +1,92 @@
+{
+  "tableId": "T0413",
+  "caption": "Table 64-3. Key nutritional factors in selected veterinary therapeutic foods for dogs with constipation and intermittent obstipation compared to recommended levels.*",
+  "columns": [
+    "",
+    "Crude fiber (%)",
+    "Primary sources of fiber**"
+  ],
+  "rows": [
+    [
+      "Moist foods",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≥7",
+      "–"
+    ],
+    [
+      "Hill's Prescription Diet w/d Canine",
+      "12.4",
+      "Cellulose"
+    ],
+    [
+      "Iams Veterinary Formula Intestinal Low-Residue",
+      "3.9",
+      "Beet pulp"
+    ],
+    [
+      "Medi-Cal Fibre Formula",
+      "15.0",
+      "Tomato pomace, guar gum, flax meal, carrageenan"
+    ],
+    [
+      "Purina Veterinary Diets OM Overweight Management Formula",
+      "19.2",
+      "Pea fiber, beet pulp, carrageenan"
+    ],
+    [
+      "Royal Canin Veterinary Diet Calorie Control CC High Fiber",
+      "8.8",
+      "Tomato pomace, guar gum, flax meal, carrageenan"
+    ],
+    [
+      "Dry foods",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≥7",
+      "–"
+    ],
+    [
+      "Hill's Prescription Diet w/d Canine",
+      "16.4",
+      "Cellulose, soybean mill run, beet pulp"
+    ],
+    [
+      "Iams Veterinary Formula Intestinal Low-Residue",
+      "2.1",
+      "Beet pulp"
+    ],
+    [
+      "Medi-Cal Fibre Formula",
+      "14.3",
+      "Tomato pomace, rice hulls, oat hulls, flax meal, apple pomace"
+    ],
+    [
+      "Purina Veterinary Diets DCO Dual Fiber Control",
+      "7.6",
+      "Beet pulp, pea fiber"
+    ],
+    [
+      "Purina Veterinary Diets OM Overweight Management",
+      "10.3",
+      "Soybean hulls, pea fiber, cellulose"
+    ],
+    [
+      "Royal Canin Veterinary Diet Calorie Control CC 26 High Fiber",
+      "17.6",
+      "Cellulose, pea fiber, rice hulls, beet pulp, psyllium husk"
+    ],
+    [
+      "Royal Canin Veterinary Diet Diabetic HF 18",
+      "12.1",
+      "Cellulose, rice hulls, guar gum"
+    ]
+  ],
+  "note": "同一张图片（与 T0414/T0413 字节完全相同）内共有三张表：Table 64-3、Table 64-4、Table 64-5；本文件转录的是第一张（Table 64-3）。"
+}

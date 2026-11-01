@@ -1,0 +1,30 @@
+{
+  "tableId": "T0404",
+  "caption": "Table 61-1. Potential causes of acute large bowel diarrhea in dogs and cats.",
+  "columns": ["Causes"],
+  "rows": [
+    ["Dietary"],
+    ["Dietary indiscretion"],
+    ["Foreign bodies"],
+    ["Garbage toxicity"],
+    ["Drugs"],
+    ["Cyclophosphamide"],
+    ["Doxorubicin"],
+    ["Infectious agents"],
+    ["Bacteria"],
+    ["Campylobacter spp."],
+    ["Clostridium spp."],
+    ["Salmonella spp."],
+    ["Parasites"],
+    ["Giardia lamblia"],
+    ["Trichuris vulpis"],
+    ["Tritrichomonas foetus"],
+    ["Viruses"],
+    ["Panleukopenia"],
+    ["Parvovirus"],
+    ["Miscellaneous"],
+    ["Hemorrhagic gastroenteritis"],
+    ["Colon volvulus"]
+  ],
+  "note": "原表为单列项目清单，无表头；保留原分层顺序：Dietary、Drugs、Infectious agents（含 Bacteria、Parasites、Viruses 子类）、Miscellaneous。"
+}

@@ -1,0 +1,32 @@
+{
+  "tableId": "T0361",
+  "caption": "Table 5-20. Composition of general lipoprotein classes in mammals.",
+  "columns": [
+    "Lipoprotein",
+    "Acronym",
+    "Protein:lipid (%)"
+  ],
+  "rows": [
+    [
+      "Chylomicron",
+      "CM",
+      "1:99"
+    ],
+    [
+      "Very low-density lipoprotein",
+      "VLDL",
+      "10:90"
+    ],
+    [
+      "Low-density lipoprotein",
+      "LDL",
+      "25:75"
+    ],
+    [
+      "High-density lipoprotein",
+      "HDL",
+      "50:50"
+    ]
+  ],
+  "note": "本图其余部分为 Figure 5-19 示意图及正文段落，未计入"
+}

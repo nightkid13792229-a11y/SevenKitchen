@@ -1,0 +1,47 @@
+{
+  "tableId": "T0295",
+  "caption": "Table 41-6. Key nutritional factors for foods for the prevention of recurrence of calcium phosphate urolithiasis in dogs.*",
+  "columns": [
+    "Factors",
+    "Recommended levels"
+  ],
+  "rows": [
+    [
+      "Water",
+      "Water intake should be encouraged to achieve a urine specific gravity <1.020 Moist food will increase water consumption and formation of less concentrated urine"
+    ],
+    [
+      "Protein",
+      "10 to 25%"
+    ],
+    [
+      "Calcium",
+      "0.4 to 0.7%"
+    ],
+    [
+      "Phosphorus",
+      "0.3 to 0.6%"
+    ],
+    [
+      "Ca:P ratio",
+      "1.1:1 to 2:1"
+    ],
+    [
+      "Sodium",
+      "<0.3%"
+    ],
+    [
+      "Magnesium",
+      "0.06 to 0.15%"
+    ],
+    [
+      "Vitamin D",
+      "500 to 1,500 IU/kg"
+    ],
+    [
+      "Urinary pH",
+      "6.2 to 6.6**"
+    ]
+  ],
+  "note": "Key: Ca:P ratio = calcium-phosphorus ratio. *Nutrients expressed on a dry matter basis. **Alkaline urine is recommended for patients with distal renal tubular acidosis."
+}

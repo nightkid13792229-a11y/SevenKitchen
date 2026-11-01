@@ -1,0 +1,47 @@
+{
+ "tableId": "T0164",
+ "caption": "Table 25-5. Key nutritional factors for commercial liquid or blended foods for canine and feline patients requiring enteral nutrition (EN) support.",
+ "columns": [
+  "Factors",
+  "Recommended food levels"
+ ],
+ "rows": [
+  [
+   "Water",
+   "Correct dehydration with parenteral fluid therapy before starting assisted feeding. Supply at 1 ml/kcal DER unless patient requires fluid restriction or diuresis. Typical daily maintenance fluid requirement is 60 ml/kg body weight."
+  ],
+  [
+   "Electrolytes",
+   "Major electrolyte disorders, acid-base abnormalities and blood glucose levels should be corrected before instituting EN support."
+  ],
+  [
+   "Osmolarity",
+   "250 (optimal) to 400 mOsm/liter."
+  ],
+  [
+   "Energy density",
+   "Supply 1 kcal/ml (as standard minimum). If the patient is not eating at least full RER per os, provide nutritional support by assisted-feeding techniques to meet this requirement. By the fifth day of food deprivation or longer, patients should receive the majority (60 to 90%) of their calculated RER as lipid. If using a liquid or blended food, select a product that provides 1.0 to 2.0 kcal/ml (1.0 to 2.0 kcal/g), as fed."
+  ],
+  [
+   "Digestible carbohydrate",
+   "Dogs and cats: 2 to 4 g/100 kcal is a safe starting point for refeeding. Increase to 6 to 10 g/100 kcal 3 to 4 days into the refeeding process."
+  ],
+  [
+   "Protein",
+   "Dogs: Use a food that provides 5.0 to 12.0 g protein/100 kcal. Cats: Use a food that provides 7.5 to 12.0 g protein/100 kcal."
+  ],
+  [
+   "Arginine",
+   "≥146 mg arginine/100 kcal for dogs. ≥250 mg arginine/100 kcal for cats."
+  ],
+  [
+   "Glutamine",
+   "≥500 mg/100 kcal."
+  ],
+  [
+   "Fat",
+   "Provide a calorically dense food (5 to 7.5 g fat/100 kcal), except in cases in which high fat content is not tolerated. Provide a low-fat content food (2.0 to 3.5 g fat/100 kcal) if fat restriction required*"
+  ]
+ ],
+ "note": "Key: DER = daily energy requirement, RER = resting energy requirement, to convert kcal to kJ, multiply kcal by 4.184.\n*For example, patients with pancreatitis."
+}

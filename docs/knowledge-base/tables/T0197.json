@@ -1,0 +1,31 @@
+{
+ "tableId": "T0197",
+ "caption": "Table 2. Feeding plan for weight reduction.",
+ "columns": [
+  "Foods",
+  "Feeding method",
+  "kcal (kJ)"
+ ],
+ "rows": [
+  [
+   "Prescription Diet r/d Canine, moistᵃ",
+   "Three-fourths can, once daily",
+   "150 (628)"
+  ],
+  [
+   "Science Diet Canine Maintenance Light, dryᵃ",
+   "One cup, once daily",
+   "221 (925)"
+  ],
+  [
+   "Milk-Bone treats (small)",
+   "Two treats, daily",
+   "40 (167)"
+  ],
+  [
+   "Total = 411 kcal/day (1.72 MJ)",
+   "",
+   ""
+  ]
+ ]
+}

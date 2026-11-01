@@ -209,7 +209,7 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
-      { source: '皮肤被毛功能目标笔记（本地整理）', note: '锌按 FEDIAF/NRC 满足为主，避免超过最低值约 2 倍，优先食物满足' },
+      { source: '皮肤被毛功能目标笔记（内部整理，无文献依据）', note: '锌按 FEDIAF/NRC 满足为主，避免超过最低值约 2 倍，优先食物满足' },
     ],
     priority: 'HIGH',
   },
@@ -234,7 +234,7 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
-      { source: '皮肤被毛功能目标笔记（本地整理）', note: '铜优先满足 FEDIAF 下限并远离上限拥挤' },
+      { source: '皮肤被毛功能目标笔记（内部整理，无文献依据）', note: '铜优先满足 FEDIAF 下限并远离上限拥挤' },
     ],
     priority: 'MEDIUM',
   },
@@ -262,7 +262,7 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
-      { source: 'NRC 犬猫营养需要（2006）', note: '维A最低推荐量数值' },
+      { source: 'NRC《犬猫营养需要》(2006)', note: '维A最低推荐量数值' },
     ],
     priority: 'MEDIUM',
   },
@@ -289,7 +289,7 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
-      { source: 'NRC 犬猫营养需要（2006）', note: '维E成年维持最低推荐量数值' },
+      { source: 'NRC《犬猫营养需要》(2006)', note: '维E成年维持最低推荐量数值' },
     ],
     priority: 'MEDIUM',
   },
@@ -316,7 +316,7 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
-      { source: '皮肤被毛功能目标笔记（本地整理）', note: '蛋白质/脂肪供能关系为项目内部规则' },
+      { source: '皮肤被毛功能目标笔记（内部整理，无文献依据）', note: '蛋白质/脂肪供能关系为项目内部规则' },
     ],
     priority: 'HIGH',
   },
@@ -370,7 +370,7 @@ export const SKIN_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第32章 皮肤与毛发疾病' },
-      { source: '皮肤被毛功能目标笔记（本地整理）', note: 'EPA+DHA 超过 1.0 g/1000 kcal 为项目内部复盘线，非官方标准' },
+      { source: '皮肤被毛功能目标笔记（内部整理，无文献依据）', note: 'EPA+DHA 超过 1.0 g/1000 kcal 为项目内部复盘线，非官方标准' },
     ],
     priority: 'MEDIUM',
   },

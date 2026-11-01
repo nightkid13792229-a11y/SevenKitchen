@@ -1,0 +1,31 @@
+{
+  "tableId": "T0214",
+  "caption": "Table 3-2. Examples of skills needed for health.*",
+  "columns": [
+    ""
+  ],
+  "rows": [
+    [
+      "Promote and protect health and prevent disease"
+    ],
+    [
+      "Understand, interpret and analyze health information"
+    ],
+    [
+      "Apply health information over a variety of life events and situations"
+    ],
+    [
+      "Navigate the health care system"
+    ],
+    [
+      "Actively participate in encounters with health care professionals"
+    ],
+    [
+      "Understand and give consent"
+    ],
+    [
+      "Understand and advocate for rights"
+    ]
+  ],
+  "note": "单列清单式表格；表内 * 来源脚注（Adapted from IOM. Health Literacy: A Prescription to End Confusion. Washington, DC: National Academies Press, 2004; 1-322.）未计入行；页面双栏正文已忽略。"
+}

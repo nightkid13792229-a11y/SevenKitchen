@@ -1,0 +1,67 @@
+{
+ "tableId": "T0323",
+ "caption": "Table 47-7. Clinical and diagnostic findings associated with the most common feline uroliths.*",
+ "columns": [
+  "Parameters",
+  "Struvite",
+  "Calcium oxalate",
+  "Purine (urate)"
+ ],
+ "rows": [
+  [
+   "Breed predisposition",
+   "Chartreux\nDomestic longhair\nDomestic shorthair\nForeign shorthair\nHimalayan\nManx\nOriental shorthair\nRagdoll\nSiamese",
+   "Burmese\nBritish shorthair\nExotic shorthair\nForeign shorthair\nHavana brown\nHimalayan\nPersian\nRagdoll\nScottish fold\nDomestic shorthair",
+   "Siamese"
+  ],
+  [
+   "Gender predisposition",
+   "Female >male\nNeutered >intact",
+   "Male >female",
+   "Neutered >intact"
+  ],
+  [
+   "Common age (years)",
+   "Younger (<7 years)",
+   "Middle-aged to older\n(>7 years)",
+   "Young (if associated with\nportosystemic shunt)"
+  ],
+  [
+   "Serum biochemistries",
+   "Normal",
+   "Hypercalcemia\nAcidemia (decreased TCO2)",
+   "Normal (idiopathic)\nEvidence of hepatic disease\n(low urea nitrogen,\nincreased ammonia)"
+  ],
+  [
+   "Urinary pH**",
+   "Slightly acidic (>6.5) or alkaline",
+   "Acidic to neutral",
+   "Acidic to neutral"
+  ],
+  [
+   "Bacteria",
+   "Usually sterile\nOccasionally associated with\nurease-producing bacteria",
+   "Usually sterile\nMay be present in cats with\ninfection secondary to\nuroliths",
+   "Usually sterile\nMay be present in cats with\ninfection secondary to\nuroliths"
+  ],
+  [
+   "Typical crystals",
+   "Colorless, coffin-lid prisms,\nsometimes shaped like squares",
+   "Monohydrate–oval,\ndumbbell shaped\nDihydrate-squares with\ndiagonal lines",
+   "Spherical, tan in color\nMay be green/brown\nThorn apple appearance"
+  ],
+  [
+   "Radiopacity",
+   "1+ to 4+",
+   "3+ to 4+",
+   "0 to 2+"
+  ],
+  [
+   "Radiographic appearance",
+   "Rough or smooth, round or\nfaceted, sometimes disk-shaped",
+   "Rough or smooth, usually\nsmall, occasionally jackstone\nshaped",
+   "Smooth, occasionally irregular"
+  ]
+ ],
+ "note": "图中另有 Table 46-8（无表头的项目式列表），未转录。"
+}

@@ -1,0 +1,26 @@
+{
+ "tableId": "T0366",
+ "caption": "Table 50-4. Key nutritional factors for foods for dogs and cats with esophagitis/gastroesophageal reflux.*",
+ "columns": [
+  "Factors",
+  "Recommended levels"
+ ],
+ "rows": [
+  [
+   "Energy density",
+   "≥4 kcal/g (≥16.7 kJ/g)"
+  ],
+  [
+   "Fat",
+   "≤15% for dog foods\n≤20% for cat foods"
+  ],
+  [
+   "Protein",
+   "≥25% for dog foods\n≥35% for cat foods"
+  ],
+  [
+   "*Nutrients expressed on a dry matter basis; food form is also a key nutritional factor, but varies with the disease and individual patients (see text).",
+   ""
+  ]
+ ]
+}

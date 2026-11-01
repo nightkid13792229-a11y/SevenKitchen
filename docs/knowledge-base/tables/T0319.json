@@ -1,0 +1,73 @@
+{
+ "tableId": "T0319",
+ "caption": "Table 46-3. Mineral composition of feline uroliths submitted for quantitative analysis to three centers.",
+ "columns": [
+  "Predominant mineral type",
+  "Uroliths submitted during collection period (%)",
+  "Uroliths submitted during collection period (%)",
+  "Uroliths submitted during collection period (%)"
+ ],
+ "rows": [
+  [
+   "Struvite",
+   "43.5",
+   "43",
+   "44"
+  ],
+  [
+   "Calcium oxalate",
+   "45.4",
+   "53",
+   "50"
+  ],
+  [
+   "Purine",
+   "5.0*",
+   "10**",
+   "3"
+  ],
+  [
+   "Compound",
+   "3.4",
+   "–",
+   "–"
+  ],
+  [
+   "Mixed",
+   "1.0",
+   "13***",
+   "–"
+  ],
+  [
+   "Matrix",
+   "0.9",
+   "–",
+   "–"
+  ],
+  [
+   "Calcium phosphate, apatite and brushite",
+   "0.3",
+   "6",
+   "0.1"
+  ],
+  [
+   "Cystine",
+   "0.1",
+   "0.1",
+   "–"
+  ],
+  [
+   "Silica",
+   "0.04",
+   "0.4",
+   "–"
+  ],
+  [
+   "Dry solidified blood",
+   "Included with matrix",
+   "1",
+   "–"
+  ]
+ ],
+ "note": "图中同一页还包含 Table 46-5 与 Table 46-4，此处只转录 Table 46-3；原图表头为一个跨三列的合并标题。"
+}

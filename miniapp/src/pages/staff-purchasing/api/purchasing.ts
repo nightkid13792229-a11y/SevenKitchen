@@ -963,3 +963,121 @@ export function uploadPaymentProofFiles(reimbursementId: string, files: string[]
 
   return Promise.all(uploadPromises);
 }
+
+// ==========================================
+// 采购商品：员工新增（2026-11-01）
+// ==========================================
+
+export interface ProcurementSkuFormOptions {
+  baseUnit: string;
+  purchaseUnits: string[];
+}
+
+export interface ProcurementSkuDraft {
+  name: string | null;
+  brand: string | null;
+  productModel: string | null;
+  purchaseChannel: string | null;
+  purchaseUnit: string | null;
+  packCount: number | null;
+  netContentPerPack: number | null;
+  netContentUnitText: string | null;
+  unitPrice: number | null;
+  missing: string[];
+  confidence: Record<string, 'high' | 'low'>;
+}
+
+export interface CreateStaffProcurementSkuInput {
+  name: string;
+  purchaseChannel: string;
+  purchaseUnit: string;
+  packCount: number;
+  netContentPerPack: number;
+  brand?: string;
+  productModel?: string;
+  currentPurchasePrice?: number;
+  sourceScreenshotUrl?: string;
+}
+
+/** 新增采购商品页的可选项（基准单位 + 允许的采购单位，来自服务端白名单） */
+export function getProcurementSkuFormOptions(ingredientId: string) {
+  return request({
+    url: '/staff/purchasing/procurement-sku-form-options',
+    method: 'GET',
+    data: { ingredientId },
+  }) as Promise<{ code: number; message: string; data: ProcurementSkuFormOptions }>;
+}
+
+/**
+ * 上传商品详情页截图。
+ *
+ * 走 `staff/purchasing/upload-sku-screenshot`：与报销凭证同一个 COS 通道，
+ * 只是落在 `procurement-sku-screenshots/` 目录下，方便按用途清理。
+ */
+export function uploadProcurementSkuScreenshot(
+  filePath: string,
+): Promise<{ url: string; key: string }> {
+  return new Promise((resolve, reject) => {
+    const token = uni.getStorageSync('token');
+    uni.uploadFile({
+      url: `${getBaseUrl()}/staff/purchasing/upload-sku-screenshot`,
+      filePath,
+      name: 'file',
+      header: { Authorization: token ? `Bearer ${token}` : '' },
+      success: (res) => {
+        try {
+          const parsed =
+            typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+          if (parsed?.code !== 0) {
+            reject(new Error(parsed?.message || '上传失败'));
+            return;
+          }
+          const url = String(parsed?.data?.url || '').trim();
+          if (!url) {
+            reject(new Error('上传失败，请重试'));
+            return;
+          }
+          resolve({ url, key: String(parsed?.data?.key || '') });
+        } catch {
+          reject(new Error('上传失败，请重试'));
+        }
+      },
+      fail: () => reject(new Error('上传失败，请检查网络')),
+    });
+  });
+}
+
+/** 从截图识别（只出草稿；失败时后端会返回 degraded，不会报错） */
+export function draftProcurementSku(input: {
+  imageUrl: string;
+  ingredientId: string;
+}) {
+  return request({
+    url: '/staff/purchasing/procurement-sku-draft',
+    method: 'POST',
+    data: input,
+  }) as Promise<{
+    code: number;
+    message: string;
+    data: { draft: ProcurementSkuDraft | null; degraded: boolean };
+  }>;
+}
+
+/** 员工新增采购商品（当场生效） */
+export function createStaffProcurementSku(
+  ingredientId: string,
+  input: CreateStaffProcurementSkuInput,
+) {
+  return request({
+    url: `/staff/purchasing/ingredients/${ingredientId}/procurement-skus`,
+    method: 'POST',
+    data: input,
+  }) as Promise<{
+    code: number;
+    message: string;
+    data: {
+      status: 'created' | 'duplicate';
+      sku: ProcurementSkuOption & { id: string };
+    };
+  }>;
+}

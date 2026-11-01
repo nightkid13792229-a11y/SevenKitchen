@@ -374,6 +374,12 @@
           }
         },
         {
+          "path": "procurement-sku-create",
+          "style": {
+            "navigationBarTitleText": "新增采购商品"
+          }
+        },
+        {
           "path": "record-form",
           "style": {
             "navigationBarTitleText": "添加采购记录"

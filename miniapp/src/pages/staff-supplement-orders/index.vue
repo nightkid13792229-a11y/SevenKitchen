@@ -24,14 +24,14 @@
         <text class="stat-label">待确认收款</text>
       </view>
       <view class="stat-divider"></view>
-      <view class="stat-item" @tap="selectStatus('PAID')">
-        <text class="stat-value">{{ counts.PAID || 0 }}</text>
-        <text class="stat-label">待分装</text>
+      <view class="stat-item" @tap="selectStatus('TO_SHIP')">
+        <text class="stat-value">{{ toShipCount }}</text>
+        <text class="stat-label">待发货</text>
       </view>
       <view class="stat-divider"></view>
-      <view class="stat-item" @tap="selectStatus('PACKED')">
-        <text class="stat-value">{{ counts.PACKED || 0 }}</text>
-        <text class="stat-label">待发货</text>
+      <view class="stat-item" @tap="selectStatus('SHIPPED')">
+        <text class="stat-value">{{ counts.SHIPPED || 0 }}</text>
+        <text class="stat-label">已发货</text>
       </view>
     </view>
 
@@ -140,31 +140,38 @@ const keyword = ref('')
 const searchVisible = ref(false)
 
 /**
- * 工作台看的是**全部 8 个状态**，与顾客侧那 5 个不一样 ——
- * 分装中/已分装是生产环节，顾客不需要知道，但这里正需要。
+ * 2026-11-02：员工端取消分装工单后，PAID / PACKING / PACKED 都是
+ * 「待发货」——列表用 TO_SHIP 一个分组去查，不再让员工区分分装阶段。
  */
 const statusOptions: Array<{ label: string; value: string }> = [
   { label: '全部', value: '' },
   { label: '待确认收款', value: 'PENDING_PAYMENT' },
-  { label: '待分装', value: 'PAID' },
-  { label: '分装中', value: 'PACKING' },
-  { label: '待发货', value: 'PACKED' },
+  { label: '待发货', value: 'TO_SHIP' },
   { label: '已发货', value: 'SHIPPED' },
   { label: '已完成', value: 'COMPLETED' },
   { label: '售后中', value: 'AFTERSALE' },
   { label: '已取消', value: 'CANCELLED' },
 ]
 
-const STATUS_TEXT: Record<SupplementOrderStatus, string> = {
+const STATUS_TEXT: Record<string, string> = {
   PENDING_PAYMENT: '待确认收款',
-  PAID: '待分装',
-  PACKING: '分装中',
+  PAID: '待发货',
+  PACKING: '待发货',
   PACKED: '待发货',
+  TO_SHIP: '待发货',
   SHIPPED: '已发货',
   COMPLETED: '已完成',
   CANCELLED: '已取消',
   AFTERSALE: '售后中',
 }
+
+/** 角标/三段统计里的「待发货」= 新单（PAID）+ 旧的分装中/已分装 */
+const toShipCount = computed(
+  () =>
+    Number(counts.value.PAID || 0) +
+    Number(counts.value.PACKING || 0) +
+    Number(counts.value.PACKED || 0),
+)
 
 function statusText(value: string) {
   return STATUS_TEXT[value as SupplementOrderStatus] || value
@@ -184,9 +191,8 @@ function nextActionText(value: string) {
       return '下一步：确认收款'
     case 'PAID':
     case 'PACKING':
-      return '下一步：分装并打标签'
     case 'PACKED':
-      return '下一步：填单号发货'
+      return '下一步：打印标签并发货'
     case 'SHIPPED':
       return '已发出，等待签收'
     case 'AFTERSALE':

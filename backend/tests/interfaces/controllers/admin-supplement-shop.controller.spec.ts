@@ -102,6 +102,8 @@ describe('AdminSupplementShopController · 分装标签图片', () => {
 
   const mockPrismaService = {
     supplementOrder: { findUnique: jest.fn() },
+    supplementOrderItem: { update: jest.fn() },
+    $transaction: jest.fn(),
   } as any;
   const mockConfigService = { getConfig: jest.fn() };
 
@@ -134,6 +136,16 @@ describe('AdminSupplementShopController · 分装标签图片', () => {
     mockPrismaService.supplementOrder.findUnique.mockImplementation(
       async ({ where }: any) => (where.id === store.id ? { ...store } : null),
     );
+    mockPrismaService.supplementOrderItem.update.mockImplementation(
+      async ({ where, data }: any) => {
+        const item = store.items.find((row: any) => row.id === where.id);
+        if (item) Object.assign(item, data);
+        return item;
+      },
+    );
+    mockPrismaService.$transaction.mockImplementation(async (callback: any) =>
+      callback(mockPrismaService),
+    );
   });
 
   /** 把两个补剂都标成已分装 */
@@ -144,9 +156,11 @@ describe('AdminSupplementShopController · 分装标签图片', () => {
     });
   };
 
-  it('未分装时沿用标签数据接口的报错，不给图片', async () => {
+  it('未付款时不给图片', async () => {
+    store.status = 'PENDING_PAYMENT';
+
     await expect(controller.getOrderLabelImages('order-1')).rejects.toThrow(
-      '请先完成分装，再打印标签',
+      '请先确认收款，再打印标签',
     );
     await expect(
       controller.getOrderLabelImages('order-1'),

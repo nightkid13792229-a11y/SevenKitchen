@@ -10,7 +10,7 @@
         </view>
         <text class="hero-date">{{ formatTime(order.createdAt) }}</text>
         <text v-if="order.status === 'PAID'" class="hero-hint">
-          {{ order.packingDate ? `预计 ${order.packingDate} 分装发货` : '已付款，等待管理员排期' }}
+          {{ order.packingDate ? `预计 ${order.packingDate} 发货` : '已付款，等待管理员排期' }}
         </text>
         <text v-else-if="order.packingDate" class="hero-hint">预计发货日 {{ order.packingDate }}</text>
       </view>
@@ -35,7 +35,7 @@
         <view class="info"><text class="label">收件人</text><text>{{ order.receiverName }} {{ order.receiverPhone }}</text></view>
         <view class="info"><text class="label">地址</text><text class="address">{{ order.receiverRegion }} {{ order.receiverDetail }}</text></view>
         <button v-if="canChangeAddress" class="ghost-btn" @tap="changeAddress">修改收货地址</button>
-        <view v-if="order.status === 'PACKED'" class="notice">已分装；改地址后需要重新打印面单。</view>
+        <view v-if="order.status === 'PACKED'" class="notice">已打包；改地址后需要重新打印面单。</view>
         <view v-if="order.trackingNumber" class="info">
           <text class="label">物流</text><text>{{ order.carrierCode || '' }} {{ order.trackingNumber }}</text>
         </view>
@@ -118,9 +118,9 @@ function statusLabel(value: string) {
   return (
     {
       PENDING_PAYMENT: '待付款',
-      PAID: '已付款 · 待分装',
-      PACKING: '分装中',
-      PACKED: '已分装 · 待发货',
+      PAID: '已付款 · 待发货',
+      PACKING: '待发货',
+      PACKED: '待发货',
       SHIPPED: '已发货',
       COMPLETED: '已完成',
       CANCELLED: '已取消',
@@ -205,7 +205,7 @@ function cancelOrder() {
   const isPaid = order.value.status === 'PAID'
   uni.showModal({
     title: isPaid ? '申请全额退款' : '取消订单',
-    content: isPaid ? '已付款未分装，确认后发起全额退款；退款成功才取消订单。' : '确认取消这笔未付款订单？',
+    content: isPaid ? '已付款未发货，确认后发起全额退款；退款成功才取消订单。' : '确认取消这笔未付款订单？',
     success: async (res) => {
       if (!res.confirm || !order.value) return
       const response = await cancelSupplementOrder(order.value.id, '顾客取消')

@@ -680,7 +680,7 @@ const STATUS_TAB_LABELS: Record<TypeFilter, Record<StatusTabKey, string>> = {
   supplement: {
     ALL: '全部',
     PENDING_PAYMENT: '待付款',
-    IN_PROGRESS: '分装中',
+    IN_PROGRESS: '待发货',
     WAIT_RECEIVE: '待收货',
     COMPLETED: '已完成',
     AFTERSALE: '售后中',

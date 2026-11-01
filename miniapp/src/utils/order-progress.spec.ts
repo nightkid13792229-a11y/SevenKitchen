@@ -77,7 +77,7 @@ describe('resolveOrderProgress', () => {
     expect(
       resolveOrderProgress({ kind: 'supplement', status: 'PACKED' }).steps[1]
         .label,
-    ).toBe('分装中');
+    ).toBe('待发货');
     expect(
       resolveOrderProgress({ kind: 'supplement', status: 'SHIPPED' }),
     ).toMatchObject({ currentIndex: 2, doneCount: 2 });

@@ -24,15 +24,12 @@ describe('分装备料页 · 从汇总变成可执行的订单入口', () => {
     expect(source).toContain('{{ order.bagCount }}')
   })
 
-  it('待分装能直接进分装，待发货能打标签和发货', () => {
-    expect(source).toContain('开始分装')
-    expect(source).toContain('继续分装')
+  it('待发货订单能直接打标签和发货，不再有「开始分装」', () => {
     expect(source).toContain('打印标签')
     expect(source).toContain('去发货')
-
-    expect(source).toContain("order.status === 'PAID'")
-    expect(source).toContain("order.status === 'PACKING'")
-    expect(source).toContain("order.status === 'PACKED'")
+    expect(source).not.toContain('开始分装')
+    expect(source).not.toContain('继续分装')
+    expect(source).not.toContain('openPack')
   })
 
   it('跳转路径与现有详情页、标签页一致', () => {
@@ -47,7 +44,7 @@ describe('分装备料页 · 从汇总变成可执行的订单入口', () => {
   it('没有当天订单时，给出「全部补剂订单」的兜底入口', () => {
     // 刚下单但还没确认收款 / 还没排期时，packingDate 是空的，
     // 这一屏按分装日查不到它；必须能一键去全部订单里找。
-    expect(source).toContain('这天没有排到分装的订单')
+    expect(source).toContain('这天没有待发货的订单')
     expect(source).toContain('去看全部补剂订单')
     expect(source).toContain('全部补剂订单 ›')
   })

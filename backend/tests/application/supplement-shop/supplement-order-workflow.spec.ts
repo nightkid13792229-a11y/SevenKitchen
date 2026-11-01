@@ -338,7 +338,24 @@ describe('补剂订单 · 分装发货售后', () => {
       expect(result.shippedAt).not.toBeNull();
     });
 
-    it('没分装就不能发货', async () => {
+    it('已付款未分装也可以直接发货，并自动补分装日期/效期', async () => {
+      // 2026-11-02：员工端取消分装工单，不再要求先分装。
+      const result = await service.shipOrder('order-1', {
+        trackingNumber: 'X',
+        carrierCode: 'SF',
+      });
+
+      expect(result.status).toBe('SHIPPED');
+      expect(result.shippedAt).not.toBeNull();
+      for (const item of result.items) {
+        expect(item.packedAt).not.toBeNull();
+        expect(item.packedExpiryDate).not.toBeNull();
+      }
+    });
+
+    it('未付款的订单不能发货', async () => {
+      store.status = 'PENDING_PAYMENT';
+
       await expect(
         service.shipOrder('order-1', { trackingNumber: 'X' }),
       ).rejects.toThrow(/不能发货/);
@@ -404,9 +421,26 @@ describe('补剂订单 · 分装发货售后', () => {
   });
 
   describe('分装标签', () => {
-    it('未分装时不允许打印标签', async () => {
+    it('已付款未分装也可以直接打标签，自动补分装日期/效期，批号留空', async () => {
+      // 2026-11-02：不再填原瓶到期日和批号。
+      const result = await service.getOrderLabels('order-1');
+
+      expect(result.labels).toHaveLength(2);
+      for (const label of result.labels) {
+        expect(label.packedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(label.expiryDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(label.batchNo).toBeNull();
+      }
+      // 首次打标签就把分装日期落库，补打不会重新起算
+      expect(store.items[0].packedAt).not.toBeNull();
+      expect(store.items[0].packedExpiryDate).not.toBeNull();
+    });
+
+    it('未付款的订单不能打标签', async () => {
+      store.status = 'PENDING_PAYMENT';
+
       await expect(service.getOrderLabels('order-1')).rejects.toThrow(
-        /请先完成分装/,
+        /请先确认收款/,
       );
     });
 

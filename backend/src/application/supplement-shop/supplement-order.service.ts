@@ -583,8 +583,17 @@ export class SupplementOrderService {
   ): Promise<{ items: SupplementOrderView[]; total: number; page: number; pageSize: number }> {
     const { skip, take, page, pageSize } = this.normalizePaging(query);
     const keyword = (query.keyword || '').trim();
+    // 2026-11-02：分装工单取消后，PAID / PACKING / PACKED 在员工眼里
+    // 都是「待发货」。列表用一个 TO_SHIP 分组去查，避免前端把同一件事
+    // 拆成三个状态、漏看旧单。
+    const statusWhere: Prisma.SupplementOrderWhereInput['status'] =
+      query.status === 'TO_SHIP'
+        ? { in: ['PAID', 'PACKING', 'PACKED'] }
+        : query.status
+          ? (query.status as never)
+          : undefined;
     const where: Prisma.SupplementOrderWhereInput = {
-      ...(query.status ? { status: query.status as never } : {}),
+      ...(statusWhere ? { status: statusWhere } : {}),
       ...(keyword
         ? {
             OR: [
@@ -983,12 +992,16 @@ export class SupplementOrderService {
     return this.getOrderById(orderId);
   }
 
-  /** 发货：只有已完成分装的订单才能填单号；PACKED 有未完结退款时拒绝 */
   /**
-   * 补剂发货（2026-10-31 与鲜食统一口径）。
+   * 补剂发货（2026-11-02：不再强制先走分装工单）。
    *
+   *   · 已付款（PAID）就可以直接发；旧单已分装（PACKED）也照常能发。
    *   · NORMAL        —— 正常寄快递：单号必填，实际运费必填
    *   · NOT_REQUIRED  —— 无需发货（自用单）：直接结案，不产生物流信息
+   *
+   * 首次发货时补分装日期/标签效期，并在同一个事务里扣库存。
+   * 库存扣减从「分装」挪到「发货」；旧单在分装时已经扣过的，
+   * ledger 的 (sourceType, sourceId, ingredientId) 唯一约束保证不会重复。
    */
   async shipOrder(
     orderId: string,
@@ -1003,7 +1016,7 @@ export class SupplementOrderService {
     },
   ): Promise<SupplementOrderView> {
     const order = await this.requireOrder(orderId);
-    this.assertStatus(order.status, ['PACKED'], '发货');
+    this.assertStatus(order.status, ['PAID', 'PACKED'], '发货');
 
     if (await this.hasOpenSupplementRefund(orderId)) {
       throw new BadRequestException(
@@ -1011,92 +1024,110 @@ export class SupplementOrderService {
       );
     }
 
-    // 无需发货：自用单直接结案，没有单号也没有运费
-    if (dto.shippingType === 'NOT_REQUIRED') {
-      await this.prisma.supplementOrder.update({
+    const shippingType = dto.shippingType ?? 'NORMAL';
+    let trackingNumber: string | null = null;
+    let carrierCode: string | null = null;
+    let actualShippingFee: string | null = null;
+
+    if (shippingType === 'NORMAL') {
+      trackingNumber = (dto.trackingNumber || '').trim();
+      if (!trackingNumber) {
+        throw new BadRequestException('请填写快递单号');
+      }
+      carrierCode = dto.carrierCode?.trim() || null;
+      actualShippingFee =
+        typeof dto.actualShippingFee === 'number' &&
+        Number.isFinite(dto.actualShippingFee)
+          ? Number(dto.actualShippingFee.toFixed(2)).toFixed(2)
+          : null;
+    }
+
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      const fresh = await tx.supplementOrder.findUnique({
         where: { id: orderId },
-        data: {
-          status: 'COMPLETED',
-          completedAt: new Date(),
-          noShippingRequired: true,
-          trackingNumber: null,
-          carrierCode: null,
-          shippedAt: null,
-          actualShippingFee: null,
-        },
+        include: { items: true },
+      });
+      if (!fresh) {
+        throw new NotFoundException(`补剂订单不存在: ${orderId}`);
+      }
+      this.assertStatus(fresh.status, ['PAID', 'PACKED'], '发货');
+
+      // 不再要求员工填原瓶到期日：第一次发货时自动补分装日期/标签效期。
+      await this.ensurePackingSnapshot(tx, fresh, now);
+
+      // 库存扣减：以前在 packOrder 做，现在分装工单取消，挪到发货。
+      // allowMissing=true 保持原来的「缺料只提示不阻断」口径。
+      await this.inventoryService?.consumeForOrder(tx, orderId, {
+        allowMissing: true,
       });
 
+      if (shippingType === 'NOT_REQUIRED') {
+        await tx.supplementOrder.update({
+          where: { id: orderId },
+          data: {
+            status: 'COMPLETED',
+            completedAt: now,
+            noShippingRequired: true,
+            trackingNumber: null,
+            carrierCode: null,
+            shippedAt: null,
+            actualShippingFee: null,
+          },
+        });
+      } else {
+        await tx.supplementOrder.update({
+          where: { id: orderId },
+          data: {
+            status: 'SHIPPED',
+            trackingNumber,
+            carrierCode,
+            actualShippingFee,
+            shippedAt: now,
+          },
+        });
+      }
+
       try {
-        await this.prisma.supplementOrderEvent.create({
+        await tx.supplementOrderEvent.create({
           data: {
             orderId,
-            type: 'COMPLETED',
-            fromValue: 'PACKED',
-            toValue: 'COMPLETED',
+            type: shippingType === 'NOT_REQUIRED' ? 'COMPLETED' : 'SHIPPED',
+            fromValue: fresh.status,
+            toValue:
+              shippingType === 'NOT_REQUIRED' ? 'COMPLETED' : 'SHIPPED',
             actorType: actor.type,
             actorId: actor.id ?? null,
-            metadata: { shippingType: 'NOT_REQUIRED' },
+            metadata: {
+              shippingType,
+              ...(trackingNumber ? { trackingNumber } : {}),
+              ...(carrierCode ? { carrierCode } : {}),
+            },
           },
         });
       } catch {
-        // 审计失败不影响结案
+        // 审计失败不影响发货；日志/告警在后续统一接
       }
-
-      return this.getOrderById(orderId);
-    }
-
-    const trackingNumber = (dto.trackingNumber || '').trim();
-    if (!trackingNumber) {
-      throw new BadRequestException('请填写快递单号');
-    }
-
-    const actualShippingFee =
-      typeof dto.actualShippingFee === 'number' && Number.isFinite(dto.actualShippingFee)
-        ? Number(dto.actualShippingFee.toFixed(2))
-        : null;
-
-    await this.prisma.supplementOrder.update({
-      where: { id: orderId },
-      data: {
-        status: 'SHIPPED',
-        trackingNumber,
-        carrierCode: dto.carrierCode?.trim() || null,
-        actualShippingFee: actualShippingFee === null ? null : actualShippingFee.toFixed(2),
-        shippedAt: new Date(),
-      },
     });
 
-    try {
-      await this.prisma.supplementOrderEvent.create({
-        data: {
-          orderId,
-          type: 'SHIPPED',
-          fromValue: 'PACKED',
-          toValue: 'SHIPPED',
-          actorType: actor.type,
-          actorId: actor.id ?? null,
-          metadata: { trackingNumber, carrierCode: dto.carrierCode ?? null },
-        },
-      });
-    } catch {
-      // 审计失败不影响发货；日志/告警在后续统一接
-    }
+    if (shippingType === 'NORMAL') {
+      await this.notificationService?.notify(orderId, 'SHIPPED');
 
-    await this.notificationService?.notify(orderId, 'SHIPPED');
-
-    // 补发单发货后，售后 case 自动 RESOLVED
-    try {
-      const caseRow = await (this.prisma as any).aftersaleCase?.findFirst?.({
-        where: { reshipOrderId: orderId, status: 'PROCESSING' },
-      });
-      if (caseRow?.id) {
-        await (this.prisma as any).aftersaleCase.update({
-          where: { id: caseRow.id },
-          data: { status: 'RESOLVED', resolvedAt: new Date() },
+      // 补发单发货后，售后 case 自动 RESOLVED
+      try {
+        const caseRow = await (this.prisma as any).aftersaleCase?.findFirst?.({
+          where: { reshipOrderId: orderId, status: 'PROCESSING' },
         });
+        if (caseRow?.id) {
+          await (this.prisma as any).aftersaleCase.update({
+            where: { id: caseRow.id },
+            data: { status: 'RESOLVED', resolvedAt: new Date() },
+          });
+        }
+      } catch {
+        // 售后回写失败不影响发货；后台可手工处理
       }
-    } catch {
-      // 售后回写失败不影响发货；后台可手工处理
     }
 
     return this.getOrderById(orderId);
@@ -1491,6 +1522,50 @@ export class SupplementOrderService {
     return { printCount: previous + 1, reprint: previous > 0 };
   }
 
+  /**
+   * 2026-11-02：员工端取消「分装工单」——流程里不再填原瓶到期日和批号。
+   *
+   * 首次生成标签 / 首次发货时自动补一次分装快照：
+   *   packedAt        = 现在（第一次打标签或发货的时间）
+   *   packedExpiryDate = 该补剂固定保质期（旧单仍取「原瓶到期日」与规则值的较小者）
+   *
+   * 只在缺失时写，补打标签不会重新起算日期。库存扣减不在这里做，
+   * 由发货时统一扣，避免「只打了标签、没发货」也把库存吃掉。
+   */
+  private async ensurePackingSnapshot(
+    tx: Prisma.TransactionClient,
+    order: {
+      items: Array<{
+        id: string;
+        shelfLifeMonths: number;
+        sourceExpiryDate: Date | null;
+        packedAt: Date | null;
+        packedExpiryDate: Date | null;
+      }>;
+    },
+    now: Date,
+  ): Promise<void> {
+    for (const item of order.items) {
+      if (item.packedAt && item.packedExpiryDate) continue;
+
+      const packedAt = item.packedAt ?? now;
+      const byRule = addMonths(packedAt, item.shelfLifeMonths);
+      const packedExpiryDate =
+        item.packedExpiryDate ??
+        (item.sourceExpiryDate &&
+        item.sourceExpiryDate.getTime() < byRule.getTime()
+          ? item.sourceExpiryDate
+          : byRule);
+
+      await tx.supplementOrderItem.update({
+        where: { id: item.id },
+        data: { packedAt, packedExpiryDate },
+      });
+      item.packedAt = packedAt;
+      item.packedExpiryDate = packedExpiryDate;
+    }
+  }
+
   async getOrderLabels(orderId: string): Promise<SupplementOrderLabels> {
     const order = await this.prisma.supplementOrder.findUnique({
       where: { id: orderId },
@@ -1500,8 +1575,23 @@ export class SupplementOrderService {
       throw new NotFoundException(`补剂订单不存在: ${orderId}`);
     }
 
-    if (order.items.some((item) => !item.packedAt)) {
-      throw new BadRequestException('请先完成分装，再打印标签');
+    if (order.status === 'PENDING_PAYMENT') {
+      throw new BadRequestException('请先确认收款，再打印标签');
+    }
+    if (order.status === 'CANCELLED') {
+      throw new BadRequestException('订单已取消，不能打印标签');
+    }
+
+    // 还没走过分装工单的单：第一次打标签时补日期/效期，不再要求员工填写。
+    if (
+      order.items.some(
+        (item) => !item.packedAt || !item.packedExpiryDate,
+      )
+    ) {
+      const now = new Date();
+      await this.prisma.$transaction(async (tx) => {
+        await this.ensurePackingSnapshot(tx, order, now);
+      });
     }
 
     const config = await this.configService.getConfig();

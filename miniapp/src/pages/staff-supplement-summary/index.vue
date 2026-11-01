@@ -3,7 +3,7 @@
     <view class="head">
       <view>
         <text class="title">分装备料</text>
-        <text class="sub">按分装日看订单 / 备料 / 包材 / 缺料</text>
+        <text class="sub">按发货日看订单 / 备料 / 包材 / 缺料</text>
       </view>
       <picker mode="date" :value="date" @change="onDateChange">
         <view class="date-btn">{{ date }}</view>
@@ -19,7 +19,7 @@
       -->
       <view class="card order-card">
         <view class="section-head">
-          <text class="section-title">当天分装订单（{{ orders.length }}）</text>
+          <text class="section-title">当天待发货订单（{{ orders.length }}）</text>
           <text class="link" @tap="goAllOrders">全部补剂订单 ›</text>
         </view>
 
@@ -29,21 +29,14 @@
             <text class="order-meta">{{ statusText(order.status) }} · {{ order.bagCount }} 袋</text>
           </view>
           <view class="order-actions">
-            <view
-              v-if="canPack(order)"
-              class="mini-btn primary"
-              @tap.stop="openPack(order)"
-            >{{ packLabel(order) }}</view>
-            <template v-if="order.status === 'PACKED'">
-              <view class="mini-btn" @tap.stop="openLabels(order)">打印标签</view>
-              <view class="mini-btn primary" @tap.stop="openShip(order)">去发货</view>
-            </template>
+            <view class="mini-btn" @tap.stop="openLabels(order)">打印标签</view>
+            <view class="mini-btn primary" @tap.stop="openShip(order)">去发货</view>
           </view>
         </view>
 
         <view v-if="orders.length === 0" class="empty-block">
-          <text class="empty">这天没有排到分装的订单</text>
-          <text class="empty-hint">刚下单还没看到，可能还没确认收款、还没排期，或排到了别的分装日（右上角可切换日期）。</text>
+          <text class="empty">这天没有待发货的订单</text>
+          <text class="empty-hint">刚下单还没看到，可能还没确认收款、还没排期，或排到了别的发货日（右上角可切换日期）。</text>
           <view class="ghost-btn" @tap="goAllOrders">去看全部补剂订单</view>
         </view>
       </view>
@@ -65,7 +58,7 @@
             {{ item.shortage > 0 ? `缺 ${item.shortage} ${item.unit}` : '足' }}
           </text>
         </view>
-        <text v-if="(data?.ingredientTotals || []).length === 0" class="empty">当天没有待分装订单</text>
+        <text v-if="(data?.ingredientTotals || []).length === 0" class="empty">当天没有待发货订单</text>
       </view>
 
       <view class="card">
@@ -110,8 +103,8 @@ const orders = computed<PackingOrder[]>(() => data.value?.orders || [])
 
 const STATUS_TEXT: Record<string, string> = {
   PENDING_PAYMENT: '待确认收款',
-  PAID: '待分装',
-  PACKING: '分装中',
+  PAID: '待发货',
+  PACKING: '待发货',
   PACKED: '待发货',
   SHIPPED: '已发货',
   COMPLETED: '已完成',
@@ -120,14 +113,6 @@ const STATUS_TEXT: Record<string, string> = {
 
 function statusText(value: string) {
   return STATUS_TEXT[value] || value
-}
-
-function canPack(order: PackingOrder) {
-  return order.status === 'PAID' || order.status === 'PACKING'
-}
-
-function packLabel(order: PackingOrder) {
-  return order.status === 'PACKING' ? '继续分装' : '开始分装'
 }
 
 function roleLabel(role: string) {
@@ -143,11 +128,6 @@ function openOrder(order: PackingOrder) {
   uni.navigateTo({
     url: `/pages/staff-supplement-orders/detail?id=${encodeURIComponent(order.id)}`,
   })
-}
-
-function openPack(order: PackingOrder) {
-  // 详情页在「待分装/分装中」时会把分装工单直接展开，进来就能填。
-  openOrder(order)
 }
 
 function openLabels(order: PackingOrder) {

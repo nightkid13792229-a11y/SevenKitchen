@@ -127,51 +127,13 @@
               {{ [item.brand, item.productModel].filter(Boolean).join(' · ') }}
             </text>
           </view>
-          <view class="item-side">
-            <text v-if="item.packedAt" class="item-packed">已分装</text>
-            <text v-else class="item-unpacked">待分装</text>
-          </view>
         </view>
       </view>
 
-      <!-- 分装工单：只在待分装/分装中时展开 -->
-      <view v-if="canPack" class="card">
+      <!-- 预计发货日：员工只读，排期由管理员操作 -->
+      <view v-if="canShip" class="card">
         <view class="section-head">
-          <text class="section-title">分装工单</text>
-          <text class="section-sub">填原瓶到期日，系统自动算标签效期</text>
-        </view>
-
-        <view v-for="(item, index) in order.items || []" :key="item.id" class="pack-row">
-          <text class="pack-name">{{ item.name }}</text>
-          <view class="pack-fields">
-            <input
-              class="pack-input"
-              v-model="packForm[index].batchNo"
-              placeholder="批号（可留空）"
-            />
-            <picker
-              mode="date"
-              :value="packForm[index].sourceExpiryDate"
-              @change="(e: any) => onExpiryChange(index, e)"
-            >
-              <view class="pack-picker" :class="{ 'pack-picker--empty': !packForm[index].sourceExpiryDate }">
-                <text class="pack-picker-text">
-                  {{ packForm[index].sourceExpiryDate || '选择原瓶到期日' }}
-                </text>
-              </view>
-            </picker>
-          </view>
-        </view>
-
-        <button class="primary-btn" :disabled="submitting" @tap="handlePack">
-          {{ submitting ? '提交中…' : '提交分装结果' }}
-        </button>
-      </view>
-
-      <!-- 分装日：员工只读，排期由管理员操作 -->
-      <view v-if="order.status === 'PAID'" class="card">
-        <view class="section-head">
-          <text class="section-title">分装日</text>
+          <text class="section-title">预计发货日</text>
           <text class="section-sub">{{ order.packingDate || '待管理员排期' }}</text>
         </view>
       </view>
@@ -188,7 +150,7 @@
         </button>
 
         <button
-          v-if="order.status === 'PACKED'"
+          v-if="canShip"
           class="primary-btn"
           @tap="goToLabels"
         >
@@ -196,7 +158,7 @@
         </button>
 
         <button
-          v-if="order.status === 'PACKED'"
+          v-if="canShip"
           class="primary-btn"
           :disabled="submitting"
           @tap="handleShip"
@@ -281,7 +243,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import {
   staffSupplementOrderApi,
@@ -310,13 +272,10 @@ const carriers = [
   { name: 'EMS', code: 'EMS' },
 ]
 
-/** 每个补剂一条：同一补剂的多袋共用同一批号与原瓶到期日 */
-const packForm = reactive<Array<{ batchNo: string; sourceExpiryDate: string }>>([])
-
 const STATUS_TEXT: Record<SupplementOrderStatus, string> = {
   PENDING_PAYMENT: '待确认收款',
-  PAID: '待分装',
-  PACKING: '分装中',
+  PAID: '待发货',
+  PACKING: '待发货',
   PACKED: '待发货',
   SHIPPED: '已发货',
   COMPLETED: '已完成',
@@ -362,8 +321,14 @@ function aftersaleTone(value: string) {
   return value === 'PENDING' || value === 'PROCESSING' ? 'is-open' : 'is-closed'
 }
 
-const canPack = computed(() =>
-  order.value ? ['PAID', 'PACKING'].includes(order.value.status) : false,
+/**
+ * 2026-11-02：员工端不再录入分装信息。
+ * 已付款（PAID）就可以直接打标签、发货；PACKING/PACKED 是旧单兼容。
+ */
+const canShip = computed(() =>
+  order.value
+    ? ['PAID', 'PACKING', 'PACKED'].includes(order.value.status)
+    : false,
 )
 
 const fullAddress = computed(() => {
@@ -382,28 +347,12 @@ function formatTime(value: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function syncPackForm() {
-  packForm.length = 0
-  for (const item of order.value?.items || []) {
-    packForm.push({
-      batchNo: item.batchNo || '',
-      // 已分装过的（比如补打）带出原值，避免重填
-      sourceExpiryDate: item.sourceExpiryDate ? item.sourceExpiryDate.slice(0, 10) : '',
-    })
-  }
-}
-
-function onExpiryChange(index: number, event: { detail: { value: string } }) {
-  packForm[index].sourceExpiryDate = event.detail.value
-}
-
 async function fetchOrder() {
   loading.value = true
   try {
     const res = await staffSupplementOrderApi.detail(orderId.value)
     if (res.code === 0 && res.data) {
       order.value = res.data
-      syncPackForm()
     } else {
       uni.showToast({ title: res.message || '加载失败', icon: 'none' })
     }
@@ -418,7 +367,7 @@ async function fetchOrder() {
 function handleConfirmPayment() {
   uni.showModal({
     title: '确认收款',
-    content: '确认已收到这笔款项？确认后订单进入待分装。',
+    content: '确认已收到这笔款项？确认后订单进入待发货。',
     success: async (res) => {
       if (!res.confirm) return
       submitting.value = true
@@ -433,54 +382,6 @@ function handleConfirmPayment() {
       } catch (error) {
         console.error('[SupplementOrderDetail] 确认收款失败:', error)
         uni.showToast({ title: '操作失败', icon: 'none' })
-      } finally {
-        submitting.value = false
-      }
-    },
-  })
-}
-
-function handlePack() {
-  const items = (order.value?.items || []).map((item, index) => ({
-    itemId: item.id,
-    batchNo: packForm[index]?.batchNo || undefined,
-    sourceExpiryDate: packForm[index]?.sourceExpiryDate || '',
-  }))
-
-  const missing = (order.value?.items || []).filter((_, index) => !packForm[index]?.sourceExpiryDate)
-  if (missing.length > 0) {
-    uni.showToast({
-      title: `还有 ${missing.length} 个补剂没填原瓶到期日`,
-      icon: 'none',
-    })
-    return
-  }
-
-  uni.showModal({
-    title: '提交分装结果',
-    content: '提交后即可打印标签。标签效期 = min(原瓶到期日, 分装日 + 效期系数)。',
-    success: async (res) => {
-      if (!res.confirm) return
-      submitting.value = true
-      try {
-        const response = await staffSupplementOrderApi.pack(orderId.value, items)
-        if (response.code === 0) {
-          if (response.data?.inventoryWarnings?.length) {
-            uni.showModal({
-              title: '库存提示',
-              content: `分装已完成，但库存不足（不阻断）：\n${response.data.inventoryWarnings.join('\n')}`,
-              showCancel: false,
-            })
-          } else {
-            uni.showToast({ title: '分装完成', icon: 'success' })
-          }
-          await fetchOrder()
-        } else {
-          uni.showToast({ title: response.message || '提交失败', icon: 'none' })
-        }
-      } catch (error) {
-        console.error('[SupplementOrderDetail] 提交分装失败:', error)
-        uni.showToast({ title: '提交失败', icon: 'none' })
       } finally {
         submitting.value = false
       }

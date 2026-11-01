@@ -2,8 +2,8 @@
   <view class="page">
     <view class="head">
       <view>
-        <text class="title">分装汇总</text>
-        <text class="sub">当天备料 / 包材 / 缺料 / 产能</text>
+        <text class="title">分装备料</text>
+        <text class="sub">按分装日看订单 / 备料 / 包材 / 缺料</text>
       </view>
       <picker mode="date" :value="date" @change="onDateChange">
         <view class="date-btn">{{ date }}</view>
@@ -12,6 +12,42 @@
 
     <view v-if="loading" class="state"><text>加载中…</text></view>
     <template v-else>
+      <!--
+        先给订单，再给汇总。
+        现场是拿着单子干活：从这一屏直接进分装、打标签、发货，
+        而不是看完一堆总量之后还要再绕到「订单中心」找单。
+      -->
+      <view class="card order-card">
+        <view class="section-head">
+          <text class="section-title">当天分装订单（{{ orders.length }}）</text>
+          <text class="link" @tap="goAllOrders">全部补剂订单 ›</text>
+        </view>
+
+        <view v-for="order in orders" :key="order.id" class="order-row">
+          <view class="order-main" @tap="openOrder(order)">
+            <text class="order-no">{{ order.orderNo }}</text>
+            <text class="order-meta">{{ statusText(order.status) }} · {{ order.bagCount }} 袋</text>
+          </view>
+          <view class="order-actions">
+            <view
+              v-if="canPack(order)"
+              class="mini-btn primary"
+              @tap.stop="openPack(order)"
+            >{{ packLabel(order) }}</view>
+            <template v-if="order.status === 'PACKED'">
+              <view class="mini-btn" @tap.stop="openLabels(order)">打印标签</view>
+              <view class="mini-btn primary" @tap.stop="openShip(order)">去发货</view>
+            </template>
+          </view>
+        </view>
+
+        <view v-if="orders.length === 0" class="empty-block">
+          <text class="empty">这天没有排到分装的订单</text>
+          <text class="empty-hint">刚下单还没看到，可能还没确认收款、还没排期，或排到了别的分装日（右上角可切换日期）。</text>
+          <view class="ghost-btn" @tap="goAllOrders">去看全部补剂订单</view>
+        </view>
+      </view>
+
       <view class="hero">
         <view class="hero-item"><text class="hero-value">{{ data?.orderCount || 0 }}</text><text class="hero-label">订单</text></view>
         <view class="hero-item"><text class="hero-value">{{ data?.bagCount || 0 }}</text><text class="hero-label">总袋数</text></view>
@@ -47,14 +83,22 @@
         <text class="section-title">未配置袋型（{{ data?.missingPouchRules?.length }}）</text>
         <text class="warning-text">{{ data?.missingPouchRules?.join('；') }}</text>
       </view>
-      <view class="notice">缺料默认不能分装；如确认缺料，请联系管理员强制分装并说明原因。员工不能强制。</view>
+      <view class="notice">缺料会按账面数量提示，但不阻断分装；请先核对库存，异常时联系管理员。</view>
     </template>
   </view>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
+
+interface PackingOrder {
+  id: string
+  orderNo: string
+  status: string
+  bagCount: number
+}
 
 const loading = ref(false)
 const now = new Date()
@@ -62,6 +106,29 @@ const date = ref(
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
 )
 const data = ref<any>(null)
+const orders = computed<PackingOrder[]>(() => data.value?.orders || [])
+
+const STATUS_TEXT: Record<string, string> = {
+  PENDING_PAYMENT: '待确认收款',
+  PAID: '待分装',
+  PACKING: '分装中',
+  PACKED: '待发货',
+  SHIPPED: '已发货',
+  COMPLETED: '已完成',
+  CANCELLED: '已取消',
+}
+
+function statusText(value: string) {
+  return STATUS_TEXT[value] || value
+}
+
+function canPack(order: PackingOrder) {
+  return order.status === 'PAID' || order.status === 'PACKING'
+}
+
+function packLabel(order: PackingOrder) {
+  return order.status === 'PACKING' ? '继续分装' : '开始分装'
+}
 
 function roleLabel(role: string) {
   return ({ POUCH: '分装袋', DESICCANT: '干燥剂', LABEL: '标签' } as Record<string, string>)[role] || role
@@ -70,6 +137,34 @@ function roleLabel(role: string) {
 function onDateChange(event: any) {
   date.value = event.detail.value
   load()
+}
+
+function openOrder(order: PackingOrder) {
+  uni.navigateTo({
+    url: `/pages/staff-supplement-orders/detail?id=${encodeURIComponent(order.id)}`,
+  })
+}
+
+function openPack(order: PackingOrder) {
+  // 详情页在「待分装/分装中」时会把分装工单直接展开，进来就能填。
+  openOrder(order)
+}
+
+function openLabels(order: PackingOrder) {
+  uni.navigateTo({
+    url: `/pages/staff-supplement-orders/labels?id=${encodeURIComponent(order.id)}`,
+  })
+}
+
+function openShip(order: PackingOrder) {
+  // 和订单中心一致：带 action=ship，详情加载完直接弹发货框。
+  uni.navigateTo({
+    url: `/pages/staff-supplement-orders/detail?id=${encodeURIComponent(order.id)}&action=ship`,
+  })
+}
+
+function goAllOrders() {
+  uni.navigateTo({ url: '/pages/staff-supplement-orders/index' })
 }
 
 async function load() {
@@ -87,7 +182,8 @@ async function load() {
   }
 }
 
-onMounted(load)
+// 从分装/发货详情返回时，状态和汇总都要重算；onMounted 只会在第一次进来时跑。
+onShow(load)
 </script>
 
 <style scoped>
@@ -103,6 +199,9 @@ onMounted(load)
 .hero-label { display: block; margin-top: 4rpx; font-size: 22rpx; color: #cad6c9; }
 .card { background: #fff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 20rpx; }
 .section-title { display: block; font-size: 28rpx; font-weight: 600; margin-bottom: 12rpx; }
+.section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12rpx; }
+.section-head .section-title { margin-bottom: 0; }
+.link { color: #2b5040; font-size: 23rpx; }
 .row { display: flex; justify-content: space-between; align-items: center; padding: 14rpx 0; border-bottom: 1rpx solid #f2f2f2; }
 .name { display: block; font-size: 27rpx; color: #303133; }
 .desc { display: block; margin-top: 4rpx; font-size: 22rpx; color: #909399; }
@@ -111,6 +210,18 @@ onMounted(load)
 .badge.red { color: #c62828; background: #fdecea; }
 .qty { font-size: 30rpx; font-weight: 600; }
 .empty { color: #909399; font-size: 24rpx; }
+.order-row { display: flex; align-items: center; justify-content: space-between; padding: 18rpx 0; border-bottom: 1rpx solid #f2f2f2; }
+.order-row:last-child { border-bottom: none; }
+.order-main { flex: 1; min-width: 0; }
+.order-no { display: block; font-size: 27rpx; font-weight: 600; color: #303133; }
+.order-meta { display: block; margin-top: 4rpx; font-size: 22rpx; color: #909399; }
+.order-actions { display: flex; align-items: center; flex-shrink: 0; }
+.mini-btn { padding: 10rpx 18rpx; border: 1rpx solid #d9dfcf; border-radius: 10rpx; font-size: 22rpx; color: #2b5040; background: #fbfcf7; }
+.mini-btn + .mini-btn { margin-left: 10rpx; }
+.mini-btn.primary { background: #1e3a2f; border-color: #1e3a2f; color: #f7f3e8; }
+.empty-block { padding: 26rpx 0 8rpx; text-align: center; }
+.empty-hint { display: block; margin-top: 8rpx; font-size: 22rpx; color: #b0b3b8; }
+.ghost-btn { display: inline-block; margin-top: 18rpx; padding: 12rpx 24rpx; border: 1rpx solid #2b5040; border-radius: 999rpx; font-size: 23rpx; color: #2b5040; }
 .warning-card { border-left: 6rpx solid #e6a23c; }
 .warning-text { color: #8a5a00; font-size: 23rpx; line-height: 1.6; }
 .notice { padding: 18rpx; background: #fdf6ec; color: #b88230; border-radius: 10rpx; font-size: 23rpx; line-height: 1.6; }

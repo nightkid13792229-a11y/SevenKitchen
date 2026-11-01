@@ -60,6 +60,9 @@ describe('staff workbench compact icon grid', () => {
       'purchasing',
       'production',
       'orders',
+      // 补剂不单独占格子：待确认收款 / 待分装 / 待发货都从「分装备料」进，
+      // 角标也必须挂在这里，否则员工看不到补剂待办。
+      'supplementOrders',
       'inventory',
       'reimbursement',
     ]) {

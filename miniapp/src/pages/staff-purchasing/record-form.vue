@@ -48,9 +48,15 @@
             <text class="sku-check">✓</text>
           </view>
         </view>
-        <view v-else class="sku-empty">
-          <text class="empty-title">暂无可用采购商品</text>
-          <text class="empty-desc">请联系管理员在该标准原料下新增采购 SKU 后再记录采购。</text>
+        <view v-if="procurementSkuOptions.length > 0 && canAddNewProcurementSku" class="sku-add" @tap="openCreateProcurementSku">
+          <text>＋ 没有我要买的商品？新增一个</text>
+        </view>
+        <view v-else-if="procurementSkuOptions.length === 0" class="sku-empty">
+          <text class="empty-title">这道原料下还没有采购商品</text>
+          <text class="empty-desc">把这次买的商品加进去，以后大家都能选</text>
+          <view v-if="canAddNewProcurementSku" class="sku-add-btn" @tap="openCreateProcurementSku">
+            <text>＋ 新增一个采购商品</text>
+          </view>
         </view>
       </view>
 
@@ -97,7 +103,8 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { onLoad } from '@dcloudio/uni-app';
+import { onLoad, onShow } from '@dcloudio/uni-app';
+import { canAddProcurementSku } from './procurement-sku-entry';
 import {
   getPurchaseListDetail,
   addPurchaseRecord,
@@ -419,8 +426,62 @@ const applySelectedItemDefaults = (item: any) => {
   }
 };
 
+const canAddNewProcurementSku = computed(() =>
+  canAddProcurementSku(selectedItem.value?.type),
+);
+
+const pendingSkuId = ref('');
+
+const openCreateProcurementSku = () => {
+  const item = selectedItem.value;
+  if (!item) return;
+
+  const ingredientId = item.ingredientId || item.id;
+  if (!ingredientId) return;
+
+  const query = [
+    `ingredientId=${encodeURIComponent(ingredientId)}`,
+    `ingredientName=${encodeURIComponent(item.ingredientName || '')}`,
+    `baseUnit=${encodeURIComponent(item.ingredientBaseUnit || item.ingredient?.baseUnit || '')}`,
+  ].join('&');
+
+  uni.navigateTo({
+    url: `/pages/staff-purchasing/procurement-sku-create?${query}`,
+  });
+};
+
+/** 从新增页回来：重新拉一次清单，把新商品选中 */
+onShow(() => {
+  if (!pendingSkuId.value) return;
+
+  const skuId = pendingSkuId.value;
+  pendingSkuId.value = '';
+
+  loadPurchaseListDetail().then(() => {
+    const sku = procurementSkuOptions.value.find((option: any) => option.id === skuId);
+    if (sku) {
+      selectProcurementSku(sku);
+      return;
+    }
+    const created = (selectedItem.value?.procurementSkus || []).find(
+      (option: any) => option.id === skuId,
+    );
+    if (created) {
+      selectProcurementSku(created);
+    }
+  });
+});
+
 onLoad((options: any) => {
   purchaseListId.value = options.id;
+  uni.$on('procurement-sku:created', (payload: any) => {
+    const currentIngredientId =
+      selectedItem.value?.ingredientId || selectedItem.value?.id;
+    if (!payload?.ingredientId || payload.ingredientId !== currentIngredientId) {
+      return;
+    }
+    pendingSkuId.value = payload.skuId || '';
+  });
   loadPurchaseListDetail();
 });
 
@@ -790,6 +851,28 @@ const goBack = () => {
   font-weight: 700;
   color: #968f6d;
   opacity: 0.45;
+}
+
+.sku-add {
+  margin-top: 12rpx;
+  padding: 22rpx;
+  border-radius: 12rpx;
+  border: 2rpx dashed rgba(176, 141, 79, 0.6);
+  background-color: #fffdf6;
+  text-align: center;
+  font-size: 26rpx;
+  color: #8a6b33;
+}
+
+.sku-add-btn {
+  margin-top: 12rpx;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  background-color: #1e3a2f;
+  color: #f7f2e2;
+  text-align: center;
+  font-size: 28rpx;
+  font-weight: 600;
 }
 
 .sku-empty {

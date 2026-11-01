@@ -81,13 +81,16 @@
           </view>
           <view class="chip-row">
             <view
-              v-for="channel in channelChoices"
+              v-for="channel in visibleChannels"
               :key="channel"
               class="chip"
               :class="{ active: form.purchaseChannel === channel }"
               @tap="selectChannel(channel)"
             >
               {{ channel }}
+            </view>
+            <view v-if="hasMoreChannels" class="chip more" @tap="showAllChannels = !showAllChannels">
+              {{ showAllChannels ? '收起' : '更多' }}
             </view>
           </view>
           <input
@@ -210,6 +213,7 @@ import {
   createStaffProcurementSku,
   draftProcurementSku,
   getProcurementSkuFormOptions,
+  getPurchaseChannels,
   uploadProcurementSkuScreenshot,
 } from './api/purchasing';
 import {
@@ -218,9 +222,10 @@ import {
 } from './procurement-sku-form';
 import { applyDraftToForm } from './procurement-sku-draft-apply';
 import { decodeRouteParam } from './route-param';
+import { buildChannelChoices } from './procurement-sku-channel';
 
 const SAMPLE_IMAGE_URL =
-  'https://img.sevenkitchen.cloud/app-assets/procurement-sku-sample.jpg';
+  'https://img.sevenkitchen.cloud/app-assets/procurement-sku-sample-v2.jpg';
 
 const BASE_UNIT_TEXT: Record<string, string> = {
   G: '克',
@@ -249,7 +254,9 @@ const submitting = ref(false);
 const sampleFailed = ref(false);
 
 const allUnits = ref<string[]>([]);
-const channelChoices = ref<string[]>(['山姆', '沃尔玛', '盒马']);
+const FALLBACK_CHANNELS = ['山姆', '沃尔玛', '盒马'];
+const allChannels = ref<string[]>(FALLBACK_CHANNELS);
+const showAllChannels = ref(false);
 const showAllUnits = ref(false);
 
 const form = ref({
@@ -275,6 +282,12 @@ const clerkUnits = computed(() => {
   const fromPriority = CLERK_UNIT_PRIORITY.filter((unit) => allUnits.value.includes(unit));
   return fromPriority.length >= 3 ? fromPriority : allUnits.value;
 });
+
+const visibleChannels = computed(() =>
+  showAllChannels.value ? allChannels.value : allChannels.value.slice(0, 6),
+);
+
+const hasMoreChannels = computed(() => allChannels.value.length > 6);
 
 const visibleUnits = computed(() =>
   showAllUnits.value ? clerkUnits.value : clerkUnits.value.slice(0, 5),
@@ -366,6 +379,16 @@ onLoad(async (options: Record<string, string>) => {
 
   loading.value = true;
   try {
+    // 历史渠道 = 员工以前真买过的，比写死三家靠谱得多
+    try {
+      const channelRes: any = await getPurchaseChannels();
+      if (channelRes?.code === 0 && Array.isArray(channelRes.data)) {
+        allChannels.value = buildChannelChoices(channelRes.data, FALLBACK_CHANNELS);
+      }
+    } catch {
+      allChannels.value = FALLBACK_CHANNELS;
+    }
+
     const res: any = await getProcurementSkuFormOptions(ingredientId.value);
     if (res?.code === 0 && res.data) {
       baseUnit.value = res.data.baseUnit || baseUnit.value;

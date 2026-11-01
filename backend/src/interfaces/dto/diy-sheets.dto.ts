@@ -79,10 +79,15 @@ export class CreateDIYSheetDto {
   @IsUUID()
   dogId!: string;
 
-  @ApiProperty({ description: '制作周期(天)', example: 7 })
+  /**
+   * 2026-11-01 起**可选**：制作单不再有"天数"这个概念（单位只有袋和克）。
+   * 老客户端仍会传，照存不误，但没有任何计算或展示依赖它。
+   */
+  @ApiPropertyOptional({ description: '制作周期(天)，已废弃，可不再传', example: 7 })
+  @IsOptional()
   @IsInt()
   @Min(1)
-  cycleDays!: number;
+  cycleDays?: number;
 
   @ApiProperty({ description: '每餐克数', example: 100 })
   @IsNumber()
@@ -156,8 +161,8 @@ export class DIYSheetResponseDto {
   @ApiProperty({ description: '狗狗名称' })
   dogName!: string;
 
-  @ApiProperty({ description: '制作周期(天)' })
-  cycleDays!: number;
+  @ApiPropertyOptional({ description: '制作周期(天)，已废弃，新单为 null' })
+  cycleDays?: number | null;
 
   @ApiProperty({ description: '每餐克数' })
   perMealG!: number;

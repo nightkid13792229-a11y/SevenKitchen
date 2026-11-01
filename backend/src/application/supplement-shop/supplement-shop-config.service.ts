@@ -40,7 +40,10 @@ export interface SupplementShopConfigDto {
   roundUpUsage: boolean;
   /** 加量：用户一次最多买几份 */
   maxPortionMultiplier: number;
-  /** 加量：一次购买覆盖的总天数上限（效期安全红线） */
+  /**
+   * @deprecated 2026-11-01 起补剂不再有"天数"，这份配置不再参与任何计算。
+   * 字段保留只为兼容后台配置页与历史数据；不要再用它做份数/效期判断。
+   */
   maxTotalDays: number;
   /** 补剂订单支付超时（分钟）；0 = 不自动关单。与鲜食订单独立 */
   paymentTimeoutMinutes: number;

@@ -125,4 +125,42 @@ describe('DIYSheetStorageService package plans', () => {
     });
     expect(result.packagePlan).toEqual(packagePlan);
   });
+
+  it('★ 不传 cycleDays 也能建单：落库 null（制作单不再有天数）', async () => {
+    const prisma = createPrismaMock();
+    const service = new DIYSheetStorageService(prisma);
+    const { cycleDays: _omit, ...dto } = baseDto;
+
+    const result = await service.create('user-1', dto as any);
+
+    expect(prisma.dIYSheet.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ cycleDays: null }),
+    });
+    expect(result.cycleDays).toBeNull();
+  });
+
+  it('★ 冻结后两次都不传天数：仍视为同一张单（null/undefined 不能造成误判）', async () => {
+    const prisma = createPrismaMock({
+      id: 'sheet-frozen',
+      recipeName: baseDto.recipeName,
+      dogName: '七七',
+      cycleDays: null,
+      perMealG: baseDto.perMealG,
+      dailyIntakeG: baseDto.dailyIntakeG,
+      packagePlan: baseDto.packagePlan,
+      purchaseList: baseDto.purchaseList,
+      productionSteps: baseDto.productionSteps,
+      snapshot: { version: 1 },
+      snapshotAt: new Date('2026-10-19T00:00:00Z'),
+      createdAt: new Date('2026-10-18T00:00:00Z'),
+      updatedAt: new Date('2026-10-18T00:00:00Z'),
+    });
+    const service = new DIYSheetStorageService(prisma);
+    const { cycleDays: _omit, ...dto } = baseDto;
+
+    const result = await service.create('user-1', dto as any);
+
+    expect(result.id).toBe('sheet-frozen');
+    expect(prisma.dIYSheet.create).not.toHaveBeenCalled();
+  });
 });

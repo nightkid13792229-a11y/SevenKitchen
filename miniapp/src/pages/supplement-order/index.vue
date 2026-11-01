@@ -40,8 +40,8 @@
         <view class="source-main">
           <text class="source-title">{{ draft.recipeName || 'DIY 制作单' }}</text>
           <text class="source-sub">
-            <text v-if="draft.dogName">{{ draft.dogName }} · </text>
-            <text v-if="draft.cycleDays">{{ draft.cycleDays }} 天用量</text>
+            <text v-if="draft.dogName">{{ draft.dogName }}</text>
+            <text v-else>按当前制作单配比</text>
           </text>
         </view>
         <text v-if="canEditUsage" class="source-action" @tap="goToRecipeDiy">改用量</text>
@@ -155,11 +155,9 @@
         "再加一份就包邮"变成零点击可见。
         金额全部来自服务端（portionOptions），前端不做乘法。
 
-        ⚠️ 这里**故意不显示"多少天量"**（2026-09-24 撤掉）。
-        天数算不准：狗狗档案里的"每天两顿"是吃饭频率，不等于"会吃几袋这个"。
-        真实场景：鲜食+干粮混吃的人，明明做了 30 袋、每天却只喂 1 袋 ——
-        系统无从知道。**给一个可能错的数字，比不给更糟。**
-        天数仍然在服务端算（用于"总天数 ≤ 效期安全线"的校验），只是不给用户看。
+        ⚠️ 这块**不显示任何"天"**（2026-09-24 先撤掉"多少天量"，2026-11-01 彻底去掉）。
+        制作单的单位是袋和克；顾客自己定的袋规下，系统算不出可信的天数，
+        补剂也不再按效期天数限制份数。**给一个可能错的数字，比不给更糟。**
       -->
       <view v-if="showPortionPicker" class="section portion-card">
         <view class="section-title">
@@ -347,16 +345,13 @@ const submitting = ref(false)
  * 实际耗时也差不多。所以让用户一次多买几份，能把固定成本摊薄 ——
  * 用户每天成本下降，我们单笔利润反而上升。
  *
- * 上限由服务端算（份数上限 + 效期天数上限双重约束），通过报价响应回传，
- * 界面只负责照着渲染，不自己拍脑袋。
+ * 上限由服务端算（只看份数上限；2026-11-01 起效期天数不再参与），
+ * 通过报价响应回传，界面只负责照着渲染，不自己拍脑袋。
  */
 const portionMultiplier = ref(1)
 const estimatedPackingDate = ref('')
 const autoScheduleEnabled = ref(true)
 const inventoryWarnings = ref<string[]>([])
-
-/** 制作单覆盖的天数：加量要靠它算总天数与每天成本 */
-const cycleDays = computed(() => Number(draft.value?.cycleDays) || 0)
 
 /** 服务端回传的最大可选份数；还没拿到报价时先按 1 处理，避免闪出非法选项 */
 const maxPortionMultiplier = computed(() =>
@@ -571,7 +566,6 @@ async function refreshQuote() {
       ),
       {
         portionMultiplier: portionMultiplier.value,
-        cycleDays: cycleDays.value || undefined,
         diySheetId: draft.value.diySheetId
       }
     )
@@ -645,14 +639,13 @@ async function refreshSummaryOnly() {
   try {
     const res = await quoteSupplements(payload, {
       portionMultiplier: portionMultiplier.value,
-      cycleDays: cycleDays.value || undefined,
       diySheetId: draft.value?.diySheetId
     })
     if (res.code === 0) {
       summary.value = res.data.quote
       inventoryWarnings.value = res.data.inventoryWarnings || []
-      // 服务端可能因为效期上限把份数收敛下来（比如换了更长的制作单），
-      // 界面要跟着回到合法值，不能停在一个后端不认的档位上。
+      // 服务端可能把份数收敛到配置上限，界面要跟着回到合法值，
+      // 不能停在一个后端不认的档位上。
       const allowed = Math.max(1, res.data.quote.maxPortionMultiplier ?? 1)
       if (portionMultiplier.value > allowed) portionMultiplier.value = allowed
       return
@@ -775,7 +768,6 @@ async function handleSubmit() {
       recipeName: draft.value.recipeName,
       dogId: draft.value.dogId,
       dogName: draft.value.dogName,
-      cycleDays: draft.value.cycleDays,
       // 首次下单补剂时用它在后端冻结整张制作单
       diySheetId: draft.value.diySheetId,
       // 加量份数：服务端会自己校验上限，越界会拒绝（前端算的只是展示用）
@@ -979,18 +971,6 @@ async function handleSubmit() {
   margin-top: 20rpx;
   padding-top: 18rpx;
   border-top: 2rpx solid #f2f4ea;
-}
-
-.portion-days {
-  font-size: 26rpx;
-  color: #26261f;
-}
-
-/* 每天成本是加量说服力的核心数字，用金色强调 */
-.portion-perday {
-  font-size: 28rpx;
-  color: #a97c33;
-  font-weight: 600;
 }
 
 .portion-hint {

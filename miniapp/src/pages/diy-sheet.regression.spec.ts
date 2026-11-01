@@ -183,11 +183,12 @@ describe('diy sheet layout regressions', () => {
     expect(templateSource).toContain('v-for="fact in makingPurchaseFacts"')
     expect(source).toContain('const dogPurchaseFacts = computed')
     expect(source).toContain('const makingPurchaseFacts = computed')
-    // 制作信息只留三个数：每餐重量 / 总餐数 / 总净重
+    // 制作信息只留三个**事实**：每餐重量 / 总袋数 / 总净重
+    // （2026-11-01：原来的"总餐数 = 餐次 × 天数"已删除，制作单不再用天数）
     expect(source).toContain("{ label: '每餐重量'")
-    expect(source).toContain("{ label: '总餐数'")
+    expect(source).toContain("{ label: '总袋数'")
     expect(source).toContain("{ label: '总净重'")
-    expect(source).toContain('const totalMealCount = computed')
+    expect(source).not.toContain('const totalMealCount = computed')
     expect(source).not.toContain("{ label: '制作周期'")
     expect(source).not.toContain("{ label: '分装规格'")
     expect(source).not.toContain("{ label: '采购量'")
@@ -696,34 +697,41 @@ describe('diy sheet layout regressions', () => {
  * 「上方天数选择暂不生效」）。若补剂下单页仍拿用户选的天数，
  * 会显示错误的天量，服务端「总天数 ≤ 效期安全线」的校验也会跟着算错。
  */
-describe('制作单：自定义分装下的真实覆盖天数', () => {
+describe('制作单：不再使用天数（2026-11-01）', () => {
   const source = readFileSync(
     resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
     'utf-8',
   )
+  const template = source.slice(0, source.indexOf('<script setup'))
 
-  it('按「总袋数 ÷ 每天餐数」反推覆盖天数（一餐一袋）', () => {
-    expect(source).toContain('effectiveCycleDays')
-    expect(source).toContain('packagePlanTotal.value.totalPackages')
-    expect(source).toMatch(/bags \/ meals/)
+  it('★ 标题不再写「X 天鲜食计划」', () => {
+    expect(source).not.toContain('天鲜食计划')
+    expect(source).toContain('鲜食制作单')
   })
 
-  it('⚠️ 不能退回「总重 ÷ 每日摄入」—— 那会隐含用户按配方每餐克数喂', () => {
-    // 实测：30袋×100g、配方建议140g/餐 → 总重口径算 11 天，用户实际吃 15 天。
-    // 补剂配的是整批食物，食物吃多久补剂就吃多久，所以必须按袋数算。
-    const days = source.slice(
-      source.indexOf('const effectiveCycleDays'),
-      source.indexOf('const effectiveCycleDays') + 900,
-    )
-    expect(days).toContain('totalPackages')
+  it('★ 制作信息用「总袋数」这个事实，不再用 餐次 × 天数 推算', () => {
+    expect(source).toContain("{ label: '总袋数'")
+    expect(source).not.toContain('总餐数')
+    expect(source).not.toContain('totalMealCount')
+    expect(source).not.toContain('mealsPerDay * cycleDays')
   })
 
-  it('交给补剂下单页的是真实天数，不是用户选的 cycleDays', () => {
-    expect(source).toMatch(/cycleDays:\s*effectiveCycleDays\.value/)
+  it('★ 保存制作单、价格预览、补剂草稿都不再带天数', () => {
+    expect(source).not.toContain('cycleDays: cycleDays.value')
+    expect(source).not.toContain('cycleDays: effectiveCycleDays')
+    expect(source).not.toContain('effectiveCycleDays')
+    // 补剂草稿里也不许出现天数
+    expect(source).not.toMatch(/saveSupplementPurchaseDraft\(\{[\s\S]{0,400}?cycleDays/)
   })
 
-  it('每日摄入缺失时退回用户选的天数，不会算出 0 天', () => {
-    expect(source).toMatch(/intake <= 0[\s\S]{0,40}return cycleDays\.value/)
+  it('★ 分享链接不再带天数', () => {
+    expect(source).not.toContain('&cycleDays=')
+  })
+
+  it('★ 只保留老单兼容：老链接里的天数仍然能读', () => {
+    // 老分享链接可能还带着 cycleDays，读不到时要能退回默认值，不能 NaN
+    expect(source).toContain("parseInt(options.cycleDays || '7')")
+    expect(source).toContain('dailyIntakeG.value * cycleDays.value')
   })
 })
 

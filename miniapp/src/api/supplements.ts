@@ -44,11 +44,11 @@ export interface SupplementQuote {
   warnings: string[]
   /** 本次购买几份（1 = 不加量） */
   portionMultiplier: number
-  /** 本次覆盖的总天数；服务端没拿到 cycleDays 时为 null */
+  /** @deprecated 2026-11-01 起补剂不再有"天"，恒为 null */
   totalDays: number | null
-  /** 总价 ÷ 总天数，界面用它讲"多买几份，每天更便宜" */
+  /** @deprecated 2026-11-01 起不再计算每天成本，恒为 null */
   perDayCost: number | null
-  /** 当前这张制作单最多能选几份（受份数上限与效期天数上限双重约束） */
+  /** 当前这张制作单最多能选几份（只看份数上限） */
   maxPortionMultiplier: number
   /**
    * 每个可选份数的结果（含总价与是否包邮），服务端已算好。
@@ -59,6 +59,7 @@ export interface SupplementQuote {
 
 export interface SupplementPortionOption {
   multiplier: number
+  /** @deprecated 2026-11-01 起不再计算天数，恒为 null */
   totalDays: number | null
   goodsSubtotal: number
   shippingFee: number
@@ -154,6 +155,7 @@ export interface CreateSupplementOrderPayload {
   recipeName?: string
   dogId?: string
   dogName?: string
+  /** @deprecated 2026-11-01 起补剂不用天数；字段保留只为兼容后端老接口 */
   cycleDays?: number
   /** 来源 DIY 制作单；首次下单补剂时后端用它冻结快照 */
   diySheetId?: string
@@ -187,14 +189,13 @@ export function fetchSupplementShopStatus() {
  *
  * @param lines 补剂清单（只给 id 与用量，价格由服务端现算）
  * @param options.portionMultiplier 加量份数，1 = 不加量
- * @param options.cycleDays 制作单天数，服务端用它算总天数与每天成本、
- *        并校验「总天数 ≤ 效期安全线」
+ *
+ * 2026-11-01：补剂不再传天数（制作单没有"天"，效期也不再计算）。
  */
 export function quoteSupplements(
   lines: SupplementQuoteLineInput[],
   options: {
     portionMultiplier?: number
-    cycleDays?: number
     diySheetId?: string
   } = {}
 ) {
@@ -206,7 +207,6 @@ export function quoteSupplements(
       ...(options.portionMultiplier !== undefined
         ? { portionMultiplier: options.portionMultiplier }
         : {}),
-      ...(options.cycleDays !== undefined ? { cycleDays: options.cycleDays } : {}),
       ...(options.diySheetId ? { diySheetId: options.diySheetId } : {})
     }
   })
@@ -466,6 +466,7 @@ export interface SupplementPurchaseDraft {
   recipeName?: string
   dogId?: string
   dogName?: string
+  /** @deprecated 2026-11-01 起补剂不用天数；字段保留只为兼容后端老接口 */
   cycleDays?: number
   /** 来源 DIY 制作单；首次下单补剂时后端用它冻结快照 */
   diySheetId?: string

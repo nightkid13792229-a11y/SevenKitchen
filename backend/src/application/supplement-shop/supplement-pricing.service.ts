@@ -62,7 +62,7 @@ export interface SupplementQuoteLineResult {
 export interface SupplementPortionOption {
   /** 份数（1 = 不加量） */
   multiplier: number;
-  /** 覆盖的总天数；没有 cycleDays 时为 null */
+  /** @deprecated 2026-11-01 起不再计算天数，恒为 null */
   totalDays: number | null;
   /** 商品小计（只含补剂商品；不含服务费/包材/运费） */
   goodsSubtotal: number;
@@ -105,11 +105,15 @@ export interface SupplementQuote {
   warnings: string[];
   /** 本次购买几份（1 = 不加量） */
   portionMultiplier: number;
-  /** 本次购买覆盖的总天数；没有 cycleDays 时为 null */
+  /**
+   * @deprecated 2026-11-01 起补剂不再计算天数，恒为 null。保留字段只为兼容老客户端。
+   */
   totalDays: number | null;
-  /** 总价 ÷ 总天数。界面用它讲"多买几份，每天更便宜" */
+  /**
+   * @deprecated 2026-11-01 起补剂不再计算每天成本，恒为 null。
+   */
   perDayCost: number | null;
-  /** 当前这张制作单最多能选几份（受份数上限与天数上限双重约束） */
+  /** 当前这张制作单最多能选几份（只受份数上限约束） */
   maxPortionMultiplier: number;
   /**
    * 每个可选份数的结果（含总价与是否包邮），供界面直接渲染成选项卡片。
@@ -121,24 +125,20 @@ export interface SupplementQuote {
 /**
  * 一张制作单最多能加量到几份。
  *
- * 两条约束同时生效，谁也替代不了谁：
- *   - maxPortionMultiplier：管选项别太多、单日产能可控
- *   - maxTotalDays：管效期安全红线
+ * 2026-11-01 起**只看份数上限**（`maxPortionMultiplier`）：
+ * 制作单不再有"天数"，补剂也不再按效期天数收敛份数 —— 顾客完全看不到"天"，
+ * 运营也无法知道这张单实际能吃几天（袋规是顾客自己定的），
+ * 再用一个估算出来的天数去卡份数，等于用猜出来的数限制真实的购买。
  *
- * 只靠天数上限的话，7 天的制作单会算出 12 份（90÷7）；
- * 只靠份数上限的话，40 天的制作单选 3 份就是 120 天，贴到效期红线。
+ * ⚠️ 配置里的 `maxTotalDays`（效期安全线）因此不再参与计算，保留字段只为兼容
+ * 后台配置页；不要再把它加回来，除非同时把"天数"重新变成一个可信的输入。
  *
- * 兜底至少返回 1：不管制作单多长，用户总得能按原量买一份。
+ * 兜底至少返回 1：不管什么配置，用户总得能按原量买一份。
  */
 export function resolveMaxPortionMultiplier(
-  config: Pick<SupplementShopConfigDto, 'maxPortionMultiplier' | 'maxTotalDays'>,
-  cycleDays: number | null | undefined,
+  config: Pick<SupplementShopConfigDto, 'maxPortionMultiplier'>,
 ): number {
-  const cap = Math.max(1, Math.floor(config.maxPortionMultiplier));
-  const days = Number(cycleDays);
-  if (!Number.isFinite(days) || days <= 0) return cap;
-  const byShelfLife = Math.floor(config.maxTotalDays / days);
-  return Math.max(1, Math.min(cap, byShelfLife));
+  return Math.max(1, Math.floor(config.maxPortionMultiplier));
 }
 
 /** 按"个数"计量的单位，分装量直接向上取整到整数 */
@@ -221,6 +221,7 @@ export class SupplementPricingService {
     lines: SupplementQuoteLineInput[];
     totalWeightG?: number;
     portionMultiplier?: number;
+    /** @deprecated 2026-11-01 起补剂不再使用天数；保留只为兼容老客户端，已忽略 */
     cycleDays?: number | null;
   }): Promise<SupplementQuote> {
     const config = await this.configService.getConfig();
@@ -249,7 +250,6 @@ export class SupplementPricingService {
 
     return this.calculateQuote(config, lines, shipping, {
       portionMultiplier: input.portionMultiplier,
-      cycleDays: input.cycleDays,
     });
   }
 
@@ -258,13 +258,13 @@ export class SupplementPricingService {
     config: SupplementShopConfigDto,
     lineInputs: SupplementQuoteLineInput[],
     shipping: SupplementQuoteShippingInfo,
-    options: { portionMultiplier?: number; cycleDays?: number | null } = {},
+    options: {
+      portionMultiplier?: number
+      /** @deprecated 2026-11-01 起补剂不再使用天数；字段保留只为兼容老客户端，已忽略 */
+      cycleDays?: number | null
+    } = {},
   ): SupplementQuote {
-    const cycleDays =
-      Number.isFinite(Number(options.cycleDays)) && Number(options.cycleDays) > 0
-        ? Math.floor(Number(options.cycleDays))
-        : null;
-    const maxPortionMultiplier = resolveMaxPortionMultiplier(config, cycleDays);
+    const maxPortionMultiplier = resolveMaxPortionMultiplier(config);
 
     /**
      * 份数。服务端**不信任客户端**：这里只做兜底收敛，
@@ -283,8 +283,6 @@ export class SupplementPricingService {
       lineInputs,
       shipping,
       effectiveMultiplier,
-      cycleDays,
-      maxPortionMultiplier,
     );
     if (portionMultiplier > maxPortionMultiplier) {
       primary.warnings.unshift(
@@ -312,8 +310,6 @@ export class SupplementPricingService {
               lineInputs,
               shipping,
               m,
-              cycleDays,
-              maxPortionMultiplier,
             );
       portionOptions.push({
         multiplier: m,
@@ -339,8 +335,6 @@ export class SupplementPricingService {
     lineInputs: SupplementQuoteLineInput[],
     shipping: SupplementQuoteShippingInfo,
     effectiveMultiplier: number,
-    cycleDays: number | null,
-    maxPortionMultiplier: number,
   ): Omit<SupplementQuote, 'portionOptions'> {
     const warnings: string[] = [];
 
@@ -467,13 +461,14 @@ export class SupplementPricingService {
     const total = guardFloat(
       goodsAmount + serviceFee + packagingFee + shippingFee,
     );
-    const totalDays =
-      cycleDays === null ? null : cycleDays * effectiveMultiplier;
-    // 每天成本：界面靠它讲清楚"多买几份，每天更便宜"。四舍五入到分。
-    const perDayCost =
-      totalDays === null || totalDays <= 0
-        ? null
-        : Math.round((total / totalDays) * 100) / 100;
+    /**
+     * 总天数 / 每天成本：2026-11-01 起**不再计算**（补剂不再有"天"的说法）。
+     *
+     * 字段保留为 null，只为兼容已经发出去的客户端与管理端读取；
+     * 不要再用它做任何判断或展示。
+     */
+    const totalDays = null;
+    const perDayCost = null;
 
     if (config.minOrderAmount > 0 && goodsAmount < config.minOrderAmount) {
       warnings.push(
@@ -502,7 +497,7 @@ export class SupplementPricingService {
       portionMultiplier: effectiveMultiplier,
       totalDays,
       perDayCost,
-      maxPortionMultiplier,
+      maxPortionMultiplier: resolveMaxPortionMultiplier(config),
     };
   }
 }

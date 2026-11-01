@@ -245,7 +245,6 @@ function handleRepurchase(order: SupplementOrder) {
     recipeName: order.recipeName || undefined,
     dogId: order.dogId || undefined,
     dogName: order.dogName || undefined,
-    cycleDays: order.cycleDays || undefined,
     portionMultiplier: order.portionMultiplier || 1,
     reorderFromOrderNo: order.orderNo
   })

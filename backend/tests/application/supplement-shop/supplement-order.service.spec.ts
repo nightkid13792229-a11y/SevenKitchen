@@ -205,22 +205,23 @@ describe('SupplementOrderService', () => {
       });
 
       expect(result.quote.portionMultiplier).toBe(3);
-      expect(result.quote.totalDays).toBe(90);
+      // 2026-11-01：补剂不再有"天"，总天数/每天成本恒为 null
+      expect(result.quote.totalDays).toBeNull();
       // 服务费按单收，加量后仍是 9.9 —— 这正是加量的意义所在
       expect(result.quote.serviceFee).toBe(9.9);
       expect(result.quote.bagCount).toBe(3);
-      expect(result.quote.perDayCost).not.toBeNull();
+      expect(result.quote.perDayCost).toBeNull();
     });
 
-    it('加量：份数超过天数上限时直接拒绝并说明原因', async () => {
-      // 40 天量 × 3 份 = 120 天，超过 90 天效期安全线
-      await expect(
-        service.quote({
-          lines: [{ ingredientId: KELP_ID, amount: 22.7 }],
-          portionMultiplier: 3,
-          cycleDays: 40,
-        }),
-      ).rejects.toThrow(/最多只能买 2 份/);
+    it('★ 天数不再参与份数上限：老客户端传 40 天也不会被卡', async () => {
+      // 以前 40 天 × 3 份 = 120 天会被效期红线拒掉；效期计算已整体移除
+      const result = await service.quote({
+        lines: [{ ingredientId: KELP_ID, amount: 22.7 }],
+        portionMultiplier: 3,
+        cycleDays: 40,
+      } as any);
+      expect(result.quote.portionMultiplier).toBe(3);
+      expect(result.quote.maxPortionMultiplier).toBe(3);
     });
 
     it('加量：份数超过配置上限时直接拒绝', async () => {
@@ -230,7 +231,7 @@ describe('SupplementOrderService', () => {
           portionMultiplier: 5,
           cycleDays: 7,
         }),
-      ).rejects.toThrow(/最多只能买 3 份/);
+      ).rejects.toThrow(/最多 3 份/);
     });
 
     it('加量：份数必须是正整数，0 和负数直接拒绝', async () => {
@@ -353,7 +354,7 @@ describe('SupplementOrderService', () => {
       cycleDays: 7,
     };
 
-    it('加量：订单落库记录份数与总天数（总天数是下单时快照，不做派生）', async () => {
+    it('加量：订单落库记录份数（天数已不再计算）', async () => {
       await service.createOrder('user-1', {
         ...baseRequest,
         portionMultiplier: 3,
@@ -361,15 +362,15 @@ describe('SupplementOrderService', () => {
 
       // 7 天量 × 3 份 = 21 天，袋数 = 2 种 × 3 份 = 6
       expect(createdOrders[0].portionMultiplier).toBe(3);
-      expect(createdOrders[0].totalDays).toBe(21);
+      expect(createdOrders[0].totalDays).toBeNull();
       expect(createdOrders[0].bagCount).toBe(6);
     });
 
-    it('加量：不加量时份数为 1，总天数等于制作单天数', async () => {
+    it('加量：不加量时份数为 1，不再写总天数', async () => {
       await service.createOrder('user-1', baseRequest);
 
       expect(createdOrders[0].portionMultiplier).toBe(1);
-      expect(createdOrders[0].totalDays).toBe(7);
+      expect(createdOrders[0].totalDays).toBeNull();
     });
 
     it('生成 SP 前缀订单号并写入订单行快照', async () => {

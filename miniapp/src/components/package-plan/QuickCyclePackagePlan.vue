@@ -20,7 +20,9 @@
     输入框的值不能一边打字一边被归一化：
       · 袋数被 clamp 到 ≥1 时，清空后立刻变 1，顾客永远打不出个位数
       · 克数每次 input 都取整，打小数点会被吃掉，接着的 5 就变成 1005
-    所以聚焦时以输入框里的原文为准（draft），失焦/点完成时才提交给页面归一化。
+    所以聚焦时**显示**以输入框里的原文为准（draft）；同时把原文发给页面归一化，
+    让价格和摘要跟着走（否则改完数字立刻点"确认订单"，价格还是旧的、按钮会点了没反应）。
+    失焦/点完成时再提交一次，做最终的取整与下限兜底。
     页面在提交订单前可以调 `commitAll()`，保证没失焦的值也算进去。
   -->
   <view class="package-plan">
@@ -177,9 +179,10 @@ function onFieldInput(
   event: { detail?: { value?: string | number } } | undefined,
 ): void {
   const value = event?.detail?.value
-  drafts[draftKey(index, field)] = value === undefined || value === null
-    ? ''
-    : String(value)
+  const raw = value === undefined || value === null ? '' : String(value)
+  // 草稿只管"显示"，保证光标不跳；模型也要跟上，价格与摘要不是滞后的
+  drafts[draftKey(index, field)] = raw
+  emit('update-row', index, field, raw)
 }
 
 /** 失焦/点完成：把原文交给页面归一化（取整、下限校验都在 composable 里） */

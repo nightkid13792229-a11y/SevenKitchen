@@ -427,7 +427,9 @@ describe('2026-11-02 老板反馈的七处调整', () => {
     const sheetPage = readPage('src/pages/diy-sheet/index.vue')
     expect(recipeDiy).toContain("custom: '1'")
     expect(recipeDiy).toContain('cycleDays: String(selectedCycleDays.value')
-    expect(sheetPage).toContain('isCustomPlan.value = options.custom')
+    expect(sheetPage).toContain("options.custom === '1' ? true")
+    // 没有 custom 参数时不能瞎猜（从"我的制作单"进来就是这种情况）
+    expect(sheetPage).toContain('isCustomPlan.value === null ? undefined')
     expect(sheetPage).toContain('packagePlanIsCustom: isCustomPlan.value')
     // 下单页优先用草稿里的选择，老草稿再反推
     expect(page).toContain('draft.value?.packagePlanIsCustom')

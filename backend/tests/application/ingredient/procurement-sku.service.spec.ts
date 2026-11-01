@@ -664,6 +664,35 @@ describe('ProcurementSkuService', () => {
     });
   });
 
+  describe('getFormOptions', () => {
+    it('返回该原料基准单位下允许的采购单位', async () => {
+      mockPrismaService.ingredient.findUnique.mockResolvedValue({
+        id: 'ing-1',
+        type: 'FOOD',
+        baseUnit: 'G',
+      });
+
+      const options = await service.getFormOptions('ing-1');
+
+      expect(options.baseUnit).toBe('G');
+      expect(options.purchaseUnits).toContain('斤');
+      expect(options.purchaseUnits).toContain('箱');
+      expect(options.purchaseUnits).not.toContain('罐');
+    });
+
+    it('非食材原料直接拒绝', async () => {
+      mockPrismaService.ingredient.findUnique.mockResolvedValue({
+        id: 'ing-2',
+        type: 'PACKAGING',
+        baseUnit: 'PCS',
+      });
+
+      await expect(service.getFormOptions('ing-2')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+  });
+
   describe('createFromStaff', () => {
     const baseSkuRow = (overrides: Record<string, unknown> = {}) => ({
       id: 'sku-1',

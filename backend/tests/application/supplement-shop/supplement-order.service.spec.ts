@@ -27,6 +27,7 @@ function config(
     maxPortionMultiplier: 3,
     maxTotalDays: 90,
     bulkBagThreshold: 60,
+    paymentTimeoutMinutes: 30,
     shippingMode: 'FLAT_RATE',
     flatShippingFee: 8,
     shippingTemplateId: null,
@@ -247,6 +248,30 @@ describe('SupplementOrderService', () => {
       }
     });
 
+    it('全部补剂都不可买时，返回零值报价而不是报错', async () => {
+      const result = await service.quote({
+        lines: [{ ingredientId: OFFLINE_ID, amount: 5 }],
+      });
+
+      expect(result.quote.lines).toEqual([]);
+      expect(result.quote.bagCount).toBe(0);
+      expect(result.quote.total).toBe(0);
+      expect(result.quote.portionOptions).toEqual([]);
+      // 老客户端靠这个数字渲染三张卡
+      expect(result.quote.maxPortionMultiplier).toBe(3);
+      expect(result.unavailable).toHaveLength(1);
+    });
+
+    it('报价响应带上最低起送、支付超时、大单提示袋数', async () => {
+      const result = await service.quote({
+        lines: [{ ingredientId: KELP_ID, amount: 22.7 }],
+      });
+
+      expect(result.minOrderAmount).toBe(0);
+      expect(result.paymentTimeoutMinutes).toBe(30);
+      expect(result.bulkBagThreshold).toBe(60);
+    });
+
     it('未上架的补剂进入 unavailable，但其余仍可报价', async () => {
       const result = await service.quote({
         lines: [
@@ -284,10 +309,12 @@ describe('SupplementOrderService', () => {
       expect(result.quote.lines[0].packedAmount).toBe(23);
     });
 
-    it('完全没有可买补剂时直接拒绝', async () => {
-      await expect(
-        service.quote({ lines: [{ ingredientId: OFFLINE_ID, amount: 5 }] }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+    it('完全没有可买补剂时报价不报错（建单仍然拒绝，见下单用例）', async () => {
+      const result = await service.quote({
+        lines: [{ ingredientId: OFFLINE_ID, amount: 5 }],
+      });
+      expect(result.quote.total).toBe(0);
+      expect(result.unavailable).toHaveLength(1);
     });
 
     it('用量不合法时拒绝', async () => {

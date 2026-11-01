@@ -305,6 +305,9 @@ export class SupplementOrderService {
       unavailable,
       enabled: config.enabled,
       inventoryWarnings: await this.buildInventoryWarnings(quote),
+      minOrderAmount: config.minOrderAmount,
+      paymentTimeoutMinutes: config.paymentTimeoutMinutes,
+      bulkBagThreshold: config.bulkBagThreshold,
     };
   }
 
@@ -1868,17 +1871,26 @@ export class SupplementOrderService {
     const { available, unavailable, meta } =
       await this.resolveAvailableLines(requested);
 
-    if (available.length === 0) {
-      throw new BadRequestException(
-        unavailable.length > 0
-          ? `当前没有可购买的补剂：${unavailable
-              .map((item) => `${item.name}（${item.reason}）`)
-              .join('；')}`
-          : '补剂清单为空，无法报价',
-      );
-    }
-
     const config = await this.configService.getConfig();
+
+    /**
+     * 一条都买不了时**不报错**，返回一条零值报价。
+     *
+     * 为什么不是 throw：小程序要拿 `unavailable` 逐条列出"哪种 + 为什么"，
+     * 报错只会丢掉结构化信息；而且线上老版本读的是 `res.data.quote.lines`，
+     * 返回 null 会让它直接抛异常。零值报价让新旧客户端都能进"暂不可购买"空态。
+     *
+     * 真正建单时仍然会拦（createOrder 里有 unavailable 检查）。
+     */
+    if (available.length === 0) {
+      return {
+        quote: this.buildEmptyQuote(),
+        unavailable,
+        config,
+        meta,
+        dosage,
+      };
+    }
 
     /**
      * 加量份数校验（服务端说了算，不信客户端）。
@@ -1915,6 +1927,39 @@ export class SupplementOrderService {
     });
 
     return { quote, unavailable, config, meta, dosage };
+  }
+
+  /**
+   * 一条补剂都买不了时的零值报价。
+   *
+   * 形状必须与真实报价完全一致（老客户端会直接读字段），金额全 0、
+   * 档位为空；`maxPortionMultiplier` 仍给 3，免得老页面渲染出 0 张卡。
+   */
+  private buildEmptyQuote(): SupplementQuote {
+    return {
+      lines: [],
+      bagCount: 0,
+      supplementCost: 0,
+      supplementPrice: 0,
+      serviceFee: 0,
+      serviceFeeBeforeWaiver: 0,
+      serviceFeeWaived: false,
+      freeServiceThreshold: null,
+      packagingFee: 0,
+      goodsSubtotal: 0,
+      goodsAmount: 0,
+      shippingFee: 0,
+      shippingDescription: '无运费',
+      freeShipping: false,
+      freeShippingThreshold: null,
+      total: 0,
+      warnings: [],
+      portionMultiplier: 1,
+      totalDays: null,
+      perDayCost: null,
+      maxPortionMultiplier: 3,
+      portionOptions: [],
+    };
   }
 
   /**

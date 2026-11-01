@@ -376,32 +376,55 @@ async function discoverTrustedSourceUrls(
     };
   }
 
-  const result = await client.search({
-    query: `${queryText} nutrition composition`,
-    count: 20,
-  });
-
   const urls: string[] = [];
   const hosts = new Set<string>();
   const sampleHosts = new Set<string>();
-  for (const item of result.results) {
+  let channelOk = false;
+  let resultCount = 0;
+
+  // 按库逐个 `site:` 搜索：一次通用查询很难把白名单站点顶上来。
+  for (const host of getDiscoveryHosts()) {
     try {
-      sampleHosts.add(new URL(item.url).host);
+      const result = await client.search({
+        query: `${queryText} nutrition composition site:${host}`,
+        count: 5,
+      });
+      channelOk = true;
+      resultCount += result.results.length;
+
+      for (const item of result.results) {
+        try {
+          sampleHosts.add(new URL(item.url).host);
+        } catch {
+          // 忽略非法 URL
+        }
+        const trustedHost = resolveTrustedHost(item.url);
+        if (!trustedHost) continue;
+        if (!urls.includes(item.url)) {
+          urls.push(item.url);
+        }
+        hosts.add(trustedHost);
+        if (urls.length >= MAX_DISCOVERED_SOURCE_URLS) {
+          return {
+            urls,
+            attemptedHosts: [...hosts],
+            channelOk,
+            resultCount,
+            sampleHosts: [...sampleHosts].slice(0, 8),
+          };
+        }
+      }
     } catch {
-      // 非法 URL 直接忽略
+      // 单个站点失败不整体判死：只要有一个成功，通道就算可用。
+      continue;
     }
-    const trustedHost = resolveTrustedHost(item.url);
-    if (!trustedHost) continue;
-    urls.push(item.url);
-    hosts.add(trustedHost);
-    if (urls.length >= MAX_DISCOVERED_SOURCE_URLS) break;
   }
 
   return {
     urls,
     attemptedHosts: [...hosts],
-    channelOk: true,
-    resultCount: result.results.length,
+    channelOk,
+    resultCount,
     sampleHosts: [...sampleHosts].slice(0, 8),
   };
 }

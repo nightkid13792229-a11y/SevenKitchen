@@ -11,6 +11,7 @@ describe('ProcurementSkuService', () => {
       findMany: jest.fn(),
       create: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
     },
@@ -660,6 +661,147 @@ describe('ProcurementSkuService', () => {
         rollbackFromHistoryId: 'history-1',
         operatorId: 'admin-2',
       }),
+    });
+  });
+
+  describe('createFromStaff', () => {
+    const baseSkuRow = (overrides: Record<string, unknown> = {}) => ({
+      id: 'sku-1',
+      ingredientId: 'ing-1',
+      name: '沃集鲜 糙米 1kg',
+      brand: null,
+      productModel: null,
+      purchaseChannel: '沃尔玛',
+      supplierName: null,
+      purchaseUnit: '袋',
+      purchaseToBaseRatio: 1000,
+      currentPurchasePrice: null,
+      referencePurchasePrice: null,
+      referencePricePerPurchaseUnit: null,
+      sourceTier: null,
+      notes: null,
+      isDefault: false,
+      isActive: true,
+      sortOrder: 0,
+      safetyStock: null,
+      reorderPoint: null,
+      targetStock: null,
+      createdAt: new Date('2026-11-01T00:00:00.000Z'),
+      ...overrides,
+    });
+
+    it('用件数乘每件净含量算出换算，而不是照抄单件规格', async () => {
+      mockPrismaService.ingredient.findUnique.mockResolvedValue({
+        id: 'ing-1',
+        type: 'FOOD',
+        baseUnit: 'ML',
+      });
+      mockPrismaService.procurementSku.findFirst.mockResolvedValue(null);
+      mockPrismaService.procurementSku.create.mockImplementation(
+        async ({ data }: any) => baseSkuRow(data),
+      );
+
+      const result = await service.createFromStaff({
+        ingredientId: 'ing-1',
+        createdById: 'user-1',
+        name: '椰汁',
+        purchaseChannel: '山姆',
+        purchaseUnit: '箱',
+        packCount: 24,
+        netContentPerPack: 330,
+      });
+
+      expect(result.status).toBe('created');
+      const data = mockPrismaService.procurementSku.create.mock.calls[0][0].data;
+      expect(data.purchaseToBaseRatio).toBe(7920);
+      expect(data.createdSource).toBe('STAFF_APP');
+      expect(data.createdById).toBe('user-1');
+      expect(data.productModel).toBe('24×330ml');
+    });
+
+    it('遇到同名同原料的商品时不创建，返回既有那条', async () => {
+      mockPrismaService.ingredient.findUnique.mockResolvedValue({
+        id: 'ing-1',
+        type: 'FOOD',
+        baseUnit: 'G',
+      });
+      mockPrismaService.procurementSku.findFirst.mockResolvedValue(
+        baseSkuRow({ id: 'sku-exist' }),
+      );
+
+      const result = await service.createFromStaff({
+        ingredientId: 'ing-1',
+        createdById: 'user-1',
+        name: ' 沃集鲜 糙米 1kg ',
+        purchaseChannel: '沃尔玛',
+        purchaseUnit: '袋',
+        packCount: 1,
+        netContentPerPack: 1000,
+      });
+
+      expect(result.status).toBe('duplicate');
+      expect(result.sku.id).toBe('sku-exist');
+      expect(mockPrismaService.procurementSku.create).not.toHaveBeenCalled();
+    });
+
+    it('拒绝非食材原料', async () => {
+      mockPrismaService.ingredient.findUnique.mockResolvedValue({
+        id: 'ing-2',
+        type: 'SUPPLEMENT',
+        baseUnit: 'G',
+      });
+
+      await expect(
+        service.createFromStaff({
+          ingredientId: 'ing-2',
+          createdById: 'user-1',
+          name: 'x',
+          purchaseChannel: '山姆',
+          purchaseUnit: '瓶',
+          packCount: 1,
+          netContentPerPack: 60,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('拒绝白名单外的采购单位', async () => {
+      mockPrismaService.ingredient.findUnique.mockResolvedValue({
+        id: 'ing-1',
+        type: 'FOOD',
+        baseUnit: 'G',
+      });
+
+      await expect(
+        service.createFromStaff({
+          ingredientId: 'ing-1',
+          createdById: 'user-1',
+          name: 'x',
+          purchaseChannel: '山姆',
+          purchaseUnit: '提',
+          packCount: 1,
+          netContentPerPack: 100,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('拒绝件数或净含量非正数', async () => {
+      mockPrismaService.ingredient.findUnique.mockResolvedValue({
+        id: 'ing-1',
+        type: 'FOOD',
+        baseUnit: 'G',
+      });
+
+      await expect(
+        service.createFromStaff({
+          ingredientId: 'ing-1',
+          createdById: 'user-1',
+          name: 'x',
+          purchaseChannel: '山姆',
+          purchaseUnit: '袋',
+          packCount: 0,
+          netContentPerPack: 1000,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 });

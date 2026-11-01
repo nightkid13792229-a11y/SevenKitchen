@@ -9,6 +9,7 @@ import {
   type IngredientSourceTierCode,
 } from '../../domain/order/ingredient-source-plan';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { composePackSpec } from '../purchasing/procurement-sku-net-content';
 
 type DecimalLike = {
   toNumber: () => number;
@@ -159,6 +160,13 @@ const PROCUREMENT_UNIT_ALIASES: Record<string, string> = {
   litre: 'L',
   litres: 'L',
   升: 'L',
+};
+
+/** 净含量没给单位时，按原料基准单位兜底的写法（拼 productModel 用） */
+const DEFAULT_NET_CONTENT_UNIT_TEXT: Record<BaseUnit, string> = {
+  [BaseUnit.G]: 'g',
+  [BaseUnit.ML]: 'ml',
+  [BaseUnit.PCS]: '个',
 };
 
 const ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT: Record<BaseUnit, string[]> = {
@@ -561,6 +569,158 @@ export class ProcurementSkuService {
         : await this.prisma.$transaction(runCreate as any);
 
     return toSummary(created as ProcurementSkuRecord);
+  }
+
+  /**
+   * 员工在小程序里新增采购商品（2026-11-01）。
+   *
+   * 与后台 `create()` 的区别，都是老板定过的规矩：
+   *   1. 换算 = 件数 × 每件净含量 —— **服务端算**，不信前端乘好的数（只填单件规格会让账目差 N 倍）；
+   *   2. 同一原料下同名商品不重复建，直接返回既有那条，让员工选它；
+   *   3. 记录是谁加的、从哪来（`STAFF_APP`）、当时传的截图。
+   */
+  async createFromStaff(input: {
+    ingredientId: string;
+    createdById: string;
+    name: string;
+    purchaseChannel: string;
+    purchaseUnit: string;
+    packCount: number;
+    netContentPerPack: number;
+    netContentUnitText?: string | null;
+    currentPurchasePrice?: number | null;
+    brand?: string | null;
+    productModel?: string | null;
+    sourceScreenshotUrl?: string | null;
+  }): Promise<{
+    status: 'created' | 'duplicate';
+    sku: ProcurementSkuSummary;
+  }> {
+    const ingredient = await this.prisma.ingredient.findUnique({
+      where: { id: input.ingredientId },
+      select: { id: true, type: true, baseUnit: true },
+    });
+    this.assertFoodIngredientCanOwnProcurementSkus(ingredient);
+
+    const baseUnit = ingredient!.baseUnit as BaseUnit;
+    const name = input.name?.trim();
+    if (!name) {
+      throw new BadRequestException('商品名称不能为空');
+    }
+
+    if (!Number.isInteger(input.packCount) || input.packCount <= 0) {
+      throw new BadRequestException('一箱/一袋件数必须是正整数');
+    }
+
+    if (
+      !Number.isFinite(input.netContentPerPack) ||
+      input.netContentPerPack <= 0
+    ) {
+      throw new BadRequestException('净含量必须大于 0');
+    }
+
+    const purchaseUnit = normalizeOptionalPurchaseUnit(
+      input.purchaseUnit,
+      baseUnit,
+    );
+    if (!purchaseUnit) {
+      throw new BadRequestException('采购单位不能为空');
+    }
+
+    const existing = await this.prisma.procurementSku.findFirst({
+      where: {
+        ingredientId: input.ingredientId,
+        isActive: true,
+        name: { equals: name, mode: 'insensitive' },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (existing) {
+      return {
+        status: 'duplicate',
+        sku: toSummary(existing as ProcurementSkuRecord),
+      };
+    }
+
+    const currentPurchasePrice =
+      input.currentPurchasePrice === undefined ||
+      input.currentPurchasePrice === null
+        ? null
+        : this.roundPrice(input.currentPurchasePrice);
+
+    if (currentPurchasePrice !== null) {
+      this.assertValidPrice(currentPurchasePrice);
+    }
+
+    const purchaseToBaseRatio = input.packCount * input.netContentPerPack;
+    const productModel =
+      normalizeOptionalText(input.productModel) ??
+      composePackSpec({
+        packCount: input.packCount,
+        value: input.netContentPerPack,
+        unit:
+          normalizeOptionalText(input.netContentUnitText) ??
+          DEFAULT_NET_CONTENT_UNIT_TEXT[baseUnit] ??
+          String(baseUnit).toLowerCase(),
+      });
+
+    const data = {
+      ingredientId: input.ingredientId,
+      name,
+      brand: normalizeOptionalText(input.brand) ?? null,
+      productModel,
+      purchaseChannel: normalizeOptionalText(input.purchaseChannel) ?? null,
+      supplierName: null,
+      purchaseUnit,
+      purchaseToBaseRatio,
+      currentPurchasePrice,
+      referencePurchasePrice: null,
+      referencePricePerPurchaseUnit: null,
+      sourceTier: null,
+      notes: null,
+      isDefault: false,
+      isActive: true,
+      sortOrder: 0,
+      safetyStock: null,
+      reorderPoint: null,
+      targetStock: null,
+      createdById: input.createdById,
+      createdSource: 'STAFF_APP',
+      sourceScreenshotUrl: normalizeOptionalText(input.sourceScreenshotUrl) ?? null,
+    };
+
+    const runCreate = async (tx: PrismaService) => {
+      const created = await tx.procurementSku.create({ data });
+
+      if (currentPurchasePrice !== null) {
+        await tx.procurementSkuPriceHistory.create({
+          data: this.buildPriceHistoryData({
+            procurementSkuId: created.id,
+            ingredientId: input.ingredientId,
+            oldPrice: null,
+            newPrice: currentPurchasePrice,
+            options: {
+              source: 'MANUAL',
+              operatorId: input.createdById,
+              note: '员工在小程序新增采购商品时填的单价',
+            },
+          }),
+        });
+      }
+
+      return created;
+    };
+
+    const created =
+      currentPurchasePrice === null
+        ? await runCreate(this.prisma)
+        : await this.prisma.$transaction(runCreate as any);
+
+    return {
+      status: 'created',
+      sku: toSummary(created as ProcurementSkuRecord),
+    };
   }
 
   async findByIngredientId(

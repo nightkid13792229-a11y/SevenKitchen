@@ -554,24 +554,29 @@ describe('SupplementPricingService', () => {
         expect(three.perDayCost).toBeNull();
       });
 
-      it('超上限时收敛到上限并给出警告（纯函数兜底，界面侧由 order service 直接拒绝）', () => {
-        const q = service.calculateQuote(
-          buildConfig({ maxPortionMultiplier: 3, maxTotalDays: 90 }),
-          lines,
-          shipping,
-          { portionMultiplier: 9 },
-        );
-        expect(q.portionMultiplier).toBe(3);
-        expect(q.warnings.some((w) => w.includes('超出上限'))).toBe(true);
+      it('超过 99 套直接拒绝，不静默改成别的份数', () => {
+        expect(() =>
+          service.calculateQuote(
+            buildConfig({ maxPortionMultiplier: 3, maxTotalDays: 90 }),
+            lines,
+            shipping,
+            { portionMultiplier: 100 },
+          ),
+        ).toThrow(BadRequestException);
       });
 
-      it('份数非法（0 / 负数 / 小数）时退回 1 份，不会算出 0 元订单', () => {
-        for (const bad of [0, -2, 1.7, Number.NaN]) {
-          const q = service.calculateQuote(buildConfig(), lines, shipping, {
-            portionMultiplier: bad,
-          });
-          expect(q.portionMultiplier).toBe(1);
+      it('份数非法（0 / 负数 / NaN）直接拒绝，小数按向下取整', () => {
+        for (const bad of [0, -2, Number.NaN]) {
+          expect(() =>
+            service.calculateQuote(buildConfig(), lines, shipping, {
+              portionMultiplier: bad,
+            }),
+          ).toThrow(BadRequestException);
         }
+        const floored = service.calculateQuote(buildConfig(), lines, shipping, {
+          portionMultiplier: 2.7,
+        });
+        expect(floored.portionMultiplier).toBe(2);
       });
 
       it('每个可选份数都返回一条选项结果（界面据此渲染卡片）', () => {
@@ -634,14 +639,14 @@ describe('SupplementPricingService', () => {
         );
       });
 
-      it('份数上限为 1 时只返回一条选项，界面据此隐藏控件', () => {
+      it('档位固定 1/2/3，不再受后台份数配置影响', () => {
         const q = service.calculateQuote(
           buildConfig({ maxPortionMultiplier: 1, maxTotalDays: 90 }),
           lines,
           shipping,
           { portionMultiplier: 1 },
         );
-        expect(q.portionOptions.map((o) => o.multiplier)).toEqual([1]);
+        expect(q.portionOptions.map((o) => o.multiplier)).toEqual([1, 2, 3]);
       });
 
       it('把份数上限回传给客户端，界面据此渲染选项', () => {
@@ -665,6 +670,60 @@ describe('SupplementPricingService', () => {
         expect(withDays.total).toBe(withoutDays.total);
         expect(withDays.totalDays).toBeNull();
       });
+    });
+  });
+
+  describe('份数（2026-11-01 取消产品上限）', () => {
+    const config = buildConfig({
+      markupMultiplier: 1,
+      priceRoundingMode: 'NONE',
+      serviceFeeAmount: 0,
+      packagingFeePerBag: 0,
+      freeShippingThreshold: null,
+      minOrderAmount: 0,
+    });
+    const lines = [
+      {
+        ingredientId: 'x',
+        name: '测试补剂',
+        unit: '粒',
+        amount: 10,
+        unitCost: 1,
+        physicalForm: 'CAPSULE' as const,
+      },
+    ];
+    const shipping = { fee: 0, description: '无运费' };
+
+    it('5 份就按 5 份算，不再被配置上限夹住', () => {
+      const one = service.calculateQuote(config, lines, shipping, {
+        portionMultiplier: 1,
+      });
+      const five = service.calculateQuote(config, lines, shipping, {
+        portionMultiplier: 5,
+      });
+      expect(one.goodsSubtotal).toBe(10);
+      expect(five.portionMultiplier).toBe(5);
+      expect(five.lines[0].bags).toBe(5);
+      expect(five.goodsSubtotal).toBe(50);
+    });
+
+    it('份数档位恒为 1/2/3，maxPortionMultiplier 恒为 3', () => {
+      const quote = service.calculateQuote(config, lines, shipping, {
+        portionMultiplier: 7,
+      });
+      expect(quote.portionOptions.map((o) => o.multiplier)).toEqual([1, 2, 3]);
+      expect(quote.maxPortionMultiplier).toBe(3);
+    });
+
+    it('份数必须是 1~99 的整数', () => {
+      expect(() =>
+        service.calculateQuote(config, lines, shipping, { portionMultiplier: 0 }),
+      ).toThrow(BadRequestException);
+      expect(() =>
+        service.calculateQuote(config, lines, shipping, {
+          portionMultiplier: 100,
+        }),
+      ).toThrow(BadRequestException);
     });
   });
 });

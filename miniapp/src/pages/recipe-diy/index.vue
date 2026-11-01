@@ -1078,6 +1078,11 @@ function navigateToSheet() {
     packageCount: totalPackages.value,
     packageSpecG: getPrimaryPackageSpecG(normalizedPackagePlan.value),
     packagePlan: JSON.stringify(normalizedPackagePlan.value),
+    // 把「顾客点的是哪一档天数 / 是否自定义」一起带过去：
+    // 制作单本身不存天数，但这层选择要能在补剂下单页原样亮出来
+    ...(isCustomPackagePlan.value
+      ? { custom: '1' }
+      : { custom: '0', cycleDays: String(selectedCycleDays.value ?? '') }),
     ...(orderId.value ? { orderId: orderId.value } : {}),
     ...(shareToken.value ? { shareToken: shareToken.value } : {})
   }

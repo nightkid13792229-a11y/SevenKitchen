@@ -698,6 +698,11 @@ const dogId = ref('')
  * 不要再用它做任何"这批能吃几天"的计算。
  */
 const cycleDays = ref(7)
+/**
+ * 顾客在 DIY 配置页是不是点了「自定义分装」。
+ * 制作单不存这个状态，只用它把选择原样带到补剂下单页。
+ */
+const isCustomPlan = ref(false)
 const perMealG = ref(0)
 const dailyIntakeG = ref(0)
 const packagePlan = ref<PackagePlanItem[]>([])
@@ -1285,6 +1290,9 @@ async function handleBuySupplements() {
     recipeName: recipe.value && recipe.value.name,
     dogId: dogId.value,
     dogName: dog.value && dog.value.name,
+    // 制作单不存天数，但「当初选的是哪一档 / 是不是自定义」要在下单页原样亮出来
+    packagePlanIsCustom: isCustomPlan.value,
+    packageCycleDays: isCustomPlan.value ? null : cycleDays.value,
     diySheetId
   })
 
@@ -1303,6 +1311,7 @@ onMounted(() => {
   shareToken.value = options.shareToken || ''
   dogId.value = options.dogId || ''
   cycleDays.value = parseInt(options.cycleDays || '7')
+  isCustomPlan.value = options.custom === '1'
   perMealG.value = parseFloat(options.perMealG || '0')
   dailyIntakeG.value = parseFloat(options.dailyIntakeG || '0')
   packagePlan.value = parsePackagePlanParam(options.packagePlan)

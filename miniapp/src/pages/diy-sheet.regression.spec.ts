@@ -720,8 +720,9 @@ describe('制作单：不再使用天数（2026-11-01）', () => {
     expect(source).not.toContain('cycleDays: cycleDays.value')
     expect(source).not.toContain('cycleDays: effectiveCycleDays')
     expect(source).not.toContain('effectiveCycleDays')
-    // 补剂草稿里也不许出现天数
-    expect(source).not.toMatch(/saveSupplementPurchaseDraft\(\{[\s\S]{0,400}?cycleDays/)
+    // 补剂草稿里不许再出现"天数"字段（2026-11-02 只允许带 packageCycleDays：
+    // 那是"当初点了哪一档"的界面记忆，不参与任何计算）
+    expect(source).not.toMatch(/saveSupplementPurchaseDraft\(\{[\s\S]{0,400}?\n\s*cycleDays:/)
   })
 
   it('★ 分享链接不再带天数', () => {

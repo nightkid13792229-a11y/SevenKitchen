@@ -348,6 +348,7 @@ import {
 import { runSupplementPayment } from '../../utils/supplement-payment'
 import { fetchMyDiySheets, updateDiySheetPlan, type DIYSheetSummary } from '../../api/diy-sheets'
 import { usePackagePlan } from '../../composables/usePackagePlan'
+import { inferPackagePlanMode } from '../../utils/package-plan-mode'
 import QuickCyclePackagePlan from '../../components/package-plan/QuickCyclePackagePlan.vue'
 import { createRequestId, toCents } from '../../utils/supplement-order-submit'
 import {
@@ -395,7 +396,7 @@ const {
 } = usePackagePlan({
   dailyIntakeG: () => sheet.value?.dailyIntakeG ?? 0,
   perMealG: () => sheet.value?.perMealG ?? 0,
-  mealsPerDay: () => 2,
+  mealsPerDay: () => resolveMealsPerDay(),
   dogId: () => draft.value?.dogId,
   onPlanChanged: () => schedulePlanApply()
 })
@@ -583,13 +584,37 @@ async function loadCurrentSheet() {
       packageSpecG: Math.floor(Number(row.packageSpecG)) || 0,
       packageCount: Math.max(1, Math.floor(Number(row.packageCount)) || 1)
     }))
-    // 制作单没有"天数"，所以初始没有任何天数高亮；点天数才会重算默认分装
-    selectedCycleDays.value = null
-    isCustomPackagePlan.value = false
+    // 优先用 DIY 配置页带过来的选择；老草稿没有这个信息，就从分装反推
+    const draftCustom = draft.value?.packagePlanIsCustom
+    if (typeof draftCustom === 'boolean') {
+      isCustomPackagePlan.value = draftCustom
+      selectedCycleDays.value = draftCustom
+        ? null
+        : Number(draft.value?.packageCycleDays) || null
+    } else {
+      const mode = inferPackagePlanMode(planRows.value, {
+        dailyIntakeG: found.dailyIntakeG,
+        mealsPerDay: resolveMealsPerDay()
+      })
+      isCustomPackagePlan.value = mode.isCustom
+      selectedCycleDays.value = mode.cycleDays
+    }
     showPackageEditor.value = false
   } catch (error) {
     console.warn('[SupplementOrder] 读取制作单分装失败:', error)
   }
+}
+
+/**
+ * 制作单存的是"每天吃多少克"和"每餐多少克"，餐次由这两个除出来。
+ * 用它（而不是写死 2）才能把 DIY 页的默认分装原样重建出来。
+ */
+function resolveMealsPerDay(): number {
+  const intake = Number(sheet.value?.dailyIntakeG)
+  const perMeal = Number(sheet.value?.perMealG)
+  if (!Number.isFinite(intake) || intake <= 0) return 2
+  if (!Number.isFinite(perMeal) || perMeal <= 0) return 2
+  return Math.max(1, Math.round(intake / perMeal))
 }
 
 function onSelectCycle(days: number) {

@@ -490,6 +490,13 @@ export interface SupplementPurchaseDraft {
   diySheetId?: string
   /** 复购时沿用原单份数 */
   portionMultiplier?: number
+  /**
+   * 顾客在 DIY 配置页选的快速天数（自定义分装时为 null）。
+   * 制作单本身不存天数，这个值只用来在下单页把当时的**选择**原样高亮出来。
+   */
+  packageCycleDays?: number | null
+  /** 顾客在 DIY 配置页是否处于「自定义分装」模式 */
+  packagePlanIsCustom?: boolean
   /** 复购来源订单号，用于后端审计 */
   reorderFromOrderNo?: string
 }

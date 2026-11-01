@@ -100,9 +100,16 @@ describe('supplement purchase regressions', () => {
       expect(source).not.toMatch(/summary\.value\.supplementPrice\s*\*/)
     })
 
-    it('页面彻底不出现"天"', () => {
+    it('天数只用来显示当初的选择，不参与任何计算', () => {
       expect(template).not.toContain('天用量')
-      expect(source).not.toContain('cycleDays')
+      // 报价与下单都不传天数
+      const quoteStart = source.indexOf('const quoteState = useSupplementQuote')
+      expect(source.slice(quoteStart, quoteStart + 400)).not.toContain('cycleDays')
+      const submitBlock = source.slice(
+        source.indexOf('async function submitOrder'),
+        source.indexOf('async function settlePayment'),
+      )
+      expect(submitBlock).not.toContain('cycleDays')
     })
   });
 
@@ -413,6 +420,18 @@ describe('2026-11-02 老板反馈的七处调整', () => {
     // 改分装期间禁止提交
     expect(page).toContain('!replanning.value')
     expect(page).not.toContain('改制作单')
+  })
+
+  it('DIY 配置页选的天数/自定义状态会带到下单页', () => {
+    const recipeDiy = readPage('src/pages/recipe-diy/index.vue')
+    const sheetPage = readPage('src/pages/diy-sheet/index.vue')
+    expect(recipeDiy).toContain("custom: '1'")
+    expect(recipeDiy).toContain('cycleDays: String(selectedCycleDays.value')
+    expect(sheetPage).toContain('isCustomPlan.value = options.custom')
+    expect(sheetPage).toContain('packagePlanIsCustom: isCustomPlan.value')
+    // 下单页优先用草稿里的选择，老草稿再反推
+    expect(page).toContain('draft.value?.packagePlanIsCustom')
+    expect(page).toContain('inferPackagePlanMode')
   })
 
   it('订单详情的操作按钮改为纵向铺满', () => {

@@ -1,0 +1,128 @@
+{
+ "num": "15-1",
+ "caption": "Effects of improper nutrition on reproductive performance and health in bitches.*",
+ "page": 1,
+ "columns": [
+  "Factors",
+  "Reproductive and health consequences"
+ ],
+ "rows": [
+  [
+   "Underfeeding",
+   "Small litter size"
+  ],
+  [
+   "",
+   "Low birth weight"
+  ],
+  [
+   "",
+   "Increased neonatal morbidity and mortality"
+  ],
+  [
+   "",
+   "Decreased milk yield"
+  ],
+  [
+   "",
+   "Decreased immunity and decreased response to vaccination"
+  ],
+  [
+   "",
+   "Decreased fertility later"
+  ],
+  [
+   "",
+   "Hair loss and weight loss in bitches"
+  ],
+  [
+   "Obesity",
+   "Decreased ovulation"
+  ],
+  [
+   "",
+   "Decreased fertility"
+  ],
+  [
+   "",
+   "Silent heat"
+  ],
+  [
+   "",
+   "Prolonged interestrous interval"
+  ],
+  [
+   "",
+   "Anestrus"
+  ],
+  [
+   "",
+   "Smaller litters"
+  ],
+  [
+   "Malnutrition*",
+   ""
+  ],
+  [
+   "Protein deficiency",
+   "Low birth weight"
+  ],
+  [
+   "",
+   "Increased neonatal morbidity and mortality"
+  ],
+  [
+   "",
+   "Decreased neonatal immunity"
+  ],
+  [
+   "Carbohydrate-free food",
+   "Low birth weight"
+  ],
+  [
+   "",
+   "Increased neonatal morbidity and mortality"
+  ],
+  [
+   "",
+   "Increased numbers of stillbirths"
+  ],
+  [
+   "Zinc deficiency",
+   "Fetal resorption"
+  ],
+  [
+   "",
+   "Smaller litters"
+  ],
+  [
+   "Iron deficiency",
+   "Decreased immunity and response to vaccination"
+  ],
+  [
+   "Pyridoxine and biotin deficiency",
+   "Decreased immunity and response to vaccination"
+  ],
+  [
+   "Hypervitaminosis A",
+   "Congenital abnormalities"
+  ],
+  [
+   "",
+   "Smaller litters"
+  ],
+  [
+   "Hypervitaminosis D",
+   "Soft-tissue calcification"
+  ]
+ ],
+ "tableId": "T0489",
+ "doc": "sacn5/chapters/SACN5_15.pdf",
+ "method": "视觉",
+ "verify": {
+  "numbers": 0,
+  "found": 0,
+  "status": "通过",
+  "misses": []
+ }
+}

@@ -159,7 +159,12 @@ def main():
                             'paragraphs': [], 'score': 0, 'reason': '无英文术语'})
                 continue
             cites = []
-            for obj in re.findall(r'\{[^{}]*\}', body):
+            # 同一条出处可能既有 citations 又有 sources —— 只取一份，优先结构化
+            objs = re.findall(r'\{[^{}]*\}', body)
+            has_sid = any('sourceId:' in o for o in objs)
+            for obj in objs:
+                if has_sid and 'sourceId:' not in obj:
+                    continue
                 sid = re.search(r"sourceId: '([^']+)'", obj)
                 src = re.search(r"source: '([^']+)'", obj)
                 loc = re.search(r"(?:chapter|locator): '([^']*)'", obj)

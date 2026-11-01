@@ -22,12 +22,25 @@
       <view class="sample-card">
         <text class="sample-title">这样截图，信息最全</text>
         <view class="sample-body">
-          <image
-            class="sample-image"
-            src="/static/procurement-sku-sample.jpg"
-            mode="aspectFill"
-            @tap="previewSample"
-          />
+          <!--
+            这里故意不用真截图：小程序的媒体资源总量有 200KB 的硬预算，
+            一张商品详情页截图就要 100~400KB，直接顶爆（会挂掉构建校验）。
+            所以用等高宽比的示意块表达"图上要有哪三样"。
+          -->
+          <view class="sample-mock">
+            <view class="mock-line mock-title">
+              <text class="mock-badge">①</text>
+              <text>沃集鲜 糙米 1kg</text>
+            </view>
+            <view class="mock-line">
+              <text class="mock-badge">②</text>
+              <text>净含量：1kg</text>
+            </view>
+            <view class="mock-line">
+              <text class="mock-badge">③</text>
+              <text>¥14.99 / 袋</text>
+            </view>
+          </view>
           <view class="sample-points">
             <text class="sample-point">① 商品标题（带规格那种）</text>
             <text class="sample-point">② 净含量 —— 1kg / 500g</text>
@@ -295,10 +308,6 @@ onLoad(async (options: Record<string, string>) => {
   }
 });
 
-const previewSample = () => {
-  uni.previewImage({ urls: ['/static/procurement-sku-sample.jpg'] });
-};
-
 const handlePickImage = async () => {
   if (uploading.value) return;
 
@@ -501,12 +510,32 @@ const handleSubmit = async () => {
   gap: 10px;
   margin-top: 8px;
 }
-.sample-image {
-  width: 62px;
-  height: 86px;
+.sample-mock {
+  width: 132px;
+  flex: none;
   border-radius: 8px;
   border: 1px solid #ddd3b6;
-  flex: none;
+  background: #fff;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+}
+.mock-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: #5d5747;
+}
+.mock-title {
+  font-weight: 600;
+  color: #1e3a2f;
+}
+.mock-badge {
+  font-size: 9px;
+  color: #8a6b33;
 }
 .sample-points {
   display: flex;

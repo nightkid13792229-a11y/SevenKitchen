@@ -145,7 +145,14 @@ export class DeepSeekWebSearchClient implements WebSearchPort {
           if (isRetryableStatus(response.status) && attempt < maxAttempts) {
             continue;
           }
-          throw new Error(`网页搜索失败：HTTP ${response.status}`);
+          // 带一小段响应体（不含 Key）：401/403 时能看出是鉴权还是权限问题。
+          const detail = await response
+            .text()
+            .then((text) => text.replace(/\s+/g, ' ').slice(0, 160))
+            .catch(() => '');
+          throw new Error(
+            `网页搜索失败：HTTP ${response.status}${detail ? ` ${detail}` : ''}`,
+          );
         }
 
         return (await response.json()) as unknown;

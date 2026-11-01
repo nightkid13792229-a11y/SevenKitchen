@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { createEmptyNutritionProfile } from '../../domain/ingredient/nutrition-profile.utils';
 import type { NutritionProfileV2 } from '../../domain/ingredient/types';
@@ -133,6 +133,8 @@ export const TRUSTED_WEB_SEARCH_PORT = 'TRUSTED_WEB_SEARCH_PORT';
 
 @Injectable()
 export class TrustedNutritionWebSearchService {
+  private readonly logger = new Logger(TrustedNutritionWebSearchService.name);
+
   constructor(
     @Optional()
     private readonly providerConfig?: AgentProviderConfigService,
@@ -244,9 +246,19 @@ export class TrustedNutritionWebSearchService {
     let discoveryStatus: 'OK' | 'UNAVAILABLE' = 'OK';
     if (!hasExplicitUrl && isWhitelistWebSearchEnabled()) {
       const client = await this.resolveWebSearchClient();
-      const discovery = client
-        ? await discoverTrustedSourceUrls(input, client)
-        : { urls: [], attemptedHosts: [], channelOk: false };
+      let discovery: { urls: string[]; attemptedHosts: string[]; channelOk: boolean };
+      try {
+        discovery = client
+          ? await discoverTrustedSourceUrls(input, client)
+          : { urls: [], attemptedHosts: [], channelOk: false };
+      } catch (error) {
+        this.logger.warn(
+          `[trusted-web-search] DeepSeek 搜索失败：${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        discovery = { urls: [], attemptedHosts: [], channelOk: false };
+      }
       discoveryStatus = discovery.channelOk ? 'OK' : 'UNAVAILABLE';
       for (const host of discovery.attemptedHosts) {
         attemptedHosts.add(host);
@@ -318,16 +330,10 @@ async function discoverTrustedSourceUrls(
     return { urls: [], attemptedHosts: [], channelOk: false };
   }
 
-  let result;
-  try {
-    result = await client.search({
-      query: `${queryText} nutrition composition`,
-      count: 20,
-    });
-  } catch {
-    // 通道本身失败：调用方据此报“不可用”，不能当成“线上没有”。
-    return { urls: [], attemptedHosts: [], channelOk: false };
-  }
+  const result = await client.search({
+    query: `${queryText} nutrition composition`,
+    count: 20,
+  });
 
   const urls: string[] = [];
   const hosts = new Set<string>();

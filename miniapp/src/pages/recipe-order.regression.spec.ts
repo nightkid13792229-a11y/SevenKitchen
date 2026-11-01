@@ -105,7 +105,7 @@ describe('recipe-order phase one UI contract', () => {
   it('presents the redesigned purchase decision sections in order', () => {
     // 2026-09-21：「说明」这一行标题已按需求删除，两张说明卡片直接跟在「交付与保障」之后。
     const sectionOrder = [
-      'recipe-life-stage-picker',
+      'recipe-info-section',
       'dog-profile-context',
       '快速选择备餐天数',
       '原料明细',
@@ -137,76 +137,49 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).not.toContain('产品说明');
   });
 
-  it('uses an inline life-stage dropdown instead of a native bottom picker or text label', () => {
-    expect(templateSource).not.toContain('<view class="section-label">食谱信息</view>');
-    expect(templateSource).toContain('recipe-life-stage-picker');
-    expect(templateSource).not.toContain('<picker');
-    expect(templateSource).not.toContain('mode="selector"');
-    expect(templateSource).not.toContain('range-key="label"');
-    expect(templateSource).not.toContain('@change="onLifeStageVersionPickerChange"');
-    expect(templateSource).toContain('@tap="toggleLifeStageDropdown"');
-    expect(templateSource).toContain('recipe-life-stage-dropdown');
-    expect(templateSource).toContain('v-if="lifeStageDropdownVisible"');
-    expect(templateSource).toContain('v-for="option in lifeStageVersionOptions"');
-    expect(templateSource).toContain('@tap.stop="selectLifeStageVersion(option)"');
-    expect(templateSource).toContain('recipe-life-stage-dropdown-mask');
-    expect(templateSource).toContain('@tap="closeLifeStageDropdown"');
-    expect(templateSource).toContain("{{ selectedLifeStageLabel || '选择生命阶段' }}");
-    expect(templateSource).not.toContain('<text v-if="selectedLifeStageLabel" class="tag life-stage-tag">');
-    expect(templateSource).not.toContain('<text class="section-label">食谱信息</text>');
-    expect(source).toContain('availableLifeStageVersions?: RecipeLifeStageVersion[]');
-    expect(source).toContain('const lifeStageVersionOptions = computed');
-    expect(source).toContain('const lifeStageDropdownVisible = ref(false)');
-    expect(source).toContain('function toggleLifeStageDropdown');
-    expect(source).toContain('function closeLifeStageDropdown');
-    expect(source).toContain('async function selectLifeStageVersion');
-    expect(source).toContain('await loadRecipeDetail()');
+  it('uses the shared version bar under the dog card instead of a top dropdown', () => {
+    expect(templateSource).not.toContain('recipe-life-stage-picker');
+    expect(templateSource).not.toContain('toggleLifeStageDropdown');
+    expect(templateSource).not.toContain('lifeStageDropdownVisible');
+    expect(templateSource).toContain('<LifeStageVersionBar');
+    expect(templateSource).toContain(':state="lifeStageState"');
+    expect(templateSource).toContain('<LifeStageVersionSheet');
+    expect(templateSource).toContain('@select="switchLifeStageVersion"');
+
+    const dogIndex = templateSource.indexOf('dog-profile-context');
+    const barIndex = templateSource.indexOf('<LifeStageVersionBar');
+    expect(barIndex).toBeGreaterThan(dogIndex);
+    expect(source).not.toContain('const lifeStageDropdownVisible = ref(false)');
   });
 
-  it('renders the selected handoff life stage in Chinese in the picker', () => {
-    expect(templateSource).toContain("{{ selectedLifeStageLabel || '选择生命阶段' }}");
-    expect(templateSource).not.toContain('v-for="stage in recipe.applicableLifeStages"');
-    expect(source).toContain('../../utils/life-stage-match');
-    expect(source).toContain('getLifeStageLabel');
+  it('auto-follows the dog and marks only user choices as manual', () => {
+    expect(source).toContain('const manualLifeStage = ref(');
+    expect(source).toContain("data.manual = manualLifeStage.value ? 'true' : 'false'");
+    expect(source).toContain('data.dogId = selectedDogId.value');
+    expect(source).toContain('async function switchLifeStageVersion');
+
+    // 换狗要清掉手动选择并重新加载菜谱（版本跟着狗走）
+    const selectDogSource = source.match(/async function selectDog\([\s\S]*?\n}\n/)?.[0] || '';
+    expect(selectDogSource).toContain("manualLifeStage.value = ''");
+    expect(selectDogSource).toContain('loadRecipeDetail()');
+    expect(selectDogSource).toContain('loadDogCalcResult(');
   });
 
-  it('reads and carries the selected life stage from the detail page handoff', () => {
-    expect(source).toContain("const selectedLifeStage = ref('')");
-    expect(source).toContain("selectedLifeStage.value = currentPage.options?.lifeStage || ''");
-    expect(templateSource).toContain("{{ selectedLifeStageLabel || '选择生命阶段' }}");
-    expect(source).toContain('lifeStage: selectedLifeStage.value');
-  });
-
-  it('offers a quick switch to the selected dog matched life-stage recipe version from the warning', () => {
-    /**
-     * 2026-10-18：生命阶段块改用共享组件 `LifeStageVersionCard`。
-     *
-     * **意图不变** —— 警示卡上必须有"切换到匹配版本"的入口，
-     * 且只有存在推荐版本时才显示。只是渲染方式从内联模板变成了组件参数。
-     */
-    const warningSource = templateSource.match(
-      /<LifeStageVersionCard[\s\S]*?<view class="feeding-note-toggle"/,
-    )?.[0] || '';
-
-    expect(warningSource).toContain(':switch-label="recommendedLifeStageOption');
-    expect(warningSource).toContain('@open-selector="switchToRecommendedLifeStage"');
-    expect(warningSource).toContain('切换到${recommendedLifeStageOption.label}');
-    expect(warningSource).toContain('acknowledge-label="我已知晓"');
-    expect(warningSource).toContain('@acknowledge="dismissWarning"');
-    expect(source).toContain('const recommendedLifeStageOption = computed');
-    expect(source).toContain('version.lifeStage === selectedDogRecipeLifeStage.value');
-    // 切换动作本身没变（只是入口从内联按钮变成了组件事件）
-    const switchFn = source.match(
-      /async function switchToRecommendedLifeStage[\s\S]*?\n}\n/,
-    )?.[0] || '';
-    expect(switchFn).toContain('recommendedLifeStageOption.value');
-    expect(switchFn).toContain('selectLifeStageVersion(');
+  it('confirms only high-risk mismatches, once per order', () => {
+    expect(source).toContain("lifeStageRisk.value === 'HIGH'");
+    expect(source).toContain('acknowledgedForOrder');
+    expect(source).toContain('confirmLifeStageMismatch');
+    expect(source).not.toContain('dismissWarning');
+    expect(templateSource).not.toContain('我已知晓');
+    // 换狗/换版都要让上一次确认作废
+    const switchSource = source.match(/async function switchLifeStageVersion[\s\S]*?\n}\n/)?.[0] || '';
+    expect(switchSource).toContain('acknowledgedForOrder.value = false');
   });
 
   it('defaults the selected dog from repurchase, detail handoff, cached dog, then first dog', () => {
     const mountedSource = source.match(/onMounted\(async \(\) => \{[\s\S]*?\n}\)/)?.[0] || '';
     const loadDogsSource = source.match(
-      /async function loadDogs\(\)[\s\S]*?\n}\n\n\/\/ ========== 生命阶段校验逻辑 ==========/
+      /async function loadDogs\([^)]*\)[\s\S]*?\n}\n\n\/\/ ========== 生命阶段校验逻辑 ==========/
     )?.[0] || '';
 
     expect(source).toContain("const detailHandoffDogId = ref('')");

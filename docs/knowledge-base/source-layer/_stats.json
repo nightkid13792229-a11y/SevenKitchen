@@ -1,0 +1,962 @@
+[
+ {
+  "doc": "README.md",
+  "docId": "README",
+  "sections": 1,
+  "paragraphs": 9
+ },
+ {
+  "doc": "aaha/AAHA-2010-Nutritional-Assessment-Guidelines.pdf",
+  "docId": "aaha-AAHA-2010-Nutritional-Assessment-Guidelines",
+  "sections": 4,
+  "paragraphs": 122
+ },
+ {
+  "doc": "aaha/AAHA-2014-Weight-Management-Guidelines.pdf",
+  "docId": "aaha-AAHA-2014-Weight-Management-Guidelines",
+  "sections": 32,
+  "paragraphs": 143
+ },
+ {
+  "doc": "aaha/AAHA-2018-Diabetes-Management-Guidelines.pdf",
+  "docId": "aaha-AAHA-2018-Diabetes-Management-Guidelines",
+  "sections": 14,
+  "paragraphs": 301
+ },
+ {
+  "doc": "aaha/AAHA-2019-Canine-Life-Stage-Guidelines.pdf",
+  "docId": "aaha-AAHA-2019-Canine-Life-Stage-Guidelines",
+  "sections": 32,
+  "paragraphs": 226
+ },
+ {
+  "doc": "aaha/AAHA-2019-Dental-Care-Guidelines.pdf",
+  "docId": "aaha-AAHA-2019-Dental-Care-Guidelines",
+  "sections": 39,
+  "paragraphs": 238
+ },
+ {
+  "doc": "aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf",
+  "docId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+  "sections": 27,
+  "paragraphs": 190
+ },
+ {
+  "doc": "aaha/AAHA-2022-Canine-Vaccination-Guidelines-2024update.pdf",
+  "docId": "aaha-AAHA-2022-Canine-Vaccination-Guidelines-2024update",
+  "sections": 70,
+  "paragraphs": 156
+ },
+ {
+  "doc": "aaha/AAHA-2022-Pain-Management-Guidelines.pdf",
+  "docId": "aaha-AAHA-2022-Pain-Management-Guidelines",
+  "sections": 29,
+  "paragraphs": 213
+ },
+ {
+  "doc": "aaha/AAHA-2023-Senior-Care-Guidelines.pdf",
+  "docId": "aaha-AAHA-2023-Senior-Care-Guidelines",
+  "sections": 27,
+  "paragraphs": 227
+ },
+ {
+  "doc": "aaha/AAHA-2023-Senior-Care-Toolkit.pdf",
+  "docId": "aaha-AAHA-2023-Senior-Care-Toolkit",
+  "sections": 19,
+  "paragraphs": 71
+ },
+ {
+  "doc": "acvim/ACVIM-2015-心血管-肾脏轴疾病.xml",
+  "docId": "acvim-ACVIM-2015",
+  "sections": 22,
+  "paragraphs": 67
+ },
+ {
+  "doc": "acvim/ACVIM-2015-治疗性抗菌药使用与耐药性.xml",
+  "docId": "acvim-ACVIM-2015",
+  "sections": 23,
+  "paragraphs": 47
+ },
+ {
+  "doc": "acvim/ACVIM-2015-犬癫痫管理.xml",
+  "docId": "acvim-ACVIM-2015",
+  "sections": 39,
+  "paragraphs": 98
+ },
+ {
+  "doc": "acvim/ACVIM-2016-犬猫尿石症治疗与预防共识.xml",
+  "docId": "acvim-ACVIM-2016",
+  "sections": 31,
+  "paragraphs": 78
+ },
+ {
+  "doc": "acvim/ACVIM-2018-犬猫莱姆病-更新共识.xml",
+  "docId": "acvim-ACVIM-2018",
+  "sections": 20,
+  "paragraphs": 68
+ },
+ {
+  "doc": "acvim/ACVIM-2018-系统性高血压-识别评估与管理.xml",
+  "docId": "acvim-ACVIM-2018",
+  "sections": 23,
+  "paragraphs": 99
+ },
+ {
+  "doc": "acvim/ACVIM-2018-细胞毒化疗药物安全使用.xml",
+  "docId": "acvim-ACVIM-2018",
+  "sections": 23,
+  "paragraphs": 67
+ },
+ {
+  "doc": "acvim/ACVIM-2018-胃肠道保护剂合理使用.xml",
+  "docId": "acvim-ACVIM-2018",
+  "sections": 49,
+  "paragraphs": 94
+ },
+ {
+  "doc": "acvim/ACVIM-2019-免疫介导性溶血性贫血-治疗.xml",
+  "docId": "acvim-ACVIM-2019",
+  "sections": 55,
+  "paragraphs": 179
+ },
+ {
+  "doc": "acvim/ACVIM-2019-免疫介导性溶血性贫血-诊断.xml",
+  "docId": "acvim-ACVIM-2019",
+  "sections": 59,
+  "paragraphs": 100
+ },
+ {
+  "doc": "acvim/ACVIM-2019-犬MMVD-分期与治疗-官方摘要卡片.pdf",
+  "docId": "acvim-ACVIM-2019-MMVD",
+  "sections": 31,
+  "paragraphs": 52
+ },
+ {
+  "doc": "acvim/ACVIM-2019-犬MMVD-诊断与治疗共识全文.xml",
+  "docId": "acvim-ACVIM-2019-MMVD",
+  "sections": 26,
+  "paragraphs": 160
+ },
+ {
+  "doc": "acvim/ACVIM-2019-犬慢性肝炎诊断与治疗.xml",
+  "docId": "acvim-ACVIM-2019",
+  "sections": 35,
+  "paragraphs": 212
+ },
+ {
+  "doc": "acvim/ACVIM-2020-心肌病分类诊断与管理.xml",
+  "docId": "acvim-ACVIM-2020",
+  "sections": 35,
+  "paragraphs": 78
+ },
+ {
+  "doc": "acvim/ACVIM-2020-肺动脉高压.xml",
+  "docId": "acvim-ACVIM-2020",
+  "sections": 33,
+  "paragraphs": 158
+ },
+ {
+  "doc": "acvim/ACVIM-2021-猫胰腺炎共识.xml",
+  "docId": "acvim-ACVIM-2021",
+  "sections": 48,
+  "paragraphs": 119
+ },
+ {
+  "doc": "acvim/ACVIM-2022-犬慢性肠病-现状综述.xml",
+  "docId": "acvim-ACVIM-2022",
+  "sections": 21,
+  "paragraphs": 87
+ },
+ {
+  "doc": "acvim/ACVIM-2022-犬胸腰段椎间盘突出-诊断与管理.xml",
+  "docId": "acvim-ACVIM-2022",
+  "sections": 48,
+  "paragraphs": 240
+ },
+ {
+  "doc": "acvim/ACVIM-2023-犬钩端螺旋体病-更新共识.xml",
+  "docId": "acvim-ACVIM-2023",
+  "sections": 17,
+  "paragraphs": 77
+ },
+ {
+  "doc": "acvim/ACVIM-2023-猫慢性肠病-低级别肿瘤与炎症鉴别.xml",
+  "docId": "acvim-ACVIM-2023",
+  "sections": 36,
+  "paragraphs": 107
+ },
+ {
+  "doc": "acvim/ACVIM-2024-免疫性血小板减少症-治疗.xml",
+  "docId": "acvim-ACVIM-2024",
+  "sections": 17,
+  "paragraphs": 282
+ },
+ {
+  "doc": "acvim/ACVIM-2024-免疫性血小板减少症-诊断.xml",
+  "docId": "acvim-ACVIM-2024",
+  "sections": 44,
+  "paragraphs": 162
+ },
+ {
+  "doc": "acvim/ACVIM-2024-犬尿失禁诊断与管理.xml",
+  "docId": "acvim-ACVIM-2024",
+  "sections": 34,
+  "paragraphs": 211
+ },
+ {
+  "doc": "acvim/ACVIM-2024-癫痫持续状态与集群发作.xml",
+  "docId": "acvim-ACVIM-2024",
+  "sections": 44,
+  "paragraphs": 171
+ },
+ {
+  "doc": "acvim/ACVIM-2026-慢性肠病诊断与治疗共识.xml",
+  "docId": "acvim-ACVIM-2026",
+  "sections": 45,
+  "paragraphs": 152
+ },
+ {
+  "doc": "aspca/ASPCA-people-foods-to-avoid.txt",
+  "docId": "aspca-ASPCA-people-foods-to-avoid",
+  "sections": 1,
+  "paragraphs": 17
+ },
+ {
+  "doc": "cn-regulation/中华人民共和国动物防疫法-全国人大公报版.pdf",
+  "docId": "cn-regulation",
+  "sections": 101,
+  "paragraphs": 1124
+ },
+ {
+  "doc": "cn-regulation/狂犬病防治技术规范-中国动物疫病预防控制中心.pdf",
+  "docId": "cn-regulation",
+  "sections": 1,
+  "paragraphs": 55
+ },
+ {
+  "doc": "fediaf/FEDIAF-Nutritional-Guidelines_2025-ONLINE.pdf",
+  "docId": "fediaf-FEDIAF-Nutritional-Guidelines-2025-ONLINE",
+  "sections": 162,
+  "paragraphs": 949
+ },
+ {
+  "doc": "iris/IRIS-AKI-Grading_2026.pdf",
+  "docId": "iris-IRIS-AKI-Grading-2026",
+  "sections": 3,
+  "paragraphs": 48
+ },
+ {
+  "doc": "iris/IRIS-DOG-Treatment_Recommendations_may-2026.pdf",
+  "docId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026",
+  "sections": 9,
+  "paragraphs": 217
+ },
+ {
+  "doc": "iris/IRIS_CAT_Treatment_Recommendations_-2026.pdf",
+  "docId": "iris-IRIS-CAT-Treatment-Recommendations-2026",
+  "sections": 8,
+  "paragraphs": 212
+ },
+ {
+  "doc": "iris/IRIS_Pocket_Guide_to_CKD_June-2026-cn6g.pdf",
+  "docId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g",
+  "sections": 5,
+  "paragraphs": 18
+ },
+ {
+  "doc": "iris/IRIS_staging_guidelines-2026.pdf",
+  "docId": "iris-IRIS-staging-guidelines-2026",
+  "sections": 7,
+  "paragraphs": 50
+ },
+ {
+  "doc": "merck/临床生化.txt",
+  "docId": "merck",
+  "sections": 1,
+  "paragraphs": 37
+ },
+ {
+  "doc": "merck/临床血液学.txt",
+  "docId": "merck",
+  "sections": 1,
+  "paragraphs": 30
+ },
+ {
+  "doc": "merck/皮肤病维生素与矿物质.txt",
+  "docId": "merck",
+  "sections": 1,
+  "paragraphs": 6
+ },
+ {
+  "doc": "merck/肝功能检查.txt",
+  "docId": "merck",
+  "sections": 1,
+  "paragraphs": 14
+ },
+ {
+  "doc": "merck/营养性皮肤病.txt",
+  "docId": "merck",
+  "sections": 1,
+  "paragraphs": 12
+ },
+ {
+  "doc": "nrc/NRC-2006-Nutrient-Requirements-Dogs-Cats.epub",
+  "docId": "nrc-NRC-2006-Nutrient-Requirements-Dogs-Cats",
+  "sections": 73,
+  "paragraphs": 5206
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_1.pdf",
+  "docId": "sacn5-chapters-SACN5-1",
+  "sections": 28,
+  "paragraphs": 185
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_10.pdf",
+  "docId": "sacn5-chapters-SACN5-10",
+  "sections": 19,
+  "paragraphs": 143
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_11.pdf",
+  "docId": "sacn5-chapters-SACN5-11",
+  "sections": 18,
+  "paragraphs": 226
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_12.pdf",
+  "docId": "sacn5-chapters-SACN5-12",
+  "sections": 7,
+  "paragraphs": 42
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_13.pdf",
+  "docId": "sacn5-chapters-SACN5-13",
+  "sections": 14,
+  "paragraphs": 154
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_14.pdf",
+  "docId": "sacn5-chapters-SACN5-14",
+  "sections": 11,
+  "paragraphs": 76
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_15.pdf",
+  "docId": "sacn5-chapters-SACN5-15",
+  "sections": 12,
+  "paragraphs": 127
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_16.pdf",
+  "docId": "sacn5-chapters-SACN5-16",
+  "sections": 13,
+  "paragraphs": 144
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_17.pdf",
+  "docId": "sacn5-chapters-SACN5-17",
+  "sections": 11,
+  "paragraphs": 79
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_18.pdf",
+  "docId": "sacn5-chapters-SACN5-18",
+  "sections": 26,
+  "paragraphs": 346
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_19.pdf",
+  "docId": "sacn5-chapters-SACN5-19",
+  "sections": 12,
+  "paragraphs": 124
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_2.pdf",
+  "docId": "sacn5-chapters-SACN5-2",
+  "sections": 9,
+  "paragraphs": 69
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_20.pdf",
+  "docId": "sacn5-chapters-SACN5-20",
+  "sections": 13,
+  "paragraphs": 139
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_21.pdf",
+  "docId": "sacn5-chapters-SACN5-21",
+  "sections": 13,
+  "paragraphs": 111
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_22.pdf",
+  "docId": "sacn5-chapters-SACN5-22",
+  "sections": 12,
+  "paragraphs": 117
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_23.pdf",
+  "docId": "sacn5-chapters-SACN5-23",
+  "sections": 14,
+  "paragraphs": 119
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_24.pdf",
+  "docId": "sacn5-chapters-SACN5-24",
+  "sections": 9,
+  "paragraphs": 66
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_25.pdf",
+  "docId": "sacn5-chapters-SACN5-25",
+  "sections": 30,
+  "paragraphs": 341
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_26.pdf",
+  "docId": "sacn5-chapters-SACN5-26",
+  "sections": 22,
+  "paragraphs": 190
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_27.pdf",
+  "docId": "sacn5-chapters-SACN5-27",
+  "sections": 19,
+  "paragraphs": 379
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_28.pdf",
+  "docId": "sacn5-chapters-SACN5-28",
+  "sections": 12,
+  "paragraphs": 117
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_29.pdf",
+  "docId": "sacn5-chapters-SACN5-29",
+  "sections": 19,
+  "paragraphs": 232
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_3.pdf",
+  "docId": "sacn5-chapters-SACN5-3",
+  "sections": 9,
+  "paragraphs": 121
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_30.pdf",
+  "docId": "sacn5-chapters-SACN5-30",
+  "sections": 15,
+  "paragraphs": 206
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_31.pdf",
+  "docId": "sacn5-chapters-SACN5-31",
+  "sections": 27,
+  "paragraphs": 237
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_32.pdf",
+  "docId": "sacn5-chapters-SACN5-32",
+  "sections": 22,
+  "paragraphs": 254
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_33.pdf",
+  "docId": "sacn5-chapters-SACN5-33",
+  "sections": 16,
+  "paragraphs": 237
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_34.pdf",
+  "docId": "sacn5-chapters-SACN5-34",
+  "sections": 18,
+  "paragraphs": 174
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_35.pdf",
+  "docId": "sacn5-chapters-SACN5-35",
+  "sections": 14,
+  "paragraphs": 151
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_36.pdf",
+  "docId": "sacn5-chapters-SACN5-36",
+  "sections": 26,
+  "paragraphs": 250
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_37.pdf",
+  "docId": "sacn5-chapters-SACN5-37",
+  "sections": 30,
+  "paragraphs": 419
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_38.pdf",
+  "docId": "sacn5-chapters-SACN5-38",
+  "sections": 15,
+  "paragraphs": 163
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_39.pdf",
+  "docId": "sacn5-chapters-SACN5-39",
+  "sections": 19,
+  "paragraphs": 179
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_4.pdf",
+  "docId": "sacn5-chapters-SACN5-4",
+  "sections": 9,
+  "paragraphs": 54
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_40.pdf",
+  "docId": "sacn5-chapters-SACN5-40",
+  "sections": 21,
+  "paragraphs": 131
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_41.pdf",
+  "docId": "sacn5-chapters-SACN5-41",
+  "sections": 11,
+  "paragraphs": 86
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_42.pdf",
+  "docId": "sacn5-chapters-SACN5-42",
+  "sections": 14,
+  "paragraphs": 95
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_43.pdf",
+  "docId": "sacn5-chapters-SACN5-43",
+  "sections": 19,
+  "paragraphs": 207
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_44.pdf",
+  "docId": "sacn5-chapters-SACN5-44",
+  "sections": 12,
+  "paragraphs": 54
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_45.pdf",
+  "docId": "sacn5-chapters-SACN5-45",
+  "sections": 8,
+  "paragraphs": 23
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_46.pdf",
+  "docId": "sacn5-chapters-SACN5-46",
+  "sections": 30,
+  "paragraphs": 466
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_47.pdf",
+  "docId": "sacn5-chapters-SACN5-47",
+  "sections": 19,
+  "paragraphs": 202
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_48.pdf",
+  "docId": "sacn5-chapters-SACN5-48",
+  "sections": 7,
+  "paragraphs": 41
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_49.pdf",
+  "docId": "sacn5-chapters-SACN5-49",
+  "sections": 8,
+  "paragraphs": 32
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_5.pdf",
+  "docId": "sacn5-chapters-SACN5-5",
+  "sections": 28,
+  "paragraphs": 501
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_50a.pdf",
+  "docId": "sacn5-chapters-SACN5-50a",
+  "sections": 16,
+  "paragraphs": 85
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_51.pdf",
+  "docId": "sacn5-chapters-SACN5-51",
+  "sections": 7,
+  "paragraphs": 9
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_52.pdf",
+  "docId": "sacn5-chapters-SACN5-52",
+  "sections": 14,
+  "paragraphs": 73
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_53.pdf",
+  "docId": "sacn5-chapters-SACN5-53",
+  "sections": 13,
+  "paragraphs": 63
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_54.pdf",
+  "docId": "sacn5-chapters-SACN5-54",
+  "sections": 11,
+  "paragraphs": 44
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_55.pdf",
+  "docId": "sacn5-chapters-SACN5-55",
+  "sections": 9,
+  "paragraphs": 39
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_56.pdf",
+  "docId": "sacn5-chapters-SACN5-56",
+  "sections": 14,
+  "paragraphs": 79
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_57.pdf",
+  "docId": "sacn5-chapters-SACN5-57",
+  "sections": 18,
+  "paragraphs": 94
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_58.pdf",
+  "docId": "sacn5-chapters-SACN5-58",
+  "sections": 13,
+  "paragraphs": 57
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_59.pdf",
+  "docId": "sacn5-chapters-SACN5-59",
+  "sections": 13,
+  "paragraphs": 67
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_6.pdf",
+  "docId": "sacn5-chapters-SACN5-6",
+  "sections": 30,
+  "paragraphs": 406
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_60.pdf",
+  "docId": "sacn5-chapters-SACN5-60",
+  "sections": 10,
+  "paragraphs": 38
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_61.pdf",
+  "docId": "sacn5-chapters-SACN5-61",
+  "sections": 7,
+  "paragraphs": 8
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_62.pdf",
+  "docId": "sacn5-chapters-SACN5-62",
+  "sections": 13,
+  "paragraphs": 73
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_63.pdf",
+  "docId": "sacn5-chapters-SACN5-63",
+  "sections": 10,
+  "paragraphs": 42
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_64.pdf",
+  "docId": "sacn5-chapters-SACN5-64",
+  "sections": 16,
+  "paragraphs": 83
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_65.pdf",
+  "docId": "sacn5-chapters-SACN5-65",
+  "sections": 11,
+  "paragraphs": 59
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_66.pdf",
+  "docId": "sacn5-chapters-SACN5-66",
+  "sections": 12,
+  "paragraphs": 68
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_67.pdf",
+  "docId": "sacn5-chapters-SACN5-67",
+  "sections": 16,
+  "paragraphs": 90
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_68.pdf",
+  "docId": "sacn5-chapters-SACN5-68",
+  "sections": 42,
+  "paragraphs": 336
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_69.pdf",
+  "docId": "sacn5-chapters-SACN5-69",
+  "sections": 31,
+  "paragraphs": 156
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_7.pdf",
+  "docId": "sacn5-chapters-SACN5-7",
+  "sections": 6,
+  "paragraphs": 61
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_8.pdf",
+  "docId": "sacn5-chapters-SACN5-8",
+  "sections": 26,
+  "paragraphs": 335
+ },
+ {
+  "doc": "sacn5/chapters/SACN5_9.pdf",
+  "docId": "sacn5-chapters-SACN5-9",
+  "sections": 14,
+  "paragraphs": 154
+ },
+ {
+  "doc": "wsava/dental/GDC-Oral-Cancer.pdf",
+  "docId": "wsava-dental-GDC-Oral-Cancer",
+  "sections": 3,
+  "paragraphs": 10
+ },
+ {
+  "doc": "wsava/dental/GDC-Toothbrushing-Toolkit-1.pdf",
+  "docId": "wsava-dental-GDC-Toothbrushing-Toolkit-1",
+  "sections": 2,
+  "paragraphs": 10
+ },
+ {
+  "doc": "wsava/dental/WSAVA-Global-Dental-Guidelines-JSAPMandarin.pdf",
+  "docId": "wsava-dental-WSAVA-Global-Dental-Guidelines-JSAPMandarin",
+  "sections": 507,
+  "paragraphs": 513
+ },
+ {
+  "doc": "wsava/hereditary/WSAVA-Hereditary-Disease-Committee-Position-Paper-HDC-Edited.pdf",
+  "docId": "wsava-hereditary-WSAVA-Hereditary-Disease-Committee-Position",
+  "sections": 3,
+  "paragraphs": 9
+ },
+ {
+  "doc": "wsava/nutrition/Body-Condition-Score-Cat-2025.pdf",
+  "docId": "wsava-nutrition-Body-Condition-Score-Cat-2025",
+  "sections": 4,
+  "paragraphs": 11
+ },
+ {
+  "doc": "wsava/nutrition/Body-Condition-Score-Dog-2025.pdf",
+  "docId": "wsava-nutrition-Body-Condition-Score-Dog-2025",
+  "sections": 4,
+  "paragraphs": 11
+ },
+ {
+  "doc": "wsava/nutrition/Calorie-Needs-Healthy-Adult-Cats-2020.pdf",
+  "docId": "wsava-nutrition-Calorie-Needs-Healthy-Adult-Cats-2020",
+  "sections": 11,
+  "paragraphs": 3
+ },
+ {
+  "doc": "wsava/nutrition/Calorie-Needs-Healthy-Adult-Dogs-2020.pdf",
+  "docId": "wsava-nutrition-Calorie-Needs-Healthy-Adult-Dogs-2020",
+  "sections": 5,
+  "paragraphs": 4
+ },
+ {
+  "doc": "wsava/nutrition/Diet-History-Form.pdf",
+  "docId": "wsava-nutrition-Diet-History-Form",
+  "sections": 4,
+  "paragraphs": 3
+ },
+ {
+  "doc": "wsava/nutrition/Feeding-Guide-Hospitalized-Dogs-Cats.pdf",
+  "docId": "wsava-nutrition-Feeding-Guide-Hospitalized-Dogs-Cats",
+  "sections": 7,
+  "paragraphs": 8
+ },
+ {
+  "doc": "wsava/nutrition/Feeding-Instructions-Monitoring-Chart-Hospitalized-Patients.pdf",
+  "docId": "wsava-nutrition-Feeding-Instructions-Monitoring-Chart-Hospit",
+  "sections": 6,
+  "paragraphs": 5
+ },
+ {
+  "doc": "wsava/nutrition/Global-Nutritional-Assesment-Guidelines-Chinese.pdf",
+  "docId": "wsava-nutrition-Global-Nutritional-Assesment-Guidelines-Chin",
+  "sections": 2,
+  "paragraphs": 190
+ },
+ {
+  "doc": "wsava/nutrition/Guide-to-Treats-Cats-2025.pdf",
+  "docId": "wsava-nutrition-Guide-to-Treats-Cats-2025",
+  "sections": 5,
+  "paragraphs": 34
+ },
+ {
+  "doc": "wsava/nutrition/Guide-to-Treats-Dogs-2025.pdf",
+  "docId": "wsava-nutrition-Guide-to-Treats-Dogs-2025",
+  "sections": 27,
+  "paragraphs": 32
+ },
+ {
+  "doc": "wsava/nutrition/Implementing-WSAVA-Nutrition-Guidelines.pdf",
+  "docId": "wsava-nutrition-Implementing-WSAVA-Nutrition-Guidelines",
+  "sections": 7,
+  "paragraphs": 13
+ },
+ {
+  "doc": "wsava/nutrition/Interpreting-Food-Labels-2025.pdf",
+  "docId": "wsava-nutrition-Interpreting-Food-Labels-2025",
+  "sections": 4,
+  "paragraphs": 9
+ },
+ {
+  "doc": "wsava/nutrition/Muscle-Condition-Score-Cat.pdf",
+  "docId": "wsava-nutrition-Muscle-Condition-Score-Cat",
+  "sections": 1,
+  "paragraphs": 0
+ },
+ {
+  "doc": "wsava/nutrition/Muscle-Condition-Score-Dog.pdf",
+  "docId": "wsava-nutrition-Muscle-Condition-Score-Dog",
+  "sections": 5,
+  "paragraphs": 2
+ },
+ {
+  "doc": "wsava/nutrition/Nutritional-Assessment-Checklist.pdf",
+  "docId": "wsava-nutrition-Nutritional-Assessment-Checklist",
+  "sections": 6,
+  "paragraphs": 9
+ },
+ {
+  "doc": "wsava/nutrition/Principles-of-Wellness-2025.pdf",
+  "docId": "wsava-nutrition-Principles-of-Wellness-2025",
+  "sections": 41,
+  "paragraphs": 158
+ },
+ {
+  "doc": "wsava/nutrition/Quick-Tips-Implementing-WSAVA-Nutrition-Guidelines.pdf",
+  "docId": "wsava-nutrition-Quick-Tips-Implementing-WSAVA-Nutrition-Guid",
+  "sections": 19,
+  "paragraphs": 61
+ },
+ {
+  "doc": "wsava/nutrition/Raw-Meat-Based-Diets-for-Pets-2021.pdf",
+  "docId": "wsava-nutrition-Raw-Meat-Based-Diets-for-Pets-2021",
+  "sections": 5,
+  "paragraphs": 9
+ },
+ {
+  "doc": "wsava/nutrition/SOP-for-Use-of-WSAVA-GNC-Toolkits-v4.pdf",
+  "docId": "wsava-nutrition-SOP-for-Use-of-WSAVA-GNC-Toolkits-v4",
+  "sections": 2,
+  "paragraphs": 6
+ },
+ {
+  "doc": "wsava/nutrition/Selecting-a-Pet-Food-2021.pdf",
+  "docId": "wsava-nutrition-Selecting-a-Pet-Food-2021",
+  "sections": 4,
+  "paragraphs": 12
+ },
+ {
+  "doc": "wsava/nutrition/WSAVA-Nutrition-Assessment-Guidelines-2011-JSAP.pdf",
+  "docId": "wsava-nutrition-WSAVA-Nutrition-Assessment-Guidelines-2011-J",
+  "sections": 2,
+  "paragraphs": 130
+ },
+ {
+  "doc": "wsava/pain/WSAVA-2022疼痛识别评估和治疗指南-中文.pdf",
+  "docId": "wsava-pain-WSAVA-2022",
+  "sections": 13,
+  "paragraphs": 43
+ },
+ {
+  "doc": "wsava/pain/topic-sheets/Caesarean-section.pdf",
+  "docId": "wsava-pain-topic-sheets-Caesarean-section",
+  "sections": 1,
+  "paragraphs": 13
+ },
+ {
+  "doc": "wsava/pain/topic-sheets/Cancer-Pain.pdf",
+  "docId": "wsava-pain-topic-sheets-Cancer-Pain",
+  "sections": 1,
+  "paragraphs": 7
+ },
+ {
+  "doc": "wsava/pain/topic-sheets/Degenerative-joint-disease.pdf",
+  "docId": "wsava-pain-topic-sheets-Degenerative-joint-disease",
+  "sections": 4,
+  "paragraphs": 10
+ },
+ {
+  "doc": "wsava/pain/topic-sheets/Pregnant-or-lactating-patients.pdf",
+  "docId": "wsava-pain-topic-sheets-Pregnant-or-lactating-patients",
+  "sections": 3,
+  "paragraphs": 11
+ },
+ {
+  "doc": "wsava/pain/topic-sheets/WSAVA-Global-Pain-Council-Perceived-levels-of-pain.pdf",
+  "docId": "wsava-pain-topic-sheets-WSAVA-Global-Pain-Council-Perceived-",
+  "sections": 3,
+  "paragraphs": 8
+ },
+ {
+  "doc": "wsava/position-statements/WSAVA-OneHealth-肥胖预防.pdf",
+  "docId": "wsava-position-statements-WSAVA-OneHealth",
+  "sections": 5,
+  "paragraphs": 22
+ },
+ {
+  "doc": "wsava/position-statements/WSAVA-微芯片与肿瘤立场声明.pdf",
+  "docId": "wsava-position-statements-WSAVA",
+  "sections": 1,
+  "paragraphs": 22
+ },
+ {
+  "doc": "wsava/reproduction/Executive-Summary.pdf",
+  "docId": "wsava-reproduction-Executive-Summary",
+  "sections": 3,
+  "paragraphs": 62
+ },
+ {
+  "doc": "wsava/reproduction/J-of-Small-Animal-Practice-2024-Romagnoli-WSAVA-guidelines-for-the-control-of-reproduction-in-dogs-and-cats.pdf",
+  "docId": "wsava-reproduction-J-of-Small-Animal-Practice-2024-Romagnoli",
+  "sections": 8,
+  "paragraphs": 1152
+ },
+ {
+  "doc": "wsava/reproduction/WSAVA犬猫生殖管理指南-中文版.pdf",
+  "docId": "wsava-reproduction-WSAVA",
+  "sections": 2654,
+  "paragraphs": 1187
+ },
+ {
+  "doc": "wsava/vaccination/WSAVA-Vaccination-guidelines-2024.pdf",
+  "docId": "wsava-vaccination-WSAVA-Vaccination-guidelines-2024",
+  "sections": 8,
+  "paragraphs": 403
+ },
+ {
+  "doc": "wsava/welfare/PWG-福祉提示.pdf",
+  "docId": "wsava-welfare-PWG",
+  "sections": 4,
+  "paragraphs": 4
+ },
+ {
+  "doc": "wsava/welfare/WSAVA-Animal-Welfare-Guidelines-2018.pdf",
+  "docId": "wsava-welfare-WSAVA-Animal-Welfare-Guidelines-2018",
+  "sections": 54,
+  "paragraphs": 548
+ },
+ {
+  "doc": "wsava/welfare/WSAVA_Animal_Welfare_Charter_Feb-2020.pdf",
+  "docId": "wsava-welfare-WSAVA-Animal-Welfare-Charter-Feb-2020",
+  "sections": 4,
+  "paragraphs": 5
+ }
+]

@@ -360,34 +360,20 @@ describe('diy sheet layout regressions', () => {
     expect(foodBlock).toContain('imageUrl: selectedRp?.imageUrl')
   })
 
-  it('keeps life-stage warning visible on the generated DIY sheet', () => {
+  it('shows which life-stage version the sheet uses, without live re-checking', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
       'utf-8',
     )
 
-    expect(source).toContain('生命阶段提醒')
-    /**
-     * 2026-10-18：生命阶段块改用共享组件 `LifeStageVersionCard`。
-     *
-     * **意图不变** —— 制作单上必须能看到生命阶段提醒（顾客在 DIY 页确认过，
-     * 制作单留作记录）。只是渲染方式从内联模板变成了组件。
-     */
-    expect(source).toContain('<LifeStageVersionCard')
-    expect(source).toContain('variant="warning"')
-    expect(source).toContain(':match-type="lifeStageVerdict?.matchType"')
-    expect(source).toContain('../../utils/life-stage-match')
-    // 2026-09-19：结论由后端给出，制作单不再自己算
-    expect(source).toContain('fetchLifeStageMatch')
-    expect(source).toContain('isLifeStageMismatch')
-    expect(source).not.toContain('resolveDogRecipeLifeStage(')
-    expect(source).not.toContain('isRecipeLifeStageMatch(')
-    // 拿不到后端结论时不得静默放行
-    expect(source).toContain('lifeStageCheckFailed')
-    // 制作单是结果页：提醒只作展示，不再要求确认（避免同一个提醒反复打断）
-    expect(source).not.toContain('dismissWarning')
+    // 2026-11-02：制作单是冻结记录 —— 只写"这一版是哪一版"，不再实时判定
+    expect(source).toContain('版本：')
+    expect(source).toContain('lifeStageLabel')
+    expect(source).not.toContain('<LifeStageVersionCard')
+    expect(source).not.toContain('fetchLifeStageMatch')
+    expect(source).not.toContain('useLifeStageVersion')
     expect(source).not.toContain('我已知晓')
-  })
+  });
 
   it('uses net food weight for supplement nutrient totals and current storage copy', () => {
     const source = readFileSync(

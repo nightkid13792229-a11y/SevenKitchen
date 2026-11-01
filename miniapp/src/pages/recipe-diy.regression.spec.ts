@@ -42,37 +42,26 @@ describe('recipe diy regressions', () => {
     expect(source).toContain('scroll-into-view')
   })
 
-  it('offers a quick switch to the selected dog matched life-stage recipe version', () => {
+  it('renders the shared version bar and lets the customer switch versions', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-diy/index.vue'),
       'utf-8',
     )
     const templateSource = source.slice(0, source.indexOf('<script setup'))
     const switchSource = source.match(
-      /async function switchToRecommendedLifeStage[\s\S]*?\n}\n/,
+      /async function switchLifeStageVersion[\s\S]*?\n}\n/,
     )?.[0] || ''
 
-    /**
-     * 2026-10-18：改用共享组件后，"有没有切换按钮"由 `switch-label` 决定。
-     * **意图不变** —— 只有存在推荐版本时才给切换入口。
-     */
-    expect(templateSource).toContain(':switch-label="recommendedLifeStageOption')
-    expect(templateSource).toContain('@open-selector="switchToRecommendedLifeStage"')
-    expect(templateSource).toContain('@open-selector="switchToRecommendedLifeStage"')
-    // 2026-10-18：切换文案改由 `switch-label` 传进共享组件（不再是插值模板）
-    expect(templateSource).toContain('切换到${recommendedLifeStageOption.label}')
-    expect(source).toContain("const selectedLifeStage = ref('')")
-    expect(source).toContain('availableLifeStageVersions?: RecipeLifeStageVersion[]')
-    expect(source).toContain('const recommendedLifeStageOption = computed')
-    expect(source).toContain('version.lifeStage === dogLifeStage.value')
-    expect(source).toContain('function resetDiyLifeStageDependentState')
-    expect(switchSource).toContain('const option = recommendedLifeStageOption.value')
-    expect(switchSource).toContain('selectedLifeStage.value = option.lifeStage')
-    expect(switchSource).toContain('recipeId.value = option.recipeId')
-    expect(switchSource).toContain('await loadRecipe()')
-    expect(switchSource).toContain('await loadDogCalc(selectedDogId.value)')
-    expect(switchSource).toContain('checkLifeStageMatch()')
-  })
+    expect(templateSource).toContain('<LifeStageVersionBar');
+    expect(templateSource).toContain('<LifeStageVersionSheet');
+    expect(templateSource).not.toContain('<LifeStageVersionCard');
+    expect(templateSource).toContain('@select="switchLifeStageVersion"');
+    expect(source).toContain('const manualLifeStage = ref(');
+    expect(source).toContain('manualLifeStage.value = lifeStage');
+    expect(switchSource).toContain('await loadRecipe()');
+    expect(switchSource).toContain('loadDogCalc(');
+    expect(source).toContain('item.lifeStage === targetLifeStage');
+  });
 
   /**
    * 2026-09-22：饭量说明与成品订购页对齐。
@@ -333,37 +322,22 @@ describe('recipe diy regressions', () => {
    * 顾客会觉得"刚确认过又问一遍"，且弹窗的取消键正好是漏斗末端的放弃键。
    * 现在卡片确认即写留痕，本次不再弹窗；换狗或换生命阶段版本会重新提醒。
    */
-  it('acknowledges the life-stage reminder once per dog without a second modal', () => {
+  it('confirms a high-risk life-stage mismatch when generating the sheet', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-diy/index.vue'),
       'utf-8',
     )
-    const dismissSource = source.match(
-      /async function dismissWarning\(\)[\s\S]*?\n}\n/,
-    )?.[0] || ''
     const generateSource = source.match(
       /async function generateSheet\(\)[\s\S]*?\n}\n/,
     )?.[0] || ''
 
-    expect(source).toContain('const acknowledgedLifeStageDogIds = ref<string[]>([])')
-    expect(source).toContain('const isLifeStageAcknowledged = computed')
-
-    // 卡片确认时即写留痕
-    expect(dismissSource).toContain('recordLifeStageAcknowledgement')
-    expect(dismissSource).toContain("source: 'diy'")
-
-    // 生成时若该狗已确认过，不再弹窗
-    expect(generateSource).toContain('const alreadyAcknowledged')
-    expect(generateSource).toContain('if (!alreadyAcknowledged)')
-    expect(generateSource).toContain('confirmLifeStageMismatch')
-
-    // 已确认的狗不再显示提醒卡片
-    const templateSource = source.slice(0, source.indexOf('<script setup'))
-    expect(templateSource).toContain('!isLifeStageAcknowledged')
-
-    // 换生命阶段版本＝换判定依据，重新提醒
-    expect(source).toContain('acknowledgedLifeStageDogIds.value = []')
-  })
+    expect(generateSource).toContain("lifeStageRisk.value === 'HIGH'");
+    expect(generateSource).toContain('confirmLifeStageMismatch');
+    expect(generateSource).toContain("source: 'diy'");
+    expect(source).toContain('acknowledgedForSheet');
+    expect(source).not.toContain('acknowledgedLifeStageDogIds');
+    expect(source).not.toContain('dismissWarning');
+  });
 
   /**
    * 取消自定义分装会直接丢弃顾客填写的克数/袋数，先确认一次。

@@ -33,7 +33,7 @@
       <view class="life-stage-sheet__footer">
         <button
           class="life-stage-sheet__confirm button-reset"
-          :disabled="!selected"
+          :class="{ 'is-disabled': !selected }"
           @tap="confirm"
         >用这个版本</button>
       </view>
@@ -185,7 +185,7 @@ function confirm() {
   font-weight: 600;
 }
 
-.life-stage-sheet__confirm[disabled] {
+.life-stage-sheet__confirm.is-disabled {
   background: #d9cfc3;
 }
 </style>

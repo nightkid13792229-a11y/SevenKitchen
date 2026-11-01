@@ -66,13 +66,14 @@ export class SupplementQuoteRequestDto {
       '加量份数（1 = 不加量）。每份 = 每个补剂多做一袋同样规格的小袋',
     default: 1,
     minimum: 1,
-    maximum: 12,
+    maximum: 99,
   })
   @IsOptional()
   @IsInt()
   @Min(1)
-  // 12 只是防呆上界；真正的上限来自后台配置，由服务端按制作单天数算出
-  @Max(12)
+  // 2026-11-01 起不再有产品上限（1~99 都能买），
+  // 99 只是防误输入的技术兜底，必须与服务端的 MAX_PURCHASABLE_PORTIONS 一致
+  @Max(99)
   portionMultiplier?: number;
 
   @ApiPropertyOptional({
@@ -96,6 +97,29 @@ export class CreateSupplementOrderDto extends SupplementQuoteRequestDto {
   @ApiProperty({ description: '收货地址 ID' })
   @IsUUID()
   addressId!: string;
+
+  /**
+   * ⚠️ 这两个字段**必须声明在 DTO 上**：控制器开了 `whitelist: true`，
+   * 没声明就会被静默丢掉 —— 那样"金额一致性校验"和"防重复下单"
+   * 会完全失效，而且不报错。
+   */
+
+  @ApiPropertyOptional({
+    description: '顾客在确认弹层看到的合计（整数分）。与服务端重算不一致时拒绝建单',
+    minimum: 0,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  expectedTotal?: number;
+
+  @ApiPropertyOptional({
+    description: '一次提交流程的幂等键，重试复用同一个值',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  clientRequestId?: string;
 
   @ApiPropertyOptional({ description: '来源食谱 ID' })
   @IsOptional()

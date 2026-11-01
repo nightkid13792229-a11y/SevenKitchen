@@ -233,6 +233,11 @@ export function useSupplementQuote(
       packedAmount: 0
     }))
     selectedIds.value = seed.map((line) => line.ingredientId)
+    /**
+     * 首次加载也要先立基线：否则报价一失败，回滚目标还是"空选择"，
+     * 页面会被清成一种都没选，`retry()` 也就没有东西可发（顾客只能逐个重新勾）。
+     */
+    confirmedIds = [...selectedIds.value]
     await requestQuote(selectedIds.value)
   }
 

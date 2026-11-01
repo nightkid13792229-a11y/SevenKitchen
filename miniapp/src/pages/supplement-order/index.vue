@@ -527,6 +527,12 @@ onLoad(() => {
     prepackExpanded.value = false
   }
 
+  /**
+   * 幂等键一次进页面只生成一次：关掉确认弹层再提交、或建单响应丢了重试，
+   * 都复用它 —— 否则"响应丢了"这种情况会变成两笔订单。
+   */
+  submitRequestId.value = createRequestId()
+
   if (Number(draft.value.portionMultiplier) > 1) {
     portionMultiplier.value = Math.floor(Number(draft.value.portionMultiplier))
   }
@@ -698,7 +704,6 @@ async function openConfirmSheet() {
 
   priceChanged.value = Math.abs(Number(summary.value.total ?? 0) - before) > 0.004
   submitError.value = ''
-  submitRequestId.value = createRequestId()
   showConfirmSheet.value = true
 }
 
@@ -709,9 +714,13 @@ function closeConfirmSheet() {
 
 async function submitOrder() {
   if (submitting.value || !draft.value || !summary.value || !selectedAddress.value) return
+  if (belowMinOrder.value) return
 
   submitting.value = true
   submitError.value = ''
+
+  // ---- 只负责建单 ----
+  let order: SupplementOrder | null = null
   try {
     await requestSupplementSubscriptions()
     const res = await createSupplementOrder({
@@ -732,19 +741,23 @@ async function submitOrder() {
       clientRequestId: submitRequestId.value || createRequestId()
     })
 
-    const order = res.data as SupplementOrder
+    order = res.data as SupplementOrder
     clearSupplementPurchaseDraft()
-    showConfirmSheet.value = false
-    submitRequestId.value = ''
-    // 建单成功就一定有订单：接下来的支付无论什么结果，都跳订单详情
-    await settlePayment(order)
   } catch (error) {
     submitError.value = readErrorMessage(error)
-    // 金额可能已经过期（例如后台刚调过价），顺手刷新一次
-    await retry()
   } finally {
     submitting.value = false
   }
+
+  if (!order) {
+    // 没建成单：金额可能已经过期（例如后台刚调过价），顺手刷新一次
+    await retry()
+    return
+  }
+
+  // ---- 订单已经成立，支付失败也不能说"提交失败" ----
+  showConfirmSheet.value = false
+  await settlePayment(order)
 }
 
 /** 提交后的支付处理：能支付就支付，不能支付就降级为待人工确认收款 */

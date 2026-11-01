@@ -312,6 +312,28 @@ describe('supplement order page redesign (2026-11-01)', () => {
     expect(template).toContain('提交并支付')
   })
 
+  it('建单与支付分开处理：建单失败不继续支付', () => {
+    const block = source.slice(
+      source.indexOf('async function submitOrder'),
+      source.indexOf('async function settlePayment'),
+    )
+    expect(block).toContain('if (!order)')
+    // settlePayment 必须在建单的 try/finally 之后，不能被建单的 catch 吞掉
+    expect(block.indexOf('await settlePayment(order)')).toBeGreaterThan(
+      block.indexOf('finally'),
+    )
+    expect(block).not.toContain('提交失败，请稍后重试')
+  })
+
+  it('同一次进页面只生成一次幂等键，关掉弹层再提交也不会重复下单', () => {
+    const openBlock = source.slice(
+      source.indexOf('async function openConfirmSheet'),
+      source.indexOf('function closeConfirmSheet'),
+    )
+    expect(openBlock).not.toContain('createRequestId()')
+    expect(source).toMatch(/onLoad\(\(\) => \{[\s\S]*?createRequestId\(\)/)
+  })
+
   it('提交带幂等键与期望金额，建单成功后一定跳详情', () => {
     expect(source).toContain('clientRequestId')
     expect(source).toContain('expectedTotal: toCents(')

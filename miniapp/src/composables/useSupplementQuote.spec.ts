@@ -71,9 +71,9 @@ describe('useSupplementQuote', () => {
     const slow = deferred<any>()
     const fast = deferred<any>()
     const quote = vi
-      .fn<Parameters<QuoteFn>, ReturnType<QuoteFn>>()
-      .mockReturnValueOnce(slow.promise as any)
-      .mockReturnValueOnce(fast.promise as any)
+      .fn()
+      .mockReturnValueOnce(slow.promise)
+      .mockReturnValueOnce(fast.promise) as unknown as QuoteFn
     const state = useSupplementQuote({ quote })
 
     const first = state.load([{ ingredientId: 'a', recipeItemId: 'r1' }])
@@ -127,5 +127,23 @@ describe('useSupplementQuote', () => {
 
     expect(state.selectedIds.value).toEqual(['a', 'b'])
     expect(state.status.value).toBe('failed')
+  })
+
+  it('首屏报价失败后，勾选不被清空，重试会真的重新发请求', async () => {
+    const quote = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('断网'))
+      .mockResolvedValueOnce(okQuote())
+    const state = useSupplementQuote({ quote })
+
+    await state.load([{ ingredientId: 'a', recipeItemId: 'r1' }])
+    expect(state.status.value).toBe('failed')
+    // 回滚到"这次加载本来要买的东西"，而不是清空
+    expect(state.selectedIds.value).toEqual(['a'])
+
+    await state.retry()
+    expect(quote).toHaveBeenCalledTimes(2)
+    expect(state.status.value).toBe('ready')
+    expect(state.canSubmit.value).toBe(true)
   })
 })

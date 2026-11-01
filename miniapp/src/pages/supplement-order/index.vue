@@ -45,6 +45,11 @@
     </view>
 
     <template v-else>
+      <!-- 预分装说明图：页面最顶部，常显 -->
+      <view class="section prepack-card">
+        <image class="prepack-image" src="/static/mall/prepack-explainer.jpg" mode="widthFix" />
+      </view>
+
       <!-- 来源制作单 -->
       <view class="section source-card">
         <view class="source-main">
@@ -54,23 +59,37 @@
             <text v-else>按当前制作单配比</text>
           </text>
         </view>
-        <text v-if="canEditDiySheet" class="source-action" @tap="goEditDiySheet">改制作单</text>
       </view>
 
-      <!-- 预分装说明：第一次来展开，之后收成一行 -->
-      <view v-if="prepackExpanded" class="section prepack-card">
-        <image class="prepack-image" src="/static/mall/prepack-explainer.jpg" mode="widthFix" />
-        <text class="prepack-collapse" @tap="prepackExpanded = false">知道了，收起</text>
-      </view>
-      <view v-else class="prepack-toggle" @tap="prepackExpanded = true">
-        <text class="prepack-toggle-text">为什么是预分装？</text>
-        <text class="prepack-toggle-arrow">›</text>
+      <!-- 快速改分装：直接改这张制作单的分装，不用跳回配置页 -->
+      <view class="section plan-section">
+        <view class="section-title">
+          <text class="title-text">快速选择备餐天数</text>
+          <text v-if="replanning" class="plan-pending">更新中…</text>
+        </view>
+        <QuickCyclePackagePlan
+          v-if="canQuickAdjust"
+          :cycle-days="selectedCycleDays"
+          :package-plan="planRows"
+          :is-custom="isCustomPackagePlan"
+          :editor-open="showPackageEditor"
+          :summary-text="inlineSummaryText"
+          :warnings="planWarnings"
+          @select-cycle="onSelectCycle"
+          @toggle-custom="togglePackageEditor"
+          @add-row="addPackagePlanRow"
+          @update-row="updatePackagePlanRow"
+          @remove-row="removePackagePlanRow"
+        />
+        <text v-else class="plan-unavailable">
+          这张制作单缺少饭量信息，暂时不能在这里改分装，请回制作单里修改。
+        </text>
       </view>
 
       <!-- 补剂清单 -->
       <view class="section">
         <view class="section-title">
-          <text class="title-text">本次要买的补剂</text>
+          <text class="title-text">本制作单需要的补剂</text>
           <text
             v-if="selectableLines.length > 1"
             class="title-action"
@@ -79,10 +98,6 @@
             {{ allSelectableSelected ? '全不选' : '全选' }}
           </text>
         </view>
-        <text class="section-subtip">
-          按这张制作单的配比算：{{ selectableLines.length }} 种，每种 1 袋
-        </text>
-
         <view
           v-for="line in lines"
           :key="line.ingredientId"
@@ -114,15 +129,27 @@
             v-if="!line.unavailableReason"
             class="line-packed"
           >
-            <text v-if="portionMultiplier === 1">整单 {{ lineAmount(line) }}</text>
+            <text v-if="portionMultiplier === 1">{{ lineAmount(line) }}</text>
             <text v-else>{{ lineAmount(line) }} × {{ portionMultiplier }} 袋</text>
           </text>
           <text v-else class="line-packed line-packed-disabled">—</text>
         </view>
 
-        <view v-if="summary" class="list-summary">
-          <text class="list-summary-text">共 {{ bagCount }} 袋</text>
-          <text class="list-summary-hint">这个量是按你制作单里的食物总量和营养目标算出来的，不是你自己填的。</text>
+        <!-- 袋数：贴在清单下方，只保留 1/2/3 -->
+        <view v-if="selectableLines.length > 0" class="portion-block">
+          <text class="portion-title">袋数</text>
+          <view class="portion-options">
+            <view
+              v-for="opt in portionOptionCards"
+              :key="opt.multiplier"
+              class="portion-option"
+              :class="{ 'portion-option-active': opt.multiplier === portionMultiplier }"
+              @tap="selectPortion(opt.multiplier)"
+            >
+              <text class="portion-option-num">{{ opt.multiplier }} 袋</text>
+              <text class="portion-option-price">{{ opt.priceLabel }}</text>
+            </view>
+          </view>
         </view>
       </view>
 
@@ -143,42 +170,6 @@
             {{ addressInvalid ? '地址已失效，请重新选择' : '请选择收货地址' }}
           </text>
           <text class="address-action">去选择</text>
-        </view>
-      </view>
-
-      <!-- 套数：三张卡固定 1/2/3，第四张自定义，最多 99 套 -->
-      <view v-if="selectableLines.length > 0" class="section portion-card">
-        <view class="section-title">
-          <text class="title-text">选择套数</text>
-        </view>
-        <text class="section-subtip">1 套 = 这张制作单需要的全部补剂（每种 1 袋）</text>
-        <text v-if="freeShippingThresholdText" class="portion-subtip portion-subtip-gold">
-          {{ freeShippingThresholdText }}
-        </text>
-
-        <view class="portion-options">
-          <view
-            v-for="opt in portionOptionCards"
-            :key="opt.multiplier"
-            class="portion-option"
-            :class="{ 'portion-option-active': opt.multiplier === portionMultiplier }"
-            @tap="selectPortion(opt.multiplier)"
-          >
-            <text v-if="opt.freeShipping" class="portion-badge">已包邮</text>
-            <text class="portion-option-num">{{ opt.multiplier }} 套</text>
-            <text class="portion-option-price">{{ opt.priceLabel }}</text>
-          </view>
-
-          <view
-            class="portion-option portion-option-custom"
-            :class="{ 'portion-option-active': showCustomPortionCard }"
-            @tap="openCustomPortion"
-          >
-            <text v-if="showCustomPortionCard" class="portion-option-num">{{ portionMultiplier }} 套</text>
-            <text v-else class="portion-option-num">自定义</text>
-            <text v-if="showCustomPortionCard" class="portion-option-price">¥{{ money(summary?.goodsSubtotal) }}</text>
-            <text v-else class="portion-option-custom-hint">更多</text>
-          </view>
         </view>
       </view>
 
@@ -228,7 +219,6 @@
           </text>
         </view>
 
-        <text class="fee-note">补剂分装后建议 6 个月内吃完（袋上印有效期）。</text>
         <text v-if="bulkWarning" class="fee-note fee-note-warn">
           本单分装量较大（约 {{ bagCount }} 袋），实际发货会顺延，我们会联系你确认。
         </text>
@@ -277,28 +267,6 @@
         </view>
       </view>
     </template>
-
-    <!-- 自定义套数 -->
-    <view v-if="showCustomPortion" class="sheet-mask" @tap="closeCustomPortion">
-      <view class="sheet" @tap.stop>
-        <text class="sheet-title">买几套</text>
-        <text class="sheet-subtip">1 套 = 这张制作单需要的全部补剂（每种 1 袋），最多 99 套</text>
-        <view class="stepper">
-          <view class="stepper-btn" @tap="stepCustomPortion(-1)">−</view>
-          <input
-            class="stepper-input"
-            type="number"
-            :value="String(customPortionValue)"
-            @blur="onCustomPortionInput"
-          />
-          <view class="stepper-btn" @tap="stepCustomPortion(1)">+</view>
-        </view>
-        <view class="sheet-actions">
-          <view class="sheet-btn sheet-btn-ghost" @tap="closeCustomPortion">取消</view>
-          <view class="sheet-btn sheet-btn-primary" @tap="confirmCustomPortion">确定</view>
-        </view>
-      </view>
-    </view>
 
     <!-- 提交前确认 -->
     <view v-if="showConfirmSheet" class="sheet-mask" @tap="closeConfirmSheet">
@@ -373,10 +341,14 @@ import {
   requestSupplementSubscriptions,
   quoteSupplements,
   readSupplementPurchaseDraft,
+  saveSupplementPurchaseDraft,
   type SupplementOrder,
   type SupplementPurchaseDraft
 } from '../../api/supplements'
 import { runSupplementPayment } from '../../utils/supplement-payment'
+import { fetchMyDiySheets, updateDiySheetPlan, type DIYSheetSummary } from '../../api/diy-sheets'
+import { usePackagePlan } from '../../composables/usePackagePlan'
+import QuickCyclePackagePlan from '../../components/package-plan/QuickCyclePackagePlan.vue'
 import { createRequestId, toCents } from '../../utils/supplement-order-submit'
 import {
   useSupplementQuote,
@@ -395,9 +367,6 @@ interface Address {
   isDefault?: boolean
 }
 
-/** 预分装说明图只给第一次来的人看 */
-const PREPACK_SEEN_KEY = 'supplementPrepackExplainerSeen'
-
 const draft = ref<SupplementPurchaseDraft | null>(null)
 const addresses = ref<Address[]>([])
 const selectedAddressId = ref('')
@@ -406,10 +375,36 @@ const submitting = ref(false)
 const submitError = ref('')
 const estimatedPackingDate = ref('')
 const autoScheduleEnabled = ref(true)
-const prepackExpanded = ref(false)
+const sheet = ref<DIYSheetSummary | null>(null)
+const replanning = ref(false)
+let planTimer: ReturnType<typeof setTimeout> | null = null
 
-const showCustomPortion = ref(false)
-const customPortionValue = ref(4)
+const {
+  selectedCycleDays,
+  packagePlan: planRows,
+  isCustomPackagePlan,
+  showPackageEditor,
+  normalizedPackagePlan,
+  inlineSummaryText,
+  validationMessage,
+  rebuildPackagePlan,
+  togglePackageEditor,
+  addPackagePlanRow,
+  updatePackagePlanRow,
+  removePackagePlanRow
+} = usePackagePlan({
+  dailyIntakeG: () => sheet.value?.dailyIntakeG ?? 0,
+  perMealG: () => sheet.value?.perMealG ?? 0,
+  mealsPerDay: () => 2,
+  dogId: () => draft.value?.dogId,
+  onPlanChanged: () => schedulePlanApply()
+})
+
+const canQuickAdjust = computed(
+  () => !!draft.value?.diySheetId && Number(sheet.value?.dailyIntakeG) > 0
+)
+
+const planWarnings = computed(() => (validationMessage.value ? [validationMessage.value] : []))
 
 const showConfirmSheet = ref(false)
 const confirmRefreshing = ref(false)
@@ -475,11 +470,10 @@ const canSubmit = computed(
     quoteCanSubmit.value &&
     !!selectedAddress.value &&
     !belowMinOrder.value &&
-    !submitting.value
+    !submitting.value &&
+    !replanning.value
 )
 
-const showCustomPortionCard = computed(() => portionMultiplier.value > 3)
-const canEditDiySheet = computed(() => !!draft.value?.diySheetId)
 
 /** 三张卡的金额来自服务端 portionOptions；接口没给时留空，不猜价格 */
 const portionOptionCards = computed(() => {
@@ -498,13 +492,6 @@ const portionOptionCards = computed(() => {
   }))
 })
 
-const freeShippingThresholdText = computed(() => {
-  const threshold = summary.value?.freeShippingThreshold
-  if (!threshold || threshold <= 0) return ''
-  const label = Number.isInteger(threshold) ? String(threshold) : threshold.toFixed(2)
-  return `满${label}元包邮`
-})
-
 const bulkWarning = computed(
   () => bulkBagThreshold.value > 0 && bagCount.value > bulkBagThreshold.value
 )
@@ -516,15 +503,6 @@ onLoad(() => {
   if (!draft.value) {
     initializing.value = false
     return
-  }
-
-  // 说明图：第一次展开，之后收起
-  try {
-    const seen = uni.getStorageSync(PREPACK_SEEN_KEY)
-    prepackExpanded.value = !seen
-    if (!seen) uni.setStorageSync(PREPACK_SEEN_KEY, '1')
-  } catch {
-    prepackExpanded.value = false
   }
 
   /**
@@ -547,6 +525,10 @@ onShow(() => {
 
 onUnload(() => {
   uni.$off('address-selected', onAddressSelected)
+  if (planTimer) {
+    clearTimeout(planTimer)
+    planTimer = null
+  }
 })
 
 async function initialize() {
@@ -554,6 +536,7 @@ async function initialize() {
   const sideTasks = Promise.all([
     loadAddresses(),
     loadPackingDate(),
+    loadCurrentSheet(),
     prefetchSupplementSubscriptions()
   ])
   try {
@@ -584,6 +567,74 @@ async function loadPackingDate() {
     }
   } catch (error) {
     console.warn('[SupplementOrder] 加载预计发货日失败:', error)
+  }
+}
+
+/** 读出这张制作单当前的分装，作为控件的初始值 */
+async function loadCurrentSheet() {
+  if (!draft.value?.diySheetId) return
+  try {
+    const res = await fetchMyDiySheets()
+    if (res.code !== 0) return
+    const found = (res.data || []).find((item) => item.id === draft.value?.diySheetId)
+    if (!found) return
+    sheet.value = found
+    planRows.value = (found.packagePlan || []).map((row) => ({
+      packageSpecG: Math.floor(Number(row.packageSpecG)) || 0,
+      packageCount: Math.max(1, Math.floor(Number(row.packageCount)) || 1)
+    }))
+    // 制作单没有"天数"，所以初始没有任何天数高亮；点天数才会重算默认分装
+    selectedCycleDays.value = null
+    isCustomPackagePlan.value = false
+    showPackageEditor.value = false
+  } catch (error) {
+    console.warn('[SupplementOrder] 读取制作单分装失败:', error)
+  }
+}
+
+function onSelectCycle(days: number) {
+  if (isCustomPackagePlan.value) return
+  selectedCycleDays.value = days
+  rebuildPackagePlan()
+}
+
+/** 改分装要落库，但输入框会连续触发，所以防抖 */
+function schedulePlanApply() {
+  if (!canQuickAdjust.value || !draft.value?.diySheetId) return
+  if (validationMessage.value) return
+  if (planTimer) clearTimeout(planTimer)
+  planTimer = setTimeout(() => {
+    planTimer = null
+    void applyPlan()
+  }, 700)
+}
+
+async function applyPlan() {
+  if (!draft.value?.diySheetId) return
+  const rows = normalizedPackagePlan.value
+  if (rows.length === 0 || validationMessage.value) return
+
+  replanning.value = true
+  try {
+    const res = await updateDiySheetPlan(draft.value.diySheetId, rows)
+    if (res.code !== 0) {
+      uni.showToast({ title: res.message || '分装没更新成功', icon: 'none' })
+      return
+    }
+    // 已冻结的制作单会新建一张 —— 必须换成新 id，否则报价还按旧单算
+    if (res.data?.id && res.data.id !== draft.value.diySheetId) {
+      draft.value.diySheetId = res.data.id
+      saveSupplementPurchaseDraft(draft.value)
+    }
+    if (res.data) sheet.value = res.data
+    await retry()
+  } catch (error) {
+    uni.showToast({
+      title: error instanceof Error && error.message ? error.message : '分装没更新成功',
+      icon: 'none'
+    })
+  } finally {
+    replanning.value = false
   }
 }
 
@@ -620,53 +671,12 @@ function goToDiySheetList() {
   uni.navigateTo({ url: '/pages/diy-sheet-list/index' })
 }
 
-/**
- * 改制作单：本页直接退回去，改完重新点「购买预分装补剂」。
- * 这样页面被销毁，不会出现"改完回来还是旧数据"，也不会往页面栈上叠页面。
- */
-function goEditDiySheet() {
-  uni.showToast({ title: '改完再点「购买预分装补剂」', icon: 'none', duration: 1600 })
-  if (getCurrentPages().length > 1) {
-    uni.navigateBack()
-  } else {
-    uni.redirectTo({ url: '/pages/diy-sheet-list/index' })
-  }
-}
-
 function selectPortion(next: number) {
   void setPortion(next)
 }
 
 async function onRetryQuote() {
   await retry()
-}
-
-function openCustomPortion() {
-  customPortionValue.value = portionMultiplier.value > 3 ? portionMultiplier.value : 4
-  showCustomPortion.value = true
-}
-
-function closeCustomPortion() {
-  showCustomPortion.value = false
-}
-
-function stepCustomPortion(delta: number) {
-  customPortionValue.value = clampPortion(customPortionValue.value + delta)
-}
-
-function onCustomPortionInput(event: any) {
-  customPortionValue.value = clampPortion(Number(event?.detail?.value))
-}
-
-async function confirmCustomPortion() {
-  showCustomPortion.value = false
-  await setPortion(customPortionValue.value)
-}
-
-function clampPortion(value: number): number {
-  const num = Math.floor(Number(value))
-  if (!Number.isFinite(num)) return 1
-  return Math.min(99, Math.max(1, num))
 }
 
 function lineAmount(line: QuoteLineState): string {
@@ -776,8 +786,15 @@ async function settlePayment(order: SupplementOrder) {
     return
   }
 
-  const prefix = outcome === 'CANCELLED' ? '支付未完成，订单已为你保留。' : ''
-  showManualConfirmModal(order, prefix)
+  if (outcome === 'CANCELLED') {
+    showCancelledModal(order)
+    return
+  }
+  showManualConfirmModal(order)
+}
+
+function goSupplementOrderDetail(order: SupplementOrder) {
+  uni.redirectTo({ url: `/pages/supplement-order-detail/index?orderId=${encodeURIComponent(order.id)}` })
 }
 
 function showPaidModal(order: SupplementOrder) {
@@ -786,20 +803,34 @@ function showPaidModal(order: SupplementOrder) {
     content: `订单号 ${order.orderNo}\n合计 ¥${order.amountTotal.toFixed(2)}\n预计发货 ${order.packingDate || '待管理员排期'}\n\n我们会尽快分装发货。`,
     showCancel: false,
     confirmText: '查看订单',
-    success: () => {
-      uni.redirectTo({ url: `/pages/supplement-order-detail/index?orderId=${encodeURIComponent(order.id)}` })
+    success: () => goSupplementOrderDetail(order)
+  })
+}
+
+/** 支付被顾客取消：订单还在，可以稍后继续付；弹窗必须能关掉 */
+function showCancelledModal(order: SupplementOrder) {
+  uni.showModal({
+    title: '支付未完成',
+    content: `订单号 ${order.orderNo}\n合计 ¥${order.amountTotal.toFixed(2)}\n\n订单已为你保留，可以稍后在订单详情里继续支付。`,
+    showCancel: true,
+    cancelText: '关闭',
+    confirmText: '查看订单',
+    success: (res) => {
+      if (res.confirm) goSupplementOrderDetail(order)
     }
   })
 }
 
-function showManualConfirmModal(order: SupplementOrder, prefix = '') {
+/** 支付通道不可用：订单成立，等待人工确认到账 */
+function showManualConfirmModal(order: SupplementOrder) {
   uni.showModal({
     title: '订单已提交',
-    content: `${prefix}订单号 ${order.orderNo}\n合计 ¥${order.amountTotal.toFixed(2)}\n预计发货 ${order.packingDate || '待管理员排期'}\n\n我们会尽快与你确认收款，随后分装发货。`,
-    showCancel: false,
+    content: `订单号 ${order.orderNo}\n合计 ¥${order.amountTotal.toFixed(2)}\n\n我们会尽快与你确认收款。`,
+    showCancel: true,
+    cancelText: '关闭',
     confirmText: '查看订单',
-    success: () => {
-      uni.redirectTo({ url: `/pages/supplement-order-detail/index?orderId=${encodeURIComponent(order.id)}` })
+    success: (res) => {
+      if (res.confirm) goSupplementOrderDetail(order)
     }
   })
 }
@@ -965,32 +996,25 @@ function readErrorMessage(error: unknown): string {
   width: 100%;
 }
 
-.prepack-collapse {
-  display: block;
-  padding: 16rpx 0;
-  text-align: center;
+
+
+
+
+/* ---- 快速改分装 ---- */
+.plan-section .package-plan {
+  margin-top: 8rpx;
+}
+
+.plan-pending {
   font-size: 22rpx;
   color: #a97c33;
 }
 
-.prepack-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background-color: #ffffff;
-  border-radius: 16rpx;
-  padding: 24rpx;
-  margin-bottom: 20rpx;
-}
-
-.prepack-toggle-text {
-  font-size: 26rpx;
-  color: #2b5040;
-}
-
-.prepack-toggle-arrow {
-  font-size: 32rpx;
-  color: #b08d4f;
+.plan-unavailable {
+  display: block;
+  font-size: 24rpx;
+  color: #909399;
+  line-height: 1.6;
 }
 
 /* ---- 补剂清单 ---- */
@@ -1077,24 +1101,65 @@ function readErrorMessage(error: unknown): string {
   color: #c0c4cc;
 }
 
-.list-summary {
-  margin-top: 20rpx;
-  padding-top: 18rpx;
+
+
+
+/* ---- 袋数 ---- */
+.portion-block {
+  margin-top: 24rpx;
+  padding-top: 20rpx;
   border-top: 1rpx solid #f2f3f5;
 }
 
-.list-summary-text {
+.portion-title {
+  display: block;
   font-size: 26rpx;
-  color: #1e3a2f;
+  color: #26261f;
   font-weight: 600;
 }
 
-.list-summary-hint {
-  display: block;
+.portion-options {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.portion-option {
+  flex: 1;
+  padding: 18rpx 6rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12rpx;
+  border: 2rpx solid #e5e0d0;
+  background-color: #fbfcf7;
+  position: relative;
+  overflow: hidden;
+  min-height: 96rpx;
+}
+
+.portion-option-num {
+  font-size: 26rpx;
+  color: #26261f;
+}
+
+.portion-option-price {
   margin-top: 8rpx;
-  font-size: 22rpx;
-  color: #9aa0a6;
-  line-height: 1.6;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #26261f;
+}
+
+.portion-option-active {
+  border-color: #1e3a2f;
+  background-color: #1e3a2f;
+}
+
+.portion-option-active .portion-option-num,
+.portion-option-active .portion-option-price {
+  color: #fbfcf7;
+  font-weight: 600;
 }
 
 /* ---- 地址 ---- */
@@ -1134,18 +1199,7 @@ function readErrorMessage(error: unknown): string {
 }
 
 /* ---- 套数 ---- */
-.portion-subtip {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: #968f6d;
-  line-height: 1.5;
-}
 
-.portion-subtip-gold {
-  color: #a97c33;
-  font-weight: 600;
-}
 
 .portion-options {
   display: flex;
@@ -1180,24 +1234,7 @@ function readErrorMessage(error: unknown): string {
   color: #26261f;
 }
 
-.portion-option-custom-hint {
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  color: #a97c33;
-}
 
-.portion-badge {
-  position: absolute;
-  top: 0;
-  right: 0;
-  padding: 0 8rpx;
-  font-size: 17rpx;
-  line-height: 1.5;
-  color: #fbfcf7;
-  background-color: #b08d4f;
-  border-top-right-radius: 12rpx;
-  border-bottom-left-radius: 8rpx;
-}
 
 .portion-option-active {
   border-color: #1e3a2f;
@@ -1422,34 +1459,8 @@ function readErrorMessage(error: unknown): string {
   line-height: 1.6;
 }
 
-.stepper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 24rpx;
-  margin: 40rpx 0;
-}
 
-.stepper-btn {
-  width: 88rpx;
-  height: 88rpx;
-  line-height: 84rpx;
-  text-align: center;
-  border-radius: 50%;
-  background-color: #f5f3ea;
-  color: #1e3a2f;
-  font-size: 44rpx;
-}
 
-.stepper-input {
-  width: 180rpx;
-  height: 88rpx;
-  text-align: center;
-  font-size: 40rpx;
-  font-weight: 600;
-  color: #26261f;
-  border-bottom: 2rpx solid #e5e0d0;
-}
 
 .sheet-actions {
   display: flex;

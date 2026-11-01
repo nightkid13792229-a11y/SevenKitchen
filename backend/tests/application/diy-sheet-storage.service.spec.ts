@@ -1,3 +1,7 @@
+import {
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { DIYSheetStorageService } from '../../src/application/diy-sheet/diy-sheet-storage.service';
 
 describe('DIYSheetStorageService package plans', () => {
@@ -162,5 +166,115 @@ describe('DIYSheetStorageService package plans', () => {
 
     expect(result.id).toBe('sheet-frozen');
     expect(prisma.dIYSheet.create).not.toHaveBeenCalled();
+  });
+
+  describe('updatePlan（补剂下单页快速改分装）', () => {
+    function sheetRow(overrides: any = {}) {
+      return {
+        id: 'sheet-1',
+        userId: 'user-1',
+        recipeId: 'recipe-1',
+        recipeName: '牛肉南瓜鲜食',
+        dogId: 'dog-1',
+        dogName: '七七',
+        cycleDays: null,
+        perMealG: 80,
+        dailyIntakeG: 160,
+        packagePlan: [{ packageSpecG: 100, packageCount: 10 }],
+        // 客户端存的采购清单形状：netAmount + netAmountStr
+        purchaseList: [
+          { name: '牛肉', type: 'FOOD', netAmount: 600, netAmountStr: '600g' },
+          { name: '钙粉', type: 'SUPPLEMENT', netAmount: 12.5, netAmountStr: '12.5g' },
+        ],
+        productionSteps: '冷冻',
+        recipeVersion: 3,
+        supplementSelections: [{ recipeItemId: 'r1', ingredientId: 'i1' }],
+        snapshot: null,
+        snapshotAt: null,
+        createdAt: new Date('2026-10-18T00:00:00Z'),
+        updatedAt: new Date('2026-10-18T00:00:00Z'),
+        ...overrides,
+      };
+    }
+
+    function prismaMock(sheet: any) {
+      return {
+        dIYSheet: {
+          findFirst: jest.fn().mockResolvedValue(sheet),
+          update: jest.fn().mockImplementation(async ({ data }: any) => ({
+            ...sheet,
+            ...data,
+          })),
+          create: jest.fn().mockImplementation(async ({ data }: any) => ({
+            ...sheet,
+            ...data,
+            id: 'sheet-new',
+            snapshot: null,
+            snapshotAt: null,
+          })),
+        },
+      } as any;
+    }
+
+    it('未冻结：就地更新包规，并按总重比例缩放采购清单', async () => {
+      const sheet = sheetRow();
+      const prisma = prismaMock(sheet);
+      const service = new DIYSheetStorageService(prisma);
+
+      // 100g×10 = 1000g → 200g×10 = 2000g，比例 2
+      const result = await service.updatePlan('user-1', 'sheet-1', [
+        { packageSpecG: 200, packageCount: 10 },
+      ]);
+
+      expect(result.id).toBe('sheet-1');
+      const data = prisma.dIYSheet.update.mock.calls[0][0].data;
+      expect(data.packagePlan).toEqual([{ packageSpecG: 200, packageCount: 10 }]);
+      expect(data.purchaseList[0].netAmount).toBe(1200);
+      expect(data.purchaseList[1].netAmount).toBe(25);
+      // 补剂不按食材取整
+      expect(data.purchaseList[1].netAmountStr).toBe('25.0g');
+    });
+
+    it('已冻结：新建一张制作单，不覆盖旧快照', async () => {
+      const sheet = sheetRow({ snapshot: { version: 1 }, snapshotAt: new Date() });
+      const prisma = prismaMock(sheet);
+      const service = new DIYSheetStorageService(prisma);
+
+      const result = await service.updatePlan('user-1', 'sheet-1', [
+        { packageSpecG: 50, packageCount: 10 },
+      ]);
+
+      expect(prisma.dIYSheet.update).not.toHaveBeenCalled();
+      expect(prisma.dIYSheet.create).toHaveBeenCalled();
+      expect(result.id).toBe('sheet-new');
+      const data = prisma.dIYSheet.create.mock.calls[0][0].data;
+      // 新单不写天数
+      expect(data.cycleDays).toBeNull();
+      expect(data.packagePlan).toEqual([{ packageSpecG: 50, packageCount: 10 }]);
+    });
+
+    it('包规非法直接拒绝', async () => {
+      const prisma = prismaMock(sheetRow());
+      const service = new DIYSheetStorageService(prisma);
+
+      await expect(service.updatePlan('user-1', 'sheet-1', [])).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      await expect(
+        service.updatePlan('user-1', 'sheet-1', [{ packageSpecG: 0, packageCount: 10 }]),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.updatePlan('user-1', 'sheet-1', [{ packageSpecG: 100, packageCount: 0 }]),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('不是自己的制作单：按不存在处理', async () => {
+      const prisma = prismaMock(null);
+      const service = new DIYSheetStorageService(prisma);
+
+      await expect(
+        service.updatePlan('user-1', 'sheet-x', [{ packageSpecG: 100, packageCount: 10 }]),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
   });
 });

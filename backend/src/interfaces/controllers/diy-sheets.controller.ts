@@ -7,6 +7,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -25,7 +26,11 @@ import {
   ApiHeader,
 } from '@nestjs/swagger';
 import { DIYSheetStorageService } from '../../application/diy-sheet/diy-sheet-storage.service';
-import { CreateDIYSheetDto, DIYSheetResponseDto } from '../dto/diy-sheets.dto';
+import {
+  CreateDIYSheetDto,
+  DIYSheetResponseDto,
+  UpdateDIYSheetPlanDto,
+} from '../dto/diy-sheets.dto';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
@@ -90,6 +95,23 @@ export class DIYSheetsController {
     const sheets = await this.diySheetService.findAllByUser(userId);
 
     return ApiResponseDto.success(sheets);
+  }
+
+  @Patch(':id/plan')
+  @UseGuards(AuthGuard)
+  @ApiOperation({
+    summary: '只改分装规格（补剂下单页快速改分装；已冻结的制作单会新建一张）',
+  })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'id', description: '制作单ID', example: 'uuid' })
+  async updatePlan(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateDIYSheetPlanDto,
+  ): Promise<ApiResponseDto<DIYSheetResponseDto>> {
+    return ApiResponseDto.success(
+      await this.diySheetService.updatePlan(user.customerId, id, dto.packagePlan),
+    );
   }
 
   @Delete(':id')

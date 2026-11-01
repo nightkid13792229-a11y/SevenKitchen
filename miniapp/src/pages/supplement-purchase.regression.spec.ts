@@ -84,17 +84,17 @@ describe('supplement purchase regressions', () => {
       expect(template).not.toContain('line.price')
     })
 
-    it('清单前有「预分装」说明图，且排在补剂清单之前', () => {
+    it('「预分装」说明图常显在页面最顶部', () => {
       const iImage = template.indexOf('prepack-explainer.jpg')
-      const iList = template.indexOf('本次要买的补剂')
+      const iList = template.indexOf('本制作单需要的补剂')
       expect(iImage).toBeGreaterThan(-1)
       expect(iList).toBeGreaterThan(iImage)
+      expect(template).not.toContain('prepack-collapse')
     })
 
-    it('套数选项直接显示服务端算好的总价与包邮角标', () => {
+    it('袋数选项直接显示服务端算好的总价', () => {
       expect(template).toContain('portionOptionCards')
       expect(template).toContain('portion-option-price')
-      expect(template).toContain('portion-badge')
       expect(source).toContain('opt.goodsSubtotal')
       // 前端不做乘法
       expect(source).not.toMatch(/summary\.value\.supplementPrice\s*\*/)
@@ -258,11 +258,12 @@ describe('supplement order page redesign (2026-11-01)', () => {
   const source = readPage('src/pages/supplement-order/index.vue')
   const template = source.slice(0, source.indexOf('<script setup'))
 
-  it('清单用「整单量 + ×N 袋」表达，并给出总袋数', () => {
-    expect(template).toContain('整单')
-    expect(template).toContain('共 {{')
-    expect(template).toContain('袋')
-    expect(template).toContain('这个量是按你制作单里的食物总量和营养目标算出来的')
+  it('清单只写每袋用量，多袋时带 ×N 袋', () => {
+    expect(template).toContain('lineAmount(line)')
+    expect(template).toContain('× {{ portionMultiplier }} 袋')
+    expect(template).not.toContain('整单')
+    // 2026-11-02：袋数合计与下方小字说明按老板要求删除
+    expect(template).not.toContain('这个量是按你制作单里')
   })
 
   it('标题与入口口径统一，不再出现「改用量」', () => {
@@ -270,16 +271,19 @@ describe('supplement order page redesign (2026-11-01)', () => {
     expect(pagesJson).toContain('"navigationBarTitleText": "购买预分装补剂"')
     expect(pagesJson).not.toContain('"navigationBarTitleText": "一键购买补剂"')
     expect(template).not.toContain('改用量')
-    expect(template).toContain('改制作单')
   })
 
-  it('套数：三张卡保留，第四张是自定义，且不再拿服务端上限夹套数', () => {
+  it('袋数：只保留 1/2/3 三个按钮，贴在补剂清单下方', () => {
     expect(template).toContain('portionOptionCards')
-    expect(template).toContain('自定义')
-    expect(source).toContain('showCustomPortion')
-    expect(template).toContain('选择套数')
-    expect(template).not.toContain('选择份数')
-    expect(source).not.toContain('if (portionMultiplier.value > allowed)')
+    expect(template).toContain('袋数')
+    expect(template).not.toContain('选择套数')
+    expect(template).not.toContain('自定义')
+    expect(template).not.toContain('showCustomPortion')
+    const iList = template.indexOf('本制作单需要的补剂')
+    const iPortion = template.indexOf('class="portion-block"')
+    const iAddress = template.indexOf('收货地址')
+    expect(iPortion).toBeGreaterThan(iList)
+    expect(iPortion).toBeLessThan(iAddress)
   })
 
   it('费用明细只出现一个商品金额，包材费按需出现', () => {
@@ -289,9 +293,9 @@ describe('supplement order page redesign (2026-11-01)', () => {
     expect(template).toContain('summary.packagingFee > 0')
   })
 
-  it('大单与效期各有一句提示', () => {
+  it('大单有一句提示；6 个月效期那句按要求删除', () => {
     expect(template).toContain('发货会顺延')
-    expect(template).toContain('6 个月内吃完')
+    expect(template).not.toContain('6 个月内吃完')
   })
 
   it('金额未确认时不能提交', () => {
@@ -355,6 +359,65 @@ describe('supplement order page redesign (2026-11-01)', () => {
   it('带客服入口', () => {
     expect(source).toContain('CustomerServiceInlineButton')
     expect(template).toContain('补剂下单咨询')
+  })
+})
+
+describe('2026-11-02 老板反馈的七处调整', () => {
+  const page = readPage('src/pages/supplement-order/index.vue')
+  const template = page.slice(0, page.indexOf('<script setup'))
+  const detail = readPage('src/pages/supplement-order-detail/index.vue')
+  const api = readPage('src/api/supplements.ts')
+
+  it('订阅消息只保留发货提醒', () => {
+    expect(api).toContain("kinds: SupplementSubscribeKind[] = ['shipped']")
+    expect(api).not.toContain("['scheduled', 'shipped', 'delay']")
+  })
+
+  it('支付未完成的弹窗去掉预计发货/确认收款，且能关掉', () => {
+    const cancelled = page.slice(
+      page.indexOf('function showCancelledModal'),
+      page.indexOf('function showManualConfirmModal'),
+    )
+    expect(cancelled).not.toContain('预计发货')
+    expect(cancelled).not.toContain('待管理员排期')
+    expect(cancelled).not.toContain('确认收款')
+    expect(cancelled).toContain("cancelText: '关闭'")
+    expect(cancelled).toContain('订单详情里继续支付')
+  })
+
+  it('人工确认收款的弹窗也能关掉、不再写预计发货', () => {
+    const manual = page.slice(
+      page.indexOf('function showManualConfirmModal'),
+      page.indexOf('function readErrorMessage'),
+    )
+    expect(manual).not.toContain('预计发货')
+    expect(manual).toContain("cancelText: '关闭'")
+  })
+
+  it('订单详情不再列出每样补剂的金额，只留补剂商品小计', () => {
+    expect(detail).not.toContain('item-price')
+    expect(detail).toContain('补剂商品小计')
+  })
+
+  it('订单详情不再展示制作单快照', () => {
+    expect(detail).not.toContain('制作单快照')
+    expect(detail).not.toContain('fetchSupplementSnapshot')
+  })
+
+  it('下单页内嵌「快速天数 + 自定义分装」，不再跳回配置页', () => {
+    expect(page).toContain('QuickCyclePackagePlan')
+    expect(page).toContain('updateDiySheetPlan')
+    expect(page).toContain('fetchMyDiySheets')
+    // 已冻结的制作单会新建一张，必须换 id
+    expect(page).toContain('draft.value.diySheetId = res.data.id')
+    // 改分装期间禁止提交
+    expect(page).toContain('!replanning.value')
+    expect(page).not.toContain('改制作单')
+  })
+
+  it('订单详情的操作按钮改为纵向铺满', () => {
+    expect(detail).toContain('flex-direction: column')
+    expect(detail).toMatch(/\.primary-btn, \.ghost-btn \{[^}]*width: 100%/)
   })
 })
 })

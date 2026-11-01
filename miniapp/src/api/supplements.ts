@@ -336,7 +336,8 @@ export async function prefetchSupplementSubscriptions(): Promise<void> {
  * 微信一次最多 3 个模板：下单要排期/发货/延迟，售后单独请求售后模板。
  */
 export async function requestSupplementSubscriptions(
-  kinds: SupplementSubscribeKind[] = ['scheduled', 'shipped', 'delay']
+  // 只订阅「发货提醒」：顾客明确不要养宠日历/排期这类与补剂无关的提醒
+  kinds: SupplementSubscribeKind[] = ['shipped']
 ): Promise<void> {
   const ids = cachedSubscribeTemplates
     ? Array.from(

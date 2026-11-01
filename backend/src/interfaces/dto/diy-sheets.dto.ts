@@ -5,6 +5,7 @@
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayNotEmpty,
   IsUUID,
   IsString,
   IsNumber,
@@ -61,6 +62,24 @@ export class DIYSheetPackagePlanItemDto {
   @IsInt()
   @Min(1)
   packageCount!: number;
+}
+
+/**
+ * 只改分装规格（补剂下单页的快速天数/自定义分装用）。
+ *
+ * 为什么单独一个 DTO：`create` 要整份采购清单，而下单页手上只有
+ * 「每袋多少克 × 多少袋」，服务端按总重比例缩放已有清单。
+ */
+export class UpdateDIYSheetPlanDto {
+  @ApiProperty({
+    description: '新的分装规格',
+    type: [DIYSheetPackagePlanItemDto],
+  })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => DIYSheetPackagePlanItemDto)
+  packagePlan!: DIYSheetPackagePlanItemDto[];
 }
 
 /**

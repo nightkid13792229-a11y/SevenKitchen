@@ -146,6 +146,8 @@ export class OrdersController {
         cartItemIds: createOrderDto.cartItemIds,
         snapshotId: createOrderDto.snapshotId,
         addressId: createOrderDto.addressId,
+        // 结算页填的顾客备注要跟着订单落库，否则客服/制作收不到
+        customerNote: createOrderDto.customerNote ?? null,
       });
 
       const response = await this.mapOrderToDto(order);

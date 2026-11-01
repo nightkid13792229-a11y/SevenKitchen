@@ -708,6 +708,7 @@ export class StaffProductionController {
               packageCount: { type: 'number' },
               dogName: { type: 'string' },
               adminRemark: { type: 'string', nullable: true },
+              customerNote: { type: 'string', nullable: true },
             },
           },
         },

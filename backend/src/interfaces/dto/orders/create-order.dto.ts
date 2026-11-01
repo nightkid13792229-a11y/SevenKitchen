@@ -174,6 +174,17 @@ export class CreateOrderDto {
   addressId?: string;
 
   @ApiPropertyOptional({
+    description:
+      'Customer-facing order note typed on the checkout page (not visible to other customers)',
+    example: '对鸡肉过敏，请分装时贴标签',
+    maxLength: 200,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  customerNote?: string;
+
+  @ApiPropertyOptional({
     description: 'Target production date',
     example: '2024-01-15T00:00:00Z',
     nullable: true,

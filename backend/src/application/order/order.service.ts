@@ -116,6 +116,14 @@ export interface CreateOrderDraftDto {
   cartItemIds?: string[];
   snapshotId?: string; // ✅ 新增：快照ID（立即购买）
   addressId?: string;
+  /**
+   * 顾客在确认订单页填的备注。
+   *
+   * 为什么放在订单层而不是靠快照：备注是在结算页才填的，
+   * 而价格快照在进入结算页之前就生成好了，快照里根本不会有备注。
+   * 所以必须在下单请求里单独带进来。
+   */
+  customerNote?: string | null;
 }
 
 export interface CreateOrderItemDto {
@@ -1441,7 +1449,9 @@ export class OrderService {
       itemParams.quantityG,
       itemParams.packageCount,
       itemParams.packageSpecG,
-      this.normalizeOrderNote(itemParams.customRequirements),
+      // 顾客备注优先取结算页提交的那条（价格快照生成得早，里面不会有备注），
+      // 再退回快照里的 customRequirements（兼容老数据与其它入口）
+      this.normalizeOrderNote(dto.customerNote ?? itemParams.customRequirements),
       dailyIntakeG,
       vacuumBagSpec, // vacuum bag specification
       null,
@@ -1611,7 +1621,8 @@ export class OrderService {
         quantityG,
         totalPacks,
         packSpecG,
-        null, // customRequirements
+        // 顾客在确认订单页填的备注：现货单也要存，客服/制作要能看到
+        this.normalizeOrderNote(dto.customerNote),
         null, // dailyIntakeG：现货没有"每日饭量"
         null, // vacuumBagSpec
         null, // productionBatchId

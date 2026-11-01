@@ -50,6 +50,13 @@ export class OrderPackagingInfoDto {
   recipientCity?: string;
   adminRemark?: string;
 
+  /**
+   * 顾客在确认订单页填的备注（只读）。
+   * 车间与打印版要能看到，过敏提醒、分装标签都写在这里。
+   */
+  @IsOptional()
+  customerNote?: string | null;
+
   @IsOptional()
   completedAt?: string; // 本地时间格式
 }

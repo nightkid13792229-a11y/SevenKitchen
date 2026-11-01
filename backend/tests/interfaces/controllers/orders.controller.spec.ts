@@ -829,6 +829,70 @@ describe('OrdersController (e2e)', () => {
       expect(response.body.data).toHaveProperty('id');
       expect(response.body.data.items).toHaveLength(1);
     });
+
+    it('should keep the customer note typed on checkout on the order item', async () => {
+      const customerId = 'test-customer-id';
+      const dogId = '550e8400-e29b-41d4-a716-446655440010';
+      const recipeId = '550e8400-e29b-41d4-a716-446655440011';
+      const ingredientId = '550e8400-e29b-41d4-a716-446655440012';
+      const snapshotId = '550e8400-e29b-41d4-a716-446655440013';
+
+      await createTestDog(customerId, dogId);
+      await createTestIngredient(ingredientId);
+      await createTestRecipeWithItems(recipeId, ingredientId);
+
+      // 顾客的备注是在结算页才填的，那时价格快照早已生成（且快照里没有备注），
+      // 所以必须靠下单请求把备注带进来，不能指望快照。
+      mockPricingSnapshotRepository.findById.mockResolvedValue({
+        requestParams: {
+          dogId,
+          addressId: null,
+          items: [
+            {
+              recipeId,
+              quantityG: 1400,
+              packageCount: 14,
+              packageSpecG: 100,
+              cycleDays: 30,
+              dailyIntakeG: 140,
+              cookingMethod: null,
+            },
+          ],
+        },
+        pricingResult: {
+          amountProduct: 111.67,
+          amountShipping: 10,
+          amountTotal: 121.67,
+          pricingBreakdown: {
+            costIngredients: 50,
+            costPackaging: 2,
+            costLabor: 10,
+            costOverhead: 5,
+            totalProductCost: 67,
+            productPrice: 111.67,
+            ingredientDetails: [],
+          },
+        },
+        belongsToCustomer: () => true,
+        canBeUsed: () => true,
+        used: false,
+        isExpired: () => false,
+      });
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/orders')
+        .set('X-Customer-Id', customerId)
+        .send({
+          type: OrderType.FRESH_FOOD,
+          snapshotId,
+          customerNote: '  对鸡肉过敏，请分装贴标签  ',
+        });
+
+      expect(response.body).toHaveProperty('code', 0);
+      expect(response.body.data.items[0].customRequirements).toBe(
+        '对鸡肉过敏，请分装贴标签',
+      );
+    });
   });
 
   describe('POST /api/v1/orders/:id/confirm and POST /api/v1/orders/:id/pay', () => {

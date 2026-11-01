@@ -228,7 +228,7 @@
       />
       <view class="order-note-footer">
         <text class="order-note-hint"
-          >备注会展示在订单详情页，便于客服和制作人员核对。</text
+          >备注会随订单一起提交，客服和制作同事都能看到。</text
         >
         <text class="order-note-count">{{ customerNote.length }}/200</text>
       </view>
@@ -1285,6 +1285,9 @@ async function submitOrder(hasRefreshedSnapshot = false) {
         ...(isStockOrder.value
           ? {}
           : { targetProductionDate: selectedProductionDate.value }),
+        // 备注是结算页才填的，价格快照里没有它；
+        // 必须随下单请求一起提交，客服与制作才能看到
+        customerNote: customerNote.value.trim() || undefined,
       },
     });
 

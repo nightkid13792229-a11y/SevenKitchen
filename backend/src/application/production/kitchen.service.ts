@@ -431,6 +431,8 @@ export class StaffProductionService {
             recipientName: order.address?.recipientName, // ✅ 收货人姓名
             recipientCity: order.address?.region?.city, // ✅ 收货城市
             adminRemark: order.adminRemark ?? undefined,
+            // 顾客自己填的备注：车间与打印版必须能看到，别只留在客服后台
+            customerNote: item.customRequirements ?? undefined,
             completedAt: order.completedAt
               ? this.toLocalTime(order.completedAt)
               : undefined,

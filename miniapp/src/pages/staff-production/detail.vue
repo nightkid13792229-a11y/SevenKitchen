@@ -80,8 +80,13 @@
               <text class="value">{{ order.recipientName }}（{{ order.recipientCity }}）</text>
             </view>
             <view v-if="order.adminRemark" class="info-row">
-              <text class="label">备注：</text>
+              <text class="label">内部备注：</text>
               <text class="value remark-text">{{ order.adminRemark }}</text>
+            </view>
+            <!-- 顾客下单时填的备注：过敏、分装要求都在这里 -->
+            <view v-if="order.customerNote" class="info-row">
+              <text class="label">顾客备注：</text>
+              <text class="value remark-text">{{ order.customerNote }}</text>
             </view>
           </view>
         </view>

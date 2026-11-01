@@ -334,6 +334,19 @@ describe('现货下单 · 库存占用与回滚', () => {
     expect(orderRepository.save).toHaveBeenCalled();
   });
 
+  it('顾客在确认订单页填的备注要跟着订单存下来', async () => {
+    const { service } = buildOrderService({});
+
+    const order = await service.createOrderDraft({
+      customerId: 'customer-1',
+      type: OrderType.TASTING_PACK,
+      snapshotId: 'snap-1',
+      customerNote: ' 请放冰袋，周末家里有人  ',
+    } as any);
+
+    expect(order.items[0].customRequirements).toBe('请放冰袋，周末家里有人');
+  });
+
   it('快照缺少商品或套数时明确报错，不去猜', async () => {
     const { service, stockService } = buildOrderService({});
     const broken = new OrderService(

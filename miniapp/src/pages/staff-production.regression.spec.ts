@@ -103,6 +103,16 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).toContain('原料清单（{{ realIngredientCount }}项）');
   });
 
+  it('把顾客备注带到生产单与打印版，别只留在客服后台', () => {
+    // 过敏提醒、分装标签都是顾客在确认订单页填的，车间必须看得到；
+    // 打印版还不能按两行截断，否则正好把关键信息截掉。
+    expect(detailSource).toContain('order.customerNote');
+    expect(detailSource).toContain('顾客备注');
+    expect(printTaskSource).toContain('order.customerNote');
+    expect(printTaskSource).toContain('customer-note-text');
+    expect(printTaskSource).toContain('-webkit-line-clamp: unset');
+  });
+
   it('uses the approved one-page A4 compact print preview layout', () => {
     expect(printTaskSource).toContain('a4-paper');
     expect(printTaskSource).toContain('print-paper-inner');

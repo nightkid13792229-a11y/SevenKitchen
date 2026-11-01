@@ -172,7 +172,7 @@
     {
       "path": "pages/supplement-order/index",
       "style": {
-        "navigationBarTitleText": "一键购买补剂",
+        "navigationBarTitleText": "购买预分装补剂",
         "enablePullDownRefresh": false
       }
     },

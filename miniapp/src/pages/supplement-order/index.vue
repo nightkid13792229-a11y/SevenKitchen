@@ -1,41 +1,51 @@
 <template>
   <view class="page">
-    <!--
-      空态：2026-09-22 补上出口。
-      原先只有两行文字，用户直接打开这页会卡住（比如从订单页返回、或收藏/转发进来）。
-    -->
+    <!-- 没有草稿：从订单页返回、收藏/转发进来都会走到这里，必须给出口 -->
     <view v-if="!draft" class="empty-state">
       <text class="empty-title">没有待购买的补剂</text>
       <text class="empty-desc">补剂是从 DIY 制作单带过来的。先在「我的制作单」里打开一份，再点「购买预分装补剂」。</text>
       <button class="empty-action" @tap="goToDiySheetList">去我的制作单</button>
     </view>
 
-    <!-- 首次报价期间：给一个明确的加载态，避免页面看起来是"空的/坏了" -->
-    <view v-else-if="initializing" class="empty-state">
-      <text class="empty-title">正在核对补剂</text>
-      <text class="empty-desc">正在按制作单上的用量计算价格，请稍候…</text>
-    </view>
-
-    <!--
-      制作单上的补剂全都没开放购买时，原先会呈现"一片灰 + 底部 ¥0.00 + 灰按钮"，
-      没有任何解释。这里给一个明确的说明与出口。
-    -->
-    <view v-else-if="lines.length > 0 && selectableLines.length === 0" class="empty-state">
-      <text class="empty-title">这些补剂暂时无法购买</text>
-      <text class="empty-desc">制作单上的补剂目前都没有开放购买，或还没有定好价格。可以稍后再试，或联系客服。</text>
+    <!-- 商城关闭：整页提示，别让顾客填完最后一步才被拒 -->
+    <view v-else-if="!enabled" class="empty-state">
+      <text class="empty-title">补剂商城暂未开放</text>
+      <text class="empty-desc">可以先回制作单看看，开放后再来买。</text>
       <button class="empty-action" @tap="goToDiySheetList">返回我的制作单</button>
     </view>
 
-    <template v-else>
-      <!--
-        来源制作单（2026-09-24 加了「改用量」入口）
+    <!-- 首次报价期间：明确的加载态，避免页面看起来是空的/坏了 -->
+    <view v-else-if="initializing" class="empty-state">
+      <text class="empty-title">正在核对补剂</text>
+      <text class="empty-desc">正在按制作单上的配比算价格，请稍候…</text>
+    </view>
 
-        补剂用量是按制作单那批食物的营养目标算出来的，所以它**不应该在这一页改**：
-        改少了补剂跟食物配不上；改天数还会改变单袋分装量、可能撑爆袋子
-        （碳酸钙粉 114g 已经是 10x15 袋的极限）。
-        想多买用下面的「加量」；想改基准用量，回制作单配置页改 —— 那里食物和补剂一起调。
-        这个入口就是让人知道该去哪，而不是在这一页干着急。
-      -->
+    <!-- 这张制作单上的补剂一条都买不了：逐条说清原因，并给出口 -->
+    <view v-else-if="allUnavailable" class="empty-state">
+      <text class="empty-title">这些补剂暂时无法购买</text>
+      <text class="empty-desc">制作单上的补剂目前都不能买，原因如下：</text>
+      <view class="unavailable-list">
+        <text
+          v-for="item in unavailable"
+          :key="item.ingredientId"
+          class="unavailable-line"
+        >
+          · {{ item.name }}：{{ item.reason }}
+        </text>
+      </view>
+      <button class="empty-action" @tap="goToDiySheetList">返回我的制作单</button>
+      <CustomerServiceInlineButton
+        class="empty-service"
+        source-type="PRODUCT"
+        :product-id="draft.recipeId"
+        :product-name="draft.recipeName"
+        title="补剂下单咨询"
+        path="/pages/supplement-order/index"
+      />
+    </view>
+
+    <template v-else>
+      <!-- 来源制作单 -->
       <view class="section source-card">
         <view class="source-main">
           <text class="source-title">{{ draft.recipeName || 'DIY 制作单' }}</text>
@@ -44,78 +54,75 @@
             <text v-else>按当前制作单配比</text>
           </text>
         </view>
-        <text v-if="canEditUsage" class="source-action" @tap="goToRecipeDiy">改用量</text>
+        <text v-if="canEditDiySheet" class="source-action" @tap="goEditDiySheet">改制作单</text>
       </view>
 
-      <!--
-        预分装说明（2026-09-23 新增）
-
-        这一页是"选要买哪些补剂"，但第一次来的用户多半不知道"预分装"是什么，
-        直接丢给他一张补剂清单会懵。所以在清单前先把这个概念讲清楚。
-
-        画面本身已经带了主文案「无需囤多种补剂，做多少买多少。」，
-        所以这里不再重复写一遍 —— 图和字说同一件事会显得啰嗦。
-
-        图是 700×466 的实拍级海报，跟仓库里 delivery/making.jpg 同规格。
-      -->
-      <view class="section prepack-card">
+      <!-- 预分装说明：第一次来展开，之后收成一行 -->
+      <view v-if="prepackExpanded" class="section prepack-card">
         <image class="prepack-image" src="/static/mall/prepack-explainer.jpg" mode="widthFix" />
+        <text class="prepack-collapse" @tap="prepackExpanded = false">知道了，收起</text>
+      </view>
+      <view v-else class="prepack-toggle" @tap="prepackExpanded = true">
+        <text class="prepack-toggle-text">为什么是预分装？</text>
+        <text class="prepack-toggle-arrow">›</text>
       </view>
 
       <!-- 补剂清单 -->
       <view class="section">
         <view class="section-title">
-          <text class="title-text">选择要买的补剂</text>
-          <!-- 多种补剂时逐个点太累，给一个全选/全不选（不可购买的自动跳过） -->
+          <text class="title-text">本次要买的补剂</text>
           <text
             v-if="selectableLines.length > 1"
             class="title-action"
-            @tap="toggleSelectAll"
+            @tap="toggleAll"
           >
             {{ allSelectableSelected ? '全不选' : '全选' }}
           </text>
         </view>
-        <text class="section-subtip">按品种单独分装，一袋一种</text>
+        <text class="section-subtip">
+          按这张制作单的配比算：{{ selectableLines.length }} 种，每种 1 袋
+        </text>
 
         <view
-          v-for="line in displayLines"
+          v-for="line in lines"
           :key="line.ingredientId"
           class="line-row"
           :class="{ 'line-row-disabled': !!line.unavailableReason }"
-          @tap="toggleLine(line)"
+          @tap="toggleLine(line.ingredientId)"
         >
           <view class="line-check">
             <view
               class="checkbox"
               :class="{
-                'checkbox-checked': isSelected(line.ingredientId),
+                'checkbox-checked': selectedIds.includes(line.ingredientId),
                 'checkbox-disabled': !!line.unavailableReason
               }"
             >
-              <text v-if="isSelected(line.ingredientId)" class="checkbox-tick">✓</text>
+              <text v-if="selectedIds.includes(line.ingredientId)" class="checkbox-tick">✓</text>
             </view>
           </view>
 
           <view class="line-main">
             <text class="line-name">{{ line.name }}</text>
-            <!-- 小字只展示品牌和规格 -->
             <text v-if="line.specText" class="line-extra">{{ line.specText }}</text>
             <text v-if="line.unavailableReason" class="line-warn">
               暂不可购买：{{ line.unavailableReason }}
             </text>
           </view>
 
-          <!-- 右侧展示分装用量（不再展示价格） -->
           <text
+            v-if="!line.unavailableReason"
             class="line-packed"
-            :class="{ 'line-packed-disabled': !!line.unavailableReason }"
           >
-            {{
-              line.unavailableReason
-                ? '—'
-                : `${formatAmount(line.packedAmount)}${line.unit}`
-            }}
+            <text v-if="portionMultiplier === 1">整单 {{ lineAmount(line) }}</text>
+            <text v-else>{{ lineAmount(line) }} × {{ portionMultiplier }} 袋</text>
           </text>
+          <text v-else class="line-packed line-packed-disabled">—</text>
+        </view>
+
+        <view v-if="summary" class="list-summary">
+          <text class="list-summary-text">共 {{ bagCount }} 袋</text>
+          <text class="list-summary-hint">这个量是按你制作单里的食物总量和营养目标算出来的，不是你自己填的。</text>
         </view>
       </view>
 
@@ -132,38 +139,19 @@
           <text class="address-action">更换</text>
         </view>
         <view v-else class="address-card address-empty" @tap="chooseAddress">
-          <text class="address-placeholder">请选择收货地址</text>
+          <text class="address-placeholder">
+            {{ addressInvalid ? '地址已失效，请重新选择' : '请选择收货地址' }}
+          </text>
           <text class="address-action">去选择</text>
         </view>
       </view>
 
-      <!-- 费用板块整体不再展示，只在最下方保留合计 -->
-
-      <!--
-        提交说明：2026-09-22 改成对「在线支付可用/不可用」两种情况都成立的说法。
-        原文只说"提交订单后我们会尽快与你确认收款"，如果在线支付是通的，
-        用户其实是直接付掉了，这句话就是错的；而两种情况的差别在提交前无法预知。
-      -->
-      <!--
-        加量（2026-09-24，v2：选项直接带总价与包邮标记）
-
-        分装服务费是按单收的，跟买多少无关；分装 8 袋和 2 袋的实际耗时也差不多。
-        一次多买几份能把固定成本摊薄。
-
-        v1 只在选项上写"1 份 / 2 份 / 3 份"，顾客要来回点才知道多少钱、哪档包邮。
-        v2 把服务端算好的【金额 + 是否包邮】印在每个选项上，
-        "再加一份就包邮"变成零点击可见。
-        金额全部来自服务端（portionOptions），前端不做乘法。
-
-        ⚠️ 这块**不显示任何"天"**（2026-09-24 先撤掉"多少天量"，2026-11-01 彻底去掉）。
-        制作单的单位是袋和克；顾客自己定的袋规下，系统算不出可信的天数，
-        补剂也不再按效期天数限制份数。**给一个可能错的数字，比不给更糟。**
-      -->
-      <view v-if="showPortionPicker" class="section portion-card">
+      <!-- 套数：三张卡固定 1/2/3，第四张自定义，最多 99 套 -->
+      <view v-if="selectableLines.length > 0" class="section portion-card">
         <view class="section-title">
-          <text class="title-text">选择份数</text>
+          <text class="title-text">选择套数</text>
         </view>
-        <!-- 包邮门槛来自服务端配置，后台改了这里跟着变 -->
+        <text class="section-subtip">1 套 = 这张制作单需要的全部补剂（每种 1 袋）</text>
         <text v-if="freeShippingThresholdText" class="portion-subtip portion-subtip-gold">
           {{ freeShippingThresholdText }}
         </text>
@@ -176,65 +164,61 @@
             :class="{ 'portion-option-active': opt.multiplier === portionMultiplier }"
             @tap="selectPortion(opt.multiplier)"
           >
-            <!--
-              包邮做成右上角标：不占选项正文的位置，又能一眼看出哪档开始包邮。
-              正文只留「几份 / 多少钱」两件事。
-            -->
             <text v-if="opt.freeShipping" class="portion-badge">已包邮</text>
-            <text class="portion-option-num">{{ opt.multiplier }} 份</text>
+            <text class="portion-option-num">{{ opt.multiplier }} 套</text>
             <text class="portion-option-price">{{ opt.priceLabel }}</text>
+          </view>
+
+          <view
+            class="portion-option portion-option-custom"
+            :class="{ 'portion-option-active': showCustomPortionCard }"
+            @tap="openCustomPortion"
+          >
+            <text v-if="showCustomPortionCard" class="portion-option-num">{{ portionMultiplier }} 套</text>
+            <text v-else class="portion-option-num">自定义</text>
+            <text v-if="showCustomPortionCard" class="portion-option-price">¥{{ money(summary?.goodsSubtotal) }}</text>
+            <text v-else class="portion-option-custom-hint">更多</text>
           </view>
         </view>
       </view>
 
-      <!--
-        费用明细（2026-09-24）
-
-        2026-09-22 曾经把费用明细整块撤掉，只留一个「包邮价」，理由是
-        小额单上「服务费 + 运费 比货本身还贵」，用户看着不划算。
-        2026-09-24 改回逐项展示（服务费、运费都列出来）：
-        费用摆出来，用户才能亲眼看到"服务费和运费不随份数变"，
-        从而自己算出加量更划算 —— 明细本身成了加量的说服力。
-      -->
-      <view v-if="inventoryWarnings.length" class="section inventory-warning-card">
-        <text class="inventory-warning-title">库存提示（不阻止下单）</text>
-        <text v-for="warning in inventoryWarnings" :key="warning" class="inventory-warning-line">· {{ warning }}</text>
-        <text class="inventory-warning-note">库存尚未完成验收，最终以分装时实物为准；如不足我们会联系你处理。</text>
+      <!-- 报价失败：行内横幅 + 重试，不再弹 toast -->
+      <view v-if="status === 'failed'" class="section error-banner">
+        <text class="error-banner-text">价格没拿到：{{ quoteError }}</text>
+        <text class="error-banner-retry" @tap="onRetryQuote">重试</text>
       </view>
 
-      <view v-if="summary && !quoteFailed" class="section fee-card">
+      <!-- 费用明细 -->
+      <view v-if="summary && summary.goodsSubtotal > 0" class="section fee-card">
         <view class="section-title">
           <text class="title-text">费用明细</text>
         </view>
 
         <view class="fee-row">
-          <text class="fee-label">补剂费</text>
-          <text class="fee-value">¥{{ summary.supplementPrice.toFixed(2) }}</text>
-        </view>
-
-        <!--
-          补剂商品小计：只算补剂商品，不含服务费/包材/运费。
-          份数选择器上显示的就是这个数（也是包邮门槛比的数）。
-        -->
-        <view class="fee-row fee-row-subtotal">
-          <text class="fee-label">补剂商品小计</text>
-          <text class="fee-value">¥{{ summary.goodsSubtotal.toFixed(2) }}</text>
+          <text class="fee-label">补剂商品金额</text>
+          <text class="fee-value">¥{{ money(summary.goodsSubtotal) }}</text>
         </view>
 
         <view class="fee-row">
           <text class="fee-label">分装服务费</text>
-          <text class="fee-value">¥{{ summary.serviceFee.toFixed(2) }}</text>
+          <text v-if="summary.serviceFeeWaived" class="fee-value fee-value-free">已免</text>
+          <text v-else class="fee-value">¥{{ money(summary.serviceFee) }}</text>
+        </view>
+
+        <view v-if="summary.packagingFee > 0" class="fee-row">
+          <text class="fee-label">包材费</text>
+          <text class="fee-value">¥{{ money(summary.packagingFee) }}</text>
         </view>
 
         <view class="fee-row">
           <text class="fee-label">运费</text>
           <text v-if="summary.freeShipping" class="fee-value fee-value-free">包邮</text>
-          <text v-else class="fee-value">¥{{ summary.shippingFee.toFixed(2) }}</text>
+          <text v-else class="fee-value">¥{{ money(summary.shippingFee) }}</text>
         </view>
 
         <view class="fee-row fee-row-total">
           <text class="fee-label">合计</text>
-          <text class="fee-value fee-value-total">¥{{ summary.total.toFixed(2) }}</text>
+          <text class="fee-value fee-value-total">¥{{ money(summary.total) }}</text>
         </view>
 
         <view class="delivery-row">
@@ -244,50 +228,141 @@
           </text>
         </view>
 
+        <text class="fee-note">补剂分装后建议 6 个月内吃完（袋上印有效期）。</text>
+        <text v-if="bulkWarning" class="fee-note fee-note-warn">
+          本单分装量较大（约 {{ bagCount }} 袋），实际发货会顺延，我们会联系你确认。
+        </text>
       </view>
 
-      <!--
-        页脚上方不放任何说明小字（2026-09-25 按产品要求撤掉）。
-        原先这里有两条：一条讲分装与支付方式，一条讲分装小样的保质期。
-        后一条要传达的信息（袋上印有「有效期至」）在实物标签上本来就直接看得到，
-        在页面上再说一遍是重复。不要再加回来。
-      -->
+      <!-- 未达最低起送：先说明，别等提交时才被拒 -->
+      <view v-if="belowMinOrder" class="section error-banner">
+        <text class="error-banner-text">
+          商品金额 ¥{{ money(summary?.goodsSubtotal) }}，未达最低起送 ¥{{ money(minOrderAmount) }}
+        </text>
+      </view>
+
+      <!-- 提交失败：行内展示服务端给的真实原因 -->
+      <view v-if="submitError" class="section error-banner">
+        <text class="error-banner-text">{{ submitError }}</text>
+      </view>
+
+      <view v-if="!summary && selectableLines.length > 0" class="section empty-hint">
+        <text class="empty-hint-text">请至少选择 1 种补剂</text>
+      </view>
 
       <view class="footer-space"></view>
 
       <view class="footer">
-        <view class="footer-total">
-          <text class="footer-amount">¥{{ summary ? summary.total.toFixed(2) : '0.00' }}</text>
-          <!--
-            金额下方**不再放说明小字**（2026-09-24 撤掉「包邮 / 含运费 ¥X」）：
-            费用明细里已经有独立的运费行，这里再写一遍是冗余，而且底部空间紧张。
-            但「价格获取失败，点击重试」必须留着 —— 那是取价失败时唯一的出口，
-            删了按钮会永久灰死。它是**功能**，不是说明。
-          -->
-          <text
-            v-if="quoteFailed"
-            class="footer-ship footer-ship-retry"
-            @tap="handleRetryQuote"
+        <CustomerServiceInlineButton
+          class="customer-service-bottom-action"
+          source-type="PRODUCT"
+          :product-id="draft.recipeId"
+          :product-name="draft.recipeName"
+          title="补剂下单咨询"
+          path="/pages/supplement-order/index"
+        />
+        <view class="footer-main">
+          <view class="footer-total">
+            <text v-if="!isAmountReady" class="footer-amount footer-amount-pending">更新中</text>
+            <text v-else class="footer-amount">¥{{ money(summary?.total) }}</text>
+          </view>
+          <button
+            class="footer-btn"
+            :class="{ 'footer-btn-disabled': !canSubmit || submitting }"
+            :disabled="!canSubmit || submitting"
+            @tap="openConfirmSheet"
           >
-            价格获取失败，点击重试
-          </text>
+            <text class="footer-btn-text">{{ submitting ? '处理中…' : '提交订单' }}</text>
+          </button>
         </view>
-        <button
-          class="footer-btn"
-          :class="{ 'footer-btn-disabled': !canSubmit || submitting }"
-          :disabled="!canSubmit || submitting"
-          @tap="handleSubmit"
-        >
-          <text class="footer-btn-text">{{ submitting ? '提交中…' : '提交订单' }}</text>
-        </button>
       </view>
     </template>
+
+    <!-- 自定义套数 -->
+    <view v-if="showCustomPortion" class="sheet-mask" @tap="closeCustomPortion">
+      <view class="sheet" @tap.stop>
+        <text class="sheet-title">买几套</text>
+        <text class="sheet-subtip">1 套 = 这张制作单需要的全部补剂（每种 1 袋），最多 99 套</text>
+        <view class="stepper">
+          <view class="stepper-btn" @tap="stepCustomPortion(-1)">−</view>
+          <input
+            class="stepper-input"
+            type="number"
+            :value="String(customPortionValue)"
+            @blur="onCustomPortionInput"
+          />
+          <view class="stepper-btn" @tap="stepCustomPortion(1)">+</view>
+        </view>
+        <view class="sheet-actions">
+          <view class="sheet-btn sheet-btn-ghost" @tap="closeCustomPortion">取消</view>
+          <view class="sheet-btn sheet-btn-primary" @tap="confirmCustomPortion">确定</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 提交前确认 -->
+    <view v-if="showConfirmSheet" class="sheet-mask" @tap="closeConfirmSheet">
+      <view class="sheet sheet-tall" @tap.stop>
+        <text class="sheet-title">确认订单</text>
+
+        <view class="confirm-row">
+          <text class="confirm-label">收货地址</text>
+          <text class="confirm-value">{{ selectedAddress ? `${selectedAddress.recipientName} ${selectedAddress.phone}` : '' }}</text>
+        </view>
+        <view v-if="selectedAddress" class="confirm-address-detail">
+          {{ formatRegion(selectedAddress.region) }}{{ selectedAddress.detail }}
+        </view>
+
+        <view class="confirm-row">
+          <text class="confirm-label">补剂</text>
+          <text class="confirm-value">{{ selectedLines.length }} 种 · 共 {{ bagCount }} 袋</text>
+        </view>
+        <view class="confirm-row">
+          <text class="confirm-label">商品金额</text>
+          <text class="confirm-value">¥{{ money(summary?.goodsSubtotal) }}</text>
+        </view>
+        <view class="confirm-row">
+          <text class="confirm-label">分装服务费</text>
+          <text class="confirm-value">{{ summary?.serviceFeeWaived ? '已免' : `¥${money(summary?.serviceFee)}` }}</text>
+        </view>
+        <view class="confirm-row">
+          <text class="confirm-label">运费</text>
+          <text class="confirm-value">{{ summary?.freeShipping ? '包邮' : `¥${money(summary?.shippingFee)}` }}</text>
+        </view>
+        <view class="confirm-row confirm-row-total">
+          <text class="confirm-label">合计</text>
+          <text class="confirm-value confirm-total">¥{{ money(summary?.total) }}</text>
+        </view>
+        <view class="confirm-row">
+          <text class="confirm-label">预计发货</text>
+          <text class="confirm-value">{{ estimatedPackingDate || '待排期' }}</text>
+        </view>
+
+        <text v-if="priceChanged" class="confirm-warn">价格有更新，请确认新金额后再提交。</text>
+        <text class="confirm-note">补剂是定制分装，分装后不支持无理由退换；如分装有问题请在售后窗口内联系我们。</text>
+        <text v-if="paymentTimeoutMinutes > 0" class="confirm-note">
+          提交后 {{ paymentTimeoutMinutes }} 分钟内未付款，订单会自动取消。
+        </text>
+        <text v-if="submitError" class="confirm-warn">{{ submitError }}</text>
+
+        <view class="sheet-actions">
+          <view class="sheet-btn sheet-btn-ghost" @tap="closeConfirmSheet">再看看</view>
+          <view
+            class="sheet-btn sheet-btn-primary"
+            :class="{ 'sheet-btn-disabled': submitting || confirmRefreshing || belowMinOrder }"
+            @tap="submitOrder"
+          >
+            {{ confirmRefreshing ? '正在核对价格…' : submitting ? '处理中…' : '提交并支付' }}
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad, onUnload, onShow } from '@dcloudio/uni-app'
+import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import {
   clearSupplementPurchaseDraft,
@@ -299,10 +374,17 @@ import {
   quoteSupplements,
   readSupplementPurchaseDraft,
   type SupplementOrder,
-  type SupplementPurchaseDraft,
-  type SupplementQuote
+  type SupplementPurchaseDraft
 } from '../../api/supplements'
 import { runSupplementPayment } from '../../utils/supplement-payment'
+import { createRequestId, toCents } from '../../utils/supplement-order-submit'
+import {
+  useSupplementQuote,
+  type QuoteFn,
+  type QuoteLineState,
+  type SeedLine
+} from '../../composables/useSupplementQuote'
+import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue'
 
 interface Address {
   id: string
@@ -313,92 +395,109 @@ interface Address {
   isDefault?: boolean
 }
 
-interface DisplayLine {
-  ingredientId: string
-  name: string
-  unit: string
-  requestedAmount: number
-  packedAmount: number
-  price: number
-  shelfLifeMonths: number
-  /** 品牌 / 规格，来自制作单（报价接口不返回） */
-  specText?: string
-  unavailableReason?: string
-}
+/** 预分装说明图只给第一次来的人看 */
+const PREPACK_SEEN_KEY = 'supplementPrepackExplainerSeen'
 
 const draft = ref<SupplementPurchaseDraft | null>(null)
-const lines = ref<DisplayLine[]>([])
-const selectedIds = ref<string[]>([])
 const addresses = ref<Address[]>([])
 const selectedAddressId = ref('')
-const summary = ref<SupplementQuote | null>(null)
 const initializing = ref(true)
-const quoting = ref(false)
-// 报价失败必须可见、可重试：否则费用整块消失、提交按钮永久灰，用户只能退出重进
-const quoteFailed = ref(false)
 const submitting = ref(false)
-
-/**
- * 加量份数（1 = 不加量）。
- *
- * 为什么要有这个：分装服务费是按单收的，跟买多少无关；分装 8 袋和 2 袋的
- * 实际耗时也差不多。所以让用户一次多买几份，能把固定成本摊薄 ——
- * 用户每天成本下降，我们单笔利润反而上升。
- *
- * 上限由服务端算（只看份数上限；2026-11-01 起效期天数不再参与），
- * 通过报价响应回传，界面只负责照着渲染，不自己拍脑袋。
- */
-const portionMultiplier = ref(1)
+const submitError = ref('')
 const estimatedPackingDate = ref('')
 const autoScheduleEnabled = ref(true)
-const inventoryWarnings = ref<string[]>([])
+const prepackExpanded = ref(false)
 
-/** 服务端回传的最大可选份数；还没拿到报价时先按 1 处理，避免闪出非法选项 */
-const maxPortionMultiplier = computed(() =>
-  Math.max(1, summary.value?.maxPortionMultiplier ?? 1)
-)
+const showCustomPortion = ref(false)
+const customPortionValue = ref(4)
 
-const showPortionPicker = computed(
-  () => maxPortionMultiplier.value > 1 && selectedLines.value.length > 0
-)
+const showConfirmSheet = ref(false)
+const confirmRefreshing = ref(false)
+const priceChanged = ref(false)
+const submitRequestId = ref('')
 
 /**
- * 份数选项卡片。
- *
- * 每个选项上直接印出【商品金额 + 是否包邮】，金额全部来自服务端
- * 的 portionOptions —— 前端一个乘法都不做。
- *
- * 不显示"多少天量"：详见模板里那段注释，天数算不准，给了反而误导。
- *
- * 这样"再加一份就包邮"是零点击可见的，顾客不用来回点着试。
- * 服务端没返回选项时（老接口）自动退回"只有 1 份"，控件整体不展示。
+ * 算价状态机：报价、竞态、失败回滚、待确认全部在这里。
+ * 页面只读它的状态、转发事件，不再自己管金额。
  */
+const quoteState = useSupplementQuote({
+  quote: quoteSupplements as unknown as QuoteFn,
+  diySheetId: () => draft.value?.diySheetId
+})
+
+const {
+  lines,
+  selectedIds,
+  selectableLines,
+  selectedLines,
+  allSelectableSelected,
+  portionMultiplier,
+  summary,
+  unavailable,
+  status,
+  errorMessage: quoteError,
+  enabled,
+  minOrderAmount,
+  paymentTimeoutMinutes,
+  bulkBagThreshold,
+  bagCount,
+  isAmountReady,
+  canSubmit: quoteCanSubmit,
+  load,
+  toggleLine,
+  toggleAll,
+  setPortion,
+  retry
+} = quoteState
+
+const selectedAddress = computed(
+  () => addresses.value.find((item) => item.id === selectedAddressId.value) || null
+)
+
+/** 选过地址但列表里找不到（比如已经删了）：要说清楚，并禁止提交 */
+const addressInvalid = computed(
+  () => !!selectedAddressId.value && !selectedAddress.value
+)
+
+const allUnavailable = computed(
+  () => status.value === 'ready' && lines.value.length > 0 && selectableLines.value.length === 0
+)
+
+/** 未达最低起送：提交前就说明，别等最后一步被拒 */
+const belowMinOrder = computed(
+  () =>
+    minOrderAmount.value > 0 &&
+    Number(summary.value?.goodsSubtotal ?? 0) < minOrderAmount.value
+)
+
+const canSubmit = computed(
+  () =>
+    quoteCanSubmit.value &&
+    !!selectedAddress.value &&
+    !belowMinOrder.value &&
+    !submitting.value
+)
+
+const showCustomPortionCard = computed(() => portionMultiplier.value > 3)
+const canEditDiySheet = computed(() => !!draft.value?.diySheetId)
+
+/** 三张卡的金额来自服务端 portionOptions；接口没给时留空，不猜价格 */
 const portionOptionCards = computed(() => {
-  const list = summary.value?.portionOptions
-  if (!list || list.length === 0) {
-    return [{ multiplier: 1, priceLabel: '', freeShipping: false }]
+  const list = summary.value?.portionOptions ?? []
+  if (list.length === 0) {
+    return [1, 2, 3].map((multiplier) => ({
+      multiplier,
+      priceLabel: '',
+      freeShipping: false
+    }))
   }
   return list.map((opt) => ({
     multiplier: opt.multiplier,
-    /**
-     * ⚠️ 这里显示的是**商品金额**（只含补剂商品，不含服务费/运费），不是含运费的合计。
-     *
-     * 为什么：包邮门槛比的就是商品金额。之前显示 total（含运费）会出现
-     * "选项上写着 ¥49.50、门槛 49，却没包邮" —— 因为那 ¥49.50 里含着运费，
-     * 商品金额其实只有 ¥41.50。同一个数字里混着运费，门槛就没法读了。
-     * 费用明细里加了「商品金额小计」一行，两处对得上。
-     */
-    priceLabel: `¥${opt.goodsSubtotal.toFixed(2)}`,
+    priceLabel: `¥${Number(opt.goodsSubtotal).toFixed(2)}`,
     freeShipping: opt.freeShipping
   }))
 })
 
-/**
- * 包邮门槛文案（「满 N 元包邮」）。
- *
- * 门槛取自服务端配置，后台改了这里跟着变 —— 不写死 49。
- * 整数就不显示小数，门槛值比 49.00 好看。
- */
 const freeShippingThresholdText = computed(() => {
   const threshold = summary.value?.freeShippingThreshold
   if (!threshold || threshold <= 0) return ''
@@ -406,98 +505,38 @@ const freeShippingThresholdText = computed(() => {
   return `满${label}元包邮`
 })
 
-const displayLines = computed(() => lines.value)
-
-const selectedLines = computed(() =>
-  lines.value.filter(
-    (line) => !line.unavailableReason && selectedIds.value.includes(line.ingredientId)
-  )
-)
-
-/** 可勾选的补剂（排除不可购买的） */
-const selectableLines = computed(() =>
-  lines.value.filter((line) => !line.unavailableReason)
-)
-
-const allSelectableSelected = computed(
-  () =>
-    selectableLines.value.length > 0 &&
-    selectableLines.value.every((line) => selectedIds.value.includes(line.ingredientId))
-)
-
-/** 全选 / 全不选（不可购买的自动跳过，不会污染报价） */
-async function toggleSelectAll() {
-  selectedIds.value = allSelectableSelected.value
-    ? []
-    : selectableLines.value.map((line) => line.ingredientId)
-
-  try {
-    await refreshSummaryOnly()
-  } catch (error) {
-    console.error('[SupplementOrder] 全选重算合计失败:', error)
-  }
-}
-
-/** 能不能跳回去改用量：要有 recipeId 才进得去配置页 */
-const canEditUsage = computed(() => !!draft.value?.recipeId)
-
-/**
- * 回制作单配置页改用量（天数）。
- * 参数与 recipe-detail 页的 buildDiyRoute 保持一致。
- */
-function goToRecipeDiy() {
-  const recipeId = draft.value?.recipeId
-  if (!recipeId) return
-  const query = [`recipeId=${encodeURIComponent(recipeId)}`]
-  if (draft.value?.dogId) {
-    query.push(`dogId=${encodeURIComponent(draft.value.dogId)}`)
-  }
-  uni.navigateTo({ url: `/pages/recipe-diy/index?${query.join('&')}` })
-}
-
-function goToDiySheetList() {
-  uni.navigateTo({ url: '/pages/diy-sheet-list/index' })
-}
-
-const selectedAddress = computed(
-  () => addresses.value.find((item) => item.id === selectedAddressId.value) || null
-)
-
-const canSubmit = computed(
-  () => selectedLines.value.length > 0 && !!selectedAddressId.value && !!summary.value
+const bulkWarning = computed(
+  () => bulkBagThreshold.value > 0 && bagCount.value > bulkBagThreshold.value
 )
 
 onLoad(() => {
   draft.value = readSupplementPurchaseDraft()
-
-  // 地址列表页选择后通过全局事件回传
   uni.$on('address-selected', onAddressSelected)
 
-  if (draft.value) {
-    lines.value = draft.value.lines.map((line) => ({
-      ingredientId: line.ingredientId,
-      name: line.name || '补剂',
-      unit: line.unit || '',
-      requestedAmount: line.amount,
-      packedAmount: 0,
-      price: 0,
-      shelfLifeMonths: 0,
-      specText: line.specText || ''
-    }))
-    selectedIds.value = draft.value.lines.map((line) => line.ingredientId)
-    if (Number(draft.value.portionMultiplier) > 1) {
-      portionMultiplier.value = Math.floor(Number(draft.value.portionMultiplier))
-    }
-    void initialize()
-  } else {
+  if (!draft.value) {
     initializing.value = false
+    return
   }
+
+  // 说明图：第一次展开，之后收起
+  try {
+    const seen = uni.getStorageSync(PREPACK_SEEN_KEY)
+    prepackExpanded.value = !seen
+    if (!seen) uni.setStorageSync(PREPACK_SEEN_KEY, '1')
+  } catch {
+    prepackExpanded.value = false
+  }
+
+  if (Number(draft.value.portionMultiplier) > 1) {
+    portionMultiplier.value = Math.floor(Number(draft.value.portionMultiplier))
+  }
+
+  void initialize()
 })
 
 onShow(() => {
-  if (draft.value && addresses.value.length === 0) {
-    void loadAddresses()
-  }
+  // 每次回到这一页都重拉地址：新增的地址只有重新拉才能显示出来
+  if (draft.value) void loadAddresses()
 })
 
 onUnload(() => {
@@ -506,22 +545,39 @@ onUnload(() => {
 
 async function initialize() {
   initializing.value = true
+  const sideTasks = Promise.all([
+    loadAddresses(),
+    loadPackingDate(),
+    prefetchSupplementSubscriptions()
+  ])
   try {
-    await Promise.all([
-      loadAddresses(),
-      refreshQuote(),
-      fetchSupplementPackingDate()
-        .then((res) => {
-          if (res.code === 0) {
-            estimatedPackingDate.value = res.data?.packingDate || ''
-            autoScheduleEnabled.value = res.data?.autoScheduleEnabled !== false
-          }
-        })
-        .catch(() => {}),
-      prefetchSupplementSubscriptions(),
-    ])
+    await load(buildSeedLines())
   } finally {
     initializing.value = false
+  }
+  await sideTasks
+}
+
+function buildSeedLines(): SeedLine[] {
+  return (draft.value?.lines ?? []).map((line) => ({
+    ingredientId: line.ingredientId,
+    recipeItemId: line.recipeItemId,
+    amount: line.amount,
+    name: line.name,
+    unit: line.unit,
+    specText: line.specText
+  }))
+}
+
+async function loadPackingDate() {
+  try {
+    const res = await fetchSupplementPackingDate()
+    if (res.code === 0) {
+      estimatedPackingDate.value = res.data?.packingDate || ''
+      autoScheduleEnabled.value = res.data?.autoScheduleEnabled !== false
+    }
+  } catch (error) {
+    console.warn('[SupplementOrder] 加载预计发货日失败:', error)
   }
 }
 
@@ -540,9 +596,13 @@ async function loadAddresses() {
   }
 }
 
-function onAddressSelected(payload: { addressId?: string }) {
-  if (payload && payload.addressId) {
-    selectedAddressId.value = payload.addressId
+async function onAddressSelected(payload: { addressId?: string } | string) {
+  // address-edit 发的是一段字符串 id，address-list 发的是对象 —— 两种都要认
+  const addressId = typeof payload === 'string' ? payload : payload?.addressId
+  if (!addressId) return
+  selectedAddressId.value = addressId
+  if (!addresses.value.some((item) => item.id === addressId)) {
+    await loadAddresses()
   }
 }
 
@@ -550,147 +610,140 @@ function chooseAddress() {
   uni.navigateTo({ url: '/pages/address-list/index?mode=select&from=supplement-order' })
 }
 
-/** 用「全部补剂」取单价与不可购买原因，用「已勾选」算金额合计 */
-async function refreshQuote() {
-  if (!draft.value || quoting.value) return
-  quoting.value = true
-  try {
-    const allRes = await quoteSupplements(
-      draft.value.lines.map((line) =>
-        line.recipeItemId
-          ? {
-              ingredientId: line.ingredientId,
-              recipeItemId: line.recipeItemId
-            }
-          : { ingredientId: line.ingredientId, amount: line.amount }
-      ),
-      {
-        portionMultiplier: portionMultiplier.value,
-        diySheetId: draft.value.diySheetId
-      }
-    )
-
-    if (allRes.code !== 0) {
-      quoteFailed.value = true
-      uni.showToast({ title: allRes.message || '报价失败', icon: 'none' })
-      return
-    }
-
-    const { quote, unavailable } = allRes.data
-    const unavailableMap = new Map(unavailable.map((item) => [item.ingredientId, item.reason]))
-    const quoteMap = new Map(quote.lines.map((item) => [item.ingredientId, item]))
-
-    lines.value = draft.value.lines.map((line) => {
-      const quoted = quoteMap.get(line.ingredientId)
-      const reason = unavailableMap.get(line.ingredientId)
-      return {
-        ingredientId: line.ingredientId,
-        name: quoted?.name || line.name || '补剂',
-        unit: quoted?.unit || line.unit || '',
-        requestedAmount: quoted?.requestedAmount ?? line.amount ?? 0,
-        packedAmount: quoted?.packedAmount ?? 0,
-        price: quoted?.price ?? 0,
-        shelfLifeMonths: quoted?.shelfLifeMonths ?? 0,
-        specText: line.specText || '',
-        unavailableReason: reason
-      }
-    })
-
-    summary.value = quote
-    quoteFailed.value = false
-    await refreshSummaryOnly()
-  } catch (error) {
-    console.error('[SupplementOrder] 报价失败:', error)
-    quoteFailed.value = true
-    uni.showToast({ title: '报价失败，请稍后重试', icon: 'none' })
-  } finally {
-    quoting.value = false
-  }
-}
-
-/** 首次报价失败后的重试：原来没有这个出口，用户只能退出重进 */
-async function handleRetryQuote() {
-  if (quoting.value) return
-  quoteFailed.value = false
-  await refreshQuote()
+function goToDiySheetList() {
+  uni.navigateTo({ url: '/pages/diy-sheet-list/index' })
 }
 
 /**
- * 勾选变化时只重算合计（单价与单项无关，无需重算明细）
- *
- * 2026-09-22：重算失败时原来只是静默保留旧 summary，
- * 用户会看到一个与当前勾选不符的合计。现在明确提示，避免被误导下单。
+ * 改制作单：本页直接退回去，改完重新点「购买预分装补剂」。
+ * 这样页面被销毁，不会出现"改完回来还是旧数据"，也不会往页面栈上叠页面。
  */
-async function refreshSummaryOnly() {
-  const ids = selectedLines.value.map((line) => line.ingredientId)
-  if (ids.length === 0) {
-    summary.value = null
+function goEditDiySheet() {
+  uni.showToast({ title: '改完再点「购买预分装补剂」', icon: 'none', duration: 1600 })
+  if (getCurrentPages().length > 1) {
+    uni.navigateBack()
+  } else {
+    uni.redirectTo({ url: '/pages/diy-sheet-list/index' })
+  }
+}
+
+function selectPortion(next: number) {
+  void setPortion(next)
+}
+
+async function onRetryQuote() {
+  await retry()
+}
+
+function openCustomPortion() {
+  customPortionValue.value = portionMultiplier.value > 3 ? portionMultiplier.value : 4
+  showCustomPortion.value = true
+}
+
+function closeCustomPortion() {
+  showCustomPortion.value = false
+}
+
+function stepCustomPortion(delta: number) {
+  customPortionValue.value = clampPortion(customPortionValue.value + delta)
+}
+
+function onCustomPortionInput(event: any) {
+  customPortionValue.value = clampPortion(Number(event?.detail?.value))
+}
+
+async function confirmCustomPortion() {
+  showCustomPortion.value = false
+  await setPortion(customPortionValue.value)
+}
+
+function clampPortion(value: number): number {
+  const num = Math.floor(Number(value))
+  if (!Number.isFinite(num)) return 1
+  return Math.min(99, Math.max(1, num))
+}
+
+function lineAmount(line: QuoteLineState): string {
+  return `${formatAmount(line.packedAmount)}${line.unit || ''}`
+}
+
+function money(value?: number | null): string {
+  return Number(value ?? 0).toFixed(2)
+}
+
+function formatAmount(value: number): string {
+  if (!Number.isFinite(value)) return '0'
+  return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100)
+}
+
+function formatRegion(region?: { province?: string; city?: string; district?: string }): string {
+  if (!region) return ''
+  return [region.province, region.city, region.district].filter(Boolean).join(' ')
+}
+
+/** 打开确认弹层：先重新取一次价，确保顾客看到的就是最终金额 */
+async function openConfirmSheet() {
+  if (submitting.value || !quoteCanSubmit.value) return
+  if (!selectedAddress.value) {
+    uni.showToast({ title: '请先选择收货地址', icon: 'none' })
     return
   }
 
-  const payload = ids.map((id) => {
-    const line = lines.value.find((item) => item.ingredientId === id)!
-    const draftLine = draft.value?.lines.find((item) => item.ingredientId === id)
-    return draftLine?.recipeItemId
-      ? { ingredientId: id, recipeItemId: draftLine.recipeItemId }
-      : { ingredientId: id, amount: line.requestedAmount }
-  })
+  const before = Number(summary.value?.total ?? 0)
+  confirmRefreshing.value = true
+  await retry()
+  confirmRefreshing.value = false
 
+  if (status.value !== 'ready' || !summary.value) return
+
+  priceChanged.value = Math.abs(Number(summary.value.total ?? 0) - before) > 0.004
+  submitError.value = ''
+  submitRequestId.value = createRequestId()
+  showConfirmSheet.value = true
+}
+
+function closeConfirmSheet() {
+  if (submitting.value) return
+  showConfirmSheet.value = false
+}
+
+async function submitOrder() {
+  if (submitting.value || !draft.value || !summary.value || !selectedAddress.value) return
+
+  submitting.value = true
+  submitError.value = ''
   try {
-    const res = await quoteSupplements(payload, {
+    await requestSupplementSubscriptions()
+    const res = await createSupplementOrder({
+      addressId: selectedAddress.value.id,
+      lines: selectedLines.value.map((line) =>
+        line.recipeItemId
+          ? { ingredientId: line.ingredientId, recipeItemId: line.recipeItemId }
+          : { ingredientId: line.ingredientId, amount: line.amount }
+      ),
+      recipeId: draft.value.recipeId,
+      recipeName: draft.value.recipeName,
+      dogId: draft.value.dogId,
+      dogName: draft.value.dogName,
+      diySheetId: draft.value.diySheetId,
       portionMultiplier: portionMultiplier.value,
-      diySheetId: draft.value?.diySheetId
+      reorderFromOrderNo: draft.value.reorderFromOrderNo,
+      expectedTotal: toCents(summary.value.total),
+      clientRequestId: submitRequestId.value || createRequestId()
     })
-    if (res.code === 0) {
-      summary.value = res.data.quote
-      inventoryWarnings.value = res.data.inventoryWarnings || []
-      // 服务端可能把份数收敛到配置上限，界面要跟着回到合法值，
-      // 不能停在一个后端不认的档位上。
-      const allowed = Math.max(1, res.data.quote.maxPortionMultiplier ?? 1)
-      if (portionMultiplier.value > allowed) portionMultiplier.value = allowed
-      return
-    }
 
-    uni.showToast({ title: res.message || '价格重算失败，请重试', icon: 'none' })
+    const order = res.data as SupplementOrder
+    clearSupplementPurchaseDraft()
+    showConfirmSheet.value = false
+    submitRequestId.value = ''
+    // 建单成功就一定有订单：接下来的支付无论什么结果，都跳订单详情
+    await settlePayment(order)
   } catch (error) {
-    console.error('[SupplementOrder] 价格重算失败:', error)
-    uni.showToast({ title: '价格重算失败，请稍后重试', icon: 'none' })
-  }
-}
-
-function isSelected(ingredientId: string): boolean {
-  return selectedIds.value.includes(ingredientId)
-}
-
-/**
- * 切换加量份数。
- * 先本地改状态让按钮立刻响应，再由 refreshSummaryOnly 向服务端重算金额 ——
- * 金额永远以服务端为准，本地不做乘法。
- */
-async function selectPortion(next: number) {
-  if (next === portionMultiplier.value) return
-  if (next < 1 || next > maxPortionMultiplier.value) return
-  portionMultiplier.value = next
-  try {
-    await refreshSummaryOnly()
-  } catch (error) {
-    console.error('[SupplementOrder] 切换加量份数失败:', error)
-  }
-}
-
-async function toggleLine(line: DisplayLine) {
-  if (line.unavailableReason) return
-
-  if (isSelected(line.ingredientId)) {
-    selectedIds.value = selectedIds.value.filter((id) => id !== line.ingredientId)
-  } else {
-    selectedIds.value = [...selectedIds.value, line.ingredientId]
-  }
-
-  try {
-    await refreshSummaryOnly()
-  } catch (error) {
-    console.error('[SupplementOrder] 重算合计失败:', error)
+    submitError.value = readErrorMessage(error)
+    // 金额可能已经过期（例如后台刚调过价），顺手刷新一次
+    await retry()
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -738,58 +791,9 @@ function showManualConfirmModal(order: SupplementOrder, prefix = '') {
   })
 }
 
-function formatAmount(value: number): string {
-  if (!Number.isFinite(value)) return '0'
-  return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100)
-}
-
-function formatRegion(region?: { province?: string; city?: string; district?: string }): string {
-  if (!region) return ''
-  return [region.province, region.city, region.district].filter(Boolean).join(' ')
-}
-
-async function handleSubmit() {
-  if (!canSubmit.value || !draft.value) return
-
-  submitting.value = true
-  try {
-    await requestSupplementSubscriptions()
-    const res = await createSupplementOrder({
-      addressId: selectedAddressId.value,
-      lines: selectedLines.value.map((line) => {
-        const draftLine = draft.value!.lines.find(
-          (item) => item.ingredientId === line.ingredientId
-        )
-        return draftLine?.recipeItemId
-          ? { ingredientId: line.ingredientId, recipeItemId: draftLine.recipeItemId }
-          : { ingredientId: line.ingredientId, amount: line.requestedAmount }
-      }),
-      recipeId: draft.value.recipeId,
-      recipeName: draft.value.recipeName,
-      dogId: draft.value.dogId,
-      dogName: draft.value.dogName,
-      // 首次下单补剂时用它在后端冻结整张制作单
-      diySheetId: draft.value.diySheetId,
-      // 加量份数：服务端会自己校验上限，越界会拒绝（前端算的只是展示用）
-      portionMultiplier: portionMultiplier.value,
-      // 复购来源：后端写 REORDERED 事件，便于追溯
-      reorderFromOrderNo: draft.value.reorderFromOrderNo
-    })
-
-    if (res.code !== 0) {
-      uni.showToast({ title: res.message || '提交失败', icon: 'none' })
-      return
-    }
-
-    const order = res.data as SupplementOrder
-    clearSupplementPurchaseDraft()
-    await settlePayment(order)
-  } catch (error) {
-    console.error('[SupplementOrder] 提交失败:', error)
-    uni.showToast({ title: '提交失败，请稍后重试', icon: 'none' })
-  } finally {
-    submitting.value = false
-  }
+function readErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message
+  return '提交没有成功，请稍后重试'
 }
 </script>
 
@@ -801,8 +805,9 @@ async function handleSubmit() {
   box-sizing: border-box;
 }
 
+/* ---- 空态 ---- */
 .empty-state {
-  padding: 200rpx 60rpx;
+  padding: 160rpx 48rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -822,12 +827,11 @@ async function handleSubmit() {
   line-height: 1.6;
 }
 
-/* 空态出口：给用户一条明确的下一步 */
 .empty-action {
   margin-top: 40rpx;
   padding: 0 56rpx;
-  height: 76rpx;
-  line-height: 76rpx;
+  height: 80rpx;
+  line-height: 80rpx;
   font-size: 28rpx;
   font-weight: 600;
   color: #ffffff;
@@ -839,235 +843,37 @@ async function handleSubmit() {
   border: none;
 }
 
+.empty-service {
+  margin-top: 24rpx;
+}
+
+.unavailable-list {
+  margin-top: 24rpx;
+  width: 100%;
+}
+
+.unavailable-line {
+  display: block;
+  font-size: 24rpx;
+  color: #b07d2b;
+  line-height: 1.9;
+}
+
+.empty-hint {
+  text-align: center;
+}
+
+.empty-hint-text {
+  font-size: 26rpx;
+  color: #909399;
+}
+
+/* ---- 通用卡片 ---- */
 .section {
   background-color: #ffffff;
   border-radius: 16rpx;
   padding: 24rpx;
   margin-bottom: 20rpx;
-}
-
-.source-card {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.source-main {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
-
-/* 「改用量」是个次要入口，用金色小字，不要抢主流程的注意力 */
-.source-action {
-  flex-shrink: 0;
-  margin-left: 16rpx;
-  padding: 8rpx 20rpx;
-  font-size: 24rpx;
-  color: #a97c33;
-  border: 2rpx solid #e8dcc0;
-  border-radius: 999rpx;
-}
-
-/*
-  预分装说明图：整幅贴满卡片、不留内边距。
-  图本身自带米白背景，若再套一层白卡的 24rpx 内边距，会变成"白框里嵌一块米色"，
-  看着像没对齐。取消内边距 + 裁圆角后，它读起来就是一张干净的横幅。
-*/
-.prepack-card {
-  padding: 0;
-  overflow: hidden;
-}
-
-.prepack-image {
-  display: block;
-  width: 100%;
-  /* 不写死高度：mode="widthFix" 会按原图 700×466 的比例自己算高度。
-     写死高度反而可能和 widthFix 打架，把图压变形。 */
-}
-
-/* ---- 加量 ---- */
-.portion-subtip {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: #968f6d;
-  line-height: 1.5;
-}
-
-.portion-options {
-  display: flex;
-  gap: 16rpx;
-  margin-top: 20rpx;
-}
-
-.portion-option {
-  flex: 1;
-  /* 选项里是两行字（份数 / 金额），不用固定高度，留出角标的位置 */
-  padding: 18rpx 8rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12rpx;
-  border: 2rpx solid #e5e0d0;
-  background-color: #fbfcf7;
-  /* 角标要相对它定位；overflow 让角标被圆角裁掉，不会溢出成直角 */
-  position: relative;
-  overflow: hidden;
-}
-
-.portion-option-price {
-  margin-top: 8rpx;
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #26261f;
-}
-
-/* 「已包邮」用墨绿：这是选项上最有说服力的一个词 */
-/* 包邮角标：贴在选项右上角，不占正文位置 */
-.portion-badge {
-  position: absolute;
-  top: 0;
-  right: 0;
-  /* 原来 padding 2/12 + 20rpx 字号会压到「3 份」上，收小一档 */
-  padding: 0 8rpx;
-  font-size: 17rpx;
-  line-height: 1.5;
-  color: #fbfcf7;
-  background-color: #b08d4f;
-  border-top-right-radius: 12rpx;
-  border-bottom-left-radius: 8rpx;
-}
-
-.portion-subtip-gold {
-  color: #a97c33;
-  font-weight: 600;
-}
-
-/* 选中态用墨绿，跟品牌主色一致（不要用旧蓝紫） */
-.portion-option-active {
-  border-color: #1e3a2f;
-  background-color: #1e3a2f;
-}
-
-.portion-option-num {
-  font-size: 28rpx;
-  color: #26261f;
-}
-
-.portion-option-active .portion-option-num,
-.portion-option-active .portion-option-price {
-  color: #fbfcf7;
-  font-weight: 600;
-}
-
-
-.portion-summary {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-top: 20rpx;
-  padding-top: 18rpx;
-  border-top: 2rpx solid #f2f4ea;
-}
-
-.portion-hint {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  color: #a97c33;
-}
-
-/* ---- 费用明细 ---- */
-.fee-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 14rpx 0;
-}
-
-.fee-label {
-  font-size: 26rpx;
-  color: #968f6d;
-}
-
-.fee-value {
-  font-size: 26rpx;
-  color: #26261f;
-}
-
-/* 包邮用墨绿，跟"已获得好处"的语义一致 */
-.fee-value-free {
-  color: #2b5040;
-}
-
-/*
-  费用明细要读出**三层**，否则五个数字平铺在一起、用户不知道哪个是哪个：
-    ① 明细项（补剂费 / 分装服务费 / 运费）—— 灰标签 + 常规值，最弱
-    ② 商品金额小计 —— 浅绿色带 + 墨绿加粗，中等强调
-    ③ 合计 —— 最大最粗的墨绿，最强
-  小计那一行用负边距铺满卡片（卡片本身有 24rpx 内边距），形成一条完整色带。
-*/
-.fee-row-subtotal {
-  margin: 12rpx -24rpx 0;
-  padding: 16rpx 24rpx;
-  background-color: #f7f8f2;
-}
-
-.fee-row-subtotal .fee-label {
-  color: #2b5040;
-  font-weight: 600;
-}
-
-.fee-row-subtotal .fee-value {
-  color: #2b5040;
-  font-size: 28rpx;
-  font-weight: 600;
-}
-
-.delivery-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 14rpx;
-  padding-top: 14rpx;
-  border-top: 1rpx solid #eee;
-  font-size: 25rpx;
-}
-.delivery-value {
-  color: #1e3a2f;
-  font-weight: 600;
-}
-.fee-row-total {
-  margin-top: 12rpx;
-  padding-top: 18rpx;
-  border-top: 2rpx solid #e5e0d0;
-}
-
-.fee-row-total .fee-label {
-  color: #26261f;
-  font-weight: 600;
-}
-
-.fee-value-total {
-  font-size: 34rpx;
-  font-weight: 700;
-  color: #1e3a2f;
-}
-
-
-.source-title {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: #303133;
-}
-
-.source-sub {
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: #909399;
 }
 
 .section-title {
@@ -1083,25 +889,102 @@ async function handleSubmit() {
   color: #303133;
 }
 
-/* 全选 / 全不选 */
 .title-action {
   font-size: 24rpx;
   font-weight: 600;
-  color: #0f6b43;
+  color: #1e3a2f;
+  padding: 12rpx 16rpx;
+  margin: -12rpx -16rpx;
 }
 
 .section-subtip {
   display: block;
   margin-bottom: 14rpx;
   font-size: 22rpx;
-  color: #c0c4cc;
-  line-height: 1.4;
+  color: #9aa0a6;
+  line-height: 1.5;
 }
 
+/* ---- 来源卡 ---- */
+.source-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.source-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.source-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #303133;
+}
+
+.source-sub {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #909399;
+}
+
+.source-action {
+  flex-shrink: 0;
+  margin-left: 16rpx;
+  padding: 16rpx 24rpx;
+  font-size: 24rpx;
+  color: #a97c33;
+  border: 2rpx solid #e8dcc0;
+  border-radius: 999rpx;
+}
+
+/* ---- 预分装说明 ---- */
+.prepack-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.prepack-image {
+  display: block;
+  width: 100%;
+}
+
+.prepack-collapse {
+  display: block;
+  padding: 16rpx 0;
+  text-align: center;
+  font-size: 22rpx;
+  color: #a97c33;
+}
+
+.prepack-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #ffffff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.prepack-toggle-text {
+  font-size: 26rpx;
+  color: #2b5040;
+}
+
+.prepack-toggle-arrow {
+  font-size: 32rpx;
+  color: #b08d4f;
+}
+
+/* ---- 补剂清单 ---- */
 .line-row {
   display: flex;
   align-items: flex-start;
-  padding: 20rpx 0;
+  padding: 24rpx 0;
   border-bottom: 1rpx solid #f2f3f5;
 }
 
@@ -1110,18 +993,18 @@ async function handleSubmit() {
 }
 
 .line-row-disabled {
-  opacity: 0.5;
+  opacity: 0.55;
 }
 
 .line-check {
-  width: 56rpx;
+  width: 60rpx;
   padding-top: 4rpx;
 }
 
 .checkbox {
   width: 36rpx;
   height: 36rpx;
-  border-radius: 50%;
+  border-radius: 6rpx;
   border: 2rpx solid #dcdfe6;
   display: flex;
   align-items: center;
@@ -1129,8 +1012,8 @@ async function handleSubmit() {
 }
 
 .checkbox-checked {
-  background-color: #4a90d9;
-  border-color: #4a90d9;
+  background-color: #1e3a2f;
+  border-color: #1e3a2f;
 }
 
 .checkbox-disabled {
@@ -1157,7 +1040,7 @@ async function handleSubmit() {
 }
 
 .line-extra {
-  margin-top: 4rpx;
+  margin-top: 6rpx;
   font-size: 22rpx;
   color: #909399;
 }
@@ -1168,18 +1051,40 @@ async function handleSubmit() {
   color: #e6a23c;
 }
 
-/* 右侧展示分装用量（原来这里是价格） */
 .line-packed {
+  flex-shrink: 0;
+  margin-left: 16rpx;
   font-size: 26rpx;
   color: #303133;
   font-weight: 600;
-  padding-top: 4rpx;
+  padding-top: 2rpx;
 }
 
 .line-packed-disabled {
   color: #c0c4cc;
 }
 
+.list-summary {
+  margin-top: 20rpx;
+  padding-top: 18rpx;
+  border-top: 1rpx solid #f2f3f5;
+}
+
+.list-summary-text {
+  font-size: 26rpx;
+  color: #1e3a2f;
+  font-weight: 600;
+}
+
+.list-summary-hint {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #9aa0a6;
+  line-height: 1.6;
+}
+
+/* ---- 地址 ---- */
 .address-card {
   display: flex;
   align-items: center;
@@ -1211,12 +1116,181 @@ async function handleSubmit() {
 
 .address-action {
   font-size: 26rpx;
-  color: #4a90d9;
-  padding-left: 20rpx;
+  color: #a97c33;
+  padding: 16rpx 8rpx 16rpx 24rpx;
 }
 
+/* ---- 套数 ---- */
+.portion-subtip {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #968f6d;
+  line-height: 1.5;
+}
+
+.portion-subtip-gold {
+  color: #a97c33;
+  font-weight: 600;
+}
+
+.portion-options {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+
+.portion-option {
+  flex: 1;
+  padding: 18rpx 6rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12rpx;
+  border: 2rpx solid #e5e0d0;
+  background-color: #fbfcf7;
+  position: relative;
+  overflow: hidden;
+  min-height: 108rpx;
+}
+
+.portion-option-num {
+  font-size: 26rpx;
+  color: #26261f;
+}
+
+.portion-option-price {
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #26261f;
+}
+
+.portion-option-custom-hint {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #a97c33;
+}
+
+.portion-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0 8rpx;
+  font-size: 17rpx;
+  line-height: 1.5;
+  color: #fbfcf7;
+  background-color: #b08d4f;
+  border-top-right-radius: 12rpx;
+  border-bottom-left-radius: 8rpx;
+}
+
+.portion-option-active {
+  border-color: #1e3a2f;
+  background-color: #1e3a2f;
+}
+
+.portion-option-active .portion-option-num,
+.portion-option-active .portion-option-price {
+  color: #fbfcf7;
+  font-weight: 600;
+}
+
+/* ---- 费用 ---- */
+.fee-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 14rpx 0;
+}
+
+.fee-label {
+  font-size: 26rpx;
+  color: #968f6d;
+}
+
+.fee-value {
+  font-size: 26rpx;
+  color: #26261f;
+}
+
+.fee-value-free {
+  color: #2b5040;
+}
+
+.fee-row-total {
+  margin-top: 12rpx;
+  padding-top: 18rpx;
+  border-top: 2rpx solid #e5e0d0;
+}
+
+.fee-row-total .fee-label {
+  color: #26261f;
+  font-weight: 600;
+}
+
+.fee-value-total {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.fee-note {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #9aa0a6;
+  line-height: 1.6;
+}
+
+.fee-note-warn {
+  color: #b07d2b;
+}
+
+.delivery-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14rpx;
+  padding-top: 14rpx;
+  border-top: 1rpx solid #eee;
+  font-size: 25rpx;
+}
+
+.delivery-value {
+  color: #1e3a2f;
+  font-weight: 600;
+}
+
+/* ---- 行内错误 ---- */
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #fdf6ec;
+  border: 1rpx solid #f3dbb5;
+}
+
+.error-banner-text {
+  flex: 1;
+  font-size: 24rpx;
+  color: #b07d2b;
+  line-height: 1.6;
+}
+
+.error-banner-retry {
+  flex-shrink: 0;
+  margin-left: 16rpx;
+  padding: 16rpx 24rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+}
+
+/* ---- 底部 ---- */
 .footer-space {
-  height: 180rpx;
+  height: 200rpx;
 }
 
 .footer {
@@ -1228,20 +1302,28 @@ async function handleSubmit() {
   border-top: 1rpx solid #f2f3f5;
   display: flex;
   align-items: center;
-  /* 合计靠右，紧挨提交按钮 */
-  justify-content: flex-end;
-  gap: 20rpx;
+  gap: 16rpx;
   padding: 14rpx 24rpx calc(14rpx + constant(safe-area-inset-bottom));
   padding-bottom: calc(14rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
 
-/* 合计：金额在上，说明在金额下方，整体右对齐 */
+.customer-service-bottom-action {
+  flex: 0 0 auto;
+}
+
+.footer-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 20rpx;
+}
+
 .footer-total {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2rpx;
 }
 
 .footer-amount {
@@ -1251,22 +1333,17 @@ async function handleSubmit() {
   line-height: 1.1;
 }
 
-.footer-ship {
-  font-size: 20rpx;
-  color: #909399;
-  line-height: 1.2;
-}
-
-.footer-ship-retry {
-  color: #e6641e;
-  text-decoration: underline;
+.footer-amount-pending {
+  font-size: 26rpx;
+  color: #9aa0a6;
+  font-weight: 500;
 }
 
 .footer-btn {
-  width: 260rpx;
+  width: 240rpx;
   height: 80rpx;
   border-radius: 40rpx;
-  background-color: #4a90d9;
+  background-color: #1e3a2f;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1286,5 +1363,162 @@ async function handleSubmit() {
   color: #ffffff;
   font-size: 30rpx;
   font-weight: 500;
+}
+
+/* ---- 弹层 ---- */
+.sheet-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  z-index: 100;
+}
+
+.sheet {
+  width: 100%;
+  background-color: #ffffff;
+  border-top-left-radius: 24rpx;
+  border-top-right-radius: 24rpx;
+  padding: 32rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.sheet-tall {
+  max-height: 84vh;
+  overflow-y: auto;
+}
+
+.sheet-title {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #26261f;
+  text-align: center;
+}
+
+.sheet-subtip {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #9aa0a6;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24rpx;
+  margin: 40rpx 0;
+}
+
+.stepper-btn {
+  width: 88rpx;
+  height: 88rpx;
+  line-height: 84rpx;
+  text-align: center;
+  border-radius: 50%;
+  background-color: #f5f3ea;
+  color: #1e3a2f;
+  font-size: 44rpx;
+}
+
+.stepper-input {
+  width: 180rpx;
+  height: 88rpx;
+  text-align: center;
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #26261f;
+  border-bottom: 2rpx solid #e5e0d0;
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 32rpx;
+}
+
+.sheet-btn {
+  flex: 1;
+  height: 88rpx;
+  line-height: 88rpx;
+  text-align: center;
+  border-radius: 44rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.sheet-btn-ghost {
+  background-color: #f5f3ea;
+  color: #6b6b5c;
+}
+
+.sheet-btn-primary {
+  background-color: #1e3a2f;
+  color: #ffffff;
+}
+
+.sheet-btn-disabled {
+  background-color: #c0c4cc;
+}
+
+.confirm-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 20rpx;
+}
+
+.confirm-label {
+  font-size: 26rpx;
+  color: #968f6d;
+}
+
+.confirm-value {
+  font-size: 26rpx;
+  color: #26261f;
+  text-align: right;
+  max-width: 70%;
+}
+
+.confirm-address-detail {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #909399;
+  text-align: right;
+}
+
+.confirm-row-total {
+  margin-top: 24rpx;
+  padding-top: 20rpx;
+  border-top: 2rpx solid #e5e0d0;
+}
+
+.confirm-total {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.confirm-warn {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  color: #b07d2b;
+  line-height: 1.6;
+}
+
+.confirm-note {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #9aa0a6;
+  line-height: 1.6;
 }
 </style>

@@ -23,6 +23,11 @@ describe('customer service page placement regressions', () => {
       title: '售后申请咨询',
       context: 'aftersale submit bar',
     },
+    {
+      path: 'src/pages/supplement-order/index.vue',
+      title: '补剂下单咨询',
+      context: 'supplement order bottom bar',
+    },
   ]
 
   it('uses a non-floating customer service component on pages with fixed bottom actions', () => {

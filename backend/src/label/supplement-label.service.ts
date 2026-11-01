@@ -64,39 +64,43 @@ export interface SupplementLabelLine {
   divider?: boolean;
 }
 
-/** 每行相对上一行的垂直推进量（mm），按 2026-11-02 新版的 8 行版式排列 */
+/** 每行相对上一行的垂直推进量（mm），按 2026-11-02 美化版 9 行排布 */
 const LINE_ADVANCE_MM = {
-  brand: 5.2,
-  category: 6.0,
-  packedDate: 5.2,
-  expiry: 5.6,
-  storage: 5.2,
-  order: 5.0,
-  sourceName: 5.2,
-  disclaimer: 4.8,
+  brand: 5.0,
+  category: 5.8,
+  divider: 1.8,
+  packedDate: 4.8,
+  expiry: 5.0,
+  storage: 4.2,
+  storageValue: 4.8,
+  order: 4.6,
+  sourceName: 4.8,
+  amount: 4.8,
+  disclaimer: 4.6,
 } as const;
 
 /** 各处字号（mm 高度） */
 const FONT_SIZE_MM = {
-  brand: 2.8,
+  brand: 2.6,
   category: 3.8,
-  packedDate: 2.8,
-  expiry: 3.4,
-  storage: 2.3,
-  order: 2.5,
+  packedDate: 2.7,
+  expiry: 3.3,
+  storage: 2.2,
+  order: 2.4,
   sourceName: 2.6,
-  disclaimer: 2.1,
+  amount: 2.7,
+  disclaimer: 2.0,
 } as const;
 
 /**
  * 决定「这张标签上该出现哪几行文字」。
  *
- * 2026-11-02 老板定版，从上到下只要这 8 行：
- *   赛文的食堂 / 预分装补剂 / 分装日期 / 有效期 /
- *   储存注意事项 / 订单编号 / 原品名称 / 分装小样食用提醒
+ * 2026-11-02 老板定版（美化版），从上到下：
+ *   赛文的食堂 / 预分装补剂 / ─── / 分装日期 / 有效期 /
+ *   储存注意事项 / 订单编号 / 原品名称 / 分装量/袋 / ─── / 分装小样食用提醒
  *
- * 不再出现：品名大字、每袋用量、第几袋/共几袋、批号、原品品牌规格、
- * 用法、分装者、分隔线。没提到的都不要。
+ * 不再出现：品名大字、第几袋/共几袋、批号、原品品牌规格、
+ * 用法、分装者。没提到的都不要。
  */
 export function buildSupplementLabelLines(
   label: SupplementLabel,
@@ -105,7 +109,7 @@ export function buildSupplementLabelLines(
 ): SupplementLabelLine[] {
   const lines: SupplementLabelLine[] = [];
 
-  // 第 1 行：品牌。没配品牌名就整行省掉，不留一条空白占位。
+  // 品牌：小字居中，作为最上面的抬头。
   const brand = (brandName ?? '').trim();
   if (brand) {
     lines.push({
@@ -117,7 +121,7 @@ export function buildSupplementLabelLines(
     });
   }
 
-  // 第 2 行：固定品类名，不再放具体补剂名（具体名称在第 7 行「原品名称」）。
+  // 品类名：整张标签的主标题。
   lines.push({
     text: '预分装补剂',
     fontSizeMm: FONT_SIZE_MM.category,
@@ -126,52 +130,86 @@ export function buildSupplementLabelLines(
     advanceMm: LINE_ADVANCE_MM.category,
   });
 
-  // 第 3 行：分装日期
+  // 标题下的细分隔线，把「抬头」和「内容」分开。
   lines.push({
-    text: `分装日期 ${label.packedDate}`,
+    text: '',
+    fontSizeMm: 0,
+    bold: false,
+    align: 'left',
+    advanceMm: LINE_ADVANCE_MM.divider,
+    divider: true,
+  });
+
+  // 日期区：分装日期用常规字重，有效期加粗（最关键的安全信息）。
+  lines.push({
+    text: `分装日期：${label.packedDate}`,
     fontSizeMm: FONT_SIZE_MM.packedDate,
     bold: false,
     align: 'left',
     advanceMm: LINE_ADVANCE_MM.packedDate,
   });
-
-  // 第 4 行：有效期。整张标签最关键的安全信息，加粗加大。
   lines.push({
-    text: `有效期 ${label.expiryDate}`,
+    text: `有效期：${label.expiryDate}`,
     fontSizeMm: FONT_SIZE_MM.expiry,
     bold: true,
     align: 'left',
     advanceMm: LINE_ADVANCE_MM.expiry,
   });
 
-  // 第 5 行：储存注意事项
+  // 储存注意事项：字段名和内容分两行，避免在「阴凉干燥」中间断行。
   lines.push({
-    text: `储存注意事项 ${label.storageCondition}`,
+    text: '储存注意事项：',
     fontSizeMm: FONT_SIZE_MM.storage,
     bold: false,
     align: 'left',
     advanceMm: LINE_ADVANCE_MM.storage,
   });
-
-  // 第 6 行：订单编号
   lines.push({
-    text: `订单编号 ${orderNo}`,
+    text: label.storageCondition,
+    fontSizeMm: FONT_SIZE_MM.storage,
+    bold: false,
+    align: 'left',
+    advanceMm: LINE_ADVANCE_MM.storageValue,
+  });
+
+  // 订单编号
+  lines.push({
+    text: `订单编号：${orderNo}`,
     fontSizeMm: FONT_SIZE_MM.order,
     bold: false,
     align: 'left',
     advanceMm: LINE_ADVANCE_MM.order,
   });
 
-  // 第 7 行：原品名称（具体补剂名）
+  // 原品名称（具体补剂名）
   lines.push({
-    text: `原品名称 ${label.productName}`,
+    text: `原品名称：${label.productName}`,
     fontSizeMm: FONT_SIZE_MM.sourceName,
     bold: false,
     align: 'left',
     advanceMm: LINE_ADVANCE_MM.sourceName,
   });
 
-  // 第 8 行：分装小样食用提醒。文案偏长，渲染时按可用宽度自动换行。
+  // 2026-11-02 新增：分装量/袋。紧跟在原品名称下面。
+  lines.push({
+    text: `分装量/袋：${label.amountText}`,
+    fontSizeMm: FONT_SIZE_MM.amount,
+    bold: true,
+    align: 'left',
+    advanceMm: LINE_ADVANCE_MM.amount,
+  });
+
+  // 底部提示前的细线，把「产品信息」和「食用提醒」分开。
+  lines.push({
+    text: '',
+    fontSizeMm: 0,
+    bold: false,
+    align: 'left',
+    advanceMm: LINE_ADVANCE_MM.divider,
+    divider: true,
+  });
+
+  // 分装小样食用提醒。文案偏长，渲染时按可用宽度自动换行。
   const disclaimer = (label.disclaimer ?? '').trim();
   if (disclaimer) {
     lines.push({

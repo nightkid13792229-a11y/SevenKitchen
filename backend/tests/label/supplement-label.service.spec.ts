@@ -75,7 +75,7 @@ async function measureInk(imageBase64: string) {
 }
 
 describe('补剂分装标签 · 文案拼装', () => {
-  it('2026-11-02 定版：从上到下只有这 8 行', () => {
+  it('2026-11-02 美化版：10 行文字 + 2 条分隔线，顺序固定', () => {
     const lines = buildSupplementLabelLines(
       createLabel(),
       'SP20260918-004',
@@ -85,23 +85,31 @@ describe('补剂分装标签 · 文案拼装', () => {
     expect(textsOf(lines)).toEqual([
       '赛文的食堂',
       '预分装补剂',
-      '分装日期 2026-09-18',
-      '有效期 2027-03-18',
-      '储存注意事项 避光、密封、阴凉干燥处保存',
-      '订单编号 SP20260918-004',
-      '原品名称 海藻粉',
+      '分装日期：2026-09-18',
+      '有效期：2027-03-18',
+      '储存注意事项：',
+      '避光、密封、阴凉干燥处保存',
+      '订单编号：SP20260918-004',
+      '原品名称：海藻粉',
+      '分装量/袋：23平勺',
       '分装小样，非直接食用；内含干燥剂，请勿食用',
     ]);
 
-    expect(lines).toHaveLength(8);
+    // 10 行文字 + 标题下/提醒前两条分隔线
+    expect(lines).toHaveLength(12);
+    expect(lines[2]).toMatchObject({ divider: true, text: '' });
+    expect(lines[10]).toMatchObject({ divider: true, text: '' });
     expect(lines[0]).toMatchObject({ bold: false, align: 'center' });
     expect(lines[1]).toMatchObject({ bold: true, align: 'center' });
     // 有效期是最关键的安全信息：必须加粗
-    expect(lines[3]).toMatchObject({ bold: true, align: 'left' });
+    expect(lines[4]).toMatchObject({ bold: true, align: 'left' });
+    // 分装量/袋在「原品名称」正下方、提醒上方
+    const text = textsOf(lines);
+    expect(text.indexOf('分装量/袋：23平勺')).toBe(
+      text.indexOf('原品名称：海藻粉') + 1,
+    );
     // 没提到的字段一个都不许再上标签
-    const text = textsOf(lines).join('|');
     for (const removed of [
-      '23平勺',
       '1/3',
       '批号',
       'NOW FOODS',
@@ -109,7 +117,7 @@ describe('补剂分装标签 · 文案拼装', () => {
       '每日',
       '分装者',
     ]) {
-      expect(text).not.toContain(removed);
+      expect(text.join('|')).not.toContain(removed);
     }
   });
 

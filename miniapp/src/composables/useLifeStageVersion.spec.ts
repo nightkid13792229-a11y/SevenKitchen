@@ -3,80 +3,39 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * 生命阶段 composable · 守卫
+ * 生命阶段 composable（2026-11-02 起）· 只做"结论 → 八态"的映射。
  *
- * 这段状态原来在**四个页面各写一遍**（21 computed + 13 函数）。
- * 三条口径必须守住：
- *   ① **不判定匹配** —— 判定在 `utils/life-stage-match.ts` 与后端
- *   ② **拿不到结论时不拦**，但要能说"无法确认"（用 `checkFailed` 区分）
- *   ③ 参数是**函数**不是值（响应式来源传值会拿到第一次的快照）
+ * 结论只有一个来源：`/recipes/:id` 返回里的 `lifeStageMatch`。
+ * 页面换狗/换版都重新加载菜谱，所以这里不再发请求、不再计时、不再自己判风险。
  */
-describe('useLifeStageVersion · 生命阶段公共状态', () => {
+describe('useLifeStageVersion · 结论映射', () => {
   const source = readFileSync(
     resolve(process.cwd(), 'src/composables/useLifeStageVersion.ts'),
     'utf-8',
   )
 
-  it('★ 不自己判定匹配，复用 utils 里的 isLifeStageMismatch', () => {
-    expect(source).toContain('isLifeStageMismatch')
-    // 不能在 composable 里再写一遍"哪些 matchType 算不匹配"
-    expect(source).not.toMatch(/matchType === 'MANUAL_MISMATCH'/)
-    expect(source).not.toMatch(/matchType === 'FALLBACK_ADULT'/)
+  it('★ 不再自己请求结论', () => {
+    expect(source).not.toContain('fetchLifeStageMatch')
+    expect(source).not.toContain('request(')
+    expect(source).not.toContain('check()')
   })
 
-  it('★ 拿不到结论时 isMatch 返回 true（不拦顾客）', () => {
-    expect(source).toContain('if (!current) return true')
+  it('★ 八态交给 life-stage-ui 一处判定', () => {
+    expect(source).toContain('resolveLifeStageUiState')
   })
 
-  it('★ checkFailed 与 verdict 分开 —— "还没查"和"查了失败"是两回事', () => {
-    expect(source).toContain('const checkFailed = ref(false)')
-    // 不能用"verdict 为 null"充当失败标记
-    expect(source).toContain('checkFailed.value = !result')
-  })
-
-  it('★ 文案优先用后端 message，后端没给才兜底', () => {
-    expect(source).toContain('if (verdict.value?.message) return verdict.value.message')
-    expect(source).toContain('buildLifeStageReminderText')
-    /**
-     * 顺序：message 判断在兜底之前。
-     *
-     * ⚠️ 必须**在 computed 体内**比较 —— 直接 `indexOf` 会命中文件顶部的
-     * import 行（`buildLifeStageReminderText` 在那里出现过一次），索引就反了。
-     * 这个坑在另外两个 spec 里也踩过。
-     */
-    const body = source.slice(
-      source.indexOf('const reminderText = computed'),
-      source.indexOf('/** \n   * 向后端要一次结论'),
-    )
-    expect(body.indexOf('verdict.value?.message')).toBeGreaterThan(-1)
-    expect(body.indexOf('verdict.value?.message')).toBeLessThan(
-      body.indexOf('buildLifeStageReminderText'),
-    )
-  })
-
-  it('★ 参数是函数而不是值（响应式来源）', () => {
-    expect(source).toContain('recipeId: () => string | null | undefined')
+  it('★ 参数仍是函数（响应式来源），且直接吃 verdict', () => {
+    expect(source).toContain('verdict: () => LifeStageMatchVerdict | null | undefined')
     expect(source).toContain('dogId: () => string | null | undefined')
   })
 
-  it('缺 recipeId 或 dogId 时不发请求', () => {
-    expect(source).toContain('if (!currentRecipeId || !currentDogId) {')
-    // 且要**重置**，不是直接 return（否则取消选狗后还挂着上次的"不匹配"）
-    expect(source).toContain('verdict.value = null')
-    expect(source).toContain('checkFailed.value = false')
+  it('★ 风险等级只读后端，不自己拼', () => {
+    expect(source).toContain('verdict()?.riskLevel')
+    expect(source).not.toMatch(/=== 'PUPPY_UNDER_14_WEEKS'/)
   })
 
-  it('查询失败不抛错（只置标记）', () => {
-    expect(source).not.toMatch(/throw new Error/)
-  })
-
-  it('★ 支持带 lifeStage 查询（DIY 配置页手动切版本后要按新版重判）', () => {
-    expect(source).toContain('lifeStage?: () => string | null | undefined')
-    expect(source).toContain('...(lifeStage?.() ? { lifeStage: lifeStage() as string } : {})')
-  })
-
-  it('★ 支持 onVerdict 回调（DIY 配置页拿到结论要重新亮警示）', () => {
-    expect(source).toContain('onVerdict?: (verdict: LifeStageMatchVerdict | null) => void')
-    expect(source).toContain('onVerdict?.(result)')
+  it('★ 没狗时不判断（isMatch 为 true，不拦）', () => {
+    expect(source).toContain("state.value === 'no_dog'")
+    expect(source).toContain("state.value === 'unknown'")
   })
 })

@@ -23,6 +23,27 @@ def cn_terms(text):
     return {t[i:i + 2] for i in range(len(t) - 1)}
 
 
+_GLOSSARY = None
+
+
+def glossary():
+    global _GLOSSARY
+    if _GLOSSARY is None:
+        _GLOSSARY = json.load(open(os.path.join(HERE, 'glossary-zh-en.json'), encoding='utf-8'))
+    return _GLOSSARY
+
+
+def expand_zh(text):
+    """把中文关键词按对照表翻成英文，补进匹配用的词集。"""
+    out = set()
+    t = text or ''
+    for zh, ens in glossary().items():
+        if zh and zh in t:
+            for e in ens:
+                out |= {w.lower() for w in WORD.findall(e)}
+    return out
+
+
 def en_terms(text):
     return {w.lower() for w in WORD.findall(text or '')
             if w.lower() not in STOP and len(w) >= 3}
@@ -174,6 +195,7 @@ def main():
                     cites.append((src.group(1), loc.group(1) if loc else '', None))
             for src, ch, sid in cites:
                 terms2 = terms | en_terms(ch)
+                terms_exp = expand_zh(head) | expand_zh(ch)
                 cands = pick_docs_by_id(sid, ch, docs) if sid else pick_docs(src, ch, docs)
                 if not cands:
                     out.append({'entry': eid, 'source': src or sid, 'chapter': ch,
@@ -182,7 +204,7 @@ def main():
                     continue
                 # 章节里如果写了表号，记下来供表格锚定
                 tbl = re.search(r'(?:表|Table|TABLE)\s*([A-Z]{0,2}[-–]?\d+(?:[-–]\d+)?)', ch or '')
-                best = (0.0, None, [], None)
+                best = (0.0, None, [], None, 0)
                 q_cn = cn_terms(head) | cn_terms(ch)
                 for cand in cands:
                     sec_score = {}
@@ -196,24 +218,32 @@ def main():
                         if not inter:
                             continue
                         cov = inter / max(len(q_use), 1)
+                        if terms_exp:
+                            # 术语表通道：中文关键词翻成英文后再匹配一次，取较高分
+                            ie = len(terms_exp & pt)
+                            if ie:
+                                cov = max(cov, ie / len(terms_exp))
                         sec_score[sec_id] = sec_score.get(sec_id, 0) + cov
                         if cov > best[0]:
-                            best = (cov, cand, [pid], sec_id)
+                            best = (cov, cand, [pid], sec_id, inter)
                     if best[3] is None and sec_score:
                         top = max(sec_score, key=sec_score.get)
-                        best = (0.0, cand, [], top)
-                conf = ('high' if best[0] >= 0.5 else
-                        'medium' if best[0] >= 0.3 else
+                        best = (0.0, cand, [], top, 0)
+                # 只有"相似度够 + 至少命中 3 个词"才算精确到段落，
+                # 否则宁可按小节给范围 —— 精度比覆盖更重要。
+                solid = best[0] >= 0.40 and best[4] >= 2
+                conf = ('high' if solid and best[0] >= 0.5 else
+                        'medium' if solid else
                         'chapter' if best[1] else 'none')
                 # 只到章节级时：锚到该小节，并把该小节的段落范围一起给出
                 if conf == 'chapter' and best[1]:
                     secs = docs[best[1]]['sections']
                     if not best[3]:
-                        best = (best[0], best[1], [], secs[0]['id'] if secs else None)
+                        best = (best[0], best[1], [], secs[0]['id'] if secs else None, best[4])
                     if best[3]:
                         rng = [p['id'] for p in docs[best[1]]['paragraphs']
                                if p['sectionId'] == best[3]][:40]
-                        best = (best[0], best[1], rng, best[3])
+                        best = (best[0], best[1], rng, best[3], best[4])
                 table_ids, table_pages = [], []
                 if tbl and best[1]:
                     hits = tmap.get((best[1], tbl.group(1).replace('–', '-').lower()), [])
@@ -224,7 +254,7 @@ def main():
                     near = [p['id'] for p in docs[best[1]]['paragraphs']
                             if p.get('pageStart') in want]
                     if near:
-                        best = (max(best[0], 0.35), best[1], near[:3], best[3])
+                        best = (max(best[0], 0.35), best[1], near[:3], best[3], best[4])
                         conf = 'medium'
                 out.append({'entry': eid, 'source': src or sid, 'chapter': ch,
                             'doc': best[1], 'paragraphs': best[2],

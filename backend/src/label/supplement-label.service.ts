@@ -64,43 +64,43 @@ export interface SupplementLabelLine {
   divider?: boolean;
 }
 
-/** 每行相对上一行的垂直推进量（mm），按 1:1 打样图逐行对出来的 */
+/** 每行相对上一行的垂直推进量（mm），按 2026-11-02 美化版 9 行排布 */
 const LINE_ADVANCE_MM = {
-  brand: 4.25,
-  product: 5.15,
-  amount: 4.35,
-  divider: 1.65,
-  packedDate: 4.1,
-  expiry: 3.75,
-  batchOrder: 3.25,
-  source: 3.1,
-  storage: 3.0,
-  usage: 3.0,
-  packer: 3.0,
-  disclaimer: 3.05,
+  brand: 5.0,
+  category: 5.8,
+  divider: 1.8,
+  packedDate: 4.8,
+  expiry: 5.0,
+  storage: 4.2,
+  storageValue: 4.8,
+  order: 4.6,
+  sourceName: 4.8,
+  amount: 4.8,
+  disclaimer: 4.6,
 } as const;
 
-/** 各处字号（mm 高度），同样来自打样图 */
+/** 各处字号（mm 高度） */
 const FONT_SIZE_MM = {
-  brand: 2.5,
-  product: 4.2,
-  amount: 3.4,
-  packedDate: 2.4,
-  expiry: 3.0,
-  batchOrder: 2.2,
-  source: 2.3,
-  storage: 2.1,
-  usage: 2.1,
-  packer: 2.0,
+  brand: 2.6,
+  category: 3.8,
+  packedDate: 2.7,
+  expiry: 3.3,
+  storage: 2.2,
+  order: 2.4,
+  sourceName: 2.6,
+  amount: 2.7,
   disclaimer: 2.0,
 } as const;
 
 /**
  * 决定「这张标签上该出现哪几行文字」。
  *
- * 单独抽成纯函数的原因：标签内容是要被人核对的安全信息（效期、批号、警示语），
- * 用像素级断言去验证太脆；文案拼装逻辑独立出来后，测试直接断言返回的数组就行。
- * 渲染函数只负责把这些行画到画布上。
+ * 2026-11-02 老板定版（美化版），从上到下：
+ *   赛文的食堂 / 预分装补剂 / ─── / 分装日期 / 有效期 /
+ *   储存注意事项 / 订单编号 / 原品名称 / 分装量/袋 / ─── / 分装小样食用提醒
+ *
+ * 不再出现：品名大字、第几袋/共几袋、批号、原品品牌规格、
+ * 用法、分装者。没提到的都不要。
  */
 export function buildSupplementLabelLines(
   label: SupplementLabel,
@@ -109,7 +109,7 @@ export function buildSupplementLabelLines(
 ): SupplementLabelLine[] {
   const lines: SupplementLabelLine[] = [];
 
-  // 第 1 行：品牌。没配品牌名就整行省掉，不留一条空白占位（省下的高度让后面几行更宽松）。
+  // 品牌：小字居中，作为最上面的抬头。
   const brand = (brandName ?? '').trim();
   if (brand) {
     lines.push({
@@ -121,31 +121,16 @@ export function buildSupplementLabelLines(
     });
   }
 
-  // 第 2 行：品名。分装现场靠它认瓶，给整张标签最大的字号。
+  // 品类名：整张标签的主标题。
   lines.push({
-    text: label.productName,
-    fontSizeMm: FONT_SIZE_MM.product,
+    text: '预分装补剂',
+    fontSizeMm: FONT_SIZE_MM.category,
     bold: true,
     align: 'center',
-    advanceMm: LINE_ADVANCE_MM.product,
+    advanceMm: LINE_ADVANCE_MM.category,
   });
 
-  // 第 3 行：每袋用量 + 第几袋/共几袋。
-  // 只有一袋时不写「1/1」：没有歧义，写了纯占地方。
-  const bagTotal = Math.max(1, Math.trunc(label.bagTotal || 1));
-  const amountText =
-    bagTotal > 1
-      ? `${label.amountText}  ${label.bagIndex}/${bagTotal}`
-      : label.amountText;
-  lines.push({
-    text: amountText,
-    fontSizeMm: FONT_SIZE_MM.amount,
-    bold: true,
-    align: 'center',
-    advanceMm: LINE_ADVANCE_MM.amount,
-  });
-
-  // 第 4 行：分隔线，把「这袋是什么」和「这袋的日期信息」分开
+  // 标题下的细分隔线，把「抬头」和「内容」分开。
   lines.push({
     text: '',
     fontSizeMm: 0,
@@ -155,73 +140,76 @@ export function buildSupplementLabelLines(
     divider: true,
   });
 
-  // 第 5 行：分装日期
+  // 日期区：分装日期用常规字重，有效期加粗（最关键的安全信息）。
   lines.push({
-    text: `分装日期 ${label.packedDate}`,
+    text: `分装日期：${label.packedDate}`,
     fontSizeMm: FONT_SIZE_MM.packedDate,
     bold: false,
     align: 'left',
     advanceMm: LINE_ADVANCE_MM.packedDate,
   });
-
-  // 第 6 行：有效期。整张标签最关键的安全信息，加粗加大，排在视线落点上。
   lines.push({
-    text: `有效期至 ${label.expiryDate}`,
+    text: `有效期：${label.expiryDate}`,
     fontSizeMm: FONT_SIZE_MM.expiry,
     bold: true,
     align: 'left',
     advanceMm: LINE_ADVANCE_MM.expiry,
   });
 
-  // 储存条件：顾客收货后最常回看的一行
+  // 储存注意事项：字段名和内容分两行，避免在「阴凉干燥」中间断行。
   lines.push({
-    text: `储存 ${label.storageCondition}`,
+    text: '储存注意事项：',
     fontSizeMm: FONT_SIZE_MM.storage,
     bold: false,
     align: 'left',
     advanceMm: LINE_ADVANCE_MM.storage,
   });
-
-  // 第 7 行：批号 + 订单号。批号是选填的，为空时只留订单号，
-  // 不能出现「批号 」这种后面什么都没有的空标签。
-  const batchNo = (label.batchNo ?? '').trim();
-  const orderText = `订单 ${orderNo}`;
   lines.push({
-    text: batchNo ? `批号 ${batchNo}   ${orderText}` : orderText,
-    fontSizeMm: FONT_SIZE_MM.batchOrder,
+    text: label.storageCondition,
+    fontSizeMm: FONT_SIZE_MM.storage,
     bold: false,
     align: 'left',
-    advanceMm: LINE_ADVANCE_MM.batchOrder,
+    advanceMm: LINE_ADVANCE_MM.storageValue,
   });
 
-  // 第 8 行：原品（品牌·规格）。拿不到原品信息就整行省略，把高度让给下面的安全提示。
-  const sourceProduct = (label.sourceProduct ?? '').trim();
-  if (sourceProduct) {
-    lines.push({
-      text: `原品 ${sourceProduct}`,
-      fontSizeMm: FONT_SIZE_MM.source,
-      bold: false,
-      align: 'left',
-      advanceMm: LINE_ADVANCE_MM.source,
-    });
-  }
-
+  // 订单编号
   lines.push({
-    text: `用法 ${label.usageText}`,
-    fontSizeMm: FONT_SIZE_MM.usage,
+    text: `订单编号：${orderNo}`,
+    fontSizeMm: FONT_SIZE_MM.order,
     bold: false,
     align: 'left',
-    advanceMm: LINE_ADVANCE_MM.usage,
-  });
-  lines.push({
-    text: `分装者 ${label.packerName}`,
-    fontSizeMm: FONT_SIZE_MM.packer,
-    bold: false,
-    align: 'left',
-    advanceMm: LINE_ADVANCE_MM.packer,
+    advanceMm: LINE_ADVANCE_MM.order,
   });
 
-  // 安全提示。文案偏长，渲染时按可用宽度自动换行。
+  // 原品名称（具体补剂名）
+  lines.push({
+    text: `原品名称：${label.productName}`,
+    fontSizeMm: FONT_SIZE_MM.sourceName,
+    bold: false,
+    align: 'left',
+    advanceMm: LINE_ADVANCE_MM.sourceName,
+  });
+
+  // 2026-11-02 新增：分装量/袋。紧跟在原品名称下面。
+  lines.push({
+    text: `分装量/袋：${label.amountText}`,
+    fontSizeMm: FONT_SIZE_MM.amount,
+    bold: true,
+    align: 'left',
+    advanceMm: LINE_ADVANCE_MM.amount,
+  });
+
+  // 底部提示前的细线，把「产品信息」和「食用提醒」分开。
+  lines.push({
+    text: '',
+    fontSizeMm: 0,
+    bold: false,
+    align: 'left',
+    advanceMm: LINE_ADVANCE_MM.divider,
+    divider: true,
+  });
+
+  // 分装小样食用提醒。文案偏长，渲染时按可用宽度自动换行。
   const disclaimer = (label.disclaimer ?? '').trim();
   if (disclaimer) {
     lines.push({

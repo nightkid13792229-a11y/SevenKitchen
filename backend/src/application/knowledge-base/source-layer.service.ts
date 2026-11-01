@@ -208,9 +208,17 @@ export class SourceLayerService {
     return this.prisma.sourceTable.findUnique({ where: { id } });
   }
 
-  /** 取图（返回路径与图注，实际文件由静态目录提供） */
+  /**
+   * 取图。
+   *
+   * 返回里带 `url` —— 静态目录挂在 `/kb-figures/`，调用方直接用这个地址就能取到文件，
+   * 不用自己拼路径。
+   */
   async getFigure(id: string) {
-    return this.prisma.sourceFigure.findUnique({ where: { id } });
+    const row = await this.prisma.sourceFigure.findUnique({ where: { id } });
+    if (!row) return null;
+    const name = row.path.split('/').pop() ?? '';
+    return { ...row, url: `/kb-figures/${name}` };
   }
 
   /**

@@ -293,6 +293,25 @@ export const ONLINE_TRUSTED_HOSTS: readonly string[] = [
  * 纯线上库（Fineli/Frida/AFCD/AUSNUT/TACO）没有 `sourceType`，
  * 只能按 `key` / `sourceCode` 在 `NUTRITION_LIBRARIES` 里查，不从这里返回。
  */
+/** 有线上可信站点、可以参与线上检索的库（CFCT 没有站点，自然不会进来）。 */
+export function getOnlineSearchLibraries(): NutritionLibrary[] {
+  return NUTRITION_LIBRARIES.filter((library) => library.onlineHosts.length > 0);
+}
+
+/** 按库代码（key 或 sourceType，大小写不敏感）找线上可检索库。 */
+export function findOnlineSearchLibrary(
+  code: string,
+): NutritionLibrary | undefined {
+  const normalized = code.trim().toUpperCase();
+  if (!normalized) return undefined;
+  return NUTRITION_LIBRARIES.find(
+    (library) =>
+      library.onlineHosts.length > 0 &&
+      (library.key.toUpperCase() === normalized ||
+        (library.sourceType ?? '').toUpperCase() === normalized),
+  );
+}
+
 export function getNutritionLibrary(
   sourceType: string | null | undefined,
 ): NutritionLibrary | undefined {

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { createEmptyNutritionProfile } from '../../domain/ingredient/nutrition-profile.utils';
 import type { NutritionProfileV2 } from '../../domain/ingredient/types';
@@ -8,6 +8,11 @@ import {
   NUTRITION_LIBRARIES,
   ONLINE_TRUSTED_HOSTS,
 } from '../../domain/nutrition-governance/nutrition-source-registry';
+import { AgentProviderConfigService } from './agent-provider-config.service';
+import {
+  DeepSeekWebSearchClient,
+  type WebSearchPort,
+} from './deepseek-web-search.client';
 
 /**
  * 线上可信域名唯一来源是登记表（`ONLINE_TRUSTED_HOSTS`）。
@@ -124,8 +129,20 @@ export interface TrustedNutritionWebSearchReport {
   discoveryStatus: 'OK' | 'UNAVAILABLE';
 }
 
+export const TRUSTED_WEB_SEARCH_PORT = 'TRUSTED_WEB_SEARCH_PORT';
+
 @Injectable()
 export class TrustedNutritionWebSearchService {
+  private readonly logger = new Logger(TrustedNutritionWebSearchService.name);
+
+  constructor(
+    @Optional()
+    private readonly providerConfig?: AgentProviderConfigService,
+    @Optional()
+    @Inject(TRUSTED_WEB_SEARCH_PORT)
+    private readonly webSearch?: WebSearchPort,
+  ) {}
+
   async search(
     input: TrustedNutritionWebSearchInput,
   ): Promise<NutritionSourceInput[]> {
@@ -144,14 +161,110 @@ export class TrustedNutritionWebSearchService {
   ): Promise<TrustedNutritionWebSearchReport> {
     const { candidates, attemptedHosts, rejectedHosts, discoveryStatus } =
       await this.resolveCandidateUrls(input);
+    const sources = await this.fetchAndExtract(
+      candidates,
+      input.ingredientName,
+    );
+
+    return {
+      sources,
+      attemptedHosts: [...new Set([...attemptedHosts, ...candidates.map((c) => resolveTrustedHost(c.url)).filter((h): h is string => Boolean(h))])],
+      rejectedHosts,
+      discoveryStatus,
+    };
+  }
+
+  /**
+   * 指定一个库、用模型给的词逐个站点搜：返回抓取解析后的来源。
+   * 与 `searchWithReport` 的区别是「库和词都由调用方指定」，不再做自动发现。
+   */
+  async searchLibrary(input: {
+    ingredientName: string;
+    hosts: readonly string[];
+    terms: readonly string[];
+  }): Promise<TrustedNutritionWebSearchReport> {
+    const client = await this.resolveWebSearchClient();
+    if (!client) {
+      return {
+        sources: [],
+        attemptedHosts: [...input.hosts],
+        rejectedHosts: [],
+        discoveryStatus: 'UNAVAILABLE',
+      };
+    }
+
+    const terms = input.terms
+      .map((term) => term.trim())
+      .filter(Boolean)
+      .slice(0, 6);
+    const urls = new Set<string>();
+    const attemptedHosts = new Set<string>();
+    const sampleHosts = new Set<string>();
+    let resultCount = 0;
+    let channelOk = false;
+
+    for (const host of input.hosts) {
+      attemptedHosts.add(host);
+      for (const term of terms) {
+        try {
+          const result = await client.search({
+            query: `${term} site:${host}`,
+            count: 5,
+          });
+          channelOk = true;
+          resultCount += result.results.length;
+          for (const item of result.results) {
+            try {
+              sampleHosts.add(new URL(item.url).host);
+            } catch {
+              // 忽略非法 URL
+            }
+            if (resolveTrustedHost(item.url)) {
+              urls.add(item.url);
+            }
+          }
+        } catch (error) {
+          this.logger.warn(
+            `[trusted-web-search] ${host} 「${term}」搜索失败：${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+        if (urls.size >= 20) break;
+      }
+      if (urls.size >= 20) break;
+    }
+
+    const candidates: TrustedUrlCandidate[] = [...urls].map((url) => ({
+      url,
+      discoveryMode: 'whitelist-web-search',
+    }));
+    const sources = channelOk
+      ? await this.fetchAndExtract(candidates, input.ingredientName)
+      : [];
+
+    this.logger.log(
+      `[trusted-web-search] 库=${input.hosts.join(',')} 搜索命中=${resultCount} 白名单URL=${urls.size} 解析来源=${sources.length} 域名样本=${[...sampleHosts].slice(0, 6).join('、') || '（空）'}`,
+    );
+
+    return {
+      sources,
+      attemptedHosts: [...attemptedHosts],
+      rejectedHosts: [],
+      discoveryStatus: channelOk ? 'OK' : 'UNAVAILABLE',
+    };
+  }
+
+  private async fetchAndExtract(
+    candidates: readonly TrustedUrlCandidate[],
+    ingredientName: string,
+  ): Promise<NutritionSourceInput[]> {
     const records: NutritionSourceInput[] = [];
-    const attempted = new Set(attemptedHosts);
 
     for (const candidate of candidates) {
       const trustedHost = resolveTrustedHost(candidate.url);
       if (!trustedHost) continue;
 
-      attempted.add(trustedHost);
       const content = await fetchTrustedText(candidate.url);
       if (!content) continue;
 
@@ -161,17 +274,45 @@ export class TrustedNutritionWebSearchService {
           trustedHost,
           discoveryMode: candidate.discoveryMode,
           text: content,
-          ingredientName: input.ingredientName,
+          ingredientName,
         }),
       );
     }
 
-    return {
-      sources: records.slice(0, 8),
-      attemptedHosts: [...attempted],
-      rejectedHosts,
-      discoveryStatus,
-    };
+    return records.slice(0, 8);
+  }
+
+  /** 测试可注入；生产用 provider 配置里的 Key 现建一个客户端。 */
+  private async resolveWebSearchClient(): Promise<WebSearchPort | null> {
+    if (this.webSearch) {
+      return this.webSearch;
+    }
+    try {
+      // 没有 DEFAULT 用途的配置：回退到任意一条已启用的 DeepSeek（同一个 Key）。
+      const config = await this.providerConfig?.getEnabledDeepSeekRuntimeConfig({
+        fallbackToDefault: true,
+        fallbackToAnyPurpose: true,
+      });
+      if (!config?.baseUrl || !config?.apiKey) {
+        this.logger.warn(
+          '[trusted-web-search] 没有可用的 DeepSeek 配置，线上检索不可用',
+        );
+        return null;
+      }
+      return new DeepSeekWebSearchClient({
+        baseUrl: config.baseUrl,
+        apiKey: config.apiKey,
+        requestTimeoutMs: config.requestTimeoutMs,
+        retryCount: config.retryCount,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `[trusted-web-search] 读取 DeepSeek 配置失败：${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return null;
+    }
   }
 
   private async resolveCandidateUrls(
@@ -205,8 +346,45 @@ export class TrustedNutritionWebSearchService {
 
     let discoveryStatus: 'OK' | 'UNAVAILABLE' = 'OK';
     if (!hasExplicitUrl && isWhitelistWebSearchEnabled()) {
-      const discovery = await discoverTrustedSourceUrls(input);
+      const client = await this.resolveWebSearchClient();
+      let discovery: {
+        urls: string[];
+        attemptedHosts: string[];
+        channelOk: boolean;
+        resultCount: number;
+        sampleHosts: string[];
+      };
+      try {
+        discovery = client
+          ? await discoverTrustedSourceUrls(input, client)
+          : {
+              urls: [],
+              attemptedHosts: [],
+              channelOk: false,
+              resultCount: 0,
+              sampleHosts: [],
+            };
+      } catch (error) {
+        this.logger.warn(
+          `[trusted-web-search] DeepSeek 搜索失败：${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        discovery = {
+          urls: [],
+          attemptedHosts: [],
+          channelOk: false,
+          resultCount: 0,
+          sampleHosts: [],
+        };
+      }
       discoveryStatus = discovery.channelOk ? 'OK' : 'UNAVAILABLE';
+      if (discovery.channelOk && discovery.urls.length === 0) {
+        this.logger.warn(
+          `[trusted-web-search] 搜索返回 ${discovery.resultCount} 条，但没有白名单域名；` +
+            `域名样本：${discovery.sampleHosts.join('、') || '（空）'}`,
+        );
+      }
       for (const host of discovery.attemptedHosts) {
         attemptedHosts.add(host);
       }
@@ -270,32 +448,76 @@ function isWhitelistWebSearchEnabled(): boolean {
 
 async function discoverTrustedSourceUrls(
   input: TrustedNutritionWebSearchInput,
-): Promise<{ urls: string[]; attemptedHosts: string[]; channelOk: boolean }> {
+  client: WebSearchPort,
+): Promise<{
+  urls: string[];
+  attemptedHosts: string[];
+  channelOk: boolean;
+  resultCount: number;
+  sampleHosts: string[];
+}> {
   const queryText = buildDiscoveryQueryText(input);
   if (!queryText) {
-    return { urls: [], attemptedHosts: [], channelOk: false };
+    return {
+      urls: [],
+      attemptedHosts: [],
+      channelOk: false,
+      resultCount: 0,
+      sampleHosts: [],
+    };
   }
 
-  const urls = new Set<string>();
-  const attemptedHosts: string[] = [];
+  const urls: string[] = [];
+  const hosts = new Set<string>();
+  const sampleHosts = new Set<string>();
   let channelOk = false;
+  let resultCount = 0;
+
+  // 按库逐个 `site:` 搜索：一次通用查询很难把白名单站点顶上来。
   for (const host of getDiscoveryHosts()) {
-    attemptedHosts.push(host);
-    const discovered = await fetchSearchResultUrls(
-      `${queryText} nutrition composition site:${host}`,
-    );
-    if (discovered.ok) {
+    try {
+      const result = await client.search({
+        query: `${queryText} nutrition composition site:${host}`,
+        count: 5,
+      });
       channelOk = true;
-    }
-    for (const url of discovered.urls) {
-      urls.add(url);
-      if (urls.size >= MAX_DISCOVERED_SOURCE_URLS) {
-        return { urls: [...urls], attemptedHosts, channelOk };
+      resultCount += result.results.length;
+
+      for (const item of result.results) {
+        try {
+          sampleHosts.add(new URL(item.url).host);
+        } catch {
+          // 忽略非法 URL
+        }
+        const trustedHost = resolveTrustedHost(item.url);
+        if (!trustedHost) continue;
+        if (!urls.includes(item.url)) {
+          urls.push(item.url);
+        }
+        hosts.add(trustedHost);
+        if (urls.length >= MAX_DISCOVERED_SOURCE_URLS) {
+          return {
+            urls,
+            attemptedHosts: [...hosts],
+            channelOk,
+            resultCount,
+            sampleHosts: [...sampleHosts].slice(0, 8),
+          };
+        }
       }
+    } catch {
+      // 单个站点失败不整体判死：只要有一个成功，通道就算可用。
+      continue;
     }
   }
 
-  return { urls: [...urls], attemptedHosts, channelOk };
+  return {
+    urls,
+    attemptedHosts: [...hosts],
+    channelOk,
+    resultCount,
+    sampleHosts: [...sampleHosts].slice(0, 8),
+  };
 }
 
 function buildDiscoveryQueryText(input: TrustedNutritionWebSearchInput): string {

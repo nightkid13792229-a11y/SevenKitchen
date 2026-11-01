@@ -112,6 +112,24 @@ export class KnowledgeSourceController {
     return ApiResponseDto.success(await this.sourceLayer.getEntryAnchors(entryId));
   }
 
+  @Get('entries/:entryId/verify')
+  @ApiOperation({ summary: '校验一处引用是否靠得住（段落存在 + 同文档 + 关键词命中）' })
+  @ApiQuery({ name: 'paragraphId', required: true, type: String })
+  @ApiQuery({ name: 'keywords', required: false, type: String, description: '逗号分隔' })
+  async verify(
+    @Param('entryId') entryId: string,
+    @Query('paragraphId') paragraphId: string,
+    @Query('keywords') keywords?: string,
+  ): Promise<ApiResponseDto<unknown>> {
+    const list = (keywords ?? '')
+      .split(',')
+      .map((k) => k.trim())
+      .filter(Boolean);
+    return ApiResponseDto.success(
+      await this.sourceLayer.verifyCitation(entryId, paragraphId, list),
+    );
+  }
+
   @Get('entries/:entryId/evidence')
   @ApiOperation({ summary: '某条知识的出处 + 原文（核对用）' })
   @ApiQuery({ name: 'perAnchor', required: false, type: Number })

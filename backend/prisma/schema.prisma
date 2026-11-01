@@ -238,6 +238,7 @@ model User {
   feedbackReplies         FeedbackReply[]
   wechatIdentities        UserWechatIdentity[]
   supplementOrders        SupplementOrder[]
+  procurementSkusCreated  ProcurementSku[]     @relation("ProcurementSkuCreator")
 
   @@index([wechatOpenid])
   @@index([phone])
@@ -1175,16 +1176,35 @@ model ProcurementSku {
   safetyStock                   Float?                    @map("safety_stock")
   reorderPoint                  Float?                    @map("reorder_point")
   targetStock                   Float?                    @map("target_stock")
+  createdById                   String?                   @map("created_by_id") @db.VarChar(36)
+  createdSource                 String?                   @map("created_source") @db.VarChar(20)
+  sourceScreenshotUrl           String?                   @map("source_screenshot_url") @db.VarChar(500)
   createdAt                     DateTime                  @default(now()) @map("created_at")
   updatedAt                     DateTime                  @default(now()) @updatedAt @map("updated_at")
 
   ingredient   Ingredient                   @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  createdBy    User?                        @relation("ProcurementSkuCreator", fields: [createdById], references: [id], onDelete: SetNull)
   priceHistory ProcurementSkuPriceHistory[]
 
   @@index([ingredientId])
   @@index([isActive])
   @@index([sourceTier])
+  @@index([createdSource, createdAt])
   @@map("procurement_sku")
+}
+
+/// 员工「从截图识别采购商品」的用量计数（每人每天一行）
+model ProcurementSkuDraftUsage {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  userId    String   @map("user_id") @db.VarChar(36)
+  usedOn    DateTime @map("used_on") @db.Date
+  count     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([userId, usedOn])
+  @@index([usedOn])
+  @@map("procurement_sku_draft_usage")
 }
 
 model ProcurementSkuPriceHistory {

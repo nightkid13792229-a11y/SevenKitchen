@@ -61,24 +61,25 @@ describe('TrustedNutritionWebSearchService', () => {
   });
 
   it('discovers trusted nutrition pages from a whitelist web search when no URL is provided', async () => {
-    const searchHtml =
-      '<a rel="nofollow" href="/l/?uddg=https%3A%2F%2Fwww.foodstandards.gov.au%2Fnutrition%2Fquail-egg.csv">Quail egg nutrition</a>';
     const csv = [
       'Food Name,Energy (kcal),Water (g),Protein (g),Fat (g)',
       'Quail egg cooked,158,74.3,13.1,11.1',
     ].join('\n');
-    global.fetch = jest.fn(async (url: string | URL | Request) => {
-      const urlText = String(url);
-      return {
-        ok: true,
-        text: jest
-          .fn()
-          .mockResolvedValue(
-            urlText.includes('lite.duckduckgo.com') ? searchHtml : csv,
-          ),
-      };
-    }) as unknown as typeof global.fetch;
-    const service = new TrustedNutritionWebSearchService();
+    global.fetch = jest.fn(async (_url: string | URL | Request) => ({
+      ok: true,
+      text: jest.fn().mockResolvedValue(csv),
+    })) as unknown as typeof global.fetch;
+    const search = jest.fn(async () => ({
+      query: '鹌鹑蛋 quail egg cooked nutrition composition',
+      results: [
+        {
+          title: 'Quail egg nutrition',
+          url: 'https://www.foodstandards.gov.au/nutrition/quail-egg.csv',
+          summary: '',
+        },
+      ],
+    }));
+    const service = new TrustedNutritionWebSearchService(undefined, { search });
 
     const results = await service.search({
       ingredientName: '鹌鹑蛋',
@@ -86,10 +87,10 @@ describe('TrustedNutritionWebSearchService', () => {
       searchTerms: ['quail egg cooked'],
     });
 
-    expect(global.fetch).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining('lite.duckduckgo.com/lite/'),
-      expect.any(Object),
+    expect(search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.stringContaining('鹌鹑蛋'),
+      }),
     );
     expect(global.fetch).toHaveBeenCalledWith(
       'https://www.foodstandards.gov.au/nutrition/quail-egg.csv',
@@ -104,6 +105,21 @@ describe('TrustedNutritionWebSearchService', () => {
         }),
       }),
     );
+  });
+
+  it('搜索通道失败时报「不可用」，不把失败当成 0 命中', async () => {
+    const search = jest.fn(async () => {
+      throw new Error('network down');
+    });
+    const service = new TrustedNutritionWebSearchService(undefined, { search });
+
+    const report = await service.searchWithReport({
+      ingredientName: '兔肝',
+      searchTerms: ['rabbit liver'],
+    });
+
+    expect(report.discoveryStatus).toBe('UNAVAILABLE');
+    expect(report.sources).toEqual([]);
   });
 
   it('ignores non-whitelisted URLs instead of fetching them', async () => {

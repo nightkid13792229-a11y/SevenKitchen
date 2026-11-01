@@ -156,7 +156,7 @@ export const KNOWLEDGE_SOURCES: readonly KnowledgeSourceRecord[] = [
   {
     id: 'ACVIM-CONSENSUS',
     name: 'ACVIM 共识 / 背书声明',
-    version: '2011–2026（已归档 23 份）',
+    version: '2011–2026（已归档 25 份）',
     tier: 'B',
     local: true,
     role: '各专科疾病的当前口径：肠道、肝胆、血液、心脏、泌尿、神经急症、感染、代谢',

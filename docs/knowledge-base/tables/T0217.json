@@ -1,0 +1,42 @@
+{
+  "tableId": "T0217",
+  "caption": "Table 30-2. Effects of surgery that may have nutritional implications for cancer patients.",
+  "columns": [
+    "Cancer sites",
+    "Surgical procedures",
+    "Possible nutritional problems"
+  ],
+  "rows": [
+    [
+      "Head, neck, tongue",
+      "Mandibulectomy\nMaxillectomy\nGlossectomy",
+      "Difficulty prehending, chewing and swallowing food\nDysphagia\nRegurgitation"
+    ],
+    [
+      "Esophagus",
+      "Esophagectomy, with or without reconstruction",
+      "Regurgitation"
+    ],
+    [
+      "Stomach",
+      "Gastrectomy, partial or complete",
+      "Altered gastric emptying\nDiarrhea"
+    ],
+    [
+      "Small intestine",
+      "Resection",
+      "Malabsorption\nDiarrhea\nIntestinal obstruction"
+    ],
+    [
+      "Large intestine",
+      "Colectomy, partial or complete",
+      "Fluid and electrolyte imbalances"
+    ],
+    [
+      "Pancreas, liver",
+      "Pancreatectomy\nCholecystectomy\nCholecystoduodenostomy",
+      "Diabetes mellitus\nMaldigestion"
+    ]
+  ],
+  "note": "图中另含 Table 30-3（Effects of chemotherapy that may have nutritional implications for cancer patients.），已见于 T0218，未重复转录；单元格内换行以 \\n 保留。"
+}

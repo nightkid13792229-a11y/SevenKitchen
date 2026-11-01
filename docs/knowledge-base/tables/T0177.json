@@ -1,0 +1,49 @@
+{
+  "tableId": "T0177",
+  "caption": "Table 26-7. Summary of catheter placement sites for parenteral nutrition administration in small animals.",
+  "columns": [
+    "Site/Technique",
+    "Pros",
+    "Cons",
+    "Indications"
+  ],
+  "rows": [
+    [
+      "External jugular",
+      "Central vein (large) access\nExchangeable\nHigh osmolar solution compatible\nLong-term use (>7 days)\nLess bandage damage",
+      "Placement technically difficult\nInfection rate higher\nIntensive patient monitoring required",
+      "Inability to use GI tract for nutritional support\nElectrolytes stable\nInterruption of oral alimentations for >7 days; catabolic <7 days\nNon-septic patients\nHospitalization required"
+    ],
+    [
+      "Tunneled catheters",
+      "Lower infection rate of CVC\nLong-term use (>7 days)\nCentral venous access\nHospitalization compatible",
+      "Operative placement recommended\nPlacement technically difficult",
+      "Long-term CVC required for PN"
+    ],
+    [
+      "PICC (femoral vein)",
+      "Central vein access\nHospitalization compatible\nExchangeable",
+      "Thrombophlebitis risk higher\nInfection rate higher\nShort-term use (<3 days)\nBlood draws not predictable",
+      "To accommodate hospitalization in cats and small dogs\nNo jugular access"
+    ],
+    [
+      "Peripheral (saphenous, cephalic)",
+      "Easy insertion\nLower infection rate\nAmendable to 3-in-1 solutions\nLess intensive patient monitoring\nExchangeable\nLower cost",
+      "Requires low osmolar solution (<650 mOsm/l)\nShort-term use (<7 days)\nIncrease risk of bandage damage\nElizabethan collar recommended",
+      "High risk of catheter sepsis from CVC\nPatient can tolerate lipid emulsions\nPatient in mild metabolic stress/malnutrition\nCentral vein access not available/contraindicated\nShort duration PN\nAdjunct to enteral or oral nutrition on short-term basis\nEmergency situations when venous access is unavailable"
+    ],
+    [
+      "IO, IP",
+      "Venous access not required",
+      "Ultra short-term use (IO)\nPlacement technically difficulty (IO)\nLimited documentation",
+      ""
+    ],
+    [
+      "Key: GI = gastrointestinal, CVC = central venous catheter, PN = parenteral nutrition, PICC = peripherally inserted central catheter, IO = intraosseous, IP = intraperitoneal.",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "note": "单元格内多行以换行保留；表末 Key 行为表格内脚注，置于第一列。"
+}

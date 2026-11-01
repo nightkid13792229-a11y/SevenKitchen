@@ -1,0 +1,21 @@
+{
+  "tableId": "T0036",
+  "caption": "TABLE 2 Continued",
+  "columns": [
+    "Body System",
+    "Diagnostic Approach",
+    "Therapeutic Tip"
+  ],
+  "rows": [
+    [
+      "Cardiac/Respiratory",
+      "PE focus: Auscultation of heart and lungs, identify normal and abnormal rhythm, breath sounds, muffled chest sounds, location of abnormality.\n\nBaseline cardiac/respiratory diagnostic evaluation should include:\n• Senior blood profile with urinalysis\n• Thoracic radiographs\n• Echocardiogram\n• Blood pressure\n• NT-proBNP\n\nAdditional diagnostic considerations:\n• Abdominal imaging if necessary\n• Respiratory: Infectious disease evaluation (PCR methods preferred)",
+      "• Dogs with pacemakers often do well.\n• Consider working with a rehabilitation specialist for therapy options.\n• Owner education is key to therapeutic management."
+    ],
+    [
+      "Musculoskeletal",
+      "PE focus: General body palpation with focus on spine, limbs, joints, muscular condition score, movement examination, full orthopedic examination, evaluation of pain level.\n\nBaseline diagnostic evaluation should include:\n• Senior blood profile with urinalysis\n\nAdditional diagnostic tests:\n• Regional radiographs\n• Arthrocentesis",
+      "• Consider a diagnostic round of pain control.\n• Use multimodal pain management when possible.\n• Make recommendations for clients interested in using harnesses, slings, etc.\n• Encourage clients to video their pets when they are monitoring pain and mobility as this can provide valuable insight to guide treatment."
+    ]
+  ]
+}

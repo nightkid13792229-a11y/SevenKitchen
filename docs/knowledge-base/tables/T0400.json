@@ -1,0 +1,15 @@
+{
+  "tableId": "T0400",
+  "caption": "Table 6-6. Thiaminase activity in fish products.*",
+  "columns": ["Food", "Thiaminase activity**"],
+  "rows": [
+    ["Marlin", "0"],
+    ["Yellowfin tuna", "265"],
+    ["Red snapper", "265"],
+    ["Skipjack tuna", "1,000"],
+    ["Dolphin (mahi mahi)", "120"],
+    ["Ladyfish", "35"],
+    ["Clam", "2,640"]
+  ],
+  "note": "表下注释：*Adapted from Hilker DM, Peter OF. Anti-thiamin activity in Hawaii fish. Journal of Nutrition 1966; 89: 419-421. **mg thiamin destroyed/100 g fish/hour."
+}

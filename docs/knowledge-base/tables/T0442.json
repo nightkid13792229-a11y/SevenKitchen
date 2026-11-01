@@ -1,0 +1,12 @@
+{
+  "tableId": "T0442",
+  "caption": "Table 1. Availability of mitotane in dogs when given in various vehicles.*",
+  "columns": ["Dogs", "Dosage method", "Maximum plasma drug concentration (mg/l)"],
+  "rows": [
+    ["Normal", "Tablets, fasting", "0.4"],
+    ["", "Pure drug in emulsion", "11.0"],
+    ["", "Ground tablets in oil with food", "15.4"],
+    ["", "Tablets in food", "13.0"],
+    ["Hyperadrenocorticism", "Tablets in food", "24.5"]
+  ]
+}

@@ -1,0 +1,31 @@
+{
+ "tableId": "T0147",
+ "caption": "Table 2-1. Guidelines for quality of evidence that can be used for veterinary clinical nutrition.",
+ "columns": [
+  "Evidence grade",
+  "Evidence guidelines",
+  "Examples of nutritional studies"
+ ],
+ "rows": [
+  [
+   "1",
+   "Evidence obtained from at least one properly randomized, controlled, clinical study that used the nutritional product in the target species with animals that had developed the disease naturally.*",
+   "Dietary modification for treatment of cats and dogs with naturally developing chronic kidney disease."
+  ],
+  [
+   "2",
+   "Evidence obtained from randomized, controlled, clinical studies conducted in a laboratory setting that used the nutritional product in the target species with animals that had developed the disease naturally.*",
+   "Effects of a dental food on plaque accumulation and gingival health in dogs.\nEnergy restriction in obese cats and dogs fed foods varying in protein, fat, fiber and carbohydrate content."
+  ],
+  [
+   "3",
+   "Evidence obtained from one or more of the following:*\nAt least one appropriately designed clinical study without randomization.\nCohort or case-controlled analytic studies.\nStudies that used acceptable models of disease or simulations in the target species.\nCase series.\nDramatic results from uncontrolled studies.",
+   "Use of foods using novel or hydrolyzed protein sources for animals with adverse food reactions.\nMyocardial failure in cats associated with taurine deficiency."
+  ],
+  [
+   "4",
+   "Evidence obtained from one or more of the following:\nOpinions based on clinical experience (textbooks, monographs or proceedings).\nDescriptive studies.\nStudies conducted in other species.\nPathophysiologic justification.\nReports of expert committees.",
+   "Hepatic disease and nutritional therapy.\nNutritional management of most diarrheal diseases."
+  ]
+ ]
+}

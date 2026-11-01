@@ -1,0 +1,107 @@
+{
+ "tableId": "T0305",
+ "caption": "Table 43-1. Common characteristics of canine struvite uroliths.",
+ "columns": [
+  "Chemical name",
+  "Formula",
+  "Crystal name"
+ ],
+ "rows": [
+  [
+   "Magnesium ammonium phosphate hexahydrate",
+   "MgNH4PO4•6H2O",
+   "Struvite"
+  ],
+  [
+   "Variations in mineral composition",
+   "",
+   ""
+  ],
+  [
+   "Struvite only",
+   "",
+   ""
+  ],
+  [
+   "Struvite mixed with lesser quantities of calcium apatite and/or ammonium acid urate",
+   "",
+   ""
+  ],
+  [
+   "Nucleus of a different mineral surrounded by variable layers composed primarily of struvite. Small quantities of calcium apatite and/or ammonium acid urate also may be present.",
+   "",
+   ""
+  ],
+  [
+   "Physical characteristics",
+   "",
+   ""
+  ],
+  [
+   "Color: Struvite uroliths are usually white, cream or light brown. The surface of uroliths is commonly red because of contaminant hematuria and may be green due to bile pigments.",
+   "",
+   ""
+  ],
+  [
+   "Shape: Variable. Solitary urocystoliths are commonly round or elliptic. Multiple urocystoliths may be any shape, but are often pyramidal. Rapidly growing uroliths with a large quantity of matrix may form a cast of the lumen (renal pelvis, ureter, bladder, urethra) in which they are formed.",
+   "",
+   ""
+  ],
+  [
+   "Nuclei and laminations: Common in infection-induced uroliths",
+   "",
+   ""
+  ],
+  [
+   "Density: Variable. Soft if they contain a large quantity of matrix. Dense and harder to cut if little matrix is present. A combination of hard and soft internal density may occur within the same urolith. Radiodense compared with non-skeletal tissue on survey radiographs. Degree of radiodensity is related to the quantity of matrix (inversely proportional) and other minerals, especially calcium apatite (more proportional).",
+   "",
+   ""
+  ],
+  [
+   "Number: Single or multiple",
+   "",
+   ""
+  ],
+  [
+   "Location: May be located in the kidney, ureter, urinary bladder and/or urethra. Most occur in the urinary bladder.",
+   "",
+   ""
+  ],
+  [
+   "Size: Subvisual to a size limited by the capacity of the structure (kidney and urinary bladder) in which they form. Very large uroliths are often composed of struvite.",
+   "",
+   ""
+  ],
+  [
+   "Predisposing factors",
+   "",
+   ""
+  ],
+  [
+   "Urinary tract infections with urease-producing microbes in patients whose urine contains a large quantity of urea",
+   "",
+   ""
+  ],
+  [
+   "Alkaline urinary pH",
+   "",
+   ""
+  ],
+  [
+   "Unidentified factors",
+   "",
+   ""
+  ],
+  [
+   "Characteristics of affected patients",
+   "",
+   ""
+  ],
+  [
+   "Mean age: Six years (range = ≤1 to more than 24 years). Especially common in Shih Tzus, pugs, Bichon Frises, miniature schnauzers and dachshunds; however, any breed may be affected. More common in females (~85%) than males (~15%).",
+   "",
+   ""
+  ]
+ ],
+ "note": "表头仅 3 列（Chemical name / Formula / Crystal name），表内自 Variations in mineral composition 起的说明性内容在原图中为跨列整段文字，按原顺序置于第一列，其余单元格留空"
+}

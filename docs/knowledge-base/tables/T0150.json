@@ -1,0 +1,427 @@
+{
+ "tableId": "T0150",
+ "caption": "Table 20-4. Selected commercial foods for young adult cats (normal and inactive/obese prone) compared to recommended levels of key nutritional factors.*",
+ "columns": [
+  "",
+  "Energy density (kcal/cup)**",
+  "Energy density (kcal ME/g)",
+  "Fat (%)",
+  "Fiber (%)",
+  "Protein (%)",
+  "P (%)",
+  "Na (%)"
+ ],
+ "rows": [
+  [
+   "Dry foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels (normal body condition)",
+   "−",
+   "4.0-5.0",
+   "10-30",
+   "<5",
+   "30-45",
+   "0.5-0.8",
+   "0.2-0.6"
+  ],
+  [
+   "Hill's Science Diet Adult Hairball Control Feline",
+   "339",
+   "4.1",
+   "22.1",
+   "8.1",
+   "34",
+   "0.69",
+   "0.31"
+  ],
+  [
+   "Hill's Science Diet Adult Optimal Care Ocean Fish & Rice Recipe",
+   "488",
+   "4.3",
+   "22.7",
+   "1.2",
+   "34",
+   "0.72",
+   "0.27"
+  ],
+  [
+   "Hill's Science Diet Adult Oral Care Feline",
+   "337",
+   "4.2",
+   "22.0",
+   "7.5",
+   "34.1",
+   "0.75",
+   "0.37"
+  ],
+  [
+   "Hill's Science Diet Nature's Best Ocean Fish & Brown Rice Dinner Adult",
+   "470",
+   "4.3",
+   "20.6",
+   "1.2",
+   "33.9",
+   "0.74",
+   "0.33"
+  ],
+  [
+   "Iams Eukanuba Adult Chicken Formula",
+   "436",
+   "4.4",
+   "23.6",
+   "1.4",
+   "38.5",
+   "0.99",
+   "0.55"
+  ],
+  [
+   "Iams Original with Chicken Cat Food",
+   "368",
+   "4.1",
+   "17.3",
+   "1.8",
+   "37.3",
+   "1.06",
+   "0.50"
+  ],
+  [
+   "Nutro Max Cat Adult Roasted Chicken Flavor",
+   "421",
+   "4.2",
+   "20.9",
+   "2.2",
+   "36.3",
+   "1.1",
+   "0.44"
+  ],
+  [
+   "Nutro Natural Choice Complete Care Adult",
+   "452",
+   "4.3",
+   "22.0",
+   "2.7",
+   "37.4",
+   "1.1",
+   "0.44"
+  ],
+  [
+   "Purina ONE Natural Blends Chicken & Oat Meal Formula",
+   "450",
+   "4.4",
+   "17.9",
+   "1.9",
+   "37.9",
+   "1.44",
+   "0.60"
+  ],
+  [
+   "Purina ONE Total Nutrition Salmon & Tuna Flavor",
+   "430",
+   "4.4",
+   "15.7",
+   "1.8",
+   "37.9",
+   "1.29",
+   "0.52"
+  ],
+  [
+   "Purina Pro Plan Indoor Care Turkey & Rice Formula",
+   "433",
+   "4.2",
+   "15.2",
+   "5.3",
+   "46.0",
+   "1.28",
+   "0.48"
+  ],
+  [
+   "Royal Canin Adult Fit 32",
+   "351",
+   "4.2",
+   "16.5",
+   "8.1",
+   "35.2",
+   "1.12",
+   "0.66"
+  ],
+  [
+   "Moist foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels (normal body condition)",
+   "−",
+   "4.0-5.0",
+   "10-30",
+   "<5",
+   "30-45",
+   "0.5-0.8",
+   "0.2-0.6"
+  ],
+  [
+   "Hill's Science Diet Adult Hairball Control Savory Chicken Entrée Minced",
+   "91/3 oz.; 168/5.5 oz.",
+   "4.4",
+   "23.3",
+   "9.8",
+   "35.9",
+   "0.65",
+   "0.49"
+  ],
+  [
+   "Hill's Science Diet Adult Indoor Cat Savory Chicken Entrée Minced",
+   "91/3 oz.; 168/5.5 oz.",
+   "4.4",
+   "23.3",
+   "9.8",
+   "35.5",
+   "0.65",
+   "0.49"
+  ],
+  [
+   "Hill's Science Diet Adult Optimal Care Gourmet Beef Entrée Minced",
+   "93/3 oz.; 171/5.5 oz.",
+   "4.4",
+   "22",
+   "4.8",
+   "37.6",
+   "0.72",
+   "0.32"
+  ],
+  [
+   "Nutro MAX Cat Gourmet Classics Adult Chicken & Liver Formula",
+   "169/5.5 oz.",
+   "4.6",
+   "29.8",
+   "2.1",
+   "42.6",
+   "1.28",
+   "0.64"
+  ],
+  [
+   "Nutro Natural Choice Complete Care Adult Chicken & Liver Entrée",
+   "167/5.5 oz.",
+   "4.7",
+   "30.4",
+   "1.7",
+   "47.8",
+   "1.30",
+   "0.65"
+  ],
+  [
+   "Purina Pro Plan Adult Cat Chicken & Rice Entrée in Gravy",
+   "78/3 oz.",
+   "3.9",
+   "15.1",
+   "0.4",
+   "59.1",
+   "0.95",
+   "1.38"
+  ],
+  [
+   "Dry foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels (inactive/obese prone)",
+   "−",
+   "3.3-3.8",
+   "9-17",
+   "5-15",
+   "30-45",
+   "0.5-0.8",
+   "0.2-0.6"
+  ],
+  [
+   "Hill's Science Diet Adult Hairball Control Light Feline",
+   "283",
+   "3.5",
+   "9.1",
+   "8.3",
+   "36",
+   "0.72",
+   "0.33"
+  ],
+  [
+   "Hill's Science Diet Adult Indoor Cat",
+   "281",
+   "3.5",
+   "9.1",
+   "8.3",
+   "36",
+   "0.72",
+   "0.33"
+  ],
+  [
+   "Hill's Science Diet Adult Light Feline",
+   "316",
+   "3.5",
+   "9.5",
+   "6.9",
+   "35.1",
+   "0.73",
+   "0.4"
+  ],
+  [
+   "Hill's Science Diet Oral Care Adult Feline",
+   "337",
+   "4.2",
+   "22",
+   "7.5",
+   "34.1",
+   "0.75",
+   "0.37"
+  ],
+  [
+   "Iams Eukanuba Adult Weight Control",
+   "315",
+   "3.9",
+   "14.4",
+   "1.8",
+   "34.7",
+   "0.99",
+   "0.54"
+  ],
+  [
+   "Nutro Natural Choice Complete Care Indoor Weight Management",
+   "359",
+   "3.8",
+   "13.2",
+   "2.7",
+   "36.3",
+   "0.82",
+   "0.22"
+  ],
+  [
+   "Nutro Natural Choice Complete Care Weight Management",
+   "308",
+   "3.8",
+   "13.2",
+   "3.3",
+   "37.4",
+   "1.10",
+   "0.44"
+  ],
+  [
+   "Purina ONE Indoor Advantage Hairball & Healthy Weight Formula",
+   "416",
+   "4.1",
+   "11.7",
+   "3.8",
+   "42.9",
+   "1.42",
+   "0.45"
+  ],
+  [
+   "Purina ONE Special Care Healthy Weight Formula",
+   "362",
+   "3.7",
+   "12.2",
+   "3.7",
+   "46.1",
+   "1.41",
+   "0.40"
+  ],
+  [
+   "Purina Pro Plan Weight Management Formula",
+   "413",
+   "4.2",
+   "12.0",
+   "3.4",
+   "50.5",
+   "1.08",
+   "0.54"
+  ],
+  [
+   "Royal Canin Indoor 27",
+   "324",
+   "4.0",
+   "14.3",
+   "7.5",
+   "29.7",
+   "1.08",
+   "0.70"
+  ],
+  [
+   "Royal Canin Indoor Light 37",
+   "285",
+   "3.5",
+   "9.9",
+   "10.2",
+   "40.7",
+   "1.07",
+   "0.80"
+  ],
+  [
+   "Moist foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels (inactive/obese prone)",
+   "−",
+   "3.3-3.8",
+   "9-17",
+   "5-15",
+   "30-45",
+   "0.5-0.8",
+   "0.2-0.6"
+  ],
+  [
+   "Hill's Science Diet Adult Indoor Cat Savory Seafood Entrée Minced",
+   "90/3 oz.; 165/5.5 oz.",
+   "4.1",
+   "23",
+   "9.4",
+   "37.9",
+   "0.7",
+   "0.43"
+  ],
+  [
+   "Hill's Science Diet Adult Light Liver & Chicken Entrée Minced",
+   "75/3 oz.; 138/5.5 oz.",
+   "3.6",
+   "14.2",
+   "10.1",
+   "35.6",
+   "0.69",
+   "0.32"
+  ],
+  [
+   "Nutro MAX Cat Gourmet Classics Lite with Chicken & Lamb",
+   "140/5.5 oz.",
+   "3.9",
+   "15.2",
+   "1.7",
+   "41.3",
+   "1.3",
+   "1.09"
+  ]
+ ],
+ "note": "表中三个 Moist foods 分段的能量密度列原文为 (kcal/can)**；同一产品列出 3 oz 与 5.5 oz 两种罐型的千卡值。"
+}

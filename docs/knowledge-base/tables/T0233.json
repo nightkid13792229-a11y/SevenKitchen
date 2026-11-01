@@ -1,0 +1,361 @@
+{
+ "tableId": "T0233",
+ "caption": "Table 32-8. The total essential fatty acid intake for a 10-kg adult dog eating 600 kcal (2,510 kJ) per day of selected commercial foods or being given one of the selected supplements.*",
+ "columns": [
+  "",
+  "Food consumed (g)",
+  "Total omega-6 consumed (mg)",
+  "Total omega-3 consumed (mg)**"
+ ],
+ "rows": [
+  [
+   "Dry foods",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Hill's Prescription Diet b/d Canine",
+   "165",
+   "4,884",
+   "1,548"
+  ],
+  [
+   "Hill's Prescription Diet d/d Potato & Duck Formula Canine",
+   "161",
+   "4,854",
+   "1,164"
+  ],
+  [
+   "Hill's Prescription Diet d/d Potato & Salmon Formula Canine",
+   "162",
+   "4,206",
+   "2,100"
+  ],
+  [
+   "Hill's Prescription Diet d/d Potato & Venison Formula Canine",
+   "161",
+   "4,932",
+   "1,146"
+  ],
+  [
+   "Hill's Prescription Diet d/d Rice & Egg Formula Canine",
+   "154",
+   "4,692",
+   "990"
+  ],
+  [
+   "Hill's Prescription Diet j/d Canine",
+   "176",
+   "4,032",
+   "5,688"
+  ],
+  [
+   "Hill's Prescription Diet z/d Canine Low Allergen",
+   "163",
+   "4,812",
+   "618"
+  ],
+  [
+   "Hill's Prescription Diet z/d ULTRA Allergen Free Canine",
+   "161",
+   "6,222",
+   "804"
+  ],
+  [
+   "Hill's Science Diet Canine Active Adult",
+   "130",
+   "5,976",
+   "678"
+  ],
+  [
+   "Hill's Science Diet Canine Adult Original",
+   "162",
+   "5,310",
+   "726"
+  ],
+  [
+   "Hill's Science Diet Canine Adult Lamb Meal & Rice Recipe Adult",
+   "162",
+   "4,815",
+   "1,002"
+  ],
+  [
+   "Hill's Science Diet Canine Light Adult",
+   "200",
+   "5,988",
+   "618"
+  ],
+  [
+   "Hill's Science Diet Canine Senior 7+ Original",
+   "163",
+   "4,590",
+   "1,710"
+  ],
+  [
+   "Hill's Science Diet Canine Sensitive Skin Dog",
+   "158",
+   "7,392",
+   "2,166"
+  ],
+  [
+   "Iams Eukanuba Adult Maintenance Formula",
+   "139",
+   "4,800",
+   "600"
+  ],
+  [
+   "Iams Eukanuba Reduced Fat Adult Formula",
+   "155",
+   "3,600",
+   "600"
+  ],
+  [
+   "Iams Eukanuba Senior Maintenance Formula",
+   "142",
+   "3,600",
+   "600"
+  ],
+  [
+   "Iams Veterinary Formulas Joint/Articulation",
+   "142",
+   "4,200",
+   "600"
+  ],
+  [
+   "Iams Veterinary Formulas Response FP",
+   "147",
+   "1,600",
+   "400"
+  ],
+  [
+   "Nutro Ultra Adult",
+   "166",
+   "7,998",
+   "1,290"
+  ],
+  [
+   "Nutro Ultra Senior",
+   "168",
+   "7,392",
+   "1,380"
+  ],
+  [
+   "Purina Veterinary Diets DRM Dermatologic Management Canine Formula",
+   "151",
+   "1,680",
+   "1,680"
+  ],
+  [
+   "Royal Canin IVD Limited Ingredient Diets Potato & Duck Canine Formula",
+   "175",
+   "2,940",
+   "1,020"
+  ],
+  [
+   "Royal Canin IVD Limited Ingredient Diets Potato & Rabbit Canine Formula",
+   "177",
+   "3,120",
+   "1,380"
+  ],
+  [
+   "Royal Canin Veterinary Diet Hypoallergenic HP19",
+   "143",
+   "7,158",
+   "1,158"
+  ],
+  [
+   "Royal Canin Veterinary Diet Sensitivity RC21",
+   "168",
+   "3,354",
+   "1,512"
+  ],
+  [
+   "Royal Canin Veterinary Diet Skin Support SS21",
+   "153",
+   "4,884",
+   "1,758"
+  ],
+  [
+   "Moist foods",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Hill's Prescription Diet a/d Canine/Feline",
+   "521",
+   "6,882",
+   "3,126"
+  ],
+  [
+   "Hill's Prescription Diet d/d Duck Formula Canine",
+   "624",
+   "4,932",
+   "1,248"
+  ],
+  [
+   "Hill's Prescription Diet d/d Lamb Formula Canine",
+   "451",
+   "3,972",
+   "1,488"
+  ],
+  [
+   "Hill's Prescription Diet d/d Salmon Formula Canine",
+   "613",
+   "5,148",
+   "4,350"
+  ],
+  [
+   "Hill's Prescription Diet d/d Venison Formula Canine",
+   "550",
+   "4,950",
+   "1,098"
+  ],
+  [
+   "Hill's Prescription Diet j/d Canine",
+   "446",
+   "4,104",
+   "6,066"
+  ],
+  [
+   "Hill's Prescription Diet n/d Canine",
+   "380",
+   "2,772",
+   "8,088"
+  ],
+  [
+   "Hill's Prescription Diet z/d ULTRA Allergen Free Canine",
+   "617",
+   "6,102",
+   "738"
+  ],
+  [
+   "Iams Veterinary Formulas Response FP",
+   "475",
+   "9,600",
+   "1,200"
+  ],
+  [
+   "Royal Canin IVD Limited Ingredient Diets Duck Canine Formula",
+   "536",
+   "5,340",
+   "720"
+  ],
+  [
+   "Royal Canin IVD Limited Ingredient Diets Whitefish Canine Formula",
+   "522",
+   "6,600",
+   "3,300"
+  ],
+  [
+   "Supplements",
+   "",
+   "",
+   ""
+  ],
+  [
+   "3V Caps for Large & Giant Breeds",
+   "1 capsule",
+   "0",
+   "417"
+  ],
+  [
+   "3V Caps for Medium & Large Breeds",
+   "1 capsule",
+   "0",
+   "300"
+  ],
+  [
+   "3V Caps for Small & Medium Breeds",
+   "1 capsule",
+   "0",
+   "171"
+  ],
+  [
+   "3V Caps Liquid",
+   "0.75 ml",
+   "0",
+   "187"
+  ],
+  [
+   "3V Caps Liquid HR",
+   "1 ml",
+   "0",
+   "450"
+  ],
+  [
+   "DermCaps 100 lb",
+   "1 capsule",
+   "402",
+   "252"
+  ],
+  [
+   "DermCaps ES",
+   "1 capsule",
+   "368",
+   "123"
+  ],
+  [
+   "DermCaps ES Liquid",
+   "1 ml",
+   "375",
+   "130"
+  ],
+  [
+   "DermCaps Liquid",
+   "1 ml",
+   "621",
+   "65"
+  ],
+  [
+   "DermCaps Regular",
+   "1 capsule",
+   "402",
+   "108"
+  ],
+  [
+   "Nutrived O.F.A. Granules",
+   "1 scoop",
+   "539",
+   "129"
+  ],
+  [
+   "EicosaDerm",
+   "1 pump",
+   "0",
+   "600"
+  ],
+  [
+   "Welactin",
+   "1 pump",
+   "0",
+   "330-364"
+  ],
+  [
+   "Omegaderm – Small Dogs & Cats",
+   "1 packet (4 ml)",
+   "1,488",
+   "300"
+  ],
+  [
+   "Nordic Naturals Omega-3",
+   "1 capsule",
+   "0",
+   "350"
+  ],
+  [
+   "Nordic Naturals Arctic Cod Liver Oil",
+   "1 capsule",
+   "0",
+   "280"
+  ],
+  [
+   "Nordic Naturals Ultimate Omega",
+   "1 capsule",
+   "0",
+   "700"
+  ]
+ ],
+ "note": "首列为食品/补充剂名称（原表无列名，留空）；'Dry foods'/'Moist foods'/'Supplements' 为分组标题行；原表在各分组处重复的列表头未重复计入；文末 * 与 ** 脚注未计入表格行。"
+}

@@ -1,0 +1,12 @@
+{
+  "tableId": "T0259",
+  "caption": "Table 37-10. Summary of evidence for treatments of chronic kidney disease.",
+  "columns": ["Dogs", "Cats"],
+  "rows": [
+    ["Grade I\nSome therapeutic renal foods (for prolonging survival time and increasing quality of life when serum creatinine [SCr] >2 mg/dl)\nCalcitriol (for prolonging survival)\nACE inhibitor (enalapril) (for reducing proteinuria)*", "Grade I\nSome therapeutic renal foods (for prolonging survival time and increasing quality of life when SCr >2 mg/dl)\nACE inhibitor (benazepril) (for reducing proteinuria; increasing appetite in cats with urine protein-creatinine ratios \u22651)*"],
+    ["Grade II\nACE inhibitor (enalapril) (for delaying progression)*", "Grade II\n\u2013"],
+    ["Grade III\nRecombinant human erythropoietin (for correcting anemia)\nDietary phosphorus restriction (IRIS stages 3 and 4)\nOmega-3 fatty acid supplementation (IRIS stages 3 and 4)", "Grade III\nSome therapeutic renal foods (for prolonging survival time)\nDietary phosphorus restriction (IRIS stages 3 and 4)\nRecombinant human erythropoietin (for correcting anemia)\nAmlodipine (for controlling hypertension)\nPotassium supplementation (for correcting hypokalemia)"],
+    ["Grade IV\nTherapeutic renal foods (for delaying progression when SCr is <2 mg/dl)\nSubcutaneous fluid therapy (for maintaining hydration)\nACE inhibitors (non-proteinuric) (for delaying progression)\nAntihypertensive therapy (confirmed hypertension)\nAlkalinizing therapy (acidemia)\nAssisted feeding (anorexia and malnutrition)\nPhosphate binders (for hyperphosphatemia)\nOthers (e.g., enteric dialysis)", "Grade IV\nTherapeutic renal foods (for delaying progression when SCr is <2 mg/dl)\nSubcutaneous fluid therapy (for maintaining hydration)\nACE inhibitor (benazepril) (for cats without proteinuria)\nAlkalinizing therapy (acidemia)\nAssisted feeding (anorexia and malnutrition)\nCalcitriol therapy\nPhosphate binders (for hyperphosphatemia)\nPotassium supplementation (for cats with normokalemia)\nOthers (e.g., enteric dialysis)"],
+    ["Key: ACE = angiotensin-converting enzyme, IRIS = International Renal Interest Society, SCr = serum creatinine.\n*Combined with feeding a veterinary therapeutic renal food. See Chapter 2 and Table 46-20 for more information about evidence grades I through IV.", ""]
+  ]
+}

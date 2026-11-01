@@ -1,0 +1,54 @@
+{
+ "tableId": "T0380",
+ "caption": "Table 55-3. Breed-associated small intestinal disorders.",
+ "columns": [
+  "",
+  ""
+ ],
+ "rows": [
+  [
+   "Eosinophilic gastroenteritis",
+   "German shepherd dog\nIrish setter"
+  ],
+  [
+   "Hemorrhagic gastroenteritis",
+   "Dachshund\nMiniature poodle\nMiniature schnauzer"
+  ],
+  [
+   "Immunoproliferative small intestinal disease",
+   "Basenji\nLudenhund"
+  ],
+  [
+   "Intestinal adenocarcinoma",
+   "Siamese cat"
+  ],
+  [
+   "Lymphoplasmacytic enteritis",
+   "German shepherd dog\nChinese Shar-Pei\nSoft-coated wheaten terrier\nDomestic shorthair cat"
+  ],
+  [
+   "Parvoviral enteritis",
+   "American pit bull terrier\nDoberman pinscher\nRottweiler\nLabrador retriever (black)"
+  ],
+  [
+   "Small intestinal bacterial overgrowth",
+   "German shepherd dog\nBeagle"
+  ],
+  [
+   "Lymphangiectasia*",
+   "Yorkshire terrier\nGolden retriever\nDachshund\nBasenji (IPSID)\nLudenhund (IPSID)"
+  ],
+  [
+   "Wheat-sensitive enteropathy",
+   "Irish setter"
+  ],
+  [
+   "Key: IPSID = immunoproliferative small intestinal disease.",
+   ""
+  ],
+  [
+   "*Soft-coated wheaten terriers may be affected by a protein-losing enteropathy that may occur in conjunction with a protein-losing nephropathy.",
+   ""
+  ]
+ ]
+}

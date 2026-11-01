@@ -1,0 +1,54 @@
+{
+  "tableId": "T0345",
+  "caption": "Table 5-1. Commonly used measurements of energy.",
+  "columns": [
+    "Term",
+    "Definition"
+  ],
+  "rows": [
+    [
+      "Basal energy requirement (BER)",
+      "BER represents the energy requirement for a normal animal in a thermoneutral environment, awake but resting and in postabsorptive (fasting) state. Other names: fasting heat production (FHP), basal metabolic rate (BMR), basal energy expenditure (BEE)."
+    ],
+    [
+      "Resting energy requirement (RER)",
+      "RER represents the energy requirement for a normal but fed animal at rest in a thermoneutral environment. RER differs from BER in that it includes energy expended for recovery from physical activity and feeding. Therefore, the difference between BER and RER includes energy needed for digestion, absorption and metabolism of food (heat increment) and recovery from previous physical activity. Other names: resting energy expenditure (REE)."
+    ],
+    [
+      "Maintenance energy requirement (MER)",
+      "MER represents the energy requirement of a moderately active adult animal in a thermoneutral environment. It includes energy needed for obtaining, digesting and absorbing food in amounts to maintain body weight, as well as energy for spontaneous activity. MER does not include energy needed to support additional activity (work, gestation, lactation and growth). Other names: maintenance energy expenditure (MEE)."
+    ],
+    [
+      "Daily energy requirement (DER)",
+      "DER represents the average daily energy expenditure of any animal, dependent on lifestyle and activity. DER differs from MER in that it includes activity necessary for work, gestation, lactation and growth, as well as energy needed to maintain normal body temperature."
+    ],
+    [
+      "Heat production (HP)",
+      "HP is the sum of heat loss through radiation, convection, conduction and evaporation and heat stored in the body as exemplified by an increase in body temperature. Heat is lost when food is metabolized (heat increment) and when physical work is performed."
+    ],
+    [
+      "Heat increment (HI)",
+      "HI is heat produced from the digestion, absorption and metabolism of food. Other names: specific dynamic action (SDA), thermic effect of food, diet-induced thermogenesis."
+    ],
+    [
+      "Gross energy (GE)",
+      "GE is the total heat produced by burning a food in a bomb calorimeter."
+    ],
+    [
+      "Digestible energy (DE)",
+      "DE is the energy remaining after the energy lost from feces is subtracted from GE."
+    ],
+    [
+      "Metabolizable energy (ME)",
+      "ME is energy available to the animal after energy from feces, urine and combustible gases has been subtracted."
+    ],
+    [
+      "Kilocalorie (kcal)",
+      "One calorie is the energy needed to raise the temperature of 1 g of water from 14.5 to 15.5°C. 1 kcal = 1,000 calories = 4.184 kJ."
+    ],
+    [
+      "Kilojoule (kJ)",
+      "One kilojoule equals 107 ergs, or the energy expended when 1 kg is moved 1 m by 1 newton. 1 kJ = 0.239 kcal."
+    ]
+  ]
+}

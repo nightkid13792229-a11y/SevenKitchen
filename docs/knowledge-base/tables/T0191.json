@@ -1,0 +1,102 @@
+{
+  "tableId": "T0191",
+  "caption": "Table 27-14. Using the food history to determine the initial food dosage for controlled weight loss.",
+  "columns": [
+    "Step",
+    "Description"
+  ],
+  "rows": [
+    [
+      "",
+      "The following steps represent the process for estimating the initial amount to feed for weight loss based on the amount of calories currently being fed to maintain the patient's obese weight."
+    ],
+    [
+      "1.",
+      "Determine the food/treats currently being fed and, as close as possible, the exact amounts (volume and/or weight) being fed (Box 27-1)."
+    ],
+    [
+      "2.",
+      "Calculate the total calories currently being fed by obtaining calorie content information for the pet foods, treats and snacks from Chapters 13 (dogs) and 20 (cats) or product information; use Appendices 16 through 19 for the energy content of human food sources or consult product label information. This is done by multiplying the volume or weight of the food, treats and snacks by their caloric content and summing them. The sum is the calorie intake used to maintain the pet's current body weight."
+    ],
+    [
+      "3.",
+      "Multiply the calorie sum obtained in Step 2 by 70% to obtain the initial number of calories to feed dogs and cats for controlled weight loss."
+    ],
+    [
+      "4.",
+      "Convert the calorie target to a food dosage by dividing the calorie target by the energy density of the food selected for weight loss (kcal/cup for dry or kcal/can for moist). The answer will be the amount to feed per day."
+    ],
+    [
+      "",
+      "An example case follows:"
+    ],
+    [
+      "",
+      "An obese dog weighs 30 kg and has a body condition score of 5/5.* According to the pet owner, the dog is fed only commercial food. The food history indicates the following daily intake: two cups of dry food (Brand A), one can (14.75 oz.) of moist food (Brand B) and four to five Brand C treats. Manufacturer's information regarding these foods indicates the following calorie content: 350 kcal/cup of dry food, 400 kcal/14.75-oz. can moist food, 50 kcal per treat. The total daily calorie intake is:"
+    ],
+    [
+      "",
+      "350 kcal/cup x two cups = 700 kcal**"
+    ],
+    [
+      "",
+      "+ 400 kcal/can x one can = 400 kcal"
+    ],
+    [
+      "",
+      "+ 5 treats x 50 kcal/treat = 250 kcal"
+    ],
+    [
+      "",
+      "Sum = 1,350 kcal/day"
+    ],
+    [
+      "",
+      "To determine the target number of calories to feed per day:"
+    ],
+    [
+      "",
+      "70% x 1,350 kcal = 945 kcal/day"
+    ],
+    [
+      "",
+      "To convert this to an amount of a selected weight-loss food to feed daily (in this case, the owner chose to feed a combination of moist (300 kcal/can) and dry (220 kcal/cup) weight-loss foods plus low-calorie treats (16 kcal/treat):"
+    ],
+    [
+      "",
+      "1 can x 300 kcal/can = 300 kcal"
+    ],
+    [
+      "",
+      "945 kcal weight-loss target - 300 kcal = 645 kcal left for dry food and treats"
+    ],
+    [
+      "",
+      "Feed 10 treats/day x 16 kcal/treat = 160 kcal"
+    ],
+    [
+      "",
+      "645 kcal - 160 kcal for treats = 485 kcal remaining for dry food"
+    ],
+    [
+      "",
+      "485 kcal + 220 kcal/cup dry food = 2.2 cups dry food"
+    ],
+    [
+      "",
+      "Recheck body weight after two to three weeks to determine if adjustments need to be made."
+    ],
+    [
+      "",
+      "Weight-loss target should be between 0.5 and 2% per week of initial obese body weight."
+    ],
+    [
+      "",
+      "*(Figures 1-2 and 1-3)"
+    ],
+    [
+      "",
+      "**To convert to kJ, multiply kcal by 4.184."
+    ]
+  ]
+}

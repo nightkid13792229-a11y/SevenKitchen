@@ -1,0 +1,103 @@
+{
+ "tableId": "T0290",
+ "caption": "Table 3. The advantages and disadvantages of medical urolith dissolution and surgical urolith removal can be accurately assessed after the mineral composition of the urolith is known or predicted. This table lists factors used to predict mineral composition of radiodense uroliths when no uroliths are available for quantitative analysis vs. clinical findings in the patient described in this case.*",
+ "columns": [
+  "Factors",
+  "MAP",
+  "CaOx",
+  "CaP",
+  "Silica",
+  "Cystine"
+ ],
+ "rows": [
+  [
+   "Typical urinary pH",
+   "No",
+   "Yes",
+   "Possible",
+   "Yes",
+   "Yes"
+  ],
+  [
+   "Typical crystalluria",
+   "Possible",
+   "Possible",
+   "Possible",
+   "Possible",
+   "Possible"
+  ],
+  [
+   "Typical urine culture",
+   "No",
+   "Yes",
+   "Yes",
+   "Yes",
+   "Yes"
+  ],
+  [
+   "Typical radiographic density",
+   "Yes",
+   "Yes",
+   "Yes",
+   "Yes",
+   "Yes"
+  ],
+  [
+   "Typical radiographic contour",
+   "Yes",
+   "Yes",
+   "Yes",
+   "No",
+   "No"
+  ],
+  [
+   "Typical serum biochemistry values",
+   "Yes",
+   "Yes",
+   "Possible",
+   "Yes",
+   "Yes"
+  ],
+  [
+   "Typical breed",
+   "No",
+   "Yes",
+   "Yes",
+   "No",
+   "No"
+  ],
+  [
+   "Typical gender",
+   "No",
+   "Yes",
+   "Yes",
+   "Yes",
+   "Yes"
+  ],
+  [
+   "Typical age",
+   "No",
+   "Yes",
+   "Yes",
+   "Yes",
+   "No"
+  ],
+  [
+   "Key: MAP = magnesium ammonium phosphate, CaOx = calcium oxalate, CaP = calcium phosphate.",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "*Characteristics of urate uroliths were not considered because they are typically radiolucent.",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ]
+ ],
+ "note": "表下方 Key 与 * 说明两行作为表内注释保留（其余列为空）；页面下半部另有 Progress Notes / Endnote / Bibliography 正文，已忽略。"
+}

@@ -1,0 +1,127 @@
+{
+  "tableId": "T0430",
+  "caption": "Table 68-2. Diseases of the liver and biliary tract commonly seen in dogs and cats.*",
+  "columns": [
+    "Disease categories",
+    "Etiology"
+  ],
+  "rows": [
+    [
+      "Liver",
+      ""
+    ],
+    [
+      "Hepatitis**",
+      "Immune mediated"
+    ],
+    [
+      "",
+      "Viral"
+    ],
+    [
+      "",
+      "Bacterial"
+    ],
+    [
+      "",
+      "Drug induced"
+    ],
+    [
+      "",
+      "Reactive"
+    ],
+    [
+      "",
+      "Toxins"
+    ],
+    [
+      "",
+      "Lobular dissecting"
+    ],
+    [
+      "Storage disorders**",
+      "Copper toxicosis"
+    ],
+    [
+      "",
+      "Lipidosis"
+    ],
+    [
+      "",
+      "Amyloidosis"
+    ],
+    [
+      "",
+      "Steroid-induced hepatopathy"
+    ],
+    [
+      "Circulatory disorders**",
+      "Hereditary portosystemic shunt"
+    ],
+    [
+      "",
+      "Portal vein hypoplasia"
+    ],
+    [
+      "",
+      "Portal vein thrombosis"
+    ],
+    [
+      "",
+      "Arteriovenous fistula"
+    ],
+    [
+      "Neoplasma",
+      "Metastases"
+    ],
+    [
+      "",
+      "Malignant lymphoma"
+    ],
+    [
+      "",
+      "Hemangiosarcoma"
+    ],
+    [
+      "",
+      "Hepatocellular carcinoma"
+    ],
+    [
+      "Biliary tract",
+      ""
+    ],
+    [
+      "Cholangitis** (Neutrophilic/lymphocytic)",
+      "Bacterial/immune mediated"
+    ],
+    [
+      "",
+      "Drug induced"
+    ],
+    [
+      "Cholecystitis",
+      "Bacterial"
+    ],
+    [
+      "Choleliths",
+      "Bilirubin"
+    ],
+    [
+      "",
+      "Cholesterol"
+    ],
+    [
+      "Neoplasma",
+      "Cholangiocarcinoma"
+    ],
+    [
+      "Extrahepatic cholestasis (Not covered by above)",
+      "Pancreatitis"
+    ],
+    [
+      "",
+      "Pancreatic/intestinal tumor"
+    ]
+  ],
+  "note": "原图同一页含三个表（Table 68-2、68-3、68-4），本文件转录的是首个表 Table 68-2。"
+}

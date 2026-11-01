@@ -1,0 +1,91 @@
+{
+  "tableId": "T0467",
+  "caption": "Table 9. Health detriments of sterilisation with loss of gonadal steroid hormones in male dogs",
+  "columns": [
+    "Condition",
+    "Occurrence (%)",
+    "Further influencing factors",
+    "Breeds at risk*"
+  ],
+  "rows": [
+    [
+      "Prostate gland tumour",
+      "<1",
+      "Age, chronic inflammations",
+      "Yes†"
+    ],
+    [
+      "Mast cell tumour",
+      "0.24 to 0.29 (10 to 21% among all skin tumours)",
+      "Age, BW (>20 kg)",
+      "Yes‡"
+    ],
+    [
+      "TCC",
+      "<1 (less in males than in females)",
+      "Age, sexual status",
+      "No"
+    ],
+    [
+      "Osteosarcoma",
+      "0.2 to 8.9 (more in males than in females)",
+      "Age, BW, sexual status, age at gonadectomy",
+      "Yes§"
+    ],
+    [
+      "Lymphoma",
+      "0.02 to 0.1 (less in males than in females)",
+      "Age at gonadectomy, sexual status",
+      "Yes¶"
+    ],
+    [
+      "Haemangiosarcoma",
+      "5% of all non-dermal primary malignant tumours, 50% of all splenic tumours",
+      "Age, age at gonadectomy, light skin and short hair",
+      "Yes‖"
+    ],
+    [
+      "Urinary sphincter mechanism incompetence (USMI)",
+      "0.94",
+      "Age, short urethral length, caudal bladder position",
+      "Not proven"
+    ],
+    [
+      "Orthopaedic diseases",
+      "0 to 22; dependent on disease and influencing factors",
+      "BW, age, age at gonadectomy",
+      "Yes††"
+    ],
+    [
+      "Obesity",
+      "Increasing with age",
+      "Feeding, physical activity, sexual status, age and breed size",
+      "Yes‡‡"
+    ],
+    [
+      "Hypothyroidism",
+      "2.05 (less in males than in females)",
+      "Environment, age",
+      "Yes§§"
+    ],
+    [
+      "Hypoadrenocorticism",
+      "0.4 (less in males than in females)",
+      "Age, sexual status",
+      "Yes¶¶"
+    ],
+    [
+      "Immune disorders",
+      "Less in males than in females",
+      "Age, sexual status",
+      "No"
+    ],
+    [
+      "Behaviour: Increase in aggression in some cases, also dependent on age at gonadectomy",
+      "Dependent on influencing factors",
+      "Age at gonadectomy, housing, training, experiences…",
+      "Not proven"
+    ]
+  ],
+  "note": "该图还包含 Table 10（cats），其内容见 T0468.json"
+}

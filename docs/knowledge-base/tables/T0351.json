@@ -1,0 +1,20 @@
+{
+  "tableId": "T0351",
+  "caption": "Table 5-8. Mineral availability as affected by different fiber sources fed at 5% total dietary fiber.*",
+  "columns": ["Fiber source", "Zinc (%)**", "Calcium (%)**", "Iron (%)***", "Phosphorus (%)\u2020"],
+  "rows": [
+    ["Apple pectin", "ND", "ND", "55a", "75"],
+    ["Beet pulp", "24a", "44a", "29a", "67a"],
+    ["Cellulose", "88", "100", "100", "100"],
+    ["Citrus pulp cells", "ND", "ND", "49a", "75"],
+    ["Corn bran", "94", "92", "100", "ND"],
+    ["Guar gum", "ND", "ND", "100", "35a"],
+    ["Gum arabic", "ND", "ND", "81", "100"],
+    ["Pea fiber", "41", "58a", "ND", "ND"],
+    ["Peanut hulls", "30a", "100", "67", "58a"],
+    ["Soy cotyledon fiber", "ND", "ND", "86", "66a"],
+    ["Soy hulls", "78", "100", "ND", "64a"],
+    ["Sunflower hulls", "54", "100", "100", "ND"],
+    ["Wheat middlings", "70", "100", "51a", "ND"]
+  ]
+}

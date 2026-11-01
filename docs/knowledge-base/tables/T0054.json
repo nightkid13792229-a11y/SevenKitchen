@@ -1,0 +1,62 @@
+{
+ "tableId": "T0054",
+ "caption": "Table VII-10. Average energy requirements during growth and reproduction in cats",
+ "columns": [
+  "",
+  "Age",
+  "Times MER",
+  "kcal",
+  "kJ"
+ ],
+ "rows": [
+  [
+   "Kittens",
+   "Up to 4 months",
+   "2.0 - 2.5",
+   "",
+   ""
+  ],
+  [
+   "",
+   "4 to 9 months",
+   "1.75 - 2.0",
+   "",
+   ""
+  ],
+  [
+   "",
+   "9 to 12 months",
+   "1.5",
+   "",
+   ""
+  ],
+  [
+   "Gestation",
+   "",
+   "",
+   "140 x kg BW0.67",
+   "585 x kg BW0.67"
+  ],
+  [
+   "Lactation",
+   "< 3 kittens",
+   "",
+   "100 x kg BW0.67 + 18 x kg BW x L",
+   "418 x kg BW0.67 + 75 x kg BW x L"
+  ],
+  [
+   "",
+   "3 - 4 kittens",
+   "",
+   "100 x kg BW0.67 + 60 x kg BW x L",
+   "418 x kg BW0.67 + 250 x kg BW x L"
+  ],
+  [
+   "",
+   "> 4 kittens",
+   "",
+   "100 x kg BW0.67 + 70 x kg BW x L",
+   "418 x kg BW0.67 + 293 x kg BW x L"
+  ]
+ ]
+}

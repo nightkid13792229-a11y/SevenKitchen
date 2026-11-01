@@ -1,0 +1,16 @@
+{
+  "tableId": "T0256",
+  "caption": "Table 37-5. Standard protocol for measuring blood pressure in dogs and cats.*",
+  "columns": ["Standard protocol for measuring blood pressure in dogs and cats.*"],
+  "rows": [
+    ["Calibrate the blood pressure measurement device twice yearly. Standardize the procedure used."],
+    ["Obtain measurements in an environment that is quiet, located away from distractions (e.g., other patients) and with the owner present."],
+    ["Restrain patients in a comfortable position, ideally in ventral or lateral recumbency to limit the distance from the base of the heart to the measurement cuff. Patients should be calm and motionless during the procedure."],
+    ["Use a cuff that is approximately 30 to 40% of the circumference of the measurement site in cats and 40% in dogs."],
+    ["Have the same trained individual, ideally a technician, perform blood pressure measurements each time."],
+    ["Determine and record five to seven consecutive and consistent (<20% variability) values."],
+    ["Discard the first measurement and determine the mean of all remaining values to obtain the patient's blood pressure measurement."],
+    ["Record the cuff size and site of placement (e.g., limb, tail), values for all measurements obtained, final (mean) value, details of any additional information (e.g., nervous patient) and interpretation of results by a veterinarian."],
+    ["*Adapted from Brown S, Atkins C, Bagley R, et al. Guidelines for the identification, evaluation, and management of systemic hypertension in dogs and cats. Journal of Veterinary Internal Medicine 2007; 21: 542-558."]
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "tableId": "T0350",
+  "caption": "Table 5-7. Probiotic benefits and potential mechanisms.",
+  "columns": [
+    "Benefit",
+    "Proposed mechanism"
+  ],
+  "rows": [
+    [
+      "Anti-allergy",
+      "Modulation of the cytokine profile"
+    ],
+    [
+      "Anticarcinogenic",
+      "Metabolism and deactivation of carcinogens"
+    ],
+    [
+      "Anti-diarrheal",
+      "Immunomodulation/stimulation of GI immune system, competitive exclusion, production of antimicrobials"
+    ],
+    [
+      "Antiinflammatory",
+      "Stimulation of the antiinflammatory cytokine IL10"
+    ],
+    [
+      "Cholesterol synthesis",
+      "Hydrolysis of bile salts, increased fermentation of end products"
+    ],
+    [
+      "Immunomodulation",
+      "Stimulation of the Th1 cytokine profile to down regulate allergic responses"
+    ]
+  ]
+}

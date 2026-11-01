@@ -1,0 +1,69 @@
+{
+  "tableId": "T0478",
+  "caption": "Table 1. (Continued)",
+  "columns": [
+    "Vaccine",
+    "Puppies ≤16 weeks",
+    "Dogs >16 weeks",
+    "Revaccination",
+    "Comments and recommendations"
+  ],
+  "rows": [
+    [
+      "Bordetella bronchiseptica (live avirulent bacteria, intranasal)\nB. bronchiseptica+CPiV (MLV) intranasal\nB. bronchiseptica+CPiV (MLV)+CAV-2 (MLV) intranasal\nB. bronchiseptica (live avirulent bacteria, oral)\nB. bronchiseptica+CPiV (MLV) oral",
+      "Each of these mucosally applied vaccines provides protection after a single dose\nSome can be applied as early as 3 weeks of age, others at 7 or 8 weeks of age. Follow the product leaflet advice",
+      "A single dose",
+      "Annually",
+      "Non-core These live vaccines intended for intranasal or oral administration MUST NOT be inadvertently injected parenterally as this may lead to a severe adverse reaction"
+    ],
+    [
+      "Bordetella bronchiseptica (killed bacteria, parenteral)\nBordetella bronchiseptica (cell wall antigen extract, parenteral)\nBordetella bronchiseptica (fimbrial antigen, parenteral)",
+      "These parenteral bacterin or subunit vaccines require two doses to immunise, generally given 2 to 4 weeks apart. Review and follow product leaflet intervals",
+      "Two doses Review and follow the specific product leaflet intervals as there are differences between products",
+      "Annually for most. Review and follow the specific product leaflet intervals There are special revaccination instructions for the fimbrial antigen vaccine",
+      "Non-core These vaccines intended for parenteral use should not inadvertently be given intranasally or orally. This would not be effective and might cause unnecessary discomfort"
+    ],
+    [
+      "Borrelia burgdorferi (Lyme borreliosis; killed whole bacteria, parenteral)\nBorrelia burgdorferi [subunit-Outer surface protein A (OspA), parenteral]\nBorrelia burgdorferi (subunit OspA and chimaeric OspC proteins)",
+      "These parenteral bacterin or subunit vaccines require two doses to immunise, generally starting at about 8 weeks of age. Review and follow the specific product leaflet intervals",
+      "Two doses 2 to 4 weeks apart. Review and follow the specific product leaflet intervals",
+      "Annually. Revaccinate just before the start of the tick season, as determined regionally",
+      "Non-core. Generally recommended only for use in dogs with a known high risk of exposure, living in or visiting regions where the risk of vector tick exposure is considered to be high, or where disease is known to be endemic. The mainstay of Borrelia prevention is diligent ectoparasite control. Direct dog to dog transmission does not occur"
+    ],
+    [
+      "Canine influenza virus (H3N8; killed adjuvanted, parenteral)\nCanine influenza virus (H3N2; killed adjuvanted, parenteral)\nCanine influenza virus (Bivalent H3N8+H3N2; killed, adjuvanted, parenteral)",
+      "These parenteral, inactivated viral vaccines require two doses to immunise. The initial dose can be given from 6 weeks of age. Review and follow the specific product leaflet intervals",
+      "Two doses. Review and follow the specific product leaflet intervals, generally 2 to 4 weeks apart",
+      "Annually",
+      "Non-core. Licensed only in USA. Consider for use in at-risk groups of co-housed dogs such as those in kennels, dog shows or day care"
+    ],
+    [
+      "Canine leishmaniosis (CanL; recombinant protein A2, parenteral)",
+      "Three doses, 3 weeks apart with the initial dose at >4 months of age",
+      "Three doses, 3 weeks apart",
+      "Annually",
+      "Non-Core. Prevention of canine leishmaniosis depends crucially on diligent ectoparasite control so as to minimise contact with the vectors. Vaccination can be regarded as a supplementary control measure, not a substitute for diligent ectoparasite control"
+    ],
+    [
+      "CanL [excreted-secreted proteins (LIESP) of L. infantum, parenteral]",
+      "Three doses, 3 weeks apart with the initial dose at >6 months of age",
+      "Three doses, 3 weeks apart",
+      "Annually",
+      ""
+    ],
+    [
+      "CanL (recombinant Protein Q, parenteral)",
+      "A single dose at >6 months of age",
+      "A single dose",
+      "Annually",
+      ""
+    ],
+    [
+      "Canine herpesvirus-1 (CHV-1; subunit, parenteral)",
+      "Not applicable. This vaccine is intended for pregnant bitches",
+      "Two doses during pregnancy First dose – During oestrus or 7 to 10 days after the presumed date of mating Second dose – 1 to 2 weeks before the expected date of whelping Follow the product leaflet",
+      "Manufacturer recommends repeating the two injection protocol during each subsequent pregnancy",
+      "This vaccine is intended to protect newborn puppies. Infection (usually from the dam) can be fatal in young puppies, <3 weeks old, that are not kept warm"
+    ]
+  ]
+}

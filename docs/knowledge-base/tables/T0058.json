@@ -1,0 +1,342 @@
+{
+ "tableId": "T0058",
+ "caption": "Table VII-14. Conversion factors - Vitamin source to activity",
+ "columns": [
+  "Vitamin",
+  "Unit declared",
+  "Vitamin source used",
+  "",
+  "",
+  "Vitamin activity"
+ ],
+ "rows": [
+  [
+   "Vitamin A",
+   "IU",
+   "",
+   "",
+   "",
+   "Retinol activity"
+  ],
+  [
+   "",
+   "",
+   "vitamin A alcohol (retinol)",
+   "0.3 μg",
+   "=",
+   "1 IU"
+  ],
+  [
+   "",
+   "",
+   "",
+   "1.0 mg",
+   "=",
+   "3,333 IU"
+  ],
+  [
+   "",
+   "",
+   "vitamin A acetate",
+   "0.344 μg",
+   "=",
+   "1 IU"
+  ],
+  [
+   "",
+   "",
+   "vitamin A propionate",
+   "0.359 μg",
+   "=",
+   "1 IU"
+  ],
+  [
+   "",
+   "",
+   "vitamin A palmitate",
+   "0.55 μg",
+   "=",
+   "1 IU"
+  ],
+  [
+   "",
+   "",
+   "vitamin A alcohol (retinol)",
+   "1.0 μg",
+   "=",
+   "1 RE"
+  ],
+  [
+   "",
+   "",
+   "",
+   "(RE = Retinol Equivalent)",
+   "",
+   ""
+  ],
+  [
+   "",
+   "",
+   "Provitamin A (β-carotene) (dogs)",
+   "1.0 mg",
+   "=",
+   "833 IU"
+  ],
+  [
+   "Vitamin D Cholecalciferol",
+   "IU",
+   "",
+   "",
+   "",
+   "Vitamin D activity"
+  ],
+  [
+   "",
+   "",
+   "vitamins D3",
+   "0.025 μg",
+   "=",
+   "1 IU"
+  ],
+  [
+   "",
+   "",
+   "",
+   "1 μg",
+   "=",
+   "40 IU"
+  ],
+  [
+   "Vitamin E Tocopherol",
+   "IU",
+   "",
+   "",
+   "",
+   "Vitamin E activity"
+  ],
+  [
+   "",
+   "",
+   "dl-α-tocopheryl acetate (all-rac-α-tocopheryl acetate)",
+   "1 mg",
+   "=",
+   "1 IU"
+  ],
+  [
+   "",
+   "",
+   "Bio-equivalence of various tocopherols:",
+   "",
+   "",
+   ""
+  ],
+  [
+   "",
+   "",
+   "d-α-tocopherol",
+   "1 mg",
+   "=",
+   "1.49 IU"
+  ],
+  [
+   "",
+   "",
+   "d-α-tocopherol acetate",
+   "1 mg",
+   "=",
+   "1.36 IU"
+  ],
+  [
+   "",
+   "",
+   "dl-α-tocopherol",
+   "1 mg",
+   "=",
+   "1.10 IU"
+  ],
+  [
+   "",
+   "",
+   "dl-α-tocopheryl acetate",
+   "1 mg",
+   "=",
+   "1.00 IU"
+  ],
+  [
+   "",
+   "",
+   "dl-β-tocopherol",
+   "1 mg",
+   "=",
+   "0.33 IU"
+  ],
+  [
+   "",
+   "",
+   "dl-δ-tocopherol",
+   "1 mg",
+   "=",
+   "0.25 IU"
+  ],
+  [
+   "",
+   "",
+   "dl-γ-tocopherol",
+   "1 mg",
+   "=",
+   "0.01 IU"
+  ],
+  [
+   "Vitamin B1 (Thiamine)",
+   "mg",
+   "",
+   "",
+   "",
+   "Thiamine cation"
+  ],
+  [
+   "",
+   "",
+   "thiamine CL",
+   "1 mg",
+   "=",
+   "0.88 mg"
+  ],
+  [
+   "",
+   "",
+   "thiamine mononitrate",
+   "1 mg",
+   "=",
+   "0.81 mg"
+  ],
+  [
+   "",
+   "",
+   "thiamine hydrochloride",
+   "1 mg",
+   "=",
+   "0.79 mg"
+  ],
+  [
+   "Vitamin B5 (Pantothenic acid)",
+   "IU",
+   "",
+   "",
+   "",
+   "Pantothenic acid"
+  ],
+  [
+   "",
+   "",
+   "calcium D-pantothenate",
+   "1 mg",
+   "=",
+   "0.92 mg"
+  ],
+  [
+   "",
+   "",
+   "calcium DL-pantothenate",
+   "1 mg",
+   "=",
+   "0.41 - 0.52 mg"
+  ],
+  [
+   "Vitamin B6 (Pyridoxine)",
+   "mg",
+   "",
+   "",
+   "",
+   "Pyridoxine"
+  ],
+  [
+   "",
+   "",
+   "pyridoxine hydrochloride",
+   "1 mg",
+   "=",
+   "0.82 mg"
+  ],
+  [
+   "Vitamin B3 (Niacin)",
+   "mg",
+   "",
+   "",
+   "",
+   "Niacin"
+  ],
+  [
+   "",
+   "",
+   "nicotinic acid",
+   "1 mg",
+   "=",
+   "1 mg"
+  ],
+  [
+   "",
+   "",
+   "nicotinamide",
+   "1 mg",
+   "=",
+   "1 mg"
+  ],
+  [
+   "Choline",
+   "mg",
+   "",
+   "",
+   "",
+   "Choline"
+  ],
+  [
+   "",
+   "",
+   "choline chloride (basis choline ion)",
+   "1 mg",
+   "=",
+   "0.75 mg"
+  ],
+  [
+   "",
+   "",
+   "choline chloride (basis choline hydroxyl-analogue)",
+   "1 mg",
+   "=",
+   "0.87 mg"
+  ],
+  [
+   "Vitamin K3 (Menadione)",
+   "mg",
+   "",
+   "",
+   "",
+   "Menadione"
+  ],
+  [
+   "",
+   "",
+   "menadione sodium bisulphite (MSB)",
+   "1 mg",
+   "=",
+   "0.51 mg"
+  ],
+  [
+   "",
+   "",
+   "menadione pyrimidinol bisulphite (MPB)",
+   "1 mg",
+   "=",
+   "0.45 mg"
+  ],
+  [
+   "",
+   "",
+   "menadione nicotinamid bisulphite (MNB)",
+   "1 mg",
+   "=",
+   "0.46 mg"
+  ]
+ ]
+}

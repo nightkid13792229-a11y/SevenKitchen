@@ -1,0 +1,56 @@
+{
+  "tableId": "T0482",
+  "caption": "Table 2. (Continued)",
+  "columns": [
+    "Vaccine",
+    "Kittens ≤16 weeks",
+    "Cats >16 weeks",
+    "Revaccination",
+    "Comments and recommendations"
+  ],
+  "note": "表格下方为正文段落，已忽略",
+  "rows": [
+    [
+      "Chlamydia felis (avirulent live, non-adjuvanted, parenteral)\nChlamydia felis (killed, adjuvanted, parenteral)",
+      "Administer the initial dose as early as 9 weeks of age; a second dose is administered 2 to 4 weeks later",
+      "Administer two doses, 2 to 4 weeks apart",
+      "Annual boosters are indicated for cats at sustained risk of exposure",
+      "Vaccination is most appropriately used as part of a control regime for animals in multi-cat environments where infections associated with clinical disease have been confirmed. Inadvertent conjunctival inoculation of live vaccine has been reported to cause clinical illness"
+    ],
+    [
+      "Bordetella bronchiseptica (avirulent live, non-adjuvanted, intranasal)",
+      "Administer a single dose intranasally as early as 4 weeks of age",
+      "Administer a single dose intranasally",
+      "Annual boosters are indicated for cats at sustained risk of exposure",
+      "Not routinely used in pet cats Consider use in pet cats that are kept in unusually large colonies"
+    ],
+    [
+      "Vaccines not recommended for pet cats",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Feline infectious peritonitis (FIP; live attenuated, non-adjuvanted, intranasal)",
+      "",
+      "",
+      "",
+      "There is insufficient scientific evidence to justify a broad recommendation for the use of this vaccine. This vaccine is labelled for use in kittens from 16 weeks of age. It contains a live, temperature-sensitive virus that can replicate in the nose, but not at higher core body temperatures. This is important for the safety of the vaccine. According to the limited studies available, only cats known to be feline coronavirus antibody-negative at the time of vaccination are likely to develop some level of protection. It is uncommon for cats to be coronavirus antibody negative at 16 weeks of age or older\nIn addition, this vaccine contains a virus strain that differs from clinically important strains found in some well-studied parts of the world"
+    ],
+    [
+      "Giardia spp. vaccines",
+      "",
+      "",
+      "",
+      "There is insufficient scientific evidence to justify use"
+    ],
+    [
+      "Microsporum canis vaccines",
+      "",
+      "",
+      "",
+      "There is insufficient scientific evidence to justify use"
+    ]
+  ]
+}

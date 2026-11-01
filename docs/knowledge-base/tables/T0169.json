@@ -1,0 +1,187 @@
+{
+ "tableId": "T0169",
+ "caption": "Table 25-9. Key nutritional factor content of selected commercial veterinary liquid foods, human liquid foods and moist veterinary foods used for enteral-assisted feeding of critically ill cats compared to key nutritional factor recommended levels.*",
+ "columns": [
+  "Factors",
+  "Osmolarity (mOsm/l)",
+  "Energy density (kcal/ml)",
+  "CHO (g)",
+  "Protein (g)",
+  "Arginine (mg)",
+  "Glutamine (mg)",
+  "Fat (g)"
+ ],
+ "rows": [
+  [
+   "Recommended levels",
+   "250-400**",
+   "1-2",
+   "2-4",
+   "7.5-12",
+   "≥250",
+   "≥500",
+   "5-7.5"
+  ],
+  [
+   "Liquid veterinary foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Abbott ClinicCare Canine/Feline Liquid Diet",
+   "315",
+   "1.0",
+   "6.8",
+   "8.2",
+   "350",
+   "815",
+   "5.1"
+  ],
+  [
+   "Abbott ClinicCare RF Liquid Diet",
+   "235",
+   "1.0",
+   "5.9",
+   "6.3",
+   "350",
+   "615",
+   "6.8"
+  ],
+  [
+   "PetAg Formula V Enteral Care HLP",
+   "312",
+   "1.2",
+   "4.2",
+   "8.5",
+   "413",
+   "na",
+   "4.8"
+  ],
+  [
+   "PetAg Formula V Enteral Care MLP",
+   "256",
+   "1.1",
+   "5.8",
+   "7.5",
+   "392.6",
+   "na",
+   "5.7"
+  ],
+  [
+   "Liquid human foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Glucerna Shakes",
+   "355",
+   "1.0",
+   "9.6",
+   "4.2",
+   "na",
+   "na",
+   "5.4"
+  ],
+  [
+   "Nestlé Impact Advanced Recovery",
+   "375",
+   "1.0",
+   "13.2",
+   "5.6",
+   "1,250",
+   "na",
+   "2.7"
+  ],
+  [
+   "Nestlé Peptamen AF",
+   "390",
+   "1.2",
+   "8.9",
+   "6.3",
+   "na",
+   "na",
+   "4.6"
+  ],
+  [
+   "Novartis Resource Diabetic",
+   "300",
+   "1.1",
+   "10.0",
+   "6.3",
+   "na",
+   "na",
+   "4.7"
+  ],
+  [
+   "Moist veterinary foods†",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Hill's Prescription Diet a/d Canine/Feline",
+   "-",
+   "1.2",
+   "3.2",
+   "9.2",
+   "495",
+   "1,077",
+   "6.3"
+  ],
+  [
+   "Iams Veterinary Formula Maximum-Calorie Canine & Feline",
+   "-",
+   "2.1",
+   "2.2",
+   "7.2",
+   "534",
+   "940",
+   "6.4"
+  ],
+  [
+   "Purina Veterinary Diets Cardiovascular (CV) Feline Formula",
+   "-",
+   "1.4",
+   "4.7",
+   "8.8",
+   "469",
+   "1,169",
+   "5.5"
+  ],
+  [
+   "Purina Veterinary Diets Dietetic Management (DM) Feline Formula",
+   "-",
+   "1.2",
+   "1.7",
+   "11.9",
+   "568",
+   "1,825",
+   "5.0"
+  ],
+  [
+   "Royal Canin Veterinary Diet Feline and Canine Recovery RS",
+   "-",
+   "1.0",
+   "1.9",
+   "12.3",
+   "683",
+   "na",
+   "7.7"
+  ]
+ ],
+ "note": "Key: CHO = digestible carbohydrate, na = information not available from the manufacturer.\n*Liquid and moist veterinary foods in this table are formulated to meet minimum requirements of the Association of American Feed Control Officials; all nutrient values = units/100 kcal, unless otherwise stated; to convert kcal to kJ, multiply kcal by 4.184.\n**250 is optimal.\n***Energy density as fed basis.\n†Table 25-11 contains recipes for blending these foods for tube feeding.\n图中另含 Table 25-10「Modules for augmenting foods.」，本文件仅转录 Table 25-9。"
+}

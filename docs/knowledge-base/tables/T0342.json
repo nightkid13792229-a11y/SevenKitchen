@@ -1,0 +1,34 @@
+{
+  "tableId": "T0342",
+  "caption": "Table 48-1. Gastrointestinal and exocrine pancreatic diseases amenable to dietary management.",
+  "columns": [
+    "Organ system",
+    "Diseases"
+  ],
+  "rows": [
+    [
+      "Oral",
+      "Inflammatory disorders (stomatitis, radiation-induced mucositis)\nPhysical abnormalities (trauma, neoplasia, congenital malformations)"
+    ],
+    [
+      "Pharynx and esophagus",
+      "Inflammatory disorders (esophagitis)\nMotility disorders (cricopharyngeal achalasia, megaesophagus)\nObstructive disorders (vascular ring anomalies, strictures, neoplasia)"
+    ],
+    [
+      "Stomach",
+      "Gastric dilatation/gastric dilatation-volvulus\nGastric motility/emptying disorders\nGastritis\nGastroduodenal ulceration\nHairballs"
+    ],
+    [
+      "Small intestine",
+      "Acute enteritis\nInflammatory bowel disease\nIntestinal neoplasia\nLymphangiectasia\nProtein-losing enteropathy\nShort bowel syndrome\nSmall intestinal bacterial overgrowth\nWheat-sensitive enteropathy"
+    ],
+    [
+      "Large intestine",
+      "Colitis\nConstipation\nFlatulence\nIrritable bowel syndrome"
+    ],
+    [
+      "Pancreas",
+      "Exocrine pancreatic insufficiency\nPancreatitis"
+    ]
+  ]
+}

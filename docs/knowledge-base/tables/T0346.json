@@ -1,0 +1,536 @@
+{
+  "tableId": "T0346",
+  "caption": "Table 5-2. Calculation of energy requirements.",
+  "columns": [
+    "Section",
+    "Item",
+    "Value"
+  ],
+  "rows": [
+    [
+      "Part 1. Feline — Maintenance (DER: 0.8 to 1.6 x RER)",
+      "Neutered adult",
+      "= 1.2 x RER"
+    ],
+    [
+      "Part 1. Feline — Maintenance (DER: 0.8 to 1.6 x RER)",
+      "Intact adult",
+      "= 1.4 x RER"
+    ],
+    [
+      "Part 1. Feline — Maintenance (DER: 0.8 to 1.6 x RER)",
+      "Active adult",
+      "= 1.6 x RER"
+    ],
+    [
+      "Part 1. Feline — Maintenance (DER: 0.8 to 1.6 x RER)",
+      "Inactive/obese prone",
+      "= 1.0 x RER"
+    ],
+    [
+      "Part 1. Feline — Maintenance (DER: 0.8 to 1.6 x RER)",
+      "Weight loss",
+      "= 0.8 x RER"
+    ],
+    [
+      "Part 1. Feline — Maintenance (DER: 0.8 to 1.6 x RER)",
+      "Critical care",
+      "= 1.0 x RER"
+    ],
+    [
+      "Part 1. Feline — Maintenance (DER: 0.8 to 1.6 x RER)",
+      "Weight gain",
+      "= 1.2-1.4 x RER at ideal weight"
+    ],
+    [
+      "Part 1. Feline — Gestation",
+      "Energy requirement increases linearly during gestation in cats. Energy intake should be increased to 1.6 x RER at breeding and gradually increased through gestation to 2 x RER at parturition. Free-choice feeding of pregnant queens is also recommended.",
+      ""
+    ],
+    [
+      "Part 1. Feline — Lactation",
+      "Lactation is nutritionally demanding and the physiologic and nutritional equivalent of heavy work. Recommend 2 to 6 x RER (depending on number of kittens nursing) or free-choice feeding.",
+      ""
+    ],
+    [
+      "Part 1. Feline — Weeks of lactation",
+      "Weeks 1-2",
+      "RER + 30% per kitten"
+    ],
+    [
+      "Part 1. Feline — Weeks of lactation",
+      "Week 3",
+      "RER + 45% per kitten"
+    ],
+    [
+      "Part 1. Feline — Weeks of lactation",
+      "Week 4",
+      "RER + 55% per kitten"
+    ],
+    [
+      "Part 1. Feline — Weeks of lactation",
+      "Week 5",
+      "RER + 65% per kitten"
+    ],
+    [
+      "Part 1. Feline — Weeks of lactation",
+      "Week 6",
+      "RER + 90% per kitten"
+    ],
+    [
+      "Part 1. Feline — Growth",
+      "Daily energy intake for growing kittens should be about 2.5 x RER. Free-choice feeding is recommended.",
+      ""
+    ],
+    [
+      "Part 2. Canine — Maintenance (DER: 1.0 to 1.8 x RER)",
+      "Neutered adult",
+      "= 1.6 x RER"
+    ],
+    [
+      "Part 2. Canine — Maintenance (DER: 1.0 to 1.8 x RER)",
+      "Intact adult",
+      "= 1.8 x RER"
+    ],
+    [
+      "Part 2. Canine — Maintenance (DER: 1.0 to 1.8 x RER)",
+      "Inactive/obese prone",
+      "= 1.4 x RER"
+    ],
+    [
+      "Part 2. Canine — Maintenance (DER: 1.0 to 1.8 x RER)",
+      "Weight loss",
+      "= 1.0 x RER"
+    ],
+    [
+      "Part 2. Canine — Maintenance (DER: 1.0 to 1.8 x RER)",
+      "Critical care",
+      "= 1.0 x RER"
+    ],
+    [
+      "Part 2. Canine — Maintenance (DER: 1.0 to 1.8 x RER)",
+      "Weight gain",
+      "= 1.2-1.4 x RER at ideal weight"
+    ],
+    [
+      "Part 2. Canine — Work",
+      "Light work",
+      "= 2 x RER"
+    ],
+    [
+      "Part 2. Canine — Work",
+      "Moderate work",
+      "= 3 x RER"
+    ],
+    [
+      "Part 2. Canine — Work",
+      "Heavy work",
+      "= 4-8 x RER"
+    ],
+    [
+      "Part 2. Canine — Gestation",
+      "First 42 days: feed as an intact adult.",
+      ""
+    ],
+    [
+      "Part 2. Canine — Gestation",
+      "Last 21 days: use 3 x RER. (This quantity may need to be increased to maintain normal body condition for some dogs, especially larger breeds.)",
+      ""
+    ],
+    [
+      "Part 2. Canine — Lactation",
+      "Lactation is nutritionally demanding and the physiologic and nutritional equivalent of heavy work. Recommend 4 to 8 x RER (depending on number of puppies nursing) or free-choice feeding. The following table may also be used to estimate the DER of lactating bitches:",
+      ""
+    ],
+    [
+      "Part 2. Canine — Lactation: Puppies (No.)",
+      "1",
+      "3.0 x RER"
+    ],
+    [
+      "Part 2. Canine — Lactation: Puppies (No.)",
+      "2",
+      "3.5 x RER"
+    ],
+    [
+      "Part 2. Canine — Lactation: Puppies (No.)",
+      "3-4",
+      "4.0 x RER"
+    ],
+    [
+      "Part 2. Canine — Lactation: Puppies (No.)",
+      "5-6",
+      "5.0 x RER"
+    ],
+    [
+      "Part 2. Canine — Lactation: Puppies (No.)",
+      "7-8",
+      "5.5 x RER"
+    ],
+    [
+      "Part 2. Canine — Lactation: Puppies (No.)",
+      "≥9",
+      "≥6.0 x RER"
+    ],
+    [
+      "Part 2. Canine — Growth",
+      "Daily energy intake for growing puppies should be 3 x RER from weaning until four months of age. At four months of age energy intake should be reduced to 2 x RER until the puppy reaches adult size.",
+      ""
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "1 kg / 2.2 lb",
+      "70"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "2 kg / 4.4 lb",
+      "118"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "3 kg / 6.6 lb",
+      "160"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "4 kg / 8.8 lb",
+      "198"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "5 kg / 11.0 lb",
+      "234"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "6 kg / 13.2 lb",
+      "268"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "7 kg / 15.4 lb",
+      "301"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "8 kg / 17.6 lb",
+      "333"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "9 kg / 19.8 lb",
+      "364"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "10 kg / 22.0 lb",
+      "394"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "11 kg / 24.2 lb",
+      "423"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "12 kg / 26.4 lb",
+      "451"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "13 kg / 28.6 lb",
+      "479"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "14 kg / 30.8 lb",
+      "507"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "15 kg / 33.0 lb",
+      "534"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "16 kg / 35.2 lb",
+      "560"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "17 kg / 37.4 lb",
+      "586"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "18 kg / 39.6 lb",
+      "612"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "19 kg / 41.8 lb",
+      "637"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "20 kg / 44.0 lb",
+      "662"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "21 kg / 46.2 lb",
+      "687"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "22 kg / 48.4 lb",
+      "711"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "23 kg / 50.6 lb",
+      "735"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "24 kg / 52.8 lb",
+      "759"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "25 kg / 55.0 lb",
+      "783"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "26 kg / 57.2 lb",
+      "806"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "27 kg / 59.4 lb",
+      "829"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "28 kg / 61.6 lb",
+      "852"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "29 kg / 63.8 lb",
+      "875"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "30 kg / 66.0 lb",
+      "897"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "31 kg / 68.2 lb",
+      "920"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "32 kg / 70.4 lb",
+      "942"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "33 kg / 72.6 lb",
+      "964"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "34 kg / 74.8 lb",
+      "986"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "35 kg / 77.0 lb",
+      "1,007"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "36 kg / 79.2 lb",
+      "1,029"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "37 kg / 81.4 lb",
+      "1,050"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "38 kg / 83.6 lb",
+      "1,071"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "39 kg / 85.8 lb",
+      "1,092"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "40 kg / 88.0 lb",
+      "1,113"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "41 kg / 90.2 lb",
+      "1,134"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "42 kg / 92.4 lb",
+      "1,155"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "43 kg / 94.6 lb",
+      "1,175"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "44 kg / 96.8 lb",
+      "1,196"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "45 kg / 99.0 lb",
+      "1,216"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "46 kg / 101.2 lb",
+      "1,236"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "47 kg / 103.4 lb",
+      "1,257"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "48 kg / 105.6 lb",
+      "1,277"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "49 kg / 107.8 lb",
+      "1,296"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "50 kg / 110.0 lb",
+      "1,316"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "51 kg / 112.2 lb",
+      "1,336"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "52 kg / 114.4 lb",
+      "1,356"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "53 kg / 116.6 lb",
+      "1,375"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "54 kg / 118.8 lb",
+      "1,394"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "55 kg / 121.0 lb",
+      "1,414"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "56 kg / 123.2 lb",
+      "1,433"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "57 kg / 125.4 lb",
+      "1,452"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "58 kg / 127.6 lb",
+      "1,471"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "59 kg / 129.8 lb",
+      "1,490"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "60 kg / 132.0 lb",
+      "1,509"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "61 kg / 134.2 lb",
+      "1,528"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "62 kg / 136.4 lb",
+      "1,547"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "63 kg / 138.6 lb",
+      "1,565"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "64 kg / 140.8 lb",
+      "1,584"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "65 kg / 143.0 lb",
+      "1,602"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "66 kg / 145.2 lb",
+      "1,621"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "67 kg / 147.4 lb",
+      "1,639"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "68 kg / 149.6 lb",
+      "1,658"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "69 kg / 151.8 lb",
+      "1,676"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "70 kg / 154.0 lb",
+      "1,694"
+    ],
+    [
+      "Part 3. Resting energy requirements of adult dogs in kilocalories metabolizable energy*",
+      "*Use the DER multiplication factors for dogs listed above for total energy intake.",
+      ""
+    ]
+  ]
+}

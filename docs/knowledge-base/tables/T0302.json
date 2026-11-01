@@ -1,0 +1,78 @@
+{
+ "tableId": "T0302",
+ "caption": "Table 42-4. Expected changes associated with combined dietary and medical therapy of cystine uroliths.",
+ "columns": [
+  "Factors",
+  "Pre-therapy",
+  "During therapy",
+  "Prevention therapy"
+ ],
+ "rows": [
+  [
+   "Polyuria",
+   "±",
+   "1+ to 3+",
+   "1+ to 3+"
+  ],
+  [
+   "Pollakiuria",
+   "0 to 4+",
+   "↑ then ↓",
+   "0"
+  ],
+  [
+   "Hematuria",
+   "0 to 4+",
+   "↓",
+   "0"
+  ],
+  [
+   "Urine specific gravity",
+   "Variable",
+   "1.004-1.020",
+   "1.004-1.020"
+  ],
+  [
+   "Urinary pH",
+   "<7.0",
+   ">7.0",
+   ">7.0"
+  ],
+  [
+   "Pyuria",
+   "0 to 4+",
+   "↓",
+   "0"
+  ],
+  [
+   "Cystine crystals",
+   "0 to 4+",
+   "0",
+   "Variable"
+  ],
+  [
+   "Bacteriuria",
+   "0 to 4+",
+   "0",
+   "0"
+  ],
+  [
+   "Bacterial culture of urine",
+   "0 to 4+",
+   "0",
+   "0"
+  ],
+  [
+   "Urea nitrogen (mg/dl)",
+   "Variable",
+   "<15",
+   "≤15"
+  ],
+  [
+   "Urolith size and number",
+   "Small to large",
+   "↓",
+   "0"
+  ]
+ ]
+}

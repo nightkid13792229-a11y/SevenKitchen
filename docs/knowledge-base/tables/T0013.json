@@ -1,0 +1,70 @@
+{
+  "tableId": "T0013",
+  "caption": "TABLE 4: Conduct Testing Based on Signalment and Findings in Physical Exam and History",
+  "columns": [
+    "Tests",
+    "Puppy",
+    "Young Adult",
+    "Mature Adult",
+    "Senior"
+  ],
+  "rows": [
+    [
+      "Fecal testing for parasites",
+      "4 in the first year",
+      "1–4 times/yr based on use of preventive product and lifestyle",
+      "",
+      ""
+    ],
+    [
+      "Tick-borne disease",
+      "N/A",
+      "Annually",
+      "",
+      ""
+    ],
+    [
+      "Heartworm",
+      "N/A",
+      "Annually; initial test is especially important to evaluate preownership status",
+      "Annually",
+      ""
+    ],
+    [
+      "CBC (hematocrit, RBC, WBC, differential, cytology, platelets)",
+      "N/A",
+      "Consider for initial baseline",
+      "Annually",
+      "Every 6–12 mo"
+    ],
+    [
+      "Chemistry screen At a minimum, include: TP, albumin, ALT, glucose, BUN, Creatinine, [SDMA if available]",
+      "N/A",
+      "Consider the minimum panel for initial baseline",
+      "Minimum annually (consider comprehensive)",
+      "Comprehensive every 6–12 mo"
+    ],
+    [
+      "Urinalysis (specific gravity, sediment, glucose, ketones, bilirubin, protein, occult blood)",
+      "N/A",
+      "Consider for initial baseline",
+      "Annually",
+      "Every 6–12 mo"
+    ],
+    [
+      "Imaging",
+      "N/A",
+      "Consider orthopedic radiographic screening for large-breed dogs",
+      "There is not enough support for general recommendation, but breed-specific screening may be indicated",
+      ""
+    ],
+    [
+      "ECG",
+      "N/A",
+      "",
+      "",
+      "There is not enough support for general recommendation, but breed-specific screening may be indicated"
+    ]
+  ],
+  "note": "表头 “Recommendations by Age” 横跨 Puppy / Young Adult / Mature Adult / Senior 四列"
+}

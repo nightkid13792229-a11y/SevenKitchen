@@ -1,0 +1,37 @@
+{
+ "tableId": "T0052",
+ "caption": "Table VII-8a. Equations for growth curves modified according to Gesellschaft für Ernährungsphysiologie (1989) and Meyer and Zentek (1992), valid from weaning age (8 weeks) to 1 year",
+ "columns": [
+  "Expected mature BW (kg)",
+  "% of expected mature",
+  "Growth curve"
+ ],
+ "rows": [
+  [
+   "≤7",
+   "% of expected mature",
+   "BW = 36.92Ln(age in weeks) - 43.57"
+  ],
+  [
+   ">7 - 15",
+   "% of expected mature",
+   "BW = 36.86Ln(age in weeks) - 48.22"
+  ],
+  [
+   ">15 - 27.5",
+   "% of expected mature",
+   "BW = 39.88Ln(age in weeks) - 60.70"
+  ],
+  [
+   ">27.5 - 47.5",
+   "% of expected mature",
+   "BW = 36.96Ln(age in weeks) - 56.18"
+  ],
+  [
+   ">47.5",
+   "% of expected mature",
+   "BW = 36.61Ln(age in weeks) - 62.39"
+  ]
+ ],
+ "note": "图中还包含第二张表 Table VII-8b（Average energy requirements during growth and reproduction in dogs），未并入本结果"
+}

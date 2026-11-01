@@ -1,0 +1,132 @@
+{
+ "tableId": "T0367",
+ "caption": "Table 50-5. Key nutritional factor content of selected commercial veterinary therapeutic foods for dogs with esophagitis/gastroesophageal reflux compared to recommended levels.*",
+ "columns": [
+  "",
+  "Energy density (kcal/cup)**",
+  "Energy density (kcal/g)",
+  "Fat (%)",
+  "Protein (%)"
+ ],
+ "rows": [
+  [
+   "Dry foods",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "–",
+   "≥4",
+   "≤15",
+   "≥25"
+  ],
+  [
+   "Hill's Prescription Diet i/d Canine",
+   "379",
+   "4.2",
+   "14.1",
+   "26.2"
+  ],
+  [
+   "Iams Veterinary Formula Intestinal Low-Residue",
+   "257",
+   "3.8",
+   "10.7",
+   "24.6"
+  ],
+  [
+   "Medi-Cal Gastro Formula",
+   "330",
+   "na",
+   "13.9",
+   "22.9"
+  ],
+  [
+   "Purina Veterinary Diets EN GastroENteric Formula",
+   "397",
+   "4.2",
+   "12.6",
+   "27.0"
+  ],
+  [
+   "Royal Canin Veterinary Diet Intestinal HE",
+   "389",
+   "4.5",
+   "22.0",
+   "33.0"
+  ],
+  [
+   "Moist foods",
+   "Energy density (kcal/can)**",
+   "Energy density (kcal/g)",
+   "Fat (%)",
+   "Protein (%)"
+  ],
+  [
+   "Recommended levels",
+   "–",
+   "≥4",
+   "≤15",
+   "≥25"
+  ],
+  [
+   "Hill's Prescription Diet i/d Canine",
+   "485/13 oz.",
+   "4.4",
+   "14.9",
+   "25.0"
+  ],
+  [
+   "Iams Veterinary Formula Intestinal Low-Residue",
+   "413/14 oz.",
+   "4.6",
+   "13.2",
+   "35.9"
+  ],
+  [
+   "Medi-Cal Gastro Formula",
+   "455/396 g",
+   "na",
+   "11.7",
+   "22.1"
+  ],
+  [
+   "Purina Veterinary Diets EN GastroENteric Formula",
+   "423/354 g",
+   "4.0",
+   "13.8",
+   "30.5"
+  ],
+  [
+   "Royal Canin Veterinary Diet Intestinal HE",
+   "446/396 g",
+   "4.3",
+   "11.8",
+   "23.1"
+  ],
+  [
+   "Key: na = information not available from manufacturer.",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "*From manufacturers' published information or calculated from manufacturers' published as-fed values; all values are on a dry matter basis unless otherwise stated.",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "**Energy density values are listed on an as fed basis and are useful for determining the amount to feed; cup = 8-oz. measuring cup. To convert to kJ, multiply kcal by 4.184.",
+   "",
+   "",
+   "",
+   ""
+  ]
+ ]
+}

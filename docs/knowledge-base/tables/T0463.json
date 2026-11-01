@@ -1,0 +1,110 @@
+{
+ "tableId": "T0463",
+ "caption": "Table 4. (Continued)",
+ "columns": [
+  "Authors",
+  "Method",
+  "Number of female dogs",
+  "Breeds",
+  "Husbandry utilization",
+  "Age at gonadectomy (n)",
+  "Time between gonadectomy and study",
+  "Behavioural problem",
+  "Improvement (n)",
+  "No change (n)",
+  "Deterioration (n)"
+ ],
+ "rows": [
+  [
+   "Reece et al., 2013",
+   "Survey",
+   "–",
+   "–",
+   "Roaming dogs",
+   "–",
+   "–",
+   "Maternal aggression",
+   "Bites to protect pups significantly reduced",
+   "–",
+   "–"
+  ],
+  [
+   "Reisner et al., 2005",
+   "Survey – email",
+   "1053 questionnaires\n219/559 females were intact",
+   "English springer spaniels",
+   "Private, kennel",
+   "–",
+   "–",
+   "Aggression towards owner",
+   "–",
+   "–",
+   "Gonadectomised females were more owner-aggressive than intact dogs"
+  ],
+  [
+   "Spain et al., 2004b",
+   "Retrospective cohort study (survey+ veterinary records)",
+   "499\n484",
+   "Different breeds",
+   "Stray, owner surrender",
+   "<5.5 months\n≥5.5 to 12 months",
+   "3 months to 11 years",
+   "Aggression and nuisance behaviour*",
+   "–",
+   "M+f:\nBarking 34.2%\nNoise phobia 52.6% (not sign. when analysis restricted to serious problems)\nSeparation anxiety <5.5 m: 14.2% (OR 0.72), ≥5.5 18.7% (OR 1)\nIn total: no sign. effect on aggression, noise phobia, separation anxiety",
+   "–"
+  ],
+  [
+   "Wright & Nesselrote, 1987",
+   "Interviews with owners",
+   "42 (29 spayed, 13 intact)",
+   "Mongrels, German shepherd dog, English springer spaniel Doberman, golden retriever, Dachshund",
+   "Sporting, mixed, working, terrier, non-sportinghound, toy",
+   "–",
+   "–",
+   "Aggression\nStimulus reactivity",
+   "–",
+   "–",
+   "Spayed versus intact (n=)\n19 versus 3\n16 versus 8"
+  ],
+  [
+   "Zink et al., 2014",
+   "Retrospective cohort study (cross-sectional)",
+   "209\n157\n459",
+   "Magyar Vizsla",
+   "–",
+   "≤6months\n7 to 12months\n>12months",
+   "–",
+   "Behavioural problems† (mostly fear of storms)",
+   "–",
+   "–",
+   "Odds 1.8-fold higher than in intact dogs\nFear of storms: odds sign increased in all age groups compared to intact dogs"
+  ],
+  [
+   "Zink et al., 2023",
+   "Surveys (cross-sectional)",
+   "2281 spayed\n792 intact",
+   "",
+   "",
+   "",
+   "",
+   "Problematic and nuisance‡",
+   "Odds decreased with increasing time gonads were present and size (OR 0.91)",
+   "–",
+   "Spayed females were more likely to develop problematic behaviour than intact dogs (939/2281; 41%) versus (221/792; 28%)"
+  ],
+  [
+   "Zlotnick et al., 2019",
+   "Retrospective data evaluation",
+   "245",
+   "Golden retrievers, Labradors, other breeds",
+   "Service dog candidates",
+   "<7 months\n7 to 11 months\n>11months",
+   "–",
+   "Behavioural problems during training",
+   "–",
+   "Graduated: 37.7% (29/99)",
+   "Dismissed: 51.9% (40/110)\n47.2% M+F in the group <7 months"
+  ]
+ ]
+}

@@ -1,0 +1,205 @@
+{
+  "tableId": "T0129",
+  "caption": "Table 17-4. Comparison of recommended levels of key nutritional factors for small- to medium-breed puppies (adult BW <25 kg) to the key nutritional factor content of selected commercial foods marketed for healthy puppy growth.",
+  "columns": [
+    "Dry foods",
+    "Energy density (kcal/cup)**",
+    "Energy density (kcal ME/g)***",
+    "Protein (%)",
+    "Fat (%)",
+    "DHA (%)",
+    "Ca (%)",
+    "P (%)",
+    "Ca:P"
+  ],
+  "rows": [
+    [
+      "Recommended levels",
+      "-",
+      "3.5-4.5",
+      "22-32",
+      "10-25",
+      "≥0.02",
+      "0.7-1.7",
+      "0.6-1.3",
+      "1:1-1.8:1"
+    ],
+    [
+      "Hill's Science Diet Puppy Healthy Development Original",
+      "384",
+      "4.2",
+      "31.8",
+      "22.9",
+      "0.22",
+      "1.59",
+      "1.21",
+      "1.3:1"
+    ],
+    [
+      "Hill's Science Diet Puppy Lamb Meal & Rice Recipe",
+      "377",
+      "4.2",
+      "31.7",
+      "21.7",
+      "0.22",
+      "1.58",
+      "1.10",
+      "1.4:1"
+    ],
+    [
+      "Hill's Science Diet Nature's Best Chicken & Brown Rice Dinner Puppy",
+      "445",
+      "4.3",
+      "30.2",
+      "22.1",
+      "0.20",
+      "1.43",
+      "1.05",
+      "1.4:1"
+    ],
+    [
+      "Hill's Science Diet Nature's Best Lamb & Brown Rice Dinner Puppy",
+      "442",
+      "4.2",
+      "30.1",
+      "22.1",
+      "0.17",
+      "1.50",
+      "1.10",
+      "1.4:1"
+    ],
+    [
+      "Iams Eukanuba Medium Breed Puppy",
+      "463",
+      "4.1",
+      "31.7",
+      "19.2",
+      "na",
+      "1.50",
+      "1.07",
+      "1.4:1"
+    ],
+    [
+      "Iams ProActive Health Smart Puppy",
+      "432",
+      "4.2",
+      "30.8",
+      "18.9",
+      "na",
+      "1.30",
+      "1.10",
+      "1.2:1"
+    ],
+    [
+      "Medi-Cal Veterinary Diet Development Formula",
+      "425",
+      "na",
+      "28.4",
+      "17.5",
+      "na",
+      "1.20",
+      "1.10",
+      "1.1:1"
+    ],
+    [
+      "Nutro Natural Choice Puppy Lamb Meal and Rice",
+      "333",
+      "3.8",
+      "29.7",
+      "14.3",
+      "na",
+      "1.98",
+      "1.54",
+      "1.3:1"
+    ],
+    [
+      "Purina ONE Healthy Puppy Formula",
+      "465",
+      "4.6",
+      "31.7",
+      "20.6",
+      "na",
+      "1.61",
+      "1.11",
+      "1.5:1"
+    ],
+    [
+      "Purina Puppy Chow",
+      "416",
+      "4.2",
+      "29.8",
+      "15.6",
+      "na",
+      "1.31",
+      "1.01",
+      "1.3:1"
+    ],
+    [
+      "Purina Pro Plan Chicken & Rice Formula Puppy",
+      "473",
+      "4.6",
+      "31.6",
+      "20.7",
+      "na",
+      "1.23",
+      "1.04",
+      "1.2:1"
+    ],
+    [
+      "Royal Canin Medium Puppy 32",
+      "402",
+      "4.6",
+      "35.6",
+      "20.0",
+      "na",
+      "1.12",
+      "0.88",
+      "1.3:1"
+    ],
+    [
+      "Moist foods",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "-",
+      "3.5-4.5",
+      "22-32",
+      "10-25",
+      "≥0.02",
+      "0.7-1.7",
+      "0.6-1.3",
+      "1:1-1.8:1"
+    ],
+    [
+      "Hill's Science Diet Puppy Healthy Development Savory Chicken Entrée",
+      "205/5.8 oz.\n459/13 oz.",
+      "4.1",
+      "28.2",
+      "23.6",
+      "na",
+      "1.33",
+      "0.96",
+      "1.4 : 1"
+    ],
+    [
+      "Purina Pro Plan Puppy Chicken & Rice Entrée Classic",
+      "459/13 oz.",
+      "4.9",
+      "42.4",
+      "38.4",
+      "na",
+      "1.92",
+      "1.48",
+      "1.3:1"
+    ]
+  ],
+  "note": "原表分为 Dry foods 与 Moist foods 两段，中段重复一次列标题（含 Moist foods 与同名 Recommended levels 行），两段列结构相同已合并，保留 Moist foods 分段行；末段脚注 Key 及 * ** *** 说明为表格附注，未计入 rows"
+}

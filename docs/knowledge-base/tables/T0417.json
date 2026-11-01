@@ -1,0 +1,142 @@
+{
+  "tableId": "T0417",
+  "caption": "Table 65-2. Key nutritional factors in selected commercial veterinary therapeutic foods for dogs with excessive flatulence compared to recommended levels.*",
+  "columns": [
+    "",
+    "Protein digestibility (%)",
+    "Fat digestibility (%)",
+    "Carbohydrate digestibility (%)",
+    "Protein (%)",
+    "Crude fiber (%)"
+  ],
+  "rows": [
+    [
+      "Dry foods",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≥87",
+      "≥90",
+      "≥90",
+      "≤30",
+      "≤5"
+    ],
+    [
+      "Hill's Prescription Diet i/d Canine",
+      "92",
+      "93",
+      "94",
+      "26.2",
+      "2.7"
+    ],
+    [
+      "Iams Veterinary Formula Intestinal Low-Residue",
+      "na",
+      "na",
+      "na",
+      "24.6",
+      "2.1"
+    ],
+    [
+      "Medi-Cal Gastro Formula",
+      "na",
+      "na",
+      "na",
+      "22.9",
+      "1.9"
+    ],
+    [
+      "Purina Veterinary Diets EN GastroENteric Formula",
+      "84.5",
+      "91.4",
+      "94.4",
+      "27.0",
+      "1.5"
+    ],
+    [
+      "Royal Canin Veterinary Diet Digestive Low Fat LF 20",
+      "na",
+      "na",
+      "na",
+      "24.2",
+      "2.3"
+    ],
+    [
+      "Royal Canin Veterinary Diet Intestinal HE 28",
+      "na",
+      "na",
+      "na",
+      "33.0",
+      "1.6"
+    ],
+    [
+      "Moist foods",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≥87",
+      "≥90",
+      "≥90",
+      "≤30",
+      "≤5"
+    ],
+    [
+      "Hill's Prescription Diet i/d Canine",
+      "88",
+      "94",
+      "93",
+      "25.0",
+      "1.0"
+    ],
+    [
+      "Iams Veterinary Formula Intestinal Low-Residue",
+      "na",
+      "na",
+      "na",
+      "35.9",
+      "3.9"
+    ],
+    [
+      "Medi-Cal Gastro Formula",
+      "na",
+      "na",
+      "na",
+      "22.1",
+      "1.0"
+    ],
+    [
+      "Purina Veterinary Diets EN GastroENteric Formula",
+      "85.1",
+      "95.6",
+      "92.2",
+      "30.5",
+      "0.9"
+    ],
+    [
+      "Royal Canin Veterinary Diet Digestive Low Fat LF",
+      "na",
+      "na",
+      "na",
+      "31.9",
+      "3.0"
+    ],
+    [
+      "Royal Canin Veterinary Diet Intestinal HE",
+      "na",
+      "na",
+      "na",
+      "23.1",
+      "1.4"
+    ]
+  ]
+}

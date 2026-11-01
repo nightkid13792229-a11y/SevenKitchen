@@ -1,0 +1,66 @@
+{
+ "tableId": "T0203",
+ "caption": "Table 28-4. Selected commercial foods used in cats with hyperlipidemia compared to recommended levels of key nutritional factors.*",
+ "columns": [
+  "Foods",
+  "Energy density (kcal/cup)**",
+  "Fat (%)",
+  "Crude fiber (%)"
+ ],
+ "rows": [
+  [
+   "Dry foods",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "-",
+   "<12",
+   "≥7"
+  ],
+  [
+   "Hill’s Prescription Diet r/d Feline",
+   "263",
+   "9.3",
+   "13.6"
+  ],
+  [
+   "Hill’s Prescription Diet r/d with Chicken Feline",
+   "266",
+   "9.8",
+   "13.8"
+  ],
+  [
+   "Purina Veterinary Diets OM Overweight Management Formula",
+   "321",
+   "8.5",
+   "5.6"
+  ],
+  [
+   "Moist foods",
+   "Energy density (kcal/can)**",
+   "Fat (%)",
+   "Crude fiber (%)"
+  ],
+  [
+   "Recommended levels",
+   "-",
+   "<12",
+   "≥7"
+  ],
+  [
+   "Hill’s Prescription Diet r/d with Liver & Chicken Feline",
+   "114 (5.5-oz. can)",
+   "9.2",
+   "15.4"
+  ],
+  [
+   "Purina Veterinary Diets OM Overweight Management Formula",
+   "150 (5.5-oz. can)",
+   "14.6",
+   "10.2"
+  ]
+ ]
+}

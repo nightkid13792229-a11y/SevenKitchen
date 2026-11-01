@@ -1,0 +1,68 @@
+{
+ "tableId": "T0033",
+ "doc": "aaha/AAHA-2023-Senior-Care-Guidelines.pdf",
+ "page": 8,
+ "caption": "TABLE 2",
+ "method": "坐标法",
+ "rows": [
+  [
+   "TABLE 2"
+  ],
+  [
+   "Diagnostic Approaches by Body System for Senior Dogs and Cats"
+  ],
+  [
+   "Body System",
+   "Diagnostic Approach",
+   "Therapeutic Tip • pruritus,"
+  ],
+  [
+   "Integument",
+   "PE focus: Identify, describe, and map skin lesions, i.e.,",
+   "Avoid steroid use if"
+  ],
+  [
+   "alopecia. Do not forget nails, nail beds, and interdigital spaces.",
+   "possible until a microscopic diagnosis is established."
+  ],
+  [
+   "Baseline dermatology diagnostic evaluation should include:",
+   "• Recognize that dermatologic • Senior blood proﬁle with urinalysis issues may also have a pain •"
+  ],
+  [
+   "Skin scraping/impression cytology of any lesions",
+   "component and should be"
+  ],
+  [
+   "•",
+   "treated for pain. Dermatophyte testing if concerned about fungal disease • • Use validated scales Measuring, mapping and aspiration of any growths to monitor progression of • Other integument issues regarding nails, nail beds; ears may treatment as appropriate.1 • Evaluate for pain • For malignant conditions, consider thoracic and abdominal imaging as part of the clinical staging The Guidelines task force encourages skin biopsy in senior pets presented with chronic dermatopathy if the baseline diagnostics are negative. Recommend referral to a specialist for chronic, progressive, or neoplastic cases. •"
+  ],
+  [
+   "Oral",
+   "PE focus: Oral cavity, with particular focus on fractured, loose",
+   "Staging procedures is a"
+  ],
+  [
+   "teeth, foreign bodies, oral ulcers, inﬂammation, masses. Make",
+   "viable plan. note of degree of dental disease and ability to prehend and swallow. Head and neck palpation. Baseline diagnostic evaluation should include: • Senior blood proﬁle with urinalysis Additional diagnostic tests: • Complete visual examination of the entire oral cavity with general anesthesia • Head and neck radiographs • Skull CT may be useful"
+  ],
+  [
+   "Hemolymphatic",
+   "PE focus: Mucous membrane color, capillary reﬁll time, abdominal palpation, lymph node palpation. Baseline diagnostic evaluation should include: • Senior blood proﬁle with urinalysis • Lymph node aspiration if indicated Additional diagnostic tests: • CBC with pathology evaluation for cell morphology • Imaging to rule out secondary etiology for hematologic abnormality • Coagulation proﬁle • Flow cytometry in select cases • Bone marrow aspirate (continued)"
+  ],
+  [
+   "8",
+   "JAAHA | 59:1 Jan/Feb 2023"
+  ]
+ ],
+ "verify": {
+  "numbers": 6,
+  "found": 6,
+  "misses": []
+ },
+ "columns": [
+  "Body System",
+  "Diagnostic Approach",
+  "Therapeutic Tip"
+ ]
+}

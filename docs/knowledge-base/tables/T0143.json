@@ -1,0 +1,114 @@
+{
+ "tableId": "T0143",
+ "caption": "Table 19-4. Nutrient levels in rat carcass.",
+ "columns": [
+  "Nutrients*",
+  "Rat carcass**"
+ ],
+ "rows": [
+  [
+   "Moisture (%)",
+   "63.6"
+  ],
+  [
+   "Protein (%)",
+   "55"
+  ],
+  [
+   "Fat (%)",
+   "38.1"
+  ],
+  [
+   "Linoleic acid (%)",
+   "9.1"
+  ],
+  [
+   "Carbohydrate (%)",
+   "1.2"
+  ],
+  [
+   "Fiber (%)",
+   "0.55"
+  ],
+  [
+   "Ash (%)",
+   "5.22"
+  ],
+  [
+   "Calculated ME (kcal/g)***",
+   "5.7"
+  ],
+  [
+   "Calcium (%)",
+   "1.15"
+  ],
+  [
+   "Phosphorus (%)",
+   "0.98"
+  ],
+  [
+   "Potassium (%)",
+   "0.79"
+  ],
+  [
+   "Magnesium (%)",
+   "0.08"
+  ],
+  [
+   "Sodium (%)",
+   "0.25"
+  ],
+  [
+   "Zinc (mg/kg)",
+   "71.4"
+  ],
+  [
+   "Copper (mg/kg)",
+   "12.4"
+  ],
+  [
+   "Iron (mg/kg)",
+   "288"
+  ],
+  [
+   "Vitamin A (IU/kg)",
+   "84,800"
+  ],
+  [
+   "Vitamin E (IU/kg)",
+   "33"
+  ],
+  [
+   "Thiamin (mg/kg)",
+   "5.8"
+  ],
+  [
+   "Riboflavin (mg/kg)",
+   "10.7"
+  ],
+  [
+   "Niacin (mg/kg)",
+   "156.6"
+  ],
+  [
+   "Folic acid (mg/kg)",
+   "2.8"
+  ],
+  [
+   "Pantothenic acid (mg/kg)",
+   "54.9"
+  ],
+  [
+   "Pyridoxine (mg/kg)",
+   "5.2"
+  ],
+  [
+   "Vitamin B12 (µg/kg)",
+   "22.5"
+  ],
+  [
+   "Choline (mg/kg)",
+   "3,242"
+  ]
+ ]
+}

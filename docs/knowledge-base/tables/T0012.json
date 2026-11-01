@@ -1,0 +1,136 @@
+{
+  "tableId": "T0012",
+  "caption": "TABLE 3: Useful Online Resources for Canine Life Stage Management",
+  "columns": [
+    "Source",
+    "URL",
+    "Information"
+  ],
+  "rows": [
+    [
+      "American Veterinary Dental College",
+      "www.avdc.org",
+      "Dental information for veterinarians and pet owners"
+    ],
+    [
+      "AAHA",
+      "www.aaha.org/aaha-guidelines/what-are-aaha-guidelines/",
+      "Anesthesia, dental care, nutritional assessment, pain management, senior care, and vaccination guidelines"
+    ],
+    [
+      "",
+      "www.aaha.org/about-aaha/aaha-position-statements/",
+      "Positions on frequency of veterinary visit, animal welfare, and microchipping"
+    ],
+    [
+      "American College of Veterinary Nutrition",
+      "www.acvn.org",
+      "List of board-certified veterinary specialists in nutrition who can provide nutritional consultation"
+    ],
+    [
+      "",
+      "",
+      "Downloadable booklet for pet owners on nutritional needs of dogs"
+    ],
+    [
+      "",
+      "",
+      "Updated links to resources for diet formulation and analysis"
+    ],
+    [
+      "American Heartworm Society",
+      "www.heartwormsociety.org",
+      "Prevalence, diagnosis, and treatment of heartworm disease"
+    ],
+    [
+      "American Veterinary Medical Association",
+      "https://www.avma.org/public/PetCare/Pages/default.aspx",
+      "Position statements (microchip, dog bite prevention, animal welfare, travel with animals)"
+    ],
+    [
+      "",
+      "www.avma.org/news/issues/recalls-alerts/pages/default.aspx",
+      "Recalls and alerts issued regarding pet and animal feeds"
+    ],
+    [
+      "American College of Veterinary Behaviorists",
+      "www.dacvb.org",
+      "Position statements, (e.g., puppy socialization)"
+    ],
+    [
+      "",
+      "",
+      "Information on dog bite prevention, selecting a trainer"
+    ],
+    [
+      "University of Prince Edward Island",
+      "cidd.discoveryspace.ca",
+      "Diseases by breed/inheritance"
+    ],
+    [
+      "Centers for Disease Control and Prevention",
+      "http://www.cdc.gov/parasites (human)",
+      "Guidelines for Veterinarians: Prevention of Zoonotic Transmission of Ascarids and Hookworms of Dogs and Cats"
+    ],
+    [
+      "",
+      "",
+      "Information about ecto-and endo-parasites"
+    ],
+    [
+      "",
+      "http://www.cdc.gov/parasites/ascariasis(human)",
+      "Information about ticks and tick-borne infections"
+    ],
+    [
+      "",
+      "http://www.cdc.gov/parasites/animals.html",
+      ""
+    ],
+    [
+      "",
+      "http://www.cdc.gov/ticks/",
+      ""
+    ],
+    [
+      "",
+      "https://www.cdc.gov/healthypets/index.html",
+      ""
+    ],
+    [
+      "",
+      "https://stacks.cdc.gov/view/cdc/5908",
+      ""
+    ],
+    [
+      "Companion Animal Parasite Council",
+      "www.capcvet.org",
+      "Internal parasite guidelines"
+    ],
+    [
+      "FDA Center for Food Safety and Applied Nutrition",
+      "https://www.fda.gov/about-fda/fda-organization/office-foods-and-veterinary-medicine",
+      "Regulatory and safety issues, adverse event reporting, meetings, industry information"
+    ],
+    [
+      "FDA Pet Food Sites",
+      "https://www.safetyreporting.hhs.gov/",
+      "Information, links, food safety issues, recalls, pet food labels, selecting nutritious foods, handling raw foods"
+    ],
+    [
+      "",
+      "https://www.fda.gov/animal-veterinary/animal-food-feeds/pet-food",
+      ""
+    ],
+    [
+      "Pet Food Institute",
+      "https://www.petfoodinstitute.org",
+      "Information on ingredient definitions, labeling regulations, current issues in pet food"
+    ],
+    [
+      "University of Cambridge",
+      "http://www.vet.cam.ac.uk/idid/",
+      "Inherited diseases in dogs database"
+    ]
+  ]
+}

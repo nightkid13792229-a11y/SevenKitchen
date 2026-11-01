@@ -1,0 +1,56 @@
+{
+ "tableId": "T0050",
+ "caption": "Table VII-7. Recommendations for DER in relation to activity",
+ "columns": [
+  "Activity level",
+  "kcal ME per kg BW^0.75",
+  "kJ ME per kg BW^0.75"
+ ],
+ "rows": [
+  [
+   "Low activity (< 1 h/day) (e.g. walking on the lead)",
+   "95",
+   "398"
+  ],
+  [
+   "Moderate activity (1 – 3 h/day) (low impact activity)",
+   "110",
+   "460"
+  ],
+  [
+   "Moderate activity (1 – 3 h/day) (high impact activity)",
+   "125",
+   "523"
+  ],
+  [
+   "High activity (3 – 6 h/day) (working dogs, e.g. sheep dogs)",
+   "150 - 175",
+   "628 - 732"
+  ],
+  [
+   "High activity under extreme conditions (racing sled dogs 168 km/d in extreme cold)",
+   "860 - 1240",
+   "3600 - 5190"
+  ],
+  [
+   "Obese prone adults",
+   "≤90",
+   "≤ 377"
+  ],
+  [
+   "Breed specific differences:",
+   "",
+   ""
+  ],
+  [
+   "Great Danes",
+   "200 (200 - 250)",
+   "837 (837 - 1046)"
+  ],
+  [
+   "Newfoundlands",
+   "105 (80 - 132)",
+   "439 (335 - 550)"
+  ]
+ ]
+}

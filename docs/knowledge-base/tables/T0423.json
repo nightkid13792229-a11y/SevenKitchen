@@ -1,0 +1,92 @@
+{
+  "tableId": "T0423",
+  "caption": "Table 67-4. Key nutritional factors in selected commercial veterinary therapeutic foods for dogs with pancreatitis compared to recommended levels.* (See Table 67-6 if patient is obese or hypertriglyceridemic.)",
+  "columns": [
+    "",
+    "Fat (%)",
+    "Protein (%)"
+  ],
+  "rows": [
+    [
+      "Moist foods",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≤15",
+      "15–30"
+    ],
+    [
+      "Hill's Prescription Diet i/d Canine",
+      "14.9",
+      "25.0"
+    ],
+    [
+      "Iams Veterinary Formula Intestinal Low-Residue",
+      "13.2",
+      "35.9"
+    ],
+    [
+      "Medi-Cal Gastro Formula",
+      "11.7",
+      "22.1"
+    ],
+    [
+      "Purina Veterinary Diets EN GastroENteric Formula",
+      "13.8",
+      "30.5"
+    ],
+    [
+      "Royal Canin Veterinary Diet Digestive Low Fat LF",
+      "6.9",
+      "31.9"
+    ],
+    [
+      "Royal Canin Veterinary Diet Intestinal HE",
+      "11.8",
+      "23.1"
+    ],
+    [
+      "Dry foods",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≤15",
+      "15–30"
+    ],
+    [
+      "Hill's Prescription Diet i/d Canine",
+      "14.1",
+      "26.2"
+    ],
+    [
+      "Iams Veterinary Formula Intestinal Low-Residue",
+      "10.7",
+      "24.6"
+    ],
+    [
+      "Medi-Cal Gastro Formula",
+      "13.9",
+      "22.9"
+    ],
+    [
+      "Purina Veterinary Diets EN GastroENteric Formula",
+      "12.6",
+      "27.0"
+    ],
+    [
+      "Royal Canin Veterinary Diet Digestive Low Fat LF 20",
+      "6.6",
+      "24.2"
+    ],
+    [
+      "Royal Canin Veterinary Diet Intestinal HE 28",
+      "22.0",
+      "33.0"
+    ]
+  ],
+  "note": "本页同时印有 Table 67-5（猫），本表按上图 Table 67-4 转录；67-5 见 T0424"
+}

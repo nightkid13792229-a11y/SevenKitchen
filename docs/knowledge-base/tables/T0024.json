@@ -1,0 +1,54 @@
+{
+ "tableId": "T0024",
+ "caption": "TABLE 7 Additional Resources",
+ "columns": [
+  "Resource",
+  "URL"
+ ],
+ "rows": [
+  [
+   "ACVN Diet History Form",
+   "acvn.org/wp-content/uploads/2020/04/ACVN-Diet-History-Form-2020-FINAL_fillable.pdf"
+  ],
+  [
+   "WSAVA Diet History Form",
+   "wsava.org/wp-content/uploads/2020/01/Diet-History-Form.pdf"
+  ],
+  [
+   "AAFCO How to Understand a Dog or Cat Food Label",
+   "talkspetfood.aafco.org/readinglabels"
+  ],
+  [
+   "ACVN Board-Certified Veterinary Nutritionist Diplomate Directory",
+   "acvn.org/directory/"
+  ],
+  [
+   "PNA Manufacturer Report",
+   "petnutritionalliance.org/chart/index.php/manufacturer-report"
+  ],
+  [
+   "FDA Recalls & Withdrawals",
+   "fda.gov/animal-veterinary/safety-health/recalls-withdrawals"
+  ],
+  [
+   "PNA Energy Calculators",
+   "petnutritionalliance.org/dog.php?lg=en_US (dog)\npetnutritionalliance.org/cat.php?lg=en_US (cat)"
+  ],
+  [
+   "USDA FoodData Central",
+   "fdc.nal.usda.gov/"
+  ],
+  [
+   "Waltham Puppy Growth Charts",
+   "waltham.com/resources/puppy-growth-charts"
+  ],
+  [
+   "American College of Veterinary Sports Medicine and Rehabilitation Diplomate Search",
+   "vsmr.site-ym.com/search/custom.asp?id=5595"
+  ],
+  [
+   "Find a Certified Canine Rehabilitation Practitioner or Certified Canine Fitness Training Professional",
+   "utvetce.com/canine-rehab-ccrp/ccrp-practitioners/\nutvetce.com/canine-fitness-ccft/ccft-graduates/"
+  ]
+ ]
+}

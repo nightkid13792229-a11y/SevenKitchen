@@ -1,0 +1,9 @@
+{
+  "tableId": "T0443",
+  "caption": "Table 7-2. Blood concentrations (µmol/l at seven days) of cats and dogs supplemented with β-carotene for at least seven days.",
+  "columns": ["Species", "Dose (mg/day)", "Body weight (kg)", "Peak plasma concentration"],
+  "rows": [
+    ["Cat", "10", "3 to 3.5 kg", "0.95"],
+    ["Dog", "25", "7 to 9 kg", "Approx. 0.02"]
+  ]
+}

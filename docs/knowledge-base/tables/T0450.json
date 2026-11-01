@@ -1,0 +1,27 @@
+{
+  "tableId": "T0450",
+  "caption": "Table 9-4. Ingredient statement from the same dry dog food as it would appear on pet food labels from selected countries.",
+  "columns": [
+    "",
+    ""
+  ],
+  "rows": [
+    [
+      "United States",
+      "Ingredients: Corn Meal, Chicken Meal, Soybean Meal, Animal Fat (Preserved With Mixed Tocopherols And Citric Acid), Natural Chicken Liver Flavor, Vegetable Oil, Dried Egg Product, Flaxseed, Salt, Calcium Carbonate, Minerals (Ferrous Sulfate, Zinc Oxide, Copper Sulfate, Manganous Oxide, Calcium Iodate, Sodium Selenite), Vitamins (Choline Chloride, Vitamin A Supplement, Vitamin D3 Supplement, Vitamin E Supplement, L-Ascorbyl-2-Polyphosphate [A Source Of Vitamin C], Niacin, Thiamine Mononitrate, Calcium Pantothenate, Pyridoxine Hydrochloride, Riboflavin, Folic Acid, Biotin, Vitamin B12 Supplement), Beta-Carotene."
+    ],
+    [
+      "Canada",
+      "Ingredients: Grain Products, Poultry Products, Soybean Meal, Stabilized Poultry and/or Animal Fat, Vitamins and Minerals."
+    ],
+    [
+      "CVMA-Certified Product",
+      "Ingredients: Corn Meal, Chicken Meal, Soybean Meal, Animal Fat, Dried Whole Egg, Vegetable Oil, Salt, Plus All Necessary Vitamins and Minerals."
+    ],
+    [
+      "Europe*",
+      "In Europe there are two options:\n1) Ingredient groupings\nIngredients: Cereals, Meat and Animal Derivatives, Vegetable Protein Extracts, Oils and Fats, Eggs and Egg Derivatives, Minerals.\n2) Individual ingredient listing\nIngredients: Ground Corn, Chicken Meal, Soybean Meal, Animal Fat, Dried Egg Product, Brewers Rice, Vegetable Oil, Iodized Salt, Calcium Carbonate, Magnesium Oxide.\n*Antioxidants, preservatives, vitamins and coloring agents are not listed under ingredients because they are considered additives and are declared elsewhere on the label."
+    ]
+  ],
+  "note": "原图为表题下的国别说明框，无独立表头；此处以「国别/产品 — 配料声明」两列结构转录，列名留空。"
+}

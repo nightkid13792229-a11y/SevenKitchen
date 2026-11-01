@@ -1,0 +1,38 @@
+{
+ "tableId": "T0320",
+ "caption": "Table 46-4. Mineral composition of 11,416 feline uroliths analyzed quantitatively at the Minnesota Urolith Center in 2008.*",
+ "columns": [
+  "Mineral type",
+  "Percent"
+ ],
+ "rows": [
+  [
+   "Struvite",
+   "49"
+  ],
+  [
+   "Calcium oxalate",
+   "39"
+  ],
+  [
+   "Urate/uric acid",
+   "4.9"
+  ],
+  [
+   "Compound/matrix/mixed",
+   "4.29/0.7/1.0"
+  ],
+  [
+   "Calcium phosphate",
+   "0.2"
+  ],
+  [
+   "Cystine",
+   "0.04"
+  ],
+  [
+   "Xanthine",
+   "<0.01"
+  ]
+ ]
+}

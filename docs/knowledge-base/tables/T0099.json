@@ -1,0 +1,127 @@
+{
+ "tableId": "T0099",
+ "caption": "Table 12-5. Comparison between the recommended daily allowances of selected nutrients for a 10-kg adult dog and the nutrient content of meat (beef).*",
+ "columns": [
+  "Nutrient",
+  "RDA 10-kg dog",
+  "RDA per 100 g",
+  "Regular ground beef - Amount meeting the DER of a 10-kg dog (482 g)",
+  "% of RDA",
+  "Adequacy"
+ ],
+ "rows": [
+  [
+   "Metabolizable energy (kcal)",
+   "650",
+   "135",
+   "650",
+   "100",
+   "Yes"
+  ],
+  [
+   "Moisture (ml)",
+   "650",
+   "60",
+   "289",
+   "44",
+   "na"
+  ],
+  [
+   "Protein (g)",
+   "24",
+   "17",
+   "82",
+   "341",
+   "No"
+  ],
+  [
+   "Fat (g)",
+   "≥8",
+   "20",
+   "96",
+   "1,204",
+   "No"
+  ],
+  [
+   "Calcium (mg)",
+   "1,000",
+   "10",
+   "48",
+   "5",
+   "No"
+  ],
+  [
+   "Phosphorus (mg)",
+   "750",
+   "200",
+   "963",
+   "128",
+   "Maybe"
+  ],
+  [
+   "Ca/P ratio",
+   "1:1-2:1",
+   "1:20",
+   "1:20",
+   "na",
+   "No"
+  ],
+  [
+   "Sodium (mg)",
+   "250-500",
+   "70",
+   "337",
+   "100",
+   "Yes"
+  ],
+  [
+   "Potassium (mg)",
+   "550",
+   "325",
+   "1,565",
+   "285",
+   "No"
+  ],
+  [
+   "Magnesium (mg)",
+   "150",
+   "25",
+   "120",
+   "80",
+   "Maybe"
+  ],
+  [
+   "Iron (mg)",
+   "14",
+   "3.25",
+   "16",
+   "112",
+   "Yes"
+  ],
+  [
+   "Copper (mg)",
+   "1",
+   "0.05",
+   "0.2",
+   "24",
+   "No"
+  ],
+  [
+   "Zinc (mg)",
+   "10",
+   "1.5",
+   "7",
+   "70",
+   "No"
+  ],
+  [
+   "Iodine (mg)",
+   "0.15",
+   "0.003",
+   "0.014",
+   "10",
+   "No"
+  ]
+ ],
+ "note": "表头为合并单元格：\"RDA\" 覆盖 10-kg dog 与 per 100 g 两列；\"Regular ground beef\" 覆盖后三列，其中 \"Amount meeting the DER of a 10-kg dog\" 覆盖 \"482 g\" 与 \"% of RDA\" 两列。表下 Key 与 * 来源注释未计入数据行。"
+}

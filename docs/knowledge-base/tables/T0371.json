@@ -1,0 +1,195 @@
+{
+ "tableId": "T0371",
+ "caption": "Table 52-3. Key nutritional factors in selected commercial veterinary therapeutic foods compared to recommended levels for dogs with gastritis and/or gastroduodenal ulceration.*",
+ "columns": [
+  "",
+  "Potassium (%)",
+  "Chloride (%)",
+  "Sodium (%)",
+  "Protein (%)***",
+  "Fat (%)",
+  "Crude fiber (%)"
+ ],
+ "rows": [
+  [
+   "Moist foods**",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "0.8-1.1",
+   "0.5-1.3",
+   "0.3-0.5",
+   "≤30",
+   "<15",
+   "≤5"
+  ],
+  [
+   "Hill's Prescription Diet i/d Canine",
+   "0.95",
+   "1.22",
+   "0.44",
+   "25.0",
+   "14.9",
+   "1.0"
+  ],
+  [
+   "Iams Veterinary Formula Intestinal Low-Residue",
+   "0.84",
+   "0.84",
+   "0.53",
+   "35.9",
+   "13.2",
+   "3.9"
+  ],
+  [
+   "Medi-Cal Gastro Formula",
+   "0.6",
+   "na",
+   "0.6",
+   "22.1",
+   "11.7",
+   "1.0"
+  ],
+  [
+   "Purina Veterinary Diets EN GastroENteric Formula",
+   "0.61",
+   "0.78",
+   "0.37",
+   "30.5",
+   "13.8",
+   "0.9"
+  ],
+  [
+   "Royal Canin Veterinary Diet Digestive Low Fat LF",
+   "0.74",
+   "1.06",
+   "0.39",
+   "31.9",
+   "6.9",
+   "3.0"
+  ],
+  [
+   "Royal Canin Veterinary Diet Intestinal HE",
+   "0.80",
+   "0.92",
+   "0.57",
+   "23.1",
+   "11.8",
+   "1.4"
+  ],
+  [
+   "Dry foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "0.8-1.1",
+   "0.5-1.3",
+   "0.3-0.5",
+   "≤30",
+   "<15",
+   "≤5"
+  ],
+  [
+   "Hill's Prescription Diet i/d Canine",
+   "0.92",
+   "1.04",
+   "0.45",
+   "26.2",
+   "14.1",
+   "2.7"
+  ],
+  [
+   "Iams Veterinary Formula Intestinal Low-Residue",
+   "0.90",
+   "0.66",
+   "0.35",
+   "24.6",
+   "10.7",
+   "2.1"
+  ],
+  [
+   "Medi-Cal Gastro Formula",
+   "0.8",
+   "na",
+   "0.5",
+   "22.9",
+   "13.9",
+   "1.9"
+  ],
+  [
+   "Purina Veterinary Diets EN GastroENteric Formula",
+   "0.66",
+   "0.85",
+   "0.60",
+   "27.0",
+   "12.6",
+   "1.5"
+  ],
+  [
+   "Royal Canin Veterinary Diet Digestive Low Fat LF 20",
+   "0.88",
+   "1.10",
+   "0.49",
+   "24.2",
+   "6.6",
+   "2.3"
+  ],
+  [
+   "Royal Canin Veterinary Diet Intestinal HE 28",
+   "0.88",
+   "0.99",
+   "0.55",
+   "33.0",
+   "22.0",
+   "1.6"
+  ],
+  [
+   "Key: na = information not available from manufacturer.",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "*From manufacturers' published information or calculated from manufacturers' published as-fed values; all values are on a dry matter basis unless otherwise stated.",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "**Moist foods are best and ideally they should be offered at temperatures between 70 to 100°F (21 to 38°C).",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "***Dietary protein may need to be limited to one or two sources that the patient has not been exposed to previously. Table 31-5 contains foods with these characteristics.",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ]
+ ]
+}

@@ -1,0 +1,70 @@
+{
+ "tableId": "T0030",
+ "caption": "TABLE 2 Pain Assessment Methods and Tools for Use in Dogs",
+ "columns": [
+  "TOOL",
+  "ACUTE OR CHRONIC PAIN",
+  "USER",
+  "EASE OF USE",
+  "PURPOSE",
+  "VALIDITY*"
+ ],
+ "rows": [
+  [
+   "Physical examination",
+   "Acute and chronic",
+   "Veterinarian",
+   "Moderate, requires training",
+   "Screening, diagnosing, monitoring",
+   "Not formally validated as an assessment of pain"
+  ],
+  [
+   "Clinic observation",
+   "Acute and chronic",
+   "Veterinarian and veterinary technician",
+   "Moderate, requires training",
+   "Monitoring",
+   "Not formally validated as an assessment of pain"
+  ],
+  [
+   "Physiological variables (heart rate; respiration; blood pressure)",
+   "Acute",
+   "Veterinarian and veterinary technician",
+   "Simple",
+   "Screening, monitoring",
+   "Not specific indicators of pain"
+  ],
+  [
+   "Wound palpation",
+   "Acute",
+   "Veterinarian and veterinary technician",
+   "Simple",
+   "Monitoring",
+   "Not formally validated as a stand-alone assessment of pain; forms part of several validated tools"
+  ],
+  [
+   "Home videos and photos",
+   "Acute and chronic",
+   "Owner collects information Veterinarian evaluates",
+   "Moderate, requires instructions",
+   "Screening, monitoring",
+   "Not formally validated as an assessment of pain"
+  ],
+  [
+   "Force plate and pressure sensitive walkway",
+   "Acute and chronic",
+   "Clinical research; dedicated assessment center",
+   "Challenging and labor intensive",
+   "Screening, diagnosing, monitoring",
+   "Valid"
+  ],
+  [
+   "Actigraphy (activity monitoring)",
+   "Acute and chronic",
+   "Clinical Research",
+   "Challenging to setup and operate",
+   "Monitoring",
+   "Valid"
+  ]
+ ]
+}

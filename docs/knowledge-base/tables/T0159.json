@@ -1,0 +1,108 @@
+{
+  "tableId": "T0159",
+  "caption": "Table 23-9. Key nutritional factor content of homemade orphan formulas (Table 23-8) compared to key nutritional factor content of queen's milk.",
+  "columns": [
+    "Nutrients*",
+    "Queen's milk",
+    "Recipe 1**",
+    "Recipe 2**"
+  ],
+  "rows": [
+    [
+      "Moisture (g)",
+      "79.3",
+      "83.1",
+      "86.4"
+    ],
+    [
+      "Dry matter (g)",
+      "20.7",
+      "16.9",
+      "13.6"
+    ],
+    [
+      "Crude protein (g)",
+      "7.5",
+      "7.1",
+      "6.4"
+    ],
+    [
+      "Fat (g)",
+      "8.6",
+      "4.4",
+      "3.4"
+    ],
+    [
+      "NFE (g)",
+      "4",
+      "4.7",
+      "2.9"
+    ],
+    [
+      "Ash (g)",
+      "0.6",
+      "0.8",
+      "0.7"
+    ],
+    [
+      "Calcium (mg)",
+      "180",
+      "96.2",
+      "109"
+    ],
+    [
+      "Phosphorus (mg)",
+      "162",
+      "126",
+      "109"
+    ],
+    [
+      "Sodium (mg)",
+      "90",
+      "33.5",
+      "90"
+    ],
+    [
+      "Potassium (mg)",
+      "103",
+      "117",
+      "113"
+    ],
+    [
+      "Copper (mg)",
+      "0.11",
+      "0.03",
+      "0.2"
+    ],
+    [
+      "Iron (mg)",
+      "0.35",
+      "0.6",
+      "3.5"
+    ],
+    [
+      "Zinc (mg)",
+      "na",
+      "0.7",
+      "1.9"
+    ],
+    [
+      "Energy",
+      "",
+      "",
+      ""
+    ],
+    [
+      "ME (kcal)***",
+      "121",
+      "80",
+      "62"
+    ],
+    [
+      "ME (kJ)***",
+      "506",
+      "335",
+      "260"
+    ]
+  ]
+}

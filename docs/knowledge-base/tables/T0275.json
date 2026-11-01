@@ -1,0 +1,133 @@
+{
+  "tableId": "T0275",
+  "caption": "Table 39-6. Levels of key nutritional factors in selected veterinary therapeutic foods used for dissolution and to minimize recurrence of urate urolithiasis in dogs compared to recommended levels.*",
+  "columns": [
+    "Dry foods",
+    "Protein (%)",
+    "Restricted purines (Yes/No)**",
+    "Sodium (%)",
+    "Urinary pH***"
+  ],
+  "rows": [
+    [
+      "Recommended levels",
+      "10–18",
+      "Yes",
+      "<0.3",
+      "7.1–7.5"
+    ],
+    [
+      "Hill's Prescription Diet u/d Canine",
+      "11.2",
+      "Yes",
+      "0.23",
+      "7.70"
+    ],
+    [
+      "Medi-Cal Reduced Protein",
+      "13.7",
+      "Yes",
+      "0.2",
+      "na"
+    ],
+    [
+      "Medi-Cal Renal LP",
+      "14.7",
+      "Yes",
+      "0.1",
+      "na"
+    ],
+    [
+      "Medi-Cal Renal MP",
+      "18.4",
+      "Yes",
+      "0.1",
+      "na"
+    ],
+    [
+      "Medi-Cal Vegetarian Formula",
+      "20.9",
+      "Yes",
+      "0.4",
+      "na"
+    ],
+    [
+      "Purina Veterinary Diets NF KidNey Function",
+      "15.9",
+      "Yes",
+      "0.22",
+      "6.7–7.5"
+    ],
+    [
+      "Purina Veterinary Diets HA HypoAllergenic",
+      "21.3",
+      "Yes",
+      "0.24",
+      "na"
+    ],
+    [
+      "Royal Canin Veterinary Diets Vegetarian Formula",
+      "19.1",
+      "Yes",
+      "0.15",
+      "6.78"
+    ],
+    [
+      "Moist foods",
+      "Protein (%)",
+      "Restricted purines (Yes/No)**",
+      "Sodium (%)",
+      "Urinary pH***"
+    ],
+    [
+      "Recommended levels",
+      "10–18",
+      "Yes",
+      "<0.3",
+      "7.1–7.5"
+    ],
+    [
+      "Hill's Prescription Diet u/d Canine",
+      "13.3",
+      "Yes",
+      "0.28",
+      "7.4"
+    ],
+    [
+      "Medi-Cal Reduced Protein",
+      "16.5",
+      "No",
+      "0.2",
+      "na"
+    ],
+    [
+      "Medi-Cal Renal LP",
+      "16.8",
+      "No",
+      "0.1",
+      "na"
+    ],
+    [
+      "Medi-Cal Renal MP",
+      "28.2",
+      "No",
+      "0.2",
+      "na"
+    ],
+    [
+      "Medi-Cal Vegetarian Formula",
+      "26.4",
+      "Yes",
+      "0.5",
+      "na"
+    ],
+    [
+      "Purina Veterinary Diets NF KidNey Function",
+      "16.5",
+      "No",
+      "0.24",
+      "6.7–7.5"
+    ]
+  ],
+  "note": "原表分 Dry foods 与 Moist foods 两大块、各带一次列标题；第 10 行为 Moist foods 的块内列标题行，按原文保留。图中上部另含 Table 39-5（编号条目式建议清单，非网格表格），未在此转录；表下 Key 与两条脚注未转录。"
+}

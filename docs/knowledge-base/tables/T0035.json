@@ -1,0 +1,21 @@
+{
+  "tableId": "T0035",
+  "caption": "TABLE 2 Continued",
+  "columns": [
+    "Body System",
+    "Diagnostic Approach",
+    "Therapeutic Tip"
+  ],
+  "rows": [
+    [
+      "Neurologic",
+      "PE focus: Full neurologic examination with checklist.4,5\n\nBaseline diagnostic evaluation should include:\n• Senior blood profile with urinalysis\n• Full neurologic examination\n\nAdditional diagnostic tests to consider:\n• SOD-1 testing for degenerative myelopathy\n• MRI\n• DISHAA or other questionnaires for cognitive dysfunction syndrome6\n• Ultrasound, chest radiograph\n\nDiagnostic tips:\n• Rule out syncope vs. seizure\n• Palpate axillae for pain from a nerve sheath tumor\n• Evaluate client video for all conditions\n• Evaluate toenail wear\n\nConsider referral to a neurologist for further workup/MRI:\n• Include any client video with referral materials",
+      "• Use multimodal therapy."
+    ],
+    [
+      "Endocrine",
+      "PE focus: General body appearance, palpation of thyroid, abdominal palpation, concern for hair loss, distended abdomen, redistribution of fat, and eye changes, including corneal, anterior chamber, lens, pressures, tear production, retina.\n\nBaseline diagnostic evaluation should include:\n• Senior blood profile with urinalysis\n\nAdditional diagnostic tests to consider:\n• Special hormonal assays depending on suspected disease\n• Regional imaging and advanced imaging with CT is often necessary\n\nAdditional testing for chronic disease:\n• Hyperthyroid/Hypothyroid: Monitor T4, calcium levels\n• Hyperadrenocorticism:\n  • ACTH stimulation test or low-dose dexamethasone suppression test\n  • Monitor adrenal size with ultrasound\n• Hypoadrenocorticism: ACTH stimulation test\n• Diabetes: periodic or continuous glucose monitoring, fructosamine, urinalysis to monitor for ketones, urinary tract infection, hematuria\n• Hyperparathyroidism: Monitor calcium, phosphorus levels, urinalysis for urinary tract infection\n• Hypoparathyroidism: Monitor calcium levels",
+      "• The FreeStyle Libre sensor can provide continuous monitoring for diabetic animals for up to 14 days (see the 2018 AAHA Diabetes Management Guidelines for Dogs and Cats).7"
+    ]
+  ]
+}

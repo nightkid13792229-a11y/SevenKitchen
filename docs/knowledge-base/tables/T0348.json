@@ -1,0 +1,42 @@
+{
+  "tableId": "T0348",
+  "caption": "Table 5-4. Classification and digestion of complex carbohydrates.*",
+  "columns": [
+    "Complex carbohydrate type",
+    "Function",
+    "Digestion site",
+    "Digestion products"
+  ],
+  "rows": [
+    [
+      "Starch, glycogen",
+      "Storage polysaccharide in plants and animals",
+      "Small intestine (enzymatic)",
+      "Mono- and disaccharides (glucose, maltose)"
+    ],
+    [
+      "Hemicellulose, cellulose",
+      "Structural parts of plant cell walls",
+      "Large intestine (microbial fermentation)",
+      "Volatile fatty acids (acetate, propionate, butyrate)"
+    ],
+    [
+      "Lignins, cutins, waxes",
+      "Associated cell wall substances",
+      "Not digested or fermented",
+      "Excreted in feces"
+    ],
+    [
+      "Gums, mucilages, pectins",
+      "Naturally occurring polysaccharides in plants",
+      "Large intestine (microbial fermentation)",
+      "Carbon dioxide, methane, hydrogen, volatile fatty acids"
+    ],
+    [
+      "*Adapted from the British Nutrition Foundation. Complex Carbohydrates in Foods. New York, NY: Van Nostrand Reinhold, 1990.",
+      "",
+      "",
+      ""
+    ]
+  ]
+}

@@ -1,0 +1,30 @@
+{
+ "tableId": "T0336",
+ "caption": "Table 47-2. Stages of periodontal disease.*",
+ "columns": [
+  "Stage",
+  "Description"
+ ],
+ "rows": [
+  [
+   "Stage 0",
+   "Clinically normal\nNo gingival inflammation or periodontitis clinically evident."
+  ],
+  [
+   "Stage 1",
+   "Gingivitis only\nNo attachment loss. Height and architecture of the alveolar margin are normal."
+  ],
+  [
+   "Stage 2",
+   "Early periodontitis\nLess than 25% attachment loss or Stage 1 furcation involvement in multirooted teeth."
+  ],
+  [
+   "Stage 3",
+   "Moderate periodontitis\n25 to 50% attachment loss or Stage 2 furcation involvement in multirooted teeth."
+  ],
+  [
+   "Stage 4",
+   "Advanced periodontitis\nGreater than 50% attachment loss or Stage 3 furcation involvement in multirooted teeth."
+  ]
+ ]
+}

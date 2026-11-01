@@ -1,0 +1,128 @@
+{
+  "tableId": "T0298",
+  "caption": "Table 41-8. Levels of key nutritional factors in selected commercial veterinary therapeutic foods used to minimize recurrence of calcium phosphate urolithiasis in dogs compared to recommended levels.*",
+  "columns": [
+    "Dry foods",
+    "Protein (%)",
+    "Calcium (%)",
+    "Phosphorus (%)",
+    "Ca:P ratio",
+    "Sodium (%)",
+    "Magnesium (%)",
+    "Vitamin D (IU/kg)",
+    "Urinary pH"
+  ],
+  "rows": [
+    [
+      "Recommended levels",
+      "10-25",
+      "0.4-0.7",
+      "0.3-0.6",
+      "1.1:1-2:1",
+      "<0.3",
+      "0.06-0.15",
+      "500-1,500",
+      "6.2-6.6**"
+    ],
+    [
+      "Hill's Prescription Diet c/d Canine",
+      "22.3",
+      "0.82",
+      "0.59",
+      "1.4:1",
+      "0.28",
+      "0.111",
+      "618",
+      "6.22"
+    ],
+    [
+      "Hill's Prescription Diet w/d Canine",
+      "18.9",
+      "0.66",
+      "0.56",
+      "1.2:1",
+      "0.22",
+      "0.088",
+      "632",
+      "6.40"
+    ],
+    [
+      "Hill's Prescription Diet w/d with Chicken Canine",
+      "19.1",
+      "0.66",
+      "0.56",
+      "1.2:1",
+      "0.27",
+      "0.080",
+      "677",
+      "6.30"
+    ],
+    [
+      "Medi-Cal Urinary SO 13",
+      "16.7",
+      "1.0",
+      "0.6",
+      "na",
+      "1.3",
+      "0.2",
+      "na",
+      "5.5-6.0"
+    ],
+    [
+      "Moist foods",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "10-25",
+      "0.4-0.7",
+      "0.3-0.6",
+      "1.1:1-2:1",
+      "<0.3",
+      "0.06-0.15",
+      "500-1,500",
+      "6.2-6.6**"
+    ],
+    [
+      "Hill's Prescription Diet c/d Canine",
+      "23.6",
+      "0.68",
+      "0.51",
+      "1.3:3",
+      "0.27",
+      "0.079",
+      "1,370",
+      "6.16"
+    ],
+    [
+      "Hill's Prescription Diet w/d Canine",
+      "17.9",
+      "0.64",
+      "0.52",
+      "1.2:1",
+      "0.24",
+      "0.088",
+      "1,745",
+      "6.40"
+    ],
+    [
+      "Medi-Cal Urinary SO",
+      "18.7",
+      "1.0",
+      "0.8",
+      "na",
+      "1.1",
+      "0.1",
+      "na",
+      "5.5-6.0"
+    ]
+  ],
+  "note": "Key: na = information not available from the manufacturer. *This list represents products with the largest market share for which published information is available. Nutrient levels expressed on a dry matter basis. Moist foods are best. **Alkaline urine recommended for patients with distal renal tubular acidosis. 原文分 Dry foods 段与 Moist foods 段，两段各自重复表头，此处以仅首列为 \"Moist foods\" 的一行标示段分隔。"
+}

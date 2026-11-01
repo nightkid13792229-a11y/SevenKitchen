@@ -1,0 +1,31 @@
+{
+ "tableId": "T0165",
+ "caption": "Table 25-6. Pharmacologic appetite stimulants.*",
+ "columns": [
+  "",
+  ""
+ ],
+ "rows": [
+  [
+   "Cyproheptadine",
+   "Antihistamine and anti-serotonin effects. Dose cats at: a) 2 to 4 mg per cat per os once or twice daily, b) 2 mg per cat every 12 hours. May take up to 24 hours for a response. Give at this dosage for one week and then taper."
+  ],
+  [
+   "Diazepam",
+   "Short-lived appetite stimulant with sedative properties. Dose in cats varies: a) 0.05 to 0.15 mg/kg IV once daily to every other day or 1 mg per os once daily, b) 0.05 to 0.4 mg/kg IV, IM or per os. Eating may begin within a few seconds after IV administration. Food should be readily available."
+  ],
+  [
+   "Mirtazapine",
+   "Increases central nervous system serotonin while antagonizing serotonin activity in the GI tract. Dose cats at: 3.5 mg per cat per os every three days. May take up to 36 hours for a response."
+  ],
+  [
+   "Oxazepam",
+   "Short-lived appetite stimulant with sedative properties. Dose cats at 2 mg per cat (total dose) every 12 hours."
+  ],
+  [
+   "Prednisolone",
+   "Dose glucocorticoids at 0.25 to 0.5 mg/kg per os every day, every other day or intermittently as needed in dogs."
+  ]
+ ],
+ "note": "*Adapted from Plumb DC. Veterinary Drug Handbook, 3rd ed. White Bear, MN: Pharma Veterinary Publishing, 1999."
+}

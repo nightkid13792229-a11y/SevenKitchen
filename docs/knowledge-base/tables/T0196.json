@@ -1,0 +1,30 @@
+{
+ "tableId": "T0196",
+ "caption": "Table 1. Foods and feeding method assessment of an obese miniature poodle with respiratory distress.",
+ "columns": [
+  "Foods",
+  "Feeding method"
+ ],
+ "rows": [
+  [
+   "Science Diet Canine Maintenance, moistᵃ",
+   "One can, once daily"
+  ],
+  [
+   "Science Diet Canine Maintenance, dryᵃ",
+   "One cup, once daily"
+  ],
+  [
+   "Milk-Bone treats (small)ᵇ",
+   "Five, daily"
+  ],
+  [
+   "Ice cream",
+   "One cup, once daily"
+  ],
+  [
+   "Various meats from owner’s meals",
+   "Once or twice daily"
+  ]
+ ]
+}

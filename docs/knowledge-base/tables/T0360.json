@@ -1,0 +1,78 @@
+{
+  "tableId": "T0360",
+  "caption": "Table 5-19. Essentially and biologic function of common fatty acids.",
+  "columns": [
+    "Structure",
+    "Common name",
+    "Essential",
+    "Biologic function"
+  ],
+  "rows": [
+    [
+      "14:0",
+      "Myristic",
+      "No",
+      "Energy use and storage, acylation of proteins"
+    ],
+    [
+      "16:0",
+      "Palmitic",
+      "No",
+      "Energy use and storage, acylation of proteins"
+    ],
+    [
+      "16:1",
+      "Palmitoleic",
+      "No",
+      "Energy use and storage"
+    ],
+    [
+      "18:0",
+      "Stearic",
+      "No",
+      "Energy use and storage, membrane fluidity"
+    ],
+    [
+      "18:1n-9",
+      "Oleic",
+      "No",
+      "Energy use and storage, phospholipid structure"
+    ],
+    [
+      "18:2n-6",
+      "Linoleic",
+      "Yes",
+      "Energy use and storage, arachidonic acid precursor (20:4n-6)"
+    ],
+    [
+      "18:3n-3",
+      "Alpha-linolenic",
+      "Yes",
+      "Energy use and storage, eicosapentaenoic acid precursor (20:5n-3)"
+    ],
+    [
+      "18:3n-6",
+      "Gamma-linolenic",
+      "Yes",
+      "Energy use and storage, arachidonic acid precursor"
+    ],
+    [
+      "20:4n-6",
+      "Arachidonic",
+      "Yes (cat)\nNo (dog)",
+      "Energy use and storage, synthesis of cytokines and eicosanoids, synthesis of steroid hormones, membrane fluidity, competitor of eicosapentaenoic acid (20:5n-3)"
+    ],
+    [
+      "20:5n-3",
+      "Eicosapentaenoic",
+      "Probably",
+      "Energy use and storage, synthesis of cytokines and eicosanoids, retinal and nervous tissue development, membrane fluidity, competitor of arachidonic acid (20:4n-6)"
+    ],
+    [
+      "22:6n-3",
+      "Docosahexaenoic",
+      "Probably",
+      "Energy use and storage, retinal and nervous tissue development, membrane fluidity, competitor of omega-6 fatty acids"
+    ]
+  ]
+}

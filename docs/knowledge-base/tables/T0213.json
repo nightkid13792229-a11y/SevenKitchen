@@ -1,0 +1,31 @@
+{
+  "tableId": "T0213",
+  "caption": "Table 3-1. Problems caused by inadequate health literacy.*",
+  "columns": [
+    ""
+  ],
+  "rows": [
+    [
+      "Improper use of medications"
+    ],
+    [
+      "Inappropriate use or no use of health services"
+    ],
+    [
+      "Poor self-management of chronic conditions"
+    ],
+    [
+      "Inadequate response in emergency situations"
+    ],
+    [
+      "Poor health outcomes"
+    ],
+    [
+      "Lack of self-efficacy and self-esteem"
+    ],
+    [
+      "Financial drain on individuals and society"
+    ]
+  ],
+  "note": "单列清单式表格；表内 * 来源脚注（Adapted from Zarcadoolas C, Pleasant AF, Greer DS. Advancing Health Literacy. San Francisco, CA: Jossey-Banks, 2006.）未计入行。图中另含 Table 3-2（Examples of skills needed for health.*），已见于 T0214，未重复转录；页面双栏正文已忽略。"
+}

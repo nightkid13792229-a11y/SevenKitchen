@@ -1,0 +1,27 @@
+{
+  "tableId": "T0299",
+  "caption": "Table 42-1. Key nutritional factors for foods for canine cystine urolith dissolution and prevention.",
+  "columns": [
+    "Factors",
+    "Dietary recommendations"
+  ],
+  "rows": [
+    [
+      "Water",
+      "Water intake should be encouraged to achieve a urine specific gravity <1.020 Moist food will increase water consumption and formation of less concentrated urine"
+    ],
+    [
+      "Protein",
+      "Avoid excess dietary protein Restrict high quality dietary protein to 10 to 18% dry matter"
+    ],
+    [
+      "Sodium",
+      "Restrict sodium to less than 0.3% dry matter"
+    ],
+    [
+      "Urinary pH",
+      "Feed a food that maintains an alkaline urine (urinary pH = 7.1 to 7.7)"
+    ]
+  ],
+  "note": ""
+}

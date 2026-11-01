@@ -1,0 +1,75 @@
+{
+  "tableId": "T0015",
+  "caption": "TABLE 1: Definitions That Pertain to Dental Care Guidelines",
+  "columns": [
+    "Terminology",
+    "Definition"
+  ],
+  "rows": [
+    [
+      "Dental chart",
+      "A written and graphical representation of the mouth, with adequate space to indicate pathology and procedures (see the “2013 AAHA Dental Care Guidelines” for included items)."
+    ],
+    [
+      "Dental prophylaxis",
+      "A procedure performed on a healthy mouth that includes oral hygiene care, a complete oral examination, and techniques to prevent disease and to remove plaque and calculus above and beneath the gum line under anesthesia before periodontitis has developed. Note: The words “prophy,” “prophylaxis,” and “dental” are often misused in veterinary medicine. More descriptive terms to use for the dental procedures that are commonly performed in companion animal dentistry to prevent periodontitis are COPAT, COHAT, and an oral ATP visit."
+    ],
+    [
+      "Dentistry",
+      "The evaluation, diagnosis, prevention, and/or treatment of abnormalities in the oral cavity, maxillofacial area, and/or associated structures. Nonsurgical, surgical, or related procedures may be included."
+    ],
+    [
+      "Endodontics",
+      "The treatment and therapy of conditions affecting the pulp."
+    ],
+    [
+      "Exodontia (extraction)",
+      "A surgical procedure performed to remove a tooth."
+    ],
+    [
+      "Gingivitis",
+      "Inflammation of the gingiva with or without loss of the supporting structure(s) shown with X-rays."
+    ],
+    [
+      "Home oral hygiene",
+      "Measures taken by pet owners that are intended to control or prevent plaque and calculus accumulation."
+    ],
+    [
+      "Oral surgery",
+      "The practical manipulation and incising of epithelium of hard and soft tissue for the purpose of improving or restoring oral health and comfort."
+    ],
+    [
+      "Orthodontics",
+      "The evaluation and treatment of malpositioned teeth for the purposes of improving occlusion and patient comfort and enhancing the quality of life."
+    ],
+    [
+      "Periodontal disease",
+      "A disease process beginning with gingivitis and progressing to periodontitis when left untreated."
+    ],
+    [
+      "Periodontitis",
+      "A destructive process involving the loss of supportive structures of the teeth, including the periodontium (i.e., gingiva, periodontal ligament, cementum, and/or alveolar bone)."
+    ],
+    [
+      "Periodontal surgery",
+      "Invasive treatment necessary to re-establish or rehabilitate periodontal attachment structures. This is indicated for patients with pockets >5 mm, stage 2 and 3 furcation exposure, or inaccessible root structures."
+    ],
+    [
+      "Periodontal therapy",
+      "Treatment of tooth-supporting structures in the presence of existing periodontal disease; includes dental cleaning as defined below and one or more of the following procedures: gingival curettage for nonsurgical removal of plaque, calculus, and debris in gingival pockets; root planing periodontal flaps; regenerative surgery; gingivectomy-gingivoplasty; and the local application of antimicrobials."
+    ],
+    [
+      "Periodontium",
+      "The supporting structures of teeth, including (1) periodontal ligament, (2) gingiva, (3) cementum, and (4) alveolar and supporting bone."
+    ],
+    [
+      "Pocket",
+      "A pathologic space between supporting structures and the tooth, extending apically from the normal attachment location of the gingival epithelial attachment."
+    ],
+    [
+      "Professional dental cleaning",
+      "Scaling (supragingival and subgingival plaque and calculus removal) of teeth with power or hand instrumentation, tooth polishing, and oral examination performed by a trained veterinary healthcare provider under general anesthesia."
+    ]
+  ],
+  "note": "表下脚注（Some definitions were derived from previously published descriptions；COHAT/COPAT/ATP 缩写说明）及正文段落未计入"
+}

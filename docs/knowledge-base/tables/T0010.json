@@ -1,0 +1,86 @@
+{
+  "tableId": "T0010",
+  "caption": "TABLE 2 (Continued)",
+  "columns": [
+    "",
+    "All",
+    "Puppy",
+    "Young Adult",
+    "Mature Adult",
+    "Senior"
+  ],
+  "rows": [
+    [
+      "Parasitology",
+      "Year-round control of intestinal parasites per CAPC/CDC and AAHA/AVMA Preventive Healthcare Guidelines.",
+      "Discuss prevalence in puppies and zoonotic potential",
+      "",
+      "",
+      ""
+    ],
+    [
+      "",
+      "",
+      "Early deworming beginning at 2 wk of age and repeating every 2 wk until started on year-round control",
+      "Continue year-round control for intestinal parasites",
+      "",
+      ""
+    ],
+    [
+      "",
+      "Perform routine fecal examination for intestinal parasites",
+      "Discuss high prevalence of intestinal parasites in puppies; perform more frequent fecal examinations in the first year of life",
+      "Perform fecal examination for intestinal parasites 1–4 times/yr depending on lifestyle and use of preventives.",
+      "",
+      ""
+    ],
+    [
+      "",
+      "Year-round heartworm preventive per CAPC and AAHA/AVMA Preventive Healthcare Guidelines",
+      "Start on heartworm preventive as early as label allows, no later than 8 wks of age.",
+      "Continue on heartworm preventive throughout all life stages\nTest annually for heartworm infection beginning at 7–12 mo of age",
+      "",
+      ""
+    ],
+    [
+      "",
+      "Year-round flea and tick control per CAPC Guidelines. AAHA/AVMA Preventive Healthcare Guidelines acknowledge clinical discretion based on risk assessment for tick control.\n\nPerform routine examination for fleas and ticks",
+      "Start on flea and tick control as early as label allows (usually 6–8 wk)",
+      "CAPC recommends year-round control for fleas and ticks throughout all life stages.\n\nAAHA/AVMA Preventive Healthcare Guidelines recommend year-round flea control and tick control based on risk assessment.\n\nTest annually for tick-borne infections beginning at 7–12 mo",
+      "",
+      ""
+    ],
+    [
+      "Vaccinations††",
+      "Evaluate risk assessment and use of non-core vaccinations as indicated, as per current AAHA guidelines",
+      "Core and noncore (if indicated) vaccines finishing at 16–20 wk",
+      "Continue CORE vaccines per current guidelines:\n\nDistemper, Adenovirus-2, Parvovirus, +/- Parainfluenza: Administer a single dose of a combination vaccine within 1 yr following the last dose in the initial vaccination series. Administer subsequent boosters at intervals of 3 yr or longer.\n\nRabies: Administer a single dose of vaccine. In most states and provinces, veterinarians are allowed discretion in administering either a 1-yr or a 3-yr labeled rabies vaccine.\nThe interval between subsequent doses is determined by the product label of the last vaccine dose administered (i.e., either 1 yr or 3 yr). For state-specific information on rabies immunization and law, www.rabiesaware.org",
+      "",
+      ""
+    ],
+    [
+      "",
+      "Evaluate current information about use of serology/vaccine titers",
+      "",
+      "Continue appropriate NONCORE vaccines per current guidelines and re-evaluate lifestyle and exposure risk: Bordetella bronchiseptica, Borrelia burgdorferi, Influenza (H3N8, H3N2), Leptospira (4-serovar):\n\nWhere risk of exposure is sustained, administer a single dose 1 yr following completion of the initial 2 doses, then annually thereafter or as indicated by duration of immunity studies per label.",
+      "",
+      ""
+    ],
+    [
+      "",
+      "",
+      "Consider antibody titer testing for the purpose of determining protection from infection from CDV, CPV, and CAV2:\nMeasuring antibody levels (quantitative or qualitative) provides a reasonable assessment of protective immunity against CDV, CPV, and CAV2.",
+      "",
+      "",
+      ""
+    ],
+    [
+      "",
+      "",
+      "",
+      "The frequency of antibody testing should be based on clinical judgment but is reasonable to perform antibody testing at least as often as the interval or booster vaccination.",
+      "",
+      ""
+    ]
+  ]
+}

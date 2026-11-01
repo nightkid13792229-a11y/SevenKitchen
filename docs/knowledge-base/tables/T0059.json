@@ -1,0 +1,36 @@
+{
+ "tableId": "T0059",
+ "caption": "Table VII-15. Theobromine content of different types of chocolate and cocoa products (mg/g)",
+ "columns": [
+  "",
+  "",
+  "",
+  ""
+ ],
+ "rows": [
+  [
+   "White chocolate",
+   "0.009 - 0.035",
+   "Cocoa powder",
+   "4.5 - 30"
+  ],
+  [
+   "Milk chocolate",
+   "1.5 - 2.0",
+   "Cocoa beans",
+   "10 - 53"
+  ],
+  [
+   "Sweet to semisweet dark chocolate",
+   "3.6 - 8.4",
+   "Cocoa shell mulches",
+   "2 - 30"
+  ],
+  [
+   "Bitter chocolate, chocolate liquor, baking chocolate",
+   "12 - 19.6",
+   "Coffee beans",
+   "-"
+  ]
+ ]
+}

@@ -1,0 +1,94 @@
+{
+  "tableId": "T0353",
+  "caption": "Table 5-10. Amino acids (continued).",
+  "columns": [
+    "Name",
+    "Structural formula",
+    "3-letter",
+    "1-letter",
+    "Side chain",
+    "Essentiality"
+  ],
+  "rows": [
+    [
+      "Lysine",
+      "[?]",
+      "Lys",
+      "K",
+      "Basic",
+      "Essential"
+    ],
+    [
+      "Methionine",
+      "[?]",
+      "Met",
+      "M",
+      "Sulfur containing",
+      "Essential"
+    ],
+    [
+      "Phenylalanine",
+      "[?]",
+      "Phe",
+      "F",
+      "Aromatic",
+      "Essential"
+    ],
+    [
+      "Proline",
+      "[?]",
+      "Pro",
+      "P",
+      "Imino acid",
+      "Nonessential"
+    ],
+    [
+      "Serine",
+      "[?]",
+      "Ser",
+      "S",
+      "Aliphatic",
+      "Nonessential"
+    ],
+    [
+      "Taurine",
+      "[?]",
+      "Tau",
+      "",
+      "Beta-amino acid and sulfonic acid group",
+      "Essential for cats; possibly conditionally essential for dogs"
+    ],
+    [
+      "Threonine",
+      "[?]",
+      "Thr",
+      "T",
+      "Aliphatic",
+      "Essential"
+    ],
+    [
+      "Tryptophan",
+      "[?]",
+      "Trp",
+      "W",
+      "Aromatic",
+      "Essential"
+    ],
+    [
+      "Tyrosine",
+      "[?]",
+      "Tyr",
+      "Y",
+      "Aromatic",
+      "Nonessential, but can provide for up to 50% of phenylalanine requirements"
+    ],
+    [
+      "Valine",
+      "[?]",
+      "Val",
+      "V",
+      "Aliphatic branched chain",
+      "Essential"
+    ]
+  ]
+}

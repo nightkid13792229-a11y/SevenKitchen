@@ -1,0 +1,84 @@
+{
+ "tableId": "T0095",
+ "caption": "Table 12-2. Ten most popular dog breeds registered by the American Kennel Club in 1996 compared with their popularity in 2005.",
+ "columns": [
+  "Breed",
+  "1996* Rank",
+  "1996* Number",
+  "2005** Rank",
+  "2005** Number"
+ ],
+ "rows": [
+  [
+   "Labrador retriever",
+   "1",
+   "149,505",
+   "1",
+   "137,867"
+  ],
+  [
+   "Rottweiler",
+   "2",
+   "89,867",
+   "16",
+   "15,916"
+  ],
+  [
+   "German shepherd dog",
+   "3",
+   "79,076",
+   "4",
+   "45,014"
+  ],
+  [
+   "Golden retriever",
+   "4",
+   "68,993",
+   "2",
+   "48,509"
+  ],
+  [
+   "Beagle",
+   "5",
+   "56,946",
+   "5",
+   "42,592"
+  ],
+  [
+   "Poodle",
+   "6",
+   "56,803",
+   "8",
+   "31,638"
+  ],
+  [
+   "Dachshund",
+   "7",
+   "48,426",
+   "6",
+   "38,566"
+  ],
+  [
+   "Cocker spaniel",
+   "8",
+   "45,305",
+   "15",
+   "16,343"
+  ],
+  [
+   "Yorkshire terrier",
+   "9",
+   "40,216",
+   "3",
+   "47,238"
+  ],
+  [
+   "Pomeranian",
+   "10",
+   "39,712",
+   "14",
+   "19,511"
+  ]
+ ],
+ "note": "表头为合并单元格：\"1996*\" 覆盖 Rank、Number 两列，\"2005**\" 覆盖 Rank、Number 两列。表下 * / ** 两条来源注释未计入数据行。"
+}

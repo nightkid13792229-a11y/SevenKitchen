@@ -1,0 +1,63 @@
+{
+ "tableId": "T0145",
+ "caption": "Table 19-5. Comparison of dietary protein requirements during maintenance and growth in selected mammals.",
+ "columns": [
+  "Classification",
+  "Species",
+  "Growth (%)*",
+  "Maintenance (%)*",
+  "G:M ratio**"
+ ],
+ "rows": [
+  [
+   "Omnivore***",
+   "Dog",
+   "12",
+   "4",
+   "3"
+  ],
+  [
+   "Omnivore†",
+   "Dog",
+   "18",
+   "8",
+   "2.25"
+  ],
+  [
+   "Omnivore***",
+   "Rat",
+   "12",
+   "4.2",
+   "2.9"
+  ],
+  [
+   "Carnivore†",
+   "Cat",
+   "18",
+   "16",
+   "1.1"
+  ],
+  [
+   "Carnivore***",
+   "Cat",
+   "29",
+   "19",
+   "1.5"
+  ],
+  [
+   "Carnivore†",
+   "Mink",
+   "31",
+   "20",
+   "1.6"
+  ],
+  [
+   "Carnivore†",
+   "Fox",
+   "24",
+   "16",
+   "1.5"
+  ]
+ ],
+ "note": "图中另含表19-6（Comparison of minimal protein and amino acid requirements...），未在此单表内转录"
+}

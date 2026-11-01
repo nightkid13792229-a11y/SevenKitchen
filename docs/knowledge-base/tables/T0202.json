@@ -1,0 +1,108 @@
+{
+ "tableId": "T0202",
+ "caption": "Table 28-3. Selected commercial foods used in dogs with hyperlipidemia compared to recommended levels of key nutritional factors.*",
+ "columns": [
+  "Foods",
+  "Energy density (kcal/cup)**",
+  "Fat (%)",
+  "Crude fiber (%)"
+ ],
+ "rows": [
+  [
+   "Dry foods",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "-",
+   "<12",
+   "≥10"
+  ],
+  [
+   "Hill’s Prescription Diet r/d Canine",
+   "242",
+   "8.2",
+   "13.5"
+  ],
+  [
+   "Hill’s Prescription Diet r/d with Chicken Canine",
+   "241",
+   "8.8",
+   "13.6"
+  ],
+  [
+   "Iams Veterinary Formula Weight Loss/Restricted Calorie",
+   "217",
+   "9.1",
+   "2.4"
+  ],
+  [
+   "Purina Veterinary Diets EN GastroENteric Formula",
+   "397",
+   "12.6",
+   "1.5"
+  ],
+  [
+   "Purina Veterinary Diets HA HypoAllergenic Formula",
+   "311",
+   "10.5",
+   "1.6"
+  ],
+  [
+   "Purina Veterinary Diets OM Overweight Management Formula",
+   "266",
+   "7.2",
+   "10.3"
+  ],
+  [
+   "Royal Canin Veterinary Diets Digestive Low Fat LF",
+   "226",
+   "6.6",
+   "2.3"
+  ],
+  [
+   "Moist foods",
+   "Energy density (kcal/can)**",
+   "Fat (%)",
+   "Crude fiber (%)"
+  ],
+  [
+   "Recommended levels",
+   "-",
+   "<12",
+   "≥10"
+  ],
+  [
+   "Hill’s Prescription Diet r/d Canine",
+   "257 (12.3-oz. can)",
+   "8.6",
+   "21.2"
+  ],
+  [
+   "Iams Veterinary Formula Weight Loss/Restricted Calorie",
+   "397 (14-oz. can)",
+   "14.9",
+   "3.2"
+  ],
+  [
+   "Purina Veterinary Diets EN GastroENteric Formula",
+   "423 (12.5-oz. can)",
+   "13.8",
+   "0.9"
+  ],
+  [
+   "Purina Veterinary Diets OM Overweight Management Formula",
+   "189 (12.5-oz. can)",
+   "8.4",
+   "19.2"
+  ],
+  [
+   "Royal Canin Veterinary Diets Digestive Low Fat LF",
+   "442 (13.6-oz. can)",
+   "6.6",
+   "3.0"
+  ]
+ ]
+}

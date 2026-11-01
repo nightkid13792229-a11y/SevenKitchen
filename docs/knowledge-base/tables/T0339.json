@@ -1,0 +1,96 @@
+{
+ "tableId": "T0339",
+ "caption": "Table 47-5. Key nutritional factor content of selected dry commercial dog foods marketed for dental health compared to recommended levels.*",
+ "columns": [
+  "Factors",
+  "VOHC Seal for plaque control (Yes/No)",
+  "Vitamin E (IU/kg)",
+  "Vitamin C (mg/kg)",
+  "Selenium (mg/kg)",
+  "Phosphorus (%)",
+  "Sodium (%)"
+ ],
+ "rows": [
+  [
+   "Recommended levels",
+   "Yes",
+   "≥400",
+   "≥100",
+   "0.5-1.3",
+   "0.4-0.8",
+   "0.2-0.4"
+  ],
+  [
+   "Hill's Prescription Diet t/d Canine",
+   "Yes",
+   "652",
+   "79",
+   "0.50",
+   "0.40",
+   "0.22"
+  ],
+  [
+   "Hill's Prescription Diet t/d Small Bites Canine",
+   "Yes",
+   "652",
+   "79",
+   "0.50",
+   "0.40",
+   "0.22"
+  ],
+  [
+   "Hill's Science Diet Adult Oral Care",
+   "Yes",
+   "564",
+   "175",
+   "0.62",
+   "0.65",
+   "0.24"
+  ],
+  [
+   "Medi-Cal Dental Formula",
+   "No",
+   "na",
+   "na",
+   "na",
+   "0.90",
+   "0.40"
+  ],
+  [
+   "Purina Veterinary Diet DH Dental Health",
+   "No",
+   "1,171",
+   "na",
+   "na",
+   "1.25",
+   "0.57"
+  ],
+  [
+   "Purina Veterinary Diet DH Dental Health Small Bites",
+   "No",
+   "1,169",
+   "na",
+   "na",
+   "1.24",
+   "0.61"
+  ],
+  [
+   "Royal Canin Veterinary Diet Dental DD 20",
+   "No",
+   "604",
+   "na",
+   "0.44",
+   "0.66",
+   "0.38"
+  ],
+  [
+   "Royal Canin Veterinary Diet Dental DS 23 Small Breed",
+   "No",
+   "725",
+   "na",
+   "0.44",
+   "0.66",
+   "0.77"
+  ]
+ ]
+}

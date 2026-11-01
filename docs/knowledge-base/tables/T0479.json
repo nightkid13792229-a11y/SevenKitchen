@@ -1,0 +1,49 @@
+{
+  "tableId": "T0479",
+  "caption": "Table 1. (Continued)",
+  "columns": [
+    "Vaccine",
+    "Puppies ≤16 weeks",
+    "Dogs >16 weeks",
+    "Revaccination",
+    "Comments and recommendations"
+  ],
+  "note": "表格下方为正文段落，已忽略",
+  "rows": [
+    [
+      "Vaccines not recommended for pet dogs",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Canine parvovirus-2 (CPV; killed, parenteral)",
+      "",
+      "",
+      "",
+      "Not recommended for general use in pet dogs where MLV vaccines are available\nMLV vaccines against canine parvovirus-2 are more potent and induce longer duration of immunity. Some MLV vaccines have been proven to be safe for use in pregnant bitches. Check the product leaflet to be sure. If safe MLV vaccines are unavailable in particular areas, use of inactivated vaccine is justified"
+    ],
+    [
+      "Canine coronavirus (CCoV; killed and MLV, parenteral)",
+      "",
+      "",
+      "",
+      "Not recommended\nThe evidence that CCoV is an important primary pathogen in adult dogs is weak. The diarrhoea associated with CCoV infection in puppies is usually mild, and the infection usually occurs in young puppies, sometimes before they are first vaccinated. Co-infection with canine parvovirus-2 can be managed by protecting robustly against parvoviral infection.\nThere is no evidence that the CCoV vaccines currently available would protect against mutant pathogenic forms of the virus (pantropic or more highly pathogenic strains) that emerge and are identified infrequently"
+    ],
+    [
+      "Giardia spp. vaccines",
+      "",
+      "",
+      "",
+      "Not recommended. There is insufficient scientific evidence to justify their use\nGiardia duodenalis infection is non-life threatening, responds to therapy, and is rarely transmitted from puppies or dogs to humans. There is insufficient evidence that Giardia vaccines can prevent the shedding of Giardia oocysts. Vaccines do not prevent infection and vaccinated dogs can develop clinical signs of infection"
+    ],
+    [
+      "Microsporum canis vaccines",
+      "",
+      "",
+      "",
+      "Not recommended. There is insufficient scientific evidence to justify their use"
+    ]
+  ]
+}

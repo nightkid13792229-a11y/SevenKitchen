@@ -1,0 +1,43 @@
+{
+ "tableId": "T0045",
+ "caption": "Table VI-1. Abbreviations",
+ "columns": [
+  "Abbreviation",
+  "Meaning",
+  "Abbreviation",
+  "Meaning"
+ ],
+ "rows": [
+  [
+   "GE",
+   "Gross energy",
+   "CP",
+   "Crude protein"
+  ],
+  [
+   "DE",
+   "Digestible energy",
+   "DP",
+   "Digestible protein"
+  ],
+  [
+   "ME",
+   "Metabolisable energy",
+   "BW",
+   "Body weight"
+  ],
+  [
+   "kJ",
+   "Kilojoule",
+   "Cr2O3",
+   "Chromium III oxide"
+  ],
+  [
+   "kcal",
+   "Kilocalorie",
+   "",
+   ""
+  ]
+ ],
+ "note": "原表无表头行，abbreviation/meaning 为左右两组成对排列"
+}

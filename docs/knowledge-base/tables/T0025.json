@@ -1,0 +1,132 @@
+{
+ "tableId": "T0025",
+ "caption": "TABLE 8 Nutrients of Concern for Diseases and Select Specific Conditions",
+ "columns": [
+  "Disease Category",
+  "Specific Conditions",
+  "Nutrients of Concern",
+  "Notes"
+ ],
+ "rows": [
+  [
+   "Adverse food reaction",
+   "Cutaneous adverse food reaction",
+   "• Limited antigen diet\n  - Novel/hydrolyzed protein\n  - Limited ingredients",
+   "• Ingredients impact success of treatment\n• Noningredients may also impact success (e.g., additives, Maillard production reaction)"
+  ],
+  [
+   "Adverse food reaction",
+   "Food intolerance",
+   "",
+   ""
+  ],
+  [
+   "Adverse food reaction",
+   "Food-responsive chronic enteropathy",
+   "",
+   ""
+  ],
+  [
+   "Inflammatory skin condition",
+   "Non-food-related skin condition",
+   "• High n-3 fatty acids\n  - Consider n-6:n-3 ratio\n• High vitamin A\n• High vitamin E\n• High zinc\n• Added antioxidants",
+   "• Individual diseases may require different supplements and doses"
+  ],
+  [
+   "Osteoarthritis",
+   "",
+   "• High EPA/DHA\n• Added glucosamine\n• Added chondroitin\n• Added antioxidants\n• Low energy density if overweight/obese",
+   "• Additional supplementation may be required to achieve optimal dose\n• High n-3 fatty acid supplementation may result in gastrointestinal disturbance"
+  ],
+  [
+   "Neurologic conditions",
+   "Cognitive dysfunction",
+   "• Added lipoic acid\n• Added carnitine\n• High EPA/DHA\n• Added antioxidants",
+   "• Synergistic effects of nutrients when combined."
+  ],
+  [
+   "Neurologic conditions",
+   "Idiopathic epilepsy",
+   "• High medium-chain triglycerides",
+   ""
+  ],
+  [
+   "Neurologic conditions",
+   "Anxiety",
+   "• Added L-tryptophan\n• Added hydrolyzed casein\n• Added antioxidants\n• Modified fiber",
+   ""
+  ],
+  [
+   "Cardiovascular disease",
+   "Degenerative valve disease",
+   "• Controlled sodium\n• High EPA/DHA\n• Avoid low protein",
+   "• Supplement potassium as required\n• Maintain optimal body and muscle condition."
+  ],
+  [
+   "Cardiovascular disease",
+   "Hypertrophic cardiomyopathy",
+   "",
+   ""
+  ],
+  [
+   "Cardiovascular disease",
+   "Dilated cardiomyopathy",
+   "• Controlled sodium\n• High EPA/DHA\n• Avoid low protein\n• Added taurine\n• Added carnitine",
+   ""
+  ],
+  [
+   "Urolithiasis",
+   "Calcium oxalate",
+   "• Low oxalate ingredients\n• Controlled calcium with appropriate calcium to phosphorus ratio\n• Avoid vitamin C supplementation\n• Low relative supersaturation\n• Added water",
+   "• Many of these nutrients of concern can be incorporated into other diets but may be difficult to identify unless specifically labeled for this use\n• Aim for USG ≤1.020 (dogs) or ≤1.035 (cats)\n• Struve urolithiasis in dogs is typically infection related and special diet may not be required long term"
+  ],
+  [
+   "Urolithiasis",
+   "Struvite",
+   "• Controlled magnesium\n• Controlled phosphorus\n• Controlled protein\n• Target acidic urine pH\n• Added water",
+   ""
+  ],
+  [
+   "Urolithiasis",
+   "Urate",
+   "• Low purines\n  - Does not necessarily mean low protein\n• Target alkaline urine pH\n• Added water",
+   ""
+  ],
+  [
+   "Urolithiasis",
+   "Cystine",
+   "• Controlled cystine\n• Controlled methionine\n• Target alkaline urine pH\n• Added water",
+   ""
+  ],
+  [
+   "Lower urinary tract disease",
+   "Matrix-crystalline plugs",
+   "• Based on mineral content of the plug\n• Added water",
+   ""
+  ],
+  [
+   "Lower urinary tract disease",
+   "Feline idiopathic cystitis",
+   "• Added antioxidants\n• High EPA/DHA\n• Added water\n• Low energy density if overweight/obese",
+   ""
+  ],
+  [
+   "Pancreatic disease",
+   "Endocrine – Diabetes mellitus",
+   "• High soluble and insoluble fiber\n• Low carbohydrate (cats)\n• High protein (unless contraindicated, e.g., proteinuria)\n• Low energy density if overweight/obese",
+   "• Consistency of meal timing and insulin regimen are most important"
+  ],
+  [
+   "Pancreatic disease",
+   "Exocrine – Pancreatitis",
+   "• Low fat (dogs)\n• Limited antigen (cats)",
+   "• Dietary fat recommendations may depend on baseline intake and degree of hyperlipidemia"
+  ],
+  [
+   "Pancreatic disease",
+   "Exocrine – Exocrine pancreatic insufficiency",
+   "• Achieve optimal body condition",
+   "• In most cases no specific diet is needed with appropriate enzyme supplementation\n• Assess serum cobalamin and supplement if indicated\n• In cases with persistent soft stool, additional fiber supplementation may be warranted"
+  ]
+ ]
+}

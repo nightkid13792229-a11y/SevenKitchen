@@ -1,0 +1,351 @@
+{
+ "tableId": "T0250",
+ "caption": "Table 36-7. Sodium content of selected human foods.*",
+ "columns": [
+  "Food",
+  "Amount",
+  "Sodium (mg)"
+ ],
+ "rows": [
+  [
+   "Bread, cereals and potatoes",
+   "",
+   ""
+  ],
+  [
+   "Recommended",
+   "",
+   ""
+  ],
+  [
+   "Macaroni",
+   "1 cup",
+   "1-10"
+  ],
+  [
+   "Potato",
+   "1 (medium)",
+   "<5"
+  ],
+  [
+   "Puffed wheat",
+   "1 oz.",
+   "1-10"
+  ],
+  [
+   "Rice (polished)",
+   "1/2 cup",
+   "1-10"
+  ],
+  [
+   "Spaghetti",
+   "1 cup",
+   "1-10"
+  ],
+  [
+   "Not recommended",
+   "",
+   ""
+  ],
+  [
+   "Bread",
+   "1 slice",
+   "200"
+  ],
+  [
+   "Corn chips",
+   "1 oz.",
+   "230"
+  ],
+  [
+   "Potato chips",
+   "1 oz.",
+   "300"
+  ],
+  [
+   "Pretzel",
+   "1",
+   "275"
+  ],
+  [
+   "Margarine and oil",
+   "",
+   ""
+  ],
+  [
+   "Recommended",
+   "",
+   ""
+  ],
+  [
+   "Unsalted margarine",
+   "1 tsp",
+   "0-1"
+  ],
+  [
+   "Vegetable shortening",
+   "1 tbs",
+   "0-1"
+  ],
+  [
+   "Not recommended",
+   "",
+   ""
+  ],
+  [
+   "Mayonnaise",
+   "1 tbs",
+   "60-90"
+  ],
+  [
+   "Dairy products",
+   "",
+   ""
+  ],
+  [
+   "Not recommended",
+   "",
+   ""
+  ],
+  [
+   "American cheese",
+   "1 oz.",
+   "200-300"
+  ],
+  [
+   "Butter",
+   "1 tsp",
+   "50"
+  ],
+  [
+   "Cottage cheese",
+   "3 oz.",
+   "200-300"
+  ],
+  [
+   "Cream cheese",
+   "1 1/2 oz.",
+   "100-120"
+  ],
+  [
+   "Milk (regular and skim)",
+   "1 cup",
+   "122"
+  ],
+  [
+   "Meats, poultry, fish",
+   "",
+   ""
+  ],
+  [
+   "Recommended",
+   "",
+   ""
+  ],
+  [
+   "Beef (fresh)",
+   "3 1/2 oz.",
+   "50"
+  ],
+  [
+   "Chicken (no skin)",
+   "",
+   ""
+  ],
+  [
+   "Light meat",
+   "3 1/2 oz.",
+   "64"
+  ],
+  [
+   "Dark meat",
+   "3 1/2 oz.",
+   "86"
+  ],
+  [
+   "Lamb (fresh)",
+   "3 1/2 oz.",
+   "84"
+  ],
+  [
+   "Pork (fresh)",
+   "3 1/2 oz.",
+   "62"
+  ],
+  [
+   "Turkey (no skin)",
+   "",
+   ""
+  ],
+  [
+   "Light meat",
+   "3 1/2 oz.",
+   "82"
+  ],
+  [
+   "Dark meat",
+   "3 1/2 oz.",
+   "98"
+  ],
+  [
+   "Not recommended",
+   "",
+   ""
+  ],
+  [
+   "Bacon",
+   "2 slices",
+   "385"
+  ],
+  [
+   "Egg",
+   "1",
+   "70"
+  ],
+  [
+   "Frankfurter",
+   "1",
+   "560"
+  ],
+  [
+   "Ham (processed)",
+   "3 oz.",
+   "940"
+  ],
+  [
+   "Tuna (canned)",
+   "1 can",
+   "320"
+  ],
+  [
+   "Vegetables (fresh or dietetic canned)",
+   "",
+   ""
+  ],
+  [
+   "Recommended",
+   "",
+   ""
+  ],
+  [
+   "Corn",
+   "1/2 cup",
+   "<5"
+  ],
+  [
+   "Cucumber",
+   "1/2 cup",
+   "<5"
+  ],
+  [
+   "Green beans",
+   "1/2 cup",
+   "<5"
+  ],
+  [
+   "Green pepper",
+   "1/4 cup",
+   "<5"
+  ],
+  [
+   "Lettuce",
+   "1/4 cup",
+   "<5"
+  ],
+  [
+   "Peas",
+   "1/2 cup",
+   "<5"
+  ],
+  [
+   "Tomato",
+   "1",
+   "<5"
+  ],
+  [
+   "Not recommended",
+   "",
+   ""
+  ],
+  [
+   "Most canned vegetables",
+   "1/2 cup",
+   "190-450"
+  ],
+  [
+   "Fruits",
+   "",
+   ""
+  ],
+  [
+   "Most fresh and canned fruits are low in sodium and are permitted",
+   "",
+   ""
+  ],
+  [
+   "Other food items",
+   "",
+   ""
+  ],
+  [
+   "Not recommended",
+   "",
+   ""
+  ],
+  [
+   "Macaroni with cheese",
+   "1 cup",
+   "1,000"
+  ],
+  [
+   "Peanut butter",
+   "1 tbs",
+   "81"
+  ],
+  [
+   "Pizza (cheese)",
+   "1 slice",
+   "650"
+  ],
+  [
+   "Desserts",
+   "",
+   ""
+  ],
+  [
+   "Recommended",
+   "",
+   ""
+  ],
+  [
+   "Sherbet",
+   "1/2 cup",
+   "15-25"
+  ],
+  [
+   "Not recommended",
+   "",
+   ""
+  ],
+  [
+   "Cookies",
+   "1",
+   "35-100"
+  ],
+  [
+   "Gelatins",
+   "1/2 cup",
+   "60-85"
+  ],
+  [
+   "Ice cream",
+   "1/2 cup",
+   "60-85"
+  ],
+  [
+   "Puddings",
+   "1/2 cup",
+   "100-200"
+  ]
+ ]
+}

@@ -1,0 +1,167 @@
+{
+ "tableId": "T0154",
+ "caption": "Table 23-1. Normal physiologic values for neonatal kittens and data for neonatal care.",
+ "columns": [
+  "",
+  "",
+  ""
+ ],
+ "rows": [
+  [
+   "Litter size",
+   "-",
+   "Average: 3-5 (1-7)"
+  ],
+  [
+   "Body weight",
+   "Birth weight",
+   "90-120 g"
+  ],
+  [
+   "",
+   "Weeks 1-2",
+   "Double"
+  ],
+  [
+   "",
+   "Weeks 3-4",
+   "Triple"
+  ],
+  [
+   "Daily weight gain",
+   "Weeks 1-4",
+   "Average: 10-13 g/day"
+  ],
+  [
+   "Body temperature",
+   "24 hr after birth",
+   "33.3-35.5°C (92-96°F)"
+  ],
+  [
+   "",
+   "End of Week 1",
+   "36.6°C (98°F)"
+  ],
+  [
+   "Heart rate",
+   "Weeks 0-4",
+   ">220 beats/min."
+  ],
+  [
+   "Respiratory rate",
+   "Weeks 1-2",
+   "15-35 breaths/min."
+  ],
+  [
+   "Shivering reflex develops",
+   "-",
+   "Week 1"
+  ],
+  [
+   "Eyes",
+   "Eyelids open",
+   "8 days (5-14)"
+  ],
+  [
+   "",
+   "Pupillary light response",
+   "24 hr after eyelids separate"
+  ],
+  [
+   "Ears",
+   "Reaction to auditory stimuli",
+   "3 days"
+  ],
+  [
+   "",
+   "External ear canals open",
+   "6-14 days (completely open by 17 days)"
+  ],
+  [
+   "",
+   "Development functional hearing",
+   "21 days"
+  ],
+  [
+   "Locomotion",
+   "Forelimbs start to support weight",
+   "3-4 days (1-10)"
+  ],
+  [
+   "",
+   "Ability to stand",
+   ""
+  ],
+  [
+   "",
+   "Sitting",
+   "10 days (5-25)"
+  ],
+  [
+   "",
+   "Walking unsteadily",
+   "20 days"
+  ],
+  [
+   "",
+   "Start climbing",
+   "21-22 days"
+  ],
+  [
+   "Micturition and defecation",
+   "Voluntary control",
+   "3 weeks"
+  ],
+  [
+   "Energy requirements",
+   "At birth",
+   "380 kcal/kg"
+  ],
+  [
+   "",
+   "At 4 weeks",
+   "250 kcal/kg"
+  ],
+  [
+   "Eating solid food",
+   "-",
+   "28-50 days"
+  ],
+  [
+   "Deciduous teeth eruption",
+   "Incisors",
+   "2-3 weeks"
+  ],
+  [
+   "",
+   "Canines",
+   "3-4 weeks"
+  ],
+  [
+   "",
+   "Premolars",
+   "3-6 weeks"
+  ],
+  [
+   "Permanent teeth eruption",
+   "Incisors",
+   "3-4 months"
+  ],
+  [
+   "",
+   "Canines",
+   "4-5 months"
+  ],
+  [
+   "",
+   "Premolars",
+   "4-6 months"
+  ],
+  [
+   "",
+   "Molars",
+   "4-5 months"
+  ]
+ ],
+ "note": "原表无表头行（3 列：项目 / 子项 / 数值）。"
+}

@@ -1,0 +1,76 @@
+{
+ "tableId": "T0032",
+ "caption": "TABLE 1 Diagnostic Tests and Recommended Frequencies for Senior Dogs and Cats",
+ "columns": [
+  "Diagnostic Test",
+  "Canine",
+  "Feline"
+ ],
+ "rows": [
+  [
+   "Fecal testing for parasites",
+   "1–4 times/yr, depending on use of preventive products and lifestyle.",
+   "1–2 times/yr, depending on health and lifestyle factors."
+  ],
+  [
+   "Tick-borne disease",
+   "Annually",
+   "N/A"
+  ],
+  [
+   "Heartworm",
+   "Annually",
+   "Detailed information on heartworm testing is available in the American Heartworm Society guidelines.¹"
+  ],
+  [
+   "Comprehensive CBC (including cell morphology, differentials and pathologist review if necessary)",
+   "Every 6–12 mo.",
+   "Every 6–12 mo."
+  ],
+  [
+   "Chemistry (TP, albumin, ALT, glucose, BUN, creatinine, sodium, potassium, calcium, SDMA if available)",
+   "Every 6–12 mo.",
+   "Every 6–12 mo."
+  ],
+  [
+   "Urinalysis (USG, sediment, glucose, ketones, bilirubin, protein, occult blood)",
+   "Every 6–12 mo.",
+   "Every 6–12 mo."
+  ],
+  [
+   "Imaging",
+   "Imaging of a region of interest should be performed if clinically indicated. Breed-specific screening may be appropriate.",
+   "Imaging of a region of interest should be performed if clinically indicated."
+  ],
+  [
+   "Electrocardiogram",
+   "Perform an electrocardiogram annually in breeds with high risk of cardiac disease (e.g., boxers, Dobermans), or in other patients when clinically indicated or if an arrhythmic condition is suspected.",
+   "Perform an electrocardiogram annually in breeds with high risk of cardiac disease (e.g., boxers, Dobermans), or in other patients when clinically indicated or if an arrhythmic condition is suspected."
+  ],
+  [
+   "Urine protein:creatinine ratio",
+   "If proteinuria is identified or persistent microalbuminuria is present.",
+   "If proteinuria is identified or persistent microalbuminuria is present."
+  ],
+  [
+   "Thyroxine (T4)",
+   "Recommended annually.",
+   "Strongly recommended annually."
+  ],
+  [
+   "Blood pressure",
+   "Recommended annually.",
+   "Strongly recommended annually. Recommended every 6–12 mo in healthy geriatric cats."
+  ],
+  [
+   "Retroviral testing",
+   "N/A",
+   "Consider based on individual patient’s risk."
+  ],
+  [
+   "NT-proBNP",
+   "Annually and to be strongly considered before an anesthetic event.",
+   "Annually and to be strongly considered before an anesthetic event."
+  ]
+ ]
+}

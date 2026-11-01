@@ -1,0 +1,37 @@
+{
+  "tableId": "T0484",
+  "caption": "Table 3. Core vaccines for dogs in shelters",
+  "columns": [
+    "Vaccines",
+    "<5 months old",
+    "≥5 months old",
+    "Comments"
+  ],
+  "note": "本图含两张表：已转录上方 Table 3（犬舍核心疫苗）；下方 Table 4（猫舍核心疫苗）与 T0483 内容相同",
+  "rows": [
+    [
+      "CDV+CAV+CPV+CPiV (MLV, parenteral)\nRecombinant CDV with MLV CAV+CPV+CPiV (parenteral)",
+      "Administer immediately at admission starting at 1 month of age\nRepeat every 2 to 3 weeks until 5 months old",
+      "Administer immediately at admission\nRepeat in 2 to 3 weeks",
+      "Use combination vaccines containing modified-live viruses or the recombinant CDV for more rapid onset of immunity"
+    ],
+    [
+      "Bordetella bronchiseptica+CPiV (modified-live, intranasal)\nB. bronchiseptica+CPiV+CAV (modified-live, intranasal)",
+      "Administer immediately at admission starting at 3 weeks of age",
+      "Administer immediately at admission",
+      "Intranasal vaccines containing modified-live B. bronchiseptica and at least CPiV are preferred for rapid onset of optimum immunity. They can be given as early as 3 weeks of age"
+    ],
+    [
+      "B. bronchiseptica (modified-live, oral)\nB. bronchiseptica+CPiV (modified-live, oral)",
+      "Administer immediately at admission starting at 7 or 8 weeks of age, depending on the vaccine chosen",
+      "Administer immediately at admission",
+      "The oral vaccines can be used in dogs 7 or 8 weeks of age and older, but the intranasal vaccine must be used for dogs that are younger"
+    ],
+    [
+      "Rabies Virus (inactivated, parenteral)",
+      "Follow local laws for minimum age for vaccination. Administer at discharge for short-term stay shelters or at admission for long-term stay shelters",
+      "",
+      "Rabies-endemic countries only.\nAdminister according to local law"
+    ]
+  ]
+}

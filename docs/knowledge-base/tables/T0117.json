@@ -1,0 +1,221 @@
+{
+  "tableId": "T0117",
+  "caption": "Table 16-2. Average litter size and birth weight of dogs.*",
+  "columns": [
+    "Breed",
+    "Litter size",
+    "Birth weight (g)"
+  ],
+  "rows": [
+    [
+      "Airedale terrier",
+      "9",
+      "300"
+    ],
+    [
+      "Appenzell mountain dog",
+      "10",
+      "465"
+    ],
+    [
+      "Australian silky terrier",
+      "3",
+      "-"
+    ],
+    [
+      "Bernese mountain dog",
+      "5",
+      "445"
+    ],
+    [
+      "Borzoi",
+      "9",
+      "450"
+    ],
+    [
+      "Boxer",
+      "8",
+      "440"
+    ],
+    [
+      "Cavalier King Charles spaniel",
+      "4",
+      "230"
+    ],
+    [
+      "Chihuahua",
+      "2-3",
+      "140"
+    ],
+    [
+      "Chow chow",
+      "6",
+      "460"
+    ],
+    [
+      "Dachshund",
+      "4",
+      "215"
+    ],
+    [
+      "Dalmatian",
+      "5-6",
+      "-"
+    ],
+    [
+      "Doberman pinscher",
+      "7",
+      "410"
+    ],
+    [
+      "English bulldog",
+      "7",
+      "295"
+    ],
+    [
+      "English cocker spaniel",
+      "6",
+      "230"
+    ],
+    [
+      "English springer spaniel",
+      "11",
+      "375"
+    ],
+    [
+      "Fox terrier",
+      "3",
+      "260"
+    ],
+    [
+      "French bulldog",
+      "5",
+      "215"
+    ],
+    [
+      "German shepherd dog",
+      "6",
+      "445"
+    ],
+    [
+      "German shorthaired pointer",
+      "7-8",
+      "415"
+    ],
+    [
+      "Great Pyrenees",
+      "≥5",
+      "705"
+    ],
+    [
+      "Hovawart",
+      "11",
+      "435"
+    ],
+    [
+      "Irish terrier",
+      "6",
+      "270"
+    ],
+    [
+      "Labrador retriever",
+      "5",
+      "450"
+    ],
+    [
+      "Maltese",
+      "3",
+      "155"
+    ],
+    [
+      "Miniature dachshund",
+      "3",
+      "210"
+    ],
+    [
+      "Miniature pinscher",
+      "3",
+      "-"
+    ],
+    [
+      "Miniature poodle",
+      "2-3",
+      "165"
+    ],
+    [
+      "Miniature schnauzer",
+      "4",
+      "155"
+    ],
+    [
+      "Newfoundland",
+      "7",
+      "595"
+    ],
+    [
+      "Norwich terrier",
+      "5",
+      "225"
+    ],
+    [
+      "Papillon",
+      "3",
+      "120"
+    ],
+    [
+      "Pekingese",
+      "2-3",
+      "-"
+    ],
+    [
+      "Pomeranian",
+      "2",
+      "-"
+    ],
+    [
+      "Pug",
+      "3",
+      "-"
+    ],
+    [
+      "Rottweiler",
+      "7",
+      "-"
+    ],
+    [
+      "Saint Bernard",
+      "7",
+      "640"
+    ],
+    [
+      "Scottish terrier",
+      "5",
+      "240"
+    ],
+    [
+      "Shetland sheepdog",
+      "4-5",
+      "260"
+    ],
+    [
+      "Shih Tzu",
+      "2-3",
+      "-"
+    ],
+    [
+      "Sloughi",
+      "3",
+      "670"
+    ],
+    [
+      "Standard schnauzer",
+      "6",
+      "285"
+    ],
+    [
+      "Yorkshire terrier",
+      "5",
+      "95"
+    ]
+  ]
+}

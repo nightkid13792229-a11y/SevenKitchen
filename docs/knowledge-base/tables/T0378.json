@@ -1,0 +1,126 @@
+{
+ "tableId": "T0378",
+ "caption": "Table 55-1. Potential causes of acute small bowel diarrhea in dogs and cats.",
+ "columns": [
+  "Dietary",
+  "Infectious agents",
+  "Miscellaneous",
+  "Toxin or drug induced"
+ ],
+ "rows": [
+  [
+   "Dietary indiscretion",
+   "Bacteria",
+   "Hemorrhagic gastroenteritis",
+   "Chemotherapeutic agents"
+  ],
+  [
+   "Foreign bodies",
+   "Bacillus spp.",
+   "",
+   "Digoxin"
+  ],
+  [
+   "Garbage toxicity",
+   "Campylobacter spp.",
+   "",
+   "Heavy metals"
+  ],
+  [
+   "Raw meat consumption",
+   "Clostridium spp.",
+   "",
+   "Laxatives (magnesium oxide, lactulose)"
+  ],
+  [
+   "",
+   "Escherichia coli",
+   "",
+   "Nonsteroidal antiinflammatory drugs"
+  ],
+  [
+   "",
+   "Salmonella spp.",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Staphylococcus spp.",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Yersinia spp.",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Parasites",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Helminths (roundworms, hookworms, Strongyloides spp.)",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Protozoa (Giardia spp., Isospora spp., Cryptosporidium spp.)",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Rickettsia",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Salmon poisoning",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Viruses",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Canine distemper",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Coronavirus",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Panleukopenia",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Parvovirus",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Rotavirus",
+   "",
+   ""
+  ]
+ ]
+}

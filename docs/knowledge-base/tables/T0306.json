@@ -1,0 +1,61 @@
+{
+ "tableId": "T0306",
+ "caption": "Table 43-2. Some potential risk factors for canine infection-induced struvite uroliths.",
+ "columns": [
+  "Diet",
+  "Urine",
+  "Patient/metabolic",
+  "Drugs"
+ ],
+ "rows": [
+  [
+   "High protein content (source of urea)",
+   "Urease-positive UTI",
+   "Females",
+   "Glucocorticoid-associated bacterial UTI"
+  ],
+  [
+   "Urine alkalinizing potential",
+   "High urea concentration",
+   "Breeds",
+   ""
+  ],
+  [
+   "High phosphorus content",
+   "Hyperammonuria",
+   "Miniature schnauzers",
+   ""
+  ],
+  [
+   "High magnesium content",
+   "High-ionic phosphorus concentration",
+   "Bichon Frises",
+   ""
+  ],
+  [
+   "",
+   "High magnesium levels",
+   "Shih Tzus",
+   ""
+  ],
+  [
+   "",
+   "High pH",
+   "Pugs",
+   ""
+  ],
+  [
+   "",
+   "Urine retention",
+   "Dachshunds",
+   ""
+  ],
+  [
+   "",
+   "Concentration of urine and thus lithogenic substances",
+   "Hyperadrenocorticism associated with bacterial UTI",
+   ""
+  ]
+ ],
+ "note": "原图各列内容为独立的多行罗列，按行序横向对齐转录；表下注释 Key: UTI = urinary tract infection. 未计入数据行"
+}

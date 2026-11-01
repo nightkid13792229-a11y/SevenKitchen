@@ -1,0 +1,96 @@
+{
+  "tableId": "T0427",
+  "caption": "Table 68-1. Major hepatobiliary functions related to nutrient digestion and metabolism.",
+  "columns": [
+    "Functions"
+  ],
+  "rows": [
+    [
+      "Metabolic functions"
+    ],
+    [
+      "Converts glucose to glycogen and triglycerides during absorptive state"
+    ],
+    [
+      "Converts glycogen to glucose in postabsorptive period"
+    ],
+    [
+      "Synthesizes glucose from glucogenic precursors such as glycerol and amino acids in postabsorptive period (gluconeogenesis)"
+    ],
+    [
+      "Transforms amino acids (transamination and deamination), synthesizes nonessential amino acids as needed for metabolism"
+    ],
+    [
+      "Synthesizes triacylglycerols and secrets them as lipoproteins"
+    ],
+    [
+      "Synthesizes and releases cholesterol into blood"
+    ],
+    [
+      "Forms ketones from degraded fatty acids during fasting"
+    ],
+    [
+      "Synthesizes urea from ammonia (sole site in body)"
+    ],
+    [
+      "Synthesizes plasma albumin, fibrinogen and various other coagulation factors"
+    ],
+    [
+      "Biliary functions"
+    ],
+    [
+      "Synthesizes bile salts from cholesterol, which are secreted into bile for lipid emulsification and absorption in the small intestine"
+    ],
+    [
+      "Secretes a bicarbonate-rich solution to help neutralize acid in the duodenum"
+    ],
+    [
+      "Secretes plasma cholesterol into bile"
+    ],
+    [
+      "Conjugates and excretes bilirubin in bile"
+    ],
+    [
+      "Detoxifies substances by biotransformation before biliary excretion"
+    ],
+    [
+      "Excretes endogenous and foreign organic molecules in bile"
+    ],
+    [
+      "Storage functions"
+    ],
+    [
+      "Stores glucose as glycogen and triglycerides"
+    ],
+    [
+      "Stores vitamins, particularly A but also D, E, K, B12 and to a lesser extent other B vitamins"
+    ],
+    [
+      "Stores minerals such as iron, copper, manganese and zinc"
+    ],
+    [
+      "Stores blood, especially with pressure increases in the hepatic vein or posterior vena cava"
+    ],
+    [
+      "Endocrine functions"
+    ],
+    [
+      "Activates (partial) vitamin D by dehydroxylation"
+    ],
+    [
+      "Converts thyroxine to triiodothyronine"
+    ],
+    [
+      "Secretes IGF-1 in response to growth hormone"
+    ],
+    [
+      "Metabolizes (deactivates) and excretes hormones"
+    ],
+    [
+      "Miscellaneous functions"
+    ],
+    [
+      "Removes bacteria and food antigens that regularly cross the intestinal epithelial barrier (Kupffer cells of mononuclear-macrophage system in the sinusoids)"
+    ]
+  ]
+}

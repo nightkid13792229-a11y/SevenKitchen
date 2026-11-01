@@ -1,0 +1,87 @@
+{
+ "tableId": "T0149",
+ "caption": "Table 20-3. Key nutritional factors for foods for young adult cats.",
+ "columns": [
+  "Factors",
+  "Normal weight",
+  "Inactive/obese prone"
+ ],
+ "rows": [
+  [
+   "Energy density (kcal ME/g)",
+   "4.0-5.0",
+   "3.3-3.8"
+  ],
+  [
+   "Energy density (kJ ME/g)",
+   "16.7-20.9",
+   "13.8-15.9"
+  ],
+  [
+   "Fat (%)",
+   "10-30",
+   "9-17"
+  ],
+  [
+   "Fiber (%)",
+   "<5",
+   "5-15"
+  ],
+  [
+   "Protein (%)",
+   "30-45",
+   "30-45"
+  ],
+  [
+   "Phosphorus (%)",
+   "0.5-0.8",
+   "0.5-0.8"
+  ],
+  [
+   "Sodium (%)",
+   "0.2-0.6",
+   "0.2-0.6"
+  ],
+  [
+   "Chloride (%)",
+   "1.5 x Na",
+   "1.5 x Na"
+  ],
+  [
+   "Magnesium (%)",
+   "0.04-0.1",
+   "0.04-0.1"
+  ],
+  [
+   "Average urinary pH",
+   "6.2-6.4",
+   "6.2-6.4"
+  ],
+  [
+   "Antioxidants",
+   "",
+   ""
+  ],
+  [
+   "Vitamin E (IU/kg)",
+   "≥500",
+   "≥500"
+  ],
+  [
+   "Vitamin C (mg/kg)",
+   "100-200",
+   "100-200"
+  ],
+  [
+   "Selenium (mg/kg)",
+   "0.5-1.3",
+   "0.5-1.3"
+  ],
+  [
+   "VOHC Seal of Acceptance",
+   "Plaque control",
+   "Plaque control"
+  ]
+ ],
+ "note": "表头原为两行：Factors | Recommended food levels*（下分 Normal weight 与 Inactive/obese prone）。表下注：Key: ME = metabolizable energy, VOHC = Veterinary Oral Health Council (Chapter 47). *Dry matter basis. Concentrations presume an energy density of 4.0 kcal/g. Levels should be corrected for foods with higher energy densities. Adjustment is unnecessary for foods with lower energy densities."
+}

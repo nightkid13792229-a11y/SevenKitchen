@@ -1,0 +1,86 @@
+{
+ "tableId": "T0146",
+ "caption": "Table 19-6. Comparison of minimal protein and amino acid requirements for growth in kittens and puppies.*",
+ "columns": [
+  "Nutrients",
+  "Recommended allowance for kittens** % DM",
+  "Recommended allowance for puppies** % DM"
+ ],
+ "rows": [
+  [
+   "Crude protein",
+   "22.5",
+   "17.5"
+  ],
+  [
+   "EAA",
+   "-",
+   "-"
+  ],
+  [
+   "Amino acids",
+   "",
+   ""
+  ],
+  [
+   "Arginine***",
+   "0.96",
+   "0.66"
+  ],
+  [
+   "Histidine",
+   "0.33",
+   "0.25"
+  ],
+  [
+   "Isoleucine",
+   "0.54",
+   "0.50"
+  ],
+  [
+   "Leucine",
+   "1.28",
+   "0.82"
+  ],
+  [
+   "Lysine",
+   "0.85",
+   "0.70"
+  ],
+  [
+   "Methionine (met + cys)",
+   "0.44 (0.88)",
+   "0.26 (0.53)"
+  ],
+  [
+   "Phenylalanine (phe + tyr)",
+   "0.5 (1.91)",
+   "0.50 (1.00)"
+  ],
+  [
+   "Threonine",
+   "0.65",
+   "0.63"
+  ],
+  [
+   "Tryptophan",
+   "0.16",
+   "0.18"
+  ],
+  [
+   "Valine",
+   "0.64",
+   "0.56"
+  ],
+  [
+   "Taurine (extruded)",
+   "0.1",
+   "–"
+  ],
+  [
+   "Taurine (canned)",
+   "0.17",
+   "–"
+  ]
+ ]
+}

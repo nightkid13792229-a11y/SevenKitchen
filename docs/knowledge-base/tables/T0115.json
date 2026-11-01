@@ -1,0 +1,241 @@
+{
+ "tableId": "T0115",
+ "caption": "Table 16-1. Normal physiologic values for neonatal puppies and data for neonatal care.",
+ "columns": [
+  "Parameter",
+  "Item",
+  "Value"
+ ],
+ "rows": [
+  [
+   "Birth weight",
+   "Individual",
+   "1-6.5% of mother's weight"
+  ],
+  [
+   "Birth weight",
+   "Total litter",
+   "12-14% of mother's weight"
+  ],
+  [
+   "Daily weight gain",
+   "BW at 8-10 days",
+   "2 x birth weight"
+  ],
+  [
+   "Daily weight gain",
+   "Week 1",
+   "8% (5-10%)"
+  ],
+  [
+   "Daily weight gain",
+   "Weeks 2-4",
+   "5% (3.5-6%)"
+  ],
+  [
+   "Daily weight gain",
+   "Weeks 5-10",
+   "2 g/kg adult BW"
+  ],
+  [
+   "Daily weight gain",
+   ">10 weeks",
+   "2-4 g/kg adult BW"
+  ],
+  [
+   "Body temperature",
+   "24 hr after birth",
+   "35.5 ± 0.8°C (96 ± 1.4°F)"
+  ],
+  [
+   "Body temperature",
+   "Weeks 1-2",
+   "34.5-37.2°C (94-99°F)"
+  ],
+  [
+   "Body temperature",
+   "Weeks 2-4",
+   "36.0-37.8°C (97-100°F)"
+  ],
+  [
+   "Body temperature",
+   ">4 weeks",
+   "37.8-38.3°C (97-101°F)"
+  ],
+  [
+   "Heart rate",
+   "Weeks 1-2",
+   "230-240 beats/min."
+  ],
+  [
+   "Heart rate",
+   "Weeks 3-4",
+   "210-220 beats/min."
+  ],
+  [
+   "Heart rate",
+   "Weeks 5-6",
+   "195 beats/min."
+  ],
+  [
+   "Heart rate",
+   "Week 7",
+   "185 beats/min."
+  ],
+  [
+   "Heart rate",
+   "Weeks 8-12",
+   "165-175 beats/min."
+  ],
+  [
+   "Respiratory rate",
+   "At birth",
+   "15-35 breaths/min."
+  ],
+  [
+   "Shivering reflex develops",
+   "-",
+   "6-8 days"
+  ],
+  [
+   "Eyes",
+   "Eyes open",
+   "10-14 days"
+  ],
+  [
+   "Eyes",
+   "Visual following of moving objects",
+   "3-4 weeks"
+  ],
+  [
+   "Eyes",
+   "Recognition of owner and mother",
+   "4-5 weeks"
+  ],
+  [
+   "Ears",
+   "Open",
+   "12-17 days"
+  ],
+  [
+   "Ears",
+   "Reaction to auditory stimuli",
+   "3-4 weeks"
+  ],
+  [
+   "Locomotion",
+   "Stepping movements with forelimbs",
+   "5-6 days"
+  ],
+  [
+   "Locomotion",
+   "Stepping movements with pelvic limbs",
+   "7-10 days"
+  ],
+  [
+   "Locomotion",
+   "Ability to stand",
+   "10 days"
+  ],
+  [
+   "Locomotion",
+   "Steady gait",
+   "3 weeks"
+  ],
+  [
+   "Locomotion",
+   "Walking and running",
+   "4 weeks"
+  ],
+  [
+   "Micturition and defecation",
+   "Voluntary control",
+   "16-21 days"
+  ],
+  [
+   "Activated sleep",
+   "Muscle tic disappears",
+   "4 weeks"
+  ],
+  [
+   "Descent of testes",
+   "-",
+   "18-45 days"
+  ],
+  [
+   "Urine specific gravity",
+   "-",
+   "1.006-1.007"
+  ],
+  [
+   "Water requirement",
+   "-",
+   "180 (130-220) ml/BW_kg/day"
+  ],
+  [
+   "Eating solid food",
+   "-",
+   "4-5 weeks"
+  ],
+  [
+   "Deciduous teeth eruption",
+   "Incisors",
+   "3-4 weeks"
+  ],
+  [
+   "Deciduous teeth eruption",
+   "Canines",
+   "3 weeks"
+  ],
+  [
+   "Deciduous teeth eruption",
+   "Premolars",
+   "4-12 weeks"
+  ],
+  [
+   "Permanent teeth eruption",
+   "Incisors",
+   "3-5 months"
+  ],
+  [
+   "Permanent teeth eruption",
+   "Canines",
+   "4-6 months"
+  ],
+  [
+   "Permanent teeth eruption",
+   "Premolars",
+   "4-6 months"
+  ],
+  [
+   "Permanent teeth eruption",
+   "Molars",
+   "5-7 months"
+  ],
+  [
+   "Body water",
+   "At birth",
+   "80%"
+  ],
+  [
+   "Fat reserves",
+   "At birth",
+   "1-2%"
+  ],
+  [
+   "Fat reserves",
+   "At 2 weeks",
+   "10%"
+  ],
+  [
+   "Fat reserves",
+   "At 1 month",
+   "17%"
+  ],
+  [
+   "Fat reserves",
+   "Non-obese adult dogs",
+   "22-23%"
+  ]
+ ]
+}

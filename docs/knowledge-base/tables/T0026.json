@@ -1,0 +1,144 @@
+{
+ "tableId": "T0026",
+ "caption": "TABLE 8 (Continued) Nutrients of Concern for Diseases and Select Specific Conditions",
+ "columns": [
+  "Disease Category",
+  "Specific Conditions",
+  "Nutrients of Concern",
+  "Notes"
+ ],
+ "rows": [
+  [
+   "Gastrointestinal",
+   "Acute vomiting, diarrhea",
+   "• Highly digestible\n• Low to moderate fat",
+   "• Difficult to identify digestibility unless specifically labeled for this use"
+  ],
+  [
+   "Gastrointestinal",
+   "Chronic enteropathy",
+   "• Limited antigen diet\n  - Novel/hydrolyzed protein\n• ± modified fiber\n• ± low fat",
+   "• Assess serum cobalamin and folate and supplement if indicated"
+  ],
+  [
+   "Gastrointestinal",
+   "Intestinal dysbiosis",
+   "• Modified fiber",
+   "• Assess serum cobalamin and supplement if indicated"
+  ],
+  [
+   "Gastrointestinal",
+   "Protein-losing enteropathy",
+   "• Low fat\n• ± limited antigen",
+   ""
+  ],
+  [
+   "Gastrointestinal",
+   "Fiber-responsive colitis",
+   "• Moderate to high fiber\n• Mixed fiber types",
+   "• Fiber can be separately supplemented"
+  ],
+  [
+   "Gastrointestinal",
+   "Large bowel diarrhea",
+   "",
+   ""
+  ],
+  [
+   "Gastrointestinal",
+   "Constipation",
+   "• Moderate to high fiber\n• Mixed fiber types\n• Low energy density if overweight/obese\n• Increased water",
+   "• Investigate underlying causes (e.g., hypercalcemia, hypokalemia, obesity)"
+  ],
+  [
+   "Gastrointestinal",
+   "Obstipation",
+   "• Highly digestible\n• Low energy density if overweight/obese",
+   "• Difficult to identify digestibility unless specifically labeled for this use\n• Caution with high-fiber weight loss diets"
+  ],
+  [
+   "Other endocrine",
+   "Hyperlipidemia",
+   "• Low fat",
+   "• Consider EPA/DHA supplementation"
+  ],
+  [
+   "Other endocrine",
+   "Feline idiopathic hypercalcemia",
+   "• Controlled calcium\n• Avoid excess vitamin D\n• Avoid excess vitamin A\n• ± increased fiber",
+   ""
+  ],
+  [
+   "Other endocrine",
+   "Hyperthyroid",
+   "• Low iodine",
+   "• Impossible to achieve necessary level of iodine restriction without specific formulation and production procedures\n• Specific nutritional modification not required if hyperthyroidism is managed by other means"
+  ],
+  [
+   "Liver disease",
+   "Encephalopathic",
+   "• Low protein\n• ± B12 supplementation",
+   "• Avoid organ meats\n• Consider vegetarian protein sources"
+  ],
+  [
+   "Liver disease",
+   "Nonencephalopathic – Portosystemic shunt",
+   "• Moderate protein",
+   ""
+  ],
+  [
+   "Liver disease",
+   "Nonencephalopathic – Microvascular dysplasia",
+   "",
+   ""
+  ],
+  [
+   "Liver disease",
+   "Nonencephalopathic – Chronic hepatitis",
+   "",
+   ""
+  ],
+  [
+   "Liver disease",
+   "Copper-associated hepatopathy",
+   "• Low copper\n• Added zinc",
+   "• Only specifically designed low-copper diets are below AAFCO minimums"
+  ],
+  [
+   "Kidney",
+   "Protein-losing nephropathy",
+   "• 25–50% protein reduction from current intake\n  - Meet essential amino acid requirements\n• High EPA/DHA\n• Low phosphorus if azotemic",
+   "• Protein recommendations will depend upon the degree of proteinuria\n• Many medications used to address proteinuria and hypertension may exacerbate hyperkalemia, and reducing dietary potassium intake may help"
+  ],
+  [
+   "Kidney",
+   "Acute kidney injury",
+   "• Moderate protein",
+   "• Consider as a critical care disease category when hypercatabolic"
+  ],
+  [
+   "Kidney",
+   "Chronic kidney disease",
+   "• Low phosphorus\n• ± potassium supplementation\n• High EPA/DHA\n• Increased energy density to maintain body and muscle condition (unless obese)",
+   "• Many medications used to address proteinuria and hypertension may exacerbate hyperkalemia, and reducing dietary potassium intake may help\n• Consider vitamin D supplementation"
+  ],
+  [
+   "Obesity",
+   "",
+   "• High protein\n• Moderate to high fiber\n• Low energy density\n• Increased nutrient to calorie ratio\n• Moderate to low fat",
+   "• Restriction below RER is not recommended with over-the-counter products"
+  ],
+  [
+   "Dental disease",
+   "",
+   "• Mechanical action or masking flavor for\n  - Plaque or tartar reduction and/or prevention\n  - Control of bad breath odor",
+   "• Mechanical brushing and dental prophylaxis are most effective"
+  ],
+  [
+   "Critical care",
+   "",
+   "• Highly digestible\n• Increased energy density\n• High fat\n• Added antioxidants\n• Texture more amenable to tube feeding slurry use",
+   "• Difficult to identify digestibility unless specifically labeled for this use"
+  ]
+ ]
+}

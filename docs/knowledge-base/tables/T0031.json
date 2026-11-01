@@ -1,0 +1,94 @@
+{
+ "tableId": "T0031",
+ "caption": "TABLE 2 (Continued)",
+ "columns": [
+  "TOOL",
+  "ACUTE OR CHRONIC PAIN",
+  "USER",
+  "EASE OF USE",
+  "PURPOSE",
+  "VALIDITY*"
+ ],
+ "rows": [
+  [
+   "CLINICAL METROLOGY INSTRUMENTS (CMIS)",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Canine osteoarthritis staging tool (COAST)ᵃ",
+   "Chronic, osteoarthritis",
+   "Owner and veterinarian",
+   "Moderate",
+   "Screening",
+   "Not validated"
+  ],
+  [
+   "Colorado Acute Pain Scale Canineᵇ",
+   "Acute",
+   "Veterinarian and veterinary technician",
+   "Simple",
+   "Monitoring",
+   "Not validated"
+  ],
+  [
+   "Glasgow Short Form scaleᶜ",
+   "Acute",
+   "Veterinarian and veterinary technician",
+   "Moderate",
+   "Monitoring",
+   "Moderately validated"
+  ],
+  [
+   "Liverpool Osteoarthritis in Dogs (LOAD)ᵈ",
+   "Chronic, osteoarthritis",
+   "Owner",
+   "Simple",
+   "Monitoring",
+   "Valid"
+  ],
+  [
+   "Canine Brief Pain Inventory (CBPI)ᵉ",
+   "Chronic, osteoarthritis",
+   "Owner",
+   "Simple",
+   "Monitoring",
+   "Valid"
+  ],
+  [
+   "Helsinki chronic pain indexᶠ",
+   "Chronic, osteoarthritis",
+   "Owner",
+   "Simple",
+   "Monitoring",
+   "Limited validation"
+  ],
+  [
+   "Sleep and nighttime restlessness evaluation (SNoRE)ᵍ",
+   "Chronic, osteoarthritis",
+   "Owner",
+   "Simple",
+   "Monitoring",
+   "Moderately validated"
+  ],
+  [
+   "Client-specific outcome measures (CSOM)ʰ",
+   "Chronic, osteoarthritis",
+   "Owner",
+   "Moderate",
+   "Monitoring",
+   "Moderately validated"
+  ],
+  [
+   "Health related quality of life (HRQoL)ⁱ",
+   "Chronic",
+   "Owner",
+   "Simple",
+   "Monitoring",
+   "Valid, not specific to pain"
+  ]
+ ]
+}

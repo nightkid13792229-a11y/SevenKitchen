@@ -1,0 +1,46 @@
+{
+ "tableId": "T0453",
+ "caption": "Table 9-10. Common ingredient categories found on European pet food labels.",
+ "columns": [
+  ""
+ ],
+ "rows": [
+  [
+   "Cereals\nAll types of cereals, regardless of their presentation, or ingre-\ndients made from the starchy endosperm"
+  ],
+  [
+   "Derivatives of vegetable origin\nDerivatives resulting from the treatment of vegetable products in\nparticular cereals, vegetables, legumes and oilseeds"
+  ],
+  [
+   "Egg and egg derivatives\nAll egg products, fresh or preserved by appropriate treatment,\nand derivatives from the processing thereof"
+  ],
+  [
+   "Fish and fish derivatives\nFish or parts of fish, fresh or preserved by appropriate treatment,\nand derivatives from the processing thereof"
+  ],
+  [
+   "Meat and animal derivatives\nAll fleshy parts of slaughtered warm-blooded land animals, fresh\nor preserved by appropriate treatment, and all products and\nderivatives of the processing of the carcass"
+  ],
+  [
+   "Milk and milk derivatives\nAll milk products, fresh or preserved by appropriate treatment,\nand derivatives from the processing thereof"
+  ],
+  [
+   "Minerals\nAll inorganic substances suitable for animal feed"
+  ],
+  [
+   "Oils and fats\nAll animal and vegetable oils and fats"
+  ],
+  [
+   "Various sugars\nAll types of sugars"
+  ],
+  [
+   "Vegetable protein extracts\nAll products of vegetable origin in which the proteins have been\nconcentrated by an adequate process to contain at least 50%\ncrude protein, as related to the dry matter, and which may be\nrestructured or textured"
+  ],
+  [
+   "Vegetables\nAll types of vegetables and legumes, fresh or preserved by\nappropriate treatment"
+  ],
+  [
+   "Yeasts\nAll yeasts, the cells of which have been killed and dried"
+  ]
+ ],
+ "note": "單欄表格：每格上半為成分類別（粗體），下半為該類別的說明。"
+}

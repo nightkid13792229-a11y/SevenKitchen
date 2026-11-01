@@ -1,0 +1,21 @@
+{
+  "tableId": "T0403",
+  "caption": "Table 60-3. Key nutritional factors in selected highly digestible commercial veterinary therapeutic foods marketed for cats with small intestinal bacterial overgrowth compared to recommended levels.*",
+  "columns": ["", "Fat (%)", "Protein digestibility (%)", "Fat digestibility (%)", "Carbohydrate digestibility (%)", "Ingredient comments"],
+  "rows": [
+    ["Dry foods", "", "", "", "", ""],
+    ["Recommended levels", "15–25", "≥87", "≥90", "≥90", "—"],
+    ["Hill's Prescription Diet i/d Feline", "20.2", "88", "92", "90", "—"],
+    ["Iams Veterinary Formula Intestinal Low-Residue", "13.7", "na", "na", "na", "FOS, MOS prebiotics"],
+    ["Medi-Cal Hypoallergenic/Gastro", "11.5", "na", "na", "na", "FOS prebiotic, Bacillus subtilis dried fermentation extract"],
+    ["Purina Veterinary Diets EN GastroENteric Formula", "18.4", "94.0", "93.1", "79.7", "—"],
+    ["Royal Canin Veterinary Diet Intestinal HE", "23.7", "na", "na", "na", "FOS, MOS prebioti sodium silico aluminate"],
+    ["Moist foods", "", "", "", "", ""],
+    ["Recommended levels", "15–25", "≥87", "≥90", "≥90", "—"],
+    ["Hill's Prescription Diet i/d Feline", "24.1", "91", "89", "91", "—"],
+    ["Iams Veterinary Formula Intestinal Low-Residue", "11.7", "na", "na", "na", "FOS prebiotic"],
+    ["Medi-Cal Hypoallergenic/Gastro", "35.9", "na", "na", "na", "FOS prebiotic"],
+    ["Medi-Cal Sensitivity CR", "35.1", "na", "na", "na", "—"]
+  ],
+  "note": "表下注释：Key: na = information not available from manufacturer, FOS = fructooligosaccharide, MOS = mannanoligosaccharide. *Manufacturers' published values. Nutrients expressed as % dry matter."
+}

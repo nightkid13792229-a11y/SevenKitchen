@@ -1,0 +1,17 @@
+{
+  "tableId": "T0258",
+  "caption": "Table 37-8. Potential etiopathogenic mechanisms in chronic kidney disease and therapeutic approaches for each.",
+  "columns": ["Factors", "Therapeutic approaches"],
+  "rows": [
+    ["Chronic renal hypoxia", "Maintain hydration (increased water intake)\nAvoid excessive sodium intake\nACE inhibitors\nControl anemia (erythropoietin)"],
+    ["Glomerular hypertension and hyperfiltration", "Avoid excessive dietary protein and sodium\nIncreased dietary omega-3 fatty acids\nACE inhibitors"],
+    ["Hyperphosphatemia and secondary renal hyperparathyroidism", "Limit dietary phosphorus\nIntestinal phosphate binders\nCalcitriol (after normophosphatemia is achieved)"],
+    ["Hypokalemia", "Potassium supplementation"],
+    ["Metabolic acidosis", "Avoid excessive dietary protein\nAlkalinizing foods (therapeutic renal foods)\nAlkalinizing agents (bicarbonate, potassium citrate)"],
+    ["Proteinuria", "Avoid excessive dietary protein\nIncreased dietary omega-3 fatty acids\nACE inhibitors"],
+    ["Renal oxidative stress", "Avoid excessive dietary protein, phosphorus and sodium\nIncreased dietary antioxidants\nOmega-3 fatty acid supplementation"],
+    ["Systemic hypertension", "Avoid excessive dietary sodium\nACE inhibitors\nCalcium-channel antagonists (amlodipine)"],
+    ["Tubulointerstitial inflammation/fibrosis", "Increased dietary omega-3 fatty acids\nAvoid excessive dietary phosphorus and protein"],
+    ["Key: ACE = angiotensin-converting enzyme.", ""]
+  ]
+}

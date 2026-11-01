@@ -1,0 +1,98 @@
+{
+ "tableId": "T0280",
+ "caption": "Table 4-1. Glossary of nutritional genomics terminology.",
+ "columns": [
+  "Term",
+  "Definition"
+ ],
+ "rows": [
+  [
+   "Bioinformatics",
+   "The application of computerized statistical tools (informatics) to biologic data. In genome projects, informatics includes the development of methods to search databases quickly, analyze DNA sequence information and predict protein sequence and structure from DNA sequence data."
+  ],
+  [
+   "Dietary signature",
+   "The repeatable pattern of gene expression, protein expression and metabolite production in different tissues in response to one or more food components."
+  ],
+  [
+   "Gene expression",
+   "The process of converting the genetic code into mRNA and subsequently the translation of mRNA sequences into protein."
+  ],
+  [
+   "Genome",
+   "All the genetic material in the chromosomes of an organism; its size is generally given as its total number of base pairs; the term is derived from gene + chromosome."
+  ],
+  [
+   "Genomics",
+   "The mapping, sequencing and analysis of all genes present in the genome of a given species."
+  ],
+  [
+   "Genotype",
+   "The genetic makeup of an individual, in contrast to its physical appearance or phenotype."
+  ],
+  [
+   "Metabolome",
+   "The complete set of metabolites synthesized by a biologic system; all the substances except DNA, RNA and protein."
+  ],
+  [
+   "Metabolomics",
+   "The study of the influence of the genome on an organism's entire metabolite profile, at a given time."
+  ],
+  [
+   "Microarray technology",
+   "A laboratory technique that permits the simultaneous detection of thousands of genes in a small sample and analyzes the expression of those genes."
+  ],
+  [
+   "Nutrigenetics",
+   "The effect of genetic variation of an individual on the interaction between diet and disease."
+  ],
+  [
+   "Nutrigenomics",
+   "The effects of nutrients on the genome, proteome and metabolome."
+  ],
+  [
+   "Nutritional genomics",
+   "An umbrella term that includes nutrigenomics and nutrigenetics."
+  ],
+  [
+   "Phenotype",
+   "The visible properties of an organism that are produced by the interaction of the genotype and the environment."
+  ],
+  [
+   "Probes",
+   "Single stranded DNA sequences of varying lengths (depending on the technology platform) that represent individual genes that are immobilized onto a solid support."
+  ],
+  [
+   "Proteome",
+   "The entire complement of proteins, and their interactions, in cells, tissues, organs and physiologic fluids."
+  ],
+  [
+   "Proteomics",
+   "The study of the protein products of gene expression with the goal of identifying the proteins and understanding their role in the functioning of an organism."
+  ],
+  [
+   "Single nucleotide polymorphism",
+   "A variation of a gene's normal sequence, in which a single nucleotide in the genetic material is altered and the specific alteration occurs in more than 1% of the population. It is the most common form of polymorphism."
+  ],
+  [
+   "Systems biology",
+   "The study of entire biologic systems using transcriptomics, proteomics and metabolomics (Figure 4-1)."
+  ],
+  [
+   "Transcription",
+   "The process whereby mRNA is synthesized from a DNA template."
+  ],
+  [
+   "Transcriptome",
+   "The sum of all the mRNA expressed by the genome of an organism."
+  ],
+  [
+   "Transcriptomics",
+   "The study of the relative amounts of mRNA expressed in cells or tissues at a given time."
+  ],
+  [
+   "Translation",
+   "The process of protein synthesis whereby the primary structure of the protein is determined by the nucleotide sequence in mRNA."
+  ]
+ ]
+}

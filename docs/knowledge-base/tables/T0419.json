@@ -1,0 +1,142 @@
+{
+  "tableId": "T0419",
+  "caption": "Table 66-2. Key nutritional factors in selected commercial veterinary therapeutic foods for dogs with exocrine pancreatic insufficiency compared to recommended levels.*",
+  "columns": [
+    "",
+    "Protein digestibility (%)",
+    "Fat digestibility (%)",
+    "Carbohydrate digestibility (%)",
+    "Fat (%)",
+    "Crude fiber (%)"
+  ],
+  "rows": [
+    [
+      "Dry foods",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≥87",
+      "≥90",
+      "≥90",
+      "10-15",
+      "≤5**"
+    ],
+    [
+      "Hill's Prescription Diet i/d Canine",
+      "92",
+      "93",
+      "94",
+      "14.1",
+      "2.7"
+    ],
+    [
+      "Iams Veterinary Formula Intestinal Low-Residue",
+      "na",
+      "na",
+      "na",
+      "10.7",
+      "2.1"
+    ],
+    [
+      "Medi-Cal Gastro Formula",
+      "na",
+      "na",
+      "na",
+      "13.9",
+      "1.9"
+    ],
+    [
+      "Purina Veterinary Diets EN GastroENteric Formula***",
+      "84.5",
+      "91.4",
+      "94.4",
+      "12.6",
+      "1.5"
+    ],
+    [
+      "Purina Veterinary Diets HA Hypoallergenic Formula***",
+      "90.7",
+      "93.1",
+      "95.7",
+      "10.54",
+      "1.58"
+    ],
+    [
+      "Royal Canin Veterinary Diet Low Fat LF 20",
+      "na",
+      "na",
+      "na",
+      "6.6",
+      "2.3"
+    ],
+    [
+      "Royal Canin Veterinary Diet Hypoallergenic HP 19",
+      "na",
+      "na",
+      "na",
+      "20.9",
+      "2.3"
+    ],
+    [
+      "Moist foods",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≥87",
+      "≥90",
+      "≥90",
+      "10-15",
+      "≤5**"
+    ],
+    [
+      "Hill's Prescription Diet i/d Canine",
+      "88",
+      "94",
+      "93",
+      "14.9",
+      "1.0"
+    ],
+    [
+      "Iams Veterinary Formula Intestinal Low-Residue",
+      "na",
+      "na",
+      "na",
+      "13.2",
+      "3.9"
+    ],
+    [
+      "Medi-Cal Gastro Formula",
+      "na",
+      "na",
+      "na",
+      "11.7",
+      "1.0"
+    ],
+    [
+      "Purina Veterinary Diets EN GastroENteric Formula***",
+      "85.1",
+      "95.6",
+      "92.2",
+      "13.8",
+      "0.9"
+    ],
+    [
+      "Royal Canin Veterinary Diet Low Fat LF",
+      "na",
+      "na",
+      "na",
+      "6.9",
+      "3.0"
+    ]
+  ]
+}

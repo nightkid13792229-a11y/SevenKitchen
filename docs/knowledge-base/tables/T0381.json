@@ -1,0 +1,66 @@
+{
+  "tableId": "T0381",
+  "caption": "Table 55-4. Characteristics of small and large bowel diarrhea.",
+  "columns": [
+    "Characteristics",
+    "Small bowel",
+    "Large bowel"
+  ],
+  "rows": [
+    [
+      "Blood in feces",
+      "Melena",
+      "Hematochezia"
+    ],
+    [
+      "Fecal quality",
+      "Loose, watery, “cow-pie”",
+      "Loose to semi-formed, “jelly-like”"
+    ],
+    [
+      "Fecal volume",
+      "Large quantities",
+      "Small quantities"
+    ],
+    [
+      "Frequency of defecation",
+      "Normal to slightly increased",
+      "Increased"
+    ],
+    [
+      "Malaise",
+      "May be present",
+      "Rare"
+    ],
+    [
+      "Mucus in feces",
+      "Usually absent",
+      "Usually present"
+    ],
+    [
+      "Steatorrhea",
+      "May be present",
+      "Absent"
+    ],
+    [
+      "Tenesmus",
+      "Absent",
+      "Usually present"
+    ],
+    [
+      "Urgency",
+      "Absent",
+      "Usually present"
+    ],
+    [
+      "Vomiting",
+      "May be present",
+      "Absent"
+    ],
+    [
+      "Weight loss",
+      "May be present",
+      "Rare"
+    ]
+  ]
+}

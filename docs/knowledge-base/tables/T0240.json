@@ -1,0 +1,26 @@
+{
+ "tableId": "T0240",
+ "caption": "Table 34-1. Common clinical signs of osteoarthritis (OA).*",
+ "columns": [
+  "Stage",
+  "Dogs",
+  "Cats"
+ ],
+ "rows": [
+  [
+   "Mild OA",
+   "Stiffness, decreased activity, limping",
+   "Decreased activity"
+  ],
+  [
+   "Moderate OA",
+   "Pain, muscle atrophy, difficulty rising",
+   "Reluctance to jump, climb stairs, groom"
+  ],
+  [
+   "Severe OA",
+   "Loss of range of motion, vocalization, crepitus, lethargy, inappetence",
+   "Limping, muscle atrophy, inappropriate elimination"
+  ]
+ ]
+}

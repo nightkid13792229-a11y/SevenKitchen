@@ -1,0 +1,102 @@
+{
+ "tableId": "T0265",
+ "caption": "Table 38-4. Advantages and disadvantages of survey radiography, double-contrast radiography and ultrasonography in assessing uroliths.",
+ "columns": [
+  "Parameters",
+  "Survey radiography",
+  "Double-contrast radiography",
+  "Ultrasonography"
+ ],
+ "rows": [
+  [
+   "Assessment of uroliths",
+   "Yes, if radiodense",
+   "Indirectly*",
+   "Poor"
+  ],
+  [
+   "Assessment of radiolucent urocystoliths",
+   "Unreliable",
+   "Yes",
+   "Yes"
+  ],
+  [
+   "Distinguishing blood clots from urocystoliths",
+   "No",
+   "Probably",
+   "Yes"
+  ],
+  [
+   "Assessment of laminated urocystoliths",
+   "Best of the three methods",
+   "Probably",
+   "No"
+  ],
+  [
+   "Assessment of other bladder disorders",
+   "Unreliable",
+   "Yes",
+   "Sometimes"
+  ],
+  [
+   "Assessment of urocystolith number",
+   "Yes (>3 mm)",
+   "Yes (>1 mm)",
+   "Equipment and observer dependent"
+  ],
+  [
+   "Assessment of urocystolith size",
+   "Yes (>3 mm)",
+   "Yes (>1 mm)",
+   "Equipment and observer dependent"
+  ],
+  [
+   "Assessment of urocystolith density",
+   "Yes (>3 mm)",
+   "No",
+   "No"
+  ],
+  [
+   "Assessment of urocystolith shape",
+   "Yes (>3 mm)",
+   "Yes (>1 mm)",
+   "No"
+  ],
+  [
+   "Immediate postsurgical assessment for uroliths",
+   "Yes",
+   "Not recommended**",
+   "No (air artifacts)"
+  ],
+  [
+   "Risk of air artifact in bladder",
+   "No",
+   "Yes",
+   "No"
+  ],
+  [
+   "Risk of iatrogenic bacterial urinary tract infection",
+   "No",
+   "Yes",
+   "No"
+  ],
+  [
+   "Exposure to ionizing radiation",
+   "Yes",
+   "Yes",
+   "No"
+  ],
+  [
+   "Necessary to remove hair",
+   "No",
+   "No",
+   "Often"
+  ],
+  [
+   "Authors' overall choice",
+   "Screening",
+   "Investigation",
+   "Third choice"
+  ]
+ ]
+}

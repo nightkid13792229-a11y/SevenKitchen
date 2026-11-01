@@ -1,0 +1,90 @@
+{
+ "tableId": "T0135",
+ "caption": "Table 18-9. Key nutritional factors for foods for working and sporting dogs.",
+ "columns": [
+  "Factors",
+  "Sprint activity",
+  "Intermediate activity (low/moderate duration and frequency)",
+  "Intermediate activity (high duration and frequency)",
+  "Endurance activity"
+ ],
+ "rows": [
+  [
+   "Water",
+   "Unlimited access except just before a race",
+   "Unlimited access",
+   "Unlimited access",
+   "Unlimited access"
+  ],
+  [
+   "Energy density",
+   "Use food with 3.5 to 4.0 kcal ME/g DM",
+   "Use food with 4.0 to 5.0 kcal ME/g DM",
+   "Use food with 4.5 to 5.5 kcal ME/g DM",
+   "Use food with >6.0 kcal ME/g DM"
+  ],
+  [
+   "Fat",
+   "Use food with 8 to 10% DM fat or 20 to 24% of calories from fat",
+   "Use food with 15 to 30% DM fat or 30 to 55% of calories from fat",
+   "Use food with 25 to 40% DM fat or 45 to 65% of calories from fat",
+   "Use food with >50% DM fat or >75% of calories from fat"
+  ],
+  [
+   "Unsaturated fatty acids",
+   "-",
+   ">60% unsaturated fatty acids to optimize olfaction",
+   ">60% unsaturated fatty acids to optimize olfaction",
+   "-"
+  ],
+  [
+   "Digestible carbohydrate",
+   "Use food with 55 to 65% DM NFE or 50 to 60% of calories from NFE",
+   "Use food with 30 to 55% DM NFE or 20 to 50% of calories from NFE",
+   "Use food with 30 to 35% DM NFE or 15 to 30% of calories from NFE",
+   "Use food with <15% DM NFE or <10% of calories from NFE"
+  ],
+  [
+   "Protein",
+   "Use food with 22 to 28% DM protein or 20 to 25% of kcal (ME) from protein",
+   "Use food with 22 to 32% DM protein or 20 to 25% of kcal (ME) from protein",
+   "Use food with 22 to 32% DM protein or 18 to 25% of kcal (ME) from protein",
+   "Use food with 28 to 34% DM protein or 18 to 22% of kcal (ME) from protein"
+  ],
+  [
+   "Digestibility",
+   "DM digestibility >80%",
+   "DM digestibility >80%",
+   "DM digestibility >80%",
+   "DM digestibility >80%"
+  ],
+  [
+   "Antioxidants",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Vitamin E",
+   "≥500 IU vitamin E/kg food (DM)",
+   "≥500 IU vitamin E/kg food (DM)",
+   "≥500 IU vitamin E/kg food (DM)",
+   "≥500 IU vitamin E/kg food (DM)"
+  ],
+  [
+   "Vitamin C",
+   "150 to 250 mg vitamin C/kg food (DM)",
+   "150 to 250 mg vitamin C/kg food (DM)",
+   "150 to 250 mg vitamin C/kg food (DM)",
+   "150 to 250 mg vitamin C/kg food (DM)"
+  ],
+  [
+   "Selenium",
+   "0.5 to 1.3 mg/kg food (DM)",
+   "0.5 to 1.3 mg/kg food (DM)",
+   "0.5 to 1.3 mg/kg food (DM)",
+   "0.5 to 1.3 mg/kg food (DM)"
+  ]
+ ]
+}

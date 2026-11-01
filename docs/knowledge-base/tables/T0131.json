@@ -1,0 +1,37 @@
+{
+  "tableId": "T0131",
+  "caption": "Table 18-4. Percent fast twitch fibers (Type II) by selected canine breeds.*",
+  "columns": [
+    "Muscle",
+    "Greyhound",
+    "Crossbred",
+    "Foxhound"
+  ],
+  "rows": [
+    [
+      "Biceps femoris",
+      "88.6",
+      "67.2",
+      "63.0"
+    ],
+    [
+      "Semitendinosus",
+      "98.9",
+      "85.3",
+      "69.6"
+    ],
+    [
+      "Triceps (long head)",
+      "94.2",
+      "77.2",
+      "64.9"
+    ],
+    [
+      "Vastus lateralis",
+      "96.6",
+      "61.4",
+      "80.7"
+    ]
+  ],
+  "note": "脚注：*Adapted from Guy PS, Snow DH. Skeletal muscle fibre composition in the dog and its relationship to athletic ability. Research in Veterinary Science 1981; 31: 244-248.；图下部 Table 18-5 已由 T0132 单独转录"
+}

@@ -1,0 +1,57 @@
+{
+  "tableId": "T0126",
+  "caption": "Table 17-1. Key nutritional factors for foods for growing puppies.*",
+  "columns": [
+    "Factors",
+    "Recommended levels in food (DM) Puppies with an adult BW <25 kg",
+    "Recommended levels in food (DM) Puppies with an adult BW >25 kg"
+  ],
+  "rows": [
+    [
+      "Energy density (kcal ME/g)",
+      "3.5-4.5",
+      "3.5-4.5"
+    ],
+    [
+      "Energy density (kJ ME/g)",
+      "14.6-18.8",
+      "14.6-18.8"
+    ],
+    [
+      "Crude protein (%)",
+      "22-32",
+      "22-32"
+    ],
+    [
+      "Crude fat (%)",
+      "10-25",
+      "10-25"
+    ],
+    [
+      "DHA (%)",
+      "≥0.02",
+      "≥0.02"
+    ],
+    [
+      "Calcium (%)",
+      "0.7-1.7",
+      "0.7-1.2"
+    ],
+    [
+      "Phosphorus (%)",
+      "0.6-1.3",
+      "0.6-1.1"
+    ],
+    [
+      "Ca:P ratio",
+      "1:1-1.8:1",
+      "1:1-1.5:1"
+    ],
+    [
+      "Digestibility",
+      "See energy density recommendations, above; foods with higher energy density values tend to be more digestible",
+      "See energy density recommendations, above; foods with higher energy density values tend to be more digestible"
+    ]
+  ],
+  "note": "该页（第312页）表题为 Table 17-1；表下 Key 与 * 脚注未计入 rows"
+}

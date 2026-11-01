@@ -1,0 +1,14 @@
+{
+  "tableId": "T0334",
+  "caption": "Table 46-27. Stepwise approach for management of calcium oxalate urolithiasis in cats.*",
+  "columns": ["Stepwise approach"],
+  "rows": [
+    ["1. Obtain baseline data (post-removal radiographs, complete urinalysis, serum concentrations of calcium, urea nitrogen and creatinine) to evaluate effectiveness of removal procedure, renal function and calcium homeostasis."],
+    ["2. If the patient is hypercalcemic, correct underlying cause. If no cause is identified (i.e., idiopathic hypercalcemia exists) consider high-fiber foods and potassium citrate to decrease urine acidity."],
+    ["3. If the patient is normocalcemic, consider foods with reduced oxalate, sodium and protein that do not promote formation of overly acidic urine (pH <6.2). Ideally foods should contain additional water and citrate and have adequate phosphorus and magnesium. Avoid excess vitamins C and D."],
+    ["4. Reevaluate patient in two to four weeks to verify compliance with nutritional recommendations (urine specific gravity and pH) and amelioration of crystalluria (urine sediment examination). For most accurate results, urine pH should be measured using a pH meter."],
+    ["5. If calcium oxalate crystals or concentrated urine (specific gravity >1.030) persist, consider moist foods or additional water added to current food. If calcium oxalate crystals or aciduria persist (urinary pH <6.2), consider additional potassium citrate."],
+    ["6. Reevaluate patient in two to four weeks to verify compliance with nutritional recommendation (urine specific gravity and pH) and amelioration of crystalluria (urine sediment examination). If calcium oxalate crystalluria persists, and patient is consuming a homemade food, consider vitamin B6 supplementation (2 to 4 mg/kg every 24 hours)."],
+    ["7. After three to six months, reevaluate patient to verify compliance with nutritional recommendations, amelioration of crystalluria and lack of urolith recurrence (abdominal radiography). If no uroliths are present, continue present therapy and reevaluate in three to six months. If uroliths have recurred, consider nonsurgical urolith removal. Consider using voiding urohydropropulsion in females or male cats with a previously performed perineal urethrostomy. If unsuccessful, surgery can be considered if clinical signs referable to urocystolithiasis persist. If clinical signs are not present, continue therapy to minimize urolith growth."]
+  ]
+}

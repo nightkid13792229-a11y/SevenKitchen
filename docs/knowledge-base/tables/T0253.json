@@ -1,0 +1,12 @@
+{
+  "tableId": "T0253",
+  "caption": "Table 37-1. International Renal Interest Society (IRIS) Staging System for Chronic Kidney Disease in Dogs and Cats.",
+  "columns": ["Stage", "Serum creatinine (dogs)", "Serum creatinine (cats)", "Substrate based on proteinuria and hypertension", "Comments"],
+  "rows": [
+    ["1", "<1.4 mg/dl (<125 \u00b5mol/l)", "<1.6 mg/dl (<140 \u00b5mol/l)", "Proteinuria: NP/BP/P*\nHypertension: N/L/M/H/nc/c/RND**", "Non-azotemic CKD\nClinical signs (other than PU/PD) usually absent"],
+    ["2", "1.4-2.0 mg/dl (125-179 \u00b5mol/l)", "1.6-2.8 mg/dl (140-249 \u00b5mol/l)", "Proteinuria: NP/BP/P*\nHypertension: N/L/M/H/nc/c/RND**", "Mild renal azotemia (overlaps with reference range)\nClinical signs (other than PU/PD) usually mild or absent"],
+    ["3", "2.1-5.0 mg/dl (180-439 \u00b5mol/l)", "2.9-5.0 mg/dl (250-439 \u00b5mol/l)", "Proteinuria: NP/BP/P*\nHypertension: N/L/M/H/nc/c/RND**", "Moderate renal azotemia\nExtrarenal clinical signs usually begin in this stage"],
+    ["4", ">5.0 mg/dl (>440 \u00b5mol/l)", ">5.0 mg/dl (>440 \u00b5mol/l)", "Proteinuria: NP/BP/P*\nHypertension: N/L/M/H/nc/c/RND**", "Severe renal azotemia\nMany extrarenal clinical signs usually present"],
+    ["Key: PU/PD = polyuria/polydipsia, UPC = urine protein-creatinine ratio, BP = blood pressure.\n*NP = non-proteinuric (UPC <0.2), BP = borderline proteinuric (UPC = 0.2 to 0.4 in cats and 0.2 to 0.5 in dogs), P = proteinuric (UPC >0.4 in cats and >0.5 in dogs).\n**N = minimal risk of complications (systolic BP <150 mm Hg), L = low risk of complications (systolic BP 150 to 159 mm Hg), M = moderate risk of complications (systolic BP 160 to 179 mm Hg), H = high risk of complications (systolic BP >180 mm Hg), nc = no evidence of hypertensive complications, c = hypertensive complications present, RND = risk not determined (blood pressure not measured).\nAdapted from www.iris-kidney.com.", "", "", "", ""]
+  ]
+}

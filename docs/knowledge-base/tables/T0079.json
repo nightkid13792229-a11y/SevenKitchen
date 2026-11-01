@@ -1,0 +1,42 @@
+{
+  "tableId": "T0079",
+  "caption": "Table 2. Energy available from protein, fat and digestible carbohydrate (nitrogen-free extract).",
+  "columns": [
+    "Metabolizable energy",
+    "Species",
+    "Crude protein",
+    "Crude fat",
+    "Digestible carbohydrate"
+  ],
+  "rows": [
+    [
+      "kcal/g",
+      "All*",
+      "4.4 x digest.*",
+      "9.4 x digest.*",
+      "4.15 x digest.*"
+    ],
+    [
+      "kcal/g",
+      "Dogs and cats**",
+      "3.5**",
+      "8.5**",
+      "3.5**"
+    ],
+    [
+      "kJ/g",
+      "All*",
+      "18.41 x digest.*",
+      "39.33 x digest.*",
+      "17.36 x digest.*"
+    ],
+    [
+      "kJ/g",
+      "Dogs and cats**",
+      "14.64**",
+      "35.56**",
+      "14.64**"
+    ]
+  ],
+  "note": "原表为上下两个子表（Metabolizable energy (kcal/g) 与 (kJ/g)），列结构相同，已合并，单位列注明"
+}

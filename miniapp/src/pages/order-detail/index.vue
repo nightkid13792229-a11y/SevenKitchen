@@ -73,6 +73,10 @@
             <!-- 第1层：食谱名 -->
             <view class="item-header">
               <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
+              <text
+                v-if="item.recipeSnapshot?.series_life_stage_label"
+                class="recipe-version"
+              >{{ item.recipeSnapshot.series_life_stage_label }}</text>
               <text v-if="isStockOrder" class="nutrition-standard"
                 >现货 · 试吃装</text
               >
@@ -918,6 +922,8 @@ interface OrderItem {
     id: string;
     version: number;
     name: string;
+    series_life_stage?: string;
+    series_life_stage_label?: string;
     coverImageUrl?: string | null;
     nutrition_standard: string;
     energy_density_kcal_per_kg: number;
@@ -2970,6 +2976,10 @@ async function buyAgain() {
       ];
       if (dogId) {
         queryPairs.push(`dogId=${encodeURIComponent(dogId)}`);
+      }
+      const previousLifeStage = firstItem.recipeSnapshot?.series_life_stage;
+      if (previousLifeStage) {
+        queryPairs.push(`previousLifeStage=${encodeURIComponent(previousLifeStage)}`);
       }
       const queryString = queryPairs.join('&');
 

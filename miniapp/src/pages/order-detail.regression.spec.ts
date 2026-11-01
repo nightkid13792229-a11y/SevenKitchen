@@ -340,4 +340,20 @@ describe('order detail runtime regressions', () => {
       'formatAmount(order.amountTotal || order.totalAmount)',
     )
   })
+
+  it('shows the life-stage version frozen in the order snapshot', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+    expect(source).toContain('series_life_stage_label')
+  })
+
+  it('carries the previous version into the repurchase route', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+    expect(source).toContain('previousLifeStage')
+  })
 })

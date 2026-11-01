@@ -130,4 +130,9 @@ describe('checkout direct-buy storage contract', () => {
     expect(source).toContain("placeholder=\"可填写过敏提醒、分装标签、配送时间等特殊要求\"")
     expect(source).toContain('maxlength="200"')
   })
+
+  it('shows which life-stage version is being bought', () => {
+    expect(source).toContain('lifeStageLabel')
+    expect(source).toContain('orderConfig.lifeStageLabel')
+  })
 })

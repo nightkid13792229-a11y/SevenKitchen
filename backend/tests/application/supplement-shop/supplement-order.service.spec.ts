@@ -160,9 +160,19 @@ describe('SupplementOrderService', () => {
     );
     mockPrismaService.supplementOrder.findFirst.mockImplementation(
       async ({ where }: any) => {
-        const found = createdOrders.find(
-          (row) => row.id === where.id && row.userId === where.userId,
-        );
+        const found = createdOrders.find((row) => {
+          if (where.id !== undefined && row.id !== where.id) return false;
+          if (where.userId !== undefined && row.userId !== where.userId) {
+            return false;
+          }
+          if (
+            where.clientRequestId !== undefined &&
+            row.clientRequestId !== where.clientRequestId
+          ) {
+            return false;
+          }
+          return true;
+        });
         return found ?? null;
       },
     );
@@ -226,14 +236,18 @@ describe('SupplementOrderService', () => {
       expect(result.quote.maxPortionMultiplier).toBe(3);
     });
 
-    it('加量：份数超过配置上限时直接拒绝', async () => {
+    it('加量：不再有产品上限，5 套照算，100 套才拒绝', async () => {
+      const five = await service.quote({
+        lines: [{ ingredientId: KELP_ID, amount: 22.7 }],
+        portionMultiplier: 5,
+      });
+      expect(five.quote.portionMultiplier).toBe(5);
       await expect(
         service.quote({
           lines: [{ ingredientId: KELP_ID, amount: 22.7 }],
-          portionMultiplier: 5,
-          cycleDays: 7,
+          portionMultiplier: 100,
         }),
-      ).rejects.toThrow(/最多 3 份/);
+      ).rejects.toThrow(/1~99/);
     });
 
     it('加量：份数必须是正整数，0 和负数直接拒绝', async () => {
@@ -244,7 +258,7 @@ describe('SupplementOrderService', () => {
             portionMultiplier: bad,
             cycleDays: 30,
           }),
-        ).rejects.toThrow(/不小于 1 的整数/);
+        ).rejects.toThrow(/1~99 的整数/);
       }
     });
 
@@ -459,6 +473,28 @@ describe('SupplementOrderService', () => {
         service.createOrder('user-1', baseRequest),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(createdOrders).toHaveLength(0);
+    });
+
+    it('期望金额不一致时拒绝建单', async () => {
+      await expect(
+        service.createOrder('user-1', { ...baseRequest, expectedTotal: 1 }),
+      ).rejects.toThrow(/价格已更新/);
+    });
+
+    it('同一个 clientRequestId 重复提交只产生一笔订单', async () => {
+      const req = { ...baseRequest, clientRequestId: 'req-abc' };
+      const first = await service.createOrder('user-1', req);
+      const second = await service.createOrder('user-1', req);
+      expect(second.id).toBe(first.id);
+      expect(createdOrders).toHaveLength(1);
+    });
+
+    it('份数上限放到 99：100 套拒绝，5 套可以下单', async () => {
+      await expect(
+        service.createOrder('user-1', { ...baseRequest, portionMultiplier: 100 }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await service.createOrder('user-1', { ...baseRequest, portionMultiplier: 5 });
+      expect(createdOrders[0].portionMultiplier).toBe(5);
     });
 
     it('清单里有不可购买补剂时拒绝下单并说明原因', async () => {

@@ -19,7 +19,7 @@ import { TimezoneUtil } from '../../utils/timezone.util';
 import { IngredientType } from '../../domain/ingredient/enums';
 import {
   SupplementPricingService,
-  resolveMaxPortionMultiplier,
+  MAX_PURCHASABLE_PORTIONS,
   type SupplementQuote,
   type SupplementQuoteLineInput,
 } from './supplement-pricing.service';
@@ -113,6 +113,16 @@ export interface SupplementQuoteRequest {
 
 export interface CreateSupplementOrderRequest extends SupplementQuoteRequest {
   addressId: string;
+  /**
+   * 顾客在这一步看到的合计（**整数分**）。服务端重算后不一致就拒绝建单，
+   * 避免"页面显示一个数、扣款另一个数"。不传则跳过校验（老客户端兼容）。
+   */
+  expectedTotal?: number;
+  /**
+   * 一次提交流程的幂等键。重试复用同一个值，服务端据此只建一笔单。
+   * 同一张制作单以后再买是正常复购，不按内容判重。
+   */
+  clientRequestId?: string;
   recipeId?: string;
   recipeName?: string;
   dogId?: string;
@@ -128,6 +138,12 @@ export interface SupplementQuoteResponse {
   enabled: boolean;
   /** 库存系统验收前的软提示；不阻止下单 */
   inventoryWarnings: string[];
+  /** 最低起送金额（商品小计口径）；0 = 不限制。下单页据此提前禁用提交 */
+  minOrderAmount: number;
+  /** 补剂订单支付超时（分钟）；0 = 不自动关单。确认弹层据此写"未付款 N 分钟内自动取消" */
+  paymentTimeoutMinutes: number;
+  /** 单笔分装袋数超过它就提示"发货会顺延"（只提示，不拦单） */
+  bulkBagThreshold: number;
 }
 
 export interface SupplementOrderItemView {
@@ -316,6 +332,20 @@ export class SupplementOrderService {
     userId: string,
     request: CreateSupplementOrderRequest,
   ): Promise<SupplementOrderView> {
+    /**
+     * 幂等：同一份提交（同一个 clientRequestId）只建一笔订单。
+     * 小程序在"一次提交流程"开始时生成它，网络重试时复用同一个值。
+     * 注意：不按制作单或内容判重 —— 同一张单以后还想再买是正常复购。
+     */
+    const clientRequestId = (request.clientRequestId ?? '').trim() || null;
+    if (clientRequestId) {
+      const existing = await this.prisma.supplementOrder.findFirst({
+        where: { userId, clientRequestId },
+        select: { id: true },
+      });
+      if (existing) return this.getOrder(userId, existing.id);
+    }
+
     const { quote, unavailable, config, meta, dosage } =
       await this.buildQuote(request, userId);
 
@@ -329,6 +359,22 @@ export class SupplementOrderService {
           .map((item) => `${item.name}（${item.reason}）`)
           .join('；')}`,
       );
+    }
+
+    /**
+     * 金额一致性：顾客在确认弹层里看到的是这个数，扣款也必须是这个数。
+     * 用整数分比较，避免浮点误差导致正常下单被拒。
+     */
+    const expectedTotal = request.expectedTotal;
+    if (expectedTotal !== undefined && expectedTotal !== null) {
+      if (!Number.isInteger(expectedTotal) || expectedTotal < 0) {
+        throw new BadRequestException('期望金额不合法');
+      }
+      if (Math.round(quote.total * 100) !== expectedTotal) {
+        throw new BadRequestException(
+          `价格已更新，请确认新价格后重新提交（当前合计 ¥${quote.total.toFixed(2)}）`,
+        );
+      }
     }
 
     if (
@@ -370,7 +416,9 @@ export class SupplementOrderService {
       detail: address.detail,
     };
 
-    const orderId = await this.prisma.$transaction(async (tx) => {
+    let orderId: string;
+    try {
+      orderId = await this.prisma.$transaction(async (tx) => {
       const orderNo = await this.generateOrderNo(tx);
 
       const created = await tx.supplementOrder.create({
@@ -398,6 +446,7 @@ export class SupplementOrderService {
           // totalDays 不再计算，落库为 null。
           cycleDays: request.cycleDays ?? null,
           reorderFromOrderNo: request.reorderFromOrderNo ?? null,
+          clientRequestId,
           // 加量信息：份数取报价里已校验收敛过的值
           portionMultiplier: quote.portionMultiplier,
           totalDays: quote.totalDays,
@@ -468,7 +517,21 @@ export class SupplementOrderService {
       }
 
       return created.id;
-    });
+      });
+    } catch (error) {
+      /**
+       * 并发下两个相同 clientRequestId 同时到达：唯一索引会让其中一个落败。
+       * 落败的那个不是错误，它应该拿到已经建成的那一笔。
+       */
+      if (clientRequestId && (error as { code?: string })?.code === 'P2002') {
+        const existing = await this.prisma.supplementOrder.findFirst({
+          where: { userId, clientRequestId },
+          select: { id: true },
+        });
+        if (existing) return this.getOrder(userId, existing.id);
+      }
+      throw error;
+    }
 
     return this.getOrder(userId, orderId);
   }
@@ -1893,29 +1956,21 @@ export class SupplementOrderService {
     }
 
     /**
-     * 加量份数校验（服务端说了算，不信客户端）。
+     * 购买套数校验（服务端说了算，不信客户端）。
      *
-     * 为什么在这里拒绝、而不是让 pricing service 静默收敛：
-     * 客户端只会在响应里拿到 maxPortionMultiplier，然后据此渲染选项；
-     * 如果它仍然传来一个越界值，那是 bug 或篡改 —— 静默改成 3 份会让用户
-     * 看到的金额与实际下单金额不一致。直接报错最清楚。
-     */
-    /**
-     * 2026-11-01：补剂不再有"天数"，份数上限只看配置里的 `maxPortionMultiplier`
-     * （`request.cycleDays` 保留在 DTO 里只为兼容老客户端，已不参与任何计算）。
+     * 2026-11-01 起取消产品上限：1~99 直接照算。越界一律拒绝，
+     * 绝不"静默改成别的套数计价"——那会让顾客看到的金额和实际下单金额对不上。
+     * 99 只是技术兜底（防误输入打挂分装产能），顾客界面上看不到。
      */
     const requestedMultiplier = request.portionMultiplier;
     if (requestedMultiplier !== undefined && requestedMultiplier !== null) {
       if (
         !Number.isInteger(requestedMultiplier) ||
-        requestedMultiplier < 1
+        requestedMultiplier < 1 ||
+        requestedMultiplier > MAX_PURCHASABLE_PORTIONS
       ) {
-        throw new BadRequestException('加量份数必须是不小于 1 的整数');
-      }
-      const maxPortionMultiplier = resolveMaxPortionMultiplier(config);
-      if (requestedMultiplier > maxPortionMultiplier) {
         throw new BadRequestException(
-          `加量份数最多 ${maxPortionMultiplier} 份`,
+          `购买套数必须是 1~${MAX_PURCHASABLE_PORTIONS} 的整数`,
         );
       }
     }

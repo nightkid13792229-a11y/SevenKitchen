@@ -4956,6 +4956,9 @@ model SupplementOrder {
   id                        String                @id @default(uuid()) @map("id")
   orderNo                   String                @unique @map("order_no") @db.VarChar(32)
   userId                    String                @map("user_id")
+  /// 小程序一次提交流程生成的幂等键：重试复用同一个值，防止重复建单。
+  /// 同一张制作单以后还想再买是正常复购，所以不按内容判重。
+  clientRequestId           String?               @map("client_request_id") @db.VarChar(64)
   status                    SupplementOrderStatus @default(PENDING_PAYMENT) @map("status")
   bagCount                  Int                   @map("bag_count")
 
@@ -5048,7 +5051,9 @@ model SupplementOrder {
   @@index([packingDate, status])
   @@index([reorderFromOrderNo])
   @@map("supplement_order")
+  @@unique([userId, clientRequestId])
 }
+
 
 /// 补剂订单行：一个补剂 = 一袋（按品种分装）
 /// 同时承载分装结果（批号、原瓶到期日、分装后效期、分装时间）

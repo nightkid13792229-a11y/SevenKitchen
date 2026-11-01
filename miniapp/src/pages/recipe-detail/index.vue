@@ -986,6 +986,19 @@ function loadRecipeDetail() {
         checkFavoriteStatus()
       }
 
+      if (res.data.lifeStageMatch) {
+        trackFunnelEvent({
+          eventName: 'life_stage_bar_shown',
+          step: 'detail',
+          recipeId: selectedRecipeIdForActions.value,
+          dogId: selectedDogId.value,
+          properties: {
+            matchType: res.data.lifeStageMatch.matchType,
+            riskLevel: res.data.lifeStageMatch.riskLevel || 'NONE',
+          },
+        })
+      }
+
       // 漏斗：详情页浏览（漏斗第 2 步）
       trackFunnelEvent({
         eventName: 'detail_view',

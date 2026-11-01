@@ -235,6 +235,7 @@ import { ref, computed, onMounted } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
+import { trackFunnelEvent } from '../../utils/funnel'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import { navigateToDogCreate } from '../../utils/dog-profile-entry'
 import { getNutritionStandardExplain, getNutritionStandardLabel } from '../../utils/label-mapping'
@@ -651,12 +652,23 @@ async function loadRecipe() {
         ...res.data,
         availableLifeStageVersions: res.data.availableLifeStageVersions || [],
       }
-      if (!selectedLifeStage.value && res.data.selectedLifeStage) {
+      if (!manualLifeStage.value && res.data.selectedLifeStage) {
         selectedLifeStage.value = res.data.selectedLifeStage
       }
       if (res.data.selectedRecipeId || res.data.id) {
         recipeId.value = res.data.selectedRecipeId || res.data.id
       }
+      trackFunnelEvent({
+        eventName: 'life_stage_bar_shown',
+        step: 'diy_page',
+        recipeId: recipeId.value,
+        dogId: selectedDogId.value,
+        properties: {
+          state: lifeStageState.value,
+          matchType: res.data.lifeStageMatch?.matchType || null,
+          riskLevel: res.data.lifeStageMatch?.riskLevel || 'NONE',
+        },
+      })
       console.log('[RecipeDiy] 食谱信息加载成功:', res.data)
     }
   } catch (error) {

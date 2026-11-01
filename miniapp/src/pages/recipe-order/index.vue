@@ -951,8 +951,9 @@ const dogsLoadFailed = ref(false)
 async function retryPageLoad() {
   pageLoadError.value = ''
   dogsLoadFailed.value = false
+  await loadDogs({ silentSelection: true })
   await loadRecipeDetail()
-  await loadDogs()
+  if (selectedDogId.value) loadDogCalcResult(selectedDogId.value)
 }
 
 async function retryDogsLoad() {
@@ -1337,12 +1338,23 @@ async function loadRecipeDetail() {
     if (res.code === 0 && res.data) {
       pageLoadError.value = ''
       recipe.value = res.data
-      if (!selectedLifeStage.value && res.data.selectedLifeStage) {
+      if (!manualLifeStage.value && res.data.selectedLifeStage) {
         selectedLifeStage.value = res.data.selectedLifeStage
       }
       if (res.data.selectedRecipeId || res.data.id) {
         recipeId.value = res.data.selectedRecipeId || res.data.id
       }
+      trackFunnelEvent({
+        eventName: 'life_stage_bar_shown',
+        step: 'order_page',
+        recipeId: recipeId.value,
+        dogId: selectedDogId.value,
+        properties: {
+          state: lifeStageState.value,
+          matchType: res.data.lifeStageMatch?.matchType || null,
+          riskLevel: res.data.lifeStageMatch?.riskLevel || 'NONE',
+        },
+      })
     }
   } catch (error) {
     console.error('Load recipe error:', error)
@@ -1353,6 +1365,13 @@ async function loadRecipeDetail() {
 async function switchLifeStageVersion(lifeStage: string) {
   if (!lifeStage || lifeStage === selectedLifeStage.value) return
 
+  trackFunnelEvent({
+    eventName: 'life_stage_version_switched',
+    step: 'order_page',
+    recipeId: recipeId.value,
+    dogId: selectedDogId.value,
+    properties: { from: selectedLifeStage.value, to: lifeStage, manual: true },
+  })
   acknowledgedForOrder.value = false
   manualLifeStage.value = lifeStage
   selectedLifeStage.value = lifeStage
@@ -1766,9 +1785,8 @@ async function buyNow() {
   packagePlanSection.value?.commitAll()
   if (!canBuyNow.value) return
 
-  // 生命阶段不匹配：**每次下单都确认一次**，并留痕作为"已明确告知"的凭证。
-  // 不再因为顾客之前点过"我已知晓"就跳过 —— 多提醒一次的成本，
-  // 远低于没提醒到、狗狗吃错粮的风险。
+  // 高风险（幼犬/繁殖期选错）：每一次下单确认一次，并留痕作为"已明确告知"的凭证。
+  // 同一单确认过就不再问；换狗/换版会让它作废。
   if (lifeStageRisk.value === 'HIGH' && !acknowledgedForOrder.value) {
     const confirmed = await confirmLifeStageMismatch({
       recipeId: recipeId.value,
@@ -1776,6 +1794,13 @@ async function buyNow() {
       verdict: recipe.value.lifeStageMatch || null,
       source: 'order',
       dogName: selectedDog.value?.name,
+    })
+    trackFunnelEvent({
+      eventName: 'life_stage_confirm_result',
+      step: 'order_page',
+      recipeId: recipeId.value,
+      dogId: selectedDogId.value,
+      properties: { accepted: confirmed, riskLevel: lifeStageRisk.value },
     })
     if (!confirmed) return
     acknowledgedForOrder.value = true

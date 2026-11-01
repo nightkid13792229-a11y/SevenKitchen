@@ -1318,9 +1318,6 @@ async function loadData() {
       loadEquipmentRecommendations()
     ])
 
-    // 生命阶段结论由后端给出（需等食谱与狗狗都就绪）
-    await checkLifeStageMatch()
-
     // 价格预览加载完成后，加载推荐产品（需要 ingredientIds）
     await loadRecommendedProducts()
 

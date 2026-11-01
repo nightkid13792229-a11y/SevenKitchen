@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -17,6 +20,7 @@ export const NEURO_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'neuro-001',
     domain: 'NEURO',
+    questionType: 'DEFINITION',
     title: '犬认知功能障碍综合征（CDS）的定义与 DISHA 体征',
     keywords: [
       '认知功能障碍', 'CDS', '脑老化', '老年犬', 'DISHA', '行为改变',
@@ -39,11 +43,16 @@ export const NEURO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第35章 犬认知功能障碍', note: 'CLINICAL IMPORTANCE、表35-1 行为评估、DISHA、患病率' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第35章 犬认知功能障碍' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'neuro-002',
     domain: 'NEURO',
+    questionType: 'NUTRITION',
     title: '犬认知功能障碍的关键营养因素（表35-3）',
     keywords: [
       '认知营养', '脑营养', '抗氧化', '维E', '维C', '硒', 'L-肉碱', 'α-硫辛酸',
@@ -66,11 +75,16 @@ export const NEURO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第35章 犬认知功能障碍', note: '表35-3 脑老化犬食物关键营养因素、抗氧化剂与线粒体辅因子' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第35章 犬认知功能障碍' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'neuro-003',
     domain: 'NEURO',
+    questionType: 'NUTRITION',
     title: '脑老化中的氧化损伤与抗氧化干预',
     keywords: [
       '氧化应激', '自由基', '活性氧', '抗氧化', '超氧化物歧化酶', '脑老化',
@@ -93,11 +107,16 @@ export const NEURO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第35章 犬认知功能障碍', note: '氧化损伤、ROS、SOD 下降、BBB 与抗氧化干预' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第35章 犬认知功能障碍' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'neuro-004',
     domain: 'NEURO',
+    questionType: 'NUTRITION',
     title: 'β-淀粉样蛋白（Aβ）与犬脑老化病理',
     keywords: [
       'β-淀粉样蛋白', 'Aβ', '老年斑', '脑老化', '阿尔茨海默', '神经病理',
@@ -120,11 +139,16 @@ export const NEURO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第35章 犬认知功能障碍', note: 'Aβ 病理、时空沉积、年龄患病率、与认知缺陷相关' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第35章 犬认知功能障碍' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'neuro-005',
     domain: 'NEURO',
+    questionType: 'NUTRITION',
     title: '老年犬认知障碍的排除诊断与行为评估',
     keywords: [
       '排除诊断', '行为评估', '问卷', '筛查', '老年犬健康', '行为改变',
@@ -146,6 +170,10 @@ export const NEURO_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第35章 犬认知功能障碍', note: '排除诊断、表35-1 行为评估、AAHA 老年护理、VIN 回顾' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第35章 犬认知功能障碍' },
     ],
     priority: 'MEDIUM',
   },

@@ -1,0 +1,41 @@
+{
+ "num": "13-2",
+ "caption": "Table 13-2. Influence of age on daily energy requirements of active pet dogs.*",
+ "page": 4,
+ "columns": [
+  "Age (years)",
+  "kcal ME/BWkg0.75",
+  "kJ ME/BWkg0.75",
+  "x RER"
+ ],
+ "rows": [
+  [
+   "1-2",
+   "120-140",
+   "500-585",
+   "1.7-2.0"
+  ],
+  [
+   "3-7",
+   "100-130",
+   "420-550",
+   "1.4-1.9"
+  ],
+  [
+   ">7",
+   "80-120",
+   "335-500",
+   "1.1-1.7"
+  ]
+ ],
+ "note": "Typical DER ranges** (spans the last three columns). Key: DER = daily energy requirement, ME = metabolizable energy, RER = resting energy requirement, kcal = kilocalories, kJ = kilojoules. *Most pet dogs are minimally active and have a DER of approximately 95 kcal/BWkg0.75 or 1.2 to 1.4 x RER. **The energy requirements indicated in this table are only starting points and should be adapted for individual dogs.",
+ "tableId": "T0486",
+ "doc": "sacn5/chapters/SACN5_13.pdf",
+ "method": "视觉",
+ "verify": {
+  "numbers": 23,
+  "found": 23,
+  "status": "通过",
+  "misses": []
+ }
+}

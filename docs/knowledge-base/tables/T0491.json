@@ -1,0 +1,76 @@
+{
+ "num": "29-11",
+ "caption": "Goitrogenic factors in foods and the environment.*",
+ "page": 17,
+ "columns": [
+  "Nutrients or food types"
+ ],
+ "rows": [
+  [
+   "Cabbage (goitrin)"
+  ],
+  [
+   "Canned foods"
+  ],
+  [
+   "Cassava (linamarin)"
+  ],
+  [
+   "Cyanides"
+  ],
+  [
+   "Excess iodine"
+  ],
+  [
+   "Iodine deficiency"
+  ],
+  [
+   "Millet"
+  ],
+  [
+   "Rutabagas"
+  ],
+  [
+   "Sweet potatoes"
+  ],
+  [
+   "Turnips"
+  ],
+  [
+   "Seaweed"
+  ],
+  [
+   "Various beans (including soybeans)"
+  ],
+  [
+   "Environmental"
+  ],
+  [
+   "Polychlorinated biphenyls (fish-containing foods)"
+  ],
+  [
+   "Pesticides"
+  ],
+  [
+   "Phthalates"
+  ],
+  [
+   "Polyphenols (fish-containing foods)"
+  ],
+  [
+   "Propylthiouracil (drug)"
+  ],
+  [
+   "Resorcinols (fish-containing foods)"
+  ]
+ ],
+ "tableId": "T0491",
+ "doc": "sacn5/chapters/SACN5_29.pdf",
+ "method": "视觉",
+ "verify": {
+  "numbers": 0,
+  "found": 0,
+  "status": "通过",
+  "misses": []
+ }
+}

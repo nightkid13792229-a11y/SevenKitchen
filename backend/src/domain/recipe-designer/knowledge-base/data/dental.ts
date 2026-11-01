@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -16,6 +19,7 @@ export const DENTAL_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'dental-001',
     domain: 'DENTAL',
+    questionType: 'DEFINITION',
     title: '牙周病的患病率与分期',
     keywords: [
       '牙周病', '牙龈炎', '牙周炎', '口腔', '牙齿', '菌斑',
@@ -38,11 +42,16 @@ export const DENTAL_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第47章 牙周病', note: 'INTRODUCTION、表47-2 分期、患病率、致病机制' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第47章 牙周病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'dental-002',
     domain: 'DENTAL',
+    questionType: 'NUTRITION',
     title: '牙周病预防的关键营养因素（表47-4）',
     keywords: [
       '牙周营养', '口腔营养', '维E', '维C', '硒', '磷', '钠', '口腔健康',
@@ -64,11 +73,16 @@ export const DENTAL_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第47章 牙周病', note: '表47-4 犬猫预防牙周病食物关键营养因素、VOHC、HMP' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第47章 牙周病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'dental-003',
     domain: 'DENTAL',
+    questionType: 'NUTRITION',
     title: '食物质地与口腔健康：VOHC 与干粮洁齿的误区',
     keywords: [
       '食物质地', '干粮', '软食', 'VOHC', '洁齿', '咀嚼', '菌斑控制',
@@ -91,11 +105,16 @@ export const DENTAL_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第47章 牙周病', note: 'Food Texture、干粮洁齿误区、VOHC、图47-5' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第47章 牙周病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'dental-004',
     domain: 'DENTAL',
+    questionType: 'NUTRITION',
     title: '可消化碳水/糖与犬龋齿：糖不是主因',
     keywords: [
       '可消化碳水', '糖', '蔗糖', '龋齿', '菌斑', '淀粉',
@@ -117,11 +136,16 @@ export const DENTAL_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第47章 牙周病', note: 'Box47-2 可消化碳水与口腔健康、龋齿罕见' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第47章 牙周病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'dental-005',
     domain: 'DENTAL',
+    questionType: 'NUTRITION',
     title: '牙周病的风险因素与品种易感',
     keywords: [
       '风险因素', '品种', '短吻犬', '小型犬', '年龄', '咀嚼行为', '口腔健康',
@@ -144,11 +168,16 @@ export const DENTAL_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第47章 牙周病', note: 'Risk Factors、品种易感、年龄、免疫与全身健康' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第47章 牙周病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'dental-006',
     domain: 'DENTAL',
+    questionType: 'NUTRITION',
     title: '口腔-全身健康关联与牙周病并发症',
     keywords: [
       '口腔全身健康', '菌血症', '心瓣膜', '肾', '肝', '全身并发症',
@@ -170,6 +199,10 @@ export const DENTAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第47章 牙周病', note: 'Systemic Complications、菌血症、口腔-全身关联' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第47章 牙周病' },
     ],
     priority: 'MEDIUM',
   },

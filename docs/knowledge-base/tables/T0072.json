@@ -1,7 +1,52 @@
 {
-  "tableId": "T0072",
-  "caption": "",
-  "columns": [],
-  "rows": [],
-  "note": "PHANTOM: 该页只有正文引用，无表格本体"
+ "tableId": "T0072",
+ "caption": "Table 4. How to determine the protein, fat and carbohydrate content as a percent of the food's total energy content",
+ "columns": [
+  "Nutrient",
+  "%",
+  "kcal/g of nutrient",
+  "kJ/g of nutrient",
+  "kcal/g of food**",
+  "kJ/g of food**"
+ ],
+ "rows": [
+  [
+   "Protein",
+   "22",
+   "3.5*",
+   "14.64*",
+   "0.77",
+   "3.22"
+  ],
+  [
+   "Fat",
+   "9",
+   "8.5*",
+   "35.56*",
+   "0.77",
+   "3.20"
+  ],
+  [
+   "Digestible carbohydrate",
+   "51",
+   "3.5*",
+   "14.64*",
+   "1.79",
+   "7.47"
+  ],
+  [
+   "Total",
+   "-",
+   "-",
+   "-",
+   "3.33",
+   "13.89"
+  ]
+ ],
+ "verify": {
+  "numbers": 17,
+  "found": 17,
+  "misses": []
+ },
+ "method": "视觉"
 }

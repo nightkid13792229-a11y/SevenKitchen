@@ -243,6 +243,27 @@ else
   ok "Database migrations applied"
   echo ""
 
+  # 知识库原文层（2026-11-02）：把解析产物灌进库。
+  # 数据在 docs/knowledge-base/ 下，生产是稀疏检出，缺了就先拉下来。
+  if [ -f scripts/import-knowledge-source-layer.ts ]; then
+    if [ ! -d ../docs/knowledge-base/source-layer ]; then
+      info "Fetching knowledge source data (sparse checkout)..."
+      git sparse-checkout add docs/knowledge-base >/dev/null 2>&1 || true
+      git checkout HEAD -- docs/knowledge-base >/dev/null 2>&1 || true
+    fi
+    if [ -d ../docs/knowledge-base/source-layer ]; then
+      info "Importing knowledge source layer (idempotent)..."
+      if pnpm ts-node -r tsconfig-paths/register scripts/import-knowledge-source-layer.ts; then
+        ok "Knowledge source layer imported"
+      else
+        warn "Knowledge source layer import failed (non-blocking)"
+      fi
+    else
+      warn "Knowledge source data missing, skipped import"
+    fi
+    echo ""
+  fi
+
   # 营养库覆盖率门禁（2026-10-28）：低于基线就不部署，避免"数据坏了照常上线"。
   if [ -f scripts/audit-nutrition-coverage.ts ]; then
     info "Checking nutrition coverage baseline (read-only)..."

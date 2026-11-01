@@ -1,7 +1,101 @@
 {
-  "tableId": "T0375",
-  "caption": "Table 54-1",
-  "columns": [],
-  "rows": [],
-  "note": "两页均无该表格"
+ "tableId": "T0375",
+ "caption": "Table 54-1. Potential causes of gastric emptying disorders in dogs and cats.",
+ "columns": [
+  "Cause"
+ ],
+ "rows": [
+  [
+   "Functional obstruction (primary motility defects)"
+  ],
+  [
+   "Gastric ulcers"
+  ],
+  [
+   "Idiopathic asynchronous motility"
+  ],
+  [
+   "Idiopathic hypomotility"
+  ],
+  [
+   "Infectious gastroenteritis"
+  ],
+  [
+   "Postoperative ileus"
+  ],
+  [
+   "Functional obstruction (secondary motility defects)"
+  ],
+  [
+   "Drug therapy"
+  ],
+  [
+   "Anticholinergics"
+  ],
+  [
+   "Beta-adrenergic agonists"
+  ],
+  [
+   "Narcotic analgesics"
+  ],
+  [
+   "Electrolyte disturbances"
+  ],
+  [
+   "Hypercalcemia"
+  ],
+  [
+   "Hypocalcemia"
+  ],
+  [
+   "Hypokalemia"
+  ],
+  [
+   "Hypomagnesemia"
+  ],
+  [
+   "Inflammation"
+  ],
+  [
+   "Acute pancreatitis"
+  ],
+  [
+   "Peritonitis"
+  ],
+  [
+   "Metabolic disorders"
+  ],
+  [
+   "Diabetes mellitus"
+  ],
+  [
+   "Hepatic encephalopathy"
+  ],
+  [
+   "Hypothyroidism"
+  ],
+  [
+   "Mechanical obstruction"
+  ],
+  [
+   "Congenital or acquired antral pyloric hypertrophy"
+  ],
+  [
+   "Extraluminal compression"
+  ],
+  [
+   "Gastric or duodenal foreign bodies"
+  ],
+  [
+   "Gastric or duodenal granulomatous lesions"
+  ],
+  [
+   "Gastric or duodenal neoplasia or polyps"
+  ]
+ ],
+ "verify": {
+  "numbers": 0,
+  "found": 0
+ },
+ "method": "视觉"
 }

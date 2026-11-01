@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -18,6 +21,7 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'hepatic-001',
     domain: 'HEPATIC',
+    questionType: 'NUTRITION',
     title: '肝胆疾病营养管理的总体目标',
     keywords: [
       '肝胆疾病', '肝脏病', '肝病营养', '营养管理目标', '肝功能', '肝',
@@ -39,11 +43,16 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第68章 肝胆疾病', note: 'CLINICAL IMPORTANCE、营养不良机制、营养管理总体目标' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第68章 肝胆疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'hepatic-002',
     domain: 'HEPATIC',
+    questionType: 'NUTRITION',
     title: '肝胆疾病犬的能量需求（充足供能是基石）',
     keywords: [
       '肝病能量', '能量密度', '供能', '能量需求', 'kcal', '能量',
@@ -64,11 +73,16 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第68章 肝胆疾病', note: '表68-8 犬猫肝胆疾病关键营养因素、Energy 节' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第68章 肝胆疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'hepatic-003',
     domain: 'HEPATIC',
+    questionType: 'NUTRITION',
     title: '肝病犬的蛋白质管理（含肝性脑病时的限制）',
     keywords: [
       '肝病蛋白', '蛋白质', '蛋白限制', '低蛋白', '肝性脑病', '蛋白',
@@ -92,11 +106,16 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第68章 肝胆疾病', note: '表68-8 蛋白与牛磺酸目标、Protein and Amino Acids 节、HE 蛋白限制、PSS 蛋白需求' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第68章 肝胆疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'hepatic-004',
     domain: 'HEPATIC',
+    questionType: 'DEFINITION',
     title: '肝性脑病（HE）的概念与营养管理要点',
     keywords: [
       '肝性脑病', 'HE', '血氨', '神经症状', '精神行为异常', '氨中毒',
@@ -118,11 +137,16 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第68章 肝胆疾病', note: 'Box68-1 肝性脑病、Carbohydrate/Fiber 节、HE 蛋白限制' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第68章 肝胆疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'hepatic-005',
     domain: 'HEPATIC',
+    questionType: 'NUTRITION',
     title: '门体分流（PSS）的营养管理',
     keywords: [
       '门体分流', 'PSS', '门静脉', '肝外分流', '肝内分流', '生长迟缓',
@@ -145,11 +169,16 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第68章 肝胆疾病', note: 'Portosystemic Shunts 节、脂代谢异常、PSS 蛋白需求研究' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第68章 肝胆疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'hepatic-007',
     domain: 'HEPATIC',
+    questionType: 'NUTRITION',
     title: '犬肝胆疾病的钠限制与电解质管理',
     keywords: [
       '钠', '腹水', '门脉高压', '低白蛋白', '钾', '低钾血症', '电解质',
@@ -170,11 +199,16 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第68章 肝胆疾病', note: '表68-8 钠/钾目标、Sodium 节、低钾血症与预后' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第68章 肝胆疾病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'hepatic-008',
     domain: 'HEPATIC',
+    questionType: 'NUTRITION',
     title: '犬铜相关肝病：铜限制与锌补充',
     keywords: [
       '铜', '铜中毒', '肝铜', '贝灵顿梗', '杜宾', '锌', 'Wilson',
@@ -197,11 +231,16 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第68章 肝胆疾病', note: 'Canine Copper-Associated Hepatotoxicosis、Copper/Zinc 节、表68-8 铜锌目标' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第68章 肝胆疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'hepatic-010',
     domain: 'HEPATIC',
+    questionType: 'NUTRITION',
     title: '肝胆疾病的抗氧化支持：维生素E与C',
     keywords: [
       '抗氧化', '维生素E', '维生素C', '氧化应激', '自由基', '脂质过氧化',
@@ -224,11 +263,16 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第68章 肝胆疾病', note: 'Antioxidant Vitamins E and C、表68-8 维E/维C目标' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第68章 肝胆疾病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'hepatic-011',
     domain: 'HEPATIC',
+    questionType: 'NUTRITION',
     title: '肝胆疾病的可消化碳水与纤维管理',
     keywords: [
       '碳水', '纤维', '可发酵纤维', '结肠', '肝性脑病', '固氮',
@@ -251,11 +295,16 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第68章 肝胆疾病', note: 'Carbohydrate、Fiber、肝性脑病碳水目标' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第68章 肝胆疾病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'hepatic-012',
     domain: 'HEPATIC',
+    questionType: 'NUTRITION',
     title: '肝胆疾病的维生素K与凝血、水溶性维生素及L-肉碱',
     keywords: [
       '维生素K', '凝血', '出血', '水溶性维生素', 'L-肉碱', '胆道梗阻',
@@ -276,6 +325,10 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第68章 肝胆疾病', note: 'Vitamins、L-Carnitine、Iron、凝血异常与维K' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第68章 肝胆疾病' },
     ],
     priority: 'MEDIUM',
   },

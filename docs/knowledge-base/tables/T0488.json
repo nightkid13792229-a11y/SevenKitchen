@@ -1,0 +1,45 @@
+{
+ "num": "14-4",
+ "caption": "Table 14-4. Feeding plan summary for mature dogs.",
+ "page": 7,
+ "columns": [
+  "No.",
+  "Feeding plan summary for mature dogs."
+ ],
+ "rows": [
+  [
+   "1.",
+   "Select a food or foods with levels of key nutritional factors listed in Table 14-3; for foods not in this table, contact the manufacturer for levels of key nutritional factors in the food in question."
+  ],
+  [
+   "2.",
+   "The selected food should also be approved or meet requirements established by a credible regulatory agency (e.g., AAFCO)."
+  ],
+  [
+   "3.",
+   "Body condition and other assessment criteria will determine the DER. DER is calculated by multiplying RER by an appropriate factor (Table 5-2). Remember, DER calculations should be used as guidelines, starting points and estimates for individual dogs and not as absolute requirements. Dogs in ideal body condition = 3.0 to 4.0 kcal (12.5 to 16.7 kJ) ME/g DM; Inactive/obese-prone dogs = 3.0 to 3.5 kcal (12.5 to 14.6 kJ) ME/g DM"
+  ],
+  [
+   "4.",
+   "Determine the preferred feeding method (Table 13-5); when the correct amount of food is fed; meal-restricted feeding is least likely to result in obesity."
+  ],
+  [
+   "5.",
+   "For food-restricted meal feeding, estimate the initial quantity of food based on DER calculation (DER / food energy density). Food energy density can be obtained from Table 14-3 or from the manufacturer."
+  ],
+  [
+   "6.",
+   "Monitor body weight, body condition and general health. These parameters are used to refine the amount to feed."
+  ]
+ ],
+ "note": "Key: AAFCO = Association of American Feed Control Officials, DER = daily energy requirement, RER = resting energy requirement, ME = metabolizable energy, DM = dry matter.",
+ "tableId": "T0488",
+ "doc": "sacn5/chapters/SACN5_14.pdf",
+ "method": "视觉",
+ "verify": {
+  "numbers": 22,
+  "found": 22,
+  "status": "通过",
+  "misses": []
+ }
+}

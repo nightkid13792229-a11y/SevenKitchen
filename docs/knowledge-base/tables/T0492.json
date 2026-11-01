@@ -1,0 +1,45 @@
+{
+ "num": "30-5",
+ "caption": "Key nutritional factors for foods for canine and feline cancer patients.",
+ "page": 7,
+ "columns": [
+  "Factors",
+  "Dietary recommendations"
+ ],
+ "rows": [
+  [
+   "Digestible carbohydrate (NFE)*",
+   "Avoid excess digestible carbohydrate\nNFE = ≤25% DM or <20% of the food's ME"
+  ],
+  [
+   "Fat",
+   "Provide a large proportion of energy from fat\nFat = 25 to 40% of DM or 50 to 65% of the food's ME"
+  ],
+  [
+   "Omega-3 fatty acids",
+   "Provide foods with increased levels of omega-3 fatty acids (>5% DM)"
+  ],
+  [
+   "Omega-6: omega-3 fatty acid ratio",
+   "Provide foods with an omega-6:omega-3 ratio as close to 1:1 as possible"
+  ],
+  [
+   "Protein",
+   "Avoid protein deficiency\nProvide protein in excess of adult requirements\nDogs: protein = 30 to 45% of DM or 25 to 40% of the food's ME\nCats: protein = 40 to 50% of DM or 35 to 45% of the food's ME\n(Taurine is always a necessary inclusion in feline diets)"
+  ],
+  [
+   "Arginine",
+   "Provide foods with arginine DM levels >2%"
+  ]
+ ],
+ "note": "*Key: NFE = nitrogen-free extract, DM = dry matter, ME = metabolizable energy.",
+ "tableId": "T0492",
+ "doc": "sacn5/chapters/SACN5_30.pdf",
+ "method": "视觉",
+ "verify": {
+  "numbers": 24,
+  "found": 24,
+  "status": "通过",
+  "misses": []
+ }
+}

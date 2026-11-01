@@ -1,0 +1,84 @@
+{
+ "num": "11-1",
+ "caption": "Causes of poisonings in dogs and cats.*",
+ "page": 2,
+ "columns": [
+  "Substance",
+  "Total cases (%)"
+ ],
+ "rows": [
+  [
+   "Drugs",
+   "25.0"
+  ],
+  [
+   "Insecticides",
+   "19.6"
+  ],
+  [
+   "Plants",
+   "12.1"
+  ],
+  [
+   "Miscellaneous/unknown",
+   "8.9"
+  ],
+  [
+   "Rodenticides",
+   "8.4"
+  ],
+  [
+   "Cleaning products",
+   "5.9"
+  ],
+  [
+   "Cosmetics",
+   "2.9"
+  ],
+  [
+   "Hydrocarbons",
+   "2.9"
+  ],
+  [
+   "Foreign bodies",
+   "2.8"
+  ],
+  [
+   "Chemicals",
+   "2.7"
+  ],
+  [
+   "Fertilizers",
+   "2.2"
+  ],
+  [
+   "Food",
+   "1.7"
+  ],
+  [
+   "Herbicides",
+   "1.6"
+  ],
+  [
+   "Paints",
+   "1.6"
+  ],
+  [
+   "Bites/stings",
+   "1.2"
+  ],
+  [
+   "Heavy metals",
+   "0.5"
+  ]
+ ],
+ "tableId": "T0485",
+ "doc": "sacn5/chapters/SACN5_11.pdf",
+ "method": "视觉",
+ "verify": {
+  "numbers": 16,
+  "found": 16,
+  "status": "通过",
+  "misses": []
+ }
+}

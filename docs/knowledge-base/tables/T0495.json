@@ -1,0 +1,49 @@
+{
+ "num": "35-3",
+ "caption": "Key nutritional factors for foods for dogs with brain aging and associated behavioral changes (cognitive dysfunction).",
+ "page": 9,
+ "columns": [
+  "Factors",
+  "Dietary recommendation"
+ ],
+ "rows": [
+  [
+   "Vitamin E",
+   "Increase dietary antioxidants\nProvide foods with ≥750 mg/kg"
+  ],
+  [
+   "Vitamin C",
+   "Increase dietary antioxidants\nProvide foods with ≥150 mg/kg"
+  ],
+  [
+   "Selenium",
+   "Increase dietary antioxidants\nProvide foods with 0.5 to 1.3 mg/kg"
+  ],
+  [
+   "L-carnitine",
+   "Increase mitochondrial cofactors\nProvide foods with 250 to 750 IU/kg"
+  ],
+  [
+   "α-lipoic acid",
+   "Increase mitochondrial cofactors\nProvide foods with ≥100 mg/kg"
+  ],
+  [
+   "Omega-3 fatty acids (docosahexaenoic and eicosapentaenoic acids)",
+   "Total omegas-3 >1%"
+  ],
+  [
+   "Fruits and vegetables",
+   "1% of each of five vegetable and fruit ingredients"
+  ]
+ ],
+ "note": "*Dry matter basis.",
+ "tableId": "T0495",
+ "doc": "sacn5/chapters/SACN5_35.pdf",
+ "method": "视觉",
+ "verify": {
+  "numbers": 11,
+  "found": 11,
+  "status": "通过",
+  "misses": []
+ }
+}

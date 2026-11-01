@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -10,6 +13,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'gi-001',
     domain: 'GI',
+    questionType: 'DEFINITION',
     title: 'IBD/CIE 概念与术语：慢性炎症性肠病是什么',
     keywords: [
       'ibd',
@@ -33,6 +37,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
     caveats: [
       'IBD/CIE 是医学诊断，需兽医通过排除性检查与组织病理活检确诊；营养支持不能替代诊断与药物治疗，所有方案调整均需兽医指导。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -43,11 +48,16 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         note: '本地仅存摘要（dog-ibd-cie-functional-targets.md）',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第57章 炎症性肠病（IBD）' },
+      { sourceId: 'ACVIM-CONSENSUS', locator: '' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'gi-002',
     domain: 'GI',
+    questionType: 'NUTRITION',
     title: 'IBD/CIE 是排除性诊断：诊断路径与检查要点',
     keywords: [
       'diagnosis',
@@ -74,6 +84,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
       '出现脱水、发热、黑便/血便、剧烈腹痛、抑郁等生命威胁体征时需立即就医，不可仅靠饮食调整。',
       '所有检查、活检与诊断决策必须由兽医主导。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -88,11 +99,17 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第60章 小肠细菌过度生长（SIBO）',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第57章 炎症性肠病（IBD）' },
+      { sourceId: 'SACN5', locator: '第56章 急性胃肠炎与肠炎' },
+      { sourceId: 'SACN5', locator: '第60章 小肠细菌过度生长（SIBO）' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'gi-003',
     domain: 'GI',
+    questionType: 'NUTRITION',
     title: '饮食试验：新奇蛋白 / 水解蛋白 / 单一蛋白源',
     keywords: [
       'diet trial',
@@ -123,6 +140,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
       '饮食试验成败依赖主人严格依从，且应在兽医诊断与指导下进行；若同时用药，换食时机需与兽医的药物方案（如激素减量）协调。',
       '家庭自制消除食谱必须保证营养完整均衡（ADF/FEDIAF 合规），不能只喂单一肉源造成营养不均衡；需兽医营养评估确认。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -137,11 +155,17 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         note: '本地仅存摘要（dog-ibd-cie-functional-targets.md）：有限抗原、新奇/水解蛋白',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第57章 炎症性肠病（IBD）' },
+      { sourceId: 'ACVIM-CONSENSUS', locator: '' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'gi-004',
     domain: 'GI',
+    questionType: 'NUTRITION',
     title: '高消化率与低残渣原则（含无乳糖）',
     keywords: [
       'digestibility',
@@ -166,6 +190,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
       '高消化治疗粮或经评估的家庭食谱是否适用于当前病情，需兽医确认；不要自行长期只喂单一食材。',
       '消化率指标以干物质（DM）为基准，家庭食谱需按 DM 换算评估。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -180,11 +205,17 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第60章 小肠细菌过度生长（SIBO）',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第57章 炎症性肠病（IBD）' },
+      { sourceId: 'SACN5', locator: '第56章 急性胃肠炎与肠炎' },
+      { sourceId: 'SACN5', locator: '第60章 小肠细菌过度生长（SIBO）' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'gi-005',
     domain: 'GI',
+    questionType: 'NUTRITION',
     title: '脂肪与能量密度：低脂对部分 IBD 病例有益',
     keywords: [
       'fat',
@@ -211,6 +242,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
       '脂肪水平调整需基于兽医对胰腺炎、PLE、高脂血症、淋巴管扩张等并发状况的评估；状态不明时采用保守温和低脂路线。',
       '家庭食谱不能靠高脂堆能量密度；患犬耐受性需在兽医指导下逐步试探。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -225,11 +257,17 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         note: '本地仅存摘要（dog-ibd-cie-functional-targets.md）：可选低脂',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第57章 炎症性肠病（IBD）' },
+      { sourceId: 'SACN5', locator: '第58章 蛋白丢失性肠病（PLE）' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'gi-006',
     domain: 'GI',
+    questionType: 'NUTRITION',
     title: '纤维：可溶/不可溶纤维与肠道健康',
     keywords: [
       'fiber',
@@ -260,6 +298,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
       '纤维类型与用量需兽医评估；不要默认给 IBD 患犬高纤维饮食，除非明确为大肠/纤维反应型问题。',
       '家庭食谱中南瓜/车前子等只应作为精准杠杆少量使用，避免复杂蔬菜堆叠削弱有限抗原原则。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -274,11 +313,17 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第58章 蛋白丢失性肠病（PLE）',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第57章 炎症性肠病（IBD）' },
+      { sourceId: 'SACN5', locator: '第56章 急性胃肠炎与肠炎' },
+      { sourceId: 'SACN5', locator: '第58章 蛋白丢失性肠病（PLE）' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'gi-007',
     domain: 'GI',
+    questionType: 'NUTRITION',
     title: '益生菌/益生元的证据边界',
     keywords: [
       'probiotic',
@@ -305,6 +350,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
       '补充益生菌/益生元不能替代兽医诊断与基础饮食治疗；剂量与产品选择需兽医指导。',
       '对免疫抑制或危重患者使用活菌产品需格外谨慎。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -315,11 +361,16 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第57章 炎症性肠病（IBD）',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第60章 小肠细菌过度生长（SIBO）' },
+      { sourceId: 'SACN5', locator: '第57章 炎症性肠病（IBD）' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'gi-008',
     domain: 'GI',
+    questionType: 'NUTRITION',
     title: '急性胃肠炎：短期清淡饮食与恢复方案',
     keywords: [
       'acute gastroenteritis',
@@ -350,17 +401,22 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
       '禁食时间与补液方案必须由兽医决定；出现血便、高热、剧烈腹痛等生命威胁体征立即就医。',
       '急性期不要自行使用止泻/止吐药物或长时间断食。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
         chapter: '第56章 急性胃肠炎与肠炎',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第56章 急性胃肠炎与肠炎' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'gi-009',
     domain: 'GI',
+    questionType: 'NUTRITION',
     title: '慢性腹泻的营养策略：三种食物方案与饮食试验',
     keywords: [
       'chronic diarrhea',
@@ -386,6 +442,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
       '慢性腹泻病因复杂（IBD、SIBO、淋巴瘤、外分泌胰腺功能不全、大肠疾病等），必须由兽医诊断后制定方案。',
       '抗生素使用需兽医处方，不可自行长期用药。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -400,11 +457,17 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第56章 急性胃肠炎与肠炎',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第57章 炎症性肠病（IBD）' },
+      { sourceId: 'SACN5', locator: '第60章 小肠细菌过度生长（SIBO）' },
+      { sourceId: 'SACN5', locator: '第56章 急性胃肠炎与肠炎' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'gi-010',
     domain: 'GI',
+    questionType: 'NUTRITION',
     title: '食物过敏/不良反应与 IBD 的鉴别',
     keywords: [
       'food allergy',
@@ -431,6 +494,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
       '「食物过敏」标签应由兽医通过饮食试验与排除诊断确认，不可仅凭主人观察下结论。',
       '需兽医指导排除寄生虫、感染、肿瘤等其他病因后再实施长期消除饮食。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -441,11 +505,16 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第61章 大肠疾病概述',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第57章 炎症性肠病（IBD）' },
+      { sourceId: 'SACN5', locator: '第61章 大肠疾病概述' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'gi-011',
     domain: 'GI',
+    questionType: 'NUTRITION',
     title: '少食多餐：喂养方法与喂食量调整',
     keywords: [
       'small meals',
@@ -471,6 +540,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
     caveats: [
       '餐次与喂食量调整需结合患犬耐受性与兽医评估；不要因「多餐」而超过每日能量需求。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -485,11 +555,17 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第60章 小肠细菌过度生长（SIBO）',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第57章 炎症性肠病（IBD）' },
+      { sourceId: 'SACN5', locator: '第58章 蛋白丢失性肠病（PLE）' },
+      { sourceId: 'SACN5', locator: '第60章 小肠细菌过度生长（SIBO）' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'gi-012',
     domain: 'GI',
+    questionType: 'NUTRITION',
     title: 'PLE/低白蛋白时的营养注意（低脂高蛋白方案）',
     keywords: [
       'ple',
@@ -521,6 +597,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
       'PLE 是严重疾病，需兽医全面诊断与治疗（免疫抑制、输液/白蛋白支持、急症处理等）；家庭饮食调整不能替代急症医疗。',
       '不要自行补充 MCT 油或大量蛋白补充剂，需兽医处方与监测。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -531,11 +608,16 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第57章 炎症性肠病（IBD）',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第58章 蛋白丢失性肠病（PLE）' },
+      { sourceId: 'SACN5', locator: '第57章 炎症性肠病（IBD）' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'gi-013',
     domain: 'GI',
+    questionType: 'NUTRITION',
     title: '营养评估与监测：体重、体况、钴胺素/叶酸与微量营养素',
     keywords: [
       'monitoring',
@@ -568,6 +650,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
     caveats: [
       '所有化验与补充剂（钴胺素、脂溶性维生素、锌、镁等）需兽医评估与处方，不要盲目大剂量补充。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -582,11 +665,17 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         note: '本地仅存摘要（dog-ibd-cie-functional-targets.md）：评估钴胺素/叶酸',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第57章 炎症性肠病（IBD）' },
+      { sourceId: 'SACN5', locator: '第56章 急性胃肠炎与肠炎' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'gi-014',
     domain: 'GI',
+    questionType: 'NUTRITION',
     title: '需要兽医指导的边界：诊断、药物与安全底线',
     keywords: [
       'veterinary guidance',
@@ -615,6 +704,7 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
       '本条目不能替代兽医诊断与治疗；所有饮食调整均需在兽医指导下进行。',
       '家庭食谱必须满足营养完整均衡标准，不能因「清淡」而导致营养不足。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -632,6 +722,12 @@ export const GI_KNOWLEDGE: KnowledgeEntry[] = [
         source: 'IBD/CIE 功能目标表（内部整理，无文献依据）',
         note: 'dog-ibd-cie-functional-targets.md：ADF/FEDIAF 合规为硬标准',
       },
+    ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第57章 炎症性肠病（IBD）' },
+      { sourceId: 'SACN5', locator: '第56章 急性胃肠炎与肠炎' },
+      { sourceId: 'SACN5', locator: '第58章 蛋白丢失性肠病（PLE）' },
+      { sourceId: 'INTERNAL-IBD-TARGET', locator: '' },
     ],
     priority: 'HIGH',
   },

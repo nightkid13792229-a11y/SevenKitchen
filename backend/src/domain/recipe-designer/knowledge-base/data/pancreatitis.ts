@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -15,6 +18,7 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'pancreatitis-001',
     domain: 'PANCREATITIS',
+    questionType: 'DEFINITION',
     title: '胰腺炎：定义与临床特征',
     keywords: ['胰腺炎', 'pancreatitis', '急性胰腺炎', '急性坏死性胰腺炎', '呕吐', '腹痛', '犬'],
     applicableTo: ['pancreatitis', 'acute-pancreatitis', 'vomiting', 'dog', 'cat'],
@@ -31,6 +35,7 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
       '高脂血症等可干扰淀粉酶/脂肪酶等检测结果，化验单解读须由兽医完成。',
       '疑似胰腺炎病例均可能需急症处理，需兽医诊断与指导。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -38,11 +43,15 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
         note: '临床重要性、患者评估（病史与体格检查、实验室与影像学）',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第67章 胰腺炎' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'pancreatitis-002',
     domain: 'PANCREATITIS',
+    questionType: 'NUTRITION',
     title: '胰腺炎危险因素：高脂餐、肥胖、高脂血症与品种易感性',
     keywords: ['危险因素', 'risk factor', '高脂饮食', '高脂餐', '肥胖', 'obesity', '高脂血症', '迷你雪纳瑞', 'miniature schnauzer', '品种'],
     applicableTo: ['pancreatitis', 'hyperlipidemia', 'obesity', 'breed-risk', 'high-fat-diet'],
@@ -61,6 +70,7 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
       '高脂人类食物、剩饭与垃圾是节日期间常见诱因，应严格避免。',
       '危险因素评估与品种/化验结果解读需兽医诊断与指导。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -73,11 +83,16 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
         note: '持续高甘油三酯血症是人医与犬急性胰腺炎的主要危险因素',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第67章 胰腺炎' },
+      { sourceId: 'SACN5', locator: '第28章 高脂血症' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'pancreatitis-003',
     domain: 'PANCREATITIS',
+    questionType: 'NUTRITION',
     title: '急性胰腺炎营养支持：早期肠内营养 vs 禁食的循证变化',
     keywords: ['营养支持', 'enteral nutrition', '肠内营养', '禁食', 'NPO', '肠外营养', 'parenteral nutrition', '早期喂养'],
     applicableTo: ['pancreatitis', 'acute-pancreatitis', 'enteral-nutrition', 'npo', 'parenteral-nutrition'],
@@ -96,6 +111,7 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
       '肠外营养中是否使用脂肪乳存在争议：若患犬存在高甘油三酯血症，应先评估血清甘油三酯再决定是否静脉给予脂质。',
       '急性出血性/坏死性胰腺炎属医疗急症，所有营养干预均需兽医诊断与指导。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -103,11 +119,15 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
         note: '喂养方案：NPO 时限、肠内 vs 肠外营养的证据（人类与实验犬数据）',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第67章 胰腺炎' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'pancreatitis-004',
     domain: 'PANCREATITIS',
+    questionType: 'NUTRITION',
     title: '低脂饮食原则：脂肪与蛋白质目标范围（干物质基准）',
     keywords: ['低脂', 'low-fat', '脂肪限制', 'fat restriction', '干物质', 'dry matter', '蛋白', 'protein', '胰腺炎饮食'],
     applicableTo: ['pancreatitis', 'low-fat', 'hyperlipidemia', 'high-triglycerides', 'obesity'],
@@ -125,6 +145,7 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
       '脂肪限制程度取决于个体状态（是否肥胖/高甘油三酯血症），需兽医评估后确定。',
       '长期低脂饮食须保证营养充足、避免必需脂肪酸缺乏，需兽医诊断与指导。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -137,11 +158,16 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
         note: '高脂血症饮食推荐：脂肪 <12% DM',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第67章 胰腺炎' },
+      { sourceId: 'SACN5', locator: '第28章 高脂血症' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'pancreatitis-005',
     domain: 'PANCREATITIS',
+    questionType: 'NUTRITION',
     title: '恢复期喂养：逐步复食与少食多餐',
     keywords: ['恢复期', 'recovery', '复食', 'refeeding', '少食多餐', 'small frequent meals', '单体要素饮食', 'monomeric', '高消化性'],
     applicableTo: ['pancreatitis', 'recovery', 'low-fat', 'gi-diet', 'small-frequent-meals'],
@@ -159,6 +185,7 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
       '少食多餐与低脂易消化原则应持续到恢复期结束，具体安排需兽医指导。',
       '能否回归日常饮食、何时回归，需兽医根据病情判断；需兽医诊断与指导。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -166,11 +193,15 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
         note: '喂养方案：复水复食步骤、单体要素饮食、胃肠处方粮过渡、少食多餐',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第67章 胰腺炎' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'pancreatitis-006',
     domain: 'PANCREATITIS',
+    questionType: 'NUTRITION',
     title: '高脂血症：甘油三酯阈值与临床意义',
     keywords: ['高脂血症', 'hyperlipidemia', '高甘油三酯血症', 'hypertriglyceridemia', '甘油三酯', 'triglyceride', '脂血', 'lipemia', '乳糜微粒', 'chylomicron'],
     applicableTo: ['hyperlipidemia', 'high-triglycerides', 'pancreatitis', 'monitoring'],
@@ -189,6 +220,7 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
       '空腹时长（10~12小时以上）是判断「异常」的前提，采血与解读须由兽医执行。',
       '高脂血症既是胰腺炎危险因素，也可能继发于糖尿病、库欣综合征、甲状腺功能减退、肾病等，病因排查需兽医诊断与指导。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -201,11 +233,16 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
         note: '血清甘油三酯 >900 mg/dl 增加犬胰腺炎风险',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第28章 高脂血症' },
+      { sourceId: 'SACN5', locator: '第67章 胰腺炎' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'pancreatitis-007',
     domain: 'PANCREATITIS',
+    questionType: 'NUTRITION',
     title: '高脂血症饮食干预：低脂高纤与长期管理',
     keywords: ['饮食干预', 'dietary management', '低脂高纤', 'low-fat high-fiber', '膳食纤维', 'fiber', '处方粮', '纤维酸', 'fibrate'],
     applicableTo: ['hyperlipidemia', 'high-triglycerides', 'low-fat', 'dietary-management', 'prevention'],
@@ -225,6 +262,7 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
       '药物（纤维酸类等）的剂量与适应证须由兽医处方并定期监测，勿自行给药。',
       '所有高脂血症管理方案需兽医诊断与指导。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -232,11 +270,15 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
         note: '表28-2 关键营养因素、喂养方案、管理目标、复查与药物介入（Box 28-2）',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第28章 高脂血症' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'pancreatitis-008',
     domain: 'PANCREATITIS',
+    questionType: 'NUTRITION',
     title: '鱼油与补充剂：证据边界',
     keywords: ['鱼油', 'fish oil', 'omega-3', '海洋鱼油', 'marine fish oil', '抗氧化剂', 'antioxidant', '烟酸', 'niacin', '补充剂', 'supplement'],
     applicableTo: ['hyperlipidemia', 'high-triglycerides', 'fish-oil', 'supplements', 'chronic-pancreatitis'],
@@ -255,6 +297,7 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
       '以上结论多为「证据边界」描述，不构成用药建议；任何药物与补充剂的使用需兽医诊断与指导。',
       '补充剂与处方药可能存在相互作用（如与降脂药同用），须由兽医评估。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -267,11 +310,16 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
         note: '其他营养因素——抗氧化剂（人慢性胰腺炎 RCT）、钴胺素',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第28章 高脂血症' },
+      { sourceId: 'SACN5', locator: '第67章 胰腺炎' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'pancreatitis-009',
     domain: 'PANCREATITIS',
+    questionType: 'NUTRITION',
     title: '慢性胰腺炎与外分泌功能不全（EPI）',
     keywords: ['慢性胰腺炎', 'chronic pancreatitis', '外分泌功能不全', 'exocrine pancreatic insufficiency', 'EPI', '胰酶', 'pancreatic enzyme', '钴胺素', 'cobalamin'],
     applicableTo: ['chronic-pancreatitis', 'epi', 'pancreatitis', 'cat', 'cobalamin'],
@@ -288,6 +336,7 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
       '胰酶补充剂的选择、剂量与给药方式须兽医处方指导；自行添加酶制剂可能无效甚至有害。',
       '并发糖尿病、IBD 等的病例管理更复杂，需兽医诊断与指导。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -295,11 +344,15 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
         note: '慢性胰腺炎与获得性外分泌功能不全、钴胺素评估与补充',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第67章 胰腺炎' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'pancreatitis-010',
     domain: 'PANCREATITIS',
+    questionType: 'NUTRITION',
     title: '自制低脂膳食的风险：必需脂肪酸与营养充足性',
     keywords: ['自制膳食', 'homemade', '低脂食谱', '必需脂肪酸', 'essential fatty acid', '营养充足', 'complete and balanced', '谨慎维护', 'NRC'],
     applicableTo: ['homemade', 'low-fat', 'prevention', 'hyperlipidemia', 'hepatorenal-caution'],
@@ -317,6 +370,7 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
       '低脂不等于无脂：必须满足必需脂肪酸需求，油脂添加与整体配方平衡需专业校验。',
       '「低脂维护」与「治疗」的边界须清楚：面向用户表述应保守，不得宣称治疗肝病、胰腺炎或降低血脂；需兽医诊断与指导。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '项目整理笔记：犬低脂/肝胆/尿素谨慎复盘目标表（内部整理，无文献依据）',
@@ -327,11 +381,16 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
         note: 'NRC 为营养需要与安全上限的参考来源，不替代 FEDIAF/ADF 执行标准',
       },
     ],
+    sources: [
+      { sourceId: 'INTERNAL-REVIEW-TARGET', locator: '' },
+      { sourceId: 'NRC-2006', locator: '' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'pancreatitis-011',
     domain: 'PANCREATITIS',
+    questionType: 'NUTRITION',
     title: '监测与复查：胰腺炎与高脂血症的随访',
     keywords: ['监测', 'monitoring', '复查', 'recheck', '甘油三酯', 'triglyceride', '脂血', 'lipemia', '随访', 'follow-up', '复发', 'relapse'],
     applicableTo: ['pancreatitis', 'hyperlipidemia', 'high-triglycerides', 'monitoring', 'relapse'],
@@ -349,6 +408,7 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
       '化验结果的判读（尤其脂血干扰、空腹状态、样本是否被清除乳糜微粒）需兽医完成。',
       '所有监测与复查计划需兽医诊断与指导。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -361,11 +421,16 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
         note: '管理目标、复查时间点（1~2个月）、半年随访建议',
       },
     ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第67章 胰腺炎' },
+      { sourceId: 'SACN5', locator: '第28章 高脂血症' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'pancreatitis-012',
     domain: 'PANCREATITIS',
+    questionType: 'NUTRITION',
     title: '易感品种与预防性管理（迷你雪纳瑞等）',
     keywords: ['易感品种', 'breed predisposition', '迷你雪纳瑞', 'miniature schnauzer', '预防', 'prevention', '饮食不当', 'dietary indiscretion', '假日', 'holiday'],
     applicableTo: ['breed-risk', 'prevention', 'hyperlipidemia', 'low-fat', 'pancreatitis'],
@@ -383,6 +448,7 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
       '预防性低脂饮食不等同于治疗性处方粮；出现呕吐、腹痛等可疑症状应立即就医。',
       '所有预防与管理措施需兽医诊断与指导。',
     ],
+    reviewBy: '2027-04-01',
     citations: [
       {
         source: '小动物临床营养学（第5版）',
@@ -394,6 +460,10 @@ export const PANCREATITIS_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第28章 高脂血症',
         note: '迷你雪纳瑞家族性/原发性高脂血症倾向、饮食干预与胰腺炎风险',
       },
+    ],
+    sources: [
+      { sourceId: 'SACN5', locator: '第67章 胰腺炎' },
+      { sourceId: 'SACN5', locator: '第28章 高脂血症' },
     ],
     priority: 'MEDIUM',
   },

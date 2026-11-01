@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -17,6 +20,7 @@ export const CRITICAL_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'critical-001',
     domain: 'CRITICAL',
+    questionType: 'NUTRITION',
     title: '重症/住院患者营养不良的后果与营养支持的必要性',
     keywords: [
       '重症营养', '营养不良', '住院', '免疫', '伤口愈合', '药物代谢', '支持喂养',
@@ -39,11 +43,16 @@ export const CRITICAL_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第25章 重症监护营养与肠内辅助喂养', note: 'CLINICAL IMPORTANCE、营养不良后果（免疫/组织/药物）、住院营养不足' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第25章 重症监护营养与肠内辅助喂养' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'critical-002',
     domain: 'CRITICAL',
+    questionType: 'NUTRITION',
     title: '重症患者营养评估与辅助喂养指征',
     keywords: [
       '营养评估', 'RER', '静息能量', '辅助喂养', 'BCS', '体重下降', '指征',
@@ -66,11 +75,16 @@ export const CRITICAL_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第25章 重症监护营养与肠内辅助喂养', note: 'PATIENT ASSESSMENT、RER 计算、辅助喂养指征、体重下降' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第25章 重症监护营养与肠内辅助喂养' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'critical-003',
     domain: 'CRITICAL',
+    questionType: 'NUTRITION',
     title: '重症患者的代谢变化与底物选择（脂肪/蛋白优先）',
     keywords: [
       '代谢', '急性期', '高代谢', '胰岛素抵抗', '分解代谢', '底物', '脂肪', '蛋白', '碳水',
@@ -92,11 +106,16 @@ export const CRITICAL_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第25章 重症监护营养与肠内辅助喂养', note: '代谢变化、急性/适应期、底物选择' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第25章 重症监护营养与肠内辅助喂养' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'critical-004',
     domain: 'CRITICAL',
+    questionType: 'NUTRITION',
     title: '重症患者的能量目标与体蛋白丢失风险',
     keywords: [
       '能量目标', '体蛋白', '瘦体重', '肌肉丢失', '蛋白质丢失', '预后',
@@ -119,11 +138,16 @@ export const CRITICAL_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第25章 重症监护营养与肠内辅助喂养', note: '体蛋白丢失、分解代谢、能量目标' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第25章 重症监护营养与肠内辅助喂养' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'critical-005',
     domain: 'CRITICAL',
+    questionType: 'NUTRITION',
     title: '肠内辅助喂养（管饲）的意义与方法',
     keywords: [
       '肠内喂养', '管饲', '胃造瘘', '鼻胃管', '黏膜保护', '辅助喂养',
@@ -146,11 +170,16 @@ export const CRITICAL_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第25章 重症监护营养与肠内辅助喂养', note: '肠内辅助喂养、黏膜保护、喂养医嘱与途径' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第25章 重症监护营养与肠内辅助喂养' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'critical-006',
     domain: 'CRITICAL',
+    questionType: 'NUTRITION',
     title: '厌食、恶病质与再喂养注意事项',
     keywords: [
       '厌食', '恶病质', '再喂养', '代谢适应', '体重下降', '再喂养综合征',
@@ -172,6 +201,10 @@ export const CRITICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第25章 重症监护营养与肠内辅助喂养', note: '厌食、恶病质与适应、味觉嗅觉、再喂养' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第25章 重症监护营养与肠内辅助喂养' },
     ],
     priority: 'MEDIUM',
   },

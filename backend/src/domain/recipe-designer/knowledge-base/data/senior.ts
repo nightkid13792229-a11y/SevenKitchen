@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -10,6 +13,7 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'senior-001',
     domain: 'SENIOR',
+    questionType: 'DEFINITION',
     title: '老年犬的定义与个体差异（年龄≠疾病）',
     keywords: ['老年犬', '成熟犬', '老龄', '个体差异', '寿命', 'senior dog', 'geriatric', 'mature dog', 'aging'],
     applicableTo: ['senior', 'geriatric', 'older-dog'],
@@ -32,11 +36,18 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第35章 犬认知功能障碍（Cognitive Dysfunction in Dogs）', note: '7 岁以上老年犬群体规模数据' },
       { source: 'AAHA 营养与体重管理指南 2021', chapter: '营养评估（Nutritional Assessment）', note: '高龄（advancing age）是改变能量与营养素需求的脆弱生命阶段' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第14章 中老年犬的饲喂（Feeding Mature Adult Dogs: Middle Aged and Older）' },
+      { sourceId: 'SACN5', locator: '第35章 犬认知功能障碍（Cognitive Dysfunction in Dogs）' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '营养评估（Nutritional Assessment）' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'senior-002',
     domain: 'SENIOR',
+    questionType: 'NUTRITION',
     title: '老年犬常见共病及其对营养的影响',
     keywords: ['共病', '慢性肾病', '心脏病', '关节炎', '牙周病', '高血压', 'comorbidity', 'CKD', 'heart disease', 'osteoarthritis', 'periodontal disease'],
     applicableTo: ['senior', 'geriatric', 'older-dog', 'ckd-risk', 'cardiac-risk'],
@@ -60,11 +71,18 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第35章 犬认知功能障碍', note: '行为改变的医学排查、多病优先级的食品选择原则' },
       { source: 'AAHA 营养与体重管理指南 2021', chapter: '营养风险因素与治疗性食品', note: '慢性病（CKD、糖尿病、骨关节炎）营养管理是整体医疗计划的核心' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第14章 中老年犬的饲喂' },
+      { sourceId: 'SACN5', locator: '第35章 犬认知功能障碍' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '营养风险因素与治疗性食品' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'senior-003',
     domain: 'SENIOR',
+    questionType: 'NUTRITION',
     title: '蛋白质需求：维持足够优质蛋白，健康老年犬通常不需要限制蛋白',
     keywords: ['蛋白质', '肌肉流失', '少肌症', '优质蛋白', 'protein', 'sarcopenia', 'lean body mass', 'muscle loss'],
     applicableTo: ['senior', 'geriatric', 'older-dog', 'muscle-loss'],
@@ -85,11 +103,17 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '蛋白质争议、15-23% DM 建议、高蛋白与肾病关系、免疫与氮平衡研究' },
       { source: 'AAHA 营养与体重管理指南 2021', chapter: '体重管理 / 老年生命阶段', note: '高蛋白限能饮食保留瘦体重；老年期瘦体重流失' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第14章 中老年犬的饲喂' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '体重管理 / 老年生命阶段' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'senior-004',
     domain: 'SENIOR',
+    questionType: 'NUTRITION',
     title: '能量需求变化：防肥胖与防消瘦需个体化',
     keywords: ['能量', '热量', '肥胖', '消瘦', '能量密度', '脂肪', 'energy', 'calorie', 'obesity', 'weight loss', 'energy density'],
     applicableTo: ['senior', 'geriatric', 'older-dog', 'overweight', 'underweight'],
@@ -112,11 +136,17 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '能量需求下降 12-13%、1.4×RER、能量密度与脂肪推荐范围、高龄消瘦犬' },
       { source: 'AAHA 营养与体重管理指南 2021', chapter: '预防肥胖（Prevention of Obesity）', note: '中年能量需求下降但结果不一致、老年期瘦体重与体重下降、减重摄入数据' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第14章 中老年犬的饲喂' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '预防肥胖（Prevention of Obesity）' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'senior-005',
     domain: 'SENIOR',
+    questionType: 'NUTRITION',
     title: '定期营养评估（AAHA/WSAVA 框架）',
     keywords: ['营养评估', '筛查', '扩展评估', '就诊频率', '第五生命体征', 'nutritional assessment', 'screening', 'extended evaluation'],
     applicableTo: ['senior', 'geriatric', 'older-dog'],
@@ -138,11 +168,18 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '评估频率 6-12 个月、营养监测的重要性' },
       { source: '小动物临床营养学（第5版）', chapter: '第35章 犬认知功能障碍', note: '引述 AAHA 老年护理工作组：老年犬每年两次筛查' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '如何进行完整营养评估（How to Perform a Complete Nutritional Assessment）' },
+      { sourceId: 'SACN5', locator: '第14章 中老年犬的饲喂' },
+      { sourceId: 'SACN5', locator: '第35章 犬认知功能障碍' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'senior-006',
     domain: 'SENIOR',
+    questionType: 'NUTRITION',
     title: 'BCS/MCS：体况与肌肉状态需分别监测',
     keywords: ['BCS', 'MCS', '体况评分', '肌肉状况评分', '体脂', '肌肉流失', 'body condition score', 'muscle condition score', 'body fat'],
     applicableTo: ['senior', 'geriatric', 'older-dog', 'overweight', 'muscle-loss'],
@@ -162,11 +199,17 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
       { source: 'AAHA 营养与体重管理指南 2021', chapter: '营养评估：BCS 与 MCS', note: '9 分制 BCS 与体脂关系、MCS 评估与验证' },
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '理想体况 BCS 2.5/5-3.5/5' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '营养评估：BCS 与 MCS' },
+      { sourceId: 'SACN5', locator: '第14章 中老年犬的饲喂' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'senior-007',
     domain: 'SENIOR',
+    questionType: 'NUTRITION',
     title: '纤维与消化健康：便秘、饱腹与血糖',
     keywords: ['纤维', '便秘', '消化', '饱腹', '血糖', 'fiber', 'constipation', 'digestion', 'satiety', 'glycemic'],
     applicableTo: ['senior', 'geriatric', 'older-dog', 'overweight', 'constipation'],
@@ -186,11 +229,17 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '便秘、纤维稀释热量与餐后血糖、表14-2 纤维推荐' },
       { source: 'AAHA 营养与体重管理指南 2021', chapter: '治疗性减重食品', note: '添加纤维的饱腹效应与降低能量密度作用' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第14章 中老年犬的饲喂' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '治疗性减重食品' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'senior-008',
     domain: 'SENIOR',
+    questionType: 'NUTRITION',
     title: '抗氧化与认知支持：EPA/DHA 的证据边界',
     keywords: ['抗氧化', '认知', 'EPA', 'DHA', 'omega-3', '维生素E', '维生素C', '硒', 'antioxidant', 'cognitive', 'docosahexaenoic', 'eicosapentaenoic'],
     applicableTo: ['senior', 'geriatric', 'older-dog', 'cognitive-dysfunction'],
@@ -212,11 +261,17 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第35章 犬认知功能障碍', note: '表35-3 关键营养因子、Grade 1 证据的临床试验与实验室研究、补充剂证据边界' },
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '认知功能障碍患病率（11-12 岁 28%、15-16 岁 68%）及成熟犬抗氧化关键因子' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第35章 犬认知功能障碍' },
+      { sourceId: 'SACN5', locator: '第14章 中老年犬的饲喂' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'senior-009',
     domain: 'SENIOR',
+    questionType: 'NUTRITION',
     title: '认知功能障碍：行为变化不等于正常衰老，先排查医学原因',
     keywords: ['认知功能障碍', 'CDS', '行为改变', 'DISHA', '迷失方向', '屋内便溺', 'cognitive dysfunction', 'behavior change', 'disorientation'],
     applicableTo: ['senior', 'geriatric', 'older-dog', 'cognitive-dysfunction'],
@@ -237,11 +292,17 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第35章 犬认知功能障碍', note: 'DISHA 征象、患病率数据、医学排查、环境丰富化' },
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '认知功能障碍临床征象约 7-8 岁开始出现' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第35章 犬认知功能障碍' },
+      { sourceId: 'SACN5', locator: '第14章 中老年犬的饲喂' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'senior-010',
     domain: 'SENIOR',
+    questionType: 'NUTRITION',
     title: '饮食过渡、适口性与零食管理',
     keywords: ['换粮', '过渡', '适口性', '食欲', '零食', 'diet transition', 'palatability', 'appetite', 'treats'],
     applicableTo: ['senior', 'geriatric', 'older-dog'],
@@ -262,11 +323,17 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '3-7 天过渡期、高脂提高适口性、零食 <10%、喂养方法' },
       { source: 'AAHA 营养与体重管理指南 2021', chapter: '个性化营养建议（Individualized Nutritional Recommendations）', note: '4-7 天过渡、额外食品 ≤10% 总热量' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第14章 中老年犬的饲喂' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '个性化营养建议（Individualized Nutritional Recommendations）' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'senior-011',
     domain: 'SENIOR',
+    questionType: 'NUTRITION',
     title: '水分管理与脱水风险',
     keywords: ['水', '脱水', '饮水', 'water', 'dehydration', 'hydration'],
     applicableTo: ['senior', 'geriatric', 'older-dog'],
@@ -283,11 +350,16 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '水与脱水风险、表14-2' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第14章 中老年犬的饲喂' },
+    ],
     priority: 'LOW',
   },
   {
     id: 'senior-012',
     domain: 'SENIOR',
+    questionType: 'NUTRITION',
     title: '热量限制与健康长寿',
     keywords: ['热量限制', '长寿', '寿命', '饮食限制', 'caloric restriction', 'longevity', 'life span', 'diet restriction'],
     applicableTo: ['senior', 'geriatric', 'older-dog'],
@@ -304,6 +376,11 @@ export const SENIOR_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬的饲喂', note: '热量限制 20%-30% 与衰老、疾病风险' },
       { source: 'AAHA 营养与体重管理指南 2021', chapter: '预防肥胖（Prevention of Obesity）', note: '引述饮食限制延长寿命与骨关节炎研究（Kealy 等）' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第14章 中老年犬的饲喂' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '预防肥胖（Prevention of Obesity）' },
     ],
     priority: 'LOW',
   },

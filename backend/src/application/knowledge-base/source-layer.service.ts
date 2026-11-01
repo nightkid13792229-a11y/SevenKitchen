@@ -208,9 +208,17 @@ export class SourceLayerService {
     return this.prisma.sourceTable.findUnique({ where: { id } });
   }
 
-  /** 取图（返回路径与图注，实际文件由静态目录提供） */
+  /**
+   * 取图。
+   *
+   * 返回里带 `url` —— 静态目录挂在 `/kb-figures/`，调用方直接用这个地址就能取到文件，
+   * 不用自己拼路径。
+   */
   async getFigure(id: string) {
-    return this.prisma.sourceFigure.findUnique({ where: { id } });
+    const row = await this.prisma.sourceFigure.findUnique({ where: { id } });
+    if (!row) return null;
+    const name = row.path.split('/').pop() ?? '';
+    return { ...row, url: `/kb-figures/${name}` };
   }
 
   /**
@@ -235,6 +243,47 @@ export class SourceLayerService {
       precision: r.precision,
       confidence: r.confidence,
     }));
+  }
+
+  /**
+   * 校验一处引用：AI 说"依据这段"，到底靠不靠得住。
+   *
+   * 三条判定：① 段落是否存在 ② 是否属于该条目锚定的文档 ③ 段落里是否有该条目的关键词。
+   * 返回 `ok=false` 时调用方应把这条回答标为"引用不可核"。
+   */
+  async verifyCitation(
+    entryId: string,
+    paragraphId: string,
+    keywords: string[] = [],
+  ): Promise<{
+    ok: boolean;
+    reason: string;
+    paragraph: ParagraphHit | null;
+    matchedKeywords: string[];
+  }> {
+    const paragraph = await this.getParagraph(paragraphId);
+    if (!paragraph) {
+      return { ok: false, reason: 'paragraph-not-found', paragraph: null, matchedKeywords: [] };
+    }
+
+    const anchors = await this.getEntryAnchors(entryId);
+    const inAnchoredDoc = anchors.some(
+      (a) => a.documentId === paragraph.documentId,
+    );
+
+    const text = paragraph.text.toLowerCase();
+    const matched = keywords.filter((k) => {
+      const key = (k ?? '').trim().toLowerCase();
+      return key.length >= 2 && text.includes(key);
+    });
+
+    if (!inAnchoredDoc) {
+      return { ok: false, reason: 'document-mismatch', paragraph, matchedKeywords: matched };
+    }
+    if (keywords.length > 0 && matched.length === 0) {
+      return { ok: false, reason: 'no-keyword-match', paragraph, matchedKeywords: [] };
+    }
+    return { ok: true, reason: 'ok', paragraph, matchedKeywords: matched };
   }
 
   /**

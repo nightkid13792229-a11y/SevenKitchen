@@ -1,0 +1,152 @@
+{
+ "num": "35-1",
+ "caption": "Behaviors evaluated in dogs to assess age-related cognitive decline.",
+ "page": 1,
+ "columns": [
+  ""
+ ],
+ "rows": [
+  [
+   "1. Confusion, awareness, spatial orientation"
+  ],
+  [
+   "Gets lost in familiar locations"
+  ],
+  [
+   "Goes to wrong side of doors (e.g., hinge side)"
+  ],
+  [
+   "Gets stuck and cannot navigate around or over obstacles"
+  ],
+  [
+   "Less responsive to stimuli"
+  ],
+  [
+   "Decreased recognition of familiar people, pets or places"
+  ],
+  [
+   "2. Relationships and social behavior"
+  ],
+  [
+   "Decreased interest in petting or contact"
+  ],
+  [
+   "Decreased greeting behavior"
+  ],
+  [
+   "Alterations or problems with social hierarchy"
+  ],
+  [
+   "In need of constant contact (e.g., over dependent or \"clingy\")"
+  ],
+  [
+   "3. Activity: Increased, decreased or repetitive"
+  ],
+  [
+   "Decreased daytime sleep/increased wandering or pacing"
+  ],
+  [
+   "Decreased exploration (apathy)"
+  ],
+  [
+   "Staring, fixation or snapping at objects"
+  ],
+  [
+   "Licking owners or household objects"
+  ],
+  [
+   "4. Agitation or anxiety"
+  ],
+  [
+   "Inappropriate vocalization"
+  ],
+  [
+   "Restless sleep"
+  ],
+  [
+   "Increased irritability/aggression"
+  ],
+  [
+   "Aimless pacing and wandering"
+  ],
+  [
+   "Increased/new fears or phobias"
+  ],
+  [
+   "Separation anxiety"
+  ],
+  [
+   "5. Appetite"
+  ],
+  [
+   "Increased interest (volume eaten or speed of eating)"
+  ],
+  [
+   "Decreased interest"
+  ],
+  [
+   "Anxiety-conflict behaviors at food bowl"
+  ],
+  [
+   "6. Decreased responsiveness to stimuli"
+  ],
+  [
+   "May seem to have a decline in vision, hearing or odor perception"
+  ],
+  [
+   "7. Decreased self-care"
+  ],
+  [
+   "8. Sleep-wake cycle"
+  ],
+  [
+   "Restless sleep or awake at night"
+  ],
+  [
+   "Increased daytime sleep"
+  ],
+  [
+   "9. Learning and memory"
+  ],
+  [
+   "a) House soiling: Indoor elimination at random sites or in view of owners"
+  ],
+  [
+   "Decreased or no signaling"
+  ],
+  [
+   "Goes outdoors, eliminates indoors upon return"
+  ],
+  [
+   "Elimination in crate or sleeping area"
+  ],
+  [
+   "Incontinence"
+  ],
+  [
+   "b) Works, tasks, commands"
+  ],
+  [
+   "Impaired working ability"
+  ],
+  [
+   "Impaired responsiveness to known commands or tricks"
+  ],
+  [
+   "Decreased ability to perform tasks"
+  ],
+  [
+   "Inability or slow to learn new tasks (must retrain)"
+  ]
+ ],
+ "note": "表内为单栏列表（无表头行，原文用加粗编号小标题分组）；表末脚注：*Adapted with permission from Landsberg G, Hunthausen W, Ackerman L. The effects of aging on behavior in senior pets. Handbook of Behavior Problems of the Dog and Cat. Edinburgh, Scotland: Elsevier Health Sciences, 2003.",
+ "tableId": "T0493",
+ "doc": "sacn5/chapters/SACN5_35.pdf",
+ "method": "视觉",
+ "verify": {
+  "numbers": 9,
+  "found": 9,
+  "status": "通过",
+  "misses": []
+ }
+}

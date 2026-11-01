@@ -1,1 +1,81 @@
-{"tableId":"T0199","caption":"","columns":[],"rows":[],"note":"PHANTOM: 该页只有正文引用，无表格本体"}
+{
+ "tableId": "T0199",
+ "caption": "Table 28-1. Clinical signs and diseases associated with hypertriglyceridemia in dogs and cats.",
+ "columns": [
+  "Clinical signs"
+ ],
+ "rows": [
+  [
+   "Dogs"
+  ],
+  [
+   "Abdominal discomfort*"
+  ],
+  [
+   "Acute pancreatitis"
+  ],
+  [
+   "Behavior (lethargy, inactivity)"
+  ],
+  [
+   "Crystalline stromal dystrophy (especially cavalier King Charles spaniels)"
+  ],
+  [
+   "Cushing's syndrome"
+  ],
+  [
+   "Fasting lipemia (six to 12 hours)"
+  ],
+  [
+   "Intermittent diarrhea*"
+  ],
+  [
+   "Intermittent vomiting*"
+  ],
+  [
+   "Lipemia retinalis"
+  ],
+  [
+   "Lipemic aqueous"
+  ],
+  [
+   "Lipid corneal dystrophy/arcus lipoides corneae"
+  ],
+  [
+   "Seizures"
+  ],
+  [
+   "Cats"
+  ],
+  [
+   "Cutaneous xanthomata"
+  ],
+  [
+   "Lipemia retinalis"
+  ],
+  [
+   "Lipid keratopathy"
+  ],
+  [
+   "Peripheral nerve paralysis"
+  ],
+  [
+   "Horner's syndrome"
+  ],
+  [
+   "Tibial nerve paralysis"
+  ],
+  [
+   "Radial nerve paralysis"
+  ],
+  [
+   "Splenomegaly"
+  ]
+ ],
+ "verify": {
+  "numbers": 1,
+  "found": 1,
+  "misses": []
+ },
+ "method": "视觉"
+}

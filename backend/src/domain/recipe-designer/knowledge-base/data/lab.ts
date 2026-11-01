@@ -13,10 +13,6 @@ import type { KnowledgeEntry } from '../types';
  *   所以这里只写"这个指标反映什么、偏高偏低通常意味着什么、该结合什么一起看、
  *   下一步查什么"，**一律不写具体数值区间** —— 写了就会有人拿它去套别人的报告。
  *
- * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
- * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
- *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
- *
  * 建立日期：2026-10-01
  */
 export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
@@ -47,9 +43,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-002',
@@ -77,9 +71,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-003',
@@ -110,9 +102,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-004',
@@ -143,9 +133,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-005',
@@ -175,9 +163,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-006',
@@ -207,9 +193,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-007',
@@ -240,9 +224,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-008',
@@ -273,9 +255,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'FOLLOWUP',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-009',
@@ -304,9 +284,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-010',
@@ -334,8 +312,6 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'LOW',
     questionType: 'INTERPRET',
-    riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
 ];

@@ -11,14 +11,9 @@ import type { KnowledgeEntry } from '../types';
  *   老板把边界定死了："边界把严一点，我们不做诊断，只做初步分析。"
  *   所以这里**一条都不写"这可能是 XX 病"**，只写：
  *     · 该观察什么（家长在家能看到的）
- *     · 什么情况算红旗信号、要多急（写在 urgency 里，AI 只能照用）
+
  *     · 去医院时该准备什么
  *
- *   凡是 TRIAGE 类，urgency 必填 —— 这是唯一不让 AI 自由发挥的判断。
- *
- * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
- * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
- *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -55,10 +50,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-002',
@@ -90,10 +82,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-003',
@@ -123,10 +112,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-004',
@@ -162,10 +148,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-005',
@@ -195,10 +178,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-006',
@@ -228,10 +208,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'TRIAGE',
-    riskLevel: 'MEDIUM',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-007',
@@ -263,9 +240,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-008',
@@ -297,10 +272,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'TRIAGE',
-    riskLevel: 'MEDIUM',
-    urgency: 'OBSERVE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-009',
@@ -329,10 +301,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-010',
@@ -362,10 +331,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-011',
@@ -396,10 +362,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-012',
@@ -430,9 +393,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-013',
@@ -461,10 +422,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-014',
@@ -495,9 +453,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-015',
@@ -525,8 +481,6 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'LOW',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
 ];

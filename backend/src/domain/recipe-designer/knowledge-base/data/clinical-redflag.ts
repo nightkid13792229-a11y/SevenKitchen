@@ -7,14 +7,10 @@ import type { KnowledgeEntry } from '../types';
  * **哪些表现等不得**（立即就医）、哪些要尽快、哪些可以先观察。
  *
  * ── 本领域的硬规矩 ────────────────────────────────────────────
- *   1. 全部走新结构：`questionType: 'TRIAGE'` + **必填 `urgency`**
+
  *      （IMMEDIATE 立即就医 / SOON 尽快就医 / OBSERVE 可先观察）。
  *   2. **不做诊断**，只写"看到什么、最可能是什么方向、该多快去"。
  *   3. 高风险结论必须有 ≥2 个不同机构的来源（校验会拦）。
- *
- * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
- * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
- *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -57,10 +53,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-017',
@@ -100,10 +93,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-018',
@@ -144,10 +134,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-019',
@@ -189,10 +176,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-020',
@@ -233,10 +217,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-021',
@@ -276,10 +257,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-022',
@@ -319,10 +297,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-023',
@@ -363,10 +338,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-024',
@@ -406,10 +378,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-025',
@@ -450,10 +419,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-026',
@@ -494,10 +460,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-027',
@@ -537,10 +500,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-028',
@@ -580,10 +540,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-029',
@@ -624,10 +581,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-030',
@@ -667,10 +621,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-031',
@@ -711,10 +662,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-032',
@@ -761,10 +709,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-033',
@@ -811,9 +756,6 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
 ];

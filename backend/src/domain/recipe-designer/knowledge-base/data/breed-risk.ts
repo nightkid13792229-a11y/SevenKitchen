@@ -13,10 +13,6 @@ import type { KnowledgeEntry } from '../types';
  *      品种只是概率因素，不能变成对某一只狗的判决。
  *   3. 品种名用中文常用名，括号里给英文名，便于对照 WSAVA 遗传病立场文件。
  *
- * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
- * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
- *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
- *
  * 建立日期：2026-10-01
  *
  * ── 本批 16 条的取源纪律（2026-10-01 第二批） ──────────────
@@ -92,9 +88,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-002',
@@ -165,9 +159,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-003',
@@ -240,9 +232,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-004',
@@ -333,9 +323,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-005',
@@ -408,9 +396,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-006',
@@ -481,9 +467,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-007',
@@ -554,9 +538,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-008',
@@ -620,9 +602,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-009',
@@ -691,9 +671,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-010',
@@ -766,9 +744,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-011',
@@ -821,9 +797,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-012',
@@ -896,9 +870,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-013',
@@ -949,9 +921,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-014',
@@ -1019,9 +989,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-015',
@@ -1087,9 +1055,7 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'breed-016',
@@ -1163,8 +1129,6 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
 ];

@@ -26,7 +26,6 @@ import {
 import {
   KNOWLEDGE_DOMAIN_LABELS,
   KNOWLEDGE_QUESTION_TYPE_LABELS,
-  KNOWLEDGE_URGENCY_LABELS,
   HEALTH_ONLY_DOMAINS,
   type KnowledgeEntry,
 } from '../src/domain/recipe-designer/knowledge-base/types';
@@ -111,14 +110,12 @@ export function buildMarkdown(entries: KnowledgeEntry[], date: string): string {
   lines.push('');
   lines.push('## 审核优先级建议');
   lines.push('');
-  const highRisk = entries.filter((entry) => entry.riskLevel === 'HIGH').length;
   const triage = entries.filter(
     (entry) => entry.questionType === 'TRIAGE',
   ).length;
   const single = entries.filter(
     (entry) => resolveEvidenceStrength(entry) === 'SINGLE_SOURCE',
   ).length;
-  lines.push(`- 风险等级「高」：**${highRisk} 条**`);
   lines.push(`- 分诊类（回答"要不要去医院"）：**${triage} 条**`);
   lines.push(`- 单一来源：**${single} 条**`);
   lines.push('');
@@ -137,14 +134,6 @@ export function buildMarkdown(entries: KnowledgeEntry[], date: string): string {
       lines.push(
         `- **分类**：${KNOWLEDGE_QUESTION_TYPE_LABELS[entry.questionType as keyof typeof KNOWLEDGE_QUESTION_TYPE_LABELS] ?? entry.questionType ?? '—'}`,
       );
-      lines.push(
-        `- **风险等级**：${RISK_LABELS[entry.riskLevel ?? ''] ?? entry.riskLevel ?? '—'}`,
-      );
-      if (entry.urgency) {
-        lines.push(
-          `- **紧急程度**：${KNOWLEDGE_URGENCY_LABELS[entry.urgency] ?? entry.urgency}`,
-        );
-      }
       lines.push(
         `- **证据强度**：${EVIDENCE_LABELS[resolveEvidenceStrength(entry)] ?? '—'}`,
       );
@@ -232,10 +221,6 @@ export function buildCsv(entries: KnowledgeEntry[]): string {
         ] ??
           entry.questionType ??
           '',
-        RISK_LABELS[entry.riskLevel ?? ''] ?? entry.riskLevel ?? '',
-        entry.urgency
-          ? (KNOWLEDGE_URGENCY_LABELS[entry.urgency] ?? entry.urgency)
-          : '',
         EVIDENCE_LABELS[resolveEvidenceStrength(entry)] ?? '',
         String(new Set(sources.map((source) => source.sourceId)).size),
         sources.map((source) => source.sourceId).join(' / '),
@@ -243,7 +228,6 @@ export function buildCsv(entries: KnowledgeEntry[]): string {
         entry.summary.replace(/\*\*/g, ''),
         String(entry.details.length),
         String((entry.caveats ?? []).length),
-        entry.reviewStatus ?? '（未标注=未审核）',
         '',
         '',
       ]

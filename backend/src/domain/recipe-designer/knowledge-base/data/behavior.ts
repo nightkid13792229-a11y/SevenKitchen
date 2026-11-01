@@ -13,10 +13,6 @@ import type { KnowledgeEntry } from '../types';
  *      居家能怎么配合、什么时候该看医生（行为专科或全科）"。
  *   3. 涉及疼痛/感官退化引起的行为改变，要与 WSAVA 疼痛指南口径一致。
  *
- * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
- * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
- *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
- *
  * 建立日期：2026-10-01
  */
 export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
@@ -84,9 +80,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'DEFINITION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-002',
@@ -154,9 +148,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'DEFINITION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-003',
@@ -248,10 +240,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-004',
@@ -319,9 +308,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-005',
@@ -389,9 +376,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'SAFETY',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-006',
@@ -448,9 +433,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-007',
@@ -521,9 +504,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-008',
@@ -600,9 +581,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-009',
@@ -679,9 +658,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-010',
@@ -769,10 +746,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-011',
@@ -829,9 +803,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-012',
@@ -891,8 +863,6 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'FOLLOWUP',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
 ];

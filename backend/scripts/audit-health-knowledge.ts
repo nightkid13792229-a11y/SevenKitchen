@@ -26,8 +26,6 @@ import { KNOWLEDGE_SOURCES } from '../src/domain/recipe-designer/knowledge-base/
 export interface HealthKnowledgeAudit {
   total: number;
   byDomain: Record<string, number>;
-  byUrgency: Record<string, number>;
-  byRisk: Record<string, number>;
   byEvidence: Record<string, number>;
   problems: string[];
   warnings: string[];
@@ -128,8 +126,6 @@ export function auditHealthKnowledge(
   const health = entries.filter((entry) => healthOnly.has(entry.domain));
 
   const byDomain: Record<string, number> = {};
-  const byUrgency: Record<string, number> = {};
-  const byRisk: Record<string, number> = {};
   const byEvidence: Record<string, number> = {};
   const problems: string[] = [];
   const warnings: string[] = [];
@@ -140,10 +136,6 @@ export function auditHealthKnowledge(
 
   for (const entry of health) {
     byDomain[entry.domain] = (byDomain[entry.domain] ?? 0) + 1;
-    byUrgency[entry.urgency ?? '（无）'] =
-      (byUrgency[entry.urgency ?? '（无）'] ?? 0) + 1;
-    byRisk[entry.riskLevel ?? '（无）'] =
-      (byRisk[entry.riskLevel ?? '（无）'] ?? 0) + 1;
     const orgs = new Set(
       (entry.sources ?? []).map((source) => source.sourceId),
     );
@@ -165,17 +157,6 @@ export function auditHealthKnowledge(
     // 复核过期 = 这条知识该重新核了，但没人在看
     if (entry.reviewBy && entry.reviewBy < today) {
       problems.push(`条目 ${entry.id} 的复核日期已过（${entry.reviewBy}）`);
-    }
-
-    // 顾客侧开不开放，只看条目自己的 reviewStatus（2026-10-02）：
-    // 原来另有一张 approvals.ts 登记表，老板说不用留记录，已撤掉。
-    // 这里不再判"有没有审核记录"，改成把**还没开放的**健康侧条目列出来 ——
-    // 不是错误，是提醒：写完了却忘了标 APPROVED，顾客那边就永远看不到。
-    if (healthOnly.has(entry.domain) && entry.reviewStatus !== 'APPROVED') {
-      warnings.push(
-        `条目 ${entry.id}（健康侧）还不是 APPROVED，顾客侧看不到` +
-          `（当前状态：${entry.reviewStatus ?? '缺省=未审核'}）`,
-      );
     }
 
     // citations 里的出处名要能对上号：要么对得上登记表的规范名，
@@ -243,8 +224,6 @@ export function auditHealthKnowledge(
   return {
     total: health.length,
     byDomain,
-    byUrgency,
-    byRisk,
     byEvidence,
     problems,
     warnings,
@@ -260,8 +239,6 @@ function main() {
   } else {
     console.log(`健康知识条目：${result.total} 条`);
     console.log('  按领域：', result.byDomain);
-    console.log('  按风险：', result.byRisk);
-    console.log('  按紧急程度：', result.byUrgency);
     console.log('  按证据强度：', result.byEvidence);
     console.log(`\n硬问题（${result.problems.length}）：`);
     for (const problem of result.problems) console.log(`  ✗ ${problem}`);

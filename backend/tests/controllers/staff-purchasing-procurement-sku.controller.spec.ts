@@ -3,6 +3,7 @@ jest.mock('uuid', () => ({ v4: () => 'test-uuid' }));
 import { BadRequestException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { StaffGuard } from '../../src/interfaces/guards/role.guard';
+import { ProcurementSkuDraftNoticeException } from '../../src/application/purchasing/procurement-sku-draft.errors';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { StaffPurchasingController } from '../../src/interfaces/controllers/staff-purchasing.controller';
@@ -104,7 +105,9 @@ describe('StaffPurchasingController — 新增采购商品', () => {
   });
 
   it('订单列表截图这类明确的拒绝要原样抛给前端，不能被降级吞掉', async () => {
-    const verdict = new BadRequestException('这张图看起来是订单列表，请截商品详情页');
+    const verdict = new ProcurementSkuDraftNoticeException(
+      '这张图看起来是订单列表，请截商品详情页',
+    );
     draftService.draftFromScreenshot.mockRejectedValue(verdict);
 
     await expect(
@@ -116,7 +119,9 @@ describe('StaffPurchasingController — 新增采购商品', () => {
   });
 
   it('配额用尽也要把原因告诉员工，不能降级成"没认出来"', async () => {
-    const quotaError = new BadRequestException('今天的识别次数已用完（每天 30 次）');
+    const quotaError = new ProcurementSkuDraftNoticeException(
+      '今天的识别次数已用完（每天 30 次）',
+    );
     draftService.draftFromScreenshot.mockRejectedValue(quotaError);
 
     await expect(
@@ -125,6 +130,19 @@ describe('StaffPurchasingController — 新增采购商品', () => {
         'user-1',
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('AI 没配置好时也要安静地退回手填，不能给员工弹配置错误', async () => {
+    draftService.draftFromScreenshot.mockRejectedValue(
+      new BadRequestException('DeepSeek Agent 设置未启用'),
+    );
+
+    const result = await controller.draftProcurementSku(
+      { imageUrl: 'https://img.example.com/x.jpg', ingredientId: 'ing-1' },
+      'user-1',
+    );
+
+    expect(result.data).toEqual({ draft: null, degraded: true });
   });
 
   it('整个采购接口都要求员工身份（顾客 token 不能建采购商品）', () => {

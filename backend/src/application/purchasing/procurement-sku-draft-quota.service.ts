@@ -13,8 +13,9 @@
  * 这是刻意选的：宁可配额"越用越紧"，也不要为了回滚计数引入一次写失败的风险。
  */
 
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { ProcurementSkuDraftNoticeException } from './procurement-sku-draft.errors';
 
 export const DAILY_DRAFT_LIMIT_PER_USER = 30;
 export const MONTHLY_DRAFT_LIMIT_SYSTEM = 3000;
@@ -41,7 +42,7 @@ export class ProcurementSkuDraftQuotaService {
     if (
       (monthTotal?._sum?.count ?? 0) >= MONTHLY_DRAFT_LIMIT_SYSTEM
     ) {
-      throw new BadRequestException(
+      throw new ProcurementSkuDraftNoticeException(
         '本月识别次数已达上限，请手动填写，或联系管理员',
       );
     }
@@ -53,7 +54,7 @@ export class ProcurementSkuDraftQuotaService {
     });
 
     if ((row?.count ?? 0) > DAILY_DRAFT_LIMIT_PER_USER) {
-      throw new BadRequestException(
+      throw new ProcurementSkuDraftNoticeException(
         `今天的识别次数已用完（每天 ${DAILY_DRAFT_LIMIT_PER_USER} 次），请手动填写`,
       );
     }

@@ -22,6 +22,7 @@ import {
   normalizeNetContentToBaseUnit,
   type BaseUnitCode,
 } from './procurement-sku-net-content';
+import { ProcurementSkuDraftNoticeException } from './procurement-sku-draft.errors';
 
 /** 「AI / Agent 配置」里这一项的用途标识；未单独配置时回退全局默认 */
 export const PROCUREMENT_SKU_DRAFT_PURPOSE = 'PROCUREMENT_SKU_DRAFT';
@@ -143,7 +144,7 @@ export class ProcurementSkuDraftService {
     const productList = (raw as { productList?: unknown }).productList;
 
     if (Array.isArray(productList) && productList.length > 0) {
-      throw new BadRequestException(
+      throw new ProcurementSkuDraftNoticeException(
         '这张图看起来是订单列表，不是商品详情页。请截单个商品的详情页（要有标题、净含量和单价），或者直接手动填写。',
       );
     }

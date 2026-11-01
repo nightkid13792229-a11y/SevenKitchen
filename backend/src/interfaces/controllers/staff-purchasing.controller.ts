@@ -56,6 +56,7 @@ import { Put, Delete } from '@nestjs/common';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { ProcurementSkuService } from '../../application/ingredient/procurement-sku.service';
 import { ProcurementSkuDraftService } from '../../application/purchasing/procurement-sku-draft.service';
+import { ProcurementSkuDraftNoticeException } from '../../application/purchasing/procurement-sku-draft.errors';
 import { CreateStaffProcurementSkuDto } from '../dto/staff/procurement-sku-create.dto';
 
 @ApiTags('Staff Purchasing')
@@ -146,7 +147,7 @@ export class StaffPurchasingController {
     } catch (error) {
       // 「这张图不是商品详情页」「配额用完了」是**给员工看的说明**，必须原样抛出去：
       // 降级成含糊的"没认出来"会让他反复重传同一张图，或不知道为什么突然不能识别了。
-      if (error instanceof BadRequestException) {
+      if (error instanceof ProcurementSkuDraftNoticeException) {
         throw error;
       }
 

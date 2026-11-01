@@ -1,14 +1,12 @@
-来源ID,相对路径,字节,SHA256,说明
+﻿来源ID,相对路径,字节,SHA256,说明
 AAHA,aaha/AAHA-2010-Nutritional-Assessment-Guidelines.pdf,518460,cedf5609ab738aa4a51d39a8f1c72839f5aab56b1aaf3586251e150fcba2606d,
 AAHA,aaha/AAHA-2014-Weight-Management-Guidelines.pdf,613354,89df89b05d080258fe89d1f6019c6326fd5cf52b435bd6e8e143a5612d5aff29,
 AAHA,aaha/AAHA-2014-Weight-Management-Implementation-Toolkit.pdf,4672327,4737126313c8467397cc6ff563f50deb7d245ec76caed3e0b5e4fa927107593c,
 AAHA,aaha/AAHA-2019-Canine-Life-Stage-Guidelines.pdf,2526952,90bae15fbdfa3c080dda278a0f3ba79ec52993203fa7cf51fb8efa32cd130ec5,
-AAHA,aaha/AAHA-2019-Dental-Care-Guidelines-mirror.pdf,544682,b687c5938eaef15207ee81fca907f9f7c06ab3a7f54e89794bb1ab5be6bfd07e,
 AAHA,aaha/AAHA-2019-Dental-Care-Guidelines.pdf,4048911,bfc30e6457097881f9e59a8f779a5dbae254d364d3f58bf5eca156492c1d16b9,
 AAHA,aaha/AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf,3269573,df542584fa12b1e10ecf8aa61f6ef625e12bb53122354bd0109d64ab9837ccdc,
 AAHA,aaha/AAHA-2022-Canine-Vaccination-Guidelines-2024update.pdf,5507872,6ccd89577f12cd002b02ba3c26ab1a628901afe237f039fe528c18ccc6c0ce03,
 AAHA,aaha/AAHA-2023-Senior-Care-Toolkit.pdf,4807731,6299dfb4e596974d896f1ef4bc856164aa04ac37065e479b56f16840637489f3,
-ACVIM,acvim/ACVIM-2010-钩端螺旋体病-历史版本.xml,200330,b179a8bdd1b36f798230c14501946c72219c51eb1c2106ab973b5708237b2266,"2010 ACVIM Small Animal Consensus Statement on Leptospirosis: Diagnosis, Epidemiology, Treatment, and Prevention"
 ACVIM,acvim/ACVIM-2015-心血管-肾脏轴疾病.xml,231855,245a6b006cc602b725be6638b0f97ca3e2f0f0438d7dd1c0c74241b0388fd146,Cardiovascular–renal axis disorders in the domestic dog and cat: a veterinary consensus statement
 ACVIM,acvim/ACVIM-2015-治疗性抗菌药使用与耐药性.xml,146062,ebf9ef83f3703060b2023ab3d03b7c5655219de256b761e56f92a264835de73c,
 ACVIM,acvim/ACVIM-2015-犬癫痫管理.xml,209953,7fd3d6b7b04df1268a9d0ad456ceccfa0f4a2d971d1f80fdf598cadc9457320f,2015 ACVIM Small Animal Consensus Statement on Seizure Management in Dogs
@@ -39,15 +37,10 @@ IRIS,iris/IRIS-DOG-Treatment_Recommendations_may-2026.pdf,423491,b294cd7c8714681
 IRIS,iris/IRIS_CAT_Treatment_Recommendations_-2026.pdf,235091,886d3c7b11fa719bcaacde4a965e4d1bf3de37b1d72e9641f491958677186c9c,
 IRIS,iris/IRIS_Pocket_Guide_to_CKD_June-2026-cn6g.pdf,545317,4e1a1397f74bf42dbc19ac5d950227336efba3ef589d5774a5fc45d9b79ba00e,
 IRIS,iris/IRIS_staging_guidelines-2026.pdf,298110,894e86e0dc27a8f9d5c63e91cd344cd7174ec0617b89d7b5a46c7c3733f4d59b,
-MERCK,merck/临床生化.html,347342,f65cb34f2f3c935ac22bfd32bf1e68d3ea24d6618985690fe1243b239499e7ac,网页存档（原始 HTML）
 MERCK,merck/临床生化.txt,26391,7334b23c6ef648e98bff9474d9fb663f73dab3fc431500b15b6cea8388c78b4a,网页正文文本版
-MERCK,merck/临床血液学.html,354188,8bf92beff7cd61d9e9e28ef08b8bc0ad7f1d06242512cbe3ab2a3fbccc5ebeab,网页存档（原始 HTML）
 MERCK,merck/临床血液学.txt,22056,83e35c9362c681b315647ecdb0882c42ff445a5e92403100f9e25afb7660e026,网页正文文本版
-MERCK,merck/皮肤病维生素与矿物质.html,226616,43b70d620907e914ac8ca682294a480d00a1d32d0391c411395bf74bb155cbd0,网页存档（原始 HTML）
 MERCK,merck/皮肤病维生素与矿物质.txt,4100,ee9b8f606749cbd2a9b296361777dec495c6520b40d704f53defc4e98f09bcb0,网页正文文本版
-MERCK,merck/肝功能检查.html,244674,0fef53ead0aeeeef2e9ff461c42b7b19700340a5dc7a38b590bb677c6103874c,网页存档（原始 HTML）
 MERCK,merck/肝功能检查.txt,9499,e7c572e233c6522da7b0f06028d97cb26c811241bbb46ea4bc35dc967140ced8,网页正文文本版
-MERCK,merck/营养性皮肤病.html,316253,eb4d1e592dd50f6a288ecab5046d74d4ea977b3730ad607bda47452cbedaec93,网页存档（原始 HTML）
 MERCK,merck/营养性皮肤病.txt,8108,b1102f4f04a2137784de6c76fd626f1c8a39f0a8c9e87e8e26b7c77ed9c6ee13,网页正文文本版
 NRC,nrc/NRC-2006-Nutrient-Requirements-Dogs-Cats.epub,20274424,810360be08648ad7f84c4c4b974cb62b94b4d9c041b8595284826f93106a3f6d,
 SACN5,sacn5/chapters/SACN5_1.pdf,7167255,d1a46084d11d494434fd9b2748a1d52275b968a94c415342b54d16d1b5bb7f09,
@@ -117,16 +110,11 @@ SACN5,sacn5/chapters/SACN5_67.pdf,2018469,cad37514033f4659cbb92238747f2b4adc2176
 SACN5,sacn5/chapters/SACN5_68.pdf,12231313,5a6d22a07bb6579086eaef2c72d07f05412bbca73bc29594d3049092ee9f1906,
 SACN5,sacn5/chapters/SACN5_69.pdf,1552602,2a26573c9e651bdf7934cc31739d6df71685f724bab4b0c67b1cd330e02e960b,
 SACN5,sacn5/chapters/SACN5_7.pdf,1247587,8d272461110f6d74c215d4b93e36a3519874c33126cb75cc0c760e1faa2a2482,
-SACN5,sacn5/chapters/SACN5_70.pdf,2436505,aa4a38859814af1ae1c9675bc17ed6fccf5e6cf73fdeef72cce0513976d692cc,
-SACN5,sacn5/chapters/SACN5_71.pdf,8407305,db1a7b700d60f1ce7a536dfb294ae1260521ee0ee67fe6351b1d84eff377da1e,
-SACN5,sacn5/chapters/SACN5_72.pdf,1295787,ee011be0c572cccda3597aa39095625775beaf41aa4f8cde6ac982dd1e6654d7,
 SACN5,sacn5/chapters/SACN5_8.pdf,15376384,03dd9e0d1f0a735c9e81874a2e369d246cc6ee9cd458f1f54ea7c5b2b22893d7,
 SACN5,sacn5/chapters/SACN5_9.pdf,7709474,87b4423bb9d6ffb9f75a2eb8a75ac0b0347cb673a628a9be044a0dfa9c8b37bf,
 WSAVA-DENTAL,wsava/dental/GDC-Oral-Cancer.pdf,59865788,ffaae5fd02b02300d9ed403820e24dfcb7cfe4bc9f6120ecff45752dfabb5d56,
 WSAVA-DENTAL,wsava/dental/GDC-Toothbrushing-Toolkit-1.pdf,440714,5c969353ee4ae9edf71a72cd47c81893826706c322ba9c6e542f09569ca1ca28,
 WSAVA-DENTAL,wsava/dental/WSAVA-Global-Dental-Guidelines-JSAPMandarin.pdf,39201245,2da310b490d63cb1a831cc3c15e9874f5ce6f6e15d606e91a2c5f1c423087fb7,
-WSAVA-GI,wsava/gastrointestinal/forms/Final_Lower_Endoscopy_Report_Form.pdf,66413,ff057ab19e299d98b1fa0cdc03a67d57ca2ae5a6251a587df1299e28947160b5,
-WSAVA-GI,wsava/gastrointestinal/forms/Final_Upper_Endoscopy_Report_Form.pdf,64111,8bdc7fdc0f0aca698be4576a8e5f0ec4c6946402e5c4510dedad8d5eb9796dea,
 WSAVA-HEREDITARY,wsava/hereditary/WSAVA-Hereditary-Disease-Committee-Position-Paper-HDC-Edited.pdf,110893,b10b7c5810de0c48a173d54bb4b8bca503eadec9b580496d8a3757576688efad,
 WSAVA-NUTRITION,wsava/nutrition/Body-Condition-Score-Cat-2025.pdf,5892887,a8a8cedeb884c9572c5ff1d3a29e915b1b57c8137f2c95eac18a6057a4c318f6,
 WSAVA-NUTRITION,wsava/nutrition/Body-Condition-Score-Dog-2025.pdf,5739899,5b2cf171672b9b3a77b8e184977fd3bcc6e1e7f56e8fecf6726f57cb3bb531f5,
@@ -149,7 +137,6 @@ WSAVA-NUTRITION,wsava/nutrition/Raw-Meat-Based-Diets-for-Pets-2021.pdf,3285658,d
 WSAVA-NUTRITION,wsava/nutrition/SOP-for-Use-of-WSAVA-GNC-Toolkits-v4.pdf,450282,df2d57af5ba26a115fb7da569dc999f25d6fea69e71e42104a47bf14fc5b1f8c,
 WSAVA-NUTRITION,wsava/nutrition/Selecting-a-Pet-Food-2021.pdf,2256752,007eb191826f686324d412f4bfe3c2b3c49139b3653236e017b03668586b5e27,
 WSAVA-NUTRITION,wsava/nutrition/WSAVA-Nutrition-Assessment-Guidelines-2011-JSAP.pdf,866301,652cebc560db0dc76ac910deaf1388dc1f38786668409acaa6e290ec7cddbca3,
-WSAVA-NUTRITION,wsava/nutrition/manifest.csv,2369,1d745dfecc4841399c8902c90b48c2d3bae6622fd9194fbbf419581a8de061e2,
 WSAVA-PAIN,wsava/pain/WSAVA-2022疼痛识别评估和治疗指南-中文.pdf,66303427,1c9a738020b7c547ee455907a7fc945091d76d724464d41ea72e8f7615487a91,
 WSAVA-PAIN,wsava/pain/topic-sheets/Caesarean-section.pdf,539073,03fc1b99fa351dbfe6c86eb94bceb7fe6b79486d118e0a101a3cd5eadc34cabb,
 WSAVA-PAIN,wsava/pain/topic-sheets/Cancer-Pain.pdf,496797,c87414eb96f1274990aa0c7989933b4e66a81b6ef1c9a714dad2812bc985100b,
@@ -158,13 +145,11 @@ WSAVA-PAIN,wsava/pain/topic-sheets/Pregnant-or-lactating-patients.pdf,130851,b20
 WSAVA-PAIN,wsava/pain/topic-sheets/WSAVA-Global-Pain-Council-Perceived-levels-of-pain.pdf,136268,69a1aadb56fed709a0b772551ed6408c3218091b71e14763256bdd5f8b63748c,
 WSAVA-POSITION,wsava/position-statements/WSAVA-OneHealth-肥胖预防.pdf,208361,a699487abb9f9630907512dee3b808ac67bf73c12cdcf0980cad2a879dcf9e34,
 WSAVA-POSITION,wsava/position-statements/WSAVA-微芯片与肿瘤立场声明.pdf,330673,2a560e11924302cf5c9ae5c5251b561b0390022914b3bd1c447f8bdf4e2236ae,
-WSAVA-RENAL,wsava/renal/Renal-Standardization-Brochure.pdf,2163699,21a3cab0f4570323c138b4872ffa559c2ec32465461963dedf5761814068b38c,
 WSAVA-REPRO,wsava/reproduction/Executive-Summary.pdf,256777,e5d1c7a8dad586b282ef49b9d7705cca18d46456738e681111066fffeb24116b,
 WSAVA-REPRO,wsava/reproduction/J-of-Small-Animal-Practice-2024-Romagnoli-WSAVA-guidelines-for-the-control-of-reproduction-in-dogs-and-cats.pdf,76706915,73a0df834e6aea92079914966fa27cff1c3ef3afff18445dcc3dd69245944315,
 WSAVA-REPRO,wsava/reproduction/WSAVA犬猫生殖管理指南-中文版.pdf,14185070,7aecb81817dc4950b7018dcb5521c58a91e427e0bd3c69943b9b0d0e9deda109,
-WSAVA-VACC,wsava/vaccination/WSAVA-2015疫苗接种指南-中文.pdf,1493508,6bab332d64839ebcea866e5eace8db0c78d51c0767b74e378217fabe9b5626c3,
-WSAVA-VACC,wsava/vaccination/WSAVA-Vaccination-Guidelines-2015.pdf,377712,70ae3dcbe5973ee8b2837ddff8062af908dac4aae4854c67fb3057fa89b28434,
 WSAVA-VACC,wsava/vaccination/WSAVA-Vaccination-guidelines-2024.pdf,831198,86d26ed4a975ce3cca35b029762228d0f4bae5122f512407362770c7ef7d3653,
 WSAVA-WELFARE,wsava/welfare/PWG-福祉提示.pdf,380078,55444109487751ebb235be9ffb627518d7e302c7e151f3eeaa900e55514325d5,
 WSAVA-WELFARE,wsava/welfare/WSAVA-Animal-Welfare-Guidelines-2018.pdf,1792891,de624fa8e80743fd31bafade5ad350868b0e110f147c70d6820683cc1f001ff7,
 WSAVA-WELFARE,wsava/welfare/WSAVA_Animal_Welfare_Charter_Feb-2020.pdf,3542657,10ffd180878cebb088c5800e7de2d3cdb1baf7ccc0de10777432110098894d1d,
+ACVIM-CONSENSUS,acvim/ACVIM-2019-犬MMVD-分期与治疗-官方摘要卡片.pdf,955084,a364cc8608523b18cfe5f905b8a9a3d0e06add987ece31fb3a16c5b1cb227ba4,犬MMVD分期标准与治疗推荐官方摘要卡（LA/Ao>1.6、LVIDDN>1.7、VHS>10.5、杂音>3/6；B1不用药；B2匹莫苯丹）

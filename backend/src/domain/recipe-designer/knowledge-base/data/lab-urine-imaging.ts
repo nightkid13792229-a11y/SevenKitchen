@@ -479,11 +479,11 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
       '抗菌药会影响培养结果，采样前是否停药、停多久必须听主治兽医的安排；本条目不提供在家采样与保存的具体时长。',
     ],
     citations: [
-      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2010 钩端螺旋体病共识 · 培养与 PCR；ACVIM 2024 犬尿失禁诊断与管理共识 · 尿液分析与尿培养；ACVIM 2015 治疗性抗菌药使用与耐药性共识 · 培养的使用' },
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2023 钩端螺旋体病更新共识 · 培养与 PCR；ACVIM 2024 犬尿失禁诊断与管理共识 · 尿液分析与尿培养；ACVIM 2015 治疗性抗菌药使用与耐药性共识 · 培养的使用' },
       { source: 'IRIS 肾病指南 2026', chapter: '犬 CKD 治疗建议 · 排除可治疗的肾盂肾炎' },
     ],
     sources: [
-      { sourceId: 'ACVIM-CONSENSUS', locator: 'ACVIM 2010 钩端螺旋体病共识 · PCR 与培养；ACVIM 2024 尿失禁共识 · Urinalysis and urine culture；ACVIM 2015 抗菌药共识 · Use of Screening Cultures in Animals', note: '经膀胱穿刺采尿并限时接种；培养需"采得合格"的样本与定量培养加药敏；无临床症状时不建议常规培养；院内培养的局限' },
+      { sourceId: 'ACVIM-CONSENSUS', locator: 'ACVIM 2023 钩端螺旋体病更新共识 · PCR 与培养；ACVIM 2024 尿失禁共识 · Urinalysis and urine culture；ACVIM 2015 抗菌药共识 · Use of Screening Cultures in Animals', note: '经膀胱穿刺采尿并限时接种；培养需"采得合格"的样本与定量培养加药敏；无临床症状时不建议常规培养；院内培养的局限' },
       { sourceId: 'IRIS-CKD-2026', locator: '犬治疗建议 · 排除可治疗病因段落', note: '任何泌尿道感染都应视为潜在肾盂肾炎，需要恰当处理' },
     ],
     priority: 'MEDIUM',

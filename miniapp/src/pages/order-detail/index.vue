@@ -159,6 +159,11 @@
                     class="ingredients-procurement-badge"
                     >实际采购</text
                   >
+                  <text
+                    v-else-if="actualProcurement?.status === 'IN_PROGRESS'"
+                    class="ingredients-procurement-badge pending"
+                    >采购中</text
+                  >
                 </view>
                 <text class="expand-icon">{{
                   expandedIngredients[item.id] ? '收起' : '展开'
@@ -4830,6 +4835,11 @@ async function applyRefund() {
 }
 
 /* ===== 实际采购披露（2026-11-02） ===== */
+.ingredients-procurement-badge.pending {
+  background-color: #f2f4ea;
+  color: #8a8a70;
+}
+
 .ingredients-procurement-badge {
   margin-left: 8rpx;
   padding: 2rpx 10rpx;

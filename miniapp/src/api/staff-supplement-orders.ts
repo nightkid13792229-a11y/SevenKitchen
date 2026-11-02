@@ -43,6 +43,12 @@ export interface StaffSupplementOrder {
   inventoryWarnings?: string[];
   orderNo: string;
   status: SupplementOrderStatus;
+  /**
+   * 有未完结售后时由后端派生；不等于订单 status。
+   * 新售后不改订单状态，卡片上靠这两个字段挂「售后中/退款中」。
+   */
+  hasOpenAftersale?: boolean;
+  openAftersaleLabel?: string | null;
   bagCount: number;
   amountSupplement: number;
   amountServiceFee: number;

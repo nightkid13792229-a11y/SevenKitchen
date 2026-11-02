@@ -47,11 +47,22 @@
 
       <el-table :data="orders" v-loading="loading" border stripe size="small">
         <el-table-column prop="orderNo" label="订单号" width="160" />
-        <el-table-column label="状态" width="100" align="center">
+        <el-table-column label="状态" width="130" align="center">
           <template #default="{ row }">
-            <el-tag :type="SUPPLEMENT_ORDER_STATUS_TYPES[row.status]" size="small">
-              {{ SUPPLEMENT_ORDER_STATUS_LABELS[row.status] || row.status }}
-            </el-tag>
+            <div class="status-cell">
+              <el-tag :type="SUPPLEMENT_ORDER_STATUS_TYPES[row.status]" size="small">
+                {{ SUPPLEMENT_ORDER_STATUS_LABELS[row.status] || row.status }}
+              </el-tag>
+              <!-- 新售后不改订单 status：有未完结售后单时单独挂一个「售后中/退款中」 -->
+              <el-tag
+                v-if="row.hasOpenAftersale"
+                type="warning"
+                size="small"
+                effect="plain"
+              >
+                {{ row.openAftersaleLabel || '售后中' }}
+              </el-tag>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="补剂" min-width="220">
@@ -947,6 +958,14 @@ onMounted(loadAll);
 /* 嵌进「订单管理」的标签页时，外层已经提供了内容区留白，这里再留一次会显得上下都是空的 */
 .supplement-orders-panel.is-embedded {
   padding: 0;
+}
+
+/* 状态列可能同时有「履约状态」和「售后中/退款中」两个标签 */
+.status-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 
 .supplement-orders-panel.is-embedded .page-header {

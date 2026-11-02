@@ -6,7 +6,13 @@
       <view class="hero">
         <view class="hero-top">
           <text class="order-no">{{ order.orderNo }}</text>
-          <text class="status">{{ statusLabel(order.status) }}</text>
+          <view class="status-tags">
+            <text class="status">{{ statusLabel(order.status) }}</text>
+            <!-- 新售后不改订单状态：有未完结售后时单独挂「售后中/退款中」 -->
+            <text v-if="openAftersaleLabel" class="status status--aftersale">
+              {{ openAftersaleLabel }}
+            </text>
+          </view>
         </view>
         <text class="hero-date">{{ formatTime(order.createdAt) }}</text>
         <text v-if="order.status === 'PAID'" class="hero-hint">
@@ -22,6 +28,7 @@
             <text class="item-name">{{ item.name }}</text>
             <text class="item-sub">{{ formatAmount(item.packedAmount) }}{{ item.unit }} / 袋 · 共 {{ item.bags }} 袋</text>
           </view>
+          <text class="item-price">¥{{ money(item.price) }}</text>
         </view>
         <view class="fee-line"><text>补剂商品小计</text><text>¥{{ money(order.amountSupplement) }}</text></view>
         <view class="fee-line"><text>分装服务费</text><text>¥{{ money(order.amountServiceFee) }}</text></view>
@@ -39,6 +46,14 @@
         <view v-if="order.trackingNumber" class="info">
           <text class="label">物流</text><text>{{ order.carrierCode || '' }} {{ order.trackingNumber }}</text>
         </view>
+      </view>
+
+      <view class="card" v-if="snapshot?.snapshot">
+        <view class="card-title">制作单快照</view>
+        <view class="info"><text class="label">食谱</text><text>{{ snapshot.snapshot.sheet?.recipeName || '—' }}</text></view>
+        <view class="info"><text class="label">狗狗</text><text>{{ snapshot.snapshot.sheet?.dogName || '—' }}</text></view>
+        <view class="info"><text class="label">冻结</text><text>{{ formatTime(snapshot.snapshotAt || '') }}</text></view>
+        <text class="snapshot-tip">下单时冻结，后续改食谱不影响已购补剂。</text>
       </view>
 
       <view class="card" v-if="aftersales.length > 0">
@@ -76,11 +91,12 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad, onUnload } from '@dcloudio/uni-app'
+import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import {
   cancelSupplementOrder,
   fetchSupplementAftersales,
   fetchSupplementOrderDetail,
+  fetchSupplementSnapshot,
   saveSupplementPurchaseDraft,
   updateSupplementAddress,
   type SupplementAftersale,
@@ -91,6 +107,7 @@ import { runSupplementPayment } from '../../utils/supplement-payment'
 const orderId = ref('')
 const order = ref<SupplementOrder | null>(null)
 const aftersales = ref<SupplementAftersale[]>([])
+const snapshot = ref<any>(null)
 const loading = ref(false)
 const paying = ref(false)
 const pendingAddress = ref(false)
@@ -104,6 +121,18 @@ const canCancel = computed(() =>
 const canApplyAftersale = computed(() =>
   order.value ? ['PACKED', 'SHIPPED', 'COMPLETED'].includes(order.value.status) : false,
 )
+
+/**
+ * 售后独立于订单状态：订单还是「已发货/已完成」，但只要有未完结售后，
+ * 就在状态旁边挂一个「售后中/退款中」，顾客一眼能看到。
+ */
+const openAftersaleLabel = computed(() => {
+  const current = aftersales.value.find((item) =>
+    ['PENDING', 'PROCESSING'].includes(item.status),
+  )
+  if (!current) return ''
+  return current.requestType === 'REFUND' ? '退款中' : '售后中'
+})
 
 function money(value: number | null | undefined) {
   return Number(value || 0).toFixed(2)
@@ -147,13 +176,15 @@ function previewPhotos(photos: string[], current: string) {
 async function load() {
   loading.value = true
   try {
-    const [detail, cases] = await Promise.all([
+    const [detail, cases, snapshotRes] = await Promise.all([
       fetchSupplementOrderDetail(orderId.value),
       fetchSupplementAftersales(orderId.value).catch(() => ({ code: 0, data: [] } as any)),
+      fetchSupplementSnapshot(orderId.value).catch(() => ({ code: 0, data: null } as any)),
     ])
     if (detail.code === 0) order.value = detail.data
     else uni.showToast({ title: detail.message || '加载失败', icon: 'none' })
     if (cases.code === 0) aftersales.value = cases.data || []
+    if (snapshotRes.code === 0) snapshot.value = snapshotRes.data
   } finally {
     loading.value = false
   }
@@ -253,6 +284,18 @@ onLoad((options: any) => {
   uni.$on('address-selected', onAddressSelected)
   if (orderId.value) load()
 })
+
+// 从「申请售后」页返回时重新拉一次：售后记录和「售后中/退款中」标签
+// 要立刻出现，不能等用户退出重进。
+let firstShow = true
+onShow(() => {
+  if (firstShow) {
+    firstShow = false
+    return
+  }
+  if (orderId.value) void load()
+})
+
 onUnload(() => uni.$off('address-selected', onAddressSelected))
 </script>
 
@@ -262,18 +305,22 @@ onUnload(() => uni.$off('address-selected', onAddressSelected))
 .hero { background: linear-gradient(140deg, #1e3a2f, #2b5040); color: #f7f3e8; border-radius: 20rpx; padding: 28rpx; margin-bottom: 20rpx; }
 .hero-top { display: flex; justify-content: space-between; align-items: center; }
 .order-no { font-size: 28rpx; font-weight: 600; }
+.status-tags { display: flex; align-items: center; gap: 8rpx; }
 .status { font-size: 24rpx; background: rgba(255,255,255,.16); padding: 6rpx 14rpx; border-radius: 20rpx; }
+.status--aftersale { background: #d98d2b; color: #2b1a00; font-weight: 600; }
 .hero-date, .hero-hint { display: block; margin-top: 12rpx; color: #cad6c9; font-size: 23rpx; }
 .card { background: #fff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 20rpx; }
 .card-title { font-size: 28rpx; font-weight: 600; margin-bottom: 16rpx; }
 .item { display: flex; justify-content: space-between; padding: 12rpx 0; border-bottom: 1rpx solid #f0f2f5; }
 .item-name { display: block; font-size: 27rpx; }
 .item-sub { display: block; color: #909399; font-size: 23rpx; margin-top: 4rpx; }
+.item-price { font-size: 27rpx; }
 .fee-line { display: flex; justify-content: space-between; padding: 10rpx 0; font-size: 25rpx; color: #606266; }
 .fee-line.total { border-top: 1rpx solid #eee; margin-top: 8rpx; padding-top: 16rpx; font-size: 30rpx; font-weight: 600; color: #303133; }
 .info { display: flex; gap: 16rpx; padding: 8rpx 0; font-size: 26rpx; }
 .label { color: #909399; flex: 0 0 100rpx; }
 .address { flex: 1; line-height: 1.5; }
+.snapshot-tip { display: block; margin-top: 10rpx; color: #909399; font-size: 22rpx; line-height: 1.5; }
 .notice { margin-top: 12rpx; padding: 12rpx; background: #fdf6ec; color: #b88230; font-size: 23rpx; border-radius: 8rpx; }
 .aftersale-row { display: flex; justify-content: space-between; padding: 12rpx 0; border-bottom: 1rpx solid #f2f2f2; }
 .aftersale-reason { display: block; font-size: 26rpx; }
@@ -281,15 +328,8 @@ onUnload(() => uni.$off('address-selected', onAddressSelected))
 .aftersale-photos { display: flex; gap: 8rpx; margin-top: 8rpx; }
 .aftersale-photo { width: 92rpx; height: 92rpx; border-radius: 8rpx; }
 .aftersale-amount { font-size: 26rpx; color: #b88230; }
-.actions { display: flex; flex-direction: column; gap: 20rpx; margin-top: 24rpx; }
-.primary-btn, .ghost-btn {
-  width: 100%;
-  height: 88rpx;
-  line-height: 88rpx;
-  border-radius: 44rpx;
-  font-size: 30rpx;
-  font-weight: 600;
-}
-.primary-btn { background: #1e3a2f; color: #fff; }
-.ghost-btn { background: #f7f8f2; color: #2b5040; border: 1rpx solid #e5e0d0; }
+.actions { display: flex; flex-wrap: wrap; gap: 16rpx; margin-top: 10rpx; }
+.primary-btn, .ghost-btn { flex: 1; min-width: 220rpx; border-radius: 44rpx; font-size: 28rpx; }
+.primary-btn { background: #409eff; color: #fff; }
+.ghost-btn { background: #ecf5ff; color: #409eff; }
 </style>

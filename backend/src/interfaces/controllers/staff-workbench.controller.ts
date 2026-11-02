@@ -120,8 +120,17 @@ export class StaffWorkbenchController {
       }),
     ]);
 
+    const supplementAftersalePending =
+      (await (this.prisma as any).aftersaleCase?.count?.({
+        where: {
+          orderType: 'SUPPLEMENT',
+          status: { in: ['PENDING', 'PROCESSING'] },
+        },
+      })) ?? 0;
+
     const ordersPending =
-      orderPending + (role === 'ADMIN' ? refundPending : 0);
+      orderPending +
+      (role === 'ADMIN' ? refundPending + supplementAftersalePending : 0);
     const badges = {
       purchasing: purchasePending,
       production: productionPending,

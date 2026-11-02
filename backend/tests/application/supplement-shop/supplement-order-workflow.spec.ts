@@ -25,7 +25,6 @@ function config(
     roundUpUsage: true,
     maxPortionMultiplier: 3,
     maxTotalDays: 90,
-    bulkBagThreshold: 60,
     shippingMode: 'FLAT_RATE',
     flatShippingFee: 8,
     shippingTemplateId: null,
@@ -168,6 +167,10 @@ describe('补剂订单 · 分装发货售后', () => {
 
     service = module.get(SupplementOrderService);
     jest.clearAllMocks();
+    // 售后相关 mock 只在需要的用例里挂，避免影响「按状态汇总」的精确断言
+    delete mockPrismaService.aftersaleCase;
+    delete mockPrismaService.supplementOrder.findMany;
+    delete mockPrismaService.supplementOrder.count;
 
     store = buildOrder();
     mockConfigService.getConfig.mockResolvedValue(config());
@@ -536,6 +539,43 @@ describe('补剂订单 · 分装发货售后', () => {
       const counts = await service.getStatusCounts();
 
       expect(counts).toEqual({ PENDING_PAYMENT: 3, PAID: 2, PACKED: 1 });
+    });
+
+    it('「售后中」按未完结售后单派生，不依赖订单 status', async () => {
+      mockPrismaService.supplementOrder.groupBy.mockResolvedValue([
+        { status: 'SHIPPED', _count: { _all: 2 } },
+      ]);
+      mockPrismaService.aftersaleCase = {
+        findMany: jest.fn().mockResolvedValue([{ orderId: 'order-1' }]),
+      };
+      mockPrismaService.supplementOrder.count = jest.fn().mockResolvedValue(1);
+
+      const counts = await service.getStatusCounts();
+
+      expect(counts.AFTERSALE).toBe(1);
+    });
+  });
+
+  describe('后台订单列表 · 售后中筛选', () => {
+    it('把有未完结售后单的订单筛出来，而不是只看 status=AFTERSALE', async () => {
+      mockPrismaService.aftersaleCase = {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ orderId: 'order-1', requestType: 'REFUND' }]),
+      };
+      mockPrismaService.supplementOrder.findMany = jest
+        .fn()
+        .mockResolvedValue([{ ...store }]);
+      mockPrismaService.supplementOrder.count = jest.fn().mockResolvedValue(1);
+
+      const result = await service.listAllOrders({ status: 'AFTERSALE' });
+
+      expect(result.total).toBe(1);
+      const where = mockPrismaService.supplementOrder.findMany.mock.calls[0][0]
+        .where;
+      // 未完结售后单的 orderId 必须进 where，旧的 AFTERSALE 状态也要兼容
+      expect(JSON.stringify(where)).toContain('order-1');
+      expect(JSON.stringify(where)).toContain('AFTERSALE');
     });
   });
 });

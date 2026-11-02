@@ -69,6 +69,12 @@ describe('工作台补剂订单 · 列表页', () => {
     expect(listSource).toContain("counts.value.PACKED")
   })
 
+  it('有未完结售后时，列表卡片挂「售后中/退款中」', () => {
+    // 新售后不改订单 status，必须读后端派生的 hasOpenAftersale
+    expect(listSource).toContain('order.hasOpenAftersale')
+    expect(listSource).toContain('order.openAftersaleLabel')
+  })
+
   it('每个状态都给出了下一步该做什么的提示', () => {
     expect(listSource).toContain('下一步：确认收款')
     expect(listSource).toContain('下一步：打印标签并发货')
@@ -95,6 +101,12 @@ describe('工作台补剂订单 · 详情页', () => {
 
   it('打印标签入口把订单 ID 带过去', () => {
     expect(detailSource).toContain('/pages/staff-supplement-orders/labels?id=')
+  })
+
+  it('有未完结售后时，状态旁边挂「售后中/退款中」', () => {
+    expect(detailSource).toContain('openAftersaleLabel')
+    expect(detailSource).toContain("['PENDING', 'PROCESSING']")
+    expect(detailSource).toContain('退款中')
   })
 })
 

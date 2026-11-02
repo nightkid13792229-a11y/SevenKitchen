@@ -24,6 +24,20 @@ describe('工作台补剂订单 · 接口契约', () => {
     expect(apiSource).toContain('`/admin/supplement-shop/orders/${orderId}/labels`')
   })
 
+  it('管理员可以在详情页直接处理售后：走 admin resolve 接口', () => {
+    expect(apiSource).toContain(
+      '`/admin/supplement-shop/aftersales/${caseId}/resolve`',
+    )
+    expect(apiSource).toContain(
+      "resolutionType: 'REFUND' | 'RESHIP' | 'REGISTER_ONLY' | 'REJECT'",
+    )
+    expect(detailSource).toContain('isAdmin')
+    expect(detailSource).toContain('canResolve')
+    expect(detailSource).toContain('resolveAftersale')
+    expect(detailSource).toContain('同意退款')
+    expect(detailSource).toContain('驳回')
+  })
+
   it('2026-11-02 起详情页不再提交分装工单：不填批号、不选原瓶到期日', () => {
     // 分装工单整块删掉；员工只用「打印标签」和「发货」。
     expect(detailSource).not.toContain('分装工单')

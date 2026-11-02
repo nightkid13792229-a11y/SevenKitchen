@@ -103,6 +103,7 @@ describe('OrderProcurementDisclosureService', () => {
         ingredientName: '鸡胸',
         source: 'ORDER_PURCHASE',
         channel: '山姆会员店',
+        brand: null,
         productName: '鸡胸 生鲜鸡大胸',
         purchasedAt: '2026-11-05',
       },
@@ -144,6 +145,7 @@ describe('OrderProcurementDisclosureService', () => {
         ingredientName: '糙米',
         source: 'FROM_INVENTORY',
         channel: '沃尔玛',
+        brand: null,
         productName: '有机糙米',
         purchasedAt: '2026-10-28',
       },
@@ -189,7 +191,7 @@ describe('OrderProcurementDisclosureService', () => {
           purchasedAt: new Date('2026-11-05T02:00:00.000Z'),
         },
       ],
-      skus: [{ id: 'sku-1', name: '泰森 鲜鸡大胸' }],
+      skus: [{ id: 'sku-1', name: '泰森 鲜鸡大胸', brand: '泰森' }],
     });
 
     const result = await service.build({
@@ -198,6 +200,7 @@ describe('OrderProcurementDisclosureService', () => {
     });
 
     expect(result?.items[0].productName).toBe('泰森 鲜鸡大胸');
+    expect(result?.items[0].brand).toBe('泰森');
   });
 
   it('有已完成也有未完成清单时状态为 IN_PROGRESS，但已完成的照常展示', async () => {

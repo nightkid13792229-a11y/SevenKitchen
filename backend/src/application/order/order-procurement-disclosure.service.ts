@@ -27,6 +27,8 @@ export interface ProcurementDisclosureItem {
   ingredientName: string;
   source: ProcurementDisclosureSource;
   channel: string | null;
+  /** 采购商品的品牌；补剂展示用 */
+  brand: string | null;
   productName: string | null;
   /** YYYY-MM-DD */
   purchasedAt: string | null;
@@ -143,14 +145,14 @@ export class OrderProcurementDisclosureService {
           .filter((id): id is string => Boolean(id)),
       ),
     );
-    const skuNameById = await this.loadSkuNames(skuIds);
+    const skuInfoById = await this.loadSkuInfo(skuIds);
 
     const items: ProcurementDisclosureItem[] = [];
     for (const ingredient of params.ingredients) {
       const ownRecord = latestByIngredient.get(ingredient.id);
       if (ownRecord) {
         items.push(
-          this.toItem(ingredient, ownRecord, 'ORDER_PURCHASE', skuNameById),
+          this.toItem(ingredient, ownRecord, 'ORDER_PURCHASE', skuInfoById),
         );
         continue;
       }
@@ -168,7 +170,7 @@ export class OrderProcurementDisclosureService {
       }
 
       items.push(
-        this.toItem(ingredient, fallback, 'FROM_INVENTORY', skuNameById),
+        this.toItem(ingredient, fallback, 'FROM_INVENTORY', skuInfoById),
       );
     }
 
@@ -183,13 +185,14 @@ export class OrderProcurementDisclosureService {
     ingredient: { id: string; name: string },
     record: PurchaseRecordLite,
     source: ProcurementDisclosureSource,
-    skuNameById: Map<string, string>,
+    skuInfoById: Map<string, { name: string; brand: string | null }>,
   ): ProcurementDisclosureItem {
+    const skuInfo = record.procurementSkuId
+      ? skuInfoById.get(record.procurementSkuId)
+      : null;
     const productName =
       this.normalizeText(record.procurementSkuName) ||
-      (record.procurementSkuId
-        ? this.normalizeText(skuNameById.get(record.procurementSkuId))
-        : '') ||
+      this.normalizeText(skuInfo?.name) ||
       this.normalizeText(ingredient.name) ||
       null;
 
@@ -198,6 +201,7 @@ export class OrderProcurementDisclosureService {
       ingredientName: ingredient.name,
       source,
       channel: this.normalizeText(record.purchaseChannel) || null,
+      brand: this.normalizeText(skuInfo?.brand) || null,
       productName,
       purchasedAt: this.toDateString(record.purchasedAt),
     };
@@ -237,17 +241,21 @@ export class OrderProcurementDisclosureService {
     `);
   }
 
-  private async loadSkuNames(skuIds: string[]): Promise<Map<string, string>> {
+  private async loadSkuInfo(
+    skuIds: string[],
+  ): Promise<Map<string, { name: string; brand: string | null }>> {
     if (skuIds.length === 0) {
       return new Map();
     }
 
     const skus = await this.prisma.procurementSku.findMany({
       where: { id: { in: skuIds } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, brand: true },
     });
 
-    return new Map(skus.map((sku) => [sku.id, sku.name]));
+    return new Map(
+      skus.map((sku) => [sku.id, { name: sku.name, brand: sku.brand }]),
+    );
   }
 
   private latestDate(dates: Date[]): Date | null {

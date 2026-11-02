@@ -296,6 +296,7 @@ export class OrderDto {
       ingredientName: string;
       source: 'ORDER_PURCHASE' | 'FROM_INVENTORY';
       channel: string | null;
+      brand: string | null;
       productName: string | null;
       purchasedAt: string | null;
     }>;

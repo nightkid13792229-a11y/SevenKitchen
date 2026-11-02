@@ -72,4 +72,20 @@ describe('orders list repurchase action contract', () => {
     // 列表项类型补齐 completedAt，用于"已完成 7 天后退款/重做锁定"
     expect(source).toContain('completedAt?: string;');
   });
+  it('puts the detail entry right after the order-number copy button (2026-11-03)', () => {
+    expect(source).toContain('order-link--inline');
+    expect(source).toContain('查看详情 ›');
+    expect(source).not.toContain('order-foot');
+    // 详情入口在订单号那一行里，紧跟「复制」
+    const rowStart = source.indexOf('class="order-no-row"');
+    const linkIndex = source.indexOf('order-link--inline');
+    expect(rowStart).toBeGreaterThan(-1);
+    expect(linkIndex).toBeGreaterThan(rowStart);
+  });
+
+  it('keeps the tracking copy button right next to the tracking number', () => {
+    expect(source).toContain('justify-content: flex-start');
+    expect(source).toContain('flex: 0 1 auto;');
+    expect(source).toContain('logistics__copy');
+  });
 });

@@ -166,6 +166,11 @@
         >
           <text class="order-no">订单号 {{ orderNoOf(order) }}</text>
           <text class="order-no__copy">复制</text>
+          <text
+            class="order-link order-link--inline"
+            @tap.stop="handleOrderTap(order)"
+            >查看详情 ›</text
+          >
         </view>
 
         <!--
@@ -253,13 +258,6 @@
         >
           <text class="logistics__text">{{ trackingText(order) }}</text>
           <text class="logistics__copy" @tap.stop="copyTrackingNumber(order)">复制</text>
-        </view>
-
-        <!-- 底部：只留详情入口（订单号已统一到卡片头） -->
-        <view class="order-foot">
-          <text class="order-link" @tap.stop="handleOrderTap(order)">
-            查看详情 ›
-          </text>
         </view>
 
         <!--
@@ -2856,12 +2854,12 @@ onUnmounted(() => {
   background: #f2f6ee;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12rpx;
+  justify-content: flex-start;
+  gap: 10rpx;
 }
 
 .logistics__text {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   font-size: 22rpx;
   color: #26261f;
@@ -2880,15 +2878,6 @@ onUnmounted(() => {
   font-size: 20rpx;
   font-weight: 700;
   color: #1e3a2f;
-}
-
-/* 单号 + 详情入口 */
-.order-foot {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 16rpx;
-  margin-top: 16rpx;
 }
 
 /* 订单号：三类订单统一放在卡片头下面一行（2026-11-02），点整行即复制 */
@@ -2920,6 +2909,12 @@ onUnmounted(() => {
   font-size: 22rpx;
   font-weight: 700;
   color: #1e3a2f;
+}
+
+/* 详情入口紧跟订单号复制按钮（2026-11-03 老板要求） */
+.order-link--inline {
+  margin-left: 14rpx;
+  flex: 0 0 auto;
 }
 
 /* 操作区：左边复购文字入口，右边一主一次 */

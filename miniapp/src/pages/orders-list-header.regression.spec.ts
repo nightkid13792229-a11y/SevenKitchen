@@ -55,9 +55,11 @@ describe('orders list card header · 单号行统一', () => {
     expect(template).toContain('{{ formatSupplementSummary(order) }}');
   });
 
-  it('卡片底部只剩「查看详情」，不再重复单号', () => {
-    expect(footBlock).toContain('查看详情');
-    expect(footBlock).not.toContain('order-no');
-    expect(footBlock).not.toContain('copyOrderNo');
+  it('详情入口紧跟在单号复制按钮右边，底部不再单独放', () => {
+    // 2026-11-03 老板：查看详情放到订单号复制按钮的右边
+    expect(noRowBlock).toContain('order-link--inline');
+    expect(noRowBlock).toContain('查看详情');
+    expect(noRowBlock).toContain('@tap.stop="handleOrderTap(order)"');
+    expect(footBlock).toBe('');
   });
 });

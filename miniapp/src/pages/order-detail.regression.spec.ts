@@ -353,8 +353,12 @@ describe('order detail runtime regressions', () => {
     expect(source).toContain('来自库存')
     expect(source).toContain('库存采购日期')
     expect(source).toContain('采购完成后，这里会显示每种原料的实际采购渠道和采购产品')
-    // 顾客只看渠道 + 采购产品名，不看品牌和规格
-    expect(source).not.toContain('品牌 {{')
+    // 食材只给内容，不写「渠道 / 采购产品」两个词（2026-11-03）
+    expect(source).toContain('>{{ getProcurementDisclosure(ingredient)?.channel }}</text')
+    // 补剂另走一套：渠道 / 品牌 / 采购产品，且不显示来源标签与库存日期
+    expect(source).toContain('isSupplementIngredient')
+    expect(source).toContain('品牌')
+    expect(source).toContain('getProcurementDisclosure(ingredient)?.brand')
     expect(source).not.toContain('规格 {{')
   })
 

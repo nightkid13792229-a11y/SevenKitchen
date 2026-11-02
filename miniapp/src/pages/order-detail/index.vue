@@ -220,47 +220,72 @@
                       v-if="getProcurementDisclosure(ingredient)"
                       class="procurement-line"
                     >
-                      <text
-                        class="procurement-tag"
-                        :class="{
-                          inventory:
+                      <!-- 补剂：渠道 / 品牌 / 采购产品，不带来源标签和库存日期 -->
+                      <template v-if="isSupplementIngredient(ingredient)">
+                        <text class="procurement-chip"
+                          >渠道
+                          {{
+                            getProcurementDisclosure(ingredient)?.channel || '—'
+                          }}</text
+                        >
+                        <text class="procurement-chip"
+                          >品牌
+                          {{
+                            getProcurementDisclosure(ingredient)?.brand || '—'
+                          }}</text
+                        >
+                        <text class="procurement-chip"
+                          >采购产品
+                          {{
+                            getProcurementDisclosure(ingredient)?.productName ||
+                            '—'
+                          }}</text
+                        >
+                      </template>
+                      <!-- 食材：只显示内容，不再写「渠道 / 采购产品」 -->
+                      <template v-else>
+                        <text
+                          class="procurement-tag"
+                          :class="{
+                            inventory:
+                              getProcurementDisclosure(ingredient)?.source ===
+                              'FROM_INVENTORY',
+                          }"
+                          >{{
                             getProcurementDisclosure(ingredient)?.source ===
-                            'FROM_INVENTORY',
-                        }"
-                        >{{
-                          getProcurementDisclosure(ingredient)?.source ===
-                          'FROM_INVENTORY'
-                            ? '来自库存'
-                            : '本单采购'
-                        }}</text
-                      >
-                      <text
-                        v-if="getProcurementDisclosure(ingredient)?.channel"
-                        class="procurement-chip"
-                        >渠道
-                        {{ getProcurementDisclosure(ingredient)?.channel }}</text
-                      >
-                      <text
-                        v-if="getProcurementDisclosure(ingredient)?.productName"
-                        class="procurement-chip"
-                        >采购产品
-                        {{
-                          getProcurementDisclosure(ingredient)?.productName
-                        }}</text
-                      >
-                      <text
-                        v-if="
-                          getProcurementDisclosure(ingredient)?.source ===
-                            'FROM_INVENTORY' &&
-                          getProcurementDisclosure(ingredient)?.purchasedAt
-                        "
-                        class="procurement-date"
-                        >库存采购日期：{{
-                          formatChineseDate(
-                            getProcurementDisclosure(ingredient)?.purchasedAt,
-                          )
-                        }}</text
-                      >
+                            'FROM_INVENTORY'
+                              ? '来自库存'
+                              : '本单采购'
+                          }}</text
+                        >
+                        <text
+                          v-if="getProcurementDisclosure(ingredient)?.channel"
+                          class="procurement-chip"
+                          >{{ getProcurementDisclosure(ingredient)?.channel }}</text
+                        >
+                        <text
+                          v-if="
+                            getProcurementDisclosure(ingredient)?.productName
+                          "
+                          class="procurement-chip"
+                          >{{
+                            getProcurementDisclosure(ingredient)?.productName
+                          }}</text
+                        >
+                        <text
+                          v-if="
+                            getProcurementDisclosure(ingredient)?.source ===
+                              'FROM_INVENTORY' &&
+                            getProcurementDisclosure(ingredient)?.purchasedAt
+                          "
+                          class="procurement-date"
+                          >库存采购日期：{{
+                            formatChineseDate(
+                              getProcurementDisclosure(ingredient)?.purchasedAt,
+                            )
+                          }}</text
+                        >
+                      </template>
                     </view>
                   </view>
                 </view>
@@ -1098,6 +1123,7 @@ interface ActualProcurementItem {
   ingredientName: string;
   source: 'ORDER_PURCHASE' | 'FROM_INVENTORY';
   channel: string | null;
+  brand?: string | null;
   productName: string | null;
   purchasedAt: string | null;
 }
@@ -1402,6 +1428,13 @@ function getProcurementDisclosure(
   const ingredientId = ingredient?.ingredient_id
   if (!ingredientId) return null
   return procurementDisclosureMap.value.get(ingredientId) || null
+}
+
+function isSupplementIngredient(ingredient: RecipeSnapshotItem): boolean {
+  return (
+    String((ingredient as any)?.ingredient_type || '').toUpperCase() ===
+    'SUPPLEMENT'
+  )
 }
 
 function formatChineseDate(value?: string | null): string {

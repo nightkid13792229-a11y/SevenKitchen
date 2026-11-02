@@ -36,6 +36,19 @@ describe('life-stage-ui', () => {
     ).toBe('fallback_low');
   });
 
+  it('匹配态说清"为什么是这一版"', async () => {
+    const { buildLifeStageBarCopy, describeMatchedStage } = await import('./life-stage-ui');
+    expect(describeMatchedStage('LOW_ACTIVITY_ADULT_OR_SENIOR')).toContain('活动量偏低');
+    const copy = buildLifeStageBarCopy('matched', {
+      dogName: 'Poppy',
+      dogAgeText: '11 个月',
+      currentLabel: '成犬版',
+      matchReason: describeMatchedStage('HIGH_ACTIVITY_ADULT'),
+      versionCount: 2,
+    });
+    expect(copy.subtitle).toBe('Poppy 11 个月 · 活动量正常或偏高');
+  });
+
   it('版本条文案不含系统词', () => {
     const copy = buildLifeStageBarCopy('manual_low', {
       dogName: '旺财',

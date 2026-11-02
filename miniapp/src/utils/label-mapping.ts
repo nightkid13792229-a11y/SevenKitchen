@@ -71,7 +71,7 @@ export function getLifeStageLabel(stage: string): string {
   const map: Record<string, string> = {
     'PUPPY_UNDER_14_WEEKS': '幼犬版（14 周内）',
     'PUPPY_14_WEEKS_PLUS': '幼犬版（14 周以上）',
-    'LOW_ACTIVITY_ADULT_OR_SENIOR': '低活动 / 老年版',
+    'LOW_ACTIVITY_ADULT_OR_SENIOR': '低活动成犬 / 老年版',
     'HIGH_ACTIVITY_ADULT': '成犬版',
     'REPRODUCTION': '繁殖期版',
     'PUPPY': '幼犬期',

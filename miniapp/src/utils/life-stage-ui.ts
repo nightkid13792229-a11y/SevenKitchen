@@ -66,6 +66,8 @@ export interface LifeStageBarContext {
   currentLabel?: string | null;
   suggestedLabel?: string | null;
   versionCount?: number;
+  /** 匹配态第二行"为什么是这一版"的原因 */
+  matchReason?: string | null;
 }
 
 function stageWord(dogStage?: string | null): string {
@@ -90,7 +92,7 @@ export function buildLifeStageBarCopy(
     case 'matched':
       return {
         title: current,
-        subtitle: `${dog}${age ? ` ${age}` : ''} · 按档案匹配`,
+        subtitle: `${dog}${age ? ` ${age}` : ''} · ${(ctx.matchReason || '').trim() || '按档案匹配'}`,
         action: (ctx.versionCount ?? 0) > 1 ? 'switch' : 'none',
         actionLabel: (ctx.versionCount ?? 0) > 1 ? '换一版 ›' : '',
       };
@@ -143,6 +145,29 @@ export function buildLifeStageBarCopy(
     case 'legacy':
     default:
       return { title: '', subtitle: '', action: 'none', actionLabel: '' };
+  }
+}
+
+/**
+ * 匹配态"为什么是这一版"：直接说狗的实际情况，而不是笼统的"按档案匹配"。
+ *
+ * 2026-11-02 顾客实测：11 个月的小型犬（已成年）活动量填了"低"，
+ * 被分到"低活动成犬 / 老年版"，看到"老年"两个字以为系统判错了。
+ * 把原因写出来，顾客才知道是"活动量低"而不是"算成老年"。
+ */
+export function describeMatchedStage(dogLifeStage?: string | null): string {
+  switch (dogLifeStage) {
+    case 'LOW_ACTIVITY_ADULT_OR_SENIOR':
+      return '活动量偏低或已进入老年';
+    case 'HIGH_ACTIVITY_ADULT':
+      return '活动量正常或偏高';
+    case 'PUPPY_UNDER_14_WEEKS':
+    case 'PUPPY_14_WEEKS_PLUS':
+      return '幼犬期';
+    case 'REPRODUCTION':
+      return '繁殖期';
+    default:
+      return '按档案匹配';
   }
 }
 

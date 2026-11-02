@@ -628,7 +628,7 @@ describe('OrderRecipeTemplateService', () => {
       expect(result.templateStage).toBe('HIGH_ACTIVITY_ADULT');
       expect(result.dogStage).toBe('LOW_ACTIVITY_ADULT_OR_SENIOR');
       expect(result.warning).toContain('成犬版');
-      expect(result.warning).toContain('低活动 / 老年版');
+      expect(result.warning).toContain('低活动成犬 / 老年版');
       expect(result.warning).toContain('原料比例可能需要按当前阶段重新评估');
     });
 

@@ -22,6 +22,7 @@
 import { computed } from 'vue'
 import {
   buildLifeStageBarCopy,
+  describeMatchedStage,
   type LifeStageUiState,
 } from '@/utils/life-stage-ui'
 
@@ -36,6 +37,7 @@ const props = withDefaults(
     suggestedLabel?: string | null
     suggestedStage?: string | null
     versionCount?: number
+    matchReason?: string | null
     busy?: boolean
   }>(),
   {
@@ -47,6 +49,7 @@ const props = withDefaults(
     suggestedLabel: null,
     suggestedStage: null,
     versionCount: 0,
+    matchReason: null,
     busy: false,
   },
 )
@@ -68,6 +71,7 @@ const copy = computed(() =>
     currentLabel: props.currentLabel,
     suggestedLabel: props.suggestedLabel,
     versionCount: props.versionCount,
+    matchReason: props.matchReason || describeMatchedStage(props.dogStage),
   }),
 )
 

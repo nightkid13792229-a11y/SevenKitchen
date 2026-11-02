@@ -108,7 +108,7 @@ describe('life-stage display helpers', () => {
   it('labels every recipe and profile life stage', () => {
     expect(getLifeStageLabel('PUPPY_UNDER_14_WEEKS')).toBe('幼犬版（14 周内）');
     expect(getLifeStageLabel('PUPPY_14_WEEKS_PLUS')).toBe('幼犬版（14 周以上）');
-    expect(getLifeStageLabel('LOW_ACTIVITY_ADULT_OR_SENIOR')).toBe('低活动 / 老年版');
+    expect(getLifeStageLabel('LOW_ACTIVITY_ADULT_OR_SENIOR')).toBe('低活动成犬 / 老年版');
     expect(getLifeStageLabel('HIGH_ACTIVITY_ADULT')).toBe('成犬版');
     expect(getLifeStageLabel('REPRODUCTION')).toBe('繁殖期版');
     expect(getLifeStageLabel('PUPPY')).toBe('幼犬期');

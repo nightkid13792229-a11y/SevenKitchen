@@ -10,6 +10,7 @@ describe('LifeStageVersionBar / Sheet', () => {
     expect(barSource).not.toContain('不匹配');
     expect(barSource).not.toContain('没有完全匹配');
     expect(barSource).toContain('versionCount');
+    expect(barSource).toContain('describeMatchedStage');
   });
 
   it('版本条按状态给四种色调，且 legacy 不渲染', () => {

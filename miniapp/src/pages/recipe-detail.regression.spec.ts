@@ -229,7 +229,7 @@ describe('recipe detail nutrition report regressions', () => {
     )
     expect(labelMapping).toContain("'PUPPY_UNDER_14_WEEKS': '幼犬版（14 周内）'")
     expect(labelMapping).toContain("'PUPPY_14_WEEKS_PLUS': '幼犬版（14 周以上）'")
-    expect(labelMapping).toContain("'LOW_ACTIVITY_ADULT_OR_SENIOR': '低活动 / 老年版'")
+    expect(labelMapping).toContain("'LOW_ACTIVITY_ADULT_OR_SENIOR': '低活动成犬 / 老年版'")
     expect(labelMapping).toContain("'HIGH_ACTIVITY_ADULT': '成犬版'")
     expect(labelMapping).toContain("'REPRODUCTION': '繁殖期版'")
   })

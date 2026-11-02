@@ -28,6 +28,38 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ADMIN_WEB_DIR="$SCRIPT_DIR/admin-web"
 DIST_DIR="$ADMIN_WEB_DIR/dist"
 
+# 多会话门禁：同一时间只允许一个后台部署；记录上次部署的提交
+COLLAB_LIB="$SCRIPT_DIR/scripts/lib/collab.sh"
+if [ ! -f "$COLLAB_LIB" ]; then
+  fail "缺少协作库：$COLLAB_LIB（请先把多会话门禁合并到 main）"
+  exit 1
+fi
+# shellcheck source=scripts/lib/collab.sh
+source "$COLLAB_LIB"
+
+SK_FORCE_DEPLOY=0
+for _arg in "$@"; do
+  [ "$_arg" = "--force" ] && SK_FORCE_DEPLOY=1
+done
+
+LOCK_TOKEN="$(collab_lock_acquire deploy-admin-web "后台部署" 1800 0)" || {
+  fail "另一个后台部署正在进行（看门禁：bash scripts/gate.sh status）"
+  exit 1
+}
+BUILD_ROOT=""
+
+cleanup() {
+  if [ -n "${BUILD_ROOT:-}" ] && [ -d "$BUILD_ROOT" ]; then
+    rm -rf "$BUILD_ROOT"
+  fi
+  if [ -n "${LOCK_TOKEN:-}" ]; then
+    collab_lock_release deploy-admin-web "$LOCK_TOKEN" >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+
+DEPLOY_STATE_FILE="$(collab_state_dir)/deploy-state/admin-web"
+
 echo "=========================================="
 echo "SevenKitchen Admin Web Deployment"
 echo "=========================================="
@@ -65,14 +97,20 @@ git -C "$SCRIPT_DIR" fetch origin --quiet
 DEPLOY_COMMIT="$(git -C "$SCRIPT_DIR" rev-parse origin/main)"
 ok "Build source: origin/main @ ${DEPLOY_COMMIT:0:8}"
 
+# 自上次部署以来 admin-web 没改动 → 跳过，避免无意义覆盖（--force 可强制）
+if [ "$SK_FORCE_DEPLOY" -ne 1 ] && [ -f "$DEPLOY_STATE_FILE" ]; then
+  LAST_DEPLOY_COMMIT="$(awk 'NR==1{print $1}' "$DEPLOY_STATE_FILE")"
+  if [ -n "$LAST_DEPLOY_COMMIT" ] \
+     && git -C "$SCRIPT_DIR" merge-base --is-ancestor "$LAST_DEPLOY_COMMIT" "$DEPLOY_COMMIT" 2>/dev/null \
+     && git -C "$SCRIPT_DIR" diff --quiet "$LAST_DEPLOY_COMMIT..$DEPLOY_COMMIT" -- admin-web/; then
+    ok "admin-web 自上次部署（${LAST_DEPLOY_COMMIT:0:8}）以来没有改动，跳过部署"
+    info "需要强制部署请加 --force"
+    exit 0
+  fi
+fi
+
 # Step 1: 导出源码到临时目录（不读当前工作区，旧分支 / 脏工作区都不影响结果）
 BUILD_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/sevenkitchen-admin-web.XXXXXX")"
-cleanup() {
-  if [ -n "${BUILD_ROOT:-}" ] && [ -d "$BUILD_ROOT" ]; then
-    rm -rf "$BUILD_ROOT"
-  fi
-}
-trap cleanup EXIT
 info "Exporting source to $BUILD_ROOT..."
 git -C "$SCRIPT_DIR" archive "$DEPLOY_COMMIT" | tar -x -C "$BUILD_ROOT"
 ADMIN_WEB_BUILD_DIR="$BUILD_ROOT/admin-web"
@@ -136,6 +174,10 @@ else
   fail "Deployment verification failed - index.html not found on server"
   exit 1
 fi
+echo ""
+
+printf '%s %s\n' "$DEPLOY_COMMIT" "$(date '+%F %T')" > "$DEPLOY_STATE_FILE"
+ok "部署记录：$DEPLOY_STATE_FILE（${DEPLOY_COMMIT:0:8}）"
 echo ""
 
 echo "=========================================="

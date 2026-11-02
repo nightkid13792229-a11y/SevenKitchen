@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SevenKitchen 多会话门禁：推 main 必须走 merge-main 门禁
+# 由 scripts/session.sh install-hooks 安装到 .git/hooks/pre-push
+set -euo pipefail
+
+branch="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+common="$(cd "$(git rev-parse --show-toplevel)" && cd "$(git rev-parse --git-common-dir)" && pwd)"
+lock="$common/sevenkitchen/locks/merge-main.lock"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main|refs/heads/master)
+      if [ ! -d "$lock" ]; then
+        echo "✗ 推 main 前必须先拿 merge-main 门禁。" >&2
+        echo "  用：bash scripts/session.sh merge（会自动拿锁）" >&2
+        exit 1
+      fi
+      if [ "$branch" != "main" ] && [ "$branch" != "master" ]; then
+        echo "✗ 禁止从 $branch 直接推 main；请用 session.sh merge" >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+exit 0

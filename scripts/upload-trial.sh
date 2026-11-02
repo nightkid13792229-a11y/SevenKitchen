@@ -20,8 +20,25 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLI="/Applications/wechatwebdevtools.app/Contents/MacOS/cli"
-LOCK_DIR="$REPO_ROOT/.wechat-trial.lock"
-STATE_FILE="$REPO_ROOT/.wechat-trial-state"
+COLLAB_LIB="$REPO_ROOT/scripts/lib/collab.sh"
+if [ ! -f "$COLLAB_LIB" ]; then
+  echo "✗ 缺少协作库：$COLLAB_LIB（请先把多会话门禁合并到 main）" >&2
+  exit 1
+fi
+# shellcheck source=lib/collab.sh
+source "$COLLAB_LIB"
+
+MAIN_WT="$(collab_main_worktree)"
+if [ -z "$MAIN_WT" ]; then
+  echo "✗ 找不到主工作区；请在仓库内执行" >&2
+  exit 1
+fi
+STATE_FILE="$MAIN_WT/.wechat-trial-state"
+LEGACY_STATE="$REPO_ROOT/.wechat-trial-state"
+if [ ! -f "$STATE_FILE" ] && [ -f "$LEGACY_STATE" ]; then
+  cp -p "$LEGACY_STATE" "$STATE_FILE"
+fi
+LOCK_TOKEN=""
 DESC="${1:-小程序更新}"
 TODAY="$(date '+%Y.%m.%d')"
 
@@ -34,19 +51,25 @@ if [ ! -x "$CLI" ]; then
   exit 1
 fi
 
-# ---- 1. 互斥锁：同一时间只允许一个上传 ----
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  fail "另一个上传正在进行（锁：$LOCK_DIR）"
-  fail "如果确认没有在传，删除这个目录后重试"
+# ---- 1. 互斥门禁：同一时间只允许一个上传（跨工位共用）----
+if [ -d "$REPO_ROOT/.wechat-trial.lock" ]; then
+  fail "发现旧版本地锁目录：$REPO_ROOT/.wechat-trial.lock"
+  fail "确认没有上传在进行后，删除这个目录再重试"
   exit 1
 fi
+LOCK_TOKEN="$(collab_lock_acquire upload-trial "体验版上传：$DESC" 1800 0)" || {
+  fail "另一个上传正在进行（看门禁：bash scripts/gate.sh status）"
+  exit 1
+}
 
 BUILD_ROOT=""
 cleanup() {
   if [ -n "$BUILD_ROOT" ] && [ -d "$BUILD_ROOT" ]; then
     git -C "$REPO_ROOT" worktree remove "$BUILD_ROOT" --force >/dev/null 2>&1 || true
   fi
-  rmdir "$LOCK_DIR" 2>/dev/null || true
+  if [ -n "$LOCK_TOKEN" ]; then
+    collab_lock_release upload-trial "$LOCK_TOKEN" >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
 

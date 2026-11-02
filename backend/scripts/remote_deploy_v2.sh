@@ -19,6 +19,10 @@ BUILD_ROOT=""
 BUILD_BACKEND_DIR=""
 DIST_DIR=""
 DEPLOY_COMMIT=""
+LOCK_TOKEN=""
+DEPLOY_STATE_FILE=""
+SK_FORCE_DEPLOY=0
+SK_SKIP_DEPLOY=0
 
 # Export configuration for ssh-helper
 export SERVER_HOST
@@ -43,6 +47,9 @@ cleanup() {
   if [ -n "${BUILD_ROOT:-}" ] && [ -d "$BUILD_ROOT" ]; then
     rm -rf "$BUILD_ROOT"
   fi
+  if [ -n "${LOCK_TOKEN:-}" ] && declare -F collab_lock_release >/dev/null 2>&1; then
+    collab_lock_release deploy-backend "$LOCK_TOKEN" >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
 
@@ -58,6 +65,27 @@ fi
 
 # Source the SSH helper to get its functions
 source "$SSH_HELPER_SCRIPT"
+
+# ============================================================================
+# 多会话门禁：同一时间只允许一个后端部署；记录上次部署的提交
+# ============================================================================
+COLLAB_LIB="$REPO_ROOT/scripts/lib/collab.sh"
+if [ ! -f "$COLLAB_LIB" ]; then
+  fail "缺少协作库：$COLLAB_LIB（请先把多会话门禁合并到 main）"
+  exit 1
+fi
+# shellcheck source=../../scripts/lib/collab.sh
+source "$COLLAB_LIB"
+
+for _arg in "$@"; do
+  [ "$_arg" = "--force" ] && SK_FORCE_DEPLOY=1
+done
+
+LOCK_TOKEN="$(collab_lock_acquire deploy-backend "后端部署" 3600 0)" || {
+  fail "另一个后端部署正在进行（看门禁：bash scripts/gate.sh status）"
+  exit 1
+}
+DEPLOY_STATE_FILE="$(collab_state_dir)/deploy-state/backend"
 
 # ============================================================================
 # Deployment Functions (Business Logic)
@@ -81,6 +109,20 @@ build_artifact_locally() {
   git -C "$REPO_ROOT" fetch origin main
   DEPLOY_COMMIT="$(git -C "$REPO_ROOT" rev-parse FETCH_HEAD)"
   ok "Deploy commit: ${DEPLOY_COMMIT}"
+
+  # 自上次部署以来 backend/ 没改动 → 跳过，避免无意义重置/重启（--force 可强制）
+  if [ "$SK_FORCE_DEPLOY" -ne 1 ] && [ -f "$DEPLOY_STATE_FILE" ]; then
+    local last_deploy_commit
+    last_deploy_commit="$(awk 'NR==1{print $1}' "$DEPLOY_STATE_FILE")"
+    if [ -n "$last_deploy_commit" ] \
+       && git -C "$REPO_ROOT" merge-base --is-ancestor "$last_deploy_commit" "$DEPLOY_COMMIT" 2>/dev/null \
+       && git -C "$REPO_ROOT" diff --quiet "$last_deploy_commit..$DEPLOY_COMMIT" -- backend/; then
+      ok "backend 自上次部署（${last_deploy_commit:0:8}）以来没有改动，跳过部署"
+      info "需要强制部署请加 --force"
+      SK_SKIP_DEPLOY=1
+      return 0
+    fi
+  fi
 
   BUILD_ROOT="$(mktemp -d)"
   BUILD_BACKEND_DIR="$BUILD_ROOT/backend"
@@ -449,10 +491,20 @@ deploy_to_production() {
   echo ""
 
   build_artifact_locally
+
+  if [ "$SK_SKIP_DEPLOY" -eq 1 ]; then
+    echo ""
+    ok "本次没有需要部署的后端改动"
+    exit 0
+  fi
+
   validate_remote_access
   prepare_remote_runtime
   upload_artifact
   restart_and_verify_remote
+
+  printf '%s %s\n' "$DEPLOY_COMMIT" "$(date '+%F %T')" > "$DEPLOY_STATE_FILE"
+  ok "部署记录：$DEPLOY_STATE_FILE（${DEPLOY_COMMIT:0:8}）"
 
   echo ""
   echo "=========================================="

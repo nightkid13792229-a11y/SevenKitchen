@@ -28,6 +28,30 @@
 5. **如果预览、构建或用户明确要求的预览目录同步失败，必须明确告知失败原因**，不能让用户自己猜测是不是没编译、目录不对、同步没完成或输出没更新
 6. **凡是小程序本地开发默认 API 地址，都以** `http://127.0.0.1:3011/api/v1` **为准**，除非用户明确要求切换
 
+## 多会话协作硬规则（2026-11-03 起，严格版）
+
+1. **主工作区只读**：`/Users/zhaochen/Documents/SevenKitchen` 不写代码、不提交、不 `git add`。
+   所有改动先开工位：
+   ```bash
+   cd /Users/zhaochen/Documents/SevenKitchen
+   bash scripts/session.sh start "任务名"
+   ```
+2. **一个任务一个工位、一个分支**（`task/日期-短名`），从最新 `origin/main` 切；
+   一个工位只做一个任务，合并后清理，不复用旧分支。第二个任务不要搭在第一个分支上。
+3. **只在工位里提交**：`bash scripts/session.sh commit -m "..."`；
+   主工作区禁止 `git add -A`；提交前看清本次包含哪些文件。
+4. **共享出口先拿门禁**：合并 main、部署后端、部署后台、上传体验版、跑 migration，
+   先 `bash scripts/gate.sh status` 看谁占着；不要绕过 `session.sh merge` 直接推 main。
+   部署脚本和上传脚本会自动拿门禁，不需要手动加。
+5. **测试红了先分清楚是谁的**：先在干净 `origin/main` 上复跑同一条命令做对照；
+   基线本来就红就记录，不拦自己；只有自己改的部分红才停。
+   别人的分支没绿，不合并进自己的工位。
+6. **会话收尾**：`bash scripts/session.sh status` 确认没有遗留工位/门禁；
+   合并后用 `session.sh cleanup` 清理。详细说明见 `docs/MULTI_SESSION_WORKFLOW.md`。
+
+> 本机已安装兜底 git 钩子：禁止在 main 上直接 commit；推 main 必须有 `merge-main` 门禁。
+> 重装：`bash scripts/session.sh install-hooks`。
+
 ## 生产部署授权（老板 2026-10-12 定）
 
 **老板原话**："本会话后续所有的修改都可以直接部署到生产端，小程序不用，
@@ -51,6 +75,7 @@
    ```
    同理 admin-web：`git diff --stat <上次>..HEAD -- admin-web/`。
    小程序不一样 —— **每次都要上传**（老板要在手机上看到最新那份）。
+   现在部署脚本会自己比对上次部署记录，没改动会直接跳过（`--force` 可强制）。
 6. ⚠️ **前端部署统一用主工作区那份脚本**（2026-11-01 加的）：
    ```bash
    bash /Users/zhaochen/Documents/SevenKitchen/deploy-admin-web.sh
@@ -78,7 +103,7 @@ bash scripts/upload-trial.sh "这次改了什么"
 脚本替你做四件事：
 
 - 永远从 `origin/main` 构建（与当前分支、工作区是否干净无关）
-- 同一时间只允许一个上传（`.wechat-trial.lock`，异常退出要手动删）
+- 同一时间只允许一个上传（跨工位共用门禁，异常退出会自动过期）
 - 版本号自动递增（当天日期 + 序号，记在 `.wechat-trial-state`）
 - 上传失败自动重试一次，并把「版本号 ↔ 提交」写进状态文件
 

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# SevenKitchen 多会话门禁：主工作区只读
+# 由 scripts/session.sh install-hooks 安装到 .git/hooks/pre-commit
+set -euo pipefail
+
+branch="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+case "$branch" in
+  main|master)
+    git_dir="$(git rev-parse --git-dir)"
+    # 允许 merge 产生的提交（快进合并不会触发这里；--no-ff 合并有 MERGE_HEAD）
+    if [ -f "$git_dir/MERGE_HEAD" ]; then
+      exit 0
+    fi
+    echo "✗ 主工作区只读：不要在 $branch 上直接提交。" >&2
+    echo "  正确做法：bash scripts/session.sh start \"任务名\"" >&2
+    echo "  然后在任务工位里提交；合并用 bash scripts/session.sh merge" >&2
+    exit 1
+    ;;
+esac
+
+exit 0

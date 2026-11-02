@@ -321,6 +321,7 @@ import {
   appendReceiptUrls,
   removeReceiptUrl
 } from '../api/purchasing';
+import { formatStaffQuantity } from '../../../utils/staff-quantity';
 import {
   formatReimbursementCustomFeeTitle,
   getReimbursementCustomFeeCategoryLabel,
@@ -451,7 +452,7 @@ const formatNeededQuantity = (item?: any) => {
     return '—';
   }
 
-  return `${formatDecimal(quantity)}${unit}`;
+  return formatStaffQuantity(quantity, unit, { maxDecimals: 3 });
 };
 
 const formatRecordRawSummary = (record: any, item?: any, priceChange?: any) => {
@@ -466,7 +467,7 @@ const formatRecordRawSummary = (record: any, item?: any, priceChange?: any) => {
     packageSize > 0 &&
     packageUnit
   ) {
-    return `${formatDecimal(packageCount)}${getRecordPurchaseUnit(record, item, priceChange)} x ${formatDecimal(packageSize)}${packageUnit}`;
+    return `${formatStaffQuantity(packageCount, getRecordPurchaseUnit(record, item, priceChange), { maxDecimals: 3 })} x ${formatStaffQuantity(packageSize, packageUnit, { maxDecimals: 3 })}`;
   }
 
   return '';
@@ -483,7 +484,11 @@ const formatRecordQuantity = (record: any, item?: any, priceChange?: any) => {
     return '-';
   }
 
-  return `${formatDecimal(quantity)}${getRecordPurchaseUnit(record, item, priceChange)}`;
+  return formatStaffQuantity(
+    quantity,
+    getRecordPurchaseUnit(record, item, priceChange),
+    { maxDecimals: 3 },
+  );
 };
 
 const formatRecordNormalizedSummary = (record: any, item?: any, priceChange?: any) => {
@@ -495,11 +500,15 @@ const formatRecordNormalizedSummary = (record: any, item?: any, priceChange?: an
   const baseQuantity = Number(record?.actualBaseQuantity || 0);
   const baseSummary =
     Number.isFinite(baseQuantity) && baseQuantity > 0 && record?.actualBaseUnit
-      ? `${formatDecimal(baseQuantity, 3)}${formatMeasurementUnit(record.actualBaseUnit)}`
+      ? formatStaffQuantity(baseQuantity, formatMeasurementUnit(record.actualBaseUnit), {
+          maxDecimals: 3,
+        })
       : '';
   const purchaseSummary =
     Number.isFinite(quantity) && quantity > 0
-      ? `${formatDecimal(quantity, 3)}${getPurchaseRecordUnit(item, priceChange)}`
+      ? formatStaffQuantity(quantity, getPurchaseRecordUnit(item, priceChange), {
+          maxDecimals: 3,
+        })
       : '';
 
   if (!baseSummary || !purchaseSummary || purchaseSummary === baseSummary) {
@@ -665,10 +674,10 @@ const formatSkuStockText = (record: any, item?: any) => {
   );
 
   if (getRecordBaseUnit(record, item) === 'PCS') {
-    return `${formatDecimal(quantity, 3)}${getPcsDisplayUnit(item)}`;
+    return formatStaffQuantity(quantity, getPcsDisplayUnit(item), { maxDecimals: 3 });
   }
 
-  return `${formatDecimal(quantity, 3)}${unit}`;
+  return formatStaffQuantity(quantity, unit, { maxDecimals: 3 });
 };
 
 const formatDeltaRate = (deltaRate?: number | null) => {

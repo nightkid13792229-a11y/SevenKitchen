@@ -202,6 +202,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
+import { formatStaffQuantity } from '../../utils/staff-quantity';
 import { previewPurchaseList, resolvePurchaseItemDisplay } from './api/purchasing';
 
 // 表单数据
@@ -468,10 +469,12 @@ const formatQuantity = (item: any) => {
 const formatResolvedQuantity = (value: number, item: any) => {
   if (item.type === 'FOOD') {
     const meta = resolveFoodDisplayMeta(item, value);
-    return `${formatDisplayValue(meta.value, meta.unit)}${meta.unit}`;
+    return formatStaffQuantity(meta.value, meta.unit);
   }
 
-  return `${formatSupplementDisplayValue(Number(value || 0))}${getDisplayUnit(item)}`;
+  return formatStaffQuantity(Number(value || 0), getDisplayUnit(item), {
+    maxDecimals: 2,
+  });
 };
 
 // 获取显示单位

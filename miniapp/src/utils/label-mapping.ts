@@ -69,11 +69,11 @@ export function getHealthTagLabel(tagOrUuid: string): string {
  */
 export function getLifeStageLabel(stage: string): string {
   const map: Record<string, string> = {
-    'PUPPY_UNDER_14_WEEKS': '小于14周幼犬',
-    'PUPPY_14_WEEKS_PLUS': '大于等于14周幼犬',
-    'LOW_ACTIVITY_ADULT_OR_SENIOR': '低运动量成犬或老年犬',
-    'HIGH_ACTIVITY_ADULT': '普通或高运动量成犬',
-    'REPRODUCTION': '繁殖期',
+    'PUPPY_UNDER_14_WEEKS': '幼犬版（14 周内）',
+    'PUPPY_14_WEEKS_PLUS': '幼犬版（14 周以上）',
+    'LOW_ACTIVITY_ADULT_OR_SENIOR': '低活动成犬 / 老年版',
+    'HIGH_ACTIVITY_ADULT': '成犬版',
+    'REPRODUCTION': '繁殖期版',
     'PUPPY': '幼犬期',
     'ADULT': '成犬期',
     'SENIOR': '老年犬期',

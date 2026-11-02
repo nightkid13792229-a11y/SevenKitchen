@@ -117,22 +117,6 @@
           </span>
         </el-form-item>
 
-        <el-divider content-position="left">加量</el-divider>
-
-        <el-form-item label="加量份数上限">
-          <el-input-number
-            v-model="form.maxPortionMultiplier"
-            :min="1"
-            :max="12"
-            :step="1"
-            style="width: 220px"
-          />
-          <span class="form-tip">
-            用户一次最多买几份。每份 = 每个补剂多做一袋同样规格的小袋。
-            建议不超过 3 —— 选项太多不好选，单日分装产能也不好排。
-          </span>
-        </el-form-item>
-
         <el-divider content-position="left">支付超时</el-divider>
 
         <el-form-item label="补剂订单支付超时">
@@ -171,6 +155,20 @@
             style="width: 220px"
           />
           <span class="form-tip">按订单数；补发单也计入。超过自动顺延，管理员可超排留痕</span>
+        </el-form-item>
+
+        <el-form-item label="大单提示袋数">
+          <el-input-number
+            v-model="form.bulkBagThreshold"
+            :min="1"
+            :max="500"
+            :step="10"
+            style="width: 220px"
+          />
+          <span class="form-tip">
+            单笔分装袋数超过这个值，下单页会提示「发货会顺延，我们会联系你确认」。
+            只提示、不拦单，也不影响排期与产能计算。默认 60 袋。
+          </span>
         </el-form-item>
 
         <el-form-item label="自动排期">
@@ -568,6 +566,7 @@ const form = ref<SupplementShopConfig>({
   minOrderAmount: 0,
   roundUpUsage: true,
   maxPortionMultiplier: 3,
+  bulkBagThreshold: 60,
   paymentTimeoutMinutes: 30,
   dailyCutoffTime: '17:00',
   dailyPackingCapacity: 30,
@@ -669,7 +668,7 @@ async function handleSave() {
       priceRoundingMode: form.value.priceRoundingMode,
       minOrderAmount: form.value.minOrderAmount,
       roundUpUsage: form.value.roundUpUsage,
-      maxPortionMultiplier: form.value.maxPortionMultiplier,
+      bulkBagThreshold: form.value.bulkBagThreshold,
       paymentTimeoutMinutes: form.value.paymentTimeoutMinutes,
       dailyCutoffTime: form.value.dailyCutoffTime,
       dailyPackingCapacity: form.value.dailyPackingCapacity,

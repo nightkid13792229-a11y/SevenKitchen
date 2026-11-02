@@ -128,6 +128,7 @@
             <text>{{ orderConfig.recipeName?.charAt(0) }}</text>
           </view>
           <text class="recipe-name">{{ orderConfig.recipeName }}</text>
+          <text v-if="orderConfig.lifeStageLabel" class="recipe-version">{{ orderConfig.lifeStageLabel }}</text>
         </view>
       </view>
 
@@ -369,6 +370,7 @@ interface CartItem {
   dogWeightKg?: number;
   recipeId: string;
   recipeName: string;
+  lifeStageLabel?: string;
   recipeCoverImage?: string;
   cycleDays: number;
   dailyIntakeG: number;
@@ -1000,6 +1002,10 @@ function loadDirectBuyItem(options: any) {
 
   directBuyPrice.value = buildDirectBuyPrice(storedConfig, options);
   orderConfig.value = buildDirectBuyOrderConfig(storedConfig, options);
+  orderConfig.value.lifeStageLabel = readTextValue(
+    storedConfig.lifeStageLabel,
+    options.lifeStageLabel,
+  );
 
   const item: CartItem = {
     id: 'direct-buy-temp',
@@ -1848,6 +1854,13 @@ function goToAddAddress() {
   font-size: 32rpx;
   font-weight: bold;
   color: #f3eddd;
+}
+
+.recipe-version {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  color: #b45309;
 }
 
 .recipe-name {

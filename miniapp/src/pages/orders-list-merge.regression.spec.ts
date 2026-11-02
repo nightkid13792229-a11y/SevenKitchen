@@ -79,7 +79,10 @@ describe('我的订单合并补剂订单', () => {
   })
 
   it('补剂卡片展示订单号、概要、金额与状态，并复用补剂自己的支付流程', () => {
-    expect(template).toContain('order.orderNo')
+    // 2026-11-02：订单号不再挤在概要小字里，统一走卡片头的单号行
+    expect(template).toContain('order-no-row')
+    expect(template).toContain('orderNoOf(order)')
+    expect(source).toContain("return (order as SupplementOrderRow).orderNo || ''")
     expect(template).toContain('formatSupplementSummary(order)')
     expect(template).toContain('formatAmount(order.totalAmount)')
     expect(template).toContain('formatShortDateTime(order.createdAt)')
@@ -114,10 +117,15 @@ describe('我的订单合并补剂订单', () => {
     // 2026-10-21：结果页从"补剂订单列表"改到"补剂订单详情"，两条支付成功路径都要跟上。
     // 顾客的补剂订单列表入口已并入「我的订单」，但详情页仍是下单后的落点。
     const purchaseSource = readPage('src/pages/supplement-order/index.vue')
+    // 2026-11-02：三个弹窗（支付成功/支付未完成/人工确认）共用一个跳转函数
+    expect(purchaseSource).toContain('function goSupplementOrderDetail')
+    expect(purchaseSource).toContain(
+      'uni.redirectTo({ url: `/pages/supplement-order-detail/index?orderId=',
+    )
     const redirectCount = [
       ...purchaseSource.matchAll(/uni\.redirectTo\(\{ url: `\/pages\/supplement-order-detail\/index\?orderId=/g),
     ].length
-    expect(redirectCount).toBe(2)
+    expect(redirectCount).toBe(1)
 
     const pagesJson = readPage('src/pages.json')
     expect(pagesJson).toContain('pages/supplement-order-detail/index')

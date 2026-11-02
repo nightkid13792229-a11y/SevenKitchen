@@ -256,7 +256,9 @@ describe('staff purchasing purchase record form', () => {
 
     expect(detailSource).toContain('class="record-sku-list"');
     expect(detailSource).toContain('record-sku-option');
-    expect(detailSource).toContain('暂无可用采购商品');
+    // 2026-11-01：空状态改成可点的「新增一个采购商品」，管理员那句只留作非食材的兜底
+    expect(detailSource).toContain('这道原料下还没有采购商品');
+    expect(detailSource).toContain('＋ 新增一个采购商品');
     expect(detailSource).toContain('请联系管理员在该标准原料下新增采购 SKU 后再记录采购。');
 
     expect(detailSource).not.toContain('推荐参考：{{ getItemSuggestedProductLabel(selectedIngredient) }}');

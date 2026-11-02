@@ -220,18 +220,18 @@ describe('recipe detail nutrition report regressions', () => {
 
     // 2026-09-19：中文名统一收敛到 label-mapping，页面里不再自带第二份映射
     expect(source).toContain("getLifeStageLabel } from '../../utils/label-mapping'")
-    expect(source).not.toContain("'PUPPY_UNDER_14_WEEKS': '小于14周幼犬'")
+    expect(source).not.toContain("'PUPPY_UNDER_14_WEEKS': '幼犬版（14 周内）'")
 
     // 中文名的唯一来源仍然是 label-mapping，且覆盖设计器的全部阶段
     const labelMapping = readFileSync(
       resolve(process.cwd(), 'src/utils/label-mapping.ts'),
       'utf-8',
     )
-    expect(labelMapping).toContain("'PUPPY_UNDER_14_WEEKS': '小于14周幼犬'")
-    expect(labelMapping).toContain("'PUPPY_14_WEEKS_PLUS': '大于等于14周幼犬'")
-    expect(labelMapping).toContain("'LOW_ACTIVITY_ADULT_OR_SENIOR': '低运动量成犬或老年犬'")
-    expect(labelMapping).toContain("'HIGH_ACTIVITY_ADULT': '普通或高运动量成犬'")
-    expect(labelMapping).toContain("'REPRODUCTION': '繁殖期'")
+    expect(labelMapping).toContain("'PUPPY_UNDER_14_WEEKS': '幼犬版（14 周内）'")
+    expect(labelMapping).toContain("'PUPPY_14_WEEKS_PLUS': '幼犬版（14 周以上）'")
+    expect(labelMapping).toContain("'LOW_ACTIVITY_ADULT_OR_SENIOR': '低活动成犬 / 老年版'")
+    expect(labelMapping).toContain("'HIGH_ACTIVITY_ADULT': '成犬版'")
+    expect(labelMapping).toContain("'REPRODUCTION': '繁殖期版'")
   })
 
   it('uses backend selected life-stage version metadata instead of the old header tag loop', () => {
@@ -260,9 +260,10 @@ describe('recipe detail nutrition report regressions', () => {
      *
      * 意图没变（未匹配必须视觉区分），只是实现位置变了 —— 断言跟着搬。
      */
-    expect(templateSource).toContain('<LifeStageVersionCard');
-    expect(templateSource).toContain(':match-type="recipe.lifeStageMatch?.matchType"');
-    expect(templateSource).toContain(':message="recipe.lifeStageMatch?.message"');
+    expect(templateSource).toContain('<LifeStageVersionBar');
+    expect(templateSource).toContain(':state="lifeStageState"');
+    expect(templateSource).toContain(':current-label="selectedLifeStageLabel"');
+    expect(templateSource).toContain('<LifeStageVersionSheet');
     // 页面不再自己判定"是否匹配"—— 判定只有一份（utils + 后端）
     expect(source).not.toContain('const isLifeStageMismatch = computed');
 
@@ -334,7 +335,7 @@ describe('recipe detail nutrition report regressions', () => {
     const recipeNameIndex = templateSource.indexOf('class="recipe-name"')
     const dogSelectorIndex = templateSource.indexOf('class="recipe-detail-dog-selector"')
     // 生命阶段卡已改成共享组件，这里按组件标签找位置
-    const lifeStageIndex = templateSource.indexOf('<LifeStageVersionCard')
+    const lifeStageIndex = templateSource.indexOf('<LifeStageVersionBar')
 
     expect(recipeNameIndex).toBeGreaterThan(-1)
     expect(dogSelectorIndex).toBeGreaterThan(recipeNameIndex)
@@ -361,7 +362,9 @@ describe('recipe detail nutrition report regressions', () => {
     expect(diySource).toContain("`dogId=${encodeURIComponent(selectedDogId.value)}`")
     expect(diySource).toContain("return `/pages/recipe-diy/index?${query.join('&')}`")
     expect(orderSource).toContain("`dogId=${encodeURIComponent(selectedDogId.value)}`")
-    expect(orderSource).toContain('lifeStage=${encodeURIComponent(recipe.value.selectedLifeStage)}')
+    // 2026-11-02：只有顾客手动选过版本才把 lifeStage 带过去，并标 manual=true
+    expect(orderSource).toContain('selectedManualLifeStage.value')
+    expect(orderSource).toContain('manual=true')
     // 登录后直达：两条链路都必须把目标页作为 redirect 传下去
     const diyFlow = source.match(
       /function generateDiySheet\(\)[\s\S]*?\n}\n/,
@@ -375,30 +378,15 @@ describe('recipe detail nutrition report regressions', () => {
     expect(orderFlow).toContain('target')
   })
 
-  it('★ 不匹配时的文案说清"为什么"（2026-10-18 起由共享组件承担）', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+  it('★ 不匹配时的文案说清"为什么"（2026-11-02 起由 life-stage-ui 承担）', () => {
+    const code = readFileSync(
+      resolve(process.cwd(), 'src/utils/life-stage-ui.ts'),
       'utf-8',
-    )
-    /**
-     * 原来这条断言的是详情页自己的 `lifeStageVersionCopy`。
-     * 现在文案逻辑搬到了 `components/recipe/LifeStageVersionCard.vue` ——
-     * **意图不变**（看到警示色时必须知道问题出在哪），断言跟着搬。
-     */
-    const component = readFileSync(
-      resolve(process.cwd(), 'src/components/recipe/LifeStageVersionCard.vue'),
-      'utf-8',
-    )
-    // 断言前剥注释 —— 组件头部的说明表里也写着这句话
-    const code = component
-      .replace(/<!--[\s\S]*?-->/g, '')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-    expect(code).toContain('没有完全匹配的版本')
-    // 顺序：后端 message 优先（先判 message 再用兜底文案）
-    const messageIndex = code.indexOf('props.message')
-    const fallbackIndex = code.indexOf('没有完全匹配的版本')
-    expect(messageIndex).toBeGreaterThan(-1)
-    expect(messageIndex).toBeLessThan(fallbackIndex)
+      )
+    // 说清原因，但不用系统词"不匹配/没有完全匹配版本"
+    expect(code).toContain('这道菜没有适合')
+    expect(code).toContain('幼犬配方与成犬不同')
+    expect(code).not.toContain('没有完全匹配的版本')
   })
 
   it('only labels a life-stage version as matched when backend returns dog-specific match metadata', () => {
@@ -412,7 +400,7 @@ describe('recipe detail nutrition report regressions', () => {
      */
     expect(source).not.toContain('hasDogSpecificLifeStageMatch')
     const templateSource = source.slice(0, source.indexOf('<script setup'))
-    expect(templateSource).toContain(':match-type="recipe.lifeStageMatch?.matchType"')
+    expect(templateSource).toContain(':state="lifeStageState"')
   })
 
   it('guards recipe detail response ordering before state writes and side effects', () => {
@@ -463,4 +451,26 @@ describe('recipe detail nutrition report regressions', () => {
     // 无卖点时整块不渲染（不出现空占位）
     expect(templateSource).not.toContain('class="recipe-selling-point" v-else')
   });
+
+  it('carries a manually chosen version into the DIY route too', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const diySource = source.match(/function buildDiyRoute\(\)[\s\S]*?\n}\n/)?.[0] || ''
+    expect(diySource).toContain('selectedManualLifeStage.value')
+    expect(diySource).toContain('manual=true')
+  })
+
+  it('loads the dog list before the recipe so the first render has a dog', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const mounted = source.match(/onMounted\(async \(\) => \{[\s\S]*?\n}\)/)?.[0] || ''
+    expect(mounted.indexOf('await loadDogsForDetail()')).toBeGreaterThan(-1)
+    expect(mounted.indexOf('await loadDogsForDetail()')).toBeLessThan(
+      mounted.indexOf('loadRecipeDetail()'),
+    )
+  })
 })

@@ -130,7 +130,12 @@
         class="order-item"
         @tap="handleOrderTap(order)"
       >
-        <!-- 卡片头：类型 + 下单时间；"到哪一步"交给下面的进度线说 -->
+        <!--
+          卡片头（2026-11-02 统一）：
+          第一行「类型 + 下单时间」，第二行「订单号 + 复制」。
+          三类订单同一个位置、同一套样式 —— 找单号不用上下扫；
+          点整行都能复制，且只复制单号本身。
+        -->
         <view class="order-header">
           <view class="order-header-main">
             <view
@@ -154,9 +159,18 @@
           </view>
         </view>
 
+        <view
+          v-if="orderNoOf(order)"
+          class="order-no-row"
+          @tap.stop="copyOrderNo(order)"
+        >
+          <text class="order-no">订单号 {{ orderNoOf(order) }}</text>
+          <text class="order-no__copy">复制</text>
+        </view>
+
         <!--
           标题与副信息：三类订单各自取自己的名字。
-          鲜食用食谱名、定制造用定制标题、补剂用订单号 + 明细概要。
+          鲜食用食谱名、定制造用定制标题、补剂用明细概要（订单号已统一到卡片头）。
         -->
         <view class="order-main">
           <view class="order-title-row">
@@ -186,7 +200,7 @@
             {{ customOrderSubtitle(order) }}
           </text>
           <text v-else-if="order._orderType === 'supplement'" class="order-meta">
-            订单号 {{ order.orderNo }} · {{ formatSupplementSummary(order) }}
+            {{ formatSupplementSummary(order) }}
           </text>
           <text v-else class="order-meta">{{ foodMetaText(order) }}</text>
 
@@ -229,26 +243,20 @@
           <text class="eta__text">{{ etaTextOf(order) }}</text>
         </view>
 
-        <!-- 已发货：承运商 + 运单号，点进物流详情 -->
+        <!--
+          已发货：承运商 + 运单号，右侧直接给一个「复制」。
+          不再做「物流详情」入口和物流信息弹窗（2026-11-02 老板：卡片上只要能复制单号）。
+        -->
         <view
           v-if="order._orderType === 'food' && order.status === 'SHIPPED' && trackingText(order)"
           class="logistics"
-          @tap.stop="viewLogistics(order)"
         >
           <text class="logistics__text">{{ trackingText(order) }}</text>
-          <text class="logistics__link">物流详情 ›</text>
+          <text class="logistics__copy" @tap.stop="copyTrackingNumber(order)">复制</text>
         </view>
 
-        <!-- 底部：单号 + 详情入口 -->
+        <!-- 底部：只留详情入口（订单号已统一到卡片头） -->
         <view class="order-foot">
-          <text
-            v-if="order._orderType !== 'supplement' && orderNoOf(order)"
-            class="order-no"
-            @tap.stop="copyOrderNo(order)"
-          >
-            订单号 {{ orderNoOf(order) }}
-            <text class="order-no__copy">复制</text>
-          </text>
           <text class="order-link" @tap.stop="handleOrderTap(order)">
             查看详情 ›
           </text>
@@ -1430,28 +1438,21 @@ function formatSupplementAmount(value: number): string {
     : String(Math.round(value * 100) / 100);
 }
 
-function viewLogistics(order: FoodOrderRow) {
-  if (!order.trackingNumber) {
-    uni.showToast({
-      title: '暂无物流信息',
-      icon: 'none',
-    });
-    return;
-  }
+/**
+ * 复制运单号（2026-11-02 老板要求）。
+ *
+ * 卡片上只显示「承运商 + 单号」，但**复制出去只能是单号本身** ——
+ * 顾客拿去查快递、填理赔，多一个「顺丰速运」就查不到了。
+ * 所以这里单独取 trackingNumber，不要复用 trackingText()。
+ */
+function copyTrackingNumber(order: FoodOrderRow) {
+  const trackingNumber = String(order.trackingNumber || '').trim();
+  if (!trackingNumber) return;
 
-  uni.showModal({
-    title: '物流信息',
-    content: `快递公司：${getCarrierName(order.carrierCode)}\n运单号：${order.trackingNumber}`,
-    confirmText: '复制单号',
-    cancelText: '关闭',
-    success: (res) => {
-      if (!res.confirm) return;
-      uni.setClipboardData({
-        data: order.trackingNumber || '',
-        success: () => {
-          uni.showToast({ title: '已复制', icon: 'success' });
-        },
-      });
+  uni.setClipboardData({
+    data: trackingNumber,
+    success: () => {
+      uni.showToast({ title: '运单号已复制', icon: 'none' });
     },
   });
 }
@@ -2869,9 +2870,14 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.logistics__link {
+/* 复制运单号：小胶囊，视觉与订单号后的「复制」同一路 */
+.logistics__copy {
   flex: 0 0 auto;
-  font-size: 21rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 6rpx;
+  border: 1rpx solid #e3e6d4;
+  background: #fbfcf7;
+  font-size: 20rpx;
   font-weight: 700;
   color: #1e3a2f;
 }
@@ -2880,12 +2886,23 @@ onUnmounted(() => {
 .order-foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16rpx;
   margin-top: 16rpx;
 }
 
+/* 订单号：三类订单统一放在卡片头下面一行（2026-11-02），点整行即复制 */
+.order-no-row {
+  display: flex;
+  align-items: center;
+  margin-top: 6rpx;
+}
+
 .order-no {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 20rpx;
   color: #968f6d;
 }

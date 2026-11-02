@@ -117,34 +117,31 @@
           提示：请先选择爱犬以计算推荐饭量
         </view>
 
-        <!-- 生命阶段提醒：紧贴所选狗狗，不再单独占一屏；
-             已确认过的狗狗不再重复提醒（留痕在确认时即写入） -->
-        <!--
-          生命阶段提醒 · 2026-10-18 改用共享组件
-
-          这一页是"警示 + 切换 + 确认"三件套：
-            · 切换：换成按档案匹配的那一版
-            · 确认：顾客表明"我知道，继续"→ 留痕（`confirmLifeStageMismatch`）
-        -->
-        <LifeStageVersionCard
-          v-if="!isLifeStageMatch && selectedDog && showWarning && !isLifeStageAcknowledged"
-          variant="warning"
-          :match-type="lifeStageVerdict?.matchType"
-          :message="lifeStageVerdict?.message"
-          :selected-label="lifeStageVerdict?.selectedLifeStage"
-          :dog-name="lifeStageVerdict?.dogName || selectedDog?.name"
-          :switch-label="recommendedLifeStageOption ? `切换到${recommendedLifeStageOption.label}` : null"
-          acknowledge-label="我已知晓"
-          @open-selector="switchToRecommendedLifeStage"
-          @acknowledge="dismissWarning"
+        <!-- 生命阶段版本条（2026-11-02）：紧贴所选狗狗；版本跟着狗走，可手动换版 -->
+        <LifeStageVersionBar
+          :state="lifeStageState"
+          :dog-name="selectedDog?.name"
+          :dog-stage="dogLifeStage"
+          :dog-stage-label="dogLifeStageLabel"
+          :current-label="selectedLifeStageLabel"
+          :suggested-label="suggestedLifeStageVersion?.label"
+          :suggested-stage="suggestedLifeStageVersion?.lifeStage"
+          :version-count="lifeStageVersionOptions.length"
+          @open-selector="versionSheetVisible = true"
+          @select="switchLifeStageVersion"
+          @see-suitable="goSuitableRecipes"
+          @retry="loadRecipe"
+          @add-dog="goToCreateDog"
         />
 
-        <!-- 后端结论没取到：不静默放行，给一条中性提示（不是警示色，避免网络抖动吓到顾客） -->
-        <view v-if="lifeStageCheckFailed" class="life-stage-unknown-note">
-          <text class="life-stage-unknown-text">
-            暂时无法确认这份食谱是否适合当前狗狗，建议稍后重试或联系客服。
-          </text>
-        </view>
+        <LifeStageVersionSheet
+          :visible="versionSheetVisible"
+          :versions="lifeStageVersionOptions"
+          :current-stage="selectedLifeStage"
+          :matched-stage="dogLifeStage"
+          @close="versionSheetVisible = false"
+          @select="switchLifeStageVersion"
+        />
 
         <!-- 饭量计算失败：给出原因与重试，避免按钮永久灰着 -->
         <view v-if="dogCalcFailed" class="dog-calc-error" @tap="retryDogCalc">
@@ -238,19 +235,16 @@ import { ref, computed, onMounted } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
+import { trackFunnelEvent } from '../../utils/funnel'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import { navigateToDogCreate } from '../../utils/dog-profile-entry'
 import { getNutritionStandardExplain, getNutritionStandardLabel } from '../../utils/label-mapping'
 import {
-  buildLifeStageReminderText,
   confirmLifeStageMismatch,
-  fetchLifeStageMatch,
   getLifeStageLabel,
-  isLifeStageMismatch,
-  recordLifeStageAcknowledgement,
-  type LifeStageMatchVerdict,
 } from '../../utils/life-stage-match'
-import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
+import LifeStageVersionBar from '@/components/recipe/LifeStageVersionBar.vue'
+import LifeStageVersionSheet from '@/components/recipe/LifeStageVersionSheet.vue'
 import CustomerServiceInlineButton from '@/components/CustomerServiceInlineButton.vue'
 import QuickCyclePackagePlan from '@/components/package-plan/QuickCyclePackagePlan.vue'
 import { useDogSelection } from '@/composables/useDogSelection'
@@ -395,54 +389,61 @@ const healthTagUuidLabelMap = ref<Record<string, string>>({})
  *   ③ 取消选狗时要**重置**三个状态，否则会挂着上次的"不匹配"假警报
  */
 const {
-  verdict: lifeStageVerdict,
-  checkFailed: lifeStageCheckFailed,
+  state: lifeStageState,
+  riskLevel: lifeStageRisk,
   dogLifeStage,
-  reminderText: lifeStageReminderText,
-  check: checkLifeStageMatch,
 } = useLifeStageVersion({
-  recipeId: () => recipeId.value,
-  dogId: () => selectedDog.value?.id,
+  verdict: () => recipe.value?.lifeStageMatch,
+  dogId: () => selectedDogId.value,
   applicableStages: () => recipe.value.applicableLifeStages,
   dogName: () => selectedDog.value?.name,
-  lifeStage: () => selectedLifeStage.value || undefined,
-  onVerdict: () => {
-    // 结论变了就重新亮起警示（切版本后提醒不能消失）
-    showWarning.value = true
-  },
 })
 
-/** 页面自己要读"是否匹配"来渲染（composable 里是 computed，这里保持 ref 语义不变） */
-const isLifeStageMatch = computed(() => !isLifeStageMismatch(lifeStageVerdict.value?.matchType))
-const showWarning = ref(true)
-/**
- * 本次进入页面已经确认过生命阶段提醒的狗狗。
- * 卡片上点「我已知晓」即写留痕，之后不再弹同义弹窗（避免"刚确认过又问一遍"）。
- * 切换狗狗属于新的一只狗，会重新提醒。
- */
-const acknowledgedLifeStageDogIds = ref<string[]>([])
-const isLifeStageAcknowledged = computed(() => {
-  const dogId = selectedDog.value?.id
-  return Boolean(dogId && acknowledgedLifeStageDogIds.value.includes(dogId))
-})
+const manualLifeStage = ref('')
+const versionSheetVisible = ref(false)
+/** 本次生成制作单已确认过高风险提醒（换狗/换版即作废） */
+const acknowledgedForSheet = ref(false)
 /**
  * 生命阶段匹配结论 —— **由后端给出**（2026-09-19 起不再前端自己算）。
  * 前端重算认不出混血犬的体型，算不出时还会被当成"匹配"静默放行。
  */
 
 
-const recommendedLifeStageOption = computed(() => {
+const dogLifeStageLabel = computed(
+  () => recipe.value?.lifeStageMatch?.dogLifeStageLabel || (dogLifeStage.value ? getLifeStageLabel(dogLifeStage.value) : ''),
+)
+const selectedLifeStageLabel = computed(() => {
+  const stage = selectedLifeStage.value || recipe.value.selectedLifeStage || ''
+  if (!stage) return ''
+  const version = recipe.value.availableLifeStageVersions?.find(
+    (item) => item.lifeStage === stage,
+  )
+  return getLifeStageLabel(stage)
+})
+const lifeStageVersionOptions = computed(() =>
+  (recipe.value.availableLifeStageVersions || []).map((version) => ({
+    recipeId: version.recipeId,
+    lifeStage: version.lifeStage,
+    label: getLifeStageLabel(version.lifeStage),
+  })),
+)
+const suggestedLifeStageVersion = computed(() => {
   const targetLifeStage = dogLifeStage.value
   if (!targetLifeStage) return null
+  const current = selectedLifeStage.value || recipe.value.selectedLifeStage || manualLifeStage.value || ''
   const version = recipe.value.availableLifeStageVersions?.find(
-    version => version.lifeStage === dogLifeStage.value,
+    (item) => item.lifeStage === targetLifeStage,
   )
-  if (!version || version.lifeStage === recipe.value.selectedLifeStage) return null
+  if (!version || version.lifeStage === current) return null
   return {
     ...version,
-    label: version.label || getLifeStageLabel(version.lifeStage),
+    label: getLifeStageLabel(version.lifeStage),
   }
 })
+
+function goSuitableRecipes() {
+  uni.reLaunch({ url: '/pages/home/index' })
+}
 const dogProfileFacts = computed(() => {
   if (!selectedDog.value) return []
 
@@ -585,6 +586,7 @@ onMounted(async () => {
   shareToken.value = options.shareToken || ''
   initialDogId.value = routeDogId.value || options.dogId || ''
   selectedLifeStage.value = options.lifeStage || ''
+  manualLifeStage.value = options.lifeStage || ''
   console.log('[食谱ID]', recipeId.value, '[订单]', orderId.value)
 
   /**
@@ -618,13 +620,21 @@ onShow(() => {
 })
 
 
+let recipeRequestSeq = 0
+
 async function loadRecipe() {
   console.log('[RecipeDiy] loadRecipe 开始, recipeId:', recipeId.value)
+  const requestSeq = ++recipeRequestSeq
+  const requestDogId = selectedDogId.value
 
   try {
     const requestData: Record<string, string> = {}
-    if (selectedLifeStage.value) {
-      requestData.lifeStage = selectedLifeStage.value
+    if (manualLifeStage.value) {
+      requestData.lifeStage = manualLifeStage.value
+    }
+    requestData.manual = manualLifeStage.value ? 'true' : 'false'
+    if (selectedDogId.value) {
+      requestData.dogId = selectedDogId.value
     }
     if (shareToken.value) {
       requestData.shareToken = shareToken.value
@@ -640,6 +650,9 @@ async function loadRecipe() {
       data: requestData
     })
 
+    if (requestSeq !== recipeRequestSeq || requestDogId !== selectedDogId.value) {
+      return
+    }
     console.log('[RecipeDiy] loadRecipe API响应:', res)
 
     if (res.code === 0 && res.data) {
@@ -647,12 +660,23 @@ async function loadRecipe() {
         ...res.data,
         availableLifeStageVersions: res.data.availableLifeStageVersions || [],
       }
-      if (!selectedLifeStage.value && res.data.selectedLifeStage) {
+      if (!manualLifeStage.value && res.data.selectedLifeStage) {
         selectedLifeStage.value = res.data.selectedLifeStage
       }
       if (res.data.selectedRecipeId || res.data.id) {
         recipeId.value = res.data.selectedRecipeId || res.data.id
       }
+      trackFunnelEvent({
+        eventName: 'life_stage_bar_shown',
+        step: 'diy_page',
+        recipeId: recipeId.value,
+        dogId: selectedDogId.value,
+        properties: {
+          state: lifeStageState.value,
+          matchType: res.data.lifeStageMatch?.matchType || null,
+          riskLevel: res.data.lifeStageMatch?.riskLevel || 'NONE',
+        },
+      })
       console.log('[RecipeDiy] 食谱信息加载成功:', res.data)
     }
   } catch (error) {
@@ -711,7 +735,7 @@ async function loadDogs() {
        * **饭量计算和生命阶段检查就废了**。
        *
        * 这里改成：灌完列表**无条件**调一次 `selectDog(preferred)` ——
-       * 它除了选中，还要 `loadDogCalc` + `checkLifeStageMatch`。
+       * 它除了选中，还要重新加载菜谱 + `loadDogCalc`。
        */
       setDogs(res.data)
       console.log('[RecipeDiy] 狗狗列表加载成功, 数量:', res.data.length)
@@ -749,6 +773,8 @@ async function selectDog(dogId: string) {
   const dog = dogs.value.find(item => item.id === dogId)
   if (!dog) return
 
+  manualLifeStage.value = ''
+  acknowledgedForSheet.value = false
   selectDogState(dog.id)
   isCustomPackagePlan.value = false
   showPackageEditor.value = false
@@ -756,11 +782,14 @@ async function selectDog(dogId: string) {
   packagePlanDogId.value = null
   resetDiyLifeStageDependentState()
 
+  await loadRecipe()
   await loadDogCalc(dog.id)
-  void checkLifeStageMatch()
 }
 
+let dogCalcRequestSeq = 0
+
 async function loadDogCalc(dogId: string) {
+  const requestSeq = ++dogCalcRequestSeq
   console.log('========== [RecipeDiy] loadDogCalc 开始 ==========')
   console.log('[调用参数]', { dogId, recipeId: recipeId.value })
 
@@ -776,6 +805,9 @@ async function loadDogCalc(dogId: string) {
 
     console.log('[API响应]', res)
 
+    if (requestSeq !== dogCalcRequestSeq) {
+      return
+    }
     if (res.code === 0 && res.data) {
       dogCalcResult.value = res.data
       displayDailyIntakeG.value = res.data.dailyIntakeG
@@ -834,54 +866,18 @@ function resetDiyLifeStageDependentState() {
   packagePlanDogId.value = null
 }
 
-async function switchToRecommendedLifeStage() {
-  const option = recommendedLifeStageOption.value
-  if (!option?.lifeStage) return
+async function switchLifeStageVersion(lifeStage: string) {
+  if (!lifeStage || lifeStage === selectedLifeStage.value) return
 
-  selectedLifeStage.value = option.lifeStage
-  if (option.recipeId) {
-    recipeId.value = option.recipeId
-  }
-  showWarning.value = true
-  // 换了生命阶段版本＝换了一份判定依据，之前的「已知晓」不再适用，需要重新提醒
-  acknowledgedLifeStageDogIds.value = []
+  acknowledgedForSheet.value = false
+  manualLifeStage.value = lifeStage
+  selectedLifeStage.value = lifeStage
+  versionSheetVisible.value = false
   resetDiyLifeStageDependentState()
 
   await loadRecipe()
   if (selectedDogId.value) {
     await loadDogCalc(selectedDogId.value)
-  }
-  void checkLifeStageMatch()
-}
-
-/**
- * 卡片上点「我已知晓」= 完成本次确认。
- *
- * 2026-09-22：原来是「卡片确认一次 + 点生成制作单时再弹一次同义弹窗」，
- * 顾客会觉得"刚确认过又问一遍"，而且弹窗的取消键「再看看」正好是漏斗末端的放弃键。
- * 现在改为：卡片确认时**立即写留痕**（合规凭证不变），本次不再弹窗；
- * 换一只狗属于新的一只狗，会重新提醒。
- */
-async function dismissWarning() {
-  showWarning.value = false
-
-  const dogId = selectedDog.value?.id
-  if (!dogId || !isLifeStageMismatch(lifeStageVerdict.value?.matchType)) return
-  if (acknowledgedLifeStageDogIds.value.includes(dogId)) return
-
-  acknowledgedLifeStageDogIds.value = [...acknowledgedLifeStageDogIds.value, dogId]
-
-  try {
-    await recordLifeStageAcknowledgement({
-      recipeId: recipeId.value,
-      dogId,
-      verdict: lifeStageVerdict.value,
-      source: 'diy',
-    })
-  } catch (error) {
-    // 留痕失败不阻断顾客继续操作，但要把这只狗移出已确认集合，下次仍会提醒
-    console.error('[RecipeDiy] 记录生命阶段确认失败:', error)
-    acknowledgedLifeStageDogIds.value = acknowledgedLifeStageDogIds.value.filter((id) => id !== dogId)
   }
 }
 
@@ -1004,25 +1000,23 @@ async function generateSheet() {
     return
   }
 
-  // 生命阶段不匹配：卡片上已确认过的狗狗不再弹窗（留痕在卡片确认时已写入）；
-  // 没确认过（比如直接从生成按钮进入）才走一次弹窗确认，同样留痕作为凭证。
-  if (isLifeStageMismatch(lifeStageVerdict.value?.matchType)) {
-    const dogId = selectedDog.value?.id || selectedDogId.value || ''
-    const alreadyAcknowledged = Boolean(dogId && acknowledgedLifeStageDogIds.value.includes(dogId))
-
-    if (!alreadyAcknowledged) {
-      const confirmed = await confirmLifeStageMismatch({
-        recipeId: recipeId.value,
-        dogId,
-        verdict: lifeStageVerdict.value,
-        source: 'diy',
-        dogName: selectedDog.value?.name,
-      })
-      if (!confirmed) return
-      if (dogId) {
-        acknowledgedLifeStageDogIds.value = [...acknowledgedLifeStageDogIds.value, dogId]
-      }
+  // 2026-11-02：只有高风险（幼犬/繁殖期选错）才在生成前确认一次，并留痕。
+  if (lifeStageRisk.value === 'HIGH' && !acknowledgedForSheet.value) {
+    const confirmed = await confirmLifeStageMismatch({
+      recipeId: recipeId.value,
+      dogId: selectedDog.value?.id || selectedDogId.value || '',
+      verdict: recipe.value.lifeStageMatch || null,
+      source: 'diy',
+      dogName: selectedDog.value?.name,
+      dogAgeText: (selectedDog.value as any)?.ageText || '',
+      dogStage: dogLifeStage.value,
+      currentVersionLabel: selectedLifeStageLabel.value,
+    })
+    if (!confirmed) {
+      goSuitableRecipes()
+      return
     }
+    acknowledgedForSheet.value = true
   }
 
   void generateAndNavigateToSheet()
@@ -1048,6 +1042,7 @@ async function generateAndNavigateToSheet() {
     })
 
     uni.setStorageSync(HOME_RECIPE_STATS_DIRTY_KEY, '1')
+    acknowledgedForSheet.value = false
     navigateToSheet()
   } catch (error) {
     console.error('[RecipeDiy] Generate sheet error:', error)
@@ -1078,6 +1073,11 @@ function navigateToSheet() {
     packageCount: totalPackages.value,
     packageSpecG: getPrimaryPackageSpecG(normalizedPackagePlan.value),
     packagePlan: JSON.stringify(normalizedPackagePlan.value),
+    // 把「顾客点的是哪一档天数 / 是否自定义」一起带过去：
+    // 制作单本身不存天数，但这层选择要能在补剂下单页原样亮出来
+    ...(isCustomPackagePlan.value
+      ? { custom: '1' }
+      : { custom: '0', cycleDays: String(selectedCycleDays.value ?? '') }),
     ...(orderId.value ? { orderId: orderId.value } : {}),
     ...(shareToken.value ? { shareToken: shareToken.value } : {})
   }

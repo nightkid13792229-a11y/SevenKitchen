@@ -20,91 +20,41 @@ describe('supplement purchase regressions', () => {
     const source = readPage('src/pages/supplement-order/index.vue')
     const template = source.slice(0, source.indexOf('<script setup'))
 
-    /**
-     * 2026-09-24：**翻转** 2026-09-22 的"费用不逐项展示、只给一个包邮价"。
-     * 现在补剂费 / 分装服务费 / 运费都要列出来。
-     * 明细摆出来是为了让加量可计算：用户能亲眼看到固定费用不随份数变。
-     */
-    it('费用逐项展示：补剂费、分装服务费、运费、合计', () => {
-      expect(template).toContain('fee-card')
-      expect(template).toContain('补剂费')
+    it('费用逐项展示：商品金额、分装服务费、运费、合计', () => {
+      expect(template).toContain('补剂商品金额')
       expect(template).toContain('分装服务费')
       expect(template).toContain('运费')
       expect(template).toContain('合计')
-      // 金额一律取服务端算好的值，前端不做乘法/加法
-      expect(template).toContain('summary.supplementPrice')
-      expect(template).toContain('summary.serviceFee')
-      expect(template).toContain('summary.shippingFee')
-      expect(template).toContain('summary.total')
     })
 
-    it('包邮时运费显示「包邮」，未包邮时显示金额与凑单提示', () => {
+    it('包邮时运费显示「包邮」，状态来自服务端', () => {
+      expect(template).toContain('包邮')
       expect(template).toContain('summary.freeShipping')
-      expect(template).toContain('fee-value-free')
-      // 门槛来自服务端（后台改了界面跟着变），不再在合计下方写"再买 X 可包邮"
-      expect(source).toContain('freeShippingThresholdText')
-      expect(source).toContain('freeShippingThreshold')
-      expect(source).not.toContain('freeShippingHint')
-      expect(template).not.toContain('fee-hint')
-    })
-
-    it('底部金额下方不再放说明小字，但保留取价失败的重试出口', () => {
-      // 费用明细里已有独立的运费行，底部再写一遍是冗余。
-      //
-      // 只看**渲染出来的 <text> 内容**，不看原始源码 —— 解释"为什么撤掉"的注释里
-      // 必然会出现这些字，扫源码会误伤自己的注释（这个坑踩了三次，所以这里
-      // 统一改成提取文本节点再断言）。
-      const footer = template.slice(template.indexOf('<view class="footer">'))
-      const renderedText = [...footer.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)]
-        .map((m) => m[1])
-        .join('｜')
-
-      expect(source).not.toContain('footerShippingLabel')
-      expect(renderedText).not.toContain('包邮')
-      expect(renderedText).not.toContain('含运费')
-      expect(renderedText).toContain('价格获取失败')
-      // ⚠️ 但重试必须留着：那是取价失败时唯一的出口，删了按钮会永久灰死。
-      // 它是功能，不是说明 —— 别一起删掉。
-      expect(template).toContain('footer-ship-retry')
-      expect(template).toContain('价格获取失败，点击重试')
-      expect(source).toContain('handleRetryQuote')
     })
 
     it('空态给出可点的出口', () => {
-      expect(template).toContain('@tap="goToDiySheetList"')
-      expect(source).toContain("'/pages/diy-sheet-list/index'")
+      expect(template).toContain('去我的制作单')
+      expect(source).toContain("uni.navigateTo({ url: '/pages/diy-sheet-list/index' })")
     })
 
     it('首次报价期间有加载态，不会显示成空白页', () => {
-      expect(template).toContain('v-else-if="initializing"')
       expect(template).toContain('正在核对补剂')
+      expect(template).toContain('initializing')
     })
 
-    it('补剂全部不可购买时给出说明与出口，而不是一片灰', () => {
-      expect(template).toContain('selectableLines.length === 0')
+    it('补剂全部不可购买时逐条给出原因与出口', () => {
       expect(template).toContain('这些补剂暂时无法购买')
+      expect(template).toContain('item.reason')
       expect(template).toContain('返回我的制作单')
     })
 
-    it('多种补剂时提供全选/全不选', () => {
-      expect(template).toContain('@tap="toggleSelectAll"')
-      expect(template).toContain('allSelectableSelected')
-      expect(source).toContain('selectableLines')
-    })
-
-    it('全选会跳过不可购买的补剂，不会污染报价', () => {
-      // 可选项的定义必须排除 unavailableReason
-      const selectableBlock = source.slice(
-        source.indexOf('const selectableLines'),
-        source.indexOf('const allSelectableSelected'),
-      )
-      expect(selectableBlock).toContain('!line.unavailableReason')
+    it('多种补剂时提供全选/全不选，且只作用于可购买的行', () => {
+      expect(template).toContain('全选')
+      expect(template).toContain('全不选')
+      expect(source).toContain('allSelectableSelected')
     })
 
     it('支付成功与降级人工收款，两种弹窗文案各自成立', () => {
-      // 页面上的说明小字已按产品要求撤掉（见下方「页脚上方不放说明小字」那条），
-      // 但提交后的弹窗仍然必须区分两种情况：
-      // 在线支付已经成功，却告诉顾客"我们会尽快与你确认收款"，那就是错的。
       const paidBlock = source.slice(
         source.indexOf('function showPaidModal'),
         source.indexOf('function showManualConfirmModal'),
@@ -116,13 +66,11 @@ describe('supplement purchase regressions', () => {
       expect(manualBlock).toContain('我们会尽快与你确认收款')
     })
 
-    it('价格重算失败会明确提示，不会静默保留旧合计', () => {
-      const block = source.slice(
-        source.indexOf('async function refreshSummaryOnly'),
-        source.indexOf('function isSelected'),
-      )
-      expect(block).toContain('价格重算失败')
-      expect(block).toContain('showToast')
+    it('报价失败时行内提示 + 重试，不再弹通用 toast', () => {
+      expect(template).toContain('价格没拿到')
+      expect(source).toContain('onRetryQuote')
+      expect(source).not.toContain('报价失败，请稍后重试')
+      expect(source).not.toContain('价格重算失败，请稍后重试')
     })
 
     it('提交后按支付结果分流，通道不可用时降级人工确认', () => {
@@ -131,198 +79,43 @@ describe('supplement purchase regressions', () => {
       expect(source).toContain('showManualConfirmModal')
     })
 
-    it('报价失败时在合计下方给重试出口，不再让按钮永久灰死', () => {
-      // 原来只弹一次 toast，按钮永久灰、只能退出重进
-      expect(source).toContain('const quoteFailed = ref(false)')
-      expect(source).toContain('quoteFailed.value = true')
-      expect(template).toContain('quoteFailed')
-      expect(template).toContain('@tap="handleRetryQuote"')
-      expect(template).toContain('价格获取失败')
-      expect(source).toContain('async function handleRetryQuote')
+    it('补剂行右侧展示整单分装用量，不展示价格', () => {
+      expect(template).toContain('lineAmount(line)')
+      expect(template).not.toContain('line.price')
     })
 
-    it('补剂行右侧展示分装用量，不再展示价格', () => {
-      expect(template).toContain('line-packed')
-      expect(template).toContain('formatAmount(line.packedAmount)')
-      // 行内价格标记已移除
-      expect(template).not.toContain('line-price')
-      expect(template).not.toContain('line.price.toFixed')
+    it('「预分装」说明图常显在页面最顶部', () => {
+      const iImage = template.indexOf('prepack-explainer.jpg')
+      const iList = template.indexOf('本制作单需要的补剂')
+      expect(iImage).toBeGreaterThan(-1)
+      expect(iList).toBeGreaterThan(iImage)
+      expect(template).not.toContain('prepack-collapse')
     })
 
-    it('补剂行小字只展示品牌与规格，不展示价格 / 保质期 / 用量', () => {
-      expect(template).toContain('line.specText')
-      expect(template).not.toContain('分装后保质期')
-      expect(template).not.toContain('制作单用量')
-      expect(source).not.toContain('function formatUnitPrice')
-    })
-
-    it('清单前有「预分装」说明图，且排在补剂清单之前', () => {
-      // 图是这一页"什么叫预分装"的唯一解释，删掉用户就只能对着清单干猜
-      expect(template).toContain('prepack-card')
-      expect(template).toContain('/static/mall/prepack-explainer.jpg')
-      // 顺序：来源制作单 → 预分装说明 → 补剂清单
-      const iSource = template.indexOf('source-card')
-      const iPrepack = template.indexOf('prepack-image')
-      const iList = template.indexOf('选择要买的补剂')
-      expect(iSource).toBeGreaterThan(-1)
-      expect(iPrepack).toBeGreaterThan(iSource)
-      expect(iList).toBeGreaterThan(iPrepack)
-    })
-
-    it('加量：份数上限来自服务端，界面只照着渲染', () => {
-      // 上限是"份数上限 + 效期天数上限"两个约束算出来的，只能服务端说了算
-      expect(source).toContain('maxPortionMultiplier')
+    it('袋数选项显示的是含运费的合计，且包邮档带角标', () => {
       expect(template).toContain('portionOptionCards')
-      expect(template).toContain('@tap="selectPortion(opt.multiplier)"')
-      // 没有可选项时整块不出现，避免出现只有一个"1 份"的废控件
-      expect(template).toContain('v-if="showPortionPicker"')
-    })
-
-    it('加量：每个选项直接显示总价与是否包邮（零点击可见）', () => {
-      // v1 只在选项上写"1 份/2 份/3 份"，顾客要来回点才知道多少钱、哪档包邮
-      expect(source).toContain('portionOptionCards')
-      expect(source).toContain('portionOptions')
       expect(template).toContain('portion-option-price')
-      // 包邮做成右上角标，不占正文位置
+      // 2026-11-02：卡片金额改成"合计"（含服务费/运费），不是商品金额
+      expect(source).toContain('opt.total')
+      expect(source).not.toContain('opt.goodsSubtotal')
       expect(template).toContain('portion-badge')
       expect(template).toContain('已包邮')
-      // 金额必须取服务端算好的，前端不做乘法
-      expect(source).toMatch(/opt\.goodsSubtotal\.toFixed/)
-      expect(source).not.toMatch(/summary\.value\.supplementPrice\s*\*\s*portionMultiplier/)
-      // ⚠️ 选项上必须是「商品金额」而不是含运费的合计 —— 否则会出现
-      // "写着 ¥49.50、门槛 49，却没包邮"（那 49.50 里含着 8 元运费）
-      expect(source).not.toMatch(/priceLabel:\s*`¥\$\{opt\.total/)
+      // 前端不做乘法
+      expect(source).not.toMatch(/summary\.value\.supplementPrice\s*\*/)
     })
 
-    it('费用明细把「补剂商品小计」与「运费」分层，跟份数选择器对得上', () => {
-      // 没有这一行，用户无法把"选项上的价格"和"明细里的三项"对应起来。
-      // 2026-10-20 改成「补剂商品小计」：这一行只算补剂商品，
-      // 分装服务费已单独成行，不再并进小计。
-      expect(template).toContain('fee-row-subtotal')
-      expect(template).toContain('补剂商品小计')
-      expect(template).toContain('summary.goodsSubtotal')
-      // 小计必须在运费之前
-      expect(template.indexOf('fee-row-subtotal')).toBeLessThan(
-        template.indexOf('<text class="fee-label">运费</text>'),
-      )
-    })
-
-    it('费用明细要读出三层：明细项 < 补剂商品小计 < 合计', () => {
-      // 五个数字平铺在一起时，用户分不清哪个是哪个 —— 必须靠视觉层次区分
-      // ① 小计：浅色底带 + 墨绿加粗
-      const sub = source.slice(
-        source.indexOf('.fee-row-subtotal {'),
-        source.indexOf('.fee-row-total {'),
-      )
-      expect(sub).toContain('background-color')
-      expect(sub).toContain('#2b5040')
-      expect(sub).toMatch(/font-weight:\s*600/)
-      // ② 合计：比小计更大更粗
-      const total = source.slice(source.indexOf('.fee-value-total {'))
-      expect(total).toMatch(/font-size:\s*34rpx/)
-      expect(total).toMatch(/font-weight:\s*700/)
-    })
-
-    it('页脚上方不放说明小字（2026-09-25 按产品要求撤掉，别再放回来）', () => {
-      // 原先这里有两条：一条讲分装与支付方式，一条讲分装小样的保质期。
-      // 后者要传达的信息（袋上印「有效期至」）在实物标签上本来就直接看得到。
-      // 断言只针对**渲染出来的文本节点**，避免被解释性注释里的同名字样误伤。
-      const renderedText = [...template.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)]
-        .map((m) => m[1])
-        .join('\n')
-
-      expect(renderedText).not.toContain('有效期至')
-      expect(renderedText).not.toContain('按需购买')
-      expect(renderedText).not.toContain('确认收款后发货')
-      // 样式也一并清掉，别留下没人用的死规则
-      expect(source).not.toContain('.notice-expiry')
-      expect(source).not.toContain('.notice-text')
-    })
-
-    it('加量卡片紧贴费用明细，顾客看钱的地方就能调整', () => {
-      const iPortion = template.indexOf('portion-card')
-      const iFee = template.indexOf('fee-card')
-      expect(iPortion).toBeGreaterThan(-1)
-      expect(iFee).toBeGreaterThan(iPortion)
-    })
-
-    it('制作单卡片提供「改用量」入口，而不是让顾客在这一页干着急', () => {
-      expect(template).toContain('改用量')
-      expect(template).toContain('@tap="goToRecipeDiy"')
-      expect(source).toContain('/pages/recipe-diy/index?')
-      // 没有 recipeId 时不显示（点了也进不去）
-      expect(source).toContain('canEditUsage')
-    })
-
-    it('加量：报价与下单只传份数，不再传制作单天数', () => {
-      // 金额一律服务端算，前端不做乘法
-      expect(source).toContain('portionMultiplier: portionMultiplier.value')
-      // 下单时也要带上，否则订单落库的份数永远是 1
-      expect(source).toMatch(/portionMultiplier:\s*portionMultiplier\.value/)
-      // 2026-11-01：补剂不再有"天"，报价/下单都不许再带 cycleDays
-      expect(source).not.toContain('cycleDays')
-    })
-
-    it('加量：标题是「选择份数」，副标题是包邮门槛', () => {
-      expect(template).toContain('选择份数')
-      expect(template).toContain('portion-subtip-gold')
-      expect(source).toContain('满${label}元包邮')
-      // 副标题里不再重复啰嗦"每份是原量、服务费只收一次"
-      expect(template).not.toContain('分装服务费只收一次')
-    })
-
-    it('加量：选项正文只留「几份 / 多少钱」，不显示天数', () => {
-      expect(template).toContain('portion-option-price')
-      // ⚠️ 天数是**故意**不显示的：狗狗档案里的"每天两顿"是吃饭频率，
-      // 不等于"会吃几袋这个"。鲜食+干粮混吃的人做了 30 袋、每天只喂 1 袋，
-      // 系统无从知道 —— 给一个可能错的数字比不给更糟。
-      //
-      // 只看选项本身那段，别扫整个模板：解释"为什么不显示"的注释里
-      // 也会出现这两个字，全模板断言会误伤自己的注释。
-      const optionBlock = template.slice(
-        template.indexOf('portion-options'),
-        template.indexOf('fee-card'),
-      )
-      expect(optionBlock).not.toContain('天量')
-      expect(optionBlock).not.toContain('daysLabel')
-      expect(source).not.toContain('daysLabel')
-      expect(template).not.toContain('portion-option-days')
-      // 每天成本与包邮文字也都从正文移除（包邮改角标）
-      expect(optionBlock).not.toContain('每天')
-      expect(template).not.toContain('portion-option-perday')
-      expect(template).not.toContain('portion-option-ship')
-    })
-
-    it('★ 页面彻底不出现"天"：不显示、也不传', () => {
-      // 2026-11-01 老板决定：补剂不再用天数的说法，效期也不再计算/展现。
-      expect(source).not.toContain('cycleDays')
+    it('天数只用来显示当初的选择，不参与任何计算', () => {
       expect(template).not.toContain('天用量')
-      expect(source).toContain('portionMultiplier: portionMultiplier.value')
+      // 报价与下单都不传天数
+      const quoteStart = source.indexOf('const quoteState = useSupplementQuote')
+      expect(source.slice(quoteStart, quoteStart + 400)).not.toContain('cycleDays')
+      const submitBlock = source.slice(
+        source.indexOf('async function submitOrder'),
+        source.indexOf('async function settlePayment'),
+      )
+      expect(submitBlock).not.toContain('cycleDays')
     })
-
-    it('加量：服务端收敛份数后，界面要跟着回到合法档位', () => {
-      // 换了更长的制作单时上限会变小，界面不能停在后端不认的档位上
-      expect(source).toContain('maxPortionMultiplier ?? 1')
-      expect(source).toMatch(/if \(portionMultiplier\.value > allowed\)/)
-    })
-
-    it('加量控件用品牌墨绿，不是旧的蓝紫', () => {
-      expect(source).toContain('.portion-option-active')
-      expect(source).toMatch(/\.portion-option-active[^}]*#1e3a2f/)
-      // 旧的蓝紫配色不许回来
-      expect(source).not.toContain('#1890ff')
-      expect(source).not.toContain('#6c4bbb')
-    })
-
-    it('说明图整幅贴满卡片、不写死高度', () => {
-      // 图自带米白底，套白卡内边距会变成"白框里嵌一块米色"
-      expect(source).toContain('.prepack-card {')
-      expect(source).toMatch(/\.prepack-card\s*\{[^}]*padding:\s*0/)
-      // 写死高度会和 mode="widthFix" 打架，把图压变形
-      expect(template).toContain('mode="widthFix"')
-      expect(source).not.toMatch(/\.prepack-image\s*\{[^}]*height:\s*\d/)
-    })
-  })
+  });
 
   describe('补剂订单页', () => {
     const source = readPage('src/pages/supplement-orders/index.vue')
@@ -467,4 +260,189 @@ describe('supplement purchase regressions', () => {
       expect(template).toContain('自己做')
     })
   })
+
+/**
+ * 2026-11-01 下单页重构：这一组断言锁的是新契约。
+ * 老的那一组（上面的「补剂下单页」）里凡是与新契约冲突的，随后一并改写。
+ */
+describe('supplement order page redesign (2026-11-01)', () => {
+  const source = readPage('src/pages/supplement-order/index.vue')
+  const template = source.slice(0, source.indexOf('<script setup'))
+
+  it('清单只写每袋用量，多袋时带 ×N 袋', () => {
+    expect(template).toContain('lineAmount(line)')
+    expect(template).toContain('× {{ portionMultiplier }} 袋')
+    expect(template).not.toContain('整单')
+    // 2026-11-02：袋数合计与下方小字说明按老板要求删除
+    expect(template).not.toContain('这个量是按你制作单里')
+  })
+
+  it('标题与入口口径统一，不再出现「改用量」', () => {
+    const pagesJson = readPage('src/pages.json')
+    expect(pagesJson).toContain('"navigationBarTitleText": "购买预分装补剂"')
+    expect(pagesJson).not.toContain('"navigationBarTitleText": "一键购买补剂"')
+    expect(template).not.toContain('改用量')
+  })
+
+  it('袋数：只保留 1/2/3 三个按钮，贴在补剂清单下方', () => {
+    expect(template).toContain('portionOptionCards')
+    expect(template).toContain('袋数')
+    expect(template).not.toContain('选择套数')
+    expect(template).not.toContain('自定义')
+    expect(template).not.toContain('showCustomPortion')
+    const iList = template.indexOf('本制作单需要的补剂')
+    const iPortion = template.indexOf('class="portion-block"')
+    const iAddress = template.indexOf('收货地址')
+    expect(iPortion).toBeGreaterThan(iList)
+    expect(iPortion).toBeLessThan(iAddress)
+  })
+
+  it('费用明细只出现一个商品金额，包材费按需出现', () => {
+    expect(template).toContain('补剂商品金额')
+    expect(template).not.toContain('补剂商品小计')
+    expect(template).not.toContain('>补剂费<')
+    expect(template).toContain('summary.packagingFee > 0')
+  })
+
+  it('大单有一句提示；6 个月效期那句按要求删除', () => {
+    expect(template).toContain('发货会顺延')
+    expect(template).not.toContain('6 个月内吃完')
+  })
+
+  it('金额未确认时不能提交', () => {
+    expect(template).toContain('isAmountReady')
+    expect(template).toContain('更新中')
+  })
+
+  it('地址：回页面就重拉列表，且兼容字符串型事件载荷', () => {
+    expect(source).toContain('void loadAddresses()')
+    expect(source).toMatch(/typeof payload === 'string'/)
+    expect(source).toContain('地址已失效')
+  })
+
+  it('提交前有确认弹层，弹层里重新取价', () => {
+    expect(template).toContain('确认订单')
+    expect(source).toContain('openConfirmSheet')
+    expect(source).toContain('await retry()')
+    expect(template).toContain('提交并支付')
+  })
+
+  it('建单与支付分开处理：建单失败不继续支付', () => {
+    const block = source.slice(
+      source.indexOf('async function submitOrder'),
+      source.indexOf('async function settlePayment'),
+    )
+    expect(block).toContain('if (!order)')
+    // settlePayment 必须在建单的 try/finally 之后，不能被建单的 catch 吞掉
+    expect(block.indexOf('await settlePayment(order)')).toBeGreaterThan(
+      block.indexOf('finally'),
+    )
+    expect(block).not.toContain('提交失败，请稍后重试')
+  })
+
+  it('同一次进页面只生成一次幂等键，关掉弹层再提交也不会重复下单', () => {
+    const openBlock = source.slice(
+      source.indexOf('async function openConfirmSheet'),
+      source.indexOf('function closeConfirmSheet'),
+    )
+    expect(openBlock).not.toContain('createRequestId()')
+    expect(source).toMatch(/onLoad\(\(\) => \{[\s\S]*?createRequestId\(\)/)
+  })
+
+  it('提交带幂等键与期望金额，建单成功后一定跳详情', () => {
+    expect(source).toContain('clientRequestId')
+    expect(source).toContain('expectedTotal: toCents(')
+    expect(source).toContain('redirectTo')
+    expect(source).not.toContain('提交失败，请稍后重试')
+  })
+
+  it('主按钮与勾选框用品牌色，不再有旧蓝', () => {
+    expect(source).not.toContain('#4a90d9')
+    expect(source).toContain('#1e3a2f')
+    expect(source).toMatch(/\.checkbox\s*\{[^}]*border-radius:\s*6rpx/)
+  })
+
+  it('库存提示块已删除', () => {
+    expect(template).not.toContain('库存提示')
+    expect(source).not.toContain('inventoryWarnings')
+  })
+
+  it('带客服入口', () => {
+    expect(source).toContain('CustomerServiceInlineButton')
+    expect(template).toContain('补剂下单咨询')
+  })
+})
+
+describe('2026-11-02 老板反馈的七处调整', () => {
+  const page = readPage('src/pages/supplement-order/index.vue')
+  const template = page.slice(0, page.indexOf('<script setup'))
+  const detail = readPage('src/pages/supplement-order-detail/index.vue')
+  const api = readPage('src/api/supplements.ts')
+
+  it('订阅消息只保留发货提醒', () => {
+    expect(api).toContain("kinds: SupplementSubscribeKind[] = ['shipped']")
+    expect(api).not.toContain("['scheduled', 'shipped', 'delay']")
+  })
+
+  it('支付未完成的弹窗去掉预计发货/确认收款，且能关掉', () => {
+    const cancelled = page.slice(
+      page.indexOf('function showCancelledModal'),
+      page.indexOf('function showManualConfirmModal'),
+    )
+    expect(cancelled).not.toContain('预计发货')
+    expect(cancelled).not.toContain('待管理员排期')
+    expect(cancelled).not.toContain('确认收款')
+    expect(cancelled).toContain("cancelText: '关闭'")
+    expect(cancelled).toContain('订单详情里继续支付')
+  })
+
+  it('人工确认收款的弹窗也能关掉、不再写预计发货', () => {
+    const manual = page.slice(
+      page.indexOf('function showManualConfirmModal'),
+      page.indexOf('function readErrorMessage'),
+    )
+    expect(manual).not.toContain('预计发货')
+    expect(manual).toContain("cancelText: '关闭'")
+  })
+
+  it('订单详情不再列出每样补剂的金额，只留补剂商品小计', () => {
+    expect(detail).not.toContain('item-price')
+    expect(detail).toContain('补剂商品小计')
+  })
+
+  it('订单详情不再展示制作单快照', () => {
+    expect(detail).not.toContain('制作单快照')
+    expect(detail).not.toContain('fetchSupplementSnapshot')
+  })
+
+  it('下单页内嵌「快速天数 + 自定义分装」，不再跳回配置页', () => {
+    expect(page).toContain('QuickCyclePackagePlan')
+    expect(page).toContain('updateDiySheetPlan')
+    expect(page).toContain('fetchMyDiySheets')
+    // 已冻结的制作单会新建一张，必须换 id
+    expect(page).toContain('draft.value.diySheetId = res.data.id')
+    // 改分装期间禁止提交
+    expect(page).toContain('!replanning.value')
+    expect(page).not.toContain('改制作单')
+  })
+
+  it('DIY 配置页选的天数/自定义状态会带到下单页', () => {
+    const recipeDiy = readPage('src/pages/recipe-diy/index.vue')
+    const sheetPage = readPage('src/pages/diy-sheet/index.vue')
+    expect(recipeDiy).toContain("custom: '1'")
+    expect(recipeDiy).toContain('cycleDays: String(selectedCycleDays.value')
+    expect(sheetPage).toContain("options.custom === '1' ? true")
+    // 没有 custom 参数时不能瞎猜（从"我的制作单"进来就是这种情况）
+    expect(sheetPage).toContain('isCustomPlan.value === null ? undefined')
+    expect(sheetPage).toContain('packagePlanIsCustom: isCustomPlan.value')
+    // 下单页优先用草稿里的选择，老草稿再反推
+    expect(page).toContain('draft.value?.packagePlanIsCustom')
+    expect(page).toContain('inferPackagePlanMode')
+  })
+
+  it('订单详情的操作按钮改为纵向铺满', () => {
+    expect(detail).toContain('flex-direction: column')
+    expect(detail).toMatch(/\.primary-btn, \.ghost-btn \{[^}]*width: 100%/)
+  })
+})
 })

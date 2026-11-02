@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { globSync } from 'node:fs'
 import { resolve } from 'node:path'
+import ts from 'typescript'
 
 /**
  * 模板里调用的东西，脚本里必须存在（2026-10-04）。
@@ -96,9 +97,114 @@ function calledInTemplate(source: string): string[] {
   return [...found].sort()
 }
 
+/**
+ * 只取 `<script>` 块。
+ *
+ * 以前返回的是 `</template>` 之后的全部内容（连 `<style>` 一起），
+ * 对纯正则够用；现在要用 TypeScript 解析器判断"顶层定义"，
+ * 把样式块喂给解析器既慢（整条测试 3s → 13s，直接超时）又不准。
+ */
 function scriptOf(source: string): string {
+  const blocks = [...source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)]
+  if (blocks.length > 0) {
+    return blocks.map((block) => block[1]).join('\n')
+  }
+
   const match = source.match(/<template>[\s\S]*<\/template>/)
   return match ? source.slice(match[0].length) : source
+}
+
+/**
+ * `<script setup>` 的**顶层绑定**（只有这些对模板可见）。
+ *
+ * ## 为什么需要（2026-11-02 真 bug）
+ *
+ * 生命阶段那轮把 `recipeVersionLabel()` **误粘贴进了 `orderCenterTitle`
+ * computed 的函数体里**（连缩进都乱了）。模板里 `v-if="recipeVersionLabel(item)"`
+ * 一求值就抛 `recipeVersionLabel is not a function`，
+ * **整页重渲染失败** —— 顾客点进「鲜食订单详情」看到的就是**一片空白**，
+ * console 里一条错都没有（生产包不打印渲染异常）。
+ *
+ * 旧守卫只查"脚本里出现过 `function recipeVersionLabel`"，所以照样通过。
+ *
+ * ## 为什么用 TypeScript 语法树，而不是数花括号
+ *
+ * 先试过逐字符数 `{}` —— 被正则字面量里的引号带偏
+ * （`/['"“”]/` 里既有单引号又有双引号），算出两个假的"嵌套函数"。
+ * 项目本来就带 `typescript`，直接用它的解析器，只认**顶层语句**，
+ * 不用自己猜字符串/正则/注释的边界。
+ */
+function topLevelBindings(script: string): Set<string> {
+  const names = new Set<string>()
+
+  let sourceFile: ts.SourceFile
+  try {
+    sourceFile = ts.createSourceFile(
+      'script.ts',
+      script,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    )
+  } catch {
+    // 解析不了就当作"什么也没定义"，让守卫报出来，而不是静默放过
+    return names
+  }
+
+  const collectBindingName = (node: ts.BindingName) => {
+    if (ts.isIdentifier(node)) {
+      names.add(node.text)
+      return
+    }
+    for (const element of node.elements) {
+      if (ts.isBindingElement(element)) {
+        collectBindingName(element.name)
+      }
+    }
+  }
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name) {
+      names.add(statement.name.text)
+      continue
+    }
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        collectBindingName(declaration.name)
+      }
+      continue
+    }
+    if (
+      (ts.isClassDeclaration(statement) ||
+        ts.isInterfaceDeclaration(statement) ||
+        ts.isEnumDeclaration(statement) ||
+        ts.isTypeAliasDeclaration(statement)) &&
+      statement.name
+    ) {
+      names.add(statement.name.text)
+      continue
+    }
+    if (ts.isImportDeclaration(statement)) {
+      const clause = statement.importClause
+      if (!clause) {
+        continue
+      }
+      if (clause.name) {
+        names.add(clause.name.text)
+      }
+      const bindings = clause.namedBindings
+      if (bindings && ts.isNamespaceImport(bindings)) {
+        names.add(bindings.name.text)
+      }
+      if (bindings && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          names.add(element.name.text)
+        }
+      }
+    }
+  }
+
+  return names
 }
 
 /**
@@ -107,17 +213,21 @@ function scriptOf(source: string): string {
  * ⚠️ 判据必须比"出现过"严：`attachmentList` 被删掉之后，
  * 脚本里还剩 `attachments: attachmentList(record)` 这一句**调用** ——
  * 只查"出现过"会放过它，而它恰恰就是崩的那个。
- * 所以这里只认四种"定义"：
- *   · `function NAME`
- *   · `const|let|var NAME`
- *   · import 进来的 `NAME`
+ *
+ * 认这几种"定义"：
+ *   · `<script setup>` 的顶层 `function NAME` / `const|let|var NAME` / import / interface
  *   · 解构/简写位置上的 `NAME,` `NAME }`（比如 `defineExpose({ addRecord })`）
  *     以及 props 成员 `NAME?:`
+ *
+ * 前一组必须是**顶层**：写在别的函数体里对模板不可见，调用时同样会抛错整页空白。
  */
 function isDefinedInScript(script: string, name: string): boolean {
+  if (topLevelBindings(script).has(name)) {
+    return true
+  }
+
+  // 解构 / props 简写：这些本来就写在顶层对象里（深度 1），只能宽松认
   const patterns = [
-    new RegExp(`\\bfunction\\s+${name}\\b`),
-    new RegExp(`\\b(?:const|let|var)\\s+${name}\\b`),
     new RegExp(`\\b${name}\\s*[,}]`),
     new RegExp(`\\b${name}\\s*[?:]\\s*[^,;)]*[,;}]`),
   ]
@@ -158,7 +268,9 @@ describe('模板绑定的完整性（2026-10-04 老板报的"点了没反应"）
     }
 
     expect(problems).toEqual([])
-  })
+    // 全量并行跑时 CPU 抢不过来：单跑约 1.3s，185 个测试文件一起跑会被拖到 14s。
+    // 给足超时，别让"机器忙"被误读成"模板坏了"。
+  }, 30000)
 
   /**
    * 模板里**直接引用的变量**，脚本里也必须存在（2026-10-17 新增）。
@@ -207,7 +319,9 @@ describe('模板绑定的完整性（2026-10-04 老板报的"点了没反应"）
     }
 
     expect(problems).toEqual([])
-  })
+    // 全量并行跑时 CPU 抢不过来：单跑约 1.3s，185 个测试文件一起跑会被拖到 14s。
+    // 给足超时，别让"机器忙"被误读成"模板坏了"。
+  }, 30000)
 
   /**
    * 组件 props 的名字。

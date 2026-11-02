@@ -237,6 +237,7 @@ model User {
   feedbackReplies         FeedbackReply[]
   wechatIdentities        UserWechatIdentity[]
   supplementOrders        SupplementOrder[]
+  procurementSkusCreated  ProcurementSku[]     @relation("ProcurementSkuCreator")
 
   @@index([wechatOpenid])
   @@index([phone])
@@ -1176,15 +1177,34 @@ model ProcurementSku {
   safetyStock                   Float?                    @map("safety_stock")
   reorderPoint                  Float?                    @map("reorder_point")
   targetStock                   Float?                    @map("target_stock")
+  createdById                   String?                   @map("created_by_id") @db.VarChar(36)
+  createdSource                 String?                   @map("created_source") @db.VarChar(20)
+  sourceScreenshotUrl           String?                   @map("source_screenshot_url") @db.VarChar(500)
   createdAt                     DateTime                  @default(now()) @map("created_at")
   updatedAt                     DateTime                  @default(now()) @updatedAt @map("updated_at")
 
   ingredient   Ingredient                   @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  createdBy    User?                        @relation("ProcurementSkuCreator", fields: [createdById], references: [id], onDelete: SetNull)
   priceHistory ProcurementSkuPriceHistory[]
 
   @@index([ingredientId])
   @@index([isActive])
+  @@index([createdSource, createdAt])
   @@map("procurement_sku")
+}
+
+/// 员工「从截图识别采购商品」的用量计数（每人每天一行）
+model ProcurementSkuDraftUsage {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  userId    String   @map("user_id") @db.VarChar(36)
+  usedOn    DateTime @map("used_on") @db.Date
+  count     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([userId, usedOn])
+  @@index([usedOn])
+  @@map("procurement_sku_draft_usage")
 }
 
 model ProcurementSkuPriceHistory {
@@ -4488,6 +4508,8 @@ model SupplementShopConfig {
   /// 一次购买覆盖的总天数上限。效期安全红线：粉剂分装效期 6 个月 = 180 天，
   /// 默认 90 天正好用一半，留足余量。
   maxTotalDays              Int                          @default(90) @map("max_total_days")
+  /// 单笔分装袋数超过这个值，下单页提示"发货会顺延"（只提示，不拦单、不改排期）
+  bulkBagThreshold          Int                          @default(60) @map("bulk_bag_threshold")
 
   // ---- 支付超时（2026-09-24 与鲜食解耦）----
   /// 补剂订单的支付超时（分钟）。**与鲜食订单各自独立**：
@@ -4928,6 +4950,9 @@ model SupplementOrder {
   id                        String                @id @default(uuid()) @map("id")
   orderNo                   String                @unique @map("order_no") @db.VarChar(32)
   userId                    String                @map("user_id")
+  /// 小程序一次提交流程生成的幂等键：重试复用同一个值，防止重复建单。
+  /// 同一张制作单以后还想再买是正常复购，所以不按内容判重。
+  clientRequestId           String?               @map("client_request_id") @db.VarChar(64)
   status                    SupplementOrderStatus @default(PENDING_PAYMENT) @map("status")
   bagCount                  Int                   @map("bag_count")
 
@@ -5020,7 +5045,9 @@ model SupplementOrder {
   @@index([packingDate, status])
   @@index([reorderFromOrderNo])
   @@map("supplement_order")
+  @@unique([userId, clientRequestId])
 }
+
 
 /// 补剂订单行：一个补剂 = 一袋（按品种分装）
 /// 同时承载分装结果（批号、原瓶到期日、分装后效期、分装时间）

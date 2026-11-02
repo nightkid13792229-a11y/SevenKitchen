@@ -26,6 +26,8 @@ function config(
     roundUpUsage: true,
     maxPortionMultiplier: 3,
     maxTotalDays: 90,
+    bulkBagThreshold: 60,
+    paymentTimeoutMinutes: 30,
     shippingMode: 'FLAT_RATE',
     flatShippingFee: 8,
     shippingTemplateId: null,
@@ -158,9 +160,19 @@ describe('SupplementOrderService', () => {
     );
     mockPrismaService.supplementOrder.findFirst.mockImplementation(
       async ({ where }: any) => {
-        const found = createdOrders.find(
-          (row) => row.id === where.id && row.userId === where.userId,
-        );
+        const found = createdOrders.find((row) => {
+          if (where.id !== undefined && row.id !== where.id) return false;
+          if (where.userId !== undefined && row.userId !== where.userId) {
+            return false;
+          }
+          if (
+            where.clientRequestId !== undefined &&
+            row.clientRequestId !== where.clientRequestId
+          ) {
+            return false;
+          }
+          return true;
+        });
         return found ?? null;
       },
     );
@@ -224,14 +236,18 @@ describe('SupplementOrderService', () => {
       expect(result.quote.maxPortionMultiplier).toBe(3);
     });
 
-    it('加量：份数超过配置上限时直接拒绝', async () => {
+    it('加量：不再有产品上限，5 套照算，100 套才拒绝', async () => {
+      const five = await service.quote({
+        lines: [{ ingredientId: KELP_ID, amount: 22.7 }],
+        portionMultiplier: 5,
+      });
+      expect(five.quote.portionMultiplier).toBe(5);
       await expect(
         service.quote({
           lines: [{ ingredientId: KELP_ID, amount: 22.7 }],
-          portionMultiplier: 5,
-          cycleDays: 7,
+          portionMultiplier: 100,
         }),
-      ).rejects.toThrow(/最多 3 份/);
+      ).rejects.toThrow(/1~99/);
     });
 
     it('加量：份数必须是正整数，0 和负数直接拒绝', async () => {
@@ -242,8 +258,32 @@ describe('SupplementOrderService', () => {
             portionMultiplier: bad,
             cycleDays: 30,
           }),
-        ).rejects.toThrow(/不小于 1 的整数/);
+        ).rejects.toThrow(/1~99 的整数/);
       }
+    });
+
+    it('全部补剂都不可买时，返回零值报价而不是报错', async () => {
+      const result = await service.quote({
+        lines: [{ ingredientId: OFFLINE_ID, amount: 5 }],
+      });
+
+      expect(result.quote.lines).toEqual([]);
+      expect(result.quote.bagCount).toBe(0);
+      expect(result.quote.total).toBe(0);
+      expect(result.quote.portionOptions).toEqual([]);
+      // 老客户端靠这个数字渲染三张卡
+      expect(result.quote.maxPortionMultiplier).toBe(3);
+      expect(result.unavailable).toHaveLength(1);
+    });
+
+    it('报价响应带上最低起送、支付超时、大单提示袋数', async () => {
+      const result = await service.quote({
+        lines: [{ ingredientId: KELP_ID, amount: 22.7 }],
+      });
+
+      expect(result.minOrderAmount).toBe(0);
+      expect(result.paymentTimeoutMinutes).toBe(30);
+      expect(result.bulkBagThreshold).toBe(60);
     });
 
     it('未上架的补剂进入 unavailable，但其余仍可报价', async () => {
@@ -283,10 +323,12 @@ describe('SupplementOrderService', () => {
       expect(result.quote.lines[0].packedAmount).toBe(23);
     });
 
-    it('完全没有可买补剂时直接拒绝', async () => {
-      await expect(
-        service.quote({ lines: [{ ingredientId: OFFLINE_ID, amount: 5 }] }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+    it('完全没有可买补剂时报价不报错（建单仍然拒绝，见下单用例）', async () => {
+      const result = await service.quote({
+        lines: [{ ingredientId: OFFLINE_ID, amount: 5 }],
+      });
+      expect(result.quote.total).toBe(0);
+      expect(result.unavailable).toHaveLength(1);
     });
 
     it('用量不合法时拒绝', async () => {
@@ -431,6 +473,28 @@ describe('SupplementOrderService', () => {
         service.createOrder('user-1', baseRequest),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(createdOrders).toHaveLength(0);
+    });
+
+    it('期望金额不一致时拒绝建单', async () => {
+      await expect(
+        service.createOrder('user-1', { ...baseRequest, expectedTotal: 1 }),
+      ).rejects.toThrow(/价格已更新/);
+    });
+
+    it('同一个 clientRequestId 重复提交只产生一笔订单', async () => {
+      const req = { ...baseRequest, clientRequestId: 'req-abc' };
+      const first = await service.createOrder('user-1', req);
+      const second = await service.createOrder('user-1', req);
+      expect(second.id).toBe(first.id);
+      expect(createdOrders).toHaveLength(1);
+    });
+
+    it('份数上限放到 99：100 套拒绝，5 套可以下单', async () => {
+      await expect(
+        service.createOrder('user-1', { ...baseRequest, portionMultiplier: 100 }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await service.createOrder('user-1', { ...baseRequest, portionMultiplier: 5 });
+      expect(createdOrders[0].portionMultiplier).toBe(5);
     });
 
     it('清单里有不可购买补剂时拒绝下单并说明原因', async () => {

@@ -357,4 +357,20 @@ describe('order detail runtime regressions', () => {
     expect(source).not.toContain('品牌 {{')
     expect(source).not.toContain('规格 {{')
   })
+
+  it('shows the life-stage version frozen in the order snapshot', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+    expect(source).toContain('series_life_stage_label')
+  })
+
+  it('carries the previous version into the repurchase route', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+    expect(source).toContain('previousLifeStage')
+  })
 })

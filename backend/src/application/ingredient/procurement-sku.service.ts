@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { BaseUnit, IngredientType } from '../../domain/ingredient/enums';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { composePackSpec } from '../purchasing/procurement-sku-net-content';
 
 type DecimalLike = {
   toNumber: () => number;
@@ -73,6 +74,11 @@ export interface ProcurementSkuSummary {
   safetyStock: number | null;
   reorderPoint: number | null;
   targetStock: number | null;
+  /** 谁加的（后台原料页给员工新增的卡片标一行小字用） */
+  createdById?: string | null;
+  createdSource?: string | null;
+  createdByName?: string | null;
+  createdAt?: string | null;
 }
 
 export interface ProcurementSkuPriceHistoryView {
@@ -88,6 +94,27 @@ export interface ProcurementSkuPriceHistoryView {
   operatorId: string | null;
   note: string | null;
   createdAt: string;
+}
+
+/** 后台「员工新增的采购商品」清单的一行 */
+export interface StaffCreatedProcurementSkuView {
+  id: string;
+  ingredientId: string;
+  ingredientName: string | null;
+  baseUnit: string | null;
+  name: string;
+  brand: string | null;
+  productModel: string | null;
+  purchaseChannel: string | null;
+  purchaseUnit: string | null;
+  purchaseToBaseRatio: number | null;
+  currentPurchasePrice: number | null;
+  isActive: boolean;
+  createdById: string | null;
+  createdByName: string | null;
+  createdSource: string | null;
+  createdAt: string;
+  sourceScreenshotUrl: string | null;
 }
 
 export interface CreateProcurementSkuDto {
@@ -152,6 +179,13 @@ const PROCUREMENT_UNIT_ALIASES: Record<string, string> = {
   litre: 'L',
   litres: 'L',
   升: 'L',
+};
+
+/** 净含量没给单位时，按原料基准单位兜底的写法（拼 productModel 用） */
+const DEFAULT_NET_CONTENT_UNIT_TEXT: Record<BaseUnit, string> = {
+  [BaseUnit.G]: 'g',
+  [BaseUnit.ML]: 'ml',
+  [BaseUnit.PCS]: '个',
 };
 
 const ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT: Record<BaseUnit, string[]> = {
@@ -248,6 +282,10 @@ const toSummary = (sku: ProcurementSkuRecord): ProcurementSkuSummary => ({
   safetyStock: sku.safetyStock ?? null,
   reorderPoint: sku.reorderPoint ?? null,
   targetStock: sku.targetStock ?? null,
+  createdById: (sku as any).createdById ?? null,
+  createdSource: (sku as any).createdSource ?? null,
+  createdByName: (sku as any).createdBy?.nickname ?? null,
+  createdAt: sku.createdAt ? sku.createdAt.toISOString() : null,
 });
 
 const toPriceHistoryView = (
@@ -506,11 +544,187 @@ export class ProcurementSkuService {
     return toSummary(created as ProcurementSkuRecord);
   }
 
+  /**
+   * 小程序「新增采购商品」页要用的选项：这道原料的基准单位 + 这个基准单位下允许的采购单位。
+   *
+   * 为什么不把白名单抄一份到前端：前台抄一份就必然和后台漂移，
+   * 员工就会看到"选了却被服务端拒掉"的死路（2026-11-01 定的单一事实来源）。
+   */
+  async getFormOptions(ingredientId: string): Promise<{
+    baseUnit: BaseUnit;
+    purchaseUnits: string[];
+  }> {
+    const ingredient = await this.prisma.ingredient.findUnique({
+      where: { id: ingredientId },
+      select: { id: true, type: true, baseUnit: true },
+    });
+    this.assertFoodIngredientCanOwnProcurementSkus(ingredient);
+
+    const baseUnit = ingredient!.baseUnit as BaseUnit;
+
+    return {
+      baseUnit,
+      purchaseUnits: [...ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT[baseUnit]],
+    };
+  }
+
+  /**
+   * 员工在小程序里新增采购商品（2026-11-01）。
+   *
+   * 与后台 `create()` 的区别，都是老板定过的规矩：
+   *   1. 换算 = 件数 × 每件净含量 —— **服务端算**，不信前端乘好的数（只填单件规格会让账目差 N 倍）；
+   *   2. 同一原料下同名商品不重复建，直接返回既有那条，让员工选它；
+   *   3. 记录是谁加的、从哪来（`STAFF_APP`）、当时传的截图。
+   */
+  async createFromStaff(input: {
+    ingredientId: string;
+    createdById: string;
+    name: string;
+    purchaseChannel: string;
+    purchaseUnit: string;
+    packCount: number;
+    netContentPerPack: number;
+    netContentUnitText?: string | null;
+    currentPurchasePrice?: number | null;
+    brand?: string | null;
+    productModel?: string | null;
+    sourceScreenshotUrl?: string | null;
+  }): Promise<{
+    status: 'created' | 'duplicate';
+    sku: ProcurementSkuSummary;
+  }> {
+    const ingredient = await this.prisma.ingredient.findUnique({
+      where: { id: input.ingredientId },
+      select: { id: true, type: true, baseUnit: true },
+    });
+    this.assertFoodIngredientCanOwnProcurementSkus(ingredient);
+
+    const baseUnit = ingredient!.baseUnit as BaseUnit;
+    const name = input.name?.trim();
+    if (!name) {
+      throw new BadRequestException('商品名称不能为空');
+    }
+
+    if (!Number.isInteger(input.packCount) || input.packCount <= 0) {
+      throw new BadRequestException('一箱/一袋件数必须是正整数');
+    }
+
+    if (
+      !Number.isFinite(input.netContentPerPack) ||
+      input.netContentPerPack <= 0
+    ) {
+      throw new BadRequestException('净含量必须大于 0');
+    }
+
+    const purchaseUnit = normalizeOptionalPurchaseUnit(
+      input.purchaseUnit,
+      baseUnit,
+    );
+    if (!purchaseUnit) {
+      throw new BadRequestException('采购单位不能为空');
+    }
+
+    const existing = await this.prisma.procurementSku.findFirst({
+      where: {
+        ingredientId: input.ingredientId,
+        isActive: true,
+        name: { equals: name, mode: 'insensitive' },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (existing) {
+      return {
+        status: 'duplicate',
+        sku: toSummary(existing as ProcurementSkuRecord),
+      };
+    }
+
+    const currentPurchasePrice =
+      input.currentPurchasePrice === undefined ||
+      input.currentPurchasePrice === null
+        ? null
+        : this.roundPrice(input.currentPurchasePrice);
+
+    if (currentPurchasePrice !== null) {
+      this.assertValidPrice(currentPurchasePrice);
+    }
+
+    const purchaseToBaseRatio = input.packCount * input.netContentPerPack;
+    const productModel =
+      normalizeOptionalText(input.productModel) ??
+      composePackSpec({
+        packCount: input.packCount,
+        value: input.netContentPerPack,
+        unit:
+          normalizeOptionalText(input.netContentUnitText) ??
+          DEFAULT_NET_CONTENT_UNIT_TEXT[baseUnit] ??
+          String(baseUnit).toLowerCase(),
+      });
+
+    const data = {
+      ingredientId: input.ingredientId,
+      name,
+      brand: normalizeOptionalText(input.brand) ?? null,
+      productModel,
+      purchaseChannel: normalizeOptionalText(input.purchaseChannel) ?? null,
+      supplierName: null,
+      purchaseUnit,
+      purchaseToBaseRatio,
+      currentPurchasePrice,
+      referencePurchasePrice: null,
+      referencePricePerPurchaseUnit: null,
+      notes: null,
+      isDefault: false,
+      isActive: true,
+      sortOrder: 0,
+      safetyStock: null,
+      reorderPoint: null,
+      targetStock: null,
+      createdById: input.createdById,
+      createdSource: 'STAFF_APP',
+      sourceScreenshotUrl: normalizeOptionalText(input.sourceScreenshotUrl) ?? null,
+    };
+
+    const runCreate = async (tx: PrismaService) => {
+      const created = await tx.procurementSku.create({ data });
+
+      if (currentPurchasePrice !== null) {
+        await tx.procurementSkuPriceHistory.create({
+          data: this.buildPriceHistoryData({
+            procurementSkuId: created.id,
+            ingredientId: input.ingredientId,
+            oldPrice: null,
+            newPrice: currentPurchasePrice,
+            options: {
+              source: 'MANUAL',
+              operatorId: input.createdById,
+              note: '员工在小程序新增采购商品时填的单价',
+            },
+          }),
+        });
+      }
+
+      return created;
+    };
+
+    const created =
+      currentPurchasePrice === null
+        ? await runCreate(this.prisma)
+        : await this.prisma.$transaction(runCreate as any);
+
+    return {
+      status: 'created',
+      sku: toSummary(created as ProcurementSkuRecord),
+    };
+  }
+
   async findByIngredientId(
     ingredientId: string,
   ): Promise<ProcurementSkuSummary[]> {
     const skus = await this.prisma.procurementSku.findMany({
       where: { ingredientId },
+      include: { createdBy: { select: { nickname: true } } },
       orderBy: [{ createdAt: 'asc' }],
     });
 
@@ -797,6 +1011,92 @@ export class ProcurementSkuService {
     await this.prisma.procurementSku.delete({
       where: { id },
     });
+  }
+
+  /**
+   * 后台「原料管理 › 员工新增的采购商品」清单（2026-11-01）。
+   *
+   * `createdSource` 固定写死 `STAFF_APP`，不接受前端传 —— 否则前台传个空就把全部
+   * 历史 SKU 都算成"员工新增"了。
+   */
+  async listStaffCreated(query: {
+    ingredientId?: string;
+    createdById?: string;
+    createdFrom?: string;
+    createdTo?: string;
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ items: StaffCreatedProcurementSkuView[]; total: number }> {
+    const page = Math.max(1, Math.trunc(query.page ?? 1));
+    const pageSize = Math.min(200, Math.max(1, Math.trunc(query.pageSize ?? 20)));
+
+    const where: Record<string, unknown> = { createdSource: 'STAFF_APP' };
+
+    if (query.ingredientId) {
+      where.ingredientId = query.ingredientId;
+    }
+
+    if (query.createdById) {
+      where.createdById = query.createdById;
+    }
+
+    const createdAtRange: Record<string, Date> = {};
+    if (query.createdFrom) {
+      // 用本地时间构造：界面按本地时间显示，用 UTC 边界会漏掉早上 8 点前的条目
+      createdAtRange.gte = new Date(`${query.createdFrom}T00:00:00`);
+    }
+    if (query.createdTo) {
+      createdAtRange.lte = new Date(`${query.createdTo}T23:59:59.999`);
+    }
+    if (Object.keys(createdAtRange).length > 0) {
+      where.createdAt = createdAtRange;
+    }
+
+    const keyword = query.keyword?.trim();
+    if (keyword) {
+      where.OR = [
+        { name: { contains: keyword, mode: 'insensitive' } },
+        { purchaseChannel: { contains: keyword, mode: 'insensitive' } },
+      ];
+    }
+
+    const [rows, total] = await Promise.all([
+      this.prisma.procurementSku.findMany({
+        where,
+        include: {
+          ingredient: { select: { name: true, baseUnit: true } },
+          createdBy: { select: { nickname: true } },
+        },
+        orderBy: [{ createdAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.procurementSku.count({ where }),
+    ]);
+
+    return {
+      items: rows.map((row: any) => ({
+        id: row.id,
+        ingredientId: row.ingredientId,
+        ingredientName: row.ingredient?.name ?? null,
+        baseUnit: row.ingredient?.baseUnit ?? null,
+        name: row.name,
+        brand: row.brand ?? null,
+        productModel: row.productModel ?? null,
+        purchaseChannel: row.purchaseChannel ?? null,
+        purchaseUnit: row.purchaseUnit ?? null,
+        purchaseToBaseRatio: row.purchaseToBaseRatio ?? null,
+        currentPurchasePrice: toNullableNumber(row.currentPurchasePrice),
+        isActive: row.isActive,
+        createdById: row.createdById ?? null,
+        createdByName: row.createdBy?.nickname ?? null,
+        createdSource: row.createdSource ?? null,
+        createdAt: row.createdAt.toISOString(),
+        sourceScreenshotUrl: row.sourceScreenshotUrl ?? null,
+      })),
+      total,
+    };
   }
 
   async listBrands(): Promise<string[]> {

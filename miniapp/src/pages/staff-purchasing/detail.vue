@@ -338,10 +338,25 @@
                 </view>
                 <text class="record-sku-check">✓</text>
               </view>
+              <view
+                v-if="canAddNewProcurementSku"
+                class="record-sku-add"
+                @tap.stop="openCreateProcurementSku"
+              >
+                ＋ 没有我要买的商品？新增一个
+              </view>
             </view>
             <view v-else class="record-sku-empty">
-              <text class="empty-title">暂无可用采购商品</text>
-              <text class="empty-desc">请联系管理员在该标准原料下新增采购 SKU 后再记录采购。</text>
+              <text class="empty-title">这道原料下还没有采购商品</text>
+              <text v-if="canAddNewProcurementSku" class="empty-desc">把这次买的商品加进去，以后大家都能选</text>
+              <text v-else class="empty-desc">请联系管理员在该标准原料下新增采购 SKU 后再记录采购。</text>
+              <view
+                v-if="canAddNewProcurementSku"
+                class="record-sku-add-btn"
+                @tap.stop="openCreateProcurementSku"
+              >
+                ＋ 新增一个采购商品
+              </view>
             </view>
           </view>
 
@@ -393,7 +408,8 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { onLoad } from '@dcloudio/uni-app';
+import { onLoad, onUnload } from '@dcloudio/uni-app';
+import { canAddProcurementSku } from './procurement-sku-entry';
 import { getPurchaseListDetail, completePurchase as completePurchaseApi, reopenPurchaseList as reopenPurchaseListApi, startPurchase as startPurchaseApi, getPurchaseRecords, deletePurchaseRecord as deletePurchaseRecordApi, addPurchaseRecord, updatePurchaseRecord as updatePurchaseRecordApi, markPurchaseItemNoPurchase as markPurchaseItemNoPurchaseApi, clearPurchaseItemNoPurchase as clearPurchaseItemNoPurchaseApi, removeItemFromList, checkOrderDateChanges, getPurchaseChannels, previewPurchaseList, addOrdersToList, resolveProcurementSkuProfile, resolvePurchaseItemDisplay, resolvePurchaseRecordDisplay } from './api/purchasing';
 
 // 状态管理
@@ -714,6 +730,54 @@ const recordProcurementSkuIndex = computed(() => {
   const index = recordProcurementSkuOptions.value.findIndex((sku) => sku.id === recordForm.value.procurementSkuId);
   return index >= 0 ? index : 0;
 });
+
+/**
+ * 只有食材能新增采购商品（2026-11-01 老板定：补剂、包材不开放）。
+ * 判据与后端一致，避免员工点进去才发现 400。
+ */
+const canAddNewProcurementSku = computed(() =>
+  canAddProcurementSku(selectedIngredient.value?.type),
+);
+
+const openCreateProcurementSku = () => {
+  const item = selectedIngredient.value;
+  if (!item) return;
+
+  const ingredientId = item.ingredientId || item.id;
+  if (!ingredientId) return;
+
+  const query = [
+    `ingredientId=${encodeURIComponent(ingredientId)}`,
+    `ingredientName=${encodeURIComponent(item.ingredientName || '')}`,
+    `baseUnit=${encodeURIComponent(item.ingredientBaseUnit || item.baseUnit || '')}`,
+  ].join('&');
+
+  uni.navigateTo({
+    url: `/pages/staff-purchasing/procurement-sku-create?${query}`,
+  });
+};
+
+/** 新增完采购商品回来：重新拉清单，并把它选中 */
+const handleProcurementSkuCreated = async (payload: any) => {
+  const ingredientId = payload?.ingredientId;
+  if (!ingredientId) return;
+
+  await loadDetail();
+
+  const item = items.value.find((row) => (row.ingredientId || row.id) === ingredientId);
+  if (!item) return;
+
+  handleContinueAdd(item);
+
+  if (payload?.skuId) {
+    const sku = recordProcurementSkuOptions.value.find((option) => option.id === payload.skuId);
+    if (sku) {
+      selectRecordSku(sku);
+    }
+  }
+
+  showRecordForm.value = true;
+};
 
 const getReferencePriceParts = (sku: any) => {
   const price = Number(sku?.currentPurchasePrice || sku?.referencePricePerPurchaseUnit || 0);
@@ -1131,7 +1195,12 @@ const dateChanges = ref<any>({
 // 页面加载
 onLoad((options: any) => {
   purchaseListId.value = options.id;
+  uni.$on('procurement-sku:created', handleProcurementSkuCreated);
   loadDetail();
+});
+
+onUnload(() => {
+  uni.$off('procurement-sku:created', handleProcurementSkuCreated);
 });
 
 // 加载详情
@@ -3268,6 +3337,28 @@ const confirmDeleteItem = (item: any) => {
       line-height: 1.5;
       color: #7a5c28;
     }
+  }
+
+  .record-sku-add {
+    margin-top: 6rpx;
+    padding: 22rpx;
+    border-radius: 14rpx;
+    border: 2rpx dashed rgba(176, 141, 79, 0.6);
+    background-color: #fffdf6;
+    text-align: center;
+    font-size: 26rpx;
+    color: #8a6b33;
+  }
+
+  .record-sku-add-btn {
+    margin-top: 8rpx;
+    padding: 20rpx;
+    border-radius: 14rpx;
+    background-color: #1e3a2f;
+    color: #f7f2e2;
+    text-align: center;
+    font-size: 28rpx;
+    font-weight: 600;
   }
 
   .record-sku-option {

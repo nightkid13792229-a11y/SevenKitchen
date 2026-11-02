@@ -17,6 +17,9 @@
         <el-button :icon="MagicStick" @click="handleAiCreate">
           AI 添加原料
         </el-button>
+        <el-button :icon="List" @click="goToStaffCreatedSkus">
+          员工新增的采购商品
+        </el-button>
       </div>
     </div>
 
@@ -494,7 +497,7 @@ import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
-import { Plus, Search, Refresh, MagicStick } from '@element-plus/icons-vue'
+import { Plus, Search, Refresh, MagicStick, List } from '@element-plus/icons-vue'
 import { ingredientApi } from '@/api/ingredients'
 import {
   IngredientType,
@@ -518,6 +521,9 @@ type IngredientCenterTab = 'standard' | 'nutrition' | 'tags'
 
 const route = useRoute()
 const router = useRouter()
+const goToStaffCreatedSkus = () => {
+  router.push({ name: 'StaffProcurementSkus' })
+}
 const centerTabs: IngredientCenterTab[] = ['standard', 'nutrition', 'tags']
 const loading = ref(false)
 const ingredients = ref<Ingredient[]>([])

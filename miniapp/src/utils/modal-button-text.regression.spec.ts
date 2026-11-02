@@ -98,7 +98,15 @@ describe('modal button text regressions', () => {
       'utf-8',
     )
 
-    expect(source).toContain("confirmText: '我已知晓'")
+    // 2026-11-02：按钮文案统一由 life-stage-ui 的 buildRiskConfirmCopy 给出
+    expect(source).toContain('buildRiskConfirmCopy')
+    expect(source).toContain('confirmText: copy.confirmText')
     expect(source).not.toContain('我已知晓，继续')
+    const ui = readFileSync(
+      resolve(process.cwd(), 'src/utils/life-stage-ui.ts'),
+      'utf-8',
+    )
+    expect(ui).toContain("confirmText: '仍要继续'")
+    expect(ui).toContain("cancelText: '看合适版'")
   })
 })

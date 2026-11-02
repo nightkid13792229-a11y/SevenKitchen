@@ -75,11 +75,21 @@ export interface SupplementUnavailableLine {
 }
 
 export interface SupplementQuoteResponse {
+  /**
+   * 全部补剂都不可买时是一条**零值报价**（lines 为空、金额全 0），
+   * 不是 null —— 老版本读 `quote.lines` 会崩。
+   */
   quote: SupplementQuote
   unavailable: SupplementUnavailableLine[]
   enabled: boolean
   /** 库存软提示；不阻止下单 */
   inventoryWarnings?: string[]
+  /** 最低起送金额（商品小计口径）；0 = 不限制 */
+  minOrderAmount: number
+  /** 补剂订单支付超时（分钟）；0 = 不自动关单 */
+  paymentTimeoutMinutes: number
+  /** 单笔分装袋数超过它就提示"发货会顺延" */
+  bulkBagThreshold: number
 }
 
 export interface SupplementOrderItem {
@@ -159,8 +169,12 @@ export interface CreateSupplementOrderPayload {
   cycleDays?: number
   /** 来源 DIY 制作单；首次下单补剂时后端用它冻结快照 */
   diySheetId?: string
-  /** 加量份数，1 = 不加量。服务端会按配置校验上限 */
+  /** 购买套数，1 = 不加量；1~99，服务端校验 */
   portionMultiplier?: number
+  /** 顾客在确认弹层里看到的合计（整数分）；不一致服务端会拒绝建单 */
+  expectedTotal?: number
+  /** 一次提交流程的幂等键；重试复用同一个值，服务端据此只建一笔单 */
+  clientRequestId?: string
   remark?: string
 }
 
@@ -202,6 +216,8 @@ export function quoteSupplements(
   return request<SupplementQuoteResponse>({
     url: '/supplements/quote',
     method: 'POST',
+    // 错误由下单页用行内横幅展示：网络层再弹一次 toast 会把真实原因盖掉
+    suppressErrorToast: true,
     data: {
       lines,
       ...(options.portionMultiplier !== undefined
@@ -217,6 +233,7 @@ export function createSupplementOrder(payload: CreateSupplementOrderPayload) {
   return request<SupplementOrder>({
     url: '/supplement-orders',
     method: 'POST',
+    suppressErrorToast: true,
     data: payload
   })
 }
@@ -319,7 +336,8 @@ export async function prefetchSupplementSubscriptions(): Promise<void> {
  * 微信一次最多 3 个模板：下单要排期/发货/延迟，售后单独请求售后模板。
  */
 export async function requestSupplementSubscriptions(
-  kinds: SupplementSubscribeKind[] = ['scheduled', 'shipped', 'delay']
+  // 只订阅「发货提醒」：顾客明确不要养宠日历/排期这类与补剂无关的提醒
+  kinds: SupplementSubscribeKind[] = ['shipped']
 ): Promise<void> {
   const ids = cachedSubscribeTemplates
     ? Array.from(
@@ -472,6 +490,13 @@ export interface SupplementPurchaseDraft {
   diySheetId?: string
   /** 复购时沿用原单份数 */
   portionMultiplier?: number
+  /**
+   * 顾客在 DIY 配置页选的快速天数（自定义分装时为 null）。
+   * 制作单本身不存天数，这个值只用来在下单页把当时的**选择**原样高亮出来。
+   */
+  packageCycleDays?: number | null
+  /** 顾客在 DIY 配置页是否处于「自定义分装」模式 */
+  packagePlanIsCustom?: boolean
   /** 复购来源订单号，用于后端审计 */
   reorderFromOrderNo?: string
 }

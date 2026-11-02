@@ -96,3 +96,21 @@ describe('AI 用途清单 · AI 添加原料', () => {
     expect(purposes.indexOf('INGREDIENT_INTAKE')).toBeLessThan(purposes.indexOf('NUTRITION_REVIEW'))
   })
 })
+
+/**
+ * 采购商品截图识别（2026-11-01）。
+ *
+ * 这一条不在清单里时，老板在后台看不到它 —— 会静默借用「全局默认」，
+ * 而全局默认是可以被换成纯文本模型的，换了以后识别会直接失败且没有提示。
+ */
+describe('AI 用途清单 · 采购商品识别', () => {
+  it('在清单里，且默认用能读图的模型', () => {
+    const meta = AGENT_PURPOSES.find(
+      (item) => item.purpose === 'PROCUREMENT_SKU_DRAFT'
+    )
+
+    expect(meta).toBeTruthy()
+    expect(meta?.label).toContain('采购')
+    expect(meta?.defaultModel).toBe('deepseek-flash')
+  })
+})

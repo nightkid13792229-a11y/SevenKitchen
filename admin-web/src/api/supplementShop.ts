@@ -135,8 +135,13 @@ export interface SupplementShopConfig {
   priceRoundingMode: SupplementPriceRoundingMode;
   minOrderAmount: number;
   roundUpUsage: boolean;
-  /** 加量：用户一次最多买几份 */
+  /**
+   * @deprecated 2026-11-01 起补剂不再有份数上限，界面不再维护这个字段。
+   * 后端字段保留只为兼容，不参与任何计算。
+   */
   maxPortionMultiplier: number;
+  /** 单笔分装袋数超过它就提示"发货会顺延"（只提示，不拦单） */
+  bulkBagThreshold: number;
   /** 补剂订单支付超时（分钟）；0 = 不自动关单。与鲜食订单独立 */
   paymentTimeoutMinutes: number;
   /** 截单时间 HH:mm（Asia/Shanghai） */

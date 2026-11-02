@@ -82,6 +82,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "原料库" },
       },
       {
+        // 员工在小程序里新增的采购商品清单（2026-11-01）
+        path: "ingredients/staff-procurement-skus",
+        name: "StaffProcurementSkus",
+        component: () => import("@/views/Ingredients/StaffProcurementSkus.vue"),
+        meta: { title: "员工新增的采购商品" },
+      },
+      {
         // 旧地址：判断食材/补剂的半成品页已下线，统一落到 Agent 页。
         path: "ingredients/ai-create",
         redirect: { name: "IngredientAiAgent" },

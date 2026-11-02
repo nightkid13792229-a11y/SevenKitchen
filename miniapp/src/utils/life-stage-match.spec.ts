@@ -106,13 +106,11 @@ describe('fetchLifeStageMatch', () => {
 
 describe('life-stage display helpers', () => {
   it('labels every recipe and profile life stage', () => {
-    expect(getLifeStageLabel('PUPPY_UNDER_14_WEEKS')).toBe('小于14周幼犬');
-    expect(getLifeStageLabel('PUPPY_14_WEEKS_PLUS')).toBe('大于等于14周幼犬');
-    expect(getLifeStageLabel('LOW_ACTIVITY_ADULT_OR_SENIOR')).toBe(
-      '低运动量成犬或老年犬',
-    );
-    expect(getLifeStageLabel('HIGH_ACTIVITY_ADULT')).toBe('普通或高运动量成犬');
-    expect(getLifeStageLabel('REPRODUCTION')).toBe('繁殖期');
+    expect(getLifeStageLabel('PUPPY_UNDER_14_WEEKS')).toBe('幼犬版（14 周内）');
+    expect(getLifeStageLabel('PUPPY_14_WEEKS_PLUS')).toBe('幼犬版（14 周以上）');
+    expect(getLifeStageLabel('LOW_ACTIVITY_ADULT_OR_SENIOR')).toBe('低活动成犬 / 老年版');
+    expect(getLifeStageLabel('HIGH_ACTIVITY_ADULT')).toBe('成犬版');
+    expect(getLifeStageLabel('REPRODUCTION')).toBe('繁殖期版');
     expect(getLifeStageLabel('PUPPY')).toBe('幼犬期');
     expect(getLifeStageLabel('ADULT')).toBe('成犬期');
     expect(getLifeStageLabel('SENIOR')).toBe('老年犬期');
@@ -135,7 +133,7 @@ describe('life-stage display helpers', () => {
         dogName: '敢敢',
       }),
     ).toBe(
-      '该食谱适用于：普通或高运动量成犬。当前选择的狗狗「敢敢」为大于等于14周幼犬，建议确认后再继续。',
+      '该食谱适用于：成犬版。当前选择的狗狗「敢敢」为幼犬版（14 周以上），建议确认后再继续。',
     );
   });
 
@@ -156,5 +154,38 @@ describe('life-stage display helpers', () => {
         dogLifeStage: 'ADULT',
       }),
     ).toContain('尚未配置适用生命阶段');
+  });
+});
+
+describe('confirmLifeStageMismatch · 高风险确认文案', () => {
+  it('用风险说明与 4 字按钮，且不下发系统词', async () => {
+    const { confirmLifeStageMismatch } = await import('./life-stage-match');
+    const showModal = vi.fn((options: any) => options.success({ confirm: false }));
+    ;(globalThis as any).uni = { showModal };
+
+    const confirmed = await confirmLifeStageMismatch({
+      recipeId: 'recipe-1',
+      dogId: 'dog-1',
+      verdict: {
+        matchType: 'FALLBACK_ADULT',
+        riskLevel: 'HIGH',
+        selectedLifeStage: 'HIGH_ACTIVITY_ADULT',
+        dogLifeStage: 'PUPPY_14_WEEKS_PLUS',
+      },
+      source: 'order',
+      dogName: '旺财',
+      dogAgeText: '3个月',
+      dogStage: 'PUPPY_14_WEEKS_PLUS',
+      currentVersionLabel: '成犬版',
+    });
+
+    expect(confirmed).toBe(false);
+    const options = showModal.mock.calls[0][0];
+    expect(options.content).toContain('钙磷比例');
+    expect(options.content).toContain('成犬版');
+    expect(options.content).not.toContain('没有完全匹配');
+    expect(options.content).not.toContain('手动展示');
+    expect(options.confirmText.length).toBeLessThanOrEqual(4);
+    expect(options.cancelText).toBe('看合适版');
   });
 });

@@ -32,6 +32,7 @@ function config(
     roundUpUsage: true,
     maxPortionMultiplier: 3,
     maxTotalDays: 90,
+    bulkBagThreshold: 60,
     paymentTimeoutMinutes: 30,
     dailyCutoffTime: '17:00',
     dailyPackingCapacity: 30,

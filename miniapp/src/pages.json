@@ -172,7 +172,7 @@
     {
       "path": "pages/supplement-order/index",
       "style": {
-        "navigationBarTitleText": "一键购买补剂",
+        "navigationBarTitleText": "购买预分装补剂",
         "enablePullDownRefresh": false
       }
     },
@@ -389,6 +389,12 @@
             "navigationBarBackgroundColor": "#1E3A2F",
             "navigationBarTextStyle": "white",
             "backgroundColor": "#FBFCF7"
+          }
+        },
+        {
+          "path": "procurement-sku-create",
+          "style": {
+            "navigationBarTitleText": "新增采购商品"
           }
         },
         {

@@ -45,9 +45,18 @@
     <view class="package-plan-toolbar">
       <text class="package-plan-inline-summary">{{ summaryText }}</text>
       <button class="package-edit-button" @tap="toggleCustom">
-        {{ editorOpen ? '取消自定义' : '自定义分装' }}
+        {{ editorOpen ? '取消自定义' : '自己定分装' }}
       </button>
     </view>
+
+    <!--
+      入口说明（2026-11-02）：光一个按钮，顾客不知道"自己定"是定什么。
+      一句话说清接管的是"每袋多少克、一共几袋"，以及天数不再自动算。
+      进入自定义后就不必再显示 —— 那时已有常驻模式说明。
+    -->
+    <text v-if="!isCustom" class="package-plan-entry-hint">
+      自己定每袋克数和总袋数，不再按天数自动计算
+    </text>
 
     <!--
       校验与提示合并成一块（2026-11-01）：
@@ -107,7 +116,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import {
   ORDER_CYCLE_OPTIONS,
   type PackagePlanItem,
@@ -302,6 +311,14 @@ defineExpose({ commitAll })
   justify-content: space-between;
   gap: 18rpx;
   margin-top: 24rpx;
+}
+
+.package-plan-entry-hint {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  line-height: 1.45;
+  color: #6b6653;
 }
 
 .package-plan-inline-summary {

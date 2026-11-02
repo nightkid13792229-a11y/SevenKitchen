@@ -66,6 +66,21 @@ describe('QuickCyclePackagePlan · 共享分装组件', () => {
     expect(template).not.toContain(':disabled')
   })
 
+  it('★ 天数按钮上不写量：结果只在下面的摘要里说一次', () => {
+    // 按钮只负责"选哪一档"，摘要负责"选完是多少"。
+    // 2026-11-02 曾把"约14袋 · 1.7kg"印在按钮上，与摘要重复且把按钮撑高，已撤掉。
+    expect(template).not.toContain('cycle-sub')
+    expect(source).not.toContain('optionHints')
+    expect(source).not.toContain('buildDefaultPackagePlan')
+  })
+
+  it('★ 自定义入口说清"接管的是什么"', () => {
+    expect(template).toContain('自己定分装')
+    expect(template).toContain('自己定每袋克数和总袋数')
+    // 进入自定义后有常驻模式说明，入口这句就收起来
+    expect(template).toContain('v-if="!isCustom"')
+  })
+
   it('★ 组件样式只用类选择器（微信组件 wxss 限制）', () => {
     // 先把选择器抽出来再看，避免把颜色值里的 #26261f 误判成 ID 选择器
     const selectors = [...style.matchAll(/(?:^|\})\s*([^{}@]+)\{/g)]

@@ -17,6 +17,10 @@ import type { RecipeSnapshot } from '../../domain/recipe/types';
 import {
   resolvePreparationMethodTokens,
 } from './preparation-method-text.util';
+import {
+  SERIES_LIFE_STAGE_LABELS,
+  type RecipeSeriesLifeStage,
+} from '../../domain/recipe/recipe-series';
 
 /** 与订单侧共用的最小食谱结构（不依赖具体仓储实现） */
 export interface RecipeForSnapshot {
@@ -25,6 +29,7 @@ export interface RecipeForSnapshot {
   name: string;
   productionLossRate: number;
   energyDensityKcalPerKg: number;
+  seriesLifeStage?: string | null;
   nutritionDetailedData?: unknown;
   items?: Array<{
     ingredientId: string;
@@ -113,6 +118,15 @@ export function buildProductionRecipeSnapshot(
     production_loss_rate: recipe.productionLossRate,
     energy_density_kcal_per_kg: recipe.energyDensityKcalPerKg,
     nutrition_standard: params.nutritionStandard ?? 'FEDIAF_2021',
+    ...(recipe.seriesLifeStage
+      ? {
+          series_life_stage: recipe.seriesLifeStage,
+          series_life_stage_label:
+            SERIES_LIFE_STAGE_LABELS[
+              recipe.seriesLifeStage as RecipeSeriesLifeStage
+            ] ?? recipe.seriesLifeStage,
+        }
+      : {}),
     nutrition_detailed_data: recipe.nutritionDetailedData,
     items: recipeItems.map((ri) => {
       const ingredient = ingredientMap.get(ri.ingredientId);

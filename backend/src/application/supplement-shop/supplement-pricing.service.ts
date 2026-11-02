@@ -141,6 +141,17 @@ export function resolveMaxPortionMultiplier(
   return Math.max(1, Math.floor(config.maxPortionMultiplier));
 }
 
+/**
+ * 下单页并排展示的档位。
+ *
+ * 2026-11-01 起固定 1/2/3：份数上限已经交给顾客（最多 99 套），
+ * 这三档只是"零点击就能看到加量更划算"的入口，不再受后台配置影响。
+ */
+export const PORTION_CARD_TIERS: readonly number[] = [1, 2, 3];
+
+/** 单笔可购买的套数上限：纯技术兜底，防误输入打挂后台与分装产能。 */
+export const MAX_PURCHASABLE_PORTIONS = 99;
+
 /** 按"个数"计量的单位，分装量直接向上取整到整数 */
 const COUNTABLE_UNIT_KEYWORDS = ['片', '粒', '平勺', '勺', '颗', '袋', '包', '支', '滴', '胶囊'];
 
@@ -264,31 +275,29 @@ export class SupplementPricingService {
       cycleDays?: number | null
     } = {},
   ): SupplementQuote {
-    const maxPortionMultiplier = resolveMaxPortionMultiplier(config);
-
     /**
-     * 份数。服务端**不信任客户端**：这里只做兜底收敛，
-     * 真正的拒绝（超出上限就报错）在 order service 里做，
-     * 免得分装工单被一个越界的份数写坏。
+     * 份数。2026-11-01 起取消产品上限：1~99 直接照算，不再收敛到配置值。
+     * 越界的份数一律拒绝，绝不"静默按别的份数计价"——那会让顾客看到的
+     * 金额和真实下单的金额对不上。
      */
     const rawMultiplier = Math.floor(Number(options.portionMultiplier ?? 1));
-    const portionMultiplier =
-      Number.isFinite(rawMultiplier) && rawMultiplier >= 1
-        ? rawMultiplier
-        : 1;
-    const effectiveMultiplier = Math.min(portionMultiplier, maxPortionMultiplier);
+    if (
+      !Number.isFinite(rawMultiplier) ||
+      rawMultiplier < 1 ||
+      rawMultiplier > MAX_PURCHASABLE_PORTIONS
+    ) {
+      throw new BadRequestException(
+        `购买套数必须是 1~${MAX_PURCHASABLE_PORTIONS} 的整数`,
+      );
+    }
+    const portionMultiplier = rawMultiplier;
 
     const primary = this.buildQuoteForMultiplier(
       config,
       lineInputs,
       shipping,
-      effectiveMultiplier,
+      portionMultiplier,
     );
-    if (portionMultiplier > maxPortionMultiplier) {
-      primary.warnings.unshift(
-        `加量份数 ${portionMultiplier} 超出上限，按 ${maxPortionMultiplier} 份计价`,
-      );
-    }
 
     /**
      * 把每个可选份数的结果一次算好返回（2026-09-24）。
@@ -301,9 +310,9 @@ export class SupplementPricingService {
      * 与真正下单时的金额**出自同一套逻辑**，不会出现两处口径漂移。
      */
     const portionOptions: SupplementPortionOption[] = [];
-    for (let m = 1; m <= maxPortionMultiplier; m += 1) {
+    for (const m of PORTION_CARD_TIERS) {
       const quote =
-        m === effectiveMultiplier
+        m === portionMultiplier
           ? primary
           : this.buildQuoteForMultiplier(
               config,
@@ -497,7 +506,7 @@ export class SupplementPricingService {
       portionMultiplier: effectiveMultiplier,
       totalDays,
       perDayCost,
-      maxPortionMultiplier: resolveMaxPortionMultiplier(config),
+      maxPortionMultiplier: PORTION_CARD_TIERS[PORTION_CARD_TIERS.length - 1],
     };
   }
 }

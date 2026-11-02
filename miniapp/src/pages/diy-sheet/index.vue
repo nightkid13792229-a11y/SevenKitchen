@@ -38,27 +38,13 @@
     </view>
 
     <!--
-      生命阶段提醒（静态）· 2026-10-18 改用共享组件
-
-      顾客在 DIY 页点「生成制作单」时已经确认过并留痕，这里**不再要求确认**，
-      只把结论留在页面上作为记录 —— 避免同一个提醒反复打断。
-      所以只给 variant="warning"，不给任何动作按钮。
+      生命阶段版本（2026-11-02）：制作单是冻结记录，只写明"这一版是哪一版"，
+      不再实时判定（顾客在 DIY 页已确认过、也已留痕）。
     -->
-    <LifeStageVersionCard
-      v-if="!isLifeStageMatch && dog"
-      variant="warning"
-      :match-type="lifeStageVerdict?.matchType"
-      :message="lifeStageVerdict?.message"
-      :selected-label="lifeStageVerdict?.selectedLifeStage"
-      :dog-name="lifeStageVerdict?.dogName || dog?.name"
-    />
-
-      <!-- 后端结论没取到：不静默放行，给一条中性提示 -->
-      <view v-if="lifeStageCheckFailed" class="life-stage-unknown-note">
-        <text class="life-stage-unknown-text">
-          暂时无法确认这份食谱是否适合当前狗狗，建议稍后重试或联系客服。
-        </text>
-      </view>
+    <view v-if="lifeStageLabel" class="life-stage-version-line">
+      <text class="life-stage-version-label">版本：</text>
+      <text class="life-stage-version-value">{{ lifeStageLabel }}</text>
+    </view>
 
     <!-- 2. 制作清单（标题拿掉：导航栏已经叫 DIY制作单） -->
     <view class="section purchase-list-section">
@@ -642,17 +628,11 @@ import {
 } from '../../api/supplements'
 import { PrintCanvasBuilder, type CanvasImageInfo } from '../../utils/print-canvas'
 import {
-  buildLifeStageReminderText,
-  fetchLifeStageMatch,
   getLifeStageLabel,
-  isLifeStageMismatch,
-  type LifeStageMatchVerdict
 } from '../../utils/life-stage-match'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
-import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue'
 import { buildFinishedFoodOrderUrl } from '../../utils/custom-recipe-delivery'
-import { useLifeStageVersion } from '@/composables/useLifeStageVersion'
 import { normalizeImageUrl, getOptimizedProductImageUrl } from '../../utils/config'
 import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-format'
 import { getPackagePlanTotal, type PackagePlanItem } from '../../utils/order-package-plan'
@@ -698,6 +678,11 @@ const dogId = ref('')
  * 不要再用它做任何"这批能吃几天"的计算。
  */
 const cycleDays = ref(7)
+/**
+ * 顾客在 DIY 配置页是不是点了「自定义分装」。
+ * 制作单不存这个状态，只用它把选择原样带到补剂下单页。
+ */
+const isCustomPlan = ref<boolean | null>(null)
 const perMealG = ref(0)
 const dailyIntakeG = ref(0)
 const packagePlan = ref<PackagePlanItem[]>([])
@@ -935,24 +920,10 @@ const supplementNutrientBaseWeightG = computed(() => {
  * 生命阶段匹配结论 —— **由后端给出**（2026-09-19 起不再前端自己算）。
  * 前端重算认不出混血犬的体型，算不出时还会被当成"匹配"静默放行。
  */
-/**
- * 生命阶段状态（2026-10-18 收进 composable）。
- *
- * 这段原来在**四个页面各写一遍**（21 computed + 13 函数）。
- * 现在数据在 composable、UI 在 `LifeStageVersionCard`，页面只剩"什么时候调 check"。
- */
-const {
-  verdict: lifeStageVerdict,
-  checkFailed: lifeStageCheckFailed,
-  dogLifeStage,
-  isMatch: isLifeStageMatch,
-  reminderText: lifeStageReminderText,
-  check: checkLifeStageMatch,
-} = useLifeStageVersion({
-  recipeId: () => recipeId.value,
-  dogId: () => dogId.value,
-  applicableStages: () => recipe.value?.applicableLifeStages || [],
-  dogName: () => dog.value?.name,
+const lifeStageLabel = computed(() => {
+  const stage = recipe.value?.selectedLifeStage || ''
+  if (stage) return getLifeStageLabel(stage)
+  return recipe.value?.selectedLifeStageLabel || ''
 })
 
 // 格式化狗狗年龄
@@ -1285,6 +1256,11 @@ async function handleBuySupplements() {
     recipeName: recipe.value && recipe.value.name,
     dogId: dogId.value,
     dogName: dog.value && dog.value.name,
+    // 制作单不存天数，但「当初选的是哪一档 / 是不是自定义」要在下单页原样亮出来。
+    // 不知道时不传（undefined），让下单页按分装反推，别谎报一个 7 天。
+    packagePlanIsCustom: isCustomPlan.value === null ? undefined : isCustomPlan.value,
+    packageCycleDays:
+      isCustomPlan.value === false ? cycleDays.value : null,
     diySheetId
   })
 
@@ -1303,6 +1279,9 @@ onMounted(() => {
   shareToken.value = options.shareToken || ''
   dogId.value = options.dogId || ''
   cycleDays.value = parseInt(options.cycleDays || '7')
+  // '1' / '0' 是 DIY 配置页明确告诉我们的；没有这个参数（例如从"我的制作单"打开）
+  // 就是"不知道"，交给补剂下单页按分装反推，不要瞎猜成 7 天
+  isCustomPlan.value = options.custom === '1' ? true : options.custom === '0' ? false : null
   perMealG.value = parseFloat(options.perMealG || '0')
   dailyIntakeG.value = parseFloat(options.dailyIntakeG || '0')
   packagePlan.value = parsePackagePlanParam(options.packagePlan)
@@ -1339,9 +1318,6 @@ async function loadData() {
       loadDog(),
       loadEquipmentRecommendations()
     ])
-
-    // 生命阶段结论由后端给出（需等食谱与狗狗都就绪）
-    await checkLifeStageMatch()
 
     // 价格预览加载完成后，加载推荐产品（需要 ingredientIds）
     await loadRecommendedProducts()
@@ -3842,5 +3818,25 @@ onShareTimeline(() => {
   display: flex;
   justify-content: center;
   padding: 24rpx 0 180rpx;
+}
+</style>
+
+<style scoped lang="scss">
+.life-stage-version-line {
+  display: flex;
+  align-items: center;
+  padding: 12rpx 32rpx;
+  background: #fffaf3;
+}
+
+.life-stage-version-label {
+  font-size: 22rpx;
+  color: #8a7a66;
+}
+
+.life-stage-version-value {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #3f3222;
 }
 </style>

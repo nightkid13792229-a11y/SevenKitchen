@@ -50,13 +50,20 @@ import {
   ReimbursementStatus,
 } from '../../domain/purchasing';
 import { AuthGuard } from '../auth';
+import { StaffGuard } from '../guards/role.guard';
 import { UserId, UserRole } from '../auth/user.decorator';
 import { Put, Delete } from '@nestjs/common';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
+import { ProcurementSkuService } from '../../application/ingredient/procurement-sku.service';
+import { ProcurementSkuDraftService } from '../../application/purchasing/procurement-sku-draft.service';
+import { ProcurementSkuDraftNoticeException } from '../../application/purchasing/procurement-sku-draft.errors';
+import { CreateStaffProcurementSkuDto } from '../dto/staff/procurement-sku-create.dto';
 
 @ApiTags('Staff Purchasing')
 @Controller('api/v1/staff/purchasing')
-@UseGuards(AuthGuard)
+// 2026-11-01 补上 StaffGuard：AuthGuard 放行任何有效 JWT（含顾客），
+// 而这里全是员工的写操作（建采购商品、传图、记采购记录），顾客不该能调。
+@UseGuards(AuthGuard, StaffGuard)
 @ApiSecurity('bearer')
 @UsePipes(
   new ValidationPipe({
@@ -72,7 +79,112 @@ export class StaffPurchasingController {
     private readonly purchasingService: PurchasingService,
     private readonly reimbursementService: ReimbursementService,
     private readonly cosService: TencentCosService,
+    private readonly procurementSkuService: ProcurementSkuService,
+    private readonly procurementSkuDraftService: ProcurementSkuDraftService,
   ) {}
+
+  /**
+   * ==========================================
+   * 采购商品：员工在小程序里新增（2026-11-01）
+   *
+   * 老板的原话：商超换品了，员工在「添加采购记录」里找不到对应的采购 SKU，
+   * 只能停下来找管理员。这四个接口就是为了让他当场加上、当场用。
+   * ==========================================
+   */
+
+  @Post('upload-sku-screenshot')
+  @ApiOperation({ summary: '上传商品详情页截图（用于识别并新增采购商品）' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadProcurementSkuScreenshot(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ApiResponseDto<any>> {
+    if (!file) {
+      throw new BadRequestException('请选择文件');
+    }
+
+    const result = await this.cosService.uploadImage(
+      file,
+      file.originalname,
+      'procurement-sku-screenshots',
+    );
+
+    return ApiResponseDto.success(result, '上传成功');
+  }
+
+  @Get('procurement-sku-form-options')
+  @ApiOperation({ summary: '新增采购商品页的可选项（基准单位 + 允许的采购单位）' })
+  async getProcurementSkuFormOptions(
+    @Query('ingredientId') ingredientId: string,
+  ): Promise<ApiResponseDto<any>> {
+    if (!ingredientId) {
+      throw new BadRequestException('缺少原料ID');
+    }
+
+    return ApiResponseDto.success(
+      await this.procurementSkuService.getFormOptions(ingredientId),
+    );
+  }
+
+  @Post('procurement-sku-draft')
+  @ApiOperation({ summary: '从商品详情页截图识别采购商品（只出草稿，不落库）' })
+  async draftProcurementSku(
+    @Body() body: { imageUrl: string; ingredientId: string },
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    if (!body?.imageUrl || !body?.ingredientId) {
+      throw new BadRequestException('缺少截图地址或原料ID');
+    }
+
+    try {
+      const draft = await this.procurementSkuDraftService.draftFromScreenshot({
+        imageUrl: body.imageUrl,
+        ingredientId: body.ingredientId,
+        userId,
+      });
+
+      return ApiResponseDto.success({ draft, degraded: false });
+    } catch (error) {
+      // 「这张图不是商品详情页」「配额用完了」是**给员工看的说明**，必须原样抛出去：
+      // 降级成含糊的"没认出来"会让他反复重传同一张图，或不知道为什么突然不能识别了。
+      if (error instanceof ProcurementSkuDraftNoticeException) {
+        throw error;
+      }
+
+      // 其余（模型超时、网络、解析失败）按老板定的 A2 降级为手填，绝不卡住员工
+      this.logger.warn(
+        `采购商品识别失败，降级为手填：${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+
+      return ApiResponseDto.success({ draft: null, degraded: true });
+    }
+  }
+
+  @Post('ingredients/:ingredientId/procurement-skus')
+  @ApiOperation({ summary: '员工为某道食材新增采购商品（当场生效）' })
+  async createStaffProcurementSku(
+    @Param('ingredientId') ingredientId: string,
+    @Body() dto: CreateStaffProcurementSkuDto,
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.procurementSkuService.createFromStaff({
+      ingredientId,
+      createdById: userId,
+      name: dto.name,
+      purchaseChannel: dto.purchaseChannel,
+      purchaseUnit: dto.purchaseUnit,
+      packCount: dto.packCount,
+      netContentPerPack: dto.netContentPerPack,
+      currentPurchasePrice: dto.currentPurchasePrice,
+      brand: dto.brand,
+      productModel: dto.productModel,
+      sourceScreenshotUrl: dto.sourceScreenshotUrl,
+    });
+
+    return ApiResponseDto.success(result);
+  }
 
   /**
    * ==========================================

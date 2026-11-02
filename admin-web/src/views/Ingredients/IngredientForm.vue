@@ -891,6 +891,21 @@
                 <el-tag :type="sku.isActive ? 'success' : 'info'" size="small">
                   {{ sku.isActive ? '已启用' : '已停用' }}
                 </el-tag>
+                <el-tag
+                  v-if="sku.createdSource === 'STAFF_APP'"
+                  size="small"
+                  type="warning"
+                >
+                  员工新增</el-tag
+                >
+              </div>
+              <div
+                v-if="sku.createdSource === 'STAFF_APP'"
+                class="rp-card-origin"
+              >
+                员工 {{ sku.createdByName || '（未知）' }} · {{
+                  formatStaffAddedDate(sku.createdAt)
+                }} 添加
               </div>
               <div class="rp-card-actions">
                 <el-button
@@ -1795,6 +1810,13 @@ const PROCUREMENT_PURCHASE_UNITS_BY_BASE_UNIT: Record<BaseUnit, string[]> = {
     '瓶',
     '卷',
   ],
+}
+const formatStaffAddedDate = (value?: string | null) => {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 const procurementPurchaseUnitOptions = computed(
   () => PROCUREMENT_PURCHASE_UNITS_BY_BASE_UNIT[formData.baseUnit] || [],
@@ -3795,6 +3817,12 @@ const handleCancel = () => {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.rp-card-origin {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #8a6b33;
 }
 
 .rp-card-info {

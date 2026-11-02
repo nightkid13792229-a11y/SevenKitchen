@@ -73,6 +73,10 @@
             <!-- 第1层：食谱名 -->
             <view class="item-header">
               <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
+              <text
+                v-if="recipeVersionLabel(item)"
+                class="recipe-version"
+              >{{ recipeVersionLabel(item) }}</text>
               <text v-if="isStockOrder" class="nutrition-standard"
                 >现货 · 试吃装</text
               >
@@ -924,6 +928,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { onShareAppMessage, onPullDownRefresh } from '@dcloudio/uni-app';
 import { request, requestSubscriptionMessage } from '../../utils/api';
+import { getLifeStageLabel } from '../../utils/label-mapping';
 import {
   bindOrderCustomerAddress as bindExistingOrderAddress,
   createOrderCustomerAddress,
@@ -987,6 +992,8 @@ interface OrderItem {
     id: string;
     version: number;
     name: string;
+    series_life_stage?: string;
+    series_life_stage_label?: string;
     coverImageUrl?: string | null;
     nutrition_standard: string;
     energy_density_kcal_per_kg: number;
@@ -1465,6 +1472,23 @@ const groupedItems = computed(() => {
 
   return Array.from(groups.values());
 });
+
+/**
+ * 商品行上的「生命阶段版本名」。
+ *
+ * ⚠️ 必须定义在脚本顶层（2026-11-02 修）：它曾经被误粘贴进
+ * `orderCenterTitle` 这个 computed 的函数体里，模板 `v-if="recipeVersionLabel(item)"`
+ * 一求值就抛 `recipeVersionLabel is not a function`，
+ * 整页重渲染失败 —— 顾客点进「鲜食订单详情」就是一片空白。
+ * 回归守卫见 src/template-bindings.regression.spec.ts（只认顶层绑定）。
+ */
+function recipeVersionLabel(item: any): string {
+  const snapshot = item?.recipeSnapshot
+  if (!snapshot) return ''
+  // 2026-11-02：以前端映射为准，后端旧标签只作兜底
+  const stage = snapshot.series_life_stage
+  return stage ? getLifeStageLabel(stage) : snapshot.series_life_stage_label || ''
+}
 
 const orderCenterTitle = computed(() => {
   const firstName = order.value?.items?.[0]?.recipeSnapshot?.name?.trim();
@@ -3096,6 +3120,10 @@ async function buyAgain() {
       ];
       if (dogId) {
         queryPairs.push(`dogId=${encodeURIComponent(dogId)}`);
+      }
+      const previousLifeStage = firstItem.recipeSnapshot?.series_life_stage;
+      if (previousLifeStage) {
+        queryPairs.push(`previousLifeStage=${encodeURIComponent(previousLifeStage)}`);
       }
       const queryString = queryPairs.join('&');
 

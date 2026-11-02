@@ -682,6 +682,10 @@ export interface ProcurementSku {
   targetStock: number | null;
   createdAt?: string;
   updatedAt?: string;
+  /** 谁加的（员工在小程序里新增时有值） */
+  createdById?: string | null;
+  createdSource?: string | null;
+  createdByName?: string | null;
 }
 
 export interface ProcurementSkuForm {

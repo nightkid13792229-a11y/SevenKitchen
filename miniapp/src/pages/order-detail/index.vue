@@ -1347,8 +1347,16 @@ const groupedItems = computed(() => {
   return Array.from(groups.values());
 });
 
-const orderCenterTitle = computed(() => {
-  function recipeVersionLabel(item: any): string {
+/**
+ * 商品行上的「生命阶段版本名」。
+ *
+ * ⚠️ 必须定义在脚本顶层（2026-11-02 修）：它曾经被误粘贴进
+ * `orderCenterTitle` 这个 computed 的函数体里，模板 `v-if="recipeVersionLabel(item)"`
+ * 一求值就抛 `recipeVersionLabel is not a function`，
+ * 整页重渲染失败 —— 顾客点进「鲜食订单详情」就是一片空白。
+ * 回归守卫见 src/template-bindings.regression.spec.ts（只认顶层绑定）。
+ */
+function recipeVersionLabel(item: any): string {
   const snapshot = item?.recipeSnapshot
   if (!snapshot) return ''
   // 2026-11-02：以前端映射为准，后端旧标签只作兜底
@@ -1356,7 +1364,8 @@ const orderCenterTitle = computed(() => {
   return stage ? getLifeStageLabel(stage) : snapshot.series_life_stage_label || ''
 }
 
-const firstName = order.value?.items?.[0]?.recipeSnapshot?.name?.trim();
+const orderCenterTitle = computed(() => {
+  const firstName = order.value?.items?.[0]?.recipeSnapshot?.name?.trim();
   if (!firstName) return '赛文的食堂 鲜食订单';
   const itemCount = order.value?.items?.length || 1;
   return itemCount > 1 ? `${firstName}等${itemCount}件` : firstName;

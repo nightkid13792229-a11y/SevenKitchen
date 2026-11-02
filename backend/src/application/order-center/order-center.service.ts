@@ -249,6 +249,8 @@ export class OrderCenterService {
                     OR: [
                       { orderNo: { contains: query.keyword, mode: 'insensitive' } },
                       { id: { contains: query.keyword, mode: 'insensitive' } },
+                      // 老「后台订单」页的搜索支持狗狗名，平移过来不能丢
+                      { dog: { name: { contains: query.keyword, mode: 'insensitive' } } },
                       ...(keywordUserIds && keywordUserIds.length > 0
                         ? [{ customerId: { in: keywordUserIds } }]
                         : []),
@@ -299,6 +301,8 @@ export class OrderCenterService {
                     OR: [
                       { orderId: { contains: query.keyword, mode: 'insensitive' } },
                       { id: { contains: query.keyword, mode: 'insensitive' } },
+                      // 定制单也按狗狗名搜（老搜索的同一口径）
+                      { dog: { name: { contains: query.keyword, mode: 'insensitive' } } },
                       ...(keywordUserIds && keywordUserIds.length > 0
                         ? [{ customerId: { in: keywordUserIds } }]
                         : []),
@@ -350,6 +354,8 @@ export class OrderCenterService {
                     OR: [
                       { orderNo: { contains: query.keyword, mode: 'insensitive' } },
                       { id: { contains: query.keyword, mode: 'insensitive' } },
+                      // 补剂单的狗名是下单快照，直接在这张表上搜
+                      { dogName: { contains: query.keyword, mode: 'insensitive' } },
                       ...(keywordUserIds && keywordUserIds.length > 0
                         ? [{ userId: { in: keywordUserIds } }]
                         : []),
@@ -849,6 +855,14 @@ export class OrderCenterService {
                   mode: 'insensitive' as const,
                 },
               },
+              {
+                dog: {
+                  name: {
+                    contains: query.keyword,
+                    mode: 'insensitive' as const,
+                  },
+                },
+              },
               ...(userIds && userIds.length > 0
                 ? [{ customerId: { in: userIds } }]
                 : []),
@@ -882,6 +896,14 @@ export class OrderCenterService {
                 id: {
                   contains: query.keyword,
                   mode: 'insensitive' as const,
+                },
+              },
+              {
+                dog: {
+                  name: {
+                    contains: query.keyword,
+                    mode: 'insensitive' as const,
+                  },
                 },
               },
               ...(userIds && userIds.length > 0
@@ -921,6 +943,12 @@ export class OrderCenterService {
               },
               {
                 id: {
+                  contains: query.keyword,
+                  mode: 'insensitive' as const,
+                },
+              },
+              {
+                dogName: {
                   contains: query.keyword,
                   mode: 'insensitive' as const,
                 },

@@ -196,6 +196,29 @@ export const staffSupplementOrderApi = {
     });
   },
 
+  /**
+   * 处理补剂售后（管理员）。
+   *
+   * 后端接口是 AdminGuard：员工调用会 403，手机上只给 ADMIN 显示按钮。
+   * REFUND 会发起微信原路退款；RESHIP 会生成 0 元补发单；
+   * REGISTER_ONLY 只登记；REJECT 驳回。
+   */
+  resolveAftersale(
+    caseId: string,
+    payload: {
+      resolutionType: 'REFUND' | 'RESHIP' | 'REGISTER_ONLY' | 'REJECT';
+      refundAmount?: number;
+      note?: string;
+      rejectReason?: string;
+    },
+  ) {
+    return request<StaffSupplementAftersaleCase>({
+      url: `/admin/supplement-shop/aftersales/${caseId}/resolve`,
+      method: 'POST',
+      data: payload,
+    });
+  },
+
   /** 分装标签数据；未分装时后端会拒绝（必须先填原瓶到期日） */
   labels(orderId: string) {
     return request<StaffSupplementOrderLabels>({

@@ -352,3 +352,18 @@ describe('staff order detail · 顾客备注', () => {
     expect(detailSource).toContain('indexOf(note) === index');
   });
 });
+
+describe('staff order detail · 预约制作日', () => {
+  it('鲜食订单详情显示顾客预约的制作日期', () => {
+    // 2026-11-02：详情页以前只有状态进度和下单时间，看不到这一单排在哪天做
+    expect(detailSource).toContain('预约制作日');
+    expect(detailSource).toContain('order.targetProductionDate');
+    expect(detailSource).toContain('formatProductionDate');
+    expect(detailSource).toContain('targetProductionDate?: string | null');
+  });
+
+  it('按东八区取日期，避免零点存库导致差一天', () => {
+    expect(detailSource).toContain('SHANGHAI_OFFSET_MS');
+    expect(detailSource).toContain('getUTCFullYear()');
+  });
+});

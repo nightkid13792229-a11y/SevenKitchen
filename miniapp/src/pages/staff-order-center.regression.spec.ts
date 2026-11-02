@@ -177,3 +177,19 @@ describe('staff order center · 两个只读页', () => {
     expect(dogPage).toContain("['治疗中', '慢性', '未标注结果']")
   })
 })
+
+describe('staff order center · 关键词搜索', () => {
+  it('★ 把老「后台订单」的关键词搜索平移过来', () => {
+    expect(orderCenter).toContain('searchKeyword')
+    expect(orderCenter).toContain('performSearch')
+    expect(orderCenter).toContain('订单号 / 姓名 / 手机号 / 狗狗名')
+    expect(orderCenter).toContain(
+      'keyword: searchKeyword.value.trim() || undefined',
+    )
+  })
+
+  it('清空关键词后重新查询，不会把上一次的结果留在列表里', () => {
+    expect(orderCenter).toContain('clearSearchKeyword')
+    expect(orderCenter).toContain("searchKeyword.value = ''")
+  })
+})

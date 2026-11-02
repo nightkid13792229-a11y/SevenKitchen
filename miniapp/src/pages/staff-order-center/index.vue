@@ -8,6 +8,23 @@
       <text class="refresh" @tap="load()">刷新</text>
     </view>
 
+    <!-- 搜索（2026-11-02）：老「后台订单」页的关键词搜索平移过来。
+         订单号 / 顾客姓名 / 手机号 / 狗狗名都能搜；状态仍用下面的状态栏 -->
+    <view class="search-bar">
+      <view class="search-input-wrap">
+        <text class="search-icon">🔍</text>
+        <input
+          class="search-input"
+          v-model="searchKeyword"
+          placeholder="订单号 / 姓名 / 手机号 / 狗狗名"
+          confirm-type="search"
+          @confirm="performSearch"
+        />
+        <text v-if="searchKeyword" class="search-clear" @tap.stop="clearSearchKeyword">×</text>
+      </view>
+      <text class="search-btn" @tap="performSearch">搜索</text>
+    </view>
+
     <!-- 三类分开看：颜色跟卡片上的色条是同一套，别各写各的 -->
     <scroll-view class="type-tabs" scroll-x>
       <view
@@ -185,6 +202,8 @@ const TYPE_STATUS_VALUES: Record<string, string[]> = {
 const type = ref('')
 const status = ref('')
 const onlyAftersale = ref(false)
+/** 关键词：订单号 / 顾客姓名 / 手机号 / 狗狗名（后端统一处理三类订单） */
+const searchKeyword = ref('')
 const items = ref<OrderCenterItem[]>([])
 const loading = ref(false)
 const page = ref(1)
@@ -213,6 +232,18 @@ function formatTime(value: string) {
   return `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
+/** 点搜索 / 键盘回车都走这里：从第 1 页重新查，别把上一次的结果留在后面 */
+function performSearch() {
+  searchKeyword.value = searchKeyword.value.trim()
+  load()
+}
+
+function clearSearchKeyword() {
+  if (!searchKeyword.value) return
+  searchKeyword.value = ''
+  load()
+}
+
 async function load(reset = true) {
   if (reset) {
     page.value = 1
@@ -226,6 +257,7 @@ async function load(reset = true) {
       data: {
         type: type.value || undefined,
         status: status.value || undefined,
+        keyword: searchKeyword.value.trim() || undefined,
         aftersale: onlyAftersale.value ? true : undefined,
         page: page.value,
         pageSize,
@@ -354,6 +386,14 @@ onMounted(() => load())
 .title { display: block; font-size: 38rpx; font-weight: 700; color: #1e3a2f; }
 .sub { display: block; margin-top: 6rpx; color: #909399; font-size: 23rpx; }
 .refresh { color: #1e3a2f; font-size: 25rpx; padding: 10rpx 4rpx; }
+
+/* 搜索：跟卡片同一套白底圆角，按钮用主色，别做成另一套视觉 */
+.search-bar { display: flex; align-items: center; gap: 14rpx; margin-bottom: 16rpx; }
+.search-input-wrap { flex: 1; display: flex; align-items: center; min-height: 76rpx; padding: 0 22rpx; background: #fff; border-radius: 38rpx; border: 1rpx solid #e4e7ed; box-sizing: border-box; }
+.search-icon { margin-right: 10rpx; color: #909399; font-size: 24rpx; }
+.search-input { flex: 1; min-width: 0; height: 76rpx; font-size: 24rpx; color: #303133; }
+.search-clear { padding: 0 6rpx 0 12rpx; color: #b0b4bb; font-size: 30rpx; line-height: 1; }
+.search-btn { flex: none; padding: 0 28rpx; height: 76rpx; line-height: 76rpx; border-radius: 38rpx; background: #1e3a2f; color: #fff; font-size: 24rpx; font-weight: 600; }
 
 .type-tabs { white-space: nowrap; margin-bottom: 12rpx; }
 .type-tab { display: inline-block; padding: 12rpx 26rpx; margin-right: 12rpx; border-radius: 30rpx; background: #fff; color: #606266; font-size: 26rpx; }

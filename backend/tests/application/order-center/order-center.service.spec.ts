@@ -177,6 +177,38 @@ describe('OrderCenterService', () => {
     expect(where.customerId).toBeUndefined();
   });
 
+  it('★ 按狗狗名搜索：三类订单都带上狗名条件（老「后台订单」的搜索口径）', async () => {
+    await service.list({ pageSize: 20, keyword: '旺财' });
+
+    const foodWhere = prisma.order.findMany.mock.calls[0][0].where;
+    const customWhere =
+      prisma.customRecipeOrder.findMany.mock.calls[0][0].where;
+    const supplementWhere =
+      prisma.supplementOrder.findMany.mock.calls[0][0].where;
+
+    expect(foodWhere.OR).toEqual(
+      expect.arrayContaining([
+        { dog: { name: { contains: '旺财', mode: 'insensitive' } } },
+      ]),
+    );
+    expect(customWhere.OR).toEqual(
+      expect.arrayContaining([
+        { dog: { name: { contains: '旺财', mode: 'insensitive' } } },
+      ]),
+    );
+    expect(supplementWhere.OR).toEqual(
+      expect.arrayContaining([
+        { dogName: { contains: '旺财', mode: 'insensitive' } },
+      ]),
+    );
+    // 总数也要按同一个条件收窄，否则分页会按「没搜索」的总数算
+    expect(prisma.order.count.mock.calls[0][0].where.OR).toEqual(
+      expect.arrayContaining([
+        { dog: { name: { contains: '旺财', mode: 'insensitive' } } },
+      ]),
+    );
+  });
+
   it('只查补剂时不会碰鲜食/定制查询', async () => {
     const result = await service.list({
       type: 'SUPPLEMENT',

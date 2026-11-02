@@ -84,6 +84,10 @@
             <text v-if="order.hasOpenAftersale" class="status-tag status-tag--warn">
               {{ order.openAftersaleLabel || '售后中' }}
             </text>
+            <text
+              v-if="order.refundStatus === 'SUCCESS'"
+              class="status-tag status-tag--done"
+            >已退款</text>
           </view>
         </view>
 

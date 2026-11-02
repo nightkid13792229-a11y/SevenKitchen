@@ -62,6 +62,15 @@
               >
                 {{ row.openAftersaleLabel || '售后中' }}
               </el-tag>
+              <!-- 已发货订单退款成功后，履约状态仍是已发货，这里补一个「已退款」 -->
+              <el-tag
+                v-if="row.refundStatus === 'SUCCESS'"
+                type="success"
+                size="small"
+                effect="plain"
+              >
+                已退款
+              </el-tag>
             </div>
           </template>
         </el-table-column>

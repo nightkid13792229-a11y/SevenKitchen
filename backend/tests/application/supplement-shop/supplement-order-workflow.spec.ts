@@ -577,5 +577,30 @@ describe('补剂订单 · 分装发货售后', () => {
       expect(JSON.stringify(where)).toContain('order-1');
       expect(JSON.stringify(where)).toContain('AFTERSALE');
     });
+
+    it('已退款成功的售后单把 refundStatus/金额补给订单视图（前端据此显示已退款）', async () => {
+      mockPrismaService.aftersaleCase = {
+        findMany: jest.fn(({ where }: any) =>
+          where?.refundStatus === 'SUCCESS'
+            ? [
+                {
+                  orderId: 'order-1',
+                  refundAmount: 28.7,
+                  refundedAt: new Date('2026-11-02T07:49:04Z'),
+                },
+              ]
+            : [],
+        ),
+      };
+      mockPrismaService.supplementOrder.findMany = jest
+        .fn()
+        .mockResolvedValue([{ ...store }]);
+      mockPrismaService.supplementOrder.count = jest.fn().mockResolvedValue(1);
+
+      const result = await service.listAllOrders({});
+
+      expect(result.items[0].refundStatus).toBe('SUCCESS');
+      expect(result.items[0].refundAmount).toBe(28.7);
+    });
   });
 });

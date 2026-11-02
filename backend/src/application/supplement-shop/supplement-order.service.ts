@@ -2510,22 +2510,63 @@ export class SupplementOrderService {
     const ids = views.map((view) => view.id);
     if (ids.length === 0) return views;
     try {
-      const cases = await (this.prisma as any).aftersaleCase?.findMany?.({
-        where: {
-          orderType: 'SUPPLEMENT',
-          orderId: { in: ids },
-          status: { in: ['PENDING', 'PROCESSING'] },
-        },
-        select: { orderId: true, requestType: true },
-      });
-      if (!cases?.length) return views;
-      const byOrder = new Map<string, string>();
-      for (const item of cases) byOrder.set(item.orderId, item.requestType);
+      const [cases, refundCases] = await Promise.all([
+        (this.prisma as any).aftersaleCase?.findMany?.({
+          where: {
+            orderType: 'SUPPLEMENT',
+            orderId: { in: ids },
+            status: { in: ['PENDING', 'PROCESSING'] },
+          },
+          select: { orderId: true, requestType: true },
+        }),
+        // 已退款成功的售后单：订单级字段可能是旧数据（case 流程之前），
+        // 这里兜底把 refundStatus/refundAmount 补给前台，避免「钱退了、状态还显示已发货」。
+        (this.prisma as any).aftersaleCase?.findMany?.({
+          where: {
+            orderType: 'SUPPLEMENT',
+            orderId: { in: ids },
+            requestType: 'REFUND',
+            refundStatus: 'SUCCESS',
+          },
+          select: { orderId: true, refundAmount: true, refundedAt: true },
+        }),
+      ]);
+
+      const openByOrder = new Map<string, string>();
+      for (const item of cases ?? []) {
+        openByOrder.set(item.orderId, item.requestType);
+      }
+      const refundByOrder = new Map<
+        string,
+        { amount: number; refundedAt: string | null }
+      >();
+      for (const item of refundCases ?? []) {
+        const current = refundByOrder.get(item.orderId) ?? {
+          amount: 0,
+          refundedAt: null,
+        };
+        current.amount += Number(item.refundAmount ?? 0);
+        if (item.refundedAt) {
+          current.refundedAt = new Date(item.refundedAt).toISOString();
+        }
+        refundByOrder.set(item.orderId, current);
+      }
+
       for (const view of views) {
-        const requestType = byOrder.get(view.id);
+        const requestType = openByOrder.get(view.id);
         if (requestType) {
           view.hasOpenAftersale = true;
-          view.openAftersaleLabel = requestType === 'REFUND' ? '退款中' : '售后中';
+          view.openAftersaleLabel =
+            requestType === 'REFUND' ? '退款中' : '售后中';
+        }
+        const refund = refundByOrder.get(view.id);
+        if (refund) {
+          view.refundStatus = view.refundStatus || 'SUCCESS';
+          if (!view.amountsRedacted) {
+            view.refundAmount =
+              view.refundAmount ?? Number(refund.amount.toFixed(2));
+            view.refundedAt = view.refundedAt ?? refund.refundedAt;
+          }
         }
       }
     } catch {

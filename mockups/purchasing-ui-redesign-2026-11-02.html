@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小程序「采购管理」界面审核与建议稿</title>
+<style>
+  :root{
+    --ink:#26261f; --ink2:#6b6653; --ink3:#8a8a7e;
+    --cream:#f9faf2; --bg:#fbfcf7; --surface:#fff;
+    --line:#eef1e2; --line2:#e5e8d4;
+    --brand:#1e3a2f; --brand-deep:#173026; --brand-soft:#eef2e4;
+    --cream-text:#f3eddd;
+    --gold:#b08d4f; --gold-ink:#8a6b33; --gold-soft:#f6efe0;
+    --danger:#b4453a; --danger-soft:#f8e8e2;
+    --page:#e9ebee;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--page);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;font-size:14px;}
+  .wrap{max-width:1400px;margin:0 auto;padding:36px 28px 70px;}
+
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.16em;font-weight:800;
+    color:var(--gold-ink);background:var(--gold-soft);border:1px solid #e8dcc0;border-radius:999px;padding:6px 12px;}
+  h1{margin:14px 0 10px;font-size:32px;line-height:1.18;letter-spacing:-.01em;}
+  .lede{margin:0 0 18px;color:#4a4a42;font-size:14.5px;line-height:1.8;max-width:900px;}
+  .lede b{background:linear-gradient(transparent 62%, #ffe08a 62%);padding:0 2px;}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:30px;}
+  .meta span{font-size:12px;color:#5c5c52;background:#fff;border:1px solid #dcdfe3;border-radius:999px;padding:5px 11px;}
+  .meta b{color:var(--ink);}
+
+  h2{font-size:19px;margin:44px 0 6px;letter-spacing:-.01em;}
+  h2 .num{display:inline-flex;width:24px;height:24px;border-radius:7px;background:var(--brand);color:var(--cream-text);
+    font-size:12px;align-items:center;justify-content:center;margin-right:9px;vertical-align:2px;}
+  .h2sub{margin:0 0 18px;color:#6d6d63;font-size:13px;line-height:1.7;max-width:900px;}
+
+  /* ---------- 问题实拍 ---------- */
+  .shots{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;}
+  .shot{background:#fff;border:1px solid #dfe2e6;border-radius:14px;padding:12px;box-shadow:0 10px 24px rgba(16,24,40,.06);}
+  .shot .frame{position:relative;border-radius:10px;overflow:hidden;background:#000;line-height:0;}
+  .shot img{width:100%;display:block;}
+  .mark{position:absolute;border:2px solid #e0342b;border-radius:6px;
+    box-shadow:0 0 0 3px rgba(224,52,43,.18);}
+  .mark::after{content:"";position:absolute;inset:0;background:rgba(224,52,43,.06);}
+  .shot .cap{margin-top:10px;font-size:12.5px;line-height:1.65;color:#4a4a42;}
+  .shot .cap b{display:block;font-size:13px;color:#1c1c18;margin-bottom:3px;}
+  .tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.04em;border-radius:4px;padding:2px 6px;
+    vertical-align:1px;margin-right:6px;}
+  .tag.s0{background:#fee4e2;color:#a41d12;border:1px solid #f7c9c4;}
+  .tag.s1{background:#fff1d6;color:#8a5a00;border:1px solid #f2d9a5;}
+
+  /* ---------- 建议稿 ---------- */
+  .redesign{display:grid;grid-template-columns:390px 390px 390px;gap:26px;justify-content:start;}
+  .col-note{margin-top:14px;}
+  .col-note h4{margin:0 0 7px;font-size:14px;}
+  .col-note ul{margin:0;padding-left:17px;color:#4a4a42;font-size:12.6px;line-height:1.75;}
+  .col-note li{margin-bottom:4px;}
+  .col-note li b{color:#1c1c18;}
+
+  .phone{width:390px;height:844px;background:var(--bg);border-radius:42px;overflow:hidden;position:relative;
+    box-shadow:0 24px 48px rgba(16,24,40,.22), 0 0 0 9px #1a1a1a, 0 0 0 10px #3a3a3a;}
+  .statusbar{height:47px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 6px;
+    font-size:13px;font-weight:700;color:var(--cream-text);background:var(--brand);}
+  .statusbar.dark{color:#1c1c18;background:transparent;}
+  .sb-right{display:flex;gap:5px;align-items:center;font-size:11px;letter-spacing:.02em;}
+  .nav{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;
+    background:var(--brand);color:var(--cream-text);position:relative;}
+  .nav .title{position:absolute;left:0;right:0;text-align:center;font-size:16px;font-weight:700;pointer-events:none;}
+  .nav .back{font-size:22px;line-height:1;opacity:.95;}
+  .nav .action{font-size:12px;color:var(--cream-text);opacity:.9;border:1px solid rgba(243,237,221,.35);
+    border-radius:999px;padding:4px 9px;}
+  .nav .spacer{width:46px;}
+  .screen{height:753px;overflow:hidden;position:relative;padding-bottom:0;}
+
+  /* 首页 */
+  .datestrip{display:flex;gap:7px;padding:11px 14px 9px;overflow:hidden;}
+  .dchip{flex:0 0 auto;width:80px;padding:8px 9px;border-radius:11px;background:#fff;border:1px solid var(--line2);}
+  .dchip .d1{font-size:10.5px;color:var(--ink2);letter-spacing:.02em;}
+  .dchip .d2{font-size:13px;font-weight:800;margin-top:2px;color:var(--ink);}
+  .dchip .d3{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--ink2);margin-top:5px;}
+  .dot{width:5px;height:5px;border-radius:50%;background:#c9cdbf;display:inline-block;}
+  .dot.on{background:var(--gold);}
+  .dot.done{background:#5b8a6b;}
+  .dchip.active{background:var(--brand);border-color:var(--brand);}
+  .dchip.active .d1{color:rgba(243,237,221,.66);}
+  .dchip.active .d2{color:var(--cream-text);}
+  .dchip.active .d3{color:rgba(243,237,221,.8);}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;margin:0 14px 11px;padding:14px;}
+  .card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}
+  .card-head .d{font-size:15.5px;font-weight:800;letter-spacing:-.01em;}
+  .card-head .d small{font-size:11px;font-weight:600;color:var(--ink2);margin-left:5px;}
+  .badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;border-radius:999px;padding:4px 8px;}
+  .badge.pending{background:var(--gold-soft);color:var(--gold-ink);}
+  .badge.done{background:var(--brand-soft);color:#2f5b45;}
+  .badge.danger{background:var(--danger-soft);color:var(--danger);}
+  .metrics{display:flex;align-items: stretch;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:11px;}
+  .metrics .m{flex:1;padding:8px 9px;}
+  .metrics .m + .m{border-left:1px solid var(--line);}
+  .metrics .k{font-size:10px;color:var(--ink2);}
+  .metrics .v{font-size:15px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums;}
+  .metrics .v.gold{color:var(--gold-ink);}
+  .btn{height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;gap:5px;
+    font-size:14.5px;font-weight:700;border:none;}
+  .btn.primary{background:var(--brand);color:var(--cream-text);}
+  .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line2);}
+  .link{font-size:11.5px;color:var(--gold-ink);font-weight:700;text-align:center;margin-top:9px;}
+
+  .tiles{display:flex;gap:9px;margin:0 14px 12px;}
+  .tile{flex:1;border-radius:13px;padding:11px 12px;display:flex;align-items:center;justify-content:space-between;gap:6px;}
+  .tile .t1{font-size:13.5px;font-weight:800;}
+  .tile .t2{font-size:10px;margin-top:2px;}
+  .tile.dark{background:var(--brand);color:var(--cream-text);}
+  .tile.dark .t2{color:rgba(243,237,221,.7);}
+  .tile.light{background:#fff;border:1px solid var(--line2);}
+  .tile.light .t2{color:var(--ink2);}
+  .arrow{font-size:16px;opacity:.7;}
+
+  .listhead{display:flex;align-items:center;justify-content:space-between;margin:2px 14px 9px;}
+  .listhead .lt{font-size:15px;font-weight:800;}
+  .seg{display:flex;gap:3px;background:#eef0e6;border-radius:9px;padding:3px;}
+  .seg span{font-size:10.5px;font-weight:700;color:#5d6355;padding:4px 8px;border-radius:7px;}
+  .seg span.on{background:#fff;color:var(--brand);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+
+  .row-card{background:#fff;border:1px solid var(--line);border-radius:13px;margin:0 14px 9px;padding:12px 13px;}
+  .row-card .r1{display:flex;align-items:center;gap:6px;}
+  .row-card .date{font-size:14.5px;font-weight:800;}
+  .kind{font-size:9.5px;font-weight:800;border-radius:5px;padding:3px 6px;background:var(--gold-soft);color:var(--gold-ink);}
+  .kind.stock{background:var(--brand-soft);color:#2f5b45;}
+  .row-card .r2{display:flex;align-items:baseline;justify-content:space-between;margin-top:8px;}
+  .row-card .nums{font-size:11.5px;color:var(--ink2);}
+  .row-card .money{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;}
+  .row-card .r3{display:flex;align-items:center;justify-content:space-between;margin-top:9px;padding-top:9px;border-top:1px dashed var(--line2);}
+  .row-card .mini{font-size:11.5px;font-weight:800;color:var(--brand);}
+  .row-card .more{font-size:11px;color:var(--ink3);}
+
+  /* 详情 */
+  .sticky{background:#fff;border-bottom:1px solid var(--line);padding:11px 14px;}
+  .sticky .s1{display:flex;align-items:center;justify-content:space-between;}
+  .sticky .s1 .dt{font-size:15px;font-weight:800;}
+  .sticky .s2{display:flex;align-items:center;gap:9px;margin-top:8px;}
+  .pbar{flex:1;height:5px;border-radius:3px;background:#eef0e6;overflow:hidden;}
+  .pbar i{display:block;height:100%;width:38%;background:var(--gold);border-radius:3px;}
+  .sticky .s2 .pt{font-size:10.5px;color:var(--ink2);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .sticky .s2 .amt{font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;}
+
+  .groupbar{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:#f4f6ec;}
+  .groupbar .g{font-size:12px;font-weight:800;color:#3f4a3b;}
+  .ing{background:#fff;padding:9px 14px;border-bottom:1px solid var(--line);}
+  .ing .i1{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+  .ing .nm{font-size:14.5px;font-weight:800;line-height:1.3;flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+  .ing .qty{text-align:right;flex:0 0 auto;}
+  .ing .qty .n{font-size:19px;font-weight:800;color:var(--gold-ink);font-variant-numeric:tabular-nums;letter-spacing:-.02em;}
+  .ing .qty .u{font-size:10px;color:var(--ink2);margin-left:2px;font-weight:700;}
+  .ing .qty .lbl{display:block;font-size:9.5px;color:var(--ink3);margin-bottom:1px;}
+  .ing .qty.zero .n{font-size:12px;color:var(--ink3);font-weight:700;}
+  .ing .i2{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;height:29px;}
+  .ing .meta{font-size:11px;color:var(--ink2);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ing .rec{flex:0 0 auto;font-size:11px;font-weight:800;color:var(--brand);border:1px solid #cfdac7;
+    background:#fff;border-radius:8px;padding:4px 10px;}
+  .collapse{margin:10px 14px;padding:11px 13px;border-radius:11px;background:#f4f6ec;display:flex;
+    align-items:center;justify-content:space-between;font-size:11.5px;color:#4a5346;font-weight:700;}
+
+  .bottom{position:absolute;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);
+    padding:11px 14px 26px;display:flex;align-items:center;justify-content:space-between;gap:12px;
+    box-shadow:0 -6px 18px rgba(30,46,36,.05);}
+  .bottom .sum{font-size:10.5px;color:var(--ink2);line-height:1.5;}
+  .bottom .sum b{display:block;font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .bottom .btn{width:150px;height:44px;}
+
+  /* 记录弹窗 */
+  .behind{position:absolute;inset:0;background:#fff;}
+  .behind .b-sticky{height:62px;background:#fff;border-bottom:1px solid var(--line);}
+  .behind .b-row{height:74px;margin:0 14px;border-bottom:1px solid var(--line);}
+  .behind .b-row::before{content:"";display:block;width:52%;height:11px;border-radius:4px;background:#e6e9dd;margin-top:16px;}
+  .behind .b-row::after{content:"";display:block;width:30%;height:8px;border-radius:4px;background:#eff1e8;margin-top:9px;}
+  .dim{position:absolute;inset:0;background:rgba(20,26,22,.45);}
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:20px 20px 0 0;padding:0 0 26px;}
+  .sheet .grab{width:36px;height:4px;border-radius:2px;background:#dfe2d6;margin:8px auto 0;}
+  .sheet .sh{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px;}
+  .sheet .sh .t{font-size:16px;font-weight:800;}
+  .sheet .sh .x{font-size:19px;color:#9a9a8e;line-height:1;}
+  .summary{margin:0 16px 13px;border-radius:12px;background:var(--gold-soft);padding:11px 12px;}
+  .summary .name{font-size:13.5px;font-weight:800;}
+  .summary .name small{font-size:10px;color:var(--gold-ink);font-weight:700;margin-left:6px;}
+  .summary .three{display:flex;margin-top:9px;gap:7px;}
+  .summary .three .c{flex:1;background:rgba(255,255,255,.7);border-radius:8px;padding:6px 7px;}
+  .summary .three .c.main{background:#fff;box-shadow:0 0 0 1.5px var(--gold) inset;}
+  .summary .three .k{font-size:9.5px;color:#7a6a44;}
+  .summary .three .v{font-size:13px;font-weight:800;margin-top:1px;font-variant-numeric:tabular-nums;}
+  .summary .three .c.main .v{font-size:16px;color:var(--gold-ink);}
+
+  .sect{padding:0 16px;margin-bottom:13px;}
+  .sect .lbl{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:7px;}
+  .sect .lbl .l{font-size:12.5px;font-weight:800;}
+  .sect .lbl .h{font-size:10px;color:var(--ink3);}
+  .opt{display:flex;align-items:center;gap:9px;border:1px solid var(--line2);border-radius:10px;padding:9px 11px;margin-bottom:7px;background:#fff;}
+  .opt.on{border-color:var(--brand);background:#f7f9f1;box-shadow:0 0 0 1px var(--brand) inset;}
+  .radio{width:15px;height:15px;border-radius:50%;border:1.5px solid #cfd4c4;flex:0 0 auto;}
+  .opt.on .radio{border-color:var(--brand);background:radial-gradient(circle, var(--brand) 0 4px, #fff 4.5px 100%);}
+  .opt .oc{flex:1;min-width:0;}
+  .opt .on1{display:flex;align-items:center;gap:6px;}
+  .opt .onm{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .opt .onm2{font-size:10.5px;color:var(--ink2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .rec-badge{font-size:8.5px;font-weight:800;color:#fff;background:var(--gold);border-radius:4px;padding:2px 5px;flex:0 0 auto;}
+  .fields{display:flex;gap:9px;}
+  .field{flex:1;border:1px solid var(--line2);border-radius:10px;background:#fbfcf7;padding:8px 10px;}
+  .field .fk{font-size:10px;color:var(--ink2);}
+  .field .fv{display:flex;align-items:baseline;gap:3px;margin-top:2px;font-size:16px;font-weight:800;}
+  .field .fv .ph{font-size:13px;font-weight:600;color:#b3b5a8;}
+  .field .fv .fu{font-size:10.5px;color:var(--ink2);font-weight:700;margin-left:auto;}
+  .hintline{font-size:10px;color:var(--gold-ink);margin-top:5px;font-weight:700;}
+  .sheet .foot{display:flex;gap:9px;padding:4px 16px 0;}
+  .sheet .foot .btn{flex:1;height:44px;}
+  .sheet .foot .btn.ghost{background:#fff;}
+
+  /* ---------- 规范 ---------- */
+  .spec{display:grid;grid-template-columns:1.15fr 1fr;gap:18px;}
+  .panel{background:#fff;border:1px solid #dfe2e6;border-radius:14px;padding:18px;}
+  .panel h3{margin:0 0 4px;font-size:14.5px;}
+  .panel p{margin:0 0 14px;font-size:12px;color:#6d6d63;line-height:1.6;}
+  .swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;}
+  .sw{border:1px solid #e4e6e9;border-radius:9px;overflow:hidden;}
+  .sw .c{height:44px;}
+  .sw .n{padding:6px 7px;font-size:9.5px;line-height:1.45;background:#fff;}
+  .sw .n b{display:block;font-size:10.5px;color:#1c1c18;}
+  .sw .n code{font-size:9px;color:#7a7a70;}
+  .demo{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .demo .d{border:1px solid #e4e6e9;border-radius:9px;padding:10px;background:#fbfcf7;}
+  .demo .d .l{font-size:9.5px;color:#7a7a70;margin-bottom:6px;letter-spacing:.04em;font-weight:700;}
+  .demo .btn{height:38px;font-size:13px;border-radius:9px;}
+  .btns{display:flex;flex-direction:column;gap:7px;}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px;}
+  .chip{font-size:10.5px;font-weight:800;border-radius:999px;padding:4px 9px;}
+  .type-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}
+  .ty{font-size:9.5px;font-weight:800;border-radius:5px;padding:3px 6px;}
+  .ty.a{background:var(--gold-soft);color:var(--gold-ink);}
+  .ty.b{background:var(--brand-soft);color:#2f5b45;}
+  .ty.c{background:var(--danger-soft);color:var(--danger);}
+
+  .phases{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+  .phase{background:#fff;border:1px solid #dfe2e6;border-radius:14px;padding:16px;position:relative;overflow:hidden;}
+  .phase::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--gold);}
+  .phase.p1::before{background:#d9a83f;}
+  .phase.p2::before{background:#7aa88b;}
+  .phase.p3::before{background:var(--brand);}
+  .phase .k{font-size:10px;letter-spacing:.14em;font-weight:800;color:#8a8a7e;}
+  .phase h4{margin:5px 0 8px;font-size:15px;}
+  .phase .days{font-size:11px;color:#fff;background:var(--gold-ink);border-radius:999px;padding:2px 8px;display:inline-block;margin-bottom:9px;}
+  .phase ul{margin:0;padding-left:16px;font-size:11.6px;line-height:1.7;color:#4a4a42;}
+  .phase li{margin-bottom:5px;}
+  .phase .accept{margin-top:9px;padding-top:9px;border-top:1px dashed #e2e4e8;font-size:10.5px;color:#6d6d63;line-height:1.55;}
+  .phase .accept b{color:#a41d12;}
+
+  .foot-note{margin-top:38px;padding-top:16px;border-top:1px solid #d6d9de;font-size:11.5px;color:#7a7a70;line-height:1.8;}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="eyebrow">MINIAPP · 采购管理 · UI AUDIT</span>
+  <h1>采购管理：8 个页面的界面审核与建议稿</h1>
+  <p class="lede">
+    在微信开发者工具里用真实数据逐页走了一遍：<b>3 处文字和底色完全相同（等于看不见）</b>，
+    6 处对比度低于 3:1；7 个页面标题显示两遍；采购清单详情一屏只能看 2 个原料。
+    这不是审美问题——采购员在货架前会直接卡住。下面是实拍证据与建议界面。
+  </p>
+  <div class="meta">
+    <span>审核日期 <b>2026-11-02</b></span>
+    <span>范围 <b>8 个页面 / 11,481 行</b></span>
+    <span>问题 <b>30 项</b>（阻断 5 / 严重 10 / 一般 15）</span>
+    <span>建议投入 <b>6–8 个工作日</b></span>
+    <span>验证方式 <b>模拟器实拍 + WCAG 对比度计算</b></span>
+  </div>
+
+  <h2><span class="num">1</span>问题实拍</h2>
+  <p class="h2sub">红框为问题区域。截图均为模拟器原图（iPhone 尺寸，含系统导航栏），未做任何修饰。</p>
+
+  <div class="shots">
+    <div class="shot">
+      <div class="frame">
+        <img src="assets/purchasing-ui-2026-11-02/01-index-marked.jpg" alt="采购首页">
+      </div>
+      <div class="cap"><b><span class="tag s0">阻断</span>补货入口整块看不见字</b>
+        深绿底 <code>#1E3A2F</code>，文字却是 <code>#26261F</code>，对比度 1.08–1.23:1。同一页的"开始采购"按钮用的正是米白字，说明是批量改色误伤。</div>
+    </div>
+
+    <div class="shot">
+      <div class="frame">
+        <img src="assets/purchasing-ui-2026-11-02/05-stock-marked.jpg" alt="创建补货单">
+      </div>
+      <div class="cap"><b><span class="tag s0">阻断</span>选中的分类是一个黑块</b>
+        <code>.filter-chip.active</code> 的文字色与底色都写成 <code>#1E3A2F</code>，对比度 1.0:1——用户看不到自己选的是"食材"。页头"补货"同样是深字压深绿金渐变。</div>
+    </div>
+
+    <div class="shot">
+      <div class="frame">
+        <img src="assets/purchasing-ui-2026-11-02/06-submit-marked.jpg" alt="报销提交">
+      </div>
+      <div class="cap"><b><span class="tag s0">阻断</span>当前步骤与类型标签都看不见</b>
+        步骤条当前步、每张采购单的"日采/补货"标签，都是文字色 = 底色，只剩深绿方块。</div>
+    </div>
+
+    <div class="shot">
+      <div class="frame">
+        <img src="assets/purchasing-ui-2026-11-02/04-record-marked.jpg" alt="添加采购记录">
+      </div>
+      <div class="cap"><b><span class="tag s0">阻断</span>输入框和页面一个颜色</b>
+        输入框、选择器、分区卡片全是 <code>#FBFCF7</code>，没有底色差也没有描边；固定底栏与页面同色，原生输入框还会盖在底栏上——"取消"被金额占位文字压住。</div>
+    </div>
+
+    <div class="shot">
+      <div class="frame">
+        <img src="assets/purchasing-ui-2026-11-02/02-today-marked.jpg" alt="采购首页-今天">
+      </div>
+      <div class="cap"><b><span class="tag s1">严重</span>同一句话说了三遍</b>
+        "暂无待采购订单"分别出现在徽标、正文和禁用按钮上。状态只该出现一次，其余空间应给下一步动作。</div>
+    </div>
+
+    <div class="shot">
+      <div class="frame">
+        <img src="assets/purchasing-ui-2026-11-02/03-detail-marked.jpg" alt="采购清单详情">
+      </div>
+      <div class="cap"><b><span class="tag s1">严重</span>原料名被右侧按钮挤成两行</b>
+        每行 5 层信息 + 竖排两个按钮，一屏只看 2 个原料；30 个原料约 15 屏。0 需求与 148g 需求视觉权重相同。</div>
+    </div>
+
+    <div class="shot">
+      <div class="frame">
+        <img src="assets/purchasing-ui-2026-11-02/07-reimb-detail-marked.jpg" alt="报销详情">
+      </div>
+      <div class="cap"><b><span class="tag s1">严重</span>"需要采购 kg"缺数字，单价被拆行</b>
+        数量为 0 时函数只返回单位；<code>¥15.00/500</code> 与 <code>g</code> 断成两行。账目对不上，报销会被退回。</div>
+    </div>
+
+    <div class="shot">
+      <div class="frame">
+        <img src="assets/purchasing-ui-2026-11-02/08-reimb-list-marked.jpg" alt="报销列表">
+      </div>
+      <div class="cap"><b><span class="tag s1">严重</span>5 个 tab 挤一行，选中态只有金色文字</b>
+        金色在米白底上只有 3.01:1；没有数量角标，看不出"待报销"有几张。金额一律红色，与本系统的删除色撞车。</div>
+    </div>
+  </div>
+
+  <h2><span class="num">2</span>建议界面</h2>
+  <p class="h2sub">
+    目标：首屏看到"今天该做什么"，一屏看 3 张清单；详情页一屏看 6 个原料，仍需采购量是视觉主角。
+    所有文字对比度 ≥ 4.5:1，主按钮统一深绿底米白字。
+  </p>
+
+  <div class="redesign">
+
+    <!-- ============ 屏幕 1：首页 ============ -->
+    <div>
+      <div class="phone">
+        <div class="statusbar"><span>9:41</span><span class="sb-right">●●● ▮</span></div>
+        <div class="nav">
+          <span class="back">‹</span>
+          <span class="title">采购管理</span>
+          <span class="action">报销</span>
+        </div>
+        <div class="screen">
+          <div class="datestrip">
+            <div class="dchip">
+              <div class="d1">今天</div><div class="d2">11/2 周一</div>
+              <div class="d3"><i class="dot"></i>无订单</div>
+            </div>
+            <div class="dchip active">
+              <div class="d1">明天</div><div class="d2">11/3 周二</div>
+              <div class="d3"><i class="dot on"></i>待采购</div>
+            </div>
+            <div class="dchip">
+              <div class="d1">后天</div><div class="d2">11/4 周三</div>
+              <div class="d3"><i class="dot"></i>无订单</div>
+            </div>
+            <div class="dchip">
+              <div class="d1">其他</div><div class="d2">选日期</div>
+              <div class="d3"><i class="dot done"></i>已有 3 张</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div class="d">11月3日<small>周二 · 制作日期</small></div>
+              <span class="badge pending">已有清单</span>
+            </div>
+            <div class="metrics">
+              <div class="m"><div class="k">关联订单</div><div class="v">2 单</div></div>
+              <div class="m"><div class="k">原料种类</div><div class="v">30 种</div></div>
+              <div class="m"><div class="k">预估金额</div><div class="v gold">¥30.90</div></div>
+            </div>
+            <div class="btn primary">查看清单 <span style="opacity:.7">›</span></div>
+            <div class="link">另有 2 张订单待合并 · 点此处理</div>
+          </div>
+
+          <div class="tiles">
+            <div class="tile dark">
+              <div><div class="t1">补货</div><div class="t2">按库存建议生成</div></div>
+              <span class="arrow">›</span>
+            </div>
+            <div class="tile light">
+              <div><div class="t1">报销</div><div class="t2">3 张待提交</div></div>
+              <span class="arrow">›</span>
+            </div>
+          </div>
+
+          <div class="listhead">
+            <div class="lt">采购清单</div>
+            <div class="seg"><span class="on">全部</span><span>待采购</span><span>已完成</span></div>
+          </div>
+
+          <div class="row-card">
+            <div class="r1"><span class="date">11月3日</span><span class="kind">日采</span>
+              <span class="badge pending" style="margin-left:auto">待采购</span></div>
+            <div class="r2"><span class="nums">30 种原料 · 0 条记录</span><span class="money">¥30.90</span></div>
+            <div class="r3"><span class="mini">继续采购 ›</span><span class="more">删除</span></div>
+          </div>
+
+          <div class="row-card">
+            <div class="r1"><span class="date">11月1日</span><span class="kind">日采</span>
+              <span class="badge done" style="margin-left:auto">已完成</span></div>
+            <div class="r2"><span class="nums">15 种原料 · 6 条记录</span><span class="money">¥106.44</span></div>
+            <div class="r3"><span class="mini">查看明细 ›</span><span class="more">11月2日完成</span></div>
+          </div>
+
+          <div class="row-card">
+            <div class="r1"><span class="date">10月31日</span><span class="kind stock">补货</span>
+              <span class="badge done" style="margin-left:auto">已完成</span></div>
+            <div class="r2"><span class="nums">24 种原料 · 12 条记录</span><span class="money">¥102.90</span></div>
+            <div class="r3"><span class="mini">查看明细 ›</span><span class="more">10月31日完成</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-note">
+        <h4>首页 · 改了什么</h4>
+        <ul>
+          <li><b>删掉页内大标题</b>：系统栏已有"采购管理"，省下约 96pt</li>
+          <li><b>日期条</b>横滑，状态点（无单 / 待采购 / 已有）一眼分辨</li>
+          <li><b>当日行动卡</b>：状态只出现一次，三个数字一行，一个主按钮</li>
+          <li><b>补货 / 报销</b>并排，深绿只给主入口</li>
+          <li><b>清单一屏约 3 张</b>（当前 2 张）：日期+类型+状态 / 数量+金额 / 动作，三行制</li>
+          <li>金额改中性色，等宽数字右对齐</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ============ 屏幕 2：详情 ============ -->
+    <div>
+      <div class="phone">
+        <div class="statusbar"><span>9:41</span><span class="sb-right">●●● ▮</span></div>
+        <div class="nav">
+          <span class="back">‹</span>
+          <span class="title">日采清单详情</span>
+          <span class="spacer"></span>
+        </div>
+        <div class="screen">
+          <div class="sticky">
+            <div class="s1">
+              <span class="dt">11月3日 · 周二</span>
+              <span class="badge pending">待采购</span>
+            </div>
+            <div class="s2">
+              <span class="pt">已录 6/30</span>
+              <div class="pbar"><i></i></div>
+              <span class="amt">¥106.44</span>
+            </div>
+          </div>
+
+          <div class="groupbar"><span class="g">食材 23</span><span style="font-size:11px;color:#6b6653">收起 ⌃</span></div>
+
+          <div class="ing">
+            <div class="i1">
+              <div class="nm">MM澳洲谷饲牛霖</div>
+              <div class="qty"><span class="lbl">仍需采购</span><span class="n">148</span><span class="u">g</span></div>
+            </div>
+            <div class="i2">
+              <span class="meta">山姆会员店 · 1.2kg/盒 · ¥49.88/500g</span>
+              <span class="rec">记录</span>
+            </div>
+          </div>
+
+          <div class="ing">
+            <div class="i1">
+              <div class="nm">牛肝</div>
+              <div class="qty zero"><span class="n">库存已覆盖</span></div>
+            </div>
+            <div class="i2">
+              <span class="meta">本地生鲜市场 · 散称 · 需求 35g 已由库存抵扣</span>
+              <span class="rec" style="color:#8a8a7e;border-color:#e2e4d8">记录</span>
+            </div>
+          </div>
+
+          <div class="ing">
+            <div class="i1">
+              <div class="nm">小白菜 盒马日日鲜小白菜</div>
+              <div class="qty"><span class="lbl">仍需采购</span><span class="n">37</span><span class="u">g</span></div>
+            </div>
+            <div class="i2">
+              <span class="meta">盒马鲜生 · 300g/份 · ¥6.65/500g</span>
+              <span class="rec">记录</span>
+            </div>
+          </div>
+
+          <div class="ing">
+            <div class="i1">
+              <div class="nm">小麦胚芽油</div>
+              <div class="qty"><span class="lbl">仍需采购</span><span class="n">7.5</span><span class="u">ml</span></div>
+            </div>
+            <div class="i2">
+              <span class="meta">NOW FOODS · 16盎司(473ml)/瓶 · ¥97.52/500ml</span>
+              <span class="rec">记录</span>
+            </div>
+          </div>
+
+          <div class="ing">
+            <div class="i1">
+              <div class="nm">未加碘低钠海盐</div>
+              <div class="qty"><span class="lbl">仍需采购</span><span class="n">120</span><span class="u">g</span></div>
+            </div>
+            <div class="i2">
+              <span class="meta">中盐 · 300g*6袋 · ¥4.63/500g</span>
+              <span class="rec">记录</span>
+            </div>
+          </div>
+
+          <div class="ing">
+            <div class="i1">
+              <div class="nm">无抗保洁鸡蛋</div>
+              <div class="qty"><span class="lbl">仍需采购</span><span class="n">6</span><span class="u">枚</span></div>
+            </div>
+            <div class="i2">
+              <span class="meta">沃集鲜 · 1.59kg(30枚)/盒 · ¥7.48/500g</span>
+              <span class="rec">记录</span>
+            </div>
+          </div>
+
+          <div class="collapse"><span>库存已覆盖 7 项 · 无需采购</span><span>展开 ⌄</span></div>
+
+          <div class="bottom">
+            <div class="sum">已录 6/30 · 已花<b>¥106.44</b></div>
+            <div class="btn primary">确认完成</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-note">
+        <h4>详情 · 改了什么</h4>
+        <ul>
+          <li><b>吸顶汇总条</b>：日期 / 状态 / 进度 / 金额滚动时始终可见</li>
+          <li><b>两行制</b>：名称 + 仍需采购（19px 金色数字）；渠道规格一行省略</li>
+          <li><b>0 需求自动折叠</b>到"库存已覆盖 7 项"，一屏可见 6 项</li>
+          <li>右侧只留一个"记录"按钮，不再竖排两个</li>
+          <li>订单需求 / 库存抵扣收进行内说明，不占主视线</li>
+          <li>底栏左侧同步进度与已花金额，含 Home 条安全区</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ============ 屏幕 3：记录弹窗 ============ -->
+    <div>
+      <div class="phone">
+        <div class="statusbar"><span>9:41</span><span class="sb-right">●●● ▮</span></div>
+        <div class="nav">
+          <span class="back">‹</span>
+          <span class="title">日采清单详情</span>
+          <span class="spacer"></span>
+        </div>
+        <div class="screen" style="background:#f4f5ee">
+          <div class="behind">
+            <div class="b-sticky"></div>
+            <div class="b-row"></div><div class="b-row"></div><div class="b-row"></div><div class="b-row"></div>
+          </div>
+          <div class="dim"></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="sh"><span class="t">添加采购记录</span><span class="x">×</span></div>
+
+            <div class="summary">
+              <div class="name"> MM澳洲谷饲牛霖 <small>采购任务</small></div>
+              <div class="three">
+                <div class="c"><div class="k">订单需求</div><div class="v">561 g</div></div>
+                <div class="c"><div class="k">库存抵扣</div><div class="v">561 g</div></div>
+                <div class="c main"><div class="k">仍需采购</div><div class="v">0 g</div></div>
+              </div>
+            </div>
+
+            <div class="sect">
+              <div class="lbl"><span class="l">采购商品</span><span class="h">选择本次实际买到的</span></div>
+              <div class="opt">
+                <span class="radio"></span>
+                <div class="oc">
+                  <div class="on1"><span class="onm">牛霖</span></div>
+                  <div class="onm2">本地生鲜市场 · 散称 · 历史 ¥47.44/500g</div>
+                </div>
+              </div>
+              <div class="opt on">
+                <span class="radio"></span>
+                <div class="oc">
+                  <div class="on1"><span class="rec-badge">推荐</span><span class="onm">MM澳洲谷饲牛霖</span></div>
+                  <div class="onm2">山姆会员店 · 1.2kg/盒 · 历史 ¥49.88/500g</div>
+                </div>
+              </div>
+              <div class="opt">
+                <span class="radio"></span>
+                <div class="oc">
+                  <div class="on1"><span class="onm">有机谷饲嫩牛肉</span></div>
+                  <div class="onm2">盒马鲜生 · 260g/盒 · 历史 ¥95.77/500g</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="sect">
+              <div class="lbl"><span class="l">购买数量 *</span><span class="h">本次实际买了多少</span></div>
+              <div class="fields">
+                <div class="field">
+                  <div class="fk">数量</div>
+                  <div class="fv"><span class="ph">如 2</span><span class="fu">盒</span></div>
+                  <div class="hintline">≈ 2.4 kg · 折合 ¥49.88/500g</div>
+                </div>
+                <div class="field">
+                  <div class="fk">付款金额 *</div>
+                  <div class="fv"><span style="font-size:13px;color:#8a8a7e">¥</span><span class="ph">0.00</span></div>
+                  <div class="hintline" style="color:#6b6653">比上次采购 +0.0%</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="foot">
+              <div class="btn ghost">取消</div>
+              <div class="btn primary">保存</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-note">
+        <h4>记录 · 改了什么</h4>
+        <ul>
+          <li><b>三个指标一行</b>，"仍需采购"放大高亮，先回答"还要不要买"</li>
+          <li>采购商品改<b>单选圆点</b>，未选为空圈，不再所有项都打勾</li>
+          <li>数量、金额各占一半宽度，单位固定在右侧</li>
+          <li>实时折算 <b>≈2.4 kg · ¥49.88/500g</b>，边输边校验</li>
+          <li>取消 / 保存等宽，保存为深绿主色（10.56:1）</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <h2><span class="num">3</span>落地规范</h2>
+  <p class="h2sub">8 个页面现有 22 个硬编码颜色、16 种圆角、15 种字号。收敛成一套 token，之后改一处不会再坏一处。</p>
+
+  <div class="spec">
+    <div class="panel">
+      <h3>色板（22 → 15）</h3>
+      <p>深色底只用米白字；金色只给大号数字与描边，小字用深金；红色只给驳回 / 删除 / 超支。</p>
+      <div class="swatches">
+        <div class="sw"><div class="c" style="background:#26261f"></div><div class="n"><b>ink</b><code>#26261F</code> 14.8:1</div></div>
+        <div class="sw"><div class="c" style="background:#6b6653"></div><div class="n"><b>ink-2</b><code>#6B6653</code> 5.6:1</div></div>
+        <div class="sw"><div class="c" style="background:#fbfcf7;border-bottom:1px solid #eee"></div><div class="n"><b>bg</b><code>#FBFCF7</code> 页面</div></div>
+        <div class="sw"><div class="c" style="background:#eef1e2"></div><div class="n"><b>line</b><code>#EEF1E2</code> 分隔</div></div>
+        <div class="sw"><div class="c" style="background:#1e3a2f"></div><div class="n"><b>brand</b><code>#1E3A2F</code> 主色</div></div>
+        <div class="sw"><div class="c" style="background:#f3eddd"></div><div class="n"><b>cream</b><code>#F3EDDD</code> 深底字</div></div>
+        <div class="sw"><div class="c" style="background:#b08d4f"></div><div class="n"><b>gold</b><code>#B08D4F</code> 仅大字</div></div>
+        <div class="sw"><div class="c" style="background:#8a6b33"></div><div class="n"><b>gold-ink</b><code>#8A6B33</code> 4.8:1</div></div>
+        <div class="sw"><div class="c" style="background:#f6efe0"></div><div class="n"><b>gold-soft</b><code>#F6EFE0</code> 浅底</div></div>
+        <div class="sw"><div class="c" style="background:#eef2e4"></div><div class="n"><b>brand-soft</b><code>#EEF2E4</code></div></div>
+        <div class="sw"><div class="c" style="background:#b4453a"></div><div class="n"><b>danger</b><code>#B4453A</code></div></div>
+        <div class="sw"><div class="c" style="background:#f8e8e2"></div><div class="n"><b>danger-soft</b><code>#F8E8E2</code></div></div>
+        <div class="sw"><div class="c" style="background:#8a8a7e"></div><div class="n"><b>ink-3</b><code>#8A8A7E</code> 仅装饰</div></div>
+        <div class="sw"><div class="c" style="background:#fff;border-bottom:1px solid #eee"></div><div class="n"><b>surface</b><code>#FFFFFF</code> 卡片</div></div>
+        <div class="sw"><div class="c" style="background:#173026"></div><div class="n"><b>brand-deep</b><code>#173026</code> 渐变</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>控件与状态</h3>
+      <p>一屏只留一个主色按钮；次要动作改描边；状态徽标带文字，不只靠颜色。</p>
+      <div class="demo">
+        <div class="d">
+          <div class="l">按钮</div>
+          <div class="btns">
+            <div class="btn primary" style="background:#1e3a2f;color:#f3eddd;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:700">主操作 · 深绿</div>
+            <div class="btn ghost" style="border-radius:9px;border:1px solid #e5e8d4;display:flex;align-items:center;justify-content:center;font-weight:700;color:#26261f;background:#fff">次要 · 描边</div>
+            <div class="btn ghost" style="border-radius:9px;border:1px solid #f0cfc9;display:flex;align-items:center;justify-content:center;font-weight:700;color:#b4453a;background:#f8e8e2">危险 · 浅红底</div>
+          </div>
+        </div>
+        <div class="d">
+          <div class="l">状态徽标</div>
+          <div class="chips">
+            <span class="chip" style="background:#f6efe0;color:#8a6b33">待采购</span>
+            <span class="chip" style="background:#eef2e4;color:#2f5b45">已完成</span>
+            <span class="chip" style="background:#f8e8e2;color:#b4453a">已驳回</span>
+            <span class="chip" style="background:#f2f4f2;color:#6b7a70">已取消</span>
+          </div>
+          <div class="l" style="margin-top:12px">清单类型</div>
+          <div class="type-row">
+            <span class="ty a">日采</span>
+            <span class="ty b">补货</span>
+            <span class="ty c">异常</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2><span class="num">4</span>落地节奏</h2>
+  <p class="h2sub">P0 做完页面就能正常使用，不用等重构；P1/P2 解决效率；P3 保证不再退化。</p>
+
+  <div class="phases">
+    <div class="phase">
+      <div class="k">P0 · 止血</div>
+      <h4>先让人看得见</h4>
+      <span class="days">0.5 天</span>
+      <ul>
+        <li>修 3 处"字=底色"</li>
+        <li>修 6 处低对比</li>
+        <li>记录页输入框可见化</li>
+        <li>底栏安全区 + 内容留白</li>
+        <li>"需要采购 kg"补数字</li>
+        <li>单价断行修复</li>
+      </ul>
+      <div class="accept"><b>验收：</b>全部文字 ≥ 4.5:1；iPhone 14 Pro 上底栏不压内容</div>
+    </div>
+
+    <div class="phase p1">
+      <div class="k">P1 · 重构</div>
+      <h4>首页与详情</h4>
+      <span class="days">2–3 天</span>
+      <ul>
+        <li>统一导航，删双标题</li>
+        <li>日期条 + 当日行动卡</li>
+        <li>清单卡片三行制</li>
+        <li>详情两行制 + 折叠</li>
+        <li>记录弹窗重排</li>
+      </ul>
+      <div class="accept"><b>验收：</b>30 项首屏 ≥ 6 项；一屏 ≥ 3 张清单卡；单位写法 ≤ 1 种</div>
+    </div>
+
+    <div class="phase p2">
+      <div class="k">P2 · 表单与报销</div>
+      <h4>补货 / 报销收口</h4>
+      <span class="days">2 天</span>
+      <ul>
+        <li>建议数字变真筛选</li>
+        <li>卡片去粉底，改左色条</li>
+        <li>步骤条 / 类型标签重做</li>
+        <li>报销明细对齐不断行</li>
+        <li>删除死页面 3 个</li>
+      </ul>
+      <div class="accept"><b>验收：</b>报销 4 步每步状态清晰；无死页面残留</div>
+    </div>
+
+    <div class="phase p3">
+      <div class="k">P3 · 防回归</div>
+      <h4>建规范</h4>
+      <span class="days">1–2 天</span>
+      <ul>
+        <li>tokens + 8 个共享组件</li>
+        <li>统一数量单位格式化</li>
+        <li>对比度检查脚本进流程</li>
+        <li>8 页 × 2 宽度视觉基线</li>
+      </ul>
+      <div class="accept"><b>验收：</b>同色/低对比规则在提交前被自动拦下</div>
+    </div>
+  </div>
+
+  <div class="foot-note">
+    <b style="color:#1e3a2f">P0 / P1 / P2 / P3 已全部落地（2026-11-02 ~ 11-03）</b>：止血、去重标题、首页压缩、详情三行制与库存覆盖折叠、深绿导航与吸顶进度、补货筛选、金额中性色；规范侧新增 token、UI 一页纸和对比度守门人测试。详见文档第 10 节。<br>
+    证据截图与建议稿说明：截图来自微信开发者工具模拟器真实数据（2026-11-02），建议稿为静态 HTML 示意，非最终代码实现。
+    完整问题清单（30 项，含文件位置与验收标准）见 <code>docs/audits/2026-11-02-purchasing-ui-audit.md</code>。
+  </div>
+</div>
+</body>
+</html>

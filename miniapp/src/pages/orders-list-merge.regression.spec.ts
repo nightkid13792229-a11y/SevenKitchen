@@ -79,7 +79,10 @@ describe('我的订单合并补剂订单', () => {
   })
 
   it('补剂卡片展示订单号、概要、金额与状态，并复用补剂自己的支付流程', () => {
-    expect(template).toContain('order.orderNo')
+    // 2026-11-02：订单号不再挤在概要小字里，统一走卡片头的单号行
+    expect(template).toContain('order-no-row')
+    expect(template).toContain('orderNoOf(order)')
+    expect(source).toContain("return (order as SupplementOrderRow).orderNo || ''")
     expect(template).toContain('formatSupplementSummary(order)')
     expect(template).toContain('formatAmount(order.totalAmount)')
     expect(template).toContain('formatShortDateTime(order.createdAt)')

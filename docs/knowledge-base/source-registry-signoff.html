@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>知识库来源登记 · 签字页</title>
+<style>
+  :root{
+    --bg:#f6f4ef; --card:#ffffff; --ink:#1f2933; --muted:#6b7280;
+    --line:#e5e7eb; --soft:#f9fafb;
+    --green:#0f766e; --green-bg:#ecfdf5;
+    --amber:#b45309; --amber-bg:#fffbeb;
+    --red:#b91c1c; --red-bg:#fef2f2;
+    --blue:#1d4ed8; --blue-bg:#eff6ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:14px;line-height:1.5}
+  .wrap{max-width:1500px;margin:0 auto;padding:24px 22px 60px}
+  header{display:flex;gap:18px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:18px}
+  h1{font-size:24px;margin:0 0 6px;letter-spacing:.2px}
+  .sub{color:var(--muted);margin:0;max-width:820px}
+  .signbox{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:260px}
+  .signbox label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+  .signbox input{border:1px solid #d1d5db;border-radius:8px;padding:7px 9px;font-size:14px;width:100%;background:#fff}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .stat .n{font-size:26px;font-weight:700;line-height:1.1}
+  .stat .l{font-size:12px;color:var(--muted);margin-top:4px}
+  .stat.green .n{color:var(--green)} .stat.amber .n{color:var(--amber)} .stat.red .n{color:var(--red)}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 12px}
+  .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;color:var(--ink)}
+  .chip.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .btn{border:1px solid #d1d5db;background:#fff;border-radius:9px;padding:7px 12px;font-size:13px;cursor:pointer;color:var(--ink)}
+  .btn.primary{background:var(--green);border-color:var(--green);color:#fff}
+  .btn.warn{background:#fff;border-color:#f59e0b;color:var(--amber)}
+  .btn.ghost{background:transparent}
+  .btn:hover{filter:brightness(.97)}
+  .progress{height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin:4px 0 16px}
+  .progress > i{display:block;height:100%;width:0;background:var(--green);transition:width .2s}
+  .tablewrap{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:auto;max-height:calc(100vh - 250px)}
+  table{border-collapse:separate;border-spacing:0;width:100%;min-width:1120px}
+  thead th{position:sticky;top:0;z-index:2;background:#fbfaf7;text-align:left;font-size:12px;color:var(--muted);
+    font-weight:600;padding:10px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  tbody td{padding:9px 10px;border-bottom:1px solid #f0efeb;vertical-align:top}
+  tbody tr:hover{background:#fcfbf8}
+  tbody tr.changed{background:var(--amber-bg)}
+  tbody tr.signed{background:var(--green-bg)}
+  tbody tr.decision td:first-child{box-shadow:inset 3px 0 0 var(--amber)}
+  tbody tr.decision{background:#fffdf5}
+  .src{font-weight:650;font-size:13.5px;margin-bottom:2px}
+  .meta{font-size:11.5px;color:var(--muted)}
+  .badges{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+  .badge{font-size:10.5px;padding:1px 6px;border-radius:999px;border:1px solid transparent;white-space:nowrap}
+  .badge.pending{background:#fff7ed;color:#9a3412;border-color:#fed7aa}
+  .badge.decision{background:#fffbeb;color:#92400e;border-color:#fde68a}
+  .badge.changed{background:#fef3c7;color:#92400e;border-color:#fcd34d}
+  .badge.ok{background:#ecfdf5;color:#065f46;border-color:#a7f3d0}
+  .badge.hold{background:#f3f4f6;color:#374151;border-color:#e5e7eb}
+  select,input[type=text],input[list]{border:1px solid #d1d5db;border-radius:7px;padding:6px 7px;font-size:12.5px;background:#fff;color:var(--ink);max-width:100%}
+  select:focus,input:focus{outline:2px solid #99f6e4;outline-offset:1px}
+  .w-type{width:115px}.w-ver{width:145px}.w-scope{width:210px}.w-status{width:140px}.w-sign{width:105px}.w-note{width:160px}
+  .counts{font-size:12px;color:var(--muted);white-space:nowrap}
+  .footer{margin-top:14px;color:var(--muted);font-size:12.5px;display:flex;gap:16px;flex-wrap:wrap}
+  .toast{position:fixed;right:22px;bottom:22px;background:#111827;color:#fff;padding:10px 14px;border-radius:10px;font-size:13px;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none;z-index:50}
+  .toast.show{opacity:1;transform:none}
+  .empty{padding:40px;text-align:center;color:var(--muted)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:0 0 10px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+  @media(max-width:900px){.stats{grid-template-columns:repeat(2,1fr)}.wrap{padding:16px 12px 50px}h1{font-size:20px}.tablewrap{max-height:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>知识库来源登记 · 签字页</h1>
+      <p class="sub">你只需要动四列：<b>来源类型、版本/年份、适用范围、状态</b>。不改就点“同意”；要改就先改下拉，签字会自动变“改后同意”。底部导出结果，发回即可。</p>
+      <div class="legend">
+        <span><i style="background:#fffbeb;border:1px solid #fde68a"></i>待拍板</span>
+        <span><i style="background:#ecfdf5;border:1px solid #a7f3d0"></i>已签</span>
+        <span><i style="background:#fef3c7;border:1px solid #fcd34d"></i>有改动</span>
+        <span><i style="background:#f3f4f6;border:1px solid #e5e7eb"></i>待议</span>
+      </div>
+    </div>
+    <div class="signbox">
+      <label for="signer">签字人</label>
+      <input id="signer" type="text" value="老板" autocomplete="off">
+      <label for="signDate" style="margin-top:8px">签字日期</label>
+      <input id="signDate" type="date">
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat"><div class="n" id="nTotal">0</div><div class="l">来源总数</div></div>
+    <div class="stat green"><div class="n" id="nSigned">0</div><div class="l">已签（同意 / 改后同意）</div></div>
+    <div class="stat amber"><div class="n" id="nChanged">0</div><div class="l">有改动</div></div>
+    <div class="stat red"><div class="n" id="nPending">0</div><div class="l">未签 / 待议</div></div>
+  </div>
+  <div class="progress"><i id="bar"></i></div>
+
+  <div class="toolbar">
+    <button class="chip active" data-filter="all">全部 <span class="counts" id="cAll"></span></button>
+    <button class="chip" data-filter="unsigned">未签 <span class="counts" id="cUnsigned"></span></button>
+    <button class="chip" data-filter="decision">待拍板 <span class="counts" id="cDecision"></span></button>
+    <button class="chip" data-filter="pending">待核 <span class="counts" id="cPending"></span></button>
+    <button class="chip" data-filter="changed">有改动 <span class="counts" id="cChanged"></span></button>
+    <span style="flex:1"></span>
+    <button class="btn primary" id="agreeRest">未签的全部同意</button>
+    <button class="btn warn" id="reset">重置</button>
+    <button class="btn" id="exportJson">导出签字结果</button>
+    <button class="btn" id="exportCsv">导出 CSV</button>
+    <button class="btn" id="copyResult">复制结果</button>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="min-width:250px">来源</th>
+          <th>来源类型</th>
+          <th>版本/年份</th>
+          <th>适用范围</th>
+          <th>状态</th>
+          <th>文档 / 引用</th>
+          <th>签字</th>
+          <th>备注</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <span>页面只在本机浏览器里，不会上传。导出 JSON 或 CSV 后发回即可。</span>
+    <span>来源登记 v2：已取消证据等级 A/B/C；类型、年份、范围是事实，模型自己判断。</span>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const DATA = [{"id": "SACN5", "name": "小动物临床营养学（第5版）", "org": "Mark Morris Institute", "version": "2010（第5版）", "type": "教科书", "species": "犬猫", "scope": "疾病营养管理", "status": "在库", "docs": "69", "refs": "309", "role": "现有条目主力出处；猫章节只标注不删", "supersedes": "", "notes": "引用占比 38.5%；按章建索引"}, {"id": "FEDIAF-2025", "name": "FEDIAF 犬猫营养指南", "org": "FEDIAF", "version": "2025", "type": "标准", "species": "犬猫", "scope": "营养需要量/安全上限", "status": "在库", "docs": "1", "refs": "20", "role": "配方基线（2026-11-01 老板定）", "supersedes": "", "notes": "与 NRC/AAFCO 冲突时按问题类型定优先"}, {"id": "NRC-2006", "name": "NRC 犬猫营养需要", "org": "National Academies Press", "version": "2006", "type": "标准", "species": "犬猫", "scope": "营养需要/原料成分/补充剂/加工损失", "status": "在库", "docs": "1", "refs": "11", "role": "科学基础与交叉校验；不作原料主数据源", "supersedes": "", "notes": "62 张表未数字化；原料数据走 USDA/MEXT/CFCT"}, {"id": "WSAVA-NUTRITION", "name": "WSAVA 营养指南与工具包", "org": "WSAVA", "version": "2011–2025", "type": "指南/工具包", "species": "犬猫", "scope": "营养筛查/BCS/MCS/饮食史/标签/生食", "status": "在库", "docs": "21", "refs": "38", "role": "临床营养流程与工具", "supersedes": "", "notes": "22 份工具包；含单页"}, {"id": "AAHA-2021-NUTRITION", "name": "AAHA 营养与体重管理指南", "org": "AAHA", "version": "2021", "type": "指南", "species": "犬猫", "scope": "个体化营养评估/体重管理/自制膳食风险", "status": "在库", "docs": "1", "refs": "36", "role": "临床营养评估与体重管理", "supersedes": "减重细节指向 AAHA-2014", "notes": ""}, {"id": "AAHA-2014-WEIGHT", "name": "AAHA 体重管理指南", "org": "AAHA", "version": "2014", "type": "指南", "species": "犬", "scope": "减重详细方案", "status": "在库（待确认）", "docs": "1", "refs": "12", "role": "减重供能/速率/蛋白/监测", "supersedes": "被 AAHA-2021 指向为详细减重方案（不是取代）", "notes": "2021 版指向它作为详细方案，不是被取代；请签“在库/停用”"}, {"id": "AAHA-2010-NUTRITION-ASSESSMENT", "name": "AAHA 营养评估指南", "org": "AAHA", "version": "2010", "type": "指南", "species": "犬猫", "scope": "营养筛查与扩展评估流程", "status": "在库-待登记", "docs": "1", "refs": "0", "role": "历史流程参考", "supersedes": "待核", "notes": "已解析但不在代码登记表；建议补登或停用"}, {"id": "WSAVA-VACC-2024", "name": "WSAVA 疫苗接种指南", "org": "WSAVA", "version": "2024", "type": "指南", "species": "犬", "scope": "核心/非核心疫苗/首免/加强/抗体", "status": "在库", "docs": "1", "refs": "28", "role": "免疫首要依据", "supersedes": "取代 WSAVA-VACC-2015", "notes": ""}, {"id": "WSAVA-VACC-2015", "name": "WSAVA 疫苗接种指南（历史版）", "org": "WSAVA", "version": "2015", "type": "指南", "species": "犬", "scope": "历史对照", "status": "停用", "docs": "0", "refs": "0", "role": "已删除原件", "supersedes": "被 WSAVA-VACC-2024 取代", "notes": "2026-11-01 停用；不参与检索"}, {"id": "AAHA-VACC-2022", "name": "AAHA 犬免疫指南", "org": "AAHA", "version": "2022（2024 更新）", "type": "指南", "species": "犬", "scope": "疫苗场景/钩端螺旋体", "status": "在库", "docs": "1", "refs": "10", "role": "免疫场景落地", "supersedes": "", "notes": ""}, {"id": "CN-EPIDEMIC-LAW", "name": "中华人民共和国动物防疫法", "org": "全国人大", "version": "2021（2021-05-01 施行）", "type": "法规", "species": "犬", "scope": "强制免疫/免疫证明", "status": "在库", "docs": "1", "refs": "5", "role": "国内合规", "supersedes": "", "notes": "地方差异以当地为准"}, {"id": "CN-RABIES-TECH", "name": "狂犬病防治技术规范", "org": "中国动物疫病预防控制中心", "version": "待核（现行）", "type": "法规", "species": "犬", "scope": "狂犬病免疫", "status": "在库", "docs": "1", "refs": "1", "role": "狂犬病免疫要求", "supersedes": "", "notes": ""}, {"id": "IRIS-CKD-2026", "name": "IRIS 肾病指南（含 AKI/猫）", "org": "IRIS", "version": "2026", "type": "指南", "species": "犬猫", "scope": "CKD 分期/AKI/治疗/口袋指南", "status": "在库", "docs": "5", "refs": "21", "role": "肾病分期与复查", "supersedes": "", "notes": "5 份含猫治疗建议；只取犬用部分"}, {"id": "MERCK-CLINICAL-BIOCHEM", "name": "Merck 临床生化", "org": "Merck & Co.", "version": "在线（持续更新）", "type": "参考手册", "species": "犬猫", "scope": "生化指标解读", "status": "在库", "docs": "1", "refs": "42", "role": "指标解读背景/警示", "supersedes": "", "notes": "只做背景，不单独支撑结论"}, {"id": "MERCK-HEME", "name": "Merck 临床血液学", "org": "Merck & Co.", "version": "在线（持续更新）", "type": "参考手册", "species": "犬猫", "scope": "血常规解读", "status": "在库", "docs": "1", "refs": "15", "role": "血常规背景", "supersedes": "", "notes": ""}, {"id": "MERCK-HEPATIC", "name": "Merck 肝功能检查", "org": "Merck & Co.", "version": "在线（持续更新）", "type": "参考手册", "species": "犬猫", "scope": "胆汁酸/胆管/门体分流", "status": "在库", "docs": "1", "refs": "4", "role": "肝功能判读背景", "supersedes": "", "notes": ""}, {"id": "MERCK-DERM", "name": "Merck 皮肤病维生素与矿物质/营养性皮肤病", "org": "Merck & Co.", "version": "在线（持续更新）", "type": "参考手册", "species": "犬猫", "scope": "营养性皮肤病", "status": "在库-待登记", "docs": "2", "refs": "0", "role": "皮肤营养背景", "supersedes": "", "notes": "已解析但无登记 ID；当前被错映射到 MERCK-CLINICAL"}, {"id": "ACVIM-CONSENSUS", "name": "ACVIM 共识/背书声明（25 份）", "org": "ACVIM", "version": "2011–2026", "type": "共识", "species": "犬猫", "scope": "肠道/肝胆/血液/心脏/泌尿/神经/感染/代谢", "status": "在库", "docs": "25", "refs": "66", "role": "专科当前口径", "supersedes": "", "notes": "建议按主题拆子 ID；当前为 bundle"}, {"id": "WSAVA-PAIN-2022", "name": "WSAVA 疼痛识别、评估与治疗指南", "org": "WSAVA", "version": "2022", "type": "指南", "species": "犬猫", "scope": "疼痛识别/评估/治疗", "status": "在库", "docs": "6", "refs": "24", "role": "疼痛识别", "supersedes": "", "notes": "中文正本为扫描件，文字层 1,264 字；优先英文/专题单页"}, {"id": "AAHA-PAIN-2022", "name": "AAHA 疼痛管理指南", "org": "AAHA", "version": "2022", "type": "指南", "species": "犬猫", "scope": "疼痛识别/多模式管理", "status": "在库-待映射", "docs": "1", "refs": "0", "role": "补 WSAVA 中文扫描件缺口", "supersedes": "", "notes": "已解析但导入无 sourceId；建议映射后启用"}, {"id": "WSAVA-DENTAL", "name": "WSAVA 全球牙科指南", "org": "WSAVA", "version": "2019", "type": "指南", "species": "犬猫", "scope": "口腔/牙周分级/家庭护理", "status": "在库", "docs": "3", "refs": "8", "role": "牙科", "supersedes": "", "notes": "含中文版 39 MB"}, {"id": "AAHA-DENTAL-2019", "name": "AAHA 牙科护理指南", "org": "AAHA", "version": "2019", "type": "指南", "species": "犬猫", "scope": "口腔护理/洁牙时机", "status": "在库", "docs": "1", "refs": "8", "role": "牙科", "supersedes": "", "notes": ""}, {"id": "WSAVA-REPRO", "name": "WSAVA 犬猫生殖管理指南", "org": "WSAVA", "version": "2024", "type": "指南", "species": "犬猫", "scope": "繁殖/绝育", "status": "在库", "docs": "3", "refs": "6", "role": "生殖", "supersedes": "", "notes": "含中文版 87 MB"}, {"id": "WSAVA-RENAL", "name": "WSAVA 肾脏标准化指南", "org": "WSAVA", "version": "待核（现行）", "type": "指南", "species": "犬猫", "scope": "肾小球疾病诊断标准化", "status": "待补", "docs": "0", "refs": "0", "role": "肾小球诊断", "supersedes": "待核（原件缺失）", "notes": "登记 local=true，但 wsava/renal/ 目录为空；需补文件或停用"}, {"id": "WSAVA-HEREDITARY", "name": "WSAVA 遗传病委员会立场文件", "org": "WSAVA", "version": "待核（现行）", "type": "立场文件", "species": "犬", "scope": "品种遗传风险", "status": "在库", "docs": "1", "refs": "9", "role": "品种风险", "supersedes": "", "notes": "仅 2 页，覆盖薄"}, {"id": "WSAVA-WELFARE", "name": "WSAVA 动物福利指南", "org": "WSAVA", "version": "2018/2020", "type": "指南", "species": "犬猫", "scope": "福利/饲养边界", "status": "在库", "docs": "3", "refs": "16", "role": "福利", "supersedes": "", "notes": ""}, {"id": "WSAVA-POSITION", "name": "WSAVA 立场声明", "org": "WSAVA", "version": "待核（多份）", "type": "立场文件", "species": "犬猫", "scope": "One Health 肥胖/微芯片", "status": "在库-待映射", "docs": "2", "refs": "0", "role": "公共立场", "supersedes": "", "notes": "已解析但未引用；建议映射"}, {"id": "AAHA-SENIOR-2023", "name": "AAHA 老年犬猫护理指南", "org": "AAHA", "version": "2023", "type": "指南", "species": "犬猫", "scope": "老年检查节奏/常见问题", "status": "在库", "docs": "2", "refs": "38", "role": "老年", "supersedes": "", "notes": "工具包+全文"}, {"id": "AAHA-LIFE-STAGE-2019", "name": "AAHA 犬生命阶段指南", "org": "AAHA", "version": "2019", "type": "指南", "species": "犬", "scope": "体检节奏", "status": "在库", "docs": "1", "refs": "61", "role": "生命阶段", "supersedes": "", "notes": ""}, {"id": "AAHA-DIABETES-2018", "name": "AAHA 糖尿病管理指南", "org": "AAHA", "version": "2018", "type": "指南", "species": "犬猫", "scope": "糖尿病管理", "status": "在库-待登记", "docs": "1", "refs": "0", "role": "糖尿病", "supersedes": "", "notes": "已解析但无登记 ID；建议补登"}, {"id": "ASPCA-POISON", "name": "ASPCA 有毒食物清单", "org": "ASPCA", "version": "在线（持续更新）", "type": "毒物参考", "species": "犬猫", "scope": "有毒食物", "status": "在库-待登记", "docs": "1", "refs": "0", "role": "毒物警示", "supersedes": "", "notes": "已解析但无登记 ID；建议补登"}, {"id": "INTERNAL-LIVER-LOWFAT", "name": "肝肾低脂注意事项", "org": "内部", "version": "2026-10", "type": "内部笔记", "species": "犬", "scope": "低脂/肝胆/胰腺炎", "status": "内部", "docs": "0", "refs": "5", "role": "内部经验", "supersedes": "", "notes": "无文献依据；只能做提示"}, {"id": "INTERNAL-SKIN-TARGET", "name": "皮肤被毛功能目标", "org": "内部", "version": "2026-10", "type": "内部笔记", "species": "犬", "scope": "皮肤营养目标", "status": "内部", "docs": "0", "refs": "4", "role": "内部经验", "supersedes": "", "notes": ""}, {"id": "INTERNAL-IBD-TARGET", "name": "IBD/CIE 功能目标表", "org": "内部", "version": "2026-10", "type": "内部笔记", "species": "犬", "scope": "慢性肠病目标", "status": "内部", "docs": "0", "refs": "1", "role": "内部经验", "supersedes": "", "notes": ""}, {"id": "INTERNAL-REVIEW-TARGET", "name": "低脂/肝胆/尿素复盘目标表", "org": "内部", "version": "2026-10", "type": "内部笔记", "species": "犬", "scope": "复盘目标", "status": "内部", "docs": "0", "refs": "1", "role": "内部经验", "supersedes": "", "notes": ""}, {"id": "GFE-2006", "name": "GfE 犬猫营养需要量", "org": "GfE", "version": "2006", "type": "标准", "species": "犬猫", "scope": "欧洲营养需要量", "status": "未归档", "docs": "0", "refs": "2", "role": "参考口径", "supersedes": "", "notes": "未归档原文；只能交叉参考"}, {"id": "MEYER-ZENTEK", "name": "Meyer & Zentek 犬猫营养学", "org": "—", "version": "待核", "type": "教科书", "species": "犬猫", "scope": "营养学", "status": "未归档", "docs": "0", "refs": "1", "role": "参考", "supersedes": "", "notes": "未归档原文"}, {"id": "KLEIN-ETAL", "name": "Klein 等单篇文献", "org": "—", "version": "待核", "type": "单篇文献", "species": "犬", "scope": "待核", "status": "未归档", "docs": "0", "refs": "1", "role": "参考", "supersedes": "", "notes": "未归档原文"}, {"id": "CN-PET-FOOD-STD", "name": "宠物食品国家标准", "org": "国家市场监督管理总局/国家标准化管理委员会", "version": "待核", "type": "标准", "species": "犬猫", "scope": "国内合规", "status": "待补", "docs": "0", "refs": "0", "role": "合规参考", "supersedes": "待核", "notes": "版本号待核；老板定“仅参考，不作配方基线”"}];
+const DECISION_IDS = new Set([
+  'AAHA-2014-WEIGHT','WSAVA-RENAL','AAHA-2010-NUTRITION-ASSESSMENT','AAHA-DIABETES-2018',
+  'ASPCA-POISON','MERCK-DERM','AAHA-PAIN-2022','WSAVA-POSITION','CN-PET-FOOD-STD','WSAVA-VACC-2015'
+]);
+const PENDING_IDS = new Set([
+  'CN-RABIES-TECH','WSAVA-RENAL','WSAVA-POSITION','WSAVA-HEREDITARY','MEYER-ZENTEK','KLEIN-ETAL','CN-PET-FOOD-STD'
+]);
+const TYPE_OPTIONS = ['指南','共识','教科书','标准','法规','参考手册','立场文件','内部笔记','单篇文献','毒物参考','指南/工具包'];
+const STATUS_OPTIONS = ['在库','在库（待确认）','在库-待登记','在库-待映射','停用','待补','未归档','内部'];
+const SIGN_OPTIONS = ['未签','同意','改后同意','待议'];
+const STORAGE_KEY = 'kb-source-signoff-v2';
+
+const state = DATA.map(d => ({
+  ...d,
+  orig: {type:d.type, version:d.version, scope:d.scope, status:d.status},
+  sign: '未签',
+  note: ''
+}));
+let filter = 'all';
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function isChanged(r){ return r.type!==r.orig.type || r.version!==r.orig.version || r.scope!==r.orig.scope || r.status!==r.orig.status; }
+function signed(r){ return r.sign==='同意' || r.sign==='改后同意'; }
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2200); }
+
+function options(list, value){
+  return list.map(v => `<option value="${esc(v)}"${v===value?' selected':''}>${esc(v)}</option>`).join('');
+}
+function scopeList(){
+  const set = new Set(DATA.map(d=>d.scope));
+  return [...set].sort((a,b)=>a.localeCompare(b,'zh'));
+}
+
+function save(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      signer: $('signer').value, signDate: $('signDate').value,
+      rows: state.map(r=>({id:r.id,type:r.type,version:r.version,scope:r.scope,status:r.status,sign:r.sign,note:r.note}))
+    }));
+  }catch(e){}
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    const saved = JSON.parse(raw);
+    if(saved.signer) $('signer').value = saved.signer;
+    if(saved.signDate) $('signDate').value = saved.signDate;
+    if(Array.isArray(saved.rows)){
+      for(const s of saved.rows){
+        const r = state.find(x=>x.id===s.id);
+        if(!r) continue;
+        r.type=s.type??r.type; r.version=s.version??r.version; r.scope=s.scope??r.scope; r.status=s.status??r.status;
+        r.sign=s.sign??r.sign; r.note=s.note??r.note;
+      }
+    }
+  }catch(e){}
+}
+
+function counts(){
+  const total=state.length;
+  const signedN=state.filter(signed).length;
+  const changedN=state.filter(isChanged).length;
+  const pendingN=state.filter(r=>!signed(r) || r.sign==='待议').length;
+  return {total,signedN,changedN,pendingN};
+}
+function renderStats(){
+  const c=counts();
+  $('nTotal').textContent=c.total; $('nSigned').textContent=c.signedN;
+  $('nChanged').textContent=c.changedN; $('nPending').textContent=c.pendingN;
+  $('bar').style.width = (c.total? Math.round(c.signedN/c.total*100):0)+'%';
+  $('cAll').textContent='('+c.total+')';
+  $('cUnsigned').textContent='('+state.filter(r=>!signed(r)).length+')';
+  $('cDecision').textContent='('+state.filter(r=>DECISION_IDS.has(r.id)).length+')';
+  $('cPending').textContent='('+state.filter(r=>PENDING_IDS.has(r.id)).length+')';
+  $('cChanged').textContent='('+c.changedN+')';
+}
+
+function rowHtml(r){
+  const changed=isChanged(r);
+  const cls=[changed?'changed':'',signed(r)?'signed':'',DECISION_IDS.has(r.id)?'decision':''].filter(Boolean).join(' ');
+  const badges=[];
+  if(DECISION_IDS.has(r.id)) badges.push('<span class="badge decision">待拍板</span>');
+  if(PENDING_IDS.has(r.id) || /待核/.test(r.version)) badges.push('<span class="badge pending">待核</span>');
+  if(changed) badges.push('<span class="badge changed">已改</span>');
+  if(r.sign==='同意') badges.push('<span class="badge ok">同意</span>');
+  if(r.sign==='改后同意') badges.push('<span class="badge changed">改后同意</span>');
+  if(r.sign==='待议') badges.push('<span class="badge hold">待议</span>');
+  return `<tr data-id="${esc(r.id)}" class="${cls}">
+    <td>
+      <div class="src">${esc(r.name)}</div>
+      <div class="meta">${esc(r.org)} · ${esc(r.id)} · ${esc(r.species)}</div>
+      ${r.supersedes?`<div class="meta">${esc(r.supersedes)}</div>`:''}
+      <div class="badges">${badges.join('')}</div>
+    </td>
+    <td><select data-field="type" class="w-type">${options(TYPE_OPTIONS, r.type)}</select></td>
+    <td><input data-field="version" class="w-ver" type="text" value="${esc(r.version)}" title="${esc(r.version)}" list="versionList"></td>
+    <td><input data-field="scope" class="w-scope" type="text" value="${esc(r.scope)}" title="${esc(r.scope)}" list="scopeList"></td>
+    <td><select data-field="status" class="w-status">${options(STATUS_OPTIONS, r.status)}</select></td>
+    <td><div class="counts">${esc(r.docs)} 份 / ${esc(r.refs)} 处</div></td>
+    <td><select data-field="sign" class="w-sign">${options(SIGN_OPTIONS, r.sign)}</select></td>
+    <td><input data-field="note" class="w-note" type="text" value="${esc(r.note)}" title="${esc(r.note)}" placeholder="可留空"></td>
+  </tr>`;
+}
+
+function visibleRows(){
+  return state.filter(r=>{
+    if(filter==='unsigned') return !signed(r);
+    if(filter==='decision') return DECISION_IDS.has(r.id);
+    if(filter==='pending') return PENDING_IDS.has(r.id) || /待核/.test(r.version);
+    if(filter==='changed') return isChanged(r);
+    return true;
+  });
+}
+function renderTable(){
+  const rows=visibleRows();
+  $('tbody').innerHTML = rows.length ? rows.map(rowHtml).join('') : '<tr><td colspan="8"><div class="empty">这个筛选下没有来源。</div></td></tr>';
+}
+function render(){ renderStats(); renderTable(); save(); }
+
+function update(id, field, value){
+  const r=state.find(x=>x.id===id); if(!r) return;
+  if(field==='sign'){ r.sign=value; }
+  else {
+    r[field]=value;
+    const changed=isChanged(r);
+    if(changed && (r.sign==='未签' || r.sign==='同意')) r.sign='改后同意';
+    if(!changed && r.sign==='改后同意') r.sign='未签';
+  }
+  render();
+}
+
+function buildExport(){
+  const c=counts();
+  return {
+    document:'source-registry-2026-11-02',
+    signedBy: $('signer').value.trim() || '老板',
+    signedAt: $('signDate').value,
+    exportedAt: new Date().toISOString(),
+    summary:{total:c.total, signed:c.signedN, changed:c.changedN, pending:c.pendingN},
+    rows: state.map(r=>({
+      sourceId:r.id, name:r.name,
+      original:{type:r.orig.type, version:r.orig.version, scope:r.orig.scope, status:r.orig.status},
+      signed:{type:r.type, version:r.version, scope:r.scope, status:r.status},
+      conclusion:r.sign, changed:isChanged(r), note:r.note
+    }))
+  };
+}
+function download(name, text, mime){
+  const blob=new Blob([text],{type:mime||'text/plain;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},500);
+}
+function exportJson(){
+  const d=buildExport();
+  const name='source-registry-signoff-'+new Date().toISOString().slice(0,10)+'.json';
+  download(name, JSON.stringify(d,null,2), 'application/json;charset=utf-8');
+  toast('已导出 JSON，去“下载”文件夹找。');
+}
+function exportCsv(){
+  const head=['来源ID','名称','来源类型','版本/年份','适用范围','状态','签字结论','是否改动','备注','签字人','签字日期'];
+  const lines=[head.join(',')];
+  for(const r of state){
+    const vals=[r.id,r.name,r.type,r.version,r.scope,r.status,r.sign,isChanged(r)?'是':'否',r.note,$('signer').value.trim()||'老板',$('signDate').value];
+    lines.push(vals.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','));
+  }
+  const name='source-registry-signoff-'+new Date().toISOString().slice(0,10)+'.csv';
+  download(name, '\ufeff'+lines.join('\r\n'), 'text/csv;charset=utf-8');
+  toast('已导出 CSV，去“下载”文件夹找。');
+}
+async function copyResult(){
+  const text=JSON.stringify(buildExport(),null,2);
+  try{
+    await navigator.clipboard.writeText(text);
+    toast('已复制，直接粘贴即可。');
+  }catch(e){
+    const ta=document.createElement('textarea');
+    ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); toast('已复制，直接粘贴即可。'); }
+    catch(err){ toast('复制失败，请用“导出 JSON”。'); }
+    ta.remove();
+  }
+}
+
+// init
+const today=new Date();
+$('signDate').value = today.toISOString().slice(0,10);
+load();
+if(!$('signer').value) $('signer').value='老板';
+$('signer').addEventListener('change', save);
+$('signDate').addEventListener('change', save);
+
+document.querySelectorAll('.chip').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.chip').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    filter=btn.dataset.filter;
+    renderTable();
+  });
+});
+$('tbody').addEventListener('change', e=>{
+  const tr=e.target.closest('tr'); if(!tr) return;
+  const field=e.target.dataset.field; if(!field) return;
+  update(tr.dataset.id, field, e.target.value);
+});
+$('agreeRest').addEventListener('click', ()=>{
+  for(const r of state){ if(!signed(r) && r.sign!=='待议') r.sign = isChanged(r) ? '改后同意' : '同意'; }
+  render();
+  toast('未签的已经全部勾上；有改动的标为“改后同意”。');
+});
+$('reset').addEventListener('click', ()=>{
+  if(!confirm('确定重置所有签字和改动？')) return;
+  try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+  location.reload();
+});
+$('exportJson').addEventListener('click', exportJson);
+$('exportCsv').addEventListener('click', exportCsv);
+$('copyResult').addEventListener('click', copyResult);
+
+// datalists
+const dlScope=document.createElement('datalist'); dlScope.id='scopeList';
+dlScope.innerHTML=scopeList().map(v=>`<option value="${esc(v)}"></option>`).join('');
+document.body.appendChild(dlScope);
+const dlVersion=document.createElement('datalist'); dlVersion.id='versionList';
+dlVersion.innerHTML=[...new Set(DATA.map(d=>d.version))].sort().map(v=>`<option value="${esc(v)}"></option>`).join('');
+document.body.appendChild(dlVersion);
+
+render();
+</script>
+</body>
+</html>

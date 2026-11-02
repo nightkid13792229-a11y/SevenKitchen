@@ -26,12 +26,15 @@ function docId(rel: string): string {
 function sourceIdFor(rel: string): string | null {
   if (rel.startsWith('sacn5/')) return 'SACN5';
   if (rel.startsWith('aaha/')) {
-    if (rel.includes('2021')) return 'AAHA-2021-NUTRITION';
+    if (rel.includes('2010')) return 'AAHA-2010-NUTRITION-ASSESSMENT';
     if (rel.includes('2014')) return 'AAHA-2014-WEIGHT';
+    if (rel.includes('2018-Diabetes')) return 'AAHA-DIABETES-2018';
+    if (rel.includes('2021')) return 'AAHA-2021-NUTRITION';
     if (rel.includes('2023-Senior')) return 'AAHA-SENIOR-2023';
     if (rel.includes('2019-Canine-Life')) return 'AAHA-LIFE-STAGE-2019';
     if (rel.includes('2019-Dental')) return 'AAHA-DENTAL-2019';
     if (rel.includes('2022-Canine-Vaccination')) return 'AAHA-VACC-2022';
+    if (rel.includes('2022-Pain')) return 'AAHA-PAIN-2022';
     return null;
   }
   if (rel.startsWith('acvim/')) return 'ACVIM-CONSENSUS';
@@ -42,11 +45,21 @@ function sourceIdFor(rel: string): string | null {
   if (rel.startsWith('wsava/repro')) return 'WSAVA-REPRO';
   if (rel.startsWith('wsava/welfare')) return 'WSAVA-WELFARE';
   if (rel.startsWith('wsava/hereditary')) return 'WSAVA-HEREDITARY';
+  if (rel.startsWith('wsava/position-statements')) return 'WSAVA-POSITION';
   if (rel.startsWith('iris/')) return 'IRIS-CKD-2026';
   if (rel.startsWith('fediaf/')) return 'FEDIAF-2025';
   if (rel.startsWith('nrc/')) return 'NRC-2006';
-  if (rel.startsWith('merck/')) return 'MERCK-CLINICAL-BIOCHEM';
-  if (rel.startsWith('cn-regulation/')) return 'CN-EPIDEMIC-LAW';
+  if (rel.startsWith('merck/')) {
+    if (rel.includes('临床生化')) return 'MERCK-CLINICAL-BIOCHEM';
+    if (rel.includes('临床血液学')) return 'MERCK-HEME';
+    if (rel.includes('肝功能')) return 'MERCK-HEPATIC';
+    if (rel.includes('皮肤')) return 'MERCK-DERM';
+    return null;
+  }
+  if (rel.startsWith('cn-regulation/')) {
+    if (rel.includes('狂犬病')) return 'CN-RABIES-TECH';
+    return 'CN-EPIDEMIC-LAW';
+  }
   if (rel.startsWith('aspca/')) return 'ASPCA-POISON';
   return null;
 }
@@ -72,6 +85,11 @@ async function main() {
   let nDocs = 0, nSecs = 0, nParas = 0;
   for (const f of files) {
     const d = JSON.parse(fs.readFileSync(path.join(layerDir, f), 'utf8'));
+    // 知识库自己的 README 不是来源，跳过（2026-11-02 签字版 v1）
+    if (/^README(\.md)?$/i.test(String(d.path ?? ''))) {
+      console.log('skip README.md');
+      continue;
+    }
     const chars = d.paragraphs.reduce((s: number, p: any) => s + p.text.length, 0);
     await prisma.sourceDocument.create({
       data: {

@@ -61,7 +61,7 @@ function parseArgs(argv: string[]) {
 export function sourceDisplayName(sourceId: string): string {
   const record = KNOWLEDGE_SOURCES.find((item) => item.id === sourceId);
   if (!record) return sourceId;
-  return `${record.name}（${record.version}｜证据级 ${record.tier}）`;
+  return `${record.name}（${record.version}）`;
 }
 
 export function healthEntriesOf(

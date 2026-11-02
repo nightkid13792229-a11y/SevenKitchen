@@ -159,11 +159,13 @@ export class OrderProcurementDisclosureService {
       ),
     );
     const skuInfoById = await this.loadSkuInfo(skuIds);
-    const supplementSkuByIngredient = await this.loadSupplementSkuFallbacks(
-      params.ingredients
-        .filter((ingredient) => this.isSupplement(ingredient.type))
-        .map((ingredient) => ingredient.id),
-    );
+    const supplementIngredientIds = params.ingredients
+      .filter((ingredient) => this.isSupplement(ingredient.type))
+      .map((ingredient) => ingredient.id);
+    const supplementSkuByIngredient =
+      await this.loadSupplementSkuFallbacks(supplementIngredientIds);
+    const supplementIngredientFallback =
+      await this.loadSupplementIngredientFallbacks(supplementIngredientIds);
 
     const items: ProcurementDisclosureItem[] = [];
     for (const ingredient of params.ingredients) {
@@ -197,6 +199,7 @@ export class OrderProcurementDisclosureService {
         const skuInfo =
           (ingredient.skuId ? skuInfoById.get(ingredient.skuId) : null) ||
           supplementSkuByIngredient.get(ingredient.id) ||
+          supplementIngredientFallback.get(ingredient.id) ||
           null;
         if (skuInfo) {
           items.push({
@@ -339,6 +342,48 @@ export class OrderProcurementDisclosureService {
       }
     }
     return result;
+  }
+
+  /**
+   * 补剂连商品档案都没有时的最后兜底：用原料自己的品牌/规格/渠道。
+   */
+  private async loadSupplementIngredientFallbacks(
+    ingredientIds: string[],
+  ): Promise<
+    Map<
+      string,
+      {
+        name: string;
+        brand: string | null;
+        purchaseChannel: string | null;
+      }
+    >
+  > {
+    if (ingredientIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.prisma.ingredient.findMany({
+      where: { id: { in: ingredientIds } },
+      select: {
+        id: true,
+        name: true,
+        brand: true,
+        productModel: true,
+        purchaseChannel: true,
+      },
+    });
+
+    return new Map(
+      rows.map((row) => [
+        row.id,
+        {
+          name: row.productModel || row.name,
+          brand: row.brand,
+          purchaseChannel: row.purchaseChannel,
+        },
+      ]),
+    );
   }
 
   private async loadSkuInfo(skuIds: string[]): Promise<

@@ -12,6 +12,7 @@ describe('OrderProcurementDisclosureService', () => {
     purchaseItems?: any[];
     skus?: any[];
     fallbackRecords?: any[];
+    ingredientRows?: any[];
   }) {
     const prisma = {
       purchaseList: {
@@ -25,6 +26,9 @@ describe('OrderProcurementDisclosureService', () => {
       },
       procurementSku: {
         findMany: jest.fn().mockResolvedValue(overrides.skus ?? []),
+      },
+      ingredient: {
+        findMany: jest.fn().mockResolvedValue(overrides.ingredientRows ?? []),
       },
       $queryRaw: jest.fn().mockResolvedValue(overrides.fallbackRecords ?? []),
     } as any;
@@ -311,6 +315,43 @@ describe('OrderProcurementDisclosureService', () => {
       channel: '天猫旗舰店',
       brand: 'NOW FOODS',
       productName: '海藻粉 450mcg碘/平勺 227g/瓶',
+      purchasedAt: null,
+    });
+  });
+  it('补剂连商品档案都没有时，用原料自己的品牌/规格/渠道兜底', async () => {
+    const { service } = buildService({
+      lists: [
+        {
+          id: 'list-1',
+          status: 'COMPLETED',
+          completedAt: new Date('2026-11-05T10:00:00.000Z'),
+        },
+      ],
+      records: [],
+      purchaseItems: [],
+      skus: [],
+      ingredientRows: [
+        {
+          id: 'ingredient-zinc',
+          name: '蛋氨酸锌胶囊',
+          brand: 'NOW Foods',
+          productModel: 'L-OptiZinc, 30 mg, 100 Veg Capsules',
+          purchaseChannel: 'iherb',
+        },
+      ],
+    });
+
+    const result = await service.build({
+      orderId: 'order-1',
+      ingredients: [
+        { id: 'ingredient-zinc', name: '蛋氨酸锌胶囊', type: 'SUPPLEMENT' },
+      ],
+    });
+
+    expect(result?.items[0]).toMatchObject({
+      channel: 'iherb',
+      brand: 'NOW Foods',
+      productName: 'L-OptiZinc, 30 mg, 100 Veg Capsules',
       purchasedAt: null,
     });
   });

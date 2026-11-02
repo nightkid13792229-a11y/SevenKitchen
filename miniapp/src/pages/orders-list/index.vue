@@ -168,6 +168,12 @@
             </text>
             <text v-else class="order-title">{{ getRecipeName(order) }}</text>
 
+            <!-- 新售后不改订单 status：补剂有未完结售后时在标题旁单独挂一个标记 -->
+            <text
+              v-if="order._orderType === 'supplement' && isAftersaleOrder(order)"
+              class="aftersale-badge"
+            >售后中</text>
+
             <text v-if="order._orderType === 'custom'" class="order-price">
               <text class="order-price__symbol">¥</text>{{ formatAmountText(customOrderAmount(order)) }}
             </text>
@@ -2709,6 +2715,16 @@ onUnmounted(() => {
   display: flex;
   align-items: baseline;
   gap: 16rpx;
+}
+
+.aftersale-badge {
+  flex: none;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background: #fdf1e3;
+  color: #a9651b;
+  font-size: 20rpx;
+  font-weight: 600;
 }
 
 .order-title {

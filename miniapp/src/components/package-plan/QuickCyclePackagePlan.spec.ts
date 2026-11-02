@@ -66,14 +66,12 @@ describe('QuickCyclePackagePlan · 共享分装组件', () => {
     expect(template).not.toContain(':disabled')
   })
 
-  it('★ 天数按钮带量级提示：约几袋 / 多少公斤', () => {
-    // 用"点下去真正生成"的同一套算法，按钮上的数才会和摘要对得上
-    expect(source).toContain('buildDefaultPackagePlan')
-    expect(source).toContain('const optionHints = computed')
-    expect(template).toContain('class="cycle-sub"')
-    expect(template).toContain('optionHints[days]')
-    // 饭量还没算出来时不出提示，按钮保持单行
-    expect(source).toContain("if (!Number.isFinite(dailyIntakeG) || dailyIntakeG <= 0) return ''")
+  it('★ 天数按钮上不写量：结果只在下面的摘要里说一次', () => {
+    // 按钮只负责"选哪一档"，摘要负责"选完是多少"。
+    // 2026-11-02 曾把"约14袋 · 1.7kg"印在按钮上，与摘要重复且把按钮撑高，已撤掉。
+    expect(template).not.toContain('cycle-sub')
+    expect(source).not.toContain('optionHints')
+    expect(source).not.toContain('buildDefaultPackagePlan')
   })
 
   it('★ 自定义入口说清"接管的是什么"', () => {

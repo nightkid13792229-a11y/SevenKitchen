@@ -49,6 +49,25 @@
       </view>
       <view v-else-if="stageHint" class="stage-hint">{{ stageHint }}</view>
 
+      <!-- 订单信息（2026-11-02）：预约制作日是排产、备料的依据，
+           以前只有后台订单列表能看到，点进详情反而查不到 -->
+      <view class="card order-info-card">
+        <view class="card-title">
+          订单信息
+          <text class="card-note">预约制作日由顾客选择</text>
+        </view>
+        <view class="kv">
+          <text class="kv-key">预约制作日</text>
+          <text class="kv-value production-date" :class="{ muted: !order.targetProductionDate }">
+            {{ formatProductionDate(order.targetProductionDate) }}
+          </text>
+        </view>
+        <view v-if="order.createdAt" class="kv">
+          <text class="kv-key">下单时间</text>
+          <text class="kv-value">{{ formatDateTime(order.createdAt) }}</text>
+        </view>
+      </view>
+
       <!-- 售后信息：以前只有顶部变红，为什么退、到哪一步都看不到 -->
       <view v-if="isAftersale" class="aftersale-card">
         <view class="aftersale-head">
@@ -739,6 +758,8 @@ interface OrderDetail {
   /** 新订单号（SK20261030-003）；老数据可能为空 */
   orderNo?: string | null
   status: string
+  /** 顾客下单时预约的制作日期（当天零点）；老订单/现货单可能为空 */
+  targetProductionDate?: string | null
   cancellationReason?: string | null
   refundStatus?: {
     success: boolean
@@ -1667,6 +1688,23 @@ function formatShortDate(value?: string | null): string {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${month}-${day}`
+}
+
+const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000
+
+/**
+ * 预约制作日只显示日期（带星期，方便排产）。
+ *
+ * 这个字段是"某一天"，不是某个时刻：后端按当天零点存，直接截 ISO 字符串
+ * 或者用设备本地时区都可能差一天，所以统一按东八区取年月日。
+ */
+function formatProductionDate(value?: string | null): string {
+  if (!value) return '未设置'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  const shanghai = new Date(date.getTime() + SHANGHAI_OFFSET_MS)
+  return `${shanghai.getUTCFullYear()}年${shanghai.getUTCMonth() + 1}月${shanghai.getUTCDate()}日 ${WEEKDAY_LABELS[shanghai.getUTCDay()]}`
 }
 
 function copyTrackingNumber() {
@@ -3566,6 +3604,10 @@ async function saveAddressForm() {
 .kv-value { flex: 1; font-size: 24rpx; color: #303133; line-height: 1.6; }
 .kv-sub { margin-left: 8rpx; color: #909399; font-size: 22rpx; }
 .kv-value.muted { color: #b0b4bb; }
+/* 订单信息：预约制作日要一眼看到，键名留够宽度，日期放大加粗 */
+.order-info-card .kv-key { width: 150rpx; }
+.production-date { font-size: 28rpx; font-weight: 600; color: #1e3a2f; }
+.production-date.muted { font-size: 24rpx; font-weight: 400; }
 .kv-action { flex: none; margin-left: 12rpx; font-size: 20rpx; color: #2b5040; }
 
 .fee { display: flex; justify-content: space-between; padding: 12rpx 0; font-size: 24rpx; }

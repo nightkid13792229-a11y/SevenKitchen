@@ -6,6 +6,9 @@
 |---|---|
 | `env.sh` | 本地环境切换（dev / prod / status） |
 | `deploy_to_tencent_cdn.sh` | **SSL 证书续期后自动部署到腾讯云 CDN**（详见下文） |
+| `session.sh` | **多会话任务工位**：开工 / 提交 / 合并 / 清理（见 `docs/MULTI_SESSION_WORKFLOW.md`） |
+| `gate.sh` | **共享出口门禁**：查看 / 占用 / 释放（合并、部署、上传、迁移） |
+| `upload-trial.sh` | **上传小程序体验版**（固定动作，自动拿门禁） |
 
 ---
 

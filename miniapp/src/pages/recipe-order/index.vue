@@ -153,6 +153,8 @@
         :editor-open="showPackageEditor"
         :summary-text="packagePlanInlineSummaryText"
         :warnings="packagePlanWarnings"
+        :daily-intake-g="displayDailyIntakeG"
+        :meals-per-day="selectedDog?.mealsPerDay || 0"
         @select-cycle="selectCycle"
         @toggle-custom="togglePackageEditor"
         @add-row="addPackagePlanRow"

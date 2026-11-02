@@ -214,7 +214,7 @@ describe('recipe-order phase one UI contract', () => {
     expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
       .toContain('Math.max(MIN_PACKAGE_SPEC_G');
     // 2026-11-01：界面在共享组件里（两页同一份）
-    expect(packagePlanComponentSource).toContain("{{ editorOpen ? '取消自定义' : '自定义分装' }}");
+    expect(packagePlanComponentSource).toContain("{{ editorOpen ? '取消自定义' : '自己定分装' }}");
     expect(packagePlanComponentSource).toContain(':class="{ active: !isCustom && cycleDays === days, disabled: isCustom }"');
     expect(packagePlanComponentSource).toContain('v-if="warnings.length > 0"');
     expect(packagePlanComponentSource).toContain('{{ warning }}');

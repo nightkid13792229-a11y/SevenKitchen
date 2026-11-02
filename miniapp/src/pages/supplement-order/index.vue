@@ -75,6 +75,8 @@
           :editor-open="showPackageEditor"
           :summary-text="inlineSummaryText"
           :warnings="planWarnings"
+          :daily-intake-g="sheet?.dailyIntakeG || 0"
+          :meals-per-day="resolveMealsPerDay()"
           @select-cycle="onSelectCycle"
           @toggle-custom="togglePackageEditor"
           @add-row="addPackagePlanRow"

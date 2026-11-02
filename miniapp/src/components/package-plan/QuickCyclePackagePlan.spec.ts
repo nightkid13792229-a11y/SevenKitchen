@@ -66,6 +66,23 @@ describe('QuickCyclePackagePlan · 共享分装组件', () => {
     expect(template).not.toContain(':disabled')
   })
 
+  it('★ 天数按钮带量级提示：约几袋 / 多少公斤', () => {
+    // 用"点下去真正生成"的同一套算法，按钮上的数才会和摘要对得上
+    expect(source).toContain('buildDefaultPackagePlan')
+    expect(source).toContain('const optionHints = computed')
+    expect(template).toContain('class="cycle-sub"')
+    expect(template).toContain('optionHints[days]')
+    // 饭量还没算出来时不出提示，按钮保持单行
+    expect(source).toContain("if (!Number.isFinite(dailyIntakeG) || dailyIntakeG <= 0) return ''")
+  })
+
+  it('★ 自定义入口说清"接管的是什么"', () => {
+    expect(template).toContain('自己定分装')
+    expect(template).toContain('自己定每袋克数和总袋数')
+    // 进入自定义后有常驻模式说明，入口这句就收起来
+    expect(template).toContain('v-if="!isCustom"')
+  })
+
   it('★ 组件样式只用类选择器（微信组件 wxss 限制）', () => {
     // 先把选择器抽出来再看，避免把颜色值里的 #26261f 误判成 ID 选择器
     const selectors = [...style.matchAll(/(?:^|\})\s*([^{}@]+)\{/g)]

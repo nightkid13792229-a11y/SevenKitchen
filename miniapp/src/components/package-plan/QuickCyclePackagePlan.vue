@@ -35,6 +35,7 @@
         @tap="selectCycle(days)"
       >
         <text class="cycle-text">{{ days }}天</text>
+        <text v-if="optionHints[days]" class="cycle-sub">{{ optionHints[days] }}</text>
       </view>
     </view>
 
@@ -45,9 +46,18 @@
     <view class="package-plan-toolbar">
       <text class="package-plan-inline-summary">{{ summaryText }}</text>
       <button class="package-edit-button" @tap="toggleCustom">
-        {{ editorOpen ? '取消自定义' : '自定义分装' }}
+        {{ editorOpen ? '取消自定义' : '自己定分装' }}
       </button>
     </view>
+
+    <!--
+      入口说明（2026-11-02）：光一个按钮，顾客不知道"自己定"是定什么。
+      一句话说清接管的是"每袋多少克、一共几袋"，以及天数不再自动算。
+      进入自定义后就不必再显示 —— 那时已有常驻模式说明。
+    -->
+    <text v-if="!isCustom" class="package-plan-entry-hint">
+      自己定每袋克数和总袋数，不再按天数自动计算
+    </text>
 
     <!--
       校验与提示合并成一块（2026-11-01）：
@@ -107,9 +117,10 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import {
   ORDER_CYCLE_OPTIONS,
+  buildDefaultPackagePlan,
   type PackagePlanItem,
 } from '@/utils/order-package-plan'
 
@@ -131,6 +142,10 @@ const props = withDefaults(
     summaryText?: string
     /** 当前的问题列表（每袋不足、未达起订量…），有几条列几条 */
     warnings?: string[]
+    /** 每日摄入克数：用来给天数按钮算"约几袋 / 多少公斤"，缺了就不显示 */
+    dailyIntakeG?: number | null
+    /** 每天吃几餐：同上 */
+    mealsPerDay?: number | null
   }>(),
   {
     cycleDays: null,
@@ -140,8 +155,39 @@ const props = withDefaults(
     editorOpen: false,
     summaryText: '',
     warnings: () => [],
+    dailyIntakeG: 0,
+    mealsPerDay: 0,
   },
 )
+
+/**
+ * 每个天数档位对应多少量：用和"点下去真正生成"同一套算法算，
+ * 所以按钮上写的数就是选中后摘要里出现的数（不会对不上）。
+ *
+ * 数据不全（还没算出饭量）时该档返回空串，按钮保持原来的单行样式。
+ */
+function hintFor(days: number): string {
+  const dailyIntakeG = Number(props.dailyIntakeG)
+  const mealsPerDay = Number(props.mealsPerDay)
+  if (!Number.isFinite(dailyIntakeG) || dailyIntakeG <= 0) return ''
+  if (!Number.isFinite(mealsPerDay) || mealsPerDay < 1) return ''
+
+  const plan = buildDefaultPackagePlan({ dailyIntakeG, mealsPerDay, days })
+  const bags = plan.reduce((sum, row) => sum + row.packageCount, 0)
+  const grams = plan.reduce((sum, row) => sum + row.packageSpecG * row.packageCount, 0)
+  if (bags <= 0 || grams <= 0) return ''
+
+  const kg = grams / 1000
+  const weightText = kg >= 10 ? `${Math.round(kg)}kg` : `${kg.toFixed(1)}kg`
+  return `约${bags}袋 · ${weightText}`
+}
+
+/** 一次算好，模板里不要再对每个按钮算两遍 */
+const optionHints = computed<Record<number, string>>(() => {
+  const hints: Record<number, string> = {}
+  for (const days of props.cycleOptions) hints[days] = hintFor(days)
+  return hints
+})
 
 const emit = defineEmits<{
   (event: 'select-cycle', days: number): void
@@ -282,6 +328,15 @@ defineExpose({ commitAll })
   font-weight: 700;
 }
 
+/* 天数按钮下的量级：约几袋 / 多少公斤 */
+.cycle-sub {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  line-height: 1.3;
+  color: #6b6653;
+}
+
 /* 自定义模式下的常驻说明：不再靠点灰按钮的 toast 解释 */
 .package-plan-mode-hint {
   margin-top: 14rpx;
@@ -302,6 +357,14 @@ defineExpose({ commitAll })
   justify-content: space-between;
   gap: 18rpx;
   margin-top: 24rpx;
+}
+
+.package-plan-entry-hint {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  line-height: 1.45;
+  color: #6b6653;
 }
 
 .package-plan-inline-summary {

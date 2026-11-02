@@ -224,7 +224,7 @@ describe('recipe diy regressions', () => {
       resolve(process.cwd(), 'src/components/package-plan/QuickCyclePackagePlan.vue'),
       'utf-8',
     )
-    expect(packagePlanComponentSource).toContain("{{ editorOpen ? '取消自定义' : '自定义分装' }}")
+    expect(packagePlanComponentSource).toContain("{{ editorOpen ? '取消自定义' : '自己定分装' }}")
     expect(packagePlanComponentSource).toContain('v-for="(row, index) in packagePlan"')
     expect(packagePlanComponentSource).toContain('再加一种分装')
     expect(source).not.toContain('/orders/pricing/preview')

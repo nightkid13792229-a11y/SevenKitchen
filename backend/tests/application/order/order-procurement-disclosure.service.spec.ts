@@ -232,4 +232,86 @@ describe('OrderProcurementDisclosureService', () => {
     expect(result?.status).toBe('IN_PROGRESS');
     expect(result?.items).toHaveLength(1);
   });
+  it('补剂没有采购记录时，用订单快照选定的采购商品兜底（渠道/品牌/商品名）', async () => {
+    const { service } = buildService({
+      lists: [
+        {
+          id: 'list-1',
+          status: 'COMPLETED',
+          completedAt: new Date('2026-11-05T10:00:00.000Z'),
+        },
+      ],
+      records: [],
+      purchaseItems: [],
+      skus: [
+        {
+          id: 'sku-supp',
+          name: '海藻粉 450mcg碘/平勺 227g/瓶',
+          brand: 'NOW FOODS',
+          purchaseChannel: '天猫旗舰店',
+        },
+      ],
+    });
+
+    const result = await service.build({
+      orderId: 'order-1',
+      ingredients: [
+        {
+          id: 'ingredient-supp',
+          name: '海藻粉',
+          type: 'SUPPLEMENT',
+          skuId: 'sku-supp',
+        },
+      ],
+    });
+
+    expect(result?.items).toEqual([
+      {
+        ingredientId: 'ingredient-supp',
+        ingredientName: '海藻粉',
+        source: 'FROM_INVENTORY',
+        channel: '天猫旗舰店',
+        brand: 'NOW FOODS',
+        productName: '海藻粉 450mcg碘/平勺 227g/瓶',
+        purchasedAt: null,
+      },
+    ]);
+  });
+  it('补剂快照没带商品时，回落到该补剂自己的商品档案', async () => {
+    const { service } = buildService({
+      lists: [
+        {
+          id: 'list-1',
+          status: 'COMPLETED',
+          completedAt: new Date('2026-11-05T10:00:00.000Z'),
+        },
+      ],
+      records: [],
+      purchaseItems: [],
+      skus: [
+        {
+          id: 'sku-supp',
+          ingredientId: 'ingredient-supp',
+          name: '海藻粉 450mcg碘/平勺 227g/瓶',
+          brand: 'NOW FOODS',
+          purchaseChannel: '天猫旗舰店',
+        },
+      ],
+    });
+
+    const result = await service.build({
+      orderId: 'order-1',
+      ingredients: [
+        { id: 'ingredient-supp', name: '海藻粉', type: 'SUPPLEMENT' },
+      ],
+    });
+
+    expect(result?.items[0]).toMatchObject({
+      ingredientId: 'ingredient-supp',
+      channel: '天猫旗舰店',
+      brand: 'NOW FOODS',
+      productName: '海藻粉 450mcg碘/平勺 227g/瓶',
+      purchasedAt: null,
+    });
+  });
 });

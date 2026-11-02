@@ -1052,7 +1052,10 @@ export class OrdersController {
       return null;
     }
 
-    const ingredientMap = new Map<string, { id: string; name: string }>();
+    const ingredientMap = new Map<
+      string,
+      { id: string; name: string; type?: string | null; skuId?: string | null }
+    >();
     for (const item of order.items) {
       const snapshotItems = (item.recipeSnapshot as any)?.items ?? [];
       for (const row of snapshotItems) {

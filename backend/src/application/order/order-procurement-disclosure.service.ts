@@ -55,7 +55,13 @@ export class OrderProcurementDisclosureService {
 
   async build(params: {
     orderId: string;
-    ingredients: Array<{ id: string; name: string }>;
+    ingredients: Array<{
+      id: string;
+      name: string;
+      type?: string | null;
+      /** 订单快照里选定的采购商品，补剂兜底用 */
+      skuId?: string | null;
+    }>;
   }): Promise<ProcurementDisclosure | null> {
     const ingredientIds = Array.from(
       new Set(params.ingredients.map((item) => item.id).filter(Boolean)),
@@ -138,14 +144,26 @@ export class OrderProcurementDisclosureService {
     );
     const fallbackRecords = await this.findLatestCompletedRecords(needFallback);
 
+    const supplementSkuIds = params.ingredients
+      .filter(
+        (ingredient) =>
+          this.isSupplement(ingredient.type) && Boolean(ingredient.skuId),
+      )
+      .map((ingredient) => ingredient.skuId as string);
     const skuIds = Array.from(
       new Set(
         [...records, ...fallbackRecords]
           .map((record) => record.procurementSkuId)
-          .filter((id): id is string => Boolean(id)),
+          .filter((id): id is string => Boolean(id))
+          .concat(supplementSkuIds),
       ),
     );
     const skuInfoById = await this.loadSkuInfo(skuIds);
+    const supplementSkuByIngredient = await this.loadSupplementSkuFallbacks(
+      params.ingredients
+        .filter((ingredient) => this.isSupplement(ingredient.type))
+        .map((ingredient) => ingredient.id),
+    );
 
     const items: ProcurementDisclosureItem[] = [];
     for (const ingredient of params.ingredients) {
@@ -157,21 +175,41 @@ export class OrderProcurementDisclosureService {
         continue;
       }
 
-      if (!inventoryCovered.has(ingredient.id)) {
-        continue;
+      if (inventoryCovered.has(ingredient.id)) {
+        const fallback = fallbackRecords.find(
+          (record) => record.ingredientId === ingredient.id,
+        );
+        if (fallback) {
+          items.push(
+            this.toItem(ingredient, fallback, 'FROM_INVENTORY', skuInfoById),
+          );
+          continue;
+        }
       }
 
-      const fallback = fallbackRecords.find(
-        (record) => record.ingredientId === ingredient.id,
-      );
-      if (!fallback) {
-        // 库存抵扣了，但历史上没有可公开的采购记录：宁可不说，也不编。
-        continue;
+      /**
+       * 补剂兜底（2026-11-03）：
+       * 系统里从来没有补剂采购记录（历史 876 条全是食材），补剂通常是
+       * 「家里还有、现场确认无需采购」。这时用订单快照选定的采购商品
+       * 给出渠道/品牌/商品名，前端不标来源、不展示日期。
+       */
+      if (this.isSupplement(ingredient.type)) {
+        const skuInfo =
+          (ingredient.skuId ? skuInfoById.get(ingredient.skuId) : null) ||
+          supplementSkuByIngredient.get(ingredient.id) ||
+          null;
+        if (skuInfo) {
+          items.push({
+            ingredientId: ingredient.id,
+            ingredientName: ingredient.name,
+            source: 'FROM_INVENTORY',
+            channel: this.normalizeText(skuInfo.purchaseChannel) || null,
+            brand: this.normalizeText(skuInfo.brand) || null,
+            productName: this.normalizeText(skuInfo.name) || null,
+            purchasedAt: null,
+          });
+        }
       }
-
-      items.push(
-        this.toItem(ingredient, fallback, 'FROM_INVENTORY', skuInfoById),
-      );
     }
 
     return {
@@ -185,7 +223,14 @@ export class OrderProcurementDisclosureService {
     ingredient: { id: string; name: string },
     record: PurchaseRecordLite,
     source: ProcurementDisclosureSource,
-    skuInfoById: Map<string, { name: string; brand: string | null }>,
+    skuInfoById: Map<
+      string,
+      {
+        name: string;
+        brand: string | null;
+        purchaseChannel: string | null;
+      }
+    >,
   ): ProcurementDisclosureItem {
     const skuInfo = record.procurementSkuId
       ? skuInfoById.get(record.procurementSkuId)
@@ -241,20 +286,89 @@ export class OrderProcurementDisclosureService {
     `);
   }
 
-  private async loadSkuInfo(
-    skuIds: string[],
-  ): Promise<Map<string, { name: string; brand: string | null }>> {
+  /**
+   * 补剂兜底商品：优先默认，其次启用，最后最新。
+   * 补剂没有采购记录，只能用商品档案说明「这是什么、从哪买、什么品牌」。
+   */
+  private async loadSupplementSkuFallbacks(
+    ingredientIds: string[],
+  ): Promise<
+    Map<
+      string,
+      {
+        name: string;
+        brand: string | null;
+        purchaseChannel: string | null;
+      }
+    >
+  > {
+    if (ingredientIds.length === 0) {
+      return new Map();
+    }
+
+    const skus = await this.prisma.procurementSku.findMany({
+      where: { ingredientId: { in: ingredientIds } },
+      orderBy: [
+        { isDefault: 'desc' },
+        { isActive: 'desc' },
+        { createdAt: 'desc' },
+      ],
+      select: {
+        ingredientId: true,
+        name: true,
+        brand: true,
+        purchaseChannel: true,
+      },
+    });
+
+    const result = new Map<
+      string,
+      {
+        name: string;
+        brand: string | null;
+        purchaseChannel: string | null;
+      }
+    >();
+    for (const sku of skus) {
+      if (!result.has(sku.ingredientId)) {
+        result.set(sku.ingredientId, {
+          name: sku.name,
+          brand: sku.brand,
+          purchaseChannel: sku.purchaseChannel,
+        });
+      }
+    }
+    return result;
+  }
+
+  private async loadSkuInfo(skuIds: string[]): Promise<
+    Map<
+      string,
+      {
+        name: string;
+        brand: string | null;
+        purchaseChannel: string | null;
+      }
+    >
+  > {
     if (skuIds.length === 0) {
       return new Map();
     }
 
     const skus = await this.prisma.procurementSku.findMany({
       where: { id: { in: skuIds } },
-      select: { id: true, name: true, brand: true },
+      select: { id: true, name: true, brand: true, purchaseChannel: true },
     });
 
     return new Map(
-      skus.map((sku) => [sku.id, { name: sku.name, brand: sku.brand }]),
+      skus.map((sku) => [
+        sku.id,
+        {
+          name: sku.name,
+          brand: sku.brand,
+          purchaseChannel: sku.purchaseChannel,
+        },
+      ]),
     );
   }
 
@@ -275,6 +389,10 @@ export class OrderProcurementDisclosureService {
     const month = String(value.getMonth() + 1).padStart(2, '0');
     const day = String(value.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  }
+
+  private isSupplement(type?: string | null): boolean {
+    return String(type || '').toUpperCase() === 'SUPPLEMENT';
   }
 
   private normalizeText(value: string | null | undefined): string {

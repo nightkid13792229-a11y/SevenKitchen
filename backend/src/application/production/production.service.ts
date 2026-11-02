@@ -93,11 +93,9 @@ export class ProductionService {
   private buildProductionGroupKey(params: {
     recipeSnapshotId: string;
     recipeSnapshot: any;
-    ingredientSourcePlan?: string | null;
   }): string {
     return [
       params.recipeSnapshotId,
-      params.ingredientSourcePlan || 'DEFAULT_SOURCE_PLAN',
       this.buildRecipeSourceSignature(params.recipeSnapshot),
     ].join('::');
   }
@@ -189,7 +187,6 @@ export class ProductionService {
         const productionGroupKey = this.buildProductionGroupKey({
           recipeSnapshotId,
           recipeSnapshot: item.recipeSnapshot,
-          ingredientSourcePlan: item.ingredientSourcePlan,
         });
 
         orderItemsWithDailyIntake.push({
@@ -749,7 +746,6 @@ export class ProductionService {
           packageSpecG: number;
           packageCount: number;
         }> | null;
-        ingredientSourcePlan: string | null;
         recipeSnapshot: any;
         createdAt: string;
       }>;
@@ -788,7 +784,6 @@ export class ProductionService {
           packageSpecG: number;
           packageCount: number;
         }> | null;
-        ingredientSourcePlan: string | null;
         recipeSnapshot: any;
         createdAt: string;
       }>;
@@ -865,7 +860,6 @@ export class ProductionService {
             packageSpecG: orderItem.packageSpecG,
             packageCount: orderItem.packageCount,
             packagePlan: orderItem.packagePlan ?? null,
-            ingredientSourcePlan: orderItem.ingredientSourcePlan ?? null,
             recipeSnapshot: unit.recipeSnapshot,
             createdAt: orderItem.createdAt.toISOString(),
           });
@@ -1014,7 +1008,6 @@ export class ProductionService {
             packageSpecG: orderItem.packageSpecG,
             packageCount: orderItem.packageCount,
             packagePlan: orderItem.packagePlan ?? null,
-            ingredientSourcePlan: orderItem.ingredientSourcePlan ?? null,
           });
         }
 

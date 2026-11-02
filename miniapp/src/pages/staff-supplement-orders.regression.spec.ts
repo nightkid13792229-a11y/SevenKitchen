@@ -24,12 +24,27 @@ describe('工作台补剂订单 · 接口契约', () => {
     expect(apiSource).toContain('`/admin/supplement-shop/orders/${orderId}/labels`')
   })
 
-  it('分装提交用 itemId（订单行 ID），不是 labelId 或别的名字', () => {
-    // 后端 SupplementPackItemDto 校验的是 itemId，且要求覆盖全部订单行；
-    // 写成 labelId 会被 400 挡回来
-    expect(apiSource).toContain('itemId: string')
-    expect(detailSource).toContain('itemId: item.id')
-    expect(detailSource).not.toContain('itemId: item.labelId')
+  it('管理员可以在详情页直接处理售后：走 admin resolve 接口', () => {
+    expect(apiSource).toContain(
+      '`/admin/supplement-shop/aftersales/${caseId}/resolve`',
+    )
+    expect(apiSource).toContain(
+      "resolutionType: 'REFUND' | 'RESHIP' | 'REGISTER_ONLY' | 'REJECT'",
+    )
+    expect(detailSource).toContain('isAdmin')
+    expect(detailSource).toContain('canResolve')
+    expect(detailSource).toContain('resolveAftersale')
+    expect(detailSource).toContain('同意退款')
+    expect(detailSource).toContain('驳回')
+  })
+
+  it('2026-11-02 起详情页不再提交分装工单：不填批号、不选原瓶到期日', () => {
+    // 分装工单整块删掉；员工只用「打印标签」和「发货」。
+    expect(detailSource).not.toContain('分装工单')
+    expect(detailSource).not.toContain('sourceExpiryDate')
+    expect(detailSource).not.toContain('batchNo')
+    expect(detailSource).not.toContain('原瓶到期日')
+    expect(detailSource).not.toContain('提交分装结果')
   })
 
   it('标签数据带 bagIndex / bagTotal（加量后一个补剂多袋，每袋一张）', () => {
@@ -39,7 +54,7 @@ describe('工作台补剂订单 · 接口契约', () => {
 })
 
 describe('工作台补剂订单 · 列表页', () => {
-  it('覆盖后端全部 8 个状态，一个都不能漏', () => {
+  it('状态文案覆盖后端全部 8 个状态，一个都不能漏', () => {
     // 漏掉某个状态，那个状态的订单在这张列表里就会"消失"
     for (const value of [
       'PENDING_PAYMENT',
@@ -51,20 +66,32 @@ describe('工作台补剂订单 · 列表页', () => {
       'AFTERSALE',
       'CANCELLED',
     ]) {
-      expect(listSource).toContain(`value: '${value}'`)
+      expect(listSource).toContain(`${value}:`)
     }
   })
 
-  it('三段待办可点筛选，对应三个真正需要人动手的状态', () => {
+  it('三段待办可点筛选：待收款 / 待发货 / 已发货', () => {
     expect(listSource).toContain("selectStatus('PENDING_PAYMENT')")
-    expect(listSource).toContain("selectStatus('PAID')")
-    expect(listSource).toContain("selectStatus('PACKED')")
+    expect(listSource).toContain("selectStatus('TO_SHIP')")
+    expect(listSource).toContain("selectStatus('SHIPPED')")
+  })
+
+  it('待发货是一个合并分组，不再让员工区分待分装/分装中/已分装', () => {
+    expect(listSource).toContain("{ label: '待发货', value: 'TO_SHIP' }")
+    expect(listSource).toContain('toShipCount')
+    expect(listSource).toContain("counts.value.PAID")
+    expect(listSource).toContain("counts.value.PACKED")
+  })
+
+  it('有未完结售后时，列表卡片挂「售后中/退款中」', () => {
+    // 新售后不改订单 status，必须读后端派生的 hasOpenAftersale
+    expect(listSource).toContain('order.hasOpenAftersale')
+    expect(listSource).toContain('order.openAftersaleLabel')
   })
 
   it('每个状态都给出了下一步该做什么的提示', () => {
     expect(listSource).toContain('下一步：确认收款')
-    expect(listSource).toContain('下一步：分装并打标签')
-    expect(listSource).toContain('下一步：填单号发货')
+    expect(listSource).toContain('下一步：打印标签并发货')
   })
 
   it('加载失败不静默，要给提示', () => {
@@ -73,25 +100,27 @@ describe('工作台补剂订单 · 列表页', () => {
 })
 
 describe('工作台补剂订单 · 详情页', () => {
-  it('分装表单每个补剂一条，批号可空、原瓶到期日必填', () => {
-    expect(detailSource).toContain('sourceExpiryDate')
-    // 缺到期日必须挡住，否则后端会退回来、白填一遍
-    expect(detailSource).toContain('没填原瓶到期日')
-  })
-
-  it('已分装过的补剂带出原值，补打标签时不用重填', () => {
-    expect(detailSource).toContain('item.sourceExpiryDate')
-  })
-
-  it('按状态给不同操作：待收款→确认收款，待发货→打印标签与发货', () => {
-    expect(detailSource).toContain("order.status === 'PENDING_PAYMENT'")
-    expect(detailSource).toContain("order.status === 'PACKED'")
-    expect(detailSource).toContain('确认收款')
+  it('已付款就直接给「打印标签」和「发货」，不再要求先分装', () => {
+    expect(detailSource).toContain("['PAID', 'PACKING', 'PACKED']")
+    expect(detailSource).toContain('canShip')
     expect(detailSource).toContain('打印标签')
+    expect(detailSource).toContain('发货')
+  })
+
+  it('只保留待收款的两个动作：确认收款 / 取消订单', () => {
+    expect(detailSource).toContain("order.status === 'PENDING_PAYMENT'")
+    expect(detailSource).toContain('确认收款')
+    expect(detailSource).toContain('取消订单')
   })
 
   it('打印标签入口把订单 ID 带过去', () => {
     expect(detailSource).toContain('/pages/staff-supplement-orders/labels?id=')
+  })
+
+  it('有未完结售后时，状态旁边挂「售后中/退款中」', () => {
+    expect(detailSource).toContain('openAftersaleLabel')
+    expect(detailSource).toContain("['PENDING', 'PROCESSING']")
+    expect(detailSource).toContain('退款中')
   })
 })
 
@@ -197,13 +226,13 @@ describe('工作台补剂订单 · 标签打印页', () => {
     expect(labelsSource).toContain('共 {{ labels.length }} 张标签')
   })
 
-  it('加载中 / 加载失败可重试 / 未分装时给出回去填分装的出口', () => {
+  it('加载中 / 加载失败可重试；不再要求先分装才能打标签', () => {
     expect(labelsSource).toContain('加载中')
     expect(labelsSource).toContain('@tap="fetchLabels"')
     expect(labelsSource).toContain('{{ loadError }}')
-    expect(labelsSource).toContain('packRequired')
-    expect(labelsSource).toContain('请先回订单详情填分装结果')
-    expect(labelsSource).toContain('goToOrderDetail')
+    // 2026-11-02：分装工单取消后，标签直接从订单生成，不存在「先分装」的拦截
+    expect(labelsSource).not.toContain('packRequired')
+    expect(labelsSource).not.toContain('请先回订单详情填分装结果')
   })
 
   it('预览用后端返回的图片，不新增任何图片资源', () => {

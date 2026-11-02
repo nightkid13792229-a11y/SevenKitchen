@@ -1,0 +1,11 @@
+{
+  "operator": "boss-2026-11-02",
+  "items": [
+    { "purchaseRecordId": "a4580de8-8bca-4d2d-86a6-bd355612756a", "newBaseQuantity": 486, "reason": "原录入把 486g 重复换算成 486×486；按采购商品净含量 486g/罐 修正" },
+    { "purchaseRecordId": "6df6713e-dc05-48e9-bce6-564ed7f007fc", "newBaseQuantity": 500, "reason": "原录入把 500g 重复乘以包装规格 1500；按 500g 修正" },
+    { "purchaseRecordId": "cbb5e399-49c1-4d33-b2a3-bb4cde5d5a26", "newBaseQuantity": 3000, "reason": "原录入把 3000g 重复乘以包装规格 1500；按 3000g 修正" },
+    { "purchaseRecordId": "fc7c18ff-6982-4f71-9df3-e893b960ccaa", "newBaseQuantity": 700, "reason": "原录入把 700g 重复乘以 200；按 700g 修正" },
+    { "purchaseRecordId": "de29ffd3-1881-4bfe-b50e-71a439218901", "newBaseQuantity": 1000, "reason": "原录入把 1000g 重复乘以 500；按 1000g 修正" },
+    { "purchaseRecordId": "7fc2bfcb-bc34-4ed4-a182-b613f8f1af9f", "newBaseQuantity": 1500, "reason": "原录入把 1500g 重复乘以 500；按 1500g 修正" }
+  ]
+}

@@ -43,6 +43,12 @@ export interface StaffSupplementOrder {
   inventoryWarnings?: string[];
   orderNo: string;
   status: SupplementOrderStatus;
+  /**
+   * 有未完结售后时由后端派生；不等于订单 status。
+   * 新售后不改订单状态，卡片上靠这两个字段挂「售后中/退款中」。
+   */
+  hasOpenAftersale?: boolean;
+  openAftersaleLabel?: string | null;
   bagCount: number;
   amountSupplement: number;
   amountServiceFee: number;
@@ -187,6 +193,29 @@ export const staffSupplementOrderApi = {
     return request<StaffSupplementOrder>({
       url: `/admin/supplement-shop/orders/${orderId}`,
       method: 'GET',
+    });
+  },
+
+  /**
+   * 处理补剂售后（管理员）。
+   *
+   * 后端接口是 AdminGuard：员工调用会 403，手机上只给 ADMIN 显示按钮。
+   * REFUND 会发起微信原路退款；RESHIP 会生成 0 元补发单；
+   * REGISTER_ONLY 只登记；REJECT 驳回。
+   */
+  resolveAftersale(
+    caseId: string,
+    payload: {
+      resolutionType: 'REFUND' | 'RESHIP' | 'REGISTER_ONLY' | 'REJECT';
+      refundAmount?: number;
+      note?: string;
+      rejectReason?: string;
+    },
+  ) {
+    return request<StaffSupplementAftersaleCase>({
+      url: `/admin/supplement-shop/aftersales/${caseId}/resolve`,
+      method: 'POST',
+      data: payload,
     });
   },
 

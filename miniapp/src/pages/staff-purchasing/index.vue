@@ -1,14 +1,9 @@
 <template>
   <view class="purchasing-page">
-    <view class="header">
-      <text class="title">采购管理</text>
-      <text class="subtitle">查看日采、补货与原料需求</text>
-    </view>
-
     <view class="planning-card">
-      <view class="section-heading">
+      <view class="planning-head">
         <text class="section-title">日采</text>
-        <text class="section-subtitle">先选制作日期，再决定生成日采清单还是查看已有清单</text>
+        <text class="planning-hint">先选制作日期</text>
       </view>
 
       <view class="date-chip-group">
@@ -23,11 +18,11 @@
           @tap="selectTargetDate(option.date)"
         >
           <text class="chip-label">{{ option.label }}</text>
-          <text class="chip-date">{{ option.shortDate }}</text>
+          <text class="chip-date">{{ option.dayText }}</text>
           <text class="chip-meta">{{ getDateOverview(option.date).chipText }}</text>
         </view>
 
-        <picker mode="date" :start="todayString" :value="selectedTargetDate" @change="onTargetDateChange">
+        <picker class="date-chip-picker" mode="date" :start="todayString" :value="selectedTargetDate" @change="onTargetDateChange">
           <view class="date-chip more-date-chip" :class="{ active: isCustomDateSelected }">
             <text class="chip-label">更多日期</text>
             <text class="chip-date">{{ customDateDisplay }}</text>
@@ -55,7 +50,9 @@
 
         <view v-else class="summary-body">
           <text class="summary-line">{{ selectedDateOverview.summaryLine }}</text>
-          <text class="summary-hint">{{ selectedDateOverview.hintText }}</text>
+          <text v-if="selectedDateOverview.actionType === 'none'" class="summary-hint">
+            {{ selectedDateOverview.hintText }}
+          </text>
         </view>
 
         <view class="summary-actions" :class="{ 'single-action': !shouldShowPreviewButton }">
@@ -86,10 +83,10 @@
       <text class="quick-entry-arrow">›</text>
     </view>
 
-    <view class="filters">
-      <view class="filter-item filter-item-stack">
-        <text class="filter-label">清单状态</text>
-        <view class="status-filter-group">
+    <view class="purchase-lists">
+      <view class="list-heading">
+        <text class="section-title">采购清单</text>
+        <view class="status-filter-group compact">
           <view
             v-for="option in statusOptions"
             :key="option.value || 'ALL'"
@@ -100,13 +97,6 @@
             <text>{{ option.label }}</text>
           </view>
         </view>
-      </view>
-    </view>
-
-    <view class="purchase-lists">
-      <view class="section-heading list-heading">
-        <text class="section-title">采购清单列表</text>
-        <text class="section-subtitle">这里展示已经生成的日采和补货清单，状态筛选只作用于下方列表</text>
       </view>
 
       <view v-if="loading" class="loading-state">
@@ -126,55 +116,50 @@
           class="list-item"
           @tap="goToDetail(list.id)"
         >
-          <view class="item-header">
-            <view class="header-left">
-              <view class="target-line">
-                <text class="target-date">{{ formatDate(list.targetDate) }}（制作日期）</text>
-                <text class="kind-badge" :class="getListKindClass(list.kind)">
-                  {{ getListKindText(list.kind) }}
-                </text>
-              </view>
-              <text class="create-time">创建于 {{ formatDateTime(list.createdAt) }}</text>
+          <view class="item-top">
+            <view class="target-line">
+              <text class="target-date">{{ formatDate(list.targetDate) }}</text>
+              <text class="kind-badge" :class="getListKindClass(list.kind)">
+                {{ getListKindText(list.kind) }}
+              </text>
             </view>
             <view class="status-badge" :class="getStatusClass(list.status)">
               <text>{{ getStatusText(list.status) }}</text>
             </view>
           </view>
 
-          <view class="item-body">
-            <view class="info-row">
-              <text class="label">原料种类:</text>
-              <text class="value">{{ list.itemCount }} 种</text>
-            </view>
-            <view class="info-row" v-if="list.recordsCount !== undefined">
-              <text class="label">采购记录:</text>
-              <text class="value">{{ list.recordsCount }} 条</text>
-            </view>
-            <view class="info-row" v-if="list.totalActualCost !== undefined && list.totalActualCost > 0">
-              <text class="label">采购金额:</text>
-              <text class="value cost">¥{{ Number(list.totalActualCost).toFixed(2) }}</text>
-            </view>
-            <view class="info-row" v-else-if="list.totalEstimatedCost !== undefined && list.totalEstimatedCost > 0">
-              <text class="label">预估金额:</text>
-              <text class="value cost">¥{{ Number(list.totalEstimatedCost).toFixed(2) }}</text>
-            </view>
-            <view class="info-row" v-if="list.sourceOrderIds && list.sourceOrderIds.length > 0">
-              <text class="label">关联订单:</text>
-              <text class="value">{{ list.sourceOrderIds.length }} 个</text>
-            </view>
-            <view class="info-row" v-else-if="list.kind === 'STOCK_REPLENISHMENT'">
-              <text class="label">来源:</text>
-              <text class="value">补货</text>
-            </view>
-            <view class="info-row" v-if="list.completedAt">
-              <text class="label">完成时间:</text>
-              <text class="value">{{ formatDate(list.completedAt) }}</text>
-            </view>
+          <view class="item-metrics">
+            <text class="metric">{{ list.itemCount }} 种原料</text>
+            <text v-if="list.recordsCount !== undefined" class="metric">
+              {{ list.recordsCount }} 条记录
+            </text>
+            <text
+              v-if="list.totalActualCost !== undefined && list.totalActualCost > 0"
+              class="amount"
+            >
+              ¥{{ Number(list.totalActualCost).toFixed(2) }}
+            </text>
+            <text
+              v-else-if="list.totalEstimatedCost !== undefined && list.totalEstimatedCost > 0"
+              class="amount estimated"
+            >
+              预估 ¥{{ Number(list.totalEstimatedCost).toFixed(2) }}
+            </text>
           </view>
 
-          <view v-if="list.status === 'PENDING' && !list.reimbursementId" class="item-footer">
-            <view class="delete-list-btn" @tap.stop="confirmDeletePurchaseList(list.id)">
-              删除清单
+          <view class="item-meta">
+            <text class="create-time">创建于 {{ formatDateTime(list.createdAt) }}</text>
+            <view class="item-meta-right">
+              <text v-if="list.completedAt" class="done-time">
+                {{ formatDate(list.completedAt) }} 完成
+              </text>
+              <text
+                v-if="list.status === 'PENDING' && !list.reimbursementId"
+                class="delete-link"
+                @tap.stop="confirmDeletePurchaseList(list.id)"
+              >
+                删除
+              </text>
             </view>
           </view>
         </view>
@@ -201,6 +186,7 @@ interface DateOption {
   label: string;
   date: string;
   shortDate: string;
+  dayText: string;
 }
 
 interface DateOverview {
@@ -305,6 +291,7 @@ const quickDateOptions = computed<DateOption[]>(() => {
       label,
       date: dateStr,
       shortDate: `${formatShortMonthDay(dateStr)} ${formatWeekday(dateStr)}`,
+      dayText: formatShortMonthDay(dateStr),
     };
   });
 });
@@ -321,7 +308,7 @@ const customDateDisplay = computed(() => {
   }
 
   return isCustomDateSelected.value
-    ? `${formatShortMonthDay(selectedTargetDate.value)} ${formatWeekday(selectedTargetDate.value)}`
+    ? formatShortMonthDay(selectedTargetDate.value)
     : '选择';
 });
 
@@ -1017,27 +1004,8 @@ onShow(() => {
 .purchasing-page {
   min-height: 100vh;
   background-color: #fbfcf7;
+  padding-top: 24rpx;
   padding-bottom: 48rpx;
-}
-
-.header {
-  background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
-  padding: 40rpx 32rpx;
-  margin-bottom: 24rpx;
-
-  .title {
-    display: block;
-    font-size: 44rpx;
-    font-weight: bold;
-    color: #26261f;
-    margin-bottom: 8rpx;
-  }
-
-  .subtitle {
-    display: block;
-    font-size: 24rpx;
-    color: rgba(38, 38, 31, 0.6);
-  }
 }
 
 .planning-card,
@@ -1067,18 +1035,18 @@ onShow(() => {
 .quick-entry-title {
   font-size: 30rpx;
   font-weight: 700;
-  color: #26261f;
+  color: #f3eddd;
 }
 
 .quick-entry-subtitle {
   font-size: 24rpx;
-  color: rgba(38, 38, 31, 0.6);
+  color: rgba(243, 237, 221, 0.78);
   line-height: 1.5;
 }
 
 .quick-entry-arrow {
   font-size: 40rpx;
-  color: rgba(38, 38, 31, 0.42);
+  color: rgba(243, 237, 221, 0.6);
 }
 
 .planning-card,
@@ -1108,32 +1076,60 @@ onShow(() => {
   line-height: 1.5;
 }
 
-.date-chip-group {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.planning-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 16rpx;
+  margin-bottom: 12rpx;
+}
+
+.planning-hint {
+  font-size: 22rpx;
+  color: #6b6653;
+}
+
+.date-chip-group {
+  display: flex;
+  gap: 10rpx;
+  overflow-x: auto;
+}
+
+.date-chip-picker {
+  flex: 0 0 148rpx;
 }
 
 .date-chip {
-  min-height: 152rpx;
-  border-radius: 20rpx;
-  padding: 24rpx 22rpx;
+  width: 148rpx;
+  flex: 0 0 148rpx;
+  border-radius: 16rpx;
+  padding: 14rpx 16rpx;
   background: #f6efe0;
-  border: 2rpx solid transparent;
+  border: 2rpx solid #eadfc6;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 10rpx;
+  gap: 6rpx;
   box-sizing: border-box;
 
   &.active {
-    border-color: #b08d4f;
-    background: linear-gradient(135deg, #f6efe0 0%, #b08d4f 100%);
+    border-color: #1e3a2f;
+    background: #1e3a2f;
     box-shadow: 0 10rpx 24rpx rgba(30, 46, 36, 0.18);
+
+    .chip-label,
+    .chip-date {
+      color: #f3eddd;
+    }
+
+    .chip-meta {
+      color: rgba(243, 237, 221, 0.8);
+    }
   }
 
-  &.muted {
-    background: #fbfcf7;
+  &.muted:not(.active) {
+    background: #ffffff;
+    border-color: #eef1e2;
   }
 }
 
@@ -1142,19 +1138,23 @@ onShow(() => {
 }
 
 .chip-label {
-  font-size: 28rpx;
+  font-size: 24rpx;
   font-weight: 600;
   color: #26261f;
 }
 
 .chip-date {
   font-size: 24rpx;
+  font-weight: 700;
   color: #26261f;
 }
 
 .chip-meta {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #6b6653;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .date-summary-card {
@@ -1193,17 +1193,17 @@ onShow(() => {
 
   &.generate {
     background: rgba(176, 141, 79, 0.14);
-    color: #8a6b33;
+    color: #7a5c28;
   }
 
   &.supplement {
     background: rgba(176, 141, 79, 0.14);
-    color: #8a6b33;
+    color: #7a5c28;
   }
 
   &.existing {
     background: rgba(30, 58, 47, 0.12);
-    color: #b08d4f;
+    color: #7a5c28;
   }
 
   &.empty {
@@ -1219,7 +1219,7 @@ onShow(() => {
 
 .summary-tag {
   font-size: 22rpx;
-  color: #8a6b33;
+  color: #7a5c28;
   background: rgba(176, 141, 79, 0.16);
   padding: 8rpx 16rpx;
   border-radius: 999rpx;
@@ -1249,7 +1249,7 @@ onShow(() => {
 
 .summary-hint {
   font-size: 24rpx;
-  color: #8a6b33;
+  color: #7a5c28;
   line-height: 1.6;
 }
 
@@ -1279,13 +1279,13 @@ onShow(() => {
 
   &.secondary {
     background: #fbfcf7;
-    color: #8a6b33;
+    color: #7a5c28;
     border: 1rpx solid rgba(176, 141, 79, 0.35);
   }
 
   &.primary {
-    background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
-    color: #26261f;
+    background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+    color: #f3eddd;
     box-shadow: 0 10rpx 24rpx rgba(30, 46, 36, 0.24);
   }
 
@@ -1321,10 +1321,18 @@ onShow(() => {
   width: 100%;
 }
 
+.status-filter-group.compact {
+  width: auto;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  gap: 8rpx;
+}
+
 .status-filter-chip {
   min-width: 132rpx;
   height: 64rpx;
   padding: 0 24rpx;
+  flex-shrink: 0;
   border-radius: 999rpx;
   background-color: #fbfcf7;
   color: #26261f;
@@ -1338,9 +1346,19 @@ onShow(() => {
     font-weight: 500;
   }
 
+  .status-filter-group.compact & {
+    min-width: 0;
+    height: 54rpx;
+    padding: 0 16rpx;
+
+    text {
+      font-size: 22rpx;
+    }
+  }
+
   &.active {
-    background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
-    color: #26261f;
+    background: #1e3a2f;
+    color: #f3eddd;
     box-shadow: 0 8rpx 18rpx rgba(30, 46, 36, 0.25);
   }
 }
@@ -1350,7 +1368,16 @@ onShow(() => {
 }
 
 .list-heading {
-  margin: 0 0 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin: 0 0 18rpx;
+
+  .section-title {
+    font-size: 30rpx;
+    white-space: nowrap;
+  }
 }
 
 .loading-state,
@@ -1395,60 +1422,48 @@ onShow(() => {
 .list-item {
   background-color: #fbfcf7;
   border-radius: 20rpx;
-  padding: 24rpx;
+  padding: 22rpx 24rpx;
   box-shadow: 0 6rpx 18rpx rgba(30, 46, 36, 0.04);
 
-  .item-header {
+  .item-top {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 16rpx;
-    padding-bottom: 16rpx;
-    border-bottom: 1rpx solid #eef1e2;
+    justify-content: space-between;
+    gap: 12rpx;
 
-    .header-left {
+    .target-line {
       display: flex;
-      flex-direction: column;
-      gap: 8rpx;
+      align-items: center;
+      gap: 12rpx;
+      flex-wrap: wrap;
+    }
 
-      .target-line {
-        display: flex;
-        align-items: center;
-        gap: 12rpx;
-        flex-wrap: wrap;
+    .target-date {
+      font-size: 30rpx;
+      font-weight: bold;
+      color: #26261f;
+    }
+
+    .kind-badge {
+      padding: 4rpx 12rpx;
+      border-radius: 999rpx;
+      font-size: 22rpx;
+      font-weight: 600;
+
+      &.order {
+        background: rgba(176, 141, 79, 0.18);
+        color: #7a5c28;
       }
 
-      .target-date {
-        font-size: 30rpx;
-        font-weight: bold;
-        color: #26261f;
-      }
-
-      .kind-badge {
-        padding: 6rpx 14rpx;
-        border-radius: 999rpx;
-        font-size: 22rpx;
-        font-weight: 600;
-
-        &.order {
-          background: rgba(176, 141, 79, 0.18);
-          color: #8a6b33;
-        }
-
-        &.stock {
-          background: rgba(30, 58, 47, 0.14);
-          color: #1e3a2f;
-        }
-      }
-
-      .create-time {
-        font-size: 22rpx;
-        color: #6b6653;
+      &.stock {
+        background: rgba(30, 58, 47, 0.14);
+        color: #1e3a2f;
       }
     }
 
     .status-badge {
-      padding: 8rpx 16rpx;
+      flex-shrink: 0;
+      padding: 6rpx 14rpx;
       border-radius: 8rpx;
       font-size: 22rpx;
       font-weight: bold;
@@ -1460,7 +1475,7 @@ onShow(() => {
 
       &.pending {
         background-color: #f6efe0;
-        color: #8a6b33;
+        color: #7a5c28;
       }
 
       &.completed {
@@ -1470,55 +1485,59 @@ onShow(() => {
     }
   }
 
-  .item-body {
-    margin-bottom: 16rpx;
+  .item-metrics {
+    display: flex;
+    align-items: baseline;
+    gap: 16rpx;
+    margin-top: 10rpx;
 
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8rpx;
+    .metric {
+      font-size: 24rpx;
+      color: #6b6653;
+    }
 
-      &:last-child {
-        margin-bottom: 0;
-      }
+    .amount {
+      margin-left: auto;
+      font-size: 30rpx;
+      font-weight: 800;
+      color: #26261f;
+      font-variant-numeric: tabular-nums;
 
-      .label {
+      &.estimated {
         font-size: 26rpx;
-        color: #26261f;
-      }
-
-      .value {
-        font-size: 26rpx;
-        color: #26261f;
-        font-weight: 500;
-
-        &.cost {
-          color: #b4553f;
-          font-weight: bold;
-        }
+        font-weight: 700;
+        color: #6b6653;
       }
     }
   }
 
-  .item-footer {
-    padding-top: 16rpx;
-    border-top: 1rpx solid #eef1e2;
+  .item-meta {
     display: flex;
-    justify-content: flex-end;
     align-items: center;
+    justify-content: space-between;
+    gap: 12rpx;
+    margin-top: 6rpx;
 
-    .delete-list-btn {
-      padding: 12rpx 32rpx;
-      background: linear-gradient(135deg, #f8e8e2 0%, #b4553f 100%);
-      color: #b4553f;
-      border-radius: 8rpx;
-      font-size: 24rpx;
-      font-weight: 500;
+    .create-time {
+      font-size: 22rpx;
+      color: #6b6653;
+    }
 
-      &:active {
-        opacity: 0.8;
-      }
+    .item-meta-right {
+      display: flex;
+      align-items: center;
+      gap: 16rpx;
+    }
+
+    .done-time {
+      font-size: 22rpx;
+      color: #6b6653;
+    }
+
+    .delete-link {
+      font-size: 22rpx;
+      color: #b4453a;
+      padding: 10rpx 0 10rpx 8rpx;
     }
   }
 }
@@ -1529,7 +1548,7 @@ onShow(() => {
 
   text {
     font-size: 26rpx;
-    color: #b08d4f;
+    color: #7a5c28;
   }
 }
 </style>

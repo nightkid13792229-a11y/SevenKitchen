@@ -77,7 +77,6 @@ export interface ProcurementSkuManifest {
   purchaseToBaseRatio?: number | null;
   currentPurchasePrice?: number | null;
   referencePurchasePrice?: number | null;
-  sourceTier?: 'ORGANIC' | 'MARKET_PREMIUM' | 'WHOLESALE' | null;
   notes?: string | null;
 }
 

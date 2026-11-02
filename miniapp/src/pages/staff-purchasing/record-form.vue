@@ -44,6 +44,16 @@
                   {{ formatProcurementSkuReferencePrice(sku) }}
                 </text>
               </view>
+              <view
+                v-if="formData.procurementSkuId === sku.id"
+                class="sku-customer-preview"
+              >
+                <text class="sku-customer-preview-label">顾客将看到</text>
+                <text class="sku-customer-preview-value"
+                  >渠道 {{ sku.purchaseChannel || '未填渠道' }} · 采购产品
+                  {{ sku.name }}</text
+                >
+              </view>
             </view>
             <text class="sku-check">✓</text>
           </view>
@@ -601,7 +611,7 @@ const goBack = () => {
 .record-form-page {
   min-height: 100vh;
   background-color: #fbfcf7;
-  padding-bottom: 140rpx;
+  padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
 }
 
 .loading-state {
@@ -621,7 +631,8 @@ const goBack = () => {
 }
 
 .form-section {
-  background-color: #fbfcf7;
+  background-color: #ffffff;
+  border: 1rpx solid #eef1e2;
   border-radius: 16rpx;
   padding: 32rpx;
   margin-bottom: 24rpx;
@@ -652,7 +663,7 @@ const goBack = () => {
   flex-shrink: 0;
   font-size: 24rpx;
   font-weight: 600;
-  color: #b08d4f;
+  color: #7a5c28;
 }
 
 .form-input {
@@ -661,8 +672,9 @@ const goBack = () => {
   padding: 0 24rpx;
   font-size: 28rpx;
   color: #26261f;
-  background-color: #fbfcf7;
-  border-radius: 8rpx;
+  background-color: #f2f4ea;
+  border: 1rpx solid #e5e8d4;
+  border-radius: 12rpx;
   box-sizing: border-box;
 }
 
@@ -671,8 +683,9 @@ const goBack = () => {
   align-items: center;
   gap: 12rpx;
   padding-right: 24rpx;
-  background-color: #fbfcf7;
-  border-radius: 8rpx;
+  background-color: #f2f4ea;
+  border: 1rpx solid #e5e8d4;
+  border-radius: 12rpx;
 }
 
 .unit-input {
@@ -697,8 +710,9 @@ const goBack = () => {
   justify-content: space-between;
   height: 80rpx;
   padding: 0 24rpx;
-  background-color: #fbfcf7;
-  border-radius: 8rpx;
+  background-color: #f2f4ea;
+  border: 1rpx solid #e5e8d4;
+  border-radius: 12rpx;
 
   .picker-text {
     font-size: 28rpx;
@@ -737,7 +751,7 @@ const goBack = () => {
     background-color: #eef2e4;
 
     .sku-check {
-      color: #b08d4f;
+      color: #7a5c28;
       opacity: 1;
     }
   }
@@ -766,7 +780,7 @@ const goBack = () => {
   padding: 3rpx 10rpx;
   border-radius: 999rpx;
   font-size: 20rpx;
-  color: #b08d4f;
+  color: #7a5c28;
   background-color: #eef2e4;
 }
 
@@ -804,23 +818,19 @@ const goBack = () => {
 .empty-title {
   font-size: 28rpx;
   font-weight: 600;
-  color: #8a6b33;
+  color: #7a5c28;
 }
 
 .empty-desc {
   font-size: 24rpx;
   line-height: 1.5;
-  color: #8a6b33;
+  color: #7a5c28;
 }
 
 .bottom-actions {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
   display: flex;
   gap: 24rpx;
-  padding: 24rpx 32rpx;
+  padding: 8rpx 0 calc(24rpx + env(safe-area-inset-bottom));
   background-color: #fbfcf7;
   box-shadow: 0 -2rpx 10rpx rgba(30, 46, 36, 0.05);
   box-sizing: border-box;
@@ -837,13 +847,40 @@ const goBack = () => {
   border: none;
 
   &.cancel {
-    background-color: #fbfcf7;
+    background-color: #ffffff;
+    border: 1rpx solid #e5e8d4;
     color: #26261f;
   }
 
   &.submit {
-    background-color: #b08d4f;
-    color: #26261f;
+    background-color: #1e3a2f;
+    color: #f3eddd;
   }
+}
+
+.sku-customer-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8rpx;
+  margin-top: 12rpx;
+  padding: 8rpx 12rpx;
+  border-radius: 8rpx;
+  background-color: #eef3ea;
+}
+
+.sku-customer-preview-label {
+  flex: none;
+  color: #2f6b4f;
+  font-size: 20rpx;
+  font-weight: 700;
+}
+
+.sku-customer-preview-value {
+  flex: 1;
+  color: #26261f;
+  font-size: 21rpx;
+  line-height: 1.5;
+  word-break: break-all;
 }
 </style>

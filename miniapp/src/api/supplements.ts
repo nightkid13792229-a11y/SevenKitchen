@@ -166,8 +166,8 @@ export interface CreateSupplementOrderPayload {
 
 export const SUPPLEMENT_ORDER_STATUS_LABELS: Record<string, string> = {
   PENDING_PAYMENT: '待付款',
-  PAID: '待分装',
-  PACKING: '分装中',
+  PAID: '待发货',
+  PACKING: '待发货',
   PACKED: '待发货',
   SHIPPED: '已发货',
   COMPLETED: '已完成',

@@ -144,7 +144,6 @@ describe('applyLocalIngredientImport', () => {
       data: expect.objectContaining({
         ingredientId: 'ingredient-1',
         name: 'Duck egg supplier tray',
-        sourceTier: 'WHOLESALE',
       }),
     });
     expect(writeAuditFile).toHaveBeenCalledWith(
@@ -385,7 +384,6 @@ function makeFoodManifest(
           purchaseUnit: 'tray',
           purchaseToBaseRatio: 600,
           currentPurchasePrice: 42,
-          sourceTier: 'WHOLESALE',
         },
       ],
     },

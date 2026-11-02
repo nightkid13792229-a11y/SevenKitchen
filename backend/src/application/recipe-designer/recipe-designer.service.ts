@@ -2225,6 +2225,7 @@ export class RecipeDesignerService {
           purchaseUnit: usageUnit,
           purchaseToBaseRatio: 1,
           currentPricePerPurchaseUnit: 0,
+          initialPricePerPurchaseUnit: 0,
           effectivePricePerPurchaseUnit: 0,
           properties: {
             category_type: 'OTHER',

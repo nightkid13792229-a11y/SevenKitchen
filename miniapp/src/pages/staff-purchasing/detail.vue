@@ -1,10 +1,5 @@
 <template>
   <view class="purchase-detail-page">
-    <!-- 顶部标题 -->
-    <view class="header">
-      <text class="title">{{ detailTitle }}</text>
-    </view>
-
     <!-- 加载状态 -->
     <view v-if="loading" class="loading-state">
       <text>加载中...</text>
@@ -12,6 +7,15 @@
 
     <!-- 详情内容 -->
     <view v-else-if="purchaseList" class="detail-content">
+      <!-- 吸顶进度条：滚动时始终能看到录了多少、花了多少 -->
+      <view class="detail-progress">
+        <text class="dp-label">已处理 {{ handledItemCount }}/{{ trackableItemCount }}</text>
+        <view class="dp-bar">
+          <view class="dp-fill" :style="{ width: handledPercent + '%' }"></view>
+        </view>
+        <text class="dp-cost">¥{{ recordedCost.toFixed(2) }}</text>
+      </view>
+
       <!-- 日期变更警告横幅 -->
       <view v-if="dateChanges.hasChanges" class="date-change-warning">
         <view class="warning-header">
@@ -35,7 +39,7 @@
           <view class="header-left">
             <view class="target-line">
               <text class="target-date">{{ formatDate(purchaseList.targetDate) }}</text>
-              <text class="time-badge">采购时间</text>
+              <text class="time-badge">制作日期</text>
             </view>
             <text class="create-time">创建于 {{ formatFullDateTime(purchaseList.createdAt) }}</text>
           </view>
@@ -123,42 +127,49 @@
             <!-- 该类型的原料列表 -->
             <view class="items-list">
               <view v-for="(item, index) in group.items" :key="index" class="item-card">
-                <!-- 原料基本信息（始终显示） -->
+                <!-- 原料基本信息：名称 + 仍需采购 / 渠道规格 / 需求明细 -->
                 <view class="item-basic">
-                  <view class="item-info">
-                    <view class="item-heading">
-                      <text class="item-name">{{ getPurchaseItemTitle(item) }}</text>
-                      <text v-if="formatSkuReferencePrice(item)" class="sku-price">{{ formatSkuReferencePrice(item) }}</text>
-                    </view>
-                    <view v-if="item.resolvedSuggestedProductName && item.resolvedSuggestedProductName !== getPurchaseItemTitle(item)" class="item-sku-lines">
-                      <text class="item-sku secondary"> 推荐参考：{{ item.resolvedSuggestedProductName }} </text>
-                    </view>
-                    <view v-if="formatBrandLabel(item.resolvedBrand) || item.resolvedPurchaseChannel || item.resolvedProductModel" class="item-specs">
-                      <text v-if="formatBrandLabel(item.resolvedBrand)" class="spec brand">{{ formatBrandLabel(item.resolvedBrand) }}</text>
-                      <text v-if="item.resolvedPurchaseChannel" class="spec">{{ item.resolvedPurchaseChannel }}</text>
-                      <text v-if="item.resolvedProductModel" class="spec">{{ item.resolvedProductModel }}</text>
-                    </view>
-                    <view class="item-demand-row">
-                      <view class="stock-audit-inline">
-                        <text>订单需求 {{ formatResolvedQuantity(item.resolvedGrossQuantityNeeded, item) }}</text>
-                        <text class="audit-divider">|</text>
-                        <text>库存抵扣 {{ formatResolvedQuantity(item.resolvedStockDeductedQuantity, item) }}</text>
-                      </view>
-                      <view class="item-quantity">
-                        <text class="quantity-label">仍需采购</text>
+                  <view class="item-line-1">
+                    <text class="item-name">{{ getPurchaseItemTitle(item) }}</text>
+                    <view class="item-quantity" :class="{ covered: isItemCovered(item) }">
+                      <template v-if="isItemCovered(item)">
+                        <text class="quantity-zero">库存已覆盖</text>
+                      </template>
+                      <template v-else>
+                        <text class="quantity-label">仍需</text>
                         <text class="quantity-value">{{ formatQuantity(item) }}</text>
                         <text class="quantity-unit">{{ getDisplayUnit(item) }}</text>
-                      </view>
+                      </template>
                     </view>
                   </view>
 
-                  <view class="item-actions">
-                    <!-- 删除原料按钮：仅补货清单允许人工删除，日采清单由订单生成不允许删除 -->
-                    <button v-if="purchaseList.kind === 'STOCK_REPLENISHMENT' && purchaseList.status === 'PENDING' && !purchaseList.startedAt" class="delete-item-btn" @tap="confirmDeleteItem(item)">删除</button>
+                  <view class="item-line-2">
+                    <text class="item-meta">{{ buildItemMetaLine(item) }}</text>
+                    <button
+                      v-if="canManagePurchaseRecords && !item.noPurchaseNeeded"
+                      class="record-btn"
+                      @tap.stop="handleContinueAdd(item)"
+                    >记录</button>
+                  </view>
 
-                    <!-- 开始采购后显示的添加按钮 -->
-                    <button v-if="canManagePurchaseRecords && !item.noPurchaseNeeded" class="continue-add-btn" @tap="handleContinueAdd(item)">添加采购记录</button>
-                    <button v-if="canManagePurchaseRecords && shouldShowNoPurchaseButton(item)" class="no-purchase-btn" @tap="markItemNoPurchase(item)" :loading="noPurchaseMarkingItemId === item.id" :disabled="Boolean(noPurchaseMarkingItemId)">无需采购</button>
+                  <view class="item-line-3">
+                    <text class="audit-text">
+                      订单 {{ formatResolvedQuantity(item.resolvedGrossQuantityNeeded, item) }}
+                      · 库存抵扣 {{ formatResolvedQuantity(item.resolvedStockDeductedQuantity, item) }}
+                    </text>
+                    <view class="line-3-actions">
+                      <text
+                        v-if="canManagePurchaseRecords && shouldShowNoPurchaseButton(item)"
+                        class="inline-action"
+                        :class="{ disabled: noPurchaseMarkingItemId === item.id }"
+                        @tap.stop="markItemNoPurchase(item)"
+                      >{{ noPurchaseMarkingItemId === item.id ? '标记中…' : '无需采购' }}</text>
+                      <text
+                        v-if="purchaseList.kind === 'STOCK_REPLENISHMENT' && purchaseList.status === 'PENDING' && !purchaseList.startedAt"
+                        class="inline-action danger"
+                        @tap.stop="confirmDeleteItem(item)"
+                      >删除</text>
+                    </view>
                   </view>
                 </view>
 
@@ -211,6 +222,27 @@
         <!-- 空状态 -->
         <view v-else class="empty-items">
           <text class="empty-text">该采购清单暂无原料</text>
+        </view>
+
+        <!-- 库存已覆盖的原料：默认折叠，避免 30 项里一半是无需买的 -->
+        <view v-if="coveredItems.length > 0" class="covered-section">
+          <view class="covered-head" @tap="showCoveredItems = !showCoveredItems">
+            <text class="covered-title">库存已覆盖 {{ coveredItems.length }} 项</text>
+            <text class="covered-toggle">{{ showCoveredItems ? '收起' : '展开' }}</text>
+          </view>
+          <view v-if="showCoveredItems" class="covered-list">
+            <view v-for="item in coveredItems" :key="item.id" class="covered-item">
+              <view class="covered-copy">
+                <text class="covered-name">{{ getPurchaseItemTitle(item) }}</text>
+                <text class="covered-meta">{{ buildItemMetaLine(item) }}</text>
+              </view>
+              <button
+                v-if="canManagePurchaseRecords && !item.noPurchaseNeeded"
+                class="covered-record-btn"
+                @tap.stop="handleContinueAdd(item)"
+              >记录</button>
+            </view>
+          </view>
         </view>
       </view>
 
@@ -389,6 +421,65 @@ const detailTitle = computed(() => {
 });
 
 // 按类型分组的原料（计算属性）
+const isItemCovered = (item: any) => {
+  const required = getItemRequiredQuantity(item);
+  return (
+    Number.isFinite(required) &&
+    required <= 0 &&
+    !item.noPurchaseNeeded &&
+    (item.records || []).length === 0
+  );
+};
+
+const coveredItems = computed(() => items.value.filter((item) => isItemCovered(item)));
+const showCoveredItems = ref(false);
+
+const trackableItemCount = computed(
+  () => items.value.filter((item) => !isItemCovered(item)).length,
+);
+const handledItemCount = computed(
+  () =>
+    items.value.filter(
+      (item) =>
+        !isItemCovered(item) &&
+        ((item.records || []).length > 0 || item.noPurchaseNeeded === true),
+    ).length,
+);
+const handledPercent = computed(() =>
+  trackableItemCount.value > 0
+    ? Math.round((handledItemCount.value / trackableItemCount.value) * 100)
+    : 0,
+);
+const recordedCost = computed(() =>
+  items.value.reduce(
+    (sum, item) =>
+      sum +
+      (item.records || []).reduce(
+        (recordSum: number, record: any) => recordSum + Number(record.actualCost || 0),
+        0,
+      ),
+    0,
+  ),
+);
+
+const buildItemMetaLine = (item: any) => {
+  const parts = [
+    formatBrandLabel(item.resolvedBrand),
+    item.resolvedPurchaseChannel,
+    item.resolvedProductModel,
+    formatSkuReferencePrice(item),
+  ].filter(Boolean);
+
+  if (
+    item.resolvedSuggestedProductName &&
+    item.resolvedSuggestedProductName !== getPurchaseItemTitle(item)
+  ) {
+    parts.unshift(`推荐 ${item.resolvedSuggestedProductName}`);
+  }
+
+  return parts.join(' · ');
+};
+
 const groupedItems = computed(() => {
   if (items.value.length === 0) {
     return [];
@@ -399,7 +490,7 @@ const groupedItems = computed(() => {
 
   // 按类型分组
   const groups = new Map<string, any[]>();
-  items.value.forEach((item) => {
+  items.value.filter((item) => !isItemCovered(item)).forEach((item) => {
     const type = item.type || 'FOOD';
     if (!groups.has(type)) {
       groups.set(type, []);
@@ -409,7 +500,7 @@ const groupedItems = computed(() => {
 
   // 按定义的顺序返回分组
   return typeOrder
-    .filter((type) => groups.has(type))
+    .filter((type) => groups.has(type) && (groups.get(type) || []).length > 0)
     .map((type) => ({
       type,
       items: groups.get(type)!,
@@ -1964,19 +2055,8 @@ const confirmDeleteItem = (item: any) => {
 .purchase-detail-page {
   min-height: 100vh;
   background-color: #fbfcf7;
-  padding-bottom: 140rpx;
-}
-
-.header {
-  background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
-  padding: 40rpx 32rpx;
-  margin-bottom: 24rpx;
-
-  .title {
-    font-size: 44rpx;
-    font-weight: bold;
-    color: #26261f;
-  }
+  padding-bottom: calc(160rpx + env(safe-area-inset-bottom));
+  padding-top: 24rpx;
 }
 
 .loading-state,
@@ -2014,6 +2094,50 @@ const confirmDeleteItem = (item: any) => {
 
 .detail-content {
   padding: 0 32rpx;
+}
+
+.detail-progress {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+  padding: 12rpx 20rpx;
+  background: rgba(251, 252, 247, 0.97);
+  border: 1rpx solid #eef1e2;
+  border-radius: 12rpx;
+  box-shadow: 0 4rpx 12rpx rgba(30, 46, 36, 0.06);
+
+  .dp-label {
+    flex-shrink: 0;
+    font-size: 22rpx;
+    color: #6b6653;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dp-bar {
+    flex: 1;
+    height: 8rpx;
+    background: #eef0e6;
+    border-radius: 4rpx;
+    overflow: hidden;
+  }
+
+  .dp-fill {
+    height: 100%;
+    background: #b08d4f;
+    border-radius: 4rpx;
+  }
+
+  .dp-cost {
+    flex-shrink: 0;
+    font-size: 24rpx;
+    font-weight: 800;
+    color: #26261f;
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 .section {
@@ -2072,7 +2196,7 @@ const confirmDeleteItem = (item: any) => {
         font-size: 22rpx;
         font-weight: 600;
         background: rgba(176, 141, 79, 0.18);
-        color: #8a6b33;
+        color: #7a5c28;
       }
 
       .create-time {
@@ -2094,7 +2218,7 @@ const confirmDeleteItem = (item: any) => {
 
       &.pending {
         background-color: #f6efe0;
-        color: #8a6b33;
+        color: #7a5c28;
       }
 
       &.completed {
@@ -2104,7 +2228,7 @@ const confirmDeleteItem = (item: any) => {
 
       &.cancelled {
         background-color: #f8e8e2;
-        color: #b4553f;
+        color: #b4453a;
       }
     }
   }
@@ -2148,12 +2272,12 @@ const confirmDeleteItem = (item: any) => {
 
   .pending-title {
     margin-bottom: 0;
-    color: #8a6b33;
+    color: #7a5c28;
   }
 
   .pending-count {
     font-size: 24rpx;
-    color: #8a6b33;
+    color: #7a5c28;
     background-color: rgba(176, 141, 79, 0.12);
     padding: 8rpx 16rpx;
     border-radius: 999rpx;
@@ -2162,7 +2286,7 @@ const confirmDeleteItem = (item: any) => {
   .pending-hint {
     display: block;
     font-size: 24rpx;
-    color: #8a6b33;
+    color: #7a5c28;
     line-height: 1.6;
   }
 
@@ -2172,7 +2296,7 @@ const confirmDeleteItem = (item: any) => {
     justify-content: space-between;
     gap: 16rpx;
     font-size: 24rpx;
-    color: #8a6b33;
+    color: #7a5c28;
     flex-wrap: wrap;
   }
 
@@ -2214,7 +2338,7 @@ const confirmDeleteItem = (item: any) => {
   .pending-append-subtitle {
     font-size: 24rpx;
     font-weight: 700;
-    color: #8a6b33;
+    color: #7a5c28;
   }
 
   .pending-append-item {
@@ -2246,7 +2370,7 @@ const confirmDeleteItem = (item: any) => {
   .pending-append-spec,
   .pending-append-audit {
     font-size: 22rpx;
-    color: #8a6b33;
+    color: #7a5c28;
     line-height: 1.45;
   }
 
@@ -2261,12 +2385,12 @@ const confirmDeleteItem = (item: any) => {
 
   .pending-append-quantity-label {
     font-size: 20rpx;
-    color: #8a6b33;
+    color: #7a5c28;
   }
 
   .pending-append-quantity-value {
     font-size: 28rpx;
-    color: #8a6b33;
+    color: #7a5c28;
     font-weight: 800;
   }
 
@@ -2277,7 +2401,7 @@ const confirmDeleteItem = (item: any) => {
     line-height: 80rpx;
     border-radius: 40rpx;
     border: none;
-    background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
+    background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
     color: #f3eddd;
     font-size: 28rpx;
     font-weight: 600;
@@ -2289,6 +2413,76 @@ const confirmDeleteItem = (item: any) => {
   display: flex;
   flex-direction: column;
   gap: 24rpx;
+}
+
+.covered-section {
+  margin-top: 20rpx;
+  border-radius: 12rpx;
+  background: #f4f6ec;
+  overflow: hidden;
+}
+
+.covered-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18rpx 24rpx;
+}
+
+.covered-title {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #4a5346;
+}
+
+.covered-toggle {
+  font-size: 22rpx;
+  color: #7a5c28;
+}
+
+.covered-list {
+  padding: 0 24rpx 8rpx;
+}
+
+.covered-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  padding: 14rpx 0;
+  border-top: 1rpx solid #e5e8d4;
+}
+
+.covered-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.covered-name {
+  display: block;
+  font-size: 26rpx;
+  color: #26261f;
+}
+
+.covered-meta {
+  display: block;
+  margin-top: 2rpx;
+  font-size: 20rpx;
+  color: #8a8a7e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.covered-record-btn {
+  flex-shrink: 0;
+  padding: 6rpx 16rpx;
+  border-radius: 8rpx;
+  background: #1e3a2f;
+  color: #f3eddd;
+  font-size: 20rpx;
+  line-height: 1.4;
+  border: none;
 }
 
 .ingredient-group {
@@ -2327,151 +2521,132 @@ const confirmDeleteItem = (item: any) => {
   overflow: hidden;
   transition: all 0.3s;
 
-  .item-basic {
-    padding: 24rpx;
+    .item-basic {
+    padding: 20rpx 24rpx;
+  }
+
+  .item-line-1 {
     display: flex;
-    justify-content: space-between;
     align-items: flex-start;
+    justify-content: space-between;
     gap: 16rpx;
+  }
 
-    .item-info {
-      flex: 1;
-      min-width: 0;
+  .item-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 28rpx;
+    font-weight: 600;
+    color: #26261f;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 
-      .item-heading {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16rpx;
-        margin-bottom: 10rpx;
+  .item-quantity {
+    display: flex;
+    align-items: baseline;
+    gap: 4rpx;
+    flex-shrink: 0;
 
-        .item-name {
-          flex: 1;
-          min-width: 0;
-          font-size: 30rpx;
-          font-weight: 600;
-          color: #26261f;
-          line-height: 1.45;
-        }
-
-        .sku-price {
-          flex-shrink: 0;
-          max-width: 260rpx;
-          font-size: 22rpx;
-          font-weight: 600;
-          color: #8a6b33;
-          line-height: 1.4;
-          text-align: right;
-        }
-      }
-
-      .item-sku-lines {
-        display: flex;
-        flex-direction: column;
-        gap: 6rpx;
-        margin-bottom: 12rpx;
-
-        .item-sku {
-          font-size: 24rpx;
-
-          &.primary {
-            color: #b08d4f;
-            font-weight: 500;
-          }
-
-          &.secondary {
-            color: #6b6653;
-          }
-        }
-      }
-
-      .item-specs {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8rpx;
-        margin-bottom: 12rpx;
-
-        .spec {
-          font-size: 22rpx;
-          color: #26261f;
-          padding: 4rpx 12rpx;
-          background-color: #f0f3e9;
-          border-radius: 4rpx;
-
-          &.brand {
-            background-color: #eef2e4;
-            color: #1e3a2f;
-          }
-        }
-      }
-
-      .item-demand-row {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 8rpx 16rpx;
-        margin-top: 4rpx;
-
-        .stock-audit-inline {
-          display: flex;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 4rpx;
-          flex: 1;
-          min-width: 260rpx;
-          font-size: 22rpx;
-          line-height: 1.45;
-          color: #6b6653;
-
-          .audit-divider {
-            color: #968f6d;
-          }
-        }
-
-        .item-quantity {
-          display: flex;
-          align-items: baseline;
-          gap: 4rpx;
-          flex-shrink: 0;
-
-          .quantity-label {
-            font-size: 24rpx;
-            color: #26261f;
-          }
-
-          .quantity-value {
-            font-size: 32rpx;
-            font-weight: bold;
-            color: #b08d4f;
-          }
-
-          .quantity-unit {
-            font-size: 22rpx;
-            color: #6b6653;
-          }
-        }
-      }
+    .quantity-label {
+      font-size: 22rpx;
+      color: #6b6653;
     }
 
-    .item-action {
-      flex-shrink: 0;
-      align-self: flex-end;
+    .quantity-value {
+      font-size: 34rpx;
+      font-weight: 800;
+      color: #7a5c28;
+      line-height: 1.1;
+    }
 
-      .continue-add-btn {
-        padding: 12rpx 20rpx;
-        background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-        color: #f3eddd;
-        border-radius: 8rpx;
-        font-size: 24rpx;
-        border: none;
-        line-height: 1.5;
-        white-space: nowrap;
+    .quantity-unit {
+      font-size: 22rpx;
+      color: #6b6653;
+    }
 
-        &:active {
-          opacity: 0.8;
-        }
-      }
+    .quantity-zero {
+      font-size: 22rpx;
+      color: #8a8a7e;
+    }
+  }
+
+  .item-line-2 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16rpx;
+    margin-top: 6rpx;
+  }
+
+  .item-meta {
+    flex: 1;
+    min-width: 0;
+    font-size: 22rpx;
+    color: #6b6653;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .record-btn {
+    flex-shrink: 0;
+    margin: 0;
+    padding: 8rpx 20rpx;
+    height: auto;
+    line-height: 1.4;
+    border-radius: 8rpx;
+    background: #1e3a2f;
+    color: #f3eddd;
+    font-size: 22rpx;
+    font-weight: 600;
+    border: none;
+
+    &:active {
+      opacity: 0.8;
+    }
+  }
+
+  .item-line-3 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12rpx;
+    margin-top: 4rpx;
+  }
+
+  .audit-text {
+    flex: 1;
+    min-width: 0;
+    font-size: 22rpx;
+    color: #8a8a7e;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .line-3-actions {
+    display: flex;
+    align-items: center;
+    gap: 16rpx;
+    flex-shrink: 0;
+  }
+
+  .inline-action {
+    font-size: 22rpx;
+    color: #7a5c28;
+    padding: 6rpx 0;
+
+    &.danger {
+      color: #b4453a;
+    }
+
+    &.disabled {
+      color: #8a8a7e;
     }
   }
 
@@ -2503,7 +2678,7 @@ const confirmDeleteItem = (item: any) => {
           display: block;
           margin-bottom: 8rpx;
           font-size: 24rpx;
-          color: #b08d4f;
+          color: #7a5c28;
           font-weight: 500;
         }
 
@@ -2517,13 +2692,13 @@ const confirmDeleteItem = (item: any) => {
           .record-quantity {
             font-size: 28rpx;
             font-weight: bold;
-            color: #b08d4f;
+            color: #7a5c28;
           }
 
           .record-cost {
             font-size: 28rpx;
             font-weight: bold;
-            color: #b4553f;
+            color: #b4453a;
           }
 
           .record-channel {
@@ -2574,7 +2749,7 @@ const confirmDeleteItem = (item: any) => {
 
         .delete-btn {
           padding: 8rpx 24rpx;
-          background-color: #b4553f;
+          background-color: #b4453a;
           color: #f3eddd;
           border-radius: 8rpx;
           font-size: 22rpx;
@@ -2617,7 +2792,7 @@ const confirmDeleteItem = (item: any) => {
 
   .order-id {
     font-size: 24rpx;
-    color: #b08d4f;
+    color: #7a5c28;
     font-family: monospace;
   }
 
@@ -2647,7 +2822,7 @@ const confirmDeleteItem = (item: any) => {
   left: 0;
   right: 0;
   background-color: #fbfcf7;
-  padding: 24rpx 32rpx;
+  padding: 24rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
   box-shadow: 0 -4rpx 16rpx rgba(30, 46, 36, 0.05);
   z-index: 100;
   display: flex;
@@ -2679,7 +2854,7 @@ const confirmDeleteItem = (item: any) => {
     &.reopen {
       width: 100%;
       background: #f6efe0;
-      color: #8a6b33;
+      color: #7a5c28;
       border: 1rpx solid #b08d4f;
       box-shadow: none;
     }
@@ -2811,13 +2986,13 @@ const confirmDeleteItem = (item: any) => {
 
   .summary-demand {
     font-size: 24rpx;
-    color: #8a6b33;
+    color: #7a5c28;
     flex-shrink: 0;
   }
 
   .summary-subtext {
     font-size: 22rpx;
-    color: #8a6b33;
+    color: #7a5c28;
     line-height: 1.5;
   }
 
@@ -2827,7 +3002,7 @@ const confirmDeleteItem = (item: any) => {
 
   .record-demand-metrics {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1.2fr 1fr 1fr;
     gap: 10rpx;
   }
 
@@ -2842,7 +3017,7 @@ const confirmDeleteItem = (item: any) => {
       display: block;
       margin-bottom: 6rpx;
       font-size: 20rpx;
-      color: #8a6b33;
+      color: #7a5c28;
       white-space: nowrap;
     }
 
@@ -2854,8 +3029,21 @@ const confirmDeleteItem = (item: any) => {
       white-space: nowrap;
     }
 
-    &.primary .metric-value {
-      color: #b08d4f;
+    &.primary {
+      order: -1;
+      background-color: #ffffff;
+      border-color: #7a5c28;
+
+      .metric-label {
+        color: #26261f;
+        font-weight: 600;
+      }
+
+      .metric-value {
+        font-size: 32rpx;
+        font-weight: 800;
+        color: #7a5c28;
+      }
     }
   }
 }
@@ -2906,7 +3094,7 @@ const confirmDeleteItem = (item: any) => {
     padding: 4rpx 14rpx;
     border-radius: 999rpx;
     background-color: #eef2e4;
-    color: #b08d4f;
+    color: #7a5c28;
     font-size: 22rpx;
     font-weight: 600;
   }
@@ -3042,14 +3230,14 @@ const confirmDeleteItem = (item: any) => {
     }
 
     &.active {
-      background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
-      color: #26261f;
+      background: #1e3a2f;
+      color: #f3eddd;
       box-shadow: 0 6rpx 16rpx rgba(30, 46, 36, 0.24);
     }
 
     &.custom-entry {
       background: #f6efe0;
-      color: #8a6b33;
+      color: #7a5c28;
       border: 1rpx dashed rgba(176, 141, 79, 0.5);
     }
   }
@@ -3072,13 +3260,13 @@ const confirmDeleteItem = (item: any) => {
     .empty-title {
       font-size: 28rpx;
       font-weight: 700;
-      color: #8a6b33;
+      color: #7a5c28;
     }
 
     .empty-desc {
       font-size: 24rpx;
       line-height: 1.5;
-      color: #8a6b33;
+      color: #7a5c28;
     }
   }
 
@@ -3129,7 +3317,7 @@ const confirmDeleteItem = (item: any) => {
 
   .record-sku-option.active .record-sku-badge {
     background-color: rgba(30, 58, 47, 0.12);
-    color: #b08d4f;
+    color: #7a5c28;
   }
 
   .record-sku-name {
@@ -3245,7 +3433,7 @@ const confirmDeleteItem = (item: any) => {
     }
 
     &.price-tone-bad {
-      color: #b4553f;
+      color: #b4453a;
     }
   }
 }
@@ -3255,7 +3443,7 @@ const confirmDeleteItem = (item: any) => {
 }
 
 .modal-footer {
-  padding: 24rpx 32rpx;
+  padding: 24rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
   border-top: 1rpx solid #eef1e2;
   display: flex;
   gap: 24rpx;
@@ -3274,7 +3462,7 @@ const confirmDeleteItem = (item: any) => {
     }
 
     &.submit {
-      background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
+      background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
       color: #f3eddd;
     }
 
@@ -3288,11 +3476,11 @@ const confirmDeleteItem = (item: any) => {
 // 新增样式：日期变更警告横幅
 // ==========================================
 .date-change-warning {
-  background: linear-gradient(135deg, #f6efe0 0%, #b08d4f 100%);
+  background: #f6efe0;
   margin: 0 32rpx 24rpx;
   border-radius: 16rpx;
   padding: 24rpx;
-  border-left: 6rpx solid #b08d4f;
+  border-left: 6rpx solid #b4553f;
 
   .warning-header {
     display: flex;
@@ -3307,7 +3495,7 @@ const confirmDeleteItem = (item: any) => {
     .warning-title {
       font-size: 28rpx;
       font-weight: bold;
-      color: #8a6b33;
+      color: #7a5c28;
     }
   }
 
@@ -3327,13 +3515,13 @@ const confirmDeleteItem = (item: any) => {
 
       .order-info {
         font-size: 26rpx;
-        color: #8a6b33;
+        color: #7a5c28;
         font-weight: 500;
       }
 
       .order-detail {
         font-size: 22rpx;
-        color: #8a6b33;
+        color: #7a5c28;
       }
     }
   }
@@ -3355,7 +3543,7 @@ const confirmDeleteItem = (item: any) => {
 
       &.ignore {
         background-color: rgba(176, 141, 79, 0.1);
-        color: #8a6b33;
+        color: #7a5c28;
       }
 
       &:active {
@@ -3376,7 +3564,7 @@ const confirmDeleteItem = (item: any) => {
 
   .delete-item-btn {
     padding: 8rpx 20rpx;
-    background-color: #b4553f;
+    background-color: #b4453a;
     color: #f3eddd;
     border-radius: 8rpx;
     font-size: 24rpx;
@@ -3407,7 +3595,7 @@ const confirmDeleteItem = (item: any) => {
   .no-purchase-btn {
     padding: 12rpx 20rpx;
     background-color: #f6efe0;
-    color: #8a6b33;
+    color: #7a5c28;
     border-radius: 8rpx;
     font-size: 24rpx;
     border: 1rpx solid #b08d4f;
@@ -3442,7 +3630,7 @@ const confirmDeleteItem = (item: any) => {
   .no-purchase-title {
     font-size: 26rpx;
     font-weight: 600;
-    color: #8a6b33;
+    color: #7a5c28;
   }
 
   .no-purchase-reason {
@@ -3454,7 +3642,7 @@ const confirmDeleteItem = (item: any) => {
     padding: 8rpx 18rpx;
     border-radius: 8rpx;
     background-color: #fbfcf7;
-    color: #8a6b33;
+    color: #7a5c28;
     border: 1rpx solid #b08d4f;
     font-size: 22rpx;
     line-height: 1.5;

@@ -359,7 +359,6 @@ import {
   buildDefaultPackagePlan,
   estimateFeedDays,
   getPackagePlanTotal,
-  getSourcePlanLabel,
 } from '../../utils/order-package-plan';
 
 interface CartItem {
@@ -408,8 +407,6 @@ interface OrderConfig {
   totalGrams: number;
   estimatedFeedDays: string;
   packagePlan: PackagePlanItem[];
-  ingredientSourcePlan?: string;
-  ingredientSourcePlanLabel: string;
   cookingMethod: 'RAW' | 'COOKED';
   recipeId?: string;
   recipeName: string;
@@ -438,8 +435,6 @@ const orderConfig = ref<OrderConfig>({
   totalGrams: 0,
   estimatedFeedDays: '-',
   packagePlan: [],
-  ingredientSourcePlan: '',
-  ingredientSourcePlanLabel: '',
   cookingMethod: 'RAW',
   recipeId: '',
   recipeName: '',
@@ -815,17 +810,6 @@ function buildDirectBuyOrderConfig(
     options.estimatedFeedDays ||
       estimateFeedDays(totalGrams, dailyIntakeG || optionDailyIntakeG),
   );
-  const ingredientSourcePlan = readTextValue(
-    storedConfig.ingredientSourcePlan,
-    options.ingredientSourcePlan,
-  );
-  const ingredientSourcePlanLabel = readTextValue(
-    storedConfig.ingredientSourcePlanLabel,
-    options.ingredientSourcePlanLabel ||
-      (ingredientSourcePlan
-        ? getSourcePlanLabel(ingredientSourcePlan as any)
-        : ''),
-  );
   const recipeId = readTextValue(storedConfig.recipeId, options.recipeId);
   const recipeName = readTextValue(storedConfig.recipeName, options.recipeName);
   const recipeCoverImage = readTextValue(
@@ -848,8 +832,6 @@ function buildDirectBuyOrderConfig(
       estimatedFeedDays ||
       estimateFeedDays(totalGrams, dailyIntakeG || optionDailyIntakeG),
     packagePlan,
-    ingredientSourcePlan,
-    ingredientSourcePlanLabel,
     cookingMethod: (readTextValue(
       storedConfig.cookingMethod,
       options.cookingMethod,
@@ -1196,7 +1178,6 @@ async function refreshDirectBuyPricingSnapshot(): Promise<{
       data: {
         dogId: orderConfig.value.dogId,
         type: 'FRESH_FOOD',
-        ingredientSourcePlan: orderConfig.value.ingredientSourcePlan,
         addressId: selectedAddress.value?.id,
         items: [buildPricingPreviewItemFromOrderConfig()],
       },

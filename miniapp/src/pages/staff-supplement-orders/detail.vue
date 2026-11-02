@@ -26,9 +26,19 @@
       <view class="card">
         <view class="card-head">
           <text class="order-no">{{ order.orderNo }}</text>
-          <text class="status-tag" :class="statusClass(order.status)">
-            {{ statusText(order.status) }}
-          </text>
+          <view class="status-tags">
+            <text class="status-tag" :class="statusClass(order.status)">
+              {{ statusText(order.status) }}
+            </text>
+            <!-- 新售后不改订单状态：有未完结售后时单独挂「售后中/退款中」 -->
+            <text v-if="openAftersaleLabel" class="status-tag status-tag--warn">
+              {{ openAftersaleLabel }}
+            </text>
+            <text
+              v-if="order.refundStatus === 'SUCCESS'"
+              class="status-tag status-tag--done"
+            >已退款</text>
+          </view>
         </view>
         <view class="info-row">
           <text class="info-label">顾客</text>
@@ -103,6 +113,28 @@
             <text class="info-label">申请</text>
             <text class="info-value">{{ formatTime(record.createdAt) }}</text>
           </view>
+
+          <!-- 只有管理员能处理；员工角色看不到这一排按钮 -->
+          <view v-if="canResolve(record)" class="aftersale-actions">
+            <view
+              v-if="record.requestType === 'REFUND'"
+              class="mini-btn primary"
+              @tap="openResolve(record, 'REFUND')"
+            >同意退款</view>
+            <view
+              v-else-if="record.requestType === 'RESHIP'"
+              class="mini-btn primary"
+              @tap="openResolve(record, 'RESHIP')"
+            >同意补发</view>
+            <view
+              v-else
+              class="mini-btn primary"
+              @tap="openResolve(record, 'REGISTER_ONLY')"
+            >仅登记完成</view>
+            <view class="mini-btn" @tap="openResolve(record, 'REJECT')">
+              驳回
+            </view>
+          </view>
         </view>
       </view>
 
@@ -127,51 +159,13 @@
               {{ [item.brand, item.productModel].filter(Boolean).join(' · ') }}
             </text>
           </view>
-          <view class="item-side">
-            <text v-if="item.packedAt" class="item-packed">已分装</text>
-            <text v-else class="item-unpacked">待分装</text>
-          </view>
         </view>
       </view>
 
-      <!-- 分装工单：只在待分装/分装中时展开 -->
-      <view v-if="canPack" class="card">
+      <!-- 预计发货日：员工只读，排期由管理员操作 -->
+      <view v-if="canShip" class="card">
         <view class="section-head">
-          <text class="section-title">分装工单</text>
-          <text class="section-sub">填原瓶到期日，系统自动算标签效期</text>
-        </view>
-
-        <view v-for="(item, index) in order.items || []" :key="item.id" class="pack-row">
-          <text class="pack-name">{{ item.name }}</text>
-          <view class="pack-fields">
-            <input
-              class="pack-input"
-              v-model="packForm[index].batchNo"
-              placeholder="批号（可留空）"
-            />
-            <picker
-              mode="date"
-              :value="packForm[index].sourceExpiryDate"
-              @change="(e: any) => onExpiryChange(index, e)"
-            >
-              <view class="pack-picker" :class="{ 'pack-picker--empty': !packForm[index].sourceExpiryDate }">
-                <text class="pack-picker-text">
-                  {{ packForm[index].sourceExpiryDate || '选择原瓶到期日' }}
-                </text>
-              </view>
-            </picker>
-          </view>
-        </view>
-
-        <button class="primary-btn" :disabled="submitting" @tap="handlePack">
-          {{ submitting ? '提交中…' : '提交分装结果' }}
-        </button>
-      </view>
-
-      <!-- 分装日：员工只读，排期由管理员操作 -->
-      <view v-if="order.status === 'PAID'" class="card">
-        <view class="section-head">
-          <text class="section-title">分装日</text>
+          <text class="section-title">预计发货日</text>
           <text class="section-sub">{{ order.packingDate || '待管理员排期' }}</text>
         </view>
       </view>
@@ -188,7 +182,7 @@
         </button>
 
         <button
-          v-if="order.status === 'PACKED'"
+          v-if="canShip"
           class="primary-btn"
           @tap="goToLabels"
         >
@@ -196,7 +190,7 @@
         </button>
 
         <button
-          v-if="order.status === 'PACKED'"
+          v-if="canShip"
           class="primary-btn"
           :disabled="submitting"
           @tap="handleShip"
@@ -277,14 +271,55 @@
         <button class="secondary-btn" :disabled="submitting" @tap="closeShip">取消</button>
       </view>
     </view>
+
+    <!-- 售后处理弹窗（仅管理员；员工角色不显示入口） -->
+    <view v-if="resolveVisible" class="modal-mask" @tap="closeResolve">
+      <view class="modal-panel" @tap.stop>
+        <view class="modal-title">处理售后</view>
+
+        <view class="resolve-summary">
+          <text>售后单 {{ resolveCase?.caseNo || '—' }}</text>
+          <text>诉求：{{ resolveCase ? aftersaleTypeText(resolveCase.requestType) : '—' }}</text>
+          <text>原因：{{ resolveCase?.requestedReason || '—' }}</text>
+        </view>
+
+        <block v-if="resolveAction === 'REFUND'">
+          <text class="form-label">退款金额（元）</text>
+          <input
+            v-model="resolveAmount"
+            class="form-input"
+            type="digit"
+            placeholder="不填 = 按申请金额全额退款"
+            :maxlength="10"
+          />
+          <text class="form-hint">未发货订单只支持全额退款；发货后可部分退款。</text>
+        </block>
+
+        <text class="form-label">
+          {{ resolveAction === 'REJECT' ? '驳回原因（必填）' : '处理备注（选填）' }}
+        </text>
+        <textarea
+          v-model="resolveNote"
+          class="form-textarea"
+          :placeholder="resolveAction === 'REJECT' ? '请填写驳回原因' : '选填'"
+          maxlength="500"
+        />
+
+        <button class="primary-btn" :disabled="resolving" @tap="submitResolve">
+          {{ resolving ? '提交中…' : resolveConfirmLabel }}
+        </button>
+        <button class="secondary-btn" :disabled="resolving" @tap="closeResolve">取消</button>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import {
   staffSupplementOrderApi,
+  type StaffSupplementAftersaleCase,
   type StaffSupplementOrder,
   type SupplementOrderStatus,
 } from '../../api/staff-supplement-orders'
@@ -294,6 +329,47 @@ const orderId = ref('')
 const order = ref<StaffSupplementOrder | null>(null)
 const loading = ref(false)
 const submitting = ref(false)
+
+/** 管理员才有售后处理权；员工只能看记录 */
+function getStoredUser(): { role?: string } | null {
+  let stored = uni.getStorageSync('user')
+  if (!stored || stored === '{}' || stored === '') {
+    stored = uni.getStorageSync('userInfo')
+  }
+  if (typeof stored === 'string') {
+    try {
+      return JSON.parse(stored)
+    } catch {
+      return null
+    }
+  }
+  return stored || null
+}
+const isAdmin = computed(() => getStoredUser()?.role === 'ADMIN')
+
+/** 售后处理弹窗状态 */
+const resolveVisible = ref(false)
+const resolving = ref(false)
+const resolveCase = ref<StaffSupplementAftersaleCase | null>(null)
+const resolveAction = ref<'REFUND' | 'RESHIP' | 'REGISTER_ONLY' | 'REJECT'>(
+  'REFUND',
+)
+const resolveAmount = ref('')
+const resolveNote = ref('')
+const resolveConfirmLabel = computed(
+  () =>
+    ({
+      REFUND: '确认退款',
+      RESHIP: '确认补发',
+      REGISTER_ONLY: '确认登记',
+      REJECT: '确认驳回',
+    })[resolveAction.value],
+)
+
+/** 只有待受理的售后才给处理按钮；处理中/已结束的不重复操作 */
+function canResolve(record: StaffSupplementAftersaleCase) {
+  return isAdmin.value && record.status === 'PENDING'
+}
 
 /** 发货弹窗状态（2026-10-31） */
 const shipVisible = ref(false)
@@ -310,13 +386,10 @@ const carriers = [
   { name: 'EMS', code: 'EMS' },
 ]
 
-/** 每个补剂一条：同一补剂的多袋共用同一批号与原瓶到期日 */
-const packForm = reactive<Array<{ batchNo: string; sourceExpiryDate: string }>>([])
-
 const STATUS_TEXT: Record<SupplementOrderStatus, string> = {
   PENDING_PAYMENT: '待确认收款',
-  PAID: '待分装',
-  PACKING: '分装中',
+  PAID: '待发货',
+  PACKING: '待发货',
   PACKED: '待发货',
   SHIPPED: '已发货',
   COMPLETED: '已完成',
@@ -362,9 +435,24 @@ function aftersaleTone(value: string) {
   return value === 'PENDING' || value === 'PROCESSING' ? 'is-open' : 'is-closed'
 }
 
-const canPack = computed(() =>
-  order.value ? ['PAID', 'PACKING'].includes(order.value.status) : false,
+/**
+ * 2026-11-02：员工端不再录入分装信息。
+ * 已付款（PAID）就可以直接打标签、发货；PACKING/PACKED 是旧单兼容。
+ */
+const canShip = computed(() =>
+  order.value
+    ? ['PAID', 'PACKING', 'PACKED'].includes(order.value.status)
+    : false,
 )
+
+/** 有未完结售后时，在订单状态旁边挂「售后中/退款中」 */
+const openAftersaleLabel = computed(() => {
+  const current = (order.value?.aftersaleCases || []).find((item) =>
+    ['PENDING', 'PROCESSING'].includes(item.status),
+  )
+  if (!current) return ''
+  return current.requestType === 'REFUND' ? '退款中' : '售后中'
+})
 
 const fullAddress = computed(() => {
   if (!order.value) return '—'
@@ -382,28 +470,12 @@ function formatTime(value: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function syncPackForm() {
-  packForm.length = 0
-  for (const item of order.value?.items || []) {
-    packForm.push({
-      batchNo: item.batchNo || '',
-      // 已分装过的（比如补打）带出原值，避免重填
-      sourceExpiryDate: item.sourceExpiryDate ? item.sourceExpiryDate.slice(0, 10) : '',
-    })
-  }
-}
-
-function onExpiryChange(index: number, event: { detail: { value: string } }) {
-  packForm[index].sourceExpiryDate = event.detail.value
-}
-
 async function fetchOrder() {
   loading.value = true
   try {
     const res = await staffSupplementOrderApi.detail(orderId.value)
     if (res.code === 0 && res.data) {
       order.value = res.data
-      syncPackForm()
     } else {
       uni.showToast({ title: res.message || '加载失败', icon: 'none' })
     }
@@ -418,7 +490,7 @@ async function fetchOrder() {
 function handleConfirmPayment() {
   uni.showModal({
     title: '确认收款',
-    content: '确认已收到这笔款项？确认后订单进入待分装。',
+    content: '确认已收到这笔款项？确认后订单进入待发货。',
     success: async (res) => {
       if (!res.confirm) return
       submitting.value = true
@@ -440,52 +512,76 @@ function handleConfirmPayment() {
   })
 }
 
-function handlePack() {
-  const items = (order.value?.items || []).map((item, index) => ({
-    itemId: item.id,
-    batchNo: packForm[index]?.batchNo || undefined,
-    sourceExpiryDate: packForm[index]?.sourceExpiryDate || '',
-  }))
+function openResolve(
+  record: StaffSupplementAftersaleCase,
+  action: 'REFUND' | 'RESHIP' | 'REGISTER_ONLY' | 'REJECT',
+) {
+  resolveCase.value = record
+  resolveAction.value = action
+  // 退款默认带出申请金额；管理员能看到的订单实付作为兜底
+  resolveAmount.value =
+    action === 'REFUND'
+      ? String(record.refundAmount ?? order.value?.amountTotal ?? '')
+      : ''
+  resolveNote.value = ''
+  resolveVisible.value = true
+}
 
-  const missing = (order.value?.items || []).filter((_, index) => !packForm[index]?.sourceExpiryDate)
-  if (missing.length > 0) {
-    uni.showToast({
-      title: `还有 ${missing.length} 个补剂没填原瓶到期日`,
-      icon: 'none',
-    })
+function closeResolve() {
+  if (resolving.value) return
+  resolveVisible.value = false
+}
+
+async function submitResolve() {
+  if (!resolveCase.value || resolving.value) return
+  const action = resolveAction.value
+  const note = resolveNote.value.trim()
+
+  if (action === 'REJECT' && !note) {
+    uni.showToast({ title: '请填写驳回原因', icon: 'none' })
     return
   }
 
-  uni.showModal({
-    title: '提交分装结果',
-    content: '提交后即可打印标签。标签效期 = min(原瓶到期日, 分装日 + 效期系数)。',
-    success: async (res) => {
-      if (!res.confirm) return
-      submitting.value = true
-      try {
-        const response = await staffSupplementOrderApi.pack(orderId.value, items)
-        if (response.code === 0) {
-          if (response.data?.inventoryWarnings?.length) {
-            uni.showModal({
-              title: '库存提示',
-              content: `分装已完成，但库存不足（不阻断）：\n${response.data.inventoryWarnings.join('\n')}`,
-              showCancel: false,
-            })
-          } else {
-            uni.showToast({ title: '分装完成', icon: 'success' })
-          }
-          await fetchOrder()
-        } else {
-          uni.showToast({ title: response.message || '提交失败', icon: 'none' })
-        }
-      } catch (error) {
-        console.error('[SupplementOrderDetail] 提交分装失败:', error)
-        uni.showToast({ title: '提交失败', icon: 'none' })
-      } finally {
-        submitting.value = false
+  let refundAmount: number | undefined
+  if (action === 'REFUND' && resolveAmount.value.trim()) {
+    const value = Number(resolveAmount.value)
+    if (!Number.isFinite(value) || value <= 0) {
+      uni.showToast({ title: '退款金额不正确', icon: 'none' })
+      return
+    }
+    refundAmount = value
+  }
+
+  resolving.value = true
+  try {
+    const res = await staffSupplementOrderApi.resolveAftersale(
+      resolveCase.value.id,
+      {
+        resolutionType: action,
+        ...(refundAmount !== undefined ? { refundAmount } : {}),
+        ...(note ? { note } : {}),
+        ...(action === 'REJECT' ? { rejectReason: note } : {}),
+      },
+    )
+    if (res.code === 0) {
+      const successText: Record<typeof action, string> = {
+        REFUND: '退款已发起',
+        RESHIP: '补发单已生成',
+        REGISTER_ONLY: '已登记完成',
+        REJECT: '已驳回',
       }
-    },
-  })
+      uni.showToast({ title: successText[action], icon: 'success' })
+      resolveVisible.value = false
+      await fetchOrder()
+    } else {
+      uni.showToast({ title: res.message || '处理失败', icon: 'none' })
+    }
+  } catch (error) {
+    console.error('[SupplementOrderDetail] 处理售后失败:', error)
+    uni.showToast({ title: '处理失败', icon: 'none' })
+  } finally {
+    resolving.value = false
+  }
 }
 
 function handleShip() {
@@ -684,6 +780,12 @@ onLoad((options) => {
   margin-bottom: 20rpx;
 }
 
+.status-tags {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
 .order-no {
   font-size: 30rpx;
   font-weight: 600;
@@ -751,6 +853,54 @@ onLoad((options) => {
 .aftersale-row + .aftersale-row {
   padding-top: 18rpx;
   border-top: 1rpx solid #f2f4ea;
+}
+.aftersale-actions {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+.mini-btn {
+  margin: 0;
+  padding: 10rpx 22rpx;
+  border: 1rpx solid #d9dfcf;
+  border-radius: 10rpx;
+  background: #fbfcf7;
+  color: #2b5040;
+  font-size: 24rpx;
+  line-height: 1.4;
+}
+.mini-btn.primary {
+  background: #1e3a2f;
+  border-color: #1e3a2f;
+  color: #f7f3e8;
+}
+.resolve-summary {
+  padding: 16rpx 20rpx;
+  margin-bottom: 12rpx;
+  background: #f7f8f2;
+  border-radius: 12rpx;
+}
+.resolve-summary text {
+  display: block;
+  margin: 4rpx 0;
+  color: #606266;
+  font-size: 24rpx;
+}
+.form-textarea {
+  width: 100%;
+  min-height: 140rpx;
+  padding: 16rpx 20rpx;
+  background: #f6f7f6;
+  border-radius: 10rpx;
+  font-size: 26rpx;
+  color: #303133;
+  box-sizing: border-box;
+}
+.form-hint {
+  display: block;
+  margin-top: 8rpx;
+  color: #909399;
+  font-size: 22rpx;
 }
 .aftersale-head {
   display: flex;

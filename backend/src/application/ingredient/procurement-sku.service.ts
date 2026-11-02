@@ -4,10 +4,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { BaseUnit, IngredientType } from '../../domain/ingredient/enums';
-import {
-  INGREDIENT_SOURCE_TIER_CODES,
-  type IngredientSourceTierCode,
-} from '../../domain/order/ingredient-source-plan';
 import { PrismaService } from '../../infrastructure/prisma.service';
 
 type DecimalLike = {
@@ -27,7 +23,6 @@ type ProcurementSkuRecord = {
   currentPurchasePrice: DecimalLike | number | null;
   referencePurchasePrice: DecimalLike | number | null;
   referencePricePerPurchaseUnit: DecimalLike | number | null;
-  sourceTier: IngredientSourceTierCode | null;
   notes: string | null;
   isDefault: boolean;
   isActive: boolean;
@@ -71,7 +66,6 @@ export interface ProcurementSkuSummary {
   currentPurchasePrice: number | null;
   referencePurchasePrice: number | null;
   referencePricePerPurchaseUnit: number | null;
-  sourceTier: IngredientSourceTierCode | null;
   notes: string | null;
   isDefault: boolean;
   isActive: boolean;
@@ -107,7 +101,6 @@ export interface CreateProcurementSkuDto {
   currentPurchasePrice?: number | null;
   referencePurchasePrice?: number | null;
   referencePricePerPurchaseUnit?: number | null;
-  sourceTier?: IngredientSourceTierCode | string | null;
   notes?: string | null;
   isDefault?: boolean;
   isActive?: boolean;
@@ -233,35 +226,6 @@ const toNullableNumber = (
   return typeof value === 'number' ? value : value.toNumber();
 };
 
-const normalizeOptionalSourceTier = (
-  value: IngredientSourceTierCode | string | null | undefined,
-): IngredientSourceTierCode | null | undefined => {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (value === null) {
-    return null;
-  }
-
-  const normalized = value.trim().toUpperCase();
-  if (normalized.length === 0) {
-    return null;
-  }
-
-  if (
-    INGREDIENT_SOURCE_TIER_CODES.includes(
-      normalized as IngredientSourceTierCode,
-    )
-  ) {
-    return normalized as IngredientSourceTierCode;
-  }
-
-  throw new BadRequestException(
-    `Unknown procurement SKU source tier: ${value}`,
-  );
-};
-
 const toSummary = (sku: ProcurementSkuRecord): ProcurementSkuSummary => ({
   id: sku.id,
   ingredientId: sku.ingredientId,
@@ -277,7 +241,6 @@ const toSummary = (sku: ProcurementSkuRecord): ProcurementSkuSummary => ({
   referencePricePerPurchaseUnit: toNullableNumber(
     sku.referencePurchasePrice ?? sku.referencePricePerPurchaseUnit,
   ),
-  sourceTier: sku.sourceTier ?? null,
   notes: sku.notes,
   isDefault: sku.isDefault ?? false,
   isActive: sku.isActive,
@@ -303,19 +266,6 @@ const toPriceHistoryView = (
   note: row.note,
   createdAt: row.createdAt.toISOString(),
 });
-
-const SOURCE_TIER_RANK: Record<IngredientSourceTierCode, number> = {
-  ORGANIC: 0,
-  MARKET_PREMIUM: 1,
-  WHOLESALE: 2,
-};
-
-const getSourceTierRank = (
-  sourceTier: IngredientSourceTierCode | null | undefined,
-): number =>
-  sourceTier && SOURCE_TIER_RANK[sourceTier] !== undefined
-    ? SOURCE_TIER_RANK[sourceTier]
-    : Number.POSITIVE_INFINITY;
 
 const getSkuPurchasePrice = (
   sku: Pick<
@@ -350,12 +300,6 @@ const sortProcurementSkus = <T extends ProcurementSkuRecord>(skus: T[]): T[] =>
   [...skus].sort((left, right) => {
     if (left.isActive !== right.isActive) {
       return left.isActive ? -1 : 1;
-    }
-
-    const tierDiff =
-      getSourceTierRank(left.sourceTier) - getSourceTierRank(right.sourceTier);
-    if (tierDiff !== 0) {
-      return tierDiff;
     }
 
     const unitCostDiff = getSkuUnitCost(left) - getSkuUnitCost(right);
@@ -524,7 +468,6 @@ export class ProcurementSkuService {
         dto.referencePricePerPurchaseUnit ??
         dto.referencePurchasePrice ??
         null,
-      sourceTier: normalizeOptionalSourceTier(dto.sourceTier) ?? null,
       notes: normalizeOptionalText(dto.notes) ?? null,
       isDefault: false,
       isActive: dto.isActive ?? true,
@@ -674,11 +617,6 @@ export class ProcurementSkuService {
       if (dto.referencePurchasePrice === undefined) {
         data.referencePurchasePrice = dto.referencePricePerPurchaseUnit;
       }
-    }
-
-    const sourceTier = normalizeOptionalSourceTier(dto.sourceTier);
-    if (sourceTier !== undefined) {
-      data.sourceTier = sourceTier;
     }
 
     const notes = normalizeOptionalText(dto.notes);

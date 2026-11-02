@@ -1,9 +1,6 @@
 <template>
   <view class="submit-reimbursement-page">
-    <view class="page-header">
-      <text class="title">{{ resubmitId ? '重新提交报销' : '申请报销' }}</text>
-      <text class="subtitle">{{ stepSubtitle }}</text>
-    </view>
+    <text v-if="stepSubtitle" class="step-hint">{{ stepSubtitle }}</text>
 
     <view class="step-indicator">
       <view
@@ -851,28 +848,17 @@ const formatDate = (dateStr: string) => {
 <style scoped lang="scss">
 .submit-reimbursement-page {
   min-height: 100vh;
-  padding-bottom: 150rpx;
+  padding-bottom: calc(170rpx + env(safe-area-inset-bottom));
   background-color: #fbfcf7;
+  padding-top: 16rpx;
 }
 
-.page-header {
-  padding: 40rpx 32rpx 28rpx;
-  background-color: #ffffff;
-  border-bottom: 1rpx solid #eef1e2;
-
-  .title {
-    display: block;
-    margin-bottom: 8rpx;
-    color: #26261f;
-    font-size: 40rpx;
-    font-weight: 700;
-  }
-
-  .subtitle {
-    display: block;
-    color: #6b6653;
-    font-size: 24rpx;
-  }
+.step-hint {
+  display: block;
+  padding: 8rpx 32rpx 0;
+  color: #6b6653;
+  font-size: 24rpx;
+  line-height: 1.5;
 }
 
 .step-indicator {
@@ -895,12 +881,12 @@ const formatDate = (dateStr: string) => {
   background-color: #eef2e4;
 
   &.active {
-    color: #1e3a2f;
+    color: #f3eddd;
     background-color: #1e3a2f;
   }
 
   &.done {
-    color: #b08d4f;
+    color: #7a5c28;
     background-color: #eef2e4;
   }
 }
@@ -940,7 +926,7 @@ const formatDate = (dateStr: string) => {
 
 .section-total {
   flex-shrink: 0;
-  color: #b08d4f;
+  color: #7a5c28;
   font-size: 26rpx;
   font-weight: 700;
 }
@@ -1009,7 +995,7 @@ const formatDate = (dateStr: string) => {
 .select-state {
   flex-shrink: 0;
   min-width: 80rpx;
-  color: #b08d4f;
+  color: #7a5c28;
   font-size: 24rpx;
   font-weight: 700;
   text-align: right;
@@ -1019,7 +1005,7 @@ const formatDate = (dateStr: string) => {
   margin-top: 22rpx;
   padding: 20rpx;
   border-radius: 8rpx;
-  color: #8a6b33;
+  color: #7a5c28;
   background-color: #f6efe0;
   font-size: 24rpx;
   line-height: 1.55;
@@ -1071,7 +1057,7 @@ const formatDate = (dateStr: string) => {
   flex-shrink: 0;
   padding: 4rpx 12rpx;
   border-radius: 8rpx;
-  color: #1e3a2f;
+  color: #f3eddd;
   background-color: #1e3a2f;
   font-size: 22rpx;
   font-weight: 700;
@@ -1244,7 +1230,7 @@ const formatDate = (dateStr: string) => {
   }
 
   &.total .value {
-    color: #b08d4f;
+    color: #7a5c28;
     font-size: 34rpx;
   }
 }
@@ -1300,7 +1286,7 @@ const formatDate = (dateStr: string) => {
   z-index: 10;
   display: flex;
   gap: 18rpx;
-  padding: 20rpx 24rpx 28rpx;
+  padding: 20rpx 24rpx calc(28rpx + env(safe-area-inset-bottom));
   background-color: #ffffff;
   box-shadow: 0 -8rpx 24rpx rgba(30, 46, 36, 0.08);
 

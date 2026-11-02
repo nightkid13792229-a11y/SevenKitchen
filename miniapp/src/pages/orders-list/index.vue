@@ -168,6 +168,12 @@
             </text>
             <text v-else class="order-title">{{ getRecipeName(order) }}</text>
 
+            <!-- 新售后不改订单 status：补剂有未完结售后时在标题旁单独挂一个标记 -->
+            <text
+              v-if="order._orderType === 'supplement' && isAftersaleOrder(order)"
+              class="aftersale-badge"
+            >售后中</text>
+
             <text v-if="order._orderType === 'custom'" class="order-price">
               <text class="order-price__symbol">¥</text>{{ formatAmountText(customOrderAmount(order)) }}
             </text>
@@ -500,7 +506,6 @@ interface Order {
     packageCount: number;
     packageSpecG: number;
     packagePlan?: Array<{ packageSpecG: number; packageCount: number }>;
-    ingredientSourcePlan?: string | null;
     dailyIntakeG?: number;
   };
   address?: {
@@ -680,7 +685,7 @@ const STATUS_TAB_LABELS: Record<TypeFilter, Record<StatusTabKey, string>> = {
   supplement: {
     ALL: '全部',
     PENDING_PAYMENT: '待付款',
-    IN_PROGRESS: '分装中',
+    IN_PROGRESS: '待发货',
     WAIT_RECEIVE: '待收货',
     COMPLETED: '已完成',
     AFTERSALE: '售后中',
@@ -1074,6 +1079,21 @@ function isAftersaleOrder(order: UnifiedOrder): boolean {
   );
 }
 
+/**
+ * 补剂是否已经退款成功。
+ *
+ * 已发货订单退款后，履约状态仍然是 SHIPPED；顾客侧必须显示「已退款」，
+ * 不能继续显示「已发货」。后端 case 流程会把 order.refundStatus 补成 SUCCESS。
+ */
+function isSupplementRefunded(order: UnifiedOrder): boolean {
+  return (
+    order._orderType === 'supplement' &&
+    String(
+      (order as unknown as { refundStatus?: string }).refundStatus || '',
+    ).toUpperCase() === 'SUCCESS'
+  )
+}
+
 /** 近 N 个月之前的时间戳；范围=全部时返回 0，等于不过滤 */
 function rangeStartAt(range: RangeFilter): number {
   if (range === 'ALL') return 0;
@@ -1133,11 +1153,13 @@ function getOrdersByTab(
   }
 
   return sameType.filter((order) => {
+    // 已退款的补剂单归到「已完成」，不再留在「待收货」里
+    if (isSupplementRefunded(order)) return status === 'COMPLETED'
     // 有未处理售后的单只出现在"售后中"，不在"待确认/已完成"里重复出现
-    if (isAftersaleOrder(order)) return false;
-    const statuses = getStatusesForTab(status, order._orderType);
+    if (isAftersaleOrder(order)) return false
+    const statuses = getStatusesForTab(status, order._orderType)
     // 未知筛选值（例如 URL 里传进来的野状态码）退化为精确匹配当前状态
-    return statuses ? statuses.includes(order.status) : order.status === status;
+    return statuses ? statuses.includes(order.status) : order.status === status
   });
 }
 
@@ -1677,6 +1699,20 @@ function getStatusText(orderOrStatus: UnifiedOrder | string): string {
     // 补剂的 PACKING / PACKED 在鲜食状态表里不存在，若不单独处理会兜底成「处理中」，
     // 顾客看不出订单卡在哪一步，所以走补剂自己的中文映射。
     if (orderOrStatus._orderType === 'supplement') {
+      if (isSupplementRefunded(orderOrStatus)) {
+        const refunded = Number(
+          (orderOrStatus as unknown as { refundAmount?: number }).refundAmount ||
+            0,
+        )
+        const total = Number(
+          (orderOrStatus as unknown as { amountTotal?: number }).amountTotal ??
+            orderOrStatus.totalAmount ??
+            0,
+        )
+        return refunded > 0 && total > 0 && refunded < total
+          ? '部分退款'
+          : '已退款'
+      }
       return SUPPLEMENT_ORDER_STATUS_LABELS[status] || getOrderStatusText(status)
     }
     /**
@@ -1730,6 +1766,7 @@ function getStatusColor(orderOrStatus: UnifiedOrder | string): string {
   const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
   if (typeof orderOrStatus !== 'string') {
     if (orderOrStatus._orderType === 'supplement') {
+      if (isSupplementRefunded(orderOrStatus)) return '#16a34a'
       return SUPPLEMENT_STATUS_COLORS[status] || '#999'
     }
     if (orderOrStatus._orderType === 'custom') {
@@ -2709,6 +2746,16 @@ onUnmounted(() => {
   display: flex;
   align-items: baseline;
   gap: 16rpx;
+}
+
+.aftersale-badge {
+  flex: none;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background: #fdf1e3;
+  color: #a9651b;
+  font-size: 20rpx;
+  font-weight: 600;
 }
 
 .order-title {

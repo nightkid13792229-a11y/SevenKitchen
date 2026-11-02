@@ -170,7 +170,6 @@ model OrderItem {
   packageCount         Int       @map("package_count")
   packageSpecG         Int       @map("package_spec_g")
   packagePlan          Json?     @map("package_plan")
-  ingredientSourcePlan String?   @map("ingredient_source_plan") @db.VarChar(40)
   customRequirements   String?   @map("custom_requirements")
   dailyIntakeG         Float?    @map("daily_intake_g")
   allocatedAt          DateTime? @map("allocated_at")
@@ -990,6 +989,9 @@ model Ingredient {
   purchaseUnit                  String                        @map("purchase_unit") @db.VarChar(50)
   purchaseToBaseRatio           Float                         @map("purchase_to_base_ratio")
   currentPricePerPurchaseUnit   Decimal                       @map("current_price_per_purchase_unit") @db.Decimal(10, 2)
+  /// 创建时录入的采购单价（只写一次、永不自动更新）。
+  /// 成品鲜食算价：优先取「最近一次采购价」，没有采购历史时用它兜底。
+  initialPricePerPurchaseUnit   Decimal?                      @map("initial_price_per_purchase_unit") @db.Decimal(14, 6)
   effectivePricePerPurchaseUnit Decimal?                      @map("effective_price_per_purchase_unit") @db.Decimal(10, 2)
   weightG                       Float?                        @map("weight_g")
   maxCapacityG                  Float?                        @map("max_capacity_g")
@@ -1167,7 +1169,6 @@ model ProcurementSku {
   currentPurchasePrice          Decimal?                  @map("current_purchase_price") @db.Decimal(10, 2)
   referencePurchasePrice        Decimal?                  @map("reference_purchase_price") @db.Decimal(10, 2)
   referencePricePerPurchaseUnit Decimal?                  @map("reference_price_per_purchase_unit") @db.Decimal(10, 2)
-  sourceTier                    ProcurementSkuSourceTier? @map("source_tier")
   notes                         String?
   isDefault                     Boolean                   @default(false) @map("is_default")
   isActive                      Boolean                   @default(true) @map("is_active")
@@ -1183,7 +1184,6 @@ model ProcurementSku {
 
   @@index([ingredientId])
   @@index([isActive])
-  @@index([sourceTier])
   @@map("procurement_sku")
 }
 
@@ -3604,12 +3604,6 @@ enum IngredientProcurementStrategy {
   DAILY_PURCHASE
   STOCK_REPLENISHMENT
   HYBRID
-}
-
-enum ProcurementSkuSourceTier {
-  ORGANIC
-  MARKET_PREMIUM
-  WHOLESALE
 }
 
 enum BaseUnit {

@@ -1821,9 +1821,15 @@ export class WechatPaymentService {
     };
   }
 
-  /** 退款成功统一收尾：case RESOLVED；PAID/PACKED 订单取消；通知 */
+  /** 退款成功统一收尾：case RESOLVED；PAID/PACKED 订单取消；已发货只记退款、不覆盖履约状态 */
   private async finalizeSupplementCaseRefundSuccess(
-    caseRow: { id: string; orderId: string; refundId: string | null },
+    caseRow: {
+      id: string;
+      orderId: string;
+      refundId: string | null;
+      refundAmount?: unknown;
+      refundOutNo?: string | null;
+    },
     refundId: string | null,
     successTime: Date | null,
   ): Promise<string | null> {
@@ -1841,15 +1847,36 @@ export class WechatPaymentService {
       const order = await tx.supplementOrder.findUnique({
         where: { id: caseRow.orderId },
       });
-      if (order?.status === 'PACKED') {
-        await tx.supplementOrder.update({
-          where: { id: order.id },
-          data: {
-            status: 'CANCELLED',
-            cancelledAt: successTime ?? new Date(),
-            cancellationReason: '未发货全额退款',
-          },
-        });
+      if (order) {
+        // 订单级的退款结果也要落下来：顾客列表/详情靠它显示「已退款」。
+        // 注意：已发货/已完成的单不把 status 改成 CANCELLED，
+        // 履约状态保留，退款只体现在 refundStatus/refundAmount。
+        const refundAmount = this.toMoneyNumber(
+          caseRow.refundAmount ?? order.amountTotal,
+        );
+        const refundPatch = {
+          refundStatus: 'SUCCESS',
+          refundAmount,
+          refundedAt: successTime ?? new Date(),
+          ...(refundId ? { refundId } : {}),
+          ...(caseRow.refundOutNo ? { refundOutNo: caseRow.refundOutNo } : {}),
+        };
+        if (order.status === 'PACKED') {
+          await tx.supplementOrder.update({
+            where: { id: order.id },
+            data: {
+              ...refundPatch,
+              status: 'CANCELLED',
+              cancelledAt: successTime ?? new Date(),
+              cancellationReason: '未发货全额退款',
+            },
+          });
+        } else {
+          await tx.supplementOrder.update({
+            where: { id: order.id },
+            data: refundPatch,
+          });
+        }
       }
       await tx.supplementOrderEvent.create({
         data: {

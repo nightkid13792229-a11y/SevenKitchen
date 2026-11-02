@@ -107,6 +107,7 @@ export class PrismaIngredientRepository implements IngredientRepository {
       purchaseUnit: ingredient.purchaseUnit,
       purchaseToBaseRatio: ingredient.purchaseToBaseRatio,
       currentPricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit,
+      initialPricePerPurchaseUnit: ingredient.initialPricePerPurchaseUnit,
       effectivePricePerPurchaseUnit: ingredient.effectivePricePerPurchaseUnit,
       weightG: ingredient.weightG,
       maxCapacityG: ingredient.maxCapacityG,
@@ -263,6 +264,9 @@ export class PrismaIngredientRepository implements IngredientRepository {
       record.properties,
       normalizeNutritionProfileForRead(record.nutritionProfile ?? null),
       record.supplementRetailEnabled ?? false,
+      record.initialPricePerPurchaseUnit
+        ? parseFloat(record.initialPricePerPurchaseUnit.toString())
+        : null,
     );
   }
 }

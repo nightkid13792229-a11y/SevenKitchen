@@ -35,6 +35,7 @@ describe('AdminController', () => {
       coverImageService as any,
       {} as any,
       {} as any,
+      {} as any,
       jwtAuthService as any,
     );
 
@@ -405,7 +406,9 @@ describe('AdminController', () => {
         {} as any,
         {} as any,
         {} as any,
-        {} as any,
+        {
+          resolveBasis: jest.fn().mockResolvedValue(new Map()),
+        } as any,
       );
 
       const result = await controller.getIngredientById('ingredient-1');

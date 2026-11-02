@@ -36,6 +36,7 @@ import {
   type CreateRecommendedProductDto,
   type UpdateRecommendedProductDto,
 } from '../../application/ingredient/recommended-product.service';
+import { IngredientPriceBasisService } from '../../application/ingredient/ingredient-price-basis.service';
 import type {
   CreateIngredientDto,
   UpdateIngredientDto,
@@ -139,6 +140,7 @@ export class AdminController {
     private readonly coverImageService: CoverImageService,
     private readonly imageOptimizationService: ImageOptimizationService,
     private readonly cosService: TencentCosService,
+    private readonly ingredientPriceBasisService?: IngredientPriceBasisService,
     private readonly jwtAuthService?: JwtAuthService,
   ) {}
 
@@ -272,6 +274,11 @@ export class AdminController {
       prismaIngredient?.procurementSkus.filter((sku) => sku.isActive).length ||
       0;
     const procurementSkuCount = prismaIngredient?.procurementSkus.length || 0;
+    const priceBasis = this.ingredientPriceBasisService
+      ? ((await this.ingredientPriceBasisService.resolveBasis([ingredient.id])).get(
+          ingredient.id,
+        ) ?? null)
+      : null;
 
     return {
       id: ingredient.id,
@@ -292,6 +299,20 @@ export class AdminController {
       currentPricePerPurchaseUnit: Number(
         ingredient.currentPricePerPurchaseUnit,
       ),
+      initialPricePerPurchaseUnit: Number(
+        ingredient.initialPricePerPurchaseUnit ?? 0,
+      ),
+      priceBasis: priceBasis
+        ? {
+            source: priceBasis.source,
+            pricePerPurchaseUnit: priceBasis.pricePerPurchaseUnit,
+            baseUnitCost: priceBasis.baseUnitCost,
+            purchasedAt: priceBasis.purchasedAt
+              ? priceBasis.purchasedAt.toISOString()
+              : null,
+            purchaseToBaseRatio: priceBasis.purchaseToBaseRatio,
+          }
+        : null,
       effectivePricePerPurchaseUnit: Number(
         ingredient.getEffectivePricePerPurchaseUnit(),
       ),
@@ -1403,7 +1424,6 @@ export class AdminController {
               packageCount: item.packageCount,
               packageSpecG: item.packageSpecG,
               packagePlan: item.packagePlan ?? null,
-              ingredientSourcePlan: item.ingredientSourcePlan ?? null,
               dailyIntakeG: item.dailyIntakeG,
             };
           }
@@ -2539,7 +2559,6 @@ export class AdminController {
       packageCount: item.packageCount,
       packageSpecG: item.packageSpecG,
       packagePlan: item.packagePlan ?? null,
-      ingredientSourcePlan: item.ingredientSourcePlan ?? null,
       cookingMethod: item.cookingMethod ?? null,
       customRequirements: item.customRequirements,
       dailyIntakeG: item.dailyIntakeG,

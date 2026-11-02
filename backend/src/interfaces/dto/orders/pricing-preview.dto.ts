@@ -19,12 +19,6 @@ import { Type } from 'class-transformer';
 import { OrderType } from '../../../domain';
 import { CookingMethod } from '../../../domain/order';
 
-const INGREDIENT_SOURCE_PLAN_CODES = [
-  'ORGANIC',
-  'MARKET_PREMIUM',
-  'WHOLESALE',
-] as const;
-
 const PRICING_PURPOSE_CODES = ['ORDER', 'DIY_SHEET'] as const;
 
 export class PricingPreviewPackagePlanItemDto {
@@ -138,15 +132,6 @@ export class PricingPreviewRequestDto {
   @ApiProperty({ enum: OrderType, example: OrderType.FRESH_FOOD })
   @IsEnum(OrderType)
   type!: OrderType;
-
-  @ApiPropertyOptional({
-    description: 'Ingredient source plan',
-    enum: INGREDIENT_SOURCE_PLAN_CODES,
-    example: 'MARKET_PREMIUM',
-  })
-  @IsOptional()
-  @IsEnum(INGREDIENT_SOURCE_PLAN_CODES)
-  ingredientSourcePlan?: string;
 
   @ApiPropertyOptional({
     description:
@@ -268,15 +253,6 @@ export class IngredientCostItemDto {
 
   @ApiPropertyOptional({ description: 'Procurement SKU name used for pricing' })
   procurementSkuName?: string;
-
-  @ApiPropertyOptional({ description: 'Selected ingredient source plan' })
-  procurementSkuSourcePlan?: string;
-
-  @ApiPropertyOptional({ description: 'Matched procurement SKU source tier' })
-  procurementSkuSourceTier?: string;
-
-  @ApiPropertyOptional({ description: 'Source tier fallback level' })
-  procurementSkuFallbackLevel?: number;
 
   @ApiPropertyOptional({ description: 'Nutrient target key (for supplements)' })
   nutrientTargetKey?: string;

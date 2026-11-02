@@ -51,7 +51,6 @@ export class OrderItemDto {
     example: 'MARKET_PREMIUM',
     nullable: true,
   })
-  ingredientSourcePlan?: string | null;
 
   @ApiPropertyOptional({
     description: 'Cooking method selected for this order item',
@@ -283,6 +282,24 @@ export class OrderDto {
 
   @ApiProperty({ type: [OrderItemDto] })
   items!: OrderItemDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'Actual procurement disclosure. Fresh-food orders only; null for tasting packs / custom orders.',
+    nullable: true,
+  })
+  actualProcurement?: {
+    status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
+    completedAt: string | null;
+    items: Array<{
+      ingredientId: string;
+      ingredientName: string;
+      source: 'ORDER_PURCHASE' | 'FROM_INVENTORY';
+      channel: string | null;
+      productName: string | null;
+      purchasedAt: string | null;
+    }>;
+  } | null;
 
   @ApiPropertyOptional({
     description: 'Pricing breakdown (Phase 5)',
@@ -593,7 +610,6 @@ export class OrderSummaryDto {
     packageCount: number;
     packageSpecG: number;
     packagePlan?: OrderPackagePlanItemDto[] | null;
-    ingredientSourcePlan?: string | null;
     dailyIntakeG?: number | null;
     /** 试吃装商品 ID（鲜食为 null），让顾客端能识别这是现货订单 */
     tastingPackId?: string | null;

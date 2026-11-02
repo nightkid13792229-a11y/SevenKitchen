@@ -295,7 +295,6 @@ interface OrderPrintBase {
   packageSpecG: number;
   packageCount: number;
   packagePlan?: PackagePlanRow[];
-  ingredientSourcePlan?: string | null;
   printCount: number;
   recipeSnapshot: any;
   createdAt: string;
@@ -419,7 +418,6 @@ async function loadAllBatchesForRecipe(
           packagePlan: normalizePackagePlanRows(item.packagePlan),
           packageSpecG: item.packageSpecG || 500,
           packageCount: item.packageCount || 1,
-          ingredientSourcePlan: item.ingredientSourcePlan ?? null,
           printCount: 2,
           recipeSnapshot: item.recipeSnapshot,
           createdAt: item.createdAt,
@@ -475,7 +473,6 @@ function initializeOrders(taskData: any) {
     packagePlan: normalizePackagePlanRows(item.packagePlan),
     packageSpecG: item.packageSpecG || 500,
     packageCount: item.packageCount || 1,
-    ingredientSourcePlan: item.ingredientSourcePlan ?? null,
     printCount: 2, // 默认打印2份
     recipeSnapshot: taskData.recipeSnapshot,
     createdAt: taskData.createdAt || new Date().toISOString(),

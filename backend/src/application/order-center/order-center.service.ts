@@ -59,8 +59,8 @@ export interface OrderCenterItem {
   /**
    * 这道订单的食谱名（2026-10-30）。
    *
-   * 老板要求列表卡片**不显示顾客名和手机号**，改显示食谱名 —— 员工是按
-   * "要做什么菜"干活的，不是按"谁买的"。
+   * 卡片主行仍显示食谱名（员工按"要做什么菜"干活）；
+   * 2026-11-02 起鲜食卡片额外显示顾客名和狗狗名，手机号仍不显示。
    * 拿不到就返回 null（补剂单大多没有绑定食谱），前端整行不显示，不要占位。
    */
   recipeName: string | null;
@@ -77,6 +77,8 @@ export interface OrderCenterItem {
   recipeId: string | null;
   /** 可打开的狗狗档案 id；空 = 这单没关联狗 */
   dogId: string | null;
+  /** 狗狗名（2026-11-02）：鲜食卡片上和顾客名一起显示 */
+  dogName: string | null;
 }
 
 const GROUP_LABELS: Record<UnifiedStatusGroup, string> = {
@@ -249,6 +251,8 @@ export class OrderCenterService {
                     OR: [
                       { orderNo: { contains: query.keyword, mode: 'insensitive' } },
                       { id: { contains: query.keyword, mode: 'insensitive' } },
+                      // 老「后台订单」页的搜索支持狗狗名，平移过来不能丢
+                      { dog: { name: { contains: query.keyword, mode: 'insensitive' } } },
                       ...(keywordUserIds && keywordUserIds.length > 0
                         ? [{ customerId: { in: keywordUserIds } }]
                         : []),
@@ -271,6 +275,8 @@ export class OrderCenterService {
               targetProductionDate: true,
               shippingAddressSnapshot: true,
               dogId: true,
+              /** 卡片上要显示狗狗名（2026-11-02） */
+              dog: { select: { name: true } },
               /**
                * 为什么要带 items：鲜食单的「下单那一版食谱」只存在
                * `order_item.recipe_snapshot` 里，没有别的表能还原。
@@ -299,6 +305,8 @@ export class OrderCenterService {
                     OR: [
                       { orderId: { contains: query.keyword, mode: 'insensitive' } },
                       { id: { contains: query.keyword, mode: 'insensitive' } },
+                      // 定制单也按狗狗名搜（老搜索的同一口径）
+                      { dog: { name: { contains: query.keyword, mode: 'insensitive' } } },
                       ...(keywordUserIds && keywordUserIds.length > 0
                         ? [{ customerId: { in: keywordUserIds } }]
                         : []),
@@ -331,6 +339,8 @@ export class OrderCenterService {
               /** 卡片上要显示的是食谱名，不是顾客名 */
               recipe: { select: { name: true } },
               dogId: true,
+              /** 卡片上要显示狗狗名（2026-11-02） */
+              dog: { select: { name: true } },
             },
             orderBy: { createdAt: 'desc' },
             take: fetchSize,
@@ -350,6 +360,8 @@ export class OrderCenterService {
                     OR: [
                       { orderNo: { contains: query.keyword, mode: 'insensitive' } },
                       { id: { contains: query.keyword, mode: 'insensitive' } },
+                      // 补剂单的狗名是下单快照，直接在这张表上搜
+                      { dogName: { contains: query.keyword, mode: 'insensitive' } },
                       ...(keywordUserIds && keywordUserIds.length > 0
                         ? [{ userId: { in: keywordUserIds } }]
                         : []),
@@ -383,6 +395,8 @@ export class OrderCenterService {
               /** 补剂单自带了食谱名快照，不用再连表 */
               recipeName: true,
               dogId: true,
+              /** 补剂单的狗狗名也是下单快照 */
+              dogName: true,
             },
             orderBy: { createdAt: 'desc' },
             take: fetchSize,
@@ -593,6 +607,7 @@ export class OrderCenterService {
       /** 卡片主行显示的是食谱名（老板 2026-10-30 定的口径） */
       recipeName: snapshot?.name ?? null,
       dogId: row.dogId ?? firstItem?.dogId ?? null,
+      dogName: row.dog?.name ?? null,
     });
   }
 
@@ -630,6 +645,7 @@ export class OrderCenterService {
       recipeId: row.recipeId ?? null,
       recipeName: row.recipe?.name ?? null,
       dogId: row.dogId ?? null,
+      dogName: row.dog?.name ?? null,
     });
   }
 
@@ -671,6 +687,7 @@ export class OrderCenterService {
       /** 补剂单没有绑定食谱时这里是空，卡片上那行直接不显示 */
       recipeName: row.recipeName ?? null,
       dogId: row.dogId ?? null,
+      dogName: row.dogName ?? null,
     });
   }
 
@@ -693,6 +710,7 @@ export class OrderCenterService {
     recipeId: string | null;
     recipeName: string | null;
     dogId: string | null;
+    dogName: string | null;
   }): OrderCenterItem {
     const user = input.users.get(input.userId);
     const address = (input.row.shippingAddressSnapshot ?? {}) as Record<
@@ -730,6 +748,7 @@ export class OrderCenterService {
       recipeId: input.recipeId,
       recipeName: input.recipeName,
       dogId: input.dogId,
+      dogName: input.dogName,
     };
   }
 
@@ -849,6 +868,14 @@ export class OrderCenterService {
                   mode: 'insensitive' as const,
                 },
               },
+              {
+                dog: {
+                  name: {
+                    contains: query.keyword,
+                    mode: 'insensitive' as const,
+                  },
+                },
+              },
               ...(userIds && userIds.length > 0
                 ? [{ customerId: { in: userIds } }]
                 : []),
@@ -882,6 +909,14 @@ export class OrderCenterService {
                 id: {
                   contains: query.keyword,
                   mode: 'insensitive' as const,
+                },
+              },
+              {
+                dog: {
+                  name: {
+                    contains: query.keyword,
+                    mode: 'insensitive' as const,
+                  },
                 },
               },
               ...(userIds && userIds.length > 0
@@ -921,6 +956,12 @@ export class OrderCenterService {
               },
               {
                 id: {
+                  contains: query.keyword,
+                  mode: 'insensitive' as const,
+                },
+              },
+              {
+                dogName: {
                   contains: query.keyword,
                   mode: 'insensitive' as const,
                 },

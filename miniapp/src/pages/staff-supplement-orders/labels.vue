@@ -23,24 +23,22 @@
     <!-- 加载中 -->
     <view v-if="loading" class="state-block">
       <text class="state-title">加载中…</text>
-      <text class="state-hint">后端正在按分装结果生成标签图，标签多时要等几秒。</text>
+      <text class="state-hint">正在按订单生成标签图，标签多时要等几秒。</text>
     </view>
 
     <!-- 加载失败：一定要有出口，且后端文案原样显示 -->
     <view v-else-if="loadError" class="state-block">
       <text class="state-title">标签没取到</text>
       <text class="state-error">{{ loadError }}</text>
-      <text v-if="packRequired" class="state-hint">请先回订单详情填分装结果，填完再回来打印。</text>
       <view class="state-actions">
         <button class="primary-btn" @tap="fetchLabels">重试</button>
-        <button v-if="packRequired" class="secondary-btn" @tap="goToOrderDetail">回订单详情</button>
       </view>
     </view>
 
     <!-- 加载成功但一张都没有：也算一种"没东西可打"，给重试出口 -->
     <view v-else-if="labels.length === 0" class="state-block">
       <text class="state-title">这张单还没有标签</text>
-      <text class="state-hint">正常要等补剂分装完才有标签；如果刚填过分装结果，点重试。</text>
+      <text class="state-hint">标签按订单里的补剂生成；如果刚下单，点重试。</text>
       <view class="state-actions">
         <button class="primary-btn" @tap="fetchLabels">重试</button>
       </view>
@@ -153,7 +151,6 @@ import {
   classifyLabelPrintError,
   describeLabelLoadError,
   describeLabelPrintFailure,
-  isSupplementPackRequiredError,
   type LabelPrintFailure,
 } from '../../utils/supplement-label-print'
 
@@ -192,8 +189,6 @@ const printing = ref(false)
 const printerName = ref('')
 const availablePrinters = ref<any[]>([])
 const showPrinterList = ref(false)
-
-const packRequired = computed(() => isSupplementPackRequiredError(loadError.value))
 
 const printedCount = computed(
   () => printStates.value.filter((state) => state === 'done').length,
@@ -608,15 +603,6 @@ function showPrintFailure(failure: LabelPrintFailure, remaining: number) {
 }
 
 /* ============================ 导航 ============================ */
-
-function goToOrderDetail() {
-  // 正常是从订单详情进来的，退回去就行；扫码/分享直接进来的没有上一页，改用重定向
-  if (getCurrentPages().length > 1) {
-    uni.navigateBack()
-    return
-  }
-  uni.redirectTo({ url: `/pages/staff-supplement-orders/detail?id=${orderId.value}` })
-}
 
 function goBack() {
   uni.navigateBack()

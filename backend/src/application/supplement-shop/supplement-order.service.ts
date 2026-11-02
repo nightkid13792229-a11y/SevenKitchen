@@ -510,6 +510,39 @@ export class SupplementOrderService {
     return view;
   }
 
+  /**
+   * 「售后中」的订单范围（2026-11-02）。
+   *
+   * 新售后流程不把订单 status 改成 AFTERSALE —— 那会把「已发货/已完成」
+   * 这个履约状态覆盖掉，发货、自动完成、退款都会跟着乱。
+   * 所以「售后中」是一个派生条件：有 PENDING/PROCESSING 售后记录的单，
+   * 加上旧的 status=AFTERSALE 存量单。
+   */
+  private async buildOpenAftersaleWhere(): Promise<Prisma.SupplementOrderWhereInput> {
+    let orderIds: string[] = [];
+    try {
+      const cases = await (this.prisma as any).aftersaleCase?.findMany?.({
+        where: {
+          orderType: 'SUPPLEMENT',
+          status: { in: ['PENDING', 'PROCESSING'] },
+        },
+        select: { orderId: true },
+        distinct: ['orderId'],
+      });
+      orderIds = (cases ?? [])
+        .map((row: { orderId?: string }) => row.orderId)
+        .filter((id: string | undefined): id is string => Boolean(id));
+    } catch {
+      // 旧库/测试环境没有 case 表时只查旧 AFTERSALE
+    }
+    return {
+      OR: [
+        { id: { in: orderIds.length > 0 ? orderIds : ['__none__'] } },
+        { status: 'AFTERSALE' },
+      ],
+    };
+  }
+
   /** 后台：所有补剂订单 */
   async listAllOrders(
     query: ListSupplementOrdersQuery = {},
@@ -517,37 +550,44 @@ export class SupplementOrderService {
   ): Promise<{ items: SupplementOrderView[]; total: number; page: number; pageSize: number }> {
     const { skip, take, page, pageSize } = this.normalizePaging(query);
     const keyword = (query.keyword || '').trim();
+
+    const and: Prisma.SupplementOrderWhereInput[] = [];
+
     // 2026-11-02：分装工单取消后，PAID / PACKING / PACKED 在员工眼里
     // 都是「待发货」。列表用一个 TO_SHIP 分组去查，避免前端把同一件事
     // 拆成三个状态、漏看旧单。
-    const statusWhere: Prisma.SupplementOrderWhereInput['status'] =
-      query.status === 'TO_SHIP'
-        ? { in: ['PAID', 'PACKING', 'PACKED'] }
-        : query.status
-          ? (query.status as never)
-          : undefined;
-    const where: Prisma.SupplementOrderWhereInput = {
-      ...(statusWhere ? { status: statusWhere } : {}),
-      ...(keyword
-        ? {
-            OR: [
-              { orderNo: { contains: keyword, mode: 'insensitive' } },
-              {
-                shippingAddressSnapshot: {
-                  path: ['recipientName'],
-                  string_contains: keyword,
-                },
-              },
-              {
-                shippingAddressSnapshot: {
-                  path: ['phone'],
-                  string_contains: keyword,
-                },
-              },
-            ],
-          }
-        : {}),
-    };
+    if (query.status === 'TO_SHIP') {
+      and.push({ status: { in: ['PAID', 'PACKING', 'PACKED'] } });
+    } else if (query.status === 'AFTERSALE') {
+      // 「售后中」不再看订单 status（新售后不改订单状态），
+      // 而是看有没有未完结的售后记录；旧 AFTERSALE 数据继续兼容。
+      and.push(await this.buildOpenAftersaleWhere());
+    } else if (query.status) {
+      and.push({ status: query.status as never });
+    }
+
+    if (keyword) {
+      and.push({
+        OR: [
+          { orderNo: { contains: keyword, mode: 'insensitive' } },
+          {
+            shippingAddressSnapshot: {
+              path: ['recipientName'],
+              string_contains: keyword,
+            },
+          },
+          {
+            shippingAddressSnapshot: {
+              path: ['phone'],
+              string_contains: keyword,
+            },
+          },
+        ],
+      });
+    }
+
+    const where: Prisma.SupplementOrderWhereInput =
+      and.length > 0 ? { AND: and } : {};
 
     const [rows, total] = await Promise.all([
       this.prisma.supplementOrder.findMany({
@@ -650,6 +690,18 @@ export class SupplementOrderService {
     for (const row of rows) {
       counts[row.status] = row._count._all;
     }
+
+    // 「售后中」不是订单 status，而是「有未完结售后记录」的派生数量；
+    // 旧 AFTERSALE 存量单也算进去，避免后台 tab 的角标永远是 0。
+    if ((this.prisma as any).aftersaleCase?.findMany) {
+      try {
+        const where = await this.buildOpenAftersaleWhere();
+        counts.AFTERSALE = await this.prisma.supplementOrder.count({ where });
+      } catch {
+        // 查不到就保留 groupBy 出来的旧 AFTERSALE 数量
+      }
+    }
+
     return counts;
   }
 
@@ -2458,22 +2510,63 @@ export class SupplementOrderService {
     const ids = views.map((view) => view.id);
     if (ids.length === 0) return views;
     try {
-      const cases = await (this.prisma as any).aftersaleCase?.findMany?.({
-        where: {
-          orderType: 'SUPPLEMENT',
-          orderId: { in: ids },
-          status: { in: ['PENDING', 'PROCESSING'] },
-        },
-        select: { orderId: true, requestType: true },
-      });
-      if (!cases?.length) return views;
-      const byOrder = new Map<string, string>();
-      for (const item of cases) byOrder.set(item.orderId, item.requestType);
+      const [cases, refundCases] = await Promise.all([
+        (this.prisma as any).aftersaleCase?.findMany?.({
+          where: {
+            orderType: 'SUPPLEMENT',
+            orderId: { in: ids },
+            status: { in: ['PENDING', 'PROCESSING'] },
+          },
+          select: { orderId: true, requestType: true },
+        }),
+        // 已退款成功的售后单：订单级字段可能是旧数据（case 流程之前），
+        // 这里兜底把 refundStatus/refundAmount 补给前台，避免「钱退了、状态还显示已发货」。
+        (this.prisma as any).aftersaleCase?.findMany?.({
+          where: {
+            orderType: 'SUPPLEMENT',
+            orderId: { in: ids },
+            requestType: 'REFUND',
+            refundStatus: 'SUCCESS',
+          },
+          select: { orderId: true, refundAmount: true, refundedAt: true },
+        }),
+      ]);
+
+      const openByOrder = new Map<string, string>();
+      for (const item of cases ?? []) {
+        openByOrder.set(item.orderId, item.requestType);
+      }
+      const refundByOrder = new Map<
+        string,
+        { amount: number; refundedAt: string | null }
+      >();
+      for (const item of refundCases ?? []) {
+        const current = refundByOrder.get(item.orderId) ?? {
+          amount: 0,
+          refundedAt: null,
+        };
+        current.amount += Number(item.refundAmount ?? 0);
+        if (item.refundedAt) {
+          current.refundedAt = new Date(item.refundedAt).toISOString();
+        }
+        refundByOrder.set(item.orderId, current);
+      }
+
       for (const view of views) {
-        const requestType = byOrder.get(view.id);
+        const requestType = openByOrder.get(view.id);
         if (requestType) {
           view.hasOpenAftersale = true;
-          view.openAftersaleLabel = requestType === 'REFUND' ? '退款中' : '售后中';
+          view.openAftersaleLabel =
+            requestType === 'REFUND' ? '退款中' : '售后中';
+        }
+        const refund = refundByOrder.get(view.id);
+        if (refund) {
+          view.refundStatus = view.refundStatus || 'SUCCESS';
+          if (!view.amountsRedacted) {
+            view.refundAmount =
+              view.refundAmount ?? Number(refund.amount.toFixed(2));
+            view.refundedAt = view.refundedAt ?? refund.refundedAt;
+          }
         }
       }
     } catch {

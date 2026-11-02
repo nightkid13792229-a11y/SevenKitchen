@@ -1,10 +1,5 @@
 <template>
   <view class="reimbursement-detail-page">
-    <!-- 顶部标题 -->
-    <view class="header">
-      <text class="title">报销单详情</text>
-    </view>
-
     <!-- 加载状态 -->
     <view v-if="loading" class="loading-state">
       <text>加载中...</text>
@@ -453,7 +448,7 @@ const formatNeededQuantity = (item?: any) => {
   const unit = formatMeasurementUnit(item.quantityUnit || item?.ingredient?.purchaseUnit);
 
   if (!Number.isFinite(quantity) || quantity <= 0) {
-    return unit || '-';
+    return '—';
   }
 
   return `${formatDecimal(quantity)}${unit}`;
@@ -1110,19 +1105,8 @@ const formatDate = (dateStr: string) => {
 .reimbursement-detail-page {
   min-height: 100vh;
   background-color: #fbfcf7;
-  padding-bottom: 120rpx;
-}
-
-.header {
-  background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
-  padding: 40rpx 32rpx;
-  margin-bottom: 24rpx;
-
-  .title {
-    font-size: 44rpx;
-    font-weight: bold;
-    color: #26261f;
-  }
+  padding-top: 24rpx;
+  padding-bottom: calc(160rpx + env(safe-area-inset-bottom));
 }
 
 .loading-state, .error-state {
@@ -1182,7 +1166,7 @@ const formatDate = (dateStr: string) => {
 
       &.pending {
         background-color: #f6efe0;
-        color: #8a6b33;
+        color: #7a5c28;
       }
 
       &.reimbursed {
@@ -1192,12 +1176,12 @@ const formatDate = (dateStr: string) => {
 
       &.rejected {
         background-color: #f8e8e2;
-        color: #b4553f;
+        color: #b4453a;
       }
 
       &.resubmit {
         background-color: #f6efe0;
-        color: #8a6b33;
+        color: #7a5c28;
       }
     }
   }
@@ -1290,12 +1274,12 @@ const formatDate = (dateStr: string) => {
 
     .expand-text {
       font-size: 24rpx;
-      color: #b08d4f;
+      color: #7a5c28;
     }
 
     .expand-icon {
       font-size: 20rpx;
-      color: #b08d4f;
+      color: #7a5c28;
     }
   }
 
@@ -1330,7 +1314,7 @@ const formatDate = (dateStr: string) => {
     .item-cost {
       font-size: 24rpx;
       font-weight: bold;
-      color: #b4553f;
+      color: #26261f;
     }
   }
 }
@@ -1364,7 +1348,7 @@ const formatDate = (dateStr: string) => {
   right: -10rpx;
   width: 44rpx;
   height: 44rpx;
-  background-color: #b4553f;
+  background-color: #b4453a;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1414,7 +1398,7 @@ const formatDate = (dateStr: string) => {
   }
 
   &.delete {
-    background: linear-gradient(135deg, #b4553f 0%, #b4553f 100%);
+    background: #b4453a;
     color: #f3eddd;
     box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.2);
   }
@@ -1464,7 +1448,7 @@ const formatDate = (dateStr: string) => {
   }
 
   .upload-hint {
-    color: #b08d4f;
+    color: #7a5c28;
     text-decoration: underline;
   }
 }
@@ -1494,7 +1478,7 @@ const formatDate = (dateStr: string) => {
 
       &.comment {
         .value {
-          color: #b4553f;
+          color: #b4453a;
         }
       }
     }
@@ -1507,7 +1491,7 @@ const formatDate = (dateStr: string) => {
   left: 0;
   right: 0;
   background-color: #fbfcf7;
-  padding: 24rpx 32rpx;
+  padding: 24rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
   box-shadow: 0 -4rpx 16rpx rgba(30, 46, 36, 0.05);
   z-index: 100;
 
@@ -1523,7 +1507,7 @@ const formatDate = (dateStr: string) => {
     justify-content: center;
 
     &.resubmit {
-      background: linear-gradient(135deg, #b4553f 0%, #b4553f 100%);
+      background: #b4453a;
       color: #f3eddd;
       box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
 
@@ -1560,16 +1544,16 @@ const formatDate = (dateStr: string) => {
   text {
     font-size: 24rpx;
     line-height: 1.5;
-    color: #b08d4f;
+    color: #7a5c28;
   }
 }
 
 .cost-summary-card {
-  background: linear-gradient(135deg, #f6efe0 0%, #b08d4f 100%);
+  background: #f6efe0;
   border: 2rpx solid #b08d4f;
 
   .section-title {
-    color: #8a6b33;
+    color: #7a5c28;
     border-bottom: 2rpx solid #b08d4f;
     padding-bottom: 16rpx;
   }
@@ -1589,7 +1573,7 @@ const formatDate = (dateStr: string) => {
       flex: 1;
       font-size: 28rpx;
       font-weight: bold;
-      color: #8a6b33;
+      color: #7a5c28;
       line-height: 1.3;
     }
 
@@ -1597,7 +1581,7 @@ const formatDate = (dateStr: string) => {
       flex-shrink: 0;
       font-size: 32rpx;
       font-weight: bold;
-      color: #b4553f;
+      color: #b4453a;
       line-height: 1;
     }
   }
@@ -1650,15 +1634,16 @@ const formatDate = (dateStr: string) => {
 
   .record-audit-subtitle {
     font-size: 22rpx;
-    color: #8a6b33;
+    color: #7a5c28;
     line-height: 1.35;
   }
 
   .record-audit-cost {
     flex-shrink: 0;
     font-size: 28rpx;
-    font-weight: bold;
-    color: #b4553f;
+    font-weight: 800;
+    color: #26261f;
+    font-variant-numeric: tabular-nums;
   }
 
   .record-audit-meta {
@@ -1672,7 +1657,7 @@ const formatDate = (dateStr: string) => {
     border-radius: 999rpx;
     background: rgba(176, 141, 79, 0.08);
     font-size: 22rpx;
-    color: #8a6b33;
+    color: #7a5c28;
     line-height: 1.35;
   }
 
@@ -1706,11 +1691,12 @@ const formatDate = (dateStr: string) => {
       font-weight: 600;
       color: #26261f;
       line-height: 1.4;
-      word-break: break-word;
+      word-break: normal;
+      white-space: nowrap;
       text-align: right;
 
       &.up {
-        color: #b4553f;
+        color: #b4453a;
       }
 
       &.down {
@@ -1738,7 +1724,7 @@ const formatDate = (dateStr: string) => {
 
     .extra-text {
       font-size: 22rpx;
-      color: #8a6b33;
+      color: #7a5c28;
       line-height: 1.4;
     }
   }
@@ -1789,7 +1775,7 @@ const formatDate = (dateStr: string) => {
     .custom-fees-title {
       display: block;
       font-size: 26rpx;
-      color: #8a6b33;
+      color: #7a5c28;
       margin-bottom: 12rpx;
       font-weight: bold;
     }
@@ -1821,7 +1807,7 @@ const formatDate = (dateStr: string) => {
       .fee-amount {
         font-size: 26rpx;
         font-weight: bold;
-        color: #b4553f;
+        color: #26261f;
       }
     }
   }
@@ -1837,13 +1823,14 @@ const formatDate = (dateStr: string) => {
     .total-label {
       font-size: 32rpx;
       font-weight: bold;
-      color: #8a6b33;
+      color: #7a5c28;
     }
 
     .total-value {
       font-size: 40rpx;
-      font-weight: bold;
-      color: #b4553f;
+      font-weight: 800;
+      color: #26261f;
+      font-variant-numeric: tabular-nums;
     }
   }
 }

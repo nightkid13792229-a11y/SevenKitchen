@@ -50,6 +50,11 @@ export class Ingredient {
     public readonly nutritionProfile: NutritionProfile | null = null,
     /** 是否允许在补剂商城对外售卖；仅生产用的补剂为 false */
     public readonly supplementRetailEnabled: boolean = false,
+    /**
+     * 创建时录入的采购单价（只写一次，不随改价变化）。
+     * 成品鲜食算价：没有采购历史时用它兜底。
+     */
+    public readonly initialPricePerPurchaseUnit: number | null = null,
   ) {
     this.validateInvariants();
   }
@@ -158,6 +163,42 @@ export class Ingredient {
   getEffectivePricePerPurchaseUnit(): number {
     return (
       this.effectivePricePerPurchaseUnit ?? this.currentPricePerPurchaseUnit
+    );
+  }
+
+  /**
+   * 用一个新的「采购单位单价」复制一份原料（其余字段不变）。
+   *
+   * 成品鲜食算价按「最近一次采购价」或「创建价」计算，价格不落在原料档案上，
+   * 而是算价时临时替换，避免一次算价改写主数据。
+   */
+  withCurrentPrice(pricePerPurchaseUnit: number): Ingredient {
+    return new Ingredient(
+      this.id,
+      this.name,
+      this.type,
+      this.procurementStrategy,
+      this.diyEnabled,
+      this.procurementEnabled,
+      this.brand,
+      this.productModel,
+      this.purchaseChannel,
+      this.notes,
+      this.baseUnit,
+      this.unitDisplayLabel,
+      this.purchaseUnit,
+      this.purchaseToBaseRatio,
+      pricePerPurchaseUnit,
+      this.effectivePricePerPurchaseUnit,
+      this.weightG,
+      this.maxCapacityG,
+      this.safetyStock,
+      this.reorderPoint,
+      this.targetStock,
+      this.properties,
+      this.nutritionProfile,
+      this.supplementRetailEnabled,
+      this.initialPricePerPurchaseUnit,
     );
   }
 

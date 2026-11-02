@@ -237,7 +237,6 @@ export class StaffCustomerServiceController {
         customerId,
         dogId,
         type: body.type || 'FRESH_FOOD',
-        ingredientSourcePlan: body.ingredientSourcePlan,
         targetProductionDate: body.targetProductionDate
           ? new Date(body.targetProductionDate)
           : null,
@@ -520,7 +519,6 @@ export class StaffCustomerServiceController {
             packageCount: item.packageCount,
             packageSpecG: item.packageSpecG,
             packagePlan: item.packagePlan,
-            ingredientSourcePlan: item.ingredientSourcePlan,
             cookingMethod: item.cookingMethod,
             customRequirements: item.customRequirements,
             dailyIntakeG: item.dailyIntakeG,

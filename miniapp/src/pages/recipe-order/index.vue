@@ -189,16 +189,19 @@
           <text class="ingredient-list-title-text">原料明细</text>
         </view>
 
-        <!-- 采购标准：把"我们从哪买"讲成一条明确的承诺，而不是让顾客自己从明细里推断 -->
+        <!-- 采购与公开：讲清优先顺序和断货后的兜底，但不承诺单品级的渠道/品牌/规格 -->
         <view class="sourcing-standard-card">
           <view class="sourcing-standard-head">
-            <text class="sourcing-standard-badge">采购标准</text>
+            <text class="sourcing-standard-badge">采购与公开</text>
           </view>
           <text class="sourcing-standard-line">
-            优先采购山姆、盒马、iHerb 等优质渠道的食材与补剂。
+            食材优先从山姆、盒马、沃尔玛、永辉等商超渠道采购，若遇无货或断货，再选择农贸市场、团购网站等渠道。
           </text>
-          <text class="sourcing-standard-line sourcing-standard-line--sub">
-            这些渠道买不到的，再向下选择其他可靠来源。
+          <text class="sourcing-standard-line">
+            营养补充剂优先从iHerb采购，若遇无货或断货，再选择亚马逊国际、天猫/京东国际等渠道。
+          </text>
+          <text class="sourcing-standard-line sourcing-standard-line--commit">
+            采购完成后，实际采购的原料将展示在订单详情中。
           </text>
         </view>
 
@@ -217,20 +220,6 @@
             <text class="ingredient-amount">
               {{ ingredient.amountText }}
             </text>
-          </view>
-          <view class="ingredient-meta-row">
-            <view class="ingredient-meta-item">
-              <text class="ingredient-meta-label">渠道</text>
-              <text class="ingredient-meta-value">{{ ingredient.purchaseChannelText }}</text>
-            </view>
-            <view class="ingredient-meta-item">
-              <text class="ingredient-meta-label">品牌</text>
-              <text class="ingredient-meta-value">{{ ingredient.brandText }}</text>
-            </view>
-            <view class="ingredient-meta-item">
-              <text class="ingredient-meta-label">规格</text>
-              <text class="ingredient-meta-value">{{ ingredient.productModelText }}</text>
-            </view>
           </view>
         </view>
 
@@ -493,16 +482,9 @@ import {
   ORDER_CYCLE_OPTIONS,
   buildDefaultPackagePlan,
   estimateFeedDays,
-  getSourcePlanLabel,
   isMinimumOrderMet,
-  type IngredientSourcePlanCode,
   type PackagePlanItem,
 } from '../../utils/order-package-plan'
-import {
-  buildIngredientBrandText,
-  buildIngredientDisplayName,
-  buildIngredientPurchaseChannelText,
-} from './ingredientDisplay'
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue'
 import QuickCyclePackagePlan from '@/components/package-plan/QuickCyclePackagePlan.vue'
 import { trackFunnelEvent } from '../../utils/funnel'
@@ -627,10 +609,6 @@ interface IngredientCostItem {
   type: string
   amount: number
   unit: string
-  procurementSkuName?: string
-  brand?: string
-  productModel?: string
-  purchaseChannel?: string
   displayUnit?: string
   unitCost: number
   cost: number
@@ -644,9 +622,6 @@ interface IngredientDisplayRow {
   typeClass: string
   nameText: string
   amountText: string
-  purchaseChannelText: string
-  brandText: string
-  productModelText: string
   /** 原料类型，用于排序时把食材与补剂分开（两者单位不同，不混排） */
   rawType: string
   /** 排序用的数值：食材是克重，补剂是粒/片/平勺数量 */
@@ -731,7 +706,6 @@ const {
   selectedDog,
   setDogs,
 } = useDogSelection<Dog>()
-const selectedSourcePlan = ref<IngredientSourcePlanCode>('MARKET_PREMIUM')
 
 /**
  * 分装计划（2026-10-18 收进 composable）。
@@ -951,7 +925,6 @@ const packagePlanWarnings = computed(() => {
 const hasSelectedCycleOrCustomPackagePlan = computed(() => Boolean(
   selectedCycleDays.value || isCustomPackagePlan.value,
 ))
-const sourcePlanLabel = computed(() => getSourcePlanLabel(selectedSourcePlan.value))
 const perMealG = computed(() => {
   if (!displayDailyIntakeG.value || !selectedDog.value?.mealsPerDay) return 0
   return displayDailyIntakeG.value / selectedDog.value.mealsPerDay
@@ -1117,11 +1090,8 @@ const displayIngredientRows = computed<IngredientDisplayRow[]>(() => {
     sortAmount: ingredient.netAmount ?? ingredient.amount ?? 0,
     typeLabel: getIngredientTypeLabel(ingredient.type),
     typeClass: getIngredientTypeClass(ingredient.type),
-    nameText: buildIngredientDisplayName(ingredient),
+    nameText: ingredient.name || '-',
     amountText: formatIngredientAmount(ingredient),
-    purchaseChannelText: buildIngredientPurchaseChannelText(ingredient),
-    brandText: buildIngredientBrandText(ingredient),
-    productModelText: ingredient.productModel || '-',
   }))
 })
 
@@ -1689,14 +1659,13 @@ function buildPricingPreviewItem() {
   }
 }
 
-async function requestPricingPreview(sourcePlan: IngredientSourcePlanCode) {
+async function requestPricingPreview() {
   return request({
     url: '/orders/pricing/preview',
     method: 'POST',
     data: {
       dogId: selectedDogId.value,
       type: 'FRESH_FOOD',
-      ingredientSourcePlan: sourcePlan,
       items: [buildPricingPreviewItem()]
     }
   })
@@ -1714,7 +1683,7 @@ async function loadPricePreview() {
   isPricePreviewLoading.value = true
 
   try {
-    const res = await requestPricingPreview(selectedSourcePlan.value)
+    const res = await requestPricingPreview()
     if (res.code === 0 && res.data) {
       if (requestSeq !== pricingPreviewRequestSeq) {
         return
@@ -1816,8 +1785,6 @@ async function continueBuyNow() {
     packagePlan: normalizedPackagePlan.value,
     totalPackages: totalPackages.value,
     totalGrams: totalGrams.value,
-    ingredientSourcePlan: selectedSourcePlan.value,
-    ingredientSourcePlanLabel: sourcePlanLabel.value,
     cookingMethod: cookingMethod.value || 'RAW',
     amountProduct: pricePreview.value?.amountProduct || 0,
     amountShipping: pricePreview.value?.amountShipping || 0,
@@ -3694,8 +3661,6 @@ onShow(() => {
 
 .ingredient-name-cell,
 .ingredient-name,
-.ingredient-meta-row,
-.ingredient-meta-item,
 .ingredient-amount {
   min-width: 0;
 }
@@ -3775,9 +3740,10 @@ onShow(() => {
   color: #6b6653;
 }
 
-.sourcing-standard-line--sub {
+.sourcing-standard-line--commit {
   margin-top: 4rpx;
-  color: #968f6d;
+  color: #1e3a2f;
+  font-weight: 700;
 }
 
 /* ===== 原料明细：展开 / 收起 ===== */
@@ -3807,43 +3773,116 @@ onShow(() => {
   transform: rotate(180deg);
 }
 
-/*
- * 原料明细的渠道 / 品牌 / 规格
- *
- * 排版逻辑：靠"分块"区分字段，而不是靠字色或字重。
- *   · 每个字段是一个独立的浅底圆角小块 → 一眼能看出这是三个不同的字段；
- *   · 块内「字段名 + 内容」用**完全相同的字体、字号、颜色**，读起来是一个整体
- *     （"渠道 天猫旗舰店"），不制造额外的视觉层级。
- *   · 内容较长时（如采购规格）块内自然换行，不会把相邻字段挤乱。
- */
-.ingredient-meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10rpx;
-  margin-top: 12rpx;
+.ingredient-amount {
+  min-width: 0;
 }
 
-.ingredient-meta-item {
-  display: inline-flex;
-  align-items: baseline;
+.ingredient-name-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 6rpx;
-  max-width: 100%;
-  padding: 5rpx 12rpx;
-  border-radius: 8rpx;
-  background-color: #f4f6ec;
-  font-size: 22rpx;
-  line-height: 1.4;
-  color: #6b6653;
+  line-height: 1.35;
+}
+
+.ingredient-type-tag {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 4rpx 7rpx;
+  border-radius: 6rpx;
+  font-size: 19rpx;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.ingredient-type-tag.food {
+  color: #26261f;
+  background-color: #eef2e4;
+}
+
+.ingredient-type-tag.supplement {
+  color: #b08d4f;
+  background-color: #eef2e4;
+}
+
+.ingredient-name {
+  flex: 1 1 180rpx;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  font-size: 26rpx;
+  font-weight: 800;
+  color: #26261f;
+  line-height: 1.35;
   word-break: break-all;
 }
 
-/* 字段名与内容同款：不靠颜色 / 字号 / 字重区分，避免"标签比内容淡"的老问题 */
-.ingredient-meta-label,
-.ingredient-meta-value {
-  color: inherit;
-  font-size: inherit;
-  font-weight: inherit;
-  line-height: inherit;
+/* ===== 采购标准 Banner ===== */
+.sourcing-standard-card {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 18rpx;
+  padding: 20rpx 22rpx;
+  background: linear-gradient(150deg, #fdf8ee 0%, #f6efe0 100%);
+  border: 1rpx solid rgba(176, 141, 79, 0.45);
+  border-radius: 14rpx;
+}
+
+.sourcing-standard-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+.sourcing-standard-badge {
+  padding: 3rpx 12rpx;
+  border-radius: 6rpx;
+  background: #b08d4f;
+  color: #fdf8ee;
+  font-size: 20rpx;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.sourcing-standard-line {
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #6b6653;
+}
+
+.sourcing-standard-line--commit {
+  margin-top: 4rpx;
+  color: #1e3a2f;
+  font-weight: 700;
+}
+
+/* ===== 原料明细：展开 / 收起 ===== */
+.ingredient-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  margin-top: 20rpx;
+  padding: 16rpx 0;
+  border-top: 1rpx solid #eef1e2;
+}
+
+.ingredient-toggle-text {
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+}
+
+.ingredient-toggle-arrow {
+  font-size: 20rpx;
+  color: #1e3a2f;
+  transition: transform 0.2s ease;
+}
+
+.ingredient-toggle-arrow.open {
+  transform: rotate(180deg);
 }
 
 .ingredient-amount {

@@ -27,7 +27,6 @@ import {
   OrderItem,
   PricingBreakdownSnapshot,
   CookingMethod,
-  normalizeIngredientSourcePlan,
   normalizePackagePlan,
   summarizePackagePlan,
 } from '../../domain/order';
@@ -70,9 +69,8 @@ import {
   resolvePreparationMethodText,
   resolvePreparationMethodTokens,
 } from '../recipe/preparation-method-text.util';
-import { OrderSourcePlanService } from './order-source-plan.service';
+import { IngredientPriceBasisService } from '../ingredient/ingredient-price-basis.service';
 import { buildProductionRecipeSnapshot } from '../recipe/production-recipe-snapshot';
-import type { IngredientSourcePlanCode } from '../../domain/order/ingredient-source-plan';
 import { ShippingNotificationService } from '../shipping/shipping-notification.service';
 import { TastingPackService } from '../tasting-pack/tasting-pack.service';
 import { TastingPackStockService } from '../tasting-pack/tasting-pack-stock.service';
@@ -109,7 +107,6 @@ export interface CreateOrderDraftDto {
   customerId: string;
   dogId?: string;
   type: OrderType;
-  ingredientSourcePlan?: string;
   pricingPurpose?: 'ORDER' | 'DIY_SHEET';
   targetProductionDate?: Date | null;
   items?: CreateOrderItemDto[];
@@ -319,7 +316,7 @@ export class OrderService {
     private readonly pricingService: PricingService,
     private readonly globalConfigService: GlobalConfigService,
     private readonly shippingService: ShippingService,
-    private readonly orderSourcePlanService: OrderSourcePlanService,
+    private readonly ingredientPriceBasisService: IngredientPriceBasisService,
     @Inject(ADDRESS_REPOSITORY)
     private readonly addressRepository: AddressRepository,
     // @Inject('CartRepository')
@@ -457,7 +454,6 @@ export class OrderService {
 
   private async resolveOrderRecipeIngredientMap(params: {
     recipeItems: RecipeDomainItem[];
-    ingredientSourcePlan?: IngredientSourcePlanCode | null;
     useSupplementProcurementAlternatives: boolean;
     pricedIngredientIdsByRecipeItemId?: Map<string, string>;
   }): Promise<Map<string, Ingredient>> {
@@ -510,21 +506,17 @@ export class OrderService {
       ).values(),
     );
 
-    const sourcePlanIngredientMap = params.ingredientSourcePlan
-      ? await this.orderSourcePlanService.applySourcePlanToIngredients(
-          selectedIngredients,
-          params.ingredientSourcePlan,
-        )
-      : new Map(
-          selectedIngredients.map((ingredient) => [ingredient.id, ingredient]),
-        );
+    // 成品鲜食算价依据：最近一次采购价 → 创建价（不再按采购方案挑 SKU）
+    const pricedIngredientMap =
+      await this.ingredientPriceBasisService.applyToIngredients(
+        selectedIngredients,
+      );
 
     return new Map(
       Array.from(selectedByRecipeIngredientId.entries()).map(
         ([recipeIngredientId, selectedIngredient]) => [
           recipeIngredientId,
-          sourcePlanIngredientMap.get(selectedIngredient.id) ||
-            selectedIngredient,
+          pricedIngredientMap.get(selectedIngredient.id) || selectedIngredient,
         ],
       ),
     );
@@ -1384,12 +1376,8 @@ export class OrderService {
 
     // 7. 创建 RecipeSnapshot
     const recipeItems = recipe.items || [];
-    const ingredientSourcePlan = normalizeIngredientSourcePlan(
-      requestParams.ingredientSourcePlan,
-    );
     const ingredientMap = await this.resolveOrderRecipeIngredientMap({
       recipeItems,
-      ingredientSourcePlan,
       useSupplementProcurementAlternatives: false,
       pricedIngredientIdsByRecipeItemId:
         this.getPricedIngredientIdsByRecipeItemId(pricingResult),
@@ -1457,7 +1445,6 @@ export class OrderService {
       null,
       null,
       itemParams.packagePlan ?? null,
-      requestParams.ingredientSourcePlan ?? null,
       itemParams.cookingMethod ?? null,
     );
     console.log(
@@ -1628,8 +1615,7 @@ export class OrderService {
         null, // productionBatchId
         null, // allocatedAt
         [{ packageSpecG: packSpecG, packageCount: totalPacks }],
-        null, // ingredientSourcePlan
-          null, // cookingMethod
+        null, // cookingMethod
         tastingPackId,
       );
 
@@ -1854,10 +1840,6 @@ export class OrderService {
       throw new BadRequestException('items is required when not using cart');
     }
 
-    const ingredientSourcePlan = normalizeIngredientSourcePlan(
-      dto.ingredientSourcePlan,
-    );
-
     // Load dog profile for pricing calculation
     const dog = await this.dogRepository.findById(dto.dogId);
     if (!dog) {
@@ -1887,7 +1869,6 @@ export class OrderService {
       const recipeItems = recipe.items || [];
       const ingredientMap = await this.resolveOrderRecipeIngredientMap({
         recipeItems,
-        ingredientSourcePlan,
         useSupplementProcurementAlternatives: false,
       });
 
@@ -2047,7 +2028,6 @@ export class OrderService {
         null,
         null,
         packageInput.packagePlan ?? null,
-        ingredientSourcePlan,
         itemDto.cookingMethod ?? null,
       );
 
@@ -2077,7 +2057,6 @@ export class OrderService {
       packagePlan: dto.items[0].packagePlan,
       cycleDays: dto.items[0].cycleDays,
       dailyIntakeG: dto.items[0].dailyIntakeG,
-      ingredientSourcePlan,
     });
 
     // Phase 7.1: Create pricing breakdown snapshot
@@ -2333,9 +2312,6 @@ export class OrderService {
     }
 
     const isDiySheetPreview = dto.pricingPurpose === 'DIY_SHEET';
-    const ingredientSourcePlan = isDiySheetPreview
-      ? null
-      : normalizeIngredientSourcePlan(dto.ingredientSourcePlan);
 
     const itemDto = dto.items[0];
     const packageInput = this.resolveOrderItemPackageInput(itemDto);
@@ -2362,7 +2338,6 @@ export class OrderService {
 
     const ingredientMap = await this.resolveOrderRecipeIngredientMap({
       recipeItems,
-      ingredientSourcePlan,
       useSupplementProcurementAlternatives: false,
     });
 
@@ -2469,7 +2444,6 @@ export class OrderService {
       packagePlan: packageInput.packagePlan,
       cycleDays: itemDto.cycleDays,
       dailyIntakeG: itemDto.dailyIntakeG,
-      ingredientSourcePlan,
       pricingPurpose: dto.pricingPurpose ?? 'ORDER',
     });
 
@@ -2510,7 +2484,6 @@ export class OrderService {
       requestParams: {
         dogId: dto.dogId,
         addressId: dto.addressId, // ✅ 修复：保存addressId到快照
-        ingredientSourcePlan,
         items: [
           {
             recipeId: itemDto.recipeId,
@@ -2543,8 +2516,7 @@ export class OrderService {
    * Used for home showcase and recipe detail reference price display (P0-2).
    *
    * Caliber:
-   * - Fixed source plan MARKET_PREMIUM (商超优先), matching the default
-   *   customer-facing ordering口径.
+   * - 成品鲜食算价口径：最近一次采购价 → 原料创建价（2026-11-02 起）。
    * - Reference quantity = globalConfig.minOrderWeightG (起订量), a single
    *   package, one meal per day; shipping is amortized over that weight.
    * - pricePer100g = (productPrice + shippingFee) * 100 / referenceWeightG.
@@ -2563,7 +2535,6 @@ export class OrderService {
     const recipeItems = recipe.items || [];
     const ingredientMap = await this.resolveOrderRecipeIngredientMap({
       recipeItems,
-      ingredientSourcePlan: 'MARKET_PREMIUM',
       useSupplementProcurementAlternatives: false,
     });
 
@@ -3480,7 +3451,6 @@ export class OrderService {
           null, // productionBatchId：新条目，可被分配
           null, // allocatedAt
           item.packagePlan ?? null,
-          item.ingredientSourcePlan ?? null,
           item.cookingMethod ?? null,
         ),
     );
@@ -3680,7 +3650,6 @@ export class OrderService {
         null, // productionBatchId：现货不进生产
         null, // allocatedAt
         [{ packageSpecG: packSpecG, packageCount: totalPacks }],
-        null, // ingredientSourcePlan
           null, // cookingMethod
         sourceItem.tastingPackId,
       );
@@ -4325,7 +4294,6 @@ export class OrderService {
         recipeSnapshot: true,
         quantityG: true,
         dailyIntakeG: true,
-        ingredientSourcePlan: true,
         cookingMethod: true,
         customRequirements: true,
         productionBatchId: true,
@@ -4368,9 +4336,6 @@ export class OrderService {
       customerId: order.customerId,
       dogId,
       type: order.type,
-      ingredientSourcePlan:
-        (orderItem.ingredientSourcePlan as IngredientSourcePlanCode | null) ??
-        undefined,
       pricingPurpose: 'ORDER',
       targetProductionDate: order.targetProductionDate,
       addressId: order.addressId,

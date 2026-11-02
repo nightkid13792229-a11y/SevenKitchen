@@ -37,7 +37,6 @@ import { AuthGuard } from '../auth/auth.guard';
 import { StaffGuard } from '../guards/role.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { RequestUser } from '../auth/request-user.interface';
-import type { IngredientSourcePlanCode } from '../../domain/order/ingredient-source-plan';
 
 /**
  * 试吃装 · 后台
@@ -86,7 +85,6 @@ export class AdminTastingPackController {
     body: {
       specs: TastingPackRecipeSpec[];
       sets?: number;
-      ingredientSourcePlan?: IngredientSourcePlanCode | null;
       manualUnitPrice?: number | null;
     },
   ) {
@@ -94,7 +92,6 @@ export class AdminTastingPackController {
       await this.pricingService.quote({
         specs: body.specs || [],
         sets: body.sets,
-        ingredientSourcePlan: body.ingredientSourcePlan,
         manualUnitPrice: body.manualUnitPrice,
       }),
     );
@@ -109,14 +106,12 @@ export class AdminTastingPackController {
     body: {
       specs: TastingPackRecipeSpec[];
       sets: number;
-      ingredientSourcePlan?: IngredientSourcePlanCode | null;
     },
   ) {
     return ApiResponseDto.success(
       await this.pricingService.buildStockRequirement({
         specs: body.specs || [],
         sets: body.sets,
-        ingredientSourcePlan: body.ingredientSourcePlan,
       }),
     );
   }

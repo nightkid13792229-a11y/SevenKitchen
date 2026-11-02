@@ -12,7 +12,6 @@ import { OrderItem } from '../../domain/order/order-item.entity';
 import { PricingBreakdownSnapshot } from '../../domain/order/pricing-breakdown-snapshot';
 import type { OrderRepository } from '../../domain/order/order.repository';
 import { OrderStatus, OrderType } from '../../domain';
-import { normalizeIngredientSourcePlan } from '../../domain/order/ingredient-source-plan';
 import { CookingMethod } from '../../domain/order/cooking-method.enum';
 
 interface OrderData {
@@ -37,7 +36,6 @@ interface OrderData {
     packageCount: number;
     packageSpecG: number;
     packagePlan?: Array<{ packageSpecG: number; packageCount: number }> | null;
-    ingredientSourcePlan?: string | null;
     cookingMethod?: string | null;
     customRequirements: string | null;
     dailyIntakeG?: number | null; // 试吃装为 null（现货没有"每日饭量"）
@@ -152,9 +150,6 @@ export class FileBackedOrderRepository
           itemData.productionBatchId ?? null,
           (itemData.allocatedAt ? new Date(itemData.allocatedAt) : null) as any,
           itemData.packagePlan ?? null,
-          itemData.ingredientSourcePlan
-            ? normalizeIngredientSourcePlan(itemData.ingredientSourcePlan)
-            : null,
           normalizeStoredCookingMethod(itemData.cookingMethod),
         ),
     );
@@ -263,7 +258,6 @@ export class FileBackedOrderRepository
         packageCount: item.packageCount,
         packageSpecG: item.packageSpecG,
         packagePlan: item.packagePlan ?? null,
-        ingredientSourcePlan: item.ingredientSourcePlan ?? null,
         cookingMethod: item.cookingMethod ?? null,
         customRequirements: item.customRequirements,
         dailyIntakeG: item.dailyIntakeG,
@@ -495,7 +489,6 @@ export class FileBackedOrderRepository
           packageCount: item.packageCount,
           packageSpecG: item.packageSpecG,
           packagePlan: item.packagePlan ?? null,
-          ingredientSourcePlan: item.ingredientSourcePlan ?? null,
             cookingMethod: item.cookingMethod ?? null,
           customRequirements: item.customRequirements,
           dailyIntakeG: item.dailyIntakeG,

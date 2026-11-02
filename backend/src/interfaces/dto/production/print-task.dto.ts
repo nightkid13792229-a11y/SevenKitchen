@@ -23,7 +23,6 @@ export class PrintTaskOrderItemDto {
 
   @IsString()
   @IsOptional()
-  ingredientSourcePlan?: string;
 
   @IsString()
   dogName!: string;

@@ -1,0 +1,10 @@
+{
+  "operator": "boss-2026-11-02",
+  "items": [
+    {
+      "procurementSkuId": "c7a3fc1e-7920-4fe2-9da6-c0a90c61a102",
+      "isActive": false,
+      "reason": "商品名写 12kg/件、价格录成 10.2 元（折合 0.85 元/kg），与同类鸭肝 19.8 元/kg 明显不符；历史采购记录已由算价校验剔除，先停用该商品避免继续选错"
+    }
+  ]
+}

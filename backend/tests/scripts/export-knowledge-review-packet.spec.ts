@@ -69,11 +69,12 @@ describe('健康知识审核包导出', () => {
     expect(lines[0]).toContain('审核意见');
   });
 
-  it('出处显示名带版本与证据级，便于兽医核对是不是最新版', () => {
+  it('出处显示名带版本，便于兽医核对是不是最新版', () => {
     const named = sourceDisplayName('WSAVA-VACC-2024');
 
     expect(named).toContain('WSAVA');
-    expect(named).toContain('证据级');
+    expect(named).toContain('2024');
+    expect(named).not.toContain('证据级');
   });
 
   it('没登记过的来源 ID 原样显示（不假装有出处）', () => {

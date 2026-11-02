@@ -83,12 +83,12 @@ describe('staff production scheduling guardrails', () => {
     expect(productionApiSource).toContain('resultPhotoUrls?: string[]');
   });
 
-  it('keeps ingredient source plan as API data without showing it as production staff copy', () => {
+  it('drops the retired source plan from production API and staff copy', () => {
     expect(indexSource).not.toContain('source-plan-badge');
     expect(indexSource).not.toContain('task.ingredientSourcePlanLabel');
     expect(detailSource).not.toContain('采购策略');
     expect(detailSource).not.toContain('taskDetail.ingredientSourcePlanLabel');
-    expect(productionApiSource).toContain('ingredientSourcePlanLabel?: string');
+    expect(productionApiSource).not.toContain('ingredientSourcePlan');
   });
 
   it('prints production ingredients by procurement sku without counting subtotal rows', () => {

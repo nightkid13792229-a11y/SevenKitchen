@@ -204,7 +204,7 @@
     {
       "path": "pages/staff-supplement-summary/index",
       "style": {
-        "navigationBarTitleText": "分装汇总"
+        "navigationBarTitleText": "分装备料"
       }
     },
     {
@@ -340,49 +340,73 @@
         {
           "path": "index",
           "style": {
-            "navigationBarTitleText": "采购管理"
+            "navigationBarTitleText": "采购管理",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
           }
         },
         {
           "path": "stock-create",
           "style": {
-            "navigationBarTitleText": "创建补货采购单"
+            "navigationBarTitleText": "创建补货采购单",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
           }
         },
         {
           "path": "reimbursement/submit",
           "style": {
-            "navigationBarTitleText": "提交报销申请"
+            "navigationBarTitleText": "提交报销申请",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
           }
         },
         {
           "path": "reimbursement/list",
           "style": {
-            "navigationBarTitleText": "我的报销申请"
+            "navigationBarTitleText": "我的报销申请",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
           }
         },
         {
           "path": "reimbursement/detail",
           "style": {
-            "navigationBarTitleText": "报销单详情"
+            "navigationBarTitleText": "报销单详情",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
           }
         },
         {
           "path": "detail",
           "style": {
-            "navigationBarTitleText": "采购清单详情"
+            "navigationBarTitleText": "采购清单详情",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
           }
         },
         {
           "path": "record-form",
           "style": {
-            "navigationBarTitleText": "添加采购记录"
+            "navigationBarTitleText": "添加采购记录",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
           }
         },
         {
           "path": "preview",
           "style": {
-            "navigationBarTitleText": "预览采购需求"
+            "navigationBarTitleText": "预览采购需求",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
           }
         }
       ]

@@ -1,0 +1,88 @@
+/* ============================================================================
+ * 员工端 · 设计 token（2026-11-03）
+ *
+ * 采购管理 P0/P1 落地后抽出的一套值。只放变量与 mixin，不产出选择器规则，
+ * 各页 `@import` 多少次都不会重复生成样式。
+ *
+ * 用法（与 styles/health-section.scss 同一套路，适配小程序样式隔离）：
+ *   <style scoped lang="scss">
+ *   @import '../../styles/staff-tokens.scss';
+ *   .card { background: $staff-surface; border-radius: $staff-radius-card; }
+ *   </style>
+ *
+ * 规则（审核文档 §6）：
+ *   1. 深色底只用 $staff-cream 或 cream-dim，禁止 $staff-ink
+ *   2. 小号金色文字用 $staff-gold-ink，$staff-gold 只给 ≥36rpx 加粗数字/描边
+ *   3. 金额常态用 $staff-ink，红色只给驳回/删除/超支
+ *   4. 固定底栏必须带 env(safe-area-inset-bottom)
+ * ========================================================================= */
+
+/* ── 文字 ─────────────────────────────────────────────────────────────── */
+$staff-ink: #26261f;
+$staff-ink-2: #6b6653;
+$staff-ink-3: #8a8a7e;
+
+/* ── 底色与分隔 ───────────────────────────────────────────────────────── */
+$staff-bg: #fbfcf7;
+$staff-surface: #ffffff;
+$staff-line: #eef1e2;
+$staff-line-strong: #e5e8d4;
+
+/* ── 品牌 ─────────────────────────────────────────────────────────────── */
+$staff-brand: #1e3a2f;
+$staff-brand-deep: #173026;
+$staff-cream: #f3eddd;
+
+/* ── 金色 ─────────────────────────────────────────────────────────────── */
+$staff-gold: #b08d4f;
+$staff-gold-ink: #7a5c28;
+$staff-gold-soft: #f6efe0;
+
+/* ── 浅色底与危险色 ───────────────────────────────────────────────────── */
+$staff-brand-soft: #eef2e4;
+$staff-danger: #b4453a;
+$staff-danger-soft: #f8e8e2;
+
+/* ── 字号（rpx）────────────────────────────────────────────────────────── */
+$staff-font-metric: 40rpx; // 页面大数字
+$staff-font-h1: 32rpx; // 区块标题
+$staff-font-h2: 30rpx; // 列表主标题
+$staff-font-body: 28rpx; // 正文
+$staff-font-sub: 26rpx; // 次要正文
+$staff-font-caption: 24rpx; // 最小字号，22rpx 停用
+
+/* ── 间距（rpx）──────────────────────────────────────────────────────── */
+$staff-gutter: 32rpx;
+$staff-card-padding: 28rpx;
+$staff-gap-card: 16rpx;
+$staff-gap-section: 24rpx;
+
+/* ── 形状 ─────────────────────────────────────────────────────────────── */
+$staff-radius-card: 20rpx;
+$staff-radius-control: 12rpx;
+$staff-radius-pill: 999rpx;
+$staff-shadow-card: 0 6rpx 18rpx rgba(30, 46, 36, 0.05);
+$staff-shadow-bar: 0 -4rpx 16rpx rgba(30, 46, 36, 0.06);
+
+/* ── 常用混入 ─────────────────────────────────────────────────────────── */
+@mixin staff-card {
+  background: $staff-surface;
+  border: 1rpx solid $staff-line;
+  border-radius: $staff-radius-card;
+}
+
+@mixin staff-bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 24rpx $staff-gutter calc(24rpx + env(safe-area-inset-bottom));
+  background: $staff-bg;
+  box-shadow: $staff-shadow-bar;
+}
+
+@mixin staff-ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

@@ -124,10 +124,18 @@ describe('staff order center · 食谱 / 狗狗入口', () => {
     expect(orderCenter).toContain('@tap.stop="openDog(item)"')
   })
 
-  it('★ 卡片主行显示食谱名，不再显示顾客名和手机号', () => {
+  it('★ 三类卡片都显示顾客姓名和狗狗名，但手机号仍不显示', () => {
     expect(orderCenter).toContain('v-if="item.recipeName"')
     expect(orderCenter).toContain('{{ item.recipeName }}')
-    expect(orderCenter).not.toContain('item.customerName')
+    // 2026-11-02：不再只限鲜食，补剂/定制卡片也显示这一行
+    expect(orderCenter).toContain('v-if="item.customerName || item.dogName"')
+    expect(orderCenter).not.toContain(
+      `v-if="item.type === 'FOOD' && (item.customerName || item.dogName)"`,
+    )
+    expect(orderCenter).toContain('{{ item.customerName }}')
+    expect(orderCenter).toContain('{{ item.dogName }}')
+    expect(orderCenter).toContain('顾客 ')
+    expect(orderCenter).toContain('狗狗 ')
     expect(orderCenter).not.toContain('item.customerPhone')
   })
 
@@ -175,5 +183,21 @@ describe('staff order center · 两个只读页', () => {
     expect(dogPage).not.toContain('ongoingConditions')
     expect(dogPage).toContain('isOngoingStatus(item.status)')
     expect(dogPage).toContain("['治疗中', '慢性', '未标注结果']")
+  })
+})
+
+describe('staff order center · 关键词搜索', () => {
+  it('★ 把老「后台订单」的关键词搜索平移过来', () => {
+    expect(orderCenter).toContain('searchKeyword')
+    expect(orderCenter).toContain('performSearch')
+    expect(orderCenter).toContain('订单号 / 姓名 / 手机号 / 狗狗名')
+    expect(orderCenter).toContain(
+      'keyword: searchKeyword.value.trim() || undefined',
+    )
+  })
+
+  it('清空关键词后重新查询，不会把上一次的结果留在列表里', () => {
+    expect(orderCenter).toContain('clearSearchKeyword')
+    expect(orderCenter).toContain("searchKeyword.value = ''")
   })
 })

@@ -87,7 +87,6 @@ export interface TastingPackQuote {
     tastingMultiplier: number;
     priceRoundingMode: string;
     targetMargin: number;
-    ingredientSourcePlan: string;
   };
   /** 本次定价用的成本基数 */
   costBasis?: 'MANUAL' | 'STOCK_BATCH' | 'LIVE';
@@ -249,7 +248,6 @@ export const tastingPackApi = {
   quotePreview: (data: {
     specs: TastingPackRecipeSpec[];
     sets?: number;
-    ingredientSourcePlan?: string | null;
   }): Promise<TastingPackQuote> =>
     api.post('/admin/tasting-pack/quote-preview', data),
 
@@ -257,7 +255,6 @@ export const tastingPackApi = {
   stockRequirementPreview: (data: {
     specs: TastingPackRecipeSpec[];
     sets: number;
-    ingredientSourcePlan?: string | null;
   }): Promise<TastingPackStockRequirement> =>
     api.post('/admin/tasting-pack/stock-requirement-preview', data),
 

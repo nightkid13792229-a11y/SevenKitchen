@@ -65,7 +65,6 @@ export interface PurchaseItemConstructor {
       purchaseToBaseRatio?: number | null;
       currentPurchasePrice?: number | null;
       referencePricePerPurchaseUnit?: number | null;
-      sourceTier?: string | null;
       isActive: boolean;
     }>;
   };
@@ -287,7 +286,6 @@ export class PurchaseItem {
                 referencePricePerPurchaseUnit: toNullableNumber(
                   sku.referencePricePerPurchaseUnit,
                 ),
-                sourceTier: sku.sourceTier ?? null,
                 isActive: sku.isActive,
               }),
             ),

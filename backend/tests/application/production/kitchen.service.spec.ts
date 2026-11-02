@@ -282,7 +282,7 @@ describe('StaffProductionService', () => {
     );
   });
 
-  it('numbers same-recipe pots separately when ingredient source plans differ', async () => {
+  it('numbers same-recipe pots in creation order', async () => {
     const recipeSnapshot = {
       id: 'recipe-1',
       name: '糙米鸡蛋牛肉',
@@ -339,7 +339,6 @@ describe('StaffProductionService', () => {
                 packageSpecG: 208,
                 packageCount: 60,
                 packagePlan: null,
-                ingredientSourcePlan: 'WHOLESALE',
               },
             ],
           },
@@ -354,7 +353,6 @@ describe('StaffProductionService', () => {
                 packageSpecG: 122,
                 packageCount: 60,
                 packagePlan: null,
-                ingredientSourcePlan: 'MARKET_PREMIUM',
               },
             ],
           },
@@ -369,30 +367,24 @@ describe('StaffProductionService', () => {
     expect(byId.get('unit-wholesale-1')).toEqual(
       expect.objectContaining({
         currentPotNumber: 1,
-        totalPots: 2,
-        ingredientSourcePlan: 'WHOLESALE',
-        ingredientSourcePlanLabel: '性价比优先',
+        totalPots: 3,
       }),
     );
     expect(byId.get('unit-wholesale-2')).toEqual(
       expect.objectContaining({
         currentPotNumber: 2,
-        totalPots: 2,
-        ingredientSourcePlan: 'WHOLESALE',
-        ingredientSourcePlanLabel: '性价比优先',
+        totalPots: 3,
       }),
     );
     expect(byId.get('unit-market-1')).toEqual(
       expect.objectContaining({
-        currentPotNumber: 1,
-        totalPots: 1,
-        ingredientSourcePlan: 'MARKET_PREMIUM',
-        ingredientSourcePlanLabel: '超市优先',
+        currentPotNumber: 3,
+        totalPots: 3,
       }),
     );
   });
 
-  it('adds source-plan procurement sku names to production recipe snapshots', async () => {
+  it('adds the most recent procurement sku names to production recipe snapshots', async () => {
     const recipeSnapshot = {
       id: 'recipe-1',
       name: '糙米鸡蛋牛肉',
@@ -439,7 +431,6 @@ describe('StaffProductionService', () => {
                 packageSpecG: 122,
                 packageCount: 60,
                 packagePlan: null,
-                ingredientSourcePlan: 'MARKET_PREMIUM',
               },
             ],
           },
@@ -450,7 +441,8 @@ describe('StaffProductionService', () => {
       findMany: jest.fn().mockResolvedValue({
         list: [
           {
-            id: 'purchase-list-1',
+            id: 'purchase-list-old',
+            createdAt: new Date('2026-04-20T10:00:00.000Z'),
             sourceOrderIds: ['order-market'],
             items: [
               {
@@ -461,22 +453,17 @@ describe('StaffProductionService', () => {
                 type: 'FOOD',
                 ingredient: {
                   procurementSkus: [
-                    {
-                      id: 'sku-wholesale',
-                      sourceTier: 'WHOLESALE',
-                      currentPurchasePrice: 58,
-                    },
-                    {
-                      id: 'sku-market',
-                      sourceTier: 'MARKET_PREMIUM',
-                      currentPurchasePrice: 98,
-                      brand: '山姆会员店',
-                      purchaseChannel: '山姆会店',
-                      productModel: '1.2kg/盒',
-                    },
+                    { id: 'sku-wholesale', currentPurchasePrice: 58 },
                   ],
                 },
               },
+            ],
+          },
+          {
+            id: 'purchase-list-new',
+            createdAt: new Date('2026-04-21T10:00:00.000Z'),
+            sourceOrderIds: ['order-market'],
+            items: [
               {
                 ingredientId: 'ingredient-beef',
                 ingredientName: '牛霖',
@@ -486,13 +473,7 @@ describe('StaffProductionService', () => {
                 ingredient: {
                   procurementSkus: [
                     {
-                      id: 'sku-wholesale',
-                      sourceTier: 'WHOLESALE',
-                      currentPurchasePrice: 58,
-                    },
-                    {
                       id: 'sku-market',
-                      sourceTier: 'MARKET_PREMIUM',
                       currentPurchasePrice: 98,
                       brand: '山姆会员店',
                       purchaseChannel: '山姆会店',

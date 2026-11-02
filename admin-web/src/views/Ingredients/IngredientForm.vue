@@ -309,6 +309,44 @@
       </span>
     </el-form-item>
 
+    <!-- 算价依据（只读）：成品鲜食按这个价算成本 -->
+    <template v-if="priceBasisVisible">
+      <div class="section-title">算价依据</div>
+      <div class="price-basis-card">
+        <div class="price-basis-head">
+          <el-tag :type="priceBasisTagType" size="small">
+            {{ priceBasisSourceLabel }}
+          </el-tag>
+          <span class="price-basis-hint"
+            >成品鲜食按此价计算成本；只影响新订单，老订单价格已冻结</span
+          >
+        </div>
+        <div class="price-basis-grid">
+          <div class="price-basis-item">
+            <span class="label">算价单价</span>
+            <span class="value">¥{{ priceBasisValueText }}</span>
+            <span class="unit">/ {{ priceBasisUnitLabel }}</span>
+          </div>
+          <div class="price-basis-item">
+            <span class="label">折合</span>
+            <span class="value">¥{{ priceBasisBaseValueText }}</span>
+            <span class="unit">/ {{ priceBasisBaseUnitLabel }}</span>
+          </div>
+          <div class="price-basis-item">
+            <span class="label">最近采购</span>
+            <span class="value">{{ priceBasisPurchasedAtText }}</span>
+          </div>
+          <div class="price-basis-item">
+            <span class="label">创建价</span>
+            <span class="value">{{ initialPriceDisplay }}</span>
+            <span v-if="initialPriceSet" class="unit"
+              >/ {{ priceBasisUnitLabel }}</span
+            >
+          </div>
+        </div>
+      </div>
+    </template>
+
     <!-- 类型特定属性 -->
     <div class="section-title">{{ getTypeSpecificTitle() }}</div>
 
@@ -850,10 +888,6 @@
                 <el-tag v-if="sku.productModel" size="small" type="info">{{
                   sku.productModel
                 }}</el-tag>
-                <el-tag v-if="sku.sourceTier" size="small" type="success">
-                  {{ getProcurementSourceTierLabel(sku.sourceTier) }}
-                </el-tag>
-                <el-tag v-else size="small" type="warning">未标来源</el-tag>
                 <el-tag :type="sku.isActive ? 'success' : 'info'" size="small">
                   {{ sku.isActive ? '已启用' : '已停用' }}
                 </el-tag>
@@ -1156,24 +1190,6 @@
           style="width: 320px"
         />
       </el-form-item>
-      <el-form-item label="来源等级">
-        <el-select
-          v-model="procurementForm.sourceTier"
-          clearable
-          placeholder="选择参与顾客来源方案匹配的等级"
-          style="width: 240px"
-        >
-          <el-option
-            v-for="option in procurementSourceTierOptions"
-            :key="option.value"
-            :label="option.label"
-            :value="option.value"
-          />
-        </el-select>
-        <span class="hint-text" style="margin-left: 8px"
-          >未标来源的食材 SKU 不参与三档方案匹配</span
-        >
-      </el-form-item>
       <el-form-item label="供应商">
         <el-input
           v-model="procurementForm.supplierName"
@@ -1381,7 +1397,6 @@ import {
   type ProcurementSkuForm,
   type ProcurementSkuPriceHistory,
   type ProcurementSkuPriceHistorySource,
-  type ProcurementSkuSourceTier,
   type SupplementProperties,
   type PackagingProperties,
   type RecommendedProduct,
@@ -1585,6 +1600,91 @@ const structureAlertDescription = computed(() => {
 
   return '包材直接在标准原料上维护采购、库存与生产信息，不提供营养数据入口。'
 })
+
+// 算价依据（只读展示）：后端按「最近采购价 → 创建价 → 商品参考价」算好
+const priceBasis = computed(() => {
+  const value = (props.ingredient as Partial<Ingredient> | undefined)?.priceBasis
+  return value ?? null
+})
+
+const priceBasisVisible = computed(
+  () =>
+    Boolean(props.ingredient?.id) &&
+    formData.type !== IngredientType.PACKAGING &&
+    priceBasis.value !== null,
+)
+
+const formatPriceBasisNumber = (value?: number | null) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return '-'
+  }
+  return value >= 1 ? value.toFixed(2) : value.toFixed(4)
+}
+
+const priceBasisUnitLabel = computed(() => formData.purchaseUnit || '采购单位')
+const priceBasisBaseUnitLabel = computed(() => {
+  if (formData.baseUnit === BaseUnit.ML) return 'L'
+  if (formData.baseUnit === BaseUnit.G) return 'kg'
+  return '个'
+})
+const priceBasisValueText = computed(() =>
+  formatPriceBasisNumber(priceBasis.value?.pricePerPurchaseUnit),
+)
+const priceBasisBaseValueText = computed(() => {
+  const base = priceBasis.value?.baseUnitCost
+  if (base === null || base === undefined) return '-'
+  return formatPriceBasisNumber(
+    base * (formData.baseUnit === BaseUnit.PCS ? 1 : 1000),
+  )
+})
+const initialPriceValue = computed(
+  () =>
+    (props.ingredient as Partial<Ingredient> | undefined)
+      ?.initialPricePerPurchaseUnit ?? null,
+)
+const initialPriceSet = computed(
+  () =>
+    initialPriceValue.value !== null &&
+    Number.isFinite(initialPriceValue.value) &&
+    Number(initialPriceValue.value) > 0,
+)
+const initialPriceDisplay = computed(() =>
+  initialPriceSet.value
+    ? `¥${formatPriceBasisNumber(initialPriceValue.value)}`
+    : '未设置',
+)
+const priceBasisSourceLabel = computed(() => {
+  const map: Record<string, string> = {
+    LATEST_PURCHASE: '最近采购价',
+    INITIAL_PRICE: '创建价',
+    SKU_REFERENCE: '商品参考价',
+    CURRENT_PRICE: '当前价',
+    NONE: '暂无依据',
+  }
+  return map[priceBasis.value?.source || ''] || '算价依据'
+})
+const priceBasisTagType = computed<'success' | 'info' | 'warning' | 'danger'>(
+  () => {
+    switch (priceBasis.value?.source) {
+      case 'LATEST_PURCHASE':
+        return 'success'
+      case 'INITIAL_PRICE':
+        return 'info'
+      case 'SKU_REFERENCE':
+      case 'CURRENT_PRICE':
+        return 'warning'
+      case 'NONE':
+        return 'danger'
+      default:
+        return 'info'
+    }
+  },
+)
+const priceBasisPurchasedAtText = computed(() =>
+  priceBasis.value?.purchasedAt
+    ? priceBasis.value.purchasedAt.slice(0, 10)
+    : '无采购记录',
+)
 
 // 类型特定属性
 const foodProperties = reactive<FoodProperties>(
@@ -2468,21 +2568,6 @@ const priceHistoryRows = ref<ProcurementSkuPriceHistory[]>([])
 const skuBrandSuggestions = ref<string[]>([])
 const skuChannelSuggestions = ref<string[]>([])
 
-const procurementSourceTierOptions: Array<{
-  label: string
-  value: ProcurementSkuSourceTier
-}> = [
-  { label: '有机', value: 'ORGANIC' },
-  { label: '商超', value: 'MARKET_PREMIUM' },
-  { label: '性价比', value: 'WHOLESALE' },
-]
-
-const getProcurementSourceTierLabel = (
-  value?: ProcurementSkuSourceTier | null,
-) =>
-  procurementSourceTierOptions.find((option) => option.value === value)
-    ?.label || '未标来源'
-
 const getPriceHistorySourceText = (
   value: ProcurementSkuPriceHistorySource,
 ) => {
@@ -2522,7 +2607,6 @@ const procurementForm = reactive({
   brand: '',
   productModel: '',
   purchaseChannel: '',
-  sourceTier: null as ProcurementSkuSourceTier | null,
   supplierName: '',
   purchaseUnit: '',
   purchaseToBaseRatio: undefined as number | undefined,
@@ -2778,7 +2862,6 @@ const openProcurementDialog = (sku?: ProcurementSku) => {
     procurementForm.brand = sku.brand || ''
     procurementForm.productModel = sku.productModel || ''
     procurementForm.purchaseChannel = sku.purchaseChannel || ''
-    procurementForm.sourceTier = sku.sourceTier || null
     procurementForm.supplierName = sku.supplierName || ''
     procurementForm.purchaseUnit = sku.purchaseUnit || ''
     procurementForm.purchaseToBaseRatio = sku.purchaseToBaseRatio ?? undefined
@@ -2794,7 +2877,6 @@ const openProcurementDialog = (sku?: ProcurementSku) => {
     procurementForm.brand = ''
     procurementForm.productModel = ''
     procurementForm.purchaseChannel = ''
-    procurementForm.sourceTier = null
     procurementForm.supplierName = ''
     procurementForm.purchaseUnit = ''
     procurementForm.purchaseToBaseRatio = undefined
@@ -2984,7 +3066,6 @@ const saveProcurementSku = async () => {
     purchaseChannel: normalizeProcurementSkuOptionalText(
       procurementForm.purchaseChannel,
     ),
-    sourceTier: procurementForm.sourceTier || null,
     supplierName: normalizeProcurementSkuOptionalText(
       procurementForm.supplierName,
     ),
@@ -3762,5 +3843,53 @@ const handleCancel = () => {
   gap: 2px;
   font-size: 12px;
   color: #606266;
+}
+
+.price-basis-card {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  background: #fafaf9;
+}
+
+.price-basis-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.price-basis-hint {
+  font-size: 12px;
+  color: #909399;
+}
+
+.price-basis-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.price-basis-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.price-basis-item .label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.price-basis-item .value {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.price-basis-item .unit {
+  font-size: 12px;
+  color: #909399;
 }
 </style>

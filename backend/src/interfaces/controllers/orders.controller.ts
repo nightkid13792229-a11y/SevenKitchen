@@ -29,6 +29,7 @@ import {
   ApiHeader,
 } from '@nestjs/swagger';
 import { OrderService } from '../../application/order/order.service';
+import { OrderProcurementDisclosureService } from '../../application/order/order-procurement-disclosure.service';
 import { OrderSummaryService } from '../../application/order/order-summary.service';
 import { WechatPaymentService } from '../../application/payment/wechat-payment.service';
 import { RecipeService } from '../../application/recipe/recipe.service';
@@ -40,7 +41,7 @@ import { PRODUCTION_BATCH_REPOSITORY } from '../../application/production/produc
 import type { OrderRepository } from '../../domain/order/order.repository';
 import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
-import { Order, OrderItem } from '../../domain/order';
+import { Order, OrderItem, OrderType } from '../../domain/order';
 import { computeEstimatedShippingDate } from '../../domain/order/estimated-shipping';
 import { OrderStatus } from '../../domain';
 import {
@@ -90,6 +91,7 @@ export class OrdersController {
     @Inject(PRODUCTION_BATCH_REPOSITORY)
     private readonly productionRepository: ProductionBatchRepository,
     private readonly shippingNotificationService: ShippingNotificationService,
+    private readonly procurementDisclosureService: OrderProcurementDisclosureService,
     @Optional()
     private readonly orderSummaryService?: OrderSummaryService,
   ) {}
@@ -138,7 +140,6 @@ export class OrdersController {
         customerId,
         dogId: createOrderDto.dogId,
         type: createOrderDto.type,
-        ingredientSourcePlan: createOrderDto.ingredientSourcePlan,
         targetProductionDate: createOrderDto.targetProductionDate
           ? new Date(createOrderDto.targetProductionDate)
           : null,
@@ -954,7 +955,6 @@ export class OrdersController {
         customerId,
         dogId: requestDto.dogId,
         type: requestDto.type,
-        ingredientSourcePlan: requestDto.ingredientSourcePlan,
         pricingPurpose: requestDto.pricingPurpose,
         targetProductionDate: null,
         items: requestDto.items,
@@ -1043,6 +1043,33 @@ export class OrdersController {
     }
   }
 
+  /**
+   * 订单详情里的「实际采购」披露。
+   * 只对成品鲜食订单计算；试吃装/定制单不展示。
+   */
+  private async buildActualProcurement(order: Order) {
+    if (order.type !== OrderType.FRESH_FOOD) {
+      return null;
+    }
+
+    const ingredientMap = new Map<string, { id: string; name: string }>();
+    for (const item of order.items) {
+      const snapshotItems = (item.recipeSnapshot as any)?.items ?? [];
+      for (const row of snapshotItems) {
+        const id = row?.ingredient_id || row?.ingredientId;
+        if (!id || ingredientMap.has(id)) {
+          continue;
+        }
+        ingredientMap.set(id, { id, name: String(row?.name || '') });
+      }
+    }
+
+    return this.procurementDisclosureService.build({
+      orderId: order.id,
+      ingredients: Array.from(ingredientMap.values()),
+    });
+  }
+
   private async mapOrderToDto(order: Order): Promise<OrderDto> {
     const customer = await this.prisma.user.findUnique({
       where: { id: order.customerId },
@@ -1081,6 +1108,7 @@ export class OrdersController {
     const items = await Promise.all(
       order.items.map((item) => this.mapOrderItemToDto(item, itemTotalPrice)),
     );
+    const actualProcurement = await this.buildActualProcurement(order);
 
     // Debug logging for amount issue
     console.log('[Order Detail] order.totalAmount:', order.totalAmount);
@@ -1148,6 +1176,7 @@ export class OrdersController {
       amountShipping: order.amountShipping,
       amountTotal: order.amountTotal,
       items,
+      actualProcurement,
       pricingBreakdown,
       pricingBreakdownSnapshot: order.pricingBreakdownSnapshot, // 新增：完整的定价快照
       productionPhotos, // 新增：原料照片
@@ -1258,7 +1287,6 @@ export class OrdersController {
       packageCount: item.packageCount,
       packageSpecG: item.packageSpecG,
       packagePlan: item.packagePlan ?? null,
-      ingredientSourcePlan: item.ingredientSourcePlan ?? null,
       cookingMethod: item.cookingMethod ?? null,
       customRequirements: item.customRequirements,
       dailyIntakeG: item.dailyIntakeG,
@@ -1329,7 +1357,6 @@ export class OrdersController {
         packageCount: item.packageCount,
         packageSpecG: item.packageSpecG,
         packagePlan: item.packagePlan ?? null,
-        ingredientSourcePlan: item.ingredientSourcePlan ?? null,
         dailyIntakeG: item.dailyIntakeG,
       };
     }

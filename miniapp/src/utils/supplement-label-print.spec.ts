@@ -6,43 +6,26 @@ import {
   classifyLabelPrintError,
   describeLabelLoadError,
   describeLabelPrintFailure,
-  isSupplementPackRequiredError,
 } from './supplement-label-print'
 
 /**
  * 补剂标签打印页的错误文案规则。
  *
  * 这一页的成败全在"话说清楚没有"：
- *   · 后端说「请先完成分装，再打印标签」时必须原样透传，不能吞成「加载失败」
+ *   · 后端拒绝时必须原样透传，不能吞成「加载失败」
  *   · 打印失败必须分清 未连接 / 图片没生成 / 超时，三种情况现场要做的事完全不同
  */
 describe('supplement label load errors', () => {
-  it('原样透传后端文案（页面要显示「请先完成分装，再打印标签」）', () => {
-    const backendError = new Error('请先完成分装，再打印标签')
+  it('原样透传后端文案', () => {
+    const backendError = new Error('订单状态不允许打印标签')
 
-    expect(describeLabelLoadError(backendError)).toBe('请先完成分装，再打印标签')
-    expect(isSupplementPackRequiredError(describeLabelLoadError(backendError))).toBe(true)
-  })
-
-  it('后端换了别的措辞也不吞掉', () => {
-    expect(describeLabelLoadError(new Error('订单状态不允许打印标签'))).toBe(
-      '订单状态不允许打印标签',
-    )
+    expect(describeLabelLoadError(backendError)).toBe('订单状态不允许打印标签')
   })
 
   it('网络层失败才由前端组织文案', () => {
     expect(describeLabelLoadError({ errMsg: 'request:fail timeout' })).toContain('超时')
     expect(describeLabelLoadError({ errMsg: 'request:fail' })).toContain('网络')
     expect(describeLabelLoadError(undefined)).toBe('标签图片加载失败，请重试')
-  })
-
-  it('只有后端说"分装"才提示回去填分装结果', () => {
-    expect(isSupplementPackRequiredError('请先完成分装，再打印标签')).toBe(true)
-    expect(isSupplementPackRequiredError('订单还未分装，无法打印标签')).toBe(true)
-    // 网络报错里带"标签"两个字，不能误判成"没分装"
-    expect(isSupplementPackRequiredError('网络异常，没取到标签图片，请检查网络后重试')).toBe(false)
-    expect(isSupplementPackRequiredError('订单不存在')).toBe(false)
-    expect(isSupplementPackRequiredError('')).toBe(false)
   })
 })
 

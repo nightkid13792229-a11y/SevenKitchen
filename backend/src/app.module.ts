@@ -112,7 +112,6 @@ import {
   ORDER_REPOSITORY,
 } from './application/order/order.service';
 import { OrderSummaryService } from './application/order/order-summary.service';
-import { OrderSourcePlanService } from './application/order/order-source-plan.service';
 import {
   AddressService,
   ADDRESS_REPOSITORY,
@@ -126,6 +125,8 @@ import {
   INGREDIENT_REPOSITORY,
 } from './application/ingredient/ingredient.service';
 import { IngredientPricingService } from './application/ingredient/ingredient-pricing.service';
+import { IngredientPriceBasisService } from './application/ingredient/ingredient-price-basis.service';
+import { OrderProcurementDisclosureService } from './application/order/order-procurement-disclosure.service';
 import { LabelIngredientInfoService } from './application/ingredient/label-ingredient-info.service';
 import { PrismaIngredientRepository } from './infrastructure/repositories/prisma-ingredient.repository';
 // import { InMemoryIngredientRepository } from './infrastructure/repositories/in-memory-ingredient.repository'; // NOTE: Currently unused
@@ -573,7 +574,6 @@ validatePrismaConfig();
       : []),
     OrderService,
     OrderSummaryService,
-    OrderSourcePlanService,
     RecipeService,
     IngredientPreparationHistoryService,
     CoverImageService,
@@ -609,6 +609,8 @@ validatePrismaConfig();
     AuthGuard,
     IngredientService,
     IngredientPricingService,
+    IngredientPriceBasisService,
+    OrderProcurementDisclosureService,
     LabelIngredientInfoService,
     {
       provide: INGREDIENT_REPOSITORY,

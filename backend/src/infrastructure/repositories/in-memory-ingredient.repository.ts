@@ -73,6 +73,7 @@ export class InMemoryIngredientRepository implements IngredientRepository {
       data.properties ?? existing.properties,
       existing.nutritionProfile,
       existing.supplementRetailEnabled,
+      existing.initialPricePerPurchaseUnit,
     );
 
     this.ingredients.set(id, updated);
@@ -113,6 +114,7 @@ export class InMemoryIngredientRepository implements IngredientRepository {
       existing.properties,
       existing.nutritionProfile,
       existing.supplementRetailEnabled,
+      existing.initialPricePerPurchaseUnit,
     );
 
     this.ingredients.set(id, updated);
@@ -153,6 +155,7 @@ export class InMemoryIngredientRepository implements IngredientRepository {
       existing.properties,
       existing.nutritionProfile,
       existing.supplementRetailEnabled,
+      existing.initialPricePerPurchaseUnit,
     );
 
     this.ingredients.set(id, updated);

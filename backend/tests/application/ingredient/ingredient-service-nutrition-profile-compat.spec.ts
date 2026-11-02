@@ -70,6 +70,8 @@ describe('IngredientService nutrition profile compatibility', () => {
       null,
       { category_type: 'MINERAL' },
       nutritionProfile,
+      false,
+      12.5,
     );
 
   beforeEach(async () => {
@@ -86,6 +88,17 @@ describe('IngredientService nutrition profile compatibility', () => {
     service = module.get(IngredientService);
     jest.clearAllMocks();
     ingredientRepository.save.mockImplementation(async (ingredient: any) => ingredient);
+  });
+
+  it('keeps the initial price when updating an ingredient', async () => {
+    ingredientRepository.findById.mockResolvedValue(createExistingIngredient());
+
+    await service.updateIngredient('ingredient-1', {
+      name: '碳酸钙（新）',
+    } as any);
+
+    const saved = ingredientRepository.save.mock.calls[0][0];
+    expect(saved.initialPricePerPurchaseUnit).toBe(12.5);
   });
 
   it('does not generate legacy active_nutrients from nutritionProfile on create', async () => {

@@ -224,6 +224,9 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
     key: 'supplementSummary',
     title: '分装备料',
     icon: '/static/ui-icons/inventory.png',
+    // 补剂待处理（待确认收款 / 待分装 / 待发货）都从这一个入口进；
+    // 后端 /staff/workbench/summary 已经算好 supplementOrders，别让它白算。
+    badgeKey: 'supplementOrders',
     onTap: goToSupplementSummary,
   },
   {

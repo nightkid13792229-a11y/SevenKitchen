@@ -8,6 +8,23 @@
       <text class="refresh" @tap="load()">刷新</text>
     </view>
 
+    <!-- 搜索（2026-11-02）：老「后台订单」页的关键词搜索平移过来。
+         订单号 / 顾客姓名 / 手机号 / 狗狗名都能搜；状态仍用下面的状态栏 -->
+    <view class="search-bar">
+      <view class="search-input-wrap">
+        <text class="search-icon">🔍</text>
+        <input
+          class="search-input"
+          v-model="searchKeyword"
+          placeholder="订单号 / 姓名 / 手机号 / 狗狗名"
+          confirm-type="search"
+          @confirm="performSearch"
+        />
+        <text v-if="searchKeyword" class="search-clear" @tap.stop="clearSearchKeyword">×</text>
+      </view>
+      <text class="search-btn" @tap="performSearch">搜索</text>
+    </view>
+
     <!-- 三类分开看：颜色跟卡片上的色条是同一套，别各写各的 -->
     <scroll-view class="type-tabs" scroll-x>
       <view
@@ -60,10 +77,17 @@
           <text class="status">{{ item.statusLabel }}</text>
         </view>
 
-        <!-- 主行显示食谱名，不显示顾客名/手机号（老板 2026-10-30 定的口径）：
-             员工是按"要做什么菜"干活的；没有绑定食谱（多数补剂单）就整行不显示 -->
+        <!-- 主行显示食谱名；三类卡片下面都补一行顾客/狗狗（2026-11-02 老板要求）。
+             手机号仍然不显示：员工按食谱干活，电话去详情页看 -->
         <view v-if="item.recipeName" class="order-main">
           <text class="recipe-name">{{ item.recipeName }}</text>
+        </view>
+
+        <!-- 三类卡片：顾客姓名 + 狗狗名，现场认单用；缺哪项就只显示另一项 -->
+        <view v-if="item.customerName || item.dogName" class="order-people">
+          <text v-if="item.customerName" class="person">顾客 {{ item.customerName }}</text>
+          <text v-if="item.customerName && item.dogName" class="person-sep">·</text>
+          <text v-if="item.dogName" class="person">狗狗 {{ item.dogName }}</text>
         </view>
 
         <view class="tags-row">
@@ -126,6 +150,10 @@ interface OrderCenterItem {
   statusGroup: string
   /** 卡片主行显示的食谱名；空 = 这单没绑定食谱（多数补剂单） */
   recipeName: string | null
+  /** 顾客昵称；三类卡片上都显示（2026-11-02） */
+  customerName: string | null
+  /** 狗狗名；三类卡片上都显示（2026-11-02） */
+  dogName: string | null
   createdAt: string
   amountTotal: number | null
   /** 是否有未完结的售后（待受理/处理中）：决定标签是橙色还是灰色 */
@@ -185,6 +213,8 @@ const TYPE_STATUS_VALUES: Record<string, string[]> = {
 const type = ref('')
 const status = ref('')
 const onlyAftersale = ref(false)
+/** 关键词：订单号 / 顾客姓名 / 手机号 / 狗狗名（后端统一处理三类订单） */
+const searchKeyword = ref('')
 const items = ref<OrderCenterItem[]>([])
 const loading = ref(false)
 const page = ref(1)
@@ -213,6 +243,18 @@ function formatTime(value: string) {
   return `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
+/** 点搜索 / 键盘回车都走这里：从第 1 页重新查，别把上一次的结果留在后面 */
+function performSearch() {
+  searchKeyword.value = searchKeyword.value.trim()
+  load()
+}
+
+function clearSearchKeyword() {
+  if (!searchKeyword.value) return
+  searchKeyword.value = ''
+  load()
+}
+
 async function load(reset = true) {
   if (reset) {
     page.value = 1
@@ -226,6 +268,7 @@ async function load(reset = true) {
       data: {
         type: type.value || undefined,
         status: status.value || undefined,
+        keyword: searchKeyword.value.trim() || undefined,
         aftersale: onlyAftersale.value ? true : undefined,
         page: page.value,
         pageSize,
@@ -355,6 +398,14 @@ onMounted(() => load())
 .sub { display: block; margin-top: 6rpx; color: #909399; font-size: 23rpx; }
 .refresh { color: #1e3a2f; font-size: 25rpx; padding: 10rpx 4rpx; }
 
+/* 搜索：跟卡片同一套白底圆角，按钮用主色，别做成另一套视觉 */
+.search-bar { display: flex; align-items: center; gap: 14rpx; margin-bottom: 16rpx; }
+.search-input-wrap { flex: 1; display: flex; align-items: center; min-height: 76rpx; padding: 0 22rpx; background: #fff; border-radius: 38rpx; border: 1rpx solid #e4e7ed; box-sizing: border-box; }
+.search-icon { margin-right: 10rpx; color: #909399; font-size: 24rpx; }
+.search-input { flex: 1; min-width: 0; height: 76rpx; font-size: 24rpx; color: #303133; }
+.search-clear { padding: 0 6rpx 0 12rpx; color: #b0b4bb; font-size: 30rpx; line-height: 1; }
+.search-btn { flex: none; padding: 0 28rpx; height: 76rpx; line-height: 76rpx; border-radius: 38rpx; background: #1e3a2f; color: #fff; font-size: 24rpx; font-weight: 600; }
+
 .type-tabs { white-space: nowrap; margin-bottom: 12rpx; }
 .type-tab { display: inline-block; padding: 12rpx 26rpx; margin-right: 12rpx; border-radius: 30rpx; background: #fff; color: #606266; font-size: 26rpx; }
 .type-tab.is-food { border: 1rpx solid #c9dccf; }
@@ -389,6 +440,10 @@ onMounted(() => load())
 
 .order-main { display: flex; align-items: baseline; margin-top: 16rpx; }
 .recipe-name { font-size: 29rpx; font-weight: 600; color: #1e3a2f; }
+/* 鲜食卡片上的顾客/狗狗：小字一行，别抢食谱名的注意力 */
+.order-people { display: flex; align-items: center; flex-wrap: wrap; margin-top: 8rpx; }
+.person { font-size: 22rpx; color: #606266; }
+.person-sep { margin: 0 10rpx; color: #c0c4cc; font-size: 22rpx; }
 
 .tags-row { display: flex; flex-wrap: wrap; margin-top: 10rpx; }
 .mini-tag { margin: 0 10rpx 6rpx 0; padding: 3rpx 10rpx; border-radius: 6rpx; font-size: 20rpx; }

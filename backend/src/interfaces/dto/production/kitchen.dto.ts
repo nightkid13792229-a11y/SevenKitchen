@@ -44,7 +44,6 @@ export class OrderPackagingInfoDto {
   packagePlan?: OrderPackagePlanItemDto[] | null;
 
   @IsOptional()
-  ingredientSourcePlan?: string | null;
 
   recipientName?: string;
   recipientCity?: string;
@@ -83,10 +82,8 @@ export class PackagingUnitDetailDto {
   orderItems!: OrderPackagingInfoDto[];
 
   @IsOptional()
-  ingredientSourcePlan?: string | null;
 
   @IsOptional()
-  ingredientSourcePlanLabel?: string;
 
   // 锅号信息
   @IsNumber()

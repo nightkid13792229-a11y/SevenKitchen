@@ -150,6 +150,11 @@
                   <text class="ingredients-count"
                     >（共{{ item.recipeSnapshot.items.length }}种）</text
                   >
+                  <text
+                    v-if="hasProcurementDisclosure"
+                    class="ingredients-procurement-badge"
+                    >实际采购</text
+                  >
                 </view>
                 <text class="expand-icon">{{
                   expandedIngredients[item.id] ? '收起' : '展开'
@@ -161,12 +166,29 @@
                 :class="{ expanded: expandedIngredients[item.id] }"
                 v-if="expandedIngredients[item.id]"
               >
+                <!-- 实际采购：采购完成后公开；未完成时给一句明确的预期 -->
+                <view v-if="procurementStatusText" class="procurement-status">
+                  <text
+                    class="procurement-status-dot"
+                    :class="{
+                      done: actualProcurement?.status === 'COMPLETED',
+                    }"
+                    >{{ actualProcurement?.status === 'COMPLETED' ? '✓' : '·' }}</text
+                  >
+                  <text class="procurement-status-text">{{
+                    procurementStatusText
+                  }}</text>
+                </view>
+
                 <view
                   v-for="(category, idx) in getGroupedIngredients(
                     item.recipeSnapshot.items,
                   )"
                   :key="idx"
                   class="ingredient-category"
+                  :class="{
+                    'ingredient-category--disclosed': hasProcurementDisclosure,
+                  }"
                 >
                   <view class="category-title"
                     >【{{ category.typeName }}】</view
@@ -175,11 +197,62 @@
                     v-for="(ingredient, iIdx) in category.items"
                     :key="iIdx"
                     class="ingredient-item"
+                    :class="{
+                      'ingredient-item--disclosed': Boolean(
+                        getProcurementDisclosure(ingredient),
+                      ),
+                    }"
                     @longpress="showIngredientDetail(ingredient, item)"
                   >
                     <text class="ingredient-text">{{
                       formatIngredientDisplay(ingredient, item)
                     }}</text>
+                    <view
+                      v-if="getProcurementDisclosure(ingredient)"
+                      class="procurement-line"
+                    >
+                      <text
+                        class="procurement-tag"
+                        :class="{
+                          inventory:
+                            getProcurementDisclosure(ingredient)?.source ===
+                            'FROM_INVENTORY',
+                        }"
+                        >{{
+                          getProcurementDisclosure(ingredient)?.source ===
+                          'FROM_INVENTORY'
+                            ? '来自库存'
+                            : '本单采购'
+                        }}</text
+                      >
+                      <text
+                        v-if="getProcurementDisclosure(ingredient)?.channel"
+                        class="procurement-chip"
+                        >渠道
+                        {{ getProcurementDisclosure(ingredient)?.channel }}</text
+                      >
+                      <text
+                        v-if="getProcurementDisclosure(ingredient)?.productName"
+                        class="procurement-chip"
+                        >采购产品
+                        {{
+                          getProcurementDisclosure(ingredient)?.productName
+                        }}</text
+                      >
+                      <text
+                        v-if="
+                          getProcurementDisclosure(ingredient)?.source ===
+                            'FROM_INVENTORY' &&
+                          getProcurementDisclosure(ingredient)?.purchasedAt
+                        "
+                        class="procurement-date"
+                        >库存采购日期：{{
+                          formatChineseDate(
+                            getProcurementDisclosure(ingredient)?.purchasedAt,
+                          )
+                        }}</text
+                      >
+                    </view>
                   </view>
                 </view>
               </view>
@@ -883,10 +956,6 @@ import {
   canApplyComplaint,
   canApplyAftersale,
 } from '../../utils/order-aftersale';
-import {
-  getSourcePlanLabel,
-  type IngredientSourcePlanCode,
-} from '../../utils/order-package-plan';
 
 interface RecipeSnapshotItem {
   ingredient_id: string;
@@ -929,7 +998,6 @@ interface OrderItem {
   packageCount: number;
   packageSpecG: number;
   packagePlan?: Array<{ packageSpecG: number; packageCount: number }>;
-  ingredientSourcePlan?: string | null;
   customRequirements?: string | null;
   totalPrice?: number;
 }
@@ -1009,6 +1077,23 @@ interface Order {
       type?: string;
     }>;
   };
+  /** 实际采购披露：采购完成后后端返回；试吃装/定制单为 null */
+  actualProcurement?: ActualProcurement | null;
+}
+
+interface ActualProcurementItem {
+  ingredientId: string;
+  ingredientName: string;
+  source: 'ORDER_PURCHASE' | 'FROM_INVENTORY';
+  channel: string | null;
+  productName: string | null;
+  purchasedAt: string | null;
+}
+
+interface ActualProcurement {
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
+  completedAt: string | null;
+  items: ActualProcurementItem[];
 }
 
 interface CustomerServiceConfig {
@@ -1281,10 +1366,51 @@ function shouldFetchOrderFinancialSummary(status?: string | null): boolean {
   return ['IN_PRODUCTION', 'FREEZING', 'SHIPPED', 'COMPLETED', 'AFTERSALE', 'CANCELLED'].includes(status);
 }
 
-function formatIngredientSourcePlan(plan?: string | null): string {
-  if (!plan) return '';
-  return getSourcePlanLabel(plan as IngredientSourcePlanCode) || plan;
+// ===== 实际采购披露（2026-11-02）=====
+// 后端在采购完成后返回；试吃装/定制单为 null。
+const actualProcurement = computed(() => order.value?.actualProcurement ?? null)
+
+const procurementDisclosureMap = computed(() => {
+  const map = new Map<string, ActualProcurementItem>()
+  for (const item of actualProcurement.value?.items || []) {
+    if (item?.ingredientId) {
+      map.set(item.ingredientId, item)
+    }
+  }
+  return map
+})
+
+const hasProcurementDisclosure = computed(
+  () => procurementDisclosureMap.value.size > 0,
+)
+
+function getProcurementDisclosure(
+  ingredient: RecipeSnapshotItem,
+): ActualProcurementItem | null {
+  const ingredientId = ingredient?.ingredient_id
+  if (!ingredientId) return null
+  return procurementDisclosureMap.value.get(ingredientId) || null
 }
+
+function formatChineseDate(value?: string | null): string {
+  if (!value) return ''
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!match) return String(value)
+  return `${match[1]}年${Number(match[2])}月${Number(match[3])}日`
+}
+
+const procurementStatusText = computed(() => {
+  const data = actualProcurement.value
+  if (!data) return ''
+  if (data.status === 'COMPLETED') {
+    const date = data.completedAt ? formatChineseDate(data.completedAt) : ''
+    return date ? `采购已完成 · ${date}` : '采购已完成'
+  }
+  if (data.status === 'IN_PROGRESS') {
+    return '采购进行中，已完成的原料会陆续显示实际采购信息'
+  }
+  return '采购完成后，这里会显示每种原料的实际采购渠道和采购产品。'
+})
 
 // 原料清单展开状态
 const expandedIngredients = ref<Record<string, boolean>>({});
@@ -4672,6 +4798,104 @@ async function applyRefund() {
 .order-note-text {
   font-size: 20rpx;
   color: #26261f;
+  line-height: 1.5;
+}
+
+/* ===== 实际采购披露（2026-11-02） ===== */
+.ingredients-procurement-badge {
+  margin-left: 8rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background-color: #eef3ea;
+  color: #2f6b4f;
+  font-size: 18rpx;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.procurement-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 10rpx;
+  margin-bottom: 16rpx;
+  padding: 14rpx 16rpx;
+  border-radius: 12rpx;
+  background-color: #f7f9f2;
+  border: 1rpx dashed #d5ddc8;
+}
+
+.procurement-status-dot {
+  flex: none;
+  width: 28rpx;
+  height: 28rpx;
+  border-radius: 50%;
+  background-color: #d5ddc8;
+  color: #ffffff;
+  font-size: 18rpx;
+  line-height: 28rpx;
+  text-align: center;
+}
+
+.procurement-status-dot.done {
+  background-color: #2f6b4f;
+}
+
+.procurement-status-text {
+  flex: 1;
+  font-size: 22rpx;
+  line-height: 1.55;
+  color: #6b6653;
+}
+
+.ingredient-category--disclosed {
+  grid-template-columns: 1fr;
+}
+
+.ingredient-item--disclosed {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  padding: 8rpx 0;
+}
+
+.procurement-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: 8rpx;
+}
+
+.procurement-tag {
+  flex: none;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background-color: #eef3ea;
+  color: #2f6b4f;
+  font-size: 18rpx;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.procurement-tag.inventory {
+  background-color: #f6efe0;
+  color: #8a6b33;
+}
+
+.procurement-chip {
+  padding: 3rpx 10rpx;
+  border-radius: 8rpx;
+  background-color: #f4f6ec;
+  color: #6b6653;
+  font-size: 20rpx;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.procurement-date {
+  width: 100%;
+  color: #968f6d;
+  font-size: 19rpx;
   line-height: 1.5;
 }
 </style>

@@ -350,8 +350,7 @@ export function readSearchPlan(value: unknown): SearchPlan | null {
           state: readText(item.state),
           profileState: item.profileState === 'COOKED' ? ('COOKED' as const) : ('RAW' as const),
           coverage: typeof item.coverage === 'number' ? item.coverage : 0,
-          reason: readText(item.reason),
-          isOnline: item.isOnline === true
+          reason: readText(item.reason)
         }))
         .filter((item) => item.recordId.length > 0 && item.name.length > 0)
         .slice(0, 12)
@@ -367,7 +366,6 @@ export function readSearchPlan(value: unknown): SearchPlan | null {
           .filter((item): item is Record<string, unknown> => isRecord(item))
           .map((item) => ({
             library: readText(item.library),
-            kind: item.kind === 'ONLINE' ? ('ONLINE' as const) : ('LOCAL' as const),
             terms: Array.isArray(item.terms)
               ? item.terms.map((term) => readText(term)).filter(Boolean)
               : [],
@@ -387,8 +385,7 @@ export function readSearchPlan(value: unknown): SearchPlan | null {
             sourceType: readText(item.sourceType),
             state: readText(item.state),
             profileState: item.profileState === 'COOKED' ? ('COOKED' as const) : ('RAW' as const),
-            coverage: typeof item.coverage === 'number' ? item.coverage : 0,
-            isOnline: item.isOnline === true
+            coverage: typeof item.coverage === 'number' ? item.coverage : 0
           }))
           .filter((item) => item.recordId.length > 0)
       : [],

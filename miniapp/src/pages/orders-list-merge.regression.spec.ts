@@ -25,7 +25,7 @@ describe('我的订单合并补剂订单', () => {
     // 同一档位在三种订单上的说法不同
     expect(source).toContain("IN_PROGRESS: '制作中'")
     expect(source).toContain("WAIT_RECEIVE: '待收货'")
-    expect(source).toContain("IN_PROGRESS: '分装中'")
+    expect(source).toContain("IN_PROGRESS: '待发货'")
     expect(source).toContain("IN_PROGRESS: '定制中'")
     expect(source).toContain("WAIT_RECEIVE: '待确认'")
 

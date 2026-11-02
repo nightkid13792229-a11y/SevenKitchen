@@ -61,8 +61,7 @@ describe('OrderService staff order package corrections', () => {
           recipeSnapshot: { id: 'recipe-1', name: '牛肉餐' },
           quantityG: 1000,
           dailyIntakeG: 200,
-          ingredientSourcePlan: 'MARKET_PREMIUM',
-        }),
+          }),
         update: jest.fn().mockResolvedValue({
           id: 'item-1',
           orderId: 'order-1',
@@ -117,7 +116,6 @@ describe('OrderService staff order package corrections', () => {
         customerId: 'customer-1',
         dogId: 'dog-1',
         addressId: 'address-1',
-        ingredientSourcePlan: 'MARKET_PREMIUM',
         items: [
           expect.objectContaining({
             recipeId: 'recipe-1',

@@ -1,11 +1,5 @@
 <template>
   <view class="reimbursement-list-page">
-    <!-- 顶部标题 -->
-    <view class="header">
-      <text class="title">我的报销申请</text>
-      <text class="subtitle">查看采购报销、行政杂费与工资登记状态</text>
-    </view>
-
     <!-- 状态筛选 -->
     <view class="status-tabs">
       <view
@@ -312,7 +306,8 @@ const confirmDelete = (item: any) => {
 .reimbursement-list-page {
   min-height: 100vh;
   background-color: #fbfcf7;
-  padding-bottom: 160rpx; // 为底部按钮留出空间
+  padding-top: 24rpx;
+  padding-bottom: calc(180rpx + env(safe-area-inset-bottom)); // 为底部按钮留出空间
 }
 
 .bottom-action {
@@ -320,7 +315,7 @@ const confirmDelete = (item: any) => {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 24rpx 32rpx;
+  padding: 24rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
   background-color: #fbfcf7;
   box-shadow: 0 -2rpx 12rpx rgba(30, 46, 36, 0.08);
   z-index: 100;
@@ -329,7 +324,7 @@ const confirmDelete = (item: any) => {
 .submit-btn {
   width: 100%;
   height: 96rpx;
-  background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
   border-radius: 48rpx;
   border: none;
   display: flex;
@@ -340,32 +335,12 @@ const confirmDelete = (item: any) => {
   text {
     font-size: 32rpx;
     font-weight: bold;
-    color: #26261f;
+    color: #f3eddd;
   }
 
   &:active {
     opacity: 0.8;
     transform: scale(0.98);
-  }
-}
-
-.header {
-  background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
-  padding: 40rpx 32rpx;
-  margin-bottom: 24rpx;
-
-  .title {
-    display: block;
-    font-size: 44rpx;
-    font-weight: bold;
-    color: #26261f;
-    margin-bottom: 8rpx;
-  }
-
-  .subtitle {
-    display: block;
-    font-size: 24rpx;
-    color: rgba(38, 38, 31, 0.6);
   }
 }
 
@@ -389,8 +364,11 @@ const confirmDelete = (item: any) => {
   }
 
   &.active {
+    background-color: #f6efe0;
+    border-radius: 10rpx;
+
     .tab-text {
-      color: #b08d4f;
+      color: #7a5c28;
       font-weight: bold;
     }
   }
@@ -461,7 +439,7 @@ const confirmDelete = (item: any) => {
 
       &.pending {
         background-color: #f6efe0;
-        color: #8a6b33;
+        color: #7a5c28;
       }
 
       &.reimbursed {
@@ -471,12 +449,12 @@ const confirmDelete = (item: any) => {
 
       &.rejected {
         background-color: #f8e8e2;
-        color: #b4553f;
+        color: #b4453a;
       }
 
       &.resubmit {
         background-color: #f6efe0;
-        color: #8a6b33;
+        color: #7a5c28;
       }
     }
 
@@ -523,9 +501,10 @@ const confirmDelete = (item: any) => {
       }
 
       .value {
-        font-size: 26rpx;
-        font-weight: bold;
-        color: #b4553f;
+        font-size: 28rpx;
+        font-weight: 800;
+        color: #26261f;
+        font-variant-numeric: tabular-nums;
       }
     }
   }
@@ -538,7 +517,7 @@ const confirmDelete = (item: any) => {
 
     .summary-text {
       font-size: 24rpx;
-      color: #8a6b33;
+      color: #7a5c28;
       line-height: 1.5;
     }
   }
@@ -568,7 +547,7 @@ const confirmDelete = (item: any) => {
         background-color: #fbfcf7;
         border-radius: 6rpx;
         font-size: 22rpx;
-        color: #b08d4f;
+        color: #7a5c28;
       }
     }
   }
@@ -599,7 +578,7 @@ const confirmDelete = (item: any) => {
 
   text {
     font-size: 26rpx;
-    color: #b08d4f;
+    color: #7a5c28;
   }
 }
 </style>

@@ -42,14 +42,14 @@ describe('order detail runtime regressions', () => {
     expect(source).toContain('formatPhoneForOrderStaff(address.phone)')
   })
 
-  it('supports packagePlan and ingredientSourcePlan on order items', () => {
+  it('supports packagePlan on order items and drops the retired source plan', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
       'utf-8',
     )
 
     expect(source).toContain('packagePlan?: Array<{ packageSpecG: number; packageCount: number }>')
-    expect(source).toContain('ingredientSourcePlan?: string | null')
+    expect(source).not.toContain('ingredientSourcePlan')
   })
 
   it('does not leak internal order item enums to the customer', () => {
@@ -339,5 +339,22 @@ describe('order detail runtime regressions', () => {
     expect(source).toContain(
       'formatAmount(order.amountTotal || order.totalAmount)',
     )
+  })
+  it('shows actual procurement disclosure after purchase is completed', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    // 2026-11-02：采购完成后公开实际采购的渠道和采购产品名称
+    expect(source).toContain('actualProcurement')
+    expect(source).toContain('getProcurementDisclosure')
+    expect(source).toContain('本单采购')
+    expect(source).toContain('来自库存')
+    expect(source).toContain('库存采购日期')
+    expect(source).toContain('采购完成后，这里会显示每种原料的实际采购渠道和采购产品')
+    // 顾客只看渠道 + 采购产品名，不看品牌和规格
+    expect(source).not.toContain('品牌 {{')
+    expect(source).not.toContain('规格 {{')
   })
 })

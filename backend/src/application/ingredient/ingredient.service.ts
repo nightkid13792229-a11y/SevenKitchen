@@ -208,6 +208,7 @@ export class IngredientService {
       normalizedProperties,
       normalizedProfile,
       false,
+      currentPricePerPurchaseUnit,
     );
 
     return this.ingredientRepository.save(ingredient, dto.tagIds);
@@ -311,6 +312,7 @@ export class IngredientService {
       nextProperties,
       nextNutritionProfile,
       existing.supplementRetailEnabled,
+      existing.initialPricePerPurchaseUnit,
     );
 
     // Update tag associations if provided

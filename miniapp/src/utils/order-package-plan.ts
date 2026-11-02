@@ -1,8 +1,3 @@
-export type IngredientSourcePlanCode =
-  | 'ORGANIC'
-  | 'MARKET_PREMIUM'
-  | 'WHOLESALE'
-
 export interface PackagePlanItem {
   packageSpecG: number
   packageCount: number
@@ -28,28 +23,6 @@ export const DEFAULT_ORDER_CYCLE_DAYS = 7
 export const ORDER_CYCLE_OPTIONS = [7, 15, 30] as const
 export const MIN_ORDER_WEIGHT_G = 1000
 export const MIN_PACKAGE_SPEC_G = 30
-
-export const SOURCE_PLAN_OPTIONS: Array<{
-  code: IngredientSourcePlanCode
-  label: string
-  description: string
-}> = [
-  {
-    code: 'ORGANIC',
-    label: '有机优先',
-    description: '优先采购有机食材，如果没有有机来源，再向下选择。',
-  },
-  {
-    code: 'MARKET_PREMIUM',
-    label: '商超优先',
-    description: '优先采购山姆、盒马等商超来源的食材，如果没有，再向下选择本地农贸市场或者批发市场的来源。',
-  },
-  {
-    code: 'WHOLESALE',
-    label: '批发优先',
-    description: '优先采用本地大型食材批发市场来源，包括但不限于成都海吉星、海霸王、美菜网等批发市场。营养价值与有机或者商超来源几乎没有差异，但品控没有大型商超那么严格。',
-  },
-]
 
 export function buildDefaultPackagePlan(
   input: BuildDefaultPackagePlanInput,
@@ -96,10 +69,6 @@ export function estimateFeedDays(
   }
 
   return (totalGrams / dailyIntakeG).toFixed(1)
-}
-
-export function getSourcePlanLabel(code: IngredientSourcePlanCode): string {
-  return SOURCE_PLAN_OPTIONS.find((item) => item.code === code)?.label || ''
 }
 
 function normalizePositiveInteger(

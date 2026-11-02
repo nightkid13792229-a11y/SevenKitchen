@@ -80,7 +80,6 @@ function buildPackItem(
     null,
     [{ packageSpecG: 80, packageCount: 10 }],
     null,
-    null,
     'pack-1',
   );
 }
@@ -476,7 +475,6 @@ describe('现货订单 · 一键补发', () => {
       null,
       null,
       [{ packageSpecG: 80, packageCount: totalPacks }],
-      null,
       null,
       params.type === OrderType.FRESH_FOOD ? null : 'pack-1',
     );

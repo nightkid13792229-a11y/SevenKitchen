@@ -1,10 +1,5 @@
 <template>
   <view class="preview-page">
-    <!-- 顶部标题 -->
-    <view class="header">
-      <text class="title">日采需求预览</text>
-    </view>
-
     <!-- 日期选择器 -->
     <view class="date-selector-section">
       <view class="form-item">
@@ -363,6 +358,8 @@ const handlePreview = async () => {
 };
 
 onLoad((options: Record<string, string>) => {
+  uni.setNavigationBarTitle({ title: '日采需求预览' });
+
   if (!options?.startDate) {
     return;
   }
@@ -505,19 +502,8 @@ const getPreparationLabel = (item: any) => {
 .preview-page {
   min-height: 100vh;
   background-color: #fbfcf7;
+  padding-top: 24rpx;
   padding-bottom: 32rpx;
-}
-
-.header {
-  background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
-  padding: 40rpx 32rpx;
-  margin-bottom: 24rpx;
-
-  .title {
-    font-size: 44rpx;
-    font-weight: bold;
-    color: #26261f;
-  }
 }
 
 // 日期选择器区域
@@ -545,8 +531,9 @@ const getPreparationLabel = (item: any) => {
     .picker-value {
       height: 80rpx;
       padding: 0 24rpx;
-      background-color: #fbfcf7;
-      border-radius: 8rpx;
+      background-color: #f2f4ea;
+      border: 1rpx solid #e5e8d4;
+      border-radius: 12rpx;
       display: flex;
       align-items: center;
 
@@ -585,9 +572,10 @@ const getPreparationLabel = (item: any) => {
     .quick-btn {
       flex: 1;
       height: 64rpx;
-      background: #fbfcf7;
+      background: #eef2e4;
       color: #26261f;
-      border-radius: 8rpx;
+      border: 1rpx solid #e5e8d4;
+      border-radius: 12rpx;
       font-size: 26rpx;
       border: none;
       display: flex;
@@ -691,7 +679,7 @@ const getPreparationLabel = (item: any) => {
     display: block;
     margin: -8rpx 0 24rpx;
     font-size: 24rpx;
-    color: #8a6b33;
+    color: #7a5c28;
     line-height: 1.6;
   }
 }
@@ -733,7 +721,7 @@ const getPreparationLabel = (item: any) => {
 
   .date {
     font-size: 28rpx;
-    color: #b08d4f;
+    color: #7a5c28;
     font-weight: 500;
   }
 
@@ -791,7 +779,7 @@ const getPreparationLabel = (item: any) => {
 
       .procurement-sku {
         font-size: 22rpx;
-        color: #b08d4f;
+        color: #7a5c28;
         font-weight: 500;
       }
 
@@ -826,7 +814,7 @@ const getPreparationLabel = (item: any) => {
     .quantity {
       font-size: 32rpx;
       font-weight: bold;
-      color: #b08d4f;
+      color: #7a5c28;
     }
 
     .unit {
@@ -856,7 +844,7 @@ const getPreparationLabel = (item: any) => {
 
     .preparation-label {
       font-size: 22rpx;
-      color: #8a6b33;
+      color: #7a5c28;
       font-weight: 600;
     }
 
@@ -869,8 +857,9 @@ const getPreparationLabel = (item: any) => {
     .preparation-tag {
       padding: 8rpx 16rpx;
       border-radius: 999rpx;
-      background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
-      color: #8a6b33;
+      background: #f6efe0;
+      border: 1rpx solid rgba(176, 141, 79, 0.35);
+      color: #7a5c28;
       font-size: 22rpx;
       line-height: 1.4;
     }
@@ -917,7 +906,7 @@ const getPreparationLabel = (item: any) => {
 
   .order-id {
     font-size: 24rpx;
-    color: #b08d4f;
+    color: #7a5c28;
     font-family: monospace;
   }
 

@@ -492,6 +492,8 @@ export interface Ingredient {
   purchaseUnit?: string | null;
   purchaseToBaseRatio?: number | null;
   currentPricePerPurchaseUnit?: number;
+  initialPricePerPurchaseUnit?: number;
+  priceBasis?: IngredientPriceBasis | null;
   effectivePricePerPurchaseUnit?: number | null;
   unitCost?: number;
   safetyStock?: number | null;
@@ -637,10 +639,20 @@ export interface RecommendedProductForm {
   sortOrder?: number;
 }
 
-export type ProcurementSkuSourceTier =
-  | "ORGANIC"
-  | "MARKET_PREMIUM"
-  | "WHOLESALE";
+export type IngredientPriceBasisSource =
+  | "LATEST_PURCHASE"
+  | "INITIAL_PRICE"
+  | "SKU_REFERENCE"
+  | "CURRENT_PRICE"
+  | "NONE";
+
+export interface IngredientPriceBasis {
+  source: IngredientPriceBasisSource;
+  pricePerPurchaseUnit: number;
+  baseUnitCost: number | null;
+  purchasedAt: string | null;
+  purchaseToBaseRatio: number;
+}
 
 export type ProcurementSkuPriceHistorySource =
   | "MANUAL"
@@ -661,7 +673,6 @@ export interface ProcurementSku {
   currentPurchasePrice: number | null;
   referencePurchasePrice: number | null;
   referencePricePerPurchaseUnit: number | null;
-  sourceTier: ProcurementSkuSourceTier | null;
   notes: string | null;
   isDefault: boolean;
   isActive: boolean;
@@ -682,7 +693,6 @@ export interface ProcurementSkuForm {
   purchaseUnit?: string | null;
   purchaseToBaseRatio?: number | null;
   currentPurchasePrice?: number | null;
-  sourceTier?: ProcurementSkuSourceTier | null;
   notes?: string | null;
   isActive?: boolean;
   safetyStock?: number | null;

@@ -8,7 +8,7 @@
  *   ③ 备货生产单测算原料需求
  *
  * 口径说明（与鲜食对齐，不另造一套）：
- * - 原料方案默认走 `MARKET_PREMIUM`（商超优先），与顾客端参考价口径一致
+ * - 原料算价与鲜食同一口径：最近一次采购价 → 原料创建价
  * - 倍率只作用于商品成本，运费按现有重量模板另计
  * - 起订量豁免：试吃装本身就是小额尝鲜，不走 minOrderWeightG 校验
  */
@@ -21,14 +21,10 @@ import {
   type TastingPackRecipeInput,
 } from '../../domain/pricing/pricing.service';
 import { applyPriceRounding } from '../../domain/pricing/price-rounding';
-import {
-  INGREDIENT_SOURCE_PLANS,
-  type IngredientSourcePlanCode,
-} from '../../domain/order/ingredient-source-plan';
 import { IngredientType } from '../../domain/ingredient/enums';
 import type { Ingredient } from '../../domain/ingredient/ingredient.entity';
 import { GlobalConfigService } from '../config/global-config.service';
-import { OrderSourcePlanService } from '../order/order-source-plan.service';
+import { IngredientPriceBasisService } from '../ingredient/ingredient-price-basis.service';
 import { ShippingService } from '../shipping/shipping.service';
 import { TastingPackConfigService } from './tasting-pack-config.service';
 import { INGREDIENT_REPOSITORY } from '../ingredient/ingredient.service';
@@ -85,11 +81,8 @@ export interface TastingPackQuote {
     tastingMultiplier: number;
     priceRoundingMode: string;
     targetMargin: number;
-    ingredientSourcePlan: IngredientSourcePlanCode;
   };
 }
-
-const DEFAULT_SOURCE_PLAN: IngredientSourcePlanCode = 'MARKET_PREMIUM';
 
 @Injectable()
 export class TastingPackPricingService {
@@ -97,7 +90,7 @@ export class TastingPackPricingService {
     private readonly pricingService: PricingService,
     private readonly globalConfigService: GlobalConfigService,
     private readonly tastingPackConfigService: TastingPackConfigService,
-    private readonly orderSourcePlanService: OrderSourcePlanService,
+    private readonly ingredientPriceBasisService: IngredientPriceBasisService,
     private readonly shippingService: ShippingService,
     private readonly prisma: PrismaService,
     @Inject(RECIPE_REPOSITORY)
@@ -125,7 +118,6 @@ export class TastingPackPricingService {
    */
   async loadPackContext(params: {
     specs: TastingPackRecipeSpec[];
-    ingredientSourcePlan?: IngredientSourcePlanCode | null;
   }): Promise<
     Array<{
       spec: TastingPackRecipeSpec;
@@ -139,8 +131,6 @@ export class TastingPackPricingService {
     if (!Array.isArray(specs) || specs.length === 0) {
       throw new NotFoundException('试吃装至少要配置一道菜');
     }
-
-    const sourcePlan = this.resolveSourcePlan(params.ingredientSourcePlan);
 
     const recipes = await Promise.all(
       specs.map((spec) => this.recipeRepository.findLatestPublicById(spec.recipeId)),
@@ -171,12 +161,9 @@ export class TastingPackPricingService {
       ingredients.map((ingredient) => [ingredient.id, ingredient]),
     );
 
-    // 原料方案（商超优先/有机/批发）一次性套到全部原料上
-    const sourcePlanMap =
-      await this.orderSourcePlanService.applySourcePlanToIngredients(
-        ingredients,
-        sourcePlan,
-      );
+    // 与鲜食同一算价口径：最近一次采购价 → 创建价
+    const pricedIngredientMap =
+      await this.ingredientPriceBasisService.applyToIngredients(ingredients);
 
     const prepMethodMap = await this.loadPreparationMethodNameMap(
       recipes.flatMap((recipe) =>
@@ -189,7 +176,7 @@ export class TastingPackPricingService {
       const ingredientMap = new Map<string, Ingredient>();
       for (const ri of recipe.items || []) {
         const ingredient =
-          sourcePlanMap.get(ri.ingredientId) ||
+          pricedIngredientMap.get(ri.ingredientId) ||
           catalogById.get(ri.ingredientId);
         if (!ingredient) {
           throw new NotFoundException(`原料不存在: ${ri.ingredientId}`);
@@ -210,7 +197,6 @@ export class TastingPackPricingService {
   /** 定价输入：把上面的原始素材转成定价服务能算的形状 */
   async buildPackRecipes(params: {
     specs: TastingPackRecipeSpec[];
-    ingredientSourcePlan?: IngredientSourcePlanCode | null;
   }): Promise<TastingPackRecipeInput[]> {
     const contexts = await this.loadPackContext(params);
 
@@ -258,7 +244,6 @@ export class TastingPackPricingService {
   async quote(params: {
     specs: TastingPackRecipeSpec[];
     sets?: number;
-    ingredientSourcePlan?: IngredientSourcePlanCode | null;
     /** 商品手动定价覆盖（后台按商品设置）；有值时跳过自动算价 */
     manualUnitPrice?: number | null;
     /**
@@ -271,13 +256,9 @@ export class TastingPackPricingService {
     stockUnitCost?: number | null;
   }): Promise<TastingPackQuote> {
     const sets = this.normalizeSets(params.sets);
-    const sourcePlan = this.resolveSourcePlan(params.ingredientSourcePlan);
 
     const [packRecipes, globalConfig, packConfig] = await Promise.all([
-      this.buildPackRecipes({
-        specs: params.specs,
-        ingredientSourcePlan: sourcePlan,
-      }),
+      this.buildPackRecipes({ specs: params.specs }),
       this.globalConfigService.getGlobalConfig(),
       this.tastingPackConfigService.getConfig(),
     ]);
@@ -385,7 +366,6 @@ export class TastingPackPricingService {
         tastingMultiplier: packConfig.tastingMultiplier,
         priceRoundingMode: roundingMode,
         targetMargin: globalConfig.targetMargin,
-        ingredientSourcePlan: sourcePlan,
       },
     };
   }
@@ -400,7 +380,6 @@ export class TastingPackPricingService {
   async buildStockRequirement(params: {
     specs: TastingPackRecipeSpec[];
     sets: number;
-    ingredientSourcePlan?: IngredientSourcePlanCode | null;
   }): Promise<{
     sets: number;
     totalNetFoodWeightG: number;
@@ -415,13 +394,9 @@ export class TastingPackPricingService {
     }>;
   }> {
     const sets = this.normalizeSets(params.sets);
-    const sourcePlan = this.resolveSourcePlan(params.ingredientSourcePlan);
 
     const [packRecipes, globalConfig, packConfig] = await Promise.all([
-      this.buildPackRecipes({
-        specs: params.specs,
-        ingredientSourcePlan: sourcePlan,
-      }),
+      this.buildPackRecipes({ specs: params.specs }),
       this.globalConfigService.getGlobalConfig(),
       this.tastingPackConfigService.getConfig(),
     ]);
@@ -456,16 +431,6 @@ export class TastingPackPricingService {
         packageSpecG: entry.packageSpecG,
       })),
     };
-  }
-
-  private resolveSourcePlan(
-    value: IngredientSourcePlanCode | null | undefined,
-  ): IngredientSourcePlanCode {
-    const codes = Object.keys(INGREDIENT_SOURCE_PLANS);
-    if (value && codes.includes(value)) {
-      return value;
-    }
-    return DEFAULT_SOURCE_PLAN;
   }
 
   private normalizeSets(sets: number | undefined): number {

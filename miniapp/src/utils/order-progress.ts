@@ -40,7 +40,7 @@ const STEP_KEYS: OrderStepKey[] = ['PAID', 'MAKING', 'SHIPPED', 'RECEIVED'];
 
 const STEP_LABELS: Record<OrderKind, [string, string, string, string]> = {
   food: ['已付款', '制作中', '已发货', '已签收'],
-  supplement: ['已付款', '分装中', '已发货', '已签收'],
+  supplement: ['已付款', '待发货', '已发货', '已签收'],
   custom: ['已付款', '定制中', '已交付', '已完成'],
 };
 

@@ -15,6 +15,7 @@ function foodRow(overrides: any = {}) {
     targetProductionDate: new Date('2026-10-21T00:00:00Z'),
     shippingAddressSnapshot: null,
     dogId: 'd1',
+    dog: { name: '旺财' },
     items: [
       { id: 'f1-item', recipeSnapshot: { id: 'r1', name: '鸡肉餐' } },
     ],
@@ -177,6 +178,38 @@ describe('OrderCenterService', () => {
     expect(where.customerId).toBeUndefined();
   });
 
+  it('★ 按狗狗名搜索：三类订单都带上狗名条件（老「后台订单」的搜索口径）', async () => {
+    await service.list({ pageSize: 20, keyword: '旺财' });
+
+    const foodWhere = prisma.order.findMany.mock.calls[0][0].where;
+    const customWhere =
+      prisma.customRecipeOrder.findMany.mock.calls[0][0].where;
+    const supplementWhere =
+      prisma.supplementOrder.findMany.mock.calls[0][0].where;
+
+    expect(foodWhere.OR).toEqual(
+      expect.arrayContaining([
+        { dog: { name: { contains: '旺财', mode: 'insensitive' } } },
+      ]),
+    );
+    expect(customWhere.OR).toEqual(
+      expect.arrayContaining([
+        { dog: { name: { contains: '旺财', mode: 'insensitive' } } },
+      ]),
+    );
+    expect(supplementWhere.OR).toEqual(
+      expect.arrayContaining([
+        { dogName: { contains: '旺财', mode: 'insensitive' } },
+      ]),
+    );
+    // 总数也要按同一个条件收窄，否则分页会按「没搜索」的总数算
+    expect(prisma.order.count.mock.calls[0][0].where.OR).toEqual(
+      expect.arrayContaining([
+        { dog: { name: { contains: '旺财', mode: 'insensitive' } } },
+      ]),
+    );
+  });
+
   it('只查补剂时不会碰鲜食/定制查询', async () => {
     const result = await service.list({
       type: 'SUPPLEMENT',
@@ -223,13 +256,16 @@ describe('OrderCenterService', () => {
     expect(result.items.every((item) => item.customerRole === null)).toBe(true);
   });
 
-  it('★ 鲜食单带出 itemId / 下单快照的食谱 id / 狗狗 id', async () => {
+  it('★ 鲜食单带出 itemId / 下单快照的食谱 id / 狗狗 id 和名字', async () => {
     const result = await service.list({ pageSize: 20 });
     const food = result.items.find((item) => item.type === 'FOOD');
 
     expect(food?.itemId).toBe('f1-item');
     expect(food?.recipeId).toBe('r1');
     expect(food?.dogId).toBe('d1');
+    // 2026-11-02：鲜食卡片要显示顾客名和狗狗名
+    expect(food?.customerName).toBe('张三');
+    expect(food?.dogName).toBe('旺财');
   });
 
   it('★ 补剂单没关联食谱/狗狗时两个 id 都是 null（前端就不显示入口）', async () => {

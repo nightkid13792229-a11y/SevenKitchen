@@ -294,6 +294,7 @@ function buildIngredientData(
     purchaseUnit: 'g',
     purchaseToBaseRatio: 1,
     currentPricePerPurchaseUnit: 0,
+    initialPricePerPurchaseUnit: 0,
     properties: {
       importSource: 'standard-ingredient-import',
       manifestVersion: manifest.version,
@@ -728,7 +729,6 @@ function buildProcurementSkuData(
     purchaseToBaseRatio: sku.purchaseToBaseRatio ?? null,
     currentPurchasePrice: sku.currentPurchasePrice ?? null,
     referencePurchasePrice: sku.referencePurchasePrice ?? null,
-    sourceTier: sku.sourceTier ?? null,
     notes: sku.notes ?? null,
     isDefault: false,
     isActive: true,

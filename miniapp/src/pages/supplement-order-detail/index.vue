@@ -6,11 +6,20 @@
       <view class="hero">
         <view class="hero-top">
           <text class="order-no">{{ order.orderNo }}</text>
-          <text class="status">{{ statusLabel(order.status) }}</text>
+          <view class="status-tags">
+            <text class="status">{{ statusLabel(order.status) }}</text>
+            <!-- 新售后不改订单状态：有未完结售后时单独挂「售后中/退款中」 -->
+            <text v-if="openAftersaleLabel" class="status status--aftersale">
+              {{ openAftersaleLabel }}
+            </text>
+          </view>
         </view>
         <text class="hero-date">{{ formatTime(order.createdAt) }}</text>
-        <text v-if="order.status === 'PAID'" class="hero-hint">
-          {{ order.packingDate ? `预计 ${order.packingDate} 分装发货` : '已付款，等待管理员排期' }}
+        <text v-if="isRefunded" class="hero-hint">
+          退款 ¥{{ money(order.refundAmount) }} 已原路退回
+        </text>
+        <text v-else-if="order.status === 'PAID'" class="hero-hint">
+          {{ order.packingDate ? `预计 ${order.packingDate} 发货` : '已付款，等待管理员排期' }}
         </text>
         <text v-else-if="order.packingDate" class="hero-hint">预计发货日 {{ order.packingDate }}</text>
       </view>
@@ -36,7 +45,7 @@
         <view class="info"><text class="label">收件人</text><text>{{ order.receiverName }} {{ order.receiverPhone }}</text></view>
         <view class="info"><text class="label">地址</text><text class="address">{{ order.receiverRegion }} {{ order.receiverDetail }}</text></view>
         <button v-if="canChangeAddress" class="ghost-btn" @tap="changeAddress">修改收货地址</button>
-        <view v-if="order.status === 'PACKED'" class="notice">已分装；改地址后需要重新打印面单。</view>
+        <view v-if="order.status === 'PACKED'" class="notice">已打包；改地址后需要重新打印面单。</view>
         <view v-if="order.trackingNumber" class="info">
           <text class="label">物流</text><text>{{ order.carrierCode || '' }} {{ order.trackingNumber }}</text>
         </view>
@@ -85,7 +94,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad, onUnload } from '@dcloudio/uni-app'
+import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import {
   cancelSupplementOrder,
   fetchSupplementAftersales,
@@ -112,9 +121,28 @@ const canChangeAddress = computed(() =>
 const canCancel = computed(() =>
   order.value ? ['PENDING_PAYMENT', 'PAID'].includes(order.value.status) : false,
 )
-const canApplyAftersale = computed(() =>
-  order.value ? ['PACKED', 'SHIPPED', 'COMPLETED'].includes(order.value.status) : false,
+/** 钱已原路退回：订单履约状态可能仍是「已发货」，但顾客侧必须显示已退款 */
+const isRefunded = computed(
+  () => String(order.value?.refundStatus || '').toUpperCase() === 'SUCCESS',
 )
+const canApplyAftersale = computed(() =>
+  order.value
+    ? !isRefunded.value &&
+      ['PACKED', 'SHIPPED', 'COMPLETED'].includes(order.value.status)
+    : false,
+)
+
+/**
+ * 售后独立于订单状态：订单还是「已发货/已完成」，但只要有未完结售后，
+ * 就在状态旁边挂一个「售后中/退款中」，顾客一眼能看到。
+ */
+const openAftersaleLabel = computed(() => {
+  const current = aftersales.value.find((item) =>
+    ['PENDING', 'PROCESSING'].includes(item.status),
+  )
+  if (!current) return ''
+  return current.requestType === 'REFUND' ? '退款中' : '售后中'
+})
 
 function money(value: number | null | undefined) {
   return Number(value || 0).toFixed(2)
@@ -126,12 +154,13 @@ function formatTime(value: string) {
   return value ? value.replace('T', ' ').slice(0, 16) : '—'
 }
 function statusLabel(value: string) {
+  if (isRefunded.value) return '已退款'
   return (
     {
       PENDING_PAYMENT: '待付款',
-      PAID: '已付款 · 待分装',
-      PACKING: '分装中',
-      PACKED: '已分装 · 待发货',
+      PAID: '已付款 · 待发货',
+      PACKING: '待发货',
+      PACKED: '待发货',
       SHIPPED: '已发货',
       COMPLETED: '已完成',
       CANCELLED: '已取消',
@@ -218,7 +247,7 @@ function cancelOrder() {
   const isPaid = order.value.status === 'PAID'
   uni.showModal({
     title: isPaid ? '申请全额退款' : '取消订单',
-    content: isPaid ? '已付款未分装，确认后发起全额退款；退款成功才取消订单。' : '确认取消这笔未付款订单？',
+    content: isPaid ? '已付款未发货，确认后发起全额退款；退款成功才取消订单。' : '确认取消这笔未付款订单？',
     success: async (res) => {
       if (!res.confirm || !order.value) return
       const response = await cancelSupplementOrder(order.value.id, '顾客取消')
@@ -266,6 +295,18 @@ onLoad((options: any) => {
   uni.$on('address-selected', onAddressSelected)
   if (orderId.value) load()
 })
+
+// 从「申请售后」页返回时重新拉一次：售后记录和「售后中/退款中」标签
+// 要立刻出现，不能等用户退出重进。
+let firstShow = true
+onShow(() => {
+  if (firstShow) {
+    firstShow = false
+    return
+  }
+  if (orderId.value) void load()
+})
+
 onUnload(() => uni.$off('address-selected', onAddressSelected))
 </script>
 
@@ -275,7 +316,9 @@ onUnload(() => uni.$off('address-selected', onAddressSelected))
 .hero { background: linear-gradient(140deg, #1e3a2f, #2b5040); color: #f7f3e8; border-radius: 20rpx; padding: 28rpx; margin-bottom: 20rpx; }
 .hero-top { display: flex; justify-content: space-between; align-items: center; }
 .order-no { font-size: 28rpx; font-weight: 600; }
+.status-tags { display: flex; align-items: center; gap: 8rpx; }
 .status { font-size: 24rpx; background: rgba(255,255,255,.16); padding: 6rpx 14rpx; border-radius: 20rpx; }
+.status--aftersale { background: #d98d2b; color: #2b1a00; font-weight: 600; }
 .hero-date, .hero-hint { display: block; margin-top: 12rpx; color: #cad6c9; font-size: 23rpx; }
 .card { background: #fff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 20rpx; }
 .card-title { font-size: 28rpx; font-weight: 600; margin-bottom: 16rpx; }

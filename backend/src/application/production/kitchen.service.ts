@@ -307,8 +307,6 @@ export class StaffProductionService {
 
         // Get order items information
         const orderItems = orderInfoMap.get(unit.id) || [];
-        const ingredientSourcePlan =
-          this.resolvePackagingUnitIngredientSourcePlan(orderItems);
         const key = this.buildPackagingUnitDisplayGroupKey(unit, orderItems);
 
         // Convert times to local time
@@ -323,7 +321,6 @@ export class StaffProductionService {
         const productionRecipeSnapshot =
           this.enrichRecipeSnapshotWithProcurementSku({
             recipeSnapshot,
-            ingredientSourcePlan,
             orderItems,
             purchaseLists: purchaseListsByDate.get(productionDate) || [],
           });
@@ -342,9 +339,6 @@ export class StaffProductionService {
           totalProductionG: unit.totalProductionG,
           status: unit.status,
           orderItems,
-          ingredientSourcePlan,
-          ingredientSourcePlanLabel:
-            this.getIngredientSourcePlanLabel(ingredientSourcePlan),
           currentPotNumber: potNumberMap.get(unit.id) || 1,
           totalPots: totalPotsMap.get(key) || 1,
           productionDate,
@@ -427,7 +421,6 @@ export class StaffProductionService {
             packageSpecG: item.packageSpecG,
             packageCount: item.packageCount,
             packagePlan: item.packagePlan ?? null,
-            ingredientSourcePlan: item.ingredientSourcePlan ?? null,
             recipientName: order.address?.recipientName, // ✅ 收货人姓名
             recipientCity: order.address?.region?.city, // ✅ 收货城市
             adminRemark: order.adminRemark ?? undefined,
@@ -489,7 +482,6 @@ export class StaffProductionService {
 
   private enrichRecipeSnapshotWithProcurementSku(params: {
     recipeSnapshot: any;
-    ingredientSourcePlan?: string | null;
     orderItems: OrderPackagingInfoDto[];
     purchaseLists: any[];
   }): any {
@@ -515,7 +507,12 @@ export class StaffProductionService {
           sourceOrderIds.some((orderId: string) => orderIds.has(orderId))
         );
       })
-      .flatMap((list) => (Array.isArray(list.items) ? list.items : []));
+      .flatMap((list) =>
+        (Array.isArray(list.items) ? list.items : []).map((item: any) => ({
+          ...item,
+          __listCreatedAt: list.createdAt,
+        })),
+      );
 
     if (relevantPurchaseItems.length === 0) {
       return params.recipeSnapshot;
@@ -528,11 +525,8 @@ export class StaffProductionService {
         const candidates = relevantPurchaseItems.filter(
           (purchaseItem: any) => purchaseItem.ingredientId === ingredientId,
         );
-        const selectedPurchaseItem = this.selectPurchaseItemForSourcePlan(
-          candidates,
-          params.ingredientSourcePlan,
-          item.ingredient_type,
-        );
+        const selectedPurchaseItem =
+          this.selectPurchaseItemForProduction(candidates);
 
         const selectedSku =
           this.getPurchaseItemProcurementSku(selectedPurchaseItem);
@@ -580,75 +574,36 @@ export class StaffProductionService {
     };
   }
 
-  private selectPurchaseItemForSourcePlan(
-    candidates: any[],
-    ingredientSourcePlan?: string | null,
-    ingredientType?: string | null,
-  ): any | undefined {
-    const validCandidates = candidates.filter(
-      (candidate) => this.hasPrintablePurchaseMetadata(candidate),
+  /**
+   * 从候选采购明细里挑一条用于打印/展示。
+   * 口径：最近一次采购（同一制作日期下，后建的清单更晚），不再看来源等级。
+   */
+  private selectPurchaseItemForProduction(candidates: any[]): any | undefined {
+    const validCandidates = candidates.filter((candidate) =>
+      this.hasPrintablePurchaseMetadata(candidate),
     );
 
     if (validCandidates.length <= 1) {
       return validCandidates[0];
     }
 
-    if (ingredientType !== 'FOOD') {
-      return validCandidates[0];
-    }
+    return [...validCandidates].sort((left, right) => {
+      const leftTime = left.__listCreatedAt
+        ? new Date(left.__listCreatedAt).getTime()
+        : 0;
+      const rightTime = right.__listCreatedAt
+        ? new Date(right.__listCreatedAt).getTime()
+        : 0;
 
-    const plan = ingredientSourcePlan || 'WHOLESALE';
-    const tierPriority: Record<string, string[]> = {
-      ORGANIC: ['ORGANIC', 'MARKET_PREMIUM', 'WHOLESALE'],
-      MARKET_PREMIUM: ['MARKET_PREMIUM', 'ORGANIC', 'WHOLESALE'],
-      WHOLESALE: ['WHOLESALE', 'MARKET_PREMIUM', 'ORGANIC'],
-    };
-    const orderedTiers = tierPriority[plan] || tierPriority.WHOLESALE;
-
-    let tierCandidates = validCandidates;
-    for (const tier of orderedTiers) {
-      const matched = validCandidates.filter(
-        (candidate) => this.getPurchaseItemSourceTier(candidate) === tier,
-      );
-      if (matched.length > 0) {
-        tierCandidates = matched;
-        break;
-      }
-    }
-
-    const preferLowestPrice = plan === 'WHOLESALE';
-    return [...tierCandidates].sort((a, b) => {
-      const priceA = this.getPurchaseItemPrice(a);
-      const priceB = this.getPurchaseItemPrice(b);
-
-      if (priceA !== null && priceB !== null && priceA !== priceB) {
-        return preferLowestPrice ? priceA - priceB : priceB - priceA;
+      if (leftTime !== rightTime) {
+        return rightTime - leftTime;
       }
 
-      return this.getPurchaseItemProcurementSkuName(a).localeCompare(
-        this.getPurchaseItemProcurementSkuName(b),
+      return this.getPurchaseItemProcurementSkuName(left).localeCompare(
+        this.getPurchaseItemProcurementSkuName(right),
         'zh-Hans-CN',
       );
     })[0];
-  }
-
-  private getPurchaseItemSourceTier(purchaseItem: any): string | null {
-    const sku = this.getPurchaseItemProcurementSku(purchaseItem);
-
-    return sku?.sourceTier || null;
-  }
-
-  private getPurchaseItemPrice(purchaseItem: any): number | null {
-    const sku = this.getPurchaseItemProcurementSku(purchaseItem);
-    const price =
-      sku?.currentPurchasePrice ??
-      sku?.referencePricePerPurchaseUnit ??
-      (purchaseItem.quantityNeeded
-        ? Number(purchaseItem.estimatedCost) / Number(purchaseItem.quantityNeeded)
-        : null);
-    const numericPrice = Number(price);
-
-    return Number.isFinite(numericPrice) ? numericPrice : null;
   }
 
   private getPurchaseItemProcurementSku(purchaseItem: any): any | null {
@@ -703,53 +658,13 @@ export class StaffProductionService {
     );
   }
 
-  private resolvePackagingUnitIngredientSourcePlan(
-    orderItems: OrderPackagingInfoDto[],
-  ): string | null {
-    const plans = Array.from(
-      new Set(
-        orderItems
-          .map((item) => item.ingredientSourcePlan)
-          .filter((plan): plan is string => Boolean(plan)),
-      ),
-    );
-
-    if (plans.length === 0) {
-      return null;
-    }
-
-    if (plans.length > 1) {
-      return 'MIXED';
-    }
-
-    return plans[0];
-  }
-
-  private getIngredientSourcePlanLabel(plan?: string | null): string | undefined {
-    const labels: Record<string, string> = {
-      ORGANIC: '有机优先',
-      MARKET_PREMIUM: '超市优先',
-      WHOLESALE: '性价比优先',
-      MIXED: '多采购策略',
-    };
-
-    if (!plan) {
-      return undefined;
-    }
-
-    return labels[plan] || plan;
-  }
-
   private buildPackagingUnitDisplayGroupKey(
     unit: PackagingUnit,
     orderItems: OrderPackagingInfoDto[],
   ): string {
     const recipeId = (unit.recipeSnapshot as any).id || 'unknown-recipe';
-    const sourcePlan =
-      this.resolvePackagingUnitIngredientSourcePlan(orderItems) ||
-      'DEFAULT_SOURCE_PLAN';
 
-    return `${unit.productionBatchId}-${recipeId}-${sourcePlan}`;
+    return `${unit.productionBatchId}-${recipeId}`;
   }
 
   private areAllPackagingUnitsForOrderCompleted(

@@ -120,7 +120,6 @@ interface PrintData {
     packageSpecG: number;
     packageCount: number;
     packagePlan?: Array<{ packageSpecG: number; packageCount: number }>;
-    ingredientSourcePlan?: string | null;
     dogName: string;
     recipientName?: string;
     recipientCity?: string;

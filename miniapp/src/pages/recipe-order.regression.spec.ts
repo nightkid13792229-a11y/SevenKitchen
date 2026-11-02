@@ -26,7 +26,8 @@ describe('recipe-order phase one UI contract', () => {
 
   it('uses packagePlan instead of single packageCount/packageSpecG payload only', () => {
     expect(source).toContain('packagePlan');
-    expect(source).toContain('ingredientSourcePlan');
+    // 2026-11-02：采购方案已整体下线，下单/预览不再携带 ingredientSourcePlan
+    expect(source).not.toContain('ingredientSourcePlan');
   });
 
   it('does not expose quick meal-size editing controls', () => {
@@ -338,8 +339,9 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).not.toContain('source-plan-safety-copy');
     expect(templateSource).not.toContain('{{ selectedSourcePlanDescription }}');
     expect(templateSource).toContain('原料明细');
-    expect(source).toContain("const selectedSourcePlan = ref<IngredientSourcePlanCode>('MARKET_PREMIUM')");
-    expect(source).not.toContain("const selectedSourcePlan = ref<IngredientSourcePlanCode>('WHOLESALE')");
+    expect(source).not.toContain('selectedSourcePlan');
+    expect(source).not.toContain('ingredientSourcePlan');
+    expect(source).not.toContain('getSourcePlanLabel');
     expect(source).not.toContain('loadSourcePlanPricePreviews');
     expect(source).not.toContain('selectedSourcePlanDescription');
     expect(source).not.toContain('SourcePlanPriceState');
@@ -374,33 +376,35 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('const visibleIngredientRows = computed');
     expect(source).toContain('const hiddenIngredientCount = computed');
     expect(templateSource).toContain('展开其余 ${hiddenIngredientCount} 项原料');
-    // 采购标准 Banner
+    // 采购与公开 Banner：讲优先顺序和兜底，不承诺单品级渠道/品牌/规格
     expect(templateSource).toContain('sourcing-standard-card');
-    expect(templateSource).toContain('优先采购山姆、盒马、iHerb 等优质渠道');
+    expect(templateSource).toContain('采购与公开');
+    expect(templateSource).toContain('食材优先从山姆、盒马、沃尔玛、永辉等商超渠道采购');
+    expect(templateSource).toContain('营养补充剂优先从iHerb采购');
+    expect(templateSource).toContain('采购完成后，实际采购的原料将展示在订单详情中。');
     expect(templateSource).toContain('ingredient-type-tag');
     expect(templateSource).toContain('{{ ingredient.typeLabel }}');
     expect(templateSource).toContain('ingredient.typeClass');
     expect(templateSource).toContain('ingredient-row-main');
     expect(templateSource).toContain('<text class="ingredient-name">{{ ingredient.nameText }}</text>');
     expect(templateSource).toContain('{{ ingredient.amountText }}');
-    expect(templateSource).toContain('ingredient-meta-row');
-    expect(templateSource).toContain('ingredient-meta-item');
-    expect(templateSource).toContain('ingredient-meta-label');
-    expect(templateSource).toContain('渠道</text>');
-    expect(templateSource).toContain('品牌</text>');
-    expect(templateSource).toContain('规格</text>');
-    expect(templateSource).toContain('{{ ingredient.purchaseChannelText }}');
-    expect(templateSource).toContain('{{ ingredient.brandText }}');
-    expect(templateSource).toContain('{{ ingredient.productModelText }}');
+    // 单品级的渠道 / 品牌 / 规格不再展示
+    expect(templateSource).not.toContain('ingredient-meta-row');
+    expect(templateSource).not.toContain('ingredient-meta-item');
+    expect(templateSource).not.toContain('渠道</text>');
+    expect(templateSource).not.toContain('品牌</text>');
+    expect(templateSource).not.toContain('规格</text>');
+    expect(templateSource).not.toContain('{{ ingredient.purchaseChannelText }}');
+    expect(templateSource).not.toContain('{{ ingredient.brandText }}');
+    expect(templateSource).not.toContain('{{ ingredient.productModelText }}');
     expect(templateSource).not.toContain('{{ formatIngredientAmount(ingredient) }}');
     expect(templateSource).not.toContain('{{ buildIngredientDisplayName(ingredient) }}');
     expect(templateSource).not.toContain('{{ buildIngredientPurchaseChannelText(ingredient) }}');
     expect(templateSource).not.toContain('{{ buildIngredientBrandText(ingredient) }}');
     expect(source).toContain('displayIngredientRows');
-    expect(source).toContain('procurementSkuName?: string');
-    expect(source).toContain('buildIngredientDisplayName');
-    expect(source).toContain('buildIngredientPurchaseChannelText');
-    expect(source).toContain('buildIngredientBrandText');
+    expect(source).not.toContain('buildIngredientDisplayName');
+    expect(source).not.toContain('buildIngredientPurchaseChannelText');
+    expect(source).not.toContain('buildIngredientBrandText');
     expect(source).toContain('displayIngredients');
     expect(source).toContain('getIngredientTypeLabel');
     expect(source).toContain('getIngredientTypeClass');
@@ -408,7 +412,7 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('grid-template-columns: minmax(0, 1fr) auto;');
     expect(source).toContain('white-space: normal;');
     expect(source).not.toContain('ingredient-spec-cell');
-    expect(source).toContain('productModel?: string');
+    expect(source).not.toContain('productModel?: string');
     expect(source).not.toContain('function showIngredientDetail(ingredient: IngredientCostItem)');
     expect(source).not.toContain('title: ingredient.name');
     expect(source).not.toContain("品牌：${ingredient.brand || '-'}");

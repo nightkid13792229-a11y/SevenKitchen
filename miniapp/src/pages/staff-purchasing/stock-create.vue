@@ -1,9 +1,6 @@
 <template>
   <view class="stock-create-page">
-    <view class="hero">
-      <text class="hero-title">补货</text>
-      <text class="hero-subtitle">适合海产、冻品、补剂、包材等可提前备货的原料</text>
-    </view>
+    <text class="page-hint">适合海产、冻品、补剂、包材等可提前备货的原料</text>
 
     <view class="section">
       <text class="section-title">计划采购日期</text>
@@ -22,16 +19,31 @@
       </view>
 
       <view class="suggestion-pills">
-        <view class="suggestion-pill danger">
+        <view
+          class="suggestion-pill danger"
+          :class="{ active: suggestionFilter === 'NEEDS_REPLENISHMENT' }"
+          @tap="toggleSuggestionFilter('NEEDS_REPLENISHMENT')"
+        >
           <text>需补货 {{ replenishmentSuggestions.length }}</text>
         </view>
-        <view class="suggestion-pill warning">
+        <view
+          class="suggestion-pill warning"
+          :class="{ active: suggestionFilter === 'LOW_STOCK' }"
+          @tap="toggleSuggestionFilter('LOW_STOCK')"
+        >
           <text>低库存 {{ lowStockSuggestions.length }}</text>
         </view>
-        <view class="suggestion-pill neutral">
+        <view
+          class="suggestion-pill neutral"
+          :class="{ active: suggestionFilter === 'NO_POLICY' }"
+          @tap="toggleSuggestionFilter('NO_POLICY')"
+        >
           <text>未设阈值 {{ noPolicyIngredients.length }}</text>
         </view>
       </view>
+      <text v-if="suggestionFilter" class="suggestion-filter-hint" @tap="toggleSuggestionFilter(suggestionFilter)">
+        已按「{{ suggestionFilterLabel }}」筛选 · 点此清除
+      </text>
 
       <button
         class="suggestion-btn"
@@ -76,13 +88,13 @@
         <text>正在加载原料...</text>
       </view>
 
-      <view v-else-if="ingredients.length === 0" class="empty-state">
+      <view v-else-if="displayedIngredients.length === 0" class="empty-state">
         <text class="empty-text">暂无可选原料</text>
       </view>
 
       <view v-else class="ingredient-list">
         <view
-          v-for="ingredient in ingredients"
+          v-for="ingredient in displayedIngredients"
           :key="ingredient.id"
           class="ingredient-card"
           :class="getStockStatusCardClass(ingredient.stockStatus)"
@@ -215,7 +227,7 @@
 
     <view class="bottom-bar">
       <view class="bottom-summary">
-        <text class="summary-label">预估总金额</text>
+        <text class="summary-label">已选 {{ selectedItems.length }} 项 · 预估</text>
         <text class="summary-amount">¥{{ formatPrice(totalEstimatedCost) }}</text>
       </view>
       <button class="submit-btn" :loading="submitting" @tap="submit">
@@ -260,6 +272,7 @@ const loading = ref(false);
 const submitting = ref(false);
 const keyword = ref('');
 const selectedType = ref('');
+const suggestionFilter = ref<'' | 'NEEDS_REPLENISHMENT' | 'LOW_STOCK' | 'NO_POLICY'>('');
 const targetDate = ref('');
 
 const getTodayString = () => {
@@ -291,6 +304,31 @@ const lowStockSuggestions = computed(() => {
 const noPolicyIngredients = computed(() => {
   return ingredients.value.filter((item) => item.stockStatus === 'NO_POLICY');
 });
+
+const displayedIngredients = computed(() => {
+  if (!suggestionFilter.value) {
+    return ingredients.value;
+  }
+
+  return ingredients.value.filter(
+    (item) => item.stockStatus === suggestionFilter.value,
+  );
+});
+
+const suggestionFilterLabel = computed(() => {
+  const labels: Record<string, string> = {
+    NEEDS_REPLENISHMENT: '需补货',
+    LOW_STOCK: '低库存',
+    NO_POLICY: '未设阈值',
+  };
+  return labels[suggestionFilter.value] || '';
+});
+
+const toggleSuggestionFilter = (
+  value: 'NEEDS_REPLENISHMENT' | 'LOW_STOCK' | 'NO_POLICY',
+) => {
+  suggestionFilter.value = suggestionFilter.value === value ? '' : value;
+};
 
 onLoad(() => {
   targetDate.value = getTodayString();
@@ -535,25 +573,15 @@ const submit = async () => {
   min-height: 100vh;
   background: #fbfcf7;
   padding-bottom: 220rpx;
+  padding-top: 16rpx;
 }
 
-.hero {
-  padding: 40rpx 32rpx 28rpx;
-  background: linear-gradient(135deg, #1e3a2f 0%, #b08d4f 100%);
-}
-
-.hero-title {
+.page-hint {
   display: block;
-  font-size: 40rpx;
-  font-weight: 700;
-  color: #26261f;
-}
-
-.hero-subtitle {
-  display: block;
-  margin-top: 10rpx;
+  padding: 8rpx 28rpx 0;
+  color: #6b6653;
   font-size: 24rpx;
-  color: rgba(38, 38, 31, 0.6);
+  line-height: 1.6;
 }
 
 .section {
@@ -592,21 +620,34 @@ const submit = async () => {
   padding: 12rpx 20rpx;
   border-radius: 999rpx;
   font-size: 24rpx;
+
+  &.active {
+    box-shadow: inset 0 0 0 2rpx #1e3a2f;
+    font-weight: 700;
+  }
+}
+
+.suggestion-filter-hint {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: #6b6653;
 }
 
 .suggestion-pill.danger {
   background: #f8e8e2;
-  color: #b4553f;
+  color: #b4453a;
 }
 
 .suggestion-pill.warning {
-  background: #b08d4f;
-  color: #8a6b33;
+  background: #f6efe0;
+  border: 1rpx solid rgba(176, 141, 79, 0.4);
+  color: #7a5c28;
 }
 
 .suggestion-pill.neutral {
   background: #eef2e4;
-  color: #b08d4f;
+  color: #7a5c28;
 }
 
 .suggestion-btn {
@@ -621,14 +662,14 @@ const submit = async () => {
 
 .suggestion-btn[disabled] {
   background: #eef2e4;
-  color: #968f6d;
+  color: #6b6653;
 }
 
 .suggestion-hint {
   display: block;
   margin-top: 16rpx;
   font-size: 24rpx;
-  color: #b08d4f;
+  color: #7a5c28;
   line-height: 1.6;
 }
 
@@ -648,7 +689,7 @@ const submit = async () => {
 
 .picker-arrow {
   font-size: 32rpx;
-  color: #b08d4f;
+  color: #7a5c28;
 }
 
 .search-input,
@@ -673,13 +714,13 @@ const submit = async () => {
   padding: 14rpx 24rpx;
   border-radius: 999rpx;
   background: #eef2e4;
-  color: #b08d4f;
+  color: #7a5c28;
   font-size: 24rpx;
 }
 
 .filter-chip.active {
   background: #1e3a2f;
-  color: #1e3a2f;
+  color: #f3eddd;
 }
 
 .ingredient-list,
@@ -689,7 +730,13 @@ const submit = async () => {
   gap: 18rpx;
 }
 
-.ingredient-card,
+.ingredient-card {
+  padding: 24rpx;
+  border-radius: 18rpx;
+  background: #ffffff;
+  border: 1rpx solid #eef1e2;
+}
+
 .selected-card {
   padding: 24rpx;
   border-radius: 18rpx;
@@ -697,13 +744,15 @@ const submit = async () => {
 }
 
 .ingredient-card.is-danger {
-  background: #f8e8e2;
-  box-shadow: inset 0 0 0 2rpx #b4553f;
+  background: #ffffff;
+  border-color: #f0cfc9;
+  box-shadow: inset 8rpx 0 0 #b4453a;
 }
 
 .ingredient-card.is-warning {
-  background: #f6efe0;
-  box-shadow: inset 0 0 0 2rpx #b08d4f;
+  background: #ffffff;
+  border-color: #eadfc6;
+  box-shadow: inset 8rpx 0 0 #b08d4f;
 }
 
 .ingredient-main,
@@ -744,8 +793,9 @@ const submit = async () => {
 }
 
 .strategy-badge.hybrid {
-  background: #b08d4f;
-  color: #8a6b33;
+  background: #f6efe0;
+  border: 1rpx solid rgba(176, 141, 79, 0.4);
+  color: #7a5c28;
 }
 
 .strategy-badge.daily {
@@ -761,12 +811,13 @@ const submit = async () => {
 
 .stock-status-badge.danger {
   background: #f8e8e2;
-  color: #b4553f;
+  color: #b4453a;
 }
 
 .stock-status-badge.warning {
-  background: #b08d4f;
-  color: #8a6b33;
+  background: #f6efe0;
+  border: 1rpx solid rgba(176, 141, 79, 0.4);
+  color: #7a5c28;
 }
 
 .stock-status-badge.success {
@@ -776,7 +827,7 @@ const submit = async () => {
 
 .stock-status-badge.muted {
   background: #eef2e4;
-  color: #b08d4f;
+  color: #7a5c28;
 }
 
 .ingredient-meta {
@@ -789,14 +840,14 @@ const submit = async () => {
 .meta-tag,
 .selected-meta {
   font-size: 22rpx;
-  color: #b08d4f;
+  color: #7a5c28;
 }
 
 .ingredient-detail {
   display: block;
   margin-top: 10rpx;
   font-size: 24rpx;
-  color: #b08d4f;
+  color: #7a5c28;
 }
 
 .ingredient-suggestion {
@@ -818,7 +869,7 @@ const submit = async () => {
 
 .add-btn[disabled] {
   background: #eef2e4;
-  color: #968f6d;
+  color: #6b6653;
 }
 
 .field-row {
@@ -835,7 +886,7 @@ const submit = async () => {
   display: block;
   margin-bottom: 10rpx;
   font-size: 24rpx;
-  color: #b08d4f;
+  color: #7a5c28;
 }
 
 .input-wrapper {
@@ -846,7 +897,7 @@ const submit = async () => {
 
 .input-suffix {
   font-size: 26rpx;
-  color: #b08d4f;
+  color: #7a5c28;
 }
 
 .remove-btn {
@@ -865,7 +916,7 @@ const submit = async () => {
 .empty-state {
   padding: 48rpx 24rpx;
   text-align: center;
-  color: #b08d4f;
+  color: #7a5c28;
 }
 
 .empty-state.soft {
@@ -897,7 +948,7 @@ const submit = async () => {
 
 .summary-label {
   font-size: 22rpx;
-  color: #b08d4f;
+  color: #7a5c28;
 }
 
 .summary-amount {

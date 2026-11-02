@@ -75,12 +75,6 @@
         </view>
       </view>
       <view class="field-group">
-        <text class="field-label">原料方案</text>
-        <picker :range="sourcePlanLabels" :value="sourcePlanIndex" @change="onSourcePlanChange">
-          <view class="picker-box">{{ sourcePlanLabels[sourcePlanIndex] }}</view>
-        </picker>
-      </view>
-      <view class="field-group">
         <text class="field-label">目标制作日期</text>
         <picker mode="date" :value="form.targetProductionDate" @change="onDateChange">
           <view class="picker-box">{{ form.targetProductionDate || '不指定' }}</view>
@@ -128,10 +122,6 @@ const addressOptions = ref<StaffCustomerAddressOption[]>([])
 const recipeOptions = ref<StaffFinishedFoodRecipeOption[]>([])
 const selectedAddressId = ref('')
 const selectedRecipeId = ref('')
-
-const sourcePlanOptions = ['MARKET_PREMIUM', 'ORGANIC', 'WHOLESALE']
-const sourcePlanLabels = ['菜场优选', '有机优选', '批发采购']
-const sourcePlanIndex = ref(0)
 
 const form = reactive({
   cycleDays: '7',
@@ -218,10 +208,6 @@ function onAddressChange(event: any) {
   selectedAddressId.value = addressOptions.value[index]?.id || ''
 }
 
-function onSourcePlanChange(event: any) {
-  sourcePlanIndex.value = Number(event?.detail?.value || 0)
-}
-
 function onDateChange(event: any) {
   form.targetProductionDate = String(event?.detail?.value || '')
 }
@@ -271,7 +257,6 @@ async function submitAssistedOrder() {
       dogId: dogId.value,
       addressId: selectedAddressId.value,
       type: 'FRESH_FOOD',
-      ingredientSourcePlan: sourcePlanOptions[sourcePlanIndex.value],
       targetProductionDate: form.targetProductionDate || null,
       actualAmount,
       remark: form.remark,

@@ -196,7 +196,6 @@ export interface StaffAssistedOrderPayload {
   dogId: string;
   addressId?: string;
   type?: 'FRESH_FOOD';
-  ingredientSourcePlan?: string;
   targetProductionDate?: string | null;
   actualAmount?: number;
   remark?: string;

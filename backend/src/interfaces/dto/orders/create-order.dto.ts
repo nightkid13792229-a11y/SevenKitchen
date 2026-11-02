@@ -20,12 +20,6 @@ import { Type } from 'class-transformer';
 import { OrderType } from '../../../domain';
 import { CookingMethod } from '../../../domain/order';
 
-const INGREDIENT_SOURCE_PLAN_CODES = [
-  'ORGANIC',
-  'MARKET_PREMIUM',
-  'WHOLESALE',
-] as const;
-
 export class PackagePlanItemDto {
   @ApiProperty({ description: 'Package specification in grams', example: 100 })
   @IsInt()
@@ -130,15 +124,6 @@ export class CreateOrderDto {
   @ApiProperty({ enum: OrderType, example: OrderType.FRESH_FOOD })
   @IsEnum(OrderType)
   type!: OrderType;
-
-  @ApiPropertyOptional({
-    description: 'Ingredient source plan',
-    enum: INGREDIENT_SOURCE_PLAN_CODES,
-    example: 'MARKET_PREMIUM',
-  })
-  @IsOptional()
-  @IsEnum(INGREDIENT_SOURCE_PLAN_CODES)
-  ingredientSourcePlan?: string;
 
   @ApiPropertyOptional({
     type: [CreateOrderItemDto],

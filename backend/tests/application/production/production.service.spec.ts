@@ -137,11 +137,6 @@ describe('ProductionService - Phase 8.10', () => {
     id: string,
     recipeSnapshot: RecipeSnapshot,
     dailyIntakeG: number,
-    ingredientSourcePlan:
-      | 'ORGANIC'
-      | 'MARKET_PREMIUM'
-      | 'WHOLESALE'
-      | null = null,
     quantityG = 1000,
   ): OrderItem => {
     return new OrderItem(
@@ -158,7 +153,6 @@ describe('ProductionService - Phase 8.10', () => {
       null,
       null,
       null,
-      ingredientSourcePlan,
     );
   };
 
@@ -271,23 +265,23 @@ describe('ProductionService - Phase 8.10', () => {
       expect(result.getTotalProductionG()).toBeCloseTo(3000, 2);
     });
 
-    it('should not merge same-recipe order items when ingredient source plans differ', async () => {
+    it('merges same-recipe order items now that the source plan is retired', async () => {
       const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
-      const organicItem = createMockOrderItem(
-        'item-organic',
+      const firstItem = createMockOrderItem(
+        'item-first',
         recipeSnapshot,
         310.34,
-        'ORGANIC',
+        1000,
       );
-      const wholesaleItem = createMockOrderItem(
-        'item-wholesale',
+      const secondItem = createMockOrderItem(
+        'item-second',
         recipeSnapshot,
         250,
-        'WHOLESALE',
+        800,
       );
       const order = createMockPurchasingOrder('order-1', [
-        organicItem,
-        wholesaleItem,
+        firstItem,
+        secondItem,
       ]);
 
       orderRepository.findByTargetProductionDateRange.mockResolvedValue({
@@ -300,10 +294,11 @@ describe('ProductionService - Phase 8.10', () => {
         productionDate: '2025-01-20',
       });
 
-      expect(result.packagingUnits).toHaveLength(2);
-      expect(
-        result.packagingUnits.map((unit) => unit.sourceOrderItemIds),
-      ).toEqual(expect.arrayContaining([['item-organic'], ['item-wholesale']]));
+      expect(result.packagingUnits).toHaveLength(1);
+      expect(result.packagingUnits[0].sourceOrderItemIds).toEqual([
+        'item-first',
+        'item-second',
+      ]);
     });
 
     it('should reject non-PURCHASING orders', async () => {
@@ -539,9 +534,9 @@ describe('ProductionService - Phase 8.10', () => {
         production_loss_rate: 1.05,
       };
 
-      const itemA = createMockOrderItem('item-a', recipeSnapshot, 300, null, 2250);
-      const itemB = createMockOrderItem('item-b', recipeSnapshot, 300, null, 1800);
-      const itemC = createMockOrderItem('item-c', recipeSnapshot, 300, null, 1350);
+      const itemA = createMockOrderItem('item-a', recipeSnapshot, 300, 2250);
+      const itemB = createMockOrderItem('item-b', recipeSnapshot, 300, 1800);
+      const itemC = createMockOrderItem('item-c', recipeSnapshot, 300, 1350);
       const order = createMockPurchasingOrder('order-1', [itemA, itemB, itemC]);
 
       orderRepository.findByTargetProductionDateRange.mockResolvedValue({

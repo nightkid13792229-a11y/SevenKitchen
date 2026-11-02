@@ -21,7 +21,8 @@ import {
   ORDER_REPOSITORY,
   ORDER_STATUS_HISTORY_REPOSITORY,
 } from 'src/application/order/order.service';
-import { OrderSourcePlanService } from 'src/application/order/order-source-plan.service';
+import { IngredientPriceBasisService } from 'src/ingredient/ingredient-price-basis.service';
+import { OrderProcurementDisclosureService } from 'src/order/order-procurement-disclosure.service';
 import { PRODUCTION_BATCH_REPOSITORY } from 'src/application/production/production.service';
 import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
 import {
@@ -332,11 +333,17 @@ describe('OrdersController (e2e)', () => {
           useValue: mockShippingNotificationService,
         },
         {
-          provide: OrderSourcePlanService,
+          provide: IngredientPriceBasisService,
           useValue: {
-            applySourcePlanToIngredients: jest.fn(async (ingredients: any[]) =>
+            applyToIngredients: jest.fn(async (ingredients: any[]) =>
               new Map(ingredients.map((ingredient) => [ingredient.id, ingredient])),
             ),
+          },
+        },
+        {
+          provide: OrderProcurementDisclosureService,
+          useValue: {
+            build: jest.fn().mockResolvedValue(null),
           },
         },
         {
@@ -559,7 +566,6 @@ describe('OrdersController (e2e)', () => {
       params.packageSpecG ?? 100,
       params.customRequirements ?? null,
       params.dailyIntakeG ?? 310.34,
-      null,
       null,
       null,
       null,
@@ -2170,7 +2176,6 @@ describe('OrdersController (e2e)', () => {
         .send({
           dogId,
           type: OrderType.FRESH_FOOD,
-          ingredientSourcePlan: 'MARKET_PREMIUM',
           items: [
             {
               recipeId,
@@ -2198,7 +2203,6 @@ describe('OrdersController (e2e)', () => {
       expect(mockPricingSnapshotRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
           requestParams: expect.objectContaining({
-            ingredientSourcePlan: 'MARKET_PREMIUM',
             items: [
               expect.objectContaining({
                 recipeId,

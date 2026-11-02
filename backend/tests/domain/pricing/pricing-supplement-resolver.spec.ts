@@ -303,7 +303,7 @@ describe('PricingService supplement nutrition resolver integration', () => {
     expect(supplementDetail?.calculation).toContain('按配方比例1.000%');
   });
 
-  it('copies procurement sku source metadata into food ingredient cost details', async () => {
+  it('copies procurement sku id/name into food ingredient cost details', async () => {
     const foodIngredient = new Ingredient(
       'food-1',
       '鸡胸肉',
@@ -382,9 +382,6 @@ describe('PricingService supplement nutrition resolver integration', () => {
       expect.objectContaining({
         procurementSkuId: 'sku-wholesale',
         procurementSkuName: '批发鸡胸肉',
-        procurementSkuSourcePlan: 'WHOLESALE',
-        procurementSkuSourceTier: 'WHOLESALE',
-        procurementSkuFallbackLevel: 0,
       }),
     );
   });

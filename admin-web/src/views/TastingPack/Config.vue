@@ -342,9 +342,6 @@
               <el-descriptions-item label="成品口径利润率">
                 {{ (quote.pricingParams.targetMargin * 100).toFixed(0) }}%
               </el-descriptions-item>
-              <el-descriptions-item label="原料方案">
-                {{ quote.pricingParams.ingredientSourcePlan }}
-              </el-descriptions-item>
             </el-descriptions>
           </div>
         </div>

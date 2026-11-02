@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>成品鲜食 · 采购信息公开 & 来源等级清理 · 原型</title>
+<style>
+  :root{
+    --bg:#f0f3e9; --surface:#fbfcf7; --primary:#1e3a2f; --primary-tint:#eef3ea;
+    --gold:#b08d4f; --gold-soft:#f6efe0; --ink:#26261f; --ink2:#6b6653; --ink3:#968f6d;
+    --line:#e3e6d4; --danger:#b4553f; --danger-soft:#f7e9e3; --green:#2f6b4f;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:#e7e9e2;color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;}
+  .board{padding:28px;display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start;justify-content:center;}
+  .board-title{width:100%;text-align:center;font-size:13px;letter-spacing:.16em;color:#8b8b80;margin-bottom:2px;}
+
+  /* ---------- frame wrapper ---------- */
+  .frame{background:#fff;border-radius:20px;padding:18px 18px 14px;box-shadow:0 10px 30px rgba(30,46,36,.10);}
+  .frame-head{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+  .frame-idx{width:22px;height:22px;border-radius:7px;background:var(--primary);color:#fff;
+    font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+  .frame-head b{font-size:13px;font-weight:700;}
+  .frame-head i{font-style:normal;font-size:11px;color:var(--ink3);margin-left:4px;}
+  .frame-note{margin-top:10px;font-size:10.5px;line-height:1.5;color:var(--ink2);max-width:390px;}
+
+  /* ---------- phone ---------- */
+  .phone{width:390px;background:var(--bg);border-radius:26px;overflow:hidden;
+    border:1px solid #dfe3d5;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6);}
+  .status{height:30px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;font-size:11px;font-weight:600;color:var(--ink);}
+  .status .right{letter-spacing:1px;font-size:9px;color:#5c5a4e;}
+  .nav{height:42px;display:flex;align-items:center;justify-content:center;position:relative;
+    font-size:15px;font-weight:700;}
+  .nav .back{position:absolute;left:14px;font-size:22px;font-weight:400;color:var(--ink);top:6px;}
+  .screen{padding:10px 12px 14px;display:flex;flex-direction:column;gap:10px;}
+
+  /* ---------- generic ---------- */
+  .card{background:var(--surface);border-radius:var(--radius);padding:12px;}
+  .card-tight{padding:10px 12px;}
+  .sec-title{font-size:14px;font-weight:800;margin:0 0 8px;}
+  .muted{color:var(--ink2);}
+  .tiny{font-size:10px;color:var(--ink3);}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .btn{background:var(--primary);color:#fff;border-radius:999px;font-size:13px;font-weight:700;
+    padding:10px 18px;text-align:center;}
+  .btn-ghost{background:#fff;color:var(--primary);border:1px solid var(--line);}
+  .divider{height:1px;background:#eef1e2;margin:10px 0;}
+
+  /* marks */
+  .mark{position:relative;border:1.6px dashed;border-radius:12px;padding:10px;margin:12px 0 4px;}
+  .mark-del{border-color:var(--danger);background:var(--danger-soft);}
+  .mark-new{border-color:var(--green);background:#f1f7f1;}
+  .mark-label{position:absolute;top:-10px;left:10px;font-size:9.5px;font-weight:700;color:#fff;
+    padding:2px 8px;border-radius:999px;letter-spacing:.02em;white-space:nowrap;}
+  .mark-del .mark-label{background:var(--danger);}
+  .mark-new .mark-label{background:var(--green);}
+  .mark + .mark-desc{font-size:10px;color:var(--ink2);margin:2px 0 6px;}
+
+  /* ---------- recipe hero ---------- */
+  .hero{background:linear-gradient(135deg,#2c5343 0%,#1e3a2f 55%,#14291f 100%);
+    border-radius:16px;padding:16px;color:#fff;position:relative;overflow:hidden;}
+  .hero:after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;
+    border-radius:50%;background:rgba(216,188,133,.16);}
+  .hero h1{margin:0;font-size:19px;font-weight:800;letter-spacing:.01em;}
+  .hero p{margin:6px 0 0;font-size:11px;color:#d8bc85;}
+  .hero .badge{display:inline-block;margin-top:10px;font-size:9.5px;padding:3px 8px;border-radius:999px;
+    background:rgba(255,255,255,.14);color:#f3e7cd;}
+
+  /* ---------- dogs / cycle ---------- */
+  .dog-row{display:flex;gap:8px;}
+  .dog{display:flex;align-items:center;gap:7px;padding:6px 12px 6px 6px;border-radius:999px;
+    background:#fff;border:1px solid var(--line);font-size:12px;font-weight:600;}
+  .dog.active{border-color:var(--primary);background:var(--primary-tint);}
+  .avatar{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#d9c9a8,#b08d4f);}
+  .cycle{display:flex;gap:8px;}
+  .cycle-item{flex:1;text-align:center;padding:9px 0;border-radius:10px;background:#fff;
+    border:1px solid var(--line);font-size:12px;font-weight:700;color:var(--ink2);}
+  .cycle-item.active{background:var(--primary);border-color:var(--primary);color:#fff;}
+
+  /* ---------- ingredient rows ---------- */
+  .ing-title{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;}
+  .ing-title b{font-size:14px;font-weight:800;}
+  .ing-title span{font-size:10px;color:var(--ink3);}
+  .ing-row{padding:9px 0;border-bottom:1px solid #eef1e2;}
+  .ing-row:last-child{border-bottom:none;}
+  .ing-main{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+  .ing-name{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;min-width:0;}
+  .type{padding:1px 5px;border-radius:5px;background:#eef2e4;font-size:9px;font-weight:700;color:var(--ink);}
+  .type.sup{color:var(--gold);}
+  .ing-amt{font-size:12px;font-weight:800;white-space:nowrap;}
+  .meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
+  .chip{display:inline-flex;align-items:baseline;gap:4px;padding:2px 8px;border-radius:6px;
+    background:#f4f6ec;font-size:10px;color:var(--ink2);}
+  .chip b{font-weight:400;color:inherit;}
+  .mark-new .chip{background:#fff;border:1px solid #e3ecd9;}
+
+  /* ---------- tags ---------- */
+  .tag{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;
+    padding:1px 7px;border-radius:999px;border:1px solid transparent;white-space:nowrap;}
+  .tag-buy{background:#eef3ea;color:var(--green);border-color:#cfdcc4;}
+  .tag-stock{background:var(--gold-soft);color:#8a6b33;border-color:#e8d9bd;}
+  .src-note{font-size:9.5px;color:var(--ink3);line-height:1.5;margin-top:5px;}
+
+  /* ---------- bottom bar ---------- */
+  .bottombar{position:relative;margin-top:2px;background:#fff;border-radius:16px 16px 0 0;
+    padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+    box-shadow:0 -4px 14px rgba(30,46,36,.06);}
+  .price{font-size:19px;font-weight:800;letter-spacing:-.01em;}
+  .price-sub{font-size:9.5px;color:var(--ink3);margin-top:1px;}
+
+  /* ---------- detail status ---------- */
+  .status-card{background:linear-gradient(135deg,#24493a,#14291f);border-radius:16px;padding:14px;color:#fff;}
+  .status-card .top{display:flex;align-items:center;justify-content:space-between;}
+  .status-card h2{margin:0;font-size:17px;font-weight:800;}
+  .status-card .est{font-size:10px;color:#d8bc85;margin-top:4px;}
+  .steps{display:flex;align-items:center;gap:6px;margin-top:14px;}
+  .step{flex:1;text-align:center;font-size:9px;color:rgba(255,255,255,.55);}
+  .step.done{color:#f3e7cd;}
+  .step.now{color:#fff;font-weight:700;}
+  .bar{height:3px;border-radius:2px;background:rgba(255,255,255,.18);margin-bottom:6px;}
+  .bar.done{background:#d8bc85;}
+
+  .kv{display:flex;justify-content:space-between;font-size:11.5px;padding:3px 0;}
+  .kv .k{color:var(--ink2);}
+  .kv .v{font-weight:600;}
+
+  .list-head{display:flex;align-items:center;justify-content:space-between;}
+  .list-head b{font-size:12px;}
+  .link{font-size:10px;color:var(--gold);}
+
+  .empty-note{border:1px dashed #cfd8c2;border-radius:10px;background:#f7f9f2;
+    padding:9px 10px;font-size:10px;line-height:1.55;color:var(--ink2);}
+
+  .ok-line{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;color:var(--green);}
+  .ok-dot{width:14px;height:14px;border-radius:50%;background:var(--green);color:#fff;
+    font-size:9px;display:flex;align-items:center;justify-content:center;}
+
+  /* ---------- staff form ---------- */
+  .label{font-size:11px;font-weight:700;color:var(--ink2);margin-bottom:6px;display:flex;gap:4px;}
+  .label i{font-style:normal;color:var(--danger);}
+  .picker{border:1px solid var(--line);border-radius:10px;background:#fff;padding:10px 12px;
+    font-size:12px;display:flex;justify-content:space-between;align-items:center;}
+  .sku{border:1px solid var(--line);border-radius:12px;background:#fff;padding:10px;margin-bottom:8px;position:relative;}
+  .sku.active{border-color:var(--primary);background:var(--primary-tint);}
+  .sku-name{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:6px;}
+  .rec{font-size:8.5px;background:var(--gold);color:#fff;border-radius:999px;padding:1px 6px;}
+  .sku-meta{font-size:10px;color:var(--ink2);margin-top:5px;}
+  .sku-visible{font-size:9px;color:var(--green);margin-top:6px;font-weight:600;}
+  .sku-facts{font-size:10.5px;color:var(--ink);margin-top:6px;line-height:1.5;}
+  .sku-price{font-size:9.5px;color:var(--ink3);margin-top:4px;}
+  .check{position:absolute;right:10px;top:10px;width:16px;height:16px;border-radius:50%;
+    background:var(--primary);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;}
+  .input{border:1px solid var(--line);border-radius:10px;background:#fff;padding:10px 12px;font-size:12px;
+    display:flex;justify-content:space-between;align-items:center;color:var(--ink2);}
+  .hintbar{background:var(--gold-soft);border-radius:10px;padding:8px 10px;font-size:9.5px;
+    line-height:1.55;color:#7c5f2a;}
+
+  /* ---------- desktop admin ---------- */
+  .desktop{width:940px;background:#f6f7f2;border-radius:14px;border:1px solid #dfe3d5;overflow:hidden;}
+  .d-top{height:40px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;
+    padding:0 16px;gap:10px;font-size:11px;color:var(--ink2);}
+  .d-top b{color:var(--ink);font-size:12px;}
+  .d-body{padding:14px;display:flex;gap:14px;}
+  .d-col{background:#fff;border-radius:10px;border:1px solid var(--line);padding:14px;}
+  .d-left{width:280px;}
+  .d-right{flex:1;}
+  .f-title{font-size:12px;font-weight:800;margin:0 0 10px;}
+  .f-item{margin-bottom:12px;}
+  .f-label{font-size:10px;color:var(--ink2);margin-bottom:4px;}
+  .f-input{border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-size:11px;color:var(--ink);background:#fff;}
+  table{border-collapse:collapse;width:100%;font-size:11px;}
+  th{background:#f6f7f2;text-align:left;font-weight:700;color:var(--ink2);padding:8px 8px;border-bottom:1px solid var(--line);}
+  td{padding:8px;border-bottom:1px solid #eef1e2;color:var(--ink);}
+  .radio{width:13px;height:13px;border-radius:50%;border:1.5px solid #c9cfc0;display:inline-block;}
+  .radio.on{border:5px solid var(--primary);}
+  .switch{width:26px;height:14px;border-radius:99px;background:var(--primary);display:inline-block;position:relative;}
+  .switch:after{content:"";position:absolute;right:2px;top:2px;width:10px;height:10px;border-radius:50%;background:#fff;}
+  .d-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;}
+  .btn-sm{font-size:11px;font-weight:700;border-radius:6px;padding:6px 12px;}
+  .btn-primary{background:var(--primary);color:#fff;}
+  .btn-line{background:#fff;border:1px solid var(--line);color:var(--ink2);}
+  .strike{text-decoration:line-through;color:#a9a396;}
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="board-title">成品鲜食 · 采购信息公开 & 来源等级清理 · 页面原型</div>
+
+  <!-- ================= A · 订购页 改前 ================= -->
+  <div class="frame" id="frame-a">
+    <div class="frame-head"><span class="frame-idx">A</span><b>订购成品页</b><i>改前 · 红框 = 要删掉</i></div>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="right">●●●●  ⚡ 100%</span></div>
+      <div class="nav"><span class="back">‹</span>订购成品</div>
+      <div class="screen">
+        <div class="hero">
+          <h1>鸡胸南瓜营养餐</h1>
+          <p>高蛋白低脂 · 肠胃友好</p>
+          <span class="badge">符合 FEDIAF 2021 犬营养标准</span>
+        </div>
+
+        <div class="dog-row">
+          <div class="dog active"><span class="avatar"></span>布丁</div>
+          <div class="dog"><span class="avatar"></span>豆豆</div>
+        </div>
+
+        <div class="card card-tight">
+          <div class="sec-title" style="font-size:12px;margin-bottom:8px;">快速选择备餐天数</div>
+          <div class="cycle">
+            <div class="cycle-item active">7 天</div>
+            <div class="cycle-item">15 天</div>
+            <div class="cycle-item">30 天</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="ing-title"><b>原料明细</b><span>共 8 种</span></div>
+
+          <div class="mark mark-del">
+            <span class="mark-label">整块改写：渠道承诺</span>
+            <div style="font-size:10px;font-weight:800;color:#8a6b33;background:var(--gold-soft);
+                        display:inline-block;padding:1px 7px;border-radius:5px;margin-bottom:6px;">采购标准</div>
+            <div style="font-size:10.5px;line-height:1.6;">优先采购山姆、盒马、iHerb 等优质渠道的食材与补剂。<br>
+              <span class="muted">这些渠道买不到的，再向下选择其他可靠来源。</span></div>
+          </div>
+
+          <div class="mark mark-del" style="padding:6px 10px;">
+            <span class="mark-label">每行这三列都删</span>
+            <div class="ing-row">
+              <div class="ing-main"><div class="ing-name"><span class="type">食材</span>鸡胸</div><div class="ing-amt">900g</div></div>
+              <div class="meta"><span class="chip">渠道 <b>山姆</b></span><span class="chip">品牌 <b>泰森</b></span><span class="chip">规格 <b>2kg/袋</b></span></div>
+            </div>
+            <div class="ing-row">
+              <div class="ing-main"><div class="ing-name"><span class="type">食材</span>南瓜</div><div class="ing-amt">450g</div></div>
+              <div class="meta"><span class="chip">渠道 <b>盒马</b></span><span class="chip">品牌 <b>盒马日日鲜</b></span><span class="chip">规格 <b>500g/份</b></span></div>
+            </div>
+            <div class="ing-row">
+              <div class="ing-main"><div class="ing-name"><span class="type">食材</span>糙米</div><div class="ing-amt">300g</div></div>
+              <div class="meta"><span class="chip">渠道 <b>山姆</b></span><span class="chip">品牌 <b>沃集鲜</b></span><span class="chip">规格 <b>1kg/袋</b></span></div>
+            </div>
+            <div class="ing-row">
+              <div class="ing-main"><div class="ing-name"><span class="type sup">补剂</span>鱼油</div><div class="ing-amt">21 粒</div></div>
+              <div class="meta"><span class="chip">渠道 <b>iHerb</b></span><span class="chip">品牌 <b>Nordic Naturals</b></span><span class="chip">规格 <b>120粒/瓶</b></span></div>
+            </div>
+          </div>
+          <div style="text-align:center;font-size:10px;color:var(--gold);padding:8px 0 2px;">展开其余 4 项原料 ▼</div>
+        </div>
+
+        <div class="bottombar">
+          <div><div class="price">¥128.00</div><div class="price-sub">每餐约 ¥12.80 · 共 21 袋</div></div>
+          <div class="btn" style="min-width:112px;">去结算</div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">问题：这 6 个值不是采购同事定的，是算价时系统按「商超优先」自动挑的采购商品，补剂那两行来自原料档案。缺货换货时就成了兑现不了的承诺。</div>
+  </div>
+
+  <!-- ================= B · 订购页 改后 ================= -->
+  <div class="frame" id="frame-b">
+    <div class="frame-head"><span class="frame-idx">B</span><b>订购成品页</b><i>改后 · 绿框 = 新增/改写</i></div>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="right">●●●●  ⚡ 100%</span></div>
+      <div class="nav"><span class="back">‹</span>订购成品</div>
+      <div class="screen">
+        <div class="hero">
+          <h1>鸡胸南瓜营养餐</h1>
+          <p>高蛋白低脂 · 肠胃友好</p>
+          <span class="badge">符合 FEDIAF 2021 犬营养标准</span>
+        </div>
+
+        <div class="dog-row">
+          <div class="dog active"><span class="avatar"></span>布丁</div>
+          <div class="dog"><span class="avatar"></span>豆豆</div>
+        </div>
+
+        <div class="card card-tight">
+          <div class="sec-title" style="font-size:12px;margin-bottom:8px;">快速选择备餐天数</div>
+          <div class="cycle">
+            <div class="cycle-item active">7 天</div>
+            <div class="cycle-item">15 天</div>
+            <div class="cycle-item">30 天</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="ing-title"><b>原料明细</b><span>共 8 种</span></div>
+
+          <div class="mark mark-new">
+            <span class="mark-label">改写为「采购与公开」</span>
+            <div style="font-size:10px;font-weight:800;color:var(--green);background:#e7f0e6;
+                        display:inline-block;padding:1px 7px;border-radius:5px;margin-bottom:6px;">采购与公开</div>
+            <div style="font-size:10.5px;line-height:1.7;">
+              食材优先从山姆、盒马、沃尔玛、永辉等商超渠道采购，若遇无货或断货，再选择农贸市场、团购网站等渠道。<br>
+              营养补充剂优先从iHerb采购，若遇无货或断货，再选择亚马逊国际、天猫/京东国际等渠道。<br>
+              <span style="color:var(--green);font-weight:600;">采购完成后，实际采购的原料将展示在订单详情中。</span>
+            </div>
+          </div>
+
+          <div class="ing-row">
+            <div class="ing-main"><div class="ing-name"><span class="type">食材</span>鸡胸</div><div class="ing-amt">900g</div></div>
+          </div>
+          <div class="ing-row">
+            <div class="ing-main"><div class="ing-name"><span class="type">食材</span>南瓜</div><div class="ing-amt">450g</div></div>
+          </div>
+          <div class="ing-row">
+            <div class="ing-main"><div class="ing-name"><span class="type">食材</span>糙米</div><div class="ing-amt">300g</div></div>
+          </div>
+          <div class="ing-row">
+            <div class="ing-main"><div class="ing-name"><span class="type sup">补剂</span>鱼油</div><div class="ing-amt">21 粒</div></div>
+          </div>
+          <div style="text-align:center;font-size:10px;color:var(--gold);padding:8px 0 2px;">展开其余 4 项原料 ▼</div>
+        </div>
+
+        <div class="bottombar">
+          <div><div class="price">¥128.00</div><div class="price-sub">每餐约 ¥12.80 · 共 21 袋</div></div>
+          <div class="btn" style="min-width:112px;">去结算</div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">写清「优先顺序 + 断货怎么办」，但不说死单品从哪买、什么牌子、什么规格；最后一句把承诺换成后续公开。售价另按「最近一次采购价」规则计算。</div>
+  </div>
+
+  <!-- ================= C · 订单详情 采购中 ================= -->
+  <div class="frame" id="frame-c">
+    <div class="frame-head"><span class="frame-idx">C</span><b>订单详情</b><i>采购中 · 占位说明</i></div>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="right">●●●●  ⚡ 100%</span></div>
+      <div class="nav"><span class="back">‹</span>鲜食订单详情</div>
+      <div class="screen">
+        <div class="status-card">
+          <div class="top"><h2>采购中</h2><span style="font-size:10px;color:#d8bc85;">SK20261102-018</span></div>
+          <div class="est">预计 11 月 8 日发货</div>
+          <div class="steps">
+            <div class="step done"><div class="bar done"></div>已付款</div>
+            <div class="step now"><div class="bar done"></div>采购中</div>
+            <div class="step"><div class="bar"></div>生产中</div>
+            <div class="step"><div class="bar"></div>已发货</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sec-title">商品信息</div>
+          <div style="font-size:13px;font-weight:800;">鸡胸南瓜营养餐</div>
+          <div class="kv" style="margin-top:8px;"><span class="k">总净重</span><span class="v">2,100g</span></div>
+          <div class="kv"><span class="k">分装明细</span><span class="v">100g × 21 袋</span></div>
+          <div class="divider"></div>
+          <div class="list-head"><b>原料清单（共 8 种）</b><span class="link">收起</span></div>
+
+          <div class="mark mark-new" style="margin-top:10px;">
+            <span class="mark-label">新增：先说明，后兑现</span>
+            <div class="empty-note" style="border:none;background:transparent;padding:0;">
+              采购完成后，这里会显示每种原料的实际采购渠道和采购产品。
+            </div>
+          </div>
+
+          <div class="ing-row" style="padding-top:10px;">
+            <div class="ing-main"><div class="ing-name"><span class="type">食材</span>鸡胸</div><div class="ing-amt">900g</div></div>
+          </div>
+          <div class="ing-row">
+            <div class="ing-main"><div class="ing-name"><span class="type">食材</span>南瓜</div><div class="ing-amt">450g</div></div>
+          </div>
+          <div class="ing-row">
+            <div class="ing-main"><div class="ing-name"><span class="type">食材</span>糙米</div><div class="ing-amt">300g</div></div>
+          </div>
+          <div class="ing-row">
+            <div class="ing-main"><div class="ing-name"><span class="type sup">补剂</span>鱼油</div><div class="ing-amt">21 粒</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">采购完成前不能给具体信息，但可以先给一个明确的时间点，顾客不会觉得「这里什么都没有」。</div>
+  </div>
+
+  <!-- ================= D · 订单详情 采购完成 ================= -->
+  <div class="frame" id="frame-d">
+    <div class="frame-head"><span class="frame-idx">D</span><b>订单详情</b><i>采购完成 · 实际采购信息</i></div>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="right">●●●●  ⚡ 100%</span></div>
+      <div class="nav"><span class="back">‹</span>鲜食订单详情</div>
+      <div class="screen">
+        <div class="status-card">
+          <div class="top"><h2>生产中</h2><span style="font-size:10px;color:#d8bc85;">SK20261102-018</span></div>
+          <div class="est">预计 11 月 8 日发货</div>
+          <div class="steps">
+            <div class="step done"><div class="bar done"></div>已付款</div>
+            <div class="step done"><div class="bar done"></div>采购中</div>
+            <div class="step now"><div class="bar done"></div>生产中</div>
+            <div class="step"><div class="bar"></div>已发货</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sec-title">商品信息</div>
+          <div style="font-size:13px;font-weight:800;">鸡胸南瓜营养餐</div>
+          <div class="kv" style="margin-top:8px;"><span class="k">总净重</span><span class="v">2,100g</span></div>
+          <div class="kv"><span class="k">分装明细</span><span class="v">100g × 21 袋</span></div>
+          <div class="divider"></div>
+
+          <div class="list-head"><b>原料清单（共 8 种）</b><span class="link">收起</span></div>
+
+          <div class="mark mark-new" style="margin-top:10px;padding:8px 10px 10px;">
+            <span class="mark-label">新增：采购已完成 + 说明</span>
+            <div class="ok-line"><span class="ok-dot">✓</span>采购已完成 · 11 月 5 日</div>
+            <div class="src-note" style="margin-top:4px;">以下是本单原料的实际采购信息。如遇缺货更换同级原料，也会在这里如实标注。</div>
+
+            <div class="ing-row" style="padding-top:9px;">
+              <div class="ing-main"><div class="ing-name"><span class="type">食材</span>鸡胸</div><div class="ing-amt">900g</div></div>
+              <div class="meta">
+                <span class="tag tag-buy">本单采购</span>
+                <span class="chip">渠道 <b>山姆</b></span><span class="chip">采购产品 <b>泰森 鲜鸡大胸</b></span>
+              </div>
+            </div>
+
+            <div class="ing-row">
+              <div class="ing-main"><div class="ing-name"><span class="type">食材</span>南瓜</div><div class="ing-amt">450g</div></div>
+              <div class="meta">
+                <span class="tag tag-buy">本单采购</span>
+                <span class="chip">渠道 <b>盒马</b></span><span class="chip">采购产品 <b>盒马日日鲜 贝贝南瓜</b></span>
+              </div>
+            </div>
+
+            <div class="ing-row">
+              <div class="ing-main"><div class="ing-name"><span class="type">食材</span>糙米</div><div class="ing-amt">300g</div></div>
+              <div class="meta">
+                <span class="tag tag-stock">来自库存</span>
+                <span class="chip">渠道 <b>山姆</b></span><span class="chip">采购产品 <b>沃集鲜 糙米</b></span>
+              </div>
+              <div class="src-note">库存采购日期：2026年10月28日</div>
+            </div>
+
+            <div class="ing-row" style="border-bottom:none;">
+              <div class="ing-main"><div class="ing-name"><span class="type sup">补剂</span>鱼油</div><div class="ing-amt">21 粒</div></div>
+              <div class="meta">
+                <span class="tag tag-stock">来自库存</span>
+                <span class="chip">渠道 <b>iHerb</b></span><span class="chip">采购产品 <b>Nordic Naturals Ultimate Omega</b></span>
+              </div>
+              <div class="src-note">库存采购日期：2026年10月21日</div>
+            </div>
+          </div>
+
+          <div style="text-align:center;font-size:10px;color:var(--gold);padding:8px 0 2px;">展开其余 4 项原料 ▼</div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">两种来源分开标注：「本单采购」= 这一单实际买的；「来自库存」= 这一单没单独买，给的是该原料最近一次真实采购。只展示渠道和采购产品名称，不展示品牌、规格、金额与供应商。</div>
+  </div>
+
+  <!-- ================= E · 员工录入 ================= -->
+  <div class="frame" id="frame-e">
+    <div class="frame-head"><span class="frame-idx">E</span><b>员工 · 添加采购记录</b><i>改后</i></div>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="right">●●●●  ⚡ 100%</span></div>
+      <div class="nav"><span class="back">‹</span>添加采购记录</div>
+      <div class="screen">
+        <div class="card">
+          <div class="label">原料名称 <i>*</i></div>
+          <div class="picker"><span>鸡胸</span><span style="color:#b08d4f;">›</span></div>
+
+          <div class="label" style="margin-top:14px;">采购商品 <i>*</i></div>
+
+          <div class="sku active">
+            <div class="sku-name">泰森 鲜鸡大胸 <span class="rec">推荐</span></div>
+            <span class="check">✓</span>
+            <div class="mark mark-new" style="margin:8px 0 0;padding:7px 9px;">
+              <span class="mark-label">新增：顾客可见预览</span>
+              <div class="sku-facts">顾客将看到：渠道 <b>山姆</b> · 产品 <b>泰森 鲜鸡大胸</b></div>
+            </div>
+            <div class="sku-price">¥68.00 / 袋（内部成本，顾客看不到）</div>
+          </div>
+
+          <div class="sku">
+            <div class="sku-name">圣农 鸡胸肉</div>
+            <div class="sku-facts">渠道 盒马 · 规格 500g/袋</div>
+            <div class="sku-price">¥19.90 / 袋</div>
+          </div>
+
+          <div class="label" style="margin-top:14px;">购买数量 <i>*</i></div>
+          <div class="input"><span style="color:#26261f;">5</span><span>袋</span></div>
+
+          <div class="label" style="margin-top:14px;">付款金额 <i>*</i></div>
+          <div class="input"><span style="color:#26261f;">156.50</span><span style="font-size:9px;">单价 ¥31.30/袋</span></div>
+
+          <div class="hintbar" style="margin-top:14px;">
+            这里选的采购渠道和商品名称会展示给顾客（规格、品牌不展示），请按实际买到的商品填写；买到的不是列表里的商品时，先新增采购商品。
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-top:2px;">
+          <div class="btn btn-ghost" style="flex:1;">取消</div>
+          <div class="btn" style="flex:2;">保存</div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">员工端原来不知道哪些字段会给顾客看。加一行「顾客将看到」的预览，员工一眼确认：顾客看到的是渠道 + 商品名称，规格和品牌不展示。</div>
+  </div>
+
+  <!-- ================= F · 后台原料表单 ================= -->
+  <div class="frame" id="frame-f">
+    <div class="frame-head"><span class="frame-idx">F</span><b>后台 · 原料与采购商品</b><i>清理「来源等级」后的样子</i></div>
+    <div class="desktop">
+      <div class="d-top"><b>原料管理</b><span>/</span><span>鸡胸</span><span style="margin-left:auto;color:#968f6d;">编辑原料</span></div>
+      <div class="d-body">
+        <div class="d-col d-left">
+          <div class="f-title">基本信息</div>
+          <div class="f-item"><div class="f-label">原料名称</div><div class="f-input">鸡胸</div></div>
+          <div class="f-item"><div class="f-label">类型 / 采购策略</div><div class="f-input">食材 · 每日采购</div></div>
+
+          <div class="mark mark-del" style="margin-top:20px;padding:16px 10px 10px;">
+            <span class="mark-label">删除</span>
+            <div class="f-label" style="margin-bottom:4px;">来源等级</div>
+            <div class="f-input strike">商超优先</div>
+            <div style="font-size:9.5px;color:var(--danger);margin-top:5px;line-height:1.5;">
+              三档来源方案（有机 / 商超 / 批发）整体下线，这个字段与匹配逻辑一起删。
+            </div>
+          </div>
+
+          <div class="mark mark-new" style="margin-top:16px;padding:8px 10px;">
+            <span class="mark-label">新增：算价依据（只读）</span>
+            <div style="font-size:10px;line-height:1.7;">
+              <div style="display:flex;justify-content:space-between;"><span>最近采购价</span><b>¥65.00 / 2kg</b></div>
+              <div style="display:flex;justify-content:space-between;"><span>采购日期</span><b>2026-10-28</b></div>
+              <div style="display:flex;justify-content:space-between;color:#6b6653;"><span>折合</span><span>¥32.50 / kg</span></div>
+              <div style="margin-top:6px;padding-top:6px;border-top:1px dashed #cfdcc4;color:#6b6653;">
+                无采购历史时：用创建价 ¥62.00 / 2kg
+              </div>
+              <div style="margin-top:6px;color:#2f6b4f;">新订单按此价算；老订单价格已冻结，不受影响。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-col d-right">
+          <div class="f-title">采购商品（采购 SKU）</div>
+          <div style="font-size:10px;margin-bottom:8px;">
+            <span class="strike" style="background:#f7e9e3;padding:1px 6px;border-radius:4px;">来源</span>
+            <span style="color:var(--danger);">← 这一列（原来源等级 / 未标来源）整列删除</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>名称</th><th>采购渠道</th><th>规格</th><th>单价</th>
+                <th>状态</th><th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>泰森 鲜鸡大胸</td><td>山姆</td><td>2kg/袋</td><td>¥68.00</td>
+                <td><span class="switch"></span></td>
+                <td style="color:#b08d4f;">编辑</td>
+              </tr>
+              <tr>
+                <td>圣农 鸡胸肉</td><td>盒马</td><td>500g/袋</td><td>¥19.90</td>
+                <td><span class="switch"></span></td>
+                <td style="color:#b08d4f;">编辑</td>
+              </tr>
+              <tr>
+                <td>正大 鸡胸</td><td>沃尔玛</td><td>1kg/袋</td><td>¥32.00</td>
+                <td><span class="switch"></span></td>
+                <td style="color:#b08d4f;">编辑</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="font-size:9.5px;color:#968f6d;margin-top:8px;line-height:1.6;">
+            删除「来源」列；不再需要「算价品」——算价按该原料最近一次采购价自动跟随。
+          </div>
+          <div class="d-actions">
+            <div class="btn-sm btn-line">取消</div>
+            <div class="btn-sm btn-primary">保存</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">来源等级从表单、列表、导入模板和算价逻辑里一起拿掉；算价改为「最近一次采购价 → 无则创建价」，后台只读展示依据，不再需要人工挑「算价品」。</div>
+  </div>
+
+</div>
+</body>
+</html>

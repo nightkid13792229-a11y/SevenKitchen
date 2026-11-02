@@ -255,9 +255,6 @@ export interface IngredientCostItem {
   ingredientId?: string; // 原料ID
   procurementSkuId?: string; // 采购 SKU ID
   procurementSkuName?: string; // 采购 SKU 名称
-  procurementSkuSourcePlan?: string; // 顾客选择的采购来源方案
-  procurementSkuSourceTier?: string; // 实际命中的采购 SKU 来源等级
-  procurementSkuFallbackLevel?: number; // 来源方案回退层级
   properties?: any; // 完整的properties对象（包含purchase_link等）
   preparationMethod?: string; // 添加时机 / 部位状态预处理
   nutrientTargetKey?: string; // 营养素名称（补剂用）
@@ -938,19 +935,6 @@ export class PricingService {
           (ingredient as any).procurementSkuName ||
           ingredientProperties.procurement_sku_name ||
           undefined;
-        const procurementSkuSourcePlan =
-          (ingredient as any).sourcePlanCode ||
-          ingredientProperties.procurement_sku_source_plan ||
-          undefined;
-        const procurementSkuSourceTier =
-          (ingredient as any).procurementSkuSourceTier ||
-          ingredientProperties.procurement_sku_source_tier ||
-          undefined;
-        const procurementSkuFallbackLevel =
-          (ingredient as any).sourcePlanFallbackLevel ??
-          ingredientProperties.procurement_sku_fallback_level ??
-          undefined;
-
         // Collect detailed data
         ingredientDetails.push({
           recipeItemId: item.id,
@@ -970,9 +954,6 @@ export class PricingService {
           ingredientId: ingredient.id,
           procurementSkuId,
           procurementSkuName,
-          procurementSkuSourcePlan,
-          procurementSkuSourceTier,
-          procurementSkuFallbackLevel,
           displayUnit: 'g', // 前端显示时转换为克
           properties: ingredient.properties, // 添加完整properties
         });

@@ -27,9 +27,9 @@ describe('checkout direct-buy storage contract', () => {
     expect(source).not.toContain('buildDirectBuyOrderConfig(rawStoredConfig, options)')
   })
 
-  it('includes package plan and ingredient source plan label in order config', () => {
+  it('includes package plan in order config without the retired source plan', () => {
     expect(source).toContain('packagePlan')
-    expect(source).toContain('ingredientSourcePlanLabel')
+    expect(source).not.toContain('ingredientSourcePlan')
   })
 
   it('preserves cooking method from stored config', () => {
@@ -43,7 +43,7 @@ describe('checkout direct-buy storage contract', () => {
     expect(source).toContain("url: '/orders/pricing/preview'")
     expect(source).toContain('dogId: orderConfig.value.dogId')
     expect(source).toContain('recipeId: orderConfig.value.recipeId')
-    expect(source).toContain('ingredientSourcePlan: orderConfig.value.ingredientSourcePlan')
+    expect(source).not.toContain('ingredientSourcePlan')
     expect(source).toContain('addressId: selectedAddress.value?.id')
     expect(source).toContain("uni.setStorageSync('direct_buy_order_config'")
     expect(source).toContain('价格已更新，请确认后重新提交')

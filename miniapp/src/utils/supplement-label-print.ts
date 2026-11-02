@@ -75,13 +75,6 @@ export function describeLabelLoadError(error: unknown): string {
   return '标签图片加载失败，请重试'
 }
 
-/** 后端"还没分装"的拒绝：措辞可能微调，所以主判定 + 兜底关键词都留着 */
-export function isSupplementPackRequiredError(message: string): boolean {
-  if (!message) return false
-  if (message.includes('请先完成分装')) return true
-  return message.includes('分装') && (message.includes('标签') || message.includes('打印'))
-}
-
 /**
  * 打印失败归类。
  *

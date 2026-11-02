@@ -845,6 +845,7 @@ export class IngredientCreationCommitService {
       purchaseUnit,
       purchaseToBaseRatio: 1,
       currentPricePerPurchaseUnit: 0,
+      initialPricePerPurchaseUnit: 0,
       properties: properties as Prisma.InputJsonValue,
       nutritionProfile:
         primaryNutritionData as unknown as Prisma.InputJsonValue,

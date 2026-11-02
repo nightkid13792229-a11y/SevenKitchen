@@ -98,8 +98,6 @@ export function getPackagingUnits(params: {
       recipeVersion: number;
       totalProductionG: number;
       status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
-      ingredientSourcePlan?: string | null;
-      ingredientSourcePlanLabel?: string;
       orderItems: Array<{
         orderId: string;
         orderItemId: string;
@@ -107,7 +105,6 @@ export function getPackagingUnits(params: {
         packageSpecG: number; // 单包规格（g）
         packageCount: number; // 总袋数
         packagePlan?: PackagePlanItem[] | null;
-        ingredientSourcePlan?: string | null;
         recipientName?: string;
         recipientCity?: string;
         adminRemark?: string;
@@ -314,7 +311,6 @@ export function getRecipeBatchesWithOrders(params: {
           packageSpecG: number;
           packageCount: number;
           packagePlan?: PackagePlanItem[] | null;
-          ingredientSourcePlan?: string | null;
           recipeSnapshot: any;
           createdAt: string;
         }>;

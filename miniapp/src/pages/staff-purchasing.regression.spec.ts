@@ -39,7 +39,7 @@ describe('staff purchasing wording', () => {
 
   it('uses concise replenishment entry wording', () => {
     expect(indexSource).toContain('quick-entry-title">补货');
-    expect(stockCreateSource).toContain('hero-title">补货');
+    expect(stockCreateSource).toContain('section-title">补货建议');
     expect(indexSource).not.toContain('创建补货采购单');
     expect(stockCreateSource).not.toContain('创建补货采购单');
   });
@@ -188,7 +188,8 @@ describe('staff purchasing detail audit display', () => {
     expect(detailSource).toContain("'补货清单详情'");
     expect(detailSource).toContain("'日采清单详情'");
     expect(detailSource).toContain('uni.setNavigationBarTitle({ title: detailTitle.value })');
-    expect(detailSource).toContain('采购时间');
+    expect(detailSource).toContain('制作日期');
+    expect(detailSource).not.toContain('采购时间');
     expect(detailSource).not.toContain('<text class="title">采购清单详情</text>');
     expect(detailSource).not.toContain('<text class="label">采购类型:</text>');
   });
@@ -210,30 +211,37 @@ describe('staff purchasing detail audit display', () => {
   });
 
   it('keeps item deletion available only for replenishment lists', () => {
-    expect(detailSource).toContain('class="delete-item-btn"');
+    expect(detailSource).toContain('confirmDeleteItem(item)');
     expect(detailSource).toContain("purchaseList.kind === 'STOCK_REPLENISHMENT'");
+    expect(detailSource).toContain('!purchaseList.startedAt');
   });
 
   it('shows stock audit quantities inline while keeping shortage prominent', () => {
-    expect(detailSource).toContain('class="item-demand-row"');
-    expect(detailSource).toContain('class="stock-audit-inline"');
+    expect(detailSource).toContain('class="item-line-3"');
+    expect(detailSource).toContain('class="audit-text"');
     expect(detailSource).not.toContain('class="item-stock-offset"');
-    expect(detailSource).toContain('订单需求 {{ formatResolvedQuantity(item.resolvedGrossQuantityNeeded, item) }}');
-    expect(detailSource).toContain('库存抵扣 {{ formatResolvedQuantity(item.resolvedStockDeductedQuantity, item) }}');
-    expect(detailSource).toContain('<text class="quantity-label">仍需采购</text>');
+    expect(detailSource).toContain('formatResolvedQuantity(item.resolvedGrossQuantityNeeded, item)');
+    expect(detailSource).toContain('formatResolvedQuantity(item.resolvedStockDeductedQuantity, item)');
+    expect(detailSource).toContain('class="quantity-label">仍需</text>');
+    expect(detailSource).toContain('formatQuantity(item)');
   });
 
   it('surfaces SKU brand and reference price with a scannable item header', () => {
-    expect(detailSource).toContain('class="item-heading"');
-    expect(detailSource).toContain('item.resolvedBrand');
+    expect(detailSource).toContain('class="item-line-1"');
+    expect(detailSource).toContain('class="item-name"');
+    expect(detailSource).toContain('buildItemMetaLine(item)');
+    expect(detailSource).toContain('formatBrandLabel(item.resolvedBrand)');
+    expect(detailSource).toContain('item.resolvedPurchaseChannel');
+    expect(detailSource).toContain('item.resolvedProductModel');
     expect(detailSource).toContain('formatSkuReferencePrice(item)');
-    expect(detailSource).toContain('sku-price');
     expect(detailSource).toContain('resolvedCurrentPurchasePrice');
     expect(detailSource).toContain('resolvedPurchaseToBaseRatio');
     expect(detailSource).toContain('参考单价 ¥');
     expect(detailSource).not.toContain('约¥');
     expect(detailSource).not.toContain('class="spec brand">品牌');
-    expect(detailSource.indexOf('class="sku-price"')).toBeLessThan(detailSource.indexOf('class="item-specs"'));
+    expect(detailSource.indexOf('class="item-name"')).toBeLessThan(
+      detailSource.indexOf('buildItemMetaLine(item)'),
+    );
   });
 });
 

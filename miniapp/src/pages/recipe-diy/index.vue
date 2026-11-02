@@ -418,13 +418,13 @@ const selectedLifeStageLabel = computed(() => {
   const version = recipe.value.availableLifeStageVersions?.find(
     (item) => item.lifeStage === stage,
   )
-  return version?.label || getLifeStageLabel(stage)
+  return getLifeStageLabel(stage)
 })
 const lifeStageVersionOptions = computed(() =>
   (recipe.value.availableLifeStageVersions || []).map((version) => ({
     recipeId: version.recipeId,
     lifeStage: version.lifeStage,
-    label: version.label || getLifeStageLabel(version.lifeStage),
+    label: getLifeStageLabel(version.lifeStage),
   })),
 )
 const suggestedLifeStageVersion = computed(() => {
@@ -437,7 +437,7 @@ const suggestedLifeStageVersion = computed(() => {
   if (!version || version.lifeStage === current) return null
   return {
     ...version,
-    label: version.label || getLifeStageLabel(version.lifeStage),
+    label: getLifeStageLabel(version.lifeStage),
   }
 })
 

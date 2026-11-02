@@ -818,14 +818,10 @@ const selectedRecipeIdForActions = computed(() => {
 })
 
 const selectedLifeStageLabel = computed(() => {
-  if (recipe.value.selectedLifeStageLabel) return recipe.value.selectedLifeStageLabel
-  if (recipe.value.lifeStageMatch?.lifeStageLabel) return recipe.value.lifeStageMatch.lifeStageLabel
   const selectedStage = recipe.value.selectedLifeStage || recipe.value.lifeStageMatch?.lifeStage || ''
-  if (!selectedStage) return ''
-  const matchedVersion = recipe.value.availableLifeStageVersions?.find(
-    (version) => version.lifeStage === selectedStage,
-  )
-  return matchedVersion?.label || getLifeStageLabel(selectedStage)
+  if (!selectedStage) return recipe.value.selectedLifeStageLabel || ''
+  // 2026-11-02：版本名以前端映射为准
+  return getLifeStageLabel(selectedStage)
 })
 
 const lifeStageState = computed(() =>
@@ -849,7 +845,7 @@ const suggestedVersion = computed(() => {
 })
 const suggestedVersionLabel = computed(() => {
   const version = suggestedVersion.value
-  return version ? version.label || getLifeStageLabel(version.lifeStage) : ''
+  return version ? getLifeStageLabel(version.lifeStage) : ''
 })
 const suggestedVersionStage = computed(() => suggestedVersion.value?.lifeStage || '')
 const lifeStageVersionOptions = computed(() =>
@@ -857,7 +853,7 @@ const lifeStageVersionOptions = computed(() =>
     const price = getVersionReferencePrice(version)
     return {
       lifeStage: version.lifeStage,
-      label: version.label || getLifeStageLabel(version.lifeStage),
+      label: getLifeStageLabel(version.lifeStage),
       recipeId: version.recipeId,
       note: price ? `约¥${formatReferencePrice(price)}/100g` : '',
     }

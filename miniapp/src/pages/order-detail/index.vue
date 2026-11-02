@@ -74,9 +74,9 @@
             <view class="item-header">
               <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
               <text
-                v-if="item.recipeSnapshot?.series_life_stage_label"
+                v-if="recipeVersionLabel(item)"
                 class="recipe-version"
-              >{{ item.recipeSnapshot.series_life_stage_label }}</text>
+              >{{ recipeVersionLabel(item) }}</text>
               <text v-if="isStockOrder" class="nutrition-standard"
                 >现货 · 试吃装</text
               >
@@ -855,6 +855,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { onShareAppMessage, onPullDownRefresh } from '@dcloudio/uni-app';
 import { request, requestSubscriptionMessage } from '../../utils/api';
+import { getLifeStageLabel } from '../../utils/label-mapping';
 import {
   bindOrderCustomerAddress as bindExistingOrderAddress,
   createOrderCustomerAddress,
@@ -1347,7 +1348,15 @@ const groupedItems = computed(() => {
 });
 
 const orderCenterTitle = computed(() => {
-  const firstName = order.value?.items?.[0]?.recipeSnapshot?.name?.trim();
+  function recipeVersionLabel(item: any): string {
+  const snapshot = item?.recipeSnapshot
+  if (!snapshot) return ''
+  // 2026-11-02：以前端映射为准，后端旧标签只作兜底
+  const stage = snapshot.series_life_stage
+  return stage ? getLifeStageLabel(stage) : snapshot.series_life_stage_label || ''
+}
+
+const firstName = order.value?.items?.[0]?.recipeSnapshot?.name?.trim();
   if (!firstName) return '赛文的食堂 鲜食订单';
   const itemCount = order.value?.items?.length || 1;
   return itemCount > 1 ? `${firstName}等${itemCount}件` : firstName;

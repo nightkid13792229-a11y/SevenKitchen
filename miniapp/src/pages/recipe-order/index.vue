@@ -961,20 +961,17 @@ async function retryDogsLoad() {
   await loadDogs()
 }
 const selectedLifeStageLabel = computed(() => {
-  if (recipe.value.selectedLifeStageLabel) return recipe.value.selectedLifeStageLabel
+  // 2026-11-02：版本名以前端映射为准 —— 后端旧标签（如"低活动 / 老年版"）不再直出
   const stage = selectedLifeStage.value || recipe.value.selectedLifeStage || ''
-  if (!stage) return ''
-  const matchedVersion = recipe.value.availableLifeStageVersions?.find(
-    version => version.lifeStage === stage,
-  )
-  return matchedVersion?.label || getLifeStageLabel(stage)
+  if (!stage) return recipe.value.selectedLifeStageLabel || ''
+  return getLifeStageLabel(stage)
 })
 const lifeStageVersionOptions = computed(() => {
   const versions = recipe.value.availableLifeStageVersions || []
   return versions.map(version => ({
     recipeId: version.recipeId,
     lifeStage: version.lifeStage,
-    label: version.label || getLifeStageLabel(version.lifeStage),
+    label: getLifeStageLabel(version.lifeStage),
   }))
 })
 const suggestedLifeStageVersion = computed(() => {
@@ -988,7 +985,7 @@ const suggestedLifeStageVersion = computed(() => {
   return {
     recipeId: version.recipeId,
     lifeStage: version.lifeStage,
-    label: version.label || getLifeStageLabel(version.lifeStage),
+    label: getLifeStageLabel(version.lifeStage),
   }
 })
 

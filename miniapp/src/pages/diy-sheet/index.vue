@@ -922,7 +922,8 @@ const supplementNutrientBaseWeightG = computed(() => {
  */
 const lifeStageLabel = computed(() => {
   const stage = recipe.value?.selectedLifeStage || ''
-  return recipe.value?.selectedLifeStageLabel || (stage ? getLifeStageLabel(stage) : '')
+  if (stage) return getLifeStageLabel(stage)
+  return recipe.value?.selectedLifeStageLabel || ''
 })
 
 // 格式化狗狗年龄

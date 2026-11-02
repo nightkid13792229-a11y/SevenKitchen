@@ -504,7 +504,7 @@ cmd_cleanup() {
     esac
   done
 
-  local main_wt state meta branch wt cur_wt
+  local main_wt state meta="" branch wt cur_wt
   main_wt="$(collab_main_worktree)"
   state="$(collab_state_dir)"
   cur_wt="$(git rev-parse --show-toplevel 2>/dev/null || true)"
@@ -523,14 +523,27 @@ cmd_cleanup() {
     base="$(basename "$target")"
     if [ -f "$state/tasks/$base.meta" ]; then
       meta="$state/tasks/$base.meta"
-    else
-      die "找不到任务登记：$target"
     fi
   fi
 
-  branch="$(collab_meta_get "$meta" branch)"
-  wt="$(collab_meta_get "$meta" worktree)"
-  [ -n "$branch" ] && [ -n "$wt" ] || die "任务登记不完整：$meta"
+  if [ -n "$meta" ]; then
+    branch="$(collab_meta_get "$meta" branch)"
+    wt="$(collab_meta_get "$meta" worktree)"
+  else
+    # 兼容没有登记的老分支/老工位：允许直接传 task/... 分支名
+    if git -C "$main_wt" show-ref --verify --quiet "refs/heads/$target"; then
+      branch="$target"
+      wt="$(git -C "$main_wt" worktree list --porcelain | awk -v b="refs/heads/$branch" '
+        /^worktree / { path=substr($0, 10) }
+        /^branch / { if ($2 == b) { print path; exit } }
+      ')"
+      [ -n "$wt" ] || die "分支 $branch 没有对应的工位目录"
+    else
+      die "找不到任务登记或分支：$target"
+    fi
+  fi
+
+  [ -n "$branch" ] && [ -n "$wt" ] || die "任务登记不完整：${meta:-$target}"
 
   if [ "$cur_wt" = "$wt" ]; then
     die "当前就在这个工位里；先 cd 到主工作区再 cleanup"
@@ -565,7 +578,7 @@ cmd_cleanup() {
     fi
   fi
 
-  rm -f "$meta"
+  [ -n "$meta" ] && rm -f "$meta"
   ok "已清理：$branch"
 }
 

@@ -124,10 +124,17 @@ describe('staff order center · 食谱 / 狗狗入口', () => {
     expect(orderCenter).toContain('@tap.stop="openDog(item)"')
   })
 
-  it('★ 卡片主行显示食谱名，不再显示顾客名和手机号', () => {
+  it('★ 鲜食卡片显示顾客姓名和狗狗名，但手机号仍不显示', () => {
     expect(orderCenter).toContain('v-if="item.recipeName"')
     expect(orderCenter).toContain('{{ item.recipeName }}')
-    expect(orderCenter).not.toContain('item.customerName')
+    // 只有鲜食卡片加这一行，定制/补剂保持原样
+    expect(orderCenter).toContain(
+      `v-if="item.type === 'FOOD' && (item.customerName || item.dogName)"`,
+    )
+    expect(orderCenter).toContain('{{ item.customerName }}')
+    expect(orderCenter).toContain('{{ item.dogName }}')
+    expect(orderCenter).toContain('顾客 ')
+    expect(orderCenter).toContain('狗狗 ')
     expect(orderCenter).not.toContain('item.customerPhone')
   })
 

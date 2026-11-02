@@ -77,10 +77,20 @@
           <text class="status">{{ item.statusLabel }}</text>
         </view>
 
-        <!-- 主行显示食谱名，不显示顾客名/手机号（老板 2026-10-30 定的口径）：
-             员工是按"要做什么菜"干活的；没有绑定食谱（多数补剂单）就整行不显示 -->
+        <!-- 主行显示食谱名；鲜食卡片下面补一行顾客/狗狗（2026-11-02 老板要求）。
+             手机号仍然不显示：员工按食谱干活，电话去详情页看 -->
         <view v-if="item.recipeName" class="order-main">
           <text class="recipe-name">{{ item.recipeName }}</text>
+        </view>
+
+        <!-- 鲜食卡片：顾客姓名 + 狗狗名，现场认单用；定制/补剂卡片保持原样 -->
+        <view
+          v-if="item.type === 'FOOD' && (item.customerName || item.dogName)"
+          class="order-people"
+        >
+          <text v-if="item.customerName" class="person">顾客 {{ item.customerName }}</text>
+          <text v-if="item.customerName && item.dogName" class="person-sep">·</text>
+          <text v-if="item.dogName" class="person">狗狗 {{ item.dogName }}</text>
         </view>
 
         <view class="tags-row">
@@ -143,6 +153,10 @@ interface OrderCenterItem {
   statusGroup: string
   /** 卡片主行显示的食谱名；空 = 这单没绑定食谱（多数补剂单） */
   recipeName: string | null
+  /** 顾客昵称；鲜食卡片上显示（2026-11-02） */
+  customerName: string | null
+  /** 狗狗名；鲜食卡片上显示（2026-11-02） */
+  dogName: string | null
   createdAt: string
   amountTotal: number | null
   /** 是否有未完结的售后（待受理/处理中）：决定标签是橙色还是灰色 */
@@ -429,6 +443,10 @@ onMounted(() => load())
 
 .order-main { display: flex; align-items: baseline; margin-top: 16rpx; }
 .recipe-name { font-size: 29rpx; font-weight: 600; color: #1e3a2f; }
+/* 鲜食卡片上的顾客/狗狗：小字一行，别抢食谱名的注意力 */
+.order-people { display: flex; align-items: center; flex-wrap: wrap; margin-top: 8rpx; }
+.person { font-size: 22rpx; color: #606266; }
+.person-sep { margin: 0 10rpx; color: #c0c4cc; font-size: 22rpx; }
 
 .tags-row { display: flex; flex-wrap: wrap; margin-top: 10rpx; }
 .mini-tag { margin: 0 10rpx 6rpx 0; padding: 3rpx 10rpx; border-radius: 6rpx; font-size: 20rpx; }

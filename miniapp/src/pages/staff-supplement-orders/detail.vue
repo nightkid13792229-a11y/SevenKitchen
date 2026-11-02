@@ -34,6 +34,10 @@
             <text v-if="openAftersaleLabel" class="status-tag status-tag--warn">
               {{ openAftersaleLabel }}
             </text>
+            <text
+              v-if="order.refundStatus === 'SUCCESS'"
+              class="status-tag status-tag--done"
+            >已退款</text>
           </view>
         </view>
         <view class="info-row">

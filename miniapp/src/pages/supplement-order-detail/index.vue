@@ -15,7 +15,10 @@
           </view>
         </view>
         <text class="hero-date">{{ formatTime(order.createdAt) }}</text>
-        <text v-if="order.status === 'PAID'" class="hero-hint">
+        <text v-if="isRefunded" class="hero-hint">
+          退款 ¥{{ money(order.refundAmount) }} 已原路退回
+        </text>
+        <text v-else-if="order.status === 'PAID'" class="hero-hint">
           {{ order.packingDate ? `预计 ${order.packingDate} 发货` : '已付款，等待管理员排期' }}
         </text>
         <text v-else-if="order.packingDate" class="hero-hint">预计发货日 {{ order.packingDate }}</text>
@@ -118,8 +121,15 @@ const canChangeAddress = computed(() =>
 const canCancel = computed(() =>
   order.value ? ['PENDING_PAYMENT', 'PAID'].includes(order.value.status) : false,
 )
+/** 钱已原路退回：订单履约状态可能仍是「已发货」，但顾客侧必须显示已退款 */
+const isRefunded = computed(
+  () => String(order.value?.refundStatus || '').toUpperCase() === 'SUCCESS',
+)
 const canApplyAftersale = computed(() =>
-  order.value ? ['PACKED', 'SHIPPED', 'COMPLETED'].includes(order.value.status) : false,
+  order.value
+    ? !isRefunded.value &&
+      ['PACKED', 'SHIPPED', 'COMPLETED'].includes(order.value.status)
+    : false,
 )
 
 /**
@@ -144,6 +154,7 @@ function formatTime(value: string) {
   return value ? value.replace('T', ' ').slice(0, 16) : '—'
 }
 function statusLabel(value: string) {
+  if (isRefunded.value) return '已退款'
   return (
     {
       PENDING_PAYMENT: '待付款',

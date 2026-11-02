@@ -1,0 +1,32 @@
+{
+  "tableId": "T0313",
+  "caption": "Table 43-7. Mean times for struvite urolith dissolution.",
+  "columns": [
+    "Urolith location and infective status",
+    "Mean time for dissolution",
+    "Comments and precautions"
+  ],
+  "rows": [
+    [
+      "Infection-induced urocystoliths",
+      "Approximately 2.5 months (range two weeks to seven months)",
+      "Use appropriate caution in dogs at increased risk for pancreatitis, dogs with renal failure and dogs with hypoalbuminemic edema"
+    ],
+    [
+      "Sterile urocystoliths",
+      "Three to four weeks",
+      "If idiopathic, appropriately monitor for recurrence"
+    ],
+    [
+      "Infection-induced struvite urocystoliths in immature dogs",
+      "Less than two weeks",
+      "If circumstances warrant feeding for a longer period, serial monitor body weight, body condition, serum albumin concentration and packed cell volume for evidence of protein-calorie malnutrition"
+    ],
+    [
+      "Infection-induced nephroliths",
+      "Approximately 184 days (range 67 to 300 days)",
+      "Contraindicated in dogs with concomitant obstruction to urine outflow"
+    ]
+  ],
+  "note": "图中另含 Table 43-8（完整内容见 T0314），此处只转录第一张表 Table 43-7。"
+}

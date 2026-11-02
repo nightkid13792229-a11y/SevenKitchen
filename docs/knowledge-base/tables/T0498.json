@@ -1,0 +1,118 @@
+{
+ "num": "67-1",
+ "caption": "Table 67-1. Risk factors for pancreatitis in dogs and cats.",
+ "page": 3,
+ "columns": [
+  "Risk factors"
+ ],
+ "rows": [
+  [
+   "Breed"
+  ],
+  [
+   "Boxer"
+  ],
+  [
+   "Briard"
+  ],
+  [
+   "Cavalier King Charles spaniel"
+  ],
+  [
+   "Cocker spaniel"
+  ],
+  [
+   "Collie"
+  ],
+  [
+   "Miniature schnauzer"
+  ],
+  [
+   "Sheltie"
+  ],
+  [
+   "Yorkshire terrier"
+  ],
+  [
+   "Himalayan cat"
+  ],
+  [
+   "Dietary factors"
+  ],
+  [
+   "High-fat, low-protein foods"
+  ],
+  [
+   "Ingestion of garbage or table scraps"
+  ],
+  [
+   "Drug administration"
+  ],
+  [
+   "Azathioprine"
+  ],
+  [
+   "Corticosteroids"
+  ],
+  [
+   "L-asparaginase"
+  ],
+  [
+   "Organophosphate insecticides (cats)"
+  ],
+  [
+   "Fasting hyperlipidemia"
+  ],
+  [
+   "Gender"
+  ],
+  [
+   "Castrated males"
+  ],
+  [
+   "Spayed females"
+  ],
+  [
+   "Hepatobiliary disease"
+  ],
+  [
+   "Feline suppurative cholangiohepatitis"
+  ],
+  [
+   "Triaditis (IBD, cholangiohepatitis, pancreatitis)"
+  ],
+  [
+   "Hypercalcemia"
+  ],
+  [
+   "Hyperparathyroidism"
+  ],
+  [
+   "Intravenous calcium infusion"
+  ],
+  [
+   "Increasing age"
+  ],
+  [
+   "Intervertebral disk disease"
+  ],
+  [
+   "Ischemia or reperfusion"
+  ],
+  [
+   "Postgastric dilatation-volvulus"
+  ],
+  [
+   "Obesity"
+  ]
+ ],
+ "tableId": "T0498",
+ "doc": "sacn5/chapters/SACN5_67.pdf",
+ "method": "视觉",
+ "verify": {
+  "numbers": 0,
+  "found": 0,
+  "status": "通过",
+  "misses": []
+ }
+}

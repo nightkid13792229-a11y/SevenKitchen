@@ -25,6 +25,72 @@ export interface KnowledgeSourceRecord {
   role: string;
 }
 
+/**
+ * 内部整理材料与未归档文献（2026-11-02 补登记）。
+ *
+ * 它们不是"权威来源"：内部笔记是我们自己的整理，GfE/Meyer/Klein 是引用了
+ * 但没归档的文献。登记进来是为了**让出处可追溯**——至少能说出"这条依据的是
+ * 什么、有没有原文"，而不是留一串自由文本。
+ */
+const EXTRA_SOURCES: KnowledgeSourceRecord[] = [
+  {
+    id: 'INTERNAL-LIVER-LOWFAT',
+    name: '肝肾低脂注意事项（内部整理，无文献依据）',
+    version: '2026-10',
+    tier: 'C',
+    local: false,
+    role: '内部经验：低脂饮食在肝胆与胰腺炎场景的注意事项',
+  },
+  {
+    id: 'INTERNAL-SKIN-TARGET',
+    name: '皮肤被毛功能目标（内部整理，无文献依据）',
+    version: '2026-10',
+    tier: 'C',
+    local: false,
+    role: '内部经验：皮肤被毛相关营养目标设定',
+  },
+  {
+    id: 'INTERNAL-IBD-TARGET',
+    name: 'IBD/CIE 功能目标表（内部整理，无文献依据）',
+    version: '2026-10',
+    tier: 'C',
+    local: false,
+    role: '内部经验：慢性肠病营养目标',
+  },
+  {
+    id: 'INTERNAL-REVIEW-TARGET',
+    name: '低脂/肝胆/尿素复盘目标表（内部整理，无文献依据）',
+    version: '2026-10',
+    tier: 'C',
+    local: false,
+    role: '内部经验：复盘用目标值',
+  },
+  {
+    id: 'GFE-2006',
+    name: 'GfE 犬猫营养需要量（德国营养生理学会）',
+    version: '2006',
+    tier: 'C',
+    local: false,
+    role: '参考：欧洲营养需要量口径（未归档原文）',
+  },
+  {
+    id: 'MEYER-ZENTEK',
+    name: 'Meyer H & Zentek J（犬猫营养学）',
+    version: '—',
+    tier: 'C',
+    local: false,
+    role: '参考：德文营养学教科书（未归档原文）',
+  },
+  {
+    id: 'KLEIN-ETAL',
+    name: 'Klein C, Thes M, Böswald LF, et al.',
+    version: '—',
+    tier: 'C',
+    local: false,
+    role: '参考：单篇文献（未归档原文）',
+  },
+];
+
 export const KNOWLEDGE_SOURCES: readonly KnowledgeSourceRecord[] = [
   // ── 免疫 ────────────────────────────────────────────────
   {
@@ -251,7 +317,12 @@ export const KNOWLEDGE_SOURCES: readonly KnowledgeSourceRecord[] = [
   },
 ];
 
-const SOURCE_IDS = new Set(KNOWLEDGE_SOURCES.map((source) => source.id));
+const ALL_SOURCES: readonly KnowledgeSourceRecord[] = [
+  ...KNOWLEDGE_SOURCES,
+  ...EXTRA_SOURCES,
+];
+
+const SOURCE_IDS = new Set(ALL_SOURCES.map((source) => source.id));
 
 export function isKnownSourceId(sourceId: string): boolean {
   return SOURCE_IDS.has(String(sourceId || '').trim());
@@ -261,7 +332,7 @@ export function getKnowledgeSource(
   sourceId: string,
 ): KnowledgeSourceRecord | undefined {
   const key = String(sourceId || '').trim();
-  return KNOWLEDGE_SOURCES.find((source) => source.id === key);
+  return ALL_SOURCES.find((source) => source.id === key);
 }
 
 /** 机构前缀：判断两个来源算不算"互相独立"时用 */

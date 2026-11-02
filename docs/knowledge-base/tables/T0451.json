@@ -1,0 +1,162 @@
+{
+  "tableId": "T0451",
+  "caption": "Table 9-5. Guaranteed or typical analysis from the same dry cat food as it would appear on pet food labels from selected countries.",
+  "columns": [
+    "",
+    "",
+    ""
+  ],
+  "rows": [
+    [
+      "United States (guaranteed analysis)",
+      "",
+      ""
+    ],
+    [
+      "Crude protein",
+      "Minimum",
+      "30.0%"
+    ],
+    [
+      "Crude fat",
+      "Minimum",
+      "18.0%"
+    ],
+    [
+      "Crude fiber",
+      "Maximum",
+      "2.0%"
+    ],
+    [
+      "Moisture",
+      "Maximum",
+      "10.0%"
+    ],
+    [
+      "Vitamin E",
+      "Minimum",
+      "275 IU/kg"
+    ],
+    [
+      "Ascorbic acid (vitamin C)*",
+      "Minimum",
+      "50 mg/kg"
+    ],
+    [
+      "Canada (guaranteed analysis)",
+      "",
+      ""
+    ],
+    [
+      "Protein",
+      "-",
+      "30.0%"
+    ],
+    [
+      "Fat",
+      "-",
+      "18.0%"
+    ],
+    [
+      "Moisture",
+      "-",
+      "10%"
+    ],
+    [
+      "CVMA-Certified Food in Canada (guaranteed analysis)",
+      "",
+      ""
+    ],
+    [
+      "Crude protein",
+      "Minimum",
+      "30.0%"
+    ],
+    [
+      "Crude fat",
+      "Minimum",
+      "18.0%"
+    ],
+    [
+      "Crude fibre",
+      "Maximum",
+      "2.0%"
+    ],
+    [
+      "Moisture",
+      "Maximum",
+      "10.0%"
+    ],
+    [
+      "Ash",
+      "Maximum",
+      "5.0%"
+    ],
+    [
+      "Europe (typical analysis)",
+      "",
+      ""
+    ],
+    [
+      "Crude protein",
+      "-",
+      "31.3%"
+    ],
+    [
+      "Crude oils and fats",
+      "-",
+      "21.3%"
+    ],
+    [
+      "Crude fibre",
+      "-",
+      "2.0%"
+    ],
+    [
+      "Crude ash",
+      "-",
+      "4.7%"
+    ],
+    [
+      "Moisture",
+      "-",
+      "7.5%"
+    ],
+    [
+      "Additives (per kg)",
+      "",
+      ""
+    ],
+    [
+      "Vitamin A",
+      "-",
+      "17,100 IU"
+    ],
+    [
+      "Vitamin D3",
+      "-",
+      "1,710 IU"
+    ],
+    [
+      "Vitamin E",
+      "-",
+      "290 mg"
+    ],
+    [
+      "Copper (copper chloride)",
+      "-",
+      "21 mg"
+    ],
+    [
+      "Contains EU permitted antioxidant",
+      "",
+      ""
+    ],
+    [
+      "Contains EU permitted colourant",
+      "",
+      ""
+    ]
+  ],
+  "note": "原表无表头行，分「美国/加拿大/CVMA/欧洲」四个分段；表脚注释：*Not recognized as an essential nutrient by the AAFCO Cat Food Nutrient Profiles. 分段标题置于首列、其余两列留空。"
+}

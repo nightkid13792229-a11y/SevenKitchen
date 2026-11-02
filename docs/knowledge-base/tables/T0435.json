@@ -1,0 +1,127 @@
+{
+  "tableId": "T0435",
+  "caption": "Table 68-10. General therapy for patients with hepatobiliary disease.*",
+  "columns": [
+    "",
+    ""
+  ],
+  "rows": [
+    [
+      "Fluid therapy",
+      ""
+    ],
+    [
+      "Maintain hydration",
+      "Give appropriate parenteral fluid therapy"
+    ],
+    [
+      "Prevent hypokalemia",
+      "Add KCl to maintenance fluids"
+    ],
+    [
+      "Maintain acid-base balance",
+      "Use potassium-replete food or potassium supplement"
+    ],
+    [
+      "Prevent or control hypoglycemia",
+      "Avoid alkalosis in patients with hepatic encephalopathy"
+    ],
+    [
+      "",
+      "Add dextrose to parenteral fluids as needed"
+    ],
+    [
+      "Nutritional support",
+      ""
+    ],
+    [
+      "Maintain caloric intake",
+      "Ensure that daily energy requirement is being met; if not, begin assisted feeding"
+    ],
+    [
+      "Provide adequate vitamins and minerals",
+      "Add B vitamins to fluids or give as injection"
+    ],
+    [
+      "Modify feeding plan to control complications",
+      "Use complete and balanced food"
+    ],
+    [
+      "",
+      "See specific complications below"
+    ],
+    [
+      "Control hepatic encephalopathy",
+      ""
+    ],
+    [
+      "Modify food and prevent formation and absorption of enteric toxins",
+      "Avoid excess dietary protein"
+    ],
+    [
+      "",
+      "Use retention enemas q6h containing lactulose or povidone iodine solution"
+    ],
+    [
+      "",
+      "Give lactulose orally"
+    ],
+    [
+      "Control GI hemorrhage",
+      "Treat GI parasites, treat gastric ulcers, avoid drugs that exacerbate GI hemorrhage (e.g., aspirin, glucocorticoids)"
+    ],
+    [
+      "Correct metabolic imbalances",
+      "See fluid therapy above"
+    ],
+    [
+      "Avoid drugs or therapies that exacerbate hepatic encephalopathy",
+      "Do not administer sedatives, analgesics, anesthetics, diuretics, stored blood or methionine-containing products"
+    ],
+    [
+      "Control seizures",
+      "Use appropriate anticonvulsant drugs (e.g., potassium bromide)"
+    ],
+    [
+      "Control infection",
+      "Give systemic antimicrobials (see below)"
+    ],
+    [
+      "Control ascites and edema",
+      "Avoid excess dietary sodium chloride"
+    ],
+    [
+      "",
+      "Administer diuretics (e.g., furosemide, spironolactone)"
+    ],
+    [
+      "Control coagulation defects and anemia",
+      "Give vitamin K1 parenterally"
+    ],
+    [
+      "",
+      "Give fresh plasma or blood transfusion as needed"
+    ],
+    [
+      "Control GI ulceration",
+      "Give H2 blockers (e.g., ranitidine) or cytoprotective agents (e.g., sucralfate)"
+    ],
+    [
+      "Control infection and endotoxemia",
+      "Give systemic antibiotics (e.g., penicillin, ampicillin, cephalosporins, aminoglycosides, metronidazole)"
+    ],
+    [
+      "",
+      "Give intestinal antibiotics (e.g., neomycin)"
+    ],
+    [
+      "Manage cholestasis",
+      "Give bile “altering” or choleretic drugs (e.g., ursodiol)"
+    ],
+    [
+      "",
+      "Correct extrahepatic bile duct obstruction"
+    ]
+  ],
+  "note": "原表无表头行（左列为治疗目标/类别，右列为具体措施），故列名为空字符串；加粗类别行单独成行、右列为空。"
+}

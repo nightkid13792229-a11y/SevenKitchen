@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -16,6 +19,7 @@ export const ORTHO_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'ortho-001',
     domain: 'ORTHO',
+    questionType: 'NUTRITION',
     title: '骨关节炎的营养管理总体原则与风险因素',
     keywords: [
       '骨关节炎', '关节炎', '关节', '退行性关节病', '营养管理', '风险因素',
@@ -38,11 +42,16 @@ export const ORTHO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第34章 骨关节炎的营养管理', note: 'CLINICAL IMPORTANCE、Risk Factors、综合治疗' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第34章 骨关节炎的营养管理' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'ortho-002',
     domain: 'ORTHO',
+    questionType: 'NUTRITION',
     title: '骨关节炎的营养管理关键因素（表34-2）',
     keywords: [
       '骨关节炎营养', '关键营养因素', 'omega-3', 'L-肉碱', '氨基葡萄糖', '硫酸软骨素',
@@ -65,11 +74,16 @@ export const ORTHO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第34章 骨关节炎的营养管理', note: '表34-2 骨关节炎患者关键营养因素' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第34章 骨关节炎的营养管理' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'ortho-003',
     domain: 'ORTHO',
+    questionType: 'NUTRITION',
     title: 'omega-3 脂肪酸与骨关节炎：抗炎与保护软骨',
     keywords: [
       'omega-3', 'EPA', 'DHA', '抗炎', '炎症', '软骨', 'agrecan', '鱼油',
@@ -92,11 +106,16 @@ export const ORTHO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第34章 骨关节炎的营养管理', note: 'omega-3 机制、EPA 保护软骨、临床研究、表34-3/34-4' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第34章 骨关节炎的营养管理' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'ortho-004',
     domain: 'ORTHO',
+    questionType: 'NUTRITION',
     title: '骨关节炎与体重管理：控制体重是关键',
     keywords: [
       '体重管理', '肥胖', '减重', 'L-肉碱', '瘦体重', '炎症', '骨科',
@@ -118,11 +137,16 @@ export const ORTHO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第34章 骨关节炎的营养管理', note: 'Risk Factors 肥胖、L-Carnitine、体重管理' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第34章 骨关节炎的营养管理' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'ortho-005',
     domain: 'ORTHO',
+    questionType: 'NUTRITION',
     title: '氨基葡萄糖与硫酸软骨素在骨关节炎中的使用',
     keywords: [
       '氨基葡萄糖', '硫酸软骨素', '关节保护', '软骨', '补充剂', '黏多糖',
@@ -145,11 +169,16 @@ export const ORTHO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第34章 骨关节炎的营养管理', note: 'Glucosamine 与 chondroitin、机制、安全性与注意事项' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第34章 骨关节炎的营养管理' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'ortho-006',
     domain: 'ORTHO',
+    questionType: 'NUTRITION',
     title: '骨关节炎抗氧化需求：维生素E、C与硒',
     keywords: [
       '抗氧化', '维生素E', '维生素C', '硒', '氧化应激', '自由基',
@@ -171,11 +200,16 @@ export const ORTHO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第34章 骨关节炎的营养管理', note: '表34-2 抗氧化剂目标' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第34章 骨关节炎的营养管理' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'ortho-007',
     domain: 'ORTHO',
+    questionType: 'NUTRITION',
     title: '骨关节炎动物的磷与钠考量（合并肾病/心衰风险）',
     keywords: [
       '磷', '钠', '共病', '肾病', '心衰', '老年犬', '骨关节炎',
@@ -196,6 +230,10 @@ export const ORTHO_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第34章 骨关节炎的营养管理', note: '表34-2 磷/钠目标、合并肾病/心衰风险' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第34章 骨关节炎的营养管理' },
     ],
     priority: 'MEDIUM',
   },

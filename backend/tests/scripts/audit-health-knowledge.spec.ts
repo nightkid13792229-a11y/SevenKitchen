@@ -39,20 +39,13 @@ describe('健康知识条目自检', () => {
     expect(result.problems).toEqual([]);
   });
 
-  it('统计口径覆盖风险、紧急程度与证据强度', () => {
-    const riskTotal = Object.values(result.byRisk).reduce(
-      (sum, n) => sum + n,
-      0,
-    );
+  it('统计口径覆盖证据强度', () => {
     const evidenceTotal = Object.values(result.byEvidence).reduce(
       (sum, n) => sum + n,
       0,
     );
 
-    expect(riskTotal).toBe(result.total);
     expect(evidenceTotal).toBe(result.total);
-    // 分诊类必须写死紧急程度（这条在结构校验里也有，这里再确认统计口径没漏）
-    expect(result.byUrgency.IMMEDIATE).toBeGreaterThan(0);
   });
 
   it('重复标题会被抓出来', () => {
@@ -79,7 +72,6 @@ describe('健康知识条目自检', () => {
       {
         ...sample,
         id: 'stale-1',
-        reviewStatus: 'PENDING_REVIEW',
         reviewBy: '2026-01-01',
       },
     ];
@@ -91,46 +83,6 @@ describe('健康知识条目自检', () => {
     );
   });
 
-  it('健康侧条目标成已审核不再算问题（登记表已撤，审核状态就写在条目上）', () => {
-    const healthDomain = Object.keys(
-      result.byDomain,
-    )[0] as KnowledgeEntry['domain'];
-    const approved: KnowledgeEntry[] = [
-      {
-        ...sample,
-        id: 'approved-1',
-        domain: healthDomain,
-        reviewStatus: 'APPROVED',
-      },
-    ];
-
-    const fake = auditHealthKnowledge(approved, { today: '2026-10-01' });
-
-    // 2026-10-02：老板要求不留审核记录，approvals.ts 已撤掉，
-    // 所以"健康侧标了 APPROVED"就是正常状态，不该报错。
-    expect(fake.problems.some((item) => item.includes('APPROVED'))).toBe(false);
-  });
-
-  it('健康侧条目还没标 APPROVED 会提示（顾客侧看不到）', () => {
-    const healthDomain = Object.keys(
-      result.byDomain,
-    )[0] as KnowledgeEntry['domain'];
-    const pending: KnowledgeEntry[] = [
-      {
-        ...sample,
-        id: 'pending-1',
-        domain: healthDomain,
-        reviewStatus: 'PENDING_REVIEW',
-      },
-    ];
-
-    const fake = auditHealthKnowledge(pending, { today: '2026-10-01' });
-
-    expect(fake.problems).toEqual([]);
-    expect(
-      fake.warnings.some((item) => item.includes('顾客侧看不到')),
-    ).toBe(true);
-  });
 
   it('猫专属正文会被提示（我们只做狗）', () => {
     const feline: KnowledgeEntry[] = [

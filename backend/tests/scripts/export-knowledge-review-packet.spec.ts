@@ -36,7 +36,6 @@ describe('健康知识审核包导出', () => {
           !entry.id ||
           !entry.title ||
           !entry.summary ||
-          !entry.riskLevel ||
           !entry.questionType ||
           !entry.reviewBy ||
           (entry.sources || []).length === 0,
@@ -59,13 +58,6 @@ describe('健康知识审核包导出', () => {
     expect(markdown).toContain('**意见**：');
   });
 
-  it('分诊条目的紧急程度是中文写死的，不是让兽医自己猜', () => {
-    const markdown = buildMarkdown(entries, '2026-10-01');
-    const triage = entries.filter((entry) => entry.questionType === 'TRIAGE');
-
-    expect(triage.length).toBeGreaterThan(0);
-    expect(markdown).toContain('**紧急程度**：立即就医');
-  });
 
   it('CSV 一行一条、带 BOM、留了回填列', () => {
     const csv = buildCsv(entries);

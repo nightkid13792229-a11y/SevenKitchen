@@ -1,0 +1,31 @@
+{
+ "tableId": "T0232",
+ "caption": "Table 32-7. Fatty acids found in pet food ingredients and supplements.",
+ "columns": [
+  "Fatty acids",
+  "Ingredients/supplements"
+ ],
+ "rows": [
+  [
+   "Linoleic acid (omega-6)",
+   "Vegetable oils (soy oil, corn oil, safflower oil, canola oil, etc.)\nGrains (corn, soybeans)"
+  ],
+  [
+   "γ-linolenic acid (GLA, omega-6)",
+   "Black currant oil\nBorage oil\nEvening primrose oil"
+  ],
+  [
+   "α-linolenic acid (ALA, omega-3)",
+   "Flax\nFlax (linseed) oil"
+  ],
+  [
+   "Eicosapentaenoic acid (EPA, omega-3)",
+   "Fish meal\nCold water marine oils"
+  ],
+  [
+   "Docosahexaenoic acid (DHA, omega-3)",
+   "Fish meal\nCold water marine oils"
+  ]
+ ],
+ "note": "单元格内多行以 \\n 保留原换行。"
+}

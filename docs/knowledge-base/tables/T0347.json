@@ -1,0 +1,72 @@
+{
+  "tableId": "T0347",
+  "caption": "Table 5-3. Influence of low environmental temperatures on daily energy requirement (DER).",
+  "columns": [
+    "Breed",
+    "Increase in DER (%)",
+    "Environmental temperature Low",
+    "Environmental temperature Normal"
+  ],
+  "rows": [
+    [
+      "Labrador retrievers and beagles",
+      "25 (12-43)*",
+      "8.5°C (47.3°F)",
+      "15°C (59°F)"
+    ],
+    [
+      "Great Danes",
+      "22**",
+      "Winter",
+      "Summer"
+    ],
+    [
+      "Shorthaired dogs",
+      "95***",
+      "7.6°C (46°F)",
+      "25°C (77°F)"
+    ],
+    [
+      "Longhaired dogs",
+      "59.5***",
+      "7.6°C (46°F)",
+      "25°C (77°F)"
+    ],
+    [
+      "Beagles",
+      "70.5†",
+      "-17°C (1.4°F)",
+      "17°C (62.6°F)"
+    ],
+    [
+      "Alaskan sled dogs",
+      "61.5†",
+      "-17°C (1.4°F)",
+      "17°C (62.6°F)"
+    ],
+    [
+      "*Blaza SE. Energy requirements of dogs in cool conditions. Canine Practice 1982; 9: 10-15.",
+      "",
+      "",
+      ""
+    ],
+    [
+      "**Zentek J, Meyer H. Energieaufnahme adulter Deutscher Doggen. Berliner und Münchner Tierärztliche Wochenschrift 1992; 105: 325-327.",
+      "",
+      "",
+      ""
+    ],
+    [
+      "***Meyer H. Energie und Nährstoffe–Stoffwechsel und Bedarf. In: Ernährung des Hundes. Stuttgart, Germany: Eugen Ulmer, 1990; 99.",
+      "",
+      "",
+      ""
+    ],
+    [
+      "†Durrer JL, Hannon JP. Seasonal variations in caloric intake of dogs living in an arctic environment. American Journal of Physiology 1962; 202: 375-378.",
+      "",
+      "",
+      ""
+    ]
+  ]
+}

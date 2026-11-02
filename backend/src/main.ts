@@ -75,6 +75,11 @@ async function bootstrap() {
 
   // 配置静态文件服务（使用项目根目录）
   app.useStaticAssets(join(process.cwd(), 'public'));
+  // 知识库图片（2026-11-02）：原文层里的图注配图，只读对外提供。
+  // 路径与库里 source_figure.path 的前缀一致。
+  app.useStaticAssets(join(process.cwd(), '..', 'docs', 'knowledge-base', 'figures'), {
+    prefix: '/kb-figures/',
+  });
   app.use(
     '/api/v1/customer-service/wechat/callback',
     express.text({ type: ['text/*', 'application/xml', 'application/*+xml'] }),

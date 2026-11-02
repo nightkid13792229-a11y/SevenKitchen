@@ -1,0 +1,87 @@
+{
+  "tableId": "T0182",
+  "caption": "Table 1. Canine and feline fact and monitoring sheet. — Customized Pet Weight-Loss Plan",
+  "columns": [
+    "Item",
+    "Details"
+  ],
+  "rows": [
+    [
+      "Title",
+      "Customized Pet Weight-Loss Plan"
+    ],
+    [
+      "Instruction 1",
+      "Feed only the prescribed food(s)."
+    ],
+    [
+      "Instruction 2",
+      "Feed your pet alone; away from other pets."
+    ],
+    [
+      "Instruction 3",
+      "Do not feed table scraps, treats, snacks or other food unless your veterinary health-care team approves them and the amount(s) to be fed."
+    ],
+    [
+      "Instruction 4",
+      "Exercise your pet as prescribed."
+    ],
+    [
+      "Instruction 5",
+      "Do not handle, prepare or eat food in the presence of your pet."
+    ],
+    [
+      "Instruction 6",
+      "Have your pet rechecked on a regular basis by a member of your veterinary health-care team to monitor progress of the weight-loss program."
+    ],
+    [
+      "Patient's name",
+      ""
+    ],
+    [
+      "Dog / Cat",
+      ""
+    ],
+    [
+      "Beginning date",
+      "____ / ____ / ____"
+    ],
+    [
+      "Beginning body weight",
+      "____ lb/kg"
+    ],
+    [
+      "Target (optimal) body weight",
+      "____ lb/kg"
+    ],
+    [
+      "Prescribed food(s)",
+      ""
+    ],
+    [
+      "Amount of food per meal",
+      ""
+    ],
+    [
+      "Number of meals per day",
+      ""
+    ],
+    [
+      "Amount and type of exercise per day",
+      ""
+    ],
+    [
+      "Estimated time to reach optimal weight if all instructions are followed",
+      "____ months"
+    ],
+    [
+      "Weigh your pet every",
+      "____ weeks, and record the weight in the chart below"
+    ],
+    [
+      "Weight Loss Chart",
+      "Weight (lb/kg) vs Time (weeks), blank grid, no recorded values"
+    ]
+  ],
+  "note": "该页为可填写表单式表格（事实与监测记录表），表内无行列数据，按“项目/填写内容”两列转录；空白填写线以空串/下划线保留。"
+}

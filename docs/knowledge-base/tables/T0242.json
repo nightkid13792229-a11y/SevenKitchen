@@ -1,0 +1,70 @@
+{
+ "tableId": "T0242",
+ "caption": "Table 34-3. Nutrient comparison of control and test foods.*",
+ "columns": [
+  "Nutrients",
+  "Control food",
+  "Test food**"
+ ],
+ "rows": [
+  [
+   "Protein (%)",
+   "23.2",
+   "20.0"
+  ],
+  [
+   "Fat (%)",
+   "13.9",
+   "13.6"
+  ],
+  [
+   "NFE (%)",
+   "54.7",
+   "53.3"
+  ],
+  [
+   "Total omega-3 fatty acids (%)",
+   "0.09",
+   "3.48"
+  ],
+  [
+   "EPA (%)",
+   "<0.01",
+   "0.38"
+  ],
+  [
+   "Omega-6:omega-3 fatty acid ratio",
+   "22.8",
+   "0.7"
+  ]
+ ],
+ "note": "同一张图内还包含 Table 34-4（脂肪酸含量比较），已完整记录在 additionalTables 中。",
+ "additionalTables": [
+  {
+   "caption": "Table 34-4. Fatty acid concentration of a therapeutic food vs. supplements for a 27-kg dog.",
+   "columns": [
+    "",
+    "Therapeutic food* (4 cups)",
+    "GNC Preventative Nutrition Multi Oil Formula (300 mg/capsule)",
+    "3V Caps for Large & Giant Breeds (DVM Pharmaceuticals) (1,488 mg capsule)",
+    "Welactin (Nutramax) Liquid (1.5 ml/pump)"
+   ],
+   "rows": [
+    [
+     "EPA content",
+     "1,578 mg",
+     "180 mg/capsule",
+     "250 mg/capsule",
+     "97-120 mg/pump"
+    ],
+    [
+     "Amount/day to equal intake from j/d Canine",
+     "-",
+     "9 capsules",
+     "6 capsules",
+     "13 pumps"
+    ]
+   ]
+  }
+ ]
+}

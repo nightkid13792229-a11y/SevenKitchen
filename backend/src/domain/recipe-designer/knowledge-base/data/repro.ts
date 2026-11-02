@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -15,6 +18,7 @@ export const REPRO_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'repro-001',
     domain: 'REPRO',
+    questionType: 'NUTRITION',
     title: '繁殖母犬营养管理的目标与体况要求',
     keywords: [
       '繁殖母犬', '配种', '发情', '体况', 'BCS', '受孕', '窝仔数',
@@ -37,11 +41,16 @@ export const REPRO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第15章 繁殖犬的饲养', note: 'INTRODUCTION、表15-1 营养不良对繁殖的影响、体况要求' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第15章 繁殖犬的饲养' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'repro-002',
     domain: 'REPRO',
+    questionType: 'NUTRITION',
     title: '繁殖母犬的关键营养因素（表15-5）',
     keywords: [
       '繁殖母犬营养', '能量密度', '粗蛋白', '粗脂肪', 'DHA', '钙磷', '碳水',
@@ -64,11 +73,16 @@ export const REPRO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第15章 繁殖犬的饲养', note: '表15-5 繁殖犬关键营养因素、表15-9 商品粮对比；对应 NRC 原书表15-8 母犬妊娠晚期/哺乳高峰 RA' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第15章 繁殖犬的饲养' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'repro-003',
     domain: 'REPRO',
+    questionType: 'NUTRITION',
     title: '妊娠母犬的能量与体重管理',
     keywords: [
       '妊娠', '怀孕', '能量需求', '增重', '胎儿', '体重', '围产期',
@@ -91,11 +105,16 @@ export const REPRO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第15章 繁殖犬的饲养', note: 'Pregnancy、表15-2 增重分布、图15-1 体重与采食' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第15章 繁殖犬的饲养' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'repro-004',
     domain: 'REPRO',
+    questionType: 'NUTRITION',
     title: '哺乳母犬的能量、蛋白、脂肪需求',
     keywords: [
       '哺乳', '产奶', '能量', '蛋白', '脂肪', '产奶量', '乳糖',
@@ -118,11 +137,16 @@ export const REPRO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第15章 繁殖犬的饲养', note: 'Lactation、表15-3 犬奶vs牛奶、DHA、蛋白脂肪目标' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第15章 繁殖犬的饲养' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'repro-005',
     domain: 'REPRO',
+    questionType: 'NUTRITION',
     title: '妊娠/哺乳母犬的钙磷与子痫风险',
     keywords: [
       '钙', '磷', '钙磷比', '子痫', '哺乳期低钙', '羊搐', '钙补充',
@@ -145,11 +169,16 @@ export const REPRO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第15章 繁殖犬的饲养', note: 'Calcium and Phosphorus、Box15-2 子痫、表15-5 钙磷目标' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第15章 繁殖犬的饲养' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'repro-006',
     domain: 'REPRO',
+    questionType: 'NUTRITION',
     title: '哺乳期母犬的水分需求',
     keywords: [
       '水', '哺乳水', '水分', '饮水', '产奶', '补水',
@@ -171,11 +200,16 @@ export const REPRO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第15章 繁殖犬的饲养', note: 'Water、哺乳水需求' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第15章 繁殖犬的饲养' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'repro-007',
     domain: 'REPRO',
+    questionType: 'NUTRITION',
     title: 'FEDIAF 表 VII-8b 妊娠与哺乳期能量公式（原文数值）',
     keywords: [
       '妊娠', '怀孕', '哺乳', '泌乳', '能量', 'FEDIAF 表 VII-8b', '窝仔数',
@@ -201,9 +235,15 @@ export const REPRO_KNOWLEDGE: KnowledgeEntry[] = [
       '存在疾病或产科的异常情况，应由兽医处理。',
     ],
     citations: [
-      { source: 'FEDIAF 犬猫营养指南', chapter: '生长与繁殖 / 表 VII-8b', note: '2025 年 9 月原版（波兰文官方译本）逐格核对' },
+      { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '生长与繁殖 / 表 VII-8b', note: '2025 年 9 月原版（波兰文官方译本）逐格核对' },
       { source: 'Gesellschaft für Ernährungsphysiologie (GfE)', note: '1989，妊娠公式出处' },
-      { source: 'NRC 犬猫营养需要 (2006)', note: '2006b / 2006h，哺乳公式出处' },
+      { source: 'NRC《犬猫营养需要》(2006)', note: '2006b / 2006h，哺乳公式出处' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'FEDIAF-2025', locator: '生长与繁殖 / 表 VII-8b' },
+      { sourceId: 'GFE-2006', locator: '' },
+      { sourceId: 'NRC-2006', locator: '' },
     ],
     priority: 'HIGH',
   },

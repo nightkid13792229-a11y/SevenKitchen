@@ -1,0 +1,91 @@
+{
+  "tableId": "T0432",
+  "caption": "Table 68-6. Metabolic alterations in hepatic failure.*",
+  "columns": [
+    "Alterations",
+    "Mechanisms"
+  ],
+  "rows": [
+    [
+      "Hyperglucagonemia",
+      "Portosystemic shunting"
+    ],
+    [
+      "",
+      "Impaired hepatic degradation"
+    ],
+    [
+      "",
+      "Increased plasma aromatic amino acid levels"
+    ],
+    [
+      "",
+      "Hyperammonemia"
+    ],
+    [
+      "Hyperinsulinemia",
+      "Increased peripheral insulin resistance"
+    ],
+    [
+      "",
+      "Decreased insulin to glucagon ratio"
+    ],
+    [
+      "",
+      "Impaired hepatic degradation"
+    ],
+    [
+      "Increased plasma cortisol levels",
+      "Deranged feedback mechanism"
+    ],
+    [
+      "Decreased liver and muscle carbohydrate stores",
+      "Accelerated glycogenolysis"
+    ],
+    [
+      "",
+      "Impaired glycogenesis"
+    ],
+    [
+      "Increased gluconeogenesis",
+      "Hyperglucagonemia"
+    ],
+    [
+      "Hyperglycemia (fasting and postprandial)",
+      "Portosystemic shunting"
+    ],
+    [
+      "",
+      "Increased gluconeogenesis"
+    ],
+    [
+      "",
+      "Decreased insulin-dependent glucose uptake"
+    ],
+    [
+      "",
+      "Decreased insulin-hepatic glycolysis"
+    ],
+    [
+      "Increased plasma aromatic amino acid levels",
+      "Decreased hepatic clearance and incorporation into proteins"
+    ],
+    [
+      "",
+      "Increased release into the circulation"
+    ],
+    [
+      "Decreased plasma branched-chain amino acid levels",
+      "Hyperinsulinemia and excessive uptake"
+    ],
+    [
+      "",
+      "Increased usage as an energy source"
+    ],
+    [
+      "Increased plasma methionine, glutamine, asparagine and histidine levels",
+      "Decreased hepatic clearance"
+    ]
+  ],
+  "note": "两列按原图同一行对齐转录；Mechanisms 为独立项目清单，故部分行左列为空。"
+}

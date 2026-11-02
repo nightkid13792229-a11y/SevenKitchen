@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -13,6 +16,7 @@ export const RENAL_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'renal-001',
     domain: 'RENAL',
+    questionType: 'DEFINITION',
     title: 'CKD 分期概念与营养干预时机：按 IRIS 分期决定何时开始营养管理',
     keywords: ['慢性肾病', 'CKD', 'chronic kidney disease', 'IRIS', '分期', 'staging', '肌酐', 'creatinine', '氮质血症', 'azotemia', '早期干预'],
     applicableTo: ['ckd', 'renal', 'kidney', 'senior'],
@@ -32,13 +36,19 @@ export const RENAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第37章 慢性肾病', note: 'IRIS 分期表 37-1；营养管理启动时机（2 期起、肌酐 >2 mg/dl 明确需要）；蛋白尿提示营养管理' },
-      { source: '肝肾低脂注意事项笔记', note: 'IRIS 分期需持续异常 + SDMA/肌酐 + 尿液证据；尿素单独不能确诊' },
+      { source: '肝肾低脂注意事项笔记（内部整理，无文献依据）', note: 'IRIS 分期需持续异常 + SDMA/肌酐 + 尿液证据；尿素单独不能确诊' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第37章 慢性肾病' },
+      { sourceId: 'INTERNAL-LIVER-LOWFAT', locator: '' },
     ],
     priority: 'HIGH',
   },
   {
     id: 'renal-002',
     domain: 'RENAL',
+    questionType: 'NUTRITION',
     title: '磷限制：CKD 营养管理的关键营养素，控制血磷与生存期直接相关',
     keywords: ['磷', 'phosphorus', '限磷', '低磷', 'hyperphosphatemia', '高磷血症', 'phosphate', '血磷', '生存期', 'survival', '磷结合剂'],
     applicableTo: ['ckd', 'renal', 'kidney', 'hyperphosphatemia'],
@@ -59,14 +69,21 @@ export const RENAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第37章 慢性肾病', note: '磷推荐范围表 37-9；高/低磷实验与生存率；磷限制证据级别' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '表8 疾病相关关注营养素', note: 'CKD 关注营养素：低磷' },
-      { source: '肝肾低脂注意事项笔记', note: '低磷路线优先选碳酸钙/蛋壳粉而非骨粉作为钙源' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '表8 疾病相关关注营养素', note: 'CKD 关注营养素：低磷' },
+      { source: '肝肾低脂注意事项笔记（内部整理，无文献依据）', note: '低磷路线优先选碳酸钙/蛋壳粉而非骨粉作为钙源' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第37章 慢性肾病' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '表8 疾病相关关注营养素' },
+      { sourceId: 'INTERNAL-LIVER-LOWFAT', locator: '' },
     ],
     priority: 'HIGH',
   },
   {
     id: 'renal-003',
     domain: 'RENAL',
+    questionType: 'NUTRITION',
     title: '蛋白质管理：早期犬一般不限制蛋白，晚期才考虑适度限制并保证优质蛋白',
     keywords: ['蛋白', 'protein', '低蛋白', '限蛋白', 'protein restriction', '优质蛋白', '高生物价', 'biologic value', '尿素', 'uremia', '尿毒症', '氮平衡'],
     applicableTo: ['ckd', 'renal', 'kidney', 'proteinuria'],
@@ -89,14 +106,21 @@ export const RENAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第37章 慢性肾病', note: '蛋白推荐 14-20% DM（表 37-9）；限蛋白争议（Box 37-1）；蛋白性肾病管理（Box 37-2）；优质蛋白与赖氨酸/色氨酸' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '表8 疾病相关关注营养素', note: 'CKD 关注营养素：↓蛋白；蛋白丢失性肾病：蛋白减少当前摄入 25-50% 并满足必需氨基酸' },
-      { source: '肝肾低脂注意事项笔记', note: '无确诊时避免激进肾性限蛋白，尿素单项升高不足以支持治疗性限蛋白' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '表8 疾病相关关注营养素', note: 'CKD 关注营养素：↓蛋白；蛋白丢失性肾病：蛋白减少当前摄入 25-50% 并满足必需氨基酸' },
+      { source: '肝肾低脂注意事项笔记（内部整理，无文献依据）', note: '无确诊时避免激进肾性限蛋白，尿素单项升高不足以支持治疗性限蛋白' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第37章 慢性肾病' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '表8 疾病相关关注营养素' },
+      { sourceId: 'INTERNAL-LIVER-LOWFAT', locator: '' },
     ],
     priority: 'HIGH',
   },
   {
     id: 'renal-004',
     domain: 'RENAL',
+    questionType: 'NUTRITION',
     title: '钠限制：CKD 犬粮钠 ≤0.3% DM，避免过高与过低并逐步换粮',
     keywords: ['钠', 'sodium', '盐', 'salt', '限钠', '低钠', 'hypertension', '高血压', '水肿', 'edema', '氯化物', 'chloride'],
     applicableTo: ['ckd', 'renal', 'kidney', 'hypertension', 'senior'],
@@ -117,13 +141,19 @@ export const RENAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第37章 慢性肾病', note: '钠 ≤0.3% DM（犬）表 37-9；钠潴留/缺乏风险；逐步换粮；高血压与限钠讨论' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '表8 疾病相关关注营养素', note: 'CKD 关注营养素（钠管理框架；心血管病强调控制钠）' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '表8 疾病相关关注营养素', note: 'CKD 关注营养素（钠管理框架；心血管病强调控制钠）' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第37章 慢性肾病' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '表8 疾病相关关注营养素' },
     ],
     priority: 'MEDIUM',
   },
   {
     id: 'renal-005',
     domain: 'RENAL',
+    questionType: 'NUTRITION',
     title: '钾：CKD 犬粮钾 0.4-0.8% DM，血钾正常或偏高时避免过量补充',
     keywords: ['钾', 'potassium', '高钾', 'hyperkalemia', '低钾', 'hypokalemia', '补钾', 'potassium gluconate', '葡萄糖酸钾'],
     applicableTo: ['ckd', 'renal', 'kidney'],
@@ -143,13 +173,19 @@ export const RENAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第37章 慢性肾病', note: '钾推荐 0.4-0.8% DM（犬）表 37-9；高钾时换低钾食物' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '表8 疾病相关关注营养素', note: 'CKD 关注营养素：↓钾补充；药物可加重高钾、降低膳食钾可能有帮助' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '表8 疾病相关关注营养素', note: 'CKD 关注营养素：↓钾补充；药物可加重高钾、降低膳食钾可能有帮助' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第37章 慢性肾病' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '表8 疾病相关关注营养素' },
     ],
     priority: 'MEDIUM',
   },
   {
     id: 'renal-006',
     domain: 'RENAL',
+    questionType: 'NUTRITION',
     title: '水分与湿粮：不限量新鲜饮水 + 优先湿粮，减轻肾脏浓缩负担',
     keywords: ['饮水', '水分', '湿粮', 'moist food', 'canned', 'water', 'hydration', '脱水', '多尿', 'polyuria', '尿比重', 'isosthenuria'],
     applicableTo: ['ckd', 'renal', 'kidney', 'hydration'],
@@ -169,13 +205,19 @@ export const RENAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第37章 慢性肾病', note: '水分章节：自由饮水 + 湿粮优先；等渗尿与渗透功' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '高水分饮食（猫）', note: '高水分食物增加饱腹感与总水摄入' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '高水分饮食（猫）', note: '高水分食物增加饱腹感与总水摄入' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第37章 慢性肾病' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '高水分饮食（猫）' },
     ],
     priority: 'HIGH',
   },
   {
     id: 'renal-007',
     domain: 'RENAL',
+    questionType: 'NUTRITION',
     title: '代谢性酸中毒：CKD 常见并发症，维持血总 CO2 在参考范围，必要时碱化治疗',
     keywords: ['酸中毒', '代谢性酸中毒', 'metabolic acidosis', 'acidosis', '碱化', 'alkalinizing', '碳酸氢钠', 'sodium bicarbonate', '枸橼酸钾', 'potassium citrate', '总CO2', '血气'],
     applicableTo: ['ckd', 'renal', 'kidney'],
@@ -196,13 +238,19 @@ export const RENAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第37章 慢性肾病', note: '代谢性酸中毒与肾氨生成；碱化食物与碱化药物；总 CO2 维持目标' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '表8 疾病相关关注营养素', note: 'CKD 营养管理框架（酸碱平衡属综合管理部分）' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '表8 疾病相关关注营养素', note: 'CKD 营养管理框架（酸碱平衡属综合管理部分）' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第37章 慢性肾病' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '表8 疾病相关关注营养素' },
     ],
     priority: 'MEDIUM',
   },
   {
     id: 'renal-008',
     domain: 'RENAL',
+    questionType: 'NUTRITION',
     title: '能量与体重维持：避免消瘦是 CKD 营养管理核心目标之一',
     keywords: ['能量', 'energy', '热量', 'calorie', '体重', 'body weight', '体况评分', 'BCS', '肌肉', 'muscle', '消瘦', 'weight loss', '厌食', 'anorexia', 'RER', 'DER'],
     applicableTo: ['ckd', 'renal', 'kidney', 'senior', 'weight'],
@@ -224,13 +272,19 @@ export const RENAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第37章 慢性肾病', note: 'DER 1.1-1.6×RER；监测营养不良；辅助喂养时机；"只喂肾病粮"误区' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '表8 疾病相关关注营养素', note: 'CKD 关注营养素：增加能量密度维持体重与肌肉（除非肥胖）；RER 以下限制不推荐' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '表8 疾病相关关注营养素', note: 'CKD 关注营养素：增加能量密度维持体重与肌肉（除非肥胖）；RER 以下限制不推荐' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第37章 慢性肾病' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '表8 疾病相关关注营养素' },
     ],
     priority: 'HIGH',
   },
   {
     id: 'renal-009',
     domain: 'RENAL',
+    questionType: 'NUTRITION',
     title: '肾性继发甲状旁腺功能亢进：CKD 必然伴随，控制磷是核心，活性维生素 D 需兽医处方',
     keywords: ['甲状旁腺', 'parathyroid', 'PTH', '继发性甲旁亢', 'secondary renal hyperparathyroidism', '高磷血症', '维生素D', 'calcitriol', '钙三醇', '骨病', '肾性骨营养不良'],
     applicableTo: ['ckd', 'renal', 'kidney'],
@@ -251,13 +305,19 @@ export const RENAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第37章 慢性肾病', note: '继发性甲旁亢发病机制（磷潴留→1-α羟化酶抑制→骨化三醇↓）；患病率；骨化三醇治疗证据' },
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '表8 疾病相关关注营养素', note: 'CKD 关注要点：考虑维生素 D 补充' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '表8 疾病相关关注营养素', note: 'CKD 关注要点：考虑维生素 D 补充' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第37章 慢性肾病' },
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '表8 疾病相关关注营养素' },
     ],
     priority: 'MEDIUM',
   },
   {
     id: 'renal-010',
     domain: 'RENAL',
+    questionType: 'DEFINITION',
     title: '监测与复查：肌酐/尿素/血磷/电解质/尿检/UPC/血压，按分期定频率',
     keywords: ['监测', 'monitoring', '复查', 'recheck', '肌酐', 'creatinine', '尿素', 'urea', 'SDMA', '尿检', 'urinalysis', '尿蛋白肌酐比', 'UPC', '血压', 'blood pressure', '白蛋白', 'albumin'],
     applicableTo: ['ckd', 'renal', 'kidney', 'senior'],
@@ -279,13 +339,19 @@ export const RENAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第37章 慢性肾病', note: '复查频率（氮质血症 2-3 月、尿毒症 2-4 周）；复查参数表 37-13；UPC 趋势解读；营养不良监测' },
-      { source: '肝肾低脂注意事项笔记', note: '复查清单：肌酐、SDMA、血磷、尿检、尿比重、UPC、血压（引自 IRIS 分期与复查提示）' },
+      { source: '肝肾低脂注意事项笔记（内部整理，无文献依据）', note: '复查清单：肌酐、SDMA、血磷、尿检、尿比重、UPC、血压（引自 IRIS 分期与复查提示）' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第37章 慢性肾病' },
+      { sourceId: 'INTERNAL-LIVER-LOWFAT', locator: '' },
     ],
     priority: 'HIGH',
   },
   {
     id: 'renal-011',
     domain: 'RENAL',
+    questionType: 'NUTRITION',
     title: '自制肾病膳食需专业配方：多数网络/书籍食谱不均衡，钙磷比与维生素 D 有风险',
     keywords: ['自制粮', '自制膳食', 'home-prepared', 'homemade', '食谱', 'recipe', '钙磷比', 'Ca:P', '维生素D', 'vitamin D', '营养均衡', 'complete and balanced', '营养师', 'veterinary nutritionist'],
     applicableTo: ['ckd', 'renal', 'kidney', 'homemade'],
@@ -304,9 +370,15 @@ export const RENAL_KNOWLEDGE: KnowledgeEntry[] = [
       '需兽医诊断与指导；补充剂（钙、维生素 D、钾等）的种类与剂量不可自行决定。',
     ],
     citations: [
-      { source: 'AAHA 2021 营养与体重管理指南', chapter: '自制膳食（Home-Prepared Diets）', note: '多数自制食谱不均衡；需认证兽医营养师配方并逐年更新；严格按方执行' },
+      { source: 'AAHA 营养与体重管理指南 2021', chapter: '自制膳食（Home-Prepared Diets）', note: '多数自制食谱不均衡；需认证兽医营养师配方并逐年更新；严格按方执行' },
       { source: '小动物临床营养学（第5版）', chapter: '第37章 慢性肾病', note: '常规食材难达治疗粮磷/蛋白水平；换其他商业粮或自制粮需保证整体营养' },
-      { source: '肝肾低脂注意事项笔记', note: '低磷路线优先碳酸钙/蛋壳粉而非骨粉；无确诊时不宣称治疗性肾病膳食' },
+      { source: '肝肾低脂注意事项笔记（内部整理，无文献依据）', note: '低磷路线优先碳酸钙/蛋壳粉而非骨粉；无确诊时不宣称治疗性肾病膳食' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'AAHA-2021-NUTRITION', locator: '自制膳食（Home-Prepared Diets）' },
+      { sourceId: 'SACN5', locator: '第37章 慢性肾病' },
+      { sourceId: 'INTERNAL-LIVER-LOWFAT', locator: '' },
     ],
     priority: 'MEDIUM',
   },

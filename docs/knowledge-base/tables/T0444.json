@@ -1,0 +1,20 @@
+{
+  "tableId": "T0444",
+  "caption": "Table 8-4. Common grain ingredients and their carbohydrate or nitrogen-free extract (NFE) concentrations (as fed).",
+  "columns": ["Grain", "NFE (%)*"],
+  "rows": [
+    ["Barley", "76"],
+    ["Corn", "81"],
+    ["Corn flour", "85"],
+    ["Cornstarch", "88"],
+    ["Grain sorghum", "80"],
+    ["Oat groats", "70"],
+    ["Rice", "90"],
+    ["Rice bran", "46"],
+    ["Rice flour", "90"],
+    ["Wheat", "78"],
+    ["Wheat flour", "82"],
+    ["Wheat middlings", "66"]
+  ],
+  "note": "图中另含 Table 8-5 \"Dry protein sources used in commercial pet foods and their typical protein ranges (as fed).\"（Ingredient | Protein (%)）与 Table 8-6 \"Protein-to-ash ratios of dry protein sources used in commercial pet foods.\"（Ingredient | Protein:ash），未纳入本表。"
+}

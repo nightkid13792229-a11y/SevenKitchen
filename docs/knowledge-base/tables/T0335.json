@@ -1,0 +1,42 @@
+{
+ "tableId": "T0335",
+ "caption": "Table 47-1. Conditions affecting the oral cavity.",
+ "columns": [
+  "Conditions primarily affecting teeth",
+  "Conditions primarily affecting the periodontium/oral mucosa"
+ ],
+ "rows": [
+  [
+   "Abrasion",
+   "Chemical or thermal burns"
+  ],
+  [
+   "Attrition",
+   "Gingival hyperplasia"
+  ],
+  [
+   "Erosion",
+   "Gingivitis"
+  ],
+  [
+   "Fracture",
+   "Gingivostomatitis"
+  ],
+  [
+   "Intrinsic staining",
+   "Neoplasia"
+  ],
+  [
+   "Odontoclastic resorption",
+   "Periapical abscess"
+  ],
+  [
+   "Pulpitis",
+   "Periodontitis"
+  ],
+  [
+   "",
+   "Ulcers"
+  ]
+ ]
+}

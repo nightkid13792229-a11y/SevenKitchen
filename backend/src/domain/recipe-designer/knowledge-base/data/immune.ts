@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -9,10 +12,10 @@ import type { KnowledgeEntry } from '../types';
  * ── 三条写作纪律 ──────────────────────────────────────────
  *   1. **只写指南说了的**。本领域涉及"要不要打、什么时候打"，写错会害到狗，
  *      所以每条都标了 locator（章节/表号），便于复核。
- *   2. 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过）——
- *      老板的边界没变：未经专业审核的兽医内容不得对顾客开放，顾客侧只放 APPROVED。
- *      以后新写的条目先写 PENDING_REVIEW；改内容就退回 PENDING_REVIEW。
- *   3. 分诊类（TRIAGE）必须写死 urgency，不让 AI 自己判断有多急。
+
+
+
+
  *
  * 建立日期：2026-10-01
  */
@@ -44,9 +47,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'IMMUNE',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-002',
@@ -76,9 +77,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'IMMUNE',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-003',
@@ -107,9 +106,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'IMMUNE',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-004',
@@ -133,7 +130,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'WSAVA 疫苗接种指南 2024', chapter: 'Effects of maternally derived antibodies / 26+ weeks 讨论' },
-      { source: 'AAHA 犬免疫指南 2022（2024 更新）', chapter: '幼犬免疫程序' },
+      { source: 'AAHA 犬免疫指南 2022', chapter: '幼犬免疫程序' },
     ],
     sources: [
       { sourceId: 'WSAVA-VACC-2024', locator: 'MDA 章节与 Fig 1', note: '6–8 周起、每 2–4 周、至 16 周或更大；26 周龄以上的讨论' },
@@ -141,9 +138,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'IMMUNE',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-005',
@@ -172,9 +167,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'IMMUNE',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-006',
@@ -205,9 +198,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'IMMUNE',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-007',
@@ -239,9 +230,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'IMMUNE',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-008',
@@ -271,9 +260,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'IMMUNE',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-009',
@@ -303,10 +290,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-010',
@@ -337,9 +321,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'IMMUNE',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-011',
@@ -368,9 +350,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-012',
@@ -392,7 +372,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'WSAVA 疫苗接种指南 2024', chapter: 'Different types of vaccine / 非核心疫苗' },
-      { source: 'AAHA 犬免疫指南 2022（2024 更新）', chapter: '非核心疫苗建议' },
+      { source: 'AAHA 犬免疫指南 2022', chapter: '非核心疫苗建议' },
     ],
     sources: [
       { sourceId: 'WSAVA-VACC-2024', locator: '非核心疫苗段落', note: '按生活方式与地方流行率逐只评估' },
@@ -400,9 +380,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'IMMUNE',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-013',
@@ -430,9 +408,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'IMMUNE',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-014',
@@ -458,9 +434,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'LOW',
     questionType: 'IMMUNE',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-015',
@@ -488,9 +462,6 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
 ];

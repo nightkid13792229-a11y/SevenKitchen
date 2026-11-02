@@ -1,0 +1,34 @@
+{
+  "tableId": "T0218",
+  "caption": "Table 30-3. Effects of chemotherapy that may have nutritional implications for cancer patients.",
+  "columns": [
+    ""
+  ],
+  "rows": [
+    [
+      "Alterations in smell or taste"
+    ],
+    [
+      "Constipation"
+    ],
+    [
+      "Decreased appetite"
+    ],
+    [
+      "Diarrhea"
+    ],
+    [
+      "Food aversions"
+    ],
+    [
+      "Nausea"
+    ],
+    [
+      "Stomatitis, glossitis, pharyngitis"
+    ],
+    [
+      "Vomiting"
+    ]
+  ],
+  "note": "单列清单式表格；页面双栏正文已忽略。"
+}

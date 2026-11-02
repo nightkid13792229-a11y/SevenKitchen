@@ -1,0 +1,168 @@
+{
+  "tableId": "T0082",
+  "caption": "Table 10-3. Balanced low-fat homemade formulas for overweight adult dogs and cats.*/**,***",
+  "columns": [
+    "Formula",
+    "Ingredients",
+    "Grams",
+    "Nutrient",
+    "Nutrient content (% dry matter)††"
+  ],
+  "rows": [
+    [
+      "Daily food formulation for an 18-kg (40-lb) dog (as fed)",
+      "Chicken, white meat",
+      "65",
+      "Dry matter",
+      "36.5"
+    ],
+    [
+      "Daily food formulation for an 18-kg (40-lb) dog (as fed)",
+      "Egg, large, boiled",
+      "81",
+      "Protein",
+      "22.6"
+    ],
+    [
+      "Daily food formulation for an 18-kg (40-lb) dog (as fed)",
+      "Rice, white, cooked†",
+      "325",
+      "Fat",
+      "8.0"
+    ],
+    [
+      "Daily food formulation for an 18-kg (40-lb) dog (as fed)",
+      "Cereal, All Bran",
+      "26",
+      "Linoleic acid",
+      "1.1"
+    ],
+    [
+      "Daily food formulation for an 18-kg (40-lb) dog (as fed)",
+      "Calcium carbonate",
+      "2",
+      "Fiber",
+      "5.8"
+    ],
+    [
+      "Daily food formulation for an 18-kg (40-lb) dog (as fed)",
+      "Salt, iodized",
+      "1",
+      "Calcium",
+      "0.50"
+    ],
+    [
+      "Daily food formulation for an 18-kg (40-lb) dog (as fed)",
+      "Salt substitute (KCl)",
+      "1",
+      "Phosphorus",
+      "0.37"
+    ],
+    [
+      "Daily food formulation for an 18-kg (40-lb) dog (as fed)",
+      "Total",
+      "501",
+      "Potassium",
+      "0.63"
+    ],
+    [
+      "Daily food formulation for an 18-kg (40-lb) dog (as fed)",
+      "",
+      "",
+      "Sodium",
+      "0.45"
+    ],
+    [
+      "Daily food formulation for an 18-kg (40-lb) dog (as fed)",
+      "",
+      "",
+      "Magnesium",
+      "0.14"
+    ],
+    [
+      "Daily food formulation for an 18-kg (40-lb) dog (as fed)",
+      "",
+      "",
+      "Energy (kcal/100 g)",
+      "398"
+    ],
+    [
+      "Daily food formulation for a 4.5-kg (10-lb) cat (as fed)",
+      "Liver, chicken, cooked",
+      "125",
+      "Dry matter (%)",
+      "33.8"
+    ],
+    [
+      "Daily food formulation for a 4.5-kg (10-lb) cat (as fed)",
+      "Rice, white, cooked†",
+      "46",
+      "Protein",
+      "52.7"
+    ],
+    [
+      "Daily food formulation for a 4.5-kg (10-lb) cat (as fed)",
+      "Cereal, All Bran",
+      "8",
+      "Fat",
+      "11.4"
+    ],
+    [
+      "Daily food formulation for a 4.5-kg (10-lb) cat (as fed)",
+      "Calcium carbonate",
+      "1.2",
+      "Linoleic acid",
+      "1.2"
+    ],
+    [
+      "Daily food formulation for a 4.5-kg (10-lb) cat (as fed)",
+      "Salt, iodized",
+      "0.3",
+      "Fiber",
+      "5.2"
+    ],
+    [
+      "Daily food formulation for a 4.5-kg (10-lb) cat (as fed)",
+      "Salt, substitute (KCl)",
+      "0.3",
+      "Calcium",
+      "0.85"
+    ],
+    [
+      "Daily food formulation for a 4.5-kg (10-lb) cat (as fed)",
+      "Total",
+      "180",
+      "Phosphorus",
+      "0.77"
+    ],
+    [
+      "Daily food formulation for a 4.5-kg (10-lb) cat (as fed)",
+      "",
+      "",
+      "Potassium",
+      "0.67"
+    ],
+    [
+      "Daily food formulation for a 4.5-kg (10-lb) cat (as fed)",
+      "",
+      "",
+      "Sodium",
+      "0.44"
+    ],
+    [
+      "Daily food formulation for a 4.5-kg (10-lb) cat (as fed)",
+      "",
+      "",
+      "Magnesium",
+      "0.11"
+    ],
+    [
+      "Daily food formulation for a 4.5-kg (10-lb) cat (as fed)",
+      "",
+      "",
+      "Energy (kcal/100 g)",
+      "420"
+    ]
+  ],
+  "note": "原表为上下两个配方子表（狗 / 猫），左侧 Ingredients-Grams，右侧 Nutrient content；已合并，用 Formula 列区分"
+}

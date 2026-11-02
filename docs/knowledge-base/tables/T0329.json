@@ -1,0 +1,17 @@
+{
+  "tableId": "T0329",
+  "caption": "Box 46-7. Behavioral Management for Cats with Inappropriate Urination.*",
+  "columns": ["Resources", "Recommendations", "Explanations/consequences"],
+  "rows": [
+    ["Number of litter boxes", "Number of litter boxes = number of cats +1", "Too few litter boxes may result in problems that cause a cat to seek alternative toileting sites. These problems may include: volume of excrement in the litter box; box occupied by another cat; box being guarded by another cat."],
+    ["Location of litter boxes", "Should be spread throughout environment in easily accessible locations", "Clustering litter boxes in one location may create access problems. These problems may include: guarding by another cat and physical challenges (e.g., stairs/distance) with getting to the litter box location."],
+    ["Litter box style", "Large", "Boxes that are too small may be uncomfortable for cats to use, causing them to seek out other sites."],
+    ["", "Uncovered", "Boxes that are covered may trap odors, creating an unpleasant environment and causing the cat to seek other toileting sites."],
+    ["Litter", "Clumping (sand-like) Unscented", "Although individual preferences exist, the majority of cats prefer unscented clumping (finely particulate matter\u2013similar to sand) litter."],
+    ["Litter box hygiene", "Daily litter box scooping Complete litter box cleaning/change every 1 to 4 weeks", "Cats tend to be fastidious and prefer clean toileting locations. Frequency of full box cleaning (wash/new litter) will depend on litter type; clumping type litters that allow owners to remove urine may require less frequent changes."],
+    ["Scratching posts/pads", "Multiple, sturdy, tall, prominently located", "Scratching is a form of marking behavior. Encouraging scratch marking on appropriate targets may reduce the likelihood of other forms of marking and prevent destruction of household items."],
+    ["Resting perches", "Multiple, single cat sized, elevated, upholstered surfaces", "Creative use of vertical space in the home can reduce inter-cat tension/aggression. Cats tend to prefer upholstered surfaces over slick surfaces but individual preferences may exist."],
+    ["Feeding/water stations", "Number of stations = number of cats", "Providing adequate resources spread throughout the environment allows cats to self-segregate; this may help to reduce social tension in multi-cat households."],
+    ["Play/social interaction", "At least 2 to 3 daily short sessions (5 to 10 minutes)", "Cat age and personality may affect type and duration of interaction but it is important to recognize that domesticated cats are social and will often benefit from play/interaction. Indoor-only cats can especially benefit from owner-initiated activity such as play with toys for overall stress reduction and exercise. Play activity also enhances the family-pet bond and is useful for overweight cats."]
+  ]
+}

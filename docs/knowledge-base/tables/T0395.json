@@ -1,0 +1,157 @@
+{
+ "tableId": "T0395",
+ "caption": "Table 58-3. Key nutritional factors in selected veterinary therapeutic foods for dogs with lymphangiectasia/protein-losing enteropathy compared to recommended levels.* (See Table 31-5 if foods with novel protein sources or protein hydrolysates are desired.)",
+ "columns": [
+  "",
+  "Energy density (kcal/g)",
+  "Fat (%)",
+  "Protein (%)",
+  "Fiber (%)",
+  "Protein digestibility (%)",
+  "Fat digestibility (%)",
+  "Carbohydrate digestibility (%)"
+ ],
+ "rows": [
+  [
+   "Dry foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   ">3.5",
+   "<15",
+   "≥25",
+   "≤5",
+   "≥87",
+   "≥90",
+   "≥90"
+  ],
+  [
+   "Hill's Prescription Diet i/d Canine",
+   "4.2",
+   "14.1",
+   "26.2",
+   "2.7",
+   "92",
+   "93",
+   "94"
+  ],
+  [
+   "Iams Veterinary Formula Intestinal Low-Residue",
+   "3.8",
+   "10.7",
+   "24.6",
+   "2.1",
+   "na",
+   "na",
+   "na"
+  ],
+  [
+   "Medi-Cal Low Fat LF 20",
+   "na",
+   "6.6",
+   "24.2",
+   "5.2",
+   "na",
+   "na",
+   "na"
+  ],
+  [
+   "Purina Veterinary Diets EN GastroENteric Formula**",
+   "4.2",
+   "12.6",
+   "27.0",
+   "1.5",
+   "84.5",
+   "91.4",
+   "94.4"
+  ],
+  [
+   "Royal Canin Veterinary Diet Digestive Low Fat LF 20",
+   "3.7",
+   "6.6",
+   "24.2",
+   "2.3",
+   "na",
+   "na",
+   "na"
+  ],
+  [
+   "Moist foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   ">3.5",
+   "<15",
+   "≥25",
+   "≤5",
+   "≥87",
+   "≥90",
+   "≥90"
+  ],
+  [
+   "Hill's Prescription Diet i/d Canine",
+   "4.4",
+   "14.9",
+   "25.0",
+   "1.0",
+   "88",
+   "94",
+   "93"
+  ],
+  [
+   "Iams Veterinary Formula Intestinal Low-Residue",
+   "4.6",
+   "13.2",
+   "35.9",
+   "3.9",
+   "na",
+   "na",
+   "na"
+  ],
+  [
+   "Medi-Cal Low Fat LF",
+   "na",
+   "9.0",
+   "32.8",
+   "3.1",
+   "na",
+   "na",
+   "na"
+  ],
+  [
+   "Purina Veterinary Diets EN GastroENteric Formula**",
+   "4.0",
+   "13.8",
+   "30.5",
+   "0.9",
+   "85.1",
+   "95.6",
+   "92.2"
+  ],
+  [
+   "Royal Canin Veterinary Diet Digestive Low Fat LF",
+   "4.0",
+   "6.9",
+   "31.9",
+   "3.0",
+   "na",
+   "na",
+   "na"
+  ]
+ ],
+ "note": "图中本表下方另有一张 Table 58-4（猫，同一组列），内容与 T0394 重复，未再转录。"
+}

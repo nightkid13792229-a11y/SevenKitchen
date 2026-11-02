@@ -1,0 +1,32 @@
+{
+  "tableId": "T0216",
+  "caption": "Table 30-1. Phases of clinical and metabolic alterations in cancer patients.",
+  "columns": [
+    "Phase",
+    "Clinical changes",
+    "Metabolic changes"
+  ],
+  "rows": [
+    [
+      "1",
+      "Preclinical, silent phase\nNo obvious clinical signs",
+      "Hyperlactatemia\nHyperinsulinemia\nAltered blood amino acid profiles"
+    ],
+    [
+      "2",
+      "Early clinical signs\nAnorexia\nLethargy\nMild weight loss\nMore susceptible to side effects from chemotherapy, etc.",
+      "Similar metabolic changes"
+    ],
+    [
+      "3",
+      "Cachexia\nAnorexia\nLethargy\nMore susceptible to side effects from chemotherapy, etc.",
+      "Similar changes but more profound"
+    ],
+    [
+      "4",
+      "Recovery\nRemission",
+      "Metabolic changes may persist\nChanges secondary to surgery, chemotherapy or radiation therapy"
+    ]
+  ],
+  "note": "单元格内换行以 \\n 保留；页面双栏正文已忽略。"
+}

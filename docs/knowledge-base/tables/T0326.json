@@ -1,0 +1,26 @@
+{
+  "tableId": "T0326",
+  "caption": "Table 46-20. Descriptions of grades used to classify evidence supporting treatments for cats with lower urinary tract diseases.*",
+  "columns": [
+    "Grade",
+    "Description of evidence"
+  ],
+  "rows": [
+    [
+      "I",
+      "At least one properly designed, randomized, controlled clinical study performed in patients of the target species"
+    ],
+    [
+      "II",
+      "Evidence from properly designed, randomized, controlled studies in animals of the target species with spontaneous disease in a laboratory or research animal colony setting"
+    ],
+    [
+      "III",
+      "Appropriately controlled studies without randomization\nAppropriately designed case-control epidemiologic studies\nStudies using models of disease or simulations in the target species\nDramatic results from uncontrolled studies\nCase series"
+    ],
+    [
+      "IV",
+      "Studies conducted in other species\nReports of expert committees\nDescriptive studies\nCase reports\nPathophysiologic justification/rationale\nOpinions of respected experts"
+    ]
+  ]
+}

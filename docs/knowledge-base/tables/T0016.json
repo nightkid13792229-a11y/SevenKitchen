@@ -1,0 +1,95 @@
+{
+  "tableId": "T0016",
+  "caption": "TABLE 3: Materials Needed for the Practice of Veterinary Dentistry*",
+  "columns": [
+    "Category",
+    "Item"
+  ],
+  "rows": [
+    [
+      "Necessary materials",
+      "Antiseptic rinse"
+    ],
+    [
+      "Necessary materials",
+      "Prophy paste in individual single use tubs (fine grit)"
+    ],
+    [
+      "Necessary materials",
+      "Prophy angle and cups"
+    ],
+    [
+      "Necessary materials",
+      "Hemostatic agents"
+    ],
+    [
+      "Necessary materials",
+      "Needles and syringes"
+    ],
+    [
+      "Necessary materials",
+      "Intraoral dental radiographic capabilities"
+    ],
+    [
+      "Necessary materials",
+      "Equipment to prevent hypothermia: conductive blanket, forced-air warming blanket, circulating water blanket, towels, blankets, IV fluid warmer, dental water reservoir warmer"
+    ],
+    [
+      "Necessary materials",
+      "Gauze sponges"
+    ],
+    [
+      "Necessary materials",
+      "Antimicrobial agents for local application"
+    ],
+    [
+      "Necessary materials",
+      "Resorbable suture material sized appropriately for surgical needs (3-0, 4-0, or smaller)"
+    ],
+    [
+      "Necessary materials",
+      "Bone augmentation/guided tissue regeneration material"
+    ],
+    [
+      "Necessary materials",
+      "Local anesthetic drugs and delivery system"
+    ],
+    [
+      "Necessary equipment",
+      "A dental machine with tubing and attachments for low and high-speed handpieces, mechanical scaler, suction and pressurized air/water delivery system"
+    ],
+    [
+      "Necessary equipment",
+      "Dental radiograph generator (wall, ceiling mount or floor model)"
+    ],
+    [
+      "Necessary equipment",
+      "Suction"
+    ],
+    [
+      "Necessary equipment",
+      "High- and low-speed hand pieces (two of each)"
+    ],
+    [
+      "Necessary equipment",
+      "Pressurized air water delivery system"
+    ],
+    [
+      "Necessary equipment",
+      "Autoclave or gas sterilization system"
+    ],
+    [
+      "Necessary equipment",
+      "Various sizes of high-speed and low-speed burs (round/cross cut taper/finishing burs)"
+    ],
+    [
+      "Necessary equipment",
+      "Power scaler with tips for gross and subgingival scaling (ultrasonic, subsonic, piezoelectric)"
+    ],
+    [
+      "Necessary equipment",
+      "Head or eye loupes for magnification"
+    ]
+  ],
+  "note": "原图该表为两级列表（无表格线、无列标题），按 “Necessary materials / Necessary equipment” 分组整理为两列；脚注 “*Disposable items are for single use only.” 未计入"
+}

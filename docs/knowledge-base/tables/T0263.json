@@ -1,0 +1,96 @@
+{
+ "tableId": "T0263",
+ "caption": "Table 1. Results of initial laboratory evaluation including CBC, serum biochemistries and urinalysis.",
+ "columns": [
+  "Parameters",
+  "Day 1",
+  "Reference ranges"
+ ],
+ "rows": [
+  [
+   "Hematocrit (%)",
+   "46",
+   "37-62"
+  ],
+  [
+   "Total white blood cell count (× 1,000/µl)",
+   "21.5",
+   "5.4-16.6"
+  ],
+  [
+   "Segmented neutrophils (× 1,000/µl)",
+   "18.92",
+   "3.24-10.7"
+  ],
+  [
+   "Bands (× 1,000/µl)",
+   "0.215",
+   "0.0-0.25"
+  ],
+  [
+   "Lymphocytes (× 1,000/µl)",
+   "1.29",
+   "0.75-5.65"
+  ],
+  [
+   "Monocytes (× 1,000/µl)",
+   "1.075",
+   "0.1-1.19"
+  ],
+  [
+   "Glucose (mg/dl)",
+   "119",
+   "89-135"
+  ],
+  [
+   "Urea nitrogen (mg/dl)",
+   "67",
+   "8-27"
+  ],
+  [
+   "Creatinine (mg/dl)",
+   "1.6",
+   "0.6-1.4"
+  ],
+  [
+   "Phosphorus (mg/dl)",
+   "5.2",
+   "2.6-6.0"
+  ],
+  [
+   "Calcium (mg/dl)",
+   "10.1",
+   "9.5-11.6"
+  ],
+  [
+   "Total protein (g/dl)",
+   "6.5",
+   "5.4-7.2"
+  ],
+  [
+   "Albumin (g/dl)",
+   "2.8",
+   "2.7-3.8"
+  ],
+  [
+   "Total CO2 (mmol/l)",
+   "19",
+   "18-24"
+  ],
+  [
+   "Potassium (mg/dl)",
+   "4.6",
+   "3.5-5.5"
+  ],
+  [
+   "Amylase (IU/l)",
+   "985",
+   "338-1,007"
+  ],
+  [
+   "Lipase (IU/l)",
+   "1,245",
+   "268-1,796"
+  ]
+ ]
+}

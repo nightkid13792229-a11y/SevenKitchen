@@ -1,0 +1,51 @@
+{
+  "tableId": "T0215",
+  "caption": "Table 3-3. Additional resources for improving health literacy and compliance.",
+  "columns": [
+    "Titles",
+    "Publishers"
+  ],
+  "rows": [
+    [
+      "Health literacy resources",
+      ""
+    ],
+    [
+      "Health Literacy",
+      "Institute of Medicine\nNational Academies Press\n500 5th Street NW, Lockbox 285\nWashington, DC 20055"
+    ],
+    [
+      "Understanding Health Literacy: Implications for Medicine and Public Health",
+      "American Medical Association\n800-621-8335\nwww.amapress.com"
+    ],
+    [
+      "Health Literacy in Primary Care: A Clinician’s Guide",
+      "Springer Publisher Company\n11 West 42nd Street\nNew York, NY 10036\nwww.springerpub.com"
+    ],
+    [
+      "Health Literacy from A to Z: Practical Ways to Communicate Your Health Message",
+      "Jones and Bartlett Publishers\n40 Tall Pine Drive\nSudbury, MA 01776\nwww.jbpub.com"
+    ],
+    [
+      "Advancing Health Literacy: A Framework for Understanding and Action",
+      "Jossey-Bass\n800-956-7739\nwww.josseybass.com"
+    ],
+    [
+      "Compliance resources",
+      ""
+    ],
+    [
+      "The Path to High-Quality Care: Practical Tips for Improving Compliance",
+      "American Animal Hospital Association\n12575 West Bayaud Avenue\nLakewood, CO 80228\n800-883-6301\nwww.aahanet.org"
+    ],
+    [
+      "Veterinary Clinics of North America: Small Animal Practice\n(March 2006; 36(2): 419-436)",
+      "WB Saunders Co.\n6277 Sea Harbor Drive\nOrlando, FL 32887\n877-839-7126\nwww.usjc@elsevier.com"
+    ],
+    [
+      "Journal of the American Veterinary Medical Association\nEvaluation of client compliance with short-term administration of antimicrobials to dogs.\n(Feb. 15, 2005; 226(4): 567-574)",
+      "American Veterinary Medical Association\n1931 N. Meacham Rd, Suite 100\nSchaumburg , IL 60173\n847-925-8070"
+    ]
+  ],
+  "note": "Titles 列中的 “Health literacy resources”“Compliance resources” 为分区标题行（Publishers 列空白），按原样保留为行；单元格内换行以 \\n 保留。"
+}

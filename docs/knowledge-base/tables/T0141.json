@@ -1,0 +1,62 @@
+{
+ "tableId": "T0141",
+ "caption": "Table 19-1. Age and gender distribution of cats in the United States (1996).*",
+ "columns": [
+  "",
+  "Status",
+  "% of population"
+ ],
+ "rows": [
+  [
+   "Gender",
+   "Male",
+   "9.7"
+  ],
+  [
+   "",
+   "Neutered male",
+   "41.2"
+  ],
+  [
+   "",
+   "Female",
+   "11.7"
+  ],
+  [
+   "",
+   "Spayed female",
+   "34.4"
+  ],
+  [
+   "Age (years)",
+   "0-1",
+   "25.7"
+  ],
+  [
+   "",
+   "1-4",
+   "27"
+  ],
+  [
+   "",
+   "4-7",
+   "17.6"
+  ],
+  [
+   "",
+   "7-10",
+   "12"
+  ],
+  [
+   "",
+   "10-15",
+   "13.4"
+  ],
+  [
+   "",
+   "15+",
+   "4.4"
+  ]
+ ],
+ "note": "图中另含表19-2（Comparisons of cat populations...），未在此单表内转录"
+}

@@ -1,0 +1,186 @@
+{
+ "tableId": "T0249",
+ "caption": "Table 36-6. Levels of key nutrients in selected commercial foods for cats with cardiovascular disease compared to the recommended levels.*",
+ "columns": [
+  "Dry foods",
+  "Energy density (kcal/cup)**",
+  "Na (%)",
+  "Taurine (%)***",
+  "P (%)",
+  "K (%)***",
+  "Mg (%)***"
+ ],
+ "rows": [
+  [
+   "Recommended levels",
+   "–",
+   "0.07-0.30",
+   "≥0.3",
+   "0.3-0.7",
+   "≥0.52",
+   "≥0.04"
+  ],
+  [
+   "Hill's Prescription Diet g/d Feline",
+   "297",
+   "0.32",
+   "0.14",
+   "0.54",
+   "0.77",
+   "0.049"
+  ],
+  [
+   "Hill's Prescription Diet k/d Feline",
+   "477",
+   "0.24",
+   "0.16",
+   "0.46",
+   "0.75",
+   "0.058"
+  ],
+  [
+   "Hill's Science Diet Mature Adult Active Longevity Original",
+   "475",
+   "0.32",
+   "0.2",
+   "0.69",
+   "0.88",
+   "0.069"
+  ],
+  [
+   "Medi-Cal Mature Formula",
+   "355",
+   "0.4",
+   "0.4",
+   "0.8",
+   "1.0",
+   "na"
+  ],
+  [
+   "Medi-Cal Reduced Protein",
+   "440",
+   "0.3",
+   "0.4",
+   "0.6",
+   "0.8",
+   "na"
+  ],
+  [
+   "Medi-Cal Renal LP",
+   "409",
+   "0.2",
+   "0.2",
+   "0.5",
+   "1.0",
+   "na"
+  ],
+  [
+   "Purina Veterinary Diets NF KidNey Function",
+   "398",
+   "0.2",
+   "0.18",
+   "0.41",
+   "0.88",
+   "0.10"
+  ],
+  [
+   "Moist foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "–",
+   "0.07-0.30",
+   "≥0.3",
+   "0.3-0.7",
+   "≥0.52",
+   "≥0.04"
+  ],
+  [
+   "Hill's Prescription Diet g/d Feline",
+   "165/5.5 oz.",
+   "0.32",
+   "0.44",
+   "0.52",
+   "0.72",
+   "0.088"
+  ],
+  [
+   "Hill's Prescription Diet k/d with Chicken Feline",
+   "183/5.5 oz.",
+   "0.3",
+   "0.42",
+   "0.38",
+   "1.18",
+   "0.049"
+  ],
+  [
+   "Hill's Science Diet Mature Adult Active Longevity Gourmet Turkey Entrée Minced",
+   "87/3 oz.; 160/5.5 oz.",
+   "0.28",
+   "0.48",
+   "0.64",
+   "0.84",
+   "0.072"
+  ],
+  [
+   "Iams Veterinary Formula Stress/Weight Gain Formula Maximum-Calorie",
+   "333/6 oz.",
+   "0.24",
+   "0.33",
+   "0.83",
+   "1.01",
+   "0.089"
+  ],
+  [
+   "Medi-Cal Mature Formula",
+   "205/170 g",
+   "0.3",
+   "0.3",
+   "0.6",
+   "0.7",
+   "na"
+  ],
+  [
+   "Medi-Cal Reduced Protein",
+   "265/170 g",
+   "0.2",
+   "0.3",
+   "0.5",
+   "0.7",
+   "na"
+  ],
+  [
+   "Medi-Cal Renal LP",
+   "125/85 g pouch",
+   "0.6",
+   "0.8",
+   "0.5",
+   "1.1",
+   "na"
+  ],
+  [
+   "Purina Veterinary Diets CV Cardiovascular Formula",
+   "223/5.5 oz.",
+   "0.2",
+   "0.31",
+   "0.92",
+   "1.33",
+   "0.07"
+  ],
+  [
+   "Purina Veterinary Diets NF KidNey Function",
+   "234/5.5 oz.",
+   "0.16",
+   "0.45",
+   "0.52",
+   "0.96",
+   "0.10"
+  ]
+ ]
+}

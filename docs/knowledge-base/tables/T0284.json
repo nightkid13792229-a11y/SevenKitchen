@@ -1,0 +1,47 @@
+{
+ "tableId": "T0284",
+ "caption": "Table 40-6. Selected human foods with minimal calcium or oxalate content.",
+ "columns": [
+  "Food items",
+  "Low-calcium foods",
+  "Low-oxalate foods"
+ ],
+ "rows": [
+  [
+   "Meats and eggs",
+   "Eggs\nPoultry",
+   "Beef\nEggs\nFish and shellfish*\nLamb\nPork\nPoultry"
+  ],
+  [
+   "Vegetables",
+   "",
+   "Cabbage\nCauliflower\nMushrooms\nPeas, green\nRadishes\nPotatoes, white"
+  ],
+  [
+   "Milk and dairy products",
+   "",
+   "Cheese*\nMilk*\nYogurt*"
+  ],
+  [
+   "Fruits",
+   "",
+   "Apple\nAvocado\nBanana\nBing cherries\nGrapefruit\nGrapes, green\nMangos\nMelons\nCantaloupe\nCasaba\nHoneydew\nWatermelon\nPlums, green or yellow"
+  ],
+  [
+   "Breads, grains, nuts",
+   "Almonds\nMacaroni\nPretzels\nRice\nSpaghetti\nWalnuts",
+   "Bread, white\nMacaroni\nNoodles\nRice\nSpaghetti"
+  ],
+  [
+   "Miscellaneous",
+   "Popcorn",
+   "Jellies\nPreserves\nSoups with allowed ingredients"
+  ],
+  [
+   "*Low in oxalate, but not low in calcium content.",
+   "",
+   ""
+  ]
+ ],
+ "note": "左列 Food items 为合并单元格（每个食物类别跨多行），故按类别成行，同列内换行的多个条目用 \\n 连接；Cantaloupe/Casaba/Honeydew/Watermelon 在原图中缩进于 Melons 之下；末行为表内脚注。"
+}

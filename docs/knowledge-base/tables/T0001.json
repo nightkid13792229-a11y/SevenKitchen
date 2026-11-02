@@ -1,0 +1,50 @@
+{
+  "tableId": "T0001",
+  "caption": "Table 1 Definitions and Acronyms",
+  "columns": [
+    "Term",
+    "Definition"
+  ],
+  "rows": [
+    [
+      "Screening evaluation",
+      "Initial evaluation performed on all animals."
+    ],
+    [
+      "Extended evaluation",
+      "In-depth information-gathering based on issues of concern identified during initial screening."
+    ],
+    [
+      "Iterative process",
+      "Each factor is assessed and re-assessed as often as required."
+    ],
+    [
+      "Life stage",
+      "Life stages of dogs and cats refer to periods of life that may influence nutritional needs (e.g., growth, reproduction and adult, for which AAFCO provides nutrient profiles).44,45,46"
+    ],
+    [
+      "Satisfactory diet",
+      "Complete (all nutrients present), balanced (nutrients present in proper proportions), digestible (nutrients in the diet are available to the animal), palatable (eats willingly), sufficient (amount, see text) and safe."
+    ],
+    [
+      "MER",
+      "Maintenance energy requirements."
+    ],
+    [
+      "RER",
+      "Resting energy requirements."
+    ],
+    [
+      "BW",
+      "Body weight."
+    ],
+    [
+      "BCS",
+      "Body condition score. An evaluation of body fat."
+    ],
+    [
+      "MCS",
+      "Muscle condition score. An evaluation of muscle mass."
+    ]
+  ]
+}

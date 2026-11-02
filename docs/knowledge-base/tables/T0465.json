@@ -1,0 +1,49 @@
+{
+  "tableId": "T0465",
+  "caption": "Table 7. Health benefits of sterilisation with loss of gonadal steroid hormones in cats",
+  "columns": [
+    "Condition",
+    "Occurrence (%)",
+    "Substantial morbidity*",
+    "Breed at risk†",
+    "Influencing factors"
+  ],
+  "rows": [
+    [
+      "Ovarian diseases incl. granulosa cell tumour (GCT)",
+      "Variable",
+      "Yes",
+      "No",
+      "Age"
+    ],
+    [
+      "Pyometra",
+      "2.2% at 13 years of age",
+      "Yes",
+      "Yes‡",
+      "Age"
+    ],
+    [
+      "Uterine tumours",
+      "29% of all tumours",
+      "Yes",
+      "No",
+      "Age"
+    ],
+    [
+      "Testicular tumours",
+      "Extremely seldom",
+      "Low",
+      "No",
+      "Cryptorchidism"
+    ],
+    [
+      "Mammary tumours",
+      "17% of all tumours, 12% of all malignant tumours",
+      "Yes",
+      "Yes§",
+      "Age, gestagens"
+    ]
+  ],
+  "note": "该图还包含 Table 8（female dogs），其内容见 T0466.json"
+}

@@ -1,0 +1,43 @@
+{
+ "num": "36-1",
+ "caption": "Table 36-1. Functional classes of heart failure.*",
+ "page": 3,
+ "columns": [
+  "Functional class"
+ ],
+ "rows": [
+  [
+   "Class I. The asymptomatic patient"
+  ],
+  [
+   "Heart disease is detectable (cardiac murmur, dysrhythmia), but the patient is not overtly affected and does not demonstrate clinical signs of heart failure."
+  ],
+  [
+   "a. Heart disease is detectable but no signs of compensation are evident, such as volume or pressure overload ventricular hypertrophy."
+  ],
+  [
+   "b. Heart disease is detectable in conjunction with radiographic or echocardiographic evidence of compensation, such as volume or pressure overload ventricular hypertrophy."
+  ],
+  [
+   "Class II. Mild to moderate heart failure"
+  ],
+  [
+   "Clinical signs of heart failure are evident at rest or with mild exercise and adversely affect the quality of life. Typical clinical signs include exercise intolerance, cough, tachypnea, mild respiratory distress and mild to moderate ascites. Hypoperfusion at rest is generally not present."
+  ],
+  [
+   "Class III. Advanced heart failure"
+  ],
+  [
+   "Clinical signs of CHF are immediately evident. These clinical signs include respiratory distress (dyspnea), marked ascites, profound exercise intolerance and hypoperfusion at rest. In the most severe cases, the patient is moribund and suffers from cardiogenic shock."
+  ]
+ ],
+ "tableId": "T0496",
+ "doc": "sacn5/chapters/SACN5_36.pdf",
+ "method": "视觉",
+ "verify": {
+  "numbers": 0,
+  "found": 0,
+  "status": "通过",
+  "misses": []
+ }
+}

@@ -1,0 +1,13 @@
+{
+  "tableId": "T0401",
+  "caption": "Table 60-1. Key nutritional factors for foods for dogs and cats with small intestinal bacterial overgrowth.*",
+  "columns": [
+    "Factors",
+    "Recommended levels"
+  ],
+  "rows": [
+    ["Digestibility", "≥87% for protein and ≥90% for fat and digestible carbohydrate"],
+    ["Fat", "12 to 15% for dogs\n15 to 25% for cats"],
+    ["*Nutrients expressed on a dry matter basis.", ""]
+  ]
+}

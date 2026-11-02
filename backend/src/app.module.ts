@@ -313,6 +313,8 @@ import { OrderRecipeDesignService } from './application/recipe-designer/order-re
 import { OrderRecipeTemplateService } from './application/recipe-designer/order-recipe-template.service';
 import { RecipeCopywritingService } from './application/recipe-designer/recipe-copywriting.service';
 import { KnowledgeBaseService } from './application/recipe-designer/knowledge-base.service';
+import { SourceLayerService } from './application/knowledge-base/source-layer.service';
+import { KnowledgeSourceController } from './interfaces/controllers/knowledge-source.controller';
 import {
   SupplementLabelExtractionService,
   SUPPLEMENT_LABEL_OCR_PROVIDER,
@@ -402,6 +404,7 @@ validatePrismaConfig();
     LabelModule,
   ],
   controllers: [
+    KnowledgeSourceController,
     DesignRecipeCoverController,
     AiCoverPreviewController,
     RecipeCoverConfigController,
@@ -905,6 +908,7 @@ validatePrismaConfig();
     SupplementLabelExtractionService,
     RecipeCopywritingService,
     KnowledgeBaseService,
+    SourceLayerService,
     {
       provide: SUPPLEMENT_LABEL_OCR_PROVIDER,
       useClass: TencentCloudSupplementLabelOcrProvider,

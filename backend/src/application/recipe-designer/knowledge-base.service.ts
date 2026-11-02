@@ -16,7 +16,6 @@ import {
 import {
   HEALTH_ONLY_DOMAINS,
   KNOWLEDGE_QUESTION_TYPE_LABELS,
-  KNOWLEDGE_URGENCY_LABELS,
   type KnowledgeEntry,
 } from '../../domain/recipe-designer/knowledge-base/types';
 
@@ -28,14 +27,6 @@ import {
  * 中间的内容。库里涨到几千条也不怕，只要每次只挑最相关的这一小撮。
  */
 export const KNOWLEDGE_PROMPT_ENTRY_LIMIT = 24;
-
-/**
- * 面向谁生成提示词。
- *
- * 老板把边界定死了：**未审核的兽医内容不得对顾客开放**。
- * 营养师侧看得到全部（他们看得懂"这条还没审"），顾客侧只给已审核的。
- */
-export type KnowledgeAudience = 'nutritionist' | 'customer';
 
 /**
  * 这次检索是给谁用的。
@@ -176,25 +167,6 @@ export class KnowledgeBaseService {
     return entries.filter((entry) => !excluded.has(entry.domain));
   }
 
-  /** 受众过滤：未审核的条目不给顾客看（老板定的边界） */
-  private filterByAudience(
-    entries: KnowledgeEntry[],
-    audience: KnowledgeAudience,
-  ): KnowledgeEntry[] {
-    if (audience === 'nutritionist') {
-      return entries;
-    }
-    // 未审核 / 被驳回的一律过滤；缺省（没写 reviewStatus）视为未审核。
-    //
-    // 2026-10-02：审核结论**直接标在条目自己身上**（`reviewStatus: 'APPROVED'`）。
-    // 原来另外有一张 `knowledge-base/approvals.ts` 登记表，老板说不用留记录，已撤掉 ——
-    // 状态跟着内容走反而更不容易出错：条目被删/改了 id，不会留下"审了个不存在的东西"的孤儿，
-    // 也不会出现"编号被复用、旧审核静默套在新内容上"。
-    // 约定（写在各领域文件表头）：新条目一律先写 `PENDING_REVIEW`；**改内容就退回 PENDING_REVIEW**，
-    // 换了内容就等于没审过，顾客侧立刻看不到。
-    return entries.filter((entry) => entry.reviewStatus === 'APPROVED');
-  }
-
   /**
    * 关键词检索（用于提示词内补充命中）。
    */
@@ -213,18 +185,16 @@ export class KnowledgeBaseService {
     tags: string[],
     extraKeywords: string[] = [],
     options: {
-      audience?: KnowledgeAudience;
       limit?: number;
       purpose?: KnowledgePurpose;
     } = {},
   ): string {
-    const audience = options.audience ?? 'nutritionist';
     const purpose = options.purpose ?? 'recipe-design';
     const limit = options.limit ?? KNOWLEDGE_PROMPT_ENTRY_LIMIT;
 
-    // 先按用途与受众过滤，再做关键词补充 —— 否则名额会被不相干的条目占满
+    // 先按用途过滤，再做关键词补充 —— 否则名额会被不相干的条目占满
     const scoped = (entries: KnowledgeEntry[]) =>
-      this.filterByAudience(this.filterByPurpose(entries, purpose), audience);
+      this.filterByPurpose(entries, purpose);
 
     const matched = scoped(this.searchByTags(tags));
     const extraMatched = scoped(
@@ -248,10 +218,7 @@ export class KnowledgeBaseService {
               ? `／类型：${KNOWLEDGE_QUESTION_TYPE_LABELS[entry.questionType]}`
               : '') +
             '）' +
-            entry.title +
-            (entry.urgency
-              ? `\n  **紧急程度：${KNOWLEDGE_URGENCY_LABELS[entry.urgency]}**（照用，不要自行判断）`
-              : ''),
+            entry.title,
           `  建议：${entry.summary}`,
           ...entry.details.map((detail) => `  要点：${detail}`),
           ...entry.caveats.map((caveat) => `  注意：${caveat}`),
@@ -321,7 +288,10 @@ export class KnowledgeBaseService {
 /**
  * 走新结构的条目（填了 questionType 的）要满足的额外要求。
  *
- * 旧 202 条不填 questionType，这里一条都不查 —— 落实"旧条目先不动"。
+ * 旧 198 条不填 questionType，这里一条都不查 —— 落实"旧条目先不动"。
+ *
+ * 2026-11-01 起不再校验风险等级 / 紧急程度 / 审核状态（字段已删）。
+ * 保留的两条：① 出处必须指向登记表里有的来源；② 走新结构要写下次复核日期。
  */
 function validateStructuredEntry(entry: KnowledgeEntry): string[] {
   if (!entry.questionType) {
@@ -329,10 +299,6 @@ function validateStructuredEntry(entry: KnowledgeEntry): string[] {
   }
 
   const problems: string[] = [];
-
-  if (!entry.riskLevel) {
-    problems.push(`条目 ${entry.id} 走新结构但缺 riskLevel（风险等级）`);
-  }
 
   if (!entry.sources || entry.sources.length === 0) {
     problems.push(`条目 ${entry.id} 走新结构但缺结构化出处 sources`);
@@ -346,44 +312,10 @@ function validateStructuredEntry(entry: KnowledgeEntry): string[] {
           '（新增来源见 docs/knowledge-base/intake-sop.md）',
       );
     }
-
-    // 交叉验证按风险分级：高风险必须两个**不同机构**的来源
-    const organizations = new Set(
-      entry.sources
-        .filter((source) => isKnownSourceId(source.sourceId))
-        .map((source) => sourceOrganization(source.sourceId)),
-    );
-    if (entry.riskLevel === 'HIGH' && organizations.size < 2) {
-      problems.push(
-        `条目 ${entry.id} 是高风险结论，但只有一个来源机构（${[...organizations].join('、') || '无'}）` +
-          '—— 高风险必须有 ≥2 个互相独立的来源',
-      );
-    }
-  }
-
-  // 分诊类必须写死紧急程度：这是唯一不能让 AI 自己判断的东西
-  if (entry.questionType === 'TRIAGE' && !entry.urgency) {
-    problems.push(
-      `条目 ${entry.id} 是分诊类，必须写明 urgency（立即就医 / 尽快就医 / 可观察）`,
-    );
-  }
-
-  // 有没有写审核状态必须明确：缺省视为未审核，顾客侧看不到
-  if (!entry.reviewStatus) {
-    problems.push(
-      `条目 ${entry.id} 走新结构但没写 reviewStatus（缺省视为未审核，顾客侧看不到）`,
-    );
   }
 
   if (!entry.reviewBy) {
     problems.push(`条目 ${entry.id} 走新结构但没写 reviewBy（下次复核日期）`);
-  }
-
-  if (entry.riskLevel === 'HIGH' && entry.questionType === 'TRIAGE' && entry.urgency === 'OBSERVE') {
-    // 高风险 + 可观察 是自相矛盾的组合，多半是填错了
-    problems.push(
-      `条目 ${entry.id} 标了高风险却给"可观察"—— 两者矛盾，请核对`,
-    );
   }
 
   return problems;

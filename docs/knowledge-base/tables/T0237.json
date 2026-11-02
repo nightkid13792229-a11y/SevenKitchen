@@ -1,0 +1,97 @@
+{
+ "tableId": "T0237",
+ "caption": "Table 33-4. Summary of reports delineating risk factors for developmental orthopedic disease in dogs.",
+ "columns": [
+  "Diseases",
+  "Key points",
+  "Interpretation",
+  "Risk factors",
+  "References*"
+ ],
+ "rows": [
+  [
+   "Hip dysplasia",
+   "Rapid weight gain German shepherd dogs First 60 days of age",
+   "Rapid weight gain increased risk of hip dysplasia. Dysplastic parents increased risk",
+   "Breed Rapid weight gain",
+   "Riser et al, 1964"
+  ],
+  [
+   "Hip dysplasia",
+   "Pups born by cesarean section-hand reared Vaginally born pups, pair-fed bitch milk at 70% free choice",
+   "Free-choice feeding resulted in increased weight gain and increased occurrence of hip dysplasia",
+   "Free-choice feeding Rapid weight gain",
+   "Lust et al, 1973"
+  ],
+  [
+   "Hip dysplasia",
+   "Labrador retrievers Rapid growth rate",
+   "Early fusion of triradiate growth plate in acetabulum",
+   "Breed Rapid weight gain",
+   "Lust et al, 1985"
+  ],
+  [
+   "Hip dysplasia",
+   "Weight gain >breed standards",
+   "Increased occurrence of hip dysplasia",
+   "Rapid weight gain",
+   "Kåström, 1975"
+  ],
+  [
+   "Hip dysplasia",
+   "Restricted feeding Labrador retrievers",
+   "Restricted feeding decreased occurrence of hip dysplasia",
+   "Breed Rapid weight gain",
+   "Kealy et al, 1992"
+  ],
+  [
+   "Osteochondrosis",
+   "Epidemiologic study",
+   "Labrador retrievers, Great Danes, Newfoundlands, rottweilers at greatest risk All large breeds at increased risk",
+   "Breed Gender Anatomic location",
+   "Slater et al, 1991; Slater et al, 1992"
+  ],
+  [
+   "Osteochondrosis",
+   "Epidemiologic study",
+   "Males at higher risk of OCD in shoulder",
+   "Gender Calcium content Well water",
+   "Döbenencker et al, 1997; Slater et al, 1991; Slater et al, 1992"
+  ],
+  [
+   "Osteochondrosis",
+   "Great Danes Rapid growth Over nutrition",
+   "Rapid growth increased occurrence of developmental orthopedic disease",
+   "Breed Rapid growth",
+   "Daemmrich, 1991; Hedhammar et al, 1974; Meyer and Zentek, 1992"
+  ],
+  [
+   "Osteochondrosis",
+   "Great Danes Excess calcium",
+   "Excessive calcium intake increased occurrence of developmental orthopedic disease",
+   "Breed Excessive calcium",
+   "Hazewinkel et al, 1985"
+  ],
+  [
+   "Osteochondrosis",
+   "Great Danes Excess calcium and phosphorus intake",
+   "Excessive mineral intake at young age leads to hypercalcinonism",
+   "Breed Excess minerals",
+   "Schoenmakers et al, 2000"
+  ],
+  [
+   "Osteochondrosis",
+   "Great Danes Excess vitamin D intake",
+   "Imbalance of vitamin D metabolites at chondrocytes",
+   "Breed Excess vitamin D",
+   "Tryfonidou et al, 2003"
+  ],
+  [
+   "Developmental orthopedic disease",
+   "Large breeds Rapid growth",
+   "Excessive energy intake increased occurrence of developmental orthopedic disease",
+   "Breed Rapid growth High energy density food",
+   "Richardson and Toll, 1997"
+  ]
+ ]
+}

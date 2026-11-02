@@ -1,0 +1,56 @@
+{
+ "tableId": "T0338",
+ "caption": "Table 47-4. Key nutritional factors for foods for dogs and cats for prevention of periodontal disease and maintenance of overall health.*",
+ "columns": [
+  "Factors",
+  "Dogs",
+  "Cats"
+ ],
+ "rows": [
+  [
+   "Food texture",
+   "VOHC Seal for plaque control",
+   "VOHC Seal for plaque control"
+  ],
+  [
+   "Antioxidants",
+   "",
+   ""
+  ],
+  [
+   "  Vitamin E (IU/kg)",
+   "≥400",
+   "≥500"
+  ],
+  [
+   "  Vitamin C (mg/kg)",
+   "≥100",
+   "100-200"
+  ],
+  [
+   "  Selenium (mg/kg)",
+   "0.5-1.3",
+   "0.5-1.3"
+  ],
+  [
+   "Phosphorus (%)",
+   "0.4-0.8",
+   "0.5-0.8"
+  ],
+  [
+   "Sodium (%)",
+   "0.2-0.4",
+   "0.2-0.5"
+  ],
+  [
+   "Magnesium (%)",
+   "-",
+   "0.04-0.1"
+  ],
+  [
+   "Average urinary pH",
+   "-",
+   "6.2-6.4"
+  ]
+ ]
+}

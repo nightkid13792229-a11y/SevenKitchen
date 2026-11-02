@@ -1,0 +1,71 @@
+{
+ "tableId": "T0152",
+ "caption": "Table 22-2. Energy requirements of pregnant queens.*",
+ "columns": [
+  "Body weight (kg)",
+  "Body weight (lb)",
+  "kcal ME per day At 90 kcal/kg BW",
+  "kcal ME per day At 100 kcal/kg BW",
+  "kJ ME per day At 375 kJ/kg BW",
+  "kJ ME per day At 420 kJ/kg BW"
+ ],
+ "rows": [
+  [
+   "2",
+   "4.4",
+   "180",
+   "200",
+   "750",
+   "840"
+  ],
+  [
+   "3",
+   "6.6",
+   "270",
+   "300",
+   "1,125",
+   "1,260"
+  ],
+  [
+   "4",
+   "8.8",
+   "360",
+   "400",
+   "1,500",
+   "1,680"
+  ],
+  [
+   "5",
+   "11.0",
+   "450",
+   "500",
+   "1,875",
+   "2,100"
+  ],
+  [
+   "6",
+   "13.2",
+   "540",
+   "600",
+   "2,250",
+   "2,520"
+  ],
+  [
+   "7",
+   "15.4",
+   "630",
+   "700",
+   "2,625",
+   "2,940"
+  ],
+  [
+   "8",
+   "17.6",
+   "720",
+   "800",
+   "3,000",
+   "3,360"
+  ]
+ ],
+ "note": "图中下方另含 Table 22-3. Daily energy requirements of lactating queens over the lactation period.*（5 列，属另一张表，未并入本表）"
+}

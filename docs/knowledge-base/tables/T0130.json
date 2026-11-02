@@ -1,0 +1,23 @@
+{
+  "tableId": "T0130",
+  "caption": "Table 18-1. Working and sporting dog activities listed by exercise type.",
+  "columns": [
+    "Exercise type",
+    "Activity"
+  ],
+  "rows": [
+    [
+      "Sprint\n(high-intensity physical activity that can be sustained less than two minutes)",
+      "Coursing (sight hounds)\nRacing (greyhounds, whippets)\nWeight pulling"
+    ],
+    [
+      "Intermediate\n(physical activity lasting a few minutes to a few hours)",
+      "Agility\nBorder patrol, customs\nDrug detection\nExercise with people (running, bicycling)\nField trials\nFrisbee trials\nGuarding\nHunting (game birds, rabbits)\nLivestock management (cattle, sheep, hogs)\nMilitary\nPolice work\nPursuit (raccoon, coyote, fox, deer, wild boar)\nSearch and rescue\nService work (guide dogs, assistance dogs)\nTracking"
+    ],
+    [
+      "Endurance\n(physical activity that last many hours)",
+      "Sled pulling (racing, expedition)"
+    ]
+  ],
+  "note": "Activity 列为合并单元格内的逐条活动，已用换行保留在同一单元格；图下部 Table 18-2（Popular books about training scent-detection dogs）为文献列表、无列结构，未转录"
+}

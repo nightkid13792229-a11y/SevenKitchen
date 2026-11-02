@@ -1,0 +1,127 @@
+{
+ "tableId": "T0166",
+ "caption": "Table 25-7. Example using enteral-assisted feeding guidelines.",
+ "columns": [
+  "Patient data needed",
+  "Canine patient example"
+ ],
+ "rows": [
+  [
+   "1. Current body weight",
+   "12 kg"
+  ],
+  [
+   "2. Calculate resting energy requirement (RER) as kcal/day",
+   "451 kcal/day"
+  ],
+  [
+   "3. Expected daily fluid volume in ml/kg/day",
+   "60 ml/kg"
+  ],
+  [
+   "4. Size (Fr.) and volume capacity of feeding tube",
+   "18-Fr., E-tube (10-ml volume)"
+  ],
+  [
+   "Food information needed: Determine the caloric density of the food or food blend. Liquid foods have a set caloric density (kcal/ml) provided on the product information sheet. Moist foods need to be blended with a liquid (water or liquid food) to make a gruel (food blend) that can be delivered through a feeding tube or by syringe.",
+   ""
+  ],
+  [
+   "1. Determine gruel caloric density:",
+   ""
+  ],
+  [
+   "Identify kcal per can of food",
+   "569 kcal/12.7 oz. can"
+  ],
+  [
+   "Calculate ml/can (Xx oz. in can x 30 ml/oz.); assumes 30 ml/weight/oz.",
+   "12.7 oz. x 30 = 383 ml"
+  ],
+  [
+   "Determine ml of fluid needed to blend with canned food",
+   "100 ml warm water"
+  ],
+  [
+   "Determine caloric density of fluid if not water*",
+   "–"
+  ],
+  [
+   "Calculate caloric density of food blend. kcal/ml = (total kcal ÷ total ml)",
+   "569 ÷ (383 + 100) = 1.2 kcal/ml"
+  ],
+  [
+   "2. Determine water provided in food or food blend:",
+   ""
+  ],
+  [
+   "Calculate water in canned food (ml x % moisture); 75% moisture in canned food obtained from product information sheet",
+   "383 x 75% = 287 ml"
+  ],
+  [
+   "Calculate water in liquid if not water**",
+   "–"
+  ],
+  [
+   "Calculate % water in blend (ml total water ÷ total ml)",
+   "(287 + 100) ÷ 483 = 79%"
+  ],
+  [
+   "3. Provide a feeding protocol:",
+   ""
+  ],
+  [
+   "Method of food delivery (bolus feeding or constant rate infusion)",
+   "bolus"
+  ],
+  [
+   "Beginning feeding rate (x % of RER)",
+   "25% RER"
+  ],
+  [
+   "Daily caloric intake goal (kcal/day)***",
+   "113 kcal/day"
+  ],
+  [
+   "Daily feeding rate",
+   "–"
+  ],
+  [
+   "Calculate amount (kcal/day ÷ kcal/ml of food blend)",
+   "113 kcal ÷ 1.2 kcal/ml = 94 ml food blend/day"
+  ],
+  [
+   "Determine meals/day (per 24 hr)",
+   "4"
+  ],
+  [
+   "Determine feeding dosage (ml/meal/day)",
+   "94 ml ÷ 4 meals = 24 ml/meal; therefore, 24 ml q6hr"
+  ],
+  [
+   "Water provided by food or food blend/day (ml)",
+   "94 ml x 79% = 74 ml water"
+  ],
+  [
+   "Flush required after food delivery (ml)",
+   "4 x 10 ml flush = 40 ml water"
+  ],
+  [
+   "Additional water needed to meet daily fluid volume (daily requirement = 60 ml/kg)",
+   "720 ml/day – (74 + 40) = 606 ml"
+  ],
+  [
+   "Provide guidelines for residuals (see text)",
+   "–"
+  ],
+  [
+   "Provide monitoring guidelines (see text)",
+   "–"
+  ],
+  [
+   "Tube maintenance and removal guidelines (see text)",
+   "–"
+  ]
+ ],
+ "note": "*If blending the canned food with a commercial liquid food, these foods provide a caloric density greater than 0. Determine the liquid food's caloric density and plug it into the top half of the equation. The caloric density can range between 0.8 to 1.9 kcal/ml depending on the commercial product.\n**Every liquid food is part solids and part water, find this information about the product and calculate the absolute water contribution to the food blend, or assume the liquid food to be 100% water, if moisture content is 90% or greater.\n***Increase this rate as tolerated by the patient or with a feeding goal to meet the patient's RER by Day 2 or 3."
+}

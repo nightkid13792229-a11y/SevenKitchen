@@ -1,0 +1,28 @@
+{
+  "tableId": "T0162",
+  "caption": "Table 25-3. Examples of hospital feeding orders.",
+  "columns": [
+    "Examples of hospital feeding orders"
+  ],
+  "rows": [
+    [
+      "1. Offer 2 cans of product XX every 6 hr PO."
+    ],
+    [
+      "2. Give 100 ml of product YY gruel every 6 hr via PEG (percutaneous gastrostomy) tube."
+    ],
+    [
+      "3. Administer 300 ml of parenteral solution IV every 8 hr. Sometimes the feeding orders should contain special conditions:"
+    ],
+    [
+      "4. Begin feeding liquid product ZZ at 10 ml/hr via NG (nasogastric) tube. D/C (discontinue) all feeding if vomiting begins."
+    ],
+    [
+      "5. Administer 300 ml of parenteral solution IV every 8 hr. Check urine glucose and decrease rate to 150 ml every 8 hr if urine is positive. Recheck serum potassium daily and increase to 40 mEq/l if below normal."
+    ],
+    [
+      "6. Give 30 ml of product YY gruel every 6 hr by PEG. Increase meal volume fed by 10 ml every 24 hr. decrease volume by 50% if vomiting begins."
+    ]
+  ],
+  "note": "同一图片下方还可见 Table 25-4，本文件只转录画面最上方的 Table 25-3（框内编号条目）。"
+}

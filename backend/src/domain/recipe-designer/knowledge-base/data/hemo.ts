@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -18,6 +21,7 @@ export const HEMO_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'hemo-001',
     domain: 'HEMO',
+    questionType: 'NUTRITION',
     title: '贫血的类型与营养支持总体原则',
     keywords: [
       '贫血', '营养不良性贫血', '缺铁性贫血', '慢性病贫血', '造血', '血液',
@@ -40,13 +44,20 @@ export const HEMO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: 'NRC《犬猫营养需要》(2006)', chapter: '表15-5 成年犬维持营养需要量', note: '造血相关营养素推荐量（铁/铜/锌/叶酸/钴胺素/维B6等）' },
       { source: '小动物临床营养学（第5版）', chapter: '相应疾病章节', note: '贫血作为肾病/肝病/肿瘤/重症伴随问题的营养原则' },
-      { source: 'ACVIM 犬猫免疫介导性溶血性贫血诊断共识（2019）', chapter: '诊断分类与贫血类型鉴别', note: '贫血类型鉴别与营养支持边界' },
+      { source: 'ACVIM 免疫介导性溶血性贫血诊断共识 2019', chapter: '诊断分类与贫血类型鉴别', note: '贫血类型鉴别与营养支持边界' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'NRC-2006', locator: '表15-5 成年犬维持营养需要量' },
+      { sourceId: 'SACN5', locator: '相应疾病章节' },
+      { sourceId: 'ACVIM-CONSENSUS', locator: '诊断分类与贫血类型鉴别' },
     ],
     priority: 'HIGH',
   },
   {
     id: 'hemo-002',
     domain: 'HEMO',
+    questionType: 'NUTRITION',
     title: '犬造血营养素需要量（NRC 表15-5，成年犬维持）',
     keywords: [
       '铁', '铜', '锌', '钴胺素', '叶酸', '维生素B6', '造血营养素',
@@ -69,11 +80,16 @@ export const HEMO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: 'NRC《犬猫营养需要》(2006)', chapter: '表15-5 成年犬维持营养需要量', note: 'Recommended Allowance：造血相关矿物质/维生素推荐量' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'NRC-2006', locator: '表15-5 成年犬维持营养需要量' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'hemo-003',
     domain: 'HEMO',
+    questionType: 'NUTRITION',
     title: '缺铁性贫血与铁的营养管理',
     keywords: [
       '缺铁', '铁', '铁缺乏', '贫血', '补铁', '血细胞',
@@ -96,13 +112,20 @@ export const HEMO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: 'NRC《犬猫营养需要》(2006)', chapter: '表15-5 成年犬维持营养需要量', note: '铁推荐量 30mg/1000kcal ME' },
       { source: '小动物临床营养学（第5版）', chapter: '第68章 肝胆疾病', note: '铁过量与氧化损伤、肝病铁管理' },
-      { source: 'ACVIM 犬猫免疫介导性溶血性贫血诊断共识（2019）', chapter: '缺铁与慢性失血的鉴别要点', note: '缺铁性贫血的鉴别与营养支持' },
+      { source: 'ACVIM 免疫介导性溶血性贫血诊断共识 2019', chapter: '缺铁与慢性失血的鉴别要点', note: '缺铁性贫血的鉴别与营养支持' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'NRC-2006', locator: '表15-5 成年犬维持营养需要量' },
+      { sourceId: 'SACN5', locator: '第68章 肝胆疾病' },
+      { sourceId: 'ACVIM-CONSENSUS', locator: '缺铁与慢性失血的鉴别要点' },
     ],
     priority: 'HIGH',
   },
   {
     id: 'hemo-004',
     domain: 'HEMO',
+    questionType: 'NUTRITION',
     title: '慢性病/炎症性贫血与肾病贫血的营养支持',
     keywords: [
       '慢性病贫血', '炎症性贫血', '肾病贫血', '促红细胞生成素', '贫血',
@@ -125,13 +148,20 @@ export const HEMO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: 'NRC《犬猫营养需要》(2006)', chapter: '表15-5 成年犬维持营养需要量', note: '造血营养素推荐量' },
       { source: '小动物临床营养学（第5版）', chapter: '第37章 慢性肾病', note: '肾病贫血、蛋白-能量营养不良、磷与贫血营养管理' },
-      { source: 'ACVIM 犬猫免疫介导性溶血性贫血治疗共识（2019）', chapter: '慢性病/炎症性贫血的处理原则', note: '慢性病贫血的营养支持与监测' },
+      { source: 'ACVIM 免疫介导性溶血性贫血治疗共识 2019', chapter: '慢性病/炎症性贫血的处理原则', note: '慢性病贫血的营养支持与监测' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'NRC-2006', locator: '表15-5 成年犬维持营养需要量' },
+      { sourceId: 'SACN5', locator: '第37章 慢性肾病' },
+      { sourceId: 'ACVIM-CONSENSUS', locator: '慢性病/炎症性贫血的处理原则' },
     ],
     priority: 'MEDIUM',
   },
   {
     id: 'hemo-005',
     domain: 'HEMO',
+    questionType: 'NUTRITION',
     title: '贫血相关的蛋白与能量营养需求',
     keywords: [
       '贫血蛋白', '低蛋白血症', '白蛋白', '营养不良', '蛋白-热量',
@@ -155,11 +185,17 @@ export const HEMO_KNOWLEDGE: KnowledgeEntry[] = [
       { source: 'NRC《犬猫营养需要》(2006)', chapter: '表15-5 成年犬维持营养需要量', note: '粗蛋白/氨基酸推荐量（造血与免疫合成基础）' },
       { source: '小动物临床营养学（第5版）', chapter: '第25章 重症监护营养', note: '蛋白-热量营养不良、白蛋白、再喂养' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'NRC-2006', locator: '表15-5 成年犬维持营养需要量' },
+      { sourceId: 'SACN5', locator: '第25章 重症监护营养' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'hemo-006',
     domain: 'HEMO',
+    questionType: 'NUTRITION',
     title: '贫血营养管理的安全边界与监测',
     keywords: [
       '贫血监测', '血常规', '铁过量', '铜中毒', '补铁风险', '营养监测',
@@ -182,7 +218,13 @@ export const HEMO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: 'NRC《犬猫营养需要》(2006)', chapter: '表15-5 成年犬维持营养需要量', note: '铁/铜/锌推荐量安全范围' },
       { source: '小动物临床营养学（第5版）', chapter: '第68章 肝胆疾病', note: '铜蓄积病、铁过量氧化损伤' },
-      { source: 'ACVIM 犬猫免疫性血小板减少症诊断共识（2024）', chapter: '血液学监测与安全边界', note: '营养管理必须配合兽医监测' },
+      { source: 'ACVIM 免疫性血小板减少症诊断共识 2024', chapter: '血液学监测与安全边界', note: '营养管理必须配合兽医监测' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'NRC-2006', locator: '表15-5 成年犬维持营养需要量' },
+      { sourceId: 'SACN5', locator: '第68章 肝胆疾病' },
+      { sourceId: 'ACVIM-CONSENSUS', locator: '血液学监测与安全边界' },
     ],
     priority: 'MEDIUM',
   },

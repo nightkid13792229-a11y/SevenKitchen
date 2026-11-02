@@ -1,0 +1,46 @@
+{
+ "tableId": "T0027",
+ "caption": "TABLE 9 Examples of Open-Ended and Closed-Ended Inquiry",
+ "columns": [
+  "Factor",
+  "Inquiry Type",
+  "Examples"
+ ],
+ "rows": [
+  [
+   "Animal Factors",
+   "Open-ended inquiry",
+   "“Walk me through how (he/she) has been doing since our last visit, including any changes or concerns you have.”\n“Describe for me a typical day for (him/her) including all (his/her) activities.”\n“What other activities or exercise does (he/she) get during a week?”"
+  ],
+  [
+   "Animal Factors",
+   "Closed-ended inquiry",
+   "“Has (he/she) experienced any:\n• vomiting?\n• diarrhea?\n• flatulence?\n• constipation?”"
+  ],
+  [
+   "Diet Factors",
+   "Open-ended inquiry",
+   "“Tell me everything (he/she) eats throughout a day, starting from first thing in the morning right through to the end of the day.”⁷²\n“Describe for me any extra foods (he/she) receives in addition to (his/her) kibble.”\n“Tell me more about all supplements or medications (he/she) receives.”\n“What about other snacks, treats, table food, or food rewards?”"
+  ],
+  [
+   "Diet Factors",
+   "Closed-ended inquiry",
+   "“How much are you feeding (him/her)?”\n“How often are you feeding (him/her)?”"
+  ],
+  [
+   "Environment Factors",
+   "Open-ended inquiry",
+   "“Describe for me all of the people involved in feeding (him/her) including snacks, treats, or table food.”\n“Tell me about the challenges at home to limiting the number of calories (he/she) consumes in a day.”"
+  ],
+  [
+   "Environment Factors",
+   "Closed-ended inquiry",
+   "“Where does (he/she) spend most of their time?”"
+  ],
+  [
+   "Human Factors",
+   "Open-ended inquiry",
+   "“Tell me your thoughts on (his/her) current diet.”\n“What are your thoughts on altering (his/her) diet at this time?”\n“What things do you look for when choosing a food for (him/her)?”\n“How will changing (his/her) diet and cutting back on the little extras impact (his/her) relationship with the people in your household?”"
+  ]
+ ]
+}

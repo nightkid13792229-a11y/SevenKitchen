@@ -1,0 +1,50 @@
+{
+ "tableId": "T0142",
+ "caption": "Table 19-2. Comparisons of cat populations in the 10 countries with the highest numbers of cats.*",
+ "columns": [
+  "Country",
+  "Pet cat population (millions)"
+ ],
+ "rows": [
+  [
+   "USA",
+   "76.43"
+  ],
+  [
+   "China",
+   "53.10"
+  ],
+  [
+   "Russia",
+   "12.70"
+  ],
+  [
+   "Brazil",
+   "12.47"
+  ],
+  [
+   "France",
+   "9.60"
+  ],
+  [
+   "Italy",
+   "9.40"
+  ],
+  [
+   "UK",
+   "7.70"
+  ],
+  [
+   "Germany",
+   "7.70"
+  ],
+  [
+   "Ukraine",
+   "7.35"
+  ],
+  [
+   "Japan",
+   "7.30"
+  ]
+ ]
+}

@@ -1,0 +1,79 @@
+{
+ "tableId": "T0098",
+ "caption": "Table 12-4. Taxonomy and natural feeding behavior of the order Carnivora.*",
+ "columns": [
+  "Family",
+  "Canidae",
+  "Ursidae",
+  "Procyonidae",
+  "Ailuropodidae",
+  "Mustelidae",
+  "Viverridae"
+ ],
+ "rows": [
+  [
+   "Feeding behavior",
+   "Omnivores",
+   "Omnivores; Carnivores",
+   "Omnivores",
+   "Herbivores",
+   "Carnivores; Omnivores",
+   "Omnivores"
+  ],
+  [
+   "No. of species",
+   "35",
+   "7",
+   "13",
+   "2",
+   "63",
+   "35"
+  ],
+  [
+   "Examples",
+   "Dogs; Jackals; Coyotes; Foxes; Wolves",
+   "Bears",
+   "Raccoons; Coatis; Kinkajou; Olingos",
+   "Pandas",
+   "Weasels; Polecats; Mink; Ferrets; Martens; Wolverine; Badgers; Skunks; Otters",
+   "Genets; Civets; Linsangs"
+  ],
+  [
+   "Family",
+   "Herpestidae",
+   "Hyaenidae",
+   "Felidae",
+   "Otariidae",
+   "Odobenidae",
+   "Phocidae"
+  ],
+  [
+   "Feeding behavior",
+   "Carnivores; Omnivores",
+   "Carnivores",
+   "Carnivores",
+   "Carnivores",
+   "Carnivores",
+   "Carnivores"
+  ],
+  [
+   "No. of species",
+   "37",
+   "4",
+   "36",
+   "14",
+   "1",
+   "19"
+  ],
+  [
+   "Examples",
+   "Mongooses; Meerkats",
+   "Hyenas",
+   "Leopards; Pumas; Cats; Ocelots; Serval; Jaguars; Lynx; Bobcats; Lions; Tigers; Cheetahs",
+   "Eared seals; Sea lions",
+   "Walrus",
+   "Earless seals"
+  ]
+ ],
+ "note": "原表为上下两块（各 6 个科），第 0 列的 Family 表头行给出第 1 块的 6 个科名（即 columns），第 5 行起为第 2 块，重复了 Family / Feeding behavior / No. of species / Examples 四个行标签。同一张图下方另有 Table 12-5，此处只转录 Table 12-4；同一单元格内换行的多个条目用 \"; \" 连接。"
+}

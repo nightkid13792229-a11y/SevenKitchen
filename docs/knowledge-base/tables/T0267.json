@@ -1,0 +1,45 @@
+{
+ "tableId": "T0267",
+ "caption": "Table 36-6 continued",
+ "columns": [
+  ""
+ ],
+ "rows": [
+  [
+   "2. Antimicrobials"
+  ],
+  [
+   "a. Antimicrobials are administered to prevent iatrogenic urinary tract infection during catheterization of the urinary bladder. The dosage, dosing interval and route should be based on the recommendations of the manufacturer. We recommend that antimicrobial administration be continued for three to five days after urine collection. This represents the time required for normal urothelial repair and replacement."
+  ],
+  [
+   "b. Select antimicrobials that are primarily excreted in the urine and that minimally affect urine concentrations of minerals, promoters and inhibitors associated with urolith formation. Because some antimicrobials are formulated as salts of sodium or potassium, high concentrations of sodium or potassium may be excreted in urine. We routinely use cephalosporins when collecting urine for amino acid evaluation (i.e., cystine urolithiasis), and ampicillin when collecting urine from dogs with calcium oxalate or urate uroliths."
+  ],
+  [
+   "3. Fasting urine collection"
+  ],
+  [
+   "a. Fasting urine collections have been evaluated to characterize the pathophysiologic mechanism of hypercalciuria in dogs with calcium oxalate uroliths. Dogs that absorb excessive amounts of calcium from their food and subsequently excrete large quantities of calcium in their urine have intestinal hypercalciuria. Hypercalciuria primarily occurs during food consumption; normal or low quantities of urine calcium are excreted when food is withheld. In addition, dogs with intestinal hypercalciuria have normal serum concentrations of calcium and normal or low serum concentrations of parathyroid hormone. In contrast, urinary calcium excretion during fed and nonfed conditions is similar in dogs with primary hyperparathyroidism (resorptive hypercalciuria) or impaired renal tubular absorption of calcium (renal-leak hypercalciuria)."
+  ],
+  [
+   "b. Fasting urine collections are initiated immediately following collection of urine during standard feeding."
+  ],
+  [
+   "4. Urinary pH. The solubility of mineral salts is influenced by urinary pH. Determination of urinary pH from 24-hour urine samples may be helpful in understanding crystal formation, and can also be used to calculate activity products for several mineral salts commonly found in uroliths. We use an ion selective electrode and pH meter to accurately measure urinary pH."
+  ],
+  [
+   "5. Activity products"
+  ],
+  [
+   "a. The activity product of urine is a mathematical expression used to estimate the degree of saturation of urine with mineral salts. Activity products are calculated by measuring concentrations of major ionizable solutes in urine. For efficiency, computer programs are commonly used to aid in calculating activity products."
+  ],
+  [
+   "b. Urine in which the activity product exceeds the solubility product is saturated for that particular mineral salt. Although crystals may not form at this degree of saturation, uroliths already present are likely to grow."
+  ],
+  [
+   "c. Urine in which the activity product exceeds the formation product for a particular mineral salt is associated with an unstable state of oversaturation. Crystal nucleation and rapid crystal growth are likely at this urine concentration."
+  ],
+  [
+   "*Hill's Pet Nutrition, Inc., Topeka, KS, USA."
+  ]
+ ]
+}

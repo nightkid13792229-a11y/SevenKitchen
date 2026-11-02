@@ -1,0 +1,16 @@
+{
+  "tableId": "T0255",
+  "caption": "Table 37-4. Diagnostic tests for evaluating patients with suspected chronic kidney disease.",
+  "columns": ["Diagnostic tests"],
+  "rows": [
+    ["Bacterial urine culture"],
+    ["Complete blood cell count"],
+    ["Diagnostic imaging (abdominal radiography and/or ultrasonography)"],
+    ["Excretory urography, if indicated for obstructive uropathy"],
+    ["Renal biopsy, if indicated for evaluation of persistent proteinuria or suspected renal neoplasia"],
+    ["Serum biochemistry profile"],
+    ["Systemic blood pressure measurement"],
+    ["Urinalysis, including microscopic examination of urine sediment"],
+    ["Urine protein-creatinine ratio"]
+  ]
+}

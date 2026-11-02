@@ -1,0 +1,22 @@
+{
+ "tableId": "T0455",
+ "caption": "表 6. 針對進行口腔疾病手術治療犬貓之術中疼痛控制：不同藥物取得性的組合示例",
+ "columns": [
+  "",
+  ""
+ ],
+ "rows": [
+  [
+   "不受藥物取用性影響的建議組合",
+   "麻醉前給藥：合併使用 acepromazine 與α-2腎上腺素受體致效劑（例如 dexmedetomidine、xylazine、medetomidine），或者，使用 benzodiazepine（例如 midazolam）搭配鴉片類藥物\n麻醉誘導：靜脈注射 propofol（3-5 mg/kg）、ketamine（5 mg/kg）+ diazepam 或 midazolam（0.25 mg/kg），或 alfaxalone（2-5 mg/kg）至觀察到藥效\n麻醉維持：吸入性麻醉劑（isoflurane 或 sevoflurane）\n術後止痛：NSAID。根據藥品標示和物種決定這些藥物的使用天數。根據疼痛的嚴重程度，可以重複投予鴉片類藥物"
+  ],
+  [
+   "沒有管制藥物的建議組合",
+   "麻醉前給藥：合併使用 acepromazine 或α-2腎上腺素受體致效劑（例如 dexmedetomidine、xylazine、medetomidine）以及注射型 tramadol。如果無法取用注射劑型，可以口服投予 tramadol\n麻醉誘導：靜脈注射 propofol（3-10 mg/kg）、alfaxalone（2-5 mg/kg）或 tiletamine/zolazepam（1-2 mg/kg）至觀察到藥效。若使用 tiletamine/zolazepam 作為麻醉前給藥，可以肌肉注射的途徑給藥進行麻醉誘導\n麻醉維持：吸入性麻醉劑（halothane、isoflurane 或 sevoflurane）。靜脈注射 propofol 或 alfaxalone 至觀察到藥效。Tiletamine/Zolazepam\n術後止痛：NSAIDs。根據藥品標示和物種決定這些藥物的使用天數。在犬，可以使用 metamizol（dipyrone；每12小時靜脈注射 25 mg/kg）或 acetaminophen（paracetamol；每12小時口服投予 12.5 mg/kg），但在貓不能這麼做。當無法取用鴉片類藥物時，可以將這兩種藥物與 NSAID 合併使用，以達到更好的術後止痛效果。"
+  ],
+  [
+   "受限於止痛藥物取用性的建議組合",
+   "麻醉前給藥：Xylazine\n麻醉誘導與維持：靜脈注射 pentobarbital（2-5 mg/kg）、thiopental（2-8 mg/kg）、propofol（3-5 mg/kg）至觀察到藥效。靜脈／肌肉注射 Tiletamine/Zolazepam\n術後止痛：與沒有管制藥物的建議組合相同"
+  ]
+ ]
+}

@@ -1,0 +1,91 @@
+{
+ "num": "14-2",
+ "caption": "Table 14-2. Key nutritional factors for foods for mature dogs.",
+ "page": 3,
+ "columns": [
+  "Factors",
+  "Normal weight and body condition",
+  "Inactive/obese prone"
+ ],
+ "rows": [
+  [
+   "Water",
+   "Free access",
+   "Free access"
+  ],
+  [
+   "Energy density (kcal ME/g)",
+   "3.0-4.0",
+   "3.0-3.5"
+  ],
+  [
+   "Energy density (kJ ME/g)",
+   "12.5-16.7",
+   "12.5-14.6"
+  ],
+  [
+   "Crude fat (%)",
+   "10-15",
+   "7-10"
+  ],
+  [
+   "Crude fiber (%)**",
+   "≥2",
+   "≥10"
+  ],
+  [
+   "Protein (%)",
+   "15-23",
+   "15-23"
+  ],
+  [
+   "Phosphorus (%)",
+   "0.3-0.7",
+   "0.3-0.7"
+  ],
+  [
+   "Sodium (%)",
+   "0.15-0.4",
+   "0.15-0.4"
+  ],
+  [
+   "Chloride (%)",
+   "1.5 x Na",
+   "1.5 x Na"
+  ],
+  [
+   "Antioxidants (amount/kg food)",
+   "",
+   ""
+  ],
+  [
+   "Vitamin E (IU)",
+   "400",
+   "400"
+  ],
+  [
+   "Vitamin C (mg)",
+   "≥100",
+   "≥100"
+  ],
+  [
+   "Selenium (mg)",
+   "0.5-1.3",
+   "0.5-1.3"
+  ],
+  [
+   "Food texture (VOHC Seal of Acceptance)",
+   "Reduced plaque accumulation",
+   "Reduced plaque accumulation"
+  ]
+ ],
+ "tableId": "T0487",
+ "doc": "sacn5/chapters/SACN5_14.pdf",
+ "method": "视觉",
+ "verify": {
+  "numbers": 36,
+  "found": 36,
+  "status": "通过",
+  "misses": []
+ }
+}

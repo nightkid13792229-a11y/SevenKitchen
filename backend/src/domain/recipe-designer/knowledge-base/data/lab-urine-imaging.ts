@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -9,10 +12,6 @@ import type { KnowledgeEntry } from '../types';
  * ── 本领域的两条硬规矩（与 data/lab.ts 一致，必须继续遵守）────────
  *   1. **不写任何具体数值区间**（血细胞计数、比重、蛋白肌酐比等都一样）。
  *   2. **不做诊断**，只写"反映什么、意味着什么、下一步查什么"。
- *
- * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
- * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
- *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -47,9 +46,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-044',
@@ -80,9 +77,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-045',
@@ -114,9 +109,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-046',
@@ -147,9 +140,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'LOW',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-047',
@@ -180,9 +171,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-048',
@@ -213,9 +202,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-049',
@@ -247,9 +234,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-050',
@@ -283,9 +268,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-051',
@@ -316,9 +299,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-052',
@@ -350,9 +331,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-053',
@@ -386,9 +365,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-054',
@@ -420,9 +397,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-055',
@@ -454,9 +429,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-056',
@@ -488,9 +461,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-057',
@@ -524,9 +495,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-058',
@@ -559,9 +528,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-059',
@@ -597,9 +564,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-060',
@@ -637,9 +602,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-061',
@@ -665,7 +628,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
       { source: 'AAHA 犬生命阶段指南 2019', chapter: '个体基线、趋势记录与监测频率' },
       { source: 'IRIS 肾病指南 2026', chapter: '分期前提、蛋白尿亚分期与复查' },
       { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2019 犬猫免疫介导性溶血性贫血治疗共识 · 监测' },
-      { source: 'WSAVA 动物福利指南 2018', chapter: '病历记录（Record keeping）' },
+      { source: 'WSAVA 动物福利指南', chapter: '病历记录（Record keeping）' },
     ],
     sources: [
       { sourceId: 'AAHA-LIFE-STAGE-2019', locator: '基线、趋势与监测频率段落', note: '建立个体基线、以病历记录并回顾趋势、监测频率随生命阶段与疾病状态变化、建议由兽医提出' },
@@ -675,9 +638,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'FOLLOWUP',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-062',
@@ -708,9 +669,6 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    urgency: 'SOON',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
 ];

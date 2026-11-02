@@ -1,0 +1,86 @@
+{
+ "tableId": "T0279",
+ "caption": "Table 1. Results of selected urinalysis and serum biochemistry parameters of a two-year-old male English bulldog with recurrent urocystoliths.",
+ "columns": [
+  "Factors",
+  "Reference values",
+  "1*",
+  "35",
+  "78",
+  "114"
+ ],
+ "rows": [
+  [
+   "Urine specific gravity",
+   "-",
+   "1.035",
+   "1.005",
+   "1.006",
+   "1.027"
+  ],
+  [
+   "Urinary pH",
+   "-",
+   "6",
+   "6",
+   "7.5",
+   "6"
+  ],
+  [
+   "Hematuria",
+   "-",
+   "0",
+   "0",
+   "+",
+   "+"
+  ],
+  [
+   "Pyuria",
+   "-",
+   "0",
+   "0",
+   "0",
+   "+"
+  ],
+  [
+   "Crystals",
+   "-",
+   "Urate",
+   "0",
+   "0",
+   "Urate"
+  ],
+  [
+   "Urine culture",
+   "-",
+   "Neg",
+   "Neg",
+   "Neg",
+   "Neg"
+  ],
+  [
+   "SUN (mg/dl)",
+   "7-28",
+   "13",
+   "4",
+   "4",
+   "8"
+  ],
+  [
+   "Creatinine (mg/dl)",
+   "0.5-1.5",
+   "1.1",
+   "0.7",
+   "0.7",
+   "0.9"
+  ],
+  [
+   "Albumin (mg/dl)",
+   "2.4-3.8",
+   "3.3",
+   "3.0",
+   "3.1",
+   "3.5"
+  ]
+ ]
+}

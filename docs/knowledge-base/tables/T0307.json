@@ -1,0 +1,30 @@
+{
+ "tableId": "T0307",
+ "caption": "Table 43-3. Key nutritional factors for dissolution and prevention of canine struvite uroliths.",
+ "columns": [
+  "Factors",
+  "Dietary recommendations"
+ ],
+ "rows": [
+  [
+   "Water",
+   "Water intake should be encouraged to achieve urine specific gravity <1.020\nMoist food will increase water consumption and formation of less concentrated urine"
+  ],
+  [
+   "Protein",
+   "Avoid excess dietary protein\nDissolution: restrict dietary protein to ≤8%, dry matter (DM)\nPrevention: restrict dietary protein to <25% DM"
+  ],
+  [
+   "Phosphorus",
+   "Avoid excess dietary phosphorus\nDissolution: restrict dietary phosphorus to ≤0.1% DM\nPrevention: restrict dietary phosphorus to <0.6% DM"
+  ],
+  [
+   "Magnesium",
+   "Avoid excess dietary magnesium\nDissolution: restrict dietary magnesium to <0.02% DM\nPrevention: restrict dietary magnesium to 0.04 to 0.1% DM"
+  ],
+  [
+   "Urinary pH",
+   "Feed a food that maintains an acidic urine\nDissolution: urinary pH = 5.9 to 6.1\nPrevention: urinary pH = 6.2 to 6.4"
+  ]
+ ]
+}

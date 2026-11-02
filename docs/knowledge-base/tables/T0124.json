@@ -1,0 +1,63 @@
+{
+  "tableId": "T0124",
+  "caption": "Table 16-9. Homemade milk replacers for puppies.",
+  "columns": [
+    "Recipe 1",
+    "Amount",
+    "Recipe 2",
+    "Amount",
+    "Recipe 1 (modified)",
+    "Amount"
+  ],
+  "rows": [
+    [
+      "Skim milk",
+      "43.8 g",
+      "Cow’s milk**",
+      "800 ml",
+      "Skim milk",
+      "64 g"
+    ],
+    [
+      "Low-fat curd*",
+      "40 g",
+      "Half cream***",
+      "200 ml",
+      "Low-fat curd*",
+      "15 g"
+    ],
+    [
+      "Egg yolk (2/3)",
+      "10 g",
+      "Bone meal",
+      "6 g",
+      "One egg yolk",
+      "15 g"
+    ],
+    [
+      "Vegetable oil",
+      "6 g",
+      "Citric acid",
+      "4 g",
+      "Vegetable oil",
+      "3 g"
+    ],
+    [
+      "Vitamin-mineral mix",
+      "0.2 g",
+      "One egg yolk",
+      "15 g",
+      "Vitamin-mineral mix",
+      "2.5 g"
+    ],
+    [
+      "-",
+      "-",
+      "Vitamin A",
+      "2,000 IU",
+      "CaCO3",
+      "0.5"
+    ]
+  ],
+  "note": "表下 * ** *** 三条脚注为表格附注，未计入 rows"
+}

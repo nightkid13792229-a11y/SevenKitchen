@@ -1,0 +1,42 @@
+{
+ "tableId": "T0254",
+ "caption": "Table 37-3. Elements of the physical examination that should be emphasized in patients with suspected chronic kidney disease.",
+ "columns": [
+  "Elements of the physical examination"
+ ],
+ "rows": [
+  [
+   "Body weight and body condition score"
+  ],
+  [
+   "Cardiovascular system: Abnormal heart sounds? Increased tortuosity of superficial veins? Systemic blood pressure (direct or indirect measurement) abnormalities? Pulse rate and character?"
+  ],
+  [
+   "Cervical region: Thyroid masses (cats)?"
+  ],
+  [
+   "Fundus: Retinal detachment? Hemorrhage? Increased tortuosity of arteries? Retinal edema? Lipemia retinalis?"
+  ],
+  [
+   "Genitourinary tract (urethra, prostate gland, penis, prepuce, vulva): Shape? Position? Pain? Discharge?"
+  ],
+  [
+   "Hydration status"
+  ],
+  [
+   "Kidneys: Both palpable? Size? Shape? Position? Surface contours? Pain? Bilaterally symmetrical?"
+  ],
+  [
+   "Musculoskeletal: Muscle masses? Evidence of osteodystrophy?"
+  ],
+  [
+   "Oral examination: Mucosal ulcers? Pallor? Necrosis or discoloration of tongue?"
+  ],
+  [
+   "Temperature, pulse, heart and respiratory rates"
+  ],
+  [
+   "Urinary bladder: Size? Position? Shape? Pain? Thickness of wall? Intraluminal masses? Grating sensation?"
+  ]
+ ]
+}

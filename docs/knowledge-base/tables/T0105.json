@@ -1,0 +1,21 @@
+{
+ "tableId": "T0105",
+ "caption": "Table 14-1. Percent survival rates of mature dogs.*",
+ "columns": [
+  "Age",
+  "10 years",
+  "15 years"
+ ],
+ "rows": [
+  [
+   "Small-breed dogs",
+   "38%",
+   "7.0%"
+  ],
+  [
+   "Large-breed dogs",
+   "13%",
+   "0.1%"
+  ]
+ ]
+}

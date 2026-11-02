@@ -1,0 +1,78 @@
+{
+ "tableId": "T0200",
+ "caption": "Table 28-1. Clinical signs and diseases associated with hypertriglyceridemia in dogs and cats.",
+ "columns": [
+  "Clinical signs and diseases"
+ ],
+ "rows": [
+  [
+   "Dogs"
+  ],
+  [
+   "Abdominal discomfort*"
+  ],
+  [
+   "Acute pancreatitis"
+  ],
+  [
+   "Behavior (lethargy, inactivity)"
+  ],
+  [
+   "Crystalline stromal dystrophy (especially cavalier King Charles spaniels)"
+  ],
+  [
+   "Cushing’s syndrome"
+  ],
+  [
+   "Fasting lipemia (six to 12 hours)"
+  ],
+  [
+   "Intermittent diarrhea*"
+  ],
+  [
+   "Intermittent vomiting*"
+  ],
+  [
+   "Lipemia retinalis"
+  ],
+  [
+   "Lipemic aqueous"
+  ],
+  [
+   "Lipid corneal dystrophy/arcus lipoides corneae"
+  ],
+  [
+   "Seizures"
+  ],
+  [
+   "Cats"
+  ],
+  [
+   "Cutaneous xanthomata"
+  ],
+  [
+   "Lipemia retinalis"
+  ],
+  [
+   "Lipid keratopathy"
+  ],
+  [
+   "Peripheral nerve paralysis"
+  ],
+  [
+   "    Horner’s syndrome"
+  ],
+  [
+   "    Tibial nerve paralysis"
+  ],
+  [
+   "    Radial nerve paralysis"
+  ],
+  [
+   "Splenomegaly"
+  ],
+  [
+   "*These clinical signs may occur concomitantly in the same patient. The collective term used to describe these signs is “pseudopancreatitis.”"
+  ]
+ ]
+}

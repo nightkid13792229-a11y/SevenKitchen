@@ -1,0 +1,132 @@
+{
+  "tableId": "T0038",
+  "caption": "Table III-1. Nutrients",
+  "columns": [
+    "",
+    "",
+    "",
+    ""
+  ],
+  "rows": [
+    [
+      "Major nutrients",
+      "Protein",
+      "",
+      ""
+    ],
+    [
+      "",
+      "Fat",
+      "",
+      ""
+    ],
+    [
+      "Fatty acids",
+      "Linoleic acid",
+      "Arachidonic acid (cats)",
+      ""
+    ],
+    [
+      "",
+      "Alpha-linolenic acid",
+      "Eicosapentaenoic acid (EPA)",
+      ""
+    ],
+    [
+      "",
+      "",
+      "Docosahexaenoic acid (DHA)",
+      ""
+    ],
+    [
+      "Amino acids",
+      "Arginine",
+      "Histidine",
+      "Isoleucine"
+    ],
+    [
+      "",
+      "Cystine",
+      "Tyrosine",
+      "Lysine"
+    ],
+    [
+      "",
+      "Phenylalanine",
+      "Threonine",
+      "Tryptophan"
+    ],
+    [
+      "",
+      "Leucine",
+      "Methionine",
+      "Valine"
+    ],
+    [
+      "Minerals",
+      "Calcium",
+      "Phosphorus",
+      "Potassium"
+    ],
+    [
+      "",
+      "Sodium",
+      "Copper",
+      "Iron"
+    ],
+    [
+      "",
+      "Chloride",
+      "Magnesium",
+      "Iodine"
+    ],
+    [
+      "",
+      "Manganese",
+      "Zinc",
+      "Selenium"
+    ],
+    [
+      "Vitamins",
+      "Vitamin A",
+      "Vitamin D",
+      "Vitamin E"
+    ],
+    [
+      "",
+      "Vitamin B1 (Thiamine)*",
+      "Vitamin B2 (Riboflavin)*",
+      "Vitamin B5 (Pantothenic acid)*"
+    ],
+    [
+      "",
+      "Vitamin B3 (Niacin)*",
+      "Vitamin B6 (Pyridoxine)*",
+      "Vitamin B7 (Biotin)*"
+    ],
+    [
+      "",
+      "Vitamin B12* (Cyanocobalamin)*",
+      "Vitamin B9 (Folic acid)*",
+      "Vitamin K"
+    ],
+    [
+      "Vitamin-like substances",
+      "Taurine (cats)",
+      "Choline",
+      ""
+    ],
+    [
+      "Remarks",
+      "See section on analytical method pp. 34 for the appropriate method and other details.",
+      "",
+      ""
+    ],
+    [
+      "",
+      "Routine analysis for energy calculation includes moisture, crude protein, crude fat, crude ash, crude fibre (Weende analysis)",
+      "",
+      ""
+    ]
+  ]
+}

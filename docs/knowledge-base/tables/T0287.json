@@ -1,0 +1,66 @@
+{
+ "tableId": "T0287",
+ "caption": "Table 40-9. Expected changes associated with dietary and medical therapy to minimize recurrence of calcium oxalate uroliths.",
+ "columns": [
+  "Factors",
+  "Pre-therapy",
+  "Prevention therapy"
+ ],
+ "rows": [
+  [
+   "Polyuria",
+   "±",
+   "Variable"
+  ],
+  [
+   "Pollakiuria",
+   "0 to 4+",
+   "0"
+  ],
+  [
+   "Hematuria",
+   "0 to 4+",
+   "0"
+  ],
+  [
+   "Urine specific gravity",
+   "Variable",
+   "1.004-1.015"
+  ],
+  [
+   "Urinary pH",
+   "<7.0",
+   ">7.0"
+  ],
+  [
+   "Pyuria",
+   "0 to 4+",
+   "0"
+  ],
+  [
+   "Calcium oxalate crystals",
+   "0 to 4+",
+   "0"
+  ],
+  [
+   "Bacteriuria",
+   "0 to 4+",
+   "0"
+  ],
+  [
+   "Bacterial culture of urine",
+   "0 to 4+",
+   "0"
+  ],
+  [
+   "Urea nitrogen (mg/dl)",
+   ">15",
+   "<15"
+  ],
+  [
+   "Urolith size and number",
+   "Small to large",
+   "0"
+  ]
+ ]
+}

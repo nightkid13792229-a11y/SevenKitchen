@@ -1,0 +1,34 @@
+{
+ "tableId": "T0060",
+ "caption": "Table VII-16. Compounds isolated from onions and garlic and reported to oxidise canine erythrocytes",
+ "columns": [
+  "Onions",
+  "Garlic"
+ ],
+ "rows": [
+  [
+   "n-propyl disulfide",
+   "sodium 2-propenyl thiosulfate"
+  ],
+  [
+   "n-propyl",
+   "bis-2-propenyl trisulfide"
+  ],
+  [
+   "3 different sodium alk(en)yl thiosulfates",
+   "bis-2-propenyl tetrasulfide"
+  ],
+  [
+   "e.g. sodium n-propyl thiosulfate",
+   "bis-2-propenyl pentasulfide"
+  ],
+  [
+   "trans-1-propenyl thiosulfate",
+   "bis-2-propenyl thiosulfonate"
+  ],
+  [
+   "cis-1-propenyl thiosulfate",
+   "several sulphur containing esters"
+  ]
+ ]
+}

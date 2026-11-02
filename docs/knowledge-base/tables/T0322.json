@@ -1,0 +1,34 @@
+{
+ "tableId": "T0322",
+ "caption": "Table 46-6. Clinical presentations of cats with various lower urinary tract diseases.*",
+ "columns": [
+  "Presentation",
+  "Nonobstructive periuria",
+  "Obstructive dysuria",
+  "Behavioral periuria**",
+  "Urinary incontinence"
+ ],
+ "rows": [
+  [
+   "Probable diagnoses",
+   "FIC\nUroliths\nInfection\nNeoplasia",
+   "Urethral plugs\nUroliths\nUrethral strictures\nFunctional obstruction\nBlood clots\nForeign material",
+   "Toileting preferences/\naversions and/or\nmarking with or\nwithout medical\ncauses of lower\nurinary tract\ndisease (e.g., FIC,\nuroliths, UTI, others)",
+   "Neurologic incontinence\nAnatomic abnormalities\nPartial obstruction"
+  ],
+  [
+   "Initial tests",
+   "Urinalysis\nDiagnostic imaging",
+   "Abdominal radiographs\nUrinalysis",
+   "Urinalysis\nDiagnostic imaging",
+   "Neurologic examination\nUrinalysis\nDiagnostic imaging"
+  ],
+  [
+   "Ancillary tests",
+   "Urine culture\nAbdominal ultrasound\nContrast\nurethrocystography",
+   "Serum biochemistry profile\nUrine culture\nContrast urethrocystography\nComplete blood count",
+   "Urine culture\nAbdominal ultrasound\nContrast\nurethrocystography\nCoagulation profile\nComplete blood count",
+   "Urine culture\nAbdominal ultrasound\nContrast\nurethrocystography\nIntravenous urography\nCystoscopy"
+  ]
+ ]
+}

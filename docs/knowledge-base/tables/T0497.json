@@ -1,0 +1,60 @@
+{
+ "num": "37-9",
+ "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+ "page": 17,
+ "columns": [
+  "Factors",
+  "Dietary recommendations"
+ ],
+ "rows": [
+  [
+   "Water",
+   "Parenteral fluid therapy if dehydration, blood volume contraction or renal hypoperfusion is clinically significant\nOffer water free choice at all times\nRecommend moist foods"
+  ],
+  [
+   "Protein",
+   "14 to 20% in foods for dogs\n28 to 35% in foods for cats"
+  ],
+  [
+   "Phosphorus",
+   "0.2 to 0.5% in foods for dogs\n0.3 to 0.6% in foods for cats"
+  ],
+  [
+   "Sodium",
+   "≤0.3% in foods for dogs\n≤0.4% in foods for cats"
+  ],
+  [
+   "Chloride",
+   "1.5 x sodium levels in foods for dogs\n1.5 x sodium levels in foods for cats"
+  ],
+  [
+   "Potassium",
+   "0.4 to 0.8% in foods for dogs\n0.7 to 1.2% in foods for cats\nIf patient becomes hyperkalemic, switch to a lower potassium food"
+  ],
+  [
+   "Omega-3 fatty acids",
+   "0.4 to 2.5% in foods for dogs and cats\nOmega-6:omega-3 fatty acid ratio of 1:1 to 7:1"
+  ],
+  [
+   "Antioxidants",
+   ""
+  ],
+  [
+   "Vitamin E",
+   "≥400 IU vitamin E/kg of food for dogs\n≥500 IU vitamin E/kg of food for cats"
+  ],
+  [
+   "Vitamin C",
+   "≥100 mg vitamin C/kg of food for dogs\n100 to 200 mg vitamin C/kg of food for cats"
+  ]
+ ],
+ "tableId": "T0497",
+ "doc": "sacn5/chapters/SACN5_37.pdf",
+ "method": "视觉",
+ "verify": {
+  "numbers": 30,
+  "found": 30,
+  "status": "通过",
+  "misses": []
+ }
+}

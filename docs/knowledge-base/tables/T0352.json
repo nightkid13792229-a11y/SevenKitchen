@@ -1,0 +1,102 @@
+{
+  "tableId": "T0352",
+  "caption": "Table 5-10. Amino acids.",
+  "columns": [
+    "Name",
+    "Structural formula",
+    "3-letter",
+    "1-letter",
+    "Side chain",
+    "Essentiality"
+  ],
+  "rows": [
+    [
+      "Alanine",
+      "[?]",
+      "Ala",
+      "A",
+      "Aliphatic",
+      "Nonessential"
+    ],
+    [
+      "Arginine",
+      "[?]",
+      "Arg",
+      "R",
+      "Basic",
+      "Essential"
+    ],
+    [
+      "Asparagine",
+      "[?]",
+      "Asn",
+      "N",
+      "Acidic",
+      "Nonessential"
+    ],
+    [
+      "Aspartate",
+      "[?]",
+      "Asp",
+      "D",
+      "Acidic",
+      "Nonessential"
+    ],
+    [
+      "Cysteine",
+      "[?]",
+      "Cys",
+      "C",
+      "Sulfur containing",
+      "Nonessential, but can provide for up to 50% of methionine requirements"
+    ],
+    [
+      "Glutamate",
+      "[?]",
+      "Glu",
+      "E",
+      "Acidic",
+      "Nonessential"
+    ],
+    [
+      "Glutamine",
+      "[?]",
+      "Gln",
+      "Q",
+      "Acidic",
+      "Conditionally essential"
+    ],
+    [
+      "Glycine",
+      "[?]",
+      "Gly",
+      "G",
+      "Aliphatic",
+      "Nonessential"
+    ],
+    [
+      "Histidine",
+      "[?]",
+      "His",
+      "H",
+      "Basic and aromatic",
+      "Essential"
+    ],
+    [
+      "Isoleucine",
+      "[?]",
+      "Ile",
+      "I",
+      "Aliphatic branched chain",
+      "Essential"
+    ],
+    [
+      "Leucine",
+      "[?]",
+      "Leu",
+      "L",
+      "Aliphatic branched chain",
+      "Essential"
+    ]
+  ]
+}

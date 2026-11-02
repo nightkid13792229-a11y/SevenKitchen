@@ -1,0 +1,55 @@
+{
+ "tableId": "T0093",
+ "caption": "Table 1. Biochemistry and clotting values for a nine-year-old German shepherd dog.",
+ "columns": [
+  "Test",
+  "Day 1",
+  "Day 5",
+  "Reference values"
+ ],
+ "rows": [
+  [
+   "ALP (IU/l)",
+   "124",
+   "221",
+   "71-120"
+  ],
+  [
+   "AST (IU/l)",
+   "ND",
+   "502",
+   "13-50"
+  ],
+  [
+   "ALT (IU/l)",
+   "194",
+   "885",
+   "21-97"
+  ],
+  [
+   "Bilirubin (mg/dl)",
+   "8.2",
+   "23.2",
+   "0.1-0.3"
+  ],
+  [
+   "Albumin (g/dl)",
+   "2.7",
+   "2.2",
+   "3.1-4.2"
+  ],
+  [
+   "PT (seconds)",
+   "70",
+   "24.5",
+   "7.3-11.8"
+  ],
+  [
+   "aPTT (seconds)",
+   ">100",
+   "28.4",
+   "10.6-14.8"
+  ]
+ ],
+ "note": ""
+}

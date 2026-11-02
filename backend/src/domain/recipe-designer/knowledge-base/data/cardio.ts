@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -16,6 +19,7 @@ export const CARDIO_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'cardio-001',
     domain: 'CARDIO',
+    questionType: 'NUTRITION',
     title: '犬心血管疾病分型与易感犬种',
     keywords: [
       '心血管', '心脏病', '瓣膜病', '扩张型心肌病', '心衰', '易感犬种',
@@ -38,11 +42,16 @@ export const CARDIO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第36章 心血管疾病', note: 'CLINICAL IMPORTANCE、易感犬种、表36-1 心衰功能分级' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第36章 心血管疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'cardio-002',
     domain: 'CARDIO',
+    questionType: 'NUTRITION',
     title: '心衰犬的钠限制（核心营养管理）',
     keywords: [
       '钠', '氯化钠', '限钠', '盐', '心衰钠', '水钠潴留', '钠限制',
@@ -66,11 +75,16 @@ export const CARDIO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第36章 心血管疾病', note: '表36-4 钠/氯目标、Sodium and Chloride 节、表36-7 人食钠含量、NAS 分级' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第36章 心血管疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'cardio-003',
     domain: 'CARDIO',
+    questionType: 'NUTRITION',
     title: '心衰犬的牛磺酸需求',
     keywords: [
       '牛磺酸', '扩张型心肌病', 'DCM', '心肌', '氨基酸', '心衰',
@@ -92,11 +106,16 @@ export const CARDIO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第36章 心血管疾病', note: '表36-4 牛磺酸目标、Taurine 节、牛磺酸与DCM' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第36章 心血管疾病' },
+    ],
     priority: 'HIGH',
   },
   {
     id: 'cardio-004',
     domain: 'CARDIO',
+    questionType: 'NUTRITION',
     title: '心衰犬的L-肉碱与磷、钾、镁需求',
     keywords: [
       'L-肉碱', '磷', '钾', '镁', '扩张型心肌病', '利尿剂', '电解质',
@@ -119,11 +138,16 @@ export const CARDIO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第36章 心血管疾病', note: '表36-4 磷/钾/镁/肉碱目标、L-Carnitine、Potassium and Magnesium、Diuretics' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第36章 心血管疾病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'cardio-005',
     domain: 'CARDIO',
+    questionType: 'NUTRITION',
     title: '心脏恶病质（cardiac cachexia）的营养管理',
     keywords: [
       '恶病质', '心脏恶病质', '体重下降', '消瘦', '蛋白能量营养不良', '心衰',
@@ -146,11 +170,16 @@ export const CARDIO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第36章 心血管疾病', note: 'Cachexia、图36-4、Protein 节、恶病质与能量需求' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第36章 心血管疾病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'cardio-006',
     domain: 'CARDIO',
+    questionType: 'NUTRITION',
     title: '心衰犬的 omega-3 脂肪酸补充',
     keywords: [
       'omega-3', '鱼油', '脂肪', '细胞因子', '抗炎', '恶病质', '心衰',
@@ -173,11 +202,16 @@ export const CARDIO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第36章 心血管疾病', note: 'Omega-3 Fatty Acids、细胞因子与恶病质、心脏保护' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第36章 心血管疾病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'cardio-007',
     domain: 'CARDIO',
+    questionType: 'NUTRITION',
     title: '心衰与高血压、肾病共病的营养协作',
     keywords: [
       '高血压', '共病', '肾病', '心衰', '蛋白尿', '限钠', '血压',
@@ -200,11 +234,16 @@ export const CARDIO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第36章 心血管疾病', note: '高血压、Screening for Concomitant Disease、心肾交互' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第36章 心血管疾病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'cardio-008',
     domain: 'CARDIO',
+    questionType: 'DEFINITION',
     title: '心血管疾病的分期与早期营养干预原则',
     keywords: [
       '分期', '早期干预', 'ACC', 'AHA', '心脏病进展', '营养干预', '预防',
@@ -227,11 +266,16 @@ export const CARDIO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第36章 心血管疾病', note: '表36-1 心衰功能分级、ACC/AHA 分期、早期干预与肥胖' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第36章 心血管疾病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'cardio-009',
     domain: 'CARDIO',
+    questionType: 'NUTRITION',
     title: '心血管疾病的食物形态与禁忌（钠、零食、水源）',
     keywords: [
       '高钠食物', '禁忌', '零食', '低钠零食', '水源', '钠含量', '喂食',
@@ -254,11 +298,16 @@ export const CARDIO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第36章 心血管疾病', note: '表36-7 人食钠含量、表36-8 低钠零食、水源与喂食量' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第36章 心血管疾病' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'cardio-010',
     domain: 'CARDIO',
+    questionType: 'NUTRITION',
     title: '胸膜积液/乳糜胸与心衰的营养与电解质平衡',
     keywords: [
       '胸膜积液', '乳糜胸', '胸腔', '淋巴', '电解质', '蛋白营养不良',
@@ -280,11 +329,16 @@ export const CARDIO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第36章 心血管疾病', note: 'Pleural Effusion、Chylothorax、排液与营养液体平衡' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第36章 心血管疾病' },
+    ],
     priority: 'LOW',
   },
   {
     id: 'cardio-011',
     domain: 'CARDIO',
+    questionType: 'NUTRITION',
     title: '心血管疾病与利尿剂/药物的营养相互作用',
     keywords: [
       '利尿剂', 'ACE抑制剂', '地高辛', '药物交互', '硫胺素', '水溶性维生素',
@@ -307,11 +361,16 @@ export const CARDIO_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第36章 心血管疾病', note: 'Diuretics、ACE Inhibitors、硫胺素缺乏、钾镁与药物' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第36章 心血管疾病' },
+    ],
     priority: 'LOW',
   },
   {
     id: 'cardio-012',
     domain: 'CARDIO',
+    questionType: 'NUTRITION',
     title: '心血管疾病营养管理的总体原则与体况监测',
     keywords: [
       '营养管理原则', '体况', 'BCS', '体重监测', '营养评估', '综合管理',
@@ -333,6 +392,10 @@ export const CARDIO_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第36章 心血管疾病', note: '表36-4 关键营养因素、体况监测、喂食量与综合管理' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第36章 心血管疾病' },
     ],
     priority: 'MEDIUM',
   },

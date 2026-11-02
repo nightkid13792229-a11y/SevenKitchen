@@ -1,0 +1,26 @@
+{
+ "tableId": "T0201",
+ "caption": "Table 28-2. Key nutritional factors for hyperlipidemia.",
+ "columns": [
+  "Disorder",
+  "Factor",
+  "Dietary recommendations"
+ ],
+ "rows": [
+  [
+   "Hyperlipidemia",
+   "Triglycerides",
+   "Feed a food that reduces serum triglycerides\nRestrict dietary fat (<12% dry matter [DM])"
+  ],
+  [
+   "Hyperlipidemia",
+   "Triglycerides",
+   "Feed a food that reduces serum triglycerides and binds cholesterol and bile acids\nIncrease dietary fiber:\nDogs: ≥10% DM\nCats: ≥7% DM"
+  ],
+  [
+   "Hyperlipidemia",
+   "Triglycerides",
+   "Add lipid-reducing drugs (fibrates) if dietary management alone is unsuccessful in controlling hyperlipidemia"
+  ]
+ ]
+}

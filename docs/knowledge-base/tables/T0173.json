@@ -1,0 +1,275 @@
+{
+  "tableId": "T0173",
+  "caption": "Table 26-2. Standard total nutrient admixture (TNA) formulations.",
+  "columns": [
+    "",
+    "Feline example"
+  ],
+  "rows": [
+    [
+      "PART A. CALCULATION WORKSHEET",
+      ""
+    ],
+    [
+      "Patient data needed",
+      ""
+    ],
+    [
+      "1. Current body weight in kg",
+      "4.1 kg"
+    ],
+    [
+      "2. Calculate resting energy requirement (RER) as kcal/day",
+      "200 kcal/day"
+    ],
+    [
+      "3. Expected fluid volume in ml/kg/day",
+      "70 ml/kg"
+    ],
+    [
+      "4. Calories from fat as a percent",
+      "80%"
+    ],
+    [
+      "5. Protein-calorie ratio as g/100 kcal RER",
+      "4 g/100 kcal RER"
+    ],
+    [
+      "6. Potassium concentration as mEq/l",
+      "30 mEq/l"
+    ],
+    [
+      "Parenteral solution formula",
+      ""
+    ],
+    [
+      "1. Determine volume of fat and dextrose needed daily",
+      ""
+    ],
+    [
+      "Calculate RER calories from fat",
+      "200 x 0.80 = 160 kcal"
+    ],
+    [
+      "Calculate volume of 20% lipid needed",
+      "160 kcal ÷ 2 kcal/ml = 80 ml/day"
+    ],
+    [
+      "Calculate RER calories from dextrose",
+      "200 - 160 = 40 kcal"
+    ],
+    [
+      "Calculate volume of 50% dextrose needed",
+      "40 kcal ÷ 1.7 kcal/ml = 24 ml/day"
+    ],
+    [
+      "2. Determine volume of amino acid solution needed daily",
+      ""
+    ],
+    [
+      "Calculate g of protein needed",
+      "RER x 4 g/100 kcal = 8 g protein/day"
+    ],
+    [
+      "Calculate volume of 8.5% amino acid needed",
+      "8 g ÷ 0.085 g/ml = 94 ml/day"
+    ],
+    [
+      "3. Determine volume of B vitamins and trace minerals needed daily",
+      ""
+    ],
+    [
+      "Calculate B vitamins needed",
+      "RER x 1 ml/100 kcal = 2 ml/day"
+    ],
+    [
+      "Calculate trace minerals needed",
+      "RER x 1 ml/100 kcal = 2 ml/day"
+    ],
+    [
+      "Daily parenteral nutrition formula",
+      "80 ml of 20% lipid emulsion"
+    ],
+    [
+      "",
+      "24 ml of 50% dextrose"
+    ],
+    [
+      "",
+      "94 ml of 8.5% amino acid with electrolytes"
+    ],
+    [
+      "",
+      "2 ml of vitamin-B complex"
+    ],
+    [
+      "",
+      "2 ml of trace elements"
+    ],
+    [
+      "",
+      "Total = 202 ml"
+    ],
+    [
+      "4. Determine volume of crystalloid solution needed to meet daily fluid requirement",
+      ""
+    ],
+    [
+      "Daily fluid volume requested",
+      "4.1 kg x 70 ml/kg = 287 ml/day"
+    ],
+    [
+      "Volume required is daily total – PN total",
+      "287 – 202 = 85 ml"
+    ],
+    [
+      "5. Determine phosphorus supplementation",
+      ""
+    ],
+    [
+      "Phosphorus from amino acids",
+      "94 x 30 mM/l = 2.8 mM"
+    ],
+    [
+      "Desired final phosphorus concentration in the TNA",
+      "= 10 mM/l x 287 ml = 2.9 mM (no phosphorus is needed)"
+    ],
+    [
+      "6. Determine potassium supplementation",
+      ""
+    ],
+    [
+      "K⁺ from lactated Ringer's solution",
+      "85 ml x 4 mEq/l = 0.3 mEq"
+    ],
+    [
+      "K⁺ from amino acid solution",
+      "94 ml x 60 mEq/l = 5.6 mEq"
+    ],
+    [
+      "Total K⁺ in TNA solution",
+      "0.3 mEq + 5.6 mEq = 5.9 mEq"
+    ],
+    [
+      "Desired final K⁺ concentration in TNA",
+      "30 mEq/l x 287 ml = 8.6 mEq"
+    ],
+    [
+      "KCl (2.0 mEq/ml) required",
+      "8.6 mEq – 5.9 mEq = 2.7 mEq ÷ 2.0 = 1.4 ml"
+    ],
+    [
+      "PART B. FELINE FORMULA EXAMPLE",
+      ""
+    ],
+    [
+      "Animal data",
+      ""
+    ],
+    [
+      "Body weight",
+      "4.1 kg"
+    ],
+    [
+      "RER",
+      "200 kcal/day"
+    ],
+    [
+      "Calories from fat",
+      "80%"
+    ],
+    [
+      "Calories from glucose",
+      "20%"
+    ],
+    [
+      "Protein-calorie ratio",
+      "4 g/100 kcal (adequate for most cats)"
+    ],
+    [
+      "Fluid volume",
+      "70 ml/kg (maintenance fluid volume)"
+    ],
+    [
+      "Potassium concentration",
+      "30 mEq/l"
+    ],
+    [
+      "Parenteral solution",
+      ""
+    ],
+    [
+      "50% dextrose",
+      "24 ml providing 41 kcal"
+    ],
+    [
+      "20% lipid emulsion",
+      "80 ml providing 160 kcal"
+    ],
+    [
+      "8.5% amino acids with electrolytes",
+      "94 ml providing 8 g of amino acids"
+    ],
+    [
+      "Potassium chloride",
+      "1.4 ml"
+    ],
+    [
+      "Vitamin-B complex",
+      "2 ml"
+    ],
+    [
+      "Trace elements",
+      "2 ml"
+    ],
+    [
+      "Lactated Ringer's solution",
+      "85 ml"
+    ],
+    [
+      "Total fluid volume",
+      "288 ml"
+    ],
+    [
+      "This final solution is a 500-ml bag containing 200 kcal (80% from fat), adequate nitrogen, major B vitamins with the following electrolyte profile",
+      ""
+    ],
+    [
+      "Sodium",
+      "61.6 mEq/l"
+    ],
+    [
+      "Potassium",
+      "29.5 mEq/l"
+    ],
+    [
+      "Magnesium",
+      "3.3 mEq/l"
+    ],
+    [
+      "Phosphorus",
+      "9.8 mM/l"
+    ],
+    [
+      "Chloride",
+      "55.4 mEq/l"
+    ],
+    [
+      "Calcium",
+      "0.8 mEq/l"
+    ],
+    [
+      "Zinc",
+      "2 mg"
+    ],
+    [
+      "Copper",
+      "1 mg"
+    ],
+    [
+      "Manganese",
+      "0.2 mg"
+    ]
+  ],
+  "note": "表为左右两栏：左栏为项目名（无表头），右栏表头为 Feline example；PART/小节标题行右栏留空。"
+}

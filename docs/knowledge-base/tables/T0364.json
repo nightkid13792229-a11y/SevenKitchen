@@ -1,0 +1,95 @@
+{
+  "tableId": "T0364",
+  "caption": "Table 50-1. Breed-associated disorders of the pharynx and esophagus.",
+  "columns": [
+    "Conditions",
+    "Breeds"
+  ],
+  "rows": [
+    [
+      "Cricopharyngeal dysphasia",
+      "Cocker spaniel"
+    ],
+    [
+      "Congenital esophageal dysmotility and/or megaesophagus",
+      "Bouvier des Flandres"
+    ],
+    [
+      "Congenital esophageal dysmotility and/or megaesophagus",
+      "Chinese Shar-Pei"
+    ],
+    [
+      "Congenital esophageal dysmotility and/or megaesophagus",
+      "Fox terrier and other terrier breeds"
+    ],
+    [
+      "Congenital esophageal dysmotility and/or megaesophagus",
+      "German shepherd dog"
+    ],
+    [
+      "Congenital esophageal dysmotility and/or megaesophagus",
+      "Great Dane"
+    ],
+    [
+      "Congenital esophageal dysmotility and/or megaesophagus",
+      "Irish setter"
+    ],
+    [
+      "Congenital esophageal dysmotility and/or megaesophagus",
+      "Labrador retriever"
+    ],
+    [
+      "Congenital esophageal dysmotility and/or megaesophagus",
+      "Miniature schnauzer"
+    ],
+    [
+      "Congenital esophageal dysmotility and/or megaesophagus",
+      "Newfoundland"
+    ],
+    [
+      "Congenital esophageal dysmotility and/or megaesophagus",
+      "Siamese cat"
+    ],
+    [
+      "Idiopathic acquired megaesophagus",
+      "German shepherd dog"
+    ],
+    [
+      "Idiopathic acquired megaesophagus",
+      "Golden retriever"
+    ],
+    [
+      "Idiopathic acquired megaesophagus",
+      "Great Dane"
+    ],
+    [
+      "Idiopathic acquired megaesophagus",
+      "Irish setter"
+    ],
+    [
+      "Vascular ring anomalies",
+      "Boston terrier"
+    ],
+    [
+      "Vascular ring anomalies",
+      "English bulldog"
+    ],
+    [
+      "Vascular ring anomalies",
+      "German shepherd dog"
+    ],
+    [
+      "Vascular ring anomalies",
+      "Irish setter"
+    ],
+    [
+      "Vascular ring anomalies",
+      "Labrador retriever"
+    ],
+    [
+      "Vascular ring anomalies",
+      "Poodle"
+    ]
+  ],
+  "note": "Conditions 为跨多行的合并单元格，已在其所属的每个品种行重复填入；本图下方另含第二张表 Table 50-2「Mechanisms of pharyngeal and esophageal disorders」（Mechanisms / Disorders，含 Aberrant motility、Inflammatory conditions、Obstructive lesions 三组），未并入本结果"
+}

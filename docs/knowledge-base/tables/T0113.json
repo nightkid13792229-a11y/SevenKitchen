@@ -1,0 +1,37 @@
+{
+ "tableId": "T0113",
+ "caption": "Table 15-10. Feeding plan summary for reproducing dogs.",
+ "columns": [
+  "Recommendation"
+ ],
+ "rows": [
+  [
+   "1. For gestating and lactating bitches, use Table 15-9 to select a food with the appropriate levels of key nutritional factors; for breeding males, use Table 13-4. For foods in neither table, contact manufacturers for key nutritional factor content."
+  ],
+  [
+   "2. The selected food should be approved by a credible regulatory agency (e.g., Association of American Feed Control Officials)."
+  ],
+  [
+   "3. Determine an appropriate feeding method (Table 13-5). Free-choice feeding is the preferred method for feeding bitches during late gestation and lactation; food-restricted meal feeding may be best for breeding males."
+  ],
+  [
+   "4. For food-restricted meal feeding, estimate the initial quantity of food based on daily energy requirement (DER) calculation (DER ÷ food energy density)."
+  ],
+  [
+   "5. DER is calculated by multiplying resting energy requirement (RER) (Table 5-2) by an appropriate factor. Remember, DER calculations are estimates and should be used as guidelines or starting points for amounts to feed individual dogs and not as absolute requirements; the amount fed should be refined by monitoring body condition score and weight. Gestation = 1.8 to 2.0 x RER for the first four weeks, then 2.2 to 3.5 x RER for the last five weeks. Lactation = 4.0 to 8.0 x RER (peak lactation: 2.1 x RER + 25% per puppy) or use Method 1 (Table 15-7)."
+  ],
+  [
+   "6. At the end of lactation, bitches should be fed for weaning as described in Box 16-5."
+  ],
+  [
+   "7. Monitor body condition, body weight, general health, reproductive performance and puppy growth rates to adjust the feeding plan."
+  ]
+ ],
+ "note": "表格位于第292页顶部通栏（金色表头带，表题下为编号条目）。",
+ "verify": {
+  "numbers": 28,
+  "found": 28,
+  "misses": []
+ },
+ "method": "视觉"
+}

@@ -1,0 +1,148 @@
+{
+ "tableId": "T0230",
+ "caption": "Table 32-10. Summary of randomized, masked clinical studies using fatty acid supplements or fatty acid-enhanced foods in dogs with dermatologic disease.",
+ "columns": [
+  "Reference*",
+  "Dogs (no.)",
+  "Type of trial",
+  "Duration of therapy (weeks)",
+  "Control of pruritus (%)**",
+  "Control of clinical signs***"
+ ],
+ "rows": [
+  [
+   "Scott et al, 1992",
+   "20",
+   "R,DB",
+   "2",
+   "25",
+   "-"
+  ],
+  [
+   "Scarff and Lloyd, 1992",
+   "35",
+   "R,DB,PC",
+   "9",
+   "0",
+   "+"
+  ],
+  [
+   "Bond and Lloyd, 1992a",
+   "21",
+   "R,DB,PC",
+   "8",
+   "76",
+   "+"
+  ],
+  [
+   "Bond and Lloyd, 1992b",
+   "37",
+   "R,SB",
+   "16",
+   "64",
+   "+"
+  ],
+  [
+   "Bond and Lloyd, 1993",
+   "28",
+   "R,DB",
+   "16",
+   "67",
+   "+"
+  ],
+  [
+   "White, 1992",
+   "10",
+   "R,DB,PC",
+   "8",
+   "0",
+   "+"
+  ],
+  [
+   "Logas and Kunkle, 1994",
+   "16",
+   "R,DB,X",
+   "6",
+   "56",
+   "+"
+  ],
+  [
+   "Harvey, 1999",
+   "18",
+   "R,DB,PC",
+   "8",
+   "50",
+   "+"
+  ],
+  [
+   "Paterson, 1995",
+   "32",
+   "R,SB,PC",
+   "12",
+   "50-75",
+   "+"
+  ],
+  [
+   "Šavík et al, 2004",
+   "60",
+   "R,DB,PC",
+   "12",
+   "57",
+   "-"
+  ],
+  [
+   "Taugbøl et al, 2004",
+   "24",
+   "R,DB,PC",
+   "10",
+   "53",
+   "-"
+  ],
+  [
+   "Noli and Banni, 2004",
+   "24",
+   "R,DB,PC",
+   "8",
+   "50",
+   "-"
+  ],
+  [
+   "Mueller et al, 2003",
+   "29",
+   "R,DB,PC",
+   "NR",
+   "9-15",
+   "-"
+  ],
+  [
+   "Mueller et al, 2005",
+   "30",
+   "R,DB,PC",
+   "10",
+   "40-50",
+   "+"
+  ],
+  [
+   "Nesbitt et al, 2003",
+   "58",
+   "R,DB",
+   "8",
+   "50",
+   "+"
+  ],
+  [
+   "Sture and Lloyd, 1995",
+   "25",
+   "R,DB,PC,X",
+   "9",
+   "40",
+   "+"
+  ]
+ ],
+ "note": "该页有两张表：Table 32-10（本文件）与 Table 32-11（猫，4 条记录，未转录）。表注 Key: NR = not reported, DB = double blind, PC = placebo controlled, SB = single blind, R = randomized, X = cross-over; **percentage of dogs in which good to excellent pruritus control was reported; ***A + symbol indicates that improvement in clinical signs other than pruritus was noted.",
+ "verify": {
+  "numbers": 66,
+  "found": 66
+ },
+ "method": "视觉"
+}

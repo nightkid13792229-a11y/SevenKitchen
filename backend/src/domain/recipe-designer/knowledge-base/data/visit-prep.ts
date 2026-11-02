@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -10,10 +13,6 @@ import type { KnowledgeEntry } from '../types';
  *   1. 每条必须带检索标签 `visit-prep`（由 SECTION_TAGS.visitPrep 产出）。
  *   2. 这一块是"沟通方法"，不是医学结论；但仍然要写清依据出处。
  *   3. 不承诺任何诊疗结果，不替医生排优先级（可以说"医生通常会先问 X"）。
- *
- * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
- * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
- *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -82,9 +81,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'SAFETY',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'visit-002',
@@ -161,9 +158,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'SAFETY',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'visit-003',
@@ -222,9 +217,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'SAFETY',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'visit-004',
@@ -284,9 +277,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'SAFETY',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'visit-005',
@@ -323,7 +314,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
         note: '面诊时应询问当前使用的药物、补充剂、营养保健品与草药',
       },
       {
-        source: 'WSAVA 动物福利指南 2018',
+        source: 'WSAVA 动物福利指南',
         chapter: '第 3 章 就诊相关的福利需求（到院前准备与到院时分诊）',
         note: '到院前应做准备，到院时由前台／分诊人员先行判断',
       },
@@ -352,10 +343,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    riskLevel: 'HIGH',
-    urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'visit-006',
@@ -420,9 +408,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'FOLLOWUP',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'visit-007',
@@ -482,9 +468,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'PREVENTION',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'visit-008',
@@ -509,7 +493,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'WSAVA 动物福利指南 2018',
+        source: 'WSAVA 动物福利指南',
         chapter: '第 3 章 就诊相关的福利需求 · 记录保存',
         note: '检查、治疗与反应应准确及时记录，便于随访与交接',
       },
@@ -544,8 +528,6 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'FOLLOWUP',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
 ];

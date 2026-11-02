@@ -1,0 +1,55 @@
+{
+ "tableId": "T0084",
+ "caption": "Table 10-5. Balanced low-protein/low-purine homemade formula for adult dogs with urate urinary calculi (daily food formulation for an 18-kg (40-lb) dog, as fed).*/**/***",
+ "columns": [
+  "Ingredients",
+  "Grams",
+  "Nutrient content (% dry matter)\\u2020",
+  ""
+ ],
+ "rows": [
+  [
+   "Rice, white, cooked",
+   "431",
+   "Dry matter",
+   "29.5"
+  ],
+  [
+   "Egg, large, boiled",
+   "49",
+   "Protein",
+   "9.8"
+  ],
+  [
+   "Oil, vegetable",
+   "27",
+   "Fat",
+   "21.8"
+  ],
+  [
+   "Calcium carbonate",
+   "1.2",
+   "Fiber",
+   "2.2"
+  ],
+  [
+   "Salt, substitute (KCl)",
+   "1.2",
+   "Calcium",
+   "0.38"
+  ],
+  [
+   "Total",
+   "509",
+   "Phosphorus",
+   "0.10"
+  ],
+  [
+   "",
+   "",
+   "Energy (kcal/100 g)",
+   "483"
+  ]
+ ],
+ "note": "同一张图中下方还完整包含 Table 10-6，本文件只转录上方 Table 10-5；Table 10-6 见 T0085.json。"
+}

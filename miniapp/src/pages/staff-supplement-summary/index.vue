@@ -28,10 +28,6 @@
             <text class="order-no">{{ order.orderNo }}</text>
             <text class="order-meta">{{ statusText(order.status) }} · {{ order.bagCount }} 袋</text>
           </view>
-          <view class="order-actions">
-            <view class="mini-btn" @tap.stop="openLabels(order)">打印标签</view>
-            <view class="mini-btn primary" @tap.stop="openShip(order)">去发货</view>
-          </view>
         </view>
 
         <view v-if="orders.length === 0" class="empty-block">
@@ -130,19 +126,6 @@ function openOrder(order: PackingOrder) {
   })
 }
 
-function openLabels(order: PackingOrder) {
-  uni.navigateTo({
-    url: `/pages/staff-supplement-orders/labels?id=${encodeURIComponent(order.id)}`,
-  })
-}
-
-function openShip(order: PackingOrder) {
-  // 和订单中心一致：带 action=ship，详情加载完直接弹发货框。
-  uni.navigateTo({
-    url: `/pages/staff-supplement-orders/detail?id=${encodeURIComponent(order.id)}&action=ship`,
-  })
-}
-
 function goAllOrders() {
   uni.navigateTo({ url: '/pages/staff-supplement-orders/index' })
 }
@@ -195,10 +178,6 @@ onShow(load)
 .order-main { flex: 1; min-width: 0; }
 .order-no { display: block; font-size: 27rpx; font-weight: 600; color: #303133; }
 .order-meta { display: block; margin-top: 4rpx; font-size: 22rpx; color: #909399; }
-.order-actions { display: flex; align-items: center; flex-shrink: 0; }
-.mini-btn { padding: 10rpx 18rpx; border: 1rpx solid #d9dfcf; border-radius: 10rpx; font-size: 22rpx; color: #2b5040; background: #fbfcf7; }
-.mini-btn + .mini-btn { margin-left: 10rpx; }
-.mini-btn.primary { background: #1e3a2f; border-color: #1e3a2f; color: #f7f3e8; }
 .empty-block { padding: 26rpx 0 8rpx; text-align: center; }
 .empty-hint { display: block; margin-top: 8rpx; font-size: 22rpx; color: #b0b3b8; }
 .ghost-btn { display: inline-block; margin-top: 18rpx; padding: 12rpx 24rpx; border: 1rpx solid #2b5040; border-radius: 999rpx; font-size: 23rpx; color: #2b5040; }

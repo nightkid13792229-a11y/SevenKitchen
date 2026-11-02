@@ -1,0 +1,153 @@
+{
+ "tableId": "T0379",
+ "caption": "Table 55-2. Potential causes of chronic small bowel diarrhea in dogs and cats.",
+ "columns": [
+  "Dietary",
+  "Infectious agents",
+  "Inflammatory bowel disease",
+  "Miscellaneous",
+  "Neoplasia"
+ ],
+ "rows": [
+  [
+   "Adverse reactions to food",
+   "Algae",
+   "Eosinophilic gastroenteritis",
+   "Juvenile diarrhea of cats",
+   "APUD cell tumors"
+  ],
+  [
+   "Food allergy (hypersensitivity)",
+   "Protothecosis",
+   "Lymphocytic enteritis",
+   "Lymphangiectasia",
+   "Lymphosarcoma"
+  ],
+  [
+   "Lactose intolerance",
+   "Bacteria",
+   "Lymphoplasmacytic enteritis",
+   "",
+   "Mast cell tumor"
+  ],
+  [
+   "",
+   "Campylobacter spp.",
+   "Regional enteritis",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Mycobacterium spp.",
+   "Suppurative gastroenteritis",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Salmonellosis",
+   "",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Small intestinal bacterial overgrowth",
+   "",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Fungi",
+   "",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Histoplasmosis",
+   "",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Pythiosis",
+   "",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Zygomycosis",
+   "",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Parasites",
+   "",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Helminths (roundworms, hookworms)",
+   "",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Protozoa (Isospora spp., Giardia lamblia, Cryptosporidium spp.)",
+   "",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Viruses",
+   "",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Coronavirus",
+   "",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Feline immunodeficiency virus",
+   "",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Feline infectious peritonitis",
+   "",
+   "",
+   ""
+  ],
+  [
+   "",
+   "Feline leukemia virus",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Key: APUD = amine precursor uptake and decarboxylation.",
+   "",
+   "",
+   "",
+   ""
+  ]
+ ]
+}

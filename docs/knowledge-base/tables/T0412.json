@@ -1,0 +1,27 @@
+{
+ "tableId": "T0412",
+ "caption": "Table 63-3. Key nutritional factors for foods for dogs with idiopathic bowel syndrome.*",
+ "columns": [
+  "Factors",
+  "Recommended levels"
+ ],
+ "rows": [
+  [
+   "Soluble fiber**",
+   "1 to 5%"
+  ],
+  [
+   "Mixed fiber**",
+   "5 to 10%"
+  ],
+  [
+   "Insoluble fiber**",
+   "10 to 15%"
+  ],
+  [
+   "Crude fiber***",
+   "≥8%"
+  ]
+ ],
+ "note": "表下 * ** *** 脚注未计入行。"
+}

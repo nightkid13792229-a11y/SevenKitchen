@@ -1,0 +1,111 @@
+{
+  "tableId": "T0179",
+  "caption": "Table 27-4. Key nutritional factors for calorie-restricted dog foods for weight loss and prevention of weight regain. Table 27-5. Key nutritional factors for calorie-restricted cat foods for weight loss and prevention of weight regain.",
+  "columns": [
+    "Factors",
+    "Dietary recommendations (dry matter basis)"
+  ],
+  "rows": [
+    [
+      "Energy density",
+      "Foods for weight loss and prevention of weight regain should contain ≤3.4 kcal (≤14.2 kJ) metabolizable energy (ME)/g"
+    ],
+    [
+      "Fat",
+      "Foods for weight loss should contain ≤9%\nFoods for prevention of weight regain should contain ≤14%"
+    ],
+    [
+      "Fiber",
+      "Foods for weight loss should contain 12 to 25%\nFoods for prevention of weight regain should contain 10 to 20%"
+    ],
+    [
+      "Protein",
+      "Foods for weight loss should contain ≥25%\nFoods for prevention of weight regain should contain ≥18%"
+    ],
+    [
+      "Lysine",
+      "Foods for weight loss should contain ≥1.7%"
+    ],
+    [
+      "Carbohydrate",
+      "Foods for weight loss should contain ≤40%\nFoods for prevention of weight regain should contain ≤55%"
+    ],
+    [
+      "L-carnitine",
+      "Foods for weight loss and prevention of weight regain should contain ≥300 ppm"
+    ],
+    [
+      "Antioxidants",
+      "Foods for weight loss and prevention of weight regain should contain:"
+    ],
+    [
+      "Vitamin E",
+      "≥400 IU vitamin E/kg"
+    ],
+    [
+      "Vitamin C",
+      "≥100 mg vitamin C/kg"
+    ],
+    [
+      "Selenium",
+      "0.5 to 1.3 mg selenium/kg"
+    ],
+    [
+      "Sodium",
+      "Foods for weight loss and prevention of weight regain should contain between 0.2 to 0.4%"
+    ],
+    [
+      "Phosphorus",
+      "Foods for weight loss and prevention of weight regain should contain between 0.4 to 0.8%"
+    ],
+    [
+      "Energy density",
+      "Foods for weight loss should contain ≤3.4 kcal (≤14.2 kJ) metabolizable energy (ME)/g\nFoods for prevention of weight regain should contain ≤3.8 kcal (≤15.9 kJ) ME/g"
+    ],
+    [
+      "Fat",
+      "Foods for weight loss should contain ≤10%\nFoods for prevention of weight regain should contain ≤18%"
+    ],
+    [
+      "Fiber",
+      "Foods for weight loss should contain 15 to 20%\nFoods for prevention of weight regain should contain between 6 to 15%"
+    ],
+    [
+      "Protein",
+      "Foods for weight loss and prevention of weight regain should contain ≥35%"
+    ],
+    [
+      "Carbohydrate",
+      "Foods for weight loss should contain ≤35%\nFoods for prevention of weight regain should contain ≤40%"
+    ],
+    [
+      "L-carnitine",
+      "Foods for weight loss and prevention of weight regain should contain ≥500 ppm"
+    ],
+    [
+      "Antioxidants",
+      "Foods for weight loss and prevention of weight regain should contain:"
+    ],
+    [
+      "Vitamin E",
+      "≥500 IU vitamin E/kg"
+    ],
+    [
+      "Vitamin C",
+      "100 to 200 mg vitamin C/kg"
+    ],
+    [
+      "Selenium",
+      "0.5 to 1.3 mg selenium/kg"
+    ],
+    [
+      "Sodium",
+      "Foods for weight loss and prevention of weight regain should contain between 0.2 to 0.6%"
+    ],
+    [
+      "Phosphorus",
+      "Foods for weight loss and prevention of weight regain should contain between 0.5 to 0.8%"
+    ]
+  ],
+  "note": "图内含并排两张表，列结构相同：前 13 行为 Table 27-4（dogs），后 12 行为 Table 27-5（cats）；Antioxidants 下的 Vitamin E / Vitamin C / Selenium 在原表中缩进排列，此处按行平铺。"
+}

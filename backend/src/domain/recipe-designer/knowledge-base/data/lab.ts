@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -12,10 +15,6 @@ import type { KnowledgeEntry } from '../types';
  *   报告上印的区间才是这一份结果该用的区间。
  *   所以这里只写"这个指标反映什么、偏高偏低通常意味着什么、该结合什么一起看、
  *   下一步查什么"，**一律不写具体数值区间** —— 写了就会有人拿它去套别人的报告。
- *
- * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
- * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
- *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -47,9 +46,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-002',
@@ -77,9 +74,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-003',
@@ -110,9 +105,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-004',
@@ -143,9 +136,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-005',
@@ -167,7 +158,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'Merck 兽医手册 · 临床生化', chapter: '肝酶解读' },
-      { source: 'ACVIM 犬慢性肝炎诊断与治疗共识 2019', chapter: '肝功能评估' },
+      { source: 'ACVIM 犬慢性肝炎共识 2019', chapter: '肝功能评估' },
     ],
     sources: [
       { sourceId: 'MERCK-CLINICAL-BIOCHEM', locator: '肝酶段落', note: 'ALT/ALP 的影响因素与特异性差异' },
@@ -175,9 +166,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-006',
@@ -199,7 +188,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'Merck 兽医手册 · 临床血液学', chapter: '血常规指标解读' },
-      { source: 'ACVIM 犬猫免疫介导性溶血性贫血诊断共识 2019', chapter: '贫血的分类与鉴别' },
+      { source: 'ACVIM 免疫介导性溶血性贫血诊断共识 2019', chapter: '贫血的分类与鉴别' },
     ],
     sources: [
       { sourceId: 'MERCK-HEME', locator: '血常规解读', note: '三类细胞的意义' },
@@ -207,9 +196,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-007',
@@ -240,9 +227,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-008',
@@ -273,9 +258,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'FOLLOWUP',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-009',
@@ -304,9 +287,7 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-010',
@@ -334,8 +315,6 @@ export const LAB_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'LOW',
     questionType: 'INTERPRET',
-    riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
 ];

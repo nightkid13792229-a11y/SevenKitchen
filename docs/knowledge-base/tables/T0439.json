@@ -1,0 +1,15 @@
+{
+  "tableId": "T0439",
+  "caption": "Table 69-2. Selected factors that can determine the effects of nutrients on drug absorption.",
+  "columns": ["Factors", "Examples"],
+  "rows": [
+    ["Physicochemical properties of drugs", "Lipophilic or hydrophilic"],
+    ["Drug formulation", "Tablet, capsule or liquid"],
+    ["Meal type", "Volume, temperature, moisture"],
+    ["Drug dose", "Amount and concentration"],
+    ["Route of administration", "By mouth, gastric tube, etc."],
+    ["Order of administration", "Pre- vs. postprandial"],
+    ["Time interval between food and drug administration", "Phase of digestion"],
+    ["Owner/patient compliance", "Mixing drugs and food for ease of administration"]
+  ]
+}

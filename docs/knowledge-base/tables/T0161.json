@@ -1,0 +1,117 @@
+{
+  "tableId": "T0161",
+  "caption": "Table 25-1. Disorders and drugs that affect taste and smell in people.*",
+  "columns": [
+    "Disorders",
+    "",
+    ""
+  ],
+  "rows": [
+    [
+      "Adrenocortical insufficiency",
+      "Cushing's syndrome",
+      "Nasal polyposis"
+    ],
+    [
+      "Allergic rhinitis",
+      "Diabetes mellitus",
+      "Niacin deficiency"
+    ],
+    [
+      "Bronchial asthma",
+      "Head trauma",
+      "Radiation therapy"
+    ],
+    [
+      "Burns",
+      "Hepatic cirrhosis",
+      "Sinusitis"
+    ],
+    [
+      "Cancer",
+      "Hypertension",
+      "Viral hepatitis (acute)"
+    ],
+    [
+      "Chronic renal failure",
+      "Hypothyroidism",
+      "Zinc deficiency"
+    ],
+    [
+      "Cobalamin deficiency",
+      "Influenza-like infections",
+      ""
+    ],
+    [
+      "Drugs",
+      "",
+      ""
+    ],
+    [
+      "Drug classification",
+      "Examples",
+      ""
+    ],
+    [
+      "Amebicides",
+      "Metronidazole",
+      ""
+    ],
+    [
+      "Antiepileptic drugs",
+      "Phenytoin",
+      ""
+    ],
+    [
+      "Anesthetics (local)",
+      "Benzocaine, procaine hydrochloride, tetracaine hydrochloride",
+      ""
+    ],
+    [
+      "Antihistamines",
+      "Chlorpheniramine maleate",
+      ""
+    ],
+    [
+      "Antimicrobial agents",
+      "Amphotericin B, ampicillin, cephalosporins, chloramphenicol, gentamicin, griseofulvin, kanamycin, lincomycin, neomycin, nitrofurantoin, sulfonamides, streptomycin, tetracyclines",
+      ""
+    ],
+    [
+      "Antineoplastic agents",
+      "Doxorubicin, methotrexate, vincristine sulfate",
+      ""
+    ],
+    [
+      "Antirheumatic, analgesic, antipyretic, antiinflammatory, immunosuppressive agents",
+      "Allopurinol, azathioprine, colchicine, levamisole, D-penicillamine, phenylbutazone",
+      ""
+    ],
+    [
+      "Antithyroid agents",
+      "Propylthiouracil, thiouracil",
+      ""
+    ],
+    [
+      "Diuretics and antihypertensive agents",
+      "Captopril, furosemide, thiazides",
+      ""
+    ],
+    [
+      "Opiates",
+      "Codeine, morphine",
+      ""
+    ],
+    [
+      "Sympathomimetic drugs",
+      "Amphetamines, ephedrine",
+      ""
+    ],
+    [
+      "Others",
+      "Digitalis glycosides, estrogens, iron sorbitex, oral antidiabetic agents, vitamin D",
+      ""
+    ]
+  ],
+  "note": "表头 Disorders 为跨三列的合并表头；下半部分 Drugs 区为两列（Drug classification / Examples），第三列留空。"
+}

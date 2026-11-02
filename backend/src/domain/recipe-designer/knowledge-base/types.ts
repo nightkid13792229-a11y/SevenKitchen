@@ -110,6 +110,9 @@ export type KnowledgePriority = 'HIGH' | 'MEDIUM' | 'LOW';
  *
  * 升级遵循"旧 202 条先不动"：下面这些字段**全部可选**，只有走新结构的条目
  * 才填；填了就要满足对应要求，由 KnowledgeBaseService 在启动时校验。
+ *
+ * 2026-11-01 老板决定：**去掉「风险等级」「紧急程度」「审核状态」三个字段**。
+ * 理由：知识库只服务内部，能进库的内容本来就是审核过的；风险与紧急程度由模型自行判断。
  * ========================================================================= */
 
 /**
@@ -141,38 +144,6 @@ export const KNOWLEDGE_QUESTION_TYPE_LABELS: Record<
   IMMUNE: '免疫',
   SAFETY: '安全',
 };
-
-/**
- * 风险等级 —— 决定这条知识**需不需要两个独立来源互相印证**。
- *
- * 上一轮审查的结论：交叉验证按风险分级，不搞一刀切。
- *   · 定义类结论，多引一本教科书不增加信息；
- *   · 紧急程度、数值、禁忌这类说错了会伤到狗的，必须两个来源。
- */
-export type KnowledgeRiskLevel = 'HIGH' | 'MEDIUM' | 'LOW';
-
-/**
- * 紧急程度 —— **只对"分诊"类必填**。
- *
- * 这是整个知识库里唯一不能让 AI 自由发挥的判断：
- * "怎么说"可以交给 AI 翻译成人话，"有多急"必须写死。
- */
-export type KnowledgeUrgency = 'IMMEDIATE' | 'SOON' | 'OBSERVE';
-
-export const KNOWLEDGE_URGENCY_LABELS: Record<KnowledgeUrgency, string> = {
-  IMMEDIATE: '立即就医',
-  SOON: '尽快就医',
-  OBSERVE: '可观察',
-};
-
-/**
- * 审核状态。
- *
- * 老板把边界定得很清楚：**未经专业审核的兽医内容不得对顾客开放**。
- * 所以新补的条目一律先标 PENDING_REVIEW，顾客侧检索时会被过滤掉，
- * 营养师侧照常可见（他们看得懂"这条还没审"）。
- */
-export type KnowledgeReviewStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
 
 /**
  * 结构化出处（取代自由文本）。
@@ -238,23 +209,10 @@ export interface KnowledgeEntry {
 
   /** 问题类型；填了就算"新结构条目"，要满足下面各项要求 */
   questionType?: KnowledgeQuestionType;
-  /** 风险等级；HIGH 时必须有两个及以上独立来源 */
-  riskLevel?: KnowledgeRiskLevel;
-  /** 紧急程度；questionType 为 TRIAGE 时必填 */
-  urgency?: KnowledgeUrgency;
   /** 结构化出处；填了就以它为准（旧的 citations 仍保留兼容） */
   sources?: KnowledgeSourceRef[];
   /** 来源之间的真冲突；有冲突时必须在结论里说清取舍 */
   conflicts?: KnowledgeConflict[];
   /** 下次复核日期 YYYY-MM-DD（配合复核 SOP） */
   reviewBy?: string;
-  /**
-   * 审核状态；**缺省视为未审核**，顾客侧看不到。
-   *
-   * 2026-10-02 起这是顾客侧放行的**唯一凭据**（原来另有一张 approvals.ts 登记表，
-   * 老板说不用留审核记录，已撤掉）。两条纪律：
-   *   · 新条目一律先写 `PENDING_REVIEW`，审核通过才改 `APPROVED`；
-   *   · **改动某条内容就把它退回 `PENDING_REVIEW`** —— 换了内容就等于没审过。
-   */
-  reviewStatus?: KnowledgeReviewStatus;
 }

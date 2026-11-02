@@ -1,0 +1,77 @@
+{
+  "tableId": "T0310",
+  "caption": "Table 43-5. Key nutritional factors in selected commercial veterinary therapeutic foods used for dissolution of struvite uroliths in dogs compared to recommended levels.",
+  "columns": [
+    "Food",
+    "Protein (%)",
+    "Phosphorus (%)",
+    "Magnesium (%)",
+    "Urinary pH"
+  ],
+  "rows": [
+    [
+      "Dry foods",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≤8",
+      "≤0.1",
+      "<0.02",
+      "5.9-6.1"
+    ],
+    [
+      "Royal Canin Veterinary Diet Control Formula",
+      "23.9",
+      "0.84",
+      "0.130",
+      "6.0-6.3"
+    ],
+    [
+      "Royal Canin Veterinary Diet Urinary SO 14",
+      "17.0",
+      "0.63",
+      "0.066",
+      "5.5-6.0"
+    ],
+    [
+      "Moist foods",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≤8",
+      "≤0.1",
+      "<0.02",
+      "5.9-6.1"
+    ],
+    [
+      "Hill's Prescription Diet s/d Canine",
+      "7.9",
+      "0.10",
+      "0.024",
+      "5.935"
+    ],
+    [
+      "Royal Canin Veterinary Diet Control Formula",
+      "22.8",
+      "0.66",
+      "0.078",
+      "6.0-6.3"
+    ],
+    [
+      "Royal Canin Veterinary Diet Urinary SO",
+      "18.5",
+      "0.86",
+      "0.059",
+      "5.5-6.0"
+    ]
+  ],
+  "note": "图中另含 Table 43-6（完整内容见 T0311），此处只转录第一张表 Table 43-5；“Dry foods”/“Moist foods”为表内分组标题行。"
+}

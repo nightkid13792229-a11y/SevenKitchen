@@ -1,0 +1,13 @@
+{
+ "tableId": "T0238",
+ "caption": "Table 33-9. Example calculation for converting estimated daily energy requirement (DER) to a daily amount of food to feed.",
+ "columns": [
+  "Table 33-9. Example calculation for converting estimated daily energy requirement (DER) to a daily amount of food to feed."
+ ],
+ "rows": [
+  [
+   "To determine the daily amount to feed, divide the estimated DER by the as-fed energy density of the food. For example, if a puppy's estimated DER is 1,127 kcal/day and the food selected provides 375 kcal/8-oz. measuring cup, feed three cups/day (1,127 kcal ÷ 375 kcal/cup = three cups). This amount would be divided into two or three meals per day. Regardless of how the DER is estimated, or if the manufacturer's recommendations are used as a starting point, adjust the amount to feed (as needed) every two weeks based on the puppy's body condition score (BCS). If the BCS is >3/5, decrease the amount fed by 10%; if the BCS is <2/5, increase the amount fed by 10%. To convert kcal to kJ, multiply kcal by 4.184."
+  ]
+ ],
+ "note": "该表为单栏说明式表格（无网格线），标题行为表头，整段说明为一个单元格；跨页部分无续表。"
+}

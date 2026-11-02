@@ -1,0 +1,145 @@
+{
+  "tableId": "T0270",
+  "caption": "Table 38-9. Mineral composition of 5,050 canine nephroliths and ureteroliths evaluated at the Minnesota Urolith Center by quantitative methods: 1991 to 2006.",
+  "columns": [
+    "Predominate mineral type",
+    "Proportion of predominant mineral (%)",
+    "Number",
+    "Percent"
+  ],
+  "rows": [
+    [
+      "Calcium oxalate",
+      "-",
+      "2,174",
+      "43.1"
+    ],
+    [
+      "Calcium oxalate monohydrate",
+      "100",
+      "(1,168)",
+      "-"
+    ],
+    [
+      "",
+      "70-99",
+      "(511)",
+      "-"
+    ],
+    [
+      "Calcium oxalate dihydrate",
+      "70–100*",
+      "(234)",
+      "-"
+    ],
+    [
+      "Calcium oxalate monohydrate and dihydrate",
+      "70–100",
+      "(161)",
+      "-"
+    ],
+    [
+      "Calcium phosphate",
+      "-",
+      "81",
+      "1.6"
+    ],
+    [
+      "Calcium apatite",
+      "70–100",
+      "(67)",
+      "-"
+    ],
+    [
+      "Calcium hydrogen phosphate•2H2O",
+      "70–100",
+      "(14)",
+      "-"
+    ],
+    [
+      "Magnesium ammonium phosphate•6H2O",
+      "70–100",
+      "1,299",
+      "25.7"
+    ],
+    [
+      "Purines",
+      "-",
+      "671",
+      "13.3"
+    ],
+    [
+      "Ammonium acid urate",
+      "70–100",
+      "(476)",
+      "-"
+    ],
+    [
+      "Sodium acid urate",
+      "70–100",
+      "(47)",
+      "-"
+    ],
+    [
+      "Sodium calcium urate",
+      "70–100",
+      "(17)",
+      "-"
+    ],
+    [
+      "Uric acid",
+      "70–100",
+      "104",
+      "-"
+    ],
+    [
+      "Xanthine",
+      "70–100",
+      "(24)",
+      "-"
+    ],
+    [
+      "Cystine",
+      "70–100",
+      "77",
+      "-"
+    ],
+    [
+      "Silica",
+      "70–100",
+      "18",
+      "0.4"
+    ],
+    [
+      "Mixed**",
+      "-",
+      "132",
+      "2.6"
+    ],
+    [
+      "Compound***",
+      "-",
+      "575",
+      "11.4"
+    ],
+    [
+      "Matrix",
+      "-",
+      "13",
+      "0.3"
+    ],
+    [
+      "Drug metabolite",
+      "na",
+      "1",
+      "0.02"
+    ],
+    [
+      "Other",
+      "na",
+      "7",
+      "0.1"
+    ]
+  ],
+  "note": "图中下部另含 Table 38-10（编号条目式清单，非网格表格，且与 T0271 内容重复），未在此转录；表下 Key 与三条脚注未转录。"
+}

@@ -1,0 +1,83 @@
+{
+ "tableId": "T0340",
+ "caption": "Table 47-6. Key nutritional factor content of selected dry commercial cat foods marketed for dental health compared to recommended levels.*",
+ "columns": [
+  "Factors",
+  "VOHC Seal for plaque control (Yes/No)",
+  "Vitamin E (IU/kg)",
+  "Vitamin C (mg/kg)",
+  "Selenium (mg/kg)",
+  "Phosphorus (%)",
+  "Sodium (%)",
+  "Magnesium (%)",
+  "Urinary pH"
+ ],
+ "rows": [
+  [
+   "Recommended levels",
+   "Yes",
+   "≥500",
+   "100-200",
+   "0.5-1.3",
+   "0.5-0.8",
+   "0.2-0.5",
+   "0.04-0.1",
+   "6.2-6.4"
+  ],
+  [
+   "Hill's Prescription Diet t/d Feline",
+   "Yes",
+   "811",
+   "83",
+   "0.59",
+   "0.80",
+   "0.33",
+   "0.065",
+   "6.34"
+  ],
+  [
+   "Hill's Science Diet Adult Oral Care",
+   "Yes",
+   "670",
+   "171",
+   "0.55",
+   "0.75",
+   "0.37",
+   "0.058",
+   "6.30"
+  ],
+  [
+   "Medi-Cal Dental Formula",
+   "No",
+   "na",
+   "na",
+   "na",
+   "0.70",
+   "0.60",
+   "na",
+   "na"
+  ],
+  [
+   "Purina Veterinary Diets DH Dental Health",
+   "Yes",
+   "722",
+   "na",
+   "na",
+   "1.50",
+   "0.63",
+   "0.10",
+   "na"
+  ],
+  [
+   "Royal Canin Veterinary Diet Dental DD 27",
+   "No",
+   "710",
+   "na",
+   "0.34",
+   "0.81",
+   "0.65",
+   "0.097",
+   "na"
+  ]
+ ]
+}

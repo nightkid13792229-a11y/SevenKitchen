@@ -1,0 +1,22 @@
+{
+  "tableId": "T0014",
+  "caption": "TABLE 3 (Continued)",
+  "columns": [
+    "Source",
+    "URL",
+    "Information"
+  ],
+  "rows": [
+    [
+      "Lifespan calculators or databases for purebred dogs",
+      "Institute of Canine Biology https://www.instituteofcaninebiology.org/lifespan.html",
+      "Charts listing the average life spans of various purebred dogs"
+    ],
+    [
+      "",
+      "AKC: How long do dogs live? https://www.akc.org/expert-advice/health/how-long-do-dogs-live/",
+      ""
+    ]
+  ],
+  "note": "同一图片下半部分还印有 TABLE 4（与小图 T0013 内容重复），此处只转录 TABLE 3 续表"
+}

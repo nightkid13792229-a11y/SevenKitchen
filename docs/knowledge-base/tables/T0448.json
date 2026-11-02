@@ -1,0 +1,57 @@
+{
+  "tableId": "T0448",
+  "caption": "Table 8-11. Standard accelerated stability tests and their conditions.*",
+  "columns": [
+    "Test",
+    "Conditions",
+    "Comments"
+  ],
+  "rows": [
+    [
+      "Ambient storage",
+      "Room temperature\nAtmospheric pressure",
+      "Too slow"
+    ],
+    [
+      "Light",
+      "Room temperature\nAtmospheric pressure",
+      "Different mechanism"
+    ],
+    [
+      "Metal catalysts",
+      "Room temperature\nAtmospheric pressure",
+      "More decomposition"
+    ],
+    [
+      "Weight-gain method",
+      "30 to 80°C\nAtmospheric pressure",
+      "Endpoint questionable"
+    ],
+    [
+      "Schaal oven",
+      "60 to 70°C\nAtmospheric pressure",
+      "Fewest problems"
+    ],
+    [
+      "Oxygen uptake",
+      "80 to 100°C\nAtmospheric pressure",
+      "Different mechanism"
+    ],
+    [
+      "Oxygen bomb",
+      "99°C\n65 to 115 psi O2",
+      "Different mechanism"
+    ],
+    [
+      "Active oxygen (AOM)",
+      "98°C\nAir bubbling",
+      "Different mechanism"
+    ],
+    [
+      "Rancimat",
+      "100 to 140°C",
+      "Endpoint questionable"
+    ]
+  ],
+  "note": "表脚注释：*Frankel EN. Trends in Food Science & Technology 1993; 4: 220-225. 同一 Test 对应多条 Conditions 时以换行合并到同一单元格。"
+}

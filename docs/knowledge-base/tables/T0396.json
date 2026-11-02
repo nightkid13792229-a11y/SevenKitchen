@@ -1,0 +1,196 @@
+{
+ "tableId": "T0396",
+ "caption": "Table 59-2. Key nutritional factors in selected commercial veterinary therapeutic foods for dogs with short bowel syndrome compared to recommended levels.*",
+ "columns": [
+  "",
+  "Protein digestibility (%)",
+  "Fat digestibility (%)",
+  "Carbohydrate digestibility (%)",
+  "Fat (%)",
+  "Fiber (%)**",
+  "Primary sources of fiber**",
+  "Lactose free (Yes/No)"
+ ],
+ "rows": [
+  [
+   "Dry foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "≥87",
+   "≥90",
+   "≥90",
+   "12-15",
+   "≤5",
+   "–",
+   "Yes"
+  ],
+  [
+   "Hill's Prescription Diet i/d Canine",
+   "92",
+   "93",
+   "94",
+   "14.1",
+   "2.7",
+   "Cellulose, beet pulp",
+   "Yes"
+  ],
+  [
+   "Iams Veterinary Formula Intestinal Low-Residue",
+   "na",
+   "na",
+   "na",
+   "10.7",
+   "2.1",
+   "Beet pulp",
+   "Yes"
+  ],
+  [
+   "Medi-Cal Gastro Formula",
+   "na",
+   "na",
+   "na",
+   "13.9",
+   "1.9",
+   "Flax meal, pea fiber",
+   "Yes"
+  ],
+  [
+   "Medi-Cal Low Fat Formula",
+   "na",
+   "na",
+   "na",
+   "6.6",
+   "5.2",
+   "Beet pulp, cellulose",
+   "Yes"
+  ],
+  [
+   "Purina Veterinary Diets EN GastroENteric Formula",
+   "84.5",
+   "91.4",
+   "94.4",
+   "12.6",
+   "1.5",
+   "–",
+   "Yes"
+  ],
+  [
+   "Royal Canin Veterinary Diet Digestive Low Fat LF 20",
+   "na",
+   "na",
+   "na",
+   "6.6",
+   "2.3",
+   "Beet pulp, cellulose",
+   "Yes"
+  ],
+  [
+   "Royal Canin Veterinary Diet Intestinal HE 28",
+   "na",
+   "na",
+   "na",
+   "22.0",
+   "1.6",
+   "Beet pulp, psyllium husks",
+   "Yes"
+  ],
+  [
+   "Moist foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "≥87",
+   "≥90",
+   "≥90",
+   "12-15",
+   "≤5",
+   "–",
+   "Yes"
+  ],
+  [
+   "Hill's Prescription Diet i/d Canine",
+   "88",
+   "94",
+   "93",
+   "14.9",
+   "1.0",
+   "Soy fiber",
+   "Yes"
+  ],
+  [
+   "Iams Veterinary Formula Intestinal Low-Residue",
+   "na",
+   "na",
+   "na",
+   "13.2",
+   "3.9",
+   "Beet pulp",
+   "Yes"
+  ],
+  [
+   "Medi-Cal Gastro Formula",
+   "na",
+   "na",
+   "na",
+   "11.7",
+   "1.0",
+   "Oat bran, guar gum, flax meal",
+   "No"
+  ],
+  [
+   "Medi-Cal Low Fat Formula",
+   "na",
+   "na",
+   "na",
+   "9.0",
+   "3.1",
+   "Cellulose, beet pulp, guar gum, carrageenan",
+   "Yes"
+  ],
+  [
+   "Purina Veterinary Diets EN GastroENteric Formula",
+   "85.1",
+   "95.6",
+   "92.2",
+   "13.8",
+   "0.9",
+   "Gum arabic",
+   "Yes"
+  ],
+  [
+   "Royal Canin Veterinary Diet Digestive Low Fat LF",
+   "na",
+   "na",
+   "na",
+   "6.9",
+   "3.0",
+   "Cellulose, guar gum",
+   "Yes"
+  ],
+  [
+   "Royal Canin Veterinary Diet Intestinal HE",
+   "na",
+   "na",
+   "na",
+   "11.8",
+   "1.4",
+   "Oat bran, guar gum, carrageenan, flaxseed",
+   "No"
+  ]
+ ]
+}

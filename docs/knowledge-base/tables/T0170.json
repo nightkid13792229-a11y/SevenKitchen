@@ -1,0 +1,47 @@
+{
+ "tableId": "T0170",
+ "caption": "Table 25-10. Modules for augmenting foods.",
+ "columns": [
+  "Products",
+  "Key features"
+ ],
+ "rows": [
+  [
+   "Arginine (various)",
+   "Available OTC as 500-mg capsules in most pharmacies and health food stores"
+  ],
+  [
+   "Corn syrup (various)",
+   "Mostly maltose, 2.9 kcal/ml"
+  ],
+  [
+   "Glutamine (various)",
+   "Available as powder from chemical catalogs and most pharmacies and health food stores; check label for concentration"
+  ],
+  [
+   "Medium-chain triglyceride oil (Mead Johnson)",
+   "Fractionated coconut oil, 8.3 kcal/ml"
+  ],
+  [
+   "Pectin (various)",
+   "Available OTC as a powder containing <1% crude protein and ~90% soluble fiber"
+  ],
+  [
+   "ProMod (Ross Laboratories)",
+   "23.6 g protein/100 kcal, 18.2 g glutamine/100 g powder, 1.48 kcal/ml reconstituted"
+  ],
+  [
+   "Psyllium fiber (FiberAll Regular, Rydelle Labs)",
+   "Available OTC as a powder containing 8% crude protein, 85% total dietary fiber, 72% soluble fiber"
+  ],
+  [
+   "Psyllium fiber (Metamucil Regular, Searle)",
+   "Available OTC as a powder containing 17% crude protein, 53% total dietary fiber, 44% soluble fiber"
+  ],
+  [
+   "Taurine (various)",
+   "Available OTC as 250-mg and 500-mg tablets in most pharmacies and health food stores"
+  ]
+ ],
+ "note": "Key: OTC = over the counter; to convert kcal to kJ, multiply kcal by 4.184."
+}

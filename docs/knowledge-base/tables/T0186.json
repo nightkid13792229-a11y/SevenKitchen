@@ -1,0 +1,46 @@
+{
+  "tableId": "T0186",
+  "caption": "Table 27-10. Selected commercial treats marketed for weight management in dogs and their respective levels of key nutritional factors (levels for maintenance of target weight (Table 27-4)).*",
+  "columns": [
+    "Recommended levels",
+    "Energy per treat (kcal) na**",
+    "Energy density (kcal ME/g)",
+    "Fat (%)",
+    "Protein (%)",
+    "Fiber (%)",
+    "Phosphorus (%)",
+    "Sodium (%)"
+  ],
+  "rows": [
+    [
+      "Recommended levels",
+      "na**",
+      "≤3.4",
+      "≤14",
+      "≥18",
+      "10-20",
+      "0.4-0.8",
+      "0.2-0.4"
+    ],
+    [
+      "Hill's Prescription Diet Canine Treats",
+      "13",
+      "2.9",
+      "7.3",
+      "14.6",
+      "17",
+      "0.45",
+      "0.11"
+    ],
+    [
+      "Royal Canin Veterinary Diet Canine Treats",
+      "14",
+      "3.4",
+      "6.3",
+      "10.9",
+      "6.8",
+      "0.47",
+      "0.19"
+    ]
+  ]
+}

@@ -1,0 +1,160 @@
+{
+ "tableId": "T0286",
+ "caption": "Table 40-8. Levels of key nutritional factors in selected veterinary therapeutic foods used to minimize recurrence of calcium oxalate urolithiasis in dogs compared to recommended levels.*",
+ "columns": [
+  "",
+  "Protein (%)",
+  "Calcium (%)**",
+  "Phosphorus (%)**",
+  "Sodium (%)",
+  "Magnesium (%)",
+  "Urinary pH***"
+ ],
+ "rows": [
+  [
+   "Dry foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "10-18",
+   "0.4-0.7",
+   "0.3-0.6",
+   "<0.3",
+   "0.04-0.15",
+   "7.1-7.5"
+  ],
+  [
+   "Hill's Prescription Diet u/d Canine",
+   "11.2",
+   "0.34",
+   "0.15",
+   "0.23",
+   "0.046",
+   "7.70"
+  ],
+  [
+   "Medi-Cal Urinary SO 13",
+   "16.7",
+   "1.0",
+   "0.6",
+   "1.3",
+   "0.2",
+   "5.5-6.0"
+  ],
+  [
+   "Purina Veterinary Diets NF KidNey Function",
+   "15.9",
+   "0.76",
+   "0.29",
+   "0.22",
+   "0.07",
+   "6.7-7.5"
+  ],
+  [
+   "Royal Canin Veterinary Diet Urinary SO 14",
+   "17.0",
+   "0.80",
+   "0.63",
+   "1.38",
+   "0.066",
+   "5.5-6.0"
+  ],
+  [
+   "",
+   "Protein (%)",
+   "Calcium (%)**",
+   "Phosphorus (%)**",
+   "Sodium (%)",
+   "Magnesium (%)",
+   "Urinary pH***"
+  ],
+  [
+   "Moist foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "10-18",
+   "0.4-0.7",
+   "0.3-0.6",
+   "<0.3",
+   "0.04-0.15",
+   "7.1-7.5"
+  ],
+  [
+   "Hill's Prescription Diet u/d Canine",
+   "13.3",
+   "0.35",
+   "0.17",
+   "0.28",
+   "0.049",
+   "7.4"
+  ],
+  [
+   "Medi-Cal Urinary SO",
+   "18.7",
+   "1.0",
+   "0.8",
+   "1.1",
+   "0.10",
+   "5.5-6.0"
+  ],
+  [
+   "Purina Veterinary Diets NF KidNey Function",
+   "16.5",
+   "0.50",
+   "0.30",
+   "0.24",
+   "0.08",
+   "6.7-7.5"
+  ],
+  [
+   "Royal Canin Veterinary Diet Urinary SO",
+   "18.5",
+   "0.97",
+   "0.86",
+   "1.45",
+   "0.059",
+   "5.5-6.0"
+  ],
+  [
+   "*Manufacturers' published values. Nutrients expressed as % dry matter, unless otherwise stated; moist foods are best; avoid foods with added vitamin C (ascorbic acid); avoid foods with high oxalate ingredients (Table 40-3).",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "**Calcium:phosphorus ratio should be in the range of 1.1:1 to 2:1.",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "***Protocols for measuring urinary pH may vary.",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ]
+ ],
+ "note": "原表分 Dry foods / Moist foods 两块，第二块重复印了一次列头（已作为单独一行保留，首列为空）；第一列表头在原图中为空白；末三行为表内脚注。同一页右侧另含 Table 40-9，已由 T0287 单独转录。"
+}

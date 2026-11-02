@@ -1,0 +1,42 @@
+{
+ "tableId": "T0148",
+ "caption": "Table 20-1. Important diseases for adult cats that have nutritional associations.",
+ "columns": [
+  "Disease/health concern",
+  "Incidence/prevalence/mortality/pet owner concern",
+  "References*"
+ ],
+ "rows": [
+  [
+   "Dental disease",
+   "Most prevalent disease; numerous associated health issues",
+   "Lund et al, 1999"
+  ],
+  [
+   "Obesity",
+   "Approximate 30% prevalence; numerous associated health issues; neutered and indoor cats are at increased risk",
+   "Lund et al, 1999"
+  ],
+  [
+   "FLUTD",
+   "0.85 to 1.5% per year incidence; 3% prevalence; most common reason cat owners seek veterinary care; kidney/urinary diseases are the most common cat owner concerns",
+   "Lawler et al, 1985; Lund et al, 1999; Willeberg, 1984; Westropp et al, 2005; Hostutler et al, 2005; Anon, Vet Economics, 2005; MAF, 2005"
+  ],
+  [
+   "Kidney disease",
+   "Second leading cause of non-accidental death; kidney/urinary diseases are the most common cat owner concerns",
+   "Polzin et al, 2005; Ross et al, 2006; MAF, 1998, 2005"
+  ],
+  [
+   "Cancer",
+   "Leading cause of non-accidental death",
+   "MAF, 1998"
+  ],
+  [
+   "Arthritis",
+   "Incidence in general population unknown, but 22% in cats over one year of age in one study; overweight cats are three times likelier to have arthritis",
+   "Godfrey, 2005; Scarlett and Donoghue, 1998"
+  ]
+ ],
+ "note": "图中下方另含 Table 20-2. Factors to consider during nutritional assessment.（5 列，属另一张表，未并入本表）"
+}

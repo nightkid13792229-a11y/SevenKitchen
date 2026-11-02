@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -11,10 +14,6 @@ import type { KnowledgeEntry } from '../types';
  *   1. **不写任何具体数值区间**。参考区间因实验室而异，写了就会被拿去套别人的报告。
  *      只写"这个指标反映什么、偏高偏低通常意味着什么、该结合什么一起看、下一步查什么"。
  *   2. **不做诊断**。只能说"提示/需要结合/建议由兽医判断"，不能下结论。
- *
- * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
- * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
- *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -41,7 +40,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'Merck 兽医手册 · 临床生化', chapter: 'ALT、AST 段落' },
-      { source: 'ACVIM 犬慢性肝炎诊断与治疗共识 2019', chapter: '临床病理学评估' },
+      { source: 'ACVIM 犬慢性肝炎共识 2019', chapter: '临床病理学评估' },
     ],
     sources: [
       {
@@ -57,9 +56,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-022',
@@ -82,7 +79,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'Merck 兽医手册 · 临床生化', chapter: 'ALP、GGT 段落' },
-      { source: 'ACVIM 犬慢性肝炎诊断与治疗共识 2019', chapter: '临床病理学评估' },
+      { source: 'ACVIM 犬慢性肝炎共识 2019', chapter: '临床病理学评估' },
     ],
     sources: [
       {
@@ -98,9 +95,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-023',
@@ -124,7 +119,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'Merck 兽医手册 · 肝功能检查', chapter: 'Total Serum Bile Acids in Hepatic Disease' },
-      { source: 'ACVIM 犬慢性肝炎诊断与治疗共识 2019', chapter: '胆汁酸与胆红素的诊断价值' },
+      { source: 'ACVIM 犬慢性肝炎共识 2019', chapter: '胆汁酸与胆红素的诊断价值' },
     ],
     sources: [
       {
@@ -140,9 +135,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-024',
@@ -166,7 +159,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'Merck 兽医手册 · 肝功能检查', chapter: 'Ammonia in Hepatic Disease' },
-      { source: 'ACVIM 犬慢性肝炎诊断与治疗共识 2019', chapter: '肝性脑病与门体分流评估' },
+      { source: 'ACVIM 犬慢性肝炎共识 2019', chapter: '肝性脑病与门体分流评估' },
     ],
     sources: [
       {
@@ -182,9 +175,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-025',
@@ -206,7 +197,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
       '如果动物出现持续呕吐、明显食欲下降、体重下降、腹部膨大或眼睛/牙龈发黄，请尽快就医，不要只等化验单。',
     ],
     citations: [
-      { source: 'ACVIM 犬慢性肝炎诊断与治疗共识 2019', chapter: '诊断：临床病理、影像与肝活检的整合' },
+      { source: 'ACVIM 犬慢性肝炎共识 2019', chapter: '诊断：临床病理、影像与肝活检的整合' },
       { source: 'Merck 兽医手册 · 临床生化', chapter: '肝功能相关指标段落' },
     ],
     sources: [
@@ -223,9 +214,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-026',
@@ -265,9 +254,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-027',
@@ -306,9 +293,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-028',
@@ -348,9 +333,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-029',
@@ -389,9 +372,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-030',
@@ -425,10 +406,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'TRIAGE',
-    urgency: 'SOON',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-031',
@@ -468,9 +446,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-032',
@@ -510,9 +486,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-033',
@@ -552,9 +526,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-034',
@@ -595,9 +567,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-035',
@@ -637,9 +607,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'HIGH',
     questionType: 'INTERPRET',
-    riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-036',
@@ -662,7 +630,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
       '如果动物出现休息时呼吸急促、咳嗽、舌色发紫、突然虚弱或晕倒，请**立即就医**。',
     ],
     citations: [
-      { source: 'ACVIM 心血管–肾脏轴疾病共识 2015', chapter: '心脏生物标志物（NT-proBNP、cTnI）' },
+      { source: 'ACVIM 心血管-肾脏轴疾病共识 2015', chapter: '心脏生物标志物（NT-proBNP、cTnI）' },
       { source: 'Merck 兽医手册 · 临床生化', chapter: 'CK 段落' },
       { source: '小动物临床营养学（第5版）', chapter: '第36章 心血管疾病：临床评估' },
     ],
@@ -685,9 +653,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-037',
@@ -710,7 +676,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'Merck 兽医手册 · 临床生化', chapter: '急性期蛋白与炎症指标段落' },
-      { source: 'ACVIM 犬慢性肠病共识 2022', chapter: '实验室指标与炎症评估' },
+      { source: 'ACVIM 犬慢性肠病现状综述 2022', chapter: '实验室指标与炎症评估' },
     ],
     sources: [
       {
@@ -726,9 +692,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-038',
@@ -752,7 +716,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'Merck 兽医手册 · 临床生化', chapter: '微量元素与矿物质段落' },
-      { source: 'ACVIM 犬慢性肝炎诊断与治疗共识 2019', chapter: '铜相关性慢性肝炎' },
+      { source: 'ACVIM 犬慢性肝炎共识 2019', chapter: '铜相关性慢性肝炎' },
       { source: '小动物临床营养学（第5版）', chapter: '皮肤与被毛疾病中的微量元素' },
     ],
     sources: [
@@ -774,9 +738,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-039',
@@ -816,9 +778,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'LOW',
     questionType: 'INTERPRET',
-    riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-040',
@@ -857,9 +817,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-041',
@@ -898,9 +856,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'INTERPRET',
-    riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-042',
@@ -940,8 +896,6 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     priority: 'MEDIUM',
     questionType: 'PREVENTION',
-    riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'APPROVED',
   },
 ];

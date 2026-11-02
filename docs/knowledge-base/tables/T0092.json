@@ -1,0 +1,31 @@
+{
+ "tableId": "T0092",
+ "caption": "Table 11-4. Sampling procedures for foodborne illnesses.",
+ "columns": [
+  "Sampling procedures for foodborne illnesses"
+ ],
+ "rows": [
+  [
+   "Collect samples for toxicologic and microbiologic studies as separate samples and label them accordingly."
+  ],
+  [
+   "Collect several samples from the same source, e.g., different areas of the food bag, stool specimen."
+  ],
+  [
+   "Treat samples as though they were being prepared for a legal case by following the rules of evidence."
+  ],
+  [
+   "Collect duplicate samples or split samples so that the veterinarian can retain one sample and the other can be submitted to the laboratory."
+  ],
+  [
+   "Collect samples for microbiologic testing aseptically using sterile gloves, instruments and containers."
+  ],
+  [
+   "Use watertight sample containers, preferably with screw-type lids."
+  ],
+  [
+   "Label all sample containers with an accurate and complete description of the contents, e.g., submitter's name, client's name, date and time collected, product name, etc. Submit other sample information and any supporting descriptions with the samples."
+  ]
+ ],
+ "note": "同一张图下半部分还有 Table 11-5（另一个独立的单列表格），此处只转录 Table 11-4。"
+}

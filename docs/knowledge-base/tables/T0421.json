@@ -1,0 +1,90 @@
+{
+  "tableId": "T0421",
+  "caption": "Table 66-4. Enzyme preparations used in patients with exocrine pancreatic insufficiency.*",
+  "columns": [
+    "Products (manufacturers)",
+    "Lipase",
+    "Protease",
+    "Amylase",
+    "Formulation"
+  ],
+  "rows": [
+    [
+      "Viokase-V Powder (Fort Dodge)",
+      "71,400",
+      "388,000",
+      "460,000",
+      "Powder"
+    ],
+    [
+      "Viokase-V Tablets (Fort Dodge)",
+      "9,000",
+      "57,000",
+      "64,000",
+      "Tablets"
+    ],
+    [
+      "Viokase Powder (Axcan Scandipharm)",
+      "16,800",
+      "70,000",
+      "70,000",
+      "Powder"
+    ],
+    [
+      "Pancrezyme Powder (Daniels Pharmaceuticals)",
+      "71,400",
+      "388,000",
+      "460,000",
+      "Powder"
+    ],
+    [
+      "Pancrezyme Tablets (Daniels Pharmaceuticals)",
+      "9,000",
+      "57,000",
+      "64,000",
+      "Tablets"
+    ],
+    [
+      "Pancrease MT16 Capsules (McNeil)",
+      "18,000",
+      "18,000",
+      "48,000",
+      "Enteric-coated microtablets"
+    ],
+    [
+      "Pancrease MT20 Capsules (McNeil)",
+      "20,000",
+      "44,000",
+      "56,000",
+      "Enteric-coated microtablets"
+    ],
+    [
+      "Pancreatic Plus Powder (Butler)",
+      "71,400",
+      "388,000",
+      "460,000",
+      "Powder"
+    ],
+    [
+      "Pancreatic Plus Tablets (Butler)",
+      "9,000",
+      "57,000",
+      "64,000",
+      "Tablets"
+    ],
+    [
+      "Pancrelipase Capsules (Mutual)",
+      "18,000",
+      "18,000",
+      "48,000",
+      "Enteric-coated pellets"
+    ],
+    [
+      "Lypex Pancreatic Enzyme Capsules (Vio-Vet)",
+      "30,000",
+      "18,750",
+      "1,200",
+      "Capsules"
+    ]
+  ]
+}

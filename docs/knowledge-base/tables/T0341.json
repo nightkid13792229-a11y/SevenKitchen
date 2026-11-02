@@ -1,0 +1,30 @@
+{
+  "tableId": "T0341",
+  "caption": "Table 1. Staging feline dental resorptive lesions.",
+  "columns": [
+    "Stage",
+    "Description"
+  ],
+  "rows": [
+    [
+      "Stage I",
+      "Lesion extends into cementum or enamel only"
+    ],
+    [
+      "Stage II",
+      "Lesion extends into the dentin"
+    ],
+    [
+      "Stage III",
+      "Lesion extends into the pulp cavity"
+    ],
+    [
+      "Stage IV",
+      "Extensive structural damage to tooth, root or both"
+    ],
+    [
+      "Stage V",
+      "Root retention with complete loss of crown"
+    ]
+  ]
+}

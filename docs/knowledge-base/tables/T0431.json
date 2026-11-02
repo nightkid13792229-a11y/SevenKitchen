@@ -1,0 +1,64 @@
+{
+  "tableId": "T0431",
+  "caption": "Table 68-5. Causes of extrahepatic bile duct obstruction.*",
+  "columns": [
+    ""
+  ],
+  "rows": [
+    [
+      "Cholelithiasis"
+    ],
+    [
+      "Cholecystitis (choledochitis)"
+    ],
+    [
+      "Neoplasia"
+    ],
+    [
+      "Bile duct adenocarcinoma"
+    ],
+    [
+      "Pancreatic adenocarcinoma"
+    ],
+    [
+      "Malignant lymphoma"
+    ],
+    [
+      "Local tumor invasion"
+    ],
+    [
+      "Malformation (polycystic liver disease)"
+    ],
+    [
+      "Parasitic (trematode infection)"
+    ],
+    [
+      "Extrinsic compression"
+    ],
+    [
+      "Lymph nodes"
+    ],
+    [
+      "Pancreatic mass"
+    ],
+    [
+      "Entrapment in diaphragmatic hernia"
+    ],
+    [
+      "Fibrosis or stricture"
+    ],
+    [
+      "Blunt trauma"
+    ],
+    [
+      "Peritonitis"
+    ],
+    [
+      "Pancreatitis"
+    ],
+    [
+      "Iatrogenic (postsurgical)"
+    ]
+  ],
+  "note": "原表为单列清单、无表头行（首列为病因条目，含缩进子项），故列名为空字符串。"
+}

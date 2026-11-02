@@ -1,0 +1,150 @@
+{
+ "tableId": "T0333",
+ "caption": "Table 46-26. Comparison of key nutritional factors in selected commercial veterinary therapeutic foods for decreasing risk of recurrence of calcium oxalate uroliths in cats.*",
+ "columns": [
+  "Moist foods**",
+  "Mg (%)",
+  "P (%)",
+  "Ca (%)",
+  "Protein (%)",
+  "Na (%)",
+  "Urinary pH"
+ ],
+ "rows": [
+  [
+   "Recommended levels",
+   "0.07-0.14",
+   "0.5-1.0",
+   "0.6-1.0",
+   "≥32",
+   "0.3-0.6",
+   "≥6.2"
+  ],
+  [
+   "Hill's Prescription Diet c/d Multicare with Chicken Feline",
+   "0.052",
+   "0.68",
+   "0.72",
+   "43.8",
+   "0.32",
+   "6.35"
+  ],
+  [
+   "Hill's Prescription Diet c/d Multicare with Seafood Feline",
+   "0.054",
+   "0.71",
+   "0.62",
+   "44.8",
+   "0.33",
+   "6.4"
+  ],
+  [
+   "Iams Veterinary Formula Urinary O - Moderate pH/O",
+   "0.085",
+   "0.77",
+   "1.11",
+   "43.4",
+   "0.34",
+   "na"
+  ],
+  [
+   "Medi-Cal Urinary SO in Gel",
+   "na",
+   "1.2",
+   "1.2",
+   "43.5",
+   "1.1",
+   "6.4"
+  ],
+  [
+   "Purina Veterinary Diets UR Urinary St/Ox Feline Formula",
+   "0.07",
+   "0.97",
+   "0.96",
+   "50.6",
+   "0.62",
+   "6.0-6.4"
+  ],
+  [
+   "Royal Canin Veterinary Diet Urinary SO in Gel",
+   "0.097",
+   "1.36",
+   "1.02",
+   "41.3",
+   "1.02",
+   "6.0-6.3"
+  ],
+  [
+   "Dry foods",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Recommended levels",
+   "0.07-0.14",
+   "0.5-1.0",
+   "0.6-1.0",
+   "≥32",
+   "0.3-0.6",
+   "≥6.2"
+  ],
+  [
+   "Hill's Prescription Diet c/d Multicare Feline",
+   "0.06",
+   "0.65",
+   "0.74",
+   "36.1",
+   "0.35",
+   "6.3"
+  ],
+  [
+   "Hill's Prescription Diet c/d Multicare with Chicken Feline",
+   "0.061",
+   "0.65",
+   "0.76",
+   "34.6",
+   "0.33",
+   "6.3"
+  ],
+  [
+   "Iams Veterinary Formula Urinary O - Moderate pH/O",
+   "0.098",
+   "0.91",
+   "1.24",
+   "36.5",
+   "0.46",
+   "na"
+  ],
+  [
+   "Medi-Cal Urinary SO",
+   "na",
+   "0.9",
+   "1.1",
+   "34.6",
+   "1.4",
+   "6.2"
+  ],
+  [
+   "Purina Veterinary Diets UR Urinary St/Ox Feline Formula",
+   "0.07",
+   "1.08",
+   "1.1",
+   "44.9",
+   "1.17",
+   "6.0-6.4"
+  ],
+  [
+   "Royal Canin Veterinary Diet Urinary SO 33",
+   "0.065",
+   "0.88",
+   "0.96",
+   "37.1",
+   "1.45",
+   "6.0-6.3"
+  ]
+ ]
+}

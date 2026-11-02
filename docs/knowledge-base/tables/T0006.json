@@ -1,0 +1,30 @@
+{
+  "tableId": "T0006",
+  "caption": "TABLE 1 Proposed Canine Life Stage Definitions",
+  "columns": [
+    "Stage",
+    "Definition (Length of Time)"
+  ],
+  "rows": [
+    [
+      "Puppy",
+      "Birth to cessation of rapid growth (~6–9 mo, varying with breed and size)"
+    ],
+    [
+      "Young adult",
+      "Cessation of rapid growth to completion of physical and social maturation, which occurs in most dogs by 3 to 4 yr of age"
+    ],
+    [
+      "Mature adult",
+      "Completion of physical and social maturation until the last 25% of estimated lifespan (breed and size dependent)"
+    ],
+    [
+      "Senior",
+      "The last 25% of estimated lifespan through end of life"
+    ],
+    [
+      "End of life",
+      "Terminal stage (depends on the specific pathologies)"
+    ]
+  ]
+}

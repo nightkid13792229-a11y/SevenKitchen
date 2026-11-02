@@ -1,0 +1,20 @@
+{
+  "tableId": "T0397",
+  "caption": "Table 59-3. Key nutritional factors in selected commercial veterinary therapeutic foods for cats with short bowel syndrome compared to recommended levels.*",
+  "columns": ["", "Protein digestibility (%)", "Fat digestibility (%)", "Carbohydrate digestibility (%)", "Fat (%)", "Fiber (%)**", "Primary sources of fiber**", "Lactose free (Yes/No)"],
+  "rows": [
+    ["Dry foods", "", "", "", "", "", "", ""],
+    ["Recommended levels", "≥87", "≥90", "≥90", "15–25", "≤5", "—", "Yes"],
+    ["Hill's Prescription Diet i/d Feline", "88", "92", "90", "20.2", "2.8", "Cellulose, beet pulp", "Yes"],
+    ["Iams Veterinary Formula Intestinal Low-Residue", "na", "na", "na", "13.7", "1.8", "Beet pulp", "Yes"],
+    ["Medi-Cal Hypoallergenic/Gastro", "na", "na", "na", "11.5", "3.1", "Beet pulp, rice bran", "Yes"],
+    ["Purina Veterinary Diets EN GastroENteric Formula", "94.0", "93.1", "79.7", "18.4", "1.3", "Cellulose", "Yes"],
+    ["Royal Canin Veterinary Diet Intestinal HE 30", "na", "na", "na", "23.7", "5.8", "Cellulose, beet pulp", "Yes"],
+    ["Moist foods", "", "", "", "", "", "", ""],
+    ["Recommended levels", "≥87", "≥90", "≥90", "15–25", "≤5", "—", "Yes"],
+    ["Hill's Prescription Diet i/d Feline", "91", "89", "91", "24.1", "2.4", "Beet pulp, cellulose, guar gum", "Yes"],
+    ["Iams Veterinary Formula Intestinal Low-Residue", "na", "na", "na", "11.7", "3.7", "Beet pulp", "Yes"],
+    ["Medi-Cal Hypoallergenic/Gastro", "na", "na", "na", "35.9", "1.2", "Cellulose, carrageenan, guar gum, flax meal", "Yes"],
+    ["Medi-Cal Sensitivity CR", "na", "na", "na", "35.1", "2.5", "Cellulose, guar gum, carrageenan, carob gum", "Yes"]
+  ]
+}

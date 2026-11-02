@@ -1,0 +1,44 @@
+{
+ "num": "35-2",
+ "caption": "Table 35-2. Laboratory deficits and tentative clinical correlates in age-related cognitive dysfunction syndrome in dogs.",
+ "page": 3,
+ "columns": [
+  "Laboratory deficit",
+  "Clinical signs"
+ ],
+ "rows": [
+  [
+   "Impaired spatial learning",
+   "Disorientation in space, time"
+  ],
+  [
+   "Impaired spatial memory",
+   "Disorientation in familiar surroundings"
+  ],
+  [
+   "Impaired oddity and discrimination learning",
+   "Impaired symbolic recognition, object permanence"
+  ],
+  [
+   "Executive dysfunction",
+   "Deterioration of social skills, increased house soiling"
+  ],
+  [
+   "Disrupted sleep-wake cycle",
+   "Wandering at night"
+  ],
+  [
+   "Altered locomotion in open field",
+   "Altered activity levels"
+  ]
+ ],
+ "tableId": "T0494",
+ "doc": "sacn5/chapters/SACN5_35.pdf",
+ "method": "视觉",
+ "verify": {
+  "numbers": 0,
+  "found": 0,
+  "status": "通过",
+  "misses": []
+ }
+}

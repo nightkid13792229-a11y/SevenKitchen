@@ -1,0 +1,71 @@
+{
+ "num": "15-3",
+ "caption": "Table 15-3. Nutrient comparison (% as fed) between bitch's milk and cow's milk.*",
+ "page": 3,
+ "columns": [
+  "Nutrients",
+  "Canine milk",
+  "Bovine milk"
+ ],
+ "rows": [
+  [
+   "Total protein",
+   "7.5",
+   "3.3"
+  ],
+  [
+   "Arginine",
+   "0.42",
+   "0.13"
+  ],
+  [
+   "Isoleucine",
+   "0.38",
+   "0.21"
+  ],
+  [
+   "Leucine",
+   "0.98",
+   "0.36"
+  ],
+  [
+   "Lysine",
+   "0.37",
+   "0.27"
+  ],
+  [
+   "Valine",
+   "0.46",
+   "0.18"
+  ],
+  [
+   "Total fat",
+   "9.5",
+   "3.5"
+  ],
+  [
+   "Linoleic acid (C18:2)",
+   "11.7",
+   "2.5"
+  ],
+  [
+   "Lactose",
+   "3.4",
+   "5.0"
+  ],
+  [
+   "Gross energy (kcal/100 g)",
+   "146",
+   "74"
+  ]
+ ],
+ "tableId": "T0490",
+ "doc": "sacn5/chapters/SACN5_15.pdf",
+ "method": "视觉",
+ "verify": {
+  "numbers": 23,
+  "found": 23,
+  "status": "通过",
+  "misses": []
+ }
+}

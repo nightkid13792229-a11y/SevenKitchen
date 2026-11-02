@@ -1,0 +1,107 @@
+{
+  "tableId": "T0274",
+  "caption": "Table 39-3. Purine content of selected foods.",
+  "columns": [
+    "Foods to avoid (high purine concentration)",
+    "Foods to use sparingly (moderately high purine concentration)",
+    "Foods that can be fed (negligible purine concentration)"
+  ],
+  "rows": [
+    [
+      "Anchovies",
+      "Asparagus",
+      "Breads (whole grain cereal products)"
+    ],
+    [
+      "Brain",
+      "Cauliflower",
+      "Butter and fats"
+    ],
+    [
+      "Clams",
+      "Fish*",
+      "Cheese"
+    ],
+    [
+      "Goose",
+      "Legumes (beans and peas)",
+      "Eggs"
+    ],
+    [
+      "Gravies",
+      "Lentils",
+      "Fruits and fruit juices"
+    ],
+    [
+      "Heart",
+      "Meats",
+      "Gelatin"
+    ],
+    [
+      "Kidney",
+      "Mushrooms",
+      "Milk"
+    ],
+    [
+      "Liver",
+      "Spinach",
+      "Nuts"
+    ],
+    [
+      "Mackerel",
+      "",
+      "Refined cereals"
+    ],
+    [
+      "Meat extracts including bouillon",
+      "",
+      "Sugars"
+    ],
+    [
+      "Mussels",
+      "",
+      "Vegetable soups"
+    ],
+    [
+      "Oysters",
+      "",
+      "Cream soups"
+    ],
+    [
+      "Salmon",
+      "",
+      "Vegetables**"
+    ],
+    [
+      "Sardines",
+      "",
+      "Water"
+    ],
+    [
+      "Scallops",
+      "",
+      ""
+    ],
+    [
+      "Shrimp",
+      "",
+      ""
+    ],
+    [
+      "Sweetbreads",
+      "",
+      ""
+    ],
+    [
+      "Tuna",
+      "",
+      ""
+    ],
+    [
+      "Yeast (baker's and brewer's)",
+      "",
+      ""
+    ]
+  ],
+  "note": "三列均为无表头的清单，条目数不同，较短列以空字符串补齐；表下 **Except those listed in the first/second column 两条脚注未转录。"
+}

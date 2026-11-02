@@ -1,0 +1,37 @@
+{
+ "tableId": "T0104",
+ "caption": "Table 13-6. Feeding plan summary for young adult dogs.",
+ "columns": [
+  "Recommendation"
+ ],
+ "rows": [
+  [
+   "1. Select a food or foods with the best levels of key nutritional factors (Table 13-4); for foods not in Table 13-4, contact the manufacturer for key nutritional factor content."
+  ],
+  [
+   "2. The selected food should also be approved or meet requirements established by a credible regulatory agency (e.g., AAFCO)."
+  ],
+  [
+   "3. Determine the preferred feeding method (Table 13-5); when the correct amount of food is fed, meal-restricted feeding is least likely to result in obesity."
+  ],
+  [
+   "4. For food-restricted meal feeding, estimate the initial quantity of food based on DER calculation (DER ÷ food energy density)."
+  ],
+  [
+   "5. Body condition and other assessment criteria will determine the DER. DER is calculated by multiplying RER by an appropriate factor (Table 5-2). Remember, DER calculations should be used as guidelines, starting points and estimates for individual dogs and not as absolute requirements. Neutered adult = 1.6 x RER. Intact adult = 1.8 x RER. Inactive/obese-prone adult = 1.2 to 1.4 x RER (Most pet dogs are relatively inactive). Working adult = 2.0 to 8.0 x RER (Chapter 18)."
+  ],
+  [
+   "6. Monitor body weight, body condition and general health. These parameters are used to refine the amount to feed."
+  ],
+  [
+   "Key: AAFCO = Association of American Feed Control Officials, DER = daily energy requirement, RER = resting energy requirement."
+  ]
+ ],
+ "note": "表格位于第270页左栏（金色表头带，表题下为编号条目）。同页 Box 13-5 右侧另有 Table 1. Factors associated with coprophagy，属另一张表，未并入本记录。",
+ "verify": {
+  "numbers": 21,
+  "found": 21,
+  "misses": []
+ },
+ "method": "视觉"
+}

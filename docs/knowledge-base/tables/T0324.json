@@ -1,0 +1,36 @@
+{
+ "tableId": "T0324",
+ "caption": "Table 46-18. Oxalate content of selected human foods.*",
+ "columns": [
+  "Product categories",
+  "Moderate to high oxalate",
+  "Low oxalate"
+ ],
+ "rows": [
+  [
+   "Milk and dairy products",
+   "–",
+   "Milk**\nCheese**"
+  ],
+  [
+   "Meats",
+   "Liver\nSardines",
+   "Beef\nBacon\nHam\nLamb\nShellfish\nPoultry"
+  ],
+  [
+   "Fruits",
+   "Apples (green)\nApricots\nBananas\nCherries\nBerries (most)\nOranges/tangerines\nPears\nPeel (lemon/lime/orange)\nPineapple",
+   "Apples (red)\nCoconut (fresh)\nCranberries\nMelons\nPeaches"
+  ],
+  [
+   "Vegetables",
+   "Beans\nCarrots\nCelery\nGreen beans\nGreen peppers\nGreens (collards,\nmustard, turnips)\nPeas\nSoybean products\nSpinach\nSweet potatoes\nTofu\nTomatoes",
+   "Asparagus\nAvocado\nBroccoli**\nCabbage\nCorn (sweet)\nCucumber"
+  ],
+  [
+   "Breads/\ngrains/nuts",
+   "Bagels\nBread (whole wheat)\nCornbread\nFig newtons\nFruitcake\nGrits\nOatmeal\nMost nuts\nRice (brown)",
+   "Bread (white)\nTortilla (corn)\nPasta (boiled)\nPopped popcorn\nRice (white)"
+  ]
+ ]
+}

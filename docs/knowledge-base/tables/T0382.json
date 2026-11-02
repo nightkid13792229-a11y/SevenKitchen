@@ -1,0 +1,18 @@
+{
+  "tableId": "T0382",
+  "caption": "Table 56-2. Key nutritional factors for dogs and cats with acute gastroenteritis or enteritis.*",
+  "columns": [
+    "Factors",
+    "Recommended levels"
+  ],
+  "rows": [
+    ["Sodium", "0.3 to 0.5%"],
+    ["Chloride", "0.5 to 1.3%"],
+    ["Potassium", "0.8 to 1.1%"],
+    ["Fat", "12 to 15% for dogs (highly digestible foods)\n15 to 25% for cats (highly digestible foods)\n8 to 12% for dogs (increased-fiber foods)\n9 to 18% for cats (increased-fiber foods)"],
+    ["Energy density", "4.0 to 4.5 kcal/g (16.7 to 18.8 kJ/g) (highly digestible foods)\n≥3.2 kcal/g (≥13.4 kJ/g) for dogs and ≥3.4 kcal/g (≥14.2 kJ/g) for cats (increased-fiber foods)"],
+    ["Fiber", "≤5% in highly digestible foods (mixed fiber sources are best)\n7 to 15% in fiber-enhanced foods (insoluble fiber sources are best)"],
+    ["Digestibility", "≥87% for protein and ≥90% for fat and carbohydrate (highly digestible foods)\n≥80% for protein and fat and ≥90% for carbohydrate (fiber-enhanced foods)"],
+    ["*Nutrient levels are on a dry matter basis.", ""]
+  ]
+}

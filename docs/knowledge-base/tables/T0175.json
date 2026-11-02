@@ -1,0 +1,63 @@
+{
+  "tableId": "T0175",
+  "caption": "Table 26-5. Drug incompatibility with B-complex vitamins.*",
+  "columns": [
+    "Known incompatible",
+    "Suspected incompatible"
+  ],
+  "rows": [
+    [
+      "2-PAM (pralidoxime chloride)",
+      "4-methylpyrazole"
+    ],
+    [
+      "Aminophylline",
+      "Adriamycin"
+    ],
+    [
+      "Asparaginase",
+      "Carboplatin"
+    ],
+    [
+      "Bicarbonate",
+      "Cisplatin"
+    ],
+    [
+      "Calcium versenate",
+      "Dobutamine"
+    ],
+    [
+      "Cefazolin",
+      "Dopamine"
+    ],
+    [
+      "Diazepam",
+      "Fentanyl"
+    ],
+    [
+      "Digoxin (injectable)",
+      "Propranolol"
+    ],
+    [
+      "Mannitol",
+      ""
+    ],
+    [
+      "Nitropresside",
+      ""
+    ],
+    [
+      "Penicillin G",
+      ""
+    ],
+    [
+      "Quinidine",
+      ""
+    ],
+    [
+      "*Plumb DC. Veterinary Drug Handbook, 3rd ed. White Bear, MN: Pharma Veterinary Publishing, 1999.",
+      ""
+    ]
+  ],
+  "note": "表末 * 开头的文献出处为表格内脚注，放在第一列。"
+}

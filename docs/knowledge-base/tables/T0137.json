@@ -1,0 +1,36 @@
+{
+  "tableId": "T0137",
+  "caption": "Table 18-13. Feeding plan summary for working and sporting dogs.",
+  "columns": [
+    "Activity",
+    "Feeding plan"
+  ],
+  "rows": [
+    ["Sprint activity", "Feed a food with the appropriate amounts of key nutritional factors for this type of activity (Table 18-12)."],
+    ["", "Feed the right amount of food (DER = 1.6 to 2 x RER)."],
+    ["", "Check body condition frequently to assess energy balance and food dose."],
+    ["", "Time meals and snacks correctly. Provide food or snack >four hours before activity; offer high-carbohydrate snack within 30 minutes after racing to enhance glycogen repletion."],
+    ["", "Allow free access to water except just before racing."],
+    ["", "Monitor hydration status frequently."],
+    ["Intermediate activity (working/hunting)", "Feed a food with the appropriate amounts of key nutritional factors for this type of activity (Table 18-12)."],
+    ["", "Feed the right amount of food. The food dose will be highly variable depending on duration and frequency of exercise (DER = 2 to 5 x RER) and should be calculated after assessing the amount of exercise performed."],
+    ["", "Check body condition frequently to assess energy balance and food dose."],
+    ["", "Time meals and snacks correctly. Feed after exercise or >four hours before exercise. Snacks should be given during exercise or at the end of breaks <15 minutes before resuming exercise."],
+    ["", "Allow free access to water."],
+    ["", "Monitor hydration status frequently."],
+    ["Intermediate athletes (training)", "Feed the same as for work (See above)."],
+    ["", "Allow adequate time to adapt to new food (>six weeks) before seasonal work."],
+    ["", "Begin training and new food at least six weeks before seasonal work begins."],
+    ["", "Allow free access to water."],
+    ["Intermediate athletes (idle)", "Feed as typical adult dog (Chapter 13)."],
+    ["", "Feed a performance food (smaller amount) or typical adult maintenance food as needed to maintain optimal body condition."],
+    ["", "Allow free access to water."],
+    ["Endurance athletes", "Feed a food with the appropriate amounts of key nutritional factors for this type of activity (Table 18-12)."],
+    ["", "Feed the right amount of food. The food dose will be highly variable depending on duration and frequency of exercise (DER = 5 to 11 x RER) and should be calculated after assessing amount of exercise performed."],
+    ["", "Check body condition frequently to assess energy balance and food dose."],
+    ["", "Time meals and snacks correctly. Feed after exercise or >four hours before exercise. If snacks are used they should be given during or after exercise."],
+    ["", "Allow free access to water."],
+    ["", "Monitor hydration status frequently."],
+    ["Key", "DER = daily energy requirement, RER = resting energy requirement."]
+  ]
+}

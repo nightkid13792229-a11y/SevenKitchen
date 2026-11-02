@@ -1,3 +1,6 @@
+
+
+
 import type { KnowledgeEntry } from '../types';
 
 /**
@@ -10,6 +13,7 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'growth-001',
     domain: 'GROWTH',
+    questionType: 'NUTRITION',
     title: '幼犬能量需求特点：随生长阶段递减，按 RER 倍数估算',
     keywords: ['能量需求', '每日能量需求', 'DER', 'RER', 'energy requirement', '热量', 'growth energy'],
     applicableTo: ['puppy', 'growth'],
@@ -30,13 +34,19 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第17章 幼犬生长', note: '表17-2 生长犬能量摄入初始估算；正文 Energy 节' },
-      { source: 'FEDIAF 犬猫营养指南', chapter: '生长阶段', note: '7.2.4 表 VII-8b 犬生长期平均能量需求公式' },
+      { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '生长阶段', note: '7.2.4 表 VII-8b 犬生长期平均能量需求公式' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第17章 幼犬生长' },
+      { sourceId: 'FEDIAF-2025', locator: '生长阶段' },
     ],
     priority: 'HIGH',
   },
   {
     id: 'growth-002',
     domain: 'GROWTH',
+    questionType: 'NUTRITION',
     title: '蛋白质需求：生长需要高蛋白，且氨基酸谱与成年犬不同',
     keywords: ['蛋白质', 'protein', '氨基酸', '精氨酸', 'arginine', '粗蛋白', 'crude protein', '生长蛋白'],
     applicableTo: ['puppy', 'growth'],
@@ -56,14 +66,21 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第17章 幼犬生长', note: '表17-1 关键营养因子；正文 Protein 节' },
-      { source: 'FEDIAF 犬猫营养指南', chapter: '生长阶段', note: '表 III-3a/3b 犬全价粮推荐营养水平（早期/后期生长）' },
+      { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '生长阶段', note: '表 III-3a/3b 犬全价粮推荐营养水平（早期/后期生长）' },
       { source: 'NRC《犬猫营养需要》(2006)', chapter: '生长', note: '17.5% DM 最低推荐允许量等数值经 SACN5 第17章转引（NRC 原书表15-3 幼犬断奶后生长 RA）' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第17章 幼犬生长' },
+      { sourceId: 'FEDIAF-2025', locator: '生长阶段' },
+      { sourceId: 'NRC-2006', locator: '生长' },
     ],
     priority: 'HIGH',
   },
   {
     id: 'growth-003',
     domain: 'GROWTH',
+    questionType: 'NUTRITION',
     title: '脂肪与 DHA：支持能量密度、必需脂肪酸与神经发育',
     keywords: ['脂肪', 'fat', 'DHA', 'EPA', 'omega-3', '亚油酸', 'linoleic acid', '神经发育', '可训练性', '鱼油'],
     applicableTo: ['puppy', 'growth'],
@@ -84,13 +101,20 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第17章 幼犬生长', note: '正文 Fat 节、表17-1' },
       { source: '小动物临床营养学（第5版）', chapter: '第16章 新生幼犬', note: '母乳脂肪与 DHA/EPA 相关内容（表16-4）' },
-      { source: 'FEDIAF 犬猫营养指南', chapter: '生长阶段', note: '表 III-3a 犬全价粮脂肪与脂肪酸最低水平' },
+      { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '生长阶段', note: '表 III-3a 犬全价粮脂肪与脂肪酸最低水平' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第17章 幼犬生长' },
+      { sourceId: 'SACN5', locator: '第16章 新生幼犬' },
+      { sourceId: 'FEDIAF-2025', locator: '生长阶段' },
     ],
     priority: 'MEDIUM',
   },
   {
     id: 'growth-004',
     domain: 'GROWTH',
+    questionType: 'NUTRITION',
     title: '钙磷需求与钙磷比：按成年体型分档',
     keywords: ['钙', '钙磷比', 'phosphorus', 'calcium', 'Ca:P ratio', '骨骼', '矿物质', '大型犬钙'],
     applicableTo: ['puppy', 'growth', 'small-breed-puppy', 'medium-breed-puppy', 'large-breed-puppy', 'giant-breed-puppy'],
@@ -112,13 +136,20 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第17章 幼犬生长', note: '表17-1 关键营养因子；正文 Calcium and Phosphorus 节' },
       { source: '小动物临床营养学（第5版）', chapter: '第16章 新生幼犬', note: '母乳钙磷水平（表16-4）' },
-      { source: 'FEDIAF 犬猫营养指南', chapter: '生长阶段', note: '表 III-3a 犬全价粮钙磷最低水平与脚注 a/b' },
+      { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '生长阶段', note: '表 III-3a 犬全价粮钙磷最低水平与脚注 a/b' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第17章 幼犬生长' },
+      { sourceId: 'SACN5', locator: '第16章 新生幼犬' },
+      { sourceId: 'FEDIAF-2025', locator: '生长阶段' },
     ],
     priority: 'HIGH',
   },
   {
     id: 'growth-005',
     domain: 'GROWTH',
+    questionType: 'NUTRITION',
     title: '大型/巨型犬幼犬：过量钙与能量导致发育性骨科病（DOD）',
     keywords: ['发育性骨科病', 'DOD', 'developmental orthopedic disease', '髋关节发育不良', 'hip dysplasia', '大型犬', '巨型犬', '过量钙', '过量能量', '大型犬幼犬'],
     applicableTo: ['puppy', 'growth', 'large-breed-puppy', 'giant-breed-puppy'],
@@ -140,13 +171,20 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第17章 幼犬生长', note: '引言（发育性骨科病）、Energy 节、Feeding Method 节' },
       { source: '小动物临床营养学（第5版）', chapter: '第33章 大型/巨型犬幼犬喂养', note: '文中多处指向第33章的详细建议（本库未收录，仅作指引）' },
-      { source: 'FEDIAF 犬猫营养指南', chapter: '生长阶段', note: '7.2.4：过量饲喂导致生长加速并可致骨骼畸形，尤其大型/巨型犬种；幼犬不应自由采食' },
+      { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '生长阶段', note: '7.2.4：过量饲喂导致生长加速并可致骨骼畸形，尤其大型/巨型犬种；幼犬不应自由采食' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第17章 幼犬生长' },
+      { sourceId: 'SACN5', locator: '第33章 大型/巨型犬幼犬喂养' },
+      { sourceId: 'FEDIAF-2025', locator: '生长阶段' },
     ],
     priority: 'HIGH',
   },
   {
     id: 'growth-006',
     domain: 'GROWTH',
+    questionType: 'NUTRITION',
     title: '喂养方法与餐数：快速生长期限食定量，每日分 2-4 餐',
     keywords: ['喂养方法', '餐数', '自由采食', 'free-choice', '限食', 'meal feeding', 'feeding frequency', '每日餐数', '定时定量'],
     applicableTo: ['puppy', 'growth'],
@@ -166,13 +204,19 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第17章 幼犬生长', note: '表17-3 喂养方案摘要、表17-5 喂食量计算示例、Feeding Method 节' },
-      { source: 'FEDIAF 犬猫营养指南', chapter: '生长阶段', note: '7.2.4：幼犬不应自由采食（ad libitum）' },
+      { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '生长阶段', note: '7.2.4：幼犬不应自由采食（ad libitum）' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第17章 幼犬生长' },
+      { sourceId: 'FEDIAF-2025', locator: '生长阶段' },
     ],
     priority: 'MEDIUM',
   },
   {
     id: 'growth-007',
     domain: 'GROWTH',
+    questionType: 'NUTRITION',
     title: '生长曲线与体况监测：BCS 至少每 2 周评估，按 10% 步长调量',
     keywords: ['生长曲线', 'growth curve', '体况评分', 'BCS', 'body condition', '体重监测', '体重记录', '调量'],
     applicableTo: ['puppy', 'growth'],
@@ -193,13 +237,20 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第17章 幼犬生长', note: '表17-3、Reassessment 节；图17-1 生长曲线' },
       { source: '小动物临床营养学（第5版）', chapter: '第16章 新生幼犬', note: 'Box 16-3 体重增长：各体型达成年体重 50% 的月龄' },
-      { source: 'FEDIAF 犬猫营养指南', chapter: '生长阶段', note: '表 VII-8a 生长曲线方程（按预期成年体重分档）' },
+      { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '生长阶段', note: '表 VII-8a 生长曲线方程（按预期成年体重分档）' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第17章 幼犬生长' },
+      { sourceId: 'SACN5', locator: '第16章 新生幼犬' },
+      { sourceId: 'FEDIAF-2025', locator: '生长阶段' },
     ],
     priority: 'HIGH',
   },
   {
     id: 'growth-008',
     domain: 'GROWTH',
+    questionType: 'NUTRITION',
     title: '断奶过渡：从母乳到固体食物的渐进转换',
     keywords: ['断奶', 'weaning', '断奶过渡', '过渡期', '母乳', '固体食物', '奶糊', '幼犬开食'],
     applicableTo: ['puppy', 'growth', 'weaning'],
@@ -222,11 +273,17 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第16章 新生幼犬', note: '引言（断奶期）、表16-1、Box 16-1 行为时间线' },
       { source: '小动物临床营养学（第5版）', chapter: '第17章 幼犬生长', note: 'Assess and Select the Food 节（断奶期食物选择）' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第16章 新生幼犬' },
+      { sourceId: 'SACN5', locator: '第17章 幼犬生长' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'growth-009',
     domain: 'GROWTH',
+    questionType: 'NUTRITION',
     title: '零食热量占比：不超过每日总喂食量的 10%',
     keywords: ['零食', 'treats', '奖励', '热量占比', '零食热量', '钙摄入', '每日总量'],
     applicableTo: ['puppy', 'growth'],
@@ -245,11 +302,16 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第17章 幼犬生长', note: 'Assess and Select the Food 节（零食钙与能量、10% 限制）' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第17章 幼犬生长' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'growth-010',
     domain: 'GROWTH',
+    questionType: 'NUTRITION',
     title: '常见误区：幼犬粮"蛋白越高越好"与成犬粮替代',
     keywords: ['误区', '高蛋白', '幼犬粮', '成犬粮', '成年犬粮', 'myth', '高蛋白误区', '蛋白越多越好'],
     applicableTo: ['puppy', 'growth'],
@@ -268,13 +330,19 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第17章 幼犬生长', note: 'Protein 节（上限以上无害、成犬粮不适用）' },
-      { source: 'FEDIAF 犬猫营养指南', chapter: '生长阶段', note: '表 III-3a 蛋白最低水平（早期 25.0 / 后期 20.0 g/100g DM）' },
+      { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '生长阶段', note: '表 III-3a 蛋白最低水平（早期 25.0 / 后期 20.0 g/100g DM）' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第17章 幼犬生长' },
+      { sourceId: 'FEDIAF-2025', locator: '生长阶段' },
     ],
     priority: 'MEDIUM',
   },
   {
     id: 'growth-011',
     domain: 'GROWTH',
+    questionType: 'NUTRITION',
     title: '新生幼犬：体重监测与能量摄入（出生至断奶）',
     keywords: ['新生幼犬', 'neonate', '出生体重', 'birth weight', '体重增长', '能量摄入', '哺乳', '低血糖', '初乳'],
     applicableTo: ['puppy', 'growth', 'neonatal-puppy'],
@@ -297,11 +365,17 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
       { source: '小动物临床营养学（第5版）', chapter: '第16章 新生幼犬', note: '表16-1/16-2、Box 16-3 体重增长、Box 16-4 低血糖低体温脱水' },
       { source: '小动物临床营养学（第5版）', chapter: '第17章 幼犬生长', note: '用于断奶后阶段的对应建议衔接' },
     ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第16章 新生幼犬' },
+      { sourceId: 'SACN5', locator: '第17章 幼犬生长' },
+    ],
     priority: 'MEDIUM',
   },
   {
     id: 'growth-012',
     domain: 'GROWTH',
+    questionType: 'NUTRITION',
     title: '幼犬粮消化率与能量密度：优选高消化率、适中能量密度',
     keywords: ['消化率', 'digestibility', '能量密度', 'energy density', '易消化', '胀气', '腹泻', '大肚子'],
     applicableTo: ['puppy', 'growth'],
@@ -320,13 +394,19 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第17章 幼犬生长', note: '表17-1 能量密度推荐；Digestibility 节' },
-      { source: 'FEDIAF 犬猫营养指南', chapter: '生长阶段', note: '能量密度与 ME 计算（7.2.2）' },
+      { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '生长阶段', note: '能量密度与 ME 计算（7.2.2）' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'SACN5', locator: '第17章 幼犬生长' },
+      { sourceId: 'FEDIAF-2025', locator: '生长阶段' },
     ],
     priority: 'LOW',
   },
   {
     id: 'growth-013',
     domain: 'GROWTH',
+    questionType: 'NUTRITION',
     title: 'FEDIAF 表 VII-8a 生长曲线方程与表 VII-8b 生长期能量公式（原文数值）',
     keywords: [
       '生长曲线', '预期成年体重', '增速比', 'FEDIAF 表 VII-8a', '表 VII-8b', '能量公式',
@@ -354,10 +434,17 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
       '曲线依赖「预期成年体重」这一输入；本条目提供的是 5 档区间解，用于按体型档位推算，不代表对单只狗的精确成年体重预测。',
     ],
     citations: [
-      { source: 'FEDIAF 犬猫营养指南', chapter: '生长与繁殖 / 表 VII-8a、表 VII-8b', note: '2025 年 9 月原版（波兰文官方译本）逐格核对' },
+      { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '生长与繁殖 / 表 VII-8a、表 VII-8b', note: '2025 年 9 月原版（波兰文官方译本）逐格核对' },
       { source: 'Gesellschaft für Ernährungsphysiologie (GfE)', note: '1989，生长曲线原始出处' },
       { source: 'Meyer H & Zentek J', note: '1992，生长曲线原始出处' },
       { source: 'Klein C, Thes M, Böswald LF, et al.', note: '2019, J Anim Physiol Anim Nutr 103:1952-1958，曲线验证' },
+    ],
+    reviewBy: '2027-04-01',
+    sources: [
+      { sourceId: 'FEDIAF-2025', locator: '生长与繁殖 / 表 VII-8a、表 VII-8b' },
+      { sourceId: 'GFE-2006', locator: '' },
+      { sourceId: 'MEYER-ZENTEK', locator: '' },
+      { sourceId: 'KLEIN-ETAL', locator: '' },
     ],
     priority: 'HIGH',
   },

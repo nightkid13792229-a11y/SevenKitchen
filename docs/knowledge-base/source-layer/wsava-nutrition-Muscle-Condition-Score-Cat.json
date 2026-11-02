@@ -1,0 +1,30 @@
+{
+ "sections": [
+  {
+   "id": "wsava-nutrition-Muscle-Condition-Score-Cat-s001",
+   "title": "Muscle Condition Score（WSAVA Global Nutrition Committee）",
+   "pageNo": 1
+  }
+ ],
+ "paragraphs": [
+  {
+   "id": "wsava-nutrition-Muscle-Condition-Score-Cat-p00001",
+   "sectionId": "wsava-nutrition-Muscle-Condition-Score-Cat-s001",
+   "text": "Muscle condition score is assessed by visualization and palpation of the spine, scapulae, skull, and wings of the ilia. Muscle loss is typically first noted in the epaxial muscles on each side of the spine; muscle loss at other sites can be more variable. Muscle condition score is graded as normal, mild loss, moderate loss, or severe loss. Note that animals can have significant muscle loss even if they are overweight (body condition score > 5/9). Conversely, animals can have a low body condition score (< 4/9) but have minimal muscle loss. Therefore, assessing both body condition score and muscle condition score on every animal at every visit is important. Palpation is especially important with mild muscle loss and in animals that are overweight.",
+   "pageStart": 1,
+   "pageEnd": 1
+  },
+  {
+   "id": "wsava-nutrition-Muscle-Condition-Score-Cat-p00002",
+   "sectionId": "wsava-nutrition-Muscle-Condition-Score-Cat-s001",
+   "text": "评分分四级并各配示意图：Normal muscle mass（正常肌肉量）、Mild muscle loss（轻度肌肉丢失）、Moderate muscle loss（中度肌肉丢失）、Severe muscle loss（重度肌肉丢失）。示意图标注的触诊部位为脊柱两侧、肩胛、颅骨与髂骨翼。",
+   "pageStart": 1,
+   "pageEnd": 1
+  }
+ ],
+ "pages": 1,
+ "docId": "wsava-nutrition-Muscle-Condition-Score-Cat",
+ "path": "wsava/nutrition/Muscle-Condition-Score-Cat.pdf",
+ "title": "Muscle-Condition-Score-Cat.pdf",
+ "note": "原文件为纯图片扫描件（无文字层），本段文字由视觉转录生成（2026-11-02），供检索用。"
+}

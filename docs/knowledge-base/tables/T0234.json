@@ -1,0 +1,223 @@
+{
+ "tableId": "T0234",
+ "caption": "Table 32-9. The total essential fatty acid intake for a 4.5-kg cat eating 260 kcal (1,088 kJ) per day of selected commercial foods or being given one of the selected supplements.",
+ "columns": [
+  "",
+  "Food consumed (g)",
+  "Total omega-6 consumed (mg)",
+  "Total omega-3 consumed (mg)*"
+ ],
+ "rows": [
+  [
+   "Dry foods",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Hill's Prescription Diet d/d Duck & Green Pea Formula Feline",
+   "68",
+   "2,254",
+   "473"
+  ],
+  [
+   "Hill's Prescription Diet d/d Rabbit & Green Pea Formula Feline",
+   "69",
+   "2,304",
+   "460"
+  ],
+  [
+   "Hill's Prescription Diet d/d Venison & Green Pea Formula Feline",
+   "67",
+   "2,142",
+   "458"
+  ],
+  [
+   "Hill's Prescription Diet z/d Low Allergen Feline",
+   "69",
+   "3,630",
+   "419"
+  ],
+  [
+   "Hill's Science Diet Adult Original Cat Food",
+   "64",
+   "2,301",
+   "140"
+  ],
+  [
+   "Hill's Science Diet Mature Adult 7+ Original Cat Food",
+   "66",
+   "2,114",
+   "146"
+  ],
+  [
+   "Hill's Science Diet Sensitive Skin Adult Cat Food",
+   "67",
+   "3,123",
+   "294"
+  ],
+  [
+   "Iams Eukanuba Chicken & Rice Formula Cat Food",
+   "55",
+   "2,158",
+   "302"
+  ],
+  [
+   "Iams Eukanuba Mature Care Formula for Cats",
+   "61",
+   "2,049",
+   "411"
+  ],
+  [
+   "Royal Canin Adult Fit 32 Cat Food",
+   "68",
+   "2,462",
+   "322"
+  ],
+  [
+   "Royal Canin Indoor 27 Cat Food",
+   "70",
+   "2,395",
+   "408"
+  ],
+  [
+   "Royal Canin IVD Limited Ingredient Diets Green Pea & Venison Feline Formula",
+   "73",
+   "1,794",
+   "624"
+  ],
+  [
+   "Royal Canin Persian 30 Cat Food",
+   "60",
+   "2,889",
+   "481"
+  ],
+  [
+   "Royal Canin Skin Care 30 Cat Food",
+   "63",
+   "2,951",
+   "499"
+  ],
+  [
+   "Royal Canin Veterinary Diet Feline Hypoallergenic HP 23",
+   "63",
+   "3,003",
+   "486"
+  ],
+  [
+   "Royal Canin Veterinary Diet Feline Sensitivity RD 30",
+   "67",
+   "2,140",
+   "213"
+  ],
+  [
+   "Moist foods",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Hill's Prescription Diet a/d Canine/Feline",
+   "226",
+   "3,344",
+   "1,422"
+  ],
+  [
+   "Hill's Prescription Diet d/d Duck Formula Feline",
+   "215",
+   "3,354",
+   "666"
+  ],
+  [
+   "Hill's Prescription Diet d/d Rabbit Formula Feline",
+   "233",
+   "3,403",
+   "699"
+  ],
+  [
+   "Hill's Prescription Diet d/d Venison Formula Feline",
+   "206",
+   "4,178",
+   "988"
+  ],
+  [
+   "Hill's Prescription Diet z/d ULTRA Allergen Free Feline",
+   "241",
+   "2,574",
+   "289"
+  ],
+  [
+   "Hill's Science Diet Savory Salmon Entrée Adult Cat Food",
+   "250",
+   "2,072",
+   "1,147"
+  ],
+  [
+   "Iams Veterinary Formulas Response LB/Feline",
+   "199",
+   "2,600",
+   "520"
+  ],
+  [
+   "Supplements",
+   "",
+   "",
+   ""
+  ],
+  [
+   "3V Caps for Small & Medium Breeds",
+   "1 capsule",
+   "0",
+   "171"
+  ],
+  [
+   "3V Caps Liquid HR",
+   "1 ml",
+   "0",
+   "450"
+  ],
+  [
+   "DermCaps ES Liquid",
+   "1 ml",
+   "375",
+   "130"
+  ],
+  [
+   "DermCaps Liquid",
+   "1 ml",
+   "621",
+   "65"
+  ],
+  [
+   "DermCaps Regular",
+   "1 capsule",
+   "402",
+   "108"
+  ],
+  [
+   "Nutrived O.F.A. Granules",
+   "1 scoop",
+   "539",
+   "129"
+  ],
+  [
+   "EicosaDerm",
+   "1/2 pump",
+   "0",
+   "300"
+  ],
+  [
+   "Welactin",
+   "1 pump",
+   "0",
+   "330-364"
+  ],
+  [
+   "Nordic Naturals Omega-3",
+   "1 capsule",
+   "0",
+   "350"
+  ]
+ ],
+ "note": "首列为食品/补充剂名称（原表无列名，留空）；'Dry foods'/'Moist foods'/'Supplements' 为分组标题行；原表在各分组处重复的列表头未重复计入；文末 * 脚注未计入表格行。"
+}

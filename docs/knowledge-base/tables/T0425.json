@@ -1,0 +1,76 @@
+{
+  "tableId": "T0425",
+  "caption": "Table 67-6. Key nutritional factors in selected commercial veterinary therapeutic foods for obese or hypertriglyceridemic dogs with pancreatitis compared to recommended levels.*",
+  "columns": [
+    "",
+    "Fat (%)",
+    "Protein (%)"
+  ],
+  "rows": [
+    [
+      "Moist foods",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≤10",
+      "15–30"
+    ],
+    [
+      "Hill's Prescription Diet w/d Canine",
+      "12.7",
+      "17.9"
+    ],
+    [
+      "Medi-Cal Fibre Formula",
+      "9.1",
+      "24.8"
+    ],
+    [
+      "Purina Veterinary Diets OM Overweight Management Formula",
+      "8.4",
+      "44.1"
+    ],
+    [
+      "Dry foods",
+      "",
+      ""
+    ],
+    [
+      "Recommended levels",
+      "≤10",
+      "15–30"
+    ],
+    [
+      "Hill's Prescription Diet w/d Canine",
+      "9.0",
+      "18.9"
+    ],
+    [
+      "Medi-Cal Fibre Formula",
+      "10.6",
+      "26.2"
+    ],
+    [
+      "Purina Veterinary Diets DCO Dual Fiber Control",
+      "12.4",
+      "25.3"
+    ],
+    [
+      "Purina Veterinary Diets OM Overweight Management Formula",
+      "7.2",
+      "31.1"
+    ],
+    [
+      "Royal Canin Veterinary Diet Calorie Control CC 26 High Fiber",
+      "10.4",
+      "30.9"
+    ],
+    [
+      "Royal Canin Veterinary Diet Diabetic HF 18",
+      "9.9",
+      "22"
+    ]
+  ]
+}

@@ -1,0 +1,91 @@
+{
+ "tableId": "T0406",
+ "caption": "Table 61-2. Potential causes of chronic large bowel diarrhea in dogs and cats.",
+ "columns": [
+  ""
+ ],
+ "rows": [
+  [
+   "Infectious causes"
+  ],
+  [
+   "Parasitic"
+  ],
+  [
+   "Giardia lamblia"
+  ],
+  [
+   "Trichuris vulpis"
+  ],
+  [
+   "Bacteria"
+  ],
+  [
+   "Campylobacter spp."
+  ],
+  [
+   "Salmonella spp."
+  ],
+  [
+   "Viral"
+  ],
+  [
+   "Feline immunodeficiency virus"
+  ],
+  [
+   "Feline leukemia virus"
+  ],
+  [
+   "Fungal"
+  ],
+  [
+   "Histoplasmosis"
+  ],
+  [
+   "Pythiosis"
+  ],
+  [
+   "Inflammatory bowel disease"
+  ],
+  [
+   "Eosinophilic colitis"
+  ],
+  [
+   "Lymphocytic colitis"
+  ],
+  [
+   "Lymphoplasmacytic colitis"
+  ],
+  [
+   "Regional enterocolitis"
+  ],
+  [
+   "Suppurative colitis"
+  ],
+  [
+   "Dietary (adverse reactions to food)"
+  ],
+  [
+   "Food allergy (hypersensitivity)"
+  ],
+  [
+   "Food intolerance"
+  ],
+  [
+   "Neoplasia"
+  ],
+  [
+   "Adenocarcinoma"
+  ],
+  [
+   "Adenoma/polyps"
+  ],
+  [
+   "Lymphosarcoma"
+  ],
+  [
+   "Mast cell tumor"
+  ]
+ ],
+ "note": "图中同时含一张并排的小表 Table 61-3（Breed-associated colonic disorders），列结构不同（Disorders / Breeds 两列），未并入本表；表下无脚注。"
+}

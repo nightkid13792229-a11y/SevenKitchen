@@ -1,0 +1,77 @@
+{
+ "tableId": "T0288",
+ "caption": "Table 40-10. Managing highly recurrent calcium oxalate uroliths.",
+ "columns": [
+  "Causes",
+  "Identification",
+  "Therapeutic goal"
+ ],
+ "rows": [
+  [
+   "Causes",
+   "Identification",
+   "Therapeutic goal"
+  ],
+  [
+   "Client and patient causes",
+   "",
+   ""
+  ],
+  [
+   "Inadequate dietary compliance",
+   "Question owner\nPersistent calcium oxalate crystalluria\nUrea nitrogen >10-15 mg/dl\nUrine specific gravity >1.010-1.020\nUrinary pH <7.0-7.5 during treatment with Prescription Diet u/d Canine* (use lower values for the canned food)",
+   "Emphasize need to feed dissolution food exclusively"
+  ],
+  [
+   "Administration of vitamin-mineral supplements",
+   "Question owner",
+   "Discontinue vitamin-mineral supplements containing calcium and vitamins C and D"
+  ],
+  [
+   "Clinician factors",
+   "",
+   ""
+  ],
+  [
+   "Incomplete surgical removal of uroliths",
+   "Postsurgical radiography revealing uroliths\nPersistence of clinical signs after cystotomy or recurrence of clinical signs soon after cystotomy (within one to three months)",
+   "Uroliths not causing clinical signs should be monitored for potentially adverse consequences (obstruction, urinary tract infection, etc.)\nClinically active uroliths may require surgical removal\nRemove small uroliths by voiding urohydropropulsion or lithotripsy"
+  ],
+  [
+   "Inappropriate food choice",
+   "Persistent calcium oxalate crystalluria",
+   "Choose foods with reduced levels of calcium, oxalic acid, protein and sodium that do not promote formation of acidic urine\nConsider adding potassium citrate if aciduria persists"
+  ],
+  [
+   "Inadequate monitoring",
+   "Postsurgical radiography to verify complete urolith removal was not performed\nUrinalysis or urine sediment examinations were not performed within three to six months of initiation of therapy",
+   "Perform postsurgical radiography to evaluate success of surgery\nPerform complete urinalysis within one to three months of initiation of therapy\nOnce stable, urinalysis should be performed every four to six months\nPerform survey lateral abdominal radiography every four to six months to assess recurrence"
+  ],
+  [
+   "Corticosteroid administration",
+   "Corticosteroids were prescribed to manage other disease conditions",
+   "If possible, discontinue corticosteroid administration"
+  ],
+  [
+   "Disease factors",
+   "",
+   ""
+  ],
+  [
+   "Hypercalcemia",
+   "Elevated serum calcium concentration",
+   "Identify and, if possible, eliminate underlying cause for hypercalcemia (hyperparathyroidism, neoplasia, hypervitaminosis D, etc.)"
+  ],
+  [
+   "Recurrence of uroliths despite appropriate management",
+   "Lateral radiograph of abdomen",
+   "Uroliths not causing clinical signs should be monitored for potentially adverse consequences (obstruction, urinary tract infection, etc.)\nClinically active uroliths may require surgical removal\nRemove small uroliths by voiding urohydropropulsion or lithotripsy"
+  ],
+  [
+   "*Hill's Pet Nutrition, Inc., Topeka, KS, USA.",
+   "",
+   ""
+  ]
+ ],
+ "note": "首行为列头（原表在表格顶部重复印出 Causes/Identification/Therapeutic goal）；Client and patient causes / Clinician factors / Disease factors 为跨列的分组标题行；同一单元格内换行的多条内容用 \\n 连接；末行为表内脚注。"
+}

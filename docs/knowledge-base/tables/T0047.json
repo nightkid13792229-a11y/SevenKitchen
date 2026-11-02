@@ -1,0 +1,63 @@
+{
+ "tableId": "T0047",
+ "caption": "Table VII-2. Guide to 9-point and 5-point Body Condition Scores in dogs",
+ "columns": [
+  "Score 9-point",
+  "Score 5-point",
+  "Location Feature",
+  "Estimated body fat (%)",
+  "% BW below or above BCS 5"
+ ],
+ "rows": [
+  [
+   "1.\nEmaciated",
+   "1",
+   "Ribs & other bony prominences Visible from a distance & easily palpable with no overlaying fat.\nAbdomen Severe abdominal tuck when viewed from the side, exaggerated hourglass shape when viewed from above.\nTail base Prominent, raised bone structures with no tissue between the skin and bone. Obvious loss of muscle mass and no discernible body fat.",
+   "<4%",
+   "- ≥40%"
+  ],
+  [
+   "2.\nVery Thin",
+   "",
+   "Ribs & other bony prominences Visible & easily palpable with no fat layer under the skin.\nAbdomen Strong abdominal tuck when viewed from the side, accentuated hourglass shape when viewed from above.\nTail base Prominent, raised bone structures with no tissue between the skin and bone. Minimal loss of muscle mass.",
+   "4 - 10%",
+   "-30 -40%"
+  ],
+  [
+   "3.\nThin",
+   "2",
+   "Ribs & other bony prominences Discernible & easily palpable with minimal fat cover.\nAbdomen Pronounced abdominal tuck when viewed from the side, marked hourglass shape when viewed from above.\nTail base Raised bony structures with little tissue between skin and bone.",
+   "5 - 15%",
+   "-20 -30%"
+  ],
+  [
+   "4.\nSlightly\nunderweight",
+   "",
+   "Ribs & other bony prominences Easily palpable with minimal fat cover.\nAbdomen Abdominal tuck when viewed from the side, slightly marked hourglass shape when viewed from above.\nTail base Raised bony structures with little subcutaneous tissue.",
+   "10 - 20%",
+   "-10 - 15%"
+  ],
+  [
+   "5.\nIdeal",
+   "3",
+   "Ribs & other bony prominences Ribs not visible, but easily palpable, with thin layer of fat. Other bony prominences are palpable with slight amount of overlaying fat.\nAbdomen Abdominal tuck when viewed from the side and well proportioned lumbar waist (hourglass shape) when viewed from above.\nTail base Smooth contour or some thickening, bony structures palpable under a thin layer of subcutaneous fat.",
+   "15 - 25%",
+   "0%"
+  ],
+  [
+   "6.\nSlightly\noverweight",
+   "",
+   "Ribs & other bony prominences Palpable with moderate fat cover.\nAbdomen Less obvious abdominal tuck when viewed from the side, hourglass shape less pronounced when viewed from above.\nTail base Smooth contour or some thickening, bony structures remain palpable under moderate layer of subcutaneous fat.",
+   "20 - 30%",
+   "+10 - 15%"
+  ],
+  [
+   "7.\nOverweight",
+   "4",
+   "Ribs & other bony prominences Difficult to palpate, thick fat cover.\nAbdomen Little abdominal tuck when viewed from the side or waist, and back slightly broadened when viewed from above.\nTail base Smooth contour or some thickening, bony structures remain palpable under subcutaneous fat.",
+   "25 - 35%",
+   "+20 - 30%"
+  ]
+ ],
+ "note": "图中表格仅显示至 9-point 第 7 行（Overweight），后续行未包含在图片内"
+}

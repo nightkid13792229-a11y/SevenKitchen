@@ -1,0 +1,61 @@
+{
+ "tableId": "T0229",
+ "caption": "Table 32-4. Risk factors for zinc-related skin disease in dogs.",
+ "columns": [
+  "Risk factors"
+ ],
+ "rows": [
+  [
+   "Certain breeds"
+  ],
+  [
+   "Siberian husky"
+  ],
+  [
+   "Malamute"
+  ],
+  [
+   "Bull terrier"
+  ],
+  [
+   "Great Dane"
+  ],
+  [
+   "Labrador retriever"
+  ],
+  [
+   "Other rapidly growing large and giant breeds"
+  ],
+  [
+   "Food"
+  ],
+  [
+   "High mineral levels (calcium, phosphorus, magnesium)"
+  ],
+  [
+   "High phytate levels (high levels of cereal ingredients)"
+  ],
+  [
+   "Low essential fatty acid levels"
+  ],
+  [
+   "Dietary supplements"
+  ],
+  [
+   "Calcium and/or other mineral supplements"
+  ],
+  [
+   "Cottage cheese or other dairy products"
+  ],
+  [
+   "Small intestinal disease"
+  ],
+  [
+   "Viral enteritis"
+  ],
+  [
+   "Malassimilation (malabsorption, maldigestion)"
+  ]
+ ],
+ "note": "表内无独立表头行，按书中原样逐行转录。"
+}

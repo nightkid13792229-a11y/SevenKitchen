@@ -94,7 +94,7 @@ export function buildLifeStageBarCopy(
         title: current,
         subtitle: `${dog}${age ? ` ${age}` : ''} · ${(ctx.matchReason || '').trim() || '按档案匹配'}`,
         action: (ctx.versionCount ?? 0) > 1 ? 'switch' : 'none',
-        actionLabel: (ctx.versionCount ?? 0) > 1 ? '换一版 ›' : '',
+        actionLabel: (ctx.versionCount ?? 0) > 1 ? '换生命阶段 ›' : '',
       };
     case 'manual_low':
       return {

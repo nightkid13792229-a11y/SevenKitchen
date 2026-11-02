@@ -47,6 +47,7 @@ describe('life-stage-ui', () => {
       versionCount: 2,
     });
     expect(copy.subtitle).toBe('Poppy 11 个月 · 活动量正常或偏高');
+    expect(copy.actionLabel).toBe('换生命阶段 ›');
   });
 
   it('版本条文案不含系统词', () => {

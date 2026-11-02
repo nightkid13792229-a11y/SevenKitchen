@@ -77,9 +77,14 @@
       >
         <view class="card-head">
           <text class="order-no">{{ order.orderNo }}</text>
-          <text class="status-tag" :class="statusClass(order.status)">
-            {{ statusText(order.status) }}
-          </text>
+          <view class="status-tags">
+            <text class="status-tag" :class="statusClass(order.status)">
+              {{ statusText(order.status) }}
+            </text>
+            <text v-if="order.hasOpenAftersale" class="status-tag status-tag--warn">
+              {{ order.openAftersaleLabel || '售后中' }}
+            </text>
+          </view>
         </view>
 
         <view class="card-row">
@@ -479,6 +484,12 @@ onReachBottom(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16rpx;
+}
+
+.status-tags {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
 }
 
 .order-no {

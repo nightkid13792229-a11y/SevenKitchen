@@ -19,7 +19,7 @@ import { TimezoneUtil } from '../../utils/timezone.util';
 import { IngredientType } from '../../domain/ingredient/enums';
 import {
   SupplementPricingService,
-  MAX_PURCHASABLE_PORTIONS,
+  resolveMaxPortionMultiplier,
   type SupplementQuote,
   type SupplementQuoteLineInput,
 } from './supplement-pricing.service';
@@ -113,16 +113,6 @@ export interface SupplementQuoteRequest {
 
 export interface CreateSupplementOrderRequest extends SupplementQuoteRequest {
   addressId: string;
-  /**
-   * 顾客在这一步看到的合计（**整数分**）。服务端重算后不一致就拒绝建单，
-   * 避免"页面显示一个数、扣款另一个数"。不传则跳过校验（老客户端兼容）。
-   */
-  expectedTotal?: number;
-  /**
-   * 一次提交流程的幂等键。重试复用同一个值，服务端据此只建一笔单。
-   * 同一张制作单以后再买是正常复购，不按内容判重。
-   */
-  clientRequestId?: string;
   recipeId?: string;
   recipeName?: string;
   dogId?: string;
@@ -138,12 +128,6 @@ export interface SupplementQuoteResponse {
   enabled: boolean;
   /** 库存系统验收前的软提示；不阻止下单 */
   inventoryWarnings: string[];
-  /** 最低起送金额（商品小计口径）；0 = 不限制。下单页据此提前禁用提交 */
-  minOrderAmount: number;
-  /** 补剂订单支付超时（分钟）；0 = 不自动关单。确认弹层据此写"未付款 N 分钟内自动取消" */
-  paymentTimeoutMinutes: number;
-  /** 单笔分装袋数超过它就提示"发货会顺延"（只提示，不拦单） */
-  bulkBagThreshold: number;
 }
 
 export interface SupplementOrderItemView {
@@ -321,9 +305,6 @@ export class SupplementOrderService {
       unavailable,
       enabled: config.enabled,
       inventoryWarnings: await this.buildInventoryWarnings(quote),
-      minOrderAmount: config.minOrderAmount,
-      paymentTimeoutMinutes: config.paymentTimeoutMinutes,
-      bulkBagThreshold: config.bulkBagThreshold,
     };
   }
 
@@ -332,20 +313,6 @@ export class SupplementOrderService {
     userId: string,
     request: CreateSupplementOrderRequest,
   ): Promise<SupplementOrderView> {
-    /**
-     * 幂等：同一份提交（同一个 clientRequestId）只建一笔订单。
-     * 小程序在"一次提交流程"开始时生成它，网络重试时复用同一个值。
-     * 注意：不按制作单或内容判重 —— 同一张单以后还想再买是正常复购。
-     */
-    const clientRequestId = (request.clientRequestId ?? '').trim() || null;
-    if (clientRequestId) {
-      const existing = await this.prisma.supplementOrder.findFirst({
-        where: { userId, clientRequestId },
-        select: { id: true },
-      });
-      if (existing) return this.getOrder(userId, existing.id);
-    }
-
     const { quote, unavailable, config, meta, dosage } =
       await this.buildQuote(request, userId);
 
@@ -359,22 +326,6 @@ export class SupplementOrderService {
           .map((item) => `${item.name}（${item.reason}）`)
           .join('；')}`,
       );
-    }
-
-    /**
-     * 金额一致性：顾客在确认弹层里看到的是这个数，扣款也必须是这个数。
-     * 用整数分比较，避免浮点误差导致正常下单被拒。
-     */
-    const expectedTotal = request.expectedTotal;
-    if (expectedTotal !== undefined && expectedTotal !== null) {
-      if (!Number.isInteger(expectedTotal) || expectedTotal < 0) {
-        throw new BadRequestException('期望金额不合法');
-      }
-      if (Math.round(quote.total * 100) !== expectedTotal) {
-        throw new BadRequestException(
-          `价格已更新，请确认新价格后重新提交（当前合计 ¥${quote.total.toFixed(2)}）`,
-        );
-      }
     }
 
     if (
@@ -416,9 +367,7 @@ export class SupplementOrderService {
       detail: address.detail,
     };
 
-    let orderId: string;
-    try {
-      orderId = await this.prisma.$transaction(async (tx) => {
+    const orderId = await this.prisma.$transaction(async (tx) => {
       const orderNo = await this.generateOrderNo(tx);
 
       const created = await tx.supplementOrder.create({
@@ -446,7 +395,6 @@ export class SupplementOrderService {
           // totalDays 不再计算，落库为 null。
           cycleDays: request.cycleDays ?? null,
           reorderFromOrderNo: request.reorderFromOrderNo ?? null,
-          clientRequestId,
           // 加量信息：份数取报价里已校验收敛过的值
           portionMultiplier: quote.portionMultiplier,
           totalDays: quote.totalDays,
@@ -517,21 +465,7 @@ export class SupplementOrderService {
       }
 
       return created.id;
-      });
-    } catch (error) {
-      /**
-       * 并发下两个相同 clientRequestId 同时到达：唯一索引会让其中一个落败。
-       * 落败的那个不是错误，它应该拿到已经建成的那一笔。
-       */
-      if (clientRequestId && (error as { code?: string })?.code === 'P2002') {
-        const existing = await this.prisma.supplementOrder.findFirst({
-          where: { userId, clientRequestId },
-          select: { id: true },
-        });
-        if (existing) return this.getOrder(userId, existing.id);
-      }
-      throw error;
-    }
+    });
 
     return this.getOrder(userId, orderId);
   }
@@ -576,6 +510,39 @@ export class SupplementOrderService {
     return view;
   }
 
+  /**
+   * 「售后中」的订单范围（2026-11-02）。
+   *
+   * 新售后流程不把订单 status 改成 AFTERSALE —— 那会把「已发货/已完成」
+   * 这个履约状态覆盖掉，发货、自动完成、退款都会跟着乱。
+   * 所以「售后中」是一个派生条件：有 PENDING/PROCESSING 售后记录的单，
+   * 加上旧的 status=AFTERSALE 存量单。
+   */
+  private async buildOpenAftersaleWhere(): Promise<Prisma.SupplementOrderWhereInput> {
+    let orderIds: string[] = [];
+    try {
+      const cases = await (this.prisma as any).aftersaleCase?.findMany?.({
+        where: {
+          orderType: 'SUPPLEMENT',
+          status: { in: ['PENDING', 'PROCESSING'] },
+        },
+        select: { orderId: true },
+        distinct: ['orderId'],
+      });
+      orderIds = (cases ?? [])
+        .map((row: { orderId?: string }) => row.orderId)
+        .filter((id: string | undefined): id is string => Boolean(id));
+    } catch {
+      // 旧库/测试环境没有 case 表时只查旧 AFTERSALE
+    }
+    return {
+      OR: [
+        { id: { in: orderIds.length > 0 ? orderIds : ['__none__'] } },
+        { status: 'AFTERSALE' },
+      ],
+    };
+  }
+
   /** 后台：所有补剂订单 */
   async listAllOrders(
     query: ListSupplementOrdersQuery = {},
@@ -583,37 +550,44 @@ export class SupplementOrderService {
   ): Promise<{ items: SupplementOrderView[]; total: number; page: number; pageSize: number }> {
     const { skip, take, page, pageSize } = this.normalizePaging(query);
     const keyword = (query.keyword || '').trim();
+
+    const and: Prisma.SupplementOrderWhereInput[] = [];
+
     // 2026-11-02：分装工单取消后，PAID / PACKING / PACKED 在员工眼里
     // 都是「待发货」。列表用一个 TO_SHIP 分组去查，避免前端把同一件事
     // 拆成三个状态、漏看旧单。
-    const statusWhere: Prisma.SupplementOrderWhereInput['status'] =
-      query.status === 'TO_SHIP'
-        ? { in: ['PAID', 'PACKING', 'PACKED'] }
-        : query.status
-          ? (query.status as never)
-          : undefined;
-    const where: Prisma.SupplementOrderWhereInput = {
-      ...(statusWhere ? { status: statusWhere } : {}),
-      ...(keyword
-        ? {
-            OR: [
-              { orderNo: { contains: keyword, mode: 'insensitive' } },
-              {
-                shippingAddressSnapshot: {
-                  path: ['recipientName'],
-                  string_contains: keyword,
-                },
-              },
-              {
-                shippingAddressSnapshot: {
-                  path: ['phone'],
-                  string_contains: keyword,
-                },
-              },
-            ],
-          }
-        : {}),
-    };
+    if (query.status === 'TO_SHIP') {
+      and.push({ status: { in: ['PAID', 'PACKING', 'PACKED'] } });
+    } else if (query.status === 'AFTERSALE') {
+      // 「售后中」不再看订单 status（新售后不改订单状态），
+      // 而是看有没有未完结的售后记录；旧 AFTERSALE 数据继续兼容。
+      and.push(await this.buildOpenAftersaleWhere());
+    } else if (query.status) {
+      and.push({ status: query.status as never });
+    }
+
+    if (keyword) {
+      and.push({
+        OR: [
+          { orderNo: { contains: keyword, mode: 'insensitive' } },
+          {
+            shippingAddressSnapshot: {
+              path: ['recipientName'],
+              string_contains: keyword,
+            },
+          },
+          {
+            shippingAddressSnapshot: {
+              path: ['phone'],
+              string_contains: keyword,
+            },
+          },
+        ],
+      });
+    }
+
+    const where: Prisma.SupplementOrderWhereInput =
+      and.length > 0 ? { AND: and } : {};
 
     const [rows, total] = await Promise.all([
       this.prisma.supplementOrder.findMany({
@@ -716,6 +690,18 @@ export class SupplementOrderService {
     for (const row of rows) {
       counts[row.status] = row._count._all;
     }
+
+    // 「售后中」不是订单 status，而是「有未完结售后记录」的派生数量；
+    // 旧 AFTERSALE 存量单也算进去，避免后台 tab 的角标永远是 0。
+    if ((this.prisma as any).aftersaleCase?.findMany) {
+      try {
+        const where = await this.buildOpenAftersaleWhere();
+        counts.AFTERSALE = await this.prisma.supplementOrder.count({ where });
+      } catch {
+        // 查不到就保留 groupBy 出来的旧 AFTERSALE 数量
+      }
+    }
+
     return counts;
   }
 
@@ -2024,43 +2010,42 @@ export class SupplementOrderService {
     const { available, unavailable, meta } =
       await this.resolveAvailableLines(requested);
 
+    if (available.length === 0) {
+      throw new BadRequestException(
+        unavailable.length > 0
+          ? `当前没有可购买的补剂：${unavailable
+              .map((item) => `${item.name}（${item.reason}）`)
+              .join('；')}`
+          : '补剂清单为空，无法报价',
+      );
+    }
+
     const config = await this.configService.getConfig();
 
     /**
-     * 一条都买不了时**不报错**，返回一条零值报价。
+     * 加量份数校验（服务端说了算，不信客户端）。
      *
-     * 为什么不是 throw：小程序要拿 `unavailable` 逐条列出"哪种 + 为什么"，
-     * 报错只会丢掉结构化信息；而且线上老版本读的是 `res.data.quote.lines`，
-     * 返回 null 会让它直接抛异常。零值报价让新旧客户端都能进"暂不可购买"空态。
-     *
-     * 真正建单时仍然会拦（createOrder 里有 unavailable 检查）。
+     * 为什么在这里拒绝、而不是让 pricing service 静默收敛：
+     * 客户端只会在响应里拿到 maxPortionMultiplier，然后据此渲染选项；
+     * 如果它仍然传来一个越界值，那是 bug 或篡改 —— 静默改成 3 份会让用户
+     * 看到的金额与实际下单金额不一致。直接报错最清楚。
      */
-    if (available.length === 0) {
-      return {
-        quote: this.buildEmptyQuote(),
-        unavailable,
-        config,
-        meta,
-        dosage,
-      };
-    }
-
     /**
-     * 购买套数校验（服务端说了算，不信客户端）。
-     *
-     * 2026-11-01 起取消产品上限：1~99 直接照算。越界一律拒绝，
-     * 绝不"静默改成别的套数计价"——那会让顾客看到的金额和实际下单金额对不上。
-     * 99 只是技术兜底（防误输入打挂分装产能），顾客界面上看不到。
+     * 2026-11-01：补剂不再有"天数"，份数上限只看配置里的 `maxPortionMultiplier`
+     * （`request.cycleDays` 保留在 DTO 里只为兼容老客户端，已不参与任何计算）。
      */
     const requestedMultiplier = request.portionMultiplier;
     if (requestedMultiplier !== undefined && requestedMultiplier !== null) {
       if (
         !Number.isInteger(requestedMultiplier) ||
-        requestedMultiplier < 1 ||
-        requestedMultiplier > MAX_PURCHASABLE_PORTIONS
+        requestedMultiplier < 1
       ) {
+        throw new BadRequestException('加量份数必须是不小于 1 的整数');
+      }
+      const maxPortionMultiplier = resolveMaxPortionMultiplier(config);
+      if (requestedMultiplier > maxPortionMultiplier) {
         throw new BadRequestException(
-          `购买套数必须是 1~${MAX_PURCHASABLE_PORTIONS} 的整数`,
+          `加量份数最多 ${maxPortionMultiplier} 份`,
         );
       }
     }
@@ -2072,39 +2057,6 @@ export class SupplementOrderService {
     });
 
     return { quote, unavailable, config, meta, dosage };
-  }
-
-  /**
-   * 一条补剂都买不了时的零值报价。
-   *
-   * 形状必须与真实报价完全一致（老客户端会直接读字段），金额全 0、
-   * 档位为空；`maxPortionMultiplier` 仍给 3，免得老页面渲染出 0 张卡。
-   */
-  private buildEmptyQuote(): SupplementQuote {
-    return {
-      lines: [],
-      bagCount: 0,
-      supplementCost: 0,
-      supplementPrice: 0,
-      serviceFee: 0,
-      serviceFeeBeforeWaiver: 0,
-      serviceFeeWaived: false,
-      freeServiceThreshold: null,
-      packagingFee: 0,
-      goodsSubtotal: 0,
-      goodsAmount: 0,
-      shippingFee: 0,
-      shippingDescription: '无运费',
-      freeShipping: false,
-      freeShippingThreshold: null,
-      total: 0,
-      warnings: [],
-      portionMultiplier: 1,
-      totalDays: null,
-      perDayCost: null,
-      maxPortionMultiplier: 3,
-      portionOptions: [],
-    };
   }
 
   /**

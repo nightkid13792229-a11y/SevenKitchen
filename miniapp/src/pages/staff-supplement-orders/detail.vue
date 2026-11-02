@@ -26,9 +26,15 @@
       <view class="card">
         <view class="card-head">
           <text class="order-no">{{ order.orderNo }}</text>
-          <text class="status-tag" :class="statusClass(order.status)">
-            {{ statusText(order.status) }}
-          </text>
+          <view class="status-tags">
+            <text class="status-tag" :class="statusClass(order.status)">
+              {{ statusText(order.status) }}
+            </text>
+            <!-- 新售后不改订单状态：有未完结售后时单独挂「售后中/退款中」 -->
+            <text v-if="openAftersaleLabel" class="status-tag status-tag--warn">
+              {{ openAftersaleLabel }}
+            </text>
+          </view>
         </view>
         <view class="info-row">
           <text class="info-label">顾客</text>
@@ -331,6 +337,15 @@ const canShip = computed(() =>
     : false,
 )
 
+/** 有未完结售后时，在订单状态旁边挂「售后中/退款中」 */
+const openAftersaleLabel = computed(() => {
+  const current = (order.value?.aftersaleCases || []).find((item) =>
+    ['PENDING', 'PROCESSING'].includes(item.status),
+  )
+  if (!current) return ''
+  return current.requestType === 'REFUND' ? '退款中' : '售后中'
+})
+
 const fullAddress = computed(() => {
   if (!order.value) return '—'
   return [order.value.receiverRegion, order.value.receiverDetail].filter(Boolean).join(' ') || '—'
@@ -583,6 +598,12 @@ onLoad((options) => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 20rpx;
+}
+
+.status-tags {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
 }
 
 .order-no {

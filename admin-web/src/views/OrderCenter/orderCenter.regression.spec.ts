@@ -54,6 +54,15 @@ describe('订单中心 · 定制订单走抽屉', () => {
     expect(supplementPanelSource).toContain('initialKeyword')
     expect(stripComments(routerSource)).toContain('redirectTo("/order-center", { type: "SUPPLEMENT" })')
   })
+
+  it('补剂有未完结售后时，订单行直接挂「售后中/退款中」标签', () => {
+    const panel = stripComments(supplementPanelSource)
+    // 新售后不改订单 status，列表必须读后端派生的 hasOpenAftersale
+    expect(panel).toContain('row.hasOpenAftersale')
+    expect(panel).toContain('row.openAftersaleLabel')
+    // 「售后中」tab 仍然走 AFTERSALE，但后端把它解释成「有未完结售后单」
+    expect(panel).toContain("{ label: '售后中', value: 'AFTERSALE' }")
+  })
 })
 
 describe('订单中心 · 类型与子类型（2026-10-21）', () => {

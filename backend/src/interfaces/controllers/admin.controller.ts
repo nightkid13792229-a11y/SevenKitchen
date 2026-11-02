@@ -37,6 +37,7 @@ import {
   type UpdateRecommendedProductDto,
 } from '../../application/ingredient/recommended-product.service';
 import { IngredientPriceBasisService } from '../../application/ingredient/ingredient-price-basis.service';
+import { OrderProcurementDisclosureService } from '../../application/order/order-procurement-disclosure.service';
 import type {
   CreateIngredientDto,
   UpdateIngredientDto,
@@ -142,6 +143,7 @@ export class AdminController {
     private readonly cosService: TencentCosService,
     private readonly ingredientPriceBasisService?: IngredientPriceBasisService,
     private readonly jwtAuthService?: JwtAuthService,
+    private readonly orderProcurementDisclosureService?: OrderProcurementDisclosureService,
   ) {}
 
   private mapNutritionFoodMappings(mappings?: any[]) {
@@ -2407,6 +2409,38 @@ export class AdminController {
     }
   }
 
+  /**
+   * 员工端订单详情的「实际采购」：口径与顾客端一致，只是走 /admin/orders/:id。
+   */
+  private async buildActualProcurementForAdmin(order: any) {
+    if (
+      !this.orderProcurementDisclosureService ||
+      order?.type !== 'FRESH_FOOD'
+    ) {
+      return null;
+    }
+
+    const ingredientMap = new Map<string, { id: string; name: string }>();
+    for (const item of order.items ?? []) {
+      const snapshotItems = (item.recipeSnapshot as any)?.items ?? [];
+      for (const row of snapshotItems) {
+        const id = row?.ingredient_id || row?.ingredientId;
+        if (!id || ingredientMap.has(id)) {
+          continue;
+        }
+        ingredientMap.set(id, { id, name: row?.name ?? '' });
+      }
+    }
+    if (ingredientMap.size === 0) {
+      return null;
+    }
+
+    return this.orderProcurementDisclosureService.build({
+      orderId: order.id,
+      ingredients: Array.from(ingredientMap.values()),
+    });
+  }
+
   private async mapOrderToAdminDto(order: any): Promise<AdminOrderDto> {
     /**
      * 实际运费 / 无需发货是**纯记账字段**，不在领域实体上，这里单独取一次。
@@ -2470,6 +2504,8 @@ export class AdminController {
       items: await Promise.all(
         order.items.map((item: any) => this.mapAdminOrderItem(item)),
       ),
+      // 员工端订单详情也带「实际采购」：店长在小程序里看的正是这个接口
+      actualProcurement: await this.buildActualProcurementForAdmin(order),
       pricingBreakdown: order.pricingBreakdownSnapshot
         ? {
             costIngredients: order.pricingBreakdownSnapshot.costIngredients,

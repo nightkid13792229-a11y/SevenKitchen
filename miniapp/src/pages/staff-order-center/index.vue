@@ -77,17 +77,14 @@
           <text class="status">{{ item.statusLabel }}</text>
         </view>
 
-        <!-- 主行显示食谱名；鲜食卡片下面补一行顾客/狗狗（2026-11-02 老板要求）。
+        <!-- 主行显示食谱名；三类卡片下面都补一行顾客/狗狗（2026-11-02 老板要求）。
              手机号仍然不显示：员工按食谱干活，电话去详情页看 -->
         <view v-if="item.recipeName" class="order-main">
           <text class="recipe-name">{{ item.recipeName }}</text>
         </view>
 
-        <!-- 鲜食卡片：顾客姓名 + 狗狗名，现场认单用；定制/补剂卡片保持原样 -->
-        <view
-          v-if="item.type === 'FOOD' && (item.customerName || item.dogName)"
-          class="order-people"
-        >
+        <!-- 三类卡片：顾客姓名 + 狗狗名，现场认单用；缺哪项就只显示另一项 -->
+        <view v-if="item.customerName || item.dogName" class="order-people">
           <text v-if="item.customerName" class="person">顾客 {{ item.customerName }}</text>
           <text v-if="item.customerName && item.dogName" class="person-sep">·</text>
           <text v-if="item.dogName" class="person">狗狗 {{ item.dogName }}</text>
@@ -153,9 +150,9 @@ interface OrderCenterItem {
   statusGroup: string
   /** 卡片主行显示的食谱名；空 = 这单没绑定食谱（多数补剂单） */
   recipeName: string | null
-  /** 顾客昵称；鲜食卡片上显示（2026-11-02） */
+  /** 顾客昵称；三类卡片上都显示（2026-11-02） */
   customerName: string | null
-  /** 狗狗名；鲜食卡片上显示（2026-11-02） */
+  /** 狗狗名；三类卡片上都显示（2026-11-02） */
   dogName: string | null
   createdAt: string
   amountTotal: number | null

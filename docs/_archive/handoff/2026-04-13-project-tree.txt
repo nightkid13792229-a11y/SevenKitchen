@@ -1,0 +1,352 @@
+SevenKitchen project tree summary (generated 2026-04-13)
+
+.
+.github
+.github/workflows
+admin-web
+admin-web/.vscode
+admin-web/public
+admin-web/src
+admin-web/src/api
+admin-web/src/assets
+admin-web/src/components
+admin-web/src/components/Dog
+admin-web/src/constants
+admin-web/src/layouts
+admin-web/src/router
+admin-web/src/store
+admin-web/src/types
+admin-web/src/utils
+admin-web/src/views
+admin-web/src/views/Aftersale
+admin-web/src/views/Analytics
+admin-web/src/views/Breeds
+admin-web/src/views/CustomRecipes
+admin-web/src/views/Dogs
+admin-web/src/views/Finance
+admin-web/src/views/Finance/components
+admin-web/src/views/IngredientTags
+admin-web/src/views/Ingredients
+admin-web/src/views/Ingredients/components
+admin-web/src/views/Orders
+admin-web/src/views/Orders/components
+admin-web/src/views/Purchasing
+admin-web/src/views/Recipes
+admin-web/src/views/Users
+admin-web/tests
+backend
+backend/.data
+backend/deploy
+backend/docs
+backend/miniapp
+backend/prisma
+backend/prisma/manual_migrations
+backend/prisma/migrations
+backend/prisma/migrations/20251215000000_order_persistence
+backend/prisma/migrations/20251215010000_address_persistence
+backend/prisma/migrations/20251215020000_dog_persistence
+backend/prisma/migrations/20251216060116_recipe_persistence
+backend/prisma/migrations/20251216063921_order_persistence_table_mapping
+backend/prisma/migrations/20251216070826_address_persistence_table_mapping
+backend/prisma/migrations/20251216101028_add_order_dog_address_references
+backend/prisma/migrations/20251216115956_add_daily_intake_g_to_order_item
+backend/prisma/migrations/20251216133724_add_production_batch_and_packaging_unit
+backend/prisma/migrations/20251216151402_add_allocation_lock_to_order_item
+backend/prisma/migrations/20251216161937_add_kitchen_task_fields_to_packaging_unit
+backend/prisma/migrations/20251217010000_add_inventory_ledger_entry
+backend/prisma/migrations/20251219193259_add_order_cancellation_fields
+backend/prisma/migrations/20251219202028_add_payment_tracking_fields
+backend/prisma/migrations/20251219202948_add_order_status_history
+backend/prisma/migrations/20251219225121_fix_order_payment_columns
+backend/prisma/migrations/20251220000000_add_order_shipping_fields
+backend/prisma/migrations/20251220003000_fix_order_shipping_columns
+backend/prisma/migrations/20251220010000_fix_all_order_lifecycle_columns
+backend/prisma/migrations/20251224145000_add_custom_breed_name
+backend/prisma/migrations/20260106195839_add_example_weight_to_recipe_item
+backend/prisma/migrations/20260109000000_add_order_freezing_and_aftersale
+backend/prisma/migrations/20260109000000_phase9_order_status_optimization
+backend/prisma/migrations/20260125192532_add_reimbursement_cost_details
+backend/prisma/migrations/20260125205511_update_reimbursement_status_and_add_payment_proof
+backend/prisma/migrations/20260125225305_remove_allergy_record_fields
+backend/prisma/migrations/20260127183915_add_min_pot_weight_config
+backend/prisma/migrations/20260130_add_is_custom_recipe
+backend/prisma/migrations/20260131000000_add_favorite_recipe_table
+backend/prisma/migrations/20260201230300_add_original_target_production_date
+backend/prisma/migrations/20260201231000_add_missing_purchase_and_custom_recipe_tables
+backend/prisma/migrations/2026020123300000_add_only_missing_tables
+backend/prisma/migrations/20260203210000_add_reimbursement_table
+backend/prisma/migrations/20260204170000_add_is_common_to_dog_breed
+backend/prisma/migrations/20260329000000_add_recipe_share_token
+backend/prisma/migrations/20260331120000_add_ingredient_price_change
+backend/prisma/migrations/20260331180000_add_home_header_bg_image_url
+backend/prisma/migrations/20260331223000_make_purchase_record_quantity_decimal
+backend/prisma/migrations/20260401170000_add_purchase_record_normalization_fields
+backend/prisma/migrations/20260401193000_add_purchase_item_suggested_product_fields
+backend/prisma/migrations/20260401210000_remove_pricing_group_fields
+backend/prisma/migrations/20260401233000_add_order_admin_remark
+backend/prisma/migrations/20260402120000_add_stock_replenishment_purchasing
+backend/prisma/migrations/20260402153000_add_ingredient_stock_policy_fields
+backend/prisma/migrations/20260402190000_add_aliases_to_dog_breed
+backend/prisma/migrations/20260402213000_add_inventory_management_foundation
+backend/prisma/migrations/20260403121500_add_procurement_sku
+backend/prisma/migrations/20260403133000_add_purchase_procurement_sku_snapshots
+backend/prisma/migrations/20260403183000_add_reimbursement_paid_fields
+backend/prisma/migrations/20260403190000_add_dog_profile_event
+backend/prisma/migrations/20260403190000_add_finance_expense_foundation
+backend/prisma/migrations/20260407123000_add_dog_avatar
+backend/prisma/migrations/20260407234500_add_missing_recommended_product_table
+backend/prisma/migrations/20260408133000_add_feedback_nutrition_design_foundation
+backend/prisma/migrations/20260411150000_add_ingredient_nutrition_profile
+backend/prisma/migrations/20260411153000_extend_procurement_sku_domain_fields
+backend/prisma/migrations/20260411173000_add_procurement_sku_to_inventory_ledger
+backend/prisma/migrations/20260411183000_add_procurement_sku_to_inventory_operations
+backend/public
+backend/scripts
+backend/scripts/migrations
+backend/scripts/scripts-archive
+backend/sql
+backend/src
+backend/src/application
+backend/src/application/address
+backend/src/application/analytics
+backend/src/application/config
+backend/src/application/custom-recipe
+backend/src/application/custom-recipe/dto
+backend/src/application/diy-sheet
+backend/src/application/dog
+backend/src/application/finance
+backend/src/application/health
+backend/src/application/ingredient
+backend/src/application/ingredient-tag
+backend/src/application/inventory
+backend/src/application/kitchen
+backend/src/application/nutrition-food
+backend/src/application/order
+backend/src/application/production
+backend/src/application/purchasing
+backend/src/application/recipe
+backend/src/application/scheduler
+backend/src/application/shipping
+backend/src/application/weight-record
+backend/src/assets
+backend/src/assets/fonts
+backend/src/domain
+backend/src/domain/address
+backend/src/domain/common
+backend/src/domain/custom-recipe
+backend/src/domain/dog
+backend/src/domain/health
+backend/src/domain/ingredient
+backend/src/domain/ingredient-tag
+backend/src/domain/inventory
+backend/src/domain/order
+backend/src/domain/order-pricing-snapshot
+backend/src/domain/packaging
+backend/src/domain/pricing
+backend/src/domain/production
+backend/src/domain/purchasing
+backend/src/domain/recipe
+backend/src/domain/shipping
+backend/src/domain/user
+backend/src/infrastructure
+backend/src/infrastructure/repositories
+backend/src/infrastructure/services
+backend/src/infrastructure/sms
+backend/src/infrastructure/wechat
+backend/src/interfaces
+backend/src/interfaces/auth
+backend/src/interfaces/common
+backend/src/interfaces/controllers
+backend/src/interfaces/controllers/auth
+backend/src/interfaces/controllers/custom-recipe
+backend/src/interfaces/dto
+backend/src/interfaces/dto/addresses
+backend/src/interfaces/dto/admin
+backend/src/interfaces/dto/analytics
+backend/src/interfaces/dto/auth
+backend/src/interfaces/dto/breeds
+backend/src/interfaces/dto/common
+backend/src/interfaces/dto/dogs
+backend/src/interfaces/dto/feedback
+backend/src/interfaces/dto/finance
+backend/src/interfaces/dto/health
+backend/src/interfaces/dto/kitchen
+backend/src/interfaces/dto/nutrition-food
+backend/src/interfaces/dto/orders
+backend/src/interfaces/dto/production
+backend/src/interfaces/dto/recipes
+backend/src/interfaces/dto/reviews
+backend/src/interfaces/dto/users
+backend/src/interfaces/dto/weight-record
+backend/src/interfaces/guards
+backend/src/label
+backend/src/label/dto
+backend/src/support
+backend/src/utils
+backend/test
+backend/tests
+backend/tests/application
+backend/tests/application/analytics
+backend/tests/application/dog
+backend/tests/application/finance
+backend/tests/application/ingredient
+backend/tests/application/inventory
+backend/tests/application/kitchen
+backend/tests/application/order
+backend/tests/application/production
+backend/tests/application/purchasing
+backend/tests/application/recipe
+backend/tests/application/shipping
+backend/tests/application/weight-record
+backend/tests/controllers
+backend/tests/domain
+backend/tests/domain/dog
+backend/tests/domain/order
+backend/tests/infrastructure
+backend/tests/infrastructure/repositories
+backend/tests/interfaces
+backend/tests/interfaces/auth
+backend/tests/interfaces/controllers
+backend/tests/prisma
+backend/tests/scripts
+backend/tests/support
+backend/tests/utils
+docs
+docs/_alignment
+docs/_history
+docs/config
+docs/e2e
+docs/handoff
+docs/plans
+docs/reports
+docs/superpowers
+docs/superpowers/plans
+docs/superpowers/specs
+docs/testing
+miniapp
+miniapp/Users
+miniapp/Users/zhaochen
+miniapp/Users/zhaochen/Documents
+miniapp/Users/zhaochen/Documents/SevenKitchen
+miniapp/Users/zhaochen/Documents/SevenKitchen/miniapp
+miniapp/Users/zhaochen/Documents/SevenKitchen/miniapp/docs
+miniapp/docs
+miniapp/scripts
+miniapp/src
+miniapp/src/api
+miniapp/src/components
+miniapp/src/components/dog-profile
+miniapp/src/config
+miniapp/src/constants
+miniapp/src/custom-tab-bar
+miniapp/src/mixins
+miniapp/src/pages
+miniapp/src/pages/address-edit
+miniapp/src/pages/address-list
+miniapp/src/pages/aftersale-apply
+miniapp/src/pages/calculate-portion
+miniapp/src/pages/checkout
+miniapp/src/pages/common
+miniapp/src/pages/custom-recipe
+miniapp/src/pages/diy-sheet
+miniapp/src/pages/diy-sheet-list
+miniapp/src/pages/dog-create
+miniapp/src/pages/dog-profile-basic
+miniapp/src/pages/dog-profile-feeding
+miniapp/src/pages/dog-profile-health
+miniapp/src/pages/dog-profile-list
+miniapp/src/pages/dog-profile-overview
+miniapp/src/pages/favorite-recipes
+miniapp/src/pages/feedback-form
+miniapp/src/pages/feedback-list
+miniapp/src/pages/home
+miniapp/src/pages/login
+miniapp/src/pages/me
+miniapp/src/pages/network-settings
+miniapp/src/pages/order-config
+miniapp/src/pages/order-detail
+miniapp/src/pages/orders-list
+miniapp/src/pages/privacy
+miniapp/src/pages/profile-setup
+miniapp/src/pages/recipe-detail
+miniapp/src/pages/recipe-diy
+miniapp/src/pages/recipe-list
+miniapp/src/pages/recipe-order
+miniapp/src/pages/shared-photos
+miniapp/src/pages/snapshot
+miniapp/src/pages/staff-inventory
+miniapp/src/pages/staff-orders
+miniapp/src/pages/staff-production
+miniapp/src/pages/staff-purchasing
+miniapp/src/pages/staff-purchasing/reimbursement
+miniapp/src/pages/staff-recipes
+miniapp/src/pages/staff-shipping
+miniapp/src/pages/staff-workbench
+miniapp/src/pages/terms
+miniapp/src/pages/weight-management
+miniapp/src/static
+miniapp/src/static/tabbar
+miniapp/src/utils
+miniapp/src/utils/jcing-sdk
+miniapp/src/utils/mini _program_3.0.4_release_20250925
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/.idea
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/.idea/inspectionProfiles
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/.mini-ide
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/api
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/btn
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/classSubdirectory
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/custom-input
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/static
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/pages
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/pages/index
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/utils
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/utils/JCAPI
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/Images
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/SaveData
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/TestLabel
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/index
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/logs
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/utils
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/utils/JCAPI
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/.idea
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/Images
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/pages
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/pages/index
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/utils
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/utils/JCAPI
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/.hbuilderx
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/public
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/pages
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/pages/index
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/pages/main
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/static
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/static/JCAPI
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/utils
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/.hbuilderx
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/composables
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/pages
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/pages/index
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/pages/main
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/static
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/static/JCAPI
+miniapp/src/utils/mini _program_3.0.4_release_20250925/排版相关
+miniapp/src/utils/mini _program_3.0.4_release_20250925/接口文档
+miniapp/src/utils/mini _program_3.0.4_release_20250925/注意事项
+miniapp/static
+miniapp/static/tabbar
+scripts
+skills
+skills/production-ssh

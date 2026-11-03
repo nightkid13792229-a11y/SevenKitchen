@@ -1,0 +1,424 @@
+163ba2d	2025-12-16	chore: accept Phase 8.6 comprehensive verification
+2d791c0	2025-12-16	chore: initial project structure
+f5c0aa8	2025-12-16	docs: fill phase8.7 alignment report and gap list
+a1c301f	2025-12-16	feat: implement DogCalcService with constants and full test coverage
+3427058	2025-12-16	feat(order): add dailyIntakeG snapshot and energy density persistence (phase 8.9)
+14e5e40	2025-12-16	fix(phase8.10): add batch-level orderItemCount and ensure sourceOrderItemIds is array
+31e53ad	2025-12-16	fix(phase8.10): expose sourceOrderItemIds in Admin API response
+3535704	2025-12-16	docs: phase 8.10 closeout (baseline, capabilities, history)
+ac7828d	2025-12-16	docs: add phase 8.10 closeout archive
+e1fdef8	2025-12-16	feat(phase8.11): implement allocation lock for production batches
+885a8dd	2025-12-16	fix(phase8.11): macOS compatibility for allocation lock verify script
+1cf0553	2025-12-16	fix(script): update auth login payload for phase8.11 verify
+c7980ed	2025-12-16	feat(production): allocation lock for production batches (phase 8.11)
+6334a23	2025-12-17	feat(phase8.12): implement kitchen task data capture MVP
+68fe9ab	2025-12-17	docs: close Phase 8.12 kitchen task MVP (baseline, capabilities, archive)
+b4e942a	2025-12-17	feat(phase8.13): implement inventory deduction from kitchen tasks
+d2b040b	2025-12-17	fix(phase8.13): repair prisma migration + remove unused ts-expect-error
+08e5857	2025-12-17	chore: accept Phase 8.13 inventory deduction
+2debf46	2025-12-17	fix(phase8.12): repair 500 error in kitchen batches API + add tests
+e2af289	2025-12-17	test: fix kitchen service test assertion
+14c557a	2025-12-17	fix: allow empty packagingUnits in kitchen batch list
+51a0e78	2025-12-17	chore: update Phase 8.12 acceptance status with E2E verification
+b5d2a4e	2025-12-17	fix(script): enhance Phase 8.12+8.13 E2E script for macOS stability
+f458ab6	2025-12-17	fix(script): repair health check parsing in phase8_12_13 e2e
+f85319d	2025-12-17	fix(script): repair login curl in phase8_12_13 e2e
+16c37ea	2025-12-17	fix(phase8.12+8.13): add recipeSnapshot.items to kitchen batch detail API
+eb31e21	2025-12-17	docs: add verification guide for recipe snapshot items fix
+ff4b614	2025-12-17	fix(script): remove local keyword outside function for macOS bash 3.2 compatibility
+616ce32	2025-12-17	fix(phase8.12+8.13): fix Step 7 500 error with robust validation and error handling
+0955ffd	2025-12-17	fix(phase8.12): support two-stage status transition for updateTask
+3256ffc	2025-12-17	fix(script): two-stage task update in phase8_12_13 e2e
+fd685de	2025-12-17	docs: Phase 8.12+8.13 E2E acceptance and archival setup
+e4046e3	2025-12-17	feat(script): add E2E_FORCE_FRESH_DEDUCTION auto-cleanup mode
+664eccd	2025-12-17	docs: add Phase 8.12+8.13 verification checklist
+e0e322d	2025-12-17	test: eliminate console noise in test output
+3c37e55	2025-12-17	test: eliminate console noise in test output
+b875785	2025-12-17	feat(phase8.14.1): complete shipping fulfillment hardening
+a4fd33b	2025-12-17	fix(phase8.14): make health check compatible with /api/v1 prefix
+2df4d40	2025-12-17	fix(phase8.14): fix staff login in E2E script to use customerId
+6228d7e	2025-12-17	fix(phase8.14): add Step 2.5 auto-create dog in E2E script
+3dc4331	2025-12-19	Phase 8.14: Shipping Fulfillment MVP (batch completion + shipping persistence)
+70bb41e	2025-12-19	chore(phase8.14): remove noise-only files from PR
+41ed47a	2025-12-19	fix(phase8.14): restore domain state machine + shipping fields
+93127fb	2025-12-19	chore(phase8.15): add manual migration + acceptance doc
+87ad072	2025-12-19	feat(phase8.14-8.15): shipping fulfillment + order completion
+560206e	2025-12-19	Merge pull request #2 from nightkid13792229-a11y/pr-1
+adc3696	2025-12-20	chore: trigger CI
+2ed4758	2025-12-20	ci: add verify-orders workflow
+9c3fa49	2025-12-20	chore: update assert_public_recipe script
+a299cbc	2025-12-20	ci: rerun workflow with corepack enabled
+b7f0db4	2025-12-21	ci: rerun workflow with corepack enabled
+9dfae51	2025-12-21	ci: fix pnpm availability in workflow
+1543393	2025-12-21	ci: fix pnpm workspace config
+fb98618	2025-12-21	fix: add missing order shipping fields migration
+9957cf9	2025-12-21	fix: ensure order shipping columns exist in db
+40eaec6	2025-12-21	fix: align order table with prisma schema
+9a54a1c	2025-12-21	Reset Prisma migrations before deployment
+cdc861d	2025-12-21	Add Tencent Lighthouse deployment kit
+7c8bff2	2025-12-23	Phase 4.1: 实现狗狗档案录入与喂食建议展示功能
+53595a9	2025-12-23	fix: build error type mismatch in calcPreview method
+db0c5a9	2025-12-23	fix: add entry point check to prevent double bootstrap execution
+ac8f92d	2025-12-23	feat: add 200 dog breeds database with AAHA standards
+73f613a	2025-12-24	docs: add database naming conventions to prevent field name errors
+f76fd22	2025-12-24	fix: support mixed breed dogs with virtual ID
+4aa751c	2025-12-24	feat: add custom breed name support for mixed breed dogs
+3b74f44	2025-12-24	feat: add admin web dog profile management module
+c77d143	2025-12-24	fix: enable CORS for local admin web development
+6323cca	2025-12-25	fix: handle mixed breed dogs without size class in GET/PUT endpoints
+c16c320	2025-12-25	fix: implement edit mode for dog profile page
+7a28d74	2025-12-25	fix: correct type errors in DTOs
+731ef1b	2025-12-25	fix: use onLoad lifecycle hook to properly receive page parameters
+c513c7e	2025-12-25	fix: import onLoad from @dcloudio/uni-app instead of vue
+251f430	2025-12-25	fix: align mixed breed validation logic with frontend
+05cc0c2	2025-12-25	fix: correct mealsPerDay validation and mixed breed logic
+fd4a3d1	2025-12-25	fix: mark breed parameter as unused to fix TS build error
+81b7ca0	2025-12-25	debug: add logging to track breedId in submit payload
+cca4982	2025-12-25	feat: improve admin-web dog profile management
+024dbcb	2025-12-25	fix: add missing fields to UpdateDogProfileDto including breedId
+829ca88	2025-12-25	feat: optimize dog profile creation UX with visual selectors
+46a29dc	2025-12-25	feat: add ingredient management module
+08e8b28	2025-12-25	fix: add ingredient management menu item to sidebar
+307cae3	2025-12-25	feat: add supplement seed data and adjust ingredient table columns
+989b4d3	2025-12-25	fix: improve seedIngredients logic to check each ingredient individually
+9efd9e2	2025-12-26	feat: add home page and CLAUDE.md
+ece15b5	2025-12-26	feat: optimize dog profile creation with auto life stage and treat fields
+e7bad58	2025-12-26	Merge feat/admin-web-improvements into main
+a0a3133	2025-12-26	chore: add editor config for consistent formatting
+364c087	2025-12-26	feat: 优化零食设置UI交互
+7d3c7c1	2025-12-27	feat: 添加狗狗能量计算过程详细展示
+26e3a8a	2025-12-27	feat: 修改小程序API地址为本地后端
+32acdff	2025-12-27	feat: add breed management functionality for admin-web
+cc4816d	2025-12-27	feat: add detailed energy calculation process display
+dec3b13	2025-12-27	Merge feature/breed-management into main
+cb598e4	2025-12-27	fix: add missing methods to DogBreedRepository interface
+8a9c09b	2025-12-27	feat: add pagination to breed management table
+9fe4e2f	2025-12-27	fix: add repository mode configuration to .env.example
+9011054	2025-12-27	feat: add ingredient tag management system with autocomplete
+2075eec	2025-12-28	feat: enhance dog profile management with UI improvements
+084e4b2	2025-12-29	feat(backend): Add User model and owner info API
+962be63	2025-12-30	fix(ingredients): fix form state management and add display improvements
+ff953b3	2025-12-30	feat(backend): improve ingredient sorting and include tags in API
+ceaee6e	2025-12-30	feat(auth): add admin login and authentication improvements
+d0190ca	2025-12-30	feat(backend): add WeChat, SMS integration and update dependencies
+16c5cc2	2025-12-30	feat(admin-web): add user management and authentication UI
+ec70d90	2025-12-30	feat(miniapp): add login page and API utilities
+5b767bf	2026-01-01	feat: implement comprehensive health tag architecture migration and new features
+f53d109	2026-01-02	chore: remove ingredient import script
+0f3cabb	2026-01-05	feat: implement shopping cart, pricing system and shipping templates
+82e83a6	2026-01-05	feat(miniapp): 优化购物车页面
+6a9999f	2026-01-05	feat(backend): 添加原料采购渠道字段到价格明细
+5682f71	2026-01-05	feat(backend): 优化包装和运费计算逻辑
+0ad7dfd	2026-01-05	feat(miniapp): 在订购成品页添加原料清单板块
+e6f68e2	2026-01-05	style(miniapp): 统一页面显示格式和样式
+324278c	2026-01-05	feat(backend): 购物车显示实时价格，确保与订购成品页价格一致
+cb356ca	2026-01-07	feat(miniapp): 优化订单确认页面文案和布局
+a6b4bcc	2026-01-07	feat: 移除购物车功能并添加DIY食谱配置页面
+1a6e5be	2026-01-09	feat: 添加DIY制作单功能和优化页面
+95eab7d	2026-01-09	feat: 实现Phase 9.1订单状态系统和图片上传功能重构
+02770a9	2026-01-10	feat: 为食谱订购页面添加生命阶段不匹配警告功能
+cbde65a	2026-01-10	feat: 实现食谱收藏功能，修复收藏数量统计问题
+931c5c7	2026-01-13	fix: 修复食谱exampleWeight字段无法保存到数据库的问题
+d52d33a	2026-01-14	feat: Phase 1-2 采购清单重构 - 数据库和领域层
+53d9713	2026-01-14	feat: Phase 2 完成 - 采购记录业务逻辑和API接口
+a7b6049	2026-01-14	fix: 修复PrismaPurchaseRecordRepository的TypeScript编译错误
+ecfd0ce	2026-01-14	feat: Phase 3 完成 - 采购记录功能前端开发
+d68cebd	2026-01-14	fix: 后端返回采购清单时包含recordsCount和totalActualCost字段
+2a128ed	2026-01-14	test: 完成采购清单功能测试验证
+5093c74	2026-01-14	feat: 完成订单系统和生产管理功能重构
+8f97dfa	2026-01-14	feat: 完成小程序采购管理和生产管理功能
+32f5e41	2026-01-14	feat: 管理后台添加采购管理模块
+091c12f	2026-01-14	docs: 添加项目文档和测试报告
+f840dc4	2026-01-14	docs: 添加AI沟通规范并更新gitignore规则
+958343b	2026-01-17	feat: 优化采购管理和生产管理模块，新增打印功能
+4e9eab5	2026-01-23	fix: 修复采购和生产管理的时区转换问题
+ed1eb85	2026-01-23	refactor(miniapp): 统一日期格式化工具
+a58ea99	2026-01-23	refactor(admin-web): 统一日期格式化工具和类型定义
+3f7a25a	2026-01-23	fix(miniapp): 修复打印标签份数不生效的问题
+fced231	2026-01-23	feat(db): 添加数据清理脚本
+9a1c1c8	2026-01-23	feat(miniapp): 添加标签打印功能和SDK集成
+f5bebb7	2026-01-23	feat(admin-web): 添加订单确认收款功能
+723e6a6	2026-01-23	chore: 更新Backend配置和数据模型
+3418810	2026-01-23	chore(miniapp): 更新小程序配置和页面
+70cbfa4	2026-01-23	feat(miniapp): 添加订单API工具
+dfaddd1	2026-01-23	chore: 更新订单详情页和微信服务
+556d084	2026-01-23	feat(db): 添加订单数据更新脚本
+be1fcfd	2026-01-23	feat(miniapp): 添加吉成打印机SDK
+118d04d	2026-01-23	docs: 添加WSAVA疫苗指南文档
+548d919	2026-01-23	chore: 更新gitignore排除临时文件
+74b5828	2026-01-23	refactor: 根本性解决时区转换问题
+d6e74a4	2026-01-24	chore: 保存当前工作进度，准备重构订单状态
+46cbc6f	2026-01-24	refactor: 将WAITING_FOR_PRODUCTION状态重命名为PURCHASING并实现采购状态转换
+bf6547e	2026-01-24	refactor: 更新Prisma Schema和前端类型定义以支持PURCHASING状态
+80749f0	2026-01-24	docs: 添加数据库迁移脚本和完成报告
+7ac9ab1	2026-01-24	fix: 修复登录页面Logo显示问题并隐藏用户协议文案
+d26ea4f	2026-01-24	fix: 修复登录页面Logo路径为相对路径
+ecc334e	2026-01-24	config: 添加PNG资源到vite配置确保静态文件被正确处理
+c631b4e	2026-01-25	fix: 修复采购清单生成和优化相关页面
+c0649be	2026-01-25	feat: 狗狗管理、健康记录及页面优化功能
+7c0d3a2	2026-01-25	feat: 优化采购管理和生产管理页面功能
+e07a2af	2026-01-25	feat: 添加预览采购需求API和页面配置
+8828c69	2026-01-25	refactor: 删除采购清单的已取消状态
+9674c0a	2026-01-25	refactor: 删除采购清单状态筛选中的已取消选项
+be76705	2026-01-25	refactor: 修改采购清单卡片中的实际总额文案为采购金额
+aa77d54	2026-01-25	feat: 新增获取所有采购渠道列表的API
+04d89da	2026-01-25	fix: 修复采购渠道快速选择从数据库加载所有渠道
+41c2466	2026-01-25	docs: 添加报销单费用明细功能设计文档
+3d692b3	2026-01-25	docs: 添加报销单费用明细功能实施计划
+7840672	2026-01-25	feat: 添加报销单费用明细字段到数据库
+c2a0a56	2026-01-25	feat: 更新 Reimbursement 实体支持费用明细
+f0dc201	2026-01-25	fix: 添加费用字段验证和计算方法
+43f52e4	2026-01-25	feat: 添加报销单费用明细验证和存储
+2a6f147	2026-01-25	fix: 增强自定义费用数组验证
+a1b7cc4	2026-01-25	docs: 更新报销单 API 文档
+432c1ca	2026-01-25	feat: 更新前端 API 类型支持费用明细
+2d2d861	2026-01-25	feat: 提交报销时传递费用明细
+3bad26c	2026-01-25	feat: 支持重新提交时加载已有费用明细
+913d9b9	2026-01-25	feat: 在详情页展示费用汇总和计算公式
+60e7810	2026-01-25	test: 添加报销单费用明细功能测试脚本和文档
+484623b	2026-01-25	fix: 修复测试文件中的类型错误
+b743eb7	2026-01-25	fix: 报销单详情页显示优化
+bb641f8	2026-01-25	fix: 禁用代码依赖分析过滤，防止vendor.js被忽略
+ffc0cb3	2026-01-25	fix: 更新基础库版本并关闭url检查
+81832e4	2026-01-25	fix: 报销单详情页添加提交人和审核人信息
+3d1a2f6	2026-01-25	feat: 添加删除病史和体检附件的API接口
+39c68a3	2026-01-25	feat: 删除附件时同步删除腾讯云COS服务器文件
+cd9a132	2026-01-25	fix: 体检记录日期只返回年月日格式
+0d947bb	2026-01-25	fix: 病史记录发病日期只返回年月日格式
+b8d7796	2026-01-25	fix: 移除URL API使用以兼容小程序环境
+20037f7	2026-01-25	feat: 编辑病史/体检记录时立即保存到数据库
+282c128	2026-01-25	feat: 给AllergyRecord模型添加attachments字段
+f4e2cfe	2026-01-25	feat: AllergyRecordResponseDto添加attachments字段
+4dca67f	2026-01-25	feat: 给过敏记录DTO添加attachments字段支持
+63d1385	2026-01-25	feat: getDog接口返回allergyRecords过敏记录数据
+bc95c12	2026-01-25	feat: 添加过敏记录AllergyRecord接口和formData字段
+cbccdf1	2026-01-25	feat: 添加过敏记录状态变量和选项配置
+e78da16	2026-01-25	feat: 实现过敏记录完整CRUD函数和文件上传管理功能
+ee70476	2026-01-25	feat: populateFormData加载过敏记录数据
+4fd151b	2026-01-25	feat: 添加过敏记录UI(卡片列表、弹窗、辅助函数、computed属性)
+9546e18	2026-01-25	feat: submit函数包含allergyRecords字段
+76dd853	2026-01-25	fix: 修复过敏记录确认方picker逻辑错误
+5b91ba2	2026-01-25	feat(allergy-records): add attachments support to allergy records feature
+d7f116f	2026-01-25	refactor(allergy-records): simplify allergy record model
+e15e4a0	2026-01-25	fix(allergy-records): correct file upload API endpoint
+5933a27	2026-01-25	feat(allergy-records): add delete attachment API for allergy records
+f4c9717	2026-01-28	chore: add .worktrees/ to gitignore
+0ad8860	2026-01-30	chore: update manifest.json and vite.config.ts for production deployment
+8076706	2026-01-30	fix: remove require() calls in App.vue causing TypeError
+a45c14e	2026-01-30	fix: detect production build and force use of production API URL
+ac9fe42	2026-01-30	fix: use Vite define to inject __PROD__ constant for production detection
+eb872b5	2026-01-30	fix: use uni-app conditional compilation for production API URL
+89a08ea	2026-01-31	fix: enable lazyCodeLoading for components to pass code quality review
+fc91d8d	2026-01-31	fix: add lazyCodeLoading to manifest.json mp-weixin section
+7ec925e	2026-02-01	fix(auth): add fallback nickname and debug logs for WeChat login
+d09bf2f	2026-02-01	feat(me): add user avatar and nickname display in profile page
+47869b6	2026-02-01	feat: 实现微信头像昵称填写功能
+10c28ee	2026-02-01	fix: 头像上传失败时的优雅降级处理
+7090ea9	2026-02-01	docs: 添加COS头像上传配置说明
+722e31c	2026-02-01	fix: 修复退出登录按钮被导航栏遮挡的问题
+af17d19	2026-02-01	docs: 添加微信小程序分享功能设计文档
+60c4d6f	2026-02-01	docs: 添加微信小程序分享功能实施计划
+aa92cf4	2026-02-01	feat: 创建mixins目录用于存放可复用的组合式函数
+e5edb27	2026-02-01	feat: 实现ShareMixin分享功能核心逻辑
+7fdf3b6	2026-02-01	feat: 首页集成分享功能
+49d97ef	2026-02-01	feat: 食谱详情页集成动态分享功能
+bacb1e5	2026-02-01	feat: 收藏食谱页集成分享功能
+ff1bb3b	2026-02-01	feat: 添加分享图片资源(临时占位图)
+aef3708	2026-02-01	feat: 在pages.json中启用页面分享功能
+58f24a6	2026-02-01	docs: 添加分享功能测试指南
+14a5cbd	2026-02-01	docs: 添加分享功能实施完成总结
+107616e	2026-02-01	debug: 添加制备方法加载诊断日志
+d23da97	2026-02-01	fix: 修复全局配置图片上传时的500错误
+3ac7eab	2026-02-01	fix: 修复reimbursement表缺失导致的迁移失败
+b7f3219	2026-02-01	fix: add missing original_target_production_date column to order table
+326393b	2026-02-02	feat: 将分享图片从本地静态文件改为COS链接配置
+0b37642	2026-02-02	fix: add missing purchase, custom recipe, and related tables to production database
+544528e	2026-02-02	fix: use DO block for enum creation (PostgreSQL compatibility)
+f8042ed	2026-02-02	fix: add ReimbursementStatus enum creation
+ac6cdf4	2026-02-02	fix: add missing purchase and custom recipe tables (without reimbursement table)
+125b453	2026-02-02	fix: add migration for only missing tables (skip diy_sheet and order_pricing_snapshot)
+2547515	2026-02-02	chore: 更新分享图片COS链接为实际配置
+75095aa	2026-02-02	chore: database backup before migration sync (20260202_005959)
+c52f671	2026-02-02	chore: database backup before migration sync (20260202_005959)
+6b800ea	2026-02-02	feat: add production migrations to development
+74e3dff	2026-02-02	chore: remove duplicate migration files
+30b3383	2026-02-02	fix: 修复分享图片不显示问题（使用双script标签方案）
+23b891f	2026-02-02	chore: add production migration script
+15a9617	2026-02-02	chore: complete database synchronization between dev and production
+3e1fb8f	2026-02-02	fix: 将分享图片域名改为CDN域名以解决AccessDenied问题
+984ba75	2026-02-02	chore: archive legacy scripts and clean up scripts directory
+4f009ba	2026-02-02	chore: complete archiving of phase verification scripts
+f7c48ed	2026-02-02	chore: install pdfkit for PDF generation
+ed43726	2026-02-02	feat: create PDF generator service for production tasks
+1f75e63	2026-02-02	feat: extend COS service to support PDF file upload
+43a3ada	2026-02-02	feat: create DTOs for print task API
+f5ef43b	2026-02-02	feat: add print production task method in StaffProductionService
+b766cf8	2026-02-02	feat: add print task API endpoint
+2e0d991	2026-02-02	feat: update print task page to generate PDF for printing
+8390c4a	2026-02-02	fix: optimize print preview page layout and fix top bar overflow
+8090e45	2026-02-02	fix: add status bar height to avoid overlap with system status bar
+a8bcec3	2026-02-02	feat: optimize print preview page layout - move button to bottom and adjust table structure
+9f33e1e	2026-02-02	feat: optimize PDF layout with auto-scaling to fit in single A4 page
+716d258	2026-02-02	fix: adjust ingredients table column widths to prevent amount column overflow
+352d826	2026-02-02	feat: swap amount and preparation method columns, left-align amount
+dc53b10	2026-02-02	refactor: reduce amount column width to give more space to preparation method
+ab4d829	2026-02-02	fix: add definite assignment assertions to PrintTask DTOs
+e3363f6	2026-02-02	fix: correct pdfkit import and type annotations in PDF generator service
+b2422bb	2026-02-02	fix: exclude scripts-debug from TypeScript compilation
+0b8e9d9	2026-02-02	chore: remove TypeScript files from scripts-debug to fix build errors
+db70acf	2026-02-02	fix: ensure recipeVersion is sent as string in print request
+3af3dbf	2026-02-02	debug: add logging for recipeVersion type check
+902211c	2026-02-02	fix: handle string '0' in API response code check
+b7f0996	2026-02-02	feat: add Chinese font support for PDF generation
+a247292	2026-02-03	fix: auto-copy fonts to dist directory on build
+c6535d9	2026-02-03	fix: correct recipe filter logic and add request logging
+99b3735	2026-02-03	fix: 修正API参数和优化多项功能
+df3d506	2026-02-03	fix: 优化PDF制作单排版布局
+ab0eba4	2026-02-03	fix: 修复发货功能状态验证和UI优化
+d70d7e4	2026-02-03	style: 将PDF制作单改为黑白色设计并添加表格框线
+703b92f	2026-02-03	feat: 删除小程序中的评价、发货管理和完成订单功能
+a74d421	2026-02-03	fix: add migration to create reimbursement table in production
+1fb7fae	2026-02-04	fix: 修复用户头像上传功能并添加自动清理旧头像
+74b6baa	2026-02-05	fix: 修复小程序常见品种无法点选的问题
+5a03c7a	2026-02-05	fix: 修复admin.controller.ts中的格式错误
+0b07865	2026-02-05	fix: 修复小程序前端代码格式问题
+dc785ac	2026-02-05	fix: 管理后台常见品种改为使用数据库isCommon字段
+e06407e	2026-02-07	fix: 改进标签打印字体和图片上传错误提示
+526a236	2026-02-08	fix: 管理员在小程序端可以看到所有员工的采购清单
+6ddc122	2026-02-08	fix: 管理员在小程序端可查看所有员工的报销单
+9f0ec1c	2026-02-08	debug: 添加报销单查询详细日志
+73b2641	2026-02-08	fix: 员工工作台添加订单管理入口
+d56edb9	2026-02-10	fix: 员工账号可在小程序端查看订单详情
+18ec59f	2026-02-11	fix: 修复标签打印字体在真机不生效的问题
+e853dfb	2026-03-03	feat: 添加原料照片分享功能
+00a83c3	2026-03-05	feat: 添加后端标签图片生成API
+b0310ca	2026-03-05	fix: 修复标签打印字体问题
+b921f06	2026-03-06	fix: 修复标签打印字体问题 - 添加canvas字体注册
+541e985	2026-03-06	fix: 修复标签预览字体问题 - 使用后端统一生成图片 - 预览功能改为调用后端API生成图片 - 确保预览和打印使用相同的字体渲染 - 修复预览显示手机系统字体的问题 - 将base64图片转换为临时文件供预览使用 Co-Authored-By: Claude <noreply@anthropic.com>
+784511f	2026-03-06	fix: 改进LabelService字体路径检测逻辑
+413b07b	2026-03-06	fix: 修正start:prod脚本路径
+ba05761	2026-03-06	fix: 修正LabelController路由前缀为api/v1/labels
+1c2c6bc	2026-03-06	fix: LabelController使用统一响应格式
+16fcd9c	2026-03-08	feat: 添加食谱封面标题功能
+e4bd526	2026-03-08	docs: 新增食谱设计功能产品设计文档
+bc05487	2026-03-08	docs: 新增食谱设计功能技术实施计划
+1134e5d	2026-03-08	feat: 添加食谱设计功能数据库模型
+f380696	2026-03-08	fix: 修复食谱封面标题丢失问题
+8fb9871	2026-03-08	feat(backend): 添加营养食品功能
+5c0858f	2026-03-08	feat(miniapp): 添加隐私政策和用户协议
+40f80d7	2026-03-08	fix(miniapp): 优化标签打印功能
+8946fa7	2026-03-08	fix(miniapp): 优化订单分享照片功能
+82b7eb9	2026-03-08	docs: 精简CLAUDE.md项目规则文档
+c7dd4bb	2026-03-08	chore(backend): 更新依赖锁定文件
+c1f5807	2026-03-08	feat: 添加环境隔离配置和统一部署脚本
+a9b7c0c	2026-03-08	fix: 修复小程序环境切换和标签排版
+6fb3c33	2026-03-08	fix: 删除后端标签中食谱标题上方的横线
+b8d66a3	2026-03-08	fix: 优化产品标签排版，避免品牌名称被遮挡
+3b4f460	2026-03-08	fix: 调整标签排版，优化品牌名称与食谱标题间距
+bd2bb07	2026-03-09	fix: 修复制备方法排序问题并优化多处功能
+0552d0b	2026-03-11	fix: 修复标签打印份数问题并优化订单分享照片功能
+703d7c4	2026-03-15	fix: 修复订单分享照片权限问题和小程序配置警告
+64d7393	2026-03-15	fix: 修复精臣打印机不出纸问题，改用canvas绘制流程
+1e8bceb	2026-03-17	fix: 修改首页食谱排序规则为按创建时间降序
+686eca9	2026-03-17	fix: 修复首页食谱排序，在分组后添加排序逻辑确保正确顺序
+409153c	2026-03-19	fix: 修复部署脚本，确保服务总是重启并添加健康检查
+3059ef9	2026-03-19	feat: 添加批量重新生成封面图片的 API 端点
+d059c3d	2026-03-19	fix: 修复数据库表名大小写问题
+f8b2f9a	2026-03-19	fix: 修复原始查询中的列名使用 snake_case
+c2ba127	2026-03-19	fix: 添加 WebP 格式支持，修复封面标题渲染问题
+95f1e9e	2026-03-19	fix: 修复小程序购买链接跳转路径问题
+5b20b36	2026-03-20	fix: 修复 DIY 制作单页面购买链接跳转失败问题
+7a16bf6	2026-03-20	fix: 修复新用户首次登录时存储失败问题
+9a0e780	2026-03-20	fix: 修复购买链接功能问题
+52882dc	2026-03-21	fix: 修复订单详情页狗狗性别信息不显示问题
+84c73fa	2026-03-21	fix: 修复 TypeScript 编译错误
+f70911c	2026-03-21	fix: 修复删除生产批次时误删已完成订单数据的问题
+2263ed3	2026-03-22	feat: 采购清单排除已报销项 & 修复食谱生命阶段匹配问题
+546b762	2026-03-27	fix: 修复狗狗档案创建问题 & 添加过敏记录保存功能
+32ba0fb	2026-03-30	feat: 挑食/过敏筛选改为按CFCT分类展示食材 & 多项功能增强
+c7eb051	2026-04-03	docs: add ingredient sku separation design
+eb9d70e	2026-04-03	docs: add dog profile edit interaction design
+ba54e74	2026-04-03	feat: add procurement sku foundation
+e505964	2026-04-03	fix: harden procurement sku foundation
+abe7a4a	2026-04-03	feat: add dog profile flow helpers
+ca1c37d	2026-04-03	fix: align dog profile helpers with task scope
+4acde67	2026-04-03	docs: add finance center design spec
+768eb5e	2026-04-03	feat: switch purchasing flow to procurement skus
+3318df8	2026-04-03	fix: export cached dog lookup helper
+3e3ce76	2026-04-03	feat: expose separated diy and procurement sku endpoints
+2b316f3	2026-04-03	fix: remove stray finance center spec
+76b47c9	2026-04-03	feat: separate diy and procurement sku flows
+31edae6	2026-04-05	fix: tighten dog profile helper normalization
+5c52612	2026-04-03	feat: add dog profile flow helpers
+89b1e4e	2026-04-03	fix: align dog profile helpers with task scope
+77eee69	2026-04-03	fix: export cached dog lookup helper
+1d3e768	2026-04-05	fix: tighten dog profile helper normalization
+aba9da8	2026-04-05	feat: add dog profile overview flow
+6d64b01	2026-04-05	fix: tighten dog profile overview readiness
+f94ddee	2026-04-05	test: fix dog profile overview parity fixtures
+73deb51	2026-04-05	fix: stabilize procurement sku runtime typing
+670e50a	2026-04-05	feat: convert dog create to wizard flow
+19f74a4	2026-04-05	fix: harden purchase list filtering and fallback
+9b11391	2026-04-05	fix: relax dog create preview gating
+90a8f6a	2026-04-05	fix: validate dog create weight gating
+cb7d83d	2026-04-05	feat: add focused dog profile edit pages
+4d76b4a	2026-04-05	fix: allow local admin origins in cors
+12c5d79	2026-04-05	feat: add dog profile analytics and harden edit flows
+00c8fdf	2026-04-07	Merge branch 'codex/standard-ingredient-sku-separation' of github.com:nightkid13792229-a11y/SevenKitchen
+f73b400	2026-04-07	docs: add dog profile create flow redesign spec
+3188bde	2026-04-08	fix: add missing recommended product migration
+f64f875	2026-04-08	refactor: define create flow view boundaries
+3197e8e	2026-04-08	Merge branch 'codex/hotfix-recommended-product-migration' of github.com:nightkid13792229-a11y/SevenKitchen
+907bd4c	2026-04-08	fix: align create step weight gate
+a7d4fc1	2026-04-08	fix: wire create view helper into availability
+15496db	2026-04-08	fix: configure admin web production api base
+fab8fd6	2026-04-08	Merge branch 'codex/release-followups' of github.com:nightkid13792229-a11y/SevenKitchen
+872879b	2026-04-08	chore: prepare 2026-04-08 release candidate
+6babec7	2026-04-08	fix: allow production admin web cors origin
+7c090da	2026-04-08	Merge branch 'codex/release-followups' of github.com:nightkid13792229-a11y/SevenKitchen
+77825ec	2026-04-08	fix: return explicit cors origins for admin web
+b1d44ed	2026-04-08	Merge branch 'codex/release-followups' of github.com:nightkid13792229-a11y/SevenKitchen
+df1652d	2026-04-08	merge: integrate origin/main into release candidate
+66edf1a	2026-04-08	Merge remote-tracking branch 'origin/main' into codex/release-candidate-20260408
+adf225b	2026-04-08	fix: support schema param in migration check
+64c2f42	2026-04-08	fix: restore applied production migrations
+5db36f4	2026-04-08	fix: restore prisma finance schema definitions
+ed08f5c	2026-04-08	fix: align prisma schema with production column types
+0c8d398	2026-04-08	feat: add missing production feature tables migration
+6bb7953	2026-04-08	feat: unify finance and purchasing admin release
+19304fa	2026-04-08	feat: add sku brand and channel autocomplete
+3a3690b	2026-04-09	fix: avoid ingredient suggestion route collisions
+50dd567	2026-04-09	fix: preserve duplicated recipe metadata
+bcec922	2026-04-09	fix: compress rendered recipe covers
+ef3c998	2026-04-09	Fix health attachment cleanup and upload docs
+4d36a81	2026-04-10	feat(dog-profile): harden backend profile flows
+877cf35	2026-04-10	feat(dog-profile): refine miniapp create and edit flow
+816e13b	2026-04-10	docs: align CLAUDE.md collaboration rules
+12dc01d	2026-04-10	Merge branch 'codex/dog-profile-flow'
+b965619	2026-04-10	fix(miniapp): restore home feedback entry
+47f7551	2026-04-10	feat: improve dog avatar upload flow
+ba98374	2026-04-10	feat(miniapp): add dog avatar cropper
+48352dd	2026-04-10	Fix recipe stats counting and audit tooling
+ca4cd03	2026-04-10	Merge pull request #5 from nightkid13792229-a11y/codex/dog-avatar-upload
+b70e7af	2026-04-10	Merge pull request #6 from nightkid13792229-a11y/codex/recipe-stats-fixes
+aaf6413	2026-04-10	feat(miniapp): add explicit apply actions for recipe filters
+6b094d1	2026-04-10	Merge pull request #7 from nightkid13792229-a11y/codex/home-filter-drawer-confirmation
+020a9a1	2026-04-10	Improve dog breed search and alias management
+3d06451	2026-04-10	docs: update miniapp preview workspace guidance
+e17d473	2026-04-10	feat: automate breed popularity management
+10ad89f	2026-04-10	test: cover recipe stats refresh regressions
+8ee990a	2026-04-11	Merge remote-tracking branch 'origin/main' into codex/dog-hot-breeds-top10
+ce3aea6	2026-04-11	Merge pull request #8 from nightkid13792229-a11y/codex/dog-hot-breeds-top10
+4735f2c	2026-04-11	Refine miniapp startup flow and DIY sheet formatting
+64b0659	2026-04-11	Merge branch 'codex/recipe-stats-fixes'
+020906b	2026-04-11	feat: refine diy sheet recommendation copy and layout
+36e6381	2026-04-11	docs: capture ingredient sku domain design
+123564c	2026-04-12	docs: add ingredient nutrition entry redesign spec
+22f5b5c	2026-04-12	docs: add nutrition entry implementation plan
+375c205	2026-04-12	feat: normalize ingredient nutrition profile structure
+d9dc091	2026-04-12	chore: remove extra ingredient domain refactor spec from task scope
+86fb459	2026-04-12	fix: tighten nutrition profile normalization contract
+87c5d92	2026-04-12	fix: persist ingredient nutrition profile entity field
+b8c3f76	2026-04-12	fix: preserve legacy nutrition profile writes
+b3df909	2026-04-12	fix: accept base unit display name alias in ingredient service
+9335134	2026-04-12	feat: refactor ingredient sku domain and nutrition entry

@@ -1,0 +1,13 @@
+ M admin-web/src/constants/ingredientNutrition.ts
+ M admin-web/src/types/ingredient.ts
+ M admin-web/src/utils/ingredientNutrition.ts
+ M admin-web/src/views/Ingredients/IngredientForm.vue
+ M admin-web/src/views/Ingredients/components/IngredientNutritionEditor.vue
+ M admin-web/src/views/Ingredients/index.vue
+ M backend/src/domain/ingredient/types.ts
+?? .superpowers/
+?? admin-web/src/utils/ingredientNutritionUnits.ts
+?? admin-web/src/views/Ingredients/components/IngredientNutritionDialog.vue
+?? admin-web/tests/
+?? docs/handoff/
+?? docs/reports/2026-04-12-production-ingredient-readonly-audit.md

@@ -1,0 +1,8 @@
+ admin-web/src/constants/ingredientNutrition.ts     | 199 +++++++-----
+ admin-web/src/types/ingredient.ts                  |   4 +-
+ admin-web/src/utils/ingredientNutrition.ts         |  79 ++++-
+ admin-web/src/views/Ingredients/IngredientForm.vue |  65 +---
+ .../components/IngredientNutritionEditor.vue       | 333 ++++++++++++---------
+ admin-web/src/views/Ingredients/index.vue          |  40 ++-
+ backend/src/domain/ingredient/types.ts             |   1 +
+ 7 files changed, 434 insertions(+), 287 deletions(-)

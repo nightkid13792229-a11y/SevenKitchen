@@ -1,0 +1,1258 @@
+.cursorrules
+.editorconfig
+.github/workflows/verify-orders.yml
+.gitignore
+CLAUDE.md
+FRONTEND_TEST_REPORT.md
+IMPLEMENTATION_GUIDE.md
+INGREDIENT_VERIFICATION_REPORT.md
+MINIPAPP_COMPLETION_REPORT.md
+README.md
+TENCENT_COS_SETUP.md
+TEST_REPORT.md
+admin-web/.env.development
+admin-web/.env.production
+admin-web/.gitignore
+admin-web/.vscode/extensions.json
+admin-web/README.md
+admin-web/index.html
+admin-web/package-lock.json
+admin-web/package.json
+admin-web/pnpm-lock.yaml
+admin-web/public/vite.svg
+admin-web/src/App.vue
+admin-web/src/api/analytics.ts
+admin-web/src/api/breeds.ts
+admin-web/src/api/dogs.ts
+admin-web/src/api/finance.ts
+admin-web/src/api/globalConfig.ts
+admin-web/src/api/index.ts
+admin-web/src/api/ingredientTags.ts
+admin-web/src/api/ingredients.ts
+admin-web/src/api/orders.ts
+admin-web/src/api/preparationMethods.ts
+admin-web/src/api/purchasing.ts
+admin-web/src/api/recipeHealthTags.ts
+admin-web/src/api/recipes.ts
+admin-web/src/api/shippingTemplates.ts
+admin-web/src/api/users.ts
+admin-web/src/assets/vue.svg
+admin-web/src/components/Dog/BCSSlider.vue
+admin-web/src/components/Dog/TreatConfig.vue
+admin-web/src/components/HelloWorld.vue
+admin-web/src/constants/ingredientNutrition.ts
+admin-web/src/constants/reimbursement.ts
+admin-web/src/layouts/MainLayout.vue
+admin-web/src/main.ts
+admin-web/src/router/index.ts
+admin-web/src/store/user.ts
+admin-web/src/style.css
+admin-web/src/types/analytics.ts
+admin-web/src/types/breed.ts
+admin-web/src/types/dog.ts
+admin-web/src/types/finance.ts
+admin-web/src/types/ingredient.ts
+admin-web/src/types/order.ts
+admin-web/src/types/recipe.ts
+admin-web/src/types/shims.d.ts
+admin-web/src/types/user.ts
+admin-web/src/utils/date.ts
+admin-web/src/utils/ingredientNutrition.ts
+admin-web/src/utils/ingredientNutritionUnits.ts
+admin-web/src/views/Aftersale/AftersaleManagement.vue
+admin-web/src/views/Analytics/DogProfileAnalytics.vue
+admin-web/src/views/Breeds/BreedForm.vue
+admin-web/src/views/Breeds/BreedTable.vue
+admin-web/src/views/Breeds/CustomBreedTable.vue
+admin-web/src/views/Breeds/index.vue
+admin-web/src/views/CustomRecipes/OrderDetail.vue
+admin-web/src/views/CustomRecipes/OrderList.vue
+admin-web/src/views/Dashboard.vue
+admin-web/src/views/Dogs/DogDetail.vue
+admin-web/src/views/Dogs/index.vue
+admin-web/src/views/Finance/ContributionAnalysis.vue
+admin-web/src/views/Finance/ExpenseAnalysis.vue
+admin-web/src/views/Finance/ExpenseBills.vue
+admin-web/src/views/Finance/Overview.vue
+admin-web/src/views/Finance/components/ExpenseBillDialog.vue
+admin-web/src/views/Finance/components/RangeSwitcher.vue
+admin-web/src/views/GlobalConfig.vue
+admin-web/src/views/IngredientTags/TagForm.vue
+admin-web/src/views/IngredientTags/index.vue
+admin-web/src/views/Ingredients/IngredientForm.vue
+admin-web/src/views/Ingredients/components/IngredientNutritionDialog.vue
+admin-web/src/views/Ingredients/components/IngredientNutritionEditor.vue
+admin-web/src/views/Ingredients/index.vue
+admin-web/src/views/Inventory.vue
+admin-web/src/views/Login.vue
+admin-web/src/views/Orders/Detail.vue
+admin-web/src/views/Orders/components/CancelDialog.vue
+admin-web/src/views/Orders/components/ConfirmPaymentDialog.vue
+admin-web/src/views/Orders/components/OrderStatCard.vue
+admin-web/src/views/Orders/components/OrderTimeline.vue
+admin-web/src/views/Orders/components/RecipeSnapshotDialog.vue
+admin-web/src/views/Orders/components/ShippingDialog.vue
+admin-web/src/views/Orders/index.vue
+admin-web/src/views/Production.vue
+admin-web/src/views/Purchasing/PurchaseHistory.vue
+admin-web/src/views/Purchasing/ReimbursementDetail.vue
+admin-web/src/views/Purchasing/ReimbursementList.vue
+admin-web/src/views/Recipes.vue
+admin-web/src/views/Recipes/RecipeForm.vue
+admin-web/src/views/Recipes/index.vue
+admin-web/src/views/Users/UserForm.vue
+admin-web/src/views/Users/index.vue
+admin-web/test-delete-dog.sh
+admin-web/tests/ingredientNutritionUnits.test.ts
+admin-web/tsconfig.app.json
+admin-web/tsconfig.json
+admin-web/tsconfig.node.json
+admin-web/vite.config.ts
+backend/.data/orders.json
+backend/.env
+backend/.env.bak
+backend/.env.development
+backend/.env.example
+backend/.env.production
+backend/.gitignore
+backend/.npmrc
+backend/.prettierrc
+backend/ALLERGY_RECORDS_API_GUIDE.md
+backend/API_SETUP.md
+backend/API_TESTING_GUIDE.md
+backend/MANUAL_TESTING_GUIDE.md
+backend/PURCHASING_TEST_REPORT.md
+backend/README.md
+backend/SETUP_DATABASE.md
+backend/VERIFICATION_REPORT.md
+backend/check-all-ingredient-ids.js
+backend/check-duplicate-recipes.js
+backend/check-order-complete-data.js
+backend/check-order-recipe-snapshot.js
+backend/check-raw-snapshot.js
+backend/check-recipe-history.js
+backend/check-recipe-ingredients.js
+backend/check-recipe-timeline.js
+backend/check-snapshot-format.js
+backend/check-specific-recipe.js
+backend/compare-results.js
+backend/copy-fonts.js
+backend/create-test-orders.js
+backend/create-test-purchase-list.sql
+backend/delete-all-orders.js
+backend/deploy/docker-compose.postgres.yml
+backend/deploy/nginx.conf.example
+backend/direct-generate-purchase.js
+backend/docker-compose.yml
+backend/docs/ACCEPTANCE_STATUS.md
+backend/docs/DEPLOYMENT_EXECUTION_SUMMARY.md
+backend/docs/DEPLOYMENT_TENCENT_LIGHTHOUSE.md
+backend/docs/PHASE2_2_ACCEPTANCE.md
+backend/docs/PHASE2_2_FINAL_ACCEPTANCE.md
+backend/docs/PHASE3_1_ADDRESSES_ACCEPTANCE.md
+backend/docs/PHASE3_2_ORDERS_LIST_ACCEPTANCE.md
+backend/docs/PHASE3_3_DIY_SHEET_ACCEPTANCE.md
+backend/docs/PHASE3_ENTRY_CHECKLIST.md
+backend/docs/PHASE4_1_AUTH_CONTEXT_ACCEPTANCE.md
+backend/docs/PHASE4_2_JWT_AUTH_ACCEPTANCE.md
+backend/docs/PHASE4_3_FIXES.md
+backend/docs/PHASE4_3_IMPLEMENTATION_SUMMARY.md
+backend/docs/PHASE4_3_RECIPE_SEED.md
+backend/docs/PHASE4_3_UUID_V4_FIX.md
+backend/docs/PHASE7_1_FRONTEND_ORDER_DETAIL_ALIGN.md
+backend/docs/PHASE7_1_PRICING_BREAKDOWN_ACCEPTANCE.md
+backend/docs/PHASE7_2_PRICE_EXPLANATION.md
+backend/docs/PHASE8_10_BASELINE.md
+backend/docs/PHASE8_10_CAPABILITIES.md
+backend/docs/PHASE8_10_PRODUCTION_MVP.md
+backend/docs/PHASE8_12_13_RECIPE_SNAPSHOT_ITEMS_FIX.md
+backend/docs/PHASE8_12_BASELINE.md
+backend/docs/PHASE8_12_CAPABILITIES.md
+backend/docs/PHASE8_12_MIGRATION_FIX.md
+backend/docs/PHASE8_13_CAPABILITIES.md
+backend/docs/PHASE8_14_ACCEPTANCE.md
+backend/docs/PHASE8_14_PLAN.md
+backend/docs/PHASE8_15_ACCEPTANCE.md
+backend/docs/PHASE8_16_ACCEPTANCE.md
+backend/docs/PHASE8_16_EVIDENCE_PACK.md
+backend/docs/PHASE8_16_FINAL_GATE_COMPLETE.md
+backend/docs/PHASE8_16_FINAL_GATE_VERIFICATION.md
+backend/docs/PHASE8_16_GATE_COMPLETE.md
+backend/docs/PHASE8_16_GATE_EVIDENCE_COMPLETE.md
+backend/docs/PHASE8_17_EXECUTION_SUMMARY.md
+backend/docs/PHASE8_2B_DOG_PERSISTENCE.md
+backend/docs/PHASE8_3_RECIPE_PERSISTENCE.md
+backend/docs/PHASE8_4_ORDER_PERSISTENCE.md
+backend/docs/PHASE8_5_ADDRESS_PERSISTENCE.md
+backend/docs/PHASE8_6_COMPREHENSIVE_VERIFY.md
+backend/docs/PHASE9_AUTO_TEST_REPORT.md
+backend/docs/PHASE9_COMPLETION_SUMMARY.md
+backend/docs/PHASE9_EXECUTION_REPORT.md
+backend/docs/PHASE9_MANUAL_TEST_STEPS.md
+backend/docs/PHASE9_MIGRATION_GUIDE.md
+backend/docs/REIMBURSEMENT_COST_DETAILS.md
+backend/docs/VERIFICATION_SUMMARY.md
+backend/docs/phase2_2_verify_output.txt
+backend/docs/phase2_2_verify_output_final.txt
+backend/docs/phase2_2_verify_output_v2.txt
+backend/docs/phase3_1_addresses_verify_output.txt
+backend/docs/phase3_2_orders_list_verify_output.txt
+backend/docs/phase3_3_diy_sheet_verify_output.txt
+backend/docs/phase4_1_auth_context_verify_output.txt
+backend/docs/phase4_2_jwt_auth_verify_output.txt
+backend/docs/phase7_2_price_explanation_verify_output.txt
+backend/eslint.config.mjs
+backend/find-recipes-with-ingredients.js
+backend/fix-purchase-item-names.js
+backend/generate-ingredient-list.js
+backend/generate-purchase-list.js
+backend/generate-test-token.ts
+backend/investigate-purchase-list.js
+backend/miniapp/test-recipe-response.json
+backend/nest-cli.json
+backend/package-lock.json
+backend/package.json
+backend/pnpm-lock.yaml
+backend/pnpm-workspace.yaml
+backend/prisma.config.ts
+backend/prisma/200-breeds-info-table.md
+backend/prisma/BREED_IMPORT_SUMMARY.md
+backend/prisma/CLOUD_SERVER_IMPORT_GUIDE.md
+backend/prisma/README_SEED.md
+backend/prisma/SEED_EXECUTION_GUIDE.md
+backend/prisma/backfill-breed-aliases.ts
+backend/prisma/backfill-ingredient-domain-foundation.ts
+backend/prisma/backfill-ingredient-nutrition-profile-v2.ts
+backend/prisma/backfill-procurement-sku-defaults.shared.ts
+backend/prisma/backfill-procurement-sku-defaults.ts
+backend/prisma/breed-alias-catalog.ts
+backend/prisma/breeds-list.txt
+backend/prisma/dev.db
+backend/prisma/manual_migrations/20251217_add_order_shipping_fields.sql
+backend/prisma/manual_migrations/20251219_add_order_completed_at.sql
+backend/prisma/manual_migrations/README.md
+backend/prisma/migrations-create-users.sql
+backend/prisma/migrations/20251215000000_order_persistence/migration.sql
+backend/prisma/migrations/20251215010000_address_persistence/migration.sql
+backend/prisma/migrations/20251215020000_dog_persistence/migration.sql
+backend/prisma/migrations/20251216060116_recipe_persistence/migration.sql
+backend/prisma/migrations/20251216063921_order_persistence_table_mapping/migration.sql
+backend/prisma/migrations/20251216070826_address_persistence_table_mapping/migration.sql
+backend/prisma/migrations/20251216101028_add_order_dog_address_references/migration.sql
+backend/prisma/migrations/20251216115956_add_daily_intake_g_to_order_item/migration.sql
+backend/prisma/migrations/20251216133724_add_production_batch_and_packaging_unit/migration.sql
+backend/prisma/migrations/20251216151402_add_allocation_lock_to_order_item/migration.sql
+backend/prisma/migrations/20251216161937_add_kitchen_task_fields_to_packaging_unit/migration.sql
+backend/prisma/migrations/20251217010000_add_inventory_ledger_entry/migration.sql
+backend/prisma/migrations/20251219193259_add_order_cancellation_fields/migration.sql
+backend/prisma/migrations/20251219202028_add_payment_tracking_fields/migration.sql
+backend/prisma/migrations/20251219202948_add_order_status_history/migration.sql
+backend/prisma/migrations/20251219225121_fix_order_payment_columns/migration.sql
+backend/prisma/migrations/20251220000000_add_order_shipping_fields/migration.sql
+backend/prisma/migrations/20251220003000_fix_order_shipping_columns/migration.sql
+backend/prisma/migrations/20251220010000_fix_all_order_lifecycle_columns/migration.sql
+backend/prisma/migrations/20251224145000_add_custom_breed_name/migration.sql
+backend/prisma/migrations/20260106195839_add_example_weight_to_recipe_item/migration.sql
+backend/prisma/migrations/20260109000000_add_order_freezing_and_aftersale/migration.sql
+backend/prisma/migrations/20260109000000_phase9_order_status_optimization/migration.sql
+backend/prisma/migrations/20260125192532_add_reimbursement_cost_details/migration.sql
+backend/prisma/migrations/20260125205511_update_reimbursement_status_and_add_payment_proof/migration.sql
+backend/prisma/migrations/20260125225305_remove_allergy_record_fields/migration.sql
+backend/prisma/migrations/20260127183915_add_min_pot_weight_config/migration.sql
+backend/prisma/migrations/20260130_add_is_custom_recipe/README.md
+backend/prisma/migrations/20260130_add_is_custom_recipe/migration.sh
+backend/prisma/migrations/20260130_add_is_custom_recipe/migration.sql
+backend/prisma/migrations/20260131000000_add_favorite_recipe_table/migration.sql
+backend/prisma/migrations/20260201230300_add_original_target_production_date/migration.sql
+backend/prisma/migrations/20260201231000_add_missing_purchase_and_custom_recipe_tables/migration.sql
+backend/prisma/migrations/2026020123300000_add_only_missing_tables/migration.sql
+backend/prisma/migrations/20260203210000_add_reimbursement_table/migration.sql
+backend/prisma/migrations/20260204170000_add_is_common_to_dog_breed/migration.sql
+backend/prisma/migrations/20260329000000_add_recipe_share_token/migration.sql
+backend/prisma/migrations/20260331120000_add_ingredient_price_change/migration.sql
+backend/prisma/migrations/20260331180000_add_home_header_bg_image_url/migration.sql
+backend/prisma/migrations/20260331223000_make_purchase_record_quantity_decimal/migration.sql
+backend/prisma/migrations/20260401170000_add_purchase_record_normalization_fields/migration.sql
+backend/prisma/migrations/20260401193000_add_purchase_item_suggested_product_fields/migration.sql
+backend/prisma/migrations/20260401210000_remove_pricing_group_fields/migration.sql
+backend/prisma/migrations/20260401233000_add_order_admin_remark/migration.sql
+backend/prisma/migrations/20260402120000_add_stock_replenishment_purchasing/migration.sql
+backend/prisma/migrations/20260402153000_add_ingredient_stock_policy_fields/migration.sql
+backend/prisma/migrations/20260402190000_add_aliases_to_dog_breed/migration.sql
+backend/prisma/migrations/20260402213000_add_inventory_management_foundation/migration.sql
+backend/prisma/migrations/20260403121500_add_procurement_sku/migration.sql
+backend/prisma/migrations/20260403133000_add_purchase_procurement_sku_snapshots/migration.sql
+backend/prisma/migrations/20260403183000_add_reimbursement_paid_fields/migration.sql
+backend/prisma/migrations/20260403190000_add_dog_profile_event/migration.sql
+backend/prisma/migrations/20260403190000_add_finance_expense_foundation/migration.sql
+backend/prisma/migrations/20260407123000_add_dog_avatar/migration.sql
+backend/prisma/migrations/20260407234500_add_missing_recommended_product_table/migration.sql
+backend/prisma/migrations/20260408133000_add_feedback_nutrition_design_foundation/migration.sql
+backend/prisma/migrations/20260411150000_add_ingredient_nutrition_profile/migration.sql
+backend/prisma/migrations/20260411153000_extend_procurement_sku_domain_fields/migration.sql
+backend/prisma/migrations/20260411173000_add_procurement_sku_to_inventory_ledger/migration.sql
+backend/prisma/migrations/20260411183000_add_procurement_sku_to_inventory_operations/migration.sql
+backend/prisma/migrations/migration_lock.toml
+backend/prisma/schema.prisma
+backend/prisma/schema.prisma.backup
+backend/prisma/seed-dog-breeds-200.ts
+backend/prisma/seed-dog-breeds.ts
+backend/prisma/seed-nutrition-standards.ts
+backend/prisma/verify-breeds.sql
+backend/public/batch-print.html
+backend/public/task-print.html
+backend/recheck-recipes.js
+backend/scripts/README.md
+backend/scripts/assert_public_recipe.sh
+backend/scripts/audit-recipe-stats.ts
+backend/scripts/check_migration_history.sh
+backend/scripts/create-favorite-recipe-table.sql
+backend/scripts/create-test-staff.sql
+backend/scripts/deploy_lighthouse.sh
+backend/scripts/fix_kitchen_task_migration.sql
+backend/scripts/fix_recipe_snapshot_items.sql
+backend/scripts/install_systemd_service.sh
+backend/scripts/migrations/phase8_18_fix_orderstatus_enum.sql
+backend/scripts/phase_orders_closed_loop_verify.sh
+backend/scripts/pre-deploy-check.sh
+backend/scripts/remote_deploy_v2.sh
+backend/scripts/repair-favorite-counts.ts
+backend/scripts/scripts-archive/README.md
+backend/scripts/scripts-archive/backup-reimbursement-before-migration.sh
+backend/scripts/scripts-archive/cleanup-data.ts
+backend/scripts/scripts-archive/cleanup-purchase-list.ts
+backend/scripts/scripts-archive/cleanup-test-data.ts
+backend/scripts/scripts-archive/comprehensive_verify.sh
+backend/scripts/scripts-archive/create-admin.ts
+backend/scripts/scripts-archive/diagnose-duplicate-lists.ts
+backend/scripts/scripts-archive/diagnose-jan25-orders.ts
+backend/scripts/scripts-archive/fix-recipe-item-foreign-keys.sh
+backend/scripts/scripts-archive/migrate-all-data-to-production.sh
+backend/scripts/scripts-archive/migrate-production.sh
+backend/scripts/scripts-archive/migrate-recipes-and-ingredients.sh
+backend/scripts/scripts-archive/migrate-recipes-to-production.sh
+backend/scripts/scripts-archive/migrate-to-purchasing.sh
+backend/scripts/scripts-archive/order_persistence_smoke.sh
+backend/scripts/scripts-archive/phase2_2_verify.sh
+backend/scripts/scripts-archive/phase3_1_addresses_verify.sh
+backend/scripts/scripts-archive/phase3_2_orders_list_verify.sh
+backend/scripts/scripts-archive/phase3_3_diy_sheet_verify.sh
+backend/scripts/scripts-archive/phase4_1_auth_context_verify.sh
+backend/scripts/scripts-archive/phase4_2_jwt_auth_verify.sh
+backend/scripts/scripts-archive/phase4_3_verify.sh
+backend/scripts/scripts-archive/phase5_verify.sh
+backend/scripts/scripts-archive/phase6_verify.sh
+backend/scripts/scripts-archive/phase7_1_pricing_breakdown_verify.sh
+backend/scripts/scripts-archive/phase7_2_price_explanation_verify.sh
+backend/scripts/scripts-archive/phase8_11_allocation_lock_verify.sh
+backend/scripts/scripts-archive/phase8_12_13_kitchen_inventory_e2e_verify.sh
+backend/scripts/scripts-archive/phase8_14_shipping_fulfillment_e2e_verify.sh
+backend/scripts/scripts-archive/phase8_1_part1_persistence_smoke.sh
+backend/scripts/scripts-archive/phase8_2_partA_address_persistence_smoke.sh
+backend/scripts/scripts-archive/phase8_2b_dog_persistence_smoke.sh
+backend/scripts/scripts-archive/phase8_3_recipe_persistence_smoke.sh
+backend/scripts/scripts-archive/phase8_4_order_persistence_smoke.sh
+backend/scripts/scripts-archive/phase8_5_address_persistence_smoke.sh
+backend/scripts/scripts-archive/phase8_6_comprehensive_verify.sh
+backend/scripts/scripts-archive/post_deploy_verify.sh
+backend/scripts/scripts-archive/release_verify.sh
+backend/scripts/scripts-archive/remote_deploy.sh
+backend/scripts/scripts-archive/seed-dog-breeds.ts
+backend/scripts/scripts-archive/test-confirm-payment.ts
+backend/scripts/scripts-archive/test-delete-purchase-list.ts
+backend/scripts/scripts-archive/test-production.ts
+backend/scripts/scripts-archive/test-purchasing.ts
+backend/scripts/scripts-archive/update-order-dates.ts
+backend/scripts/scripts-archive/update-order-status.ts
+backend/scripts/scripts-archive/verify-purchasing-fix.ts
+backend/scripts/scripts-archive/verify-purchasing-targetdate.ts
+backend/scripts/smoke_pricing_purchase_flow.js
+backend/scripts/ssh-helper.sh
+backend/scripts/start-check.ts
+backend/scripts/start-once.ts
+backend/scripts/verify_env.sh
+backend/sql/check-all-snapshot-amounts.sql
+backend/sql/check-ingredient-amounts.sql
+backend/src/app.module.ts
+backend/src/application/address/address.service.ts
+backend/src/application/analytics/dog-profile-analytics.service.ts
+backend/src/application/config/global-config.service.ts
+backend/src/application/custom-recipe/custom-recipe.service.ts
+backend/src/application/custom-recipe/dto/custom-recipe.dto.ts
+backend/src/application/diy-sheet/diy-sheet-storage.service.ts
+backend/src/application/dog/dog.service.ts
+backend/src/application/finance/expense-bill.service.ts
+backend/src/application/finance/expense-template.service.ts
+backend/src/application/finance/finance-alert.service.ts
+backend/src/application/finance/finance-categories.ts
+backend/src/application/finance/finance-report.service.ts
+backend/src/application/health/health.service.ts
+backend/src/application/ingredient-tag/ingredient-tag.service.ts
+backend/src/application/ingredient/ingredient-pricing.service.ts
+backend/src/application/ingredient/ingredient.service.ts
+backend/src/application/ingredient/procurement-sku.service.ts
+backend/src/application/ingredient/recommended-product.service.ts
+backend/src/application/inventory/inventory.service.ts
+backend/src/application/kitchen/kitchen.service.ts
+backend/src/application/nutrition-food/nutrition-food.service.ts
+backend/src/application/order/order.service.tokens.ts
+backend/src/application/order/order.service.ts
+backend/src/application/production/kitchen.service.ts
+backend/src/application/production/production.service.ts
+backend/src/application/purchasing/index.ts
+backend/src/application/purchasing/purchasing-time.utils.ts
+backend/src/application/purchasing/purchasing.service.tokens.ts
+backend/src/application/purchasing/purchasing.service.ts
+backend/src/application/purchasing/reimbursement.service.ts
+backend/src/application/recipe/cover-image.service.ts
+backend/src/application/recipe/diy-sheet.service.ts
+backend/src/application/recipe/recipe.service.ts
+backend/src/application/scheduler/finance-scheduler.service.ts
+backend/src/application/scheduler/order-scheduler.service.ts
+backend/src/application/shipping/shipping-fulfillment.service.ts
+backend/src/application/shipping/shipping.service.tokens.ts
+backend/src/application/shipping/shipping.service.ts
+backend/src/application/weight-record/weight-record.service.ts
+backend/src/assets/fonts/SourceHanSansSC-Bold.otf
+backend/src/assets/fonts/SourceHanSansSC-Regular.otf
+backend/src/domain/address/address.entity.ts
+backend/src/domain/address/address.repository.ts
+backend/src/domain/address/index.ts
+backend/src/domain/common/errors.ts
+backend/src/domain/custom-recipe/custom-recipe.repository.ts
+backend/src/domain/dog/constants.ts
+backend/src/domain/dog/dog-breed.entity.ts
+backend/src/domain/dog/dog-breed.repository.ts
+backend/src/domain/dog/dog-calc.service.ts
+backend/src/domain/dog/dog.entity.ts
+backend/src/domain/dog/dog.repository.ts
+backend/src/domain/dog/enums.ts
+backend/src/domain/health/health.repository.ts
+backend/src/domain/index.ts
+backend/src/domain/ingredient-tag/index.ts
+backend/src/domain/ingredient-tag/ingredient-tag.entity.ts
+backend/src/domain/ingredient-tag/ingredient-tag.repository.ts
+backend/src/domain/ingredient/enums.ts
+backend/src/domain/ingredient/index.ts
+backend/src/domain/ingredient/ingredient.entity.ts
+backend/src/domain/ingredient/ingredient.repository.ts
+backend/src/domain/ingredient/nutrition-profile.constants.ts
+backend/src/domain/ingredient/nutrition-profile.utils.ts
+backend/src/domain/ingredient/types.ts
+backend/src/domain/inventory/enums.ts
+backend/src/domain/inventory/index.ts
+backend/src/domain/inventory/inventory-adjustment.entity.ts
+backend/src/domain/inventory/inventory-ledger-entry.entity.ts
+backend/src/domain/inventory/inventory-stocktake.entity.ts
+backend/src/domain/inventory/inventory.repository.ts
+backend/src/domain/order-pricing-snapshot/order-pricing-snapshot.entity.ts
+backend/src/domain/order-pricing-snapshot/order-pricing-snapshot.repository.interface.ts
+backend/src/domain/order/cooking-method.enum.ts
+backend/src/domain/order/enums.ts
+backend/src/domain/order/index.ts
+backend/src/domain/order/order-item.entity.ts
+backend/src/domain/order/order-status-history.entity.ts
+backend/src/domain/order/order-status-history.repository.ts
+backend/src/domain/order/order.entity.ts
+backend/src/domain/order/order.repository.ts
+backend/src/domain/order/preparation-method.enum.ts
+backend/src/domain/order/pricing-breakdown-snapshot.ts
+backend/src/domain/packaging/index.ts
+backend/src/domain/packaging/packaging.module.ts
+backend/src/domain/packaging/packaging.service.ts
+backend/src/domain/pricing/pricing.service.ts
+backend/src/domain/production/enums.ts
+backend/src/domain/production/index.ts
+backend/src/domain/production/packaging-unit.entity.ts
+backend/src/domain/production/production-batch.entity.ts
+backend/src/domain/production/production.repository.ts
+backend/src/domain/purchasing/enums.ts
+backend/src/domain/purchasing/index.ts
+backend/src/domain/purchasing/purchase-item.entity.ts
+backend/src/domain/purchasing/purchase-list.entity.ts
+backend/src/domain/purchasing/purchase-list.repository.ts
+backend/src/domain/purchasing/purchase-record.entity.ts
+backend/src/domain/purchasing/purchase-record.repository.ts
+backend/src/domain/purchasing/reimbursement.entity.ts
+backend/src/domain/purchasing/reimbursement.repository.ts
+backend/src/domain/recipe/enums.ts
+backend/src/domain/recipe/recipe.repository.ts
+backend/src/domain/recipe/types.ts
+backend/src/domain/shipping/index.ts
+backend/src/domain/shipping/shipping-fee.service.ts
+backend/src/domain/shipping/shipping-template.repository.ts
+backend/src/domain/user/enums.ts
+backend/src/infrastructure/prisma.service.ts
+backend/src/infrastructure/repositories/file-backed-order.repository.ts
+backend/src/infrastructure/repositories/in-memory-address.repository.ts
+backend/src/infrastructure/repositories/in-memory-dog.repository.ts
+backend/src/infrastructure/repositories/in-memory-ingredient.repository.ts
+backend/src/infrastructure/repositories/in-memory-order.repository.ts
+backend/src/infrastructure/repositories/in-memory-recipe.repository.ts
+backend/src/infrastructure/repositories/in-memory-shipping-template.repository.ts
+backend/src/infrastructure/repositories/prisma-address.repository.ts
+backend/src/infrastructure/repositories/prisma-dog-breed.repository.ts
+backend/src/infrastructure/repositories/prisma-dog.repository.ts
+backend/src/infrastructure/repositories/prisma-health.repository.ts
+backend/src/infrastructure/repositories/prisma-ingredient-tag.repository.ts
+backend/src/infrastructure/repositories/prisma-ingredient.repository.ts
+backend/src/infrastructure/repositories/prisma-inventory.repository.ts
+backend/src/infrastructure/repositories/prisma-order-pricing-snapshot.repository.ts
+backend/src/infrastructure/repositories/prisma-order-status-history.repository.ts
+backend/src/infrastructure/repositories/prisma-order.repository.ts
+backend/src/infrastructure/repositories/prisma-order.repository.ts.bak
+backend/src/infrastructure/repositories/prisma-production.repository.ts
+backend/src/infrastructure/repositories/prisma-purchase-list.repository.ts
+backend/src/infrastructure/repositories/prisma-purchase-record.repository.ts
+backend/src/infrastructure/repositories/prisma-recipe.repository.ts
+backend/src/infrastructure/repositories/prisma-reimbursement.repository.ts
+backend/src/infrastructure/repositories/prisma-shipping-template.repository.ts
+backend/src/infrastructure/repositories/prisma-weight-record.repository.ts
+backend/src/infrastructure/services/health-tag-mapping.service.ts
+backend/src/infrastructure/services/pdf-generator.service.ts
+backend/src/infrastructure/services/tencent-cos.service.ts
+backend/src/infrastructure/sms/sms.module.ts
+backend/src/infrastructure/sms/sms.service.ts
+backend/src/infrastructure/wechat/wechat.module.ts
+backend/src/infrastructure/wechat/wechat.service.ts
+backend/src/interfaces/auth/auth.guard.ts
+backend/src/interfaces/auth/current-user.decorator.ts
+backend/src/interfaces/auth/index.ts
+backend/src/interfaces/auth/jwt.service.ts
+backend/src/interfaces/auth/request-user.interface.ts
+backend/src/interfaces/auth/user.decorator.ts
+backend/src/interfaces/common/all-exceptions.filter.ts
+backend/src/interfaces/common/bad-request-exception.filter.ts
+backend/src/interfaces/common/unauthorized-exception.filter.ts
+backend/src/interfaces/controllers/addresses.controller.ts
+backend/src/interfaces/controllers/admin-dog-profile-analytics.controller.ts
+backend/src/interfaces/controllers/admin-finance.controller.ts
+backend/src/interfaces/controllers/admin-purchasing.controller.ts
+backend/src/interfaces/controllers/admin.controller.ts
+backend/src/interfaces/controllers/admin.controller.ts.bak
+backend/src/interfaces/controllers/admin.controller.ts.disabled.backup2
+backend/src/interfaces/controllers/aftersale-photos.controller.ts
+backend/src/interfaces/controllers/auth.controller.ts
+backend/src/interfaces/controllers/auth/admin.guard.ts
+backend/src/interfaces/controllers/custom-recipe/admin-custom-recipe.controller.ts
+backend/src/interfaces/controllers/custom-recipe/custom-recipe.controller.ts
+backend/src/interfaces/controllers/diy-sheets.controller.ts
+backend/src/interfaces/controllers/dog-avatar-error.ts
+backend/src/interfaces/controllers/dog-profile-analytics.controller.ts
+backend/src/interfaces/controllers/dogs.controller.ts
+backend/src/interfaces/controllers/favorites.controller.ts
+backend/src/interfaces/controllers/feedback.controller.ts
+backend/src/interfaces/controllers/global-config.controller.ts
+backend/src/interfaces/controllers/health-notification.controller.ts
+backend/src/interfaces/controllers/health-records.controller.ts
+backend/src/interfaces/controllers/health-upload-error.ts
+backend/src/interfaces/controllers/health-upload.controller.ts
+backend/src/interfaces/controllers/health.controller.ts
+backend/src/interfaces/controllers/ingredient-suggestions.controller.ts
+backend/src/interfaces/controllers/nutrition-food.controller.ts
+backend/src/interfaces/controllers/orders.controller.ts
+backend/src/interfaces/controllers/procurement-sku.controller.ts
+backend/src/interfaces/controllers/recipes.controller.ts
+backend/src/interfaces/controllers/recommended-product.controller.ts
+backend/src/interfaces/controllers/reviews.controller.ts
+backend/src/interfaces/controllers/shared-photos.controller.ts
+backend/src/interfaces/controllers/shipping-template.controller.ts
+backend/src/interfaces/controllers/shipping.controller.ts
+backend/src/interfaces/controllers/staff-inventory.controller.ts
+backend/src/interfaces/controllers/staff-kitchen.controller.ts
+backend/src/interfaces/controllers/staff-production-photos.controller.ts
+backend/src/interfaces/controllers/staff-production.controller.ts
+backend/src/interfaces/controllers/staff-purchasing.controller.ts
+backend/src/interfaces/controllers/staff-shipping.controller.ts
+backend/src/interfaces/controllers/users.controller.ts
+backend/src/interfaces/dto/addresses/address-region.dto.ts
+backend/src/interfaces/dto/addresses/address-response.dto.ts
+backend/src/interfaces/dto/addresses/create-address.dto.ts
+backend/src/interfaces/dto/addresses/update-address.dto.ts
+backend/src/interfaces/dto/admin/staff.dto.ts
+backend/src/interfaces/dto/analytics/dog-profile-analytics-response.dto.ts
+backend/src/interfaces/dto/analytics/track-dog-profile-event.dto.ts
+backend/src/interfaces/dto/auth/phone-login.dto.ts
+backend/src/interfaces/dto/auth/wechat-login.dto.ts
+backend/src/interfaces/dto/breeds/breed-response.dto.ts
+backend/src/interfaces/dto/breeds/create-breed.dto.ts
+backend/src/interfaces/dto/breeds/index.ts
+backend/src/interfaces/dto/breeds/update-breed.dto.ts
+backend/src/interfaces/dto/common/response.dto.ts
+backend/src/interfaces/dto/diy-sheets.dto.ts
+backend/src/interfaces/dto/dogs/calc-for-recipe.dto.ts
+backend/src/interfaces/dto/dogs/calc-preview.dto.ts
+backend/src/interfaces/dto/dogs/create-dog.dto.ts
+backend/src/interfaces/dto/dogs/dog-response.dto.ts
+backend/src/interfaces/dto/dogs/update-dog.dto.ts
+backend/src/interfaces/dto/feedback/create-feedback-reply.dto.ts
+backend/src/interfaces/dto/feedback/create-feedback.dto.ts
+backend/src/interfaces/dto/finance/create-expense-bill.dto.ts
+backend/src/interfaces/dto/finance/create-expense-template.dto.ts
+backend/src/interfaces/dto/finance/finance-range.dto.ts
+backend/src/interfaces/dto/finance/record-expense-payment.dto.ts
+backend/src/interfaces/dto/global-config.dto.ts
+backend/src/interfaces/dto/health/allergy-response.dto.ts
+backend/src/interfaces/dto/health/checkup-response.dto.ts
+backend/src/interfaces/dto/health/create-allergy.dto.ts
+backend/src/interfaces/dto/health/create-checkup.dto.ts
+backend/src/interfaces/dto/health/create-medical-record.dto.ts
+backend/src/interfaces/dto/health/create-vaccine.dto.ts
+backend/src/interfaces/dto/health/medical-record-response.dto.ts
+backend/src/interfaces/dto/health/update-allergy.dto.ts
+backend/src/interfaces/dto/health/update-checkup.dto.ts
+backend/src/interfaces/dto/health/update-medical-record.dto.ts
+backend/src/interfaces/dto/health/update-vaccine.dto.ts
+backend/src/interfaces/dto/health/vaccine-response.dto.ts
+backend/src/interfaces/dto/kitchen/update-task.dto.ts
+backend/src/interfaces/dto/nutrition-food/nutrition-food.dto.ts
+backend/src/interfaces/dto/orders/admin-order-operations.dto.ts
+backend/src/interfaces/dto/orders/admin-order-query.dto.ts
+backend/src/interfaces/dto/orders/admin-order-stats.dto.ts
+backend/src/interfaces/dto/orders/cancel-order.dto.ts
+backend/src/interfaces/dto/orders/create-aftersale.dto.ts
+backend/src/interfaces/dto/orders/create-order.dto.ts
+backend/src/interfaces/dto/orders/order-response.dto.ts
+backend/src/interfaces/dto/orders/payment-response.dto.ts
+backend/src/interfaces/dto/orders/pricing-preview.dto.ts
+backend/src/interfaces/dto/orders/resolve-aftersale.dto.ts
+backend/src/interfaces/dto/orders/share-photos.dto.ts
+backend/src/interfaces/dto/production/kitchen.dto.ts
+backend/src/interfaces/dto/production/print-task.dto.ts
+backend/src/interfaces/dto/recipes/admin-recipe.dto.ts
+backend/src/interfaces/dto/recipes/design-source.dto.ts
+backend/src/interfaces/dto/recipes/diy-sheet.dto.ts
+backend/src/interfaces/dto/recipes/filter-options.dto.ts
+backend/src/interfaces/dto/recipes/preparation-method.dto.ts
+backend/src/interfaces/dto/recipes/recipe-health-tag.dto.ts
+backend/src/interfaces/dto/recipes/recipe-metadata.dto.ts
+backend/src/interfaces/dto/recipes/recipe-response.dto.ts
+backend/src/interfaces/dto/reviews/create-review.dto.ts
+backend/src/interfaces/dto/shipping-template.dto.ts
+backend/src/interfaces/dto/users/user-response.dto.ts
+backend/src/interfaces/dto/weight-record/create-weight-record.dto.ts
+backend/src/interfaces/dto/weight-record/weight-record-response.dto.ts
+backend/src/interfaces/guards/role.guard.ts
+backend/src/label/dto/label-data.dto.ts
+backend/src/label/index.ts
+backend/src/label/label.controller.ts
+backend/src/label/label.module.ts
+backend/src/label/label.service.ts
+backend/src/main.ts
+backend/src/support/favorite-recipe-repair.ts
+backend/src/support/recipe-stats-audit.ts
+backend/src/utils/cors.util.ts
+backend/src/utils/date-helpers.ts
+backend/src/utils/date.util.ts
+backend/src/utils/env-config.ts
+backend/src/utils/timezone.util.ts
+backend/test-api-params.js
+backend/test-api.sh
+backend/test-end-to-end.js
+backend/test-filter-debug.js
+backend/test-filter.js
+backend/test-frontend-format.js
+backend/test-prisma-read.mjs
+backend/test-prisma-start.sh
+backend/test-purchasing-api.sh
+backend/test-reimbursement-cost-details.sh
+backend/test/app.e2e-spec.ts
+backend/test/jest-e2e.json
+backend/tests/app.spec.ts
+backend/tests/application/analytics/dog-profile-analytics.service.spec.ts
+backend/tests/application/dog/dog-delete.service.spec.ts
+backend/tests/application/dog/dog.service.spec.ts
+backend/tests/application/finance/expense-bill.service.spec.ts
+backend/tests/application/finance/finance-report.service.spec.ts
+backend/tests/application/ingredient/ingredient-domain-refactor.spec.ts
+backend/tests/application/ingredient/ingredient-service-nutrition-profile-compat.spec.ts
+backend/tests/application/ingredient/nutrition-profile-structure.spec.ts
+backend/tests/application/ingredient/procurement-sku.service.spec.ts
+backend/tests/application/ingredient/recommended-product.service.spec.ts
+backend/tests/application/inventory/inventory-procurement-sku.spec.ts
+backend/tests/application/inventory/inventory.service.spec.ts
+backend/tests/application/kitchen/kitchen.service.spec.ts
+backend/tests/application/order/order.service.spec.ts
+backend/tests/application/production/production.service.spec.ts
+backend/tests/application/purchasing/purchasing-procurement-sku.spec.ts
+backend/tests/application/purchasing/purchasing.service.spec.ts
+backend/tests/application/recipe/cover-image.service.spec.ts
+backend/tests/application/recipe/recipe.service.spec.ts
+backend/tests/application/shipping/shipping-fulfillment.service.spec.ts
+backend/tests/application/weight-record/weight-record.service.spec.ts
+backend/tests/controllers/dogs.controller.spec.ts
+backend/tests/domain/dog/dog-calc.service.spec.ts
+backend/tests/domain/dog/dog.entity.spec.ts
+backend/tests/domain/order/order.entity.spec.ts
+backend/tests/infrastructure/repositories/prisma-dog-breed.repository.spec.ts
+backend/tests/infrastructure/repositories/prisma-ingredient.repository.spec.ts
+backend/tests/infrastructure/repositories/prisma-purchase-list.repository.spec.ts
+backend/tests/interfaces/auth/auth.guard.spec.ts
+backend/tests/interfaces/controllers/addresses.controller.spec.ts
+backend/tests/interfaces/controllers/admin-dog-profile-analytics.controller.spec.ts
+backend/tests/interfaces/controllers/admin-finance.controller.spec.ts
+backend/tests/interfaces/controllers/admin.controller.spec.ts
+backend/tests/interfaces/controllers/auth.controller.spec.ts
+backend/tests/interfaces/controllers/dog-avatar-error.spec.ts
+backend/tests/interfaces/controllers/dog-profile-analytics.controller.spec.ts
+backend/tests/interfaces/controllers/dogs.controller.spec.ts
+backend/tests/interfaces/controllers/favorites.controller.spec.ts
+backend/tests/interfaces/controllers/ingredient-suggestions.controller.spec.ts
+backend/tests/interfaces/controllers/orders.controller.spec.ts
+backend/tests/interfaces/controllers/procurement-sku.controller.spec.ts
+backend/tests/interfaces/controllers/recipes.controller.spec.ts
+backend/tests/interfaces/controllers/recommended-product.controller.spec.ts
+backend/tests/interfaces/controllers/staff-kitchen.controller.spec.ts
+backend/tests/interfaces/controllers/staff-shipping.controller.spec.ts
+backend/tests/prisma/backfill-ingredient-nutrition-profile-v2.spec.ts
+backend/tests/prisma/backfill-procurement-sku-defaults.spec.ts
+backend/tests/prisma/breed-alias-catalog.spec.ts
+backend/tests/scripts/check-migration-history.spec.ts
+backend/tests/support/favorite-recipe-repair.spec.ts
+backend/tests/support/recipe-stats-audit.spec.ts
+backend/tests/utils/cors.util.spec.ts
+backend/tests/utils/date.util.spec.ts
+backend/tests/utils/env-config.spec.ts
+backend/tsconfig.build.json
+backend/tsconfig.json
+backend/update-order-dates-final.js
+backend/update-target-date.js
+backend/verify-deletion.js
+backend/verify-pricing-calculation.js
+backend/verify-purchase-amount.js
+backend/verify-purchase-calculation.js
+backend/verify-purchase-item-fields.js
+backend/verify-purchasing-api.ts
+backend/verify-purchasing-data-flow.js
+backend/verify-snapshot-integrity.js
+backup_sevenkitchen_20260202_005959.sql
+claude_code_zai_env.sh
+deploy-admin-web.sh
+docs/00_Tech_Stack_Standards.md
+docs/01_Project_Overview.md
+docs/02_Roles_and_Core_Flows.md
+docs/03_Features_and_UI_Blueprints.md
+docs/04_Domain_Model_and_Algorithms.md
+docs/05_API_Specs.md
+docs/06_Cursor_Collaboration_Guide.md
+docs/07_Core_Architecture.md
+docs/2026-02-02-cdn-domain-verification.md
+docs/2026-02-02-wechat-share-deployment.md
+docs/2026-02-02-wechat-share-fix-testing-guide.md
+docs/2026-02-02-wechat-share-image-issue-report.md
+docs/BCS_IMAGE_FIX_GUIDE.md
+docs/BCS_IMAGE_TROUBLESHOOTING.md
+docs/COS_AVATAR_CONFIG.md
+docs/COS_BCS_IMAGES_CONFIG.md
+docs/COS_SETUP_GUIDE.md
+docs/DATABASE_NAMING_CONVENTIONS.md
+docs/DEPLOYMENT.md
+docs/JCING_SDK_SETUP.md
+docs/PRINTER_TROUBLESHOOTING.md
+docs/PRINT_LAYOUT_DESIGN.md
+docs/PURCHASING_STATUS_MIGRATION_REPORT.md
+docs/REMOTE_DEPLOY_GUIDE.md
+docs/SSH_REFACTOR.md
+docs/TIMEZONE_HANDLING.md
+docs/_alignment/README.md
+docs/_alignment/phase8_0_gap_report.md
+docs/_alignment/phase8_0_patch_07.md
+docs/_alignment/phase8_7_alignment_report.md
+docs/_history/README.md
+docs/_history/phase6_implementation_notes.md
+docs/_history/phase8_10_closeout_20251216.md
+docs/_history/phase8_12_closeout_20251217.md
+docs/config/cos-share-images-setup.md
+docs/e2e/PHASE8_12_13_VERIFICATION_CHECKLIST.md
+docs/e2e/PHASE8_14_SHIPPING_E2E.md
+docs/e2e/README.md
+docs/handoff/2026-04-13-commit-timeline.tsv
+docs/handoff/2026-04-13-project-change-log.md
+docs/handoff/2026-04-13-project-file-manifest.txt
+docs/handoff/2026-04-13-project-handoff.md
+docs/handoff/2026-04-13-project-tree.txt
+docs/plans/2025-01-25-allergy-records-implementation.md
+docs/plans/2025-01-25-allergy-records-redesign-design.md
+docs/plans/2025-01-25-reimbursement-cost-details-design.md
+docs/plans/2025-01-25-reimbursement-cost-details-implementation.md
+docs/plans/2025-03-03-photo-sharing-design.md
+docs/plans/2026-01-28-instant-upload-implementation.md
+docs/plans/2026-01-28-production-task-instant-upload-design.md
+docs/plans/2026-01-30-miniapp-production-deployment.md
+docs/plans/2026-02-01-wechat-share-feature-design.md
+docs/plans/2026-02-01-wechat-share-implementation-summary.md
+docs/plans/2026-02-01-wechat-share-implementation.md
+docs/plans/2026-02-02-database-sync-dev-to-production.md
+docs/plans/2026-02-02-production-task-pdf-print.md
+docs/plans/2026-03-08-recipe-designer-design.md
+docs/plans/2026-03-08-recipe-designer-implementation.md
+docs/plans/2026-03-31-finance-process-design.md
+docs/reports/2026-04-12-production-ingredient-readonly-audit.md
+docs/reports/manual-pricing-group-review-2026-03-31.md
+docs/reports/pricing-group-cleanup-report.md
+docs/superpowers/plans/2026-04-03-dog-profile-analytics.md
+docs/superpowers/plans/2026-04-03-finance-center-v1.md
+docs/superpowers/plans/2026-04-03-standard-ingredient-sku-separation.md
+docs/superpowers/plans/2026-04-03-wechat-miniapp-dog-profile-flow.md
+docs/superpowers/plans/2026-04-07-dog-profile-create-flow-redesign.md
+docs/superpowers/plans/2026-04-08-release-candidate-validation.md
+docs/superpowers/plans/2026-04-08-sku-brand-channel-autocomplete.md
+docs/superpowers/plans/2026-04-10-dog-avatar-crop.md
+docs/superpowers/plans/2026-04-10-dog-breed-search-optimization.md
+docs/superpowers/plans/2026-04-10-dog-hot-breeds-top10.md
+docs/superpowers/plans/2026-04-11-standard-ingredient-domain-refactor-implementation.md
+docs/superpowers/plans/2026-04-12-standard-ingredient-nutrition-entry-implementation.md
+docs/superpowers/specs/2026-04-03-standard-ingredient-sku-separation-design.md
+docs/superpowers/specs/2026-04-03-wechat-miniapp-dog-profile-edit-interaction-design.md
+docs/superpowers/specs/2026-04-07-wechat-miniapp-dog-profile-create-flow-redesign.md
+docs/superpowers/specs/2026-04-10-dog-avatar-crop-design.md
+docs/superpowers/specs/2026-04-10-dog-breed-search-optimization-design.md
+docs/superpowers/specs/2026-04-11-standard-ingredient-sku-domain-design.md
+docs/superpowers/specs/2026-04-12-standard-ingredient-nutrition-entry-design.md
+docs/testing/wechat-share-testing-guide.md
+miniapp/.gitignore
+miniapp/.npmrc
+miniapp/API_TEST_PAGE_SUMMARY.md
+miniapp/API_URL_MIGRATION_SUMMARY.md
+miniapp/BUILD_FIX_ROOT_CAUSE.md
+miniapp/BUILD_FIX_SUMMARY.md
+miniapp/BUILD_MARKER_SUMMARY.md
+miniapp/BUILD_OUTPUT.md
+miniapp/CHANGES.md
+miniapp/DEBUG_FILTER.md
+miniapp/FIX_NOTES.md
+miniapp/QUICKSTART.md
+miniapp/README.md
+miniapp/Users/zhaochen/Documents/SevenKitchen/miniapp/docs/WECHAT_DEVTOOLS_GUIDE.md
+miniapp/VALIDATION_COMPLETE.md
+miniapp/build-dev.sh
+miniapp/check-styles.sh
+miniapp/clean-and-rebuild.sh
+miniapp/docs/CONFIGURATION.md
+miniapp/docs/DOG_LIST_MVP_FIX.md
+miniapp/docs/ORDER_CREATION_FIX.md
+miniapp/docs/REAL_USER_DRY_RUN.md
+miniapp/docs/WECHAT_DEVTOOLS_SETUP.md
+miniapp/docs/WECHAT_DEVTOOLS_TROUBLESHOOTING.md
+miniapp/package.json
+miniapp/pages-min.json
+miniapp/pnpm-lock.yaml
+miniapp/project.config.json
+miniapp/project.private.config.json
+miniapp/quick-rebuild.sh
+miniapp/rebuild-and-restart.sh
+miniapp/scripts/check-env.js
+miniapp/scripts/doctor.sh
+miniapp/scripts/ensure-compile.sh
+miniapp/scripts/fix-components-injection.js
+miniapp/scripts/mp-weixin-build.sh
+miniapp/scripts/mp-weixin-dev.sh
+miniapp/scripts/mp-weixin-verify.sh
+miniapp/scripts/open-devtools.sh
+miniapp/src/App.vue
+miniapp/src/api/analytics.ts
+miniapp/src/api/dogs.spec.ts
+miniapp/src/api/dogs.ts
+miniapp/src/api/inventory.ts
+miniapp/src/api/label.ts
+miniapp/src/api/orders.ts
+miniapp/src/api/production.ts
+miniapp/src/api/purchasing.ts
+miniapp/src/app-startup.regression.spec.ts
+miniapp/src/components/DimensionRating.vue
+miniapp/src/components/ImagePreviewModal.vue
+miniapp/src/components/OrderProgressBar.vue
+miniapp/src/components/RecipeSnapshotModal.vue
+miniapp/src/components/ReviewForm.vue
+miniapp/src/components/ReviewList.vue
+miniapp/src/components/ShareButton.md
+miniapp/src/components/ShareButton.vue
+miniapp/src/components/dog-profile/DogAvatarCropper.regression.spec.ts
+miniapp/src/components/dog-profile/DogAvatarCropper.vue
+miniapp/src/components/dog-profile/HealthRecordsSection.vue
+miniapp/src/components/dog-profile/RecommendationSummaryCard.vue
+miniapp/src/components/dog-profile/StepProgressHeader.vue
+miniapp/src/components/dog-profile/StickyActionBar.vue
+miniapp/src/components/dog-profile/TaskStatusCard.vue
+miniapp/src/components/manual-item-form.vue
+miniapp/src/components/order-selector.vue
+miniapp/src/config/share.config.ts
+miniapp/src/constants/dog-profile.ts
+miniapp/src/constants/reimbursement.ts
+miniapp/src/custom-tab-bar/index.js
+miniapp/src/custom-tab-bar/index.json
+miniapp/src/custom-tab-bar/index.regression.spec.ts
+miniapp/src/custom-tab-bar/index.wxml
+miniapp/src/custom-tab-bar/index.wxss
+miniapp/src/logging.regression.spec.ts
+miniapp/src/main.ts
+miniapp/src/manifest.json
+miniapp/src/mixins/.gitkeep
+miniapp/src/mixins/shareMixin.ts
+miniapp/src/pages.json
+miniapp/src/pages.json.full
+miniapp/src/pages.json.subpackages
+miniapp/src/pages/address-edit/index.vue
+miniapp/src/pages/address-list/index.vue
+miniapp/src/pages/aftersale-apply/index.vue
+miniapp/src/pages/calculate-portion/index.vue
+miniapp/src/pages/checkout/index.vue
+miniapp/src/pages/common/webview.vue
+miniapp/src/pages/custom-recipe/index.vue
+miniapp/src/pages/custom-recipe/orders.vue
+miniapp/src/pages/custom-recipe/success.vue
+miniapp/src/pages/diy-sheet-list/index.vue
+miniapp/src/pages/diy-sheet.regression.spec.ts
+miniapp/src/pages/diy-sheet/copy.spec.ts
+miniapp/src/pages/diy-sheet/copy.ts
+miniapp/src/pages/diy-sheet/index.vue
+miniapp/src/pages/dog-create.regression.spec.ts
+miniapp/src/pages/dog-create/index.vue
+miniapp/src/pages/dog-profile-basic/index.vue
+miniapp/src/pages/dog-profile-feeding/index.vue
+miniapp/src/pages/dog-profile-health/index.vue
+miniapp/src/pages/dog-profile-list/index.vue
+miniapp/src/pages/dog-profile-overview.regression.spec.ts
+miniapp/src/pages/dog-profile-overview/index.vue
+miniapp/src/pages/favorite-recipes/index.vue
+miniapp/src/pages/feedback-form/index.vue
+miniapp/src/pages/feedback-list/index.vue
+miniapp/src/pages/home.regression.spec.ts
+miniapp/src/pages/home/index.vue
+miniapp/src/pages/login/index.vue
+miniapp/src/pages/login/staff.vue
+miniapp/src/pages/me/index.vue
+miniapp/src/pages/network-settings/index.vue
+miniapp/src/pages/order-config/index.vue
+miniapp/src/pages/order-detail.regression.spec.ts
+miniapp/src/pages/order-detail/index.vue
+miniapp/src/pages/orders-list/index.vue
+miniapp/src/pages/privacy/index.vue
+miniapp/src/pages/profile-setup/index.vue
+miniapp/src/pages/recipe-detail/index.vue
+miniapp/src/pages/recipe-diy/index.vue
+miniapp/src/pages/recipe-list/index.vue
+miniapp/src/pages/recipe-order/index.vue
+miniapp/src/pages/recipe-stats.regression.spec.ts
+miniapp/src/pages/shared-photos/index.vue
+miniapp/src/pages/snapshot/index.vue
+miniapp/src/pages/staff-inventory/index.vue
+miniapp/src/pages/staff-inventory/stocktake-create.vue
+miniapp/src/pages/staff-orders/detail.vue
+miniapp/src/pages/staff-orders/index.vue
+miniapp/src/pages/staff-production/detail.vue
+miniapp/src/pages/staff-production/index.vue
+miniapp/src/pages/staff-production/print-label.vue
+miniapp/src/pages/staff-production/print-task.vue
+miniapp/src/pages/staff-production/print.vue
+miniapp/src/pages/staff-purchasing/detail.vue
+miniapp/src/pages/staff-purchasing/detail.vue.backup
+miniapp/src/pages/staff-purchasing/index-updated.vue
+miniapp/src/pages/staff-purchasing/index.vue
+miniapp/src/pages/staff-purchasing/preview.vue
+miniapp/src/pages/staff-purchasing/record-form.vue
+miniapp/src/pages/staff-purchasing/reimbursement/detail.vue
+miniapp/src/pages/staff-purchasing/reimbursement/list.vue
+miniapp/src/pages/staff-purchasing/reimbursement/submit.vue
+miniapp/src/pages/staff-purchasing/stock-create.vue
+miniapp/src/pages/staff-recipes/index.vue
+miniapp/src/pages/staff-shipping/index.vue
+miniapp/src/pages/staff-workbench/index.vue
+miniapp/src/pages/terms/index.vue
+miniapp/src/pages/weight-management/index.vue
+miniapp/src/static/logo.png
+miniapp/src/static/share-default.png
+miniapp/src/static/share-home.png
+miniapp/src/static/share-images-readme.txt
+miniapp/src/static/share-recipe.png
+miniapp/src/static/tabbar/home-active.png
+miniapp/src/static/tabbar/home.png
+miniapp/src/static/tabbar/me-active.png
+miniapp/src/static/tabbar/me.png
+miniapp/src/static/tabbar/staff-active.png
+miniapp/src/static/tabbar/staff.png
+miniapp/src/utils/api.spec.ts
+miniapp/src/utils/api.ts
+miniapp/src/utils/canvas-printer.ts
+miniapp/src/utils/config-image.spec.ts
+miniapp/src/utils/config.ts
+miniapp/src/utils/date.ts
+miniapp/src/utils/diy-sheet-format.spec.ts
+miniapp/src/utils/diy-sheet-format.ts
+miniapp/src/utils/dog-avatar-crop.spec.ts
+miniapp/src/utils/dog-avatar-crop.ts
+miniapp/src/utils/dog-avatar.spec.ts
+miniapp/src/utils/dog-avatar.ts
+miniapp/src/utils/dog-breed-search-catalog.ts
+miniapp/src/utils/dog-breed-search.spec.ts
+miniapp/src/utils/dog-breed-search.ts
+miniapp/src/utils/dog-breed-ui.spec.ts
+miniapp/src/utils/dog-breed-ui.ts
+miniapp/src/utils/dog-cache.spec.ts
+miniapp/src/utils/dog-cache.ts
+miniapp/src/utils/dog-profile-analytics.spec.ts
+miniapp/src/utils/dog-profile-analytics.ts
+miniapp/src/utils/dog-profile-create-actions.spec.ts
+miniapp/src/utils/dog-profile-create-actions.ts
+miniapp/src/utils/dog-profile-create-view.spec.ts
+miniapp/src/utils/dog-profile-create-view.ts
+miniapp/src/utils/dog-profile-draft.spec.ts
+miniapp/src/utils/dog-profile-draft.ts
+miniapp/src/utils/dog-profile-form.spec.ts
+miniapp/src/utils/dog-profile-form.ts
+miniapp/src/utils/dog-profile-overview.spec.ts
+miniapp/src/utils/dog-profile-overview.ts
+miniapp/src/utils/dog-recommendation-summary.spec.ts
+miniapp/src/utils/dog-recommendation-summary.ts
+miniapp/src/utils/format.ts
+miniapp/src/utils/health-records.spec.ts
+miniapp/src/utils/health-records.ts
+miniapp/src/utils/jcing-printer.ts
+miniapp/src/utils/jcing-sdk/JCAPI.js
+miniapp/src/utils/jcing-sdk/JCAPIDraw.js
+miniapp/src/utils/jcing-sdk/JCAPIErrorCode.js
+miniapp/src/utils/jcing-sdk/JCAPIManager.js
+miniapp/src/utils/jcing-sdk/JCBarcode.js
+miniapp/src/utils/jcing-sdk/JCBle.js
+miniapp/src/utils/jcing-sdk/JCCodeWriter.js
+miniapp/src/utils/jcing-sdk/JCDataUntil.js
+miniapp/src/utils/jcing-sdk/JCPrinter.js
+miniapp/src/utils/jcing-sdk/JCQrcode.js
+miniapp/src/utils/jcing-sdk/lzo1x.js
+miniapp/src/utils/label-config.ts
+miniapp/src/utils/label-mapping.ts
+miniapp/src/utils/label-renderer.ts
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/.idea/.gitignore
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/.idea/dd_3.0.0.iml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/.idea/inspectionProfiles/Project_Default.xml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/.idea/modules.xml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/.idea/workspace.xml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/.mini-ide/project-ide.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/README.MD
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/api/config.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/api/desc.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/api/index.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/api/log.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/api/my.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/api/propsPolyfill.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/api/relations.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/api/runtimeProcess.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/api/utils.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/btn/btn.acss
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/btn/btn.axml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/btn/btn.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/btn/btn.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/classSubdirectory/app.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/classSubdirectory/component.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/classSubdirectory/page.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/classSubdirectory/processRelation.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/classSubdirectory/promise.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/classSubdirectory/relation.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/classSubdirectory/selectComponent.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/classSubdirectory/utils.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/componentClass.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/custom-input/custom-input.acss
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/custom-input/custom-input.axml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/custom-input/custom-input.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/custom-input/custom-input.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/lifeCyclesMap.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/_relationNode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/cloneDeep.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/collectObserver.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/collectObservers.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/compatibleLifetime.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/findRelationNode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/getUrl.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/handleAfterInit.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/handleExternalClasses.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/handleProps.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/index.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/mergeOptions.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/nextUid.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/observerHandle.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/processDataSet.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/processRelationPath.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/processTriggerEvent.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/updateData.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/component/utils/watchShakes.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/__antmove/static/app.acss
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/app.acss
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/app.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/app.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/mini.project.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/pages/index/index.acss
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/pages/index/index.axml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/pages/index/index.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/pages/index/index.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/project.private.config.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/readme
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/sitemap.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/test.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/utils/JCAPI/JCAPI.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/utils/JCAPI/JCAPIDraw.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/utils/JCAPI/JCAPIErrorCode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/utils/JCAPI/JCAPIManager.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/utils/JCAPI/JCBarcode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/utils/JCAPI/JCBle.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/utils/JCAPI/JCCodeWriter.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/utils/JCAPI/JCDataUntil.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/utils/JCAPI/JCPrinter.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/utils/JCAPI/JCQrcode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/utils/JCAPI/lzo1x.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/dd/utils/util.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/Images/结构预览.png
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/app.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/app.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/app.ttss
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/log.txt
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/SaveData/SaveData.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/SaveData/SaveData.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/SaveData/SaveData.ttml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/SaveData/SaveData.ttss
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/TestLabel/TestLabel.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/TestLabel/TestLabel.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/TestLabel/TestLabel.ttml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/TestLabel/TestLabel.ttss
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/index/index.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/index/index.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/index/index.ttml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/index/index.ttss
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/logs/logs.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/logs/logs.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/logs/logs.ttml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/pages/logs/logs.ttss
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/project.config.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/project.private.config.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/readme
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/sitemap.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/utils/JCAPI/JCAPI.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/utils/JCAPI/JCAPIDraw.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/utils/JCAPI/JCAPIErrorCode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/utils/JCAPI/JCAPIManager.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/utils/JCAPI/JCBarcode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/utils/JCAPI/JCBle.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/utils/JCAPI/JCCodeWriter.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/utils/JCAPI/JCDataUntil.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/utils/JCAPI/JCPrinter.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/utils/JCAPI/JCQrcode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/utils/JCAPI/lzo1x.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/fs/utils/util.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/.idea/.gitignore
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/.idea/modules.xml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/.idea/vcs.xml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/.idea/workspace.xml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/.idea/wx_3.0.0_release_20241023.iml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/Images/结构预览.png
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/app.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/app.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/app.wxss
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/pages/index/index.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/pages/index/index.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/pages/index/index.wxml
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/pages/index/index.wxss
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/project.config.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/project.private.config.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/readme
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/sitemap.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/utils/JCAPI/JCAPI.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/utils/JCAPI/JCAPIDraw.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/utils/JCAPI/JCAPIErrorCode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/utils/JCAPI/JCAPIManager.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/utils/JCAPI/JCBarcode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/utils/JCAPI/JCBle.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/utils/JCAPI/JCCodeWriter.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/utils/JCAPI/JCDataUntil.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/utils/JCAPI/JCPrinter.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/utils/JCAPI/JCQrcode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/utils/JCAPI/lzo1x.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/SDK DEMO/wx/utils/util.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/UNI-APP 调用小程序 SDK 组件.pdf
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/.hbuilderx/launch.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/babel.config.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/jsconfig.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/package-lock.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/package.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/postcss.config.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/public/index.html
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/shime-uni.d.ts
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/shime-vue.d.ts
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/App.vue
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/main.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/manifest.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/pages.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/pages/index/index.vue
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/pages/main/main.vue
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/static/JCAPI/JCAPI.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/static/JCAPI/JCAPIDraw.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/static/JCAPI/JCAPIErrorCode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/static/JCAPI/JCAPIManager.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/static/JCAPI/JCBarcode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/static/JCAPI/JCBle.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/static/JCAPI/JCCodeWriter.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/static/JCAPI/JCDataUntil.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/static/JCAPI/JCPrinter.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/static/JCAPI/JCQrcode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/static/JCAPI/lzo1x.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/uni.promisify.adaptor.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/uni.scss
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue2-option-demo/src/utils/print.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/.hbuilderx/launch.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/index.html
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/jsconfig.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/package-lock.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/package.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/project.config.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/project.private.config.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/App.vue
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/composables/print.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/main.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/manifest.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/pages.json
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/pages/index/index.vue
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/pages/main/main.vue
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/shime-uni.d.ts
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/static/JCAPI/JCAPI.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/static/JCAPI/JCAPIDraw.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/static/JCAPI/JCAPIErrorCode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/static/JCAPI/JCAPIManager.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/static/JCAPI/JCBarcode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/static/JCAPI/JCBle.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/static/JCAPI/JCCodeWriter.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/static/JCAPI/JCDataUntil.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/static/JCAPI/JCPrinter.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/static/JCAPI/JCQrcode.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/static/JCAPI/lzo1x.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/src/uni.scss
+miniapp/src/utils/mini _program_3.0.4_release_20250925/uni-app 调用小程序SDK组件示例/niimbot-vue3-comoption-demo/vite.config.js
+miniapp/src/utils/mini _program_3.0.4_release_20250925/小程序 SDK 接入包使用说明.pdf
+miniapp/src/utils/mini _program_3.0.4_release_20250925/排版相关/小程序 SDK -内容排版.pdf
+miniapp/src/utils/mini _program_3.0.4_release_20250925/接口文档/小程序 SDK 接口说明文档 V3.0.4.pdf
+miniapp/src/utils/mini _program_3.0.4_release_20250925/注意事项/小程序 打印机蓝牙相关注意事项-案例编号0001.pdf
+miniapp/src/utils/page-scroll.spec.ts
+miniapp/src/utils/page-scroll.ts
+miniapp/src/utils/print-canvas.ts
+miniapp/src/utils/runtime-base-url.spec.ts
+miniapp/src/utils/runtime-base-url.ts
+miniapp/src/utils/user-profile.spec.ts
+miniapp/src/utils/user-profile.ts
+miniapp/src/utils/weight-management.spec.ts
+miniapp/src/utils/weight-management.ts
+miniapp/static/logo.png
+miniapp/static/tabbar/home-active.png
+miniapp/static/tabbar/home.png
+miniapp/static/tabbar/icons-guide.md
+miniapp/static/tabbar/me-active.png
+miniapp/static/tabbar/me.png
+miniapp/static/tabbar/staff-active.png
+miniapp/static/tabbar/staff.png
+miniapp/sync-to-build.sh
+miniapp/tsconfig.json
+miniapp/verify-ingredient-display.js
+miniapp/vite.config.ts
+miniapp/vitest.config.ts
+scripts/env.sh
+skills/production-ssh/CREATION_SUMMARY.md
+skills/production-ssh/HOW_TO_USE.md
+skills/production-ssh/README.md
+skills/production-ssh/SKILL.md
+skills/production-ssh/example-view-logs.sh

@@ -1,4 +1,5 @@
 import { AGENT_TOOLS, executeTool } from '../../../src/application/recipe-designer/agent/tools';
+import { CitationRegistry } from '../../../src/application/recipe-designer/agent/citation-registry';
 
 describe('Agent 工具：search_knowledge_library', () => {
   it('已注册到 Agent 工具清单', () => {
@@ -30,6 +31,7 @@ describe('Agent 工具：search_knowledge_library', () => {
         port: {} as any,
         catalog: {} as any,
         library: { search } as any,
+        citations: new CitationRegistry(),
         onAsk: jest.fn(),
       },
     );
@@ -46,6 +48,8 @@ describe('Agent 工具：search_knowledge_library', () => {
     expect(outcome.data).toMatchObject({ count: 1 });
     expect(outcome.summary).toContain('SACN5');
     expect(outcome.summary).toContain('p17');
+    expect(outcome.summary).toContain('[K1]');
+    expect((outcome.data as any).passages[0].citationId).toBe('K1');
   });
 
   it('assess 摘要带出缺口数值和目标范围', async () => {
@@ -75,6 +79,7 @@ describe('Agent 工具：search_knowledge_library', () => {
         } as any,
         catalog: {} as any,
         library: {} as any,
+        citations: new CitationRegistry(),
         onAsk: jest.fn(),
       },
     );
@@ -93,6 +98,7 @@ describe('Agent 工具：search_knowledge_library', () => {
         port: {} as any,
         catalog: {} as any,
         library: { search } as any,
+        citations: new CitationRegistry(),
         onAsk: jest.fn(),
       },
     );

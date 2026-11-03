@@ -5329,6 +5329,8 @@ model RecipeDesignAgentSession {
   skillName        String                    @map("skill_name") @db.VarChar(80)
   skillVersion     String                    @map("skill_version") @db.VarChar(40)
   stepCount        Int                       @default(0) @map("step_count")
+  /** 阶段 1 观察：最终答案的引用审计（有效/无效/未引用数值行） */
+  citationAudit    Json?                     @map("citation_audit")
   promptTokens     Int                       @default(0) @map("prompt_tokens")
   completionTokens Int                       @default(0) @map("completion_tokens")
   /** 本轮开始时（每次用户发新消息）的累计值快照：本次 = 当前累计 - 本轮起点 */

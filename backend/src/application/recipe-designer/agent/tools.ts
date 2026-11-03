@@ -8,6 +8,7 @@ import type { DeepSeekToolDefinition } from '../deepseek-tools-chat';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
 import type { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
+import type { CitationRegistry } from './citation-registry';
 import {
   AgentToolError,
   fail,
@@ -77,9 +78,9 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
     function: {
       name: 'search_knowledge_library',
       description:
-        '在知识库原文里按关键词找段落（只读）。返回 5–8 段原文，带来源、章节、页码。' +
+        '在知识库原文里按关键词找段落（只读）。返回 5–8 段原文，带来源、章节、页码和引用编号 K#。' +
         '设计疾病营养配方（如 CKD、胰腺炎、肾病）前先用它查证据；可以换关键词、换来源多次查。' +
-        '它返回的是原文，不是结论；回答时引用来源+章节+页码。',
+        '它返回的是原文，不是结论；最终回答用 [K#] 引用。',
       parameters: {
         type: 'object',
         properties: {
@@ -216,6 +217,7 @@ export interface ToolExecutionContext {
   port: RecipeDraftPort;
   catalog: RecipeCatalogPort;
   library: KnowledgeLibraryService;
+  citations: CitationRegistry;
   /** ask 工具把问题交回运行时：运行时暂停并等用户回答。 */
   onAsk: (question: string, options: string[]) => void;
 }
@@ -272,17 +274,22 @@ export async function executeTool(
             : scope === 'all'
               ? undefined
               : CKD_DOCUMENT_IDS;
-        const passages = await context.library.search(query, {
-          sourceIds,
-          documentIds,
-          limit,
-        });
+        const passages = (
+          await context.library.search(query, {
+            sourceIds,
+            documentIds,
+            limit,
+          })
+        ).map((passage) => ({
+          ...passage,
+          citationId: context.citations.register(passage).citationId,
+        }));
         return ok(
           { query, passages, count: passages.length },
           passages.length === 0
             ? `知识库原文里没有找到「${query}」；换个关键词或来源再查`
             : `找到 ${passages.length} 段原文：${passages
-                .map((item) => `${item.sourceName ?? item.sourceId}${item.sourceId ? `（${item.sourceId}）` : ''}${item.pageStart ? ` p${item.pageStart}` : ''}`)
+                .map((item) => `${item.sourceName ?? item.sourceId}${item.sourceId ? `（${item.sourceId}）` : ''}${item.pageStart ? ` p${item.pageStart}` : ''} [${item.citationId}]`)
                 .slice(0, 4)
                 .join('；')}`,
         );
@@ -506,6 +513,11 @@ function summarizeAssessment(summary: {
           return `${gap.label} ${actual}${target}`;
         })
         .join('、')}`,
+    );
+  }
+  if (summary.gaps.length > 0) {
+    parts.push(
+      '若该营养素受当前疾病影响，先查原文确认目标，再改配方',
     );
   }
   if (summary.allergens.length > 0) {

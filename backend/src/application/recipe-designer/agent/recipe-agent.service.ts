@@ -29,6 +29,7 @@ import {
 } from '../deepseek-tools-chat';
 import { RecipeDesignerService } from '../recipe-designer.service';
 import { buildSystemPrompt } from './prompt';
+import { CitationRegistry } from './citation-registry';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
 import { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
@@ -214,6 +215,7 @@ export class RecipeAgentService implements OnModuleInit {
     const catalog = new RecipeCatalogPort(this.prisma);
 
     const messages = await this.buildMessages(sessionId, message, flow);
+    const citations = new CitationRegistry();
     let toolCalls = 0;
 
     while (true) {
@@ -243,6 +245,10 @@ export class RecipeAgentService implements OnModuleInit {
       if (calls.length === 0) {
         if (response.content) {
           await this.appendMessage(sessionId, 'ASSISTANT', response.content);
+          await this.prisma.recipeDesignAgentSession.update({
+            where: { id: sessionId },
+            data: { citationAudit: citations.audit(response.content) as any },
+          });
         }
         await this.markWaiting(sessionId);
         return;
@@ -269,6 +275,7 @@ export class RecipeAgentService implements OnModuleInit {
           port,
           catalog,
           this.library,
+          citations,
           call,
           (question, options) => {
             pendingAsk = { question, options };
@@ -300,6 +307,7 @@ export class RecipeAgentService implements OnModuleInit {
     port: RecipeDraftPort,
     catalog: RecipeCatalogPort,
     library: KnowledgeLibraryService,
+    citations: CitationRegistry,
     call: DeepSeekToolCall,
     onAsk: (question: string, options: string[]) => void,
   ): Promise<{ result: unknown }> {
@@ -315,6 +323,7 @@ export class RecipeAgentService implements OnModuleInit {
       port,
       catalog,
       library,
+      citations,
       onAsk: (question, options) => onAsk(question, options),
     });
     return { result };

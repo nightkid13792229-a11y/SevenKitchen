@@ -46,14 +46,15 @@ LOCK_TOKEN="$(collab_lock_acquire deploy-admin-web "后台部署" 1800 0)" || {
   fail "另一个后台部署正在进行（看门禁：bash scripts/gate.sh status）"
   exit 1
 }
+LOCK_DIR_ABS="$(collab_lock_dir deploy-admin-web)"
 BUILD_ROOT=""
 
 cleanup() {
   if [ -n "${BUILD_ROOT:-}" ] && [ -d "$BUILD_ROOT" ]; then
     rm -rf "$BUILD_ROOT"
   fi
-  if [ -n "${LOCK_TOKEN:-}" ]; then
-    collab_lock_release deploy-admin-web "$LOCK_TOKEN" >/dev/null 2>&1 || true
+  if [ -n "${LOCK_TOKEN:-}" ] && [ -n "${LOCK_DIR_ABS:-}" ]; then
+    collab_lock_release_at "$LOCK_DIR_ABS" "$LOCK_TOKEN" >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT

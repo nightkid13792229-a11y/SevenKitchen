@@ -74,9 +74,9 @@
    只有 `miniapp/` 变动、`backend/` 一个字没改时，**不要部署后端** ——
    部署脚本会重置生产源码并重启服务，纯粹多余。先判一下：
    ```bash
-   git diff --stat <上次部署的提交>..HEAD -- backend/   # 空 = 不用部署
+   git diff --stat <上次部署的提交>..origin/main -- backend/ docs/knowledge-base/source-layer   # 空 = 不用部署
    ```
-   同理 admin-web：`git diff --stat <上次>..HEAD -- admin-web/`。
+   同理 admin-web：`git diff --stat <上次>..origin/main -- admin-web/`。
    小程序不一样 —— **每次都要上传**（老板要在手机上看到最新那份）。
    现在部署脚本会自己比对上次部署记录，没改动会直接跳过（`--force` 可强制）。
 6. ⚠️ **前端部署统一用主工作区那份脚本**（2026-11-01 加的）：

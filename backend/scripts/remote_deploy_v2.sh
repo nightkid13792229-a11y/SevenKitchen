@@ -47,8 +47,8 @@ cleanup() {
   if [ -n "${BUILD_ROOT:-}" ] && [ -d "$BUILD_ROOT" ]; then
     rm -rf "$BUILD_ROOT"
   fi
-  if [ -n "${LOCK_TOKEN:-}" ] && declare -F collab_lock_release >/dev/null 2>&1; then
-    collab_lock_release deploy-backend "$LOCK_TOKEN" >/dev/null 2>&1 || true
+  if [ -n "${LOCK_TOKEN:-}" ] && [ -n "${LOCK_DIR_ABS:-}" ] && declare -F collab_lock_release_at >/dev/null 2>&1; then
+    collab_lock_release_at "$LOCK_DIR_ABS" "$LOCK_TOKEN" >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -85,6 +85,7 @@ LOCK_TOKEN="$(collab_lock_acquire deploy-backend "后端部署" 3600 0)" || {
   fail "另一个后端部署正在进行（看门禁：bash scripts/gate.sh status）"
   exit 1
 }
+LOCK_DIR_ABS="$(collab_lock_dir deploy-backend)"
 DEPLOY_STATE_FILE="$(collab_state_dir)/deploy-state/backend"
 
 # ============================================================================
@@ -107,7 +108,7 @@ build_artifact_locally() {
 
   info "Fetching origin/main..."
   git -C "$REPO_ROOT" fetch origin main
-  DEPLOY_COMMIT="$(git -C "$REPO_ROOT" rev-parse FETCH_HEAD)"
+  DEPLOY_COMMIT="$(git -C "$REPO_ROOT" rev-parse origin/main)"
   ok "Deploy commit: ${DEPLOY_COMMIT}"
 
   # 自上次部署以来 backend/ 没改动 → 跳过，避免无意义重置/重启（--force 可强制）
@@ -116,7 +117,7 @@ build_artifact_locally() {
     last_deploy_commit="$(awk 'NR==1{print $1}' "$DEPLOY_STATE_FILE")"
     if [ -n "$last_deploy_commit" ] \
        && git -C "$REPO_ROOT" merge-base --is-ancestor "$last_deploy_commit" "$DEPLOY_COMMIT" 2>/dev/null \
-       && git -C "$REPO_ROOT" diff --quiet "$last_deploy_commit..$DEPLOY_COMMIT" -- backend/; then
+       && git -C "$REPO_ROOT" diff --quiet "$last_deploy_commit..$DEPLOY_COMMIT" -- backend/ docs/knowledge-base/source-layer; then
       ok "backend 自上次部署（${last_deploy_commit:0:8}）以来没有改动，跳过部署"
       info "需要强制部署请加 --force"
       SK_SKIP_DEPLOY=1
@@ -189,7 +190,7 @@ MAX_RETRIES=3
 RETRY_COUNT=0
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
   if git fetch origin main; then
-    git reset --hard FETCH_HEAD
+    git reset --hard origin/main
     ok "Code reset to $(git rev-parse --short HEAD)"
     break
   else

@@ -10,6 +10,14 @@
 | `gate.sh` | **共享出口门禁**：查看 / 占用 / 释放（合并、部署、上传、迁移） |
 | `upload-trial.sh` | **上传小程序体验版**（固定动作，自动拿门禁） |
 
+## 协作脚本测试
+
+```bash
+bash scripts/tests/collab-smoke.sh
+```
+
+在临时仓库里验证门禁释放、工位端口、并发推进后的 merge 恢复、cleanup；不碰真实仓库。
+
 ---
 
 # deploy_to_tencent_cdn.sh
@@ -116,7 +124,7 @@ tail -30 /var/log/tencent-cdn-deploy.log
 
 ## 相关文档
 
-- 事故复盘：`docs/reports/2026-09-29-image-cdn-certificate-outage.md`
+- 事故复盘：`docs/_archive/reports/2026-09-29-image-cdn-certificate-outage.md`
 
 ## 注意：本仓库还有另一套证书体系
 

@@ -86,7 +86,7 @@ npx prisma studio             # 查看真实表结构
 cd admin-web
 npm run dev
 npm run build          # 类型检查 + 构建
-npm run build:prod     # 生产构建
+npm run build:prod     # 生产构建（部署脚本用这个）
 npm run test           # Vitest
 ```
 
@@ -117,7 +117,7 @@ npm run test               # Vitest
 | 改动 | 最低验证 |
 |---|---|
 | 后端 | `npx tsc --noEmit` + 目标模块 Jest |
-| 管理后台 | `npm run build` |
+| 管理后台 | `npm run build`（自检）；部署脚本用 `npm run build:prod` |
 | 小程序 | `npm run preview` 或 `npm run build:mp-weixin` |
 | 数据库 | `npx prisma validate` + migration |
 | 部署 | 合并 main、跑部署脚本、回读健康检查 |

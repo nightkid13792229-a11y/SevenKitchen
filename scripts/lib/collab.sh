@@ -9,21 +9,25 @@
 #
 # 注意：调用方应先 `set -euo pipefail`。本文件不主动改调用方的 shell 选项。
 
+# 以库文件位置锁定仓库根，不依赖调用时的 cwd。
+# 部署脚本会 cd 到临时构建目录，cleanup 时如果还按 cwd 找 .git，锁就释放不掉。
+COLLAB_REPO_ROOT="${COLLAB_REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+
 # ---------------------------------------------------------------------------
 # 基础路径
 # ---------------------------------------------------------------------------
 
 # 主工作区（git worktree list 的第一条），所有工位都从它切出去
 collab_main_worktree() {
-  git worktree list --porcelain 2>/dev/null \
+  git -C "$COLLAB_REPO_ROOT" worktree list --porcelain 2>/dev/null \
     | awk 'NR==1 && $1=="worktree" {sub(/^worktree /,""); print; exit}'
 }
 
 # git 公共目录：主工作区是 .git，工位里会解析回主仓库的 .git
 collab_common_dir() {
   local top common
-  top="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
-  common="$(cd "$top" && git rev-parse --git-common-dir 2>/dev/null)" || return 1
+  top="${COLLAB_REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}" || return 1
+  common="$(git -C "$top" rev-parse --git-common-dir 2>/dev/null)" || return 1
   ( cd "$top" && cd "$common" && pwd )
 }
 
@@ -66,7 +70,9 @@ collab_meta_get() {
 # ---------------------------------------------------------------------------
 
 collab_lock_dir() {
-  printf '%s/locks/%s.lock\n' "$(collab_state_dir)" "$1"
+  local state
+  state="$(collab_state_dir)" || return 1
+  printf '%s/locks/%s.lock\n' "$state" "$1"
 }
 
 # 判断门禁是否已过期。返回 0 = 过期，可以清理。
@@ -179,18 +185,24 @@ collab_lock_acquire() {
   done
 }
 
-# 释放门禁；只有 token 对得上才删，避免误删别人的锁
-collab_lock_release() {
-  local resource="$1" token="${2:-}"
-  local dir owner
-  dir="$(collab_lock_dir "$resource")" || return 1
-  [ -d "$dir" ] || return 0
+# 按绝对路径释放门禁；不依赖 cwd，部署脚本 cd 到临时目录后仍能释放
+collab_lock_release_at() {
+  local dir="$1" token="${2:-}" owner
+  [ -d "$dir" ] || return 1
   owner="$(collab_meta_get "$dir/owner" token)"
   if [ -z "$token" ] || [ "$owner" != "$token" ]; then
-    printf '⚠ 门禁 %s 的持有者已变化，跳过释放\n' "$resource" >&2
+    printf '⚠ 门禁 %s 的持有者已变化，跳过释放\n' "$(basename "$dir" .lock)" >&2
     return 1
   fi
   rm -rf "$dir"
+}
+
+# 释放门禁；只有 token 对得上才删，避免误删别人的锁
+collab_lock_release() {
+  local resource="$1" token="${2:-}"
+  local dir
+  dir="$(collab_lock_dir "$resource")" || return 1
+  collab_lock_release_at "$dir" "$token"
 }
 
 # 打印当前所有门禁

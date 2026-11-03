@@ -52,8 +52,12 @@ if [ ! -x "$CLI" ]; then
 fi
 
 # ---- 1. 互斥门禁：同一时间只允许一个上传（跨工位共用）----
-if [ -d "$REPO_ROOT/.wechat-trial.lock" ]; then
-  fail "发现旧版本地锁目录：$REPO_ROOT/.wechat-trial.lock"
+LEGACY_LOCK="$REPO_ROOT/.wechat-trial.lock"
+if [ ! -d "$LEGACY_LOCK" ] && [ -n "${MAIN_WT:-}" ] && [ "$MAIN_WT" != "$REPO_ROOT" ]; then
+  LEGACY_LOCK="$MAIN_WT/.wechat-trial.lock"
+fi
+if [ -d "$LEGACY_LOCK" ]; then
+  fail "发现旧版本地锁目录：$LEGACY_LOCK"
   fail "确认没有上传在进行后，删除这个目录再重试"
   exit 1
 fi
@@ -61,14 +65,15 @@ LOCK_TOKEN="$(collab_lock_acquire upload-trial "体验版上传：$DESC" 1800 0)
   fail "另一个上传正在进行（看门禁：bash scripts/gate.sh status）"
   exit 1
 }
+LOCK_DIR_ABS="$(collab_lock_dir upload-trial)"
 
 BUILD_ROOT=""
 cleanup() {
   if [ -n "$BUILD_ROOT" ] && [ -d "$BUILD_ROOT" ]; then
     git -C "$REPO_ROOT" worktree remove "$BUILD_ROOT" --force >/dev/null 2>&1 || true
   fi
-  if [ -n "$LOCK_TOKEN" ]; then
-    collab_lock_release upload-trial "$LOCK_TOKEN" >/dev/null 2>&1 || true
+  if [ -n "$LOCK_TOKEN" ] && [ -n "${LOCK_DIR_ABS:-}" ]; then
+    collab_lock_release_at "$LOCK_DIR_ABS" "$LOCK_TOKEN" >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT

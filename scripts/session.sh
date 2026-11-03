@@ -59,8 +59,20 @@ EOF
 # ---------------------------------------------------------------------------
 
 pick_port() {
-  local p
+  local p state used meta
+  state="$(collab_state_dir 2>/dev/null || true)"
   for p in $(seq 3012 3099); do
+    # 先看已登记工位，避免两个工位在启动后端前拿到同一个端口
+    used=0
+    for meta in "$state"/tasks/*.meta; do
+      [ -f "$meta" ] || continue
+      if [ "$(collab_meta_get "$meta" port)" = "$p" ]; then
+        used=1
+        break
+      fi
+    done
+    [ "$used" -eq 1 ] && continue
+
     if command -v nc >/dev/null 2>&1; then
       if ! nc -z 127.0.0.1 "$p" >/dev/null 2>&1; then
         printf '%s\n' "$p"
@@ -304,7 +316,9 @@ check_staged_files() {
     fi
   done <<< "$staged"
 
-  if git diff --cached --unified=0 | grep -qE '^\+(<<<<<<<|>>>>>>>)'; then
+  local staged_diff
+  staged_diff="$(git diff --cached --unified=0)"
+  if grep -qE '^\+(<<<<<<<|>>>>>>>)' <<< "$staged_diff"; then
     die "暂存内容里还有未解决的冲突标记；先解决冲突再提交"
   fi
 }
@@ -394,7 +408,7 @@ cmd_merge() {
     esac
   done
 
-  local wt branch main_wt state token
+  local wt branch main_wt state token original_branch_sha safe_main_tips
   wt="$(git rev-parse --show-toplevel 2>/dev/null)" || die "当前目录不在 git 仓库里"
   main_wt="$(collab_main_worktree)"
   branch="$(git branch --show-current 2>/dev/null || true)"
@@ -402,6 +416,8 @@ cmd_merge() {
 
   [ "$wt" != "$main_wt" ] || die "请在任务工位里执行 merge，不要在 main 上"
   [ -n "$branch" ] && [ "$branch" != "main" ] || die "当前不在任务分支上"
+  original_branch_sha="$(git rev-parse "$branch")"
+  safe_main_tips=" $original_branch_sha "
 
   if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
     die "工位还有未提交改动；先 commit"
@@ -440,40 +456,68 @@ cmd_merge() {
   fi
 
   git -C "$main_wt" fetch origin main || die "主工作区拉取 origin/main 失败"
-  local ahead
-  ahead="$(git -C "$main_wt" rev-list --count origin/main..main)"
-  if [ "$ahead" -ne 0 ]; then
-    die "主工作区有 $ahead 个未推送提交；如果确认是上次合并遗留，先 git push origin main 或 git reset --hard origin/main"
-  fi
 
-  info "快进合并到主工作区 ..."
-  git -C "$main_wt" merge --ff-only "$branch" \
-    || die "无法快进合并（可能主工作区被占用或有未跟踪文件冲突）"
+  local attempt=1 pushed=0
+  while [ "$attempt" -le 3 ]; do
+    git -C "$main_wt" fetch origin main || die "主工作区拉取 origin/main 失败"
 
-  if [ "$no_push" -eq 0 ]; then
-    local attempt=1 pushed=0
-    while [ "$attempt" -le 3 ]; do
-      if git -C "$main_wt" push origin main; then
-        pushed=1
-        break
-      fi
-      warn "推送 main 失败（可能有人同时提交），第 $attempt/3 次重试..."
-      git -C "$main_wt" fetch origin main || true
-      local cnt parent origin_sha
-      cnt="$(git -C "$main_wt" rev-list --count origin/main..main)"
-      parent="$(git -C "$main_wt" rev-parse main^ 2>/dev/null || true)"
-      origin_sha="$(git -C "$main_wt" rev-parse origin/main)"
-      if [ "$cnt" = "1" ] && [ "$parent" = "$origin_sha" ]; then
-        # 本地只多出“本次合并”这一个提交，且父提交就是最新 origin/main：安全回退重来
-        git -C "$main_wt" reset --hard origin/main
-        git -C "$main_wt" merge --ff-only "$branch" || die "重试合并失败"
+    # 如果主工作区领先 origin：只允许“上一次合并遗留”这一种情况，回退后重来；
+    # 其它未推送提交（别人/手工）一律不碰。
+    local ahead main_tip branch_tip safe
+    ahead="$(git -C "$main_wt" rev-list --count origin/main..main)"
+    if [ "$ahead" -ne 0 ]; then
+      main_tip="$(git -C "$main_wt" rev-parse main)"
+      branch_tip="$(git rev-parse "$branch")"
+      case " $safe_main_tips " in
+        *" $main_tip "*) safe=1 ;;
+        *) safe=0 ;;
+      esac
+      if [ "$main_tip" = "$branch_tip" ] || [ "$safe" -eq 1 ]; then
+        warn "主工作区有上次合并遗留，回退到 origin/main 后重试"
+        git -C "$main_wt" reset --hard origin/main || die "回退主工作区失败"
       else
-        die "推送 main 失败，且本地状态不适合自动重试；请人工检查"
+        die "主工作区有 $ahead 个未推送提交，且不是本次合并；请人工检查"
       fi
-      attempt=$((attempt + 1))
-      sleep 2
-    done
-    [ "$pushed" -eq 1 ] || die "推送 main 失败（已重试 3 次）"
+    fi
+
+    # origin/main 在合并前又前进了：重新变基到最新 main，再合并。
+    if ! git merge-base --is-ancestor origin/main "$branch"; then
+      info "origin/main 已前进，重新把 $branch 变基到最新 main ..."
+      if ! git rebase origin/main; then
+        git rebase --abort >/dev/null 2>&1 || true
+        die "与最新 origin/main 有冲突，已回滚；请手工解决后再 merge"
+      fi
+      if [ "$no_push" -eq 0 ]; then
+        git push --force-with-lease origin "$branch" || die "推送任务分支失败"
+      fi
+    fi
+
+    info "快进合并到主工作区 ..."
+    git -C "$main_wt" merge --ff-only "$branch" \
+      || die "无法快进合并（可能主工作区被占用或有未跟踪文件冲突）"
+    safe_main_tips="$safe_main_tips $(git -C "$main_wt" rev-parse main)"
+
+    if [ "$no_push" -eq 1 ]; then
+      pushed=1
+      break
+    fi
+
+    if git -C "$main_wt" push origin main; then
+      pushed=1
+      break
+    fi
+
+    warn "推送 main 失败（可能有人同时提交），第 $attempt/3 次重试..."
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+
+  if [ "$pushed" -ne 1 ]; then
+    # 只回退“本次合并”这一个提交；分支本身保留，下次还能重新 merge。
+    if [ "$(git -C "$main_wt" rev-parse main)" = "$(git rev-parse "$branch")" ]; then
+      git -C "$main_wt" reset --hard origin/main >/dev/null 2>&1 || true
+    fi
+    die "推送 main 失败（已重试 3 次）；本次合并已回滚，分支保留"
   fi
 
   local merged_sha push_label task_name
@@ -550,6 +594,7 @@ cmd_cleanup() {
   fi
 
   local merged=0
+  git -C "$main_wt" fetch origin main --quiet >/dev/null 2>&1 || true
   if git -C "$main_wt" show-ref --verify --quiet "refs/heads/$branch"; then
     if git -C "$main_wt" merge-base --is-ancestor "$branch" origin/main 2>/dev/null; then
       merged=1
@@ -571,10 +616,11 @@ cmd_cleanup() {
   fi
 
   if git -C "$main_wt" show-ref --verify --quiet "refs/heads/$branch"; then
-    if [ "$force" -eq 1 ]; then
-      git -C "$main_wt" branch -D "$branch" >/dev/null
-    else
-      git -C "$main_wt" branch -d "$branch" >/dev/null
+    # 前面已经确认“已合并进 origin/main”或用户加了 --force；用 -D 避免
+    # 主工作区 HEAD 落后 origin/main 时 -d 误判“未合并”。
+    if ! git -C "$main_wt" branch -D "$branch" >/dev/null; then
+      warn "工位已删除，但分支 $branch 删除失败；登记保留：${meta:-无}"
+      exit 1
     fi
   fi
 

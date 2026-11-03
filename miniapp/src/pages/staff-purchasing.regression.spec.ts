@@ -222,7 +222,8 @@ describe('staff purchasing detail audit display', () => {
     expect(detailSource).not.toContain('class="item-stock-offset"');
     expect(detailSource).toContain('formatResolvedQuantity(item.resolvedGrossQuantityNeeded, item)');
     expect(detailSource).toContain('formatResolvedQuantity(item.resolvedStockDeductedQuantity, item)');
-    expect(detailSource).toContain('class="quantity-label">仍需</text>');
+    expect(detailSource).toContain('<StaffQuantityText');
+    expect(detailSource).toContain('label="仍需"');
     expect(detailSource).toContain('formatQuantity(item)');
   });
 

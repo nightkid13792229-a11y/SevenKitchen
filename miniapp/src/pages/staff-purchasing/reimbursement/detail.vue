@@ -66,32 +66,16 @@
             </view>
 
             <view class="record-audit-metrics">
-              <view class="metric-pill">
-                <text class="metric-label">需要采购</text>
-                <text class="metric-value">{{ record.neededQuantityText }}</text>
-              </view>
-              <view class="metric-pill">
-                <text class="metric-label">实际采购</text>
-                <text class="metric-value">{{ record.purchasedQuantityText }}</text>
-              </view>
-              <view class="metric-pill">
-                <text class="metric-label">折算单价</text>
-                <text class="metric-value">{{ record.unitPriceText }}</text>
-              </view>
-              <view class="metric-pill">
-                <text class="metric-label">上次折算单价</text>
-                <text class="metric-value">{{ record.previousUnitPriceText }}</text>
-              </view>
-              <view class="metric-pill">
-                <text class="metric-label">当前库存</text>
-                <text class="metric-value">{{ record.stockText }}</text>
-              </view>
-              <view class="metric-pill">
-                <text class="metric-label">增减幅度</text>
-                <text class="metric-value" :class="record.deltaRateClass">
-                  {{ record.deltaRateText }}
-                </text>
-              </view>
+              <StaffMetric label="需要采购" :value="record.neededQuantityText" />
+              <StaffMetric label="实际采购" :value="record.purchasedQuantityText" />
+              <StaffMetric label="折算单价" :value="record.unitPriceText" />
+              <StaffMetric label="上次折算单价" :value="record.previousUnitPriceText" />
+              <StaffMetric label="当前库存" :value="record.stockText" />
+              <StaffMetric
+                label="增减幅度"
+                :value="record.deltaRateText"
+                :tone="record.deltaRateClass"
+              />
             </view>
 
             <view v-if="record.normalizedQuantityText || record.notes" class="record-audit-extra">
@@ -316,6 +300,7 @@
 import { ref, computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import StaffStatusBadge from '../../../components/staff/StaffStatusBadge.vue';
+import StaffMetric from '../../../components/staff/StaffMetric.vue';
 import {
   getReimbursementDetail,
   getPurchaseRecords,

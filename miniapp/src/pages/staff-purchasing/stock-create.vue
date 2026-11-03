@@ -225,7 +225,7 @@
       </view>
     </view>
 
-    <view class="bottom-bar">
+    <StaffBottomBar spread gap="lg">
       <view class="bottom-summary">
         <text class="summary-label">已选 {{ selectedItems.length }} 项 · 预估</text>
         <text class="summary-amount">¥{{ formatPrice(totalEstimatedCost) }}</text>
@@ -233,12 +233,13 @@
       <button class="submit-btn" :loading="submitting" @tap="submit">
         {{ submitting ? '创建中...' : '创建补货单' }}
       </button>
-    </view>
+    </StaffBottomBar>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import StaffBottomBar from '../../components/staff/StaffBottomBar.vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import {
   createStockPurchaseList,

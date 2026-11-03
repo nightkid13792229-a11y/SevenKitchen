@@ -133,16 +133,12 @@
                 <view class="item-basic">
                   <view class="item-line-1">
                     <text class="item-name">{{ getPurchaseItemTitle(item) }}</text>
-                    <view class="item-quantity" :class="{ covered: isItemCovered(item) }">
-                      <template v-if="isItemCovered(item)">
-                        <text class="quantity-zero">库存已覆盖</text>
-                      </template>
-                      <template v-else>
-                        <text class="quantity-label">仍需</text>
-                        <text class="quantity-value">{{ formatQuantity(item) }}</text>
-                        <text class="quantity-unit">{{ getDisplayUnit(item) }}</text>
-                      </template>
-                    </view>
+                    <StaffQuantityText
+                      :covered="isItemCovered(item)"
+                      :value="formatQuantity(item)"
+                      :unit="getDisplayUnit(item)"
+                      label="仍需"
+                    />
                   </view>
 
                   <view class="item-line-2">
@@ -262,7 +258,7 @@
       </view>
 
       <!-- 底部操作栏 -->
-      <view v-if="purchaseList.status === 'PENDING'" class="bottom-actions">
+      <StaffBottomBar v-if="purchaseList.status === 'PENDING'" gap="sm">
         <!-- 未开始采购：显示开始采购按钮 -->
         <button v-if="!purchaseList.startedAt" class="action-btn start" @tap="startPurchase">开始采购</button>
 
@@ -273,7 +269,7 @@
             <text v-else>提交中...</text>
           </button>
         </template>
-      </view>
+      </StaffBottomBar>
 
       <!-- 已完成提示 -->
       <view v-if="purchaseList.status === 'COMPLETED'" class="bottom-actions completed">
@@ -412,6 +408,8 @@
 import { ref, computed } from 'vue';
 import { onLoad, onUnload } from '@dcloudio/uni-app';
 import StaffStatusBadge from '../../components/staff/StaffStatusBadge.vue';
+import StaffQuantityText from '../../components/staff/StaffQuantityText.vue';
+import StaffBottomBar from '../../components/staff/StaffBottomBar.vue';
 import { formatStaffQuantity } from '../../utils/staff-quantity';
 import { canAddProcurementSku } from './procurement-sku-entry';
 import { getPurchaseListDetail, completePurchase as completePurchaseApi, reopenPurchaseList as reopenPurchaseListApi, startPurchase as startPurchaseApi, getPurchaseRecords, deletePurchaseRecord as deletePurchaseRecordApi, addPurchaseRecord, updatePurchaseRecord as updatePurchaseRecordApi, markPurchaseItemNoPurchase as markPurchaseItemNoPurchaseApi, clearPurchaseItemNoPurchase as clearPurchaseItemNoPurchaseApi, removeItemFromList, checkOrderDateChanges, getPurchaseChannels, previewPurchaseList, addOrdersToList, resolveProcurementSkuProfile, resolvePurchaseItemDisplay, resolvePurchaseRecordDisplay } from './api/purchasing';
@@ -2897,6 +2895,42 @@ const confirmDeleteItem = (item: any) => {
 }
 
 // 底部操作栏
+.action-btn {
+  flex: 1;
+  height: 88rpx;
+  border-radius: 16rpx;
+  font-size: 32rpx;
+  font-weight: bold;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &.start {
+    background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+    color: #f3eddd;
+    box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
+  }
+
+  &.complete {
+    background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+    color: #f3eddd;
+    box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
+  }
+
+  &.reopen {
+    width: 100%;
+    background: #f6efe0;
+    color: #7a5c28;
+    border: 1rpx solid #b08d4f;
+    box-shadow: none;
+  }
+
+  &:active {
+    opacity: 0.8;
+  }
+}
+
 .bottom-actions {
   position: fixed;
   bottom: 0;

@@ -86,11 +86,11 @@
   </view>
 
   <!-- 底部申请按钮 -->
-  <view class="bottom-action">
+  <StaffBottomBar>
     <button class="submit-btn" @tap="goToSubmit">
       <text>申请报销</text>
     </button>
-  </view>
+  </StaffBottomBar>
 </template>
 
 <script setup lang="ts">
@@ -98,6 +98,7 @@ import { ref, computed, onMounted } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import StaffStatusBadge from '../../../components/staff/StaffStatusBadge.vue';
 import StaffEmptyState from '../../../components/staff/StaffEmptyState.vue';
+import StaffBottomBar from '../../../components/staff/StaffBottomBar.vue';
 import { getMyReimbursements, deleteReimbursement } from '../api/purchasing';
 import { summarizeReimbursementCustomFees } from '../constants/reimbursement';
 

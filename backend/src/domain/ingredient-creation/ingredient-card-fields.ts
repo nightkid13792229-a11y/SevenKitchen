@@ -1,16 +1,19 @@
 /**
- * 原料卡字段契约：原料卡上要展示/可写的全部字段，以这份纯数据为唯一口径。
+ * 食材线原料卡字段契约：原料卡上要展示/可写的全部字段，以这份纯数据为唯一口径。
  *
  * 为什么收成一份契约：
  * - 页面手写 7 个输入框，AI 就只看得见 7 个字段；少一项等于「看不见」；
  * - 草稿校验、提交入库、AI 工具、前端渲染都从同一份目录取值，两侧才不会漂移；
  * - 这里只放数据与类型，不碰 Prisma、不碰 DTO，任何一层都能直接引用。
  *
+ * 2026-11 起这份目录只描述**食材线**。补剂线还没开放；等补剂流程上线后
+ * 单独维护一份补剂目录，不要把两类原料的字段混在同一张卡里。
+ *
  * 约定：
  * - `key` 是页面 / 草稿 / AI 工具共用的公共名（camelCase）；
  * - 直接落 `properties` JSON 的字段用 snake_case，见 `INGREDIENT_PROPERTY_KEY_BY_FIELD`；
- * - 可食部是唯一「公共名与存储名不同」的字段：公共名 `edibleYieldPercent`（0–100），
- *   草稿与入库用 `edibleYieldRate`（0–1），换算只在 `toIngredientDraft` /
+ * - 可食部是唯一「公共名与存储名不同」的字段：公共名 `edibleYieldPercent`（10–100），
+ *   草稿与入库用 `edibleYieldRate`（0.1–1），换算只在 `toIngredientDraft` /
  *   `toIngredientCard` 两处发生，落库键是 `properties.edible_yield_rate`；
  * - 只做展示、还没接入来源的字段，来源标记只允许「人工 / AI / 空」。
  */
@@ -21,9 +24,7 @@ export type IngredientFieldGroup =
   | 'MEASURE'
   | 'NUTRITION'
   | 'PURCHASE'
-  | 'STOCK'
-  | 'USAGE'
-  | 'STORAGE';
+  | 'LABEL';
 
 /**
  * 字段的生命周期阶段：
@@ -43,7 +44,7 @@ export interface IngredientCardFieldDef {
 }
 
 /**
- * 30 个字段的定义，数组顺序即展示顺序。
+ * 15 个字段的定义，数组顺序即展示顺序。
  *
  * 不导出这一份：对外只给排好序的 `INGREDIENT_CARD_FIELDS`，
  * 类型 `IngredientCardFieldKey` 从它派生，避免键表维护两遍。
@@ -53,28 +54,14 @@ const CARD_FIELD_DEFINITIONS = [
   {
     key: 'name',
     group: 'BASIC',
-    label: '名称',
-    stage: 'CREATABLE',
-    valueType: 'STRING',
-  },
-  {
-    key: 'nameEn',
-    group: 'BASIC',
-    label: '英文名',
+    label: '原料名称',
     stage: 'CREATABLE',
     valueType: 'STRING',
   },
   {
     key: 'type',
     group: 'BASIC',
-    label: '类型',
-    stage: 'CREATABLE',
-    valueType: 'ENUM',
-  },
-  {
-    key: 'category',
-    group: 'BASIC',
-    label: '类别',
+    label: '原料类型',
     stage: 'CREATABLE',
     valueType: 'ENUM',
   },
@@ -84,6 +71,13 @@ const CARD_FIELD_DEFINITIONS = [
     label: '备注',
     stage: 'CREATABLE',
     valueType: 'STRING',
+  },
+  {
+    key: 'tags',
+    group: 'BASIC',
+    label: '标签分类',
+    stage: 'AFTER_CREATE',
+    valueType: 'STRING_ARRAY',
   },
   // MEASURE
   {
@@ -96,21 +90,14 @@ const CARD_FIELD_DEFINITIONS = [
   {
     key: 'unitDisplayLabel',
     group: 'MEASURE',
-    label: '展示名',
+    label: '标准单位展示名',
     stage: 'CREATABLE',
     valueType: 'STRING',
   },
   {
     key: 'weightG',
     group: 'MEASURE',
-    label: '单块重量',
-    stage: 'CREATABLE',
-    valueType: 'NUMBER',
-  },
-  {
-    key: 'maxCapacityG',
-    group: 'MEASURE',
-    label: '最大容量',
+    label: '单个重量(克)',
     stage: 'CREATABLE',
     valueType: 'NUMBER',
   },
@@ -118,14 +105,14 @@ const CARD_FIELD_DEFINITIONS = [
   {
     key: 'cfctClass',
     group: 'NUTRITION',
-    label: 'CFCT 分类',
+    label: 'CFCT分类',
     stage: 'CREATABLE',
     valueType: 'STRING',
   },
   {
     key: 'edibleYieldPercent',
     group: 'NUTRITION',
-    label: '可食部',
+    label: '可食部比率',
     stage: 'CREATABLE',
     valueType: 'NUMBER',
   },
@@ -136,143 +123,50 @@ const CARD_FIELD_DEFINITIONS = [
     stage: 'CREATABLE',
     valueType: 'STRING',
   },
+  {
+    key: 'densityGPerMl',
+    group: 'NUTRITION',
+    label: '密度(g/ml)',
+    stage: 'CREATABLE',
+    valueType: 'NUMBER',
+  },
   // PURCHASE
   {
     key: 'procurementStrategy',
     group: 'PURCHASE',
     label: '采购策略',
     stage: 'CREATABLE',
-    valueType: 'STRING',
+    valueType: 'ENUM',
   },
+  // LABEL 标签信息（合规）
   {
-    key: 'purchaseUnit',
-    group: 'PURCHASE',
-    label: '采购单位',
+    key: 'labelCategory',
+    group: 'LABEL',
+    label: '标签类型',
     stage: 'CREATABLE',
-    valueType: 'STRING',
+    valueType: 'ENUM',
   },
   {
-    key: 'purchaseToBaseRatio',
-    group: 'PURCHASE',
-    label: '换算倍数',
+    key: 'labelNames',
+    group: 'LABEL',
+    label: '标签名称',
     stage: 'CREATABLE',
-    valueType: 'NUMBER',
-  },
-  {
-    key: 'currentPricePerPurchaseUnit',
-    group: 'PURCHASE',
-    label: '当前采购价',
-    stage: 'CREATABLE',
-    valueType: 'NUMBER',
-  },
-  {
-    key: 'brand',
-    group: 'PURCHASE',
-    label: '品牌',
-    stage: 'CREATABLE',
-    valueType: 'STRING',
-  },
-  {
-    key: 'productModel',
-    group: 'PURCHASE',
-    label: '规格',
-    stage: 'CREATABLE',
-    valueType: 'STRING',
-  },
-  {
-    key: 'purchaseChannel',
-    group: 'PURCHASE',
-    label: '采购渠道',
-    stage: 'CREATABLE',
-    valueType: 'STRING',
-  },
-  // STOCK
-  {
-    key: 'safetyStock',
-    group: 'STOCK',
-    label: '安全库存',
-    stage: 'AFTER_CREATE',
-    valueType: 'NUMBER',
-  },
-  {
-    key: 'reorderPoint',
-    group: 'STOCK',
-    label: '补货点',
-    stage: 'AFTER_CREATE',
-    valueType: 'NUMBER',
-  },
-  {
-    key: 'targetStock',
-    group: 'STOCK',
-    label: '目标库存',
-    stage: 'AFTER_CREATE',
-    valueType: 'NUMBER',
-  },
-  // USAGE
-  {
-    key: 'diyEnabled',
-    group: 'USAGE',
-    label: '用于 DIY',
-    stage: 'CREATABLE',
-    valueType: 'BOOLEAN',
-  },
-  {
-    key: 'addTiming',
-    group: 'USAGE',
-    label: '添加时机',
-    stage: 'CREATABLE',
-    valueType: 'STRING',
-  },
-  {
-    key: 'productionLossRate',
-    group: 'USAGE',
-    label: '生产损耗率',
-    stage: 'CREATABLE',
-    valueType: 'NUMBER',
-  },
-  {
-    key: 'tags',
-    group: 'USAGE',
-    label: '标签分类',
-    stage: 'AFTER_CREATE',
     valueType: 'STRING_ARRAY',
   },
-  // STORAGE
   {
-    key: 'shelfLifeMonths',
-    group: 'STORAGE',
-    label: '保质期',
-    stage: 'CREATABLE',
-    valueType: 'NUMBER',
-  },
-  {
-    key: 'storageCondition',
-    group: 'STORAGE',
-    label: '储存条件',
+    key: 'labelNameSource',
+    group: 'LABEL',
+    label: '名称依据',
     stage: 'CREATABLE',
     valueType: 'STRING',
-  },
-  {
-    key: 'openedShelfLifeDays',
-    group: 'STORAGE',
-    label: '开封后效期',
-    stage: 'CREATABLE',
-    valueType: 'NUMBER',
-  },
-  {
-    key: 'isOilBased',
-    group: 'STORAGE',
-    label: '内容物油性',
-    stage: 'CREATABLE',
-    valueType: 'BOOLEAN',
   },
 ] as const;
 
-/** 30 个公共字段名；从定义数组派生，不另维护一份键表。 */
+/** 15 个公共字段名；从定义数组派生，不另维护一份键表。 */
 export type IngredientCardFieldKey =
   (typeof CARD_FIELD_DEFINITIONS)[number]['key'];
 
-/** 30 个字段的完整定义，顺序即展示顺序。 */
+/** 15 个字段的完整定义，顺序即展示顺序。 */
 export const INGREDIENT_CARD_FIELDS: readonly IngredientCardFieldDef[] =
   CARD_FIELD_DEFINITIONS;
 
@@ -281,9 +175,9 @@ export const INGREDIENT_CARD_FIELD_KEYS: readonly IngredientCardFieldKey[] =
   INGREDIENT_CARD_FIELDS.map((field) => field.key);
 
 /**
- * AI 可写的 26 项 = 除了 4 项 `AFTER_CREATE`（库存三项 + 标签）之外的全部。
+ * AI 可写的 14 项 = 除了 1 项 `AFTER_CREATE`（标签分类）之外的全部。
  *
- * 库存三项要等原料建完、有了库存记录才有意义；标签分类本期也先只读展示。
+ * 标签分类本期先只读展示，等原料建完再补。
  */
 export const AI_WRITABLE_INGREDIENT_FIELDS: readonly IngredientCardFieldKey[] =
   INGREDIENT_CARD_FIELDS.filter((field) => field.stage === 'CREATABLE').map(
@@ -291,11 +185,13 @@ export const AI_WRITABLE_INGREDIENT_FIELDS: readonly IngredientCardFieldKey[] =
   );
 
 /**
- * 落 `properties` JSON 的 6 个字段：公共名 → snake_case 存储键。
- * 其余 23 项都是 `Ingredient` 表列；可食部单独见下。
+ * 落 `properties` JSON 的字段：公共名 → snake_case 存储键。
+ *
+ * 其中 `nameEn` / `category` / `addTiming` / `productionLossRate` 已经不在
+ * 食材档案里展示，但旧草稿与 AI 工具仍可能带值，保留映射避免写库时丢掉。
  */
 export const INGREDIENT_PROPERTY_KEY_BY_FIELD: Partial<
-  Record<IngredientCardFieldKey, string>
+  Record<IngredientCardFieldKey | 'nameEn' | 'category' | 'addTiming' | 'productionLossRate', string>
 > = {
   nameEn: 'name_en',
   category: 'coverage_category',
@@ -303,13 +199,17 @@ export const INGREDIENT_PROPERTY_KEY_BY_FIELD: Partial<
   mainNutrientsDesc: 'main_nutrients_desc',
   addTiming: 'add_timing',
   productionLossRate: 'production_loss_rate',
+  densityGPerMl: 'density_g_per_ml',
+  labelCategory: 'label_category',
+  labelNames: 'label_names',
+  labelNameSource: 'label_name_source',
 };
 
 /**
  * 可食部落 `properties` 的键。
  *
- * 单独导出、**不**塞进上面那张映射表：它的公共名（0–100 的百分数）
- * 与存储名（0–1 的比例）不同，混进通用映射会被当成「可直接写入」而多除/少除一次。
+ * 单独导出、**不**塞进上面那张映射表：它的公共名（10–100 的百分数）
+ * 与存储名（0.1–1 的比例）不同，混进通用映射会被当成「可直接写入」而多除/少除一次。
  */
 export const EDIBLE_YIELD_RATE_PROPERTY_KEY = 'edible_yield_rate';
 

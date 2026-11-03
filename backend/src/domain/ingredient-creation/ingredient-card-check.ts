@@ -37,11 +37,10 @@ export const INGREDIENT_CARD_RULES: readonly {
   { code: 'NAME_DUPLICATE', level: 'blocking' },
   { code: 'BASE_UNIT_INVALID', level: 'blocking' },
   { code: 'UNIT_LABEL_REQUIRED', level: 'blocking' },
-  { code: 'PURCHASE_RATIO_INVALID', level: 'blocking' },
-  { code: 'PURCHASE_PRICE_NEGATIVE', level: 'blocking' },
+  { code: 'LABEL_CATEGORY_REQUIRED', level: 'blocking' },
+  { code: 'LABEL_NAMES_REQUIRED', level: 'blocking' },
+  { code: 'DENSITY_REQUIRED', level: 'blocking' },
   { code: 'EDIBLE_RANGE', level: 'exceptionable' },
-  { code: 'SHELF_LIFE_RANGE', level: 'exceptionable' },
-  { code: 'STORAGE_EMPTY', level: 'warning' },
   { code: 'FIELDS_EMPTY', level: 'warning' },
 ];
 
@@ -54,7 +53,15 @@ const BASE_UNITS: readonly IngredientDraft['baseUnit'][] = ['G', 'ML', 'PCS'];
  * `UNIT_LABEL_REQUIRED`），再数一遍只会重复啰嗦。
  */
 const FIELDS_WITH_OWN_REQUIRED_CHECKS: ReadonlySet<IngredientCardFieldKey> =
-  new Set(['name', 'type', 'baseUnit', 'unitDisplayLabel']);
+  new Set([
+    'name',
+    'type',
+    'baseUnit',
+    'unitDisplayLabel',
+    'labelCategory',
+    'labelNames',
+    'densityGPerMl',
+  ]);
 
 /**
  * 完整度只看建原料时就能填的字段；`AFTER_CREATE`（库存三项、标签）
@@ -108,11 +115,6 @@ function isDuplicateName(
 /** `null` / `undefined` / 纯空白字符串都算空；数字 0 是有值。 */
 function isBlank(value: string | null | undefined): boolean {
   return typeof value !== 'string' || value.trim() === '';
-}
-
-/** 采购单位这种「字符串有没有填」的判断：纯空白等于没填。 */
-function hasText(value: string | null | undefined): boolean {
-  return typeof value === 'string' && value.trim() !== '';
 }
 
 /** 数字字段有没有值：0 是合法值，不能当空。 */
@@ -237,63 +239,58 @@ export function runIngredientCardCheck(
     });
   }
 
-  const ratio = ingredient.purchaseToBaseRatio;
-  if (isSet(ratio) && ratio <= 0) {
+  const labelCategory = ingredient.labelCategory;
+  if (
+    labelCategory !== 'FEED_MATERIAL' &&
+    labelCategory !== 'FEED_ADDITIVE'
+  ) {
     items.push({
-      code: 'PURCHASE_RATIO_INVALID',
-      message: `采购换算比例必须大于 0（当前为 ${ratio}），否则 1 个采购单位换不出基本单位数量。`,
-      fieldPath: cell('purchaseToBaseRatio'),
-      suggestion:
-        '填写 1 个采购单位包含多少基本单位，例如 1 袋 500 克就填 500。',
+      code: 'LABEL_CATEGORY_REQUIRED',
+      message:
+        '标签类型为空：饲料原料写进「原料组成」，饲料添加剂写进「添加剂组成」，不选就无法生成合规标签。',
+      fieldPath: cell('labelCategory'),
+      suggestion: '按《饲料原料目录》/《饲料添加剂品种目录》判断后选择。',
     });
   }
 
-  const price = ingredient.currentPricePerPurchaseUnit;
-  if (isSet(price) && price < 0) {
+  const labelNames = Array.isArray(ingredient.labelNames)
+    ? ingredient.labelNames
+        .filter((name): name is string => typeof name === 'string')
+        .map((name) => name.trim())
+        .filter(Boolean)
+    : [];
+  if (labelNames.length === 0) {
     items.push({
-      code: 'PURCHASE_PRICE_NEGATIVE',
-      message: `采购价不能为负数（当前为 ${price}），负价会污染成本与毛利计算。`,
-      fieldPath: cell('currentPricePerPurchaseUnit'),
-      suggestion: '改成 0 或正数；价格未知时留空，不要用负数占位。',
+      code: 'LABEL_NAMES_REQUIRED',
+      message:
+        '标签名称为空：标签上必须写出规范名称，而且不能带「片 / 胶囊 / 粉」这类剂型。',
+      fieldPath: cell('labelNames'),
+      suggestion: '按目录里的规范写法填写，可填多个。',
     });
   }
 
-  // 草稿存的是 0–1 的比例，判据也按比例；不要拿它去和 100 比。
+  const density = ingredient.densityGPerMl;
+  if (
+    ingredient.baseUnit === 'ML' &&
+    (!isSet(density) || !Number.isFinite(density) || density <= 0)
+  ) {
+    items.push({
+      code: 'DENSITY_REQUIRED',
+      message:
+        '基准单位是毫升，但密度为空：体积换算不出质量，采购、库存和营养都会算错。',
+      fieldPath: cell('densityGPerMl'),
+      suggestion: '填写密度(g/ml)，例如牛奶约 1.03。',
+    });
+  }
+
+  // 草稿存的是 0.1–1 的比例，判据也按比例；不要拿它去和 100 比。
   const edibleYieldRate = ingredient.edibleYieldRate;
-  if (isSet(edibleYieldRate) && (edibleYieldRate <= 0 || edibleYieldRate > 1)) {
+  if (isSet(edibleYieldRate) && (edibleYieldRate < 0.1 || edibleYieldRate > 1)) {
     items.push({
       code: 'EDIBLE_RANGE',
-      message: `可食部比例 ${edibleYieldRate} 超出范围：这一格按比例存 0–1（对应 0%–100%），必须大于 0 且不超过 1。`,
+      message: `可食部比例 ${edibleYieldRate} 超出范围：这一格按比例存 0.1–1（对应 10%–100%），必须不小于 0.1 且不超过 1。`,
       fieldPath: cell('edibleYieldPercent'),
       suggestion: '按实际可食比例填写，例如整条鱼可食部约 60% 时填 0.6。',
-    });
-  }
-
-  const shelfLifeMonths = ingredient.shelfLifeMonths;
-  if (
-    isSet(shelfLifeMonths) &&
-    (!Number.isInteger(shelfLifeMonths) ||
-      shelfLifeMonths < 1 ||
-      shelfLifeMonths > 120)
-  ) {
-    items.push({
-      code: 'SHELF_LIFE_RANGE',
-      message: `保质期必须是 1–120 之间的整数月（当前为 ${shelfLifeMonths}），否则库存到期日算不出来。`,
-      fieldPath: cell('shelfLifeMonths'),
-      suggestion: '按「月」填整数，例如冷冻保存 12 个月就填 12。',
-    });
-  }
-
-  if (
-    (hasText(ingredient.purchaseUnit) || isSet(price)) &&
-    isBlank(ingredient.storageCondition)
-  ) {
-    items.push({
-      code: 'STORAGE_EMPTY',
-      message:
-        '已经填了采购单位或采购价，但贮存条件为空，收货后不知道该怎么存。',
-      fieldPath: cell('storageCondition'),
-      suggestion: '补一句贮存条件，例如「-18℃ 冷冻」「常温避光」。',
     });
   }
 

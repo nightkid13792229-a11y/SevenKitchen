@@ -27,7 +27,7 @@ function makeRun(overrides: Partial<CheckRunView> = {}): CheckRunView {
     draftId: 'draft-1',
     domain: 'INGREDIENT',
     trigger: 'USER',
-    rulesVersion: 'ingredient-card-v1',
+    rulesVersion: 'ingredient-card-v2',
     payloadHash: 'hash-1',
     result,
     counts: {
@@ -338,7 +338,7 @@ describe('toCheckRunSummary', () => {
       exceptionable: 1,
       warning: 1,
       checkedAt: '2026-10-26T10:00:00.000Z',
-      rulesVersion: 'ingredient-card-v1'
+      rulesVersion: 'ingredient-card-v2'
     })
   })
 

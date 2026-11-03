@@ -29,6 +29,10 @@ import {
   PREPARATION_STATES,
 } from './ingredient-creation.constants';
 import { NutritionEvidenceEntryDto } from './nutrition-evidence-entry.dto';
+import {
+  ProcurementSkuDraftDto,
+  RecommendedProductDraftDto,
+} from './child-drafts.dto';
 
 /** 与 Prisma 的 `IngredientProcurementStrategy` 枚举保持一致。 */
 const PROCUREMENT_STRATEGIES = Object.values(IngredientProcurementStrategy);
@@ -38,6 +42,9 @@ const ADD_TIMINGS = [
   'BEFORE_MIXING',
   'BEFORE_MEAL',
 ] as const satisfies readonly SupplementAddTiming[];
+
+/** 标签类型：与标准原料编辑页的「标签类型」一致。 */
+const LABEL_CATEGORIES = ['FEED_MATERIAL', 'FEED_ADDITIVE'] as const;
 
 /**
  * ⑤ 标准原料预填值。
@@ -106,10 +113,10 @@ export class CommitIngredientDto implements IngredientDraft {
   cfctClass?: string | null;
 
   /**
-   * 可食部**比例**（0–1），不是百分数：前端把 75% 换算成 0.75 再传，
+   * 可食部**比例**（0.1–1），不是百分数：前端把 10%–100% 换算成 0.1–1 再传，
    * 服务端原样落 `properties.edible_yield_rate`，绝不再除一次 100。
    */
-  @ApiPropertyOptional({ description: '可食部比例（0–1）', nullable: true })
+  @ApiPropertyOptional({ description: '可食部比例（0.1–1）', nullable: true })
   @IsOptional()
   @IsNumber()
   edibleYieldRate?: number | null;
@@ -119,6 +126,12 @@ export class CommitIngredientDto implements IngredientDraft {
   @IsString()
   @MaxLength(200)
   mainNutrientsDesc?: string | null;
+
+  @ApiPropertyOptional({ description: '密度(g/ml)；基准单位为 ML 时必填', nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  densityGPerMl?: number | null;
 
   // PURCHASE
   @ApiPropertyOptional({
@@ -223,6 +236,28 @@ export class CommitIngredientDto implements IngredientDraft {
   @IsOptional()
   @IsBoolean()
   isOilBased?: boolean | null;
+
+  // LABEL 标签信息（合规）
+  @ApiPropertyOptional({
+    description: '标签类型：饲料原料 / 饲料添加剂',
+    enum: LABEL_CATEGORIES,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsIn(LABEL_CATEGORIES)
+  labelCategory?: 'FEED_MATERIAL' | 'FEED_ADDITIVE' | null;
+
+  @ApiPropertyOptional({ description: '标签名称', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  labelNames?: string[];
+
+  @ApiPropertyOptional({ description: '名称依据', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  labelNameSource?: string | null;
 }
 
 /** ③ 一份营养档案（生 / 熟各最多一份）。 */
@@ -277,4 +312,24 @@ export class CommitIngredientCreationDto {
   @IsInt()
   @Min(0)
   primaryProfileIndex!: number;
+
+  @ApiPropertyOptional({
+    description: '家庭 DIY 推荐商品（可多条）',
+    type: () => [RecommendedProductDraftDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RecommendedProductDraftDto)
+  recommendedProducts?: RecommendedProductDraftDto[];
+
+  @ApiPropertyOptional({
+    description: '生产采购 SKU（可多条）',
+    type: () => [ProcurementSkuDraftDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProcurementSkuDraftDto)
+  procurementSkus?: ProcurementSkuDraftDto[];
 }

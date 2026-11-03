@@ -55,6 +55,9 @@ interface Store {
   nutritionFoods: Array<Record<string, any> & { id: string }>;
   mappings: Array<Record<string, any> & { id: string }>;
   audits: Array<Record<string, any> & { id: string }>;
+  recommendedProducts: Array<Record<string, any> & { id: string }>;
+  procurementSkus: Array<Record<string, any> & { id: string }>;
+  procurementSkuPriceHistories: Array<Record<string, any> & { id: string }>;
 }
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -72,6 +75,9 @@ function createPrismaMock(options: HarnessOptions = {}) {
     nutritionFoods: [],
     mappings: [],
     audits: [],
+    recommendedProducts: [],
+    procurementSkus: [],
+    procurementSkuPriceHistories: [],
   };
   const sourceRecords = options.sourceRecords ?? [];
   const draftState =
@@ -155,6 +161,27 @@ function createPrismaMock(options: HarnessOptions = {}) {
         return { id: row.id };
       }),
     },
+    recommendedProduct: {
+      create: jest.fn(async ({ data }: any) => {
+        const row = { id: nextId('rp'), ...clone(data) };
+        store.recommendedProducts.push(row);
+        return { id: row.id };
+      }),
+    },
+    procurementSku: {
+      create: jest.fn(async ({ data }: any) => {
+        const row = { id: nextId('sku'), ...clone(data) };
+        store.procurementSkus.push(row);
+        return { id: row.id };
+      }),
+    },
+    procurementSkuPriceHistory: {
+      create: jest.fn(async ({ data }: any) => {
+        const row = { id: nextId('sku-history'), ...clone(data) };
+        store.procurementSkuPriceHistories.push(row);
+        return { id: row.id };
+      }),
+    },
     // 锁只能走事务客户端；外层客户端一旦被调用就是实现写错了。
     $queryRaw: jest.fn(async () => {
       throw new Error('pg_advisory_xact_lock 必须在事务客户端上执行');
@@ -175,6 +202,9 @@ function createPrismaMock(options: HarnessOptions = {}) {
     nutritionFood: client.nutritionFood,
     nutritionFoodMapping: client.nutritionFoodMapping,
     ingredientCreationAudit: client.ingredientCreationAudit,
+    recommendedProduct: client.recommendedProduct,
+    procurementSku: client.procurementSku,
+    procurementSkuPriceHistory: client.procurementSkuPriceHistory,
     $queryRaw: txQueryRaw,
   };
 
@@ -190,6 +220,10 @@ function createPrismaMock(options: HarnessOptions = {}) {
         store.nutritionFoods = snapshot.nutritionFoods;
         store.mappings = snapshot.mappings;
         store.audits = snapshot.audits;
+        store.recommendedProducts = snapshot.recommendedProducts;
+        store.procurementSkus = snapshot.procurementSkus;
+        store.procurementSkuPriceHistories =
+          snapshot.procurementSkuPriceHistories;
         if (draftState && draftStepSnapshot !== undefined) {
           draftState.step = draftStepSnapshot;
         }
@@ -874,23 +908,26 @@ describe('IngredientCreationCommitService', () => {
     expect(row).not.toHaveProperty('rawPageHtml');
   });
 
-  it('manualFields 里 brand 这类新字段也能进审计（不只是旧的 7 键）', async () => {
+  it('manualFields 里 labelNames 这类新字段也能进审计（不只是旧的 7 键）', async () => {
     const draft = buildDraft({
       ingredient: {
         ...baseIngredient,
-        manualFields: ['brand', 'name'],
+        manualFields: ['labelNames', 'name'],
       },
     });
     const { service, prisma } = await createHarness({ draft });
 
     await service.commit({
       ...baseInput,
-      ingredient: { ...baseIngredient, brand: '××水产' },
+      ingredient: {
+        ...baseIngredient,
+        labelNames: ['鸡肝'],
+      },
     });
 
     const changes = prisma.ingredientCreationAudit.create.mock.calls[0][0].data
       .changes as { ingredientFields: string[] };
-    expect(changes.ingredientFields).toEqual(['brand', 'name']);
+    expect(changes.ingredientFields).toEqual(['labelNames', 'name']);
   });
 
   it('没有提案快照时退回草稿的缝合方案，status=MANUAL 的行仍算人工裁决', async () => {
@@ -1254,6 +1291,87 @@ describe('IngredientCreationCommitService', () => {
     expect(foodData.notes).toContain(longKey);
     // meta 里保留完整来源编号（JSON 没有列长度限制）
     expect(foodData.nutritionData.meta.externalId).toBe(longKey);
+  });
+
+  it('DIY 推荐商品与采购 SKU 随原料同事务落库，SKU 价格写一条历史', async () => {
+    const { service, store } = await createHarness();
+
+    await service.commit({
+      ...baseInput,
+      recommendedProducts: [
+        {
+          name: '挪威三文鱼 500g',
+          brand: '挪威海产',
+          productModel: '500g/袋',
+          purchaseChannel: '山姆',
+          purchaseLinkPlatform: 'TAOBAO',
+          purchaseLinkUrl: 'https://example.com/salmon',
+          sortOrder: 1,
+        },
+      ],
+      procurementSkus: [
+        {
+          name: '三文鱼整条',
+          brand: '挪威海产',
+          productModel: '5kg/箱',
+          purchaseChannel: '批发市场',
+          supplierName: '某供应商',
+          purchaseUnit: '箱',
+          purchaseToBaseRatio: 5000,
+          currentPurchasePrice: 380,
+          safetyStock: 1,
+          reorderPoint: 2,
+          targetStock: 5,
+          notes: '冷冻',
+        },
+      ],
+    });
+
+    expect(store.recommendedProducts).toHaveLength(1);
+    expect(store.recommendedProducts[0]).toMatchObject({
+      ingredientId: 'ingredient-1',
+      name: '挪威三文鱼 500g',
+      sortOrder: 1,
+      isActive: true,
+    });
+    expect(store.recommendedProducts[0]?.purchaseLink).toEqual({
+      platform: 'TAOBAO',
+      url: 'https://example.com/salmon',
+    });
+
+    expect(store.procurementSkus).toHaveLength(1);
+    expect(store.procurementSkus[0]).toMatchObject({
+      ingredientId: 'ingredient-1',
+      name: '三文鱼整条',
+      purchaseUnit: '箱',
+      purchaseToBaseRatio: 5000,
+      createdSource: 'AI_AGENT',
+    });
+    expect(store.procurementSkuPriceHistories).toHaveLength(1);
+    expect(store.procurementSkuPriceHistories[0]).toMatchObject({
+      newPrice: 380,
+      source: 'MANUAL',
+    });
+  });
+
+  it('子板块缺名称或库存倒挂 → BadRequest，整次提交回滚', async () => {
+    const { service, store } = await createHarness();
+
+    await expect(
+      service.commit({
+        ...baseInput,
+        procurementSkus: [
+          {
+            name: '三文鱼整条',
+            safetyStock: 5,
+            reorderPoint: 2,
+          },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(store.ingredients).toHaveLength(0);
+    expect(store.procurementSkus).toHaveLength(0);
   });
 
   it('草稿已提交过（step=COMMIT）→ ConflictException，不开事务', async () => {

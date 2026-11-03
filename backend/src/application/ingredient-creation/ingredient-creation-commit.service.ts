@@ -26,8 +26,11 @@ import type {
   IngredientCreationDraft,
   IngredientDraft,
   NutritionEvidenceEntry,
+  ProcurementSkuDraft,
   ProfileDraft,
+  RecommendedProductDraft,
 } from './ingredient-creation.types';
+import { normalizeOptionalPurchaseUnit } from '../ingredient/procurement-sku.service';
 
 /**
  * 向导提交的入参。字段与设计文档第六节的「一次性提交」对应：
@@ -40,6 +43,10 @@ export interface CommitIngredientCreationInput {
   profiles: ProfileDraft[];
   /** 主档案在 `profiles` 里的下标；必须指向存在的档案。 */
   primaryProfileIndex: number;
+  /** 家庭 DIY 推荐商品（可多条），与原料同事务落库。 */
+  recommendedProducts?: RecommendedProductDraft[];
+  /** 生产采购 SKU（可多条），与原料同事务落库。 */
+  procurementSkus?: ProcurementSkuDraft[];
 }
 
 export interface CommitIngredientCreationResult {
@@ -315,7 +322,7 @@ function findAiProposalForProfile(
 }
 
 /**
- * 原料卡人工字段白名单：直接取字段契约的 30 个公共键。
+ * 原料卡人工字段白名单：直接取字段契约的 15 个公共键。
  *
  * 不能在这里手写一份更短的清单：人把「品牌」标记成人工核对后，提交审计里
  * 会静默丢掉这个标记，事后查不到是谁改的。
@@ -581,6 +588,13 @@ export class IngredientCreationCommitService {
         input.draftId,
         primaryNutritionData,
       );
+      // 两个子板块与原料同事务：任一条商品/SKU 不合法，整次授权回滚。
+      await this.createChildRecords(
+        tx,
+        createdIngredient.id,
+        ingredient.baseUnit,
+        input,
+      );
       const stateCounts = new Map<string, number>();
       for (const prepared of preparedProfiles) {
         const state = prepared.profile.preparationState;
@@ -669,10 +683,10 @@ export class IngredientCreationCommitService {
     if (edibleYieldRate !== null && edibleYieldRate !== undefined) {
       if (
         !Number.isFinite(edibleYieldRate) ||
-        edibleYieldRate <= 0 ||
+        edibleYieldRate < 0.1 ||
         edibleYieldRate > 1
       ) {
-        throw new BadRequestException('可食部比例必须在 (0, 1] 之间');
+        throw new BadRequestException('可食部比例必须在 [0.1, 1] 之间（对应页面 10%–100%）');
       }
     }
 
@@ -916,6 +930,147 @@ export class IngredientCreationCommitService {
         );
       }
       throw error;
+    }
+  }
+
+  /**
+   * 两个子板块落库：DIY 推荐商品与生产采购 SKU。
+   *
+   * 与原料同事务：任一条缺名称、价格/库存不合法都会整次回滚，
+   * 不会出现「原料建好了、SKU 只建了一半」的中间态。
+   */
+  private async createChildRecords(
+    tx: Prisma.TransactionClient,
+    ingredientId: string,
+    baseUnit: IngredientDraft['baseUnit'],
+    input: CommitIngredientCreationInput,
+  ): Promise<void> {
+    for (const [index, draft] of (input.recommendedProducts ?? []).entries()) {
+      const name = readNonEmptyString(draft.name);
+      if (name === null) {
+        throw new BadRequestException(
+          `第 ${index + 1} 个 DIY 推荐商品缺名称，不能提交`,
+        );
+      }
+
+      const purchaseLinkUrl = readNonEmptyString(draft.purchaseLinkUrl);
+      const purchaseLinkPlatform =
+        readNonEmptyString(draft.purchaseLinkPlatform) ?? 'OTHER';
+      const sortOrder = Number.isFinite(draft.sortOrder)
+        ? Math.max(0, Math.trunc(draft.sortOrder as number))
+        : index;
+
+      await tx.recommendedProduct.create({
+        data: {
+          ingredientId,
+          name,
+          brand: readNonEmptyString(draft.brand),
+          productModel: readNonEmptyString(draft.productModel),
+          purchaseChannel: readNonEmptyString(draft.purchaseChannel),
+          ...(purchaseLinkUrl
+            ? {
+                purchaseLink: {
+                  platform: purchaseLinkPlatform,
+                  url: purchaseLinkUrl,
+                } as Prisma.InputJsonValue,
+              }
+            : {}),
+          imageUrl: readNonEmptyString(draft.imageUrl),
+          sortOrder,
+          isActive: draft.isActive !== false,
+        },
+      });
+    }
+
+    for (const [index, draft] of (input.procurementSkus ?? []).entries()) {
+      const name = readNonEmptyString(draft.name);
+      if (name === null) {
+        throw new BadRequestException(
+          `第 ${index + 1} 个采购 SKU 缺名称，不能提交`,
+        );
+      }
+
+      const ratio = draft.purchaseToBaseRatio;
+      if (
+        ratio !== null &&
+        ratio !== undefined &&
+        (!Number.isFinite(ratio) || ratio <= 0)
+      ) {
+        throw new BadRequestException(
+          `采购 SKU「${name}」的换算倍数必须大于 0`,
+        );
+      }
+
+      const price = draft.currentPurchasePrice;
+      if (
+        price !== null &&
+        price !== undefined &&
+        (!Number.isFinite(price) || price < 0)
+      ) {
+        throw new BadRequestException(`采购 SKU「${name}」的采购价不能为负数`);
+      }
+
+      const safetyStock = draft.safetyStock ?? null;
+      const reorderPoint = draft.reorderPoint ?? null;
+      const targetStock = draft.targetStock ?? null;
+      if (
+        safetyStock !== null &&
+        reorderPoint !== null &&
+        reorderPoint < safetyStock
+      ) {
+        throw new BadRequestException(
+          `采购 SKU「${name}」的补货点必须大于或等于安全库存`,
+        );
+      }
+      if (
+        reorderPoint !== null &&
+        targetStock !== null &&
+        targetStock < reorderPoint
+      ) {
+        throw new BadRequestException(
+          `采购 SKU「${name}」的目标库存必须大于或等于补货点`,
+        );
+      }
+
+      const created = await tx.procurementSku.create({
+        data: {
+          ingredientId,
+          name,
+          brand: readNonEmptyString(draft.brand),
+          productModel: readNonEmptyString(draft.productModel),
+          purchaseChannel: readNonEmptyString(draft.purchaseChannel),
+          supplierName: readNonEmptyString(draft.supplierName),
+          purchaseUnit: normalizeOptionalPurchaseUnit(
+            draft.purchaseUnit,
+            baseUnit,
+          ),
+          purchaseToBaseRatio: ratio ?? null,
+          currentPurchasePrice: price ?? null,
+          notes: readNonEmptyString(draft.notes),
+          isDefault: false,
+          isActive: draft.isActive !== false,
+          sortOrder: index,
+          safetyStock,
+          reorderPoint,
+          targetStock,
+          createdById: input.userId,
+          createdSource: 'AI_AGENT',
+        },
+      });
+
+      if (price !== null && price !== undefined) {
+        await tx.procurementSkuPriceHistory.create({
+          data: {
+            procurementSkuId: created.id,
+            ingredientId,
+            oldPrice: null,
+            newPrice: price,
+            source: 'MANUAL',
+            operatorId: input.userId,
+            note: 'AI 辅助新建原料时设置初始采购价',
+          },
+        });
+      }
     }
   }
 

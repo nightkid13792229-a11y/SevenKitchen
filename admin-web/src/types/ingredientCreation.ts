@@ -92,8 +92,8 @@ export type IngredientCardField = IngredientCardFieldKey
  * 人明确清空的才是 `null`。旧调用方（AI 字段工具、提交服务）只构造其中
  * 一部分字段，也照样成立。
  *
- * 可食部的公共名是 `edibleYieldPercent`（0–100），**草稿里存的是比例**
- * `edibleYieldRate`（0–1）；换算只在 `toIngredientDraft` / `toIngredientCard`
+ * 可食部的公共名是 `edibleYieldPercent`（10–100），**草稿里存的是比例**
+ * `edibleYieldRate`（0.1–1）；换算只在 `toIngredientDraft` / `toIngredientCard`
  * 两处发生，这里不重复换算。
  */
 export interface IngredientDraft {
@@ -113,6 +113,8 @@ export interface IngredientDraft {
   cfctClass?: string | null
   edibleYieldRate?: number | null
   mainNutrientsDesc?: string | null
+  /** 密度(g/ml)：基准单位为 ML 时必填 */
+  densityGPerMl?: number | null
   // PURCHASE
   procurementStrategy?: string | null
   purchaseUnit?: string | null
@@ -121,7 +123,7 @@ export interface IngredientDraft {
   brand?: string | null
   productModel?: string | null
   purchaseChannel?: string | null
-  // STOCK（原料建完、有了库存记录才谈得上；本阶段只读回传）
+  // STOCK（已搬到采购 SKU 板块；原料级不再写）
   safetyStock?: number | null
   reorderPoint?: number | null
   targetStock?: number | null
@@ -135,11 +137,58 @@ export interface IngredientDraft {
   storageCondition?: string | null
   openedShelfLifeDays?: number | null
   isOilBased?: boolean | null
+  // LABEL 标签信息（合规）
+  labelCategory?: 'FEED_MATERIAL' | 'FEED_ADDITIVE' | null
+  labelNames?: string[]
+  labelNameSource?: string | null
   /**
    * 人工审核时改过的字段（只存在草稿里）。
    * AI 的 updateIngredientFields 遇到这些字段会跳过，不覆盖人的判断。
    */
   manualFields?: IngredientCardField[]
+}
+
+/**
+ * 一份「家庭 DIY 推荐商品」草稿。
+ *
+ * 字段与标准原料编辑页的「新增DIY推荐商品」弹窗一一对应；
+ * 一条原料可以有多条，授权时按数组顺序落库。
+ */
+export interface RecommendedProductDraft {
+  /** 前端本地行标识，仅用于渲染与增删；不落库 */
+  key: string
+  name: string
+  brand: string
+  productModel: string
+  purchaseChannel: string
+  purchaseLinkPlatform: string
+  purchaseLinkUrl: string
+  imageUrl: string
+  sortOrder: number
+  isActive: boolean
+}
+
+/**
+ * 一份「生产采购 SKU」草稿。
+ *
+ * 字段与标准原料编辑页的「新增采购SKU」弹窗一一对应；支持多条。
+ */
+export interface ProcurementSkuDraft {
+  /** 前端本地行标识，仅用于渲染与增删；不落库 */
+  key: string
+  name: string
+  brand: string
+  productModel: string
+  purchaseChannel: string
+  supplierName: string
+  purchaseUnit: string
+  purchaseToBaseRatio: number | null
+  currentPurchasePrice: number | null
+  safetyStock: number | null
+  reorderPoint: number | null
+  targetStock: number | null
+  notes: string
+  isActive: boolean
 }
 
 /** ③ 一份营养档案草稿（生 / 熟各一份）。 */
@@ -352,6 +401,10 @@ export interface IngredientCreationDraftPayload {
   profiles?: ProfileDraft[]
   checks?: FinalCheckResult
   ingredient?: IngredientDraft
+  /** 家庭 DIY 推荐商品草稿（可多条） */
+  recommendedProducts?: RecommendedProductDraft[]
+  /** 生产采购 SKU 草稿（可多条） */
+  procurementSkus?: ProcurementSkuDraft[]
   verify?: { exceptions: ExceptionRecord[] }
   /** AI 提案历史：只追加、不覆盖，前端不得回传 */
   proposalHistory?: ProposalSnapshot[]
@@ -380,6 +433,10 @@ export interface CommitIngredientCreationInput {
   /** 同一 preparationState 最多一份 */
   profiles: ProfileDraft[]
   primaryProfileIndex: number
+  /** 家庭 DIY 推荐商品（可多条） */
+  recommendedProducts?: RecommendedProductDraft[]
+  /** 生产采购 SKU（可多条） */
+  procurementSkus?: ProcurementSkuDraft[]
 }
 
 /** `POST drafts/:id/commit` 的返回值。 */

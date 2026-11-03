@@ -28,7 +28,7 @@ describe('AI 添加原料 · 检索方案确认', () => {
     expect(page).toContain('轮次')
     expect(page).toContain('候选档案')
     expect(page).not.toContain('addPlanKeyword')
-    expect(page).not.toContain('目标库')
+    expect(page).not.toContain('目标库编辑')
   })
 
   it('候选记录在卡里以表格多选呈现，并显示汇报与事实列', () => {

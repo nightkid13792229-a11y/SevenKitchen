@@ -14,7 +14,9 @@ import { LINE_NOT_OPEN_MESSAGE } from './ingredient-line';
 import type {
   IngredientCreationDraft,
   IngredientDraft,
+  ProcurementSkuDraft,
   ProfileDraft,
+  RecommendedProductDraft,
 } from './ingredient-creation.types';
 
 /** 授权失败的机器可读原因；前端按 code + domain 列表显示。 */
@@ -113,6 +115,22 @@ function readDraftProfiles(draft: IngredientCreationDraft): ProfileDraft[] {
   return Array.isArray(profiles) ? (profiles as ProfileDraft[]) : [];
 }
 
+/** 草稿里的 DIY 推荐商品；脏数据按没有处理。 */
+function readDraftRecommendedProducts(
+  draft: IngredientCreationDraft,
+): RecommendedProductDraft[] {
+  const rows: unknown = draft.payload.recommendedProducts;
+  return Array.isArray(rows) ? (rows as RecommendedProductDraft[]) : [];
+}
+
+/** 草稿里的采购 SKU；脏数据按没有处理。 */
+function readDraftProcurementSkus(
+  draft: IngredientCreationDraft,
+): ProcurementSkuDraft[] {
+  const rows: unknown = draft.payload.procurementSkus;
+  return Array.isArray(rows) ? (rows as ProcurementSkuDraft[]) : [];
+}
+
 /** 人登记过的例外 code 集合；脏数据（非对象 / 缺 code）直接忽略。 */
 function approvedExceptionCodes(draft: IngredientCreationDraft): Set<string> {
   const exceptions: unknown = draft.payload.verify?.exceptions;
@@ -201,6 +219,8 @@ export class IngredientCreationAuthorizeService {
       ingredient: material.ingredient,
       profiles: material.profiles,
       primaryProfileIndex: input.primaryProfileIndex,
+      recommendedProducts: readDraftRecommendedProducts(draft),
+      procurementSkus: readDraftProcurementSkus(draft),
     });
 
     return { ...result, authorizedAt: new Date().toISOString() };

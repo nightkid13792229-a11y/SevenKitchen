@@ -217,7 +217,7 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
     });
   });
 
-  it('草稿是 30 字段全量卡时：只改写入字段，其余字段与 manualFields 原样保留', async () => {
+  it('草稿是全量卡时：只改写入字段，其余字段与 manualFields 原样保留', async () => {
     const fullCard = {
       name: '冷冻三文鱼',
       nameEn: 'Frozen salmon',
@@ -231,6 +231,7 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
       cfctClass: '禽肉类及制品',
       edibleYieldRate: 0.95,
       mainNutrientsDesc: '蛋白质、脂肪',
+      densityGPerMl: 1.05,
       procurementStrategy: 'DAILY_PURCHASE',
       purchaseUnit: '袋',
       purchaseToBaseRatio: 1000,
@@ -249,7 +250,10 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
       storageCondition: '-18℃ 冷冻',
       openedShelfLifeDays: 3,
       isOilBased: false,
-      manualFields: ['brand'],
+      labelCategory: 'FEED_MATERIAL',
+      labelNames: ['三文鱼'],
+      labelNameSource: '饲料原料目录（2023 版）',
+      manualFields: ['labelNames'],
     };
 
     const { tools, draftService } = createTools({ ingredient: fullCard });
@@ -268,10 +272,11 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
       ...fullCard,
       cfctClass: '畜肉类及制品',
     });
-    expect(ingredient.manualFields).toEqual(['brand']);
+    expect(ingredient.manualFields).toEqual(['labelNames']);
     expect(ingredient.brand).toBe('××');
     expect(ingredient.weightG).toBe(150);
     expect(ingredient.shelfLifeMonths).toBe(12);
+    expect(ingredient.labelNames).toEqual(['三文鱼']);
   });
 
   it('草稿没有原料卡时用草稿名与起手卡兜底', async () => {
@@ -308,8 +313,8 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
   it.each([
     ['非法类别', { category: 'FRUIT' }, 'MEAT_ORGAN'],
     ['非法基准单位', { baseUnit: 'KG' }, 'G'],
-    ['可食部小于等于 0', { edibleYieldPercent: 0 }, '(0, 100]'],
-    ['可食部大于 100', { edibleYieldPercent: 101 }, '(0, 100]'],
+    ['可食部小于 10', { edibleYieldPercent: 9.9 }, '[10, 100]'],
+    ['可食部大于 100', { edibleYieldPercent: 101 }, '[10, 100]'],
     ['可食部不是数字', { edibleYieldPercent: '九十五' }, 'edibleYieldPercent'],
     ['空名称', { name: '   ' }, 'name'],
     ['超长展示名', { unitDisplayLabel: '克'.repeat(51) }, 'unitDisplayLabel'],

@@ -63,7 +63,7 @@ export interface ExceptionRecord {
 /**
  * 原料卡上允许人改、AI 也能写的字段。
  *
- * 直接复用字段契约的 30 个公共键，不再在这里手写一份字面量清单：少一项就等于
+ * 直接复用字段契约的 15 个公共键，不再在这里手写一份字面量清单：少一项就等于
  * 草稿收不下这个字段，多一项则与页面、AI 工具对不上。
  *
  * 用**公共字段名**（而不是入库键名）标记人工改动：可食部在库里存成比例
@@ -80,8 +80,8 @@ export type IngredientCardField = IngredientCardFieldKey;
  * 人明确清空的才是 `null`。旧调用方（AI 字段工具、提交服务）只构造其中
  * 一部分字段，也照样成立。
  *
- * 可食部的公共名是 `edibleYieldPercent`（0–100），**草稿里存的是比例**
- * `edibleYieldRate`（0–1）；换算只在 `toIngredientDraft` / `toIngredientCard`
+ * 可食部的公共名是 `edibleYieldPercent`（10–100），**草稿里存的是比例**
+ * `edibleYieldRate`（0.1–1）；换算只在 `toIngredientDraft` / `toIngredientCard`
  * 两处发生，这里不重复换算。
  */
 export interface IngredientDraft {
@@ -101,6 +101,8 @@ export interface IngredientDraft {
   cfctClass?: string | null;
   edibleYieldRate?: number | null;
   mainNutrientsDesc?: string | null;
+  /** 密度(g/ml)：基准单位为 ML 时必填 */
+  densityGPerMl?: number | null;
   // PURCHASE
   procurementStrategy?: string | null;
   purchaseUnit?: string | null;
@@ -123,6 +125,10 @@ export interface IngredientDraft {
   storageCondition?: string | null;
   openedShelfLifeDays?: number | null;
   isOilBased?: boolean | null;
+  // LABEL 标签信息（合规）
+  labelCategory?: 'FEED_MATERIAL' | 'FEED_ADDITIVE' | null;
+  labelNames?: string[];
+  labelNameSource?: string | null;
   /**
    * 人工审核时改过的字段（只存在草稿里，不写正式表）。
    *
@@ -130,6 +136,36 @@ export interface IngredientDraft {
    * 不允许把人的判断悄悄改回去；提交时随审计一起留痕。
    */
   manualFields?: IngredientCardField[];
+}
+
+/** 一份「家庭 DIY 推荐商品」草稿（字段与标准原料编辑页的子弹窗对齐）。 */
+export interface RecommendedProductDraft {
+  name: string;
+  brand?: string | null;
+  productModel?: string | null;
+  purchaseChannel?: string | null;
+  purchaseLinkPlatform?: string | null;
+  purchaseLinkUrl?: string | null;
+  imageUrl?: string | null;
+  sortOrder?: number | null;
+  isActive?: boolean | null;
+}
+
+/** 一份「生产采购 SKU」草稿（字段与标准原料编辑页的子弹窗对齐）。 */
+export interface ProcurementSkuDraft {
+  name: string;
+  brand?: string | null;
+  productModel?: string | null;
+  purchaseChannel?: string | null;
+  supplierName?: string | null;
+  purchaseUnit?: string | null;
+  purchaseToBaseRatio?: number | null;
+  currentPurchasePrice?: number | null;
+  safetyStock?: number | null;
+  reorderPoint?: number | null;
+  targetStock?: number | null;
+  notes?: string | null;
+  isActive?: boolean | null;
 }
 
 /** ③ 一份营养档案草稿（生 / 熟各一份）。 */
@@ -421,6 +457,10 @@ export interface IngredientCreationDraftPayload {
   profiles?: ProfileDraft[];
   checks?: FinalCheckResult;
   ingredient?: IngredientDraft;
+  /** 家庭 DIY 推荐商品草稿（可多条） */
+  recommendedProducts?: RecommendedProductDraft[];
+  /** 生产采购 SKU 草稿（可多条） */
+  procurementSkus?: ProcurementSkuDraft[];
   verify?: { exceptions: ExceptionRecord[] };
   /** AI 提案历史：只追加、不覆盖（appendProposal） */
   proposalHistory?: ProposalSnapshot[];

@@ -369,15 +369,16 @@
 
       <el-form-item label="可食部比率" prop="edible_yield_rate">
         <el-input-number
-          v-model="foodProperties.edible_yield_rate"
-          :min="0.1"
-          :max="1.0"
-          :step="0.01"
-          :precision="2"
+          v-model="edibleYieldPercent"
+          :min="10"
+          :max="100"
+          :step="1"
+          :precision="1"
           controls-position="right"
           style="width: 200px"
         />
-        <span class="hint-text">去除不可食部分后的比率，如带骨肉类为0.85</span>
+        <span class="unit-label">%</span>
+        <span class="hint-text">按百分比填写，如带骨肉类为 85%；保存时仍按 0.85 的比例入库</span>
       </el-form-item>
 
       <el-form-item label="主要营养价值" prop="main_nutrients_desc">
@@ -1387,6 +1388,11 @@ import {
 import { ingredientApi } from '@/api/ingredients'
 import { buildSupplementActiveNutrientsFromNutritionProfile } from '@/utils/ingredientNutrition'
 import {
+  isEdibleYieldPercentInRange,
+  toEdibleYieldPercent,
+  toEdibleYieldRate,
+} from '@/utils/edibleYield'
+import {
   getDefaultProcurementStrategyForType,
   getIngredientTypeCapabilities,
   shouldLoadChildSkuData,
@@ -1707,6 +1713,18 @@ const foodProperties = reactive<FoodProperties>(
     ? (formData.properties as FoodProperties)
     : getDefaultFoodProperties(),
 )
+
+/**
+ * 可食部的输入/展示按百分比（10–100），存储仍是 0.1–1.0 的比例。
+ *
+ * 换算只在这一处发生：读库 ×100，写库 ÷100；后端实体与算价仍按比例。
+ */
+const edibleYieldPercent = computed<number | null>({
+  get: () => toEdibleYieldPercent(foodProperties.edible_yield_rate),
+  set: (value) => {
+    foodProperties.edible_yield_rate = toEdibleYieldRate(value) ?? 0
+  },
+})
 
 const supplementProperties = reactive<SupplementProperties>(
   formData.type === IngredientType.SUPPLEMENT
@@ -3307,12 +3325,8 @@ const handleSubmit = async () => {
       if (!foodProperties.cfct_class) {
         throw new Error('请选择CFCT分类')
       }
-      if (
-        !foodProperties.edible_yield_rate ||
-        foodProperties.edible_yield_rate < 0.1 ||
-        foodProperties.edible_yield_rate > 1.0
-      ) {
-        throw new Error('可食部比率必须在0.1到1.0之间')
+      if (!isEdibleYieldPercentInRange(edibleYieldPercent.value)) {
+        throw new Error('可食部比率必须按百分比填写，范围 10% 到 100%')
       }
       if (
         formData.baseUnit === BaseUnit.ML &&

@@ -11,6 +11,10 @@ import {
   type IngredientCardFieldKey
 } from '@/constants/ingredientCardFields'
 import { INGREDIENT_NUTRITION_TAB_LABELS } from '@/constants/ingredientNutrition'
+import {
+  toEdibleYieldPercent,
+  toEdibleYieldRate
+} from '@/utils/edibleYield'
 import type {
   CheckItem,
   CommitIngredientCreationInput,
@@ -20,7 +24,9 @@ import type {
   IngredientCreationDraftPayload,
   IngredientDraft,
   PreparationState,
-  ProfileDraft
+  ProcurementSkuDraft,
+  ProfileDraft,
+  RecommendedProductDraft
 } from '@/types/ingredientCreation'
 import {
   PROFILE_FIELD_DEFINITIONS,
@@ -49,13 +55,24 @@ export type IngredientCardFormValue =
   | null
 
 /**
- * 原料卡表单：30 个格子 + 人工标记，键名与字段目录一一对应。
+ * 食材档案不再展示、但草稿里仍要原样带回的字段。
  *
- * 用映射类型而不是手写 30 个属性：目录里加一项，表单类型自动跟着长；
+ * 为什么保留：草稿 PATCH 是整块替换 `payload.ingredient`，页面只发改动格子
+ * 时若少带这些键，AI 已经写进去的值会被悄悄抹掉。它们在页面上不可见，
+ * 只有类别会在「营养档案」页露出，用来决定生熟要求。
+ */
+export type IngredientCardHiddenKey = 'nameEn' | 'category'
+
+/**
+ * 原料卡表单：15 个可见格子 + 2 个隐藏保留字段 + 人工标记。
+ *
+ * 用映射类型而不是手写属性：目录里加一项，表单类型自动跟着长；
  * `toIngredientCard` 少读一项会直接报类型错，写回由单测逐项钉住。
  */
 export type IngredientCardForm = {
   [K in IngredientCardFieldKey]: IngredientCardFormValue
+} & {
+  [K in IngredientCardHiddenKey]: IngredientCardFormValue
 } & {
   manualFields: IngredientCardField[]
 }
@@ -74,10 +91,6 @@ function toText(value: unknown): string {
 
 function toNullableText(value: unknown): string | null {
   return toText(value) || null
-}
-
-function toBooleanOrNull(value: unknown): boolean | null {
-  return typeof value === 'boolean' ? value : null
 }
 
 function toTagList(value: unknown): string[] {
@@ -116,14 +129,20 @@ function toKnownSelectValue(
   return field.options.some((option) => option.value === text) ? text : null
 }
 
-/** 类别是受控词表里唯一带 TS 字面量类型的字段，主档案判定要再收窄一层。 */
+/** 类别是受控词表，主档案判定要再收窄一层。 */
+const COVERAGE_CATEGORY_SET: ReadonlySet<string> = new Set([
+  'MEAT_ORGAN',
+  'STARCHY_VEGETABLE',
+  'OTHER'
+])
+
 function toKnownCoverageCategory(value: unknown): CoverageCategory | null {
-  const known = toKnownSelectValue('category', value)
-  return known === null ? null : (known as CoverageCategory)
+  const text = toText(value)
+  return COVERAGE_CATEGORY_SET.has(text) ? (text as CoverageCategory) : null
 }
 
 /**
- * 人工标记只收目录内的 30 个公共键；旧草稿 / 脏数据里的其它字符串丢掉。
+ * 人工标记只收目录内的 15 个公共键；旧草稿 / 脏数据里的其它字符串丢掉。
  * 可食部的标记用公共名 `edibleYieldPercent`，不用存储名。
  */
 function toManualFields(value: unknown): IngredientCardField[] {
@@ -142,7 +161,7 @@ function toManualFields(value: unknown): IngredientCardField[] {
  * 读原料卡。优先用草稿里的 `payload.ingredient`，没有时按起手卡 / 草稿名兜底，
  * 页面永远能拿到一张可编辑的卡（只是值可能为空）。
  *
- * 30 项全部读出：少读一项，页面上就是「看不见」，下一次整卡保存还会把它抹掉。
+ * 可见的 15 项与隐藏保留的 2 项（英文名 / 类别）全部读出：少读一项，下一次整卡保存就会把它抹掉。
  */
 export function toIngredientCard(
   payload: IngredientCreationDraftPayload | null | undefined,
@@ -157,57 +176,40 @@ export function toIngredientCard(
   return {
     // BASIC
     name: toText(source?.name) || toText(intake?.name) || fallbackName.trim(),
-    nameEn: toText(source?.nameEn) || toText(intake?.nameEn),
     type: toText(source?.type) || 'FOOD',
-    // 未知枚举原样保留，页面原样展示，不静默清空。
-    category: toText(source?.category) || toText(intake?.category),
     notes: toText(source?.notes),
+    tags: toTagList(source?.tags),
     // MEASURE
     baseUnit,
     unitDisplayLabel:
       toText(source?.unitDisplayLabel) || DEFAULT_UNIT_DISPLAY_LABELS[baseUnit],
     weightG: toFiniteNumber(source?.weightG),
-    maxCapacityG: toFiniteNumber(source?.maxCapacityG),
     // NUTRITION
     cfctClass: toText(source?.cfctClass),
-    edibleYieldPercent:
-      rate !== null && rate >= 0 && rate <= 1
-        ? Math.round(rate * 10000) / 100
-        : null,
+    edibleYieldPercent: toEdibleYieldPercent(rate),
     mainNutrientsDesc: toText(source?.mainNutrientsDesc),
+    densityGPerMl: toFiniteNumber(source?.densityGPerMl),
     // PURCHASE
     procurementStrategy: toText(source?.procurementStrategy),
-    purchaseUnit: toText(source?.purchaseUnit),
-    purchaseToBaseRatio: toFiniteNumber(source?.purchaseToBaseRatio),
-    currentPricePerPurchaseUnit: toFiniteNumber(
-      source?.currentPricePerPurchaseUnit
-    ),
-    brand: toText(source?.brand),
-    productModel: toText(source?.productModel),
-    purchaseChannel: toText(source?.purchaseChannel),
-    // STOCK
-    safetyStock: toFiniteNumber(source?.safetyStock),
-    reorderPoint: toFiniteNumber(source?.reorderPoint),
-    targetStock: toFiniteNumber(source?.targetStock),
-    // USAGE
-    diyEnabled: toBooleanOrNull(source?.diyEnabled),
-    addTiming: toText(source?.addTiming),
-    productionLossRate: toFiniteNumber(source?.productionLossRate),
-    tags: toTagList(source?.tags),
-    // STORAGE
-    shelfLifeMonths: toFiniteNumber(source?.shelfLifeMonths),
-    storageCondition: toText(source?.storageCondition),
-    openedShelfLifeDays: toFiniteNumber(source?.openedShelfLifeDays),
-    isOilBased: toBooleanOrNull(source?.isOilBased),
+    // LABEL
+    labelCategory: toText(source?.labelCategory),
+    labelNames: toTagList(source?.labelNames),
+    labelNameSource: toText(source?.labelNameSource),
+    // 隐藏保留（不在食材档案里展示）
+    nameEn: toText(source?.nameEn) || toText(intake?.nameEn),
+    category: toText(source?.category) || toText(intake?.category),
     manualFields: toManualFields(source?.manualFields)
   }
 }
 
 /**
- * 表单值写回草稿：**30 项一个不少**，可食部百分数换比例，空串落成 null。
+ * 表单值写回草稿：可见 15 项 + 隐藏 2 项一个不少，可食部百分数换比例。
  *
  * 为什么一项都不能省：后端草稿 PATCH 是 `payload = payload || $1::jsonb` 的浅替换，
  * `payload.ingredient` 会被整块覆盖。少发一个键 = 把 AI 填的其它字段悄悄抹掉。
+ *
+ * 品牌 / 规格 / 采购渠道 / 采购单位 / 换算 / 价格 / 库存三项已经搬到
+ * 「DIY 推荐商品」「采购 SKU」两个子板块，原料级一律清空，避免两处各存一份。
  */
 export function toIngredientDraft(card: IngredientCardForm): IngredientDraft {
   const baseUnit = toBaseUnit(card.baseUnit)
@@ -216,51 +218,44 @@ export function toIngredientDraft(card: IngredientCardForm): IngredientDraft {
   return {
     // BASIC
     name: toText(card.name),
-    nameEn: toNullableText(card.nameEn),
     type: 'FOOD',
-    category: toKnownSelectValue(
-      'category',
-      card.category
-    ) as CoverageCategory | null,
     notes: toNullableText(card.notes),
+    tags: toTagList(card.tags),
     // MEASURE
     baseUnit,
     unitDisplayLabel:
       toText(card.unitDisplayLabel) || DEFAULT_UNIT_DISPLAY_LABELS[baseUnit],
     weightG: toFiniteNumber(card.weightG),
-    maxCapacityG: toFiniteNumber(card.maxCapacityG),
     // NUTRITION
     cfctClass: toNullableText(card.cfctClass),
-    edibleYieldRate:
-      percent === null ? null : Math.round(percent * 100) / 10000,
+    edibleYieldRate: toEdibleYieldRate(percent),
     mainNutrientsDesc: toNullableText(card.mainNutrientsDesc),
+    densityGPerMl: toFiniteNumber(card.densityGPerMl),
     // PURCHASE
     procurementStrategy: toKnownSelectValue(
       'procurementStrategy',
       card.procurementStrategy
     ),
-    purchaseUnit: toNullableText(card.purchaseUnit),
-    purchaseToBaseRatio: toFiniteNumber(card.purchaseToBaseRatio),
-    currentPricePerPurchaseUnit: toFiniteNumber(
-      card.currentPricePerPurchaseUnit
-    ),
-    brand: toNullableText(card.brand),
-    productModel: toNullableText(card.productModel),
-    purchaseChannel: toNullableText(card.purchaseChannel),
-    // STOCK
-    safetyStock: toFiniteNumber(card.safetyStock),
-    reorderPoint: toFiniteNumber(card.reorderPoint),
-    targetStock: toFiniteNumber(card.targetStock),
-    // USAGE
-    diyEnabled: toBooleanOrNull(card.diyEnabled),
-    addTiming: toKnownSelectValue('addTiming', card.addTiming),
-    productionLossRate: toFiniteNumber(card.productionLossRate),
-    tags: toTagList(card.tags),
-    // STORAGE
-    shelfLifeMonths: toFiniteNumber(card.shelfLifeMonths),
-    storageCondition: toNullableText(card.storageCondition),
-    openedShelfLifeDays: toFiniteNumber(card.openedShelfLifeDays),
-    isOilBased: toBooleanOrNull(card.isOilBased),
+    // LABEL
+    labelCategory: toKnownSelectValue(
+      'labelCategory',
+      card.labelCategory
+    ) as 'FEED_MATERIAL' | 'FEED_ADDITIVE' | null,
+    labelNames: toTagList(card.labelNames),
+    labelNameSource: toNullableText(card.labelNameSource),
+    // 隐藏保留
+    nameEn: toNullableText(card.nameEn),
+    category: toKnownCoverageCategory(card.category),
+    // 已从食材线移除 / 搬到子板块：原料级不再写，避免重复
+    brand: null,
+    productModel: null,
+    purchaseChannel: null,
+    purchaseUnit: null,
+    purchaseToBaseRatio: null,
+    currentPricePerPurchaseUnit: null,
+    safetyStock: null,
+    reorderPoint: null,
+    targetStock: null,
     manualFields: toManualFields(card.manualFields)
   }
 }
@@ -666,5 +661,61 @@ export function toCommitInput(
     return null
   }
 
-  return { ingredient, profiles, primaryProfileIndex }
+  return {
+    ingredient,
+    profiles,
+    primaryProfileIndex,
+    recommendedProducts: toRecommendedProductDrafts(payload),
+    procurementSkus: toProcurementSkuDrafts(payload)
+  }
+}
+
+/** 草稿里的 DIY 推荐商品：去掉前端行标识，只保留要落库的字段。 */
+export function toRecommendedProductDrafts(
+  payload: IngredientCreationDraftPayload | null | undefined
+): RecommendedProductDraft[] {
+  const stored = Array.isArray(payload?.recommendedProducts)
+    ? payload.recommendedProducts
+    : []
+  return stored
+    .filter((item): item is RecommendedProductDraft => isRecord(item))
+    .map((item) => ({
+      key: typeof item.key === 'string' ? item.key : '',
+      name: toText(item.name),
+      brand: toText(item.brand),
+      productModel: toText(item.productModel),
+      purchaseChannel: toText(item.purchaseChannel),
+      purchaseLinkPlatform: toText(item.purchaseLinkPlatform) || 'OTHER',
+      purchaseLinkUrl: toText(item.purchaseLinkUrl),
+      imageUrl: toText(item.imageUrl),
+      sortOrder: Math.max(0, Math.trunc(toFiniteNumber(item.sortOrder) ?? 0)),
+      isActive: item.isActive !== false
+    }))
+}
+
+/** 草稿里的采购 SKU：数字字段统一收成 number|null，空行不在这里丢。 */
+export function toProcurementSkuDrafts(
+  payload: IngredientCreationDraftPayload | null | undefined
+): ProcurementSkuDraft[] {
+  const stored = Array.isArray(payload?.procurementSkus)
+    ? payload.procurementSkus
+    : []
+  return stored
+    .filter((item): item is ProcurementSkuDraft => isRecord(item))
+    .map((item) => ({
+      key: typeof item.key === 'string' ? item.key : '',
+      name: toText(item.name),
+      brand: toText(item.brand),
+      productModel: toText(item.productModel),
+      purchaseChannel: toText(item.purchaseChannel),
+      supplierName: toText(item.supplierName),
+      purchaseUnit: toText(item.purchaseUnit),
+      purchaseToBaseRatio: toFiniteNumber(item.purchaseToBaseRatio),
+      currentPurchasePrice: toFiniteNumber(item.currentPurchasePrice),
+      safetyStock: toFiniteNumber(item.safetyStock),
+      reorderPoint: toFiniteNumber(item.reorderPoint),
+      targetStock: toFiniteNumber(item.targetStock),
+      notes: toText(item.notes),
+      isActive: item.isActive !== false
+    }))
 }

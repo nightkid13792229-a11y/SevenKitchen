@@ -42,6 +42,10 @@ import {
   PREPARATION_STATES,
 } from './ingredient-creation.constants';
 import { NutritionEvidenceEntryDto } from './nutrition-evidence-entry.dto';
+import {
+  ProcurementSkuDraftDto,
+  RecommendedProductDraftDto,
+} from './child-drafts.dto';
 
 /** 与 Prisma 的 `IngredientProcurementStrategy` 枚举保持一致。 */
 const PROCUREMENT_STRATEGIES = Object.values(IngredientProcurementStrategy);
@@ -51,6 +55,9 @@ const ADD_TIMINGS = [
   'BEFORE_MIXING',
   'BEFORE_MEAL',
 ] as const satisfies readonly SupplementAddTiming[];
+
+/** 标签类型：与标准原料编辑页的「标签类型」一致。 */
+const LABEL_CATEGORIES = ['FEED_MATERIAL', 'FEED_ADDITIVE'] as const;
 
 /**
  * 起手口径卡的可 patch 片段。
@@ -219,21 +226,21 @@ export class UpdateDraftIngredientDto implements IngredientDraft {
   cfctClass?: string | null;
 
   /**
-   * 可食部**比例**（0–1），不是百分数。
+   * 可食部**比例**（0.1–1），不是百分数。
    *
-   * 页面上的 75% 由前端换算成 0.75 再传；这里再挡一道 0–1，
+   * 页面上的 10%–100% 由前端换算成 0.1–1 再传；这里再挡一道 0.1–1，
    * 多除/少除一次 100 都能在接口层被拒，而不是悄悄写进库里。
    */
   @ApiPropertyOptional({
     description:
-      '可食部比例（0–1）；百分数公共名 edibleYieldPercent 只用于页面',
+      '可食部比例（0.1–1）；百分数公共名 edibleYieldPercent（10–100）只用于页面',
     nullable: true,
-    minimum: 0,
+    minimum: 0.1,
     maximum: 1,
   })
   @IsOptional()
   @IsNumber()
-  @Min(0)
+  @Min(0.1)
   @Max(1)
   edibleYieldRate?: number | null;
 
@@ -242,6 +249,15 @@ export class UpdateDraftIngredientDto implements IngredientDraft {
   @IsString()
   @MaxLength(200)
   mainNutrientsDesc?: string | null;
+
+  @ApiPropertyOptional({
+    description: '密度(g/ml)；基准单位为 ML 时必填',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  densityGPerMl?: number | null;
 
   // PURCHASE
   @ApiPropertyOptional({
@@ -372,6 +388,28 @@ export class UpdateDraftIngredientDto implements IngredientDraft {
   @IsBoolean()
   isOilBased?: boolean | null;
 
+  // LABEL 标签信息（合规）
+  @ApiPropertyOptional({
+    description: '标签类型：饲料原料 / 饲料添加剂',
+    enum: LABEL_CATEGORIES,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsIn(LABEL_CATEGORIES)
+  labelCategory?: 'FEED_MATERIAL' | 'FEED_ADDITIVE' | null;
+
+  @ApiPropertyOptional({ description: '标签名称', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  labelNames?: string[];
+
+  @ApiPropertyOptional({ description: '名称依据', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  labelNameSource?: string | null;
+
   // 人工改动标记：只收契约内的公共字段名（可食部用公共名 edibleYieldPercent）
   @ApiPropertyOptional({
     description: '人工审核时改过的字段（公共字段名）',
@@ -438,6 +476,26 @@ export class UpdateDraftPayloadDto {
   @ValidateNested()
   @Type(() => UpdateDraftIngredientDto)
   ingredient?: UpdateDraftIngredientDto;
+
+  @ApiPropertyOptional({
+    description: '家庭 DIY 推荐商品草稿（可多条）',
+    type: () => [RecommendedProductDraftDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RecommendedProductDraftDto)
+  recommendedProducts?: RecommendedProductDraftDto[];
+
+  @ApiPropertyOptional({
+    description: '生产采购 SKU 草稿（可多条）',
+    type: () => [ProcurementSkuDraftDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProcurementSkuDraftDto)
+  procurementSkus?: ProcurementSkuDraftDto[];
 
   @ApiPropertyOptional({ description: '人工例外' })
   @IsOptional()

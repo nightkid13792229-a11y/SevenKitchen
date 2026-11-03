@@ -33,7 +33,7 @@ const base = {
   unitDisplayLabel: '克',
 };
 
-/** 30 个公共字段各给一个合法值（storage 名与公共名不同的只有可食部）。 */
+/** 15 个公共字段各给一个合法值（storage 名与公共名不同的只有可食部）。 */
 const fullFields = {
   ...base,
   nameEn: 'Atlantic Salmon',
@@ -44,6 +44,7 @@ const fullFields = {
   cfctClass: '鱼虾蟹贝类',
   edibleYieldRate: 0.75,
   mainNutrientsDesc: '高蛋白、低脂',
+  densityGPerMl: 1.05,
   procurementStrategy: 'DAILY_PURCHASE',
   purchaseUnit: '袋',
   purchaseToBaseRatio: 1000,
@@ -63,6 +64,9 @@ const fullFields = {
   storageCondition: '-18℃ 冷冻',
   openedShelfLifeDays: 3,
   isOilBased: false,
+  labelCategory: 'FEED_MATERIAL',
+  labelNames: ['三文鱼'],
+  labelNameSource: '饲料原料目录（2023 版）',
   manualFields: ['edibleYieldPercent', 'name'],
   // 故意的拼写错误：契约外的键必须被 whitelist 剥掉，不能原样落进 payload
   storagCondition: '-18℃ 冷冻',
@@ -85,7 +89,7 @@ async function validated(
 }
 
 describe('UpdateDraftIngredientDto', () => {
-  it('接受 30 项全量，且每一项都真的落在实例上', async () => {
+  it('接受 15 项全量，且每一项都真的落在实例上', async () => {
     expect(await errorsOf(fullFields)).toEqual([]);
 
     const payload = await validated(fullFields);
@@ -102,6 +106,9 @@ describe('UpdateDraftIngredientDto', () => {
 
   it('可食部比例越界被拒', async () => {
     expect(await errorsOf({ edibleYieldRate: 1.5 })).toContain(
+      'edibleYieldRate',
+    );
+    expect(await errorsOf({ edibleYieldRate: 0.05 })).toContain(
       'edibleYieldRate',
     );
     expect(await errorsOf({ edibleYieldRate: -0.1 })).toContain(
@@ -124,13 +131,12 @@ describe('UpdateDraftIngredientDto', () => {
     expect(payload.evil).toBeUndefined();
   });
 
-  it('manualFields 收下契约内全部 30 个键，契约外的键被拒', async () => {
+  it('manualFields 收下契约内全部 15 个键，契约外的键被拒', async () => {
     expect(await errorsOf({ manualFields: ['nope'] })).toContain(
       'manualFields',
     );
 
-    // 逐个键都要通过：只钉 2 个键拦不住「只认旧 7 键」的白名单回退，
-    // 也拦不住误用 AI 可写 26 键（漏掉 safetyStock / tags 等 4 项）。
+    // 逐个键都要通过：只钉 2 个键拦不住「只认旧字段」的白名单回退。
     const rejected: string[] = [];
     for (const field of INGREDIENT_CARD_FIELD_KEYS) {
       const errors = await errorsOf({ manualFields: [field] });
@@ -146,7 +152,7 @@ describe('UpdateDraftIngredientDto', () => {
     ).toEqual([]);
   });
 
-  it('四个必填字段仍然必填', async () => {
+  it('四个基础必填字段仍然必填', async () => {
     const dto = plainToInstance(UpdateDraftIngredientDto, {});
     const errors = (await validate(dto, { whitelist: true })).map(
       (error) => error.property,
@@ -169,6 +175,10 @@ describe('UpdateDraftIngredientDto', () => {
         safetyStock: null,
         shelfLifeMonths: null,
         isOilBased: null,
+        densityGPerMl: null,
+        labelCategory: null,
+        labelNames: null,
+        labelNameSource: null,
         currentPricePerPurchaseUnit: 0,
         productionLossRate: 1.05,
         procurementStrategy: null,

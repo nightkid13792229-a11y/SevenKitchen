@@ -34,6 +34,8 @@ function createDraft(
         type: 'FOOD',
         baseUnit: 'G',
         unitDisplayLabel: '克',
+        labelCategory: 'FEED_MATERIAL',
+        labelNames: ['三文鱼'],
       },
     },
     createdBy: 'admin-1',
@@ -135,7 +137,7 @@ describe('IngredientCheckRunService', () => {
         draftId: 'draft-1',
         domain: 'INGREDIENT',
         trigger: 'USER',
-        rulesVersion: 'ingredient-card-v1',
+        rulesVersion: 'ingredient-card-v2',
         payloadHash: hashDraftPayload(draft.payload),
         counts: { blocking: 1, exceptionable: 0, warning: 1 },
         createdBy: 'admin-1',
@@ -150,7 +152,7 @@ describe('IngredientCheckRunService', () => {
           draftId: 'draft-1',
           domain: 'INGREDIENT',
           trigger: 'USER',
-          rulesVersion: 'ingredient-card-v1',
+          rulesVersion: 'ingredient-card-v2',
           payloadHash: hashDraftPayload(draft.payload),
           result: {
             blocking: [expect.objectContaining({ code: 'NAME_DUPLICATE' })],
@@ -165,7 +167,7 @@ describe('IngredientCheckRunService', () => {
       });
     });
 
-    it('只填 4 个必填项时完整度只进 warning，绝不阻断授权', async () => {
+    it('只填 6 个必填项时完整度只进 warning，绝不阻断授权', async () => {
       const run = await service.runDomain('draft-1', 'INGREDIENT', 'USER');
 
       expect(run.counts.blocking).toBe(0);
@@ -202,6 +204,8 @@ describe('IngredientCheckRunService', () => {
             type: 'FOOD',
             baseUnit: 'G',
             unitDisplayLabel: '克',
+            labelCategory: 'FEED_MATERIAL',
+            labelNames: ['三文鱼'],
           },
         },
       });

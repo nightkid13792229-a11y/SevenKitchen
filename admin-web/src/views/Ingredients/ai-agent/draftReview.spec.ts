@@ -525,8 +525,8 @@ describe('审核页 · 顶部检查状态与提交入参', () => {
 })
 
 /**
- * 30 项全量往返：后端的草稿 PATCH 是浅替换，`payload.ingredient` 会被整块覆盖。
- * 只映射 9 项等于每改一次就悄悄抹掉另外 21 项，所以这里逐项钉死。
+ * 全量往返：后端的草稿 PATCH 是浅替换，`payload.ingredient` 会被整块覆盖。
+ * 少映射一项等于每改一次就悄悄抹掉它，所以这里逐项钉死。
  */
 const FULL_INGREDIENT: IngredientDraft = {
   // BASIC
@@ -544,7 +544,8 @@ const FULL_INGREDIENT: IngredientDraft = {
   cfctClass: '鱼类及制品',
   edibleYieldRate: 0.75,
   mainNutrientsDesc: '优质蛋白、Omega-3',
-  // PURCHASE
+  densityGPerMl: 1.05,
+  // PURCHASE（已搬到子板块，原料级仍保留旧值用于验证清理）
   procurementStrategy: 'DAILY_PURCHASE',
   purchaseUnit: '袋',
   purchaseToBaseRatio: 500,
@@ -566,7 +567,11 @@ const FULL_INGREDIENT: IngredientDraft = {
   storageCondition: '冷冻 -18℃',
   openedShelfLifeDays: 3,
   isOilBased: false,
-  manualFields: ['brand', 'edibleYieldPercent']
+  // LABEL
+  labelCategory: 'FEED_MATERIAL',
+  labelNames: ['三文鱼'],
+  labelNameSource: '饲料原料目录（2023 版）',
+  manualFields: ['cfctClass', 'edibleYieldPercent']
 }
 
 const FULL_INGREDIENT_BY_KEY = FULL_INGREDIENT as unknown as Record<
@@ -574,8 +579,8 @@ const FULL_INGREDIENT_BY_KEY = FULL_INGREDIENT as unknown as Record<
   unknown
 >
 
-describe('审核页 · 原料卡 30 项全量映射', () => {
-  it('toIngredientCard 读全 30 项，可食部换成 0–100 百分数', () => {
+describe('审核页 · 食材原料卡映射', () => {
+  it('toIngredientCard 读全 15 个可见格子，并保留类别/英文名', () => {
     const card = toIngredientCard({ ingredient: FULL_INGREDIENT })
 
     for (const field of INGREDIENT_CARD_FIELDS) {
@@ -585,10 +590,12 @@ describe('审核页 · 原料卡 30 项全量映射', () => {
           : FULL_INGREDIENT_BY_KEY[field.key]
       expect(card[field.key], field.key).toEqual(expected)
     }
-    expect(card.manualFields).toEqual(['brand', 'edibleYieldPercent'])
+    expect(card.nameEn).toBe('Frozen salmon')
+    expect(card.category).toBe('MEAT_ORGAN')
+    expect(card.manualFields).toEqual(['cfctClass', 'edibleYieldPercent'])
   })
 
-  it('toIngredientDraft 写回 30 项，brand / weightG / shelfLifeMonths / 采购策略都在', () => {
+  it('toIngredientDraft 写回可见字段与隐藏保留字段，采购/库存搬到子板块后清空', () => {
     const draft = toIngredientDraft(
       toIngredientCard({ ingredient: FULL_INGREDIENT })
     )
@@ -599,28 +606,69 @@ describe('审核页 · 原料卡 30 项全量映射', () => {
         field.key === 'edibleYieldPercent' ? 'edibleYieldRate' : field.key
       expect(draft, `缺字段 ${draftKey}`).toHaveProperty(draftKey)
     }
-    // 30 个存储字段 + manualFields，不多不少。
-    expect(Object.keys(draft)).toHaveLength(31)
     expect(draft).toMatchObject({
-      brand: '挪威海产',
+      name: '冷冻三文鱼',
+      nameEn: 'Frozen salmon',
+      category: 'MEAT_ORGAN',
       weightG: 250,
-      shelfLifeMonths: 12,
+      densityGPerMl: 1.05,
+      labelCategory: 'FEED_MATERIAL',
+      labelNames: ['三文鱼'],
+      labelNameSource: '饲料原料目录（2023 版）',
       procurementStrategy: 'DAILY_PURCHASE',
-      purchaseChannel: '山姆会员店',
-      storageCondition: '冷冻 -18℃',
-      productionLossRate: 1.05,
       tags: ['高蛋白', '冷冻'],
-      diyEnabled: false,
-      isOilBased: false,
       edibleYieldRate: 0.75,
-      manualFields: ['brand', 'edibleYieldPercent']
+      manualFields: ['cfctClass', 'edibleYieldPercent']
+    })
+    expect(draft).toMatchObject({
+      brand: null,
+      productModel: null,
+      purchaseChannel: null,
+      purchaseUnit: null,
+      purchaseToBaseRatio: null,
+      currentPricePerPurchaseUnit: null,
+      safetyStock: null,
+      reorderPoint: null,
+      targetStock: null
     })
   })
 
-  it('toCommitInput 带完整原料卡，21 个非手填字段不会在提交时丢掉', () => {
+  it('toCommitInput 带完整原料卡与两个子板块草稿', () => {
     const input = toCommitInput({
       ingredient: FULL_INGREDIENT,
-      profiles: [rawProfile]
+      profiles: [rawProfile],
+      recommendedProducts: [
+        {
+          key: 'rp-1',
+          name: '挪威三文鱼 500g',
+          brand: '挪威海产',
+          productModel: '500g/袋',
+          purchaseChannel: '山姆',
+          purchaseLinkPlatform: 'TAOBAO',
+          purchaseLinkUrl: 'https://example.com/salmon',
+          imageUrl: '',
+          sortOrder: 1,
+          isActive: true
+        }
+      ],
+      procurementSkus: [
+        {
+          key: 'sku-1',
+          name: '三文鱼整条',
+          brand: '挪威海产',
+          productModel: '5kg/箱',
+          purchaseChannel: '批发市场',
+          supplierName: '某供应商',
+          purchaseUnit: '箱',
+          purchaseToBaseRatio: 5000,
+          currentPurchasePrice: 380,
+          safetyStock: 1,
+          reorderPoint: 2,
+          targetStock: 5,
+          notes: '冷冻',
+          isActive: true
+        }
+      ]
     })
 
     expect(input).not.toBeNull()
@@ -629,31 +677,23 @@ describe('审核页 · 原料卡 30 项全量映射', () => {
         field.key === 'edibleYieldPercent' ? 'edibleYieldRate' : field.key
       expect(input?.ingredient, `缺字段 ${draftKey}`).toHaveProperty(draftKey)
     }
-    expect(input?.ingredient).toMatchObject({
-      brand: '挪威海产',
-      weightG: 250,
-      shelfLifeMonths: 12,
-      procurementStrategy: 'DAILY_PURCHASE'
-    })
+    expect(input?.recommendedProducts).toHaveLength(1)
+    expect(input?.procurementSkus).toHaveLength(1)
+    expect(input?.recommendedProducts?.[0]?.name).toBe('挪威三文鱼 500g')
+    expect(input?.procurementSkus?.[0]?.purchaseUnit).toBe('箱')
   })
 
   it('0 与 false 写回草稿时不被当成空', () => {
     const card = {
       ...toIngredientCard(null),
       name: '冷冻三文鱼',
-      currentPricePerPurchaseUnit: 0,
-      productionLossRate: 1,
-      diyEnabled: false,
-      isOilBased: false,
-      edibleYieldPercent: 0
+      weightG: 0,
+      edibleYieldPercent: 10
     }
 
     expect(toIngredientDraft(card)).toMatchObject({
-      currentPricePerPurchaseUnit: 0,
-      productionLossRate: 1,
-      diyEnabled: false,
-      isOilBased: false,
-      edibleYieldRate: 0
+      weightG: 0,
+      edibleYieldRate: 0.1
     })
   })
 
@@ -674,6 +714,6 @@ describe('审核页 · 原料卡 30 项全量映射', () => {
       }
     })
 
-    expect(card.manualFields).toEqual(['brand', 'cfctClass'])
+    expect(card.manualFields).toEqual(['cfctClass'])
   })
 })

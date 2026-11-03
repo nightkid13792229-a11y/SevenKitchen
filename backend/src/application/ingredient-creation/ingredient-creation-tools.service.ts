@@ -409,7 +409,12 @@ const WRITE_NUTRITION_TOOL: AgentToolDefinition = {
   },
 };
 
-/** 原料卡可写字段：与 `IngredientCardField` 一一对应，白名单只在这里声明一次。 */
+/**
+ * 原料卡可写字段：可见格子之外，`nameEn` / `category` 仍保留给 AI 内部使用
+ * （英文名参与营养档案命名，类别决定必需生熟），但不在食材档案里展示。
+ */
+type IngredientToolField = IngredientCardField | 'nameEn' | 'category';
+
 const INGREDIENT_CARD_FIELDS = [
   'name',
   'nameEn',
@@ -418,7 +423,7 @@ const INGREDIENT_CARD_FIELDS = [
   'unitDisplayLabel',
   'cfctClass',
   'edibleYieldPercent',
-] as const satisfies readonly IngredientCardField[];
+] as const satisfies readonly IngredientToolField[];
 
 const INGREDIENT_CARD_FIELD_SET: ReadonlySet<string> = new Set(
   INGREDIENT_CARD_FIELDS,
@@ -497,7 +502,7 @@ const WRITE_INGREDIENT_TOOL: AgentToolDefinition = {
             edibleYieldPercent: {
               type: 'number',
               description:
-                '可食部百分比，必须大于 0 且不超过 100（例如带骨肉 85 表示 85%）；未知就不要传，留作待补。',
+                '可食部百分比，必须在 10–100 之间（例如带骨肉 85 表示 85%）；未知就不要传，留作待补。',
             },
           },
           additionalProperties: false,
@@ -1149,7 +1154,7 @@ function readIngredientEditorCard(
     unitDisplayLabel,
     cfctClass: cfctClass || null,
     edibleYieldRate:
-      edibleYieldRate !== null && edibleYieldRate > 0 && edibleYieldRate <= 1
+      edibleYieldRate !== null && edibleYieldRate >= 0.1 && edibleYieldRate <= 1
         ? edibleYieldRate
         : null,
     manualFields,
@@ -1186,7 +1191,7 @@ type IngredientFieldValidation =
  * 长度上限对齐数据库列（展示名 50、CFCT 50 余量到 100、名称 100）。
  */
 function validateIngredientField(
-  field: IngredientCardField,
+  field: IngredientToolField,
   raw: unknown,
 ): IngredientFieldValidation {
   switch (field) {
@@ -1275,13 +1280,13 @@ function validateIngredientField(
       if (percent === null) {
         return {
           ok: false,
-          error: 'edibleYieldPercent 必须是数字（0–100 的百分数）。',
+          error: 'edibleYieldPercent 必须是数字（10–100 的百分数）。',
         };
       }
-      if (percent <= 0 || percent > 100) {
+      if (percent < 10 || percent > 100) {
         return {
           ok: false,
-          error: `edibleYieldPercent 必须在 (0, 100] 之间；收到 ${percent}。`,
+          error: `edibleYieldPercent 必须在 [10, 100] 之间；收到 ${percent}。`,
         };
       }
       return { ok: true, value: percent };
@@ -2342,12 +2347,12 @@ export class IngredientCreationToolsService {
       manualFields: readStoredIngredientManualFields(stored),
     };
     const previousBaseUnit = current.baseUnit;
-    const applied: IngredientCardField[] = [];
-    const skipped: Array<{ field: IngredientCardField; reason: string }> = [];
-    const changed: IngredientCardField[] = [];
+    const applied: IngredientToolField[] = [];
+    const skipped: Array<{ field: IngredientToolField; reason: string }> = [];
+    const changed: IngredientToolField[] = [];
 
     for (const field of provided) {
-      if ((next.manualFields ?? []).includes(field)) {
+      if ((next.manualFields ?? []).includes(field as IngredientCardField)) {
         skipped.push({
           field,
           reason:

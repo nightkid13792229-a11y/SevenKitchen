@@ -640,13 +640,13 @@ function summarizeUnknownArgs(args: AnyArgs): string {
 
 /** 原料卡工具的参数名 → 中文，让记录能直接读懂。 */
 const INGREDIENT_FIELD_LABELS: Record<string, string> = {
-  name: '名称',
+  name: '原料名称',
   nameEn: '英文名',
   category: '类别',
   baseUnit: '基准单位',
-  unitDisplayLabel: '展示名',
-  cfctClass: 'CFCT',
-  edibleYieldPercent: '可食部'
+  unitDisplayLabel: '标准单位展示名',
+  cfctClass: 'CFCT分类',
+  edibleYieldPercent: '可食部比率'
 }
 
 /** 改原料卡：名称=鸡肝 · 类别=MEAT_ORGAN · 可食部=95 */

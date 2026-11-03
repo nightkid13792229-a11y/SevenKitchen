@@ -74,7 +74,7 @@ describe('toStepView', () => {
     expect(views[0]?.summary).toContain('3 条名字')
     expect(views[1]?.summary).toBe('rec-1')
     expect(views[2]?.summary).toBe('档案 0 · 1 项')
-    expect(views[3]?.summary).toContain('名称=鸡肝')
+    expect(views[3]?.summary).toContain('原料名称=鸡肝')
     expect(views[4]?.summary).toBe('好了。')
   })
 

@@ -188,7 +188,7 @@ const DEFAULT_NET_CONTENT_UNIT_TEXT: Record<BaseUnit, string> = {
   [BaseUnit.PCS]: '个',
 };
 
-const ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT: Record<BaseUnit, string[]> = {
+export const ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT: Record<BaseUnit, string[]> = {
   [BaseUnit.G]: [
     'g',
     'kg',
@@ -228,7 +228,7 @@ const ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT: Record<BaseUnit, string[]> = {
   ],
 };
 
-const normalizeOptionalPurchaseUnit = (
+export const normalizeOptionalPurchaseUnit = (
   value: string | null | undefined,
   baseUnit: BaseUnit | string,
 ): string | null | undefined => {

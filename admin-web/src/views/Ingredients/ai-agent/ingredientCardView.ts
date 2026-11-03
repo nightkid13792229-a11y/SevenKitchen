@@ -1,12 +1,12 @@
 /**
- * 原料档案页的纯视图模型：字段目录 → 30 个可渲染的格子。
+ * 原料档案页的纯视图模型：字段目录 → 可渲染的格子。
  *
  * 这层不依赖 Vue、不发请求，只做三件事：
- * - 把草稿里的存储口径翻成展示口径（可食部比例 → 百分数，损耗 → 倍数）；
+ * - 把草稿里的存储口径翻成展示口径（可食部比例 → 百分数）；
  * - 补齐空格子的展示（空 → 「空」，而不是隐藏）；
- * - 把页面上的 30 个格子原样写回一份完整草稿（整卡保存，绝不只发改动的那一格）。
+ * - 把页面上的可见格子 + 隐藏保留字段原样写回一份完整草稿（整卡保存，绝不只发改动的那一格）。
  *
- * 后端草稿 PATCH 是浅替换：`payload.ingredient` 会被整块覆盖，所以写回必须 30 项齐全。
+ * 后端草稿 PATCH 是浅替换：`payload.ingredient` 会被整块覆盖，所以写回必须字段齐全。
  */
 import {
   INGREDIENT_CARD_FIELDS,
@@ -16,6 +16,7 @@ import {
   type IngredientFieldGroup
 } from '@/constants/ingredientCardFields'
 import { CFCT_CLASS_OPTIONS } from '@/types/ingredient'
+import { toEdibleYieldPercent } from '@/utils/edibleYield'
 import type { IngredientDraft } from '@/types/ingredientCreation'
 import {
   toIngredientCard,
@@ -30,6 +31,7 @@ export type IngredientCardCellKind =
   | 'number'
   | 'boolean'
   | 'select'
+  | 'string-list'
   | 'tags'
 
 /** 一个格子的全部渲染信息（纯数据，模板只照着画）。 */
@@ -45,6 +47,8 @@ export interface IngredientCardCell {
   display: string
   isManual: boolean
   isAfterCreate: boolean
+  /** 当前基准单位下是否显示（单个重量只在个/件、密度只在毫升） */
+  visible: boolean
   /** 来源标记：人工 / AI / 空（没有值就不标来源） */
   sourceLabel: 'AI' | '人工' | null
   options?: readonly { label: string; value: string }[]
@@ -54,7 +58,7 @@ export interface IngredientCardCell {
 }
 
 /**
- * 页面表单的形状：30 个键都可能出现，值来自控件（未知键忽略）。
+ * 页面表单的形状：可见格子都可能出现，值来自控件（未知键忽略）。
  *
  * 用 Partial 是为了让调用方可以只覆盖改动过的键，其余沿用草稿原值。
  */
@@ -206,6 +210,8 @@ function kindFor(
       return 'boolean'
     case 'select':
       return 'select'
+    case 'string-list':
+      return 'string-list'
     case 'tags':
       return 'tags'
   }
@@ -222,7 +228,7 @@ function draftFieldValue(
   field: IngredientCardFieldDef
 ): IngredientCardFormValue {
   if (!draft) {
-    return field.valueType === 'tags'
+    return field.valueType === 'tags' || field.valueType === 'string-list'
       ? []
       : field.valueType === 'text' || field.valueType === 'select'
         ? ''
@@ -230,14 +236,14 @@ function draftFieldValue(
   }
 
   if (field.key === 'edibleYieldPercent') {
-    const rate = finiteNumber(draft.edibleYieldRate)
-    return rate === null ? null : Math.round(rate * 10000) / 100
+    return toEdibleYieldPercent(finiteNumber(draft.edibleYieldRate))
   }
 
   const raw = (draft as unknown as Record<string, unknown>)[field.key]
 
   switch (field.valueType) {
     case 'tags':
+    case 'string-list':
       return Array.isArray(raw)
         ? raw
             .filter((item): item is string => typeof item === 'string')
@@ -281,7 +287,7 @@ function hintFor(
 }
 
 /**
- * 铺满 30 个格子：顺序、分组、label 全部来自字段目录，空值也占位。
+ * 铺满可见格子：顺序、分组、label 全部来自字段目录，空值也占位。
  *
  * @param draft 草稿里的原料卡（可食部是比例）；没有就传 null
  * @param manualFields 人工改动过的公共字段名
@@ -297,6 +303,7 @@ export function buildIngredientCardCells(
     const isManual = manual.has(field.key)
     // 目录把 CFCT 分类标成 text（后端只校验字符串），页面按受控词表下拉渲染。
     const isCfctClass = field.key === 'cfctClass'
+    const baseUnit = draft?.baseUnit ?? 'G'
 
     return {
       key: field.key,
@@ -308,6 +315,8 @@ export function buildIngredientCardCells(
       display: formatCellDisplay(field.key, value),
       isManual,
       isAfterCreate: field.stage === 'AFTER_CREATE',
+      visible:
+        !field.visibleWhenBaseUnit || field.visibleWhenBaseUnit === baseUnit,
       sourceLabel: isManual
         ? '人工'
         : isEmptyIngredientCardValue(value)
@@ -321,7 +330,7 @@ export function buildIngredientCardCells(
 }
 
 /**
- * 页面表单 → 完整草稿（30 项）。
+ * 页面表单 → 完整草稿（可见格子 + 隐藏保留字段）。
  *
  * 以草稿为底、用表单覆盖：表单里没出现的键保留草稿原值，
  * 因此任何一次保存发出去的都是完整原料卡，不会因浅替换丢字段。
@@ -335,9 +344,14 @@ export function toIngredientDraftFromCells(
   )
   const target = card as unknown as Record<string, unknown>
 
-  for (const field of INGREDIENT_CARD_FIELDS) {
-    if (Object.prototype.hasOwnProperty.call(form, field.key)) {
-      target[field.key] = form[field.key]
+  for (const [key, value] of Object.entries(form)) {
+    if (key === 'manualFields') {
+      continue
+    }
+    // 可见格子与隐藏保留字段（例如类别）都以表单为准；
+    // 草稿里没有的键不接收，避免脏数据混进来。
+    if (Object.prototype.hasOwnProperty.call(target, key)) {
+      target[key] = value
     }
   }
   if (Object.prototype.hasOwnProperty.call(form, 'manualFields')) {

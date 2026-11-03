@@ -633,13 +633,13 @@ function oneLine(value: string, max = STEP_SUMMARY_MAX): string {
 
 /** 原料卡字段 → 中文，与页面同口径。 */
 const INGREDIENT_STEP_FIELD_LABELS: Record<string, string> = {
-  name: '名称',
+  name: '原料名称',
   nameEn: '英文名',
   category: '类别',
   baseUnit: '基准单位',
-  unitDisplayLabel: '展示名',
-  cfctClass: 'CFCT',
-  edibleYieldPercent: '可食部',
+  unitDisplayLabel: '标准单位展示名',
+  cfctClass: 'CFCT分类',
+  edibleYieldPercent: '可食部比率',
 };
 
 /**
@@ -1200,13 +1200,13 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
         ? `${Math.round(ingredient.edibleYieldRate * 10000) / 100}%`
         : '待补';
     lines.push(
-      `原料卡：名称=${String(ingredient.name ?? '')} 英文名=${String(
+      `原料卡：原料名称=${String(ingredient.name ?? '')} 英文名=${String(
         ingredient.nameEn ?? '待补',
       )} 类别=${String(ingredient.category ?? '待补')} 基准单位=${String(
         ingredient.baseUnit ?? 'G',
-      )} 展示名=${String(ingredient.unitDisplayLabel ?? '')} CFCT=${String(
+      )} 标准单位展示名=${String(ingredient.unitDisplayLabel ?? '')} CFCT分类=${String(
         ingredient.cfctClass ?? '待补',
-      )} 可食部=${percent}`,
+      )} 可食部比率=${percent}`,
     );
     const manualFields = Array.isArray(ingredient.manualFields)
       ? ingredient.manualFields.filter((field) => typeof field === 'string')

@@ -382,7 +382,7 @@ export interface LabelProperties {
 
 export interface FoodProperties extends LabelProperties {
   cfct_class: string; // CFCT分类 (e.g. "畜肉类", "蔬菜类")
-  edible_yield_rate: number; // 可食部/出肉率 (0.1-1.0)
+  edible_yield_rate: number; // 可食部/出肉率：库内存 0.1–1.0 比例，页面按 10–100% 填写
   main_nutrients_desc: string; // 主要营养价值
   density_g_per_ml?: number; // 密度- 仅当 base_unit == 'ML' 时必需
 }

@@ -5,12 +5,14 @@ import {
 } from 'src/domain/ingredient-creation/ingredient-card-check';
 import { INGREDIENT_CARD_FIELDS } from 'src/domain/ingredient-creation/ingredient-card-fields';
 
-/** 干净草稿：只填 4 个必填项，采购、贮存等其余字段都留空。 */
+/** 干净草稿：填 6 个必填项，采购、贮存等其余字段都留空。 */
 const base: IngredientDraft = {
   name: '冷冻三文鱼',
   type: 'FOOD',
   baseUnit: 'G',
   unitDisplayLabel: '克',
+  labelCategory: 'FEED_MATERIAL',
+  labelNames: ['三文鱼'],
 };
 
 const check = (
@@ -23,19 +25,22 @@ const codes = (
   existingNames: readonly string[] = [],
 ) => check(ingredient, existingNames).map((item) => item.code);
 
-/** 有必填校验的 4 项，不计入完整度提醒。 */
+/** 有必填校验的 6 项，不计入完整度提醒。 */
 const REQUIRED_FIELD_KEYS: ReadonlySet<string> = new Set([
   'name',
   'type',
   'baseUnit',
   'unitDisplayLabel',
+  'labelCategory',
+  'labelNames',
 ]);
 
 /** 枚举字段给合法值，其余按类型给一个非空值：完整度只看「有没有值」。 */
 function sampleValue(field: (typeof INGREDIENT_CARD_FIELDS)[number]): unknown {
-  if (field.key === 'category') return 'MEAT_ORGAN';
+  if (field.key === 'labelCategory') return 'FEED_MATERIAL';
+  if (field.key === 'labelNames') return ['三文鱼'];
   if (field.key === 'procurementStrategy') return 'DAILY_PURCHASE';
-  if (field.key === 'addTiming') return 'BEFORE_MIXING';
+  if (field.valueType === 'STRING_ARRAY') return ['x'];
   return field.valueType === 'NUMBER' || field.valueType === 'BOOLEAN'
     ? 1
     : 'x';
@@ -82,7 +87,7 @@ describe('runIngredientCardCheck', () => {
     expect(warnings[0].fieldPath).toBeUndefined();
     expect(warnings[0].message).toMatch(/还有 \d+ 项没填/);
     expect(warnings[0].message).toBe(
-      '还有 22 项没填：英文名、类别、备注、单块重量、最大容量、CFCT 分类、可食部、主要营养价值 等',
+      '还有 7 项没填：备注、单个重量(克)、CFCT分类、可食部比率、主要营养价值、采购策略、名称依据',
     );
     expect(warnings[0].suggestion).toBe('这些不是阻断项，补不补由你定');
     expect(
@@ -181,39 +186,41 @@ describe('runIngredientCardCheck', () => {
     ).toBe('ingredient.unitDisplayLabel');
   });
 
-  it('采购换算比例为空时不报错，0 与负数报错', () => {
-    expect(codes(base)).not.toContain('PURCHASE_RATIO_INVALID');
-    expect(codes({ ...base, purchaseToBaseRatio: null })).not.toContain(
-      'PURCHASE_RATIO_INVALID',
-    );
-    expect(codes({ ...base, purchaseToBaseRatio: 0.5 })).not.toContain(
-      'PURCHASE_RATIO_INVALID',
-    );
+  it('标签类型必须选，空值与目录外值都阻断', () => {
+    for (const labelCategory of [undefined, null, 'NOT_A_CATEGORY']) {
+      const items = check({
+        ...base,
+        labelCategory: labelCategory as never,
+      });
+      expect(items.map((item) => item.code)).toContain(
+        'LABEL_CATEGORY_REQUIRED',
+      );
+      expect(
+        items.find((item) => item.code === 'LABEL_CATEGORY_REQUIRED')
+          ?.fieldPath,
+      ).toBe('ingredient.labelCategory');
+    }
+  });
 
-    const zero = check({ ...base, purchaseToBaseRatio: 0 });
-    expect(zero.map((item) => item.code)).toContain('PURCHASE_RATIO_INVALID');
-    expect(
-      zero.find((item) => item.code === 'PURCHASE_RATIO_INVALID')?.fieldPath,
-    ).toBe('ingredient.purchaseToBaseRatio');
-    expect(codes({ ...base, purchaseToBaseRatio: -1 })).toContain(
-      'PURCHASE_RATIO_INVALID',
+  it('标签名称至少一项，空白项不算', () => {
+    for (const labelNames of [[], ['  '], undefined]) {
+      expect(
+        codes({ ...base, labelNames: labelNames as never }),
+      ).toContain('LABEL_NAMES_REQUIRED');
+    }
+    expect(codes({ ...base, labelNames: ['三文鱼'] })).not.toContain(
+      'LABEL_NAMES_REQUIRED',
     );
   });
 
-  it('采购价 0 不报负价，负数才报', () => {
-    expect(codes(base)).not.toContain('PURCHASE_PRICE_NEGATIVE');
-    expect(codes({ ...base, currentPricePerPurchaseUnit: 0 })).not.toContain(
-      'PURCHASE_PRICE_NEGATIVE',
+  it('基准单位为毫升时密度必填，大于 0', () => {
+    const ml: IngredientDraft = { ...base, baseUnit: 'ML' };
+    expect(codes(ml)).toContain('DENSITY_REQUIRED');
+    expect(codes({ ...ml, densityGPerMl: 0 })).toContain('DENSITY_REQUIRED');
+    expect(codes({ ...ml, densityGPerMl: 1.03 })).not.toContain(
+      'DENSITY_REQUIRED',
     );
-    expect(codes({ ...base, currentPricePerPurchaseUnit: 12.5 })).not.toContain(
-      'PURCHASE_PRICE_NEGATIVE',
-    );
-
-    const items = check({ ...base, currentPricePerPurchaseUnit: -0.01 });
-    expect(items.map((item) => item.code)).toContain('PURCHASE_PRICE_NEGATIVE');
-    expect(
-      items.find((item) => item.code === 'PURCHASE_PRICE_NEGATIVE')?.fieldPath,
-    ).toBe('ingredient.currentPricePerPurchaseUnit');
+    expect(codes(base)).not.toContain('DENSITY_REQUIRED');
   });
 
   it('可食部 0 与 1.5 都不合格，1 合法', () => {
@@ -239,70 +246,22 @@ describe('runIngredientCardCheck', () => {
     expect(item?.fieldPath).not.toContain('edibleYieldRate');
   });
 
-  it('保质期必须是 1–120 的整数月', () => {
-    for (const shelfLifeMonths of [0, 1.5, 121]) {
-      expect(codes({ ...base, shelfLifeMonths })).toContain('SHELF_LIFE_RANGE');
-    }
-
-    for (const shelfLifeMonths of [1, 12, 120]) {
-      expect(codes({ ...base, shelfLifeMonths })).not.toContain(
-        'SHELF_LIFE_RANGE',
-      );
-    }
-
-    expect(codes({ ...base, shelfLifeMonths: null })).not.toContain(
-      'SHELF_LIFE_RANGE',
-    );
-
-    const items = check({ ...base, shelfLifeMonths: 0 });
-    expect(
-      items.find((item) => item.code === 'SHELF_LIFE_RANGE')?.fieldPath,
-    ).toBe('ingredient.shelfLifeMonths');
-  });
-
-  it('填了采购单位或采购价、却没填贮存条件时提醒', () => {
-    const byUnit = check({ ...base, purchaseUnit: '袋' });
-    expect(byUnit.map((item) => item.code)).toContain('STORAGE_EMPTY');
-    expect(
-      byUnit.find((item) => item.code === 'STORAGE_EMPTY')?.fieldPath,
-    ).toBe('ingredient.storageCondition');
-
-    expect(codes({ ...base, currentPricePerPurchaseUnit: 0 })).toContain(
-      'STORAGE_EMPTY',
-    );
-
-    expect(
-      codes({ ...base, purchaseUnit: '袋', storageCondition: '-18℃ 冷冻' }),
-    ).not.toContain('STORAGE_EMPTY');
-    expect(
-      codes({ ...base, purchaseUnit: '  ', storageCondition: '常温避光' }),
-    ).not.toContain('STORAGE_EMPTY');
-    expect(codes(base)).not.toContain('STORAGE_EMPTY');
-  });
-
   it('多个问题按规则表的固定顺序返回', () => {
     const messy: IngredientDraft = {
       name: '  ',
       type: 'FOOD',
       baseUnit: 'KG' as never,
       unitDisplayLabel: '',
-      purchaseToBaseRatio: 0,
-      currentPricePerPurchaseUnit: -1,
       edibleYieldRate: 0,
-      shelfLifeMonths: 0,
-      purchaseUnit: '袋',
-      storageCondition: ' ',
     };
 
     expect(codes(messy)).toEqual([
       'NAME_REQUIRED',
       'BASE_UNIT_INVALID',
       'UNIT_LABEL_REQUIRED',
-      'PURCHASE_RATIO_INVALID',
-      'PURCHASE_PRICE_NEGATIVE',
+      'LABEL_CATEGORY_REQUIRED',
+      'LABEL_NAMES_REQUIRED',
       'EDIBLE_RANGE',
-      'SHELF_LIFE_RANGE',
-      'STORAGE_EMPTY',
       'FIELDS_EMPTY',
     ]);
   });
@@ -313,12 +272,7 @@ describe('runIngredientCardCheck', () => {
       type: 'FOOD',
       baseUnit: 'KG' as never,
       unitDisplayLabel: '',
-      purchaseToBaseRatio: 0,
-      currentPricePerPurchaseUnit: -1,
       edibleYieldRate: 0,
-      shelfLifeMonths: 0,
-      purchaseUnit: '袋',
-      storageCondition: '',
     });
 
     expect(items.length).toBeGreaterThan(0);
@@ -340,11 +294,10 @@ describe('runIngredientCardCheck', () => {
       'NAME_DUPLICATE',
       'BASE_UNIT_INVALID',
       'UNIT_LABEL_REQUIRED',
-      'PURCHASE_RATIO_INVALID',
-      'PURCHASE_PRICE_NEGATIVE',
+      'LABEL_CATEGORY_REQUIRED',
+      'LABEL_NAMES_REQUIRED',
+      'DENSITY_REQUIRED',
       'EDIBLE_RANGE',
-      'SHELF_LIFE_RANGE',
-      'STORAGE_EMPTY',
       'FIELDS_EMPTY',
     ]);
     expect(INGREDIENT_CARD_RULES).toEqual([
@@ -352,11 +305,10 @@ describe('runIngredientCardCheck', () => {
       { code: 'NAME_DUPLICATE', level: 'blocking' },
       { code: 'BASE_UNIT_INVALID', level: 'blocking' },
       { code: 'UNIT_LABEL_REQUIRED', level: 'blocking' },
-      { code: 'PURCHASE_RATIO_INVALID', level: 'blocking' },
-      { code: 'PURCHASE_PRICE_NEGATIVE', level: 'blocking' },
+      { code: 'LABEL_CATEGORY_REQUIRED', level: 'blocking' },
+      { code: 'LABEL_NAMES_REQUIRED', level: 'blocking' },
+      { code: 'DENSITY_REQUIRED', level: 'blocking' },
       { code: 'EDIBLE_RANGE', level: 'exceptionable' },
-      { code: 'SHELF_LIFE_RANGE', level: 'exceptionable' },
-      { code: 'STORAGE_EMPTY', level: 'warning' },
       { code: 'FIELDS_EMPTY', level: 'warning' },
     ]);
     expect(
@@ -366,10 +318,6 @@ describe('runIngredientCardCheck', () => {
     expect(
       INGREDIENT_CARD_RULES.find((rule) => rule.code === 'EDIBLE_RANGE')?.level,
     ).toBe('exceptionable');
-    expect(
-      INGREDIENT_CARD_RULES.find((rule) => rule.code === 'STORAGE_EMPTY')
-        ?.level,
-    ).toBe('warning');
     expect(
       INGREDIENT_CARD_RULES.find((rule) => rule.code === 'FIELDS_EMPTY')?.level,
     ).toBe('warning');

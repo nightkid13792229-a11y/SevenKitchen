@@ -5,6 +5,8 @@
 **类型**：FOOD（食材）
 **执行方式**：.agents/skills/adding-standard-ingredients 半自动流程，走正式 admin API 写入
 
+> 2026-11-03 注：`adding-standard-ingredients` 技能已删除，以下命令仅作历史记录，不再可执行。
+
 ---
 
 ## 一、为什么用中国食物成分表打底

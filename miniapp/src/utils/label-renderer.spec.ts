@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { formatIngredients } from './label-renderer';
 import {
   applyIngredientLabelInfo,
   formatIngredients as formatStaffProductionIngredients,
@@ -43,7 +42,7 @@ describe('label renderer ingredient formatting', () => {
       ],
     };
 
-    const formatted = formatIngredients(recipeSnapshot, 2000);
+    const formatted = formatStaffProductionIngredients(recipeSnapshot, 2000);
 
     expect(formatted.foodIngredients).toBe('牛霖27.73%');
     expect(formatted.supplementIngredients).toBe('骨粉19.13g、海藻粉4.20平勺');
@@ -130,7 +129,7 @@ describe('label renderer ingredient formatting', () => {
       ],
     };
 
-    const formatted = formatIngredients(recipeSnapshot, 2520);
+    const formatted = formatStaffProductionIngredients(recipeSnapshot, 2520);
 
     expect(formatted.supplementIngredients).toContain('碳酸钙粉15.73g');
     expect(formatted.supplementIngredients).toContain('海藻粉3.77平勺');

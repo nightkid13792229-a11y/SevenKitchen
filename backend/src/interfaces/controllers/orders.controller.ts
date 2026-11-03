@@ -75,6 +75,7 @@ import {
   ShippingNotificationService,
   type ShippingNotificationChoice,
 } from '../../application/shipping/shipping-notification.service';
+import { buildCookingAdviceForOrder } from '../../application/cooking/cooking-time';
 
 @ApiTags('Orders')
 @Controller('api/v1/orders')
@@ -1174,6 +1175,8 @@ export class OrdersController {
         ? (order as any).originalTargetProductionDate.toISOString()
         : null,
       estimatedShippingDate, // 新增：预计发货日期
+      // 烹饪建议：口径来自 src/application/cooking（与生产标签同一份表，多规格只看第一档）
+      cookingAdvice: buildCookingAdviceForOrder(order),
       totalAmount: order.totalAmount ?? order.amountTotal,
       amountProduct: order.amountProduct,
       amountShipping: order.amountShipping,

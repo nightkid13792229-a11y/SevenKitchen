@@ -6,6 +6,10 @@ import {
 } from 'canvas';
 import * as path from 'path';
 import { LabelDataDto } from './dto/label-data.dto';
+import {
+  COOKING_LABEL_JUDGEMENT,
+  formatCookingTimes,
+} from '../application/cooking/cooking-time';
 
 /**
  * 70×100mm 热敏标签排版 V10
@@ -50,8 +54,6 @@ const FS = {
 const LH = 1.22;
 
 type Spec = { packageSpecG: number; packageCount: number };
-
-type CookingTimes = { steam: string; stew: string; sousvide: string };
 
 type FontScale = typeof FS;
 
@@ -207,67 +209,30 @@ export class LabelV10Service {
   }
 
   /**
-   * 烹饪时间：按每袋实际克重分档。
-   *
-   * ⚠️ 口径与顾客端鲜食订单详情页保持一致
-   * （miniapp/src/utils/cooking-time.ts，2026-11-03 老板定）：
-   *   ≤150g      蒸/炖 约 10 分钟，低温慢煮 30 分钟
-   *   151–250g   约 15 分钟，45 分钟
-   *   251–400g   约 20 分钟，60 分钟
-   *   401–600g   约 25 分钟，90 分钟
-   *   >600g      不给固定时间（返回 null），只给判定标准
-   * 改这里之前先看顾客端那份，两边不要各说各的。
+   * 烹饪说明这一块的内容。时间口径来自唯一真源
+   * （src/application/cooking/cooking-time.ts），标签和顾客端共用。
+   * 超过 600g 不显示克重、也不说「按判定标准」，只印一句话。
    */
-  private cookingTimesFor(weightG: number): CookingTimes | null {
-    if (!Number.isFinite(weightG) || weightG <= 0) {
-      return null;
-    }
-    if (weightG <= 150) {
-      return { steam: '约 10 分钟', stew: '约 10 分钟', sousvide: '30 分钟' };
-    }
-    if (weightG <= 250) {
-      return { steam: '约 15 分钟', stew: '约 15 分钟', sousvide: '45 分钟' };
-    }
-    if (weightG <= 400) {
-      return { steam: '约 20 分钟', stew: '约 20 分钟', sousvide: '60 分钟' };
-    }
-    if (weightG <= 600) {
-      return { steam: '约 25 分钟', stew: '约 25 分钟', sousvide: '90 分钟' };
-    }
-    return null;
-  }
-
-  /**
-   * 烹饪说明这一行的文案（首项是「100克/袋」）。
-   * 蒸和炖走同一档，合并成一项省宽度；超过 600g 只指向判定标准。
-   */
-  private cookingTokens(spec: Spec): string[] {
-    const label = `${spec.packageSpecG}克/袋`;
-    const times = this.cookingTimesFor(spec.packageSpecG);
-    if (!times) {
-      return [label, '超过600g，按判定标准'];
+  private cookingBlock(spec: Spec): {
+    weightLabel: string | null;
+    methods: string[];
+  } {
+    const labels = formatCookingTimes(spec.packageSpecG);
+    if (!labels) {
+      return { weightLabel: null, methods: [COOKING_LABEL_JUDGEMENT] };
     }
     const methods =
-      times.steam === times.stew
-        ? [`蒸/炖 ${times.steam}`, `低温慢煮 ${times.sousvide}`]
-        : [
-            `蒸 ${times.steam}`,
-            `炖 ${times.stew}`,
-            `低温慢煮 ${times.sousvide}`,
-          ];
-    return [label, ...methods];
+      labels.steam === labels.stew
+        ? [`蒸/炖 ${labels.steam}`, `低温慢煮 ${labels.sousvide}`]
+        : [`蒸 ${labels.steam}`, `炖 ${labels.stew}`, `低温慢煮 ${labels.sousvide}`];
+    return { weightLabel: `${spec.packageSpecG}克/袋`, methods };
   }
 
-  /** 超重规格才补一句判定标准；正常重量不加，省版面 */
-  private cookingJudgement(spec: Spec): string | null {
-    if (this.cookingTimesFor(spec.packageSpecG)) {
-      return null;
-    }
-    return '中心无可见血水；慢煮中心达 65℃ 后 1 分钟';
-  }
-
-  /** 多档规格时标一下「第一档」，免得拿 500g 的袋子照 100g 的时间做 */
+  /** 多档规格时标一下「第一档」，免得拿 500g 的袋子照 100g 的时间做；超重时这一行没有克重，不留提示 */
   private cookingHint(specs: Spec[]): string {
+    if (specs[0] && !formatCookingTimes(specs[0].packageSpecG)) {
+      return '';
+    }
     return specs.length > 1 ? '按第一档袋规格' : '按袋规格';
   }
 
@@ -317,9 +282,6 @@ export class LabelV10Service {
         return { height: Number.POSITIVE_INFINITY };
       }
       h += cookingLines.lines.length * lh(this.F.cook) + mm(0.6);
-      if (this.cookingJudgement(cookingSpec)) {
-        h += lh(this.F.cook);
-      }
     }
     h += mm(0.4) + lh(this.F.ban);
     h += mm(1.2) + lh(this.F.warn);
@@ -330,21 +292,35 @@ export class LabelV10Service {
   /**
    * 烹饪行排版：`100克/袋  蒸/炖 约 10 分钟  低温慢煮 30 分钟`
    * 放不下时按整段换行（续行顶格），而不是缩小到看不清或直接报错。
+   * 超重时没有克重标签，整句话按整行宽度换行。
    */
   private layoutCookingRow(
     ctx: CanvasRenderingContext2D,
     spec: Spec,
     contentW: number,
-  ): { lines: string[][]; fits: boolean } {
-    const [label, ...methods] = this.cookingTokens(spec);
+  ): { lines: string[][]; fits: boolean; hasLabel: boolean } {
+    const { weightLabel, methods } = this.cookingBlock(spec);
     const gap = mm(2);
     const labelColW = mm(12);
 
+    if (!weightLabel) {
+      ctx.font = `${mm(this.F.cook)}px "Chinese"`;
+      return {
+        lines: this.wrapCookingSentence(
+          ctx,
+          methods[0] ?? '',
+          contentW,
+        ).map((line) => [line]),
+        fits: true,
+        hasLabel: false,
+      };
+    }
+
     ctx.font = `bold ${mm(this.F.cook)}px "Chinese-Bold"`;
-    const labelWidth = ctx.measureText(label).width;
+    const labelWidth = ctx.measureText(weightLabel).width;
     const firstLineStart = Math.max(labelColW, labelWidth + gap);
 
-    const lines: string[][] = [[label]];
+    const lines: string[][] = [[weightLabel]];
     let cursor = firstLineStart;
     let fits = true;
 
@@ -363,7 +339,7 @@ export class LabelV10Service {
       }
     }
 
-    return { lines, fits };
+    return { lines, fits, hasLabel: true };
   }
 
   /** 原料组成：整段排（名称 + 加粗占比），放不下整条换行 */
@@ -599,7 +575,7 @@ export class LabelV10Service {
       layout.lines.forEach((line, lineIndex) => {
         let x = left;
         let pieces = line;
-        if (lineIndex === 0) {
+        if (lineIndex === 0 && layout.hasLabel) {
           ctx.font = `bold ${mm(this.F.cook)}px "Chinese-Bold"`;
           ctx.fillStyle = '#111111';
           ctx.fillText(line[0], left, y);
@@ -616,13 +592,6 @@ export class LabelV10Service {
         y += lh(this.F.cook);
       });
       y += mm(0.6);
-
-      const judgement = this.cookingJudgement(cookingSpec);
-      if (judgement) {
-        ctx.font = `${mm(this.F.cook)}px "Chinese"`;
-        ctx.fillText(judgement, left, y);
-        y += lh(this.F.cook);
-      }
     }
 
     y += mm(0.4);
@@ -705,6 +674,71 @@ export class LabelV10Service {
     }
 
     return { text: fitted, sizeMm };
+  }
+
+  /**
+   * 超重那句话的换行：优先在分号处断开（读起来是两条规则），
+   * 单段仍超宽时才按「字/数字」拆，且不把 65℃ 这种数字单位拆两半。
+   */
+  private wrapCookingSentence(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    contentW: number,
+  ): string[] {
+    const segments = text
+      .split('；')
+      .map((part, index, all) => (index < all.length - 1 ? `${part}；` : part))
+      .filter(Boolean);
+
+    const lines: string[] = [];
+    for (const segment of segments) {
+      if (ctx.measureText(segment).width <= contentW) {
+        lines.push(segment);
+        continue;
+      }
+      lines.push(...this.wrapByAtoms(ctx, segment, contentW));
+    }
+    return lines.length > 0 ? lines : [''];
+  }
+
+  /** 按「不可拆的原子」换行：连续的数字/单位（65℃、12.3%、70g）算一个原子 */
+  private wrapByAtoms(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    maxWidth: number,
+  ): string[] {
+    const atoms: string[] = [];
+    let buffer = '';
+    for (const ch of Array.from(text)) {
+      if (/[0-9A-Za-z℃%．.×]/.test(ch)) {
+        buffer += ch;
+        continue;
+      }
+      if (buffer) {
+        atoms.push(buffer);
+        buffer = '';
+      }
+      atoms.push(ch);
+    }
+    if (buffer) {
+      atoms.push(buffer);
+    }
+
+    const lines: string[] = [];
+    let current = '';
+    for (const atom of atoms) {
+      const next = current + atom;
+      if (current && ctx.measureText(next).width > maxWidth) {
+        lines.push(current);
+        current = atom;
+      } else {
+        current = next;
+      }
+    }
+    if (current) {
+      lines.push(current);
+    }
+    return lines.length > 0 ? lines : [''];
   }
 
   private wrapByWidth(

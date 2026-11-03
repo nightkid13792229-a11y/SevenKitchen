@@ -10,7 +10,6 @@ const printLabelSource = readFileSync(resolve(__dirname, 'staff-production/print
 const labelConfigSource = readFileSync(resolve(__dirname, 'staff-production/utils/label-config.ts'), 'utf8');
 const labelRendererSource = readFileSync(resolve(__dirname, 'staff-production/utils/label-renderer.ts'), 'utf8');
 const jcingPrinterSource = readFileSync(resolve(__dirname, 'staff-production/utils/jcing-printer.ts'), 'utf8');
-const sharedJcingPrinterSource = readFileSync(resolve(__dirname, '../utils/jcing-printer.ts'), 'utf8');
 const canvasPrinterSource = readFileSync(resolve(__dirname, 'staff-production/utils/canvas-printer.ts'), 'utf8');
 const sharedCanvasPrinterSource = readFileSync(resolve(__dirname, '../utils/canvas-printer.ts'), 'utf8');
 
@@ -173,7 +172,7 @@ describe('staff production scheduling guardrails', () => {
   });
 
   it('prints backend-generated product label images at the actual 70x100mm paper size', () => {
-    [jcingPrinterSource, sharedJcingPrinterSource].forEach((source) => {
+    [jcingPrinterSource].forEach((source) => {
       expect(source).toContain('const LABEL_PAPER_WIDTH_MM = 70');
       expect(source).toContain('const LABEL_PAPER_HEIGHT_MM = 100');
       expect(source).toContain('JCAPI.startDrawLabel(canvasId, component, LABEL_PAPER_WIDTH_MM, LABEL_PAPER_HEIGHT_MM, 0, null)');

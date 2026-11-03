@@ -648,7 +648,7 @@
               <text class="cooking-desc">无需解冻，温度设置 65℃</text>
             </view>
           </template>
-          <view v-else-if="cookingWeightG > 600" class="cooking-overlimit"
+          <view v-else-if="cookingOverLimit" class="cooking-overlimit"
             >每袋超过 600g，不提供固定时间，请按下面的判定标准判断。</view
           >
           <view v-else class="cooking-overlimit"
@@ -1025,10 +1025,6 @@ import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { openCustomerServiceChat } from '../../utils/customer-service';
 import { confirmWechatReceiptBeforeInternalComplete } from '../../utils/wechat-confirm-receipt';
 import {
-  COOKING_TIME_JUDGEMENT,
-  formatCookingTimes,
-} from '../../utils/cooking-time';
-import {
   getOrderStatusText,
   canApplyRefund,
   canApplyRemake,
@@ -1091,6 +1087,15 @@ interface Order {
   createdAt: string;
   targetProductionDate?: string | null;
   estimatedShippingDate?: string | null;
+  /** 服务端按每袋克重算好的烹饪建议（与生产标签同一份口径） */
+  cookingAdvice?: {
+    weightPerBagG: number;
+    overLimit: boolean;
+    steam: string | null;
+    stew: string | null;
+    sousvide: string | null;
+    judgement: string;
+  } | null;
   amountTotal?: number;
   totalAmount?: number;
   amountProduct?: number;
@@ -1719,24 +1724,34 @@ const showDamageNote = computed(() =>
   ['SHIPPED', 'COMPLETED'].includes(String(order.value?.status || '')),
 );
 
-/** 烹饪时间按每袋克重算（多规格时先取第一档，后续可扩展为多行） */
-const cookingWeightG = computed(() => {
-  const first = order.value?.items?.[0];
-  if (!first) {
-    return 0;
-  }
-  const plan = first.packagePlan;
-  if (Array.isArray(plan) && plan.length > 0) {
-    return Math.round(Number(plan[0].packageSpecG) || 0);
-  }
-  return Math.round(Number(first.packageSpecG) || 0);
-});
+/**
+ * 烹饪建议由服务端给（backend/src/application/cooking/cooking-time.ts）。
+ * 页面不再自己维护时间表：标签和页面共用同一份口径，改一处两边同步。
+ */
+const cookingAdvice = computed(() => order.value?.cookingAdvice ?? null);
 
-const cookingTimeLabels = computed(() =>
-  formatCookingTimes(cookingWeightG.value),
+const cookingWeightG = computed(() =>
+  Number(cookingAdvice.value?.weightPerBagG ?? 0),
 );
 
-const cookingTimeJudgement = COOKING_TIME_JUDGEMENT;
+const cookingTimeLabels = computed(() => {
+  const advice = cookingAdvice.value;
+  if (!advice || advice.overLimit || !advice.steam) {
+    return null;
+  }
+  return {
+    steam: advice.steam,
+    stew: advice.stew || advice.steam,
+    sousvide: advice.sousvide || '',
+  };
+});
+
+/** 超重：只给判定标准，不给固定时间 */
+const cookingOverLimit = computed(() => Boolean(cookingAdvice.value?.overLimit));
+
+const cookingTimeJudgement = computed(
+  () => cookingAdvice.value?.judgement || '',
+);
 
 const heroEtaText = computed(() => {
   const current = order.value;

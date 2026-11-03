@@ -92,44 +92,6 @@ export function buildCompleteNutritionItems(
   ].filter((item): item is string => Boolean(item));
 }
 
-/**
- * 获取烹饪建议表格数据
- * @param cookingMethod 烹饪方法对象
- * @returns 表格行数据
- */
-export function getCookingAdvice(cookingMethod: {
-  steam?: string;
-  stew?: string;
-  sousvide?: string;
-}): Array<{
-  method: string;
-  time: string;
-  description: string;
-}> {
-  // 防御性检查：如果 cookingMethod 为空或属性不存在，返回默认值
-  const steam = cookingMethod?.steam || '10-12分钟';
-  const stew = cookingMethod?.stew || '10-12分钟';
-  const sousvide = cookingMethod?.sousvide || '45分钟';
-
-  return [
-    {
-      method: '蒸',
-      time: steam,
-      description: '无需提前解冻，直接放入蒸锅'
-    },
-    {
-      method: '炖',
-      time: stew,
-      description: '需提前解冻、拆袋、加水、小火慢炖'
-    },
-    {
-      method: '低温慢煮',
-      time: sousvide,
-      description: '无需提前解冻，温度设置为65℃'
-    }
-  ];
-}
-
 function normalizePackagePlanRows(
   packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
 ): Array<{ packageSpecG: number; packageCount: number }> {
@@ -206,10 +168,8 @@ function measureLabelHeight(ctx: any, labelData: LabelData): number {
   y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
   y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
-  // 6. 烹饪建议
-  y += mmToPx(LABEL_ELEMENTS.cooking.lineHeight);
-  const cookingAdvice = getCookingAdvice(labelData.cookingMethod);
-  y += cookingAdvice.length * mmToPx(LABEL_ELEMENTS.cooking.lineHeight);
+  // 烹饪建议不在这套旧画布里：2026-11-03 起生产标签走服务端出图，
+  // 口径见 backend/src/application/cooking/cooking-time.ts（唯一真源）。
 
   return y;
 }
@@ -439,29 +399,6 @@ export async function drawProductionLabel(
       // 分隔线已移除
       y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
-      // ============= 6. 烹饪建议 =============
-      // 标题（纯文本，不使用装饰字符）
-      ctx.setFontSize(mmToPx(LABEL_ELEMENTS.cooking.titleFontSize));
-      ctx.setFillStyle('#000000');
-      ctx.setTextAlign('center');
-      const cookingTitleText = '烹饪建议';
-      ctx.fillText(cookingTitleText, centerX, y);
-      y += mmToPx(LABEL_ELEMENTS.cooking.lineHeight);
-
-      // 绘制烹饪建议（同行展示）
-      const cookingAdvice = getCookingAdvice(labelData.cookingMethod);
-      const indent = mmToPx(3); // 缩进3mm
-
-      cookingAdvice.forEach((row) => {
-        // 同行展示：方法+时间+说明
-        ctx.setFontSize(mmToPx(LABEL_ELEMENTS.cooking.descriptionFontSize));
-        ctx.setFillStyle('#000000');
-        ctx.setTextAlign('left');
-        const lineText = `${row.method} ${row.time}：${row.description}`;
-        ctx.fillText(lineText, margin + indent, y);
-        y += mmToPx(LABEL_ELEMENTS.cooking.lineHeight);
-      });
-
       // 恢复Canvas状态（恢复缩放前的坐标系）
       ctx.restore();
 
@@ -516,42 +453,6 @@ function wrapText(ctx: any, text: string, maxWidth: number): string[] {
   lines.push(currentLine);
 
   return lines;
-}
-
-/**
- * 根据真空袋规格计算烹饪时间
- * @param vacuumBagSpec 真空袋规格（如 "12*17cm"）
- * @returns 烹饪时间对象
- */
-export function getCookingTime(vacuumBagSpec: string) {
-  // 提取尺寸：从 "12*17cm" 提取 "12*17"
-  const sizeMatch = vacuumBagSpec.match(/(\d+)\*(\d+)/);
-  const size = sizeMatch ? `${sizeMatch[1]}*${sizeMatch[2]}` : '12*17';
-
-  const timeMap: Record<string, { steam: string; stew: string; sousvide: string }> = {
-    '10*15': {
-      steam: '8-10分钟',
-      stew: '8-10分钟',
-      sousvide: '30分钟'
-    },
-    '12*17': {
-      steam: '10-12分钟',
-      stew: '10-12分钟',
-      sousvide: '45分钟'
-    },
-    '15*20': {
-      steam: '12-15分钟',
-      stew: '12-15分钟',
-      sousvide: '60分钟'
-    },
-    '20*25': {
-      steam: '20-25分钟',
-      stew: '20-25分钟',
-      sousvide: '90分钟'
-    }
-  };
-
-  return timeMap[size] || timeMap['12*17'];
 }
 
 export type IngredientLabelInfo = {
@@ -722,19 +623,6 @@ export function getShelfLifeText(): string {
   return '保质期：建议-18℃以下冷冻保存，保质期为6个月；0-5℃冷藏保存，保质期为3天；开封后建议3小时内吃完';
 }
 
-/**
- * 格式化烹饪方法文本
- * @param cookingTime 烹饪时间对象
- * @returns 格式化后的烹饪方法文本
- */
-export function formatCookingMethod(cookingTime: {
-  steam: string;
-  stew: string;
-  sousvide: string;
-}): string {
-  return `蒸${cookingTime.steam} / 炖${cookingTime.stew} / 低温慢煮${cookingTime.sousvide}`;
-}
-
 // ==================== 精臣SDK绘制函数 ====================
 
 /**
@@ -790,10 +678,7 @@ function measureLabelHeightForJCSDK(labelData: LabelData): number {
   y += LABEL_LAYOUT.spacing.blockInternal;
   y += LABEL_LAYOUT.spacing.sectionGap;
 
-  // 6. 烹饪建议
-  y += LABEL_ELEMENTS.cooking.lineHeight;
-  const cookingAdvice = getCookingAdvice(labelData.cookingMethod);
-  y += cookingAdvice.length * LABEL_ELEMENTS.cooking.lineHeight;
+  // 烹饪建议不在这套旧画布里（生产标签走服务端出图）
 
   return y;
 }
@@ -1012,27 +897,6 @@ export async function drawProductionLabelWithJCSDK(
 
       // 分隔线已移除
       y += LABEL_LAYOUT.spacing.sectionGap * scale;
-
-      // ============= 6. 烹饪建议 =============
-      // 标题（纯文本，不使用装饰字符）
-      const cookingTitleText = '烹饪建议';
-      JCAPI.drawText(cookingTitleText, centerX, y, LABEL_ELEMENTS.cooking.titleFontSize * scale, 0, {
-        align: 'center'
-      });
-      y += LABEL_ELEMENTS.cooking.lineHeight * scale;
-
-      // 绘制烹饪建议（同行展示）
-      const cookingAdvice = getCookingAdvice(labelData.cookingMethod);
-      const indent = 3; // 缩进3mm
-
-      cookingAdvice.forEach((row) => {
-        // 同行展示：方法+时间+说明
-        const lineText = `${row.method} ${row.time}：${row.description}`;
-        JCAPI.drawText(lineText, margin + indent, y, LABEL_ELEMENTS.cooking.descriptionFontSize * scale, 0, {
-          align: 'left'
-        });
-        y += LABEL_ELEMENTS.cooking.lineHeight * scale;
-      });
 
       // 底部品牌名称已移除（用户要求）
 

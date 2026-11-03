@@ -262,6 +262,28 @@ export class OrderDto {
   })
   estimatedShippingDate?: string | null;
 
+  @ApiPropertyOptional({
+    description:
+      '烹饪建议（按每袋克重，多规格只看第一档）。口径与生产标签共用 src/application/cooking/cooking-time.ts；拿不到分装信息时为 null。',
+    nullable: true,
+    example: {
+      weightPerBagG: 200,
+      overLimit: false,
+      steam: '约 15 分钟',
+      stew: '约 15 分钟',
+      sousvide: '45 分钟',
+      judgement: '由于火力不一致，烹饪时间可能有误差。……',
+    },
+  })
+  cookingAdvice?: {
+    weightPerBagG: number;
+    overLimit: boolean;
+    steam: string | null;
+    stew: string | null;
+    sousvide: string | null;
+    judgement: string;
+  } | null;
+
   @ApiProperty({ example: 299.99 })
   totalAmount!: number;
 

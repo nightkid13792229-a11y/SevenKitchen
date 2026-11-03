@@ -48,51 +48,21 @@ describe('LabelV10Service · 烹饪说明', () => {
       productionTime: '2026-11-03',
     }) as LabelDataDto;
 
-  describe('按每袋克重取时间（顾客端口径）', () => {
-    const cases: Array<[number, string, string, string]> = [
-      [100, '约 10 分钟', '约 10 分钟', '30 分钟'],
-      [150, '约 10 分钟', '约 10 分钟', '30 分钟'],
-      [151, '约 15 分钟', '约 15 分钟', '45 分钟'],
-      [250, '约 15 分钟', '约 15 分钟', '45 分钟'],
-      [251, '约 20 分钟', '约 20 分钟', '60 分钟'],
-      [400, '约 20 分钟', '约 20 分钟', '60 分钟'],
-      [401, '约 25 分钟', '约 25 分钟', '90 分钟'],
-      [600, '约 25 分钟', '约 25 分钟', '90 分钟'],
-    ];
-
-    it.each(cases)('%ig/袋 → %s / %s / %s', (weight, steam, stew, sousvide) => {
-      expect((service as any).cookingTimesFor(weight)).toEqual({ steam, stew, sousvide });
-    });
-
-    it('超过 600g 不给固定时间', () => {
-      expect((service as any).cookingTimesFor(601)).toBeNull();
-    });
-  });
-
   describe('标签上的文案', () => {
-    it('蒸和炖时间相同时合并成一行，慢煮单独一行', () => {
-      expect((service as any).cookingTokens({ packageSpecG: 200, packageCount: 1 })).toEqual([
-        '200克/袋',
-        '蒸/炖 约 15 分钟',
-        '低温慢煮 45 分钟',
-      ]);
+    it('蒸和炖时间相同时合并成一项，慢煮单独一项', () => {
+      expect((service as any).cookingBlock({ packageSpecG: 200, packageCount: 1 })).toEqual({
+        weightLabel: '200克/袋',
+        methods: ['蒸/炖 约 15 分钟', '低温慢煮 45 分钟'],
+      });
     });
 
-    it('超过 600g 只印一句判定指向，不再分三种做法', () => {
-      expect((service as any).cookingTokens({ packageSpecG: 700, packageCount: 1 })).toEqual([
-        '700克/袋',
-        '超过600g，按判定标准',
-      ]);
-    });
-
-    it('超过 600g 附一句判定标准（与顾客端同一套说法）', () => {
-      const judgement = (service as any).cookingJudgement({ packageSpecG: 700, packageCount: 1 });
-      expect(judgement).toContain('65℃');
-      expect(judgement).toContain('无可见血水');
-    });
-
-    it('正常重量不额外加判定标准，省版面', () => {
-      expect((service as any).cookingJudgement({ packageSpecG: 200, packageCount: 1 })).toBeNull();
+    it('超过 600g 不显示克重、也不说按判定标准，只印那一句话', () => {
+      expect((service as any).cookingBlock({ packageSpecG: 700, packageCount: 1 })).toEqual({
+        weightLabel: null,
+        methods: [
+          '蒸/炖：食物中心无可见血水即可；低温慢煮：食物中心达65℃后1分钟即可。',
+        ],
+      });
     });
   });
 
@@ -105,11 +75,10 @@ describe('LabelV10Service · 烹饪说明', () => {
           { packageSpecG: 500, packageCount: 1 },
         ]),
       );
-      expect((service as any).cookingTokens(specs[0])).toEqual([
-        '100克/袋',
-        '蒸/炖 约 10 分钟',
-        '低温慢煮 30 分钟',
-      ]);
+      expect((service as any).cookingBlock(specs[0])).toEqual({
+        weightLabel: '100克/袋',
+        methods: ['蒸/炖 约 10 分钟', '低温慢煮 30 分钟'],
+      });
     });
 
     it('多档时栏目标题旁注明是"第一档"，免得拿 500g 的袋子照 100g 的时间做', () => {
@@ -122,6 +91,10 @@ describe('LabelV10Service · 烹饪说明', () => {
       expect(
         (service as any).cookingHint([{ packageSpecG: 200, packageCount: 1 }]),
       ).toBe('按袋规格');
+      // 超重时不留「按第一档袋规格」——那一行压根不显示克重
+      expect(
+        (service as any).cookingHint([{ packageSpecG: 700, packageCount: 1 }]),
+      ).toBe('');
     });
   });
 
@@ -189,3 +162,20 @@ describe('LabelV10Service · 烹饪说明', () => {
 
 const MM = 203 / 25.4;
 const mm = (value: number): number => Math.round(value * MM);
+
+describe('LabelV10Service · 超重那句文案的换行', () => {
+  const service = new LabelV10Service();
+  const ctx = createCanvas(559, 799).getContext('2d');
+
+  it('在分号处断行，不会把 65℃ 拆成两半', () => {
+    const layout = (service as any).layoutCookingRow(
+      ctx,
+      { packageSpecG: 700, packageCount: 1 },
+      559 - 64,
+    );
+    expect(layout.lines.map((line: string[]) => line[0])).toEqual([
+      '蒸/炖：食物中心无可见血水即可；',
+      '低温慢煮：食物中心达65℃后1分钟即可。',
+    ]);
+  });
+});

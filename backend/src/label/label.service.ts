@@ -1367,58 +1367,6 @@ export class LabelService {
   }
 
   /**
-   * 绘制烹饪建议小节
-   */
-  private drawCookingSection(
-    ctx: CanvasRenderingContext2D,
-    cookingMethod: NonNullable<Exclude<LabelDataDto['cookingMethod'], string>>,
-    startY: number,
-    centerX: number,
-    maxWidth: number,
-    canvasWidth: number,
-  ): number {
-    let y = startY;
-
-    // 标题
-    ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.sectionTitle)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText('— 烹饪建议 —', centerX, y);
-    y += mmToPx(LABEL_LAYOUT.lineHeight.compact);
-
-    // 烹饪方法
-    ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.body)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;
-
-    const methods = [
-      {
-        name: '蒸',
-        time: cookingMethod.steam || '10-12分钟',
-        desc: '无需提前解冻',
-      },
-      {
-        name: '炖',
-        time: cookingMethod.stew || '10-12分钟',
-        desc: '需解冻加水',
-      },
-      {
-        name: '低温慢煮',
-        time: cookingMethod.sousvide || '45分钟',
-        desc: '65℃',
-      },
-    ];
-
-    for (const method of methods) {
-      ctx.fillText(
-        `${method.name}: ${method.time} (${method.desc})`,
-        centerX,
-        y,
-      );
-      y += mmToPx(LABEL_LAYOUT.lineHeight.compact);
-    }
-
-    return y;
-  }
-
-  /**
    * 文本换行
    */
   private wrapText(

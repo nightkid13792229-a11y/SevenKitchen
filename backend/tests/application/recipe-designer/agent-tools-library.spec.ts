@@ -2,9 +2,9 @@ import { AGENT_TOOLS, executeTool } from '../../../src/application/recipe-design
 
 describe('Agent 工具：search_knowledge_library', () => {
   it('已注册到 Agent 工具清单', () => {
-    expect(AGENT_TOOLS.map((item) => item.function.name)).toContain(
-      'search_knowledge_library',
-    );
+    const names = AGENT_TOOLS.map((item) => item.function.name);
+    expect(names).toContain('search_knowledge_library');
+    expect(names).not.toContain('read_knowledge');
   });
 
   it('把原文段落和来源/页码回给模型', async () => {
@@ -29,7 +29,6 @@ describe('Agent 工具：search_knowledge_library', () => {
       {
         port: {} as any,
         catalog: {} as any,
-        knowledge: {} as any,
         library: { search } as any,
         onAsk: jest.fn(),
       },
@@ -57,7 +56,6 @@ describe('Agent 工具：search_knowledge_library', () => {
       {
         port: {} as any,
         catalog: {} as any,
-        knowledge: {} as any,
         library: { search } as any,
         onAsk: jest.fn(),
       },

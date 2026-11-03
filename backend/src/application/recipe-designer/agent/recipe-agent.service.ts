@@ -31,8 +31,6 @@ import { RecipeDesignerService } from '../recipe-designer.service';
 import { buildSystemPrompt } from './prompt';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
-import { RecipeKnowledgePort } from './knowledge-port';
-import { KnowledgeBaseService } from '../knowledge-base.service';
 import { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
 import { AGENT_TOOLS, executeTool } from './tools';
 import type { RecipeAgentActor } from './agent-types';
@@ -54,7 +52,6 @@ export class RecipeAgentService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly providerConfig: AgentProviderConfigService,
     private readonly designer: RecipeDesignerService,
-    private readonly knowledgeBase: KnowledgeBaseService,
     private readonly library: KnowledgeLibraryService,
   ) {}
 
@@ -215,7 +212,6 @@ export class RecipeAgentService implements OnModuleInit {
       draftId,
     );
     const catalog = new RecipeCatalogPort(this.prisma);
-    const knowledge = new RecipeKnowledgePort(this.knowledgeBase);
 
     const messages = await this.buildMessages(sessionId, message, flow);
     let toolCalls = 0;
@@ -272,7 +268,6 @@ export class RecipeAgentService implements OnModuleInit {
         const outcome = await this.runTool(
           port,
           catalog,
-          knowledge,
           this.library,
           call,
           (question, options) => {
@@ -304,7 +299,6 @@ export class RecipeAgentService implements OnModuleInit {
   private async runTool(
     port: RecipeDraftPort,
     catalog: RecipeCatalogPort,
-    knowledge: RecipeKnowledgePort,
     library: KnowledgeLibraryService,
     call: DeepSeekToolCall,
     onAsk: (question: string, options: string[]) => void,
@@ -320,7 +314,6 @@ export class RecipeAgentService implements OnModuleInit {
     const result = await executeTool(call.function.name, args, {
       port,
       catalog,
-      knowledge,
       library,
       onAsk: (question, options) => onAsk(question, options),
     });

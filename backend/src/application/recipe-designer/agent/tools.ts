@@ -1,5 +1,5 @@
 /**
- * 9 个工具（2026-10-31 重建，2026-11-03 增加原文检索）。
+ * 8 个工具（2026-10-31 重建，2026-11-03 增加原文检索、移除旧摘要工具）。
  *
  * 原则：工具的数量和返回体积，就是模型的"操作规程"。
  * 所以不加"你必须先…"的说明，而是让工具本身只回这一步需要的东西。
@@ -7,7 +7,6 @@
 import type { DeepSeekToolDefinition } from '../deepseek-tools-chat';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
-import { RecipeKnowledgePort } from './knowledge-port';
 import type { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
 import {
   AgentToolError,
@@ -66,25 +65,6 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
             type: 'string',
             description:
               '也可以直接给节点名或路径（如「肾脏泌尿 / 尿石症」）；命中多条会返回候选让你挑',
-          },
-        },
-        required: [],
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'read_knowledge',
-      description:
-        '查营养与疾病饮食的权威知识库（只读）。不带参数：列出有哪些领域、各多少条；给 topic：按主题模糊匹配，返回最相关的前 8 条（标题、建议、要点、注意、出处）。设计特殊需求配方前先查。',
-      parameters: {
-        type: 'object',
-        properties: {
-          topic: {
-            type: 'string',
-            description: '主题，如「草酸钙结石」「胰腺炎」「肾脏病」',
           },
         },
         required: [],
@@ -235,7 +215,6 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
 export interface ToolExecutionContext {
   port: RecipeDraftPort;
   catalog: RecipeCatalogPort;
-  knowledge: RecipeKnowledgePort;
   library: KnowledgeLibraryService;
   /** ask 工具把问题交回运行时：运行时暂停并等用户回答。 */
   onAsk: (question: string, options: string[]) => void;
@@ -264,30 +243,6 @@ export async function executeTool(
           typeof args.node === 'string' ? args.node.trim() : undefined;
         const result = await context.catalog.read({ kind, nodeId, node });
         return ok(result, summarizeTaxonomy(result));
-      }
-
-      case 'read_knowledge': {
-        const topic =
-          typeof args.topic === 'string' ? args.topic.trim() : '';
-        if (!topic) {
-          const domains = context.knowledge.listDomains();
-          return ok(
-            { domains },
-            `知识库共 ${domains.length} 个领域：${domains
-              .map((item) => `${item.label} ${item.count} 条`)
-              .join('；')}`,
-          );
-        }
-        const hits = context.knowledge.search(topic);
-        return ok(
-          { topic, hits },
-          hits.length === 0
-            ? `知识库里没有「${topic}」相关条目`
-            : `命中 ${hits.length} 条：${hits
-                .map((hit) => hit.title)
-                .slice(0, 5)
-                .join('；')}`,
-        );
       }
 
       case 'search_knowledge_library': {

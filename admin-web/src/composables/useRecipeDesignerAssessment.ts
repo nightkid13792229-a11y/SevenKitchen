@@ -30,6 +30,10 @@ import type {
   DraftAssessmentInputs,
   FediafDogScenario
 } from '@/types/recipeDesigner'
+import {
+  itemIngredientName,
+  itemIngredientType
+} from '@/utils/recipeDesigner/itemIdentity'
 
 export interface LocalAssessmentEngineItem {
   id: string
@@ -146,15 +150,14 @@ export function useRecipeDesignerAssessment() {
       .map((item) => ({
         id: item.id,
         name:
+          itemIngredientName(item) ||
           item.name ||
-          item.ingredientName ||
-          item.ingredient?.name ||
           item.nutritionFoodName ||
           item.nutritionFood?.displayNameZh ||
           item.nutritionFood?.name ||
           item.nutritionProfileDisplayName ||
           '',
-        ingredientType: item.ingredientType ?? item.ingredient?.type ?? null,
+        ingredientType: itemIngredientType(item),
         weightG: Number(item.weightG ?? 0),
         nutritionProfile: profileByItemId.get(item.id) ?? null
       }))

@@ -484,6 +484,10 @@ import {
   type SupplementTargetDefinition
 } from '@/utils/recipeDesigner/supplementTargets'
 import { preparationBasisMismatchHint } from '@/utils/preparationBasis'
+import {
+  isSupplementDesignerItem,
+  itemIngredientName
+} from '@/utils/recipeDesigner/itemIdentity'
 
 /** 兜底烹饪方式选项（后端未提供时使用） */
 
@@ -919,9 +923,8 @@ function itemTypeTagClass(item: DesignerItem): string {
 /** 标准原料名称（与小程序一致） */
 function itemDisplayName(item: DesignerItem): string {
   return (
+    itemIngredientName(item) ||
     item.name ||
-    item.ingredientName ||
-    item.ingredient?.name ||
     item.nutritionFoodName ||
     item.nutritionFood?.name ||
     '未命名原料'
@@ -1200,9 +1203,7 @@ async function redo() {
 }
 
 function isSupplementItem(item: DesignerItem): boolean {
-  return (
-    String(item.ingredientType || item.ingredient?.type || '').trim().toUpperCase() === 'SUPPLEMENT'
-  )
+  return isSupplementDesignerItem(item)
 }
 
 function isSupplementOption(option: RecipeDesignerIngredientOption): boolean {

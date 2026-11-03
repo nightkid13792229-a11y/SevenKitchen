@@ -91,7 +91,10 @@ import {
 } from '@/api/recipeDesigner'
 
 const props = defineProps<{ modelValue: boolean; draftId: string }>()
-const emit = defineEmits<{ (event: 'update:modelValue', value: boolean): void }>()
+const emit = defineEmits<{
+  (event: 'update:modelValue', value: boolean): void
+  (event: 'draft-changed'): void
+}>()
 
 const visible = computed({
   get: () => props.modelValue,
@@ -105,6 +108,8 @@ const sending = ref(false)
 const loading = ref(false)
 const scrollRef = ref<HTMLElement | null>(null)
 let timer: number | null = null
+let lastEditMessageId: string | null = null
+const previousStatus = ref<string | null>(null)
 
 const running = computed(() => session.value?.status === 'RUNNING')
 const statusLabel = computed(() => {
@@ -131,6 +136,23 @@ async function loadSession() {
   await nextTick()
   scrollToBottom()
   syncTimer()
+
+  // Agent 改了草稿后，编辑器右侧的原料/总重不会自动更新；
+  // 每出现一条新的 edit_recipe 执行记录，或本轮运行结束，通知父组件重载草稿。
+  const edits = messages.value.filter(
+    (message) => message.toolName === 'edit_recipe',
+  )
+  const lastEdit = edits[edits.length - 1]
+  if (lastEdit && lastEdit.id !== lastEditMessageId) {
+    lastEditMessageId = lastEdit.id
+    emit('draft-changed')
+  }
+
+  const status = session.value?.status ?? null
+  if (previousStatus.value === 'RUNNING' && status !== 'RUNNING') {
+    emit('draft-changed')
+  }
+  previousStatus.value = status
 }
 
 function syncTimer() {

@@ -415,7 +415,11 @@
 
 
     <!-- AI 食谱设计（2026-10-31 极简版）：聊天 + 执行记录 -->
-    <RecipeAgentDrawer v-model="agentDrawerVisible" :draft-id="currentDraftId" />
+    <RecipeAgentDrawer
+      v-model="agentDrawerVisible"
+      :draft-id="currentDraftId"
+      @draft-changed="handleAgentDraftChanged"
+    />
   </div>
 </template>
 
@@ -832,6 +836,20 @@ async function refreshInputsKeepingScroll() {
       items.value
     )
   }
+}
+
+let agentDraftRefresh: Promise<void> | null = null
+
+/** Agent 改完草稿后，重新拉取这一份草稿，让左侧原料和总重跟上。 */
+async function handleAgentDraftChanged() {
+  if (!draft.value || agentDraftRefresh) return
+  agentDraftRefresh = (async () => {
+    try {
+      await loadDraft(draft.value?.id)
+    } finally {
+      agentDraftRefresh = null
+    }
+  })()
 }
 
 const referenceDogId = ref<string | null>(null)

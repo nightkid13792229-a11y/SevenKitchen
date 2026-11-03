@@ -1,0 +1,192 @@
+[
+  {
+    "id": "ckd-01",
+    "question": "CKD 犬从第几期开始考虑营养管理？",
+    "query_en": "when start nutritional management early stage CKD dogs proteinuria",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00004",
+      "sacn5-chapters-SACN5-37-p00005"
+    ]
+  },
+  {
+    "id": "ckd-02",
+    "question": "CKD 犬磷的推荐范围是多少？",
+    "query_en": "phosphorus recommendation dogs CKD 0.2 to 0.5 percent dry matter",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00149-1",
+      "sacn5-chapters-SACN5-37-p00193"
+    ]
+  },
+  {
+    "id": "ckd-03",
+    "question": "CKD 犬蛋白的推荐范围是多少？",
+    "query_en": "protein recommendation dogs CKD 14 to 20 percent avoid excessive protein",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00149-1",
+      "sacn5-chapters-SACN5-37-p00151",
+      "sacn5-chapters-SACN5-37-p00152"
+    ]
+  },
+  {
+    "id": "ckd-04",
+    "question": "CKD 犬钠的上限是多少？",
+    "query_en": "sodium recommendation dogs CKD less than 0.3 percent",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00149-1"
+    ]
+  },
+  {
+    "id": "ckd-05",
+    "question": "CKD 犬钾的推荐范围是多少？",
+    "query_en": "potassium recommendation dogs CKD 0.4 to 0.8 percent",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00149-1"
+    ]
+  },
+  {
+    "id": "ckd-06",
+    "question": "CKD 犬 omega-3 脂肪酸的推荐范围是多少？",
+    "query_en": "omega-3 fatty acids recommendation dogs CKD 0.4 to 2.5 percent",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00149-2",
+      "sacn5-chapters-SACN5-37-p00251"
+    ]
+  },
+  {
+    "id": "ckd-07",
+    "question": "限磷为什么能延长 CKD 犬的生存期？",
+    "query_en": "dietary phosphorus restriction survival time dogs CKD hyperphosphatemia",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00193",
+      "sacn5-chapters-SACN5-37-p00223"
+    ]
+  },
+  {
+    "id": "ckd-08",
+    "question": "CKD 犬 UPC 多少算蛋白尿？",
+    "query_en": "UPC urine protein creatinine ratio proteinuria cutoff dogs CKD 0.5",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00013",
+      "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-p00008"
+    ]
+  },
+  {
+    "id": "ckd-09",
+    "question": "CKD 犬血压怎么监测？",
+    "query_en": "systemic blood pressure measurement monitoring dogs CKD",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00029",
+      "sacn5-chapters-SACN5-37-p00140-1",
+      "sacn5-chapters-SACN5-37-p00041",
+      "sacn5-chapters-SACN5-37-p00052"
+    ]
+  },
+  {
+    "id": "ckd-10",
+    "question": "CKD 犬多久复查一次？",
+    "query_en": "reassessment frequency azotemia uremic dogs CKD every two to three months",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00316"
+    ]
+  },
+  {
+    "id": "ckd-11",
+    "question": "CKD 犬能量需要怎么估算？",
+    "query_en": "energy requirement dogs CKD resting energy RER insufficient energy",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00289",
+      "sacn5-chapters-SACN5-37-p00158"
+    ]
+  },
+  {
+    "id": "ckd-12",
+    "question": "CKD 犬什么时候考虑磷结合剂？",
+    "query_en": "when consider phosphorus binder phosphate binder hyperphosphatemia dogs CKD",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00368"
+    ]
+  },
+  {
+    "id": "ckd-13",
+    "question": "CKD 犬需要限制钠吗？",
+    "query_en": "sodium restriction avoid excessive sodium dogs CKD",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00149-1",
+      "sacn5-chapters-SACN5-37-p00140-1",
+      "sacn5-chapters-SACN5-37-p00146"
+    ]
+  },
+  {
+    "id": "ckd-14",
+    "question": "CKD 犬能不能吃自制鲜食？",
+    "query_en": "home-prepared homemade diet dogs CKD complete balanced veterinary nutritionist",
+    "gold_paragraphs": [
+      "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-p00124",
+      "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-p00125",
+      "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-p00126",
+      "sacn5-chapters-SACN5-37-p00319"
+    ]
+  },
+  {
+    "id": "ckd-15",
+    "question": "CKD 犬合并蛋白尿怎么管理？",
+    "query_en": "proteinuria management dogs CKD UPC",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00013",
+      "sacn5-chapters-SACN5-37-p00149-1",
+      "sacn5-chapters-SACN5-37-p00183",
+      "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-p00008"
+    ]
+  },
+  {
+    "id": "ckd-16",
+    "question": "CKD 犬合并高血压怎么管理？",
+    "query_en": "systemic hypertension management dogs CKD sodium ACE inhibitors amlodipine",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00140-1",
+      "sacn5-chapters-SACN5-37-p00140-2",
+      "sacn5-chapters-SACN5-37-p00029"
+    ]
+  },
+  {
+    "id": "ckd-17",
+    "question": "CKD 4 期或尿毒症犬怎么喂？",
+    "query_en": "stage 4 uremia feeding dogs CKD protein",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00151",
+      "sacn5-chapters-SACN5-37-p00289",
+      "sacn5-chapters-SACN5-37-p00316"
+    ]
+  },
+  {
+    "id": "ckd-18",
+    "question": "CKD 犬需要补维生素 D 或 calcitriol 吗？",
+    "query_en": "vitamin D calcitriol dogs CKD secondary renal hyperparathyroidism",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00274",
+      "sacn5-chapters-SACN5-37-p00275"
+    ]
+  },
+  {
+    "id": "ckd-19",
+    "question": "CKD 犬需要补抗氧化剂或维生素 E 吗？",
+    "query_en": "antioxidants vitamin E dogs CKD omega-3",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00149-2",
+      "sacn5-chapters-SACN5-37-p00251"
+    ]
+  },
+  {
+    "id": "ckd-20",
+    "question": "CKD 的 IRIS 分期按什么指标？",
+    "query_en": "IRIS staging creatinine dogs CKD stage 1 2 3 4",
+    "gold_paragraphs": [
+      "sacn5-chapters-SACN5-37-p00011",
+      "sacn5-chapters-SACN5-37-p00012-1",
+      "sacn5-chapters-SACN5-37-p00012-2",
+      "sacn5-chapters-SACN5-37-p00013",
+      "iris-IRIS-staging-guidelines-2026-p00018",
+      "sacn5-chapters-SACN5-37-p00385"
+    ]
+  }
+]

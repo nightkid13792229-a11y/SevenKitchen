@@ -387,8 +387,8 @@ describe('order detail runtime regressions', () => {
     expect(source).not.toContain('class="hero-title"')
     expect(source).not.toContain('class="hero-meta"')
 
-    // 商品卡：封面 + 食谱名 + 分装概览 + 单价；备注独立成卡
-    expect(source).toContain('product-cover')
+    // 商品卡：食谱名 + 分装概览 + 单价（老板确认不显示封面图）；备注独立成卡
+    expect(source).not.toContain('product-cover')
     expect(source).toContain('productPackageSummary')
     expect(source).toContain('product-unit-price')
     expect(source).toContain('order-note-card')

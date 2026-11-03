@@ -68,13 +68,6 @@
           >
             <!-- 第1层：食谱名 + 分装概览 -->
             <view class="item-header">
-              <image
-                v-if="item.recipeSnapshot?.coverImageUrl"
-                class="product-cover"
-                :src="item.recipeSnapshot.coverImageUrl"
-                mode="aspectFill"
-              />
-              <view v-else class="product-cover product-cover--empty">🍲</view>
               <view class="product-head-info">
                 <view class="product-title-row">
                   <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
@@ -5337,21 +5330,6 @@ async function applyRefund() {
 /* ===== 商品卡对齐原型（2026-11-03） ===== */
 .item-header {
   align-items: flex-start;
-}
-
-.product-cover {
-  width: 124rpx;
-  height: 124rpx;
-  border-radius: 16rpx;
-  flex: none;
-  background: #eef2e4;
-}
-
-.product-cover--empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 44rpx;
 }
 
 .product-head-info {

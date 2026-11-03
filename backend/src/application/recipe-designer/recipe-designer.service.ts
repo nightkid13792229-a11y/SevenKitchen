@@ -10059,6 +10059,21 @@ export class RecipeDesignerService {
     nutritionFoodId: string;
   }) {
     if (!dto.ingredientId) {
+      // Agent/外部调用可能只给营养档案 ID；若该档案只对应一个标准原料，
+      // 自动反查，避免补剂被当成食材、也避免再要求模型多传一个参数。
+      const mappings = await this.prisma.nutritionFoodMapping.findMany({
+        where: { nutritionFoodId: dto.nutritionFoodId },
+        select: { ingredientId: true },
+        take: 2,
+      });
+      if (mappings.length === 1) {
+        return mappings[0].ingredientId;
+      }
+      if (mappings.length > 1) {
+        throw new BadRequestException(
+          '这个营养档案对应多个标准原料，请在 ingredientId 中指定',
+        );
+      }
       return null;
     }
 

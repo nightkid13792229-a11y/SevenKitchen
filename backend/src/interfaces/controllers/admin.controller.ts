@@ -76,6 +76,7 @@ import {
   OrderDto,
 } from '../dto/orders/order-response.dto';
 import type { OrderItemDto } from '../dto/orders/order-response.dto';
+import { buildCookingAdviceForOrder } from '../../application/cooking/cooking-time';
 import { InvalidStateTransitionError } from '../../domain/common/errors';
 import { UpdateOrderAdminRemarkDto } from '../dto/orders/admin-order-operations.dto';
 import {
@@ -2546,6 +2547,8 @@ export class AdminController {
       createdAt: order.createdAt.toISOString(),
       adminRemark: order.adminRemark ?? null,
       productionPhotos,
+      // 烹饪建议：和顾客端 / 生产标签共用同一份口径（src/application/cooking）
+      cookingAdvice: buildCookingAdviceForOrder(order),
     };
   }
 

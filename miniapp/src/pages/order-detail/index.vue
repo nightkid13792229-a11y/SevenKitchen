@@ -652,7 +652,7 @@
             >每袋超过 600g，不提供固定时间，请按下面的判定标准判断。</view
           >
           <view v-else class="cooking-overlimit"
-            >暂未获取到每袋重量，请按下面的判定标准判断。</view
+            >暂未获取到每袋重量，请以包装标签上的烹饪说明为准。</view
           >
           <view class="cooking-judge">{{ cookingTimeJudgement }}</view>
         </view>

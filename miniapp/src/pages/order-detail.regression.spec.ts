@@ -387,7 +387,10 @@ describe('order detail runtime regressions', () => {
     expect(source).not.toContain('class="hero-title"')
     expect(source).not.toContain('class="hero-meta"')
 
-    // 原料清单：5 个占比最高的食材 + 其余（含补剂）折叠
+    // 原料清单：默认展开，直接看到 5 个占比最高的食材；其余（含补剂）折叠
+    expect(source).toContain('isIngredientSectionOpen')
+    expect(source).toContain('!== false')
+    expect(source).not.toContain('v-if="expandedIngredients[item.id]"')
     expect(source).toContain('visibleFoodIngredients')
     expect(source).toContain('slice(0, 5)')
     expect(source).toContain('ingredient-toggle-more')

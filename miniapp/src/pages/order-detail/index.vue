@@ -163,14 +163,14 @@
                   >
                 </view>
                 <text class="expand-icon">{{
-                  expandedIngredients[item.id] ? '收起' : '展开'
+                  isIngredientSectionOpen(item.id) ? '收起' : '展开'
                 }}</text>
               </view>
 
               <view
                 class="ingredients-content"
-                :class="{ expanded: expandedIngredients[item.id] }"
-                v-if="expandedIngredients[item.id]"
+                :class="{ expanded: isIngredientSectionOpen(item.id) }"
+                v-if="isIngredientSectionOpen(item.id)"
               >
                 <!-- 实际采购：采购完成后公开；未完成时给一句明确的预期 -->
                 <view v-if="procurementStatusText" class="procurement-status">
@@ -1889,7 +1889,13 @@ watch(
 
 // 切换原料清单展开/收起
 function toggleIngredients(itemId: string) {
-  expandedIngredients.value[itemId] = !expandedIngredients.value[itemId];
+  expandedIngredients.value[itemId] =
+    !isIngredientSectionOpen(itemId);
+}
+
+/** 原料清单整块默认展开：直接看到 5 个占比最高的食材（2026-11-03 老板确认） */
+function isIngredientSectionOpen(itemId: string): boolean {
+  return expandedIngredients.value[itemId] !== false;
 }
 
 // 获取补剂的实际用量（从pricingBreakdownSnapshot）

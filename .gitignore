@@ -7,9 +7,6 @@
 # Local generated artifacts
 tmp/
 
-# Cursor
-.cursor/
-
 # Node
 node_modules/
 dist/

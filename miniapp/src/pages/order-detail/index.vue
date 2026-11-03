@@ -53,7 +53,6 @@
 
       <!-- 商品信息 -->
       <view class="section items-section">
-        <view class="section-title">商品信息</view>
 
         <!-- 按狗狗分组 -->
         <view
@@ -67,16 +66,35 @@
             :key="item.id"
             class="order-item-card"
           >
-            <!-- 第1层：食谱名 -->
+            <!-- 第1层：食谱名 + 分装概览 -->
             <view class="item-header">
-              <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
-              <text
-                v-if="recipeVersionLabel(item)"
-                class="recipe-version"
-              >{{ recipeVersionLabel(item) }}</text>
-              <text v-if="isStockOrder" class="nutrition-standard"
-                >现货 · 试吃装</text
-              >
+              <image
+                v-if="item.recipeSnapshot?.coverImageUrl"
+                class="product-cover"
+                :src="item.recipeSnapshot.coverImageUrl"
+                mode="aspectFill"
+              />
+              <view v-else class="product-cover product-cover--empty">🍲</view>
+              <view class="product-head-info">
+                <view class="product-title-row">
+                  <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
+                  <text
+                    v-if="recipeVersionLabel(item)"
+                    class="recipe-version"
+                  >{{ recipeVersionLabel(item) }}</text>
+                </view>
+                <text class="product-sub">{{
+                  productPackageSummary(item)
+                }}</text>
+                <text
+                  v-if="order.amountTotal && getTotalPackageCount()"
+                  class="product-unit-price"
+                  >单价 ¥{{ calculatePricePerPackage() }}/袋</text
+                >
+                <text v-if="isStockOrder" class="nutrition-standard"
+                  >现货 · 试吃装</text
+                >
+              </view>
             </view>
 
             <!-- 试吃装：列出这一套包含哪几道菜 -->
@@ -98,42 +116,6 @@
                 <text class="package-value">{{ stockPackCode }}</text>
               </view>
             </view>
-            <!-- 第2层：订购信息 -->
-            <view class="package-info-card">
-              <view class="package-row">
-                <text class="package-label">总净重:</text>
-                <text class="package-value"
-                  >{{ Math.round(item.quantityG) }}g</text
-                >
-              </view>
-              <view
-                class="package-row"
-                v-if="item.packagePlan && item.packagePlan.length > 0"
-              >
-                <text class="package-label">分装明细:</text>
-                <text class="package-value">{{ formatPackagePlan(item) }}</text>
-              </view>
-              <template v-else>
-                <view class="package-row">
-                  <text class="package-label">总袋数:</text>
-                  <text class="package-value">{{ item.packageCount }}袋</text>
-                </view>
-                <view class="package-row">
-                  <text class="package-label">每袋重量:</text>
-                  <text class="package-value">{{ item.packageSpecG }}g/袋</text>
-                </view>
-              </template>
-              <view
-                class="package-row"
-                v-if="order.amountTotal && getTotalPackageCount()"
-              >
-                <text class="package-label">单价:</text>
-                <text class="package-value price"
-                  >¥{{ calculatePricePerPackage() }}/袋</text
-                >
-              </view>
-            </view>
-
             <!-- 第4层：原料清单（可展开/收起） -->
             <view
               class="ingredients-section"
@@ -149,7 +131,7 @@
                 <view class="ingredients-title-row">
                   <text class="ingredients-title">原料清单</text>
                   <text class="ingredients-count"
-                    >（共{{ item.recipeSnapshot.items.length }}种）</text
+                    >共{{ item.recipeSnapshot.items.length }}种</text
                   >
                   <text
                     v-if="hasProcurementDisclosure"
@@ -328,10 +310,11 @@
           </view>
         </view>
 
-        <view v-if="customerRequirementText" class="order-note-row">
-          <text class="order-note-label">你的备注</text>
-          <text class="order-note-text">{{ customerRequirementText }}</text>
-        </view>
+      </view>
+
+      <view v-if="customerRequirementText" class="section order-note-card">
+        <text class="order-note-card-label">你的备注</text>
+        <text class="order-note-card-text">{{ customerRequirementText }}</text>
       </view>
 
       <!-- 收货与配送（2026-10-30 合并：地址、预计时间、购买人） -->
@@ -2852,6 +2835,30 @@ function calculateUnitPrice(item: OrderItem): number {
   return (item.totalPrice || 0) / item.packageCount;
 }
 
+/**
+ * 商品卡上的分装概览：单规格给「3 袋 · 每袋 300g」，多规格用分装明细。
+ */
+function productPackageSummary(item: {
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>;
+  packageSpecG?: number;
+  packageCount?: number;
+}): string {
+  const rows = (item.packagePlan || []).filter(
+    (row) => Number(row?.packageSpecG) > 0 && Number(row?.packageCount) > 0,
+  );
+  if (rows.length === 1) {
+    return `${rows[0].packageCount} 袋 · 每袋 ${Math.round(
+      Number(rows[0].packageSpecG),
+    )}g`;
+  }
+  if (rows.length > 1) {
+    return formatPackagePlan(item);
+  }
+  const count = Number(item.packageCount) || 0;
+  const spec = Math.round(Number(item.packageSpecG) || 0);
+  return count > 0 && spec > 0 ? `${count} 袋 · 每袋 ${spec}g` : '';
+}
+
 function formatPackagePlan(item: {
   packagePlan?: Array<{ packageSpecG: number; packageCount: number }>;
   packageSpecG?: number;
@@ -4898,26 +4905,6 @@ async function applyRefund() {
   color: #8a6b33;
 }
 
-/* 订单备注：直接显示在商品下面 */
-.order-note-row {
-  margin-top: 16rpx;
-  padding: 12rpx 16rpx;
-  border-radius: 8rpx;
-  background: #f0f3e9;
-}
-
-.order-note-label {
-  font-size: 20rpx;
-  color: #6b6653;
-  margin-right: 10rpx;
-}
-
-.order-note-text {
-  font-size: 20rpx;
-  color: #26261f;
-  line-height: 1.5;
-}
-
 /* ===== 实际采购披露（2026-11-02） ===== */
 .ingredients-procurement-badge.pending {
   background-color: #f2f4ea;
@@ -5345,5 +5332,70 @@ async function applyRefund() {
 
 .btn-contact {
   grid-column: 1 / -1;
+}
+
+/* ===== 商品卡对齐原型（2026-11-03） ===== */
+.item-header {
+  align-items: flex-start;
+}
+
+.product-cover {
+  width: 124rpx;
+  height: 124rpx;
+  border-radius: 16rpx;
+  flex: none;
+  background: #eef2e4;
+}
+
+.product-cover--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44rpx;
+}
+
+.product-head-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.product-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.product-sub {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #6b6653;
+}
+
+.product-unit-price {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.order-note-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.order-note-card-label {
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #2f4f3d;
+}
+
+.order-note-card-text {
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #55554a;
 }
 </style>

@@ -387,6 +387,14 @@ describe('order detail runtime regressions', () => {
     expect(source).not.toContain('class="hero-title"')
     expect(source).not.toContain('class="hero-meta"')
 
+    // 商品卡：封面 + 食谱名 + 分装概览 + 单价；备注独立成卡
+    expect(source).toContain('product-cover')
+    expect(source).toContain('productPackageSummary')
+    expect(source).toContain('product-unit-price')
+    expect(source).toContain('order-note-card')
+    expect(source).not.toContain('package-label">总净重')
+    expect(source).not.toContain('order-note-row')
+
     // 原料清单：默认展开，直接看到 5 个占比最高的食材；其余（含补剂）折叠
     expect(source).toContain('isIngredientSectionOpen')
     expect(source).toContain('!== false')

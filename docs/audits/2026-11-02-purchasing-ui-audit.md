@@ -502,3 +502,18 @@
   - 0 值也带单位，不再出现空字符串。
 - 已接入：清单详情的「订单需求 / 库存抵扣」、需求预览、报销详情的需要采购/实际采购/库存等字段。
 - 新增 `src/utils/staff-quantity.spec.ts`（6 条），采购/报销页面显示效果已截图复核。
+
+
+---
+
+## 收尾（2026-11-03）
+
+本报告的 P0 / P1 / P2 / P3 已落地；按最终状态更正上文几处“未做”：
+
+- **共享组件已抽出 5 个**并接入采购首页/详情、补货、报销列表/详情：
+  `StaffStatusBadge`、`StaffEmptyState`、`StaffBottomBar`、`StaffMetric`、`StaffQuantityText`
+  （`miniapp/src/components/staff/`）。原计划里的页头/导航组件由系统导航栏替代，
+  分段筛选暂按样式约定、不单独抽组件。
+- **体验版 2026.11.03.5** 对应提交 `03edf52d`，包含本报告全部改动。
+- 仍未做（建议保持现状）：删除 `record-form`（另一会话刚在其上新增“顾客将看到”预览，暂不删）、
+  清理 `index-updated.vue` / `detail.vue.backup` 两个历史文件、建立 8 页 × 2 宽度的截图基线。

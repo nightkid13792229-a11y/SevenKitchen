@@ -33,6 +33,7 @@ import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
 import { RecipeKnowledgePort } from './knowledge-port';
 import { KnowledgeBaseService } from '../knowledge-base.service';
+import { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
 import { AGENT_TOOLS, executeTool } from './tools';
 import type { RecipeAgentActor } from './agent-types';
 
@@ -54,6 +55,7 @@ export class RecipeAgentService implements OnModuleInit {
     private readonly providerConfig: AgentProviderConfigService,
     private readonly designer: RecipeDesignerService,
     private readonly knowledgeBase: KnowledgeBaseService,
+    private readonly library: KnowledgeLibraryService,
   ) {}
 
   /**
@@ -271,6 +273,7 @@ export class RecipeAgentService implements OnModuleInit {
           port,
           catalog,
           knowledge,
+          this.library,
           call,
           (question, options) => {
             pendingAsk = { question, options };
@@ -302,6 +305,7 @@ export class RecipeAgentService implements OnModuleInit {
     port: RecipeDraftPort,
     catalog: RecipeCatalogPort,
     knowledge: RecipeKnowledgePort,
+    library: KnowledgeLibraryService,
     call: DeepSeekToolCall,
     onAsk: (question: string, options: string[]) => void,
   ): Promise<{ result: unknown }> {
@@ -317,6 +321,7 @@ export class RecipeAgentService implements OnModuleInit {
       port,
       catalog,
       knowledge,
+      library,
       onAsk: (question, options) => onAsk(question, options),
     });
     return { result };

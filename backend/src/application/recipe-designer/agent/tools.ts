@@ -1,5 +1,5 @@
 /**
- * 6 个工具（2026-10-31 重建，替代原来的 22 个）。
+ * 9 个工具（2026-10-31 重建，2026-11-03 增加原文检索）。
  *
  * 原则：工具的数量和返回体积，就是模型的"操作规程"。
  * 所以不加"你必须先…"的说明，而是让工具本身只回这一步需要的东西。
@@ -8,6 +8,7 @@ import type { DeepSeekToolDefinition } from '../deepseek-tools-chat';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
 import { RecipeKnowledgePort } from './knowledge-port';
+import type { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
 import {
   AgentToolError,
   fail,
@@ -15,6 +16,14 @@ import {
   type RecipeEditOp,
   type ToolOutcome,
 } from './agent-types';
+
+const CKD_DOCUMENT_IDS = [
+  'sacn5-chapters-SACN5-37',
+  'iris-IRIS-staging-guidelines-2026',
+  'iris-IRIS-DOG-Treatment-Recommendations-may-2026',
+  'iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g',
+  'aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines',
+];
 
 const NO_ARGS = {
   type: 'object',
@@ -79,6 +88,46 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
           },
         },
         required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_knowledge_library',
+      description:
+        '在知识库原文里按关键词找段落（只读）。返回 5–8 段原文，带来源、章节、页码。' +
+        '设计疾病营养配方（如 CKD、胰腺炎、肾病）前先用它查证据；可以换关键词、换来源多次查。' +
+        '它返回的是原文，不是结论；回答时引用来源+章节+页码。',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description:
+              '检索词，优先英文关键词，如「CKD phosphorus dog 0.2 0.5」「proteinuria UPC dog」',
+          },
+          sourceIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              '可选：限定来源，如 ["SACN5","IRIS-CKD-2026","AAHA-2021-NUTRITION"]；不传则全库',
+          },
+          limit: { type: 'integer', minimum: 1, maximum: 10 },
+          scope: {
+            type: 'string',
+            enum: ['ckd', 'all'],
+            description:
+              '试点范围：ckd=只搜 CKD 的 5 份文档（默认）；all=全库',
+          },
+          documentIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '可选：只在这些文档 ID 里搜（一般不用传）',
+          },
+        },
+        required: ['query'],
         additionalProperties: false,
       },
     },
@@ -187,6 +236,7 @@ export interface ToolExecutionContext {
   port: RecipeDraftPort;
   catalog: RecipeCatalogPort;
   knowledge: RecipeKnowledgePort;
+  library: KnowledgeLibraryService;
   /** ask 工具把问题交回运行时：运行时暂停并等用户回答。 */
   onAsk: (question: string, options: string[]) => void;
 }
@@ -236,6 +286,49 @@ export async function executeTool(
             : `命中 ${hits.length} 条：${hits
                 .map((hit) => hit.title)
                 .slice(0, 5)
+                .join('；')}`,
+        );
+      }
+
+      case 'search_knowledge_library': {
+        const query =
+          typeof args.query === 'string' ? args.query.trim() : '';
+        if (!query) {
+          return fail('INVALID_ARGUMENT', 'query 不能为空');
+        }
+        const sourceIds = Array.isArray(args.sourceIds)
+          ? args.sourceIds
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => item.trim())
+              .filter(Boolean)
+          : undefined;
+        const limit =
+          typeof args.limit === 'number' ? args.limit : undefined;
+        const scope = args.scope === 'all' ? 'all' : 'ckd';
+        const explicitDocumentIds = Array.isArray(args.documentIds)
+          ? args.documentIds
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => item.trim())
+              .filter(Boolean)
+          : undefined;
+        const documentIds =
+          explicitDocumentIds && explicitDocumentIds.length > 0
+            ? explicitDocumentIds
+            : scope === 'all'
+              ? undefined
+              : CKD_DOCUMENT_IDS;
+        const passages = await context.library.search(query, {
+          sourceIds,
+          documentIds,
+          limit,
+        });
+        return ok(
+          { query, passages, count: passages.length },
+          passages.length === 0
+            ? `知识库原文里没有找到「${query}」；换个关键词或来源再查`
+            : `找到 ${passages.length} 段原文：${passages
+                .map((item) => `${item.sourceName ?? item.sourceId}${item.sourceId ? `（${item.sourceId}）` : ''}${item.pageStart ? ` p${item.pageStart}` : ''}`)
+                .slice(0, 4)
                 .join('；')}`,
         );
       }

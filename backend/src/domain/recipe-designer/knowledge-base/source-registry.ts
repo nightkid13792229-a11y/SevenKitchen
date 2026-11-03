@@ -143,8 +143,8 @@ export const KNOWLEDGE_SOURCES: readonly KnowledgeSourceRecord[] = [
   },
   {
     id: 'SACN5',
-    name: '小动物临床营养学（第 5 版）',
-    version: '5th',
+    name: '小动物临床营养学（第5版）',
+    version: '2010（第5版）',
     local: true,
     role: '疾病营养解读、关键营养素、自制膳食风险（现有 202 条的主力出处）',
   },

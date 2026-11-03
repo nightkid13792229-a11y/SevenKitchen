@@ -105,12 +105,11 @@ import CustomerServiceInlineButton from '../../components/CustomerServiceInlineB
 import {
   canApplyRefund,
   canApplyRemake,
-  canApplyComplaint,
   canCancelOrder,
 } from '../../utils/order-aftersale';
 
 const orderId = ref('');
-const selectedType = ref<'REFUND' | 'REMAKE' | 'COMPLAINT'>('REFUND');
+const selectedType = ref<'REFUND' | 'REMAKE'>('REFUND');
 const reason = ref('');
 const photos = ref<string[]>([]);
 const orderInfo = ref<any>(null);
@@ -120,7 +119,6 @@ const loadFailed = ref(false);
 const ALL_AFTERSALE_TYPES = [
   { value: 'REFUND' as const, label: '申请退款', icon: '💰', cancelLabel: '取消订单' },
   { value: 'REMAKE' as const, label: '申请重做', icon: '🔄' },
-  { value: 'COMPLAINT' as const, label: '投诉建议', icon: '📝' },
 ];
 
 /**
@@ -144,8 +142,7 @@ const aftersaleTypes = computed(() => {
       // 取消阶段（已付款、未采购）走的也是 REFUND 这条链路，只是叫"取消订单"
       return cancelStage || canApplyRefund(status, completedAt);
     }
-    if (type.value === 'REMAKE') return canApplyRemake(status, completedAt);
-    return canApplyComplaint(status);
+    return canApplyRemake(status, completedAt);
   }).map((type) => ({
     ...type,
     label: cancelStage && type.value === 'REFUND' ? type.cancelLabel : type.label,
@@ -184,7 +181,7 @@ onMounted(async () => {
   const type = currentPage.options?.type || 'REFUND';
 
   if (type) {
-    selectedType.value = type as 'REFUND' | 'REMAKE' | 'COMPLAINT';
+    selectedType.value = type === 'REMAKE' ? 'REMAKE' : 'REFUND';
   }
 
   if (orderId.value) {
@@ -223,7 +220,7 @@ function syncSelectedTypeWithAllowed() {
   }
 }
 
-function selectType(type: 'REFUND' | 'REMAKE' | 'COMPLAINT') {
+function selectType(type: 'REFUND' | 'REMAKE') {
   selectedType.value = type;
 }
 

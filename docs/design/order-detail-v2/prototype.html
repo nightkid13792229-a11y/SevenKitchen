@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>鲜食订单详情 · 信息架构优化原型</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #eceee7;
+    color: #26261f;
+    padding: 40px 32px 56px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .board { width: 860px; margin: 0 auto; }
+  .board-title { font-size: 22px; font-weight: 800; letter-spacing: .5px; }
+  .board-sub { margin-top: 8px; font-size: 13px; color: #7a7a68; line-height: 1.6; }
+  .phones { display: flex; gap: 44px; margin-top: 28px; align-items: flex-start; }
+  .phone-col { width: 375px; flex: none; }
+  .phone-label { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; font-weight: 700; }
+  .tag { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .tag-now { background: #e6e6df; color: #6b6653; }
+  .tag-new { background: #1e3a2f; color: #fff; }
+  .phone {
+    width: 375px; background: #f4f5ef; border-radius: 26px; overflow: hidden;
+    border: 1px solid #d9dccf; box-shadow: 0 18px 40px rgba(30,46,36,.10);
+  }
+  .statusbar { height: 34px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; font-size: 11px; color: #4a4a3e; background: #f4f5ef; }
+  .nav { height: 40px; display: flex; align-items: center; padding: 0 14px; gap: 8px; background: #f4f5ef; font-size: 15px; font-weight: 700; }
+  .nav .back { font-size: 18px; color: #26261f; }
+  .scroll { padding: 8px 12px 28px; }
+
+  .hero { background: linear-gradient(135deg, #223f33, #34594a); color: #fff; border-radius: 18px; padding: 18px; }
+  .hero-top { display: flex; justify-content: space-between; align-items: center; }
+  .hero-status { font-size: 12px; background: rgba(255,255,255,.16); padding: 4px 10px; border-radius: 999px; }
+  .hero-amount { font-size: 22px; font-weight: 800; }
+  .hero-title { margin-top: 14px; font-size: 17px; font-weight: 700; }
+  .hero-sub { margin-top: 6px; font-size: 12px; color: rgba(255,255,255,.72); }
+  .hero-progress { display: flex; gap: 6px; margin-top: 14px; }
+  .hero-progress i { height: 3px; flex: 1; border-radius: 2px; background: rgba(255,255,255,.22); }
+  .hero-progress i.on { background: #cfe3b8; }
+
+  .section { background: #fff; border-radius: 18px; padding: 16px; margin-top: 12px; border: 1px solid #eceee3; }
+  .section-title { font-size: 15px; font-weight: 800; letter-spacing: .2px; }
+  .section-head { display: flex; align-items: center; gap: 8px; }
+  .section-head .link { margin-left: auto; font-size: 12px; color: #8a8a74; }
+
+  .product-head { display: flex; gap: 12px; margin-top: 12px; }
+  .cover { width: 62px; height: 62px; border-radius: 10px; flex: none; background: linear-gradient(145deg, #dbe6c6, #b9cda0); display: flex; align-items: center; justify-content: center; font-size: 22px; }
+  .product-name { font-size: 15px; font-weight: 700; }
+  .product-meta { margin-top: 5px; font-size: 12px; color: #8a8a74; }
+  .product-price { margin-top: 6px; font-size: 13px; color: #26261f; font-weight: 700; }
+
+  .list-head { display: flex; align-items: center; gap: 8px; margin: 18px 0 4px; }
+  .list-title { font-size: 14px; font-weight: 800; }
+  .list-count { font-size: 11px; color: #9a9a86; }
+  .badge { margin-left: auto; font-size: 10px; font-weight: 700; color: #2f6b4f; background: #eaf2e3; border-radius: 999px; padding: 3px 8px; }
+  .collapse { font-size: 11px; color: #8a8a74; }
+
+  .cat { margin-top: 14px; font-size: 11px; font-weight: 800; color: #7a7a66; letter-spacing: .5px; display: flex; align-items: center; gap: 8px; }
+  .cat:after { content: ""; height: 1px; flex: 1; background: #eef0e4; }
+
+  .row { padding: 11px 0; border-bottom: 1px solid #f3f4ec; }
+  .row:last-child { border-bottom: 0; }
+  .row-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .row-name { font-size: 14px; font-weight: 650; color: #26261f; }
+  .row-amount { font-size: 13px; font-weight: 800; color: #26261f; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* before: cramped chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+  .pill { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: #eaf2e3; color: #2f6b4f; flex: none; }
+  .pill.stock { background: #f6efe0; color: #8a6b33; }
+  .chip { font-size: 11px; padding: 3px 7px; border-radius: 5px; background: #f2f4ea; color: #6b6653; line-height: 1.4; }
+  .date-line { margin-top: 5px; font-size: 10px; color: #9a9a86; }
+
+  /* after: quiet meta */
+  .meta { margin-top: 5px; display: flex; align-items: flex-start; gap: 7px; flex-wrap: wrap; font-size: 11.5px; color: #7d7d6a; line-height: 1.55; }
+  .meta .dot { color: #c6c8b8; }
+  .meta .stock-date { width: 100%; font-size: 10.5px; color: #9a9a86; }
+  .supp { margin-top: 6px; display: grid; grid-template-columns: 58px 1fr; gap: 3px 8px; font-size: 11.5px; }
+  .supp .k { color: #9a9a86; }
+  .supp .v { color: #4d4d40; }
+
+  .toggle { margin-top: 12px; text-align: center; font-size: 11.5px; color: #7d7d6a; }
+
+  .info-line { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; margin-top: 11px; line-height: 1.55; }
+  .info-line .k { color: #8a8a74; width: 72px; flex: none; }
+  .info-line .v { color: #26261f; flex: 1; }
+  .inline-actions { display: flex; gap: 6px; margin-left: 6px; flex: none; }
+  .mini-btn { font-size: 10px; padding: 2px 8px; border-radius: 6px; border: 1px solid #e0e3d2; color: #4d5a3f; background: #fbfcf6; }
+  .divider { height: 1px; background: #f0f2e7; margin: 14px 0 2px; }
+  .logistics { margin-top: 12px; background: #f7f9f1; border: 1px solid #e9edda; border-radius: 12px; padding: 12px; }
+  .logistics-top { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: #2f4f3d; }
+  .logistics-card { margin-top: 6px; font-size: 12px; color: #4d4d40; display: flex; align-items: center; gap: 8px; }
+  .tracking { font-variant-numeric: tabular-nums; letter-spacing: .3px; }
+  .copy { font-size: 10px; padding: 2px 8px; border-radius: 6px; border: 1px solid #dfe3d0; background: #fff; color: #2f4f3d; flex: none; }
+  .logistics-time { margin-top: 6px; font-size: 10.5px; color: #9a9a86; }
+
+  .tip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .tip-card { background: #f7f9f1; border: 1px solid #edf0e2; border-radius: 12px; padding: 11px 12px; }
+  .tip-card .t { font-size: 11px; font-weight: 800; color: #2f4f3d; }
+  .tip-card .d { margin-top: 5px; font-size: 11px; color: #55554a; line-height: 1.5; }
+  .tip-wide { margin-top: 10px; background: #f7f9f1; border: 1px solid #edf0e2; border-radius: 12px; padding: 11px 12px; }
+  .tip-wide .t { font-size: 11px; font-weight: 800; color: #2f4f3d; }
+  .tip-wide .d { margin-top: 5px; font-size: 11px; color: #55554a; line-height: 1.55; }
+
+  .aftersale-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .btn.full { grid-column: 1 / -1; }
+  .damage-note { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #fdf3e7; border: 1px solid #f3dfc4; color: #7a4a12; font-size: 11.5px; line-height: 1.55; }
+  .cook { margin-top: 12px; border: 1px solid #edf0e2; border-radius: 12px; padding: 12px; background: #f7f9f1; }
+  .cook-head { display: flex; align-items: center; gap: 8px; }
+  .cook-t { font-size: 11px; font-weight: 800; color: #2f4f3d; }
+  .warn { font-size: 11px; font-weight: 800; color: #b42318; background: #fde8e6; border: 1px solid #f6c9c4; border-radius: 6px; padding: 2px 7px; }
+  .cook-note { margin-left: auto; font-size: 10px; color: #9a9a86; }
+  .cook-row { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; font-size: 11px; line-height: 1.5; }
+  .cook-row .m { flex: none; width: 54px; font-weight: 800; color: #26261f; }
+  .cook-row .time { flex: none; width: 74px; color: #2f4f3d; font-weight: 700; }
+  .cook-row .desc { flex: 1; color: #55554a; }
+  .cook-judge { margin-top: 10px; padding-top: 9px; border-top: 1px dashed #dfe3d0; font-size: 10.5px; line-height: 1.6; color: #7d7d6a; }
+  .state-note { margin-top: 18px; padding: 14px 16px; border-radius: 12px; background: #fff8ef; border: 1px solid #f0dcc2; }
+  .state-note .st { font-size: 12px; font-weight: 800; color: #7a4a12; }
+  .state-note .sd { margin-top: 5px; font-size: 11.5px; color: #6b5a44; line-height: 1.55; }
+  .btn { height: 40px; border-radius: 10px; border: 1px solid #dfe3d0; background: #fbfcf6; color: #2f4f3d; font-size: 12.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .btn.primary { background: #1e3a2f; border-color: #1e3a2f; color: #fff; }
+
+  .entry { display: flex; align-items: center; justify-content: space-between; }
+  .entry .t { font-size: 13px; font-weight: 700; }
+  .entry .l { font-size: 11.5px; color: #8a8a74; }
+
+  .annot { position: relative; }
+  .num { position: absolute; left: 14px; top: -11px; z-index: 2; width: 22px; height: 22px; border-radius: 50%; background: #d9822b; color: #fff; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 18px rgba(0,0,0,.12); border: 2px solid #f4f5ef; }
+  .legend { width: 860px; margin: 30px auto 0; background: #fff; border-radius: 16px; padding: 20px 24px; border: 1px solid #e3e6d8; }
+  .legend h3 { font-size: 14px; margin-bottom: 10px; }
+  .legend ol { margin-left: 18px; font-size: 12.5px; color: #55554a; line-height: 1.9; }
+  .legend b { color: #26261f; }
+  .note { margin-top: 14px; font-size: 11.5px; color: #8a8a74; line-height: 1.7; border-top: 1px dashed #e6e8dc; padding-top: 12px; }
+  .note-box { margin-top: 12px; padding: 11px 12px; border-radius: 10px; background: #f7f9f1; border: 1px solid #edf0e2; font-size: 11.5px; color: #55554a; line-height: 1.55; }
+  .note-box b { color: #2f4f3d; font-weight: 800; }
+  .photos { display: flex; gap: 8px; margin-top: 12px; }
+  .photo { flex: 1; height: 86px; border-radius: 10px; background: linear-gradient(145deg, #dbe6c6, #b9cda0); display: flex; align-items: center; justify-content: center; font-size: 20px; color: #6d7f55; }
+  .photos-hint { margin-top: 8px; font-size: 10.5px; color: #9a9a86; }
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="board-title">鲜食订单详情 · 信息架构优化（原型）</div>
+  <div class="board-sub">左：现在 · 右：建议稿。4 处改动分别对应图上的 ①②③④ 标记；数据取自订单 SK20261101-001。</div>
+
+  <div class="phones">
+    <!-- ============ BEFORE ============ -->
+    <div class="phone-col">
+      <div class="phone-label"><span class="tag tag-now">现在</span> 重复、入口多、物流单开</div>
+      <div class="phone">
+        <div class="statusbar"><span>9:41</span><span>●●● 5G ▮</span></div>
+        <div class="nav"><span class="back">‹</span> 订单详情</div>
+        <div class="scroll">
+          <div class="hero">
+            <div class="hero-top"><span class="hero-status">已发货</span><span class="hero-amount">¥268.00</span></div>
+            <div class="hero-title">萝卜绿豆鸭胸猪里脊</div>
+            <div class="hero-sub">3 袋 · 共 900g · 预计 11月3日送达</div>
+            <div class="hero-progress"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+            <div class="hero-sub" style="margin-top:10px">订单号 SK20261101-001 复制 · 2026-11-01 10:24</div>
+          </div>
+
+          <div class="section">
+            <div class="product-head">
+              <div class="cover">🍲</div>
+              <div>
+                <div class="product-name">萝卜绿豆鸭胸猪里脊</div>
+                <div class="product-meta">3 袋 · 每袋 300g</div>
+                <div class="product-price">¥268.00 · 单价 ¥89.33/袋</div>
+              </div>
+            </div>
+            <div class="list-head">
+              <span class="list-title">原料清单</span><span class="list-count">（共15种）</span>
+              <span class="badge">实际采购</span><span class="collapse">收起</span>
+            </div>
+
+            <div class="cat">【食材】</div>
+            <div class="row">
+              <div class="row-top"><span class="row-name">猪里脊</span><span class="row-amount">505g</span></div>
+              <div class="chips"><span class="pill">本单采购</span><span class="chip">渠道 沃尔玛</span><span class="chip">采购产品 【鲜宰】猪瘦肉 400g/盒</span></div>
+            </div>
+            <div class="row">
+              <div class="row-top"><span class="row-name">三文鱼</span><span class="row-amount">120g</span></div>
+              <div class="chips"><span class="pill stock">来自库存</span><span class="chip">渠道 山姆会员店</span><span class="chip">采购产品 Pan Fish 生冷冻三文鱼块</span></div>
+              <div class="date-line">库存采购日期：2026年10月22日</div>
+            </div>
+            <div class="row">
+              <div class="row-top"><span class="row-name">鸡胸肉</span><span class="row-amount">210g</span></div>
+              <div class="chips"><span class="pill">本单采购</span><span class="chip">渠道 沃尔玛</span><span class="chip">采购产品 泰森 鲜鸡大胸 500g</span></div>
+            </div>
+            <div class="row">
+              <div class="row-top"><span class="row-name">糙米</span><span class="row-amount">190g</span></div>
+              <div class="chips"><span class="pill">本单采购</span><span class="chip">渠道 沃尔玛</span><span class="chip">采购产品 糙米</span></div>
+            </div>
+            <div class="row">
+              <div class="row-top"><span class="row-name">鸡蛋</span><span class="row-amount">60g</span></div>
+              <div class="chips"><span class="pill stock">来自库存</span><span class="chip">渠道 山姆会员店</span><span class="chip">采购产品 MM精选鲜鸡蛋</span></div>
+              <div class="date-line">库存采购日期：2026年10月26日</div>
+            </div>
+
+            <div class="cat" style="margin-top:16px">【补剂】</div>
+            <div class="row">
+              <div class="row-top"><span class="row-name">海藻粉</span><span class="row-amount">2.3g</span></div>
+              <div class="chips"><span class="chip">渠道 天猫旗舰店</span><span class="chip">品牌 NOW FOODS</span><span class="chip">采购产品 海藻粉 227g/瓶</span></div>
+            </div>
+            <div class="row">
+              <div class="row-top"><span class="row-name">碳酸钙粉</span><span class="row-amount">3.2g</span></div>
+              <div class="chips"><span class="chip">渠道 天猫旗舰店</span><span class="chip">品牌 NOW FOODS</span><span class="chip">采购产品 碳酸钙粉 340g/罐</span></div>
+            </div>
+            <div class="toggle">展开其余 8 项原料 ⌄</div>
+          </div>
+
+          <div class="section note-box"><b>你的备注</b><br>不要放葱，分装标签写狗狗名字「拿铁」。</div>
+
+          <div class="section">
+            <div class="section-title">收货与配送</div>
+            <div class="info-line"><span class="k">收货地址:</span><span class="v">张三 13800000000 广东省深圳市南山区科技园 1 号</span><span class="inline-actions"><span class="mini-btn">复制</span><span class="mini-btn">更换</span></span></div>
+            <div class="info-line"><span class="k">目标制作日期:</span><span class="v">2026-11-01</span></div>
+            <div class="info-line"><span class="k">预计发货:</span><span class="v">2026-11-02</span></div>
+            <div class="info-line"><span class="k">配送说明:</span><span class="v">顺丰冷链，发货后 1–2 天送达</span></div>
+          </div>
+
+          <div class="section entry"><span class="t">怎么喂、怎么存</span><span class="l">食用与保存提醒 ›</span></div>
+          <div class="section entry"><span class="t">联系客服</span><span class="l">在线咨询 ›</span></div>
+
+          <div class="section">
+            <div class="section-title">原料照片</div>
+            <div class="photos"><div class="photo">🐟</div><div class="photo">🥩</div><div class="photo">🥕</div></div>
+            <div class="photos-hint">员工制作完成后上传的原料照片，供您验收</div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">售后</div>
+            <div class="aftersale-grid">
+              <div class="btn">申请退款</div><div class="btn">申请重做</div>
+              <div class="btn">投诉建议</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">物流信息</div>
+            <div class="info-line"><span class="k">快递公司:</span><span class="v">顺丰速运</span></div>
+            <div class="info-line"><span class="k">运单号:</span><span class="v tracking">SF1234567890</span><span class="inline-actions"><span class="mini-btn">复制</span></span></div>
+            <div class="info-line"><span class="k">发货时间:</span><span class="v">2026-11-02 18:20</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ AFTER ============ -->
+    <div class="phone-col">
+      <div class="phone-label"><span class="tag tag-new">建议稿</span> 去重、补全、入口收敛</div>
+      <div class="phone">
+        <div class="statusbar"><span>9:41</span><span>●●● 5G ▮</span></div>
+        <div class="nav"><span class="back">‹</span> 订单详情</div>
+        <div class="scroll">
+          <div class="hero">
+            <div class="hero-top"><span class="hero-status">已发货</span><span class="hero-amount">¥268.00</span></div>
+            <div class="hero-sub" style="margin-top:10px">订单号 SK20261101-001 复制</div>
+            <div class="hero-sub">下单时间 2026-11-01 10:24</div>
+            <div class="hero-progress"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+            <div class="hero-sub">预计 11月3日送达 · 实付金额 ¥268.00</div>
+          </div>
+
+          <div class="section annot">
+            <span class="num">1</span>
+            <div class="product-head">
+              <div class="cover">🍲</div>
+              <div>
+                <div class="product-name">萝卜绿豆鸭胸猪里脊</div>
+                <div class="product-meta">3 袋 · 每袋 300g</div>
+                <div class="product-price">单价 ¥89.33/袋</div>
+              </div>
+            </div>
+            <div class="list-head">
+              <span class="list-title">原料清单</span><span class="list-count">共15种</span>
+              <span class="badge">实际采购</span><span class="collapse">收起</span>
+            </div>
+
+            <div class="cat">食材 11</div>
+            <div class="row">
+              <div class="row-top"><span class="row-name">猪里脊</span><span class="row-amount">505g</span></div>
+              <div class="meta"><span class="pill">本单采购</span><span>沃尔玛</span><span class="dot">·</span><span>【鲜宰】猪瘦肉 400g/盒</span></div>
+            </div>
+            <div class="row">
+              <div class="row-top"><span class="row-name">红薯</span><span class="row-amount">350g</span></div>
+              <div class="meta"><span class="pill">本单采购</span><span>沃尔玛</span><span class="dot">·</span><span>【宜煮】板栗红薯 约700g/份</span></div>
+            </div>
+            <div class="row">
+              <div class="row-top"><span class="row-name">糙米</span><span class="row-amount">190g</span></div>
+              <div class="meta"><span class="pill">本单采购</span><span>沃尔玛</span><span class="dot">·</span><span>糙米</span></div>
+            </div>
+            <div class="row">
+              <div class="row-top"><span class="row-name">三文鱼</span><span class="row-amount">120g</span></div>
+              <div class="meta"><span class="pill stock">来自库存</span><span>山姆会员店</span><span class="dot">·</span><span>Pan Fish 生冷冻三文鱼块</span><span class="stock-date">库存采购日期 2026年10月22日</span></div>
+            </div>
+            <div class="row">
+              <div class="row-top"><span class="row-name">鸡蛋</span><span class="row-amount">60g</span></div>
+              <div class="meta"><span class="pill stock">来自库存</span><span>山姆会员店</span><span class="dot">·</span><span>MM精选鲜鸡蛋</span><span class="stock-date">库存采购日期 2026年10月26日</span></div>
+            </div>
+            <div class="toggle">展开其余 10 项原料（含 4 种补剂）⌄</div>
+          </div>
+
+          <div class="section note-box"><b>你的备注</b><br>不要放葱，分装标签写狗狗名字「拿铁」。</div>
+
+          <div class="section annot">
+            <span class="num">2</span>
+            <div class="section-title">收货与配送</div>
+            <div class="info-line"><span class="k">收货地址</span><span class="v">张三 13800000000<br>广东省深圳市南山区科技园 1 号</span><span class="inline-actions"><span class="mini-btn">复制</span><span class="mini-btn">更换</span></span></div>
+            <div class="info-line"><span class="k">目标制作</span><span class="v">2026-11-01</span></div>
+            <div class="info-line"><span class="k">预计发货</span><span class="v">2026-11-02</span></div>
+            <div class="info-line"><span class="k">配送说明</span><span class="v">顺丰冷链，发货后 1–2 天送达</span></div>
+
+            <div class="divider"></div>
+            <div class="logistics">
+              <div class="logistics-top">🚚 顺丰速运 · 已发出</div>
+              <div class="logistics-card"><span class="tracking">SF1234567890</span><span class="copy">复制运单号</span></div>
+              <div class="logistics-time">发货时间 2026-11-02 18:20</div>
+            </div>
+          </div>
+
+          <div class="section annot">
+            <span class="num">4</span>
+            <div class="section-title">食用与保存</div>
+            <div class="tip-grid">
+              <div class="tip-card"><div class="t">冷冻保存</div><div class="d">-18℃ 可保存 180 天。</div></div>
+              <div class="tip-card"><div class="t">冷藏保存</div><div class="d">0~4 摄氏度可保存 1~3 天。冷冻转冷藏解冻，建议 24 小时内食用。</div></div>
+            </div>
+            <div class="cook">
+              <div class="cook-head">
+                <span class="cook-t">烹饪方法</span>
+                <span class="warn">必须烹饪后再食用</span>
+                <span class="cook-note">按每袋 300g 计算</span>
+              </div>
+              <div class="cook-row"><span class="m">蒸</span><span class="time">约 20 分钟</span><span class="desc">无需解冻，直接放入蒸锅</span></div>
+              <div class="cook-row"><span class="m">炖</span><span class="time">约 20 分钟</span><span class="desc">解冻拆袋，加水小火慢炖</span></div>
+              <div class="cook-row"><span class="m">低温慢煮</span><span class="time">60 分钟</span><span class="desc">无需解冻，温度设置 65℃</span></div>
+              <div class="cook-judge">由于火力不一致，烹饪时间可能有误差。蒸和炖的出锅判定标准为——鲜食中心没有可见血水。低温慢煮的<b>出浴</b>判定标准为——食物中心温度达到 65℃ 后 1 分钟。</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">原料照片</div>
+            <div class="photos"><div class="photo">🐟</div><div class="photo">🥩</div><div class="photo">🥕</div></div>
+            <div class="photos-hint">员工制作完成后上传的原料照片，供您验收</div>
+          </div>
+
+          <div class="section annot">
+            <span class="num">3</span>
+            <div class="section-title">售后与客服</div>
+            <div class="damage-note">收到后，如有化冻、破损、变质。请申请全额退款或免费重做。</div>
+            <div class="aftersale-grid">
+              <div class="btn">申请退款</div><div class="btn">申请重做</div>
+              <div class="btn full">联系客服</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <h3>4 处改动</h3>
+    <ol>
+      <li><b>原料清单</b>：默认只展示占比最高的 5 个食材；其余食材和 4 种补剂折叠。每行只保留「名称 + 用量」，渠道/商品信息改成一行安静的小字；补剂展开后用「渠道 / 品牌 / 采购产品」三行标签。</li>
+      <li><b>物流并入「收货与配送」</b>：地址、时间、配送说明之后，直接在同一个卡片里展示快递公司、运单号和复制按钮，不再单开一张「物流信息」卡。</li>
+      <li><b>售后与客服</b>：删除「投诉建议」按钮和页面（投诉统一走客服）；把收货提醒挪到按钮上方；剩 3 个按钮——退款 / 重做并排，联系客服整行。删掉原来单独一行「联系客服」入口。</li>
+      <li><b>食用与保存直接展开</b>：取消二级入口，直接展示冷冻/冷藏保存、烹饪方法（红色警示 + 出锅/出浴判定标准）；时间按每袋 300g 落在 251–400g 档；原「货损提醒」移到售后板块。</li>
+    </ol>
+    <div class="note">
+      另外三处修正：<br>
+      · 去掉重复——状态卡不再重复食谱名、分装和总价，只留状态、订单号、下单时间、预计送达、实付金额；食谱名/分装/单价只留在商品卡。<br>
+      · 补回订单号 + 复制、下单时间。<br>
+      · 补回顾客备注、员工上传的原料照片。
+    </div>
+    <div class="state-note">
+      <div class="st">如果每袋超过 600g</div>
+      <div class="sd">不提供蒸、炖、低温慢煮的固定时间，只显示判定标准：</div>
+      <div class="cook-judge" style="border-top:0;padding-top:6px;margin-top:2px">由于火力不一致，烹饪时间可能有误差。蒸和炖的出锅判定标准为——鲜食中心没有可见血水。低温慢煮的<b>出浴</b>判定标准为——食物中心温度达到 65℃ 后 1 分钟。</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

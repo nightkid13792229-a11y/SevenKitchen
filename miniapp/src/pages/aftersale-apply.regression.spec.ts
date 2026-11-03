@@ -17,13 +17,16 @@ describe('aftersale apply regressions', () => {
     expect(source).not.toContain("uni.showToast({ title: '提交成功'")
   })
 
-  it('defaults the aftersale type to refund instead of complaint', () => {
+  it('defaults the aftersale type to refund, and complaint is gone', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/aftersale-apply/index.vue'),
       'utf-8',
     )
 
-    expect(source).toContain("ref<'REFUND' | 'REMAKE' | 'COMPLAINT'>('REFUND')")
+    expect(source).toContain("ref<'REFUND' | 'REMAKE'>('REFUND')")
     expect(source).toContain("currentPage.options?.type || 'REFUND'")
+    // 2026-11-03：投诉建议统一走客服，售后表单不再提供该类型
+    expect(source).not.toContain('COMPLAINT')
+    expect(source).not.toContain('投诉建议')
   })
 })

@@ -27,9 +27,6 @@
           >{{ getStatusText(order) }}</text>
         </view>
 
-        <text class="hero-title">{{ orderCenterTitle }}</text>
-        <text class="hero-meta">{{ heroMetaText }}</text>
-
         <OrderProgressSteps
           class="hero-progress"
           kind="food"
@@ -190,104 +187,141 @@
                 </view>
 
                 <view
-                  v-for="(category, idx) in getGroupedIngredients(
-                    item.recipeSnapshot.items,
-                  )"
-                  :key="idx"
-                  class="ingredient-category"
-                  :class="{
-                    'ingredient-category--disclosed': hasProcurementDisclosure,
-                  }"
+                  v-if="visibleFoodIngredients(item).length"
+                  class="ingredient-group"
                 >
                   <view class="category-title"
-                    >【{{ category.typeName }}】</view
+                    >食材 {{ foodIngredientCount(item) }}</view
                   >
                   <view
-                    v-for="(ingredient, iIdx) in category.items"
-                    :key="iIdx"
-                    class="ingredient-item"
-                    :class="{
-                      'ingredient-item--disclosed': Boolean(
-                        getProcurementDisclosure(ingredient),
-                      ),
-                    }"
+                    v-for="(ingredient, iIdx) in visibleFoodIngredients(item)"
+                    :key="ingredient.ingredient_id || iIdx"
+                    class="ingredient-item proc-row"
                     @longpress="showIngredientDetail(ingredient, item)"
                   >
-                    <text class="ingredient-text">{{
-                      formatIngredientDisplay(ingredient, item)
-                    }}</text>
+                    <view class="proc-top">
+                      <text class="proc-name">{{ ingredient.name }}</text>
+                      <text class="proc-amount">{{
+                        ingredientAmountText(ingredient, item)
+                      }}</text>
+                    </view>
                     <view
                       v-if="getProcurementDisclosure(ingredient)"
-                      class="procurement-line"
+                      class="proc-meta"
                     >
-                      <!-- 补剂：渠道 / 品牌 / 采购产品，不带来源标签和库存日期 -->
-                      <template v-if="isSupplementIngredient(ingredient)">
-                        <text class="procurement-chip"
-                          >渠道
-                          {{
-                            getProcurementDisclosure(ingredient)?.channel || '—'
-                          }}</text
-                        >
-                        <text class="procurement-chip"
-                          >品牌
-                          {{
-                            getProcurementDisclosure(ingredient)?.brand || '—'
-                          }}</text
-                        >
-                        <text class="procurement-chip"
-                          >采购产品
-                          {{
-                            getProcurementDisclosure(ingredient)?.productName ||
-                            '—'
-                          }}</text
-                        >
-                      </template>
-                      <!-- 食材：只显示内容，不再写「渠道 / 采购产品」 -->
-                      <template v-else>
-                        <text
-                          class="procurement-tag"
-                          :class="{
-                            inventory:
-                              getProcurementDisclosure(ingredient)?.source ===
-                              'FROM_INVENTORY',
-                          }"
-                          >{{
+                      <text
+                        class="proc-tag"
+                        :class="{
+                          inventory:
                             getProcurementDisclosure(ingredient)?.source ===
-                            'FROM_INVENTORY'
-                              ? '来自库存'
-                              : '本单采购'
-                          }}</text
-                        >
-                        <text
-                          v-if="getProcurementDisclosure(ingredient)?.channel"
-                          class="procurement-chip"
-                          >{{ getProcurementDisclosure(ingredient)?.channel }}</text
-                        >
-                        <text
-                          v-if="
-                            getProcurementDisclosure(ingredient)?.productName
-                          "
-                          class="procurement-chip"
-                          >{{
-                            getProcurementDisclosure(ingredient)?.productName
-                          }}</text
-                        >
-                        <text
-                          v-if="
-                            getProcurementDisclosure(ingredient)?.source ===
-                              'FROM_INVENTORY' &&
-                            getProcurementDisclosure(ingredient)?.purchasedAt
-                          "
-                          class="procurement-date"
-                          >库存采购日期：{{
-                            formatChineseDate(
-                              getProcurementDisclosure(ingredient)?.purchasedAt,
-                            )
-                          }}</text
-                        >
-                      </template>
+                            'FROM_INVENTORY',
+                        }"
+                        >{{
+                          getProcurementDisclosure(ingredient)?.source ===
+                          'FROM_INVENTORY'
+                            ? '来自库存'
+                            : '本单采购'
+                        }}</text
+                      >
+                      <text
+                        v-if="getProcurementDisclosure(ingredient)?.channel"
+                        class="proc-text"
+                        >{{ getProcurementDisclosure(ingredient)?.channel }}</text
+                      >
+                      <text
+                        v-if="
+                          getProcurementDisclosure(ingredient)?.channel &&
+                          getProcurementDisclosure(ingredient)?.productName
+                        "
+                        class="proc-dot"
+                        >·</text
+                      >
+                      <text
+                        v-if="getProcurementDisclosure(ingredient)?.productName"
+                        class="proc-text"
+                        >{{
+                          getProcurementDisclosure(ingredient)?.productName
+                        }}</text
+                      >
+                      <text
+                        v-if="
+                          getProcurementDisclosure(ingredient)?.source ===
+                            'FROM_INVENTORY' &&
+                          getProcurementDisclosure(ingredient)?.purchasedAt
+                        "
+                        class="proc-date"
+                        >库存采购日期
+                        {{
+                          formatChineseDate(
+                            getProcurementDisclosure(ingredient)?.purchasedAt,
+                          )
+                        }}</text
+                      >
                     </view>
                   </view>
+                </view>
+
+                <view
+                  v-if="visibleSupplementIngredients(item).length"
+                  class="ingredient-group"
+                >
+                  <view class="category-title"
+                    >补剂 {{ supplementIngredientCount(item) }}</view
+                  >
+                  <view
+                    v-for="(ingredient, iIdx) in visibleSupplementIngredients(item)"
+                    :key="ingredient.ingredient_id || iIdx"
+                    class="ingredient-item proc-row"
+                    @longpress="showIngredientDetail(ingredient, item)"
+                  >
+                    <view class="proc-top">
+                      <text class="proc-name">{{ ingredient.name }}</text>
+                      <text class="proc-amount">{{
+                        ingredientAmountText(ingredient, item)
+                      }}</text>
+                    </view>
+                    <view
+                      v-if="getProcurementDisclosure(ingredient)"
+                      class="proc-supp"
+                    >
+                      <view class="supp-line">
+                        <text class="supp-k">渠道</text>
+                        <text class="supp-v">{{
+                          getProcurementDisclosure(ingredient)?.channel || '—'
+                        }}</text>
+                      </view>
+                      <view class="supp-line">
+                        <text class="supp-k">品牌</text>
+                        <text class="supp-v">{{
+                          getProcurementDisclosure(ingredient)?.brand || '—'
+                        }}</text>
+                      </view>
+                      <view class="supp-line">
+                        <text class="supp-k">采购产品</text>
+                        <text class="supp-v">{{
+                          getProcurementDisclosure(ingredient)?.productName || '—'
+                        }}</text>
+                      </view>
+                    </view>
+                  </view>
+                </view>
+
+                <view
+                  v-if="hiddenIngredientCount(item) > 0"
+                  class="ingredient-toggle-more"
+                  @tap="toggleIngredientList(item.id)"
+                >
+                  {{ expandIngredientsText(item) }} ⌄
+                </view>
+                <view
+                  v-else-if="
+                    expandedIngredientLists[item.id] &&
+                    supplementIngredientCount(item) > 0
+                  "
+                  class="ingredient-toggle-more"
+                  @tap="toggleIngredientList(item.id)"
+                >
+                  收起 ⌃
                 </view>
               </view>
             </view>
@@ -393,6 +427,27 @@
         <view v-if="isReshipOrder" class="info-row">
           <text class="label">订单性质:</text>
           <text class="value">免费补发（不收费）</text>
+        </view>
+
+        <view
+          v-if="order.status === 'SHIPPED' && order.trackingNumber"
+          class="logistics-inline"
+        >
+          <view class="logistics-head">
+            <text class="logistics-title">{{
+              getCarrierName(order.carrierCode)
+            }}</text>
+            <text class="logistics-status">已发出</text>
+          </view>
+          <view class="logistics-row">
+            <text class="logistics-no">{{ order.trackingNumber }}</text>
+            <button class="btn-copy-tracking" @tap="copyTrackingNumber">
+              复制运单号
+            </button>
+          </view>
+          <view v-if="order.shippedAt" class="logistics-time">
+            发货时间 {{ formatDateTime(order.shippedAt) }}
+          </view>
         </view>
       </view>
 
@@ -576,24 +631,54 @@
         </view>
       </view>
 
-      <!-- 怎么喂、怎么存：已发货/已完成给一个入口，复用现成页面 -->
-      <view
-        v-if="order.status === 'SHIPPED' || order.status === 'COMPLETED'"
-        class="section reminder-section"
-        @tap="goShippingNotice"
-      >
-        <view class="reminder-row">
-          <text class="reminder-title">怎么喂、怎么存</text>
-          <text class="reminder-link">食用与保存提醒 ›</text>
+      <view class="section eat-save-section">
+        <view class="section-title">食用与保存</view>
+        <view class="storage-grid">
+          <view class="storage-card">
+            <text class="storage-title">冷冻保存</text>
+            <text class="storage-desc">-18℃ 可保存 180 天。</text>
+          </view>
+          <view class="storage-card">
+            <text class="storage-title">冷藏保存</text>
+            <text class="storage-desc"
+              >0~4 摄氏度可保存 1~3 天。冷冻转冷藏解冻，建议 24 小时内食用。</text
+            >
+          </view>
         </view>
-      </view>
-
-      <view class="section service-section" @tap="contactService">
-        <view class="entry-row">
-          <text class="entry-title">联系客服</text>
-          <text class="entry-link">{{
-            customerServiceConfig.enabled ? '在线咨询 ›' : '查看联系方式 ›'
-          }}</text>
+        <view class="cooking-card">
+          <view class="cooking-head">
+            <text class="cooking-title">烹饪方法</text>
+            <text class="cooking-warn">必须烹饪后再食用</text>
+            <text v-if="cookingWeightG > 0" class="cooking-weight"
+              >按每袋 {{ cookingWeightG }}g 计算</text
+            >
+          </view>
+          <template v-if="cookingTimeLabels">
+            <view class="cooking-row">
+              <text class="cooking-method">蒸</text>
+              <text class="cooking-time">{{ cookingTimeLabels.steam }}</text>
+              <text class="cooking-desc">无需解冻，直接放入蒸锅</text>
+            </view>
+            <view class="cooking-row">
+              <text class="cooking-method">炖</text>
+              <text class="cooking-time">{{ cookingTimeLabels.stew }}</text>
+              <text class="cooking-desc">解冻拆袋，加水小火慢炖</text>
+            </view>
+            <view class="cooking-row">
+              <text class="cooking-method">低温慢煮</text>
+              <text class="cooking-time">{{
+                cookingTimeLabels.sousvide
+              }}</text>
+              <text class="cooking-desc">无需解冻，温度设置 65℃</text>
+            </view>
+          </template>
+          <view v-else-if="cookingWeightG > 600" class="cooking-overlimit"
+            >每袋超过 600g，不提供固定时间，请按下面的判定标准判断。</view
+          >
+          <view v-else class="cooking-overlimit"
+            >暂未获取到每袋重量，请按下面的判定标准判断。</view
+          >
+          <view class="cooking-judge">{{ cookingTimeJudgement }}</view>
         </view>
       </view>
 
@@ -643,8 +728,11 @@
         只保留真的能点的动作：退款 / 重做 / 投诉。锁定期的解释和
         重复的客服入口都去掉了——客服入口页面里已经有一个。
       -->
-      <view v-if="showAftersaleActions" class="section aftersale-section">
-        <view class="section-title">售后</view>
+      <view class="section aftersale-section">
+        <view class="section-title">售后与客服</view>
+        <view v-if="showDamageNote" class="damage-note"
+          >收到后，如有化冻、破损、变质。请申请全额退款或免费重做。</view
+        >
         <view class="aftersale-buttons">
           <button
             v-if="canApplyRefund(order.status, order.completedAt)"
@@ -660,12 +748,8 @@
           >
             <text class="btn-text">申请重做</text>
           </button>
-          <button
-            v-if="canApplyComplaint(order.status)"
-            class="btn-aftersale"
-            @tap="applyAftersaleType('COMPLAINT')"
-          >
-            <text class="btn-text">投诉建议</text>
+          <button class="btn-aftersale btn-contact" @tap="contactService">
+            <text class="btn-text">联系客服</text>
           </button>
         </view>
       </view>
@@ -712,26 +796,6 @@
         </view>
       </view>
 
-      <!-- 物流信息（仅在SHIPPED状态显示）-->
-      <view
-        class="section shipping-section"
-        v-if="order.status === 'SHIPPED' && order.trackingNumber"
-      >
-        <view class="section-title">物流信息</view>
-        <view class="info-row">
-          <text class="label">快递公司:</text>
-          <text class="value">{{ getCarrierName(order.carrierCode) }}</text>
-        </view>
-        <view class="info-row">
-          <text class="label">运单号:</text>
-          <text class="value tracking-number">{{ order.trackingNumber }}</text>
-          <button class="btn-copy" @tap="copyTrackingNumber">复制</button>
-        </view>
-        <view class="info-row" v-if="order.shippedAt">
-          <text class="label">发货时间:</text>
-          <text class="value">{{ formatDateTime(order.shippedAt) }}</text>
-        </view>
-      </view>
     </view>
 
     <view
@@ -985,10 +1049,13 @@ import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { openCustomerServiceChat } from '../../utils/customer-service';
 import { confirmWechatReceiptBeforeInternalComplete } from '../../utils/wechat-confirm-receipt';
 import {
+  COOKING_TIME_JUDGEMENT,
+  formatCookingTimes,
+} from '../../utils/cooking-time';
+import {
   getOrderStatusText,
   canApplyRefund,
   canApplyRemake,
-  canApplyComplaint,
   canApplyAftersale,
 } from '../../utils/order-aftersale';
 
@@ -1459,6 +1526,83 @@ const procurementStatusText = computed(() => {
 
 // 原料清单展开状态
 const expandedIngredients = ref<Record<string, boolean>>({});
+/** 原料清单内部的「5 个食材」折叠，和外层整块展开分开 */
+const expandedIngredientLists = ref<Record<string, boolean>>({});
+
+function toggleIngredientList(itemId: string) {
+  expandedIngredientLists.value[itemId] =
+    !expandedIngredientLists.value[itemId];
+}
+
+function allIngredientItems(item: OrderItem): RecipeSnapshotItem[] {
+  return item.recipeSnapshot?.items ?? [];
+}
+
+function foodIngredientCount(item: OrderItem): number {
+  return allIngredientItems(item).filter(
+    (ingredient) => !isSupplementIngredient(ingredient),
+  ).length;
+}
+
+function supplementIngredientCount(item: OrderItem): number {
+  return allIngredientItems(item).filter((ingredient) =>
+    isSupplementIngredient(ingredient),
+  ).length;
+}
+
+function sortedFoodIngredients(item: OrderItem): RecipeSnapshotItem[] {
+  return allIngredientItems(item)
+    .filter((ingredient) => !isSupplementIngredient(ingredient))
+    .slice()
+    .sort((a, b) => (b.ratio || 0) - (a.ratio || 0));
+}
+
+function visibleFoodIngredients(item: OrderItem): RecipeSnapshotItem[] {
+  const sorted = sortedFoodIngredients(item);
+  return expandedIngredientLists.value[item.id] ? sorted : sorted.slice(0, 5);
+}
+
+function visibleSupplementIngredients(item: OrderItem): RecipeSnapshotItem[] {
+  if (!expandedIngredientLists.value[item.id]) {
+    return [];
+  }
+  return allIngredientItems(item).filter((ingredient) =>
+    isSupplementIngredient(ingredient),
+  );
+}
+
+function hiddenIngredientCount(item: OrderItem): number {
+  const hiddenFood = Math.max(
+    0,
+    foodIngredientCount(item) - visibleFoodIngredients(item).length,
+  );
+  const hiddenSupplement = Math.max(
+    0,
+    supplementIngredientCount(item) - visibleSupplementIngredients(item).length,
+  );
+  return hiddenFood + hiddenSupplement;
+}
+
+function expandIngredientsText(item: OrderItem): string {
+  const hidden = hiddenIngredientCount(item);
+  const supplementCount = supplementIngredientCount(item);
+  return supplementCount > 0
+    ? `展开其余 ${hidden} 项原料（含 ${supplementCount} 种补剂）`
+    : `展开其余 ${hidden} 项原料`;
+}
+
+function ingredientAmountText(
+  ingredient: RecipeSnapshotItem,
+  item: OrderItem,
+): string {
+  if (isSupplementIngredient(ingredient)) {
+    const amount = getSupplementActualAmount(ingredient);
+    const unit = ingredient.unit_display_label || 'g';
+    return amount > 0 ? `${amount}${unit}` : '';
+  }
+  const grams = Math.round(item.quantityG * ((ingredient.ratio || 0) / 100));
+  return `${grams}g`;
+}
 
 // 原料类型映射
 const ingredientTypeMap: Record<string, string> = {
@@ -1594,27 +1738,29 @@ const effectiveShippingDate = computed(() => {
   return date.toISOString();
 });
 
-/** 售后动作只在真的能申请时出现（已发货 / 已完成） */
-const showAftersaleActions = computed(() => {
-  const status = order.value?.status;
-  return status === 'SHIPPED' || status === 'COMPLETED';
+/** 货损提醒只在可能发生货损的阶段显示 */
+const showDamageNote = computed(() =>
+  ['SHIPPED', 'COMPLETED'].includes(String(order.value?.status || '')),
+);
+
+/** 烹饪时间按每袋克重算（多规格时先取第一档，后续可扩展为多行） */
+const cookingWeightG = computed(() => {
+  const first = order.value?.items?.[0];
+  if (!first) {
+    return 0;
+  }
+  const plan = first.packagePlan;
+  if (Array.isArray(plan) && plan.length > 0) {
+    return Math.round(Number(plan[0].packageSpecG) || 0);
+  }
+  return Math.round(Number(first.packageSpecG) || 0);
 });
 
-/** 主卡副信息：狗狗 + 袋数 + 净重；现货单只给商品口径 */
-const heroMetaText = computed(() => {
-  const current = order.value;
-  if (!current) return '';
-  if (isStockOrder.value) return orderCenterDescription.value;
+const cookingTimeLabels = computed(() =>
+  formatCookingTimes(cookingWeightG.value),
+);
 
-  const group = groupedItems.value[0];
-  const parts: string[] = [];
-  if (group?.dogName) parts.push(group.dogName);
-  if (group?.dogBreedName) parts.push(group.dogBreedName);
-  if (Number(group?.dogWeightKg) > 0) parts.push(`${group.dogWeightKg}kg`);
-  if (totalPackageCount.value > 0) parts.push(`${totalPackageCount.value}袋`);
-  if (totalQuantityKg.value > 0) parts.push(`约${totalQuantityKg.value}kg`);
-  return parts.join(' · ');
-});
+const cookingTimeJudgement = COOKING_TIME_JUDGEMENT;
 
 const heroEtaText = computed(() => {
   const current = order.value;
@@ -1744,60 +1890,6 @@ watch(
 // 切换原料清单展开/收起
 function toggleIngredients(itemId: string) {
   expandedIngredients.value[itemId] = !expandedIngredients.value[itemId];
-}
-
-// 获取分组后的原料
-function getGroupedIngredients(items: RecipeSnapshotItem[]) {
-  const groups = new Map<string, RecipeSnapshotItem[]>();
-
-  items.forEach((ingredient) => {
-    const type = ingredient.ingredient_type || 'FOOD';
-    const typeName = ingredientTypeMap[type] || '其他';
-
-    if (!groups.has(typeName)) {
-      groups.set(typeName, []);
-    }
-
-    groups.get(typeName)!.push(ingredient);
-  });
-
-  // 转换为数组并排序
-  return Array.from(groups.entries()).map(([typeName, items]) => ({
-    typeName,
-    items: items.sort((a, b) => {
-      // 优先按sort_order排序
-      if (a.sort_order !== undefined && b.sort_order !== undefined) {
-        return a.sort_order - b.sort_order;
-      }
-      // 然后按ratio降序排序
-      return b.ratio - a.ratio;
-    }),
-  }));
-}
-
-// 格式化原料显示
-function formatIngredientDisplay(
-  ingredient: RecipeSnapshotItem,
-  item: OrderItem,
-): string {
-  const isSupplement = ingredient.ingredient_type === 'SUPPLEMENT';
-
-  if (isSupplement) {
-    // 补剂类型：从pricing_breakdown中获取实际用量
-    const actualAmount = getSupplementActualAmount(ingredient);
-    const unit = ingredient.unit_display_label || 'g';
-
-    if (actualAmount > 0) {
-      return `${ingredient.name} ${actualAmount}${unit}`;
-    } else {
-      return `${ingredient.name}`;
-    }
-  } else {
-    // 普通原料：计算实际用量（克数）
-    // ratio在数据库中存储的是百分比（如42.83），需要除以100
-    const actualAmountG = Math.round(item.quantityG * (ingredient.ratio / 100));
-    return `${ingredient.name} ${actualAmountG}g`;
-  }
 }
 
 // 获取补剂的实际用量（从pricingBreakdownSnapshot）
@@ -3473,30 +3565,6 @@ async function applyRefund() {
   text-align: right;
 }
 
-.service-section {
-  padding: 0;
-}
-
-/* 入口统一成「文字 + ›」（2026-10-31） */
-.entry-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 26rpx 24rpx;
-}
-
-.entry-title {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #26261f;
-}
-
-.entry-link {
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #1e3a2f;
-}
-
 .info-row {
   display: flex;
   align-items: center;
@@ -4790,29 +4858,6 @@ async function applyRefund() {
   color: #6b6653;
 }
 
-.reminder-section {
-  padding: 0;
-}
-
-.reminder-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 26rpx 24rpx;
-}
-
-.reminder-title {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #26261f;
-}
-
-.reminder-link {
-  font-size: 20rpx;
-  font-weight: 700;
-  color: #1e3a2f;
-}
-
 /* ===== 收货地址操作：一行胶囊（2026-10-31）===== */
 .address-content {
   flex: 1;
@@ -4968,5 +5013,331 @@ async function applyRefund() {
   color: #968f6d;
   font-size: 19rpx;
   line-height: 1.5;
+}
+
+/* ===== 2026-11-03 订单详情信息架构改版 ===== */
+
+/* 物流并入收货与配送 */
+.logistics-inline {
+  margin-top: 20rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 16rpx;
+  background: #f7f9f1;
+  border: 1rpx solid #e9edda;
+}
+
+.logistics-head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.logistics-title {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #2f4f3d;
+}
+
+.logistics-status {
+  font-size: 20rpx;
+  color: #7a8a6a;
+}
+
+.logistics-row {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  margin-top: 10rpx;
+}
+
+.logistics-no {
+  font-size: 24rpx;
+  color: #26261f;
+  letter-spacing: 0.4rpx;
+}
+
+.btn-copy-tracking {
+  margin: 0;
+  padding: 4rpx 14rpx;
+  border-radius: 8rpx;
+  border: 1rpx solid #dfe3d0;
+  background: #ffffff;
+  color: #2f4f3d;
+  font-size: 20rpx;
+  line-height: 1.5;
+}
+
+.btn-copy-tracking::after {
+  border: none;
+}
+
+.logistics-time {
+  margin-top: 8rpx;
+  font-size: 20rpx;
+  color: #9a9a86;
+}
+
+/* 原料清单新排版 */
+.ingredient-group {
+  margin-top: 8rpx;
+}
+
+.category-title {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  width: 100%;
+  margin: 18rpx 0 2rpx;
+  padding: 0;
+  background: transparent;
+  color: #7a7a66;
+  font-size: 21rpx;
+  font-weight: 700;
+}
+
+.category-title::after {
+  content: '';
+  flex: 1;
+  height: 1rpx;
+  background: #eef0e4;
+}
+
+.ingredient-item.proc-row {
+  display: block;
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid #f3f4ec;
+  border-radius: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.4;
+}
+
+.ingredient-item.proc-row:last-child {
+  border-bottom: 0;
+}
+
+.proc-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.proc-name {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #26261f;
+}
+
+.proc-amount {
+  font-size: 24rpx;
+  font-weight: 800;
+  color: #26261f;
+  white-space: nowrap;
+}
+
+.proc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: 8rpx;
+  font-size: 21rpx;
+  color: #7d7d6a;
+  line-height: 1.5;
+}
+
+.proc-tag {
+  flex: none;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background: #eaf2e3;
+  color: #2f6b4f;
+  font-size: 18rpx;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.proc-tag.inventory {
+  background: #f6efe0;
+  color: #8a6b33;
+}
+
+.proc-text {
+  word-break: break-all;
+}
+
+.proc-dot {
+  color: #c6c8b8;
+}
+
+.proc-date {
+  width: 100%;
+  font-size: 19rpx;
+  color: #9a9a86;
+}
+
+.proc-supp {
+  display: grid;
+  grid-template-columns: 96rpx 1fr;
+  gap: 4rpx 12rpx;
+  margin-top: 8rpx;
+  font-size: 21rpx;
+}
+
+.supp-k {
+  color: #9a9a86;
+}
+
+.supp-v {
+  color: #4d4d40;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.ingredient-toggle-more {
+  margin-top: 16rpx;
+  padding: 8rpx 0;
+  text-align: center;
+  font-size: 21rpx;
+  color: #7d7d6a;
+}
+
+/* 食用与保存 */
+.storage-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16rpx;
+  margin-top: 16rpx;
+}
+
+.storage-card {
+  padding: 18rpx 20rpx;
+  border-radius: 14rpx;
+  background: #f7f9f1;
+  border: 1rpx solid #edf0e2;
+}
+
+.storage-title {
+  display: block;
+  font-size: 21rpx;
+  font-weight: 700;
+  color: #2f4f3d;
+}
+
+.storage-desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 21rpx;
+  line-height: 1.55;
+  color: #55554a;
+}
+
+.cooking-card {
+  margin-top: 16rpx;
+  padding: 20rpx;
+  border-radius: 14rpx;
+  background: #f7f9f1;
+  border: 1rpx solid #edf0e2;
+}
+
+.cooking-head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.cooking-title {
+  font-size: 21rpx;
+  font-weight: 700;
+  color: #2f4f3d;
+}
+
+.cooking-warn {
+  padding: 3rpx 10rpx;
+  border-radius: 6rpx;
+  background: #fde8e6;
+  border: 1rpx solid #f6c9c4;
+  color: #b42318;
+  font-size: 20rpx;
+  font-weight: 700;
+}
+
+.cooking-weight {
+  margin-left: auto;
+  font-size: 19rpx;
+  color: #9a9a86;
+}
+
+.cooking-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+  margin-top: 14rpx;
+  font-size: 21rpx;
+  line-height: 1.5;
+}
+
+.cooking-method {
+  flex: none;
+  width: 110rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.cooking-time {
+  flex: none;
+  width: 150rpx;
+  font-weight: 700;
+  color: #2f4f3d;
+}
+
+.cooking-desc {
+  flex: 1;
+  color: #55554a;
+}
+
+.cooking-overlimit {
+  margin-top: 14rpx;
+  font-size: 21rpx;
+  line-height: 1.55;
+  color: #55554a;
+}
+
+.cooking-judge {
+  margin-top: 16rpx;
+  padding-top: 14rpx;
+  border-top: 1rpx dashed #dfe3d0;
+  font-size: 20rpx;
+  line-height: 1.6;
+  color: #7d7d6a;
+}
+
+/* 售后与客服 */
+.damage-note {
+  margin-top: 14rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 12rpx;
+  background: #fdf3e7;
+  border: 1rpx solid #f3dfc4;
+  color: #7a4a12;
+  font-size: 21rpx;
+  line-height: 1.55;
+}
+
+.aftersale-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20rpx;
+  margin-top: 16rpx;
+}
+
+.btn-aftersale {
+  width: 100%;
+}
+
+.btn-contact {
+  grid-column: 1 / -1;
 }
 </style>

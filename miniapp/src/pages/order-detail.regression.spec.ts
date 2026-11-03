@@ -377,4 +377,46 @@ describe('order detail runtime regressions', () => {
     )
     expect(source).toContain('previousLifeStage')
   })
+  it('2026-11-03 信息架构：去重、5 项折叠、物流合并、售后与客服', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    // 状态卡不再重复食谱名 / 分装 / 总价
+    expect(source).not.toContain('class="hero-title"')
+    expect(source).not.toContain('class="hero-meta"')
+
+    // 原料清单：5 个占比最高的食材 + 其余（含补剂）折叠
+    expect(source).toContain('visibleFoodIngredients')
+    expect(source).toContain('slice(0, 5)')
+    expect(source).toContain('ingredient-toggle-more')
+    expect(source).toContain('含')
+    expect(source).toContain('种补剂')
+
+    // 物流并入收货与配送，不再有独立的物流卡
+    expect(source).toContain('logistics-inline')
+    expect(source).not.toContain('shipping-section')
+
+    // 售后与客服：删除投诉建议，联系客服整行
+    expect(source).toContain('售后与客服')
+    expect(source).not.toContain("applyAftersaleType('COMPLAINT')")
+    expect(source).toContain('btn-contact')
+    expect(source).toContain('收到后，如有化冻、破损、变质')
+    expect(source).not.toContain('canApplyComplaint')
+
+    // 食用与保存直接展开，取消二级入口
+    expect(source).toContain('食用与保存')
+    expect(source).not.toContain('reminder-section')
+    expect(source).not.toContain('食用与保存提醒')
+    expect(source).toContain('cookingWeightG')
+    expect(source).toContain('cookingTimeJudgement')
+    expect(source).toContain('必须烹饪后再食用')
+
+    // 订单号 / 下单时间 / 备注 / 原料照片保留
+    expect(source).toContain('copyOrderId')
+    expect(source).toContain('formatDateTime(order.createdAt)')
+    expect(source).toContain('customerRequirementText')
+    expect(source).toContain('production-photos-section')
+  })
 })

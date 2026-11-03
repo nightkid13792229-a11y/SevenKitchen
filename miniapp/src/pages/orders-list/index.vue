@@ -1504,16 +1504,25 @@ function applyAftersale(order: FoodOrderRow) {
   const status = String(order.status || '');
   const completedAt = order.completedAt;
 
-  // 已付款（未采购）→ 取消订单；已发货/已完成 → 售后；其余（锁定期）→ 投诉建议
-  const type = canCancelOrder(status) || canApplyRefund(status, completedAt)
-    ? 'REFUND'
-    : canApplyRemake(status, completedAt)
-      ? 'REMAKE'
-      : 'COMPLAINT';
-
-  uni.navigateTo({
-    url: `/pages/aftersale-apply/index?orderId=${order.id}&type=${type}`,
+  // 已付款（未采购）→ 取消订单；已发货/已完成 → 售后；
+  // 其余已过售后申请期 → 去详情页联系客服（2026-11-03 删除投诉建议入口）
+  if (canCancelOrder(status) || canApplyRefund(status, completedAt)) {
+    uni.navigateTo({
+      url: `/pages/aftersale-apply/index?orderId=${order.id}&type=REFUND`,
+    });
+    return;
+  }
+  if (canApplyRemake(status, completedAt)) {
+    uni.navigateTo({
+      url: `/pages/aftersale-apply/index?orderId=${order.id}&type=REMAKE`,
+    });
+    return;
+  }
+  uni.showToast({
+    title: '该订单已过售后申请期，请在详情页联系客服',
+    icon: 'none',
   });
+  uni.navigateTo({ url: `/pages/order-detail/index?id=${order.id}` });
 }
 
 function isCustomPaymentExpired(order: UnifiedOrder): boolean {

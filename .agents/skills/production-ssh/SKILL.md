@@ -8,6 +8,13 @@ description: Use when connecting to production servers via SSH or executing remo
 ## Overview
 Secure and standardized SSH operations for production servers. **Always use the `validate_ssh_connection` function before any SSH operations, check exit codes after execution, and never skip connection testing.**
 
+## 本项目实际入口
+
+- SSH 公共函数在 `backend/scripts/ssh-helper.sh`：`validate_ssh_connection`、`ssh_exec`、`ssh_exec_multiline`、`ssh_upload`、`ssh_download`。
+- `validate_ssh_connection` **不带位置参数**：它读 `SERVER_HOST`、`SERVER_USER`、`SSH_KEY_PATH` 环境变量（有默认值）。
+- 后端生产部署统一走 `bash backend/scripts/remote_deploy_v2.sh`；不要手写 `git pull` + `npm install`。
+- SSH key 文件名沿用 `~/.ssh/claude_deploy`（历史命名，脚本依赖，不要改）。
+
 ## When to Use
 
 ```dot
@@ -60,24 +67,19 @@ SSH_KEY_PATH="$HOME/.ssh/claude_deploy"
 SERVER_USER="root"
 SERVER_HOST="1.14.3.2"
 
-# 2. Use validate_ssh_connection function (MANDATORY)
-validate_ssh_connection "$SSH_KEY_PATH" "$SERVER_USER" "$SERVER_HOST" || exit 1
+# 2. Load the project helper and validate (MANDATORY)
+#    在仓库根执行；在 backend/ 下用 source scripts/ssh-helper.sh
+source backend/scripts/ssh-helper.sh
+validate_ssh_connection || exit 1
 
 # 3. Execute remote command with error handling
-ssh -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=no \
+if ! ssh -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=no \
     "$SERVER_USER@$SERVER_HOST" \
-    "systemctl restart sevenkitchen-backend" || {
-      echo "ERROR: Failed to restart service"
-      exit 1
-    }
-
-# 4. Check exit code (MANDATORY for critical operations)
-if [ $? -eq 0 ]; then
-  echo "✓ Service restarted successfully"
-else
-  echo "✗ Service restart failed"
+    "systemctl restart sevenkitchen-backend"; then
+  echo "ERROR: Failed to restart service"
   exit 1
 fi
+echo "✓ Service restarted successfully"
 ```
 
 ## Quick Reference
@@ -91,6 +93,7 @@ fi
 | **View logs (live)** | `ssh -i "$KEY" $USER@$HOST "journalctl -u service-name -f"` |
 | **Transfer files (upload)** | `scp -i "$KEY" local-file $USER@$HOST:/remote/path/` |
 | **Transfer files (download)** | `scp -i "$KEY" $USER@$HOST:/remote/file local-path/` |
+| **后端部署（本项目）** | `bash backend/scripts/remote_deploy_v2.sh`（不要手写 `git pull` / `npm install`） |
 
 ## Implementation
 
@@ -104,41 +107,20 @@ SSH_KEY_PATH="$HOME/.ssh/claude_deploy"  # SSH private key
 SERVER_PROJECT_PATH="/opt/sevenkitchen/SevenKitchen/backend"
 ```
 
-### MANDATORY: Pre-flight Validation Function
+### MANDATORY: Pre-flight Validation
 
-**CRITICAL: Every SSH operation MUST use this function. No exceptions.**
+**CRITICAL: Every SSH operation MUST call `validate_ssh_connection` first. No exceptions.**
+
+本项目已经封装在 `backend/scripts/ssh-helper.sh`，不要自己再实现一份：
 
 ```bash
-validate_ssh_connection() {
-  local key_path="$1"
-  local user="$2"
-  local host="$3"
-
-  # Check SSH key exists
-  if [ ! -f "$key_path" ]; then
-    echo "ERROR: SSH key not found: $key_path"
-    echo "Please generate one with: ssh-keygen -t ed25519 -C 'deploy' -f ~/.ssh/claude_deploy"
-    return 1
-  fi
-
-  # Test SSH connection
-  if ! ssh -i "$key_path" -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
-      "$user@$host" "echo 'Connection test successful'" >/dev/null 2>&1; then
-    echo "ERROR: SSH connection test failed to $user@$host"
-    echo "Please check:"
-    echo "  1. Server is accessible"
-    echo "  2. SSH key is properly configured on server"
-    echo "  3. Firewall allows SSH (port 22)"
-    return 1
-  fi
-
-  echo "✓ SSH connection validated"
-  return 0
-}
-
-# MANDATORY: Call this before ANY SSH operation
-validate_ssh_connection "$SSH_KEY_PATH" "$SERVER_USER" "$SERVER_HOST" || exit 1
+# 在仓库根执行；在 backend/ 下用 source scripts/ssh-helper.sh
+source backend/scripts/ssh-helper.sh
+validate_ssh_connection || exit 1
 ```
+
+`validate_ssh_connection` 读 `SERVER_HOST` / `SERVER_USER` / `SSH_KEY_PATH`，**不接收位置参数**。
+需要改目标时，先 export 这三个变量，或直接改 helper 的默认值（不要复制函数）。
 
 **Common rationalizations to AVOID:**
 - "This is just a quick check" → Use the function
@@ -158,19 +140,14 @@ set -euo pipefail  # Exit on error, undefined variables, pipe failures
 # Change directory
 cd "${SERVER_PROJECT_PATH:?SERVER_PROJECT_PATH not set}"
 
-# Your commands here
+# 示例：只读检查。真实部署用 backend/scripts/remote_deploy_v2.sh，
+# 不要在这里手写 git pull / npm install。
 echo "Current directory: $(pwd)"
-git pull origin main
-npm install --production
-systemctl restart sevenkitchen-backend
-
-# Verify result
-if systemctl is-active --quiet sevenkitchen-backend; then
-  echo "✓ Service restarted successfully"
-else
-  echo "✗ Service failed to start"
+echo "Current commit: $(git rev-parse --short HEAD)"
+systemctl is-active --quiet sevenkitchen-backend || {
+  echo "✗ Service is not active"
   exit 1
-fi
+}
 ENDSSH
 
 # Check exit code

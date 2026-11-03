@@ -41,8 +41,9 @@ SSH_KEY_PATH="$HOME/.ssh/claude_deploy"
 SERVER_USER="root"
 SERVER_HOST="1.14.3.2"
 
-# 2. 使用validate_ssh_connection函数
-validate_ssh_connection "$SSH_KEY_PATH" "$SERVER_USER" "$SERVER_HOST" || exit 1
+# 2. 加载项目 helper 并验证（函数不接收位置参数）
+source backend/scripts/ssh-helper.sh
+validate_ssh_connection || exit 1
 
 # 3. 执行SSH命令（带错误处理）
 ssh -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=no \

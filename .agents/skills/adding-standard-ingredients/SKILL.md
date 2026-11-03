@@ -14,9 +14,9 @@ description: Use when adding a new FOOD or SUPPLEMENT standard ingredient to Sev
 
 - 半自动：任何正式环境写入前必须得到用户一次明确确认。
 - 营养数据只从本地 `nutrition_source_record` 营养库查找，不凭模型记忆补数据。
-  本地库当前覆盖：USDA SR Legacy + Foundation（约 8,300 条）、加拿大 CNF 2026（5,993 条）、
-  MEXT 日本八訂（2,478 条，含氨基酸/脂肪酸别册）、NZFCD 新西兰（2,857 条），
-  以及 CFCT/NEVO 等零星记录，共约 1.9 万条。MEXT 食品名为日语，匹配器内置常用中→日别名表，
+  本地库当前覆盖：USDA SR Legacy + Foundation、加拿大 CNF 2026、
+  MEXT 日本八訂、NZFCD 新西兰，以及 CFCT/NEVO 等零星记录，合计约 1.9 万条
+  （数量以实际库为准，可能随导入变化）。MEXT 食品名为日语，匹配器内置常用中→日别名表，
   未命中时可让用户补充中文名或英语名再查。
 - 营养不完整可以创建：草稿必须标注"营养待补"及缺失清单，营养档案保持"待验证"状态。
 - 食材（FOOD）可挂采购 SKU；补剂（SUPPLEMENT）禁止挂采购 SKU。

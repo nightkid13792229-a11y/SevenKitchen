@@ -8,7 +8,7 @@
 
 ### 方式1：自动触发（推荐）
 
-当你需要SSH到生产服务器时，Claude Code会：
+当你需要SSH到生产服务器时，DSH会：
 
 1. **检测关键词**：当你的请求包含这些词时自动触发
    - "SSH到生产服务器"
@@ -17,7 +17,7 @@
    - "连接到服务器"
    - "scp文件到服务器"
 
-2. **自动加载skill**：Claude Code会搜索并加载相关的skill
+2. **自动加载skill**：DSH会搜索并加载相关的skill
 
 3. **遵循规范**：自动使用`validate_ssh_connection`函数和其他MANDATORY规则
 
@@ -46,7 +46,7 @@
 SSH到生产服务器查看sevenkitchen-backend服务的最近50行日志
 ```
 
-**Claude Code会自动：**
+**DSH会自动：**
 1. 检测到"SSH到生产服务器"关键词
 2. 加载`production-ssh` skill
 3. 使用skill中的标准模式：
@@ -62,7 +62,7 @@ SSH到生产服务器查看sevenkitchen-backend服务的最近50行日志
 部署backend到生产服务器
 ```
 
-**Claude Code会：**
+**DSH会：**
 1. 使用skill中的SSH规范
 2. 遵循远程部署的标准流程
 3. 确保所有安全检查都在位
@@ -108,7 +108,7 @@ SSH到服务器（太模糊，可能不触发skill）
 
 ## 🎯 Skill的作用
 
-**对Claude Code：**
+**对DSH：**
 - 强制使用安全的SSH模式
 - 确保所有连接都经过验证
 - 统一错误处理流程
@@ -129,4 +129,4 @@ SSH到服务器（太模糊，可能不触发skill）
 
 ---
 
-**记住**：当你需要SSH操作时，提及"production-ssh skill"，Claude Code就会使用它！
+**记住**：当你需要SSH操作时，提及"production-ssh skill"，DSH就会使用它！

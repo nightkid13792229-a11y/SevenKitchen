@@ -86,9 +86,10 @@
 
 ### 1. MANDATORY规则
 
-**必须使用validate_ssh_connection函数：**
+**必须使用 validate_ssh_connection 函数（项目 helper，不接收位置参数）：**
 ```bash
-validate_ssh_connection "$SSH_KEY_PATH" "$SERVER_USER" "$SERVER_HOST" || exit 1
+source backend/scripts/ssh-helper.sh
+validate_ssh_connection || exit 1
 ```
 
 ### 2. 标准化变量定义
@@ -175,7 +176,7 @@ fi
 2. **详细参考**：查看`SKILL.md`了解完整规范
 3. **实践示例**：参考`example-view-logs.sh`学习正确模式
 
-### 对于Claude Code
+### 对于 DSH / AI 会话
 
 当需要SSH到生产服务器时：
 1. 自动加载`production-ssh` skill

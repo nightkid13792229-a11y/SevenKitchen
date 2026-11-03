@@ -13,9 +13,9 @@
 
 ## 核心规则
 
-1. **修改前先读文档**：必读 `docs/DATABASE_NAMING_CONVENTIONS.md`
+1. **修改前先读文档**：必读 `docs/DATABASE_NAMING_CONVENTIONS.md`；字段以 `backend/prisma/schema.prisma` 为准
 2. **禁止直接操作数据库**：必须通过Prisma migration
-3. **禁止"想象"字段名**：先查文档确认
+3. **禁止"想象"字段名**：先查 `schema.prisma` / `npx prisma studio` 确认
 4. **测试通过后再提交**
 
 ## MiniApp 协作硬规则
@@ -154,7 +154,7 @@ W=/Applications/wechatwebdevtools.app/Contents/MacOS/wechatide
    这次我这么干过一次 ✓，只好整个退出重开才恢复 ✓。
    要停挂住的调用：**只 kill 自己起的那个 PID** ✓（`job_kill` ✓），别按名字杀 ✗。
 3. **模拟器连的是本机后端** ✓（`platform = devtools` ✓，本机地址 `127.0.0.1:3011` ✓），
-   而**本机库没有那 50 只测试狗** ✗（只有 11 只普通狗、且没有疫苗产品表 ✗）。
+   而**本机库的测试档案不一定齐全** ✗（疫苗产品表、测试狗等可能没有）。
    所以"在模拟器里验疫苗记录"这条路的**前提**是：
    · 要么先把小程序里"手动指定服务器地址"（storage 键 `api_base_url`）指到**线上** ✓
    · 要么在本机补测试档案 ✓
@@ -177,15 +177,18 @@ npx uni -p mp-weixin
 # ② 把它放到**老板项目指向的位置**（老板的项目 miniprogramRoot = dist/build/mp-weixin/）
 rm -rf dist/build/mp-weixin && cp -R dist/dev/mp-weixin dist/build/mp-weixin
 # ③ 直接用老板已经打开的那个项目自查（不改 project.config.json、不新开窗口）
-#    需要时先打开它：cli open --project "$(pwd)"
+#    需要时先打开它：
+#    "/Applications/wechatwebdevtools.app/Contents/MacOS/cli" open --project "$(pwd)"
 # ④ 自查完，重新生成**生产**构建覆盖掉（否则会把 dev 版传上去 ✗）
 npm run build:mp-weixin
-# ⑤ 再上传体验版
-cli upload --project "$(pwd)" --version "<版本号>" --desc "<改了什么>" --lang zh
+# ⑤ 上传体验版（统一走脚本，不要直接 cli upload）
+cd ..
+bash scripts/upload-trial.sh "这次改了什么"
 ```
 
-⚠️ 第 ④ 步**不能省**：③ 之后 `dist/build/mp-weixin` 里是 dev 版（连本地后端），
-直接上传的话，体验版会指向 `127.0.0.1` ✗（老板手机上必然打不开 ✗）。
+⚠️ 第 ④ 步**不能省**：③ 之后本地 `dist/build/mp-weixin` 里是 dev 版（连本地后端）。
+`upload-trial.sh` 会自己从 `origin/main` 重新构建，但本地目录仍要恢复成生产版，
+否则你直接打开开发者工具看到的是连本地后端的版本。
 
 ⚠️ 用完把 `/tmp/mp-*` 之类的临时工程清掉 ✓（别留在磁盘上、也别留在开发者工具的最近项目里）。
 
@@ -193,9 +196,10 @@ cli upload --project "$(pwd)" --version "<版本号>" --desc "<改了什么>" --
 
 | 优先级 | 文档 | 用途 |
 |--------|------|------|
-| 最高 | docs/DATABASE_NAMING_CONVENTIONS.md | 字段命名规范 |
-| 高 | docs/07_Core_Architecture.md | 核心架构 |
-| 高 | docs/05_API_Specs.md | API接口定义 |
+| 最高 | docs/DATABASE_NAMING_CONVENTIONS.md | 字段命名规则与验证方法（已按 schema 校正） |
+| 最高 | backend/prisma/schema.prisma | 字段真源；与任何文档冲突时以它为准 |
+| 高 | docs/07_Core_Architecture.md | 核心架构（分批刷新中；与代码冲突以代码为准） |
+| 高 | docs/05_API_Specs.md | API 接口（分批刷新中；以 controller 为准） |
 
 ## 沟通规范
 

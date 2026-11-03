@@ -15,7 +15,7 @@ description: Use when refactoring a module inside the SevenKitchen repo (backend
    - `admin-web/` → `cd admin-web && npm run test`
    - `miniapp/` → `cd miniapp && npm run test`
 3. **基线就是红的** → 先报告哪几个失败，不要开始重构。基线红的情况下重构，等于分不清是你的改动坏了还是本来就坏。
-4. **字段名先查** `docs/DATABASE_NAMING_CONVENTIONS.md`，禁止猜。
+4. **字段名先查** `docs/DATABASE_NAMING_CONVENTIONS.md` 与 `backend/prisma/schema.prisma`，禁止猜。
 
 ## 2. 重构手法
 
@@ -32,8 +32,9 @@ description: Use when refactoring a module inside the SevenKitchen repo (backend
 - ❌ **联调期间不要跑 `npm run build`**：`deleteOutDir: true` 会删掉 `dist/`，正在跑的后端会直接死掉。
   自检只用 `cd backend && npx tsc --noEmit`。
 - ❌ 不要为自查新建临时小程序工程（会多开一个开发者工具窗口），复用现有项目。
-- ❌ 不自动 `git push`、不自动部署。部署按 `AGENTS.md`「生产部署授权」一节执行，且必须先合并到 `main`。
-- ❌ 不自动提交：改完先汇报，等用户说提交再提交。
+- ❌ 不在 `main` 上直接提交；改动走任务工位，合并用 `scripts/session.sh merge`，不要绕过门禁。
+- ❌ 不绕过部署授权：后端与 admin-web 按 `AGENTS.md`「生产部署授权」执行；小程序只上传体验版；部署前先合并到 `main`。
+- ❌ 用户没要求时不要主动部署/上传；任务明确要交付时，按上面的授权和门禁执行。
 
 ## 4. 完成标准（四条全中才算完）
 

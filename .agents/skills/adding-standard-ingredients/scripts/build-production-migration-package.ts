@@ -1,11 +1,11 @@
 import type {
   IngredientImportManifest,
   LocalIngredientImportAudit,
-} from '../../../backend/src/application/standard-ingredient-import/index';
+} from '../../../../backend/src/application/standard-ingredient-import/index';
 
 const {
   buildProductionMigrationPackage,
-} = require('../../../backend/src/application/standard-ingredient-import');
+} = require('../../../../backend/src/application/standard-ingredient-import');
 const shared: typeof import('./_shared') = require('./_shared');
 const {
   createPrismaClient,
@@ -18,7 +18,7 @@ const {
 
 const usage = `
 Usage:
-  node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/build-production-migration-package.ts --manifest ../.standard-ingredient-import/ingredient.manifest.json --local-audit ../.standard-ingredient-import/ingredient.local-apply.json --out-dir ../.standard-ingredient-import/ingredient-production-package
+  node -r ts-node/register -r tsconfig-paths/register ../.agents/skills/adding-standard-ingredients/scripts/build-production-migration-package.ts --manifest ../.standard-ingredient-import/ingredient.manifest.json --local-audit ../.standard-ingredient-import/ingredient.local-apply.json --out-dir ../.standard-ingredient-import/ingredient-production-package
 `;
 
 async function main(): Promise<void> {

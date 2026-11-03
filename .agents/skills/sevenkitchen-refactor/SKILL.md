@@ -5,7 +5,7 @@ description: Use when refactoring a module inside the SevenKitchen repo (backend
 
 # SevenKitchen 模块重构
 
-本仓库有生产流量，且 `CLAUDE.md` 里已有硬规则。本技能只补充**重构时的额外纪律**，不替代 `CLAUDE.md`；两者冲突时以 `CLAUDE.md` 为准。
+本仓库有生产流量，且 `AGENTS.md` 里已有硬规则。本技能只补充**重构时的额外纪律**，不替代 `AGENTS.md`；两者冲突时以 `AGENTS.md` 为准。
 
 ## 1. 开工前：锁范围、拿基线
 
@@ -32,7 +32,7 @@ description: Use when refactoring a module inside the SevenKitchen repo (backend
 - ❌ **联调期间不要跑 `npm run build`**：`deleteOutDir: true` 会删掉 `dist/`，正在跑的后端会直接死掉。
   自检只用 `cd backend && npx tsc --noEmit`。
 - ❌ 不要为自查新建临时小程序工程（会多开一个开发者工具窗口），复用现有项目。
-- ❌ 不自动 `git push`、不自动部署。部署按 `CLAUDE.md`「生产部署授权」一节执行，且必须先合并到 `main`。
+- ❌ 不自动 `git push`、不自动部署。部署按 `AGENTS.md`「生产部署授权」一节执行，且必须先合并到 `main`。
 - ❌ 不自动提交：改完先汇报，等用户说提交再提交。
 
 ## 4. 完成标准（四条全中才算完）

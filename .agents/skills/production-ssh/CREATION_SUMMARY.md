@@ -73,7 +73,7 @@
 ## 📁 最终文件结构
 
 ```
-skills/production-ssh/
+.agents/skills/production-ssh/
 ├── SKILL.md                    # 主技能文档（266行）
 ├── README.md                   # 快速开始指南
 ├── example-view-logs.sh        # 示例脚本（可执行）
@@ -188,7 +188,7 @@ fi
 
 ## 📚 相关资源
 
-- **Superpowers Writing Skills**: `~/.claude/plugins/cache/superpowers-marketplace/superpowers/4.1.1/skills/writing-skills/`
+- **Superpowers Writing Skills**：历史参考（原 Claude 插件路径已不再使用）
 - **现有部署脚本**: `backend/scripts/remote_deploy_v2.sh`
 - **项目文档**: `docs/`
 

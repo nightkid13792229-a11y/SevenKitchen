@@ -7,7 +7,7 @@
  *
  * Usage (from backend/):
  *   node -r ts-node/register -r tsconfig-paths/register \
- *     ../skills/adding-standard-ingredients/scripts/apply-production-ingredient.ts \
+ *     ../.agents/skills/adding-standard-ingredients/scripts/apply-production-ingredient.ts \
  *     --draft ../.standard-ingredient-import/amaranth.draft.json \
  *     [--credentials-env .env.ingredient-agent.local] [--confirm]
  */
@@ -41,7 +41,7 @@ interface DraftV1 {
 
 const USAGE = `
 Usage:
-  node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/apply-production-ingredient.ts \
+  node -r ts-node/register -r tsconfig-paths/register ../.agents/skills/adding-standard-ingredients/scripts/apply-production-ingredient.ts \
     --draft <draft.json> [--credentials-env .env.ingredient-agent.local] [--confirm] [--base-url https://api.sevenkitchen.cloud/api/v1]
 `;
 

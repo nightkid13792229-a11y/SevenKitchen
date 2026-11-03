@@ -7,7 +7,7 @@ describe('ingredient import manifest assets', () => {
       readFileSync(
         resolve(
           __dirname,
-          '../../../../skills/adding-standard-ingredients/assets/ingredient-import-manifest.schema.json',
+          '../../../../.agents/skills/adding-standard-ingredients/assets/ingredient-import-manifest.schema.json',
         ),
         'utf8',
       ),
@@ -16,7 +16,7 @@ describe('ingredient import manifest assets', () => {
       readFileSync(
         resolve(
           __dirname,
-          '../../../../skills/adding-standard-ingredients/assets/ingredient-import-template.food.json',
+          '../../../../.agents/skills/adding-standard-ingredients/assets/ingredient-import-template.food.json',
         ),
         'utf8',
       ),

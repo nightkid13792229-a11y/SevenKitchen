@@ -202,7 +202,7 @@ ssh_exec "your command"
 
 ## 📚 相关文档
 
-- **SSH规范文档**：`skills/production-ssh/SKILL.md`
+- **SSH规范文档**：`.agents/skills/production-ssh/SKILL.md`
 - **SSH工具源码**：`backend/scripts/ssh-helper.sh`
 - **后端生产部署**：`backend/scripts/remote_deploy_v2.sh`
 

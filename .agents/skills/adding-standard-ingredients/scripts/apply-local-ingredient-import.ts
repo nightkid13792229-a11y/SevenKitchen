@@ -1,11 +1,11 @@
 import type {
   DatabaseAlignmentResult,
   IngredientImportManifest,
-} from '../../../backend/src/application/standard-ingredient-import/index';
+} from '../../../../backend/src/application/standard-ingredient-import/index';
 
 const {
   applyLocalIngredientImport,
-} = require('../../../backend/src/application/standard-ingredient-import');
+} = require('../../../../backend/src/application/standard-ingredient-import');
 const shared: typeof import('./_shared') = require('./_shared');
 const {
   createPrismaClient,
@@ -18,7 +18,7 @@ const {
 
 const usage = `
 Usage:
-  node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/apply-local-ingredient-import.ts --manifest ../.standard-ingredient-import/ingredient.manifest.json --audit-out ../.standard-ingredient-import/ingredient.local-apply.json [--alignment ../.standard-ingredient-import/alignment.json]
+  node -r ts-node/register -r tsconfig-paths/register ../.agents/skills/adding-standard-ingredients/scripts/apply-local-ingredient-import.ts --manifest ../.standard-ingredient-import/ingredient.manifest.json --audit-out ../.standard-ingredient-import/ingredient.local-apply.json [--alignment ../.standard-ingredient-import/alignment.json]
 `;
 
 async function main(): Promise<void> {

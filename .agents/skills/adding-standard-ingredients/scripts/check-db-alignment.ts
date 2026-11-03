@@ -1,7 +1,7 @@
 const {
   collectDatabaseAlignmentSnapshot,
   compareDatabaseAlignmentSnapshots,
-} = require('../../../backend/src/application/standard-ingredient-import');
+} = require('../../../../backend/src/application/standard-ingredient-import');
 const shared: typeof import('./_shared') = require('./_shared');
 const {
   createPrismaClient,
@@ -15,7 +15,7 @@ const {
 
 const usage = `
 Usage:
-  node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/check-db-alignment.ts --local-env .env --production-env .env.production.readonly --out ../.standard-ingredient-import/alignment.json
+  node -r ts-node/register -r tsconfig-paths/register ../.agents/skills/adding-standard-ingredients/scripts/check-db-alignment.ts --local-env .env --production-env .env.production.readonly --out ../.standard-ingredient-import/alignment.json
 `;
 
 async function main(): Promise<void> {

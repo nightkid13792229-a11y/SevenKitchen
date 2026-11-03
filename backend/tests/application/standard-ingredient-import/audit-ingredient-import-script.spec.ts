@@ -54,7 +54,7 @@ describe('audit-ingredient-import script', () => {
           'tsconfig-paths/register',
           resolve(
             __dirname,
-            '../../../../skills/adding-standard-ingredients/scripts/audit-ingredient-import.ts',
+            '../../../../.agents/skills/adding-standard-ingredients/scripts/audit-ingredient-import.ts',
           ),
           '--manifest',
           manifestPath,
@@ -185,7 +185,7 @@ describe('audit-ingredient-import script', () => {
           'tsconfig-paths/register',
           resolve(
             __dirname,
-            '../../../../skills/adding-standard-ingredients/scripts/audit-ingredient-import.ts',
+            '../../../../.agents/skills/adding-standard-ingredients/scripts/audit-ingredient-import.ts',
           ),
           '--manifest',
           manifestPath,

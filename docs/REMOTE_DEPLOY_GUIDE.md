@@ -200,4 +200,4 @@ Next steps:
 - SSH工具：`backend/scripts/ssh-helper.sh`
 - 远程部署：`backend/scripts/deploy_lighthouse.sh`
 - 部署验证：`backend/scripts/post_deploy_verify.sh`
-- SSH规范：`skills/production-ssh/SKILL.md`
+- SSH规范：`.agents/skills/production-ssh/SKILL.md`

@@ -11,8 +11,8 @@ const {
 
 const usage = `
 Usage:
-  node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/prepare-ingredient-import.ts --type FOOD --name "duck egg" --state raw --out ../.standard-ingredient-import/duck-egg.manifest.json
-  node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/prepare-ingredient-import.ts --type SUPPLEMENT --name "fish oil" --out ../.standard-ingredient-import/fish-oil.manifest.json
+  node -r ts-node/register -r tsconfig-paths/register ../.agents/skills/adding-standard-ingredients/scripts/prepare-ingredient-import.ts --type FOOD --name "duck egg" --state raw --out ../.standard-ingredient-import/duck-egg.manifest.json
+  node -r ts-node/register -r tsconfig-paths/register ../.agents/skills/adding-standard-ingredients/scripts/prepare-ingredient-import.ts --type SUPPLEMENT --name "fish oil" --out ../.standard-ingredient-import/fish-oil.manifest.json
 `;
 
 async function main(): Promise<void> {

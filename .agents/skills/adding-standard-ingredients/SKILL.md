@@ -33,7 +33,7 @@ description: Use when adding a new FOOD or SUPPLEMENT standard ingredient to Sev
 
 ```bash
 cd backend
-node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/match-local-nutrition.ts \
+node -r ts-node/register -r tsconfig-paths/register ../.agents/skills/adding-standard-ingredients/scripts/match-local-nutrition.ts \
   --name 原料中文名 --name-en english-name --state raw \
   --out ../.standard-ingredient-import/<slug>.match.json
 ```
@@ -57,7 +57,7 @@ node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-in
 
 ```bash
 cd backend
-node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/apply-production-ingredient.ts \
+node -r ts-node/register -r tsconfig-paths/register ../.agents/skills/adding-standard-ingredients/scripts/apply-production-ingredient.ts \
   --draft ../.standard-ingredient-import/<slug>.draft.json \
   --credentials-env .env.ingredient-agent.local
 ```
@@ -66,7 +66,7 @@ node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-in
 
 ```bash
 cd backend
-node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/apply-production-ingredient.ts \
+node -r ts-node/register -r tsconfig-paths/register ../.agents/skills/adding-standard-ingredients/scripts/apply-production-ingredient.ts \
   --draft ../.standard-ingredient-import/<slug>.draft.json \
   --credentials-env .env.ingredient-agent.local --confirm
 ```

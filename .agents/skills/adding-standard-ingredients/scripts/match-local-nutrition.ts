@@ -8,30 +8,30 @@
  *
  * Usage (from backend/):
  *   node -r ts-node/register -r tsconfig-paths/register \
- *     ../skills/adding-standard-ingredients/scripts/match-local-nutrition.ts \
+ *     ../.agents/skills/adding-standard-ingredients/scripts/match-local-nutrition.ts \
  *     --name 苋菜 --state raw \
  *     --out ../.standard-ingredient-import/amaranth.match.json
  */
 import type {
   NutritionImportAuditInput,
   NutritionImportNutrientValue,
-} from '../../../backend/src/application/standard-ingredient-import/nutrition-audit';
-import type { NutritionProfileV2 } from '../../../backend/src/domain/ingredient/types';
-import type { NutritionStateTag } from '../../../backend/src/application/standard-ingredient-import/source-policy';
+} from '../../../../backend/src/application/standard-ingredient-import/nutrition-audit';
+import type { NutritionProfileV2 } from '../../../../backend/src/domain/ingredient/types';
+import type { NutritionStateTag } from '../../../../backend/src/application/standard-ingredient-import/source-policy';
 
 const {
   auditNutritionProfileForImport,
-} = require('../../../backend/src/application/standard-ingredient-import');
+} = require('../../../../backend/src/application/standard-ingredient-import');
 const {
   rankNutritionSourceCandidates,
-} = require('../../../backend/src/application/standard-ingredient-import/source-policy');
+} = require('../../../../backend/src/application/standard-ingredient-import/source-policy');
 const {
   scoreIngredientSourceNameMatch,
   mapUsdaNutrientsToNutritionProfile,
-} = require('../../../backend/src/domain/nutrition-governance/nutrition-governance.utils');
+} = require('../../../../backend/src/domain/nutrition-governance/nutrition-governance.utils');
 const {
   NUTRITION_FIELD_CATALOG,
-} = require('../../../backend/src/domain/ingredient/nutrition-field-catalog');
+} = require('../../../../backend/src/domain/ingredient/nutrition-field-catalog');
 const path = require('path') as typeof import('path');
 // Scripts run from backend/ (see usage); resolve the Prisma client from the
 // backend node_modules so this skill script stays runnable from the backend dir.
@@ -60,7 +60,7 @@ interface MatchCliArgs {
 
 const USAGE = `
 Usage:
-  node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/match-local-nutrition.ts \
+  node -r ts-node/register -r tsconfig-paths/register ../.agents/skills/adding-standard-ingredients/scripts/match-local-nutrition.ts \
     --name <ingredient name> [--name-en <english name>] [--state raw|cooked|dried|powder|oil] \
     [--limit 10] [--min-name-score 0.5] [--source-type USDA] [--out <output.json>]
 `;

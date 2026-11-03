@@ -3,7 +3,7 @@
 **日期**：2026-10-16
 **原料**：油麦菜（叶用莴苣，*Lactuca sativa* var. *angustata*）
 **类型**：FOOD（食材）
-**执行方式**：skills/adding-standard-ingredients 半自动流程，走正式 admin API 写入
+**执行方式**：.agents/skills/adding-standard-ingredients 半自动流程，走正式 admin API 写入
 
 ---
 
@@ -259,7 +259,7 @@ node -r ts-node/register -r tsconfig-paths/register \
 
 # 写入（先不带 --confirm 预演）
 node -r ts-node/register -r tsconfig-paths/register \
-  ../skills/adding-standard-ingredients/scripts/apply-production-ingredient.ts \
+  ../.agents/skills/adding-standard-ingredients/scripts/apply-production-ingredient.ts \
   --draft ../.standard-ingredient-import/youmaicai/youmaicai.draft.json \
   --credentials-env .env.ingredient-agent.local [--confirm]
 

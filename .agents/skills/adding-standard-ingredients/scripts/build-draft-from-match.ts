@@ -7,7 +7,7 @@
  *
  * Usage (from backend/):
  *   node -r ts-node/register -r tsconfig-paths/register \
- *     ../skills/adding-standard-ingredients/scripts/build-draft-from-match.ts \
+ *     ../.agents/skills/adding-standard-ingredients/scripts/build-draft-from-match.ts \
  *     --match ../.standard-ingredient-import/<slug>.match.json \
  *     --source-record-id <record id> \
  *     --name 去皮鸡腿肉 --type FOOD --category MEAT \
@@ -37,7 +37,7 @@ interface BuildDraftArgs {
 
 const USAGE = `
 Usage:
-  node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/build-draft-from-match.ts \
+  node -r ts-node/register -r tsconfig-paths/register ../.agents/skills/adding-standard-ingredients/scripts/build-draft-from-match.ts \
     --match <match.json> --source-record-id <record id> --name <中文名> \
     --type FOOD|SUPPLEMENT --category MEAT|ORGAN|SEAFOOD|VEGETABLE|FRUIT|GRAIN|DAIRY|EGG|OIL|SUPPLEMENT|OTHER \
     --purchase-unit g --price 0.05 [--purchase-channel 本地市场] [--brand ..] [--product-model ..] \

@@ -3,7 +3,7 @@
 # View logs from production server via SSH
 #
 # This script follows the production-ssh skill guidelines:
-# https://github.com/your-org/SevenKitchen/skills/production-ssh/
+# https://github.com/your-org/SevenKitchen/.agents/skills/production-ssh/
 
 set -euo pipefail
 

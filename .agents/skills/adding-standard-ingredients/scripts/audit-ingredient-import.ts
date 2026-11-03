@@ -1,10 +1,10 @@
-import type { IngredientImportManifest } from '../../../backend/src/application/standard-ingredient-import/index';
+import type { IngredientImportManifest } from '../../../../backend/src/application/standard-ingredient-import/index';
 
 const {
   auditNutritionProfileForImport,
   rankNutritionSourceCandidates,
   validateIngredientImportManifest,
-} = require('../../../backend/src/application/standard-ingredient-import');
+} = require('../../../../backend/src/application/standard-ingredient-import');
 const shared: typeof import('./_shared') = require('./_shared');
 const {
   parseArgs,
@@ -16,7 +16,7 @@ const {
 
 const usage = `
 Usage:
-  node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/audit-ingredient-import.ts --manifest ../.standard-ingredient-import/ingredient.manifest.json --out ../.standard-ingredient-import/ingredient.audit.json
+  node -r ts-node/register -r tsconfig-paths/register ../.agents/skills/adding-standard-ingredients/scripts/audit-ingredient-import.ts --manifest ../.standard-ingredient-import/ingredient.manifest.json --out ../.standard-ingredient-import/ingredient.audit.json
 `;
 
 async function main(): Promise<void> {

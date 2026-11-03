@@ -2,7 +2,7 @@
 
 ## 📌 Skill位置
 
-当前skill位于：`/Users/zhaochen/Documents/SevenKitchen/skills/production-ssh/`
+当前skill位于：`/Users/zhaochen/Documents/SevenKitchen/.agents/skills/production-ssh/`
 
 ## 🚀 使用方式
 
@@ -67,20 +67,18 @@ SSH到生产服务器查看sevenkitchen-backend服务的最近50行日志
 2. 遵循远程部署的标准流程
 3. 确保所有安全检查都在位
 
-## 🔍 Skill加载机制
+## 🔍 Skill 加载机制
 
-Claude Code按以下顺序搜索skill：
+DSH 按以下顺序搜索项目技能：
 
-1. **全局skills**：`~/.claude/skills/`
-2. **项目skills**：`<project>/.claude/skills/`
-3. **项目根目录skills**：`<project>/skills/` ← 我们的skill在这里
+1. **项目专用**：`<project>/.dsh/skills/`
+2. **项目共享**：`<project>/.agents/skills/` ← 我们的 skill 在这里
+3. **用户级**：`~/.dsh/skills/`、`~/.agents/skills/`
 
 ## ⚠️ 当前限制
 
-**重要提示**：
-- 目前skill在`skills/production-ssh/`目录
-- Claude Code可能不会自动发现它
-- **建议**：在请求中明确提及"使用production-ssh skill"
+- 目前 skill 在 `.agents/skills/production-ssh/` 目录，DSH 会自动发现
+- 其它工具只要按 Agent Skills 标准读取 `.agents/skills/`，也能使用
 
 ## 💡 最佳实践
 
@@ -124,9 +122,9 @@ SSH到服务器（太模糊，可能不触发skill）
 
 ## 📚 相关文件
 
-- **Skill文档**：`skills/production-ssh/SKILL.md`
-- **快速指南**：`skills/production-ssh/README.md`
-- **示例脚本**：`skills/production-ssh/example-view-logs.sh`
+- **Skill文档**：`.agents/skills/production-ssh/SKILL.md`
+- **快速指南**：`.agents/skills/production-ssh/README.md`
+- **示例脚本**：`.agents/skills/production-ssh/example-view-logs.sh`
 - **实际部署**：`backend/scripts/remote_deploy_v2.sh`
 
 ---

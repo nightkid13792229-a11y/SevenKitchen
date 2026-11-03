@@ -206,18 +206,69 @@ export class LabelV10Service {
     return `${total}g（${parts}）`;
   }
 
-  /** 烹饪时间：按每袋实际克重分档 */
-  private cookingTimesFor(weightG: number): CookingTimes {
-    if (weightG <= 70) {
-      return { steam: '8–10 分钟', stew: '8–10 分钟', sousvide: '30 分钟' };
+  /**
+   * 烹饪时间：按每袋实际克重分档。
+   *
+   * ⚠️ 口径与顾客端鲜食订单详情页保持一致
+   * （miniapp/src/utils/cooking-time.ts，2026-11-03 老板定）：
+   *   ≤150g      蒸/炖 约 10 分钟，低温慢煮 30 分钟
+   *   151–250g   约 15 分钟，45 分钟
+   *   251–400g   约 20 分钟，60 分钟
+   *   401–600g   约 25 分钟，90 分钟
+   *   >600g      不给固定时间（返回 null），只给判定标准
+   * 改这里之前先看顾客端那份，两边不要各说各的。
+   */
+  private cookingTimesFor(weightG: number): CookingTimes | null {
+    if (!Number.isFinite(weightG) || weightG <= 0) {
+      return null;
     }
-    if (weightG <= 120) {
-      return { steam: '10–12 分钟', stew: '10–12 分钟', sousvide: '45 分钟' };
+    if (weightG <= 150) {
+      return { steam: '约 10 分钟', stew: '约 10 分钟', sousvide: '30 分钟' };
     }
-    if (weightG <= 200) {
-      return { steam: '12–15 分钟', stew: '12–15 分钟', sousvide: '60 分钟' };
+    if (weightG <= 250) {
+      return { steam: '约 15 分钟', stew: '约 15 分钟', sousvide: '45 分钟' };
     }
-    return { steam: '20–25 分钟', stew: '20–25 分钟', sousvide: '90 分钟' };
+    if (weightG <= 400) {
+      return { steam: '约 20 分钟', stew: '约 20 分钟', sousvide: '60 分钟' };
+    }
+    if (weightG <= 600) {
+      return { steam: '约 25 分钟', stew: '约 25 分钟', sousvide: '90 分钟' };
+    }
+    return null;
+  }
+
+  /**
+   * 烹饪说明这一行的文案（首项是「100克/袋」）。
+   * 蒸和炖走同一档，合并成一项省宽度；超过 600g 只指向判定标准。
+   */
+  private cookingTokens(spec: Spec): string[] {
+    const label = `${spec.packageSpecG}克/袋`;
+    const times = this.cookingTimesFor(spec.packageSpecG);
+    if (!times) {
+      return [label, '超过600g，按判定标准'];
+    }
+    const methods =
+      times.steam === times.stew
+        ? [`蒸/炖 ${times.steam}`, `低温慢煮 ${times.sousvide}`]
+        : [
+            `蒸 ${times.steam}`,
+            `炖 ${times.stew}`,
+            `低温慢煮 ${times.sousvide}`,
+          ];
+    return [label, ...methods];
+  }
+
+  /** 超重规格才补一句判定标准；正常重量不加，省版面 */
+  private cookingJudgement(spec: Spec): string | null {
+    if (this.cookingTimesFor(spec.packageSpecG)) {
+      return null;
+    }
+    return '中心无可见血水；慢煮中心达 65℃ 后 1 分钟';
+  }
+
+  /** 多档规格时标一下「第一档」，免得拿 500g 的袋子照 100g 的时间做 */
+  private cookingHint(specs: Spec[]): string {
+    return specs.length > 1 ? '按第一档袋规格' : '按袋规格';
   }
 
   // ---------------- 测量 ----------------
@@ -257,20 +308,19 @@ export class LabelV10Service {
     h += mm(1.7) + mm(this.F.section) + mm(1.3);
     h += this.valueRows(labelData).length * lh(this.F.value);
 
-    // 烹饪
+    // 烹饪（只按第一档，与顾客端一致）
     h += mm(1.7) + mm(this.F.section) + mm(1.3);
-    const cookingLayouts = specs.map((spec) =>
-      this.layoutCookingRow(ctx, spec, contentW),
-    );
-    // 一行放不下就换行（100g 以上的规格：10–12 分钟 + 低温慢煮 45 分钟会超宽），
-    // 不能像以前那样直接判"放不下"——那会让整张标签打不出来。
-    if (cookingLayouts.some((layout) => !layout.fits)) {
-      return { height: Number.POSITIVE_INFINITY };
+    const cookingSpec = specs[0];
+    if (cookingSpec) {
+      const cookingLines = this.layoutCookingRow(ctx, cookingSpec, contentW);
+      if (!cookingLines.fits) {
+        return { height: Number.POSITIVE_INFINITY };
+      }
+      h += cookingLines.lines.length * lh(this.F.cook) + mm(0.6);
+      if (this.cookingJudgement(cookingSpec)) {
+        h += lh(this.F.cook);
+      }
     }
-    h +=
-      cookingLayouts.reduce((sum, layout) => sum + layout.lines.length, 0) *
-        lh(this.F.cook) +
-      specs.length * mm(0.6);
     h += mm(0.4) + lh(this.F.ban);
     h += mm(1.2) + lh(this.F.warn);
 
@@ -278,7 +328,7 @@ export class LabelV10Service {
   }
 
   /**
-   * 烹饪行排版：`100克/袋  蒸 10–12 分钟  炖 10–12 分钟  低温慢煮 45 分钟`
+   * 烹饪行排版：`100克/袋  蒸/炖 约 10 分钟  低温慢煮 30 分钟`
    * 放不下时按整段换行（续行顶格），而不是缩小到看不清或直接报错。
    */
   private layoutCookingRow(
@@ -286,17 +336,7 @@ export class LabelV10Service {
     spec: Spec,
     contentW: number,
   ): { lines: string[][]; fits: boolean } {
-    const times = this.cookingTimesFor(spec.packageSpecG);
-    const label = `${spec.packageSpecG}克/袋`;
-    // 蒸和炖用的是同一档时间，合成一项，省一行宽度
-    const methods =
-      times.steam === times.stew
-        ? [`蒸/炖 ${times.steam}`, `低温慢煮 ${times.sousvide}`]
-        : [
-            `蒸 ${times.steam}`,
-            `炖 ${times.stew}`,
-            `低温慢煮 ${times.sousvide}`,
-          ];
+    const [label, ...methods] = this.cookingTokens(spec);
     const gap = mm(2);
     const labelColW = mm(12);
 
@@ -392,10 +432,18 @@ export class LabelV10Service {
     ctx.textAlign = 'left';
     y += lh(this.F.brand);
 
-    // 食谱名
+    // 食谱名（太长就缩字号，绝不画出纸外）
     y += mm(1.3);
-    ctx.font = `bold ${mm(this.F.title)}px "Chinese-Bold"`;
-    ctx.fillText(labelData.recipeName, left, y);
+    const title = this.fitSingleLine(
+      ctx,
+      labelData.recipeName,
+      contentW,
+      this.F.title,
+      3.6,
+      'Chinese-Bold',
+    );
+    ctx.font = `bold ${mm(title.sizeMm)}px "Chinese-Bold"`;
+    ctx.fillText(title.text, left, y);
     y += mm(this.F.title * 1.18);
 
     // 食谱标题下不再画分隔线，留白收紧
@@ -403,19 +451,36 @@ export class LabelV10Service {
 
     // 三行元信息
     ctx.textBaseline = 'alphabetic';
-    const drawMeta = (label: string, value: string, x: number) => {
+    const drawMeta = (
+      label: string,
+      value: string,
+      x: number,
+      maxWidth?: number,
+    ) => {
       const baseline = y + mm(this.F.meta * 0.82);
       ctx.font = `${mm(this.F.metaLabel)}px "Chinese"`;
       ctx.fillStyle = '#5A5A5A';
       ctx.fillText(label, x, baseline);
       const labelW = ctx.measureText(label).width + mm(1);
-      ctx.font = `bold ${mm(this.F.meta)}px "Chinese-Bold"`;
+      // 净含量这一行多规格时很长：给得出可用宽度就缩字号，保证不越过右边距
+      const fitted =
+        maxWidth === undefined
+          ? { text: value, sizeMm: this.F.meta }
+          : this.fitSingleLine(
+              ctx,
+              value,
+              maxWidth - labelW,
+              this.F.meta,
+              1.7,
+              'Chinese-Bold',
+            );
+      ctx.font = `bold ${mm(fitted.sizeMm)}px "Chinese-Bold"`;
       ctx.fillStyle = '#111111';
-      ctx.fillText(value, x + labelW, baseline);
+      ctx.fillText(fitted.text, x + labelW, baseline);
     };
 
     // 净含量独占一行（多规格时较长），日期与保质期并排一行
-    drawMeta('净含量', this.buildNetContent(specs), left);
+    drawMeta('净含量', this.buildNetContent(specs), left, contentW);
     y += lh(this.F.meta) + mm(0.55);
     drawMeta('生产日期', this.formatDate(labelData.productionTime), left);
     drawMeta('保质期', this.buildShelfLife(labelData), left + contentW / 2);
@@ -518,7 +583,7 @@ export class LabelV10Service {
     y = this.drawSection(
       ctx,
       '烹饪说明',
-      '按袋规格',
+      this.cookingHint(specs),
       y,
       left,
       contentW,
@@ -527,8 +592,10 @@ export class LabelV10Service {
     const labelColW = mm(12);
     const methodsGap = mm(2);
 
-    specs.forEach((spec) => {
-      const layout = this.layoutCookingRow(ctx, spec, contentW);
+    // 多规格只按第一档出这一行（与顾客端详情页一致）
+    const cookingSpec = specs[0];
+    if (cookingSpec) {
+      const layout = this.layoutCookingRow(ctx, cookingSpec, contentW);
       layout.lines.forEach((line, lineIndex) => {
         let x = left;
         let pieces = line;
@@ -536,7 +603,9 @@ export class LabelV10Service {
           ctx.font = `bold ${mm(this.F.cook)}px "Chinese-Bold"`;
           ctx.fillStyle = '#111111';
           ctx.fillText(line[0], left, y);
-          x = left + Math.max(labelColW, ctx.measureText(line[0]).width + methodsGap);
+          x =
+            left +
+            Math.max(labelColW, ctx.measureText(line[0]).width + methodsGap);
           pieces = line.slice(1);
         }
         ctx.font = `${mm(this.F.cook)}px "Chinese"`;
@@ -547,7 +616,14 @@ export class LabelV10Service {
         y += lh(this.F.cook);
       });
       y += mm(0.6);
-    });
+
+      const judgement = this.cookingJudgement(cookingSpec);
+      if (judgement) {
+        ctx.font = `${mm(this.F.cook)}px "Chinese"`;
+        ctx.fillText(judgement, left, y);
+        y += lh(this.F.cook);
+      }
+    }
 
     y += mm(0.4);
     ctx.font = `${mm(this.F.ban)}px "Chinese"`;
@@ -595,6 +671,41 @@ export class LabelV10Service {
   }
 
   // ---------------- 文本工具 ----------------
+
+  /**
+   * 单行自适应：先按原字号画，宽度超了就一档档缩字号；
+   * 缩到下限还超，就用省略号收尾。返回值直接用 mm(sizeMm) 当字号。
+   */
+  private fitSingleLine(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    maxWidth: number,
+    baseMm: number,
+    floorMm: number,
+    family: 'Chinese' | 'Chinese-Bold',
+  ): { text: string; sizeMm: number } {
+    const prefix = family === 'Chinese-Bold' ? 'bold ' : '';
+    const widthAt = (value: string, sizeMm: number): number => {
+      ctx.font = `${prefix}${mm(sizeMm)}px "${family}"`;
+      return ctx.measureText(value).width;
+    };
+
+    let sizeMm = baseMm;
+    while (sizeMm > floorMm && widthAt(text, sizeMm) > maxWidth) {
+      sizeMm = Math.max(floorMm, sizeMm - 0.05);
+    }
+
+    let fitted = text;
+    if (widthAt(fitted, sizeMm) > maxWidth) {
+      let next = fitted;
+      while (next.length > 1 && widthAt(`${next}…`, sizeMm) > maxWidth) {
+        next = next.slice(0, -1);
+      }
+      fitted = `${next}…`;
+    }
+
+    return { text: fitted, sizeMm };
+  }
 
   private wrapByWidth(
     ctx: CanvasRenderingContext2D,

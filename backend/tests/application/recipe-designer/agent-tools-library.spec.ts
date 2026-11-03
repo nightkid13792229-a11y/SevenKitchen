@@ -48,6 +48,42 @@ describe('Agent 工具：search_knowledge_library', () => {
     expect(outcome.summary).toContain('p17');
   });
 
+  it('assess 摘要带出缺口数值和目标范围', async () => {
+    const outcome = await executeTool(
+      'assess',
+      {},
+      {
+        port: {
+          assess: jest.fn().mockResolvedValue({
+            isCompliant: false,
+            contentRevision: 35,
+            totalEnergyKcal: 1681.58,
+            counts: { compliant: 38, deficient: 1, excess: 0, missingData: 0 },
+            gaps: [
+              {
+                key: 'phosphorus',
+                label: '磷',
+                status: 'DEFICIENT',
+                value: 0.18,
+                min: 0.2,
+                max: 0.5,
+                unit: '%DM',
+              },
+            ],
+            allergens: [],
+          }),
+        } as any,
+        catalog: {} as any,
+        library: {} as any,
+        onAsk: jest.fn(),
+      },
+    );
+
+    expect(outcome.ok).toBe(true);
+    expect(outcome.summary).toContain('磷 0.18 %DM');
+    expect(outcome.summary).toContain('目标 0.2–0.5 %DM');
+  });
+
   it('缺 query 直接报错，不打库', async () => {
     const search = jest.fn();
     const outcome = await executeTool(

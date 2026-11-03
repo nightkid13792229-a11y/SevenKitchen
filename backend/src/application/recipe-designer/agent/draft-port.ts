@@ -50,6 +50,7 @@ export interface AssessmentGap {
   value: number | null;
   min: number | null;
   max: number | null;
+  unit: string;
 }
 
 export interface AssessmentSummary {
@@ -256,12 +257,15 @@ export class RecipeDraftPort {
       })
       .slice(0, 12)
       .map((entry) => ({
-        key: String(entry.key ?? ''),
-        label: String(entry.label ?? entry.name ?? entry.key ?? ''),
+        key: String(entry.nutrientKey ?? entry.key ?? ''),
+        label: String(
+          entry.label ?? entry.name ?? entry.nutrientKey ?? entry.key ?? '',
+        ),
         status: String(entry.status ?? ''),
-        value: toNumber(entry.value),
-        min: toNumber(entry.min),
-        max: toNumber(entry.max),
+        value: toNumber(entry.currentValue ?? entry.value),
+        min: toNumber(entry.minValue ?? entry.min),
+        max: toNumber(entry.maxValue ?? entry.max),
+        unit: String(entry.unit ?? ''),
       }));
 
     const allergens = Array.isArray(result?.allergenWarnings)

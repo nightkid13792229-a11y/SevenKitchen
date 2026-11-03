@@ -479,7 +479,13 @@ function summarizeDraft(summary: {
 function summarizeAssessment(summary: {
   isCompliant: boolean;
   counts: { deficient: number; excess: number; missingData: number };
-  gaps: Array<{ label: string }>;
+  gaps: Array<{
+    label: string;
+    value: number | null;
+    min: number | null;
+    max: number | null;
+    unit: string;
+  }>;
   allergens: string[];
 }): string {
   const parts = [
@@ -487,7 +493,20 @@ function summarizeAssessment(summary: {
     `缺 ${summary.counts.deficient} 项 / 超 ${summary.counts.excess} 项 / 缺数据 ${summary.counts.missingData} 项`,
   ];
   if (summary.gaps.length > 0) {
-    parts.push(`主要缺口：${summary.gaps.map((gap) => gap.label).join('、')}`);
+    parts.push(
+      `主要缺口：${summary.gaps
+        .map((gap) => {
+          const unit = gap.unit ? ` ${gap.unit}` : '';
+          const actual =
+            gap.value == null ? '未知' : `${gap.value}${unit}`;
+          const target =
+            gap.min == null && gap.max == null
+              ? ''
+              : `（目标 ${gap.min ?? '?'}–${gap.max ?? '?'}${unit}）`;
+          return `${gap.label} ${actual}${target}`;
+        })
+        .join('、')}`,
+    );
   }
   if (summary.allergens.length > 0) {
     parts.push(`⚠ 命中过敏原：${summary.allergens.join('、')}`);

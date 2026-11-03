@@ -1,621 +1,144 @@
-# Domain Model & Algorithms Blueprint (Based on PRD 07)
-
-    本文档定义本项目的后端领域模型（Domain Model）、聚合（Aggregates）、
-    不变量（Invariants）、领域服务（Domain Services）、计算算法（Algorithms），
-    并明确每个领域的输入与输出结构。
-
-    本文档不包含：
-        - API 入参/出参规范（属于 05 文档）
-        - 数据库存储细节（已经在 07 文档定义）
-        - UI（属于 03 文档）
-        - 技术栈（属于 00 文档）
-
-
-============================================================
-# 1. Domain Layer Overview（领域层总体结构）
-============================================================
-
-    系统采用分层结构：
-        Application Layer（编排逻辑）
-        Domain Layer（本文件定义）
-        Infrastructure Layer（数据库、缓存、第三方服务）
-
-    Domain 层负责：
-        - 领域实体的定义
-        - 业务规则的表达
-        - 状态机约束
-        - 不变量检查
-        - 计算算法
-        - 领域事件
-
-
-------------------------------------------------------------
-# 1.1 领域划分（Bounded Contexts）
-------------------------------------------------------------
-
-本项目包含六个核心领域：
-
-    1. Dog Domain（狗狗档案与营养需求）
-    2. Recipe Domain（食谱配置与营养计算）
-    3. Order Domain（订单与 Snapshot）
-    4. Production Domain（排产、厨房、溯源）
-    5. Inventory & Purchasing Domain（库存与采购）
-    6. Shipping & Address Domain（地址、运费）
-
-这六个领域之间通过 Application Service 调用，不直接耦合。
-
-
-============================================================
-# 2. Entities, Value Objects & Aggregates（实体与聚合）
-============================================================
-
-------------------------------------------------------------
-## 2.1 Dog Domain
-------------------------------------------------------------
-
-### Aggregate Root: DogProfile
-    字段（高层级，不写具体类型）：
-        dog_id
-        name
-        gender
-        birthday
-        weight
-        breed
-        neutered
-
-        activity_level
-            枚举值必须与 07 文档保持一致：
-                RESTING
-                LOW
-                NORMAL
-                HIGH
-                WORKING
-
-        bcs_score（1–9 体况评分）
-        allergy_foods / picky_foods（旧文本字段，各一段文字）
-        allergy_records[]（结构化过敏记录：过敏原 + 可信度 + 来源报告）
-            可信度四档：确诊 / 可疑 / 待排查 / 已排除。
-            「确诊」会让含该食材的食谱**彻底不进推荐**（2026-10-04）。
-        medical_history
-
-        treat_input_mode
-            枚举：
-                ESTIMATE_LEVEL
-                EXACT_KCAL
-
-        treat_level
-            当 treat_input_mode = ESTIMATE_LEVEL 时生效：
-                枚举值必须与 07 文档保持一致：
-                    NONE
-                    LOW
-                    MODERATE
-                    HIGH
-
-        manual_treat_kcal
-            当 treat_input_mode = EXACT_KCAL 时生效
-
-### 不变量（Invariants）
-    - birthday 不可大于当前日期
-    - weight > 0
-    - bcs_score 必须为 1–9 的整数
-    - treat_input_mode === ESTIMATE_LEVEL ⇒ manual_treat_kcal 必须为空
-    - treat_input_mode === ESTIMATE_LEVEL ⇒ treat_level ∈ {NONE, LOW, MODERATE, HIGH}
-    - treat_input_mode === EXACT_KCAL ⇒ treat_level 必须为空，manual_treat_kcal ≥ 0
-
-### 派生字段（由 Domain Service 计算）
-    - age_months
-    - size_class（依据体重/品种，参照 07 文档 SizeClass 规则）
-    - life_stage（幼犬/成犬/老年，参照 07 文档 LifeStage 规则）
-    - treat_cap_kcal（行为由 DogCalcService 决定）
-
-### Value Object: DogCalcInput
-    用于 DogCalcService 的输入：
-        - weight
-        - activity_level
-        - life_stage
-        - treat_input_mode
-        - treat_level（若 ESTIMATE_LEVEL）
-        - manual_treat_kcal（若 EXACT_KCAL）
-        - recipe_energy_density（用于计算克数时）
-
-### Value Object: DogCalcResult
-    - rer
-    - der
-    - treat_cap_kcal
-    - daily_intake_g
-
-
-------------------------------------------------------------
-## 2.2 Recipe Domain
-------------------------------------------------------------
-
-### Aggregate Root: Recipe
-    - recipe_id
-    - title
-    - description
-    - design_source
-    - cover_images[]
-    - items[]（RecipeItem 列表）
-    - nutrition_detailed_data
-    - status (PUBLISHED / HIDDEN)
-
-### Entity: RecipeItem
-    - ingredient_id
-    - type (FOOD | SUPPLEMENT)
-    - ratio_percent
-    - nutrient_target_key（若 type = SUPPLEMENT 时使用，用于补剂目标）
-
-### Value Object: NutritionPanel
-    - protein_dm
-    - fat_dm
-    - fiber_dm
-    - carbs_dm
-    - energy_density_kcal_per_kg
-    - 其他营养指标（以 07 文档为准）
-
-### 不变量（Invariants）
-    - ratio_percent 总和必须 = 100（食品 + 补剂）
-    - 相同 ingredient_id 不可重复
-    - nutrition_detailed_data 必须由 RecipeNutritionService 统一计算，不可人工编辑
-
-
-### Value Object: RecipeSnapshot（不可变）
-用于订单冻结配方状态。
-
-    字段包含（以 07 文档为准）：
-        recipe_title
-        version
-        items（深拷贝）
-        nutrition_detailed_data（深拷贝）
-        design_source
-        energy_density
-        created_at
-
-不变规则：
-    - Snapshot 创建后永不可更改
-    - 不允许对 snapshot 做更新，只允许新建
-
-
-------------------------------------------------------------
-## 2.3 Order Domain
-------------------------------------------------------------
-
-### Aggregate Root: Order
-    - order_id
-    - customer_id
-    - address_id
-    - amount_product
-    - amount_shipping
-    - amount_total
-    - status
-
-### Entity: OrderItem
-    - order_item_id
-    - recipe_snapshot（RecipeSnapshot 对象）
-    - daily_intake_g
-    - total_grams
-
-### 状态机（State Machine）
-OrderStatus (Phase 9: E-commerce Standard):
-    INIT
-    PENDING_PAYMENT
-    PAID
-    IN_PRODUCTION
-    SHIPPED
-    COMPLETED
-    CANCELLED
-
-**状态定义**:
-- **INIT**: 订单草稿已创建，尚未提交
-- **PENDING_PAYMENT**: 订单已提交，等待支付
-- **PAID**: 支付已确认，等待开始生产
-- **IN_PRODUCTION**: 订单正在制作中（包括排产、烹饪、包装）
-- **SHIPPED**: 订单已发货，具有物流单号
-- **COMPLETED**: �订单已完成（用户确认或7天自动完成）
-- **CANCELLED**: 订单已取消（由客户、管理员或系统）
-
-允许的转移（必须在 Domain 层强制）：
-    INIT → PENDING_PAYMENT
-    PENDING_PAYMENT → PAID
-    PENDING_PAYMENT → CANCELLED  # 用户取消/支付超时
-    PAID → IN_PRODUCTION
-    PAID → CANCELLED             # 管理员取消
-    IN_PRODUCTION → SHIPPED
-    IN_PRODUCTION → CANCELLED    # 管理员取消
-    SHIPPED → COMPLETED          # 用户确认收货或自动完成
-
-**取消规则**:
-- 客户可取消: INIT, PENDING_PAYMENT
-- 管理员可取消: 任意状态（除SHIPPED, COMPLETED, CANCELLED）
-- 系统自动取消: 支付超时（PENDING_PAYMENT → CANCELLED）
-
-非法转移必须抛出 InvalidStateTransitionException。
-
-**Phase 9 优化说明** (2026-01-09):
-- 删除了 WAITING_FOR_PRODUCTION, READY_FOR_PACKAGING, READY_FOR_SHIPMENT 状态
-- 简化为核心7状态，对齐电商行业标准（京东、美团、标准ERP）
-- IN_PRODUCTION 状态涵盖：排产、生产、包装三个子阶段
-- 用户界面只展示7个主要状态，内部流程通过子状态或标签区分
-
-
-------------------------------------------------------------
-## 2.4 Production Domain（生产域）
-------------------------------------------------------------
-
-### Aggregate Root: ProductionBatch
-    - batch_id
-    - batch_code
-    - recipe_id
-    - tasks[]（ProductionTask 列表）
-    - status (PENDING / IN_PROGRESS / COMPLETED)
-
-### Entity: ProductionTask
-    - task_id
-    - batch_id
-    - ingredient_id
-    - required_weight_g
-    - actual_weight_g
-    - photos_raw[]
-    - photos_cooked[]
-    - photos_portioned[]
-
-不变量：
-    - actual_weight_g 必须 >= 0（允许为 0 表示未录入或弃用）
-    - 若 photos_cooked / photos_portioned 非空，则 task 状态必须已到相应阶段（由 Application 层执行业务校验）
-
-溯源要求：
-    - photos_raw / photos_cooked / photos_portioned 必须通过订单间接可追溯（Order → OrderItem → Recipe / Batch → ProductionTask）。
-
-
-------------------------------------------------------------
-## 2.5 Inventory & Purchasing Domain
-------------------------------------------------------------
-
-### Entity: IngredientStock
-    - ingredient_id
-    - stock_g
-    - yield_rate（出肉率，食品专用）
-    - purchase_to_base_ratio（补剂浓度 / 稀释比）
-
-不变量：
-    - stock_g >= 0
-    - yield_rate > 0
-    - purchase_to_base_ratio > 0
-
-### Aggregate Root: PurchaseOrder
-    - po_id
-    - ingredient_id
-    - expected_g
-    - purchased_g
-    - status
-
-采购完成后库存更新规则：
-    - stock_g += purchased_g（如涉及 yield 或 purchase_to_base_ratio，由 InventoryService 统一封装换算，不在 UI 或 Controller 中计算）
-
-
-------------------------------------------------------------
-## 2.6 Shipping & Address Domain
-------------------------------------------------------------
-
-### Entity: Address
-    - receiver_name
-    - phone
-    - region（省/市/区 JSON 结构）
-    - detail_address
-    - is_default
-
-不变量：
-    - phone 必须通过手机号格式验证
-    - region 必须包含省/市/区字段
-
-### Value Object: ShippingFeeResult
-    - amount_shipping
-    - template_id
-    - rule_applied_description（方便调试与客服解释）
-
-
-============================================================
-# 3. Domain Services（领域服务）
-============================================================
-
-    所有 Domain Services 必须：
-        - 无状态（stateless）
-        - 不依赖具体 Web 框架
-        - 只依赖 Repository 接口和 Value Object
-        - 不直接操作 HTTP / Session / Cookie 等
-
-
-------------------------------------------------------------
-## 3.1 DogCalcService（核心营养计算）
-------------------------------------------------------------
-
-### Input: DogCalcInput
-    - dog_profile（或最小必要字段：weight, life_stage, activity_level, bcs_score, treat 配置）
-    - recipe_energy_density（计算克数时需要）
-    - treat_input_mode（ESTIMATE_LEVEL / EXACT_KCAL）
-    - treat_level（NONE / LOW / MODERATE / HIGH，当 ESTIMATE_LEVEL 时）
-    - manual_treat_kcal（当 EXACT_KCAL 时）
-
-### Output: DogCalcResult
-    - rer
-    - der
-    - treat_cap_kcal
-    - daily_intake_g
-
-### Algorithm:
-
-#### Step 1: 计算 RER
-    RER = 70 × (weight_kg ^ 0.75)
-
-#### Step 2: 计算 DER（引用 07 文档常量表）
-    DER = RER × factor
-
-    这里的 factor 不允许在本文件硬编码具体数字，
-    必须通过 07_PRD_Core_Architecture.md 中定义的常量表获取，例如：
-
-        ACTIVITY_MULTIPLIERS
-            - RESTING
-            - LOW
-            - NORMAL
-            - HIGH
-            - WORKING
-
-        LIFE_STAGE_FACTORS
-            - Puppy 不同月龄阶段的系数
-            - Adult 的系数
-            - Senior 的系数
-
-    实际计算流程：
-        1）根据 DogProfile.life_stage 查 LIFE_STAGE_FACTORS
-        2）根据 DogProfile.activity_level 查 ACTIVITY_MULTIPLIERS
-        3）将二者组合（如：base_factor × activity_factor 或按 07 文档定义）
-        4）得到最终 DER 系数，不在此处硬编码任何具体数值
-
-#### Step 3: 计算 treat_cap_kcal（引用 07 文档零食等级常量表）
-    treat_input_mode = ESTIMATE_LEVEL 时：
-        - treat_level ∈ {NONE, LOW, MODERATE, HIGH}
-        - 对应的“零食占 DER 的比例”必须引用 07 中定义的常量表
-          （例如 TREAT_LEVEL_MULTIPLIERS），
-          禁止在此处写死 NONE=0%, LOW=5% 类似的魔法数字。
-
-        treat_cap_kcal = DER × TREAT_LEVEL_MULTIPLIERS[treat_level]
-
-    treat_input_mode = EXACT_KCAL 时：
-        treat_cap_kcal = manual_treat_kcal
-
-#### Step 4: 计算每日鲜食克数
-    food_kcal_needed = max(DER − treat_cap_kcal, 0)
-    daily_intake_g = food_kcal_needed / (energy_density_kcal_per_kg / 1000)
-
-#### 验证规则：
-    - daily_intake_g >= 0
-    - treat_cap_kcal >= 0
-    - 若 manual_treat_kcal > DER，则可选择：
-        - 抛出 InvalidDogCalcInputException，或
-        - 记录 warning，并将 food_kcal_needed 视为 0
-
-
-------------------------------------------------------------
-## 3.2 RecipeNutritionService（食谱营养计算）
-------------------------------------------------------------
-
-Input:
-    - recipe.items（含 ratio_percent, ingredient_id, type）
-    - ingredient_nutrient_table（原始营养表）
-
-Output:
-    - nutrition_detailed_data（湿物质 + 干物质 + 能量）
-
-Algorithm（概要）：
-    1. 遍历每个 RecipeItem：
-        - 按 100g 食谱计算单项贡献
-        - 将原料营养数据转换到统一基准（湿物质或干物质）
-    2. 根据 ratio_percent 对所有营养指标做加权平均
-    3. 使用 Atwater 系数计算能量密度（kcal/kg）
-    4. 输出 NutritionPanel 结构
-
-Invariants:
-    - 不允许在 Application 层重复实现营养计算逻辑
-    - 所有营养相关的展示都应依赖 NutritionPanel，不应自行拼接
-
-
-------------------------------------------------------------
-## 3.3 RecipeSnapshotService（快照服务）
-------------------------------------------------------------
-
-Snapshot 必须在 "订单创建（或即将支付）" 时生成。
-
-Algorithm:
-    createSnapshot(recipe: Recipe) → RecipeSnapshot：
-        - 拷贝 Recipe 的关键字段：
-            recipe_title
-            version
-            items（深拷贝）
-            nutrition_detailed_data（深拷贝）
-            design_source
-            energy_density
-        - 设置 created_at = now()
-
-不变性（Immutable Rule）：
-    - snapshot 一旦写入数据库，不允许对其做任何 UPDATE
-    - 任何想变更“订单所对应配方”的行为，必须通过新建订单，而非修改 snapshot
-
-
-------------------------------------------------------------
-## 3.4 OrderService（订单逻辑）
-------------------------------------------------------------
-
-### 主流程
-
-Step 1: 创建订单草稿（INIT）
-    - 输入：用户选择的 recipe、dog_profile、周期天数、收货地址
-    - 调用：
-        - RecipeSnapshotService 生成 snapshot
-        - DogCalcService 计算每日克数（如需要）
-        - ShippingFeeService 计算运费
-        - PricingService（可内嵌在 OrderService 或单独 Domain Service）依据 GlobalConfig 计算价格
-
-    - 组合：
-        - amount_product
-        - amount_shipping
-        - amount_total
-        - 初始状态：INIT
-
-Step 2: 进入 PENDING_PAYMENT
-    - Application 层调用支付网关，Domain 层仅更新状态
-
-Step 3: 支付成功 → PAID
-    - 校验支付金额与 amount_total 一致
-    - 状态由 PENDING_PAYMENT → PAID
-    - 触发 OrderPaid 领域事件
-
-Step 4: 进入排产（SCHEDULING）
-    - 由 SchedulingService 根据 PAID 状态订单创建 ProductionBatch
-    - OrderStatus 由 PAID → SCHEDULING
-
-Step 5: 后续状态流转
-    - 按状态机约束逐步流转至 DELIVERED 或 CANCELED
-
-
-------------------------------------------------------------
-## 3.5 SchedulingService（排产服务）
-------------------------------------------------------------
-
-Input:
-    - 一批 PAID 订单
-
-Output:
-    - ProductionBatch 列表
-
-Core Logic:
-    1. 将订单的 OrderItem 按 recipe_id 分组
-    2. 根据工厂产能（每锅最大重量）拆分为多个 batch
-    3. 为每个 batch 生成对应的 ProductionTask：
-        - 计算每个 ingredient 的 required_weight_g
-    4. 触发 StockLowEvent / Purchase 建议（由 InventoryService 处理）
-
-
-------------------------------------------------------------
-## 3.6 ProductionService（厨房任务）
-------------------------------------------------------------
-
-负责：
-    - 接收 SchedulingService 生成的生产批次
-    - 记录实际投料（actual_weight_g）
-    - 记录溯源照片（raw / cooked / portioned）
-    - 完成后更新 batch.status = COMPLETED
-
-重要约束：
-    - 不允许在此处改变订单的数量逻辑，只能影响库存与溯源信息
-    - 若实际投料与应投差距过大（由业务规则定义），应发出告警事件
-
-
-------------------------------------------------------------
-## 3.7 InventoryService（库存与采购）
-------------------------------------------------------------
-
-负责：
-    - 根据 ProductionTask 的 actual_weight_g 扣减 stock_g
-    - 当 stock_g < reorder_point 时触发 StockLowEvent
-    - 处理 PurchaseOrder 完成时，对 stock_g 进行增加（考虑 yield_rate 与 purchase_to_base_ratio）
-
-禁止：
-    - 在 Controller 或 Application 层重复实现库存扣减逻辑
-    - 在前端根据估算值直接修改库存
-
-
-------------------------------------------------------------
-## 3.8 ShippingFeeService（运费）
-------------------------------------------------------------
-
-Input:
-    - address.region
-    - shipping_template
-    - total_weight
-
-Output:
-    - ShippingFeeResult
-
-Core Rules:
-    - 根据省市区匹配运费模板
-    - 考虑首重/续重、包邮区等规则（以 07 文档定义的模板为准）
-    - Domain 层只负责规则运算，不负责选择具体物流公司
-
-
-============================================================
-# 4. Domain Events（领域事件）
-============================================================
-
-建议关键事件：
-
-    DogProfileUpdated
-    RecipeUpdated
-    OrderCreated
-    OrderPaid
-    OrderScheduled
-    BatchCreated
-    BatchCompleted
-    StockLowEvent
-    ShipmentCreated
-
-用途：
-    - 解耦模块间联动
-    - 触发日志/审计记录
-    - 驱动异步动作（如通知、报表）
-
-
-============================================================
-# 5. Cross-Domain Interaction Rules（跨领域规则）
-============================================================
-
-### 5.1 Dog → DogCalc → UI
-    - DogCalcService 只能存在于 Domain 层
-    - UI 仅展示 DogCalcResult，不得自行实现 RER/DER/Treat 等计算
-
-### 5.2 Recipe → RecipeSnapshot → Order
-    - Order 必须依赖 RecipeSnapshot，而非直接引用 Recipe 当前版本
-    - Snapshot 不可变，禁止 Update
-
-### 5.3 Order → Scheduling → Production
-    - 只有 PAID 状态的订单才能进入排产
-    - SchedulingService 不允许修改订单内容，只能生成 ProductionBatch
-
-### 5.4 Production → Inventory
-    - 只有基于 actual_weight_g 的数据才能影响库存
-    - 任何基于“应投重量”的库存扣减都是无效实现
-
-### 5.5 Address → ShippingFee → OrderPricing
-    - 运费计算必须通过 ShippingFeeService 完成
-    - Order 只持有运费结果，不关心模板细节
-
-### 5.6 OrderPricing → GlobalConfig（新增）
-    - OrderService 在计算金额时，必须通过 GlobalConfig 读取：
-        - target_margin（目标毛利率）
-        - labor_hourly_rate（人工小时成本）
-    - 禁止在 Order Domain 或任何 Service 中硬编码利润率或人工成本常数。
-    - 价格相关逻辑应形如：
-        amount_product = BaseCost × (1 + target_margin)
-        其中 BaseCost 可能来自：
-            - 食材成本（由 Inventory/Ingredient 数据提供）
-            - 人工成本（labor_hourly_rate × 估算工时）
-    - GlobalConfig 的读取由 Application 层注入到 Domain Service 中，
-      Domain Service 只依赖抽象接口（例如 GlobalConfigProvider），不直接访问数据库。
-
-
-============================================================
-# 6. Domain Exceptions（领域异常）
-============================================================
-
-所有异常必须通过统一的 DomainException 体系表达，以便上层做统一处理：
-
-    - InvalidStateTransitionException
-    - InvalidSnapshotMutationException
-    - InvalidDogCalcInputException
-    - InventoryShortageException
-    - InvalidRecipeItemException
-    - ShippingTemplateNotFoundException
-    - GlobalConfigNotFoundException（读取不到全局配置时抛出）
-
-============================================================
-# End of Document
-============================================================
+# 领域模型与算法
+
+> 状态：2026-11-03 重整。本文是**领域地图 + 不变量清单**，不是字段/公式大全。
+> 字段以 `backend/prisma/schema.prisma` 为准；算法实现以 `backend/src/domain` 和对应 service 为准。
+> 旧版 600+ 行详细领域文档已归档到 `docs/_archive/legacy/04_Domain_Model_and_Algorithms.pre-2026-11-03.md`。
+
+---
+
+## 1. 领域划分
+
+| 领域 | 主要代码 | 负责什么 |
+|---|---|---|
+| Dog / Health | `backend/src/domain/dog`、`domain/health` | 犬只档案、体重/体况、生命阶段、疫苗、过敏、健康记录 |
+| Recipe / Nutrition | `backend/src/domain/recipe`、`domain/nutrition-governance`、`application/nutrition-*` | 食谱、营养计算、营养档案、标准、治理 |
+| Order / Payment | `backend/src/domain/order`、`application/order*`、`payments` | 下单、支付、订单状态、售后 |
+| Production | `backend/src/domain/production` | 排产、生产批次、厨房任务 |
+| Purchasing / Inventory | `backend/src/domain/purchasing`、`domain/inventory` | 采购单、收货、库存流水、SKU |
+| Shipping / Address | `backend/src/domain/shipping` | 地址、运费、发货、物流模板 |
+| Supplement | `backend/src/application/supplement-shop`、`interfaces/controllers/supplement-*` | 补剂商品、订单、售后、等价组 |
+| Custom Recipe | `backend/src/application/custom-recipe` | 定制需求、报价、订单、交付、退款 |
+| Knowledge | `knowledge-source`、`docs/knowledge-base` | 原文层、来源、证据政策、引用锚点 |
+| Finance | `backend/src/application/finance` | 报销、账单、财务报表、预警 |
+
+> 领域边界不是按页面分的，是按“谁拥有这条业务规则”分的。
+
+---
+
+## 2. 核心聚合与不变量
+
+### 2.1 Dog / Health
+
+- 犬只档案必须属于某个 owner；跨用户读写要在接口层做归属校验。
+- 体重、体况、生命阶段是**计算结果的关键输入**，不能只存在前端。
+- 营养计算必须带“标准/版本/换算口径”，不能把公式散落在页面。
+- 疫苗、过敏、健康记录各自有状态；不要把不同板块的状态混成一个字段。
+
+### 2.2 Recipe / Nutrition
+
+- 食谱是可编辑聚合；发布/下单使用的必须是**不可变快照**。
+- 营养档案有“待验证/已验证”等状态；未验证数据不能伪装成已验证。
+- 营养标准/换算口径要版本化；改口径不能悄悄改历史报告。
+- 食材和补剂是不同子类型，采购 SKU 规则不同（补剂不挂采购 SKU）。
+
+### 2.3 Order / Payment
+
+- 订单状态机在 domain 层；不要在 controller 里直接 `update status`。
+- 订单项引用下单时的食谱快照，不引用“当前食谱”。
+- 支付、退款、售后各自有状态；金额变更必须可追溯。
+- 订单取消/退款/售后不能靠删记录实现。
+
+### 2.4 Production
+
+- 生产批次/任务按订单快照展开；排产结果要可回读。
+- 生产完成、损耗、称重等会进入成本/库存；不能只改展示字段。
+- 厨房任务状态与订单状态不是同一个状态机，跨域要显式转换。
+
+### 2.5 Purchasing / Inventory
+
+- 库存用**流水/台账**表达，不直接改“剩余数量”一个字段。
+- 采购单、收货、入库、出库要能对应到流水。
+- 采购 SKU 与原料本体分离：品牌/渠道/规格/价格属于 SKU，不属于原料本体。
+- 任何库存调整都要有原因和操作人。
+
+### 2.6 Shipping / Address
+
+- 订单保存地址/运费快照；地址后续修改不影响历史订单。
+- 运费计算是领域服务，不在页面里拼。
+- 发货/物流状态与订单状态解耦，但要有明确映射。
+
+### 2.7 Supplement / Custom Recipe
+
+- 补剂、定制食谱是独立子域，有自己的订单/定价/交付/售后。
+- 不要把补剂或定制订单硬塞进普通鲜食订单状态机。
+- 定制报价/定金/尾款/退款必须可追溯；不要只改一个金额字段。
+
+### 2.8 Knowledge
+
+- 知识库内容必须有来源/证据等级；AI 不能凭记忆补营养/医学结论。
+- 引用要能回到原文/锚点；证据政策变化要可追溯。
+
+---
+
+## 3. 关键算法（只指路，不抄公式）
+
+| 算法 | 入口 | 说明 |
+|---|---|---|
+| 犬只能量/营养计算 | `backend/src/domain/dog`、`DogCalcService` | RER/DER、生命阶段、活动量、体况、体重目标 |
+| 食谱营养计算 | `backend/src/domain/recipe`、`RecipeNutritionService` | 按食材/补剂用量汇总营养，处理生熟/水分/单位 |
+| 食谱快照 | `RecipeSnapshotService` | 下单/发布时冻结食谱，保证历史可复现 |
+| 排产 | `application/scheduler`、`domain/production` | 按订单/产能/交期生成生产任务 |
+| 运费 | `domain/shipping`、`ShippingFeeService` | 按地址/重量/模板计算 |
+| 补剂/定制报价 | `domain/supplement`、`application/custom-recipe` | 独立定价与优惠/抵扣规则 |
+
+> 公式/系数会随营养标准和业务规则变化；**不要从旧文档抄数字**，以代码和测试为准。
+
+---
+
+## 4. 状态机
+
+主要状态机在 domain 层：
+
+- 订单 / 订单项
+- 生产批次 / 生产任务
+- 采购单 / 收货
+- 库存流水
+- 补剂订单 / 售后
+- 定制食谱订单 / 交付 / 退款
+
+规则：
+
+- 状态值用 schema/domain 里的 enum，不要临时加字符串。
+- 状态转换必须集中在一个地方；不要在多个 controller 里各写一套。
+- 新增状态要同时考虑：迁移、历史数据、前端展示、通知、报表。
+
+---
+
+## 5. 跨域规则
+
+1. **订单只认快照**：下单后食谱/价格/地址变化，不改历史订单。
+2. **生产只认订单快照**：不要回头读“当前食谱”。
+3. **库存只认流水**：任何数量变化都要有来源单据。
+4. **营养只认标准版本**：算法升级要能解释历史差异。
+5. **权限按端隔离**：CUSTOMER / STAFF / ADMIN 不共用同一套可见范围。
+6. **钱和时间的口径统一**：金额用 Decimal；时间按项目时区规范处理。
+
+---
+
+## 6. 改领域代码的顺序
+
+1. 先读对应 domain service + 现有测试。
+2. 写清“行为不变”还是“行为变更”；行为变更先找用户确认。
+3. 先补 characterization test，再改结构。
+4. 数据库变更走 Prisma migration。
+5. 跑该模块测试 + 相关跨模块测试。
+6. 更新本文的“地图/不变量”，不要抄字段清单。
+
+---
+
+## 7. 相关文档
+
+- [核心架构](07_Core_Architecture.md)：分层与模块入口。
+- [API 文档](05_API_Specs.md)：接口与 Swagger。
+- [数据库命名规范](DATABASE_NAMING_CONVENTIONS.md)：字段真源。
+- [知识库证据政策](knowledge-base/evidence-policy.md)：营养/医学证据边界。

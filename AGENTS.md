@@ -198,8 +198,9 @@ bash scripts/upload-trial.sh "这次改了什么"
 |--------|------|------|
 | 最高 | docs/DATABASE_NAMING_CONVENTIONS.md | 字段命名规则与验证方法（已按 schema 校正） |
 | 最高 | backend/prisma/schema.prisma | 字段真源；与任何文档冲突时以它为准 |
-| 高 | docs/07_Core_Architecture.md | 核心架构（分批刷新中；与代码冲突以代码为准） |
-| 高 | docs/05_API_Specs.md | API 接口（分批刷新中；以 controller 为准） |
+| 高 | docs/README.md | 文档总索引（活文档 / 历史资料） |
+| 高 | docs/07_Core_Architecture.md | 核心架构地图；与代码冲突以代码为准 |
+| 高 | docs/05_API_Specs.md | API 契约与模块索引；接口明细以 Swagger 为准 |
 
 ## 沟通规范
 

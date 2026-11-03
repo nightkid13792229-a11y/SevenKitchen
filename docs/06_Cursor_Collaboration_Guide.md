@@ -1,5 +1,7 @@
 # How to Collaborate with Cursor (AI Coding Agent)
 
+> 状态：Cursor 专用；DSH 不读取本文件。若团队已不用 Cursor，可整体移到 `_archive/`。
+
     本文档定义：
         - 如何让 Cursor 正确理解本项目
         - 如何分阶段向 Cursor 投喂文档

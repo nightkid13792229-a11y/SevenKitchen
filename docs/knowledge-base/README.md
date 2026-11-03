@@ -87,8 +87,8 @@
 
 ## 五、相关文档
 
-- 《健康管理 · 需求报告》：`docs/plans/2026-09-30-health-management-requirements.md`
+- 《健康管理 · 需求报告》：`docs/_archive/plans/2026-09-30-health-management-requirements.md`
 - 《知识库 · 技术评审 + 来源清单 + 扩充计划》：
-  `docs/plans/2026-09-30-knowledge-base-review-and-source-plan.md`
+  `docs/_archive/plans/2026-09-30-knowledge-base-review-and-source-plan.md`
 - 《资料库 B 方案 · 原文归档 + AI 读原文》：
   `docs/knowledge-base/source-archive-and-retrieval-plan.md`

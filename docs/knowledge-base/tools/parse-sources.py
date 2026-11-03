@@ -9,7 +9,7 @@
     python3 parse-sources.py --in <单份PDF> --out <json> [--doc-id X]
     python3 parse-sources.py --sample            # 跑三份样本，打印质量指标
 
-设计取舍（见 docs/superpowers/specs/2026-11-01-source-layer-spec.md）：
+设计取舍（见 docs/_archive/superpowers/specs/2026-11-01-source-layer-spec.md）：
   · 段落 50–800 字，不跨章节
   · 页眉页脚（≥3 页重复的短行）丢弃
   · 断词连字符（"sub-\\nmitted"）复原

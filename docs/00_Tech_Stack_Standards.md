@@ -1,281 +1,133 @@
-# Technical Stack & Engineering Standards
+# 技术栈与工程约定
+
+> 状态：2026-11-03 重整。版本以各目录 `package.json` 为准；本文只做总览。
+> 旧版详细技术栈文档已归档到 `docs/_archive/legacy/00_Tech_Stack_Standards.pre-2026-11-03.md`。
+
+---
+
+## 1. 技术栈
+
+### 后端
+
+| 项 | 当前 |
+|---|---|
+| 框架 | NestJS 11 |
+| 语言 | TypeScript 5.7 |
+| ORM | Prisma 6.1 |
+| 数据库 | PostgreSQL |
+| 测试 | Jest 30 |
+| 部署 | 本地构建 → SSH/rsync → 生产 systemd |
+
+### 管理后台
+
+| 项 | 当前 |
+|---|---|
+| 框架 | Vue 3.5 |
+| 构建 | Vite 7 |
+| UI | Element Plus 2.13 |
+| 状态 | Pinia 3 |
+| 路由 | Vue Router 4.6 |
+| 测试 | Vitest 4 |
+| 语言 | TypeScript 5.9 |
+
+### 小程序
+
+| 项 | 当前 |
+|---|---|
+| 框架 | uni-app 3（Vue 3） |
+| 构建 | Vite 5 |
+| 测试 | Vitest 3 |
+| 语言 | TypeScript 5 |
+| 平台 | 微信小程序（顾客端 + 员工端同一工程） |
+
+### 外部服务
+
+- 微信支付 / 订阅消息
+- 腾讯云 COS / CDN（图片）
+- 精臣 JCING 标签打印机
+- AI 供应商（原料、食谱、封面等，配置在后台）
+
+---
+
+## 2. 仓库结构
+
+```text
+backend/       NestJS API + Prisma schema + 迁移 + 测试
+admin-web/     Vue 3 管理后台
+miniapp/       uni-app 小程序（顾客端 + 员工端）
+docs/          文档（活文档在顶层，历史资料在 _archive/）
+scripts/       运维/协作脚本
+.agents/       DSH 技能与技能索引
+AGENTS.md      项目规则真源
+```
+
+---
+
+## 3. 常用命令
+
+### 后端
+
+```bash
+cd backend
+npm run start:check:miniapp   # 检查本地后端是否已可用
+npm run start:dev:miniapp     # 本地联调后端（默认 3011）
+npx tsc --noEmit              # 只做类型检查，不产出、不删 dist
+npm test                      # Jest
+npx prisma validate           # 校验 schema
+npx prisma studio             # 查看真实表结构
+```
+
+> ⚠️ 联调期间不要跑 `npm run build`：`nest-cli.json` 里 `deleteOutDir: true` 会删 `dist/`，
+> 正在跑的 `start:dev` 会直接死掉。
+
+### 管理后台
+
+```bash
+cd admin-web
+npm run dev
+npm run build          # 类型检查 + 构建
+npm run build:prod     # 生产构建
+npm run test           # Vitest
+```
+
+### 小程序
+
+```bash
+cd miniapp
+npm run preview            # 联调预览 → dist/dev/mp-weixin
+npm run build:mp-weixin    # 发布构建 → dist/build/mp-weixin
+npm run test               # Vitest
+```
+
+---
 
-    本文档用于定义：
-        - 本项目唯一允许使用的技术栈（Tech Stack）
-        - 各技术在系统中的职责边界
-        - 工程结构、测试与质量标准
-        - AI（Cursor）在实现代码时必须遵守的技术约束
+## 4. 工程约定
 
-    本文档是：
-        - 技术选型的 Source of Truth
-        - AI 决定“用什么工具写代码”的唯一依据
+1. **模块边界**：`backend/`、`admin-web/`、`miniapp/` 三选一；跨模块改动先拆任务。
+2. **数据库**：只走 Prisma migration；禁止直连改结构；字段以 `schema.prisma` 为准。
+3. **接口**：以 controller + DTO + Swagger 为准；不手抄接口清单。
+4. **测试**：改动前先跑基线；改完跑目标模块测试；不要用“应该能过”代替真实输出。
+5. **文档**：只写代码里看不出来的约束/取舍；字段、接口、页面清单尽量生成或链接。
+6. **多会话**：一个任务一个工位；合并/部署走门禁，见 [多会话协作](MULTI_SESSION_WORKFLOW.md)。
 
-    本文档不是：
-        - 产品需求文档
-        - 业务流程说明
-        - 算法或公式定义文档
+---
 
+## 5. 质量门
 
-============================================================
-# 1. Technology Stack Definition (Source of Truth)
-============================================================
+| 改动 | 最低验证 |
+|---|---|
+| 后端 | `npx tsc --noEmit` + 目标模块 Jest |
+| 管理后台 | `npm run build` |
+| 小程序 | `npm run preview` 或 `npm run build:mp-weixin` |
+| 数据库 | `npx prisma validate` + migration |
+| 部署 | 合并 main、跑部署脚本、回读健康检查 |
 
-    以下技术栈为本项目**唯一允许使用的技术组合**。
-    AI（Cursor）不得自行替换、降级或引入平替框架。
+---
 
-------------------------------------------------------------
-# 1.1 Backend (Server-side)
-------------------------------------------------------------
+## 6. 相关文档
 
-    Runtime:
-        - Node.js (LTS)
-
-    Language:
-        - TypeScript (strict mode)
-
-    Backend Framework:
-        - NestJS
-
-    选择理由：
-        - 原生支持清晰的分层架构（Module / Controller / Provider）
-        - 与 Domain / Application / Infrastructure 分层天然契合
-        - 依赖注入（DI）机制适合复杂业务与长期演进
-        - AI 对 NestJS 的语料成熟度高，生成稳定
-
-    禁止使用：
-        - Express
-        - Koa
-        - Fastify（除非作为 NestJS 内部 Adapter，由人类显式确认）
-
-
-------------------------------------------------------------
-# 1.2 ORM & Database
-------------------------------------------------------------
-
-    ORM:
-        - Prisma
-
-    Database:
-        - PostgreSQL
-
-    选择理由：
-        - Prisma Schema 已在 07_Core_Architecture.md 中作为核心设计存在
-        - 强类型 Client，避免运行期字段错误
-        - 良好的 Migration 与 Schema 演进能力
-
-    强制规则：
-        - Prisma Schema 以 07 文档为准
-        - AI 不得自行新增或修改字段
-        - Domain 层不得直接依赖 Prisma Client
-
-
-------------------------------------------------------------
-# 1.3 Frontend
-------------------------------------------------------------
-
-    Customer / Staff 端：
-        - Platform: WeChat Mini Program
-        - Framework: Uni-app
-        - Language: TypeScript
-        - UI 实现遵循 03_Features_and_UI_Blueprints.md
-
-    Admin 后台：
-        - Platform: Web
-        - Framework: Vue 3
-        - UI Library: Element Plus
-
-    强制规则：
-        - 禁止使用 React / Next.js
-        - 禁止在前端实现业务计算逻辑
-        - 前端仅作为 API Consumer 与状态展示层
-
-
-------------------------------------------------------------
-# 1.4 Infrastructure & Deployment
-------------------------------------------------------------
-
-    Cloud Provider:
-        - Alibaba Cloud (Aliyun)
-
-    Core Services:
-        - ECS（计算）
-        - RDS for PostgreSQL（数据库）
-        - OSS（对象存储：图片、溯源资料）
-
-    Containerization:
-        - Docker
-
-    Deployment Principle:
-        - 后端服务容器化部署
-        - 不采用 Serverless（避免冷启动与复杂性）
-        - 环境分离（dev / staging / production）
-
-    强制规则：
-        - AI 不得引入其他云厂商依赖
-        - 不得生成生产环境运维脚本（由人类控制）
-
-
-------------------------------------------------------------
-# 1.5 Payment & External Services
-------------------------------------------------------------
-
-    Payment:
-        - WeChat Pay
-        - Alipay
-
-    Logistics:
-        - 国内主流物流服务（通过聚合接口）
-
-    原则：
-        - 外部服务仅能通过 Infrastructure 层接入
-        - Domain 层不得感知任何第三方 SDK
-
-
-============================================================
-# 2. Project Structure Conventions
-============================================================
-
-    推荐的基础目录结构如下：
-
-        /src
-            /domain
-                /dog
-                /recipe
-                /order
-                /production
-                /inventory
-            /application
-            /infrastructure
-            /interfaces
-
-        /tests
-            /domain
-                /dog
-                /recipe
-                /order
-
-        /docs
-        /.cursor
-
-    规则说明：
-
-        - Domain 层必须完全独立于其他层
-        - Domain 层禁止引用 application / infrastructure / interfaces
-        - 测试代码与业务代码严格分离
-
-
-============================================================
-# 3. Domain Layer Standards
-============================================================
-
-    Domain 层的基本规则：
-
-        - 只包含纯业务逻辑
-        - 不允许任何 I/O 操作
-        - 不允许依赖 HTTP、数据库、UI、第三方 SDK
-        - 不允许读取环境变量
-
-    Domain 层允许的内容：
-
-        - Entities
-        - Value Objects
-        - Domain Enums
-        - Domain Services
-        - Domain-specific Errors
-
-
-============================================================
-# 4. API & Application Layer Boundaries
-============================================================
-
-    Application / API 层规则：
-
-        - Controller 只负责：
-            - 参数接收
-            - 权限校验
-            - 调用 Domain Service
-            - 返回结果
-
-        - Controller 禁止：
-            - 编写业务计算逻辑
-            - 复制 Domain 中的规则
-            - 修改 Snapshot 数据
-
-        - 所有状态流转必须由 Domain 层控制
-
-
-============================================================
-# 5. Persistence & Infrastructure Rules
-============================================================
-
-    Persistence 层（Repository）规则：
-
-        - 只负责数据映射与持久化
-        - 不允许出现业务判断
-        - 不允许跨 Domain 操作数据
-
-    Infrastructure 层规则：
-
-        - 外部系统（支付、物流、存储）只允许在该层接入
-        - 不得将 SDK 或外部 API 泄漏到 Domain 层
-
-
-============================================================
-# 6. Testing Standards (Mandatory)
-============================================================
-
-    测试是本项目的强制组成部分，而非可选项。
-
-    测试技术约定：
-
-        - 测试语言：TypeScript
-        - 测试类型：Unit Test 优先
-        - 测试目录：/tests 与 /src 严格分离
-
-    对 Domain 层的强制要求：
-
-        - 所有“计算类 Domain Service”必须有单元测试
-        - 每个计算函数至少包含：
-            - 边界值测试
-            - 枚举切换测试
-            - 异常或告警场景测试
-
-
-============================================================
-# 7. Code Style & Readability
-============================================================
-
-    代码风格原则：
-
-        - 明确优于简洁
-        - 可读性优于技巧性
-        - 显式命名，避免魔法数字
-
-
-============================================================
-# 8. Version Control & Safety
-============================================================
-
-    Git 是本项目的强制工具。
-
-    基本规则：
-
-        - 所有阶段性工作必须通过 Git 提交
-        - 禁止在未提交的情况下进行大规模修改
-        - 重要重构必须通过独立分支进行
-
-
-============================================================
-# 9. AI Execution Constraints
-============================================================
-
-    AI（Cursor）在任何阶段必须遵守：
-
-        - 不得自行决定技术栈
-        - 不得引入未经允许的框架或工具
-        - 不得“顺手优化”未被要求的模块
-        - 不得以实现便利为理由破坏架构分层
-
-============================================================
-# End of Document
-============================================================
+- [项目概览](01_Project_Overview.md)
+- [核心架构](07_Core_Architecture.md)
+- [API 文档](05_API_Specs.md)
+- [数据库命名规范](DATABASE_NAMING_CONVENTIONS.md)
+- [部署与 SSH](ops/deploy-and-ssh.md)

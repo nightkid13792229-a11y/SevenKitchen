@@ -752,7 +752,7 @@ fact-phos-ckd-01
 | 覆盖评估 | `docs/knowledge-base/knowledge-structure-v1.md`、`formulation-source-coverage.md` |
 | 来源处置 | `docs/knowledge-base/source-disposition.md`、`source-register.md` |
 | 治理规则 | `docs/knowledge-base/evidence-policy.md`、`intake-sop.md`、`evidence-update-sop.md` |
-| 前序审计 | `docs/audits/2026-10-01-health-knowledge-base-coverage-audit.md`、`docs/plans/2026-09-30-knowledge-base-review-and-source-plan.md` |
+| 前序审计 | `docs/_archive/audits/2026-10-01-health-knowledge-base-coverage-audit.md`、`docs/_archive/plans/2026-09-30-knowledge-base-review-and-source-plan.md` |
 
 ## 附录 B：抽样发现（可复核）
 

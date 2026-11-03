@@ -2,7 +2,7 @@
  * AI 文案生成 · 手动端到端验证工具
  *
  * 用途：用**真实模型**跑通「读配方 → 生成卖点与说明 → 合规校验」全链路，
- * 用于上线前冒烟测试（见 docs/plans/2026-09-17-ai-copywriting-rollout-checklist.md）。
+ * 用于上线前冒烟测试（见 docs/_archive/plans/2026-09-17-ai-copywriting-rollout-checklist.md）。
  *
  * 用法：
  *   npx ts-node -r tsconfig-paths/register prisma/check-recipe-copywriting.ts            # 自动挑一个公开食谱

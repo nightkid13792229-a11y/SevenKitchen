@@ -3,7 +3,7 @@
  *
  * ── 这份表从哪来 ──────────────────────────────────────────────
  *
- * 来自 `docs/plans/2026-10-04-vaccine-product-list-review.md`，
+ * 来自 `docs/_archive/plans/2026-10-04-vaccine-product-list-review.md`，
  * 那份清单**已经过兽医审核**。审出的两条硬口径：
  *
  *   ① 只收进口苗。老板 2026-10-04 审核意见第 5 条：
@@ -218,7 +218,7 @@ const RAW_VACCINE_PRODUCTS: Omit<VaccineProduct, 'kinds'>[] = [
      * 而是这一串法定名。逐字来源：默沙东动物保健中国官网产品页
      * `msd-animal-health.com.cn/products/nobivac-dhppi/`（"通用名 犬瘟热、传染性肝炎、
      * 细小病毒病、副流感四联活疫苗"，商品名 宠必威®优免康）—— 与
-     * `docs/plans/2026-10-04-vaccine-product-list-review.md` 2.6 表里的写法一致（两处互证）。
+     * `docs/_archive/plans/2026-10-04-vaccine-product-list-review.md` 2.6 表里的写法一致（两处互证）。
      * 注意它写的是"传染性肝炎"而不是"腺病毒"（同一个 CAV），别按"腺病毒"去拼。
      */
     aliases: [
@@ -240,7 +240,7 @@ const RAW_VACCINE_PRODUCTS: Omit<VaccineProduct, 'kinds'>[] = [
     /*
      * 通用名逐字来源（2026-10-16 补）：硕腾中国官网「疫苗家族」的产品资料
      * （`zoetis.cn` 卫佳伍产品介绍 PDF 标题就是这一串），与
-     * `docs/plans/2026-10-04-vaccine-product-list-review.md` 2.6 表（取自国家兽药基础数据库）
+     * `docs/_archive/plans/2026-10-04-vaccine-product-list-review.md` 2.6 表（取自国家兽药基础数据库）
      * 一致 —— 两处互证 ✓。
      *
      * ⚠️ 卫佳捌里**也含**这同一套四联成分，所以这一串严格说是"四联那部分"的名字；
@@ -339,7 +339,7 @@ const RAW_VACCINE_PRODUCTS: Omit<VaccineProduct, 'kinds'>[] = [
     name: '海博莱犬四联加钩端',
     /*
      * 法定**通用名**（2026-10-16 补）：逐字取自
-     * `docs/plans/2026-10-04-vaccine-product-list-review.md` 2.6 表
+     * `docs/_archive/plans/2026-10-04-vaccine-product-list-review.md` 2.6 表
      * （该表的来源是国家兽药基础数据库，A 级）。
      *
      * ⚠️ 四家的"四联"通用名各不相同（2.6 表列了 4 个版本），所以只能逐字抄，
@@ -404,7 +404,7 @@ const RAW_VACCINE_PRODUCTS: Omit<VaccineProduct, 'kinds'>[] = [
     /*
      * 毒株别名（2026-10-16 补）：本子上常常只印「狂犬病灭活疫苗（Pasteur RIV株）」
      * 而不印商品名 ✗ —— 只靠"锐必威"三个字认不出来。
-     * 毒株逐字来源：`docs/plans/2026-10-04-vaccine-product-list-review.md` 3.2 表
+     * 毒株逐字来源：`docs/_archive/plans/2026-10-04-vaccine-product-list-review.md` 3.2 表
      * （取自国家兽药基础数据库的说明书，A 级）。毒株是一支苗唯一的，不会认错别家 ✓。
      *
      * ⚠️ 通用名「犬、猫狂犬病灭活疫苗」**故意不放**：好几支狂犬苗共用它，
@@ -430,7 +430,7 @@ const RAW_VACCINE_PRODUCTS: Omit<VaccineProduct, 'kinds'>[] = [
     // 「瑞比信」官网没有这个写法 ✗（大概是旧译名或医院自己写的），先不加 ✓。
     /*
      * 毒株别名（2026-10-16 补）：本子上常写「狂犬病灭活疫苗（G52株）」不写商品名。
-     * 毒株逐字来源：上面的官网核对 + `docs/plans/2026-10-04-vaccine-product-list-review.md`
+     * 毒株逐字来源：上面的官网核对 + `docs/_archive/plans/2026-10-04-vaccine-product-list-review.md`
      * 3.2 表（G52 株）。G52 只有瑞贝康用 ✓。
      */
     aliases: ['rabisin', 'g52株'],
@@ -1045,7 +1045,7 @@ export function findComboProducts(
  * 是否续展未查到 —— 不收，免得推荐一个可能已经停产的。
  *
  * ⚠️ 数据来源：国家兽药基础数据库的兽药产品批准文号 / 批签发数据
- *    （见 docs/plans/2026-10-04-vaccine-product-list-review.md 附录）。
+ *    （见 docs/_archive/plans/2026-10-04-vaccine-product-list-review.md 附录）。
  *    这里只用到"商品名 / 企业 / 批准文号 / 防狂犬还是联苗"这些**核对过的**字段；
  *    说明书里的首免周龄多数没查到，一律 `minWeeks: null`，不编。
  */
@@ -1388,7 +1388,7 @@ const DOMESTIC_PRODUCTS: Omit<VaccineProduct, 'kinds'>[] = [
      *   · 吉林正业（兽药生字070227517，即库里的贝乐美）官网产品页逐字写
      *     「通用名称：狂犬病灭活疫苗（Flury LEP株）」，用于预防犬的狂犬病，
      *     3 月龄以上犬、每 12 个月 1 次 ✓
-     *   · `docs/plans/2026-10-04-vaccine-product-list-review.md` 2.1 也把
+     *   · `docs/_archive/plans/2026-10-04-vaccine-product-list-review.md` 2.1 也把
      *     《狂犬病灭活疫苗（Flury LEP株）》列为国产国标范本，间隔"每年 1 次" ✓
      *
      * 一支苗的毒株决定不了是哪一家 → 只写毒株/通用名时归这一条 ✓，

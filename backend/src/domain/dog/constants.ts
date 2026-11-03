@@ -108,6 +108,6 @@ export const SIZE_CLASS_SENIOR_THRESHOLDS = {
  * 注意：**不在这里做「偏大/偏小/是不是填了斤」的判断**。系统无法区分
  * 顾客真的填错了，还是养的本就是串串/茶杯犬，给出错误提醒比不提醒更伤信任。
  * 顾客侧只保留客观的「公斤 ⇄ 斤」换算回显。
- * 见 docs/plans/2026-09-28-weight-input-contamination-fix.md
+ * 见 docs/_archive/plans/2026-09-28-weight-input-contamination-fix.md
  */
 export const MAX_DOG_WEIGHT_KG = 130;

@@ -4,7 +4,7 @@
  * 补剂商城的可配置项（单例）：加价倍率、分装服务费、包材费、圆整规则、
  * 运费策略、分装有效期系数、售后策略。
  *
- * 刻意与鲜食的 GlobalConfig 解耦，详见 docs/plans/2026-09-18-supplement-shop-design.md
+ * 刻意与鲜食的 GlobalConfig 解耦，详见 docs/_archive/plans/2026-09-18-supplement-shop-design.md
  */
 
 import { BadRequestException, Injectable } from '@nestjs/common';

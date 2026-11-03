@@ -1,7 +1,7 @@
 /**
  * 需求分类节点词典（种子数据的唯一来源）。
  *
- * 与 `docs/superpowers/specs/2026-10-26-recipe-taxonomy-nodes.md` 一一对应：
+ * 与 `docs/_archive/superpowers/specs/2026-10-26-recipe-taxonomy-nodes.md` 一一对应：
  * 主蛋白 3+17、健康需求 12+36、场景 4、季节 6、工艺形态 5，合计 83 个节点。
  *
  * 改动这里的定义等于改运营的判断口径，改之前同步更新词典文件。

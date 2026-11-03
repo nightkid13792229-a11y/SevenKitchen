@@ -8,8 +8,8 @@ import { RER_COEFFICIENT, RER_EXPONENT, resolveIdealWeightFactor } from './energ
  * 体重管理计划（增减重）· 领域逻辑（2026-09-29，阶段 B）
  *
  * 设计文档：
- *   docs/plans/2026-09-28-weight-goal-plan-requirements.md
- *   docs/plans/2026-09-28-weight-goal-plan-ux-and-fields.md
+ *   docs/_archive/plans/2026-09-28-weight-goal-plan-requirements.md
+ *   docs/_archive/plans/2026-09-28-weight-goal-plan-ux-and-fields.md
  *
  * 老板原话：不只是给用户一个记录体重的工具，而是真真正正能指导用户
  * **通过饮食增减重的可执行方案**。

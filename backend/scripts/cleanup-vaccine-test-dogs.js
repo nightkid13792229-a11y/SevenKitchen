@@ -8,7 +8,7 @@
  *      真要删必须显式加 `--apply`，而且删之前会先把这些狗的全部相关数据
  *      导出成一份 JSON 存到 `backend/scripts/backup/`（不进 git）。
  *
- * 用法（在生产机上跑，见 docs/plans/2026-10-17-vaccine-ops-runbook.md）：
+ * 用法（在生产机上跑，见 docs/_archive/plans/2026-10-17-vaccine-ops-runbook.md）：
  *   cd /opt/sevenkitchen/SevenKitchen/backend
  *   node scripts/cleanup-vaccine-test-dogs.js             # ① 只看：要删什么、删多少
  *   node scripts/cleanup-vaccine-test-dogs.js --apply     # ② 真删（先备份，再删）

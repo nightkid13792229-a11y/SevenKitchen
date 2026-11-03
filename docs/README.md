@@ -32,6 +32,7 @@
 |---|---|
 | [knowledge-base/](knowledge-base/README.md) | 知识库治理、来源、证据政策 |
 | [design/](design/) | 设计草案/审核单（不是当前实现说明） |
+| [reports/](reports/README.md) | 脚本/审计新生成的按日期报告 |
 | [_archive/testing/](_archive/testing/) | 历史验收/测试指南（按需） |
 
 ---

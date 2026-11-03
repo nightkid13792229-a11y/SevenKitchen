@@ -2,7 +2,7 @@
  * 预分装补剂 v2 DTO 骨架（2026-10-20）
  *
  * 只定义接口形状与校验；业务逻辑在 service。
- * 字段/模块新增必须先登记 docs/plans/2026-10-19-supplement-field-module-dictionary.md。
+ * 字段/模块新增必须先登记 docs/_archive/plans/2026-10-19-supplement-field-module-dictionary.md。
  */
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';

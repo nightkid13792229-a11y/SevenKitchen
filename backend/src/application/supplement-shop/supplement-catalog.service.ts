@@ -4,7 +4,7 @@
  * 补剂商城第 0 期：把库存里所有补剂档案拉成一张「上架清单」，
  * 并顺带做数据体检（缺价 / 缺形态 / 缺效期 / 单位口径不一致）。
  *
- * 设计文档：docs/plans/2026-09-18-supplement-shop-design.md
+ * 设计文档：docs/_archive/plans/2026-09-18-supplement-shop-design.md
  */
 
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';

@@ -8,8 +8,8 @@
  *   npx ts-node -r tsconfig-paths/register scripts/vaccine-plan-baseline.ts
  *
  * 产出：
- *   docs/plans/2026-10-28-vaccine-baseline/snapshot.json  ← 机器对比用
- *   docs/plans/2026-10-28-vaccine-baseline/snapshot.md    ← 人看的版本
+ *   docs/reports/2026-10-28-vaccine-baseline/snapshot.json  ← 机器对比用
+ *   docs/reports/2026-10-28-vaccine-baseline/snapshot.md    ← 人看的版本
  */
 
 import * as fs from 'fs';
@@ -448,7 +448,7 @@ function main(): void {
 
   const outDir = path.resolve(
     __dirname,
-    '../../docs/plans/2026-10-28-vaccine-baseline',
+    '../../docs/reports/2026-10-28-vaccine-baseline',
   );
   fs.mkdirSync(outDir, { recursive: true });
 

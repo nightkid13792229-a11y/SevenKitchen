@@ -4,7 +4,7 @@
  * 补剂订单：把「DIY 制作单上的补剂清单」变成可下单、可分装、可发货的独立订单。
  * 刻意独立于鲜食订单体系（Order/OrderItem 强依赖食谱快照，补剂塞不进去）。
  *
- * 设计文档：docs/plans/2026-09-18-supplement-shop-design.md
+ * 设计文档：docs/_archive/plans/2026-09-18-supplement-shop-design.md
  */
 
 import {

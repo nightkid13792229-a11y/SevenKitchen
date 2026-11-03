@@ -2503,7 +2503,7 @@ export class RecipeDesignerService {
     // 但没有设计历史的客户一律拒绝 —— 光把入口藏起来不够，
     // 有人绕过界面直接调接口照样能建。
     //
-    // 见 docs/plans/2026-09-30-recipe-domain-business-definition.md §5.1
+    // 见 docs/04_Domain_Model_and_Algorithms.md §5.1
     if (!isInternalRecipeDesignerRole(context)) {
       const hasDesignHistory = await this.hasCustomerDesignHistory(context);
       if (!hasDesignHistory) {
@@ -4132,7 +4132,7 @@ export class RecipeDesignerService {
     //   · 设计器改完名字，小程序工作台（读 recipe.name）还是旧名
     //   · 而 Web 编辑页又禁止改系列食谱的名字，形成死循环
     // 业务定义：「只有一个名字 —— 系列名」，各阶段食谱名必须与系列名一致。
-    // 见 docs/plans/2026-09-30-recipe-domain-business-definition.md
+    // 见 docs/04_Domain_Model_and_Algorithms.md
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.recipeSeries.update({
         where: { id: seriesId },

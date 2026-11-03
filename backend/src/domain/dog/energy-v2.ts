@@ -6,8 +6,8 @@ import { ActivityLevel, DogSizeCategory, LifeStageOverride, TreatInputMode, Trea
  * 狗狗每日能量需求 · 第二版算法（2026-09-28）
  *
  * 依据：**FEDIAF 官方英文 2025 原版**
- * 规格书：docs/plans/2026-09-28-energy-algorithm-v2-spec.md
- * 通读笔记：docs/audits/2026-09-28-fediaf-2025-full-read.md
+ * 规格书：docs/_archive/plans/2026-09-28-energy-algorithm-v2-spec.md
+ * 通读笔记：docs/_archive/audits/2026-09-28-fediaf-2025-full-read.md
  *
  * 与 v1（dog-calc.service.ts 的 calculateDogEnergy）的区别：
  *   1. **用理想体重**算 RER（v1 用当前体重）
@@ -662,7 +662,7 @@ export function calculateDailyEnergyV2ForDog(
  * **默认关闭**：只有显式设置环境变量 `ENERGY_ALGORITHM=v2` 时才切到新算法。
  * 这样新旧两套并存、可一键回滚，且不改动线上默认行为。
  *
- * 上线节奏（见 docs/plans/2026-09-28-energy-algorithm-v2-spec.md）：
+ * 上线节奏（见 docs/_archive/plans/2026-09-28-energy-algorithm-v2-spec.md）：
  *   先影子对比 → 老板审定差异报表 → 灰度 → 全量。
  */
 export function isEnergyV2Enabled(

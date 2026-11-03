@@ -9,7 +9,7 @@
  *   · v2 = 按 FEDIAF 官方英文 2025 原版重构的 calculateDailyEnergyV2
  *   · 只读，不写数据库、不改任何线上行为
  *
- * 规格书：docs/plans/2026-09-28-energy-algorithm-v2-spec.md
+ * 规格书：docs/_archive/plans/2026-09-28-energy-algorithm-v2-spec.md
  */
 import { readFileSync } from 'fs';
 import { Dog } from '../src/domain/dog/dog.entity';

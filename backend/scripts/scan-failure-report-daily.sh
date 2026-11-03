@@ -25,7 +25,7 @@
 #   SCAN_FAILURE_LOG_DIR   报告放哪（默认 /var/log/sevenkitchen）
 #   SCAN_FAILURE_SERVICE   读哪个服务的日志（默认 sevenkitchen-backend）
 #
-# 运维手册：docs/plans/2026-10-17-vaccine-ops-runbook.md
+# 运维手册：docs/_archive/plans/2026-10-17-vaccine-ops-runbook.md
 set -uo pipefail
 
 HOURS="${SCAN_FAILURE_HOURS:-24}"

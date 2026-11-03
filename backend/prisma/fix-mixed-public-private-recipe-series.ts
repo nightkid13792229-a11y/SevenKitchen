@@ -3,7 +3,7 @@
  *
  * 背景
  * ────
- * 业务规则（见 docs/plans/2026-09-30-recipe-domain-business-definition.md）：
+ * 业务规则（见 docs/_archive/plans/2026-09-30-recipe-domain-business-definition.md）：
  *   「公开」与「私密定制」都是**系列级**属性，互相独立、互不影响。
  *   一个系列里**不能混用**——公开系列里已发布的版本都是公开，
  *   私密定制系列里已发布的版本都是私密定制。

@@ -192,7 +192,7 @@ if (violations.length) {
 
 const out = path.resolve(
   __dirname,
-  '../../docs/plans/2026-10-30-vaccine-differential-audit.md',
+  '../../docs/reports/2026-10-30-vaccine-differential-audit.md',
 );
 fs.writeFileSync(out, `${lines.join('\n')}\n`, 'utf8');
 console.log(`differential audit written: ${CASES} cases, ${doneCount} done, ${violations.length} violations -> ${out}`);

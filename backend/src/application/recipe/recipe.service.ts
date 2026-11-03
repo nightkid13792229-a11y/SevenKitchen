@@ -1162,7 +1162,7 @@ export class RecipeService {
    * 是私密定制，就把整个系列永久标记为私密定制"，导致公开橱窗里已经发布的
    * 食谱凭空消失（生产实测 11 个版本 / 5 个系列）。
    *
-   * 业务定义见 docs/plans/2026-09-30-recipe-domain-business-definition.md
+   * 业务定义见 docs/04_Domain_Model_and_Algorithms.md
    */
   private async setSeriesBusinessStatus(
     seriesId: string | null | undefined,
@@ -1236,7 +1236,7 @@ export class RecipeService {
    * 为什么不能直接改：一个系列一旦发布过，订单 / 生产单 / 收藏 / 评价都已经挂在
    * 它身上。直接改属性会让"同一道菜"的可见范围前后矛盾。
    *
-   * 见 docs/plans/2026-09-30-recipe-domain-business-definition.md
+   * 见 docs/04_Domain_Model_and_Algorithms.md
    */
   private async assertSeriesPublishTypeConsistent(
     seriesId: string | null | undefined,

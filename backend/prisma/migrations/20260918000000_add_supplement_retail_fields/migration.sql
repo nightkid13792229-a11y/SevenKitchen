@@ -1,5 +1,5 @@
 -- 补剂商城（DIY 制作单 → 一键购买补剂 → 后台分装发货）基础档案字段
--- 设计文档：docs/plans/2026-09-18-supplement-shop-design.md
+-- 设计文档：docs/_archive/plans/2026-09-18-supplement-shop-design.md
 --
 -- physical_form：物理形态，决定分装作业方式（粉剂需称重；片剂/胶囊数数；液体暂不支持分装）
 -- supplement_retail_enabled：是否上架到补剂商城（默认不上架，需人工逐个开启）

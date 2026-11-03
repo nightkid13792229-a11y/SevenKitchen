@@ -4485,7 +4485,7 @@ model FeedbackReply {
 }
 
 /// 补剂商城配置（单例）
-/// 设计文档：docs/plans/2026-09-18-supplement-shop-design.md
+/// 设计文档：docs/_archive/plans/2026-09-18-supplement-shop-design.md
 /// 刻意与鲜食的 GlobalConfig 解耦：补剂的倍率/服务费/运费策略独立可调。
 model SupplementShopConfig {
   id                        String                       @id @default("singleton") @map("id")
@@ -4944,7 +4944,7 @@ enum SupplementPackagingRole {
   LABEL
 }
 
-/// 补剂订单（独立于鲜食订单，见 docs/plans/2026-09-18-supplement-shop-design.md）
+/// 补剂订单（独立于鲜食订单，见 docs/_archive/plans/2026-09-18-supplement-shop-design.md）
 /// 金额与配置在创建时快照，之后不随「补剂商城设置」变化。
 model SupplementOrder {
   id                        String                @id @default(uuid()) @map("id")

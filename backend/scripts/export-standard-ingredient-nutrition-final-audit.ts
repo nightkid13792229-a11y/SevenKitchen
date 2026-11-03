@@ -16,7 +16,7 @@ const REPORT_DATE = '2026-05-28';
 const DEFAULT_JSON_OUT =
   'reports/standard-ingredient-nutrition-final-audit-2026-05-28.json';
 const DEFAULT_MD_OUT =
-  '../docs/audits/2026-05-28-standard-ingredient-nutrition-final-audit.md';
+  '../docs/reports/2026-05-28-standard-ingredient-nutrition-final-audit.md';
 const DEFAULT_FOOD_CSV_OUT =
   'reports/standard-ingredient-nutrition-final-audit-food-overview-2026-05-28.csv';
 const DEFAULT_SUPPLEMENT_CSV_OUT =

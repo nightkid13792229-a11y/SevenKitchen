@@ -1,7 +1,7 @@
 /**
  * 食材分类判定映射（2026-10-24 · P0a Task 1；2026-10-25 改为 11 类检查清单）。
  *
- * 依据 `docs/superpowers/specs/2026-10-24-ai-recipe-design-agent-design.md`
+ * 依据 `docs/_archive/superpowers/specs/2026-10-24-ai-recipe-design-agent-design.md`
  * 第 5.4 节「七类判定映射（已确认）」：
  *
  * - 一份原料只归一类；先判补剂，再判内脏，最后按 CFCT 分类。

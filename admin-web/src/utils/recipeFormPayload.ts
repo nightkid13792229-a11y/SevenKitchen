@@ -91,7 +91,7 @@ export interface BuildRecipeSubmitOptions {
    * 该系列下所有版本）。编辑页的名称框对这类食谱是只读的，值又是可能过时的
    * 版本名 —— 继续提交会让后端有"反写系列名"的机会，造成系列名被静默回滚。
    *
-   * 见 docs/plans/2026-09-30-recipe-domain-business-definition.md（§三 名称）
+   * 见 docs/_archive/plans/2026-09-30-recipe-domain-business-definition.md（§三 名称）
    */
   omitName?: boolean;
 }

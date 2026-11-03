@@ -1,5 +1,5 @@
 -- 补剂商城配置（单例表）
--- 设计文档：docs/plans/2026-09-18-supplement-shop-design.md
+-- 设计文档：docs/_archive/plans/2026-09-18-supplement-shop-design.md
 --
 -- 刻意与鲜食的 global_config 解耦：补剂的加价倍率、分装服务费、运费策略独立可调。
 -- enabled 默认 false —— 配置好之前商城不对外开放。

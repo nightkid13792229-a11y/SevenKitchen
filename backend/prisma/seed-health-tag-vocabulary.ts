@@ -1,7 +1,7 @@
 /**
  * 合规标签词表 seed（一次性脚本）
  *
- * 依据 docs/plans/2026-09-17-ai-recipe-copywriting-design.md 第三节，
+ * 依据 docs/_archive/plans/2026-09-17-ai-recipe-copywriting-design.md 第三节，
  * 按「四层卖点」建立结构化的合规标签树：
  *
  *   原料事实   → 含三文鱼 / 含鳕鱼 / … / 单一动物蛋白

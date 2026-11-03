@@ -6,7 +6,7 @@
  *
  * 只读：不写数据库、不改业务代码。
  * 跑法：cd backend && npx ts-node -r tsconfig-paths/register scripts/vaccine-invariant-audit.ts
- * 产出：docs/plans/2026-10-29-vaccine-invariant-audit.md
+ * 产出：docs/reports/2026-10-29-vaccine-invariant-audit.md
  */
 
 import * as fs from 'fs';
@@ -365,7 +365,7 @@ lines.push(
 
 const out = path.resolve(
   __dirname,
-  '../../docs/plans/2026-10-29-vaccine-invariant-audit.md',
+  '../../docs/reports/2026-10-29-vaccine-invariant-audit.md',
 );
 fs.writeFileSync(out, `${lines.join('\n')}\n`, 'utf8');
 console.log(`invariant audit written: ${CASES} cases -> ${out}`);

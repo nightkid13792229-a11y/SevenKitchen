@@ -9,7 +9,7 @@
 > （当时过敏只是表单里的一栏，没人填，字段越多顾客越不想填）。
 > 那六个字段的数据**已经彻底丢失**（是删列，不是归档），无法恢复。
 >
-> 完整的最新方案见 `docs/plans/2026-10-04-allergy-module-refactor-design.md`。
+> 完整的最新方案见 `docs/_archive/plans/2026-10-04-allergy-module-refactor-design.md`。
 
 > **版本**: v2.0.0
 > **日期**: 2026-10-04（过敏板块重构后重写）

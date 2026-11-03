@@ -21,7 +21,7 @@
 #
 # 定时任务入口不直接用它，而是用它旁边的 `scan-failure-report-daily.sh`
 # （落盘到 /var/log/sevenkitchen/scan-failure-YYYYMMDD.txt + 保留 30 天）。
-# 运维手册：docs/plans/2026-10-17-vaccine-ops-runbook.md
+# 运维手册：docs/_archive/plans/2026-10-17-vaccine-ops-runbook.md
 #
 # 退出码：只要有"一张都没读出来"的，就返回 1（定时任务用它当告警 ✓）
 set -uo pipefail

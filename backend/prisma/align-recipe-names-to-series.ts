@@ -3,7 +3,7 @@
  *
  * 背景
  * ────
- * 业务定义（docs/plans/2026-09-30-recipe-domain-business-definition.md §三）：
+ * 业务定义（docs/_archive/plans/2026-09-30-recipe-domain-business-definition.md §三）：
  *   **只有一个名字 —— 系列名。**各生命阶段的食谱名必须与系列名保持一致。
  *
  * 生产实测（2026-09-30）：120 个系列 / 209 个版本行名字全部一致（符合设计），

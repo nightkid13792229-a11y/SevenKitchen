@@ -19,10 +19,11 @@
         <text>加载中...</text>
       </view>
 
-      <view v-else-if="reimbursements.length === 0" class="empty-state">
-        <text class="empty-icon">📄</text>
-        <text class="empty-text">暂无报销申请</text>
-      </view>
+      <StaffEmptyState
+        v-else-if="reimbursements.length === 0"
+        icon="📄"
+        title="暂无报销申请"
+      />
 
       <view v-else class="list-items">
         <view
@@ -38,9 +39,10 @@
               <text class="submit-date">{{ formatDateTime(item.submittedAt) }}</text>
             </view>
             <view class="header-right">
-              <view class="status-badge" :class="getStatusClass(item.status)">
-                <text>{{ getStatusText(item.status) }}</text>
-              </view>
+              <StaffStatusBadge
+                :label="getStatusText(item.status)"
+                :tone="getStatusTone(item.status)"
+              />
               <!-- 删除按钮（仅可删除状态显示） -->
               <view
                 v-if="canDelete(item)"
@@ -94,6 +96,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
+import StaffStatusBadge from '../../../components/staff/StaffStatusBadge.vue';
+import StaffEmptyState from '../../../components/staff/StaffEmptyState.vue';
 import { getMyReimbursements, deleteReimbursement } from '../api/purchasing';
 import { summarizeReimbursementCustomFees } from '../constants/reimbursement';
 
@@ -216,6 +220,13 @@ const getStatusClass = (status: string) => {
     'REQUIRES_RESUBMIT': 'resubmit',
   };
   return classMap[status] || '';
+};
+
+const getStatusTone = (status: string): 'pending' | 'done' | 'danger' | 'neutral' => {
+  if (status === 'REIMBURSED') return 'done';
+  if (status === 'REJECTED') return 'danger';
+  if (status === 'PENDING_REVIEW' || status === 'REQUIRES_RESUBMIT') return 'pending';
+  return 'neutral';
 };
 
 // 格式化日期时间

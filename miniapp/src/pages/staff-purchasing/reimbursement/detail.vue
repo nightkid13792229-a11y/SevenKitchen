@@ -11,9 +11,11 @@
       <view class="section status-card">
         <view class="card-header">
           <text class="claim-number">{{ reimbursement.claimNumber }}</text>
-          <view class="status-badge" :class="getStatusClass(reimbursement.status)">
-            <text>{{ getStatusText(reimbursement.status) }}</text>
-          </view>
+          <StaffStatusBadge
+            :label="getStatusText(reimbursement.status)"
+            :tone="getStatusTone(reimbursement.status)"
+            size="lg"
+          />
         </view>
         <view class="card-body">
           <view class="info-row">
@@ -313,6 +315,7 @@
 // 强制重新编译标记 2026-01-26 20:47 - 清空报销凭证功能修复
 import { ref, computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
+import StaffStatusBadge from '../../../components/staff/StaffStatusBadge.vue';
 import {
   getReimbursementDetail,
   getPurchaseRecords,
@@ -1069,6 +1072,13 @@ const getStatusText = (status: string) => {
 };
 
 // 获取状态样式类
+const getStatusTone = (status: string): 'pending' | 'done' | 'danger' | 'neutral' => {
+  if (status === 'REIMBURSED') return 'done';
+  if (status === 'REJECTED') return 'danger';
+  if (status === 'PENDING_REVIEW' || status === 'REQUIRES_RESUBMIT') return 'pending';
+  return 'neutral';
+};
+
 const getStatusClass = (status: string) => {
   const classMap: Record<string, string> = {
     'PENDING_REVIEW': 'pending',

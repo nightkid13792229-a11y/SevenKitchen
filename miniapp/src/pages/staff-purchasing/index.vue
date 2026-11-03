@@ -103,11 +103,13 @@
         <text>加载中...</text>
       </view>
 
-      <view v-else-if="purchaseLists.length === 0" class="empty-state">
-        <text class="empty-icon">📋</text>
-        <text class="empty-text">暂无采购清单</text>
-        <text class="empty-hint">可以先在上方选择日期，生成第一张日采清单</text>
-      </view>
+      <StaffEmptyState
+        v-else-if="purchaseLists.length === 0"
+        card
+        icon="📋"
+        title="暂无采购清单"
+        hint="可以先在上方选择日期，生成第一张日采清单"
+      />
 
       <view v-else class="list-items">
         <view
@@ -123,9 +125,11 @@
                 {{ getListKindText(list.kind) }}
               </text>
             </view>
-            <view class="status-badge" :class="getStatusClass(list.status)">
-              <text>{{ getStatusText(list.status) }}</text>
-            </view>
+            <StaffStatusBadge
+              :label="getStatusText(list.status)"
+              :tone="getStatusTone(list.status)"
+              size="sm"
+            />
           </view>
 
           <view class="item-metrics">
@@ -175,6 +179,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
+import StaffStatusBadge from '../../components/staff/StaffStatusBadge.vue';
+import StaffEmptyState from '../../components/staff/StaffEmptyState.vue';
 import {
   deletePurchaseList,
   generatePurchaseList,
@@ -926,6 +932,12 @@ const getStatusClass = (status: string) => {
     COMPLETED: 'completed',
   };
   return classMap[status] || '';
+};
+
+const getStatusTone = (status: string): 'pending' | 'done' | 'danger' | 'neutral' => {
+  if (status === 'PENDING') return 'pending';
+  if (status === 'COMPLETED') return 'done';
+  return 'neutral';
 };
 
 const getSummaryStatusClass = (state: DateOverview['state']) => {

@@ -43,9 +43,11 @@
             </view>
             <text class="create-time">创建于 {{ formatFullDateTime(purchaseList.createdAt) }}</text>
           </view>
-          <view class="status-badge" :class="getStatusClass(purchaseList.status)">
-            <text>{{ getStatusText(purchaseList.status) }}</text>
-          </view>
+          <StaffStatusBadge
+            :label="getStatusText(purchaseList.status)"
+            :tone="getStatusTone(purchaseList.status)"
+            size="lg"
+          />
         </view>
 
         <!-- 完成时间 -->
@@ -409,6 +411,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { onLoad, onUnload } from '@dcloudio/uni-app';
+import StaffStatusBadge from '../../components/staff/StaffStatusBadge.vue';
 import { formatStaffQuantity } from '../../utils/staff-quantity';
 import { canAddProcurementSku } from './procurement-sku-entry';
 import { getPurchaseListDetail, completePurchase as completePurchaseApi, reopenPurchaseList as reopenPurchaseListApi, startPurchase as startPurchaseApi, getPurchaseRecords, deletePurchaseRecord as deletePurchaseRecordApi, addPurchaseRecord, updatePurchaseRecord as updatePurchaseRecordApi, markPurchaseItemNoPurchase as markPurchaseItemNoPurchaseApi, clearPurchaseItemNoPurchase as clearPurchaseItemNoPurchaseApi, removeItemFromList, checkOrderDateChanges, getPurchaseChannels, previewPurchaseList, addOrdersToList, resolveProcurementSkuProfile, resolvePurchaseItemDisplay, resolvePurchaseRecordDisplay } from './api/purchasing';
@@ -1873,6 +1876,12 @@ const getStatusText = (status: string) => {
 };
 
 // 获取状态样式类
+const getStatusTone = (status: string): 'pending' | 'done' | 'danger' | 'neutral' => {
+  if (status === 'PENDING') return 'pending';
+  if (status === 'COMPLETED') return 'done';
+  return 'neutral';
+};
+
 const getStatusClass = (status: string) => {
   const classMap: Record<string, string> = {
     DRAFT: 'draft',

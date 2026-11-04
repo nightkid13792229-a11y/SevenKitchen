@@ -38,9 +38,9 @@
       show-icon
       class="missing-sku-alert"
     >
-      <template #title> 当前标准原料还没有启用中的采购 SKU。 </template>
+      <template #title> 当前标准原料还没有启用中的生产/采购SKU。 </template>
       后续采购建议和采购执行都会缺少可选商品，请先在下方补充至少 1
-      个启用中的采购 SKU。
+      个启用中的生产/采购SKU。
     </el-alert>
 
     <!-- 标准原料信息 -->
@@ -101,17 +101,6 @@
       <div v-if="isEdit" class="form-item-helper">
         已创建原料的类型不可再修改，避免子 SKU、采购与营养链路悬空。
       </div>
-    </el-form-item>
-
-    <el-form-item label="备注">
-      <el-input
-        v-model="formData.notes"
-        type="textarea"
-        :rows="2"
-        placeholder="请输入备注"
-        maxlength="200"
-        show-word-limit
-      />
     </el-form-item>
 
     <el-form-item v-if="typeCapabilities.showTagSelector" label="标签分类">
@@ -308,44 +297,6 @@
         日采适合当天买当天用；库存补货适合海产、冻品、补剂、包材；混合表示两种采购方式都会发生。
       </span>
     </el-form-item>
-
-    <!-- 算价依据（只读）：成品鲜食按这个价算成本 -->
-    <template v-if="priceBasisVisible">
-      <div class="section-title">算价依据</div>
-      <div class="price-basis-card">
-        <div class="price-basis-head">
-          <el-tag :type="priceBasisTagType" size="small">
-            {{ priceBasisSourceLabel }}
-          </el-tag>
-          <span class="price-basis-hint"
-            >成品鲜食按此价计算成本；只影响新订单，老订单价格已冻结</span
-          >
-        </div>
-        <div class="price-basis-grid">
-          <div class="price-basis-item">
-            <span class="label">算价单价</span>
-            <span class="value">¥{{ priceBasisValueText }}</span>
-            <span class="unit">/ {{ priceBasisUnitLabel }}</span>
-          </div>
-          <div class="price-basis-item">
-            <span class="label">折合</span>
-            <span class="value">¥{{ priceBasisBaseValueText }}</span>
-            <span class="unit">/ {{ priceBasisBaseUnitLabel }}</span>
-          </div>
-          <div class="price-basis-item">
-            <span class="label">最近采购</span>
-            <span class="value">{{ priceBasisPurchasedAtText }}</span>
-          </div>
-          <div class="price-basis-item">
-            <span class="label">创建价</span>
-            <span class="value">{{ initialPriceDisplay }}</span>
-            <span v-if="initialPriceSet" class="unit"
-              >/ {{ priceBasisUnitLabel }}</span
-            >
-          </div>
-        </div>
-      </div>
-    </template>
 
     <!-- 类型特定属性 -->
     <div class="section-title">{{ getTypeSpecificTitle() }}</div>
@@ -775,7 +726,7 @@
     <!-- FOOD only child SKU management -->
     <template v-if="typeCapabilities.supportsChildSkus && isEdit">
       <div class="section-title section-title-with-tag">
-        <span>家庭 DIY 推荐商品</span>
+        <span>DIY制作单推荐商品</span>
         <el-tag size="small" type="primary"
           >已配置 {{ recommendedProductCount }} 个</el-tag
         >
@@ -787,14 +738,14 @@
             size="small"
             :icon="Plus"
             @click="openRpDialog()"
-            >新增DIY推荐商品</el-button
+            >新增DIY制作单推荐商品</el-button
           >
           <span class="hint-text" style="margin-left: 8px"
             >面向用户家庭制作场景，维护可复制的商品链接或口令</span
           >
         </div>
         <div v-if="recommendedProducts.length === 0" class="rp-empty">
-          暂无家庭 DIY 推荐商品，点击上方按钮添加
+          暂无DIY制作单推荐商品，点击上方按钮添加
         </div>
         <div v-else class="rp-list">
           <div v-for="rp in recommendedProducts" :key="rp.id" class="rp-card">
@@ -834,7 +785,7 @@
                   {{ rp.isActive ? '停用' : '启用' }}
                 </el-button>
                 <el-popconfirm
-                  title="确认删除此家庭 DIY 推荐商品？"
+                  title="确认删除此DIY制作单推荐商品？"
                   @confirm="deleteRp(rp.id)"
                 >
                   <template #reference>
@@ -861,7 +812,7 @@
         </div>
       </div>
 
-      <el-divider content-position="left">生产采购 SKU</el-divider>
+      <el-divider content-position="left">生产/采购SKU</el-divider>
       <div class="recommended-products-section">
         <div class="rp-header">
           <el-button
@@ -869,14 +820,14 @@
             size="small"
             :icon="Plus"
             @click="openProcurementDialog()"
-            >新增采购SKU</el-button
+            >新增生产/采购SKU</el-button
           >
           <span class="hint-text" style="margin-left: 8px"
             >面向采购和生产场景，维护渠道、规格、换算、价格和库存策略</span
           >
         </div>
         <div v-if="procurementSkus.length === 0" class="rp-empty">
-          暂无生产采购 SKU，点击上方按钮添加
+          暂无生产/采购SKU，点击上方按钮添加
         </div>
         <div v-else class="rp-list">
           <div v-for="sku in procurementSkus" :key="sku.id" class="rp-card">
@@ -932,7 +883,7 @@
                   {{ sku.isActive ? '停用' : '启用' }}
                 </el-button>
                 <el-popconfirm
-                  title="确认删除此生产采购 SKU？"
+                  title="确认删除此生产/采购SKU？"
                   @confirm="deleteProcurementSku(sku.id)"
                 >
                   <template #reference>
@@ -989,7 +940,6 @@
                 {{ sku.purchaseToBaseRatio }}
                 {{ BaseUnitLabels[formData.baseUnit] }}</span
               >
-              <span v-if="sku.notes">备注：{{ sku.notes }}</span>
             </div>
           </div>
         </div>
@@ -999,11 +949,11 @@
       <div class="section-title">SKU 管理</div>
       <div class="sku-guide-card">
         <div class="sku-guide-title">
-          先保存标准原料，再继续补充推荐商品和采购 SKU
+          先保存标准原料，再继续补充推荐商品和生产/采购SKU
         </div>
         <div class="sku-guide-desc">
-          保存成功后，当前弹窗会保持打开，你可以继续补充家庭 DIY
-          推荐商品，以及面向采购/生产场景的生产采购 SKU。
+          保存成功后，当前弹窗会保持打开，你可以继续补充DIY制作单
+          推荐商品，以及面向采购/生产场景的生产/采购SKU。
         </div>
       </div>
     </template>
@@ -1017,10 +967,10 @@
     </el-form-item>
   </el-form>
 
-  <!-- 采购 SKU 编辑弹窗 -->
+  <!-- 生产/采购SKU 编辑弹窗 -->
   <el-dialog
     v-model="rpDialogVisible"
-    :title="rpEditingId ? '编辑家庭DIY推荐商品' : '新增家庭DIY推荐商品'"
+    :title="rpEditingId ? '编辑DIY制作单推荐商品' : '新增DIY制作单推荐商品'"
     width="640px"
     destroy-on-close
     @closed="handleRpDialogClosed"
@@ -1032,7 +982,7 @@
         show-icon
         class="sku-dialog-alert"
       >
-        这里记录的是面向家庭 DIY
+        这里记录的是面向DIY制作单
         的推荐商品，可配置购买链接或口令和商品图片，方便小程序端展示并复制给用户。
       </el-alert>
       <el-form-item label="SKU 名称" required>
@@ -1165,10 +1115,10 @@
     </template>
   </el-dialog>
 
-  <!-- 生产采购 SKU 编辑弹窗 -->
+  <!-- 生产/采购SKU 编辑弹窗 -->
   <el-dialog
     v-model="procurementDialogVisible"
-    :title="procurementEditingId ? '编辑生产采购SKU' : '新增生产采购SKU'"
+    :title="procurementEditingId ? '编辑生产/采购SKU' : '新增生产/采购SKU'"
     width="640px"
     destroy-on-close
   >
@@ -1198,21 +1148,20 @@
         />
       </el-form-item>
       <el-form-item label="采购渠道">
-        <el-autocomplete
+        <el-select
           v-model="procurementForm.purchaseChannel"
-          :fetch-suggestions="querySearchSkuChannels"
-          placeholder="如：盒马、淘宝、线下批发市场"
-          maxlength="200"
+          filterable
+          clearable
+          placeholder="请选择采购渠道"
           style="width: 320px"
-        />
-      </el-form-item>
-      <el-form-item label="供应商">
-        <el-input
-          v-model="procurementForm.supplierName"
-          placeholder="可选，供应商名称"
-          maxlength="200"
-          style="width: 240px"
-        />
+        >
+          <el-option
+            v-for="option in skuPurchaseChannelOptions"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </el-select>
       </el-form-item>
       <el-form-item label="采购单位">
         <el-select
@@ -1251,9 +1200,22 @@
           style="width: 180px"
         />
         <span class="hint-text" style="margin-left: 8px"
-          >订单价格和采购建议会使用这个生效价</span
+          >采购建议/采购单按此价估算；成品鲜食订单优先用最近一次采购价，缺失时才参考此价</span
         >
       </el-form-item>
+      <el-form-item v-if="!procurementEditingId" label="期初库存">
+        <el-input-number
+          v-model="procurementForm.openingStock"
+          :min="0"
+          :precision="2"
+          :step="0.1"
+          style="width: 180px"
+        />
+        <span class="hint-text" style="margin-left: 8px"
+          >按采购单位填写；没有就填 0 或留空。之后入库、领用会继续累加</span
+        >
+      </el-form-item>
+      <template v-if="procurementEditingId">
       <el-form-item label="安全库存">
         <el-input-number
           v-model="procurementForm.safetyStock"
@@ -1281,16 +1243,7 @@
           style="width: 180px"
         />
       </el-form-item>
-      <el-form-item label="备注">
-        <el-input
-          v-model="procurementForm.notes"
-          type="textarea"
-          :rows="3"
-          placeholder="可填写渠道说明、规格差异、采购备注"
-          maxlength="300"
-          show-word-limit
-        />
-      </el-form-item>
+      </template>
       <el-form-item label="启用状态">
         <el-switch v-model="procurementForm.isActive" />
       </el-form-item>
@@ -1386,6 +1339,10 @@ import {
   type CreateTagDto,
 } from '@/api/ingredientTags'
 import { ingredientApi } from '@/api/ingredients'
+import {
+  fetchPublicOptionSet,
+  type PublicOptionItem,
+} from '@/api/platformOptions'
 import { buildSupplementActiveNutrientsFromNutritionProfile } from '@/utils/ingredientNutrition'
 import {
   isEdibleYieldPercentInRange,
@@ -1612,7 +1569,7 @@ const formData = reactive<IngredientForm>({
 
 const structureAlertDescription = computed(() => {
   if (formData.type === IngredientType.FOOD) {
-    return '食材继续通过 DIY 推荐商品和采购 SKU 管理用户推荐与采购执行；营养数据请在原料列表中通过“营养数据”入口单独编辑。'
+    return '食材继续通过 DIY制作单推荐商品和生产/采购SKU 管理用户推荐与采购执行；营养数据请在原料列表中通过“营养数据”入口单独编辑。'
   }
 
   if (formData.type === IngredientType.SUPPLEMENT) {
@@ -1621,19 +1578,6 @@ const structureAlertDescription = computed(() => {
 
   return '包材直接在标准原料上维护采购、库存与生产信息，不提供营养数据入口。'
 })
-
-// 算价依据（只读展示）：后端按「最近采购价 → 创建价 → 商品参考价」算好
-const priceBasis = computed(() => {
-  const value = (props.ingredient as Partial<Ingredient> | undefined)?.priceBasis
-  return value ?? null
-})
-
-const priceBasisVisible = computed(
-  () =>
-    Boolean(props.ingredient?.id) &&
-    formData.type !== IngredientType.PACKAGING &&
-    priceBasis.value !== null,
-)
 
 /**
  * 采购单位就是 1g / 1ml / 1个 时，单价等于「元/克」，只留 2 位小数会被截成 0.01 / 0.02；
@@ -1644,78 +1588,6 @@ const priceInputPrecision = computed(() =>
 )
 const priceInputStep = computed(() =>
   priceInputPrecision.value === 6 ? 0.000001 : 0.1,
-)
-
-const formatPriceBasisNumber = (value?: number | null) => {
-  if (value === null || value === undefined || !Number.isFinite(value)) {
-    return '-'
-  }
-  return value >= 1 ? value.toFixed(2) : value.toFixed(4)
-}
-
-const priceBasisUnitLabel = computed(() => formData.purchaseUnit || '采购单位')
-const priceBasisBaseUnitLabel = computed(() => {
-  if (formData.baseUnit === BaseUnit.ML) return 'L'
-  if (formData.baseUnit === BaseUnit.G) return 'kg'
-  return '个'
-})
-const priceBasisValueText = computed(() =>
-  formatPriceBasisNumber(priceBasis.value?.pricePerPurchaseUnit),
-)
-const priceBasisBaseValueText = computed(() => {
-  const base = priceBasis.value?.baseUnitCost
-  if (base === null || base === undefined) return '-'
-  return formatPriceBasisNumber(
-    base * (formData.baseUnit === BaseUnit.PCS ? 1 : 1000),
-  )
-})
-const initialPriceValue = computed(
-  () =>
-    (props.ingredient as Partial<Ingredient> | undefined)
-      ?.initialPricePerPurchaseUnit ?? null,
-)
-const initialPriceSet = computed(
-  () =>
-    initialPriceValue.value !== null &&
-    Number.isFinite(initialPriceValue.value) &&
-    Number(initialPriceValue.value) > 0,
-)
-const initialPriceDisplay = computed(() =>
-  initialPriceSet.value
-    ? `¥${formatPriceBasisNumber(initialPriceValue.value)}`
-    : '未设置',
-)
-const priceBasisSourceLabel = computed(() => {
-  const map: Record<string, string> = {
-    LATEST_PURCHASE: '最近采购价',
-    INITIAL_PRICE: '创建价',
-    SKU_REFERENCE: '商品参考价',
-    CURRENT_PRICE: '当前价',
-    NONE: '暂无依据',
-  }
-  return map[priceBasis.value?.source || ''] || '算价依据'
-})
-const priceBasisTagType = computed<'success' | 'info' | 'warning' | 'danger'>(
-  () => {
-    switch (priceBasis.value?.source) {
-      case 'LATEST_PURCHASE':
-        return 'success'
-      case 'INITIAL_PRICE':
-        return 'info'
-      case 'SKU_REFERENCE':
-      case 'CURRENT_PRICE':
-        return 'warning'
-      case 'NONE':
-        return 'danger'
-      default:
-        return 'info'
-    }
-  },
-)
-const priceBasisPurchasedAtText = computed(() =>
-  priceBasis.value?.purchasedAt
-    ? priceBasis.value.purchasedAt.slice(0, 10)
-    : '无采购记录',
 )
 
 // 类型特定属性
@@ -1821,9 +1693,10 @@ const PROCUREMENT_PURCHASE_UNITS_BY_BASE_UNIT: Record<BaseUnit, string[]> = {
     '箱',
     '瓶',
     '桶',
+    '罐',
     '份',
   ],
-  [BaseUnit.ML]: ['ml', 'L', '瓶', '桶', '盒', '箱', '袋', '包'],
+  [BaseUnit.ML]: ['ml', 'L', '瓶', '桶', '罐', '盒', '箱', '袋', '包'],
   [BaseUnit.PCS]: [
     '个',
     '只',
@@ -1837,6 +1710,7 @@ const PROCUREMENT_PURCHASE_UNITS_BY_BASE_UNIT: Record<BaseUnit, string[]> = {
     '盒',
     '箱',
     '瓶',
+    '罐',
     '卷',
   ],
 }
@@ -2600,7 +2474,7 @@ watch(
   },
 )
 
-// ==================== 家庭 DIY 推荐商品管理 ====================
+// ==================== DIY制作单推荐商品管理 ====================
 const recommendedProducts = ref<RecommendedProduct[]>([])
 const rpDialogVisible = ref(false)
 const rpEditingId = ref<string | null>(null)
@@ -2653,15 +2527,36 @@ const rpForm = reactive({
   sortOrder: 0,
 })
 
+const purchaseChannelOptions = ref<PublicOptionItem[]>([])
+const skuPurchaseChannelOptions = computed(() => {
+  const list = purchaseChannelOptions.value.map((item) => ({
+    label: item.label,
+    value: item.code,
+  }))
+  const current = procurementForm.purchaseChannel.trim()
+  if (current && !list.some((item) => item.value === current)) {
+    list.push({ label: current, value: current })
+  }
+  return list
+})
+
+async function loadPurchaseChannelOptions() {
+  try {
+    purchaseChannelOptions.value = await fetchPublicOptionSet('purchase_channel')
+  } catch {
+    purchaseChannelOptions.value = []
+  }
+}
+
 const procurementForm = reactive({
   name: '',
   brand: '',
   productModel: '',
   purchaseChannel: '',
-  supplierName: '',
   purchaseUnit: '',
   purchaseToBaseRatio: undefined as number | undefined,
   currentPurchasePrice: undefined as number | undefined,
+  openingStock: undefined as number | undefined,
   notes: '',
   isActive: true,
   safetyStock: undefined as number | undefined,
@@ -2870,7 +2765,7 @@ const loadIngredientSkuLists = async () => {
 
 const openRpDialog = (rp?: RecommendedProduct) => {
   if (!typeCapabilities.value.supportsChildSkus) {
-    ElMessage.warning('当前类型不再维护家庭 DIY 推荐商品')
+    ElMessage.warning('当前类型不再维护DIY制作单推荐商品')
     return
   }
   rpImageCommitted.value = false
@@ -2904,7 +2799,7 @@ const openRpDialog = (rp?: RecommendedProduct) => {
 
 const openProcurementDialog = (sku?: ProcurementSku) => {
   if (!typeCapabilities.value.supportsChildSkus) {
-    ElMessage.warning('当前类型不再维护生产采购 SKU')
+    ElMessage.warning('当前类型不再维护生产/采购SKU')
     return
   }
   if (sku) {
@@ -2913,10 +2808,10 @@ const openProcurementDialog = (sku?: ProcurementSku) => {
     procurementForm.brand = sku.brand || ''
     procurementForm.productModel = sku.productModel || ''
     procurementForm.purchaseChannel = sku.purchaseChannel || ''
-    procurementForm.supplierName = sku.supplierName || ''
     procurementForm.purchaseUnit = sku.purchaseUnit || ''
     procurementForm.purchaseToBaseRatio = sku.purchaseToBaseRatio ?? undefined
     procurementForm.currentPurchasePrice = sku.currentPurchasePrice ?? undefined
+    procurementForm.openingStock = undefined
     procurementForm.notes = sku.notes || ''
     procurementForm.isActive = sku.isActive
     procurementForm.safetyStock = sku.safetyStock ?? undefined
@@ -2928,10 +2823,10 @@ const openProcurementDialog = (sku?: ProcurementSku) => {
     procurementForm.brand = ''
     procurementForm.productModel = ''
     procurementForm.purchaseChannel = ''
-    procurementForm.supplierName = ''
     procurementForm.purchaseUnit = ''
     procurementForm.purchaseToBaseRatio = undefined
     procurementForm.currentPurchasePrice = undefined
+    procurementForm.openingStock = undefined
     procurementForm.notes = ''
     procurementForm.isActive = true
     procurementForm.safetyStock = undefined
@@ -3069,10 +2964,10 @@ const saveRp = async () => {
         rpEditingId.value,
         data,
       )
-      ElMessage.success('家庭 DIY 推荐商品已更新')
+      ElMessage.success('DIY制作单推荐商品已更新')
     } else {
       await ingredientApi.createRecommendedProduct(props.ingredient.id, data)
-      ElMessage.success('家庭 DIY 推荐商品已创建')
+      ElMessage.success('DIY制作单推荐商品已创建')
     }
 
     if (
@@ -3117,14 +3012,14 @@ const saveProcurementSku = async () => {
     purchaseChannel: normalizeProcurementSkuOptionalText(
       procurementForm.purchaseChannel,
     ),
-    supplierName: normalizeProcurementSkuOptionalText(
-      procurementForm.supplierName,
-    ),
     purchaseUnit: normalizeProcurementSkuOptionalText(
       procurementForm.purchaseUnit,
     ),
     purchaseToBaseRatio: procurementForm.purchaseToBaseRatio ?? null,
     currentPurchasePrice: procurementForm.currentPurchasePrice ?? null,
+    ...(procurementEditingId.value
+      ? {}
+      : { openingStock: procurementForm.openingStock ?? null }),
     notes: normalizeProcurementSkuOptionalText(procurementForm.notes),
     isActive: procurementForm.isActive,
     safetyStock: procurementForm.safetyStock ?? null,
@@ -3140,10 +3035,10 @@ const saveProcurementSku = async () => {
         procurementEditingId.value,
         data,
       )
-      ElMessage.success('生产采购 SKU 已更新')
+      ElMessage.success('生产/采购SKU 已更新')
     } else {
       await ingredientApi.createProcurementSku(props.ingredient.id, data)
-      ElMessage.success('生产采购 SKU 已创建')
+      ElMessage.success('生产/采购SKU 已创建')
     }
     procurementDialogVisible.value = false
     await Promise.all([loadProcurementSkus(), loadSkuSuggestions()])
@@ -3184,7 +3079,7 @@ const deleteRp = async (id: string) => {
   if (!props.ingredient?.id) return
   try {
     await ingredientApi.deleteRecommendedProduct(props.ingredient.id, id)
-    ElMessage.success('家庭 DIY 推荐商品已删除')
+    ElMessage.success('DIY制作单推荐商品已删除')
     await loadRecommendedProducts()
   } catch (e: any) {
     ElMessage.error('删除失败')
@@ -3207,7 +3102,8 @@ onMounted(() => {
   loadTags()
   loadIngredients() // ✅ 确保组件加载时获取原料列表
   loadSkuSuggestions()
-  loadIngredientSkuLists() // FOOD 编辑态才加载 DIY 推荐商品和生产采购 SKU
+  loadPurchaseChannelOptions()
+  loadIngredientSkuLists() // FOOD 编辑态才加载 DIY制作单推荐商品和生产/采购SKU
 })
 
 // 表单验证规则

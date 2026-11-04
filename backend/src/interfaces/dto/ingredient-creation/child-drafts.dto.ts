@@ -12,7 +12,7 @@ import {
 } from 'class-validator';
 
 /**
- * 家庭 DIY 推荐商品草稿：与标准原料编辑页的子弹窗字段一一对应。
+ * DIY制作单推荐商品草稿：与标准原料编辑页的子弹窗字段一一对应。
  *
  * 只用于草稿 payload 与授权提交；正式入库仍走 `recommendedProduct` 表。
  */
@@ -84,7 +84,7 @@ export class RecommendedProductDraftDto {
 }
 
 /**
- * 生产采购 SKU 草稿：与标准原料编辑页的子弹窗字段一一对应。
+ * 生产/采购SKU 草稿：与标准原料编辑页的子弹窗字段一一对应。
  */
 export class ProcurementSkuDraftDto {
   @ApiPropertyOptional({ description: '前端行标识（不落正式表）' })
@@ -117,12 +117,6 @@ export class ProcurementSkuDraftDto {
   @MaxLength(200)
   purchaseChannel?: string | null;
 
-  @ApiPropertyOptional({ description: '供应商', nullable: true })
-  @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  supplierName?: string | null;
-
   @ApiPropertyOptional({ description: '采购单位', nullable: true })
   @IsOptional()
   @IsString()
@@ -140,6 +134,12 @@ export class ProcurementSkuDraftDto {
   @IsNumber()
   @Min(0)
   currentPurchasePrice?: number | null;
+
+  @ApiPropertyOptional({ description: '期初库存（采购单位）', nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  openingStock?: number | null;
 
   @ApiPropertyOptional({ description: '安全库存', nullable: true })
   @IsOptional()

@@ -140,7 +140,7 @@ export interface IngredientDraft {
   manualFields?: IngredientManualField[];
 }
 
-/** 一份「家庭 DIY 推荐商品」草稿（字段与标准原料编辑页的子弹窗对齐）。 */
+/** 一份「DIY制作单推荐商品」草稿（字段与标准原料编辑页的子弹窗对齐）。 */
 export interface RecommendedProductDraft {
   name: string;
   brand?: string | null;
@@ -153,16 +153,16 @@ export interface RecommendedProductDraft {
   isActive?: boolean | null;
 }
 
-/** 一份「生产采购 SKU」草稿（字段与标准原料编辑页的子弹窗对齐）。 */
+/** 一份「生产/采购SKU」草稿（字段与标准原料编辑页的子弹窗对齐）。 */
 export interface ProcurementSkuDraft {
   name: string;
   brand?: string | null;
   productModel?: string | null;
   purchaseChannel?: string | null;
-  supplierName?: string | null;
   purchaseUnit?: string | null;
   purchaseToBaseRatio?: number | null;
   currentPurchasePrice?: number | null;
+  openingStock?: number | null;
   safetyStock?: number | null;
   reorderPoint?: number | null;
   targetStock?: number | null;
@@ -459,9 +459,9 @@ export interface IngredientCreationDraftPayload {
   profiles?: ProfileDraft[];
   checks?: FinalCheckResult;
   ingredient?: IngredientDraft;
-  /** 家庭 DIY 推荐商品草稿（可多条） */
+  /** DIY制作单推荐商品草稿（可多条） */
   recommendedProducts?: RecommendedProductDraft[];
-  /** 生产采购 SKU 草稿（可多条） */
+  /** 生产/采购SKU 草稿（可多条） */
   procurementSkus?: ProcurementSkuDraft[];
   /** 旧版原料级采购字段是否已经迁到子板块（一次性迁移标记） */
   childDraftsMigrated?: boolean;

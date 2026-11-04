@@ -115,7 +115,7 @@ function readDraftProfiles(draft: IngredientCreationDraft): ProfileDraft[] {
   return Array.isArray(profiles) ? (profiles as ProfileDraft[]) : [];
 }
 
-/** 草稿里的 DIY 推荐商品；脏数据按没有处理。 */
+/** 草稿里的 DIY制作单推荐商品；脏数据按没有处理。 */
 function readDraftRecommendedProducts(
   draft: IngredientCreationDraft,
 ): RecommendedProductDraft[] {

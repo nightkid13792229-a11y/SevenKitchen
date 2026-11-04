@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -43,9 +44,9 @@ export interface CommitIngredientCreationInput {
   profiles: ProfileDraft[];
   /** 主档案在 `profiles` 里的下标；必须指向存在的档案。 */
   primaryProfileIndex: number;
-  /** 家庭 DIY 推荐商品（可多条），与原料同事务落库。 */
+  /** DIY制作单推荐商品（可多条），与原料同事务落库。 */
   recommendedProducts?: RecommendedProductDraft[];
-  /** 生产采购 SKU（可多条），与原料同事务落库。 */
+  /** 生产/采购SKU（可多条），与原料同事务落库。 */
   procurementSkus?: ProcurementSkuDraft[];
 }
 
@@ -935,7 +936,7 @@ export class IngredientCreationCommitService {
   }
 
   /**
-   * 两个子板块落库：DIY 推荐商品与生产采购 SKU。
+   * 两个子板块落库：DIY制作单推荐商品与生产/采购SKU。
    *
    * 与原料同事务：任一条缺名称、价格/库存不合法都会整次回滚，
    * 不会出现「原料建好了、SKU 只建了一半」的中间态。
@@ -950,7 +951,7 @@ export class IngredientCreationCommitService {
       const name = readNonEmptyString(draft.name);
       if (name === null) {
         throw new BadRequestException(
-          `第 ${index + 1} 个 DIY 推荐商品缺名称，不能提交`,
+          `第 ${index + 1} 个 DIY制作单推荐商品缺名称，不能提交`,
         );
       }
 
@@ -1011,6 +1012,18 @@ export class IngredientCreationCommitService {
         throw new BadRequestException(`采购 SKU「${name}」的采购价不能为负数`);
       }
 
+      const openingStock = draft.openingStock ?? 0;
+      if (!Number.isFinite(openingStock) || openingStock < 0) {
+        throw new BadRequestException(
+          `采购 SKU「${name}」的期初库存必须是不小于 0 的数字`,
+        );
+      }
+      if (openingStock > 0 && (ratio === null || ratio === undefined || ratio <= 0)) {
+        throw new BadRequestException(
+          `采购 SKU「${name}」填了期初库存时，换算倍数必须大于 0`,
+        );
+      }
+
       const safetyStock = draft.safetyStock ?? null;
       const reorderPoint = draft.reorderPoint ?? null;
       const targetStock = draft.targetStock ?? null;
@@ -1040,7 +1053,6 @@ export class IngredientCreationCommitService {
           brand: readNonEmptyString(draft.brand),
           productModel: readNonEmptyString(draft.productModel),
           purchaseChannel: readNonEmptyString(draft.purchaseChannel),
-          supplierName: readNonEmptyString(draft.supplierName),
           purchaseUnit: normalizeOptionalPurchaseUnit(
             draft.purchaseUnit,
             baseUnit,
@@ -1069,6 +1081,39 @@ export class IngredientCreationCommitService {
             source: 'MANUAL',
             operatorId: input.userId,
             note: 'AI 辅助新建原料时设置初始采购价',
+          },
+        });
+      }
+
+      if (openingStock > 0) {
+        const deltaG = openingStock * (ratio as number);
+        const balance = await tx.inventoryLedgerEntry.aggregate({
+          where: { ingredientId },
+          _sum: { deltaG: true },
+        });
+        const quantityBeforeG = Number(balance._sum.deltaG ?? 0);
+        const adjustmentId = randomUUID();
+        await tx.inventoryAdjustment.create({
+          data: {
+            id: adjustmentId,
+            ingredientId,
+            procurementSkuId: created.id,
+            adjustmentMode: 'DELTA' as any,
+            quantityBeforeG,
+            quantityAfterG: quantityBeforeG + deltaG,
+            deltaG,
+            reason: '期初库存',
+            note: 'AI 辅助新建原料时录入',
+          },
+        });
+        await tx.inventoryLedgerEntry.create({
+          data: {
+            id: randomUUID(),
+            ingredientId,
+            procurementSkuId: created.id,
+            deltaG,
+            sourceType: 'MANUAL_ADJUSTMENT' as any,
+            sourceId: adjustmentId,
           },
         });
       }

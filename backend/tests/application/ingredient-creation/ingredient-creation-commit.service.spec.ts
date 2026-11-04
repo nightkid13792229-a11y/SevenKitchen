@@ -60,6 +60,8 @@ interface Store {
   procurementSkus: Array<Record<string, any> & { id: string }>;
   procurementSkuPriceHistories: Array<Record<string, any> & { id: string }>;
   tagAssignments: Array<Record<string, any> & { id: string }>;
+  inventoryAdjustments: Array<Record<string, any> & { id: string }>;
+  inventoryLedgerEntries: Array<Record<string, any> & { id: string }>;
 }
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -81,6 +83,8 @@ function createPrismaMock(options: HarnessOptions = {}) {
     procurementSkus: [],
     procurementSkuPriceHistories: [],
     tagAssignments: [],
+    inventoryAdjustments: [],
+    inventoryLedgerEntries: [],
   };
   const sourceRecords = options.sourceRecords ?? [];
   const draftState =
@@ -185,6 +189,21 @@ function createPrismaMock(options: HarnessOptions = {}) {
         return { id: row.id };
       }),
     },
+    inventoryAdjustment: {
+      create: jest.fn(async ({ data }: any) => {
+        const row = { ...clone(data) };
+        store.inventoryAdjustments.push(row);
+        return { id: row.id };
+      }),
+    },
+    inventoryLedgerEntry: {
+      aggregate: jest.fn(async () => ({ _sum: { deltaG: 0 } })),
+      create: jest.fn(async ({ data }: any) => {
+        const row = { id: nextId('ledger'), ...clone(data) };
+        store.inventoryLedgerEntries.push(row);
+        return { id: row.id };
+      }),
+    },
     ingredientTag: {
       findMany: jest.fn(async ({ where }: any) => {
         const ids: string[] = where?.id?.in ?? [];
@@ -229,6 +248,8 @@ function createPrismaMock(options: HarnessOptions = {}) {
     procurementSkuPriceHistory: client.procurementSkuPriceHistory,
     ingredientTag: client.ingredientTag,
     ingredientTagAssignment: client.ingredientTagAssignment,
+    inventoryAdjustment: client.inventoryAdjustment,
+    inventoryLedgerEntry: client.inventoryLedgerEntry,
     $queryRaw: txQueryRaw,
   };
 
@@ -249,6 +270,8 @@ function createPrismaMock(options: HarnessOptions = {}) {
         store.procurementSkuPriceHistories =
           snapshot.procurementSkuPriceHistories;
         store.tagAssignments = snapshot.tagAssignments;
+        store.inventoryAdjustments = snapshot.inventoryAdjustments;
+        store.inventoryLedgerEntries = snapshot.inventoryLedgerEntries;
         if (draftState && draftStepSnapshot !== undefined) {
           draftState.step = draftStepSnapshot;
         }
@@ -1319,7 +1342,7 @@ describe('IngredientCreationCommitService', () => {
     expect(foodData.nutritionData.meta.externalId).toBe(longKey);
   });
 
-  it('DIY 推荐商品与采购 SKU 随原料同事务落库，SKU 价格写一条历史', async () => {
+  it('DIY制作单推荐商品与生产/采购SKU 随原料同事务落库，SKU 价格写一条历史', async () => {
     const { service, store } = await createHarness();
 
     await service.commit({
@@ -1405,6 +1428,34 @@ describe('IngredientCreationCommitService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(failed.store.ingredients).toHaveLength(0);
     expect(failed.store.tagAssignments).toHaveLength(0);
+  });
+
+  it('采购 SKU 的期初库存按换算倍数写进库存流水', async () => {
+    const { service, store } = await createHarness();
+
+    await service.commit({
+      ...baseInput,
+      procurementSkus: [
+        {
+          name: '糙米 1kg/袋',
+          purchaseUnit: '袋',
+          purchaseToBaseRatio: 1000,
+          openingStock: 2,
+        },
+      ],
+    });
+
+    expect(store.inventoryAdjustments).toHaveLength(1);
+    expect(store.inventoryAdjustments[0]).toMatchObject({
+      deltaG: 2000,
+      reason: '期初库存',
+      procurementSkuId: store.procurementSkus[0].id,
+    });
+    expect(store.inventoryLedgerEntries).toHaveLength(1);
+    expect(store.inventoryLedgerEntries[0]).toMatchObject({
+      deltaG: 2000,
+      procurementSkuId: store.procurementSkus[0].id,
+    });
   });
 
   it('子板块缺名称或库存倒挂 → BadRequest，整次提交回滚', async () => {

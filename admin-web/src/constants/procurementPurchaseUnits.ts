@@ -29,9 +29,10 @@ export const PROCUREMENT_PURCHASE_UNITS_BY_BASE_UNIT: Record<
     '箱',
     '瓶',
     '桶',
+    '罐',
     '份'
   ],
-  [BaseUnit.ML]: ['ml', 'L', '瓶', '桶', '盒', '箱', '袋', '包'],
+  [BaseUnit.ML]: ['ml', 'L', '瓶', '桶', '罐', '盒', '箱', '袋', '包'],
   [BaseUnit.PCS]: [
     '个',
     '只',
@@ -45,6 +46,7 @@ export const PROCUREMENT_PURCHASE_UNITS_BY_BASE_UNIT: Record<
     '盒',
     '箱',
     '瓶',
+    '罐',
     '卷'
   ]
 }

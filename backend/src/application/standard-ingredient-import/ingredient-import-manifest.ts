@@ -68,8 +68,6 @@ export interface IngredientImportDescriptor {
 export interface ProcurementSkuManifest {
   sku: string;
   name?: string;
-  supplier?: string;
-  supplierName?: string;
   brand?: string | null;
   productModel?: string | null;
   purchaseChannel?: string | null;

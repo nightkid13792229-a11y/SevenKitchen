@@ -724,7 +724,6 @@ function buildProcurementSkuData(
     brand: sku.brand ?? null,
     productModel: sku.productModel ?? null,
     purchaseChannel: sku.purchaseChannel ?? null,
-    supplierName: sku.supplierName ?? sku.supplier ?? null,
     purchaseUnit: sku.purchaseUnit ?? null,
     purchaseToBaseRatio: sku.purchaseToBaseRatio ?? null,
     currentPurchasePrice: sku.currentPurchasePrice ?? null,

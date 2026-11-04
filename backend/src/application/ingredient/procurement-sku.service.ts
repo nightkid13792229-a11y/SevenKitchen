@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import {
   BadRequestException,
   Injectable,
@@ -18,7 +19,6 @@ type ProcurementSkuRecord = {
   brand: string | null;
   productModel: string | null;
   purchaseChannel: string | null;
-  supplierName: string | null;
   purchaseUnit: string | null;
   purchaseToBaseRatio: number | null;
   currentPurchasePrice: DecimalLike | number | null;
@@ -61,7 +61,6 @@ export interface ProcurementSkuSummary {
   brand: string | null;
   productModel: string | null;
   purchaseChannel: string | null;
-  supplierName: string | null;
   purchaseUnit: string | null;
   purchaseToBaseRatio: number | null;
   currentPurchasePrice: number | null;
@@ -122,7 +121,6 @@ export interface CreateProcurementSkuDto {
   brand?: string | null;
   productModel?: string | null;
   purchaseChannel?: string | null;
-  supplierName?: string | null;
   purchaseUnit?: string | null;
   purchaseToBaseRatio?: number | null;
   currentPurchasePrice?: number | null;
@@ -134,6 +132,8 @@ export interface CreateProcurementSkuDto {
   safetyStock?: number | null;
   reorderPoint?: number | null;
   targetStock?: number | null;
+  /** 期初库存：按采购单位填写；0/不填表示没有库存 */
+  openingStock?: number | null;
 }
 
 export interface UpdateProcurementSkuDto extends Partial<CreateProcurementSkuDto> {}
@@ -208,9 +208,10 @@ export const ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT: Record<BaseUnit, string[]> = {
     '箱',
     '瓶',
     '桶',
+    '罐',
     '份',
   ],
-  [BaseUnit.ML]: ['ml', 'L', '瓶', '桶', '盒', '箱', '袋', '包'],
+  [BaseUnit.ML]: ['ml', 'L', '瓶', '桶', '罐', '盒', '箱', '袋', '包'],
   [BaseUnit.PCS]: [
     '个',
     '只',
@@ -224,6 +225,7 @@ export const ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT: Record<BaseUnit, string[]> = {
     '盒',
     '箱',
     '瓶',
+    '罐',
     '卷',
   ],
 };
@@ -267,7 +269,6 @@ const toSummary = (sku: ProcurementSkuRecord): ProcurementSkuSummary => ({
   brand: sku.brand,
   productModel: sku.productModel,
   purchaseChannel: sku.purchaseChannel,
-  supplierName: sku.supplierName ?? null,
   purchaseUnit: sku.purchaseUnit ?? null,
   purchaseToBaseRatio: sku.purchaseToBaseRatio ?? null,
   currentPurchasePrice: toNullableNumber(sku.currentPurchasePrice),
@@ -486,13 +487,29 @@ export class ProcurementSkuService {
       this.assertValidPrice(currentPurchasePrice);
     }
 
+    const openingStock =
+      dto.openingStock === undefined || dto.openingStock === null
+        ? 0
+        : dto.openingStock;
+    if (!Number.isFinite(openingStock) || openingStock < 0) {
+      throw new BadRequestException('期初库存必须是不小于 0 的数字');
+    }
+    if (
+      openingStock > 0 &&
+      (dto.purchaseToBaseRatio === undefined ||
+        dto.purchaseToBaseRatio === null ||
+        !Number.isFinite(dto.purchaseToBaseRatio) ||
+        dto.purchaseToBaseRatio <= 0)
+    ) {
+      throw new BadRequestException('填了期初库存时，换算倍数必须大于 0');
+    }
+
     const data = {
       ingredientId,
       name: dto.name,
       brand: normalizeOptionalText(dto.brand) ?? null,
       productModel: normalizeOptionalText(dto.productModel) ?? null,
       purchaseChannel: normalizeOptionalText(dto.purchaseChannel) ?? null,
-      supplierName: normalizeOptionalText(dto.supplierName) ?? null,
       purchaseUnit:
         normalizeOptionalPurchaseUnit(dto.purchaseUnit, ingredient!.baseUnit) ??
         null,
@@ -533,15 +550,46 @@ export class ProcurementSkuService {
         });
       }
 
+      if (openingStock > 0) {
+        const ratio = dto.purchaseToBaseRatio as number;
+        const deltaG = openingStock * ratio;
+        const balance = await tx.inventoryLedgerEntry.aggregate({
+          where: { ingredientId },
+          _sum: { deltaG: true },
+        });
+        const quantityBeforeG = Number(balance._sum.deltaG ?? 0);
+        const adjustmentId = randomUUID();
+        await tx.inventoryAdjustment.create({
+          data: {
+            id: adjustmentId,
+            ingredientId,
+            procurementSkuId: created.id,
+            adjustmentMode: 'DELTA' as any,
+            quantityBeforeG,
+            quantityAfterG: quantityBeforeG + deltaG,
+            deltaG,
+            reason: '期初库存',
+            note: '新增采购 SKU 时录入',
+          },
+        });
+        await tx.inventoryLedgerEntry.create({
+          data: {
+            id: randomUUID(),
+            ingredientId,
+            procurementSkuId: created.id,
+            deltaG,
+            sourceType: 'MANUAL_ADJUSTMENT' as any,
+            sourceId: adjustmentId,
+          },
+        });
+      }
+
       return created;
     };
 
-    const created =
-      currentPurchasePrice === null
-        ? await runCreate(this.prisma)
-        : await this.prisma.$transaction(runCreate as any);
+    const created = await this.prisma.$transaction(runCreate as any);
 
-    return toSummary(created as ProcurementSkuRecord);
+    return toSummary(created as unknown as ProcurementSkuRecord);
   }
 
   /**
@@ -668,7 +716,6 @@ export class ProcurementSkuService {
       brand: normalizeOptionalText(input.brand) ?? null,
       productModel,
       purchaseChannel: normalizeOptionalText(input.purchaseChannel) ?? null,
-      supplierName: null,
       purchaseUnit,
       purchaseToBaseRatio,
       currentPurchasePrice,
@@ -790,10 +837,6 @@ export class ProcurementSkuService {
       data.purchaseChannel = purchaseChannel;
     }
 
-    const supplierName = normalizeOptionalText(dto.supplierName);
-    if (supplierName !== undefined) {
-      data.supplierName = supplierName;
-    }
 
     const purchaseUnit = normalizeOptionalPurchaseUnit(
       dto.purchaseUnit,

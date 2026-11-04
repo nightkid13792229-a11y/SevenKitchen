@@ -485,7 +485,7 @@ export class UpdateDraftPayloadDto {
   ingredient?: UpdateDraftIngredientDto;
 
   @ApiPropertyOptional({
-    description: '家庭 DIY 推荐商品草稿（可多条）',
+    description: 'DIY制作单推荐商品草稿（可多条）',
     type: () => [RecommendedProductDraftDto],
   })
   @IsOptional()
@@ -495,7 +495,7 @@ export class UpdateDraftPayloadDto {
   recommendedProducts?: RecommendedProductDraftDto[];
 
   @ApiPropertyOptional({
-    description: '生产采购 SKU 草稿（可多条）',
+    description: '生产/采购SKU 草稿（可多条）',
     type: () => [ProcurementSkuDraftDto],
   })
   @IsOptional()

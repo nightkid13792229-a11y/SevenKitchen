@@ -32,10 +32,10 @@ function sku(
     brand: '',
     productModel: '',
     purchaseChannel: '',
-    supplierName: '',
     purchaseUnit: '箱',
     purchaseToBaseRatio: 5000,
     currentPurchasePrice: 380,
+    openingStock: null,
     safetyStock: 1,
     reorderPoint: 2,
     targetStock: 5,
@@ -50,16 +50,16 @@ describe('子板块提交前校验', () => {
     expect(validateChildDrafts([], [])).toBeNull()
   })
 
-  it('DIY 商品缺名称时指出第几条', () => {
+  it('DIY制作单推荐商品缺名称时指出第几条', () => {
     expect(validateChildDrafts([product()], [])).toBeNull()
     expect(validateChildDrafts([product({ name: '  ' })], [])).toContain(
-      '第 1 个 DIY 推荐商品'
+      '第 1 个 DIY制作单推荐商品'
     )
   })
 
   it('采购 SKU 缺名称时指出第几条', () => {
     expect(validateChildDrafts([], [sku({ name: '  ' })])).toContain(
-      '第 1 个采购 SKU'
+      '第 1 个生产/采购SKU'
     )
   })
 

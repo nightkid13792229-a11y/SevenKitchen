@@ -27,14 +27,10 @@ describe('原料表单 · 算价依据与来源方案下线（2026-11-02）', ()
     expect(ingredientFormSource).toContain("{{ sku.isActive ? '已启用' : '已停用' }}")
   })
 
-  it('原料详情页展示只读的算价依据：最近采购价 / 创建价 / 折合单价', () => {
-    expect(ingredientFormSource).toContain('算价依据')
-    expect(ingredientFormSource).toContain('priceBasisVisible')
-    expect(ingredientFormSource).toContain('LATEST_PURCHASE')
-    expect(ingredientFormSource).toContain('SKU_REFERENCE')
-    expect(ingredientFormSource).toContain('最近采购')
-    expect(ingredientFormSource).toContain('创建价')
-    expect(ingredientFormSource).toContain('老订单价格已冻结')
+  it('原料详情页不再展示算价依据（老板 2026-11-04 要求收起）', () => {
+    expect(ingredientFormSource).not.toContain('算价依据')
+    expect(ingredientFormSource).not.toContain('priceBasisVisible')
+    expect(ingredientFormSource).not.toContain('老订单价格已冻结')
   })
 
   it('类型定义里删掉了来源等级，补上了算价依据', () => {

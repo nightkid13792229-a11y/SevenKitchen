@@ -33,6 +33,7 @@ import { PlatformOptionsService } from '../src/application/platform-options/plat
 import {
   ENUM_SOURCES,
   OPTION_SET_DEFINITIONS,
+  PURCHASE_CHANNEL_SET,
 } from '../src/application/platform-options/option-sets.registry';
 
 const prisma = new PrismaClient();
@@ -123,6 +124,47 @@ async function main(): Promise<void> {
       ? `✓ DATA 类灌入 ${dataResult.seededSets.length} 个集：${dataResult.seededSets.join('、')}`
       : '· DATA 类已有内容，未改动',
   );
+
+  // 采购渠道第一次建集时，把历史自由文本导进选项字典，老 SKU 才不会显示空白。
+  // 只在「这次刚灌入」时做，避免运营删掉某个渠道后重启又被历史数据塞回来。
+  if (dataResult.seededSets.includes(PURCHASE_CHANNEL_SET)) {
+    const [skuRows, ingredientRows] = await Promise.all([
+      prisma.procurementSku.findMany({
+        where: { purchaseChannel: { not: null } },
+        distinct: ['purchaseChannel'],
+        select: { purchaseChannel: true },
+      }),
+      prisma.ingredient.findMany({
+        where: { purchaseChannel: { not: null } },
+        distinct: ['purchaseChannel'],
+        select: { purchaseChannel: true },
+      }),
+    ]);
+    const values = [
+      ...new Set(
+        [...skuRows, ...ingredientRows]
+          .map((row) => row.purchaseChannel?.trim())
+          .filter(
+            (value): value is string =>
+              Boolean(value) &&
+              value !== '其他' &&
+              Array.from(value!).length <= 48,
+          ),
+      ),
+    ];
+    if (values.length > 0) {
+      await prisma.platformOptionItem.createMany({
+        data: values.map((value, index) => ({
+          setId: PURCHASE_CHANNEL_SET,
+          code: value,
+          label: value,
+          sortOrder: 200 + index,
+        })),
+        skipDuplicates: true,
+      });
+      console.log(`✓ 采购渠道历史值导入 ${values.length} 项`);
+    }
+  }
 
   console.log('\n完成。');
 }

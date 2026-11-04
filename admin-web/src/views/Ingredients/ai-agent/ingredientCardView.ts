@@ -49,6 +49,8 @@ export interface IngredientCardCell {
   isAfterCreate: boolean
   /** 当前基准单位下是否显示（单个重量只在个/件、密度只在毫升） */
   visible: boolean
+  /** 已从界面移除、但草稿里仍保留的字段（备注） */
+  hidden: boolean
   /** 来源标记：人工 / AI / 空（没有值就不标来源） */
   sourceLabel: 'AI' | '人工' | null
   options?: readonly { label: string; value: string }[]
@@ -317,6 +319,7 @@ export function buildIngredientCardCells(
       isAfterCreate: field.stage === 'AFTER_CREATE',
       visible:
         !field.visibleWhenBaseUnit || field.visibleWhenBaseUnit === baseUnit,
+      hidden: field.key === 'notes',
       sourceLabel: isManual
         ? '人工'
         : isEmptyIngredientCardValue(value)

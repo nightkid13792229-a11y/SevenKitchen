@@ -1,5 +1,5 @@
 /**
- * 旧草稿迁移：改动前采购信息挂在原料级，现在搬到「生产采购 SKU」。
+ * 旧草稿迁移：改动前采购信息挂在原料级，现在搬到「生产/采购SKU」。
  *
  * 纯函数只负责判断「有没有旧值、该生成哪条 SKU 草稿」；落库与标记由页面做。
  */
@@ -37,7 +37,6 @@ export function buildLegacyProcurementSkuDraft(
     brand: ingredient.brand ?? '',
     productModel: ingredient.productModel ?? '',
     purchaseChannel: ingredient.purchaseChannel ?? '',
-    supplierName: '',
     purchaseUnit: ingredient.purchaseUnit ?? '',
     purchaseToBaseRatio:
       typeof ingredient.purchaseToBaseRatio === 'number'
@@ -47,6 +46,7 @@ export function buildLegacyProcurementSkuDraft(
       typeof ingredient.currentPricePerPurchaseUnit === 'number'
         ? ingredient.currentPricePerPurchaseUnit
         : null,
+    openingStock: null,
     safetyStock:
       typeof ingredient.safetyStock === 'number' ? ingredient.safetyStock : null,
     reorderPoint:

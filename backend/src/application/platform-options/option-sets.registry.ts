@@ -93,6 +93,14 @@ export const CUSTOM_RECIPE_AFTERSALE_TYPE_SET = 'custom_recipe_aftersale_type';
  */
 export const CUSTOM_RECIPE_REFUND_REASON_SET = 'custom_recipe_refund_reason';
 
+/**
+ * 生产/采购 SKU 的采购渠道。
+ *
+ * DATA 类：运营在「选项字典」里可增删改；新增 SKU 时只从这里选，不再自由文本。
+ * code 与 label 都直接用渠道名，保证历史自由文本可以原样迁移。
+ */
+export const PURCHASE_CHANNEL_SET = 'purchase_channel';
+
 export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
   {
     code: CUSTOM_RECIPE_STATUS_SET,
@@ -324,6 +332,25 @@ export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
       { code: '3', label: '3 餐', sortOrder: 30 },
       { code: '4', label: '4 餐', sortOrder: 40 },
       { code: '5', label: '5 餐', sortOrder: 50 },
+    ],
+  },
+
+  {
+    code: PURCHASE_CHANNEL_SET,
+    name: '采购渠道',
+    description: '生产/采购 SKU 的采购渠道；只允许从这里选择',
+    sourceType: 'DATA',
+    seed: [
+      { code: '淘宝/天猫', label: '淘宝/天猫', sortOrder: 10 },
+      { code: '京东', label: '京东', sortOrder: 20 },
+      { code: '拼多多', label: '拼多多', sortOrder: 30 },
+      { code: '抖音商城', label: '抖音商城', sortOrder: 40 },
+      { code: '微信小店', label: '微信小店', sortOrder: 50 },
+      { code: '盒马', label: '盒马', sortOrder: 60 },
+      { code: '山姆会员店', label: '山姆会员店', sortOrder: 70 },
+      { code: '线下批发市场', label: '线下批发市场', sortOrder: 80 },
+      { code: '宠物店', label: '宠物店', sortOrder: 90 },
+      { code: '品牌旗舰店', label: '品牌旗舰店', sortOrder: 100 },
     ],
   },
 ] as const;

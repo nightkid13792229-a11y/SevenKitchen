@@ -749,7 +749,7 @@
               />
 
               <el-divider content-position="left">
-                家庭 DIY 推荐商品（{{ recommendedProducts.length }}）
+                DIY制作单推荐商品（{{ recommendedProducts.length }}）
               </el-divider>
               <div class="child-section">
                 <div class="child-section__head">
@@ -782,7 +782,7 @@
                 </div>
 
                 <div v-if="recommendedProducts.length === 0" class="child-empty">
-                  暂无家庭 DIY 推荐商品，点「新增」添加
+                  暂无DIY制作单推荐商品，点「新增」添加
                 </div>
 
                 <div
@@ -907,7 +907,7 @@
               </div>
 
               <el-divider content-position="left">
-                生产采购 SKU（{{ procurementSkus.length }}）
+                生产/采购SKU（{{ procurementSkus.length }}）
               </el-divider>
               <div class="child-section">
                 <div class="child-section__head">
@@ -940,7 +940,7 @@
                 </div>
 
                 <div v-if="procurementSkus.length === 0" class="child-empty">
-                  暂无生产采购 SKU，点「新增」添加
+                  暂无生产/采购SKU，点「新增」添加
                 </div>
 
                 <div
@@ -987,18 +987,29 @@
                         />
                       </el-form-item>
                       <el-form-item label="采购渠道">
-                        <el-input
+                        <el-select
                           v-model="row.purchaseChannel"
-                          maxlength="200"
-                          placeholder="如：盒马、淘宝、线下批发市场"
-                        />
-                      </el-form-item>
-                      <el-form-item label="供应商">
-                        <el-input
-                          v-model="row.supplierName"
-                          maxlength="200"
-                          placeholder="可选，供应商名称"
-                        />
+                          filterable
+                          clearable
+                          placeholder="请选择采购渠道"
+                        >
+                          <el-option
+                            v-for="option in purchaseChannelOptions"
+                            :key="option.code"
+                            :label="option.label"
+                            :value="option.code"
+                          />
+                          <el-option
+                            v-if="
+                              row.purchaseChannel &&
+                              !purchaseChannelOptions.some(
+                                (option) => option.code === row.purchaseChannel
+                              )
+                            "
+                            :label="row.purchaseChannel"
+                            :value="row.purchaseChannel"
+                          />
+                        </el-select>
                       </el-form-item>
                       <el-form-item label="采购单位">
                         <el-select
@@ -1041,54 +1052,21 @@
                           "
                         />
                       </el-form-item>
-                      <el-form-item label="安全库存">
+                      <el-form-item label="期初库存">
                         <el-input-number
-                          :model-value="row.safetyStock ?? undefined"
+                          :model-value="row.openingStock ?? undefined"
                           :min="0"
                           :precision="2"
                           :step="0.1"
                           style="width: 180px"
                           @update:model-value="
-                            row.safetyStock =
+                            row.openingStock =
                               typeof $event === 'number' ? $event : null
                           "
                         />
-                      </el-form-item>
-                      <el-form-item label="补货点">
-                        <el-input-number
-                          :model-value="row.reorderPoint ?? undefined"
-                          :min="0"
-                          :precision="2"
-                          :step="0.1"
-                          style="width: 180px"
-                          @update:model-value="
-                            row.reorderPoint =
-                              typeof $event === 'number' ? $event : null
-                          "
-                        />
-                      </el-form-item>
-                      <el-form-item label="目标库存">
-                        <el-input-number
-                          :model-value="row.targetStock ?? undefined"
-                          :min="0"
-                          :precision="2"
-                          :step="0.1"
-                          style="width: 180px"
-                          @update:model-value="
-                            row.targetStock =
-                              typeof $event === 'number' ? $event : null
-                          "
-                        />
-                      </el-form-item>
-                      <el-form-item label="备注" class="child-field--wide">
-                        <el-input
-                          v-model="row.notes"
-                          type="textarea"
-                          :rows="2"
-                          maxlength="300"
-                          show-word-limit
-                          placeholder="渠道说明、规格差异、采购备注"
-                        />
+                        <span class="child-field__hint">
+                          按采购单位填；没有就 0 或留空
+                        </span>
                       </el-form-item>
                       <el-form-item label="启用状态">
                         <el-switch v-model="row.isActive" />
@@ -1411,6 +1389,10 @@ import {
   ingredientTagApi,
   type IngredientTag
 } from '@/api/ingredientTags'
+import {
+  fetchPublicOptionSet,
+  type PublicOptionItem
+} from '@/api/platformOptions'
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
 import { useUserStore } from '@/store/user'
 import {
@@ -1736,10 +1718,11 @@ const ingredientForm = reactive<IngredientCardForm>(toIngredientCard(null))
 /** 最近一次从后端读到的原料卡：用来判断人到底改了没有。 */
 const loadedCard = ref<IngredientCardForm | null>(null)
 
-/** 两个子板块的草稿：DIY 推荐商品 / 采购 SKU，都支持多条。 */
+/** 两个子板块的草稿：DIY制作单推荐商品 / 生产/采购SKU，都支持多条。 */
 const recommendedProducts = ref<RecommendedProductDraft[]>([])
 const procurementSkus = ref<ProcurementSkuDraft[]>([])
 const ingredientTags = ref<IngredientTag[]>([])
+const purchaseChannelOptions = ref<PublicOptionItem[]>([])
 const loadedChildSnapshot = ref('')
 const childSaving = ref(false)
 const childMigrationNotice = ref('')
@@ -1780,7 +1763,7 @@ function syncChildDrafts(
 }
 
 /**
- * 旧草稿一次性迁移：改动前采购信息还挂在原料级，现在搬到「生产采购 SKU」。
+ * 旧草稿一次性迁移：改动前采购信息还挂在原料级，现在搬到「生产/采购SKU」。
  *
  * 只在草稿还没迁过、两个子板块都为空、且原料级确实有旧值时触发；
  * 自动落库并写 `childDraftsMigrated` 标记，避免下次载入重复迁移。
@@ -1831,7 +1814,7 @@ async function migrateLegacyChildDrafts(): Promise<void> {
 
   if (ok) {
     childMigrationNotice.value =
-      '检测到旧版原料级采购信息，已自动迁到「生产采购 SKU」，请核对。'
+      '检测到旧版原料级采购信息，已自动迁到「生产/采购SKU」，请核对。'
   } else {
     // 迁移失败时保留本地行并标脏，授权前 flush 会再试一次；不要让用户以为没数据。
     loadedChildSnapshot.value = JSON.stringify({
@@ -1839,7 +1822,7 @@ async function migrateLegacyChildDrafts(): Promise<void> {
       procurementSkus: []
     })
     childMigrationNotice.value =
-      '旧版原料级采购信息迁移失败，已保留在「生产采购 SKU」草稿里，请点保存重试。'
+      '旧版原料级采购信息迁移失败，已保留在「生产/采购SKU」草稿里，请点保存重试。'
   }
 }
 
@@ -1885,10 +1868,10 @@ function addProcurementSku() {
     brand: '',
     productModel: '',
     purchaseChannel: '',
-    supplierName: '',
     purchaseUnit: '',
     purchaseToBaseRatio: null,
     currentPurchasePrice: null,
+    openingStock: null,
     safetyStock: null,
     reorderPoint: null,
     targetStock: null,
@@ -2065,7 +2048,7 @@ const ingredientCardGroups = computed(() =>
     key: group.key,
     label: group.label,
     cells: ingredientCells.value.filter(
-      (cell) => cell.group === group.key && cell.visible
+      (cell) => cell.group === group.key && cell.visible && !cell.hidden
     )
   })).filter((group) => group.cells.length > 0)
 )
@@ -2194,7 +2177,7 @@ const authorizeHint = computed(() => {
     return gate.value.reasons[0] ?? '授权条件还没满足。'
   }
   if (childDraftDirty.value) {
-    return 'DIY 商品 / 采购 SKU 还有没保存的改动，先点板块里的「保存」再授权。'
+    return 'DIY制作单推荐商品 / 生产/采购SKU 还有没保存的改动，先点板块里的「保存」再授权。'
   }
   return '授权前，所有内容只在草稿里；写入后原料与档案都是「待验证」。'
 })
@@ -2289,8 +2272,17 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
 onMounted(() => {
   void scrollToBottom()
   void loadIngredientTags()
+  void loadPurchaseChannelOptions()
   window.addEventListener('beforeunload', handleBeforeUnload)
 })
+
+async function loadPurchaseChannelOptions() {
+  try {
+    purchaseChannelOptions.value = await fetchPublicOptionSet('purchase_channel')
+  } catch {
+    purchaseChannelOptions.value = []
+  }
+}
 
 async function loadIngredientTags() {
   try {
@@ -3344,7 +3336,7 @@ async function handleAuthorize() {
       const flushedChildren = await flushChildDrafts()
       if (!flushedChildren) {
         submitError.value =
-          saveError.value || 'DIY 商品 / 采购 SKU 还有没保存成功的改动，不能授权'
+          saveError.value || 'DIY制作单推荐商品 / 生产/采购SKU 还有没保存成功的改动，不能授权'
         return
       }
     }

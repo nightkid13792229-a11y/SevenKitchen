@@ -24,6 +24,13 @@ describe('ProcurementSkuService', () => {
     ingredient: {
       findUnique: jest.fn(),
     },
+    inventoryAdjustment: {
+      create: jest.fn(),
+    },
+    inventoryLedgerEntry: {
+      aggregate: jest.fn(),
+      create: jest.fn(),
+    },
   } as any;
 
   beforeEach(async () => {
@@ -42,6 +49,66 @@ describe('ProcurementSkuService', () => {
     mockPrismaService.$transaction.mockImplementation(
       async (callback: any) => callback(mockPrismaService),
     );
+    mockPrismaService.inventoryLedgerEntry.aggregate.mockResolvedValue({
+      _sum: { deltaG: 0 },
+    });
+  });
+
+  it('创建 SKU 时把期初库存换算成基础单位入账', async () => {
+    mockPrismaService.ingredient.findUnique.mockResolvedValue({
+      id: 'ing-1',
+      type: 'FOOD',
+      baseUnit: 'G',
+    });
+    mockPrismaService.procurementSku.create.mockImplementation(
+      async ({ data }: any) => ({
+        ...data,
+        id: 'sku-1',
+        displayUnit: '袋',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+
+    await service.create('ing-1', {
+      name: '糙米 1kg/袋',
+      purchaseUnit: '袋',
+      purchaseToBaseRatio: 1000,
+      openingStock: 2,
+    });
+
+    expect(mockPrismaService.inventoryAdjustment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        ingredientId: 'ing-1',
+        procurementSkuId: 'sku-1',
+        deltaG: 2000,
+        reason: '期初库存',
+      }),
+    });
+    expect(mockPrismaService.inventoryLedgerEntry.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        ingredientId: 'ing-1',
+        procurementSkuId: 'sku-1',
+        deltaG: 2000,
+        sourceType: 'MANUAL_ADJUSTMENT',
+      }),
+    });
+  });
+
+  it('期初库存大于 0 但没填换算倍数时拒绝创建', async () => {
+    mockPrismaService.ingredient.findUnique.mockResolvedValue({
+      id: 'ing-1',
+      type: 'FOOD',
+      baseUnit: 'G',
+    });
+
+    await expect(
+      service.create('ing-1', {
+        name: '糙米 1kg/袋',
+        openingStock: 1,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(mockPrismaService.procurementSku.create).not.toHaveBeenCalled();
   });
 
   it('batchFindActive ignores legacy sortOrder and orders active procurement skus by automatic purchase cost', async () => {
@@ -707,7 +774,7 @@ describe('ProcurementSkuService', () => {
       expect(options.baseUnit).toBe('G');
       expect(options.purchaseUnits).toContain('斤');
       expect(options.purchaseUnits).toContain('箱');
-      expect(options.purchaseUnits).not.toContain('罐');
+      expect(options.purchaseUnits).toContain('罐');
     });
 
     it('非食材原料直接拒绝', async () => {

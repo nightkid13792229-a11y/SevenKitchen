@@ -53,7 +53,6 @@ const mapProcurementSku = (sku: {
   brand: string | null;
   productModel: string | null;
   purchaseChannel: string | null;
-  supplierName: string | null;
   purchaseUnit: string | null;
   purchaseToBaseRatio: number | null;
   currentPurchasePrice: unknown;
@@ -72,7 +71,6 @@ const mapProcurementSku = (sku: {
   brand: sku.brand,
   productModel: sku.productModel,
   purchaseChannel: sku.purchaseChannel,
-  supplierName: sku.supplierName,
   purchaseUnit: sku.purchaseUnit,
   purchaseToBaseRatio: sku.purchaseToBaseRatio,
   currentPurchasePrice: toNullableNumber(sku.currentPurchasePrice),
@@ -132,7 +130,6 @@ const serializePayload = (payload: ProcurementSkuBackfillPayload) =>
     brand: payload.brand,
     productModel: payload.productModel,
     purchaseChannel: payload.purchaseChannel,
-    supplierName: payload.supplierName,
     purchaseUnit: payload.purchaseUnit,
     purchaseToBaseRatio: payload.purchaseToBaseRatio,
     currentPurchasePrice: payload.currentPurchasePrice,
@@ -155,7 +152,6 @@ const serializePatch = (
     brand: payload.brand,
     productModel: payload.productModel,
     purchaseChannel: payload.purchaseChannel,
-    supplierName: payload.supplierName,
     purchaseUnit: payload.purchaseUnit,
     purchaseToBaseRatio: payload.purchaseToBaseRatio,
     currentPurchasePrice: payload.currentPurchasePrice,
@@ -242,7 +238,6 @@ async function main() {
           brand: true,
           productModel: true,
           purchaseChannel: true,
-          supplierName: true,
           purchaseUnit: true,
           purchaseToBaseRatio: true,
           currentPurchasePrice: true,

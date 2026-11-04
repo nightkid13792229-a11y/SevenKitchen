@@ -105,12 +105,12 @@
       </div>
       <el-divider direction="vertical" />
       <div class="stat-item">
-        <span class="stat-label">缺少 DIY SKU:</span>
+        <span class="stat-label">缺少 DIY制作单推荐:</span>
         <span class="stat-value stat-warning">{{ missingRecommendedSkuCount }} 条</span>
       </div>
       <el-divider direction="vertical" />
       <div class="stat-item">
-        <span class="stat-label">缺少采购 SKU:</span>
+        <span class="stat-label">缺少生产/采购SKU:</span>
         <span class="stat-value stat-warning">{{ missingProcurementSkuCount }} 条</span>
       </div>
       <el-divider direction="vertical" v-if="hasActiveFilters" />
@@ -224,23 +224,23 @@
             <div class="sku-status-cell">
               <template v-if="row.type === IngredientType.FOOD">
                 <el-tag :type="row.hasActiveRecommendedProduct ? 'success' : 'warning'" size="small">
-                  DIY {{ row.hasActiveRecommendedProduct ? '已配' : '缺失' }}
+                  DIY制作单 {{ row.hasActiveRecommendedProduct ? '已配' : '缺失' }}
                 </el-tag>
                 <el-tag :type="row.hasActiveProcurementSku ? 'success' : 'danger'" size="small">
-                  采购 {{ row.hasActiveProcurementSku ? '已配' : '缺失' }}
+                  生产/采购 {{ row.hasActiveProcurementSku ? '已配' : '缺失' }}
                 </el-tag>
               </template>
               <template v-else-if="row.type === IngredientType.SUPPLEMENT">
                 <el-tag :type="row.diyEnabled ? 'success' : 'info'" size="small">
-                  DIY {{ row.diyEnabled ? '启用' : '关闭' }}
+                  DIY制作单 {{ row.diyEnabled ? '启用' : '关闭' }}
                 </el-tag>
                 <el-tag :type="row.procurementEnabled ? 'success' : 'info'" size="small">
-                  采购 {{ row.procurementEnabled ? '启用' : '关闭' }}
+                  生产/采购 {{ row.procurementEnabled ? '启用' : '关闭' }}
                 </el-tag>
               </template>
               <template v-else>
                 <el-tag :type="row.procurementEnabled ? 'success' : 'info'" size="small">
-                  采购 {{ row.procurementEnabled ? '启用' : '关闭' }}
+                  生产/采购 {{ row.procurementEnabled ? '启用' : '关闭' }}
                 </el-tag>
               </template>
             </div>
@@ -270,7 +270,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="DIY推荐" width="120" align="center">
+        <el-table-column label="DIY制作单推荐" width="140" align="center">
           <template #default="{ row }">
             <template v-if="row.type === IngredientType.FOOD">
               <el-tag :type="row.hasActiveRecommendedProduct ? 'success' : 'info'" size="small">
@@ -286,7 +286,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="采购SKU" width="120" align="center">
+        <el-table-column label="生产/采购SKU" width="140" align="center">
           <template #default="{ row }">
             <template v-if="row.type === IngredientType.FOOD">
               <el-tag :type="row.hasActiveProcurementSku ? 'success' : 'info'" size="small">
@@ -301,11 +301,6 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="notes" label="备注" width="150">
-          <template #default="{ row }">
-            {{ row.notes || '-' }}
-          </template>
-        </el-table-column>
 
         <el-table-column label="操作" width="380" fixed="right">
           <template #default="{ row }">
@@ -949,7 +944,7 @@ const handleExport = () => {
   }
 
   // 简单CSV导出
-  const headers = ['ID', '名称', '类型', '采购策略', 'DIY SKU', '采购 SKU', '标准单位', '标准单位展示名']
+  const headers = ['ID', '名称', '类型', '采购策略', 'DIY制作单推荐商品', '生产/采购SKU', '标准单位', '标准单位展示名']
   const rows = selectedIngredients.value.map(ing => [
     ing.id,
     ing.name,
@@ -999,7 +994,7 @@ const handleSubmit = async (data: IngredientForm) => {
         currentIngredient.value = createdIngredient
         await nextTick()
         if (createdIngredient.type === IngredientType.FOOD) {
-          ElMessage.success(isCopyCreate ? '复制新增成功，可继续补充采购 SKU' : '标准原料已创建，可继续补充采购 SKU')
+          ElMessage.success(isCopyCreate ? '复制新增成功，可继续补充生产/采购SKU' : '标准原料已创建，可继续补充生产/采购SKU')
         } else {
           ElMessage.success(isCopyCreate ? '复制新增成功，可继续上传产品图片' : '标准原料已创建，可继续上传产品图片')
         }

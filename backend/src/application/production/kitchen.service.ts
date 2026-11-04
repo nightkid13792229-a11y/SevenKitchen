@@ -353,7 +353,7 @@ export class StaffProductionService {
           ingredientsUsageSnapshot: unit.ingredientsUsageSnapshot,
           plannedIngredientsUsage: plannedUsage.items,
           plannedFoodInputWeightG: plannedUsage.foodInputWeightG,
-          recipeSnapshot: productionRecipeSnapshot, // 添加完整的食谱快照（包含原料列表和生产采购SKU）
+          recipeSnapshot: productionRecipeSnapshot, // 添加完整的食谱快照（包含原料列表和生产/采购SKU）
         } as PackagingUnitDetailDto;
       }),
     );

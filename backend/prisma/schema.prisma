@@ -1164,7 +1164,6 @@ model ProcurementSku {
   brand                         String?                   @db.VarChar(100)
   productModel                  String?                   @map("product_model") @db.VarChar(100)
   purchaseChannel               String?                   @map("purchase_channel") @db.VarChar(200)
-  supplierName                  String?                   @map("supplier_name") @db.VarChar(200)
   purchaseUnit                  String?                   @map("purchase_unit") @db.VarChar(50)
   purchaseToBaseRatio           Float?                    @map("purchase_to_base_ratio")
   currentPurchasePrice          Decimal?                  @map("current_purchase_price") @db.Decimal(10, 2)

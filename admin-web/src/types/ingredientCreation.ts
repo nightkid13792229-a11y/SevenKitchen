@@ -154,7 +154,7 @@ export interface IngredientDraft {
 }
 
 /**
- * 一份「家庭 DIY 推荐商品」草稿。
+ * 一份「DIY制作单推荐商品」草稿。
  *
  * 字段与标准原料编辑页的「新增DIY推荐商品」弹窗一一对应；
  * 一条原料可以有多条，授权时按数组顺序落库。
@@ -176,7 +176,7 @@ export interface RecommendedProductDraft {
 }
 
 /**
- * 一份「生产采购 SKU」草稿。
+ * 一份「生产/采购SKU」草稿。
  *
  * 字段与标准原料编辑页的「新增采购SKU」弹窗一一对应；支持多条。
  */
@@ -187,10 +187,10 @@ export interface ProcurementSkuDraft {
   brand: string
   productModel: string
   purchaseChannel: string
-  supplierName: string
   purchaseUnit: string
   purchaseToBaseRatio: number | null
   currentPurchasePrice: number | null
+  openingStock: number | null
   safetyStock: number | null
   reorderPoint: number | null
   targetStock: number | null
@@ -408,9 +408,9 @@ export interface IngredientCreationDraftPayload {
   profiles?: ProfileDraft[]
   checks?: FinalCheckResult
   ingredient?: IngredientDraft
-  /** 家庭 DIY 推荐商品草稿（可多条） */
+  /** DIY制作单推荐商品草稿（可多条） */
   recommendedProducts?: RecommendedProductDraft[]
-  /** 生产采购 SKU 草稿（可多条） */
+  /** 生产/采购SKU 草稿（可多条） */
   procurementSkus?: ProcurementSkuDraft[]
   /** 旧版原料级采购字段是否已经迁到子板块（一次性迁移标记） */
   childDraftsMigrated?: boolean
@@ -442,9 +442,9 @@ export interface CommitIngredientCreationInput {
   /** 同一 preparationState 最多一份 */
   profiles: ProfileDraft[]
   primaryProfileIndex: number
-  /** 家庭 DIY 推荐商品（可多条） */
+  /** DIY制作单推荐商品（可多条） */
   recommendedProducts?: RecommendedProductDraft[]
-  /** 生产采购 SKU（可多条） */
+  /** 生产/采购SKU（可多条） */
   procurementSkus?: ProcurementSkuDraft[]
 }
 

@@ -63,6 +63,26 @@ export interface UpdateOptionItemPayload {
   enabled?: boolean
 }
 
+export interface PublicOptionItem {
+  code: string
+  label: string
+  tone?: string | null
+}
+
+/**
+ * 只读选项集：给原料/SKU 表单等消费方用。
+ *
+ * 与顾客端同一个 `/options` 接口；不登录也能拿，但后台页面本来就有登录态。
+ */
+export async function fetchPublicOptionSet(
+  code: string,
+): Promise<PublicOptionItem[]> {
+  const data = (await api.get('/options', {
+    params: { sets: code },
+  })) as { sets?: Record<string, PublicOptionItem[]> }
+  return data?.sets?.[code] ?? []
+}
+
 export const platformOptionsApi = {
   /** 全部选项集的元信息 + 可用色彩档位（档位也由后端给，前端不写死） */
   listSets: (): Promise<{

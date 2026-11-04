@@ -211,7 +211,7 @@ export function toIngredientCard(
  * `payload.ingredient` 会被整块覆盖。少发一个键 = 把 AI 填的其它字段悄悄抹掉。
  *
  * 品牌 / 规格 / 采购渠道 / 采购单位 / 换算 / 价格 / 库存三项已经搬到
- * 「DIY 推荐商品」「采购 SKU」两个子板块，原料级一律清空，避免两处各存一份。
+ * 「DIY制作单推荐商品」「采购 SKU」两个子板块，原料级一律清空，避免两处各存一份。
  */
 export function toIngredientDraft(card: IngredientCardForm): IngredientDraft {
   const baseUnit = toBaseUnit(card.baseUnit)
@@ -673,7 +673,7 @@ export function toCommitInput(
   }
 }
 
-/** 草稿里的 DIY 推荐商品：去掉前端行标识，只保留要落库的字段。 */
+/** 草稿里的 DIY制作单推荐商品：去掉前端行标识，只保留要落库的字段。 */
 export function toRecommendedProductDrafts(
   payload: IngredientCreationDraftPayload | null | undefined
 ): RecommendedProductDraft[] {
@@ -712,10 +712,10 @@ export function toProcurementSkuDrafts(
       brand: toText(item.brand),
       productModel: toText(item.productModel),
       purchaseChannel: toText(item.purchaseChannel),
-      supplierName: toText(item.supplierName),
       purchaseUnit: toText(item.purchaseUnit),
       purchaseToBaseRatio: toFiniteNumber(item.purchaseToBaseRatio),
       currentPurchasePrice: toFiniteNumber(item.currentPurchasePrice),
+      openingStock: toFiniteNumber(item.openingStock),
       safetyStock: toFiniteNumber(item.safetyStock),
       reorderPoint: toFiniteNumber(item.reorderPoint),
       targetStock: toFiniteNumber(item.targetStock),

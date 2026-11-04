@@ -139,28 +139,28 @@ export const ingredientApi = {
   ): Promise<BatchReplaceExecuteRecipeResult[]> =>
     api.post(`/admin/ingredients/${ingredientId}/batch-replace/execute`, data),
 
-  // ==================== 家庭 DIY 推荐商品 ====================
+  // ==================== DIY制作单推荐商品 ====================
 
   /**
-   * 获取原料的家庭 DIY 推荐商品列表
+   * 获取原料的DIY制作单推荐商品列表
    */
   listRecommendedProducts: (ingredientId: string): Promise<RecommendedProduct[]> =>
     api.get(`/admin/ingredients/${ingredientId}/recommended-products`),
 
   /**
-   * 新增家庭 DIY 推荐商品
+   * 新增DIY制作单推荐商品
    */
   createRecommendedProduct: (ingredientId: string, data: RecommendedProductForm): Promise<RecommendedProduct> =>
     api.post(`/admin/ingredients/${ingredientId}/recommended-products`, data),
 
   /**
-   * 更新家庭 DIY 推荐商品
+   * 更新DIY制作单推荐商品
    */
   updateRecommendedProduct: (ingredientId: string, id: string, data: Partial<RecommendedProductForm>): Promise<RecommendedProduct> =>
     api.put(`/admin/ingredients/${ingredientId}/recommended-products/${id}`, data),
 
   /**
-   * 删除家庭 DIY 推荐商品
+   * 删除DIY制作单推荐商品
    */
   deleteRecommendedProduct: (ingredientId: string, id: string): Promise<void> =>
     api.delete(`/admin/ingredients/${ingredientId}/recommended-products/${id}`),
@@ -177,34 +177,34 @@ export const ingredientApi = {
   listPurchaseChannelSuggestions: (): Promise<string[]> =>
     api.get('/admin/ingredient-suggestions/purchase-channels'),
 
-  // ==================== 生产采购 SKU ====================
+  // ==================== 生产/采购SKU ====================
 
   /**
-   * 获取原料的生产采购 SKU 列表
+   * 获取原料的生产/采购SKU 列表
    */
   listProcurementSkus: (ingredientId: string): Promise<ProcurementSku[]> =>
     api.get(`/admin/ingredients/${ingredientId}/procurement-skus`),
 
   /**
-   * 新增生产采购 SKU
+   * 新增生产/采购SKU
    */
   createProcurementSku: (ingredientId: string, data: ProcurementSkuForm): Promise<ProcurementSku> =>
     api.post(`/admin/ingredients/${ingredientId}/procurement-skus`, data),
 
   /**
-   * 更新生产采购 SKU
+   * 更新生产/采购SKU
    */
   updateProcurementSku: (ingredientId: string, id: string, data: Partial<ProcurementSkuForm>): Promise<ProcurementSku> =>
     api.put(`/admin/ingredients/${ingredientId}/procurement-skus/${id}`, data),
 
   /**
-   * 获取生产采购 SKU 生效采购价历史
+   * 获取生产/采购SKU 生效采购价历史
    */
   listProcurementSkuPriceHistory: (ingredientId: string, id: string): Promise<ProcurementSkuPriceHistory[]> =>
     api.get(`/admin/ingredients/${ingredientId}/procurement-skus/${id}/price-history`),
 
   /**
-   * 回退生产采购 SKU 当前采购价到某条历史价格
+   * 回退生产/采购SKU 当前采购价到某条历史价格
    */
   rollbackProcurementSkuPrice: (ingredientId: string, id: string, historyId: string): Promise<ProcurementSku> =>
     api.post(`/admin/ingredients/${ingredientId}/procurement-skus/${id}/price-history/${historyId}/rollback`),
@@ -221,7 +221,7 @@ export const ingredientApi = {
     api.get('/admin/procurement-skus', { params }),
 
   /**
-   * 删除生产采购 SKU
+   * 删除生产/采购SKU
    */
   deleteProcurementSku: (ingredientId: string, id: string): Promise<void> =>
     api.delete(`/admin/ingredients/${ingredientId}/procurement-skus/${id}`)

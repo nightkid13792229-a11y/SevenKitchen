@@ -3954,14 +3954,14 @@ export class PurchasingService {
       : undefined;
 
     if (!selectedProcurementSku) {
-      throw new BadRequestException('所选生产采购 SKU 不存在');
+      throw new BadRequestException('所选生产/采购SKU 不存在');
     }
 
     if (
       selectedProcurementSku &&
       selectedProcurementSku.ingredientId !== purchaseItem.ingredientId
     ) {
-      throw new BadRequestException('所选生产采购 SKU 与采购明细原料不匹配');
+      throw new BadRequestException('所选生产/采购SKU 与采购明细原料不匹配');
     }
 
     const normalizedRecordData = this.buildNormalizedPurchaseRecordData(
@@ -4064,14 +4064,14 @@ export class PurchasingService {
         : undefined;
 
     if (dto.procurementSkuId !== undefined && !selectedProcurementSku) {
-      throw new BadRequestException('所选生产采购 SKU 不存在');
+      throw new BadRequestException('所选生产/采购SKU 不存在');
     }
 
     if (
       selectedProcurementSku &&
       selectedProcurementSku.ingredientId !== purchaseItem.ingredientId
     ) {
-      throw new BadRequestException('所选生产采购 SKU 与采购明细原料不匹配');
+      throw new BadRequestException('所选生产/采购SKU 与采购明细原料不匹配');
     }
 
     const shouldUpdateProcurementSku = dto.procurementSkuId !== undefined;

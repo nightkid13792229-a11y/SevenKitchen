@@ -320,7 +320,7 @@ export class CommitIngredientCreationDto {
   primaryProfileIndex!: number;
 
   @ApiPropertyOptional({
-    description: '家庭 DIY 推荐商品（可多条）',
+    description: 'DIY制作单推荐商品（可多条）',
     type: () => [RecommendedProductDraftDto],
   })
   @IsOptional()
@@ -330,7 +330,7 @@ export class CommitIngredientCreationDto {
   recommendedProducts?: RecommendedProductDraftDto[];
 
   @ApiPropertyOptional({
-    description: '生产采购 SKU（可多条）',
+    description: '生产/采购SKU（可多条）',
     type: () => [ProcurementSkuDraftDto],
   })
   @IsOptional()

@@ -1114,7 +1114,7 @@ export class StaffPurchasingController {
         ingredientName: { type: 'string', description: '原料名称' },
         procurementSkuId: {
           type: 'string',
-          description: '生产采购 SKU ID',
+          description: '生产/采购SKU ID',
         },
         purchaseChannel: { type: 'string', description: '采购渠道' },
         actualQuantity: {
@@ -1258,7 +1258,7 @@ export class StaffPurchasingController {
       properties: {
         procurementSkuId: {
           type: 'string',
-          description: '生产采购 SKU ID',
+          description: '生产/采购SKU ID',
         },
         purchaseChannel: { type: 'string', description: '采购渠道' },
         actualQuantity: {

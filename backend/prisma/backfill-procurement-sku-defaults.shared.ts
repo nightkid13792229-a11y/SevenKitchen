@@ -7,7 +7,6 @@ export interface LegacyProcurementSkuSnapshot {
   brand?: NullableText;
   productModel?: NullableText;
   purchaseChannel?: NullableText;
-  supplierName?: NullableText;
   purchaseUnit?: NullableText;
   purchaseToBaseRatio?: NullableNumber;
   currentPurchasePrice?: NullableNumber;
@@ -45,7 +44,6 @@ export interface ProcurementSkuBackfillPayload {
   brand: string | null;
   productModel: string | null;
   purchaseChannel: string | null;
-  supplierName: string | null;
   purchaseUnit: string | null;
   purchaseToBaseRatio: number | null;
   currentPurchasePrice: number | null;
@@ -175,7 +173,6 @@ const buildLegacyProcurementPayload = (
     brand: normalizeText(ingredient.brand),
     productModel: normalizeText(ingredient.productModel),
     purchaseChannel: normalizeText(ingredient.purchaseChannel),
-    supplierName: null,
     purchaseUnit,
     purchaseToBaseRatio,
     currentPurchasePrice,

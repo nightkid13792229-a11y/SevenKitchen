@@ -606,7 +606,7 @@ export const CFCT_CLASS_OPTIONS = [
   "其他",
 ];
 
-// 家庭 DIY 推荐商品
+// DIY制作单推荐商品
 export interface RecommendedProduct {
   id: string;
   ingredientId: string;
@@ -659,7 +659,7 @@ export type ProcurementSkuPriceHistorySource =
   | "REIMBURSEMENT"
   | "ROLLBACK";
 
-// 生产采购 SKU
+// 生产/采购SKU
 export interface ProcurementSku {
   id: string;
   ingredientId: string;
@@ -667,7 +667,6 @@ export interface ProcurementSku {
   brand: string | null;
   productModel: string | null;
   purchaseChannel: string | null;
-  supplierName: string | null;
   purchaseUnit: string | null;
   purchaseToBaseRatio: number | null;
   currentPurchasePrice: number | null;
@@ -693,10 +692,10 @@ export interface ProcurementSkuForm {
   brand?: string | null;
   productModel?: string | null;
   purchaseChannel?: string | null;
-  supplierName?: string | null;
   purchaseUnit?: string | null;
   purchaseToBaseRatio?: number | null;
   currentPurchasePrice?: number | null;
+  openingStock?: number | null;
   notes?: string | null;
   isActive?: boolean;
   safetyStock?: number | null;

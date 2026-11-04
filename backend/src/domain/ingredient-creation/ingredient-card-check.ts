@@ -73,6 +73,8 @@ const FIELDS_WITH_OWN_REQUIRED_CHECKS: ReadonlySet<IngredientCardFieldKey> =
     'labelNames',
     'densityGPerMl',
     'edibleYieldPercent',
+    // 备注已从原料/SKU 表单移除，不再计入「没填完」。
+    'notes',
   ]);
 
 /**

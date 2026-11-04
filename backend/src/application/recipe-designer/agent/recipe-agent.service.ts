@@ -259,9 +259,15 @@ export class RecipeAgentService implements OnModuleInit {
               );
             },
           });
+          const gate = {
+            mode: 'observe',
+            passed: semantic.uncitedClinicalClaims === 0,
+            uncitedClinicalClaims: semantic.uncitedClinicalClaims,
+            uncitedClinical: semantic.uncitedClinical,
+          };
           await this.prisma.recipeDesignAgentSession.update({
             where: { id: sessionId },
-            data: { citationAudit: { ...audit, semantic } as any },
+            data: { citationAudit: { ...audit, semantic, gate } as any },
           });
         }
         await this.markWaiting(sessionId);

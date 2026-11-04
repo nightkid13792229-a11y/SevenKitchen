@@ -17,6 +17,16 @@ import {
   type ToolOutcome,
 } from './agent-types';
 
+export function relatedLibraryQueries(query: string): string[] {
+  const q = String(query ?? '').toLowerCase();
+  const hasStage = /(iris|stage\s*[1-4]|[1-4]\s*期|分期)/i.test(q);
+  const hasPhosphorus = /(phosph|磷)/i.test(q);
+  // 分期 + 血磷：同时带回“分期标准”，避免只拿到血磷目标就反推分期。
+  return hasStage && hasPhosphorus
+    ? ['IRIS staging creatinine SDMA stage criteria']
+    : [];
+}
+
 const CKD_DOCUMENT_IDS = [
   'sacn5-chapters-SACN5-37',
   'iris-IRIS-staging-guidelines-2026',
@@ -274,16 +284,34 @@ export async function executeTool(
             : scope === 'all'
               ? undefined
               : CKD_DOCUMENT_IDS;
-        const passages = (
-          await context.library.search(query, {
-            sourceIds,
-            documentIds,
-            limit,
-          })
-        ).map((passage) => ({
-          ...passage,
-          citationId: context.citations.register(passage).citationId,
-        }));
+        const primary = await context.library.search(query, {
+          sourceIds,
+          documentIds,
+          limit,
+        });
+        const extras: typeof primary = [];
+        if (scope === 'ckd' || documentIds?.includes('iris-IRIS-staging-guidelines-2026')) {
+          for (const relatedQuery of relatedLibraryQueries(query)) {
+            const related = await context.library.search(relatedQuery, {
+              sourceIds,
+              documentIds,
+              limit: 4,
+            });
+            extras.push(...related);
+          }
+        }
+        const seenPassageIds = new Set<string>();
+        const merged = [...primary, ...extras].filter((passage) => {
+          if (seenPassageIds.has(passage.id)) return false;
+          seenPassageIds.add(passage.id);
+          return true;
+        });
+        const passages = merged
+          .slice(0, Math.min(12, (limit ?? 8) + 4))
+          .map((passage) => ({
+            ...passage,
+            citationId: context.citations.register(passage).citationId,
+          }));
         return ok(
           { query, passages, count: passages.length },
           passages.length === 0

@@ -21,9 +21,9 @@ function buildIngredient(overrides: Partial<Ingredient> = {}): Ingredient {
     BaseUnit.G,
     'g',
     'kg',
-    1000,
+    overrides.purchaseToBaseRatio ?? 1000,
     overrides.currentPricePerPurchaseUnit ?? 50,
-    null,
+    overrides.effectivePricePerPurchaseUnit ?? null,
     null,
     null,
     null,
@@ -242,5 +242,36 @@ describe('IngredientPriceBasisService', () => {
 
     expect(priced.get(ingredient.id)?.currentPricePerPurchaseUnit).toBe(65);
     expect(ingredient.currentPricePerPurchaseUnit).toBe(50);
+  });
+
+  it('原料档案里已有生效价时，最近采购价仍然要覆盖算价结果（2026-11-04 小米事故）', async () => {
+    const ingredient = buildIngredient({
+      currentPricePerPurchaseUnit: 38.3,
+      effectivePricePerPurchaseUnit: 38.3,
+      purchaseToBaseRatio: 1,
+    });
+    const { service } = buildService({
+      purchases: [
+        {
+          ingredientId: ingredient.id,
+          actualCost: 59.94,
+          actualBaseQuantity: 3600,
+          actualQuantity: 1.565217,
+          purchasedAt: new Date('2026-04-13T03:07:34.302Z'),
+        },
+      ],
+      meta: [
+        {
+          id: ingredient.id,
+          purchaseToBaseRatio: 1,
+          initialPricePerPurchaseUnit: 0.018652,
+          currentPricePerPurchaseUnit: 38.3,
+        },
+      ],
+    });
+
+    const priced = await service.applyToIngredients([ingredient]);
+
+    expect(priced.get(ingredient.id)?.getUnitCost()).toBeCloseTo(0.01665, 6);
   });
 });

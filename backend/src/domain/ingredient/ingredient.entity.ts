@@ -171,6 +171,10 @@ export class Ingredient {
    *
    * 成品鲜食算价按「最近一次采购价」或「创建价」计算，价格不落在原料档案上，
    * 而是算价时临时替换，避免一次算价改写主数据。
+   *
+   * ⚠️ 当前价和生效价必须一起替换：`getEffectivePricePerPurchaseUnit()` 优先读生效价，
+   * 只替换当前价的话，这次替换会被旧的生效价原样顶掉
+   * （2026-11-04 小米 38.30 元/g 的事故就是这么漏过去的）。
    */
   withCurrentPrice(pricePerPurchaseUnit: number): Ingredient {
     return new Ingredient(
@@ -189,7 +193,7 @@ export class Ingredient {
       this.purchaseUnit,
       this.purchaseToBaseRatio,
       pricePerPurchaseUnit,
-      this.effectivePricePerPurchaseUnit,
+      pricePerPurchaseUnit,
       this.weightG,
       this.maxCapacityG,
       this.safetyStock,

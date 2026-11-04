@@ -230,4 +230,43 @@ describe('IngredientPricingService', () => {
       }),
     );
   });
+
+  it('采购折算价与创建价相差超过 5 倍时，不自动审核（2026-11-04 小米事故口径）', async () => {
+    mockPrismaService.ingredientPriceChange.findMany.mockResolvedValue([
+      { ingredientId: 'ingredient-1' },
+    ]);
+    mockIngredientRepository.findByIds.mockResolvedValue([
+      {
+        id: 'ingredient-1',
+        name: '小米',
+        purchaseToBaseRatio: 1,
+        initialPricePerPurchaseUnit: 0.018652,
+        currentPricePerPurchaseUnit: 38.3,
+        getEffectivePricePerPurchaseUnit: () => 38.3,
+      },
+    ]);
+    mockPurchaseRecordRepository.findByIngredientId.mockResolvedValue([]);
+    mockGlobalConfigService.getGlobalConfig.mockResolvedValue({
+      ingredientPriceAutoApproveThreshold: 0.08,
+    });
+
+    const evaluations = await (service as any).evaluateAutoApproval([
+      {
+        id: 'change-1',
+        ingredientId: 'ingredient-1',
+        ingredientName: '小米',
+        purchaseRecordId: 'purchase-record-1',
+        previousEffectivePrice: { toNumber: () => 42.9 },
+        proposedEffectivePrice: { toNumber: () => 38.3 },
+        deltaRate: { toNumber: () => -0.1072 },
+        sourceQuantity: { toNumber: () => 1.565217 },
+        status: 'PENDING',
+      },
+    ]);
+
+    const evaluation = evaluations.get('change-1');
+
+    expect(evaluation?.eligible).toBe(false);
+    expect(evaluation?.reasons.join('；')).toContain('相差');
+  });
 });

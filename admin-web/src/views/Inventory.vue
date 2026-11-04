@@ -270,7 +270,12 @@
           <el-input v-model="priceForm.name" disabled />
         </el-form-item>
         <el-form-item label="新价格">
-          <el-input-number v-model="priceForm.price" :min="0" :precision="2" />
+          <el-input-number
+            v-model="priceForm.price"
+            :min="0"
+            :precision="priceForm.precision"
+            :step="priceForm.precision === 6 ? 0.000001 : 0.1"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -434,7 +439,9 @@ const submittingStocktake = ref(false)
 const priceForm = reactive({
   id: '',
   name: '',
-  price: 0
+  price: 0,
+  // 采购单位是 1g / 1ml / 1个 时单价就是「元/克」，2 位小数会截断成 0.01/0.02
+  precision: 2
 })
 
 const ledgerFilter = reactive({
@@ -655,6 +662,7 @@ const editPrice = (item: InventoryOverviewItem) => {
   priceForm.id = item.id
   priceForm.name = item.name
   priceForm.price = item.currentPricePerPurchaseUnit
+  priceForm.precision = (item.purchaseToBaseRatio ?? 1) === 1 ? 6 : 2
   priceDialogVisible.value = true
 }
 

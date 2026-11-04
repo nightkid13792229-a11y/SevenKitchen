@@ -782,6 +782,32 @@ export class IngredientPricingService {
         );
       }
 
+      // 写入侧防呆：采购折算价与「创建价 / 原价」相差超过 5 倍，绝不自动写入。
+      // 2026-11-04 小米 38.30 元/g 的事故里，旧价本身已经是错的，
+      // 只看「相对上一次的波动」只有 -10.7%，看起来完全正常，
+      // 所以基准必须用「创建价」，而不是上一次的价格。
+      if (ingredient) {
+        const initialPrice = Number(
+          ingredient.initialPricePerPurchaseUnit ?? 0,
+        );
+        const referencePrice =
+          initialPrice > 0
+            ? initialPrice
+            : change.previousEffectivePrice.toNumber();
+        const proposedPrice = change.proposedEffectivePrice.toNumber();
+        if (referencePrice > 0 && Number.isFinite(proposedPrice)) {
+          const ratio = proposedPrice / referencePrice;
+          if (ratio > 5 || ratio < 0.2) {
+            reasons.push(
+              `采购折算价 ${proposedPrice} 与参考价 ${referencePrice} 相差 ${ratio.toFixed(2)} 倍，疑似单位或数量录错，需人工核对`,
+            );
+            this.logger.warn(
+              `原料 ${change.ingredientName} 的采购折算价 ${proposedPrice} 与参考价 ${referencePrice} 相差 ${ratio.toFixed(2)} 倍，已拦截自动审核`,
+            );
+          }
+        }
+      }
+
       if (ingredient) {
         const historicalBaseQuantities = (
           purchaseHistoryMap.get(change.ingredientId) ?? []

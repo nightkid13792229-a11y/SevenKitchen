@@ -1559,6 +1559,51 @@ export class PurchasingService {
     return Number.isFinite(amount) && amount > 0 ? amount : 0;
   }
 
+  /**
+   * 采购预估成本：按原料档案的当前单价（元/g、元/ml、元/个）折算。
+   *
+   * 用量沿用订单快照（FOOD 为 kg、补剂为件），只把成本换成当前价；
+   * 取不到价格时回退到快照里的历史成本。
+   */
+  private resolveRequirementCostFromCurrentPrice(params: {
+    ingredient: any;
+    type: string;
+    quantity: number;
+    fallbackCost: number;
+  }): number {
+    const { ingredient, type, quantity, fallbackCost } = params;
+    const safeFallback = this.roundNumber(
+      Number.isFinite(fallbackCost) ? fallbackCost : 0,
+      2,
+    );
+    if (!ingredient || !Number.isFinite(quantity) || quantity <= 0) {
+      return safeFallback;
+    }
+
+    const unitCost = Number(ingredient.getUnitCost?.() ?? 0);
+    if (!Number.isFinite(unitCost) || unitCost <= 0) {
+      return safeFallback;
+    }
+
+    let baseQuantity = quantity;
+    if (type === 'FOOD') {
+      const grams = quantity * 1000;
+      if (ingredient.baseUnit === 'ML') {
+        const density = Number(
+          (ingredient.properties as any)?.density_g_per_ml,
+        );
+        if (!Number.isFinite(density) || density <= 0) {
+          return safeFallback;
+        }
+        baseQuantity = grams / density;
+      } else {
+        baseQuantity = grams;
+      }
+    }
+
+    return this.roundNumber(baseQuantity * unitCost, 2);
+  }
+
   private async calculatePurchaseRequirementsFromOrders(
     orders: Order[],
   ): Promise<PurchaseRequirement[]> {
@@ -1616,7 +1661,14 @@ export class PurchasingService {
           continue;
         }
 
-        const totalCost = detail.cost || 0;
+        // 采购预估按「当前原料价」重算，不再沿用订单下单时的成本快照：
+        // 快照可能是几周前、甚至带着历史错误的价格（2026-11-04 小米事故）。
+        const totalCost = this.resolveRequirementCostFromCurrentPrice({
+          ingredient: ingredientLookup.get(ingredientId),
+          type,
+          quantity: purchaseQuantity,
+          fallbackCost: Number(detail.cost) || 0,
+        });
         const preparationMethods = resolvePreparationMethodTokens(
           (detail as any).preparationMethod,
           new Map(),

@@ -603,8 +603,8 @@
               <el-input-number
                 v-model="formData.currentPricePerPurchaseUnit"
                 :min="0"
-                :precision="2"
-                :step="0.1"
+                :precision="priceInputPrecision"
+                :step="priceInputStep"
                 controls-position="right"
                 style="width: 180px"
               />
@@ -1633,6 +1633,17 @@ const priceBasisVisible = computed(
     Boolean(props.ingredient?.id) &&
     formData.type !== IngredientType.PACKAGING &&
     priceBasis.value !== null,
+)
+
+/**
+ * 采购单位就是 1g / 1ml / 1个 时，单价等于「元/克」，只留 2 位小数会被截成 0.01 / 0.02；
+ * 这类原料的输入框放开到 6 位，其余（kg、桶、份）仍是 2 位。
+ */
+const priceInputPrecision = computed(() =>
+  (formData.purchaseToBaseRatio ?? 1) === 1 ? 6 : 2,
+)
+const priceInputStep = computed(() =>
+  priceInputPrecision.value === 6 ? 0.000001 : 0.1,
 )
 
 const formatPriceBasisNumber = (value?: number | null) => {

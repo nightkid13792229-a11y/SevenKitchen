@@ -11,15 +11,59 @@
     </view>
 
     <template v-else>
-      <view class="upload-card" @tap="handlePickImage">
-        <text class="upload-icon">📷</text>
-        <text class="upload-title">
-          {{ uploading ? '正在识别…' : '拍商品详情页 / 从相册选' }}
-        </text>
-        <text class="upload-sub">识别后自动填好下面的内容</text>
+      <view
+        class="upload-card"
+        :class="{ 'has-shot': hasScreenshot }"
+        @tap="handleScreenshotTap"
+      >
+        <template v-if="shotState === 'idle'">
+          <text class="upload-icon">📷</text>
+          <text class="upload-title">拍商品详情页 / 从相册选</text>
+          <text class="upload-sub">识别后自动填好下面的内容</text>
+        </template>
+        <view v-else class="shot-row">
+          <view class="shot-thumb-wrap">
+            <image
+              v-if="shotThumbUrl"
+              class="shot-thumb"
+              :src="shotThumbUrl"
+              mode="aspectFill"
+            />
+            <view v-else class="shot-thumb shot-thumb-empty"><text>🖼</text></view>
+            <view v-if="recognizing" class="shot-mask"><text>识别中</text></view>
+          </view>
+          <view class="shot-info">
+            <view class="shot-status">
+              <text
+                class="shot-badge"
+                :class="{ done: shotState === 'done', failed: shotState === 'failed', busy: recognizing }"
+              >
+                {{ shotView.badge }}
+              </text>
+            </view>
+            <text class="shot-desc">{{ shotView.desc }}</text>
+            <view class="shot-actions">
+              <text
+                v-if="shotState === 'done'"
+                class="shot-link"
+                @tap.stop="chooseAnother"
+              >
+                换一张
+              </text>
+              <text
+                v-else-if="shotState === 'failed'"
+                class="shot-link"
+                @tap.stop="retryRecognize"
+              >
+                重试
+              </text>
+              <text class="shot-link" @tap.stop="previewScreenshot">看大图</text>
+            </view>
+          </view>
+        </view>
       </view>
 
-      <view class="sample-card">
+      <view v-if="shotState === 'idle' || shotState === 'failed'" class="sample-card">
         <text class="sample-title">这样截图，信息最全</text>
         <view class="sample-body">
           <!--
@@ -51,7 +95,10 @@
       <view class="divider"><text>或手动填写</text></view>
 
       <view v-if="draftMissing.length > 0" class="draft-notice">
-        <text>已按截图填好，其中 {{ draftMissing.length }} 项没认出来（红色那几格），补完就能存</text>
+        <text class="draft-notice-text">
+          已按截图填好，其中 {{ draftMissing.length }} 项没认出来（红色那几格），补完就能存
+        </text>
+        <text v-if="hasScreenshot" class="draft-link" @tap="previewScreenshot">查看截图</text>
       </view>
 
       <view class="form-card">
@@ -223,6 +270,7 @@ import {
 import { applyDraftToForm } from './procurement-sku-draft-apply';
 import { decodeRouteParam } from './route-param';
 import { buildChannelChoices } from './procurement-sku-channel';
+import { buildShotView, type ShotState } from './procurement-sku-shot';
 
 const SAMPLE_IMAGE_URL =
   'https://img.sevenkitchen.cloud/app-assets/procurement-sku-sample-v2.jpg';
@@ -249,7 +297,6 @@ const baseUnit = ref('G');
 const baseUnitText = computed(() => BASE_UNIT_TEXT[baseUnit.value] || '克');
 
 const loading = ref(false);
-const uploading = ref(false);
 const submitting = ref(false);
 const sampleFailed = ref(false);
 
@@ -271,11 +318,54 @@ const unitPriceText = ref('');
 
 const multipack = ref(false);
 
+/**
+ * 截图上传区四种状态（2026-11-05 老板反馈：图传完了，页面还是"没传"的样子）：
+ * idle 还没选图 / recognizing 已选图、正在上传识别 /
+ * done 识别完成 / failed 上传或识别失败（图保留，可重试）
+ */
+const shotState = ref<ShotState>('idle');
+const pickedImagePath = ref('');
 const uploadedScreenshotUrl = ref('');
+const shotError = ref('');
+
 const aiFilled = ref<Record<string, boolean>>({});
 const draftMissing = ref<string[]>([]);
 const confidence = ref<Record<string, 'high' | 'low'>>({});
 const submitted = ref(false);
+
+const recognizing = computed(() => shotState.value === 'recognizing');
+
+const hasScreenshot = computed(() =>
+  Boolean(pickedImagePath.value || uploadedScreenshotUrl.value),
+);
+
+const shotThumbUrl = computed(
+  () => pickedImagePath.value || uploadedScreenshotUrl.value,
+);
+
+const aiFilledCount = computed(
+  () => Object.values(aiFilled.value).filter(Boolean).length,
+);
+
+const shotView = computed(() =>
+  buildShotView({
+    state: shotState.value,
+    uploaded: Boolean(uploadedScreenshotUrl.value),
+    filledCount: aiFilledCount.value,
+    error: shotError.value,
+  }),
+);
+
+/** 已经填了内容才提醒"换图会覆盖"，避免员工白填一次 */
+const hasFormContent = computed(() =>
+  Boolean(
+    form.value.name.trim() ||
+      form.value.purchaseChannel.trim() ||
+      netContentText.value.trim() ||
+      unitPriceText.value.trim() ||
+      multipack.value,
+  ),
+);
 
 /** 只给"包装单位"；服务端白名单里没有的不会出现 */
 const clerkUnits = computed(() => {
@@ -408,8 +498,63 @@ const previewSample = () => {
   uni.previewImage({ urls: [SAMPLE_IMAGE_URL] });
 };
 
+const previewScreenshot = () => {
+  const url = uploadedScreenshotUrl.value || pickedImagePath.value;
+  if (!url) return;
+  uni.previewImage({ urls: [url] });
+};
+
+const failShot = (message: string) => {
+  shotError.value = message;
+  shotState.value = 'failed';
+  uni.showToast({ title: message, icon: 'none' });
+};
+
+const recognizeFromUrl = async (imageUrl: string) => {
+  shotState.value = 'recognizing';
+  shotError.value = '';
+
+  try {
+    const res: any = await draftProcurementSku({
+      imageUrl,
+      ingredientId: ingredientId.value,
+    });
+
+    if (res?.code !== 0) {
+      throw new Error(res?.message || '识别失败');
+    }
+
+    const draft = res.data?.draft;
+    if (!draft) {
+      failShot('没认出来，可以重试或手动填');
+      return;
+    }
+
+    applyDraft(draft, imageUrl);
+  } catch (error: any) {
+    failShot(error?.message || '识别失败，请手动填写');
+  }
+};
+
+const recognizeFromPath = async (filePath: string) => {
+  shotState.value = 'recognizing';
+  shotError.value = '';
+
+  let imageUrl = '';
+  try {
+    const uploaded = await uploadProcurementSkuScreenshot(filePath);
+    imageUrl = uploaded.url;
+    uploadedScreenshotUrl.value = imageUrl;
+  } catch (error: any) {
+    failShot(error?.message || '上传失败，请检查网络');
+    return;
+  }
+
+  await recognizeFromUrl(imageUrl);
+};
+
 const handlePickImage = async () => {
-  if (uploading.value) return;
+  if (recognizing.value) return;
 
   const chosen: any = await new Promise((resolve) => {
     uni.chooseImage({
@@ -424,33 +569,57 @@ const handlePickImage = async () => {
   const filePath = chosen?.tempFilePaths?.[0];
   if (!filePath) return;
 
-  uploading.value = true;
-  try {
-    const uploaded = await uploadProcurementSkuScreenshot(filePath);
-    const res: any = await draftProcurementSku({
-      imageUrl: uploaded.url,
-      ingredientId: ingredientId.value,
+  // 先点亮缩略图，再开始上传：员工点完马上能看到"图收到了"
+  pickedImagePath.value = filePath;
+  uploadedScreenshotUrl.value = '';
+  shotError.value = '';
+  aiFilled.value = {};
+  draftMissing.value = [];
+  confidence.value = {};
+
+  await recognizeFromPath(filePath);
+};
+
+const chooseAnother = async () => {
+  if (recognizing.value) return;
+
+  if (hasScreenshot.value && hasFormContent.value) {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '换一张图？',
+        content: '已经按上一张图填好的内容会重新识别，可能被覆盖。',
+        confirmText: '换一张',
+        cancelText: '先不换',
+        success: (res) => resolve(Boolean(res.confirm)),
+        fail: () => resolve(false),
+      });
     });
-
-    if (res?.code !== 0) {
-      throw new Error(res?.message || '识别失败');
-    }
-
-    const draft = res.data?.draft;
-    if (!draft) {
-      uni.showToast({ title: '没认出来，手动填一下', icon: 'none' });
-      return;
-    }
-
-    applyDraft(draft, uploaded.url);
-  } catch (error: any) {
-    uni.showToast({
-      title: error?.message || '识别失败，请手动填写',
-      icon: 'none',
-    });
-  } finally {
-    uploading.value = false;
+    if (!confirmed) return;
   }
+
+  handlePickImage();
+};
+
+const retryRecognize = () => {
+  if (recognizing.value) return;
+
+  if (uploadedScreenshotUrl.value) {
+    recognizeFromUrl(uploadedScreenshotUrl.value);
+    return;
+  }
+
+  if (pickedImagePath.value) {
+    recognizeFromPath(pickedImagePath.value);
+  }
+};
+
+const handleScreenshotTap = () => {
+  if (shotState.value === 'idle') {
+    handlePickImage();
+    return;
+  }
+  if (recognizing.value) return;
+  previewScreenshot();
 };
 
 const applyDraft = (draft: any, screenshotUrl: string) => {
@@ -493,6 +662,8 @@ const applyDraft = (draft: any, screenshotUrl: string) => {
   draftMissing.value = result.missing;
   confidence.value = result.confidence;
   uploadedScreenshotUrl.value = screenshotUrl;
+  shotError.value = '';
+  shotState.value = 'done';
 };
 
 const goBack = () => {
@@ -587,6 +758,9 @@ const handleSubmit = async () => {
 }
 
 .draft-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   background: #fdf3ee;
   border: 1px solid #e8cfc4;
   border-radius: 10px;
@@ -595,6 +769,15 @@ const handleSubmit = async () => {
   font-size: 11px;
   color: #b4553f;
   line-height: 1.6;
+}
+.draft-notice-text {
+  flex: 1;
+}
+.draft-link {
+  flex: none;
+  font-size: 11px;
+  color: #8a3f2c;
+  text-decoration: underline;
 }
 
 .upload-card {
@@ -620,6 +803,94 @@ const handleSubmit = async () => {
   margin-top: 4px;
   font-size: 11px;
   color: #9a9384;
+}
+/* 传过图之后，上传区改成一张"图 + 状态"的卡片，取代原来的相机占位 */
+.upload-card.has-shot {
+  background: #fff;
+  border-style: solid;
+  border-color: #ddd6c1;
+  padding: 10px;
+  text-align: left;
+}
+.shot-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.shot-thumb-wrap {
+  position: relative;
+  width: 62px;
+  height: 84px;
+  flex: none;
+}
+.shot-thumb {
+  width: 62px;
+  height: 84px;
+  border-radius: 8px;
+  border: 1px solid #e6dfc9;
+  background: #f4f1e7;
+}
+.shot-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+.shot-mask {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 8px;
+  background: rgba(30, 58, 47, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #fff;
+}
+.shot-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.shot-status {
+  display: flex;
+}
+.shot-badge {
+  font-size: 10px;
+  line-height: 1.6;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.shot-badge.done {
+  color: #4a6b46;
+  background: #eef3e4;
+}
+.shot-badge.busy {
+  color: #8a6b33;
+  background: #f6f1e2;
+}
+.shot-badge.failed {
+  color: #b4553f;
+  background: #fdf3ee;
+}
+.shot-desc {
+  font-size: 12px;
+  color: #26261f;
+  line-height: 1.5;
+}
+.shot-actions {
+  display: flex;
+  gap: 14px;
+}
+.shot-link {
+  padding: 2px 0;
+  font-size: 11.5px;
+  color: #4a6b46;
 }
 
 .sample-card {

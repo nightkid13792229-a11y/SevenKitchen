@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>日采清单详情 · 原料明细重构原型</title>
+<style>
+  :root{
+    --bg:#eef0e6; --page:#f7f8f1; --card:#ffffff; --line:#e6e9dc;
+    --ink:#26261f; --muted:#6b6653; --faint:#8f8b7c;
+    --green:#1e3a2f; --green-soft:#e8f0e6; --green-text:#2f6b4f;
+    --brown:#7a5c28; --brown-soft:#f6efe0; --amber:#b08d4f;
+    --red:#b4453a;
+  }
+  *{box-sizing:border-box; -webkit-font-smoothing:antialiased;}
+  body{margin:0; background:var(--bg); font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif; color:var(--ink);}
+  .stage{display:flex; justify-content:center; padding:28px 16px 48px;}
+  .phone{width:390px; background:var(--page); border-radius:34px; box-shadow:0 24px 60px rgba(30,58,47,.18); overflow:hidden; border:1px solid #dde1d2;}
+  .statusbar{height:22px; display:flex; align-items:center; justify-content:space-between; padding:0 18px; font-size:10px; color:#5f5c50; background:#f7f8f1;}
+  .nav{height:44px; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:600; background:#f7f8f1; border-bottom:1px solid #eef0e4; position:relative;}
+  .nav .back{position:absolute; left:14px; font-size:18px; color:#3c3a30;}
+  .nav .more{position:absolute; right:14px; font-size:16px; color:#8f8b7c;}
+  .content{padding-bottom:76px;}
+  .progress{display:flex; align-items:center; gap:10px; padding:10px 14px; background:#fff; border-bottom:1px solid #eef0e4; position:sticky; top:0; z-index:5;}
+  .progress .label{font-size:12px; color:var(--muted); white-space:nowrap; font-weight:600;}
+  .bar{flex:1; height:6px; border-radius:999px; background:#eef0e4; overflow:hidden;}
+  .bar i{display:block; height:100%; width:90%; border-radius:999px; background:linear-gradient(90deg,#b08d4f,#7a5c28);}
+  .progress .cost{font-size:12px; font-weight:700; color:var(--green); white-space:nowrap;}
+  .section{margin:10px 10px 0; background:#fbfcf7; border-radius:12px; padding:12px;}
+  .status-card{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
+  .status-card .date{font-size:17px; font-weight:700;}
+  .status-card .meta{font-size:11px; color:var(--faint); margin-top:4px;}
+  .pill{display:inline-flex; align-items:center; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:600; background:#f3ead8; color:#7a5c28;}
+  .import-btn{width:100%; height:40px; border:0; border-radius:10px; background:#7a5c28; color:#fdf8ea; font-size:14px; font-weight:600;}
+  .section-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px;}
+  .section-head h2{margin:0; font-size:16px;}
+  .section-head .count{font-size:11px; color:var(--faint);}
+  .filters{display:flex; flex-wrap:wrap; gap:6px; padding-bottom:8px;}
+  .chip{flex:0 0 auto; font-size:11px; color:var(--muted); background:#fff; border:1px solid var(--line); padding:4px 9px; border-radius:999px;}
+  .chip b{font-weight:700; margin-left:2px; color:var(--ink);}
+  .chip.active{background:var(--green); border-color:var(--green); color:#f3eddd;}
+  .chip.active b{color:#f3eddd;}
+  .group-head{display:flex; align-items:center; justify-content:space-between; font-size:12px; font-weight:700; color:#4a473b; margin:10px 2px 8px;}
+  .group-head span{font-size:11px; color:var(--faint); font-weight:500;}
+  .items{display:flex; flex-direction:column; gap:8px;}
+  .item{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:11px 12px; box-shadow:0 1px 4px rgba(30,58,47,.04);}
+  .row1{display:flex; align-items:flex-start; justify-content:space-between; gap:8px;}
+  .name{font-size:14px; font-weight:650; line-height:1.35;}
+  .badge{display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px; font-size:9px; font-weight:700; vertical-align:2px;}
+  .badge.pending{background:#f6efe0; color:#8a6420;}
+  .badge.covered{background:var(--green-soft); color:var(--green-text);}
+  .badge.none{background:#efeee8; color:#6b6653;}
+  .badge.done{background:#1e3a2f; color:#f3eddd;}
+  .qty{display:flex; align-items:baseline; gap:2px; flex-shrink:0;}
+  .qty .l{font-size:10px; color:var(--faint);}
+  .qty b{font-size:17px; font-weight:800; color:#7a5c28; line-height:1;}
+  .qty .u{font-size:10px; color:var(--muted);}
+  .qty.zero b{color:#b9b5a6;}
+  .audit{margin-top:6px; font-size:10.5px; color:var(--faint); letter-spacing:.1px;}
+  .meta{margin-top:5px; font-size:10.5px; color:var(--muted);}
+  .actions{display:flex; align-items:center; justify-content:space-between; gap:14px; margin-top:9px; padding-top:8px; border-top:1px dashed #eef0e4;}
+  .actions .left{font-size:10.5px; color:var(--faint); min-width:0; line-height:1.4;}
+  .actions .left.green{color:var(--green-text); font-weight:600;}
+  .actions .left a{color:var(--brown); text-decoration:none; font-weight:600;}
+  .actions .right{display:flex; align-items:center; gap:12px; flex-shrink:0;}
+  .link{font-size:11px; color:var(--brown); background:none; border:0; padding:4px 2px;}
+  .btn{font-size:11px; font-weight:700; color:#f3eddd; background:var(--green); border:0; border-radius:999px; padding:6px 12px;}
+  .records{margin-top:8px; border-top:1px dashed #eef0e4; padding-top:6px; display:flex; flex-direction:column; gap:6px;}
+  .record{display:flex; align-items:flex-start; justify-content:space-between; gap:8px; background:#fbfcf7; border-radius:8px; padding:8px 9px;}
+  .record .rname{font-size:11px; font-weight:650;}
+  .record .rsub{font-size:10px; color:var(--faint); margin-top:2px;}
+  .record .rcost{font-size:11px; font-weight:700; color:var(--green); white-space:nowrap;}
+  .orders .row{display:flex; align-items:center; gap:6px; font-size:11px; padding:9px 2px; border-bottom:1px solid #eef0e4;}
+  .orders .row:last-child{border-bottom:0;}
+  .orders .no{font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums;}
+  .orders .sep{color:#c9c4b2;}
+  .orders .dog{color:var(--brown); font-weight:600;}
+  .orders .recipe{color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .orders .head{font-size:9.5px; color:var(--faint); display:flex; gap:14px; padding:0 2px 2px;}
+  .bottom{margin:0 10px 12px; background:#fff; border-radius:14px; box-shadow:0 6px 18px rgba(30,58,47,.10); padding:8px;}
+  .bottom button{width:100%; height:40px; border:0; border-radius:10px; background:var(--green); color:#f3eddd; font-size:14px; font-weight:700;}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span>100%</span></div>
+    <div class="nav"><span class="back">‹</span>日采清单详情<span class="more">···</span></div>
+    <div class="content">
+      <div class="progress">
+        <span class="label">已处理 27/30 项</span>
+        <span class="bar"><i></i></span>
+        <span class="cost">¥12.80</span>
+      </div>
+
+      <div class="section status-card">
+        <div>
+          <div class="date">2026-11-03 <span class="pill">制作日期</span></div>
+          <div class="meta">创建于 2026-11-03 09:49 · 王丽</div>
+        </div>
+        <span class="pill">待采购</span>
+      </div>
+
+      <div class="section">
+        <button class="import-btn">AI识别订单截图</button>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><h2>原料明细</h2><span class="count">共 30 项 · 待处理 3 项</span></div>
+        <div class="filters">
+          <span class="chip active">全部<b>30</b></span>
+          <span class="chip">待采购<b>3</b></span>
+          <span class="chip">已录入<b>1</b></span>
+          <span class="chip">无需采购<b>14</b></span>
+          <span class="chip">库存足够<b>12</b></span>
+        </div>
+
+        <div class="group-head">🥩 食材 <span>23 项</span></div>
+        <div class="items">
+          <!-- 待采购 -->
+          <div class="item">
+            <div class="row1">
+              <div class="name">南瓜<span class="badge pending">待采购</span></div>
+              <div class="qty"><span class="l">仍需</span><b>0.128</b><span class="u">kg</span></div>
+            </div>
+            <div class="audit">订单 0.128 kg · 现有 0 kg · 抵扣 0 kg</div>
+            <div class="actions">
+              <div class="left"><a>无需采购</a></div>
+              <div class="right"><button class="btn">采购记录</button></div>
+            </div>
+          </div>
+
+          <!-- 库存足够，仍可手动记录 -->
+          <div class="item">
+            <div class="row1">
+              <div class="name">胡萝卜<span class="badge covered">库存足够</span></div>
+              <div class="qty zero"><span class="l">仍需</span><b>0</b><span class="u">kg</span></div>
+            </div>
+            <div class="audit">订单 0.070 kg · 现有 0.53 kg · 抵扣 0.070 kg</div>
+            <div class="actions">
+              <div class="left green">库存足够，无需购买</div>
+              <div class="right"><button class="btn">采购记录</button></div>
+            </div>
+          </div>
+
+          <!-- 已标记无需采购 -->
+          <div class="item">
+            <div class="row1">
+              <div class="name">燕麦<span class="badge none">无需采购</span></div>
+              <div class="qty zero"><span class="l">仍需</span><b>0</b><span class="u">kg</span></div>
+            </div>
+            <div class="audit">订单 0.128 kg · 现有 0.81 kg · 抵扣 0.128 kg</div>
+            <div class="actions">
+              <div class="left">现场确认无需采购 · <a>取消标记</a></div>
+              <div class="right"><button class="btn">采购记录</button></div>
+            </div>
+          </div>
+
+          <!-- 已录入一条，折叠 -->
+          <div class="item">
+            <div class="row1">
+              <div class="name">糙米<span class="badge done">已采购</span></div>
+              <div class="qty zero"><span class="l">仍需</span><b>0</b><span class="u">kg</span></div>
+            </div>
+            <div class="audit">订单 0.641 kg · 现有 1 kg · 抵扣 0.641 kg</div>
+            <div class="actions">
+              <div class="left"><a>已录入 1 条 · ¥12.80 · 查看明细</a></div>
+              <div class="right"><button class="btn">采购记录</button></div>
+            </div>
+          </div>
+
+          <!-- 已录入两条，展开 -->
+          <div class="item">
+            <div class="row1">
+              <div class="name">鸡胸肉<span class="badge done">已采购</span></div>
+              <div class="qty zero"><span class="l">仍需</span><b>0</b><span class="u">kg</span></div>
+            </div>
+            <div class="audit">订单 0.500 kg · 现有 0 kg · 抵扣 0 kg</div>
+            <div class="actions">
+              <div class="left"><a>已录入 2 条 · ¥51.70 · 收起明细</a></div>
+              <div class="right"><button class="btn">采购记录</button></div>
+            </div>
+            <div class="records">
+              <div class="record">
+                <div><div class="rname">山姆 · 鸡胸肉 1kg/袋</div><div class="rsub">1 袋 · 09:42</div></div>
+                <div class="rcost">¥32.80</div>
+              </div>
+              <div class="record">
+                <div><div class="rname">盒马 · 鸡胸肉 500g/盒</div><div class="rsub">1 盒 · 10:05</div></div>
+                <div class="rcost">¥18.90</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group-head" style="margin-top:14px;">💊 补剂 <span>7 项</span></div>
+        <div class="items">
+          <div class="item">
+            <div class="row1">
+              <div class="name">鸡蛋壳粉<span class="badge pending">待采购</span></div>
+              <div class="qty"><span class="l">仍需</span><b>7.82</b><span class="u">g</span></div>
+            </div>
+            <div class="audit">订单 9.10 g · 现有 1.28 g · 抵扣 1.28 g</div>
+            <div class="meta">京东 · 500g/罐 · 参考单价 ¥39.90</div>
+            <div class="actions">
+              <div class="left"><a>无需采购</a></div>
+              <div class="right"><button class="btn">采购记录</button></div>
+            </div>
+          </div>
+
+          <div class="item">
+            <div class="row1">
+              <div class="name">维生素E胶囊<span class="badge covered">库存足够</span></div>
+              <div class="qty zero"><span class="l">仍需</span><b>0</b><span class="u">粒</span></div>
+            </div>
+            <div class="audit">订单 0.515 粒 · 现有 8 粒 · 抵扣 0.515 粒</div>
+            <div class="meta">iHerb · 200IU/粒，100粒/瓶 · 参考单价 ¥89.00</div>
+            <div class="actions">
+              <div class="left green">库存足够，无需购买</div>
+              <div class="right"><button class="btn">采购记录</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section orders">
+        <div class="section-head"><h2>关联订单</h2><span class="count">2 单</span></div>
+        <div class="head"><span>订单号</span><span>狗狗</span><span>食谱</span></div>
+        <div class="row"><span class="no">SK20261102-005</span><span class="sep">·</span><span class="dog">皮蛋</span><span class="sep">·</span><span class="recipe">糙米红薯青花鱼牛肉</span></div>
+        <div class="row"><span class="no">SK20261102-004</span><span class="sep">·</span><span class="dog">皮蛋</span><span class="sep">·</span><span class="recipe">鸭胸猪里脊鸡蛋青花鱼</span></div>
+      </div>
+    </div>
+    <div class="bottom"><button>确认采购完成</button></div>
+  </div>
+</div>
+</body>
+</html>

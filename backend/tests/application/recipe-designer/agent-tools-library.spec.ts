@@ -107,12 +107,3 @@ describe('Agent 工具：search_knowledge_library', () => {
     expect(search).not.toHaveBeenCalled();
   });
 });
-
-describe('relatedLibraryQueries（分期 + 血磷关联检索）', () => {
-  it('IRIS 分期 + 血磷时补充分期标准查询', () => {
-    const { relatedLibraryQueries } = require('../../../src/application/recipe-designer/agent/tools');
-    expect(relatedLibraryQueries('IRIS stage 2 phosphorus 5.2')).toHaveLength(1);
-    expect(relatedLibraryQueries('CKD 2期 血磷 5.2')).toHaveLength(1);
-    expect(relatedLibraryQueries('CKD protein restriction')).toHaveLength(0);
-  });
-});

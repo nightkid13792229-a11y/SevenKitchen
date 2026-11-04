@@ -253,6 +253,32 @@ export const purchasingApi = {
   },
 
   /**
+   * 报销单 AI 审核建议（2026-11-04 阶段 E）
+   */
+  getAgentReview: (id: string): Promise<any> => {
+    return api.get(`/admin/purchasing/reimbursements/${id}/agent-review`, {
+      timeout: 20000,
+    })
+  },
+
+  runAgentReview: (id: string): Promise<any> => {
+    // 模型最多 20 秒，客户端留足余量，避免先超时但服务端仍写入
+    return api.post(
+      `/admin/purchasing/reimbursements/${id}/agent-review`,
+      {},
+      { timeout: 90000 },
+    )
+  },
+
+  uploadPaymentProofFiles: (id: string, files: File[]): Promise<any> => {
+    const formData = new FormData()
+    files.forEach((file) => formData.append('files', file))
+    return api.post(`/admin/purchasing/reimbursements/${id}/payment-proof`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+
+  /**
    * 处理报销单（兼容旧接口）
    */
   reviewReimbursement: (

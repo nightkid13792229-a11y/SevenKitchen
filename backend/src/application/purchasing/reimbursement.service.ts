@@ -19,10 +19,12 @@ import type { ReimbursementRepository } from '../../domain/purchasing/reimbursem
 import type { PurchaseListRepository } from '../../domain/purchasing/purchase-list.repository';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { IngredientPricingService } from '../ingredient/ingredient-pricing.service';
+import { PurchaseOrderImportService } from './purchase-order-import.service';
 import {
   Reimbursement,
   ReimbursementStatus,
   PurchaseList,
+  PurchaseListKind,
   PurchaseListStatus,
   REIMBURSEMENT_CUSTOM_FEE_CATEGORIES,
   type ReimbursementCustomFee,
@@ -31,7 +33,12 @@ import {
 export interface SubmitReimbursementDto {
   purchaseListIds?: string[];
   receiptUrls: string[];
+  /** 私有目录里的凭证 key（订单截图），与 receiptUrls 合计 1~10 张 */
+  receiptKeys?: string[];
   totalActualCost: number;
+  /** 凭证金额（订单实付）；不传表示不核对差额 */
+  voucherAmount?: number;
+  differenceNote?: string;
   // 新增字段
   platformShippingFee?: number;
   platformPackagingFee?: number;
@@ -50,6 +57,9 @@ interface PreparedReimbursementSubmission {
   normalizedCustomFees: ReimbursementCustomFee[];
   purchaseListsTotal: number;
   calculatedTotal: number;
+  receiptKeys: string[];
+  voucherAmount: number | null;
+  differenceAmount: number | null;
 }
 
 @Injectable()
@@ -63,6 +73,7 @@ export class ReimbursementService {
     private readonly purchaseListRepository: PurchaseListRepository,
     private readonly cosService: TencentCosService,
     private readonly ingredientPricingService: IngredientPricingService,
+    private readonly purchaseOrderImportService: PurchaseOrderImportService,
   ) {}
 
   /**
@@ -95,17 +106,32 @@ export class ReimbursementService {
       throw new BadRequestException('同一采购清单不能重复提交');
     }
 
-    // 验证发票照片
-    if (dto.receiptUrls.length === 0) {
+    // 验证发票照片：公开 URL + 私有 key 合计 1~10 张
+    const receiptKeys = (dto.receiptKeys || []).map((key) => key.trim()).filter(Boolean);
+    const receiptCount = dto.receiptUrls.length + receiptKeys.length;
+    if (receiptCount === 0) {
       throw new BadRequestException('至少需要一张发票照片');
     }
-
-    if (dto.receiptUrls.length > 10) {
+    if (receiptCount > 10) {
       throw new BadRequestException('最多只能上传10张发票照片');
     }
 
     if (dto.totalActualCost <= 0) {
       throw new BadRequestException('实际采购总额必须大于0');
+    }
+
+    // 私有凭证必须来自这些清单下已确认的订单截图，不能拿任意 COS key。
+    if (receiptKeys.length > 0) {
+      const allowed =
+        await this.purchaseOrderImportService.getAllowedReceiptKeys(
+          purchaseListIds,
+        );
+      const invalid = receiptKeys.filter((key) => !allowed.has(key));
+      if (invalid.length > 0) {
+        throw new BadRequestException(
+          '有凭证图片不属于本次采购清单的订单截图，请重新提交',
+        );
+      }
     }
 
     // 查询所有采购清单（如果有）
@@ -138,6 +164,25 @@ export class ReimbursementService {
 
       purchaseLists.push(list);
       totalEstimatedCost += list.totalEstimatedCost;
+    }
+
+    // 非日采（补货/包材）不能把运费和包装费算进这条线（2026-11-04 规则）
+    const hasDailyList = purchaseLists.some(
+      (list) => list.kind === PurchaseListKind.ORDER_DEMAND,
+    );
+    const hasNonDailyList = purchaseLists.some(
+      (list) => list.kind !== PurchaseListKind.ORDER_DEMAND,
+    );
+    if (
+      hasNonDailyList &&
+      (Number(dto.platformShippingFee || 0) > 0 ||
+        Number(dto.platformPackagingFee || 0) > 0)
+    ) {
+      if (!hasDailyList) {
+        throw new BadRequestException(
+          '补货/包材清单不能填运费和包装费，请只记商品金额',
+        );
+      }
     }
 
     // 计算采购清单总金额
@@ -196,6 +241,29 @@ export class ReimbursementService {
       );
     }
 
+    const claimedRounded = Math.round(Number(dto.totalActualCost) * 100) / 100;
+    const voucherAmount =
+      dto.voucherAmount === undefined || dto.voucherAmount === null
+        ? null
+        : Math.round(Number(dto.voucherAmount) * 100) / 100;
+    if (voucherAmount !== null) {
+      if (!Number.isFinite(voucherAmount) || voucherAmount < 0) {
+        throw new BadRequestException('凭证金额无效');
+      }
+      if (voucherAmount < claimedRounded) {
+        throw new BadRequestException(
+          `报销金额（¥${claimedRounded.toFixed(2)}）不能超过凭证金额（¥${voucherAmount.toFixed(2)}）`,
+        );
+      }
+    }
+    const differenceAmount =
+      voucherAmount === null
+        ? null
+        : Math.round((voucherAmount - claimedRounded) * 100) / 100;
+    if (differenceAmount !== null && differenceAmount < 0) {
+      throw new BadRequestException('差额不能为负');
+    }
+
     this.logger.log(
       `Validated reimbursement cost details: purchaseLists=¥${purchaseListsTotal}, ` +
         `shipping=¥${dto.platformShippingFee || 0}, packaging=¥${dto.platformPackagingFee || 0}, ` +
@@ -209,6 +277,9 @@ export class ReimbursementService {
       normalizedCustomFees,
       purchaseListsTotal,
       calculatedTotal,
+      receiptKeys,
+      voucherAmount,
+      differenceAmount,
     };
   }
 
@@ -224,6 +295,9 @@ export class ReimbursementService {
       purchaseListIds,
       totalEstimatedCost,
       normalizedCustomFees,
+      receiptKeys,
+      voucherAmount,
+      differenceAmount,
     } = await this.prepareReimbursementSubmission(dto);
 
     this.logger.log(
@@ -240,6 +314,10 @@ export class ReimbursementService {
       totalActualCost: dto.totalActualCost,
       totalEstimatedCost,
       receiptUrls: dto.receiptUrls,
+      receiptKeys,
+      voucherAmount: voucherAmount ?? undefined,
+      differenceAmount: differenceAmount ?? undefined,
+      differenceNote: dto.differenceNote?.trim() || undefined,
       submittedById,
       submittedAt: new Date(),
       purchaseLists,
@@ -364,6 +442,9 @@ export class ReimbursementService {
       purchaseListIds,
       totalEstimatedCost,
       normalizedCustomFees,
+      receiptKeys: preparedReceiptKeys,
+      voucherAmount,
+      differenceAmount,
     } = await this.prepareReimbursementSubmission(dto, {
       reimbursementId: id,
     });
@@ -375,7 +456,14 @@ export class ReimbursementService {
       totalActualCost: dto.totalActualCost,
       totalEstimatedCost,
       receiptUrls: dto.receiptUrls,
-      receiptKeys: reimbursement.receiptKeys,
+      // 传了就用（已做白名单校验、已 trim），没传才沿用原值。
+      receiptKeys:
+        dto.receiptKeys !== undefined
+          ? preparedReceiptKeys
+          : reimbursement.receiptKeys,
+      voucherAmount: voucherAmount ?? undefined,
+      differenceAmount: differenceAmount ?? undefined,
+      differenceNote: dto.differenceNote?.trim() || undefined,
       submittedById: reimbursement.submittedById,
       submittedAt: reimbursement.submittedAt,
       createdAt: reimbursement.createdAt,
@@ -441,20 +529,38 @@ export class ReimbursementService {
   /**
    * 查询报销单详情
    */
-  async getReimbursementDetail(id: string): Promise<any> {
+  async getReimbursementDetail(
+    id: string,
+    options: { requesterId?: string; isAdmin?: boolean } = {},
+  ): Promise<any> {
     const reimbursement = await this.reimbursementRepository.findById(id);
 
     if (!reimbursement) {
       throw new BadRequestException(`未找到报销单：${id}`);
     }
 
+    if (
+      options.requesterId &&
+      !options.isAdmin &&
+      reimbursement.submittedById !== options.requesterId
+    ) {
+      throw new ForbiddenException('只能查看自己提交的报销单');
+    }
+
     const priceChanges =
       await this.ingredientPricingService.getPriceChangesForReimbursement(id);
 
-    return {
-      ...reimbursement,
-      priceChanges,
-    };
+    const receiptSignedUrls = await Promise.all(
+      (reimbursement.receiptKeys || []).map((key) =>
+        this.cosService.getSignedUrl(key, 3600).catch(() => ''),
+      ),
+    );
+
+    const view: any = { ...reimbursement, priceChanges };
+    view.receiptSignedUrls = receiptSignedUrls.filter(Boolean);
+    // 私有对象 key 不下发：只给签名后的可看图。
+    delete view.receiptKeys;
+    return view;
   }
 
   /**
@@ -503,6 +609,16 @@ export class ReimbursementService {
       }
     }
 
+    // 4.1 删除私有凭证；但订单截图属于识别记录，删报销单不能把它删掉
+    for (const key of reimbursement.receiptKeys || []) {
+      if (key.startsWith('purchase-order-screenshots/')) continue;
+      await this.cosService.deleteImage(key).catch((error: any) => {
+        this.logger.warn(
+          `Failed to delete receipt object ${key}: ${error?.message}`,
+        );
+      });
+    }
+
     // 5. 清空采购清单关联
     await this.purchaseListRepository.clearReimbursementId(id);
 
@@ -547,6 +663,11 @@ export class ReimbursementService {
       totalActualCost: reimbursement.totalActualCost,
       totalEstimatedCost: reimbursement.totalEstimatedCost,
       receiptUrls: reimbursement.receiptUrls,
+      receiptKeys: reimbursement.receiptKeys,
+      voucherAmount: reimbursement.voucherAmount,
+      differenceAmount: reimbursement.differenceAmount,
+      differenceNote: reimbursement.differenceNote,
+
       submittedById: reimbursement.submittedById,
       submittedAt: reimbursement.submittedAt,
       reviewedById: operatorId ?? reimbursement.reviewedById,
@@ -587,6 +708,13 @@ export class ReimbursementService {
 
     if (!reimbursement) {
       throw new BadRequestException('报销单不存在');
+    }
+
+    // 只有待报销可以上传付款凭证；避免过期页面把凭证挂到已驳回/已报销的单上
+    if (reimbursement.status !== ReimbursementStatus.PENDING_REVIEW) {
+      throw new BadRequestException(
+        `当前状态（${reimbursement.status}）不能上传付款凭证，请刷新后重试`,
+      );
     }
 
     // 2. 验证凭证数量
@@ -664,6 +792,10 @@ export class ReimbursementService {
       totalEstimatedCost: reimbursement.totalEstimatedCost,
       receiptUrls: reimbursement.receiptUrls,
       receiptKeys: reimbursement.receiptKeys,
+      voucherAmount: reimbursement.voucherAmount,
+      differenceAmount: reimbursement.differenceAmount,
+      differenceNote: reimbursement.differenceNote,
+
       submittedById: reimbursement.submittedById,
       submittedAt: reimbursement.submittedAt,
       reviewedById:
@@ -734,19 +866,45 @@ export class ReimbursementService {
     }
 
     // 3. 创建新的报销单实体（清空凭证）
+    // 已报销的单子清空凭证后要退回「待报销」，否则传错一张图就永久锁死：
+    // 员工撤不回、报销单删不掉、清单也解不开。
+    // 退回前用 rejectChangesForReimbursement 把已生效的原料价格一并回滚（见下方）。
+    const revertedFromReimbursed =
+      reimbursement.status === ReimbursementStatus.REIMBURSED;
+
+    if (revertedFromReimbursed) {
+      // 退回待报销前，把这次报销已生效的原料价格变更一起回滚，
+      // 否则单据可以撤回删除，但价格仍停在已生效值，价格历史还会留悬空引用。
+      await this.ingredientPricingService.rejectChangesForReimbursement(
+        id,
+        undefined,
+        '付款凭证已清空，价格变更一并回滚',
+      );
+    }
+
     const updated = new Reimbursement({
       id: reimbursement.id,
       claimNumber: reimbursement.claimNumber,
-      status: reimbursement.status,
+      status: revertedFromReimbursed
+        ? ReimbursementStatus.PENDING_REVIEW
+        : reimbursement.status,
       totalActualCost: reimbursement.totalActualCost,
       totalEstimatedCost: reimbursement.totalEstimatedCost,
       receiptUrls: reimbursement.receiptUrls,
       receiptKeys: reimbursement.receiptKeys,
+      voucherAmount: reimbursement.voucherAmount,
+      differenceAmount: reimbursement.differenceAmount,
+      differenceNote: reimbursement.differenceNote,
+
       submittedById: reimbursement.submittedById,
       submittedAt: reimbursement.submittedAt,
-      reviewedById: reimbursement.reviewedById,
-      reviewedAt: reimbursement.reviewedAt,
-      reviewComment: reimbursement.reviewComment,
+      reviewedById: revertedFromReimbursed
+        ? undefined
+        : reimbursement.reviewedById,
+      reviewedAt: revertedFromReimbursed ? undefined : reimbursement.reviewedAt,
+      reviewComment: revertedFromReimbursed
+        ? '付款凭证已清空，退回待报销'
+        : reimbursement.reviewComment,
       createdAt: reimbursement.createdAt,
       updatedAt: new Date(),
       purchaseLists: reimbursement.purchaseLists,
@@ -822,7 +980,9 @@ export class ReimbursementService {
       throw new BadRequestException('请至少上传一张图片');
     }
 
-    const currentCount = reimbursement.receiptUrls?.length || 0;
+    const currentCount =
+      (reimbursement.receiptUrls?.length || 0) +
+      (reimbursement.receiptKeys?.length || 0);
     const newCount = files.length;
 
     if (currentCount + newCount > 10) {
@@ -853,17 +1013,15 @@ export class ReimbursementService {
     }
 
     const newReceiptUrls = uploadResults.map((r) => r.url);
-    const newReceiptKeys = uploadResults.map((r) => r.key);
 
-    // 6. 合并新旧凭证URL
+    // 6. 合并新旧凭证 URL。
+    // 追加的公开凭证只存 URL，不再塞 key：key 只留给「订单截图」这类私有凭证，
+    // 这样 receiptUrls + receiptKeys 的 10 张上限才是同一套口径。
     const updatedUrls = [
       ...(reimbursement.receiptUrls || []),
       ...newReceiptUrls,
     ];
-    const updatedKeys = [
-      ...(reimbursement.receiptKeys || []),
-      ...newReceiptKeys,
-    ];
+    const updatedKeys = [...(reimbursement.receiptKeys || [])];
 
     this.logger.log(
       `Successfully uploaded ${uploadResults.length} files to COS`,
@@ -878,6 +1036,9 @@ export class ReimbursementService {
       totalEstimatedCost: reimbursement.totalEstimatedCost,
       receiptUrls: updatedUrls,
       receiptKeys: updatedKeys,
+      voucherAmount: reimbursement.voucherAmount,
+      differenceAmount: reimbursement.differenceAmount,
+      differenceNote: reimbursement.differenceNote,
       submittedById: reimbursement.submittedById,
       submittedAt: reimbursement.submittedAt,
       reviewedById: reimbursement.reviewedById,
@@ -934,36 +1095,54 @@ export class ReimbursementService {
       throw new BadRequestException('当前状态不允许修改支付凭证');
     }
 
-    // 4. 验证索引
-    if (!reimbursement.receiptUrls || reimbursement.receiptUrls.length === 0) {
+    // 4. 验证索引：先按公开凭证 URL 找，超出部分按私有 key 找
+    const urls = [...(reimbursement.receiptUrls || [])];
+    const keys = [...(reimbursement.receiptKeys || [])];
+    const total = urls.length + keys.length;
+
+    if (total === 0) {
       throw new BadRequestException('没有可删除的支付凭证');
     }
 
-    if (urlIndex < 0 || urlIndex >= reimbursement.receiptUrls.length) {
+    if (urlIndex < 0 || urlIndex >= total) {
       throw new BadRequestException('无效的图片索引');
     }
 
-    // 5. 如果有对应的COS key，删除COS中的文件
-    const keyToDelete = reimbursement.receiptKeys?.[urlIndex];
-    if (keyToDelete) {
+    const updatedUrls = [...urls];
+    const updatedKeys = [...keys];
+
+    if (urlIndex < urls.length) {
+      const url = urls[urlIndex];
+      // 历史数据里公开凭证的 URL 和 key 一一对应；但私有 key（订单截图）绝不按
+      // 下标删除——只能按前缀判断，删错会把识别记录的图删掉。
+      const candidateKey = keys[urlIndex];
+      const legacyPublicKey =
+        keys.length === urls.length &&
+        candidateKey &&
+        candidateKey.startsWith('reimbursement-receipts/')
+          ? candidateKey
+          : undefined;
       try {
-        await this.cosService.deleteImage(keyToDelete);
-        this.logger.log(`Deleted COS file: ${keyToDelete}`);
-      } catch (error) {
-        this.logger.error(`Failed to delete COS file ${keyToDelete}:`, error);
-        // 继续执行，不中断流程
+        if (legacyPublicKey) {
+          await this.cosService.deleteImage(legacyPublicKey);
+        } else {
+          await this.cosService.deleteImageByUrlStrict(url);
+        }
+      } catch (error: any) {
+        this.logger.error(`Failed to delete receipt object: ${error?.message}`);
       }
-    }
-
-    // 7. 从数组中删除指定索引的元素
-    const updatedUrls = [...reimbursement.receiptUrls];
-    const updatedKeys = reimbursement.receiptKeys
-      ? [...reimbursement.receiptKeys]
-      : [];
-
-    updatedUrls.splice(urlIndex, 1);
-    if (updatedKeys.length > 0) {
-      updatedKeys.splice(urlIndex, 1);
+      updatedUrls.splice(urlIndex, 1);
+      if (legacyPublicKey) updatedKeys.splice(urlIndex, 1);
+    } else {
+      const keyIndex = urlIndex - urls.length;
+      const key = keys[keyIndex];
+      // 订单截图属于识别记录，不能因为删报销凭证就被删掉。
+      if (!key.startsWith('purchase-order-screenshots/')) {
+        await this.cosService.deleteImage(key).catch((error: any) => {
+          this.logger.error(`Failed to delete receipt key: ${error?.message}`);
+        });
+      }
+      updatedKeys.splice(keyIndex, 1);
     }
 
     this.logger.log(
@@ -979,6 +1158,9 @@ export class ReimbursementService {
       totalEstimatedCost: reimbursement.totalEstimatedCost,
       receiptUrls: updatedUrls,
       receiptKeys: updatedKeys,
+      voucherAmount: reimbursement.voucherAmount,
+      differenceAmount: reimbursement.differenceAmount,
+      differenceNote: reimbursement.differenceNote,
       submittedById: reimbursement.submittedById,
       submittedAt: reimbursement.submittedAt,
       reviewedById: reimbursement.reviewedById,

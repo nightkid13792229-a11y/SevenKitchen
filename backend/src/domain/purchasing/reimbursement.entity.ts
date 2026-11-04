@@ -38,6 +38,10 @@ export interface ReimbursementConstructor {
   totalEstimatedCost: number;
   receiptUrls: string[];
   receiptKeys?: string[]; // COS对象键（用于删除支付凭证）
+  /** 凭证金额 / 差额 / 差额说明（2026-11-04 采购-报销 AI 接入）；差额 = 凭证 - 报销 */
+  voucherAmount?: number;
+  differenceAmount?: number;
+  differenceNote?: string;
   submittedById: string;
   submittedAt: Date;
   reviewedById?: string;
@@ -65,6 +69,9 @@ export class Reimbursement {
   public readonly totalEstimatedCost: number;
   public receiptUrls: string[];
   public readonly receiptKeys: string[]; // COS对象键（用于删除支付凭证）
+  public readonly voucherAmount?: number;
+  public readonly differenceAmount?: number;
+  public readonly differenceNote?: string;
   public readonly submittedById: string;
   public readonly submittedAt: Date;
   public reviewedById?: string;
@@ -93,6 +100,9 @@ export class Reimbursement {
     this.totalEstimatedCost = data.totalEstimatedCost;
     this.receiptUrls = data.receiptUrls;
     this.receiptKeys = data.receiptKeys || [];
+    this.voucherAmount = data.voucherAmount;
+    this.differenceAmount = data.differenceAmount;
+    this.differenceNote = data.differenceNote;
     this.submittedById = data.submittedById;
     this.submittedAt = data.submittedAt;
     this.reviewedById = data.reviewedById;
@@ -141,8 +151,19 @@ export class Reimbursement {
     }
 
     // 验证发票照片数量（最多10张）
-    if (this.receiptUrls.length > 10) {
+    if (this.receiptUrls.length + this.receiptKeys.length > 10) {
       throw new Error('Maximum 10 receipt photos allowed');
+    }
+
+    // 凭证金额不能小于报销金额（差额不允许为负）
+    if (
+      this.voucherAmount !== undefined &&
+      this.voucherAmount < this.totalActualCost - 0.011
+    ) {
+      throw new Error('Voucher amount cannot be less than claimed amount');
+    }
+    if (this.differenceAmount !== undefined && this.differenceAmount < 0) {
+      throw new Error('Difference amount cannot be negative');
     }
 
     // 验证平台运费
@@ -325,6 +346,9 @@ export class Reimbursement {
       totalEstimatedCost: this.totalEstimatedCost,
       receiptUrls: this.receiptUrls,
       receiptKeys: this.receiptKeys,
+      voucherAmount: this.voucherAmount,
+      differenceAmount: this.differenceAmount,
+      differenceNote: this.differenceNote,
       submittedById: this.submittedById,
       submittedAt: this.submittedAt,
       reviewedById: this.reviewedById,
@@ -356,6 +380,15 @@ export class Reimbursement {
       totalEstimatedCost: Number(data.totalEstimatedCost),
       receiptUrls: data.receiptUrls,
       receiptKeys: data.receiptKeys || [],
+      voucherAmount:
+        data.voucherAmount === null || data.voucherAmount === undefined
+          ? undefined
+          : Number(data.voucherAmount),
+      differenceAmount:
+        data.differenceAmount === null || data.differenceAmount === undefined
+          ? undefined
+          : Number(data.differenceAmount),
+      differenceNote: data.differenceNote ?? undefined,
       submittedById: data.submittedById,
       submittedAt: data.submittedAt,
       reviewedById: data.reviewedById,

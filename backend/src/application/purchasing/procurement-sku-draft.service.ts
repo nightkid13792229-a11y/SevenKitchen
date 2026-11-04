@@ -15,7 +15,10 @@
 
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import type { DeepSeekChatOptions } from '../recipe-designer/deepseek-chat';
-import { AgentProviderConfigService } from '../nutrition-governance/agent-provider-config.service';
+import {
+  AgentProviderConfigService,
+  PURCHASE_REIMBURSEMENT_AGENT_PURPOSE,
+} from '../nutrition-governance/agent-provider-config.service';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { ProcurementSkuDraftQuotaService } from './procurement-sku-draft-quota.service';
 import {
@@ -24,8 +27,9 @@ import {
 } from './procurement-sku-net-content';
 import { ProcurementSkuDraftNoticeException } from './procurement-sku-draft.errors';
 
-/** 「AI / Agent 配置」里这一项的用途标识；未单独配置时回退全局默认 */
-export const PROCUREMENT_SKU_DRAFT_PURPOSE = 'PROCUREMENT_SKU_DRAFT';
+/** 采购报销 Agent 共用配置的用途标识；未单独配置时回退全局默认 */
+export const PROCUREMENT_SKU_DRAFT_PURPOSE =
+  PURCHASE_REIMBURSEMENT_AGENT_PURPOSE;
 
 /** 视觉模型调用口子（测试里替换掉，避免真打网络） */
 export const PROCUREMENT_SKU_DRAFT_MODEL = Symbol(

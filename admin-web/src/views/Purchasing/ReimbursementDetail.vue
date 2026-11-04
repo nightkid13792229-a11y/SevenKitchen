@@ -241,8 +241,27 @@
         </el-table>
       </el-card>
 
+      <!-- 凭证与差额（2026-11-04 采购-报销 AI 接入） -->
+      <el-card
+        shadow="never"
+        class="section-card"
+        v-if="reimbursement.voucherAmount !== null && reimbursement.voucherAmount !== undefined"
+      >
+        <template #header>
+          <div class="card-header">
+            <span class="title">凭证与差额</span>
+          </div>
+        </template>
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="凭证金额">¥{{ money(reimbursement.voucherAmount) }}</el-descriptions-item>
+          <el-descriptions-item label="报销金额">¥{{ money(reimbursement.totalActualCost) }}</el-descriptions-item>
+          <el-descriptions-item label="差额">¥{{ money(reimbursement.differenceAmount) }}</el-descriptions-item>
+          <el-descriptions-item label="差额原因">{{ reimbursement.differenceNote || '-' }}</el-descriptions-item>
+        </el-descriptions>
+      </el-card>
+
       <!-- 发票照片 -->
-      <el-card shadow="never" class="section-card" v-if="reimbursement.receiptUrls && reimbursement.receiptUrls.length > 0">
+      <el-card shadow="never" class="section-card" v-if="receiptImages.length > 0">
         <template #header>
           <div class="card-header">
             <span class="title">发票照片</span>
@@ -251,15 +270,81 @@
 
         <div class="photos-grid">
           <el-image
-            v-for="(url, index) in reimbursement.receiptUrls"
+            v-for="(url, index) in receiptImages"
             :key="index"
             :src="url"
-            :preview-src-list="reimbursement.receiptUrls"
+            :preview-src-list="receiptImages"
             :initial-index="index"
             fit="cover"
             class="photo-item"
           />
         </div>
+      </el-card>
+
+      <!-- 智能审核建议（2026-11-04 阶段 E） -->
+      <el-card shadow="never" class="section-card review-card">
+        <template #header>
+          <div class="card-header">
+            <span class="title">智能审核建议</span>
+            <div class="review-head-actions">
+              <el-tag v-if="agentReview" :type="riskTagType(agentReview.riskLevel)">
+                {{ riskText(agentReview.riskLevel) }}
+              </el-tag>
+              <el-tag v-if="agentReview" size="small" effect="plain">
+                {{ agentReview.model ? `模型：${agentReview.model}` : '规则兜底（模型未参与）' }}
+              </el-tag>
+              <el-button
+                v-if="reimbursement.status === 'PENDING_REVIEW'"
+                link
+                type="primary"
+                :loading="reviewLoading"
+                @click="runReview"
+              >
+                {{ agentReview ? '重新生成' : '生成建议' }}
+              </el-button>
+            </div>
+          </div>
+        </template>
+
+        <template v-if="agentReview">
+          <p class="review-summary">{{ agentReview.summary }}</p>
+          <p v-if="agentReview.advice" class="review-advice">{{ agentReview.advice }}</p>
+          <ul class="review-findings">
+            <li v-for="(item, index) in agentReview.findings" :key="index">
+              <el-tag size="small" :type="findingTagType(item.level)">{{ findingLevelText(item.level) }}</el-tag>
+              <span>{{ item.message }}</span>
+            </li>
+          </ul>
+        </template>
+        <el-empty v-else description="暂无审核建议" :image-size="60" />
+
+        <!-- 审核动作不受 AI 建议是否可用影响（R11：Agent 只建议，人做决定） -->
+        <template v-if="reimbursement.status === 'PENDING_REVIEW'">
+          <el-alert
+            v-if="!agentReview"
+            title="AI 建议暂不可用，仍可人工审核"
+            type="warning"
+            :closable="false"
+            show-icon
+            class="review-alert"
+          />
+          <div class="review-buttons">
+            <el-button type="primary" :loading="actionLoading" @click="triggerProofUpload">
+              通过并上传付款凭证
+            </el-button>
+            <el-button :disabled="actionLoading" @click="requireResubmit">要求补充说明</el-button>
+            <el-button type="danger" plain :disabled="actionLoading" @click="rejectClaim">驳回</el-button>
+            <input
+              ref="proofInputRef"
+              type="file"
+              accept="image/*,.pdf"
+              multiple
+              class="hidden-file"
+              @change="onProofSelected"
+            />
+          </div>
+        </template>
+        <p v-else class="review-muted">审核建议仅供复核；当前状态：{{ getStatusText(reimbursement.status) }}。</p>
       </el-card>
 
       <!-- 报销信息 -->
@@ -312,7 +397,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { purchasingApi } from '@/api/purchasing'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import {
   formatReimbursementCustomFeeTitle,
@@ -326,9 +411,24 @@ const route = useRoute()
 // 状态管理
 const loading = ref(true)
 const reimbursement = ref<any>(null)
+const agentReview = ref<any>(null)
+const reviewLoading = ref(false)
+const actionLoading = ref(false)
+const proofInputRef = ref<HTMLInputElement | null>(null)
 const activeLists = ref<number[]>([])
 
 // 计算属性
+const receiptImages = computed<string[]>(() => {
+  const urls = (reimbursement.value?.receiptUrls || []) as string[]
+  const signed = (reimbursement.value?.receiptSignedUrls || []) as string[]
+  return [...urls, ...signed]
+})
+
+const money = (value: unknown) => {
+  const parsed = Number(value ?? 0)
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : '0.00'
+}
+
 const costDiff = computed(() => {
   if (!reimbursement.value) return 0
   return reimbursement.value.totalActualCost - reimbursement.value.totalEstimatedCost
@@ -511,6 +611,124 @@ const formatReviewReasons = (
 }
 
 // 加载详情
+const riskTagType = (risk: string) =>
+  risk === 'HIGH' ? 'danger' : risk === 'MEDIUM' ? 'warning' : 'success'
+const riskText = (risk: string) =>
+  risk === 'HIGH' ? '高风险' : risk === 'MEDIUM' ? '中风险' : '低风险'
+const findingTagType = (level: string) =>
+  level === 'HIGH' ? 'danger' : level === 'WARN' ? 'warning' : 'info'
+const findingLevelText = (level: string) =>
+  level === 'HIGH' ? '必须处理' : level === 'WARN' ? '建议复核' : '提示'
+
+const loadReview = async () => {
+  try {
+    agentReview.value = await purchasingApi.getAgentReview(route.query.id as string)
+  } catch {
+    agentReview.value = null
+  }
+}
+
+const runReview = async () => {
+  reviewLoading.value = true
+  try {
+    agentReview.value = await purchasingApi.runAgentReview(route.query.id as string)
+  } catch (error) {
+    console.error('生成审核建议失败', error)
+    ElMessage.error('生成审核建议失败')
+  } finally {
+    reviewLoading.value = false
+  }
+}
+
+const triggerProofUpload = () => proofInputRef.value?.click()
+
+const onProofSelected = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  if (files.length === 0) return
+  try {
+    await ElMessageBox.confirm(
+      `确认通过并上传 ${files.length} 张付款凭证？上传后报销即完成，不可撤销。`,
+      '确认完成报销',
+      { confirmButtonText: '确认通过', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    input.value = ''
+    return
+  }
+
+  actionLoading.value = true
+  try {
+    const result: any = await purchasingApi.uploadPaymentProofFiles(
+      route.query.id as string,
+      files,
+    )
+    if (result?.status && result.status !== 'REIMBURSED') {
+      ElMessage.warning('凭证已上传，但单据状态不是「已报销」，请刷新检查')
+    } else {
+      ElMessage.success('已上传付款凭证，报销完成')
+    }
+    await loadDetail()
+    await loadReview()
+  } catch (error) {
+    console.error('上传付款凭证失败', error)
+    ElMessage.error('上传失败')
+  } finally {
+    actionLoading.value = false
+    input.value = ''
+  }
+}
+
+const requireResubmit = async () => {
+  try {
+    const { value } = await ElMessageBox.prompt('请说明需要补充什么（员工会看到）', '要求补充说明', {
+      inputPlaceholder: '例如：请补充 10-31 那笔的支付记录',
+      confirmButtonText: '退回补充',
+      cancelButtonText: '取消',
+    })
+    actionLoading.value = true
+    await purchasingApi.reviewReimbursement(route.query.id as string, {
+      decision: 'REQUIRES_RESUBMIT',
+      comment: value,
+    })
+    ElMessage.success('已退回，等待员工补充')
+    await loadDetail()
+    await loadReview()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('退回失败', error)
+      ElMessage.error('操作失败')
+    }
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+const rejectClaim = async () => {
+  try {
+    const { value } = await ElMessageBox.prompt('驳回原因（员工会看到）', '驳回报销单', {
+      inputPlaceholder: '例如：凭证金额与订单不一致',
+      confirmButtonText: '驳回',
+      cancelButtonText: '取消',
+    })
+    actionLoading.value = true
+    await purchasingApi.reviewReimbursement(route.query.id as string, {
+      decision: 'REJECT',
+      comment: value,
+    })
+    ElMessage.success('已驳回')
+    await loadDetail()
+    await loadReview()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('驳回失败', error)
+      ElMessage.error('操作失败')
+    }
+  } finally {
+    actionLoading.value = false
+  }
+}
+
 const loadDetail = async () => {
   const id = route.query.id as string
   if (!id) {
@@ -531,8 +749,10 @@ const loadDetail = async () => {
   }
 }
 
-onMounted(() => {
-  loadDetail()
+onMounted(async () => {
+  await loadDetail()
+  await loadReview()
+  // 不自动生成：模型调用慢且要花钱，由管理员点「生成建议」触发。
 })
 </script>
 
@@ -727,5 +947,67 @@ onMounted(() => {
 .back-actions {
   text-align: center;
   padding: 24px 0;
+}
+
+.review-card :deep(.card-header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.review-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.review-summary {
+  font-size: 14px;
+  color: #2b2b26;
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.review-advice {
+  font-size: 13px;
+  color: #6b6653;
+  margin: 0 0 10px;
+}
+
+.review-findings {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.review-findings li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #3c3a30;
+}
+
+.review-alert {
+  margin-bottom: 12px;
+}
+
+.review-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.review-muted {
+  font-size: 12px;
+  color: #8a8574;
+  margin: 0;
+}
+
+.hidden-file {
+  display: none;
 }
 </style>

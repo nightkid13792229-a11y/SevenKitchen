@@ -347,6 +347,24 @@
           }
         },
         {
+          "path": "order-import/upload",
+          "style": {
+            "navigationBarTitleText": "上传订单截图",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
+          }
+        },
+        {
+          "path": "order-import/review",
+          "style": {
+            "navigationBarTitleText": "识别结果",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
+          }
+        },
+        {
           "path": "stock-create",
           "style": {
             "navigationBarTitleText": "创建补货采购单",

@@ -99,6 +99,26 @@
       <view v-if="!hasPackagingLists" class="notice-strip">
         <text>包材清单会进入采购报销，不放在经营费用里。没有包材清单时，请先到补货里创建包材补货清单。</text>
       </view>
+
+      <view v-if="voucherEffective !== null" class="voucher-card">
+        <view class="voucher-row">
+          <text>凭证金额</text>
+          <view class="voucher-input">
+            <text>¥</text>
+            <input
+              v-model="voucherInput"
+              type="digit"
+              placeholder="0.00"
+              @input="voucherTouched = true"
+            />
+          </view>
+        </view>
+        <view class="voucher-row"><text>报销金额</text><text>¥{{ totalAmount.toFixed(2) }}</text></view>
+        <view class="voucher-row"><text>差额</text><text class="warn">¥{{ differenceAmount.toFixed(2) }}</text></view>
+        <text v-if="personalAmount > 0" class="voucher-note">
+          差额含个人采购 ¥{{ personalAmount.toFixed(2) }}，不会进报销。
+        </text>
+      </view>
     </view>
 
     <view v-if="currentStep === 'OPERATING_DETAILS'" class="section">
@@ -166,7 +186,10 @@
     <view v-if="currentStep === 'RECEIPTS'" class="section">
       <view class="section-head">
         <text class="section-title">上传支付凭证</text>
-        <text class="section-total">{{ receiptUrls.length }} 张</text>
+        <text class="section-total">{{ receiptUrls.length + privateReceiptKeys.length }} 张</text>
+      </view>
+      <view v-if="privateReceiptKeys.length > 0" class="notice-strip">
+        <text>已从订单截图带入 {{ privateReceiptKeys.length }} 张凭证，无需重复上传。</text>
       </view>
       <view v-if="!resubmitId" class="notice-strip">
         <text>凭证需要看清金额和支付时间，可上传转账截图、支付记录或发票照片。</text>
@@ -174,6 +197,10 @@
       <view v-else class="notice-strip">
         <text>重新提交时凭证不能在此修改；如需更换凭证，请先返回报销详情，通过凭证管理处理。</text>
       </view>
+      <view v-if="!resubmitId" class="notice-strip">
+        <text>农贸市场、便利店没有订单截图时，上传转账截图即可，金额和时间要看得清。</text>
+      </view>
+
 
       <view class="photo-grid">
         <view
@@ -296,7 +323,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import {
   deleteReceiptPhoto,
@@ -304,6 +331,7 @@ import {
   getReimbursementDetail,
   resubmitReimbursement as resubmitReimbursementApi,
   submitReimbursement as submitReimbursementApi,
+  getOrderImports,
   uploadReceiptPhoto,
 } from '../api/purchasing';
 import {
@@ -339,6 +367,7 @@ type PurchaseFilter = 'ALL' | 'ORDER_DEMAND' | 'STOCK_REPLENISHMENT' | 'PACKAGIN
 const completedPurchaseLists = ref<any[]>([]);
 const selectedListIds = ref<string[]>([]);
 const receiptUrls = ref<ReceiptPhoto[]>([]);
+const orderImports = ref<any[]>([]);
 const platformShippingFee = ref('');
 const platformPackagingFee = ref('');
 const customFees = ref<CustomFee[]>([
@@ -622,6 +651,10 @@ const goNext = () => {
     currentStep.value === 'PURCHASE_DETAILS' ||
     currentStep.value === 'OPERATING_DETAILS'
   ) {
+    if (importsLoading.value) {
+      uni.showToast({ title: '正在读取订单凭证金额，请稍等', icon: 'none' });
+      return;
+    }
     currentStep.value = 'RECEIPTS';
     return;
   }
@@ -646,6 +679,91 @@ const goBack = () => {
   currentStep.value = 'TYPE';
 };
 
+const voucherFromImports = computed<number | null>(() => {
+  const confirmed = orderImports.value.filter(
+    (item) => item.status === 'CONFIRMED',
+  );
+  if (confirmed.length === 0) return null;
+  return confirmed.reduce(
+    (sum, item) => sum + Number(item.paid ?? item.subtotal ?? 0),
+    0,
+  );
+});
+
+const voucherInput = ref('');
+const voucherTouched = ref(false);
+const voucherEffective = computed<number | null>(() => {
+  if (voucherTouched.value) {
+    const parsed = Number(voucherInput.value);
+    return Number.isFinite(parsed) && voucherInput.value.trim() !== ''
+      ? Math.round(parsed * 100) / 100
+      : null;
+  }
+  return voucherFromImports.value;
+});
+
+const personalAmount = computed(() =>
+  orderImports.value
+    .filter((item) => item.status === 'CONFIRMED')
+    .reduce((sum, item) => sum + Number(item.summary?.personalAmount ?? 0), 0),
+);
+
+const privateReceiptKeys = computed<string[]>(() =>
+  orderImports.value
+    .filter((item) => item.status === 'CONFIRMED')
+    .flatMap((item) => (item.imageKeys || []) as string[]),
+);
+
+const differenceAmount = computed(() => {
+  if (voucherEffective.value === null) return 0;
+  return Math.round((voucherEffective.value - totalAmount.value) * 100) / 100;
+});
+
+let importsSeq = 0;
+const importsLoading = ref(false);
+
+const loadOrderImports = async () => {
+  if (flowType.value !== 'PURCHASE' || selectedListIds.value.length === 0) {
+    orderImports.value = [];
+    importsLoading.value = false;
+    return;
+  }
+  const snapshot = selectedListIds.value.join(',');
+  const seq = ++importsSeq;
+  importsLoading.value = true;
+  try {
+    const results = await Promise.all(
+      selectedListIds.value.map((id) => getOrderImports(id)),
+    );
+    // 用户可能已经改了勾选；晚到的旧结果直接丢掉，避免金额/凭证串单。
+    if (seq !== importsSeq || snapshot !== selectedListIds.value.join(',')) {
+      return;
+    }
+    orderImports.value = results.flatMap((res: any) =>
+      res.code === 0 ? res.data || [] : [],
+    );
+  } catch {
+    if (seq === importsSeq) orderImports.value = [];
+  } finally {
+    if (seq === importsSeq) importsLoading.value = false;
+  }
+};
+
+watch(
+  () => [flowType.value, selectedListIds.value.join(',')],
+  () => {
+    voucherTouched.value = false;
+    voucherInput.value = '';
+    void loadOrderImports();
+  },
+);
+
+watch(voucherFromImports, (value) => {
+  if (!voucherTouched.value) {
+    voucherInput.value = value === null ? '' : value.toFixed(2);
+  }
+});
+
 const validateCurrentStep = () => {
   return validateReimbursementStep({
     currentStep: currentStep.value,
@@ -653,6 +771,7 @@ const validateCurrentStep = () => {
     selectedListIds: selectedListIds.value,
     customFees: customFees.value,
     receiptUrls: receiptUrls.value,
+    privateReceiptCount: privateReceiptKeys.value.length,
     purchaseLists: completedPurchaseLists.value,
   });
 };
@@ -713,7 +832,7 @@ const deleteCustomFee = (index: number) => {
 
 const uploadPhoto = () => {
   uni.chooseImage({
-    count: Math.max(1, 10 - receiptUrls.value.length),
+    count: Math.max(1, 10 - receiptUrls.value.length - privateReceiptKeys.value.length),
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
     success: async (res) => {
@@ -780,6 +899,20 @@ const submitReimbursement = async () => {
     return;
   }
 
+  if (flowType.value === 'PURCHASE' && importsLoading.value) {
+    uni.showToast({ title: '正在读取订单凭证金额，请稍等', icon: 'none' });
+    return;
+  }
+
+  if (
+    flowType.value === 'PURCHASE' &&
+    voucherEffective.value !== null &&
+    voucherEffective.value < totalAmount.value
+  ) {
+    uni.showToast({ title: '报销金额不能超过凭证金额', icon: 'none' });
+    return;
+  }
+
   submitting.value = true;
 
   try {
@@ -797,6 +930,12 @@ const submitReimbursement = async () => {
         : {
             purchaseListIds: selectedListIds.value,
             receiptUrls: urls,
+            receiptKeys: privateReceiptKeys.value,
+            voucherAmount: voucherEffective.value ?? undefined,
+            differenceNote:
+              personalAmount.value > 0
+                ? `含个人采购 ¥${personalAmount.value.toFixed(2)}`
+                : undefined,
             totalActualCost: totalAmount.value,
             platformShippingFee: shippingFeeAmount.value,
             platformPackagingFee: packagingFeeAmount.value,
@@ -1293,5 +1432,49 @@ const formatDate = (dateStr: string) => {
   button {
     flex: 1;
   }
+}
+
+.voucher-card {
+  margin-top: 16rpx;
+  background: #fbf1dd;
+  border: 1rpx solid #efdcb8;
+  border-radius: 16rpx;
+  padding: 16rpx 18rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.voucher-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 23rpx;
+  color: #6b6653;
+}
+
+.voucher-input {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  font-size: 23rpx;
+  color: #6b6653;
+}
+
+.voucher-input input {
+  min-width: 140rpx;
+  text-align: right;
+  font-size: 23rpx;
+  color: #26261f;
+}
+
+.voucher-row .warn {
+  color: #a8742a;
+  font-weight: 700;
+}
+
+.voucher-note {
+  font-size: 21rpx;
+  color: #7a5a20;
+  line-height: 1.5;
 }
 </style>

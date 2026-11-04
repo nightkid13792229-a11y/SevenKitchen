@@ -1081,3 +1081,164 @@ export function createStaffProcurementSku(
     };
   }>;
 }
+
+/* =========================================================
+ * 订单截图识别（2026-11-04 采购-报销 AI 接入）
+ * ========================================================= */
+
+export interface UploadedOrderScreenshot {
+  url: string;
+  key: string;
+}
+
+export interface OrderImportLineView {
+  id: string;
+  lineNo: number;
+  rawName: string;
+  spec: string | null;
+  qty: number | null;
+  unit: string | null;
+  unitPrice: number | null;
+  lineTotal: number | null;
+  /** 模型当时读到的金额（员工改写后仍保留） */
+  aiLineTotal?: number | null;
+  ingredientId: string | null;
+  procurementSkuId: string | null;
+  isPersonal: boolean;
+  editedByUser: boolean;
+  confidence: string;
+  state: 'MATCHED' | 'PERSONAL' | 'UNMATCHED' | 'NEEDS_SKU';
+  purchaseItemId: string | null;
+}
+
+export interface OrderImportView {
+  id: string;
+  purchaseListId: string;
+  channel: string;
+  orderNo: string | null;
+  orderTime: string | null;
+  subtotal: number | null;
+  shippingFee: number | null;
+  packagingFee: number | null;
+  paid: number | null;
+  incomplete: boolean;
+  incompleteReason: string | null;
+  status: string;
+  imageUrls: string[];
+  imageKeys: string[];
+  lines: OrderImportLineView[];
+  summary: {
+    total: number;
+    matched: number;
+    personal: number;
+    unmatched: number;
+    needsSku: number;
+    matchedAmount: number;
+    personalAmount: number;
+  };
+}
+
+export function uploadOrderScreenshot(
+  filePath: string,
+): Promise<UploadedOrderScreenshot> {
+  return new Promise((resolve, reject) => {
+    const token = uni.getStorageSync('token');
+    if (!token) {
+      reject(new Error('请先登录'));
+      return;
+    }
+
+    uni.uploadFile({
+      url: `${getBaseUrl()}/staff/purchasing/upload-order-screenshot`,
+      filePath,
+      name: 'file',
+      header: { Authorization: `Bearer ${token}` },
+      success: (res) => {
+        try {
+          const data = JSON.parse(res.data);
+          if (
+            res.statusCode >= 200 &&
+            res.statusCode < 300 &&
+            data.code === 0 &&
+            data.data?.url &&
+            data.data?.key
+          ) {
+            resolve({ url: data.data.url, key: data.data.key });
+          } else {
+            reject(new Error(data?.message || '上传失败'));
+          }
+        } catch {
+          reject(new Error('上传失败'));
+        }
+      },
+      fail: () => reject(new Error('上传失败')),
+    });
+  });
+}
+
+export function importOrderScreenshots(
+  purchaseListId: string,
+  imageUrls: string[],
+  imageKeys: string[],
+) {
+  return request({
+    url: `/staff/purchasing/lists/${purchaseListId}/order-imports`,
+    method: 'POST',
+    data: { imageUrls, imageKeys },
+    // 识别要调视觉模型，最长约 90 秒；默认 15 秒会先超时，服务端其实还在跑。
+    timeout: 120000,
+  });
+}
+
+export function getOrderImports(purchaseListId: string) {
+  return request({
+    url: `/staff/purchasing/lists/${purchaseListId}/order-imports`,
+    method: 'GET',
+  });
+}
+
+export function updateOrderImport(
+  importId: string,
+  data: { channel?: string; orderNo?: string | null; orderTime?: string | null },
+) {
+  return request({
+    url: `/staff/purchasing/order-imports/${importId}`,
+    method: 'PATCH',
+    data,
+  });
+}
+
+export function updateOrderImportLine(
+  importId: string,
+  lineId: string,
+  data: {
+    ingredientId?: string | null;
+    procurementSkuId?: string | null;
+    qty?: number | null;
+    unit?: string | null;
+    unitPrice?: number | null;
+    lineTotal?: number | null;
+    isPersonal?: boolean;
+  },
+) {
+  return request({
+    url: `/staff/purchasing/order-imports/${importId}/lines/${lineId}`,
+    method: 'PUT',
+    data,
+  });
+}
+
+export function confirmOrderImports(importIds: string[]) {
+  return request({
+    url: '/staff/purchasing/order-imports/confirm',
+    method: 'POST',
+    data: { importIds },
+  });
+}
+
+export function discardOrderImport(importId: string) {
+  return request({
+    url: `/staff/purchasing/order-imports/${importId}`,
+    method: 'DELETE',
+  });
+}

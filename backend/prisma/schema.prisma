@@ -2393,6 +2393,7 @@ model PurchaseList {
   createdBy            User                  @relation("PurchaseListCreator", fields: [createdById], references: [id])
   reimbursement        Reimbursement?        @relation(fields: [reimbursementId], references: [id])
   records              PurchaseRecord[]      @relation("PurchaseListRecords")
+  orderImports         PurchaseOrderImport[]
 
   @@index([targetDate])
   @@index([kind])
@@ -2461,10 +2462,15 @@ model PurchaseRecord {
   createdAt          DateTime     @default(now()) @map("created_at")
   updatedAt          DateTime     @updatedAt @map("updated_at")
   purchaseList       PurchaseList @relation("PurchaseListRecords", fields: [purchaseListId], references: [id], onDelete: Cascade)
+  /// 来自哪张订单截图的识别（2026-11-04 采购-报销 AI 接入）
+  sourceImportId     String?      @map("source_import_id") @db.VarChar(36)
+  sourceImportLineId String?      @map("source_import_line_id") @db.VarChar(36)
+  sourceImageKey     String?      @map("source_image_key") @db.VarChar(300)
 
   @@index([purchaseListId])
   @@index([purchaseItemId])
   @@index([ingredientId])
+  @@index([sourceImportId])
   @@map("purchase_record")
 }
 
@@ -2489,8 +2495,15 @@ model Reimbursement {
   customFees           Json?                   @map("custom_fees")
   paymentProofUrls     String[]                @default([]) @map("payment_proof_urls")
   paymentProofKeys     String[]                @default([]) @map("payment_proof_keys")
+  /// 凭证金额 / 差额 / 说明（2026-11-04 采购-报销 AI 接入）；差额 = 凭证 - 报销
+  voucherAmount        Decimal?                @map("voucher_amount") @db.Decimal(10, 2)
+  differenceAmount     Decimal?                @map("difference_amount") @db.Decimal(10, 2)
+  differenceNote       String?                 @map("difference_note") @db.VarChar(200)
+  /// 发票/订单截图的 COS key（私有目录用；历史数据为空）
+  receiptKeys          String[]                @default([]) @map("receipt_keys")
   priceChanges         IngredientPriceChange[]
   purchaseLists        PurchaseList[]
+  reviews              ReimbursementReview[]
   paidBy               User?                   @relation("ReimbursementPayer", fields: [paidById], references: [id], onDelete: SetNull)
   reviewedBy           User?                   @relation("ReimbursementReviewer", fields: [reviewedById], references: [id])
   submittedBy          User                    @relation("ReimbursementSubmitter", fields: [submittedById], references: [id])
@@ -5596,4 +5609,113 @@ model KnowledgeCitationAnchor {
   @@index([entryId])
   @@index([documentId])
   @@map("knowledge_citation_anchor")
+}
+
+
+/// 订单截图识别记录（2026-11-04 采购-报销 AI 接入）
+/// 一张截图 = 一笔订单；识别只出草稿，员工确认后才生成采购记录。
+model PurchaseOrderImport {
+  id               String                    @id @default(uuid()) @db.VarChar(36)
+  purchaseListId   String                    @map("purchase_list_id") @db.VarChar(36)
+  uploadedById     String                    @map("uploaded_by_id") @db.VarChar(36)
+  channel          String                    @db.VarChar(30)
+  orderNo          String?                   @map("order_no") @db.VarChar(40)
+  orderTime        DateTime?                 @map("order_time")
+  subtotal         Decimal?                  @db.Decimal(10, 2)
+  shippingFee      Decimal?                  @map("shipping_fee") @db.Decimal(10, 2)
+  packagingFee     Decimal?                  @map("packaging_fee") @db.Decimal(10, 2)
+  paid             Decimal?                  @db.Decimal(10, 2)
+  imageUrls        String[]                  @map("image_urls")
+  imageKeys        String[]                  @map("image_keys")
+  /// 首图 sha256，用于同清单内重复导入拦截
+  imageHash        String                    @map("image_hash") @db.VarChar(64)
+  status           PurchaseOrderImportStatus @default(DRAFT)
+  incomplete       Boolean                   @default(false)
+  incompleteReason String?                   @map("incomplete_reason") @db.VarChar(200)
+  model            String?                   @db.VarChar(60)
+  promptVersion    String?                   @map("prompt_version") @db.VarChar(20)
+  rawResult        Json?                     @map("raw_result")
+  confirmedAt      DateTime?                 @map("confirmed_at")
+  confirmedById    String?                   @map("confirmed_by_id") @db.VarChar(36)
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
+
+  purchaseList PurchaseList              @relation(fields: [purchaseListId], references: [id], onDelete: Cascade)
+  lines        PurchaseOrderImportLine[]
+
+  @@index([purchaseListId])
+  @@index([imageHash])
+  @@index([status])
+  // 另有部分唯一索引 (purchase_list_id, image_hash) WHERE status <> 'DISCARDED'，
+  // Prisma schema 表达不了，见 migrations/20261104230000_purchase_order_import_uniques。
+  @@map("purchase_order_import")
+}
+
+/// 订单截图里的一行商品（识别结果 + 人工匹配结果）
+model PurchaseOrderImportLine {
+  id               String                         @id @default(uuid()) @db.VarChar(36)
+  importId         String                         @map("import_id") @db.VarChar(36)
+  lineNo           Int                            @map("line_no")
+  rawName          String                         @map("raw_name") @db.VarChar(300)
+  spec             String?                        @db.VarChar(120)
+  qty              Decimal?                       @db.Decimal(10, 3)
+  unit             String?                        @db.VarChar(20)
+  unitPrice        Decimal?                       @map("unit_price") @db.Decimal(10, 2)
+  lineTotal        Decimal?                       @map("line_total") @db.Decimal(10, 2)
+  ingredientId     String?                        @map("ingredient_id") @db.VarChar(36)
+  procurementSkuId String?                        @map("procurement_sku_id") @db.VarChar(36)
+  matchSource      PurchaseOrderImportMatchSource @default(AUTO) @map("match_source")
+  matchConfidence  String?                        @map("match_confidence") @db.VarChar(10)
+  isPersonal       Boolean                        @default(false) @map("is_personal")
+  editedByUser     Boolean                        @default(false) @map("edited_by_user")
+  purchaseItemId   String?                        @map("purchase_item_id") @db.VarChar(36)
+  purchaseRecordId String?                        @map("purchase_record_id") @db.VarChar(36)
+  createdAt        DateTime                       @default(now()) @map("created_at")
+
+  import PurchaseOrderImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([importId])
+  @@index([ingredientId])
+  @@map("purchase_order_import_line")
+}
+
+enum PurchaseOrderImportStatus {
+  DRAFT
+  CONFIRMED
+  DISCARDED
+}
+
+enum PurchaseOrderImportMatchSource {
+  AUTO
+  MANUAL
+  NEW_SKU
+  PERSONAL
+}
+
+/// 报销单的 AI 审核建议（2026-11-04 阶段 E）
+/// 规则 + 模型摘要；只做建议，最终由管理员决定。
+model ReimbursementReview {
+  id              String                   @id @default(uuid()) @db.VarChar(36)
+  reimbursementId String                   @map("reimbursement_id") @db.VarChar(36)
+  riskLevel       ReimbursementReviewRisk
+  /// 生成时报销单的 updatedAt，用于判断建议是否已过期
+  claimUpdatedAt  DateTime?                @map("claim_updated_at")
+  findings        Json
+  summary         String?
+  advice          String?
+  model           String?                  @db.VarChar(60)
+  promptVersion   String?                  @map("prompt_version") @db.VarChar(20)
+  createdById     String?                  @map("created_by_id") @db.VarChar(36)
+  createdAt       DateTime                 @default(now()) @map("created_at")
+
+  reimbursement Reimbursement @relation(fields: [reimbursementId], references: [id], onDelete: Cascade)
+
+  @@index([reimbursementId, createdAt])
+  @@map("reimbursement_review")
+}
+
+enum ReimbursementReviewRisk {
+  LOW
+  MEDIUM
+  HIGH
 }

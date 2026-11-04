@@ -32,6 +32,7 @@ import {
   ApiConsumes,
 } from '@nestjs/swagger';
 import { ReimbursementService } from '../../application/purchasing/reimbursement.service';
+import { ReimbursementReviewService } from '../../application/purchasing/reimbursement-review.service';
 import type { ReviewReimbursementDto } from '../../application/purchasing/reimbursement.service';
 import { PurchasingService } from '../../application/purchasing/purchasing.service';
 import type {
@@ -50,11 +51,12 @@ import {
 } from '../../domain/purchasing';
 import { UserId } from '../auth/user.decorator';
 import { AuthGuard } from '../auth';
-// import { AdminGuard } from './auth/admin.guard';
+import { AdminGuard, StaffGuard } from '../guards/role.guard';
 
 @ApiTags('Admin Purchasing')
 @Controller('api/v1/admin/purchasing')
-@UseGuards(AuthGuard)
+// 读接口对 STAFF 开放（后台采购页面可能由员工使用）；财务写操作单独加 AdminGuard。
+@UseGuards(AuthGuard, StaffGuard)
 @UsePipes(
   new ValidationPipe({
     transform: true,
@@ -68,6 +70,7 @@ export class AdminPurchasingController {
   constructor(
     private readonly reimbursementService: ReimbursementService,
     private readonly purchasingService: PurchasingService,
+    private readonly reimbursementReviewService: ReimbursementReviewService,
   ) {}
 
   /**
@@ -225,8 +228,10 @@ export class AdminPurchasingController {
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(`Admin fetching reimbursement detail: ${id}`);
 
-    const reimbursement =
-      await this.reimbursementService.getReimbursementDetail(id);
+    const reimbursement = await this.reimbursementService.getReimbursementDetail(
+      id,
+      { isAdmin: true },
+    );
 
     return ApiResponseDto.success(
       reimbursement,
@@ -234,7 +239,30 @@ export class AdminPurchasingController {
     );
   }
 
+  @Get('reimbursements/:id/agent-review')
+  @ApiOperation({ summary: '查看报销单最近一次 AI 审核建议' })
+  async getReimbursementAgentReview(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any>> {
+    return ApiResponseDto.success(
+      await this.reimbursementReviewService.latest(id),
+    );
+  }
+
+  @Post('reimbursements/:id/agent-review')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: '生成报销单 AI 审核建议（规则 + 摘要）' })
+  async runReimbursementAgentReview(
+    @Param('id') id: string,
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    return ApiResponseDto.success(
+      await this.reimbursementReviewService.generate(id, userId),
+    );
+  }
+
   @Delete('reimbursements/:id')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: '删除报销单' })
   @ApiParam({ name: 'id', description: '报销单ID' })
   @ApiResponse({
@@ -260,6 +288,7 @@ export class AdminPurchasingController {
   }
 
   @Post('reimbursements/:id/review')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: '处理报销单（兼容旧审核接口）' })
   @ApiParam({ name: 'id', description: '报销单ID' })
   @ApiBody({
@@ -904,6 +933,7 @@ export class AdminPurchasingController {
   }
 
   @Post('reimbursements/:id/payment-proof')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: '上传报销凭证' })
   @ApiParam({ name: 'id', description: '报销单ID' })
   @ApiConsumes('multipart/form-data')
@@ -968,6 +998,7 @@ export class AdminPurchasingController {
   }
 
   @Delete('reimbursements/:id/payment-proof')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: '清空报销凭证' })
   @ApiParam({ name: 'id', description: '报销单ID' })
   @ApiResponse({

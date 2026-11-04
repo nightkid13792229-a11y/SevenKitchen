@@ -62,6 +62,8 @@ export class PurchaseList {
   public items: PurchaseItem[];
   public recordsCount?: number; // Computed field: number of purchase records
   public totalActualCost?: number; // Computed field: total actual cost from records
+  /** 列表接口附加：这张清单已导入几笔订单截图（非持久化） */
+  public orderImportCount?: number;
 
   constructor(data: PurchaseListConstructor) {
     this.id = data.id || uuidv4();

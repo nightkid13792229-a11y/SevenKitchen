@@ -137,6 +137,9 @@
             <text v-if="list.recordsCount !== undefined" class="metric">
               {{ list.recordsCount }} 条记录
             </text>
+            <text v-if="list.orderImportCount > 0" class="metric import-metric">
+              含截图 {{ list.orderImportCount }} 笔
+            </text>
             <text
               v-if="list.totalActualCost !== undefined && list.totalActualCost > 0"
               class="amount"
@@ -1562,5 +1565,9 @@ onShow(() => {
     font-size: 26rpx;
     color: #7a5c28;
   }
+}
+
+.import-metric {
+  color: #2f6b4f;
 }
 </style>

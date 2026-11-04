@@ -7,6 +7,7 @@ import { IngredientPricingService } from '../../../src/application/ingredient/in
 import { ORDER_REPOSITORY } from '../../../src/application/order/order.service';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from '../../../src/application/order/order.service';
 import { ReimbursementService } from '../../../src/application/purchasing/reimbursement.service';
+import { PurchaseOrderImportService } from '../../../src/application/purchasing/purchase-order-import.service';
 import {
   PURCHASE_LIST_REPOSITORY,
   REIMBURSEMENT_REPOSITORY,
@@ -47,6 +48,10 @@ describe('ReimbursementService', () => {
     uploadImage: jest.fn(),
   } as any;
 
+  const mockPurchaseOrderImportService = {
+    getAllowedReceiptKeys: jest.fn(),
+  } as any;
+
   const mockIngredientPricingService = {
     getPriceChangesForReimbursement: jest.fn(),
     syncPendingChangesForReimbursement: jest.fn(),
@@ -83,11 +88,18 @@ describe('ReimbursementService', () => {
           provide: IngredientPricingService,
           useValue: mockIngredientPricingService,
         },
+        {
+          provide: PurchaseOrderImportService,
+          useValue: mockPurchaseOrderImportService,
+        },
       ],
     }).compile();
 
     service = module.get(ReimbursementService);
     jest.clearAllMocks();
+    mockPurchaseOrderImportService.getAllowedReceiptKeys.mockResolvedValue(
+      new Set(),
+    );
     mockReimbursementRepository.save.mockImplementation(
       async (value: unknown) => value,
     );

@@ -18,6 +18,7 @@ describe('StaffPurchasingController — 新增采购商品', () => {
     createFromStaff: jest.fn(),
   } as any;
   const draftService = { draftFromScreenshot: jest.fn() } as any;
+  const purchaseOrderImportService = {} as any;
 
   const controller = new StaffPurchasingController(
     purchasingService,
@@ -25,6 +26,7 @@ describe('StaffPurchasingController — 新增采购商品', () => {
     cosService as any,
     procurementSkuService,
     draftService,
+    purchaseOrderImportService,
   );
 
   beforeEach(() => {

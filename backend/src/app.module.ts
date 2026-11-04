@@ -260,6 +260,14 @@ import {
   ProcurementSkuDraftService,
   PROCUREMENT_SKU_DRAFT_MODEL,
 } from './application/purchasing/procurement-sku-draft.service';
+import {
+  PurchaseOrderImportService,
+  PURCHASE_ORDER_IMPORT_MODEL,
+} from './application/purchasing/purchase-order-import.service';
+import {
+  ReimbursementReviewService,
+  REIMBURSEMENT_REVIEW_MODEL,
+} from './application/purchasing/reimbursement-review.service';
 import { ProcurementSkuDraftQuotaService } from './application/purchasing/procurement-sku-draft-quota.service';
 import { callDeepSeekJson } from './application/recipe-designer/deepseek-chat';
 import { AdminSupplementShopController } from './interfaces/controllers/admin-supplement-shop.controller';
@@ -950,6 +958,16 @@ validatePrismaConfig();
     ProcurementSkuDraftService,
     {
       provide: PROCUREMENT_SKU_DRAFT_MODEL,
+      useValue: { callDeepSeekJson },
+    },
+    PurchaseOrderImportService,
+    {
+      provide: PURCHASE_ORDER_IMPORT_MODEL,
+      useValue: { callDeepSeekJson },
+    },
+    ReimbursementReviewService,
+    {
+      provide: REIMBURSEMENT_REVIEW_MODEL,
       useValue: { callDeepSeekJson },
     },
     SupplementCatalogService,

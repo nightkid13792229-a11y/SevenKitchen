@@ -7,6 +7,11 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 
+const PRIVATE_FOLDERS = new Set([
+  'custom-recipe-sensitive-attachments',
+  'purchase-order-screenshots',
+]);
+
 export interface UploadResult {
   url: string;
   key: string;
@@ -106,10 +111,9 @@ export class TencentCosService {
             Region: this.region,
             Key: key,
             Body: fileBuffer,
-            // 敏感目录（过敏报告/定制附件）默认私有；读取时由后端签发短时 URL
-            ACL: folder === 'custom-recipe-sensitive-attachments'
-              ? 'private'
-              : 'public-read',
+            // 敏感目录默认私有；读取时由后端签发短时 URL。
+            // 订单截图含姓名/电话/地址，2026-11-04 起也走私有目录。
+            ACL: PRIVATE_FOLDERS.has(folder) ? 'private' : 'public-read',
           },
           (err: any, data: any) => {
             if (err) {
@@ -302,6 +306,27 @@ export class TencentCosService {
         },
       );
     });
+  }
+
+  /**
+   * 这个 URL 是不是我们自己的桶/CDN 的地址（2026-11-04）。
+   * 用于「只给 URL 不给 key」的场景，防止后端被当成任意 URL 代理（SSRF）。
+   */
+  isOwnedAssetUrl(url: string): boolean {
+    try {
+      const parsed = new URL(url);
+      if (!['https:', 'http:'].includes(parsed.protocol)) return false;
+      const cdnHost = this.cdnDomain
+        ?.replace(/^https?:\/\//, '')
+        .split('/')[0]
+        .trim();
+      if (cdnHost && parsed.hostname === cdnHost) return true;
+      return (
+        parsed.hostname === `${this.bucket}.cos.${this.region}.myqcloud.com`
+      );
+    } catch {
+      return false;
+    }
   }
 
   async getSignedUrl(urlOrKey: string, expiresSeconds = 3600): Promise<string> {

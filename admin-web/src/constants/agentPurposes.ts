@@ -81,9 +81,9 @@ export const AGENT_PURPOSES: AgentPurposeMeta[] = [
   },
   {
     purpose: 'PROCUREMENT_SKU_DRAFT',
-    label: '采购 · 商品截图识别（看图）',
+    label: '采购报销 Agent',
     description:
-      '员工在小程序新增采购商品时，从商超 App 的商品详情页截图里读出名称、净含量和单价。' +
+      '员工新增采购商品、上传订单截图、管理员生成报销审核摘要，共用这一套模型和密钥。' +
       '必须用**能读图**的模型（deepseek-flash）；未单独配置时回退全局默认',
     defaultModel: 'deepseek-flash',
   },

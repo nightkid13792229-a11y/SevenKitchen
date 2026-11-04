@@ -164,6 +164,8 @@ export const validateReimbursementStep = (params: {
   selectedListIds?: string[];
   customFees?: OperatingExpenseFeeInput[];
   receiptUrls?: Array<{ url?: string } | string>;
+  /** 已从订单截图带入的私有凭证张数（2026-11-04） */
+  privateReceiptCount?: number;
   purchaseLists?: ReimbursementPurchaseListLike[];
 }): ReimbursementValidationResult => {
   if (params.currentStep === 'TYPE' && !params.flowType) {
@@ -208,11 +210,15 @@ export const validateReimbursementStep = (params: {
     }
   }
 
-  if (
-    params.currentStep === 'RECEIPTS' &&
-    (!params.receiptUrls || params.receiptUrls.length === 0)
-  ) {
-    return { ok: false, message: '请上传支付凭证' };
+  if (params.currentStep === 'RECEIPTS') {
+    const publicCount = params.receiptUrls?.length || 0;
+    const privateCount = params.privateReceiptCount || 0;
+    if (publicCount + privateCount === 0) {
+      return { ok: false, message: '请上传支付凭证' };
+    }
+    if (publicCount + privateCount > 10) {
+      return { ok: false, message: '凭证最多 10 张（含订单截图）' };
+    }
   }
 
   return { ok: true };

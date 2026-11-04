@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>采购-报销 AI 接入 · 原型</title>
+<style>
+  :root{
+    --ink:#26261f; --ink2:#1e3a2f; --deep:#173026;
+    --cream:#f3eddd; --cream2:#f6efe0; --paper:#fbfcf7;
+    --line:#e2dcc9; --line2:#efe9d9;
+    --gold:#b08d4f; --gold-d:#7a5c28; --muted:#6b6653;
+    --green:#2f6b4f; --green-soft:#e8f0e6; --green-line:#c9dcc6;
+    --red:#b4453a; --red-soft:#f8e9e6;
+    --amber:#a8742a; --amber-soft:#fbf1dd;
+    --gray-soft:#f0f0ea;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:system-ui,-apple-system,"PingFang SC","Helvetica Neue",sans-serif;
+    background:#e8e5da; color:var(--ink); padding:48px; display:flex; flex-wrap:wrap; gap:40px; align-items:flex-start;
+  }
+  .slot{display:flex; flex-direction:column; gap:12px; align-items:center}
+  .slot .cap{font-size:13px; color:#5c5849; letter-spacing:.04em}
+  .slot .cap b{color:var(--ink); font-weight:600}
+
+  /* ---------- phone ---------- */
+  .phone{
+    width:390px; height:844px; background:var(--cream); border-radius:44px;
+    box-shadow:0 24px 60px rgba(40,36,24,.28), 0 0 0 10px #1c1c1a, 0 0 0 11px #3a3a36;
+    overflow:hidden; position:relative; display:flex; flex-direction:column;
+  }
+  .statusbar{height:44px; flex:0 0 44px; display:flex; align-items:center; justify-content:space-between;
+    padding:0 24px; font-size:12px; font-weight:600; color:var(--ink2); letter-spacing:.02em}
+  .statusbar .right{display:flex; gap:5px; align-items:center; font-size:11px; opacity:.85}
+  .nav{height:44px; flex:0 0 44px; display:flex; align-items:center; padding:0 14px; gap:8px;
+    font-size:15px; font-weight:600; color:var(--ink2)}
+  .nav .back{font-size:22px; line-height:1; color:var(--ink2); margin-top:-2px; font-weight:400}
+  .nav .spacer{flex:1}
+  .body{flex:1; overflow:hidden; padding:0 16px 12px; display:flex; flex-direction:column; gap:10px}
+  .scroll{flex:1; overflow:hidden; display:flex; flex-direction:column; gap:8px}
+  .bottombar{flex:0 0 auto; padding:8px 16px 22px; background:linear-gradient(to top, var(--cream) 70%, rgba(243,237,221,0))}
+
+  .card{background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:12px}
+  .card.tight{padding:10px 12px}
+  .h{font-size:13px; font-weight:600; color:var(--ink2); margin-bottom:6px; display:flex; align-items:center; justify-content:space-between}
+  .sub{font-size:11px; color:var(--muted); line-height:1.5}
+  .btn{display:flex; align-items:center; justify-content:center; height:46px; border-radius:14px;
+    background:var(--ink2); color:#f7f4e9; font-size:15px; font-weight:600; letter-spacing:.02em}
+  .btn.ghost{background:transparent; border:1px solid var(--line); color:var(--ink2)}
+  .btn.gold{background:var(--gold-d); color:#fdf8ea}
+  .btn.sm{height:32px; border-radius:10px; font-size:12px; padding:0 12px}
+  .btn.danger-outline{background:transparent; border:1px solid var(--red); color:var(--red); font-weight:500}
+  .btn.disabled{background:#d9d4c4; color:#8d8877}
+  .row{display:flex; align-items:center; gap:10px}
+  .row.between{justify-content:space-between}
+  .pill{display:inline-flex; align-items:center; gap:4px; height:22px; padding:0 8px; border-radius:999px;
+    font-size:10px; font-weight:600; letter-spacing:.02em}
+  .pill.green{background:var(--green-soft); color:var(--green); border:1px solid var(--green-line)}
+  .pill.gray{background:var(--gray-soft); color:#7b7663; border:1px solid #e3e0d4}
+  .pill.red{background:var(--red-soft); color:var(--red); border:1px solid #efd2cc}
+  .pill.amber{background:var(--amber-soft); color:var(--amber); border:1px solid #efdcb8}
+  .pill.ghost{background:transparent; color:var(--muted); border:1px solid var(--line)}
+  .money{font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink)}
+  .money.dim{color:var(--muted); font-weight:500}
+  .hr{height:1px; background:var(--line2); margin:8px 0}
+
+  /* list rows */
+  .item{display:flex; gap:10px; padding:9px 0; border-bottom:1px solid var(--line2); align-items:flex-start}
+  .item:last-child{border-bottom:none}
+  .thumb{width:38px; height:38px; border-radius:9px; background:linear-gradient(135deg,#dfe7d4,#c9d6bb); flex:0 0 38px;
+    display:flex; align-items:center; justify-content:center; font-size:16px}
+  .item .name{font-size:12.5px; font-weight:600; color:var(--ink); line-height:1.35}
+  .item .meta{font-size:10.5px; color:var(--muted); margin-top:2px; line-height:1.4}
+  .item .right{margin-left:auto; text-align:right; display:flex; flex-direction:column; gap:4px; align-items:flex-end}
+
+  /* P1 */
+  .datechip{display:flex; gap:8px; align-items:center}
+  .chip{height:28px; padding:0 12px; border-radius:999px; background:var(--paper); border:1px solid var(--line);
+    display:flex; align-items:center; font-size:12px; color:var(--ink2); font-weight:500}
+  .chip.active{background:var(--ink2); color:#f7f4e9; border-color:var(--ink2)}
+  .progress{display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:6px}
+  .bar{height:5px; border-radius:3px; background:#e6e0cf; overflow:hidden}
+  .bar > i{display:block; height:100%; background:var(--gold); width:33%}
+
+  /* upload */
+  .chips{display:flex; gap:8px; flex-wrap:wrap}
+  .uploader{display:flex; gap:10px}
+  .slotbox{width:96px; height:96px; border-radius:14px; border:1px dashed #cfc7ae; background:#f7f2e4;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:var(--muted); font-size:11px}
+  .shot{width:96px; height:96px; border-radius:14px; background:linear-gradient(160deg,#e9e2cf,#d6cdb4); position:relative;
+    display:flex; align-items:flex-end; padding:6px; overflow:hidden}
+  .shot .tag{position:absolute; top:6px; left:6px; background:rgba(30,58,47,.85); color:#f4efe0; font-size:9px; padding:2px 6px; border-radius:6px}
+  .shot .lines{width:100%; height:44px; background:repeating-linear-gradient(to bottom, rgba(255,255,255,.75) 0 3px, rgba(255,255,255,0) 3px 8px)}
+  .tips{display:flex; flex-direction:column; gap:6px}
+  .tip{display:flex; gap:7px; font-size:11px; color:var(--muted); line-height:1.45}
+  .tip b{color:var(--ink2); font-weight:600}
+
+  /* P3 */
+  .center{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px}
+  .spinner{width:52px; height:52px; border-radius:50%; border:3px solid #e4dcc7; border-top-color:var(--gold-d); animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .steps{display:flex; flex-direction:column; gap:8px; width:210px}
+  .step{display:flex; gap:9px; align-items:center; font-size:12px; color:var(--muted)}
+  .step.done{color:var(--green)}
+  .step.now{color:var(--ink2); font-weight:600}
+  .dot{width:16px; height:16px; border-radius:50%; border:1.5px solid #d5cdb8; display:flex; align-items:center; justify-content:center; font-size:9px}
+  .step.done .dot{background:var(--green-soft); border-color:var(--green-line); color:var(--green)}
+  .step.now .dot{border-color:var(--gold-d); color:var(--gold-d)}
+
+  /* P4 summary */
+  .summary{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; background:var(--ink2); border-radius:14px; padding:8px}
+  .summary .k{font-size:9.5px; color:#c9cfc0; letter-spacing:.03em}
+  .summary .v{font-size:14px; color:#f7f4e9; font-weight:600; margin-top:2px; font-variant-numeric:tabular-nums}
+  .summary .v.warn{color:#f0c88a}
+  .lineitem{display:flex; gap:8px; padding:3px 0; border-bottom:1px solid var(--line2); align-items:center}
+  .lineitem:last-child{border-bottom:none}
+  .lineitem .txt{flex:1; min-width:0}
+  .lineitem .n{font-size:11.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .lineitem .m{font-size:9.5px; color:var(--muted); margin-top:1px}
+  .lineitem .amt{font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--ink); width:52px; text-align:right}
+  .state{display:flex; align-items:center; gap:4px; font-size:9.5px; font-weight:600; padding:2px 6px; border-radius:7px; white-space:nowrap}
+  .state.ok{background:var(--green-soft); color:var(--green)}
+  .state.person{background:var(--gray-soft); color:#7b7663}
+  .state.miss{background:var(--red-soft); color:var(--red)}
+  .state.new{background:var(--amber-soft); color:var(--amber)}
+  .footline{display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--muted); padding:2px 2px 4px}
+
+  /* P5 sheet */
+  .dim{position:absolute; inset:0; background:rgba(23,48,38,.34); backdrop-filter:blur(1px)}
+  .sheet{position:absolute; left:0; right:0; bottom:0; background:var(--cream); border-radius:22px 22px 0 0;
+    padding:14px 16px 26px; box-shadow:0 -12px 30px rgba(0,0,0,.14); display:flex; flex-direction:column; gap:10px}
+  .search{height:38px; border-radius:11px; background:var(--paper); border:1px solid var(--line);
+    display:flex; align-items:center; padding:0 12px; font-size:12px; color:#a9a493; gap:6px}
+  .opt{display:flex; align-items:center; gap:9px; padding:9px 2px; border-bottom:1px solid var(--line2); font-size:12.5px}
+  .opt .sub2{font-size:10px; color:var(--muted)}
+  .opt .go{margin-left:auto; color:var(--gold-d); font-size:11px; font-weight:600}
+  .newsku{display:flex; align-items:center; gap:8px; padding:11px 12px; border-radius:12px; background:var(--paper);
+    border:1px dashed #cfc7ae; font-size:12px; color:var(--gold-d); font-weight:600}
+
+  /* P7 */
+  .steps-head{display:flex; gap:6px; justify-content:center; margin:2px 0 4px}
+  .sh{display:flex; align-items:center; gap:4px; font-size:10px; color:#a9a493}
+  .sh.on{color:var(--ink2); font-weight:600}
+  .sh i{width:14px; height:14px; border-radius:50%; background:#e6e0cf; display:flex; align-items:center; justify-content:center; font-style:normal; font-size:8px}
+  .sh.on i{background:var(--ink2); color:#f7f4e9}
+  .kv{display:flex; justify-content:space-between; font-size:12px; padding:5px 0}
+  .kv .k{color:var(--muted)}
+  .big{font-size:26px; font-weight:700; color:var(--ink2); font-variant-numeric:tabular-nums}
+  .diff{background:var(--amber-soft); border:1px solid #efdcb8; border-radius:12px; padding:9px 11px; font-size:11px; color:#7a5a20; line-height:1.5}
+
+  /* P8 */
+  .badge-status{display:inline-flex; align-items:center; gap:5px; background:var(--amber-soft); color:var(--amber);
+    border:1px solid #efdcb8; border-radius:999px; padding:3px 10px; font-size:11px; font-weight:600}
+  .claimno{font-size:11px; color:var(--muted); letter-spacing:.04em}
+
+  /* ---------- desktop ---------- */
+  .desktop{width:1280px; height:800px; background:#f7f6f2; border-radius:10px; overflow:hidden;
+    box-shadow:0 24px 60px rgba(40,36,24,.22), 0 0 0 1px #d9d5c8; display:flex; font-size:13px; color:#2b2b26}
+  .side{width:196px; background:#1e2a26; color:#cfd6cc; padding:16px 12px; display:flex; flex-direction:column; gap:4px; flex:0 0 196px}
+  .side .brand{color:#f4efe0; font-weight:700; font-size:14px; letter-spacing:.04em; margin:2px 8px 14px}
+  .navi{padding:8px 10px; border-radius:7px; font-size:12.5px; color:#b9c2b6}
+  .navi.on{background:#33443c; color:#f6f2e4; font-weight:600}
+  .main{flex:1; display:flex; flex-direction:column; min-width:0}
+  .topbar{height:52px; background:#fff; border-bottom:1px solid #e8e5da; display:flex; align-items:center; padding:0 22px; gap:10px}
+  .topbar .t{font-weight:600; font-size:14px}
+  .topbar .tag{font-size:11px; color:#8a8574; background:#f3f1e9; border-radius:5px; padding:2px 7px}
+  .content{flex:1; overflow:hidden; padding:18px 22px; display:grid; grid-template-columns:1.25fr .85fr; gap:16px}
+  .panel{background:#fff; border:1px solid #e8e5da; border-radius:10px; padding:14px 16px; min-width:0}
+  .panel h4{font-size:12px; color:#8a8574; font-weight:600; letter-spacing:.05em; margin-bottom:10px}
+  .drow{display:flex; justify-content:space-between; font-size:12.5px; padding:6px 0; border-bottom:1px dashed #eeece2}
+  .drow:last-child{border-bottom:none}
+  .drow .k{color:#8a8574}
+  .drow .v{font-variant-numeric:tabular-nums}
+  .ag{background:#f0f6ee; border:1px solid #d5e4d0; border-radius:10px; padding:12px 13px}
+  .ag .risk{display:flex; align-items:center; gap:7px; font-weight:700; color:#2f6b4f; font-size:13px}
+  .ag .dotrisk{width:8px; height:8px; border-radius:50%; background:#c99a3b}
+  .ag ul{margin:9px 0 0 0; padding-left:0; list-style:none; display:flex; flex-direction:column; gap:7px}
+  .ag li{font-size:11.5px; line-height:1.55; color:#3d4a3a; padding-left:16px; position:relative}
+  .ag li:before{content:"·"; position:absolute; left:5px; color:#7a8f74; font-weight:700}
+  .ag li b{color:#2b332a}
+  .thumbs{display:flex; gap:8px; margin-top:6px}
+  .timg{width:64px; height:84px; border-radius:6px; background:linear-gradient(160deg,#e9e2cf,#d6cdb4); border:1px solid #e2ddcc}
+  .actions{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap}
+  .abtn{height:32px; padding:0 13px; border-radius:6px; font-size:12px; display:flex; align-items:center; border:1px solid #dcd8c9; background:#fff; color:#3c3a30}
+  .abtn.primary{background:#1e3a2f; border-color:#1e3a2f; color:#f6f2e4; font-weight:600}
+  .abtn.danger{color:#b4453a; border-color:#e8cdc7}
+  .hint{font-size:11px; color:#8a8574; line-height:1.6; margin-top:8px}
+
+  .ordertabs{display:flex; gap:6px; overflow-x:auto; padding-bottom:2px}
+  .otab{flex:1 0 120px; min-width:120px; background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:5px 8px; display:flex; flex-direction:column; gap:2px}
+  .otab.active{border-color:var(--ink2); box-shadow:0 0 0 1.5px var(--ink2) inset}
+  .otab .c{font-size:10px; color:var(--muted)}
+  .otab .m{font-size:12px; font-weight:700; color:var(--ink2); font-variant-numeric:tabular-nums}
+  .otab .t{font-size:9.5px; color:var(--green); font-weight:600}
+  .chev{color:#b9b2a0; font-size:15px; margin-left:2px}
+  .field2{display:flex; align-items:center; justify-content:space-between; background:var(--paper); border:1px solid var(--line); border-radius:11px; padding:9px 11px; font-size:12.5px}
+  .field2 .lab{color:var(--muted); font-size:11px}
+  .field2 .val{font-weight:600; color:var(--ink2); font-variant-numeric:tabular-nums}
+  .switch{width:38px; height:22px; border-radius:11px; background:#dcd6c4; position:relative}
+  .switch.on{background:var(--green)}
+  .switch i{position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#fff; transition:.2s}
+  .switch.on i{left:18px}
+  .warnline{background:var(--amber-soft); border:1px solid #efdcb8; border-radius:11px; padding:8px 10px; font-size:10.5px; color:#7a5a20; line-height:1.5}
+  .tabbar{display:flex; border-top:1px solid var(--line); background:var(--cream); padding:6px 0 2px}
+  .tabbar div{flex:1; text-align:center; font-size:9.5px; color:#a9a493}
+  .tabbar div.on{color:var(--ink2); font-weight:700}
+  .tabbar span{display:block; font-size:16px; line-height:1.2}
+</style>
+</head>
+<body>
+
+<!-- ============ P0 ============ -->
+<div class="slot">
+  <div class="cap"><b>P0</b> 采购管理 · 列表页（新增标记）</div>
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span class="right">●●●● 5G ▮</span></div>
+    <div class="nav"><span class="back">‹</span>采购管理<span class="spacer"></span><span style="font-size:12px;color:#6b6653">补货 ›</span></div>
+    <div class="body">
+      <div class="chips">
+        <span class="chip active">今天</span><span class="chip">明天</span><span class="chip">后天</span><span class="chip">更多日期</span>
+      </div>
+      <div class="card">
+        <div class="row between">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#1e3a2f">10月30日 · 待采购</div>
+            <div class="sub" style="margin-top:3px">9 种原料 · 预估 ¥186.40</div>
+          </div>
+          <span class="pill amber">待采购</span>
+        </div>
+        <div class="row" style="gap:8px;margin-top:10px">
+          <div class="btn ghost" style="flex:1;height:38px;font-size:13px">预览日采需求</div>
+          <div class="btn" style="flex:1;height:38px;font-size:13px">生成日采清单</div>
+        </div>
+      </div>
+
+      <div class="card" style="flex:1;overflow:hidden">
+        <div class="h">采购清单 (2)</div>
+        <div class="item">
+          <div class="thumb">📋</div>
+          <div style="flex:1">
+            <div class="name">10月30日 · 日采</div>
+            <div class="meta">9 种原料 · 含截图识别 5 条</div>
+          </div>
+          <div class="right"><span class="pill amber">待采购</span><span class="money" style="font-size:12px">¥31.46</span></div>
+        </div>
+        <div class="item">
+          <div class="thumb">📋</div>
+          <div style="flex:1">
+            <div class="name">10月29日 · 日采</div>
+            <div class="meta">8 种原料 · 手填 6 条</div>
+          </div>
+          <div class="right"><span class="pill green">已完成</span><span class="money" style="font-size:12px">¥128.00</span></div>
+        </div>
+      </div>
+      <div class="sub" style="padding:0 4px">列表页只显示概况；截图识别在清单详情里做。</div>
+    </div>
+    <div class="tabbar"><div class="on"><span>▦</span>工作台</div><div><span>🧾</span>订单</div><div><span>👤</span>我的</div></div>
+  </div>
+</div>
+<!-- ============ P1 ============ -->
+<div class="slot">
+  <div class="cap"><b>P1</b> 采购清单详情 · 新增入口</div>
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span class="right">●●●● 5G ▮</span></div>
+    <div class="nav"><span class="back">‹</span>采购清单详情<span class="spacer"></span><span style="font-size:12px;color:#6b6653">···</span></div>
+    <div class="body">
+      <div class="datechip"><span class="chip active">10月30日 · 日采</span><span class="chip">9 种原料</span></div>
+      <div class="card tight">
+        <div class="progress"><span>已处理 3/9</span><span>已录入 ¥23.88</span></div>
+        <div class="bar"><i style="width:33%"></i></div>
+      </div>
+
+      <div class="card" style="border-color:#d9cba6;background:#fdf9ec">
+        <div class="row between">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#7a5c28">用订单截图快速录入</div>
+            <div class="sub" style="margin-top:3px">支持山姆 · 盒马 · 沃尔玛，自动填好商品和金额</div>
+          </div>
+          <div style="font-size:22px">📷</div>
+        </div>
+        <div class="btn gold" style="height:40px;margin-top:10px;font-size:14px">上传订单截图</div>
+        <div class="sub" style="margin-top:7px;color:#8a7a55">上次导入：10-30 盒马 · 5 条记录</div>
+      </div>
+
+      <div class="card" style="flex:1;overflow:hidden">
+        <div class="h">原料明细 (9)<span style="font-size:10px;color:#6b6653;font-weight:400">按类型分组</span></div>
+        <div class="item">
+          <div class="thumb">🫘</div>
+          <div><div class="name">四季豆</div><div class="meta">仍需 250g · 已录入 1 条</div></div>
+          <div class="right"><span class="pill green">已录入</span><span class="money" style="font-size:12px">¥4.99</span></div>
+        </div>
+        <div class="item">
+          <div class="thumb">🦪</div>
+          <div><div class="name">生蚝</div><div class="meta">仍需 8 只 · 已录入 1 条</div></div>
+          <div class="right"><span class="pill green">已录入</span><span class="money" style="font-size:12px">¥15.90</span></div>
+        </div>
+        <div class="item">
+          <div class="thumb">🥬</div>
+          <div><div class="name">生菜</div><div class="meta">仍需 450g · 已录入 1 条</div></div>
+          <div class="right"><span class="pill green">已录入</span><span class="money" style="font-size:12px">¥2.99</span></div>
+        </div>
+        <div class="item">
+          <div class="thumb">🥩</div>
+          <div><div class="name">牛肋条</div><div class="meta">仍需 180g · 还没记录</div></div>
+          <div class="right"><span class="pill ghost">记录</span></div>
+        </div>
+        <div class="item">
+          <div class="thumb">🐷</div>
+          <div><div class="name">猪五花</div><div class="meta">仍需 200g · 还没记录</div></div>
+          <div class="right"><span class="pill ghost">记录</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="bottombar"><div class="btn">开始采购</div></div>
+  </div>
+</div>
+
+<!-- ============ P2 ============ -->
+<div class="slot">
+  <div class="cap"><b>P2</b> 上传订单截图（不选渠道）</div>
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span class="right">●●●● 5G ▮</span></div>
+    <div class="nav"><span class="back">‹</span>上传订单截图</div>
+    <div class="body">
+      <div class="card">
+        <div class="h">订单截图<span style="font-size:10px;color:#6b6653;font-weight:400">每张图 = 一笔订单 · 最多 5 笔</span></div>
+        <div class="uploader">
+          <div class="shot"><span class="tag">盒马</span><div class="lines"></div></div>
+          <div class="shot"><span class="tag">沃尔玛</span><div class="lines"></div></div>
+          <div class="slotbox"><span style="font-size:20px">＋</span><span>继续添加</span></div>
+        </div>
+        <div class="sub" style="margin-top:8px">不同渠道的订单可以一起传，AI 会分别识别。</div>
+      </div>
+
+      <div class="card" style="background:#fbf7ea;border-color:#eadfc2">
+        <div class="h" style="color:#7a5c28">这样截图，AI 才读得准</div>
+        <div class="tips">
+          <div class="tip"><b>①</b><span>先点开「共 N 件」，把所有商品展开再截。</span></div>
+          <div class="tip"><b>②</b><span>截图里要有商品金额、运费、包装费和实付。</span></div>
+          <div class="tip"><b>③</b><span>长截图可以直接传，系统会自动分段读取。</span></div>
+        </div>
+      </div>
+      <div class="sub" style="padding:2px 4px">渠道由 AI 识别，识别错了可以在结果页改；识别结果只是草稿。</div>
+    </div>
+    <div class="bottombar"><div class="btn gold">开始识别（2 笔订单）</div></div>
+  </div>
+</div>
+<!-- ============ P3 ============ -->
+<div class="slot">
+  <div class="cap"><b>P3</b> 识别中</div>
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span class="right">●●●● 5G ▮</span></div>
+    <div class="nav"><span class="back">‹</span>识别订单</div>
+    <div class="body">
+      <div class="center">
+        <div class="spinner"></div>
+        <div style="font-size:16px;font-weight:700;color:#1e3a2f">正在识别订单</div>
+        <div class="sub">长截图会自动分段，通常 3 秒左右</div>
+        <div class="steps" style="margin-top:6px">
+          <div class="step done"><span class="dot">✓</span>读取商品行</div>
+          <div class="step now"><span class="dot">2</span>核对金额与费用</div>
+          <div class="step"><span class="dot">3</span>匹配采购清单</div>
+        </div>
+        <div class="sub" style="margin-top:12px;color:#a9a493">识别用的是采购商品库，不会凭空编造</div>
+      </div>
+    </div>
+    <div class="bottombar"><div class="btn ghost">取消</div></div>
+  </div>
+</div>
+
+<!-- ============ P4 ============ -->
+<div class="slot">
+  <div class="cap"><b>P4</b> 识别结果核对 · 多笔订单</div>
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span class="right">●●●● 5G ▮</span></div>
+    <div class="nav"><span class="back">‹</span>识别结果<span class="spacer"></span><span style="font-size:11px;color:#6b6653">2 笔 · 可逐行修改</span></div>
+    <div class="body">
+      <div class="ordertabs">
+        <div class="otab active"><div class="c">盒马 · 10-31</div><div class="m">¥134.86</div><div class="t">已核对 9/11</div></div>
+        <div class="otab"><div class="c">沃尔玛 · 11-03</div><div class="m">¥208.26</div><div class="t">待核对</div></div>
+      </div>
+
+      <div class="summary">
+        <div><div class="k">凭证金额</div><div class="v">134.86</div></div>
+        <div><div class="k">算采购</div><div class="v">31.46</div></div>
+        <div><div class="k">个人</div><div class="v">54.60</div></div>
+        <div><div class="k">待处理</div><div class="v warn">2 行</div></div>
+      </div>
+
+      <div class="footline"><span>共 11 行 · 完整 · 自检 ✓</span><span>渠道 <b style="color:#7a5c28">盒马 ▾</b></span></div>
+
+      <div class="card" style="flex:1;overflow:hidden;padding:2px 12px">
+        <div class="lineitem"><div class="txt"><div class="n">四季豆 约250g</div><div class="m">1 份 × ¥4.99</div></div><div class="amt">4.99</div><span class="state ok">四季豆</span><span class="chev">›</span></div>
+        <div class="lineitem"><div class="txt"><div class="n">蒜蓉蒸东山一口生蚝 8只</div><div class="m">1 份 × ¥15.90</div></div><div class="amt">15.90</div><span class="state ok">生蚝</span><span class="chev">›</span></div>
+        <div class="lineitem"><div class="txt"><div class="n">盒马日日鲜 生菜 约450g</div><div class="m">1 份 × ¥2.99</div></div><div class="amt">2.99</div><span class="state ok">生菜</span><span class="chev">›</span></div>
+        <div class="lineitem"><div class="txt"><div class="n">绿豆芽 300g</div><div class="m">1 包 × ¥1.59</div></div><div class="amt">1.59</div><span class="state ok">绿豆芽</span><span class="chev">›</span></div>
+        <div class="lineitem"><div class="txt"><div class="n">白蘑菇（去根）230g</div><div class="m">1 盒 × ¥5.99</div></div><div class="amt">5.99</div><span class="state ok">白蘑菇</span><span class="chev">›</span></div>
+        <div class="lineitem"><div class="txt"><div class="n">【烧烤季】脆脆川渝风味香…</div><div class="m">1 瓶 × ¥8.90 · 个人</div></div><div class="amt">8.90</div><span class="state person">个人</span><span class="chev">›</span></div>
+        <div class="lineitem"><div class="txt"><div class="n">盒马X天润 烧烤豆干 200g</div><div class="m">1 包 × ¥12.90 · 个人</div></div><div class="amt">12.90</div><span class="state person">个人</span><span class="chev">›</span></div>
+        <div class="lineitem"><div class="txt"><div class="n">【烧烤季】滋滋烧烤广味…</div><div class="m">1 袋 × ¥12.90 · 个人</div></div><div class="amt">12.90</div><span class="state person">个人</span><span class="chev">›</span></div>
+        <div class="lineitem"><div class="txt"><div class="n">冰鲜 奥尔良掌中宝 200g</div><div class="m">1 盒 × ¥19.90 · 个人</div></div><div class="amt">19.90</div><span class="state person">个人</span><span class="chev">›</span></div>
+        <div class="lineitem"><div class="txt"><div class="n">炙香雪花牛肋条 180g</div><div class="m">1 盒 × ¥29.90</div></div><div class="amt">29.90</div><span class="state miss">选原料</span><span class="chev">›</span></div>
+        <div class="lineitem"><div class="txt"><div class="n">西昌火盆烧烤香辣猪五花</div><div class="m">1 盒 × ¥17.90</div></div><div class="amt">17.90</div><span class="state miss">选原料</span><span class="chev">›</span></div>
+      </div>
+
+      <div class="diff">本单含个人采购 <b>¥54.60</b>；还有 2 行没对上原料。点任意一行可改数量、金额或原料。</div>
+    </div>
+    <div class="bottombar">
+      <div class="row between" style="margin-bottom:6px;font-size:11px;color:#6b6653"><span>2 笔订单 · 将生成 12 条</span><span class="money">¥98.00</span></div>
+      <div class="btn disabled">还有 2 行待处理</div>
+    </div>
+  </div>
+</div>
+<!-- ============ P4b ============ -->
+<div class="slot">
+  <div class="cap"><b>P4b</b> 改一行（识别或匹配错了）</div>
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span class="right">●●●● 5G ▮</span></div>
+    <div class="nav"><span class="back">‹</span>识别结果</div>
+    <div class="body" style="opacity:.45">
+      <div class="card" style="height:80px"></div>
+      <div class="card" style="height:260px"></div>
+    </div>
+    <div class="dim"></div>
+    <div class="sheet">
+      <div style="font-size:14px;font-weight:700;color:#1e3a2f">修改「炙香雪花牛肋条 180g」</div>
+      <div class="sub">原图金额 ¥29.90。改动会在审核时和原图对照。</div>
+
+      <div class="field2"><span class="lab">匹配原料</span><span class="val" style="color:#7a5c28">未选择 ›</span></div>
+      <div class="field2"><span class="lab">数量</span><span class="val">1 盒</span></div>
+      <div class="field2"><span class="lab">单价</span><span class="val">¥29.90</span></div>
+      <div class="field2"><span class="lab">小计</span><span class="val">¥29.90</span></div>
+      <div class="field2"><span class="lab">算个人采购</span><div class="switch"><i></i></div></div>
+
+      <div class="warnline">改完这一行会标记「已改动」；金额总和不再等于截图时，系统会拦住提交。</div>
+      <div class="row" style="gap:8px;margin-top:2px">
+        <div class="btn ghost" style="flex:1;height:42px">取消</div>
+        <div class="btn" style="flex:1;height:42px">保存</div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- ============ P5 ============ -->
+<div class="slot">
+  <div class="cap"><b>P5</b> 选择原料 / 新建商品</div>
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span class="right">●●●● 5G ▮</span></div>
+    <div class="nav"><span class="back">‹</span>识别结果</div>
+    <div class="body" style="opacity:.5">
+      <div class="card" style="height:90px"></div>
+      <div class="card" style="height:200px"></div>
+      <div class="card" style="height:120px"></div>
+    </div>
+    <div class="dim"></div>
+    <div class="sheet">
+      <div style="font-size:14px;font-weight:700;color:#1e3a2f">为「炙香雪花牛肋条 180g」选择原料</div>
+      <div class="sub">截图金额 ¥29.90。清单里没有「牛肋条」这道原料，不能跨原料替代。</div>
+      <div class="opt"><span>🥩</span><div><div>牛里脊</div><div class="sub2">清单里 · 仍需 500g</div></div><span class="go">选择</span></div>
+      <div class="opt"><span>🥩</span><div><div>牛霖</div><div class="sub2">清单里 · 仍需 300g</div></div><span class="go">选择</span></div>
+      <div class="opt"><span>🫀</span><div><div>牛心</div><div class="sub2">清单里 · 仍需 200g</div></div><span class="go">选择</span></div>
+      <div class="opt"><span>🚫</span><div><div>不列入本次采购</div><div class="sub2">按个人采购处理，不报</div></div><span class="go">标记</span></div>
+      <div class="newsku"><span>＋</span>清单里没有这个原料？去后台追加</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ P6 ============ -->
+<div class="slot">
+  <div class="cap"><b>P6</b> 生成后的采购记录</div>
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span class="right">●●●● 5G ▮</span></div>
+    <div class="nav"><span class="back">‹</span>采购清单详情</div>
+    <div class="body">
+      <div class="card tight">
+        <div class="progress"><span>已处理 8/9</span><span>已录入 ¥36.44</span></div>
+        <div class="bar"><i style="width:88%"></i></div>
+      </div>
+      <div class="card" style="flex:1;overflow:hidden">
+        <div class="h">采购记录 (6)<span style="font-size:10px;color:#6b6653;font-weight:400">5 条来自截图</span></div>
+        <div class="item">
+          <div class="thumb">🫘</div>
+          <div><div class="name">四季豆 <span class="pill green" style="height:18px;font-size:9px">截图</span></div><div class="meta">盒马鲜生 · 1 份 × 250g</div></div>
+          <div class="right"><span class="money" style="font-size:12px">¥4.99</span><span style="font-size:10px;color:#7a5c28">编辑</span></div>
+        </div>
+        <div class="item">
+          <div class="thumb">🦪</div>
+          <div><div class="name">生蚝 <span class="pill green" style="height:18px;font-size:9px">截图</span></div><div class="meta">盒马鲜生 · 1 份 × 8 只</div></div>
+          <div class="right"><span class="money" style="font-size:12px">¥15.90</span><span style="font-size:10px;color:#7a5c28">编辑</span></div>
+        </div>
+        <div class="item">
+          <div class="thumb">🥬</div>
+          <div><div class="name">生菜 <span class="pill green" style="height:18px;font-size:9px">截图</span></div><div class="meta">盒马鲜生 · 1 份 × 450g</div></div>
+          <div class="right"><span class="money" style="font-size:12px">¥2.99</span><span style="font-size:10px;color:#7a5c28">编辑</span></div>
+        </div>
+        <div class="item">
+          <div class="thumb">🥬</div>
+          <div><div class="name">绿豆芽 <span class="pill green" style="height:18px;font-size:9px">截图</span></div><div class="meta">盒马鲜生 · 1 包 × 300g</div></div>
+          <div class="right"><span class="money" style="font-size:12px">¥1.59</span><span style="font-size:10px;color:#7a5c28">编辑</span></div>
+        </div>
+        <div class="item">
+          <div class="thumb">🍄</div>
+          <div><div class="name">白蘑菇 <span class="pill green" style="height:18px;font-size:9px">截图</span></div><div class="meta">盒马鲜生 · 1 盒 × 230g</div></div>
+          <div class="right"><span class="money" style="font-size:12px">¥5.99</span><span style="font-size:10px;color:#7a5c28">编辑</span></div>
+        </div>
+        <div class="item">
+          <div class="thumb">🥕</div>
+          <div><div class="name">胡萝卜 <span class="pill ghost" style="height:18px;font-size:9px">手填</span></div><div class="meta">本地生鲜市场 · 2 斤 × 500g</div></div>
+          <div class="right"><span class="money" style="font-size:12px">¥4.98</span><span style="font-size:10px;color:#7a5c28">编辑</span></div>
+        </div>
+      </div>
+      <div class="sub" style="padding:0 4px">记录可以改。改完再点「确认采购完成」，系统才会入库。</div>
+    </div>
+    <div class="bottombar"><div class="btn">确认采购完成</div></div>
+  </div>
+</div>
+
+<!-- ============ P7 ============ -->
+<div class="slot">
+  <div class="cap"><b>P7</b> 报销提交 · 预填与差额</div>
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span class="right">●●●● 5G ▮</span></div>
+    <div class="nav"><span class="back">‹</span>提交报销申请</div>
+    <div class="body">
+      <div class="steps-head">
+        <span class="sh"><i>✓</i>类型</span><span class="sh"><i>✓</i>采购</span><span class="sh"><i>✓</i>凭证</span><span class="sh on"><i>4</i>确认</span>
+      </div>
+
+      <div class="card">
+        <div class="h">报销合计</div>
+        <div class="big">¥32.46</div>
+        <div class="sub">采购 ¥31.46 + 包装费 ¥1.00</div>
+      </div>
+
+      <div class="card">
+        <div class="h">费用明细</div>
+        <div class="kv"><span class="k">日采清单 10-30</span><span>¥31.46</span></div>
+        <div class="kv"><span class="k">采购相关运费</span><span>¥0.00</span></div>
+        <div class="kv"><span class="k">采购相关打包费</span><span>¥1.00</span></div>
+        <div class="hr"></div>
+        <div class="kv"><span class="k">支付凭证</span><span>1 张 · 盒马订单截图</span></div>
+      </div>
+
+      <div class="diff">
+        <div style="font-weight:700;margin-bottom:4px">凭证金额与报销金额不一致</div>
+        凭证 ¥134.86 · 报销 ¥32.46 · 差额 <b>¥102.40</b><br>
+        差额原因：本单含个人采购 ¥102.40（已逐行确认）
+      </div>
+
+      <div class="sub" style="padding:0 4px">提交后进入管理员审核。审核时能看到订单截图、差额和逐行拆分。</div>
+    </div>
+    <div class="bottombar"><div class="btn">确认提交</div></div>
+  </div>
+</div>
+
+<!-- ============ P8 ============ -->
+<div class="slot">
+  <div class="cap"><b>P8</b> 报销详情 · 撤回</div>
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span class="right">●●●● 5G ▮</span></div>
+    <div class="nav"><span class="back">‹</span>报销单详情</div>
+    <div class="body">
+      <div class="card">
+        <div class="row between">
+          <div class="claimno">BX202611040001</div>
+          <span class="badge-status">待报销</span>
+        </div>
+        <div class="big" style="margin-top:6px">¥32.46</div>
+        <div class="sub">提交于 11-04 10:12 · 赵晨</div>
+      </div>
+
+      <div class="card">
+        <div class="h">费用明细</div>
+        <div class="kv"><span class="k">日采清单 10-30</span><span>¥31.46</span></div>
+        <div class="kv"><span class="k">采购相关打包费</span><span>¥1.00</span></div>
+        <div class="hr"></div>
+        <div class="kv"><span class="k">凭证金额</span><span>¥134.86</span></div>
+        <div class="kv"><span class="k">差额</span><span style="color:#a8742a;font-weight:600">¥102.40</span></div>
+        <div class="kv"><span class="k">差额原因</span><span>含个人采购</span></div>
+      </div>
+
+      <div class="card">
+        <div class="h">支付凭证 (1)</div>
+        <div class="thumbs"><div class="timg"></div></div>
+      </div>
+
+      <div class="sub" style="padding:0 4px">还没上传付款凭证，可以撤回修改。撤回后采购清单会解锁。</div>
+    </div>
+    <div class="bottombar">
+      <div class="btn danger-outline" style="margin-bottom:8px">撤回报销，返回修改</div>
+      <div class="btn ghost" style="height:40px">联系管理员</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ P9 ============ -->
+<div class="slot">
+  <div class="cap"><b>P9</b> 管理员审核台（第三期）</div>
+  <div class="desktop">
+    <div class="side">
+      <div class="brand">SevenKitchen</div>
+      <div class="navi">订单中心</div>
+      <div class="navi">生产管理</div>
+      <div class="navi on">采购·报销</div>
+      <div class="navi">库存</div>
+      <div class="navi">财务</div>
+      <div class="navi">原料库</div>
+    </div>
+    <div class="main">
+      <div class="topbar"><span class="t">报销单 BX202611040001</span><span class="tag">待审核</span><span class="tag">含 1 张订单截图</span></div>
+      <div class="content">
+        <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+          <div class="panel">
+            <h4>报销信息</h4>
+            <div class="drow"><span class="k">提交人</span><span class="v">赵晨 · 11-04 10:12</span></div>
+            <div class="drow"><span class="k">报销金额</span><span class="v" style="font-weight:700">¥32.46</span></div>
+            <div class="drow"><span class="k">凭证金额</span><span class="v">¥134.86</span></div>
+            <div class="drow"><span class="k">差额</span><span class="v" style="color:#a8742a">¥102.40 · 含个人采购</span></div>
+            <div class="drow"><span class="k">关联清单</span><span class="v">日采 10-30 · 5 条记录</span></div>
+          </div>
+
+          <div class="panel">
+            <h4>采购记录（来自订单截图）</h4>
+            <div class="drow"><span class="k">四季豆 250g · 盒马</span><span class="v">¥4.99</span></div>
+            <div class="drow"><span class="k">生蚝 8只 · 盒马</span><span class="v">¥15.90</span></div>
+            <div class="drow"><span class="k">生菜 450g · 盒马</span><span class="v">¥2.99</span></div>
+            <div class="drow"><span class="k">绿豆芽 300g · 盒马</span><span class="v">¥1.59</span></div>
+            <div class="drow"><span class="k">白蘑菇 230g · 盒马</span><span class="v">¥5.99</span></div>
+            <div class="thumbs"><div class="timg"></div><div class="timg" style="background:linear-gradient(160deg,#eee7d5,#ddd4bd)"></div></div>
+            <div class="hint">截图可放大核对；系统已逐行比对金额与数量。</div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+          <div class="ag">
+            <div class="risk"><span class="dotrisk"></span>审核建议：中风险 · 建议通过</div>
+            <ul>
+              <li><b>差额一致</b>：6 行标记个人，合计 ¥102.40，与凭证差额一致。</li>
+              <li><b>金额自洽</b>：5 行商品金额 ¥31.46，与截图逐行对得上。</li>
+              <li><b>价格正常</b>：四季豆、生菜单价与上次持平，无异常上涨。</li>
+              <li><b>未见重复</b>：该订单号未报销过。</li>
+            </ul>
+          </div>
+
+          <div class="panel">
+            <h4>个人采购明细（已排除）</h4>
+            <div class="drow"><span class="k">烧烤酱 ×2</span><span class="v">¥21.80</span></div>
+            <div class="drow"><span class="k">烧烤豆干</span><span class="v">¥12.90</span></div>
+            <div class="drow"><span class="k">奥尔良掌中宝</span><span class="v">¥19.90</span></div>
+            <div class="drow"><span class="k">牛肋条 / 猪五花</span><span class="v">¥47.80</span></div>
+            <div class="drow"><span class="k">合计</span><span class="v" style="font-weight:700">¥102.40</span></div>
+          </div>
+
+          <div class="actions">
+            <div class="abtn primary">通过并上传付款凭证</div>
+            <div class="abtn">要求补充说明</div>
+            <div class="abtn danger">驳回</div>
+            <div class="abtn">退回修改</div>
+          </div>
+          <div class="hint">通过后上传付款凭证即完成报销；退回修改会解锁采购清单。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -224,6 +224,27 @@
         </view>
       </view>
 
+      <!-- 订单截图凭证（私有，签名链接只读） -->
+      <view
+        v-if="reimbursement.receiptSignedUrls && reimbursement.receiptSignedUrls.length > 0"
+        class="section"
+      >
+        <view class="section-header">
+          <text class="section-title">订单截图凭证</text>
+          <text class="section-hint">{{ reimbursement.receiptSignedUrls.length }} 张</text>
+        </view>
+        <view class="photos-grid">
+          <view
+            v-for="(url, index) in reimbursement.receiptSignedUrls"
+            :key="`signed-${index}`"
+            class="photo-item"
+            @tap="previewSignedReceipt(url)"
+          >
+            <image :src="url" mode="aspectFill" />
+          </view>
+        </view>
+      </view>
+
       <!-- 报销凭证（所有用户可见） -->
       <view v-if="reimbursement.paymentProofUrls && reimbursement.paymentProofUrls.length > 0" class="section">
         <view class="section-header">
@@ -250,40 +271,50 @@
         </view>
       </view>
 
-      <!-- 管理员上传报销凭证按钮（当没有报销凭证时显示） -->
-      <view
-        v-if="isAdmin && (!reimbursement.paymentProofUrls || reimbursement.paymentProofUrls.length === 0)"
-        class="bottom-actions"
-      >
-        <view v-if="pendingPriceChangeCount > 0" class="payment-proof-note">
-          <text>
-            上传报销凭证后将确认本次价格变更并完成报销（{{ pendingPriceChangeCount }}项）。
-          </text>
-        </view>
-        <button
-          class="action-btn upload"
-          @tap="uploadPaymentProof"
-          :loading="uploading"
-          :disabled="uploading"
-        >
-          <text v-if="!uploading">上传报销凭证</text>
-          <text v-else>上传中...</text>
-        </button>
-      </view>
+      <!-- 底部操作栏：三种操作合并成一个容器，避免固定底栏互相盖住（2026-11-04） -->
+      <view v-if="hasBottomActions" class="bottom-actions">
+        <template v-if="showAdminUpload">
+          <view v-if="pendingPriceChangeCount > 0" class="payment-proof-note">
+            <text>
+              上传报销凭证后将确认本次价格变更并完成报销（{{ pendingPriceChangeCount }}项）。
+            </text>
+          </view>
+          <button
+            class="action-btn upload"
+            @tap="uploadPaymentProof"
+            :loading="uploading"
+            :disabled="uploading"
+          >
+            <text v-if="!uploading">上传报销凭证</text>
+            <text v-else>上传中...</text>
+          </button>
+        </template>
 
-      <!-- 重新提交按钮 -->
-      <view
-        v-if="reimbursement.status === 'REJECTED' || reimbursement.status === 'REQUIRES_RESUBMIT'"
-        class="bottom-actions"
-      >
-        <button
-          class="action-btn resubmit"
-          @tap="resubmit"
-          :loading="resubmitting"
-        >
-          <text v-if="!resubmitting">重新提交</text>
-          <text v-else>提交中...</text>
-        </button>
+        <template v-else>
+          <text v-if="canWithdraw" class="withdraw-hint">
+            撤回后这笔报销单会删除，采购清单解锁；再点清单里的「撤回完成」才能改采购记录。
+          </text>
+          <view class="action-row">
+            <button
+              v-if="canWithdraw"
+              class="action-btn withdraw"
+              :loading="withdrawing"
+              :disabled="withdrawing"
+              @tap="withdrawReimbursement"
+            >
+              撤回报销
+            </button>
+            <button
+              v-if="canResubmit"
+              class="action-btn resubmit"
+              :loading="resubmitting"
+              @tap="resubmit"
+            >
+              <text v-if="!resubmitting">重新提交</text>
+              <text v-else>提交中...</text>
+            </button>
+          </view>
+        </template>
       </view>
     </view>
 
@@ -307,7 +338,8 @@ import {
   uploadPaymentProofFiles,
   clearPaymentProof as clearPaymentProofApi,
   appendReceiptUrls,
-  removeReceiptUrl
+  removeReceiptUrl,
+  deleteReimbursement as deleteReimbursementApi
 } from '../api/purchasing';
 import { formatStaffQuantity } from '../../../utils/staff-quantity';
 import {
@@ -857,6 +889,13 @@ const toggleItems = (index: number) => {
 };
 
 // 预览照片
+const previewSignedReceipt = (currentUrl: string) => {
+  const urls = reimbursement.value?.receiptSignedUrls || [];
+  if (urls.length > 0) {
+    uni.previewImage({ urls, current: currentUrl });
+  }
+};
+
 const previewPhoto = (currentUrl: string) => {
   if (reimbursement.value && reimbursement.value.receiptUrls) {
     uni.previewImage({
@@ -874,6 +913,68 @@ const previewPaymentProof = (currentUrl: string) => {
       current: currentUrl,
     });
   }
+};
+
+// 撤回报销：删掉这张单，清单会自动解锁
+const currentUserId = computed(() => {
+  const user = uni.getStorageSync('user');
+  return user?.id || '';
+});
+
+const hasPaymentProof = computed(
+  () => (reimbursement.value?.paymentProofUrls?.length || 0) > 0,
+);
+
+const canResubmit = computed(() =>
+  ['REJECTED', 'REQUIRES_RESUBMIT'].includes(reimbursement.value?.status),
+);
+
+const showAdminUpload = computed(
+  () => isAdmin.value && !hasPaymentProof.value,
+);
+
+const canWithdraw = computed(() => {
+  const status = reimbursement.value?.status;
+  if (!['PENDING_REVIEW', 'REJECTED', 'REQUIRES_RESUBMIT'].includes(status)) {
+    return false;
+  }
+  // 只能撤回自己的单；已上传付款凭证的不能撤回（R9）
+  if (!currentUserId.value || reimbursement.value?.submittedById !== currentUserId.value) {
+    return false;
+  }
+  return !hasPaymentProof.value;
+});
+
+const hasBottomActions = computed(
+  () => showAdminUpload.value || canWithdraw.value || canResubmit.value,
+);
+
+const withdrawing = ref(false);
+
+const withdrawReimbursement = () => {
+  if (!canWithdraw.value || withdrawing.value) return;
+  uni.showModal({
+    title: '撤回报销？',
+    content: '撤回后这张报销单会删除，采购清单解锁，可以修改采购记录后重新提交。',
+    confirmText: '撤回',
+    confirmColor: '#b4453a',
+    success: async (res) => {
+      if (!res.confirm) return;
+      withdrawing.value = true;
+      try {
+        const result: any = await deleteReimbursementApi(reimbursementId.value);
+        if (result.code !== 0) {
+          throw new Error(result.message || '撤回失败');
+        }
+        uni.showToast({ title: '已撤回', icon: 'success' });
+        // 立即返回，避免用户在延时里手动返回导致多 pop 一层
+        uni.navigateBack();
+      } catch (error: any) {
+        withdrawing.value = false;
+        uni.showToast({ title: error?.message || '撤回失败', icon: 'none' });
+      }
+    },
+  });
 };
 
 // 重新提交
@@ -968,7 +1069,9 @@ const clearPaymentProof = async () => {
 // 追加支付凭证
 const appendReceiptPhotos = async () => {
   // 检查当前图片数量
-  const currentCount = reimbursement.value?.receiptUrls?.length || 0;
+  const currentCount =
+    (reimbursement.value?.receiptUrls?.length || 0) +
+    (reimbursement.value?.receiptSignedUrls?.length || 0);
   const maxCount = 10;
   const canUpload = maxCount - currentCount;
 
@@ -1110,7 +1213,7 @@ const formatDate = (dateStr: string) => {
   min-height: 100vh;
   background-color: #fbfcf7;
   padding-top: 24rpx;
-  padding-bottom: calc(160rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(290rpx + env(safe-area-inset-bottom));
 }
 
 .loading-state, .error-state {
@@ -1380,6 +1483,11 @@ const formatDate = (dateStr: string) => {
     color: #26261f;
   }
 
+  .section-hint {
+    font-size: 22rpx;
+    color: #6b6653;
+  }
+
   .action-buttons {
     display: flex;
     gap: 12rpx;
@@ -1487,6 +1595,29 @@ const formatDate = (dateStr: string) => {
       }
     }
   }
+}
+
+.withdraw-hint {
+  display: block;
+  font-size: 21rpx;
+  color: #6b6653;
+  line-height: 1.5;
+  padding: 0 8rpx 12rpx;
+}
+
+.action-row {
+  display: flex;
+  gap: 16rpx;
+}
+
+.bottom-actions .action-btn {
+  flex: 1;
+}
+
+.bottom-actions .action-btn.withdraw {
+  background: transparent;
+  border: 1rpx solid #b4453a;
+  color: #b4453a;
 }
 
 .bottom-actions {

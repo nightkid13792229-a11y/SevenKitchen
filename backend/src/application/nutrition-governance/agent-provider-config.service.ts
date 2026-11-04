@@ -14,6 +14,11 @@ import {
 export const NUTRITION_AGENT_PURPOSE = 'NUTRITION_CANDIDATE_REVIEW';
 /** 全局默认用途：所有未单独指定用途的 AI/Agent 都回退到这里 */
 export const DEFAULT_AGENT_PURPOSE = 'DEFAULT';
+/**
+ * 采购报销 Agent：商品截图识别、订单截图识别、报销审核摘要**共用**这一套配置。
+ * 沿用历史 purpose 值（PROCUREMENT_SKU_DRAFT），已配的密钥和模型不用重填。
+ */
+export const PURCHASE_REIMBURSEMENT_AGENT_PURPOSE = 'PROCUREMENT_SKU_DRAFT';
 export const DEEPSEEK_PROVIDER = 'DEEPSEEK';
 /** 火山方舟（Seedream 生图） */
 export const ARK_PROVIDER = 'ARK';

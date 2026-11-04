@@ -52,12 +52,19 @@ import {
 import { AuthGuard } from '../auth';
 import { StaffGuard } from '../guards/role.guard';
 import { UserId, UserRole } from '../auth/user.decorator';
-import { Put, Delete } from '@nestjs/common';
+import { Put, Delete, Patch } from '@nestjs/common';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { ProcurementSkuService } from '../../application/ingredient/procurement-sku.service';
 import { ProcurementSkuDraftService } from '../../application/purchasing/procurement-sku-draft.service';
 import { ProcurementSkuDraftNoticeException } from '../../application/purchasing/procurement-sku-draft.errors';
 import { CreateStaffProcurementSkuDto } from '../dto/staff/procurement-sku-create.dto';
+import {
+  ConfirmOrderImportsDto,
+  ImportOrderScreenshotsDto,
+  UpdateOrderImportDto,
+  UpdateOrderImportLineDto,
+} from '../dto/staff/purchase-order-import.dto';
+import { PurchaseOrderImportService } from '../../application/purchasing/purchase-order-import.service';
 
 @ApiTags('Staff Purchasing')
 @Controller('api/v1/staff/purchasing')
@@ -81,6 +88,7 @@ export class StaffPurchasingController {
     private readonly cosService: TencentCosService,
     private readonly procurementSkuService: ProcurementSkuService,
     private readonly procurementSkuDraftService: ProcurementSkuDraftService,
+    private readonly purchaseOrderImportService: PurchaseOrderImportService,
   ) {}
 
   /**
@@ -184,6 +192,106 @@ export class StaffPurchasingController {
     });
 
     return ApiResponseDto.success(result);
+  }
+
+  @Post('upload-order-screenshot')
+  @ApiOperation({ summary: '上传订单截图（私有目录，用于 AI 识别）' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadOrderScreenshot(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ApiResponseDto<any>> {
+    if (!file) {
+      throw new BadRequestException('请选择文件');
+    }
+    const result = await this.cosService.uploadImage(
+      file,
+      file.originalname,
+      'purchase-order-screenshots',
+    );
+    return ApiResponseDto.success(result, '上传成功');
+  }
+
+  /**
+   * ==========================================
+   * 订单截图识别（2026-11-04 采购-报销 AI 接入）
+   *
+   * 一张图 = 一笔订单，最多 5 笔；识别只出草稿，确认后才生成采购记录。
+   * ==========================================
+   */
+
+  @Post('lists/:id/order-imports')
+  @ApiOperation({ summary: '上传订单截图并识别（每张图一笔订单）' })
+  async importOrderScreenshots(
+    @Param('id') purchaseListId: string,
+    @Body() dto: ImportOrderScreenshotsDto,
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    const imports = await this.purchaseOrderImportService.importFromScreenshots({
+      purchaseListId,
+      userId,
+      imageUrls: dto.imageUrls,
+      imageKeys: dto.imageKeys,
+    });
+    return ApiResponseDto.success(imports);
+  }
+
+  @Get('lists/:id/order-imports')
+  @ApiOperation({ summary: '查看采购清单的订单识别记录' })
+  async listOrderImports(
+    @Param('id') purchaseListId: string,
+  ): Promise<ApiResponseDto<any>> {
+    return ApiResponseDto.success(
+      await this.purchaseOrderImportService.listByPurchaseList(purchaseListId),
+    );
+  }
+
+  @Patch('order-imports/:id')
+  @ApiOperation({ summary: '修正识别出的渠道/订单号/下单时间' })
+  async updateOrderImport(
+    @Param('id') id: string,
+    @Body() dto: UpdateOrderImportDto,
+  ): Promise<ApiResponseDto<any>> {
+    return ApiResponseDto.success(
+      await this.purchaseOrderImportService.updateImport(id, dto),
+    );
+  }
+
+  @Put('order-imports/:id/lines/:lineId')
+  @ApiOperation({ summary: '修改识别出的一行（数量/单价/原料/个人）' })
+  async updateOrderImportLine(
+    @Param('id') importId: string,
+    @Param('lineId') lineId: string,
+    @Body() dto: UpdateOrderImportLineDto,
+  ): Promise<ApiResponseDto<any>> {
+    return ApiResponseDto.success(
+      await this.purchaseOrderImportService.updateLine({
+        importId,
+        lineId,
+        dto,
+      }),
+    );
+  }
+
+  @Post('order-imports/confirm')
+  @ApiOperation({ summary: '确认识别结果并生成采购记录' })
+  async confirmOrderImports(
+    @Body() dto: ConfirmOrderImportsDto,
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    return ApiResponseDto.success(
+      await this.purchaseOrderImportService.confirm(dto.importIds, userId),
+    );
+  }
+
+  @Delete('order-imports/:id')
+  @ApiOperation({ summary: '放弃一条识别记录' })
+  async discardOrderImport(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any>> {
+    return ApiResponseDto.success(
+      await this.purchaseOrderImportService.discard(id),
+    );
   }
 
   /**
@@ -583,6 +691,13 @@ export class StaffPurchasingController {
       pageSize: pageSize ? parseInt(pageSize) : 20,
       excludeReimbursed: excludeReimbursed === 'true',
     });
+
+    const counts = await this.purchaseOrderImportService.countByPurchaseLists(
+      (result.list || []).map((item: any) => item.id),
+    );
+    for (const item of result.list || []) {
+      item.orderImportCount = counts[item.id] ?? 0;
+    }
 
     return ApiResponseDto.success(result, '获取采购清单列表成功');
   }
@@ -1123,6 +1238,12 @@ export class StaffPurchasingController {
     this.logger.log(`Fetching purchase records for purchase list: ${id}`);
 
     const records = await this.purchasingService.getPurchaseRecords(id);
+    const sources =
+      await this.purchaseOrderImportService.getRecordSources(id);
+    for (const record of records as any[]) {
+      const source = sources.get(record.id);
+      record.sourceImportId = source?.sourceImportId ?? null;
+    }
 
     return ApiResponseDto.success(records, '获取采购记录列表成功');
   }
@@ -1280,6 +1401,10 @@ export class StaffPurchasingController {
   ): Promise<ApiResponseDto<any>> {
     if (!dto.key) {
       throw new BadRequestException('缺少文件Key');
+    }
+    // 只允许删公开报销凭证目录，防止把别的私有对象（如订单截图）当 key 删掉。
+    if (!dto.key.startsWith('reimbursement-receipts/')) {
+      throw new BadRequestException('无效的文件Key');
     }
 
     this.logger.log(`Deleting reimbursement receipt photo: ${dto.key}`);
@@ -1472,11 +1597,15 @@ export class StaffPurchasingController {
   })
   async getReimbursementDetail(
     @Param('id') id: string,
+    @UserId() userId: string,
+    @UserRole() userRole: string,
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(`Fetching reimbursement detail: ${id}`);
 
-    const reimbursement =
-      await this.reimbursementService.getReimbursementDetail(id);
+    const reimbursement = await this.reimbursementService.getReimbursementDetail(
+      id,
+      { requesterId: userId, isAdmin: userRole === 'ADMIN' },
+    );
 
     return ApiResponseDto.success(reimbursement, '获取报销单详情成功');
   }

@@ -114,6 +114,23 @@
         </template>
       </view>
 
+      <!-- 订单截图快速录入（2026-11-04 采购-报销 AI 接入） -->
+      <view v-if="canImportOrderScreenshot" class="section import-card">
+        <view class="import-head">
+          <view class="import-copy">
+            <text class="import-title">用订单截图快速录入</text>
+            <text class="import-sub">支持山姆 · 盒马 · 沃尔玛，自动填好商品和金额</text>
+          </view>
+          <text class="import-icon">📷</text>
+        </view>
+        <button class="import-btn" @tap="goOrderImport">上传订单截图</button>
+        <text
+          v-if="orderImportCount > 0"
+          class="import-note import-link"
+          @tap="goOrderImportReview"
+        >继续核对已导入的 {{ orderImportCount }} 笔 ›</text>
+      </view>
+
       <!-- 原料明细 -->
       <view class="section">
         <text class="section-title">原料明细 ({{ items.length }})</text>
@@ -187,9 +204,12 @@
                   <view class="records-list">
                     <view v-for="record in item.records" :key="record.id" class="record-item">
                       <view class="record-main">
-                        <text v-if="record.resolvedProcurementSkuName" class="record-sku">
-                          {{ record.resolvedProcurementSkuName }}
-                        </text>
+                        <view class="record-title-row">
+                          <text v-if="record.resolvedProcurementSkuName" class="record-sku">
+                            {{ record.resolvedProcurementSkuName }}
+                          </text>
+                          <text v-if="record.sourceImportId" class="record-source">截图</text>
+                        </view>
                         <view class="record-info">
                           <text class="record-quantity">{{ formatRecordQuantity(record, item) }}</text>
                           <text class="record-cost">¥{{ record.actualCost.toFixed(2) }}</text>
@@ -406,13 +426,13 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { onLoad, onUnload } from '@dcloudio/uni-app';
+import { onLoad, onShow, onUnload } from '@dcloudio/uni-app';
 import StaffStatusBadge from '../../components/staff/StaffStatusBadge.vue';
 import StaffQuantityText from '../../components/staff/StaffQuantityText.vue';
 import StaffBottomBar from '../../components/staff/StaffBottomBar.vue';
 import { formatStaffQuantity } from '../../utils/staff-quantity';
 import { canAddProcurementSku } from './procurement-sku-entry';
-import { getPurchaseListDetail, completePurchase as completePurchaseApi, reopenPurchaseList as reopenPurchaseListApi, startPurchase as startPurchaseApi, getPurchaseRecords, deletePurchaseRecord as deletePurchaseRecordApi, addPurchaseRecord, updatePurchaseRecord as updatePurchaseRecordApi, markPurchaseItemNoPurchase as markPurchaseItemNoPurchaseApi, clearPurchaseItemNoPurchase as clearPurchaseItemNoPurchaseApi, removeItemFromList, checkOrderDateChanges, getPurchaseChannels, previewPurchaseList, addOrdersToList, resolveProcurementSkuProfile, resolvePurchaseItemDisplay, resolvePurchaseRecordDisplay } from './api/purchasing';
+import { getPurchaseListDetail, completePurchase as completePurchaseApi, reopenPurchaseList as reopenPurchaseListApi, startPurchase as startPurchaseApi, getPurchaseRecords, getOrderImports, deletePurchaseRecord as deletePurchaseRecordApi, addPurchaseRecord, updatePurchaseRecord as updatePurchaseRecordApi, markPurchaseItemNoPurchase as markPurchaseItemNoPurchaseApi, clearPurchaseItemNoPurchase as clearPurchaseItemNoPurchaseApi, removeItemFromList, checkOrderDateChanges, getPurchaseChannels, previewPurchaseList, addOrdersToList, resolveProcurementSkuProfile, resolvePurchaseItemDisplay, resolvePurchaseRecordDisplay } from './api/purchasing';
 
 // 状态管理
 const purchaseListId = ref('');
@@ -1194,6 +1214,14 @@ const dateChanges = ref<any>({
   changedOrders: [],
 });
 
+const orderImportCount = ref(0);
+
+const canImportOrderScreenshot = computed(() => {
+  return (
+    purchaseList.value?.status === 'PENDING' && !purchaseList.value?.reimbursementId
+  );
+});
+
 // 页面加载
 onLoad((options: any) => {
   purchaseListId.value = options.id;
@@ -1201,27 +1229,77 @@ onLoad((options: any) => {
   loadDetail();
 });
 
+onShow(() => {
+  // 从识别结果页返回时刷新，确保刚生成的采购记录/入口状态是最新的
+  if (purchaseList.value && !loading.value) {
+    void loadDetail({ silent: true });
+  }
+});
+
 onUnload(() => {
   uni.$off('procurement-sku:created', handleProcurementSkuCreated);
 });
 
-// 加载详情
-const loadDetail = async () => {
-  loading.value = true;
+const goOrderImportReview = () => {
+  uni.navigateTo({
+    url: `/pages/staff-purchasing/order-import/review?id=${purchaseListId.value}`,
+  });
+};
+
+// 去上传订单截图：没开始采购先确认开始（入口常驻，但不让它在状态机之外生成记录）
+const goOrderImport = () => {
+  if (!purchaseList.value) return;
+  const navigate = () => {
+    uni.navigateTo({
+      url: `/pages/staff-purchasing/order-import/upload?id=${purchaseListId.value}`,
+    });
+  };
+  if (purchaseList.value.startedAt) {
+    navigate();
+    return;
+  }
+  uni.showModal({
+    title: '还没开始采购',
+    content: '上传订单截图会生成采购记录，需要先点「开始采购」。现在开始吗？',
+    confirmText: '开始采购',
+    success: async (res) => {
+      if (!res.confirm) return;
+      try {
+        await startPurchaseApi(purchaseListId.value);
+        await loadDetail();
+        navigate();
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '开始采购失败', icon: 'none' });
+      }
+    },
+  });
+};
+
+// 加载详情；silent=true 用于从子页面返回时静默刷新，不闪屏、不收起已展开的原料
+const loadDetail = async (options: { silent?: boolean } = {}) => {
+  const silent = options.silent === true;
+  if (!silent) loading.value = true;
 
   try {
     // 加载采购渠道列表
-    await loadPurchaseChannels();
+    if (!silent) await loadPurchaseChannels();
 
     const res: any = await getPurchaseListDetail(purchaseListId.value);
 
     if (res.code === 0) {
       purchaseList.value = res.data;
       uni.setNavigationBarTitle({ title: detailTitle.value });
+      const expandedIds = silent
+        ? new Set(
+            items.value
+              .filter((item: any) => item.expanded)
+              .map((item: any) => item.id),
+          )
+        : new Set<string>();
       items.value = (res.data.items || []).map((item: any) => ({
         ...resolvePurchaseItemDisplay(item),
         records: [],
-        expanded: false,
+        expanded: expandedIds.has(item.id),
       }));
 
       // 如果已开始采购，加载采购记录
@@ -1229,16 +1307,36 @@ const loadDetail = async () => {
         await loadPurchaseRecords();
       }
 
-      // 检测日期变更
-      if (res.data.kind === 'ORDER_DEMAND') {
-        await checkDateChanges();
+      // 未完成且未报销时，看有没有订单截图识别记录
+      if (res.data.status === 'PENDING' && !res.data.reimbursementId) {
+        try {
+          const importRes: any = await getOrderImports(purchaseListId.value);
+          // 只把「还没确认」的草稿算成待核对；已生成的不该再引导进去。
+          orderImportCount.value =
+            importRes.code === 0
+              ? (importRes.data || []).filter(
+                  (item: any) => item.status === 'DRAFT',
+                ).length
+              : 0;
+        } catch {
+          orderImportCount.value = 0;
+        }
       } else {
-        dateChanges.value = {
-          hasChanges: false,
-          changedOrders: [],
-        };
+        orderImportCount.value = 0;
       }
-      await loadPendingAppendOrders();
+
+      // 检测日期变更（静默刷新时跳过：子页面不会改订单日期）
+      if (!silent) {
+        if (res.data.kind === 'ORDER_DEMAND') {
+          await checkDateChanges();
+        } else {
+          dateChanges.value = {
+            hasChanges: false,
+            changedOrders: [],
+          };
+        }
+        await loadPendingAppendOrders();
+      }
     } else {
       uni.showToast({ title: res.message || '加载失败', icon: 'none' });
     }
@@ -3786,4 +3884,76 @@ const confirmDeleteItem = (item: any) => {
     white-space: nowrap;
   }
 }
+
+.import-card {
+  border-color: #d9cba6;
+  background: #fdf9ec;
+}
+
+.import-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+
+.import-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.import-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #7a5c28;
+}
+
+.import-sub {
+  font-size: 21rpx;
+  color: #8a7a55;
+  line-height: 1.5;
+}
+
+.import-icon {
+  font-size: 40rpx;
+}
+
+.import-btn {
+  margin-top: 18rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  border-radius: 20rpx;
+  background: #7a5c28;
+  color: #fdf8ea;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.import-note {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 21rpx;
+  color: #8a7a55;
+}
+
+.import-link {
+  color: #7a5c28;
+  font-weight: 600;
+}
+
+.record-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.record-source {
+  font-size: 18rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 8rpx;
+  background: #e8f0e6;
+  color: #2f6b4f;
+}
+
 </style>

@@ -30,6 +30,7 @@ import {
 import { RecipeDesignerService } from '../recipe-designer.service';
 import { buildSystemPrompt } from './prompt';
 import { CitationRegistry } from './citation-registry';
+import { extractCitedClaims, judgeCitedClaims } from './citation-judge';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
 import { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
@@ -215,7 +216,7 @@ export class RecipeAgentService implements OnModuleInit {
     const catalog = new RecipeCatalogPort(this.prisma);
 
     const messages = await this.buildMessages(sessionId, message, flow);
-    const citations = new CitationRegistry();
+    const citations = await this.loadCitationRegistry(sessionId);
     let toolCalls = 0;
 
     while (true) {
@@ -245,9 +246,35 @@ export class RecipeAgentService implements OnModuleInit {
       if (calls.length === 0) {
         if (response.content) {
           await this.appendMessage(sessionId, 'ASSISTANT', response.content);
+          const audit = citations.audit(response.content);
+          const claims = extractCitedClaims(response.content);
+          const semantic =
+            claims.length > 0
+              ? await judgeCitedClaims({
+                  config,
+                  claims,
+                  registry: citations,
+                  onUsage: (usage) => {
+                    void this.recordUsage(
+                      sessionId,
+                      usage.promptTokens,
+                      usage.completionTokens,
+                    );
+                  },
+                })
+              : {
+                  model: config.reviewModel || config.model,
+                  totalClaims: 0,
+                  judgedClaims: 0,
+                  claims: [],
+                  supported: 0,
+                  partial: 0,
+                  unsupported: 0,
+                  notCheckable: 0,
+                };
           await this.prisma.recipeDesignAgentSession.update({
             where: { id: sessionId },
-            data: { citationAudit: citations.audit(response.content) as any },
+            data: { citationAudit: { ...audit, semantic } as any },
           });
         }
         await this.markWaiting(sessionId);
@@ -301,6 +328,42 @@ export class RecipeAgentService implements OnModuleInit {
         }
       }
     }
+  }
+
+  /** 会话级引用登记：从本会话所有检索工具结果恢复 K 号。 */
+  private async loadCitationRegistry(
+    sessionId: string,
+  ): Promise<CitationRegistry> {
+    const registry = new CitationRegistry();
+    const rows = await this.prisma.recipeDesignAgentMessage.findMany({
+      where: {
+        sessionId,
+        role: 'TOOL',
+        toolName: 'search_knowledge_library',
+      },
+      orderBy: { seq: 'asc' },
+      select: { toolResult: true },
+    });
+    for (const row of rows) {
+      const result = row.toolResult as any;
+      const passages = Array.isArray(result?.data?.passages)
+        ? result.data.passages
+        : [];
+      for (const passage of passages) {
+        if (!passage?.citationId || !passage?.id) continue;
+        registry.restore({
+          citationId: String(passage.citationId),
+          passageId: String(passage.id),
+          sourceId: passage.sourceId ?? null,
+          sourceName: passage.sourceName ?? null,
+          documentTitle: passage.documentTitle ?? null,
+          sectionTitle: String(passage.sectionTitle ?? ''),
+          pageStart: passage.pageStart ?? null,
+          text: String(passage.text ?? ''),
+        });
+      }
+    }
+    return registry;
   }
 
   private async runTool(

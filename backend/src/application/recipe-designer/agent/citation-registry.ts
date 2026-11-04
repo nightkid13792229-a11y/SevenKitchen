@@ -8,6 +8,8 @@ export interface CitationRecord {
   documentTitle: string | null;
   sectionTitle: string;
   pageStart: number | null;
+  /** 原文（裁判只看这一段） */
+  text: string;
 }
 
 export interface CitationAudit {
@@ -45,6 +47,7 @@ export class CitationRegistry {
       documentTitle: passage.documentTitle ?? null,
       sectionTitle: passage.sectionTitle ?? '',
       pageStart: passage.pageStart ?? null,
+      text: passage.text ?? '',
     };
     this.byPassageId.set(passage.id, record);
     this.byCitationId.set(record.citationId, record);
@@ -53,6 +56,21 @@ export class CitationRegistry {
 
   records(): CitationRecord[] {
     return [...this.byCitationId.values()];
+  }
+
+  get(citationId: string): CitationRecord | undefined {
+    return this.byCitationId.get(citationId);
+  }
+
+  /** 从历史会话的工具结果恢复登记；K 号保持不变。 */
+  restore(record: CitationRecord): void {
+    if (!record?.citationId || !record?.passageId) return;
+    this.byPassageId.set(record.passageId, record);
+    this.byCitationId.set(record.citationId, record);
+    const sequence = Number(record.citationId.replace(/^K/, ''));
+    if (Number.isFinite(sequence)) {
+      this.sequence = Math.max(this.sequence, sequence);
+    }
   }
 
   audit(answer: string): CitationAudit {

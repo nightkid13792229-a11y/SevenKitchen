@@ -45,6 +45,7 @@
 import { ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import {
+  getOrderImports,
   getPurchaseListDetail,
   importOrderScreenshots,
   startPurchase,
@@ -160,7 +161,6 @@ function remove(index: number) {
 
 async function loadDraftCount(): Promise<number> {
   try {
-    const { getOrderImports } = await import('../api/purchasing');
     const res: any = await getOrderImports(purchaseListId.value);
     return res.code === 0
       ? (res.data || []).filter((item: any) => item.status === 'DRAFT').length

@@ -314,10 +314,12 @@ onUnload(() => {
 async function load() {
   if (!listId.value) return;
   if (imports.value.length === 0) loading.value = true;
-  const [detailRes, importRes] = await Promise.allSettled([
+  const settled = await Promise.allSettled([
     getPurchaseListDetail(listId.value),
     getOrderImports(listId.value),
   ]);
+  const detailRes = settled[0];
+  const importRes = settled[1];
   let failed = false;
   if (detailRes.status === 'fulfilled') {
     const res: any = detailRes.value;

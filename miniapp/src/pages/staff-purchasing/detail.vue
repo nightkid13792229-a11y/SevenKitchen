@@ -9,7 +9,7 @@
     <view v-else-if="purchaseList" class="detail-content">
       <!-- 吸顶进度条：滚动时始终能看到录了多少、花了多少 -->
       <view class="detail-progress">
-        <text class="dp-label">已处理 {{ handledItemCount }}/{{ trackableItemCount }}</text>
+        <text class="dp-label">已处理 {{ handledItemCount }}/{{ trackableItemCount }} 项</text>
         <view class="dp-bar">
           <view class="dp-fill" :style="{ width: handledPercent + '%' }"></view>
         </view>
@@ -41,7 +41,9 @@
               <text class="target-date">{{ formatDate(purchaseList.targetDate) }}</text>
               <text class="time-badge">制作日期</text>
             </view>
-            <text class="create-time">创建于 {{ formatFullDateTime(purchaseList.createdAt) }}</text>
+            <text class="create-time">
+              创建于 {{ formatFullDateTime(purchaseList.createdAt) }}<text v-if="purchaseList.createdBy?.nickname"> · {{ purchaseList.createdBy.nickname }}</text>
+            </text>
           </view>
           <StaffStatusBadge
             :label="getStatusText(purchaseList.status)"
@@ -56,11 +58,6 @@
           <text class="value">{{ formatFullDateTime(purchaseList.completedAt) }}</text>
         </view>
 
-        <!-- 创建人 -->
-        <view class="creator">
-          <text class="label">创建人:</text>
-          <text class="value">{{ purchaseList.createdBy?.nickname || '-' }}</text>
-        </view>
       </view>
 
       <view v-if="purchaseList.kind === 'ORDER_DEMAND' && purchaseList.status === 'PENDING' && (pendingAppendLoading || pendingAppendOrders.length > 0)" class="section pending-append-card">
@@ -116,14 +113,7 @@
 
       <!-- 订单截图快速录入（2026-11-04 采购-报销 AI 接入） -->
       <view v-if="canImportOrderScreenshot" class="section import-card">
-        <view class="import-head">
-          <view class="import-copy">
-            <text class="import-title">用订单截图快速录入</text>
-            <text class="import-sub">支持山姆 · 盒马 · 沃尔玛，自动填好商品和金额</text>
-          </view>
-          <text class="import-icon">📷</text>
-        </view>
-        <button class="import-btn" @tap="goOrderImport">上传订单截图</button>
+        <button class="import-btn" @tap="goOrderImport">AI识别订单截图</button>
         <text
           v-if="orderImportCount > 0"
           class="import-note import-link"
@@ -133,7 +123,7 @@
 
       <!-- 原料明细 -->
       <view class="section">
-        <text class="section-title">原料明细 ({{ items.length }})</text>
+        <text class="section-title">原料明细 ({{ trackableItemCount }})</text>
 
         <!-- 按类型分组显示原料 -->
         <view v-if="groupedItems.length > 0" class="grouped-items">
@@ -146,10 +136,12 @@
             <!-- 该类型的原料列表 -->
             <view class="items-list">
               <view v-for="(item, index) in group.items" :key="index" class="item-card">
-                <!-- 原料基本信息：名称 + 仍需采购 / 渠道规格 / 需求明细 -->
                 <view class="item-basic">
                   <view class="item-line-1">
-                    <text class="item-name">{{ getPurchaseItemTitle(item) }}</text>
+                    <view class="item-title-wrap">
+                      <text class="item-name">{{ getPurchaseItemTitle(item) }}</text>
+                      <text v-if="item.noPurchaseNeeded" class="status-chip no-purchase">无需采购</text>
+                    </view>
                     <StaffQuantityText
                       :covered="isItemCovered(item)"
                       :value="formatQuantity(item)"
@@ -158,21 +150,26 @@
                     />
                   </view>
 
-                  <view class="item-line-2">
-                    <text class="item-meta">{{ buildItemMetaLine(item) }}</text>
-                    <button
-                      v-if="canManagePurchaseRecords && !item.noPurchaseNeeded"
-                      class="record-btn"
-                      @tap.stop="handleContinueAdd(item)"
-                    >记录</button>
-                  </view>
+                  <text v-if="buildItemMetaLine(item)" class="item-meta">{{ buildItemMetaLine(item) }}</text>
 
                   <view class="item-line-3">
                     <text class="audit-text">
                       订单 {{ formatResolvedQuantity(item.resolvedGrossQuantityNeeded, item) }}
-                      · 库存抵扣 {{ formatResolvedQuantity(item.resolvedStockDeductedQuantity, item) }}
+                      · 现有 {{ formatResolvedQuantity(item.resolvedOnHandQuantity, item) }}
+                      · 抵扣 {{ formatResolvedQuantity(item.resolvedStockDeductedQuantity, item) }}
                     </text>
-                    <view class="line-3-actions">
+                  </view>
+
+                  <view v-if="item.noPurchaseNeeded" class="item-state-line">
+                    <text class="state-text">{{ item.noPurchaseReason || '已标记无需采购' }}</text>
+                    <text v-if="canManagePurchaseRecords" class="state-link" @tap.stop="clearItemNoPurchase(item)">取消标记</text>
+                  </view>
+
+                  <view
+                    v-if="(canManagePurchaseRecords && !item.noPurchaseNeeded) || (purchaseList.kind === 'STOCK_REPLENISHMENT' && purchaseList.status === 'PENDING' && !purchaseList.startedAt)"
+                    class="item-actions"
+                  >
+                    <view class="item-actions-left">
                       <text
                         v-if="canManagePurchaseRecords && shouldShowNoPurchaseButton(item)"
                         class="inline-action"
@@ -185,49 +182,56 @@
                         @tap.stop="confirmDeleteItem(item)"
                       >删除</text>
                     </view>
+                    <button
+                      v-if="canManagePurchaseRecords && !item.noPurchaseNeeded"
+                      class="record-btn"
+                      @tap.stop="handleContinueAdd(item)"
+                    >采购记录</button>
                   </view>
-                </view>
 
-                <view v-if="item.noPurchaseNeeded" class="no-purchase-card">
-                  <view class="no-purchase-main">
-                    <text class="no-purchase-title">无需采购</text>
-                    <text v-if="item.noPurchaseReason" class="no-purchase-reason">{{ item.noPurchaseReason }}</text>
+                  <view
+                    v-if="purchaseList.startedAt && (item.records || []).length > 0"
+                    class="record-summary"
+                    @tap="toggleItemRecords(item)"
+                  >
+                    <text class="record-summary-text">已录入 {{ (item.records || []).length }} 条</text>
+                    <text class="record-summary-cost">¥{{ getItemRecordCost(item).toFixed(2) }}</text>
+                    <text class="record-summary-toggle">{{ isItemRecordsExpanded(item) ? '收起' : '查看明细' }}</text>
                   </view>
-                  <button v-if="canManagePurchaseRecords" class="clear-no-purchase-btn" @tap="clearItemNoPurchase(item)">取消标记</button>
-                </view>
 
-                <!-- 已开始采购且有记录：显示采购记录列表 -->
-                <view v-if="purchaseList.startedAt && item.records.length > 0" class="item-expanded">
-                  <view class="divider"></view>
-
-                  <!-- 采购记录列表 -->
-                  <view class="records-list">
-                    <view v-for="record in item.records" :key="record.id" class="record-item">
-                      <view class="record-main">
-                        <view class="record-title-row">
-                          <text v-if="record.resolvedProcurementSkuName" class="record-sku">
-                            {{ record.resolvedProcurementSkuName }}
-                          </text>
-                          <text v-if="record.sourceImportId" class="record-source">截图</text>
+                  <!-- 采购记录明细：默认折叠，避免每个原料下面挂一大块 -->
+                  <view
+                    v-if="purchaseList.startedAt && (item.records || []).length > 0 && isItemRecordsExpanded(item)"
+                    class="item-expanded"
+                  >
+                    <view class="records-list">
+                      <view v-for="record in (item.records || [])" :key="record.id" class="record-item">
+                        <view class="record-main">
+                          <view class="record-title-row">
+                            <text v-if="record.resolvedProcurementSkuName" class="record-sku">
+                              {{ record.resolvedProcurementSkuName }}
+                            </text>
+                            <text v-if="record.sourceImportId" class="record-source">截图</text>
+                          </view>
+                          <view class="record-info">
+                            <text class="record-quantity">{{ formatRecordQuantity(record, item) }}</text>
+                            <text class="record-cost">¥{{ record.actualCost.toFixed(2) }}</text>
+                            <text class="record-channel">{{ record.resolvedPurchaseChannel || getRecordSkuLabel(record, item) }}</text>
+                          </view>
+                          <view class="record-details">
+                            <text v-if="record.resolvedProductModel || record.productModel" class="detail">
+                              {{ record.resolvedProductModel || record.productModel }}
+                            </text>
+                            <text v-if="formatRecordNormalizedSummary(record, item)" class="detail">
+                              {{ formatRecordNormalizedSummary(record, item) }}
+                            </text>
+                            <text class="detail-time">{{ formatFullDateTime(record.createdAt) }}</text>
+                          </view>
                         </view>
-                        <view class="record-info">
-                          <text class="record-quantity">{{ formatRecordQuantity(record, item) }}</text>
-                          <text class="record-cost">¥{{ record.actualCost.toFixed(2) }}</text>
-                          <text class="record-channel">{{ record.resolvedPurchaseChannel || getRecordSkuLabel(record, item) }}</text>
+                        <view v-if="canManagePurchaseRecords" class="record-actions">
+                          <button class="edit-btn" @tap="editRecord(record)">编辑</button>
+                          <button class="delete-btn" @tap="deleteRecord(record.id)">删除</button>
                         </view>
-                        <view class="record-details">
-                          <text v-if="record.resolvedProductModel || record.productModel" class="detail">
-                            {{ record.resolvedProductModel || record.productModel }}
-                          </text>
-                          <text v-if="formatRecordNormalizedSummary(record, item)" class="detail">
-                            {{ formatRecordNormalizedSummary(record, item) }}
-                          </text>
-                          <text class="detail-time">{{ formatFullDateTime(record.createdAt) }}</text>
-                        </view>
-                      </view>
-                      <view v-if="canManagePurchaseRecords" class="record-actions">
-                        <button class="edit-btn" @tap="editRecord(record)">编辑</button>
-                        <button class="delete-btn" @tap="deleteRecord(record.id)">删除</button>
                       </view>
                     </view>
                   </view>
@@ -245,7 +249,7 @@
         <!-- 库存已覆盖的原料：默认折叠，避免 30 项里一半是无需买的 -->
         <view v-if="coveredItems.length > 0" class="covered-section">
           <view class="covered-head" @tap="showCoveredItems = !showCoveredItems">
-            <text class="covered-title">库存已覆盖 {{ coveredItems.length }} 项</text>
+            <text class="covered-title">库存已覆盖 {{ coveredItems.length }} 项（无需处理）</text>
             <text class="covered-toggle">{{ showCoveredItems ? '收起' : '展开' }}</text>
           </view>
           <view v-if="showCoveredItems" class="covered-list">
@@ -258,7 +262,7 @@
                 v-if="canManagePurchaseRecords && !item.noPurchaseNeeded"
                 class="covered-record-btn"
                 @tap.stop="handleContinueAdd(item)"
-              >记录</button>
+              >采购记录</button>
             </view>
           </view>
         </view>
@@ -472,6 +476,22 @@ const isItemCovered = (item: any) => {
 const coveredItems = computed(() => items.value.filter((item) => isItemCovered(item)));
 const showCoveredItems = ref(false);
 
+// 采购记录默认折叠成一行（已录入 N 条 · 金额），点开才看明细
+const expandedRecordItems = ref<Record<string, boolean>>({});
+const isItemRecordsExpanded = (item: any) =>
+  expandedRecordItems.value[item.id] === true;
+const toggleItemRecords = (item: any) => {
+  expandedRecordItems.value = {
+    ...expandedRecordItems.value,
+    [item.id]: !isItemRecordsExpanded(item),
+  };
+};
+const getItemRecordCost = (item: any) =>
+  (item.records || []).reduce(
+    (sum: number, record: any) => sum + Number(record.actualCost || 0),
+    0,
+  );
+
 const trackableItemCount = computed(
   () => items.value.filter((item) => !isItemCovered(item)).length,
 );
@@ -501,6 +521,11 @@ const recordedCost = computed(() =>
 );
 
 const buildItemMetaLine = (item: any) => {
+  // 食材只看名称和数量，品牌/渠道/规格/参考价不再占一行（补剂、包材仍保留）
+  if ((item.type || 'FOOD') === 'FOOD') {
+    return '';
+  }
+
   const parts = [
     formatBrandLabel(item.resolvedBrand),
     item.resolvedPurchaseChannel,
@@ -2410,8 +2435,7 @@ const confirmDeleteItem = (item: any) => {
     }
   }
 
-  .complete-time,
-  .creator {
+  .complete-time {
     display: flex;
     justify-content: space-between;
     margin-bottom: 12rpx;
@@ -2693,13 +2717,41 @@ const confirmDeleteItem = (item: any) => {
 }
 
 .item-card {
-  background-color: #fbfcf7;
-  border-radius: 16rpx;
+  background-color: #ffffff;
+  border: 1rpx solid #e7eadf;
+  border-radius: 20rpx;
   overflow: hidden;
-  transition: all 0.3s;
+  box-shadow: 0 2rpx 10rpx rgba(30, 58, 47, 0.04);
 
-    .item-basic {
-    padding: 20rpx 24rpx;
+  .item-basic {
+    padding: 24rpx;
+  }
+
+  .item-title-wrap {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10rpx;
+  }
+
+  .status-chip {
+    flex-shrink: 0;
+    padding: 2rpx 12rpx;
+    border-radius: 999rpx;
+    font-size: 20rpx;
+    font-weight: 600;
+
+    &.no-purchase {
+      background: #f6efe0;
+      color: #7a5c28;
+    }
+
+    &.recorded {
+      background: #e8f0e6;
+      color: #2f6b4f;
+    }
   }
 
   .item-line-1 {
@@ -2710,8 +2762,9 @@ const confirmDeleteItem = (item: any) => {
   }
 
   .item-name {
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
+    max-width: 100%;
     font-size: 28rpx;
     font-weight: 600;
     color: #26261f;
@@ -2751,17 +2804,9 @@ const confirmDeleteItem = (item: any) => {
     }
   }
 
-  .item-line-2 {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16rpx;
-    margin-top: 6rpx;
-  }
-
   .item-meta {
-    flex: 1;
-    min-width: 0;
+    display: block;
+    margin-top: 8rpx;
     font-size: 22rpx;
     color: #6b6653;
     line-height: 1.4;
@@ -2773,10 +2818,10 @@ const confirmDeleteItem = (item: any) => {
   .record-btn {
     flex-shrink: 0;
     margin: 0;
-    padding: 8rpx 20rpx;
+    padding: 12rpx 28rpx;
     height: auto;
-    line-height: 1.4;
-    border-radius: 8rpx;
+    line-height: 1.3;
+    border-radius: 999rpx;
     background: #1e3a2f;
     color: #f3eddd;
     font-size: 22rpx;
@@ -2789,34 +2834,34 @@ const confirmDeleteItem = (item: any) => {
   }
 
   .item-line-3 {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12rpx;
-    margin-top: 4rpx;
+    margin-top: 10rpx;
   }
 
   .audit-text {
-    flex: 1;
-    min-width: 0;
+    display: block;
     font-size: 22rpx;
     color: #8a8a7e;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.5;
   }
 
-  .line-3-actions {
+  .item-actions {
     display: flex;
     align-items: center;
-    gap: 16rpx;
-    flex-shrink: 0;
+    justify-content: space-between;
+    gap: 32rpx;
+    margin-top: 14rpx;
+  }
+
+  .item-actions-left {
+    display: flex;
+    align-items: center;
+    gap: 32rpx;
   }
 
   .inline-action {
     font-size: 22rpx;
     color: #7a5c28;
-    padding: 6rpx 0;
+    padding: 10rpx 0;
 
     &.danger {
       color: #b4453a;
@@ -2827,11 +2872,63 @@ const confirmDeleteItem = (item: any) => {
     }
   }
 
+  .item-state-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16rpx;
+    margin-top: 12rpx;
+    padding: 10rpx 16rpx;
+    border-radius: 10rpx;
+    background: #f6efe0;
+
+    .state-text {
+      flex: 1;
+      min-width: 0;
+      font-size: 21rpx;
+      color: #7a5c28;
+    }
+
+    .state-link {
+      flex-shrink: 0;
+      font-size: 21rpx;
+      color: #7a5c28;
+      text-decoration: underline;
+    }
+  }
+
+  .record-summary {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+    margin-top: 14rpx;
+    padding-top: 14rpx;
+    border-top: 1rpx dashed #e2e6d8;
+
+    .record-summary-text {
+      font-size: 21rpx;
+      color: #6b6653;
+    }
+
+    .record-summary-cost {
+      font-size: 21rpx;
+      font-weight: 600;
+      color: #1e3a2f;
+    }
+
+    .record-summary-toggle {
+      margin-left: auto;
+      font-size: 21rpx;
+      color: #7a5c28;
+      font-weight: 600;
+    }
+  }
+
   .item-expanded {
-    background-color: #fbfcf7;
+    background-color: transparent;
 
     .records-list {
-      padding: 0 24rpx 24rpx;
+      padding: 12rpx 0 0;
       display: flex;
       flex-direction: column;
       gap: 16rpx;
@@ -3843,84 +3940,18 @@ const confirmDeleteItem = (item: any) => {
   }
 }
 
-.no-purchase-card {
-  margin: 0 24rpx 24rpx;
-  padding: 20rpx 24rpx;
-  border-radius: 12rpx;
-  background-color: #f6efe0;
-  border: 1rpx solid #b08d4f;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-
-  .no-purchase-main {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6rpx;
-  }
-
-  .no-purchase-title {
-    font-size: 26rpx;
-    font-weight: 600;
-    color: #7a5c28;
-  }
-
-  .no-purchase-reason {
-    font-size: 22rpx;
-    color: #6b6653;
-  }
-
-  .clear-no-purchase-btn {
-    padding: 8rpx 18rpx;
-    border-radius: 8rpx;
-    background-color: #fbfcf7;
-    color: #7a5c28;
-    border: 1rpx solid #b08d4f;
-    font-size: 22rpx;
-    line-height: 1.5;
-    white-space: nowrap;
-  }
-}
-
 .import-card {
   border-color: #d9cba6;
   background: #fdf9ec;
 }
 
-.import-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16rpx;
-}
 
-.import-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 6rpx;
-}
 
-.import-title {
-  font-size: 28rpx;
-  font-weight: 700;
-  color: #7a5c28;
-}
 
-.import-sub {
-  font-size: 21rpx;
-  color: #8a7a55;
-  line-height: 1.5;
-}
 
-.import-icon {
-  font-size: 40rpx;
-}
 
 .import-btn {
-  margin-top: 18rpx;
+  margin-top: 0;
   height: 80rpx;
   line-height: 80rpx;
   border-radius: 20rpx;

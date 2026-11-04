@@ -146,12 +146,6 @@
             >
               ¥{{ Number(list.totalActualCost).toFixed(2) }}
             </text>
-            <text
-              v-else-if="list.totalEstimatedCost !== undefined && list.totalEstimatedCost > 0"
-              class="amount estimated"
-            >
-              预估 ¥{{ Number(list.totalEstimatedCost).toFixed(2) }}
-            </text>
           </view>
 
           <view class="item-meta">
@@ -367,12 +361,9 @@ const createFallbackOverview = (date: string): DateOverview => {
   };
 };
 
-const buildSummaryLine = (orderCount: number, itemCount: number, estimatedCost: number) => {
-  const parts = [`${orderCount}个待采购订单`, `${itemCount}种原料`];
-  if (estimatedCost > 0) {
-    parts.push(`预估 ${formatCurrency(estimatedCost)}`);
-  }
-  return parts.join(' · ');
+const buildSummaryLine = (orderCount: number, itemCount: number) => {
+  // 采购管理页不展示预估金额，只展示订单/原料数
+  return [`${orderCount}个待采购订单`, `${itemCount}种原料`].join(' · ');
 };
 
 const buildExistingSummaryLine = (
@@ -394,14 +385,10 @@ const buildExistingSummaryWithPendingAppend = (
   amount: number,
   amountLabel: string,
   pendingAppendOrderCount: number,
-  pendingAppendEstimatedCost: number,
 ) => {
   const parts = [buildExistingSummaryLine(orderCount, itemCount, amount, amountLabel)];
   if (pendingAppendOrderCount > 0) {
     parts.push(`新增${pendingAppendOrderCount}单待合并`);
-  }
-  if (pendingAppendEstimatedCost > 0) {
-    parts.push(`新增预估 ${formatCurrency(pendingAppendEstimatedCost)}`);
   }
   return parts.join(' · ');
 };
@@ -426,17 +413,12 @@ const buildSupplementSummaryLine = (
   completedListCount: number,
   pendingOrderCount: number,
   itemCount: number,
-  estimatedCost: number,
 ) => {
-  const parts = [
+  return [
     completedListCount > 1 ? `已有${completedListCount}张已完成日采清单` : '已有已完成日采清单',
     `新增${pendingOrderCount}个订单`,
     `${itemCount}种原料`,
-  ];
-  if (estimatedCost > 0) {
-    parts.push(`预估 ${formatCurrency(estimatedCost)}`);
-  }
-  return parts.join(' · ');
+  ].join(' · ');
 };
 
 const buildDateOverview = (date: string, existingLists: any[], preview: any | null): DateOverview => {
@@ -457,10 +439,9 @@ const buildDateOverview = (date: string, existingLists: any[], preview: any | nu
       ? pendingList.sourceOrderIds.length
       : 0;
     const itemCount = Number(pendingList.itemCount || 0);
-    const estimatedAmount = normalizeAmount(pendingList.totalEstimatedCost);
     const actualAmount = normalizeAmount(pendingList.totalActualCost);
-    const displayAmount = estimatedAmount || actualAmount;
-    const displayAmountLabel = estimatedAmount > 0 ? '预估' : '采购';
+    const displayAmount = actualAmount;
+    const displayAmountLabel = '采购';
     const pendingAppendOrderCount = Array.isArray(preview?.affectedOrders)
       ? preview.affectedOrders.length
       : 0;
@@ -481,7 +462,6 @@ const buildDateOverview = (date: string, existingLists: any[], preview: any | nu
             displayAmount,
             displayAmountLabel,
             pendingAppendOrderCount,
-            pendingAppendEstimatedCost,
           )
         : buildExistingSummaryLine(orderCount, itemCount, displayAmount, displayAmountLabel),
       hintText: hasPendingAppendOrders
@@ -508,13 +488,8 @@ const buildDateOverview = (date: string, existingLists: any[], preview: any | nu
       return sum + (Array.isArray(list.sourceOrderIds) ? list.sourceOrderIds.length : 0);
     }, 0);
     const totalCompletedAmount = completedLists.reduce((sum, list) => {
-      const actualAmount = normalizeAmount(list.totalActualCost);
-      const estimatedAmount = normalizeAmount(list.totalEstimatedCost);
-      return sum + (actualAmount || estimatedAmount);
+      return sum + normalizeAmount(list.totalActualCost);
     }, 0);
-    const hasActualCompletedAmount = completedLists.some(
-      (list) => normalizeAmount(list.totalActualCost) > 0,
-    );
 
     if (orderCount > 0) {
       return {
@@ -528,7 +503,6 @@ const buildDateOverview = (date: string, existingLists: any[], preview: any | nu
           completedListCount,
           orderCount,
           itemCount,
-          estimatedCost,
         ),
         hintText:
           '该日期已有已完成日采清单。本次会新建一张独立的增量日采清单，只处理新增订单，不影响原已完成清单。',
@@ -555,7 +529,7 @@ const buildDateOverview = (date: string, existingLists: any[], preview: any | nu
         completedListCount,
         totalCompletedOrders,
         totalCompletedAmount,
-        hasActualCompletedAmount ? '累计采购' : '累计预估',
+        '累计采购',
       ),
       hintText:
         completedListCount > 1
@@ -581,7 +555,7 @@ const buildDateOverview = (date: string, existingLists: any[], preview: any | nu
       generateMode: 'initial',
       statusText: '可生成日采清单',
       chipText: `${orderCount}单待采购`,
-      summaryLine: buildSummaryLine(orderCount, itemCount, estimatedCost),
+      summaryLine: buildSummaryLine(orderCount, itemCount),
       hintText:
         date === todayString.value
           ? '当天清单可直接生成，便于员工马上开始采购'
@@ -1189,8 +1163,10 @@ onShow(() => {
 
 .summary-date-block {
   display: flex;
-  flex-direction: column;
-  gap: 10rpx;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16rpx;
 }
 
 .summary-date {
@@ -1200,7 +1176,7 @@ onShow(() => {
 }
 
 .summary-status {
-  align-self: flex-start;
+  align-self: center;
   padding: 8rpx 18rpx;
   border-radius: 999rpx;
   font-size: 22rpx;

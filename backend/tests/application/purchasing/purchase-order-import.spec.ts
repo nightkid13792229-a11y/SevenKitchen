@@ -3,7 +3,10 @@ import {
   isLineSetConsistent,
   toNumberOrNull,
 } from '../../../src/application/purchasing/purchase-order-parse';
-import { matchOrderLines } from '../../../src/application/purchasing/purchase-order-match';
+import {
+  matchOrderLines,
+  normalizeText,
+} from '../../../src/application/purchasing/purchase-order-match';
 import type { ListItemCandidate } from '../../../src/application/purchasing/purchase-order-import.types';
 
 describe('parseOrderDraft', () => {
@@ -176,6 +179,59 @@ describe('matchOrderLines', () => {
       '盒马',
     );
     expect(matched.needsNewSku).toBe(false);
+    expect(matched.confidence).toBe('HIGH');
+  });
+
+  it('订单渠道对不上商品渠道 → 不自动匹配，提示手动选择/新建', () => {
+    const [matched] = matchOrderLines(
+      [line('生蚝肉 200g', '200g/包')],
+      candidates,
+      '沃尔玛',
+    );
+    expect(matched.ingredientId).toBe('ing-oyster');
+    expect(matched.procurementSkuId).toBeNull();
+    expect(matched.needsNewSku).toBe(true);
+    expect(matched.reason).toContain('沃尔玛');
+  });
+
+  it('同渠道优先：盒马订单不会自动挂到沃尔玛的商品', () => {
+    const withTwoChannels: ListItemCandidate[] = [
+      {
+        purchaseItemId: 'item-greens',
+        ingredientId: 'ing-greens',
+        ingredientName: '小白菜',
+        skus: [
+          { id: 'sku-hm', name: '小白菜 300g/份', productModel: '300g/份', purchaseChannel: '盒马鲜生', purchaseToBaseRatio: 300, purchaseUnit: '份' },
+          { id: 'sku-wm', name: '小白菜 300g/份', productModel: '300g/份', purchaseChannel: '沃尔玛', purchaseToBaseRatio: 300, purchaseUnit: '份' },
+        ],
+      },
+    ];
+    const [matched] = matchOrderLines(
+      [line('凉山小白菜 约300g', '约300g/份')],
+      withTwoChannels,
+      '沃尔玛',
+    );
+    expect(matched.procurementSkuId).toBe('sku-wm');
+  });
+
+  it('手动匹配成功过的叫法，下次自动沿用', () => {
+    const aliases = [
+      {
+        normalizedName: normalizeText('凉山小白菜 约300g'),
+        channelFamily: '沃尔玛',
+        ingredientId: 'ing-sprout',
+        procurementSkuId: 'sku-sprout',
+      },
+    ];
+    const [matched] = matchOrderLines(
+      [line('凉山小白菜 约300g', '约300g/份')],
+      candidates,
+      '沃尔玛',
+      aliases,
+    );
+    expect(matched.ingredientId).toBe('ing-sprout');
+    expect(matched.procurementSkuId).toBe('sku-sprout');
+    expect(matched.reason).toBe('沿用上次匹配');
     expect(matched.confidence).toBe('HIGH');
   });
 });

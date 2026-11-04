@@ -9,6 +9,14 @@
 
 export type OrderChannel = '山姆' | '盒马' | '沃尔玛' | '其他';
 
+/** 手动匹配成功后记住的「叫法 → 原料/商品」 */
+export interface MatchAlias {
+  normalizedName: string;
+  channelFamily: string;
+  ingredientId: string;
+  procurementSkuId: string | null;
+}
+
 export interface ParsedOrderLine {
   rawName: string;
   spec: string | null;

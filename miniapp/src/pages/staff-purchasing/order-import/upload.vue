@@ -129,8 +129,10 @@ function chooseImages() {
           error: false,
         };
         photos.value.push(photo);
-        // 传对象而不是下标：上传期间删图会让下标错位。
-        void uploadOne(photo);
+        // 必须拿数组里的响应式代理再上传：直接改原始对象不会触发页面刷新，
+        // 会出现“图片已经传完但一直显示上传中”的假象。
+        const stored = photos.value[photos.value.length - 1];
+        void uploadOne(stored);
       }
     },
   });

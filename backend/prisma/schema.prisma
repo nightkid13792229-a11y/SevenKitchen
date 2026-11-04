@@ -5718,3 +5718,35 @@ enum ReimbursementReviewRisk {
   MEDIUM
   HIGH
 }
+
+
+/// 采购 SKU 改名记录（2026-11-05）：订单截图里手动匹配商品时同步商品名，留痕可追溯
+model ProcurementSkuNameChange {
+  id          String   @id @default(uuid()) @db.VarChar(36)
+  skuId       String   @map("sku_id") @db.VarChar(36)
+  oldName     String   @map("old_name")
+  newName     String   @map("new_name")
+  source      String   @db.VarChar(30)
+  changedById String?  @map("changed_by_id") @db.VarChar(36)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([skuId, createdAt])
+  @@map("procurement_sku_name_change")
+}
+
+/// 订单行 → 原料/采购商品 的学习映射（2026-11-05）
+/// 员工手动匹配成功后记住「这个叫法在这个渠道对应哪个商品」，下次自动命中。
+model PurchaseOrderMatchAlias {
+  id               String   @id @default(uuid()) @db.VarChar(36)
+  normalizedName   String   @map("normalized_name") @db.VarChar(300)
+  channelFamily    String   @default("") @map("channel_family") @db.VarChar(30)
+  ingredientId     String   @map("ingredient_id") @db.VarChar(36)
+  procurementSkuId String?  @map("procurement_sku_id") @db.VarChar(36)
+  createdById      String?  @map("created_by_id") @db.VarChar(36)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@unique([normalizedName, channelFamily])
+  @@index([ingredientId])
+  @@map("purchase_order_match_alias")
+}

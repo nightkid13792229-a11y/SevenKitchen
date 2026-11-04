@@ -18,7 +18,17 @@ describe('PurchaseOrderImportService', () => {
   const prisma: any = {
     purchaseList: { findUnique: jest.fn() },
     purchaseItem: { findMany: jest.fn(), findFirst: jest.fn() },
-    procurementSku: { findMany: jest.fn(), findUnique: jest.fn() },
+    procurementSku: {
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+    },
+    procurementSkuNameChange: { create: jest.fn() },
+    purchaseOrderMatchAlias: {
+      findMany: jest.fn().mockResolvedValue([]),
+      upsert: jest.fn(),
+    },
     purchaseOrderImport: {
       count: jest.fn(),
       findFirst: jest.fn(),
@@ -328,6 +338,111 @@ describe('PurchaseOrderImportService', () => {
         }),
       }),
     );
+  });
+
+  it('SKU 净含量优先于原料比例：200g/盒 按 200 克换算', async () => {
+    prisma.purchaseOrderImport.findMany.mockResolvedValue([
+      {
+        id: 'import-2',
+        purchaseListId: 'list-1',
+        status: 'DRAFT',
+        incomplete: false,
+        subtotal: 4.99,
+        channel: '沃尔玛',
+        orderTime: null,
+        imageKeys: [],
+        lines: [
+          {
+            id: 'line-2',
+            rawName: '【鲜宰】猪肝 200g',
+            isPersonal: false,
+            ingredientId: 'ing-liver',
+            procurementSkuId: 'sku-liver',
+            purchaseItemId: 'item-liver',
+            lineTotal: 4.99,
+            qty: 1,
+            unit: '盒',
+            spec: '200g',
+          },
+        ],
+      },
+    ]);
+    prisma.purchaseOrderImport.updateMany.mockResolvedValue({ count: 1 });
+    prisma.procurementSku.findUnique.mockResolvedValue({
+      id: 'sku-liver',
+      ingredientId: 'ing-liver',
+      name: '【鲜宰】猪肝 200g',
+      purchaseChannel: '沃尔玛',
+      purchaseUnit: '盒',
+      purchaseToBaseRatio: 200,
+      ingredient: { baseUnit: 'G', name: '猪肝', purchaseToBaseRatio: 1 },
+    });
+    prisma.purchaseItem.findFirst.mockResolvedValue({ id: 'item-liver' });
+    prisma.purchaseRecord.create.mockResolvedValue({ id: 'record-2' });
+    prisma.purchaseOrderImportLine.update.mockResolvedValue({});
+
+    await service.confirm(['import-2'], 'user-1');
+
+    expect(prisma.purchaseRecord.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          actualPackageSize: 200,
+          actualBaseQuantity: 200,
+        }),
+      }),
+    );
+  });
+
+  it('手动匹配现有商品时同步商品名并写改名记录', async () => {
+    prisma.purchaseOrderImportLine.findFirst.mockResolvedValue({
+      id: 'line-1',
+      importId: 'import-1',
+      ingredientId: 'ing-1',
+      procurementSkuId: null,
+      rawName: '【鲜宰】猪肝 200g',
+      import: { purchaseListId: 'list-1', status: 'DRAFT', channel: '沃尔玛' },
+    });
+    prisma.procurementSku.findFirst.mockResolvedValue({
+      id: 'sku-liver',
+      name: '猪肝',
+    });
+    prisma.procurementSku.findUnique.mockResolvedValue({ name: '猪肝' });
+    prisma.purchaseOrderImportLine.update.mockResolvedValue({
+      id: 'line-1',
+      lineNo: 1,
+      rawName: '【鲜宰】猪肝 200g',
+      spec: '200g',
+      qty: 1,
+      unit: '盒',
+      unitPrice: 4.99,
+      lineTotal: 4.99,
+      ingredientId: 'ing-1',
+      procurementSkuId: 'sku-liver',
+      isPersonal: false,
+      editedByUser: true,
+      matchConfidence: 'HIGH',
+    });
+
+    await service.updateLine({
+      importId: 'import-1',
+      lineId: 'line-1',
+      userId: 'user-1',
+      dto: { procurementSkuId: 'sku-liver' },
+    });
+
+    expect(prisma.procurementSku.update).toHaveBeenCalledWith({
+      where: { id: 'sku-liver' },
+      data: { name: '【鲜宰】猪肝 200g' },
+    });
+    expect(prisma.procurementSkuNameChange.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        skuId: 'sku-liver',
+        oldName: '猪肝',
+        newName: '【鲜宰】猪肝 200g',
+        source: 'ORDER_IMPORT',
+        changedById: 'user-1',
+      }),
+    });
   });
 
   it('带 COS key 时用签名链接下载私有截图', async () => {

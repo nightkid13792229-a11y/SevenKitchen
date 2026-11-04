@@ -33,7 +33,11 @@ import {
 } from '../nutrition-governance/agent-provider-config.service';
 import type { DeepSeekChatOptions } from '../recipe-designer/deepseek-chat';
 import { parseOrderDraft, isLineSetConsistent } from './purchase-order-parse';
-import { matchOrderLines } from './purchase-order-match';
+import {
+  matchOrderLines,
+  normalizeText,
+  resolveChannelFamily,
+} from './purchase-order-match';
 import type {
   ListItemCandidate,
   MatchedOrderLine,
@@ -159,6 +163,32 @@ export class PurchaseOrderImportService {
     const candidates = await this.buildCandidates(input.purchaseListId);
     const recognized: RecognizedOrder[] = [];
 
+    const aliasCache = new Map<string, Array<{
+      normalizedName: string;
+      channelFamily: string;
+      ingredientId: string;
+      procurementSkuId: string | null;
+    }>>();
+    const getAliasesForChannel = async (channel: string) => {
+      const family = resolveChannelFamily(channel);
+      const key = family || '__none__';
+      if (!aliasCache.has(key)) {
+        const rows = await this.prisma.purchaseOrderMatchAlias.findMany({
+          where: family
+            ? { OR: [{ channelFamily: family }, { channelFamily: '' }] }
+            : { channelFamily: '' },
+          select: {
+            normalizedName: true,
+            channelFamily: true,
+            ingredientId: true,
+            procurementSkuId: true,
+          },
+        });
+        aliasCache.set(key, rows);
+      }
+      return aliasCache.get(key)!;
+    };
+
     for (const [index, url] of imageUrls.entries()) {
       const imageKey = input.imageKeys?.[index]?.trim() || null;
       const buffer = await this.downloadImage(url, imageKey);
@@ -179,12 +209,18 @@ export class PurchaseOrderImportService {
       }
 
       const { draft, raw, model } = await this.recognize(buffer, url);
+      const aliases = await getAliasesForChannel(draft.channel);
       recognized.push({
         url,
         imageKey,
         imageHash,
         draft,
-        matched: matchOrderLines(draft.items, candidates, draft.channel),
+        matched: matchOrderLines(
+          draft.items,
+          candidates,
+          draft.channel,
+          aliases,
+        ),
         raw,
         model,
       });
@@ -303,6 +339,7 @@ export class PurchaseOrderImportService {
   async updateLine(input: {
     importId: string;
     lineId: string;
+    userId?: string;
     dto: {
       ingredientId?: string | null;
       procurementSkuId?: string | null;
@@ -404,7 +441,7 @@ export class PurchaseOrderImportService {
         }
         const sku = await this.prisma.procurementSku.findFirst({
           where: { id: dto.procurementSkuId, ingredientId, isActive: true },
-          select: { id: true },
+          select: { id: true, name: true },
         });
         if (!sku) {
           throw new BadRequestException('这个采购商品不属于所选原料');
@@ -417,11 +454,47 @@ export class PurchaseOrderImportService {
       }
     }
 
-    const updated = await this.prisma.purchaseOrderImportLine.update({
-      where: { id: input.lineId },
-      data,
+    // 只有“换了采购商品”才同步商品名；只改数量/金额不触发改名。
+    const targetSkuId = dto.procurementSkuId ?? null;
+    const skuChanged =
+      Boolean(targetSkuId) && targetSkuId !== line.procurementSkuId;
+    const desiredSkuName = skuChanged
+      ? line.rawName.trim().slice(0, 200)
+      : '';
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // 手动匹配现有商品时，把商品名同步成截图里的名字，并留一条改名记录。
+      if (targetSkuId && skuChanged && desiredSkuName) {
+        const sku = await tx.procurementSku.findUnique({
+          where: { id: targetSkuId },
+          select: { name: true },
+        });
+        if (sku && sku.name !== desiredSkuName) {
+          await tx.procurementSku.update({
+            where: { id: targetSkuId },
+            data: { name: desiredSkuName },
+          });
+          await tx.procurementSkuNameChange.create({
+            data: {
+              skuId: targetSkuId,
+              oldName: sku.name,
+              newName: desiredSkuName,
+              source: 'ORDER_IMPORT',
+              changedById: input.userId ?? null,
+            },
+          });
+        }
+      }
+      return tx.purchaseOrderImportLine.update({
+        where: { id: input.lineId },
+        data,
+      });
     });
-    return this.toLineView(updated);
+
+    const view = this.toLineView(updated);
+    return skuChanged && desiredSkuName
+      ? { ...view, renamedTo: desiredSkuName }
+      : view;
   }
 
   /** 确认：一次性生成采购记录 */
@@ -500,6 +573,7 @@ export class PurchaseOrderImportService {
                 name: true,
                 purchaseChannel: true,
                 purchaseUnit: true,
+                purchaseToBaseRatio: true,
                 ingredient: {
                   select: {
                     baseUnit: true,
@@ -523,11 +597,16 @@ export class PurchaseOrderImportService {
               );
             }
 
-            // 换算口径以原料为准（与手工录入 resolvePurchaseToBaseRatio 一致）。
-            const ratio = Number(sku.ingredient.purchaseToBaseRatio ?? 0);
+            // 换算优先用采购商品自己的净含量（盒/袋），没有才回退原料比例。
+            // 猪肝 200g/盒 与「散称 1kg」的换算不同，用原料比例会把 200g 算成 1g。
+            const ratio = Number(
+              sku.purchaseToBaseRatio ??
+                sku.ingredient.purchaseToBaseRatio ??
+                0,
+            );
             if (!Number.isFinite(ratio) || ratio <= 0) {
               throw new BadRequestException(
-                `「${sku.ingredient.name}」缺少采购单位换算比例，请先补全原料`,
+                `「${sku.name}」缺少净含量/换算比例，请先补全采购商品`,
               );
             }
 
@@ -577,6 +656,37 @@ export class PurchaseOrderImportService {
               where: { id: line.id },
               data: { purchaseRecordId: record.id },
             });
+
+            // 手动匹配/新建商品成功后，记住「这个叫法在这个渠道对应哪个商品」。
+            if (
+              line.matchSource !== 'AUTO' &&
+              line.ingredientId &&
+              line.procurementSkuId
+            ) {
+              const normalizedName = normalizeText(line.rawName);
+              if (normalizedName.length >= 2) {
+                const channelFamily = resolveChannelFamily(row.channel);
+                await tx.purchaseOrderMatchAlias.upsert({
+                  where: {
+                    normalizedName_channelFamily: {
+                      normalizedName,
+                      channelFamily,
+                    },
+                  },
+                  create: {
+                    normalizedName,
+                    channelFamily,
+                    ingredientId: line.ingredientId,
+                    procurementSkuId: line.procurementSkuId,
+                    createdById: userId,
+                  },
+                  update: {
+                    ingredientId: line.ingredientId,
+                    procurementSkuId: line.procurementSkuId,
+                  },
+                });
+              }
+            }
             createdCount += 1;
           }
         }

@@ -118,6 +118,13 @@
           <text class="field-label">采购商品</text>
           <text class="field-value" :class="{ warn: !editing.skuName }">{{ editing.skuName || '未选择 ›' }}</text>
         </view>
+        <view class="field">
+          <text class="field-label">净含量/规格</text>
+          <text class="field-value">
+            {{ editing.skuModel || editing.spec || '—' }}
+            <text class="field-hint">（截图：{{ editing.spec || '未读到' }}）</text>
+          </text>
+        </view>
         <view class="field tap">
           <text class="field-label">算个人采购</text>
           <switch :checked="editing.isPersonal" color="#2f6b4f" @change="onPersonalChange" />
@@ -384,6 +391,7 @@ function openEdit(line: OrderImportLineView) {
     totalText: line.lineTotal === null ? '' : String(line.lineTotal),
     ingredientName: ingredient?.ingredientName || '',
     skuName: sku?.name || '',
+    skuModel: sku?.productModel || '',
     _origTotal: line.aiLineTotal ?? line.lineTotal ?? 0,
     _origQty: line.qty,
     _origPrice: line.unitPrice,
@@ -496,6 +504,9 @@ async function saveEdit() {
       },
     );
     if (res.code !== 0) throw new Error(res.message || '保存失败');
+    if (res.data?.renamedTo) {
+      uni.showToast({ title: '已同步商品名', icon: 'none' });
+    }
     closeEdit();
     await load();
   } catch (error: any) {
@@ -963,6 +974,11 @@ function emptySummary() {
 
 .field-input.unit {
   flex: 0 0 120rpx;
+}
+
+.field-hint {
+  font-size: 20rpx;
+  color: #8a8574;
 }
 
 .field-value {

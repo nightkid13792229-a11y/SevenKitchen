@@ -263,11 +263,13 @@ export class StaffPurchasingController {
     @Param('id') importId: string,
     @Param('lineId') lineId: string,
     @Body() dto: UpdateOrderImportLineDto,
+    @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
     return ApiResponseDto.success(
       await this.purchaseOrderImportService.updateLine({
         importId,
         lineId,
+        userId,
         dto,
       }),
     );

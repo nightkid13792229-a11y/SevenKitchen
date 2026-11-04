@@ -38,6 +38,7 @@ import {
   PurchaseItem,
   PurchaseListStatus,
   PurchaseRecord,
+  SourceOrderSummary,
 } from '../../domain/purchasing';
 import { validatePurchasingOperation } from './purchasing-time.utils';
 import { DateUtil } from '../../utils/date.util';
@@ -3658,14 +3659,22 @@ export class PurchasingService {
   /**
    * 查询采购清单详情
    */
-  async getPurchaseListDetail(id: string): Promise<PurchaseList> {
+  async getPurchaseListDetail(
+    id: string,
+  ): Promise<PurchaseList & { sourceOrders: SourceOrderSummary[] }> {
     const purchaseList = await this.purchaseListRepository.findById(id);
 
     if (!purchaseList) {
       throw new BadRequestException(`未找到采购清单：${id}`);
     }
 
-    return purchaseList;
+    // 详情页的关联订单要显示 订单号 / 狗狗 / 食谱，不能只给 ID
+    const sourceOrders =
+      await this.purchaseListRepository.findSourceOrderSummaries(
+        purchaseList.sourceOrderIds || [],
+      );
+
+    return Object.assign(purchaseList, { sourceOrders });
   }
 
   private getPurchaseItemRequiredQuantity(item: PurchaseItem): number {

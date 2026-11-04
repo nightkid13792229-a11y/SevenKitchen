@@ -5,6 +5,14 @@
 
 import { PurchaseList, PurchaseListKind, PurchaseListStatus } from './index';
 
+/** 关联订单的展示信息（清单详情页一行一单） */
+export interface SourceOrderSummary {
+  id: string;
+  orderNo: string | null;
+  dogName: string | null;
+  recipeNames: string[];
+}
+
 export interface PurchaseListRepository {
   /**
    * 创建采购清单
@@ -15,6 +23,9 @@ export interface PurchaseListRepository {
    * 根据ID查找采购清单
    */
   findById(id: string): Promise<PurchaseList | null>;
+
+  /** 关联订单摘要：订单号 / 狗狗 / 食谱（详情页展示用） */
+  findSourceOrderSummaries(orderIds: string[]): Promise<SourceOrderSummary[]>;
 
   /**
    * 根据日期范围查找采购清单

@@ -7,6 +7,7 @@ import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import {
+  SourceOrderSummary,
   PurchaseList,
   PurchaseListKind,
   PurchaseListStatus,
@@ -269,6 +270,49 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     });
 
     return found ? PurchaseList.fromPrisma(found) : null;
+  }
+
+  async findSourceOrderSummaries(
+    orderIds: string[],
+  ): Promise<SourceOrderSummary[]> {
+    if (!orderIds || orderIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.prisma.order.findMany({
+      where: { id: { in: orderIds } },
+      select: {
+        id: true,
+        orderNo: true,
+        dog: { select: { name: true } },
+        items: { select: { recipeSnapshot: true } },
+      },
+    });
+
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return orderIds
+      .map((id) => byId.get(id))
+      .filter((row): row is (typeof rows)[number] => Boolean(row))
+      .map((row) => {
+        const recipeNames = row.items
+          .map((item) => {
+            const snapshot = (item.recipeSnapshot || {}) as Record<string, any>;
+            return (
+              snapshot.name ||
+              snapshot.recipeName ||
+              snapshot.title ||
+              snapshot.recipe?.name
+            );
+          })
+          .filter((name): name is string => typeof name === 'string' && name.trim().length > 0)
+          .map((name) => name.trim());
+        return {
+          id: row.id,
+          orderNo: row.orderNo ?? null,
+          dogName: row.dog?.name ?? null,
+          recipeNames: Array.from(new Set(recipeNames)),
+        };
+      });
   }
 
   async findByDateRange(

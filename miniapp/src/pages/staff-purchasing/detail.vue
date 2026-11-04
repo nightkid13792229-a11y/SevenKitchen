@@ -9,7 +9,7 @@
     <view v-else-if="purchaseList" class="detail-content">
       <!-- 吸顶进度条：滚动时始终能看到录了多少、花了多少 -->
       <view class="detail-progress">
-        <text class="dp-label">已处理 {{ handledItemCount }}/{{ trackableItemCount }} 项</text>
+        <text class="dp-label">已处理 {{ handledItemCount }}/{{ items.length }} 项</text>
         <view class="dp-bar">
           <view class="dp-fill" :style="{ width: handledPercent + '%' }"></view>
         </view>
@@ -123,11 +123,23 @@
 
       <!-- 原料明细 -->
       <view class="section">
-        <text class="section-title">原料明细 ({{ trackableItemCount }})</text>
+        <view class="items-head">
+          <text class="section-title">原料明细 ({{ items.length }})</text>
+          <text class="items-head-sub">待处理 {{ pendingItemCount }} 项</text>
+        </view>
+        <view class="filter-row">
+          <text
+            v-for="opt in filterOptions"
+            :key="opt.key"
+            class="filter-chip"
+            :class="{ active: activeItemFilter === opt.key }"
+            @tap="activeItemFilter = opt.key"
+          >{{ opt.label }} <text class="filter-count">{{ opt.count }}</text></text>
+        </view>
 
         <!-- 按类型分组显示原料 -->
         <view v-if="groupedItems.length > 0" class="grouped-items">
-          <view v-for="group in groupedItems" :key="group.type" class="ingredient-group">
+          <view v-for="group in filteredGroups" :key="group.type" class="ingredient-group">
             <!-- 类型标题 -->
             <view class="group-header">
               <text class="group-title">{{ getTypeLabel(group.type) }} ({{ group.items.length }})</text>
@@ -140,7 +152,10 @@
                   <view class="item-line-1">
                     <view class="item-title-wrap">
                       <text class="item-name">{{ getPurchaseItemTitle(item) }}</text>
-                      <text v-if="item.noPurchaseNeeded" class="status-chip no-purchase">无需采购</text>
+                      <text v-if="itemState(item) === 'NO_PURCHASE'" class="status-chip none">无需采购</text>
+                      <text v-else-if="itemState(item) === 'RECORDED'" class="status-chip done">已采购</text>
+                      <text v-else-if="itemState(item) === 'COVERED'" class="status-chip covered">库存足够</text>
+                      <text v-else class="status-chip pending">待采购</text>
                     </view>
                     <StaffQuantityText
                       :covered="isItemCovered(item)"
@@ -160,22 +175,31 @@
                     </text>
                   </view>
 
-                  <view v-if="item.noPurchaseNeeded" class="item-state-line">
-                    <text class="state-text">{{ item.noPurchaseReason || '已标记无需采购' }}</text>
-                    <text v-if="canManagePurchaseRecords" class="state-link" @tap.stop="clearItemNoPurchase(item)">取消标记</text>
-                  </view>
-
                   <view
-                    v-if="(canManagePurchaseRecords && !item.noPurchaseNeeded) || (purchaseList.kind === 'STOCK_REPLENISHMENT' && purchaseList.status === 'PENDING' && !purchaseList.startedAt)"
+                    v-if="(item.records || []).length > 0 || canManagePurchaseRecords || (purchaseList.kind === 'STOCK_REPLENISHMENT' && purchaseList.status === 'PENDING' && !purchaseList.startedAt)"
                     class="item-actions"
                   >
                     <view class="item-actions-left">
-                      <text
-                        v-if="canManagePurchaseRecords && shouldShowNoPurchaseButton(item)"
-                        class="inline-action"
-                        :class="{ disabled: noPurchaseMarkingItemId === item.id }"
-                        @tap.stop="markItemNoPurchase(item)"
-                      >{{ noPurchaseMarkingItemId === item.id ? '标记中…' : '无需采购' }}</text>
+                      <template v-if="itemState(item) === 'NO_PURCHASE'">
+                        <text class="state-hint">{{ item.noPurchaseReason || '已标记无需采购' }}</text>
+                        <text v-if="canManagePurchaseRecords" class="inline-action" @tap.stop="clearItemNoPurchase(item)">取消标记</text>
+                      </template>
+                      <template v-else-if="itemState(item) === 'RECORDED'">
+                        <text class="record-summary-link" @tap="toggleItemRecords(item)">
+                          已录入 {{ (item.records || []).length }} 条 · ¥{{ getItemRecordCost(item).toFixed(2) }} · {{ isItemRecordsExpanded(item) ? '收起' : '查看明细' }}
+                        </text>
+                      </template>
+                      <template v-else-if="itemState(item) === 'COVERED'">
+                        <text class="state-hint green">库存足够，无需购买</text>
+                      </template>
+                      <template v-else>
+                        <text
+                          v-if="canManagePurchaseRecords && shouldShowNoPurchaseButton(item)"
+                          class="inline-action"
+                          :class="{ disabled: noPurchaseMarkingItemId === item.id }"
+                          @tap.stop="markItemNoPurchase(item)"
+                        >{{ noPurchaseMarkingItemId === item.id ? '标记中…' : '无需采购' }}</text>
+                      </template>
                       <text
                         v-if="purchaseList.kind === 'STOCK_REPLENISHMENT' && purchaseList.status === 'PENDING' && !purchaseList.startedAt"
                         class="inline-action danger"
@@ -183,20 +207,10 @@
                       >删除</text>
                     </view>
                     <button
-                      v-if="canManagePurchaseRecords && !item.noPurchaseNeeded"
+                      v-if="canManagePurchaseRecords"
                       class="record-btn"
                       @tap.stop="handleContinueAdd(item)"
                     >采购记录</button>
-                  </view>
-
-                  <view
-                    v-if="purchaseList.startedAt && (item.records || []).length > 0"
-                    class="record-summary"
-                    @tap="toggleItemRecords(item)"
-                  >
-                    <text class="record-summary-text">已录入 {{ (item.records || []).length }} 条</text>
-                    <text class="record-summary-cost">¥{{ getItemRecordCost(item).toFixed(2) }}</text>
-                    <text class="record-summary-toggle">{{ isItemRecordsExpanded(item) ? '收起' : '查看明细' }}</text>
                   </view>
 
                   <!-- 采购记录明细：默认折叠，避免每个原料下面挂一大块 -->
@@ -246,37 +260,21 @@
           <text class="empty-text">该采购清单暂无原料</text>
         </view>
 
-        <!-- 库存已覆盖的原料：默认折叠，避免 30 项里一半是无需买的 -->
-        <view v-if="coveredItems.length > 0" class="covered-section">
-          <view class="covered-head" @tap="showCoveredItems = !showCoveredItems">
-            <text class="covered-title">库存已覆盖 {{ coveredItems.length }} 项（无需处理）</text>
-            <text class="covered-toggle">{{ showCoveredItems ? '收起' : '展开' }}</text>
-          </view>
-          <view v-if="showCoveredItems" class="covered-list">
-            <view v-for="item in coveredItems" :key="item.id" class="covered-item">
-              <view class="covered-copy">
-                <text class="covered-name">{{ getPurchaseItemTitle(item) }}</text>
-                <text class="covered-meta">{{ buildItemMetaLine(item) }}</text>
-              </view>
-              <button
-                v-if="canManagePurchaseRecords && !item.noPurchaseNeeded"
-                class="covered-record-btn"
-                @tap.stop="handleContinueAdd(item)"
-              >采购记录</button>
-            </view>
-          </view>
-        </view>
       </view>
 
       <!-- 关联订单 -->
-      <view v-if="purchaseList.sourceOrderIds && purchaseList.sourceOrderIds.length > 0" class="section">
-        <text class="section-title">关联订单 ({{ purchaseList.sourceOrderIds.length }})</text>
-        <view class="order-list">
-          <view v-for="(orderId, index) in purchaseList.sourceOrderIds" :key="index" class="order-item">
-            <text class="order-id">{{ formatOrderId(orderId) }}</text>
-            <button class="copy-btn" @tap="copyOrderId(orderId)">
-              <text class="copy-btn-text">复制</text>
-            </button>
+      <view v-if="sourceOrders.length > 0" class="section">
+        <text class="section-title">关联订单 ({{ sourceOrders.length }})</text>
+        <view class="order-table">
+          <view class="order-row order-head">
+            <text class="order-no">订单号</text>
+            <text class="order-dog">狗狗</text>
+            <text class="order-recipe">食谱</text>
+          </view>
+          <view v-for="order in sourceOrders" :key="order.id" class="order-row">
+            <text class="order-no">{{ order.orderNo || formatOrderId(order.id) }}</text>
+            <text class="order-dog">{{ order.dogName || '-' }}</text>
+            <text class="order-recipe">{{ (order.recipeNames || []).join('、') || '-' }}</text>
           </view>
         </view>
       </view>
@@ -458,6 +456,20 @@ const pendingAppendOrders = ref<
 >([]);
 const pendingAppendItems = ref<any[]>([]);
 
+const sourceOrders = computed(() => {
+  const list = purchaseList.value;
+  if (!list) return [];
+  if (Array.isArray(list.sourceOrders) && list.sourceOrders.length > 0) {
+    return list.sourceOrders;
+  }
+  return (list.sourceOrderIds || []).map((id: string) => ({
+    id,
+    orderNo: formatOrderId(id),
+    dogName: null,
+    recipeNames: [],
+  }));
+});
+
 const detailTitle = computed(() => {
   return purchaseList.value?.kind === 'STOCK_REPLENISHMENT' ? '补货清单详情' : '日采清单详情';
 });
@@ -473,8 +485,13 @@ const isItemCovered = (item: any) => {
   );
 };
 
-const coveredItems = computed(() => items.value.filter((item) => isItemCovered(item)));
-const showCoveredItems = ref(false);
+type ItemState = 'PENDING' | 'RECORDED' | 'COVERED' | 'NO_PURCHASE';
+const itemState = (item: any): ItemState => {
+  if (item.noPurchaseNeeded) return 'NO_PURCHASE';
+  if ((item.records || []).length > 0) return 'RECORDED';
+  if (isItemCovered(item)) return 'COVERED';
+  return 'PENDING';
+};
 
 // 采购记录默认折叠成一行（已录入 N 条 · 金额），点开才看明细
 const expandedRecordItems = ref<Record<string, boolean>>({});
@@ -492,20 +509,15 @@ const getItemRecordCost = (item: any) =>
     0,
   );
 
-const trackableItemCount = computed(
-  () => items.value.filter((item) => !isItemCovered(item)).length,
-);
 const handledItemCount = computed(
-  () =>
-    items.value.filter(
-      (item) =>
-        !isItemCovered(item) &&
-        ((item.records || []).length > 0 || item.noPurchaseNeeded === true),
-    ).length,
+  () => items.value.filter((item) => itemState(item) !== 'PENDING').length,
+);
+const pendingItemCount = computed(
+  () => items.value.filter((item) => itemState(item) === 'PENDING').length,
 );
 const handledPercent = computed(() =>
-  trackableItemCount.value > 0
-    ? Math.round((handledItemCount.value / trackableItemCount.value) * 100)
+  items.value.length > 0
+    ? Math.round((handledItemCount.value / items.value.length) * 100)
     : 0,
 );
 const recordedCost = computed(() =>
@@ -553,7 +565,7 @@ const groupedItems = computed(() => {
 
   // 按类型分组
   const groups = new Map<string, any[]>();
-  items.value.filter((item) => !isItemCovered(item)).forEach((item) => {
+  items.value.forEach((item) => {
     const type = item.type || 'FOOD';
     if (!groups.has(type)) {
       groups.set(type, []);
@@ -569,6 +581,42 @@ const groupedItems = computed(() => {
       items: groups.get(type)!,
     }));
 });
+
+// 原料状态筛选（全部 / 待采购 / 已录入 / 无需采购 / 库存足够）
+type ItemFilter = 'ALL' | ItemState;
+const activeItemFilter = ref<ItemFilter>('ALL');
+const itemStateCounts = computed(() => {
+  const counts: Record<ItemState, number> = {
+    PENDING: 0,
+    RECORDED: 0,
+    COVERED: 0,
+    NO_PURCHASE: 0,
+  };
+  for (const item of items.value) {
+    counts[itemState(item)] += 1;
+  }
+  return counts;
+});
+const filterOptions = computed(() => [
+  { key: 'ALL' as ItemFilter, label: '全部', count: items.value.length },
+  { key: 'PENDING' as ItemFilter, label: '待采购', count: itemStateCounts.value.PENDING },
+  { key: 'RECORDED' as ItemFilter, label: '已录入', count: itemStateCounts.value.RECORDED },
+  { key: 'NO_PURCHASE' as ItemFilter, label: '无需采购', count: itemStateCounts.value.NO_PURCHASE },
+  { key: 'COVERED' as ItemFilter, label: '库存足够', count: itemStateCounts.value.COVERED },
+]);
+const filteredGroups = computed(() =>
+  groupedItems.value
+    .map((group) => ({
+      ...group,
+      items:
+        activeItemFilter.value === 'ALL'
+          ? group.items
+          : group.items.filter(
+              (item) => itemState(item) === activeItemFilter.value,
+            ),
+    }))
+    .filter((group) => group.items.length > 0),
+);
 
 // 获取类型标签
 const getTypeLabel = (type: string) => {
@@ -2367,6 +2415,55 @@ const confirmDeleteItem = (item: any) => {
   }
 }
 
+.items-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 12rpx;
+
+  .section-title {
+    margin-bottom: 0;
+  }
+}
+
+.items-head-sub {
+  font-size: 21rpx;
+  color: #8a8574;
+  white-space: nowrap;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-bottom: 16rpx;
+}
+
+.filter-chip {
+  padding: 6rpx 16rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid #e7eadf;
+  background: #ffffff;
+  font-size: 21rpx;
+  color: #6b6653;
+
+  &.active {
+    background: #1e3a2f;
+    border-color: #1e3a2f;
+    color: #f3eddd;
+  }
+}
+
+.filter-count {
+  margin-left: 2rpx;
+  font-weight: 700;
+}
+
+.filter-chip.active .filter-count {
+  color: #f3eddd;
+}
+
 .status-card {
   .card-header {
     display: flex;
@@ -2616,76 +2713,6 @@ const confirmDeleteItem = (item: any) => {
   gap: 24rpx;
 }
 
-.covered-section {
-  margin-top: 20rpx;
-  border-radius: 12rpx;
-  background: #f4f6ec;
-  overflow: hidden;
-}
-
-.covered-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18rpx 24rpx;
-}
-
-.covered-title {
-  font-size: 24rpx;
-  font-weight: 600;
-  color: #4a5346;
-}
-
-.covered-toggle {
-  font-size: 22rpx;
-  color: #7a5c28;
-}
-
-.covered-list {
-  padding: 0 24rpx 8rpx;
-}
-
-.covered-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12rpx;
-  padding: 14rpx 0;
-  border-top: 1rpx solid #e5e8d4;
-}
-
-.covered-copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.covered-name {
-  display: block;
-  font-size: 26rpx;
-  color: #26261f;
-}
-
-.covered-meta {
-  display: block;
-  margin-top: 2rpx;
-  font-size: 20rpx;
-  color: #8a8a7e;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.covered-record-btn {
-  flex-shrink: 0;
-  padding: 6rpx 16rpx;
-  border-radius: 8rpx;
-  background: #1e3a2f;
-  color: #f3eddd;
-  font-size: 20rpx;
-  line-height: 1.4;
-  border: none;
-}
-
 .ingredient-group {
   background-color: #fbfcf7;
   border-radius: 12rpx;
@@ -2743,14 +2770,24 @@ const confirmDeleteItem = (item: any) => {
     font-size: 20rpx;
     font-weight: 600;
 
-    &.no-purchase {
+    &.pending {
       background: #f6efe0;
-      color: #7a5c28;
+      color: #8a6420;
     }
 
-    &.recorded {
+    &.covered {
       background: #e8f0e6;
       color: #2f6b4f;
+    }
+
+    &.none {
+      background: #efeee8;
+      color: #6b6653;
+    }
+
+    &.done {
+      background: #1e3a2f;
+      color: #f3eddd;
     }
   }
 
@@ -2848,14 +2885,39 @@ const confirmDeleteItem = (item: any) => {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 32rpx;
+    gap: 24rpx;
     margin-top: 14rpx;
   }
 
   .item-actions-left {
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
-    gap: 32rpx;
+    flex-wrap: wrap;
+    gap: 16rpx;
+  }
+
+  .state-hint {
+    flex: 1;
+    min-width: 0;
+    font-size: 21rpx;
+    color: #6b6653;
+    line-height: 1.4;
+
+    &.green {
+      color: #2f6b4f;
+      font-weight: 600;
+    }
+  }
+
+  .record-summary-link {
+    flex: 1;
+    min-width: 0;
+    font-size: 21rpx;
+    font-weight: 600;
+    color: #7a5c28;
+    line-height: 1.4;
   }
 
   .inline-action {
@@ -2869,58 +2931,6 @@ const confirmDeleteItem = (item: any) => {
 
     &.disabled {
       color: #8a8a7e;
-    }
-  }
-
-  .item-state-line {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16rpx;
-    margin-top: 12rpx;
-    padding: 10rpx 16rpx;
-    border-radius: 10rpx;
-    background: #f6efe0;
-
-    .state-text {
-      flex: 1;
-      min-width: 0;
-      font-size: 21rpx;
-      color: #7a5c28;
-    }
-
-    .state-link {
-      flex-shrink: 0;
-      font-size: 21rpx;
-      color: #7a5c28;
-      text-decoration: underline;
-    }
-  }
-
-  .record-summary {
-    display: flex;
-    align-items: center;
-    gap: 12rpx;
-    margin-top: 14rpx;
-    padding-top: 14rpx;
-    border-top: 1rpx dashed #e2e6d8;
-
-    .record-summary-text {
-      font-size: 21rpx;
-      color: #6b6653;
-    }
-
-    .record-summary-cost {
-      font-size: 21rpx;
-      font-weight: 600;
-      color: #1e3a2f;
-    }
-
-    .record-summary-toggle {
-      margin-left: auto;
-      font-size: 21rpx;
-      color: #7a5c28;
-      font-weight: 600;
     }
   }
 
@@ -3050,43 +3060,47 @@ const confirmDeleteItem = (item: any) => {
   }
 }
 
-.order-list {
+.order-table {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
+  flex-direction: column;
 }
 
-.order-item {
-  display: flex;
+.order-row {
+  display: grid;
+  grid-template-columns: 210rpx 110rpx 1fr;
   align-items: center;
   gap: 12rpx;
-  padding: 12rpx 16rpx;
-  background-color: #fbfcf7;
-  border-radius: 8rpx;
+  padding: 14rpx 0;
+  border-bottom: 1rpx solid #eef1e2;
+  font-size: 22rpx;
 
-  .order-id {
-    font-size: 24rpx;
-    color: #7a5c28;
-    font-family: monospace;
+  &:last-child {
+    border-bottom: 0;
   }
+}
 
-  .copy-btn {
-    padding: 4rpx 12rpx;
-    background-color: #1e3a2f;
-    color: #f3eddd;
-    border-radius: 4rpx;
-    font-size: 20rpx;
-    border: none;
-    line-height: 1.5;
+.order-head {
+  padding-top: 0;
+  font-size: 20rpx;
+  color: #8a8574;
+}
 
-    .copy-btn-text {
-      color: #f3eddd;
-    }
+.order-no {
+  font-weight: 600;
+  color: #26261f;
+  font-variant-numeric: tabular-nums;
+}
 
-    &:active {
-      opacity: 0.8;
-    }
-  }
+.order-dog {
+  color: #7a5c28;
+  font-weight: 600;
+}
+
+.order-recipe {
+  color: #6b6653;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 // 底部操作栏
@@ -3881,61 +3895,6 @@ const confirmDeleteItem = (item: any) => {
       &:active {
         opacity: 0.8;
       }
-    }
-  }
-}
-
-// ==========================================
-// 修改样式：原料卡片操作按钮
-// ==========================================
-.item-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-  align-self: flex-end;
-
-  .delete-item-btn {
-    padding: 8rpx 20rpx;
-    background-color: #b4453a;
-    color: #f3eddd;
-    border-radius: 8rpx;
-    font-size: 24rpx;
-    border: none;
-    line-height: 1.5;
-    white-space: nowrap;
-
-    &:active {
-      opacity: 0.8;
-    }
-  }
-
-  .continue-add-btn {
-    padding: 12rpx 20rpx;
-    background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-    color: #f3eddd;
-    border-radius: 8rpx;
-    font-size: 24rpx;
-    border: none;
-    line-height: 1.5;
-    white-space: nowrap;
-
-    &:active {
-      opacity: 0.8;
-    }
-  }
-
-  .no-purchase-btn {
-    padding: 12rpx 20rpx;
-    background-color: #f6efe0;
-    color: #7a5c28;
-    border-radius: 8rpx;
-    font-size: 24rpx;
-    border: 1rpx solid #b08d4f;
-    line-height: 1.5;
-    white-space: nowrap;
-
-    &:active {
-      opacity: 0.8;
     }
   }
 }

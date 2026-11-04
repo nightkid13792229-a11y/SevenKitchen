@@ -18,6 +18,9 @@ describe('PrismaPurchaseListRepository', () => {
     ingredient: {
       findMany: jest.fn(),
     },
+    order: {
+      findMany: jest.fn(),
+    },
   } as any;
 
   beforeEach(() => {
@@ -385,5 +388,42 @@ describe('PrismaPurchaseListRepository', () => {
         referencePricePerPurchaseUnit: 89.4,
       }),
     );
+  });
+
+  it('returns source order summaries in the original order without duplicate recipes', async () => {
+    mockPrismaService.order.findMany.mockResolvedValue([
+      {
+        id: 'order-2',
+        orderNo: 'SK20261102-005',
+        dog: { name: '皮蛋' },
+        items: [{ recipeSnapshot: { name: '食谱B' } }],
+      },
+      {
+        id: 'order-1',
+        orderNo: 'SK20261102-004',
+        dog: { name: '皮蛋' },
+        items: [
+          { recipeSnapshot: { recipeName: '食谱A' } },
+          { recipeSnapshot: { name: '食谱A' } },
+        ],
+      },
+    ]);
+
+    const repository = new PrismaPurchaseListRepository(mockPrismaService);
+    const result = await repository.findSourceOrderSummaries([
+      'order-1',
+      'order-2',
+    ]);
+
+    expect(result.map((item) => item.orderNo)).toEqual([
+      'SK20261102-004',
+      'SK20261102-005',
+    ]);
+    expect(result[0]).toEqual({
+      id: 'order-1',
+      orderNo: 'SK20261102-004',
+      dogName: '皮蛋',
+      recipeNames: ['食谱A'],
+    });
   });
 });

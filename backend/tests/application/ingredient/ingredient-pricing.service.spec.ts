@@ -161,8 +161,9 @@ describe('IngredientPricingService', () => {
           ingredientId: 'ingredient-1',
           purchaseRecordId: 'purchase-record-1',
           sourceQuantity: 3.375,
-          sourcePricePerPurchaseUnit: 29.93,
-          proposedEffectivePrice: 29.93,
+          // 6 位小数：101 元 / 3375g × 1000 = 29.925926 元/kg（原来被截成 29.93）
+          sourcePricePerPurchaseUnit: 29.925926,
+          proposedEffectivePrice: 29.925926,
         }),
       ],
     });

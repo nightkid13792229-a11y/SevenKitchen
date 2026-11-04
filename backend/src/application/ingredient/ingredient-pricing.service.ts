@@ -155,10 +155,10 @@ export class IngredientPricingService {
 
       const sourcePricePerPurchaseUnit =
         pricingBasis.ingredientPricePerPurchaseUnit;
-      const previousCurrentPricePerPurchaseUnit = this.roundCurrency(
+      const previousCurrentPricePerPurchaseUnit = this.roundPrice(
         ingredient.currentPricePerPurchaseUnit,
       );
-      const previousEffectivePrice = this.roundCurrency(
+      const previousEffectivePrice = this.roundPrice(
         ingredient.getEffectivePricePerPurchaseUnit(),
       );
 
@@ -540,7 +540,7 @@ export class IngredientPricingService {
       ingredientId,
       accumulator,
     ] of ingredientCurrentAccumulator.entries()) {
-      const currentPrice = this.toWeightedPrice(accumulator);
+      const currentPrice = this.toWeightedUnitCost(accumulator);
       appliedCurrentPriceByIngredient.set(ingredientId, currentPrice);
       await this.ingredientRepository.update(ingredientId, {
         currentPricePerPurchaseUnit: currentPrice,
@@ -591,7 +591,7 @@ export class IngredientPricingService {
         continue;
       }
 
-      const effectivePricePerPurchaseUnit = this.roundCurrency(
+      const effectivePricePerPurchaseUnit = this.roundPrice(
         effectiveUnitCost * sourceIngredient.purchaseToBaseRatio,
       );
       await this.ingredientRepository.updateEffectivePrice(
@@ -611,7 +611,7 @@ export class IngredientPricingService {
       const effectiveKey = this.buildEffectiveKey(change.ingredientId);
       const appliedEffectiveUnitCost =
         appliedEffectiveUnitCostByKey.get(effectiveKey);
-      const appliedEffectivePrice = this.roundCurrency(
+      const appliedEffectivePrice = this.roundPrice(
         (appliedEffectiveUnitCost ??
           change.proposedEffectivePrice.toNumber() /
             sourceIngredient.purchaseToBaseRatio) *
@@ -878,7 +878,7 @@ export class IngredientPricingService {
       baseQuantity,
       baseUnitCost,
       ingredientPurchaseQuantity,
-      ingredientPricePerPurchaseUnit: this.roundCurrency(
+      ingredientPricePerPurchaseUnit: this.roundPrice(
         baseUnitCost * ingredientRatio,
       ),
     };
@@ -949,6 +949,17 @@ export class IngredientPricingService {
 
   private roundCurrency(value: number): number {
     return Number(value.toFixed(2));
+  }
+
+  /**
+   * 原料单价（元/采购单位）保留 6 位小数。
+   *
+   * 采购单位是 1g 的原料（占大多数），单价就是 0.0x 元/克；
+   * 只保留 2 位会被抹成 0.01 / 0.02，误差可达 30%。
+   * SKU 价格（元/桶、元/份）仍用 roundCurrency。
+   */
+  private roundPrice(value: number): number {
+    return Number(value.toFixed(6));
   }
 
   private roundRatio(value: number): number {

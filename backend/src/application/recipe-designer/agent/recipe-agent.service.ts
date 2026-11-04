@@ -30,7 +30,7 @@ import {
 import { RecipeDesignerService } from '../recipe-designer.service';
 import { buildSystemPrompt } from './prompt';
 import { CitationRegistry } from './citation-registry';
-import { extractCitedClaims, judgeCitedClaims } from './citation-judge';
+import { judgeAnswer } from './citation-judge';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
 import { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
@@ -247,31 +247,18 @@ export class RecipeAgentService implements OnModuleInit {
         if (response.content) {
           await this.appendMessage(sessionId, 'ASSISTANT', response.content);
           const audit = citations.audit(response.content);
-          const claims = extractCitedClaims(response.content);
-          const semantic =
-            claims.length > 0
-              ? await judgeCitedClaims({
-                  config,
-                  claims,
-                  registry: citations,
-                  onUsage: (usage) => {
-                    void this.recordUsage(
-                      sessionId,
-                      usage.promptTokens,
-                      usage.completionTokens,
-                    );
-                  },
-                })
-              : {
-                  model: config.reviewModel || config.model,
-                  totalClaims: 0,
-                  judgedClaims: 0,
-                  claims: [],
-                  supported: 0,
-                  partial: 0,
-                  unsupported: 0,
-                  notCheckable: 0,
-                };
+          const semantic = await judgeAnswer({
+            config,
+            answer: response.content,
+            registry: citations,
+            onUsage: (usage) => {
+              void this.recordUsage(
+                sessionId,
+                usage.promptTokens,
+                usage.completionTokens,
+              );
+            },
+          });
           await this.prisma.recipeDesignAgentSession.update({
             where: { id: sessionId },
             data: { citationAudit: { ...audit, semantic } as any },

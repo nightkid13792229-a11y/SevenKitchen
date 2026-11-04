@@ -220,7 +220,7 @@ function kindFor(
 /**
  * 从草稿读一格，翻成展示口径。
  *
- * 可食部在草稿里是比例 `edibleYieldRate`（0–1），页面用百分数
+ * 可食部在草稿里是比例 `edibleYieldRate`（0.1–1），页面用百分数
  * `edibleYieldPercent`（0–100）；换算只在这里发生一次。
  */
 function draftFieldValue(

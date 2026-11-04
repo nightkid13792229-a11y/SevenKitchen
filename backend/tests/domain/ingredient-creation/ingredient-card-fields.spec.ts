@@ -53,16 +53,16 @@ describe('食材原料卡字段契约', () => {
     );
   });
 
-  it('只有标签分类在建完之后补，AI 本阶段不写', () => {
+  it('标签分类也可在建原料时填，没有 AFTER_CREATE 字段', () => {
     expect(AI_WRITABLE_INGREDIENT_FIELDS).toContain('labelCategory');
     expect(AI_WRITABLE_INGREDIENT_FIELDS).toContain('labelNames');
-    expect(AI_WRITABLE_INGREDIENT_FIELDS).not.toContain('tags');
-    expect(AI_WRITABLE_INGREDIENT_FIELDS).toHaveLength(14);
+    expect(AI_WRITABLE_INGREDIENT_FIELDS).toContain('tags');
+    expect(AI_WRITABLE_INGREDIENT_FIELDS).toHaveLength(15);
     expect(
       INGREDIENT_CARD_FIELDS.filter(
         (field) => field.stage === 'AFTER_CREATE',
       ).map((field) => field.key),
-    ).toEqual(['tags']);
+    ).toEqual([]);
   });
 
   it('落 properties 的字段包含标签/密度，可食部单列', () => {

@@ -5,7 +5,10 @@
  * 后端接口外面包的 `{ code, message, data }` 由 `api/index.ts` 的拦截器拆掉，
  * 这里的类型只描述 `data` 本身。
  */
-import type { IngredientCardFieldKey } from '@/constants/ingredientCardFields'
+import type {
+  IngredientCardFieldKey,
+  IngredientManualField
+} from '@/constants/ingredientCardFields'
 
 /** 草稿阶段。后端 `CreationStep` 契约：新建草稿从 INTAKE 开始。 */
 export type CreationStep =
@@ -75,19 +78,19 @@ export interface ExceptionRecord {
 /**
  * 原料卡上人可改、AI 也能写的字段（公共字段名）。
  *
- * 直接复用字段目录的 30 个公共键，不再手写一份字面量清单：少一项就等于
+ * 直接复用字段目录的 15 个公共键，不再手写一份字面量清单：少一项就等于
  * 草稿收不下这个字段，多一项则与页面、AI 工具对不上。
  *
  * 用**公共字段名**（而不是入库键名）标记人工改动：可食部在库里存成比例
  * `edibleYieldRate`，但工具与页面都以百分数 `edibleYieldPercent` 交流，
  * 标记也统一用后者，避免同一件事两套名字。
  */
-export type IngredientCardField = IngredientCardFieldKey
+export type IngredientCardField = IngredientManualField
 
 /**
  * ⑤ 标准原料档案的预填值；拿不准的保持 null，标「待补」，不阻断保存。
  *
- * 字段与 `INGREDIENT_CARD_FIELDS` 一一对应：除 4 个必填项外全部可选 ——
+ * 字段与 `INGREDIENT_CARD_FIELDS` 一一对应：除必填项外全部可选 ——
  * 向导按分组逐步填，没走到的分组就是 `undefined`（不是「人清空了」），
  * 人明确清空的才是 `null`。旧调用方（AI 字段工具、提交服务）只构造其中
  * 一部分字段，也照样成立。
@@ -132,6 +135,8 @@ export interface IngredientDraft {
   addTiming?: string | null
   productionLossRate?: number | null
   tags?: string[]
+  /** 标签关联 id；授权时写入 ingredient_tag_assignment */
+  tagIds?: string[]
   // STORAGE
   shelfLifeMonths?: number | null
   storageCondition?: string | null
@@ -145,7 +150,7 @@ export interface IngredientDraft {
    * 人工审核时改过的字段（只存在草稿里）。
    * AI 的 updateIngredientFields 遇到这些字段会跳过，不覆盖人的判断。
    */
-  manualFields?: IngredientCardField[]
+  manualFields?: IngredientManualField[]
 }
 
 /**
@@ -164,6 +169,8 @@ export interface RecommendedProductDraft {
   purchaseLinkPlatform: string
   purchaseLinkUrl: string
   imageUrl: string
+  /** 上传返回的 COS key；仅前端用于删除时清理，不落 recommended_product 表 */
+  imageKey?: string
   sortOrder: number
   isActive: boolean
 }
@@ -405,6 +412,8 @@ export interface IngredientCreationDraftPayload {
   recommendedProducts?: RecommendedProductDraft[]
   /** 生产采购 SKU 草稿（可多条） */
   procurementSkus?: ProcurementSkuDraft[]
+  /** 旧版原料级采购字段是否已经迁到子板块（一次性迁移标记） */
+  childDraftsMigrated?: boolean
   verify?: { exceptions: ExceptionRecord[] }
   /** AI 提案历史：只追加、不覆盖，前端不得回传 */
   proposalHistory?: ProposalSnapshot[]

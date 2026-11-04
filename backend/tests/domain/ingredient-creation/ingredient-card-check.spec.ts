@@ -5,12 +5,15 @@ import {
 } from 'src/domain/ingredient-creation/ingredient-card-check';
 import { INGREDIENT_CARD_FIELDS } from 'src/domain/ingredient-creation/ingredient-card-fields';
 
-/** 干净草稿：填 6 个必填项，采购、贮存等其余字段都留空。 */
+/** 干净草稿：填 9 个必填项，其余字段都留空。 */
 const base: IngredientDraft = {
   name: '冷冻三文鱼',
   type: 'FOOD',
   baseUnit: 'G',
   unitDisplayLabel: '克',
+  cfctClass: '鱼类及制品',
+  procurementStrategy: 'DAILY_PURCHASE',
+  edibleYieldRate: 0.95,
   labelCategory: 'FEED_MATERIAL',
   labelNames: ['三文鱼'],
 };
@@ -25,12 +28,15 @@ const codes = (
   existingNames: readonly string[] = [],
 ) => check(ingredient, existingNames).map((item) => item.code);
 
-/** 有必填校验的 6 项，不计入完整度提醒。 */
+/** 有必填校验的 9 项，不计入完整度提醒。 */
 const REQUIRED_FIELD_KEYS: ReadonlySet<string> = new Set([
   'name',
   'type',
   'baseUnit',
   'unitDisplayLabel',
+  'cfctClass',
+  'procurementStrategy',
+  'edibleYieldPercent',
   'labelCategory',
   'labelNames',
 ]);
@@ -53,6 +59,11 @@ function filledDraft(): Record<string, unknown> {
     type: 'FOOD',
     baseUnit: 'G',
     unitDisplayLabel: '克',
+    cfctClass: '禽肉类及制品',
+    procurementStrategy: 'DAILY_PURCHASE',
+    edibleYieldRate: 0.95,
+    labelCategory: 'FEED_MATERIAL',
+    labelNames: ['鹌鹑肉'],
   };
   for (const field of INGREDIENT_CARD_FIELDS) {
     if (field.stage !== 'CREATABLE' || REQUIRED_FIELD_KEYS.has(field.key)) {
@@ -87,7 +98,7 @@ describe('runIngredientCardCheck', () => {
     expect(warnings[0].fieldPath).toBeUndefined();
     expect(warnings[0].message).toMatch(/还有 \d+ 项没填/);
     expect(warnings[0].message).toBe(
-      '还有 7 项没填：备注、单个重量(克)、CFCT分类、可食部比率、主要营养价值、采购策略、名称依据',
+      '还有 5 项没填：备注、标签分类、单个重量(克)、主要营养价值、名称依据',
     );
     expect(warnings[0].suggestion).toBe('这些不是阻断项，补不补由你定');
     expect(
@@ -186,6 +197,51 @@ describe('runIngredientCardCheck', () => {
     ).toBe('ingredient.unitDisplayLabel');
   });
 
+  it('CFCT 分类必填', () => {
+    for (const cfctClass of [undefined, null, '  ']) {
+      const items = check({ ...base, cfctClass: cfctClass as never });
+      expect(items.map((item) => item.code)).toContain('CFCT_REQUIRED');
+      expect(
+        items.find((item) => item.code === 'CFCT_REQUIRED')?.fieldPath,
+      ).toBe('ingredient.cfctClass');
+    }
+  });
+
+  it('采购策略必填，且只认受控词表', () => {
+    for (const procurementStrategy of [undefined, null, '', '长期采购']) {
+      const items = check({
+        ...base,
+        procurementStrategy: procurementStrategy as never,
+      });
+      expect(items.map((item) => item.code)).toContain(
+        'PURCHASE_STRATEGY_REQUIRED',
+      );
+    }
+    for (const procurementStrategy of [
+      'DAILY_PURCHASE',
+      'STOCK_REPLENISHMENT',
+      'HYBRID',
+    ]) {
+      expect(
+        codes({ ...base, procurementStrategy }),
+      ).not.toContain('PURCHASE_STRATEGY_REQUIRED');
+    }
+  });
+
+  it('可食部必填，且 10%–100% 之外阻断', () => {
+    for (const edibleYieldRate of [undefined, null]) {
+      expect(codes({ ...base, edibleYieldRate: edibleYieldRate as never })).toContain(
+        'EDIBLE_REQUIRED',
+      );
+    }
+    expect(codes({ ...base, edibleYieldRate: 0.05 })).toContain('EDIBLE_RANGE');
+    expect(codes({ ...base, edibleYieldRate: 1.5 })).toContain('EDIBLE_RANGE');
+    expect(codes({ ...base, edibleYieldRate: 0.1 })).not.toContain(
+      'EDIBLE_RANGE',
+    );
+    expect(codes({ ...base, edibleYieldRate: 1 })).not.toContain('EDIBLE_RANGE');
+  });
+
   it('标签类型必须选，空值与目录外值都阻断', () => {
     for (const labelCategory of [undefined, null, 'NOT_A_CATEGORY']) {
       const items = check({
@@ -259,6 +315,8 @@ describe('runIngredientCardCheck', () => {
       'NAME_REQUIRED',
       'BASE_UNIT_INVALID',
       'UNIT_LABEL_REQUIRED',
+      'CFCT_REQUIRED',
+      'PURCHASE_STRATEGY_REQUIRED',
       'LABEL_CATEGORY_REQUIRED',
       'LABEL_NAMES_REQUIRED',
       'EDIBLE_RANGE',
@@ -294,9 +352,12 @@ describe('runIngredientCardCheck', () => {
       'NAME_DUPLICATE',
       'BASE_UNIT_INVALID',
       'UNIT_LABEL_REQUIRED',
+      'CFCT_REQUIRED',
+      'PURCHASE_STRATEGY_REQUIRED',
       'LABEL_CATEGORY_REQUIRED',
       'LABEL_NAMES_REQUIRED',
       'DENSITY_REQUIRED',
+      'EDIBLE_REQUIRED',
       'EDIBLE_RANGE',
       'FIELDS_EMPTY',
     ]);
@@ -305,10 +366,13 @@ describe('runIngredientCardCheck', () => {
       { code: 'NAME_DUPLICATE', level: 'blocking' },
       { code: 'BASE_UNIT_INVALID', level: 'blocking' },
       { code: 'UNIT_LABEL_REQUIRED', level: 'blocking' },
+      { code: 'CFCT_REQUIRED', level: 'blocking' },
+      { code: 'PURCHASE_STRATEGY_REQUIRED', level: 'blocking' },
       { code: 'LABEL_CATEGORY_REQUIRED', level: 'blocking' },
       { code: 'LABEL_NAMES_REQUIRED', level: 'blocking' },
       { code: 'DENSITY_REQUIRED', level: 'blocking' },
-      { code: 'EDIBLE_RANGE', level: 'exceptionable' },
+      { code: 'EDIBLE_REQUIRED', level: 'blocking' },
+      { code: 'EDIBLE_RANGE', level: 'blocking' },
       { code: 'FIELDS_EMPTY', level: 'warning' },
     ]);
     expect(
@@ -317,7 +381,7 @@ describe('runIngredientCardCheck', () => {
     ).toBe('blocking');
     expect(
       INGREDIENT_CARD_RULES.find((rule) => rule.code === 'EDIBLE_RANGE')?.level,
-    ).toBe('exceptionable');
+    ).toBe('blocking');
     expect(
       INGREDIENT_CARD_RULES.find((rule) => rule.code === 'FIELDS_EMPTY')?.level,
     ).toBe('warning');

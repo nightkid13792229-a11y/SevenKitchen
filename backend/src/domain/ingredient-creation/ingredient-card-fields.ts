@@ -29,7 +29,7 @@ export type IngredientFieldGroup =
 /**
  * 字段的生命周期阶段：
  * - `CREATABLE`：建原料时就能填，也允许 AI 写；
- * - `AFTER_CREATE`：要等原料建完、有了库存记录才谈得上，本阶段只读展示；
+ * - `AFTER_CREATE`：要等原料建完、有了库存记录才谈得上（当前没有这样的字段）；
  * - `SYSTEM`：系统生成，页面不给人填（当前没有这样的字段，预留给后续）。
  */
 export type IngredientFieldStage = 'CREATABLE' | 'AFTER_CREATE' | 'SYSTEM';
@@ -76,7 +76,7 @@ const CARD_FIELD_DEFINITIONS = [
     key: 'tags',
     group: 'BASIC',
     label: '标签分类',
-    stage: 'AFTER_CREATE',
+    stage: 'CREATABLE',
     valueType: 'STRING_ARRAY',
   },
   // MEASURE
@@ -166,6 +166,14 @@ const CARD_FIELD_DEFINITIONS = [
 export type IngredientCardFieldKey =
   (typeof CARD_FIELD_DEFINITIONS)[number]['key'];
 
+/**
+ * 人工标记可以覆盖的字段：15 个可见键 + `category`。
+ *
+ * `category` 不在食材档案里展示（已移到营养档案页），但它参与生熟判定，
+ * 人改过之后同样不能让 AI 再覆盖，所以必须进人工字段白名单。
+ */
+export type IngredientManualField = IngredientCardFieldKey | 'category';
+
 /** 15 个字段的完整定义，顺序即展示顺序。 */
 export const INGREDIENT_CARD_FIELDS: readonly IngredientCardFieldDef[] =
   CARD_FIELD_DEFINITIONS;
@@ -174,10 +182,14 @@ export const INGREDIENT_CARD_FIELDS: readonly IngredientCardFieldDef[] =
 export const INGREDIENT_CARD_FIELD_KEYS: readonly IngredientCardFieldKey[] =
   INGREDIENT_CARD_FIELDS.map((field) => field.key);
 
+/** 人工字段白名单：15 个可见键 + category。 */
+export const INGREDIENT_MANUAL_FIELD_KEYS: readonly IngredientManualField[] = [
+  ...INGREDIENT_CARD_FIELD_KEYS,
+  'category',
+];
+
 /**
- * AI 可写的 14 项 = 除了 1 项 `AFTER_CREATE`（标签分类）之外的全部。
- *
- * 标签分类本期先只读展示，等原料建完再补。
+ * AI 可写的 15 项：当前全部字段都是建原料时可填。
  */
 export const AI_WRITABLE_INGREDIENT_FIELDS: readonly IngredientCardFieldKey[] =
   INGREDIENT_CARD_FIELDS.filter((field) => field.stage === 'CREATABLE').map(
@@ -217,6 +229,9 @@ export const EDIBLE_YIELD_RATE_PROPERTY_KEY = 'edible_yield_rate';
 const INGREDIENT_CARD_FIELD_KEY_SET: ReadonlySet<string> = new Set(
   INGREDIENT_CARD_FIELD_KEYS,
 );
+const INGREDIENT_MANUAL_FIELD_KEY_SET: ReadonlySet<string> = new Set(
+  INGREDIENT_MANUAL_FIELD_KEYS,
+);
 
 /**
  * 这个键是不是契约内的原料卡字段。
@@ -227,4 +242,13 @@ export function isIngredientCardFieldKey(
   value: unknown,
 ): value is IngredientCardFieldKey {
   return typeof value === 'string' && INGREDIENT_CARD_FIELD_KEY_SET.has(value);
+}
+
+/** 这个键能不能被人工标记（可见字段或 category）。 */
+export function isIngredientManualField(
+  value: unknown,
+): value is IngredientManualField {
+  return (
+    typeof value === 'string' && INGREDIENT_MANUAL_FIELD_KEY_SET.has(value)
+  );
 }

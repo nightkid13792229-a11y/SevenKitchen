@@ -562,6 +562,7 @@ const FULL_INGREDIENT: IngredientDraft = {
   addTiming: 'BEFORE_MIXING',
   productionLossRate: 1.05,
   tags: ['高蛋白', '冷冻'],
+  tagIds: ['tag-1'],
   // STORAGE
   shelfLifeMonths: 12,
   storageCondition: '冷冻 -18℃',
@@ -571,7 +572,7 @@ const FULL_INGREDIENT: IngredientDraft = {
   labelCategory: 'FEED_MATERIAL',
   labelNames: ['三文鱼'],
   labelNameSource: '饲料原料目录（2023 版）',
-  manualFields: ['cfctClass', 'edibleYieldPercent']
+  manualFields: ['cfctClass', 'edibleYieldPercent', 'category']
 }
 
 const FULL_INGREDIENT_BY_KEY = FULL_INGREDIENT as unknown as Record<
@@ -592,7 +593,12 @@ describe('审核页 · 食材原料卡映射', () => {
     }
     expect(card.nameEn).toBe('Frozen salmon')
     expect(card.category).toBe('MEAT_ORGAN')
-    expect(card.manualFields).toEqual(['cfctClass', 'edibleYieldPercent'])
+    expect(card.tagIds).toEqual(['tag-1'])
+    expect(card.manualFields).toEqual([
+      'cfctClass',
+      'edibleYieldPercent',
+      'category'
+    ])
   })
 
   it('toIngredientDraft 写回可见字段与隐藏保留字段，采购/库存搬到子板块后清空', () => {
@@ -617,8 +623,9 @@ describe('审核页 · 食材原料卡映射', () => {
       labelNameSource: '饲料原料目录（2023 版）',
       procurementStrategy: 'DAILY_PURCHASE',
       tags: ['高蛋白', '冷冻'],
+      tagIds: ['tag-1'],
       edibleYieldRate: 0.75,
-      manualFields: ['cfctClass', 'edibleYieldPercent']
+      manualFields: ['cfctClass', 'edibleYieldPercent', 'category']
     })
     expect(draft).toMatchObject({
       brand: null,
@@ -710,10 +717,10 @@ describe('审核页 · 食材原料卡映射', () => {
     const card = toIngredientCard({
       ingredient: {
         ...FULL_INGREDIENT,
-        manualFields: ['brand', 'notAField', 'cfctClass'] as never
+        manualFields: ['brand', 'notAField', 'cfctClass', 'category'] as never
       }
     })
 
-    expect(card.manualFields).toEqual(['cfctClass'])
+    expect(card.manualFields).toEqual(['cfctClass', 'category'])
   })
 })

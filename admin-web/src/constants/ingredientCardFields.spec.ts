@@ -43,7 +43,7 @@ const EXPECTED_FIELD_ROWS: ReadonlyArray<
   ['name', 'BASIC', '原料名称', 'CREATABLE', 'text'],
   ['type', 'BASIC', '原料类型', 'CREATABLE', 'select'],
   ['notes', 'BASIC', '备注', 'CREATABLE', 'text'],
-  ['tags', 'BASIC', '标签分类', 'AFTER_CREATE', 'tags'],
+  ['tags', 'BASIC', '标签分类', 'CREATABLE', 'tags'],
   ['baseUnit', 'MEASURE', '基准单位', 'CREATABLE', 'select'],
   ['unitDisplayLabel', 'MEASURE', '标准单位展示名', 'CREATABLE', 'text'],
   ['weightG', 'MEASURE', '单个重量(克)', 'CREATABLE', 'number'],
@@ -82,8 +82,8 @@ describe('食材原料字段目录', () => {
     ).toEqual(EXPECTED_FIELD_ROWS)
   })
 
-  it('建完之后补的只有标签分类', () => {
-    expect(INGREDIENT_AFTER_CREATE_FIELDS.map((f) => f.key)).toEqual(['tags'])
+  it('没有建完之后才补的字段', () => {
+    expect(INGREDIENT_AFTER_CREATE_FIELDS.map((f) => f.key)).toEqual([])
   })
 
   it('5 组按后端顺序排列', () => {

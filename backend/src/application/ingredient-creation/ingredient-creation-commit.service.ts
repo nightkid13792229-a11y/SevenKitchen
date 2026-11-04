@@ -14,7 +14,7 @@ import { normalizeLegacyNutritionSourceType } from '../../domain/ingredient/nutr
 import type { NutritionProfileV2 } from '../../domain/ingredient/types';
 import {
   EDIBLE_YIELD_RATE_PROPERTY_KEY,
-  INGREDIENT_CARD_FIELD_KEYS,
+  INGREDIENT_MANUAL_FIELD_KEYS,
   INGREDIENT_PROPERTY_KEY_BY_FIELD,
 } from '../../domain/ingredient-creation/ingredient-card-fields';
 import type { PreparationState } from '../../domain/ingredient-creation/preparation-state';
@@ -322,13 +322,13 @@ function findAiProposalForProfile(
 }
 
 /**
- * 原料卡人工字段白名单：直接取字段契约的 15 个公共键。
+ * 原料卡人工字段白名单：15 个可见键 + 类别。
  *
- * 不能在这里手写一份更短的清单：人把「品牌」标记成人工核对后，提交审计里
+ * 不能在这里手写一份更短的清单：人把「类别」标记成人工核对后，提交审计里
  * 会静默丢掉这个标记，事后查不到是谁改的。
  */
 const INGREDIENT_CARD_FIELD_SET: ReadonlySet<string> = new Set(
-  INGREDIENT_CARD_FIELD_KEYS,
+  INGREDIENT_MANUAL_FIELD_KEYS,
 );
 
 /** 读原料卡上的人工改动标记；脏值过滤掉，顺序按入库顺序保留。 */
@@ -595,6 +595,7 @@ export class IngredientCreationCommitService {
         ingredient.baseUnit,
         input,
       );
+      await this.createTagAssignments(tx, createdIngredient.id, ingredient);
       const stateCounts = new Map<string, number>();
       for (const prepared of preparedProfiles) {
         const state = prepared.profile.preparationState;
@@ -1072,6 +1073,38 @@ export class IngredientCreationCommitService {
         });
       }
     }
+  }
+
+  /** 标签关联：只接受库里真实存在的标签 id，避免外键错导致整次授权 500。 */
+  private async createTagAssignments(
+    tx: Prisma.TransactionClient,
+    ingredientId: string,
+    ingredient: IngredientDraft,
+  ): Promise<void> {
+    const tagIds = [
+      ...new Set(
+        (ingredient.tagIds ?? [])
+          .filter((id): id is string => typeof id === 'string')
+          .map((id) => id.trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (tagIds.length === 0) {
+      return;
+    }
+
+    const found = await tx.ingredientTag.findMany({
+      where: { id: { in: tagIds } },
+      select: { id: true },
+    });
+    if (found.length !== tagIds.length) {
+      throw new BadRequestException('有标签不存在或已被删除，请刷新后重试');
+    }
+
+    await tx.ingredientTagAssignment.createMany({
+      data: found.map((tag) => ({ ingredientId, tagId: tag.id })),
+      skipDuplicates: true,
+    });
   }
 
   private buildNutritionFoodData(

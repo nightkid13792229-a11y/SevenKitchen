@@ -381,6 +381,34 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
     });
   });
 
+  it('类别被人工改过：AI 再写类别时跳过，不覆盖生熟判定', async () => {
+    const { tools, draftService } = createTools({
+      ingredient: {
+        name: '鸡肝',
+        type: 'FOOD',
+        category: 'MEAT_ORGAN',
+        baseUnit: 'G',
+        unitDisplayLabel: '克',
+        cfctClass: null,
+        edibleYieldRate: null,
+        manualFields: ['category'],
+      },
+    });
+
+    const result = await executeIngredient(tools, { category: 'OTHER' });
+
+    expect(result.ok).toBe(true);
+    expect(result.body.applied).toEqual([]);
+    expect(result.body.skipped).toEqual([
+      { field: 'category', reason: expect.stringContaining('人工') },
+    ]);
+    expect(result.body.ingredient).toMatchObject({
+      category: 'MEAT_ORGAN',
+      manualFields: ['category'],
+    });
+    expect(draftService.patch).not.toHaveBeenCalled();
+  });
+
   it('全部是人工改过的字段：返回 applied=0，不写库', async () => {
     const { tools, draftService } = createTools({
       ingredient: {

@@ -16,7 +16,7 @@ import {
  * - 每条规则的门槛写死在 `INGREDIENT_CARD_RULES` 里，报告落库时按它生成
  *   规则版本号，改规则就必须同步改表，不允许悄悄多一条或少一条。
  *
- * 注意可食部：草稿里存的是比例 `edibleYieldRate`（0–1），但页面与 AI 都以
+ * 注意可食部：草稿里存的是比例 `edibleYieldRate`（0.1–1），但页面与 AI 都以
  * 百分数公共名 `edibleYieldPercent`（0–100）交流。这里的判据用比例，
  * `fieldPath` 用公共名，方便前端直接定位到那一格；不做任何 ÷100 / ×100。
  */
@@ -37,20 +37,29 @@ export const INGREDIENT_CARD_RULES: readonly {
   { code: 'NAME_DUPLICATE', level: 'blocking' },
   { code: 'BASE_UNIT_INVALID', level: 'blocking' },
   { code: 'UNIT_LABEL_REQUIRED', level: 'blocking' },
+  { code: 'CFCT_REQUIRED', level: 'blocking' },
+  { code: 'PURCHASE_STRATEGY_REQUIRED', level: 'blocking' },
   { code: 'LABEL_CATEGORY_REQUIRED', level: 'blocking' },
   { code: 'LABEL_NAMES_REQUIRED', level: 'blocking' },
   { code: 'DENSITY_REQUIRED', level: 'blocking' },
-  { code: 'EDIBLE_RANGE', level: 'exceptionable' },
+  { code: 'EDIBLE_REQUIRED', level: 'blocking' },
+  { code: 'EDIBLE_RANGE', level: 'blocking' },
   { code: 'FIELDS_EMPTY', level: 'warning' },
 ];
 
 /** 基本单位白名单；原料只能按重量 / 体积 / 个数计量。 */
 const BASE_UNITS: readonly IngredientDraft['baseUnit'][] = ['G', 'ML', 'PCS'];
 
+/** 采购策略受控词表；与标准原料编辑页的必选项一致。 */
+const PROCUREMENT_STRATEGIES: ReadonlySet<string> = new Set([
+  'DAILY_PURCHASE',
+  'STOCK_REPLENISHMENT',
+  'HYBRID',
+]);
+
 /**
- * 不参与「完整度」统计的 4 项：它们各有自己的必填 / 合法性规则
- * （`NAME_REQUIRED` / `NAME_DUPLICATE` / `BASE_UNIT_INVALID` /
- * `UNIT_LABEL_REQUIRED`），再数一遍只会重复啰嗦。
+ * 不参与「完整度」统计的必填 / 合法性字段：它们各有自己的规则，
+ * 再数一遍只会重复啰嗦。
  */
 const FIELDS_WITH_OWN_REQUIRED_CHECKS: ReadonlySet<IngredientCardFieldKey> =
   new Set([
@@ -58,14 +67,17 @@ const FIELDS_WITH_OWN_REQUIRED_CHECKS: ReadonlySet<IngredientCardFieldKey> =
     'type',
     'baseUnit',
     'unitDisplayLabel',
+    'cfctClass',
+    'procurementStrategy',
     'labelCategory',
     'labelNames',
     'densityGPerMl',
+    'edibleYieldPercent',
   ]);
 
 /**
- * 完整度只看建原料时就能填的字段；`AFTER_CREATE`（库存三项、标签）
- * 要等原料建完、有了库存记录才谈得上，空着不是「没填完」。
+ * 完整度只看建原料时就能填、且没有自己规则的字段；
+ * `AFTER_CREATE` 当前没有字段，空着不参与「没填完」的统计。
  */
 const COMPLETENESS_FIELD_KEYS: readonly IngredientCardFieldKey[] =
   INGREDIENT_CARD_FIELDS.filter(
@@ -239,6 +251,30 @@ export function runIngredientCardCheck(
     });
   }
 
+  if (isBlank(ingredient.cfctClass)) {
+    items.push({
+      code: 'CFCT_REQUIRED',
+      message:
+        'CFCT分类为空：标准原料页保存时必填，空着回原料库还要再补一次。',
+      fieldPath: cell('cfctClass'),
+      suggestion: '按《中国食物成分表》的分类选择，例如「禽肉类及制品」。',
+    });
+  }
+
+  const procurementStrategy = ingredient.procurementStrategy;
+  if (
+    typeof procurementStrategy !== 'string' ||
+    !PROCUREMENT_STRATEGIES.has(procurementStrategy.trim())
+  ) {
+    items.push({
+      code: 'PURCHASE_STRATEGY_REQUIRED',
+      message:
+        '采购策略为空：标准原料页保存时必填，日采 / 库存补货 / 混合要选一个。',
+      fieldPath: cell('procurementStrategy'),
+      suggestion: '日采适合当天买当天用；库存补货适合冻品、补剂、包材。',
+    });
+  }
+
   const labelCategory = ingredient.labelCategory;
   if (
     labelCategory !== 'FEED_MATERIAL' &&
@@ -285,7 +321,15 @@ export function runIngredientCardCheck(
 
   // 草稿存的是 0.1–1 的比例，判据也按比例；不要拿它去和 100 比。
   const edibleYieldRate = ingredient.edibleYieldRate;
-  if (isSet(edibleYieldRate) && (edibleYieldRate < 0.1 || edibleYieldRate > 1)) {
+  if (!isSet(edibleYieldRate)) {
+    items.push({
+      code: 'EDIBLE_REQUIRED',
+      message:
+        '可食部比率为空：标准原料页保存时必填，空着回原料库还要再补一次。',
+      fieldPath: cell('edibleYieldPercent'),
+      suggestion: '按实际可食比例填写，例如带骨肉约 85%。',
+    });
+  } else if (edibleYieldRate < 0.1 || edibleYieldRate > 1) {
     items.push({
       code: 'EDIBLE_RANGE',
       message: `可食部比例 ${edibleYieldRate} 超出范围：这一格按比例存 0.1–1（对应 10%–100%），必须不小于 0.1 且不超过 1。`,

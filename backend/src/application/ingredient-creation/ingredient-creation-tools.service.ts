@@ -1,6 +1,9 @@
 import { createHash } from 'crypto';
 import { Injectable, Logger, Optional } from '@nestjs/common';
-import { isIngredientCardFieldKey } from '../../domain/ingredient-creation/ingredient-card-fields';
+import {
+  isIngredientCardFieldKey,
+  isIngredientManualField,
+} from '../../domain/ingredient-creation/ingredient-card-fields';
 import {
   computeCatalogCoverage,
   readCatalogFieldValue,
@@ -1139,7 +1142,7 @@ function readIngredientEditorCard(
         ...new Set(
           stored.manualFields.filter(
             (field): field is IngredientCardField =>
-              typeof field === 'string' && INGREDIENT_CARD_FIELD_SET.has(field),
+              isIngredientManualField(field),
           ),
         ),
       ]
@@ -1175,7 +1178,7 @@ function readStoredIngredientManualFields(
     return [];
   }
 
-  return [...new Set(raw.filter((field) => isIngredientCardFieldKey(field)))];
+  return [...new Set(raw.filter((field) => isIngredientManualField(field)))];
 }
 
 type IngredientFieldValue = string | number | null;

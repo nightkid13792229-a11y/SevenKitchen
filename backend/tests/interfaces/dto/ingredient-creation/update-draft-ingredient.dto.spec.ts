@@ -1,7 +1,10 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { INGREDIENT_CARD_FIELD_KEYS } from 'src/domain/ingredient-creation/ingredient-card-fields';
+import {
+  INGREDIENT_CARD_FIELD_KEYS,
+  INGREDIENT_MANUAL_FIELD_KEYS,
+} from 'src/domain/ingredient-creation/ingredient-card-fields';
 import { UpdateDraftIngredientDto } from 'src/interfaces/dto/ingredient-creation/update-draft.dto';
 
 /**
@@ -60,6 +63,7 @@ const fullFields = {
   // 生产损耗率是倍数（1.05 = 5%），不是 0–1 的比率。
   productionLossRate: 1.05,
   tags: ['水产'],
+  tagIds: ['tag-1'],
   shelfLifeMonths: 12,
   storageCondition: '-18℃ 冷冻',
   openedShelfLifeDays: 3,
@@ -100,6 +104,7 @@ describe('UpdateDraftIngredientDto', () => {
       expect({ [key]: payload[key] }).toEqual({ [key]: expect.anything() });
     }
     expect(payload.manualFields).toEqual(['edibleYieldPercent', 'name']);
+    expect(payload.tagIds).toEqual(['tag-1']);
     // 拼错的契约外键必须被剥掉，而不是原样落进服务层的 payload
     expect(payload.storagCondition).toBeUndefined();
   });
@@ -131,14 +136,14 @@ describe('UpdateDraftIngredientDto', () => {
     expect(payload.evil).toBeUndefined();
   });
 
-  it('manualFields 收下契约内全部 15 个键，契约外的键被拒', async () => {
+  it('manualFields 收下 15 个可见键 + category，契约外的键被拒', async () => {
     expect(await errorsOf({ manualFields: ['nope'] })).toContain(
       'manualFields',
     );
 
     // 逐个键都要通过：只钉 2 个键拦不住「只认旧字段」的白名单回退。
     const rejected: string[] = [];
-    for (const field of INGREDIENT_CARD_FIELD_KEYS) {
+    for (const field of INGREDIENT_MANUAL_FIELD_KEYS) {
       const errors = await errorsOf({ manualFields: [field] });
       if (errors.length > 0) {
         rejected.push(`${field} → ${errors.join(', ')}`);
@@ -148,7 +153,7 @@ describe('UpdateDraftIngredientDto', () => {
 
     // 一次全给也必须通过（真实页面就是整份回传）
     expect(
-      await errorsOf({ manualFields: [...INGREDIENT_CARD_FIELD_KEYS] }),
+      await errorsOf({ manualFields: [...INGREDIENT_MANUAL_FIELD_KEYS] }),
     ).toEqual([]);
   });
 

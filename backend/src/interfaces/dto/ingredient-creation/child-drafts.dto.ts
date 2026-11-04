@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
-  IsArray,
   IsBoolean,
   IsInt,
   IsNotEmpty,
@@ -8,12 +7,9 @@ import {
   IsOptional,
   IsPositive,
   IsString,
-  Max,
   MaxLength,
   Min,
-  ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 
 /**
  * 家庭 DIY 推荐商品草稿：与标准原料编辑页的子弹窗字段一一对应。
@@ -21,6 +17,12 @@ import { Type } from 'class-transformer';
  * 只用于草稿 payload 与授权提交；正式入库仍走 `recommendedProduct` 表。
  */
 export class RecommendedProductDraftDto {
+  @ApiPropertyOptional({ description: '前端行标识（不落正式表）' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  key?: string;
+
   @ApiProperty({ description: 'SKU 名称', example: '沃尔玛糙米 600g/罐' })
   @IsString()
   @IsNotEmpty()
@@ -63,6 +65,12 @@ export class RecommendedProductDraftDto {
   @MaxLength(500)
   imageUrl?: string | null;
 
+  @ApiPropertyOptional({ description: '商品图片 COS key（仅前端清理用）', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  imageKey?: string | null;
+
   @ApiPropertyOptional({ description: '建议顺序', nullable: true })
   @IsOptional()
   @IsInt()
@@ -79,6 +87,12 @@ export class RecommendedProductDraftDto {
  * 生产采购 SKU 草稿：与标准原料编辑页的子弹窗字段一一对应。
  */
 export class ProcurementSkuDraftDto {
+  @ApiPropertyOptional({ description: '前端行标识（不落正式表）' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  key?: string;
+
   @ApiProperty({ description: 'SKU 名称', example: '三文鱼整条 5kg/箱' })
   @IsString()
   @IsNotEmpty()

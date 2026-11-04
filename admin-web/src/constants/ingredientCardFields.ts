@@ -101,7 +101,7 @@ const CARD_FIELD_DEFINITIONS = [
     key: 'tags',
     group: 'BASIC',
     label: '标签分类',
-    stage: 'AFTER_CREATE',
+    stage: 'CREATABLE',
     valueType: 'tags',
   },
   // MEASURE 计量与形态
@@ -210,15 +210,22 @@ const CARD_FIELD_DEFINITIONS = [
 export type IngredientCardFieldKey =
   (typeof CARD_FIELD_DEFINITIONS)[number]['key']
 
+/**
+ * 人工标记可以覆盖的字段：15 个可见键 + `category`。
+ *
+ * `category` 不在食材档案里展示（已移到营养档案页），但它参与生熟判定，
+ * 人改过之后同样不能让 AI 再覆盖，所以必须进人工字段白名单。
+ */
+export type IngredientManualField = IngredientCardFieldKey | 'category'
+
 /** 15 个字段的完整定义，顺序即展示顺序。 */
 export const INGREDIENT_CARD_FIELDS: readonly IngredientCardFieldDef[] =
   CARD_FIELD_DEFINITIONS
 
 /**
- * 建完之后才补的项：标签分类。
+ * 建完之后才补的项：当前为空（标签分类已改为建原料时可填）。
  *
- * 本阶段只读展示（灰底、禁用），提交时也不写；它不能出现在
- * 「建原料时可填」的字段里，否则页面会让人填一堆没有落地处的格子。
+ * 保留这个派生常量，后续若新增库存类字段可以直接挂上去。
  */
 export const INGREDIENT_AFTER_CREATE_FIELDS: readonly IngredientCardFieldDef[] =
   INGREDIENT_CARD_FIELDS.filter((field) => field.stage === 'AFTER_CREATE')
@@ -226,6 +233,16 @@ export const INGREDIENT_AFTER_CREATE_FIELDS: readonly IngredientCardFieldDef[] =
 /** 运行时判定用的键集合。 */
 const INGREDIENT_CARD_FIELD_KEY_SET: ReadonlySet<string> = new Set(
   INGREDIENT_CARD_FIELDS.map((field) => field.key),
+)
+
+/** 人工字段白名单：15 个可见键 + category。 */
+export const INGREDIENT_MANUAL_FIELD_KEYS: readonly IngredientManualField[] = [
+  ...INGREDIENT_CARD_FIELDS.map((field) => field.key),
+  'category'
+]
+
+const INGREDIENT_MANUAL_FIELD_KEY_SET: ReadonlySet<string> = new Set(
+  INGREDIENT_MANUAL_FIELD_KEYS
 )
 
 /**
@@ -237,4 +254,11 @@ export function isIngredientCardField(
   value: string,
 ): value is IngredientCardFieldKey {
   return INGREDIENT_CARD_FIELD_KEY_SET.has(value)
+}
+
+/** 这个键能不能被人工标记（可见字段或 category）。 */
+export function isIngredientManualField(
+  value: string,
+): value is IngredientManualField {
+  return INGREDIENT_MANUAL_FIELD_KEY_SET.has(value)
 }

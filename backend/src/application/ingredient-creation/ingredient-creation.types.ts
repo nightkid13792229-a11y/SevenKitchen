@@ -1,5 +1,5 @@
 import type { IngredientCreationDraft as PrismaIngredientCreationDraft } from '@prisma/client';
-import type { IngredientCardFieldKey } from '../../domain/ingredient-creation/ingredient-card-fields';
+import type { IngredientManualField } from '../../domain/ingredient-creation/ingredient-card-fields';
 import type {
   CookingMethod,
   PreparationState,
@@ -70,12 +70,12 @@ export interface ExceptionRecord {
  * `edibleYieldRate`，但工具与页面都以百分数 `edibleYieldPercent` 交流，
  * 标记也统一用后者，避免同一件事两套名字。
  */
-export type IngredientCardField = IngredientCardFieldKey;
+export type IngredientCardField = IngredientManualField;
 
 /**
  * ⑤ 标准原料档案的预填值；拿不准的保持 null，标「待补」，不阻断保存。
  *
- * 字段与 `INGREDIENT_CARD_FIELDS` 一一对应：除 4 个必填项外全部可选 ——
+ * 字段与 `INGREDIENT_CARD_FIELDS` 一一对应：除必填项外全部可选 ——
  * 向导按分组逐步填，没走到的分组就是 `undefined`（不是「人清空了」），
  * 人明确清空的才是 `null`。旧调用方（AI 字段工具、提交服务）只构造其中
  * 一部分字段，也照样成立。
@@ -120,6 +120,8 @@ export interface IngredientDraft {
   addTiming?: string | null;
   productionLossRate?: number | null;
   tags?: string[];
+  /** 标签关联 id；授权时写入 ingredient_tag_assignment */
+  tagIds?: string[];
   // STORAGE
   shelfLifeMonths?: number | null;
   storageCondition?: string | null;
@@ -135,7 +137,7 @@ export interface IngredientDraft {
    * AI 的 `writeIngredient` 遇到这些字段会跳过并说明原因，
    * 不允许把人的判断悄悄改回去；提交时随审计一起留痕。
    */
-  manualFields?: IngredientCardField[];
+  manualFields?: IngredientManualField[];
 }
 
 /** 一份「家庭 DIY 推荐商品」草稿（字段与标准原料编辑页的子弹窗对齐）。 */
@@ -461,6 +463,8 @@ export interface IngredientCreationDraftPayload {
   recommendedProducts?: RecommendedProductDraft[];
   /** 生产采购 SKU 草稿（可多条） */
   procurementSkus?: ProcurementSkuDraft[];
+  /** 旧版原料级采购字段是否已经迁到子板块（一次性迁移标记） */
+  childDraftsMigrated?: boolean;
   verify?: { exceptions: ExceptionRecord[] };
   /** AI 提案历史：只追加、不覆盖（appendProposal） */
   proposalHistory?: ProposalSnapshot[];

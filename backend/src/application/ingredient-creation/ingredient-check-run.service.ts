@@ -67,7 +67,7 @@ export interface CheckRunView {
  * 不能拿来当新规则的依据（规则细节见 `INGREDIENT_CARD_RULES` / 终检领域函数）。
  */
 export const CHECK_RULES_VERSION: Record<CheckDomain, string> = {
-  INGREDIENT: 'ingredient-card-v2',
+  INGREDIENT: 'ingredient-card-v3',
   NUTRITION: 'final-check-v1',
 };
 

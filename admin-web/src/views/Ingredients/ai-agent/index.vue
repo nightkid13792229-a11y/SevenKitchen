@@ -695,24 +695,25 @@
                         @change="handleIngredientListChange(cell.key, $event)"
                       />
 
-                      <div
+                      <el-select
                         v-else-if="cell.kind === 'tags'"
-                        class="ingredient-tags"
+                        :model-value="ingredientCellTagIds(cell)"
+                        :disabled="isIngredientCellDisabled(cell)"
+                        multiple
+                        filterable
+                        clearable
+                        placeholder="选择标签"
+                        no-data-text="暂无标签，请先到原料库标签管理创建"
+                        class="ingredient-cell__control"
+                        @change="handleIngredientTagChange"
                       >
-                        <template v-if="ingredientCellTags(cell).length > 0">
-                          <el-tag
-                            v-for="tag in ingredientCellTags(cell)"
-                            :key="tag"
-                            size="small"
-                            effect="plain"
-                          >
-                            {{ tag }}
-                          </el-tag>
-                        </template>
-                        <span v-else class="ingredient-cell__empty-text">
-                          空
-                        </span>
-                      </div>
+                        <el-option
+                          v-for="tag in ingredientTags"
+                          :key="tag.id"
+                          :label="tag.name"
+                          :value="tag.id"
+                        />
+                      </el-select>
 
                       <el-input
                         v-else
@@ -737,6 +738,15 @@
                   </div>
                 </section>
               </el-form>
+
+              <el-alert
+                v-if="childMigrationNotice"
+                class="review-stale"
+                type="warning"
+                :closable="false"
+                show-icon
+                :title="childMigrationNotice"
+              />
 
               <el-divider content-position="left">
                 家庭 DIY 推荐商品（{{ recommendedProducts.length }}）
@@ -874,7 +884,7 @@
                             v-if="row.imageUrl"
                             link
                             type="danger"
-                            @click="row.imageUrl = ''"
+                            @click="removeRecommendedImage(row)"
                           >
                             删除图片
                           </el-button>
@@ -1090,8 +1100,7 @@
 
               <p class="review-hint">
                 改动会在离开输入框时自动保存；每次保存整张卡一起发，不会丢字段。
-                标「人工」的格子 AI 之后不会再覆盖；标签分类要等原料建完再补，
-                这里先灰显只读。
+                标「人工」的格子 AI 之后不会再覆盖；标签分类可直接选，未选不阻断。
               </p>
             </el-tab-pane>
 
@@ -1136,6 +1145,14 @@
                     :value="option.value"
                   />
                 </el-select>
+                <el-tag
+                  v-if="ingredientForm.manualFields.includes('category')"
+                  size="small"
+                  type="warning"
+                  effect="plain"
+                >
+                  人工
+                </el-tag>
                 <span class="nutrition-category__hint">
                   决定必需的生熟档案：肉类默认要“生”，根茎淀粉类默认要“熟”
                 </span>
@@ -1390,6 +1407,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import { ingredientApi, nutritionFoodApi } from '@/api/ingredients'
+import {
+  ingredientTagApi,
+  type IngredientTag
+} from '@/api/ingredientTags'
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
 import { useUserStore } from '@/store/user'
 import {
@@ -1468,6 +1489,7 @@ import {
 } from './profileFilters'
 import { COVERAGE_CATEGORY_OPTIONS } from './ingredientProfileRules'
 import { validateChildDrafts } from './childDraftRules'
+import { buildLegacyProcurementSkuDraft } from './childDraftMigration'
 import {
   answerInputFromPendingQuestion,
   askOptionAiBadge,
@@ -1717,8 +1739,10 @@ const loadedCard = ref<IngredientCardForm | null>(null)
 /** 两个子板块的草稿：DIY 推荐商品 / 采购 SKU，都支持多条。 */
 const recommendedProducts = ref<RecommendedProductDraft[]>([])
 const procurementSkus = ref<ProcurementSkuDraft[]>([])
+const ingredientTags = ref<IngredientTag[]>([])
 const loadedChildSnapshot = ref('')
 const childSaving = ref(false)
+const childMigrationNotice = ref('')
 let childKeySeq = 0
 
 function childDraftSnapshot(): string {
@@ -1755,6 +1779,70 @@ function syncChildDrafts(
   loadedChildSnapshot.value = childDraftSnapshot()
 }
 
+/**
+ * 旧草稿一次性迁移：改动前采购信息还挂在原料级，现在搬到「生产采购 SKU」。
+ *
+ * 只在草稿还没迁过、两个子板块都为空、且原料级确实有旧值时触发；
+ * 自动落库并写 `childDraftsMigrated` 标记，避免下次载入重复迁移。
+ */
+async function migrateLegacyChildDrafts(): Promise<void> {
+  const current = draft.value
+  if (!current || current.payload.childDraftsMigrated === true) {
+    return
+  }
+  if (
+    recommendedProducts.value.length > 0 ||
+    procurementSkus.value.length > 0
+  ) {
+    return
+  }
+
+  const ingredient = current.payload.ingredient
+  if (!ingredient) {
+    return
+  }
+  const seed = buildLegacyProcurementSkuDraft(
+    ingredient,
+    nextChildKey('sku')
+  )
+  if (!seed) {
+    return
+  }
+
+  procurementSkus.value = [seed]
+  const draftId = current.id
+  const step = current.step
+  const ingredientPatch = toIngredientDraftFromCells(
+    current.payload.ingredient,
+    ingredientForm
+  )
+  const ok = await enqueueSave(async () => {
+    const updated = await ingredientCreationApi.patchDraft(draftId, step, {
+      ingredient: ingredientPatch,
+      procurementSkus: [seed],
+      childDraftsMigrated: true
+    })
+    draft.value = updated
+    draftTouched.value = true
+    syncChildDrafts(updated.payload)
+    markChecksStale()
+    await refreshChecks(updated.id)
+  })
+
+  if (ok) {
+    childMigrationNotice.value =
+      '检测到旧版原料级采购信息，已自动迁到「生产采购 SKU」，请核对。'
+  } else {
+    // 迁移失败时保留本地行并标脏，授权前 flush 会再试一次；不要让用户以为没数据。
+    loadedChildSnapshot.value = JSON.stringify({
+      recommendedProducts: [],
+      procurementSkus: []
+    })
+    childMigrationNotice.value =
+      '旧版原料级采购信息迁移失败，已保留在「生产采购 SKU」草稿里，请点保存重试。'
+  }
+}
+
 function addRecommendedProduct() {
   recommendedProducts.value.push({
     key: nextChildKey('rp'),
@@ -1765,13 +1853,29 @@ function addRecommendedProduct() {
     purchaseLinkPlatform: 'OTHER',
     purchaseLinkUrl: '',
     imageUrl: '',
+    imageKey: '',
     sortOrder: recommendedProducts.value.length,
     isActive: true
   })
 }
 
 function removeRecommendedProduct(index: number) {
-  recommendedProducts.value.splice(index, 1)
+  const [removed] = recommendedProducts.value.splice(index, 1)
+  if (removed?.imageKey) {
+    void ingredientApi
+      .deleteIngredientDiyImage(removed.imageKey)
+      .catch(() => undefined)
+  }
+}
+
+function removeRecommendedImage(row: RecommendedProductDraft) {
+  if (row.imageKey) {
+    void ingredientApi
+      .deleteIngredientDiyImage(row.imageKey)
+      .catch(() => undefined)
+  }
+  row.imageUrl = ''
+  row.imageKey = ''
 }
 
 function addProcurementSku() {
@@ -1839,7 +1943,8 @@ async function saveChildDrafts(): Promise<boolean> {
     return await enqueueSave(async () => {
       const updated = await ingredientCreationApi.patchDraft(draftId, step, {
         recommendedProducts: recommendedProducts.value,
-        procurementSkus: procurementSkus.value
+        procurementSkus: procurementSkus.value,
+        childDraftsMigrated: true
       })
       draft.value = updated
       draftTouched.value = true
@@ -1866,7 +1971,14 @@ async function handleRecommendedImageUpload(
 ) {
   try {
     const result = await ingredientApi.uploadIngredientDiyImage(file)
+    const previousKey = row.imageKey
     row.imageUrl = result.url
+    row.imageKey = result.key
+    if (previousKey && previousKey !== result.key) {
+      void ingredientApi
+        .deleteIngredientDiyImage(previousKey)
+        .catch(() => undefined)
+    }
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error, '图片上传失败，请稍后重试'))
   }
@@ -1970,6 +2082,10 @@ const hasUnsavedIngredientChanges = computed(() => {
     !ingredientCellValuesEqual(
       loadedCard.value.category,
       ingredientForm.category
+    ) ||
+    !ingredientCellValuesEqual(
+      loadedCard.value.tagIds,
+      ingredientForm.tagIds
     ) ||
     childDraftDirty.value
   )
@@ -2172,8 +2288,48 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
 
 onMounted(() => {
   void scrollToBottom()
+  void loadIngredientTags()
   window.addEventListener('beforeunload', handleBeforeUnload)
 })
+
+async function loadIngredientTags() {
+  try {
+    ingredientTags.value = await ingredientTagApi.list()
+  } catch {
+    // 标签加载失败不阻断页面的其它操作；标签选择器会显示空列表。
+    ingredientTags.value = []
+  }
+  hydrateTagIdsFromNames()
+}
+
+/**
+ * 旧草稿只有标签名、没有 tagIds：标签表加载完后按名字补回 id，
+ * 授权时才能把标签关联真正写进正式库。
+ */
+function hydrateTagIdsFromNames() {
+  const ids = Array.isArray(ingredientForm.tagIds)
+    ? ingredientForm.tagIds
+    : []
+  if (ids.length > 0 || ingredientTags.value.length === 0) {
+    return
+  }
+  const names = Array.isArray(ingredientForm.tags)
+    ? ingredientForm.tags.filter(
+        (name): name is string => typeof name === 'string'
+      )
+    : []
+  if (names.length === 0) {
+    return
+  }
+  const mapped = ingredientTags.value
+    .filter((tag) => names.includes(tag.name))
+    .map((tag) => tag.id)
+  if (mapped.length > 0) {
+    ingredientForm.tagIds = mapped
+  }
+}
+
+watch(ingredientTags, hydrateTagIdsFromNames)
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
@@ -2196,6 +2352,7 @@ function applyDraft(
     Object.assign(ingredientForm, loadedCard.value)
     pendingCells.clear()
   }
+  hydrateTagIdsFromNames()
 }
 
 /**
@@ -2272,6 +2429,8 @@ async function loadDraft(draftId: string) {
     state.pendingQuestion = readPendingQuestion(
       updated.payload.pendingQuestion
     )
+    // 旧草稿的采购信息在原料级；先迁到子板块，再拉核验状态。
+    await migrateLegacyChildDrafts()
     await refreshChecks(draftId)
   } catch (error) {
     draftError.value = getApiErrorMessage(error, '草稿加载失败，请稍后重试')
@@ -2450,9 +2609,51 @@ function ingredientCellBoolean(cell: IngredientCardCell): boolean | null {
 
 function ingredientCellTags(cell: IngredientCardCell): string[] {
   const value = ingredientForm[cell.key]
-  return Array.isArray(value)
+  const names = Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : []
+  if (cell.key === 'tags' && names.length === 0) {
+    // 新草稿可能只有 tagIds：用标签表把 id 翻成名字，供展示与「AI/人工」标记。
+    const ids = ingredientForm.tagIds
+    if (Array.isArray(ids) && ids.length > 0) {
+      return ingredientTags.value
+        .filter((tag) => ids.includes(tag.id))
+        .map((tag) => tag.name)
+    }
+  }
+  return names
+}
+
+function ingredientCellTagIds(cell: IngredientCardCell): string[] {
+  const ids = ingredientForm.tagIds
+  if (Array.isArray(ids)) {
+    const cleaned = ids
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter(Boolean)
+    if (cleaned.length > 0) {
+      return cleaned
+    }
+  }
+  // 旧草稿只有标签名：按名字找回 id，保证下拉能回显。
+  const names = ingredientCellTags(cell)
+  return ingredientTags.value
+    .filter((tag) => names.includes(tag.name))
+    .map((tag) => tag.id)
+}
+
+function handleIngredientTagChange(value: unknown) {
+  const ids = Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : []
+  ingredientForm.tagIds = ids
+  ingredientForm.tags = ingredientTags.value
+    .filter((tag) => ids.includes(tag.id))
+    .map((tag) => tag.name)
+  void saveIngredientCell('tags')
 }
 
 function ingredientCellOptions(
@@ -2521,7 +2722,7 @@ function isIngredientCellClearable(cell: IngredientCardCell): boolean {
 }
 
 /**
- * 一格的禁用状态：建完后补的 4 项始终禁用；保存中 / 提交中 / 已提交整卡禁用。
+ * 一格的禁用状态：保存中 / 提交中 / 已提交整卡禁用。
  *
  * 不能只写 `cell.isAfterCreate`：Element Plus 的 disabled 是
  * `props.disabled ?? form.disabled`，显式 false 会盖掉 el-form 的整卡禁用。
@@ -2624,6 +2825,10 @@ async function saveIngredientCell(key: IngredientCardFieldKey) {
  */
 function handleCategoryChange(value: unknown) {
   ingredientForm.category = typeof value === 'string' ? value : ''
+  // 人的类别判断要进人工白名单，AI 之后再写原料卡时不能覆盖它。
+  if (!ingredientForm.manualFields.includes('category')) {
+    ingredientForm.manualFields = [...ingredientForm.manualFields, 'category']
+  }
   void saveIngredientCategory()
 }
 

@@ -29,8 +29,8 @@ import type {
 import { IngredientProcurementStrategy } from '../../../domain/ingredient/enums';
 import type { SupplementAddTiming } from '../../../domain/ingredient/supplement-add-timing';
 import {
-  INGREDIENT_CARD_FIELD_KEYS,
-  type IngredientCardFieldKey,
+  INGREDIENT_MANUAL_FIELD_KEYS,
+  type IngredientManualField,
 } from '../../../domain/ingredient-creation/ingredient-card-fields';
 import type { PreparationState } from '../../../domain/ingredient-creation/preparation-state';
 import type { CoverageCategory } from '../../../domain/ingredient-creation/state-coverage';
@@ -156,15 +156,16 @@ export class UpdateDraftProfileDto {
  *
  * 为什么不再只拿 `IngredientDraft` 当类型：interface 在运行时不存在，
  * whitelist 一个键也看不见 —— 前端多传的脏键会原样落进 payload，长度、范围、
- * 枚举也没人挡。这里按字段契约把 30 项显式声明出来。
+ * 枚举也没人挡。这里按字段契约把 15 项显式声明出来。
  *
  * 约定：
- * - 4 个必填项（名称 / 类型 / 基准单位 / 展示名）是建原料的最小信息；
+ * - 4 个基础必填项（名称 / 类型 / 基准单位 / 展示名）是接口层的最小信息；
+ *   标签类型 / 标签名称 / CFCT / 采购策略 / 可食部由原料核验阻断；
  * - 其余全部可选：向导是分步填的，没填是 `undefined`，人清空过的是 `null`；
  *   `@IsOptional()` 对两者都跳过校验，正好就是「允许显式 null」；
  * - `0` 是合法值（0 元采购价、0 损耗），校验用 `@Min(0)` 而不是「非空」；
- * - 可食部存**比例** `edibleYieldRate`（0–1）；公共名 `edibleYieldPercent`
- *   （0–100）只用于页面展示与 `manualFields`，不是草稿字段（多传会被 whitelist 剥掉）。
+ * - 可食部存**比例** `edibleYieldRate`（0.1–1）；公共名 `edibleYieldPercent`
+ *   （10–100）只用于页面展示与 `manualFields`，不是草稿字段（多传会被 whitelist 剥掉）。
  */
 export class UpdateDraftIngredientDto implements IngredientDraft {
   // BASIC
@@ -364,6 +365,12 @@ export class UpdateDraftIngredientDto implements IngredientDraft {
   @IsString({ each: true })
   tags?: string[];
 
+  @ApiPropertyOptional({ description: '标签关联 id', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tagIds?: string[];
+
   // STORAGE
   @ApiPropertyOptional({ description: '保质期（月）', nullable: true })
   @IsOptional()
@@ -410,16 +417,16 @@ export class UpdateDraftIngredientDto implements IngredientDraft {
   @MaxLength(120)
   labelNameSource?: string | null;
 
-  // 人工改动标记：只收契约内的公共字段名（可食部用公共名 edibleYieldPercent）
+  // 人工改动标记：可见字段 + category（可食部用公共名 edibleYieldPercent）
   @ApiPropertyOptional({
     description: '人工审核时改过的字段（公共字段名）',
-    enum: INGREDIENT_CARD_FIELD_KEYS,
+    enum: INGREDIENT_MANUAL_FIELD_KEYS,
     isArray: true,
   })
   @IsOptional()
   @IsArray()
-  @IsIn(INGREDIENT_CARD_FIELD_KEYS, { each: true })
-  manualFields?: IngredientCardFieldKey[];
+  @IsIn(INGREDIENT_MANUAL_FIELD_KEYS, { each: true })
+  manualFields?: IngredientManualField[];
 }
 
 /**
@@ -496,6 +503,11 @@ export class UpdateDraftPayloadDto {
   @ValidateNested({ each: true })
   @Type(() => ProcurementSkuDraftDto)
   procurementSkus?: ProcurementSkuDraftDto[];
+
+  @ApiPropertyOptional({ description: '旧版采购字段是否已迁到子板块' })
+  @IsOptional()
+  @IsBoolean()
+  childDraftsMigrated?: boolean;
 
   @ApiPropertyOptional({ description: '人工例外' })
   @IsOptional()

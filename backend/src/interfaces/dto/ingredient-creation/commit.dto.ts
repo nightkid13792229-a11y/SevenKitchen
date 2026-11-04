@@ -258,6 +258,12 @@ export class CommitIngredientDto implements IngredientDraft {
   @IsString()
   @MaxLength(120)
   labelNameSource?: string | null;
+
+  @ApiPropertyOptional({ description: '标签关联 id', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tagIds?: string[];
 }
 
 /** ③ 一份营养档案（生 / 熟各最多一份）。 */

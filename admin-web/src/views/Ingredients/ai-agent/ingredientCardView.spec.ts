@@ -107,11 +107,11 @@ describe('buildIngredientCardCells', () => {
     expect(cellOf(cells, 'labelNames').sourceLabel).toBeNull()
   })
 
-  it('建完之后补的只有标签分类', () => {
+  it('没有建完之后才补的字段', () => {
     const cells = buildIngredientCardCells(BASE_INGREDIENT, [])
 
     expect(cells.filter((cell) => cell.isAfterCreate).map((cell) => cell.key)).toEqual(
-      ['tags']
+      []
     )
     expect(cellOf(cells, 'tags').group).toBe('BASIC')
     expect(cellOf(cells, 'tags').kind).toBe('tags')

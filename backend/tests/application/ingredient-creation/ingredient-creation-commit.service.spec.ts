@@ -48,6 +48,7 @@ interface HarnessOptions {
   draft?: DraftFixture | null;
   sourceRecords?: SourceRecordFixture[];
   existingIngredients?: ExistingIngredientFixture[];
+  availableTagIds?: string[];
 }
 
 interface Store {
@@ -58,6 +59,7 @@ interface Store {
   recommendedProducts: Array<Record<string, any> & { id: string }>;
   procurementSkus: Array<Record<string, any> & { id: string }>;
   procurementSkuPriceHistories: Array<Record<string, any> & { id: string }>;
+  tagAssignments: Array<Record<string, any> & { id: string }>;
 }
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -78,6 +80,7 @@ function createPrismaMock(options: HarnessOptions = {}) {
     recommendedProducts: [],
     procurementSkus: [],
     procurementSkuPriceHistories: [],
+    tagAssignments: [],
   };
   const sourceRecords = options.sourceRecords ?? [];
   const draftState =
@@ -182,6 +185,25 @@ function createPrismaMock(options: HarnessOptions = {}) {
         return { id: row.id };
       }),
     },
+    ingredientTag: {
+      findMany: jest.fn(async ({ where }: any) => {
+        const ids: string[] = where?.id?.in ?? [];
+        return ids
+          .filter((id) => (options.availableTagIds ?? []).includes(id))
+          .map((id) => ({ id }));
+      }),
+    },
+    ingredientTagAssignment: {
+      createMany: jest.fn(async ({ data }: any) => {
+        for (const row of data) {
+          store.tagAssignments.push({
+            id: nextId('tag-assignment'),
+            ...clone(row),
+          });
+        }
+        return { count: data.length };
+      }),
+    },
     // 锁只能走事务客户端；外层客户端一旦被调用就是实现写错了。
     $queryRaw: jest.fn(async () => {
       throw new Error('pg_advisory_xact_lock 必须在事务客户端上执行');
@@ -205,6 +227,8 @@ function createPrismaMock(options: HarnessOptions = {}) {
     recommendedProduct: client.recommendedProduct,
     procurementSku: client.procurementSku,
     procurementSkuPriceHistory: client.procurementSkuPriceHistory,
+    ingredientTag: client.ingredientTag,
+    ingredientTagAssignment: client.ingredientTagAssignment,
     $queryRaw: txQueryRaw,
   };
 
@@ -224,6 +248,7 @@ function createPrismaMock(options: HarnessOptions = {}) {
         store.procurementSkus = snapshot.procurementSkus;
         store.procurementSkuPriceHistories =
           snapshot.procurementSkuPriceHistories;
+        store.tagAssignments = snapshot.tagAssignments;
         if (draftState && draftStepSnapshot !== undefined) {
           draftState.step = draftStepSnapshot;
         }
@@ -443,6 +468,7 @@ async function createHarness(options: HarnessOptions = {}) {
     draft: options.draft === undefined ? buildDraft() : options.draft,
     sourceRecords: options.sourceRecords ?? sourceRecords,
     existingIngredients: options.existingIngredients,
+    availableTagIds: options.availableTagIds,
   });
 
   const moduleRef: TestingModule = await Test.createTestingModule({
@@ -1352,6 +1378,33 @@ describe('IngredientCreationCommitService', () => {
       newPrice: 380,
       source: 'MANUAL',
     });
+  });
+
+  it('tagIds 落标签关联；不存在的标签整次回滚', async () => {
+    const { service, store } = await createHarness({
+      availableTagIds: ['tag-1'],
+    });
+
+    await service.commit({
+      ...baseInput,
+      ingredient: { ...ingredientDraft, tagIds: ['tag-1'] },
+    });
+
+    expect(store.tagAssignments).toHaveLength(1);
+    expect(store.tagAssignments[0]).toMatchObject({
+      ingredientId: 'ingredient-1',
+      tagId: 'tag-1',
+    });
+
+    const failed = await createHarness({ availableTagIds: [] });
+    await expect(
+      failed.service.commit({
+        ...baseInput,
+        ingredient: { ...ingredientDraft, tagIds: ['missing-tag'] },
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(failed.store.ingredients).toHaveLength(0);
+    expect(failed.store.tagAssignments).toHaveLength(0);
   });
 
   it('子板块缺名称或库存倒挂 → BadRequest，整次提交回滚', async () => {

@@ -7,8 +7,9 @@
  */
 import {
   INGREDIENT_CARD_FIELDS,
-  isIngredientCardField,
-  type IngredientCardFieldKey
+  isIngredientManualField,
+  type IngredientCardFieldKey,
+  type IngredientManualField
 } from '@/constants/ingredientCardFields'
 import { INGREDIENT_NUTRITION_TAB_LABELS } from '@/constants/ingredientNutrition'
 import {
@@ -61,10 +62,10 @@ export type IngredientCardFormValue =
  * 时若少带这些键，AI 已经写进去的值会被悄悄抹掉。它们在页面上不可见，
  * 只有类别会在「营养档案」页露出，用来决定生熟要求。
  */
-export type IngredientCardHiddenKey = 'nameEn' | 'category'
+export type IngredientCardHiddenKey = 'nameEn' | 'category' | 'tagIds'
 
 /**
- * 原料卡表单：15 个可见格子 + 2 个隐藏保留字段 + 人工标记。
+ * 原料卡表单：15 个可见格子 + 3 个隐藏保留字段 + 人工标记。
  *
  * 用映射类型而不是手写属性：目录里加一项，表单类型自动跟着长；
  * `toIngredientCard` 少读一项会直接报类型错，写回由单测逐项钉住。
@@ -74,7 +75,7 @@ export type IngredientCardForm = {
 } & {
   [K in IngredientCardHiddenKey]: IngredientCardFormValue
 } & {
-  manualFields: IngredientCardField[]
+  manualFields: IngredientManualField[]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -145,14 +146,14 @@ function toKnownCoverageCategory(value: unknown): CoverageCategory | null {
  * 人工标记只收目录内的 15 个公共键；旧草稿 / 脏数据里的其它字符串丢掉。
  * 可食部的标记用公共名 `edibleYieldPercent`，不用存储名。
  */
-function toManualFields(value: unknown): IngredientCardField[] {
+function toManualFields(value: unknown): IngredientManualField[] {
   if (!Array.isArray(value)) {
     return []
   }
 
   const fields = value.filter(
-    (field): field is IngredientCardField =>
-      typeof field === 'string' && isIngredientCardField(field)
+    (field): field is IngredientManualField =>
+      typeof field === 'string' && isIngredientManualField(field)
   )
   return [...new Set(fields)]
 }
@@ -161,7 +162,7 @@ function toManualFields(value: unknown): IngredientCardField[] {
  * 读原料卡。优先用草稿里的 `payload.ingredient`，没有时按起手卡 / 草稿名兜底，
  * 页面永远能拿到一张可编辑的卡（只是值可能为空）。
  *
- * 可见的 15 项与隐藏保留的 2 项（英文名 / 类别）全部读出：少读一项，下一次整卡保存就会把它抹掉。
+ * 可见的 15 项与隐藏保留的 3 项（英文名 / 类别 / 标签 id）全部读出：少读一项，下一次整卡保存就会把它抹掉。
  */
 export function toIngredientCard(
   payload: IngredientCreationDraftPayload | null | undefined,
@@ -198,12 +199,13 @@ export function toIngredientCard(
     // 隐藏保留（不在食材档案里展示）
     nameEn: toText(source?.nameEn) || toText(intake?.nameEn),
     category: toText(source?.category) || toText(intake?.category),
+    tagIds: toTagList(source?.tagIds),
     manualFields: toManualFields(source?.manualFields)
   }
 }
 
 /**
- * 表单值写回草稿：可见 15 项 + 隐藏 2 项一个不少，可食部百分数换比例。
+ * 表单值写回草稿：可见 15 项 + 隐藏 3 项一个不少，可食部百分数换比例。
  *
  * 为什么一项都不能省：后端草稿 PATCH 是 `payload = payload || $1::jsonb` 的浅替换，
  * `payload.ingredient` 会被整块覆盖。少发一个键 = 把 AI 填的其它字段悄悄抹掉。
@@ -246,6 +248,7 @@ export function toIngredientDraft(card: IngredientCardForm): IngredientDraft {
     // 隐藏保留
     nameEn: toNullableText(card.nameEn),
     category: toKnownCoverageCategory(card.category),
+    tagIds: toTagList(card.tagIds),
     // 已从食材线移除 / 搬到子板块：原料级不再写，避免重复
     brand: null,
     productModel: null,
@@ -263,7 +266,7 @@ export function toIngredientDraft(card: IngredientCardForm): IngredientDraft {
 /** 人改了一个字段：把字段名并入人工改动清单（去重、不改原对象）。 */
 export function markIngredientFieldManual(
   card: IngredientCardForm,
-  field: IngredientCardField
+  field: IngredientManualField
 ): IngredientCardForm {
   if (card.manualFields.includes(field)) {
     return card
@@ -688,6 +691,7 @@ export function toRecommendedProductDrafts(
       purchaseLinkPlatform: toText(item.purchaseLinkPlatform) || 'OTHER',
       purchaseLinkUrl: toText(item.purchaseLinkUrl),
       imageUrl: toText(item.imageUrl),
+      imageKey: toText(item.imageKey),
       sortOrder: Math.max(0, Math.trunc(toFiniteNumber(item.sortOrder) ?? 0)),
       isActive: item.isActive !== false
     }))

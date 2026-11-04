@@ -572,6 +572,18 @@
                   </div>
                 </el-alert>
 
+              <div class="ingredient-filter">
+                <el-switch v-model="onlyAiWritten" size="small" />
+                <span class="ingredient-filter__label">只看 AI 写入的字段</span>
+                <span class="ingredient-filter__hint">
+                  AI 写的是草稿；绿色「AI」标记表示当前值不是人工核对的
+                </span>
+              </div>
+
+              <p v-if="onlyAiWritten && ingredientCardGroups.length === 0" class="ingredient-filter__empty">
+                还没有 AI 写入的字段。
+              </p>
+
               <el-form
                 class="ingredient-form"
                 :disabled="Boolean(commitResult) || saving || submitting"
@@ -792,6 +804,14 @@
                 >
                   <div class="child-card__head">
                     <b>商品 {{ index + 1 }}</b>
+                    <el-tag
+                      v-if="row.source === 'AI'"
+                      size="small"
+                      type="success"
+                      effect="plain"
+                    >
+                      AI 写入
+                    </el-tag>
                     <el-button
                       link
                       type="danger"
@@ -950,6 +970,14 @@
                 >
                   <div class="child-card__head">
                     <b>SKU {{ index + 1 }}</b>
+                    <el-tag
+                      v-if="row.source === 'AI'"
+                      size="small"
+                      type="success"
+                      effect="plain"
+                    >
+                      AI 写入
+                    </el-tag>
                     <el-button
                       link
                       type="danger"
@@ -2036,6 +2064,8 @@ const reviewVisible = computed(
  * 原料卡可见格子：值来自服务端草稿，人工标记来自当前表单。
  * 表单里的即时输入由各控件自己回显，保存成功后草稿更新，格子元数据跟着刷新。
  */
+const onlyAiWritten = ref(false)
+
 const ingredientCells = computed(() =>
   buildIngredientCardCells(
     draft.value?.payload.ingredient ?? null,
@@ -2048,7 +2078,11 @@ const ingredientCardGroups = computed(() =>
     key: group.key,
     label: group.label,
     cells: ingredientCells.value.filter(
-      (cell) => cell.group === group.key && cell.visible && !cell.hidden
+      (cell) =>
+        cell.group === group.key &&
+        cell.visible &&
+        !cell.hidden &&
+        (!onlyAiWritten.value || cell.sourceLabel === 'AI')
     )
   })).filter((group) => group.cells.length > 0)
 )
@@ -4357,6 +4391,30 @@ function goBackToList() {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.ingredient-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 8px;
+  flex-wrap: wrap;
+}
+
+.ingredient-filter__label {
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+}
+
+.ingredient-filter__hint {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+}
+
+.ingredient-filter__empty {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .ingredient-form {

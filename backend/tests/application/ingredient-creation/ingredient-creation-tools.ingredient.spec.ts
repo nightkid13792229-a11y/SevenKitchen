@@ -33,7 +33,10 @@ interface DraftFixture {
   updatedAt: Date;
 }
 
-function createTools(draftPayload: Record<string, unknown> = {}) {
+function createTools(
+  draftPayload: Record<string, unknown> = {},
+  prismaOverrides: Record<string, unknown> = {},
+) {
   const draft: DraftFixture = {
     id: DRAFT_ID,
     name: '鸡肝',
@@ -61,6 +64,9 @@ function createTools(draftPayload: Record<string, unknown> = {}) {
     { runCheck: jest.fn() } as unknown as IngredientCreationCheckService,
     {
       nutritionSourceRecord: { findUnique: jest.fn() },
+      ingredientTag: { findMany: jest.fn(async () => []) },
+      platformOptionItem: { findMany: jest.fn(async () => []) },
+      ...prismaOverrides,
     } as unknown as PrismaService,
     {
       classifyNames: jest.fn(async (input: any) => ({
@@ -108,8 +114,25 @@ async function executeIngredient(
   };
 }
 
+async function executeTool(
+  tools: IngredientCreationToolsService,
+  name: string,
+  args: Record<string, unknown>,
+) {
+  const execution = await tools.execute({
+    runId: RUN_ID,
+    draftId: DRAFT_ID,
+    name,
+    args,
+  });
+  return {
+    ...execution,
+    body: JSON.parse(execution.content) as Record<string, any>,
+  };
+}
+
 describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
-  it('工具定义存在：七个人工审核字段、类别与基准单位是枚举', () => {
+  it('工具定义存在：全部可见字段、类别与基准单位是枚举', () => {
     const { tools } = createTools();
 
     const definition = tools
@@ -132,6 +155,22 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
         'unitDisplayLabel',
         'cfctClass',
         'edibleYieldPercent',
+        'weightG',
+        'mainNutrientsDesc',
+        'densityGPerMl',
+        'procurementStrategy',
+        'labelCategory',
+        'labelNames',
+        'labelNameSource',
+        'tags',
+      ]),
+    );
+    expect(
+      tools.getDefinitions().map((tool) => tool.function.name),
+    ).toEqual(
+      expect.arrayContaining([
+        'writeRecommendedProducts',
+        'writeProcurementSkus',
       ]),
     );
     expect(properties.category?.enum).toEqual([
@@ -452,6 +491,194 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
     expect(draftService.patch).not.toHaveBeenCalled();
   });
 });
+
+  it('新字段：单个重量 / 主要营养 / 密度 / 采购策略 / 标签信息 / 标签分类一次写入', async () => {
+    const { tools, draftService } = createTools(
+      {},
+      {
+        ingredientTag: {
+          findMany: jest.fn(async () => [{ id: 'tag-1', name: '水产' }]),
+        },
+      },
+    );
+
+    const result = await executeIngredient(tools, {
+      weightG: 120,
+      mainNutrientsDesc: '高蛋白、低脂肪',
+      densityGPerMl: 1.02,
+      procurementStrategy: 'STOCK_REPLENISHMENT',
+      labelCategory: 'FEED_MATERIAL',
+      labelNames: ['鸡肉', '鸡肝'],
+      labelNameSource: '饲料原料目录（2023 版）',
+      tags: ['水产'],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.body.applied).toEqual([
+      'weightG',
+      'mainNutrientsDesc',
+      'densityGPerMl',
+      'procurementStrategy',
+      'labelCategory',
+      'labelNames',
+      'labelNameSource',
+      'tags',
+    ]);
+    expect(draftService.patch).toHaveBeenCalledWith(
+      DRAFT_ID,
+      'INGREDIENT',
+      expect.objectContaining({
+        ingredient: expect.objectContaining({
+          weightG: 120,
+          mainNutrientsDesc: '高蛋白、低脂肪',
+          densityGPerMl: 1.02,
+          procurementStrategy: 'STOCK_REPLENISHMENT',
+          labelCategory: 'FEED_MATERIAL',
+          labelNames: ['鸡肉', '鸡肝'],
+          labelNameSource: '饲料原料目录（2023 版）',
+          tags: ['水产'],
+          tagIds: ['tag-1'],
+        }),
+      }),
+    );
+  });
+
+  it('标签不存在时整次写入失败，不落库', async () => {
+    const { tools, draftService } = createTools(
+      {},
+      {
+        ingredientTag: { findMany: jest.fn(async () => []) },
+      },
+    );
+
+    const result = await executeIngredient(tools, { tags: ['水产'] });
+
+    expect(result.ok).toBe(false);
+    expect(result.body.error).toContain('标签不存在');
+    expect(draftService.patch).not.toHaveBeenCalled();
+  });
+
+  it('密度 / 标签名称越界时拒绝，不落库', async () => {
+    const { tools, draftService } = createTools();
+
+    const density = await executeIngredient(tools, { densityGPerMl: 11 });
+    expect(density.ok).toBe(false);
+    expect(density.body.error).toContain('densityGPerMl');
+
+    const label = await executeIngredient(tools, {
+      labelNames: ['超'.repeat(51)],
+    });
+    expect(label.ok).toBe(false);
+    expect(label.body.error).toContain('标签名称');
+    expect(draftService.patch).not.toHaveBeenCalled();
+  });
+
+  it('DIY 商品：append 去重，组内重复只保留一条', async () => {
+    const existing = {
+      name: '鸡胸肉 500g',
+      brand: '某品牌',
+      productModel: '500g/袋',
+      purchaseLinkPlatform: 'TAOBAO',
+      purchaseLinkUrl: 'https://example.com/a',
+    };
+    const { tools, draftService } = createTools({
+      recommendedProducts: [existing],
+    });
+
+    const result = await executeTool(tools, 'writeRecommendedProducts', {
+      rows: [
+        existing,
+        {
+          name: '鸡胸肉 1kg',
+          purchaseLinkPlatform: 'JD',
+          purchaseLinkUrl: 'https://example.com/b',
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.body.added).toBe(1);
+    expect(result.body.duplicates).toEqual(['鸡胸肉 500g']);
+    expect(result.body.total).toBe(2);
+    expect(draftService.patch).toHaveBeenCalledWith(
+      DRAFT_ID,
+      'INGREDIENT',
+      expect.objectContaining({
+        recommendedProducts: expect.arrayContaining([
+          expect.objectContaining({ name: '鸡胸肉 500g' }),
+          expect.objectContaining({ name: '鸡胸肉 1kg' }),
+        ]),
+        childDraftsMigrated: true,
+      }),
+    );
+  });
+
+  it('采购 SKU：渠道来自选项字典、单位按基准单位校验、期初库存一起写', async () => {
+    const { tools, draftService } = createTools(
+      {},
+      {
+        platformOptionItem: {
+          findMany: jest.fn(async () => [
+            { code: '京东', label: '京东' },
+          ]),
+        },
+      },
+    );
+
+    const result = await executeTool(tools, 'writeProcurementSkus', {
+      rows: [
+        {
+          name: '鸡胸肉 1kg/袋',
+          purchaseChannel: '京东',
+          purchaseUnit: '袋',
+          purchaseToBaseRatio: 1000,
+          currentPurchasePrice: 29.9,
+          openingStock: 2,
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.body.total).toBe(1);
+    expect(draftService.patch).toHaveBeenCalledWith(
+      DRAFT_ID,
+      'INGREDIENT',
+      expect.objectContaining({
+        procurementSkus: [
+          expect.objectContaining({
+            name: '鸡胸肉 1kg/袋',
+            purchaseChannel: '京东',
+            purchaseToBaseRatio: 1000,
+            currentPurchasePrice: 29.9,
+            openingStock: 2,
+          }),
+        ],
+        childDraftsMigrated: true,
+      }),
+    );
+  });
+
+  it('采购渠道不在选项字典 / 单位不适用时拒绝', async () => {
+    const { tools, draftService } = createTools(
+      {},
+      {
+        platformOptionItem: { findMany: jest.fn(async () => []) },
+      },
+    );
+
+    const channel = await executeTool(tools, 'writeProcurementSkus', {
+      rows: [{ name: '鸡胸肉', purchaseChannel: '某不存在渠道' }],
+    });
+    expect(channel.ok).toBe(false);
+    expect(channel.body.error).toContain('采购渠道不在选项字典');
+
+    const unit = await executeTool(tools, 'writeProcurementSkus', {
+      rows: [{ name: '鸡胸肉', purchaseUnit: '不存在的单位' }],
+    });
+    expect(unit.ok).toBe(false);
+    expect(unit.body.error).toContain('采购单位');
+    expect(draftService.patch).not.toHaveBeenCalled();
+  });
 
 describe('IngredientCreationToolsService · 进展信号只认真读', () => {
   function createProgressTools() {

@@ -32,6 +32,7 @@ import {
   readSearchPlan,
 } from '../../domain/ingredient-creation/search-plan';
 import { normalizeUnit } from '../../domain/ingredient-creation/unit-guard';
+import { ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT } from '../ingredient/procurement-sku.service';
 import {
   NUTRITION_FIELD_CATALOG,
   type NutritionFieldDefinition,
@@ -60,7 +61,9 @@ import type {
   NutritionEvidenceEntry,
   PendingQuestion,
   PendingQuestionOption,
+  ProcurementSkuDraft,
   ProfileDraft,
+  RecommendedProductDraft,
   SearchReportEntry,
 } from './ingredient-creation.types';
 
@@ -424,8 +427,16 @@ const INGREDIENT_CARD_FIELDS = [
   'category',
   'baseUnit',
   'unitDisplayLabel',
+  'weightG',
   'cfctClass',
   'edibleYieldPercent',
+  'mainNutrientsDesc',
+  'densityGPerMl',
+  'procurementStrategy',
+  'labelCategory',
+  'labelNames',
+  'labelNameSource',
+  'tags',
 ] as const satisfies readonly IngredientToolField[];
 
 const INGREDIENT_CARD_FIELD_SET: ReadonlySet<string> = new Set(
@@ -458,6 +469,40 @@ const INGREDIENT_NAME_MAX = 100;
 const INGREDIENT_NAME_EN_MAX = 200;
 const INGREDIENT_UNIT_LABEL_MAX = 50;
 const INGREDIENT_CFCT_CLASS_MAX = 100;
+const INGREDIENT_WEIGHT_MIN = 0.1;
+const INGREDIENT_WEIGHT_MAX = 100000;
+const INGREDIENT_MAIN_NUTRIENTS_MAX = 100;
+const INGREDIENT_DENSITY_MIN = 0.1;
+const INGREDIENT_DENSITY_MAX = 10;
+const INGREDIENT_LABEL_NAME_MAX = 50;
+const INGREDIENT_LABEL_NAMES_MAX = 20;
+const INGREDIENT_TAG_NAME_MAX = 100;
+const INGREDIENT_TAGS_MAX = 20;
+const INGREDIENT_LABEL_NAME_SOURCE_MAX = 120;
+
+const INGREDIENT_PROCUREMENT_STRATEGIES = [
+  'DAILY_PURCHASE',
+  'STOCK_REPLENISHMENT',
+  'HYBRID',
+] as const;
+const INGREDIENT_PROCUREMENT_STRATEGY_SET: ReadonlySet<string> = new Set(
+  INGREDIENT_PROCUREMENT_STRATEGIES,
+);
+const INGREDIENT_LABEL_CATEGORIES = [
+  'FEED_MATERIAL',
+  'FEED_ADDITIVE',
+] as const;
+const INGREDIENT_LABEL_CATEGORY_SET: ReadonlySet<string> = new Set(
+  INGREDIENT_LABEL_CATEGORIES,
+);
+
+function sameStringArray(left: unknown, right: unknown): boolean {
+  if (!Array.isArray(left) || !Array.isArray(right)) return left === right;
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
 
 /** 原子工具 5：写草稿里的原料卡字段。 */
 const WRITE_INGREDIENT_TOOL: AgentToolDefinition = {
@@ -465,7 +510,7 @@ const WRITE_INGREDIENT_TOOL: AgentToolDefinition = {
   function: {
     name: 'writeIngredient',
     description:
-      '修改草稿里「原料卡」的字段（名称 / 英文名 / 类别 / 基准单位 / 展示名 / CFCT 分类 / 可食部），只写草稿，不碰正式原料。类别只接受 MEAT_ORGAN / STARCHY_VEGETABLE / OTHER，基准单位只接受 G / ML / PCS，可食部按 0–100 的百分数传。人工审核时改过的字段不会被覆盖，会在 skipped 里逐条说明；校验失败返回错误文本，按提示改正后重试。',
+      '修改草稿里「原料卡」的全部可见字段（名称 / 英文名 / 类别 / 基准单位 / 展示名 / 单个重量 / CFCT / 可食部 / 主要营养价值 / 密度 / 采购策略 / 标签类型 / 标签名称 / 名称依据 / 标签分类），只写草稿，不碰正式原料。人工审核时改过的字段不会被覆盖，会在 skipped 里逐条说明；校验失败返回错误文本，按提示改正后重试。标签分类只能选已有标签；没有依据的密度/标签不要编。',
     parameters: {
       type: 'object',
       properties: {
@@ -507,6 +552,50 @@ const WRITE_INGREDIENT_TOOL: AgentToolDefinition = {
               description:
                 '可食部百分比，必须在 10–100 之间（例如带骨肉 85 表示 85%）；未知就不要传，留作待补。',
             },
+            weightG: {
+              type: ['number', 'null'],
+              description:
+                '单个重量（克），0.1–100000；只在基准单位为个/件时有意义。传 null 清空。',
+            },
+            mainNutrientsDesc: {
+              type: 'string',
+              description: `主要营养价值，最多 ${INGREDIENT_MAIN_NUTRIENTS_MAX} 字；传空字符串清空。`,
+            },
+            densityGPerMl: {
+              type: ['number', 'null'],
+              description:
+                '密度 g/ml，0.1–10；只有基准单位为毫升时需要。没有依据传 null，不要编。',
+            },
+            procurementStrategy: {
+              type: 'string',
+              enum: INGREDIENT_PROCUREMENT_STRATEGIES,
+              description:
+                '采购策略：DAILY_PURCHASE=日采，STOCK_REPLENISHMENT=库存补货，HYBRID=混合。',
+            },
+            labelCategory: {
+              type: ['string', 'null'],
+              enum: [...INGREDIENT_LABEL_CATEGORIES, null],
+              description:
+                '标签类型：FEED_MATERIAL=饲料原料，FEED_ADDITIVE=饲料添加剂；不知道传 null。',
+            },
+            labelNames: {
+              type: 'array',
+              items: { type: 'string' },
+              maxItems: INGREDIENT_LABEL_NAMES_MAX,
+              description:
+                '标签名称数组，必须用目录里的规范写法；传空数组清空。',
+            },
+            labelNameSource: {
+              type: 'string',
+              description: `名称依据，最多 ${INGREDIENT_LABEL_NAME_SOURCE_MAX} 字；传空字符串清空。`,
+            },
+            tags: {
+              type: 'array',
+              items: { type: 'string' },
+              maxItems: INGREDIENT_TAGS_MAX,
+              description:
+                '标签分类名称数组；只能选已有标签，不能新建；传空数组清空。',
+            },
           },
           additionalProperties: false,
         },
@@ -517,7 +606,127 @@ const WRITE_INGREDIENT_TOOL: AgentToolDefinition = {
   },
 };
 
-/** 原子工具 6：跑现有终检，只读。 */
+const RECOMMENDED_PRODUCT_PLATFORMS = [
+  'TAOBAO',
+  'JD',
+  'PINDUODUO',
+  'IHERB',
+  'OTHER',
+  'WEBVIEW',
+] as const;
+
+/** 原子工具 6：写草稿里的 DIY制作单推荐商品。 */
+const WRITE_RECOMMENDED_PRODUCTS_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'writeRecommendedProducts',
+    description:
+      '修改草稿里的「DIY制作单推荐商品」列表，只写草稿，不碰正式库。mode=append 追加并去重（默认）；mode=replace 整表替换。每行至少要有名称；没有把握的字段留空，不要编链接或价格。',
+    parameters: {
+      type: 'object',
+      properties: {
+        mode: {
+          type: 'string',
+          enum: ['append', 'replace'],
+          description: 'append=追加去重，replace=整表替换；默认 append。',
+        },
+        rows: {
+          type: 'array',
+          maxItems: 30,
+          description: '要写入的 DIY 商品行；replace 时传空数组表示清空。',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: '商品名称（必填）。' },
+              brand: { type: 'string', description: '品牌；没有就留空。' },
+              productModel: { type: 'string', description: '规格；没有就留空。' },
+              purchaseChannel: {
+                type: 'string',
+                description: '购买渠道/店铺；没有就留空。',
+              },
+              purchaseLinkPlatform: {
+                type: 'string',
+                enum: RECOMMENDED_PRODUCT_PLATFORMS,
+                description: '链接平台；没有链接就传 OTHER。',
+              },
+              purchaseLinkUrl: {
+                type: 'string',
+                description: '购买链接；没有就留空。',
+              },
+              imageUrl: { type: 'string', description: '商品图片 URL；没有就留空。' },
+              sortOrder: { type: 'number', description: '排序，越小越靠前。' },
+              isActive: { type: 'boolean', description: '是否启用，默认 true。' },
+            },
+            required: ['name'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['rows'],
+      additionalProperties: false,
+    },
+  },
+};
+
+/** 原子工具 7：写草稿里的生产/采购 SKU。 */
+const WRITE_PROCUREMENT_SKUS_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'writeProcurementSkus',
+    description:
+      '修改草稿里的「生产/采购SKU」列表，只写草稿，不碰正式库。mode=append 追加并去重（默认）；mode=replace 整表替换。采购渠道只能选已有选项；没有依据的采购价/期初库存留空或传 0，不要编。',
+    parameters: {
+      type: 'object',
+      properties: {
+        mode: {
+          type: 'string',
+          enum: ['append', 'replace'],
+          description: 'append=追加去重，replace=整表替换；默认 append。',
+        },
+        rows: {
+          type: 'array',
+          maxItems: 30,
+          description: '要写入的 SKU 行；replace 时传空数组表示清空。',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'SKU 名称（必填）。' },
+              brand: { type: 'string', description: '品牌；没有就留空。' },
+              productModel: { type: 'string', description: '规格；没有就留空。' },
+              purchaseChannel: {
+                type: 'string',
+                description: '采购渠道；必须来自选项字典，不知道就留空。',
+              },
+              purchaseUnit: {
+                type: 'string',
+                description: '采购单位，如袋/箱/瓶；按基准单位允许的单位选。',
+              },
+              purchaseToBaseRatio: {
+                type: 'number',
+                description: '1 个采购单位等于多少基准单位；没有就留空。',
+              },
+              currentPurchasePrice: {
+                type: 'number',
+                description: '当前采购价；没有依据就留空。',
+              },
+              openingStock: {
+                type: 'number',
+                description: '期初库存（采购单位）；没有就 0 或留空，不要编。',
+              },
+              isActive: { type: 'boolean', description: '是否启用，默认 true。' },
+            },
+            required: ['name'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['rows'],
+      additionalProperties: false,
+    },
+  },
+};
+
+/** 原子工具 8：跑现有终检，只读。 */
 const SELF_CHECK_TOOL: AgentToolDefinition = {
   type: 'function',
   function: {
@@ -1181,7 +1390,7 @@ function readStoredIngredientManualFields(
   return [...new Set(raw.filter((field) => isIngredientManualField(field)))];
 }
 
-type IngredientFieldValue = string | number | null;
+type IngredientFieldValue = string | number | string[] | null;
 
 type IngredientFieldValidation =
   | { ok: true; value: IngredientFieldValue }
@@ -1293,6 +1502,149 @@ function validateIngredientField(
         };
       }
       return { ok: true, value: percent };
+    }
+    case 'weightG': {
+      if (raw === null) return { ok: true, value: null };
+      const weight = readFiniteNumber(raw);
+      if (
+        weight === null ||
+        weight < INGREDIENT_WEIGHT_MIN ||
+        weight > INGREDIENT_WEIGHT_MAX
+      ) {
+        return {
+          ok: false,
+          error: `weightG 必须在 [${INGREDIENT_WEIGHT_MIN}, ${INGREDIENT_WEIGHT_MAX}] 之间，或传 null 清空。`,
+        };
+      }
+      return { ok: true, value: weight };
+    }
+    case 'mainNutrientsDesc': {
+      if (raw !== null && typeof raw !== 'string') {
+        return {
+          ok: false,
+          error: 'mainNutrientsDesc 必须是字符串；清空传空字符串。',
+        };
+      }
+      const text = normalizeText(raw);
+      if (Array.from(text).length > INGREDIENT_MAIN_NUTRIENTS_MAX) {
+        return {
+          ok: false,
+          error: `mainNutrientsDesc 最多 ${INGREDIENT_MAIN_NUTRIENTS_MAX} 个字符，收到 ${Array.from(text).length} 个。`,
+        };
+      }
+      return { ok: true, value: text || null };
+    }
+    case 'densityGPerMl': {
+      if (raw === null) return { ok: true, value: null };
+      const density = readFiniteNumber(raw);
+      if (
+        density === null ||
+        density < INGREDIENT_DENSITY_MIN ||
+        density > INGREDIENT_DENSITY_MAX
+      ) {
+        return {
+          ok: false,
+          error: `densityGPerMl 必须在 [${INGREDIENT_DENSITY_MIN}, ${INGREDIENT_DENSITY_MAX}] 之间，或传 null 清空。`,
+        };
+      }
+      return { ok: true, value: density };
+    }
+    case 'procurementStrategy': {
+      if (
+        typeof raw !== 'string' ||
+        !INGREDIENT_PROCUREMENT_STRATEGY_SET.has(raw.trim())
+      ) {
+        return {
+          ok: false,
+          error: `procurementStrategy 只能是 ${INGREDIENT_PROCUREMENT_STRATEGIES.join(' / ')}。`,
+        };
+      }
+      return { ok: true, value: raw.trim() };
+    }
+    case 'labelCategory': {
+      if (raw === null) return { ok: true, value: null };
+      if (
+        typeof raw !== 'string' ||
+        !INGREDIENT_LABEL_CATEGORY_SET.has(raw.trim())
+      ) {
+        return {
+          ok: false,
+          error: `labelCategory 只能是 ${INGREDIENT_LABEL_CATEGORIES.join(' / ')}，或传 null 清空。`,
+        };
+      }
+      return { ok: true, value: raw.trim() };
+    }
+    case 'labelNames': {
+      if (!Array.isArray(raw)) {
+        return { ok: false, error: 'labelNames 必须是字符串数组。' };
+      }
+      const names = [
+        ...new Set(
+          raw
+            .map((value) => normalizeText(value))
+            .filter((value) => value.length > 0),
+        ),
+      ];
+      if (names.length > INGREDIENT_LABEL_NAMES_MAX) {
+        return {
+          ok: false,
+          error: `labelNames 最多 ${INGREDIENT_LABEL_NAMES_MAX} 项。`,
+        };
+      }
+      const tooLong = names.find(
+        (value) => Array.from(value).length > INGREDIENT_LABEL_NAME_MAX,
+      );
+      if (tooLong) {
+        return {
+          ok: false,
+          error: `标签名称「${tooLong}」超过 ${INGREDIENT_LABEL_NAME_MAX} 个字符。`,
+        };
+      }
+      return { ok: true, value: names };
+    }
+    case 'labelNameSource': {
+      if (raw !== null && typeof raw !== 'string') {
+        return {
+          ok: false,
+          error: 'labelNameSource 必须是字符串；清空传空字符串。',
+        };
+      }
+      const text = normalizeText(raw);
+      if (Array.from(text).length > INGREDIENT_LABEL_NAME_SOURCE_MAX) {
+        return {
+          ok: false,
+          error: `labelNameSource 最多 ${INGREDIENT_LABEL_NAME_SOURCE_MAX} 个字符。`,
+        };
+      }
+      return { ok: true, value: text || null };
+    }
+    case 'tags': {
+      if (!Array.isArray(raw)) {
+        return { ok: false, error: 'tags 必须是标签名称数组。' };
+      }
+      const names = [
+        ...new Set(
+          raw
+            .map((value) => normalizeText(value))
+            .filter((value) => value.length > 0),
+        ),
+      ];
+      if (names.length > INGREDIENT_TAGS_MAX) {
+        return {
+          ok: false,
+          error: `tags 最多 ${INGREDIENT_TAGS_MAX} 项。`,
+        };
+      }
+      const tooLong = names.find(
+        (value) => Array.from(value).length > INGREDIENT_TAG_NAME_MAX,
+      );
+      if (tooLong) {
+        return {
+          ok: false,
+          error: `标签「${tooLong}」超过 ${INGREDIENT_TAG_NAME_MAX} 个字符。`,
+        };
+      }
+      return { ok: true, value: names };
     }
     default:
       return { ok: false, error: `不支持的原料卡字段「${field}」。` };
@@ -1419,6 +1771,8 @@ export class IngredientCreationToolsService {
       GET_RECORD_TOOL,
       WRITE_NUTRITION_TOOL,
       WRITE_INGREDIENT_TOOL,
+      WRITE_RECOMMENDED_PRODUCTS_TOOL,
+      WRITE_PROCUREMENT_SKUS_TOOL,
       SELF_CHECK_TOOL,
       ASK_USER_TOOL,
       PROPOSE_SEARCH_PLAN_TOOL,
@@ -1523,6 +1877,10 @@ export class IngredientCreationToolsService {
         return this.writeNutrition(input.draftId, input.args);
       case 'writeIngredient':
         return this.writeIngredient(input.draftId, input.args);
+      case 'writeRecommendedProducts':
+        return this.writeRecommendedProducts(input.draftId, input.args);
+      case 'writeProcurementSkus':
+        return this.writeProcurementSkus(input.draftId, input.args);
       case 'selfCheck':
         return this.selfCheck(input.draftId);
       case 'askUser':
@@ -2308,6 +2666,264 @@ export class IngredientCreationToolsService {
    * - 枚举 / 长度 / 范围：非法值返回错误文本，模型可以照着改；
    * - 人工保护：`ingredient.manualFields` 里的字段一律跳过并说明。
    */
+  /**
+   * 写 DIY 制作单推荐商品草稿。
+   *
+   * 草稿层直接写，正式落库仍由授权/提交链路负责。append 默认去重，
+   * replace 才会整表替换；两种模式都保留原行上的前端 key。
+   */
+  private async writeRecommendedProducts(
+    draftId: string,
+    args: Record<string, unknown>,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const rawRows = args.rows;
+    if (!Array.isArray(rawRows)) {
+      return this.error('writeRecommendedProducts 需要 rows 数组。');
+    }
+    const mode = args.mode === undefined ? 'append' : args.mode;
+    if (mode !== 'append' && mode !== 'replace') {
+      return this.error('mode 只能是 append 或 replace。');
+    }
+    if (rawRows.length > 30) {
+      return this.error('rows 最多 30 条。');
+    }
+
+    const rows: RecommendedProductDraft[] = [];
+    for (let index = 0; index < rawRows.length; index += 1) {
+      const raw = rawRows[index];
+      if (!isRecord(raw)) {
+        return this.error(`第 ${index + 1} 行必须是对象。`);
+      }
+      const name = normalizeText(raw.name);
+      if (!name) {
+        return this.error(`第 ${index + 1} 行缺商品名称。`);
+      }
+      if (Array.from(name).length > 200) {
+        return this.error(`第 ${index + 1} 行商品名称超过 200 字。`);
+      }
+      const platform = normalizeText(raw.purchaseLinkPlatform) || 'OTHER';
+      if (!(RECOMMENDED_PRODUCT_PLATFORMS as readonly string[]).includes(platform)) {
+        return this.error(
+          `第 ${index + 1} 行 purchaseLinkPlatform 只能是 ${RECOMMENDED_PRODUCT_PLATFORMS.join(' / ')}。`,
+        );
+      }
+      const sortOrder = readFiniteNumber(raw.sortOrder);
+      rows.push({
+        source: 'AI',
+        name,
+        brand: normalizeText(raw.brand) || null,
+        productModel: normalizeText(raw.productModel) || null,
+        purchaseChannel: normalizeText(raw.purchaseChannel) || null,
+        purchaseLinkPlatform: platform,
+        purchaseLinkUrl: normalizeText(raw.purchaseLinkUrl) || null,
+        imageUrl: normalizeText(raw.imageUrl) || null,
+        sortOrder:
+          sortOrder !== null && sortOrder >= 0 ? Math.trunc(sortOrder) : index,
+        isActive: raw.isActive !== false,
+      });
+    }
+
+    const draft = await this.draftService.get(draftId);
+    const existing = Array.isArray(draft.payload.recommendedProducts)
+      ? (draft.payload.recommendedProducts as RecommendedProductDraft[])
+      : [];
+    const keyOf = (row: RecommendedProductDraft) =>
+      [
+        row.name,
+        row.brand ?? '',
+        row.productModel ?? '',
+        row.purchaseLinkPlatform ?? '',
+        row.purchaseLinkUrl ?? '',
+      ].join('|');
+
+    const duplicates: string[] = [];
+    const nextRows = mode === 'replace' ? [] : [...existing];
+    for (const row of rows) {
+      if (nextRows.some((existingRow) => keyOf(existingRow) === keyOf(row))) {
+        duplicates.push(row.name);
+        continue;
+      }
+      nextRows.push(row);
+    }
+
+    const changed = JSON.stringify(existing) !== JSON.stringify(nextRows);
+    if (changed) {
+      await this.draftService.patch(draftId, draft.step, {
+        recommendedProducts: nextRows,
+        childDraftsMigrated: true,
+      });
+    }
+
+    return {
+      ok: true,
+      content: okContent({
+        mode,
+        added: rows.length - duplicates.length,
+        duplicates,
+        total: nextRows.length,
+        rows: nextRows,
+        ...(duplicates.length > 0
+          ? { hint: '重复的条目没有重复追加；如需改已有行，请用 mode=replace 或到页面手工改。' }
+          : {}),
+      }),
+      progress: {
+        writtenFieldPaths: changed ? ['recommendedProducts'] : [],
+        sourceRecordIds: [],
+      },
+    };
+  }
+
+  /**
+   * 写生产/采购 SKU 草稿。
+   *
+   * 采购渠道只接受选项字典里的值；采购单位按当前基准单位的白名单校验。
+   * 期初库存、采购价没有依据时留空，工具不会替模型编数字。
+   */
+  private async writeProcurementSkus(
+    draftId: string,
+    args: Record<string, unknown>,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const rawRows = args.rows;
+    if (!Array.isArray(rawRows)) {
+      return this.error('writeProcurementSkus 需要 rows 数组。');
+    }
+    const mode = args.mode === undefined ? 'append' : args.mode;
+    if (mode !== 'append' && mode !== 'replace') {
+      return this.error('mode 只能是 append 或 replace。');
+    }
+    if (rawRows.length > 30) {
+      return this.error('rows 最多 30 条。');
+    }
+
+    const draft = await this.draftService.get(draftId);
+    const baseUnit = readIngredientEditorCard(draft).baseUnit;
+    const allowedUnits = new Set(
+      ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT[
+        baseUnit as keyof typeof ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT
+      ] ?? [],
+    );
+    const rawChannels = rawRows
+      .map((raw) => (isRecord(raw) ? normalizeText(raw.purchaseChannel) : ''))
+      .filter((value) => value.length > 0);
+    if (rawChannels.length > 0) {
+      const channelRows = await this.prisma.platformOptionItem.findMany({
+        where: { setId: 'purchase_channel', enabled: true },
+        select: { code: true, label: true },
+      });
+      const channels = new Map(channelRows.map((row) => [row.code, row.label]));
+      const missing = [...new Set(rawChannels)].filter(
+        (channel) => !channels.has(channel),
+      );
+      if (missing.length > 0) {
+        return this.error(
+          `采购渠道不在选项字典里：${missing.join('、')}。可选：${[
+            ...channels.keys(),
+          ].join('、') || '（当前没有可用渠道）'}。`,
+        );
+      }
+    }
+
+    const rows: ProcurementSkuDraft[] = [];
+    for (let index = 0; index < rawRows.length; index += 1) {
+      const raw = rawRows[index];
+      if (!isRecord(raw)) {
+        return this.error(`第 ${index + 1} 行必须是对象。`);
+      }
+      const name = normalizeText(raw.name);
+      if (!name) {
+        return this.error(`第 ${index + 1} 行缺 SKU 名称。`);
+      }
+      if (Array.from(name).length > 200) {
+        return this.error(`第 ${index + 1} 行 SKU 名称超过 200 字。`);
+      }
+      const purchaseUnit = normalizeText(raw.purchaseUnit);
+      if (purchaseUnit && !allowedUnits.has(purchaseUnit)) {
+        return this.error(
+          `第 ${index + 1} 行采购单位「${purchaseUnit}」不适用于 ${baseUnit}；可选：${[
+            ...allowedUnits,
+          ].join('、')}。`,
+        );
+      }
+      const ratio = readFiniteNumber(raw.purchaseToBaseRatio);
+      if (ratio !== null && ratio <= 0) {
+        return this.error(`第 ${index + 1} 行换算倍数必须大于 0。`);
+      }
+      const price = readFiniteNumber(raw.currentPurchasePrice);
+      if (price !== null && price < 0) {
+        return this.error(`第 ${index + 1} 行采购价不能为负数。`);
+      }
+      const openingStock = readFiniteNumber(raw.openingStock);
+      if (openingStock !== null && openingStock < 0) {
+        return this.error(`第 ${index + 1} 行期初库存不能为负数。`);
+      }
+      if (openingStock !== null && openingStock > 0 && ratio === null) {
+        return this.error(
+          `第 ${index + 1} 行填了期初库存时，必须同时填换算倍数。`,
+        );
+      }
+      rows.push({
+        source: 'AI',
+        name,
+        brand: normalizeText(raw.brand) || null,
+        productModel: normalizeText(raw.productModel) || null,
+        purchaseChannel: normalizeText(raw.purchaseChannel) || null,
+        purchaseUnit: purchaseUnit || null,
+        purchaseToBaseRatio: ratio,
+        currentPurchasePrice: price,
+        openingStock,
+        isActive: raw.isActive !== false,
+      });
+    }
+
+    const existing = Array.isArray(draft.payload.procurementSkus)
+      ? (draft.payload.procurementSkus as ProcurementSkuDraft[])
+      : [];
+    const keyOf = (row: ProcurementSkuDraft) =>
+      [
+        row.name,
+        row.brand ?? '',
+        row.productModel ?? '',
+        row.purchaseChannel ?? '',
+        row.purchaseUnit ?? '',
+      ].join('|');
+
+    const duplicates: string[] = [];
+    const nextRows = mode === 'replace' ? [] : [...existing];
+    for (const row of rows) {
+      if (nextRows.some((existingRow) => keyOf(existingRow) === keyOf(row))) {
+        duplicates.push(row.name);
+        continue;
+      }
+      nextRows.push(row);
+    }
+
+    const changed = JSON.stringify(existing) !== JSON.stringify(nextRows);
+    if (changed) {
+      await this.draftService.patch(draftId, draft.step, {
+        procurementSkus: nextRows,
+        childDraftsMigrated: true,
+      });
+    }
+
+    return {
+      ok: true,
+      content: okContent({
+        mode,
+        added: rows.length - duplicates.length,
+        duplicates,
+        total: nextRows.length,
+        rows: nextRows,
+        ...(duplicates.length > 0
+          ? { hint: '重复的条目没有重复追加；如需改已有行，请用 mode=replace 或到页面手工改。' }
+          : {}),
+      }),
+      progress: {
+        writtenFieldPaths: changed ? ['procurementSkus'] : [],
+        sourceRecordIds: [],
+      },
+    };
+  }
+
   private async writeIngredient(
     draftId: string,
     args: Record<string, unknown>,
@@ -2340,10 +2956,10 @@ export class IngredientCreationToolsService {
       ? draft.payload.ingredient
       : {};
     const current = readIngredientEditorCard(draft);
-    // 草稿 patch 是浅合并（`payload = payload || $1::jsonb`）：只传 9 个编辑器
-    // 字段会把人工填的其余字段（brand / weightG / shelfLifeMonths …）整张卡
-    // 覆盖掉。先铺开草稿里的完整原料卡，再用规范化后的编辑器字段覆盖可见的
-    // 9 项；循环里只改 AI 本次写入的字段。
+    // 草稿 patch 是浅合并（`payload = payload || $1::jsonb`）：只传编辑器
+    // 字段会把人工填的其余字段（brand / shelfLifeMonths …）整张卡覆盖掉。
+    // 先铺开草稿里的完整原料卡，再用规范化后的编辑器字段覆盖；循环里只改
+    // AI 本次写入的字段。
     const next: IngredientDraft = {
       ...stored,
       ...current,
@@ -2353,6 +2969,7 @@ export class IngredientCreationToolsService {
     const applied: IngredientToolField[] = [];
     const skipped: Array<{ field: IngredientToolField; reason: string }> = [];
     const changed: IngredientToolField[] = [];
+    const record = next as unknown as Record<string, unknown>;
 
     for (const field of provided) {
       if ((next.manualFields ?? []).includes(field as IngredientCardField)) {
@@ -2367,6 +2984,58 @@ export class IngredientCreationToolsService {
       const validation = validateIngredientField(field, rawFields[field]);
       if (!validation.ok) {
         return this.error(validation.error);
+      }
+
+      if (field === 'tags') {
+        const names = validation.value as string[];
+        let ids: string[] = [];
+        if (names.length > 0) {
+          const rows = await this.prisma.ingredientTag.findMany({
+            where: { name: { in: names } },
+            select: { id: true, name: true },
+          });
+          const byName = new Map(rows.map((row) => [row.name, row.id]));
+          const missing = names.filter((name) => !byName.has(name));
+          if (missing.length > 0) {
+            return this.error(
+              `标签不存在：${missing.join('、')}。只能选已有标签，请先在标签管理里创建。`,
+            );
+          }
+          ids = names.map((name) => byName.get(name) as string);
+        }
+        if (!sameStringArray(next.tags, names) || !sameStringArray(next.tagIds, ids)) {
+          next.tags = names;
+          next.tagIds = ids;
+          changed.push(field);
+        }
+        applied.push(field);
+        continue;
+      }
+
+      if (field === 'labelNames') {
+        const names = validation.value as string[];
+        if (!sameStringArray(next.labelNames, names)) {
+          next.labelNames = names;
+          changed.push(field);
+        }
+        applied.push(field);
+        continue;
+      }
+
+      if (
+        field === 'weightG' ||
+        field === 'mainNutrientsDesc' ||
+        field === 'densityGPerMl' ||
+        field === 'procurementStrategy' ||
+        field === 'labelCategory' ||
+        field === 'labelNameSource'
+      ) {
+        if (record[field] !== validation.value) {
+          record[field] = validation.value;
+          changed.push(field);
+        }
+        applied.push(field);
+        continue;
       }
 
       if (field === 'edibleYieldPercent') {

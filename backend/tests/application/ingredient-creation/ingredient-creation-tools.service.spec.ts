@@ -197,7 +197,7 @@ afterEach(() => {
 });
 
 describe('IngredientCreationToolsService · 工具清单（原子能力）', () => {
-  it('只有 10 个原子工具，没有任何提交 / 确认 / 批准工具', () => {
+  it('只有 12 个原子工具，没有任何提交 / 确认 / 批准工具', () => {
     const { tools } = createTools();
 
     expect(tools.availableToolNames()).toEqual([
@@ -207,6 +207,8 @@ describe('IngredientCreationToolsService · 工具清单（原子能力）', () 
       'getRecord',
       'writeNutrition',
       'writeIngredient',
+      'writeRecommendedProducts',
+      'writeProcurementSkus',
       'selfCheck',
       'askUser',
       'proposeSearchPlan',

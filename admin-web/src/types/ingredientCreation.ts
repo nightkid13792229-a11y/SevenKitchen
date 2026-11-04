@@ -162,6 +162,8 @@ export interface IngredientDraft {
 export interface RecommendedProductDraft {
   /** 前端本地行标识，仅用于渲染与增删；不落库 */
   key: string
+  /** AI 写入的草稿行在页面提示核对；不落正式表 */
+  source?: 'AI' | 'MANUAL'
   name: string
   brand: string
   productModel: string
@@ -183,6 +185,8 @@ export interface RecommendedProductDraft {
 export interface ProcurementSkuDraft {
   /** 前端本地行标识，仅用于渲染与增删；不落库 */
   key: string
+  /** AI 写入的草稿行在页面提示核对；不落正式表 */
+  source?: 'AI' | 'MANUAL'
   name: string
   brand: string
   productModel: string

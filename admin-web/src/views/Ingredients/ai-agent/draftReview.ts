@@ -682,8 +682,12 @@ export function toRecommendedProductDrafts(
     : []
   return stored
     .filter((item): item is RecommendedProductDraft => isRecord(item))
-    .map((item) => ({
-      key: typeof item.key === 'string' ? item.key : '',
+    .map((item, index) => ({
+      key:
+        typeof item.key === 'string' && item.key
+          ? item.key
+          : `agent-rp-${index}`,
+      source: item.source === 'AI' || item.source === 'MANUAL' ? item.source : undefined,
       name: toText(item.name),
       brand: toText(item.brand),
       productModel: toText(item.productModel),
@@ -706,8 +710,12 @@ export function toProcurementSkuDrafts(
     : []
   return stored
     .filter((item): item is ProcurementSkuDraft => isRecord(item))
-    .map((item) => ({
-      key: typeof item.key === 'string' ? item.key : '',
+    .map((item, index) => ({
+      key:
+        typeof item.key === 'string' && item.key
+          ? item.key
+          : `agent-sku-${index}`,
+      source: item.source === 'AI' || item.source === 'MANUAL' ? item.source : undefined,
       name: toText(item.name),
       brand: toText(item.brand),
       productModel: toText(item.productModel),

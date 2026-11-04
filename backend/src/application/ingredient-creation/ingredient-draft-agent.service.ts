@@ -640,6 +640,14 @@ const INGREDIENT_STEP_FIELD_LABELS: Record<string, string> = {
   unitDisplayLabel: '标准单位展示名',
   cfctClass: 'CFCT分类',
   edibleYieldPercent: '可食部比率',
+  weightG: '单个重量',
+  mainNutrientsDesc: '主要营养',
+  densityGPerMl: '密度',
+  procurementStrategy: '采购策略',
+  labelCategory: '标签类型',
+  labelNames: '标签名称',
+  labelNameSource: '名称依据',
+  tags: '标签分类',
 };
 
 /**
@@ -701,6 +709,14 @@ export function buildToolStepSummary(
             `${INGREDIENT_STEP_FIELD_LABELS[key]}=${readDisplayValue(value)}`,
         );
       return oneLine(`改原料卡 ${parts.join(' · ') || '（无字段）'}`);
+    }
+    case 'writeRecommendedProducts': {
+      const rows = Array.isArray(args.rows) ? args.rows.length : 0;
+      return oneLine(`写 DIY制作单推荐商品 ${rows} 条`);
+    }
+    case 'writeProcurementSkus': {
+      const rows = Array.isArray(args.rows) ? args.rows.length : 0;
+      return oneLine(`写 生产/采购SKU ${rows} 条`);
     }
     case 'selfCheck':
       return '跑终检';
@@ -794,6 +810,16 @@ export function buildToolResultSummary(
       return skipped > 0
         ? `更新 ${changed} 个字段，跳过 ${skipped} 个`
         : `更新 ${changed} 个字段`;
+    }
+    case 'writeRecommendedProducts':
+    case 'writeProcurementSkus': {
+      const added = typeof result.added === 'number' ? result.added : 0;
+      const duplicates = Array.isArray(result.duplicates)
+        ? result.duplicates.length
+        : 0;
+      return duplicates > 0
+        ? `写入 ${added} 条，跳过重复 ${duplicates} 条`
+        : `写入 ${added} 条`;
     }
     case 'selfCheck': {
       const counts = isRecord(result.counts) ? result.counts : {};
@@ -1199,14 +1225,33 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
       typeof ingredient.edibleYieldRate === 'number'
         ? `${Math.round(ingredient.edibleYieldRate * 10000) / 100}%`
         : '待补';
+    const tags = Array.isArray(ingredient.tags)
+      ? ingredient.tags.filter((tag) => typeof tag === 'string')
+      : [];
+    const labelNames = Array.isArray(ingredient.labelNames)
+      ? ingredient.labelNames.filter((name) => typeof name === 'string')
+      : [];
     lines.push(
       `原料卡：原料名称=${String(ingredient.name ?? '')} 英文名=${String(
         ingredient.nameEn ?? '待补',
       )} 类别=${String(ingredient.category ?? '待补')} 基准单位=${String(
         ingredient.baseUnit ?? 'G',
-      )} 标准单位展示名=${String(ingredient.unitDisplayLabel ?? '')} CFCT分类=${String(
-        ingredient.cfctClass ?? '待补',
-      )} 可食部比率=${percent}`,
+      )} 标准单位展示名=${String(ingredient.unitDisplayLabel ?? '')} 单个重量=${
+        ingredient.weightG === null || ingredient.weightG === undefined
+          ? '待补'
+          : String(ingredient.weightG)
+      } CFCT分类=${String(ingredient.cfctClass ?? '待补')} 可食部比率=${percent} 主要营养=${
+        String(ingredient.mainNutrientsDesc ?? '待补')
+      } 密度=${
+        ingredient.densityGPerMl === null ||
+        ingredient.densityGPerMl === undefined
+          ? '待补'
+          : String(ingredient.densityGPerMl)
+      } 采购策略=${String(ingredient.procurementStrategy ?? '待补')} 标签类型=${String(
+        ingredient.labelCategory ?? '待补',
+      )} 标签名称=${labelNames.join('、') || '待补'} 名称依据=${String(
+        ingredient.labelNameSource ?? '待补',
+      )} 标签分类=${tags.join('、') || '待补'}`,
     );
     const manualFields = Array.isArray(ingredient.manualFields)
       ? ingredient.manualFields.filter((field) => typeof field === 'string')
@@ -1218,9 +1263,43 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
     }
   } else {
     lines.push(
-      '（草稿还没有原料卡。可用 writeIngredient.fields 写名称 / 英文名 / 类别 / 基准单位 / 展示名 / CFCT 分类 / 可食部。）',
+      '（草稿还没有原料卡。可用 writeIngredient.fields 写名称 / 英文名 / 类别 / 基准单位 / 展示名 / 单个重量 / CFCT / 可食部 / 主要营养 / 密度 / 采购策略 / 标签类型 / 标签名称 / 名称依据 / 标签分类。）',
     );
   }
+
+  const recommendedProducts = Array.isArray(
+    draft.payload.recommendedProducts,
+  )
+    ? draft.payload.recommendedProducts
+    : [];
+  lines.push(
+    `DIY制作单推荐商品：${recommendedProducts.length} 条${
+      recommendedProducts.length
+        ? `（${recommendedProducts
+            .slice(0, 10)
+            .map((row) => (isRecord(row) ? String(row.name ?? '') : ''))
+            .filter(Boolean)
+            .join('、')}）`
+        : ''
+    }`,
+  );
+  const procurementSkus = Array.isArray(draft.payload.procurementSkus)
+    ? draft.payload.procurementSkus
+    : [];
+  lines.push(
+    `生产/采购SKU：${procurementSkus.length} 条${
+      procurementSkus.length
+        ? `（${procurementSkus
+            .slice(0, 10)
+            .map((row) => (isRecord(row) ? String(row.name ?? '') : ''))
+            .filter(Boolean)
+            .join('、')}）`
+        : ''
+    }`,
+  );
+  lines.push(
+    '写子板块用 writeRecommendedProducts / writeProcurementSkus：默认 append 去重，确认要整表替换才用 mode=replace；采购渠道只能选选项字典里的值，没有依据的价格/期初库存不要编。',
+  );
 
   const profiles = Array.isArray(draft.payload.profiles)
     ? draft.payload.profiles

@@ -142,6 +142,8 @@ export interface IngredientDraft {
 
 /** 一份「DIY制作单推荐商品」草稿（字段与标准原料编辑页的子弹窗对齐）。 */
 export interface RecommendedProductDraft {
+  /** 来源标记：AI 写入的条目在页面提示核对；不落正式表 */
+  source?: 'AI' | 'MANUAL';
   name: string;
   brand?: string | null;
   productModel?: string | null;
@@ -155,6 +157,8 @@ export interface RecommendedProductDraft {
 
 /** 一份「生产/采购SKU」草稿（字段与标准原料编辑页的子弹窗对齐）。 */
 export interface ProcurementSkuDraft {
+  /** 来源标记：AI 写入的条目在页面提示核对；不落正式表 */
+  source?: 'AI' | 'MANUAL';
   name: string;
   brand?: string | null;
   productModel?: string | null;

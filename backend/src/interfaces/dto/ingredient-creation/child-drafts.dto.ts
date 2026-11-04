@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -17,6 +18,14 @@ import {
  * 只用于草稿 payload 与授权提交；正式入库仍走 `recommendedProduct` 表。
  */
 export class RecommendedProductDraftDto {
+  @ApiPropertyOptional({
+    description: '来源标记：AI 写入的草稿行在页面提示核对（不落正式表）',
+    enum: ['AI', 'MANUAL'],
+  })
+  @IsOptional()
+  @IsIn(['AI', 'MANUAL'])
+  source?: 'AI' | 'MANUAL';
+
   @ApiPropertyOptional({ description: '前端行标识（不落正式表）' })
   @IsOptional()
   @IsString()
@@ -87,6 +96,14 @@ export class RecommendedProductDraftDto {
  * 生产/采购SKU 草稿：与标准原料编辑页的子弹窗字段一一对应。
  */
 export class ProcurementSkuDraftDto {
+  @ApiPropertyOptional({
+    description: '来源标记：AI 写入的草稿行在页面提示核对（不落正式表）',
+    enum: ['AI', 'MANUAL'],
+  })
+  @IsOptional()
+  @IsIn(['AI', 'MANUAL'])
+  source?: 'AI' | 'MANUAL';
+
   @ApiPropertyOptional({ description: '前端行标识（不落正式表）' })
   @IsOptional()
   @IsString()

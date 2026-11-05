@@ -132,6 +132,14 @@ const CARD_FIELD_DEFINITIONS = [
     valueType: 'number',
     visibleWhenBaseUnit: 'PCS',
   },
+  {
+    key: 'densityGPerMl',
+    group: 'MEASURE',
+    label: '密度(g/ml)',
+    stage: 'CREATABLE',
+    valueType: 'number',
+    visibleWhenBaseUnit: 'ML',
+  },
   // NUTRITION 营养属性
   {
     key: 'cfctClass',
@@ -155,14 +163,6 @@ const CARD_FIELD_DEFINITIONS = [
     label: '主要营养价值',
     stage: 'CREATABLE',
     valueType: 'text',
-  },
-  {
-    key: 'densityGPerMl',
-    group: 'NUTRITION',
-    label: '密度(g/ml)',
-    stage: 'CREATABLE',
-    valueType: 'number',
-    visibleWhenBaseUnit: 'ML',
   },
   // PURCHASE 采购
   {

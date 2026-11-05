@@ -518,14 +518,6 @@
           <div class="review-stats">
             <el-tag
               size="small"
-              type="warning"
-              effect="plain"
-              title="营养档案里还缺的来源字段，与原料标签无关"
-            >
-              营养待补 {{ pendingCount }} 项
-            </el-tag>
-            <el-tag
-              size="small"
               :type="conflictCount > 0 ? 'danger' : 'info'"
               effect="plain"
             >
@@ -781,6 +773,16 @@
                 </div>
               </el-alert>
 
+              <div v-if="profileGroups.length > 0" class="nutrition-summary">
+                <span class="nutrition-summary__main">
+                  营养核对：空值 {{ nutritionEmptyCount }} 项 + 零值
+                  {{ nutritionZeroCount }} 项 = {{ nutritionReviewCount }} 项
+                </span>
+                <span class="nutrition-summary__hint">
+                  空值是来源没有；零值可能是来源真实值，也可能是缺，需人工判断
+                </span>
+              </div>
+
               <div class="nutrition-category">
                 <span class="nutrition-category__label">原料类别</span>
                 <el-select
@@ -843,10 +845,11 @@
                   </span>
                   <el-tag
                     size="small"
-                    :type="group.pendingCount > 0 ? 'warning' : 'success'"
+                    :type="group.pendingCount > 0 ? 'warning' : 'info'"
                     effect="plain"
+                    :title="`空值 ${group.pendingCount} 项，零值 ${group.zeroCount} 项`"
                   >
-                    营养待补 {{ group.pendingCount }} 项
+                    空值 {{ group.pendingCount }} · 零值 {{ group.zeroCount }}
                   </el-tag>
                 </header>
 
@@ -1101,7 +1104,6 @@ import type {
 } from '@/types/ingredientCreation'
 import {
   applyProfileCellEdit,
-  countPendingRows,
   countPlanConflicts,
   markIngredientFieldManual,
   resolveRawPrimaryProfileIndex,
@@ -1533,7 +1535,15 @@ const visibleProfileGroups = computed(() => {
     }))
 })
 
-const pendingCount = computed(() => countPendingRows(profileGroups.value))
+const nutritionEmptyCount = computed(() =>
+  profileGroups.value.reduce((total, group) => total + group.pendingCount, 0)
+)
+const nutritionZeroCount = computed(() =>
+  profileGroups.value.reduce((total, group) => total + group.zeroCount, 0)
+)
+const nutritionReviewCount = computed(
+  () => nutritionEmptyCount.value + nutritionZeroCount.value
+)
 const conflictCount = computed(() =>
   countPlanConflicts(draft.value?.payload)
 )
@@ -3926,6 +3936,23 @@ function goBackToList() {
   margin: 4px 0 0;
   font-size: 12px;
   line-height: 1.7;
+  color: var(--el-text-color-secondary);
+}
+
+.nutrition-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 8px 0 10px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.nutrition-summary__main {
+  color: var(--el-text-color-regular);
+}
+
+.nutrition-summary__hint {
   color: var(--el-text-color-secondary);
 }
 

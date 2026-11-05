@@ -312,6 +312,39 @@ describe('审核页 · 营养档案映射', () => {
     expect(groups[1]?.pendingCount).toBe(TOTAL_FIELDS - 1)
   })
 
+  it('零值单独计数：0 是来源值，不直接判成待补，但计入人工核对总数', () => {
+    const groups = toProfileRows({
+      profiles: [
+        {
+          preparationState: 'RAW',
+          sourceRecordId: 'src-zero',
+          entries: [
+            {
+              fieldPath: 'vitamins.vitaminD',
+              finalValue: 0,
+              unit: 'IU',
+              sourceRecordId: 'src-zero',
+              status: 'DIRECT',
+              sourceValue: null,
+              sourceUnit: null,
+              formula: null,
+              confirmedBy: null,
+              confirmedAt: null
+            }
+          ],
+          notes: null
+        }
+      ]
+    })
+
+    expect(groups[0]?.zeroCount).toBe(1)
+    expect(groups[0]?.pendingCount).toBe(TOTAL_FIELDS - 1)
+    expect(groups[0]?.reviewCount).toBe(TOTAL_FIELDS)
+    expect(
+      groups[0]?.rows.find((row) => row.fieldPath === 'vitamins.vitaminD')
+    ).toMatchObject({ value: 0, status: 'DIRECT' })
+  })
+
   it('没有 profiles 时返回空数组，待补计数为 0（不假装目录全缺）', () => {
     const groups = toProfileRows({})
 

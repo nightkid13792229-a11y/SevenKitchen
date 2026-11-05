@@ -44,7 +44,11 @@ function makeGroup(rows: ProfileFieldRow[]): ProfileGroup {
     sourceRecordId: 'src-raw',
     sourceLabel: '本地库',
     rows,
-    pendingCount: rows.filter((row) => row.status === 'PENDING').length
+    pendingCount: rows.filter((row) => row.status === 'PENDING').length,
+    zeroCount: rows.filter((row) => row.value === 0).length,
+    reviewCount: rows.filter(
+      (row) => row.status === 'PENDING' || row.value === 0
+    ).length
   }
 }
 

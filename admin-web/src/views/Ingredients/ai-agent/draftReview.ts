@@ -313,7 +313,12 @@ export interface ProfileGroup {
   sourceRecordId: string
   sourceLabel: string
   rows: ProfileFieldRow[]
+  /** 空值格子数（没有 entry 或 finalValue 为 null） */
   pendingCount: number
+  /** 值为 0 的格子数；0 可能是来源真实值，不等于缺 */
+  zeroCount: number
+  /** 空值 + 零值，给「需要人工核对」的总数 */
+  reviewCount: number
 }
 
 const PREPARATION_STATE_LABELS: Readonly<Record<PreparationState, string>> = {
@@ -431,6 +436,11 @@ export function toProfileRows(
           ? `${baseStateLabel} · ${sourceLabel}`
           : baseStateLabel
 
+      const pendingCount = rows.filter(
+        (row) => row.status === 'PENDING'
+      ).length
+      const zeroCount = rows.filter((row) => row.value === 0).length
+
       return {
         profileIndex: indexByProfile.get(profile) ?? 0,
         preparationState,
@@ -438,7 +448,9 @@ export function toProfileRows(
         sourceRecordId: profile.sourceRecordId,
         sourceLabel,
         rows,
-        pendingCount: rows.filter((row) => row.status === 'PENDING').length
+        pendingCount,
+        zeroCount,
+        reviewCount: pendingCount + zeroCount
       }
     })
 }

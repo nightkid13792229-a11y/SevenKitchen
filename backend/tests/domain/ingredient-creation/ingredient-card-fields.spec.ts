@@ -18,11 +18,11 @@ const EXPECTED_KEYS_IN_ORDER = [
   'baseUnit',
   'unitDisplayLabel',
   'weightG',
+  'densityGPerMl',
   // NUTRITION
   'cfctClass',
   'edibleYieldPercent',
   'mainNutrientsDesc',
-  'densityGPerMl',
   // PURCHASE
   'procurementStrategy',
   // LABEL
@@ -34,8 +34,8 @@ const EXPECTED_KEYS_IN_ORDER = [
 /** 组边界：把「组」也钉死，页面的分区不会因为改字段而错位。 */
 const EXPECTED_GROUPS_IN_ORDER = [
   ...Array<'BASIC'>(4).fill('BASIC'),
-  ...Array<'MEASURE'>(3).fill('MEASURE'),
-  ...Array<'NUTRITION'>(4).fill('NUTRITION'),
+  ...Array<'MEASURE'>(4).fill('MEASURE'),
+  ...Array<'NUTRITION'>(3).fill('NUTRITION'),
   ...Array<'PURCHASE'>(1).fill('PURCHASE'),
   ...Array<'LABEL'>(3).fill('LABEL'),
 ];

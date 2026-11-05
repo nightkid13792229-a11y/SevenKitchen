@@ -101,6 +101,13 @@ const CARD_FIELD_DEFINITIONS = [
     stage: 'CREATABLE',
     valueType: 'NUMBER',
   },
+  {
+    key: 'densityGPerMl',
+    group: 'MEASURE',
+    label: '密度(g/ml)',
+    stage: 'CREATABLE',
+    valueType: 'NUMBER',
+  },
   // NUTRITION
   {
     key: 'cfctClass',
@@ -122,13 +129,6 @@ const CARD_FIELD_DEFINITIONS = [
     label: '主要营养价值',
     stage: 'CREATABLE',
     valueType: 'STRING',
-  },
-  {
-    key: 'densityGPerMl',
-    group: 'NUTRITION',
-    label: '密度(g/ml)',
-    stage: 'CREATABLE',
-    valueType: 'NUMBER',
   },
   // PURCHASE
   {

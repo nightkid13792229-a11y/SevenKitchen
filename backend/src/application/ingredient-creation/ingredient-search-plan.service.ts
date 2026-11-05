@@ -45,4 +45,29 @@ export class IngredientSearchPlanService {
 
     return approved.plan;
   }
+
+  /**
+   * 跳过当前待确认方案：只清掉 `searchPlan`，不写正式库。
+   *
+   * 跳过不等于批准：写工具仍然要求一份新的、已确认的方案；
+   * AI 可以继续查库/提问/重新提方案。
+   */
+  async dismiss(draftId: string): Promise<void> {
+    const draft = await this.draftService.get(draftId);
+    const current = readSearchPlan(draft.payload.searchPlan);
+
+    if (!current) {
+      return;
+    }
+    if (current.status !== 'PENDING') {
+      throw new BadRequestException(
+        '这份检索方案已经确认，不能跳过；如需改方案请重新检索。',
+      );
+    }
+
+    await this.draftService.patch(draftId, draft.step, {
+      searchPlan: null,
+    });
+  }
+
 }

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Logger,
@@ -262,6 +263,17 @@ export class IngredientCreationController {
     return new ApiResponseDto(0, 'Success', plan);
   }
 
+  @Delete('drafts/:id/search-plan')
+  @ApiOperation({
+    summary: '跳过当前待确认的检索方案；不写正式库，写工具仍需新方案确认',
+  })
+  async dismissSearchPlan(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<null>> {
+    await this.searchPlanService.dismiss(id);
+    return new ApiResponseDto(0, 'Success', null);
+  }
+
   @Get('audits/:ingredientId')
   @ApiOperation({
     summary: '按原料读创建记录（AI 提案、人工改动、提交人；没有 → 404）',
@@ -412,6 +424,24 @@ export class IngredientCreationController {
     );
 
     return new ApiResponseDto(0, 'Success', run);
+  }
+
+  @Post('drafts/:id/checks/auto')
+  @ApiOperation({
+    summary: 'Agent 写完后自动跑两页核验；报告标记为 AGENT，仍不授权',
+  })
+  async runAutoChecks(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<
+    ApiResponseDto<{ ingredient: CheckRunView; nutrition: CheckRunView }>
+  > {
+    const result = await this.checkService.runAllDomains(
+      id,
+      'AGENT',
+      user.userId,
+    );
+    return new ApiResponseDto(0, 'Success', result);
   }
 
   @Get('drafts/:id/checks')

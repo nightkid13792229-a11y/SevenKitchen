@@ -180,4 +180,33 @@ describe('IngredientSearchPlanService', () => {
       ),
     ).rejects.toThrow(BadRequestException);
   });
+  it('跳过待确认方案 → 清空 searchPlan，不写正式库', async () => {
+    const { service, patch } = createHarness(pendingPlan());
+
+    await service.dismiss(DRAFT_ID);
+
+    expect(patch).toHaveBeenCalledWith(DRAFT_ID, 'INTAKE', {
+      searchPlan: null,
+    });
+  });
+
+  it('已经确认的方案不能跳过', async () => {
+    const { service, patch } = createHarness(
+      pendingPlan({ status: 'APPROVED', approvedBy: 'admin-1' }),
+    );
+
+    await expect(service.dismiss(DRAFT_ID)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it('没有方案时跳过是幂等的', async () => {
+    const { service, patch } = createHarness(null);
+
+    await service.dismiss(DRAFT_ID);
+
+    expect(patch).not.toHaveBeenCalled();
+  });
+
 });

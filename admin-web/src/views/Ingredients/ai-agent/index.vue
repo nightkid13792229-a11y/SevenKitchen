@@ -402,10 +402,45 @@
           </div>
         </div>
 
-        <div v-if="state.pendingPlan" class="agent-plan">
+        <div
+          v-if="state.pendingPlan && planCollapsed"
+          class="agent-plan-collapsed"
+        >
+          <span>检索方案已收起；未确认前仍不能写草稿。</span>
+          <div>
+            <el-button link size="small" @click="planCollapsed = false">
+              展开
+            </el-button>
+            <el-button
+              link
+              size="small"
+              type="danger"
+              :loading="planDismissing"
+              @click="skipPlan"
+            >
+              跳过本方案
+            </el-button>
+          </div>
+        </div>
+
+        <div v-else-if="state.pendingPlan" class="agent-plan">
           <div class="agent-plan__head">
             <span class="agent-run__role agent-run__role--ai">AI</span>
             <b>检索方案，待你确认</b>
+            <div class="agent-plan__head-actions">
+              <el-button link size="small" @click="planCollapsed = true">
+                收起
+              </el-button>
+              <el-button
+                link
+                size="small"
+                type="danger"
+                :loading="planDismissing"
+                @click="skipPlan"
+              >
+                跳过本方案
+              </el-button>
+            </div>
           </div>
           <p class="agent-plan__hint">
             查库阶段已经跑完。确认之后我才开始写原料卡和营养档案；要改就直接在下面说，我会重新提一份。
@@ -568,7 +603,7 @@
                   :title="staleNotice('INGREDIENT') || ''"
                 >
                   <div class="review-stale__body">
-                    <span>授权只认当前草稿版本的报告；点右上角「核验此页」重跑。</span>
+                    <span>授权只认当前草稿版本的报告；点右上角「核验两页」重跑。</span>
                   </div>
                 </el-alert>
 
@@ -769,7 +804,7 @@
                 :title="staleNotice('NUTRITION') || ''"
               >
                 <div class="review-stale__body">
-                  <span>授权只认当前草稿版本的报告；点右上角「核验此页」重跑。</span>
+                  <span>授权只认当前草稿版本的报告；点右上角「核验两页」重跑。</span>
                 </div>
               </el-alert>
 
@@ -928,15 +963,24 @@
             </el-tab-pane>
             </el-tabs>
 
-            <el-button
-              class="review-tabs__check"
-              size="small"
-              :loading="checkDialogLoading"
-              :disabled="Boolean(commitResult) || submitting"
-              @click="openCheckDialog()"
-            >
-              核验此页
-            </el-button>
+            <div class="review-tabs__check-actions">
+              <el-button
+                size="small"
+                :loading="checkDialogLoading"
+                :disabled="Boolean(commitResult) || submitting"
+                @click="runBothChecks"
+              >
+                核验两页
+              </el-button>
+              <el-button
+                link
+                size="small"
+                :disabled="Boolean(commitResult) || submitting"
+                @click="openCurrentReport"
+              >
+                查看报告
+              </el-button>
+            </div>
           </div>
 
           <div class="review-feedback">
@@ -1214,6 +1258,9 @@ const state = reactive({
  * 「人改过没有」的对比，页面只改副本、提交时把副本发回去。
  */
 const planConfirming = ref(false)
+const planDismissing = ref(false)
+/** 只影响本次渲染的「收起」；不是跳过，方案仍然有效。 */
+const planCollapsed = ref(false)
 /** 方案卡里勾中的候选记录 id（可多条，每条各写一份档案）。 */
 const selectedRecordIds = ref<string[]>([])
 
@@ -1280,6 +1327,26 @@ async function confirmPlan() {
     ElMessage.error(getApiErrorMessage(error, '确认失败，请稍后重试'))
   } finally {
     planConfirming.value = false
+  }
+}
+
+/** 跳过当前待确认方案：清掉服务端方案，卡片消失，写工具仍需新方案确认。 */
+async function skipPlan() {
+  const draftId = state.draftId
+  if (!draftId || planDismissing.value) {
+    return
+  }
+  planDismissing.value = true
+  try {
+    await ingredientCreationApi.dismissSearchPlan(draftId)
+    state.pendingPlan = null
+    planCollapsed.value = false
+    selectedRecordIds.value = []
+    ElMessage.success('已跳过当前检索方案，可以继续和 Agent 对话')
+  } catch (error) {
+    ElMessage.error(getApiErrorMessage(error, '跳过失败，请稍后重试'))
+  } finally {
+    planDismissing.value = false
   }
 }
 
@@ -1922,6 +1989,11 @@ async function handleRun() {
       }
       // 每跑完一轮都重新读草稿：右边两个标签永远显示服务端最新版本。
       await loadDraft(finalState.draftId)
+      // Agent 正常写完（不是在等方案确认）时自动跑两页核验；
+      // 报告仍分域落库，授权仍由人点。
+      if (!state.pendingPlan) {
+        void autoRunChecks(finalState.draftId)
+      }
     }
   } catch (error) {
     // 流式函数本身不抛错；这里是防御性兜底，且不清空已经收到的步骤。
@@ -2425,18 +2497,79 @@ function currentApprover(): string {
   return 'unknown'
 }
 
-/** 打开弹窗并立刻重跑当前页：弹窗先显示「正在跑规则…」，再换报告。 */
-function openCheckDialog(domain?: CheckDomain) {
-  if (!draft.value) {
+/** 一次跑完两页；报告仍分域落库，授权仍要求两份都新鲜、无阻断。 */
+async function runBothChecks() {
+  const draftId = draft.value?.id
+  if (!draftId || checkDialogLoading.value) {
     return
   }
-  const target =
-    domain ?? (activeTab.value === 'profiles' ? 'NUTRITION' : 'INGREDIENT')
-  checkDialogDomain.value = target
+  checkDialogVisible.value = true
+  checkDialogDomain.value =
+    activeTab.value === 'profiles' ? 'NUTRITION' : 'INGREDIENT'
   checkDialogRun.value = null
   checkDialogError.value = ''
+  checkDialogLoading.value = true
+  try {
+    const ingredient = await ingredientCreationApi.runDomainCheck(
+      draftId,
+      'INGREDIENT'
+    )
+    const nutrition = await ingredientCreationApi.runDomainCheck(
+      draftId,
+      'NUTRITION'
+    )
+    if (draft.value?.id !== draftId) {
+      return
+    }
+    // 优先把有阻断的那一域展示出来；两域都干净时展示当前标签页。
+    const target: CheckDomain =
+      ingredient.result.blocking.length > 0
+        ? 'INGREDIENT'
+        : nutrition.result.blocking.length > 0
+          ? 'NUTRITION'
+          : checkDialogDomain.value
+    checkDialogDomain.value = target
+    checkDialogRun.value = target === 'INGREDIENT' ? ingredient : nutrition
+    await refreshChecks(draftId)
+  } catch (error) {
+    checkDialogError.value = getApiErrorMessage(
+      error,
+      '两页核验没跑成，请稍后重试'
+    )
+  } finally {
+    checkDialogLoading.value = false
+  }
+}
+
+/** 查看当前标签页已有的报告；没有报告时退回单页核验。 */
+function openCurrentReport() {
+  const domain: CheckDomain =
+    activeTab.value === 'profiles' ? 'NUTRITION' : 'INGREDIENT'
+  const run =
+    domain === 'INGREDIENT'
+      ? checksView.value?.ingredient ?? null
+      : checksView.value?.nutrition ?? null
+  if (!run) {
+    void runCheckForDomain(domain)
+    checkDialogVisible.value = true
+    return
+  }
+  checkDialogDomain.value = domain
+  checkDialogRun.value = run
+  checkDialogError.value = ''
   checkDialogVisible.value = true
-  void runCheckForDomain(target)
+}
+
+/** Agent 正常写完后自动跑两页；失败不打断对话，只留状态给用户重试。 */
+async function autoRunChecks(draftId: string) {
+  try {
+    await ingredientCreationApi.runAutoChecks(draftId)
+    if (draft.value?.id === draftId) {
+      await refreshChecks(draftId)
+    }
+  } catch {
+    // 自动核验失败不抢用户操作；用户仍可点「核验两页」手动重跑。
+  }
 }
 
 /** 跑某一页的核验并落库；成功后刷新页签横幅与授权闸门。 */
@@ -3552,6 +3685,25 @@ function goBackToList() {
   }
 }
 
+.agent-plan__head-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+
+.agent-plan-collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border: 1px dashed var(--el-border-color);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
 .agent-plan {
   margin: 12px 0;
   padding: 14px 16px;
@@ -3737,11 +3889,14 @@ function goBackToList() {
   min-height: 0;
 }
 
-.review-tabs__check {
+.review-tabs__check-actions {
   position: absolute;
   top: 8px;
   right: 16px;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .review-tabs {

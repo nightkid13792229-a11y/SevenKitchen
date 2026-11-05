@@ -97,6 +97,31 @@ export class IngredientCreationCheckService {
   }
 
   /**
+   * 两域一起跑并落报告；只给「Agent 自动核验」用。
+   *
+   * 授权仍然要人点；自动核验只是把 AI 写完后的检查结果提前落下来。
+   */
+  async runAllDomains(
+    draftId: string,
+    trigger: CheckTrigger,
+    createdBy?: string,
+  ): Promise<{ ingredient: CheckRunView; nutrition: CheckRunView }> {
+    const ingredient = await this.checkRunService.runDomain(
+      draftId,
+      'INGREDIENT',
+      trigger,
+      createdBy,
+    );
+    const nutrition = await this.checkRunService.runDomain(
+      draftId,
+      'NUTRITION',
+      trigger,
+      createdBy,
+    );
+    return { ingredient, nutrition };
+  }
+
+  /**
    * 读两域最新报告，并对着**当前草稿**判断是否过期。
    *
    * 先确认草稿存在（不存在 → 404）：没有草稿就没有「当前内容」，也就谈不上新鲜度。

@@ -37,6 +37,10 @@ export const ingredientCreationApi = {
   ): Promise<SearchPlan> =>
     api.post(`${BASE}/drafts/${id}/search-plan/confirm`, input),
 
+  /** 跳过当前待确认方案；不写正式库，写工具仍需新方案确认。 */
+  dismissSearchPlan: (id: string): Promise<null> =>
+    api.delete(`${BASE}/drafts/${id}/search-plan`),
+
   /** 读取草稿（刷新后按 draftId 恢复现场） */
   getDraft: (id: string): Promise<IngredientCreationDraft> =>
     api.get(`${BASE}/drafts/${id}`),
@@ -60,6 +64,12 @@ export const ingredientCreationApi = {
    */
   runDomainCheck: (id: string, domain: CheckDomain): Promise<CheckRunView> =>
     api.post(`${BASE}/drafts/${id}/checks`, { domain }),
+
+  /** Agent 写完后自动跑两页核验；报告 trigger=AGENT，仍不授权。 */
+  runAutoChecks: (
+    id: string
+  ): Promise<{ ingredient: CheckRunView; nutrition: CheckRunView }> =>
+    api.post(`${BASE}/drafts/${id}/checks/auto`),
 
   /** 两域各自最新报告 + 是否仍对应当前草稿（改过一格就会变成 false）。 */
   getDraftChecks: (id: string): Promise<IngredientDraftChecksView> =>

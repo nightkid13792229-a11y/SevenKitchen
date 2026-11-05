@@ -500,15 +500,29 @@
 
       <el-card v-if="reviewVisible" class="review-panel" shadow="never">
         <div class="review-panel__head">
-          <div class="review-panel__title">
-            <b>草稿审核</b>
-            <span v-if="draft" class="review-panel__step">
-              当前站点 {{ draft.step }}
-            </span>
+          <div class="review-panel__head-top">
+            <div class="review-panel__title">
+              <b>草稿审核</b>
+              <span v-if="draft" class="review-panel__step">
+                当前站点 {{ draft.step }}
+              </span>
+            </div>
+            <div
+              v-if="activeTab === 'ingredient'"
+              class="review-panel__tools"
+            >
+              <el-switch v-model="onlyAiWritten" size="small" />
+              <span class="review-panel__switch-label">只看 AI 写入</span>
+            </div>
           </div>
           <div class="review-stats">
-            <el-tag size="small" type="warning" effect="plain">
-              待补 {{ pendingCount }} 项
+            <el-tag
+              size="small"
+              type="warning"
+              effect="plain"
+              title="营养档案里还缺的来源字段，与原料标签无关"
+            >
+              营养待补 {{ pendingCount }} 项
             </el-tag>
             <el-tag
               size="small"
@@ -562,23 +576,9 @@
                   :title="staleNotice('INGREDIENT') || ''"
                 >
                   <div class="review-stale__body">
-                    <span>授权只认当前草稿版本的报告。</span>
-                    <el-button
-                      size="small"
-                      @click="openCheckDialog('INGREDIENT')"
-                    >
-                      重跑核验
-                    </el-button>
+                    <span>授权只认当前草稿版本的报告；点右上角「核验此页」重跑。</span>
                   </div>
                 </el-alert>
-
-              <div class="ingredient-filter">
-                <el-switch v-model="onlyAiWritten" size="small" />
-                <span class="ingredient-filter__label">只看 AI 写入的字段</span>
-                <span class="ingredient-filter__hint">
-                  AI 写的是草稿；绿色「AI」标记表示当前值不是人工核对的
-                </span>
-              </div>
 
               <p v-if="onlyAiWritten && ingredientCardGroups.length === 0" class="ingredient-filter__empty">
                 还没有 AI 写入的字段。
@@ -727,18 +727,28 @@
                         />
                       </el-select>
 
-                      <el-input
+                      <el-tooltip
                         v-else
-                        :model-value="ingredientCellText(cell)"
-                        :disabled="isIngredientCellDisabled(cell)"
-                        :maxlength="ingredientCellMaxlength(cell)"
-                        placeholder="空"
-                        class="ingredient-cell__control"
-                        @update:model-value="
-                          setIngredientCellTextValue(cell.key, $event)
+                        :content="ingredientCellText(cell)"
+                        :disabled="
+                          cell.key !== 'mainNutrientsDesc' ||
+                          !ingredientCellText(cell)
                         "
-                        @change="handleIngredientTextChange(cell.key, $event)"
-                      />
+                        placement="top"
+                        :show-after="200"
+                      >
+                        <el-input
+                          :model-value="ingredientCellText(cell)"
+                          :disabled="isIngredientCellDisabled(cell)"
+                          :maxlength="ingredientCellMaxlength(cell)"
+                          placeholder="空"
+                          class="ingredient-cell__control"
+                          @update:model-value="
+                            setIngredientCellTextValue(cell.key, $event)
+                          "
+                          @change="handleIngredientTextChange(cell.key, $event)"
+                        />
+                      </el-tooltip>
 
                       <span
                         v-if="cell.hint"
@@ -767,13 +777,7 @@
                 :title="staleNotice('NUTRITION') || ''"
               >
                 <div class="review-stale__body">
-                  <span>授权只认当前草稿版本的报告。</span>
-                  <el-button
-                    size="small"
-                    @click="openCheckDialog('NUTRITION')"
-                  >
-                    重跑核验
-                  </el-button>
+                  <span>授权只认当前草稿版本的报告；点右上角「核验此页」重跑。</span>
                 </div>
               </el-alert>
 
@@ -842,7 +846,7 @@
                     :type="group.pendingCount > 0 ? 'warning' : 'success'"
                     effect="plain"
                   >
-                    待补 {{ group.pendingCount }} 项
+                    营养待补 {{ group.pendingCount }} 项
                   </el-tag>
                 </header>
 
@@ -3663,6 +3667,26 @@ function goBackToList() {
   border-bottom: 1px solid var(--el-border-color-light);
 }
 
+.review-panel__head-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.review-panel__tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.review-panel__switch-label {
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  white-space: nowrap;
+}
+
 .review-panel__title {
   display: flex;
   align-items: baseline;
@@ -3752,24 +3776,6 @@ function goBackToList() {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.ingredient-filter {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0 8px;
-  flex-wrap: wrap;
-}
-
-.ingredient-filter__label {
-  font-size: 12px;
-  color: var(--el-text-color-regular);
-}
-
-.ingredient-filter__hint {
-  font-size: 11px;
-  color: var(--el-text-color-secondary);
 }
 
 .ingredient-filter__empty {

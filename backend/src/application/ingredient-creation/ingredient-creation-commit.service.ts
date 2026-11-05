@@ -27,9 +27,7 @@ import type {
   IngredientCreationDraft,
   IngredientDraft,
   NutritionEvidenceEntry,
-  ProcurementSkuDraft,
   ProfileDraft,
-  RecommendedProductDraft,
 } from './ingredient-creation.types';
 import { normalizeOptionalPurchaseUnit } from '../ingredient/procurement-sku.service';
 
@@ -44,10 +42,6 @@ export interface CommitIngredientCreationInput {
   profiles: ProfileDraft[];
   /** 主档案在 `profiles` 里的下标；必须指向存在的档案。 */
   primaryProfileIndex: number;
-  /** DIY制作单推荐商品（可多条），与原料同事务落库。 */
-  recommendedProducts?: RecommendedProductDraft[];
-  /** 生产/采购SKU（可多条），与原料同事务落库。 */
-  procurementSkus?: ProcurementSkuDraft[];
 }
 
 export interface CommitIngredientCreationResult {
@@ -589,13 +583,6 @@ export class IngredientCreationCommitService {
         input.draftId,
         primaryNutritionData,
       );
-      // 两个子板块与原料同事务：任一条商品/SKU 不合法，整次授权回滚。
-      await this.createChildRecords(
-        tx,
-        createdIngredient.id,
-        ingredient.baseUnit,
-        input,
-      );
       await this.createTagAssignments(tx, createdIngredient.id, ingredient);
       const stateCounts = new Map<string, number>();
       for (const prepared of preparedProfiles) {
@@ -932,191 +919,6 @@ export class IngredientCreationCommitService {
         );
       }
       throw error;
-    }
-  }
-
-  /**
-   * 两个子板块落库：DIY制作单推荐商品与生产/采购SKU。
-   *
-   * 与原料同事务：任一条缺名称、价格/库存不合法都会整次回滚，
-   * 不会出现「原料建好了、SKU 只建了一半」的中间态。
-   */
-  private async createChildRecords(
-    tx: Prisma.TransactionClient,
-    ingredientId: string,
-    baseUnit: IngredientDraft['baseUnit'],
-    input: CommitIngredientCreationInput,
-  ): Promise<void> {
-    for (const [index, draft] of (input.recommendedProducts ?? []).entries()) {
-      const name = readNonEmptyString(draft.name);
-      if (name === null) {
-        throw new BadRequestException(
-          `第 ${index + 1} 个 DIY制作单推荐商品缺名称，不能提交`,
-        );
-      }
-
-      const purchaseLinkUrl = readNonEmptyString(draft.purchaseLinkUrl);
-      const purchaseLinkPlatform =
-        readNonEmptyString(draft.purchaseLinkPlatform) ?? 'OTHER';
-      const sortOrder = Number.isFinite(draft.sortOrder)
-        ? Math.max(0, Math.trunc(draft.sortOrder as number))
-        : index;
-
-      await tx.recommendedProduct.create({
-        data: {
-          ingredientId,
-          name,
-          brand: readNonEmptyString(draft.brand),
-          productModel: readNonEmptyString(draft.productModel),
-          purchaseChannel: readNonEmptyString(draft.purchaseChannel),
-          ...(purchaseLinkUrl
-            ? {
-                purchaseLink: {
-                  platform: purchaseLinkPlatform,
-                  url: purchaseLinkUrl,
-                } as Prisma.InputJsonValue,
-              }
-            : {}),
-          imageUrl: readNonEmptyString(draft.imageUrl),
-          sortOrder,
-          isActive: draft.isActive !== false,
-        },
-      });
-    }
-
-    for (const [index, draft] of (input.procurementSkus ?? []).entries()) {
-      const name = readNonEmptyString(draft.name);
-      if (name === null) {
-        throw new BadRequestException(
-          `第 ${index + 1} 个采购 SKU 缺名称，不能提交`,
-        );
-      }
-
-      const ratio = draft.purchaseToBaseRatio;
-      if (
-        ratio !== null &&
-        ratio !== undefined &&
-        (!Number.isFinite(ratio) || ratio <= 0)
-      ) {
-        throw new BadRequestException(
-          `采购 SKU「${name}」的换算倍数必须大于 0`,
-        );
-      }
-
-      const price = draft.currentPurchasePrice;
-      if (
-        price !== null &&
-        price !== undefined &&
-        (!Number.isFinite(price) || price < 0)
-      ) {
-        throw new BadRequestException(`采购 SKU「${name}」的采购价不能为负数`);
-      }
-
-      const openingStock = draft.openingStock ?? 0;
-      if (!Number.isFinite(openingStock) || openingStock < 0) {
-        throw new BadRequestException(
-          `采购 SKU「${name}」的期初库存必须是不小于 0 的数字`,
-        );
-      }
-      if (openingStock > 0 && (ratio === null || ratio === undefined || ratio <= 0)) {
-        throw new BadRequestException(
-          `采购 SKU「${name}」填了期初库存时，换算倍数必须大于 0`,
-        );
-      }
-
-      const safetyStock = draft.safetyStock ?? null;
-      const reorderPoint = draft.reorderPoint ?? null;
-      const targetStock = draft.targetStock ?? null;
-      if (
-        safetyStock !== null &&
-        reorderPoint !== null &&
-        reorderPoint < safetyStock
-      ) {
-        throw new BadRequestException(
-          `采购 SKU「${name}」的补货点必须大于或等于安全库存`,
-        );
-      }
-      if (
-        reorderPoint !== null &&
-        targetStock !== null &&
-        targetStock < reorderPoint
-      ) {
-        throw new BadRequestException(
-          `采购 SKU「${name}」的目标库存必须大于或等于补货点`,
-        );
-      }
-
-      const created = await tx.procurementSku.create({
-        data: {
-          ingredientId,
-          name,
-          brand: readNonEmptyString(draft.brand),
-          productModel: readNonEmptyString(draft.productModel),
-          purchaseChannel: readNonEmptyString(draft.purchaseChannel),
-          purchaseUnit: normalizeOptionalPurchaseUnit(
-            draft.purchaseUnit,
-            baseUnit,
-          ),
-          purchaseToBaseRatio: ratio ?? null,
-          currentPurchasePrice: price ?? null,
-          notes: readNonEmptyString(draft.notes),
-          isDefault: false,
-          isActive: draft.isActive !== false,
-          sortOrder: index,
-          safetyStock,
-          reorderPoint,
-          targetStock,
-          createdById: input.userId,
-          createdSource: 'AI_AGENT',
-        },
-      });
-
-      if (price !== null && price !== undefined) {
-        await tx.procurementSkuPriceHistory.create({
-          data: {
-            procurementSkuId: created.id,
-            ingredientId,
-            oldPrice: null,
-            newPrice: price,
-            source: 'MANUAL',
-            operatorId: input.userId,
-            note: 'AI 辅助新建原料时设置初始采购价',
-          },
-        });
-      }
-
-      if (openingStock > 0) {
-        const deltaG = openingStock * (ratio as number);
-        const balance = await tx.inventoryLedgerEntry.aggregate({
-          where: { ingredientId },
-          _sum: { deltaG: true },
-        });
-        const quantityBeforeG = Number(balance._sum.deltaG ?? 0);
-        const adjustmentId = randomUUID();
-        await tx.inventoryAdjustment.create({
-          data: {
-            id: adjustmentId,
-            ingredientId,
-            procurementSkuId: created.id,
-            adjustmentMode: 'DELTA' as any,
-            quantityBeforeG,
-            quantityAfterG: quantityBeforeG + deltaG,
-            deltaG,
-            reason: '期初库存',
-            note: 'AI 辅助新建原料时录入',
-          },
-        });
-        await tx.inventoryLedgerEntry.create({
-          data: {
-            id: randomUUID(),
-            ingredientId,
-            procurementSkuId: created.id,
-            deltaG,
-            sourceType: 'MANUAL_ADJUSTMENT' as any,
-            sourceId: adjustmentId,
-          },
-        });
-      }
     }
   }
 

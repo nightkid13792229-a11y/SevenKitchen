@@ -140,40 +140,6 @@ export interface IngredientDraft {
   manualFields?: IngredientManualField[];
 }
 
-/** 一份「DIY制作单推荐商品」草稿（字段与标准原料编辑页的子弹窗对齐）。 */
-export interface RecommendedProductDraft {
-  /** 来源标记：AI 写入的条目在页面提示核对；不落正式表 */
-  source?: 'AI' | 'MANUAL';
-  name: string;
-  brand?: string | null;
-  productModel?: string | null;
-  purchaseChannel?: string | null;
-  purchaseLinkPlatform?: string | null;
-  purchaseLinkUrl?: string | null;
-  imageUrl?: string | null;
-  sortOrder?: number | null;
-  isActive?: boolean | null;
-}
-
-/** 一份「生产/采购SKU」草稿（字段与标准原料编辑页的子弹窗对齐）。 */
-export interface ProcurementSkuDraft {
-  /** 来源标记：AI 写入的条目在页面提示核对；不落正式表 */
-  source?: 'AI' | 'MANUAL';
-  name: string;
-  brand?: string | null;
-  productModel?: string | null;
-  purchaseChannel?: string | null;
-  purchaseUnit?: string | null;
-  purchaseToBaseRatio?: number | null;
-  currentPurchasePrice?: number | null;
-  openingStock?: number | null;
-  safetyStock?: number | null;
-  reorderPoint?: number | null;
-  targetStock?: number | null;
-  notes?: string | null;
-  isActive?: boolean | null;
-}
-
 /** ③ 一份营养档案草稿（生 / 熟各一份）。 */
 export interface ProfileDraft {
   preparationState: PreparationState;
@@ -463,12 +429,6 @@ export interface IngredientCreationDraftPayload {
   profiles?: ProfileDraft[];
   checks?: FinalCheckResult;
   ingredient?: IngredientDraft;
-  /** DIY制作单推荐商品草稿（可多条） */
-  recommendedProducts?: RecommendedProductDraft[];
-  /** 生产/采购SKU 草稿（可多条） */
-  procurementSkus?: ProcurementSkuDraft[];
-  /** 旧版原料级采购字段是否已经迁到子板块（一次性迁移标记） */
-  childDraftsMigrated?: boolean;
   verify?: { exceptions: ExceptionRecord[] };
   /** AI 提案历史：只追加、不覆盖（appendProposal） */
   proposalHistory?: ProposalSnapshot[];

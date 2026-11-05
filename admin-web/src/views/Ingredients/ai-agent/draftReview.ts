@@ -25,9 +25,7 @@ import type {
   IngredientCreationDraftPayload,
   IngredientDraft,
   PreparationState,
-  ProcurementSkuDraft,
   ProfileDraft,
-  RecommendedProductDraft
 } from '@/types/ingredientCreation'
 import {
   PROFILE_FIELD_DEFINITIONS,
@@ -668,66 +666,5 @@ export function toCommitInput(
     ingredient,
     profiles,
     primaryProfileIndex,
-    recommendedProducts: toRecommendedProductDrafts(payload),
-    procurementSkus: toProcurementSkuDrafts(payload)
   }
-}
-
-/** 草稿里的 DIY制作单推荐商品：去掉前端行标识，只保留要落库的字段。 */
-export function toRecommendedProductDrafts(
-  payload: IngredientCreationDraftPayload | null | undefined
-): RecommendedProductDraft[] {
-  const stored = Array.isArray(payload?.recommendedProducts)
-    ? payload.recommendedProducts
-    : []
-  return stored
-    .filter((item): item is RecommendedProductDraft => isRecord(item))
-    .map((item, index) => ({
-      key:
-        typeof item.key === 'string' && item.key
-          ? item.key
-          : `agent-rp-${index}`,
-      source: item.source === 'AI' || item.source === 'MANUAL' ? item.source : undefined,
-      name: toText(item.name),
-      brand: toText(item.brand),
-      productModel: toText(item.productModel),
-      purchaseChannel: toText(item.purchaseChannel),
-      purchaseLinkPlatform: toText(item.purchaseLinkPlatform) || 'OTHER',
-      purchaseLinkUrl: toText(item.purchaseLinkUrl),
-      imageUrl: toText(item.imageUrl),
-      imageKey: toText(item.imageKey),
-      sortOrder: Math.max(0, Math.trunc(toFiniteNumber(item.sortOrder) ?? 0)),
-      isActive: item.isActive !== false
-    }))
-}
-
-/** 草稿里的采购 SKU：数字字段统一收成 number|null，空行不在这里丢。 */
-export function toProcurementSkuDrafts(
-  payload: IngredientCreationDraftPayload | null | undefined
-): ProcurementSkuDraft[] {
-  const stored = Array.isArray(payload?.procurementSkus)
-    ? payload.procurementSkus
-    : []
-  return stored
-    .filter((item): item is ProcurementSkuDraft => isRecord(item))
-    .map((item, index) => ({
-      key:
-        typeof item.key === 'string' && item.key
-          ? item.key
-          : `agent-sku-${index}`,
-      source: item.source === 'AI' || item.source === 'MANUAL' ? item.source : undefined,
-      name: toText(item.name),
-      brand: toText(item.brand),
-      productModel: toText(item.productModel),
-      purchaseChannel: toText(item.purchaseChannel),
-      purchaseUnit: toText(item.purchaseUnit),
-      purchaseToBaseRatio: toFiniteNumber(item.purchaseToBaseRatio),
-      currentPurchasePrice: toFiniteNumber(item.currentPurchasePrice),
-      openingStock: toFiniteNumber(item.openingStock),
-      safetyStock: toFiniteNumber(item.safetyStock),
-      reorderPoint: toFiniteNumber(item.reorderPoint),
-      targetStock: toFiniteNumber(item.targetStock),
-      notes: toText(item.notes),
-      isActive: item.isActive !== false
-    }))
 }

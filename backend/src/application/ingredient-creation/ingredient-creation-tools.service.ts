@@ -32,7 +32,6 @@ import {
   readSearchPlan,
 } from '../../domain/ingredient-creation/search-plan';
 import { normalizeUnit } from '../../domain/ingredient-creation/unit-guard';
-import { ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT } from '../ingredient/procurement-sku.service';
 import {
   NUTRITION_FIELD_CATALOG,
   type NutritionFieldDefinition,
@@ -61,9 +60,7 @@ import type {
   NutritionEvidenceEntry,
   PendingQuestion,
   PendingQuestionOption,
-  ProcurementSkuDraft,
   ProfileDraft,
-  RecommendedProductDraft,
   SearchReportEntry,
 } from './ingredient-creation.types';
 
@@ -601,126 +598,6 @@ const WRITE_INGREDIENT_TOOL: AgentToolDefinition = {
         },
       },
       required: ['fields'],
-      additionalProperties: false,
-    },
-  },
-};
-
-const RECOMMENDED_PRODUCT_PLATFORMS = [
-  'TAOBAO',
-  'JD',
-  'PINDUODUO',
-  'IHERB',
-  'OTHER',
-  'WEBVIEW',
-] as const;
-
-/** 原子工具 6：写草稿里的 DIY制作单推荐商品。 */
-const WRITE_RECOMMENDED_PRODUCTS_TOOL: AgentToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'writeRecommendedProducts',
-    description:
-      '修改草稿里的「DIY制作单推荐商品」列表，只写草稿，不碰正式库。mode=append 追加并去重（默认）；mode=replace 整表替换。每行至少要有名称；没有把握的字段留空，不要编链接或价格。',
-    parameters: {
-      type: 'object',
-      properties: {
-        mode: {
-          type: 'string',
-          enum: ['append', 'replace'],
-          description: 'append=追加去重，replace=整表替换；默认 append。',
-        },
-        rows: {
-          type: 'array',
-          maxItems: 30,
-          description: '要写入的 DIY 商品行；replace 时传空数组表示清空。',
-          items: {
-            type: 'object',
-            properties: {
-              name: { type: 'string', description: '商品名称（必填）。' },
-              brand: { type: 'string', description: '品牌；没有就留空。' },
-              productModel: { type: 'string', description: '规格；没有就留空。' },
-              purchaseChannel: {
-                type: 'string',
-                description: '购买渠道/店铺；没有就留空。',
-              },
-              purchaseLinkPlatform: {
-                type: 'string',
-                enum: RECOMMENDED_PRODUCT_PLATFORMS,
-                description: '链接平台；没有链接就传 OTHER。',
-              },
-              purchaseLinkUrl: {
-                type: 'string',
-                description: '购买链接；没有就留空。',
-              },
-              imageUrl: { type: 'string', description: '商品图片 URL；没有就留空。' },
-              sortOrder: { type: 'number', description: '排序，越小越靠前。' },
-              isActive: { type: 'boolean', description: '是否启用，默认 true。' },
-            },
-            required: ['name'],
-            additionalProperties: false,
-          },
-        },
-      },
-      required: ['rows'],
-      additionalProperties: false,
-    },
-  },
-};
-
-/** 原子工具 7：写草稿里的生产/采购 SKU。 */
-const WRITE_PROCUREMENT_SKUS_TOOL: AgentToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'writeProcurementSkus',
-    description:
-      '修改草稿里的「生产/采购SKU」列表，只写草稿，不碰正式库。mode=append 追加并去重（默认）；mode=replace 整表替换。采购渠道只能选已有选项；没有依据的采购价/期初库存留空或传 0，不要编。',
-    parameters: {
-      type: 'object',
-      properties: {
-        mode: {
-          type: 'string',
-          enum: ['append', 'replace'],
-          description: 'append=追加去重，replace=整表替换；默认 append。',
-        },
-        rows: {
-          type: 'array',
-          maxItems: 30,
-          description: '要写入的 SKU 行；replace 时传空数组表示清空。',
-          items: {
-            type: 'object',
-            properties: {
-              name: { type: 'string', description: 'SKU 名称（必填）。' },
-              brand: { type: 'string', description: '品牌；没有就留空。' },
-              productModel: { type: 'string', description: '规格；没有就留空。' },
-              purchaseChannel: {
-                type: 'string',
-                description: '采购渠道；必须来自选项字典，不知道就留空。',
-              },
-              purchaseUnit: {
-                type: 'string',
-                description: '采购单位，如袋/箱/瓶；按基准单位允许的单位选。',
-              },
-              purchaseToBaseRatio: {
-                type: 'number',
-                description: '1 个采购单位等于多少基准单位；没有就留空。',
-              },
-              currentPurchasePrice: {
-                type: 'number',
-                description: '当前采购价；没有依据就留空。',
-              },
-              openingStock: {
-                type: 'number',
-                description: '期初库存（采购单位）；没有就 0 或留空，不要编。',
-              },
-              isActive: { type: 'boolean', description: '是否启用，默认 true。' },
-            },
-            required: ['name'],
-            additionalProperties: false,
-          },
-        },
-      },
-      required: ['rows'],
       additionalProperties: false,
     },
   },
@@ -1771,8 +1648,6 @@ export class IngredientCreationToolsService {
       GET_RECORD_TOOL,
       WRITE_NUTRITION_TOOL,
       WRITE_INGREDIENT_TOOL,
-      WRITE_RECOMMENDED_PRODUCTS_TOOL,
-      WRITE_PROCUREMENT_SKUS_TOOL,
       SELF_CHECK_TOOL,
       ASK_USER_TOOL,
       PROPOSE_SEARCH_PLAN_TOOL,
@@ -1877,10 +1752,6 @@ export class IngredientCreationToolsService {
         return this.writeNutrition(input.draftId, input.args);
       case 'writeIngredient':
         return this.writeIngredient(input.draftId, input.args);
-      case 'writeRecommendedProducts':
-        return this.writeRecommendedProducts(input.draftId, input.args);
-      case 'writeProcurementSkus':
-        return this.writeProcurementSkus(input.draftId, input.args);
       case 'selfCheck':
         return this.selfCheck(input.draftId);
       case 'askUser':
@@ -2666,264 +2537,6 @@ export class IngredientCreationToolsService {
    * - 枚举 / 长度 / 范围：非法值返回错误文本，模型可以照着改；
    * - 人工保护：`ingredient.manualFields` 里的字段一律跳过并说明。
    */
-  /**
-   * 写 DIY 制作单推荐商品草稿。
-   *
-   * 草稿层直接写，正式落库仍由授权/提交链路负责。append 默认去重，
-   * replace 才会整表替换；两种模式都保留原行上的前端 key。
-   */
-  private async writeRecommendedProducts(
-    draftId: string,
-    args: Record<string, unknown>,
-  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
-    const rawRows = args.rows;
-    if (!Array.isArray(rawRows)) {
-      return this.error('writeRecommendedProducts 需要 rows 数组。');
-    }
-    const mode = args.mode === undefined ? 'append' : args.mode;
-    if (mode !== 'append' && mode !== 'replace') {
-      return this.error('mode 只能是 append 或 replace。');
-    }
-    if (rawRows.length > 30) {
-      return this.error('rows 最多 30 条。');
-    }
-
-    const rows: RecommendedProductDraft[] = [];
-    for (let index = 0; index < rawRows.length; index += 1) {
-      const raw = rawRows[index];
-      if (!isRecord(raw)) {
-        return this.error(`第 ${index + 1} 行必须是对象。`);
-      }
-      const name = normalizeText(raw.name);
-      if (!name) {
-        return this.error(`第 ${index + 1} 行缺商品名称。`);
-      }
-      if (Array.from(name).length > 200) {
-        return this.error(`第 ${index + 1} 行商品名称超过 200 字。`);
-      }
-      const platform = normalizeText(raw.purchaseLinkPlatform) || 'OTHER';
-      if (!(RECOMMENDED_PRODUCT_PLATFORMS as readonly string[]).includes(platform)) {
-        return this.error(
-          `第 ${index + 1} 行 purchaseLinkPlatform 只能是 ${RECOMMENDED_PRODUCT_PLATFORMS.join(' / ')}。`,
-        );
-      }
-      const sortOrder = readFiniteNumber(raw.sortOrder);
-      rows.push({
-        source: 'AI',
-        name,
-        brand: normalizeText(raw.brand) || null,
-        productModel: normalizeText(raw.productModel) || null,
-        purchaseChannel: normalizeText(raw.purchaseChannel) || null,
-        purchaseLinkPlatform: platform,
-        purchaseLinkUrl: normalizeText(raw.purchaseLinkUrl) || null,
-        imageUrl: normalizeText(raw.imageUrl) || null,
-        sortOrder:
-          sortOrder !== null && sortOrder >= 0 ? Math.trunc(sortOrder) : index,
-        isActive: raw.isActive !== false,
-      });
-    }
-
-    const draft = await this.draftService.get(draftId);
-    const existing = Array.isArray(draft.payload.recommendedProducts)
-      ? (draft.payload.recommendedProducts as RecommendedProductDraft[])
-      : [];
-    const keyOf = (row: RecommendedProductDraft) =>
-      [
-        row.name,
-        row.brand ?? '',
-        row.productModel ?? '',
-        row.purchaseLinkPlatform ?? '',
-        row.purchaseLinkUrl ?? '',
-      ].join('|');
-
-    const duplicates: string[] = [];
-    const nextRows = mode === 'replace' ? [] : [...existing];
-    for (const row of rows) {
-      if (nextRows.some((existingRow) => keyOf(existingRow) === keyOf(row))) {
-        duplicates.push(row.name);
-        continue;
-      }
-      nextRows.push(row);
-    }
-
-    const changed = JSON.stringify(existing) !== JSON.stringify(nextRows);
-    if (changed) {
-      await this.draftService.patch(draftId, draft.step, {
-        recommendedProducts: nextRows,
-        childDraftsMigrated: true,
-      });
-    }
-
-    return {
-      ok: true,
-      content: okContent({
-        mode,
-        added: rows.length - duplicates.length,
-        duplicates,
-        total: nextRows.length,
-        rows: nextRows,
-        ...(duplicates.length > 0
-          ? { hint: '重复的条目没有重复追加；如需改已有行，请用 mode=replace 或到页面手工改。' }
-          : {}),
-      }),
-      progress: {
-        writtenFieldPaths: changed ? ['recommendedProducts'] : [],
-        sourceRecordIds: [],
-      },
-    };
-  }
-
-  /**
-   * 写生产/采购 SKU 草稿。
-   *
-   * 采购渠道只接受选项字典里的值；采购单位按当前基准单位的白名单校验。
-   * 期初库存、采购价没有依据时留空，工具不会替模型编数字。
-   */
-  private async writeProcurementSkus(
-    draftId: string,
-    args: Record<string, unknown>,
-  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
-    const rawRows = args.rows;
-    if (!Array.isArray(rawRows)) {
-      return this.error('writeProcurementSkus 需要 rows 数组。');
-    }
-    const mode = args.mode === undefined ? 'append' : args.mode;
-    if (mode !== 'append' && mode !== 'replace') {
-      return this.error('mode 只能是 append 或 replace。');
-    }
-    if (rawRows.length > 30) {
-      return this.error('rows 最多 30 条。');
-    }
-
-    const draft = await this.draftService.get(draftId);
-    const baseUnit = readIngredientEditorCard(draft).baseUnit;
-    const allowedUnits = new Set(
-      ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT[
-        baseUnit as keyof typeof ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT
-      ] ?? [],
-    );
-    const rawChannels = rawRows
-      .map((raw) => (isRecord(raw) ? normalizeText(raw.purchaseChannel) : ''))
-      .filter((value) => value.length > 0);
-    if (rawChannels.length > 0) {
-      const channelRows = await this.prisma.platformOptionItem.findMany({
-        where: { setId: 'purchase_channel', enabled: true },
-        select: { code: true, label: true },
-      });
-      const channels = new Map(channelRows.map((row) => [row.code, row.label]));
-      const missing = [...new Set(rawChannels)].filter(
-        (channel) => !channels.has(channel),
-      );
-      if (missing.length > 0) {
-        return this.error(
-          `采购渠道不在选项字典里：${missing.join('、')}。可选：${[
-            ...channels.keys(),
-          ].join('、') || '（当前没有可用渠道）'}。`,
-        );
-      }
-    }
-
-    const rows: ProcurementSkuDraft[] = [];
-    for (let index = 0; index < rawRows.length; index += 1) {
-      const raw = rawRows[index];
-      if (!isRecord(raw)) {
-        return this.error(`第 ${index + 1} 行必须是对象。`);
-      }
-      const name = normalizeText(raw.name);
-      if (!name) {
-        return this.error(`第 ${index + 1} 行缺 SKU 名称。`);
-      }
-      if (Array.from(name).length > 200) {
-        return this.error(`第 ${index + 1} 行 SKU 名称超过 200 字。`);
-      }
-      const purchaseUnit = normalizeText(raw.purchaseUnit);
-      if (purchaseUnit && !allowedUnits.has(purchaseUnit)) {
-        return this.error(
-          `第 ${index + 1} 行采购单位「${purchaseUnit}」不适用于 ${baseUnit}；可选：${[
-            ...allowedUnits,
-          ].join('、')}。`,
-        );
-      }
-      const ratio = readFiniteNumber(raw.purchaseToBaseRatio);
-      if (ratio !== null && ratio <= 0) {
-        return this.error(`第 ${index + 1} 行换算倍数必须大于 0。`);
-      }
-      const price = readFiniteNumber(raw.currentPurchasePrice);
-      if (price !== null && price < 0) {
-        return this.error(`第 ${index + 1} 行采购价不能为负数。`);
-      }
-      const openingStock = readFiniteNumber(raw.openingStock);
-      if (openingStock !== null && openingStock < 0) {
-        return this.error(`第 ${index + 1} 行期初库存不能为负数。`);
-      }
-      if (openingStock !== null && openingStock > 0 && ratio === null) {
-        return this.error(
-          `第 ${index + 1} 行填了期初库存时，必须同时填换算倍数。`,
-        );
-      }
-      rows.push({
-        source: 'AI',
-        name,
-        brand: normalizeText(raw.brand) || null,
-        productModel: normalizeText(raw.productModel) || null,
-        purchaseChannel: normalizeText(raw.purchaseChannel) || null,
-        purchaseUnit: purchaseUnit || null,
-        purchaseToBaseRatio: ratio,
-        currentPurchasePrice: price,
-        openingStock,
-        isActive: raw.isActive !== false,
-      });
-    }
-
-    const existing = Array.isArray(draft.payload.procurementSkus)
-      ? (draft.payload.procurementSkus as ProcurementSkuDraft[])
-      : [];
-    const keyOf = (row: ProcurementSkuDraft) =>
-      [
-        row.name,
-        row.brand ?? '',
-        row.productModel ?? '',
-        row.purchaseChannel ?? '',
-        row.purchaseUnit ?? '',
-      ].join('|');
-
-    const duplicates: string[] = [];
-    const nextRows = mode === 'replace' ? [] : [...existing];
-    for (const row of rows) {
-      if (nextRows.some((existingRow) => keyOf(existingRow) === keyOf(row))) {
-        duplicates.push(row.name);
-        continue;
-      }
-      nextRows.push(row);
-    }
-
-    const changed = JSON.stringify(existing) !== JSON.stringify(nextRows);
-    if (changed) {
-      await this.draftService.patch(draftId, draft.step, {
-        procurementSkus: nextRows,
-        childDraftsMigrated: true,
-      });
-    }
-
-    return {
-      ok: true,
-      content: okContent({
-        mode,
-        added: rows.length - duplicates.length,
-        duplicates,
-        total: nextRows.length,
-        rows: nextRows,
-        ...(duplicates.length > 0
-          ? { hint: '重复的条目没有重复追加；如需改已有行，请用 mode=replace 或到页面手工改。' }
-          : {}),
-      }),
-      progress: {
-        writtenFieldPaths: changed ? ['procurementSkus'] : [],
-        sourceRecordIds: [],
-      },
-    };
-  }
-
   private async writeIngredient(
     draftId: string,
     args: Record<string, unknown>,

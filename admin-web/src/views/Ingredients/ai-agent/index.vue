@@ -751,359 +751,6 @@
                 </section>
               </el-form>
 
-              <el-alert
-                v-if="childMigrationNotice"
-                class="review-stale"
-                type="warning"
-                :closable="false"
-                show-icon
-                :title="childMigrationNotice"
-              />
-
-              <el-divider content-position="left">
-                DIY制作单推荐商品（{{ recommendedProducts.length }}）
-              </el-divider>
-              <div class="child-section">
-                <div class="child-section__head">
-                  <span class="child-section__hint">
-                    面向家庭制作场景，维护可复制的商品链接或口令
-                  </span>
-                  <div class="child-section__actions">
-                    <el-button
-                      size="small"
-                      :disabled="Boolean(commitResult) || saving || submitting"
-                      @click="addRecommendedProduct"
-                    >
-                      新增
-                    </el-button>
-                    <el-button
-                      size="small"
-                      type="primary"
-                      :loading="childSaving"
-                      :disabled="
-                        !childDraftDirty ||
-                        Boolean(commitResult) ||
-                        saving ||
-                        submitting
-                      "
-                      @click="saveChildDrafts"
-                    >
-                      保存
-                    </el-button>
-                  </div>
-                </div>
-
-                <div v-if="recommendedProducts.length === 0" class="child-empty">
-                  暂无DIY制作单推荐商品，点「新增」添加
-                </div>
-
-                <div
-                  v-for="(row, index) in recommendedProducts"
-                  :key="row.key"
-                  class="child-card"
-                >
-                  <div class="child-card__head">
-                    <b>商品 {{ index + 1 }}</b>
-                    <el-tag
-                      v-if="row.source === 'AI'"
-                      size="small"
-                      type="success"
-                      effect="plain"
-                    >
-                      AI 写入
-                    </el-tag>
-                    <el-button
-                      link
-                      type="danger"
-                      :disabled="Boolean(commitResult) || saving || submitting"
-                      @click="removeRecommendedProduct(index)"
-                    >
-                      删除
-                    </el-button>
-                  </div>
-                  <el-form
-                    label-width="100px"
-                    :disabled="Boolean(commitResult) || saving || submitting"
-                    @submit.prevent
-                  >
-                    <div class="child-grid">
-                      <el-form-item label="SKU 名称" required>
-                        <el-input
-                          v-model="row.name"
-                          maxlength="100"
-                          placeholder="如：沃尔玛糙米 600g/罐"
-                        />
-                      </el-form-item>
-                      <el-form-item label="品牌">
-                        <el-input
-                          v-model="row.brand"
-                          maxlength="100"
-                          placeholder="产品品牌"
-                        />
-                      </el-form-item>
-                      <el-form-item label="零售规格">
-                        <el-input
-                          v-model="row.productModel"
-                          maxlength="100"
-                          placeholder="如：200g装、60粒/瓶"
-                        />
-                      </el-form-item>
-                      <el-form-item label="采购渠道">
-                        <el-input
-                          v-model="row.purchaseChannel"
-                          maxlength="200"
-                          placeholder="如：淘宝、京东、线下宠物店"
-                        />
-                      </el-form-item>
-                      <el-form-item label="购买链接" class="child-field--wide">
-                        <div class="child-link-row">
-                          <el-select
-                            v-model="row.purchaseLinkPlatform"
-                            style="width: 150px"
-                          >
-                            <el-option label="淘宝/天猫" value="TAOBAO" />
-                            <el-option label="京东" value="JD" />
-                            <el-option label="拼多多" value="PINDUODUO" />
-                            <el-option label="iHerb" value="IHERB" />
-                            <el-option label="其他链接" value="OTHER" />
-                            <el-option label="网页链接" value="WEBVIEW" />
-                          </el-select>
-                          <el-input
-                            v-model="row.purchaseLinkUrl"
-                            maxlength="500"
-                            placeholder="商品购买链接或口令"
-                          />
-                        </div>
-                      </el-form-item>
-                      <el-form-item label="商品图片" class="child-field--wide">
-                        <div class="child-image">
-                          <el-image
-                            v-if="row.imageUrl"
-                            :src="row.imageUrl"
-                            :preview-src-list="[row.imageUrl]"
-                            fit="cover"
-                            preview-teleported
-                            class="child-image__preview"
-                          />
-                          <el-upload
-                            :show-file-list="false"
-                            accept="image/png,image/jpeg,image/webp"
-                            :disabled="
-                              Boolean(commitResult) || saving || submitting
-                            "
-                            :before-upload="
-                              (file: File) =>
-                                handleRecommendedImageUpload(file, row)
-                            "
-                          >
-                            <el-button size="small">
-                              {{ row.imageUrl ? '替换图片' : '上传图片' }}
-                            </el-button>
-                          </el-upload>
-                          <el-button
-                            v-if="row.imageUrl"
-                            link
-                            type="danger"
-                            @click="removeRecommendedImage(row)"
-                          >
-                            删除图片
-                          </el-button>
-                        </div>
-                      </el-form-item>
-                      <el-form-item label="建议顺序">
-                        <el-input-number
-                          v-model="row.sortOrder"
-                          :min="0"
-                          :precision="0"
-                          style="width: 140px"
-                        />
-                      </el-form-item>
-                      <el-form-item label="启用此 SKU">
-                        <el-switch v-model="row.isActive" />
-                      </el-form-item>
-                    </div>
-                  </el-form>
-                </div>
-              </div>
-
-              <el-divider content-position="left">
-                生产/采购SKU（{{ procurementSkus.length }}）
-              </el-divider>
-              <div class="child-section">
-                <div class="child-section__head">
-                  <span class="child-section__hint">
-                    面向采购和生产场景，维护渠道、规格、换算、价格和库存策略
-                  </span>
-                  <div class="child-section__actions">
-                    <el-button
-                      size="small"
-                      :disabled="Boolean(commitResult) || saving || submitting"
-                      @click="addProcurementSku"
-                    >
-                      新增
-                    </el-button>
-                    <el-button
-                      size="small"
-                      type="primary"
-                      :loading="childSaving"
-                      :disabled="
-                        !childDraftDirty ||
-                        Boolean(commitResult) ||
-                        saving ||
-                        submitting
-                      "
-                      @click="saveChildDrafts"
-                    >
-                      保存
-                    </el-button>
-                  </div>
-                </div>
-
-                <div v-if="procurementSkus.length === 0" class="child-empty">
-                  暂无生产/采购SKU，点「新增」添加
-                </div>
-
-                <div
-                  v-for="(row, index) in procurementSkus"
-                  :key="row.key"
-                  class="child-card"
-                >
-                  <div class="child-card__head">
-                    <b>SKU {{ index + 1 }}</b>
-                    <el-tag
-                      v-if="row.source === 'AI'"
-                      size="small"
-                      type="success"
-                      effect="plain"
-                    >
-                      AI 写入
-                    </el-tag>
-                    <el-button
-                      link
-                      type="danger"
-                      :disabled="Boolean(commitResult) || saving || submitting"
-                      @click="removeProcurementSku(index)"
-                    >
-                      删除
-                    </el-button>
-                  </div>
-                  <el-form
-                    label-width="100px"
-                    :disabled="Boolean(commitResult) || saving || submitting"
-                    @submit.prevent
-                  >
-                    <div class="child-grid">
-                      <el-form-item label="SKU名称" required>
-                        <el-input
-                          v-model="row.name"
-                          maxlength="100"
-                          placeholder="采购时使用的商品名称"
-                        />
-                      </el-form-item>
-                      <el-form-item label="品牌">
-                        <el-input
-                          v-model="row.brand"
-                          maxlength="100"
-                          placeholder="商品品牌"
-                        />
-                      </el-form-item>
-                      <el-form-item label="产品规格">
-                        <el-input
-                          v-model="row.productModel"
-                          maxlength="100"
-                          placeholder="如：500g/袋、60粒/瓶"
-                        />
-                      </el-form-item>
-                      <el-form-item label="采购渠道">
-                        <el-select
-                          v-model="row.purchaseChannel"
-                          filterable
-                          clearable
-                          placeholder="请选择采购渠道"
-                        >
-                          <el-option
-                            v-for="option in purchaseChannelOptions"
-                            :key="option.code"
-                            :label="option.label"
-                            :value="option.code"
-                          />
-                          <el-option
-                            v-if="
-                              row.purchaseChannel &&
-                              !purchaseChannelOptions.some(
-                                (option) => option.code === row.purchaseChannel
-                              )
-                            "
-                            :label="row.purchaseChannel"
-                            :value="row.purchaseChannel"
-                          />
-                        </el-select>
-                      </el-form-item>
-                      <el-form-item label="采购单位">
-                        <el-select
-                          v-model="row.purchaseUnit"
-                          filterable
-                          clearable
-                          placeholder="请选择采购单位"
-                        >
-                          <el-option
-                            v-for="unit in procurementUnitOptions"
-                            :key="unit"
-                            :label="unit"
-                            :value="unit"
-                          />
-                        </el-select>
-                      </el-form-item>
-                      <el-form-item label="换算倍数">
-                        <el-input-number
-                          :model-value="row.purchaseToBaseRatio ?? undefined"
-                          :min="0.01"
-                          :precision="2"
-                          :step="0.01"
-                          style="width: 180px"
-                          @update:model-value="
-                            row.purchaseToBaseRatio =
-                              typeof $event === 'number' ? $event : null
-                          "
-                        />
-                      </el-form-item>
-                      <el-form-item label="当前采购价">
-                        <el-input-number
-                          :model-value="row.currentPurchasePrice ?? undefined"
-                          :min="0"
-                          :precision="2"
-                          :step="0.1"
-                          style="width: 180px"
-                          @update:model-value="
-                            row.currentPurchasePrice =
-                              typeof $event === 'number' ? $event : null
-                          "
-                        />
-                      </el-form-item>
-                      <el-form-item label="期初库存">
-                        <el-input-number
-                          :model-value="row.openingStock ?? undefined"
-                          :min="0"
-                          :precision="2"
-                          :step="0.1"
-                          style="width: 180px"
-                          @update:model-value="
-                            row.openingStock =
-                              typeof $event === 'number' ? $event : null
-                          "
-                        />
-                        <span class="child-field__hint">
-                          按采购单位填；没有就 0 或留空
-                        </span>
-                      </el-form-item>
-                      <el-form-item label="启用状态">
-                        <el-switch v-model="row.isActive" />
-                      </el-form-item>
-                    </div>
-                  </el-form>
-                </div>
-              </div>
-
               <p class="review-hint">
                 改动会在离开输入框时自动保存；每次保存整张卡一起发，不会丢字段。
                 标「人工」的格子 AI 之后不会再覆盖；标签分类可直接选，未选不阻断。
@@ -1412,15 +1059,11 @@ import {
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
-import { ingredientApi, nutritionFoodApi } from '@/api/ingredients'
+import { nutritionFoodApi } from '@/api/ingredients'
 import {
   ingredientTagApi,
   type IngredientTag
 } from '@/api/ingredientTags'
-import {
-  fetchPublicOptionSet,
-  type PublicOptionItem
-} from '@/api/platformOptions'
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
 import { useUserStore } from '@/store/user'
 import {
@@ -1430,7 +1073,6 @@ import {
 } from '@/constants/ingredientCardFields'
 import { INGREDIENT_NUTRITION_TAB_DEFINITIONS } from '@/constants/ingredientNutrition'
 import { getApiErrorMessage } from '@/utils/apiError'
-import { purchaseUnitsForBaseUnit } from '@/constants/procurementPurchaseUnits'
 import {
   LINE_LABELS,
   applyLineAction,
@@ -1450,9 +1092,7 @@ import type {
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
   IngredientDraftChecksView,
-  ProcurementSkuDraft,
   ProfileDraft,
-  RecommendedProductDraft,
   SearchPlan
 } from '@/types/ingredientCreation'
 import {
@@ -1464,9 +1104,7 @@ import {
   toCommitInput,
   toIngredientCard,
   toIngredientDraft,
-  toProcurementSkuDrafts,
   toProfileRows,
-  toRecommendedProductDrafts,
   type IngredientCardForm,
   type IngredientCardFormValue,
   type ProfileFieldRow,
@@ -1498,8 +1136,6 @@ import {
   type ProfileFilterMode
 } from './profileFilters'
 import { COVERAGE_CATEGORY_OPTIONS } from './ingredientProfileRules'
-import { validateChildDrafts } from './childDraftRules'
-import { buildLegacyProcurementSkuDraft } from './childDraftMigration'
 import {
   answerInputFromPendingQuestion,
   askOptionAiBadge,
@@ -1746,256 +1382,7 @@ const ingredientForm = reactive<IngredientCardForm>(toIngredientCard(null))
 /** 最近一次从后端读到的原料卡：用来判断人到底改了没有。 */
 const loadedCard = ref<IngredientCardForm | null>(null)
 
-/** 两个子板块的草稿：DIY制作单推荐商品 / 生产/采购SKU，都支持多条。 */
-const recommendedProducts = ref<RecommendedProductDraft[]>([])
-const procurementSkus = ref<ProcurementSkuDraft[]>([])
 const ingredientTags = ref<IngredientTag[]>([])
-const purchaseChannelOptions = ref<PublicOptionItem[]>([])
-const loadedChildSnapshot = ref('')
-const childSaving = ref(false)
-const childMigrationNotice = ref('')
-let childKeySeq = 0
-
-function childDraftSnapshot(): string {
-  return JSON.stringify({
-    recommendedProducts: recommendedProducts.value,
-    procurementSkus: procurementSkus.value
-  })
-}
-
-/** 有没保存到草稿的子板块改动：授权前必须先把它们落进草稿。 */
-const childDraftDirty = computed(
-  () => childDraftSnapshot() !== loadedChildSnapshot.value
-)
-
-function nextChildKey(prefix: string): string {
-  childKeySeq += 1
-  return `${prefix}-${Date.now()}-${childKeySeq}`
-}
-
-/** 从服务端草稿同步两个子板块；换草稿 / 每次保存成功后都走这里。 */
-function syncChildDrafts(
-  payload: IngredientCreationDraftPayload | null | undefined
-) {
-  const products = toRecommendedProductDrafts(payload).map((row, index) => ({
-    ...row,
-    key: row.key || `rp-${index}-${nextChildKey('rp')}`
-  }))
-  const skus = toProcurementSkuDrafts(payload).map((row, index) => ({
-    ...row,
-    key: row.key || `sku-${index}-${nextChildKey('sku')}`
-  }))
-  recommendedProducts.value = products
-  procurementSkus.value = skus
-  loadedChildSnapshot.value = childDraftSnapshot()
-}
-
-/**
- * 旧草稿一次性迁移：改动前采购信息还挂在原料级，现在搬到「生产/采购SKU」。
- *
- * 只在草稿还没迁过、两个子板块都为空、且原料级确实有旧值时触发；
- * 自动落库并写 `childDraftsMigrated` 标记，避免下次载入重复迁移。
- */
-async function migrateLegacyChildDrafts(): Promise<void> {
-  const current = draft.value
-  if (!current || current.payload.childDraftsMigrated === true) {
-    return
-  }
-  if (
-    recommendedProducts.value.length > 0 ||
-    procurementSkus.value.length > 0
-  ) {
-    return
-  }
-
-  const ingredient = current.payload.ingredient
-  if (!ingredient) {
-    return
-  }
-  const seed = buildLegacyProcurementSkuDraft(
-    ingredient,
-    nextChildKey('sku')
-  )
-  if (!seed) {
-    return
-  }
-
-  procurementSkus.value = [seed]
-  const draftId = current.id
-  const step = current.step
-  const ingredientPatch = toIngredientDraftFromCells(
-    current.payload.ingredient,
-    ingredientForm
-  )
-  const ok = await enqueueSave(async () => {
-    const updated = await ingredientCreationApi.patchDraft(draftId, step, {
-      ingredient: ingredientPatch,
-      procurementSkus: [seed],
-      childDraftsMigrated: true
-    })
-    draft.value = updated
-    draftTouched.value = true
-    syncChildDrafts(updated.payload)
-    markChecksStale()
-    await refreshChecks(updated.id)
-  })
-
-  if (ok) {
-    childMigrationNotice.value =
-      '检测到旧版原料级采购信息，已自动迁到「生产/采购SKU」，请核对。'
-  } else {
-    // 迁移失败时保留本地行并标脏，授权前 flush 会再试一次；不要让用户以为没数据。
-    loadedChildSnapshot.value = JSON.stringify({
-      recommendedProducts: [],
-      procurementSkus: []
-    })
-    childMigrationNotice.value =
-      '旧版原料级采购信息迁移失败，已保留在「生产/采购SKU」草稿里，请点保存重试。'
-  }
-}
-
-function addRecommendedProduct() {
-  recommendedProducts.value.push({
-    key: nextChildKey('rp'),
-    name: '',
-    brand: '',
-    productModel: '',
-    purchaseChannel: '',
-    purchaseLinkPlatform: 'OTHER',
-    purchaseLinkUrl: '',
-    imageUrl: '',
-    imageKey: '',
-    sortOrder: recommendedProducts.value.length,
-    isActive: true
-  })
-}
-
-function removeRecommendedProduct(index: number) {
-  const [removed] = recommendedProducts.value.splice(index, 1)
-  if (removed?.imageKey) {
-    void ingredientApi
-      .deleteIngredientDiyImage(removed.imageKey)
-      .catch(() => undefined)
-  }
-}
-
-function removeRecommendedImage(row: RecommendedProductDraft) {
-  if (row.imageKey) {
-    void ingredientApi
-      .deleteIngredientDiyImage(row.imageKey)
-      .catch(() => undefined)
-  }
-  row.imageUrl = ''
-  row.imageKey = ''
-}
-
-function addProcurementSku() {
-  procurementSkus.value.push({
-    key: nextChildKey('sku'),
-    name: '',
-    brand: '',
-    productModel: '',
-    purchaseChannel: '',
-    purchaseUnit: '',
-    purchaseToBaseRatio: null,
-    currentPurchasePrice: null,
-    openingStock: null,
-    safetyStock: null,
-    reorderPoint: null,
-    targetStock: null,
-    notes: '',
-    isActive: true
-  })
-}
-
-function removeProcurementSku(index: number) {
-  procurementSkus.value.splice(index, 1)
-}
-
-const procurementUnitOptions = computed(() =>
-  purchaseUnitsForBaseUnit(
-    typeof ingredientForm.baseUnit === 'string' ? ingredientForm.baseUnit : 'G'
-  )
-)
-
-// 基准单位一换，旧采购单位可能已不在白名单里：清掉，避免保存时被服务端静默收成空。
-watch(
-  () => ingredientForm.baseUnit,
-  (unit) => {
-    const allowed = purchaseUnitsForBaseUnit(
-      typeof unit === 'string' ? unit : 'G'
-    )
-    for (const row of procurementSkus.value) {
-      if (row.purchaseUnit && !allowed.includes(row.purchaseUnit)) {
-        row.purchaseUnit = ''
-      }
-    }
-  }
-)
-
-/** 保存两个子板块（整组 PATCH，后端浅替换整块数组）。 */
-async function saveChildDrafts(): Promise<boolean> {
-  if (!draft.value || commitResult.value) {
-    return false
-  }
-  const validation = validateChildDrafts(
-    recommendedProducts.value,
-    procurementSkus.value
-  )
-  if (validation) {
-    ElMessage.warning(validation)
-    return false
-  }
-
-  const draftId = draft.value.id
-  const step = draft.value.step
-  childSaving.value = true
-  try {
-    return await enqueueSave(async () => {
-      const updated = await ingredientCreationApi.patchDraft(draftId, step, {
-        recommendedProducts: recommendedProducts.value,
-        procurementSkus: procurementSkus.value,
-        childDraftsMigrated: true
-      })
-      draft.value = updated
-      draftTouched.value = true
-      syncChildDrafts(updated.payload)
-      markChecksStale()
-      await refreshChecks(updated.id)
-    })
-  } finally {
-    childSaving.value = false
-  }
-}
-
-/** 授权前把未保存的子板块落进草稿；失败时返回 false。 */
-async function flushChildDrafts(): Promise<boolean> {
-  if (!childDraftDirty.value) {
-    return true
-  }
-  return saveChildDrafts()
-}
-
-async function handleRecommendedImageUpload(
-  file: File,
-  row: RecommendedProductDraft
-) {
-  try {
-    const result = await ingredientApi.uploadIngredientDiyImage(file)
-    const previousKey = row.imageKey
-    row.imageUrl = result.url
-    row.imageKey = result.key
-    if (previousKey && previousKey !== result.key) {
-      void ingredientApi
-        .deleteIngredientDiyImage(previousKey)
-        .catch(() => undefined)
-    }
-  } catch (error) {
-    ElMessage.error(getApiErrorMessage(error, '图片上传失败，请稍后重试'))
-  }
-  return false
-}
-
 
 /** 两域最新报告 + 是否对应当前草稿；任何一次草稿保存后都要重新拉。 */
 const checksView = ref<IngredientDraftChecksView | null>(null)
@@ -2103,8 +1490,7 @@ const hasUnsavedIngredientChanges = computed(() => {
     !ingredientCellValuesEqual(
       loadedCard.value.tagIds,
       ingredientForm.tagIds
-    ) ||
-    childDraftDirty.value
+    )
   )
 })
 
@@ -2194,7 +1580,6 @@ const canAuthorize = computed(
     Boolean(draft.value) &&
     !commitResult.value &&
     !submitting.value &&
-    !childDraftDirty.value &&
     gate.value.ready
 )
 
@@ -2209,9 +1594,6 @@ const authorizeHint = computed(() => {
   }
   if (!gate.value.ready) {
     return gate.value.reasons[0] ?? '授权条件还没满足。'
-  }
-  if (childDraftDirty.value) {
-    return 'DIY制作单推荐商品 / 生产/采购SKU 还有没保存的改动，先点板块里的「保存」再授权。'
   }
   return '授权前，所有内容只在草稿里；写入后原料与档案都是「待验证」。'
 })
@@ -2306,17 +1688,8 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
 onMounted(() => {
   void scrollToBottom()
   void loadIngredientTags()
-  void loadPurchaseChannelOptions()
   window.addEventListener('beforeunload', handleBeforeUnload)
 })
-
-async function loadPurchaseChannelOptions() {
-  try {
-    purchaseChannelOptions.value = await fetchPublicOptionSet('purchase_channel')
-  } catch {
-    purchaseChannelOptions.value = []
-  }
-}
 
 async function loadIngredientTags() {
   try {
@@ -2372,7 +1745,6 @@ function applyDraft(
 ) {
   draft.value = updated
   loadedCard.value = toIngredientCard(updated.payload, updated.name)
-  syncChildDrafts(updated.payload)
 
   if (options.resetForm) {
     Object.assign(ingredientForm, loadedCard.value)
@@ -2455,8 +1827,6 @@ async function loadDraft(draftId: string) {
     state.pendingQuestion = readPendingQuestion(
       updated.payload.pendingQuestion
     )
-    // 旧草稿的采购信息在原料级；先迁到子板块，再拉核验状态。
-    await migrateLegacyChildDrafts()
     await refreshChecks(draftId)
   } catch (error) {
     draftError.value = getApiErrorMessage(error, '草稿加载失败，请稍后重试')
@@ -3362,15 +2732,6 @@ async function handleAuthorize() {
       if (!flushed) {
         submitError.value =
           saveError.value || '原料卡还有没保存成功的改动，不能授权'
-        return
-      }
-    }
-
-    if (childDraftDirty.value) {
-      const flushedChildren = await flushChildDrafts()
-      if (!flushedChildren) {
-        submitError.value =
-          saveError.value || 'DIY制作单推荐商品 / 生产/采购SKU 还有没保存成功的改动，不能授权'
         return
       }
     }
@@ -4562,88 +3923,6 @@ function goBackToList() {
   color: var(--el-text-color-secondary);
 }
 
-.child-section {
-  margin-bottom: 16px;
-}
-
-.child-section__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.child-section__hint {
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--el-text-color-secondary);
-}
-
-.child-section__actions {
-  display: flex;
-  gap: 8px;
-}
-
-.child-empty {
-  padding: 12px;
-  border: 1px dashed var(--el-border-color);
-  border-radius: 8px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.child-card {
-  margin-bottom: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 8px;
-  background: var(--el-fill-color-blank);
-}
-
-.child-card__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-  font-size: 13px;
-  color: var(--el-text-color-regular);
-}
-
-.child-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 12px;
-}
-
-.child-grid :deep(.el-form-item) {
-  margin-bottom: 10px;
-}
-
-.child-field--wide {
-  grid-column: 1 / -1;
-}
-
-.child-link-row {
-  display: flex;
-  gap: 8px;
-  width: 100%;
-}
-
-.child-image {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.child-image__preview {
-  width: 56px;
-  height: 56px;
-  border-radius: 6px;
-}
-
 .nutrition-category {
   display: flex;
   flex-wrap: wrap;
@@ -4836,8 +4115,7 @@ function goBackToList() {
     text-align: right;
   }
 
-  .ingredient-form__grid,
-  .child-grid {
+  .ingredient-form__grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

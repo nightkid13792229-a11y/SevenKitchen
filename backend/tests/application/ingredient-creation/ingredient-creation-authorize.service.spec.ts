@@ -359,8 +359,6 @@ describe('IngredientCreationAuthorizeService', () => {
       ingredient: DRAFT_INGREDIENT,
       profiles: DRAFT_PROFILES,
       primaryProfileIndex: 0,
-      recommendedProducts: [],
-      procurementSkus: [],
     });
     const { authorizedAt, ...submitted } = result;
     expect(submitted).toEqual({
@@ -390,8 +388,6 @@ describe('IngredientCreationAuthorizeService', () => {
       ingredient: DRAFT_INGREDIENT,
       profiles: DRAFT_PROFILES,
       primaryProfileIndex: 0,
-      recommendedProducts: [],
-      procurementSkus: [],
     });
   });
 

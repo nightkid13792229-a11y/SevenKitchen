@@ -42,10 +42,6 @@ import {
   PREPARATION_STATES,
 } from './ingredient-creation.constants';
 import { NutritionEvidenceEntryDto } from './nutrition-evidence-entry.dto';
-import {
-  ProcurementSkuDraftDto,
-  RecommendedProductDraftDto,
-} from './child-drafts.dto';
 
 /** 与 Prisma 的 `IngredientProcurementStrategy` 枚举保持一致。 */
 const PROCUREMENT_STRATEGIES = Object.values(IngredientProcurementStrategy);
@@ -483,31 +479,6 @@ export class UpdateDraftPayloadDto {
   @ValidateNested()
   @Type(() => UpdateDraftIngredientDto)
   ingredient?: UpdateDraftIngredientDto;
-
-  @ApiPropertyOptional({
-    description: 'DIY制作单推荐商品草稿（可多条）',
-    type: () => [RecommendedProductDraftDto],
-  })
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => RecommendedProductDraftDto)
-  recommendedProducts?: RecommendedProductDraftDto[];
-
-  @ApiPropertyOptional({
-    description: '生产/采购SKU 草稿（可多条）',
-    type: () => [ProcurementSkuDraftDto],
-  })
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ProcurementSkuDraftDto)
-  procurementSkus?: ProcurementSkuDraftDto[];
-
-  @ApiPropertyOptional({ description: '旧版采购字段是否已迁到子板块' })
-  @IsOptional()
-  @IsBoolean()
-  childDraftsMigrated?: boolean;
 
   @ApiPropertyOptional({ description: '人工例外' })
   @IsOptional()

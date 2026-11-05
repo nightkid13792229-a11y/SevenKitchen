@@ -29,10 +29,6 @@ import {
   PREPARATION_STATES,
 } from './ingredient-creation.constants';
 import { NutritionEvidenceEntryDto } from './nutrition-evidence-entry.dto';
-import {
-  ProcurementSkuDraftDto,
-  RecommendedProductDraftDto,
-} from './child-drafts.dto';
 
 /** 与 Prisma 的 `IngredientProcurementStrategy` 枚举保持一致。 */
 const PROCUREMENT_STRATEGIES = Object.values(IngredientProcurementStrategy);
@@ -319,23 +315,4 @@ export class CommitIngredientCreationDto {
   @Min(0)
   primaryProfileIndex!: number;
 
-  @ApiPropertyOptional({
-    description: 'DIY制作单推荐商品（可多条）',
-    type: () => [RecommendedProductDraftDto],
-  })
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => RecommendedProductDraftDto)
-  recommendedProducts?: RecommendedProductDraftDto[];
-
-  @ApiPropertyOptional({
-    description: '生产/采购SKU（可多条）',
-    type: () => [ProcurementSkuDraftDto],
-  })
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ProcurementSkuDraftDto)
-  procurementSkus?: ProcurementSkuDraftDto[];
 }

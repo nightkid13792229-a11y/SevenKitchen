@@ -153,55 +153,6 @@ export interface IngredientDraft {
   manualFields?: IngredientManualField[]
 }
 
-/**
- * 一份「DIY制作单推荐商品」草稿。
- *
- * 字段与标准原料编辑页的「新增DIY推荐商品」弹窗一一对应；
- * 一条原料可以有多条，授权时按数组顺序落库。
- */
-export interface RecommendedProductDraft {
-  /** 前端本地行标识，仅用于渲染与增删；不落库 */
-  key: string
-  /** AI 写入的草稿行在页面提示核对；不落正式表 */
-  source?: 'AI' | 'MANUAL'
-  name: string
-  brand: string
-  productModel: string
-  purchaseChannel: string
-  purchaseLinkPlatform: string
-  purchaseLinkUrl: string
-  imageUrl: string
-  /** 上传返回的 COS key；仅前端用于删除时清理，不落 recommended_product 表 */
-  imageKey?: string
-  sortOrder: number
-  isActive: boolean
-}
-
-/**
- * 一份「生产/采购SKU」草稿。
- *
- * 字段与标准原料编辑页的「新增采购SKU」弹窗一一对应；支持多条。
- */
-export interface ProcurementSkuDraft {
-  /** 前端本地行标识，仅用于渲染与增删；不落库 */
-  key: string
-  /** AI 写入的草稿行在页面提示核对；不落正式表 */
-  source?: 'AI' | 'MANUAL'
-  name: string
-  brand: string
-  productModel: string
-  purchaseChannel: string
-  purchaseUnit: string
-  purchaseToBaseRatio: number | null
-  currentPurchasePrice: number | null
-  openingStock: number | null
-  safetyStock: number | null
-  reorderPoint: number | null
-  targetStock: number | null
-  notes: string
-  isActive: boolean
-}
-
 /** ③ 一份营养档案草稿（生 / 熟各一份）。 */
 export interface ProfileDraft {
   preparationState: PreparationState
@@ -412,12 +363,6 @@ export interface IngredientCreationDraftPayload {
   profiles?: ProfileDraft[]
   checks?: FinalCheckResult
   ingredient?: IngredientDraft
-  /** DIY制作单推荐商品草稿（可多条） */
-  recommendedProducts?: RecommendedProductDraft[]
-  /** 生产/采购SKU 草稿（可多条） */
-  procurementSkus?: ProcurementSkuDraft[]
-  /** 旧版原料级采购字段是否已经迁到子板块（一次性迁移标记） */
-  childDraftsMigrated?: boolean
   verify?: { exceptions: ExceptionRecord[] }
   /** AI 提案历史：只追加、不覆盖，前端不得回传 */
   proposalHistory?: ProposalSnapshot[]
@@ -446,10 +391,6 @@ export interface CommitIngredientCreationInput {
   /** 同一 preparationState 最多一份 */
   profiles: ProfileDraft[]
   primaryProfileIndex: number
-  /** DIY制作单推荐商品（可多条） */
-  recommendedProducts?: RecommendedProductDraft[]
-  /** 生产/采购SKU（可多条） */
-  procurementSkus?: ProcurementSkuDraft[]
 }
 
 /** `POST drafts/:id/commit` 的返回值。 */

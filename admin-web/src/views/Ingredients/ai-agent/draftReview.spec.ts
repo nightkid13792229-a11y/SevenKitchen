@@ -640,42 +640,10 @@ describe('审核页 · 食材原料卡映射', () => {
     })
   })
 
-  it('toCommitInput 带完整原料卡与两个子板块草稿', () => {
+  it('toCommitInput 带完整原料卡与营养档案', () => {
     const input = toCommitInput({
       ingredient: FULL_INGREDIENT,
       profiles: [rawProfile],
-      recommendedProducts: [
-        {
-          key: 'rp-1',
-          name: '挪威三文鱼 500g',
-          brand: '挪威海产',
-          productModel: '500g/袋',
-          purchaseChannel: '山姆',
-          purchaseLinkPlatform: 'TAOBAO',
-          purchaseLinkUrl: 'https://example.com/salmon',
-          imageUrl: '',
-          sortOrder: 1,
-          isActive: true
-        }
-      ],
-      procurementSkus: [
-        {
-          key: 'sku-1',
-          name: '三文鱼整条',
-          brand: '挪威海产',
-          productModel: '5kg/箱',
-          purchaseChannel: '批发市场',
-          purchaseUnit: '箱',
-          purchaseToBaseRatio: 5000,
-          currentPurchasePrice: 380,
-          openingStock: null,
-          safetyStock: 1,
-          reorderPoint: 2,
-          targetStock: 5,
-          notes: '冷冻',
-          isActive: true
-        }
-      ]
     })
 
     expect(input).not.toBeNull()
@@ -684,10 +652,6 @@ describe('审核页 · 食材原料卡映射', () => {
         field.key === 'edibleYieldPercent' ? 'edibleYieldRate' : field.key
       expect(input?.ingredient, `缺字段 ${draftKey}`).toHaveProperty(draftKey)
     }
-    expect(input?.recommendedProducts).toHaveLength(1)
-    expect(input?.procurementSkus).toHaveLength(1)
-    expect(input?.recommendedProducts?.[0]?.name).toBe('挪威三文鱼 500g')
-    expect(input?.procurementSkus?.[0]?.purchaseUnit).toBe('箱')
   })
 
   it('0 与 false 写回草稿时不被当成空', () => {

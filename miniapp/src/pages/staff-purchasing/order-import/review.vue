@@ -156,14 +156,15 @@
           <text v-else class="fee-v">¥{{ money(activeImport.paid) }}</text>
         </view>
         <text v-if="feesEdited" class="fee-origin">{{ feeOriginText }}</text>
-        <view class="fee-check" :class="{ bad: feeGapWarn }">
+        <!-- 只有要员工动手时才出现（缺运费/包装费、实付没读到、对不上）；对得上就不占地方 -->
+        <view v-if="feeCheckWarn" class="fee-check">
           <text>{{ feeCheckText }}</text>
         </view>
       </view>
 
       <view class="footer">
         <view class="footer-total">
-          <text>{{ footerLabel }}</text>
+          <text class="footer-label">{{ footerLabel }}</text>
           <text class="footer-amount">¥{{ money(matchedAmount) }}</text>
         </view>
         <button class="primary-btn" :disabled="!canConfirm || submitting" :loading="submitting" @tap="submit">
@@ -487,10 +488,26 @@ const feeOriginText = computed(() => {
   return `模型读到：运费 ${shipping}、包装费 ${packaging}`;
 });
 
+/**
+ * 费用区那句「合计说明」要不要出现（2026-11-05 改）。
+ *
+ * 只在**需要员工动手**时出现：运费/包装费没读到、实付没读到、或者合计和实付对不上。
+ * 对得上的时候一个字都不说——顶部「差额 0.00」已经把话说完了，
+ * 再挂一行绿底「和实付对得上」只是占地方。
+ */
+const feeCheckWarn = computed(() => {
+  const summary = feeSummary.value;
+  if (!summary) return false;
+  if (summary.hasMissingFee) return true;
+  if (typeof summary.gap !== 'number') return true;
+  return Math.abs(summary.gap) > IMPORT_FEE_TOLERANCE;
+});
+
 const feeCheckText = computed(() => {
   const item = activeImport.value;
   const summary = feeSummary.value;
   if (!item || !summary) return '';
+  if (!feeCheckWarn.value) return '';
   const hasMissing = summary.hasMissingFee;
   const equation =
     `商品 ¥${money(summary.lineSum)} + 运费 ¥${money(summary.shipping)} + ` +
@@ -501,11 +518,11 @@ const feeCheckText = computed(() => {
       ? `运费或包装费还没填（先按 0 算），实付也没读到，请对照原图补全。`
       : `${equation}；这笔的实付没读到，暂时只能按商品金额核对。`;
   }
-  if (Math.abs(summary.gap) <= IMPORT_FEE_TOLERANCE) {
-    return `${equation}，和实付对得上。`;
-  }
   const diff = Math.abs(summary.gap).toFixed(2);
   if (hasMissing) {
+    if (summary.gap === 0) {
+      return `运费或包装费还没填（先按 0 算）：${equation}，实付刚好等于这个数；确认一下是不是本来就没有。`;
+    }
     return summary.gap > 0
       ? `运费或包装费还没填（先按 0 算）：${equation}，实付还多 ¥${diff}，点上面两行补一下就平了。`
       : `运费或包装费还没填（先按 0 算）：${equation}，实付比它还少 ¥${diff}，请对照原图核对。`;
@@ -1621,13 +1638,23 @@ function emptySummary() {
 
 .footer-total {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 24rpx;
   font-size: 22rpx;
   color: #6b6653;
   padding: 0 6rpx 10rpx;
+  text-align: right;
+}
+
+/* 统计行和金额同一侧靠右：金额是主角，永远不压缩 */
+.footer-label {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .footer-amount {
+  flex: none;
   font-weight: 700;
   color: #26261f;
 }
@@ -1950,20 +1977,16 @@ function emptySummary() {
   line-height: 1.5;
 }
 
+/* 这行只在「要员工动手」时出现，所以直接就是提醒色 */
 .fee-check {
   margin-top: 10rpx;
   padding: 12rpx 14rpx;
   border-radius: 12rpx;
-  background: #eef3ea;
-  font-size: 20rpx;
-  color: #2f6b4f;
-  line-height: 1.55;
-}
-
-.fee-check.bad {
   background: #fbf1dd;
   border: 1rpx solid #efdcb8;
+  font-size: 20rpx;
   color: #7a5a20;
+  line-height: 1.55;
 }
 
 .fee-gap-line {

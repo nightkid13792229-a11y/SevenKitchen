@@ -3,7 +3,8 @@
 - 日期：2026-11-05
 - 提出：老板（渠道唯一来源、管理员维护、可扩展）
 - 状态：待评审（评审通过后才动代码）
-- 范围：第二步（存量归并 + 写入口收口 + 改名快照），第一步已上线（98192e17 / 体验版 2026.11.05.25）
+- 范围：第二步（存量归并 + 写入口收口 + 改名快照）
+- 前置：第一步已上线（提交 98192e17，体验版 2026.11.05.25）
 
 ## 0. 一句话
 
@@ -17,39 +18,39 @@
 
 1. 筛选/统计按文字分组，同一家店会被拆成「山姆」「山姆会员店」两行；
 2. 员工端记录表单虽然改用字典，但记录还是照抄 SKU 上的旧文字（例如「山姆」）；
-3. 后台采购记录、原料表单里仍有人能自由输入，新的错字还会继续产生。
+3. 后台还有 4 处自由输入，新的错字会继续产生。
 
-现在已经没有渠道表以外的东西可以改，所以第二步的重点不是加表，而是**把存量搬干净、把写入口焊死**。
+第二步的重点不是加表，而是**把存量搬干净、把写入口焊死**。
 
 ### 1.1 现状盘点（截至第一步上线）
 
-| 表 | 列 | 现在存什么 | 谁能写 |
+| 表 | 列 | 现在存什么 | 谁在写（自由输入的已标 ★） |
 |---|---|---|---|
-| `ingredient` | `purchase_channel` | 自由文字 | 后台原料表单（已是下拉，但仍允许当前值兜底） |
-| `recommended_product` | `purchase_channel` | 自由文字 | 后台 |
-| `procurement_sku` | `purchase_channel` | 自由文字 | 小程序「新增采购商品」（第一步已改成只选） |
-| `purchase_item` | `purchase_channel` | 自由文字 | 采购清单生成 / 后台 |
-| `purchase_record` | `purchase_channel` | 自由文字（必填） | 员工端记录表单（照抄 SKU）/ 后台（自由输入） |
+| `ingredient` | `purchase_channel` | 自由文字 | ★后台原料表单（实际是自由输入，见 6.3）、AI 建原料（内部写入） |
+| `recommended_product` | `purchase_channel` | 自由文字 | ★后台推荐商品表单 |
+| `procurement_sku` | `purchase_channel` | 自由文字 | 小程序「新增采购商品」（第一步已只选）、★后台商品表单 |
+| `purchase_item` | `purchase_channel` | 自由文字 | 采购清单生成（从原料/商品带出） |
+| `purchase_record` | `purchase_channel` | 自由文字，**NOT NULL** | 员工端记录表单（照抄 SKU）、★后台记录表单、识别确认流程 |
 | `purchase_order_import` | `channel` | 字典码或 `null` | 识别流程（第一步已改） |
 | `purchase_order_match_alias` | `channel_family` | 旧写法 | 确认采购记录时学习写入 |
+| 顾客可见的「实际采购」披露 | 读 `purchase_record.purchase_channel` | 同记录 | 只读 |
 
 字典本体：`platform_option_set` / `platform_option_item`（`set_id = 'purchase_channel'`），
-码存在 `code`，展示名在 `label`，别名存在 `extra.aliases`。
+码存在 `code`，展示名在 `label`，别名存在 `extra.aliases`，停用项 `enabled=false`。
 
 ## 2. 目标与非目标
 
 **目标**
 
-- 任何写渠道的地方，只能写字典里的码；写不进就报错，不静默落文字。
+- 任何**人**写渠道的地方，只能写字典里的码；写不进就报错，不静默落文字。
 - 历史值 100% 可解释：每个旧值都有明确去向（并入某项 / 新建一项 / 停用），不留悬空文字。
-- 报表、筛选、打印按同一身份聚合，不再按文字拆分。
 - 渠道改名（只改 `label`）不影响历史单据上显示的名字。
 
 **非目标**
 
 - 不改 AI 识别与匹配流程（第一步已定型）。
 - 不放开员工维护渠道的权限。
-- 不引入门店/区域/采购方式等新的渠道维度。
+- 不新增「按渠道筛选/汇总」的报表页，也不补后台那个前端已有、后端不存在的导出接口（见 12）。
 - 不动金额、数量、报销规则 —— 这次只动「渠道」这一个字段。
 
 ## 3. 已定决策
@@ -57,11 +58,15 @@
 | 编号 | 决策 | 来源 |
 |---|---|---|
 | D1 | 唯一来源 = `platform_option_item`（`set_id='purchase_channel'`） | 老板 2026-11-05 |
-| D2 | 业务表存**渠道码**，不建数据库外键（理由见 4.1） | 本次设计，老板已同意「按你建议的」 |
-| D3 | 码一经使用不再改名；「改名」只改 `label` | 本次设计 |
+| D2 | 业务表存**渠道码**，不建数据库外键（理由见 4.1） | 设计，老板已同意「按你建议的」 |
+| D3 | 码一经使用不再改名；「改名」只改 `label` | 设计 |
 | D4 | 采购记录保留**当时的名字**快照，改名不回写历史 | 老板 2026-11-05 |
 | D5 | 旧值归并前先出一份「旧值 → 去处 + 影响行数」的清单给老板确认 | 老板 2026-11-05 |
 | D6 | 员工只能选；没有的渠道找管理员加；加完立即生效 | 老板 2026-11-05 |
+| D7 | 渠道是**这次采购**的属性；商品档案上的渠道只是默认值，允许这次买在别处 | 评审补充（4.3） |
+| D8 | 停用渠道不再出现在选择器里，但**已带着它的旧数据仍可编辑、可确认** | 评审补充（6.4） |
+| D9 | 机器猜的渠道归不上就置空并留痕；人填的渠道归不上直接拒绝 | 评审补充（6.4） |
+| D10 | 快照只在「渠道真的变了」时重写；只改金额不改写快照 | 评审补充（4.4） |
 
 ## 4. 数据模型
 
@@ -73,24 +78,48 @@
 
 所以：业务表存**码**（`varchar`），写入前由服务层用同一份字典校验；
 `code` 一经使用不可改名（D3），因此不需要靠外键维持引用完整性。
-展示名一律由字典 `label` 现查（已有一层内存缓存，见 6.4）。
 
 ### 4.2 字段级改动
 
 | 表 | 改动 |
 |---|---|
-| `ingredient` | `purchase_channel` 语义改为「字典码」；值回填（5.3）；不加列 |
+| `ingredient` | `purchase_channel` 语义改为「字典码」；值回填（5.5）；不加列 |
 | `recommended_product` | 同上 |
 | `procurement_sku` | 同上 |
 | `purchase_item` | 同上 |
-| `purchase_record` | `purchase_channel` 语义改为「字典码」；**新增** `purchase_channel_name VARCHAR(64)` 存当时的 `label`（快照），历史行回填为归并后字典项的当前 `label` |
+| `purchase_record` | `purchase_channel` 语义改为「字典码」；**新增** `purchase_channel_name VARCHAR(64)` 存当时的 `label`（快照） |
 | `purchase_order_import` | 不动（第一步已存码/null） |
-| `purchase_order_match_alias` | `channel_family` 回填为归并后的码；空串继续表示「不分渠道」 |
+| `purchase_order_match_alias` | `channel_family` 回填为归并后的码；空串继续表示「不分渠道」；合并冲突见 5.6 |
 
 > 命名遵循 `docs/DATABASE_NAMING_CONVENTIONS.md`：列名 `purchase_channel_name`，
 > Prisma 字段 `purchaseChannelName`，`@map` 到蛇形。
 
-### 4.3 索引
+### 4.3 渠道是「这次采购」的属性，不是商品的属性
+
+同一个商品，这次在山姆买、下次可能在盒马买；所以：
+
+- **商品档案（SKU）上的渠道 = 默认值**，打开记录表单时带出来；
+- **采购记录上的渠道 = 这一次的事实**，员工/管理员可以在字典范围内改；
+- 两边都不接受自由输入。
+
+这条同时解释了为什么记录要存快照（D4）——它记的是「这一次」。
+
+### 4.4 快照规则
+
+`purchase_channel_name` 只在**渠道码发生变化**时写入（新建、或更新时 `channel` 与库里的不同）。
+只改数量/金额/备注不改快照；把渠道从 A 改成 B 时，快照跟着改成 B 的当前 `label`。
+
+各展示面读什么：
+
+| 展示面 | 读什么 |
+|---|---|
+| 采购记录列表/详情、报销单明细、顾客可见的「实际采购」披露 | `purchase_channel_name`（为空时回退 `purchase_channel`） |
+| 商品档案、原料详情、采购清单项、推荐商品、打印的生产任务单 | 字典当前 `label`（这些是「现在在哪买」，不是历史凭证） |
+
+> 顾客可见的披露在 `order-procurement-disclosure.service.ts`，现在读 `record.purchaseChannel`，
+> 改成优先读快照即可，不用改数据结构。
+
+### 4.5 索引
 
 `purchase_record.purchase_channel` 加普通索引（按渠道筛选/汇总会用到）。
 其余表数量小，不加。
@@ -99,25 +128,27 @@
 
 ### 5.1 第一步：只读报告（不动库）
 
-新增一个只读脚本（例如 `backend/prisma/report-purchase-channels.ts`），输出 Markdown 表格：
+新增一个只读脚本（例如 `backend/prisma/report-purchase-channels.ts`），在生产上**只读**执行，输出 Markdown：
 
 ```
 旧值 | ingredient | recommended_product | procurement_sku | purchase_item | purchase_record | 归并到 | 依据
 山姆 | 3 | 0 | 12 | 4 | 88 | 山姆会员店 | 别名
 盒马 | 0 | 0 | 9  | 2 | 41 | 盒马鲜生 | 别名
 大润发 | 0 | 0 | 1 | 0 | 2 | （待定） | 字典里没有
+(空) | 0 | 0 | 6 | 0 | 0 | （待定） | 空字符串/空白
 ```
 
-「待定」的行，老板三选一：
+报告另外附两张小表：
 
-1. **新建**一个字典项（例如「大润发」），旧值直接归到它；
-2. **并入**现有某项（例如统一算「农贸市场」）；
-3. **停用**：旧值保留原文、只在展示时标注「已停用渠道」，不再允许新选。
-   优先复用第一步迁移里已经停用的同名项（例如线下批发市场、宠物店、品牌旗舰店）。
+- **缺渠道的商品**：`procurement_sku.purchase_channel is null` 的商品清单（编号、名称、所属原料、
+  原料上的渠道），这些商品现在录不了采购记录；
+- **合并后会撞车的别名行**：见 5.6。
 
 报告按行数从多到少排序，先看大头。
 
-归并映射长这样（完整清单以报告为准，这里只是格式示例）：
+### 5.2 归并映射示例
+
+完整清单以报告为准，这里只是格式示例：
 
 | 旧值 | 归并到 |
 |---|---|
@@ -129,86 +160,162 @@
 | 伊藤 | 伊藤洋华堂 |
 | 红旗 / 红旗超市 | 红旗连锁 |
 
-### 5.2 归并规则
+### 5.3 归并规则
 
 复用第一步的归一函数（`channel-catalog.ts`）：大小写/空格/标点不敏感；
 先比全等（码、标签、别名），再按候选词长度从长到短做包含匹配。
 **只做确定性归并**：拿不准的一律进「待定」，不自动猜。
 
-### 5.3 第二步：数据迁移
+### 5.4 待定项与空值
+
+「待定」的行，老板三选一：
+
+1. **新建**一个字典项（例如「大润发」），旧值直接归到它；
+2. **并入**现有某项（例如统一算「农贸市场」）；
+3. **停用**：旧值保留原文、只在展示时标注「已停用渠道」，不再出现在选择器里。
+   优先复用第一步迁移里已经停用的同名项（例如线下批发市场、宠物店、品牌旗舰店）。
+
+空值分两种，分别处理：
+
+- `procurement_sku.purchase_channel` 为空：能从它的原料/推荐商品上的渠道**唯一确定**的，回填；
+  确定不了的，进「缺渠道的商品」清单，由管理员在后台补，不在迁移里猜。
+- `purchase_record.purchase_channel` 为空（NOT NULL 但老代码不校验，可能有空串）：**不猜**。
+  报告里给出条数，老板二选一：并入某个指定渠道，或新建一个停用项「未填渠道（历史）」兜底。
+  条数为 0 时这一步直接跳过。
+
+### 5.5 迁移
 
 - 结构和数据都走 **Prisma migration**（不直接连库改数据）。
 - 迁移前在服务器上对 5 张表做一次 `pg_dump` 备份，文件名与时间记进部署记录。
 - 迁移 SQL 里把「旧值 → 新码」写成**显式映射**（不用运行时模糊匹配），
   每条 `UPDATE ... WHERE purchase_channel = '旧值'`，可逐条回滚。
-- `purchase_record.purchase_channel_name` 同步回填为对应字典项的 `label`。
-- 「停用」类旧值：`purchase_channel` 保留原文，`purchase_channel_name` 写原文，
-  另在字典里建一条 `enabled=false` 的同码项，保证展示能查到。
+- `purchase_record.purchase_channel_name` 同步回填为对应字典项的 `label`；
+  无渠道可归的记录按 5.4 的结论处理。
+- 「停用」类旧值：`purchase_channel` 与 `purchase_channel_name` 都写原文，
+  并在字典里保证有一条 `enabled=false` 的同码项，展示时能查到。
 
-### 5.4 第三步：校验
+### 5.6 别名表（`purchase_order_match_alias`）的去重
+
+这张表有唯一键 `(normalized_name, channel_family)`。旧行的 `channel_family` 是「山姆」「盒马」，
+归一后可能和新行（`山姆会员店`/`盒马鲜生`）撞成同一个键，直接 UPDATE 会报唯一冲突。
+
+迁移里按这个顺序保留一条、删掉其余（可重复执行）：
+
+1. 有 `procurement_sku_id` 的优先（学到的商品映射更有用）；
+2. 其次 `updated_at` 更新的优先；
+3. 再相同就按 `id` 稳定排序取第一条。
+
+被删掉的是「学习缓存」，不是业务数据，丢了只会让下一次多手动选一回，可以接受。
+另外 `channel_family` 是 `VARCHAR(30)`，**新建渠道时 `code` 长度必须 ≤ 30**（6.1 校验）。
+
+### 5.7 校验
 
 迁移后跑同一份报告脚本的「校验模式」，必须满足：
 
 ```sql
--- 5 张表里不应再有字典外的码（停用项也算字典内）
-SELECT DISTINCT purchase_channel FROM ingredient
+-- 5 张表里不应再有字典外的码（停用项也算字典内），也不应有空串
+SELECT 'ingredient' AS t, purchase_channel FROM ingredient
 WHERE purchase_channel IS NOT NULL
-  AND purchase_channel NOT IN (SELECT code FROM platform_option_item WHERE set_id='purchase_channel');
+  AND (btrim(purchase_channel) = ''
+       OR purchase_channel NOT IN (SELECT code FROM platform_option_item WHERE set_id='purchase_channel'))
+UNION ALL
+SELECT 'recommended_product', purchase_channel FROM recommended_product
+WHERE purchase_channel IS NOT NULL AND (btrim(purchase_channel) = ''
+  OR purchase_channel NOT IN (SELECT code FROM platform_option_item WHERE set_id='purchase_channel'))
+UNION ALL
+SELECT 'procurement_sku', purchase_channel FROM procurement_sku
+WHERE purchase_channel IS NOT NULL AND (btrim(purchase_channel) = ''
+  OR purchase_channel NOT IN (SELECT code FROM platform_option_item WHERE set_id='purchase_channel'))
+UNION ALL
+SELECT 'purchase_item', purchase_channel FROM purchase_item
+WHERE purchase_channel IS NOT NULL AND (btrim(purchase_channel) = ''
+  OR purchase_channel NOT IN (SELECT code FROM platform_option_item WHERE set_id='purchase_channel'))
+UNION ALL
+SELECT 'purchase_record', purchase_channel FROM purchase_record
+WHERE btrim(purchase_channel) = ''
+   OR purchase_channel NOT IN (SELECT code FROM platform_option_item WHERE set_id='purchase_channel');
 ```
 
-五张表各跑一遍（`ingredient`、`recommended_product`、`procurement_sku`、`purchase_item`、`purchase_record`），结果必须为空。
+结果必须为空。
 
-### 5.5 回滚
+### 5.8 回滚
 
-- 数据：用 5.3 的备份还原对应表；
-- 代码：本次不删列、不改类型，回滚只需回滚服务版本，不影响旧数据读取。
+- 数据：用 5.5 的备份还原对应表；
+- 代码：本次不删列、不改类型，回滚只需回滚服务版本。
 
 ## 6. 接口与页面
 
 ### 6.1 字典维护（后台「平台选项 → 采购渠道」）
 
-现状：可改 `label`、排序、启用，可新增/停用项；**别名不能编辑**。
+现状：可改 `label`、排序、启用，可新增/停用项；**别名不能编辑**；新增时手填「码」。
 
 要补：
 
 - 编辑/新增弹窗加「别名」多行输入（写进 `extra.aliases`）；
-- 保存时校验：别名不能与其他渠道的码/标签/别名重复，否则拒绝；
-- 停用前提示：已停用的渠道，员工端不再出现，但历史单据照常显示；
-- 列表里顺带显示「被多少条记录用到」，让管理员停用前心里有数（只读统计，不阻塞）。
+- 保存校验（**新增和编辑都校验**）：
+  - `code` 长度 ≤ 30、非空、同集内唯一；
+  - 名称/码/别名不得与**其他渠道**的码/标签/别名重复；撞上了拒绝，并提示「已有渠道「X」用了这个叫法，请改用它，或先停用旧渠道」；
+  - 码一旦保存不可修改（页面置灰），改名只改「显示中文」。
+- 停用前提示：停用后选择器里不再出现，但历史单据照常显示；随时可以重新启用；
+- 列表里顺带显示「被多少条记录/商品用到」，让管理员停用前心里有数（只读统计，不阻塞）。
 
 ### 6.2 员工端
 
 - 「新增采购商品 → 在哪买的」：第一步已改成只选字典项，本次不改。
-- 「采购记录」表单：渠道默认由所选采购商品带出；带不出来时（历史商品没填渠道）
-  允许员工**从字典里选**，仍然不能自由输入。
-- 记录提交时，服务端以提交上来的渠道码为准（先过卫兵），
-  同时把字典当前 `label` 写进 `purchase_channel_name` 快照。
+- 「采购记录」表单：渠道默认由所选商品带出；**允许从字典里改选**（这次买在别处），
+  不提供自由输入；商品没有渠道时不预填，让员工选。
+- 选择器只列 `enabled=true` 的项。
 
 ### 6.3 后台
 
-- 采购记录新增/编辑：渠道由下拉选择（选项来自字典），不再自由输入。
-- 原料表单：下拉保留，但去掉「当前值兜底」的隐式新增（值必须能对上字典项）。
+- 采购记录新增/编辑：渠道由下拉选择（字典），不再自由输入。
+- **原料表单目前其实是自由输入**（不是第一步以为的下拉），共 3 处要改下拉：
+  原料的「采购渠道」、商品档案的「在哪买的」、推荐商品的渠道；
+  另外 `StaffProcurementSkus.vue` 里还有一处，一起改。
+- 原料/商品表单里「当前值不在字典里时临时补一个选项」的兜底**去掉**：
+  值必须能对上字典项，对不上就提示去后台加渠道或改成标准渠道。
 - 采购清单项：渠道来自生成时的来源单据/商品，不单独编辑。
 
-### 6.4 服务端
+### 6.4 服务端写入口卫兵
 
-- 新增一个写入口卫兵（`assertChannelCode(code)`），原料 / 采购商品 / 清单项 / 采购记录
-  四个 service 的创建与更新都过它；非法值直接 400，错误信息带上合法清单提示。
-- 展示层统一 `label` 现查；字典缓存已在 `PlatformOptionsService`，写操作后 `invalidate()`。
-- 匹配：`channelMatchKey` 保留（兼容未归并干净的极端情况），归并完成后应等价于全等。
-- `purchasing.service.ts` 里选推荐商品 / 选采购商品时还有两处「按文字比较渠道」
-  （`normalizeComparableText(product.purchaseChannel) === normalizedChannel`），
-  一并改成 `channelMatchKey`，否则旧值还没搬完时这两处会挑错商品。
+新增 `assertChannelCode(code, { source })`：
+
+- `source = 'USER'`（员工端、后台表单、识别结果页确认渠道）：
+  码不在字典里（含空串）→ 400，消息是「请从后台维护的渠道中选择」；
+- `source = 'SYSTEM'`（AI 建原料、标准原料导入、历史数据搬运、识别确认自动落库）：
+  能归一到字典就归一；归不上**置 null 并记一条日志**，不阻断整批导入（D9）；
+- **停用码也接受**（D8）：选择器不列，但旧数据带着它仍能编辑金额、仍能确认生成；
+  只有「从零选一个渠道」时才必须是启用项。
+
+覆盖范围（服务层的创建/更新都过它）：
+
+| 写入口 | 说明 |
+|---|---|
+| `ingredient.service.ts` 创建/更新 | 含 AI 建原料、标准原料导入（走 SYSTEM 口径） |
+| `procurement-sku.service.ts` 创建/更新 | 员工端、后台共用 |
+| 采购清单项写入（`purchasing.service.ts` 生成/更新清单） | 从来源带出，SYSTEM 口径 |
+| `purchasing.service.ts` `addPurchaseRecord` / `updatePurchaseRecord` | 员工端、后台、识别确认共用；同时写快照 |
+| 识别确认流程 | 现在直接 `row.channel || sku.purchaseChannel || '未知渠道'`，改为走卫兵 + 写快照 |
+| `recommended-product.service.ts` 创建/更新 | 推荐商品 |
+
+另外 `purchasing.service.ts` 里选推荐商品 / 选采购商品时还有两处「按文字比较渠道」
+（`normalizeComparableText(product.purchaseChannel) === normalizedChannel`），
+一并改成按渠道码比较，否则旧值还没搬完时会挑错商品。
+
+展示层：除 4.4 规定的快照面外，统一现查 `label`；字典缓存已在 `PlatformOptionsService`，
+写操作后 `invalidate()`。
 
 ### 6.5 AI / 识别流程
 
-不改。AI 的候选清单本来就来自字典（第一步），识别结果落库前已归一到码。
+AI 的候选清单本来就来自字典（第一步）。本次只补一处：确认生成采购记录时，
+把渠道码和当时的 `label` 一起写进记录（快照），不再走 `'未知渠道'` 兜底。
 
 ### 6.6 打印与导出
 
-采购记录 / 报销凭证上展示的渠道取 `purchase_channel_name`（快照），不取字典当前 `label`，
-保证老单据过一段时间再看还是当时的名字；导出同理。
-生产任务单上印的采购渠道来自商品档案，跟随字典当前名称 —— 它是作业指引，不是历史凭证。
+- 采购记录 / 报销凭证 / 顾客披露：读快照；
+- 生产任务单上印的采购渠道来自商品档案，跟随字典当前名称 —— 它是作业指引，不是历史凭证；
+- 后台的「导出 Excel」按钮目前后端没有对应接口（`/admin/purchasing/export` 查无此路由），
+  这次不补（见 12）。
 
 ## 7. 权限
 
@@ -216,23 +323,24 @@ WHERE purchase_channel IS NOT NULL
 |---|---|
 | 查看渠道清单 | 所有登录员工（只读） |
 | 新增 / 改名 / 停用 / 改别名 | 仅管理员（`AdminGuard`，现状已如此） |
-| 给单据选渠道 | 员工（只能从清单里选） |
+| 给单据选渠道 | 员工（只能从启用项里选；旧数据可保留停用项） |
 
 ## 8. 上线顺序
 
-1. **报告**：跑只读脚本 → 老板确认「待定」项的去处。
-2. **后台能力**：别名编辑 + 校验 + 写入口卫兵（先只对新写入生效）。
-3. **数据迁移**：备份 → 显式映射 UPDATE → 校验 SQL → 抽查 3 张历史单据。
-4. **关闭自由输入**：后台采购记录的渠道改成下拉（这一步可以和数据迁移同批上线）。
-5. **观察一周**：看是否还有非字典值写入（校验 SQL 定时跑一次）。
+1. **报告**：跑只读脚本 → 老板确认「待定」项与空值的去处、确认缺渠道商品清单。
+2. **后台能力**：别名编辑 + 冲突校验 + 写入口卫兵（此时只对新写入生效）。
+3. **数据迁移**：备份 → 显式映射 UPDATE → 别名表去重 → 校验 SQL → 抽查 3 张历史单据。
+4. **关闭自由输入**：员工端/后台 4 处输入改下拉（与迁移同批上线）。
+5. **观察一周**：周跑一次校验 SQL，看是否还有非字典值写入。
 
 ## 9. 验收标准
 
-- [ ] 5 张表中不存在字典外的渠道值（5.4 的 SQL 全空）。
+- [ ] 5 张表中不存在字典外的码，也不存在空串（5.7 的 SQL 全空）。
 - [ ] 员工端与后台都不存在「自由输入渠道」的入口（前端无 `v-model` 绑 `purchaseChannel` 的输入框）。
-- [ ] 用后台把某个渠道改名后：新建单据显示新名，历史采购记录仍显示旧名。
-- [ ] 员工端把渠道清单全部停用后：下拉为空、提交被明确拦下（不是 500）。
-- [ ] 同一渠道在报表/筛选里只出现一行。
+- [ ] 用后台把某个渠道改名后：新建单据显示新名，历史采购记录与顾客披露仍显示旧名。
+- [ ] 只改某条历史记录的金额、不动渠道：快照不变。
+- [ ] 员工端在产品档案里选不到停用渠道；但一条带着停用渠道的旧记录仍能改金额、仍能确认生成。
+- [ ] 把一个渠道停用后重新启用，历史单据显示与选择器都恢复正常。
 - [ ] 归并报告里的每一行都有去处，没有「待定」遗漏。
 
 ## 10. 风险
@@ -241,20 +349,24 @@ WHERE purchase_channel IS NOT NULL
 |---|---|
 | 归并错值，历史单据对不上 | 先出报告、老板确认；迁移前备份；映射写成显式 SQL 可逐条回滚 |
 | 生产表大，UPDATE 锁表 | 按值分批更新，`purchase_channel` 有索引；低峰执行 |
+| 别名表去重删错行 | 只删「学习缓存」；按 5.6 的固定顺序保留，可重复执行 |
+| 停用渠道后员工无项可选 | 停用前页面提示；后台可随时重新启用；旧数据不受影响 |
 | 字典被改名后缓存不一致 | 目前单实例；若将来多实例，改 `invalidate` 为短 TTL 或加广播 |
-| 打印内容变化引起误会 | 打印取快照，不取当前 label |
-| 停用渠道后员工无项可选 | 停用前页面提示；后台可随时重新启用 |
+| AI 给出的渠道不在清单里 | SYSTEM 口径置空 + 留痕，不阻断导入；识别结果页让员工确认 |
 
 ## 11. 我替老板定的（请复核）
 
 1. **不建外键**，业务表存码，靠服务层校验（4.1）。
 2. **码不可改名**，改名只改 `label`；要「换名字」就新建一项并停用旧的。
-3. 快照列命名 `purchase_channel_name`，只加在 `purchase_record`（其它表是规划值，不是凭证）。
-4. 归并放**数据迁移**，不放应用启动逻辑（启动逻辑不该改历史数据）。
-5. 「停用」的旧值不删除，保留原文并在字典里留一条停用项，保证历史可解释。
+3. 快照列 `purchase_channel_name`，只加在 `purchase_record`。
+4. 归并放**数据迁移**，不放应用启动逻辑。
+5. **渠道是这次采购的属性**，商品档案只是默认值（4.3），所以员工/后台都能改选。
+6. **停用渠道仍可写**（旧数据要能编辑），只是选择器里不再出现。
+7. 人填的渠道必须合法，机器猜的归不上就置空（D9）。
+8. 别名撞车时拒绝新增并提示「并入已有渠道」，而不是默默建一个永远选不中的项。
 
 ## 12. 这次不做
 
 - 不做渠道层级（总部/门店）、不做渠道与供应商的关联。
-- 不做按渠道的历史价格分析（数据够了再单独提）。
-- 不清理 `purchase_order_match_alias` 里的历史行，只做 `channel_family` 归并。
+- 不做按渠道筛选/汇总的报表页；后台那个前端已有、后端不存在的「导出 Excel」也不在这批补。
+- 不清理 `purchase_order_match_alias` 之外的历史表，不合并重复的采购记录。

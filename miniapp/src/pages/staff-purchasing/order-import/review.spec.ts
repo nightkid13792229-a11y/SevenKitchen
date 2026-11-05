@@ -83,3 +83,41 @@ describe('order import edit sheet（2026-11-05 改版）', () => {
     expect(source).toContain('matched-review');
   });
 });
+
+describe('order import edit sheet · 真机反馈修复（2026-11-05 晚）', () => {
+  it('单位改成弹层：showActionSheet 最多 6 项，8 项会直接失败不弹', () => {
+    expect(source).toContain('function openUnitPicker');
+    expect(source).toContain('unit-option');
+    expect(source).not.toContain('uni.showActionSheet');
+  });
+
+  it('商品名自带规格时不再重复显示（…鲑鱼块 1kg · 1000g）', () => {
+    expect(source).toContain('function extraSpecOf');
+    expect(source).toContain('editingSpecText');
+  });
+
+  it('单价按两位小数显示（125.9 → 125.90）', () => {
+    expect(source).toContain("priceText: line.unitPrice === null ? '' : money(line.unitPrice)");
+  });
+
+  it('选商品列表能搜（40 多个商品滑起来太慢）', () => {
+    expect(source).toContain('const filteredSkuOptions = computed');
+    expect(source).toContain('v-model="skuSearch"');
+  });
+
+  it('点选择器那一枪不会穿透，把整个抽屉关掉', () => {
+    expect(source).toContain('pickerClosedAt');
+    expect(source).toContain('sheetOpenedAt');
+  });
+
+  it('没带清单 id 进来时给空状态，不要一直转圈', () => {
+    expect(source).toContain('loading.value = false');
+    expect(source).toContain('loaded.value = true');
+  });
+
+  it('个人采购打开后，匹配商品那行变成说明文字，也不再能点开', () => {
+    expect(source).toContain('个人采购 · 不生成采购记录');
+    expect(source).toContain('function openSkuPicker');
+    expect(source).toContain('if (editing.value?.isPersonal) return;');
+  });
+});

@@ -183,16 +183,15 @@
           <view class="sheet-grab"></view>
 
           <view class="sheet-head">
-            <view class="name-wrap">
-              <input
-                v-model="editing.rawName"
-                class="name-input"
-                maxlength="80"
-                placeholder="商品名"
-                confirm-type="done"
-              />
-              <text class="name-pen">✎</text>
-            </view>
+            <input
+              v-model="editing.rawName"
+              class="name-input"
+              :class="{ compact: longName }"
+              maxlength="80"
+              confirm-type="done"
+              placeholder="商品名"
+              placeholder-class="name-placeholder"
+            />
             <view class="personal-box">
               <text class="personal-label">个人采购</text>
               <switch
@@ -204,13 +203,22 @@
             </view>
           </view>
 
-          <view class="field tap sku-row" @tap="openSkuPicker">
+          <view
+            class="field sku-row"
+            :class="{ tap: !editing.isPersonal, muted: editing.isPersonal }"
+            @tap="openSkuPicker"
+          >
             <text class="field-label">匹配商品</text>
-            <text class="field-value" :class="{ warn: !editing.skuName }">
-              {{ editing.skuName || (editing.isPersonal ? '个人采购不用匹配' : '还没有匹配') }}
-              <text v-if="editing.skuModel" class="field-sub"> · {{ editing.skuModel }}</text>
+            <text v-if="editing.isPersonal" class="field-value muted-text">
+              个人采购 · 不生成采购记录
             </text>
-            <text v-if="!editing.isPersonal" class="chev">›</text>
+            <template v-else>
+              <text class="field-value" :class="{ warn: !editing.skuName }">
+                {{ editing.skuName || '还没有匹配' }}
+                <text v-if="editingSpecText" class="field-sub"> · {{ editingSpecText }}</text>
+              </text>
+              <text class="chev">›</text>
+            </template>
           </view>
 
           <view v-if="editingSpecWarning" class="spec-warn-box">
@@ -232,7 +240,7 @@
                     placeholder="1"
                   />
                   <view class="step-btn" hover-class="step-btn-hover" @tap="stepQty(1)">+</view>
-                  <text class="unit-chip" @tap="pickUnit">{{ editing.unitText || '件' }} ▾</text>
+                  <text class="unit-chip" @tap="openUnitPicker">{{ editing.unitText || '件' }} ▾</text>
                 </view>
               </view>
               <view class="amount-cell">
@@ -261,6 +269,23 @@
           </view>
         </view>
       </scroll-view>
+    </view>
+
+    <!-- 数量单位 -->
+    <view v-if="unitPicking" class="sheet-mask" @tap="unitPicking = false">
+      <view class="sheet" @tap.stop>
+        <text class="sheet-title">数量单位</text>
+        <text class="sheet-sub">只影响这行怎么显示；多少克是按商品自带的净含量算的。</text>
+        <view class="unit-grid">
+          <view
+            v-for="unit in UNIT_OPTIONS"
+            :key="unit"
+            class="unit-option"
+            :class="{ active: editing && editing.unitText === unit }"
+            @tap="chooseUnit(unit)"
+          >{{ unit }}</view>
+        </view>
+      </view>
     </view>
 
     <!-- 改运费 / 包装费 -->
@@ -332,9 +357,19 @@
         <text class="sheet-title">选择采购商品</text>
         <text class="sheet-sub">只列本次清单里的商品，不允许跨原料替代。</text>
 
+        <view class="picker-search-wrap">
+          <input
+            v-model="skuSearch"
+            class="picker-search"
+            placeholder="搜商品名 / 原料"
+            confirm-type="search"
+          />
+          <text v-if="skuSearch" class="picker-search-clear" @tap="skuSearch = ''">清空</text>
+        </view>
+
         <scroll-view scroll-y class="picker-list">
           <view
-            v-for="option in skuPickerOptions"
+            v-for="option in filteredSkuOptions"
             :key="option.id"
             class="picker-row"
             @tap="chooseSku(option)"
@@ -342,7 +377,9 @@
             <view class="picker-main">
               <text class="picker-name">
                 {{ option.name }}
-                <text v-if="option.productModel" class="picker-model"> {{ option.productModel }}</text>
+                <text v-if="extraSpecOf(option.name, option.productModel)" class="picker-model">
+                  {{ extraSpecOf(option.name, option.productModel) }}
+                </text>
               </text>
               <text class="picker-sub">
                 {{ option.ingredientName }}<text v-if="option.purchaseChannel"> · {{ option.purchaseChannel }}</text>
@@ -351,8 +388,8 @@
             <text v-if="option.id === editing?.procurementSkuId" class="picker-current">当前</text>
             <text v-else class="picker-go">选择</text>
           </view>
-          <view v-if="skuPickerOptions.length === 0" class="picker-row">
-            <text class="picker-sub">本次清单里还没有可用的采购商品</text>
+          <view v-if="filteredSkuOptions.length === 0" class="picker-row">
+            <text class="picker-sub">{{ skuSearch ? '没搜到这个商品' : '本次清单里还没有可用的采购商品' }}</text>
           </view>
           <view v-if="editing?.ingredientId" class="picker-create" @tap="goNewSku">
             <view class="picker-create-main">
@@ -419,6 +456,12 @@ const imports = ref<OrderImportView[]>([]);
 const activeIndex = ref(0);
 const editing = ref<any>(null);
 const pickerMode = ref<'none' | 'sku'>('none');
+const unitPicking = ref(false);
+const skuSearch = ref('');
+/** 选择器刚关掉的时刻：防那一枪继续穿透到下面的蒙层，把整个抽屉关掉 */
+let pickerClosedAt = 0;
+let sheetOpenedAt = 0;
+const UNIT_OPTIONS = ['袋', '盒', '份', '包', '瓶', '个', '组', '罐'];
 /** 渠道清单：唯一来源是后台字典 purchase_channel，页面不写死 */
 const channelOptions = ref<string[]>([]);
 const channelPicking = ref(false);
@@ -674,6 +717,55 @@ const renameHint = computed(() => {
   return `生成时商品名更新为「${name}」`;
 });
 
+/** 选商品列表按关键字过滤（40 多个商品时滑起来太慢，2026-11-05） */
+const filteredSkuOptions = computed(() => {
+  const keyword = skuSearch.value.trim().toLowerCase();
+  if (!keyword) return skuPickerOptions.value;
+  return skuPickerOptions.value.filter((option) =>
+    [option.name, option.ingredientName, option.productModel, option.purchaseChannel]
+      .filter(Boolean)
+      .some((text) => String(text).toLowerCase().includes(keyword)),
+  );
+});
+
+/** 名字超过 12 个字就缩一号字，尽量一行看全 */
+const longName = computed(() => String(editing.value?.rawName || '').length > 12);
+
+const editingSpecText = computed(() => extraSpecOf(editing.value?.skuName, editing.value?.skuModel));
+
+/**
+ * 规格只在「名字里没写」的时候补在后面（2026-11-05）。
+ * 商品名本身常带规格（「…鲑鱼块 1kg」），后面再挂一个 1000g 就是同一件事说两遍。
+ */
+function extraSpecOf(name: string | null | undefined, model: string | null | undefined): string {
+  const modelText = String(model || '').trim();
+  if (!modelText) return '';
+  const nameKeys = specKeysOf(name);
+  const modelKeys = specKeysOf(modelText);
+  if (modelKeys.length > 0 && modelKeys.every((key) => nameKeys.includes(key))) return '';
+  return modelText;
+}
+
+/** 「1kg」「约300g」「30枚」→ 归一成 1000g / 300g / 30u，用来判断是不是同一个规格 */
+function specKeysOf(text: string | null | undefined): string[] {
+  const keys: string[] = [];
+  const pattern =
+    /(\d+(?:\.\d+)?)\s*(kg|千克|公斤|g|克|ml|毫升|l|升|枚|个|只|片|粒|颗|条|块|支|根|份|包|袋|盒|瓶|罐|卷)/gi;
+  let match: RegExpExecArray | null;
+  const source = String(text || '');
+  while ((match = pattern.exec(source)) !== null) {
+    const amount = Number(match[1]);
+    if (!Number.isFinite(amount)) continue;
+    const unit = match[2].toLowerCase();
+    if (['kg', '千克', '公斤'].includes(unit)) keys.push(`${Math.round(amount * 1000)}g`);
+    else if (['g', '克'].includes(unit)) keys.push(`${Math.round(amount)}g`);
+    else if (['l', '升'].includes(unit)) keys.push(`${Math.round(amount * 1000)}ml`);
+    else if (['ml', '毫升'].includes(unit)) keys.push(`${Math.round(amount)}ml`);
+    else keys.push(`${amount}u`);
+  }
+  return keys;
+}
+
 /** 有没有改过什么（关弹窗时用来提醒一下，别让员工白改一遍） */
 const editDirty = computed(() => {
   const current = editing.value;
@@ -802,7 +894,12 @@ onUnload(() => {
 });
 
 async function load() {
-  if (!listId.value) return;
+  if (!listId.value) {
+    // 没带清单 id（旧链接/手滑进来）：直接给空状态，别一直转圈
+    loading.value = false;
+    loaded.value = true;
+    return;
+  }
   if (imports.value.length === 0) loading.value = true;
   if (channelOptions.value.length === 0) void loadChannelOptions();
   const settled = await Promise.allSettled([
@@ -929,12 +1026,13 @@ function openEdit(line: OrderImportLineView) {
     (item) => item.ingredientId === line.ingredientId,
   );
   const sku = ingredient?.skus.find((item) => item.id === line.procurementSkuId);
+  sheetOpenedAt = Date.now();
   editing.value = {
     ...line,
     rawNameOrig: line.rawName,
     qtyText: line.qty === null ? '' : String(line.qty),
     unitText: line.unit || '',
-    priceText: line.unitPrice === null ? '' : String(line.unitPrice),
+    priceText: line.unitPrice === null ? '' : money(line.unitPrice),
     ingredientName: ingredient?.ingredientName || '',
     skuName: sku?.name || '',
     skuModel: sku?.productModel || '',
@@ -955,6 +1053,8 @@ function openEdit(line: OrderImportLineView) {
  * 点蒙层就关、改了半天白改，是这类弹窗最容易挨骂的地方。
  */
 async function closeEdit(force = false) {
+  // 刚打开、或刚关掉选择器的那一下，别把抽屉一起关掉（WeChat 里会穿透）
+  if (!force && Date.now() - Math.max(sheetOpenedAt, pickerClosedAt) < 350) return;
   if (!force && editDirty.value) {
     const confirmed = await new Promise<boolean>((resolve) => {
       uni.showModal({
@@ -1022,11 +1122,14 @@ async function saveFeeEdit() {
 }
 
 function openSkuPicker() {
+  if (editing.value?.isPersonal) return;
+  skuSearch.value = '';
   pickerMode.value = 'sku';
 }
 
 function closePicker() {
   pickerMode.value = 'none';
+  pickerClosedAt = Date.now();
 }
 
 function chooseSku(sku: any) {
@@ -1039,6 +1142,8 @@ function chooseSku(sku: any) {
   editing.value.ingredientName = sku.ingredientName;
   editing.value.baseUnit = sku.baseUnit || 'G';
   editing.value.isPersonal = false;
+  // 员工自己挑的 = 认得出来，生成时才会同步商品名
+  editing.value.matchSource = 'MANUAL';
   pickerMode.value = 'none';
 }
 
@@ -1067,21 +1172,21 @@ function alignToReceipt() {
   const receipt = receiptTotal.value;
   const qty = parseNumber(editing.value?.qtyText);
   if (receipt === null || qty === null || qty <= 0) return;
-  editing.value.priceText = String(round2(receipt / qty));
+  editing.value.priceText = money(round2(receipt / qty));
 }
 
-function pickUnit() {
-  const units = ['袋', '盒', '份', '包', '瓶', '个', '组', '罐'];
-  const current = editing.value?.unitText;
-  uni.showActionSheet({
-    itemList: units,
-    success: (res) => {
-      editing.value.unitText = units[res.tapIndex];
-    },
-    fail: () => {
-      if (current) editing.value.unitText = current;
-    },
-  });
+/**
+ * 单位只给常用件数单位：写「斤」这类，生成时会被拦下来白填一遍。
+ * 用弹层而不是 showActionSheet —— 那个最多 6 项，多了直接报错不弹（2026-11-05）。
+ */
+function openUnitPicker() {
+  if (editing.value?.isPersonal) return;
+  unitPicking.value = true;
+}
+
+function chooseUnit(unit: string) {
+  if (editing.value) editing.value.unitText = unit;
+  unitPicking.value = false;
 }
 
 function goNewSku() {
@@ -2106,6 +2211,16 @@ function emptySummary() {
   padding-bottom: 6rpx;
 }
 
+/* 名字长的时候缩一号，尽量在一行里看全（输入框不能换行） */
+.name-input.compact {
+  font-size: 24rpx;
+}
+
+.name-placeholder {
+  color: #b6ae98;
+  font-weight: 500;
+}
+
 .name-pen {
   font-size: 20rpx;
   color: #a09a86;
@@ -2132,6 +2247,16 @@ function emptySummary() {
 .sku-row .field-value {
   flex: 1;
   text-align: right;
+}
+
+/* 个人采购：不生成记录，就不该还能点开选商品 */
+.sku-row.muted {
+  background: #f3f2e9;
+}
+
+.muted-text {
+  color: #8a8574 !important;
+  font-weight: 500 !important;
 }
 
 .field-sub {
@@ -2281,5 +2406,53 @@ function emptySummary() {
 .picker-current {
   font-size: 20rpx;
   color: #2f6b4f;
+}
+
+.picker-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  background: #fbfcf7;
+  border: 1rpx solid #e2dcc9;
+  border-radius: 16rpx;
+  padding: 10rpx 16rpx;
+}
+
+.picker-search {
+  flex: 1;
+  min-width: 0;
+  font-size: 24rpx;
+  color: #26261f;
+}
+
+.picker-search-clear {
+  flex: none;
+  font-size: 20rpx;
+  color: #8a8574;
+}
+
+.unit-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 6rpx;
+}
+
+.unit-option {
+  min-width: 108rpx;
+  text-align: center;
+  padding: 18rpx 0;
+  border-radius: 14rpx;
+  border: 1rpx solid #e2dcc9;
+  background: #fbfcf7;
+  font-size: 26rpx;
+  color: #26261f;
+}
+
+.unit-option.active {
+  border-color: #2f6b4f;
+  background: #e8f0e6;
+  color: #2f6b4f;
+  font-weight: 600;
 }
 </style>

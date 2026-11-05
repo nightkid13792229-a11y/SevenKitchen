@@ -121,12 +121,16 @@ function fallbackClassify(answer: string): ClassifiedClaim[] {
 const COVERAGE_SYSTEM_PROMPT = `你是“引用覆盖裁判”。只做拆分和分类，不判断真假。
 把回答拆成独立的 claim；每个 claim 保留原文，不要改写。
 分类只能是：
-- clinical：疾病、分期、化验值/目标值、营养上下限、剂量、风险、因果、患者建议；
-- numeric：以数字/范围为主的陈述；
+- clinical：事实性的疾病、分期、化验值/目标值、营养上下限、剂量、风险、因果陈述；
+- numeric：事实性的数字/范围陈述；
 - recipe_action：加原料、改克数、删除等配方操作；
 - system_result：评估是否通过、系统状态；
-- opinion：主观判断/建议，但不涉及具体临床数值；
+- opinion：方案选择、档位建议、推荐做哪种、主观判断；不要求引用；
 - other：其它。
+关键区分：
+- “植物性磷吸收率低”是事实性 clinical，需要引用；
+- “建议取 0.2–0.35% DM”“做通用型/2 期倾向型”“选严格/中间/宽松档”是 opinion，不是 clinical；
+- 不要把“建议/方案选择”算成未引用临床结论。
 只从原文提取 [K#] 引用编号，不要自己补引用，不要用外部知识。
 输出 JSON：{"claims":[{"text":"...","kind":"clinical","citationIds":["K1"]}]}。`;
 
@@ -135,6 +139,7 @@ const SUPPORT_SYSTEM_PROMPT = `你是知识库引用裁判。只判断“给定�
 特别注意：
 - 某个指标的目标范围不等于分期标准；原文只给目标时，不能支持“属于/不属于某期”的结论。
 - 数字对但用法错（单位、域、分期、因果）也要判 partial 或 unsupported。
+- 允许直接算术和单位换算：原文给出数值，claim 只是比较大小、判断是否超出范围、做单位换算（如 5.2 > 4.6、mg/dL ↔ mmol/L），且不引入新事实时，可以判 supported；不要求原文显式写出比较句。
 - 不允许用常识补全原文没有的内容。
 输出 JSON：{"verdict":"supported|partial|unsupported|not_checkable","reason":"一句话理由","quote":"原文中支持或不支持的那一句"}。`;
 

@@ -2448,6 +2448,8 @@ model PurchaseRecord {
   procurementSkuName String?      @map("procurement_sku_name") @db.VarChar(200)
   ingredientName     String       @map("ingredient_name") @db.VarChar(200)
   purchaseChannel    String       @map("purchase_channel") @db.VarChar(200)
+  /// 采购当时的渠道名称快照；渠道改名不回写历史（2026-11-05 第二步）
+  purchaseChannelName String?     @map("purchase_channel_name") @db.VarChar(64)
   actualQuantity     Decimal      @map("actual_quantity") @db.Decimal(18, 6)
   actualPackageCount Decimal?     @map("actual_package_count") @db.Decimal(18, 3)
   actualPackageSize  Decimal?     @map("actual_package_size") @db.Decimal(18, 3)

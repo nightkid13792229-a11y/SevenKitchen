@@ -170,7 +170,7 @@
                   </el-table-column>
                   <el-table-column label="采购渠道" width="150">
                     <template #default="{ row }">
-                      {{ row.purchaseChannel || '-' }}
+                      {{ row.purchaseChannelName || row.purchaseChannel || '-' }}
                     </template>
                   </el-table-column>
                   <el-table-column label="预估成本" width="120" align="right">

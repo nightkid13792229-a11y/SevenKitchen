@@ -78,12 +78,15 @@
         <!-- 采购渠道 -->
         <view class="form-section">
           <text class="form-label">采购渠道（可选）</text>
-          <input
-            v-model="formData.purchaseChannel"
-            class="form-input"
-            placeholder="如：京东、淘宝、本地市场"
-            placeholder-class="input-placeholder"
-          />
+          <picker
+            :range="channelPickerOptions"
+            :value="channelIndex"
+            @change="onChannelChange"
+          >
+            <view class="form-input picker-value">
+              {{ formData.purchaseChannel || '不填（可选）' }}
+            </view>
+          </picker>
         </view>
 
         <!-- 产品型号 -->
@@ -109,7 +112,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { getPurchaseChannels } from '../api/purchasing';
 
 // 原料类型选项
 const ingredientTypes = [
@@ -139,6 +143,29 @@ const formData = ref({
 });
 
 const submitting = ref(false);
+
+/** 采购渠道（唯一来源：后端字典，员工只能选，不能手打） */
+const channelOptions = ref<string[]>([]);
+const channelPickerOptions = computed(() => ['不填（可选）', ...channelOptions.value]);
+const channelIndex = computed(() => {
+  const index = channelOptions.value.indexOf(formData.value.purchaseChannel);
+  return index < 0 ? 0 : index + 1;
+});
+const onChannelChange = (event: any) => {
+  const index = Number(event?.detail?.value ?? 0);
+  formData.value.purchaseChannel = index <= 0 ? '' : channelOptions.value[index - 1] || '';
+};
+
+onMounted(async () => {
+  try {
+    const res: any = await getPurchaseChannels();
+    if (res?.code === 0 && Array.isArray(res.data)) {
+      channelOptions.value = res.data;
+    }
+  } catch {
+    channelOptions.value = [];
+  }
+});
 
 // 当前选中的类型索引
 const typeIndex = computed(() => {

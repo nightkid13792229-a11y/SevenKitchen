@@ -202,11 +202,15 @@
           <view class="field-row">
             <view class="field">
               <text class="field-label">采购渠道</text>
-              <input
-                v-model="item.purchaseChannel"
-                class="field-input"
-                placeholder="可选，默认原料渠道"
-              />
+              <picker
+                :range="channelPickerOptions"
+                :value="channelIndexOf(item.purchaseChannel)"
+                @change="(event: any) => onChannelChange(event, item)"
+              >
+                <view class="field-input picker-value">
+                  {{ item.purchaseChannel || '不填（可选）' }}
+                </view>
+              </picker>
             </view>
             <view class="field">
               <text class="field-label">产品型号</text>
@@ -243,6 +247,7 @@ import StaffBottomBar from '../../components/staff/StaffBottomBar.vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import {
   createStockPurchaseList,
+  getPurchaseChannels,
   getStockPurchaseIngredients,
   type StockPurchaseIngredient,
 } from './api/purchasing';
@@ -269,6 +274,18 @@ const typeOptions = [
 
 const ingredients = ref<StockPurchaseIngredient[]>([]);
 const selectedItems = ref<SelectedStockItem[]>([]);
+
+/** 采购渠道（唯一来源：后端字典，员工只能选） */
+const channelOptions = ref<string[]>([]);
+const channelPickerOptions = computed(() => ['不填（可选）', ...channelOptions.value]);
+const channelIndexOf = (value: string) => {
+  const index = channelOptions.value.indexOf(value);
+  return index < 0 ? 0 : index + 1;
+};
+const onChannelChange = (event: any, item: SelectedStockItem) => {
+  const index = Number(event?.detail?.value ?? 0);
+  item.purchaseChannel = index <= 0 ? '' : channelOptions.value[index - 1] || '';
+};
 const loading = ref(false);
 const submitting = ref(false);
 const keyword = ref('');
@@ -331,8 +348,20 @@ const toggleSuggestionFilter = (
   suggestionFilter.value = suggestionFilter.value === value ? '' : value;
 };
 
+const loadChannelOptions = async () => {
+  try {
+    const res: any = await getPurchaseChannels();
+    if (res?.code === 0 && Array.isArray(res.data)) {
+      channelOptions.value = res.data;
+    }
+  } catch {
+    channelOptions.value = [];
+  }
+};
+
 onLoad(() => {
   targetDate.value = getTodayString();
+  loadChannelOptions();
   loadIngredients();
 });
 

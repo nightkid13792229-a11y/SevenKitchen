@@ -193,6 +193,15 @@
           <el-input-number v-model="editForm.sortOrder" :min="0" :max="9999" />
           <span class="form-hint">数字越小越靠前</span>
         </el-form-item>
+        <el-form-item v-if="isChannelSet" label="别名">
+          <el-input
+            v-model="editForm.aliasesText"
+            type="textarea"
+            :rows="3"
+            placeholder="每行一个，例如：山姆\nSam's Club"
+          />
+          <span class="form-hint">历史写法与常见简称，AI 识别和旧数据靠它归到这一项</span>
+        </el-form-item>
         <el-form-item label="启用">
           <el-switch v-model="editForm.enabled" />
           <span class="form-hint">停用后小程序不再显示它，但历史数据不受影响</span>
@@ -208,11 +217,24 @@
     <el-dialog v-model="createVisible" title="新增选项" width="460px">
       <el-form label-width="88px">
         <el-form-item label="码">
-          <el-input v-model="createForm.code" placeholder="英文大写，例如 URGENT" />
-          <span class="form-hint">写进业务数据里的值，建议英文大写；保存后不能改</span>
+          <el-input
+            v-model="createForm.code"
+            :placeholder="isChannelSet ? '可留空，默认用显示中文' : '英文大写，例如 URGENT'"
+          />
+          <span class="form-hint">
+            {{ isChannelSet ? '渠道可以留空，默认与显示中文一致；保存后不能改' : '写进业务数据里的值，建议英文大写；保存后不能改' }}
+          </span>
         </el-form-item>
         <el-form-item label="显示中文">
           <el-input v-model="createForm.label" maxlength="64" />
+        </el-form-item>
+        <el-form-item v-if="isChannelSet" label="别名">
+          <el-input
+            v-model="createForm.aliasesText"
+            type="textarea"
+            :rows="3"
+            placeholder="每行一个，例如：山姆\nSam's Club"
+          />
         </el-form-item>
         <el-form-item label="排序">
           <el-input-number v-model="createForm.sortOrder" :min="0" :max="9999" />
@@ -254,6 +276,21 @@ const canAddOrRemove = computed(() => {
   return sets.value.find((set) => set.code === activeCode.value)?.canAddOrRemove ?? false
 })
 
+const isChannelSet = computed(() => activeCode.value === 'purchase_channel')
+
+/** 别名输入框：每行一个，去空、去重 */
+function splitAliases(text: string): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const raw of String(text || '').split(/[\n,，、]/)) {
+    const value = raw.trim()
+    if (!value || seen.has(value)) continue
+    seen.add(value)
+    result.push(value)
+  }
+  return result
+}
+
 const editVisible = ref(false)
 const createVisible = ref(false)
 
@@ -263,13 +300,15 @@ const editForm = reactive({
   description: '',
   tone: '' as string,
   sortOrder: 0,
-  enabled: true
+  enabled: true,
+  aliasesText: ''
 })
 
 const createForm = reactive({
   code: '',
   label: '',
-  sortOrder: 100
+  sortOrder: 100,
+  aliasesText: ''
 })
 
 async function loadSets() {
@@ -320,6 +359,10 @@ function openEdit(row: AdminPlatformOptionItem) {
   editForm.tone = row.tone || ''
   editForm.sortOrder = row.sortOrder
   editForm.enabled = row.enabled
+  const aliases = Array.isArray((row.extra as any)?.aliases)
+    ? ((row.extra as any).aliases as string[])
+    : []
+  editForm.aliasesText = aliases.join('\n')
   editVisible.value = true
 }
 
@@ -335,7 +378,10 @@ async function handleSaveEdit() {
       description: editForm.description || null,
       tone: editForm.tone || null,
       sortOrder: editForm.sortOrder,
-      enabled: editForm.enabled
+      enabled: editForm.enabled,
+      ...(isChannelSet.value && {
+        extra: { aliases: splitAliases(editForm.aliasesText) }
+      })
     })
     ElMessage.success('已保存，小程序与后台会同时生效')
     editVisible.value = false
@@ -351,6 +397,7 @@ function openCreate() {
   createForm.code = ''
   createForm.label = ''
   createForm.sortOrder = 100
+  createForm.aliasesText = ''
   createVisible.value = true
 }
 
@@ -362,9 +409,15 @@ async function handleCreate() {
   saving.value = true
   try {
     await platformOptionsApi.createItem(activeCode.value, {
-      code: createForm.code.trim().toUpperCase(),
+      // 渠道的码就是中文名，不能强制大写（会把 iHerb 变成 IHERB）
+      code: isChannelSet.value
+        ? (createForm.code.trim() || createForm.label.trim())
+        : createForm.code.trim().toUpperCase(),
       label: createForm.label.trim(),
-      sortOrder: createForm.sortOrder
+      sortOrder: createForm.sortOrder,
+      ...(isChannelSet.value && {
+        extra: { aliases: splitAliases(createForm.aliasesText) }
+      })
     })
     ElMessage.success('已新增')
     createVisible.value = false

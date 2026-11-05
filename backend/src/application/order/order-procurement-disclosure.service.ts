@@ -44,6 +44,7 @@ export interface ProcurementDisclosure {
 interface PurchaseRecordLite {
   ingredientId: string;
   purchaseChannel: string | null;
+  purchaseChannelName: string | null;
   procurementSkuName: string | null;
   procurementSkuId: string | null;
   purchasedAt: Date;
@@ -112,6 +113,7 @@ export class OrderProcurementDisclosureService {
         select: {
           ingredientId: true,
           purchaseChannel: true,
+          purchaseChannelName: true,
           procurementSkuName: true,
           procurementSkuId: true,
           purchasedAt: true,
@@ -248,7 +250,11 @@ export class OrderProcurementDisclosureService {
       ingredientId: ingredient.id,
       ingredientName: ingredient.name,
       source,
-      channel: this.normalizeText(record.purchaseChannel) || null,
+      // 顾客看到的是「当时的名字」：优先快照，老数据回退渠道码
+      channel:
+        this.normalizeText(record.purchaseChannelName) ||
+        this.normalizeText(record.purchaseChannel) ||
+        null,
       brand: this.normalizeText(skuInfo?.brand) || null,
       productName,
       purchasedAt: this.toDateString(record.purchasedAt),
@@ -278,6 +284,7 @@ export class OrderProcurementDisclosureService {
       SELECT DISTINCT ON (pr.ingredient_id)
         pr.ingredient_id AS "ingredientId",
         pr.purchase_channel AS "purchaseChannel",
+        pr.purchase_channel_name AS "purchaseChannelName",
         pr.procurement_sku_name AS "procurementSkuName",
         pr.procurement_sku_id AS "procurementSkuId",
         pr.purchased_at AS "purchasedAt"

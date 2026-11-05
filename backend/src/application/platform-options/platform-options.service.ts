@@ -1,6 +1,10 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
+  normalizeChannelKey,
+} from '../purchasing/channel-catalog';
+import { PURCHASE_CHANNEL_SET } from './option-sets.registry';
+import {
   ENUM_SOURCES,
   OPTION_SET_DEFINITIONS,
   OPTION_TONES,
@@ -197,6 +201,7 @@ export class PlatformOptionsService implements OnModuleInit {
       icon?: string | null;
       sortOrder?: number;
       enabled?: boolean;
+      extra?: Record<string, unknown> | null;
     },
   ): Promise<void> {
     this.assertSetExists(setCode);
@@ -215,6 +220,17 @@ export class PlatformOptionsService implements OnModuleInit {
       throw new NotFoundException(`选项不存在：${setCode}/${code}`);
     }
 
+    // 渠道的「叫法」不能撞车：撞了以后 AI/历史值永远只会归到先出现的那一条
+    if (setCode === PURCHASE_CHANNEL_SET) {
+      const aliases = this.extractAliases(patch.extra);
+      if (aliases.length > 0 || patch.label !== undefined) {
+        await this.assertChannelAliasUnique(
+          [patch.label ?? '', ...aliases].filter(Boolean),
+          code,
+        );
+      }
+    }
+
     await this.prisma.platformOptionItem.update({
       where: { setId_code: { setId: setCode, code } },
       data: {
@@ -226,10 +242,59 @@ export class PlatformOptionsService implements OnModuleInit {
         ...(patch.icon !== undefined && { icon: patch.icon }),
         ...(patch.sortOrder !== undefined && { sortOrder: patch.sortOrder }),
         ...(patch.enabled !== undefined && { enabled: patch.enabled }),
+        ...(patch.extra !== undefined && {
+          extra: (patch.extra as never) ?? null,
+        }),
       },
     });
 
     this.invalidate();
+  }
+
+  /** 从 extra 里取别名列表（渠道专用；其它选项集没有这个字段） */
+  private extractAliases(extra: Record<string, unknown> | null | undefined): string[] {
+    if (!extra || !Array.isArray(extra.aliases)) return [];
+    return extra.aliases
+      .filter((alias): alias is string => typeof alias === 'string')
+      .map((alias) => alias.trim())
+      .filter(Boolean);
+  }
+
+  /**
+   * 渠道名/别名不能与别的渠道撞车（2026-11-05）。
+   * 撞车的话，归一函数永远只会归到先出现的那条，后建的这一项等于永远选不中。
+   */
+  private async assertChannelAliasUnique(
+    values: string[],
+    excludeCode?: string,
+  ): Promise<void> {
+    const keys = values
+      .map((value) => normalizeChannelKey(value))
+      .filter(Boolean);
+    if (keys.length === 0) return;
+
+    const rows = await this.prisma.platformOptionItem.findMany({
+      where: { setId: PURCHASE_CHANNEL_SET },
+      select: { code: true, label: true, extra: true },
+    });
+
+    for (const key of keys) {
+      const clash = rows.find((row) => {
+        if (excludeCode && row.code === excludeCode) return false;
+        const aliases =
+          row.extra && typeof row.extra === 'object'
+            ? this.extractAliases(row.extra as Record<string, unknown>)
+            : [];
+        return [row.code, row.label, ...aliases].some(
+          (candidate) => normalizeChannelKey(candidate) === key,
+        );
+      });
+      if (clash) {
+        throw new BadRequestException(
+          `这个叫法已经被渠道「${clash.label}」占用，请改用它，或先停用旧渠道`,
+        );
+      }
+    }
   }
 
   /** 新增一项 —— **只有 DATA 类允许**（ENUM 类的值由代码定义） */
@@ -246,6 +311,14 @@ export class PlatformOptionsService implements OnModuleInit {
     });
     if (duplicated) {
       throw new BadRequestException(`该选项集里已经有码「${item.code}」`);
+    }
+
+    if (setCode === PURCHASE_CHANNEL_SET) {
+      await this.assertChannelAliasUnique([
+        item.code.trim(),
+        item.label.trim(),
+        ...this.extractAliases(item.extra),
+      ]);
     }
 
     await this.prisma.platformOptionItem.create({

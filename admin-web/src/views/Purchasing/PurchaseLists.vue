@@ -171,7 +171,7 @@
           <template #default="{ row }">{{ row.procurementSkuName || row.suggestedProductName || '-' }}</template>
         </el-table-column>
         <el-table-column label="渠道" width="150" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.purchaseChannel || '-' }}</template>
+          <template #default="{ row }">{{ row.purchaseChannelName || row.purchaseChannel || '-' }}</template>
         </el-table-column>
         <el-table-column label="预估成本" width="120" align="right">
           <template #default="{ row }">¥{{ formatAmount(row.estimatedCost) }}</template>
@@ -259,7 +259,7 @@
               </el-table-column>
               <el-table-column label="渠道/型号" min-width="180" show-overflow-tooltip>
                 <template #default="{ row }">
-                  {{ [row.purchaseChannel, row.productModel].filter(Boolean).join(' / ') || '-' }}
+                  {{ [row.purchaseChannelName || row.purchaseChannel, row.productModel].filter(Boolean).join(' / ') || '-' }}
                 </template>
               </el-table-column>
               <el-table-column label="预估" width="110" align="right">
@@ -312,7 +312,7 @@
                 </template>
               </el-table-column>
               <el-table-column label="渠道" width="150" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.purchaseChannel || '-' }}</template>
+                <template #default="{ row }">{{ row.purchaseChannelName || row.purchaseChannel || '-' }}</template>
               </el-table-column>
               <el-table-column label="数量" width="160" align="right">
                 <template #default="{ row }">

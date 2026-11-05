@@ -879,6 +879,15 @@ ${list}
               );
             }
 
+            // 建档时记下渠道码 + 当时的名字（快照），以后改名不回写历史
+            const recordChannelCode =
+              row.channel ||
+              canonicalChannelCode(sku.purchaseChannel, channels) ||
+              '';
+            const recordChannelName =
+              channels.find((item) => item.code === recordChannelCode)
+                ?.label ?? recordChannelCode;
+
             const record = await tx.purchaseRecord.create({
               data: {
                 purchaseListId: row.purchaseListId,
@@ -887,8 +896,8 @@ ${list}
                 procurementSkuId: sku.id,
                 procurementSkuName: skuName,
                 ingredientName: sku.ingredient.name,
-                purchaseChannel:
-                  row.channel || sku.purchaseChannel || '未知渠道',
+                purchaseChannel: recordChannelCode,
+                purchaseChannelName: recordChannelName,
                 actualQuantity: qty,
                 actualPackageCount: qty,
                 actualPackageSize: ratio,

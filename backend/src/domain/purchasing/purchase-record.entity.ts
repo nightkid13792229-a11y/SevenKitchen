@@ -16,6 +16,8 @@ export interface PurchaseRecordConstructor {
   procurementSkuName?: string;
   ingredientName: string;
   purchaseChannel: string;
+  /** 采购当时的渠道名称（快照）；老数据可能没有 */
+  purchaseChannelName?: string;
   actualQuantity: number; // 归一化后的实际采购数量（按采购单位）
   actualPackageCount?: number; // 原始录入：买了几件
   actualPackageSize?: number; // 原始录入：单件规格数值
@@ -34,6 +36,7 @@ type PurchaseRecordUpdateData = Partial<
   Pick<
     PurchaseRecordConstructor,
     | 'purchaseChannel'
+    | 'purchaseChannelName'
     | 'actualQuantity'
     | 'actualPackageCount'
     | 'actualPackageSize'
@@ -58,6 +61,7 @@ export class PurchaseRecord {
   public procurementSkuName?: string;
   public readonly ingredientName: string;
   public purchaseChannel: string;
+  public purchaseChannelName?: string;
   public actualQuantity: number; // 归一化后的实际采购数量（按采购单位）
   public actualPackageCount?: number;
   public actualPackageSize?: number;
@@ -80,6 +84,7 @@ export class PurchaseRecord {
     this.procurementSkuName = data.procurementSkuName;
     this.ingredientName = data.ingredientName;
     this.purchaseChannel = data.purchaseChannel;
+    this.purchaseChannelName = data.purchaseChannelName;
     this.actualQuantity = data.actualQuantity;
     this.actualPackageCount = data.actualPackageCount;
     this.actualPackageSize = data.actualPackageSize;
@@ -197,6 +202,9 @@ export class PurchaseRecord {
     if (data.purchaseChannel !== undefined) {
       this.purchaseChannel = data.purchaseChannel;
     }
+    if (data.purchaseChannelName !== undefined) {
+      this.purchaseChannelName = data.purchaseChannelName;
+    }
     if (data.actualQuantity !== undefined) {
       this.actualQuantity = data.actualQuantity;
     }
@@ -249,6 +257,7 @@ export class PurchaseRecord {
       procurementSkuName: this.procurementSkuName || null,
       ingredientName: this.ingredientName,
       purchaseChannel: this.purchaseChannel,
+      purchaseChannelName: this.purchaseChannelName ?? null,
       actualQuantity: this.actualQuantity,
       actualPackageCount: this.actualPackageCount ?? null,
       actualPackageSize: this.actualPackageSize ?? null,
@@ -277,6 +286,7 @@ export class PurchaseRecord {
       procurementSkuName: data.procurementSkuName || undefined,
       ingredientName: data.ingredientName,
       purchaseChannel: data.purchaseChannel,
+      purchaseChannelName: data.purchaseChannelName || undefined,
       actualQuantity: Number(data.actualQuantity),
       actualPackageCount:
         data.actualPackageCount !== undefined && data.actualPackageCount !== null

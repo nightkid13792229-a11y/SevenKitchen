@@ -20,6 +20,11 @@ import {
 } from '../../domain/ingredient-creation/ingredient-card-fields';
 import type { PreparationState } from '../../domain/ingredient-creation/preparation-state';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import {
+  canonicalChannelCode,
+  toChannelOptions,
+} from '../purchasing/channel-catalog';
+import { PURCHASE_CHANNEL_SET } from '../platform-options/option-sets.registry';
 import { IngredientCreationDraftService } from './ingredient-creation-draft.service';
 import type {
   ExceptionRecord,
@@ -522,6 +527,19 @@ export class IngredientCreationCommitService {
     private readonly draftService: IngredientCreationDraftService,
   ) {}
 
+  /** AI 给的渠道 → 字典码；归不上返回 null（不阻断整批提交） */
+  private async resolveChannelForCommit(
+    value: string | null,
+  ): Promise<string | null> {
+    if (!value) return null;
+    const items = await this.prisma.platformOptionItem.findMany({
+      where: { setId: PURCHASE_CHANNEL_SET, enabled: true },
+      select: { code: true, label: true, extra: true },
+      orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+    });
+    return canonicalChannelCode(value, toChannelOptions(items));
+  }
+
   async commit(
     input: CommitIngredientCreationInput,
   ): Promise<CommitIngredientCreationResult> {
@@ -886,7 +904,11 @@ export class IngredientCreationCommitService {
     if (productModel !== null) {
       data.productModel = productModel;
     }
-    const purchaseChannel = readNonEmptyString(ingredient.purchaseChannel);
+    // 渠道是机器（AI）猜的：能归一到字典就归一，归不上就**不写**（D9），
+    // 不拿一个字典外的词去污染原料档案。
+    const purchaseChannel = await this.resolveChannelForCommit(
+      readNonEmptyString(ingredient.purchaseChannel),
+    );
     if (purchaseChannel !== null) {
       data.purchaseChannel = purchaseChannel;
     }

@@ -236,7 +236,9 @@ export function resolvePurchaseRecordDisplay(record: any) {
   return {
     ...record,
     resolvedProcurementSkuName: normalizeText(record?.procurementSkuName),
-    resolvedPurchaseChannel: normalizeText(record?.purchaseChannel),
+    // 采购记录优先显示「当时的名字」快照；老数据没有快照时回退渠道码
+    resolvedPurchaseChannel:
+      normalizeText(record?.purchaseChannelName) || normalizeText(record?.purchaseChannel),
     resolvedProductModel: normalizeText(record?.productModel),
   };
 }

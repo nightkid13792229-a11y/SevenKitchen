@@ -108,7 +108,9 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="purchaseChannel" label="采购渠道" width="180" />
+        <el-table-column label="采购渠道" width="180">
+          <template #default="{ row }">{{ row.purchaseChannelName || row.purchaseChannel || '-' }}</template>
+        </el-table-column>
 
         <el-table-column label="预估成本" width="120" align="right" sortable="custom">
           <template #default="{ row }">

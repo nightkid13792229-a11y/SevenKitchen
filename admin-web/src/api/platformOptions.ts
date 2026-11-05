@@ -61,6 +61,8 @@ export interface UpdateOptionItemPayload {
   icon?: string | null
   sortOrder?: number
   enabled?: boolean
+  /** 业务附加参数；渠道用它存别名（extra.aliases） */
+  extra?: Record<string, unknown> | null
 }
 
 export interface PublicOptionItem {
@@ -105,7 +107,12 @@ export const platformOptionsApi = {
 
   createItem: (
     setCode: string,
-    payload: { code: string; label: string; sortOrder?: number },
+    payload: {
+      code: string
+      label: string
+      sortOrder?: number
+      extra?: Record<string, unknown> | null
+    },
   ): Promise<void> =>
     api.post(`/admin/options/${encodeURIComponent(setCode)}/items`, payload),
 

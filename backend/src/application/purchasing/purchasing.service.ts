@@ -3987,7 +3987,7 @@ export class PurchasingService {
     );
 
     // 渠道跟着商品档案走；商品没填时才用这次传上来的值兜底（第二步 D7）
-    const purchaseChannel = await this.resolveRecordChannel({
+    const recordChannel = await this.resolveRecordChannel({
       skuChannel: selectedProcurementSku.purchaseChannel,
       requested: dto.purchaseChannel,
     });
@@ -4000,7 +4000,8 @@ export class PurchasingService {
       procurementSkuId: selectedProcurementSku.id,
       procurementSkuName: selectedProcurementSku.name,
       ingredientName: purchaseItem.ingredientName,
-      purchaseChannel,
+      purchaseChannel: recordChannel.code,
+      purchaseChannelName: recordChannel.name,
       actualQuantity: normalizedRecordData.actualQuantity,
       actualPackageCount: normalizedRecordData.actualPackageCount,
       actualPackageSize: normalizedRecordData.actualPackageSize,
@@ -4114,7 +4115,7 @@ export class PurchasingService {
     }
 
     // 渠道同样以商品档案为准；换了商品就跟着换，没换就保持原值
-    updateData.purchaseChannel =
+    const nextChannel =
       shouldUpdateProcurementSku && selectedProcurementSku
         ? await this.resolveRecordChannel({
             skuChannel: selectedProcurementSku.purchaseChannel,
@@ -4125,6 +4126,13 @@ export class PurchasingService {
             requested: dto.purchaseChannel,
             fallback: purchaseRecord.purchaseChannel,
           });
+    updateData.purchaseChannel = nextChannel.code;
+    // 只有渠道真的变了才重写快照；只改金额/备注时保留当时的名字（D10）
+    if (nextChannel.code !== purchaseRecord.purchaseChannel) {
+      updateData.purchaseChannelName = nextChannel.name;
+    } else if (!purchaseRecord.purchaseChannelName) {
+      updateData.purchaseChannelName = nextChannel.name;
+    }
 
     // 更新采购记录
     purchaseRecord.update(updateData);
@@ -4227,7 +4235,7 @@ export class PurchasingService {
     skuChannel?: string | null;
     requested?: string | null;
     fallback?: string | null;
-  }): Promise<string> {
+  }): Promise<{ code: string; name: string }> {
     const items = await this.platformOptions.listSetWithDisabled(
       PURCHASE_CHANNEL_SET,
     );
@@ -4239,18 +4247,23 @@ export class PurchasingService {
     const fromSku = input.skuChannel
       ? resolveChannelCode(input.skuChannel, enabled, known)
       : null;
-    if (fromSku) return fromSku;
-
     const requested = input.requested
       ? resolveChannelCode(input.requested, enabled, known)
       : null;
-    if (requested) return requested;
+    const code =
+      fromSku ||
+      requested ||
+      (input.fallback && known.has(input.fallback) ? input.fallback : null);
 
-    if (input.fallback && known.has(input.fallback)) return input.fallback;
+    if (!code) {
+      throw new BadRequestException(
+        '这件商品还没填渠道，请先选择渠道或补全商品档案',
+      );
+    }
 
-    throw new BadRequestException(
-      '这件商品还没填渠道，请先选择渠道或补全商品档案',
-    );
+    // 快照：写记录的那一刻字典里的名字；以后改名不回写历史（D4）
+    const name = items.find((item) => item.code === code)?.label ?? code;
+    return { code, name };
   }
 
   /**

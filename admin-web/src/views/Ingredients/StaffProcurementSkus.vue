@@ -154,7 +154,20 @@
           </div>
         </el-form-item>
         <el-form-item label="采购渠道">
-          <el-input v-model="editForm.purchaseChannel" maxlength="200" />
+          <el-select
+            v-model="editForm.purchaseChannel"
+            filterable
+            clearable
+            placeholder="请选择采购渠道"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="channel in channelSelectOptions(editForm.purchaseChannel)"
+              :key="channel"
+              :label="channel"
+              :value="channel"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="参考单价">
           <el-input-number
@@ -197,6 +210,7 @@ import type {
 import { BaseUnitLabels } from '@/types/ingredient'
 import { purchaseUnitsForBaseUnit } from '@/constants/procurementPurchaseUnits'
 import { buildStaffSkuQueryParams } from './staffProcurementSkuQuery'
+import { fetchPublicOptionSet } from '@/api/platformOptions'
 
 const loading = ref(false)
 const rows = ref<StaffCreatedProcurementSku[]>([])
@@ -394,8 +408,29 @@ const previewScreenshot = (row: StaffCreatedProcurementSku) => {
   screenshotVisible.value = true
 }
 
+// 采购渠道（唯一来源：平台选项字典 purchase_channel）
+const channelOptions = ref<string[]>([])
+
+function channelSelectOptions(current: string) {
+  const value = (current || '').trim()
+  if (value && !channelOptions.value.includes(value)) {
+    return [...channelOptions.value, value]
+  }
+  return channelOptions.value
+}
+
+async function loadChannelOptions() {
+  try {
+    const items = await fetchPublicOptionSet('purchase_channel')
+    channelOptions.value = items.map((item) => item.code)
+  } catch {
+    channelOptions.value = []
+  }
+}
+
 onMounted(() => {
   loadIngredientOptions()
+  loadChannelOptions()
   load()
 })
 </script>

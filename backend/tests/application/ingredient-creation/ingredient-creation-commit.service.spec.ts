@@ -105,6 +105,14 @@ function createPrismaMock(options: HarnessOptions = {}) {
   };
 
   const client: any = {
+    // 渠道字典：AI 给的渠道只能归一到这里（2026-11-05 第二步）
+    platformOptionItem: {
+      findMany: jest.fn(async () => [
+        { code: '京东', label: '京东', extra: null },
+        { code: '淘宝/天猫', label: '淘宝/天猫', extra: { aliases: ['淘宝', '天猫'] } },
+        { code: '山姆会员店', label: '山姆会员店', extra: { aliases: ['山姆'] } },
+      ]),
+    },
     ingredientCreationDraft: {
       findUnique: jest.fn(async ({ where }: any) => {
         if (!draftState || draftState.id !== where.id) {

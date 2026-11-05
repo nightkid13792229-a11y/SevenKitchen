@@ -87,6 +87,8 @@ export class AdminPlatformOptionsController {
       icon?: string | null;
       sortOrder?: number;
       enabled?: boolean;
+      /** 渠道别名单（只对 purchase_channel 有意义） */
+      extra?: Record<string, unknown> | null;
     },
     @CurrentUser() _user: RequestUser,
   ) {

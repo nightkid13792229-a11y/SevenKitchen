@@ -163,3 +163,12 @@ describe('order import edit sheet · 匹配商品改二级联动（2026-11-05 �
     expect(pickerBlock).toContain('filteredSkuOptions');
   });
 });
+
+describe('order import edit sheet · 选商品时别忘了在配什么', () => {
+  it('选商品弹窗顶部带上识别到的商品名 + 截图规格/金额', () => {
+    expect(source).toContain('class="picker-context"');
+    expect(source).toContain('正在匹配');
+    expect(source).toContain('editing?.rawName');
+    expect(source).toContain('const pickerContextMeta = computed');
+  });
+});

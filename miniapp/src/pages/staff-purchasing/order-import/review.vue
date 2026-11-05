@@ -356,7 +356,15 @@
     <view v-if="pickerMode !== 'none'" class="sheet-mask" @tap="closePicker">
       <view class="sheet" @tap.stop>
         <text class="sheet-title">选择采购商品</text>
-        <text class="sheet-sub">左选原料，右选这道原料下这单要用的商品。</text>
+
+        <!-- 正在给哪一行选：截图里那串字 + 截图规格/金额，免得弹出来就忘了在配什么 -->
+        <view class="picker-context">
+          <view class="picker-context-head">
+            <text class="picker-context-label">正在匹配</text>
+            <text class="picker-context-name">{{ editing?.rawName || '这一行' }}</text>
+          </view>
+          <text v-if="pickerContextMeta" class="picker-context-meta">{{ pickerContextMeta }}</text>
+        </view>
 
         <view class="picker-search-wrap">
           <input
@@ -761,6 +769,17 @@ const renameHint = computed(() => {
     current.confidence === 'HIGH' || current.matchSource === 'MANUAL';
   if (!trusted) return '';
   return `生成时商品名更新为「${name}」`;
+});
+
+/** 选商品弹窗顶部那行小字：截图规格 + 截图金额，用来判断该选哪个包装 */
+const pickerContextMeta = computed(() => {
+  const current = editing.value;
+  if (!current) return '';
+  const parts: string[] = [];
+  if (current.spec) parts.push(`截图规格 ${current.spec}`);
+  const total = receiptTotal.value;
+  if (total !== null) parts.push(`截图小计 ¥${money(total)}`);
+  return parts.join(' · ');
 });
 
 /** 左栏自动滚到「当前这行匹配的原料」，别让它在屏幕外 */
@@ -2548,6 +2567,41 @@ function emptySummary() {
   text-align: center;
   font-size: 22rpx;
   color: #8a8574;
+}
+
+.picker-context {
+  background: #f7f2e3;
+  border: 1rpx solid #e6dfc9;
+  border-radius: 14rpx;
+  padding: 12rpx 16rpx;
+}
+
+.picker-context-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10rpx;
+}
+
+.picker-context-label {
+  flex: none;
+  font-size: 20rpx;
+  color: #8a8574;
+}
+
+.picker-context-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 25rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+  line-height: 1.4;
+}
+
+.picker-context-meta {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 20rpx;
+  color: #6b6653;
 }
 
 .picker-search-wrap {

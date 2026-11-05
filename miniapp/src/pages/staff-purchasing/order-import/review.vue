@@ -416,7 +416,7 @@
               @tap="pickerIngredientId = ingredient.ingredientId"
             >
               <text class="cascade-name">{{ ingredient.ingredientName }}</text>
-              <text class="cascade-count" :class="{ empty: ingredient.skus.length === 0 }">
+              <text class="cascade-count" :class="{ zero: ingredient.skus.length === 0 }">
                 {{ ingredient.skus.length }}
               </text>
             </view>
@@ -2584,8 +2584,10 @@ function emptySummary() {
   color: #8a8574;
 }
 
-/* 这个渠道下没有商品：数字淡掉，别让人以为漏加载了 */
-.cascade-count.empty {
+/* 这个渠道下没有商品：数字淡掉，别让人以为漏加载了
+   ⚠️ 类名别叫 empty：本页 .empty（第 1581 行）是整页空状态，带 padding-top: 120rpx，
+   撞上会把这一行撑高成 2.5 倍（2026-11-06 修） */
+.cascade-count.zero {
   color: #c8c2b1;
 }
 

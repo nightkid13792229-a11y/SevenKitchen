@@ -236,6 +236,108 @@ describe('matchOrderLines', () => {
     expect(matched.confidence).toBe('HIGH');
   });
 
+  it('沿用上次匹配时商品规格对不上 → 不挂商品，保留原料等员工重选', () => {
+    const withGreens: ListItemCandidate[] = [
+      {
+        purchaseItemId: 'item-greens',
+        ingredientId: 'ing-greens',
+        ingredientName: '小白菜',
+        skus: [
+          { id: 'sku-greens-300', name: '盒马日日鲜小白菜 300g/份', productModel: '300g/份', purchaseChannel: '盒马鲜生', purchaseToBaseRatio: 300, purchaseUnit: '份' },
+        ],
+      },
+    ];
+    const aliases = [
+      {
+        normalizedName: normalizeText('盒马日日鲜 小白菜 约300g'),
+        channelFamily: '盒马',
+        ingredientId: 'ing-greens',
+        procurementSkuId: 'sku-greens-300',
+      },
+    ];
+
+    const [matched] = matchOrderLines(
+      [line('盒马日日鲜 小白菜 约500g', '500g/份')],
+      withGreens,
+      '盒马',
+      aliases,
+    );
+
+    expect(matched.ingredientId).toBe('ing-greens');
+    expect(matched.procurementSkuId).toBeNull();
+    expect(matched.needsNewSku).toBe(true);
+    expect(matched.reason).toContain('规格');
+  });
+
+  it('同名不同规格的商品都在档案里时，自动选规格一致的那个', () => {
+    const withTwoSpecs: ListItemCandidate[] = [
+      {
+        purchaseItemId: 'item-greens',
+        ingredientId: 'ing-greens',
+        ingredientName: '小白菜',
+        skus: [
+          { id: 'sku-greens-300', name: '盒马日日鲜小白菜 300g/份', productModel: '300g/份', purchaseChannel: '盒马鲜生', purchaseToBaseRatio: 300, purchaseUnit: '份' },
+          { id: 'sku-greens-500', name: '盒马日日鲜小白菜 500g/份', productModel: '500g/份', purchaseChannel: '盒马鲜生', purchaseToBaseRatio: 500, purchaseUnit: '份' },
+        ],
+      },
+    ];
+
+    const [matched] = matchOrderLines(
+      [line('盒马日日鲜 小白菜 约500g', '500g/份')],
+      withTwoSpecs,
+      '盒马',
+    );
+
+    expect(matched.procurementSkuId).toBe('sku-greens-500');
+    expect(matched.needsNewSku).toBe(false);
+    expect(matched.confidence).toBe('HIGH');
+  });
+
+  it('只写件数的规格（6 枚 vs 30 枚）对不上 → 也需要新建商品', () => {
+    const withEggs: ListItemCandidate[] = [
+      {
+        purchaseItemId: 'item-egg',
+        ingredientId: 'ing-egg',
+        ingredientName: '鸡蛋',
+        skus: [
+          { id: 'sku-egg-6', name: '鲜鸡蛋 6枚/盒', productModel: '6枚/盒', purchaseChannel: '盒马鲜生', purchaseToBaseRatio: 6, purchaseUnit: '盒' },
+        ],
+      },
+    ];
+
+    const [matched] = matchOrderLines(
+      [line('盒马 鲜鸡蛋 30枚', '30枚/盒')],
+      withEggs,
+      '盒马',
+    );
+
+    expect(matched.ingredientId).toBe('ing-egg');
+    expect(matched.procurementSkuId).toBeNull();
+    expect(matched.needsNewSku).toBe(true);
+  });
+
+  it('截图只写包装件数（1 袋 / 2 袋）而商品按克标规格 → 不误判冲突', () => {
+    const withGreens: ListItemCandidate[] = [
+      {
+        purchaseItemId: 'item-greens',
+        ingredientId: 'ing-greens',
+        ingredientName: '小白菜',
+        skus: [
+          { id: 'sku-greens-300', name: '盒马日日鲜小白菜 300g/份', productModel: '300g/份', purchaseChannel: '盒马鲜生', purchaseToBaseRatio: 300, purchaseUnit: '份' },
+        ],
+      },
+    ];
+
+    const [matched] = matchOrderLines(
+      [line('盒马日日鲜 小白菜', '2袋')],
+      withGreens,
+      '盒马',
+    );
+
+    expect(matched.procurementSkuId).toBe('sku-greens-300');
+    expect(matched.needsNewSku).toBe(false);
+  });
+
   it('模型给出语义映射时，「鲑鱼」能落到清单里的「三文鱼」', () => {
     const withSalmon: ListItemCandidate[] = [
       ...candidates,

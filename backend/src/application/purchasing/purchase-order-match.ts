@@ -93,20 +93,45 @@ export function extractSpecTokens(value: string | null | undefined): SpecToken[]
 
 const round = (value: number): number => Math.round(value * 1000) / 1000;
 
+function countValues(tokens: SpecToken[]): number[] {
+  return tokens
+    .filter((token) => token.dimension === 'count')
+    .map((token) => Number(token.key.replace('#count', '')))
+    .filter((value) => Number.isFinite(value));
+}
+
+/**
+ * 规格是否冲突（2026-11-05 加固）。
+ *
+ * 1. 两边都有重量/体积 → 只比重量体积（包装写法 1盒/1袋 差异太大，不比）。
+ * 2. 两边都只写件数 → 比件数（6 枚 vs 30 枚要拦住）。
+ * 3. 「1 盒」这种只是包装单位，不当件数比较，避免误伤。
+ * 4. 任何一边没读到规格 → 无从比较，不判冲突。
+ */
 function specConflict(
   lineSpec: string | null,
   skuModel: string | null,
 ): boolean {
-  const lineTokens = extractSpecTokens(lineSpec).filter(
+  const lineTokens = extractSpecTokens(lineSpec);
+  const skuTokens = extractSpecTokens(skuModel);
+  const lineWeighted = lineTokens.filter(
     (token) => token.dimension !== 'count',
   );
-  const skuTokens = extractSpecTokens(skuModel).filter(
-    (token) => token.dimension !== 'count',
-  );
-  if (lineTokens.length === 0 || skuTokens.length === 0) return false;
-  return !lineTokens.some((line) =>
-    skuTokens.some((sku) => sku.key === line.key),
-  );
+  const skuWeighted = skuTokens.filter((token) => token.dimension !== 'count');
+
+  if (lineWeighted.length > 0 && skuWeighted.length > 0) {
+    return !lineWeighted.some((line) =>
+      skuWeighted.some((sku) => sku.key === line.key),
+    );
+  }
+
+  // 只有两边都只写件数时，件数才是可比信息。
+  if (lineWeighted.length > 0 || skuWeighted.length > 0) return false;
+
+  const lineCounts = countValues(lineTokens).filter((value) => value > 1);
+  const skuCounts = countValues(skuTokens).filter((value) => value > 1);
+  if (lineCounts.length === 0 || skuCounts.length === 0) return false;
+  return !lineCounts.some((line) => skuCounts.includes(line));
 }
 
 /** 渠道归一：盒马/盒马鲜生、山姆/山姆会员店、沃尔玛 视为同一家 */
@@ -158,10 +183,16 @@ function pickSku(
       const normalizedSku = normalizeText(sku.name);
       const nameHit =
         normalizedSku.length >= 2 && normalizedLine.includes(normalizedSku);
+      // 名称是身份信号，规格是包装信号：先看名字，再看规格是否对得上。
+      // 同名但规格不同的商品同时存在时，必须选规格一致的那个，不能按排序取第一个。
+      const specOk = !specConflict(line.spec, sku.productModel);
       return {
         sku,
         nameHit,
-        score: (nameHit ? 10 : 0) + channelScore(importChannel, sku),
+        score:
+          (nameHit ? 100 : 0) +
+          (specOk ? 10 : 0) +
+          channelScore(importChannel, sku),
       };
     })
     .sort((a, b) => b.score - a.score);
@@ -197,36 +228,43 @@ export function matchOrderLines(
   return lines.map((line, lineIndex) => {
     const normalizedLine = normalizeText(line.rawName);
 
-    // 先看上次手动匹配学到的映射（同渠道或通用），命中就直接沿用。
+    // 先看上次手动匹配学到的映射（同渠道或通用）。
+    // 只有「商品规格与本次截图对得上」才直接沿用；对不上就只沿用原料，
+    // 商品交给下面按规格重新选（2026-11-05：别名不再无条件沿用）。
     const alias = aliases.find(
       (item) =>
         item.normalizedName === normalizedLine &&
         (!item.channelFamily || item.channelFamily === channelFamily),
     );
+    let aliasCandidate: ListItemCandidate | null = null;
     if (alias) {
-      const aliasCandidate = candidates.find(
-        (candidate) => candidate.ingredientId === alias.ingredientId,
+      const candidate = candidates.find(
+        (item) => item.ingredientId === alias.ingredientId,
       );
-      if (aliasCandidate) {
+      if (candidate) {
         const aliasSku = alias.procurementSkuId
-          ? aliasCandidate.skus.find((sku) => sku.id === alias.procurementSkuId)
+          ? candidate.skus.find((sku) => sku.id === alias.procurementSkuId)
           : null;
-        return {
-          ...line,
-          ingredientId: aliasCandidate.ingredientId,
-          ingredientName: aliasCandidate.ingredientName,
-          procurementSkuId: aliasSku?.id ?? null,
-          purchaseItemId: aliasCandidate.purchaseItemId,
-          confidence: 'HIGH' as MatchConfidence,
-          reason: aliasSku ? '沿用上次匹配' : '沿用上次原料（待选商品）',
-          needsNewSku: !aliasSku,
-        };
+        if (aliasSku && !specConflict(line.spec, aliasSku.productModel)) {
+          return {
+            ...line,
+            ingredientId: candidate.ingredientId,
+            ingredientName: candidate.ingredientName,
+            procurementSkuId: aliasSku.id,
+            purchaseItemId: candidate.purchaseItemId,
+            confidence: 'HIGH' as MatchConfidence,
+            reason: '沿用上次匹配',
+            needsNewSku: false,
+          };
+        }
+        aliasCandidate = candidate;
       }
     }
 
     // 模型在“本次清单的原料”里做的语义匹配（比如鲑鱼→三文鱼）；
     // 只认清单内存在的原料，不认就退回字面匹配。
-    const hintedIngredientId = hintByIndex.get(lineIndex);
+    const hintedIngredientId =
+      hintByIndex.get(lineIndex) ?? aliasCandidate?.ingredientId ?? null;
     const hintedCandidate = hintedIngredientId
       ? candidates.find(
           (candidate) => candidate.ingredientId === hintedIngredientId,
@@ -267,15 +305,19 @@ export function matchOrderLines(
 
     const reason = channelMismatch
       ? `该渠道（${importChannel}）还没有对应的采购商品，请手动选择或新建`
-      : hintedCandidate
-        ? 'AI 语义匹配'
+      : conflict
+        ? aliasCandidate
+          ? `上次匹配的商品规格是 ${sku?.productModel ?? '未知'}，与截图不一致，请选择或新建`
+          : `商品规格是 ${sku?.productModel ?? '未知'}，与截图不一致`
         : !sku
-        ? '原料对上了，但这道原料还没有采购商品'
-        : conflict
-        ? `商品规格是 ${sku.productModel ?? '未知'}，与截图不一致`
-        : nameHit
-          ? '命中采购商品'
-          : '按原料匹配';
+          ? '原料对上了，但这道原料还没有采购商品'
+          : aliasCandidate
+            ? '沿用上次的原料，按截图规格重选了商品'
+            : hintedCandidate
+              ? 'AI 语义匹配'
+              : nameHit
+                ? '命中采购商品'
+                : '按原料匹配';
 
     return {
       ...line,

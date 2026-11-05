@@ -86,6 +86,9 @@
               {{ line.qty ?? '-' }}{{ line.unit || '' }} × ¥{{ money(line.unitPrice) }}
               <text v-if="line.editedByUser" class="edited"> · 已改动</text>
             </text>
+            <text v-if="lineSpecNotice(line)" class="line-spec-warn">
+              {{ lineSpecNotice(line) }}
+            </text>
           </view>
           <text class="line-amount">¥{{ money(line.lineTotal) }}</text>
           <text class="state" :class="stateClass(line)">{{ stateText(line) }}</text>
@@ -180,6 +183,12 @@
           <text class="field-value">
             {{ editing.skuModel || editing.spec || '—' }}
             <text class="field-hint">（截图：{{ editing.spec || '未读到' }}）</text>
+          </text>
+        </view>
+        <view v-if="editingSpecWarning" class="spec-warn-box">
+          <text class="spec-warn-text">{{ editingSpecWarning }}</text>
+          <text class="spec-warn-action" @tap="goNewSku">
+            新建「{{ editing.spec }}」的采购商品 ›
           </text>
         </view>
         <view v-if="canSyncSkuName" class="sync-box">
@@ -320,6 +329,7 @@ import {
 } from './import-flow';
 import { checkOrderImportAmount } from '../../../utils/order-import-check';
 import { firstBlockedImport } from '../../../utils/order-import-block';
+import { isSpecMismatch, specWarningText } from '../../../utils/order-import-spec';
 import {
   IMPORT_FEE_TOLERANCE,
   isFeeGapOff,
@@ -496,6 +506,46 @@ const skuOptions = computed(() => {
       ?.skus ?? []
   );
 });
+
+/** 当前编辑行的商品规格（截图规格对不上时用来提示，不拦人） */
+const editingSpecWarning = computed(() => {
+  const current = editing.value;
+  if (!current || current.isPersonal || !current.procurementSkuId) return null;
+  return specWarningText(current.spec, current.skuModel);
+});
+
+function skuModelFor(line: OrderImportLineView): string | null {
+  const ingredient = ingredientOptions.value.find(
+    (item) => item.ingredientId === line.ingredientId,
+  );
+  const sku = ingredient?.skus.find((item) => item.id === line.procurementSkuId);
+  return sku?.productModel || '';
+}
+
+/** 行上直接标出来：不用逐行点开才发现规格不符 */
+function lineSpecNotice(line: OrderImportLineView): string {
+  if (!line.procurementSkuId) return '';
+  const skuModel = skuModelFor(line);
+  if (!isSpecMismatch(line.spec, skuModel)) return '';
+  return `规格不符：商品 ${skuModel} ≠ 截图 ${line.spec}`;
+}
+
+/** 本次要生成的所有行里，有多少行商品规格与截图对不上 */
+const specMismatchCount = computed(
+  () =>
+    imports.value.reduce(
+      (sum, item) =>
+        sum +
+        item.lines.filter(
+          (line) =>
+            line.procurementSkuId &&
+            !line.isPersonal &&
+            isSpecMismatch(line.spec, skuModelFor(line)),
+        ).length,
+      0,
+    ),
+);
+
 const matchedLineCount = computed(() =>
   imports.value.reduce(
     (sum, item) => sum + item.lines.filter((line) => line.state === 'MATCHED').length,
@@ -772,6 +822,7 @@ function chooseIngredient(item: IngredientOption) {
   if (item.ingredientId !== editing.value.ingredientId) {
     editing.value.procurementSkuId = null;
     editing.value.skuName = '';
+    editing.value.skuModel = '';
   }
   editing.value.ingredientId = item.ingredientId;
   editing.value.ingredientName = item.ingredientName;
@@ -782,6 +833,7 @@ function chooseIngredient(item: IngredientOption) {
 function chooseSku(sku: any) {
   editing.value.procurementSkuId = sku.id;
   editing.value.skuName = sku.name;
+  editing.value.skuModel = sku.productModel || '';
   editing.value.isPersonal = false;
   editing.value.syncSkuName = false;
   pickerMode.value = 'none';
@@ -800,6 +852,7 @@ function onPersonalChange(event: any) {
     editing.value.ingredientName = '';
     editing.value.procurementSkuId = null;
     editing.value.skuName = '';
+    editing.value.skuModel = '';
   }
 }
 
@@ -809,6 +862,7 @@ function markPersonal() {
   editing.value.ingredientName = '';
   editing.value.procurementSkuId = null;
   editing.value.skuName = '';
+  editing.value.skuModel = '';
   pickerMode.value = 'none';
 }
 
@@ -839,6 +893,22 @@ async function saveEdit() {
         title: '确认修改商品名？',
         content: `「${editing.value.skuName}」将改名为「${editing.value.rawName.trim()}」，并写入改名记录。`,
         confirmText: '确认改名',
+        confirmColor: '#b4453a',
+        success: (res) => resolve(Boolean(res.confirm)),
+        fail: () => resolve(false),
+      });
+    });
+    if (!confirmed) return;
+  }
+
+  // 规格对不上不硬拦，但必须让员工确认一次：
+  // 生成后克数是按商品规格算的，差 300g/500g 会直接抬高折合单价。
+  if (editingSpecWarning.value) {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '规格和截图不一致',
+        content: `${editingSpecWarning.value}仍要这样保存吗？`,
+        confirmText: '仍然保存',
         confirmColor: '#b4453a',
         success: (res) => resolve(Boolean(res.confirm)),
         fail: () => resolve(false),
@@ -941,6 +1011,22 @@ async function submit() {
   if (!canConfirm.value || submitting.value) return;
   const ids = imports.value.filter((item) => item.status === 'DRAFT').map((item) => item.id);
   if (ids.length === 0) return;
+
+  // 生成前最后确认一次：有行的商品规格和截图对不上，
+  // 生成后克数/单价会按商品规格算，不能让员工在不知情的情况下过。
+  if (specMismatchCount.value > 0) {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '有商品规格和截图不一致',
+        content: `共 ${specMismatchCount.value} 行：生成后克数和单价会按采购商品的规格算，可能和这单实际付的钱对不上。建议先回详情页新建对应规格的商品。仍要生成吗？`,
+        confirmText: '仍然生成',
+        confirmColor: '#b4453a',
+        success: (res) => resolve(Boolean(res.confirm)),
+        fail: () => resolve(false),
+      });
+    });
+    if (!confirmed) return;
+  }
 
   submitting.value = true;
   try {
@@ -1251,6 +1337,35 @@ function emptySummary() {
 
 .edited {
   color: #a8742a;
+}
+
+.line-spec-warn {
+  font-size: 19rpx;
+  color: #b4453a;
+  line-height: 1.4;
+}
+
+.spec-warn-box {
+  margin: 10rpx 0 0;
+  padding: 12rpx 14rpx;
+  background: #fdf0ee;
+  border: 1rpx solid #f0cdc7;
+  border-radius: 14rpx;
+}
+
+.spec-warn-text {
+  display: block;
+  font-size: 20rpx;
+  color: #8f3128;
+  line-height: 1.5;
+}
+
+.spec-warn-action {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 20rpx;
+  color: #b4453a;
+  font-weight: 600;
 }
 
 .line-amount {

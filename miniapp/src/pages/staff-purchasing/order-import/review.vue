@@ -1954,9 +1954,11 @@ function emptySummary() {
   color: #b4453a;
 }
 
+/* 「选商品」会卡住整笔生成、必须动手，和「待确认」（浅底、看一眼就行）分开：
+   同一个浅底黄太难分辨，这里改成实心色块（2026-11-06 老板反馈） */
 .state.needs-sku {
-  background: #fbf1dd;
-  color: #a8742a;
+  background: #8a5a1e;
+  color: #fdf6e8;
 }
 
 .chev {

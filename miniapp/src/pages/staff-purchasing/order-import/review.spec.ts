@@ -82,6 +82,25 @@ describe('order import edit sheet（2026-11-05 改版）', () => {
     expect(source).toContain("return lineTrusted(line) ? '已匹配' : '待确认'");
     expect(source).toContain('matched-review');
   });
+
+  // 「待确认」能直接生成，「选商品」会卡住整笔——两个标签长得一样会被当成同一件事
+  // （2026-11-06 老板反馈：分不清哪行要动手）。这里锁住配色必须有区别。
+  it('「选商品」和「待确认」不是同一个颜色', () => {
+    const cssBlock = (selector: string) => {
+      const start = source.indexOf(selector);
+      expect(start).toBeGreaterThan(-1);
+      return source.slice(start, source.indexOf('}', start));
+    };
+    const review = cssBlock('.state.matched-review');
+    const needsSku = cssBlock('.state.needs-sku');
+    const background = (css: string) =>
+      /background:\s*([^;]+);/.exec(css)?.[1].trim() ?? '';
+
+    // 待确认是浅底黄，选商品是实心色块：底色和字色都不能一样
+    expect(background(needsSku)).not.toBe('');
+    expect(background(needsSku)).not.toBe(background(review));
+    expect(needsSku).not.toBe(review);
+  });
 });
 
 describe('order import edit sheet · 真机反馈修复（2026-11-05 晚）', () => {

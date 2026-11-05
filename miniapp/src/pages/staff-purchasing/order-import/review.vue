@@ -52,11 +52,11 @@
       <view v-if="activeImport" class="summary">
         <view class="summary-cell">
           <text class="summary-k">凭证金额</text>
-          <text class="summary-v">{{ money(activeImport.paid ?? activeImport.subtotal) }}</text>
+          <text class="summary-v" :class="{ warn: activeImport.paid === null }">{{ activeImport.paid === null ? '未读到' : money(activeImport.paid) }}</text>
         </view>
         <view class="summary-cell">
-          <text class="summary-k">采购金额</text>
-          <text class="summary-v">{{ money(activeSummary.matchedAmount) }}</text>
+          <text class="summary-k">核对金额</text>
+          <text class="summary-v">{{ money(reconcileAmount) }}</text>
         </view>
         <view class="summary-cell">
           <text class="summary-k">个人采购</text>
@@ -395,6 +395,13 @@ const feeSummary = computed(() => {
     paid: item.paid ?? null,
   });
 });
+
+/**
+ * 顶部「核对金额」：商品行合计 + 运费 + 包装费（费用卡的合计），
+ * 只用来和「凭证金额」对账。它包含个人采购——个人采购单独提示不报销。
+ * 采购记录金额不含运费/包装，在底部单独展示，两个口径不要混。
+ */
+const reconcileAmount = computed(() => feeSummary.value?.expected ?? 0);
 
 /** 运费/包装费被员工改过：和模型当初读到的不一样 */
 const feesEdited = computed(() => {

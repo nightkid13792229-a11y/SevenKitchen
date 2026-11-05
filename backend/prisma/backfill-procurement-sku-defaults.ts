@@ -98,7 +98,6 @@ const mapIngredient = (ingredient: {
   purchaseUnit: string;
   purchaseToBaseRatio: number;
   currentPricePerPurchaseUnit: unknown;
-  effectivePricePerPurchaseUnit: unknown;
   safetyStock: number | null;
   reorderPoint: number | null;
   targetStock: number | null;
@@ -115,9 +114,6 @@ const mapIngredient = (ingredient: {
   purchaseToBaseRatio: ingredient.purchaseToBaseRatio,
   currentPricePerPurchaseUnit:
     toNullableNumber(ingredient.currentPricePerPurchaseUnit) ?? 0,
-  effectivePricePerPurchaseUnit: toNullableNumber(
-    ingredient.effectivePricePerPurchaseUnit,
-  ),
   safetyStock: ingredient.safetyStock,
   reorderPoint: ingredient.reorderPoint,
   targetStock: ingredient.targetStock,
@@ -227,7 +223,6 @@ async function main() {
       purchaseUnit: true,
       purchaseToBaseRatio: true,
       currentPricePerPurchaseUnit: true,
-      effectivePricePerPurchaseUnit: true,
       safetyStock: true,
       reorderPoint: true,
       targetStock: true,

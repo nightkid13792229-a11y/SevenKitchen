@@ -80,7 +80,7 @@ describe('IngredientService domain refactor', () => {
     expect(result.purchaseUnit).toBe('粒');
     expect(result.purchaseToBaseRatio).toBe(1);
     expect(result.currentPricePerPurchaseUnit).toBe(0);
-    expect(result.effectivePricePerPurchaseUnit).toBe(0);
+    expect(result.currentPricePerPurchaseUnit).toBe(0);
     expect(ingredientRepository.save).toHaveBeenCalledWith(
       expect.anything(),
       ['tag-1'],
@@ -104,7 +104,7 @@ describe('IngredientService domain refactor', () => {
       purchaseUnit: 'kg',
       purchaseToBaseRatio: 1000,
       currentPricePerPurchaseUnit: 10,
-      effectivePricePerPurchaseUnit: 10,
+      currentPricePerPurchaseUnit: 10,
       weightG: null,
       maxCapacityG: null,
       safetyStock: null,

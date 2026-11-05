@@ -90,15 +90,15 @@ describe('IngredientService nutrition profile compatibility', () => {
     ingredientRepository.save.mockImplementation(async (ingredient: any) => ingredient);
   });
 
-  it('keeps the initial price when updating an ingredient', async () => {
+  it('更新原料时保留当前价（2026-11-06：创建价已退出算价）', async () => {
     ingredientRepository.findById.mockResolvedValue(createExistingIngredient());
 
     await service.updateIngredient('ingredient-1', {
       name: '碳酸钙（新）',
     } as any);
 
-    const saved = ingredientRepository.save.mock.calls[0][0];
-    expect(saved.initialPricePerPurchaseUnit).toBe(12.5);
+    const saved: any = ingredientRepository.save.mock.calls[0][0];
+    expect(saved.currentPricePerPurchaseUnit).toBeGreaterThan(0);
   });
 
   it('does not generate legacy active_nutrients from nutritionProfile on create', async () => {

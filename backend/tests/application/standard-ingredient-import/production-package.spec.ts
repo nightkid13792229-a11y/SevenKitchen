@@ -195,8 +195,7 @@ describe('buildProductionMigrationPackage', () => {
             id: 'ingredient-1',
             name: 'Duck egg',
             type: 'FOOD',
-            currentPricePerPurchaseUnit: decimalLike('0'),
-            effectivePricePerPurchaseUnit: decimalLike('12.34'),
+            currentPricePerPurchaseUnit: decimalLike('12.34'),
           },
         ],
       }),
@@ -206,7 +205,8 @@ describe('buildProductionMigrationPackage', () => {
       writePackageFile: jest.fn(),
     });
 
-    expect(result.files.upSql).toContain("VALUES (0, 12.34, 'ingredient-1'");
+    // 2026-11-06：只剩一个价格列，SQL 里不再带「生效价」那个 0
+    expect(result.files.upSql).toContain("VALUES (12.34, 'ingredient-1'");
     expect(result.files.upSql).not.toContain('\'"0"\'');
     expect(result.files.upSql).not.toContain('\'"12.34"\'');
   });

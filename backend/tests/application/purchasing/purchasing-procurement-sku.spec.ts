@@ -30,7 +30,7 @@ describe('PurchasingService stock replenishment procurement sku flow', () => {
     purchaseUnit: '袋',
     purchaseToBaseRatio: 1,
     currentPricePerPurchaseUnit: 40,
-    effectivePricePerPurchaseUnit: null,
+    currentPricePerPurchaseUnit: null,
     purchaseChannel: '旧渠道',
     productModel: '旧规格',
     safetyStock: 5,

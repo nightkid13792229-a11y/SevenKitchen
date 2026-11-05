@@ -504,7 +504,7 @@ describe('OrdersController (e2e)', () => {
       'kg',
       1000, // purchaseToBaseRatio
       50.0, // currentPricePerPurchaseUnit (50 CNY per kg)
-      50.0, // effectivePricePerPurchaseUnit
+      50.0, // currentPricePerPurchaseUnit
       null, // weightG
       null, // maxCapacityG
       null, // safetyStock

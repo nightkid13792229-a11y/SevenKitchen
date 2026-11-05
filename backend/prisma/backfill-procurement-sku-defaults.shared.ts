@@ -32,7 +32,6 @@ export interface LegacyIngredientProcurementSnapshot {
   purchaseUnit: string;
   purchaseToBaseRatio: number;
   currentPricePerPurchaseUnit: number;
-  effectivePricePerPurchaseUnit?: NullableNumber;
   safetyStock?: NullableNumber;
   reorderPoint?: NullableNumber;
   targetStock?: NullableNumber;
@@ -140,7 +139,6 @@ export const hasLegacyProcurementFootprint = (
       normalizeText(ingredient.productModel) ||
       normalizeText(ingredient.purchaseChannel) ||
       normalizeNumber(ingredient.currentPricePerPurchaseUnit) ||
-      normalizeNumber(ingredient.effectivePricePerPurchaseUnit) ||
       normalizeNumber(ingredient.safetyStock, { allowZero: true }) !== null ||
       normalizeNumber(ingredient.reorderPoint, { allowZero: true }) !== null ||
       normalizeNumber(ingredient.targetStock, { allowZero: true }) !== null ||
@@ -157,9 +155,8 @@ const buildLegacyProcurementPayload = (
   const currentPurchasePrice = normalizeNumber(
     ingredient.currentPricePerPurchaseUnit,
   );
-  const referencePurchasePrice =
-    normalizeNumber(ingredient.effectivePricePerPurchaseUnit) ??
-    currentPurchasePrice;
+  // 2026-11-06：生效价已并入当前价
+  const referencePurchasePrice = currentPurchasePrice;
   const purchaseUnit = normalizeText(ingredient.purchaseUnit);
   const purchaseToBaseRatio =
     typeof ingredient.purchaseToBaseRatio === 'number' &&

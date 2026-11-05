@@ -650,7 +650,6 @@ export async function runSupplementPackagingSingleLayerBackfill(options?: {
       purchaseUnit: true,
       purchaseToBaseRatio: true,
       currentPricePerPurchaseUnit: true,
-      effectivePricePerPurchaseUnit: true,
       procurementStrategy: true,
       weightG: true,
       maxCapacityG: true,
@@ -711,9 +710,6 @@ export async function runSupplementPackagingSingleLayerBackfill(options?: {
     ...ingredient,
     currentPricePerPurchaseUnit:
       normalizeNumber(ingredient.currentPricePerPurchaseUnit) || 0,
-    effectivePricePerPurchaseUnit: normalizeNumber(
-      ingredient.effectivePricePerPurchaseUnit,
-    ),
     tagIds: ingredient.tags.map((tag) => tag.tagId),
     procurementSkus: ingredient.procurementSkus.map((sku) => ({
       ...sku,
@@ -756,7 +752,6 @@ export async function runSupplementPackagingSingleLayerBackfill(options?: {
           purchaseUnit: update.purchaseUnit,
           purchaseToBaseRatio: update.purchaseToBaseRatio,
           currentPricePerPurchaseUnit: update.currentPricePerPurchaseUnit,
-          effectivePricePerPurchaseUnit: update.effectivePricePerPurchaseUnit,
           notes: update.notes,
           properties: update.properties as any,
         },
@@ -781,7 +776,6 @@ export async function runSupplementPackagingSingleLayerBackfill(options?: {
           purchaseUnit: create.purchaseUnit,
           purchaseToBaseRatio: create.purchaseToBaseRatio,
           currentPricePerPurchaseUnit: create.currentPricePerPurchaseUnit,
-          effectivePricePerPurchaseUnit: create.effectivePricePerPurchaseUnit,
           weightG: create.weightG,
           maxCapacityG: create.maxCapacityG,
           safetyStock: create.safetyStock,

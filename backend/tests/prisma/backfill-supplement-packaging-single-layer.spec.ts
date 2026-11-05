@@ -17,7 +17,7 @@ describe('supplement and packaging single-layer backfill planning', () => {
         purchaseUnit: '瓶',
         purchaseToBaseRatio: 100,
         currentPricePerPurchaseUnit: 82,
-        effectivePricePerPurchaseUnit: 82,
+        currentPricePerPurchaseUnit: 82,
         properties: {
           category_type: 'MINERAL',
           active_nutrients: {
@@ -101,7 +101,7 @@ describe('supplement and packaging single-layer backfill planning', () => {
         purchaseUnit: '瓶',
         purchaseToBaseRatio: 360,
         currentPricePerPurchaseUnit: 85,
-        effectivePricePerPurchaseUnit: 85,
+        currentPricePerPurchaseUnit: 85,
         diyEnabled: false,
         procurementEnabled: false,
         properties: {
@@ -156,7 +156,7 @@ describe('supplement and packaging single-layer backfill planning', () => {
         purchaseUnit: '瓶',
         purchaseToBaseRatio: 100,
         currentPricePerPurchaseUnit: 90,
-        effectivePricePerPurchaseUnit: 90,
+        currentPricePerPurchaseUnit: 90,
         diyEnabled: false,
         procurementEnabled: false,
         properties: {},

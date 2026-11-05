@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   computePurchaseToBaseRatio,
+  pickStillMissingFields,
   validateProcurementSkuForm,
 } from './procurement-sku-form';
 
@@ -94,5 +95,32 @@ describe('validateProcurementSkuForm', () => {
     );
 
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('pickStillMissingFields', () => {
+  it('AI 没认出来、但用户已经补上的字段，不再算"还缺"', () => {
+    const stillMissing = pickStillMissingFields(
+      ['name', 'packCount', 'netContentPerPack'],
+      [{ field: 'packCount', message: '请填一箱/一袋里几件' }],
+    );
+
+    expect(stillMissing).toEqual(['packCount']);
+  });
+
+  it('一个都没补上时，原样保留', () => {
+    const stillMissing = pickStillMissingFields(
+      ['name', 'packCount'],
+      [
+        { field: 'name', message: '请填商品名称' },
+        { field: 'packCount', message: '请填一箱/一袋里几件' },
+      ],
+    );
+
+    expect(stillMissing).toEqual(['name', 'packCount']);
+  });
+
+  it('全部补上后为空，提示条和红框一起消失', () => {
+    expect(pickStillMissingFields(['name', 'packCount'], [])).toEqual([]);
   });
 });

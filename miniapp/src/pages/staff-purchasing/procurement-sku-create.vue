@@ -94,9 +94,9 @@
 
       <view class="divider"><text>或手动填写</text></view>
 
-      <view v-if="draftMissing.length > 0" class="draft-notice">
+      <view v-if="stillMissing.length > 0" class="draft-notice">
         <text class="draft-notice-text">
-          已按截图填好，其中 {{ draftMissing.length }} 项没认出来（红色那几格），补完就能存
+          已按截图填好，其中 {{ stillMissing.length }} 项没认出来（红色那几格），补完就能存
         </text>
         <text v-if="hasScreenshot" class="draft-link" @tap="previewScreenshot">查看截图</text>
       </view>
@@ -193,7 +193,7 @@
             placeholder="如 24"
             placeholder-class="ph"
           />
-          <view v-if="draftMissing.includes('packCount')" class="error-text">
+          <view v-if="hasError('packCount')" class="error-text">
             截图里没看清一箱几件，请看一下包装补上（这里填错，库存会差几十倍）
           </view>
         </view>
@@ -265,12 +265,14 @@ import {
 } from './api/purchasing';
 import {
   computePurchaseToBaseRatio,
+  pickStillMissingFields,
   validateProcurementSkuForm,
 } from './procurement-sku-form';
 import { applyDraftToForm } from './procurement-sku-draft-apply';
 import { decodeRouteParam } from './route-param';
 import { buildChannelChoices } from './procurement-sku-channel';
 import { buildShotView, type ShotState } from './procurement-sku-shot';
+import { MULTIPACK_UNITS, shouldOpenMultipack } from './procurement-sku-multipack';
 
 const SAMPLE_IMAGE_URL =
   'https://img.sevenkitchen.cloud/app-assets/procurement-sku-sample-v2.jpg';
@@ -289,7 +291,6 @@ const BASE_UNIT_TEXT: Record<string, string> = {
  * 所以这里只给包装单位，真正的白名单仍以服务端返回的为准（做交集）。
  */
 const CLERK_UNIT_PRIORITY = ['袋', '箱', '包', '瓶', '盒', '桶', '提', '件', '份', '卷'];
-const MULTIPACK_UNITS = ['箱', '桶', '提', '件'];
 
 const ingredientId = ref('');
 const ingredientName = ref('');
@@ -428,12 +429,21 @@ const errors = computed(() => {
   return result.ok ? [] : result.errors;
 });
 
+const stillMissing = computed(() =>
+  pickStillMissingFields(draftMissing.value, errors.value),
+);
+
 const canSubmit = computed(() => errors.value.length === 0);
 
+/**
+ * 红框只标"现在仍然不合格"的格子：
+ * AI 没认出来、但用户已经补好的，不再标红（2026-11-05）。
+ */
 const hasError = (field: string) => {
-  if (draftMissing.value.includes(field)) return true;
-  if (!submitted.value) return false;
-  return errors.value.some((error) => error.field === field);
+  if (submitted.value) {
+    return errors.value.some((error) => error.field === field);
+  }
+  return stillMissing.value.includes(field);
 };
 
 const isLowConfidence = (field: string) => confidence.value[field] === 'low';
@@ -643,8 +653,15 @@ const applyDraft = (draft: any, screenshotUrl: string) => {
   }
   if (typeof result.patch.packCountText === 'string') {
     packCountText.value = result.patch.packCountText;
-    // 箱规有值且大于 1 → 多件装，把开关打开，让员工看见自己在填什么
-    if (result.patch.packCountText && Number(result.patch.packCountText) > 1) {
+    // 箱/桶/提/件：读不出件数时也必须把开关打开，让"一箱几件"露出来并标红；
+    // 否则页面会按 1 件算，库存和成本静默差 N 倍（2026-11-05 老板反馈）。
+    if (
+      shouldOpenMultipack({
+        purchaseUnit: form.value.purchaseUnit,
+        packCountText: result.patch.packCountText,
+        packCountMissing: result.missing.includes('packCount'),
+      })
+    ) {
       multipack.value = true;
     }
     filled.packCount = result.patch.packCountText.length > 0;

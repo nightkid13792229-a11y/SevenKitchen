@@ -90,3 +90,17 @@ export function validateProcurementSkuForm(
 
   return errors.length > 0 ? { ok: false, errors } : { ok: true };
 }
+
+/**
+ * 从"AI 没认出来的字段"里挑出"现在仍然不合格"的。
+ *
+ * 用途：红框和"还有 N 项没认出来"的提示要跟着用户输入实时消失；
+ * AI 没认出来、但用户已经补好的，不该继续标红（2026-11-05）。
+ */
+export function pickStillMissingFields(
+  draftMissing: string[],
+  errors: Array<{ field: string }>,
+): string[] {
+  const invalid = new Set<string>(errors.map((error) => error.field));
+  return draftMissing.filter((field) => invalid.has(field));
+}

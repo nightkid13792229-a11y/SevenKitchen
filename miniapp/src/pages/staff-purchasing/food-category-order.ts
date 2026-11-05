@@ -107,3 +107,51 @@ export function sortFoodItemsByCfctOrder<T>(items: readonly T[]): T[] {
     .sort((left, right) => left.rank - right.rank || left.index - right.index)
     .map((entry) => entry.item);
 }
+
+/** 采购明细的原料类型；顺序即分组顺序。 */
+export type PurchaseItemType = 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
+
+export const PURCHASE_ITEM_TYPE_ORDER: readonly PurchaseItemType[] = [
+  'FOOD',
+  'SUPPLEMENT',
+  'PACKAGING',
+];
+
+/**
+ * 读一条采购明细的类型。
+ * 老数据可能没写类型或写了不认识的值 —— 一律当食材，不能让这条原料凭空消失。
+ */
+export function resolvePurchaseItemType(item: any): PurchaseItemType {
+  const type = typeof item?.type === 'string' ? item.type.trim().toUpperCase() : '';
+  return type === 'SUPPLEMENT' || type === 'PACKAGING' ? type : 'FOOD';
+}
+
+/**
+ * 采购清单原料的展示分组：食材 → 补剂 → 包装材料。
+ * 只有食材有 CFCT 分类，按 15 类顺序排；补剂、包材保持接口返回的先后。
+ */
+export function groupPurchaseItemsForDisplay<T>(
+  items: readonly T[],
+): Array<{ type: PurchaseItemType; items: T[] }> {
+  const buckets: Record<PurchaseItemType, T[]> = {
+    FOOD: [],
+    SUPPLEMENT: [],
+    PACKAGING: [],
+  };
+
+  for (const item of items) {
+    buckets[resolvePurchaseItemType(item)].push(item);
+  }
+
+  return PURCHASE_ITEM_TYPE_ORDER.map((type) => ({
+    type,
+    items:
+      type === 'FOOD' ? sortFoodItemsByCfctOrder(buckets[type]) : buckets[type],
+  })).filter((group) => group.items.length > 0);
+}
+
+/** 把分组压平成一个列表：食材在前，其次补剂，最后包材。 */
+export function sortPurchaseItemsForDisplay<T>(items: readonly T[]): T[] {
+  return groupPurchaseItemsForDisplay(items).flatMap((group) => group.items);
+}
+

@@ -333,6 +333,7 @@ import {
   importOrderShots,
 } from './import-flow';
 import { orderImportIncompleteNotice } from '../../../utils/order-import-check';
+import { sortPurchaseItemsForDisplay } from '../food-category-order';
 import { firstBlockedImport } from '../../../utils/order-import-block';
 import { isSpecMismatch, specWarningText } from '../../../utils/order-import-spec';
 import {
@@ -486,7 +487,9 @@ const feeEditPreview = computed(() => {
   return `合计 ¥${money(expected)}，和实付 ¥${money(item.paid)} 差 ¥${Math.abs(gap).toFixed(2)}`;
 });
 const ingredientOptions = computed<IngredientOption[]>(() => {
-  const items = list.value?.items || [];
+  // 「匹配原料」抽屉列的是本次清单里的原料，顺序跟采购详情页一致：
+  // 食材（按 CFCT 分类）→ 补剂 → 包装材料（2026-11-05 定）
+  const items = sortPurchaseItemsForDisplay(list.value?.items || []);
   const seen = new Set<string>();
   const result: IngredientOption[] = [];
   for (const item of items) {

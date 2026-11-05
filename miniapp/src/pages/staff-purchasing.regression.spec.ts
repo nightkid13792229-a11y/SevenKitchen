@@ -381,10 +381,9 @@ describe('staff purchasing purchase record form', () => {
   });
 
   it('orders food items by the CFCT category order agreed on 2026-11-05', () => {
-    // 食材组按 CFCT 15 类顺序排；补剂/包材没有这套分类，保持原顺序
+    // 食材组按 CFCT 15 类顺序排；补剂/包材没有这套分类，保持原顺序。
+    // 分组逻辑与识别结果页共用同一份实现（2026-11-05 追加）
     expect(detailSource).toContain("from './food-category-order'");
-    expect(detailSource).toContain(
-      "type === 'FOOD' ? sortFoodItemsByCfctOrder(groupItems) : groupItems",
-    );
+    expect(detailSource).toContain('groupPurchaseItemsForDisplay(items.value)');
   });
 });

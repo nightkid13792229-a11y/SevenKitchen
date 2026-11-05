@@ -29,4 +29,12 @@ describe('order import review summary', () => {
     expect(summaryBlock).toContain('未读到');
     expect(summaryBlock).not.toContain('activeImport.paid ?? activeImport.subtotal');
   });
+
+  it('lists 匹配原料 in the same CFCT order as the purchase detail page', () => {
+    // 抽屉里是「本次清单里的原料」，顺序跟详情页一致（2026-11-05 老板定）
+    expect(source).toContain("from '../food-category-order'");
+    expect(source).toContain(
+      'const items = sortPurchaseItemsForDisplay(list.value?.items || []);',
+    );
+  });
 });

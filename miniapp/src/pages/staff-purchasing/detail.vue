@@ -443,7 +443,7 @@ import StaffQuantityText from '../../components/staff/StaffQuantityText.vue';
 import StaffBottomBar from '../../components/staff/StaffBottomBar.vue';
 import { formatStaffQuantity } from '../../utils/staff-quantity';
 import { canAddProcurementSku } from './procurement-sku-entry';
-import { sortFoodItemsByCfctOrder } from './food-category-order';
+import { groupPurchaseItemsForDisplay } from './food-category-order';
 import {
   chooseOrderShots,
   importOrderShots,
@@ -569,38 +569,9 @@ const buildItemMetaLine = (item: any) => {
   return parts.join(' · ');
 };
 
-const groupedItems = computed(() => {
-  if (items.value.length === 0) {
-    return [];
-  }
-
-  // 定义类型顺序
-  const typeOrder = ['FOOD', 'SUPPLEMENT', 'PACKAGING'];
-
-  // 按类型分组
-  const groups = new Map<string, any[]>();
-  items.value.forEach((item) => {
-    const type = item.type || 'FOOD';
-    if (!groups.has(type)) {
-      groups.set(type, []);
-    }
-    groups.get(type)!.push(item);
-  });
-
-  // 按定义的顺序返回分组
-  return typeOrder
-    .filter((type) => groups.has(type) && (groups.get(type) || []).length > 0)
-    .map((type) => {
-      const groupItems = groups.get(type)!;
-      return {
-        type,
-        // 食材组按 CFCT 标准分类顺序排（2026-11-05 定）；
-        // 补剂、包装材料没有这套分类，保持接口返回的先后。
-        items:
-          type === 'FOOD' ? sortFoodItemsByCfctOrder(groupItems) : groupItems,
-      };
-    });
-});
+// 原料分组：食材 → 补剂 → 包装材料；食材组内部按 CFCT 标准分类排（2026-11-05 定）。
+// 识别结果页的「匹配原料」抽屉用同一个函数，保证两处顺序一致。
+const groupedItems = computed(() => groupPurchaseItemsForDisplay(items.value));
 
 // 原料状态筛选（全部 / 待采购 / 已录入 / 无需采购 / 库存足够）
 type ItemFilter = 'ALL' | ItemState;

@@ -1,13 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   CFCT_DISPLAY_ORDER,
+  groupPurchaseItemsForDisplay,
   resolveCfctClass,
   sortFoodItemsByCfctOrder,
+  sortPurchaseItemsForDisplay,
 } from './food-category-order';
 
 const foodItem = (name: string, cfctClass?: string | null) => ({
   ingredientName: name,
   ingredient: cfctClass === undefined ? {} : { properties: { cfct_class: cfctClass } },
+});
+
+const purchaseItem = (name: string, type?: string, cfctClass?: string) => ({
+  ingredientName: name,
+  type,
+  ingredient: cfctClass ? { properties: { cfct_class: cfctClass } } : {},
 });
 
 describe('CFCT 展示顺序', () => {
@@ -124,5 +132,68 @@ describe('CFCT 展示顺序', () => {
     const item = { ingredient: { properties: '{"cfct_class":"水产类"}' } };
 
     expect(resolveCfctClass(item)).toBe('水产类');
+  });
+});
+
+describe('采购清单原料的整份排序（详情页 + 识别结果页共用）', () => {
+  it('食材在前、补剂其次、包装材料最后', () => {
+    const items = [
+      purchaseItem('分装袋', 'PACKAGING'),
+      purchaseItem('鱼油', 'SUPPLEMENT'),
+      purchaseItem('牛肝', 'FOOD', '畜肉类及制品'),
+    ];
+
+    expect(sortPurchaseItemsForDisplay(items).map((item) => item.ingredientName)).toEqual([
+      '牛肝',
+      '鱼油',
+      '分装袋',
+    ]);
+  });
+
+  it('食材内部按 CFCT 顺序，补剂之间保持原有先后', () => {
+    const items = [
+      purchaseItem('鱼油A', 'SUPPLEMENT'),
+      purchaseItem('小麦胚芽油', 'FOOD', '油脂类'),
+      purchaseItem('维生素C', 'SUPPLEMENT'),
+      purchaseItem('牛肝', 'FOOD', '畜肉类及制品'),
+    ];
+
+    expect(sortPurchaseItemsForDisplay(items).map((item) => item.ingredientName)).toEqual([
+      '牛肝',
+      '小麦胚芽油',
+      '鱼油A',
+      '维生素C',
+    ]);
+  });
+
+  it('类型缺失或写了未知值时归到食材，不会从列表里消失', () => {
+    const items = [
+      purchaseItem('分装袋', 'PACKAGING'),
+      purchaseItem('自制骨粉', 'OTHER', '其他'),
+      purchaseItem('牛肝', 'FOOD', '畜肉类及制品'),
+    ];
+
+    const groups = groupPurchaseItemsForDisplay(items);
+
+    expect(groups.map((group) => group.type)).toEqual(['FOOD', 'PACKAGING']);
+    expect(groups[0].items.map((item) => item.ingredientName)).toEqual(['牛肝', '自制骨粉']);
+    expect(groups[1].items.map((item) => item.ingredientName)).toEqual(['分装袋']);
+  });
+
+  it('空清单返回空分组', () => {
+    expect(groupPurchaseItemsForDisplay([])).toEqual([]);
+    expect(sortPurchaseItemsForDisplay([])).toEqual([]);
+  });
+
+  it('不修改传入的数组', () => {
+    const items = [
+      purchaseItem('分装袋', 'PACKAGING'),
+      purchaseItem('牛肝', 'FOOD', '畜肉类及制品'),
+    ];
+    const snapshot = [...items];
+
+    sortPurchaseItemsForDisplay(items);
+
+    expect(items).toEqual(snapshot);
   });
 });

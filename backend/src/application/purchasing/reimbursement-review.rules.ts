@@ -23,7 +23,8 @@ export interface ReviewRecordInput {
 }
 
 export interface ReviewImportInput {
-  channel: string;
+  /** 渠道；null = 识别时没认出来、员工还没确认（这类单子按现有流程也生成不了） */
+  channel: string | null;
   orderNo: string | null;
   incomplete: boolean;
   /** 商品小计 − 各行合计；没读到商品小计时为 null。差额由员工确认后生成的，这里只做提示 */

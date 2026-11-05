@@ -7,6 +7,7 @@ import {
 import { ProcurementSkuDraftQuotaService } from '../../../src/application/purchasing/procurement-sku-draft-quota.service';
 import { AgentProviderConfigService } from '../../../src/application/nutrition-governance/agent-provider-config.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
+import { PlatformOptionsService } from '../../../src/application/platform-options/platform-options.service';
 
 describe('ProcurementSkuDraftService', () => {
   let service: ProcurementSkuDraftService;
@@ -15,6 +16,13 @@ describe('ProcurementSkuDraftService', () => {
   const quota = { consume: jest.fn() };
   const agentConfig = {
     getEnabledDeepSeekRuntimeConfig: jest.fn(),
+  };
+  // 渠道字典：商品截图识别也只从这份清单里选
+  const platformOptions = {
+    listSet: jest.fn().mockResolvedValue([
+      { code: '沃尔玛', label: '沃尔玛', extra: null },
+      { code: '盒马鲜生', label: '盒马鲜生', extra: { aliases: ['盒马'] } },
+    ]),
   };
 
   const draft = (overrides: Record<string, unknown> = {}) =>
@@ -32,6 +40,7 @@ describe('ProcurementSkuDraftService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: ProcurementSkuDraftQuotaService, useValue: quota },
         { provide: AgentProviderConfigService, useValue: agentConfig },
+        { provide: PlatformOptionsService, useValue: platformOptions },
         { provide: PROCUREMENT_SKU_DRAFT_MODEL, useValue: model },
       ],
     }).compile();

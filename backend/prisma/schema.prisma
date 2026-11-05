@@ -5617,7 +5617,8 @@ model PurchaseOrderImport {
   id               String                    @id @default(uuid()) @db.VarChar(36)
   purchaseListId   String                    @map("purchase_list_id") @db.VarChar(36)
   uploadedById     String                    @map("uploaded_by_id") @db.VarChar(36)
-  channel          String                    @db.VarChar(30)
+  /// 采购渠道（字典 purchase_channel 的 code）。null = AI 没认出来、还没确认
+  channel          String?                   @db.VarChar(30)
   orderNo          String?                   @map("order_no") @db.VarChar(40)
   orderTime        DateTime?                 @map("order_time")
   subtotal         Decimal?                  @db.Decimal(10, 2)

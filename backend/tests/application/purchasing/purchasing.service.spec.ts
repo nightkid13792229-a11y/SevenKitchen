@@ -7,6 +7,7 @@ import {
   ORDER_REPOSITORY,
   ORDER_STATUS_HISTORY_REPOSITORY,
 } from 'src/application/order/order.service';
+import { PlatformOptionsService } from '../../../src/application/platform-options/platform-options.service';
 import { PurchasingService } from 'src/application/purchasing/purchasing.service';
 import {
   PURCHASE_LIST_REPOSITORY,
@@ -47,6 +48,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -129,6 +131,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -220,6 +223,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -400,6 +404,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -507,6 +512,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -596,6 +602,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -698,6 +705,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -813,6 +821,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -922,6 +931,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -1029,6 +1039,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -1113,6 +1124,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -1245,6 +1257,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -1340,6 +1353,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -1417,6 +1431,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -1498,6 +1513,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -1588,6 +1604,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -1670,6 +1687,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -1777,6 +1795,7 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
+        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },

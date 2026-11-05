@@ -20,6 +20,7 @@ function buildService(orderRepository: any) {
     { batchFindActive: jest.fn().mockResolvedValue({}) } as any,
     { findMany: jest.fn() } as any,
     { create: jest.fn() } as any,
+    {} as any,
     undefined as any,
   );
 }

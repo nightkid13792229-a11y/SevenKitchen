@@ -15,6 +15,22 @@ describe('PurchaseOrderImportService', () => {
   const agentConfig = {
     getEnabledDeepSeekRuntimeConfig: jest.fn(),
   };
+  // 渠道字典：识别时下发给模型的候选清单
+  const platformOptions = {
+    listSet: jest.fn().mockResolvedValue([
+      {
+        code: '盒马鲜生',
+        label: '盒马鲜生',
+        extra: { aliases: ['盒马'] },
+      },
+      { code: '沃尔玛', label: '沃尔玛', extra: null },
+      {
+        code: '山姆会员店',
+        label: '山姆会员店',
+        extra: { aliases: ['山姆'] },
+      },
+    ]),
+  };
   const prisma: any = {
     purchaseList: { findUnique: jest.fn() },
     purchaseItem: { findMany: jest.fn(), findFirst: jest.fn() },
@@ -57,6 +73,7 @@ describe('PurchaseOrderImportService', () => {
       prisma,
       agentConfig as any,
       cosService as any,
+      platformOptions as any,
       model as any,
     );
     cosService.isOwnedAssetUrl.mockReturnValue(true);
@@ -144,7 +161,7 @@ describe('PurchaseOrderImportService', () => {
     });
 
     expect(model.callDeepSeekJson).toHaveBeenCalledTimes(1);
-    expect(result.channel).toBe('盒马');
+    expect(result.channel).toBe('盒马鲜生');
     expect(result.lines).toHaveLength(1);
     expect(result.lines[0].ingredientId).toBe('ing-1');
     expect(result.lines[0].state).toBe('MATCHED');
@@ -228,6 +245,7 @@ describe('PurchaseOrderImportService', () => {
         id: 'import-1',
         purchaseListId: 'list-1',
         status: 'DRAFT',
+        channel: '盒马鲜生',
         subtotal: 10,
         lines: [
           {
@@ -343,6 +361,7 @@ describe('PurchaseOrderImportService', () => {
         id: 'import-1',
         purchaseListId: 'list-1',
         status: 'DRAFT',
+        channel: '盒马鲜生',
         incomplete: false,
         subtotal: 10,
         lines: [
@@ -780,6 +799,68 @@ describe('PurchaseOrderImportService', () => {
       expect(data.shippingFee).toBeNull();
       expect(view.shippingFee).toBeNull();
       expect(view.aiShippingFee).toBe(2);
+    });
+
+    it('渠道不在字典里 → 拒绝，不落库', async () => {
+      await expect(
+        service.updateImport('import-1', { channel: '大润发' }),
+      ).rejects.toThrow('不在渠道清单里');
+      expect(prisma.purchaseOrderImport.update).not.toHaveBeenCalled();
+    });
+
+    it('改渠道后重新匹配没动过的行（只改名字等于没改）', async () => {
+      const pendingRow = {
+        ...baseRow,
+        channel: null,
+        lines: [
+          {
+            id: 'line-1',
+            lineNo: 1,
+            rawName: '生蚝肉 200g',
+            spec: '200g/包',
+            qty: 1,
+            unit: '包',
+            unitPrice: 10,
+            lineTotal: 10,
+            ingredientId: 'ing-oyster',
+            procurementSkuId: null,
+            purchaseItemId: 'item-oyster',
+            matchSource: 'AUTO',
+            editedByUser: false,
+            isPersonal: false,
+          },
+        ],
+      };
+      prisma.purchaseOrderImport.findUnique
+        .mockResolvedValueOnce(pendingRow)
+        .mockResolvedValueOnce({ ...pendingRow, channel: '盒马鲜生' });
+      prisma.purchaseOrderImport.update.mockImplementation(
+        async ({ data }: any) => ({ ...pendingRow, ...data, lines: [] }),
+      );
+      prisma.purchaseItem.findMany.mockResolvedValue([
+        { id: 'item-oyster', ingredientId: 'ing-oyster', ingredientName: '生蚝' },
+      ]);
+      prisma.procurementSku.findMany.mockResolvedValue([
+        {
+          id: 'sku-hm',
+          ingredientId: 'ing-oyster',
+          name: '生蚝肉 200g/包',
+          productModel: '200g/包',
+          purchaseChannel: '盒马鲜生',
+          purchaseToBaseRatio: 200,
+          purchaseUnit: '包',
+        },
+      ]);
+      prisma.purchaseOrderMatchAlias.findMany.mockResolvedValue([]);
+      prisma.purchaseOrderImportLine.update.mockResolvedValue({});
+
+      await service.updateImport('import-1', { channel: '盒马' });
+
+      expect(prisma.purchaseOrderImportLine.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ procurementSkuId: 'sku-hm' }),
+        }),
+      );
     });
 
     it('已确认的识别记录不允许再改金额', async () => {

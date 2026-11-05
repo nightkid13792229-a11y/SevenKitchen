@@ -7,6 +7,7 @@ import {
   ORDER_REPOSITORY,
   ORDER_STATUS_HISTORY_REPOSITORY,
 } from 'src/application/order/order.service';
+import { PlatformOptionsService } from '../../../src/application/platform-options/platform-options.service';
 import { PurchasingService } from 'src/application/purchasing/purchasing.service';
 import {
   PURCHASE_LIST_REPOSITORY,
@@ -121,6 +122,10 @@ describe('PurchasingService stock replenishment procurement sku flow', () => {
         { provide: InventoryService, useValue: inventoryService },
         { provide: PURCHASE_LIST_REPOSITORY, useValue: purchaseListRepository },
         { provide: PURCHASE_RECORD_REPOSITORY, useValue: {} },
+        {
+          provide: PlatformOptionsService,
+          useValue: { listSet: jest.fn().mockResolvedValue([]) },
+        },
       ],
     }).compile();
 

@@ -17,6 +17,7 @@ describe('PurchasingService.getPurchaseListDetail', () => {
     {} as any,
     purchaseListRepository as any,
     {} as any,
+    {} as any,
   );
 
   beforeEach(() => {

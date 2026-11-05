@@ -24,7 +24,9 @@
             @tap="selectOrder(index)"
           >
             <view class="tab-main">
-              <text class="tab-channel">{{ item.channel }} · {{ formatShortDate(item.orderTime) }}</text>
+              <text class="tab-channel" :class="{ missing: !item.channel }">
+                {{ item.channel || '渠道待确认' }} · {{ formatShortDate(item.orderTime) }}
+              </text>
               <text class="tab-amount">¥{{ money(item.paid ?? item.subtotal) }}</text>
               <text class="tab-state">{{ tabState(item) }}</text>
             </view>
@@ -65,7 +67,8 @@
         </view>
         <view class="summary-cell">
           <text class="summary-k">待处理</text>
-          <text class="summary-v warn">{{ activeSummary.unmatched + activeSummary.needsSku }} 行</text>
+          <text v-if="activeImport && !activeImport.channel" class="summary-v warn">先定渠道</text>
+          <text v-else class="summary-v warn">{{ activeSummary.unmatched + activeSummary.needsSku }} 行</text>
         </view>
         <view class="summary-cell">
           <text class="summary-k">差额</text>
@@ -75,7 +78,25 @@
 
       <view v-if="activeImport" class="meta-row">
         <text class="meta-text">共 {{ activeImport.lines.length }} 行 · {{ amountStateText }}</text>
-        <text class="meta-channel" @tap="changeChannel">渠道 {{ activeImport.channel }} ›</text>
+        <text class="meta-channel" :class="{ missing: !activeImport.channel }" @tap="changeChannel">
+          {{ activeImport.channel ? '渠道 ' + activeImport.channel : '渠道待确认' }} ›
+        </text>
+      </view>
+
+      <!--
+        渠道是商品匹配的门禁：渠道没确认之前，先别让员工一行行去选商品。
+        2026-11-05：AI 认不出渠道时不再落「其他」，而是留空并在这里先问一句。
+      -->
+      <view v-if="activeImport && !activeImport.channel" class="channel-gate">
+        <text class="channel-gate-title">这笔订单还没确认渠道</text>
+        <text class="channel-gate-desc">
+          商品是按渠道匹配的。先选一下在哪买的，系统会把还没动过的行自动重新匹配一遍。
+        </text>
+        <button class="channel-gate-btn" @tap="changeChannel">选在哪买的</button>
+        <text v-if="activeImport.aiChannelGuess" class="channel-gate-hint">
+          模型看截图写的是「{{ activeImport.aiChannelGuess }}」，但渠道清单里没有这一项。
+        </text>
+        <text class="channel-gate-hint">清单里没有你要的渠道？让管理员在后台「平台选项 → 采购渠道」里加。</text>
       </view>
 
       <view v-if="activeImport && activeIncompleteNotice" class="warn-banner">
@@ -261,6 +282,31 @@
       </view>
     </view>
 
+    <!-- 选渠道（唯一来源：平台选项字典 purchase_channel） -->
+    <view v-if="channelPicking" class="sheet-mask" @tap="closeChannelPicker">
+      <view class="sheet" @tap.stop>
+        <text class="sheet-title">这笔是在哪买的？</text>
+        <text class="sheet-sub">渠道决定自动匹配哪一家的采购商品；清单由管理员在后台维护。</text>
+        <scroll-view scroll-y class="picker-list">
+          <view
+            v-for="channel in channelOptions"
+            :key="channel"
+            class="picker-row"
+            @tap="chooseChannel(channel)"
+          >
+            <text class="picker-name">{{ channel }}</text>
+            <text v-if="activeImport && activeImport.channel === channel" class="picker-go">当前</text>
+          </view>
+          <view v-if="channelOptions.length === 0" class="picker-row">
+            <text class="picker-sub">渠道清单没加载出来，请检查网络后重试</text>
+          </view>
+        </scroll-view>
+        <text v-if="channelOptions.length > 0" class="channel-tip">
+          清单里没有？让管理员在后台「平台选项 → 采购渠道」里加一项。
+        </text>
+      </view>
+    </view>
+
     <!-- 选原料 / 选商品 -->
     <view v-if="pickerMode !== 'none'" class="sheet-mask" @tap="closePicker">
       <view class="sheet" @tap.stop>
@@ -321,6 +367,7 @@ import {
   discardOrderImport,
   extractProcurementSkuOptions,
   getOrderImports,
+  getPurchaseChannels,
   getPurchaseListDetail,
   updateOrderImport,
   updateOrderImportLine,
@@ -358,6 +405,9 @@ const imports = ref<OrderImportView[]>([]);
 const activeIndex = ref(0);
 const editing = ref<any>(null);
 const pickerMode = ref<'none' | 'ingredient' | 'sku'>('none');
+/** 渠道清单：唯一来源是后台字典 purchase_channel，页面不写死 */
+const channelOptions = ref<string[]>([]);
+const channelPicking = ref(false);
 const saving = ref(false);
 const submitting = ref(false);
 const feeEditing = ref<{ shippingText: string; packagingText: string } | null>(null);
@@ -584,7 +634,8 @@ const blockReason = computed(() => {
     (item) => importIssue(item) !== null,
   );
   if (blocking) {
-    const label = `${blocking.channel}${blocking.orderTime ? ' ' + formatShortDate(blocking.orderTime) : ''}`;
+    const who = blocking.channel || '这笔订单';
+    const label = `${who}${blocking.orderTime ? ' ' + formatShortDate(blocking.orderTime) : ''}`;
     return `${label}：${importIssue(blocking)}`;
   }
   if (matchedLineCount.value === 0) return '还没有可生成的采购记录';
@@ -607,6 +658,8 @@ const footerLabel = computed(() => {
 });
 
 function importIssue(item: OrderImportView): string | null {
+  // 渠道没确认时，行级的「待处理」都是假象：确认渠道后会自动重匹配。
+  if (!item.channel) return '先确认渠道';
   const active = item.lines.filter((line) => !line.isPersonal);
   const pending = item.summary.unmatched + item.summary.needsSku;
   if (pending > 0) return `${pending} 行待处理`;
@@ -640,6 +693,7 @@ onUnload(() => {
 async function load() {
   if (!listId.value) return;
   if (imports.value.length === 0) loading.value = true;
+  if (channelOptions.value.length === 0) void loadChannelOptions();
   const settled = await Promise.allSettled([
     getPurchaseListDetail(listId.value),
     getOrderImports(listId.value),
@@ -733,6 +787,8 @@ function selectOrder(index: number) {
 function stateText(line: OrderImportLineView) {
   if (line.state === 'MATCHED') return '已匹配';
   if (line.state === 'PERSONAL') return '个人';
+  // 渠道没确认：商品还没开始匹配，别让员工以为要一行行手选
+  if (activeImport.value && !activeImport.value.channel) return '等渠道';
   if (line.state === 'NEEDS_SKU') return '选商品';
   return '选原料';
 }
@@ -980,19 +1036,42 @@ async function saveEdit() {
 
 async function changeChannel() {
   if (!activeImport.value) return;
-  const channels = ['山姆', '盒马', '沃尔玛', '其他'];
-  uni.showActionSheet({
-    itemList: channels,
-    success: async (res) => {
-      const channel = channels[res.tapIndex];
-      try {
-        await updateOrderImport(activeImport.value!.id, { channel });
-        await load();
-      } catch (error: any) {
-        uni.showToast({ title: error?.message || '修改失败', icon: 'none' });
-      }
-    },
-  });
+  if (channelOptions.value.length === 0) await loadChannelOptions();
+  channelPicking.value = true;
+}
+
+function closeChannelPicker() {
+  channelPicking.value = false;
+}
+
+/**
+ * 选完渠道立刻保存：后端会按新渠道重新匹配还没人工动过的行
+ * （2026-11-05；以前只改个名字，行不会重算，改完等于没改）。
+ */
+async function chooseChannel(channel: string) {
+  const current = activeImport.value;
+  if (!current) return;
+  channelPicking.value = false;
+  if (current.channel === channel) return;
+  try {
+    const res: any = await updateOrderImport(current.id, { channel });
+    if (res.code !== 0) throw new Error(res.message || '保存失败');
+    await load();
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '保存失败', icon: 'none' });
+  }
+}
+
+/** 渠道清单只拉一次；后台加了渠道，重进页面即可看到 */
+async function loadChannelOptions() {
+  try {
+    const res: any = await getPurchaseChannels();
+    if (res.code === 0 && Array.isArray(res.data)) {
+      channelOptions.value = res.data;
+    }
+  } catch (error) {
+    console.error('加载渠道清单失败', error);
+  }
 }
 
 async function discardActive() {
@@ -1276,6 +1355,11 @@ function emptySummary() {
   white-space: nowrap;
 }
 
+.tab-channel.missing {
+  color: #b4453a;
+  font-weight: 600;
+}
+
 .tab-amount {
   font-size: 28rpx;
   font-weight: 700;
@@ -1339,6 +1423,59 @@ function emptySummary() {
   font-size: 22rpx;
   color: #7a5c28;
   font-weight: 600;
+}
+
+.meta-channel.missing {
+  color: #b4453a;
+}
+
+/* 渠道确认卡：渠道没定之前，这是页面上第一件要做的事 */
+.channel-gate {
+  background: #fdf3e3;
+  border: 1rpx solid #e8c79a;
+  border-radius: 20rpx;
+  padding: 20rpx 22rpx;
+  margin-bottom: 14rpx;
+}
+
+.channel-gate-title {
+  display: block;
+  font-size: 27rpx;
+  font-weight: 700;
+  color: #8a4a1d;
+}
+
+.channel-gate-desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 21rpx;
+  color: #7a5a20;
+  line-height: 1.55;
+}
+
+.channel-gate-btn {
+  margin: 16rpx 0 4rpx;
+  background: #b4453a;
+  color: #fff;
+  font-size: 24rpx;
+  border-radius: 14rpx;
+  line-height: 2.2;
+}
+
+.channel-gate-hint {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 19rpx;
+  color: #8a7250;
+  line-height: 1.5;
+}
+
+.channel-tip {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 19rpx;
+  color: #8a7250;
+  line-height: 1.5;
 }
 
 .warn-banner {

@@ -33,11 +33,15 @@ import {
 } from '../nutrition-governance/agent-provider-config.service';
 import type { DeepSeekChatOptions } from '../recipe-designer/deepseek-chat';
 import { parseOrderDraft } from './purchase-order-parse';
+import { matchOrderLines, normalizeText } from './purchase-order-match';
 import {
-  matchOrderLines,
-  normalizeText,
-  resolveChannelFamily,
-} from './purchase-order-match';
+  canonicalChannelCode,
+  channelMatchKey,
+  toChannelOptions,
+  type ChannelOption,
+} from './channel-catalog';
+import { PlatformOptionsService } from '../platform-options/platform-options.service';
+import { PURCHASE_CHANNEL_SET } from '../platform-options/option-sets.registry';
 import type {
   ListItemCandidate,
   MatchedOrderLine,
@@ -59,7 +63,7 @@ export interface PurchaseOrderImportModelPort {
   ): Promise<Record<string, unknown>>;
 }
 
-export const PURCHASE_ORDER_IMPORT_PROMPT_VERSION = '2026-11-05.1';
+export const PURCHASE_ORDER_IMPORT_PROMPT_VERSION = '2026-11-05.2';
 
 /** 一张图最多切 6 段；再长就让员工截短一点 */
 const MAX_CHUNKS = 6;
@@ -89,35 +93,6 @@ const WEIGHT_OR_VOLUME_UNITS = new Set([
   '升',
 ]);
 
-const SYSTEM_PROMPT = `你是采购助理。用户会给你同一笔商超订单（山姆/盒马/沃尔玛）的长截图，按从上到下的顺序切成 N 段。
-请读完整笔订单，输出一个 JSON 对象。
-
-输出字段：
-{
-  "channel": "盒马|山姆|沃尔玛|其他",
-  "orderNo": "字符串或null",
-  "orderTime": "YYYY-MM-DD HH:mm 或null",
-  "items": [{"name":"商品名原文","spec":"规格原文或null","qty":数字或null,"unit":"盒/袋/份/瓶或null","unitPrice":数字或null,"lineTotal":数字或null}],
-  "subtotal": 数字或null,
-  "shippingFee": 数字或null,
-  "packagingFee": 数字或null,
-  "discount": 数字或null,
-  "paid": 数字或null,
-  "weightAdjustment": {"exists": true或false, "amount": 数字或null},
-  "incomplete": true或false,
-  "note": "简短说明"
-}
-
-规则：
-1. 商品金额（盒马叫商品小计、山姆叫商品总金额、沃尔玛叫商品金额）是截图上的合计，照抄。可以自己把各行金额加一遍做参考，但对不上不代表漏读。
-2. 合计数经常天然对不上：满减/优惠/优惠券、会员价或特价（商品行显示实付价、商品小计按原价）、环保包装费、运费、称重补差退款都会造成差额。这些都不算漏读，不要因此把 incomplete 置为 true。
-3. 只有当确实看到商品行被折叠（出现「展开」「查看更多」，或标注的总件数明显多于读到的行数）时，才把 incomplete 置为 true，并在 note 里写清楚看到了什么。
-4. 件数校验要看数量之和，不是行数之和。
-5. 图上出现"¥29.00 ×2"这类写法时，29.00 是单价，行小计 = 单价 × 数量。
-6. 金额一律输出数字（元），不要带 ¥ 符号、不要千分位。
-7. 读不到的字段一律给 null，绝不编造。不要输出姓名、电话、地址。
-8. 图上的「称重退差价」只是标签，不代表真的发生退款；只有出现「补差退款 X 元」这种带金额的文字，才把 weightAdjustment.exists 置为 true。`;
-
 interface RecognizedOrder {
   url: string;
   imageKey: string | null;
@@ -136,9 +111,58 @@ export class PurchaseOrderImportService {
     private readonly prisma: PrismaService,
     private readonly agentConfig: AgentProviderConfigService,
     private readonly cosService: TencentCosService,
+    private readonly platformOptions: PlatformOptionsService,
     @Inject(PURCHASE_ORDER_IMPORT_MODEL)
     private readonly model: PurchaseOrderImportModelPort,
   ) {}
+
+  /**
+   * 采购渠道的唯一来源：平台选项字典 `purchase_channel`。
+   *
+   * 2026-11-05 起 AI 的候选清单、员工端的选择项、匹配时的渠道归一
+   * 都从这里读 —— 新增一个渠道只改后台字典，不再改代码或提示词。
+   */
+  private async loadChannelOptions(): Promise<ChannelOption[]> {
+    const items = await this.platformOptions.listSet(PURCHASE_CHANNEL_SET);
+    return toChannelOptions(items);
+  }
+
+  /** 把渠道清单写进提示词：模型只能从这些里选，认不出就 null */
+  private buildSystemPrompt(channels: ChannelOption[]): string {
+    const list = channels.map((item) => item.code).join('、');
+    return `你是采购助理。用户会给你同一笔商超/网店订单的长截图，按从上到下的顺序切成 N 段。
+请读完整笔订单，输出一个 JSON 对象。
+
+输出字段：
+{
+  "channel": "从下面的渠道清单里选一个；如果截图上看不出、或者明显不在清单里，给 null",
+  "orderNo": "字符串或null",
+  "orderTime": "YYYY-MM-DD HH:mm 或null",
+  "items": [{"name":"商品名原文","spec":"规格原文或null","qty":数字或null,"unit":"盒/袋/份/瓶或null","unitPrice":数字或null,"lineTotal":数字或null}],
+  "subtotal": 数字或null,
+  "shippingFee": 数字或null,
+  "packagingFee": 数字或null,
+  "discount": 数字或null,
+  "paid": 数字或null,
+  "weightAdjustment": {"exists": true或false, "amount": 数字或null},
+  "incomplete": true或false,
+  "note": "简短说明"
+}
+
+渠道清单（channel 只能填这里的原文，或者 null）：
+${list}
+
+规则：
+1. 商品金额（盒马叫商品小计、山姆叫商品总金额、沃尔玛叫商品金额）是截图上的合计，照抄。可以自己把各行金额加一遍做参考，但对不上不代表漏读。
+2. 合计数经常天然对不上：满减/优惠/优惠券、会员价或特价（商品行显示实付价、商品小计按原价）、环保包装费、运费、称重补差退款都会造成差额。这些都不算漏读，不要因此把 incomplete 置为 true。
+3. 只有当确实看到商品行被折叠（出现「展开」「查看更多」，或标注的总件数明显多于读到的行数）时，才把 incomplete 置为 true，并在 note 里写清楚看到了什么。
+4. 件数校验要看数量之和，不是行数之和。
+5. 图上出现"¥29.00 ×2"这类写法时，29.00 是单价，行小计 = 单价 × 数量。
+6. 金额一律输出数字（元），不要带 ¥ 符号、不要千分位。
+7. 读不到的字段一律给 null，绝不编造。不要输出姓名、电话、地址。
+8. 图上的「称重退差价」只是标签，不代表真的发生退款；只有出现「补差退款 X 元」这种带金额的文字，才把 weightAdjustment.exists 置为 true。
+9. 渠道只凭截图上的店名/App 界面判断。认不出就给 null，绝对不要写「其他」「未知」或自己编一个店名 —— 员工会自己确认。`;
+  }
 
   /**
    * 识别一批截图：每张图 = 一笔订单。
@@ -164,22 +188,26 @@ export class PurchaseOrderImportService {
     await this.assertQuota(input.userId, imageUrls.length);
 
     const candidates = await this.buildCandidates(input.purchaseListId);
+    const channels = await this.loadChannelOptions();
     const recognized: RecognizedOrder[] = [];
 
+    /**
+     * 上次手动匹配学到的映射按渠道存。
+     *
+     * 历史行的 channelFamily 是旧口径（「盒马」「山姆」），读之前先按字典
+     * 归一，否则这次统一会让「沿用上次匹配」全部失效。
+     */
     const aliasCache = new Map<string, Array<{
       normalizedName: string;
       channelFamily: string;
       ingredientId: string;
       procurementSkuId: string | null;
     }>>();
-    const getAliasesForChannel = async (channel: string) => {
-      const family = resolveChannelFamily(channel);
-      const key = family || '__none__';
-      if (!aliasCache.has(key)) {
+    const getAliasesForChannel = async (channel: string | null) => {
+      const normalized = channel ? channelMatchKey(channel, channels) : '';
+      const cacheKey = normalized || '__none__';
+      if (!aliasCache.has(cacheKey)) {
         const rows = await this.prisma.purchaseOrderMatchAlias.findMany({
-          where: family
-            ? { OR: [{ channelFamily: family }, { channelFamily: '' }] }
-            : { channelFamily: '' },
           select: {
             normalizedName: true,
             channelFamily: true,
@@ -187,9 +215,14 @@ export class PurchaseOrderImportService {
             procurementSkuId: true,
           },
         });
-        aliasCache.set(key, rows);
+        const applicable = rows.filter((row) => {
+          if (!row.channelFamily) return true;
+          if (!normalized) return false;
+          return channelMatchKey(row.channelFamily, channels) === normalized;
+        });
+        aliasCache.set(cacheKey, applicable);
       }
-      return aliasCache.get(key)!;
+      return aliasCache.get(cacheKey)!;
     };
 
     for (const [index, url] of imageUrls.entries()) {
@@ -211,12 +244,13 @@ export class PurchaseOrderImportService {
         );
       }
 
-      const { draft, raw, model } = await this.recognize(buffer, url);
+      const { draft, raw, model } = await this.recognize(buffer, url, channels);
       const aliases = await getAliasesForChannel(draft.channel);
       let matched = matchOrderLines(
         draft.items,
         candidates,
         draft.channel,
+        channels,
         aliases,
       );
 
@@ -239,6 +273,7 @@ export class PurchaseOrderImportService {
             draft.items,
             candidates,
             draft.channel,
+            channels,
             aliases,
             hints,
           );
@@ -349,10 +384,20 @@ export class PurchaseOrderImportService {
       throw new BadRequestException('已确认的识别记录不能再修改');
     }
 
+    const channels = await this.loadChannelOptions();
     const data: Record<string, unknown> = {};
+    let channelChanged = false;
     if (dto.channel !== undefined) {
-      if (!dto.channel.trim()) throw new BadRequestException('渠道不能为空');
-      data.channel = dto.channel.trim();
+      const raw = dto.channel.trim();
+      if (!raw) throw new BadRequestException('渠道不能为空');
+      const channel = canonicalChannelCode(raw, channels);
+      if (!channel) {
+        throw new BadRequestException(
+          `「${raw}」不在渠道清单里，请从后台维护的渠道中选择`,
+        );
+      }
+      data.channel = channel;
+      channelChanged = channel !== current.channel;
     }
     if (dto.orderNo !== undefined) {
       data.orderNo = dto.orderNo?.trim() || null;
@@ -397,7 +442,100 @@ export class PurchaseOrderImportService {
       );
     }
 
+    // 渠道改了要重新匹配：商品匹配是「按渠道」做的，只改个名字等于没改。
+    if (channelChanged) {
+      await this.rematchAutoLines(id, String(data.channel), channels);
+      const refreshed = await this.prisma.purchaseOrderImport.findUnique({
+        where: { id },
+        include: { lines: { orderBy: { lineNo: 'asc' } } },
+      });
+      return this.toView(refreshed ?? updated);
+    }
+
     return this.toView(updated);
+  }
+
+  /**
+   * 换渠道后重算商品匹配（2026-11-05）。
+   *
+   * 只动「系统自动匹配、员工没碰过」的行：
+   *   · matchSource = AUTO 且 editedByUser = false；
+   *   · 员工手选过的（MANUAL）、标了个人采购的（PERSONAL）、新建过商品的（NEW_SKU）一律保留，
+   *     否则会把人工的判断冲掉。
+   *
+   * 原料的命中结果会作为 hint 带进去 —— 换渠道只该换商品，不该把原料也重挑一遍。
+   */
+  private async rematchAutoLines(
+    importId: string,
+    channel: string,
+    channels: ChannelOption[],
+  ): Promise<void> {
+    const current = await this.prisma.purchaseOrderImport.findUnique({
+      where: { id: importId },
+      include: { lines: { orderBy: { lineNo: 'asc' } } },
+    });
+    if (!current) return;
+
+    const targets = current.lines.filter(
+      (line) => line.matchSource === 'AUTO' && !line.editedByUser && !line.isPersonal,
+    );
+    if (targets.length === 0) return;
+
+    const candidates = await this.buildCandidates(current.purchaseListId);
+    if (candidates.length === 0) return;
+
+    const aliases = await this.prisma.purchaseOrderMatchAlias.findMany({
+      select: {
+        normalizedName: true,
+        channelFamily: true,
+        ingredientId: true,
+        procurementSkuId: true,
+      },
+    });
+    const normalized = channelMatchKey(channel, channels);
+    const applicableAliases = aliases.filter(
+      (row) =>
+        !row.channelFamily ||
+        channelMatchKey(row.channelFamily, channels) === normalized,
+    );
+
+    const parsed = targets.map((line) => ({
+      rawName: line.rawName,
+      spec: line.spec,
+      qty: numOrNull(line.qty),
+      unit: line.unit,
+      unitPrice: numOrNull(line.unitPrice),
+      lineTotal: numOrNull(line.lineTotal),
+    }));
+    const hints = targets
+      .map((line, index) => ({ lineIndex: index, ingredientId: line.ingredientId }))
+      .filter(
+        (hint): hint is { lineIndex: number; ingredientId: string } =>
+          Boolean(hint.ingredientId),
+      );
+
+    const matched = matchOrderLines(
+      parsed,
+      candidates,
+      channel,
+      channels,
+      applicableAliases,
+      hints,
+    );
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const [index, line] of matched.entries()) {
+        await tx.purchaseOrderImportLine.update({
+          where: { id: targets[index].id },
+          data: {
+            ingredientId: line.ingredientId,
+            purchaseItemId: line.purchaseItemId,
+            procurementSkuId: line.procurementSkuId,
+            matchConfidence: line.confidence,
+          },
+        });
+      }
+    });
   }
 
   /** 改一行：数量/单价/小计/匹配原料/个人标记 */
@@ -592,6 +730,7 @@ export class PurchaseOrderImportService {
       throw new BadRequestException('请先开始采购，再生成采购记录');
     }
 
+    const channels = await this.loadChannelOptions();
     for (const row of imports) {
       if (row.status !== 'DRAFT') {
         throw new BadRequestException('有识别记录已经确认过了，请刷新后重试');
@@ -734,7 +873,7 @@ export class PurchaseOrderImportService {
             ) {
               const normalizedName = normalizeText(line.rawName);
               if (normalizedName.length >= 2) {
-                const channelFamily = resolveChannelFamily(row.channel);
+                const channelFamily = channelMatchKey(row.channel, channels);
                 await tx.purchaseOrderMatchAlias.upsert({
                   where: {
                     normalizedName_channelFamily: {
@@ -847,6 +986,7 @@ export class PurchaseOrderImportService {
   private async recognize(
     buffer: Buffer,
     imageUrl: string,
+    channels: ChannelOption[],
   ): Promise<{
     draft: ParsedOrderDraft;
     raw: Record<string, unknown>;
@@ -885,20 +1025,20 @@ export class PurchaseOrderImportService {
         Math.max(runtime.requestTimeoutMs, 45000),
         90000,
       ),
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt: this.buildSystemPrompt(channels),
       userContent: content,
       temperature: 0,
       extraBody: { thinking: { type: 'disabled' } },
     });
 
-    const draft = parseOrderDraft(raw);
+    const draft = parseOrderDraft(raw, channels);
     if (draft.items.length === 0) {
       throw new BadRequestException(
         '这张图里没读出商品，请确认是订单详情截图后重试',
       );
     }
     this.logger.log(
-      `Order screenshot recognized: ${draft.channel} ${draft.items.length} lines, consistent=${draft.amountsConsistent}, url=${imageUrl.slice(0, 60)}`,
+      `Order screenshot recognized: ${draft.channel ?? '渠道未确认'} ${draft.items.length} lines, consistent=${draft.amountsConsistent}, url=${imageUrl.slice(0, 60)}`,
     );
     return { draft, raw, model: runtime.model };
   }
@@ -910,7 +1050,7 @@ export class PurchaseOrderImportService {
   private async semanticMapIngredients(
     items: Array<{ index: number; rawName: string; spec: string | null }>,
     candidates: ListItemCandidate[],
-    channel: string,
+    channel: string | null,
   ): Promise<Array<{ lineIndex: number; ingredientId: string }>> {
     if (items.length === 0 || candidates.length === 0) return [];
 
@@ -1125,6 +1265,7 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
   }
 
   private assertImportReady(row: {
+    channel: string | null;
     lines: Array<{
       rawName: string;
       isPersonal: boolean;
@@ -1134,6 +1275,10 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
       qty: unknown;
     }>;
   }): void {
+    // 渠道必须先确认：商品是按渠道匹配的，渠道不对，下面的行级检查只会误导员工。
+    if (!row.channel) {
+      throw new BadRequestException('这笔订单还没确认渠道，请先选一下在哪买的');
+    }
     // 2026-11-05 起不再拦「金额对不上」和「模型判不完整」：
     // 优惠/特价/包装费本来就会让合计对不上，页面已经让员工勾选核对过。
     // 这里只拦真正没法记账的：没匹配原料、缺数量、缺金额。
@@ -1205,10 +1350,22 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
       this.toLineView(line, rawItems[line.lineNo - 1]),
     );
     const rawDraft = (row.rawResult ?? {}) as Record<string, unknown>;
+    // 历史草稿可能存的是旧写法（「山姆」「盒马」）甚至「其他」：
+    // 能归一到字典就按标准名显示，归不上（比如「其他」）就当没确认，
+    // 否则员工会以为这笔已经选好渠道了。
+    const channels = await this.loadChannelOptions();
+    const channel = row.channel
+      ? canonicalChannelCode(row.channel, channels)
+      : null;
     return {
       id: row.id,
       purchaseListId: row.purchaseListId,
-      channel: row.channel,
+      // null = 还没确认渠道；页面据此先把「这笔在哪买的」问清楚
+      channel,
+      channelConfirmed: Boolean(channel),
+      // 模型当初猜的原文（可能是「大润发」这种不在清单里的），只用于提示，不参与匹配
+      aiChannelGuess:
+        typeof rawDraft.channel === 'string' ? rawDraft.channel : null,
       orderNo: row.orderNo,
       orderTime: row.orderTime,
       subtotal: numOrNull(row.subtotal),

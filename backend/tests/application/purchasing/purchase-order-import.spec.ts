@@ -7,6 +7,30 @@ import {
   normalizeText,
 } from '../../../src/application/purchasing/purchase-order-match';
 import type { ListItemCandidate } from '../../../src/application/purchasing/purchase-order-import.types';
+import type { ChannelOption } from '../../../src/application/purchasing/channel-catalog';
+
+/**
+ * 渠道字典（与后台 purchase_channel 同构）：
+ * 标准名是 code，历史写法放别名 —— 2026-11-05 起匹配、解析都认它。
+ */
+const CHANNELS: ChannelOption[] = [
+  { code: '山姆会员店', label: '山姆会员店', aliases: ['山姆'] },
+  { code: '盒马鲜生', label: '盒马鲜生', aliases: ['盒马'] },
+  { code: '沃尔玛', label: '沃尔玛', aliases: ['Walmart'] },
+  { code: '农贸市场', label: '农贸市场', aliases: ['菜市场', '批发市场'] },
+  { code: '成都海吉星', label: '成都海吉星', aliases: ['海吉星'] },
+];
+
+const parseDraft = (raw: Record<string, unknown>) =>
+  parseOrderDraft(raw, CHANNELS);
+
+const matchWithChannels = (
+  lines: any[],
+  candidates: ListItemCandidate[],
+  channel: string | null,
+  aliases?: any[],
+  hints?: Array<{ lineIndex: number; ingredientId: string }>,
+) => matchOrderLines(lines, candidates, channel, CHANNELS, aliases, hints);
 
 describe('parseOrderDraft', () => {
   const raw = {
@@ -28,8 +52,8 @@ describe('parseOrderDraft', () => {
   };
 
   it('解析渠道与金额，行小计之和与商品金额一致', () => {
-    const draft = parseOrderDraft(raw);
-    expect(draft.channel).toBe('盒马');
+    const draft = parseDraft(raw);
+    expect(draft.channel).toBe('盒马鲜生');
     expect(draft.items).toHaveLength(3);
     expect(draft.lineSum).toBe(19.88);
     expect(draft.amountsConsistent).toBe(true);
@@ -39,7 +63,7 @@ describe('parseOrderDraft', () => {
   });
 
   it('行小计缺失时用 单价 × 数量 补', () => {
-    const draft = parseOrderDraft({
+    const draft = parseDraft({
       ...raw,
       items: [{ name: '生菜', qty: 2, unitPrice: 2.99 }],
       subtotal: 5.98,
@@ -49,7 +73,7 @@ describe('parseOrderDraft', () => {
   });
 
   it('各行合计与商品金额差 1 元（优惠/特价/包装费）→ 不判不完整，只记金额对不上', () => {
-    const draft = parseOrderDraft({
+    const draft = parseDraft({
       ...raw,
       items: [{ name: '可口可乐 330ml*6', qty: 1, unitPrice: 147.33, lineTotal: 147.33 }],
       subtotal: 148.33,
@@ -60,7 +84,7 @@ describe('parseOrderDraft', () => {
   });
 
   it('模型明确说截图不完整 → 仍判不完整，理由用模型给的', () => {
-    const draft = parseOrderDraft({
+    const draft = parseDraft({
       ...raw,
       incomplete: true,
       incompleteReason: '商品列表被折叠，只看到 3 行',
@@ -70,7 +94,7 @@ describe('parseOrderDraft', () => {
   });
 
   it('商品金额没读到 → 不判不完整，只是金额校验不通过', () => {
-    const draft = parseOrderDraft({ ...raw, subtotal: null });
+    const draft = parseDraft({ ...raw, subtotal: null });
     expect(draft.amountsConsistent).toBe(false);
     expect(draft.incomplete).toBe(false);
   });
@@ -80,10 +104,14 @@ describe('parseOrderDraft', () => {
     expect(toNumberOrNull('abc')).toBeNull();
   });
 
-  it('渠道归一化', () => {
-    expect(parseOrderDraft({ ...raw, channel: '山姆会员店' }).channel).toBe('山姆');
-    expect(parseOrderDraft({ ...raw, channel: 'Walmart' }).channel).toBe('沃尔玛');
-    expect(parseOrderDraft({ ...raw, channel: '菜市场' }).channel).toBe('其他');
+  it('渠道归一到字典项：别名认得出，认不出就是 null（不再落到「其他」）', () => {
+    expect(parseDraft({ ...raw, channel: '山姆会员店' }).channel).toBe('山姆会员店');
+    expect(parseDraft({ ...raw, channel: '山姆' }).channel).toBe('山姆会员店');
+    expect(parseDraft({ ...raw, channel: 'Walmart' }).channel).toBe('沃尔玛');
+    expect(parseDraft({ ...raw, channel: '菜市场' }).channel).toBe('农贸市场');
+    expect(parseDraft({ ...raw, channel: '其他' }).channel).toBeNull();
+    expect(parseDraft({ ...raw, channel: '楼下小卖部' }).channel).toBeNull();
+    expect(parseDraft({ ...raw, channel: null }).channel).toBeNull();
   });
 });
 
@@ -131,7 +159,7 @@ describe('matchOrderLines', () => {
   });
 
   it('命中采购商品，置信度 HIGH', () => {
-    const [matched] = matchOrderLines(
+    const [matched] = matchWithChannels(
       [line('绿豆芽 300g', '300g/份')],
       candidates,
       '盒马',
@@ -143,7 +171,7 @@ describe('matchOrderLines', () => {
   });
 
   it('最长原料名优先：绿豆芽不会被绿豆抢走', () => {
-    const [matched] = matchOrderLines(
+    const [matched] = matchWithChannels(
       [line('盒马 绿豆芽 300g', '300g/份')],
       candidates,
       '盒马',
@@ -152,7 +180,7 @@ describe('matchOrderLines', () => {
   });
 
   it('原料对上了但规格不一致 → 需要新建商品，且不自动挂 SKU', () => {
-    const [matched] = matchOrderLines(
+    const [matched] = matchWithChannels(
       [line('白蘑菇 230g', '230g/盒')],
       candidates,
       '盒马',
@@ -164,7 +192,7 @@ describe('matchOrderLines', () => {
   });
 
   it('清单里没有的原料 → 未匹配', () => {
-    const [matched] = matchOrderLines(
+    const [matched] = matchWithChannels(
       [line('炙香雪花牛肋条 180g', '180g/盒')],
       candidates,
       '盒马',
@@ -174,7 +202,7 @@ describe('matchOrderLines', () => {
   });
 
   it('规格写法不同但数值一致时不判冲突', () => {
-    const [matched] = matchOrderLines(
+    const [matched] = matchWithChannels(
       [line('盒马 绿豆芽 300g', '约300g')],
       candidates,
       '盒马',
@@ -183,8 +211,20 @@ describe('matchOrderLines', () => {
     expect(matched.confidence).toBe('HIGH');
   });
 
+  it('渠道还没确认（null）→ 只对原料，先不挂商品，等员工确认渠道', () => {
+    const [matched] = matchWithChannels(
+      [line('生蚝肉 200g', '200g/包')],
+      candidates,
+      null,
+    );
+    expect(matched.ingredientId).toBe('ing-oyster');
+    expect(matched.procurementSkuId).toBeNull();
+    expect(matched.needsNewSku).toBe(true);
+    expect(matched.reason).toContain('还没确认渠道');
+  });
+
   it('订单渠道对不上商品渠道 → 不自动匹配，提示手动选择/新建', () => {
-    const [matched] = matchOrderLines(
+    const [matched] = matchWithChannels(
       [line('生蚝肉 200g', '200g/包')],
       candidates,
       '沃尔玛',
@@ -207,7 +247,7 @@ describe('matchOrderLines', () => {
         ],
       },
     ];
-    const [matched] = matchOrderLines(
+    const [matched] = matchWithChannels(
       [line('凉山小白菜 约300g', '约300g/份')],
       withTwoChannels,
       '沃尔玛',
@@ -224,7 +264,7 @@ describe('matchOrderLines', () => {
         procurementSkuId: 'sku-sprout',
       },
     ];
-    const [matched] = matchOrderLines(
+    const [matched] = matchWithChannels(
       [line('凉山小白菜 约300g', '约300g/份')],
       candidates,
       '沃尔玛',
@@ -256,7 +296,7 @@ describe('matchOrderLines', () => {
       },
     ];
 
-    const [matched] = matchOrderLines(
+    const [matched] = matchWithChannels(
       [line('盒马日日鲜 小白菜 约500g', '500g/份')],
       withGreens,
       '盒马',
@@ -282,7 +322,7 @@ describe('matchOrderLines', () => {
       },
     ];
 
-    const [matched] = matchOrderLines(
+    const [matched] = matchWithChannels(
       [line('盒马日日鲜 小白菜 约500g', '500g/份')],
       withTwoSpecs,
       '盒马',
@@ -305,7 +345,7 @@ describe('matchOrderLines', () => {
       },
     ];
 
-    const [matched] = matchOrderLines(
+    const [matched] = matchWithChannels(
       [line('盒马 鲜鸡蛋 30枚', '30枚/盒')],
       withEggs,
       '盒马',
@@ -328,7 +368,7 @@ describe('matchOrderLines', () => {
       },
     ];
 
-    const [matched] = matchOrderLines(
+    const [matched] = matchWithChannels(
       [line('盒马日日鲜 小白菜', '2袋')],
       withGreens,
       '盒马',
@@ -358,7 +398,7 @@ describe('matchOrderLines', () => {
       },
     ];
 
-    const [matched] = matchOrderLines(
+    const [matched] = matchWithChannels(
       [line("Member's Mark 智利大西洋鲑鱼块 1kg", '1kg')],
       withSalmon,
       '山姆',
@@ -374,7 +414,7 @@ describe('matchOrderLines', () => {
   });
 
   it('模型给了清单外的原料 id 时忽略，不会凭空匹配', () => {
-    const [matched] = matchOrderLines(
+    const [matched] = matchWithChannels(
       [line('炙香雪花牛肋条 180g', '180g/盒')],
       candidates,
       '盒马',

@@ -338,19 +338,121 @@ export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
   {
     code: PURCHASE_CHANNEL_SET,
     name: '采购渠道',
-    description: '生产/采购 SKU 的采购渠道；只允许从这里选择',
+    description: '采购渠道的唯一来源；AI 识别、员工选择、商品匹配都读它',
     sourceType: 'DATA',
+    /**
+     * 2026-11-05 老板定的标准清单（渠道唯一来源 · 第一步）。
+     *
+     * 顺序就是员工端/AI 看到的顺序；`extra.aliases` 是历史写法与简称，
+     * 用来把「山姆」「盒马」「天猫」这类旧值归一到同一条，
+     * 而不是再在代码里写 `if (text.includes('盒马'))`。
+     *
+     * 改这里只影响**全新库**（DATA 类只在集为空时灌入）；
+     * 已有库由 migration 20261105190000_purchase_channel_dictionary 对齐。
+     */
     seed: [
-      { code: '淘宝/天猫', label: '淘宝/天猫', sortOrder: 10 },
-      { code: '京东', label: '京东', sortOrder: 20 },
-      { code: '拼多多', label: '拼多多', sortOrder: 30 },
-      { code: '抖音商城', label: '抖音商城', sortOrder: 40 },
-      { code: '微信小店', label: '微信小店', sortOrder: 50 },
-      { code: '盒马', label: '盒马', sortOrder: 60 },
-      { code: '山姆会员店', label: '山姆会员店', sortOrder: 70 },
-      { code: '线下批发市场', label: '线下批发市场', sortOrder: 80 },
-      { code: '宠物店', label: '宠物店', sortOrder: 90 },
-      { code: '品牌旗舰店', label: '品牌旗舰店', sortOrder: 100 },
+      {
+        code: '山姆会员店',
+        label: '山姆会员店',
+        sortOrder: 10,
+        extra: { aliases: ['山姆', '山姆会员商店', "Sam's Club", 'Sams Club'] },
+      },
+      {
+        code: '盒马鲜生',
+        label: '盒马鲜生',
+        sortOrder: 20,
+        extra: { aliases: ['盒马', '盒马NB', '盒马mini'] },
+      },
+      {
+        code: '沃尔玛',
+        label: '沃尔玛',
+        sortOrder: 30,
+        extra: { aliases: ['沃尔玛超市', 'Walmart'] },
+      },
+      {
+        code: '永辉',
+        label: '永辉',
+        sortOrder: 40,
+        extra: { aliases: ['永辉超市', 'Bravo永辉'] },
+      },
+      {
+        code: '伊藤洋华堂',
+        label: '伊藤洋华堂',
+        sortOrder: 50,
+        extra: { aliases: ['伊藤', '伊藤洋华堂超市'] },
+      },
+      {
+        code: '农贸市场',
+        label: '农贸市场',
+        sortOrder: 60,
+        extra: { aliases: ['菜市场', '菜场', '生鲜市场', '本地市场'] },
+      },
+      {
+        code: '成都海吉星',
+        label: '成都海吉星',
+        sortOrder: 70,
+        extra: { aliases: ['海吉星', '海吉星市场'] },
+      },
+      {
+        code: '红旗连锁',
+        label: '红旗连锁',
+        sortOrder: 80,
+        extra: { aliases: ['红旗', '红旗超市'] },
+      },
+      {
+        code: '舞东风',
+        label: '舞东风',
+        sortOrder: 90,
+        extra: { aliases: ['舞东风超市'] },
+      },
+      {
+        code: '满彭超市',
+        label: '满彭超市',
+        sortOrder: 100,
+        extra: { aliases: ['满彭'] },
+      },
+      {
+        code: 'iHerb',
+        label: 'iHerb',
+        sortOrder: 110,
+        extra: { aliases: ['iherb', 'i-herb'] },
+      },
+      {
+        code: '亚马逊国际',
+        label: '亚马逊国际',
+        sortOrder: 120,
+        extra: { aliases: ['亚马逊', 'Amazon', '美亚'] },
+      },
+      {
+        code: '淘宝/天猫',
+        label: '淘宝/天猫',
+        sortOrder: 130,
+        extra: { aliases: ['淘宝', '天猫', '天猫超市', '淘宝网', 'taobao', 'tmall'] },
+      },
+      {
+        code: '京东',
+        label: '京东',
+        sortOrder: 140,
+        extra: { aliases: ['京东商城', '京东超市'] },
+      },
+      {
+        code: '拼多多',
+        label: '拼多多',
+        sortOrder: 150,
+        extra: { aliases: ['拼夕夕', 'PDD'] },
+      },
+      {
+        code: '抖音商城',
+        label: '抖音商城',
+        sortOrder: 160,
+        extra: { aliases: ['抖音', '抖音超市'] },
+      },
+      {
+        code: '微信小店',
+        label: '微信小店',
+        sortOrder: 170,
+        extra: { aliases: ['微信', '视频号小店'] },
+      },
     ],
   },
 ] as const;

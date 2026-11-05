@@ -140,14 +140,9 @@
               {{ showAllChannels ? '收起' : '更多' }}
             </view>
           </view>
-          <input
-            v-model="form.purchaseChannel"
-            class="field-input"
-            :class="{ error: hasError('purchaseChannel') }"
-            placeholder="或直接输入商超名称"
-            placeholder-class="ph"
-            maxlength="200"
-          />
+          <text v-if="allChannels.length === 0" class="field-hint-inline warn-text">
+            渠道清单没加载出来，请返回重试；新增渠道请找管理员在后台维护。
+          </text>
         </view>
 
         <view class="field">
@@ -270,7 +265,6 @@ import {
 } from './procurement-sku-form';
 import { applyDraftToForm } from './procurement-sku-draft-apply';
 import { decodeRouteParam } from './route-param';
-import { buildChannelChoices } from './procurement-sku-channel';
 import { buildShotView, type ShotState } from './procurement-sku-shot';
 import { MULTIPACK_UNITS, shouldOpenMultipack } from './procurement-sku-multipack';
 
@@ -302,8 +296,12 @@ const submitting = ref(false);
 const sampleFailed = ref(false);
 
 const allUnits = ref<string[]>([]);
-const FALLBACK_CHANNELS = ['山姆', '沃尔玛', '盒马'];
-const allChannels = ref<string[]>(FALLBACK_CHANNELS);
+/**
+ * 渠道清单（2026-11-05）：唯一来源 = 后台字典 purchase_channel。
+ * 以前这里是「历史出现过的写法 + 写死三家 + 自由输入」，
+ * 结果同一个门店能存出好几种名字。现在只给字典里的项，不给自由输入。
+ */
+const allChannels = ref<string[]>([]);
 const showAllChannels = ref(false);
 const showAllUnits = ref(false);
 
@@ -479,14 +477,13 @@ onLoad(async (options: Record<string, string>) => {
 
   loading.value = true;
   try {
-    // 历史渠道 = 员工以前真买过的，比写死三家靠谱得多
     try {
       const channelRes: any = await getPurchaseChannels();
       if (channelRes?.code === 0 && Array.isArray(channelRes.data)) {
-        allChannels.value = buildChannelChoices(channelRes.data, FALLBACK_CHANNELS);
+        allChannels.value = channelRes.data;
       }
     } catch {
-      allChannels.value = FALLBACK_CHANNELS;
+      uni.showToast({ title: '渠道清单加载失败，请重试', icon: 'none' });
     }
 
     const res: any = await getProcurementSkuFormOptions(ingredientId.value);
@@ -1000,6 +997,12 @@ const handleSubmit = async () => {
 .field-hint-inline {
   font-size: 10px;
   color: #a8a192;
+}
+.field-hint-inline.warn-text {
+  display: block;
+  margin-top: 8px;
+  color: #b4553f;
+  line-height: 1.5;
 }
 .req {
   color: #b4553f;

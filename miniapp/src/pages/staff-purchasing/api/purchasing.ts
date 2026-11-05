@@ -1114,7 +1114,10 @@ export interface OrderImportLineView {
 export interface OrderImportView {
   id: string;
   purchaseListId: string;
-  channel: string;
+  /** null = AI 没认出来、员工还没确认（页面要先问「在哪买的」） */
+  channel: string | null;
+  /** 模型当初写的渠道原文，仅用于提示（可能不在清单里） */
+  aiChannelGuess?: string | null;
   orderNo: string | null;
   orderTime: string | null;
   subtotal: number | null;

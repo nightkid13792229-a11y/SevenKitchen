@@ -30,6 +30,8 @@ import {
   PURCHASE_LIST_REPOSITORY,
   PURCHASE_RECORD_REPOSITORY,
 } from './purchasing.service.tokens';
+import { PlatformOptionsService } from '../platform-options/platform-options.service';
+import { PURCHASE_CHANNEL_SET } from '../platform-options/option-sets.registry';
 import type { PurchaseListRepository } from '../../domain/purchasing/purchase-list.repository';
 import type { PurchaseRecordRepository } from '../../domain/purchasing/purchase-record.repository';
 import {
@@ -228,6 +230,7 @@ export class PurchasingService {
     private readonly purchaseListRepository: PurchaseListRepository,
     @Inject(PURCHASE_RECORD_REPOSITORY)
     private readonly purchaseRecordRepository: PurchaseRecordRepository,
+    private readonly platformOptions: PlatformOptionsService,
     @Optional()
     private readonly searchGovernanceService?: SearchGovernanceService,
   ) {}
@@ -4191,25 +4194,15 @@ export class PurchasingService {
    * 获取所有采购渠道列表
    * 从原料数据库中提取所有不同的采购渠道
    */
+  /**
+   * 采购渠道清单（2026-11-05 起唯一来源 = 平台选项字典 `purchase_channel`）。
+   *
+   * 以前这里是「把各表里的 purchaseChannel 去重排序」—— 谁打错一次字，
+   * 错字就变成一个新的“渠道”，而且和后台维护的清单各说各话。
+   * 现在员工端、后台、AI 都只认字典，新增渠道在后台加一项即可。
+   */
   async getPurchaseChannels(): Promise<string[]> {
-    const [ingredients, recommendedChannels, procurementChannels] =
-      await Promise.all([
-        this.ingredientRepository.findAll(),
-        this.recommendedProductService.listActivePurchaseChannels(),
-        this.procurementSkuService.listActivePurchaseChannels(),
-      ]);
-
-    // 提取所有不同的采购渠道并过滤掉空值
-    const channels = new Set<string>();
-    ingredients.forEach((ingredient) => {
-      if (ingredient.purchaseChannel) {
-        channels.add(ingredient.purchaseChannel);
-      }
-    });
-    recommendedChannels.forEach((channel) => channels.add(channel));
-    procurementChannels.forEach((channel) => channels.add(channel));
-
-    // 转换为数组并按字母顺序排序
-    return Array.from(channels).sort();
+    const items = await this.platformOptions.listSet(PURCHASE_CHANNEL_SET);
+    return items.map((item) => item.code);
   }
 }

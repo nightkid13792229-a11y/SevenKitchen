@@ -7,7 +7,13 @@
  *   3. 所有金额必须通过「行小计之和 = 商品金额」的自检。
  */
 
-export type OrderChannel = '山姆' | '盒马' | '沃尔玛' | '其他';
+/**
+ * 采购渠道的字典 code（例如「山姆会员店」）。
+ *
+ * 2026-11-05 起渠道只认字典 `purchase_channel` 里的一条；
+ * `null` 表示模型没认出来、等员工确认 —— 不再用「其他」冒充。
+ */
+export type OrderChannel = string;
 
 /** 手动匹配成功后记住的「叫法 → 原料/商品」 */
 export interface MatchAlias {
@@ -27,7 +33,8 @@ export interface ParsedOrderLine {
 }
 
 export interface ParsedOrderDraft {
-  channel: OrderChannel;
+  /** null = 没认出渠道，等员工确认 */
+  channel: OrderChannel | null;
   orderNo: string | null;
   orderTime: string | null;
   items: ParsedOrderLine[];

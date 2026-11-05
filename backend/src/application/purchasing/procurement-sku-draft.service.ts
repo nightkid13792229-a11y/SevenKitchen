@@ -26,6 +26,12 @@ import {
   type BaseUnitCode,
 } from './procurement-sku-net-content';
 import { ProcurementSkuDraftNoticeException } from './procurement-sku-draft.errors';
+import {
+  canonicalChannelCode,
+  type ChannelOption,
+} from './channel-catalog';
+import { PlatformOptionsService } from '../platform-options/platform-options.service';
+import { PURCHASE_CHANNEL_SET } from '../platform-options/option-sets.registry';
 
 /** 采购报销 Agent 共用配置的用途标识；未单独配置时回退全局默认 */
 export const PROCUREMENT_SKU_DRAFT_PURPOSE =
@@ -60,7 +66,7 @@ export interface ProcurementSkuDraft {
 
 const NO_THINKING = { thinking: { type: 'disabled' } };
 
-const SYSTEM_PROMPT = `你是采购助理。用户会给你一张中国商超 App（山姆/沃尔玛/盒马等）的**商品详情页截图**，
+const SYSTEM_PROMPT = `你是采购助理。用户会给你一张中国商超/网店 App 的**商品详情页截图**，
 你要读出这件商品的信息，输出 JSON。
 
 只认商品详情页：一屏一个商品，图上有商品标题、净含量（如 1kg / 500g / 24×330ml）、单价（如 ¥14.99/袋）。
@@ -73,7 +79,7 @@ const SYSTEM_PROMPT = `你是采购助理。用户会给你一张中国商超 Ap
   "purchaseUnit": "按件卖的单位，如 袋/箱/瓶/包",
   "packCount": 一箱里有几件（单件商品给 1；图上没写就 null）,
   "netContent": { "value": 单件净含量的数字, "unit": "单位原文，如 kg/g/ml/L/个" },
-  "purchaseChannel": "从品牌或 App 界面推断的商超名，拿不准就给 null",
+  "purchaseChannel": "从下面的渠道清单里选一个；看不出就给 null，不要自己编店名",
   "unitPrice": 单价数字（元）,
   "confidence": { "name": "high|low", "purchaseChannel": "high|low", "netContent": "high|low" }
 }
@@ -90,6 +96,7 @@ export class ProcurementSkuDraftService {
     private readonly prisma: PrismaService,
     private readonly quota: ProcurementSkuDraftQuotaService,
     private readonly agentConfig: AgentProviderConfigService,
+    private readonly platformOptions: PlatformOptionsService,
     @Inject(PROCUREMENT_SKU_DRAFT_MODEL)
     private readonly model: ProcurementSkuDraftModelPort,
   ) {}
@@ -120,12 +127,15 @@ export class ProcurementSkuDraftService {
       purpose: PROCUREMENT_SKU_DRAFT_PURPOSE,
     });
 
+    // 渠道清单从字典取：员工端「在哪买的」只认这些项，AI 也必须从这里面选。
+    const channels = await this.loadChannelOptions();
+
     const raw = await this.model.callDeepSeekJson({
       baseUrl: runtime.baseUrl,
       model: runtime.model,
       apiKey: runtime.apiKey,
       requestTimeoutMs: runtime.requestTimeoutMs,
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt: this.buildSystemPrompt(channels),
       userContent: [
         {
           type: 'text',
@@ -137,13 +147,37 @@ export class ProcurementSkuDraftService {
       extraBody: NO_THINKING,
     });
 
-    return this.toDraft(raw, baseUnit);
+    return this.toDraft(raw, baseUnit, channels);
+  }
+
+  private async loadChannelOptions(): Promise<ChannelOption[]> {
+    const items = await this.platformOptions.listSet(PURCHASE_CHANNEL_SET);
+    return items.map((item) => {
+      const extra =
+        item.extra && typeof item.extra === 'object'
+          ? (item.extra as Record<string, unknown>)
+          : null;
+      const aliases =
+        extra && Array.isArray(extra.aliases)
+          ? extra.aliases.filter((alias): alias is string => typeof alias === 'string')
+          : [];
+      return { code: item.code, label: item.label, aliases };
+    });
+  }
+
+  private buildSystemPrompt(channels: ChannelOption[]): string {
+    const list = channels.map((item) => item.code).join('、');
+    return `${SYSTEM_PROMPT}
+
+渠道清单（purchaseChannel 只能填这里的原文，或者 null）：
+${list}`;
   }
 
   /** 把模型原始输出收口成草稿：能归一化的归一化，归一不了的一律 null + missing */
   private toDraft(
     raw: Record<string, unknown>,
     baseUnit: BaseUnitCode,
+    channels: ChannelOption[],
   ): ProcurementSkuDraft {
     const productList = (raw as { productList?: unknown }).productList;
 
@@ -154,7 +188,12 @@ export class ProcurementSkuDraftService {
     }
 
     const name = toStringOrNull(raw.name);
-    const purchaseChannel = toStringOrNull(raw.purchaseChannel);
+    // 模型可能写「山姆」这种简称；归一到字典项，认不出来就当没读到，
+    // 员工端只显示标准渠道，不能存一个清单外的写法。
+    const purchaseChannel = canonicalChannelCode(
+      toStringOrNull(raw.purchaseChannel),
+      channels,
+    );
     const purchaseUnit = toStringOrNull(raw.purchaseUnit);
     const netContentUnitText = toStringOrNull(
       (raw.netContent as { unit?: unknown } | undefined)?.unit,

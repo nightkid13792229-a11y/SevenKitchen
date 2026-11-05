@@ -18,6 +18,7 @@ import type {
   MatchedOrderLine,
   ParsedOrderLine,
 } from './purchase-order-import.types';
+import { channelMatchKey, type ChannelOption } from './channel-catalog';
 
 const BRAND_NOISE = [
   "member's mark",
@@ -134,51 +135,67 @@ function specConflict(
   return !lineCounts.some((line) => skuCounts.includes(line));
 }
 
-/** 渠道归一：盒马/盒马鲜生、山姆/山姆会员店、沃尔玛 视为同一家 */
-export function resolveChannelFamily(channel?: string | null): string {
-  const text = (channel || '').trim().toLowerCase();
-  if (!text) return '';
-  if (text.includes('盒马')) return '盒马';
-  if (text.includes('山姆') || text.includes('sam')) return '山姆';
-  if (text.includes('沃尔玛') || text.includes('walmart')) return '沃尔玛';
-  return text;
-}
-
+/**
+ * 渠道是硬条件：订单是沃尔玛，就不能自动挂到本地生鲜市场的散称商品。
+ *
+ * 2026-11-05 起比较之前先按**字典**归一（「山姆」和「山姆会员店」是同一条），
+ * 不再在代码里写死「盒马/山姆/沃尔玛」三家的包含判断。
+ */
 function channelScore(
-  importChannel: string,
+  importKey: string,
   sku: ListSkuCandidate,
+  channels: ChannelOption[],
 ): number {
-  if (!sku.purchaseChannel) return 0;
-  return resolveChannelFamily(sku.purchaseChannel) ===
-    resolveChannelFamily(importChannel)
-    ? 1
-    : 0;
+  if (!importKey || !sku.purchaseChannel) return 0;
+  return channelMatchKey(sku.purchaseChannel, channels) === importKey ? 1 : 0;
 }
 
 function pickSku(
   line: ParsedOrderLine,
   skus: ListSkuCandidate[],
-  importChannel: string,
+  importChannel: string | null,
+  channels: ChannelOption[],
 ): {
   sku: ListSkuCandidate | null;
   nameHit: boolean;
   channelMismatch: boolean;
+  /** 渠道还没确认：先不挑商品，等员工选了渠道再自动匹配 */
+  channelPending: boolean;
 } {
+  if (!importChannel) {
+    return {
+      sku: null,
+      nameHit: false,
+      channelMismatch: false,
+      channelPending: true,
+    };
+  }
   if (skus.length === 0) {
-    return { sku: null, nameHit: false, channelMismatch: false };
+    return {
+      sku: null,
+      nameHit: false,
+      channelMismatch: false,
+      channelPending: false,
+    };
   }
   const normalizedLine = normalizeText(line.rawName);
+  const importKey = channelMatchKey(importChannel, channels);
 
   // 渠道是硬条件：订单是沃尔玛，就不能自动挂到本地生鲜市场的散称商品。
   // 该渠道没有商品时留空，员工可以手动选别的渠道或新建商品。
-  const sameChannel = importChannel
-    ? skus.filter((sku) => channelScore(importChannel, sku) === 1)
+  const sameChannel = importKey
+    ? skus.filter((sku) => channelScore(importKey, sku, channels) === 1)
     : [];
-  if (importChannel && sameChannel.length === 0) {
-    return { sku: null, nameHit: false, channelMismatch: true };
+  if (sameChannel.length === 0) {
+    return {
+      sku: null,
+      nameHit: false,
+      channelMismatch: true,
+      channelPending: false,
+    };
   }
 
-  const ranked = (sameChannel.length > 0 ? sameChannel : skus)
+  const ranked = sameChannel
     .map((sku) => {
       const normalizedSku = normalizeText(sku.name);
       const nameHit =
@@ -192,7 +209,7 @@ function pickSku(
         score:
           (nameHit ? 100 : 0) +
           (specOk ? 10 : 0) +
-          channelScore(importChannel, sku),
+          channelScore(importKey, sku, channels),
       };
     })
     .sort((a, b) => b.score - a.score);
@@ -201,13 +218,15 @@ function pickSku(
     sku: ranked[0].sku,
     nameHit: ranked[0].nameHit,
     channelMismatch: false,
+    channelPending: false,
   };
 }
 
 export function matchOrderLines(
   lines: ParsedOrderLine[],
   candidates: ListItemCandidate[],
-  importChannel: string,
+  importChannel: string | null,
+  channels: ChannelOption[],
   aliases: MatchAlias[] = [],
   semanticHints: Array<{ lineIndex: number; ingredientId: string }> = [],
 ): MatchedOrderLine[] {
@@ -219,7 +238,9 @@ export function matchOrderLines(
     .filter((entry) => entry.normalized.length >= 1)
     .sort((a, b) => b.normalized.length - a.normalized.length);
 
-  const channelFamily = resolveChannelFamily(importChannel);
+  const channelKey = importChannel
+    ? channelMatchKey(importChannel, channels)
+    : '';
 
   const hintByIndex = new Map(
     semanticHints.map((hint) => [hint.lineIndex, hint.ingredientId]),
@@ -234,7 +255,9 @@ export function matchOrderLines(
     const alias = aliases.find(
       (item) =>
         item.normalizedName === normalizedLine &&
-        (!item.channelFamily || item.channelFamily === channelFamily),
+        (!item.channelFamily ||
+          (channelKey !== '' &&
+            channelMatchKey(item.channelFamily, channels) === channelKey)),
     );
     let aliasCandidate: ListItemCandidate | null = null;
     if (alias) {
@@ -245,7 +268,12 @@ export function matchOrderLines(
         const aliasSku = alias.procurementSkuId
           ? candidate.skus.find((sku) => sku.id === alias.procurementSkuId)
           : null;
-        if (aliasSku && !specConflict(line.spec, aliasSku.productModel)) {
+        // 渠道还没确认时不能沿用商品：同一个叫法换个渠道就是另一个商品。
+        if (
+          importChannel &&
+          aliasSku &&
+          !specConflict(line.spec, aliasSku.productModel)
+        ) {
           return {
             ...line,
             ingredientId: candidate.ingredientId,
@@ -290,10 +318,11 @@ export function matchOrderLines(
       };
     }
 
-    const { sku, nameHit, channelMismatch } = pickSku(
+    const { sku, nameHit, channelMismatch, channelPending } = pickSku(
       line,
       hit.candidate.skus,
       importChannel,
+      channels,
     );
 
     const conflict = sku ? specConflict(line.spec, sku.productModel) : false;
@@ -303,21 +332,23 @@ export function matchOrderLines(
     if (sku && nameHit && !conflict) confidence = 'HIGH';
     else if (!sku) confidence = 'LOW';
 
-    const reason = channelMismatch
-      ? `该渠道（${importChannel}）还没有对应的采购商品，请手动选择或新建`
-      : conflict
-        ? aliasCandidate
-          ? `上次匹配的商品规格是 ${sku?.productModel ?? '未知'}，与截图不一致，请选择或新建`
-          : `商品规格是 ${sku?.productModel ?? '未知'}，与截图不一致`
-        : !sku
-          ? '原料对上了，但这道原料还没有采购商品'
-          : aliasCandidate
-            ? '沿用上次的原料，按截图规格重选了商品'
-            : hintedCandidate
-              ? 'AI 语义匹配'
-              : nameHit
-                ? '命中采购商品'
-                : '按原料匹配';
+    const reason = channelPending
+      ? '这笔订单还没确认渠道，确认后会自动匹配商品'
+      : channelMismatch
+        ? `该渠道（${importChannel}）还没有对应的采购商品，请手动选择或新建`
+        : conflict
+          ? aliasCandidate
+            ? `上次匹配的商品规格是 ${sku?.productModel ?? '未知'}，与截图不一致，请选择或新建`
+            : `商品规格是 ${sku?.productModel ?? '未知'}，与截图不一致`
+          : !sku
+            ? '原料对上了，但这道原料还没有采购商品'
+            : aliasCandidate
+              ? '沿用上次的原料，按截图规格重选了商品'
+              : hintedCandidate
+                ? 'AI 语义匹配'
+                : nameHit
+                  ? '命中采购商品'
+                  : '按原料匹配';
 
     return {
       ...line,

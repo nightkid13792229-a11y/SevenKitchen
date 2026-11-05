@@ -14,10 +14,10 @@
  */
 
 import type {
-  OrderChannel,
   ParsedOrderDraft,
   ParsedOrderLine,
 } from './purchase-order-import.types';
+import { canonicalChannelCode, type ChannelOption } from './channel-catalog';
 
 const AMOUNT_TOLERANCE = 0.011;
 
@@ -38,12 +38,20 @@ export function toStringOrNull(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export function normalizeChannel(value: unknown): OrderChannel {
-  const text = toStringOrNull(value) ?? '';
-  if (text.includes('山姆') || /sam'?s/i.test(text)) return '山姆';
-  if (text.includes('盒马')) return '盒马';
-  if (text.includes('沃尔玛') || /walmart/i.test(text)) return '沃尔玛';
-  return '其他';
+/**
+ * 模型给的渠道 → 字典里的 code。
+ *
+ * 认不出来一律返回 null，不再落到「其他」（那会把「读不出来」和
+ * 「真的是别家」混成同一件事，员工永远不知道该不该改）。
+ * 模型偶尔写出「山姆」「天猫」这类简称时，靠字典的别名归一到标准项。
+ */
+export function normalizeChannel(
+  value: unknown,
+  channels: ChannelOption[],
+): string | null {
+  const text = toStringOrNull(value);
+  if (!text) return null;
+  return canonicalChannelCode(text, channels);
 }
 
 function toPositiveNumberOrNull(value: unknown): number | null {
@@ -83,7 +91,10 @@ function parseLine(raw: unknown, index: number): ParsedOrderLine | null {
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;
 
-export function parseOrderDraft(raw: Record<string, unknown>): ParsedOrderDraft {
+export function parseOrderDraft(
+  raw: Record<string, unknown>,
+  channels: ChannelOption[],
+): ParsedOrderDraft {
   const itemsRaw = Array.isArray(raw.items) ? raw.items : [];
   const items = itemsRaw
     .map((entry, index) => parseLine(entry, index))
@@ -115,7 +126,7 @@ export function parseOrderDraft(raw: Record<string, unknown>): ParsedOrderDraft 
     : null;
 
   return {
-    channel: normalizeChannel(raw.channel),
+    channel: normalizeChannel(raw.channel, channels),
     orderNo: toStringOrNull(raw.orderNo),
     orderTime: toStringOrNull(raw.orderTime),
     items,

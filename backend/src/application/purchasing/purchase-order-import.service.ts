@@ -68,6 +68,8 @@ const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const IMAGE_FETCH_TIMEOUT_MS = 20000;
 const MODEL_TIMEOUT_MS = 90000;
 const MODEL_TIMEOUT_FLOOR_MS = 45000;
+/** 单笔订单的运费 / 包装费上限（元）；超过基本是填错了，直接拦下来 */
+const MAX_FEE_AMOUNT = 5000;
 /** 每人每天最多识别几次（一次 = 一笔订单） */
 const DAILY_IMPORT_LIMIT_PER_USER = 30;
 /** 全系统每月上限 */
@@ -299,13 +301,15 @@ export class PurchaseOrderImportService {
     return Promise.all(rows.map((row) => this.toView(row)));
   }
 
-  /** 改渠道 / 订单号 / 下单时间（识别错了手动修正） */
+  /** 改渠道 / 订单号 / 下单时间 / 运费 / 包装费（识别错了手动修正） */
   async updateImport(
     id: string,
     dto: {
       channel?: string;
       orderNo?: string | null;
       orderTime?: string | null;
+      shippingFee?: number | null;
+      packagingFee?: number | null;
     },
   ): Promise<any> {
     const current = await this.prisma.purchaseOrderImport.findUnique({
@@ -327,12 +331,43 @@ export class PurchaseOrderImportService {
     if (dto.orderTime !== undefined) {
       data.orderTime = dto.orderTime ? parseOrderTime(dto.orderTime) : null;
     }
+    if (dto.shippingFee !== undefined) {
+      data.shippingFee = normalizeFee(dto.shippingFee, '运费');
+    }
+    if (dto.packagingFee !== undefined) {
+      data.packagingFee = normalizeFee(dto.packagingFee, '包装费');
+    }
 
     const updated = await this.prisma.purchaseOrderImport.update({
       where: { id },
       data,
       include: { lines: { orderBy: { lineNo: 'asc' } } },
     });
+
+    // 金额类改动留痕：模型读到的原值和员工改成多少都写进日志，审核可回溯。
+    const feeChanges: string[] = [];
+    if (dto.shippingFee !== undefined) {
+      const before = toNum(current.shippingFee);
+      const after = toNum(updated.shippingFee);
+      if (before !== after) {
+        feeChanges.push(`运费 ${fmtFee(before)} → ${fmtFee(after)}`);
+      }
+    }
+    if (dto.packagingFee !== undefined) {
+      const before = toNum(current.packagingFee);
+      const after = toNum(updated.packagingFee);
+      if (before !== after) {
+        feeChanges.push(`包装费 ${fmtFee(before)} → ${fmtFee(after)}`);
+      }
+    }
+    if (feeChanges.length > 0) {
+      const aiRaw = (current.rawResult ?? {}) as Record<string, unknown>;
+      this.logger.log(
+        `[order-import ${id}] ${feeChanges.join('，')}；模型原值 ` +
+          `运费 ${fmtFee(toNum(aiRaw.shippingFee))}、包装费 ${fmtFee(toNum(aiRaw.packagingFee))}`,
+      );
+    }
+
     return this.toView(updated);
   }
 
@@ -1062,6 +1097,7 @@ export class PurchaseOrderImportService {
     const lines = (row.lines || []).map((line: any) =>
       this.toLineView(line, rawItems[line.lineNo - 1]),
     );
+    const rawDraft = (row.rawResult ?? {}) as Record<string, unknown>;
     return {
       id: row.id,
       purchaseListId: row.purchaseListId,
@@ -1071,6 +1107,9 @@ export class PurchaseOrderImportService {
       subtotal: numOrNull(row.subtotal),
       shippingFee: numOrNull(row.shippingFee),
       packagingFee: numOrNull(row.packagingFee),
+      // 模型当初读到的运费/包装费，用于页面显示「已改动（AI 读到 ¥x）」和审核对照。
+      aiShippingFee: numOrNull(rawDraft.shippingFee),
+      aiPackagingFee: numOrNull(rawDraft.packagingFee),
       paid: numOrNull(row.paid),
       incomplete: row.incomplete,
       incompleteReason: row.incompleteReason,
@@ -1133,6 +1172,28 @@ function toNum(value: unknown): number | null {
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/**
+ * 运费/包装费人工修正的入口校验：只收 0 或正数，最多两位小数。
+ * null 表示「明确清空」，按 0 计；不传则不改。
+ */
+function normalizeFee(value: number | null, label: string): number | null {
+  if (value === null) return null;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new BadRequestException(`${label}必须是 0 或正数`);
+  }
+  if (value > MAX_FEE_AMOUNT) {
+    throw new BadRequestException(
+      `${label}超过 ${MAX_FEE_AMOUNT} 元，请核对后再填`,
+    );
+  }
+  return round2(value);
+}
+
+/** 日志里打印金额用：null 显示「未读到」，不要打印成 0 */
+function fmtFee(value: number | null): string {
+  return value === null ? '未读到' : `¥${value.toFixed(2)}`;
 }
 
 function parseOrderTime(value: string): Date | null {

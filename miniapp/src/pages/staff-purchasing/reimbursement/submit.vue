@@ -84,14 +84,24 @@
           <text class="field-label">采购相关运费</text>
           <view class="money-input">
             <text>¥</text>
-            <input v-model="platformShippingFee" type="digit" placeholder="0.00" />
+            <input
+              v-model="platformShippingFee"
+              type="digit"
+              placeholder="0.00"
+              @input="shippingTouched = true"
+            />
           </view>
         </view>
         <view class="field">
           <text class="field-label">采购相关打包费</text>
           <view class="money-input">
             <text>¥</text>
-            <input v-model="platformPackagingFee" type="digit" placeholder="0.00" />
+            <input
+              v-model="platformPackagingFee"
+              type="digit"
+              placeholder="0.00"
+              @input="packagingTouched = true"
+            />
           </view>
         </view>
       </view>
@@ -334,6 +344,7 @@ import {
   getOrderImports,
   uploadReceiptPhoto,
 } from '../api/purchasing';
+import { sumImportFees } from '../../../utils/order-import-fees';
 import {
   getReimbursementCustomFeeCategoryLabel,
   inferReimbursementCustomFeeCategory,
@@ -370,6 +381,11 @@ const receiptUrls = ref<ReceiptPhoto[]>([]);
 const orderImports = ref<any[]>([]);
 const platformShippingFee = ref('');
 const platformPackagingFee = ref('');
+/** 员工手填过就不再被识别结果覆盖（预填只填空） */
+const shippingTouched = ref(false);
+const packagingTouched = ref(false);
+/** 打开的是已存在的报销单：金额以存下来的为准，不按识别结果重填 */
+const restoredFromDraft = ref(false);
 const customFees = ref<CustomFee[]>([
   { category: 'RENT', description: '', amount: '' },
 ]);
@@ -600,6 +616,7 @@ const loadExistingReimbursement = async (id: string) => {
     selectedListIds.value = existingLists.map((list: any) => list.id);
     platformShippingFee.value = data.platformShippingFee?.toString() || '';
     platformPackagingFee.value = data.platformPackagingFee?.toString() || '';
+    restoredFromDraft.value = true;
     customFees.value =
       Array.isArray(data.customFees) && data.customFees.length > 0
         ? data.customFees.map((fee: any) => ({
@@ -754,6 +771,9 @@ watch(
   () => {
     voucherTouched.value = false;
     voucherInput.value = '';
+    // 换清单后重新按识别结果预填运费/包装费，除非员工已经手填过。
+    shippingTouched.value = false;
+    packagingTouched.value = false;
     void loadOrderImports();
   },
 );
@@ -761,6 +781,37 @@ watch(
 watch(voucherFromImports, (value) => {
   if (!voucherTouched.value) {
     voucherInput.value = value === null ? '' : value.toFixed(2);
+  }
+});
+
+/**
+ * 运费/包装费预填：只取「日采清单」里已确认的识别记录，多笔订单自动相加。
+ * 补货/包材清单的运费不进这条线（业务规则：运费/包装费只归日采）。
+ */
+const feesFromImports = computed(() => {
+  const dailyIds = new Set(
+    selectedPurchaseLists.value
+      .filter(
+        (list) => list.kind === 'ORDER_DEMAND' && !isPackagingPurchaseList(list),
+      )
+      .map((list) => list.id as string),
+  );
+  const confirmed = orderImports.value.filter(
+    (item: any) =>
+      item.status === 'CONFIRMED' && dailyIds.has(String(item.purchaseListId)),
+  );
+  return sumImportFees(confirmed);
+});
+
+watch(feesFromImports, (value) => {
+  // 只填空：员工已经填过的数不动（后端也会按总额校验，别把人改的覆盖掉）。
+  if (restoredFromDraft.value) return;
+  if (!shippingTouched.value) {
+    platformShippingFee.value = value.shipping > 0 ? value.shipping.toFixed(2) : '';
+  }
+  if (!packagingTouched.value) {
+    platformPackagingFee.value =
+      value.packaging > 0 ? value.packaging.toFixed(2) : '';
   }
 });
 

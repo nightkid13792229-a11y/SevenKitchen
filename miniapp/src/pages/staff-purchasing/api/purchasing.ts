@@ -1120,6 +1120,9 @@ export interface OrderImportView {
   subtotal: number | null;
   shippingFee: number | null;
   packagingFee: number | null;
+  /** 模型当初读到的运费 / 包装费，用于显示「已改动」对照 */
+  aiShippingFee: number | null;
+  aiPackagingFee: number | null;
   paid: number | null;
   incomplete: boolean;
   incompleteReason: string | null;
@@ -1199,7 +1202,13 @@ export function getOrderImports(purchaseListId: string) {
 
 export function updateOrderImport(
   importId: string,
-  data: { channel?: string; orderNo?: string | null; orderTime?: string | null },
+  data: {
+    channel?: string;
+    orderNo?: string | null;
+    orderTime?: string | null;
+    shippingFee?: number | null;
+    packagingFee?: number | null;
+  },
 ) {
   return request({
     url: `/staff/purchasing/order-imports/${importId}`,

@@ -40,6 +40,20 @@ export class UpdateOrderImportDto {
   @IsString()
   @MaxLength(20)
   orderTime?: string | null;
+
+  /**
+   * 运费 / 包装费允许人工修正（模型读错时以员工填的为准）。
+   * null = 明确清空（按 0 计），不传 = 不改。
+   */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  shippingFee?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  packagingFee?: number | null;
 }
 
 export class UpdateOrderImportLineDto {

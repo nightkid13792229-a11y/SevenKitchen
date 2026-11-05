@@ -33,6 +33,7 @@ describe('PurchaseOrderImportService', () => {
       count: jest.fn(),
       findFirst: jest.fn(),
       findMany: jest.fn(),
+      findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
@@ -597,6 +598,89 @@ describe('PurchaseOrderImportService', () => {
       });
       const data = prisma.purchaseOrderImportLine.update.mock.calls[0][0].data;
       expect(data.unit).toBe('袋');
+    });
+  });
+
+  describe('updateImport（运费/包装费人工修正）', () => {
+    const baseRow = {
+      id: 'import-1',
+      purchaseListId: 'list-1',
+      channel: '山姆',
+      orderNo: null,
+      orderTime: null,
+      subtotal: 125.9,
+      shippingFee: 2,
+      packagingFee: null,
+      paid: 127.9,
+      imageUrls: [],
+      imageKeys: [],
+      status: 'DRAFT',
+      incomplete: false,
+      incompleteReason: null,
+      model: 'test-model',
+      promptVersion: 'test-version',
+      rawResult: {
+        subtotal: 125.9,
+        shippingFee: 2,
+        packagingFee: null,
+        paid: 127.9,
+        items: [],
+      },
+      confirmedAt: null,
+      createdAt: new Date(),
+      lines: [],
+    };
+
+    beforeEach(() => {
+      prisma.purchaseOrderImport.findUnique.mockResolvedValue({ ...baseRow });
+      prisma.purchaseOrderImport.update.mockImplementation(
+        async ({ data }: any) => ({ ...baseRow, ...data }),
+      );
+    });
+
+    it('运费/包装费随便改，并把模型读到的原值一起返回', async () => {
+      const view = await service.updateImport('import-1', {
+        shippingFee: 3.5,
+        packagingFee: 0,
+      });
+      const data = prisma.purchaseOrderImport.update.mock.calls[0][0].data;
+      expect(data.shippingFee).toBe(3.5);
+      expect(data.packagingFee).toBe(0);
+      // 原值留在 rawResult 里，页面靠 ai* 字段做「已改动」对照。
+      expect(view.shippingFee).toBe(3.5);
+      expect(view.aiShippingFee).toBe(2);
+      expect(view.aiPackagingFee).toBeNull();
+    });
+
+    it('负数或超过上限的金额被拒绝，不落库', async () => {
+      await expect(
+        service.updateImport('import-1', { shippingFee: -1 }),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.updateImport('import-1', { packagingFee: 99999 }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.purchaseOrderImport.update).not.toHaveBeenCalled();
+    });
+
+    it('传 null 表示清空（按 0 计）', async () => {
+      const view = await service.updateImport('import-1', {
+        shippingFee: null,
+      });
+      const data = prisma.purchaseOrderImport.update.mock.calls[0][0].data;
+      expect(data.shippingFee).toBeNull();
+      expect(view.shippingFee).toBeNull();
+      expect(view.aiShippingFee).toBe(2);
+    });
+
+    it('已确认的识别记录不允许再改金额', async () => {
+      prisma.purchaseOrderImport.findUnique.mockResolvedValue({
+        ...baseRow,
+        status: 'CONFIRMED',
+      });
+      await expect(
+        service.updateImport('import-1', { shippingFee: 1 }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.purchaseOrderImport.update).not.toHaveBeenCalled();
     });
   });
 });

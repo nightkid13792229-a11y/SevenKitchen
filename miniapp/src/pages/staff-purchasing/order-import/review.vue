@@ -43,6 +43,10 @@
           <text class="summary-k">待处理</text>
           <text class="summary-v warn">{{ activeSummary.unmatched + activeSummary.needsSku }} 行</text>
         </view>
+        <view class="summary-cell">
+          <text class="summary-k">差额</text>
+          <text class="summary-v" :class="{ warn: feeGapWarn }">{{ feeGapText }}</text>
+        </view>
       </view>
 
       <view v-if="activeImport" class="meta-row">
@@ -82,6 +86,41 @@
           <text class="line-amount">¥{{ money(line.lineTotal) }}</text>
           <text class="state" :class="stateClass(line)">{{ stateText(line) }}</text>
           <text class="chev">›</text>
+        </view>
+      </view>
+
+      <!-- 费用：商品小计 + 运费 + 包装费 = 实付（运费/包装费可人工修正） -->
+      <view v-if="feeSummary" class="fees">
+        <view class="fees-head">
+          <text class="fees-title">费用</text>
+          <text class="fees-action" @tap="openFeeEdit">
+            {{ feesEdited ? '已修改 · 再改 ›' : '改运费 / 包装费 ›' }}
+          </text>
+        </view>
+        <view class="fee-row">
+          <text class="fee-k">商品小计（{{ activeImport?.lines.length ?? 0 }} 行）</text>
+          <text class="fee-v">¥{{ money(feeSummary.lineSum) }}</text>
+        </view>
+        <view class="fee-row tap" @tap="openFeeEdit">
+          <text class="fee-k">运费</text>
+          <text v-if="feeSummary.shipping === null" class="fee-v missing">未读到 · 补填 ›</text>
+          <text v-else class="fee-v">¥{{ money(feeSummary.shipping) }}</text>
+        </view>
+        <view class="fee-row tap" @tap="openFeeEdit">
+          <text class="fee-k">包装费</text>
+          <text v-if="feeSummary.packaging === null" class="fee-v missing">未读到 · 补填 ›</text>
+          <text v-else class="fee-v">¥{{ money(feeSummary.packaging) }}</text>
+        </view>
+        <view class="fee-row total">
+          <text class="fee-k">{{ activeImport?.paid === null ? '实付（未读到）' : '实付' }}</text>
+          <text v-if="activeImport?.paid === null || activeImport?.paid === undefined" class="fee-v missing">
+            未读到
+          </text>
+          <text v-else class="fee-v">¥{{ money(activeImport.paid) }}</text>
+        </view>
+        <text v-if="feesEdited" class="fee-origin">{{ feeOriginText }}</text>
+        <view class="fee-check" :class="{ bad: feeGapWarn }">
+          <text>{{ feeCheckText }}</text>
         </view>
       </view>
 
@@ -164,6 +203,44 @@
       </view>
     </view>
 
+    <!-- 改运费 / 包装费 -->
+    <view v-if="feeEditing" class="sheet-mask" @tap="closeFeeEdit">
+      <view class="sheet" @tap.stop>
+        <text class="sheet-title">运费 / 包装费</text>
+        <text class="sheet-sub">{{ feeOriginText }}。读错了可以直接改，留空按没读到处理。</text>
+
+        <view class="field">
+          <text class="field-label">运费</text>
+          <input
+            v-model="feeEditing.shippingText"
+            type="digit"
+            class="field-input"
+            placeholder="0.00"
+          />
+        </view>
+        <view class="field">
+          <text class="field-label">包装费</text>
+          <input
+            v-model="feeEditing.packagingText"
+            type="digit"
+            class="field-input"
+            placeholder="0.00"
+          />
+        </view>
+
+        <text class="fee-gap-line">{{ feeEditPreview }}</text>
+
+        <view class="warn-banner small">
+          <text>这两项按整笔订单算，不摊到商品行，也不和个人采购分摊；全额算进这次采购。</text>
+        </view>
+
+        <view class="sheet-actions">
+          <button class="ghost-btn" @tap="closeFeeEdit">取消</button>
+          <button class="primary-btn" :loading="feeSaving" @tap="saveFeeEdit">保存</button>
+        </view>
+      </view>
+    </view>
+
     <!-- 选原料 / 选商品 -->
     <view v-if="pickerMode !== 'none'" class="sheet-mask" @tap="closePicker">
       <view class="sheet" @tap.stop>
@@ -230,6 +307,11 @@ import {
 } from '../api/purchasing';
 import type { OrderImportLineView, OrderImportView } from '../api/purchasing';
 import { checkOrderImportAmount } from '../../../utils/order-import-check';
+import {
+  IMPORT_FEE_TOLERANCE,
+  isFeeGapOff,
+  summarizeOrderImportFees,
+} from '../../../utils/order-import-fees';
 
 interface IngredientOption {
   ingredientId: string;
@@ -249,6 +331,8 @@ const editing = ref<any>(null);
 const pickerMode = ref<'none' | 'ingredient' | 'sku'>('none');
 const saving = ref(false);
 const submitting = ref(false);
+const feeEditing = ref<{ shippingText: string; packagingText: string } | null>(null);
+const feeSaving = ref(false);
 let loadedOnce = false;
 
 const activeImport = computed(() => imports.value[activeIndex.value] || null);
@@ -261,6 +345,103 @@ const activeWarnings = computed(() =>
 const activeAcked = computed(() =>
   activeImport.value ? ackedImportIds.value.includes(activeImport.value.id) : false,
 );
+
+/**
+ * 费用区：商品小计 + 运费 + 包装费 = 实付。
+ * 运费/包装费是订单级的，不摊到商品行、不和个人采购分摊（业务规则 R6/R10）。
+ * 只有读到了「实付」才算差额；没读到就不猜，交给员工对照原图。
+ */
+const feeSummary = computed(() => {
+  const item = activeImport.value;
+  if (!item) return null;
+  return summarizeOrderImportFees({
+    lineTotals: item.lines.map((line) => line.lineTotal ?? null),
+    shippingFee: item.shippingFee ?? null,
+    packagingFee: item.packagingFee ?? null,
+    paid: item.paid ?? null,
+  });
+});
+
+/** 运费/包装费被员工改过：和模型当初读到的不一样 */
+const feesEdited = computed(() => {
+  const item = activeImport.value;
+  if (!item) return false;
+  return (
+    !sameAmount(item.shippingFee, item.aiShippingFee) ||
+    !sameAmount(item.packagingFee, item.aiPackagingFee)
+  );
+});
+
+const feeGapWarn = computed(() => isFeeGapOff(feeSummary.value?.gap ?? null));
+
+const feeGapText = computed(() => {
+  const gap = feeSummary.value?.gap;
+  if (typeof gap !== 'number') return '—';
+  if (Math.abs(gap) <= IMPORT_FEE_TOLERANCE) return '0.00';
+  return `${gap > 0 ? '+' : '-'}${Math.abs(gap).toFixed(2)}`;
+});
+
+/** 「模型读到：运费 ¥2.00、包装费 未读到」——改过之后也要能看到原值 */
+const feeOriginText = computed(() => {
+  const item = activeImport.value;
+  if (!item) return '';
+  const shipping =
+    item.aiShippingFee === null || item.aiShippingFee === undefined
+      ? '未读到'
+      : `¥${money(item.aiShippingFee)}`;
+  const packaging =
+    item.aiPackagingFee === null || item.aiPackagingFee === undefined
+      ? '未读到'
+      : `¥${money(item.aiPackagingFee)}`;
+  return `模型读到：运费 ${shipping}、包装费 ${packaging}`;
+});
+
+const feeCheckText = computed(() => {
+  const item = activeImport.value;
+  const summary = feeSummary.value;
+  if (!item || !summary) return '';
+  const hasMissing = summary.hasMissingFee;
+  const equation =
+    `商品 ¥${money(summary.lineSum)} + 运费 ¥${money(summary.shipping)} + ` +
+    `包装费 ¥${money(summary.packaging)} = ¥${money(summary.expected)}`;
+
+  if (summary.gap === null) {
+    return hasMissing
+      ? `运费或包装费还没填（先按 0 算），实付也没读到，请对照原图补全。`
+      : `${equation}；这笔的实付没读到，暂时只能按商品金额核对。`;
+  }
+  if (Math.abs(summary.gap) <= IMPORT_FEE_TOLERANCE) {
+    return `${equation}，和实付对得上。`;
+  }
+  const diff = Math.abs(summary.gap).toFixed(2);
+  if (hasMissing) {
+    return summary.gap > 0
+      ? `运费或包装费还没填（先按 0 算）：${equation}，实付还多 ¥${diff}，点上面两行补一下就平了。`
+      : `运费或包装费还没填（先按 0 算）：${equation}，实付比它还少 ¥${diff}，请对照原图核对。`;
+  }
+  return summary.gap > 0
+    ? `${equation}，实付 ¥${money(item.paid)} 比它多 ¥${diff}；可能有服务费或没读到的费用，请对照原图确认。`
+    : `${equation}，实付 ¥${money(item.paid)} 比它少 ¥${diff}，请对照原图核对。`;
+});
+
+/** 改费用时的实时预览：一眼看到改完还差多少 */
+const feeEditPreview = computed(() => {
+  const summary = feeSummary.value;
+  const form = feeEditing.value;
+  const item = activeImport.value;
+  if (!summary || !form || !item) return '';
+  const shipping = parseNumber(form.shippingText);
+  const packaging = parseNumber(form.packagingText);
+  const expected = round2(summary.lineSum + (shipping ?? 0) + (packaging ?? 0));
+  if (item.paid === null) {
+    return `合计 ¥${money(expected)}（实付没读到，先按这个数核对）`;
+  }
+  const gap = round2(item.paid - expected);
+  if (Math.abs(gap) <= IMPORT_FEE_TOLERANCE) {
+    return `合计 ¥${money(expected)}，和实付 ¥${money(item.paid)} 一致`;
+  }
+  return `合计 ¥${money(expected)}，和实付 ¥${money(item.paid)} 差 ¥${Math.abs(gap).toFixed(2)}`;
+});
 const ingredientOptions = computed<IngredientOption[]>(() => {
   const items = list.value?.items || [];
   const seen = new Set<string>();
@@ -472,6 +653,56 @@ function openEdit(line: OrderImportLineView) {
 function closeEdit() {
   editing.value = null;
   pickerMode.value = 'none';
+}
+
+function openFeeEdit() {
+  const item = activeImport.value;
+  if (!item) return;
+  feeEditing.value = {
+    shippingText: item.shippingFee === null ? '' : String(item.shippingFee),
+    packagingText: item.packagingFee === null ? '' : String(item.packagingFee),
+  };
+}
+
+function closeFeeEdit() {
+  feeEditing.value = null;
+}
+
+/**
+ * 保存运费/包装费。允许员工随便改（模型读错是常态），
+ * 但保留模型原值并标「已改动」，审核时能对照。
+ */
+async function saveFeeEdit() {
+  const form = feeEditing.value;
+  const item = activeImport.value;
+  if (feeSaving.value || !form || !item) return;
+
+  const shippingResult = parseFeeInput(form.shippingText, '运费');
+  if (shippingResult.error) {
+    uni.showToast({ title: shippingResult.error, icon: 'none' });
+    return;
+  }
+  const packagingResult = parseFeeInput(form.packagingText, '包装费');
+  if (packagingResult.error) {
+    uni.showToast({ title: packagingResult.error, icon: 'none' });
+    return;
+  }
+
+  feeSaving.value = true;
+  try {
+    const res: any = await updateOrderImport(item.id, {
+      shippingFee: shippingResult.value,
+      packagingFee: packagingResult.value,
+    });
+    if (res.code !== 0) throw new Error(res.message || '保存失败');
+    closeFeeEdit();
+    await load();
+    uni.showToast({ title: '已保存', icon: 'success' });
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '保存失败', icon: 'none' });
+  } finally {
+    feeSaving.value = false;
+  }
 }
 
 function openIngredientPicker() {
@@ -693,6 +924,41 @@ function parseNumber(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/** 两个金额是否等价；null 只等于 null */
+function sameAmount(
+  left: number | null | undefined,
+  right: number | null | undefined,
+): boolean {
+  const a = left === null || left === undefined ? null : Number(left);
+  const b = right === null || right === undefined ? null : Number(right);
+  if (a === null || b === null) return a === b;
+  return Math.abs(a - b) <= 0.005;
+}
+
+/** 费用输入：空 = 没读到（null），最多两位小数 */
+function parseFeeInput(
+  text: string,
+  label: string,
+): { value: number | null; error: string | null } {
+  const trimmed = String(text ?? '').trim();
+  if (!trimmed) return { value: null, error: null };
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
+    return { value: null, error: `${label}最多两位小数，例如 2.00` };
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return { value: null, error: `${label}请填数字` };
+  }
+  if (parsed > 5000) {
+    return { value: null, error: `${label}超过 5000 元，请核对` };
+  }
+  return { value: round2(parsed), error: null };
+}
+
 function money(value: number | null | undefined) {
   if (value === null || value === undefined || !Number.isFinite(Number(value))) {
     return '0.00';
@@ -800,12 +1066,13 @@ function emptySummary() {
   display: flex;
   background: #1e3a2f;
   border-radius: 24rpx;
-  padding: 18rpx 10rpx;
+  padding: 16rpx 4rpx;
   margin-bottom: 12rpx;
 }
 
 .summary-cell {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -813,14 +1080,16 @@ function emptySummary() {
 }
 
 .summary-k {
-  font-size: 19rpx;
+  font-size: 18rpx;
   color: #c9cfc0;
+  white-space: nowrap;
 }
 
 .summary-v {
-  font-size: 28rpx;
+  font-size: 26rpx;
   font-weight: 700;
   color: #f7f4e9;
+  white-space: nowrap;
 }
 
 .summary-v.warn {
@@ -1218,5 +1487,99 @@ function emptySummary() {
   font-size: 22rpx;
   color: #7a5c28;
   font-weight: 600;
+}
+
+/* 费用区：商品小计 + 运费 + 包装费 = 实付 */
+.fees {
+  margin-top: 14rpx;
+  background: #fbfcf7;
+  border: 1rpx solid #e2dcc9;
+  border-radius: 24rpx;
+  padding: 18rpx 20rpx 16rpx;
+}
+
+.fees-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4rpx;
+}
+
+.fees-title {
+  font-size: 23rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.fees-action {
+  font-size: 21rpx;
+  color: #7a5c28;
+  font-weight: 600;
+}
+
+.fee-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10rpx 0;
+  border-bottom: 1rpx dashed #efe9d9;
+}
+
+.fee-row.total {
+  border-bottom: none;
+  padding-top: 12rpx;
+}
+
+.fee-k {
+  font-size: 22rpx;
+  color: #6b6653;
+}
+
+.fee-v {
+  font-size: 24rpx;
+  color: #26261f;
+  font-weight: 600;
+}
+
+.fee-row.total .fee-v {
+  font-size: 27rpx;
+  color: #1e3a2f;
+}
+
+.fee-v.missing {
+  color: #a8742a;
+  font-weight: 600;
+}
+
+.fee-origin {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 19rpx;
+  color: #a8742a;
+  line-height: 1.5;
+}
+
+.fee-check {
+  margin-top: 10rpx;
+  padding: 12rpx 14rpx;
+  border-radius: 12rpx;
+  background: #eef3ea;
+  font-size: 20rpx;
+  color: #2f6b4f;
+  line-height: 1.55;
+}
+
+.fee-check.bad {
+  background: #fbf1dd;
+  border: 1rpx solid #efdcb8;
+  color: #7a5a20;
+}
+
+.fee-gap-line {
+  display: block;
+  padding: 2rpx 4rpx;
+  font-size: 21rpx;
+  color: #6b6653;
+  line-height: 1.5;
 }
 </style>

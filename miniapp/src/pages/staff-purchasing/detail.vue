@@ -111,9 +111,10 @@
         </template>
       </view>
 
-      <!-- 订单截图快速录入（2026-11-04 采购-报销 AI 接入） -->
+      <!-- 订单截图识别：点按钮直接选图，原地等结果（2026-11-05 起不再单独占一页） -->
       <view v-if="canImportOrderScreenshot" class="section import-card">
-        <button class="import-btn" @tap="goOrderImport">AI识别订单截图</button>
+        <button class="import-btn" @tap="goOrderImport">AI 识别订单截图</button>
+        <text class="import-hint">{{ orderShotHint }}</text>
         <text
           v-if="orderImportCount > 0"
           class="import-note import-link"
@@ -423,6 +424,15 @@
         </view>
       </view>
     </view>
+
+    <!-- 选完图就地等：上传 → 识别，完成后自动进核对页 -->
+    <view v-if="importBusy" class="import-mask">
+      <view class="import-mask-card">
+        <view class="import-spinner"></view>
+        <text class="import-mask-stage">{{ importStage }}</text>
+        <text class="import-mask-note">识别完自动进结果页</text>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -434,6 +444,11 @@ import StaffQuantityText from '../../components/staff/StaffQuantityText.vue';
 import StaffBottomBar from '../../components/staff/StaffBottomBar.vue';
 import { formatStaffQuantity } from '../../utils/staff-quantity';
 import { canAddProcurementSku } from './procurement-sku-entry';
+import {
+  ORDER_SHOT_HINT,
+  chooseOrderShots,
+  importOrderShots,
+} from './order-import/import-flow';
 import { getPurchaseListDetail, completePurchase as completePurchaseApi, reopenPurchaseList as reopenPurchaseListApi, startPurchase as startPurchaseApi, getPurchaseRecords, getOrderImports, deletePurchaseRecord as deletePurchaseRecordApi, addPurchaseRecord, updatePurchaseRecord as updatePurchaseRecordApi, markPurchaseItemNoPurchase as markPurchaseItemNoPurchaseApi, clearPurchaseItemNoPurchase as clearPurchaseItemNoPurchaseApi, removeItemFromList, checkOrderDateChanges, getPurchaseChannels, previewPurchaseList, addOrdersToList, resolveProcurementSkuProfile, resolvePurchaseItemDisplay, resolvePurchaseRecordDisplay } from './api/purchasing';
 
 // 状态管理
@@ -1288,6 +1303,9 @@ const dateChanges = ref<any>({
 });
 
 const orderImportCount = ref(0);
+const orderShotHint = ORDER_SHOT_HINT;
+const importBusy = ref(false);
+const importStage = ref('');
 
 const canImportOrderScreenshot = computed(() => {
   return (
@@ -1319,31 +1337,81 @@ const goOrderImportReview = () => {
   });
 };
 
-// 去上传订单截图：没开始采购先确认开始（入口常驻，但不让它在状态机之外生成记录）
+// 识别订单截图：入口常驻，没开始采购先确认（生成记录不能绕开状态机）
 const goOrderImport = () => {
-  if (!purchaseList.value) return;
-  const navigate = () => {
-    uni.navigateTo({
-      url: `/pages/staff-purchasing/order-import/upload?id=${purchaseListId.value}`,
-    });
-  };
+  if (!purchaseList.value || importBusy.value) return;
   if (purchaseList.value.startedAt) {
-    navigate();
+    void pickAndRecognize();
     return;
   }
   uni.showModal({
     title: '还没开始采购',
-    content: '上传订单截图会生成采购记录，需要先点「开始采购」。现在开始吗？',
+    content: '识别订单会生成采购记录，要先开始采购。现在开始吗？',
     confirmText: '开始采购',
     success: async (res) => {
       if (!res.confirm) return;
       try {
         await startPurchaseApi(purchaseListId.value);
         await loadDetail();
-        navigate();
+        await pickAndRecognize();
       } catch (error: any) {
         uni.showToast({ title: error?.message || '开始采购失败', icon: 'none' });
       }
+    },
+  });
+};
+
+// 选图 → 上传 → 识别；成功后直接进核对页，中间不再单独占一页
+const pickAndRecognize = async () => {
+  const paths = await chooseOrderShots();
+  if (paths.length === 0) return;
+  importBusy.value = true;
+  try {
+    const result = await importOrderShots(purchaseListId.value, paths, (stage) => {
+      importStage.value = stage;
+    });
+    if (result.ok) {
+      uni.navigateTo({
+        url: `/pages/staff-purchasing/order-import/review?id=${purchaseListId.value}&focus=last`,
+      });
+      return;
+    }
+    if (result.kind === 'duplicate') {
+      await handleDuplicateImport();
+      return;
+    }
+    uni.showModal({ title: '没识别成功', content: result.message, showCancel: false });
+  } catch (error: any) {
+    uni.showModal({
+      title: '没识别成功',
+      content: error?.message || '请稍后重试',
+      showCancel: false,
+    });
+  } finally {
+    importBusy.value = false;
+  }
+};
+
+// 重复上传：草稿还在就直接送进核对页，别让人再传一遍
+const handleDuplicateImport = async () => {
+  let drafts = 0;
+  try {
+    const res: any = await getOrderImports(purchaseListId.value);
+    drafts =
+      res.code === 0
+        ? (res.data || []).filter((item: any) => item.status === 'DRAFT').length
+        : 0;
+  } catch {
+    drafts = 0;
+  }
+  const goReview = drafts > 0;
+  uni.showModal({
+    title: '这张截图传过了',
+    content: goReview ? '草稿还在，直接去核对。' : '已经生成过采购记录，不用再传。',
+    confirmText: goReview ? '去核对' : '知道了',
+    showCancel: false,
+    success: (res) => {
+      if (res.confirm && goReview) goOrderImportReview();
     },
   });
 };
@@ -3930,6 +3998,62 @@ const confirmDeleteItem = (item: any) => {
 .import-link {
   color: #7a5c28;
   font-weight: 600;
+}
+
+/* 原来上传页的三条指引 + 两句解释，现在只剩按钮下这一行 */
+.import-hint {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 21rpx;
+  line-height: 1.5;
+  color: #8a8574;
+}
+
+.import-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(23, 48, 38, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.import-mask-card {
+  width: 440rpx;
+  padding: 40rpx 32rpx;
+  border-radius: 24rpx;
+  background: #fbfcf7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.import-spinner {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  border: 6rpx solid #e2dcc9;
+  border-top-color: #7a5c28;
+  animation: import-spin 0.8s linear infinite;
+}
+
+@keyframes import-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.import-mask-stage {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+}
+
+.import-mask-note {
+  font-size: 21rpx;
+  color: #6b6653;
 }
 
 .record-title-row {

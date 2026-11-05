@@ -5,8 +5,10 @@
     <template v-else-if="loaded && imports.length === 0">
       <view class="empty">
         <text class="empty-title">还没有识别记录</text>
-        <text class="empty-desc">回到清单详情，上传订单截图后再来核对。</text>
-        <button class="primary-btn" @tap="goBack">返回清单</button>
+        <text class="empty-desc">{{ orderShotHint }}</text>
+        <button class="primary-btn empty-btn" :loading="importing" @tap="pickMore">
+          选择订单截图
+        </button>
         <text class="retry-link" @tap="load">重新加载</text>
       </view>
     </template>
@@ -52,6 +54,19 @@
       <view v-if="activeImport" class="meta-row">
         <text class="meta-text">共 {{ activeImport.lines.length }} 行 · {{ amountStateText(activeImport) }}</text>
         <text class="meta-channel" @tap="changeChannel">渠道 {{ activeImport.channel }} ›</text>
+      </view>
+
+      <!-- 原图：核对本来就要「对照原图」，图就放在结果里，点开看大图 -->
+      <view v-if="activeImport && activeImport.imageUrls?.length" class="shots-row">
+        <text class="shots-label">原图</text>
+        <image
+          v-for="(url, index) in activeImport.imageUrls"
+          :key="url"
+          :src="url"
+          mode="aspectFill"
+          class="shot-thumb"
+          @tap="previewOriginal(index)"
+        />
       </view>
 
       <view v-if="activeImport && activeIncompleteNotice" class="warn-banner">
@@ -113,8 +128,8 @@
         </view>
       </view>
 
-      <view v-if="activeImport" class="diff-note">
-        本单含个人采购 ¥{{ money(activeSummary.personalAmount) }}，不会进报销；点任意一行可改数量、金额或原料。
+      <view v-if="activeImport && activeSummary.personalAmount > 0" class="diff-note">
+        个人采购 ¥{{ money(activeSummary.personalAmount) }} 不进报销；点一行可改数量、金额、原料。
       </view>
 
       <view class="footer">
@@ -125,7 +140,10 @@
         <button class="primary-btn" :disabled="!canConfirm || submitting" :loading="submitting" @tap="submit">
           {{ blockReason || '生成采购记录' }}
         </button>
-        <text class="discard" @tap="discardActive">放弃这笔识别</text>
+        <view class="footer-links">
+          <text class="footer-action" @tap="pickMore">{{ importing ? '上传中…' : '＋ 再传一笔' }}</text>
+          <text class="discard" @tap="discardActive">放弃这笔识别</text>
+        </view>
       </view>
     </template>
 
@@ -133,7 +151,7 @@
     <view v-if="editing" class="sheet-mask" @tap="closeEdit">
       <view class="sheet" @tap.stop>
         <text class="sheet-title">修改「{{ editing.rawName }}」</text>
-        <text class="sheet-sub">原图金额 ¥{{ money(editing._origTotal) }}；改动会在审核时和原图对照。</text>
+        <text class="sheet-sub">原图 ¥{{ money(editing._origTotal) }}，改动会标「已改动」。</text>
 
         <view class="field">
           <text class="field-label">数量</text>
@@ -295,6 +313,11 @@ import {
   updateOrderImportLine,
 } from '../api/purchasing';
 import type { OrderImportLineView, OrderImportView } from '../api/purchasing';
+import {
+  ORDER_SHOT_HINT,
+  chooseOrderShots,
+  importOrderShots,
+} from './import-flow';
 import { checkOrderImportAmount } from '../../../utils/order-import-check';
 import {
   IMPORT_FEE_TOLERANCE,
@@ -322,7 +345,11 @@ const saving = ref(false);
 const submitting = ref(false);
 const feeEditing = ref<{ shippingText: string; packagingText: string } | null>(null);
 const feeSaving = ref(false);
+const importing = ref(false);
+const orderShotHint = ORDER_SHOT_HINT;
 let loadedOnce = false;
+/** 从详情页刚识别完进来时，直接落到最新那笔 */
+let focusLastOnce = false;
 
 const activeImport = computed(() => imports.value[activeIndex.value] || null);
 const activeSummary = computed(() => activeImport.value?.summary ?? emptySummary());
@@ -519,6 +546,7 @@ const canConfirm = computed(() => blockReason.value === '' && !submitted.value);
 
 onLoad((options: Record<string, string>) => {
   listId.value = String(options?.id || '');
+  focusLastOnce = options?.focus === 'last';
   uni.$on('procurement-sku:created', handleSkuCreated);
   void load().finally(() => {
     loadedOnce = true;
@@ -555,6 +583,10 @@ async function load() {
     if (res.code === 0) {
       imports.value = (res.data || []).filter((item: any) => item.status === 'DRAFT');
       if (activeIndex.value >= imports.value.length) activeIndex.value = 0;
+      if (focusLastOnce && imports.value.length > 0) {
+        activeIndex.value = imports.value.length - 1;
+        focusLastOnce = false;
+      }
       loaded.value = true;
     } else {
       failed = true;
@@ -570,6 +602,52 @@ async function load() {
 
 function handleSkuCreated() {
   void load();
+}
+
+// 核对到一半想补传一笔：不用退回详情页再点一次
+async function pickMore() {
+  if (importing.value) return;
+  const paths = await chooseOrderShots();
+  if (paths.length === 0) return;
+  const before = imports.value.length;
+  importing.value = true;
+  uni.showLoading({ title: `上传 1/${paths.length}`, mask: true });
+  let loadingShown = true;
+  try {
+    const result = await importOrderShots(listId.value, paths, (stage) => {
+      uni.showLoading({ title: stage, mask: true });
+    });
+    uni.hideLoading();
+    loadingShown = false;
+    if (!result.ok) {
+      if (result.kind === 'duplicate') {
+        await load();
+        uni.showToast({ title: '这张图已经传过了', icon: 'none' });
+      } else {
+        uni.showModal({ title: '没识别成功', content: result.message, showCancel: false });
+      }
+      return;
+    }
+    await load();
+    activeIndex.value = Math.min(before, Math.max(imports.value.length - 1, 0));
+  } catch (error: any) {
+    uni.hideLoading();
+    loadingShown = false;
+    uni.showModal({
+      title: '没识别成功',
+      content: error?.message || '请稍后重试',
+      showCancel: false,
+    });
+  } finally {
+    if (loadingShown) uni.hideLoading();
+    importing.value = false;
+  }
+}
+
+function previewOriginal(current: number) {
+  const urls = activeImport.value?.imageUrls ?? [];
+  if (urls.length === 0) return;
+  uni.previewImage({ urls, current: urls[current] });
 }
 
 function selectOrder(index: number) {
@@ -955,7 +1033,7 @@ function emptySummary() {
 .review-page {
   min-height: 100vh;
   background: #f3eddd;
-  padding: 20rpx 24rpx 260rpx;
+  padding: 20rpx 24rpx 300rpx;
   box-sizing: border-box;
 }
 
@@ -986,6 +1064,32 @@ function emptySummary() {
   margin: 12rpx 0 32rpx;
   font-size: 24rpx;
   color: #6b6653;
+  line-height: 1.5;
+}
+
+.empty-btn {
+  width: 420rpx;
+  margin: 0 auto;
+}
+
+.shots-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 0 6rpx 14rpx;
+}
+
+.shots-label {
+  font-size: 21rpx;
+  color: #6b6653;
+}
+
+.shot-thumb {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 12rpx;
+  border: 1rpx solid #e2dcc9;
+  background: #e7e1cf;
 }
 
 .tabs {
@@ -1232,10 +1336,21 @@ function emptySummary() {
   color: #8d8877;
 }
 
-.discard {
-  display: block;
-  text-align: center;
+.footer-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 56rpx;
   margin-top: 12rpx;
+}
+
+.footer-action {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #7a5c28;
+}
+
+.discard {
   font-size: 22rpx;
   color: #b4453a;
 }

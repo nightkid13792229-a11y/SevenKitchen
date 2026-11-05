@@ -319,6 +319,7 @@ import {
   importOrderShots,
 } from './import-flow';
 import { checkOrderImportAmount } from '../../../utils/order-import-check';
+import { firstBlockedImport } from '../../../utils/order-import-block';
 import {
   IMPORT_FEE_TOLERANCE,
   isFeeGapOff,
@@ -506,12 +507,15 @@ const matchedAmount = computed(() =>
 );
 const blockReason = computed(() => {
   if (submitted.value) return '已生成，正在返回';
-  for (const item of imports.value) {
-    const issue = importIssue(item);
-    if (issue) {
-      const label = `${item.channel}${item.orderTime ? ' ' + formatShortDate(item.orderTime) : ''}`;
-      return `${label}：${issue}`;
-    }
+  // 先报当前这一单，再报别的单：否则站在盒马这页，按钮却写着「山姆：1 行待处理」
+  const blocking = firstBlockedImport(
+    activeImport.value,
+    imports.value,
+    (item) => importIssue(item) !== null,
+  );
+  if (blocking) {
+    const label = `${blocking.channel}${blocking.orderTime ? ' ' + formatShortDate(blocking.orderTime) : ''}`;
+    return `${label}：${importIssue(blocking)}`;
   }
   if (matchedLineCount.value === 0) return '还没有可生成的采购记录';
   return '';

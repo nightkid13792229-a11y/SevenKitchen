@@ -3,7 +3,8 @@
     <!-- Logo区域 -->
     <view class="logo-section">
       <image class="logo" :src="STATIC_LOGO_SRC" mode="aspectFit"></image>
-      <text class="app-name">赛文的食堂</text>
+      <text class="app-name">Setar</text>
+      <text class="app-cn">赛文的食堂</text>
       <text class="app-slogan">新鲜健康，为爱定制</text>
     </view>
 
@@ -253,7 +254,7 @@ const handleWechatLogin = async () => {
 
       if (isNewUser) {
         uni.showToast({
-          title: "欢迎加入赛文的食堂！",
+          title: "欢迎加入 Setar 赛文的食堂！",
           icon: "success",
           duration: 2000,
         });
@@ -306,15 +307,23 @@ const handleWechatLogin = async () => {
   height: 160rpx;
   border-radius: 28rpx;
   margin-bottom: 32rpx;
-  background-color: #fbfcf7;
-  border: 2rpx solid rgba(216, 188, 133, 0.7);
+  background-color: transparent;
+  border: none;
   box-shadow: 0 16rpx 44rpx rgba(8, 20, 14, 0.45);
 }
 
 .app-name {
-  font-size: 48rpx;
+  font-size: 64rpx;
   font-weight: bold;
   color: #f3eddd;
+  letter-spacing: 4rpx;
+  margin-bottom: 6rpx;
+}
+
+.app-cn {
+  font-size: 32rpx;
+  color: rgba(243, 237, 221, 0.85);
+  letter-spacing: 8rpx;
   margin-bottom: 16rpx;
 }
 

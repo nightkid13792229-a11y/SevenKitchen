@@ -1671,7 +1671,7 @@ async function handlePrint() {
     const drawSheetContent = (builder: PrintCanvasBuilder): number => {
       // 1. 品牌头部（封面 + 品牌 + 狗狗头像 + 食谱名）
       builder.drawBrandHeader({
-        brand: '赛文的食堂',
+        brand: 'Setar 赛文的食堂',
         logoPath: '/static/logo.png',
         avatarPath: dog.value?.avatarUrl ? normalizeImageUrl(dog.value.avatarUrl) : undefined,
         backgroundImage: headerBackground,
@@ -1802,7 +1802,7 @@ async function handlePrint() {
 
     // 页脚贴最终画布底部
     const dateStr = new Date().toLocaleDateString('zh-CN')
-    builder.drawFooter(`赛文的食堂 | ${dateStr}`)
+    builder.drawFooter(`Setar 赛文的食堂 | ${dateStr}`)
 
     const imagePath = await builder.toImage()
 

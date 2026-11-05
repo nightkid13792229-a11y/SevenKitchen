@@ -439,8 +439,8 @@ export default {
   onShareAppMessage() {
     // 动态生成标题
     const title = currentRecipeName
-      ? `${currentRecipeName} | 赛文的食堂`
-      : '精选食谱 | 赛文的食堂'
+      ? `${currentRecipeName} | Setar 赛文的食堂`
+      : '精选食谱 | Setar 赛文的食堂'
 
     // 动态选择图片：优先使用食谱封面图，否则使用默认食谱图
     const imageUrl = currentRecipeCoverImageUrl || CURRENT_SHARE_CONFIG.recipeImageUrl
@@ -464,8 +464,8 @@ export default {
   onShareTimeline() {
     // 动态生成标题
     const title = currentRecipeName
-      ? `${currentRecipeName} | 赛文的食堂`
-      : '精选食谱 | 赛文的食堂'
+      ? `${currentRecipeName} | Setar 赛文的食堂`
+      : '精选食谱 | Setar 赛文的食堂'
 
     // 动态选择图片：优先使用食谱封面图，否则使用默认食谱图
     const imageUrl = currentRecipeCoverImageUrl || CURRENT_SHARE_CONFIG.recipeImageUrl

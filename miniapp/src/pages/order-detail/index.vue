@@ -1655,7 +1655,7 @@ function recipeVersionLabel(item: any): string {
 
 const orderCenterTitle = computed(() => {
   const firstName = order.value?.items?.[0]?.recipeSnapshot?.name?.trim();
-  if (!firstName) return '赛文的食堂 鲜食订单';
+  if (!firstName) return 'Setar 赛文的食堂 鲜食订单';
   const itemCount = order.value?.items?.length || 1;
   return itemCount > 1 ? `${firstName}等${itemCount}件` : firstName;
 });
@@ -2591,7 +2591,7 @@ function getProductionPhotosShareDogName(): string {
 
   const dogNames = Array.from(names);
   if (dogNames.length === 0) {
-    return '赛文的食堂';
+    return 'Setar 赛文的食堂';
   }
   if (dogNames.length === 1) {
     return dogNames[0];
@@ -2739,7 +2739,7 @@ onShareAppMessage((e: any) => {
 
   // 默认分享订单详情页
   return {
-    title: '赛文的食堂订单详情',
+    title: 'Setar 赛文的食堂订单详情',
     path: `/pages/order-detail/index?id=${order.value?.id || ''}`,
     imageUrl: '',
   };

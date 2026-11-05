@@ -16,7 +16,7 @@ describe('app startup regressions', () => {
     }
     const homePage = pagesJson.pages.find((page) => page.path === 'pages/home/index')
 
-    expect(homePage?.style?.navigationBarTitleText).toBe('赛文的食堂')
+    expect(homePage?.style?.navigationBarTitleText).toBe('Setar 赛文的食堂')
   })
 
   it('launches on the home page, not an internal order-center page', () => {

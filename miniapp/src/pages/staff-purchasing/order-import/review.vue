@@ -35,10 +35,19 @@
             @tap.stop="previewOriginal(0)"
           />
         </view>
-        <view class="tab tab-add" :class="{ busy: importing }" @tap="pickMore">
-          <text class="tab-add-text">{{ importing ? '上传中…' : '＋ 再传一笔' }}</text>
-        </view>
       </scroll-view>
+
+      <!-- 再传一笔：固定在右侧竖排，不再挤在订单卡片后面被划出屏幕 -->
+      <view
+        class="side-add"
+        :class="{ busy: importing }"
+        hover-class="side-add-hover"
+        :hover-stay-time="80"
+        @tap="pickMore"
+      >
+        <text class="side-add-plus">＋</text>
+        <text v-for="(ch, i) in addChars" :key="i" class="side-add-char">{{ ch }}</text>
+      </view>
 
       <view v-if="activeImport" class="summary">
         <view class="summary-cell">
@@ -359,6 +368,8 @@ let focusLastOnce = false;
 
 const activeImport = computed(() => imports.value[activeIndex.value] || null);
 const activeSummary = computed(() => activeImport.value?.summary ?? emptySummary());
+/** 右侧竖排按钮一个字一行，不依赖小程序对 writing-mode 的支持 */
+const addChars = computed(() => (importing.value ? '上传中' : '再传一笔').split(''));
 /** 只有模型说「可能没读全」才单独提示 */
 const activeIncompleteNotice = computed(() =>
   activeImport.value
@@ -1126,7 +1137,8 @@ function emptySummary() {
 .review-page {
   min-height: 100vh;
   background: #f3eddd;
-  padding: 20rpx 24rpx 300rpx;
+  /* 右侧留出竖排按钮的专属通道，卡片不会被按钮压住 */
+  padding: 20rpx 70rpx 300rpx 24rpx;
   box-sizing: border-box;
 }
 
@@ -1204,20 +1216,42 @@ function emptySummary() {
   background: #e7e1cf;
 }
 
-.tab-add {
-  width: 190rpx;
-  justify-content: center;
-  border-style: dashed;
-  background: transparent;
+/* 再传一笔：贴在右边缘的竖排按钮，列表怎么滚都看得见、点得到 */
+.side-add {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 58rpx;
+  padding: 16rpx 0 18rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rpx;
+  background: #1e3a2f;
+  border-radius: 20rpx 0 0 20rpx;
+  box-shadow: -6rpx 8rpx 20rpx rgba(30, 58, 47, 0.22);
 }
 
-.tab-add.busy {
+.side-add-hover {
+  background: #2f6b4f;
+}
+
+.side-add.busy {
   opacity: 0.6;
 }
 
-.tab-add-text {
-  font-size: 20rpx;
-  color: #7a5c28;
+.side-add-plus {
+  font-size: 24rpx;
+  line-height: 1.1;
+  color: #f4d58d;
+}
+
+.side-add-char {
+  font-size: 21rpx;
+  line-height: 1.3;
+  color: #fbfcf7;
   font-weight: 600;
 }
 

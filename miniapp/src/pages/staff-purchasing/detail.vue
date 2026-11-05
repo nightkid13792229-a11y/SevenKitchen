@@ -114,7 +114,6 @@
       <!-- 订单截图识别：点按钮直接选图，原地等结果（2026-11-05 起不再单独占一页） -->
       <view v-if="canImportOrderScreenshot" class="section import-card">
         <button class="import-btn" @tap="goOrderImport">AI 识别订单截图</button>
-        <text class="import-hint">{{ orderShotHint }}</text>
         <text
           v-if="orderImportCount > 0"
           class="import-note import-link"
@@ -445,7 +444,6 @@ import StaffBottomBar from '../../components/staff/StaffBottomBar.vue';
 import { formatStaffQuantity } from '../../utils/staff-quantity';
 import { canAddProcurementSku } from './procurement-sku-entry';
 import {
-  ORDER_SHOT_HINT,
   chooseOrderShots,
   importOrderShots,
 } from './order-import/import-flow';
@@ -1303,7 +1301,6 @@ const dateChanges = ref<any>({
 });
 
 const orderImportCount = ref(0);
-const orderShotHint = ORDER_SHOT_HINT;
 const importBusy = ref(false);
 const importStage = ref('');
 
@@ -3998,15 +3995,6 @@ const confirmDeleteItem = (item: any) => {
 .import-link {
   color: #7a5c28;
   font-weight: 600;
-}
-
-/* 原来上传页的三条指引 + 两句解释，现在只剩按钮下这一行 */
-.import-hint {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 21rpx;
-  line-height: 1.5;
-  color: #8a8574;
 }
 
 .import-mask {

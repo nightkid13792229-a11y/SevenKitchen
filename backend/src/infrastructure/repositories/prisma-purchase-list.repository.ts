@@ -189,7 +189,10 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
             orderDateSnapshot: data.orderDateSnapshot,
             reimbursementId: data.reimbursementId,
             startedAt: data.startedAt,
-            completedAt: data.completedAt,
+            // 撤回完成时实体把 completedAt 清成 undefined；Prisma 会把 undefined
+            // 当成「这个字段不用动」，完成时间就留在库里了（BOSS 2026-11-05 反馈）。
+            // 这里显式落 null，撤回才能真的把完成时间撤掉。
+            completedAt: data.completedAt ?? null,
             updatedAt: data.updatedAt,
           },
         });

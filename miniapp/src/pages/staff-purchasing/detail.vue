@@ -52,8 +52,8 @@
           />
         </view>
 
-        <!-- 完成时间 -->
-        <view v-if="purchaseList.completedAt" class="complete-time">
+        <!-- 完成时间：只有「已完成」才显示。撤回完成后即使库里还残留时间也不展示 -->
+        <view v-if="purchaseList.status === 'COMPLETED' && purchaseList.completedAt" class="complete-time">
           <text class="label">完成时间:</text>
           <text class="value">{{ formatFullDateTime(purchaseList.completedAt) }}</text>
         </view>

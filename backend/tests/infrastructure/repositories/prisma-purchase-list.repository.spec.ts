@@ -334,6 +334,98 @@ describe('PrismaPurchaseListRepository', () => {
     );
   });
 
+  it('clears completedAt when a completed list is reopened and saved', async () => {
+    const tx = {
+      purchaseList: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'list-1' }),
+        update: jest.fn().mockResolvedValue({ id: 'list-1' }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'list-1',
+          targetDate: new Date('2026-11-05T04:00:00.000Z'),
+          kind: 'ORDER_DEMAND',
+          status: 'PENDING',
+          totalEstimatedCost: 6,
+          itemCount: 1,
+          createdById: 'user-1',
+          createdBy: {
+            id: 'user-1',
+            nickname: 'Tester',
+            phone: null,
+          },
+          sourceOrderIds: ['order-1'],
+          orderDateSnapshot: null,
+          reimbursementId: null,
+          createdAt: new Date('2026-11-05T01:00:00.000Z'),
+          updatedAt: new Date('2026-11-05T03:10:00.000Z'),
+          startedAt: new Date('2026-11-05T02:00:00.000Z'),
+          completedAt: null,
+          records: [],
+          items: [
+            {
+              id: 'item-1',
+              purchaseListId: 'list-1',
+              ingredientId: 'spinach',
+              ingredientName: '菠菜',
+              type: 'FOOD',
+              quantityNeeded: 600,
+              quantityUnit: 'G',
+              estimatedCost: 6,
+              displayUnit: 'G',
+              notes: null,
+              createdAt: new Date('2026-11-05T01:00:00.000Z'),
+            },
+          ],
+        }),
+      },
+      purchaseItem: {
+        upsert: jest.fn().mockResolvedValue({ id: 'item-1' }),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn(async (callback: any) => callback(tx)),
+    } as any;
+    const repository = new PrismaPurchaseListRepository(prisma);
+    const purchaseList = new PurchaseList({
+      id: 'list-1',
+      targetDate: new Date('2026-11-05T04:00:00.000Z'),
+      status: PurchaseListStatus.COMPLETED,
+      totalEstimatedCost: 6,
+      itemCount: 1,
+      createdById: 'user-1',
+      sourceOrderIds: ['order-1'],
+      startedAt: new Date('2026-11-05T02:00:00.000Z'),
+      completedAt: new Date('2026-11-05T03:00:00.000Z'),
+      items: [
+        new PurchaseItem({
+          id: 'item-1',
+          purchaseListId: 'list-1',
+          ingredientId: 'spinach',
+          ingredientName: '菠菜',
+          type: 'FOOD',
+          quantityNeeded: 600,
+          quantityUnit: 'G',
+          estimatedCost: 6,
+        } as any),
+      ],
+    });
+
+    purchaseList.reopen();
+    const saved = await repository.save(purchaseList);
+
+    // undefined 会被 Prisma 当成「不动这个字段」，完成时间就留在库里；
+    // 撤回完成必须显式写 null。
+    expect(tx.purchaseList.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'PENDING',
+          completedAt: null,
+        }),
+      }),
+    );
+    expect(saved.status).toBe(PurchaseListStatus.PENDING);
+    expect(saved.completedAt).toBeNull();
+  });
+
   it('hydrates active procurement SKU brand and price metadata for purchase detail display', () => {
     const item = PurchaseItem.fromPrisma({
       id: 'item-1',

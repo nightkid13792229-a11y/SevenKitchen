@@ -372,4 +372,11 @@ describe('staff purchasing purchase record form', () => {
     expect(detailSource).toContain("purchaseList.value?.status === 'COMPLETED'");
     expect(detailSource).toContain('!purchaseList.value?.reimbursementId');
   });
+
+  it('shows the completion time only while the list is completed', () => {
+    // 撤回完成后不能还挂着上一次的完成时间（BOSS 2026-11-05 反馈）
+    expect(detailSource).toContain(
+      "v-if=\"purchaseList.status === 'COMPLETED' && purchaseList.completedAt\"",
+    );
+  });
 });

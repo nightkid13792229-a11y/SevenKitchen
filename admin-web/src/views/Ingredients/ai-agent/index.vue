@@ -473,7 +473,7 @@
               :disabled="!planCanConfirm"
               @click="confirmPlan"
             >
-              确认并按方案继续
+              确认并填写原料档案和营养档案
             </el-button>
           </div>
         </div>

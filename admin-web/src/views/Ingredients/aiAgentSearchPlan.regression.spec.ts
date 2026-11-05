@@ -19,7 +19,7 @@ describe('AI 添加原料 · 检索方案确认', () => {
   it('页面渲染方案卡，并把待确认方案放进状态', () => {
     expect(page).toContain('pendingPlan')
     expect(page).toContain('检索方案，待你确认')
-    expect(page).toContain('确认并按方案继续')
+    expect(page).toContain('确认并填写原料档案和营养档案')
   })
 
   it('汇报与候选都用表格展示，且不再重复展示搜索词/目标库编辑区', () => {

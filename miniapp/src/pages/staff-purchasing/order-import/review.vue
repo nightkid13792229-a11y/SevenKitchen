@@ -14,39 +14,41 @@
     </template>
 
     <template v-else>
-      <scroll-view scroll-x class="tabs" :show-scrollbar="false">
-        <view
-          v-for="(item, index) in imports"
-          :key="item.id"
-          class="tab"
-          :class="{ active: index === activeIndex }"
-          @tap="selectOrder(index)"
-        >
-          <view class="tab-main">
-            <text class="tab-channel">{{ item.channel }} · {{ formatShortDate(item.orderTime) }}</text>
-            <text class="tab-amount">¥{{ money(item.paid ?? item.subtotal) }}</text>
-            <text class="tab-state">{{ tabState(item) }}</text>
+      <view class="tabs-row">
+        <scroll-view scroll-x class="tabs" :show-scrollbar="false">
+          <view
+            v-for="(item, index) in imports"
+            :key="item.id"
+            class="tab"
+            :class="{ active: index === activeIndex }"
+            @tap="selectOrder(index)"
+          >
+            <view class="tab-main">
+              <text class="tab-channel">{{ item.channel }} · {{ formatShortDate(item.orderTime) }}</text>
+              <text class="tab-amount">¥{{ money(item.paid ?? item.subtotal) }}</text>
+              <text class="tab-state">{{ tabState(item) }}</text>
+            </view>
+            <image
+              v-if="index === activeIndex && item.imageUrls && item.imageUrls.length > 0"
+              class="tab-thumb"
+              :src="item.imageUrls[0]"
+              mode="aspectFill"
+              @tap.stop="previewOriginal(0)"
+            />
           </view>
-          <image
-            v-if="index === activeIndex && item.imageUrls && item.imageUrls.length > 0"
-            class="tab-thumb"
-            :src="item.imageUrls[0]"
-            mode="aspectFill"
-            @tap.stop="previewOriginal(0)"
-          />
-        </view>
-      </scroll-view>
+        </scroll-view>
 
-      <!-- 再传一笔：固定在右侧竖排，不再挤在订单卡片后面被划出屏幕 -->
-      <view
-        class="side-add"
-        :class="{ busy: importing }"
-        hover-class="side-add-hover"
-        :hover-stay-time="80"
-        @tap="pickMore"
-      >
-        <text class="side-add-plus">＋</text>
-        <text v-for="(ch, i) in addChars" :key="i" class="side-add-char">{{ ch }}</text>
+        <!-- 再传一笔：钉在订单卡片这一行的最右边，卡片横向滚动时它不动 -->
+        <view
+          class="side-add"
+          :class="{ busy: importing }"
+          hover-class="side-add-hover"
+          :hover-stay-time="80"
+          @tap="pickMore"
+        >
+          <text class="side-add-plus">＋</text>
+          <text v-for="(ch, i) in addChars" :key="i" class="side-add-char">{{ ch }}</text>
+        </view>
       </view>
 
       <view v-if="activeImport" class="summary">
@@ -1144,8 +1146,7 @@ function emptySummary() {
 .review-page {
   min-height: 100vh;
   background: #f3eddd;
-  /* 右侧留出竖排按钮的专属通道，卡片不会被按钮压住 */
-  padding: 20rpx 70rpx 300rpx 24rpx;
+  padding: 20rpx 24rpx 300rpx;
   box-sizing: border-box;
 }
 
@@ -1185,9 +1186,18 @@ function emptySummary() {
 }
 
 
-.tabs {
-  white-space: nowrap;
+/* 订单卡片一行：卡片横向滚动，「再传一笔」钉在这一行最右边 */
+.tabs-row {
+  display: flex;
+  align-items: stretch;
+  gap: 12rpx;
   margin-bottom: 16rpx;
+}
+
+.tabs {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .tab {
@@ -1223,22 +1233,20 @@ function emptySummary() {
   background: #e7e1cf;
 }
 
-/* 再传一笔：贴在右边缘的竖排按钮，列表怎么滚都看得见、点得到 */
+/* 再传一笔：竖排小卡，跟订单卡片同一行、固定在这一行最右边 */
 .side-add {
-  position: fixed;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 10;
-  width: 58rpx;
-  padding: 16rpx 0 18rpx;
+  flex: 0 0 64rpx;
+  width: 64rpx;
+  align-self: stretch;
+  padding: 10rpx 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2rpx;
+  justify-content: center;
+  gap: 1rpx;
   background: #1e3a2f;
-  border-radius: 20rpx 0 0 20rpx;
-  box-shadow: -6rpx 8rpx 20rpx rgba(30, 58, 47, 0.22);
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(30, 58, 47, 0.16);
 }
 
 .side-add-hover {
@@ -1251,13 +1259,13 @@ function emptySummary() {
 
 .side-add-plus {
   font-size: 24rpx;
-  line-height: 1.1;
+  line-height: 1;
   color: #f4d58d;
 }
 
 .side-add-char {
-  font-size: 21rpx;
-  line-height: 1.3;
+  font-size: 20rpx;
+  line-height: 1.1;
   color: #fbfcf7;
   font-weight: 600;
 }

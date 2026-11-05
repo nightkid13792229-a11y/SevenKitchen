@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   IMPORT_FEE_TOLERANCE,
+  feeStatusText,
   isFeeGapOff,
   sumImportFees,
   summarizeOrderImportFees,
@@ -135,5 +136,47 @@ describe('isFeeGapOff', () => {
     expect(isFeeGapOff(0.02)).toBe(true)
     expect(isFeeGapOff(-2)).toBe(true)
     expect(isFeeGapOff(null)).toBe(false)
+  })
+})
+
+describe('feeStatusText', () => {
+  it('实付没读到 → 说明无法核对，不要假装一致', () => {
+    const summary = summarizeOrderImportFees({
+      lineTotals: [147.33],
+      shippingFee: null,
+      packagingFee: 1,
+      paid: null,
+    })
+    expect(feeStatusText(summary)).toBe('实付没读到')
+  })
+
+  it('账能合上 → 金额一致', () => {
+    const summary = summarizeOrderImportFees({
+      lineTotals: [147.33],
+      shippingFee: 0,
+      packagingFee: 1,
+      paid: 148.33,
+    })
+    expect(feeStatusText(summary)).toBe('金额一致')
+  })
+
+  it('实付比算出来的多 → 写清差多少', () => {
+    const summary = summarizeOrderImportFees({
+      lineTotals: [10],
+      shippingFee: 0,
+      packagingFee: 0,
+      paid: 11,
+    })
+    expect(feeStatusText(summary)).toBe('与实付差 ¥1.00')
+  })
+
+  it('实付比算出来的少 → 也写清差多少（不带负号）', () => {
+    const summary = summarizeOrderImportFees({
+      lineTotals: [12],
+      shippingFee: 0,
+      packagingFee: 0,
+      paid: 10.8,
+    })
+    expect(feeStatusText(summary)).toBe('与实付差 ¥1.20')
   })
 })

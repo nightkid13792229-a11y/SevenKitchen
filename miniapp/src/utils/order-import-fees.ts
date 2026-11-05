@@ -93,3 +93,18 @@ export function sumImportFees(items: ImportFeeLike[]): {
 export function isFeeGapOff(gap: number | null): boolean {
   return typeof gap === 'number' && Math.abs(gap) > IMPORT_FEE_TOLERANCE;
 }
+
+/**
+ * 顶部那一行的金额状态（2026-11-05）。
+ *
+ * ⚠️ 不要再用「模型抄下来的商品小计」去比「商品行合计」✗ ——
+ * 盒马特价单就是两个口径：小计按原价 148.33、商品行是实付价 147.33，
+ * 于是同一页上「差 1 元」和「和实付对得上」同时出现，自相矛盾。
+ *
+ * 现在统一用这道账：商品行合计 + 运费 + 包装费 = 实付。
+ */
+export function feeStatusText(summary: OrderImportFeeSummary): string {
+  if (summary.gap === null) return '实付没读到';
+  if (!isFeeGapOff(summary.gap)) return '金额一致';
+  return `与实付差 ¥${Math.abs(summary.gap).toFixed(2)}`;
+}

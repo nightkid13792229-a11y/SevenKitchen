@@ -22,9 +22,21 @@
           :class="{ active: index === activeIndex }"
           @tap="selectOrder(index)"
         >
-          <text class="tab-channel">{{ item.channel }} · {{ formatShortDate(item.orderTime) }}</text>
-          <text class="tab-amount">¥{{ money(item.paid ?? item.subtotal) }}</text>
-          <text class="tab-state">{{ tabState(item) }}</text>
+          <view class="tab-main">
+            <text class="tab-channel">{{ item.channel }} · {{ formatShortDate(item.orderTime) }}</text>
+            <text class="tab-amount">¥{{ money(item.paid ?? item.subtotal) }}</text>
+            <text class="tab-state">{{ tabState(item) }}</text>
+          </view>
+          <image
+            v-if="index === activeIndex && item.imageUrls && item.imageUrls.length > 0"
+            class="tab-thumb"
+            :src="item.imageUrls[0]"
+            mode="aspectFill"
+            @tap.stop="previewOriginal(0)"
+          />
+        </view>
+        <view class="tab tab-add" :class="{ busy: importing }" @tap="pickMore">
+          <text class="tab-add-text">{{ importing ? '上传中…' : '＋ 再传一笔' }}</text>
         </view>
       </scroll-view>
 
@@ -52,21 +64,8 @@
       </view>
 
       <view v-if="activeImport" class="meta-row">
-        <text class="meta-text">共 {{ activeImport.lines.length }} 行 · {{ amountStateText(activeImport) }}</text>
+        <text class="meta-text">共 {{ activeImport.lines.length }} 行 · {{ amountStateText }}</text>
         <text class="meta-channel" @tap="changeChannel">渠道 {{ activeImport.channel }} ›</text>
-      </view>
-
-      <!-- 原图：核对本来就要「对照原图」，图就放在结果里，点开看大图 -->
-      <view v-if="activeImport && activeImport.imageUrls?.length" class="shots-row">
-        <text class="shots-label">原图</text>
-        <image
-          v-for="(url, index) in activeImport.imageUrls"
-          :key="url"
-          :src="url"
-          mode="aspectFill"
-          class="shot-thumb"
-          @tap="previewOriginal(index)"
-        />
       </view>
 
       <view v-if="activeImport && activeIncompleteNotice" class="warn-banner">
@@ -131,20 +130,15 @@
         </view>
       </view>
 
-      <view v-if="activeImport && activeSummary.personalAmount > 0" class="diff-note">
-        个人采购 ¥{{ money(activeSummary.personalAmount) }} 不进报销；点一行可改数量、金额、原料。
-      </view>
-
       <view class="footer">
         <view class="footer-total">
-          <text>将生成 {{ matchedLineCount }} 条采购记录</text>
+          <text>{{ footerLabel }}</text>
           <text class="footer-amount">¥{{ money(matchedAmount) }}</text>
         </view>
         <button class="primary-btn" :disabled="!canConfirm || submitting" :loading="submitting" @tap="submit">
           {{ blockReason || '生成采购记录' }}
         </button>
         <view class="footer-links">
-          <text class="footer-action" @tap="pickMore">{{ importing ? '上传中…' : '＋ 再传一笔' }}</text>
           <text class="discard" @tap="discardActive">放弃这笔识别</text>
         </view>
       </view>
@@ -327,11 +321,12 @@ import {
   chooseOrderShots,
   importOrderShots,
 } from './import-flow';
-import { checkOrderImportAmount } from '../../../utils/order-import-check';
+import { orderImportIncompleteNotice } from '../../../utils/order-import-check';
 import { firstBlockedImport } from '../../../utils/order-import-block';
 import { isSpecMismatch, specWarningText } from '../../../utils/order-import-spec';
 import {
   IMPORT_FEE_TOLERANCE,
+  feeStatusText,
   isFeeGapOff,
   summarizeOrderImportFees,
 } from '../../../utils/order-import-fees';
@@ -364,9 +359,14 @@ let focusLastOnce = false;
 
 const activeImport = computed(() => imports.value[activeIndex.value] || null);
 const activeSummary = computed(() => activeImport.value?.summary ?? emptySummary());
-/** 只有模型说「可能没读全」才单独提示；金额差只写在顶部那一行，不再单独解释 */
-const activeIncompleteNotice = computed(
-  () => (activeImport.value ? checkImport(activeImport.value).incompleteNotice : null),
+/** 只有模型说「可能没读全」才单独提示 */
+const activeIncompleteNotice = computed(() =>
+  activeImport.value
+    ? orderImportIncompleteNotice({
+        incomplete: activeImport.value.incomplete,
+        incompleteReason: activeImport.value.incompleteReason ?? null,
+      })
+    : null,
 );
 
 /**
@@ -571,18 +571,20 @@ const blockReason = computed(() => {
   return '';
 });
 
-function checkImport(item: OrderImportView) {
-  return checkOrderImportAmount({
-    subtotal: item.subtotal ?? null,
-    incomplete: item.incomplete,
-    incompleteReason: item.incompleteReason ?? null,
-    lineTotals: item.lines.map((line) => line.lineTotal ?? null),
-  });
-}
+/**
+ * 顶部那一行只报一件事：这道账合不合得上（商品 + 运费 + 包装 = 实付）。
+ * 不再拿「模型抄的商品小计」比「商品行合计」——那是两个口径，必然打架。
+ */
+const amountStateText = computed(() =>
+  feeSummary.value ? feeStatusText(feeSummary.value) : '',
+);
 
-function amountStateText(item: OrderImportView): string {
-  return checkImport(item).statusText;
-}
+/** 底部合计：一笔就直说，多笔要讲清是「几笔订单」的总数 */
+const footerLabel = computed(() => {
+  const count = imports.value.length;
+  if (count <= 1) return `将生成 ${matchedLineCount.value} 条采购记录`;
+  return `${count} 笔订单 · 共 ${matchedLineCount.value} 条采购记录`;
+});
 
 function importIssue(item: OrderImportView): string | null {
   const active = item.lines.filter((line) => !line.isPersonal);
@@ -720,8 +722,9 @@ function stateClass(line: OrderImportLineView) {
 }
 
 function tabState(item: OrderImportView) {
-  // 不再截断：文案本身已经压短，宁可换行也别把「待处理」吃掉一半
-  return importIssue(item) ?? '可生成';
+  const issue = importIssue(item);
+  if (issue) return issue;
+  return `可生成 ${item.summary.matched} 条`;
 }
 
 function openEdit(line: OrderImportLineView) {
@@ -1162,25 +1165,6 @@ function emptySummary() {
   margin: 0 auto;
 }
 
-.shots-row {
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-  padding: 0 6rpx 14rpx;
-}
-
-.shots-label {
-  font-size: 21rpx;
-  color: #6b6653;
-}
-
-.shot-thumb {
-  width: 88rpx;
-  height: 88rpx;
-  border-radius: 12rpx;
-  border: 1rpx solid #e2dcc9;
-  background: #e7e1cf;
-}
 
 .tabs {
   white-space: nowrap;
@@ -1189,15 +1173,52 @@ function emptySummary() {
 
 .tab {
   display: inline-flex;
-  flex-direction: column;
-  gap: 4rpx;
-  width: 260rpx;
-  padding: 16rpx 18rpx;
+  flex-direction: row;
+  align-items: center;
+  gap: 10rpx;
+  width: 320rpx;
+  padding: 14rpx 16rpx;
   margin-right: 14rpx;
   border-radius: 20rpx;
   background: #fbfcf7;
   border: 2rpx solid #e2dcc9;
   box-sizing: border-box;
+  vertical-align: top;
+}
+
+.tab-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 只有选中的那张卡才带缩略图：一眼知道自己在看哪张原图 */
+.tab-thumb {
+  width: 76rpx;
+  height: 76rpx;
+  flex: 0 0 76rpx;
+  border-radius: 12rpx;
+  border: 1rpx solid #e2dcc9;
+  background: #e7e1cf;
+}
+
+.tab-add {
+  width: 190rpx;
+  justify-content: center;
+  border-style: dashed;
+  background: transparent;
+}
+
+.tab-add.busy {
+  opacity: 0.6;
+}
+
+.tab-add-text {
+  font-size: 20rpx;
+  color: #7a5c28;
+  font-weight: 600;
 }
 
 .tab.active {
@@ -1407,17 +1428,6 @@ function emptySummary() {
   font-size: 26rpx;
 }
 
-.diff-note {
-  margin-top: 14rpx;
-  padding: 14rpx 16rpx;
-  background: #fbf1dd;
-  border: 1rpx solid #efdcb8;
-  border-radius: 16rpx;
-  font-size: 21rpx;
-  color: #7a5a20;
-  line-height: 1.5;
-}
-
 .footer {
   position: fixed;
   left: 0;
@@ -1463,11 +1473,6 @@ function emptySummary() {
   margin-top: 12rpx;
 }
 
-.footer-action {
-  font-size: 22rpx;
-  font-weight: 600;
-  color: #7a5c28;
-}
 
 .discard {
   font-size: 22rpx;

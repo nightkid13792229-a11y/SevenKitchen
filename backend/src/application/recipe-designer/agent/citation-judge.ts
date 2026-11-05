@@ -130,7 +130,8 @@ const COVERAGE_SYSTEM_PROMPT = `你是“引用覆盖裁判”。只做拆分和
 关键区分：
 - “植物性磷吸收率低”是事实性 clinical，需要引用；
 - “建议取 0.2–0.35% DM”“做通用型/2 期倾向型”“选严格/中间/宽松档”是 opinion，不是 clinical；
-- 不要把“建议/方案选择”算成未引用临床结论。
+- 即使方案/档位里带数字或范围，只要它是在做选择/推荐，仍归 opinion，不归 numeric；
+- numeric 只用于事实性数值陈述；不要把“建议/方案选择”算成未引用临床结论。
 只从原文提取 [K#] 引用编号，不要自己补引用，不要用外部知识。
 输出 JSON：{"claims":[{"text":"...","kind":"clinical","citationIds":["K1"]}]}。`;
 
@@ -140,6 +141,7 @@ const SUPPORT_SYSTEM_PROMPT = `你是知识库引用裁判。只判断“给定�
 - 某个指标的目标范围不等于分期标准；原文只给目标时，不能支持“属于/不属于某期”的结论。
 - 数字对但用法错（单位、域、分期、因果）也要判 partial 或 unsupported。
 - 允许直接算术和单位换算：原文给出数值，claim 只是比较大小、判断是否超出范围、做单位换算（如 5.2 > 4.6、mg/dL ↔ mmol/L），且不引入新事实时，可以判 supported；不要求原文显式写出比较句。
+- 引用段落给出某阶段的目标值，claim 只是把患者数值与该目标做大小比较时，可以判 supported；不要求原文在比较句旁再次复述分期。
 - 不允许用常识补全原文没有的内容。
 输出 JSON：{"verdict":"supported|partial|unsupported|not_checkable","reason":"一句话理由","quote":"原文中支持或不支持的那一句"}。`;
 

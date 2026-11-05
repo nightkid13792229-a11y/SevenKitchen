@@ -133,3 +133,33 @@ describe('order import edit sheet · 脏检查', () => {
     );
   });
 });
+
+describe('order import edit sheet · 匹配商品改二级联动（2026-11-05 晚）', () => {
+  const pickerBlock = source.slice(
+    source.indexOf('<!-- 选商品：左选原料、右选商品'),
+    source.lastIndexOf('</template>'),
+  );
+
+  it('左栏列原料、右栏列这道原料下的商品，不再是一张 40 行的平铺表', () => {
+    expect(pickerBlock).toContain('class="cascade-left"');
+    expect(pickerBlock).toContain('class="cascade-right"');
+    expect(pickerBlock).toContain('v-for="ingredient in pickerIngredients"');
+    expect(pickerBlock).toContain('v-for="option in pickerSkuOptions"');
+  });
+
+  it('打开时就停在「这行现在匹配的原料」上，并把它滚进屏幕', () => {
+    expect(source).toContain('const pickerIngredientAnchor = computed');
+    expect(source).toContain('scroll-into-view="pickerIngredientAnchor"');
+    expect(source).toContain("pickerIngredientId.value =\n    editing.value?.ingredientId");
+  });
+
+  it('左栏每个原料带上商品数，右栏标出「当前」', () => {
+    expect(pickerBlock).toContain('cascade-count');
+    expect(pickerBlock).toContain('picker-current');
+  });
+
+  it('搜字的时候退回平铺结果（知道商品名的人还是能直接搜）', () => {
+    expect(pickerBlock).toContain('v-if="skuSearch"');
+    expect(pickerBlock).toContain('filteredSkuOptions');
+  });
+});

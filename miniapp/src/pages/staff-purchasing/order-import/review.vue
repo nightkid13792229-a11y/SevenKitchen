@@ -352,23 +352,24 @@
       </view>
     </view>
 
-    <!-- 选商品：一次到位（商品 + 规格 + 属于哪个原料都在这行里） -->
+    <!-- 选商品：左选原料、右选商品（2026-11-05 晚按老板意见改二级联动） -->
     <view v-if="pickerMode !== 'none'" class="sheet-mask" @tap="closePicker">
       <view class="sheet" @tap.stop>
         <text class="sheet-title">选择采购商品</text>
-        <text class="sheet-sub">只列本次清单里的商品，不允许跨原料替代。</text>
+        <text class="sheet-sub">左选原料，右选这道原料下这单要用的商品。</text>
 
         <view class="picker-search-wrap">
           <input
             v-model="skuSearch"
             class="picker-search"
-            placeholder="搜商品名 / 原料"
+            placeholder="也可以直接搜商品名"
             confirm-type="search"
           />
           <text v-if="skuSearch" class="picker-search-clear" @tap="skuSearch = ''">清空</text>
         </view>
 
-        <scroll-view scroll-y class="picker-list">
+        <!-- 搜了字：平铺结果，一屏看完 -->
+        <scroll-view v-if="skuSearch" scroll-y class="picker-list">
           <view
             v-for="option in filteredSkuOptions"
             :key="option.id"
@@ -382,24 +383,66 @@
                   {{ extraSpecOf(option.name, option.productModel) }}
                 </text>
               </text>
-              <text class="picker-sub">
-                {{ option.ingredientName }}<text v-if="option.purchaseChannel"> · {{ option.purchaseChannel }}</text>
-              </text>
+              <text class="picker-sub">{{ option.ingredientName }}</text>
             </view>
             <text v-if="option.id === editing?.procurementSkuId" class="picker-current">当前</text>
             <text v-else class="picker-go">选择</text>
           </view>
           <view v-if="filteredSkuOptions.length === 0" class="picker-row">
-            <text class="picker-sub">{{ skuSearch ? '没搜到这个商品' : '本次清单里还没有可用的采购商品' }}</text>
-          </view>
-          <view v-if="editing?.ingredientId" class="picker-create" @tap="goNewSku">
-            <view class="picker-create-main">
-              <text class="picker-create-plus">+</text>
-              <text class="picker-create-name">新建采购商品</text>
-            </view>
-            <text class="picker-create-go">去新建 ›</text>
+            <text class="picker-sub">没搜到这个商品</text>
           </view>
         </scroll-view>
+
+        <!-- 没搜字：左边原料、右边商品 -->
+        <view v-else class="cascade">
+          <scroll-view scroll-y class="cascade-left" :scroll-into-view="pickerIngredientAnchor">
+            <view
+              v-for="ingredient in pickerIngredients"
+              :id="'ing-' + ingredient.ingredientId"
+              :key="ingredient.ingredientId"
+              class="cascade-item"
+              :class="{ active: ingredient.ingredientId === pickerIngredientId }"
+              @tap="pickerIngredientId = ingredient.ingredientId"
+            >
+              <text class="cascade-name">{{ ingredient.ingredientName }}</text>
+              <text class="cascade-count">{{ ingredient.skus.length }}</text>
+            </view>
+          </scroll-view>
+
+          <scroll-view scroll-y class="cascade-right">
+            <view v-if="!pickerIngredientId" class="cascade-empty">
+              <text>左边选一个原料</text>
+            </view>
+            <view
+              v-for="option in pickerSkuOptions"
+              :key="option.id"
+              class="picker-row"
+              @tap="chooseSku(option)"
+            >
+              <view class="picker-main">
+                <text class="picker-name">
+                  {{ option.name }}
+                  <text v-if="extraSpecOf(option.name, option.productModel)" class="picker-model">
+                    {{ extraSpecOf(option.name, option.productModel) }}
+                  </text>
+                </text>
+                <text v-if="option.purchaseChannel" class="picker-sub">{{ option.purchaseChannel }}</text>
+              </view>
+              <text v-if="option.id === editing?.procurementSkuId" class="picker-current">当前</text>
+              <text v-else class="picker-go">选择</text>
+            </view>
+            <view v-if="pickerIngredientId && pickerSkuOptions.length === 0" class="cascade-empty">
+              <text>这道原料还没有采购商品</text>
+            </view>
+            <view v-if="pickerIngredientId" class="picker-create" @tap="goNewSku">
+              <view class="picker-create-main">
+                <text class="picker-create-plus">+</text>
+                <text class="picker-create-name">新建采购商品</text>
+              </view>
+              <text class="picker-create-go">去新建 ›</text>
+            </view>
+          </scroll-view>
+        </view>
       </view>
     </view>
   </view>
@@ -459,6 +502,8 @@ const editing = ref<any>(null);
 const pickerMode = ref<'none' | 'sku'>('none');
 const unitPicking = ref(false);
 const skuSearch = ref('');
+/** 二级选择里当前停在哪个原料 */
+const pickerIngredientId = ref('');
 /** 选择器刚关掉的时刻：防那一枪继续穿透到下面的蒙层，把整个抽屉关掉 */
 let pickerClosedAt = 0;
 let sheetOpenedAt = 0;
@@ -716,6 +761,35 @@ const renameHint = computed(() => {
     current.confidence === 'HIGH' || current.matchSource === 'MANUAL';
   if (!trusted) return '';
   return `生成时商品名更新为「${name}」`;
+});
+
+/** 左栏自动滚到「当前这行匹配的原料」，别让它在屏幕外 */
+const pickerIngredientAnchor = computed(() =>
+  pickerIngredientId.value ? `ing-${pickerIngredientId.value}` : '',
+);
+
+/** 左栏：本次清单里的原料 + 各有几个采购商品 */
+const pickerIngredients = computed(() =>
+  ingredientOptions.value.map((ingredient) => ({
+    ingredientId: ingredient.ingredientId,
+    ingredientName: ingredient.ingredientName,
+    skus: ingredient.skus,
+  })),
+);
+
+/** 右栏：当前原料下的商品 */
+const pickerSkuOptions = computed(() => {
+  if (!pickerIngredientId.value) return [];
+  const ingredient = ingredientOptions.value.find(
+    (item) => item.ingredientId === pickerIngredientId.value,
+  );
+  if (!ingredient) return [];
+  return ingredient.skus.map((sku) => ({
+    ...sku,
+    ingredientId: ingredient.ingredientId,
+    ingredientName: ingredient.ingredientName,
+    baseUnit: ingredient.baseUnit,
+  }));
 });
 
 /** 选商品列表按关键字过滤（40 多个商品时滑起来太慢，2026-11-05） */
@@ -1126,6 +1200,9 @@ async function saveFeeEdit() {
 function openSkuPicker() {
   if (editing.value?.isPersonal) return;
   skuSearch.value = '';
+  // 打开就停在「这行现在匹配的原料」上：绝大多数时候右边一眼就能找到
+  pickerIngredientId.value =
+    editing.value?.ingredientId || ingredientOptions.value[0]?.ingredientId || '';
   pickerMode.value = 'sku';
 }
 
@@ -1193,7 +1270,8 @@ function chooseUnit(unit: string) {
 
 function goNewSku() {
   const ingredient = ingredientOptions.value.find(
-    (item) => item.ingredientId === editing.value?.ingredientId,
+    (item) =>
+      item.ingredientId === (pickerIngredientId.value || editing.value?.ingredientId),
   );
   if (!ingredient) {
     uni.showToast({ title: '先在清单里选一个商品', icon: 'none' });
@@ -2008,7 +2086,8 @@ function emptySummary() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18rpx 4rpx;
+  gap: 8rpx;
+  padding: 16rpx 4rpx;
   border-bottom: 1rpx solid #efe9d9;
 }
 
@@ -2407,6 +2486,68 @@ function emptySummary() {
 .picker-current {
   font-size: 20rpx;
   color: #2f6b4f;
+}
+
+.cascade {
+  display: flex;
+  height: 46vh;
+  gap: 10rpx;
+}
+
+.cascade-left {
+  width: 40%;
+  flex: none;
+  background: #f7f2e3;
+  border-radius: 14rpx;
+  border: 1rpx solid #e6dfc9;
+  box-sizing: border-box;
+}
+
+.cascade-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8rpx;
+  padding: 18rpx 14rpx;
+  border-bottom: 1rpx solid #efe8d6;
+}
+
+.cascade-item.active {
+  background: #fbfcf7;
+  border-left: 6rpx solid #2f6b4f;
+  padding-left: 8rpx;
+}
+
+.cascade-name {
+  font-size: 24rpx;
+  color: #1e3a2f;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cascade-item.active .cascade-name {
+  font-weight: 700;
+}
+
+.cascade-count {
+  flex: none;
+  font-size: 19rpx;
+  color: #8a8574;
+}
+
+.cascade-right {
+  flex: 1;
+  min-width: 0;
+}
+
+.cascade-empty {
+  padding: 40rpx 10rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: #8a8574;
 }
 
 .picker-search-wrap {

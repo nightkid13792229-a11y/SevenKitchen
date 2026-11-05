@@ -93,7 +93,7 @@ async function validated(
 }
 
 describe('UpdateDraftIngredientDto', () => {
-  it('接受 15 项全量，且每一项都真的落在实例上', async () => {
+  it('接受 16 项全量，且每一项都真的落在实例上', async () => {
     expect(await errorsOf(fullFields)).toEqual([]);
 
     const payload = await validated(fullFields);

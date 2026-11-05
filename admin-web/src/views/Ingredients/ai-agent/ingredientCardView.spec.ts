@@ -35,10 +35,10 @@ function cellOf(
 }
 
 describe('buildIngredientCardCells', () => {
-  it('15 项全部出现、按目录顺序分组，空格不隐藏', () => {
+  it('16 项全部出现、按目录顺序分组，空格不隐藏', () => {
     const cells = buildIngredientCardCells(BASE_INGREDIENT, [])
 
-    expect(cells).toHaveLength(15)
+    expect(cells).toHaveLength(16)
     expect(cells.map((cell) => cell.key)).toEqual(
       INGREDIENT_CARD_FIELDS.map((field) => field.key)
     )
@@ -316,7 +316,7 @@ describe('toIngredientDraftFromCells', () => {
     expect(draft).not.toHaveProperty('shelfLifeMonths')
   })
 
-  it('品牌/规格/采购/库存已搬到子板块，原料级一律清空', () => {
+  it('品牌/规格/采购单位/库存仍清空，采购价格保留给初始 SKU', () => {
     const base: IngredientDraft = {
       ...BASE_INGREDIENT,
       brand: '旧品牌',
@@ -335,7 +335,7 @@ describe('toIngredientDraftFromCells', () => {
       productModel: null,
       purchaseUnit: null,
       purchaseToBaseRatio: null,
-      currentPricePerPurchaseUnit: null,
+      currentPricePerPurchaseUnit: 12,
       safetyStock: null
     })
   })

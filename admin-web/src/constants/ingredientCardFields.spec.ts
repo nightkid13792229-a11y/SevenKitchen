@@ -25,6 +25,7 @@ const EXPECTED_KEYS_IN_ORDER: readonly string[] = [
   'edibleYieldPercent',
   'mainNutrientsDesc',
   'procurementStrategy',
+  'currentPricePerPurchaseUnit',
   'labelCategory',
   'labelNames',
   'labelNameSource',
@@ -52,25 +53,26 @@ const EXPECTED_FIELD_ROWS: ReadonlyArray<
   ['edibleYieldPercent', 'NUTRITION', '可食部比率', 'CREATABLE', 'percent'],
   ['mainNutrientsDesc', 'NUTRITION', '主要营养价值', 'CREATABLE', 'text'],
   ['procurementStrategy', 'PURCHASE', '采购策略', 'CREATABLE', 'select'],
+  ['currentPricePerPurchaseUnit', 'PURCHASE', '采购价格', 'CREATABLE', 'number'],
   ['labelCategory', 'LABEL', '标签类型', 'CREATABLE', 'select'],
   ['labelNames', 'LABEL', '标签名称', 'CREATABLE', 'string-list'],
   ['labelNameSource', 'LABEL', '名称依据', 'CREATABLE', 'text'],
 ]
 
 describe('食材原料字段目录', () => {
-  it('15 项、5 组、键不重复', () => {
-    expect(INGREDIENT_CARD_FIELDS).toHaveLength(15)
+  it('16 项、5 组、键不重复', () => {
+    expect(INGREDIENT_CARD_FIELDS).toHaveLength(16)
     expect(INGREDIENT_CARD_FIELD_GROUPS).toHaveLength(5)
-    expect(new Set(INGREDIENT_CARD_FIELDS.map((f) => f.key)).size).toBe(15)
+    expect(new Set(INGREDIENT_CARD_FIELDS.map((f) => f.key)).size).toBe(16)
   })
 
-  it('15 个键的顺序与后端完全一致', () => {
+  it('16 个键的顺序与后端完全一致', () => {
     expect(INGREDIENT_CARD_FIELDS.map((f) => f.key)).toEqual(
       EXPECTED_KEYS_IN_ORDER,
     )
   })
 
-  it('15 项逐项钉死：分组、标签、阶段、值类型', () => {
+  it('16 项逐项钉死：分组、标签、阶段、值类型', () => {
     expect(
       INGREDIENT_CARD_FIELDS.map((f) => [
         f.key,

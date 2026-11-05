@@ -168,6 +168,7 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
         'labelNames',
         'labelNameSource',
         'tags',
+        'currentPricePerPurchaseUnit',
       ]),
     );
     expect(properties.category?.enum).toEqual([
@@ -508,6 +509,7 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
       labelNames: ['鸡肉', '鸡肝'],
       labelNameSource: '饲料原料目录（2023 版）',
       tags: ['水产'],
+      currentPricePerPurchaseUnit: 0.05,
     });
 
     expect(result.ok).toBe(true);
@@ -520,6 +522,7 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
       'labelNames',
       'labelNameSource',
       'tags',
+      'currentPricePerPurchaseUnit',
     ]);
     expect(draftService.patch).toHaveBeenCalledWith(
       DRAFT_ID,
@@ -535,6 +538,7 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
           labelNameSource: '饲料原料目录（2023 版）',
           tags: ['水产'],
           tagIds: ['tag-1'],
+          currentPricePerPurchaseUnit: 0.05,
         }),
       }),
     );

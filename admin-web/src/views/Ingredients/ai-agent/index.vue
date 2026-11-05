@@ -87,6 +87,16 @@
         </div>
 
         <div ref="bodyRef" class="agent-panel__body">
+          <el-alert
+            v-if="commitResult"
+            class="agent-written-banner"
+            type="success"
+            :closable="false"
+            show-icon
+            title="原料已写入正式库"
+            description="以下是写入前的对话记录，仅供追溯；以右侧绿色核验/已写入状态为准。"
+          />
+
           <el-empty
             v-if="state.runs.length === 0 && !state.pendingQuestion"
             description="还没有运行。输入一句话开始，例如「帮我加鸡肝」。"
@@ -707,6 +717,7 @@
                         :disabled="isIngredientCellDisabled(cell)"
                         :controls="false"
                         :precision="ingredientCellPrecision(cell)"
+                        :step="ingredientCellStep(cell)"
                         :min="ingredientCellMin(cell)"
                         :max="ingredientCellMax(cell)"
                         placeholder="空"
@@ -2157,6 +2168,10 @@ function ingredientCellMin(cell: IngredientCardCell): number {
   return 0
 }
 
+function ingredientCellStep(cell: IngredientCardCell): number | undefined {
+  return cell.key === 'currentPricePerPurchaseUnit' ? 0.01 : undefined
+}
+
 function ingredientCellMax(cell: IngredientCardCell): number | undefined {
   if (cell.key === 'edibleYieldPercent') {
     return 100
@@ -2170,6 +2185,9 @@ function ingredientCellMax(cell: IngredientCardCell): number | undefined {
 function ingredientCellPrecision(cell: IngredientCardCell): number | undefined {
   if (cell.key === 'edibleYieldPercent' || cell.key === 'weightG') {
     return 1
+  }
+  if (cell.key === 'currentPricePerPurchaseUnit') {
+    return 4
   }
   if (cell.key === 'densityGPerMl') {
     return 3
@@ -3135,6 +3153,10 @@ function goBackToList() {
   font-family: var(--el-font-family-mono, monospace);
   color: var(--el-text-color-regular);
   word-break: break-all;
+}
+
+.agent-written-banner {
+  margin-bottom: 10px;
 }
 
 .agent-panel__body {

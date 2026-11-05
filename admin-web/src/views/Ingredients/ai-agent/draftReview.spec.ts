@@ -634,7 +634,7 @@ describe('审核页 · 食材原料卡映射', () => {
     ])
   })
 
-  it('toIngredientDraft 写回可见字段与隐藏保留字段，采购/库存搬到子板块后清空', () => {
+  it('toIngredientDraft 写回可见字段与隐藏保留字段，采购价保留、其余采购/库存清空', () => {
     const draft = toIngredientDraft(
       toIngredientCard({ ingredient: FULL_INGREDIENT })
     )
@@ -666,7 +666,7 @@ describe('审核页 · 食材原料卡映射', () => {
       purchaseChannel: null,
       purchaseUnit: null,
       purchaseToBaseRatio: null,
-      currentPricePerPurchaseUnit: null,
+      currentPricePerPurchaseUnit: 39.9,
       safetyStock: null,
       reorderPoint: null,
       targetStock: null

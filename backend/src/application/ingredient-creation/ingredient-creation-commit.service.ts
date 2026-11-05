@@ -601,6 +601,12 @@ export class IngredientCreationCommitService {
         input.draftId,
         primaryNutritionData,
       );
+      await this.createInitialProcurementSku(
+        tx,
+        createdIngredient.id,
+        ingredient,
+        input.userId,
+      );
       await this.createTagAssignments(tx, createdIngredient.id, ingredient);
       const stateCounts = new Map<string, number>();
       for (const prepared of preparedProfiles) {
@@ -917,6 +923,8 @@ export class IngredientCreationCommitService {
     }
     if (hasValue(ingredient.currentPricePerPurchaseUnit)) {
       data.currentPricePerPurchaseUnit = ingredient.currentPricePerPurchaseUnit;
+      // 这是创建时的人工初始价，同时作为「创建价」兜底。
+      data.initialPricePerPurchaseUnit = ingredient.currentPricePerPurchaseUnit;
     }
     if (hasValue(ingredient.diyEnabled)) {
       data.diyEnabled = ingredient.diyEnabled;
@@ -947,6 +955,73 @@ export class IngredientCreationCommitService {
       }
       throw error;
     }
+  }
+
+  /**
+   * AI 新增原料时填了采购价格 → 生成一条最小的采购 SKU。
+   *
+   * 这条 SKU 只负责让标准原料页的「采购 SKU」有价格、让算价拿到参考价；
+   * 品牌/规格/渠道等采购信息仍然留到第一次采购时补。
+   */
+  private async createInitialProcurementSku(
+    tx: Prisma.TransactionClient,
+    ingredientId: string,
+    ingredient: IngredientDraft,
+    userId: string,
+  ): Promise<void> {
+    const price = ingredient.currentPricePerPurchaseUnit;
+    if (
+      price === null ||
+      price === undefined ||
+      !Number.isFinite(price) ||
+      price <= 0
+    ) {
+      return;
+    }
+
+    const purchaseUnit =
+      readNonEmptyString(ingredient.purchaseUnit) ??
+      readNonEmptyString(ingredient.unitDisplayLabel) ??
+      ingredient.baseUnit;
+    const ratio =
+      ingredient.purchaseToBaseRatio &&
+      Number.isFinite(ingredient.purchaseToBaseRatio) &&
+      ingredient.purchaseToBaseRatio > 0
+        ? ingredient.purchaseToBaseRatio
+        : 1;
+
+    const created = await tx.procurementSku.create({
+      data: {
+        ingredientId,
+        name: ingredient.name,
+        brand: null,
+        productModel: null,
+        purchaseChannel: null,
+        purchaseUnit,
+        purchaseToBaseRatio: ratio,
+        currentPurchasePrice: price,
+        referencePurchasePrice: null,
+        referencePricePerPurchaseUnit: null,
+        notes: null,
+        isDefault: true,
+        isActive: true,
+        sortOrder: 0,
+        createdById: userId,
+        createdSource: 'AI_AGENT',
+      },
+    });
+
+    await tx.procurementSkuPriceHistory.create({
+      data: {
+        procurementSkuId: created.id,
+        ingredientId,
+        oldPrice: null,
+        newPrice: price,
+        source: 'MANUAL',
+        operatorId: userId,
+        note: 'AI 新增原料时填写的初始采购价',
+      },
+    });
   }
 
   /** 标签关联：只接受库里真实存在的标签 id，避免外键错导致整次授权 500。 */

@@ -1229,7 +1229,12 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
         ingredient.densityGPerMl === undefined
           ? '待补'
           : String(ingredient.densityGPerMl)
-      } 采购策略=${String(ingredient.procurementStrategy ?? '待补')} 标签类型=${String(
+      } 采购策略=${String(ingredient.procurementStrategy ?? '待补')} 采购价格=${
+        ingredient.currentPricePerPurchaseUnit === null ||
+        ingredient.currentPricePerPurchaseUnit === undefined
+          ? '待补'
+          : String(ingredient.currentPricePerPurchaseUnit)
+      } 标签类型=${String(
         ingredient.labelCategory ?? '待补',
       )} 标签名称=${labelNames.join('、') || '待补'} 名称依据=${String(
         ingredient.labelNameSource ?? '待补',
@@ -1377,6 +1382,8 @@ function buildSystemPrompt(
     '- 字段必须在营养字段目录里，单位必须与目录一致。工具报错就按错误文本改参数后重试；连续改不出来就停下，说明卡在哪。',
     '- 不要编造营养数值。只写来源记录里有的值，或用户明确给出的值。',
     '- 结束前必须调用 selfCheck；它同时查原料卡和营养档案。有 blocking 就不要 finish：能补的先补，补不了的用 askUser 问人；finish 的 summary 要列出仍未解决的 blocking / 空字段。',
+    '- CFCT 分类是固定 15 类词表，不是营养库词条：鱼/水产选「水产类」，畜肉选「畜肉类及制品」，禽肉选「禽肉类及制品」，蔬菜选「蔬菜类及制品」。不要因为 CFCT 库没有命中就留空或问人。',
+    '- 标签名称没有目录命中时，用原料名称作为建议值，并把 labelNameSource 写成「按原料名建议，需人工确认」；不要因为标签目录没命中就留空。',
     '- 你可以自由决定工具调用顺序；调用 finish 结束本轮。',
     '',
     `- 本轮预算：最多 ${INGREDIENT_AGENT_MAX_TOOL_CALLS} 次工具调用 / ${INGREDIENT_AGENT_TIMEOUT_MS / 1000} 秒；连续 ${INGREDIENT_AGENT_MAX_NO_PROGRESS} 次工具调用没有新进展会被系统停止。`,

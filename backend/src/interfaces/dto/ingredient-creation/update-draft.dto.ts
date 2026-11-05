@@ -152,7 +152,7 @@ export class UpdateDraftProfileDto {
  *
  * 为什么不再只拿 `IngredientDraft` 当类型：interface 在运行时不存在，
  * whitelist 一个键也看不见 —— 前端多传的脏键会原样落进 payload，长度、范围、
- * 枚举也没人挡。这里按字段契约把 15 项显式声明出来。
+ * 枚举也没人挡。这里按字段契约把 16 项显式声明出来。
  *
  * 约定：
  * - 4 个基础必填项（名称 / 类型 / 基准单位 / 展示名）是接口层的最小信息；

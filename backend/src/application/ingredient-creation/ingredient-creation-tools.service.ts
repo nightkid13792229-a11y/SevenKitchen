@@ -434,6 +434,7 @@ const INGREDIENT_CARD_FIELDS = [
   'labelNames',
   'labelNameSource',
   'tags',
+  'currentPricePerPurchaseUnit',
 ] as const satisfies readonly IngredientToolField[];
 
 const INGREDIENT_CARD_FIELD_SET: ReadonlySet<string> = new Set(
@@ -493,6 +494,25 @@ const INGREDIENT_LABEL_CATEGORY_SET: ReadonlySet<string> = new Set(
   INGREDIENT_LABEL_CATEGORIES,
 );
 
+/** CFCT 固定 15 类；分类词表不是营养库词条，不需要库内命中。 */
+const INGREDIENT_CFCT_CLASSES = [
+  '谷类及制品',
+  '薯类及制品',
+  '干豆类及制品',
+  '蔬菜类及制品',
+  '菌藻类',
+  '水果类及制品',
+  '坚果种子类',
+  '畜肉类及制品',
+  '禽肉类及制品',
+  '乳类及制品',
+  '蛋类及制品',
+  '水产类',
+  '油脂类',
+  '调味品类',
+  '其他',
+] as const;
+
 function sameStringArray(left: unknown, right: unknown): boolean {
   if (!Array.isArray(left) || !Array.isArray(right)) return left === right;
   return (
@@ -541,8 +561,9 @@ const WRITE_INGREDIENT_TOOL: AgentToolDefinition = {
             },
             cfctClass: {
               type: 'string',
+              enum: INGREDIENT_CFCT_CLASSES,
               description:
-                'CFCT 分类，例如「禽肉类及制品」；判不准传空字符串清空，不要硬填。',
+                'CFCT 固定分类词表；鱼类选「水产类」，肉类选畜肉/禽肉类及制品，蔬菜选蔬菜类及制品。词表不是营养库，不要求库内命中。',
             },
             edibleYieldPercent: {
               type: 'number',
@@ -568,6 +589,11 @@ const WRITE_INGREDIENT_TOOL: AgentToolDefinition = {
               enum: INGREDIENT_PROCUREMENT_STRATEGIES,
               description:
                 '采购策略：DAILY_PURCHASE=日采，STOCK_REPLENISHMENT=库存补货，HYBRID=混合。',
+            },
+            currentPricePerPurchaseUnit: {
+              type: ['number', 'null'],
+              description:
+                '初始采购价，按基准单位计价（如元/克）；没有依据就传 null，不要编。填了会生成一条最小采购 SKU。',
             },
             labelCategory: {
               type: ['string', 'null'],
@@ -1522,6 +1548,17 @@ function validateIngredientField(
         };
       }
       return { ok: true, value: names };
+    }
+    case 'currentPricePerPurchaseUnit': {
+      if (raw === null) return { ok: true, value: null };
+      const price = readFiniteNumber(raw);
+      if (price === null || price < 0) {
+        return {
+          ok: false,
+          error: 'currentPricePerPurchaseUnit 必须是不小于 0 的数字，或传 null 清空。',
+        };
+      }
+      return { ok: true, value: price };
     }
     default:
       return { ok: false, error: `不支持的原料卡字段「${field}」。` };
@@ -2641,7 +2678,8 @@ export class IngredientCreationToolsService {
         field === 'densityGPerMl' ||
         field === 'procurementStrategy' ||
         field === 'labelCategory' ||
-        field === 'labelNameSource'
+        field === 'labelNameSource' ||
+        field === 'currentPricePerPurchaseUnit'
       ) {
         if (record[field] !== validation.value) {
           record[field] = validation.value;

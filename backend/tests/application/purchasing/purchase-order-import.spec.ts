@@ -235,4 +235,36 @@ describe('matchOrderLines', () => {
     expect(matched.reason).toBe('沿用上次匹配');
     expect(matched.confidence).toBe('HIGH');
   });
+
+  it('「鲑鱼」能匹配到标准原料「三文鱼」', () => {
+    const withSalmon: ListItemCandidate[] = [
+      ...candidates,
+      {
+        purchaseItemId: 'item-salmon',
+        ingredientId: 'ing-salmon',
+        ingredientName: '三文鱼',
+        skus: [
+          {
+            id: 'sku-salmon',
+            name: "Member's Mark 智利大西洋鲑鱼块 1kg",
+            productModel: '1kg',
+            purchaseChannel: '山姆会员店',
+            purchaseToBaseRatio: 1000,
+            purchaseUnit: '袋',
+          },
+        ],
+      },
+    ];
+
+    const [matched] = matchOrderLines(
+      [line("Member's Mark 智利大西洋鲑鱼块 1kg", '1kg')],
+      withSalmon,
+      '山姆',
+    );
+
+    expect(matched.ingredientId).toBe('ing-salmon');
+    expect(matched.procurementSkuId).toBe('sku-salmon');
+    expect(matched.confidence).toBe('HIGH');
+    expect(matched.needsNewSku).toBe(false);
+  });
 });

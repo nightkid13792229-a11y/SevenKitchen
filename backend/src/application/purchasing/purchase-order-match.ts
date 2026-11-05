@@ -41,6 +41,20 @@ const BRAND_NOISE = [
   '保洁',
 ];
 
+/**
+ * 常见同义词（2026-11-05）：截图里的商品名与清单里的标准原料叫法不同。
+ * 只放确定等价、不会和其他原料打架的词；剩下的靠手动匹配后学习。
+ */
+const INGREDIENT_ALIASES: Record<string, string[]> = {
+  三文鱼: ['鲑鱼', '大西洋鲑', 'salmon'],
+  青花鱼: ['鲭鱼', '鲐鱼'],
+  狭鳕鱼柳: ['狭鳕', '阿拉斯加鳕'],
+  生蚝: ['牡蛎'],
+  鸡胸: ['鸡胸肉', '鸡大胸'],
+  牛霖: ['牛后腿肉', '牛霖肉'],
+  猪里脊: ['里脊肉', '猪柳'],
+};
+
 const SPEC_PATTERN =
   /(\d+(?:\.\d+)?)\s*(kg|千克|公斤|g|克|ml|毫升|l|升|斤|两|个|只|枚|片|粒|颗|条|块|支|根|份|包|袋|盒|瓶|罐|卷)/gi;
 
@@ -180,12 +194,21 @@ export function matchOrderLines(
   aliases: MatchAlias[] = [],
 ): MatchedOrderLine[] {
   const normalizedIngredients = candidates
-    .map((candidate) => ({
-      candidate,
-      normalized: normalizeText(candidate.ingredientName),
-    }))
-    .filter((entry) => entry.normalized.length >= 1)
-    .sort((a, b) => b.normalized.length - a.normalized.length);
+    .map((candidate) => {
+      const names = [
+        candidate.ingredientName,
+        ...(INGREDIENT_ALIASES[candidate.ingredientName] ?? []),
+      ]
+        .map((name) => normalizeText(name))
+        .filter((name) => name.length >= 1);
+      return {
+        candidate,
+        names: Array.from(new Set(names)),
+        matchLength: names.reduce((max, name) => Math.max(max, name.length), 0),
+      };
+    })
+    .filter((entry) => entry.names.length > 0)
+    .sort((a, b) => b.matchLength - a.matchLength);
 
   const channelFamily = resolveChannelFamily(importChannel);
 
@@ -220,7 +243,7 @@ export function matchOrderLines(
     }
 
     const hit = normalizedIngredients.find((entry) =>
-      normalizedLine.includes(entry.normalized),
+      entry.names.some((name) => normalizedLine.includes(name)),
     );
 
     if (!hit) {

@@ -213,17 +213,44 @@ export class PurchaseOrderImportService {
 
       const { draft, raw, model } = await this.recognize(buffer, url);
       const aliases = await getAliasesForChannel(draft.channel);
+      let matched = matchOrderLines(
+        draft.items,
+        candidates,
+        draft.channel,
+        aliases,
+      );
+
+      // 字面匹配不上的，再用模型在清单内做一次语义归一（鲑鱼→三文鱼）。
+      const unmatched = matched
+        .map((line, index) => ({ line, index }))
+        .filter((entry) => !entry.line.ingredientId);
+      if (unmatched.length > 0) {
+        const hints = await this.semanticMapIngredients(
+          unmatched.map((entry) => ({
+            index: entry.index,
+            rawName: entry.line.rawName,
+            spec: entry.line.spec,
+          })),
+          candidates,
+          draft.channel,
+        );
+        if (hints.length > 0) {
+          matched = matchOrderLines(
+            draft.items,
+            candidates,
+            draft.channel,
+            aliases,
+            hints,
+          );
+        }
+      }
+
       recognized.push({
         url,
         imageKey,
         imageHash,
         draft,
-        matched: matchOrderLines(
-          draft.items,
-          candidates,
-          draft.channel,
-          aliases,
-        ),
+        matched,
         raw,
         model,
       });
@@ -872,6 +899,84 @@ export class PurchaseOrderImportService {
       `Order screenshot recognized: ${draft.channel} ${draft.items.length} lines, consistent=${draft.amountsConsistent}, url=${imageUrl.slice(0, 60)}`,
     );
     return { draft, raw, model: runtime.model };
+  }
+
+  /**
+   * 字面匹配不上的行，交给模型在「本次清单的原料」里做语义归一。
+   * 只允许从清单里选，不允许换成别的部位/品类；不确定必须返回 null。
+   */
+  private async semanticMapIngredients(
+    items: Array<{ index: number; rawName: string; spec: string | null }>,
+    candidates: ListItemCandidate[],
+    channel: string,
+  ): Promise<Array<{ lineIndex: number; ingredientId: string }>> {
+    if (items.length === 0 || candidates.length === 0) return [];
+
+    const runtime = await this.agentConfig.getEnabledDeepSeekRuntimeConfig({
+      purpose: PURCHASE_ORDER_IMPORT_PURPOSE,
+      fallbackToDefault: true,
+    });
+
+    let raw: Record<string, unknown>;
+    try {
+      raw = await this.model.callDeepSeekJson({
+        baseUrl: runtime.baseUrl,
+        model: runtime.model,
+        apiKey: runtime.apiKey,
+        requestTimeoutMs: Math.min(
+          Math.max(runtime.requestTimeoutMs, 15000),
+          30000,
+        ),
+        systemPrompt: `你是食材归一助手。只能从用户给出的“允许的原料”里选，不能发明新原料。
+判断规则：
+1. 同一种食材的不同叫法可以对应（例如鲑鱼 = 三文鱼，鸡胸肉 = 鸡胸）。
+2. 部位/品类不同不算同一种（牛肋条 ≠ 牛里脊，鸡腿 ≠ 鸡胸，鳕鱼 ≠ 银鳕鱼）。
+3. 拿不准就返回 null，不要猜。
+输出 JSON：{"matches":[{"lineNo":1,"ingredient":"三文鱼","confidence":"HIGH"}]}
+ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 为 null，confidence 为 LOW。`,
+        userPayload: {
+          channel,
+          allowedIngredients: candidates.map((item) => item.ingredientName),
+          items: items.map((item, index) => ({
+            lineNo: index + 1,
+            name: item.rawName,
+            spec: item.spec,
+          })),
+        },
+        temperature: 0,
+        maxTokens: 800,
+        extraBody: { thinking: { type: 'disabled' } },
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Semantic ingredient mapping failed, keep unmatched: ${error?.message}`,
+      );
+      return [];
+    }
+
+    const byName = new Map(
+      candidates.map((item) => [
+        normalizeText(item.ingredientName),
+        item.ingredientId,
+      ]),
+    );
+    const matches = Array.isArray((raw as any).matches)
+      ? ((raw as any).matches as any[])
+      : [];
+    const hints: Array<{ lineIndex: number; ingredientId: string }> = [];
+    for (const match of matches) {
+      const lineNo = Number(match?.lineNo);
+      const ingredientName = String(match?.ingredient ?? '').trim();
+      const confidence = String(match?.confidence ?? 'HIGH').toUpperCase();
+      if (!Number.isInteger(lineNo) || lineNo < 1 || lineNo > items.length) {
+        continue;
+      }
+      if (!ingredientName || confidence === 'LOW') continue;
+      const ingredientId = byName.get(normalizeText(ingredientName));
+      if (!ingredientId) continue;
+      hints.push({ lineIndex: items[lineNo - 1].index, ingredientId });
+    }
+    return hints;
   }
 
   private async assertListImportable(purchaseListId: string) {

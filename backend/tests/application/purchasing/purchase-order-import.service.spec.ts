@@ -524,6 +524,69 @@ describe('PurchaseOrderImportService', () => {
     expect(result.renamedTo).toBeUndefined();
   });
 
+  it('字面匹配不上时，让模型在清单内做语义匹配（鲑鱼→三文鱼）', async () => {
+    prisma.purchaseItem.findMany.mockResolvedValue([
+      { id: 'item-1', ingredientId: 'ing-1', ingredientName: '生菜' },
+      { id: 'item-salmon', ingredientId: 'ing-salmon', ingredientName: '三文鱼' },
+    ]);
+    prisma.procurementSku.findMany.mockResolvedValue([
+      {
+        id: 'sku-1',
+        ingredientId: 'ing-1',
+        name: '生菜 500g/袋',
+        productModel: '500g/袋',
+        purchaseChannel: '盒马鲜生',
+        purchaseToBaseRatio: 500,
+        purchaseUnit: '袋',
+      },
+      {
+        id: 'sku-salmon',
+        ingredientId: 'ing-salmon',
+        name: "Member's Mark 智利大西洋鲑鱼块 1kg",
+        productModel: '1kg',
+        purchaseChannel: '山姆会员店',
+        purchaseToBaseRatio: 1000,
+        purchaseUnit: '袋',
+      },
+    ]);
+    model.callDeepSeekJson
+      .mockResolvedValueOnce({
+        channel: '山姆',
+        orderNo: 'SK20261105-001',
+        orderTime: '2026-11-05 09:00',
+        items: [
+          {
+            name: "Member's Mark 智利大西洋鲑鱼块 1kg",
+            spec: '1kg',
+            qty: 1,
+            unit: '袋',
+            unitPrice: 125.9,
+            lineTotal: 125.9,
+          },
+        ],
+        subtotal: 125.9,
+        shippingFee: 0,
+        packagingFee: 2,
+        paid: 127.9,
+        incomplete: false,
+        note: '一致',
+      })
+      .mockResolvedValueOnce({
+        matches: [{ lineNo: 1, ingredient: '三文鱼', confidence: 'HIGH' }],
+      });
+
+    const [result] = await service.importFromScreenshots({
+      purchaseListId: 'list-1',
+      userId: 'user-1',
+      imageUrls: ['https://img.example.com/a.jpg'],
+    });
+
+    expect(model.callDeepSeekJson).toHaveBeenCalledTimes(2);
+    expect(result.lines[0].ingredientId).toBe('ing-salmon');
+    expect(result.lines[0].procurementSkuId).toBe('sku-salmon');
+    expect(result.lines[0].state).toBe('MATCHED');
+  });
+
   it('带 COS key 时用签名链接下载私有截图', async () => {
     model.callDeepSeekJson.mockResolvedValue({
       channel: '盒马',

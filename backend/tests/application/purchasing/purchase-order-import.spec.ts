@@ -236,7 +236,7 @@ describe('matchOrderLines', () => {
     expect(matched.confidence).toBe('HIGH');
   });
 
-  it('「鲑鱼」能匹配到标准原料「三文鱼」', () => {
+  it('模型给出语义映射时，「鲑鱼」能落到清单里的「三文鱼」', () => {
     const withSalmon: ListItemCandidate[] = [
       ...candidates,
       {
@@ -260,11 +260,25 @@ describe('matchOrderLines', () => {
       [line("Member's Mark 智利大西洋鲑鱼块 1kg", '1kg')],
       withSalmon,
       '山姆',
+      [],
+      [{ lineIndex: 0, ingredientId: 'ing-salmon' }],
     );
 
     expect(matched.ingredientId).toBe('ing-salmon');
     expect(matched.procurementSkuId).toBe('sku-salmon');
     expect(matched.confidence).toBe('HIGH');
     expect(matched.needsNewSku).toBe(false);
+    expect(matched.reason).toBe('AI 语义匹配');
+  });
+
+  it('模型给了清单外的原料 id 时忽略，不会凭空匹配', () => {
+    const [matched] = matchOrderLines(
+      [line('炙香雪花牛肋条 180g', '180g/盒')],
+      candidates,
+      '盒马',
+      [],
+      [{ lineIndex: 0, ingredientId: 'ing-not-in-list' }],
+    );
+    expect(matched.ingredientId).toBeNull();
   });
 });

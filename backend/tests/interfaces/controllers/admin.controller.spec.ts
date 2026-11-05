@@ -35,7 +35,6 @@ describe('AdminController', () => {
       coverImageService as any,
       {} as any,
       {} as any,
-      {} as any,
       jwtAuthService as any,
     );
 
@@ -390,6 +389,13 @@ describe('AdminController', () => {
             procurementSkus: [],
           }),
         },
+        // 2026-11-06：算价信息卡会查最近一次调价与最近一次采购
+        ingredientPriceChange: {
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
+        purchaseRecord: {
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
       };
 
       const controller = new AdminController(
@@ -406,9 +412,6 @@ describe('AdminController', () => {
         {} as any,
         {} as any,
         {} as any,
-        {
-          resolveBasis: jest.fn().mockResolvedValue(new Map()),
-        } as any,
       );
 
       const result = await controller.getIngredientById('ingredient-1');

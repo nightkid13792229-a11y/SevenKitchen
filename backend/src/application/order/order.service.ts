@@ -69,7 +69,6 @@ import {
   resolvePreparationMethodText,
   resolvePreparationMethodTokens,
 } from '../recipe/preparation-method-text.util';
-import { IngredientPriceBasisService } from '../ingredient/ingredient-price-basis.service';
 import { buildProductionRecipeSnapshot } from '../recipe/production-recipe-snapshot';
 import { ShippingNotificationService } from '../shipping/shipping-notification.service';
 import { TastingPackService } from '../tasting-pack/tasting-pack.service';
@@ -316,7 +315,6 @@ export class OrderService {
     private readonly pricingService: PricingService,
     private readonly globalConfigService: GlobalConfigService,
     private readonly shippingService: ShippingService,
-    private readonly ingredientPriceBasisService: IngredientPriceBasisService,
     @Inject(ADDRESS_REPOSITORY)
     private readonly addressRepository: AddressRepository,
     // @Inject('CartRepository')
@@ -497,29 +495,11 @@ export class OrderService {
       }
     }
 
-    const selectedIngredients = Array.from(
-      new Map(
-        Array.from(selectedByRecipeIngredientId.values()).map((ingredient) => [
-          ingredient.id,
-          ingredient,
-        ]),
-      ).values(),
-    );
-
-    // 成品鲜食算价依据：最近一次采购价 → 创建价（不再按采购方案挑 SKU）
-    const pricedIngredientMap =
-      await this.ingredientPriceBasisService.applyToIngredients(
-        selectedIngredients,
-      );
-
-    return new Map(
-      Array.from(selectedByRecipeIngredientId.entries()).map(
-        ([recipeIngredientId, selectedIngredient]) => [
-          recipeIngredientId,
-          pricedIngredientMap.get(selectedIngredient.id) || selectedIngredient,
-        ],
-      ),
-    );
+    // 算价口径（2026-11-06「单一来源」改造）：
+    // 价格只在采购报销时写入原料档案，这里直接用档案价。
+    // 不再在读时按「最近采购价 → 创建价 → 商品中位价 → 当前价」重新推导 ——
+    // 那套推导和写入侧是同一套规则的第二个实现，两条实现必然会分叉。
+    return new Map(selectedByRecipeIngredientId);
   }
 
   private getPricedIngredientIdsByRecipeItemId(

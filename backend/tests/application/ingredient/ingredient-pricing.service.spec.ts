@@ -3,6 +3,7 @@ import { GlobalConfigService } from '../../../src/application/config/global-conf
 import { IngredientPricingService } from '../../../src/application/ingredient/ingredient-pricing.service';
 import { INGREDIENT_REPOSITORY } from '../../../src/application/ingredient/ingredient.service';
 import { ProcurementSkuService } from '../../../src/application/ingredient/procurement-sku.service';
+import { IngredientPriceAnchorService } from '../../../src/application/ingredient/ingredient-price-anchor.service';
 import { PURCHASE_RECORD_REPOSITORY } from '../../../src/application/purchasing/purchasing.service.tokens';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 
@@ -41,6 +42,12 @@ describe('IngredientPricingService', () => {
     applyCurrentPurchasePrice: jest.fn(),
   } as any;
 
+  // 2026-11-06：价格写入闸的基准价来自历史采购中位数，这里默认给空，
+  // 等价于「没有历史采购」→ 闸门退回上一次生效价。
+  const mockPriceAnchorService = {
+    resolveAnchors: jest.fn().mockResolvedValue(new Map()),
+  } as any;
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -65,11 +72,16 @@ describe('IngredientPricingService', () => {
           provide: ProcurementSkuService,
           useValue: mockProcurementSkuService,
         },
+        {
+          provide: IngredientPriceAnchorService,
+          useValue: mockPriceAnchorService,
+        },
       ],
     }).compile();
 
     service = module.get(IngredientPricingService);
     jest.clearAllMocks();
+    mockPriceAnchorService.resolveAnchors.mockResolvedValue(new Map());
   });
 
   it('converts decimal source quantities to numbers in reimbursement views', async () => {
@@ -231,42 +243,58 @@ describe('IngredientPricingService', () => {
     );
   });
 
-  it('采购折算价与创建价相差超过 5 倍时，不自动审核（2026-11-04 小米事故口径）', async () => {
-    mockPrismaService.ingredientPriceChange.findMany.mockResolvedValue([
-      { ingredientId: 'ingredient-1' },
-    ]);
+  it('采购折算价与基准价相差超过 5 倍时，写入闸直接拒绝（2026-11-04 小米事故口径）', async () => {
+    // 事故背景：小米曾被写成 38.30 元/g，而正常价是 0.018652 元/g。
+    // 2026-11-06 起「离谱价」的判断从自动审核挪到了写入闸，
+    // 对自动审核、人工放行两条路径都生效，不会被绕过。
     mockIngredientRepository.findByIds.mockResolvedValue([
       {
         id: 'ingredient-1',
         name: '小米',
         purchaseToBaseRatio: 1,
-        initialPricePerPurchaseUnit: 0.018652,
-        currentPricePerPurchaseUnit: 38.3,
-        getEffectivePricePerPurchaseUnit: () => 38.3,
+        currentPricePerPurchaseUnit: 0.018652,
+        getEffectivePricePerPurchaseUnit: () => 0.018652,
       },
     ]);
-    mockPurchaseRecordRepository.findByIngredientId.mockResolvedValue([]);
-    mockGlobalConfigService.getGlobalConfig.mockResolvedValue({
-      ingredientPriceAutoApproveThreshold: 0.08,
-    });
+    // 前序用例可能给 findById 设过实现（clearAllMocks 不清实现），这里显式置空，
+    // 让拟定价直接取 sourcePricePerPurchaseUnit = 38.3。
+    mockPurchaseRecordRepository.findById.mockResolvedValue(undefined);
+    mockPrismaService.ingredientPriceChange.update.mockResolvedValue({});
 
-    const evaluations = await (service as any).evaluateAutoApproval([
-      {
-        id: 'change-1',
-        ingredientId: 'ingredient-1',
-        ingredientName: '小米',
-        purchaseRecordId: 'purchase-record-1',
-        previousEffectivePrice: { toNumber: () => 42.9 },
-        proposedEffectivePrice: { toNumber: () => 38.3 },
-        deltaRate: { toNumber: () => -0.1072 },
-        sourceQuantity: { toNumber: () => 1.565217 },
-        status: 'PENDING',
-      },
-    ]);
+    await (service as any).applyPriceChanges(
+      [
+        {
+          id: 'change-1',
+          ingredientId: 'ingredient-1',
+          reimbursementId: 'reimbursement-1',
+          purchaseRecordId: 'purchase-record-1',
+          sourceQuantity: { toNumber: () => 1.565217 },
+          sourcePricePerPurchaseUnit: { toNumber: () => 38.3 },
+          previousCurrentPricePerPurchaseUnit: { toNumber: () => 0.018652 },
+          previousEffectivePrice: { toNumber: () => 0.018652 },
+          proposedEffectivePrice: { toNumber: () => 38.3 },
+          appliedCurrentPricePerPurchaseUnit: null,
+          appliedEffectivePricePerPurchaseUnit: null,
+          deltaRate: { toNumber: () => 2052.3 },
+          status: 'PENDING',
+          reviewComment: null,
+          reviewedById: null,
+          reviewedAt: null,
+          createdAt: new Date(),
+        },
+      ],
+      null,
+      null,
+    );
 
-    const evaluation = evaluations.get('change-1');
-
-    expect(evaluation?.eligible).toBe(false);
-    expect(evaluation?.reasons.join('；')).toContain('相差');
+    expect(mockIngredientRepository.update).not.toHaveBeenCalled();
+    const updateCall = mockPrismaService.ingredientPriceChange.update.mock.calls
+      .map((call: any[]) => call[0])
+      .find((arg: any) => arg?.where?.id === 'change-1');
+    expect(updateCall).toBeDefined();
+    expect(updateCall.data.status).toBe('REJECTED');
+    expect(updateCall.data.gateAction).toBe('REJECT');
+    expect(updateCall.data.gateReason).toContain('倍');
   });
+
 });

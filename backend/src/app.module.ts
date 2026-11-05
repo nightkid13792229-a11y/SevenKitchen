@@ -125,7 +125,7 @@ import {
   INGREDIENT_REPOSITORY,
 } from './application/ingredient/ingredient.service';
 import { IngredientPricingService } from './application/ingredient/ingredient-pricing.service';
-import { IngredientPriceBasisService } from './application/ingredient/ingredient-price-basis.service';
+import { IngredientPriceAnchorService } from './application/ingredient/ingredient-price-anchor.service';
 import { OrderProcurementDisclosureService } from './application/order/order-procurement-disclosure.service';
 import { LabelIngredientInfoService } from './application/ingredient/label-ingredient-info.service';
 import { PrismaIngredientRepository } from './infrastructure/repositories/prisma-ingredient.repository';
@@ -626,7 +626,7 @@ validatePrismaConfig();
     AuthGuard,
     IngredientService,
     IngredientPricingService,
-    IngredientPriceBasisService,
+    IngredientPriceAnchorService,
     OrderProcurementDisclosureService,
     LabelIngredientInfoService,
     {

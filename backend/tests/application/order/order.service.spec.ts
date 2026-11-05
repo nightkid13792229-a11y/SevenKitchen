@@ -5,7 +5,6 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrderService, ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from 'src/order.service';
-import { IngredientPriceBasisService } from 'src/ingredient/ingredient-price-basis.service';
 import type { OrderRepository } from 'src/domain/order/order.repository';
 import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
 import { OrderStatusHistory } from 'src/domain/order/order-status-history.entity';
@@ -234,14 +233,6 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
         {
           provide: PricingService,
           useValue: mockPricingService,
-        },
-        {
-          provide: IngredientPriceBasisService,
-          useValue: {
-            applyToIngredients: jest
-              .fn()
-              .mockResolvedValue(new Map()),
-          },
         },
         {
           provide: ProcurementSkuService,
@@ -1739,12 +1730,6 @@ describe('OrderService - Phase 8.16: Order Cancellation', () => {
           useValue: {},
         },
         {
-          provide: IngredientPriceBasisService,
-          useValue: {
-            applyToIngredients: jest.fn().mockResolvedValue(new Map()),
-          },
-        },
-        {
           provide: 'IOrderPricingSnapshotRepository',
           useValue: {
             findById: jest.fn(),
@@ -2025,12 +2010,6 @@ describe('OrderService - Aftersale resolution state restoration', () => {
           useValue: {},
         },
         {
-          provide: IngredientPriceBasisService,
-          useValue: {
-            applyToIngredients: jest.fn().mockResolvedValue(new Map()),
-          },
-        },
-        {
           provide: 'IOrderPricingSnapshotRepository',
           useValue: {
             findById: jest.fn(),
@@ -2226,12 +2205,6 @@ describe('OrderService - Phase 8.17: Payment Transaction Tracking', () => {
         {
           provide: ShippingService,
           useValue: {},
-        },
-        {
-          provide: IngredientPriceBasisService,
-          useValue: {
-            applyToIngredients: jest.fn().mockResolvedValue(new Map()),
-          },
         },
         {
           provide: 'IOrderPricingSnapshotRepository',

@@ -103,11 +103,9 @@ describe('OrderService staff order addresses', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       addressRepository as any,
       {} as any,
-      prisma as any,
-    );
+      prisma as any);
   });
 
   it('creates an address for the order customer and binds it to the order', async () => {

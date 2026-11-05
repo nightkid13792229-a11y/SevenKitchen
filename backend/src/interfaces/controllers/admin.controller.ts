@@ -36,7 +36,6 @@ import {
   type CreateRecommendedProductDto,
   type UpdateRecommendedProductDto,
 } from '../../application/ingredient/recommended-product.service';
-import { IngredientPriceBasisService } from '../../application/ingredient/ingredient-price-basis.service';
 import { OrderProcurementDisclosureService } from '../../application/order/order-procurement-disclosure.service';
 import type {
   CreateIngredientDto,
@@ -142,7 +141,6 @@ export class AdminController {
     private readonly coverImageService: CoverImageService,
     private readonly imageOptimizationService: ImageOptimizationService,
     private readonly cosService: TencentCosService,
-    private readonly ingredientPriceBasisService?: IngredientPriceBasisService,
     private readonly jwtAuthService?: JwtAuthService,
     private readonly orderProcurementDisclosureService?: OrderProcurementDisclosureService,
   ) {}
@@ -212,6 +210,64 @@ export class AdminController {
     return { start, endExclusive };
   }
 
+  /**
+   * 原料算价信息（后台只读展示）。
+   *
+   * 2026-11-06「单一来源」改造后，价格只有一个来源：采购报销时写入的档案价。
+   * 这里只回答四个问题：多少钱一单位、这个价哪来的、哪天变的、多久没变。
+   */
+  private async buildIngredientPriceInfo(ingredient: Ingredient) {
+    const ratio =
+      Number.isFinite(ingredient.purchaseToBaseRatio) &&
+      ingredient.purchaseToBaseRatio > 0
+        ? ingredient.purchaseToBaseRatio
+        : 1;
+    const pricePerPurchaseUnit = Number(
+      ingredient.currentPricePerPurchaseUnit ?? 0,
+    );
+
+    const [latestChange, latestPurchase] = await Promise.all([
+      this.prisma.ingredientPriceChange.findFirst({
+        where: { ingredientId: ingredient.id, status: 'APPROVED' },
+        orderBy: { reviewedAt: 'desc' },
+        select: { reviewedAt: true },
+      }),
+      this.prisma.purchaseRecord.findFirst({
+        where: {
+          ingredientId: ingredient.id,
+          purchaseList: { status: 'COMPLETED' },
+        },
+        orderBy: { purchasedAt: 'desc' },
+        select: { purchasedAt: true },
+      }),
+    ]);
+
+    const lastChangedAt = latestChange?.reviewedAt ?? null;
+    const purchasedAt = latestPurchase?.purchasedAt ?? null;
+    const referenceDate = purchasedAt ?? lastChangedAt;
+    const ageDays = referenceDate
+      ? Math.floor(
+          (Date.now() - referenceDate.getTime()) / (24 * 60 * 60 * 1000),
+        )
+      : null;
+
+    return {
+      /** 价格来源：有采购历史 = 采购回写；没有 = 建档手填 */
+      source: purchasedAt ? 'LATEST_PURCHASE' : 'MANUAL_ENTRY',
+      pricePerPurchaseUnit,
+      baseUnitCost: this.roundTo(pricePerPurchaseUnit / ratio, 6),
+      purchaseToBaseRatio: ratio,
+      purchasedAt: purchasedAt ? purchasedAt.toISOString() : null,
+      lastChangedAt: lastChangedAt ? lastChangedAt.toISOString() : null,
+      ageDays,
+    };
+  }
+
+  private roundTo(value: number, digits: number): number {
+    const factor = 10 ** digits;
+    return Math.round(value * factor) / factor;
+  }
+
   private async buildIngredientDetailResponse(ingredient: Ingredient) {
     const prismaIngredient = await this.prisma.ingredient.findUnique({
       where: { id: ingredient.id },
@@ -277,11 +333,9 @@ export class AdminController {
       prismaIngredient?.procurementSkus.filter((sku) => sku.isActive).length ||
       0;
     const procurementSkuCount = prismaIngredient?.procurementSkus.length || 0;
-    const priceBasis = this.ingredientPriceBasisService
-      ? ((await this.ingredientPriceBasisService.resolveBasis([ingredient.id])).get(
-          ingredient.id,
-        ) ?? null)
-      : null;
+    // 算价信息（2026-11-06「单一来源」改造 · 阶段 D）：
+    // 价格只剩一个来源，这里只展示「多少钱一单位 + 哪来的 + 多久没变」。
+    const priceInfo = await this.buildIngredientPriceInfo(ingredient);
 
     return {
       id: ingredient.id,
@@ -302,23 +356,7 @@ export class AdminController {
       currentPricePerPurchaseUnit: Number(
         ingredient.currentPricePerPurchaseUnit,
       ),
-      initialPricePerPurchaseUnit: Number(
-        ingredient.initialPricePerPurchaseUnit ?? 0,
-      ),
-      priceBasis: priceBasis
-        ? {
-            source: priceBasis.source,
-            pricePerPurchaseUnit: priceBasis.pricePerPurchaseUnit,
-            baseUnitCost: priceBasis.baseUnitCost,
-            purchasedAt: priceBasis.purchasedAt
-              ? priceBasis.purchasedAt.toISOString()
-              : null,
-            purchaseToBaseRatio: priceBasis.purchaseToBaseRatio,
-          }
-        : null,
-      effectivePricePerPurchaseUnit: Number(
-        ingredient.getEffectivePricePerPurchaseUnit(),
-      ),
+      priceBasis: priceInfo,
       unitCost: ingredient.getUnitCost(),
       weightG: ingredient.weightG,
       maxCapacityG: ingredient.maxCapacityG,
@@ -584,9 +622,6 @@ export class AdminController {
       purchaseUnit: ing.purchaseUnit,
       purchaseToBaseRatio: ing.purchaseToBaseRatio,
       currentPricePerPurchaseUnit: Number(ing.currentPricePerPurchaseUnit),
-      effectivePricePerPurchaseUnit: Number(
-        ing.getEffectivePricePerPurchaseUnit(),
-      ),
       unitCost: ing.getUnitCost(),
       activeRecommendedProductCount:
         activeRecommendedProductCountMap.get(ing.id) || 0,
@@ -705,9 +740,6 @@ export class AdminController {
         name: ingredient.name,
         currentPricePerPurchaseUnit: Number(
           ingredient.currentPricePerPurchaseUnit,
-        ),
-        effectivePricePerPurchaseUnit: Number(
-          ingredient.getEffectivePricePerPurchaseUnit(),
         ),
         unitCost: ingredient.getUnitCost(),
       });

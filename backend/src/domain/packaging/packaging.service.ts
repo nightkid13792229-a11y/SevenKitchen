@@ -69,6 +69,15 @@ interface GlobalConfig {
   defaultIcePackId: string;
 }
 
+/**
+ * 默认产品标签原料 id（历史写死值，2026-11-06 抽成常量）。
+ *
+ * 只有后台 `global_config.default_product_label_id` 为空时才会用到它，
+ * 目的是让「什么都没配」时的行为和改造前完全一致。
+ */
+export const DEFAULT_PRODUCT_LABEL_INGREDIENT_ID =
+  '22831322-3463-49c7-8346-f5cc14277943';
+
 @Injectable()
 export class PackagingService {
   constructor(
@@ -207,15 +216,23 @@ export class PackagingService {
   async calculatePackagingCostForPlan(
     packagePlanInput: OrderPackagePlanItem[],
     totalFoodWeightG: number,
+    /**
+     * 产品标签原料 id（2026-11-06）。后台 `global_config.default_product_label_id`
+     * 一直存在但以前**没被读过** —— 代码里写死了一个 UUID，换标签就得改代码。
+     * 传了就用配置值，没传（且配置为空）继续用原来的默认值，行为不变。
+     */
+    productLabelId?: string | null,
   ): Promise<PackagingCost> {
     const packagePlan = normalizePackagePlan(packagePlanInput);
     const summary = summarizePackagePlan(packagePlan);
     const productLabel = await this.ingredientRepo.findById(
-      '22831322-3463-49c7-8346-f5cc14277943',
+      productLabelId || DEFAULT_PRODUCT_LABEL_INGREDIENT_ID,
     );
 
     if (!productLabel) {
-      throw new NotFoundException('Product label not found in database');
+      throw new NotFoundException(
+        `产品标签原料不存在：${productLabelId || DEFAULT_PRODUCT_LABEL_INGREDIENT_ID}（请到全局配置里指定「默认产品标签」）`,
+      );
     }
 
     let cost = 0;
@@ -360,11 +377,13 @@ export class PackagingService {
     // ==========================================
     const vacuumBag = await this.selectVacuumBag(singlePackSpecG);
     const productLabel = await this.ingredientRepo.findById(
-      '22831322-3463-49c7-8346-f5cc14277943',
+      DEFAULT_PRODUCT_LABEL_INGREDIENT_ID,
     );
 
     if (!productLabel) {
-      throw new NotFoundException('Product label not found in database');
+      throw new NotFoundException(
+        `产品标签原料不存在：${DEFAULT_PRODUCT_LABEL_INGREDIENT_ID}`,
+      );
     }
 
     const vacuumBagCostPerPack = vacuumBag.getUnitCost();

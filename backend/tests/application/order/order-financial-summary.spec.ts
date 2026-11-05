@@ -13,9 +13,7 @@ describe('Order financial summary', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
-      prisma as any,
-    );
+      prisma as any);
 
   it('returns estimated and actual order margin from the latest settlement', async () => {
     const prisma = {

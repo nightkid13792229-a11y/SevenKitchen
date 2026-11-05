@@ -490,6 +490,7 @@ export class PricingService {
       ? await this.packagingService.calculatePackagingCostForPlan(
           packagePlan,
           totalNetFoodWeightG,
+          globalConfig.defaultProductLabelId,
         )
       : await this.packagingService.calculatePackagingCost(
           totalPacks,
@@ -700,6 +701,7 @@ export class PricingService {
       await this.packagingService.calculatePackagingCostForPlan(
         mergedPackagePlan,
         totalNetFoodWeightG,
+        globalConfig.defaultProductLabelId,
       );
     const costPackaging = packagingResult.cost;
     const weightPackagingG = packagingResult.weightG;

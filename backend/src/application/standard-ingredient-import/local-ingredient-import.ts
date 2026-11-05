@@ -294,7 +294,6 @@ function buildIngredientData(
     purchaseUnit: 'g',
     purchaseToBaseRatio: 1,
     currentPricePerPurchaseUnit: 0,
-    initialPricePerPurchaseUnit: 0,
     properties: {
       importSource: 'standard-ingredient-import',
       manifestVersion: manifest.version,

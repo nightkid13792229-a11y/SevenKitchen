@@ -32,6 +32,7 @@ import {
   ApiConsumes,
 } from '@nestjs/swagger';
 import { ReimbursementService } from '../../application/purchasing/reimbursement.service';
+import { IngredientPricingService } from '../../application/ingredient/ingredient-pricing.service';
 import { ReimbursementReviewService } from '../../application/purchasing/reimbursement-review.service';
 import type { ReviewReimbursementDto } from '../../application/purchasing/reimbursement.service';
 import { PurchasingService } from '../../application/purchasing/purchasing.service';
@@ -71,6 +72,7 @@ export class AdminPurchasingController {
     private readonly reimbursementService: ReimbursementService,
     private readonly purchasingService: PurchasingService,
     private readonly reimbursementReviewService: ReimbursementReviewService,
+    private readonly ingredientPricingService: IngredientPricingService,
   ) {}
 
   /**
@@ -285,6 +287,30 @@ export class AdminPurchasingController {
     await this.reimbursementService.deleteReimbursement(id, userId, true);
 
     return ApiResponseDto.success(null, '删除成功');
+  }
+
+  /**
+   * 人工放行一条被价格闸挂起（HOLD）的变更（2026-11-06 单一来源改造）
+   *
+   * 只解除「波动超过阈值」这一道；0 元和 5 倍离谱仍然拒绝 ——
+   * 那两条是防单位/数量录错的，不是给人拍板的。
+   */
+  @Post('price-changes/:id/apply')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: '确认应用一条待确认的原料价格变更' })
+  @ApiParam({ name: 'id', description: '价格变更ID' })
+  async applyHeldPriceChange(
+    @Param('id') id: string,
+    @UserId() userId: string,
+    @Body() body: { comment?: string },
+  ): Promise<ApiResponseDto<any>> {
+    const priceChanges = await this.ingredientPricingService.applyHeldChange(
+      id,
+      userId,
+      body?.comment,
+    );
+
+    return ApiResponseDto.success(priceChanges, '价格变更已应用');
   }
 
   @Post('reimbursements/:id/review')

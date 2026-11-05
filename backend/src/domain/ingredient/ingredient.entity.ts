@@ -40,6 +40,10 @@ export class Ingredient {
     public readonly purchaseUnit: string,
     public readonly purchaseToBaseRatio: number,
     public readonly currentPricePerPurchaseUnit: number,
+    /**
+     * @deprecated 2026-11-06「单一来源」改造：生效价已并入当前价。
+     * 参数保留只为兼容既有构造调用，**不再参与任何计算**，阶段 C 会连同数据库列一起删除。
+     */
     public readonly effectivePricePerPurchaseUnit: number | null,
     public readonly weightG: number | null,
     public readonly maxCapacityG: number | null,
@@ -51,8 +55,9 @@ export class Ingredient {
     /** 是否允许在补剂商城对外售卖；仅生产用的补剂为 false */
     public readonly supplementRetailEnabled: boolean = false,
     /**
-     * 创建时录入的采购单价（只写一次，不随改价变化）。
-     * 成品鲜食算价：没有采购历史时用它兜底。
+     * @deprecated 2026-11-06「单一来源」改造：创建价不再参与算价，
+     * 防呆基准改用「历史采购价中位数」（见 domain/ingredient/price-gate.ts）。
+     * 参数保留只为兼容既有构造调用，阶段 C 会连同数据库列一起删除。
      */
     public readonly initialPricePerPurchaseUnit: number | null = null,
   ) {
@@ -72,15 +77,6 @@ export class Ingredient {
     if (this.currentPricePerPurchaseUnit < 0) {
       throw new ValidationError(
         `current_price_per_purchase_unit must be non-negative, got: ${this.currentPricePerPurchaseUnit}`,
-      );
-    }
-
-    if (
-      this.effectivePricePerPurchaseUnit !== null &&
-      this.effectivePricePerPurchaseUnit < 0
-    ) {
-      throw new ValidationError(
-        `effective_price_per_purchase_unit must be non-negative, got: ${this.effectivePricePerPurchaseUnit}`,
       );
     }
 
@@ -158,52 +154,11 @@ export class Ingredient {
   }
 
   /**
-   * Get effective price
+   * @deprecated 2026-11-06：生效价与当前价已合并，这里恒等于当前价。
+   * 保留方法只为兼容既有调用，新代码请直接用 `currentPricePerPurchaseUnit`。
    */
   getEffectivePricePerPurchaseUnit(): number {
-    return (
-      this.effectivePricePerPurchaseUnit ?? this.currentPricePerPurchaseUnit
-    );
-  }
-
-  /**
-   * 用一个新的「采购单位单价」复制一份原料（其余字段不变）。
-   *
-   * 成品鲜食算价按「最近一次采购价」或「创建价」计算，价格不落在原料档案上，
-   * 而是算价时临时替换，避免一次算价改写主数据。
-   *
-   * ⚠️ 当前价和生效价必须一起替换：`getEffectivePricePerPurchaseUnit()` 优先读生效价，
-   * 只替换当前价的话，这次替换会被旧的生效价原样顶掉
-   * （2026-11-04 小米 38.30 元/g 的事故就是这么漏过去的）。
-   */
-  withCurrentPrice(pricePerPurchaseUnit: number): Ingredient {
-    return new Ingredient(
-      this.id,
-      this.name,
-      this.type,
-      this.procurementStrategy,
-      this.diyEnabled,
-      this.procurementEnabled,
-      this.brand,
-      this.productModel,
-      this.purchaseChannel,
-      this.notes,
-      this.baseUnit,
-      this.unitDisplayLabel,
-      this.purchaseUnit,
-      this.purchaseToBaseRatio,
-      pricePerPurchaseUnit,
-      pricePerPurchaseUnit,
-      this.weightG,
-      this.maxCapacityG,
-      this.safetyStock,
-      this.reorderPoint,
-      this.targetStock,
-      this.properties,
-      this.nutritionProfile,
-      this.supplementRetailEnabled,
-      this.initialPricePerPurchaseUnit,
-    );
+    return this.currentPricePerPurchaseUnit;
   }
 
   /**
@@ -215,10 +170,14 @@ export class Ingredient {
 
   /**
    * Calculate unit cost (per base unit)
-   * Formula: effective_price_per_purchase_unit / purchase_to_base_ratio
+   *
+   * Formula: current_price_per_purchase_unit / purchase_to_base_ratio
+   *
+   * 2026-11-06「单一来源」改造后，这是全系统**唯一**的单价公式：
+   * 鲜食、试吃装、补剂、包材都用它，价格只在采购报销时写入一次。
    */
   getUnitCost(): number {
-    return this.getEffectivePricePerPurchaseUnit() / this.purchaseToBaseRatio;
+    return this.currentPricePerPurchaseUnit / this.purchaseToBaseRatio;
   }
 
   /**

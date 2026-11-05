@@ -492,9 +492,7 @@ export interface Ingredient {
   purchaseUnit?: string | null;
   purchaseToBaseRatio?: number | null;
   currentPricePerPurchaseUnit?: number;
-  initialPricePerPurchaseUnit?: number;
   priceBasis?: IngredientPriceBasis | null;
-  effectivePricePerPurchaseUnit?: number | null;
   unitCost?: number;
   safetyStock?: number | null;
   reorderPoint?: number | null;
@@ -527,7 +525,6 @@ export interface IngredientForm {
   purchaseUnit?: string;
   purchaseToBaseRatio?: number;
   currentPricePerPurchaseUnit?: number;
-  effectivePricePerPurchaseUnit?: number;
   safetyStock?: number;
   reorderPoint?: number;
   targetStock?: number;
@@ -639,18 +636,26 @@ export interface RecommendedProductForm {
   sortOrder?: number;
 }
 
-export type IngredientPriceBasisSource =
-  | "LATEST_PURCHASE"
-  | "INITIAL_PRICE"
-  | "SKU_REFERENCE"
-  | "CURRENT_PRICE"
-  | "NONE";
+/**
+ * 算价信息来源（2026-11-06「单一来源」改造后只剩两种）
+ *
+ * LATEST_PURCHASE = 有采购历史，价格由报销回写
+ * MANUAL_ENTRY    = 从没采购过，建档时手填
+ */
+export type IngredientPriceBasisSource = "LATEST_PURCHASE" | "MANUAL_ENTRY";
 
 export interface IngredientPriceBasis {
   source: IngredientPriceBasisSource;
+  /** 元 / 采购单位 */
   pricePerPurchaseUnit: number;
+  /** 元 / 基准单位（元/g、元/ml） */
   baseUnitCost: number | null;
+  /** 最近一次已完成的采购日期 */
   purchasedAt: string | null;
+  /** 最近一次价格生效日期 */
+  lastChangedAt?: string | null;
+  /** 距今多少天没变过（>90 天后台标黄） */
+  ageDays?: number | null;
   purchaseToBaseRatio: number;
 }
 

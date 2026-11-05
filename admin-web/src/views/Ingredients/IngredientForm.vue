@@ -647,11 +647,41 @@
         <el-input-number
           v-model="formData.currentPricePerPurchaseUnit"
           :min="0"
-          :precision="2"
-          :step="0.1"
+          :precision="priceInputPrecision"
+          :step="priceInputStep"
           controls-position="right"
           style="width: 180px"
         />
+        <span class="hint-text" style="margin-left: 8px">
+          {{ formatUnitPricePreview }}
+        </span>
+      </el-form-item>
+
+      <!-- 算价信息（2026-11-06 单一来源改造）：只读，回答"多少钱一单位、哪来的、多久没变" -->
+      <el-form-item v-if="formData.id && priceInfo" label="算价信息">
+        <div class="price-info-card">
+          <div class="price-info-line">
+            <span class="label">每 {{ baseUnitLabel }} 单价</span>
+            <span class="value">{{ formatMoney(priceInfo.baseUnitCost) }}</span>
+          </div>
+          <div class="price-info-line">
+            <span class="label">价格来源</span>
+            <span class="value">
+              {{ priceInfo.source === 'LATEST_PURCHASE' ? '采购回写' : '建档手填' }}
+            </span>
+          </div>
+          <div class="price-info-line">
+            <span class="label">最近采购</span>
+            <span class="value">{{ priceInfo.purchasedAt ? priceInfo.purchasedAt.slice(0, 10) : '从未采购' }}</span>
+          </div>
+          <div class="price-info-line">
+            <span class="label">距今</span>
+            <span class="value" :class="{ 'is-stale': isPriceStale }">
+              {{ priceInfo.ageDays === null || priceInfo.ageDays === undefined ? '—' : priceInfo.ageDays + ' 天' }}
+              <span v-if="isPriceStale" class="stale-hint">（超过 90 天，建议核对）</span>
+            </span>
+          </div>
+        </div>
       </el-form-item>
 
       <el-form-item label="消耗品类型" prop="is_consumable">
@@ -1218,12 +1248,12 @@
         <el-input-number
           v-model="procurementForm.currentPurchasePrice"
           :min="0"
-          :precision="2"
-          :step="0.1"
+          :precision="priceInputPrecision"
+          :step="priceInputStep"
           style="width: 180px"
         />
         <span class="hint-text" style="margin-left: 8px"
-          >采购建议/采购单按此价估算；成品鲜食订单优先用最近一次采购价，缺失时才参考此价</span
+          >只用于采购建议与采购单估算，<b>不参与成品鲜食与补剂的成本计算</b>（2026-11-06）</span
         >
       </el-form-item>
       <el-form-item v-if="!procurementEditingId" label="期初库存">
@@ -1402,6 +1432,7 @@ import {
   type PackagingProperties,
   type RecommendedProduct,
   type RecommendedProductForm,
+  type IngredientPriceBasis,
 } from '@/types/ingredient'
 
 interface Props {
@@ -1612,6 +1643,40 @@ const priceInputPrecision = computed(() =>
 const priceInputStep = computed(() =>
   priceInputPrecision.value === 6 ? 0.000001 : 0.1,
 )
+
+/**
+ * 算价信息（2026-11-06「单一来源」改造 · 阶段 D）
+ *
+ * 价格只剩一个来源：采购报销时写入的档案价。这里只做只读展示：
+ * 多少钱一单位、这个价哪来的、哪天变的、多久没变过（>90 天标黄）。
+ */
+const priceInfo = ref<IngredientPriceBasis | null>(null)
+
+const baseUnitLabel = computed(
+  () => BaseUnitLabels[formData.baseUnit] || formData.baseUnit,
+)
+
+const formatMoney = (value?: number | null) => {
+  const num = Number(value ?? 0)
+  if (!Number.isFinite(num)) return '¥0'
+  const abs = Math.abs(num)
+  if (abs >= 1) return `¥${num.toFixed(2)}`
+  if (abs >= 0.01) return `¥${num.toFixed(4)}`
+  return `¥${num.toFixed(6)}`
+}
+
+/** 输入框下方的实时换算，避免「元/克」被写成「元/公斤」还看不出来 */
+const formatUnitPricePreview = computed(() => {
+  const price = Number(formData.currentPricePerPurchaseUnit ?? 0)
+  const ratio = Number(formData.purchaseToBaseRatio ?? 0)
+  if (!(price > 0) || !(ratio > 0)) return ''
+  return `≈ ${formatMoney(price / ratio)} / ${baseUnitLabel.value}`
+})
+
+const isPriceStale = computed(() => {
+  const days = priceInfo.value?.ageDays
+  return typeof days === 'number' && days > 90
+})
 
 // 类型特定属性
 const foodProperties = reactive<FoodProperties>(
@@ -2088,7 +2153,6 @@ function sanitizeTopLevelFieldsForFood() {
   formData.purchaseUnit = getResolvedFoodPurchaseUnit()
   formData.purchaseToBaseRatio = 1
   formData.currentPricePerPurchaseUnit = 0
-  formData.effectivePricePerPurchaseUnit = 0
   formData.safetyStock = undefined
   formData.reorderPoint = undefined
   formData.targetStock = undefined
@@ -2399,6 +2463,7 @@ watch(
     if (oldIngredient && !newIngredient) {
       // ✅ 修复：当新增原料时，重置表单数据（清除 id 等字段）
       formData.id = undefined
+      priceInfo.value = null
       formData.name = ''
       formData.type = IngredientType.FOOD
       formData.procurementStrategy =
@@ -2414,7 +2479,6 @@ watch(
       formData.purchaseUnit = ''
       formData.purchaseToBaseRatio = undefined
       formData.currentPricePerPurchaseUnit = undefined
-      formData.effectivePricePerPurchaseUnit = undefined
       formData.weightG = undefined
       formData.maxCapacityG = undefined
       formData.safetyStock = undefined
@@ -2446,6 +2510,8 @@ watch(
       similarIngredients.value = []
 
       Object.assign(formData, newIngredient)
+      // priceBasis 只在详情接口返回，表单类型里没有
+      priceInfo.value = (newIngredient as Ingredient).priceBasis ?? null
       formData.baseUnitDisplayName =
         newIngredient.baseUnitDisplayName ||
         newIngredient.unitDisplayLabel ||
@@ -3215,7 +3281,6 @@ function buildSubmitPayload(): IngredientForm {
     purchaseUnit: formData.purchaseUnit,
     purchaseToBaseRatio: formData.purchaseToBaseRatio,
     currentPricePerPurchaseUnit: formData.currentPricePerPurchaseUnit,
-    effectivePricePerPurchaseUnit: formData.effectivePricePerPurchaseUnit,
     safetyStock: formData.safetyStock,
     reorderPoint: formData.reorderPoint,
     targetStock: formData.targetStock,
@@ -3332,13 +3397,9 @@ const handleSubmit = async () => {
 
     sanitizeTypeSpecificPayload()
 
-    if (formData.type === IngredientType.FOOD) {
-      formData.effectivePricePerPurchaseUnit =
-        formData.currentPricePerPurchaseUnit
-    } else {
+    // 2026-11-06：生效价并入当前价，不再单独提交
+    if (formData.type !== IngredientType.FOOD) {
       formData.purchaseUnit = getSingleLayerPurchaseUnit()
-      formData.effectivePricePerPurchaseUnit =
-        formData.currentPricePerPurchaseUnit
     }
 
     syncProperties()

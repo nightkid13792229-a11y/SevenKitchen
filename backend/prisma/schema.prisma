@@ -2594,6 +2594,10 @@ model IngredientPriceChange {
   appliedEffectivePricePerPurchaseUnit Decimal?                    @map("applied_effective_price_per_purchase_unit") @db.Decimal(14, 6)
   deltaRate                            Decimal?                    @map("delta_rate") @db.Decimal(10, 4)
   status                               IngredientPriceChangeStatus @default(PENDING) @map("status")
+  /// 写入闸结果（2026-11-06 单一来源改造）：APPLY 已写入 / HOLD 待确认 / REJECT 拒绝
+  gateAction                           String?                     @map("gate_action") @db.VarChar(10)
+  /// 闸门不通过的原因，后台直接展示
+  gateReason                           String?                     @map("gate_reason") @db.VarChar(300)
   reviewComment                        String?                     @map("review_comment")
   reviewedById                         String?                     @map("reviewed_by_id")
   reviewedAt                           DateTime?                   @map("reviewed_at")

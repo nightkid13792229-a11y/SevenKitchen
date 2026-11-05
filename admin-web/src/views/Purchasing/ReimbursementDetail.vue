@@ -194,48 +194,66 @@
         <template #header>
           <div class="card-header">
             <span class="title">原料价格变更 ({{ reimbursement.priceChanges.length }})</span>
+            <el-tag v-if="heldPriceChangeCount > 0" type="warning" size="small">
+              {{ heldPriceChangeCount }} 项待确认
+            </el-tag>
           </div>
         </template>
 
         <el-table :data="reimbursement.priceChanges" size="small" style="width: 100%">
-          <el-table-column prop="ingredientName" label="原料" min-width="180" />
-          <el-table-column label="旧生效价" width="120" align="right">
+          <el-table-column prop="ingredientName" label="原料" min-width="160" />
+          <el-table-column label="原单价" width="130" align="right">
             <template #default="{ row }">
-              ¥{{ Number(row.previousEffectivePrice || 0).toFixed(2) }}
+              {{ formatUnitPrice(row.previousEffectivePrice) }}/{{ row.purchaseUnit || '-' }}
             </template>
           </el-table-column>
-          <el-table-column label="采购录入价" width="130" align="right">
+          <el-table-column label="采购折算价" width="140" align="right">
             <template #default="{ row }">
-              ¥{{ Number(row.sourcePricePerPurchaseUnit || 0).toFixed(2) }}/{{ row.purchaseUnit || '-' }}
+              {{ formatUnitPrice(row.sourcePricePerPurchaseUnit) }}/{{ row.purchaseUnit || '-' }}
             </template>
           </el-table-column>
-          <el-table-column label="拟生效价" width="120" align="right">
+          <el-table-column label="拟定价" width="130" align="right">
             <template #default="{ row }">
-              ¥{{ Number(row.proposedEffectivePrice || 0).toFixed(2) }}
+              {{ formatUnitPrice(row.proposedEffectivePrice) }}/{{ row.purchaseUnit || '-' }}
             </template>
           </el-table-column>
-          <el-table-column label="涨跌幅" width="110" align="right">
+          <el-table-column label="涨跌幅" width="100" align="right">
             <template #default="{ row }">
               {{ formatDeltaRate(row.deltaRate) }}
             </template>
           </el-table-column>
-          <el-table-column label="状态" width="110">
+          <el-table-column label="校验结果" width="120">
+            <template #default="{ row }">
+              <el-tag :type="getGateTagType(row)" size="small">
+                {{ getGateText(row) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="100">
             <template #default="{ row }">
               <el-tag :type="getPriceChangeStatusType(row.status)" size="small">
                 {{ getPriceChangeStatusText(row.status) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="生效方式" width="110">
+          <el-table-column label="说明" min-width="220" show-overflow-tooltip>
             <template #default="{ row }">
-              <el-tag :type="getApprovalModeType(row.approvalMode)" size="small">
-                {{ getApprovalModeText(row.approvalMode) }}
-              </el-tag>
+              {{ row.gateReason || formatReviewReasons(row.reviewReasons, row.reviewComment) }}
             </template>
           </el-table-column>
-          <el-table-column label="变更说明" min-width="220" show-overflow-tooltip>
+          <el-table-column label="操作" width="110" fixed="right">
             <template #default="{ row }">
-              {{ formatReviewReasons(row.reviewReasons, row.reviewComment) }}
+              <el-button
+                v-if="isHeldChange(row)"
+                type="primary"
+                link
+                size="small"
+                :loading="applyingPriceChangeId === row.id"
+                @click="handleApplyHeldPriceChange(row)"
+              >
+                确认应用
+              </el-button>
+              <span v-else class="muted-text">—</span>
             </template>
           </el-table-column>
         </el-table>
@@ -608,6 +626,64 @@ const formatReviewReasons = (
   }
 
   return reviewComment || '-'
+}
+
+/**
+ * 单价按数量级自适应小数位（2026-11-06）。
+ *
+ * 很多食材的采购单位就是 1 克，单价只有 0.00278 元，
+ * 固定两位小数会全部显示成 ¥0.00，看起来像免费。
+ */
+const formatUnitPrice = (value?: number | null) => {
+  const num = Number(value ?? 0)
+  if (!Number.isFinite(num)) return '¥0'
+  const abs = Math.abs(num)
+  if (abs >= 1) return `¥${num.toFixed(2)}`
+  if (abs >= 0.01) return `¥${num.toFixed(4)}`
+  return `¥${num.toFixed(6)}`
+}
+
+/** 被价格闸挂起、等人工放行的条目 */
+const isHeldChange = (row: any) =>
+  row?.gateAction === 'HOLD' && row?.status === 'PENDING'
+
+const heldPriceChangeCount = computed(
+  () =>
+    (reimbursement.value?.priceChanges || []).filter((row: any) =>
+      isHeldChange(row)
+    ).length
+)
+
+const getGateText = (row: any) => {
+  if (isHeldChange(row)) return '待确认'
+  if (row?.gateAction === 'REJECT' || row?.status === 'REJECTED') return '已拒绝'
+  if (row?.gateAction === 'APPLY') return '已通过'
+  return '—'
+}
+
+const getGateTagType = (row: any) => {
+  if (isHeldChange(row)) return 'warning'
+  if (row?.gateAction === 'REJECT' || row?.status === 'REJECTED') return 'danger'
+  if (row?.gateAction === 'APPLY') return 'success'
+  return 'info'
+}
+
+const applyingPriceChangeId = ref<string | null>(null)
+
+const handleApplyHeldPriceChange = async (row: any) => {
+  if (!row?.id) return
+  applyingPriceChangeId.value = row.id
+  try {
+    await purchasingApi.applyHeldPriceChange(String(row.id), '后台人工确认')
+    ElMessage.success('价格变更已应用')
+    await loadDetail()
+  } catch (error: any) {
+    ElMessage.error(
+      error?.response?.data?.message || error?.message || '应用失败'
+    )
+  } finally {
+    applyingPriceChangeId.value = null
+  }
 }
 
 // 加载详情

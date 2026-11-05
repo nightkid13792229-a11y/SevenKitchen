@@ -24,7 +24,6 @@ import { applyPriceRounding } from '../../domain/pricing/price-rounding';
 import { IngredientType } from '../../domain/ingredient/enums';
 import type { Ingredient } from '../../domain/ingredient/ingredient.entity';
 import { GlobalConfigService } from '../config/global-config.service';
-import { IngredientPriceBasisService } from '../ingredient/ingredient-price-basis.service';
 import { ShippingService } from '../shipping/shipping.service';
 import { TastingPackConfigService } from './tasting-pack-config.service';
 import { INGREDIENT_REPOSITORY } from '../ingredient/ingredient.service';
@@ -90,7 +89,6 @@ export class TastingPackPricingService {
     private readonly pricingService: PricingService,
     private readonly globalConfigService: GlobalConfigService,
     private readonly tastingPackConfigService: TastingPackConfigService,
-    private readonly ingredientPriceBasisService: IngredientPriceBasisService,
     private readonly shippingService: ShippingService,
     private readonly prisma: PrismaService,
     @Inject(RECIPE_REPOSITORY)
@@ -161,9 +159,8 @@ export class TastingPackPricingService {
       ingredients.map((ingredient) => [ingredient.id, ingredient]),
     );
 
-    // 与鲜食同一算价口径：最近一次采购价 → 创建价
-    const pricedIngredientMap =
-      await this.ingredientPriceBasisService.applyToIngredients(ingredients);
+    // 与鲜食同一算价口径（2026-11-06 单一来源改造）：直接用档案价，
+    // 不再在读时重新推导「最近采购价 → 创建价」。
 
     const prepMethodMap = await this.loadPreparationMethodNameMap(
       recipes.flatMap((recipe) =>
@@ -175,9 +172,7 @@ export class TastingPackPricingService {
       const recipe = recipes[index];
       const ingredientMap = new Map<string, Ingredient>();
       for (const ri of recipe.items || []) {
-        const ingredient =
-          pricedIngredientMap.get(ri.ingredientId) ||
-          catalogById.get(ri.ingredientId);
+        const ingredient = catalogById.get(ri.ingredientId);
         if (!ingredient) {
           throw new NotFoundException(`原料不存在: ${ri.ingredientId}`);
         }

@@ -21,7 +21,6 @@ import {
   ORDER_REPOSITORY,
   ORDER_STATUS_HISTORY_REPOSITORY,
 } from 'src/application/order/order.service';
-import { IngredientPriceBasisService } from 'src/ingredient/ingredient-price-basis.service';
 import { OrderProcurementDisclosureService } from 'src/order/order-procurement-disclosure.service';
 import { PRODUCTION_BATCH_REPOSITORY } from 'src/application/production/production.service';
 import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
@@ -331,14 +330,6 @@ describe('OrdersController (e2e)', () => {
         {
           provide: ShippingNotificationService,
           useValue: mockShippingNotificationService,
-        },
-        {
-          provide: IngredientPriceBasisService,
-          useValue: {
-            applyToIngredients: jest.fn(async (ingredients: any[]) =>
-              new Map(ingredients.map((ingredient) => [ingredient.id, ingredient])),
-            ),
-          },
         },
         {
           provide: OrderProcurementDisclosureService,

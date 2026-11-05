@@ -254,8 +254,7 @@ describe('现货下单 · 库存占用与回滚', () => {
       {} as any, // dogRepository
       {} as any, // pricingService
       {} as any, // globalConfigService
-      { calculateShippingFeePreview: jest.fn() } as any,
-      {} as any, // orderSourcePlanService
+      { calculateShippingFeePreview: jest.fn() } as any, // orderSourcePlanService
       { findById: jest.fn().mockResolvedValue(null) } as any, // addressRepository
       {
         findById: jest.fn().mockResolvedValue(snapshot),
@@ -267,8 +266,7 @@ describe('现货下单 · 库存占用与回滚', () => {
       undefined, // searchGovernanceService
       undefined, // shippingNotificationService
       packService as any,
-      stockService as any,
-    );
+      stockService as any);
 
     return { service, stockService, orderRepository, packService };
   }
@@ -361,7 +359,6 @@ describe('现货下单 · 库存占用与回滚', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       {
         findById: jest.fn().mockResolvedValue({
           requestParams: { kind: 'TASTING_PACK' },
@@ -379,8 +376,7 @@ describe('现货下单 · 库存占用与回滚', () => {
       undefined,
       undefined,
       { assertPurchasable: jest.fn() } as any,
-      stockService as any,
-    );
+      stockService as any);
 
     await expect(
       broken.createOrderDraft({
@@ -412,12 +408,10 @@ describe('现货订单 · 误操作防护', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       undefined,
       undefined,
       undefined,
-      undefined,
-    );
+      undefined);
 
     await expect(service.startProduction('order-1', 'admin')).rejects.toThrow(
       '现货商品，不需要开始生产',
@@ -536,7 +530,6 @@ describe('现货订单 · 一键补发', () => {
       {} as any, // dogRepository
       {} as any, // pricingService
       {} as any, // globalConfigService
-      {} as any, // shippingService
       {} as any, // orderSourcePlanService
       {} as any, // addressRepository
       {} as any, // pricingSnapshotRepository
@@ -544,8 +537,7 @@ describe('现货订单 · 一键补发', () => {
       undefined, // searchGovernanceService
       undefined, // shippingNotificationService
       undefined, // tastingPackService
-      stockService as any,
-    );
+      stockService as any);
 
     return { service, orderRepository, stockService, prisma };
   }
@@ -822,12 +814,10 @@ describe('现货订单 · 一键补发', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       undefined,
       undefined,
       undefined,
-      undefined,
-    );
+      undefined);
 
     await service.completeOrder(reship.id, 'admin', 'admin-1');
 

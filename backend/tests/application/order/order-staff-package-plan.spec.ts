@@ -86,9 +86,7 @@ describe('OrderService staff order package corrections', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
-      prisma as any,
-    );
+      prisma as any);
     jest.spyOn(service, 'previewPricing').mockResolvedValue({
       amountProduct: 130,
       amountShipping: 12,

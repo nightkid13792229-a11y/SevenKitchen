@@ -87,11 +87,9 @@ describe('OrderService shipping notifications', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       prisma as any,
       undefined,
-      shippingNotificationService as unknown as ShippingNotificationService,
-    );
+      shippingNotificationService as unknown as ShippingNotificationService);
   });
 
   it('sends the customer shipping notification after admin shipment', async () => {

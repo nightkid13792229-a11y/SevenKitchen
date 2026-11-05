@@ -64,7 +64,7 @@ export class InMemoryIngredientRepository implements IngredientRepository {
       data.purchaseToBaseRatio ?? existing.purchaseToBaseRatio,
       data.currentPricePerPurchaseUnit ?? existing.currentPricePerPurchaseUnit,
       data.effectivePricePerPurchaseUnit ??
-        existing.effectivePricePerPurchaseUnit,
+        existing.currentPricePerPurchaseUnit,
       data.weightG ?? existing.weightG,
       data.maxCapacityG ?? existing.maxCapacityG,
       data.safetyStock ?? existing.safetyStock,
@@ -73,7 +73,7 @@ export class InMemoryIngredientRepository implements IngredientRepository {
       data.properties ?? existing.properties,
       existing.nutritionProfile,
       existing.supplementRetailEnabled,
-      existing.initialPricePerPurchaseUnit,
+      null,
     );
 
     this.ingredients.set(id, updated);
@@ -105,48 +105,7 @@ export class InMemoryIngredientRepository implements IngredientRepository {
       existing.purchaseUnit,
       existing.purchaseToBaseRatio,
       pricePerPurchaseUnit,
-      existing.effectivePricePerPurchaseUnit,
-      existing.weightG,
-      existing.maxCapacityG,
-      existing.safetyStock,
-      existing.reorderPoint,
-      existing.targetStock,
-      existing.properties,
-      existing.nutritionProfile,
-      existing.supplementRetailEnabled,
-      existing.initialPricePerPurchaseUnit,
-    );
-
-    this.ingredients.set(id, updated);
-    return updated;
-  }
-
-  async updateEffectivePrice(
-    id: string,
-    effectivePricePerPurchaseUnit: number,
-  ): Promise<Ingredient | null> {
-    const existing = this.ingredients.get(id);
-    if (!existing) {
-      return null;
-    }
-
-    const updated = new Ingredient(
-      existing.id,
-      existing.name,
-      existing.type,
-      existing.procurementStrategy,
-      existing.diyEnabled,
-      existing.procurementEnabled,
-      existing.brand,
-      existing.productModel,
-      existing.purchaseChannel,
-      existing.notes,
-      existing.baseUnit,
-      existing.unitDisplayLabel,
-      existing.purchaseUnit,
-      existing.purchaseToBaseRatio,
       existing.currentPricePerPurchaseUnit,
-      effectivePricePerPurchaseUnit,
       existing.weightG,
       existing.maxCapacityG,
       existing.safetyStock,
@@ -155,7 +114,7 @@ export class InMemoryIngredientRepository implements IngredientRepository {
       existing.properties,
       existing.nutritionProfile,
       existing.supplementRetailEnabled,
-      existing.initialPricePerPurchaseUnit,
+      null,
     );
 
     this.ingredients.set(id, updated);

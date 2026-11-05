@@ -621,16 +621,12 @@ export class PurchasingService {
       params.preferredChannel || ingredient?.purchaseChannel,
       params.preferredModel || ingredient?.productModel,
     );
+    // 2026-11-06：生效价与当前价合并，只有一个价格来源
     const currentPricePerPurchaseUnit =
       procurementSku?.currentPurchasePrice ??
       ingredient?.currentPricePerPurchaseUnit ??
-      ingredient?.effectivePricePerPurchaseUnit ??
       0;
-    const effectivePricePerPurchaseUnit =
-      procurementSku?.currentPurchasePrice ??
-      ingredient?.effectivePricePerPurchaseUnit ??
-      ingredient?.currentPricePerPurchaseUnit ??
-      0;
+    const effectivePricePerPurchaseUnit = currentPricePerPurchaseUnit;
 
     return {
       procurementSku,

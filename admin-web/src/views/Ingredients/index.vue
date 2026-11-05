@@ -812,7 +812,6 @@ const buildDuplicateDraft = (ingredient: Ingredient): IngredientForm => ({
   purchaseUnit: ingredient.purchaseUnit || '',
   purchaseToBaseRatio: ingredient.purchaseToBaseRatio ?? undefined,
   currentPricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit ?? undefined,
-  effectivePricePerPurchaseUnit: ingredient.effectivePricePerPurchaseUnit ?? undefined,
   safetyStock: ingredient.safetyStock ?? undefined,
   reorderPoint: ingredient.reorderPoint ?? undefined,
   targetStock: ingredient.targetStock ?? undefined

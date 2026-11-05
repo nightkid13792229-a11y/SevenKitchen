@@ -292,6 +292,15 @@ export const purchasingApi = {
   },
 
   /**
+   * 确认应用一条被价格闸挂起的原料价格变更（2026-11-06 单一来源改造）
+   *
+   * 只解除「波动超过阈值」这一道；0 元和 5 倍离谱仍然会被后端拒绝。
+   */
+  applyHeldPriceChange: (id: string, comment?: string): Promise<any> => {
+    return api.post(`/admin/purchasing/price-changes/${id}/apply`, { comment })
+  },
+
+  /**
    * 获取采购历史记录
    */
   getPurchaseHistory: (params?: {

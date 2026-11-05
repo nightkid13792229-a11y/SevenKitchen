@@ -1,8 +1,19 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { INGREDIENT_REPOSITORY } from './ingredient.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { ProcurementSkuService } from './procurement-sku.service';
+import { IngredientPriceAnchorService } from './ingredient-price-anchor.service';
+import {
+  evaluatePriceGate,
+  type PriceGateAction,
+} from '../../domain/ingredient/price-gate';
 import { PURCHASE_RECORD_REPOSITORY } from '../purchasing/purchasing.service.tokens';
 import type { PurchaseRecordRepository } from '../../domain/purchasing/purchase-record.repository';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
@@ -25,6 +36,10 @@ export interface IngredientPriceChangeView {
   deltaRate: number | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   approvalMode: 'AUTO' | 'MANUAL' | 'MANUAL_REQUIRED';
+  /** 写入闸结果（2026-11-06）：通过 / 挂起待确认 / 拒绝 */
+  gateAction: PriceGateAction | null;
+  /** 闸门不通过的原因，展示给后台 */
+  gateReason: string | null;
   reviewReasons: string[];
   reviewComment: string | null;
   reviewedById: string | null;
@@ -101,6 +116,7 @@ export class IngredientPricingService {
     private readonly purchaseRecordRepository: PurchaseRecordRepository,
     private readonly globalConfigService: GlobalConfigService,
     private readonly procurementSkuService: ProcurementSkuService,
+    private readonly priceAnchorService: IngredientPriceAnchorService,
   ) {}
 
   async syncPendingChangesForReimbursement(
@@ -267,6 +283,39 @@ export class IngredientPricingService {
     return this.getPriceChangesForReimbursement(reimbursementId);
   }
 
+  /**
+   * 人工放行一条被闸门挂起（HOLD）的价格变更（2026-11-06）。
+   *
+   * 只解除「波动超过阈值」这一道；0 元和 5 倍离谱仍然会被拒绝——
+   * 那两条是防单位/数量录错的，不是给人拍板的。
+   */
+  async applyHeldChange(
+    changeId: string,
+    reviewerId?: string | null,
+    reviewComment?: string,
+  ): Promise<IngredientPriceChangeView[]> {
+    const change = await this.prisma.ingredientPriceChange.findUnique({
+      where: { id: changeId },
+    });
+
+    if (!change) {
+      throw new NotFoundException(`价格变更不存在：${changeId}`);
+    }
+
+    if (change.status !== 'PENDING') {
+      throw new BadRequestException('只有待确认的价格变更可以手动放行');
+    }
+
+    await this.applyPriceChanges(
+      [change as unknown as IngredientPriceChangeApplyRecord],
+      reviewerId ?? null,
+      reviewComment ?? '人工确认后应用',
+      new Set([changeId]),
+    );
+
+    return this.getPriceChangesForReimbursement(change.reimbursementId);
+  }
+
   async rejectChangesForReimbursement(
     reimbursementId: string,
     reviewerId?: string | null,
@@ -375,6 +424,8 @@ export class IngredientPricingService {
           : row.reviewedById
             ? 'MANUAL'
             : 'AUTO',
+      gateAction: ((row as any).gateAction ?? null) as PriceGateAction | null,
+      gateReason: (row as any).gateReason ?? null,
       reviewReasons: this.buildReviewReasonsForView(
         row,
         evaluations.get(row.id),
@@ -390,12 +441,16 @@ export class IngredientPricingService {
     changes: IngredientPriceChangeApplyRecord[],
     reviewerId: string | null,
     reviewComment: string | null,
+    /**
+     * 人工放行的条目：只解除「波动过大」这一道挂起，
+     * **不解除**「必须为正」和「5 倍离谱」——那两条是防录错的，人不该拍脑袋放行。
+     */
+    forceApplyIds: Set<string> = new Set(),
   ): Promise<void> {
     if (changes.length === 0) {
       return;
     }
 
-    const groupedEffectiveAccumulator = new Map<string, WeightedAccumulator>();
     const ingredientCurrentAccumulator = new Map<string, WeightedAccumulator>();
     const procurementSkuCurrentAccumulator = new Map<
       string,
@@ -458,7 +513,73 @@ export class IngredientPricingService {
       ]),
     );
 
+    // ── 写入闸（2026-11-06「单一来源」改造 · 阶段 A）─────────────────────
+    // 三道闸：必须为正 → 不得离谱（5 倍）→ 波动可控（阈值）。
+    // 只有 APPLY 的条目会真正写库；HOLD 保持待确认；REJECT 直接拒绝并留下原因。
+    // 被挂起 / 拒绝的条目不参与加权累加，避免污染同一原料的其它有效变更。
+    const gateThresholdRate = await this.getAutoApproveThreshold();
+    const anchors = await this.priceAnchorService.resolveAnchors({
+      ingredientIds: Array.from(
+        new Set(changes.map((change) => change.ingredientId)),
+      ),
+      excludePurchaseRecordIds: changes.map(
+        (change) => change.purchaseRecordId,
+      ),
+    });
+
+    const gateResults = new Map<
+      string,
+      { action: PriceGateAction; reason: string | null; forced: boolean }
+    >();
+    const effectiveChanges: IngredientPriceChangeApplyRecord[] = [];
+
     for (const change of changes) {
+      const sourceIngredient = ingredientMap.get(change.ingredientId);
+      if (!sourceIngredient) {
+        gateResults.set(change.id, {
+          action: 'REJECT',
+          reason: '原料不存在，无法校验价格',
+          forced: false,
+        });
+        continue;
+      }
+
+      const purchaseRecord = purchaseRecordMap.get(change.purchaseRecordId);
+      const pricingBasis = purchaseRecord
+        ? this.buildPurchaseRecordPricingBasis(purchaseRecord, sourceIngredient)
+        : null;
+      const proposedPrice =
+        pricingBasis?.ingredientPricePerPurchaseUnit ??
+        change.sourcePricePerPurchaseUnit.toNumber();
+      // 基准：历史采购价中位数；没有历史就退回当前档案价；都没有 = 首次定价
+      const anchorPrice =
+        anchors.get(change.ingredientId) ??
+        this.resolveCurrentPriceOf(sourceIngredient);
+
+      const gate = evaluatePriceGate({
+        proposedPrice,
+        anchorPrice,
+        thresholdRate: gateThresholdRate,
+      });
+
+      const canForceApply =
+        gate.action === 'HOLD' && forceApplyIds.has(change.id);
+      const finalAction: PriceGateAction = canForceApply
+        ? 'APPLY'
+        : gate.action;
+
+      gateResults.set(change.id, {
+        action: finalAction,
+        reason: gate.reason,
+        forced: canForceApply,
+      });
+
+      if (finalAction === 'APPLY') {
+        effectiveChanges.push(change);
+      }
+    }
+
+    for (const change of effectiveChanges) {
       const sourceIngredient = ingredientMap.get(change.ingredientId);
       if (!sourceIngredient) {
         continue;
@@ -484,15 +605,6 @@ export class IngredientPricingService {
         pricingBasis?.baseQuantity ??
         ingredientPurchaseQuantity * sourceIngredientRatio;
 
-      const effectiveKey = this.buildEffectiveKey(change.ingredientId);
-      groupedEffectiveAccumulator.set(
-        effectiveKey,
-        this.mergeWeightedAccumulator(
-          groupedEffectiveAccumulator.get(effectiveKey),
-          baseUnitCost,
-          baseQuantity,
-        ),
-      );
       ingredientCurrentAccumulator.set(
         change.ingredientId,
         this.mergeWeightedAccumulator(
@@ -568,39 +680,6 @@ export class IngredientPricingService {
       );
     }
 
-    const appliedEffectiveUnitCostByKey = new Map<string, number>();
-    const handledIngredients = new Set<string>();
-
-    for (const change of changes) {
-      const sourceIngredient = ingredientMap.get(change.ingredientId);
-      if (!sourceIngredient) {
-        continue;
-      }
-
-      const effectiveKey = this.buildEffectiveKey(change.ingredientId);
-      const effectiveAccumulator =
-        groupedEffectiveAccumulator.get(effectiveKey);
-      if (!effectiveAccumulator) {
-        continue;
-      }
-
-      const effectiveUnitCost = this.toWeightedUnitCost(effectiveAccumulator);
-      appliedEffectiveUnitCostByKey.set(effectiveKey, effectiveUnitCost);
-
-      if (handledIngredients.has(change.ingredientId)) {
-        continue;
-      }
-
-      const effectivePricePerPurchaseUnit = this.roundPrice(
-        effectiveUnitCost * sourceIngredient.purchaseToBaseRatio,
-      );
-      await this.ingredientRepository.updateEffectivePrice(
-        change.ingredientId,
-        effectivePricePerPurchaseUnit,
-      );
-      handledIngredients.add(change.ingredientId);
-    }
-
     const reviewedAt = new Date();
     for (const change of changes) {
       const sourceIngredient = ingredientMap.get(change.ingredientId);
@@ -608,26 +687,53 @@ export class IngredientPricingService {
         continue;
       }
 
-      const effectiveKey = this.buildEffectiveKey(change.ingredientId);
-      const appliedEffectiveUnitCost =
-        appliedEffectiveUnitCostByKey.get(effectiveKey);
-      const appliedEffectivePrice = this.roundPrice(
-        (appliedEffectiveUnitCost ??
-          change.proposedEffectivePrice.toNumber() /
-            sourceIngredient.purchaseToBaseRatio) *
-          sourceIngredient.purchaseToBaseRatio,
-      );
+      const gateResult = gateResults.get(change.id);
+
+      // 挂起：价格不写，状态保持待确认，只记下原因等人工放行
+      if (gateResult?.action === 'HOLD') {
+        await this.prisma.ingredientPriceChange.update({
+          where: { id: change.id },
+          data: {
+            gateAction: 'HOLD',
+            gateReason: gateResult.reason,
+          } as any,
+        });
+        continue;
+      }
+
+      // 拒绝：标记拒绝并留下原因，绝不写库
+      if (!gateResult || gateResult.action === 'REJECT') {
+        await this.prisma.ingredientPriceChange.update({
+          where: { id: change.id },
+          data: {
+            status: 'REJECTED',
+            gateAction: 'REJECT',
+            gateReason: gateResult?.reason ?? '缺少校验结果',
+            reviewedById: reviewerId,
+            reviewedAt,
+            reviewComment,
+          } as any,
+        });
+        continue;
+      }
+
       const appliedCurrentPrice =
         appliedCurrentPriceByIngredient.get(change.ingredientId) ??
         change.sourcePricePerPurchaseUnit.toNumber();
 
+      // 2026-11-06：生效价与当前价合并成一个字段，这里三个列写同一个值，
+      // 只为兼容还没删掉的旧列（阶段 C 会一起删）。
       await this.prisma.ingredientPriceChange.update({
         where: { id: change.id },
         data: {
-          proposedEffectivePrice: appliedEffectivePrice,
+          proposedEffectivePrice: appliedCurrentPrice,
           appliedCurrentPricePerPurchaseUnit: appliedCurrentPrice,
-          appliedEffectivePricePerPurchaseUnit: appliedEffectivePrice,
+          appliedEffectivePricePerPurchaseUnit: appliedCurrentPrice,
           status: 'APPROVED',
+          gateAction: 'APPLY',
+          gateReason: gateResult.forced
+            ? `人工放行：${gateResult.reason ?? '价格变动超过阈值'}`
+            : null,
           reviewedById: reviewerId,
           reviewedAt,
           reviewComment,
@@ -692,14 +798,16 @@ export class IngredientPricingService {
         },
       )) as IngredientPriceChangeRecord | null;
 
-      const restoredEffectivePrice =
-        latestApproved?.appliedEffectivePricePerPurchaseUnit?.toNumber() ??
-        fallbackChange.previousEffectivePrice.toNumber();
+      // 2026-11-06：只剩一个价格字段，回滚也就是回滚「当前价」
+      const restoredPrice =
+        latestApproved?.appliedCurrentPricePerPurchaseUnit?.toNumber() ??
+        fallbackChange.previousCurrentPricePerPurchaseUnit.toNumber();
 
-      await this.ingredientRepository.updateEffectivePrice(
-        ingredientId,
-        restoredEffectivePrice,
-      );
+      if (Number.isFinite(restoredPrice) && restoredPrice > 0) {
+        await this.ingredientRepository.update(ingredientId, {
+          currentPricePerPurchaseUnit: restoredPrice,
+        });
+      }
     }
   }
 
@@ -782,31 +890,9 @@ export class IngredientPricingService {
         );
       }
 
-      // 写入侧防呆：采购折算价与「创建价 / 原价」相差超过 5 倍，绝不自动写入。
-      // 2026-11-04 小米 38.30 元/g 的事故里，旧价本身已经是错的，
-      // 只看「相对上一次的波动」只有 -10.7%，看起来完全正常，
-      // 所以基准必须用「创建价」，而不是上一次的价格。
-      if (ingredient) {
-        const initialPrice = Number(
-          ingredient.initialPricePerPurchaseUnit ?? 0,
-        );
-        const referencePrice =
-          initialPrice > 0
-            ? initialPrice
-            : change.previousEffectivePrice.toNumber();
-        const proposedPrice = change.proposedEffectivePrice.toNumber();
-        if (referencePrice > 0 && Number.isFinite(proposedPrice)) {
-          const ratio = proposedPrice / referencePrice;
-          if (ratio > 5 || ratio < 0.2) {
-            reasons.push(
-              `采购折算价 ${proposedPrice} 与参考价 ${referencePrice} 相差 ${ratio.toFixed(2)} 倍，疑似单位或数量录错，需人工核对`,
-            );
-            this.logger.warn(
-              `原料 ${change.ingredientName} 的采购折算价 ${proposedPrice} 与参考价 ${referencePrice} 相差 ${ratio.toFixed(2)} 倍，已拦截自动审核`,
-            );
-          }
-        }
-      }
+      // 「相差 5 倍」的防呆已整体挪到写入闸（domain/ingredient/price-gate.ts）：
+      // 那儿用「历史采购价中位数」当基准，比原来的「创建价」更抗脏数据，
+      // 而且对自动审核和人工放行两条路径都生效，不会出现绕过。
 
       if (ingredient) {
         const historicalBaseQuantities = (
@@ -892,7 +978,9 @@ export class IngredientPricingService {
     if (
       !Number.isFinite(baseQuantity) ||
       baseQuantity <= 0 ||
-      !Number.isFinite(record.actualCost)
+      !Number.isFinite(record.actualCost) ||
+      // 0 元采购不允许换算成单价：历史上就是这样把 0 价写进档案的（2026-11-06 修）
+      record.actualCost <= 0
     ) {
       return null;
     }
@@ -929,6 +1017,14 @@ export class IngredientPricingService {
       record.actualQuantity *
       this.resolvePurchaseToBaseRatio(ingredient.purchaseToBaseRatio)
     );
+  }
+
+  /** 取原料当前价：真实实体走 getter，测试/裸对象走字段 */
+  private resolveCurrentPriceOf(ingredient: any): number {
+    if (typeof ingredient?.getEffectivePricePerPurchaseUnit === 'function') {
+      return Number(ingredient.getEffectivePricePerPurchaseUnit());
+    }
+    return Number(ingredient?.currentPricePerPurchaseUnit ?? 0);
   }
 
   private resolvePurchaseToBaseRatio(ratio?: number | null): number {

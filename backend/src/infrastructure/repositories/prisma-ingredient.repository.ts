@@ -107,8 +107,8 @@ export class PrismaIngredientRepository implements IngredientRepository {
       purchaseUnit: ingredient.purchaseUnit,
       purchaseToBaseRatio: ingredient.purchaseToBaseRatio,
       currentPricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit,
-      initialPricePerPurchaseUnit: ingredient.initialPricePerPurchaseUnit,
-      effectivePricePerPurchaseUnit: ingredient.effectivePricePerPurchaseUnit,
+      // 2026-11-06：生效价已与当前价合并，旧列跟着当前价写，等阶段 C 删除
+      effectivePricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit,
       weightG: ingredient.weightG,
       maxCapacityG: ingredient.maxCapacityG,
       safetyStock: ingredient.safetyStock,
@@ -159,18 +159,6 @@ export class PrismaIngredientRepository implements IngredientRepository {
     const updated = await this.prisma.ingredient.update({
       where: { id },
       data: { currentPricePerPurchaseUnit: pricePerPurchaseUnit },
-    });
-
-    return this.mapToDomain(updated);
-  }
-
-  async updateEffectivePrice(
-    id: string,
-    effectivePricePerPurchaseUnit: number,
-  ): Promise<Ingredient | null> {
-    const updated = await this.prisma.ingredient.update({
-      where: { id },
-      data: { effectivePricePerPurchaseUnit },
     });
 
     return this.mapToDomain(updated);
@@ -253,9 +241,8 @@ export class PrismaIngredientRepository implements IngredientRepository {
       record.purchaseUnit,
       record.purchaseToBaseRatio,
       parseFloat(record.currentPricePerPurchaseUnit.toString()),
-      record.effectivePricePerPurchaseUnit
-        ? parseFloat(record.effectivePricePerPurchaseUnit.toString())
-        : null,
+      // 读的时候不再区分生效价：当前价就是唯一价格
+      parseFloat(record.currentPricePerPurchaseUnit.toString()),
       record.weightG,
       record.maxCapacityG,
       record.safetyStock,
@@ -264,9 +251,8 @@ export class PrismaIngredientRepository implements IngredientRepository {
       record.properties,
       normalizeNutritionProfileForRead(record.nutritionProfile ?? null),
       record.supplementRetailEnabled ?? false,
-      record.initialPricePerPurchaseUnit
-        ? parseFloat(record.initialPricePerPurchaseUnit.toString())
-        : null,
+      // 2026-11-06：创建价不再参与算价，读出来只当留档
+      null,
     );
   }
 }

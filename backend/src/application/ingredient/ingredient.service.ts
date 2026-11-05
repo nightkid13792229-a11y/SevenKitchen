@@ -199,7 +199,8 @@ export class IngredientService {
       purchaseUnit,
       purchaseToBaseRatio,
       currentPricePerPurchaseUnit,
-      dto.effectivePricePerPurchaseUnit ?? currentPricePerPurchaseUnit,
+      // 2026-11-06：生效价并入当前价（构造参数已废弃，只为兼容签名）
+      currentPricePerPurchaseUnit,
       dto.weightG ?? null,
       dto.maxCapacityG ?? null,
       dto.safetyStock ?? null,
@@ -208,7 +209,7 @@ export class IngredientService {
       normalizedProperties,
       normalizedProfile,
       false,
-      currentPricePerPurchaseUnit,
+      null,
     );
 
     return this.ingredientRepository.save(ingredient, dto.tagIds);
@@ -267,15 +268,13 @@ export class IngredientService {
           );
     const nextPurchaseToBaseRatio =
       dto.purchaseToBaseRatio ?? existing.purchaseToBaseRatio ?? 1;
+    // 2026-11-06：生效价并入当前价。老客户端只传 effectivePrice 时按当前价处理。
     const nextCurrentPricePerPurchaseUnit =
       dto.currentPricePerPurchaseUnit ??
+      dto.effectivePricePerPurchaseUnit ??
       existing.currentPricePerPurchaseUnit ??
       0;
-    const nextEffectivePricePerPurchaseUnit =
-      dto.effectivePricePerPurchaseUnit !== undefined
-        ? dto.effectivePricePerPurchaseUnit ?? nextCurrentPricePerPurchaseUnit
-        : existing.effectivePricePerPurchaseUnit ??
-          nextCurrentPricePerPurchaseUnit;
+    const nextEffectivePricePerPurchaseUnit = nextCurrentPricePerPurchaseUnit;
 
     const updated = new Ingredient(
       existing.id,
@@ -353,14 +352,8 @@ export class IngredientService {
       throw new NotFoundException(`Ingredient not found: ${id}`);
     }
 
-    const updatedEffective = await this.ingredientRepository.updateEffectivePrice(
-      id,
-      dto.currentPricePerPurchaseUnit,
-    );
-    if (!updatedEffective) {
-      throw new NotFoundException(`Ingredient not found: ${id}`);
-    }
-    return updatedEffective;
+    // 2026-11-06：生效价已并入当前价，只写一次
+    return ingredient;
   }
 
   /**

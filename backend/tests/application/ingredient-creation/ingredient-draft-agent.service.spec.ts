@@ -332,6 +332,10 @@ function createHarness(options: HarnessOptions = {}) {
 
   const checkService = {
     runCheck: jest.fn(async () => options.checkResult ?? PASSING_CHECK),
+    previewDomains: jest.fn(async () => ({
+      INGREDIENT: PASSING_CHECK,
+      NUTRITION: await checkService.runCheck(),
+    })),
   };
 
   const prisma = {
@@ -609,7 +613,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
         sourceRecordId: 'src-1',
       }),
     ]);
-    expect(harness.checkService.runCheck).toHaveBeenCalledWith(DRAFT_ID);
+    expect(harness.checkService.previewDomains).toHaveBeenCalledWith(DRAFT_ID);
     expect(result.steps).toBe(4);
     expect(result.reply).toContain('终检通过');
   });

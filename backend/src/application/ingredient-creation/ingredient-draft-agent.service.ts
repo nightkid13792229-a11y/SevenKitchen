@@ -1428,6 +1428,7 @@ function buildSystemPrompt(
     '- 每条营养写入都必须带 sourceRecordId。没有来源的数值一律不写：先用检索工具找词条、getRecord 读来源。',
     '- 字段必须在营养字段目录里，单位必须与目录一致。工具报错就按错误文本改参数后重试；连续改不出来就停下，说明卡在哪。',
     '- 不要编造营养数值。只写来源记录里有的值，或用户明确给出的值。',
+    '- 结束前必须调用 selfCheck；它同时查原料卡和营养档案。有 blocking 就不要 finish：能补的先补，补不了的用 askUser 问人；finish 的 summary 要列出仍未解决的 blocking / 空字段。',
     '- 你可以自由决定工具调用顺序；调用 finish 结束本轮。',
     '',
     `- 本轮预算：最多 ${INGREDIENT_AGENT_MAX_TOOL_CALLS} 次工具调用 / ${INGREDIENT_AGENT_TIMEOUT_MS / 1000} 秒；连续 ${INGREDIENT_AGENT_MAX_NO_PROGRESS} 次工具调用没有新进展会被系统停止。`,

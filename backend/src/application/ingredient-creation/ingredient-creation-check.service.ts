@@ -88,6 +88,15 @@ export class IngredientCreationCheckService {
   }
 
   /**
+   * 只读地跑两域核验，供 Agent 自检使用；不落报告，不产生授权副作用。
+   */
+  async previewDomains(
+    draftId: string,
+  ): Promise<Record<CheckDomain, FinalCheckResult>> {
+    return this.checkRunService.previewDomains(draftId);
+  }
+
+  /**
    * 读两域最新报告，并对着**当前草稿**判断是否过期。
    *
    * 先确认草稿存在（不存在 → 404）：没有草稿就没有「当前内容」，也就谈不上新鲜度。

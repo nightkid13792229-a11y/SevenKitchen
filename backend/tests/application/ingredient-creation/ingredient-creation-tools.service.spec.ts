@@ -94,7 +94,12 @@ function createTools(
       keywords: [],
     })),
   };
-  const checkService = { runCheck: jest.fn() };
+  const checkService = {
+    previewDomains: jest.fn(async () => ({
+      INGREDIENT: { blocking: [], exceptionable: [], warnings: [] },
+      NUTRITION: { blocking: [], exceptionable: [], warnings: [] },
+    })),
+  };
 
   const nameClassifierService = {
     summarizeNames: jest.fn(async (input: any) => {
@@ -194,6 +199,39 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks();
+});
+
+describe('IngredientCreationToolsService · selfCheck 两域', () => {
+  it('原料卡有 blocking 时 passed=false，并分别给出两域计数', async () => {
+    const { tools, checkService } = createTools();
+    (checkService.previewDomains as jest.Mock).mockResolvedValueOnce({
+      INGREDIENT: {
+        blocking: [
+          {
+            code: 'CFCT_REQUIRED',
+            message: '还没有填 CFCT 分类',
+            level: 'blocking',
+          },
+        ],
+        exceptionable: [],
+        warnings: [],
+      },
+      NUTRITION: {
+        blocking: [],
+        exceptionable: [],
+        warnings: [{ code: 'ENERGY_MACRO_GAP', message: '能量偏差', level: 'warning' }],
+      },
+    });
+
+    const result = await executeTool(tools, 'selfCheck', {});
+
+    expect(result.ok).toBe(true);
+    expect(result.body.passed).toBe(false);
+    expect(result.body.counts).toMatchObject({ blocking: 1, warnings: 1 });
+    expect(result.body.domains.INGREDIENT.blocking).toBe(1);
+    expect(result.body.domains.NUTRITION.warnings).toBe(1);
+    expect(result.body.blocking[0].code).toBe('CFCT_REQUIRED');
+  });
 });
 
 describe('IngredientCreationToolsService · 工具清单（原子能力）', () => {

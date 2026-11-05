@@ -732,7 +732,7 @@ const SELF_CHECK_TOOL: AgentToolDefinition = {
   function: {
     name: 'selfCheck',
     description:
-      '对当前草稿跑一次 AI 自检（只读，**不代表授权**）。返回拦死 / 可例外 / 提醒三档；passed=true 只说明没有拦死项，真正放行仍要用户跑两页核验并授权。',
+      '对当前草稿做一次只读 AI 自检：**原料卡 + 营养档案两域一起查**，不落报告、不代表授权。返回拦死 / 可例外 / 提醒三档；passed=true 只说明两域都没有拦死项，真正放行仍要用户跑两页核验并授权。',
     parameters: {
       type: 'object',
       properties: {},
@@ -3323,28 +3323,59 @@ export class IngredientCreationToolsService {
     draftId: string,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
     try {
-      const result = await this.checkService.runCheck(draftId);
+      // 只读预览两域：原料卡 + 营养档案。不能走 runDomain —— 那会落报告，
+      // 等于让 Agent 替用户把授权闸门跑了。
+      const domains = await this.checkService.previewDomains(draftId);
+      const blocking = [
+        ...domains.INGREDIENT.blocking,
+        ...domains.NUTRITION.blocking,
+      ];
+      const exceptionable = [
+        ...domains.INGREDIENT.exceptionable,
+        ...domains.NUTRITION.exceptionable,
+      ];
+      const warnings = [
+        ...domains.INGREDIENT.warnings,
+        ...domains.NUTRITION.warnings,
+      ];
       return {
         ok: true,
         content: okContent({
-          passed: result.blocking.length === 0,
+          passed: blocking.length === 0,
           counts: {
-            blocking: result.blocking.length,
-            exceptionable: result.exceptionable.length,
-            warnings: result.warnings.length,
+            blocking: blocking.length,
+            exceptionable: exceptionable.length,
+            warnings: warnings.length,
           },
-          blocking: summarizeCheckItems(result.blocking),
-          exceptionable: summarizeCheckItems(result.exceptionable),
-          warnings: summarizeCheckItems(result.warnings),
+          domains: {
+            INGREDIENT: {
+              blocking: domains.INGREDIENT.blocking.length,
+              exceptionable: domains.INGREDIENT.exceptionable.length,
+              warnings: domains.INGREDIENT.warnings.length,
+            },
+            NUTRITION: {
+              blocking: domains.NUTRITION.blocking.length,
+              exceptionable: domains.NUTRITION.exceptionable.length,
+              warnings: domains.NUTRITION.warnings.length,
+            },
+          },
+          blocking: summarizeCheckItems(blocking),
+          exceptionable: summarizeCheckItems(exceptionable),
+          warnings: summarizeCheckItems(warnings),
+          ...(blocking.length > 0
+            ? {
+                hint: '原料卡和营养档案一起查；blocking 没清空之前不要 finish，先补字段或问用户。',
+              }
+            : {}),
         }),
         progress: {
           writtenFieldPaths: [],
           sourceRecordIds: [],
           check: {
-            passed: result.blocking.length === 0,
-            blocking: result.blocking.length,
-            exceptionable: result.exceptionable.length,
-            warnings: result.warnings.length,
+            passed: blocking.length === 0,
+            blocking: blocking.length,
+            exceptionable: exceptionable.length,
+            warnings: warnings.length,
           },
         },
       };

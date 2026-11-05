@@ -287,6 +287,20 @@ export class IngredientCheckRunService {
     return toView(row);
   }
 
+  /**
+   * 只读地跑两域核验，供 Agent 自检使用：不落报告，也不产生“可授权”的副作用。
+   *
+   * 与 `runDomain` 共用 `evaluateDomain`，保证自检口径与用户点「核验」一致。
+   */
+  async previewDomains(
+    draftId: string,
+  ): Promise<Record<CheckDomain, FinalCheckResult>> {
+    const draft = await this.draftService.get(draftId);
+    const ingredient = await this.evaluateDomain(draft, 'INGREDIENT');
+    const nutrition = await this.evaluateDomain(draft, 'NUTRITION');
+    return { INGREDIENT: ingredient, NUTRITION: nutrition };
+  }
+
   /** 两域各自的最新报告；没有跑过就是 null（页面据此显示「未核验」）。 */
   async latestRuns(
     draftId: string,

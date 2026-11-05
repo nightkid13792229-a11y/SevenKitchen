@@ -61,7 +61,12 @@ function createTools(
       findCandidates: jest.fn(),
     } as unknown as IngredientCreationCandidateService,
     draftService as unknown as IngredientCreationDraftService,
-    { runCheck: jest.fn() } as unknown as IngredientCreationCheckService,
+    {
+      previewDomains: jest.fn(async () => ({
+        INGREDIENT: { blocking: [], exceptionable: [], warnings: [] },
+        NUTRITION: { blocking: [], exceptionable: [], warnings: [] },
+      })),
+    } as unknown as IngredientCreationCheckService,
     {
       nutritionSourceRecord: { findUnique: jest.fn() },
       ingredientTag: { findMany: jest.fn(async () => []) },
@@ -724,7 +729,12 @@ describe('IngredientCreationToolsService · 进展信号只认真读', () => {
         get: jest.fn(),
         patch: jest.fn(),
       } as unknown as IngredientCreationDraftService,
-      { runCheck: jest.fn() } as unknown as IngredientCreationCheckService,
+      {
+      previewDomains: jest.fn(async () => ({
+        INGREDIENT: { blocking: [], exceptionable: [], warnings: [] },
+        NUTRITION: { blocking: [], exceptionable: [], warnings: [] },
+      })),
+    } as unknown as IngredientCreationCheckService,
       {
         nutritionSourceRecord: { findUnique },
       } as unknown as PrismaService,

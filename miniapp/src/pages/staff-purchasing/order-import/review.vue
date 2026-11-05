@@ -176,73 +176,91 @@
       </view>
     </template>
 
-    <!-- 修改一行 -->
-    <view v-if="editing" class="sheet-mask" @tap="closeEdit">
-      <view class="sheet" @tap.stop>
-        <text class="sheet-title">修改「{{ editing.rawName }}」</text>
-        <text class="sheet-sub">原图 ¥{{ money(editing._origTotal) }}，改动会标「已改动」。</text>
+    <!-- 修改一行（2026-11-05 改版：名字可改、数量单价并排、小计只核对） -->
+    <view v-if="editing" class="sheet-mask" @tap="closeEdit()">
+      <scroll-view scroll-y class="sheet-scroll" @tap.stop>
+        <view class="sheet sheet-inner">
+          <view class="sheet-grab"></view>
 
-        <view class="field">
-          <text class="field-label">数量</text>
-          <input v-model="editing.qtyText" type="digit" class="field-input" placeholder="1" />
-          <input v-model="editing.unitText" class="field-input unit" placeholder="盒/袋" />
-        </view>
-        <view class="field">
-          <text class="field-label">单价</text>
-          <input v-model="editing.priceText" type="digit" class="field-input" placeholder="0.00" />
-          <text class="field-label right">小计</text>
-          <input v-model="editing.totalText" type="digit" class="field-input" placeholder="0.00" @input="editing.totalTouched = true" />
-        </view>
-
-        <view class="field tap" @tap="openIngredientPicker">
-          <text class="field-label">匹配原料</text>
-          <text class="field-value" :class="{ warn: !editing.ingredientName }">
-            {{ editing.ingredientName || '未选择 ›' }}
-          </text>
-        </view>
-        <view class="field tap" @tap="openSkuPicker">
-          <text class="field-label">采购商品</text>
-          <text class="field-value" :class="{ warn: !editing.skuName }">{{ editing.skuName || '未选择 ›' }}</text>
-        </view>
-        <view class="field">
-          <text class="field-label">净含量/规格</text>
-          <text class="field-value">
-            {{ editing.skuModel || editing.spec || '—' }}
-            <text class="field-hint">（截图：{{ editing.spec || '未读到' }}）</text>
-          </text>
-        </view>
-        <view v-if="editingSpecWarning" class="spec-warn-box">
-          <text class="spec-warn-text">{{ editingSpecWarning }}</text>
-          <text class="spec-warn-action" @tap="goNewSku">
-            新建「{{ editing.spec }}」的采购商品 ›
-          </text>
-        </view>
-        <view v-if="canSyncSkuName" class="sync-box">
-          <view class="sync-head">
-            <text class="sync-title">同步修改采购商品名</text>
-            <switch
-              :checked="editing.syncSkuName"
-              color="#b4453a"
-              @change="onSyncSkuNameChange"
-            />
+          <view class="sheet-head">
+            <view class="name-wrap">
+              <input
+                v-model="editing.rawName"
+                class="name-input"
+                maxlength="80"
+                placeholder="商品名"
+                confirm-type="done"
+              />
+              <text class="name-pen">✎</text>
+            </view>
+            <view class="personal-box">
+              <text class="personal-label">个人采购</text>
+              <switch
+                class="personal-switch"
+                :checked="editing.isPersonal"
+                color="#2f6b4f"
+                @change="onPersonalChange"
+              />
+            </view>
           </view>
-          <text class="sync-diff">{{ editing.skuName }} → {{ editing.rawName.trim() }}</text>
-          <text class="sync-tip">默认不改名。只有打开开关并保存，才会修改商品名并记录改名日志。</text>
-        </view>
-        <view class="field tap">
-          <text class="field-label">算个人采购</text>
-          <switch :checked="editing.isPersonal" color="#2f6b4f" @change="onPersonalChange" />
-        </view>
 
-        <view class="warn-banner small">
-          <text>改完会标记「已改动」；各行金额加起来和截图对不上时，系统会拦住生成。</text>
-        </view>
+          <view class="field tap sku-row" @tap="openSkuPicker">
+            <text class="field-label">匹配商品</text>
+            <text class="field-value" :class="{ warn: !editing.skuName }">
+              {{ editing.skuName || (editing.isPersonal ? '个人采购不用匹配' : '还没有匹配') }}
+              <text v-if="editing.skuModel" class="field-sub"> · {{ editing.skuModel }}</text>
+            </text>
+            <text v-if="!editing.isPersonal" class="chev">›</text>
+          </view>
 
-        <view class="sheet-actions">
-          <button class="ghost-btn" @tap="closeEdit">取消</button>
-          <button class="primary-btn" :loading="saving" @tap="saveEdit">保存</button>
+          <view v-if="editingSpecWarning" class="spec-warn-box">
+            <text class="spec-warn-text">{{ editingSpecWarning }}</text>
+            <text class="spec-warn-action" @tap="goNewSku">新建这个规格 ›</text>
+          </view>
+          <text v-if="renameHint" class="rename-hint">{{ renameHint }}</text>
+
+          <view class="amount-card">
+            <view class="amount-grid">
+              <view class="amount-cell">
+                <text class="amount-label">数量</text>
+                <view class="stepper">
+                  <view class="step-btn" hover-class="step-btn-hover" @tap="stepQty(-1)">−</view>
+                  <input
+                    v-model="editing.qtyText"
+                    type="digit"
+                    class="step-input"
+                    placeholder="1"
+                  />
+                  <view class="step-btn" hover-class="step-btn-hover" @tap="stepQty(1)">+</view>
+                  <text class="unit-chip" @tap="pickUnit">{{ editing.unitText || '件' }} ▾</text>
+                </view>
+              </view>
+              <view class="amount-cell">
+                <text class="amount-label">单价</text>
+                <view class="price-line">
+                  <text class="price-symbol">¥</text>
+                  <input
+                    v-model="editing.priceText"
+                    type="digit"
+                    class="price-input"
+                    placeholder="0.00"
+                  />
+                </view>
+              </view>
+            </view>
+            <view class="check-line" :class="{ bad: totalMismatch }">
+              <text class="check-text">{{ checkText }}</text>
+              <text v-if="totalMismatch" class="check-fix" @tap="alignToReceipt">按截图反算 ›</text>
+              <text v-else-if="gramsText" class="check-grams">{{ gramsText }}</text>
+            </view>
+          </view>
+
+          <view class="sheet-actions">
+            <button class="ghost-btn" @tap="closeEdit()">取消</button>
+            <button class="primary-btn" :loading="saving" @tap="saveEdit">保存</button>
+          </view>
         </view>
-      </view>
+      </scroll-view>
     </view>
 
     <!-- 改运费 / 包装费 -->
@@ -308,52 +326,41 @@
       </view>
     </view>
 
-    <!-- 选原料 / 选商品 -->
+    <!-- 选商品：一次到位（商品 + 规格 + 属于哪个原料都在这行里） -->
     <view v-if="pickerMode !== 'none'" class="sheet-mask" @tap="closePicker">
       <view class="sheet" @tap.stop>
-        <text class="sheet-title">{{ pickerMode === 'ingredient' ? '选择清单里的原料' : '选择采购商品' }}</text>
-        <text class="sheet-sub">
-          {{ pickerMode === 'ingredient' ? '只列本次清单里的原料，不允许跨原料替代。' : '没有合适的商品可以新建一个。' }}
-        </text>
+        <text class="sheet-title">选择采购商品</text>
+        <text class="sheet-sub">只列本次清单里的商品，不允许跨原料替代。</text>
 
         <scroll-view scroll-y class="picker-list">
-          <template v-if="pickerMode === 'ingredient'">
-            <view
-              v-for="item in ingredientOptions"
-              :key="item.ingredientId"
-              class="picker-row"
-              @tap="chooseIngredient(item)"
-            >
-              <view>
-                <text class="picker-name">{{ item.ingredientName }}</text>
-                <text class="picker-sub">{{ item.skus.length }} 个采购商品</text>
-              </view>
-              <text class="picker-go">选择</text>
+          <view
+            v-for="option in skuPickerOptions"
+            :key="option.id"
+            class="picker-row"
+            @tap="chooseSku(option)"
+          >
+            <view class="picker-main">
+              <text class="picker-name">
+                {{ option.name }}
+                <text v-if="option.productModel" class="picker-model"> {{ option.productModel }}</text>
+              </text>
+              <text class="picker-sub">
+                {{ option.ingredientName }}<text v-if="option.purchaseChannel"> · {{ option.purchaseChannel }}</text>
+              </text>
             </view>
-            <view class="picker-row" @tap="markPersonal">
-              <view>
-                <text class="picker-name">不列入本次采购</text>
-                <text class="picker-sub">按个人采购处理，不报</text>
-              </view>
-              <text class="picker-go">标记</text>
+            <text v-if="option.id === editing?.procurementSkuId" class="picker-current">当前</text>
+            <text v-else class="picker-go">选择</text>
+          </view>
+          <view v-if="skuPickerOptions.length === 0" class="picker-row">
+            <text class="picker-sub">本次清单里还没有可用的采购商品</text>
+          </view>
+          <view v-if="editing?.ingredientId" class="picker-create" @tap="goNewSku">
+            <view class="picker-create-main">
+              <text class="picker-create-plus">+</text>
+              <text class="picker-create-name">新建采购商品</text>
             </view>
-          </template>
-          <template v-else>
-            <view v-for="sku in skuOptions" :key="sku.id" class="picker-row" @tap="chooseSku(sku)">
-              <view>
-                <text class="picker-name">{{ sku.name }}</text>
-                <text class="picker-sub">{{ sku.purchaseChannel || '' }} {{ sku.productModel || '' }}</text>
-              </view>
-              <text class="picker-go">选择</text>
-            </view>
-            <view class="picker-create" @tap="goNewSku">
-              <view class="picker-create-main">
-                <text class="picker-create-plus">+</text>
-                <text class="picker-create-name">新建采购商品</text>
-              </view>
-              <text class="picker-create-go">去新建 ›</text>
-            </view>
-          </template>
+            <text class="picker-create-go">去新建 ›</text>
+          </view>
         </scroll-view>
       </view>
     </view>
@@ -361,7 +368,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { onLoad, onShow, onUnload } from '@dcloudio/uni-app';
 import {
   confirmOrderImports,
@@ -394,7 +401,13 @@ interface IngredientOption {
   ingredientId: string;
   ingredientName: string;
   baseUnit: string;
-  skus: Array<{ id: string; name: string; productModel?: string | null; purchaseChannel?: string | null }>;
+  skus: Array<{
+    id: string;
+    name: string;
+    productModel?: string | null;
+    purchaseChannel?: string | null;
+    purchaseToBaseRatio?: number | null;
+  }>;
 }
 
 const listId = ref('');
@@ -405,7 +418,7 @@ const list = ref<any>(null);
 const imports = ref<OrderImportView[]>([]);
 const activeIndex = ref(0);
 const editing = ref<any>(null);
-const pickerMode = ref<'none' | 'ingredient' | 'sku'>('none');
+const pickerMode = ref<'none' | 'sku'>('none');
 /** 渠道清单：唯一来源是后台字典 purchase_channel，页面不写死 */
 const channelOptions = ref<string[]>([]);
 const channelPicking = ref(false);
@@ -569,28 +582,109 @@ const ingredientOptions = computed<IngredientOption[]>(() => {
         name: sku.name,
         productModel: sku.productModel,
         purchaseChannel: sku.purchaseChannel,
+        purchaseToBaseRatio:
+          typeof sku.purchaseToBaseRatio === 'number' ? sku.purchaseToBaseRatio : null,
       })),
     });
   }
   return result;
 });
-const canSyncSkuName = computed(() => {
+/**
+ * 选商品：一次到位（2026-11-05）。
+ * 以前是「先选原料、再选商品」两层，两个抽屉点下来还常看到「菠菜 / 菠菜」两行；
+ * 现在直接把清单里的商品平铺出来，一行里带齐 商品名 + 规格 + 属于哪个原料。
+ */
+const skuPickerOptions = computed(() =>
+  ingredientOptions.value.flatMap((ingredient) =>
+    ingredient.skus.map((sku) => ({
+      ...sku,
+      ingredientId: ingredient.ingredientId,
+      ingredientName: ingredient.ingredientName,
+      baseUnit: ingredient.baseUnit,
+    })),
+  ),
+);
+
+
+/** 截图上的小计（模型当时读到的；员工改数量单价不会动它） */
+const receiptTotal = computed<number | null>(() => {
+  const value = editing.value?._origTotal;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+});
+
+/** 数量 × 单价：保存时用的就是它，不再让人手填小计 */
+const editingTotal = computed<number | null>(() => {
+  const qty = parseNumber(editing.value?.qtyText);
+  const price = parseNumber(editing.value?.priceText);
+  if (qty === null || price === null) return null;
+  return Math.round(qty * price * 100) / 100;
+});
+
+const totalMismatch = computed(() => {
+  const total = editingTotal.value;
+  const receipt = receiptTotal.value;
+  if (total === null || receipt === null) return false;
+  return Math.abs(total - receipt) > IMPORT_FEE_TOLERANCE;
+});
+
+/**
+ * 卡片底下那一行对账（2026-11-05 老板要求写清楚「比的是小计」）：
+ *   一致 → 「小计 ¥99.80 · 与截图小计一致」
+ *   不一致 → 「小计 ¥94.80 · 截图 ¥99.80，差 ¥5.00」
+ */
+const checkText = computed(() => {
+  const total = editingTotal.value;
+  if (total === null) return '填上数量和单价，这里自动核对小计';
+  const receipt = receiptTotal.value;
+  if (receipt === null) return `小计 ¥${money(total)}`;
+  if (!totalMismatch.value) return `✓ 小计 ¥${money(total)} · 与截图小计一致`;
+  const gap = Math.abs(round2(total - receipt));
+  return `小计 ¥${money(total)} · 截图 ¥${money(receipt)}，差 ¥${money(gap)}`;
+});
+
+/** 「约 900g · 折合 ¥110.89/kg」：规格那一行删掉以后，靠它看克数有没有算错 */
+const gramsText = computed(() => {
+  const current = editing.value;
+  if (!current || current.isPersonal) return '';
+  const qty = parseNumber(current.qtyText);
+  const ratio = Number(current.skuRatio);
+  if (qty === null || !Number.isFinite(ratio) || ratio <= 0) return '';
+  const base = round2(qty * ratio);
+  const unit = String(current.baseUnit || 'G').toUpperCase() === 'ML' ? 'ml' : 'g';
+  const total = editingTotal.value;
+  if (total === null) return `≈ ${base}${unit}`;
+  const per = round2(total / (base / 1000));
+  return `≈ ${base}${unit} · 折合 ¥${money(per)}/${unit === 'ml' ? 'L' : 'kg'}`;
+});
+
+/**
+ * 名字对不上时提前说清楚会发生什么（2026-11-05）：
+ * 只有「认出来的」行才会在生成时同步商品名，靠原料推的行不动。
+ * 这里的判断和后端一致（HIGH / 人工选过）；重名保护在生成时才查。
+ */
+const renameHint = computed(() => {
+  const current = editing.value;
+  if (!current || current.isPersonal) return '';
+  if (!current.procurementSkuId || !current.skuName) return '';
+  const name = String(current.rawName || '').trim();
+  if (!name || name === current.skuName) return '';
+  const trusted =
+    current.confidence === 'HIGH' || current.matchSource === 'MANUAL';
+  if (!trusted) return '';
+  return `生成时商品名更新为「${name}」`;
+});
+
+/** 有没有改过什么（关弹窗时用来提醒一下，别让员工白改一遍） */
+const editDirty = computed(() => {
   const current = editing.value;
   if (!current) return false;
   return (
-    Boolean(current.procurementSkuId) &&
-    current.procurementSkuId !== current._origSkuId &&
-    Boolean(current.skuName) &&
-    Boolean(current.rawName?.trim()) &&
-    current.skuName !== current.rawName.trim()
-  );
-});
-
-const skuOptions = computed(() => {
-  if (!editing.value?.ingredientId) return [];
-  return (
-    ingredientOptions.value.find((item) => item.ingredientId === editing.value.ingredientId)
-      ?.skus ?? []
+    String(current.rawName ?? '').trim() !== String(current.rawNameOrig ?? '').trim() ||
+    String(current.qtyText ?? '') !== String(current._origQtyText ?? '') ||
+    String(current.priceText ?? '') !== String(current._origPriceText ?? '') ||
+    String(current.unitText ?? '') !== String(current.unitOrig ?? '') ||
+    Boolean(current.isPersonal) !== Boolean(current.isPersonalOrig) ||
+    String(current.procurementSkuId ?? '') !== String(current._origSkuId ?? '')
   );
 });
 
@@ -801,8 +895,17 @@ function selectOrder(index: number) {
   activeIndex.value = index;
 }
 
+/**
+ * 行状态。2026-11-05 起「已匹配」只留给认得准的：
+ * 靠原料推出来、靠模型语义推出来的标「待确认」——不用逐行核对，
+ * 但一眼能看出哪几行是猜的（生成时也只有这些行不会被改名）。
+ */
+function lineTrusted(line: OrderImportLineView) {
+  return line.confidence === 'HIGH' || line.matchSource === 'MANUAL';
+}
+
 function stateText(line: OrderImportLineView) {
-  if (line.state === 'MATCHED') return '已匹配';
+  if (line.state === 'MATCHED') return lineTrusted(line) ? '已匹配' : '待确认';
   if (line.state === 'PERSONAL') return '个人';
   // 渠道没确认：商品还没开始匹配，别让员工以为要一行行手选
   if (activeImport.value && !activeImport.value.channel) return '等渠道';
@@ -811,6 +914,7 @@ function stateText(line: OrderImportLineView) {
 }
 
 function stateClass(line: OrderImportLineView) {
+  if (line.state === 'MATCHED' && !lineTrusted(line)) return 'matched-review';
   return line.state.toLowerCase().replace('_', '-');
 }
 
@@ -827,23 +931,42 @@ function openEdit(line: OrderImportLineView) {
   const sku = ingredient?.skus.find((item) => item.id === line.procurementSkuId);
   editing.value = {
     ...line,
+    rawNameOrig: line.rawName,
     qtyText: line.qty === null ? '' : String(line.qty),
     unitText: line.unit || '',
     priceText: line.unitPrice === null ? '' : String(line.unitPrice),
-    totalText: line.lineTotal === null ? '' : String(line.lineTotal),
     ingredientName: ingredient?.ingredientName || '',
     skuName: sku?.name || '',
     skuModel: sku?.productModel || '',
+    skuRatio: sku?.purchaseToBaseRatio ?? null,
+    baseUnit: ingredient?.baseUnit || 'G',
     _origSkuId: line.procurementSkuId || '',
-    syncSkuName: false,
-    _origTotal: line.aiLineTotal ?? line.lineTotal ?? 0,
-    _origQty: line.qty,
-    _origPrice: line.unitPrice,
-    totalTouched: false,
+    unitOrig: line.unit || '',
+    isPersonalOrig: Boolean(line.isPersonal),
+    // 截图上的小计：不再让人手改，只拿来对账（2026-11-05）
+    _origTotal: line.aiLineTotal ?? line.lineTotal ?? null,
+    _origQtyText: line.qty === null ? '' : String(line.qty),
+    _origPriceText: line.unitPrice === null ? '' : String(line.unitPrice),
   };
 }
 
-function closeEdit() {
+/**
+ * 关掉弹窗。改过东西又没保存时先问一句（2026-11-05）：
+ * 点蒙层就关、改了半天白改，是这类弹窗最容易挨骂的地方。
+ */
+async function closeEdit(force = false) {
+  if (!force && editDirty.value) {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '还没保存',
+        content: '这一行的改动还没保存，确定关掉吗？',
+        confirmText: '关掉',
+        success: (res) => resolve(Boolean(res.confirm)),
+        fail: () => resolve(false),
+      });
+    });
+    if (!confirmed) return;
+  }
   editing.value = null;
   pickerMode.value = 'none';
 }
@@ -898,15 +1021,7 @@ async function saveFeeEdit() {
   }
 }
 
-function openIngredientPicker() {
-  pickerMode.value = 'ingredient';
-}
-
 function openSkuPicker() {
-  if (!editing.value?.ingredientId) {
-    uni.showToast({ title: '请先选择原料', icon: 'none' });
-    return;
-  }
   pickerMode.value = 'sku';
 }
 
@@ -914,52 +1029,59 @@ function closePicker() {
   pickerMode.value = 'none';
 }
 
-function chooseIngredient(item: IngredientOption) {
-  if (item.ingredientId !== editing.value.ingredientId) {
-    editing.value.procurementSkuId = null;
-    editing.value.skuName = '';
-    editing.value.skuModel = '';
-  }
-  editing.value.ingredientId = item.ingredientId;
-  editing.value.ingredientName = item.ingredientName;
-  editing.value.isPersonal = false;
-  pickerMode.value = 'none';
-}
-
 function chooseSku(sku: any) {
   editing.value.procurementSkuId = sku.id;
   editing.value.skuName = sku.name;
   editing.value.skuModel = sku.productModel || '';
+  editing.value.skuRatio =
+    typeof sku.purchaseToBaseRatio === 'number' ? sku.purchaseToBaseRatio : null;
+  editing.value.ingredientId = sku.ingredientId;
+  editing.value.ingredientName = sku.ingredientName;
+  editing.value.baseUnit = sku.baseUnit || 'G';
   editing.value.isPersonal = false;
-  editing.value.syncSkuName = false;
   pickerMode.value = 'none';
 }
 
-function onSyncSkuNameChange(event: any) {
-  editing.value.syncSkuName = Boolean(event?.detail?.value);
-}
-
+/**
+ * 个人采购只切换标记，不动已经选好的商品（2026-11-05）。
+ * 以前一打开开关就把原料和商品清空、关掉也回不来，等于点错一下就白选。
+ */
 function onPersonalChange(event: any) {
-  const value = Boolean(event?.detail?.value);
-  editing.value.isPersonal = value;
-  if (value) {
-    // 标个人后不会再生成记录，界面上也不该继续显示“匹配到某个商品”。
-    editing.value.ingredientId = null;
-    editing.value.ingredientName = '';
-    editing.value.procurementSkuId = null;
-    editing.value.skuName = '';
-    editing.value.skuModel = '';
-  }
+  editing.value.isPersonal = Boolean(event?.detail?.value);
 }
 
-function markPersonal() {
-  editing.value.isPersonal = true;
-  editing.value.ingredientId = null;
-  editing.value.ingredientName = '';
-  editing.value.procurementSkuId = null;
-  editing.value.skuName = '';
-  editing.value.skuModel = '';
-  pickerMode.value = 'none';
+/** 数量一次 +/-1，省得为改个数字弹一次键盘 */
+function stepQty(delta: number) {
+  const current = parseNumber(editing.value?.qtyText);
+  const next = Math.max(1, Math.round((current ?? 1) + delta));
+  editing.value.qtyText = String(next);
+}
+
+/** 单位只给常用件数单位：写「斤」这类，生成时会被拦下来白填一遍 */
+/**
+ * 按截图小计反算单价（2026-11-05）。
+ * 有特价/优惠时，数量 × 单价 天然对不上截图：一键把单价改成「截图小计 ÷ 数量」，
+ * 这样小计、截图、整单核对三者才是一致的。
+ */
+function alignToReceipt() {
+  const receipt = receiptTotal.value;
+  const qty = parseNumber(editing.value?.qtyText);
+  if (receipt === null || qty === null || qty <= 0) return;
+  editing.value.priceText = String(round2(receipt / qty));
+}
+
+function pickUnit() {
+  const units = ['袋', '盒', '份', '包', '瓶', '个', '组', '罐'];
+  const current = editing.value?.unitText;
+  uni.showActionSheet({
+    itemList: units,
+    success: (res) => {
+      editing.value.unitText = units[res.tapIndex];
+    },
+    fail: () => {
+      if (current) editing.value.unitText = current;
+    },
+  });
 }
 
 function goNewSku() {
@@ -967,7 +1089,7 @@ function goNewSku() {
     (item) => item.ingredientId === editing.value?.ingredientId,
   );
   if (!ingredient) {
-    uni.showToast({ title: '请先选择原料', icon: 'none' });
+    uni.showToast({ title: '先在清单里选一个商品', icon: 'none' });
     return;
   }
   pickerMode.value = 'none';
@@ -983,18 +1105,15 @@ function goNewSku() {
 async function saveEdit() {
   if (saving.value || !editing.value || !activeImport.value) return;
 
-  if (canSyncSkuName.value && editing.value.syncSkuName) {
-    const confirmed = await new Promise<boolean>((resolve) => {
-      uni.showModal({
-        title: '确认修改商品名？',
-        content: `「${editing.value.skuName}」将改名为「${editing.value.rawName.trim()}」，并写入改名记录。`,
-        confirmText: '确认改名',
-        confirmColor: '#b4453a',
-        success: (res) => resolve(Boolean(res.confirm)),
-        fail: () => resolve(false),
-      });
-    });
-    if (!confirmed) return;
+  const qty = parseNumber(editing.value.qtyText);
+  if (qty === null || qty <= 0) {
+    uni.showToast({ title: '请先填数量', icon: 'none' });
+    return;
+  }
+  const price = parseNumber(editing.value.priceText);
+  if (price === null || price < 0) {
+    uni.showToast({ title: '请先填单价', icon: 'none' });
+    return;
   }
 
   // 规格对不上不硬拦，但必须让员工确认一次：
@@ -1013,37 +1132,29 @@ async function saveEdit() {
     if (!confirmed) return;
   }
 
-  const qty = parseNumber(editing.value.qtyText);
-  const price = parseNumber(editing.value.priceText);
-  let total = parseNumber(editing.value.totalText);
-  if (!editing.value.totalTouched && qty !== null && price !== null) {
-    total = Math.round(qty * price * 100) / 100;
-  }
-
+  const nameChanged = String(editing.value.rawName || '').trim() !== String(editing.value.rawNameOrig || '').trim();
   saving.value = true;
   try {
     const res: any = await updateOrderImportLine(
       activeImport.value.id,
       editing.value.id,
       {
+        rawName: String(editing.value.rawName || '').trim(),
         qty,
         unit: editing.value.unitText || null,
         unitPrice: price,
-        lineTotal: total,
+        lineTotal: editingTotal.value,
         ingredientId: editing.value.isPersonal ? null : editing.value.ingredientId || null,
         procurementSkuId: editing.value.isPersonal
           ? null
           : editing.value.procurementSkuId || null,
         isPersonal: editing.value.isPersonal,
-        syncSkuName: canSyncSkuName.value && editing.value.syncSkuName === true,
       },
     );
     if (res.code !== 0) throw new Error(res.message || '保存失败');
-    if (res.data?.renamedTo) {
-      uni.showToast({ title: '已同步商品名', icon: 'none' });
-    }
-    closeEdit();
+    closeEdit(true);
     await load();
+    uni.showToast({ title: nameChanged ? '已保存，名字已改' : '已保存', icon: 'none' });
   } catch (error: any) {
     uni.showToast({ title: error?.message || '保存失败', icon: 'none' });
   } finally {
@@ -1111,21 +1222,6 @@ async function discardActive() {
   }
 }
 
-watch(
-  () => [editing.value?.qtyText, editing.value?.priceText],
-  () => {
-    const current = editing.value;
-    if (!current || current.totalTouched) return;
-    const qty = parseNumber(current.qtyText);
-    const price = parseNumber(current.priceText);
-    // 刚打开时 qty/price 等于原值，不要在这里重算，否则“原图金额”会被悄悄改掉。
-    if (qty === current._origQty && price === current._origPrice) return;
-    if (qty !== null && price !== null) {
-      current.totalText = String(Math.round(qty * price * 100) / 100);
-    }
-  },
-);
-
 async function submit() {
   if (!canConfirm.value || submitting.value) return;
   const ids = imports.value.filter((item) => item.status === 'DRAFT').map((item) => item.id);
@@ -1152,7 +1248,13 @@ async function submit() {
     const res: any = await confirmOrderImports(ids);
     if (res.code !== 0) throw new Error(res.message || '生成失败');
     submitted.value = true;
-    uni.showToast({ title: `已生成 ${res.data?.createdCount ?? ''} 条记录`, icon: 'success' });
+    const renamed = Array.isArray(res.data?.renamed) ? res.data.renamed.length : 0;
+    uni.showToast({
+      title: renamed
+        ? `已生成 ${res.data?.createdCount ?? ''} 条记录，更新 ${renamed} 个商品名`
+        : `已生成 ${res.data?.createdCount ?? ''} 条记录`,
+      icon: 'success',
+    });
     setTimeout(() => uni.navigateBack(), 700);
   } catch (error: any) {
     // 失败才解锁；成功时保持锁定，避免返回动画期间重复提交。
@@ -1607,6 +1709,12 @@ function emptySummary() {
   color: #2f6b4f;
 }
 
+/* 靠原料/模型推出来的匹配：不拦人，但让人一眼看出这是猜的（2026-11-05） */
+.state.matched-review {
+  background: #fbf1dd;
+  color: #a8742a;
+}
+
 .state.personal {
   background: #f0f0ea;
   color: #7b7663;
@@ -1740,57 +1848,11 @@ function emptySummary() {
   white-space: nowrap;
 }
 
-.field-label.right {
-  margin-left: auto;
-}
-
 .field-input {
   flex: 1;
   font-size: 26rpx;
   color: #26261f;
   text-align: right;
-}
-
-.field-input.unit {
-  flex: 0 0 120rpx;
-}
-
-.sync-box {
-  margin-top: 20rpx;
-  padding: 20rpx;
-  border-radius: 12rpx;
-  background: #fbf3ef;
-  border: 1rpx solid #e6c9c2;
-}
-
-.sync-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-}
-
-.sync-title {
-  font-size: 24rpx;
-  font-weight: 600;
-  color: #8a3d33;
-}
-
-.sync-diff {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 21rpx;
-  color: #6b6653;
-  line-height: 1.5;
-  word-break: break-all;
-}
-
-.sync-tip {
-  display: block;
-  margin-top: 6rpx;
-  font-size: 20rpx;
-  color: #8a8574;
-  line-height: 1.5;
 }
 
 .field-hint {
@@ -1995,5 +2057,229 @@ function emptySummary() {
   font-size: 21rpx;
   color: #6b6653;
   line-height: 1.5;
+}
+
+/* ---------- 改一行（2026-11-05 改版） ---------- */
+/* 弹窗本体还是 .sheet 那套样式，外面套一层可滚动容器（键盘弹起来够用） */
+.sheet-scroll {
+  width: 100%;
+  max-height: 86vh;
+  background: #f3eddd;
+  border-radius: 28rpx 28rpx 0 0;
+}
+
+.sheet-inner {
+  background: transparent;
+  border-radius: 0;
+}
+
+.sheet-grab {
+  width: 68rpx;
+  height: 8rpx;
+  border-radius: 99rpx;
+  background: #d8cfb6;
+  margin: -6rpx auto 6rpx;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  margin-bottom: 2rpx;
+}
+
+.name-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.name-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+  border-bottom: 1rpx dashed #cfc5ab;
+  padding-bottom: 6rpx;
+}
+
+.name-pen {
+  font-size: 20rpx;
+  color: #a09a86;
+}
+
+.personal-box {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: 2rpx;
+}
+
+.personal-label {
+  font-size: 21rpx;
+  color: #6b6653;
+}
+
+.personal-switch {
+  transform: scale(0.72);
+  transform-origin: right center;
+}
+
+.sku-row .field-value {
+  flex: 1;
+  text-align: right;
+}
+
+.field-sub {
+  font-size: 21rpx;
+  font-weight: 500;
+  color: #8a8574;
+}
+
+.rename-hint {
+  display: block;
+  font-size: 20rpx;
+  color: #8a8574;
+  line-height: 1.5;
+  padding: 0 6rpx;
+  margin-top: -6rpx;
+}
+
+.amount-card {
+  background: #fbfcf7;
+  border: 1rpx solid #e2dcc9;
+  border-radius: 16rpx;
+  overflow: hidden;
+}
+
+.amount-grid {
+  display: flex;
+}
+
+.amount-cell {
+  flex: 1;
+  min-width: 0;
+  padding: 16rpx 18rpx 18rpx;
+}
+
+.amount-cell + .amount-cell {
+  border-left: 1rpx solid #ece5d2;
+}
+
+.amount-label {
+  display: block;
+  font-size: 21rpx;
+  color: #6b6653;
+  margin-bottom: 10rpx;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+}
+
+.step-btn {
+  width: 54rpx;
+  height: 54rpx;
+  border-radius: 12rpx;
+  background: #eee7d4;
+  color: #4a5b50;
+  font-size: 32rpx;
+  line-height: 54rpx;
+  text-align: center;
+}
+
+.step-btn-hover {
+  background: #e3dbc4;
+}
+
+.step-input {
+  width: 76rpx;
+  text-align: center;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.unit-chip {
+  font-size: 22rpx;
+  color: #6b6653;
+  padding: 8rpx 14rpx;
+  margin-left: 6rpx;
+  border: 1rpx solid #e2dcc9;
+  border-radius: 8rpx;
+  background: #f6f1e2;
+  white-space: nowrap;
+}
+
+.price-line {
+  display: flex;
+  align-items: baseline;
+  gap: 4rpx;
+}
+
+.price-symbol {
+  font-size: 22rpx;
+  color: #6b6653;
+}
+
+.price-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.check-line {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  border-top: 1rpx solid #ece5d2;
+  background: #f7f9f2;
+  padding: 12rpx 18rpx;
+  font-size: 20rpx;
+  color: #4f7a62;
+}
+
+.check-line.bad {
+  background: #fbf1dd;
+  color: #a8742a;
+}
+
+.check-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.check-grams {
+  flex: none;
+  color: #6b6653;
+}
+
+.check-fix {
+  flex: none;
+  color: #a8742a;
+  font-weight: 600;
+}
+
+.picker-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker-model {
+  font-size: 20rpx;
+  font-weight: 400;
+  color: #8a8574;
+}
+
+.picker-current {
+  font-size: 20rpx;
+  color: #2f6b4f;
 }
 </style>

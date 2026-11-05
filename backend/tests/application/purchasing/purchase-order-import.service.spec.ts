@@ -40,7 +40,10 @@ describe('PurchaseOrderImportService', () => {
       findFirst: jest.fn(),
       update: jest.fn(),
     },
-    procurementSkuNameChange: { create: jest.fn() },
+    procurementSkuNameChange: {
+      create: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     purchaseOrderMatchAlias: {
       findMany: jest.fn().mockResolvedValue([]),
       upsert: jest.fn(),
@@ -309,6 +312,7 @@ describe('PurchaseOrderImportService', () => {
 
     await expect(service.confirm(['import-1'], 'user-1')).resolves.toEqual({
       createdCount: 1,
+      renamed: [],
     });
   });
 
@@ -352,6 +356,7 @@ describe('PurchaseOrderImportService', () => {
 
     await expect(service.confirm(['import-1'], 'user-1')).resolves.toEqual({
       createdCount: 1,
+      renamed: [],
     });
   });
 
@@ -437,7 +442,7 @@ describe('PurchaseOrderImportService', () => {
 
     const result = await service.confirm(['import-1'], 'user-1');
 
-    expect(result).toEqual({ createdCount: 1 });
+    expect(result).toEqual({ createdCount: 1, renamed: [] });
     expect(prisma.purchaseRecord.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -501,6 +506,124 @@ describe('PurchaseOrderImportService', () => {
         }),
       }),
     );
+  });
+
+  describe('生成采购记录时同步商品名（2026-11-05）', () => {
+    const primeConfirm = (line: Record<string, unknown>) => {
+      prisma.purchaseOrderImport.findMany.mockResolvedValue([
+        {
+          id: 'import-1',
+          purchaseListId: 'list-1',
+          status: 'DRAFT',
+          incomplete: false,
+          subtotal: 99.8,
+          channel: '盒马鲜生',
+          orderTime: null,
+          imageKeys: [],
+          lines: [
+            {
+              id: 'line-1',
+              rawName: '冰鲜 原切澳洲牛嫩肉 450g',
+              isPersonal: false,
+              ingredientId: 'ing-beef',
+              procurementSkuId: 'sku-beef',
+              purchaseItemId: 'item-1',
+              lineTotal: 99.8,
+              qty: 2,
+              unit: '袋',
+              spec: '450g/袋',
+              ...line,
+            },
+          ],
+        },
+      ]);
+      prisma.purchaseOrderImport.updateMany.mockResolvedValue({ count: 1 });
+      prisma.procurementSku.findUnique.mockResolvedValue({
+        id: 'sku-beef',
+        ingredientId: 'ing-beef',
+        name: '牛嫩肉',
+        productModel: '450g/袋',
+        purchaseChannel: '盒马鲜生',
+        purchaseUnit: '袋',
+        purchaseToBaseRatio: 450,
+        ingredient: { baseUnit: 'G', name: '牛肉', purchaseToBaseRatio: 450 },
+      });
+      prisma.procurementSku.findMany.mockResolvedValue([]);
+      prisma.purchaseItem.findFirst.mockResolvedValue({ id: 'item-1' });
+      prisma.purchaseRecord.create.mockResolvedValue({ id: 'record-1' });
+      prisma.purchaseOrderImportLine.update.mockResolvedValue({});
+    };
+
+    it('认得出来的行：把截图叫法写成商品名，去掉跟规格重复的尾巴，记录里也用新名字', async () => {
+      primeConfirm({ matchConfidence: 'HIGH' });
+
+      const result = await service.confirm(['import-1'], 'user-1');
+
+      expect(result.renamed).toEqual([
+        {
+          lineId: 'line-1',
+          skuId: 'sku-beef',
+          from: '牛嫩肉',
+          to: '冰鲜 原切澳洲牛嫩肉',
+        },
+      ]);
+      expect(prisma.procurementSku.update).toHaveBeenCalledWith({
+        where: { id: 'sku-beef' },
+        data: { name: '冰鲜 原切澳洲牛嫩肉' },
+      });
+      expect(prisma.procurementSkuNameChange.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          skuId: 'sku-beef',
+          oldName: '牛嫩肉',
+          newName: '冰鲜 原切澳洲牛嫩肉',
+          source: 'ORDER_IMPORT',
+          changedById: 'user-1',
+        }),
+      });
+      expect(prisma.purchaseRecord.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            procurementSkuName: '冰鲜 原切澳洲牛嫩肉',
+          }),
+        }),
+      );
+    });
+
+    it('按原料猜出来的行（中可信）不改名，免得把错的名字写进商品表', async () => {
+      primeConfirm({ matchConfidence: 'MEDIUM', matchSource: 'AUTO' });
+
+      const result = await service.confirm(['import-1'], 'user-1');
+
+      expect(result.renamed).toEqual([]);
+      expect(prisma.procurementSku.update).not.toHaveBeenCalled();
+      expect(prisma.procurementSkuNameChange.create).not.toHaveBeenCalled();
+      expect(prisma.purchaseRecord.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ procurementSkuName: '牛嫩肉' }),
+        }),
+      );
+    });
+
+    it('员工自己选的商品算认得出来，照样改名', async () => {
+      primeConfirm({ matchConfidence: 'MEDIUM', matchSource: 'MANUAL' });
+
+      const result = await service.confirm(['import-1'], 'user-1');
+
+      expect(result.renamed).toHaveLength(1);
+      expect(prisma.procurementSku.update).toHaveBeenCalled();
+    });
+
+    it('同渠道已经有同名同规格的商品时，不改名（否则以后两件货分不开）', async () => {
+      primeConfirm({ matchConfidence: 'HIGH' });
+      prisma.procurementSku.findMany.mockResolvedValue([
+        { id: 'sku-other', productModel: '450g/袋' },
+      ]);
+
+      const result = await service.confirm(['import-1'], 'user-1');
+
+      expect(result.renamed).toEqual([]);
+      expect(prisma.procurementSku.update).not.toHaveBeenCalled();
+    });
   });
 
   it('手动匹配现有商品时同步商品名并写改名记录', async () => {
@@ -695,6 +818,29 @@ describe('PurchaseOrderImportService', () => {
       prisma.purchaseOrderImportLine.update.mockImplementation(
         async ({ data }: any) => ({ id: 'line-1', ...data }),
       );
+    });
+
+    it('可以改截图里的商品名（识别错了直接改）', async () => {
+      await service.updateLine({
+        importId: 'import-1',
+        lineId: 'line-1',
+        userId: 'user-1',
+        dto: { rawName: '  盒马日日鲜 小白菜 300g  ' },
+      });
+      const data = prisma.purchaseOrderImportLine.update.mock.calls[0][0].data;
+      expect(data.rawName).toBe('盒马日日鲜 小白菜 300g');
+      expect(data.editedByUser).toBe(true);
+    });
+
+    it('名字改成空的 → 拒绝，不落库', async () => {
+      await expect(
+        service.updateLine({
+          importId: 'import-1',
+          lineId: 'line-1',
+          dto: { rawName: '   ' },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.purchaseOrderImportLine.update).not.toHaveBeenCalled();
     });
 
     it('重存同一个原料时保留已选商品', async () => {

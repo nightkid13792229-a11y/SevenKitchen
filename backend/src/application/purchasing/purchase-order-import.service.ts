@@ -33,7 +33,11 @@ import {
 } from '../nutrition-governance/agent-provider-config.service';
 import type { DeepSeekChatOptions } from '../recipe-designer/deepseek-chat';
 import { parseOrderDraft } from './purchase-order-parse';
-import { matchOrderLines, normalizeText } from './purchase-order-match';
+import {
+  extractSpecTokens,
+  matchOrderLines,
+  normalizeText,
+} from './purchase-order-match';
 import {
   canonicalChannelCode,
   channelMatchKey,
@@ -197,12 +201,15 @@ ${list}
      * 历史行的 channelFamily 是旧口径（「盒马」「山姆」），读之前先按字典
      * 归一，否则这次统一会让「沿用上次匹配」全部失效。
      */
-    const aliasCache = new Map<string, Array<{
-      normalizedName: string;
-      channelFamily: string;
-      ingredientId: string;
-      procurementSkuId: string | null;
-    }>>();
+    const aliasCache = new Map<
+      string,
+      Array<{
+        normalizedName: string;
+        channelFamily: string;
+        ingredientId: string;
+        procurementSkuId: string | null;
+      }>
+    >();
     const getAliasesForChannel = async (channel: string | null) => {
       const normalized = channel ? channelMatchKey(channel, channels) : '';
       const cacheKey = normalized || '__none__';
@@ -477,7 +484,8 @@ ${list}
     if (!current) return;
 
     const targets = current.lines.filter(
-      (line) => line.matchSource === 'AUTO' && !line.editedByUser && !line.isPersonal,
+      (line) =>
+        line.matchSource === 'AUTO' && !line.editedByUser && !line.isPersonal,
     );
     if (targets.length === 0) return;
 
@@ -508,10 +516,12 @@ ${list}
       lineTotal: numOrNull(line.lineTotal),
     }));
     const hints = targets
-      .map((line, index) => ({ lineIndex: index, ingredientId: line.ingredientId }))
-      .filter(
-        (hint): hint is { lineIndex: number; ingredientId: string } =>
-          Boolean(hint.ingredientId),
+      .map((line, index) => ({
+        lineIndex: index,
+        ingredientId: line.ingredientId,
+      }))
+      .filter((hint): hint is { lineIndex: number; ingredientId: string } =>
+        Boolean(hint.ingredientId),
       );
 
     const matched = matchOrderLines(
@@ -538,12 +548,14 @@ ${list}
     });
   }
 
-  /** 改一行：数量/单价/小计/匹配原料/个人标记 */
+  /** 改一行：截图里的名字/数量/单价/小计/匹配原料/个人标记 */
   async updateLine(input: {
     importId: string;
     lineId: string;
     userId?: string;
     dto: {
+      /** 截图里那串字，识别错了允许员工直接改（2026-11-05） */
+      rawName?: string;
       ingredientId?: string | null;
       procurementSkuId?: string | null;
       qty?: number | null;
@@ -566,6 +578,16 @@ ${list}
 
     const dto = input.dto;
     const data: Record<string, unknown> = { editedByUser: true };
+
+    // 截图名字：改的是「这行在截图上写的是什么」，同时也会被当成
+    // 下一次自动匹配要记住的叫法，所以只做「去掉首尾空格 + 限长」。
+    if (dto.rawName !== undefined) {
+      const rawName = String(dto.rawName ?? '').trim();
+      if (!rawName) {
+        throw new BadRequestException('名字不能为空');
+      }
+      data.rawName = rawName.slice(0, 200);
+    }
 
     if (dto.qty !== undefined) {
       if (dto.qty !== null && (!Number.isFinite(dto.qty) || dto.qty <= 0)) {
@@ -664,9 +686,12 @@ ${list}
     const skuChanged =
       Boolean(targetSkuId) && targetSkuId !== line.procurementSkuId;
     // 默认不改名：换商品只是匹配，改名必须由员工在界面上显式同意（并二次确认）。
+    // 2026-11-05 起界面上不再有这个勾选 —— 改名统一挪到「生成采购记录」那一下做。
     const shouldRename = skuChanged && dto.syncSkuName === true;
     const desiredSkuName = shouldRename
-      ? line.rawName.trim().slice(0, 200)
+      ? String(dto.rawName ?? line.rawName)
+          .trim()
+          .slice(0, 200)
       : '';
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -741,6 +766,12 @@ ${list}
     const result = await this.prisma
       .$transaction(async (tx) => {
         let createdCount = 0;
+        const renames: Array<{
+          lineId: string;
+          skuId: string;
+          from: string;
+          to: string;
+        }> = [];
         for (const row of imports) {
           // 抢占式确认：并发第二次会拿到 count=0，直接失败，不会重复记账。
           const claimed = await tx.purchaseOrderImport.updateMany({
@@ -779,6 +810,7 @@ ${list}
                 id: true,
                 ingredientId: true,
                 name: true,
+                productModel: true,
                 purchaseChannel: true,
                 purchaseUnit: true,
                 purchaseToBaseRatio: true,
@@ -796,6 +828,18 @@ ${list}
               throw new BadRequestException(
                 `「${line.rawName}」的原料和采购商品对不上，请重新选择`,
               );
+            }
+
+            // 名字对齐：把这行的截图叫法写成商品名（认不准的行不动）。
+            // 先改名再记账，记录里存的才是新名字。
+            const renamed = await this.syncLineSkuName(tx, {
+              line,
+              sku,
+              userId,
+            });
+            const skuName = renamed?.to ?? sku.name;
+            if (renamed) {
+              renames.push({ lineId: line.id, ...renamed });
             }
 
             const unit = (line.unit ?? '').trim();
@@ -841,7 +885,7 @@ ${list}
                 purchaseItemId,
                 ingredientId: line.ingredientId!,
                 procurementSkuId: sku.id,
-                procurementSkuName: sku.name,
+                procurementSkuName: skuName,
                 ingredientName: sku.ingredient.name,
                 purchaseChannel:
                   row.channel || sku.purchaseChannel || '未知渠道',
@@ -898,7 +942,7 @@ ${list}
             createdCount += 1;
           }
         }
-        return { createdCount };
+        return { createdCount, renamed: renames };
       })
       .catch((error: any) => {
         if (error?.code === 'P2002') {
@@ -913,6 +957,77 @@ ${list}
       `Purchase order import confirmed: ${result.createdCount} records from ${ids.length} imports`,
     );
     return result;
+  }
+
+  /**
+   * 生成采购记录时，把这一行在截图上的叫法同步成匹配到的商品名（2026-11-05）。
+   *
+   * 为什么放在「生成」这一下，而不是「保存这一行」：
+   *   保存是一行一行来的，员工只点开过的行才会被改名 —— 名字对不对，
+   *   就取决于他点开了几行。放在生成，所有匹配行一次对齐，报一个数字就够。
+   *
+   * 只在「认得出来」的行上改，认不准宁可不动：
+   *   · 名字是字面命中 / 沿用上次匹配（HIGH），或者员工自己挑的商品（MANUAL）；
+   *   · 同渠道没有「同名又同规格」的商品（否则以后两件货分不开）；
+   *   · 去掉名字尾巴上跟商品规格重复的那段（「…450g」→「…」），免得越改越长；
+   *   · 名字不能变成纯数字 / 符号。
+   */
+  private async syncLineSkuName(
+    tx: any,
+    input: {
+      line: any;
+      sku: {
+        id: string;
+        name: string;
+        productModel?: string | null;
+        purchaseChannel: string | null;
+      };
+      userId: string;
+    },
+  ): Promise<{ skuId: string; from: string; to: string } | null> {
+    const { line, sku } = input;
+    if (line.isPersonal) return null;
+    const trusted =
+      line.matchSource === 'MANUAL' || line.matchConfidence === 'HIGH';
+    if (!trusted) return null;
+
+    const desired = stripSpecSuffix(
+      String(line.rawName ?? '').trim(),
+      sku.productModel ?? null,
+    ).slice(0, 200);
+    if (!desired || desired === sku.name) return null;
+    // 「300g」「×2」这种认岔的名字不要写进商品表
+    if (!/[\u4e00-\u9fa5a-zA-Z]/.test(desired)) return null;
+
+    const sameName = await tx.procurementSku.findMany({
+      where: {
+        id: { not: sku.id },
+        isActive: true,
+        name: desired,
+        purchaseChannel: sku.purchaseChannel,
+      },
+      select: { id: true, productModel: true },
+    });
+    const targetSpec = specKeyOf(sku.productModel ?? null);
+    const conflicted = (sameName ?? []).some(
+      (row: any) => specKeyOf(row.productModel ?? null) === targetSpec,
+    );
+    if (conflicted) return null;
+
+    await tx.procurementSku.update({
+      where: { id: sku.id },
+      data: { name: desired },
+    });
+    await tx.procurementSkuNameChange.create({
+      data: {
+        skuId: sku.id,
+        oldName: sku.name,
+        newName: desired,
+        source: 'ORDER_IMPORT',
+        changedById: input.userId ?? null,
+      },
+    });
+    return { skuId: sku.id, from: sku.name, to: desired };
   }
 
   async discard(id: string): Promise<{ id: string; status: string }> {
@@ -954,9 +1069,7 @@ ${list}
   }
 
   /** 报销提交用：这些清单下已确认的订单截图 key 白名单 */
-  async getAllowedReceiptKeys(
-    purchaseListIds: string[],
-  ): Promise<Set<string>> {
+  async getAllowedReceiptKeys(purchaseListIds: string[]): Promise<Set<string>> {
     if (purchaseListIds.length === 0) return new Set();
     const rows = await this.prisma.purchaseOrderImport.findMany({
       where: {
@@ -977,7 +1090,10 @@ ${list}
       select: { id: true, sourceImportId: true },
     });
     return new Map(
-      rows.map((row) => [row.id, { sourceImportId: row.sourceImportId as string }]),
+      rows.map((row) => [
+        row.id,
+        { sourceImportId: row.sourceImportId as string },
+      ]),
     );
   }
 
@@ -1200,6 +1316,10 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
     });
 
     const byIngredient = new Map<string, ListItemCandidate>();
+    // 曾用名：生成记录时商品名会被截图里的叫法替换，匹配必须同时认旧名字。
+    const previousNames = await this.loadPreviousSkuNames(
+      skus.map((sku) => sku.id),
+    );
     for (const item of items) {
       if (byIngredient.has(item.ingredientId)) continue;
       byIngredient.set(item.ingredientId, {
@@ -1217,10 +1337,32 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
               ? Number(sku.purchaseToBaseRatio)
               : null,
             purchaseUnit: sku.purchaseUnit,
+            previousNames: previousNames.get(sku.id) ?? [],
           })),
       });
     }
     return Array.from(byIngredient.values());
+  }
+
+  /** 每个商品最近改过什么名字（最多留 5 个，够匹配用） */
+  private async loadPreviousSkuNames(
+    skuIds: string[],
+  ): Promise<Map<string, string[]>> {
+    const result = new Map<string, string[]>();
+    if (skuIds.length === 0) return result;
+    const changes = await this.prisma.procurementSkuNameChange.findMany({
+      where: { skuId: { in: skuIds } },
+      select: { skuId: true, oldName: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    for (const change of changes ?? []) {
+      const list = result.get(change.skuId) ?? [];
+      if (list.length >= 5) continue;
+      if (list.includes(change.oldName)) continue;
+      list.push(change.oldName);
+      result.set(change.skuId, list);
+    }
+    return result;
   }
 
   private async downloadImage(
@@ -1414,6 +1556,7 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
       isPersonal: line.isPersonal,
       editedByUser: line.editedByUser,
       confidence: line.matchConfidence ?? 'LOW',
+      matchSource: line.matchSource ?? null,
       state,
       purchaseItemId: line.purchaseItemId ?? null,
     };
@@ -1570,4 +1713,35 @@ function findWhitespaceRow(
     if (allWhite) return y;
   }
   return Math.min(target, height - 1);
+}
+
+/** 规格的归一化指纹：450g/袋 → "450g"；没规格 → 空串 */
+function specKeyOf(value: string | null | undefined): string {
+  return extractSpecTokens(value ?? '')
+    .map((token) => token.key)
+    .sort()
+    .join('|');
+}
+
+/**
+ * 把名字末尾跟规格重复的那段去掉（2026-11-05）。
+ * 截图名常写成「冰鲜 原切澳洲牛嫩肉 450g」，而规格字段本来就存了 450g/袋；
+ * 不去掉的话商品名会越来越长，而且下次截图写「450克」又要再变一次。
+ */
+function stripSpecSuffix(name: string, productModel: string | null): string {
+  const trimmed = name.trim();
+  if (!trimmed || !productModel) return trimmed;
+  const core = productModel.split(/[\/／]/)[0].trim();
+  if (!core) return trimmed;
+  for (const candidate of [core, core.replace(/^约/, '')]) {
+    if (candidate.length < 2) continue;
+    if (!trimmed.endsWith(candidate)) continue;
+    const rest = trimmed
+      .slice(0, -candidate.length)
+      .replace(/[（(\s]+$/, '')
+      .replace(/[约\s]+$/, '')
+      .trim();
+    if (rest.length >= 2) return rest;
+  }
+  return trimmed;
 }

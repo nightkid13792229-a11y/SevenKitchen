@@ -57,6 +57,12 @@ export class UpdateOrderImportDto {
 }
 
 export class UpdateOrderImportLineDto {
+  /** 截图里那串商品名：识别错了允许员工直接改（2026-11-05） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  rawName?: string;
+
   @IsOptional()
   @IsString()
   ingredientId?: string | null;

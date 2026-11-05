@@ -255,6 +255,35 @@ describe('matchOrderLines', () => {
     expect(matched.procurementSkuId).toBe('sku-wm');
   });
 
+  it('改过名的商品：旧名字也认（截图还是按旧叫法写的也一样匹配）', () => {
+    const renamed: ListItemCandidate[] = [
+      {
+        purchaseItemId: 'item-greens',
+        ingredientId: 'ing-greens',
+        ingredientName: '小白菜',
+        skus: [
+          {
+            id: 'sku-greens',
+            // 上个月这张单把它改名成了「盒马日日鲜 小白菜」
+            name: '盒马日日鲜 小白菜',
+            productModel: '300g/份',
+            purchaseChannel: '盒马鲜生',
+            purchaseToBaseRatio: 300,
+            purchaseUnit: '份',
+            previousNames: ['小白菜'],
+          },
+        ],
+      },
+    ];
+    const [matched] = matchWithChannels(
+      [line('小白菜 约300g', '约300g/份')],
+      renamed,
+      '盒马鲜生',
+    );
+    expect(matched.procurementSkuId).toBe('sku-greens');
+    expect(matched.confidence).toBe('HIGH');
+  });
+
   it('手动匹配成功过的叫法，下次自动沿用', () => {
     const aliases = [
       {

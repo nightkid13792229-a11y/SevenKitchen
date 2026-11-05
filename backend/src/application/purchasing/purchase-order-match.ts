@@ -53,7 +53,10 @@ export function normalizeText(value: string): string {
     /(\d+(?:\.\d+)?)\s*(kg|千克|公斤|g|克|ml|毫升|l|升)\s*[\/（(]?\s*(个|只|枚|片|粒|颗|条|块|支|根|份|包|袋|盒|瓶|罐|卷|斤|两)/gi,
     '$1$2',
   );
-  text = text.replace(/[\s【】\[\]（）()「」『』·•,，。.、:：;；!！?？'"“”‘’*×x/-]/g, '');
+  text = text.replace(
+    /[\s【】\[\]（）()「」『』·•,，。.、:：;；!！?？'"“”‘’*×x/-]/g,
+    '',
+  );
   for (const noise of BRAND_NOISE) {
     text = text.split(noise).join('');
   }
@@ -67,7 +70,9 @@ interface SpecToken {
   dimension: 'g' | 'ml' | 'count';
 }
 
-export function extractSpecTokens(value: string | null | undefined): SpecToken[] {
+export function extractSpecTokens(
+  value: string | null | undefined,
+): SpecToken[] {
   if (!value) return [];
   const tokens: SpecToken[] = [];
   const regex = new RegExp(SPEC_PATTERN.source, 'gi');
@@ -200,14 +205,24 @@ function pickSku(
       const normalizedSku = normalizeText(sku.name);
       const nameHit =
         normalizedSku.length >= 2 && normalizedLine.includes(normalizedSku);
+      // 曾用名同样算「名字命中」：订单识别的商品名会跟着截图改，
+      // 只认现名的话，改完名以后同样的字反而匹配不上了（2026-11-05）。
+      const previousHit =
+        !nameHit &&
+        (sku.previousNames ?? []).some((oldName) => {
+          const normalizedOld = normalizeText(oldName);
+          return (
+            normalizedOld.length >= 2 && normalizedLine.includes(normalizedOld)
+          );
+        });
       // 名称是身份信号，规格是包装信号：先看名字，再看规格是否对得上。
       // 同名但规格不同的商品同时存在时，必须选规格一致的那个，不能按排序取第一个。
       const specOk = !specConflict(line.spec, sku.productModel);
       return {
         sku,
-        nameHit,
+        nameHit: nameHit || previousHit,
         score:
-          (nameHit ? 100 : 0) +
+          (nameHit || previousHit ? 100 : 0) +
           (specOk ? 10 : 0) +
           channelScore(importKey, sku, channels),
       };
@@ -354,7 +369,7 @@ export function matchOrderLines(
       ...line,
       ingredientId: hit.candidate.ingredientId,
       ingredientName: hit.candidate.ingredientName,
-      procurementSkuId: needsNewSku ? null : sku?.id ?? null,
+      procurementSkuId: needsNewSku ? null : (sku?.id ?? null),
       purchaseItemId: hit.candidate.purchaseItemId,
       confidence,
       reason,

@@ -62,6 +62,11 @@ export interface ListSkuCandidate {
   /** 采购单位 → 基准单位的换算比（件数 × 单件净含量） */
   purchaseToBaseRatio: number | null;
   purchaseUnit: string | null;
+  /**
+   * 曾用名（2026-11-05）。生成采购记录时会把截图里的叫法同步成商品名，
+   * 匹配时也必须认旧名字 —— 否则「改完名字，下次同样的字反而匹配不上」。
+   */
+  previousNames?: string[] | null;
 }
 
 export interface ListItemCandidate {

@@ -1107,6 +1107,8 @@ export interface OrderImportLineView {
   isPersonal: boolean;
   editedByUser: boolean;
   confidence: string;
+  /** AUTO = 系统匹配；MANUAL = 员工自己选的商品（2026-11-05：两种都算「认得出来」） */
+  matchSource?: string | null;
   state: 'MATCHED' | 'PERSONAL' | 'UNMATCHED' | 'NEEDS_SKU';
   purchaseItemId: string | null;
 }
@@ -1224,6 +1226,7 @@ export function updateOrderImportLine(
   importId: string,
   lineId: string,
   data: {
+    rawName?: string;
     ingredientId?: string | null;
     procurementSkuId?: string | null;
     qty?: number | null;

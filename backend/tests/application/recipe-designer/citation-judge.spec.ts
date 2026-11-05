@@ -1,12 +1,16 @@
 import { callDeepSeekJson } from '../../../src/application/recipe-designer/deepseek-chat';
 import { CitationRegistry } from '../../../src/application/recipe-designer/agent/citation-registry';
-import { judgeAnswer } from '../../../src/application/recipe-designer/agent/citation-judge';
+import { judgeAnswer, rewriteAnswer } from '../../../src/application/recipe-designer/agent/citation-judge';
 
 jest.mock('../../../src/application/recipe-designer/deepseek-chat', () => ({
   callDeepSeekJson: jest.fn(),
 }));
 
 const mockedCall = callDeepSeekJson as jest.Mock;
+
+beforeEach(() => {
+  mockedCall.mockReset();
+});
 
 function passage() {
   return {
@@ -102,5 +106,36 @@ describe('judgeAnswer 兜底', () => {
 
     expect(audit.uncitedClinicalClaims).toBe(1);
     expect(audit.uncitedClinical[0].claim).toContain('5.2');
+  });
+});
+
+
+describe('rewriteAnswer 修订器', () => {
+  it('把未引用临床结论交给修订器，并保留引用表', async () => {
+    mockedCall.mockResolvedValueOnce({ answer: '修订后：血磷 5.2 超过 2 期目标 [K1]。' });
+    const registry = new CitationRegistry();
+    registry.register(passage());
+    const result = await rewriteAnswer({
+      config: CONFIG,
+      answer: '原文',
+      uncited: [{ claim: '血磷 5.2 不属于 IRIS 2 期', kind: 'clinical' }],
+      registry,
+    });
+    expect(result.answer).toContain('修订后');
+    expect(mockedCall).toHaveBeenCalledTimes(1);
+    const payload = mockedCall.mock.calls[0][0];
+    expect(payload.userPayload.uncitedClinical).toHaveLength(1);
+    expect(payload.userPayload.availableCitations[0].citationId).toBe('K1');
+  });
+
+  it('没有未引用结论时不调模型', async () => {
+    const result = await rewriteAnswer({
+      config: CONFIG,
+      answer: '原文',
+      uncited: [],
+      registry: new CitationRegistry(),
+    });
+    expect(result.answer).toBe('原文');
+    expect(mockedCall).not.toHaveBeenCalled();
   });
 });

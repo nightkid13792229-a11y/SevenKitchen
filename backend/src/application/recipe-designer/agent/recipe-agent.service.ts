@@ -30,7 +30,7 @@ import {
 import { RecipeDesignerService } from '../recipe-designer.service';
 import { buildSystemPrompt } from './prompt';
 import { CitationRegistry } from './citation-registry';
-import { judgeAnswer } from './citation-judge';
+import { judgeAnswer, rewriteAnswer } from './citation-judge';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
 import { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
@@ -245,29 +245,76 @@ export class RecipeAgentService implements OnModuleInit {
       const calls = response.toolCalls ?? [];
       if (calls.length === 0) {
         if (response.content) {
-          await this.appendMessage(sessionId, 'ASSISTANT', response.content);
-          const audit = citations.audit(response.content);
-          const semantic = await judgeAnswer({
+          let finalContent = response.content;
+          let audit = citations.audit(finalContent);
+          const onUsage = (usage: {
+            promptTokens: number;
+            completionTokens: number;
+          }) => {
+            void this.recordUsage(
+              sessionId,
+              usage.promptTokens,
+              usage.completionTokens,
+            );
+          };
+          let semantic = await judgeAnswer({
             config,
-            answer: response.content,
+            answer: finalContent,
             registry: citations,
-            onUsage: (usage) => {
-              void this.recordUsage(
-                sessionId,
-                usage.promptTokens,
-                usage.completionTokens,
-              );
-            },
+            onUsage,
           });
+          const beforeUncited = semantic.uncitedClinicalClaims;
+          let rewrite: Record<string, unknown> | null = null;
+          if (beforeUncited > 0) {
+            const rewritten = await rewriteAnswer({
+              config,
+              answer: finalContent,
+              uncited: semantic.uncitedClinical,
+              registry: citations,
+              onUsage,
+            });
+            if (
+              rewritten.answer &&
+              rewritten.answer.trim() &&
+              rewritten.answer !== finalContent
+            ) {
+              finalContent = rewritten.answer;
+              audit = citations.audit(finalContent);
+              semantic = await judgeAnswer({
+                config,
+                answer: finalContent,
+                registry: citations,
+                onUsage,
+              });
+              rewrite = {
+                attempted: true,
+                changed: true,
+                beforeUncited,
+                afterUncited: semantic.uncitedClinicalClaims,
+                error: rewritten.error ?? null,
+              };
+            } else {
+              rewrite = {
+                attempted: true,
+                changed: false,
+                beforeUncited,
+                afterUncited: beforeUncited,
+                error: rewritten.error ?? null,
+              };
+            }
+          }
+          await this.appendMessage(sessionId, 'ASSISTANT', finalContent);
           const gate = {
-            mode: 'observe',
-            passed: semantic.uncitedClinicalClaims === 0,
+            mode: 'rewrite',
+            passed:
+              semantic.uncitedClinicalClaims === 0 &&
+              audit.invalidCitationCount === 0,
             uncitedClinicalClaims: semantic.uncitedClinicalClaims,
             uncitedClinical: semantic.uncitedClinical,
           };
           await this.prisma.recipeDesignAgentSession.update({
             where: { id: sessionId },
-            data: { citationAudit: { ...audit, semantic, gate } as any },
+            data: { citationAudit: { ...audit, semantic, gate, rewrite } as any },
           });
         }
         await this.markWaiting(sessionId);

@@ -268,6 +268,73 @@ async function judgeSupport(input: {
   return results;
 }
 
+
+const REWRITE_SYSTEM_PROMPT = `你是食谱 Agent 的引用修订器。只修订最终答案。
+规则：
+1. 保留原结构、已有 [K#] 和已有事实；
+2. 对“未引用临床结论”：删除、改成“待核对”，或改写成已有 [K#] 支持的表述；
+3. 不得新增未提供的 [K#]，不得新增未引用的事实；
+4. 不要解释修订过程。
+只输出 JSON：{"answer":"修订后的完整回答"}。`;
+
+export interface RewriteResult {
+  answer: string;
+  error?: string;
+}
+
+export async function rewriteAnswer(input: {
+  config: {
+    baseUrl: string;
+    model: string;
+    reviewModel: string;
+    apiKey: string;
+    requestTimeoutMs: number;
+  };
+  answer: string;
+  uncited: UncitedClinicalClaim[];
+  registry: CitationRegistry;
+  onUsage?: (usage: { promptTokens: number; completionTokens: number }) => void;
+}): Promise<RewriteResult> {
+  if (input.uncited.length === 0) {
+    return { answer: input.answer };
+  }
+  try {
+    const availableCitations = input.registry.records().map((record) => ({
+      citationId: record.citationId,
+      source: record.sourceName ?? record.sourceId,
+      section: record.sectionTitle,
+      page: record.pageStart,
+      text: record.text.slice(0, 500),
+    }));
+    const response = await callDeepSeekJson({
+      baseUrl: input.config.baseUrl,
+      model: input.config.model,
+      apiKey: input.config.apiKey,
+      requestTimeoutMs: input.config.requestTimeoutMs,
+      systemPrompt: REWRITE_SYSTEM_PROMPT,
+      userPayload: {
+        answer: input.answer,
+        uncitedClinical: input.uncited,
+        availableCitations,
+      },
+      temperature: 0.2,
+      maxTokens: 4096,
+      extraBody: { thinking: { type: 'disabled' } },
+      onUsage: input.onUsage,
+    });
+    const answer = String(response.answer ?? '').trim();
+    if (!answer) {
+      return { answer: input.answer, error: '修订器没有返回内容' };
+    }
+    return { answer };
+  } catch (error) {
+    return {
+      answer: input.answer,
+      error: `修订失败：${(error as Error)?.message ?? '未知错误'}`,
+    };
+  }
+}
+
 /**
  * 两遍裁判：
  * 1. 看完整回答，拆 claim，标出“临床/数值”以及有没有 [K#]；

@@ -125,6 +125,18 @@
             <text class="field-hint">（截图：{{ editing.spec || '未读到' }}）</text>
           </text>
         </view>
+        <view v-if="canSyncSkuName" class="sync-box">
+          <view class="sync-head">
+            <text class="sync-title">同步修改采购商品名</text>
+            <switch
+              :checked="editing.syncSkuName"
+              color="#b4453a"
+              @change="onSyncSkuNameChange"
+            />
+          </view>
+          <text class="sync-diff">{{ editing.skuName }} → {{ editing.rawName.trim() }}</text>
+          <text class="sync-tip">默认不改名。只有打开开关并保存，才会修改商品名并记录改名日志。</text>
+        </view>
         <view class="field tap">
           <text class="field-label">算个人采购</text>
           <switch :checked="editing.isPersonal" color="#2f6b4f" @change="onPersonalChange" />
@@ -251,6 +263,18 @@ const ingredientOptions = computed<IngredientOption[]>(() => {
   }
   return result;
 });
+const canSyncSkuName = computed(() => {
+  const current = editing.value;
+  if (!current) return false;
+  return (
+    Boolean(current.procurementSkuId) &&
+    current.procurementSkuId !== current._origSkuId &&
+    Boolean(current.skuName) &&
+    Boolean(current.rawName?.trim()) &&
+    current.skuName !== current.rawName.trim()
+  );
+});
+
 const skuOptions = computed(() => {
   if (!editing.value?.ingredientId) return [];
   return (
@@ -392,6 +416,8 @@ function openEdit(line: OrderImportLineView) {
     ingredientName: ingredient?.ingredientName || '',
     skuName: sku?.name || '',
     skuModel: sku?.productModel || '',
+    _origSkuId: line.procurementSkuId || '',
+    syncSkuName: false,
     _origTotal: line.aiLineTotal ?? line.lineTotal ?? 0,
     _origQty: line.qty,
     _origPrice: line.unitPrice,
@@ -435,7 +461,12 @@ function chooseSku(sku: any) {
   editing.value.procurementSkuId = sku.id;
   editing.value.skuName = sku.name;
   editing.value.isPersonal = false;
+  editing.value.syncSkuName = false;
   pickerMode.value = 'none';
+}
+
+function onSyncSkuNameChange(event: any) {
+  editing.value.syncSkuName = Boolean(event?.detail?.value);
 }
 
 function onPersonalChange(event: any) {
@@ -479,6 +510,21 @@ function goNewSku() {
 
 async function saveEdit() {
   if (saving.value || !editing.value || !activeImport.value) return;
+
+  if (canSyncSkuName.value && editing.value.syncSkuName) {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '确认修改商品名？',
+        content: `「${editing.value.skuName}」将改名为「${editing.value.rawName.trim()}」，并写入改名记录。`,
+        confirmText: '确认改名',
+        confirmColor: '#b4453a',
+        success: (res) => resolve(Boolean(res.confirm)),
+        fail: () => resolve(false),
+      });
+    });
+    if (!confirmed) return;
+  }
+
   const qty = parseNumber(editing.value.qtyText);
   const price = parseNumber(editing.value.priceText);
   let total = parseNumber(editing.value.totalText);
@@ -501,6 +547,7 @@ async function saveEdit() {
           ? null
           : editing.value.procurementSkuId || null,
         isPersonal: editing.value.isPersonal,
+        syncSkuName: canSyncSkuName.value && editing.value.syncSkuName === true,
       },
     );
     if (res.code !== 0) throw new Error(res.message || '保存失败');
@@ -974,6 +1021,44 @@ function emptySummary() {
 
 .field-input.unit {
   flex: 0 0 120rpx;
+}
+
+.sync-box {
+  margin-top: 20rpx;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  background: #fbf3ef;
+  border: 1rpx solid #e6c9c2;
+}
+
+.sync-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.sync-title {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #8a3d33;
+}
+
+.sync-diff {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 21rpx;
+  color: #6b6653;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.sync-tip {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 20rpx;
+  color: #8a8574;
+  line-height: 1.5;
 }
 
 .field-hint {

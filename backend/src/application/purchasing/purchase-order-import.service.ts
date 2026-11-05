@@ -348,6 +348,8 @@ export class PurchaseOrderImportService {
       unitPrice?: number | null;
       lineTotal?: number | null;
       isPersonal?: boolean;
+      /** 只有员工显式勾选才同步商品名 */
+      syncSkuName?: boolean;
     };
   }): Promise<any> {
     const line = await this.prisma.purchaseOrderImportLine.findFirst({
@@ -458,13 +460,15 @@ export class PurchaseOrderImportService {
     const targetSkuId = dto.procurementSkuId ?? null;
     const skuChanged =
       Boolean(targetSkuId) && targetSkuId !== line.procurementSkuId;
-    const desiredSkuName = skuChanged
+    // 默认不改名：换商品只是匹配，改名必须由员工在界面上显式同意（并二次确认）。
+    const shouldRename = skuChanged && dto.syncSkuName === true;
+    const desiredSkuName = shouldRename
       ? line.rawName.trim().slice(0, 200)
       : '';
 
     const updated = await this.prisma.$transaction(async (tx) => {
       // 手动匹配现有商品时，把商品名同步成截图里的名字，并留一条改名记录。
-      if (targetSkuId && skuChanged && desiredSkuName) {
+      if (targetSkuId && shouldRename && desiredSkuName) {
         const sku = await tx.procurementSku.findUnique({
           where: { id: targetSkuId },
           select: { name: true },
@@ -492,7 +496,7 @@ export class PurchaseOrderImportService {
     });
 
     const view = this.toLineView(updated);
-    return skuChanged && desiredSkuName
+    return shouldRename && desiredSkuName
       ? { ...view, renamedTo: desiredSkuName }
       : view;
   }

@@ -74,6 +74,11 @@ export class UpdateOrderImportLineDto {
   @IsOptional()
   @IsBoolean()
   isPersonal?: boolean;
+
+  /** 显式同意把采购商品改名（默认 false，防止换商品时误改） */
+  @IsOptional()
+  @IsBoolean()
+  syncSkuName?: boolean;
 }
 
 export class ConfirmOrderImportsDto {

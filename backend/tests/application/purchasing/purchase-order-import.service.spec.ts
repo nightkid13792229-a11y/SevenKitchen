@@ -427,7 +427,7 @@ describe('PurchaseOrderImportService', () => {
       importId: 'import-1',
       lineId: 'line-1',
       userId: 'user-1',
-      dto: { procurementSkuId: 'sku-liver' },
+      dto: { procurementSkuId: 'sku-liver', syncSkuName: true },
     });
 
     expect(prisma.procurementSku.update).toHaveBeenCalledWith({
@@ -443,6 +443,41 @@ describe('PurchaseOrderImportService', () => {
         changedById: 'user-1',
       }),
     });
+  });
+
+  it('只换商品、不勾选同步时，绝不动商品名', async () => {
+    prisma.purchaseOrderImportLine.findFirst.mockResolvedValue({
+      id: 'line-1',
+      importId: 'import-1',
+      ingredientId: 'ing-1',
+      procurementSkuId: null,
+      rawName: '【鲜宰】猪肝 200g',
+      import: { purchaseListId: 'list-1', status: 'DRAFT', channel: '沃尔玛' },
+    });
+    prisma.procurementSku.findFirst.mockResolvedValue({
+      id: 'sku-liver',
+      name: '猪肝',
+    });
+    prisma.purchaseOrderImportLine.update.mockResolvedValue({
+      id: 'line-1',
+      lineNo: 1,
+      rawName: '【鲜宰】猪肝 200g',
+      ingredientId: 'ing-1',
+      procurementSkuId: 'sku-liver',
+      isPersonal: false,
+      editedByUser: true,
+    });
+
+    const result = await service.updateLine({
+      importId: 'import-1',
+      lineId: 'line-1',
+      userId: 'user-1',
+      dto: { procurementSkuId: 'sku-liver' },
+    });
+
+    expect(prisma.procurementSku.update).not.toHaveBeenCalled();
+    expect(prisma.procurementSkuNameChange.create).not.toHaveBeenCalled();
+    expect(result.renamedTo).toBeUndefined();
   });
 
   it('带 COS key 时用签名链接下载私有截图', async () => {

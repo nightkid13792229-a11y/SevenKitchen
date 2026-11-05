@@ -54,19 +54,8 @@
         <text class="meta-channel" @tap="changeChannel">渠道 {{ activeImport.channel }} ›</text>
       </view>
 
-      <view v-if="activeImport && activeWarnings.length > 0" class="warn-banner">
-        <text v-for="(line, index) in activeWarnings" :key="index" class="warn-line">{{ line }}</text>
-      </view>
-
-      <view
-        v-if="activeImport && activeWarnings.length > 0"
-        class="ack-row"
-        @tap="toggleAck"
-      >
-        <view class="ack-box" :class="{ checked: activeAcked }">
-          <text v-if="activeAcked" class="ack-tick">✓</text>
-        </view>
-        <text class="ack-text">我已对照原图核对过，金额和截图没问题，可以生成</text>
+      <view v-if="activeImport && activeIncompleteNotice" class="warn-banner">
+        <text class="warn-line">{{ activeIncompleteNotice }}</text>
       </view>
 
       <view v-if="activeImport" class="lines">
@@ -337,13 +326,9 @@ let loadedOnce = false;
 
 const activeImport = computed(() => imports.value[activeIndex.value] || null);
 const activeSummary = computed(() => activeImport.value?.summary ?? emptySummary());
-/** 已勾选「我已对照原图核对」的识别记录（按 id 记，切 Tab 不丢） */
-const ackedImportIds = ref<string[]>([]);
-const activeWarnings = computed(() =>
-  activeImport.value ? checkImport(activeImport.value).warnings : [],
-);
-const activeAcked = computed(() =>
-  activeImport.value ? ackedImportIds.value.includes(activeImport.value.id) : false,
+/** 只有模型说「可能没读全」才单独提示；金额差只写在顶部那一行，不再单独解释 */
+const activeIncompleteNotice = computed(
+  () => (activeImport.value ? checkImport(activeImport.value).incompleteNotice : null),
 );
 
 /**
@@ -501,13 +486,6 @@ const blockReason = computed(() => {
       return `${label}：${issue}`;
     }
   }
-  // 金额/完整性有提示时，逐单勾选「我已核对」才放行：只要求看一眼，不拦死。
-  const unacked = imports.value.find(
-    (item) =>
-      checkImport(item).warnings.length > 0 &&
-      !ackedImportIds.value.includes(item.id),
-  );
-  if (unacked) return `${unacked.channel}：请勾选「我已核对」`;
   if (matchedLineCount.value === 0) return '还没有可生成的采购记录';
   return '';
 });
@@ -522,25 +500,13 @@ function checkImport(item: OrderImportView) {
 }
 
 function amountStateText(item: OrderImportView): string {
-  const check = checkImport(item);
-  if (check.warnings.length === 0) return '金额一致';
-  if (item.incomplete) return '模型说可能没读全';
-  if (check.diff === null) return '没读到商品金额';
-  return `与商品小计差 ¥${Math.abs(check.diff).toFixed(2)}`;
-}
-
-function toggleAck() {
-  const current = activeImport.value;
-  if (!current) return;
-  ackedImportIds.value = activeAcked.value
-    ? ackedImportIds.value.filter((id) => id !== current.id)
-    : [...ackedImportIds.value, current.id];
+  return checkImport(item).statusText;
 }
 
 function importIssue(item: OrderImportView): string | null {
   const active = item.lines.filter((line) => !line.isPersonal);
   const pending = item.summary.unmatched + item.summary.needsSku;
-  if (pending > 0) return `还有 ${pending} 行待处理`;
+  if (pending > 0) return `${pending} 行待处理`;
   const badQty = active.filter((line) => !line.qty || line.qty <= 0);
   if (badQty.length > 0) return `${badQty.length} 行缺数量`;
   const badAmount = active.filter(
@@ -622,9 +588,8 @@ function stateClass(line: OrderImportLineView) {
 }
 
 function tabState(item: OrderImportView) {
-  const issue = importIssue(item);
-  if (!issue) return '可生成';
-  return issue.length > 8 ? `${issue.slice(0, 8)}…` : issue;
+  // 不再截断：文案本身已经压短，宁可换行也别把「待处理」吃掉一半
+  return importIssue(item) ?? '可生成';
 }
 
 function openEdit(line: OrderImportLineView) {
@@ -1059,7 +1024,9 @@ function emptySummary() {
 
 .tab-state {
   font-size: 20rpx;
+  line-height: 1.4;
   color: #2f6b4f;
+  word-break: break-all;
 }
 
 .summary {
@@ -1132,47 +1099,6 @@ function emptySummary() {
 
 .warn-line {
   display: block;
-}
-
-.warn-line + .warn-line {
-  margin-top: 6rpx;
-}
-
-.ack-row {
-  display: flex;
-  align-items: flex-start;
-  padding: 2rpx 6rpx 14rpx;
-}
-
-.ack-box {
-  width: 32rpx;
-  height: 32rpx;
-  flex: 0 0 32rpx;
-  border-radius: 8rpx;
-  border: 2rpx solid #c9bda0;
-  background: #fffdf7;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 2rpx 12rpx 0 0;
-}
-
-.ack-box.checked {
-  background: #1e3a2f;
-  border-color: #1e3a2f;
-}
-
-.ack-tick {
-  font-size: 20rpx;
-  line-height: 1;
-  color: #f7f4e9;
-}
-
-.ack-text {
-  flex: 1;
-  font-size: 21rpx;
-  line-height: 1.5;
-  color: #4a4638;
 }
 
 .lines {

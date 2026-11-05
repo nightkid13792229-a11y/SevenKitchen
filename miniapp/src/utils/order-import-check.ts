@@ -5,8 +5,12 @@
  * 「商品小计」与「各行合计」对不上，用公式硬判只会误报（盒马特价单就是例子：
  * 小计按原价、商品行按实付价，差 1 元但截图完整）。
  *
- * 所以这里只把差额算出来，交给页面提示，员工勾选「我已核对」后照常生成，
- * 不再拦人。差额会随明细一起留在库里，报销审核时仍然看得到。
+ * 这里的产出只用于「显示」，不参与任何拦截：
+ *   · statusText：顶部一行，说清金额状态（一致 / 差多少 / 没读到）
+ *   · incompleteNotice：只有模型说「可能没读全」时才有值，单独一条轻提示
+ *
+ * 差额本身不落库也不拦人 —— 点「生成采购记录」就是员工的判断；
+ * 报销审核页会重新算一遍差额，提示审核人抽查原图。
  */
 
 const TOLERANCE = 0.011;
@@ -25,8 +29,10 @@ export interface OrderImportAmountInput {
 export interface OrderImportAmountCheck {
   /** 商品小计 − 各行合计；没读到商品小计时为 null */
   diff: number | null;
-  /** 为空表示金额上没发现问题，不需要员工确认 */
-  warnings: string[];
+  /** 顶部一行状态：金额一致 / 与商品小计差 ¥x / 没读到商品金额 */
+  statusText: string;
+  /** 模型认为没读完整时的一句话；否则 null */
+  incompleteNotice: string | null;
 }
 
 export function checkOrderImportAmount(
@@ -35,27 +41,23 @@ export function checkOrderImportAmount(
   const lineSum = round2(
     input.lineTotals.reduce((sum, value) => sum + (value ?? 0), 0),
   );
-  const warnings: string[] = [];
 
-  if (input.incomplete) {
-    warnings.push(
-      input.incompleteReason?.trim() ||
-        '模型认为这张截图没读完整，请对照原图确认',
-    );
-  }
+  const incompleteNotice = input.incomplete
+    ? input.incompleteReason?.trim() ||
+      '模型认为这张截图没读完整，请对照原图确认'
+    : null;
 
-  let diff: number | null = null;
   if (input.subtotal === null || input.subtotal === undefined) {
-    warnings.push('没读到商品金额，无法自动核对是否读全，请对照原图确认');
-  } else {
-    diff = round2(input.subtotal - lineSum);
-    if (Math.abs(diff) > TOLERANCE) {
-      warnings.push(
-        `各行合计 ¥${lineSum.toFixed(2)}，商品小计 ¥${round2(input.subtotal).toFixed(2)}，` +
-          `差 ¥${Math.abs(diff).toFixed(2)}；可能是优惠、特价或包装费，请对照原图确认`,
-      );
-    }
+    return { diff: null, statusText: '没读到商品金额', incompleteNotice };
   }
 
-  return { diff, warnings };
+  const diff = round2(input.subtotal - lineSum);
+  const consistent = Math.abs(diff) <= TOLERANCE;
+  return {
+    diff,
+    statusText: consistent
+      ? '金额一致'
+      : `与商品小计差 ¥${Math.abs(diff).toFixed(2)}`,
+    incompleteNotice,
+  };
 }

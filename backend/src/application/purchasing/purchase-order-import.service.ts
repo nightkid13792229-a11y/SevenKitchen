@@ -296,7 +296,9 @@ export class PurchaseOrderImportService {
                     procurementSkuId: line.procurementSkuId,
                     matchSource: line.needsNewSku ? 'NEW_SKU' : 'AUTO',
                     matchConfidence: line.confidence,
-                    isPersonal: false,
+                    // 没匹配到原料 = 系统不认识这个商品，先按个人采购放行（2026-11-05 老板定）：
+                    // 员工要报销，误标会自己改回来；不再让这种行堵住整笔生成。
+                    isPersonal: !line.ingredientId,
                     purchaseItemId: line.purchaseItemId,
                   })),
                 },

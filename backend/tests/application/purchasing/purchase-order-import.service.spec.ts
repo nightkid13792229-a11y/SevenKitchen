@@ -107,7 +107,7 @@ describe('PurchaseOrderImportService', () => {
           id: `line-${index + 1}`,
           ...line,
           procurementSkuId: line.procurementSkuId ?? null,
-          isPersonal: false,
+          isPersonal: line.isPersonal ?? false,
           editedByUser: false,
         })),
       }),
@@ -151,6 +151,53 @@ describe('PurchaseOrderImportService', () => {
     // 模型原始金额要留着，供「原图金额」对照
     expect(result.lines[0].aiLineTotal).toBe(2.99);
     expect(result.summary.matchedAmount).toBe(2.99);
+  });
+
+  it('没匹配到原料的行先标成个人采购，不再堵住生成（员工要报销会自己改回来）', async () => {
+    model.callDeepSeekJson.mockResolvedValue({
+      channel: '盒马鲜生',
+      orderNo: '456',
+      orderTime: '2026-11-05 10:29',
+      items: [
+        {
+          name: '可口可乐 汽水 330ml*6',
+          qty: 1,
+          unit: '组',
+          unitPrice: 10.9,
+          lineTotal: 10.9,
+        },
+        {
+          name: '盒马日日鲜 生菜 约500g',
+          spec: '约500g/份',
+          qty: 1,
+          unit: '份',
+          unitPrice: 2.99,
+          lineTotal: 2.99,
+        },
+      ],
+      subtotal: 13.89,
+      paid: 13.89,
+      incomplete: false,
+      note: '',
+    });
+
+    const [result] = await service.importFromScreenshots({
+      purchaseListId: 'list-1',
+      userId: 'user-1',
+      imageUrls: ['https://img.example.com/b.jpg'],
+    });
+
+    const cola = result.lines.find((line: any) =>
+      String(line.rawName).includes('可口可乐'),
+    );
+    const lettuce = result.lines.find((line: any) =>
+      String(line.rawName).includes('生菜'),
+    );
+    expect(cola.isPersonal).toBe(true);
+    expect(cola.state).toBe('PERSONAL');
+    // 认得出的原料还是照常匹配，不要被一起标成个人
+    expect(lettuce.isPersonal).toBe(false);
+    expect(lettuce.state).toBe('MATCHED');
   });
 
   it('同一张图重复导入 → 拒绝', async () => {

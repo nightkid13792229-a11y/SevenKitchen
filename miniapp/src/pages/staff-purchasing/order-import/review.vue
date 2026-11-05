@@ -1045,7 +1045,8 @@ function openEdit(line: OrderImportLineView) {
     // 截图上的小计：不再让人手改，只拿来对账（2026-11-05）
     _origTotal: line.aiLineTotal ?? line.lineTotal ?? null,
     _origQtyText: line.qty === null ? '' : String(line.qty),
-    _origPriceText: line.unitPrice === null ? '' : String(line.unitPrice),
+    // 跟输入框里的格式保持一致（价格按两位小数显示），否则一打开就算「已改动」
+    _origPriceText: line.unitPrice === null ? '' : money(line.unitPrice),
   };
 }
 

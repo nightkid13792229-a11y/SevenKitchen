@@ -121,3 +121,15 @@ describe('order import edit sheet · 真机反馈修复（2026-11-05 晚）', ()
     expect(source).toContain('if (editing.value?.isPersonal) return;');
   });
 });
+
+describe('order import edit sheet · 脏检查', () => {
+  it('刚打开没改任何东西时，关掉不该弹「还没保存」', () => {
+    // 价格输入框显示两位小数，原始值也必须按同一格式存，否则一比就认为改过
+    expect(source).toContain(
+      "_origPriceText: line.unitPrice === null ? '' : money(line.unitPrice)",
+    );
+    expect(source).not.toContain(
+      "_origPriceText: line.unitPrice === null ? '' : String(line.unitPrice)",
+    );
+  });
+});

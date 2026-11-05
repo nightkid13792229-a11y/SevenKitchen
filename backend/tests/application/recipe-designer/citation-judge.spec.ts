@@ -1,6 +1,6 @@
 import { callDeepSeekJson } from '../../../src/application/recipe-designer/deepseek-chat';
 import { CitationRegistry } from '../../../src/application/recipe-designer/agent/citation-registry';
-import { judgeAnswer, rewriteAnswer } from '../../../src/application/recipe-designer/agent/citation-judge';
+import { citationGatePassed, judgeAnswer, rewriteAnswer } from '../../../src/application/recipe-designer/agent/citation-judge';
 
 jest.mock('../../../src/application/recipe-designer/deepseek-chat', () => ({
   callDeepSeekJson: jest.fn(),
@@ -137,5 +137,32 @@ describe('rewriteAnswer 修订器', () => {
     });
     expect(result.answer).toBe('原文');
     expect(mockedCall).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('citationGatePassed', () => {
+  it('未引用、无效引用、unsupported 都为 0 才通过', () => {
+    expect(
+      citationGatePassed({
+        uncitedClinicalClaims: 0,
+        invalidCitationCount: 0,
+        unsupported: 0,
+      }),
+    ).toBe(true);
+    expect(
+      citationGatePassed({
+        uncitedClinicalClaims: 0,
+        invalidCitationCount: 0,
+        unsupported: 1,
+      }),
+    ).toBe(false);
+    expect(
+      citationGatePassed({
+        uncitedClinicalClaims: 1,
+        invalidCitationCount: 0,
+        unsupported: 0,
+      }),
+    ).toBe(false);
   });
 });

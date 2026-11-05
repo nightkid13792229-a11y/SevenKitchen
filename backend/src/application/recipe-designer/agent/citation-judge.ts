@@ -142,8 +142,23 @@ const SUPPORT_SYSTEM_PROMPT = `你是知识库引用裁判。只判断“给定�
 - 数字对但用法错（单位、域、分期、因果）也要判 partial 或 unsupported。
 - 允许直接算术和单位换算：原文给出数值，claim 只是比较大小、判断是否超出范围、做单位换算（如 5.2 > 4.6、mg/dL ↔ mmol/L），且不引入新事实时，可以判 supported；不要求原文显式写出比较句。
 - 引用段落给出某阶段的目标值，claim 只是把患者数值与该目标做大小比较时，可以判 supported；不要求原文在比较句旁再次复述分期。
+- 如果原文写“Stage 2 Same as Stage 1”或类似“与上一期相同”，视为 Stage 2 继承 Stage 1 的目标；不要因为目标值只写在 Stage 1 就判 unsupported。
+- 患者数值可以来自 claim，不要求原文出现该患者数值；只要目标值在原文里即可。
 - 不允许用常识补全原文没有的内容。
 输出 JSON：{"verdict":"supported|partial|unsupported|not_checkable","reason":"一句话理由","quote":"原文中支持或不支持的那一句"}。`;
+
+/** 引用门槛：未引用、无效引用、语义不支持，三者都为 0 才通过。 */
+export function citationGatePassed(input: {
+  uncitedClinicalClaims: number;
+  invalidCitationCount: number;
+  unsupported: number;
+}): boolean {
+  return (
+    input.uncitedClinicalClaims === 0 &&
+    input.invalidCitationCount === 0 &&
+    input.unsupported === 0
+  );
+}
 
 function normalizeVerdict(value: unknown): JudgeVerdict {
   const verdict = String(value ?? '').trim();

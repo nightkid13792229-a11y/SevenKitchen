@@ -30,7 +30,11 @@ import {
 import { RecipeDesignerService } from '../recipe-designer.service';
 import { buildSystemPrompt } from './prompt';
 import { CitationRegistry } from './citation-registry';
-import { judgeAnswer, rewriteAnswer } from './citation-judge';
+import {
+  citationGatePassed,
+  judgeAnswer,
+  rewriteAnswer,
+} from './citation-judge';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
 import { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
@@ -306,10 +310,14 @@ export class RecipeAgentService implements OnModuleInit {
           await this.appendMessage(sessionId, 'ASSISTANT', finalContent);
           const gate = {
             mode: 'rewrite',
-            passed:
-              semantic.uncitedClinicalClaims === 0 &&
-              audit.invalidCitationCount === 0,
+            passed: citationGatePassed({
+              uncitedClinicalClaims: semantic.uncitedClinicalClaims,
+              invalidCitationCount: audit.invalidCitationCount,
+              unsupported: semantic.unsupported,
+            }),
             uncitedClinicalClaims: semantic.uncitedClinicalClaims,
+            unsupported: semantic.unsupported,
+            partial: semantic.partial,
             uncitedClinical: semantic.uncitedClinical,
           };
           await this.prisma.recipeDesignAgentSession.update({

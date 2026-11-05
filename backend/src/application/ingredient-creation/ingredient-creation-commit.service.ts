@@ -754,7 +754,12 @@ export class IngredientCreationCommitService {
     ingredientName: string,
   ): Promise<void> {
     const lockKey = ingredientName.toLowerCase();
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+    await tx.$queryRaw<{ locked: boolean }[]>`
+      WITH lock AS (
+        SELECT pg_advisory_xact_lock(hashtext(${lockKey}))
+      )
+      SELECT true AS "locked" FROM lock
+    `;
   }
 
   /** 读齐所有档案引用的来源记录；引用不存在或已停用就不提交（不猜来源、不落空 dataSource）。 */

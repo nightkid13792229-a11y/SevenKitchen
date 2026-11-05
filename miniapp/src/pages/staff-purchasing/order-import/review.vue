@@ -31,11 +31,11 @@
               <text class="tab-state">{{ tabState(item) }}</text>
             </view>
             <image
-              v-if="index === activeIndex && item.imageUrls && item.imageUrls.length > 0"
+              v-if="item.imageUrls && item.imageUrls.length > 0"
               class="tab-thumb"
               :src="item.imageUrls[0]"
               mode="aspectFill"
-              @tap.stop="previewOriginal(0)"
+              @tap.stop="previewOriginal(item)"
             />
           </view>
         </scroll-view>
@@ -774,8 +774,8 @@ async function pickMore() {
   }
 }
 
-function previewOriginal(current: number) {
-  const urls = activeImport.value?.imageUrls ?? [];
+function previewOriginal(item: OrderImportView, current = 0) {
+  const urls = item.imageUrls ?? [];
   if (urls.length === 0) return;
   uni.previewImage({ urls, current: urls[current] });
 }
@@ -1302,7 +1302,7 @@ function emptySummary() {
   min-width: 0;
 }
 
-/* 只有选中的那张卡才带缩略图：一眼知道自己在看哪张原图 */
+/* 每张卡都带缩略图：一眼对上原图，点小图直接看大图 */
 .tab-thumb {
   width: 76rpx;
   height: 76rpx;

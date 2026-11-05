@@ -172,3 +172,34 @@ describe('order import edit sheet · 选商品时别忘了在配什么', () => {
     expect(source).toContain('const pickerContextMeta = computed');
   });
 });
+
+describe('选商品抽屉只列这笔订单渠道的商品（2026-11-06）', () => {
+  it('抽屉按订单渠道筛商品，别的渠道不再混进来', () => {
+    expect(source).toContain("from '../../../utils/purchase-channel'");
+    expect(source).toContain('keepSkuForChannel');
+    expect(source).toContain('const pickerOrderChannel = computed');
+  });
+
+  it('订单还没确认渠道时不打开抽屉，先让人定渠道', () => {
+    // 渠道是商品匹配的门禁：没渠道就不知道筛哪一家
+    expect(source).toContain("title: '先选这笔订单的渠道'");
+  });
+
+  it('抽屉顶部写明这笔是哪个渠道，不靠人猜', () => {
+    expect(source).toContain('picker-channel-tag');
+    expect(source).toContain('这笔在');
+  });
+
+  it('同渠道没有商品时说清楚，并引导去新建（新建会带渠道）', () => {
+    expect(source).toContain('这个渠道下还没有采购商品');
+  });
+
+  it('新建采购商品带着这笔的渠道过去', () => {
+    const starter = source.slice(
+      source.indexOf('function goNewSku'),
+      source.indexOf('async function saveEdit'),
+    );
+    expect(starter).toContain('channel=');
+    expect(starter).toContain('pickerOrderChannel.value');
+  });
+});

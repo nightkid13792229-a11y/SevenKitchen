@@ -265,6 +265,7 @@ import {
 } from './procurement-sku-form';
 import { applyDraftToForm } from './procurement-sku-draft-apply';
 import { decodeRouteParam } from './route-param';
+import { prefillChannel } from '../../utils/purchase-channel';
 import { buildShotView, type ShotState } from './procurement-sku-shot';
 import { MULTIPACK_UNITS, shouldOpenMultipack } from './procurement-sku-multipack';
 
@@ -485,6 +486,13 @@ onLoad(async (options: Record<string, string>) => {
     } catch {
       uni.showToast({ title: '渠道清单加载失败，请重试', icon: 'none' });
     }
+
+    // 从识别结果页过来时带着那笔订单的渠道：预选它（还能改）
+    const requestedChannel = prefillChannel(
+      decodeRouteParam(options?.channel),
+      allChannels.value,
+    );
+    if (requestedChannel) form.value.purchaseChannel = requestedChannel;
 
     const res: any = await getProcurementSkuFormOptions(ingredientId.value);
     if (res?.code === 0 && res.data) {

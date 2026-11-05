@@ -364,6 +364,9 @@
             <text class="picker-context-name">{{ editing?.rawName || '这一行' }}</text>
           </view>
           <text v-if="pickerContextMeta" class="picker-context-meta">{{ pickerContextMeta }}</text>
+          <text v-if="pickerOrderChannel" class="picker-channel-tag">
+            这笔在 {{ pickerOrderChannel }} · 只显示这一家的商品
+          </text>
         </view>
 
         <view class="picker-search-wrap">
@@ -413,7 +416,9 @@
               @tap="pickerIngredientId = ingredient.ingredientId"
             >
               <text class="cascade-name">{{ ingredient.ingredientName }}</text>
-              <text class="cascade-count">{{ ingredient.skus.length }}</text>
+              <text class="cascade-count" :class="{ empty: ingredient.skus.length === 0 }">
+                {{ ingredient.skus.length }}
+              </text>
             </view>
           </scroll-view>
 
@@ -440,7 +445,10 @@
               <text v-else class="picker-go">选择</text>
             </view>
             <view v-if="pickerIngredientId && pickerSkuOptions.length === 0" class="cascade-empty">
-              <text>这道原料还没有采购商品</text>
+              <text>「{{ pickerOrderChannel }}」这个渠道下还没有采购商品</text>
+              <text class="cascade-empty-hint">
+                在别家买的不要挂到这笔上，重建一个属于这个渠道的商品更准。
+              </text>
             </view>
             <view v-if="pickerIngredientId" class="picker-create" @tap="goNewSku">
               <view class="picker-create-main">
@@ -479,6 +487,7 @@ import { orderImportIncompleteNotice } from '../../../utils/order-import-check';
 import { sortPurchaseItemsForDisplay } from '../food-category-order';
 import { firstBlockedImport } from '../../../utils/order-import-block';
 import { isSpecMismatch, specWarningText } from '../../../utils/order-import-spec';
+import { keepSkuForChannel } from '../../../utils/purchase-channel';
 import {
   IMPORT_FEE_TOLERANCE,
   feeStatusText,
@@ -660,6 +669,10 @@ const feeEditPreview = computed(() => {
   }
   return `合计 ¥${money(expected)}，和实付 ¥${money(item.paid)} 差 ¥${Math.abs(gap).toFixed(2)}`;
 });
+
+/** 这笔订单的渠道：选商品只列这一家的商品（渠道是商品的身份之一） */
+const pickerOrderChannel = computed(() => activeImport.value?.channel || '');
+
 const ingredientOptions = computed<IngredientOption[]>(() => {
   // 「匹配原料」抽屉列的是本次清单里的原料，顺序跟采购详情页一致：
   // 食材（按 CFCT 分类）→ 补剂 → 包装材料（2026-11-05 定）
@@ -670,18 +683,23 @@ const ingredientOptions = computed<IngredientOption[]>(() => {
     const ingredientId = item.ingredientId || item.ingredient?.id;
     if (!ingredientId || seen.has(ingredientId)) continue;
     seen.add(ingredientId);
+    const skus = extractProcurementSkuOptions(item).map((sku) => ({
+      id: sku.id as string,
+      name: sku.name,
+      productModel: sku.productModel,
+      purchaseChannel: sku.purchaseChannel,
+      purchaseToBaseRatio:
+        typeof sku.purchaseToBaseRatio === 'number' ? sku.purchaseToBaseRatio : null,
+    }));
     result.push({
       ingredientId,
       ingredientName: item.ingredientName || item.ingredient?.name || '原料',
       baseUnit: item.ingredientBaseUnit || item.baseUnit || 'G',
-      skus: extractProcurementSkuOptions(item).map((sku) => ({
-        id: sku.id as string,
-        name: sku.name,
-        productModel: sku.productModel,
-        purchaseChannel: sku.purchaseChannel,
-        purchaseToBaseRatio:
-          typeof sku.purchaseToBaseRatio === 'number' ? sku.purchaseToBaseRatio : null,
-      })),
+      // 2026-11-06：每道原料下只留**这笔订单这个渠道**的采购商品。
+      // 渠道是商品的身份之一（同一件东西在盒马和山姆是两个商品，包装/规格/价格都不同），
+      // 以前把所有渠道的商品平铺出来，盒马的单子里混着农贸市场、山姆、沃尔玛，
+      // 顺手一点就把记录挂到了别家的商品上。原料本身保留（同渠道没商品时还能去新建）。
+      skus: keepSkuForChannel(skus, pickerOrderChannel.value),
     });
   }
   return result;
@@ -1218,6 +1236,11 @@ async function saveFeeEdit() {
 
 function openSkuPicker() {
   if (editing.value?.isPersonal) return;
+  // 商品是按渠道列的：这笔还没定渠道时先别让人挑商品（页面顶部有渠道门禁）
+  if (!pickerOrderChannel.value) {
+    uni.showToast({ title: '先选这笔订单的渠道', icon: 'none' });
+    return;
+  }
   skuSearch.value = '';
   // 打开就停在「这行现在匹配的原料」上：绝大多数时候右边一眼就能找到
   pickerIngredientId.value =
@@ -1302,7 +1325,9 @@ function goNewSku() {
       `/pages/staff-purchasing/procurement-sku-create?` +
       `ingredientId=${encodeURIComponent(ingredient.ingredientId)}` +
       `&ingredientName=${encodeURIComponent(ingredient.ingredientName)}` +
-      `&baseUnit=${encodeURIComponent(ingredient.baseUnit)}`,
+      `&baseUnit=${encodeURIComponent(ingredient.baseUnit)}` +
+      // 新建的商品就属于这笔的渠道，带过去直接预选，省得再选一次（还能改）
+      `&channel=${encodeURIComponent(pickerOrderChannel.value)}`,
   });
 }
 
@@ -2557,6 +2582,11 @@ function emptySummary() {
   color: #8a8574;
 }
 
+/* 这个渠道下没有商品：数字淡掉，别让人以为漏加载了 */
+.cascade-count.empty {
+  color: #c8c2b1;
+}
+
 .cascade-right {
   flex: 1;
   min-width: 0;
@@ -2567,6 +2597,14 @@ function emptySummary() {
   text-align: center;
   font-size: 22rpx;
   color: #8a8574;
+}
+
+.cascade-empty-hint {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  line-height: 1.5;
+  color: #a9a495;
 }
 
 .picker-context {
@@ -2602,6 +2640,17 @@ function emptySummary() {
   margin-top: 6rpx;
   font-size: 20rpx;
   color: #6b6653;
+}
+
+/* 这笔是哪个渠道：抽屉里只列这一家的商品，写出来免得人以为商品少了 */
+.picker-channel-tag {
+  display: inline-block;
+  margin-top: 8rpx;
+  padding: 3rpx 12rpx;
+  border-radius: 999rpx;
+  background: #1e3a2f;
+  color: #f7f2e3;
+  font-size: 19rpx;
 }
 
 .picker-search-wrap {

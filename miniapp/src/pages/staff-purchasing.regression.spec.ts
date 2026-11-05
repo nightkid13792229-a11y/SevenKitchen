@@ -379,4 +379,12 @@ describe('staff purchasing purchase record form', () => {
       "v-if=\"purchaseList.status === 'COMPLETED' && purchaseList.completedAt\"",
     );
   });
+
+  it('orders food items by the CFCT category order agreed on 2026-11-05', () => {
+    // 食材组按 CFCT 15 类顺序排；补剂/包材没有这套分类，保持原顺序
+    expect(detailSource).toContain("from './food-category-order'");
+    expect(detailSource).toContain(
+      "type === 'FOOD' ? sortFoodItemsByCfctOrder(groupItems) : groupItems",
+    );
+  });
 });

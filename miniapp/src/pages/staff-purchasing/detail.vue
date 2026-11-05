@@ -443,6 +443,7 @@ import StaffQuantityText from '../../components/staff/StaffQuantityText.vue';
 import StaffBottomBar from '../../components/staff/StaffBottomBar.vue';
 import { formatStaffQuantity } from '../../utils/staff-quantity';
 import { canAddProcurementSku } from './procurement-sku-entry';
+import { sortFoodItemsByCfctOrder } from './food-category-order';
 import {
   chooseOrderShots,
   importOrderShots,
@@ -589,10 +590,16 @@ const groupedItems = computed(() => {
   // 按定义的顺序返回分组
   return typeOrder
     .filter((type) => groups.has(type) && (groups.get(type) || []).length > 0)
-    .map((type) => ({
-      type,
-      items: groups.get(type)!,
-    }));
+    .map((type) => {
+      const groupItems = groups.get(type)!;
+      return {
+        type,
+        // 食材组按 CFCT 标准分类顺序排（2026-11-05 定）；
+        // 补剂、包装材料没有这套分类，保持接口返回的先后。
+        items:
+          type === 'FOOD' ? sortFoodItemsByCfctOrder(groupItems) : groupItems,
+      };
+    });
 });
 
 // 原料状态筛选（全部 / 待采购 / 已录入 / 无需采购 / 库存足够）

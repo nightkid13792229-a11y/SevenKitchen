@@ -345,12 +345,12 @@
               </view>
               <text class="picker-go">选择</text>
             </view>
-            <view class="picker-row" @tap="goNewSku">
-              <view>
-                <text class="picker-name">＋ 新建采购商品</text>
-                <text class="picker-sub">挂到「{{ editing?.ingredientName || '当前原料' }}」下</text>
+            <view class="picker-create" @tap="goNewSku">
+              <view class="picker-create-main">
+                <text class="picker-create-plus">+</text>
+                <text class="picker-create-name">新建采购商品</text>
               </view>
-              <text class="picker-go">去新建</text>
+              <text class="picker-create-go">去新建 ›</text>
             </view>
           </template>
         </scroll-view>
@@ -1832,6 +1832,50 @@ function emptySummary() {
 
 .picker-go {
   font-size: 22rpx;
+  color: #7a5c28;
+  font-weight: 600;
+}
+
+/* 新建采购商品：不是商品行，用底色卡片 + 圆形加号单独成块 */
+.picker-create {
+  margin: 22rpx 0 4rpx;
+  padding: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f2e6c6;
+  border: 1rpx solid #dcc493;
+  border-radius: 18rpx;
+}
+
+.picker-create-main {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.picker-create-plus {
+  flex: none;
+  width: 34rpx;
+  height: 34rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #7a5c28;
+  color: #f7f4e9;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.picker-create-name {
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #6b4d16;
+}
+
+.picker-create-go {
+  font-size: 21rpx;
   color: #7a5c28;
   font-weight: 600;
 }

@@ -32,11 +32,11 @@
           <text class="summary-v">{{ money(activeImport.paid ?? activeImport.subtotal) }}</text>
         </view>
         <view class="summary-cell">
-          <text class="summary-k">算采购</text>
+          <text class="summary-k">采购金额</text>
           <text class="summary-v">{{ money(activeSummary.matchedAmount) }}</text>
         </view>
         <view class="summary-cell">
-          <text class="summary-k">个人</text>
+          <text class="summary-k">个人采购</text>
           <text class="summary-v">{{ money(activeSummary.personalAmount) }}</text>
         </view>
         <view class="summary-cell">

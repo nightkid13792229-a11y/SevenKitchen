@@ -989,11 +989,9 @@ model Ingredient {
   nutritionProfile              Json?                         @map("nutrition_profile")
   purchaseUnit                  String                        @map("purchase_unit") @db.VarChar(50)
   purchaseToBaseRatio           Float                         @map("purchase_to_base_ratio")
+  /// 唯一的原料价格（2026-11-06「单一来源」改造）：
+  /// 只在采购报销时写入，算价一律读它。
   currentPricePerPurchaseUnit   Decimal                       @map("current_price_per_purchase_unit") @db.Decimal(14, 6)
-  /// 创建时录入的采购单价（只写一次、永不自动更新）。
-  /// 成品鲜食算价：优先取「最近一次采购价」，没有采购历史时用它兜底。
-  initialPricePerPurchaseUnit   Decimal?                      @map("initial_price_per_purchase_unit") @db.Decimal(14, 6)
-  effectivePricePerPurchaseUnit Decimal?                      @map("effective_price_per_purchase_unit") @db.Decimal(14, 6)
   weightG                       Float?                        @map("weight_g")
   maxCapacityG                  Float?                        @map("max_capacity_g")
   safetyStock                   Float?                        @map("safety_stock")

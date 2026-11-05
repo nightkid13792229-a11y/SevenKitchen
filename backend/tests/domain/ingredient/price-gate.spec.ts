@@ -1,4 +1,7 @@
-import { evaluatePriceGate } from '../../../src/domain/ingredient/price-gate';
+import {
+  evaluatePriceGate,
+  wouldWipeExistingPrice,
+} from '../../../src/domain/ingredient/price-gate';
 
 /**
  * 价格写入闸（2026-11-06 单一来源改造）
@@ -112,5 +115,27 @@ describe('evaluatePriceGate', () => {
     });
     expect(result.deltaRate).toBeCloseTo(1, 6);
     expect(result.multiple).toBeCloseTo(2, 6);
+  });
+});
+
+/**
+ * 2026-11-06 红薯事故：后台一次「原料保存」把已有价格写成了 0，
+ * 而编辑原料走的是直接写档案价，不经过采购报销的三道闸。
+ */
+describe('wouldWipeExistingPrice', () => {
+  it('有价改成 0 / 负数 → 视为误清零', () => {
+    expect(wouldWipeExistingPrice(0.02, 0)).toBe(true);
+    expect(wouldWipeExistingPrice(0.02, -1)).toBe(true);
+    expect(wouldWipeExistingPrice(0.02, Number.NaN)).toBe(true);
+  });
+
+  it('本来就是 0 的原料可以继续是 0（新原料还没定价）', () => {
+    expect(wouldWipeExistingPrice(0, 0)).toBe(false);
+    expect(wouldWipeExistingPrice(0, 0.02)).toBe(false);
+  });
+
+  it('正常改价不算清零', () => {
+    expect(wouldWipeExistingPrice(0.02, 0.017)).toBe(false);
+    expect(wouldWipeExistingPrice(0.02, 0.000001)).toBe(false);
   });
 });

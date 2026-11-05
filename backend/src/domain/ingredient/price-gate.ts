@@ -112,3 +112,23 @@ export function evaluatePriceGate(input: PriceGateInput): PriceGateResult {
 
   return { action: 'APPLY', reason: null, deltaRate, multiple };
 }
+
+
+/**
+ * 是否属于「把已有价格清零」的操作（2026-11-06 红薯事故后补）。
+ *
+ * 采购报销那条路有三道闸，但后台「编辑原料」是直接写档案价，绕过所有闸。
+ * 已经有价格的原料被改成 0 或负数，一律视为误操作。
+ */
+export function wouldWipeExistingPrice(
+  previousPrice: number,
+  nextPrice: number,
+): boolean {
+  const previous = Number(previousPrice);
+  const next = Number(nextPrice);
+  return (
+    Number.isFinite(previous) &&
+    previous > 0 &&
+    (!Number.isFinite(next) || next <= 0)
+  );
+}

@@ -107,8 +107,6 @@ export class PrismaIngredientRepository implements IngredientRepository {
       purchaseUnit: ingredient.purchaseUnit,
       purchaseToBaseRatio: ingredient.purchaseToBaseRatio,
       currentPricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit,
-      // 2026-11-06：生效价已与当前价合并，旧列跟着当前价写，等阶段 C 删除
-      effectivePricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit,
       weightG: ingredient.weightG,
       maxCapacityG: ingredient.maxCapacityG,
       safetyStock: ingredient.safetyStock,

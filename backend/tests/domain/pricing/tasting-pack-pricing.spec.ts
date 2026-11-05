@@ -191,7 +191,7 @@ describe('PricingService.calculateTastingPackPrice', () => {
     // 两道的 80g 袋合并成一行，袋数相加
     expect(
       packagingService.calculatePackagingCostForPlan,
-    ).toHaveBeenCalledWith([{ packageSpecG: 80, packageCount: 4 }], 320);
+    ).toHaveBeenCalledWith([{ packageSpecG: 80, packageCount: 4 }], 320, null);
 
     // 成本合计 14.4 + 7.2 + 0.64 + 5 = 27.24
     expect(result.totalProductCost).toBeCloseTo(27.24, 6);

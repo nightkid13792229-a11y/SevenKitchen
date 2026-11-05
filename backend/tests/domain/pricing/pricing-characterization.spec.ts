@@ -254,7 +254,7 @@ describe('PricingService 特征化：现有鲜食单菜定价必须保持不变'
     );
     expect(
       packagingService.calculatePackagingCostForPlan,
-    ).toHaveBeenCalledWith([{ packageSpecG: 100, packageCount: 20 }], 2000);
+    ).toHaveBeenCalledWith([{ packageSpecG: 100, packageCount: 20 }], 2000, null);
 
     // ---- 成本合计与售价 ----
     // 145.5866… + 32.1 + 4.28 + 14 = 145.9666…

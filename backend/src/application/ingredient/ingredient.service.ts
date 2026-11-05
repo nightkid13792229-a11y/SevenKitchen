@@ -6,6 +6,7 @@
 import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import { Ingredient } from '../../domain/ingredient';
+import { wouldWipeExistingPrice } from '../../domain/ingredient/price-gate';
 import {
   IngredientType,
   BaseUnit,
@@ -276,6 +277,15 @@ export class IngredientService {
       0;
     const nextEffectivePricePerPurchaseUnit = nextCurrentPricePerPurchaseUnit;
 
+    // 2026-11-06：编辑表单直接写档案价，不经过采购报销那道闸，
+    // 于是「红薯被一次保存写成 0 元」这种事闸门拦不住。这里补一道：
+    // 已经有价格的原料，不允许被改成 0（要停用请关采购 / DIY 开关）。
+    this.assertPriceNotWipedToZero({
+      ingredientName: existing.name,
+      previousPrice: existing.currentPricePerPurchaseUnit,
+      nextPrice: nextCurrentPricePerPurchaseUnit,
+    });
+
     const updated = new Ingredient(
       existing.id,
       dto.name !== undefined ? dto.name : existing.name,
@@ -344,6 +354,12 @@ export class IngredientService {
       throw new NotFoundException(`Ingredient not found: ${id}`);
     }
 
+    this.assertPriceNotWipedToZero({
+      ingredientName: existing.name,
+      previousPrice: existing.currentPricePerPurchaseUnit,
+      nextPrice: dto.currentPricePerPurchaseUnit,
+    });
+
     const ingredient = await this.ingredientRepository.updatePrice(
       id,
       dto.currentPricePerPurchaseUnit,
@@ -354,6 +370,29 @@ export class IngredientService {
 
     // 2026-11-06：生效价已并入当前价，只写一次
     return ingredient;
+  }
+
+  /**
+   * 禁止把已有的价格改成 0（2026-11-06 红薯事故后补的闸）。
+   *
+   * 采购报销那条路有完整的三道闸，但后台「编辑原料」是直接写档案价，
+   * 绕过了所有闸。红薯就是这样在 01:31 被一次保存写成 0 元的，
+   * 而它还在多个已发布食谱里，成本和售价跟着一起变。
+   *
+   * 允许的场景：新原料建档时就是 0（还没定价）。
+   */
+  private assertPriceNotWipedToZero(params: {
+    ingredientName: string;
+    previousPrice: number;
+    nextPrice: number;
+  }): void {
+    if (wouldWipeExistingPrice(params.previousPrice, params.nextPrice)) {
+      const previous = Number(params.previousPrice ?? 0);
+      throw new BadRequestException(
+        `「${params.ingredientName}」当前单价是 ${previous}，不能改成 0 或负数。` +
+          `如果不希望它再参与算价，请关闭「参与采购 / DIY」开关，而不是把价格清零。`,
+      );
+    }
   }
 
   /**

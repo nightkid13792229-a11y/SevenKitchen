@@ -423,12 +423,15 @@ perBaseUnitCost(pricePerPurchaseUnit, purchaseToBaseRatio): number
 | E | 迁移 `20261106031000`：删除补剂/包材 35 条遗留采购商品副本（停用 + 无来源 + 0 采购记录引用才删） | ✅ |
 | E | 迁移 `20261106032000`：采购单位「克」→「g」、名称去首尾空格、重复档案改名标记 | ✅ |
 | E | 报销详情价格列改为自适应小数位（元/克 不再显示成 ¥0.00） | ✅ |
+| C | 迁移 `20261106040000`：先建备份表，再删 `effective_price_per_purchase_unit` / `initial_price_per_purchase_unit` | ✅ |
+| — | 迁移 `20261106041000`：修复「红薯」被误写成 0 元（只在仍为 0 时按最后一次批准的调价回填） | ✅ |
+| — | 后台「编辑原料」补一道闸：已有价格不允许被改成 0 / 负数（`wouldWipeExistingPrice`） | ✅ |
 
 ### 有意未做
 
 | 项 | 原因 |
 |---|---|
-| **阶段 C：drop `effective_price_per_purchase_unit` / `initial_price_per_purchase_unit`** | 删列后无法回滚到旧代码（旧 Prisma 模型会 select 这两列）。等 B 阶段在生产跑够观察期再单独发一次迁移 |
+| ~~阶段 C~~ | 已在首批上线当天完成（老板 2026-11-06 决定不等观察期）；备份表 `ingredient_price_backup_20261106` 保留，回填与回滚 SQL 写在迁移注释里 |
 | `Ingredient` 构造参数里的 `effectivePricePerPurchaseUnit` / `initialPricePerPurchaseUnit` | 已标记 `@deprecated`、不再参与任何计算；删参数要改 26 处构造调用，风险大于收益，留到 C 阶段一起做 |
 | 人工费标定（工时 / 损耗率） | 老板 2026-11-06 明确暂时不管 |
 | E1 补货试运行 | 需要老板/库房配合建一张真实补货单 |
@@ -461,3 +464,4 @@ perBaseUnitCost(pricePerPurchaseUnit, purchaseToBaseRatio): number
 | 2026-11-06 | 补充 §3.4 三类原料对照、§3.5 补货线；阶段 E 增 E10–E13；澄清包材在阶段 A 无行为变化 |
 | 2026-11-06 | 核清「补剂/包材无采购商品层」与「采购开关、推荐商品不参与算价」（§3.4、§3.4.1） |
 | 2026-11-06 | 首批落地（阶段 A/B/D/E），补实施记录；阶段 C 留待观察期后单独发布 |
+| 2026-11-06 | 阶段 C 完成（备份后删两列）；修复红薯 0 元并补「编辑原料不得清零」闸 |

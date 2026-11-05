@@ -268,10 +268,25 @@ export class ReimbursementReviewService {
           }
         }
 
+        // 商品金额与各行合计的差额：优惠/特价/包装费都会造成差额，
+        // 员工确认后照常生成，这里只把差额算出来给审核提示用。
+        const subtotal =
+          item.subtotal === null || item.subtotal === undefined
+            ? NaN
+            : Number(item.subtotal);
+        const lineSum = item.lines.reduce(
+          (sum, line) => sum + Number(line.lineTotal ?? 0),
+          0,
+        );
+        const amountDiff = Number.isFinite(subtotal)
+          ? Math.round((subtotal - lineSum) * 100) / 100
+          : null;
+
         return {
           channel: item.channel,
           orderNo: item.orderNo,
           incomplete: item.incomplete,
+          amountDiff,
           personalAmount: item.lines
             .filter((line) => line.isPersonal)
             .reduce((sum, line) => sum + Number(line.lineTotal ?? 0), 0),

@@ -46,12 +46,23 @@
       </view>
 
       <view v-if="activeImport" class="meta-row">
-        <text class="meta-text">共 {{ activeImport.lines.length }} 行 · {{ activeImport.incomplete ? '截图不完整' : '金额自检通过' }}</text>
+        <text class="meta-text">共 {{ activeImport.lines.length }} 行 · {{ amountStateText(activeImport) }}</text>
         <text class="meta-channel" @tap="changeChannel">渠道 {{ activeImport.channel }} ›</text>
       </view>
 
-      <view v-if="activeImport && activeImport.incomplete" class="warn-banner">
-        <text>{{ activeImport.incompleteReason || '这张截图没读完整，请展开全部商品后重新上传' }}</text>
+      <view v-if="activeImport && activeWarnings.length > 0" class="warn-banner">
+        <text v-for="(line, index) in activeWarnings" :key="index" class="warn-line">{{ line }}</text>
+      </view>
+
+      <view
+        v-if="activeImport && activeWarnings.length > 0"
+        class="ack-row"
+        @tap="toggleAck"
+      >
+        <view class="ack-box" :class="{ checked: activeAcked }">
+          <text v-if="activeAcked" class="ack-tick">✓</text>
+        </view>
+        <text class="ack-text">我已对照原图核对过，金额和截图没问题，可以生成</text>
       </view>
 
       <view v-if="activeImport" class="lines">
@@ -218,6 +229,7 @@ import {
   updateOrderImportLine,
 } from '../api/purchasing';
 import type { OrderImportLineView, OrderImportView } from '../api/purchasing';
+import { checkOrderImportAmount } from '../../../utils/order-import-check';
 
 interface IngredientOption {
   ingredientId: string;
@@ -241,6 +253,14 @@ let loadedOnce = false;
 
 const activeImport = computed(() => imports.value[activeIndex.value] || null);
 const activeSummary = computed(() => activeImport.value?.summary ?? emptySummary());
+/** 已勾选「我已对照原图核对」的识别记录（按 id 记，切 Tab 不丢） */
+const ackedImportIds = ref<string[]>([]);
+const activeWarnings = computed(() =>
+  activeImport.value ? checkImport(activeImport.value).warnings : [],
+);
+const activeAcked = computed(() =>
+  activeImport.value ? ackedImportIds.value.includes(activeImport.value.id) : false,
+);
 const ingredientOptions = computed<IngredientOption[]>(() => {
   const items = list.value?.items || [];
   const seen = new Set<string>();
@@ -300,12 +320,43 @@ const blockReason = computed(() => {
       return `${label}：${issue}`;
     }
   }
+  // 金额/完整性有提示时，逐单勾选「我已核对」才放行：只要求看一眼，不拦死。
+  const unacked = imports.value.find(
+    (item) =>
+      checkImport(item).warnings.length > 0 &&
+      !ackedImportIds.value.includes(item.id),
+  );
+  if (unacked) return `${unacked.channel}：请勾选「我已核对」`;
   if (matchedLineCount.value === 0) return '还没有可生成的采购记录';
   return '';
 });
 
+function checkImport(item: OrderImportView) {
+  return checkOrderImportAmount({
+    subtotal: item.subtotal ?? null,
+    incomplete: item.incomplete,
+    incompleteReason: item.incompleteReason ?? null,
+    lineTotals: item.lines.map((line) => line.lineTotal ?? null),
+  });
+}
+
+function amountStateText(item: OrderImportView): string {
+  const check = checkImport(item);
+  if (check.warnings.length === 0) return '金额一致';
+  if (item.incomplete) return '模型说可能没读全';
+  if (check.diff === null) return '没读到商品金额';
+  return `与商品小计差 ¥${Math.abs(check.diff).toFixed(2)}`;
+}
+
+function toggleAck() {
+  const current = activeImport.value;
+  if (!current) return;
+  ackedImportIds.value = activeAcked.value
+    ? ackedImportIds.value.filter((id) => id !== current.id)
+    : [...ackedImportIds.value, current.id];
+}
+
 function importIssue(item: OrderImportView): string | null {
-  if (item.incomplete) return '截图不完整，请重传';
   const active = item.lines.filter((line) => !line.isPersonal);
   const pending = item.summary.unmatched + item.summary.needsSku;
   if (pending > 0) return `还有 ${pending} 行待处理`;
@@ -315,13 +366,6 @@ function importIssue(item: OrderImportView): string | null {
     (line) => line.lineTotal === null || line.lineTotal === undefined,
   );
   if (badAmount.length > 0) return `${badAmount.length} 行缺金额`;
-  if (item.subtotal !== null) {
-    const sum = item.lines.reduce((acc, line) => acc + (line.lineTotal ?? 0), 0);
-    const diff = Math.round((sum - item.subtotal) * 100) / 100;
-    if (Math.abs(diff) > 0.011) {
-      return `各行合计与截图差 ¥${Math.abs(diff).toFixed(2)}`;
-    }
-  }
   return null;
 }
 const canConfirm = computed(() => blockReason.value === '' && !submitted.value);
@@ -815,6 +859,51 @@ function emptySummary() {
 .warn-banner.small {
   font-size: 19rpx;
   margin: 12rpx 0 0;
+}
+
+.warn-line {
+  display: block;
+}
+
+.warn-line + .warn-line {
+  margin-top: 6rpx;
+}
+
+.ack-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 2rpx 6rpx 14rpx;
+}
+
+.ack-box {
+  width: 32rpx;
+  height: 32rpx;
+  flex: 0 0 32rpx;
+  border-radius: 8rpx;
+  border: 2rpx solid #c9bda0;
+  background: #fffdf7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2rpx 12rpx 0 0;
+}
+
+.ack-box.checked {
+  background: #1e3a2f;
+  border-color: #1e3a2f;
+}
+
+.ack-tick {
+  font-size: 20rpx;
+  line-height: 1;
+  color: #f7f4e9;
+}
+
+.ack-text {
+  flex: 1;
+  font-size: 21rpx;
+  line-height: 1.5;
+  color: #4a4638;
 }
 
 .lines {

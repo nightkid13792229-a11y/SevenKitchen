@@ -203,13 +203,17 @@ describe('PurchaseOrderImportService', () => {
     );
   });
 
-  it('金额被改到与截图合计不符时，确认被拒', async () => {
+  it('各行金额与截图合计对不上（员工已核对）时，允许确认生成', async () => {
     prisma.purchaseOrderImport.findMany.mockResolvedValue([
       {
         id: 'import-1',
         purchaseListId: 'list-1',
         status: 'DRAFT',
+        incomplete: false,
         subtotal: 100,
+        channel: '盒马',
+        orderTime: null,
+        imageKeys: [],
         lines: [
           {
             id: 'line-1',
@@ -223,13 +227,26 @@ describe('PurchaseOrderImportService', () => {
         ],
       },
     ]);
+    prisma.purchaseOrderImport.updateMany.mockResolvedValue({ count: 1 });
+    prisma.procurementSku.findUnique.mockResolvedValue({
+      id: 'sku-1',
+      ingredientId: 'ing-1',
+      name: '生菜 500g/袋',
+      purchaseChannel: '盒马鲜生',
+      purchaseUnit: '袋',
+      purchaseToBaseRatio: 500,
+      ingredient: { baseUnit: 'G', name: '生菜', purchaseToBaseRatio: 500 },
+    });
+    prisma.purchaseItem.findFirst.mockResolvedValue({ id: 'item-1' });
+    prisma.purchaseRecord.create.mockResolvedValue({ id: 'record-1' });
+    prisma.purchaseOrderImportLine.update.mockResolvedValue({});
 
-    await expect(service.confirm(['import-1'], 'user-1')).rejects.toThrow(
-      '对不上',
-    );
+    await expect(service.confirm(['import-1'], 'user-1')).resolves.toEqual({
+      createdCount: 1,
+    });
   });
 
-  it('截图被判为不完整时，确认被拒（折叠图不能生成）', async () => {
+  it('模型判了截图不完整（员工已核对）时，允许确认生成', async () => {
     prisma.purchaseOrderImport.findMany.mockResolvedValue([
       {
         id: 'import-1',
@@ -237,13 +254,39 @@ describe('PurchaseOrderImportService', () => {
         status: 'DRAFT',
         incomplete: true,
         subtotal: 207.06,
-        lines: [],
+        channel: '盒马',
+        orderTime: null,
+        imageKeys: [],
+        lines: [
+          {
+            id: 'line-1',
+            rawName: '白虾仁',
+            isPersonal: false,
+            ingredientId: 'ing-1',
+            procurementSkuId: 'sku-1',
+            lineTotal: 29.99,
+            qty: 1,
+          },
+        ],
       },
     ]);
+    prisma.purchaseOrderImport.updateMany.mockResolvedValue({ count: 1 });
+    prisma.procurementSku.findUnique.mockResolvedValue({
+      id: 'sku-1',
+      ingredientId: 'ing-1',
+      name: '白虾仁 200g/袋',
+      purchaseChannel: '盒马鲜生',
+      purchaseUnit: '袋',
+      purchaseToBaseRatio: 200,
+      ingredient: { baseUnit: 'G', name: '白虾仁', purchaseToBaseRatio: 200 },
+    });
+    prisma.purchaseItem.findFirst.mockResolvedValue({ id: 'item-1' });
+    prisma.purchaseRecord.create.mockResolvedValue({ id: 'record-1' });
+    prisma.purchaseOrderImportLine.update.mockResolvedValue({});
 
-    await expect(service.confirm(['import-1'], 'user-1')).rejects.toThrow(
-      '没读完整',
-    );
+    await expect(service.confirm(['import-1'], 'user-1')).resolves.toEqual({
+      createdCount: 1,
+    });
   });
 
   it('数量缺失或为 0 时，确认被拒', async () => {

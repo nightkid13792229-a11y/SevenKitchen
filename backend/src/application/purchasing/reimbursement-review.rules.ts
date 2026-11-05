@@ -26,6 +26,8 @@ export interface ReviewImportInput {
   channel: string;
   orderNo: string | null;
   incomplete: boolean;
+  /** 商品小计 − 各行合计；没读到商品小计时为 null。差额由员工确认后生成的，这里只做提示 */
+  amountDiff: number | null;
   personalAmount: number;
   /** 只是换原料/标个人，金额没动 */
   matchEditedLines: number;
@@ -82,8 +84,26 @@ export function evaluateReimbursement(
   if (incompleteImports.length > 0) {
     findings.push({
       code: 'INCOMPLETE_SCREENSHOT',
-      level: 'HIGH',
-      message: `有 ${incompleteImports.length} 笔订单截图没读完整（商品金额对不上），采购记录可能少记`,
+      level: 'WARN',
+      message: `有 ${incompleteImports.length} 笔订单截图模型认为没读完整，员工确认后已生成，请抽查原图`,
+    });
+  }
+
+  // 商品金额与各行合计的差额：优惠/特价/包装费都会造成差额，只提示不拦截。
+  const diffImports = input.imports.filter(
+    (item) => item.amountDiff !== null && Math.abs(item.amountDiff) > 0.011,
+  );
+  if (diffImports.length > 0) {
+    const maxDiff = round2(
+      diffImports.reduce(
+        (max, item) => Math.max(max, Math.abs(item.amountDiff ?? 0)),
+        0,
+      ),
+    );
+    findings.push({
+      code: 'AMOUNT_DIFF',
+      level: 'WARN',
+      message: `有 ${diffImports.length} 笔订单的商品金额与各行合计最大差 ¥${maxDiff.toFixed(2)}（员工确认后已生成），请抽查原图`,
     });
   }
 

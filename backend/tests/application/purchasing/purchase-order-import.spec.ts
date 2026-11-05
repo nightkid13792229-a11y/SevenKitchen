@@ -1,6 +1,5 @@
 import {
   parseOrderDraft,
-  isLineSetConsistent,
   toNumberOrNull,
 } from '../../../src/application/purchasing/purchase-order-parse';
 import {
@@ -49,21 +48,31 @@ describe('parseOrderDraft', () => {
     expect(draft.amountsConsistent).toBe(true);
   });
 
-  it('行小计之和与商品金额对不上 → 判为不完整并写清差额', () => {
+  it('各行合计与商品金额差 1 元（优惠/特价/包装费）→ 不判不完整，只记金额对不上', () => {
     const draft = parseOrderDraft({
       ...raw,
-      items: [{ name: '白虾仁', qty: 1, unitPrice: 29.99 }],
-      subtotal: 207.06,
+      items: [{ name: '可口可乐 330ml*6', qty: 1, unitPrice: 147.33, lineTotal: 147.33 }],
+      subtotal: 148.33,
     });
     expect(draft.amountsConsistent).toBe(false);
-    expect(draft.incomplete).toBe(true);
-    expect(draft.incompleteReason).toContain('177.07');
+    expect(draft.incomplete).toBe(false);
+    expect(draft.incompleteReason).toBeNull();
   });
 
-  it('商品金额缺失也算不完整', () => {
-    const draft = parseOrderDraft({ ...raw, subtotal: null });
+  it('模型明确说截图不完整 → 仍判不完整，理由用模型给的', () => {
+    const draft = parseOrderDraft({
+      ...raw,
+      incomplete: true,
+      incompleteReason: '商品列表被折叠，只看到 3 行',
+    });
     expect(draft.incomplete).toBe(true);
-    expect(draft.incompleteReason).toContain('没读到商品金额');
+    expect(draft.incompleteReason).toBe('商品列表被折叠，只看到 3 行');
+  });
+
+  it('商品金额没读到 → 不判不完整，只是金额校验不通过', () => {
+    const draft = parseOrderDraft({ ...raw, subtotal: null });
+    expect(draft.amountsConsistent).toBe(false);
+    expect(draft.incomplete).toBe(false);
   });
 
   it('金额字符串带 ¥ 和逗号也能读', () => {
@@ -75,14 +84,6 @@ describe('parseOrderDraft', () => {
     expect(parseOrderDraft({ ...raw, channel: '山姆会员店' }).channel).toBe('山姆');
     expect(parseOrderDraft({ ...raw, channel: 'Walmart' }).channel).toBe('沃尔玛');
     expect(parseOrderDraft({ ...raw, channel: '菜市场' }).channel).toBe('其他');
-  });
-});
-
-describe('isLineSetConsistent', () => {
-  it('合计一致返回 true，差一分钱以上返回 false', () => {
-    expect(isLineSetConsistent([{ lineTotal: 10 }, { lineTotal: 5 }], 15)).toBe(true);
-    expect(isLineSetConsistent([{ lineTotal: 10 }], 15)).toBe(false);
-    expect(isLineSetConsistent([{ lineTotal: 10 }], null)).toBe(true);
   });
 });
 

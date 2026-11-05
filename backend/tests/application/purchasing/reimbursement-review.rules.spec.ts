@@ -26,6 +26,7 @@ const base = (overrides: Partial<ReviewClaimInput> = {}): ReviewClaimInput => ({
       channel: '盒马',
       orderNo: '512738841924500221',
       incomplete: false,
+      amountDiff: 0,
       personalAmount: 102.4,
       matchEditedLines: 0,
       amountEditedLines: 0,
@@ -49,12 +50,21 @@ describe('evaluateReimbursement', () => {
     expect(result.findings.map((item) => item.code)).toContain('NO_RECEIPT');
   });
 
-  it('截图不完整 → 高风险', () => {
+  it('截图不完整（员工确认后生成）→ 只提示中风险，不直接判高风险', () => {
     const result = evaluateReimbursement(
       base({ imports: [{ ...base().imports[0], incomplete: true }] }),
     );
-    expect(result.riskLevel).toBe('HIGH');
+    expect(result.riskLevel).toBe('MEDIUM');
     expect(result.findings[0].code).toBe('INCOMPLETE_SCREENSHOT');
+  });
+
+  it('商品金额与各行合计有差额 → 中风险提示并写明差额', () => {
+    const result = evaluateReimbursement(
+      base({ imports: [{ ...base().imports[0], amountDiff: 1 }] }),
+    );
+    expect(result.riskLevel).toBe('MEDIUM');
+    const finding = result.findings.find((item) => item.code === 'AMOUNT_DIFF');
+    expect(finding?.message).toContain('1.00');
   });
 
   it('只是换原料/标个人 → 只提示，不升风险', () => {

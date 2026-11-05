@@ -32,7 +32,7 @@ import {
   PURCHASE_REIMBURSEMENT_AGENT_PURPOSE,
 } from '../nutrition-governance/agent-provider-config.service';
 import type { DeepSeekChatOptions } from '../recipe-designer/deepseek-chat';
-import { parseOrderDraft, isLineSetConsistent } from './purchase-order-parse';
+import { parseOrderDraft } from './purchase-order-parse';
 import {
   matchOrderLines,
   normalizeText,
@@ -59,7 +59,7 @@ export interface PurchaseOrderImportModelPort {
   ): Promise<Record<string, unknown>>;
 }
 
-export const PURCHASE_ORDER_IMPORT_PROMPT_VERSION = '2026-11-04.2';
+export const PURCHASE_ORDER_IMPORT_PROMPT_VERSION = '2026-11-05.1';
 
 /** 一张图最多切 6 段；再长就让员工截短一点 */
 const MAX_CHUNKS = 6;
@@ -107,13 +107,14 @@ const SYSTEM_PROMPT = `你是采购助理。用户会给你同一笔商超订单
 }
 
 规则：
-1. 商品金额（盒马叫商品小计、山姆叫商品总金额、沃尔玛叫商品金额）应当等于各行小计之和。你必须自己把各行金额加一遍，再和截图上的合计对比。
-2. 如果加出来和截图合计不一致，说明有商品行没读到或被折叠（例如底部写"共18件"但只显示几行）。此时 incomplete=true，并在 note 里写清楚差多少钱。
-3. 件数校验要看数量之和，不是行数之和。
-4. 图上出现"¥29.00 ×2"这类写法时，29.00 是单价，行小计 = 单价 × 数量。请用订单合计校验你的判断。
-5. 金额一律输出数字（元），不要带 ¥ 符号、不要千分位。
-6. 读不到的字段一律给 null，绝不编造。不要输出姓名、电话、地址。
-7. 图上的「称重退差价」只是标签，不代表真的发生退款；只有出现「补差退款 X 元」这种带金额的文字，才把 weightAdjustment.exists 置为 true。`;
+1. 商品金额（盒马叫商品小计、山姆叫商品总金额、沃尔玛叫商品金额）是截图上的合计，照抄。可以自己把各行金额加一遍做参考，但对不上不代表漏读。
+2. 合计数经常天然对不上：满减/优惠/优惠券、会员价或特价（商品行显示实付价、商品小计按原价）、环保包装费、运费、称重补差退款都会造成差额。这些都不算漏读，不要因此把 incomplete 置为 true。
+3. 只有当确实看到商品行被折叠（出现「展开」「查看更多」，或标注的总件数明显多于读到的行数）时，才把 incomplete 置为 true，并在 note 里写清楚看到了什么。
+4. 件数校验要看数量之和，不是行数之和。
+5. 图上出现"¥29.00 ×2"这类写法时，29.00 是单价，行小计 = 单价 × 数量。
+6. 金额一律输出数字（元），不要带 ¥ 符号、不要千分位。
+7. 读不到的字段一律给 null，绝不编造。不要输出姓名、电话、地址。
+8. 图上的「称重退差价」只是标签，不代表真的发生退款；只有出现「补差退款 X 元」这种带金额的文字，才把 weightAdjustment.exists 置为 true。`;
 
 interface RecognizedOrder {
   url: string;
@@ -982,7 +983,6 @@ export class PurchaseOrderImportService {
   }
 
   private assertImportReady(row: {
-    incomplete: boolean;
     lines: Array<{
       rawName: string;
       isPersonal: boolean;
@@ -991,14 +991,10 @@ export class PurchaseOrderImportService {
       lineTotal: unknown;
       qty: unknown;
     }>;
-    subtotal: unknown;
   }): void {
-    if (row.incomplete) {
-      throw new BadRequestException(
-        '这张截图没读完整（商品金额对不上），请展开全部商品后重新上传',
-      );
-    }
-
+    // 2026-11-05 起不再拦「金额对不上」和「模型判不完整」：
+    // 优惠/特价/包装费本来就会让合计对不上，页面已经让员工勾选核对过。
+    // 这里只拦真正没法记账的：没匹配原料、缺数量、缺金额。
     const unresolved = row.lines.filter(
       (line) => !line.isPersonal && !line.ingredientId,
     );
@@ -1040,21 +1036,6 @@ export class PurchaseOrderImportService {
     if (missingAmount.length > 0) {
       throw new BadRequestException(
         `还有 ${missingAmount.length} 行没有金额，不能生成采购记录`,
-      );
-    }
-
-    const subtotal = toNum(row.subtotal as number);
-    if (
-      subtotal !== null &&
-      !isLineSetConsistent(
-        row.lines.map((line) => ({
-          lineTotal: toNum(line.lineTotal as number),
-        })),
-        subtotal,
-      )
-    ) {
-      throw new BadRequestException(
-        '各行金额之和与截图上的商品金额对不上，请检查后再生成',
       );
     }
   }

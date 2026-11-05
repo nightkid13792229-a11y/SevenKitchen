@@ -8,7 +8,9 @@
  * 硬规则：
  *   · 金额读不出来给 null，不用 0 顶替；
  *   · 行小计缺失时用 单价 × 数量 补，但补出来的结果会降低可信度；
- *   · 行小计之和与商品金额差超过 1 分 → amountsConsistent=false。
+ *   · 「截图完整不完整」只由模型判断，不再由金额差判定（2026-11-05）。
+ *     优惠/特价/包装费/称重退差都会让合计对不上，公式化判断只会误报；
+ *     金额差仍然算出来（amountsConsistent），交给页面提示，不做拦截。
  */
 
 import type {
@@ -106,14 +108,11 @@ export function parseOrderDraft(raw: Record<string, unknown>): ParsedOrderDraft 
       : {};
 
   const incompleteFlag = raw.incomplete === true;
-  const incomplete = incompleteFlag || !amountsConsistent;
-  const incompleteReason = !amountsConsistent
-    ? subtotal === null
-      ? '没读到商品金额，无法校验是否读全'
-      : `各行小计之和 ${lineSum.toFixed(2)} 与商品金额 ${subtotal.toFixed(2)} 差 ${(
-          subtotal - lineSum
-        ).toFixed(2)}，可能有商品被折叠或漏读`
-    : toStringOrNull(raw.incompleteReason);
+  const incomplete = incompleteFlag;
+  const incompleteReason = incompleteFlag
+    ? (toStringOrNull(raw.incompleteReason) ??
+      '模型认为这张截图没读完整，请对照原图确认')
+    : null;
 
   return {
     channel: normalizeChannel(raw.channel),
@@ -136,19 +135,4 @@ export function parseOrderDraft(raw: Record<string, unknown>): ParsedOrderDraft 
     qtySum,
     amountsConsistent,
   };
-}
-
-/**
- * 员工改完金额后重新校验：总行小计必须等于商品金额。
- * 只在「商品金额读到了」时校验；没读到就放行（原始截图本身不完整）。
- */
-export function isLineSetConsistent(
-  lines: Array<{ lineTotal: number | null }>,
-  subtotal: number | null,
-): boolean {
-  if (subtotal === null) return true;
-  const sum = round2(
-    lines.reduce((acc, line) => acc + (line.lineTotal ?? 0), 0),
-  );
-  return Math.abs(sum - subtotal) <= AMOUNT_TOLERANCE;
 }

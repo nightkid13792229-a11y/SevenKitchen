@@ -46,8 +46,7 @@
           :hover-stay-time="80"
           @tap="pickMore"
         >
-          <text class="side-add-plus">＋</text>
-          <text v-for="(ch, i) in addChars" :key="i" class="side-add-char">{{ ch }}</text>
+          <text class="side-add-plus">{{ importing ? '…' : '＋' }}</text>
         </view>
       </view>
 
@@ -371,8 +370,6 @@ let focusLastOnce = false;
 
 const activeImport = computed(() => imports.value[activeIndex.value] || null);
 const activeSummary = computed(() => activeImport.value?.summary ?? emptySummary());
-/** 右侧竖排按钮一个字一行，不依赖小程序对 writing-mode 的支持 */
-const addChars = computed(() => (importing.value ? '上传中' : '再传一笔').split(''));
 /** 只有模型说「可能没读全」才单独提示 */
 const activeIncompleteNotice = computed(() =>
   activeImport.value
@@ -1208,7 +1205,7 @@ function emptySummary() {
   flex-direction: row;
   align-items: center;
   gap: 10rpx;
-  width: 320rpx;
+  width: 280rpx;
   padding: 14rpx 16rpx;
   margin-right: 14rpx;
   border-radius: 20rpx;
@@ -1261,16 +1258,9 @@ function emptySummary() {
 }
 
 .side-add-plus {
-  font-size: 24rpx;
+  font-size: 40rpx;
   line-height: 1;
   color: #f4d58d;
-}
-
-.side-add-char {
-  font-size: 20rpx;
-  line-height: 1.1;
-  color: #fbfcf7;
-  font-weight: 600;
 }
 
 .tab.active {
@@ -1281,6 +1271,9 @@ function emptySummary() {
 .tab-channel {
   font-size: 20rpx;
   color: #6b6653;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tab-amount {

@@ -717,7 +717,6 @@
                         :disabled="isIngredientCellDisabled(cell)"
                         :controls="false"
                         :precision="ingredientCellPrecision(cell)"
-                        :step="ingredientCellStep(cell)"
                         :min="ingredientCellMin(cell)"
                         :max="ingredientCellMax(cell)"
                         placeholder="空"
@@ -2168,10 +2167,6 @@ function ingredientCellMin(cell: IngredientCardCell): number {
   return 0
 }
 
-function ingredientCellStep(cell: IngredientCardCell): number | undefined {
-  return cell.key === 'currentPricePerPurchaseUnit' ? 0.01 : undefined
-}
-
 function ingredientCellMax(cell: IngredientCardCell): number | undefined {
   if (cell.key === 'edibleYieldPercent') {
     return 100
@@ -2185,9 +2180,6 @@ function ingredientCellMax(cell: IngredientCardCell): number | undefined {
 function ingredientCellPrecision(cell: IngredientCardCell): number | undefined {
   if (cell.key === 'edibleYieldPercent' || cell.key === 'weightG') {
     return 1
-  }
-  if (cell.key === 'currentPricePerPurchaseUnit') {
-    return 4
   }
   if (cell.key === 'densityGPerMl') {
     return 3

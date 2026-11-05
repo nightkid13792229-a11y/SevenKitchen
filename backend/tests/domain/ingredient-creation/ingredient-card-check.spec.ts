@@ -98,7 +98,7 @@ describe('runIngredientCardCheck', () => {
     expect(warnings[0].fieldPath).toBeUndefined();
     expect(warnings[0].message).toMatch(/还有 \d+ 项没填/);
     expect(warnings[0].message).toBe(
-      '还有 5 项没填：标签分类、单个重量(克)、主要营养价值、采购价格、名称依据',
+      '还有 4 项没填：标签分类、单个重量(克)、主要营养价值、名称依据',
     );
     expect(warnings[0].suggestion).toBe('这些不是阻断项，补不补由你定');
     expect(

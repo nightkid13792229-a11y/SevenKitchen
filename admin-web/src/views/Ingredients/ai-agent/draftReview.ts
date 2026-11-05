@@ -160,7 +160,7 @@ function toManualFields(value: unknown): IngredientManualField[] {
  * 读原料卡。优先用草稿里的 `payload.ingredient`，没有时按起手卡 / 草稿名兜底，
  * 页面永远能拿到一张可编辑的卡（只是值可能为空）。
  *
- * 可见的 16 项与隐藏保留的 3 项（英文名 / 类别 / 标签 id）全部读出：少读一项，下一次整卡保存就会把它抹掉。
+ * 可见的 15 项与隐藏保留的 3 项（英文名 / 类别 / 标签 id）全部读出：少读一项，下一次整卡保存就会把它抹掉。
  */
 export function toIngredientCard(
   payload: IngredientCreationDraftPayload | null | undefined,
@@ -190,9 +190,6 @@ export function toIngredientCard(
     densityGPerMl: toFiniteNumber(source?.densityGPerMl),
     // PURCHASE
     procurementStrategy: toText(source?.procurementStrategy),
-    currentPricePerPurchaseUnit: toFiniteNumber(
-      source?.currentPricePerPurchaseUnit
-    ),
     // LABEL
     labelCategory: toText(source?.labelCategory),
     labelNames: toTagList(source?.labelNames),
@@ -206,14 +203,13 @@ export function toIngredientCard(
 }
 
 /**
- * 表单值写回草稿：可见 16 项 + 隐藏 3 项一个不少，可食部百分数换比例。
+ * 表单值写回草稿：可见 15 项 + 隐藏 3 项一个不少，可食部百分数换比例。
  *
  * 为什么一项都不能省：后端草稿 PATCH 是 `payload = payload || $1::jsonb` 的浅替换，
  * `payload.ingredient` 会被整块覆盖。少发一个键 = 把 AI 填的其它字段悄悄抹掉。
  *
  * 品牌 / 规格 / 采购渠道 / 采购单位 / 换算 / 库存三项已经搬到
- * 「DIY制作单推荐商品」「采购 SKU」两个子板块，原料级一律清空；采购价格保留，
- * 因为它会生成一条最小的初始采购 SKU，供算价使用。
+ * 「DIY制作单推荐商品」「采购 SKU」两个子板块，原料级一律清空。
  */
 export function toIngredientDraft(card: IngredientCardForm): IngredientDraft {
   const baseUnit = toBaseUnit(card.baseUnit)
@@ -257,9 +253,7 @@ export function toIngredientDraft(card: IngredientCardForm): IngredientDraft {
     purchaseChannel: null,
     purchaseUnit: null,
     purchaseToBaseRatio: null,
-    currentPricePerPurchaseUnit: toFiniteNumber(
-      card.currentPricePerPurchaseUnit
-    ),
+    currentPricePerPurchaseUnit: null,
     safetyStock: null,
     reorderPoint: null,
     targetStock: null,

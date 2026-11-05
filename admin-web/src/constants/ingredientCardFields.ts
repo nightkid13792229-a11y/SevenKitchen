@@ -68,7 +68,7 @@ export interface IngredientCardFieldDef {
 }
 
 /**
- * 16 项定义，数组顺序即展示顺序（与后端目录逐项对应）。
+ * 15 项定义，数组顺序即展示顺序（与后端目录逐项对应）。
  *
  * 不单独导出这一份：对外只给排好序的 `INGREDIENT_CARD_FIELDS`，
  * 类型 `IngredientCardFieldKey` 从它派生，避免键表维护两遍。
@@ -176,15 +176,6 @@ const CARD_FIELD_DEFINITIONS = [
       { label: '库存补货', value: 'STOCK_REPLENISHMENT' },
       { label: '混合', value: 'HYBRID' },
     ],
-  },
-  {
-    key: 'currentPricePerPurchaseUnit',
-    group: 'PURCHASE',
-    label: '采购价格',
-    stage: 'CREATABLE',
-    valueType: 'number',
-    unit: '元',
-    hint: '按基准单位计价，如元/克；填了会自动生成一条初始采购 SKU',
   },
   // LABEL 标签信息（合规）：决定原料在标签上出现在哪一段、写成什么
   {

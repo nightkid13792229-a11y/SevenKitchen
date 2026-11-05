@@ -25,7 +25,6 @@ const EXPECTED_KEYS_IN_ORDER = [
   'mainNutrientsDesc',
   // PURCHASE
   'procurementStrategy',
-  'currentPricePerPurchaseUnit',
   // LABEL
   'labelCategory',
   'labelNames',
@@ -37,14 +36,14 @@ const EXPECTED_GROUPS_IN_ORDER = [
   ...Array<'BASIC'>(4).fill('BASIC'),
   ...Array<'MEASURE'>(4).fill('MEASURE'),
   ...Array<'NUTRITION'>(3).fill('NUTRITION'),
-  ...Array<'PURCHASE'>(2).fill('PURCHASE'),
+  ...Array<'PURCHASE'>(1).fill('PURCHASE'),
   ...Array<'LABEL'>(3).fill('LABEL'),
 ];
 
 describe('食材原料卡字段契约', () => {
-  it('恰好 16 项且键不重复', () => {
-    expect(INGREDIENT_CARD_FIELDS).toHaveLength(16);
-    expect(new Set(INGREDIENT_CARD_FIELD_KEYS).size).toBe(16);
+  it('恰好 15 项且键不重复', () => {
+    expect(INGREDIENT_CARD_FIELDS).toHaveLength(15);
+    expect(new Set(INGREDIENT_CARD_FIELD_KEYS).size).toBe(15);
   });
 
   it('每组顺序与设计一致', () => {
@@ -58,7 +57,7 @@ describe('食材原料卡字段契约', () => {
     expect(AI_WRITABLE_INGREDIENT_FIELDS).toContain('labelCategory');
     expect(AI_WRITABLE_INGREDIENT_FIELDS).toContain('labelNames');
     expect(AI_WRITABLE_INGREDIENT_FIELDS).toContain('tags');
-    expect(AI_WRITABLE_INGREDIENT_FIELDS).toHaveLength(16);
+    expect(AI_WRITABLE_INGREDIENT_FIELDS).toHaveLength(15);
     expect(
       INGREDIENT_CARD_FIELDS.filter(
         (field) => field.stage === 'AFTER_CREATE',

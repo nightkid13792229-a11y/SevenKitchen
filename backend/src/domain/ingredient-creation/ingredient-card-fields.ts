@@ -138,13 +138,6 @@ const CARD_FIELD_DEFINITIONS = [
     stage: 'CREATABLE',
     valueType: 'ENUM',
   },
-  {
-    key: 'currentPricePerPurchaseUnit',
-    group: 'PURCHASE',
-    label: '采购价格',
-    stage: 'CREATABLE',
-    valueType: 'NUMBER',
-  },
   // LABEL 标签信息（合规）
   {
     key: 'labelCategory',
@@ -196,7 +189,7 @@ export const INGREDIENT_MANUAL_FIELD_KEYS: readonly IngredientManualField[] = [
 ];
 
 /**
- * AI 可写的 16 项：当前全部字段都是建原料时可填。
+ * AI 可写的 15 项：当前全部字段都是建原料时可填。
  */
 export const AI_WRITABLE_INGREDIENT_FIELDS: readonly IngredientCardFieldKey[] =
   INGREDIENT_CARD_FIELDS.filter((field) => field.stage === 'CREATABLE').map(

@@ -1363,39 +1363,6 @@ describe('IngredientCreationCommitService', () => {
     expect(prisma.ingredient.create).not.toHaveBeenCalled();
   });
 
-  it('填了初始采购价 → 生成一条最小采购 SKU 与价格历史', async () => {
-    const { service, store } = await createHarness();
-
-    await service.commit({
-      ...baseInput,
-      ingredient: {
-        ...ingredientDraft,
-        currentPricePerPurchaseUnit: 0.05,
-      },
-    });
-
-    expect(store.procurementSkus).toHaveLength(1);
-    expect(store.procurementSkus[0]).toMatchObject({
-      ingredientId: 'ingredient-1',
-      name: ingredientDraft.name,
-      purchaseUnit: ingredientDraft.unitDisplayLabel,
-      purchaseToBaseRatio: 1,
-      currentPurchasePrice: 0.05,
-      isDefault: true,
-      isActive: true,
-      createdById: 'admin-1',
-      createdSource: 'AI_AGENT',
-    });
-    expect(store.procurementSkuPriceHistories).toHaveLength(1);
-    expect(store.procurementSkuPriceHistories[0]).toMatchObject({
-      procurementSkuId: store.procurementSkus[0].id,
-      ingredientId: 'ingredient-1',
-      oldPrice: null,
-      newPrice: 0.05,
-      source: 'MANUAL',
-    });
-  });
-
   it('同一草稿提交成功后再次提交 → ConflictException，不建第二套数据', async () => {
     const { service, prisma, store } = await createHarness();
 

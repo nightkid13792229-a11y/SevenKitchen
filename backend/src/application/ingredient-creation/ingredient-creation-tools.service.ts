@@ -434,7 +434,6 @@ const INGREDIENT_CARD_FIELDS = [
   'labelNames',
   'labelNameSource',
   'tags',
-  'currentPricePerPurchaseUnit',
 ] as const satisfies readonly IngredientToolField[];
 
 const INGREDIENT_CARD_FIELD_SET: ReadonlySet<string> = new Set(
@@ -589,11 +588,6 @@ const WRITE_INGREDIENT_TOOL: AgentToolDefinition = {
               enum: INGREDIENT_PROCUREMENT_STRATEGIES,
               description:
                 '采购策略：DAILY_PURCHASE=日采，STOCK_REPLENISHMENT=库存补货，HYBRID=混合。',
-            },
-            currentPricePerPurchaseUnit: {
-              type: ['number', 'null'],
-              description:
-                '初始采购价，按基准单位计价（如元/克）；没有依据就传 null，不要编。填了会生成一条最小采购 SKU。',
             },
             labelCategory: {
               type: ['string', 'null'],
@@ -1548,17 +1542,6 @@ function validateIngredientField(
         };
       }
       return { ok: true, value: names };
-    }
-    case 'currentPricePerPurchaseUnit': {
-      if (raw === null) return { ok: true, value: null };
-      const price = readFiniteNumber(raw);
-      if (price === null || price < 0) {
-        return {
-          ok: false,
-          error: 'currentPricePerPurchaseUnit 必须是不小于 0 的数字，或传 null 清空。',
-        };
-      }
-      return { ok: true, value: price };
     }
     default:
       return { ok: false, error: `不支持的原料卡字段「${field}」。` };
@@ -2678,8 +2661,7 @@ export class IngredientCreationToolsService {
         field === 'densityGPerMl' ||
         field === 'procurementStrategy' ||
         field === 'labelCategory' ||
-        field === 'labelNameSource' ||
-        field === 'currentPricePerPurchaseUnit'
+        field === 'labelNameSource'
       ) {
         if (record[field] !== validation.value) {
           record[field] = validation.value;

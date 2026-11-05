@@ -1229,12 +1229,7 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
         ingredient.densityGPerMl === undefined
           ? '待补'
           : String(ingredient.densityGPerMl)
-      } 采购策略=${String(ingredient.procurementStrategy ?? '待补')} 采购价格=${
-        ingredient.currentPricePerPurchaseUnit === null ||
-        ingredient.currentPricePerPurchaseUnit === undefined
-          ? '待补'
-          : String(ingredient.currentPricePerPurchaseUnit)
-      } 标签类型=${String(
+      } 采购策略=${String(ingredient.procurementStrategy ?? '待补')} 标签类型=${String(
         ingredient.labelCategory ?? '待补',
       )} 标签名称=${labelNames.join('、') || '待补'} 名称依据=${String(
         ingredient.labelNameSource ?? '待补',

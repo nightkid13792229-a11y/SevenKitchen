@@ -163,15 +163,16 @@
       </view>
 
       <view class="footer">
-        <view class="footer-total">
-          <text class="footer-label">{{ footerLabel }}</text>
-          <text class="footer-amount">¥{{ money(matchedAmount) }}</text>
-        </view>
         <button class="primary-btn" :disabled="!canConfirm || submitting" :loading="submitting" @tap="submit">
           {{ blockReason || '生成采购记录' }}
         </button>
+        <!-- 按钮下方一行：左边「放弃」，右边「几笔订单 · 几条记录 + 金额」 -->
         <view class="footer-links">
           <text class="discard" @tap="discardActive">放弃这笔识别</text>
+          <view class="footer-total">
+            <text class="footer-label">{{ footerLabel }}</text>
+            <text class="footer-amount">¥{{ money(matchedAmount) }}</text>
+          </view>
         </view>
       </view>
     </template>
@@ -1849,6 +1850,15 @@ function emptySummary() {
   background: linear-gradient(to top, #f3eddd 75%, rgba(243, 237, 221, 0));
 }
 
+/* 按钮下方那一行：左「放弃」，右「合计」，两头分开 */
+.footer-links {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 10rpx;
+  padding: 0 6rpx;
+}
+
 .footer-total {
   display: flex;
   justify-content: flex-end;
@@ -1856,7 +1866,6 @@ function emptySummary() {
   gap: 24rpx;
   font-size: 22rpx;
   color: #6b6653;
-  padding: 0 6rpx 10rpx;
   text-align: right;
 }
 
@@ -1886,15 +1895,6 @@ function emptySummary() {
   background: #d9d4c4;
   color: #8d8877;
 }
-
-.footer-links {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 56rpx;
-  margin-top: 12rpx;
-}
-
 
 .discard {
   font-size: 22rpx;

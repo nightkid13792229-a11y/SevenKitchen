@@ -379,12 +379,20 @@
       </el-form-item>
 
       <el-form-item label="购买/采购渠道">
-        <el-input
+        <el-select
           v-model="formData.purchaseChannel"
-          placeholder="如：京东、天猫旗舰店"
-          maxlength="200"
+          filterable
+          clearable
+          placeholder="请选择采购渠道"
           style="width: 320px"
-        />
+        >
+          <el-option
+            v-for="option in channelSelectOptions(formData.purchaseChannel)"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </el-select>
       </el-form-item>
 
       <el-form-item label="添加时机" prop="add_timing">
@@ -596,12 +604,20 @@
       </el-form-item>
 
       <el-form-item label="采购渠道">
-        <el-input
+        <el-select
           v-model="formData.purchaseChannel"
-          placeholder="如：盒马、线下包材供应商"
-          maxlength="200"
+          filterable
+          clearable
+          placeholder="请选择采购渠道"
           style="width: 320px"
-        />
+        >
+          <el-option
+            v-for="option in channelSelectOptions(formData.purchaseChannel)"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </el-select>
       </el-form-item>
 
       <el-form-item label="采购单位">
@@ -1010,13 +1026,20 @@
         />
       </el-form-item>
       <el-form-item label="采购渠道">
-        <el-autocomplete
+        <el-select
           v-model="rpForm.purchaseChannel"
-          :fetch-suggestions="querySearchSkuChannels"
-          placeholder="如：淘宝、京东、线下宠物店"
-          maxlength="200"
+          filterable
+          clearable
+          placeholder="请选择采购渠道"
           style="width: 300px"
-        />
+        >
+          <el-option
+            v-for="option in channelSelectOptions(rpForm.purchaseChannel)"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </el-select>
       </el-form-item>
       <el-form-item label="购买链接">
         <div style="width: 100%">
@@ -2539,6 +2562,23 @@ const skuPurchaseChannelOptions = computed(() => {
   }
   return list
 })
+
+/**
+ * 渠道下拉的选项（2026-11-05 第二步）：只能从字典里选。
+ * 编辑一条老数据时，如果它的值已经不在字典里（历史写法），
+ * 临时把它作为一个「旧值」选项带出来，避免一保存就把渠道改没了。
+ */
+function channelSelectOptions(current: string | null | undefined) {
+  const list = purchaseChannelOptions.value.map((item) => ({
+    label: item.label,
+    value: item.code,
+  }))
+  const value = (current || '').trim()
+  if (value && !list.some((item) => item.value === value)) {
+    list.push({ label: `${value}（旧值）`, value })
+  }
+  return list
+}
 
 async function loadPurchaseChannelOptions() {
   try {

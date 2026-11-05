@@ -7,6 +7,11 @@ import {
 import { BaseUnit, IngredientType } from '../../domain/ingredient/enums';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { composePackSpec } from '../purchasing/procurement-sku-net-content';
+import {
+  resolveChannelCode,
+  toChannelOptions,
+} from '../purchasing/channel-catalog';
+import { PURCHASE_CHANNEL_SET } from '../platform-options/option-sets.registry';
 
 type DecimalLike = {
   toNumber: () => number;
@@ -361,6 +366,33 @@ const sortProcurementSkus = <T extends ProcurementSkuRecord>(skus: T[]): T[] =>
 export class ProcurementSkuService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * 「在哪买的」只认字典（2026-11-05 第二步）：
+   * 能归一到标准项就归一，归不上就拒绝 —— 商品档案是渠道的身份，
+   * 这里放过一个错字，以后每一条采购记录都会继承它。
+   */
+  private async resolvePurchaseChannel(
+    value: string | null | undefined,
+  ): Promise<string | null | undefined> {
+    if (value === undefined) return undefined;
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (!text) return null;
+    const items = await this.prisma.platformOptionItem.findMany({
+      where: { setId: PURCHASE_CHANNEL_SET },
+      select: { code: true, label: true, enabled: true, extra: true },
+      orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+    });
+    const enabled = toChannelOptions(items.filter((item) => item.enabled));
+    const known = new Set(items.map((item) => item.code));
+    const resolved = resolveChannelCode(text, enabled, known);
+    if (!resolved) {
+      throw new BadRequestException(
+        `「${text}」不在采购渠道清单里，请从后台维护的渠道中选择`,
+      );
+    }
+    return resolved;
+  }
+
   private roundPrice(value: number): number {
     return Number(value.toFixed(2));
   }
@@ -509,7 +541,8 @@ export class ProcurementSkuService {
       name: dto.name,
       brand: normalizeOptionalText(dto.brand) ?? null,
       productModel: normalizeOptionalText(dto.productModel) ?? null,
-      purchaseChannel: normalizeOptionalText(dto.purchaseChannel) ?? null,
+      purchaseChannel:
+        (await this.resolvePurchaseChannel(dto.purchaseChannel)) ?? null,
       purchaseUnit:
         normalizeOptionalPurchaseUnit(dto.purchaseUnit, ingredient!.baseUnit) ??
         null,
@@ -715,7 +748,8 @@ export class ProcurementSkuService {
       name,
       brand: normalizeOptionalText(input.brand) ?? null,
       productModel,
-      purchaseChannel: normalizeOptionalText(input.purchaseChannel) ?? null,
+      purchaseChannel:
+        (await this.resolvePurchaseChannel(input.purchaseChannel)) ?? null,
       purchaseUnit,
       purchaseToBaseRatio,
       currentPurchasePrice,
@@ -832,7 +866,9 @@ export class ProcurementSkuService {
       data.productModel = productModel;
     }
 
-    const purchaseChannel = normalizeOptionalText(dto.purchaseChannel);
+    const purchaseChannel = await this.resolvePurchaseChannel(
+      dto.purchaseChannel,
+    );
     if (purchaseChannel !== undefined) {
       data.purchaseChannel = purchaseChannel;
     }

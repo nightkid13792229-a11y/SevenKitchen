@@ -346,7 +346,19 @@
           </div>
         </el-form-item>
         <el-form-item label="采购渠道" required>
-          <el-input v-model="recordForm.purchaseChannel" placeholder="如盒马、京东、山姆" />
+          <el-select
+            v-model="recordForm.purchaseChannel"
+            filterable
+            placeholder="请选择采购渠道"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="channel in channelOptionsFor(recordForm.purchaseChannel)"
+              :key="channel"
+              :label="channel"
+              :value="channel"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="采购数量">
           <el-input-number v-model="recordForm.actualQuantity" :min="0" :precision="2" :step="1" />
@@ -424,6 +436,9 @@ const detailActionLoading = ref(false)
 const records = ref<PurchaseRecord[]>([])
 const recordsLoading = ref(false)
 
+// 采购渠道（唯一来源：平台选项字典 purchase_channel）
+const purchaseChannelOptions = ref<string[]>([])
+
 const recordDialogVisible = ref(false)
 const recordSubmitting = ref(false)
 const recordItem = ref<PurchaseItem | null>(null)
@@ -450,7 +465,25 @@ const listParams = computed(() => ({
 
 onMounted(() => {
   loadLists()
+  void loadPurchaseChannels()
 })
+
+async function loadPurchaseChannels() {
+  try {
+    purchaseChannelOptions.value = (await purchasingApi.getPurchaseChannels()) || []
+  } catch {
+    purchaseChannelOptions.value = []
+  }
+}
+
+/** 下拉选项：字典 + 当前值兜底（老记录的写法不在字典里时也要能显示出来） */
+function channelOptionsFor(current: string) {
+  const value = (current || '').trim()
+  if (value && !purchaseChannelOptions.value.includes(value)) {
+    return [...purchaseChannelOptions.value, value]
+  }
+  return purchaseChannelOptions.value
+}
 
 async function loadLists() {
   loading.value = true

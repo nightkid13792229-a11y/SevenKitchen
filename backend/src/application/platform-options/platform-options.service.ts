@@ -165,6 +165,15 @@ export class PlatformOptionsService implements OnModuleInit {
   }
 
   /**
+   * 全量项（含停用）。给业务层校验「这个值是不是字典里的码」用 ——
+   * 停用的项仍然要接受，否则老数据连金额都改不了（设计 D8）。
+   */
+  async listSetWithDisabled(code: string): Promise<AdminOptionItemDto[]> {
+    const result = await this.listSetForAdmin(code);
+    return result.items;
+  }
+
+  /**
    * 把某个码翻成中文。
    *
    * 给后端自己用（写通知文案、导出报表）——

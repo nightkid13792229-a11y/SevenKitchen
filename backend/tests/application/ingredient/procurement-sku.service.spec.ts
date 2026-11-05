@@ -24,6 +24,14 @@ describe('ProcurementSkuService', () => {
     ingredient: {
       findUnique: jest.fn(),
     },
+    // 渠道字典（2026-11-05 第二步）：商品渠道只认这里的码
+    platformOptionItem: {
+      findMany: jest.fn().mockResolvedValue([
+        { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+        { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+        { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+      ]),
+    },
     inventoryAdjustment: {
       create: jest.fn(),
     },

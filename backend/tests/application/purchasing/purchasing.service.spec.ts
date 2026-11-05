@@ -48,7 +48,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -131,7 +141,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -223,7 +243,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -404,7 +434,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -512,7 +552,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -602,7 +652,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -705,7 +765,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -821,7 +891,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -931,7 +1011,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -1039,7 +1129,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
@@ -1124,7 +1224,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -1257,7 +1367,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -1353,7 +1473,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -1431,7 +1561,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -1513,7 +1653,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -1604,7 +1754,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -1687,7 +1847,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },
@@ -1795,7 +1965,17 @@ describe('PurchasingService procurement sku separation', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         PurchasingService,
-        { provide: PlatformOptionsService, useValue: { listSet: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: PlatformOptionsService,
+          useValue: {
+            listSet: jest.fn().mockResolvedValue([]),
+            listSetWithDisabled: jest.fn().mockResolvedValue([
+              { code: '盒马鲜生', label: '盒马鲜生', enabled: true, extra: { aliases: ['盒马'] } },
+              { code: '沃尔玛', label: '沃尔玛', enabled: true, extra: null },
+              { code: '山姆会员店', label: '山姆会员店', enabled: true, extra: { aliases: ['山姆'] } },
+            ]),
+          },
+        },
         {
           provide: ORDER_REPOSITORY,
           useValue: { findByTargetProductionDateRange: jest.fn() },

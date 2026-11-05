@@ -32,6 +32,11 @@ import {
 } from './purchasing.service.tokens';
 import { PlatformOptionsService } from '../platform-options/platform-options.service';
 import { PURCHASE_CHANNEL_SET } from '../platform-options/option-sets.registry';
+import {
+  resolveChannelCode,
+  toChannelOptions,
+  type ChannelOption,
+} from './channel-catalog';
 import type { PurchaseListRepository } from '../../domain/purchasing/purchase-list.repository';
 import type { PurchaseRecordRepository } from '../../domain/purchasing/purchase-record.repository';
 import {
@@ -3981,6 +3986,12 @@ export class PurchasingService {
       dto,
     );
 
+    // 渠道跟着商品档案走；商品没填时才用这次传上来的值兜底（第二步 D7）
+    const purchaseChannel = await this.resolveRecordChannel({
+      skuChannel: selectedProcurementSku.purchaseChannel,
+      requested: dto.purchaseChannel,
+    });
+
     // 创建采购记录
     const purchaseRecord = new PurchaseRecord({
       purchaseListId,
@@ -3989,7 +4000,7 @@ export class PurchasingService {
       procurementSkuId: selectedProcurementSku.id,
       procurementSkuName: selectedProcurementSku.name,
       ingredientName: purchaseItem.ingredientName,
-      purchaseChannel: dto.purchaseChannel,
+      purchaseChannel,
       actualQuantity: normalizedRecordData.actualQuantity,
       actualPackageCount: normalizedRecordData.actualPackageCount,
       actualPackageSize: normalizedRecordData.actualPackageSize,
@@ -4102,6 +4113,19 @@ export class PurchasingService {
       updateData.procurementSkuName = selectedProcurementSku!.name;
     }
 
+    // 渠道同样以商品档案为准；换了商品就跟着换，没换就保持原值
+    updateData.purchaseChannel =
+      shouldUpdateProcurementSku && selectedProcurementSku
+        ? await this.resolveRecordChannel({
+            skuChannel: selectedProcurementSku.purchaseChannel,
+            requested: dto.purchaseChannel,
+            fallback: purchaseRecord.purchaseChannel,
+          })
+        : await this.resolveRecordChannel({
+            requested: dto.purchaseChannel,
+            fallback: purchaseRecord.purchaseChannel,
+          });
+
     // 更新采购记录
     purchaseRecord.update(updateData);
 
@@ -4194,6 +4218,41 @@ export class PurchasingService {
    * 获取所有采购渠道列表
    * 从原料数据库中提取所有不同的采购渠道
    */
+  /**
+   * 采购记录上的渠道（2026-11-05 第二步）：
+   * 以**商品档案**为准；商品没填渠道时，才允许用这次传上来的值兜底（D7）。
+   * 两种情况都必须能对上字典，人填的不合法直接拒绝。
+   */
+  private async resolveRecordChannel(input: {
+    skuChannel?: string | null;
+    requested?: string | null;
+    fallback?: string | null;
+  }): Promise<string> {
+    const items = await this.platformOptions.listSetWithDisabled(
+      PURCHASE_CHANNEL_SET,
+    );
+    const enabled: ChannelOption[] = toChannelOptions(
+      items.filter((item) => item.enabled),
+    );
+    const known = new Set(items.map((item) => item.code));
+
+    const fromSku = input.skuChannel
+      ? resolveChannelCode(input.skuChannel, enabled, known)
+      : null;
+    if (fromSku) return fromSku;
+
+    const requested = input.requested
+      ? resolveChannelCode(input.requested, enabled, known)
+      : null;
+    if (requested) return requested;
+
+    if (input.fallback && known.has(input.fallback)) return input.fallback;
+
+    throw new BadRequestException(
+      '这件商品还没填渠道，请先选择渠道或补全商品档案',
+    );
+  }
+
   /**
    * 采购渠道清单（2026-11-05 起唯一来源 = 平台选项字典 `purchase_channel`）。
    *

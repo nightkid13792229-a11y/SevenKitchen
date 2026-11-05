@@ -406,10 +406,10 @@ export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
         extra: { aliases: ['舞东风超市'] },
       },
       {
-        code: '满彭超市',
-        label: '满彭超市',
+        code: '满彭菜场',
+        label: '满彭菜场',
         sortOrder: 100,
-        extra: { aliases: ['满彭'] },
+        extra: { aliases: ['满彭', '满彭超市'] },
       },
       {
         code: 'iHerb',
@@ -452,6 +452,18 @@ export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
         label: '微信小店',
         sortOrder: 170,
         extra: { aliases: ['微信', '视频号小店'] },
+      },
+      {
+        code: '自制',
+        label: '自制',
+        sortOrder: 180,
+        extra: { aliases: ['自家做', '自己做的'] },
+      },
+      {
+        code: '朴朴超市',
+        label: '朴朴超市',
+        sortOrder: 190,
+        extra: { aliases: ['朴朴'] },
       },
     ],
   },

@@ -4,6 +4,7 @@ import {
   channelMatchKey,
   findChannelOption,
   normalizeChannelKey,
+  resolveChannelCode,
   toChannelOptions,
 } from '../../../src/application/purchasing/channel-catalog';
 
@@ -66,6 +67,18 @@ describe('channel-catalog', () => {
     expect(channelMatchKey('大润发', CHANNELS)).toBe('大润发');
     expect(channelMatchKey(' 大 润 发 ', CHANNELS)).toBe('大润发');
     expect(channelMatchKey(null, CHANNELS)).toBe('');
+  });
+
+  it('写入口：能归一就归一，停用码原样接受，认不出给 null', () => {
+    const known = new Set([
+      ...CHANNELS.map((item) => item.code),
+      '美菜网',
+    ]);
+    expect(resolveChannelCode('山姆', CHANNELS, known)).toBe('山姆会员店');
+    expect(resolveChannelCode('美菜网', CHANNELS, known)).toBe('美菜网');
+    expect(resolveChannelCode('大润发', CHANNELS, known)).toBeNull();
+    expect(resolveChannelCode('  ', CHANNELS, known)).toBeNull();
+    expect(resolveChannelCode(null, CHANNELS, known)).toBeNull();
   });
 
   it('展示名：认识给字典标签，不认识给原文', () => {

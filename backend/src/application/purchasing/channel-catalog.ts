@@ -126,3 +126,22 @@ export function toChannelOptions(
     return { code: item.code, label: item.label, aliases };
   });
 }
+
+/**
+ * 写入口的取值规则（2026-11-05 第二步）：
+ *   · 空 → null（「没填」是合法状态，商品可以先不填渠道）；
+ *   · 能归一到启用项 → 用标准码（「山姆」→「山姆会员店」）；
+ *   · 是字典里的停用项 → 原样接受（老数据要能继续编辑，D8）；
+ *   · 都不是 → null，由调用方按「人填的拒绝、机器猜的置空」处理（D9）。
+ */
+export function resolveChannelCode(
+  value: string | null | undefined,
+  enabled: ChannelOption[],
+  knownCodes: Set<string>,
+): string | null {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text) return null;
+  const canonical = canonicalChannelCode(text, enabled);
+  if (canonical) return canonical;
+  return knownCodes.has(text) ? text : null;
+}

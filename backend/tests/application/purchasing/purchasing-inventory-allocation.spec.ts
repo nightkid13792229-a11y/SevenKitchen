@@ -1045,4 +1045,55 @@ describe('PurchasingService inventory allocation calculation', () => {
       }),
     ]);
   });
+
+  it('does not re-mark a supplement as no purchase after the buyer cancelled it', async () => {
+    const { service, orderRepository, purchaseListRepository } =
+      await createService();
+    const cancelledSupplementList = new PurchaseList({
+      id: 'purchase-list-1',
+      targetDate: new Date('2026-04-20T12:00:00.000Z'),
+      status: PurchaseListStatus.PENDING,
+      totalEstimatedCost: 30,
+      itemCount: 1,
+      createdById: 'admin-1',
+      sourceOrderIds: ['order-fish-oil'],
+      items: [
+        new PurchaseItem({
+          id: 'item-fish-oil',
+          purchaseListId: 'purchase-list-1',
+          ingredientId: 'fish-oil',
+          ingredientName: '鱼油',
+          type: 'SUPPLEMENT',
+          quantityNeeded: 30,
+          quantityUnit: 'G',
+          estimatedCost: 30,
+          noPurchaseNeeded: false,
+        }),
+      ],
+    });
+    purchaseListRepository.findById.mockResolvedValue(
+      cancelledSupplementList,
+    );
+    orderRepository.findById.mockResolvedValue(
+      makePaidOrder('fish-oil', '鱼油', 20, 'order-fish-oil-extra', {
+        unit: 'G',
+        cost: 20,
+        type: 'SUPPLEMENT',
+      }),
+    );
+
+    const result = await service.addOrdersToPurchaseList(
+      'purchase-list-1',
+      ['order-fish-oil-extra'],
+      'admin-1',
+    );
+
+    expect(result.updatedItems).toEqual([
+      expect.objectContaining({
+        ingredientId: 'fish-oil',
+        noPurchaseNeeded: false,
+        noPurchaseReason: null,
+      }),
+    ]);
+  });
 });

@@ -415,9 +415,11 @@ export class PurchasingService {
       requirement.quantityNeeded,
     );
     const clearNoPurchaseMarker = addedShortageQuantity > 0;
-    // 补剂默认无需采购：追加订单合并后仍然保持默认（要买就先取消）
-    const isSupplement =
-      (existing.type || requirement.type) === 'SUPPLEMENT';
+    // 补剂默认无需采购在建单时已经写好，追加订单时保持原状态：
+    // 已经点过「取消」的补剂不能被重新标回无需采购，否则刚买过的会变回无需采购。
+    const keepNoPurchaseMarker =
+      (existing.type || requirement.type) === 'SUPPLEMENT' ||
+      !clearNoPurchaseMarker;
 
     return new PurchaseItem({
       id: existing.id,
@@ -465,26 +467,18 @@ export class PurchasingService {
       availableQuantity:
         requirement.availableQuantity ?? existing.availableQuantity,
       usesInventory: existing.usesInventory || requirement.usesInventory,
-      noPurchaseNeeded: isSupplement
-        ? true
-        : clearNoPurchaseMarker
-          ? false
-          : existing.noPurchaseNeeded,
-      noPurchaseReason: isSupplement
-        ? existing.noPurchaseReason || SUPPLEMENT_DEFAULT_NO_PURCHASE_REASON
-        : clearNoPurchaseMarker
-          ? null
-          : existing.noPurchaseReason,
-      noPurchaseMarkedAt: isSupplement
-        ? existing.noPurchaseMarkedAt || new Date()
-        : clearNoPurchaseMarker
-          ? null
-          : existing.noPurchaseMarkedAt,
-      noPurchaseMarkedById: isSupplement
+      noPurchaseNeeded: keepNoPurchaseMarker
+        ? existing.noPurchaseNeeded
+        : false,
+      noPurchaseReason: keepNoPurchaseMarker
+        ? existing.noPurchaseReason
+        : null,
+      noPurchaseMarkedAt: keepNoPurchaseMarker
+        ? existing.noPurchaseMarkedAt
+        : null,
+      noPurchaseMarkedById: keepNoPurchaseMarker
         ? existing.noPurchaseMarkedById
-        : clearNoPurchaseMarker
-          ? null
-          : existing.noPurchaseMarkedById,
+        : null,
       purchaseChannel: existing.purchaseChannel || requirement.purchaseChannel,
       productModel: existing.productModel || requirement.productModel,
       displayUnit: existing.displayUnit || requirement.displayUnit,

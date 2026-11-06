@@ -34,6 +34,7 @@ const makePaidOrder = (
     cost?: number;
     procurementSkuId?: string;
     procurementSkuName?: string;
+    type?: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
   },
 ) => ({
   id: orderId,
@@ -47,7 +48,7 @@ const makePaidOrder = (
         purchaseAmount,
         unit: options?.unit ?? 'G',
         cost: options?.cost ?? purchaseAmount / 100,
-        type: 'FOOD',
+        type: options?.type ?? 'FOOD',
         procurementSkuId: options?.procurementSkuId,
         procurementSkuName: options?.procurementSkuName,
       },
@@ -59,7 +60,7 @@ const makePaidOrder = (
         items: [
           {
             ingredient_id: ingredientId,
-            ingredient_type: 'FOOD',
+            ingredient_type: options?.type ?? 'FOOD',
             sort_order: 1,
           },
         ],
@@ -91,6 +92,17 @@ const spinachIngredient = {
   purchaseUnit: 'G',
   purchaseToBaseRatio: 1,
   currentPricePerPurchaseUnit: 0.03,
+};
+
+const fishOilIngredient = {
+  id: 'fish-oil',
+  name: '鱼油',
+  type: 'SUPPLEMENT',
+  procurementStrategy: 'DAILY_PURCHASE',
+  baseUnit: 'G',
+  purchaseUnit: '瓶',
+  purchaseToBaseRatio: 100,
+  currentPricePerPurchaseUnit: 100,
 };
 
 const makePendingPurchaseList = () =>
@@ -136,8 +148,8 @@ describe('PurchasingService inventory allocation calculation', () => {
       findByIds: jest
         .fn()
         .mockImplementation(async (ids: string[]) =>
-          [beefIngredient, spinachIngredient].filter((ingredient) =>
-            ids.includes(ingredient.id),
+          [beefIngredient, spinachIngredient, fishOilIngredient].filter(
+            (ingredient) => ids.includes(ingredient.id),
           ),
         ),
       findAll: jest.fn().mockResolvedValue([]),
@@ -936,5 +948,101 @@ describe('PurchasingService inventory allocation calculation', () => {
         triggeredBy: 'purchase_list_order_addition',
       }),
     );
+  });
+
+  it('marks supplement items as no purchase by default in a generated order-demand list', async () => {
+    const { service } = await createService({
+      orders: [
+        makePaidOrder('fish-oil', '鱼油', 30, 'order-fish-oil', {
+          unit: 'G',
+          cost: 30,
+          type: 'SUPPLEMENT',
+        }),
+      ],
+      availability: new Map(),
+    });
+
+    const result: any = await service.generatePurchaseList(
+      { startDate: '2026-04-20' },
+      'admin-1',
+    );
+
+    expect(result.purchaseList.items).toEqual([
+      expect.objectContaining({
+        ingredientId: 'fish-oil',
+        type: 'SUPPLEMENT',
+        noPurchaseNeeded: true,
+        noPurchaseReason: '补剂默认无需采购',
+      }),
+    ]);
+  });
+
+  it('keeps food items as needing purchase in a generated order-demand list', async () => {
+    const { service } = await createService({
+      orders: [makePaidOrder('beef', '牛肉', 3000)],
+    });
+
+    const result: any = await service.generatePurchaseList(
+      { startDate: '2026-04-20' },
+      'admin-1',
+    );
+
+    expect(result.purchaseList.items).toEqual([
+      expect.objectContaining({
+        ingredientId: 'beef',
+        type: 'FOOD',
+        noPurchaseNeeded: false,
+      }),
+    ]);
+  });
+
+  it('keeps the supplement no-purchase default when merging new orders', async () => {
+    const { service, orderRepository, purchaseListRepository } =
+      await createService();
+    const supplementList = new PurchaseList({
+      id: 'purchase-list-1',
+      targetDate: new Date('2026-04-20T12:00:00.000Z'),
+      status: PurchaseListStatus.PENDING,
+      totalEstimatedCost: 30,
+      itemCount: 1,
+      createdById: 'admin-1',
+      sourceOrderIds: ['order-fish-oil'],
+      items: [
+        new PurchaseItem({
+          id: 'item-fish-oil',
+          purchaseListId: 'purchase-list-1',
+          ingredientId: 'fish-oil',
+          ingredientName: '鱼油',
+          type: 'SUPPLEMENT',
+          quantityNeeded: 30,
+          quantityUnit: 'G',
+          estimatedCost: 30,
+          noPurchaseNeeded: true,
+          noPurchaseReason: '补剂默认无需采购',
+        }),
+      ],
+    });
+    purchaseListRepository.findById.mockResolvedValue(supplementList);
+    orderRepository.findById.mockResolvedValue(
+      makePaidOrder('fish-oil', '鱼油', 20, 'order-fish-oil-extra', {
+        unit: 'G',
+        cost: 20,
+        type: 'SUPPLEMENT',
+      }),
+    );
+
+    const result = await service.addOrdersToPurchaseList(
+      'purchase-list-1',
+      ['order-fish-oil-extra'],
+      'admin-1',
+    );
+
+    expect(result.updatedItems).toEqual([
+      expect.objectContaining({
+        ingredientId: 'fish-oil',
+        noPurchaseNeeded: true,
+        noPurchaseReason: '补剂默认无需采购',
+      }),
+    ]);
   });
 });

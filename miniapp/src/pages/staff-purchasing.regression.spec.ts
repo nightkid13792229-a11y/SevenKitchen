@@ -360,9 +360,29 @@ describe('staff purchasing purchase record form', () => {
 
   it('marks no-purchase items with one tap and keeps inline undo available', () => {
     expect(detailSource).toContain('noPurchaseMarkingItemId');
-    expect(detailSource).toContain('已标记，可点取消标记撤销');
-    expect(detailSource).toContain('取消标记');
+    expect(detailSource).toContain('已标记，可点取消撤销');
+    expect(detailSource).toContain('>取消</text>');
+    expect(detailSource).not.toContain('取消标记');
     expect(detailSource).not.toContain('确认将"${getPurchaseItemTitle(item)}"标记为无需采购？');
+  });
+
+  it('shows 无需采购 + 取消 together and keeps the manual record button gated', () => {
+    // 2026-11-06 BOSS 反馈：文案统一「无需采购」，取消紧跟其后；
+    // 「手动记录」在无需采购 / 库存足够时置灰，先取消才能点。
+    expect(detailSource).toContain('<text class="state-hint">无需采购</text>');
+    expect(detailSource).toContain('const canManualRecord');
+    expect(detailSource).toContain("state === 'PENDING' || state === 'RECORDED'");
+    expect(detailSource).toContain('dismissItemCovered');
+    expect(detailSource).toContain('库存足够，无需购买');
+    expect(detailSource).toContain('>手动记录</button>');
+    expect(detailSource).not.toContain('>采购记录</button>');
+  });
+
+  it('labels the AI order screenshot entry as AI记录 and keeps filters on one row', () => {
+    expect(detailSource).toContain('>AI记录</button>');
+    expect(detailSource).toContain('flex-wrap: nowrap');
+    expect(detailSource).not.toContain('🥩 食材');
+    expect(detailSource).not.toContain('💊 补剂');
   });
 
   it('allows completed purchase lists to be reopened before reimbursement', () => {

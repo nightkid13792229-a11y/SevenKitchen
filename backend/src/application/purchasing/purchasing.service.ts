@@ -64,6 +64,12 @@ import { perBaseUnitCostOrInfinity } from '../../domain/ingredient/unit-price';
 
 const MAX_SEARCH_EXPANSION_TERMS = 8;
 
+/**
+ * 补剂是库存商品：日采清单里默认按「无需采购」处理，采购员不用逐条点。
+ * 真要买的时候，先取消无需采购标记，再手动记录采购（2026-11-06）。
+ */
+const SUPPLEMENT_DEFAULT_NO_PURCHASE_REASON = '补剂默认无需采购';
+
 export interface GeneratePurchaseListDto {
   startDate: string; // YYYY-MM-DD format
   endDate?: string; // YYYY-MM-DD format, optional (defaults to startDate)
@@ -354,6 +360,21 @@ export class PurchasingService {
     );
   }
 
+  private getSupplementNoPurchaseDefaults(type?: string): {
+    noPurchaseNeeded?: boolean;
+    noPurchaseReason?: string | null;
+    noPurchaseMarkedAt?: Date | null;
+  } {
+    if (type !== 'SUPPLEMENT') {
+      return {};
+    }
+    return {
+      noPurchaseNeeded: true,
+      noPurchaseReason: SUPPLEMENT_DEFAULT_NO_PURCHASE_REASON,
+      noPurchaseMarkedAt: new Date(),
+    };
+  }
+
   private createPurchaseItemFromRequirement(
     purchaseListId: string,
     requirement: PurchaseRequirement,
@@ -380,6 +401,7 @@ export class PurchasingService {
       purchaseChannel: requirement.purchaseChannel,
       productModel: requirement.productModel,
       displayUnit: requirement.displayUnit,
+      ...this.getSupplementNoPurchaseDefaults(requirement.type),
     });
   }
 
@@ -393,6 +415,9 @@ export class PurchasingService {
       requirement.quantityNeeded,
     );
     const clearNoPurchaseMarker = addedShortageQuantity > 0;
+    // 补剂默认无需采购：追加订单合并后仍然保持默认（要买就先取消）
+    const isSupplement =
+      (existing.type || requirement.type) === 'SUPPLEMENT';
 
     return new PurchaseItem({
       id: existing.id,
@@ -440,18 +465,26 @@ export class PurchasingService {
       availableQuantity:
         requirement.availableQuantity ?? existing.availableQuantity,
       usesInventory: existing.usesInventory || requirement.usesInventory,
-      noPurchaseNeeded: clearNoPurchaseMarker
-        ? false
-        : existing.noPurchaseNeeded,
-      noPurchaseReason: clearNoPurchaseMarker
-        ? null
-        : existing.noPurchaseReason,
-      noPurchaseMarkedAt: clearNoPurchaseMarker
-        ? null
-        : existing.noPurchaseMarkedAt,
-      noPurchaseMarkedById: clearNoPurchaseMarker
-        ? null
-        : existing.noPurchaseMarkedById,
+      noPurchaseNeeded: isSupplement
+        ? true
+        : clearNoPurchaseMarker
+          ? false
+          : existing.noPurchaseNeeded,
+      noPurchaseReason: isSupplement
+        ? existing.noPurchaseReason || SUPPLEMENT_DEFAULT_NO_PURCHASE_REASON
+        : clearNoPurchaseMarker
+          ? null
+          : existing.noPurchaseReason,
+      noPurchaseMarkedAt: isSupplement
+        ? existing.noPurchaseMarkedAt || new Date()
+        : clearNoPurchaseMarker
+          ? null
+          : existing.noPurchaseMarkedAt,
+      noPurchaseMarkedById: isSupplement
+        ? existing.noPurchaseMarkedById
+        : clearNoPurchaseMarker
+          ? null
+          : existing.noPurchaseMarkedById,
       purchaseChannel: existing.purchaseChannel || requirement.purchaseChannel,
       productModel: existing.productModel || requirement.productModel,
       displayUnit: existing.displayUnit || requirement.displayUnit,
@@ -2046,6 +2079,7 @@ export class PurchasingService {
           purchaseChannel: req.purchaseChannel,
           productModel: req.productModel,
           displayUnit: req.displayUnit,
+          ...this.getSupplementNoPurchaseDefaults(req.type),
         }),
     );
 
@@ -2756,6 +2790,7 @@ export class PurchasingService {
           purchaseChannel: req.purchaseChannel,
           productModel: req.productModel,
           displayUnit: req.displayUnit, // ✅ 传入显示单位
+          ...this.getSupplementNoPurchaseDefaults(req.type),
         }),
     );
 
@@ -3464,6 +3499,7 @@ export class PurchasingService {
             id: `recalc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // 生成新ID
             purchaseListId: purchaseList.id,
             ...item,
+            ...this.getSupplementNoPurchaseDefaults(item.type),
           }),
       ),
       itemCount: mergedItems.length,

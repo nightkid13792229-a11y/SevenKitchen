@@ -113,7 +113,7 @@
 
       <!-- 订单截图识别：点按钮直接选图，原地等结果（2026-11-05 起不再单独占一页） -->
       <view v-if="canImportOrderScreenshot || orderImportTotal > 0" class="section import-card">
-        <button v-if="canImportOrderScreenshot" class="import-btn" @tap="goOrderImport">AI 识别订单截图</button>
+        <button v-if="canImportOrderScreenshot" class="import-btn" @tap="goOrderImport">AI记录</button>
         <text
           v-if="canImportOrderScreenshot && orderImportCount > 0"
           class="import-note import-link"
@@ -140,7 +140,7 @@
             class="filter-chip"
             :class="{ active: activeItemFilter === opt.key }"
             @tap="activeItemFilter = opt.key"
-          >{{ opt.label }} <text class="filter-count">{{ opt.count }}</text></text>
+          >{{ opt.label }}<text class="filter-count">{{ opt.count }}</text></text>
         </view>
 
         <!-- 按类型分组显示原料 -->
@@ -187,8 +187,14 @@
                   >
                     <view class="item-actions-left">
                       <template v-if="itemState(item) === 'NO_PURCHASE'">
-                        <text class="state-hint">{{ item.noPurchaseReason || '已标记无需采购' }}</text>
-                        <text v-if="canManagePurchaseRecords" class="inline-action" @tap.stop="clearItemNoPurchase(item)">取消标记</text>
+                        <view class="state-inline">
+                          <text class="state-hint">无需采购</text>
+                          <text
+                            v-if="canManagePurchaseRecords"
+                            class="inline-action"
+                            @tap.stop="clearItemNoPurchase(item)"
+                          >取消</text>
+                        </view>
                       </template>
                       <template v-else-if="itemState(item) === 'RECORDED'">
                         <text class="record-summary-link" @tap="toggleItemRecords(item)">
@@ -196,7 +202,14 @@
                         </text>
                       </template>
                       <template v-else-if="itemState(item) === 'COVERED'">
-                        <text class="state-hint green">库存足够，无需购买</text>
+                        <view class="state-inline">
+                          <text class="state-hint green">库存足够，无需购买</text>
+                          <text
+                            v-if="canManagePurchaseRecords"
+                            class="inline-action"
+                            @tap.stop="dismissItemCovered(item)"
+                          >取消</text>
+                        </view>
                       </template>
                       <template v-else>
                         <text
@@ -215,8 +228,10 @@
                     <button
                       v-if="canManagePurchaseRecords"
                       class="record-btn"
+                      :class="{ disabled: !canManualRecord(item) }"
+                      :disabled="!canManualRecord(item)"
                       @tap.stop="handleContinueAdd(item)"
-                    >采购记录</button>
+                    >手动记录</button>
                   </view>
 
                   <!-- 采购记录明细：默认折叠，避免每个原料下面挂一大块 -->
@@ -496,7 +511,15 @@ const detailTitle = computed(() => {
 });
 
 // 按类型分组的原料（计算属性）
+// 「库存足够」是系统按库存自动判定的，采购员确认要买时可以先取消（本页内有效），
+// 取消后卡片回到「待采购」，才能点「手动记录」。
+const coveredDismissedItemIds = ref<Record<string, boolean>>({});
+const isCoveredDismissed = (item: any) =>
+  coveredDismissedItemIds.value[item.id] === true;
 const isItemCovered = (item: any) => {
+  if (isCoveredDismissed(item)) {
+    return false;
+  }
   const required = getItemRequiredQuantity(item);
   return (
     Number.isFinite(required) &&
@@ -512,6 +535,13 @@ const itemState = (item: any): ItemState => {
   if ((item.records || []).length > 0) return 'RECORDED';
   if (isItemCovered(item)) return 'COVERED';
   return 'PENDING';
+};
+
+// 「手动记录」只对真正需要买/已买过的原料开放：
+// 无需采购、库存足够两种状态必须先点「取消」，避免误录。
+const canManualRecord = (item: any) => {
+  const state = itemState(item);
+  return state === 'PENDING' || state === 'RECORDED';
 };
 
 // 采购记录默认折叠成一行（已录入 N 条 · 金额），点开才看明细
@@ -595,13 +625,22 @@ const itemStateCounts = computed(() => {
   }
   return counts;
 });
-const filterOptions = computed(() => [
-  { key: 'ALL' as ItemFilter, label: '全部', count: items.value.length },
-  { key: 'PENDING' as ItemFilter, label: '待采购', count: itemStateCounts.value.PENDING },
-  { key: 'RECORDED' as ItemFilter, label: '已录入', count: itemStateCounts.value.RECORDED },
-  { key: 'NO_PURCHASE' as ItemFilter, label: '无需采购', count: itemStateCounts.value.NO_PURCHASE },
-  { key: 'COVERED' as ItemFilter, label: '库存足够', count: itemStateCounts.value.COVERED },
-]);
+const filterOptions = computed(() => {
+  const options = [
+    { key: 'ALL' as ItemFilter, label: '全部', count: items.value.length },
+    { key: 'PENDING' as ItemFilter, label: '待采购', count: itemStateCounts.value.PENDING },
+    { key: 'RECORDED' as ItemFilter, label: '已录入', count: itemStateCounts.value.RECORDED },
+    { key: 'NO_PURCHASE' as ItemFilter, label: '无需采购', count: itemStateCounts.value.NO_PURCHASE },
+    { key: 'COVERED' as ItemFilter, label: '库存足够', count: itemStateCounts.value.COVERED },
+  ];
+  // 一屏一行展示：数量为 0 的筛选项先不占位置（当前选中项始终保留）
+  return options.filter(
+    (option) =>
+      option.key === 'ALL' ||
+      option.key === activeItemFilter.value ||
+      option.count > 0,
+  );
+});
 const filteredGroups = computed(() =>
   groupedItems.value
     .map((group) => ({
@@ -616,12 +655,12 @@ const filteredGroups = computed(() =>
     .filter((group) => group.items.length > 0),
 );
 
-// 获取类型标签
+// 获取类型标签（列表里不再放 emoji 图标，左侧保持干净）
 const getTypeLabel = (type: string) => {
   const labels: Record<string, string> = {
-    FOOD: '🥩 食材',
-    SUPPLEMENT: '💊 补剂',
-    PACKAGING: '📦 包装材料',
+    FOOD: '食材',
+    SUPPLEMENT: '补剂',
+    PACKAGING: '包装材料',
   };
   return labels[type] || type;
 };
@@ -1629,8 +1668,18 @@ const loadPurchaseRecords = async () => {
   }
 };
 
-// 点击"继续添加采购记录"按钮
+// 点击"手动记录"按钮
 const handleContinueAdd = (item: any) => {
+  if (!canManualRecord(item)) {
+    uni.showToast({
+      title:
+        itemState(item) === 'NO_PURCHASE'
+          ? '已标记无需采购，请先点「取消」'
+          : '库存足够，请先点「取消」再记录',
+      icon: 'none',
+    });
+    return;
+  }
   selectedIngredient.value = item;
   editingRecord.value = null;
   resetRecordForm();
@@ -1932,7 +1981,7 @@ const markItemNoPurchase = async (item: any) => {
     const response: any = await markPurchaseItemNoPurchaseApi(purchaseListId.value, item.id, { reason: '现场确认无需采购' });
 
     if (response.code === 0) {
-      uni.showToast({ title: '已标记，可点取消标记撤销', icon: 'none' });
+      uni.showToast({ title: '已标记，可点取消撤销', icon: 'none' });
       await loadDetail();
     } else {
       uni.showToast({ title: response.message || '标记失败', icon: 'none' });
@@ -1958,7 +2007,12 @@ const clearItemNoPurchase = (item: any) => {
         const response: any = await clearPurchaseItemNoPurchaseApi(purchaseListId.value, item.id);
 
         if (response.code === 0) {
-          uni.showToast({ title: '已取消', icon: 'success' });
+          // 取消后如果库存仍自动判定为足够，也一并解除，避免再点一次取消
+          coveredDismissedItemIds.value = {
+            ...coveredDismissedItemIds.value,
+            [item.id]: true,
+          };
+          uni.showToast({ title: '已取消，可手动记录', icon: 'success' });
           await loadDetail();
         } else {
           uni.showToast({
@@ -1970,6 +2024,25 @@ const clearItemNoPurchase = (item: any) => {
         console.error('取消无需采购标记失败', error);
         uni.showToast({ title: error.message || '取消失败', icon: 'none' });
       }
+    },
+  });
+};
+
+// 取消「库存足够」：只是让这张卡回到「待采购」，可以手动记录采购；
+// 系统判定的库存数据不变，重新进页面仍按库存自动判定。
+const dismissItemCovered = (item: any) => {
+  uni.showModal({
+    title: '取消库存足够',
+    content: `确认取消"${getPurchaseItemTitle(item)}"的库存足够状态？取消后可手动记录采购。`,
+    success: (res) => {
+      if (!res.confirm) {
+        return;
+      }
+      coveredDismissedItemIds.value = {
+        ...coveredDismissedItemIds.value,
+        [item.id]: true,
+      };
+      uni.showToast({ title: '已取消，可手动记录', icon: 'none' });
     },
   });
 };
@@ -2497,18 +2570,22 @@ const confirmDeleteItem = (item: any) => {
 
 .filter-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10rpx;
+  flex-wrap: nowrap;
+  gap: 8rpx;
   margin-bottom: 16rpx;
+  overflow: hidden;
 }
 
 .filter-chip {
-  padding: 6rpx 16rpx;
+  flex-shrink: 0;
+  padding: 6rpx 12rpx;
   border-radius: 999rpx;
   border: 1rpx solid #e7eadf;
   background: #ffffff;
-  font-size: 21rpx;
+  font-size: 20rpx;
+  line-height: 1.3;
   color: #6b6653;
+  white-space: nowrap;
 
   &.active {
     background: #1e3a2f;
@@ -2518,7 +2595,7 @@ const confirmDeleteItem = (item: any) => {
 }
 
 .filter-count {
-  margin-left: 2rpx;
+  margin-left: 4rpx;
   font-weight: 700;
 }
 
@@ -2927,6 +3004,13 @@ const confirmDeleteItem = (item: any) => {
     font-weight: 600;
     border: none;
 
+    // 无需采购 / 库存足够时置灰，先点「取消」才可记录
+    &.disabled {
+      background: #ecece7 !important;
+      color: #a3a094 !important;
+      opacity: 1;
+    }
+
     &:active {
       opacity: 0.8;
     }
@@ -2960,8 +3044,16 @@ const confirmDeleteItem = (item: any) => {
     gap: 16rpx;
   }
 
+  .state-inline {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8rpx;
+    min-width: 0;
+  }
+
   .state-hint {
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
     font-size: 21rpx;
     color: #6b6653;

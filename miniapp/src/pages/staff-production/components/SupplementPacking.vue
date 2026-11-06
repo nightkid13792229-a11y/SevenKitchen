@@ -1,10 +1,7 @@
 <template>
-  <view class="page">
-    <view class="head">
-      <view>
-        <text class="title">分装备料</text>
-        <text class="sub">按发货日看订单 / 备料 / 包材 / 缺料</text>
-      </view>
+  <view class="packing-panel">
+    <view class="panel-head">
+      <text class="panel-sub">按发货日看订单 / 备料 / 包材 / 缺料</text>
       <picker mode="date" :value="date" @change="onDateChange">
         <view class="date-btn">{{ date }}</view>
       </picker>
@@ -78,9 +75,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
-import { request } from '../../utils/api'
+import { computed, onMounted, ref } from 'vue'
+import { request } from '../../../utils/api'
 
 interface PackingOrder {
   id: string
@@ -88,6 +84,8 @@ interface PackingOrder {
   status: string
   bagCount: number
 }
+
+const emit = defineEmits<{ (event: 'count', value: number): void }>()
 
 const loading = ref(false)
 const now = new Date()
@@ -138,30 +136,34 @@ async function load() {
       method: 'GET',
       data: { date: date.value },
     })
-    if (res.code === 0) data.value = res.data
-    else uni.showToast({ title: res.message || '加载失败', icon: 'none' })
+    if (res.code === 0) {
+      data.value = res.data
+      emit('count', Number(res.data?.orderCount || 0))
+    } else uni.showToast({ title: res.message || '加载失败', icon: 'none' })
   } finally {
     loading.value = false
   }
 }
 
-// 从分装/发货详情返回时，状态和汇总都要重算；onMounted 只会在第一次进来时跑。
-onShow(load)
+// 这一块现在是生产管理页里的一个面板，页面的 onShow 不会再自动跑到这里，
+// 所以由父页面在「回到本页」或「切到补剂」时手动调 refresh()。
+defineExpose({ refresh: load })
+
+onMounted(load)
 </script>
 
 <style scoped>
-.page { min-height: 100vh; background: #f5f6f8; padding: 24rpx; box-sizing: border-box; }
-.head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20rpx; }
-.title { display: block; font-size: 38rpx; font-weight: 700; color: #1e3a2f; }
-.sub { display: block; margin-top: 6rpx; color: #909399; font-size: 23rpx; }
-.date-btn { background: #fff; padding: 12rpx 20rpx; border-radius: 30rpx; font-size: 26rpx; color: #1e3a2f; }
-.state { padding-top: 200rpx; text-align: center; color: #909399; }
+.packing-panel { padding: 0 32rpx 24rpx; box-sizing: border-box; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20rpx; }
+.panel-sub { color: #6b6653; font-size: 23rpx; }
+.date-btn { background: #fff; padding: 12rpx 20rpx; border-radius: 30rpx; font-size: 26rpx; color: #1e3a2f; border: 1rpx solid #e3e6d5; }
+.state { padding-top: 120rpx; text-align: center; color: #909399; }
 .hero { display: flex; background: linear-gradient(140deg, #1e3a2f, #2b5040); border-radius: 18rpx; padding: 28rpx; color: #f7f3e8; margin-bottom: 20rpx; }
 .hero-item { flex: 1; text-align: center; }
 .hero-value { display: block; font-size: 40rpx; font-weight: 700; }
 .hero-label { display: block; margin-top: 4rpx; font-size: 22rpx; color: #cad6c9; }
-.card { background: #fff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 20rpx; }
-.section-title { display: block; font-size: 28rpx; font-weight: 600; margin-bottom: 12rpx; }
+.card { background: #fff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 20rpx; box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04); }
+.section-title { display: block; font-size: 28rpx; font-weight: 600; margin-bottom: 12rpx; color: #26261f; }
 .section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12rpx; }
 .section-head .section-title { margin-bottom: 0; }
 .link { color: #2b5040; font-size: 23rpx; }

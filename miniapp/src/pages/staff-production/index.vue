@@ -3,132 +3,153 @@
     <!-- 顶部标题 -->
     <view class="header">
       <text class="title">生产管理</text>
-      <text class="subtitle">自动排单、查看任务、完成制作</text>
+      <text class="subtitle">鲜食排单制作 · 补剂分装备料</text>
     </view>
 
-    <view class="date-section">
-      <picker mode="date" :value="selectedProductionDate" @change="handleProductionDateChange">
-        <view class="date-picker">
-          <view>
-            <text class="date-label">生产日期</text>
-            <text class="date-value">{{ selectedProductionDate }}</text>
+    <!-- 鲜食 / 补剂都属于生产环节，共用一个入口，在这里再分 -->
+    <view class="mode-switch">
+      <view
+        v-for="mode in productionModes"
+        :key="mode.value"
+        class="mode-item"
+        :class="{ active: activeMode === mode.value }"
+        @tap="switchMode(mode.value)"
+      >
+        <text class="mode-label">{{ mode.label }}</text>
+        <text v-if="mode.count > 0" class="mode-count">{{ mode.count }}</text>
+      </view>
+    </view>
+
+    <view v-show="activeMode === 'FRESH'" class="mode-panel">
+      <view class="date-section">
+        <picker mode="date" :value="selectedProductionDate" @change="handleProductionDateChange">
+          <view class="date-picker">
+            <view>
+              <text class="date-label">生产日期</text>
+              <text class="date-value">{{ selectedProductionDate }}</text>
+            </view>
+            <text class="date-arrow">切换</text>
           </view>
-          <text class="date-arrow">切换</text>
+        </picker>
+        <text class="date-hint">未完成的历史制作单会继续显示，避免跨天漏单</text>
+      </view>
+
+      <!-- 统计卡片 -->
+      <view class="stats-section">
+        <view class="stat-card">
+          <text class="stat-value">{{ statistics.todayOrders }}</text>
+          <text class="stat-label">制作单</text>
         </view>
-      </picker>
-      <text class="date-hint">未完成的历史制作单会继续显示，避免跨天漏单</text>
-    </view>
-
-    <!-- 统计卡片 -->
-    <view class="stats-section">
-      <view class="stat-card">
-        <text class="stat-value">{{ statistics.todayOrders }}</text>
-        <text class="stat-label">制作单</text>
-      </view>
-      <view class="stat-card">
-        <text class="stat-value">{{ statistics.pendingScheduleOrders }}</text>
-        <text class="stat-label">待排单订单</text>
-      </view>
-      <view class="stat-card">
-        <text class="stat-value">{{ statistics.inProgress }}</text>
-        <text class="stat-label">制作中</text>
-      </view>
-      <view class="stat-card">
-        <text class="stat-value">{{ statistics.completed }}</text>
-        <text class="stat-label">已完成</text>
-      </view>
-    </view>
-
-    <!-- 自动排单按钮（所选日期仍有未分配订单时显示） -->
-    <view v-if="canAutoSchedule" class="schedule-section">
-      <button class="schedule-btn" @tap="autoScheduleToday">
-        <text>📋 {{ scheduleButtonText }}</text>
-      </button>
-      <text class="schedule-hint">{{ scheduleHintText }}</text>
-      <text class="schedule-warning">⚠️ 点击前会检查所选日期的采购清单是否已完成</text>
-    </view>
-
-    <!-- Tab切换 -->
-    <view class="tabs">
-      <view v-for="tab in tabs" :key="tab.value" class="tab-item" :class="{ active: activeTab === tab.value }" @tap="switchTab(tab.value)">
-        <text>{{ tab.label }}</text>
-        <text class="tab-count">{{ tab.count }}</text>
-      </view>
-    </view>
-
-    <!-- 任务列表 -->
-    <view class="task-list">
-      <!-- 空状态 -->
-      <view v-if="filteredTasks.length === 0" class="empty-state">
-        <text class="empty-icon">👨‍🍳</text>
-        <text class="empty-text">暂无{{ currentTabLabel }}任务</text>
-      </view>
-
-      <!-- 任务卡片 -->
-      <view v-else>
-        <view v-for="task in filteredTasks" :key="task.id" class="task-card">
-          <view class="task-header" @tap="viewDetails(task)">
-            <view class="recipe-title">
-              <text class="recipe-name">{{ task.recipeName }} v{{ task.recipeVersion }}</text>
-              <text v-if="isCarryoverTask(task)" class="carryover-badge">逾期</text>
-            </view>
-            <text class="pot-info">({{ task.currentPotNumber }}/{{ task.totalPots }})</text>
-          </view>
-
-          <view class="task-body" @tap="viewDetails(task)">
-            <view class="info-row">
-              <text class="label">制作数量：</text>
-              <text class="value">{{ formatDecimal(task.totalProductionG) }}g</text>
-            </view>
-            <view class="info-row">
-              <text class="label">关联订单：</text>
-              <text class="value">{{ task.orderItems.length }}个</text>
-            </view>
-            <view class="info-row">
-              <text class="label">创建时间：</text>
-              <text class="value">{{ task.createdAt }}</text>
-            </view>
-            <view v-if="isCarryoverTask(task)" class="info-row">
-              <text class="label">生产日期：</text>
-              <text class="value carryover-text">{{ task.productionDate }}</text>
-            </view>
-          </view>
-
-          <!-- 操作按钮区 -->
-          <view class="action-buttons">
-            <!-- PENDING状态：显示开始制作按钮 -->
-            <button v-if="task.status === 'PENDING'" class="start-btn" @tap.stop="handleStartTask(task)">
-              <text class="btn-icon">▶️</text>
-              <text class="btn-text">开始制作</text>
-            </button>
-
-            <!-- 删除按钮 -->
-            <view class="delete-btn" @tap.stop="handleDelete(task)">
-              <text class="delete-icon">🗑️</text>
-              <text class="delete-text">删除</text>
-            </view>
-          </view>
+        <view class="stat-card">
+          <text class="stat-value">{{ statistics.pendingScheduleOrders }}</text>
+          <text class="stat-label">待排单订单</text>
+        </view>
+        <view class="stat-card">
+          <text class="stat-value">{{ statistics.inProgress }}</text>
+          <text class="stat-label">制作中</text>
+        </view>
+        <view class="stat-card">
+          <text class="stat-value">{{ statistics.completed }}</text>
+          <text class="stat-label">已完成</text>
         </view>
       </view>
-    </view>
 
-    <!-- 历史记录（可展开查看） -->
-    <view v-if="historyBatches.length > 0" class="history-section">
-      <view class="section-title">历史记录</view>
-      <view v-for="batch in historyBatches" :key="batch.id" class="history-item" @tap="toggleHistory(batch.id)">
-        <view class="history-header">
-          <text class="history-date">{{ batch.date }}</text>
-          <text class="history-count">{{ batch.count }}锅</text>
-          <text class="history-toggle">{{ expandedHistoryId === batch.id ? '▼' : '▶' }}</text>
+      <!-- 自动排单按钮（所选日期仍有未分配订单时显示） -->
+      <view v-if="canAutoSchedule" class="schedule-section">
+        <button class="schedule-btn" @tap="autoScheduleToday">
+          <text>📋 {{ scheduleButtonText }}</text>
+        </button>
+        <text class="schedule-hint">{{ scheduleHintText }}</text>
+        <text class="schedule-warning">⚠️ 点击前会检查所选日期的采购清单是否已完成</text>
+      </view>
+
+      <!-- Tab切换 -->
+      <view class="tabs">
+        <view v-for="tab in tabs" :key="tab.value" class="tab-item" :class="{ active: activeTab === tab.value }" @tap="switchTab(tab.value)">
+          <text>{{ tab.label }}</text>
+          <text class="tab-count">{{ tab.count }}</text>
         </view>
-        <view v-if="expandedHistoryId === batch.id" class="history-details">
-          <view v-for="unit in batch.units" :key="unit.id" class="history-unit">
-            <text class="history-recipe">{{ unit.recipeName }} ({{ unit.currentPotNumber }}/{{ unit.totalPots }})</text>
-            <text class="history-weight">{{ formatDecimal(unit.totalProductionG) }}g</text>
-            <text class="history-time">{{ unit.completedAt }}</text>
+      </view>
+
+      <!-- 任务列表 -->
+      <view class="task-list">
+        <!-- 空状态 -->
+        <view v-if="filteredTasks.length === 0" class="empty-state">
+          <text class="empty-icon">👨‍🍳</text>
+          <text class="empty-text">暂无{{ currentTabLabel }}任务</text>
+        </view>
+
+        <!-- 任务卡片 -->
+        <view v-else>
+          <view v-for="task in filteredTasks" :key="task.id" class="task-card">
+            <view class="task-header" @tap="viewDetails(task)">
+              <view class="recipe-title">
+                <text class="recipe-name">{{ task.recipeName }} v{{ task.recipeVersion }}</text>
+                <text v-if="isCarryoverTask(task)" class="carryover-badge">逾期</text>
+              </view>
+              <text class="pot-info">({{ task.currentPotNumber }}/{{ task.totalPots }})</text>
+            </view>
+
+            <view class="task-body" @tap="viewDetails(task)">
+              <view class="info-row">
+                <text class="label">制作数量：</text>
+                <text class="value">{{ formatDecimal(task.totalProductionG) }}g</text>
+              </view>
+              <view class="info-row">
+                <text class="label">关联订单：</text>
+                <text class="value">{{ task.orderItems.length }}个</text>
+              </view>
+              <view class="info-row">
+                <text class="label">创建时间：</text>
+                <text class="value">{{ task.createdAt }}</text>
+              </view>
+              <view v-if="isCarryoverTask(task)" class="info-row">
+                <text class="label">生产日期：</text>
+                <text class="value carryover-text">{{ task.productionDate }}</text>
+              </view>
+            </view>
+
+            <!-- 操作按钮区 -->
+            <view class="action-buttons">
+              <!-- PENDING状态：显示开始制作按钮 -->
+              <button v-if="task.status === 'PENDING'" class="start-btn" @tap.stop="handleStartTask(task)">
+                <text class="btn-icon">▶️</text>
+                <text class="btn-text">开始制作</text>
+              </button>
+
+              <!-- 删除按钮 -->
+              <view class="delete-btn" @tap.stop="handleDelete(task)">
+                <text class="delete-icon">🗑️</text>
+                <text class="delete-text">删除</text>
+              </view>
+            </view>
           </view>
         </view>
       </view>
+
+      <!-- 历史记录（可展开查看） -->
+      <view v-if="historyBatches.length > 0" class="history-section">
+        <view class="section-title">历史记录</view>
+        <view v-for="batch in historyBatches" :key="batch.id" class="history-item" @tap="toggleHistory(batch.id)">
+          <view class="history-header">
+            <text class="history-date">{{ batch.date }}</text>
+            <text class="history-count">{{ batch.count }}锅</text>
+            <text class="history-toggle">{{ expandedHistoryId === batch.id ? '▼' : '▶' }}</text>
+          </view>
+          <view v-if="expandedHistoryId === batch.id" class="history-details">
+            <view v-for="unit in batch.units" :key="unit.id" class="history-unit">
+              <text class="history-recipe">{{ unit.recipeName }} ({{ unit.currentPotNumber }}/{{ unit.totalPots }})</text>
+              <text class="history-weight">{{ formatDecimal(unit.totalProductionG) }}g</text>
+              <text class="history-time">{{ unit.completedAt }}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 补剂分装：原来工作台上的「分装备料」整块搬到这里 -->
+    <view v-show="activeMode === 'SUPPLEMENT'" class="mode-panel">
+      <SupplementPacking ref="supplementRef" @count="onSupplementCount" />
     </view>
   </view>
 </template>
@@ -138,6 +159,7 @@ import { ref, onMounted, computed } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { getTodayStatistics, autoSchedule, getPackagingUnits, completeProductionTask, startProductionTask, deleteProductionBatch } from './api/production';
 import { formatDecimal } from './utils/format';
+import SupplementPacking from './components/SupplementPacking.vue';
 
 const getTodayDateText = () => {
   const now = new Date();
@@ -148,6 +170,24 @@ const getTodayDateText = () => {
 };
 
 const selectedProductionDate = ref(getTodayDateText());
+
+// 鲜食 / 补剂同属生产环节，共用一个入口，进来再分。
+type ProductionMode = 'FRESH' | 'SUPPLEMENT';
+const activeMode = ref<ProductionMode>('FRESH');
+const supplementRef = ref<any>(null);
+const supplementCount = ref(0);
+
+const switchMode = (mode: ProductionMode) => {
+  if (activeMode.value === mode) return;
+  activeMode.value = mode;
+  if (mode === 'SUPPLEMENT') {
+    supplementRef.value?.refresh?.();
+  }
+};
+
+const onSupplementCount = (value: number) => {
+  supplementCount.value = Number(value || 0);
+};
 
 // 统计数据
 const statistics = ref({
@@ -181,6 +221,15 @@ const taskStatusCounts = computed(() => {
     },
   );
 });
+
+const freshTodoCount = computed(() => {
+  return taskStatusCounts.value.PENDING + taskStatusCounts.value.IN_PROGRESS;
+});
+
+const productionModes = computed(() => [
+  { value: 'FRESH' as ProductionMode, label: '鲜食生产', count: freshTodoCount.value },
+  { value: 'SUPPLEMENT' as ProductionMode, label: '补剂分装', count: supplementCount.value },
+]);
 
 // Tab筛选
 const tabs = computed(() => [
@@ -240,6 +289,10 @@ onMounted(() => {
 onShow(() => {
   loadTodayStatistics();
   loadPackagingUnits();
+  // 补剂面板在子组件里，页面的 onShow 不会自动触发它；回页时手动刷一次
+  if (activeMode.value === 'SUPPLEMENT') {
+    supplementRef.value?.refresh?.();
+  }
 });
 
 // 加载今日统计
@@ -515,6 +568,49 @@ const toggleHistory = (batchId: string) => {
     font-size: 24rpx;
     color: rgba(38, 38, 31, 0.6);
   }
+}
+
+.mode-switch {
+  display: flex;
+  gap: 12rpx;
+  margin: 0 32rpx 24rpx;
+  padding: 8rpx;
+  background: #eef2e4;
+  border-radius: 16rpx;
+}
+
+.mode-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  padding: 20rpx 0;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  color: #4a5245;
+
+  &.active {
+    background: #1e3a2f;
+    color: #f3eddd;
+    font-weight: 600;
+    box-shadow: 0 4rpx 12rpx rgba(30, 58, 47, 0.2);
+
+    .mode-count {
+      background: rgba(243, 237, 221, 0.22);
+    }
+  }
+}
+
+.mode-count {
+  min-width: 36rpx;
+  padding: 0 10rpx;
+  font-size: 22rpx;
+  line-height: 32rpx;
+  text-align: center;
+  color: inherit;
+  background: rgba(30, 58, 47, 0.1);
+  border-radius: 999rpx;
 }
 
 .stats-section {

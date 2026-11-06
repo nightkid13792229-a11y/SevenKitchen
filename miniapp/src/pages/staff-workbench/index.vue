@@ -17,10 +17,9 @@
             <image class="module-icon" :src="module.icon" mode="aspectFit" />
           </view>
           <text class="module-title">{{ module.title }}</text>
-          <text
-            v-if="module.badgeKey && badgeCount(module.badgeKey) > 0"
-            class="module-badge"
-          >{{ formatBadge(badgeCount(module.badgeKey)) }}</text>
+          <text v-if="moduleBadge(module) > 0" class="module-badge">{{
+            formatBadge(moduleBadge(module))
+          }}</text>
         </view>
       </view>
     </view>
@@ -47,7 +46,7 @@ type WorkbenchModule = {
   key: string
   title: string
   icon: string
-  badgeKey?: WorkbenchBadgeKey
+  badgeKeys?: WorkbenchBadgeKey[]
   onTap: () => void
 }
 
@@ -139,6 +138,9 @@ const loadStats = async () => {
 }
 
 const badgeCount = (key: WorkbenchBadgeKey) => Number(todoCounts.value[key] || 0)
+// 一个格子可以挂多个待办（生产管理同时算鲜食和补剂），红点是它们相加
+const moduleBadge = (module: WorkbenchModule) =>
+  (module.badgeKeys || []).reduce((sum, key) => sum + badgeCount(key), 0)
 const formatBadge = (count: number) => (count > 99 ? '99+' : String(count))
 
 function goToPurchasing() {
@@ -187,10 +189,6 @@ function goToOrderCenter() {
   uni.navigateTo({ url: '/pages/staff-order-center/index' })
 }
 
-function goToSupplementSummary() {
-  uni.navigateTo({ url: '/pages/staff-supplement-summary/index' })
-}
-
 /**
  * 补剂售后不再单独占一个格子（2026-10-30）。
  *
@@ -203,31 +201,23 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
     key: 'purchasing',
     title: '采购管理',
     icon: '/static/ui-icons/purchasing.png',
-    badgeKey: 'purchasing',
+    badgeKeys: ['purchasing'],
     onTap: goToPurchasing,
   },
   {
     key: 'production',
     title: '生产管理',
     icon: '/static/ui-icons/production.png',
-    badgeKey: 'production',
+    // 鲜食待制作 + 补剂待处理，都是「生产」这条线上的活
+    badgeKeys: ['production', 'supplementOrders'],
     onTap: goToProduction,
   },
   {
     key: 'orderCenter',
     title: '订单中心',
     icon: '/static/ui-icons/orders.png',
-    badgeKey: 'orders',
+    badgeKeys: ['orders'],
     onTap: goToOrderCenter,
-  },
-  {
-    key: 'supplementSummary',
-    title: '分装备料',
-    icon: '/static/ui-icons/inventory.png',
-    // 补剂待处理（待确认收款 / 待分装 / 待发货）都从这一个入口进；
-    // 后端 /staff/workbench/summary 已经算好 supplementOrders，别让它白算。
-    badgeKey: 'supplementOrders',
-    onTap: goToSupplementSummary,
   },
   {
     key: 'customers',
@@ -239,7 +229,7 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
     key: 'inventory',
     title: '库存管理',
     icon: '/static/ui-icons/inventory.png',
-    badgeKey: 'inventory',
+    badgeKeys: ['inventory'],
     onTap: goToInventory,
   },
   {
@@ -252,7 +242,7 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
     key: 'reimbursement',
     title: '报销管理',
     icon: '/static/ui-icons/reimbursement.png',
-    badgeKey: 'reimbursement',
+    badgeKeys: ['reimbursement'],
     onTap: goToReimbursement,
   },
   {

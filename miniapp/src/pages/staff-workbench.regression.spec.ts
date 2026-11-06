@@ -42,33 +42,26 @@ describe('staff workbench compact icon grid', () => {
 
     // 2026-10-21：鲜食 / 定制 / 补剂收口到「订单中心」一个入口；
     // 补剂侧再拆出「分装备料」这个现场高频动作。
-    // 旧的「订单管理」「补剂订单」两个并列入口随之撤掉。
     // 2026-10-30：补剂售后也收进订单中心（勾「只看售后」+ 订单详情的售后记录），
     // 工作台从 10 个格子回到 9 个，正好三行。
+    // 2026-11-07：分装备料并进「生产管理」（里面再分鲜食 / 补剂），
+    // 鲜食和补剂同属生产环节，不再各占一个格子。
     expect([...moduleConfig.matchAll(/title: '([^']+)'/g)].map((match) => match[1])).toEqual([
       '采购管理',
       '生产管理',
       '订单中心',
-      '分装备料',
       '客户与狗狗',
       '库存管理',
       '食谱管理',
       '报销管理',
       '食谱设计器',
     ])
-    for (const badgeKey of [
-      'purchasing',
-      'production',
-      'orders',
-      // 补剂不单独占格子：待确认收款 / 待分装 / 待发货都从「分装备料」进，
-      // 角标也必须挂在这里，否则员工看不到补剂待办。
-      'supplementOrders',
-      'inventory',
-      'reimbursement',
-    ]) {
-      expect(moduleConfig).toContain(`badgeKey: '${badgeKey}'`)
+    for (const badgeKey of ['purchasing', 'orders', 'inventory', 'reimbursement']) {
+      expect(moduleConfig).toContain(`badgeKeys: ['${badgeKey}']`)
     }
-    expect(source).toContain('badgeCount(module.badgeKey)')
+    // 补剂待办不再单独占格子，但红点要挂在生产管理上，否则员工看不到补剂待办
+    expect(moduleConfig).toContain("badgeKeys: ['production', 'supplementOrders']")
+    expect(source).toContain('moduleBadge(module)')
   })
 
   it('订单中心入口已注册，补剂订单从订单中心仍能进详情', () => {
@@ -81,7 +74,7 @@ describe('staff workbench compact icon grid', () => {
     )
 
     expect(source).toContain("url: '/pages/staff-order-center/index'")
-    expect(source).toContain("badgeKey: 'orders'")
+    expect(source).toContain("badgeKeys: ['orders']")
     expect(orderCenterSource).toContain("item.type === 'SUPPLEMENT'")
     expect(orderCenterSource).toContain('/pages/staff-supplement-orders/detail?id=')
 
@@ -112,6 +105,24 @@ describe('staff workbench compact icon grid', () => {
     expect(
       pagesConfig.pages.map((page: { path: string }) => page.path),
     ).not.toContain('pages/staff-supplement-aftersales/index')
+  })
+
+  it('★ 分装备料已并入生产管理：工作台不再有独立入口，旧页面和路由一起撤掉', () => {
+    const pagesConfig = JSON.parse(
+      readFileSync(resolve(__dirname, '../pages.json'), 'utf8'),
+    )
+    const moduleConfig = source.match(/const workbenchModules[\s\S]*?\n\]\)/)?.[0] || ''
+
+    expect(moduleConfig).not.toContain('分装备料')
+    expect(moduleConfig).not.toContain('supplementSummary')
+    expect(source).not.toContain('/pages/staff-supplement-summary')
+
+    expect(
+      existsSync(resolve(__dirname, 'staff-supplement-summary/index.vue')),
+    ).toBe(false)
+    expect(
+      pagesConfig.pages.map((page: { path: string }) => page.path),
+    ).not.toContain('pages/staff-supplement-summary/index')
   })
 
   it('uses bundled image assets instead of the retired header and module UI', () => {

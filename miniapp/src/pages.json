@@ -202,12 +202,6 @@
       }
     },
     {
-      "path": "pages/staff-supplement-summary/index",
-      "style": {
-        "navigationBarTitleText": "分装备料"
-      }
-    },
-    {
       "path": "pages/recipe-designer/list",
       "style": {
         "navigationBarTitleText": "食谱设计器"

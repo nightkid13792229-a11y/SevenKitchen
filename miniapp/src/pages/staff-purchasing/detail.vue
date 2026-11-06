@@ -443,6 +443,7 @@ import StaffQuantityText from '../../components/staff/StaffQuantityText.vue';
 import StaffBottomBar from '../../components/staff/StaffBottomBar.vue';
 import { formatStaffQuantity } from '../../utils/staff-quantity';
 import { canAddProcurementSku } from './procurement-sku-entry';
+import { buildSkuCreateQuery, isSkuCreatedFor } from './procurement-sku-event';
 import { groupPurchaseItemsForDisplay } from './food-category-order';
 import {
   chooseOrderShots,
@@ -836,6 +837,7 @@ const openCreateProcurementSku = () => {
     `ingredientId=${encodeURIComponent(ingredientId)}`,
     `ingredientName=${encodeURIComponent(item.ingredientName || '')}`,
     `baseUnit=${encodeURIComponent(item.ingredientBaseUnit || item.baseUnit || '')}`,
+    buildSkuCreateQuery('detail'),
   ].join('&');
 
   uni.navigateTo({
@@ -843,8 +845,15 @@ const openCreateProcurementSku = () => {
   });
 };
 
-/** 新增完采购商品回来：重新拉清单，并把它选中 */
+/**
+ * 新增完采购商品回来：重新拉清单，并把它选中。
+ *
+ * 只处理「从本页点新增」的那条广播：识别结果页新建商品也会广播，
+ * 全局广播会送到压在栈里的本页，照旧执行就会在确认后弹出没人点过的抽屉。
+ */
 const handleProcurementSkuCreated = async (payload: any) => {
+  if (!isSkuCreatedFor(payload, 'detail')) return;
+
   const ingredientId = payload?.ingredientId;
   if (!ingredientId) return;
 

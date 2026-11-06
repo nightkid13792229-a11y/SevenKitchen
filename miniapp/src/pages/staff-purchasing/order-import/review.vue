@@ -488,6 +488,7 @@ import { sortPurchaseItemsForDisplay } from '../food-category-order';
 import { firstBlockedImport } from '../../../utils/order-import-block';
 import { isSpecMismatch, specWarningText } from '../../../utils/order-import-spec';
 import { keepSkuForChannel } from '../../../utils/purchase-channel';
+import { buildSkuCreateQuery, isSkuCreatedFor } from '../procurement-sku-event';
 import {
   IMPORT_FEE_TOLERANCE,
   feeStatusText,
@@ -1050,7 +1051,9 @@ async function load() {
   loading.value = false;
 }
 
-function handleSkuCreated() {
+function handleSkuCreated(payload: any) {
+  // 只认本页发起的「新增商品」：别处新建商品时不必重拉本页
+  if (!isSkuCreatedFor(payload, 'order-import')) return;
   void load();
 }
 
@@ -1327,7 +1330,9 @@ function goNewSku() {
       `&ingredientName=${encodeURIComponent(ingredient.ingredientName)}` +
       `&baseUnit=${encodeURIComponent(ingredient.baseUnit)}` +
       // 新建的商品就属于这笔的渠道，带过去直接预选，省得再选一次（还能改）
-      `&channel=${encodeURIComponent(pickerOrderChannel.value)}`,
+      `&channel=${encodeURIComponent(pickerOrderChannel.value)}` +
+      // 广播只回本页：详情页也听着这条广播，不能让它跟着开抽屉
+      `&${buildSkuCreateQuery('order-import')}`,
   });
 }
 

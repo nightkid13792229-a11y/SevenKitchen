@@ -268,6 +268,10 @@ import { decodeRouteParam } from './route-param';
 import { prefillChannel } from '../../utils/purchase-channel';
 import { buildShotView, type ShotState } from './procurement-sku-shot';
 import { MULTIPACK_UNITS, shouldOpenMultipack } from './procurement-sku-multipack';
+import {
+  normalizeSkuCreateSource,
+  type SkuCreateSource,
+} from './procurement-sku-event';
 
 const SAMPLE_IMAGE_URL =
   'https://img.sevenkitchen.cloud/app-assets/procurement-sku-sample-v2.jpg';
@@ -291,6 +295,13 @@ const ingredientId = ref('');
 const ingredientName = ref('');
 const baseUnit = ref('G');
 const baseUnitText = computed(() => BASE_UNIT_TEXT[baseUnit.value] || '克');
+
+/**
+ * 是哪个页面让我新建的（详情页 / 识别结果页 / 采购记录页）。
+ * 新建成功后的广播是全应用的，压在栈里的页面也收得到，
+ * 所以要把来源带回去，只有发起页处理（否则详情节会误弹「添加采购记录」抽屉）。
+ */
+let createSource: SkuCreateSource | '' = '';
 
 const loading = ref(false);
 const submitting = ref(false);
@@ -470,6 +481,7 @@ onLoad(async (options: Record<string, string>) => {
   ingredientId.value = String(options?.ingredientId || '');
   ingredientName.value = decodeRouteParam(options?.ingredientName) || '原料';
   baseUnit.value = String(options?.baseUnit || 'G');
+  createSource = normalizeSkuCreateSource(options?.from);
 
   if (!ingredientId.value) {
     uni.showToast({ title: '缺少原料信息', icon: 'none' });
@@ -728,6 +740,8 @@ const handleSubmit = async () => {
       ingredientId: ingredientId.value,
       skuId: result?.sku?.id,
       duplicate: result?.status === 'duplicate',
+      // 只回发起页：识别结果页新建商品时，详情页也在听这条广播
+      from: createSource,
     });
 
     setTimeout(() => {

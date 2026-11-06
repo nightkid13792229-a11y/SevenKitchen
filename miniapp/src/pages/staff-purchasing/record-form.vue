@@ -117,6 +117,7 @@
 import { ref, computed } from 'vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { canAddProcurementSku } from './procurement-sku-entry';
+import { buildSkuCreateQuery, isSkuCreatedFor } from './procurement-sku-event';
 import {
   getPurchaseListDetail,
   addPurchaseRecord,
@@ -455,6 +456,7 @@ const openCreateProcurementSku = () => {
     `ingredientId=${encodeURIComponent(ingredientId)}`,
     `ingredientName=${encodeURIComponent(item.ingredientName || '')}`,
     `baseUnit=${encodeURIComponent(item.ingredientBaseUnit || item.ingredient?.baseUnit || '')}`,
+    buildSkuCreateQuery('record-form'),
   ].join('&');
 
   uni.navigateTo({
@@ -487,6 +489,9 @@ onShow(() => {
 onLoad((options: any) => {
   purchaseListId.value = options.id;
   uni.$on('procurement-sku:created', (payload: any) => {
+    // 只认本页发起的「新增商品」：识别结果页新建时也在广播，别把别的页面的商品记到这里
+    if (!isSkuCreatedFor(payload, 'record-form')) return;
+
     const currentIngredientId =
       selectedItem.value?.ingredientId || selectedItem.value?.id;
     if (!payload?.ingredientId || payload.ingredientId !== currentIngredientId) {

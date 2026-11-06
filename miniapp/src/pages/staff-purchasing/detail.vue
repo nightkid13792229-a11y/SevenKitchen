@@ -112,13 +112,19 @@
       </view>
 
       <!-- 订单截图识别：点按钮直接选图，原地等结果（2026-11-05 起不再单独占一页） -->
-      <view v-if="canImportOrderScreenshot" class="section import-card">
-        <button class="import-btn" @tap="goOrderImport">AI 识别订单截图</button>
+      <view v-if="canImportOrderScreenshot || orderImportTotal > 0" class="section import-card">
+        <button v-if="canImportOrderScreenshot" class="import-btn" @tap="goOrderImport">AI 识别订单截图</button>
         <text
-          v-if="orderImportCount > 0"
+          v-if="canImportOrderScreenshot && orderImportCount > 0"
           class="import-note import-link"
           @tap="goOrderImportReview"
         >继续核对已导入的 {{ orderImportCount }} 笔 ›</text>
+        <!-- 只读回看：已确认的也在里面，清单做完/报销后仍能翻（2026-11-06） -->
+        <text
+          v-if="orderImportTotal > 0"
+          class="import-note import-link"
+          @tap="goImportHistory"
+        >查看识别记录（{{ orderImportTotal }} 笔）›</text>
       </view>
 
       <!-- 原料明细 -->
@@ -1288,6 +1294,7 @@ const dateChanges = ref<any>({
 });
 
 const orderImportCount = ref(0);
+const orderImportTotal = ref(0);
 const importBusy = ref(false);
 const importStage = ref('');
 
@@ -1318,6 +1325,13 @@ onUnload(() => {
 const goOrderImportReview = () => {
   uni.navigateTo({
     url: `/pages/staff-purchasing/order-import/review?id=${purchaseListId.value}`,
+  });
+};
+
+/** 只读回看：草稿和已确认的都在这一页，不会改动采购单。 */
+const goImportHistory = () => {
+  uni.navigateTo({
+    url: `/pages/staff-purchasing/order-import/history?id=${purchaseListId.value}`,
   });
 };
 
@@ -1432,22 +1446,18 @@ const loadDetail = async (options: { silent?: boolean } = {}) => {
         await loadPurchaseRecords();
       }
 
-      // 未完成且未报销时，看有没有订单截图识别记录
-      if (res.data.status === 'PENDING' && !res.data.reimbursementId) {
-        try {
-          const importRes: any = await getOrderImports(purchaseListId.value);
-          // 只把「还没确认」的草稿算成待核对；已生成的不该再引导进去。
-          orderImportCount.value =
-            importRes.code === 0
-              ? (importRes.data || []).filter(
-                  (item: any) => item.status === 'DRAFT',
-                ).length
-              : 0;
-        } catch {
-          orderImportCount.value = 0;
-        }
-      } else {
+      // 订单截图识别记录：草稿给「继续核对」，全部（含已确认）给「查看识别记录」。
+      // 已确认的也要拉：清单完成/报销后仍然能回看当时 AI 认了什么（2026-11-06）。
+      try {
+        const importRes: any = await getOrderImports(purchaseListId.value);
+        const importRows = importRes.code === 0 ? importRes.data || [] : [];
+        orderImportCount.value = importRows.filter(
+          (item: any) => item.status === 'DRAFT',
+        ).length;
+        orderImportTotal.value = importRows.length;
+      } catch {
         orderImportCount.value = 0;
+        orderImportTotal.value = 0;
       }
 
       // 检测日期变更（静默刷新时跳过：子页面不会改订单日期）

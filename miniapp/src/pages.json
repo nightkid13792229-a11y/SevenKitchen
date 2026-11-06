@@ -356,6 +356,15 @@
           }
         },
         {
+          "path": "order-import/history",
+          "style": {
+            "navigationBarTitleText": "识别记录",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
+          }
+        },
+        {
           "path": "stock-create",
           "style": {
             "navigationBarTitleText": "创建补货采购单",

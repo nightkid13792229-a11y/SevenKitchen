@@ -285,6 +285,36 @@
   }
   .foot-note b { color: #5f5b4d; font-weight: 650; }
 
+
+  /* ---------- 空态 / 精简后的记录卡 ---------- */
+  .record-channel { font-size: 10.5px; color: #8a8574; }
+  .record-foot { justify-content: flex-start; gap: 8px; }
+  .record-foot .edit { margin-left: auto; }
+  .frame-wrap.extra { display: none; }
+  .empty-card {
+    margin-top: 2px; padding: 22px 18px 18px; border-radius: 16px;
+    border: 1.4px dashed #cdbb92; background: rgba(255, 253, 246, .62); text-align: center;
+  }
+  .empty-icon {
+    width: 44px; height: 44px; border-radius: 50%; margin: 0 auto 10px;
+    background: #eef2e4; color: #2f6b4f; font-size: 24px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; font-weight: 500;
+  }
+  .empty-title { font-size: 15px; font-weight: 700; letter-spacing: -.1px; }
+  .empty-desc { margin-top: 5px; font-size: 11.5px; line-height: 1.55; color: var(--muted); }
+  .empty-cta {
+    margin: 14px auto 0; max-width: 240px; height: 44px; border-radius: 11px;
+    background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+    color: #f3eddd; font-size: 14px; font-weight: 650;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 18px rgba(30, 58, 47, .16);
+  }
+  .empty-hint { margin-top: 12px; text-align: center; font-size: 11px; color: #9a9482; }
+  .btn-primary.disabled {
+    background: #e9e4d5; color: #9c9788; box-shadow: none; font-weight: 600;
+  }
+  .foot-hint { margin-top: 8px; text-align: center; font-size: 11px; color: #9a9482; }
+
   /* ---------- 单屏出图模式 ---------- */
   html.shot body { background: #f4f1e5; }
   html.shot .page-head, html.shot .caption, html.shot .foot-note { display: none; }
@@ -295,6 +325,7 @@
   html.shot[data-shot="1"] .frame-wrap:nth-child(1),
   html.shot[data-shot="2"] .frame-wrap:nth-child(2),
   html.shot[data-shot="3"] .frame-wrap:nth-child(3) { display: block; }
+  html.shot[data-shot="4"] .frame-wrap.extra { display: block; }
 </style>
 </head>
 <body>
@@ -306,8 +337,8 @@
     </div>
     <div class="legend">
       <span>一屏填完</span>
-      <span>名字看得全</span>
-      <span>保存有反馈</span>
+      <span>保存回列表</span>
+      <span>空态能新增</span>
     </div>
   </div>
 
@@ -417,7 +448,6 @@
 
             <div class="sheet-foot">
               <div class="btn-primary">保存记录</div>
-              <div class="btn-ghost"><b>保存并再记一条</b></div>
             </div>
           </div>
           <div class="home-indicator"></div>
@@ -425,7 +455,7 @@
       </div>
       <div class="caption">
         <h3><em>①</em>记录采购 · 一屏填完</h3>
-        <p>一屏看全：还需多少、买的什么、花了多少、买完差多少。<br>只有一个实心按钮；换商品先确认，再按新规格重算。</p>
+        <p>一屏看全：还需多少、买的什么、花了多少、买完差多少。<br>只有一个实心按钮；保存后回清单，换商品要重填数量金额。</p>
       </div>
     </div>
 
@@ -518,14 +548,14 @@
             </div>
 
             <div class="add-row">＋ 新增采购商品</div>
-            <div class="picker-foot">选中后自动回到记录页</div>
+            <div class="picker-foot">选中后回到记录页，数量和金额要重填</div>
           </div>
           <div class="home-indicator"></div>
         </div>
       </div>
       <div class="caption">
         <h3><em>②</em>更换商品 · 按渠道</h3>
-        <p>商品多时才展开；先按当前渠道过滤，选中即带回。<br>不再把十几张商品卡平铺在表单里。</p>
+        <p>商品多时才展开；先按当前渠道过滤，选中即带回。<br>换商品会清空数量和金额，避免按旧规格记错。</p>
       </div>
     </div>
 
@@ -594,8 +624,8 @@
                   <div class="record-qty">4 盒 × 280g <small>= 1120g</small></div>
                   <div class="record-cost">¥29.48</div>
                 </div>
-                <div class="record-meta">盒马鲜生 · 17:39 · 截图</div>
                 <div class="record-foot">
+                  <span class="record-channel">盒马鲜生</span>
                   <span class="delta-ok">买齐，多 189g</span>
                   <span class="edit">编辑</span>
                 </div>
@@ -626,7 +656,96 @@
       </div>
       <div class="caption">
         <h3><em>③</em>保存后 · 自动展开</h3>
-        <p>关掉抽屉就展开这张原料，新记录高亮。<br>卡片直接写清「买齐 / 多多少 / 还差多少」，不用再点开找。</p>
+        <p>关掉抽屉就展开这张原料，新记录高亮。<br>卡片只留名字、数量金额、状态；时间/截图收进「···」。</p>
+      </div>
+    </div>
+
+    <!-- ============ 屏幕 4：没有匹配商品 ============ -->
+    <div class="frame-wrap extra">
+      <div class="phone">
+        <div class="screen" id="screen-4">
+          <div class="app-header">
+            <div class="status light">
+              <span>17:57</span>
+              <span class="right">
+                <span class="signal"><i></i><i></i><i></i></span>
+                <span>5G</span>
+                <span class="battery"><i></i></span>
+              </span>
+            </div>
+            <div class="nav-row">
+              <div class="back">
+                <svg width="10" height="17" viewBox="0 0 10 17" fill="none">
+                  <path d="M8.6 1.2L1.6 8.5l7 7.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div class="nav-title">日采清单详情</div>
+              <div class="capsule"><div class="dots"><i></i><i></i><i></i></div><div class="ring"></div></div>
+            </div>
+          </div>
+          <div class="progress-card">
+            <div class="progress-top">
+              <span>已处理 <b>26/26</b> 项</span>
+              <span class="money">¥97.28</span>
+            </div>
+            <div class="track"><i style="width:100%"></i></div>
+          </div>
+
+          <div class="section-row">
+            <h2>原料明细 <span style="font-size:14px;font-weight:600;color:#6b6653;">(26)</span></h2>
+            <span>待处理 0 项</span>
+          </div>
+          <div class="chips">
+            <span class="chip active">全部 26</span>
+            <span class="chip">已录入 2</span>
+            <span class="chip">无需采购 18</span>
+          </div>
+
+          <div class="scrim"></div>
+
+          <div class="sheet">
+            <div class="grabber"></div>
+            <div class="sheet-head">
+              <div class="sheet-title">记录采购</div>
+              <div class="pill">猪里脊</div>
+              <div class="close">×</div>
+            </div>
+
+            <div class="sheet-body">
+              <div class="need">
+                <div>
+                  <div class="need-label">还需</div>
+                  <div class="need-value">931<small>g</small></div>
+                </div>
+                <div class="need-side">已买 <b>0g</b> · 共需 931g<br>按订单用量算</div>
+              </div>
+              <div class="bar"><i style="width:0%"></i></div>
+
+              <div class="label-row">
+                <div class="label">商品</div>
+                <div class="hint">点「新增」补一个</div>
+              </div>
+
+              <div class="empty-card">
+                <div class="empty-icon">＋</div>
+                <div class="empty-title">这道原料下还没有采购商品</div>
+                <div class="empty-desc">把这次买的商品加进去，以后大家都能选。</div>
+                <div class="empty-cta">＋ 新增采购商品</div>
+              </div>
+              <div class="empty-hint">选好商品后，再填数量和金额</div>
+            </div>
+
+            <div class="sheet-foot">
+              <div class="btn-primary disabled">保存记录</div>
+              <div class="foot-hint">先新增或选择一个商品</div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="caption">
+        <h3><em>④</em>没有匹配商品 · 新增入口</h3>
+        <p>没有商品时不让人卡住，直接给「新增采购商品」。<br>新增后自动选中回到这里，不用重新找。</p>
       </div>
     </div>
   </div>

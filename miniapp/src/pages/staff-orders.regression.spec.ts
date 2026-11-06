@@ -244,6 +244,19 @@ describe('staff order detail · 状态改版', () => {
     expect(detailSource).toContain("['INIT', 'PENDING_PAYMENT', 'PAID', 'PURCHASING']");
   });
 
+  it('★ 已发货的订单能在详情页改实际运费（2026-11-07）', () => {
+    // 入口只挂在「已发货 / 已完成 / 售后中」且已经有这个数的时候
+    expect(detailSource).toContain('canEditActualShippingFee');
+    expect(detailSource).toContain("['SHIPPED', 'COMPLETED', 'AFTERSALE']");
+    expect(detailSource).toContain('改运费');
+    // 弹窗走单独接口，不带 shippingType、不重新发货
+    expect(detailSource).toContain('/shipping-fee');
+    expect(detailSource).toContain("method: 'PATCH'");
+    expect(detailSource).toContain('{ actualShippingFee: Number(feeText) }');
+    // 两位小数校验和执行一致
+    expect(detailSource).toContain('/^\\d+(\\.\\d{1,2})?$/');
+  });
+
   it('★ 从列表带 action=ship 进来会自动打开发货弹窗', () => {
     expect(detailSource).toContain("options.action === 'ship'");
     expect(detailSource).toContain('if (autoShip && canShip.value) shipOrder()');

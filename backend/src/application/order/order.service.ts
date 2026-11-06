@@ -3108,6 +3108,57 @@ export class OrderService {
     return savedOrder;
   }
 
+  /**
+   * 改实际运费（2026-11-07）。
+   *
+   * 只动 `actual_shipping_fee` 这一列：订单状态、顾客付款、发货通知、
+   * 微信发货信息**都不碰**。发货那一刻填错了，就只有这一个救命入口 ——
+   * 以前它只在发货那一下可写，发出去就再也改不了（老板 2026-11-07 提出）。
+   *
+   * 允许改的状态：已发货 / 已完成 / 售后中。未发货的单还没这一列，
+   * 已取消的单也不该再改成本。
+   */
+  async updateActualShippingFee(
+    orderId: string,
+    actualShippingFee: number,
+  ): Promise<{ orderId: string; actualShippingFee: number }> {
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order not found: ${orderId}`);
+    }
+
+    const editableStatuses: OrderStatus[] = [
+      OrderStatus.SHIPPED,
+      OrderStatus.COMPLETED,
+      OrderStatus.AFTERSALE,
+    ];
+    if (!editableStatuses.includes(order.status)) {
+      throw new BadRequestException('只有已发货的订单才能改实际运费');
+    }
+
+    if (!Number.isFinite(actualShippingFee) || actualShippingFee < 0) {
+      throw new BadRequestException('实际运费必须是不小于 0 的数字');
+    }
+    if (
+      Math.abs(actualShippingFee - Number(actualShippingFee.toFixed(2))) > 1e-9
+    ) {
+      throw new BadRequestException('实际运费最多保留两位小数');
+    }
+
+    // 存两位小数的字符串，和 shipOrder 同一个口径，避开浮点误差
+    const fixed = actualShippingFee.toFixed(2);
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { actualShippingFee: fixed },
+    });
+
+    this.logger.log(
+      `[ActualShippingFee] order ${orderId}: updated to ${fixed}`,
+    );
+
+    return { orderId, actualShippingFee: Number(fixed) };
+  }
+
   private async sendShippingNotificationSafely(orderId: string): Promise<void> {
     if (!this.shippingNotificationService) return;
 

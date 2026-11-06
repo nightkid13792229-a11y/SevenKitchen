@@ -2185,6 +2185,66 @@ export class AdminController {
   }
 
   /**
+   * PATCH /admin/orders/:orderId/shipping-fee - 只改「实际运费」（2026-11-07）
+   *
+   * 发货那一刻填错了的救命入口：只改成本记账，不动订单状态、不发发货通知、
+   * 不重传微信发货信息。员工端订单详情在「已发货 / 已完成」时才露出这个入口。
+   */
+  @Patch('orders/:orderId/shipping-fee')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '修改订单实际运费（不改状态、不发通知）' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        actualShippingFee: {
+          type: 'number',
+          example: 18.5,
+          description: '实际运费（元，两位小数，不能为负）',
+        },
+      },
+      required: ['actualShippingFee'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request or order status' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async updateActualShippingFee(
+    @Param('orderId') orderId: string,
+    @Body() body: { actualShippingFee?: number | string | null },
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      const rawFee = body.actualShippingFee;
+      if (rawFee === undefined || rawFee === null || String(rawFee).trim() === '') {
+        return ApiResponseDto.error(400, '请填写实际运费');
+      }
+      const parsedFee = Number(rawFee);
+      if (!Number.isFinite(parsedFee) || parsedFee < 0) {
+        return ApiResponseDto.error(400, '实际运费必须是不小于 0 的数字');
+      }
+      if (Math.abs(parsedFee - Number(parsedFee.toFixed(2))) > 1e-9) {
+        return ApiResponseDto.error(400, '实际运费最多保留两位小数');
+      }
+
+      const result = await this.orderService.updateActualShippingFee(
+        orderId,
+        Number(parsedFee.toFixed(2)),
+      );
+
+      return ApiResponseDto.success(result);
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
    * POST /admin/orders/:orderId/confirm-payment - Confirm payment (admin)
    */
   @Post('orders/:orderId/confirm-payment')

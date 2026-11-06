@@ -113,7 +113,10 @@
         <view class="ship-meta">
           <text v-if="order.shippedAt">{{ formatDateTime(order.shippedAt) }} 已交快递</text>
           <text v-else-if="estimatedShippingText">预计 {{ estimatedShippingText }} 发货</text>
-          <text v-if="typeof order.actualShippingFee === 'number'">实际运费 ¥{{ formatAmount(order.actualShippingFee) }}</text>
+          <view v-if="typeof order.actualShippingFee === 'number'" class="ship-fee">
+            <text>实际运费 ¥{{ formatAmount(order.actualShippingFee) }}</text>
+            <text v-if="canEditActualShippingFee" class="ship-fee-edit" @tap.stop="openFeePanel">改运费</text>
+          </view>
         </view>
       </view>
 
@@ -599,6 +602,32 @@
       </view>
     </view>
 
+    <!-- 改实际运费（2026-11-07）：发货那一刻填错了，只有这里能救 -->
+    <view v-if="feeVisible" class="modal-mask" @tap="closeFeePanel">
+      <view class="modal-panel" @tap.stop>
+        <view class="modal-header">
+          <text class="modal-title">修改实际运费</text>
+          <text class="modal-close" @tap="closeFeePanel">×</text>
+        </view>
+        <view class="form-item">
+          <text class="form-label">实际运费（元）</text>
+          <input
+            v-model="feeDraft"
+            class="form-input"
+            type="digit"
+            placeholder="例如 12.50"
+            :maxlength="8"
+          />
+        </view>
+        <text class="address-lock-hint">
+          只改内部这一笔成本记录：订单状态、顾客付款、发货通知、微信发货信息都不会变。
+        </text>
+        <button class="address-save-btn" :disabled="savingFee" @tap="saveShippingFee">
+          {{ savingFee ? '保存中...' : '确认修改' }}
+        </button>
+      </view>
+    </view>
+
     <view v-if="amountVisible" class="modal-mask" @tap="closeAmountPanel">
       <view class="modal-panel" @tap.stop>
         <view class="modal-header">
@@ -895,6 +924,10 @@ const selectedCarrierIndex = ref(0)
 const trackingNumber = ref('')
 /** 实际运费草稿（元，最多两位小数）；空 = 不记录 */
 const actualShippingFeeDraft = ref('')
+/** 改实际运费（2026-11-07）：发出去之后才发现填错，只能在这里救 */
+const feeVisible = ref(false)
+const feeDraft = ref('')
+const savingFee = ref(false)
 /** 发货类型：正常发货 / 无需发货（自用单，2026-10-31） */
 const shippingType = ref<'NORMAL' | 'NOT_REQUIRED'>('NORMAL')
 const isShipping = ref(false)
@@ -976,6 +1009,17 @@ const canStartProduction = computed(() => {
 
 const canShip = computed(() => {
   return order.value && order.value.status === 'FREEZING'
+})
+
+/**
+ * 能不能改实际运费（2026-11-07）：发货那一刻填错了要能救。
+ * 只有「已发货 / 已完成 / 售后中」且有这个数时才露出入口 ——
+ * 口径和后端 updateActualShippingFee 保持一致。
+ */
+const canEditActualShippingFee = computed(() => {
+  const o = order.value
+  if (!o || typeof o.actualShippingFee !== 'number') return false
+  return ['SHIPPED', 'COMPLETED', 'AFTERSALE'].includes(o.status)
 })
 
 const canEditAddress = computed(() => {
@@ -1985,6 +2029,53 @@ function closeShippingModal() {
 
 function onCarrierChange(event: any) {
   selectedCarrierIndex.value = Number(event.detail.value || 0)
+}
+
+/** 打开「改运费」：带上当前值，省得员工重打一遍 */
+function openFeePanel() {
+  if (!canEditActualShippingFee.value || !order.value) return
+  feeDraft.value = Number(order.value.actualShippingFee).toFixed(2)
+  feeVisible.value = true
+}
+
+function closeFeePanel() {
+  feeVisible.value = false
+  feeDraft.value = ''
+}
+
+async function saveShippingFee() {
+  if (!order.value || savingFee.value) return
+
+  const feeText = String(feeDraft.value || '').trim()
+  if (!feeText) {
+    uni.showToast({ title: '请填写实际运费', icon: 'none' })
+    return
+  }
+  if (!/^\d+(\.\d{1,2})?$/.test(feeText)) {
+    uni.showToast({ title: '运费最多两位小数，例如 12.50', icon: 'none' })
+    return
+  }
+
+  const orderId = order.value.id
+  savingFee.value = true
+  try {
+    await request({
+      url: `/admin/orders/${orderId}/shipping-fee`,
+      method: 'PATCH',
+      data: { actualShippingFee: Number(feeText) },
+    })
+    feeVisible.value = false
+    feeDraft.value = ''
+    uni.showToast({ title: '运费已改', icon: 'success' })
+    await loadOrderDetail()
+  } catch (error: any) {
+    uni.showToast({
+      title: error?.message || '改运费失败',
+      icon: 'none',
+    })
+  } finally {
+    savingFee.value = false
+  }
 }
 
 async function confirmShipping() {
@@ -3619,6 +3710,9 @@ async function saveAddressForm() {
 .ship-no { display: block; margin-top: 4rpx; font-size: 26rpx; font-weight: 600; color: #1f2d27; font-family: Menlo, Consolas, monospace; }
 .ship-copy { flex: none; padding: 8rpx 20rpx; border: 1rpx solid #dfe4e1; border-radius: 30rpx; background: #fff; font-size: 20rpx; color: #2b5040; }
 .ship-meta { display: flex; justify-content: space-between; margin-top: 12rpx; font-size: 20rpx; color: #909399; }
+/* 改运费（2026-11-07）：挂在运费后面，22rpx 高的小胶囊，别抢「复制单号」的位置 */
+.ship-fee { display: flex; align-items: center; gap: 12rpx; }
+.ship-fee-edit { flex: none; padding: 4rpx 16rpx; border: 1rpx solid #dfe4e1; border-radius: 20rpx; background: #fff; color: #2b5040; }
 
 .danger-zone { margin: 32rpx 32rpx 0; padding-top: 24rpx; border-top: 1rpx solid #f0f1f2; text-align: center; }
 .danger-btn { font-size: 24rpx; color: #c0392b; }

@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>员工端 · 合并发货 / 拆包发货 原型</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 36px 32px 48px;
+        background: #e9ecea;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: #1f2d27;
+      }
+      .doc-head { max-width: 1660px; margin: 0 auto 26px; }
+      .doc-head h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: 0.5px; }
+      .doc-head p { margin: 0; font-size: 14px; color: #667069; line-height: 1.6; }
+
+      .stage { display: flex; gap: 34px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+      .col { width: 390px; }
+      .col-title { margin: 0 0 4px; font-size: 15px; font-weight: 800; color: #1f2d27; }
+      .col-sub { margin: 0 0 12px; font-size: 12px; color: #7a847e; line-height: 1.5; min-height: 34px; }
+
+      .phone {
+        width: 390px;
+        height: 900px;
+        border-radius: 30px;
+        background: #f4f5f3;
+        border: 1px solid #dfe3e0;
+        overflow: hidden;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 10px 30px rgba(31, 45, 39, 0.08);
+      }
+
+      .nav {
+        height: 52px; flex: none;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 16px; font-size: 15px; font-weight: 700;
+        background: #f4f5f3;
+      }
+      .nav .back { font-size: 18px; color: #1f2d27; }
+      .nav .action { font-size: 13px; font-weight: 700; color: #2b5040; }
+      .nav .action.muted { color: #b3bab5; font-weight: 500; }
+
+      .body { flex: 1; overflow: hidden; padding: 4px 14px 96px; }
+
+      .card {
+        background: #fff; border-radius: 14px; padding: 14px;
+        margin-bottom: 12px; border: 1px solid #eef0ee;
+      }
+      .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+      .card-title { font-size: 14px; font-weight: 800; }
+      .tag { font-size: 11px; padding: 2px 8px; border-radius: 9px; background: #eef4ef; color: #2b5040; }
+      .tag.warn { background: #fdf1e7; color: #b06a1f; }
+      .tag.grey { background: #f1f2f1; color: #8b938d; }
+
+      .row { display: flex; align-items: center; gap: 10px; }
+      .between { justify-content: space-between; }
+      .muted { color: #909399; font-size: 12px; }
+      .tiny { color: #909399; font-size: 11px; }
+      .strong { font-weight: 700; }
+      .num { font-family: Menlo, Consolas, monospace; }
+
+      /* ---------- screen 1 : 选择态 ---------- */
+      .pick {
+        display: flex; gap: 12px; align-items: flex-start;
+      }
+      .box {
+        flex: none; width: 20px; height: 20px; margin-top: 2px;
+        border-radius: 50%; border: 1.5px solid #cfd5d1; background: #fff;
+      }
+      .box.on { border-color: #2b5040; background: #2b5040; position: relative; }
+      .box.on::after {
+        content: "✓"; position: absolute; inset: 0; color: #fff;
+        font-size: 12px; line-height: 17px; text-align: center;
+      }
+      .box.off { background: #f5f6f5; border-style: dashed; }
+      .order-name { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+      .order-meta { font-size: 11px; color: #909399; line-height: 1.6; }
+
+      .bottom-bar {
+        position: absolute; left: 0; right: 0; bottom: 0;
+        padding: 12px 16px 22px; background: #fff; border-top: 1px solid #eef0ee;
+        display: flex; align-items: center; gap: 12px;
+      }
+      .btn {
+        flex: 1; height: 46px; border-radius: 23px; background: #23483c;
+        color: #fff; font-size: 15px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .btn.ghost { background: #fff; color: #2b5040; border: 1px solid #cfd8d2; }
+      .btn.disabled { background: #c9d2cc; }
+      .bar-note { font-size: 11px; color: #909399; margin-bottom: 4px; }
+
+      /* ---------- screen 2/3 : 发货单 ---------- */
+      .summary {
+        border-radius: 14px; padding: 14px; margin-bottom: 12px;
+        background: #23483c; color: #fff;
+      }
+      .summary .big { font-size: 19px; font-weight: 800; letter-spacing: 0.4px; }
+      .summary .sub { margin-top: 6px; font-size: 11px; color: rgba(255,255,255,0.72); line-height: 1.6; }
+      .summary .metrics { display: flex; gap: 8px; margin-top: 12px; }
+      .metric { flex: 1; background: rgba(255,255,255,0.1); border-radius: 9px; padding: 7px 8px; text-align: center; }
+      .metric b { display: block; font-size: 15px; }
+      .metric span { font-size: 10px; color: rgba(255,255,255,0.65); }
+
+      .pkg-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+      .pkg-name { font-size: 13px; font-weight: 800; }
+      .pkg-fee { font-size: 12px; color: #2b5040; font-weight: 700; }
+
+      .line {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 0; border-bottom: 1px dashed #f0f2f0;
+      }
+      .line:last-of-type { border-bottom: none; }
+      .line .who { font-size: 12px; }
+      .line .who small { display: block; color: #909399; font-size: 10px; margin-top: 2px; }
+
+      .stepper { display: flex; align-items: center; gap: 8px; }
+      .step-btn {
+        width: 24px; height: 24px; border-radius: 50%; background: #f4f6f4;
+        border: 1px solid #e2e7e3; color: #2b5040; font-size: 14px;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .step-val { min-width: 34px; text-align: center; font-size: 13px; font-weight: 700; }
+      .step-unit { font-size: 10px; color: #909399; }
+
+      .fields { margin-top: 10px; padding-top: 10px; border-top: 1px solid #f1f3f1; }
+      .field { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; font-size: 12px; }
+      .field .k { color: #909399; }
+      .field .v { font-weight: 600; }
+      .field .v.placeholder { color: #c2c8c4; font-weight: 400; }
+      .field .v.price { color: #b06a1f; font-weight: 700; }
+
+      .add-pkg {
+        border: 1px dashed #c6d0c9; border-radius: 12px; padding: 13px;
+        text-align: center; font-size: 12px; color: #2b5040; font-weight: 700;
+        margin-bottom: 12px; background: #fbfcfb;
+      }
+      .hint {
+        font-size: 11px; color: #909399; line-height: 1.6; padding: 0 4px 10px;
+      }
+      .alert {
+        border-radius: 12px; padding: 10px 12px; font-size: 11px; line-height: 1.6;
+        background: #fdf6ec; color: #9a6520; margin-bottom: 12px;
+      }
+
+      /* ---------- screen 4 : 详情 ---------- */
+      .hero { border-radius: 14px; padding: 16px; background: #23483c; color: #fff; margin-bottom: 12px; }
+      .hero .st { font-size: 21px; font-weight: 800; }
+      .hero .ss { margin-top: 4px; font-size: 11px; color: rgba(255,255,255,0.7); }
+      .hero .no { margin-top: 10px; font-size: 11px; color: rgba(255,255,255,0.6); font-family: Menlo, Consolas, monospace; }
+
+      .pkg-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px dashed #f0f2f0; }
+      .pkg-row:last-child { border-bottom: none; }
+      .pkg-row .l { font-size: 11px; color: #909399; }
+      .pkg-row .n { font-size: 12px; font-weight: 600; font-family: Menlo, Consolas, monospace; margin-top: 2px; }
+      .pkg-row .r { font-size: 11px; color: #2b5040; font-weight: 700; }
+      .share {
+        margin-top: 10px; padding-top: 10px; border-top: 1px solid #f1f3f1;
+        display: flex; align-items: center; justify-content: space-between; font-size: 12px;
+      }
+      .share b { color: #b06a1f; }
+
+      .caption {
+        max-width: 1660px; margin: 26px auto 0; font-size: 12px; color: #6b756f; line-height: 1.7;
+      }
+      .caption b { color: #1f2d27; }
+    </style>
+  </head>
+  <body>
+    <div class="doc-head">
+      <h1>员工端 · 合并发货 / 拆包发货（原型）</h1>
+      <p>
+        同一个模型的两个方向：<b>包裹里装几张单 = 合并</b>；<b>一张单装进几个包裹 = 拆包</b>。
+        系统不判断该不该拆、不提示超重 —— 全由员工决定。
+      </p>
+    </div>
+
+    <div class="stage">
+      <!-- ① 选择 -->
+      <div class="col">
+        <p class="col-title">① 待发货 · 多选</p>
+        <p class="col-sub">点右上角「合并发货」才进入选择态，平时列表不变。</p>
+        <div class="phone">
+          <div class="nav">
+            <span class="back">‹</span>
+            <span>鲜食订单</span>
+            <span class="action">合并发货</span>
+          </div>
+          <div class="body">
+            <div class="card">
+              <div class="pick">
+                <div class="box on"></div>
+                <div style="flex:1">
+                  <div class="row between">
+                    <span class="order-name">猪里脊青花鱼藜麦小米</span>
+                    <span class="tag">急冻完成</span>
+                  </div>
+                  <div class="order-meta">
+                    晚晚 · 小新 · 博美<br />
+                    14 袋 · 1.54kg · ¥398.00<br />
+                    SK20261104-005
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="pick">
+                <div class="box on"></div>
+                <div style="flex:1">
+                  <div class="row between">
+                    <span class="order-name">三文鱼南瓜糙米</span>
+                    <span class="tag">急冻完成</span>
+                  </div>
+                  <div class="order-meta">
+                    晚晚 · 布丁 · 柯基<br />
+                    8 袋 · 2.64kg · ¥520.00<br />
+                    SK20261105-011
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card" style="opacity:0.55">
+              <div class="pick">
+                <div class="box off"></div>
+                <div style="flex:1">
+                  <div class="row between">
+                    <span class="order-name">鸭肉梨子小米</span>
+                    <span class="tag grey">地址不同</span>
+                  </div>
+                  <div class="order-meta">
+                    张先生 · 豆豆 · 比熊<br />
+                    12 袋 · 2.20kg · SK20261105-014
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="bottom-bar">
+            <div style="flex:1">
+              <div class="bar-note">已选 2 单 · 合计 4.18kg</div>
+              <div class="btn">合并发货</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ② 默认一个包裹 -->
+      <div class="col">
+        <p class="col-title">② 发货单 · 默认 1 个包裹</p>
+        <p class="col-sub">勾完进来就是这个样子，什么都不用分，直接填单号运费。</p>
+        <div class="phone">
+          <div class="nav">
+            <span class="back">‹</span>
+            <span>确认发货</span>
+            <span class="action muted">记录</span>
+          </div>
+          <div class="body">
+            <div class="summary">
+              <div class="big">2 单合成一票</div>
+              <div class="sub">同一收货人 · 重庆市永川区卧龙路373号春风里2单元3-2</div>
+              <div class="metrics">
+                <div class="metric"><b>22</b><span>总袋数</span></div>
+                <div class="metric"><b>4.18</b><span>总净重 kg</span></div>
+                <div class="metric"><b>1</b><span>包裹数</span></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="pkg-hd">
+                <span class="pkg-name">包裹 1</span>
+                <span class="pkg-fee">运费 ¥20.00</span>
+              </div>
+              <div class="line">
+                <div class="who">小新 · 猪里脊青花鱼<small>14 袋 · 1.54kg</small></div>
+                <div class="stepper">
+                  <span class="step-btn">−</span><span class="step-val">14</span><span class="step-btn">＋</span><span class="step-unit">袋</span>
+                </div>
+              </div>
+              <div class="line">
+                <div class="who">布丁 · 三文鱼南瓜糙米<small>8 袋 · 2.64kg</small></div>
+                <div class="stepper">
+                  <span class="step-btn">−</span><span class="step-val">8</span><span class="step-btn">＋</span><span class="step-unit">袋</span>
+                </div>
+              </div>
+              <div class="fields">
+                <div class="field"><span class="k">快递公司</span><span class="v">顺丰速运</span></div>
+                <div class="field"><span class="k">运单号</span><span class="v num">SF0206400913347</span></div>
+                <div class="field"><span class="k">包裹运费</span><span class="v price">¥20.00</span></div>
+              </div>
+            </div>
+
+            <div class="add-pkg">＋ 再拆一个包裹</div>
+            <div class="hint">剩下的 0 袋已全部分配完；不需要动手，直接确认发货即可。</div>
+          </div>
+          <div class="bottom-bar">
+            <div style="flex:1">
+              <div class="bar-note">1 个包裹 · 运费合计 ¥20.00</div>
+              <div class="btn">确认发货</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ③ 拆成两包 -->
+      <div class="col">
+        <p class="col-title">③ 拆成 2 个包裹</p>
+        <p class="col-sub">点「再拆一个包裹」，用加减器把袋挪过去；每包各自一个单号、一笔运费。</p>
+        <div class="phone">
+          <div class="nav">
+            <span class="back">‹</span>
+            <span>确认发货</span>
+            <span class="action muted">记录</span>
+          </div>
+          <div class="body" style="padding-bottom:104px">
+            <div class="summary" style="padding:10px 14px">
+              <div class="big" style="font-size:17px">2 单 · 2 个包裹</div>
+              <div class="metrics">
+                <div class="metric"><b>22</b><span>总袋数</span></div>
+                <div class="metric"><b>4.18</b><span>总净重 kg</span></div>
+                <div class="metric"><b>32.00</b><span>运费合计 ¥</span></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="pkg-hd">
+                <span class="pkg-name">包裹 1</span>
+                <span class="pkg-fee">运费 ¥20.00</span>
+              </div>
+              <div class="line">
+                <div class="who">小新<small>1.54kg · 共 14 袋</small></div>
+                <div class="stepper">
+                  <span class="step-btn">−</span><span class="step-val">7</span><span class="step-btn">＋</span><span class="step-unit">袋</span>
+                </div>
+              </div>
+              <div class="line">
+                <div class="who">布丁<small>2.64kg · 共 8 袋</small></div>
+                <div class="stepper">
+                  <span class="step-btn">−</span><span class="step-val">8</span><span class="step-btn">＋</span><span class="step-unit">袋</span>
+                </div>
+              </div>
+              <div class="fields">
+                <div class="field"><span class="k">快递公司</span><span class="v">顺丰速运</span></div>
+                <div class="field"><span class="k">运单号</span><span class="v num">SF0206400913347</span></div>
+                <div class="field"><span class="k">包裹运费</span><span class="v price">¥20.00</span></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="pkg-hd">
+                <span class="pkg-name">包裹 2</span>
+                <span class="pkg-fee">运费 ¥12.00</span>
+              </div>
+              <div class="line">
+                <div class="who">小新<small>1.54kg · 共 14 袋</small></div>
+                <div class="stepper">
+                  <span class="step-btn">−</span><span class="step-val">7</span><span class="step-btn">＋</span><span class="step-unit">袋</span>
+                </div>
+              </div>
+              <div class="line">
+                <div class="who">布丁<small>2.64kg · 共 8 袋</small></div>
+                <div class="stepper">
+                  <span class="step-btn">−</span><span class="step-val">0</span><span class="step-btn">＋</span><span class="step-unit">袋</span>
+                </div>
+              </div>
+              <div class="fields">
+                <div class="field"><span class="k">快递公司</span><span class="v">顺丰速运</span></div>
+                <div class="field"><span class="k">运单号</span><span class="v num">SF0206400913355</span></div>
+                <div class="field"><span class="k">包裹运费</span><span class="v price">¥12.00</span></div>
+              </div>
+            </div>
+
+            <div class="add-pkg" style="margin-bottom:0">＋ 再拆一个包裹</div>
+          </div>
+          <div class="bottom-bar">
+            <div style="flex:1">
+              <div class="bar-note">2 个包裹 · 合计 ¥32.00 · 按重量分摊到各单</div>
+              <div class="btn">确认发货</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ④ 提交后 -->
+      <div class="col">
+        <p class="col-title">④ 提交后 · 订单详情</p>
+        <p class="col-sub">每张订单都看得到自己那份运费，以及自己落在哪几个包裹里。</p>
+        <div class="phone">
+          <div class="nav">
+            <span class="back">‹</span>
+            <span>鲜食订单详情</span>
+            <span class="action muted">···</span>
+          </div>
+          <div class="body">
+            <div class="hero">
+              <div class="st">已发货</div>
+              <div class="ss">已交快递</div>
+              <div class="no">SK20261104-005　复制</div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">物流</span>
+                <span class="tag">合并发货 · 2 个包裹</span>
+              </div>
+              <div class="pkg-row">
+                <div>
+                  <div class="l">包裹 1 · 顺丰速运</div>
+                  <div class="n">SF0206400913347</div>
+                </div>
+                <span class="r">¥20.00</span>
+              </div>
+              <div class="pkg-row">
+                <div>
+                  <div class="l">包裹 2 · 顺丰速运</div>
+                  <div class="n">SF0206400913355</div>
+                </div>
+                <span class="r">¥12.00</span>
+              </div>
+              <div class="share">
+                <span>本单承担运费</span>
+                <span><b>¥16.52</b> <span class="tiny">（按重量 1.54/4.18 分摊）</span></span>
+              </div>
+              <div class="share" style="border-top:none;padding-top:2px">
+                <span class="tiny">11-07 00:26 已交快递</span>
+                <span class="tiny" style="color:#2b5040">改运费 ›</span>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head"><span class="card-title">订单信息</span></div>
+              <div class="field"><span class="k">预约制作日</span><span class="v">2026年11月5日 周四</span></div>
+              <div class="field"><span class="k">下单时间</span><span class="v">11-04 16:11</span></div>
+            </div>
+
+            <div class="card">
+              <div class="card-head"><span class="card-title">商品与用量</span></div>
+              <div class="strong" style="font-size:13px">猪里脊青花鱼藜麦小米</div>
+              <div class="muted" style="margin-top:6px">给小新 · 博美 · 2.68kg</div>
+              <div class="row" style="gap:8px;margin-top:10px">
+                <span class="tag">110g×14袋</span>
+                <span class="tag">每日 244g</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="caption">
+      <b>分摊规则（按重量、尾差归最后一单）：</b>
+      包裹 1 里小新 0.77kg、布丁 2.64kg → 20.00 分成 4.52 / 15.48；
+      包裹 2 只有小新 → 12.00 全归小新；小新合计 4.52 + 12.00 = <b>¥16.52</b>，两单相加正好等于实付 ¥32.00。
+    </div>
+  </body>
+</html>

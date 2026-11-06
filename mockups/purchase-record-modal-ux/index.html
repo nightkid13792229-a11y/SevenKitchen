@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>采购记录弹窗 · 优化原型</title>
+<style>
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  :root {
+    --ink: #26261f;
+    --ink-2: #3b3b31;
+    --muted: #6b6653;
+    --faint: #8f8b7d;
+    --green: #1e3a2f;
+    --green-deep: #173026;
+    --cream: #fbf8ec;
+    --cream-2: #f4eeda;
+    --card: #fffdf6;
+    --line: #e7dfc9;
+    --line-soft: #efe9d8;
+    --gold: #b08d4f;
+    --gold-ink: #7a5c28;
+    --red: #b4453a;
+    --ok: #2f6b4f;
+    --ok-bg: #e8f0e6;
+    --warn: #8a6420;
+    --warn-bg: #f6efe0;
+  }
+  html, body { margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(900px 500px at 18% -10%, #f6f7f1 0%, rgba(246,247,241,0) 60%),
+      radial-gradient(700px 500px at 95% 10%, #eef1e8 0%, rgba(238,241,232,0) 55%),
+      #e4e7dd;
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    letter-spacing: 0;
+  }
+  .stage { width: 1400px; margin: 0 auto; padding: 42px 40px 26px; }
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
+  .page-head h1 { margin: 0; font-size: 27px; line-height: 1.2; letter-spacing: -0.6px; font-weight: 750; }
+  .page-head .sub { margin-top: 7px; font-size: 12px; color: var(--muted); letter-spacing: 0.2px; }
+  .legend { display: flex; gap: 8px; padding-bottom: 2px; }
+  .legend span {
+    font-size: 11px; color: #5d5a4b; padding: 6px 10px; border-radius: 999px;
+    background: rgba(255,253,246,.75); border: 1px solid #d9d2bd; white-space: nowrap;
+  }
+  .row { display: flex; justify-content: center; align-items: flex-start; gap: 44px; }
+  .frame-wrap { width: 390px; }
+  .phone {
+    position: relative; width: 390px; height: 844px; border-radius: 42px; overflow: hidden;
+    background: #101511;
+    box-shadow: 0 34px 80px rgba(26, 36, 26, 0.22), 0 8px 20px rgba(26, 36, 26, 0.10), 0 0 0 1px rgba(20, 30, 20, 0.10);
+  }
+  .screen { position: absolute; inset: 0; overflow: hidden; background: #f4f1e5; }
+  .status {
+    height: 44px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px; font-size: 12px; font-weight: 650; letter-spacing: 0.2px;
+    position: relative; z-index: 30;
+  }
+  .status.light { color: #f3eddd; }
+  .status.dark { color: var(--ink); }
+  .status .right { display: flex; align-items: center; gap: 7px; }
+  .signal { display: flex; align-items: flex-end; gap: 2px; height: 9px; }
+  .signal i { display: block; width: 3px; background: currentColor; border-radius: 1px; }
+  .signal i:nth-child(1) { height: 4px; }
+  .signal i:nth-child(2) { height: 6px; }
+  .signal i:nth-child(3) { height: 8px; }
+  .battery { width: 23px; height: 11px; border: 1.3px solid currentColor; border-radius: 3px; padding: 1.6px; opacity: .92; }
+  .battery i { display: block; width: 74%; height: 100%; border-radius: 1px; background: currentColor; }
+  .home-indicator {
+    position: absolute; bottom: 7px; left: 50%; transform: translateX(-50%);
+    width: 126px; height: 5px; border-radius: 3px; background: rgba(30, 35, 25, .28); z-index: 60;
+  }
+  .home-indicator.light { background: rgba(243, 237, 221, .55); }
+
+  /* ---------- 背景：日采详情（被遮罩） ---------- */
+  .app-header { background: linear-gradient(180deg, #1f3c30 0%, #1c362b 100%); color: #f3eddd; padding-bottom: 18px; }
+  .nav-row { height: 44px; display: flex; align-items: center; padding: 0 18px; position: relative; }
+  .back { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; opacity: .9; }
+  .nav-title { position: absolute; left: 50%; transform: translateX(-50%); font-size: 17px; font-weight: 650; letter-spacing: .3px; }
+  .capsule {
+    margin-left: auto; width: 78px; height: 30px; border: 1px solid rgba(243,237,221,.35);
+    border-radius: 999px; display: flex; align-items: center; justify-content: space-around; padding: 0 9px;
+  }
+  .capsule .dots { display: flex; gap: 4px; }
+  .capsule .dots i { width: 4px; height: 4px; border-radius: 50%; background: #f3eddd; opacity: .85; }
+  .capsule .ring { width: 14px; height: 14px; border-radius: 50%; border: 1.6px solid #f3eddd; opacity: .85; }
+  .progress-card {
+    margin: 0 14px; background: var(--card); border-radius: 13px; padding: 12px 14px 13px;
+    box-shadow: 0 10px 26px rgba(30, 40, 30, .08);
+  }
+  .progress-top { display: flex; align-items: baseline; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  .progress-top b { font-size: 13px; color: var(--ink); font-weight: 700; }
+  .progress-top .money { font-size: 15px; font-weight: 800; color: var(--ink); letter-spacing: -.3px; }
+  .track { height: 5px; margin-top: 9px; border-radius: 999px; background: #ece7d7; overflow: hidden; }
+  .track > i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #c9a86a, #b08d4f); }
+  .section-row { display: flex; align-items: baseline; justify-content: space-between; margin: 18px 18px 10px; }
+  .section-row h2 { margin: 0; font-size: 19px; font-weight: 750; letter-spacing: -.3px; }
+  .section-row span { font-size: 11px; color: var(--muted); }
+  .chips { display: flex; gap: 7px; margin: 0 18px 12px; flex-wrap: wrap; }
+  .chip {
+    font-size: 11px; padding: 5px 9px; border-radius: 999px; border: 1px solid #ddd6c2;
+    color: var(--muted); background: rgba(255,253,246,.6);
+  }
+  .chip.active { background: var(--green); border-color: var(--green); color: #f3eddd; }
+
+  .scrim { position: absolute; inset: 0; background: rgba(11, 18, 13, .42); z-index: 5; }
+
+  /* ---------- 底部抽屉通用 ---------- */
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 10;
+    background: var(--cream); border-radius: 26px 26px 0 0;
+    box-shadow: 0 -26px 70px rgba(0, 0, 0, .22);
+    display: flex; flex-direction: column;
+  }
+  .grabber { width: 40px; height: 4px; border-radius: 2px; background: #d8d1bc; margin: 9px auto 0; }
+  .sheet-head { display: flex; align-items: center; gap: 8px; padding: 12px 20px 0; }
+  .sheet-title { font-size: 20px; font-weight: 750; letter-spacing: -.4px; }
+  .pill {
+    font-size: 10.5px; font-weight: 650; color: var(--ok); background: #edf3e7;
+    border-radius: 999px; padding: 3px 8px; letter-spacing: .1px;
+  }
+  .close {
+    margin-left: auto; width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 21px; line-height: 1; color: #6f6a58; background: #f0ead7;
+  }
+  .sheet-body { padding: 0 20px 6px; flex: 0 0 auto; }
+
+  /* ---------- 抽屉 1：记录采购 ---------- */
+  .need { margin-top: 15px; display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+  .need-label { font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+  .need-value { font-size: 27px; font-weight: 800; letter-spacing: -1px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .need-value small { font-size: 13px; font-weight: 650; letter-spacing: 0; }
+  .need-side { font-size: 11px; line-height: 1.5; color: var(--faint); text-align: right; padding-bottom: 2px; }
+  .need-side b { color: var(--ink-2); font-weight: 700; }
+  .bar { height: 6px; border-radius: 999px; background: #e9e3d0; margin-top: 9px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #cdae74, #b08d4f); }
+  .bar-cap { display: flex; justify-content: space-between; margin-top: 5px; font-size: 10px; color: #a19b89; }
+
+  .label-row { margin: 17px 0 8px; display: flex; align-items: baseline; justify-content: space-between; }
+  .label-row .label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .label-row .hint { font-size: 10.5px; color: #a19b89; }
+
+  .product-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 13px; display: flex; gap: 10px; align-items: center;
+    box-shadow: 0 3px 10px rgba(40, 40, 30, .03);
+  }
+  .product-main { flex: 1; min-width: 0; }
+  .product-name { font-size: 15px; font-weight: 680; line-height: 1.42; color: var(--ink); }
+  .name-sub { display: block; margin-top: 3px; font-size: 12px; font-weight: 500; color: #8a8574; line-height: 1.35; letter-spacing: 0; }
+  .record-name .name-sub { font-size: 11px; margin-top: 2px; }
+  .product-sub { margin-top: 5px; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
+  .tag-last { font-size: 9.5px; font-weight: 650; color: var(--ok); background: var(--ok-bg); padding: 2px 6px; border-radius: 5px; }
+  .change { flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: var(--ok); white-space: nowrap; }
+  .change span { font-size: 14px; font-weight: 600; margin-left: 1px; }
+
+  .inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 13px; }
+  .field {
+    background: var(--card); border: 1.4px solid var(--line); border-radius: 14px;
+    padding: 10px 13px 9px; min-width: 0;
+  }
+  .field.focus { border-color: #2f6b4f; box-shadow: 0 0 0 3px rgba(47, 107, 79, .09); }
+  .field-label { font-size: 10.5px; color: var(--muted); }
+  .field-line { display: flex; align-items: baseline; gap: 5px; margin-top: 2px; }
+  .field-value { font-size: 27px; font-weight: 800; letter-spacing: -1px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .field-unit { font-size: 12px; color: var(--muted); }
+
+  .result { margin-top: 11px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .result-main { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+  .result-main b { color: var(--ink-2); font-weight: 700; }
+  .delta {
+    flex-shrink: 0; font-size: 10.5px; font-weight: 700; color: var(--warn);
+    background: var(--warn-bg); border-radius: 999px; padding: 4px 8px; white-space: nowrap;
+  }
+  .note {
+    margin-top: 13px; padding-top: 11px; border-top: 1px dashed var(--line);
+    display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted);
+  }
+  .note .plus { font-size: 15px; line-height: 1; color: var(--ok); font-weight: 600; }
+
+  .sheet-foot { padding: 10px 20px calc(16px + 30px); }
+  .btn-primary {
+    height: 52px; border-radius: 13px; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+    color: #f3eddd; font-size: 17px; font-weight: 650; letter-spacing: .3px;
+    box-shadow: 0 10px 22px rgba(30, 58, 47, .18);
+  }
+  .btn-ghost { margin-top: 9px; text-align: center; font-size: 12px; color: var(--muted); }
+  .btn-ghost b { color: var(--ok); font-weight: 650; }
+
+  /* ---------- 抽屉 2：更换商品 ---------- */
+  .picker-sub { padding: 6px 20px 0; font-size: 11px; color: var(--muted); }
+  .search {
+    margin: 12px 20px 0; height: 38px; border-radius: 11px; background: #f2ecd8;
+    display: flex; align-items: center; gap: 8px; padding: 0 12px; color: #9a9482; font-size: 12px;
+  }
+  .tabs { display: flex; gap: 8px; padding: 12px 20px 0; overflow: hidden; }
+  .tab {
+    flex-shrink: 0; font-size: 11.5px; padding: 6px 10px; border-radius: 999px;
+    color: var(--muted); border: 1px solid #ded7c2; background: rgba(255,253,246,.65);
+  }
+  .tab.active { background: var(--green); border-color: var(--green); color: #f3eddd; font-weight: 650; }
+  .picker-list { margin: 10px 12px 0; background: var(--card); border-radius: 14px; border: 1px solid var(--line); overflow: hidden; }
+  .picker-row { display: flex; align-items: center; gap: 10px; padding: 12px 12px; border-bottom: 1px solid #f1ebda; }
+  .picker-row:last-child { border-bottom: none; }
+  .picker-row.selected { background: #f2f6ec; }
+  .picker-main { flex: 1; min-width: 0; }
+  .picker-name { font-size: 14px; font-weight: 650; line-height: 1.4; }
+  .picker-meta { margin-top: 4px; font-size: 10.5px; color: var(--muted); display: flex; gap: 6px; flex-wrap: wrap; }
+  .check {
+    flex-shrink: 0; width: 21px; height: 21px; border-radius: 50%;
+    background: var(--green); color: #f3eddd; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .check.empty { background: transparent; border: 1.4px solid #ddd6c2; }
+  .add-row {
+    margin: 10px 20px 0; height: 42px; border-radius: 11px; border: 1.4px dashed #cdbb92;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    font-size: 12px; color: #8a6b33; background: rgba(255,253,246,.55);
+  }
+  .picker-foot { margin-top: auto; padding: 10px 20px calc(16px + 30px); text-align: center; font-size: 11px; color: #9a9482; }
+
+  /* ---------- 屏幕 3：保存后 ---------- */
+  .detail-page { position: absolute; inset: 0; background: #f4f1e5; overflow: hidden; }
+  .detail-page .progress-card { margin-top: -18px; position: relative; z-index: 2; }
+  .item-card {
+    margin: 0 14px; background: var(--card); border: 1px solid #e6dfcb; border-radius: 17px;
+    padding: 14px; box-shadow: 0 6px 18px rgba(40, 40, 30, .04);
+  }
+  .item-top { display: flex; align-items: flex-start; gap: 8px; }
+  .item-name { font-size: 17px; font-weight: 750; letter-spacing: -.2px; }
+  .badge-done { font-size: 10px; font-weight: 650; color: #f3eddd; background: var(--green); border-radius: 5px; padding: 2px 6px; margin-top: 3px; }
+  .item-need { margin-left: auto; text-align: right; flex-shrink: 0; }
+  .item-need .k { font-size: 10px; color: var(--muted); }
+  .item-need .v { font-size: 22px; font-weight: 800; line-height: 1.1; letter-spacing: -.5px; }
+  .item-need .v small { font-size: 11px; font-weight: 600; }
+  .item-meta { margin-top: 6px; font-size: 10.5px; color: #8a8574; letter-spacing: .1px; }
+  .meta-link { color: #2f6b4f; font-weight: 650; }
+  .item-link { margin-top: 10px; display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #2f6b4f; font-weight: 600; }
+  .item-link span { font-size: 13px; }
+
+  .record-card {
+    margin-top: 10px; background: #fffdf7; border: 1.6px solid #c9a86a; border-radius: 14px;
+    padding: 12px 13px 11px; position: relative;
+    box-shadow: 0 0 0 4px rgba(201, 168, 106, .12), 0 8px 22px rgba(176, 141, 79, .12);
+  }
+  .record-top { display: flex; gap: 8px; align-items: flex-start; }
+  .record-name { flex: 1; font-size: 14px; font-weight: 680; line-height: 1.42; color: var(--ink); }
+  .more { flex-shrink: 0; color: #8f8b7d; font-size: 16px; line-height: 1; letter-spacing: 1px; padding-top: 1px; }
+  .record-mid { margin-top: 8px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .record-qty { font-size: 14px; font-weight: 700; letter-spacing: -.2px; }
+  .record-qty small { font-size: 11px; font-weight: 500; color: var(--muted); }
+  .record-cost { font-size: 19px; font-weight: 800; color: var(--red); letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+  .record-meta { margin-top: 5px; font-size: 10.5px; color: #8a8574; }
+  .record-foot { margin-top: 9px; display: flex; align-items: center; justify-content: space-between; }
+  .delta-ok { font-size: 10.5px; font-weight: 700; color: var(--ok); background: var(--ok-bg); border-radius: 999px; padding: 3px 8px; }
+  .edit { font-size: 11px; font-weight: 650; color: #2f6b4f; }
+
+  .toast {
+    position: absolute; left: 50%; bottom: 102px; transform: translateX(-50%);
+    background: rgba(30, 58, 47, .94); color: #f3eddd; font-size: 12px; font-weight: 600;
+    padding: 9px 14px; border-radius: 999px; display: flex; align-items: center; gap: 6px;
+    box-shadow: 0 10px 26px rgba(20, 35, 25, .24); white-space: nowrap; z-index: 40;
+  }
+  .toast .tick { width: 15px; height: 15px; border-radius: 50%; background: #c9a86a; color: #1e3a2f; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; }
+  .bottom-bar {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(24px + 8px);
+    background: linear-gradient(180deg, rgba(244,241,229,0) 0%, #f4f1e5 30%);
+    z-index: 35;
+  }
+  .bottom-bar .btn-primary { height: 50px; border-radius: 13px; font-size: 16.5px; }
+
+  /* ---------- 说明文字 ---------- */
+  .caption { margin-top: 18px; }
+  .caption h3 { margin: 0; font-size: 14px; font-weight: 750; letter-spacing: -.1px; }
+  .caption h3 em { font-style: normal; color: #8a6b33; margin-right: 6px; font-weight: 750; }
+  .caption p { margin: 6px 0 0; font-size: 11.5px; line-height: 1.75; color: #676356; }
+  .foot-note {
+    margin-top: 26px; padding-top: 14px; border-top: 1px solid rgba(120, 116, 95, .18);
+    display: flex; justify-content: space-between; gap: 20px; font-size: 10.5px; color: #8b8778; line-height: 1.7;
+  }
+  .foot-note b { color: #5f5b4d; font-weight: 650; }
+
+  /* ---------- 单屏出图模式 ---------- */
+  html.shot body { background: #f4f1e5; }
+  html.shot .page-head, html.shot .caption, html.shot .foot-note { display: none; }
+  html.shot .stage { width: 390px; margin: 0; padding: 0; }
+  html.shot .row { display: block; }
+  html.shot .frame-wrap { display: none; width: 390px; }
+  html.shot .phone { border-radius: 0; box-shadow: none; }
+  html.shot[data-shot="1"] .frame-wrap:nth-child(1),
+  html.shot[data-shot="2"] .frame-wrap:nth-child(2),
+  html.shot[data-shot="3"] .frame-wrap:nth-child(3) { display: block; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="page-head">
+    <div>
+      <h1>采购记录弹窗 · 优化原型</h1>
+      <div class="sub">日采清单详情 / 员工端 · 2026-11-06 · 方案 v1</div>
+    </div>
+    <div class="legend">
+      <span>一屏填完</span>
+      <span>名字看得全</span>
+      <span>保存有反馈</span>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- ============ 屏幕 1：记录采购 ============ -->
+    <div class="frame-wrap">
+      <div class="phone">
+        <div class="screen" id="screen-1">
+          <!-- 背景：日采详情 -->
+          <div class="app-header">
+            <div class="status light">
+              <span>17:57</span>
+              <span class="right">
+                <span class="signal"><i></i><i></i><i></i></span>
+                <span>5G</span>
+                <span class="battery"><i></i></span>
+              </span>
+            </div>
+            <div class="nav-row">
+              <div class="back">
+                <svg width="10" height="17" viewBox="0 0 10 17" fill="none">
+                  <path d="M8.6 1.2L1.6 8.5l7 7.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div class="nav-title">日采清单详情</div>
+              <div class="capsule"><div class="dots"><i></i><i></i><i></i></div><div class="ring"></div></div>
+            </div>
+          </div>
+          <div class="progress-card">
+            <div class="progress-top">
+              <span>已处理 <b>26/26</b> 项</span>
+              <span class="money">¥97.28</span>
+            </div>
+            <div class="track"><i style="width:100%"></i></div>
+          </div>
+
+          <div class="section-row">
+            <h2>原料明细 <span style="font-size:14px;font-weight:600;color:#6b6653;">(26)</span></h2>
+            <span>待处理 0 项</span>
+          </div>
+          <div class="chips">
+            <span class="chip active">全部 26</span>
+            <span class="chip">已录入 2</span>
+            <span class="chip">无需采购 18</span>
+          </div>
+          <div class="scrim"></div>
+
+          <!-- 抽屉：记录采购 -->
+          <div class="sheet">
+            <div class="grabber"></div>
+            <div class="sheet-head">
+              <div class="sheet-title">记录采购</div>
+              <div class="pill">猪里脊</div>
+              <div class="close">×</div>
+            </div>
+
+            <div class="sheet-body">
+              <div class="need">
+                <div>
+                  <div class="need-label">还需</div>
+                  <div class="need-value">931<small>g</small></div>
+                </div>
+                <div class="need-side">已买 <b>0g</b> · 共需 931g<br>按订单用量算</div>
+              </div>
+              <div class="bar"><i style="width:0%"></i></div>
+
+              <div class="label-row">
+                <div class="label">商品</div>
+                <div class="hint">点「更换」可换规格</div>
+              </div>
+              <div class="product-card">
+                <div class="product-main">
+                  <div class="product-name">冰鲜 猪里脊肉 约280g/盒<span class="name-sub">（盒马工坊 冷鲜）</span></div>
+                  <div class="product-sub">
+                    <span>盒马鲜生</span>
+                    <span class="tag-last">上次买过</span>
+                    <span>¥29.48/盒</span>
+                  </div>
+                </div>
+                <div class="change">更换<span>›</span></div>
+              </div>
+
+              <div class="inputs">
+                <div class="field">
+                  <div class="field-label">买了</div>
+                  <div class="field-line">
+                    <span class="field-value">4</span>
+                    <span class="field-unit">盒</span>
+                  </div>
+                </div>
+                <div class="field focus">
+                  <div class="field-label">花了</div>
+                  <div class="field-line">
+                    <span class="field-value">29.48</span>
+                    <span class="field-unit">元</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="result">
+                <div class="result-main">共 <b>1120g</b> · 单价 ¥13.16/500g</div>
+                <div class="delta">多 189g</div>
+              </div>
+
+              <div class="note"><span class="plus">＋</span> 备注（选填）</div>
+            </div>
+
+            <div class="sheet-foot">
+              <div class="btn-primary">保存记录</div>
+              <div class="btn-ghost"><b>保存并再记一条</b></div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="caption">
+        <h3><em>①</em>记录采购 · 一屏填完</h3>
+        <p>一屏看全：还需多少、买的什么、花了多少、买完差多少。<br>只有一个实心按钮；换商品先确认，再按新规格重算。</p>
+      </div>
+    </div>
+
+    <!-- ============ 屏幕 2：更换商品 ============ -->
+    <div class="frame-wrap">
+      <div class="phone">
+        <div class="screen" id="screen-2">
+          <div class="app-header">
+            <div class="status light">
+              <span>17:57</span>
+              <span class="right">
+                <span class="signal"><i></i><i></i><i></i></span>
+                <span>5G</span>
+                <span class="battery"><i></i></span>
+              </span>
+            </div>
+            <div class="nav-row">
+              <div class="back">
+                <svg width="10" height="17" viewBox="0 0 10 17" fill="none">
+                  <path d="M8.6 1.2L1.6 8.5l7 7.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div class="nav-title">日采清单详情</div>
+              <div class="capsule"><div class="dots"><i></i><i></i><i></i></div><div class="ring"></div></div>
+            </div>
+          </div>
+          <div class="progress-card">
+            <div class="progress-top">
+              <span>已处理 <b>26/26</b> 项</span>
+              <span class="money">¥97.28</span>
+            </div>
+            <div class="track"><i style="width:100%"></i></div>
+          </div>
+
+          <div class="section-row">
+            <h2>原料明细 <span style="font-size:14px;font-weight:600;color:#6b6653;">(26)</span></h2>
+            <span>待处理 0 项</span>
+          </div>
+          <div class="chips">
+            <span class="chip active">全部 26</span>
+            <span class="chip">已录入 2</span>
+            <span class="chip">无需采购 18</span>
+          </div>
+          <div class="scrim"></div>
+
+          <div class="sheet">
+            <div class="grabber"></div>
+            <div class="sheet-head">
+              <div class="sheet-title">更换采购商品</div>
+              <div class="close">×</div>
+            </div>
+            <div class="picker-sub">默认只看「盒马鲜生」；换渠道再选别家的货</div>
+
+            <div class="search">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <circle cx="6" cy="6" r="4.4" stroke="#9a9482" stroke-width="1.4"/>
+                <path d="M9.4 9.4L12.4 12.4" stroke="#9a9482" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+              搜商品名或规格
+            </div>
+
+            <div class="tabs">
+              <div class="tab active">盒马鲜生 3</div>
+              <div class="tab">山姆 2</div>
+              <div class="tab">沃尔玛 1</div>
+            </div>
+
+            <div class="picker-list">
+              <div class="picker-row selected">
+                <div class="picker-main">
+                  <div class="picker-name">冰鲜 猪里脊肉 约280g/盒</div>
+                  <div class="picker-meta"><span>280g/盒</span><span>·</span><span>上次买过</span><span>·</span><span>¥29.48</span></div>
+                </div>
+                <div class="check">✓</div>
+              </div>
+              <div class="picker-row">
+                <div class="picker-main">
+                  <div class="picker-name">冰鲜 猪里脊肉 500g/盒</div>
+                  <div class="picker-meta"><span>500g/盒</span><span>·</span><span>¥39.90</span></div>
+                </div>
+                <div class="check empty"></div>
+              </div>
+              <div class="picker-row">
+                <div class="picker-main">
+                  <div class="picker-name">冰鲜 猪里脊肉 1kg/袋</div>
+                  <div class="picker-meta"><span>1kg/袋</span><span>·</span><span>¥68.00</span></div>
+                </div>
+                <div class="check empty"></div>
+              </div>
+            </div>
+
+            <div class="add-row">＋ 新增采购商品</div>
+            <div class="picker-foot">选中后自动回到记录页</div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="caption">
+        <h3><em>②</em>更换商品 · 按渠道</h3>
+        <p>商品多时才展开；先按当前渠道过滤，选中即带回。<br>不再把十几张商品卡平铺在表单里。</p>
+      </div>
+    </div>
+
+    <!-- ============ 屏幕 3：保存后 ============ -->
+    <div class="frame-wrap">
+      <div class="phone">
+        <div class="screen" id="screen-3">
+          <div class="detail-page">
+            <div class="app-header">
+              <div class="status light">
+                <span>17:57</span>
+                <span class="right">
+                  <span class="signal"><i></i><i></i><i></i></span>
+                  <span>5G</span>
+                  <span class="battery"><i></i></span>
+                </span>
+              </div>
+              <div class="nav-row">
+                <div class="back">
+                  <svg width="10" height="17" viewBox="0 0 10 17" fill="none">
+                    <path d="M8.6 1.2L1.6 8.5l7 7.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <div class="nav-title">日采清单详情</div>
+                <div class="capsule"><div class="dots"><i></i><i></i><i></i></div><div class="ring"></div></div>
+              </div>
+            </div>
+
+            <div class="progress-card">
+              <div class="progress-top">
+                <span>已处理 <b>26/26</b> 项</span>
+                <span class="money">¥97.28</span>
+              </div>
+              <div class="track"><i style="width:100%"></i></div>
+            </div>
+
+            <div class="section-row">
+              <h2>原料明细 <span style="font-size:14px;font-weight:600;color:#6b6653;">(26)</span></h2>
+              <span>待处理 0 项</span>
+            </div>
+            <div class="chips">
+              <span class="chip active">全部 26</span>
+              <span class="chip">已录入 2</span>
+              <span class="chip">无需采购 18</span>
+              <span class="chip">库存足够 6</span>
+            </div>
+
+            <div class="item-card">
+              <div class="item-top">
+                <div class="item-name">猪里脊</div>
+                <div class="badge-done">已采购</div>
+                <div class="item-need">
+                  <div class="k">仍需</div>
+                  <div class="v">0<small>g</small></div>
+                </div>
+              </div>
+              <div class="item-meta">按订单 931g 计算 · <span class="meta-link">怎么算的 ›</span></div>
+              <div class="item-link">已录入 1 条 · ¥29.48 · 收起 <span>⌄</span></div>
+
+              <div class="record-card">
+                <div class="record-top">
+                  <div class="record-name">冰鲜 猪里脊肉 约280g/盒<span class="name-sub">（盒马工坊 冷鲜）</span></div>
+                  <div class="more">···</div>
+                </div>
+                <div class="record-mid">
+                  <div class="record-qty">4 盒 × 280g <small>= 1120g</small></div>
+                  <div class="record-cost">¥29.48</div>
+                </div>
+                <div class="record-meta">盒马鲜生 · 17:39 · 截图</div>
+                <div class="record-foot">
+                  <span class="delta-ok">买齐，多 189g</span>
+                  <span class="edit">编辑</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="item-card" style="margin-top:12px;">
+              <div class="item-top">
+                <div class="item-name">牛霖</div>
+                <div class="badge-done">已采购</div>
+                <div class="item-need">
+                  <div class="k">仍需</div>
+                  <div class="v">0<small>g</small></div>
+                </div>
+              </div>
+              <div class="item-meta">按订单 711g 计算 · <span class="meta-link">怎么算的 ›</span></div>
+              <div class="item-link">已录入 1 条 · ¥67.80 · 查看明细 <span>›</span></div>
+            </div>
+
+            <div class="toast"><span class="tick">✓</span>采购记录已保存</div>
+
+            <div class="bottom-bar">
+              <div class="btn-primary">确认采购完成</div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="caption">
+        <h3><em>③</em>保存后 · 自动展开</h3>
+        <p>关掉抽屉就展开这张原料，新记录高亮。<br>卡片直接写清「买齐 / 多多少 / 还差多少」，不用再点开找。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot-note">
+    <div><b>说明：</b>本图为交互原型，不是线上截图。颜色、圆角、字号以现有员工端为准，落地时按真机再校一遍。</div>
+    <div><b>关键词：</b>一屏五块 · 一个主按钮 · 商品按渠道 · 保存即反馈</div>
+  </div>
+</div>
+
+<script>
+  const shotIndex = new URLSearchParams(location.search).get('shot');
+  if (shotIndex) {
+    document.documentElement.classList.add('shot');
+    document.documentElement.dataset.shot = shotIndex;
+  }
+</script>
+</body>
+</html>

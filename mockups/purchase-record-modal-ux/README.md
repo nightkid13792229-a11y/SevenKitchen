@@ -7,7 +7,7 @@
 
 | 图 | 内容 |
 |---|---|
-| [`shots/overview.png`](shots/overview.png) | 三屏总览 |
+| [`shots/overview.png`](shots/overview.png) | 四屏总览 |
 | [`shots/screen-1.png`](shots/screen-1.png) | 记录采购 · 一屏填完 |
 | [`shots/screen-2.png`](shots/screen-2.png) | 更换采购商品 · 按渠道 |
 | [`shots/screen-3.png`](shots/screen-3.png) | 保存后 · 自动展开 + 高亮 |

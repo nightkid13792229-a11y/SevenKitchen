@@ -60,6 +60,7 @@ import {
 import { InventoryService } from '../inventory/inventory.service';
 import { resolvePreparationMethodTokens } from '../recipe/preparation-method-text.util';
 import { SearchGovernanceService } from '../search-governance/search-governance.service';
+import { perBaseUnitCostOrInfinity } from '../../domain/ingredient/unit-price';
 
 const MAX_SEARCH_EXPANSION_TERMS = 8;
 
@@ -600,7 +601,7 @@ export class PurchasingService {
       return Number.POSITIVE_INFINITY;
     }
 
-    return price / sku.purchaseToBaseRatio;
+    return perBaseUnitCostOrInfinity(price, sku.purchaseToBaseRatio);
   }
 
   private getProcurementSkuPurchasePrice(

@@ -16,6 +16,7 @@ import {
   PackagingProperties,
 } from './types';
 import { ValidationError } from '../common/errors';
+import { perBaseUnitCost } from './unit-price';
 
 export interface IngredientProperties
   extends
@@ -177,7 +178,12 @@ export class Ingredient {
    * 鲜食、试吃装、补剂、包材都用它，价格只在采购报销时写入一次。
    */
   getUnitCost(): number {
-    return this.currentPricePerPurchaseUnit / this.purchaseToBaseRatio;
+    return (
+      perBaseUnitCost(
+        this.currentPricePerPurchaseUnit,
+        this.purchaseToBaseRatio,
+      ) ?? 0
+    );
   }
 
   /**

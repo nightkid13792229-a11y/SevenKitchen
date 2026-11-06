@@ -1,0 +1,53 @@
+/**
+ * 单价换算（2026-11-06「单一来源」改造 · 阶段 D）
+ *
+ * 全系统只有这一条换算公式：
+ *
+ *     每基准单位成本 = 价格 ÷ 换算比
+ *
+ * 其中「价格」是元 / 采购单位（元/瓶、元/组、元/克），
+ * 「换算比」是 1 个采购单位等于多少基准单位（120 粒/瓶、12 个/组、1 克/克）。
+ *
+ * 改造前这段除法散落在 7 个地方（原料实体、补剂目录、补剂下单、采购服务、
+ * SKU 服务、调价服务、算价依据 SQL），每处都自己判一遍 0 和 NaN，
+ * 一旦有人改了口径，其余六处不会跟着变。现在统一收敛到这里。
+ *
+ * ⚠️ 换算比非法（null / ≤0 / 非数字）时返回 null，**不抛异常**：
+ * 调用方有的是「展示层允许缺失」（补剂目录的 unitCost 本来就可能为空），
+ * 有的是「必须拿到数才能算价」（算价），由调用方自己决定怎么办。
+ */
+export function perBaseUnitCost(
+  pricePerPurchaseUnit: number | null | undefined,
+  purchaseToBaseRatio: number | null | undefined,
+): number | null {
+  // 必须先判空再 Number()：Number(null) === 0，会把「没有价格」静默变成免费。
+  // 这正是 2026-11-06 改造要消灭的那类错误。
+  if (pricePerPurchaseUnit === null || pricePerPurchaseUnit === undefined) {
+    return null;
+  }
+  if (purchaseToBaseRatio === null || purchaseToBaseRatio === undefined) {
+    return null;
+  }
+
+  const price = Number(pricePerPurchaseUnit);
+  const ratio = Number(purchaseToBaseRatio);
+
+  if (!Number.isFinite(price) || !Number.isFinite(ratio) || ratio <= 0) {
+    return null;
+  }
+
+  return price / ratio;
+}
+
+/**
+ * 同一条公式，但换算比非法时返回正无穷。
+ *
+ * 采购选品按「每基准单位成本」从低到高排，非法价格应该沉到最后，
+ * 而不是变成 0 排到最前（那会让「还没定价」的商品被优先推荐）。
+ */
+export function perBaseUnitCostOrInfinity(
+  pricePerPurchaseUnit: number | null | undefined,
+  purchaseToBaseRatio: number | null | undefined,
+): number {
+  return perBaseUnitCost(pricePerPurchaseUnit, purchaseToBaseRatio) ?? Number.POSITIVE_INFINITY;
+}

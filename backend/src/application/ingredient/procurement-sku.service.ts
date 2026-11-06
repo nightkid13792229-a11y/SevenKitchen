@@ -12,6 +12,7 @@ import {
   toChannelOptions,
 } from '../purchasing/channel-catalog';
 import { PURCHASE_CHANNEL_SET } from '../platform-options/option-sets.registry';
+import { perBaseUnitCostOrInfinity } from '../../domain/ingredient/unit-price';
 
 type DecimalLike = {
   toNumber: () => number;
@@ -337,7 +338,7 @@ const getSkuUnitCost = (
     return Number.POSITIVE_INFINITY;
   }
 
-  return price / sku.purchaseToBaseRatio;
+  return perBaseUnitCostOrInfinity(price, sku.purchaseToBaseRatio);
 };
 
 const sortProcurementSkus = <T extends ProcurementSkuRecord>(skus: T[]): T[] =>

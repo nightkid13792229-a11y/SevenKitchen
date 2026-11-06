@@ -12,6 +12,7 @@ import { IngredientType } from '../../domain/ingredient/enums';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { SupplementDosageService } from './supplement-dosage.service';
 import { isSupplementUnitOneToOne } from './supplement-unit.util';
+import { perBaseUnitCost } from '../../domain/ingredient/unit-price';
 
 /** 物理形态（与 prisma schema 的 IngredientPhysicalForm 对齐） */
 export type IngredientPhysicalFormCode = 'POWDER' | 'TABLET' | 'CAPSULE' | 'LIQUID';
@@ -456,7 +457,8 @@ export class SupplementCatalogService {
 
     const price = Number(ingredient.currentPricePerPurchaseUnit || 0);
     const ratio = Number(ingredient.purchaseToBaseRatio || 0);
-    const unitCost = price > 0 && ratio > 0 ? price / ratio : null;
+    const unitCost =
+      price > 0 && ratio > 0 ? perBaseUnitCost(price, ratio) : null;
 
     const physicalForm = this.normalizePhysicalForm(ingredient.physicalForm);
     const suggestedPhysicalForm = this.suggestPhysicalForm(

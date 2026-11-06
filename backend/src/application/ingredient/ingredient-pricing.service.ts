@@ -18,6 +18,7 @@ import { PURCHASE_RECORD_REPOSITORY } from '../purchasing/purchasing.service.tok
 import type { PurchaseRecordRepository } from '../../domain/purchasing/purchase-record.repository';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import type { Ingredient } from '../../domain/ingredient';
+import { perBaseUnitCost } from '../../domain/ingredient/unit-price';
 
 export interface IngredientPriceChangeView {
   id: string;
@@ -600,7 +601,8 @@ export class IngredientPricingService {
         this.toNumericSourceQuantity(change.sourceQuantity);
       const baseUnitCost =
         pricingBasis?.baseUnitCost ??
-        ingredientPricePerPurchaseUnit / sourceIngredientRatio;
+        perBaseUnitCost(ingredientPricePerPurchaseUnit, sourceIngredientRatio) ??
+        0;
       const baseQuantity =
         pricingBasis?.baseQuantity ??
         ingredientPurchaseQuantity * sourceIngredientRatio;

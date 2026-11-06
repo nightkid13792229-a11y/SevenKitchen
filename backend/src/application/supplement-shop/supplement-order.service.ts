@@ -37,6 +37,7 @@ import {
   type SupplementCandidateItem,
 } from './supplement-candidate.service';
 import { computeSheetTotalWeightG } from './supplement-sheet-weight.util';
+import { perBaseUnitCost } from '../../domain/ingredient/unit-price';
 import {
   isSupplementUnitOneToOne,
   toSupplementBaseQuantity,
@@ -2399,7 +2400,7 @@ export class SupplementOrderService {
         name: ingredient.name,
         unit: displayUnit,
         amount: line.amount,
-        unitCost: price / ratio,
+        unitCost: perBaseUnitCost(price, ratio) ?? 0,
         physicalForm: ingredient.physicalForm as IngredientPhysicalFormCode,
         isOilBased: ingredient.isOilBased === true,
       });

@@ -55,10 +55,29 @@
           :state="dogPanelState"
           :daily-intake-g="displayDailyIntakeG"
           :per-meal-g="perMealG"
+          :facts-footer="true"
           @select="selectDog"
           @create-dog="goToCreateDog"
           @retry="retryDogsLoad"
-        />
+        >
+          <!--
+            饭量说明放六项读数正下方（2026-11-07）：顾客是看到「每日饭量 / 每餐约」
+            这两个数字才冒出「怎么算的」这个疑问的，答案要贴着这两格。
+            原位置夹在狗狗面板和生命阶段卡中间的缝里，看起来像漏在那的一行。
+          -->
+          <template #facts-footer>
+            <view class="feeding-note-toggle" @tap="toggleFeedingNote">
+              <text class="feeding-note-toggle-text">每日饭量是怎么算的？</text>
+              <text class="feeding-note-toggle-action">{{ feedingNoteExpanded ? '收起' : '展开' }}</text>
+            </view>
+            <view v-if="feedingNoteExpanded" class="feeding-adjustment-note">
+              <text class="feeding-adjustment-line">① 按它的体重、年龄和每天的活动量，算出它一天大概需要多少热量；</text>
+              <text class="feeding-adjustment-line">② 再根据它是偏胖还是偏瘦、每天吃多少零食，做相应增减；</text>
+              <text class="feeding-adjustment-line">③ 用这个热量除以食谱每 100g 含的热量，就是每天的克数。</text>
+              <text class="feeding-adjustment-line feeding-adjustment-line--tip">这是首次喂食的保守估算。建议观察 2-4 周，按体重和便便情况增减 5%-10%。</text>
+            </view>
+          </template>
+        </DogContextPanel>
 
         <!-- 生命阶段与饭量说明只在“有档案”时出现；空档案/失败由组件自己提示 -->
         <block v-if="dogPanelState === 'ready'">
@@ -94,18 +113,6 @@
             @close="versionSheetVisible = false"
             @select="switchLifeStageVersion"
           />
-
-          <!-- 首单喂食量说明：默认收起，避免挤压主要内容 -->
-          <view class="feeding-note-toggle" @tap="toggleFeedingNote">
-            <text class="feeding-note-toggle-text">每日饭量是怎么算的？</text>
-            <text class="feeding-note-toggle-action">{{ feedingNoteExpanded ? '收起' : '展开' }}</text>
-          </view>
-          <view v-if="feedingNoteExpanded" class="feeding-adjustment-note">
-            <text class="feeding-adjustment-line">① 按它的体重、年龄和每天的活动量，算出它一天大概需要多少热量；</text>
-            <text class="feeding-adjustment-line">② 再根据它是偏胖还是偏瘦、每天吃多少零食，做相应增减；</text>
-            <text class="feeding-adjustment-line">③ 用这个热量除以食谱每 100g 含的热量，就是每天的克数。</text>
-            <text class="feeding-adjustment-line feeding-adjustment-line--tip">这是首次喂食的保守估算。建议观察 2-4 周，按体重和便便情况增减 5%-10%。</text>
-          </view>
         </block>
       </view>
     </view>
@@ -2199,12 +2206,12 @@ onShow(() => {
   gap: 18rpx;
 }
 
+/* 现在这条在狗狗面板内部、六项读数正下方：上下留白由面板的脚注位给，自己不占外间距 */
 .feeding-note-toggle {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 14rpx;
-  padding: 12rpx 4rpx;
+  padding: 8rpx 0 10rpx;
 }
 
 .feeding-note-toggle-text {
@@ -2220,9 +2227,11 @@ onShow(() => {
 .feeding-adjustment-note {
   display: flex;
   flex-direction: column;
+  margin-top: 8rpx;
   padding: 16rpx 18rpx;
   border-radius: 8rpx;
-  background-color: #eef2e4;
+  /* 面板本身是灰绿底，展开的说明改成白底 + 同色描边，读起来是嵌在卡片里的一小块 */
+  background-color: #ffffff;
   border: 1rpx solid #e5e8d4;
   font-size: 24rpx;
   line-height: 1.6;

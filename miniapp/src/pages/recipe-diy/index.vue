@@ -64,10 +64,28 @@
           :daily-intake-g="displayDailyIntakeG"
           :per-meal-g="perMealG"
           hint="提示：请先选择爱犬以计算推荐饭量"
+          :facts-footer="true"
           @select="selectDog"
           @create-dog="goToCreateDog"
           @retry="retryDogsLoad"
-        />
+        >
+          <!--
+            饭量说明放六项读数正下方（2026-11-07）：和成品订购页同一处、同一份文案，
+            顾客是看到「每日饭量 / 每餐约」两个数字才问「怎么算的」的。
+          -->
+          <template #facts-footer>
+            <view class="feeding-note-toggle" @tap="toggleFeedingNote">
+              <text class="feeding-note-toggle-text">每日饭量是怎么算的？</text>
+              <text class="feeding-note-toggle-action">{{ feedingNoteExpanded ? '收起' : '展开' }}</text>
+            </view>
+            <view v-if="feedingNoteExpanded" class="feeding-adjustment-note">
+              <text class="feeding-adjustment-line">① 按它的体重、年龄和每天的活动量，算出它一天大概需要多少热量；</text>
+              <text class="feeding-adjustment-line">② 再根据它是偏胖还是偏瘦、每天吃多少零食，做相应增减；</text>
+              <text class="feeding-adjustment-line">③ 用这个热量除以食谱每 100g 含的热量，就是每天的饭量。</text>
+              <text class="feeding-adjustment-line feeding-adjustment-line--tip">这是首次喂食的保守估算。建议观察 2-4 周，按体重和便便情况增减 5%-10%。</text>
+            </view>
+          </template>
+        </DogContextPanel>
 
         <!-- 生命阶段与饭量说明只在“有档案”时出现；空档案/失败由组件自己提示 -->
         <block v-if="dogPanelState === 'ready'">
@@ -102,23 +120,6 @@
             <text class="dog-calc-error-text">
               饭量计算失败，可能是网络波动。点这里重新计算。
             </text>
-          </view>
-
-          <!--
-            饭量算法：默认收起。
-            原来这里是「饭量计算过程」+ 5 张计算卡（DER / 零食能量 / 鲜食能量 / 每日饭量 / 每餐饭量，
-            带公式与中间值），对顾客做决定帮助很小；
-            现在改成成品订购页同款的 3 条人话 + 一句观察建议。
-          -->
-          <view class="feeding-note-toggle" @tap="toggleFeedingNote">
-            <text class="feeding-note-toggle-text">每日饭量是怎么算的？</text>
-            <text class="feeding-note-toggle-action">{{ feedingNoteExpanded ? '收起' : '展开' }}</text>
-          </view>
-          <view v-if="feedingNoteExpanded" class="feeding-adjustment-note">
-            <text class="feeding-adjustment-line">① 按它的体重、年龄和每天的活动量，算出它一天大概需要多少热量；</text>
-            <text class="feeding-adjustment-line">② 再根据它是偏胖还是偏瘦、每天吃多少零食，做相应增减；</text>
-            <text class="feeding-adjustment-line">③ 用这个热量除以食谱每 100g 含的热量，就是每天的饭量。</text>
-            <text class="feeding-adjustment-line feeding-adjustment-line--tip">这是首次喂食的保守估算。建议观察 2-4 周，按体重和便便情况增减 5%-10%。</text>
           </view>
         </block>
       </view>
@@ -1136,9 +1137,10 @@ function getHealthTagLabel(tagOrUuid: string): string {
   display: flex;
   flex-direction: column;
   gap: 8rpx;
-  margin-top: 20rpx;
+  margin-top: 8rpx;
   padding: 18rpx 20rpx;
-  background-color: #eef2e4;
+  /* 面板本身是灰绿底，展开的说明改成白底 + 同色描边，读起来是嵌在卡片里的一小块 */
+  background-color: #ffffff;
   border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
 }
@@ -1226,12 +1228,12 @@ function getHealthTagLabel(tagOrUuid: string): string {
   color: #6b6653;
 }
 
+/* 现在这条在狗狗面板内部、六项读数正下方：上下留白由面板的脚注位给，自己不占外间距 */
 .feeding-note-toggle {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 14rpx;
-  padding: 12rpx 4rpx;
+  padding: 8rpx 0 10rpx;
 }
 
 .feeding-note-toggle-text {

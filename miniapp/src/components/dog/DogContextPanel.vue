@@ -16,10 +16,11 @@
     · 不存选中状态 —— 只发 select 事件，持久化在页面 / useDogSelection
     · 不决定要不要二次确认 —— 那是页面的业务（换狗会重算价格）
 
-    ## 显示什么由两个开关决定
+    ## 显示什么由三个开关决定
 
     · facts：'full' 六项（成品 / DIY）| 'none' 只有胶囊（详情页）
     · panel：true 灰绿底面板（成品 / DIY）| false 直接铺在页面上（详情页）
+    · factsFooter：true 六项下面留一条脚注位（成品 / DIY 放「饭量怎么算的」）| false 不留
 
     ## 六项为什么长这样（2026-11-07）
 
@@ -87,6 +88,15 @@
             </view>
           </view>
         </view>
+
+        <!--
+          六项读数下方的脚注位（2026-11-07）：成品页 / DIY 页在这里放「每日饭量是怎么算的？」。
+          放在面板内部、紧贴着「每日饭量 / 每餐约」两格——顾客是看到这两个数字才冒出
+          「怎么算的」这个疑问的；以前它飘在面板和生命阶段卡中间的缝里，像是漏在那的一行。
+        -->
+        <view v-if="showFacts && factsFooter" class="dog-facts-footer">
+          <slot name="facts-footer" />
+        </view>
       </view>
 
       <!-- 有档案但还没选中：不显示六项，避免一排“计算中” -->
@@ -132,6 +142,8 @@ const props = withDefaults(
     perMealG?: number
     /** 有档案但还没选中时的一行提示 */
     hint?: string
+    /** 六项读数下方是否留一条脚注位（成品页 / DIY 页放「饭量怎么算的」） */
+    factsFooter?: boolean
   }>(),
   {
     dogs: () => [],
@@ -142,6 +154,7 @@ const props = withDefaults(
     dailyIntakeG: 0,
     perMealG: 0,
     hint: '',
+    factsFooter: false,
   },
 )
 
@@ -287,6 +300,13 @@ const factItems = computed(() => {
 .dog-facts-wrap {
   margin-top: 16rpx;
   padding-top: 16rpx;
+  border-top: 1rpx solid #e5e8d4;
+}
+
+/* 脚注位：和六项读数用同一条细线隔开，读起来是参数表的最后一行 */
+.dog-facts-footer {
+  margin-top: 12rpx;
+  padding-top: 12rpx;
   border-top: 1rpx solid #e5e8d4;
 }
 

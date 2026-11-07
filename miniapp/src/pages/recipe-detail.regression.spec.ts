@@ -537,9 +537,13 @@ describe('recipe detail reference price copy', () => {
     expect(template).not.toContain('/100g起');
     expect(template).not.toContain("? '起'");
     // 两个分支（有/无狗狗档案）都要写清最终价以下单页为准
-    expect(template).toContain("'已含冷链配送 · 最终价格以下单页为准'");
+    // 价格按 1kg 起订量估算，且写清最终价以下单页为准
     expect(template).toContain(
-      "'按狗狗体重精确计算 · 已含冷链配送 · 最终价格以下单页为准'",
+      '按 1kg 起订量估算 · 已含冷链配送 · 最终价格以下单页为准',
+    );
+    // 不能买成品（顾客自建食谱）时不展示价格条
+    expect(template).toContain(
+      'v-if="displayReferencePrice && canBuyFinishedFood"',
     );
   });
 });

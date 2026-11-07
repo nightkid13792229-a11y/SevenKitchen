@@ -23,7 +23,7 @@ import { ShippingService } from '../../../src/application/shipping/shipping.serv
  * 算钱本身由 PricingService 的既有用例保证。
  */
 describe('OrderService · computeRecipeReferencePrice', () => {
-  const recipeRepo = { findById: jest.fn() };
+  const recipeRepo = { findById: jest.fn(), findByIdAndVersion: jest.fn() };
   const pricing = { calculateOrderPrice: jest.fn() };
   const shipping = { calculateShippingFeePreview: jest.fn() };
   const config = { getGlobalConfig: jest.fn() };
@@ -80,6 +80,7 @@ describe('OrderService · computeRecipeReferencePrice', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     recipeRepo.findById.mockResolvedValue(recipe);
+    recipeRepo.findByIdAndVersion.mockResolvedValue(recipe);
     config.getGlobalConfig.mockResolvedValue({ minOrderWeightG: 1000 });
     pricing.calculateOrderPrice.mockResolvedValue({
       productPrice: 200,
@@ -114,6 +115,15 @@ describe('OrderService · computeRecipeReferencePrice', () => {
       amountProduct: 200,
       amountShipping: 30,
     });
+  });
+
+  it('指定版本时按那个版本取价，不会读到草稿', async () => {
+    await buildService();
+
+    await service.computeRecipeReferencePrice('recipe-1', 4);
+
+    expect(recipeRepo.findByIdAndVersion).toHaveBeenCalledWith('recipe-1', 4);
+    expect(recipeRepo.findById).not.toHaveBeenCalled();
   });
 
   it('起订量改成 1500g 时袋数跟着变', async () => {

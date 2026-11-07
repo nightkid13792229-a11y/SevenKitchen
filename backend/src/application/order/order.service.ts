@@ -2512,13 +2512,26 @@ export class OrderService {
    * - 只影响展示；参考价与实际首单实测差 <1%，更大的单会更便宜，文案统一用「约」。
    * - pricePer100g = (productPrice + shippingFee) * 100 / referenceWeightG.
    */
-  async computeRecipeReferencePrice(recipeId: string): Promise<{
+  async computeRecipeReferencePrice(
+    recipeId: string,
+    /**
+     * 指定版本时**只**取这个版本（展示哪一条就按哪一条算）。
+     * 不传时沿用旧行为：取该 recipeId 的最新版本。
+     *
+     * 为什么要传：findById 取的是"版本号最大"的行，不过滤状态 ——
+     * 某道菜有草稿时，参考价会算到未发布的版本上（首页卡片却是已发布版）。
+     */
+    version?: number,
+  ): Promise<{
     recipeId: string;
     pricePer100g: number;
     amountProduct: number;
     amountShipping: number;
   }> {
-    const recipe = await this.recipeRepository.findById(recipeId);
+    const recipe =
+      version !== undefined && version !== null
+        ? await this.recipeRepository.findByIdAndVersion(recipeId, version)
+        : await this.recipeRepository.findById(recipeId);
     if (!recipe) {
       throw new NotFoundException(`Recipe not found: ${recipeId}`);
     }

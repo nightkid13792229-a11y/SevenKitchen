@@ -393,3 +393,17 @@ describe('home reference price copy', () => {
     expect(source).toContain('minPricePer100g > 0');
   });
 });
+
+describe('home reference price freshness', () => {
+  it('下拉刷新时清空参考价，价格更新后能看到新价', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    );
+    const start = source.indexOf('function refreshRecipesWithFilters()');
+    expect(start).toBeGreaterThan(-1);
+    const block = source.slice(start, start + 400);
+
+    expect(block).toContain('referencePriceMap.value = {}');
+  });
+});

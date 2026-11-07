@@ -1220,6 +1220,8 @@ function refreshRecipesWithFilters() {
   visibleRecipesCount.value = 0
   hasMore.value = true
   currentPage.value = 1
+  // 参考价也要重新拉：否则下拉刷新后仍显示上一次的价格（运费/成本变动看不到）
+  referencePriceMap.value = {}
   loadRecipes(true)
 }
 

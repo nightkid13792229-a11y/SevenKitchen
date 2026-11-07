@@ -343,13 +343,13 @@
     <!-- 底部操作按钮 -->
     <view class="bottom-actions">
       <!-- 参考价条（接口未就绪时不展示） -->
-      <view v-if="displayReferencePrice" class="reference-price-strip">
+      <view v-if="displayReferencePrice && canBuyFinishedFood" class="reference-price-strip">
         <view class="reference-price-copy">
           <text class="reference-price-value">
             约¥{{ formatReferencePrice(displayReferencePrice.amount) }}/100g
           </text>
           <text class="reference-price-note">
-            {{ displayReferencePrice.isMin ? '已含冷链配送 · 最终价格以下单页为准' : '按狗狗体重精确计算 · 已含冷链配送 · 最终价格以下单页为准' }}
+            按 1kg 起订量估算 · 已含冷链配送 · 最终价格以下单页为准
           </text>
         </view>
       </view>

@@ -1801,17 +1801,39 @@ export class RecipesController {
    */
   private async resolveReferencePriceLifeStageVersions(
     id: string,
-  ): Promise<Array<{ recipeId: string; lifeStage: string | null }>> {
-    const seriesRecipes = this.latestPublicVersionBySeriesStage(
-      await this.loadPublicSeriesRecipes(id),
-    );
+  ): Promise<
+    Array<{ recipeId: string; version: number | null; lifeStage: string | null }>
+  > {
+    const candidates = await this.loadPublicSeriesRecipes(id);
+    const seriesRecipes = this.latestPublicVersionBySeriesStage(candidates);
+
     if (seriesRecipes.length > 0) {
       return seriesRecipes.map((recipe) => ({
         recipeId: recipe.recipeId,
+        version: recipe.version ?? null,
         lifeStage: recipe.seriesLifeStage ?? null,
       }));
     }
-    return [{ recipeId: id, lifeStage: null }];
+
+    /**
+     * 没有生命阶段的老/独立食谱：取**最新已发布**版本。
+     * 以前这里只回 recipeId，算价会按"版本号最大"取 —— 可能是草稿。
+     */
+    const latestPublic = [...candidates].sort(
+      (left, right) => (right.version ?? 0) - (left.version ?? 0),
+    )[0];
+    if (latestPublic) {
+      return [
+        {
+          recipeId: latestPublic.recipeId,
+          version: latestPublic.version ?? null,
+          lifeStage: null,
+        },
+      ];
+    }
+
+    // 非公开食谱（员工预览 / 顾客自建）：仍按最新版本算，用于内部参考
+    return [{ recipeId: id, version: null, lifeStage: null }];
   }
 
   @Get('reference-prices')
@@ -1831,47 +1853,47 @@ export class RecipesController {
       .map((id) => id.trim())
       .filter((id) => Boolean(id));
 
-    const items: Array<{
-      recipeId: string;
-      minPricePer100g: number | null;
-      lifeStagePrices: Array<{
-        recipeId: string;
-        lifeStage: string | null;
-        pricePer100g: number;
-      }>;
-    }> = [];
-
-    for (const id of idList) {
-      try {
-        const versions = await this.resolveReferencePriceLifeStageVersions(id);
-        const lifeStagePrices: Array<{
-          recipeId: string;
-          lifeStage: string | null;
-          pricePer100g: number;
-        }> = [];
-        for (const version of versions) {
-          const price = await this.orderService.computeRecipeReferencePrice(
-            version.recipeId,
+    /**
+     * 并行算：首页一次要 10 张卡片、约 24 个生命阶段，串行在生产实测 1.3 秒+。
+     * 每个版本之间互不依赖，Promise.all 之后耗时主要看最慢的一次。
+     */
+    const results = await Promise.all(
+      idList.map(async (id) => {
+        try {
+          const versions = await this.resolveReferencePriceLifeStageVersions(id);
+          const lifeStagePrices = await Promise.all(
+            versions.map(async (version) => {
+              const price = await this.orderService.computeRecipeReferencePrice(
+                version.recipeId,
+                version.version ?? undefined,
+              );
+              return {
+                recipeId: version.recipeId,
+                lifeStage: version.lifeStage,
+                pricePer100g: price.pricePer100g,
+              };
+            }),
           );
-          lifeStagePrices.push({
-            recipeId: version.recipeId,
-            lifeStage: version.lifeStage,
-            pricePer100g: price.pricePer100g,
-          });
+
+          const prices = lifeStagePrices.map((item) => item.pricePer100g);
+          const minPricePer100g =
+            prices.length > 0 ? Math.min(...prices) : null;
+
+          return { recipeId: id, minPricePer100g, lifeStagePrices };
+        } catch (error) {
+          // 无法计算参考价（缺系统配置/原料等）时跳过，前端静默不展示
+          console.warn(
+            `[Recipes] Skip reference price for recipe ${id}:`,
+            (error as Error)?.message,
+          );
+          return null;
         }
+      }),
+    );
 
-        const prices = lifeStagePrices.map((item) => item.pricePer100g);
-        const minPricePer100g = prices.length > 0 ? Math.min(...prices) : null;
-
-        items.push({ recipeId: id, minPricePer100g, lifeStagePrices });
-      } catch (error) {
-        // 无法计算参考价（缺系统配置/原料等）时跳过，前端静默不展示
-        console.warn(
-          `[Recipes] Skip reference price for recipe ${id}:`,
-          (error as Error)?.message,
-        );
-      }
-    }
+    const items = results.filter(
+      (item): item is NonNullable<typeof item> => item !== null,
+    );
 
     return ApiResponseDto.success({ items });
   }
@@ -1885,21 +1907,19 @@ export class RecipesController {
     @Param('id') id: string,
   ): Promise<ApiResponseDto<any>> {
     const versions = await this.resolveReferencePriceLifeStageVersions(id);
-    const lifeStagePrices: Array<{
-      recipeId: string;
-      lifeStage: string | null;
-      pricePer100g: number;
-    }> = [];
-    for (const version of versions) {
-      const price = await this.orderService.computeRecipeReferencePrice(
-        version.recipeId,
-      );
-      lifeStagePrices.push({
-        recipeId: version.recipeId,
-        lifeStage: version.lifeStage,
-        pricePer100g: price.pricePer100g,
-      });
-    }
+    const lifeStagePrices = await Promise.all(
+      versions.map(async (version) => {
+        const price = await this.orderService.computeRecipeReferencePrice(
+          version.recipeId,
+          version.version ?? undefined,
+        );
+        return {
+          recipeId: version.recipeId,
+          lifeStage: version.lifeStage,
+          pricePer100g: price.pricePer100g,
+        };
+      }),
+    );
 
     const prices = lifeStagePrices.map((item) => item.pricePer100g);
     const minPricePer100g = prices.length > 0 ? Math.min(...prices) : null;

@@ -67,7 +67,7 @@ export class ShippingController {
   @ApiQuery({
     name: 'shippingTemplateId',
     description:
-      'Optional shipping template ID (uses active template if not provided)',
+      'Optional shipping template ID. When omitted, uses the default template configured in 全局配置; if that setting is invalid and the active template is not unique, the request fails instead of guessing.',
     required: false,
     type: String,
   })

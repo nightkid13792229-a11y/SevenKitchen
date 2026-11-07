@@ -3,12 +3,20 @@
  * Admin-only endpoint for managing global configuration
  */
 
-import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { GlobalConfigService } from '../../application/config/global-config.service';
 import { UpdateGlobalConfigDto } from '../dto/global-config.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { StaffGuard } from '../guards/role.guard';
 import { ApiResponseDto } from '../dto/common/response.dto';
+import { PrismaShippingTemplateRepository } from '../../infrastructure/repositories/prisma-shipping-template.repository';
 
 /**
  * ⚠️ 2026-10-16（B4）加了 `StaffGuard`。
@@ -27,7 +35,10 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 @Controller('api/v1/admin/global-config')
 @UseGuards(AuthGuard, StaffGuard)
 export class GlobalConfigController {
-  constructor(private readonly globalConfigService: GlobalConfigService) {}
+  constructor(
+    private readonly globalConfigService: GlobalConfigService,
+    private readonly shippingTemplateRepository: PrismaShippingTemplateRepository,
+  ) {}
 
   /**
    * Get current global configuration
@@ -48,11 +59,38 @@ export class GlobalConfigController {
    */
   @Put()
   async updateConfig(@Body() dto: UpdateGlobalConfigDto) {
+    await this.assertDefaultShippingTemplateUsable(dto.defaultShippingTemplateId);
+
     const updated = await this.globalConfigService.updateGlobalConfig(dto);
     return ApiResponseDto.success({
       id: 'singleton',
       ...updated,
     });
+  }
+
+  /**
+   * 保存「默认运费模板」前必须能真的用。
+   *
+   * 2026-11-07 起算价只认这一个设置：存进去一个不存在 / 已停用的 id，
+   * 下单预览会直接报错、顾客结不了账。把错误挡在保存这一刻，比等顾客发现便宜。
+   */
+  private async assertDefaultShippingTemplateUsable(
+    templateId?: string | null,
+  ): Promise<void> {
+    if (!templateId) {
+      return; // 清空默认模板允许保存；算价会退回唯一生效模板
+    }
+
+    const template =
+      await this.shippingTemplateRepository.findById(templateId);
+    if (!template) {
+      throw new BadRequestException('默认运费模板不存在，请重新选择');
+    }
+    if (!template.isActive) {
+      throw new BadRequestException(
+        '默认运费模板已停用，请先激活它或换一张生效的模板',
+      );
+    }
   }
 }
 

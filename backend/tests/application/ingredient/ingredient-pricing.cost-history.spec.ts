@@ -85,6 +85,22 @@ describe('IngredientPricingService · 报销写价留痕', () => {
     );
   });
 
+  it('老记录没有实际克数、且食材换算是 1 时，不猜——返回 0 让这条不参与调价', () => {
+    const base = (service as any).resolveActualBaseQuantity(
+      { actualQuantity: 2 },
+      { purchaseToBaseRatio: 1, type: 'FOOD' },
+    );
+    expect(base).toBe(0);
+  });
+
+  it('补剂/包材（换算不是 1）仍可退回「数量 × 换算」', () => {
+    const base = (service as any).resolveActualBaseQuantity(
+      { actualQuantity: 2 },
+      { purchaseToBaseRatio: 60, type: 'SUPPLEMENT' },
+    );
+    expect(base).toBe(120);
+  });
+
   it('先写价再写流水：价写失败时不该留下一条假流水', async () => {
     update.mockRejectedValueOnce(new Error('db down'));
 

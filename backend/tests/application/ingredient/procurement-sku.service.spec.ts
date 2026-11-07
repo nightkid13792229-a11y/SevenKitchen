@@ -249,6 +249,8 @@ describe('ProcurementSkuService', () => {
         productModel: '   ',
         purchaseChannel: '',
         notes: null,
+        // 2026-11-07 复核后：食材的采购商品必须带换算
+        purchaseToBaseRatio: 1000,
       }),
     ).resolves.toEqual(
       expect.objectContaining({

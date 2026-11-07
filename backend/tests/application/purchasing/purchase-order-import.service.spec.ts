@@ -520,7 +520,7 @@ describe('PurchaseOrderImportService', () => {
     expect(cosService.getSignedUrl).not.toHaveBeenCalled();
   });
 
-  it('确认生成时按原料比例换算，并带上来源', async () => {
+  it('确认生成时按采购商品的净含量换算，并带上来源', async () => {
     prisma.purchaseOrderImport.findMany.mockResolvedValue([
       {
         id: 'import-1',
@@ -554,6 +554,8 @@ describe('PurchaseOrderImportService', () => {
       name: '生菜 500g/袋',
       purchaseChannel: '盒马鲜生',
       purchaseUnit: '袋',
+      // 2026-11-07 复核：换算只认商品自己的，不再退回原料比例
+      purchaseToBaseRatio: 500,
       ingredient: { baseUnit: 'G', name: '生菜', purchaseToBaseRatio: 500 },
     });
     prisma.purchaseItem.findFirst.mockResolvedValue({ id: 'item-1' });

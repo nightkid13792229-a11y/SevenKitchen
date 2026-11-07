@@ -867,13 +867,11 @@ ${list}
               );
             }
 
-            // 换算优先用采购商品自己的净含量（盒/袋），没有才回退原料比例。
-            // 猪肝 200g/盒 与「散称 1kg」的换算不同，用原料比例会把 200g 算成 1g。
-            const ratio = Number(
-              sku.purchaseToBaseRatio ??
-                sku.ingredient.purchaseToBaseRatio ??
-                0,
-            );
+            // 只用采购商品自己的净含量（盒/袋）。
+            // 2026-11-07 复核：原来「商品没填换算就退回原料比例」，
+            // 而食材的档案换算恒为 1 —— 截图导入会把「2 盒」记成「2 克」。
+            // 这里不再兜底：没有净含量就让员工先补商品。
+            const ratio = Number(sku.purchaseToBaseRatio ?? 0);
             if (!Number.isFinite(ratio) || ratio <= 0) {
               throw new BadRequestException(
                 `「${sku.name}」缺少净含量/换算比例，请先补全采购商品`,

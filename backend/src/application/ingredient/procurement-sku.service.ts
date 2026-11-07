@@ -415,6 +415,27 @@ export class ProcurementSkuService {
     return ratio > 0 ? ratio : null;
   }
 
+  /**
+   * 食材的采购商品必须带「一件多少克」（2026-11-07 复核后补）。
+   *
+   * 不填换算的后果是静默的、而且很大：采购记录会退回原料档案的换算
+   * （食材的档案换算恒为 1），「2 盒」被记成「2 克」，库存少记 500 倍，
+   * 报销再把 39.9 ÷ 2 = 19.95 元/g 写进档案，食谱成本跟着错。
+   */
+  private assertSkuRatioPresent(
+    sku: { name: string },
+    purchaseToBaseRatio: number | null | undefined,
+  ): void {
+    const ratio = Number(purchaseToBaseRatio);
+    if (Number.isFinite(ratio) && ratio > 0) {
+      return;
+    }
+
+    throw new BadRequestException(
+      `采购商品「${sku?.name || '未命名'}」必须填写「一件多少克」（或一箱几件 × 每件净含量），否则采购和成本都没法折算`,
+    );
+  }
+
   private async initializeIngredientCostFromSku(
     tx: PrismaService | any,
     params: {
@@ -641,6 +662,8 @@ export class ProcurementSkuService {
     }
 
     const computedRatio = this.resolvePurchaseToBaseRatioFromPackFacts(dto);
+    const resolvedRatio = computedRatio ?? dto.purchaseToBaseRatio ?? null;
+    this.assertSkuRatioPresent({ name: dto.name }, resolvedRatio);
 
     const data = {
       ingredientId,
@@ -652,7 +675,7 @@ export class ProcurementSkuService {
       purchaseUnit:
         normalizeOptionalPurchaseUnit(dto.purchaseUnit, ingredient!.baseUnit) ??
         null,
-      purchaseToBaseRatio: computedRatio ?? dto.purchaseToBaseRatio ?? null,
+      purchaseToBaseRatio: resolvedRatio,
       currentPurchasePrice,
       referencePurchasePrice:
         dto.referencePurchasePrice ??
@@ -1059,6 +1082,10 @@ export class ProcurementSkuService {
     }
 
     if (dto.purchaseToBaseRatio !== undefined) {
+      this.assertSkuRatioPresent(
+        { name: dto.name ?? '未命名' },
+        dto.purchaseToBaseRatio,
+      );
       data.purchaseToBaseRatio = dto.purchaseToBaseRatio;
     }
 

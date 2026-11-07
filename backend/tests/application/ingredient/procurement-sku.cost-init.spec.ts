@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProcurementSkuService } from '../../../src/application/ingredient/procurement-sku.service';
 import { IngredientCostHistoryService } from '../../../src/application/ingredient/ingredient-cost-history.service';
@@ -77,6 +78,18 @@ describe('ProcurementSkuService · 建档初始化成本', () => {
 
     expect(updateMany).not.toHaveBeenCalled();
     expect(record).not.toHaveBeenCalled();
+  });
+
+  it('食材建采购商品必须带换算，否则拒绝（复核：换算为空会让「2 盒」记成「2 克」）', () => {
+    expect(() =>
+      service['assertSkuRatioPresent']({ name: '糙米 1kg' }, null),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      service['assertSkuRatioPresent']({ name: '糙米 1kg' }, 0),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      service['assertSkuRatioPresent']({ name: '糙米 1kg' }, 1000),
+    ).not.toThrow();
   });
 
   it('「一箱几件 × 每件净含量」由服务端算换算，不信前端乘好的数', () => {

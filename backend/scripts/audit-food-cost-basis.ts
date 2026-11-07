@@ -200,6 +200,22 @@ async function main() {
     console.log(`     ✗ ${item.name}`);
   }
 
+  // ②c 上线前体检：采购商品缺换算会让「2 盒」记成「2 克」
+  const skusWithoutRatio = await prisma.procurementSku.findMany({
+    where: {
+      isActive: true,
+      ingredient: { type: 'FOOD' },
+      OR: [{ purchaseToBaseRatio: null }, { purchaseToBaseRatio: { lte: 0 } }],
+    },
+    select: { name: true },
+  });
+  console.log(
+    `[②c] 启用中但没填换算的采购商品：${skusWithoutRatio.length} 条（必须为 0，否则采购数量会记错）`,
+  );
+  for (const sku of skusWithoutRatio.slice(0, 10)) {
+    console.log(`     ✗ ${sku.name}`);
+  }
+
   // ③ 待补清单
   const pending = foodIngredients.filter((item) => item.procurementSkus.length === 0);
   const unpriced = foodIngredients.filter(

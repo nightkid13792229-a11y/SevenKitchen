@@ -1203,42 +1203,39 @@ export class PurchasingService {
     const effectiveSkuId =
       selectedProcurementSkuId || purchaseItem.procurementSkuId || null;
     const loadedSkus = purchaseItem.ingredient?.procurementSkus ?? [];
-    let ratio = resolvePurchaseLineRatio({
-      procurementSkuId: effectiveSkuId,
-      skus: loadedSkus,
+
+    let sku: { id: string; purchaseToBaseRatio?: number | null } | null =
+      effectiveSkuId
+        ? (loadedSkus.find((item) => item.id === effectiveSkuId) ?? null)
+        : null;
+
+    // 商品可能已被删除（采购记录只存 id，没有外键）：查不到当「没有商品」，
+    // 退回原料换算，不能让一条历史采购记录因此改不动。
+    if (effectiveSkuId && !sku) {
+      sku = await this.procurementSkuService
+        .findById(effectiveSkuId)
+        .catch(() => null);
+    }
+
+    const resolution = resolvePurchaseLineRatio({
+      skuExpected: Boolean(effectiveSkuId),
+      sku,
       ingredientRatio: purchaseItem.ingredient?.purchaseToBaseRatio,
     });
 
-    if (
-      ratio === null &&
-      effectiveSkuId &&
-      !loadedSkus.some((sku) => sku.id === effectiveSkuId)
-    ) {
-      // 商品可能已被删除（采购记录只存 id，没有外键）：查不到就当没有，
-      // 退回原料档案的换算，不能让一条历史采购记录因此改不动。
-      const sku = await this.procurementSkuService
-        .findById(effectiveSkuId)
-        .catch(() => null);
-      ratio = resolvePurchaseLineRatio({
-        procurementSkuId: effectiveSkuId,
-        skus: sku
-          ? [
-              {
-                id: effectiveSkuId,
-                purchaseToBaseRatio: sku.purchaseToBaseRatio,
-              },
-            ]
-          : [],
-        ingredientRatio: purchaseItem.ingredient?.purchaseToBaseRatio,
-      });
-    }
-
-    if (ratio === null) {
+    if ('problem' in resolution) {
+      if (resolution.problem === 'SKU_RATIO_MISSING') {
+        throw new BadRequestException(
+          `采购商品「${purchaseItem.procurementSkuName || purchaseItem.ingredientName}」` +
+            '没有填「一件多少克」，无法折算实际采购量。请先补商品的换算再记采购',
+        );
+      }
       throw new BadRequestException(
         `原料 ${purchaseItem.ingredientName} 缺少有效的采购换算系数，无法折算实际采购量`,
       );
     }
-    return ratio;
+
+    return resolution.ratio;
   }
 
   private resolveDensity(purchaseItem: PurchaseItem): number | null {

@@ -28,3 +28,21 @@ export function isSkuCreatedFor(payload: any, source: SkuCreateSource): boolean 
 export function buildSkuCreateQuery(source: SkuCreateSource): string {
   return `from=${source}`;
 }
+
+/**
+ * 刚建好的商品能不能直接挂到识别结果页那一行上（2026-11-07）。
+ *
+ * 商品是按渠道分身份的：同一件猪里脊在盒马和山姆是两个商品。
+ * 新建时默认带上了这笔订单的渠道，但员工可以改；改成别家就不能硬挂过来，
+ * 否则这笔沃尔玛的账会记成盒马的商品，成本对不上。
+ * 两边有一边为空（渠道还没确认、历史数据没填）时不拦，交给后面的正常校验。
+ */
+export function canAutoMatchSku(
+  skuChannel: unknown,
+  orderChannel: unknown,
+): boolean {
+  const sku = String(skuChannel ?? '').trim();
+  const order = String(orderChannel ?? '').trim();
+  if (!sku || !order) return true;
+  return sku === order;
+}

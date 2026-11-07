@@ -466,7 +466,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { onLoad, onShow, onUnload } from '@dcloudio/uni-app';
+import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app';
 import {
   confirmOrderImports,
   discardOrderImport,
@@ -488,7 +488,11 @@ import { sortPurchaseItemsForDisplay } from '../food-category-order';
 import { firstBlockedImport } from '../../../utils/order-import-block';
 import { isSpecMismatch, specWarningText } from '../../../utils/order-import-spec';
 import { keepSkuForChannel } from '../../../utils/purchase-channel';
-import { buildSkuCreateQuery, isSkuCreatedFor } from '../procurement-sku-event';
+import {
+  buildSkuCreateQuery,
+  canAutoMatchSku,
+  isSkuCreatedFor,
+} from '../procurement-sku-event';
 import {
   IMPORT_FEE_TOLERANCE,
   feeStatusText,
@@ -538,6 +542,30 @@ const orderShotHint = ORDER_SHOT_HINT;
 let loadedOnce = false;
 /** 从详情页刚识别完进来时，直接落到最新那笔 */
 let focusLastOnce = false;
+
+/**
+ * 从本页「新建采购商品」建好的那条，回到本页后直接匹配到原来那一行（2026-11-07）。
+ * 以前回来只是刷新一下，员工还得自己再点「匹配商品」去刚建的那一堆里翻。
+ */
+interface PendingSkuMatch {
+  lineId: string;
+  sku: {
+    id: string;
+    ingredientId: string;
+    name: string;
+    productModel?: string | null;
+    purchaseChannel?: string | null;
+    purchaseToBaseRatio?: number | null;
+  };
+}
+const pendingSkuMatch = ref<PendingSkuMatch | null>(null);
+/** 这次新建是从哪一行点出去的（广播里没带 lineId 时兜底） */
+let newSkuFromLineId = '';
+/** 同一时刻只跑一次自动匹配：返回时 onShow 也会重新拉一遍 */
+let applyingSkuMatch = false;
+/** 页面被新建商品页压住时先攒着，回来再弹 */
+let pendingSkuToast = '';
+let pageVisible = false;
 
 const activeImport = computed(() => imports.value[activeIndex.value] || null);
 const activeSummary = computed(() => activeImport.value?.summary ?? emptySummary());
@@ -999,7 +1027,18 @@ onLoad((options: Record<string, string>) => {
 });
 
 onShow(() => {
+  pageVisible = true;
   if (loadedOnce) void load();
+  if (pendingSkuToast) {
+    const text = pendingSkuToast;
+    pendingSkuToast = '';
+    // 等导航落定再弹，否则会被新建商品页那条「已添加」顶掉
+    setTimeout(() => uni.showToast({ title: text, icon: 'none' }), 240);
+  }
+});
+
+onHide(() => {
+  pageVisible = false;
 });
 
 onUnload(() => {
@@ -1054,7 +1093,104 @@ async function load() {
 function handleSkuCreated(payload: any) {
   // 只认本页发起的「新增商品」：别处新建商品时不必重拉本页
   if (!isSkuCreatedFor(payload, 'order-import')) return;
+  const sku = payload?.sku;
+  const lineId = String(payload?.lineId || newSkuFromLineId || '');
+  if (sku?.id && sku?.ingredientId && lineId) {
+    pendingSkuMatch.value = { lineId, sku };
+    void load().then(() => void applyPendingSkuMatch());
+    return;
+  }
   void load();
+}
+
+/** 弹一句结果：页面还被新建商品页压着时先攒着，回来再弹 */
+function notifySkuMatch(text: string) {
+  if (pageVisible) {
+    uni.showToast({ title: text, icon: 'none' });
+    return;
+  }
+  pendingSkuToast = text;
+}
+
+/** 把刚建好的商品填进正在编辑的那一行（抽屉留着让人补数量/单价时用） */
+function selectSkuOnEditing(sku: PendingSkuMatch['sku']) {
+  if (!editing.value) return;
+  const ingredient = ingredientOptions.value.find(
+    (item) => item.ingredientId === sku.ingredientId,
+  );
+  chooseSku({
+    ...sku,
+    ingredientName: ingredient?.ingredientName || editing.value.ingredientName || '',
+    baseUnit: ingredient?.baseUnit || editing.value.baseUnit || 'G',
+  });
+}
+
+/**
+ * 新建商品保存后自动匹配（2026-11-07 老板要求）：
+ * 回到识别结果页时这一行直接变成「已匹配」刚建的商品，抽屉自动收起；
+ * 只有数量/单价还没填好时才把抽屉留着，让人补完再保存。
+ */
+async function applyPendingSkuMatch() {
+  const pending = pendingSkuMatch.value;
+  if (!pending || applyingSkuMatch) return;
+
+  const owner = imports.value.find((item) =>
+    (item.lines || []).some((row) => row.id === pending.lineId),
+  );
+  if (!owner) {
+    pendingSkuMatch.value = null;
+    return;
+  }
+
+  // 商品是按渠道分身份的：员工在新建页把渠道改成了别家，就别硬挂到这笔上
+  if (!canAutoMatchSku(pending.sku.purchaseChannel, owner.channel)) {
+    const skuChannel = String(pending.sku.purchaseChannel || '').trim();
+    const orderChannel = String(owner.channel || '').trim();
+    pendingSkuMatch.value = null;
+    notifySkuMatch(`新建的商品属于${skuChannel}，这笔是${orderChannel}，没有自动匹配`);
+    return;
+  }
+
+  applyingSkuMatch = true;
+  const drawerOpen = editing.value?.id === pending.lineId;
+  try {
+    const payload: Record<string, any> = {
+      ingredientId: pending.sku.ingredientId,
+      procurementSkuId: pending.sku.id,
+      isPersonal: false,
+    };
+
+    if (drawerOpen) {
+      const qty = parseNumber(editing.value.qtyText);
+      const price = parseNumber(editing.value.priceText);
+      if (qty === null || qty <= 0 || price === null || price < 0) {
+        // 数量/单价还没填好：先把商品选上、抽屉留着，别把已经打好的字吞掉
+        pendingSkuMatch.value = null;
+        selectSkuOnEditing(pending.sku);
+        notifySkuMatch('已选上刚新建的商品，补齐数量/单价再保存');
+        return;
+      }
+      const name = String(editing.value.rawName || '').trim();
+      if (name) payload.rawName = name;
+      payload.qty = qty;
+      payload.unitPrice = price;
+      if (editing.value.unitText) payload.unit = editing.value.unitText;
+    }
+
+    const res: any = await updateOrderImportLine(owner.id, pending.lineId, payload);
+    if (res.code !== 0) throw new Error(res.message || '匹配失败');
+
+    pendingSkuMatch.value = null;
+    if (drawerOpen) closeEdit(true);
+    await load();
+    notifySkuMatch('已匹配刚新建的商品');
+  } catch (error: any) {
+    pendingSkuMatch.value = null;
+    notifySkuMatch(error?.message || '匹配失败，请手动选商品');
+    await load();
+  } finally {
+    applyingSkuMatch = false;
+  }
 }
 
 // 核对到一半想补传一笔：不用退回详情页再点一次
@@ -1323,6 +1459,9 @@ function goNewSku() {
     return;
   }
   pickerMode.value = 'none';
+  // 记住是从哪一行点出去的：新建页保存后要把商品直接匹配回这一行
+  const fromLineId = String(editing.value?.id || '');
+  newSkuFromLineId = fromLineId;
   uni.navigateTo({
     url:
       `/pages/staff-purchasing/procurement-sku-create?` +
@@ -1331,6 +1470,7 @@ function goNewSku() {
       `&baseUnit=${encodeURIComponent(ingredient.baseUnit)}` +
       // 新建的商品就属于这笔的渠道，带过去直接预选，省得再选一次（还能改）
       `&channel=${encodeURIComponent(pickerOrderChannel.value)}` +
+      (fromLineId ? `&lineId=${encodeURIComponent(fromLineId)}` : '') +
       // 广播只回本页：详情页也听着这条广播，不能让它跟着开抽屉
       `&${buildSkuCreateQuery('order-import')}`,
   });

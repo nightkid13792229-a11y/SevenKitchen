@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   buildSkuCreateQuery,
+  canAutoMatchSku,
   isSkuCreatedFor,
   normalizeSkuCreateSource,
 } from './procurement-sku-event';
@@ -74,5 +75,52 @@ describe('四个页面按来源接广播（回归：确认后误弹抽屉）', (
     const source = read('src/pages/staff-purchasing/procurement-sku-create.vue');
     expect(source).toContain('normalizeSkuCreateSource');
     expect(source).toContain('from: createSource');
+  });
+});
+
+/**
+ * 2026-11-07：识别结果页新建商品，保存后要自动匹配回原来那一行。
+ * 为此广播要多带两样东西：是**哪一行**（lineId）和**建好的商品**（sku），
+ * 少了任何一个就只能退回「刷新一下、你自己再挑」的老样子。
+ */
+describe('新增商品广播 · 带回去匹配哪一行', () => {
+  const read = (path: string): string =>
+    readFileSync(resolve(process.cwd(), path), 'utf-8');
+
+  it('新建商品页把 lineId 和商品摘要一起广播回去', () => {
+    const source = read('src/pages/staff-purchasing/procurement-sku-create.vue');
+    expect(source).toContain('lineId: createForLineId');
+    expect(source).toContain('sku: result?.sku');
+    expect(source).toContain("createForLineId = String(options?.lineId || '')");
+  });
+
+  it('识别结果页跳新建时带上这一行的 id', () => {
+    const source = read('src/pages/staff-purchasing/order-import/review.vue');
+    expect(source).toContain('`&lineId=${encodeURIComponent(fromLineId)}`');
+    expect(source).toContain("const fromLineId = String(editing.value?.id || '')");
+  });
+
+  it('收到广播后自动匹配，而不是只刷新', () => {
+    const source = read('src/pages/staff-purchasing/order-import/review.vue');
+    expect(source).toContain('applyPendingSkuMatch');
+    expect(source).toContain('updateOrderImportLine(owner.id, pending.lineId');
+    expect(source).toContain("已匹配刚新建的商品");
+  });
+});
+
+describe('新建的商品能不能直接挂到这笔上', () => {
+  it('同一个渠道可以', () => {
+    expect(canAutoMatchSku('沃尔玛', '沃尔玛')).toBe(true);
+    expect(canAutoMatchSku(' 沃尔玛 ', '沃尔玛')).toBe(true);
+  });
+
+  it('渠道不同就不挂（同一件东西在两家是两个商品）', () => {
+    expect(canAutoMatchSku('盒马鲜生', '沃尔玛')).toBe(false);
+  });
+
+  it('有一边空着（渠道没确认 / 老数据没填）时先放过去', () => {
+    expect(canAutoMatchSku('', '沃尔玛')).toBe(true);
+    expect(canAutoMatchSku('沃尔玛', null)).toBe(true);
+    expect(canAutoMatchSku(undefined, undefined)).toBe(true);
   });
 });

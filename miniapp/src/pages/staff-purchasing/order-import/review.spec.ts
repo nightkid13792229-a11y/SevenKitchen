@@ -222,3 +222,37 @@ describe('选商品抽屉只列这笔订单渠道的商品（2026-11-06）', () 
     expect(starter).toContain('pickerOrderChannel.value');
   });
 });
+
+/**
+ * 2026-11-07 老板要求：从这页新建商品、保存回来，这一行要已经匹配上新商品，
+ * 别再让人自己点「匹配商品」去挑一遍。
+ */
+describe('识别结果页 · 新建商品回来自动匹配', () => {
+  const autoMatchBlock = source.slice(
+    source.indexOf('async function applyPendingSkuMatch'),
+    source.indexOf('// 核对到一半想补传一笔'),
+  );
+
+  it('按「哪一行 + 哪个商品」把这行改成已匹配', () => {
+    expect(autoMatchBlock).not.toBe('');
+    expect(autoMatchBlock).toContain(
+      'updateOrderImportLine(owner.id, pending.lineId, payload)',
+    );
+    expect(autoMatchBlock).toContain('procurementSkuId: pending.sku.id');
+  });
+
+  it('匹配成功后收起抽屉，并告诉员工匹配上了', () => {
+    expect(autoMatchBlock).toContain('if (drawerOpen) closeEdit(true)');
+    expect(autoMatchBlock).toContain('已匹配刚新建的商品');
+  });
+
+  it('数量/单价没填好时别把抽屉关掉：选上商品，让人补完再保存', () => {
+    expect(autoMatchBlock).toContain('selectSkuOnEditing(pending.sku)');
+    expect(autoMatchBlock).toContain('补齐数量/单价再保存');
+  });
+
+  it('别家渠道的商品不硬挂到这笔上', () => {
+    expect(autoMatchBlock).toContain('canAutoMatchSku');
+    expect(autoMatchBlock).toContain('没有自动匹配');
+  });
+});

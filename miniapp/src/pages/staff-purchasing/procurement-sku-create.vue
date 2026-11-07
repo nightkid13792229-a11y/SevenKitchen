@@ -302,6 +302,11 @@ const baseUnitText = computed(() => BASE_UNIT_TEXT[baseUnit.value] || '克');
  * 所以要把来源带回去，只有发起页处理（否则详情节会误弹「添加采购记录」抽屉）。
  */
 let createSource: SkuCreateSource | '' = '';
+/**
+ * 从识别结果页某一行的「新建采购商品」进来时，记住是那一行（2026-11-07）：
+ * 保存后退回识别结果页，要把新商品直接匹配到这一行，不能靠那边猜。
+ */
+let createForLineId = '';
 
 const loading = ref(false);
 const submitting = ref(false);
@@ -482,6 +487,7 @@ onLoad(async (options: Record<string, string>) => {
   ingredientName.value = decodeRouteParam(options?.ingredientName) || '原料';
   baseUnit.value = String(options?.baseUnit || 'G');
   createSource = normalizeSkuCreateSource(options?.from);
+  createForLineId = String(options?.lineId || '');
 
   if (!ingredientId.value) {
     uni.showToast({ title: '缺少原料信息', icon: 'none' });
@@ -739,6 +745,9 @@ const handleSubmit = async () => {
     uni.$emit('procurement-sku:created', {
       ingredientId: ingredientId.value,
       skuId: result?.sku?.id,
+      // 识别结果页拿它把新商品直接挂到「刚点新建的那一行」上（2026-11-07）
+      lineId: createForLineId || undefined,
+      sku: result?.sku,
       duplicate: result?.status === 'duplicate',
       // 只回发起页：识别结果页新建商品时，详情页也在听这条广播
       from: createSource,

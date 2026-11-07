@@ -54,17 +54,9 @@
       </el-card>
     </div>
 
-    <div v-else-if="line === 'SUPPLEMENT'" class="line-gate">
-      <el-card shadow="never">
-        <h3 class="line-gate__title">补剂线还没开放</h3>
-        <p class="line-gate__hint">
-          补剂和食材的字段、计量口径、核验规则都不一样，这条线正在单独做。
-          这半页不会保存任何东西。
-        </p>
-        <el-button v-if="canSwitchLine" type="primary" @click="revertToFood">
-          改回食材
-        </el-button>
-      </el-card>
+    <!-- 补剂线：左证据、右档案，一屏里填完；AI 读链接是后续阶段 -->
+    <div v-else-if="line === 'SUPPLEMENT'" class="supplement-pane">
+      <SupplementWorkbench />
     </div>
 
     <div v-else class="ai-agent-layout">
@@ -1143,6 +1135,7 @@ import {
   type IngredientLine,
   type LineEntryState
 } from './lineEntry'
+import SupplementWorkbench from './supplement/SupplementWorkbench.vue'
 import type {
   AuthorizeBlockedReason,
   AuthorizeResult,
@@ -1388,11 +1381,6 @@ function pickLine(next: IngredientLine) {
     entryState,
     applyLineAction(entryState, { type: 'PICK', line: next })
   )
-}
-
-/** 闸门卡上的「改回食材」：直接落到食材线，而不是回到起手卡。 */
-function revertToFood() {
-  pickLine('FOOD')
 }
 
 /** 食材线返回起手卡；只在还没锁定的时候可用。 */
@@ -3086,6 +3074,12 @@ function goBackToList() {
 
 .line-gate__option--muted {
   background: var(--el-fill-color-lighter);
+}
+
+.supplement-pane {
+  /* 对照屏自己撑满：左证据右档案，滚动在内部 */
+  display: block;
+  min-height: 620px;
 }
 
 .ai-agent-layout {

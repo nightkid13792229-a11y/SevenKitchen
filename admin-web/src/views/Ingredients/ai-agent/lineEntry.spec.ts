@@ -13,6 +13,19 @@ import {
  * 入口预选只在用户还没表达意见时起作用——否则 `?line=supplement`
  * 会让闸门卡上的「改回食材」变成死路。
  */
+describe('补剂线', () => {
+  it('选补剂时不再被拒，线路就是补剂', () => {
+    const decision = resolveLineEntry({ userPick: 'SUPPLEMENT' })
+    expect(decision.line).toBe('SUPPLEMENT')
+    expect(decision.rejected).toBe(false)
+    expect(decision.locked).toBe(false)
+  })
+
+  it('包装仍然被拒（回归）', () => {
+    expect(resolveLineEntry({ draftType: 'PACKAGING' }).rejected).toBe(true)
+  })
+})
+
 describe('resolveLineEntry', () => {
   it('没有任何输入 → 未定，不锁定', () => {
     expect(resolveLineEntry({})).toMatchObject({

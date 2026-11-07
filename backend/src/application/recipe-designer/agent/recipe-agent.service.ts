@@ -314,10 +314,14 @@ export class RecipeAgentService implements OnModuleInit {
               uncitedClinicalClaims: semantic.uncitedClinicalClaims,
               invalidCitationCount: audit.invalidCitationCount,
               unsupported: semantic.unsupported,
+              judgedClaims: semantic.judgedClaims,
+              citedClinicalClaims: semantic.citedClinicalClaims,
             }),
             uncitedClinicalClaims: semantic.uncitedClinicalClaims,
             unsupported: semantic.unsupported,
             partial: semantic.partial,
+            judgedClaims: semantic.judgedClaims,
+            citedClinicalClaims: semantic.citedClinicalClaims,
             uncitedClinical: semantic.uncitedClinical,
           };
           await this.prisma.recipeDesignAgentSession.update({

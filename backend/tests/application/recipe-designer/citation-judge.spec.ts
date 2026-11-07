@@ -142,12 +142,14 @@ describe('rewriteAnswer 修订器', () => {
 
 
 describe('citationGatePassed', () => {
-  it('未引用、无效引用、unsupported 都为 0 才通过', () => {
+  it('未引用、无效引用、unsupported 都为 0，且全部临床 claim 都判过，才通过', () => {
     expect(
       citationGatePassed({
         uncitedClinicalClaims: 0,
         invalidCitationCount: 0,
         unsupported: 0,
+        judgedClaims: 1,
+        citedClinicalClaims: 1,
       }),
     ).toBe(true);
     expect(
@@ -155,6 +157,8 @@ describe('citationGatePassed', () => {
         uncitedClinicalClaims: 0,
         invalidCitationCount: 0,
         unsupported: 1,
+        judgedClaims: 1,
+        citedClinicalClaims: 1,
       }),
     ).toBe(false);
     expect(
@@ -162,6 +166,24 @@ describe('citationGatePassed', () => {
         uncitedClinicalClaims: 1,
         invalidCitationCount: 0,
         unsupported: 0,
+        judgedClaims: 1,
+        citedClinicalClaims: 1,
+      }),
+    ).toBe(false);
+  });
+});
+
+
+
+describe('citationGatePassed 覆盖率', () => {
+  it('有带引用临床 claim 未判时不通过', () => {
+    expect(
+      citationGatePassed({
+        uncitedClinicalClaims: 0,
+        invalidCitationCount: 0,
+        unsupported: 0,
+        judgedClaims: 6,
+        citedClinicalClaims: 15,
       }),
     ).toBe(false);
   });

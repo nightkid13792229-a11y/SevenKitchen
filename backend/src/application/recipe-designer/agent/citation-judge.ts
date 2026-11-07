@@ -53,7 +53,7 @@ export interface JudgeAudit {
   error?: string;
 }
 
-const MAX_JUDGE_CLAIMS = 6;
+const MAX_JUDGE_CLAIMS = 20;
 const MAX_CLASSIFIED_CLAIMS = 30;
 
 /** 只取“带 [K#] 的句子”；没有引用的句子不进入语义裁判。 */
@@ -152,11 +152,14 @@ export function citationGatePassed(input: {
   uncitedClinicalClaims: number;
   invalidCitationCount: number;
   unsupported: number;
+  judgedClaims: number;
+  citedClinicalClaims: number;
 }): boolean {
   return (
     input.uncitedClinicalClaims === 0 &&
     input.invalidCitationCount === 0 &&
-    input.unsupported === 0
+    input.unsupported === 0 &&
+    input.judgedClaims === input.citedClinicalClaims
   );
 }
 

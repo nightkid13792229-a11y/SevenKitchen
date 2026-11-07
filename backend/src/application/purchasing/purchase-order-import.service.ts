@@ -668,10 +668,28 @@ ${list}
         }
         const sku = await this.prisma.procurementSku.findFirst({
           where: { id: dto.procurementSkuId, ingredientId, isActive: true },
-          select: { id: true, name: true },
+          select: { id: true, name: true, purchaseChannel: true },
         });
         if (!sku) {
           throw new BadRequestException('这个采购商品不属于所选原料');
+        }
+        // 渠道是商品的身份证（2026-11-07）：这笔订单在沃尔玛，就不能挂山姆的商品，
+        // 否则生成记录时按山姆的净含量折算，成本对不上。前端只列本渠道的商品，
+        // 这里再挡一次，旧版本 / 改参数也绕不过去。
+        const channels = await this.loadChannelOptions();
+        const orderChannelKey = channelMatchKey(
+          line.import.channel,
+          channels,
+        );
+        if (!orderChannelKey) {
+          throw new BadRequestException(
+            '这笔订单还没确认渠道，请先选好渠道再挂商品',
+          );
+        }
+        if (channelMatchKey(sku.purchaseChannel, channels) !== orderChannelKey) {
+          throw new BadRequestException(
+            `「${sku.name}」是${sku.purchaseChannel || '未填渠道'}的商品，这笔订单是${line.import.channel}，不能挂过来`,
+          );
         }
         data.procurementSkuId = dto.procurementSkuId;
         data.isPersonal = false;

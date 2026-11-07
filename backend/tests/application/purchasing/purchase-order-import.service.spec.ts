@@ -782,6 +782,7 @@ describe('PurchaseOrderImportService', () => {
     prisma.procurementSku.findFirst.mockResolvedValue({
       id: 'sku-liver',
       name: '猪肝',
+      purchaseChannel: '沃尔玛',
     });
     prisma.procurementSku.findUnique.mockResolvedValue({ name: '猪肝' });
     prisma.purchaseOrderImportLine.update.mockResolvedValue({
@@ -834,6 +835,7 @@ describe('PurchaseOrderImportService', () => {
     prisma.procurementSku.findFirst.mockResolvedValue({
       id: 'sku-liver',
       name: '猪肝',
+      purchaseChannel: '沃尔玛',
     });
     prisma.purchaseOrderImportLine.update.mockResolvedValue({
       id: 'line-1',
@@ -1068,6 +1070,98 @@ describe('PurchaseOrderImportService', () => {
       });
       const data = prisma.purchaseOrderImportLine.update.mock.calls[0][0].data;
       expect(data.unit).toBe('袋');
+    });
+
+    it('挂别的渠道的商品 → 拒绝，不落库（2026-11-07）', async () => {
+      prisma.purchaseOrderImportLine.findFirst.mockResolvedValue({
+        id: 'line-1',
+        importId: 'import-1',
+        ingredientId: 'ing-1',
+        procurementSkuId: null,
+        qty: 1,
+        unit: null,
+        unitPrice: 10,
+        lineTotal: 10,
+        import: {
+          status: 'DRAFT',
+          purchaseListId: 'list-1',
+          channel: '沃尔玛',
+        },
+      });
+      prisma.procurementSku.findFirst.mockResolvedValue({
+        id: 'sku-sams',
+        name: '冷鲜 鲜切黄牛后腿肉 约200g',
+        purchaseChannel: '山姆会员店',
+      });
+
+      await expect(
+        service.updateLine({
+          importId: 'import-1',
+          lineId: 'line-1',
+          dto: { procurementSkuId: 'sku-sams' },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.purchaseOrderImportLine.update).not.toHaveBeenCalled();
+    });
+
+    it('挂同渠道的商品（别名写法也算）→ 正常保存', async () => {
+      prisma.purchaseOrderImportLine.findFirst.mockResolvedValue({
+        id: 'line-1',
+        importId: 'import-1',
+        ingredientId: 'ing-1',
+        procurementSkuId: null,
+        qty: 1,
+        unit: null,
+        unitPrice: 10,
+        lineTotal: 10,
+        import: {
+          status: 'DRAFT',
+          purchaseListId: 'list-1',
+          channel: '山姆会员店',
+        },
+      });
+      prisma.procurementSku.findFirst.mockResolvedValue({
+        id: 'sku-sams',
+        name: 'MM澳洲谷饲牛霖',
+        // 老数据写的是别名「山姆」，订单渠道是字典码
+        purchaseChannel: '山姆',
+      });
+
+      await service.updateLine({
+        importId: 'import-1',
+        lineId: 'line-1',
+        dto: { procurementSkuId: 'sku-sams' },
+      });
+
+      const data = prisma.purchaseOrderImportLine.update.mock.calls[0][0].data;
+      expect(data.procurementSkuId).toBe('sku-sams');
+    });
+
+    it('订单还没确认渠道 → 不许挂商品', async () => {
+      prisma.purchaseOrderImportLine.findFirst.mockResolvedValue({
+        id: 'line-1',
+        importId: 'import-1',
+        ingredientId: 'ing-1',
+        procurementSkuId: null,
+        qty: 1,
+        unit: null,
+        unitPrice: 10,
+        lineTotal: 10,
+        import: { status: 'DRAFT', purchaseListId: 'list-1', channel: null },
+      });
+      prisma.procurementSku.findFirst.mockResolvedValue({
+        id: 'sku-wm',
+        name: '冷鲜 鲜切黄牛后腿肉',
+        purchaseChannel: '沃尔玛',
+      });
+
+      await expect(
+        service.updateLine({
+          importId: 'import-1',
+          lineId: 'line-1',
+          dto: { procurementSkuId: 'sku-wm' },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 

@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { IngredientCostHistoryService } from '../../../src/application/ingredient/ingredient-cost-history.service';
 import {
   INGREDIENT_REPOSITORY,
   IngredientService,
@@ -82,6 +83,7 @@ describe('IngredientService nutrition profile compatibility', () => {
           provide: INGREDIENT_REPOSITORY,
           useValue: ingredientRepository,
         },
+        { provide: IngredientCostHistoryService, useValue: { record: jest.fn() } },
       ],
     }).compile();
 

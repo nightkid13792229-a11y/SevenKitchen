@@ -8,6 +8,7 @@ import {
   IngredientProcurementStrategy,
   IngredientType,
 } from '../../../src/domain/ingredient/enums';
+import { IngredientCostHistoryService } from '../../../src/application/ingredient/ingredient-cost-history.service';
 
 describe('IngredientService domain refactor', () => {
   let service: IngredientService;
@@ -33,6 +34,7 @@ describe('IngredientService domain refactor', () => {
           provide: INGREDIENT_REPOSITORY,
           useValue: ingredientRepository,
         },
+        { provide: IngredientCostHistoryService, useValue: { record: jest.fn() } },
       ],
     }).compile();
 

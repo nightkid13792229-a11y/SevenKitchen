@@ -43,6 +43,7 @@ import type {
   UpdateIngredientDto,
   UpdateIngredientPriceDto,
 } from '../../application/ingredient/ingredient.service';
+import { UserId } from '../auth/user.decorator';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import {
   ProductionService,
@@ -731,11 +732,13 @@ export class AdminController {
   async updateIngredientPrice(
     @Param('id') id: string,
     @Body() dto: UpdateIngredientPriceDto,
+    @UserId() operatorId?: string,
   ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
     try {
       const ingredient = await this.ingredientService.updateIngredientPrice(
         id,
         dto,
+        operatorId ?? null,
       );
       return ApiResponseDto.success({
         id: ingredient.id,

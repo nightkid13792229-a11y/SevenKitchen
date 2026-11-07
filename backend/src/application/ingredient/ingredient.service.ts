@@ -6,6 +6,7 @@
 import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import { Ingredient } from '../../domain/ingredient';
+import { IngredientCostHistoryService } from './ingredient-cost-history.service';
 import { wouldWipeExistingPrice } from '../../domain/ingredient/price-gate';
 import {
   IngredientType,
@@ -80,6 +81,7 @@ export class IngredientService {
   constructor(
     @Inject(INGREDIENT_REPOSITORY)
     private readonly ingredientRepository: IngredientRepository,
+    private readonly costHistory: IngredientCostHistoryService,
   ) {}
 
   private resolveBaseUnitDisplayName(
@@ -280,6 +282,9 @@ export class IngredientService {
     // 2026-11-06：编辑表单直接写档案价，不经过采购报销那道闸，
     // 于是「红薯被一次保存写成 0 元」这种事闸门拦不住。这里补一道：
     // 已经有价格的原料，不允许被改成 0（要停用请关采购 / DIY 开关）。
+    // 食材的采购换算恒为 1（成本口径 = 每基准单位），别处不要试图改它。
+    this.assertFoodPurchaseRatioInvariant(nextType, nextPurchaseToBaseRatio);
+
     this.assertPriceNotWipedToZero({
       ingredientName: existing.name,
       previousPrice: existing.currentPricePerPurchaseUnit,
@@ -348,6 +353,7 @@ export class IngredientService {
   async updateIngredientPrice(
     id: string,
     dto: UpdateIngredientPriceDto,
+    operatorId?: string | null,
   ): Promise<Ingredient> {
     const existing = await this.ingredientRepository.findById(id);
     if (!existing) {
@@ -368,6 +374,16 @@ export class IngredientService {
       throw new NotFoundException(`Ingredient not found: ${id}`);
     }
 
+    // 手工改价必须留痕：库存页是唯一绕开采购报销直接写成本的入口
+    await this.costHistory.record({
+      ingredientId: id,
+      oldCost: existing.currentPricePerPurchaseUnit,
+      newCost: dto.currentPricePerPurchaseUnit,
+      source: 'MANUAL',
+      operatorId: operatorId ?? null,
+      note: '后台手工改价',
+    });
+
     // 2026-11-06：生效价已并入当前价，只写一次
     return ingredient;
   }
@@ -381,6 +397,30 @@ export class IngredientService {
    *
    * 允许的场景：新原料建档时就是 0（还没定价）。
    */
+  /**
+   * 食材采购换算不变量（2026-11-07 成本口径归位）。
+   *
+   * 食材的成本 = `current_price_per_purchase_unit ÷ purchase_to_base_ratio`。
+   * 换算恒为 1 时，这一列就是「元/基准单位」。一旦有人把换算写成 500，
+   * 成本会静默变成原来的 1/500 —— 没有任何报错，只有售价悄悄变低。
+   */
+  private assertFoodPurchaseRatioInvariant(
+    type: IngredientType | string,
+    purchaseToBaseRatio: number,
+  ): void {
+    if (type !== IngredientType.FOOD) {
+      return;
+    }
+
+    if (Number(purchaseToBaseRatio) === 1) {
+      return;
+    }
+
+    throw new BadRequestException(
+      '食材的采购换算固定为 1（成本按每克/每毫升记），规格请到「生产/采购SKU」里维护',
+    );
+  }
+
   private assertPriceNotWipedToZero(params: {
     ingredientName: string;
     previousPrice: number;

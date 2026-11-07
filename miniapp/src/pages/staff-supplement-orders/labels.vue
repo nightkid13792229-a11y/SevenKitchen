@@ -183,6 +183,8 @@ const loadError = ref('')
 const previewSrcs = ref<string[]>([])
 
 type LabelPrintState = 'idle' | 'printing' | 'done' | 'failed'
+const PRINT_STORAGE_PREFIX = 'supplement_label_printed_'
+const printStorageKey = computed(() => `${PRINT_STORAGE_PREFIX}${orderId.value}`)
 const printStates = ref<LabelPrintState[]>([])
 const printing = ref(false)
 
@@ -232,6 +234,8 @@ function setPrintState(index: number, state: LabelPrintState) {
   const next = printStates.value.slice()
   next[index] = state
   printStates.value = next
+  // 退出页面再回来仍知道哪些已打，避免重复出纸。
+  uni.setStorageSync(printStorageKey.value, next)
 }
 
 function sleep(ms: number) {
@@ -264,7 +268,11 @@ async function fetchLabels() {
       brandName.value = res.data.brandName || ''
       receiverName.value = res.data.receiverName || ''
       labels.value = res.data.labels || []
-      printStates.value = labels.value.map(() => 'idle' as LabelPrintState)
+      const savedStates = uni.getStorageSync(printStorageKey.value)
+      printStates.value =
+        Array.isArray(savedStates) && savedStates.length === labels.value.length
+          ? (savedStates as LabelPrintState[])
+          : labels.value.map(() => 'idle' as LabelPrintState)
       buildPreviewSrcs()
 
       // 单张图缺了不阻断整页（能打的先打），但要说清楚是哪几张缺了

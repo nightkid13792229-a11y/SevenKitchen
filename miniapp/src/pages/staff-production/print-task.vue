@@ -17,7 +17,7 @@
         <view class="print-paper-inner">
           <view class="header-section">
             <view class="compact-task-title-line">
-              {{ printData.recipeName }} v{{ printData.recipeVersion }} · 第 {{ printData.currentPotNumber }}/{{ printData.totalPots }} 锅
+              {{ printData.recipeName }} v{{ printData.recipeVersion }} · 第 {{ printData.currentPotNumber }} 锅 / 共 {{ printData.totalPots }} 锅
             </view>
             <view class="meta-info">
               <text>状态: {{ statusText }}</text>

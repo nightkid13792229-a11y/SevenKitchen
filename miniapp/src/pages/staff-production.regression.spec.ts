@@ -324,7 +324,7 @@ describe('生产管理 · Phase 1 安全与信任', () => {
   it('未来任务不进当前列表；逾期只按早于今天，跨天单独标', () => {
     expect(indexSource).toContain('isFutureTask');
     expect(indexSource).toContain('visibleTasks');
-    expect(indexSource).toContain('todayDate');
+    expect(indexSource).toContain('getTodayDateText()');
     expect(indexSource).toContain('isOverdueTask');
     expect(indexSource).toContain("'跨天'");
     expect(indexSource).toContain("'逾期'");
@@ -406,5 +406,36 @@ describe('生产管理 · Phase 2 现场流程（详情 / 过敏 / 补剂 / 搜�
   it('详情和打印带订单号，不再只给截断 ID', () => {
     expect(detailSource).toContain('order.orderNo');
     expect(printTaskSource).toContain('order.orderNo');
+  });
+});
+
+describe('生产管理 · Phase 3 规范与一致性', () => {
+  it('最小字号 24rpx，不再出现 22 / 23rpx', () => {
+    for (const source of [indexSource, detailSource, packingSource]) {
+      expect(source).not.toContain('font-size: 22rpx');
+      expect(source).not.toContain('font-size: 23rpx');
+    }
+  });
+
+  it('主要触控区提高到 88rpx', () => {
+    expect(indexSource).toContain('min-height: 88rpx');
+    expect(detailSource).toContain('min-height: 88rpx');
+    expect(packingSource).toContain('min-height: 88rpx');
+  });
+
+  it('生产页不再用彩色 emoji 当图标', () => {
+    for (const source of [indexSource, detailSource, packingSource]) {
+      expect(source).not.toContain('▶️');
+      expect(source).not.toContain('🗑️');
+      expect(source).not.toContain('👨‍🍳');
+      expect(source).not.toContain('⚠️');
+    }
+  });
+
+  it('历史记录与「已完成」tab 去重，重量和锅次文案统一', () => {
+    expect(indexSource).not.toContain('history-section');
+    expect(indexSource).not.toContain('toggleHistory');
+    expect(indexSource).toContain('formatWeightG');
+    expect(indexSource).toContain('第 {{ task.currentPotNumber }} 锅');
   });
 });

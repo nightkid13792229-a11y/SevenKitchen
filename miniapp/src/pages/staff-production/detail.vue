@@ -10,7 +10,7 @@
       <!-- 任务标题 -->
       <view class="task-title-section">
         <text class="recipe-name">{{ taskDetail.recipeName }} v{{ taskDetail.recipeVersion }}</text>
-        <text class="pot-info">({{ taskDetail.currentPotNumber }}/{{ taskDetail.totalPots }})</text>
+        <text class="pot-info">第 {{ taskDetail.currentPotNumber }} 锅 / 共 {{ taskDetail.totalPots }} 锅</text>
         <view class="status-badge" :class="taskDetail.status.toLowerCase()">
           <text>{{ statusText }}</text>
         </view>
@@ -29,7 +29,7 @@
         </view>
         <view class="info-row">
           <text class="label">本锅制作量：</text>
-          <text class="value">{{ formatDecimal(taskDetail.totalProductionG) }}g</text>
+          <text class="value">{{ formatWeightG(taskDetail.totalProductionG) }}</text>
         </view>
         <view class="info-row">
           <text class="label">关联订单：</text>
@@ -63,14 +63,14 @@
             :class="{ 'is-allergy': isAllergyNote(order.customerNote) }"
           >
             <text class="customer-note-label">
-              {{ isAllergyNote(order.customerNote) ? '⚠️ 过敏提醒' : '顾客备注' }}
+              {{ isAllergyNote(order.customerNote) ? '过敏提醒' : '顾客备注' }}
             </text>
             <text class="customer-note-text">{{ order.customerNote }}</text>
           </view>
           <view class="order-info">
             <view class="info-row">
               <text class="label">订单总净重：</text>
-              <text class="value">{{ formatDecimal(getOrderTotalNetWeight(order)) }}g</text>
+              <text class="value">{{ formatWeightG(getOrderTotalNetWeight(order)) }}</text>
             </view>
             <view v-if="hasPackagePlan(order)" class="info-row">
               <text class="label">订单分装：</text>
@@ -112,11 +112,11 @@
           </view>
           <view class="info-row">
             <text class="label">计划产出：</text>
-            <text class="value">{{ formatDecimal(taskDetail.totalProductionG) }}g</text>
+            <text class="value">{{ formatWeightG(taskDetail.totalProductionG) }}</text>
           </view>
           <view class="info-row">
             <text class="label">实际产出：</text>
-            <text class="value">{{ formatDecimal(taskDetail.actualOutputG || taskDetail.totalProductionG) }}g</text>
+            <text class="value">{{ formatWeightG(taskDetail.actualOutputG || taskDetail.totalProductionG) }}</text>
           </view>
         </view>
 
@@ -281,7 +281,6 @@
 
     <!-- 错误状态：先给重试，再给返回，不能只让员工退出去 -->
     <view v-else class="error-state">
-      <text class="error-icon">⚠️</text>
       <text class="error-text">{{ loadError || '加载失败' }}</text>
       <view class="error-actions">
         <button class="retry-btn" @tap="loadTaskDetail">重试</button>
@@ -304,6 +303,7 @@ import {
 import { getBaseUrl } from '../../utils/config';
 import { calculateSupplementAmountForProduction } from '../../utils/supplement-nutrients';
 import { hasAllergyText as isAllergyNote } from './utils/note';
+import { formatWeightG } from './utils/format';
 
 // 格式化函数
 function formatDecimal(value: number | null | undefined, decimals: number = 2): string {
@@ -1138,6 +1138,7 @@ function printLabel() {
 
   .retry-btn,
   .back-btn {
+    min-height: 88rpx;
     padding: 20rpx 40rpx;
     border: none;
     border-radius: 8rpx;
@@ -1156,7 +1157,7 @@ function printLabel() {
 }
 
 .task-title-section {
-  background-color: #fbfcf7;
+  background-color: #fff;
   padding: 32rpx;
   margin-bottom: 24rpx;
   display: flex;
@@ -1184,12 +1185,12 @@ function printLabel() {
 
     &.pending {
       background-color: #f6efe0;
-      color: #8a6b33;
+      color: #7a5c28;
     }
 
     &.in_progress {
       background-color: #eef2e4;
-      color: #b08d4f;
+      color: #7a5c28;
     }
 
     &.completed {
@@ -1200,11 +1201,11 @@ function printLabel() {
 }
 
 .section {
-  background-color: #fbfcf7;
+  background-color: #fff;
   margin: 0 32rpx 24rpx;
   padding: 24rpx;
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
+  border-radius: 20rpx;
+  box-shadow: 0 6rpx 18rpx rgba(30, 46, 36, 0.05);
 }
 
 .section-title {
@@ -1286,7 +1287,7 @@ function printLabel() {
 
 .order-item {
   padding: 16rpx;
-  background-color: #fbfcf7;
+  background-color: #f7f8f2;
   border-radius: 8rpx;
   margin-bottom: 12rpx;
 
@@ -1334,7 +1335,7 @@ function printLabel() {
   border: 2rpx solid #e5e8d4;
   border-radius: 8rpx;
   padding: 20rpx;
-  background-color: #fbfcf7;
+  background-color: #f7f8f2;
   margin-bottom: 20rpx;
 
   &.result-normal {
@@ -1356,7 +1357,7 @@ function printLabel() {
     background-color: #f8e8e2;
 
     .result-delta {
-      color: #b4553f;
+      color: #b4453a;
     }
   }
 }
@@ -1400,7 +1401,7 @@ function printLabel() {
   }
 
   .ingredient-type {
-    font-size: 22rpx;
+    font-size: 24rpx;
     color: #1e3a2f;
     font-weight: bold;
     flex-shrink: 0;
@@ -1410,11 +1411,11 @@ function printLabel() {
     }
 
     &.type-supplement {
-      color: #8a6b33;  // 橙色
+      color: #7a5c28;  // 橙色
     }
 
     &.type-packaging {
-      color: #b08d4f;  // 蓝色
+      color: #7a5c28;  // 蓝色
     }
   }
 
@@ -1434,13 +1435,13 @@ function printLabel() {
   }
 
   .ingredient-standard-name {
-    font-size: 22rpx;
+    font-size: 24rpx;
     color: #6b6653;
     word-break: break-all;
   }
 
   .ingredient-method {
-    font-size: 22rpx;
+    font-size: 24rpx;
     color: #6b6653;
     flex-shrink: 0;
     margin-left: auto;
@@ -1448,7 +1449,7 @@ function printLabel() {
 }
 
 .ingredients-note {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #6b6653;
   margin-bottom: 12rpx;
 }
@@ -1515,7 +1516,7 @@ function printLabel() {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #b4553f;
+  background-color: #b4453a;
   border-radius: 8rpx;
   display: flex;
   flex-direction: column;
@@ -1525,7 +1526,7 @@ function printLabel() {
 
   .error-text {
     color: #f3eddd;
-    font-size: 22rpx;
+    font-size: 24rpx;
     text-align: center;
     padding: 0 8rpx;
   }
@@ -1536,8 +1537,8 @@ function printLabel() {
     border-radius: 8rpx;
 
     text {
-      color: #b4553f;
-      font-size: 22rpx;
+      color: #b4453a;
+      font-size: 24rpx;
       font-weight: bold;
     }
   }
@@ -1549,7 +1550,7 @@ function printLabel() {
   right: -8rpx;
   width: 48rpx;
   height: 48rpx;
-  background-color: #b4553f;
+  background-color: #b4453a;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1568,7 +1569,7 @@ function printLabel() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background-color: #fbfcf7;
+  background-color: #f7f8f2;
 
   .upload-icon {
     font-size: 60rpx;
@@ -1577,13 +1578,13 @@ function printLabel() {
   }
 
   .upload-text {
-    font-size: 22rpx;
+    font-size: 24rpx;
     color: #6b6653;
   }
 }
 
 .photos-hint {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #6b6653;
   text-align: center;
   margin-top: 8rpx;
@@ -1613,10 +1614,10 @@ function printLabel() {
 }
 
 .completion-option {
-  height: 72rpx;
+  height: 88rpx;
   border: 2rpx solid #e5e8d4;
   border-radius: 8rpx;
-  background-color: #fbfcf7;
+  background-color: #f7f8f2;
   display: flex;
   align-items: center;
   justify-content: center;

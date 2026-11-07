@@ -27,6 +27,9 @@ const PAGES = [
   'staff-purchasing/reimbursement/list.vue',
   'staff-purchasing/reimbursement/submit.vue',
   'staff-purchasing/reimbursement/detail.vue',
+  'staff-production/index.vue',
+  'staff-production/detail.vue',
+  'staff-production/components/SupplementPacking.vue',
 ];
 
 const readPage = (path: string) =>

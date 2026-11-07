@@ -67,10 +67,9 @@
       <!-- 自动排单按钮（所选日期仍有未分配订单时显示） -->
       <view v-if="canAutoSchedule" class="schedule-section">
         <button class="schedule-btn" @tap="autoScheduleToday">
-          <text>📋 {{ scheduleButtonText }}</text>
+          <text>{{ scheduleButtonText }}</text>
         </button>
         <text class="schedule-hint">{{ scheduleHintText }}</text>
-        <text class="schedule-warning">⚠️ 点击前会检查所选日期的采购清单是否已完成</text>
       </view>
 
       <!-- Tab切换 -->
@@ -96,7 +95,6 @@
 
         <!-- 首次加载失败：明确说失败，并给重试 -->
         <view v-else-if="loadError && allTasks.length === 0" class="error-state">
-          <text class="error-icon">⚠️</text>
           <text class="error-text">数据没加载出来</text>
           <text class="error-hint">{{ loadError }}</text>
           <button class="retry-btn" @tap="refreshAll">重试</button>
@@ -104,7 +102,7 @@
 
         <!-- 空状态 -->
         <view v-else-if="filteredTasks.length === 0" class="empty-state">
-          <text class="empty-icon">👨‍🍳</text>
+          <image class="empty-icon" src="/static/ui-icons/production.png" mode="aspectFit" />
           <text class="empty-text">{{ emptyText }}</text>
         </view>
 
@@ -135,13 +133,13 @@
                   <text v-if="hasAllergyNote(task)" class="note-badge allergy-badge">过敏</text>
                   <text v-else-if="hasAnyNote(task)" class="note-badge">有备注</text>
                 </view>
-                <text class="pot-info">({{ task.currentPotNumber }}/{{ task.totalPots }})</text>
+                <text class="pot-info">第 {{ task.currentPotNumber }} 锅 / 共 {{ task.totalPots }} 锅</text>
               </view>
 
             <view class="task-body" @tap="viewDetails(task)">
               <view class="info-row">
                 <text class="label">制作数量：</text>
-                <text class="value">{{ formatDecimal(task.totalProductionG) }}g</text>
+                <text class="value">{{ formatWeightG(task.totalProductionG) }}</text>
               </view>
               <view class="info-row">
                 <text class="label">关联订单：</text>
@@ -166,7 +164,6 @@
             <view class="action-buttons">
               <!-- PENDING：开始制作 -->
               <button v-if="task.status === 'PENDING'" class="start-btn" @tap.stop="handleStartTask(task)">
-                <text class="btn-icon">▶️</text>
                 <text class="btn-text">开始制作</text>
               </button>
 
@@ -176,7 +173,6 @@
                 class="start-btn"
                 @tap.stop="viewDetails(task)"
               >
-                <text class="btn-icon">▶️</text>
                 <text class="btn-text">继续制作</text>
               </button>
 
@@ -186,13 +182,11 @@
                 class="start-btn"
                 @tap.stop="viewDetails(task, 'print')"
               >
-                <text class="btn-icon">🏷️</text>
                 <text class="btn-text">打印标签</text>
               </button>
 
               <!-- 删除按生产批次执行；已完成和含完成锅的批次不显示 -->
               <view v-if="canDeleteTask(task)" class="delete-btn" @tap.stop="handleDelete(task)">
-                <text class="delete-icon">🗑️</text>
                 <text class="delete-text">删除整批</text>
               </view>
             </view>
@@ -201,24 +195,6 @@
       </view>
       </view>
 
-      <!-- 历史记录（可展开查看） -->
-      <view v-if="historyBatches.length > 0" class="history-section">
-        <view class="section-title">历史记录</view>
-        <view v-for="batch in historyBatches" :key="batch.id" class="history-item" @tap="toggleHistory(batch.id)">
-          <view class="history-header">
-            <text class="history-date">{{ batch.date }}</text>
-            <text class="history-count">{{ batch.count }}锅</text>
-            <text class="history-toggle">{{ expandedHistoryId === batch.id ? '▼' : '▶' }}</text>
-          </view>
-          <view v-if="expandedHistoryId === batch.id" class="history-details">
-            <view v-for="unit in batch.units" :key="unit.id" class="history-unit">
-              <text class="history-recipe">{{ unit.recipeName }} ({{ unit.currentPotNumber }}/{{ unit.totalPots }})</text>
-              <text class="history-weight">{{ formatDecimal(unit.totalProductionG) }}g</text>
-              <text class="history-time">{{ unit.completedAt }}</text>
-            </view>
-          </view>
-        </view>
-      </view>
     </view>
 
     <!-- 补剂分装：原来工作台上的「分装备料」整块搬到这里 -->
@@ -236,7 +212,7 @@
 import { ref, computed } from 'vue';
 import { onShow, onPullDownRefresh } from '@dcloudio/uni-app';
 import { getTodayStatistics, autoSchedule, getPackagingUnits, completeProductionTask, startProductionTask, deleteProductionBatch } from './api/production';
-import { formatDecimal } from './utils/format';
+import { formatWeightG } from './utils/format';
 import { hasAllergyText } from './utils/note';
 import SupplementPacking from './components/SupplementPacking.vue';
 
@@ -315,7 +291,6 @@ const statistics = ref({
 const allTasks = ref<any[]>([]);
 
 // 今天、加载态、失败态：三者要分开，不能把「没取到」显示成「今天没活」。
-const todayDate = ref(getTodayDateText());
 const loading = ref(false);
 const loadError = ref('');
 
@@ -375,31 +350,9 @@ const isOverdueTask = (task: any) => {
   return Boolean(
     task?.productionDate &&
       task.status !== 'COMPLETED' &&
-      task.productionDate < todayDate.value,
+      task.productionDate < getTodayDateText(),
   );
 };
-
-// 历史记录
-const historyBatches = computed(() => {
-  const historyMap = new Map<string, any[]>();
-  visibleTasks.value
-    .filter((unit) => unit.status === 'COMPLETED')
-    .forEach((unit) => {
-      const date = unit.productionDate || String(unit.createdAt || '').split(' ')[0];
-      if (!historyMap.has(date)) {
-        historyMap.set(date, []);
-      }
-      historyMap.get(date)!.push(unit);
-    });
-
-  return Array.from(historyMap.entries()).map((entry) => ({
-    id: `batch-${entry[0]}`,
-    date: entry[0],
-    count: entry[1].length,
-    units: entry[1],
-  }));
-});
-const expandedHistoryId = ref<string | null>(null);
 
 const activeTab = ref('PENDING');
 const keyword = ref('');
@@ -488,7 +441,7 @@ const scheduleButtonText = computed(() => {
 const scheduleHintText = computed(() => {
   const pendingCount = Number(statistics.value.pendingScheduleOrders || 0);
   const actionText = hasExistingProductionTasks.value ? '创建新增生产批次' : '创建生产批次';
-  return `将为 ${selectedProductionDate.value} 的 ${pendingCount} 笔待排单订单${actionText}`;
+  return `将为 ${selectedProductionDate.value} 的 ${pendingCount} 笔待排单订单${actionText}；采购清单未完成会自动拦下`;
 });
 
 // 首屏统计的「含跨天」说明：让 2 锅里有几锅是昨天/更早的一眼可见。
@@ -516,20 +469,21 @@ const canDeleteTask = (task: any) => {
 
 // 页面加载：onShow 在首次进入和从详情返回时都会触发，统一走 refreshAll。
 onShow(() => {
-  todayDate.value = getTodayDateText();
   refreshAll();
   if (activeMode.value === 'SUPPLEMENT') {
     supplementRef.value?.refresh?.();
   }
 });
 
+let refreshSeq = 0;
+
 // 加载今日统计
-async function loadTodayStatistics(): Promise<boolean> {
+async function loadTodayStatistics(seq = refreshSeq): Promise<boolean> {
   try {
     const res = await getTodayStatistics({
       targetDate: selectedProductionDate.value,
     });
-    statistics.value = res.data;
+    if (seq === refreshSeq) statistics.value = res.data;
     return true;
   } catch (error: any) {
     console.error('Failed to load statistics:', error);
@@ -538,7 +492,7 @@ async function loadTodayStatistics(): Promise<boolean> {
 }
 
 // 加载分装单元
-async function loadPackagingUnits(): Promise<boolean> {
+async function loadPackagingUnits(seq = refreshSeq): Promise<boolean> {
   try {
     const res = await getPackagingUnits({
       status: undefined, // 获取所有状态
@@ -548,7 +502,7 @@ async function loadPackagingUnits(): Promise<boolean> {
       includeUnfinishedCarryover: true,
     });
 
-    allTasks.value = res.data.list;
+    if (seq === refreshSeq) allTasks.value = res.data.list;
     return true;
   } catch (error: any) {
     console.error('Failed to load packaging units:', error);
@@ -558,12 +512,14 @@ async function loadPackagingUnits(): Promise<boolean> {
 
 // 统计和列表一起刷新：任一项失败都明确告诉用户，不拿 0 / 空态冒充成功。
 async function refreshAll() {
+  const seq = ++refreshSeq;
   loading.value = true;
   loadError.value = '';
   const [statsOk, listOk] = await Promise.all([
-    loadTodayStatistics(),
-    loadPackagingUnits(),
+    loadTodayStatistics(seq),
+    loadPackagingUnits(seq),
   ]);
+  if (seq !== refreshSeq) return;
   if (!statsOk || !listOk) {
     loadError.value = '请检查网络后重试';
   } else {
@@ -801,14 +757,6 @@ const handleDelete = async (task: any) => {
   }
 };
 
-// 展开/折叠历史记录
-const toggleHistory = (batchId: string) => {
-  if (expandedHistoryId.value === batchId) {
-    expandedHistoryId.value = null;
-  } else {
-    expandedHistoryId.value = batchId;
-  }
-};
 </script>
 
 <style scoped lang="scss">
@@ -825,7 +773,7 @@ const toggleHistory = (batchId: string) => {
   margin: 0 32rpx 24rpx;
   padding: 8rpx;
   background: #eef2e4;
-  border-radius: 16rpx;
+  border-radius: 20rpx;
 }
 
 .mode-item {
@@ -834,6 +782,7 @@ const toggleHistory = (batchId: string) => {
   align-items: center;
   justify-content: center;
   gap: 10rpx;
+  min-height: 88rpx;
   padding: 20rpx 0;
   border-radius: 12rpx;
   font-size: 28rpx;
@@ -854,7 +803,7 @@ const toggleHistory = (batchId: string) => {
 .mode-count {
   min-width: 36rpx;
   padding: 0 10rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
   line-height: 32rpx;
   text-align: center;
   color: inherit;
@@ -869,11 +818,11 @@ const toggleHistory = (batchId: string) => {
 }
 
 .date-section {
-  background-color: #fbfcf7;
+  background-color: #fff;
   margin: 0 32rpx 24rpx;
   padding: 24rpx;
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
+  border-radius: 20rpx;
+  box-shadow: 0 6rpx 18rpx rgba(30, 46, 36, 0.05);
 }
 
 .date-picker {
@@ -899,7 +848,7 @@ const toggleHistory = (batchId: string) => {
 
 .date-arrow {
   font-size: 24rpx;
-  color: #b08d4f;
+  color: #7a5c28;
   background-color: #eef2e4;
   border-radius: 8rpx;
   padding: 8rpx 16rpx;
@@ -909,17 +858,17 @@ const toggleHistory = (batchId: string) => {
 .date-hint {
   display: block;
   margin-top: 14rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #6b6653;
 }
 
 .stat-card {
   flex: 1;
-  background-color: #fbfcf7;
+  background-color: #fff;
   padding: 32rpx 24rpx;
-  border-radius: 16rpx;
+  border-radius: 20rpx;
   text-align: center;
-  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
+  box-shadow: 0 6rpx 18rpx rgba(30, 46, 36, 0.05);
 
   .stat-value {
     display: block;
@@ -943,11 +892,11 @@ const toggleHistory = (batchId: string) => {
 }
 
 .schedule-section {
-  background-color: #fbfcf7;
+  background-color: #fff;
   margin: 0 32rpx 24rpx;
   padding: 32rpx;
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
+  border-radius: 20rpx;
+  box-shadow: 0 6rpx 18rpx rgba(30, 46, 36, 0.05);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -958,6 +907,7 @@ const toggleHistory = (batchId: string) => {
     color: #f3eddd;
     border: none;
     border-radius: 12rpx;
+    min-height: 88rpx;
     padding: 24rpx 48rpx;
     font-size: 32rpx;
     font-weight: bold;
@@ -969,19 +919,14 @@ const toggleHistory = (batchId: string) => {
     text-align: center;
   }
 
-  .schedule-warning {
-    font-size: 22rpx;
-    color: #8a6b33;
-    text-align: center;
-  }
 }
 
 .batch-print-section {
-  background-color: #fbfcf7;
+  background-color: #fff;
   margin: 0 32rpx 24rpx;
   padding: 32rpx;
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
+  border-radius: 20rpx;
+  box-shadow: 0 6rpx 18rpx rgba(30, 46, 36, 0.05);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -992,6 +937,7 @@ const toggleHistory = (batchId: string) => {
     color: #f3eddd;
     border: none;
     border-radius: 12rpx;
+    min-height: 88rpx;
     padding: 24rpx 48rpx;
     font-size: 32rpx;
     font-weight: bold;
@@ -1014,16 +960,17 @@ const toggleHistory = (batchId: string) => {
 
 .tabs {
   display: flex;
-  background-color: #fbfcf7;
+  background-color: #fff;
   margin: 0 32rpx 24rpx;
-  border-radius: 16rpx;
+  border-radius: 20rpx;
   padding: 8rpx;
-  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
+  box-shadow: 0 6rpx 18rpx rgba(30, 46, 36, 0.05);
 }
 
 .tab-item {
   flex: 1;
   text-align: center;
+  min-height: 88rpx;
   padding: 16rpx;
   border-radius: 12rpx;
   font-size: 28rpx;
@@ -1051,10 +998,10 @@ const toggleHistory = (batchId: string) => {
     height: 32rpx;
     line-height: 32rpx;
     padding: 0 8rpx;
-    border-radius: 16rpx;
+    border-radius: 20rpx;
     background-color: #f0f3e9;
     color: #1e3a2f;
-    font-size: 22rpx;
+    font-size: 24rpx;
     font-weight: 600;
   }
 }
@@ -1084,10 +1031,10 @@ const toggleHistory = (batchId: string) => {
   gap: 12rpx;
   margin: 0 32rpx 24rpx;
   padding: 0 24rpx;
-  height: 72rpx;
+  height: 88rpx;
   background-color: #fff;
   border-radius: 12rpx;
-  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
+  box-shadow: 0 6rpx 18rpx rgba(30, 46, 36, 0.05);
 }
 
 .search-input {
@@ -1114,7 +1061,7 @@ const toggleHistory = (batchId: string) => {
 
 .date-group-tag {
   padding: 2rpx 10rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 400;
   color: #7a5c28;
   background-color: #f6efe0;
@@ -1172,6 +1119,7 @@ const toggleHistory = (batchId: string) => {
 
   .retry-btn {
     margin-top: 28rpx;
+    min-height: 88rpx;
     padding: 16rpx 48rpx;
     background-color: #1e3a2f;
     color: #f3eddd;
@@ -1187,8 +1135,9 @@ const toggleHistory = (batchId: string) => {
 
   .empty-icon {
     display: block;
-    font-size: 120rpx;
-    margin-bottom: 24rpx;
+    width: 120rpx;
+    height: 120rpx;
+    margin: 0 auto 24rpx;
   }
 
   .empty-text {
@@ -1198,16 +1147,16 @@ const toggleHistory = (batchId: string) => {
 }
 
 .task-card {
-  background-color: #fbfcf7;
-  border-radius: 16rpx;
+  background-color: #fff;
+  border-radius: 20rpx;
   padding: 24rpx;
   margin-bottom: 24rpx;
-  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
+  box-shadow: 0 6rpx 18rpx rgba(30, 46, 36, 0.05);
   cursor: pointer;
   transition: all 0.2s;
 
   &:active {
-    background-color: #fbfcf7;
+    background-color: #f7f8f2;
     transform: scale(0.98);
   }
 
@@ -1234,7 +1183,7 @@ const toggleHistory = (batchId: string) => {
     }
 
     .carryover-badge {
-      font-size: 22rpx;
+      font-size: 24rpx;
       color: #7a5c28;
       background-color: #f6efe0;
       border: 1rpx solid #e5e8d4;
@@ -1244,7 +1193,7 @@ const toggleHistory = (batchId: string) => {
       white-space: nowrap;
 
       &.is-overdue {
-        color: #b4553f;
+        color: #b4453a;
         background-color: #f8e8e2;
       }
     }
@@ -1277,7 +1226,7 @@ const toggleHistory = (batchId: string) => {
       }
 
       .carryover-text {
-        color: #b4553f;
+        color: #b4453a;
         font-weight: 600;
       }
 
@@ -1300,6 +1249,7 @@ const toggleHistory = (batchId: string) => {
     align-items: center;
     justify-content: center;
     gap: 8rpx;
+    min-height: 88rpx;
     padding: 12rpx 24rpx;
     background-color: #1e3a2f;
     border-radius: 8rpx;
@@ -1327,6 +1277,7 @@ const toggleHistory = (batchId: string) => {
     align-items: center;
     justify-content: center;
     gap: 8rpx;
+    min-height: 88rpx;
     padding: 12rpx 24rpx;
     background-color: rgba(180, 85, 63, 0.1);
     border-radius: 8rpx;
@@ -1344,79 +1295,10 @@ const toggleHistory = (batchId: string) => {
 
     .delete-text {
       font-size: 26rpx;
-      color: #b4553f;
+      color: #b4453a;
       font-weight: 500;
     }
   }
 }
 
-.history-section {
-  background-color: #fbfcf7;
-  margin: 0 32rpx 24rpx;
-  padding: 24rpx;
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
-}
-
-.history-item {
-  margin-bottom: 16rpx;
-  padding-bottom: 16rpx;
-  border-bottom: 1rpx solid #eef1e2;
-
-  &:last-child {
-    margin-bottom: 0;
-    padding-bottom: 0;
-    border-bottom: none;
-  }
-
-  .history-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-
-    .history-date {
-      font-size: 26rpx;
-      font-weight: bold;
-      color: #26261f;
-    }
-
-    .history-count {
-      font-size: 24rpx;
-      color: #26261f;
-    }
-
-    .history-toggle {
-      font-size: 24rpx;
-      color: #6b6653;
-    }
-  }
-
-  .history-details {
-    margin-top: 12rpx;
-    padding-left: 24rpx;
-  }
-
-  .history-unit {
-    display: flex;
-    justify-content: space-between;
-    padding: 8rpx 0;
-    font-size: 24rpx;
-    color: #26261f;
-
-    .history-recipe {
-      flex: 1;
-    }
-
-    .history-weight {
-      min-width: 120rpx;
-      text-align: right;
-    }
-
-    .history-time {
-      min-width: 150rpx;
-      text-align: right;
-      color: #6b6653;
-    }
-  }
-}
 </style>

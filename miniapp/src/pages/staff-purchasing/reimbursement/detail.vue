@@ -1051,13 +1051,32 @@ const releaseHeldChange = (record: any) => {
     return;
   }
 
-  const reason = change.gateReason
-    ? `闸门判定：${change.gateReason}`
-    : '本次价格相对历史采购价波动过大';
+  // 弹窗里必须用「当前口径」说话：
+  // gateReason 是判定当时存下来的文字，规则改过之后会过时（比如还写着 8%），
+  // 直接展示会让人以为今天算出来是 89.9%。
+  const percent = formatDeltaPercent(change.deltaRate);
+  const changeText =
+    percent === '—' ? '与上次档案价一致（0%）' : `比上次档案价 ${percent}`;
+  const staleVerdict =
+    change.gateAction === 'HOLD' && change.gatePreviewAction === 'APPLY';
+  const currentVerdict = staleVerdict
+    ? '按现在的规则（基准＝上次档案价），这一项本可以直接生效；它是在旧规则下被拦的。'
+    : '按现在的规则，这一项仍需人工确认才能生效。';
+  const oldVerdict = change.gateReason
+    ? `当时判定：${change.gateReason}`
+    : '';
 
   uni.showModal({
     title: '放行这次调价？',
-    content: `${change.ingredientName || '该原料'}\n${reason}\n\n放行后会立刻按本次采购价更新原料价。`,
+    content: [
+      change.ingredientName || '该原料',
+      `本次${changeText}`,
+      currentVerdict,
+      oldVerdict,
+      '放行后会立刻按本次采购价更新原料价。',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
     confirmText: '放行',
     success: async (res) => {
       if (!res.confirm) {

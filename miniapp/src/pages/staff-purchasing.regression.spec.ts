@@ -122,6 +122,13 @@ describe('staff reimbursement detail guardrails', () => {
     expect(reimbursementDetailSource).not.toContain('月成本影响');
   });
 
+  it('explains a held price change with today\'s numbers, not the stored reason', () => {
+    // 旧判定文字会过时（还写着 8%、89.9%），弹窗必须以当前口径为主
+    expect(reimbursementDetailSource).toContain('与上次档案价一致');
+    expect(reimbursementDetailSource).toContain('当时判定：');
+    expect(reimbursementDetailSource).toContain('staleVerdict');
+  });
+
   it('judges every price change before approval, no "预计" state', () => {
     expect(reimbursementDetailSource).toContain('gatePreviewAction');
     expect(reimbursementDetailSource).toContain('需放行');

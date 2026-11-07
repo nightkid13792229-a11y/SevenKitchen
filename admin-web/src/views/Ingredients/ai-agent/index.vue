@@ -1735,30 +1735,6 @@ const closingReady = computed(
 )
 
 /**
- * 「采购商品」板块什么时候出现（2026-11-08 老板定）：
- * 原料卡写全 + 两页核验都通过。改了原料导致报告变旧时它会自己收起。
- */
-const showProcurementCard = computed(() =>
-  shouldShowProcurementCard({
-    line: line.value ?? '',
-    hasDraft: Boolean(draft.value),
-    hasIngredientBaseUnit: Boolean(
-      (draft.value?.payload as { ingredient?: { baseUnit?: unknown } } | undefined)
-        ?.ingredient?.baseUnit
-    ),
-    checksReady: gate.value.ready && !commitResult.value
-  })
-)
-
-// 板块刚出现时把它带进视口：它在草稿板块下方，窗口不高时可能在屏幕外。
-watch(showProcurementCard, (visible) => {
-  if (!visible) return
-  void nextTick(() => {
-    closingCardRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-  })
-})
-
-/**
  * 商品详情页截图识别（2026-11-08）。
  *
  * 与小程序「新增采购商品」同一个识别服务、同一份提示词与每日配额：
@@ -2142,6 +2118,30 @@ const canAuthorize = computed(
     closingReady.value &&
     gate.value.ready
 )
+
+/**
+ * 「采购商品」板块什么时候出现（2026-11-08 老板定）：
+ * 原料卡写全 + 两页核验都通过。改了原料导致报告变旧时它会自己收起。
+ */
+const showProcurementCard = computed(() =>
+  shouldShowProcurementCard({
+    line: line.value ?? '',
+    hasDraft: Boolean(draft.value),
+    hasIngredientBaseUnit: Boolean(
+      (draft.value?.payload as { ingredient?: { baseUnit?: unknown } } | undefined)
+        ?.ingredient?.baseUnit
+    ),
+    checksReady: gate.value.ready && !commitResult.value
+  })
+)
+
+// 板块刚出现时把它带进视口：它在草稿板块下方，窗口不高时可能在屏幕外。
+watch(showProcurementCard, (visible) => {
+  if (!visible) return
+  void nextTick(() => {
+    closingCardRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
+})
 
 const authorizeHint = computed(() => {
   if (commitResult.value) {

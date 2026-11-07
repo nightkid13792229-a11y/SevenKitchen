@@ -59,6 +59,7 @@
           class="search-input"
           placeholder="搜索食谱 / 订单号"
           confirm-type="search"
+          @focus="markModePicked"
         />
         <text v-if="keyword" class="search-clear" @tap="keyword = ''">清除</text>
       </view>
@@ -144,7 +145,7 @@
               </view>
               <view class="info-row">
                 <text class="label">关联订单：</text>
-                <text class="value">{{ task.orderItems.length }}个</text>
+                <text class="value">{{ orderSummary(task) }}</text>
               </view>
               <view class="info-row">
                 <text class="label">创建时间：</text>
@@ -236,6 +237,7 @@ import { ref, computed } from 'vue';
 import { onShow, onPullDownRefresh } from '@dcloudio/uni-app';
 import { getTodayStatistics, autoSchedule, getPackagingUnits, completeProductionTask, startProductionTask, deleteProductionBatch } from './api/production';
 import { formatDecimal } from './utils/format';
+import { hasAllergyText } from './utils/note';
 import SupplementPacking from './components/SupplementPacking.vue';
 
 const getTodayDateText = () => {
@@ -277,7 +279,7 @@ const switchMode = (mode: ProductionMode) => {
   userPickedMode.value = true;
   activeMode.value = mode;
   uni.pageScrollTo({ scrollTop: 0, duration: 0 });
-  if (mode === 'SUPPLEMENT') {
+  if (mode === 'SUPPLEMENT' && !supplementLoaded.value) {
     supplementRef.value?.refresh?.();
   }
 };
@@ -357,9 +359,16 @@ const isCarryoverTask = (task: any) => {
 const hasAnyNote = (task: any) =>
   (task?.orderItems || []).some((item: any) => Boolean(item?.customerNote));
 const hasAllergyNote = (task: any) =>
-  (task?.orderItems || []).some((item: any) =>
-    String(item?.customerNote || '').includes('过敏'),
+  (task?.orderItems || []).some((item: any) => hasAllergyText(item?.customerNote));
+
+const orderSummary = (task: any) => {
+  const items = task?.orderItems || [];
+  const orderNos = Array.from(
+    new Set(items.map((item: any) => item.orderNo).filter(Boolean)),
   );
+  if (orderNos.length === 0) return `${items.length}个`;
+  return `${items.length}个 · ${orderNos.slice(0, 2).join('、')}${orderNos.length > 2 ? '…' : ''}`;
+};
 
 // 逾期只认「生产日期早于今天」；选未来日期时，今天的单是「跨天」不是「逾期」。
 const isOverdueTask = (task: any) => {
@@ -579,6 +588,9 @@ const handleDateChange = async (event: any) => {
   const nextDate = event?.detail?.value;
   if (!nextDate) return;
 
+  // 用户已经自己选日期了，就别再自动切模式。
+  userPickedMode.value = true;
+
   if (activeMode.value === 'FRESH') {
     if (nextDate === selectedProductionDate.value) return;
     selectedProductionDate.value = nextDate;
@@ -628,7 +640,12 @@ const autoScheduleToday = async () => {
 
 // 切换Tab
 const switchTab = (tab: string) => {
+  userPickedMode.value = true;
   activeTab.value = tab;
+};
+
+const markModePicked = () => {
+  userPickedMode.value = true;
 };
 
 // 查看详情：带上生产日期，详情页只查这一天，不再全库找最近 100 条。

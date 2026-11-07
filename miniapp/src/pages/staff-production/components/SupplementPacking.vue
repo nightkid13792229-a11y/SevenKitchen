@@ -49,7 +49,7 @@
           <view class="hero-item"><text class="hero-value">{{ data?.capacity || 0 }}</text><text class="hero-label">产能（袋/天）</text></view>
         </view>
         <view v-if="capacityOver > 0" class="capacity-warning">
-          今日 {{ data?.bagCount || 0 }} 袋，超出日产能 {{ capacityOver }} 袋
+          当天 {{ data?.bagCount || 0 }} 袋，超出日产能 {{ capacityOver }} 袋
         </view>
 
         <view class="card">

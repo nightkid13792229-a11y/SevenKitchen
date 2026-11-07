@@ -382,12 +382,14 @@ describe('生产管理 · Phase 2 现场流程（详情 / 过敏 / 补剂 / 搜�
     expect(indexSource).toContain('有备注');
     expect(detailSource).toContain('customer-note');
     expect(detailSource).toContain('isAllergyNote');
+    expect(detailSource).toContain("from './utils/note'");
     expect(detailSource).toContain('过敏提醒');
   });
 
   it('补剂看板显示顾客名、产能预警、空态合并、行可点提示', () => {
     expect(packingSource).toContain('order.receiverName');
     expect(packingSource).toContain('capacityOver');
+    expect(packingSource).toContain('当天');
     expect(packingSource).toContain('v-if="orders.length > 0"');
     expect(packingSource).toContain('查看详情 ›');
   });
@@ -397,6 +399,8 @@ describe('生产管理 · Phase 2 现场流程（详情 / 过敏 / 补剂 / 搜�
     expect(indexSource).toContain('totalTaskCount > 8');
     expect(indexSource).toContain('maybePickInitialMode');
     expect(indexSource).toContain('userPickedMode');
+    expect(indexSource).toContain('markModePicked');
+    expect(indexSource).toContain('orderSummary');
   });
 
   it('详情和打印带订单号，不再只给截断 ID', () => {

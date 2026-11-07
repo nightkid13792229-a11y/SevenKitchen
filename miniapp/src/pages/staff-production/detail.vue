@@ -303,6 +303,7 @@ import {
 } from './api/production';
 import { getBaseUrl } from '../../utils/config';
 import { calculateSupplementAmountForProduction } from '../../utils/supplement-nutrients';
+import { hasAllergyText as isAllergyNote } from './utils/note';
 
 // 格式化函数
 function formatDecimal(value: number | null | undefined, decimals: number = 2): string {
@@ -357,10 +358,6 @@ function getOrderTotalNetWeight(order: {
   }
 
   return Number(order.packageSpecG || 0) * Number(order.packageCount || 0);
-}
-
-function isAllergyNote(note?: string): boolean {
-  return String(note || '').includes('过敏');
 }
 
 function formatShortOrderId(orderId?: string): string {

@@ -333,4 +333,19 @@ describe('生产管理 · Phase 1 安全与信任', () => {
     expect(indexSource).toContain("task.status === 'IN_PROGRESS'");
     expect(indexSource).toContain("task.status === 'COMPLETED'");
   });
+
+  it('跨天单按日期升序分组，最老的排前面', () => {
+    expect(indexSource).toContain('date-group-title');
+    expect(indexSource).toContain('localeCompare');
+    expect(indexSource).toContain("'当天'");
+    expect(indexSource).toContain("'跨天'");
+  });
+
+  it('所选日期本身的未完成锅也要能标逾期，不只跨天单', () => {
+    expect(indexSource).toContain('isCarryoverTask(task) || isOverdueTask(task)');
+  });
+
+  it('开始制作成功后本地切换状态，不再回查最近 100 条', () => {
+    expect(detailSource).toContain("taskDetail.value.status = 'IN_PROGRESS'");
+  });
 });

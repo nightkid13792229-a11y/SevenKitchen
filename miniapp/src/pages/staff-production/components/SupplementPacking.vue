@@ -39,7 +39,7 @@
           </view>
         </view>
 
-        <view v-if="orders.length === 0" class="empty-block">
+        <view v-if="orders.length === 0 && !loadError" class="empty-block">
           <text class="empty">这天没有待发货的订单</text>
           <text class="empty-hint">刚下单还没看到，可能还没确认收款、还没排期，或排到了别的发货日（右上角可切换日期）。</text>
           <view class="ghost-btn" @tap="goAllOrders">去看全部补剂订单</view>
@@ -63,7 +63,7 @@
             {{ item.shortage > 0 ? `缺 ${item.shortage} ${item.unit}` : '足' }}
           </text>
         </view>
-        <text v-if="(data?.ingredientTotals || []).length === 0" class="empty">当天没有待发货订单</text>
+        <text v-if="(data?.ingredientTotals || []).length === 0 && !loadError" class="empty">当天没有待发货订单</text>
       </view>
 
       <view class="card">

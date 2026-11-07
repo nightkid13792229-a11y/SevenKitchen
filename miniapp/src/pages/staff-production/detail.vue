@@ -682,17 +682,20 @@ const startProduction = () => {
       uni.showLoading({ title: '开始中...' });
       try {
         const result = await startProductionTask(taskId.value);
+        // 先关 loading 再提示，否则提示会被 hideLoading 立刻吞掉。
+        uni.hideLoading();
         if (result.code === 0) {
+          // 就地切状态，避免再走「最近 100 条」回查把老任务查丢。
+          taskDetail.value.status = 'IN_PROGRESS';
           uni.showToast({ title: '已开始制作', icon: 'success' });
-          await loadTaskDetail();
         } else {
           uni.showToast({ title: result.message || '操作失败', icon: 'none' });
         }
       } catch (error: any) {
+        uni.hideLoading();
         console.error('Start production failed:', error);
         uni.showToast({ title: error.message || '开始制作失败', icon: 'none' });
       } finally {
-        uni.hideLoading();
         starting.value = false;
       }
     },

@@ -95,22 +95,33 @@
           <text class="empty-text">暂无{{ currentTabLabel }}任务</text>
         </view>
 
-        <!-- 任务卡片 -->
+        <!-- 任务卡片：按生产日期分组，最老的排前面 -->
         <view v-else>
-          <view v-for="task in filteredTasks" :key="task.id" class="task-card">
-            <view class="task-header" @tap="viewDetails(task)">
-              <view class="recipe-title">
-                <text class="recipe-name">{{ task.recipeName }} v{{ task.recipeVersion }}</text>
-                <text
-                  v-if="isCarryoverTask(task)"
-                  class="carryover-badge"
-                  :class="{ 'is-overdue': isOverdueTask(task) }"
-                >
-                  {{ isOverdueTask(task) ? '逾期' : '跨天' }}
-                </text>
-              </view>
-              <text class="pot-info">({{ task.currentPotNumber }}/{{ task.totalPots }})</text>
+          <view v-for="(task, index) in filteredTasks" :key="task.id">
+            <view
+              v-if="index === 0 || task.productionDate !== filteredTasks[index - 1].productionDate"
+              class="date-group-title"
+            >
+              <text>{{ task.productionDate }}</text>
+              <text class="date-group-tag">
+                {{ task.productionDate === selectedProductionDate ? '当天' : '跨天' }}
+              </text>
             </view>
+
+            <view class="task-card">
+              <view class="task-header" @tap="viewDetails(task)">
+                <view class="recipe-title">
+                  <text class="recipe-name">{{ task.recipeName }} v{{ task.recipeVersion }}</text>
+                  <text
+                    v-if="isCarryoverTask(task) || isOverdueTask(task)"
+                    class="carryover-badge"
+                    :class="{ 'is-overdue': isOverdueTask(task) }"
+                  >
+                    {{ isOverdueTask(task) ? '逾期' : '跨天' }}
+                  </text>
+                </view>
+                <text class="pot-info">({{ task.currentPotNumber }}/{{ task.totalPots }})</text>
+              </view>
 
             <view class="task-body" @tap="viewDetails(task)">
               <view class="info-row">
@@ -172,6 +183,7 @@
             </view>
           </view>
         </view>
+      </view>
       </view>
 
       <!-- 历史记录（可展开查看） -->
@@ -259,7 +271,23 @@ const isFutureTask = (task: any) => {
   );
 };
 
-const visibleTasks = computed(() => allTasks.value.filter((task) => !isFutureTask(task)));
+const visibleTasks = computed(() =>
+  allTasks.value
+    .filter((task) => !isFutureTask(task))
+    .sort((a, b) => {
+      // 跨天旧单排在前面；同一天按锅次，再按创建时间。
+      const dateCompare = String(a.productionDate || '').localeCompare(
+        String(b.productionDate || ''),
+      );
+      if (dateCompare !== 0) return dateCompare;
+
+      const potCompare =
+        Number(a.currentPotNumber || 0) - Number(b.currentPotNumber || 0);
+      if (potCompare !== 0) return potCompare;
+
+      return String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
+    }),
+);
 
 // 跨天：不属于所选日期、但还没做完的锅。
 const isCarryoverTask = (task: any) => {
@@ -455,11 +483,14 @@ async function refreshAll() {
 }
 
 onPullDownRefresh(async () => {
-  await refreshAll();
-  if (activeMode.value === 'SUPPLEMENT') {
-    await supplementRef.value?.refresh?.();
+  try {
+    await refreshAll();
+    if (activeMode.value === 'SUPPLEMENT') {
+      await supplementRef.value?.refresh?.();
+    }
+  } finally {
+    uni.stopPullDownRefresh();
   }
-  uni.stopPullDownRefresh();
 });
 
 const handleProductionDateChange = async (event: any) => {
@@ -926,6 +957,25 @@ const toggleHistory = (batchId: string) => {
 
 .task-list {
   padding: 0 32rpx;
+}
+
+.date-group-title {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin: 8rpx 0 12rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #6b6653;
+}
+
+.date-group-tag {
+  padding: 2rpx 10rpx;
+  font-size: 22rpx;
+  font-weight: 400;
+  color: #7a5c28;
+  background-color: #f6efe0;
+  border-radius: 6rpx;
 }
 
 .inline-error {

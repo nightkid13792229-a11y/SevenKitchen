@@ -78,6 +78,7 @@ describe('生产管理 · 鲜食 / 补剂分装共用入口', () => {
     expect(packingSource).toContain('没取到')
     expect(packingSource).toContain('@tap="load"')
     expect(packingSource).toContain('v-else-if="loadError')
+    expect(packingSource).toContain('orders.length === 0 && !loadError')
   })
 
   it('★ 旧的「分装备料」独立页和路由已撤掉，不留死页面', () => {

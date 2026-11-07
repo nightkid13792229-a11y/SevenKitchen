@@ -106,7 +106,7 @@ describe('staff reimbursement detail guardrails', () => {
     expect(reimbursementDetailSource).toContain('撤销审核');
 
     // 没凭证时不能点通过
-    expect(reimbursementDetailSource).toContain('先上传付款凭证');
+    expect(reimbursementDetailSource).toContain('先上传报销转账凭证');
   });
 
   it('shows 涨跌 inline on each purchase record instead of a separate table', () => {
@@ -120,6 +120,29 @@ describe('staff reimbursement detail guardrails', () => {
     expect(reimbursementDetailSource).not.toContain('>原价<');
     expect(reimbursementDetailSource).not.toContain('确认应用');
     expect(reimbursementDetailSource).not.toContain('月成本影响');
+  });
+
+  it('lets the submitter approve their own claim without a transfer proof', () => {
+    expect(reimbursementDetailSource).toContain('isSelfReview');
+    expect(reimbursementDetailSource).toContain('canApprove');
+    expect(reimbursementDetailSource).toContain('本人单，无需凭证');
+    // 别人审仍然必须走「先传凭证」
+    expect(reimbursementDetailSource).toContain('先上传报销转账凭证');
+  });
+
+  it('releases a held price change from the phone instead of sending people to desktop', () => {
+    expect(reimbursementDetailSource).toContain('applyHeldPriceChange');
+    expect(reimbursementDetailSource).toContain('canRelease(record)');
+    expect(reimbursementDetailSource).toContain('releaseHeldChange');
+    expect(reimbursementDetailSource).toContain('放行');
+    // 普通调价不再打「调价」标签，涨跌列已经说明
+    expect(reimbursementDetailSource).not.toContain("'调价'");
+  });
+
+  it('uses transfer/purchase payment wording instead of generic proof wording', () => {
+    expect(reimbursementDetailSource).toContain('报销转账凭证');
+    expect(reimbursementDetailSource).toContain('采购付款凭证');
+    expect(reimbursementDetailSource).not.toContain('员工消费凭证');
   });
 
   it('reads the real review events instead of rebuilding history from status', () => {

@@ -47,7 +47,7 @@
             <text class="cell-value" :class="differenceClass">{{ differenceText }}</text>
           </view>
           <view class="summary-cell">
-            <text class="cell-label">付款凭证</text>
+            <text class="cell-label">转账凭证</text>
             <text class="cell-value">{{ proofCountText }}</text>
           </view>
         </view>
@@ -104,7 +104,7 @@
       <!-- ④ 付款凭证（审核员自己的证据，前置） -->
       <view class="section">
         <view class="section-header">
-          <text class="section-title">付款凭证</text>
+          <text class="section-title">报销转账凭证</text>
           <text class="section-hint">{{ proofPhotos.length }} 张</text>
         </view>
 
@@ -120,7 +120,7 @@
         </view>
 
         <view v-else class="empty-block">
-          <text class="empty-text">还没有上传付款凭证</text>
+          <text class="empty-text">还没有上传报销转账凭证</text>
           <text v-if="canReview" class="empty-sub">付款后把转账截图传上来，再点「审核通过」才算完成</text>
         </view>
 
@@ -131,7 +131,7 @@
             :disabled="uploading"
             @tap="uploadProof"
           >
-            {{ proofPhotos.length > 0 ? '继续添加' : '上传付款凭证' }}
+            {{ proofPhotos.length > 0 ? '继续添加' : '上传报销转账凭证' }}
           </button>
           <button
             v-if="proofPhotos.length > 0"
@@ -144,10 +144,10 @@
         </view>
       </view>
 
-      <!-- ⑤ 员工消费凭证（发票 / 订单截图） -->
+      <!-- ⑤ 采购付款凭证（员工付给商家的发票 / 订单截图） -->
       <view v-if="receiptPhotos.length > 0" class="section">
         <view class="section-header">
-          <text class="section-title">员工消费凭证</text>
+          <text class="section-title">采购付款凭证</text>
           <text class="section-hint">{{ receiptPhotos.length }} 张</text>
         </view>
         <view class="photos-grid">
@@ -210,6 +210,11 @@
                 class="meta-chip"
                 :class="recordPriceTagTone(record)"
               >{{ recordPriceTag(record) }}</text>
+              <text
+                v-if="canRelease(record)"
+                class="meta-chip release"
+                @tap.stop="releaseHeldChange(record)"
+              >放行</text>
             </view>
 
             <view class="record-metrics">
@@ -267,8 +272,11 @@
 
     <!-- 底部操作栏 -->
     <view v-if="reimbursement && hasBottomActions" class="bottom-actions">
-      <text v-if="canReview && !hasPaymentProof" class="bottom-hint">
-        先上传付款凭证，才能点「审核通过」
+      <text v-if="canReview && !canApprove" class="bottom-hint">
+        先上传报销转账凭证，才能点「审核通过」
+      </text>
+      <text v-else-if="canReview && isSelfReview && !hasPaymentProof" class="bottom-hint">
+        这是你自己的单：不需要转账凭证，直接通过即可（会记「本人审核」）
       </text>
 
       <view class="action-row">
@@ -278,8 +286,8 @@
           </button>
           <button
             class="action-btn approve"
-            :class="{ disabled: !hasPaymentProof }"
-            :disabled="submitting || !hasPaymentProof"
+            :class="{ disabled: !canApprove }"
+            :disabled="submitting || !canApprove"
             @tap="openSheet('approve')"
           >
             审核通过
@@ -366,8 +374,12 @@
             <text class="confirm-value">¥{{ money(reimbursement.totalActualCost) }}</text>
           </view>
           <view class="confirm-row">
-            <text class="confirm-label">付款凭证</text>
+            <text class="confirm-label">报销转账凭证</text>
             <text class="confirm-value">{{ proofPhotos.length }} 张</text>
+          </view>
+          <view v-if="isSelfReview && !hasPaymentProof" class="confirm-row">
+            <text class="confirm-label">转账凭证</text>
+            <text class="confirm-value">本人单，无需凭证</text>
           </view>
           <view v-if="pendingPriceChangeCount > 0" class="confirm-row">
             <text class="confirm-label">价格变更</text>
@@ -439,6 +451,7 @@ import {
   deleteReimbursement as deleteReimbursementApi,
   reviewReimbursement,
   revertReimbursementReview,
+  applyHeldPriceChange,
 } from '../api/purchasing';
 import { formatStaffQuantity } from '../../../utils/staff-quantity';
 import { formatReimbursementCustomFeeTitle } from '../constants/reimbursement';
@@ -493,6 +506,12 @@ const canManageProof = computed(() => isAdmin.value && isPending.value);
 // 2026-11-07 复审：不再挡「自己审自己」——老板很可能既是提交人又是唯一管理员，
 // 挡了会导致自己的单在手机上永远过不了。要严格隔离的话应在服务端统一做。
 const canReview = computed(() => isAdmin.value && isPending.value);
+
+/** 当前用户就是提交人：自己的单不存在「给自己转账」，不该被凭证卡住 */
+const isSelfReview = computed(() => isAdmin.value && isOwner.value);
+
+/** 能点「审核通过」：已有转账凭证，或者是自己的单 */
+const canApprove = computed(() => hasPaymentProof.value || isSelfReview.value);
 
 const canRevert = computed(() => {
   if (!isAdmin.value || status.value !== 'REIMBURSED') {
@@ -1009,6 +1028,48 @@ const recordDeltaTone = (record: any) => {
   return change ? getDeltaTone(change.deltaRate) : 'flat';
 };
 
+/** 被价格闸挂起的调价，管理员可以在手机上直接放行 */
+const canRelease = (record: any) => {
+  if (!isAdmin.value) {
+    return false;
+  }
+  const change = priceChangeOf(record);
+  return !!change && change.status === 'PENDING' && change.gateAction === 'HOLD';
+};
+
+const releaseHeldChange = (record: any) => {
+  const change = priceChangeOf(record);
+  if (!change) {
+    return;
+  }
+
+  const reason = change.gateReason
+    ? `闸门判定：${change.gateReason}`
+    : '本次价格相对历史采购价波动过大';
+
+  uni.showModal({
+    title: '放行这次调价？',
+    content: `${change.ingredientName || '该原料'}\n${reason}\n\n放行后会立刻按本次采购价更新原料价。`,
+    confirmText: '放行',
+    success: async (res) => {
+      if (!res.confirm) {
+        return;
+      }
+
+      try {
+        const result: any = await applyHeldPriceChange(change.id, '手机端放行');
+        if (result.code !== 0) {
+          throw new Error(result.message || '放行失败');
+        }
+        uni.showToast({ title: '已放行', icon: 'success' });
+        await loadDetail();
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '放行失败', icon: 'none' });
+      }
+    },
+  });
+};
+
 /** 行内标签：把「调价 / 需放行 / 已生效 / 已作废」挂在记录上 */
 const recordPriceTag = (record: any) => {
   const change = priceChangeOf(record);
@@ -1021,7 +1082,9 @@ const recordPriceTag = (record: any) => {
   if (change.status === 'REJECTED') {
     return '已作废';
   }
-  return change.gateAction === 'HOLD' ? '需放行' : '调价';
+  // 普通调价不再打标签：同一行的「涨跌」已经说清楚了，
+  // 只有需要人处理的（被闸门挂起）才标记
+  return change.gateAction === 'HOLD' ? '需放行' : '';
 };
 
 const recordPriceTagTone = (record: any) => {
@@ -1109,7 +1172,7 @@ const summaryAlerts = computed<Array<{ tone: string; text: string }>>(() => {
     // 已经被闸门挂起：通过后价格不会变，等于还要去电脑端放行
     alerts.push({
       tone: 'danger',
-      text: `${heldPriceChangeCount.value} 项已被价格闸挂起，通过后价格不会变，需要到电脑端放行`,
+      text: `${heldPriceChangeCount.value} 项被价格闸挂起：审核可以先通过，但这几项价格不会变，在明细里点「放行」才会更新`,
     });
   }
 
@@ -1217,7 +1280,7 @@ const timeline = computed(() => {
 
   if (proofPhotos.value.length > 0) {
     items.push({
-      title: '已上传付款凭证',
+      title: '已上传报销转账凭证',
       desc: `${proofPhotos.value.length} 张`,
       tone: 'done',
     });
@@ -1323,8 +1386,8 @@ const previewReceipt = (photo: { url: string }) => {
 /* ---------------- 弹层 ---------------- */
 
 const openSheet = (sheet: 'reject' | 'approve' | 'revert') => {
-  if (sheet === 'approve' && !hasPaymentProof.value) {
-    uni.showToast({ title: '请先上传付款凭证', icon: 'none' });
+  if (sheet === 'approve' && !canApprove.value) {
+    uni.showToast({ title: '请先上传报销转账凭证', icon: 'none' });
     return;
   }
   rejectComment.value = '';
@@ -1995,6 +2058,12 @@ const resubmit = () => {
       &.muted {
         color: #8a8472;
         background-color: #f0eee5;
+      }
+
+      &.release {
+        color: #fbfcf7;
+        background-color: #22301f;
+        font-weight: 600;
       }
     }
   }

@@ -415,7 +415,7 @@ describe('ReimbursementService', () => {
     expect(mockStatusHistoryRepository.append).not.toHaveBeenCalled();
   });
 
-  it('refuses to approve without a payment proof (2026-11-07 split)', async () => {
+  it('别人审、又没有转账凭证时不能通过', async () => {
     mockReimbursementRepository.findById.mockResolvedValue(
       createPendingReviewReimbursement(),
     );
@@ -425,12 +425,36 @@ describe('ReimbursementService', () => {
         decision: 'APPROVE',
         comment: '通过',
       }),
-    ).rejects.toThrow('请先上传付款凭证，再审核通过');
+    ).rejects.toThrow('请先上传报销转账凭证，再审核通过');
 
     expect(
       mockIngredientPricingService.applyApprovedChangesForReimbursement,
     ).not.toHaveBeenCalled();
     expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('自己的单没有转账凭证也能通过（本人审核）', async () => {
+    const reimbursement = createPendingReviewReimbursement();
+    // submittedById = user-1，改用 user-1 审核
+    mockReimbursementRepository.findById.mockResolvedValue(reimbursement);
+
+    const saved = await service.reviewReimbursement(
+      'reimbursement-1',
+      'user-1',
+      { decision: 'APPROVE' },
+    );
+
+    expect(saved.status).toBe(ReimbursementStatus.REIMBURSED);
+    expect(saved.reviewComment).toBe('本人审核通过（无转账凭证）');
+    expect(mockPrisma.reimbursementReviewEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'APPROVE',
+          actorId: 'user-1',
+          comment: '本人审核通过（无转账凭证）',
+        }),
+      }),
+    );
   });
 
   it('驳回走 REJECT：状态变已驳回、价格变更作废、写事件', async () => {

@@ -815,6 +815,18 @@ export function reviewReimbursement(
 }
 
 /**
+ * 放行一条被价格闸挂起的调价（管理员）
+ * 只解除「幅度超阈值」这一道；0 元和 5 倍离谱仍然拒绝
+ */
+export function applyHeldPriceChange(changeId: string, comment?: string) {
+  return request({
+    url: `/admin/purchasing/price-changes/${changeId}/apply`,
+    method: 'POST',
+    data: { comment },
+  });
+}
+
+/**
  * 撤销审核（管理员）：已报销 → 待审核，价格变更回到待确认
  * 只允许审核后 24 小时内
  */

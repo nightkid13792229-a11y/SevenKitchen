@@ -429,22 +429,30 @@ export class ReimbursementService {
       );
     }
 
-    // 2026-11-07：通过之前必须已经有付款凭证。
-    // 手机端把「上传付款凭证」和「审核通过」拆成两个动作，凭证是付款的证据；
-    // 没有凭证就通过，等于承认一笔没有付款记录的报销。
-    if (
-      dto.decision === 'APPROVE' &&
-      (reimbursement.paymentProofUrls?.length ?? 0) === 0
-    ) {
-      throw new BadRequestException('请先上传付款凭证，再审核通过');
+    // 2026-11-07：通过之前必须已经有报销转账凭证。
+    // 手机端把「上传凭证」和「审核通过」拆成两个动作，凭证是付款的证据。
+    //
+    // 2026-11-08：自己的单例外——老板给自己报销时不存在「转账给自己」这件事，
+    // 强求凭证等于把自己的单永久卡死。自审走留痕：备注写「本人审核通过」。
+    const isSelfReview =
+      !!reimbursement.submittedById &&
+      reimbursement.submittedById === reviewerId;
+    const hasPaymentProof = (reimbursement.paymentProofUrls?.length ?? 0) > 0;
+
+    if (dto.decision === 'APPROVE' && !isSelfReview && !hasPaymentProof) {
+      throw new BadRequestException('请先上传报销转账凭证，再审核通过');
     }
+
+    const reviewComment =
+      dto.comment?.trim() ||
+      (isSelfReview && !hasPaymentProof ? '本人审核通过（无转账凭证）' : dto.comment);
 
     this.logger.log(
       `Reviewer ${reviewerId} reviewing reimbursement ${id} with decision: ${dto.decision}`,
     );
 
     const fromStatus = reimbursement.status;
-    reimbursement.review(reviewerId, dto.decision, dto.comment);
+    reimbursement.review(reviewerId, dto.decision, reviewComment);
     const toStatus = reimbursement.status;
 
     // 2026-11-07 复审：状态和价格必须一起成功/失败。
@@ -455,14 +463,14 @@ export class ReimbursementService {
           await this.ingredientPricingService.applyApprovedChangesForReimbursement(
             id,
             reviewerId,
-            dto.comment,
+            reviewComment,
             tx,
           );
         } else {
           await this.ingredientPricingService.rejectChangesForReimbursement(
             id,
             reviewerId,
-            dto.comment,
+            reviewComment,
             tx,
           );
         }
@@ -478,7 +486,7 @@ export class ReimbursementService {
           actorId: reviewerId,
           fromStatus,
           toStatus,
-          comment: dto.comment,
+          comment: reviewComment,
         });
 
         return this.reimbursementRepository.save(reimbursement, tx);

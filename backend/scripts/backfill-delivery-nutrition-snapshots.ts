@@ -1,5 +1,9 @@
 /**
- * 历史交付快照 · 补「核心营养 8 项 + 宏量报告行」（一次性脚本，2026-11-07）
+ * 历史交付快照 · 补「核心营养 8 项 + 宏量报告行 + 完整营养报告」（一次性脚本）
+ *
+ * 2026-11-08 扩展：老快照里没有 `nutrition.report`（报告整份冻结是这一版才加的），
+ * 交付页因此不显示「营养报告」入口。这里按交付挂的那道食谱**当前**的报告回填一份，
+ * 让老订单也能看到报告；新交付由交付端自己冻结，不依赖本脚本。
  *
  * ## 为什么需要它
  *
@@ -13,7 +17,7 @@
  *
  * ## 能补什么、补不了什么（必须知道）
  *
- * · 能补：8 项营养数字、宏量报告行（库里都还在）。
+ * · 能补：8 项营养数字、宏量报告行、完整营养报告（库里都还在）。
  * · 补的是**食谱当前行**的营养数据 —— 快照里没有存过这些数字，
  *   所以做不到"交付那一刻的原值"。定制食谱是交付后基本不再改的私密行，
  *   这次涉及的 19 份当前都可对上；将来若发现改过，以这条为已知差异。
@@ -39,6 +43,8 @@ import { config as loadEnv } from 'dotenv';
 import {
   readDeliveryMacroRows,
   readDeliveryMacros,
+  readDeliveryNutritionReport,
+  readDeliveryScenario,
   type SnapshotMacros,
 } from '../src/domain/custom-recipe/delivery-nutrition';
 
@@ -126,49 +132,56 @@ export async function runDeliveryNutritionBackfill(input: {
         continue;
       }
 
-      const hasMacros = Object.prototype.hasOwnProperty.call(
-        nutrition,
-        'macros',
-      )
-        ? nutrition.macros !== null && nutrition.macros !== undefined
-        : false;
-      const hasReportRows = Object.prototype.hasOwnProperty.call(
-        nutrition,
-        'reportRows',
-      )
-        ? nutrition.reportRows !== null && nutrition.reportRows !== undefined
-        : false;
-      if (hasMacros && hasReportRows) {
-        counters.alreadyComplete += 1;
-        continue;
-      }
+      const has = (key: string) =>
+        Object.prototype.hasOwnProperty.call(nutrition, key) &&
+        nutrition[key] !== null &&
+        nutrition[key] !== undefined;
 
       const macros = readDeliveryMacros(target.recipe?.nutritionDetailedData);
       const reportRows = readDeliveryMacroRows(
         target.recipe?.nutritionDetailedData,
       );
-      if (!macros && !reportRows) {
-        counters.noSourceData += 1;
-        logger.info(
-          `- 跳过（食谱没有营养数据）: ${target.label} · ${
-            target.recipe?.name ?? '食谱缺失'
-          }`,
-        );
+      const report = readDeliveryNutritionReport(
+        target.recipe?.nutritionDetailedData,
+      );
+      const scenario = readDeliveryScenario(
+        target.recipe?.nutritionDetailedData,
+      );
+
+      /**
+       * 只补**缺的且有源**的键：老快照缺 `report`、但食谱本来就没报告时
+       * 一条都不写 —— 否则每跑一遍都会重写同一份快照，幂等性就没了。
+       */
+      const patches: Record<string, unknown> = {};
+      if (!has('macros') && macros) patches.macros = macros;
+      if (!has('reportRows') && reportRows) patches.reportRows = reportRows;
+      if (!has('report') && report) patches.report = report;
+      if (!has('scenario') && scenario) patches.scenario = scenario;
+
+      if (Object.keys(patches).length === 0) {
+        if (has('macros') || has('reportRows') || has('report')) {
+          counters.alreadyComplete += 1;
+        } else {
+          counters.noSourceData += 1;
+          logger.info(
+            `- 跳过（食谱没有营养数据）: ${target.label} · ${
+              target.recipe?.name ?? '食谱缺失'
+            }`,
+          );
+        }
         continue;
       }
 
       counters.eligible += 1;
-      const nextNutrition = {
-        ...nutrition,
-        ...(hasMacros ? {} : { macros }),
-        ...(hasReportRows ? {} : { reportRows }),
-      };
+      const nextNutrition = { ...nutrition, ...patches };
       const nextSnapshot = { ...(snapshot as Record<string, unknown>), nutrition: nextNutrition };
 
       logger.info(
         `- ${input.apply ? '补' : '将补'}: ${target.label} · ${
           target.recipe?.name ?? '食谱缺失'
-        }${macros ? `\n    ${formatMacros(macros)}` : ''}`,
+        }${patches.macros ? `\n    ${formatMacros(patches.macros as SnapshotMacros)}` : ''}${
+          patches.report ? '\n    + 完整营养报告（整份冻结）' : ''
+        }`,
       );
 
       if (input.apply) {

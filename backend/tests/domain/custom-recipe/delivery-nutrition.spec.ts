@@ -1,6 +1,8 @@
 import {
   readDeliveryMacroRows,
   readDeliveryMacros,
+  readDeliveryNutritionReport,
+  readDeliveryScenario,
 } from '../../../src/domain/custom-recipe/delivery-nutrition';
 
 /**
@@ -143,5 +145,137 @@ describe('readDeliveryMacroRows', () => {
     expect(readDeliveryMacroRows({ report: { macroRows: [] } })).toBeNull();
     expect(readDeliveryMacroRows({ report: { macroRows: [{ name: '  ' }] } })).toBeNull();
     expect(readDeliveryMacroRows(null)).toBeNull();
+  });
+});
+
+
+/**
+ * 完整营养报告冻结（2026-11-08）
+ *
+ * 交付页新加了「营养报告」入口，报告的**版本**必须跟交付那一版一致：
+ * 私密定制食谱原地更新、版本号恒为 1，所以只能交付时整份冻结进快照。
+ */
+const FULL_REPORT_SHAPE = {
+  ...PRODUCTION_SHAPE,
+  scenario: 'EARLY_GROWTH_REPRODUCTION',
+  report: {
+    ingredientRows: [
+      {
+        ingredientName: '鸡胸肉',
+        amountLabel: '320g',
+        concentrationLabel: '-',
+        weightPercentLabel: '32.00%',
+        // 库里可能多出来的键，不该进快照
+        internalRatio: 0.32,
+      },
+    ],
+    macroRows: [
+      { key: 'crudeProtein', name: '蛋白质', dryMatterLabel: '38.23%', energyPercentLabel: '31.26%', weightPercentLabel: '10.22%' },
+    ],
+    energyDensityRows: [
+      { label: '每公斤配方', value: '1144 kcal/kg' },
+      { label: '每公斤干物质', value: '4096 kcal/kg DM' },
+    ],
+    nutrientSections: {
+      minerals: {
+        title: '微量元素',
+        dryMatterHeader: '/100gDM',
+        rows: [
+          { key: 'calcium', name: '钙', unit: 'mg', minLabel: '1000', maxLabel: '2500', currentLabel: '2192', dryMatterLabel: '2192', status: 'COMPLIANT' },
+        ],
+      },
+      vitamins: {
+        title: '维生素',
+        dryMatterHeader: '/100gDM',
+        rows: [],
+      },
+      aminoAcids: {
+        title: '氨基酸',
+        dryMatterHeader: '/100gDM',
+        rows: [
+          { key: 'lysine', name: '赖氨酸', unit: 'g', currentLabel: '1.2' },
+        ],
+      },
+      // 未知分区：不认
+      unknownSection: { title: '未知', dryMatterHeader: '', rows: [{ name: 'x' }] },
+    },
+  },
+};
+
+describe('readDeliveryNutritionReport', () => {
+  it('★ 整份报告只留渲染字段（多余的键不进快照契约）', () => {
+    const report = readDeliveryNutritionReport(FULL_REPORT_SHAPE);
+
+    expect(report).toEqual({
+      ingredientRows: [
+        {
+          ingredientName: '鸡胸肉',
+          amountLabel: '320g',
+          concentrationLabel: '-',
+          weightPercentLabel: '32.00%',
+        },
+      ],
+      macroRows: [
+        {
+          key: 'crudeProtein',
+          name: '蛋白质',
+          dryMatterLabel: '38.23%',
+          energyPercentLabel: '31.26%',
+          weightPercentLabel: '10.22%',
+        },
+      ],
+      energyDensityRows: [
+        { label: '每公斤配方', value: '1144 kcal/kg' },
+        { label: '每公斤干物质', value: '4096 kcal/kg DM' },
+      ],
+      nutrientSections: {
+        minerals: {
+          title: '微量元素',
+          dryMatterHeader: '/100gDM',
+          rows: [
+            {
+              key: 'calcium',
+              name: '钙',
+              unit: 'mg',
+              minLabel: '1000',
+              maxLabel: '2500',
+              currentLabel: '2192',
+              dryMatterLabel: '2192',
+              status: 'COMPLIANT',
+            },
+          ],
+        },
+        aminoAcids: {
+          title: '氨基酸',
+          dryMatterHeader: '/100gDM',
+          rows: [{ key: 'lysine', name: '赖氨酸', unit: 'g', currentLabel: '1.2' }],
+        },
+      },
+    });
+  });
+
+  it('没有报告 / 空报告都给 null（前端据此隐藏入口）', () => {
+    // 只有 summary 和宏量行的老数据不等于"有完整报告"
+    expect(readDeliveryNutritionReport({ ...SUMMARY })).toBeNull();
+    expect(readDeliveryNutritionReport(null)).toBeNull();
+    expect(readDeliveryNutritionReport({ report: {} })).toBeNull();
+    expect(readDeliveryNutritionReport({ report: { nutrientSections: { minerals: { rows: [] } } } })).toBeNull();
+  });
+
+  it('只有部分分区也能用（缺的分区不写空壳）', () => {
+    const report = readDeliveryNutritionReport({
+      report: { nutrientSections: { vitamins: { title: '维生素', rows: [{ name: '维生素 E', currentLabel: '1000' }] } } },
+    });
+
+    expect(Object.keys(report?.nutrientSections ?? {})).toEqual(['vitamins']);
+  });
+});
+
+describe('readDeliveryScenario', () => {
+  it('读出场景，空值给 null', () => {
+    expect(readDeliveryScenario({ scenario: 'EARLY_GROWTH_REPRODUCTION' })).toBe('EARLY_GROWTH_REPRODUCTION');
+    expect(readDeliveryScenario({ scenario: '   ' })).toBeNull();
+    expect(readDeliveryScenario({})).toBeNull();
+    expect(readDeliveryScenario(null)).toBeNull();
   });
 });

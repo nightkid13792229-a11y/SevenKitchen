@@ -122,6 +122,25 @@ export interface SnapshotNutrition {
    * 而不是拿后来被改过的活行去凑。
    */
   reportRows?: SnapshotMacroRow[] | null;
+  /**
+   * 完整营养报告（2026-11-08 加）：交付那一刻 `nutritionDetailedData.report`
+   * 的**冻结副本**，报告页照着渲染。
+   *
+   * ## 为什么要塞进快照（与 2026-10-18「不塞报告」的决定相反）
+   *
+   * 私密定制食谱是**原地更新**（`Recipe.version` 永远是 1），营养师交付后
+   * 再改配方，历史版本在库里就不存在了 —— 报告页按 `recipeId` 现取，
+   * 顾客在交付页点「查看报告」看到的是**改过之后**的数字，
+   * 而同一页的配方、喂食量都还是交付那一版。两个口径打架。
+   *
+   * 唯一能冻结的就是这份快照。实测报告 JSON 只有十几 KB
+   * （营养素合并成 4 个分区、每行只留渲染字段），比当初担心的几十 KB 小得多。
+   *
+   * 老快照没有这个键 → 报告入口不显示（历史数据由一次性脚本回填）。
+   */
+  report?: SnapshotNutritionReport | null;
+  /** 报告头要显示的场景（如 `EARLY_GROWTH_REPRODUCTION`）；没有就不写 */
+  scenario?: string | null;
 }
 
 /** 宏量报告行（与 `nutritionDetailedData.report.macroRows` 同结构） */
@@ -131,6 +150,31 @@ export interface SnapshotMacroRow {
   dryMatterLabel: string;
   energyPercentLabel: string;
   weightPercentLabel: string;
+}
+
+/**
+ * 冻结下来的完整营养报告（2026-11-08）。
+ *
+ * 结构与 `nutritionDetailedData.report` 对齐，但**只保留报告页真正渲染的字段**
+ * （见 `delivery-nutrition.ts` 的 `readDeliveryNutritionReport`）：
+ * 行内的 `key` 用来做列表 key，其余键一律不存 —— 快照是对外契约，
+ * 多存的键将来没人敢删。
+ */
+export interface SnapshotNutritionReport {
+  ingredientRows: SnapshotNutritionReportRow[];
+  macroRows: SnapshotNutritionReportRow[];
+  energyDensityRows: SnapshotNutritionReportRow[];
+  nutrientSections: Record<string, SnapshotNutrientSection>;
+}
+
+export interface SnapshotNutritionReportRow {
+  [key: string]: string | undefined;
+}
+
+export interface SnapshotNutrientSection {
+  title: string;
+  dryMatterHeader: string;
+  rows: SnapshotNutritionReportRow[];
 }
 
 export interface SnapshotShoppingLine {
@@ -311,6 +355,9 @@ export function buildDeliverySnapshot(
        * 2026-11-07 补上。
        */
       reportRows: nutrition.reportRows ?? null,
+      // 2026-11-08：报告整份冻结（见 SnapshotNutrition.report 的说明）
+      report: nutrition.report ?? null,
+      scenario: nutrition.scenario ?? null,
     },
     shopping: {
       lines,

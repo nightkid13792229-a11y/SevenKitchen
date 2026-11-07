@@ -129,6 +129,29 @@ export interface CustomRecipeOrderDetail {
 }
 
 /** 交付内容快照（后端算好、结构固定，前端照着渲染） */
+/**
+ * 冻结的完整营养报告（2026-11-08）。
+ *
+ * 结构与 `nutritionDetailedData.report` 对齐，但只保留报告页真正渲染的字段
+ * （后端 `readDeliveryNutritionReport` 同一白名单）—— 快照是对外契约，
+ * 多存的键将来没人敢删。
+ */
+export interface DeliveryNutritionReport {
+  ingredientRows: Array<DeliveryReportRow>;
+  macroRows: Array<DeliveryReportRow>;
+  energyDensityRows: Array<DeliveryReportRow>;
+  nutrientSections: Record<string, DeliveryNutrientSection>;
+}
+
+/** 报告里的一行：字段随分区不同（原料名 / 数值标签 / 标准上下限…） */
+export type DeliveryReportRow = Record<string, string | undefined>;
+
+export interface DeliveryNutrientSection {
+  title: string;
+  dryMatterHeader: string;
+  rows: Array<DeliveryReportRow>;
+}
+
 export interface DeliveryContent {
   schemaVersion: number;
   recipe: {
@@ -181,6 +204,16 @@ export interface DeliveryContent {
       energyDensityKcalPerKg: number | null;
       calciumPhosphorusRatio: number | null;
     } | null;
+    /**
+     * 完整营养报告（2026-11-08）—— 交付那一刻整份冻结，报告页直接照着渲染。
+     *
+     * 为什么不按 `recipeId` 现取：私密定制食谱是原地更新、版本号恒为 1，
+     * 营养师交付后再改配方，现取到的就是改后的数字，跟这一页冻结的配方对不上。
+     * 老快照没有这个键 → 交付页不显示报告入口。
+     */
+    report?: DeliveryNutritionReport | null;
+    /** 报告头要显示的场景（如 `EARLY_GROWTH_REPRODUCTION`） */
+    scenario?: string | null;
   };
   shopping: {
     /**

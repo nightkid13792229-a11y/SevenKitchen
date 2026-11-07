@@ -1,4 +1,7 @@
-import type { SnapshotMacroRow } from './custom-recipe.delivery';
+import type {
+  SnapshotMacroRow,
+  SnapshotNutritionReport,
+} from './custom-recipe.delivery';
 
 /**
  * 交付快照 · 核心营养 8 项 / 宏量报告行的**唯一取数口径**。
@@ -142,4 +145,135 @@ export function readDeliveryMacroRows(
     .filter((row) => row.name.length > 0);
 
   return normalized.length > 0 ? normalized : null;
+}
+
+/**
+ * 完整营养报告 —— 交付那一刻 `nutritionDetailedData.report` 的冻结副本（2026-11-08）。
+ *
+ * ## 为什么这跟"快照不塞报告"的老口径不一样了
+ *
+ * 老口径（2026-10-18 注释里写的）：报告有几百项、几十 KB，按需去报告页查。
+ * 但那份"按需查"查的是 **Recipe 活行**，而私密定制食谱是**原地更新**的
+ * （`Recipe.version` 恒为 1）：营养师交付后再改配方，库里的历史版本就没了，
+ * 顾客在交付页点「查看报告」看到的是改后的数字，跟同一页冻结的配方对不上。
+ *
+ * 实测一份报告序列化后只有十几 KB（营养素已合并成 4 个分区、
+ * 每行只留渲染字段），所以这里整份冻结进快照，报告页从快照渲染。
+ *
+ * ## 只留渲染要的字段
+ *
+ * 快照是对外契约：多存的键将来没人敢删。行内 `key` 保留（列表 key 用），
+ * 其余未知键一律丢掉。
+ */
+const REPORT_SECTION_KEYS = [
+  'minerals',
+  'vitamins',
+  'aminoAcids',
+  'fattyAcids',
+] as const;
+
+const INGREDIENT_ROW_FIELDS = [
+  'ingredientName',
+  'amountLabel',
+  'concentrationLabel',
+  'weightPercentLabel',
+] as const;
+
+const MACRO_ROW_FIELDS = [
+  'key',
+  'name',
+  'dryMatterLabel',
+  'energyPercentLabel',
+  'weightPercentLabel',
+] as const;
+
+const ENERGY_ROW_FIELDS = ['label', 'value'] as const;
+
+const NUTRIENT_ROW_FIELDS = [
+  'key',
+  'name',
+  'unit',
+  'minLabel',
+  'maxLabel',
+  'currentLabel',
+  'dryMatterLabel',
+  'status',
+] as const;
+
+function pickStringFields(
+  row: Record<string, unknown>,
+  fields: readonly string[],
+): Record<string, string> {
+  const picked: Record<string, string> = {};
+  for (const field of fields) {
+    const value = row[field];
+    if (typeof value === 'string') {
+      picked[field] = value;
+    }
+  }
+  return picked;
+}
+
+function readReportRows(
+  value: unknown,
+  fields: readonly string[],
+): Array<Record<string, string>> {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((row): row is Record<string, unknown> => isRecord(row))
+    .map((row) => pickStringFields(row, fields))
+    .filter((row) => Object.keys(row).length > 0);
+}
+
+export function readDeliveryNutritionReport(
+  detailed: unknown,
+): SnapshotNutritionReport | null {
+  if (!isRecord(detailed)) return null;
+  const report = isRecord(detailed.report) ? detailed.report : null;
+  if (!report) return null;
+
+  const ingredientRows = readReportRows(
+    report.ingredientRows,
+    INGREDIENT_ROW_FIELDS,
+  );
+  const macroRows = readReportRows(report.macroRows, MACRO_ROW_FIELDS);
+  const energyDensityRows = readReportRows(
+    report.energyDensityRows,
+    ENERGY_ROW_FIELDS,
+  );
+
+  const rawSections = isRecord(report.nutrientSections)
+    ? report.nutrientSections
+    : {};
+  const nutrientSections: SnapshotNutritionReport['nutrientSections'] = {};
+  for (const key of REPORT_SECTION_KEYS) {
+    const section = rawSections[key];
+    if (!isRecord(section)) continue;
+    const rows = readReportRows(section.rows, NUTRIENT_ROW_FIELDS);
+    if (rows.length === 0) continue;
+    nutrientSections[key] = {
+      title: typeof section.title === 'string' ? section.title : '',
+      dryMatterHeader:
+        typeof section.dryMatterHeader === 'string'
+          ? section.dryMatterHeader
+          : '',
+      rows,
+    };
+  }
+
+  const hasAnything =
+    ingredientRows.length > 0 ||
+    macroRows.length > 0 ||
+    energyDensityRows.length > 0 ||
+    Object.keys(nutrientSections).length > 0;
+  if (!hasAnything) return null;
+
+  return { ingredientRows, macroRows, energyDensityRows, nutrientSections };
+}
+
+/** 报告头要显示的场景（如 `EARLY_GROWTH_REPRODUCTION`）；没有就不写 */
+export function readDeliveryScenario(detailed: unknown): string | null {
+  if (!isRecord(detailed)) return null;
+  const scenario = detailed.scenario;
+  return typeof scenario === 'string' && scenario.trim() ? scenario.trim() : null;
 }

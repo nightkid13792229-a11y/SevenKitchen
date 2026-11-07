@@ -104,6 +104,9 @@ describe('交付内容快照', () => {
           'macros',
           // 2026-11-07 补：宏量报告行（2026-10-28 加字段时组装这一层漏了）
           'reportRows',
+          // 2026-11-08 加：完整营养报告整份冻结 + 报告头要用的场景
+          'report',
+          'scenario',
         ].sort(),
       );
       expect(Object.keys(snapshot.shopping).sort()).toEqual(
@@ -158,6 +161,36 @@ describe('交付内容快照', () => {
     it('没有报告行时给 null（前端不用判 undefined）', () => {
       const snapshot = buildDeliverySnapshot(input());
       expect(snapshot.nutrition.reportRows).toBeNull();
+      expect(snapshot.nutrition.report).toBeNull();
+      expect(snapshot.nutrition.scenario).toBeNull();
+    });
+
+    it('★ 完整营养报告与场景整份冻结（报告页照着这份渲染，不再回查活行）', () => {
+      const report = {
+        ingredientRows: [{ ingredientName: '鸡胸肉', concentrationLabel: '-', weightPercentLabel: '32%' }],
+        macroRows: [{ key: 'crudeProtein', name: '蛋白质', dryMatterLabel: '38.23%' }],
+        energyDensityRows: [{ label: '每公斤配方', value: '3620 kcal/kg' }],
+        nutrientSections: {
+          minerals: {
+            title: '微量元素',
+            dryMatterHeader: '/100gDM',
+            rows: [{ name: '钙', unit: 'mg', currentLabel: '1100' }],
+          },
+        },
+      };
+      const snapshot = buildDeliverySnapshot(
+        input({
+          nutrition: {
+            standard: 'FEDIAF_2025',
+            energyDensityKcalPerKg: 3620,
+            report,
+            scenario: 'EARLY_GROWTH_REPRODUCTION',
+          },
+        }),
+      );
+
+      expect(snapshot.nutrition.report).toEqual(report);
+      expect(snapshot.nutrition.scenario).toBe('EARLY_GROWTH_REPRODUCTION');
     });
   });
 

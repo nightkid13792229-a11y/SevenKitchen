@@ -182,6 +182,69 @@ describe('CustomRecipeDeliveryService', () => {
       expect(snapshot.recipe.items).toHaveLength(2);
     });
 
+    it('★ 完整营养报告随交付整份冻结（2026-11-08：报告页不再回查活行）', async () => {
+      const { service, txProxy } = createService({
+        recipe: buildRecipe({
+          nutritionDetailedData: {
+            standard: 'FEDIAF_2025',
+            scenario: 'EARLY_GROWTH_REPRODUCTION',
+            summary: { protein_dm_pct: 38.23 },
+            report: {
+              ingredientRows: [
+                { ingredientName: '鸡胸肉', weightPercentLabel: '70%' },
+              ],
+              macroRows: [
+                { key: 'crudeProtein', name: '蛋白质', dryMatterLabel: '38.23%' },
+              ],
+              energyDensityRows: [{ label: '每公斤配方', value: '3620 kcal/kg' }],
+              nutrientSections: {
+                minerals: {
+                  title: '微量元素',
+                  dryMatterHeader: '/100gDM',
+                  rows: [{ name: '钙', currentLabel: '2192' }],
+                },
+              },
+            },
+          },
+        }),
+      });
+
+      await service.deliver({
+        orderIdOrId: 'CR202610160001',
+        recipeIdOrBizId: 'CR1759000000000',
+        deliveredBy: 'admin-1',
+      });
+
+      const snapshot = (txProxy.customRecipeDelivery.create as jest.Mock).mock
+        .calls[0][0].data.contentSnapshot;
+
+      expect(snapshot.nutrition.report.ingredientRows).toEqual([
+        { ingredientName: '鸡胸肉', weightPercentLabel: '70%' },
+      ]);
+      expect(snapshot.nutrition.report.nutrientSections.minerals.rows[0].name).toBe(
+        '钙',
+      );
+      expect(snapshot.nutrition.scenario).toBe('EARLY_GROWTH_REPRODUCTION');
+      // 8 项仍然同时冻结（报告与核心营养同一份来源）
+      expect(snapshot.nutrition.macros.proteinPercent).toBe(38.23);
+    });
+
+    it('食谱没有结构化报告时，快照里的 report 为 null（入口据此隐藏）', async () => {
+      const { service, txProxy } = createService({});
+
+      await service.deliver({
+        orderIdOrId: 'CR202610160001',
+        recipeIdOrBizId: 'CR1759000000000',
+        deliveredBy: 'admin-1',
+      });
+
+      const snapshot = (txProxy.customRecipeDelivery.create as jest.Mock).mock
+        .calls[0][0].data.contentSnapshot;
+
+      expect(snapshot.nutrition.report).toBeNull();
+      expect(snapshot.nutrition.scenario).toBeNull();
+    });
+
     it('交付成功后自动上报微信虚拟发货（定制食谱）', async () => {
       const uploadVirtualForCustomRecipeOrder = jest
         .fn()

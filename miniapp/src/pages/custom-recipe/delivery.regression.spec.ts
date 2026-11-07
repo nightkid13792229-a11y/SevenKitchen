@@ -108,15 +108,26 @@ describe('交付页 · 内容与交互（P1）', () => {
     expect(bottomBarIndex).toBeGreaterThan(reportEntryIndex);
   });
 
-  it('★ 营养报告页地址只带食谱编号（明细由报告页现取）', () => {
+  it('★ 报告入口只在交付快照里冻结了报告时才出现（不点进去看「暂无报告」）', () => {
+    // 2026-11-08：入口 gating 从「有食谱编号」改成「快照里有冻结报告」
+    expect(template).toContain('v-if="frozenNutritionReport"');
+    expect(source).toContain('content.value.nutrition.report');
+    // 老快照没有 report → 不渲染入口
+    expect(template).not.toContain('v-if="selectedRecipeId"');
+  });
+
+  it('★ 报告页地址带订单号，让报告页读冻结的交付版', () => {
     const openSource = source.match(
       /const openNutritionReport = \(\) => \{[\s\S]*?\n\};/,
     )?.[0] || '';
 
-    expect(openSource).toContain('/pages/recipe-nutrition-report/index?recipeId=');
+    expect(openSource).toContain('/pages/recipe-nutrition-report/index?');
     expect(openSource).toContain('encodeURIComponent(selectedRecipeId.value)');
-    // 缺编号时给提示，不跳空页
-    expect(openSource).toContain('这条交付缺少食谱编号');
+    // 订单号是"读交付快照"的钥匙：不带它，报告页会去取被改过的活行
+    expect(openSource).toContain('orderId=');
+    expect(openSource).toContain('encodeURIComponent(orderId.value)');
+    // 没报告 / 缺编号时给提示，不跳空页
+    expect(openSource).toContain('这份交付没有营养报告');
   });
 
   it('★ 营养报告卡与上面的「全营养标准」banner 左右对齐', () => {

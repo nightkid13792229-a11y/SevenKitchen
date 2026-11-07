@@ -126,11 +126,14 @@
       </view>
 
       <!--
-        营养报告入口（2026-11-07）：放在页面最下方 —— 核心营养成分之后。
-        样式与详情页共用同一个组件；报告明细不在交付快照里（几十 KB），
-        点进去由报告页按食谱编号现取，看到的就是当下这份完整评估。
+        营养报告入口（2026-11-07，2026-11-08 收口）：
+        放在页面最下方 —— 核心营养成分之后；样式与详情页共用同一个组件。
+
+        入口只在**交付时冻结了报告**的情况下出现：快照里没有报告就说明
+        这单交付本来就没有报告（老数据可跑回填脚本补），
+        不显示入口，避免点进去是「暂无报告」。
       -->
-      <view v-if="selectedRecipeId" class="report-entry-slot">
+      <view v-if="frozenNutritionReport" class="report-entry-slot">
         <NutritionReportEntry @open="openNutritionReport" />
       </view>
 
@@ -427,24 +430,35 @@ const goOrderFinished = () => {
 };
 
 /**
- * 营养报告：进独立报告页，按**食谱编号**现取完整评估。
+ * 交付时冻结的完整营养报告（2026-11-08）。
  *
- * 交付快照里没有报告明细（几百个营养项），所以这一页不预取、也不算，
- * 点进来由报告页读 `nutritionDetailedData.report`。
+ * 后端在交付那一刻把 `nutritionDetailedData.report` 整份写进快照，
+ * 报告页直接渲染这一份 —— 私密定制食谱是原地更新的，
+ * 「按食谱编号现取」会拿到营养师后来改过的数字。
  *
- * ⚠️ 已知口径（2026-11-08 审核记录）：报告读的是该食谱的**当前**数据 ——
- * 私密定制食谱是原地更新、版本号保持 1，无法按 `orderId` 取回交付那一版
- * （拿到的那份快照本来也不含报告明细）。所以营养师在交付之后、重新交付之前
- * 又改过配方时，这一页看到的配方是交付版，报告会是改后的数字。
- * 要彻底对上版本，只能让后端把报告（或报告版本号）写进交付快照。
+ * 老快照没有这个键 → 不显示入口（历史订单由一次性回填脚本补）。
+ */
+const frozenNutritionReport = computed(
+  () => content.value.nutrition.report ?? null,
+);
+
+/**
+ * 营养报告：进报告页，**带上订单号**，让报告页从交付快照里取冻结的那份。
+ *
+ * 交付快照里没有报告（老数据）时入口不会出现，这里再兜一层：
+ * 真点到了就回详情页那种按食谱编号现取的旧路径，不至于开空白页。
  */
 const openNutritionReport = () => {
-  if (!selectedRecipeId.value) {
-    uni.showToast({ title: '这条交付缺少食谱编号', icon: 'none' });
+  if (!frozenNutritionReport.value || !selectedRecipeId.value) {
+    uni.showToast({ title: '这份交付没有营养报告', icon: 'none' });
     return;
   }
+  const query = [`recipeId=${encodeURIComponent(selectedRecipeId.value)}`];
+  if (orderId.value) {
+    query.push(`orderId=${encodeURIComponent(orderId.value)}`);
+  }
   uni.navigateTo({
-    url: `/pages/recipe-nutrition-report/index?recipeId=${encodeURIComponent(selectedRecipeId.value)}`,
+    url: `/pages/recipe-nutrition-report/index?${query.join('&')}`,
   });
 };
 

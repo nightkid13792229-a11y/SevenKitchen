@@ -30,6 +30,8 @@ import {
 import {
   readDeliveryMacroRows,
   readDeliveryMacros,
+  readDeliveryNutritionReport,
+  readDeliveryScenario,
 } from '../../domain/custom-recipe/delivery-nutrition';
 import {
   buildShoppingList,
@@ -1585,6 +1587,16 @@ export class CustomRecipeDeliveryService {
         macros: readDeliveryMacros(input.recipe.nutritionDetailedData),
         // 2026-10-28：宏量报告行原样冻结，供「历史订单食谱」回看交付当时那张表
         reportRows: readDeliveryMacroRows(input.recipe.nutritionDetailedData),
+        /**
+         * 2026-11-08：完整营养报告整份冻结。
+         *
+         * 为什么不能"点报告页时再按 recipeId 现取"：私密定制食谱是原地更新
+         * （version 恒为 1），营养师交付后再改配方，活行已经不是交付那一版 ——
+         * 报告页会显示改后的数字，跟同一页冻结的配方、喂食量对不上。
+         * 报告实测只有十几 KB，冻结在快照里最稳。
+         */
+        report: readDeliveryNutritionReport(input.recipe.nutritionDetailedData),
+        scenario: readDeliveryScenario(input.recipe.nutritionDetailedData),
       },
       /**
        * 采购清单（批次 2.2）—— 这套算法原先在**小程序页面里**，

@@ -12,7 +12,7 @@
     <view v-else-if="loadFailed" class="state-panel">
       <text class="state-title">营养报告加载失败</text>
       <text class="state-copy">网络不稳或这条食谱暂时打不开，可以再试一次。</text>
-      <button class="state-btn" @tap="loadNutritionReport">重新加载</button>
+      <button class="state-btn" @tap="reload">重新加载</button>
     </view>
 
     <view v-else-if="!report" class="state-panel">
@@ -130,6 +130,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { request } from '../../utils/api'
+import { fetchDelivery } from '../../api/custom-recipe'
+import { resolveDeliverySelection } from '../../utils/custom-recipe-delivery'
 import { getScenarioLabel } from '../recipe-designer/assessment'
 
 interface NutritionReport {
@@ -149,6 +151,13 @@ interface NutritionSection {
 const loading = ref(false)
 const recipeId = ref('')
 const shareToken = ref('')
+/**
+ * 从「我的定制食谱」点进来时会带订单号（2026-11-08）。
+ *
+ * 带它就是**交付页入口**：报告要读交付快照里冻结的那一份（交付版），
+ * 不能按食谱编号去取活行 —— 私密定制食谱原地更新，活行可能已经被改过。
+ */
+const orderId = ref('')
 const recipe = ref<any>({})
 const report = ref<NutritionReport | null>(null)
 /** 接口失败 / 网络失败（与「没有报告」分开显示，2026-11-08） */
@@ -177,8 +186,18 @@ onMounted(() => {
   const currentPage = pages[pages.length - 1] as any
   recipeId.value = currentPage.options?.recipeId || ''
   shareToken.value = currentPage.options?.shareToken || ''
-  loadNutritionReport()
+  orderId.value = currentPage.options?.orderId || ''
+  reload()
 })
+
+/** 重试按钮与首次加载共用：带订单号走交付快照，否则走食谱活行 */
+function reload() {
+  if (orderId.value) {
+    void loadFromDeliverySnapshot()
+    return
+  }
+  loadNutritionReport()
+}
 
 function loadNutritionReport() {
   if (!recipeId.value) {
@@ -212,6 +231,45 @@ function loadNutritionReport() {
   }).finally(() => {
     loading.value = false
   })
+}
+
+/**
+ * 交付页入口：从**交付快照**里取冻结的报告（2026-11-08）。
+ *
+ * 快照里没有报告（这单交付本来就没生成报告）时退回按食谱编号现取的旧路径，
+ * 与点进来之前的行为一致，不会开一个空白页。
+ */
+async function loadFromDeliverySnapshot() {
+  loading.value = true
+  loadFailed.value = false
+
+  try {
+    const delivery = await fetchDelivery(orderId.value, undefined, recipeId.value)
+    const selected = resolveDeliverySelection(delivery as any, recipeId.value)
+    const snapshot = selected?.content
+    const frozen = snapshot?.nutrition?.report
+
+    if (frozen) {
+      recipe.value = {
+        name: snapshot?.recipe?.name || '',
+        nutritionStandard: snapshot?.nutrition?.standard || null,
+        nutritionDetailedData: {
+          standard: snapshot?.nutrition?.standard || null,
+          scenario: snapshot?.nutrition?.scenario || null,
+        },
+      }
+      report.value = frozen as unknown as NutritionReport
+      loading.value = false
+      return
+    }
+
+    // 老交付没有冻结报告：退回旧路径（历史数据由回填脚本补）
+    loadNutritionReport()
+  } catch (error) {
+    console.error('[RecipeNutritionReport] Failed to load delivery report:', error)
+    loadFailed.value = true
+    loading.value = false
+  }
 }
 
 function getNutritionStandardLabel(standard: string): string {

@@ -66,6 +66,7 @@ import {
 import { AllergenVocabularyService } from '../../application/health/allergen-vocabulary.service';
 import { pickCoverBadgeNames } from '../../domain/recipe-designer/cover-badge-policy';
 import { DiySheetService } from '../../application/recipe/diy-sheet.service';
+import { RecipeService } from '../../application/recipe/recipe.service';
 import { CustomRecipeDeliveryService } from '../../application/custom-recipe/custom-recipe-delivery.service';
 import { SupplementCandidateService } from '../../application/supplement-shop/supplement-candidate.service';
 import { computeSheetTotalWeightG } from '../../application/supplement-shop/supplement-sheet-weight.util';
@@ -128,6 +129,7 @@ export class RecipesController {
     private readonly deliveryService: CustomRecipeDeliveryService,
     private readonly supplementCandidateService: SupplementCandidateService,
     private readonly recipeCoverImageService: RecipeCoverImageService,
+    private readonly recipeService: RecipeService,
   ) {}
 
   private buildPublicRecipeWhere(
@@ -797,13 +799,25 @@ export class RecipesController {
         updatedAt: true,
         applicableLifeStages: true,
         targetHealthTags: true,
+        isCustomRecipe: true,
+        customOrderId: true,
+        customerOwnerId: true,
+        sourceDesignRecipeId: true,
       },
     });
 
     // 双保险：即使旧查询条件漏了，草稿也不进入食谱管理页。
-    const visibleRecipes = recipes.filter(
+    const nonDraftRecipes = recipes.filter(
       (recipe) => recipe.status !== RecipeStatus.DRAFT,
     );
+
+    /**
+     * 顾客自己用食谱设计器做的食谱不进入员工食谱管理页。
+     * 与后台「用户的食谱」分类共用同一套判断（看设计稿是谁建的），
+     * 不是看有没有绑定顾客 —— 我们给顾客做的私密定制也绑定顾客。
+     */
+    const visibleRecipes =
+      await this.recipeService.filterOutUserRecipes(nonDraftRecipes);
 
     /**
      * 只展示最新版本：

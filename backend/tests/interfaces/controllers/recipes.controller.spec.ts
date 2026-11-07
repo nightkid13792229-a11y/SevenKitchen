@@ -42,6 +42,7 @@ import { JwtAuthService } from 'src/auth/jwt.service';
 import { OrderService } from 'src/application/order/order.service';
 import { WeightGoalPlanService } from 'src/application/weight-goal-plan/weight-goal-plan.service';
 import { AllergenVocabularyService } from 'src/application/health/allergen-vocabulary.service';
+import { RecipeService } from 'src/application/recipe/recipe.service';
 
 describe('RecipesController (e2e)', () => {
   let app: INestApplication;
@@ -119,6 +120,12 @@ describe('RecipesController (e2e)', () => {
       findMany: jest.fn().mockResolvedValue([]),
       findFirst: jest.fn(),
     },
+    designRecipe: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    user: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   };
   const mockJwtAuthService = {
     validateToken: jest.fn(),
@@ -138,6 +145,7 @@ describe('RecipesController (e2e)', () => {
       controllers: [RecipesController],
       providers: [
         DiySheetService,
+        RecipeService,
         {
           /**
            * 2026-10-24：交付版本锁。
@@ -277,6 +285,8 @@ describe('RecipesController (e2e)', () => {
     mockDogBreedRepository.findById.mockResolvedValue(mockBreed);
     mockDogBreedRepository.findAll.mockResolvedValue([mockBreed]);
     mockPrismaService.recipe.findMany.mockResolvedValue([]);
+    mockPrismaService.designRecipe.findMany.mockResolvedValue([]);
+    mockPrismaService.user.findMany.mockResolvedValue([]);
     mockPrismaService.preparationMethod.findMany.mockResolvedValue([]);
     mockPrismaService.dog.findFirst.mockResolvedValue(null);
     mockPrismaService.dogBreed.findUnique.mockResolvedValue(null);
@@ -480,6 +490,68 @@ describe('RecipesController (e2e)', () => {
         .expect(200);
 
       expect(response.body.data).toEqual([]);
+    });
+
+    it('hides recipes designed by customers themselves', async () => {
+      mockJwtAuthService.validateToken.mockReturnValueOnce({
+        userId: 'staff-1',
+        customerId: 'staff-1',
+        role: 'STAFF',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        {
+          id: 'row-business-custom',
+          recipeId: 'business-custom',
+          seriesId: 'series-business',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          name: '我们给顾客做的私密定制',
+          status: 'PRIVATE_CUSTOM',
+          coverImageUrl: null,
+          version: 1,
+          createdAt: new Date('2026-06-01T08:00:00.000Z'),
+          updatedAt: new Date('2026-06-02T08:00:00.000Z'),
+          applicableLifeStages: [],
+          targetHealthTags: [],
+          isCustomRecipe: true,
+          customOrderId: null,
+          customerOwnerId: 'customer-1',
+          sourceDesignRecipeId: 'design-staff',
+        },
+        {
+          id: 'row-user-custom',
+          recipeId: 'user-custom',
+          seriesId: 'series-user',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          name: '秋菊的鲜食食谱',
+          status: 'PRIVATE_CUSTOM',
+          coverImageUrl: null,
+          version: 1,
+          createdAt: new Date('2026-06-03T08:00:00.000Z'),
+          updatedAt: new Date('2026-06-04T08:00:00.000Z'),
+          applicableLifeStages: [],
+          targetHealthTags: [],
+          isCustomRecipe: true,
+          customOrderId: null,
+          customerOwnerId: 'customer-1',
+          sourceDesignRecipeId: 'design-customer',
+        },
+      ]);
+      mockPrismaService.designRecipe.findMany.mockResolvedValue([
+        { id: 'design-staff', createdBy: 'staff-1' },
+        { id: 'design-customer', createdBy: 'customer-1' },
+      ]);
+      mockPrismaService.user.findMany.mockResolvedValue([
+        { id: 'customer-1' },
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/staff/all?status=PRIVATE_CUSTOM')
+        .set('Authorization', 'Bearer staff-token')
+        .expect(200);
+
+      expect(
+        response.body.data.map((recipe: { id: string }) => recipe.id),
+      ).toEqual(['business-custom']);
     });
   });
 

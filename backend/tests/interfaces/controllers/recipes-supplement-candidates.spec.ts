@@ -25,6 +25,7 @@ describe('RecipesController.getSupplementCandidates', () => {
       {} as any,
       candidateService as any,
       {} as any,
+      {} as any,
     );
     jest
       .spyOn(controller as any, 'getAccessibleRecipe')

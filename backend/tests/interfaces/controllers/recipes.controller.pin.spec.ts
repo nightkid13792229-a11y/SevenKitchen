@@ -33,6 +33,7 @@ describe('RecipesController.getAccessibleRecipe · delivered version pin', () =>
       deliveryService as any,
       {} as any,
       {} as any,
+      {} as any,
     );
     const req = {
       user: { userId: 'user-1', customerId: 'user-1', role: 'CUSTOMER' },

@@ -630,6 +630,14 @@ export class RecipeService {
     };
   }
 
+  /**
+   * 员工端食谱管理列表与后台共用同一套分类：
+   * 默认不展示顾客自己用食谱设计器做的食谱。
+   */
+  async filterOutUserRecipes(recipes: any[]): Promise<any[]> {
+    return this.applyAdminRecipeManagementCategoryFilter(recipes);
+  }
+
   private async applyAdminRecipeManagementCategoryFilter(
     recipes: any[],
     requestedCategory?: AdminRecipeManagementCategory,

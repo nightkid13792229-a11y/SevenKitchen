@@ -319,7 +319,9 @@ export class TastingPackPricingService {
         });
       amountShipping = shippingResult.amountShipping;
     } catch (error) {
-      // 与鲜食口径一致：运费算不出来时不阻塞报价，运费记 0 并在日志里留痕
+      // ⚠️ 与鲜食不同：尝鲜装报价不阻塞，运费记 0 并留痕。
+      // 2026-11-07 起鲜食下单已改为"运费算不出来就报错"，这里仍是静默免运费；
+      // 模板配置错时会少收运费，待产品确认是否一并改成报错（故意先保持原行为）。
       console.error('[TastingPackPricing] 运费计算失败:', error);
     }
 

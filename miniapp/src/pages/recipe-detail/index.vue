@@ -348,7 +348,7 @@
             约¥{{ formatReferencePrice(displayReferencePrice.amount) }}/100g
           </text>
           <text class="reference-price-note">
-            {{ displayReferencePrice.isMin ? '已含冷链配送 · 最终价格以下单页为准' : '按狗狗体重精确计算最终价格 · 已含冷链配送' }}
+            {{ displayReferencePrice.isMin ? '已含冷链配送 · 最终价格以下单页为准' : '按狗狗体重精确计算 · 已含冷链配送 · 最终价格以下单页为准' }}
           </text>
         </view>
       </view>
@@ -745,7 +745,7 @@ const activeLifeStageVersionRecipeId = computed(() => {
   return version?.recipeId || ''
 })
 
-// 展示参考价：有生效版本价则展示该价；否则展示全阶段最低价（加"起"）
+// 展示参考价：有生效版本价则展示该价；否则展示全阶段最低价（文案统一用「约」）
 const displayReferencePrice = computed(() => {
   const data = referencePriceData.value
   if (!data) return null

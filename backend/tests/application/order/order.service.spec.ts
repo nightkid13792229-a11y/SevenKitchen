@@ -4,6 +4,7 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
+import { InternalServerErrorException } from '@nestjs/common';
 import { OrderService, ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from 'src/order.service';
 import type { OrderRepository } from 'src/domain/order/order.repository';
 import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
@@ -800,6 +801,94 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
           }),
         }),
       );
+    });
+
+    it('refuses to price a fresh-food order when shipping cannot be resolved', async () => {
+      const dog = createMockDog();
+      const recipe = createMockRecipe();
+      const ingredient = createFullFoodIngredient();
+
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([ingredient]);
+      mockPrismaService.preparationMethod.findMany.mockResolvedValue([]);
+      mockPricingService.calculateOrderPrice.mockReturnValue({
+        costIngredients: 50,
+        costPackaging: 10,
+        costLabor: 20,
+        costOverhead: 5,
+        totalProductCost: 85,
+        productPrice: 141.67,
+        weightPackagingG: 0,
+      });
+      mockShippingService.calculateShippingFeePreview.mockRejectedValue(
+        new InternalServerErrorException('运费模板配置异常'),
+      );
+
+      // 运费解析失败必须让报价失败：绝不能把运费当成 0 写进快照。
+      mockPricingSnapshotRepository.create.mockResolvedValue({
+        id: 'snapshot-1',
+      });
+
+      await expect(
+        service.previewPricing({
+          customerId: 'customer-id-1',
+          dogId: 'dog-id-1',
+          type: OrderType.FRESH_FOOD,
+          items: [
+            {
+              recipeId: 'recipe-id-1',
+              quantityG: 1000,
+              packageSpecG: 200,
+              packageCount: 5,
+            },
+          ],
+        }),
+      ).rejects.toBeInstanceOf(InternalServerErrorException);
+
+      expect(mockPricingSnapshotRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('keeps DIY sheet previews working when shipping cannot be resolved', async () => {
+      const dog = createMockDog();
+      const recipe = createMockRecipe();
+      const ingredient = createFullFoodIngredient();
+
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([ingredient]);
+      mockPrismaService.preparationMethod.findMany.mockResolvedValue([]);
+      mockPricingService.calculateOrderPrice.mockReturnValue({
+        costIngredients: 50,
+        costPackaging: 10,
+        costLabor: 20,
+        costOverhead: 5,
+        totalProductCost: 85,
+        productPrice: 141.67,
+        weightPackagingG: 0,
+      });
+      mockShippingService.calculateShippingFeePreview.mockRejectedValue(
+        new InternalServerErrorException('运费模板配置异常'),
+      );
+
+      // 制作单不涉及收款：运费解析失败不能拦住生产单
+      const result = await service.previewPricing({
+        customerId: 'customer-id-1',
+        dogId: 'dog-id-1',
+        type: OrderType.FRESH_FOOD,
+        pricingPurpose: 'DIY_SHEET',
+        items: [
+          {
+            recipeId: 'recipe-id-1',
+            quantityG: 1000,
+            packageSpecG: 200,
+            packageCount: 5,
+          },
+        ],
+      } as any);
+
+      expect(result.amountShipping).toBe(0);
+      expect(mockPricingSnapshotRepository.create).not.toHaveBeenCalled();
     });
 
     it('does not require procurement source SKUs or create an order snapshot for DIY sheet previews', async () => {

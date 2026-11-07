@@ -1934,25 +1934,21 @@ export class OrderService {
         singlePackSpecG: packageInput.packageSpecG, // Use frontend-provided package spec
       });
 
-      // Calculate shipping fee if address is provided
+      // 运费：地址查不到时保持 0（沿用原行为），但**模板解析失败必须报错**，
+      // 不能静默按 0 运费建单 —— 那就是给顾客免运费。
       if (dto.addressId) {
-        try {
-          const address = await this.addressRepository.findById(dto.addressId);
-          if (address) {
-            const totalWeightG =
-              packageInput.quantityG + (pricing.weightPackagingG || 0);
-            const shippingResult =
-              await this.shippingService.calculateShippingFeePreview({
-                region: address.region,
-                totalWeightG,
-                shippingTemplateId: null, // Use default active template
-              });
-            shippingFee = shippingResult.amountShipping;
-            shippingTemplateId = shippingResult.templateId;
-          }
-        } catch (error) {
-          // Address not found or shipping calculation failed - shipping fee remains 0
-          console.warn('Shipping fee calculation failed:', error);
+        const address = await this.addressRepository.findById(dto.addressId);
+        if (address) {
+          const totalWeightG =
+            packageInput.quantityG + (pricing.weightPackagingG || 0);
+          const shippingResult =
+            await this.shippingService.calculateShippingFeePreview({
+              region: address.region,
+              totalWeightG,
+              shippingTemplateId: null, // 后台配置的默认运费模板
+            });
+          shippingFee = shippingResult.amountShipping;
+          shippingTemplateId = shippingResult.templateId;
         }
       }
 
@@ -2398,22 +2394,32 @@ export class OrderService {
       singlePackSpecG: packageInput.packageSpecG, // Use frontend-provided package spec
     });
 
-    // Calculate shipping fee using default shipping template
-    let shippingFee = 0;
-    try {
-      // Calculate total shipping weight (food + packaging materials)
-      const totalWeightG =
-        packageInput.quantityG + (pricing.weightPackagingG || 0);
-
+    const totalWeightG =
+      packageInput.quantityG + (pricing.weightPackagingG || 0);
+    const calculateShippingFee = async (): Promise<number> => {
       const shippingResult =
         await this.shippingService.calculateShippingFeePreview({
           totalWeightG,
-          shippingTemplateId: null, // Use default active template
+          shippingTemplateId: null, // 后台配置的默认运费模板
         });
-      shippingFee = shippingResult.amountShipping;
-    } catch (error) {
-      // Shipping calculation failed - shipping fee remains 0
-      console.error('[PreviewPricing] Shipping calculation failed:', error);
+      return shippingResult.amountShipping;
+    };
+
+    // 运费必须算得出来：解析不到模板时**报错**，绝不能把运费当成 0 写进快照。
+    // （2026-11-07：模板解析改为读后台默认模板后，"配置错"会走到这里，
+    //   静默记 0 等于给顾客免运费，而且结算页只显示一个总额、看不出来。）
+    // 例外：制作单（DIY_SHEET）不涉及收款，运费算不出来就记 0，
+    // 不能让一张生产单因为运费配置而打不开。
+    let shippingFee: number;
+    if (isDiySheetPreview) {
+      try {
+        shippingFee = await calculateShippingFee();
+      } catch (error) {
+        console.warn('[DiySheet] Shipping unavailable, fall back to 0:', error);
+        shippingFee = 0;
+      }
+    } else {
+      shippingFee = await calculateShippingFee();
     }
 
     // Debug logging for pricing comparison

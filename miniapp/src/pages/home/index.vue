@@ -1492,7 +1492,7 @@ function viewRecipe(recipeId: string, dogId?: string | null) {
 }
 
 // 获取生命阶段标签
-// 拉取食谱参考价（每100g起、已含运费）。接口未就绪或失败时静默降级：不展示价格。
+// 拉取食谱参考价（每100g、已含运费）。接口未就绪或失败时静默降级：不展示价格。
 const tastingPackEntry = ref({
   visible: false,
   name: '多种口味试吃装',

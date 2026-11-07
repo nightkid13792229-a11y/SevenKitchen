@@ -110,9 +110,6 @@
                 <div class="row-actions">
                   <el-button size="small" @click="openLedgerForIngredient(row)">流水</el-button>
                   <el-button size="small" @click="openAdjustmentDialog(row)">调库存</el-button>
-                  <el-button type="primary" size="small" @click="editPrice(row)">
-                    改成本
-                  </el-button>
                 </div>
               </template>
             </el-table-column>
@@ -264,28 +261,7 @@
       </el-tabs>
     </el-card>
 
-    <el-dialog v-model="priceDialogVisible" title="修改成本" width="420px">
-      <el-form :model="priceForm" label-width="110px">
-        <el-form-item label="原料名称">
-          <el-input v-model="priceForm.name" disabled />
-        </el-form-item>
-        <el-form-item :label="`每 ${priceForm.unitLabel} 成本`">
-          <el-input-number
-            v-model="priceForm.price"
-            :min="0"
-            :precision="priceForm.precision"
-            :step="priceForm.precision === 6 ? 0.000001 : 0.1"
-          />
-          <div class="hint-text" style="margin-top: 4px">
-            {{ costPreviewText }}
-          </div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="priceDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="savePrice">确定</el-button>
-      </template>
-    </el-dialog>
+
 
     <el-dialog v-model="adjustmentDialogVisible" title="手工库存调整" width="520px">
       <el-form :model="adjustmentForm" label-width="110px">
@@ -431,7 +407,6 @@ const loadingStocktakes = ref(false)
 const inventory = ref<InventoryOverviewItem[]>([])
 const ledgerEntries = ref<InventoryLedgerItem[]>([])
 const stocktakes = ref<InventoryStocktakeItem[]>([])
-const priceDialogVisible = ref(false)
 const adjustmentDialogVisible = ref(false)
 const stocktakeDialogVisible = ref(false)
 const onlyWarnings = ref(false)
@@ -439,17 +414,6 @@ const typeFilter = ref('')
 const submittingAdjustment = ref(false)
 const submittingStocktake = ref(false)
 
-const priceForm = reactive({
-  id: '',
-  name: '',
-  price: 0,
-  // 采购单位是 1g / 1ml / 1个 时单价就是「元/克」，2 位小数会截断成 0.01/0.02
-  precision: 2,
-  /** 展示用的单位（食材是 g/ml，补剂/包材是采购单位） */
-  unitLabel: 'g',
-  /** 默认采购商品的换算，用来把「元/克」折回「一件多少钱」给人看 */
-  defaultRatio: null as number | null
-})
 
 const ledgerFilter = reactive({
   ingredientId: ''
@@ -674,37 +638,6 @@ const formatCostUnit = (row: any): string => {
     return row?.baseUnit === 'ML' ? 'ml' : 'g'
   }
   return row?.purchaseUnit || row?.stockUnitLabel || ''
-}
-
-const costPreviewText = computed(() => {
-  const price = Number(priceForm.price ?? 0)
-  const ratio = Number(priceForm.defaultRatio ?? 0)
-  if (!(price > 0) || !(ratio > 0)) return ''
-  return `折合约 ¥${(price * ratio).toFixed(2)} / 1 件（按默认商品 ${ratio}${priceForm.unitLabel}）`
-})
-
-const editPrice = (item: InventoryOverviewItem) => {
-  priceForm.id = item.id
-  priceForm.name = item.name
-  priceForm.price = item.currentPricePerPurchaseUnit
-  priceForm.unitLabel = formatCostUnit(item)
-  // 食材成本是「元/g」，量级很小，必须放到 6 位小数
-  priceForm.precision = isFoodRow(item) ? 6 : ((item.purchaseToBaseRatio ?? 1) === 1 ? 6 : 2)
-  // 库存列表不返回商品明细，只按原料档案的换算折（食材恒为 1，预览就不显示）
-  priceForm.defaultRatio =
-    isFoodRow(item) ? null : (item.purchaseToBaseRatio ?? null)
-  priceDialogVisible.value = true
-}
-
-const savePrice = async () => {
-  try {
-    await inventoryApi.updatePrice(priceForm.id, priceForm.price)
-    ElMessage.success('价格修改成功')
-    priceDialogVisible.value = false
-    await loadInventory()
-  } catch (error) {
-    ElMessage.error('价格修改失败')
-  }
 }
 
 const resetAdjustmentForm = () => {

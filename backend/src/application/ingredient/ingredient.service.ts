@@ -361,6 +361,15 @@ export class IngredientService {
       throw new NotFoundException(`Ingredient not found: ${id}`);
     }
 
+    // 2026-11-07 硬门禁：食材成本只有两个来源 —— 建档时用第一条采购商品初始化、
+    // 之后由采购报销按实付覆盖。手工改价是第三个来源，会让「来源唯一」不成立。
+    if (existing.type === IngredientType.FOOD) {
+      throw new BadRequestException(
+        `「${existing.name}」是食材，成本只能由「建档时的采购商品」或「采购报销」写入，` +
+          '不能手工改。要调价请走采购商品 / 报销',
+      );
+    }
+
     this.assertPriceNotWipedToZero({
       ingredientName: existing.name,
       previousPrice: existing.currentPricePerPurchaseUnit,

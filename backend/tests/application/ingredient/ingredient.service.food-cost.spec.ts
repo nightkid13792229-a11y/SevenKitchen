@@ -70,9 +70,9 @@ describe('IngredientService · 食材成本', () => {
     service = module.get(IngredientService);
   });
 
-  it('手工改价写一条 MANUAL 流水，带操作人', async () => {
-    findById.mockResolvedValue(buildIngredient());
-    updatePrice.mockResolvedValue(buildIngredient());
+  it('补剂手工改价仍写一条 MANUAL 流水（食材已禁止手工改价）', async () => {
+    findById.mockResolvedValue(buildIngredient(IngredientType.SUPPLEMENT));
+    updatePrice.mockResolvedValue(buildIngredient(IngredientType.SUPPLEMENT));
 
     await service.updateIngredientPrice(
       'i1',
@@ -120,6 +120,20 @@ describe('IngredientService · 食材成本', () => {
         purchaseToBaseRatio: 500,
       } as any),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('食材不允许手工改价：成本只能来自建档初始化或报销覆盖', async () => {
+    findById.mockResolvedValue(buildIngredient());
+
+    await expect(
+      service.updateIngredientPrice(
+        'i1',
+        { currentPricePerPurchaseUnit: 0.08 } as any,
+        'u1',
+      ),
+    ).rejects.toThrow(/只能由/);
+
+    expect(record).not.toHaveBeenCalled();
   });
 
   it('补剂改成别的换算不受这条约束（它们的采购口径本来就挂在原料上）', () => {

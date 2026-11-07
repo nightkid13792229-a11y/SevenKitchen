@@ -13,8 +13,8 @@ describe('库存页 · 成本单位', () => {
     expect(inventorySource).toMatch(/isFoodRow[\s\S]{0,160}baseUnit/)
   })
 
-  it('按钮和弹窗都改叫「成本」，并带换算预览', () => {
-    expect(inventorySource).toContain('改成本')
-    expect(inventorySource).toContain('costPreviewText')
+  it('不再提供手工改成本的入口（成本只能来自采购商品与报销）', () => {
+    expect(inventorySource).not.toContain('改成本')
+    expect(inventorySource).not.toContain('costPreviewText')
   })
 })

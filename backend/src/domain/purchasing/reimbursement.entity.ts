@@ -274,6 +274,29 @@ export class Reimbursement {
   }
 
   /**
+   * 撤销审核（2026-11-07）
+   * 状态转换: REIMBURSED → PENDING_REVIEW
+   *
+   * 注意：这里**故意不走** REIMBURSEMENT_STATUS_TRANSITIONS，
+   * 因为 resubmit() 也读那张表；把 REIMBURSED → PENDING_REVIEW 写进去，
+   * 会让「已报销」的单子能被员工重新提交，那是错误的口子。
+   *
+   * reviewedById / reviewedAt 保留不擦，用于页面显示「上次审核是谁、什么时候」；
+   * reviewComment 用来记撤销原因。
+   */
+  revertReview(reason?: string): void {
+    if (this.status !== ReimbursementStatus.REIMBURSED) {
+      throw new InvalidStateTransitionError(
+        `Only REIMBURSED reimbursements can be reverted, current: ${this.status}`,
+      );
+    }
+
+    this.status = ReimbursementStatus.PENDING_REVIEW;
+    this.reviewComment = reason?.trim() || '审核已撤销';
+    this.updatedAt = new Date();
+  }
+
+  /**
    * 检查是否已批准
    */
   isApproved(): boolean {

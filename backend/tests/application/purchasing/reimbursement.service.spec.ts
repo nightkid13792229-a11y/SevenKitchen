@@ -58,6 +58,7 @@ describe('ReimbursementService', () => {
     autoApproveEligibleChangesForReimbursement: jest.fn(),
     applyApprovedChangesForReimbursement: jest.fn(),
     rejectChangesForReimbursement: jest.fn(),
+    revertApprovedChangesForReimbursement: jest.fn(),
   } as any;
 
   beforeEach(async () => {
@@ -271,6 +272,41 @@ describe('ReimbursementService', () => {
     );
   });
 
+  it('only attaches the payment proof when autoComplete is false (2026-11-07 split)', async () => {
+    mockReimbursementRepository.findById.mockResolvedValue(
+      createPendingReviewReimbursement(),
+    );
+
+    const result = await service.uploadPaymentProofFiles(
+      'reimbursement-1',
+      [
+        {
+          fieldname: 'file',
+          originalname: 'payment-proof-1.jpg',
+          encoding: '7bit',
+          mimetype: 'image/jpeg',
+          size: 1,
+          stream: undefined as any,
+          destination: '',
+          filename: 'payment-proof-1.jpg',
+          path: '/tmp/payment-proof-1.jpg',
+          buffer: Buffer.from('proof'),
+        } as Express.Multer.File,
+      ],
+      'admin-1',
+      { autoComplete: false },
+    );
+
+    expect(result.status).toBe(ReimbursementStatus.PENDING_REVIEW);
+    expect(result.paymentProofUrls).toEqual([
+      'https://example.com/payment-proof-1.jpg',
+    ]);
+    expect(result.reviewedAt).toBeUndefined();
+    expect(
+      mockIngredientPricingService.applyApprovedChangesForReimbursement,
+    ).not.toHaveBeenCalled();
+  });
+
   it('does not unlock production from reimbursement approval', async () => {
     const reimbursement = new Reimbursement({
       id: 'reimbursement-1',
@@ -279,6 +315,7 @@ describe('ReimbursementService', () => {
       totalActualCost: 180,
       totalEstimatedCost: 180,
       receiptUrls: ['https://example.com/receipt-1.jpg'],
+      paymentProofUrls: ['https://example.com/proof-1.jpg'],
       submittedById: 'user-1',
       submittedAt: new Date('2026-04-14T00:00:00.000Z'),
       purchaseLists: [
@@ -319,6 +356,62 @@ describe('ReimbursementService', () => {
     expect(mockOrderRepository.findById).not.toHaveBeenCalled();
     expect(mockOrderRepository.save).not.toHaveBeenCalled();
     expect(mockStatusHistoryRepository.append).not.toHaveBeenCalled();
+  });
+
+  it('refuses to approve without a payment proof (2026-11-07 split)', async () => {
+    mockReimbursementRepository.findById.mockResolvedValue(
+      createPendingReviewReimbursement(),
+    );
+
+    await expect(
+      service.reviewReimbursement('reimbursement-1', 'admin-1', {
+        decision: 'APPROVE',
+        comment: '通过',
+      }),
+    ).rejects.toThrow('请先上传付款凭证，再审核通过');
+
+    expect(
+      mockIngredientPricingService.applyApprovedChangesForReimbursement,
+    ).not.toHaveBeenCalled();
+    expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('reverts an approved reimbursement back to pending within 24h', async () => {
+    const reimbursement = createPendingReviewReimbursement();
+    reimbursement.review('admin-1', 'APPROVE', '同意');
+    reimbursement.paymentProofUrls.push('https://example.com/proof-1.jpg');
+    mockReimbursementRepository.findById.mockResolvedValue(reimbursement);
+
+    const result = await service.revertReimbursement(
+      'reimbursement-1',
+      'admin-1',
+      '金额录错了',
+    );
+
+    expect(
+      mockIngredientPricingService.revertApprovedChangesForReimbursement,
+    ).toHaveBeenCalledWith('reimbursement-1', 'admin-1');
+    expect(result.status).toBe(ReimbursementStatus.PENDING_REVIEW);
+    expect(result.reviewComment).toBe('审核已撤销：金额录错了');
+    // 保留上次审核人和时间，页面要显示「上次审核」
+    expect(result.reviewedById).toBe('admin-1');
+    expect(result.reviewedAt).toBeInstanceOf(Date);
+  });
+
+  it('refuses to revert after the 24h window', async () => {
+    const reimbursement = createPendingReviewReimbursement();
+    reimbursement.review('admin-1', 'APPROVE', '同意');
+    reimbursement.reviewedAt = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    mockReimbursementRepository.findById.mockResolvedValue(reimbursement);
+
+    await expect(
+      service.revertReimbursement('reimbursement-1', 'admin-1'),
+    ).rejects.toThrow('已超过 24 小时撤销窗口');
+
+    expect(
+      mockIngredientPricingService.revertApprovedChangesForReimbursement,
+    ).not.toHaveBeenCalled();
+    expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
   });
 
   it('updates editable reimbursement details on resubmit', async () => {

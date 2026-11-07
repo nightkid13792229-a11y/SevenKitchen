@@ -988,6 +988,7 @@ export class AdminPurchasingController {
     @Param('id') id: string,
     @UploadedFiles() files: Express.Multer.File[],
     @UserId() userId: string,
+    @Body() body?: { autoComplete?: string | boolean },
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(
       `Uploading payment proof for reimbursement: ${id}, files count: ${files?.length || 0}`,
@@ -1017,10 +1018,61 @@ export class AdminPurchasingController {
       }
     }
 
-    const reimbursement =
-      await this.reimbursementService.uploadPaymentProofFiles(id, files, userId);
+    // 手机端传 autoComplete=false：只挂凭证，不完成报销（2026-11-07）
+    // 不传 = 旧行为（上传即完成），电脑端尚未改造，保持兼容
+    const autoComplete =
+      body?.autoComplete === undefined
+        ? true
+        : !(
+            body.autoComplete === false ||
+            `${body.autoComplete}`.toLowerCase() === 'false' ||
+            `${body.autoComplete}` === '0'
+          );
 
-    return ApiResponseDto.success(reimbursement, '报销凭证上传成功');
+    const reimbursement =
+      await this.reimbursementService.uploadPaymentProofFiles(
+        id,
+        files,
+        userId,
+        { autoComplete },
+      );
+
+    return ApiResponseDto.success(
+      reimbursement,
+      autoComplete ? '报销凭证上传成功' : '付款凭证已上传，待确认审核通过',
+    );
+  }
+
+  @Post('reimbursements/:id/revert')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: '撤销报销审核（24 小时内）' })
+  @ApiParam({ name: 'id', description: '报销单ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        comment: {
+          type: 'string',
+          description: '撤销说明（可选）',
+        },
+      },
+    },
+  })
+  async revertReimbursement(
+    @Param('id') id: string,
+    @UserId() userId: string,
+    @Body() body?: { comment?: string },
+  ): Promise<ApiResponseDto<any>> {
+    this.logger.log(`Admin ${userId} reverting reimbursement ${id}`);
+
+    const reimbursement =
+      await this.reimbursementService.revertReimbursement(
+        id,
+        userId,
+        body?.comment,
+      );
+
+    return ApiResponseDto.success(reimbursement, '已撤销审核，单据回到待审核');
   }
 
   @Delete('reimbursements/:id/payment-proof')

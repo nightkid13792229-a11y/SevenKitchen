@@ -799,6 +799,34 @@ export function resubmitReimbursement(
 }
 
 /**
+ * 审核报销单（管理员）
+ * APPROVE = 通过（会同时生效价格变更）；REQUIRES_RESUBMIT = 驳回、要求员工修改后重提
+ */
+export function reviewReimbursement(
+  id: string,
+  decision: 'APPROVE' | 'REJECT' | 'REQUIRES_RESUBMIT',
+  comment?: string,
+) {
+  return request({
+    url: `/admin/purchasing/reimbursements/${id}/review`,
+    method: 'POST',
+    data: { decision, comment },
+  });
+}
+
+/**
+ * 撤销审核（管理员）：已报销 → 待审核，价格变更回到待确认
+ * 只允许审核后 24 小时内
+ */
+export function revertReimbursementReview(id: string, comment?: string) {
+  return request({
+    url: `/admin/purchasing/reimbursements/${id}/revert`,
+    method: 'POST',
+    data: { comment },
+  });
+}
+
+/**
  * 删除报销单
  */
 export function deleteReimbursement(id: string) {
@@ -912,8 +940,11 @@ export function clearPaymentProof(reimbursementId: string) {
 }
 
 /**
- * 上传报销凭证文件（管理员专用）
+ * 上传付款凭证（管理员专用）
  * 由于微信小程序限制，需要逐个上传文件
+ *
+ * 2026-11-07：手机端只挂凭证、不完成报销（autoComplete=false）。
+ * 真正「审核通过」由 reviewReimbursement 单独触发。
  */
 export function uploadPaymentProofFiles(reimbursementId: string, files: string[]) {
   const token = uni.getStorageSync('token');
@@ -929,6 +960,9 @@ export function uploadPaymentProofFiles(reimbursementId: string, files: string[]
         url: `${getBaseUrl()}/admin/purchasing/reimbursements/${reimbursementId}/payment-proof`,
         filePath,
         name: 'files',
+        formData: {
+          autoComplete: 'false',
+        },
         header: {
           'Authorization': `Bearer ${token}`,
         },

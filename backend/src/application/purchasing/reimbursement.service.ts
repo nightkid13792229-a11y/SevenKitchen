@@ -29,6 +29,7 @@ import {
   REIMBURSEMENT_CUSTOM_FEE_CATEGORIES,
   type ReimbursementCustomFee,
 } from '../../domain/purchasing';
+import { isWithinRevertWindow } from '../../domain/purchasing/reimbursement-review-window';
 
 export interface SubmitReimbursementDto {
   purchaseListIds?: string[];
@@ -366,6 +367,16 @@ export class ReimbursementService {
       );
     }
 
+    // 2026-11-07：通过之前必须已经有付款凭证。
+    // 手机端把「上传付款凭证」和「审核通过」拆成两个动作，凭证是付款的证据；
+    // 没有凭证就通过，等于承认一笔没有付款记录的报销。
+    if (
+      dto.decision === 'APPROVE' &&
+      (reimbursement.paymentProofUrls?.length ?? 0) === 0
+    ) {
+      throw new BadRequestException('请先上传付款凭证，再审核通过');
+    }
+
     this.logger.log(
       `Reviewer ${reviewerId} reviewing reimbursement ${id} with decision: ${dto.decision}`,
     );
@@ -392,6 +403,61 @@ export class ReimbursementService {
 
     this.logger.log(
       `Reimbursement ${id} reviewed successfully: ${dto.decision}`,
+    );
+
+    return saved;
+  }
+
+  /**
+   * 撤销审核（2026-11-07）
+   *
+   * 已报销的单在 24 小时内可以撤销、回到待审核：
+   * - 已生效的价格变更回到「待确认」，原料当前价回退；
+   * - 状态回到待审核，付款凭证保留，员工端能看到「审核已撤销」；
+   * - reviewedById / reviewedAt 保留，页面按「上次审核」展示，不清空痕迹。
+   */
+  async revertReimbursement(
+    id: string,
+    operatorId: string,
+    comment?: string,
+  ): Promise<Reimbursement> {
+    const reimbursement = await this.reimbursementRepository.findById(id);
+
+    if (!reimbursement) {
+      throw new BadRequestException(`未找到报销单：${id}`);
+    }
+
+    if (reimbursement.status !== ReimbursementStatus.REIMBURSED) {
+      throw new BadRequestException(
+        `只有已报销的报销单可以撤销审核。当前状态：${reimbursement.status}`,
+      );
+    }
+
+    if (!reimbursement.reviewedAt) {
+      throw new BadRequestException('这张报销单没有审核时间，无法撤销审核');
+    }
+
+    if (!isWithinRevertWindow(reimbursement.reviewedAt)) {
+      throw new BadRequestException(
+        '已超过 24 小时撤销窗口，如需修改请联系管理员处理',
+      );
+    }
+
+    // 先回退价格，再改状态：价格回退失败就不应该把单子变回待审核
+    await this.ingredientPricingService.revertApprovedChangesForReimbursement(
+      id,
+      operatorId,
+    );
+
+    const trimmedComment = comment?.trim();
+    reimbursement.revertReview(
+      trimmedComment ? `审核已撤销：${trimmedComment}` : '审核已撤销',
+    );
+
+    const saved = await this.reimbursementRepository.save(reimbursement);
+
+    this.logger.log(
+      `Reimbursement ${id} review reverted by ${operatorId} (reviewed at ${reimbursement.reviewedAt.toISOString()})`,
     );
 
     return saved;
@@ -696,13 +762,20 @@ export class ReimbursementService {
   }
 
   /**
-   * 上传报销凭证文件（支持多文件上传到COS）
+   * 上传付款凭证（支持多文件上传到COS）
+   *
+   * 2026-11-07：新增 autoComplete 开关。
+   * - true（默认，保持电脑端旧行为）：上传即完成报销、应用价格变更；
+   * - false（手机端新流程）：只把凭证挂上去，状态仍是待审核，
+   *   等审核员再点「审核通过」才真正完成。
    */
   async uploadPaymentProofFiles(
     id: string,
     files: Express.Multer.File[],
     operatorId?: string | null,
+    options: { autoComplete?: boolean } = {},
   ): Promise<Reimbursement> {
+    const autoComplete = options.autoComplete !== false;
     // 1. 查询报销单
     const reimbursement = await this.reimbursementRepository.findById(id);
 
@@ -778,11 +851,10 @@ export class ReimbursementService {
     }
 
     // 5. 创建新的报销单实体（因为属性是readonly的）
-    // 只有待报销状态上传凭证后，才自动改为已报销状态
-    const finalStatus =
-      reimbursement.status === ReimbursementStatus.PENDING_REVIEW
-        ? ReimbursementStatus.REIMBURSED
-        : reimbursement.status;
+    // autoComplete=true 时才把待审核改成已报销；false 只挂附件，状态不动
+    const finalStatus = autoComplete
+      ? ReimbursementStatus.REIMBURSED
+      : reimbursement.status;
 
     const updated = new Reimbursement({
       id: reimbursement.id,

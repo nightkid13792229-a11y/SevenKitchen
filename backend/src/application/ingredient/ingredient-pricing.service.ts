@@ -366,6 +366,62 @@ export class IngredientPricingService {
     }
   }
 
+  /**
+   * 撤销审核时回退价格变更（2026-11-07）
+   *
+   * 和 rejectChangesForReimbursement 的区别：
+   * - 驳回是「这单不要了」，变更标 REJECTED，之后不会再被应用；
+   * - 撤销审核是「我要再看一遍」，变更必须回到 PENDING，
+   *   否则重新通过时 applyApprovedChangesForReimbursement 找不到待应用的条目，
+   *   价格就永远不会再生效。
+   */
+  async revertApprovedChangesForReimbursement(
+    reimbursementId: string,
+    operatorId?: string | null,
+  ): Promise<void> {
+    const approvedChanges = (await this.prisma.ingredientPriceChange.findMany({
+      where: {
+        reimbursementId,
+        status: 'APPROVED',
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    })) as IngredientPriceChangeRecord[];
+
+    if (approvedChanges.length === 0) {
+      return;
+    }
+
+    // 先把原料当前价退回变更前的值
+    await this.restorePricesAfterRejectedApproval(
+      reimbursementId,
+      approvedChanges,
+    );
+
+    // 再把这些变更退回待确认，并清掉「已应用」的痕迹
+    await this.prisma.ingredientPriceChange.updateMany({
+      where: {
+        reimbursementId,
+        status: 'APPROVED',
+      },
+      data: {
+        status: 'PENDING',
+        reviewedById: null,
+        reviewedAt: null,
+        reviewComment: null,
+        appliedCurrentPricePerPurchaseUnit: null,
+        appliedEffectivePricePerPurchaseUnit: null,
+        gateAction: null,
+        gateReason: null,
+      },
+    });
+
+    this.logger.log(
+      `Reverted ${approvedChanges.length} approved price changes for reimbursement ${reimbursementId} by ${operatorId ?? 'unknown'}`,
+    );
+  }
+
   async getPriceChangesForReimbursement(
     reimbursementId: string,
   ): Promise<IngredientPriceChangeView[]> {

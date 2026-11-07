@@ -5,333 +5,456 @@
       <text>加载中...</text>
     </view>
 
-    <!-- 详情内容 -->
     <view v-else-if="reimbursement" class="detail-content">
-      <!-- 状态卡片 -->
-      <view class="section status-card">
+      <!-- ① 单据头：谁、什么时候、什么状态 -->
+      <view class="section header-card">
         <view class="card-header">
           <text class="claim-number">{{ reimbursement.claimNumber }}</text>
           <StaffStatusBadge
-            :label="getStatusText(reimbursement.status)"
-            :tone="getStatusTone(reimbursement.status)"
+            :label="statusText"
+            :tone="statusTone"
             size="lg"
           />
         </view>
-        <view class="card-body">
-          <view class="info-row">
-            <text class="label">提交时间:</text>
-            <text class="value">{{ formatFullDateTime(reimbursement.submittedAt) }}</text>
-          </view>
-          <view class="info-row">
-            <text class="label">提交人:</text>
-            <text class="value">{{ reimbursement.submittedBy?.nickname || '-' }}</text>
-          </view>
+        <view class="submit-line">
+          <text class="submitter">{{ submitterName }}</text>
+          <text class="dot">·</text>
+          <text class="submit-time">{{ formatFullDateTime(reimbursement.submittedAt) }}</text>
+          <text v-if="waitingText" class="waiting">{{ waitingText }}</text>
+        </view>
+        <view v-if="revertedNotice" class="revert-notice">
+          <text>{{ revertedNotice }}</text>
+        </view>
+        <view v-if="rejectNotice" class="reject-notice">
+          <text>{{ rejectNotice }}</text>
         </view>
       </view>
 
-      <!-- 费用汇总卡片 -->
-      <view class="section cost-summary-card">
-        <text class="section-title">费用明细</text>
-
-        <view class="record-summary">
-          <text class="record-summary-title">采购记录明细 ({{ auditPurchaseRecords.length }})</text>
-          <text class="record-summary-total">¥{{ purchaseRecordsTotal }}</text>
+      <!-- ② 审核摘要：审核员最先要看的三个数 + 风险 -->
+      <view class="section summary-card">
+        <view class="summary-main">
+          <text class="summary-label">报销金额</text>
+          <text class="summary-amount">¥{{ money(reimbursement.totalActualCost) }}</text>
         </view>
 
-        <view v-if="auditPurchaseRecords.length > 0" class="record-audit-list">
-          <view
-            v-for="record in auditPurchaseRecords"
-            :key="record.id"
-            class="record-audit-card"
-          >
-            <view class="record-audit-top">
-              <view class="record-audit-main">
-                <view class="record-audit-heading">
-                  <view class="record-audit-title">
-                    <text class="record-audit-name">{{ record.procurementSkuName || record.ingredientName }}</text>
-                    <text
-                      v-if="record.procurementSkuName && record.procurementSkuName !== record.ingredientName"
-                      class="record-audit-subtitle"
-                    >
-                      标准原料：{{ record.ingredientName }}
-                    </text>
-                  </view>
-                  <text class="record-audit-cost">¥{{ formatMoney(record.actualCost) }}</text>
-                </view>
-                <view class="record-audit-meta">
-                  <text class="meta-chip">{{ record.purchaseChannel || '未填写渠道' }}</text>
-                  <text v-if="record.productModel" class="meta-chip">{{ record.productModel }}</text>
-                </view>
-              </view>
-            </view>
-
-            <view class="record-audit-metrics">
-              <StaffMetric label="需要采购" :value="record.neededQuantityText" />
-              <StaffMetric label="实际采购" :value="record.purchasedQuantityText" />
-              <StaffMetric label="折算单价" :value="record.unitPriceText" />
-              <StaffMetric label="上次折算单价" :value="record.previousUnitPriceText" />
-              <StaffMetric label="当前库存" :value="record.stockText" />
-              <StaffMetric
-                label="增减幅度"
-                :value="record.deltaRateText"
-                :tone="record.deltaRateClass"
-              />
-            </view>
-
-            <view v-if="record.normalizedQuantityText || record.notes" class="record-audit-extra">
-              <text v-if="record.normalizedQuantityText" class="extra-text">
-                {{ record.normalizedQuantityText }}
-              </text>
-              <text v-if="record.notes" class="extra-text">备注：{{ record.notes }}</text>
-            </view>
+        <view class="summary-grid">
+          <view class="summary-cell">
+            <text class="cell-label">凭证金额</text>
+            <text class="cell-value">{{ voucherAmountText }}</text>
+          </view>
+          <view class="summary-cell">
+            <text class="cell-label">差额</text>
+            <text class="cell-value" :class="differenceClass">{{ differenceText }}</text>
+          </view>
+          <view class="summary-cell">
+            <text class="cell-label">付款凭证</text>
+            <text class="cell-value">{{ proofCountText }}</text>
           </view>
         </view>
 
-        <view v-else class="record-empty-state">
-          <text>暂无采购记录，当前仅展示其它费用与报销总额</text>
-        </view>
-
-        <!-- 平台运费 -->
-        <view v-if="reimbursement.platformShippingFee > 0" class="cost-row">
-          <text class="label">平台运费</text>
-          <text class="value">¥{{ reimbursement.platformShippingFee.toFixed(2) }}</text>
-        </view>
-
-        <!-- 平台打包费 -->
-        <view v-if="reimbursement.platformPackagingFee > 0" class="cost-row">
-          <text class="label">平台打包费</text>
-          <text class="value">¥{{ reimbursement.platformPackagingFee.toFixed(2) }}</text>
-        </view>
-
-        <!-- 自定义费用明细 -->
-        <view v-if="hasCustomFees" class="custom-fees-section">
-          <text class="custom-fees-title">其它费用</text>
+        <view v-if="summaryAlerts.length > 0" class="summary-alerts">
           <view
-            v-for="(fee, index) in reimbursement.customFees"
+            v-for="(alert, index) in summaryAlerts"
             :key="index"
-            class="custom-fee-row"
+            class="alert-line"
+            :class="alert.tone"
           >
-            <view class="fee-copy">
-              <text class="fee-desc">{{ getCustomFeeHeading(fee) }}</text>
-              <text
-                v-if="getCustomFeeNote(fee)"
-                class="fee-note"
-              >
-                {{ getCustomFeeNote(fee) }}
-              </text>
-            </view>
-            <text class="fee-amount">¥{{ fee.amount.toFixed(2) }}</text>
+            <text class="alert-dot">●</text>
+            <text class="alert-text">{{ alert.text }}</text>
           </view>
         </view>
 
-        <!-- 总金额 -->
-        <view class="total-row">
-          <text class="total-label">报销总额</text>
-          <text class="total-value">¥{{ reimbursement.totalActualCost.toFixed(2) }}</text>
-        </view>
+        <text v-if="differenceNote" class="difference-note">差额说明：{{ differenceNote }}</text>
       </view>
 
-      <!-- 采购清单 -->
-      <view class="section">
-        <text class="section-title">包含采购清单 ({{ reimbursement.purchaseLists?.length || 0 }})</text>
-        <view class="purchase-lists">
-          <view
-            v-for="(list, index) in reimbursement.purchaseLists"
-            :key="index"
-            class="purchase-card"
-          >
-            <view class="card-header">
-              <text class="date">{{ formatDate(list.targetDate) }}</text>
-              <text class="status">{{ getListStatusText(list.status) }}</text>
-            </view>
-            <view class="card-body">
-              <view class="info-row">
-                <text class="label">原料种类:</text>
-                <text class="value">{{ list.itemCount }} 种</text>
-              </view>
-              <view class="info-row">
-                <text class="label">预估成本:</text>
-                <text class="value">¥{{ list.totalEstimatedCost.toFixed(2) }}</text>
-              </view>
-              <view class="info-row">
-                <text class="label">订单数量:</text>
-                <text class="value">{{ list.sourceOrderIds?.length || 0 }} 个</text>
-              </view>
-            </view>
-            <!-- 展开查看原料明细 -->
-            <view class="items-expand" @tap="toggleItems(index)">
-              <text class="expand-text">{{ expandedItems[index] ? '收起' : '展开' }}原料明细</text>
-              <text class="expand-icon">{{ expandedItems[index] ? '▲' : '▼' }}</text>
-            </view>
-            <view v-if="expandedItems[index]" class="items-list">
-              <view
-                v-for="(item, idx) in list.items"
-                :key="idx"
-                class="item-row"
-              >
-                <text class="item-name">{{ item.ingredientName }}</text>
-                <text class="item-quantity">{{ Number(item.quantityNeeded).toFixed(2) }}{{ item.quantityUnit }}</text>
-                <text class="item-cost">¥{{ item.estimatedCost.toFixed(2) }}</text>
-              </view>
-            </view>
-          </view>
-        </view>
-      </view>
-
-      <!-- 发票照片 -->
+      <!-- ③ 金额构成：一个数怎么来的 -->
       <view class="section">
         <view class="section-header">
-          <text class="section-title">支付凭证</text>
-          <!-- 上传按钮（可编辑状态下显示） -->
+          <text class="section-title">金额构成</text>
+        </view>
+        <view class="breakdown">
+          <view class="breakdown-row">
+            <text class="breakdown-label">采购 {{ auditPurchaseRecords.length }} 条</text>
+            <text class="breakdown-value">¥{{ purchaseRecordsTotal }}</text>
+          </view>
+          <view v-if="shippingFee > 0" class="breakdown-row">
+            <text class="breakdown-label">平台运费</text>
+            <text class="breakdown-value">¥{{ money(shippingFee) }}</text>
+          </view>
+          <view v-if="packagingFee > 0" class="breakdown-row">
+            <text class="breakdown-label">平台打包费</text>
+            <text class="breakdown-value">¥{{ money(packagingFee) }}</text>
+          </view>
           <view
-            v-if="canEditReceipts"
-            class="upload-btn-mini"
-            @tap="appendReceiptPhotos"
+            v-for="(fee, index) in customFees"
+            :key="`fee-${index}`"
+            class="breakdown-row"
           >
-            <text>+</text>
-            <text>添加</text>
+            <text class="breakdown-label">{{ customFeeLabel(fee) }}</text>
+            <text class="breakdown-value">¥{{ money(fee.amount) }}</text>
+          </view>
+          <view class="breakdown-row total">
+            <text class="breakdown-label">报销总额</text>
+            <text class="breakdown-value">¥{{ money(reimbursement.totalActualCost) }}</text>
           </view>
         </view>
-
-        <!-- 有图片时显示 -->
-        <view v-if="reimbursement.receiptUrls && reimbursement.receiptUrls.length > 0" class="photos-grid">
-          <view
-            v-for="(url, index) in reimbursement.receiptUrls"
-            :key="index"
-            class="photo-item-wrapper"
-          >
-            <view
-              class="photo-item"
-              @tap="previewPhoto(url)"
-            >
-              <image :src="url" mode="aspectFill" />
-            </view>
-            <!-- 删除按钮（可编辑状态下显示） -->
-            <view
-              v-if="canEditReceipts"
-              class="delete-btn"
-              @tap.stop="removeReceiptPhoto(index)"
-            >
-              <text>×</text>
-            </view>
-          </view>
-        </view>
-
-        <!-- 无图片时显示提示 -->
-        <view v-else class="empty-photos">
-          <text>暂无支付凭证</text>
-          <text v-if="canEditReceipts" class="upload-hint" @tap="appendReceiptPhotos">点击上传</text>
-        </view>
+        <text v-if="breakdownMismatchText" class="breakdown-hint">{{ breakdownMismatchText }}</text>
       </view>
 
-      <!-- 订单截图凭证（私有，签名链接只读） -->
-      <view
-        v-if="reimbursement.receiptSignedUrls && reimbursement.receiptSignedUrls.length > 0"
-        class="section"
-      >
+      <!-- ④ 付款凭证（审核员自己的证据，前置） -->
+      <view class="section">
         <view class="section-header">
-          <text class="section-title">订单截图凭证</text>
-          <text class="section-hint">{{ reimbursement.receiptSignedUrls.length }} 张</text>
+          <text class="section-title">付款凭证</text>
+          <text class="section-hint">{{ proofPhotos.length }} 张</text>
         </view>
-        <view class="photos-grid">
-          <view
-            v-for="(url, index) in reimbursement.receiptSignedUrls"
-            :key="`signed-${index}`"
-            class="photo-item"
-            @tap="previewSignedReceipt(url)"
-          >
-            <image :src="url" mode="aspectFill" />
-          </view>
-        </view>
-      </view>
 
-      <!-- 报销凭证（所有用户可见） -->
-      <view v-if="reimbursement.paymentProofUrls && reimbursement.paymentProofUrls.length > 0" class="section">
-        <view class="section-header">
-          <text class="section-title">报销凭证</text>
-          <!-- 管理员操作按钮 -->
-          <view v-if="isAdmin" class="action-buttons">
-            <view class="action-btn-mini replace" @tap="uploadPaymentProof">
-              <text>替换</text>
-            </view>
-            <view class="action-btn-mini delete" @tap="clearPaymentProof">
-              <text>清空</text>
-            </view>
-          </view>
-        </view>
-        <view class="photos-grid">
+        <view v-if="proofPhotos.length > 0" class="photos-grid">
           <view
-            v-for="(url, index) in reimbursement.paymentProofUrls"
-            :key="index"
+            v-for="(url, index) in proofPhotos"
+            :key="`proof-${index}`"
             class="photo-item"
             @tap="previewPaymentProof(url)"
           >
             <image :src="url" mode="aspectFill" />
           </view>
         </view>
-      </view>
 
-      <!-- 底部操作栏：三种操作合并成一个容器，避免固定底栏互相盖住（2026-11-04） -->
-      <view v-if="hasBottomActions" class="bottom-actions">
-        <template v-if="showAdminUpload">
-          <view v-if="pendingPriceChangeCount > 0" class="payment-proof-note">
-            <text>
-              上传报销凭证后将确认本次价格变更并完成报销（{{ pendingPriceChangeCount }}项）。
-            </text>
-          </view>
+        <view v-else class="empty-block">
+          <text class="empty-text">还没有上传付款凭证</text>
+          <text v-if="canReview" class="empty-sub">付款后把转账截图传上来，再点「审核通过」才算完成</text>
+        </view>
+
+        <view v-if="canManageProof" class="inline-actions">
           <button
-            class="action-btn upload"
-            @tap="uploadPaymentProof"
+            class="ghost-btn"
             :loading="uploading"
             :disabled="uploading"
+            @tap="uploadProof"
           >
-            <text v-if="!uploading">上传报销凭证</text>
-            <text v-else>上传中...</text>
+            {{ proofPhotos.length > 0 ? '继续添加' : '上传付款凭证' }}
+          </button>
+          <button
+            v-if="proofPhotos.length > 0"
+            class="ghost-btn danger"
+            :disabled="uploading"
+            @tap="clearProof"
+          >
+            清空
+          </button>
+        </view>
+      </view>
+
+      <!-- ⑤ 员工消费凭证（发票 / 订单截图） -->
+      <view v-if="receiptPhotos.length > 0" class="section">
+        <view class="section-header">
+          <text class="section-title">员工消费凭证</text>
+          <text class="section-hint">{{ receiptPhotos.length }} 张</text>
+        </view>
+        <view class="photos-grid">
+          <view
+            v-for="(photo, index) in receiptPhotos"
+            :key="`receipt-${index}`"
+            class="photo-item-wrapper"
+          >
+            <view class="photo-item" @tap="previewReceipt(photo)">
+              <image :src="photo.url" mode="aspectFill" />
+            </view>
+            <view
+              v-if="canEditReceipts && photo.removableIndex >= 0"
+              class="delete-btn"
+              @tap.stop="removeReceiptPhoto(photo.removableIndex)"
+            >
+              <text>×</text>
+            </view>
+          </view>
+        </view>
+        <view v-if="canEditReceipts" class="inline-actions">
+          <button class="ghost-btn" :disabled="uploadingReceipts" @tap="appendReceiptPhotos">
+            补充发票 / 截图
+          </button>
+        </view>
+      </view>
+
+      <!-- ⑥ 采购明细 -->
+      <view class="section">
+        <view class="section-header">
+          <text class="section-title">采购明细</text>
+          <text class="section-hint">{{ auditPurchaseRecords.length }} 条 · ¥{{ purchaseRecordsTotal }}</text>
+        </view>
+
+        <view v-if="auditPurchaseRecords.length === 0" class="empty-block">
+          <text class="empty-text">没有关联采购记录</text>
+        </view>
+
+        <view v-else class="record-list">
+          <view
+            v-for="record in auditPurchaseRecords"
+            :id="`record-${record.id}`"
+            :key="record.id"
+            class="record-card"
+            :class="{ highlighted: record.id === highlightRecordId }"
+          >
+            <view class="record-head">
+              <view class="record-title-wrap">
+                <text class="record-name">{{ recordTitle(record) }}</text>
+                <text v-if="recordSubtitle(record)" class="record-sub">{{ recordSubtitle(record) }}</text>
+              </view>
+              <text class="record-cost">¥{{ money(record.actualCost) }}</text>
+            </view>
+
+            <view class="record-meta">
+              <text class="meta-chip">{{ record.purchaseChannelName || record.purchaseChannel || '未填渠道' }}</text>
+              <text class="meta-chip">{{ formatShortDate(record.purchasedAt) }}</text>
+              <text v-if="record.productModel" class="meta-chip">{{ record.productModel }}</text>
+              <text v-if="isManualRecord(record)" class="meta-chip warn">无订单截图</text>
+              <text v-if="priceChangeOf(record)" class="meta-chip accent">调价</text>
+            </view>
+
+            <view class="record-metrics">
+              <view class="metric">
+                <text class="metric-label">实际采购</text>
+                <text class="metric-value">{{ record.purchasedQuantityText }}</text>
+              </view>
+              <view class="metric">
+                <text class="metric-label">折算单价</text>
+                <text class="metric-value">{{ record.unitPriceText }}</text>
+              </view>
+              <view class="metric">
+                <text class="metric-label">上次单价</text>
+                <text class="metric-value muted">{{ record.previousUnitPriceText }}</text>
+              </view>
+            </view>
+
+            <text v-if="record.notes" class="record-note">备注：{{ record.notes }}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- ⑦ 价格变更：只展示，不给逐项确认 -->
+      <view v-if="priceChanges.length > 0" class="section">
+        <view class="section-header">
+          <text class="section-title">价格变更</text>
+          <text class="section-hint">{{ priceChangeHint }}</text>
+        </view>
+
+        <view class="price-table">
+          <view class="price-row price-head">
+            <text class="col-name">原料</text>
+            <text class="col-num">原价</text>
+            <text class="col-num">新价</text>
+            <text class="col-delta">涨跌</text>
+          </view>
+          <view
+            v-for="change in priceChanges"
+            :key="change.id"
+            class="price-row"
+            @tap="focusRecord(change.purchaseRecordId)"
+          >
+            <text class="col-name">
+              {{ change.ingredientName }}
+              <text v-if="change.statusLabel" class="price-status">{{ change.statusLabel }}</text>
+            </text>
+            <text class="col-num">{{ change.previousPriceText }}</text>
+            <text class="col-num">{{ change.proposedPriceText }}</text>
+            <text class="col-delta" :class="change.tone">{{ change.deltaText }}</text>
+          </view>
+        </view>
+
+        <text v-if="pendingPriceChangeCount > 0" class="price-footnote">
+          点一行可在上方采购明细里定位；审核通过后这 {{ pendingPriceChangeCount }} 项一次性生效
+        </text>
+      </view>
+
+      <!-- ⑧ 审核记录 -->
+      <view class="section">
+        <view class="section-header">
+          <text class="section-title">审核记录</text>
+        </view>
+        <view class="timeline">
+          <view
+            v-for="(item, index) in timeline"
+            :key="index"
+            class="timeline-item"
+            :class="item.tone"
+          >
+            <view class="timeline-dot" />
+            <view class="timeline-body">
+              <text class="timeline-title">{{ item.title }}</text>
+              <text class="timeline-desc">{{ item.desc }}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view v-else class="error-state">
+      <text class="error-icon">⚠️</text>
+      <text class="error-text">加载失败</text>
+    </view>
+
+    <!-- 底部操作栏 -->
+    <view v-if="reimbursement && hasBottomActions" class="bottom-actions">
+      <text v-if="canReview && !hasPaymentProof" class="bottom-hint">
+        先上传付款凭证，才能点「审核通过」
+      </text>
+      <text v-else-if="isPending && isOwner" class="bottom-hint">
+        这是你自己提交的单，需要其他管理员审核
+      </text>
+
+      <view class="action-row">
+        <template v-if="canReview">
+          <button class="action-btn reject" :disabled="submitting" @tap="openSheet('reject')">
+            驳回
+          </button>
+          <button
+            class="action-btn approve"
+            :class="{ disabled: !hasPaymentProof }"
+            :disabled="submitting || !hasPaymentProof"
+            @tap="openSheet('approve')"
+          >
+            审核通过
           </button>
         </template>
 
-        <template v-else>
-          <text v-if="canWithdraw" class="withdraw-hint">
-            撤回后这笔报销单会删除，采购清单解锁；再点清单里的「撤回完成」才能改采购记录。
-          </text>
-          <view class="action-row">
-            <button
-              v-if="canWithdraw"
-              class="action-btn withdraw"
-              :loading="withdrawing"
-              :disabled="withdrawing"
-              @tap="withdrawReimbursement"
-            >
-              撤回报销
-            </button>
-            <button
-              v-if="canResubmit"
-              class="action-btn resubmit"
-              :loading="resubmitting"
-              @tap="resubmit"
-            >
-              <text v-if="!resubmitting">重新提交</text>
-              <text v-else>提交中...</text>
-            </button>
-          </view>
+        <template v-else-if="canRevert">
+          <button class="action-btn revert" :disabled="submitting" @tap="openSheet('revert')">
+            撤销审核
+          </button>
+        </template>
+
+        <template v-else-if="canWithdraw || canResubmit">
+          <button
+            v-if="canWithdraw"
+            class="action-btn withdraw"
+            :loading="withdrawing"
+            :disabled="withdrawing"
+            @tap="withdrawReimbursement"
+          >
+            撤回报销
+          </button>
+          <button
+            v-if="canResubmit"
+            class="action-btn resubmit"
+            :loading="resubmitting"
+            :disabled="resubmitting"
+            @tap="resubmit"
+          >
+            重新提交
+          </button>
         </template>
       </view>
     </view>
 
-    <!-- 错误状态 -->
-    <view v-else class="error-state">
-      <text class="error-icon">⚠️</text>
-      <text class="error-text">加载失败</text>
+    <!-- 驳回弹层 -->
+    <view v-if="activeSheet === 'reject'" class="sheet-mask" @tap="closeSheet">
+      <view class="sheet" @tap.stop>
+        <text class="sheet-title">驳回报销单</text>
+        <text class="sheet-sub">员工会看到这段说明，改完可以重新提交</text>
+
+        <view class="reason-chips">
+          <view
+            v-for="reason in rejectReasons"
+            :key="reason"
+            class="chip"
+            :class="{ active: rejectReason === reason }"
+            @tap="rejectReason = reason"
+          >
+            {{ reason }}
+          </view>
+        </view>
+
+        <textarea
+          v-model="rejectComment"
+          class="sheet-textarea"
+          placeholder="补充说明（可选，会一起发给员工）"
+          maxlength="200"
+        />
+
+        <view class="sheet-actions">
+          <button class="sheet-btn" @tap="closeSheet">取消</button>
+          <button
+            class="sheet-btn primary danger"
+            :loading="submitting"
+            :disabled="submitting"
+            @tap="submitReject"
+          >
+            确认驳回
+          </button>
+        </view>
+      </view>
+    </view>
+
+    <!-- 通过确认弹层 -->
+    <view v-if="activeSheet === 'approve'" class="sheet-mask" @tap="closeSheet">
+      <view class="sheet" @tap.stop>
+        <text class="sheet-title">确认审核通过？</text>
+        <text class="sheet-sub">通过后可在 24 小时内撤销</text>
+
+        <view class="confirm-rows">
+          <view class="confirm-row">
+            <text class="confirm-label">报销金额</text>
+            <text class="confirm-value">¥{{ money(reimbursement.totalActualCost) }}</text>
+          </view>
+          <view class="confirm-row">
+            <text class="confirm-label">付款凭证</text>
+            <text class="confirm-value">{{ proofPhotos.length }} 张</text>
+          </view>
+          <view v-if="pendingPriceChangeCount > 0" class="confirm-row">
+            <text class="confirm-label">价格变更</text>
+            <text class="confirm-value">{{ pendingPriceChangeCount }} 项将同时生效</text>
+          </view>
+        </view>
+
+        <view class="sheet-actions">
+          <button class="sheet-btn" @tap="closeSheet">再看看</button>
+          <button
+            class="sheet-btn primary"
+            :loading="submitting"
+            :disabled="submitting"
+            @tap="submitApprove"
+          >
+            确认通过
+          </button>
+        </view>
+      </view>
+    </view>
+
+    <!-- 撤销确认弹层 -->
+    <view v-if="activeSheet === 'revert'" class="sheet-mask" @tap="closeSheet">
+      <view class="sheet" @tap.stop>
+        <text class="sheet-title">撤销审核？</text>
+        <text class="sheet-sub">
+          单据会回到待审核；{{ revertedPriceChangeCount }} 项已生效的价格会回退成变更前，
+          员工也能看到这次撤销。
+        </text>
+
+        <textarea
+          v-model="revertComment"
+          class="sheet-textarea"
+          placeholder="撤销说明（可选）"
+          maxlength="200"
+        />
+
+        <view class="sheet-actions">
+          <button class="sheet-btn" @tap="closeSheet">取消</button>
+          <button
+            class="sheet-btn primary warning"
+            :loading="submitting"
+            :disabled="submitting"
+            @tap="submitRevert"
+          >
+            确认撤销
+          </button>
+        </view>
+      </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-// 强制重新编译标记 2026-01-26 20:47 - 清空报销凭证功能修复
 import { ref, computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import StaffStatusBadge from '../../../components/staff/StaffStatusBadge.vue';
-import StaffMetric from '../../../components/staff/StaffMetric.vue';
 import {
   getReimbursementDetail,
   getPurchaseRecords,
@@ -339,7 +462,9 @@ import {
   clearPaymentProof as clearPaymentProofApi,
   appendReceiptUrls,
   removeReceiptUrl,
-  deleteReimbursement as deleteReimbursementApi
+  deleteReimbursement as deleteReimbursementApi,
+  reviewReimbursement,
+  revertReimbursementReview,
 } from '../api/purchasing';
 import { formatStaffQuantity } from '../../../utils/staff-quantity';
 import {
@@ -347,51 +472,93 @@ import {
   getReimbursementCustomFeeCategoryLabel,
 } from '../constants/reimbursement';
 
-// 状态管理
+const REVERT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const activeSheet = ref<'' | 'reject' | 'approve' | 'revert'>('');
 const reimbursementId = ref('');
 const reimbursement = ref<any>(null);
 const loading = ref(true);
-const resubmitting = ref(false);
+const submitting = ref(false);
 const uploading = ref(false);
 const uploadingReceipts = ref(false);
-const expandedItems = ref<Record<number, boolean>>({});
+const withdrawing = ref(false);
+const resubmitting = ref(false);
+const highlightRecordId = ref('');
 const purchaseRecordsByListId = ref<Record<string, any[]>>({});
 
-// 判断是否为管理员
+const rejectReasons = [
+  '金额对不上',
+  '凭证看不清',
+  '重复报销',
+  '没按采购流程',
+  '其它',
+];
+const rejectReason = ref(rejectReasons[0]);
+const rejectComment = ref('');
+const revertComment = ref('');
+
+const currentUserId = computed(() => {
+  const user = uni.getStorageSync('user');
+  return user?.id || '';
+});
+
 const isAdmin = computed(() => {
   const user = uni.getStorageSync('user');
-  return user && user.role === 'ADMIN';
+  return user?.role === 'ADMIN';
 });
 
-// 立即输出管理员状态测试
-console.log('🔴 立即执行测试 - isAdmin:', isAdmin.value);
+const isOwner = computed(
+  () => !!currentUserId.value && reimbursement.value?.submittedById === currentUserId.value,
+);
 
-// 判断是否可以编辑支付凭证
+const status = computed(() => reimbursement.value?.status || '');
+const isPending = computed(() => status.value === 'PENDING_REVIEW');
+const hasPaymentProof = computed(
+  () => (reimbursement.value?.paymentProofUrls?.length || 0) > 0,
+);
+const proofPhotos = computed<string[]>(() => reimbursement.value?.paymentProofUrls || []);
+
+const canManageProof = computed(() => isAdmin.value && isPending.value);
+const canReview = computed(() => isAdmin.value && isPending.value && !isOwner.value);
+
+const canRevert = computed(() => {
+  if (!isAdmin.value || status.value !== 'REIMBURSED') {
+    return false;
+  }
+  const reviewedAt = reimbursement.value?.reviewedAt;
+  if (!reviewedAt) {
+    return false;
+  }
+  const elapsed = Date.now() - new Date(reviewedAt).getTime();
+  return Number.isFinite(elapsed) && elapsed >= 0 && elapsed <= REVERT_WINDOW_MS;
+});
+
+const canResubmit = computed(() =>
+  ['REJECTED', 'REQUIRES_RESUBMIT'].includes(status.value),
+);
+
+const canWithdraw = computed(() => {
+  if (!isPending.value && !canResubmit.value) {
+    return false;
+  }
+  if (!isOwner.value) {
+    return false;
+  }
+  return !hasPaymentProof.value;
+});
+
+const hasBottomActions = computed(
+  () => canReview.value || canRevert.value || canWithdraw.value || canResubmit.value,
+);
+
 const canEditReceipts = computed(() => {
-  const user = uni.getStorageSync('user');
-  if (!user || !reimbursement.value) return false;
-
-  // 管理员或提交者可以编辑
-  const isOwner = user.id === reimbursement.value.submittedById;
-  const canEdit = isAdmin.value || isOwner;
-
-  // 只有待报销、被驳回、需重新提交状态可以编辑
   const editableStatuses = ['PENDING_REVIEW', 'REJECTED', 'REQUIRES_RESUBMIT'];
-  const statusEditable = editableStatuses.includes(reimbursement.value.status);
-
-  return canEdit && statusEditable;
+  return (isAdmin.value || isOwner.value) && editableStatuses.includes(status.value);
 });
 
-const pendingPriceChangeCount = computed(() => {
-  const changes = reimbursement.value?.priceChanges || [];
-  return changes.filter((change: any) => change?.status === 'PENDING').length;
-});
+/* ---------------- 格式化 ---------------- */
 
-// 是否有自定义费用
-const hasCustomFees = computed(() => {
-  if (!reimbursement.value?.customFees) return false;
-  return reimbursement.value.customFees.length > 0;
-});
+const money = (value?: number | null) => Number(value || 0).toFixed(2);
 
 const formatMeasurementUnit = (unit?: string | null) => {
   if (!unit) return '';
@@ -407,135 +574,6 @@ const formatMeasurementUnit = (unit?: string | null) => {
   };
 
   return labelMap[normalized] || `${unit}`.trim();
-};
-
-const formatDecimal = (value: number, maxDecimalPlaces = 3) => {
-  if (!Number.isFinite(value)) return '0';
-  const fixed = value.toFixed(maxDecimalPlaces);
-  return fixed.replace(/\.?0+$/, '');
-};
-
-const formatMoney = (value?: number | null) => {
-  return Number(value || 0).toFixed(2);
-};
-
-const formatCustomFeeTitle = (fee: any) => {
-  return formatReimbursementCustomFeeTitle(fee);
-};
-
-const getCustomFeeHeading = (fee: any) => {
-  if (fee?.category) {
-    return getReimbursementCustomFeeCategoryLabel(fee.category);
-  }
-
-  return formatCustomFeeTitle(fee);
-};
-
-const getCustomFeeNote = (fee: any) => {
-  if (!fee?.category || !fee?.description) return '';
-
-  const categoryLabel = getReimbursementCustomFeeCategoryLabel(fee.category);
-  return fee.description.trim() === categoryLabel ? '' : fee.description.trim();
-};
-
-const getPurchaseRecordUnit = (item?: any, priceChange?: any) => {
-  const unit =
-    priceChange?.purchaseUnit ||
-    item?.ingredient?.purchaseUnit ||
-    item?.quantityUnit ||
-    item?.ingredient?.baseUnit;
-
-  return formatMeasurementUnit(unit) || '个';
-};
-
-const parsePurchaseUnitFromProductModel = (productModel?: string | null) => {
-  const normalized = `${productModel || ''}`.trim();
-  const match = normalized.match(/[\/／]\s*([^\/／\s]+)\s*$/);
-  return match?.[1]?.trim() || '';
-};
-
-const getRecordPurchaseUnit = (record: any, item?: any, priceChange?: any) => {
-  return (
-    record?.procurementSkuPurchaseUnit ||
-    parsePurchaseUnitFromProductModel(record?.productModel) ||
-    getPurchaseRecordUnit(item, priceChange)
-  );
-};
-
-const formatNeededQuantity = (item?: any) => {
-  if (!item) return '-';
-
-  const quantity = Number(item.quantityNeeded || 0);
-  const unit = formatMeasurementUnit(item.quantityUnit || item?.ingredient?.purchaseUnit);
-
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    return '—';
-  }
-
-  return formatStaffQuantity(quantity, unit, { maxDecimals: 3 });
-};
-
-const formatRecordRawSummary = (record: any, item?: any, priceChange?: any) => {
-  const packageCount = Number(record?.actualPackageCount || 0);
-  const packageSize = Number(record?.actualPackageSize || 0);
-  const packageUnit = record?.actualPackageUnit;
-
-  if (
-    Number.isFinite(packageCount) &&
-    packageCount > 0 &&
-    Number.isFinite(packageSize) &&
-    packageSize > 0 &&
-    packageUnit
-  ) {
-    return `${formatStaffQuantity(packageCount, getRecordPurchaseUnit(record, item, priceChange), { maxDecimals: 3 })} x ${formatStaffQuantity(packageSize, packageUnit, { maxDecimals: 3 })}`;
-  }
-
-  return '';
-};
-
-const formatRecordQuantity = (record: any, item?: any, priceChange?: any) => {
-  const rawSummary = formatRecordRawSummary(record, item, priceChange);
-  if (rawSummary) {
-    return rawSummary;
-  }
-
-  const quantity = Number(record?.actualQuantity || 0);
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    return '-';
-  }
-
-  return formatStaffQuantity(
-    quantity,
-    getRecordPurchaseUnit(record, item, priceChange),
-    { maxDecimals: 3 },
-  );
-};
-
-const formatRecordNormalizedSummary = (record: any, item?: any, priceChange?: any) => {
-  if (formatRecordRawSummary(record, item, priceChange)) {
-    return '';
-  }
-
-  const quantity = Number(record?.actualQuantity || 0);
-  const baseQuantity = Number(record?.actualBaseQuantity || 0);
-  const baseSummary =
-    Number.isFinite(baseQuantity) && baseQuantity > 0 && record?.actualBaseUnit
-      ? formatStaffQuantity(baseQuantity, formatMeasurementUnit(record.actualBaseUnit), {
-          maxDecimals: 3,
-        })
-      : '';
-  const purchaseSummary =
-    Number.isFinite(quantity) && quantity > 0
-      ? formatStaffQuantity(quantity, getPurchaseRecordUnit(item, priceChange), {
-          maxDecimals: 3,
-        })
-      : '';
-
-  if (!baseSummary || !purchaseSummary || purchaseSummary === baseSummary) {
-    return '';
-  }
-
-  return `折算 ${baseSummary} ≈ ${purchaseSummary}`;
 };
 
 const normalizeUnitForMath = (unit?: string | null) => {
@@ -636,6 +674,75 @@ const getPurchaseUnitToBaseRatio = (unit: string | undefined, baseUnit: string, 
     : 1;
 };
 
+const getPurchaseRecordUnit = (item?: any, priceChange?: any) => {
+  const unit =
+    priceChange?.purchaseUnit ||
+    item?.ingredient?.purchaseUnit ||
+    item?.quantityUnit ||
+    item?.ingredient?.baseUnit;
+
+  return formatMeasurementUnit(unit) || '个';
+};
+
+const parsePurchaseUnitFromProductModel = (productModel?: string | null) => {
+  const normalized = `${productModel || ''}`.trim();
+  const match = normalized.match(/[\/／]\s*([^\/／\s]+)\s*$/);
+  return match?.[1]?.trim() || '';
+};
+
+const getRecordPurchaseUnit = (record: any, item?: any, priceChange?: any) => {
+  return (
+    record?.procurementSkuPurchaseUnit ||
+    parsePurchaseUnitFromProductModel(record?.productModel) ||
+    getPurchaseRecordUnit(item, priceChange)
+  );
+};
+
+/**
+ * 实际采购数量。
+ * 2026-11-07 修：原来是「2 g x 1000 G」——包数被套上了采购单位，
+ * 而且单位大小写混着。这里改成「2 × 1000 g（共 2 kg）」，不再编造「袋/包」。
+ */
+const formatRecordQuantity = (record: any, item?: any, priceChange?: any) => {
+  const packageCount = Number(record?.actualPackageCount || 0);
+  const packageSize = Number(record?.actualPackageSize || 0);
+  const packageUnitRaw = record?.actualPackageUnit;
+  const baseQuantity = Number(record?.actualBaseQuantity || 0);
+  const baseUnitRaw = record?.actualBaseUnit || record?.procurementSkuStockBaseUnit;
+  const baseUnit = formatMeasurementUnit(baseUnitRaw);
+
+  // 只有「包装单位 ≠ 基础单位」（真的换算过）才补一句总计，避免「2 × 1 个（共 2 个）」
+  const hasUnitConversion =
+    normalizeUnitForMath(packageUnitRaw) !== normalizeUnitForMath(baseUnitRaw);
+  const baseSummary =
+    hasUnitConversion && Number.isFinite(baseQuantity) && baseQuantity > 0 && baseUnit
+      ? `（共 ${formatStaffQuantity(baseQuantity, baseUnit, { maxDecimals: 3 })}）`
+      : '';
+
+  if (
+    Number.isFinite(packageCount) &&
+    packageCount > 0 &&
+    Number.isFinite(packageSize) &&
+    packageSize > 0
+  ) {
+    const size = formatStaffQuantity(packageSize, formatMeasurementUnit(packageUnitRaw), {
+      maxDecimals: 3,
+    });
+    return `${formatStaffQuantity(packageCount, '', { maxDecimals: 3 })} × ${size}${baseSummary}`;
+  }
+
+  const quantity = Number(record?.actualQuantity || 0);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return '-';
+  }
+
+  return formatStaffQuantity(
+    quantity,
+    getRecordPurchaseUnit(record, item, priceChange),
+    { maxDecimals: 3 },
+  );
+};
+
 const formatComparableUnitPrice = (record: any, item?: any) => {
   const cost = Number(record?.actualCost || 0);
   const baseQuantity = Number(record?.actualBaseQuantity || 0);
@@ -675,65 +782,166 @@ const formatComparablePreviousUnitPrice = (item: any, priceChange: any, record: 
   return `¥${scaledPrice.toFixed(2)}/${getComparablePriceUnitLabel(record, item)}`;
 };
 
-const formatSkuStockText = (record: any, item?: any) => {
-  if (!record?.procurementSkuId) {
-    return '-';
-  }
-
-  if (!record.procurementSkuHasStockLedger) {
-    return '暂无库存记录';
-  }
-
-  const quantity = Number(record.procurementSkuStockBaseQuantity ?? 0);
-  if (!Number.isFinite(quantity)) {
-    return '-';
-  }
-
-  const unit = formatMeasurementUnit(
-    record.procurementSkuStockBaseUnit || record.actualBaseUnit,
-  );
-
-  if (getRecordBaseUnit(record, item) === 'PCS') {
-    return formatStaffQuantity(quantity, getPcsDisplayUnit(item), { maxDecimals: 3 });
-  }
-
-  return formatStaffQuantity(quantity, unit, { maxDecimals: 3 });
-};
-
-const formatDeltaRate = (deltaRate?: number | null) => {
+const formatDeltaPercent = (deltaRate?: number | null) => {
   if (deltaRate === undefined || deltaRate === null || !Number.isFinite(Number(deltaRate))) {
-    return '暂无';
+    return '—';
   }
 
   const percentage = Number(deltaRate) * 100;
+  if (Math.abs(percentage) < 0.05) {
+    return '—';
+  }
+
   const prefix = percentage > 0 ? '+' : '';
   return `${prefix}${percentage.toFixed(1)}%`;
 };
 
-const getDeltaRateClass = (deltaRate?: number | null) => {
+const getDeltaTone = (deltaRate?: number | null) => {
   if (deltaRate === undefined || deltaRate === null || !Number.isFinite(Number(deltaRate))) {
-    return 'neutral';
+    return 'flat';
   }
 
-  if (Number(deltaRate) > 0) {
+  if (Number(deltaRate) > 0.0005) {
     return 'up';
   }
 
-  if (Number(deltaRate) < 0) {
+  if (Number(deltaRate) < -0.0005) {
     return 'down';
   }
 
   return 'flat';
 };
 
-const priceChangeMap = computed(() => {
-  const changes = reimbursement.value?.priceChanges || [];
-  return new Map(
-    changes
-      .filter((change: any) => change?.purchaseRecordId)
-      .map((change: any) => [change.purchaseRecordId, change]),
-  );
+const formatFullDateTime = (dateStr?: string) => {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return '-';
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  const hours = `${date.getHours()}`.padStart(2, '0');
+  const minutes = `${date.getMinutes()}`.padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day} ${hours}:${minutes}`;
+};
+
+const formatShortDate = (dateStr?: string) => {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return '-';
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+};
+
+/* ---------------- 状态与文案 ---------------- */
+
+const statusText = computed(() => {
+  const map: Record<string, string> = {
+    PENDING_REVIEW: '待审核',
+    REIMBURSED: '已报销',
+    REJECTED: '已驳回',
+    REQUIRES_RESUBMIT: '需重新提交',
+  };
+  return map[status.value] || status.value;
 });
+
+const statusTone = computed<'pending' | 'done' | 'danger' | 'neutral'>(() => {
+  if (status.value === 'REIMBURSED') return 'done';
+  if (status.value === 'REJECTED') return 'danger';
+  if (status.value === 'PENDING_REVIEW' || status.value === 'REQUIRES_RESUBMIT') return 'pending';
+  return 'neutral';
+});
+
+const submitterName = computed(() => reimbursement.value?.submittedBy?.nickname || '-');
+const reviewerName = computed(() => reimbursement.value?.reviewedBy?.nickname || '-');
+const differenceNote = computed(() => reimbursement.value?.differenceNote || '');
+
+const waitingText = computed(() => {
+  if (!isPending.value || !reimbursement.value?.submittedAt) {
+    return '';
+  }
+  const elapsed = Date.now() - new Date(reimbursement.value.submittedAt).getTime();
+  if (!Number.isFinite(elapsed) || elapsed <= 0) {
+    return '';
+  }
+  const hours = Math.floor(elapsed / 3600000);
+  if (hours >= 24) {
+    return `已等 ${Math.floor(hours / 24)} 天`;
+  }
+  if (hours >= 1) {
+    return `已等 ${hours} 小时`;
+  }
+  return `已等 ${Math.max(1, Math.floor(elapsed / 60000))} 分钟`;
+});
+
+const revertedNotice = computed(() => {
+  if (!isPending.value || !reimbursement.value?.reviewedAt) {
+    return '';
+  }
+
+  // 后端存的是「审核已撤销：原因」，展示时去掉前缀，避免出现两个「已撤销」
+  const comment = String(reimbursement.value?.reviewComment || '').replace(
+    /^审核已撤销[:：]\s*/,
+    '',
+  );
+
+  return comment && comment !== '审核已撤销'
+    ? `上次审核已撤销：${comment}`
+    : '上次审核已撤销';
+});
+
+const rejectNotice = computed(() => {
+  if (!['REJECTED', 'REQUIRES_RESUBMIT'].includes(status.value)) {
+    return '';
+  }
+
+  const comment = reimbursement.value?.reviewComment;
+  const who = reviewerName.value !== '-' ? `${reviewerName.value} · ` : '';
+  const when = reimbursement.value?.reviewedAt
+    ? formatFullDateTime(reimbursement.value.reviewedAt)
+    : '';
+  const label = status.value === 'REJECTED' ? '已驳回' : '需要补充后重新提交';
+
+  return `${label}｜${who}${when}${comment ? `：${comment}` : ''}`;
+});
+
+/* ---------------- 金额 ---------------- */
+
+const shippingFee = computed(() => Number(reimbursement.value?.platformShippingFee || 0));
+const packagingFee = computed(() => Number(reimbursement.value?.platformPackagingFee || 0));
+const customFees = computed<any[]>(() => {
+  const fees = reimbursement.value?.customFees;
+  return Array.isArray(fees) ? fees : [];
+});
+
+const customFeeLabel = (fee: any) => {
+  if (fee?.category) {
+    return getReimbursementCustomFeeCategoryLabel(fee.category);
+  }
+  return formatReimbursementCustomFeeTitle(fee);
+};
+
+const voucherAmountText = computed(() => {
+  const amount = reimbursement.value?.voucherAmount;
+  return amount === null || amount === undefined ? '未核对' : `¥${money(amount)}`;
+});
+
+const differenceText = computed(() => {
+  const amount = reimbursement.value?.differenceAmount;
+  if (amount === null || amount === undefined) {
+    return '—';
+  }
+  return `¥${money(amount)}`;
+});
+
+const differenceClass = computed(() => {
+  const amount = reimbursement.value?.differenceAmount;
+  if (amount === null || amount === undefined || Number(amount) <= 0.01) {
+    return '';
+  }
+  return 'warn';
+});
+
+const proofCountText = computed(() => `${proofPhotos.value.length} 张`);
+
+/* ---------------- 采购记录 ---------------- */
 
 const purchaseItemMap = computed(() => {
   const map = new Map<string, any>();
@@ -746,6 +954,15 @@ const purchaseItemMap = computed(() => {
   });
 
   return map;
+});
+
+const priceChangeMap = computed(() => {
+  const changes = reimbursement.value?.priceChanges || [];
+  return new Map(
+    changes
+      .filter((change: any) => change?.purchaseRecordId)
+      .map((change: any) => [change.purchaseRecordId, change]),
+  );
 });
 
 const auditPurchaseRecords = computed(() => {
@@ -763,14 +980,9 @@ const auditPurchaseRecords = computed(() => {
 
         return {
           ...record,
-          neededQuantityText: formatNeededQuantity(purchaseItem),
           purchasedQuantityText: formatRecordQuantity(record, purchaseItem, priceChange),
-          normalizedQuantityText: formatRecordNormalizedSummary(record, purchaseItem, priceChange),
           unitPriceText: formatComparableUnitPrice(record, purchaseItem),
           previousUnitPriceText: formatComparablePreviousUnitPrice(purchaseItem, priceChange, record),
-          deltaRateText: formatDeltaRate(priceChange?.deltaRate),
-          deltaRateClass: getDeltaRateClass(priceChange?.deltaRate),
-          stockText: formatSkuStockText(record, purchaseItem),
         };
       });
     })
@@ -789,13 +1001,189 @@ const purchaseRecordsTotal = computed(() => {
   return total.toFixed(2);
 });
 
-// 页面加载
+const recordTitle = (record: any) => record.procurementSkuName || record.ingredientName || '-';
+
+const recordSubtitle = (record: any) => {
+  if (!record?.procurementSkuName || record.procurementSkuName === record.ingredientName) {
+    return '';
+  }
+  return `标准原料：${record.ingredientName}`;
+};
+
+const isManualRecord = (record: any) => !record?.sourceImportId;
+
+const priceChangeOf = (record: any) => priceChangeMap.value.get(record.id);
+
+const breakdownMismatchText = computed(() => {
+  const total = Number(reimbursement.value?.totalActualCost || 0);
+  const parts =
+    Number(purchaseRecordsTotal.value) + shippingFee.value + packagingFee.value +
+    customFees.value.reduce((sum, fee) => sum + Number(fee.amount || 0), 0);
+  const diff = total - parts;
+  if (Math.abs(diff) < 0.01) {
+    return '';
+  }
+  return `明细合计 ¥${parts.toFixed(2)}，报销总额 ¥${total.toFixed(2)}，相差 ¥${Math.abs(diff).toFixed(2)}`;
+});
+
+/* ---------------- 价格变更 ---------------- */
+
+const priceChanges = computed(() => {
+  const changes = reimbursement.value?.priceChanges || [];
+
+  return changes.map((change: any) => {
+    const unit = change.purchaseUnit ? formatMeasurementUnit(change.purchaseUnit) : '';
+    const suffix = unit ? `/${unit}` : '';
+    const tone = getDeltaTone(change.deltaRate);
+    const statusLabel =
+      change.status === 'APPROVED' ? '已生效' : change.status === 'REJECTED' ? '已作废' : '';
+
+    return {
+      ...change,
+      previousPriceText: `¥${money(change.previousEffectivePrice)}${suffix}`,
+      proposedPriceText: `¥${money(change.proposedEffectivePrice)}${suffix}`,
+      deltaText:
+        tone === 'up'
+          ? `↑ ${formatDeltaPercent(change.deltaRate)}`
+          : tone === 'down'
+            ? `↓ ${formatDeltaPercent(change.deltaRate)}`
+            : '—',
+      tone,
+      statusLabel,
+    };
+  });
+});
+
+const pendingPriceChangeCount = computed(
+  () => (reimbursement.value?.priceChanges || []).filter((change: any) => change.status === 'PENDING').length,
+);
+
+const revertedPriceChangeCount = computed(
+  () => (reimbursement.value?.priceChanges || []).filter((change: any) => change.status === 'APPROVED').length,
+);
+
+const maxDeltaRate = computed(() => {
+  const rates = (reimbursement.value?.priceChanges || [])
+    .filter((change: any) => change.status === 'PENDING')
+    .map((change: any) => Math.abs(Number(change.deltaRate || 0)));
+  return rates.length > 0 ? Math.max(...rates) : 0;
+});
+
+const priceChangeHint = computed(() => {
+  if (pendingPriceChangeCount.value > 0) {
+    return `${pendingPriceChangeCount.value} 项待生效`;
+  }
+  if (revertedPriceChangeCount.value > 0) {
+    return `${revertedPriceChangeCount.value} 项已生效`;
+  }
+  return `${priceChanges.value.length} 项`;
+});
+
+/* ---------------- 摘要提示 ---------------- */
+
+const manualRecordCount = computed(
+  () => auditPurchaseRecords.value.filter((record: any) => isManualRecord(record)).length,
+);
+
+const summaryAlerts = computed<Array<{ tone: string; text: string }>>(() => {
+  const alerts: Array<{ tone: string; text: string }> = [];
+
+  if (isPending.value && isAdmin.value && !hasPaymentProof.value) {
+    alerts.push({ tone: 'warn', text: '还没有付款凭证，暂不能审核通过' });
+  }
+
+  if (pendingPriceChangeCount.value > 0) {
+    const maxText = formatDeltaPercent(maxDeltaRate.value);
+    if (maxDeltaRate.value >= 0.3) {
+      alerts.push({
+        tone: 'danger',
+        text: `${pendingPriceChangeCount.value} 项价格变更将通过后生效，最大幅度 ${maxText}，请核对`,
+      });
+    } else {
+      alerts.push({
+        tone: 'info',
+        text: `${pendingPriceChangeCount.value} 项价格变更将通过后一次性生效`,
+      });
+    }
+  }
+
+  if (manualRecordCount.value > 0) {
+    alerts.push({
+      tone: 'info',
+      text: `${manualRecordCount.value} 条记录没有订单截图，只能人工核对转账记录`,
+    });
+  }
+
+  const voucherAmount = reimbursement.value?.voucherAmount;
+  if (voucherAmount === null || voucherAmount === undefined) {
+    alerts.push({ tone: 'info', text: '没有填凭证金额，差额没法自动核对' });
+  }
+
+  const differenceAmount = Number(reimbursement.value?.differenceAmount || 0);
+  if (differenceAmount > 0.01) {
+    alerts.push({ tone: 'info', text: `凭证比报销多 ¥${money(differenceAmount)}` });
+  }
+
+  return alerts;
+});
+
+/* ---------------- 消费凭证 ---------------- */
+
+const receiptPhotos = computed<Array<{ url: string; removableIndex: number }>>(() => {
+  const publicUrls: string[] = reimbursement.value?.receiptUrls || [];
+  const signedUrls: string[] = reimbursement.value?.receiptSignedUrls || [];
+
+  return [
+    ...publicUrls.map((url, index) => ({ url, removableIndex: index })),
+    ...signedUrls.map((url) => ({ url, removableIndex: -1 })),
+  ];
+});
+
+/* ---------------- 审核记录 ---------------- */
+
+const timeline = computed(() => {
+  const items: Array<{ title: string; desc: string; tone: string }> = [];
+
+  items.push({
+    title: '员工提交',
+    desc: `${submitterName.value} · ${formatFullDateTime(reimbursement.value?.submittedAt)}`,
+    tone: 'done',
+  });
+
+  if (reimbursement.value?.reviewedAt) {
+    const isReverted = isPending.value;
+    const decisionMap: Record<string, string> = {
+      REIMBURSED: '审核通过',
+      REJECTED: '已驳回',
+      REQUIRES_RESUBMIT: '要求补充后重提',
+    };
+    items.push({
+      title: isReverted ? '审核已撤销' : decisionMap[status.value] || '已处理',
+      desc: `${reviewerName.value} · ${formatFullDateTime(reimbursement.value.reviewedAt)}${
+        reimbursement.value.reviewComment ? ` · ${reimbursement.value.reviewComment}` : ''
+      }`,
+      tone: isReverted ? 'pending' : status.value === 'REIMBURSED' ? 'done' : 'danger',
+    });
+  }
+
+  if (proofPhotos.value.length > 0) {
+    items.push({
+      title: '已上传付款凭证',
+      desc: `${proofPhotos.value.length} 张`,
+      tone: 'done',
+    });
+  }
+
+  return items;
+});
+
+/* ---------------- 数据加载 ---------------- */
+
 onLoad((options: any) => {
   reimbursementId.value = options.id;
   loadDetail();
 });
 
-// 加载详情
 const loadDetail = async () => {
   loading.value = true;
 
@@ -805,23 +1193,12 @@ const loadDetail = async () => {
     if (res.code === 0) {
       reimbursement.value = res.data;
       await loadPurchaseRecordsForReimbursement();
-
-      // 调试日志 - 强制触发重新编译
-      console.log('='.repeat(50));
-      console.log('=== 报销单详情调试信息 ===');
-      console.log('1. 完整数据:', res.data);
-      console.log('2. paymentProofUrls:', res.data.paymentProofUrls);
-      console.log('3. paymentProofUrls长度:', res.data.paymentProofUrls?.length || 0);
-      console.log('4. 用户信息:', uni.getStorageSync('user'));
-      console.log('5. isAdmin:', isAdmin.value);
-      console.log('6. 是否显示上传按钮:', isAdmin.value && (!res.data.paymentProofUrls || res.data.paymentProofUrls.length === 0));
-      console.log('='.repeat(50));
     } else {
       uni.showToast({ title: res.message || '加载失败', icon: 'none' });
     }
   } catch (error: any) {
     console.error('加载报销单详情失败', error);
-    uni.showToast({ title: '加载失败', icon: 'none' });
+    uni.showToast({ title: error?.message || '加载失败', icon: 'none' });
   } finally {
     loading.value = false;
   }
@@ -850,12 +1227,7 @@ const loadPurchaseRecordsForReimbursement = async () => {
           success: true,
         };
       } catch (error) {
-        return {
-          listId: list.id,
-          records: [],
-          success: false,
-          error,
-        };
+        return { listId: list.id, records: [], success: false, error };
       }
     }),
   );
@@ -868,7 +1240,6 @@ const loadPurchaseRecordsForReimbursement = async () => {
       nextMap[result.listId] = result.records;
       return;
     }
-
     failedCount += 1;
     console.error('加载报销单关联采购记录失败', result.error);
   });
@@ -883,83 +1254,239 @@ const loadPurchaseRecordsForReimbursement = async () => {
   }
 };
 
-// 展开/收起原料明细
-const toggleItems = (index: number) => {
-  expandedItems.value[index] = !expandedItems.value[index];
-};
+/* ---------------- 图片 ---------------- */
 
-// 预览照片
-const previewSignedReceipt = (currentUrl: string) => {
-  const urls = reimbursement.value?.receiptSignedUrls || [];
-  if (urls.length > 0) {
-    uni.previewImage({ urls, current: currentUrl });
-  }
-};
-
-const previewPhoto = (currentUrl: string) => {
-  if (reimbursement.value && reimbursement.value.receiptUrls) {
-    uni.previewImage({
-      urls: reimbursement.value.receiptUrls,
-      current: currentUrl,
-    });
-  }
-};
-
-// 预览报销凭证
 const previewPaymentProof = (currentUrl: string) => {
-  if (reimbursement.value && reimbursement.value.paymentProofUrls) {
-    uni.previewImage({
-      urls: reimbursement.value.paymentProofUrls,
-      current: currentUrl,
-    });
+  if (proofPhotos.value.length > 0) {
+    uni.previewImage({ urls: proofPhotos.value, current: currentUrl });
   }
 };
 
-// 撤回报销：删掉这张单，清单会自动解锁
-const currentUserId = computed(() => {
-  const user = uni.getStorageSync('user');
-  return user?.id || '';
-});
-
-const hasPaymentProof = computed(
-  () => (reimbursement.value?.paymentProofUrls?.length || 0) > 0,
-);
-
-const canResubmit = computed(() =>
-  ['REJECTED', 'REQUIRES_RESUBMIT'].includes(reimbursement.value?.status),
-);
-
-const showAdminUpload = computed(
-  () => isAdmin.value && !hasPaymentProof.value,
-);
-
-const canWithdraw = computed(() => {
-  const status = reimbursement.value?.status;
-  if (!['PENDING_REVIEW', 'REJECTED', 'REQUIRES_RESUBMIT'].includes(status)) {
-    return false;
+const previewReceipt = (photo: { url: string }) => {
+  const urls = receiptPhotos.value.map((item) => item.url);
+  if (urls.length > 0) {
+    uni.previewImage({ urls, current: photo.url });
   }
-  // 只能撤回自己的单；已上传付款凭证的不能撤回（R9）
-  if (!currentUserId.value || reimbursement.value?.submittedById !== currentUserId.value) {
-    return false;
+};
+
+/* ---------------- 弹层 ---------------- */
+
+const openSheet = (sheet: 'reject' | 'approve' | 'revert') => {
+  if (sheet === 'approve' && !hasPaymentProof.value) {
+    uni.showToast({ title: '请先上传付款凭证', icon: 'none' });
+    return;
   }
-  return !hasPaymentProof.value;
-});
+  rejectComment.value = '';
+  revertComment.value = '';
+  activeSheet.value = sheet;
+};
 
-const hasBottomActions = computed(
-  () => showAdminUpload.value || canWithdraw.value || canResubmit.value,
-);
+const closeSheet = () => {
+  activeSheet.value = '';
+};
 
-const withdrawing = ref(false);
+const submitReject = async () => {
+  if (submitting.value) return;
+
+  const reason = rejectReason.value;
+  const extra = rejectComment.value.trim();
+  const comment = extra ? `${reason}：${extra}` : reason;
+
+  submitting.value = true;
+  try {
+    const res: any = await reviewReimbursement(reimbursementId.value, 'REQUIRES_RESUBMIT', comment);
+    if (res.code !== 0) {
+      throw new Error(res.message || '驳回失败');
+    }
+    closeSheet();
+    uni.showToast({ title: '已驳回', icon: 'success' });
+    await loadDetail();
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '驳回失败', icon: 'none' });
+  } finally {
+    submitting.value = false;
+  }
+};
+
+const submitApprove = async () => {
+  if (submitting.value) return;
+
+  submitting.value = true;
+  try {
+    const res: any = await reviewReimbursement(reimbursementId.value, 'APPROVE');
+    if (res.code !== 0) {
+      throw new Error(res.message || '审核失败');
+    }
+    closeSheet();
+    uni.showToast({ title: '已通过', icon: 'success' });
+    await loadDetail();
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '审核失败', icon: 'none' });
+  } finally {
+    submitting.value = false;
+  }
+};
+
+const submitRevert = async () => {
+  if (submitting.value) return;
+
+  submitting.value = true;
+  try {
+    const res: any = await revertReimbursementReview(
+      reimbursementId.value,
+      revertComment.value.trim() || undefined,
+    );
+    if (res.code !== 0) {
+      throw new Error(res.message || '撤销失败');
+    }
+    closeSheet();
+    uni.showToast({ title: '已撤销审核', icon: 'success' });
+    await loadDetail();
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '撤销失败', icon: 'none' });
+  } finally {
+    submitting.value = false;
+  }
+};
+
+/* ---------------- 凭证管理 ---------------- */
+
+const uploadProof = async () => {
+  if (uploading.value) return;
+
+  const remain = Math.max(0, 10 - proofPhotos.value.length);
+  if (remain <= 0) {
+    uni.showToast({ title: '最多只能上传10张', icon: 'none' });
+    return;
+  }
+
+  const res = await uni.chooseImage({ count: remain, sizeType: ['compressed'] });
+  if (!res.tempFilePaths || res.tempFilePaths.length === 0) {
+    return;
+  }
+
+  uploading.value = true;
+  try {
+    await uploadPaymentProofFiles(reimbursementId.value, res.tempFilePaths);
+    uni.showToast({ title: '已上传，待审核通过', icon: 'none' });
+    await loadDetail();
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '上传失败', icon: 'none' });
+  } finally {
+    uploading.value = false;
+  }
+};
+
+const clearProof = () => {
+  uni.showModal({
+    title: '清空付款凭证？',
+    content: '凭证会全部删除，但审核状态不变。',
+    confirmText: '清空',
+    confirmColor: '#a8402f',
+    success: async (res) => {
+      if (!res.confirm) return;
+
+      uploading.value = true;
+      try {
+        await clearPaymentProofApi(reimbursementId.value);
+        uni.showToast({ title: '已清空', icon: 'success' });
+        await loadDetail();
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '清空失败', icon: 'none' });
+      } finally {
+        uploading.value = false;
+      }
+    },
+  });
+};
+
+const appendReceiptPhotos = async () => {
+  const currentCount = receiptPhotos.value.length;
+  const canUpload = 10 - currentCount;
+  if (canUpload <= 0) {
+    uni.showToast({ title: '最多只能上传10张', icon: 'none' });
+    return;
+  }
+
+  const res = await uni.chooseImage({ count: canUpload, sizeType: ['compressed'] });
+  if (!res.tempFilePaths || res.tempFilePaths.length === 0) {
+    return;
+  }
+
+  uploadingReceipts.value = true;
+  try {
+    await appendReceiptUrls(reimbursementId.value, res.tempFilePaths);
+    uni.showToast({ title: '上传成功', icon: 'success' });
+    await loadDetail();
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '上传失败', icon: 'none' });
+  } finally {
+    uploadingReceipts.value = false;
+  }
+};
+
+const removeReceiptPhoto = (index: number) => {
+  uni.showModal({
+    title: '删除这张凭证？',
+    content: '删除后需要重新上传。',
+    confirmText: '删除',
+    confirmColor: '#a8402f',
+    success: async (res) => {
+      if (!res.confirm) return;
+
+      try {
+        await removeReceiptUrl(reimbursementId.value, index);
+        uni.showToast({ title: '已删除', icon: 'success' });
+        await loadDetail();
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '删除失败', icon: 'none' });
+      }
+    },
+  });
+};
+
+/* ---------------- 定位 ---------------- */
+
+const focusRecord = (recordId?: string) => {
+  if (!recordId) return;
+
+  highlightRecordId.value = recordId;
+  setTimeout(() => {
+    const query = uni.createSelectorQuery();
+    query.select(`#record-${recordId}`).boundingClientRect();
+    query.selectViewport().scrollOffset();
+    query.exec((res: any[]) => {
+      const rect = res?.[0];
+      const offset = res?.[1];
+      if (!rect || !offset) {
+        return;
+      }
+      // rect.top 是相对视口的位置，要加上当前滚动量才是页面绝对位置
+      uni.pageScrollTo({
+        scrollTop: Math.max(0, Number(offset.scrollTop || 0) + rect.top - 120),
+        duration: 300,
+      });
+    });
+  }, 30);
+
+  setTimeout(() => {
+    highlightRecordId.value = '';
+  }, 2200);
+};
+
+/* ---------------- 员工动作 ---------------- */
 
 const withdrawReimbursement = () => {
   if (!canWithdraw.value || withdrawing.value) return;
+
   uni.showModal({
     title: '撤回报销？',
-    content: '撤回后这张报销单会删除，采购清单解锁，可以修改采购记录后重新提交。',
+    content: '撤回后这张报销单会删除，采购清单解锁，可以改完采购记录再重新提交。',
     confirmText: '撤回',
-    confirmColor: '#b4453a',
+    confirmColor: '#a8402f',
     success: async (res) => {
       if (!res.confirm) return;
+
       withdrawing.value = true;
       try {
         const result: any = await deleteReimbursementApi(reimbursementId.value);
@@ -967,7 +1494,6 @@ const withdrawReimbursement = () => {
           throw new Error(result.message || '撤回失败');
         }
         uni.showToast({ title: '已撤回', icon: 'success' });
-        // 立即返回，避免用户在延时里手动返回导致多 pop 一层
         uni.navigateBack();
       } catch (error: any) {
         withdrawing.value = false;
@@ -977,11 +1503,10 @@ const withdrawReimbursement = () => {
   });
 };
 
-// 重新提交
 const resubmit = () => {
   uni.showModal({
     title: '重新提交',
-    content: '重新提交需要选择采购清单和上传发票照片',
+    content: '重新提交需要重新确认采购清单和发票照片',
     confirmText: '继续',
     cancelText: '取消',
     success: (res) => {
@@ -993,230 +1518,18 @@ const resubmit = () => {
     },
   });
 };
-
-// 上传报销凭证
-const uploadPaymentProof = async () => {
-  // 选择图片
-  const res = await uni.chooseImage({
-    count: 9,
-    sizeType: ['compressed'],
-  });
-
-  if (!res.tempFilePaths || res.tempFilePaths.length === 0) {
-    return;
-  }
-
-  uploading.value = true;
-
-  try {
-    // 调用后端API上传文件（会自动处理COS上传）
-    await uploadPaymentProofFiles(reimbursementId.value, res.tempFilePaths);
-
-    uni.showToast({
-      title: '上传成功',
-      icon: 'success',
-    });
-
-    // 刷新详情
-    await loadDetail();
-  } catch (error: any) {
-    console.error('上传报销凭证失败', error);
-    uni.showToast({
-      title: error.message || '上传失败',
-      icon: 'none',
-    });
-  } finally {
-    uploading.value = false;
-  }
-};
-
-// 清空报销凭证
-const clearPaymentProof = async () => {
-  uni.showModal({
-    title: '确认清空',
-    content: '确定要清空所有报销凭证吗？此操作不可恢复。',
-    confirmText: '清空',
-    confirmColor: '#ff4444',
-    success: async (res) => {
-      if (res.confirm) {
-        uploading.value = true;
-
-        try {
-          // 调用后端API清空报销凭证（DELETE请求）
-          await clearPaymentProofApi(reimbursementId.value);
-
-          uni.showToast({
-            title: '清空成功',
-            icon: 'success',
-          });
-
-          // 刷新详情
-          await loadDetail();
-        } catch (error: any) {
-          console.error('清空报销凭证失败', error);
-          uni.showToast({
-            title: error.message || '清空失败',
-            icon: 'none',
-          });
-        } finally {
-          uploading.value = false;
-        }
-      }
-    },
-  });
-};
-
-// 追加支付凭证
-const appendReceiptPhotos = async () => {
-  // 检查当前图片数量
-  const currentCount =
-    (reimbursement.value?.receiptUrls?.length || 0) +
-    (reimbursement.value?.receiptSignedUrls?.length || 0);
-  const maxCount = 10;
-  const canUpload = maxCount - currentCount;
-
-  if (canUpload <= 0) {
-    uni.showToast({
-      title: '最多只能上传10张图片',
-      icon: 'none',
-    });
-    return;
-  }
-
-  // 选择图片
-  const res = await uni.chooseImage({
-    count: canUpload,
-    sizeType: ['compressed'],
-  });
-
-  if (!res.tempFilePaths || res.tempFilePaths.length === 0) {
-    return;
-  }
-
-  uploadingReceipts.value = true;
-
-  try {
-    // 调用后端API上传文件
-    await appendReceiptUrls(reimbursementId.value, res.tempFilePaths);
-
-    uni.showToast({
-      title: '上传成功',
-      icon: 'success',
-    });
-
-    // 刷新详情
-    await loadDetail();
-  } catch (error: any) {
-    console.error('上传支付凭证失败', error);
-    uni.showToast({
-      title: error.message || '上传失败',
-      icon: 'none',
-    });
-  } finally {
-    uploadingReceipts.value = false;
-  }
-};
-
-// 删除支付凭证
-const removeReceiptPhoto = async (index: number) => {
-  uni.showModal({
-    title: '确认删除',
-    content: '确定要删除这张支付凭证吗？',
-    confirmText: '删除',
-    confirmColor: '#ff4444',
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          await removeReceiptUrl(reimbursementId.value, index);
-
-          uni.showToast({
-            title: '删除成功',
-            icon: 'success',
-          });
-
-          // 刷新详情
-          await loadDetail();
-        } catch (error: any) {
-          console.error('删除支付凭证失败', error);
-          uni.showToast({
-            title: error.message || '删除失败',
-            icon: 'none',
-          });
-        }
-      }
-    },
-  });
-};
-
-// 获取状态文本
-const getStatusText = (status: string) => {
-  const statusMap: Record<string, string> = {
-    'PENDING_REVIEW': '待报销',
-    'REIMBURSED': '已报销',
-    'REJECTED': '已驳回',
-    'REQUIRES_RESUBMIT': '需重新提交',
-  };
-  return statusMap[status] || status;
-};
-
-// 获取状态样式类
-const getStatusTone = (status: string): 'pending' | 'done' | 'danger' | 'neutral' => {
-  if (status === 'REIMBURSED') return 'done';
-  if (status === 'REJECTED') return 'danger';
-  if (status === 'PENDING_REVIEW' || status === 'REQUIRES_RESUBMIT') return 'pending';
-  return 'neutral';
-};
-
-const getStatusClass = (status: string) => {
-  const classMap: Record<string, string> = {
-    'PENDING_REVIEW': 'pending',
-    'REIMBURSED': 'reimbursed',
-    'REJECTED': 'rejected',
-    'REQUIRES_RESUBMIT': 'resubmit',
-  };
-  return classMap[status] || '';
-};
-
-// 获取清单状态文本
-const getListStatusText = (status: string) => {
-  const statusMap: Record<string, string> = {
-    'DRAFT': '草稿',
-    'PENDING': '待采购',
-    'COMPLETED': '已完成',
-    'CANCELLED': '已取消',
-  };
-  return statusMap[status] || status;
-};
-
-// 格式化完整日期时间
-const formatFullDateTime = (dateStr?: string) => {
-  if (!dateStr) return '-';
-  const date = new Date(dateStr);
-  const year = date.getFullYear();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const day = date.getDate().toString().padStart(2, '0');
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
-};
-
-// 格式化日期
-const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr);
-  return `${date.getMonth() + 1}月${date.getDate()}日`;
-};
-
 </script>
 
 <style scoped lang="scss">
 .reimbursement-detail-page {
   min-height: 100vh;
   background-color: #fbfcf7;
-  padding-top: 24rpx;
-  padding-bottom: calc(290rpx + env(safe-area-inset-bottom));
+  padding-top: 20rpx;
+  padding-bottom: calc(220rpx + env(safe-area-inset-bottom));
 }
 
-.loading-state, .error-state {
+.loading-state,
+.error-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1234,248 +1547,22 @@ const formatDate = (dateStr: string) => {
 }
 
 .detail-content {
-  padding: 0 32rpx;
+  padding: 0 24rpx;
 }
 
 .section {
-  background-color: #fbfcf7;
-  margin-bottom: 24rpx;
-  border-radius: 16rpx;
-  padding: 32rpx;
-
-  .section-title {
-    display: block;
-    font-size: 30rpx;
-    font-weight: bold;
-    color: #26261f;
-    margin-bottom: 24rpx;
-  }
-}
-
-.status-card {
-  .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24rpx;
-
-    .claim-number {
-      font-size: 32rpx;
-      font-weight: bold;
-      color: #26261f;
-    }
-
-    .status-badge {
-      padding: 12rpx 24rpx;
-      border-radius: 8rpx;
-      font-size: 24rpx;
-      font-weight: bold;
-
-      &.pending {
-        background-color: #f6efe0;
-        color: #7a5c28;
-      }
-
-      &.reimbursed {
-        background-color: #eef2e4;
-        color: #1e3a2f;
-      }
-
-      &.rejected {
-        background-color: #f8e8e2;
-        color: #b4453a;
-      }
-
-      &.resubmit {
-        background-color: #f6efe0;
-        color: #7a5c28;
-      }
-    }
-  }
-
-  .card-body {
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 12rpx;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-
-      .label {
-        font-size: 26rpx;
-        color: #26261f;
-      }
-
-      .value {
-        font-size: 26rpx;
-        color: #26261f;
-        font-weight: 500;
-      }
-    }
-  }
-}
-
-.purchase-lists {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-}
-
-.purchase-card {
-  background-color: #fbfcf7;
-  border-radius: 12rpx;
-  padding: 24rpx;
-
-  .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16rpx;
-
-    .date {
-      font-size: 28rpx;
-      font-weight: bold;
-      color: #26261f;
-    }
-
-    .status {
-      font-size: 22rpx;
-      color: #1e3a2f;
-      padding: 4rpx 12rpx;
-      background-color: #eef2e4;
-      border-radius: 4rpx;
-    }
-  }
-
-  .card-body {
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 8rpx;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-
-      .label {
-        font-size: 24rpx;
-        color: #6b6653;
-      }
-
-      .value {
-        font-size: 24rpx;
-        color: #26261f;
-      }
-    }
-  }
-
-  .items-expand {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 16rpx;
-    padding-top: 16rpx;
-    border-top: 1rpx solid #e5e8d4;
-
-    .expand-text {
-      font-size: 24rpx;
-      color: #7a5c28;
-    }
-
-    .expand-icon {
-      font-size: 20rpx;
-      color: #7a5c28;
-    }
-  }
-
-  .items-list {
-    margin-top: 16rpx;
-    padding-top: 16rpx;
-    border-top: 1rpx solid #e5e8d4;
-  }
-
-  .item-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12rpx;
-
-    &:last-child {
-      margin-bottom: 0;
-    }
-
-    .item-name {
-      flex: 1;
-      font-size: 24rpx;
-      color: #26261f;
-    }
-
-    .item-quantity {
-      font-size: 24rpx;
-      color: #26261f;
-      margin-right: 16rpx;
-    }
-
-    .item-cost {
-      font-size: 24rpx;
-      font-weight: bold;
-      color: #26261f;
-    }
-  }
-}
-
-.photos-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16rpx;
-}
-
-.photo-item-wrapper {
-  position: relative;
-  width: 200rpx;
-  height: 200rpx;
-}
-
-.photo-item {
-  width: 200rpx;
-  height: 200rpx;
-
-  image {
-    width: 100%;
-    height: 100%;
-    border-radius: 12rpx;
-  }
-}
-
-.delete-btn {
-  position: absolute;
-  top: -10rpx;
-  right: -10rpx;
-  width: 44rpx;
-  height: 44rpx;
-  background-color: #b4453a;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.2);
-  z-index: 10;
-
-  text {
-    color: #f3eddd;
-    font-size: 32rpx;
-    font-weight: bold;
-    line-height: 1;
-  }
+  background-color: #fbfaf6;
+  border: 1rpx solid #eae2cf;
+  border-radius: 20rpx;
+  padding: 28rpx;
+  margin-bottom: 20rpx;
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24rpx;
+  align-items: baseline;
+  margin-bottom: 20rpx;
 
   .section-title {
     font-size: 30rpx;
@@ -1484,488 +1571,767 @@ const formatDate = (dateStr: string) => {
   }
 
   .section-hint {
-    font-size: 22rpx;
+    font-size: 24rpx;
     color: #6b6653;
   }
+}
 
-  .action-buttons {
+/* ① 单据头 */
+.header-card {
+  .card-header {
     display: flex;
-    gap: 12rpx;
-  }
-}
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16rpx;
 
-.action-btn-mini {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8rpx 20rpx;
-  border-radius: 8rpx;
-  font-size: 24rpx;
-  font-weight: bold;
-
-  &.replace {
-    background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-    color: #f3eddd;
-    box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.2);
-  }
-
-  &.delete {
-    background: #b4453a;
-    color: #f3eddd;
-    box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.2);
-  }
-
-  text {
-    color: inherit;
-  }
-}
-
-.upload-btn-mini {
-  display: flex;
-  align-items: center;
-  gap: 4rpx;
-  padding: 8rpx 16rpx;
-  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-  border-radius: 8rpx;
-  box-shadow: 0 4rpx 12rpx rgba(30, 46, 36, 0.2);
-
-  text {
-    color: #f3eddd;
-    font-size: 24rpx;
-    font-weight: bold;
-
-    &:first-child {
+    .claim-number {
       font-size: 32rpx;
-      line-height: 1;
+      font-weight: bold;
+      color: #26261f;
+      letter-spacing: 0.5rpx;
     }
   }
-}
 
-.empty-photos {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60rpx 32rpx;
-  background-color: #fbfcf7;
-  border-radius: 12rpx;
-
-  text {
+  .submit-line {
+    display: flex;
+    align-items: center;
     font-size: 26rpx;
     color: #6b6653;
 
-    &:not(.upload-hint) {
-      margin-bottom: 16rpx;
+    .submitter {
+      color: #26261f;
+      font-weight: 500;
+    }
+
+    .dot {
+      margin: 0 8rpx;
+    }
+
+    .waiting {
+      margin-left: auto;
+      font-size: 24rpx;
+      color: #7a5c28;
+      background-color: #f6efe0;
+      border-radius: 8rpx;
+      padding: 4rpx 12rpx;
     }
   }
 
-  .upload-hint {
-    color: #7a5c28;
-    text-decoration: underline;
+  .revert-notice {
+    margin-top: 16rpx;
+    padding: 12rpx 16rpx;
+    border-radius: 8rpx;
+    background-color: #f8eeea;
+    font-size: 24rpx;
+    color: #a8402f;
+    line-height: 1.5;
+  }
+
+  .reject-notice {
+    margin-top: 16rpx;
+    padding: 16rpx;
+    border-radius: 8rpx;
+    background-color: #f8eeea;
+    border-left: 6rpx solid #a8402f;
+    font-size: 24rpx;
+    color: #7d2d22;
+    line-height: 1.6;
   }
 }
 
-.review-section {
-  .review-info {
-    .info-row {
+/* ② 审核摘要 */
+.summary-card {
+  background-color: #f6f2e6;
+  border-color: #e3d8bf;
+
+  .summary-main {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-bottom: 20rpx;
+    border-bottom: 1rpx solid #e3d8bf;
+
+    .summary-label {
+      font-size: 26rpx;
+      color: #6b6653;
+    }
+
+    .summary-amount {
+      font-size: 52rpx;
+      font-weight: bold;
+      color: #22301f;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  .summary-grid {
+    display: flex;
+    padding: 20rpx 0 4rpx;
+
+    .summary-cell {
+      flex: 1;
       display: flex;
-      justify-content: space-between;
-      margin-bottom: 12rpx;
+      flex-direction: column;
+
+      .cell-label {
+        font-size: 22rpx;
+        color: #6b6653;
+        margin-bottom: 6rpx;
+      }
+
+      .cell-value {
+        font-size: 28rpx;
+        font-weight: 600;
+        color: #26261f;
+        font-variant-numeric: tabular-nums;
+
+        &.warn {
+          color: #a8402f;
+        }
+      }
+    }
+  }
+
+  .summary-alerts {
+    margin-top: 16rpx;
+    padding-top: 16rpx;
+    border-top: 1rpx solid #e3d8bf;
+
+    .alert-line {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 10rpx;
 
       &:last-child {
         margin-bottom: 0;
       }
 
-      .label {
-        font-size: 26rpx;
-        color: #26261f;
+      .alert-dot {
+        font-size: 16rpx;
+        line-height: 1.8;
+        margin-right: 8rpx;
+        color: #7a5c28;
       }
 
-      .value {
+      .alert-text {
         flex: 1;
-        font-size: 26rpx;
-        color: #26261f;
-        text-align: right;
+        font-size: 24rpx;
+        line-height: 1.6;
+        color: #4a4636;
       }
 
-      &.comment {
-        .value {
-          color: #b4453a;
+      &.danger {
+        .alert-dot,
+        .alert-text {
+          color: #a8402f;
+        }
+      }
+
+      &.warn {
+        .alert-dot,
+        .alert-text {
+          color: #8a6420;
         }
       }
     }
   }
-}
 
-.withdraw-hint {
-  display: block;
-  font-size: 21rpx;
-  color: #6b6653;
-  line-height: 1.5;
-  padding: 0 8rpx 12rpx;
-}
-
-.action-row {
-  display: flex;
-  gap: 16rpx;
-}
-
-.bottom-actions .action-btn {
-  flex: 1;
-}
-
-.bottom-actions .action-btn.withdraw {
-  background: transparent;
-  border: 1rpx solid #b4453a;
-  color: #b4453a;
-}
-
-.bottom-actions {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background-color: #fbfcf7;
-  padding: 24rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
-  box-shadow: 0 -4rpx 16rpx rgba(30, 46, 36, 0.05);
-  z-index: 100;
-
-  .action-btn {
-    width: 100%;
-    height: 88rpx;
-    border-radius: 16rpx;
-    font-size: 32rpx;
-    font-weight: bold;
-    border: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    &.resubmit {
-      background: #b4453a;
-      color: #f3eddd;
-      box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
-
-      &:active {
-        opacity: 0.8;
-      }
-    }
-
-     &.upload {
-       background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-       color: #f3eddd;
-       box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
-
-       &:active {
-         opacity: 0.8;
-       }
-
-       &[disabled] {
-         background: #f2f4ea;
-         color: #6b6653;
-         box-shadow: none;
-       }
-     }
-   }
- }
-
-.payment-proof-note {
-  margin-bottom: 16rpx;
-  padding: 16rpx 20rpx;
-  border: 1rpx solid #e5e8d4;
-  border-radius: 12rpx;
-  background-color: #eef2e4;
-
-  text {
+  .difference-note {
+    display: block;
+    margin-top: 12rpx;
     font-size: 24rpx;
-    line-height: 1.5;
-    color: #7a5c28;
+    color: #6b6653;
+    line-height: 1.6;
   }
 }
 
-.cost-summary-card {
-  background: #f6efe0;
-  border: 2rpx solid #b08d4f;
-
-  .section-title {
-    color: #7a5c28;
-    border-bottom: 2rpx solid #b08d4f;
-    padding-bottom: 16rpx;
-  }
-
-  .record-summary {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16rpx;
-    margin-bottom: 16rpx;
-    padding: 16rpx 20rpx;
-    background: rgba(251, 252, 247, 0.6);
-    border: 1rpx solid rgba(176, 141, 79, 0.12);
-    border-radius: 14rpx;
-
-    .record-summary-title {
-      flex: 1;
-      font-size: 28rpx;
-      font-weight: bold;
-      color: #7a5c28;
-      line-height: 1.3;
-    }
-
-    .record-summary-total {
-      flex-shrink: 0;
-      font-size: 32rpx;
-      font-weight: bold;
-      color: #b4453a;
-      line-height: 1;
-    }
-  }
-
-  .record-audit-list {
-    display: flex;
-    flex-direction: column;
-    gap: 14rpx;
-    margin-bottom: 20rpx;
-  }
-
-  .record-audit-card {
-    padding: 18rpx 20rpx;
-    background: rgba(251, 252, 247, 0.6);
-    border-radius: 14rpx;
-    box-shadow: inset 0 0 0 1rpx rgba(30, 46, 36, 0.35);
-  }
-
-  .record-audit-top {
-    margin-bottom: 12rpx;
-  }
-
-  .record-audit-main {
-    display: flex;
-    flex-direction: column;
-    gap: 8rpx;
-  }
-
-  .record-audit-heading {
+/* ③ 金额构成 */
+.breakdown {
+  .breakdown-row {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    gap: 16rpx;
-  }
+    padding: 10rpx 0;
+    font-size: 26rpx;
+    color: #4a4636;
 
-  .record-audit-title {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 4rpx;
-    min-width: 0;
-  }
-
-  .record-audit-name {
-    font-size: 28rpx;
-    font-weight: bold;
-    color: #26261f;
-    line-height: 1.4;
-  }
-
-  .record-audit-subtitle {
-    font-size: 22rpx;
-    color: #7a5c28;
-    line-height: 1.35;
-  }
-
-  .record-audit-cost {
-    flex-shrink: 0;
-    font-size: 28rpx;
-    font-weight: 800;
-    color: #26261f;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .record-audit-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6rpx;
-  }
-
-  .meta-chip {
-    padding: 2rpx 10rpx;
-    border-radius: 999rpx;
-    background: rgba(176, 141, 79, 0.08);
-    font-size: 22rpx;
-    color: #7a5c28;
-    line-height: 1.35;
-  }
-
-  .record-audit-metrics {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8rpx;
-  }
-
-  .metric-pill {
-    display: flex;
-    align-items: center;
-    gap: 8rpx;
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-    padding: 10rpx 12rpx;
-    background: #f6efe0;
-    border-radius: 10rpx;
-
-    .metric-label {
-      font-size: 22rpx;
-      color: #6b6653;
-      white-space: nowrap;
+    .breakdown-value {
+      font-variant-numeric: tabular-nums;
+      color: #26261f;
     }
 
-    .metric-value {
-      flex: 1;
-      min-width: 0;
-      font-size: 24rpx;
-      font-weight: 600;
-      color: #26261f;
-      line-height: 1.4;
-      word-break: normal;
-      white-space: nowrap;
-      text-align: right;
+    &.total {
+      margin-top: 8rpx;
+      padding-top: 16rpx;
+      border-top: 1rpx solid #eae2cf;
 
-      &.up {
-        color: #b4453a;
-      }
-
-      &.down {
-        color: #1e3a2f;
-      }
-
-      &.flat,
-      &.neutral {
+      .breakdown-label {
+        font-weight: bold;
         color: #26261f;
       }
-    }
 
-    &.full-width {
-      grid-column: 1 / -1;
-    }
-  }
-
-  .record-audit-extra {
-    display: flex;
-    flex-direction: column;
-    gap: 6rpx;
-    margin-top: 10rpx;
-    padding-top: 10rpx;
-    border-top: 1rpx dashed rgba(176, 141, 79, 0.2);
-
-    .extra-text {
-      font-size: 22rpx;
-      color: #7a5c28;
-      line-height: 1.4;
+      .breakdown-value {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #22301f;
+      }
     }
   }
+}
 
-  .record-empty-state {
-    margin-bottom: 24rpx;
-    padding: 32rpx 24rpx;
-    border-radius: 16rpx;
-    background: rgba(251, 252, 247, 0.6);
-    text-align: center;
+.breakdown-hint {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #8a6420;
+  line-height: 1.5;
+}
 
-    text {
-      font-size: 24rpx;
-      color: #6b6653;
-      line-height: 1.6;
-    }
+/* 图片 */
+.photos-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 -8rpx;
+
+  .photo-item-wrapper {
+    position: relative;
+    width: 25%;
+    padding: 8rpx;
+    box-sizing: border-box;
   }
 
-  .cost-row {
+  .photo-item {
+    width: 100%;
+    height: 140rpx;
+    border-radius: 10rpx;
+    overflow: hidden;
+    background-color: #efeade;
+
+    image {
+      width: 100%;
+      height: 100%;
+    }
+  }
+}
+
+.delete-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 20rpx;
+  background-color: rgba(168, 64, 47, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  text {
+    color: #fff;
+    font-size: 26rpx;
+    line-height: 1;
+  }
+}
+
+.empty-block {
+  padding: 24rpx;
+  border-radius: 12rpx;
+  background-color: #f7f4ea;
+  display: flex;
+  flex-direction: column;
+
+  .empty-text {
+    font-size: 26rpx;
+    color: #4a4636;
+  }
+
+  .empty-sub {
+    margin-top: 8rpx;
+    font-size: 22rpx;
+    color: #6b6653;
+    line-height: 1.5;
+  }
+}
+
+.inline-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 20rpx;
+
+  .ghost-btn {
+    flex: 1;
+    height: 72rpx;
+    line-height: 72rpx;
+    font-size: 26rpx;
+    color: #22301f;
+    background-color: #eef2e4;
+    border: 1rpx solid #d8dfc6;
+    border-radius: 12rpx;
+    padding: 0;
+
+    &::after {
+      border: none;
+    }
+
+    &.danger {
+      color: #a8402f;
+      background-color: #f8eeea;
+      border-color: #ecd6ce;
+    }
+  }
+}
+
+/* ⑥ 采购明细 */
+.record-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.record-card {
+  background-color: #fffefb;
+  border: 1rpx solid #ece4d2;
+  border-radius: 14rpx;
+  padding: 22rpx;
+  transition: background-color 0.2s ease;
+
+  &.highlighted {
+    background-color: #fdf6e3;
+    border-color: #d9b96a;
+  }
+
+  .record-head {
     display: flex;
     justify-content: space-between;
+    align-items: flex-start;
+
+    .record-title-wrap {
+      flex: 1;
+      padding-right: 16rpx;
+
+      .record-name {
+        display: block;
+        font-size: 28rpx;
+        font-weight: 600;
+        color: #26261f;
+        line-height: 1.4;
+      }
+
+      .record-sub {
+        display: block;
+        margin-top: 4rpx;
+        font-size: 22rpx;
+        color: #6b6653;
+      }
+    }
+
+    .record-cost {
+      font-size: 30rpx;
+      font-weight: bold;
+      color: #26261f;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  .record-meta {
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: 12rpx;
+
+    .meta-chip {
+      font-size: 20rpx;
+      color: #6b6653;
+      background-color: #f4f1e6;
+      border-radius: 6rpx;
+      padding: 4rpx 10rpx;
+      margin-right: 10rpx;
+      margin-bottom: 8rpx;
+
+      &.warn {
+        color: #8a6420;
+        background-color: #f8efd9;
+      }
+
+      &.accent {
+        color: #a8402f;
+        background-color: #f8eeea;
+      }
+    }
+  }
+
+  .record-metrics {
+    display: flex;
+    margin-top: 6rpx;
+
+    .metric {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+
+      .metric-label {
+        font-size: 20rpx;
+        color: #8a8472;
+        margin-bottom: 4rpx;
+      }
+
+      .metric-value {
+        font-size: 24rpx;
+        color: #26261f;
+        line-height: 1.4;
+        word-break: break-word;
+        font-variant-numeric: tabular-nums;
+
+        &.muted {
+          color: #6b6653;
+        }
+      }
+    }
+  }
+
+  .record-note {
+    display: block;
+    margin-top: 12rpx;
+    font-size: 22rpx;
+    color: #6b6653;
+    line-height: 1.5;
+  }
+}
+
+/* ⑦ 价格变更 */
+.price-table {
+  border-radius: 12rpx;
+  overflow: hidden;
+  border: 1rpx solid #ece4d2;
+  background-color: #fffefb;
+
+  .price-row {
+    display: flex;
     align-items: center;
-    padding: 16rpx 0;
-    border-bottom: 1rpx solid rgba(0, 0, 0, 0.05);
+    padding: 16rpx 18rpx;
+    border-bottom: 1rpx solid #f1ebdc;
+    font-size: 24rpx;
 
     &:last-child {
       border-bottom: none;
     }
 
-    .label {
-      font-size: 28rpx;
-      color: #26261f;
-    }
+    &.price-head {
+      background-color: #f6f2e6;
+      font-size: 22rpx;
+      color: #6b6653;
 
-    .value {
-      font-size: 30rpx;
-      font-weight: bold;
-      color: #26261f;
-    }
-  }
-
-  .custom-fees-section {
-    margin: 16rpx 0;
-    padding: 16rpx;
-    background-color: rgba(251, 252, 247, 0.6);
-    border-radius: 12rpx;
-
-    .custom-fees-title {
-      display: block;
-      font-size: 26rpx;
-      color: #7a5c28;
-      margin-bottom: 12rpx;
-      font-weight: bold;
-    }
-
-    .custom-fee-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      padding: 8rpx 0;
-
-      .fee-copy {
-        flex: 1;
-        padding-right: 16rpx;
-
-        .fee-desc {
-          display: block;
-          font-size: 26rpx;
-          color: #26261f;
-        }
-
-        .fee-note {
-          display: block;
-          margin-top: 6rpx;
-          font-size: 22rpx;
-          color: #6b6653;
-        }
-      }
-
-      .fee-amount {
-        font-size: 26rpx;
-        font-weight: bold;
-        color: #26261f;
+      .col-name,
+      .col-num,
+      .col-delta {
+        color: #6b6653;
       }
     }
-  }
 
-  .total-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 16rpx;
-    padding-top: 16rpx;
-    border-top: 2rpx solid #b08d4f;
+    .col-name {
+      flex: 1;
+      min-width: 0;
+      color: #26261f;
+      padding-right: 8rpx;
 
-    .total-label {
-      font-size: 32rpx;
-      font-weight: bold;
-      color: #7a5c28;
+      .price-status {
+        margin-left: 6rpx;
+        font-size: 18rpx;
+        color: #6b6653;
+      }
     }
 
-    .total-value {
-      font-size: 40rpx;
-      font-weight: 800;
+    .col-num {
+      width: 150rpx;
+      text-align: right;
       color: #26261f;
       font-variant-numeric: tabular-nums;
+    }
+
+    .col-delta {
+      width: 130rpx;
+      text-align: right;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+
+      &.up {
+        color: #a8402f;
+      }
+
+      &.down {
+        color: #2f6b4f;
+      }
+
+      &.flat {
+        color: #8a8472;
+        font-weight: normal;
+      }
+    }
+  }
+}
+
+.price-footnote {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: #6b6653;
+  line-height: 1.5;
+}
+
+/* ⑧ 审核记录 */
+.timeline {
+  .timeline-item {
+    display: flex;
+    padding-bottom: 22rpx;
+
+    &:last-child {
+      padding-bottom: 0;
+    }
+
+    .timeline-dot {
+      width: 14rpx;
+      height: 14rpx;
+      border-radius: 7rpx;
+      margin-top: 10rpx;
+      margin-right: 14rpx;
+      background-color: #c8bfa4;
+    }
+
+    .timeline-body {
+      flex: 1;
+
+      .timeline-title {
+        display: block;
+        font-size: 26rpx;
+        color: #26261f;
+        font-weight: 500;
+      }
+
+      .timeline-desc {
+        display: block;
+        margin-top: 4rpx;
+        font-size: 22rpx;
+        color: #6b6653;
+        line-height: 1.5;
+      }
+    }
+
+    &.done .timeline-dot {
+      background-color: #2f6b4f;
+    }
+
+    &.pending .timeline-dot {
+      background-color: #8a6420;
+    }
+
+    &.danger .timeline-dot {
+      background-color: #a8402f;
+    }
+  }
+}
+
+/* 底部操作 */
+.bottom-actions {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
+  background-color: rgba(251, 252, 247, 0.96);
+  border-top: 1rpx solid #eae2cf;
+
+  .bottom-hint {
+    display: block;
+    font-size: 22rpx;
+    color: #8a6420;
+    line-height: 1.4;
+    margin-bottom: 10rpx;
+  }
+
+  .action-row {
+    display: flex;
+    gap: 16rpx;
+
+    .action-btn {
+      flex: 1;
+      height: 88rpx;
+      line-height: 88rpx;
+      border-radius: 14rpx;
+      font-size: 30rpx;
+      font-weight: 600;
+      padding: 0;
+
+      &::after {
+        border: none;
+      }
+
+      &.reject {
+        flex: 0 0 200rpx;
+        color: #a8402f;
+        background-color: #f8eeea;
+        border: 1rpx solid #ecd6ce;
+      }
+
+      &.approve {
+        color: #fbfcf7;
+        background-color: #22301f;
+      }
+
+      &.approve.disabled {
+        background-color: #b9bfae;
+      }
+
+      &.revert {
+        color: #a8402f;
+        background-color: #f8eeea;
+        border: 1rpx solid #ecd6ce;
+      }
+
+      &.withdraw {
+        color: #6b6653;
+        background-color: #f4f1e6;
+        border: 1rpx solid #e0d8c4;
+      }
+
+      &.resubmit {
+        color: #fbfcf7;
+        background-color: #22301f;
+      }
+    }
+  }
+}
+
+/* 弹层 */
+.sheet-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-color: rgba(20, 22, 16, 0.45);
+  display: flex;
+  align-items: flex-end;
+  z-index: 20;
+}
+
+.sheet {
+  width: 100%;
+  background-color: #fbfcf7;
+  border-radius: 24rpx 24rpx 0 0;
+  padding: 32rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+
+  .sheet-title {
+    display: block;
+    font-size: 32rpx;
+    font-weight: bold;
+    color: #26261f;
+  }
+
+  .sheet-sub {
+    display: block;
+    margin-top: 8rpx;
+    font-size: 24rpx;
+    color: #6b6653;
+    line-height: 1.6;
+  }
+
+  .reason-chips {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 20rpx -6rpx 0;
+
+    .chip {
+      margin: 0 6rpx 12rpx;
+      padding: 12rpx 20rpx;
+      border-radius: 999rpx;
+      font-size: 24rpx;
+      color: #4a4636;
+      background-color: #f4f1e6;
+      border: 1rpx solid #e6ddc7;
+
+      &.active {
+        color: #a8402f;
+        background-color: #f8eeea;
+        border-color: #dfb9ae;
+      }
+    }
+  }
+
+  .sheet-textarea {
+    width: 100%;
+    height: 140rpx;
+    margin-top: 16rpx;
+    padding: 16rpx;
+    box-sizing: border-box;
+    background-color: #f7f4ea;
+    border-radius: 12rpx;
+    font-size: 26rpx;
+    color: #26261f;
+  }
+
+  .confirm-rows {
+    margin-top: 20rpx;
+    padding: 8rpx 20rpx;
+    background-color: #f7f4ea;
+    border-radius: 12rpx;
+
+    .confirm-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 14rpx 0;
+      font-size: 26rpx;
+      border-bottom: 1rpx solid #ebe4d2;
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      .confirm-label {
+        color: #6b6653;
+      }
+
+      .confirm-value {
+        color: #26261f;
+        font-weight: 600;
+      }
+    }
+  }
+
+  .sheet-actions {
+    display: flex;
+    gap: 16rpx;
+    margin-top: 24rpx;
+
+    .sheet-btn {
+      flex: 1;
+      height: 88rpx;
+      line-height: 88rpx;
+      border-radius: 14rpx;
+      font-size: 30rpx;
+      padding: 0;
+      color: #4a4636;
+      background-color: #f1eee3;
+      border: 1rpx solid #e2dac6;
+
+      &::after {
+        border: none;
+      }
+
+      &.primary {
+        color: #fbfcf7;
+        background-color: #22301f;
+        border-color: #22301f;
+      }
+
+      &.primary.danger {
+        background-color: #a8402f;
+        border-color: #a8402f;
+      }
+
+      &.warning {
+        background-color: #8a6420;
+        border-color: #8a6420;
+      }
     }
   }
 }

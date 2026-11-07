@@ -59,51 +59,60 @@ describe('staff purchasing wording', () => {
 });
 
 describe('staff reimbursement detail guardrails', () => {
-  it('uses reimbursement completion wording instead of approval wording', () => {
-    expect(reimbursementListSource).toContain("label: '待报销', value: 'PENDING_REVIEW'");
-    expect(reimbursementListSource).toContain("'PENDING_REVIEW': '待报销'");
+  it('uses review wording instead of reimbursement-completion wording', () => {
+    expect(reimbursementListSource).toContain("label: '待审核', value: 'PENDING_REVIEW'");
+    expect(reimbursementListSource).toContain("'PENDING_REVIEW': '待审核'");
     expect(reimbursementListSource).toContain('报销处理人');
-    expect(reimbursementListSource).not.toContain('待审核');
-    expect(reimbursementListSource).not.toContain('审核人');
+    expect(reimbursementListSource).not.toContain('待报销');
 
-    expect(reimbursementDetailSource).toContain("'PENDING_REVIEW': '待报销'");
-    expect(reimbursementDetailSource).not.toContain('待审核');
+    expect(reimbursementDetailSource).toContain("PENDING_REVIEW: '待审核'");
+    expect(reimbursementDetailSource).not.toContain('待报销');
     expect(reimbursementDetailSource).not.toContain('按实际采购记录审核');
   });
 
-  it('keeps reimbursement purchase record cards focused on SKU, stock, and comparable prices', () => {
+  it('keeps purchase records focused on SKU, quantity source, and comparable prices', () => {
     expect(reimbursementDetailSource).toContain('record.procurementSkuName || record.ingredientName');
-    expect(reimbursementDetailSource).toContain('标准原料：{{ record.ingredientName }}');
-    expect(reimbursementDetailSource).toContain('当前库存');
-    expect(reimbursementDetailSource).toContain('formatSkuStockText(record, purchaseItem)');
+    expect(reimbursementDetailSource).toContain('标准原料：');
     expect(reimbursementDetailSource).toContain('折算单价');
-    expect(reimbursementDetailSource).toContain('上次折算单价');
-    expect(reimbursementDetailSource).toContain('getRecordPurchaseUnit(record');
+    expect(reimbursementDetailSource).toContain('上次单价');
+    expect(reimbursementDetailSource).toContain('无订单截图');
     expect(reimbursementDetailSource).toContain('formatComparableUnitPrice(record, purchaseItem)');
     expect(reimbursementDetailSource).toContain('formatComparablePreviousUnitPrice(purchaseItem, priceChange, record)');
     expect(reimbursementDetailSource).toContain("return '500g';");
     expect(reimbursementDetailSource).toContain("return '500ml';");
-    expect(reimbursementDetailSource).toContain('stockText: formatSkuStockText(record, purchaseItem)');
 
+    // 2026-11-07：审核员不需要「需要采购 / 当前库存 / 增减幅度」，这些已从卡片移除
+    expect(reimbursementDetailSource).not.toContain('当前库存');
+    expect(reimbursementDetailSource).not.toContain('需要采购');
+    expect(reimbursementDetailSource).not.toContain('增减幅度');
+    expect(reimbursementDetailSource).not.toContain('formatSkuStockText');
     expect(reimbursementDetailSource).not.toContain('record-summary-hint');
     expect(reimbursementDetailSource).not.toContain('按实际采购记录归档');
-    expect(reimbursementDetailSource).not.toContain('record.listDateText');
-    expect(reimbursementDetailSource).not.toContain('record.purchasedAtText');
-    expect(reimbursementDetailSource).not.toContain('采购单价');
-    expect(reimbursementDetailSource).not.toContain('上次采购单价');
-    expect(reimbursementDetailSource).not.toContain('金额信息');
-    expect(reimbursementDetailSource).not.toContain('formula-row');
-    expect(reimbursementDetailSource).not.toContain('costFormula');
-    expect(reimbursementDetailSource).not.toContain('class="metric-pill full-width"');
   });
 
-  it('treats payment-proof upload as reimbursement completion and price confirmation', () => {
-    expect(reimbursementDetailSource).toContain('pendingPriceChangeCount');
-    expect(reimbursementDetailSource).toContain('上传报销凭证后将确认本次价格变更并完成报销');
-    expect(reimbursementDetailSource).toContain(':disabled="uploading"');
-    expect(reimbursementDetailSource).not.toContain('请先审核报销单中的价格变更');
-    expect(reimbursementDetailSource).not.toContain(':disabled="uploading || hasPendingPriceChanges"');
-    expect(reimbursementDetailSource).not.toContain('存在待人工审核的价格变更，请先审核报销单');
+  it('separates payment-proof upload from approval (2026-11-07)', () => {
+    // 上传只挂附件，不再自动完成报销
+    expect(purchasingApiSource).toContain("autoComplete: 'false'");
+    expect(reimbursementDetailSource).not.toContain('上传报销凭证后将确认本次价格变更并完成报销');
+
+    // 通过 / 驳回 / 撤销 是三个独立动作
+    expect(reimbursementDetailSource).toContain('reviewReimbursement(');
+    expect(reimbursementDetailSource).toContain("'REQUIRES_RESUBMIT'");
+    expect(reimbursementDetailSource).toContain('revertReimbursementReview(');
+    expect(reimbursementDetailSource).toContain('审核通过');
+    expect(reimbursementDetailSource).toContain('撤销审核');
+
+    // 没凭证时不能点通过
+    expect(reimbursementDetailSource).toContain('先上传付款凭证');
+  });
+
+  it('shows price changes as a read-only three-column table', () => {
+    expect(reimbursementDetailSource).toContain('>原价<');
+    expect(reimbursementDetailSource).toContain('>新价<');
+    expect(reimbursementDetailSource).toContain('>涨跌<');
+    expect(reimbursementDetailSource).toContain('getDeltaTone');
+    expect(reimbursementDetailSource).not.toContain('确认应用');
+    expect(reimbursementDetailSource).not.toContain('月成本影响');
   });
 });
 
@@ -343,9 +352,10 @@ describe('staff purchasing purchase record form', () => {
   });
 
   it('does not show redundant normalized purchase summaries in reimbursement detail', () => {
-    expect(reimbursementDetailSource).toContain('const baseSummary');
-    expect(reimbursementDetailSource).toContain('const purchaseSummary');
-    expect(reimbursementDetailSource).toContain('purchaseSummary === baseSummary');
+    // 2026-11-07：折算说明整段从审核页移除，只保留「2 × 1000 g（共 2 kg）」这种
+    // 一眼能读的数量写法，不再额外折一行「折算 x ≈ y」
+    expect(reimbursementDetailSource).not.toContain('formatRecordNormalizedSummary');
+    expect(reimbursementDetailSource).not.toContain('折算 ');
     expect(reimbursementDetailSource).not.toContain("parts.join(' ≈ ')");
   });
 

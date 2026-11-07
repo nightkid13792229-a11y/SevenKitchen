@@ -105,7 +105,7 @@ import { summarizeReimbursementCustomFees } from '../constants/reimbursement';
 // 状态筛选标签
 const statusTabs = [
   { label: '全部', value: '' },
-  { label: '待报销', value: 'PENDING_REVIEW' },
+  { label: '待审核', value: 'PENDING_REVIEW' },
   { label: '已报销', value: 'REIMBURSED' },
   { label: '已驳回', value: 'REJECTED' },
   { label: '需重提', value: 'REQUIRES_RESUBMIT' },
@@ -204,7 +204,7 @@ const goToSubmit = () => {
 // 获取状态文本
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
-    'PENDING_REVIEW': '待报销',
+    'PENDING_REVIEW': '待审核',
     'REIMBURSED': '已报销',
     'REJECTED': '已驳回',
     'REQUIRES_RESUBMIT': '需重新提交',
@@ -269,7 +269,7 @@ const getExpenseSummary = (item: any) => {
   return parts.join('、');
 };
 
-// 判断是否可以删除（只有待报销、已驳回、需重新提交状态可以删除）
+// 判断是否可以删除（只有待审核、已驳回、需重新提交状态可以删除）
 const canDelete = (item: any) => {
   return ['PENDING_REVIEW', 'REJECTED', 'REQUIRES_RESUBMIT'].includes(item.status);
 };

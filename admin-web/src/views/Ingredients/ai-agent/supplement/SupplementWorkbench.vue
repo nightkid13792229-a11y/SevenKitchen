@@ -58,6 +58,9 @@
     <section class="wb-archive">
       <div class="wb-archive__head">
         <b>补剂档案</b>
+        <el-button text size="small" data-action="open-compare" @click="compareOpen = true">
+          比一比候选
+        </el-button>
         <el-button
           v-if="pending.length > 0"
           text
@@ -299,6 +302,10 @@
       </div>
     </section>
 
+    <el-drawer v-model="compareOpen" title="比一比候选" size="760px">
+      <SupplementCompare @use="adoptCandidate" />
+    </el-drawer>
+
     <el-drawer v-model="pendingOpen" title="待验证的补剂档案" size="460px">
       <p class="wb-drawer__hint">
         这些档案已经写进库，但还没确认可用，所以配方里选不到。确认后才会进配方。
@@ -346,6 +353,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
+import SupplementCompare from './SupplementCompare.vue'
 import { ingredientCatalogApi, type FeedAdditiveMatch } from '@/api/ingredientCatalog'
 import { nutritionFoodApi } from '@/api/ingredients'
 import type {
@@ -384,6 +392,7 @@ const previewSkipped = ref<string[]>([])
 const catalogOptions = ref<FeedAdditiveMatch[]>([])
 const catalogLoading = ref(false)
 const catalogHint = ref('')
+const compareOpen = ref(false)
 
 const tagSuggestions = ['油脂类', '矿物质', '维生素', '益生菌', '关节', '膳食纤维']
 
@@ -507,6 +516,21 @@ async function searchCatalog(keyword: string): Promise<void> {
   } finally {
     catalogLoading.value = false
   }
+}
+
+/** 从对比里挑中一个：把名字、采购价、换算倍数带回表单，其它还是人填。 */
+function adoptCandidate(payload: { name: string; price: number | null; units: number | null }): void {
+  if (payload.name && !draft.name.trim()) {
+    draft.name = payload.name
+  }
+  if (payload.price && payload.price > 0) {
+    draft.currentPricePerPurchaseUnit = payload.price
+  }
+  if (payload.units && payload.units > 0) {
+    draft.purchaseToBaseRatio = payload.units
+  }
+  compareOpen.value = false
+  ElMessage.success('已把选中的那个带进表单，剩下的照标签补')
 }
 
 async function readLink(): Promise<void> {

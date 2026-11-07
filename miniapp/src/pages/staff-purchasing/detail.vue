@@ -5032,7 +5032,7 @@ const confirmDeleteItem = (item: any) => {
 }
 
 .sku-picker-list {
-  height: 40vh;
+  height: 36vh;
   margin: 18rpx 24rpx 0;
   border-radius: 24rpx;
   border: 1rpx solid #e7dfc9;

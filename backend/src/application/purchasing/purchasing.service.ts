@@ -61,6 +61,7 @@ import { InventoryService } from '../inventory/inventory.service';
 import { resolvePreparationMethodTokens } from '../recipe/preparation-method-text.util';
 import { SearchGovernanceService } from '../search-governance/search-governance.service';
 import { perBaseUnitCostOrInfinity } from '../../domain/ingredient/unit-price';
+import { resolvePurchaseLineRatio } from '../../domain/purchasing/purchase-line-ratio';
 
 const MAX_SEARCH_EXPANSION_TERMS = 8;
 
@@ -1174,9 +1175,50 @@ export class PurchasingService {
     );
   }
 
-  private resolvePurchaseToBaseRatio(purchaseItem: PurchaseItem): number {
-    const ratio = Number(purchaseItem.ingredient?.purchaseToBaseRatio ?? 0);
-    if (!Number.isFinite(ratio) || ratio <= 0) {
+  /**
+   * 采购明细的换算（2026-11-07 成本口径归位 · Task 6）。
+   *
+   * 优先取**这一行选中的采购商品**的换算，没有商品才退回原料档案。
+   * 原因：实际买的是某个商品，一件 400g 和一件 500g 是两回事；
+   * 食材档案的换算现在固定为 1，退回它会把「2 袋」记成「2 克」。
+   *
+   * 商品被停用后不在预加载列表里，这里兜一次单查 —— 停用不影响历史采购怎么折算。
+   */
+  private async resolvePurchaseToBaseRatio(
+    purchaseItem: PurchaseItem,
+  ): Promise<number> {
+    const loadedSkus = purchaseItem.ingredient?.procurementSkus ?? [];
+    let ratio = resolvePurchaseLineRatio({
+      procurementSkuId: purchaseItem.procurementSkuId,
+      skus: loadedSkus,
+      ingredientRatio: purchaseItem.ingredient?.purchaseToBaseRatio,
+    });
+
+    if (
+      ratio === null &&
+      purchaseItem.procurementSkuId &&
+      !loadedSkus.some((sku) => sku.id === purchaseItem.procurementSkuId)
+    ) {
+      // 商品可能已被删除（采购记录只存 id，没有外键）：查不到就当没有，
+      // 退回原料档案的换算，不能让一条历史采购记录因此改不动。
+      const sku = await this.procurementSkuService
+        .findById(purchaseItem.procurementSkuId)
+        .catch(() => null);
+      ratio = resolvePurchaseLineRatio({
+        procurementSkuId: purchaseItem.procurementSkuId,
+        skus: sku
+          ? [
+              {
+                id: purchaseItem.procurementSkuId,
+                purchaseToBaseRatio: sku.purchaseToBaseRatio,
+              },
+            ]
+          : [],
+        ingredientRatio: purchaseItem.ingredient?.purchaseToBaseRatio,
+      });
+    }
+
+    if (ratio === null) {
       throw new BadRequestException(
         `原料 ${purchaseItem.ingredientName} 缺少有效的采购换算系数，无法折算实际采购量`,
       );
@@ -1432,12 +1474,12 @@ export class PurchasingService {
     return this.roundNumber(converted, 3);
   }
 
-  private buildNormalizedPurchaseRecordData(
+  private async buildNormalizedPurchaseRecordData(
     purchaseItem: PurchaseItem,
     dto: AddPurchaseRecordDto | UpdatePurchaseRecordDto,
     existingRecord?: PurchaseRecord,
-  ): NormalizedPurchaseRecordData {
-    const purchaseToBaseRatio = this.resolvePurchaseToBaseRatio(purchaseItem);
+  ): Promise<NormalizedPurchaseRecordData> {
+    const purchaseToBaseRatio = await this.resolvePurchaseToBaseRatio(purchaseItem);
     const baseUnit = this.resolveBaseUnit(purchaseItem);
     const density = this.resolveDensity(purchaseItem);
     const rawFactsProvided =
@@ -4010,7 +4052,7 @@ export class PurchasingService {
       throw new BadRequestException('所选生产/采购SKU 与采购明细原料不匹配');
     }
 
-    const normalizedRecordData = this.buildNormalizedPurchaseRecordData(
+    const normalizedRecordData = await this.buildNormalizedPurchaseRecordData(
       purchaseItem,
       dto,
     );
@@ -4105,7 +4147,7 @@ export class PurchasingService {
       throw new BadRequestException('请选择已配置的采购 SKU 后再记录采购');
     }
 
-    const normalizedRecordData = this.buildNormalizedPurchaseRecordData(
+    const normalizedRecordData = await this.buildNormalizedPurchaseRecordData(
       purchaseItem,
       dto,
       purchaseRecord,

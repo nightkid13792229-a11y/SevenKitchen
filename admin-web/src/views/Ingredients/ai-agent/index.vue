@@ -48,7 +48,6 @@
           >
             <b>补剂类原料</b>
             <span>矿物质、维生素、鱼油、益生菌</span>
-            <el-tag size="small" type="info" effect="plain">暂未开放</el-tag>
           </button>
         </div>
       </el-card>

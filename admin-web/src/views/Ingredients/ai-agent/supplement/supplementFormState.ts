@@ -122,6 +122,13 @@ export function findMissingHumanFields(draft: SupplementDraftValue): string[] {
   if (draft.tagNames.length === 0) {
     missing.push('tagNames')
   }
+  // 合规两格：阶段四由 AI 查目录预填，在那之前没人填就是没人填
+  if (!draft.labelCategory) {
+    missing.push('labelCategory')
+  }
+  if (draft.labelNames.length === 0) {
+    missing.push('labelNames')
+  }
   return missing
 }
 
@@ -132,6 +139,9 @@ export function toCreatePayload(
     return null
   }
   if (findMissingHumanFields(draft).length > 0) {
+    return null
+  }
+  if (!draft.purchaseUnit.trim()) {
     return null
   }
   if (!draft.servingUnitsPerDose || draft.servingUnitsPerDose < 1) {

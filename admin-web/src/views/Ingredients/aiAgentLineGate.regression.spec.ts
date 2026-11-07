@@ -23,9 +23,12 @@ describe('AI 添加原料 · 线路闸门', () => {
     expect(page).toContain('这次添加的是哪一类原料')
   })
 
-  it('补剂给出「未开放」的闸门，而不是偷偷按食材跑', () => {
-    expect(page).toContain('补剂线还没开放')
-    expect(page).toContain('改回食材')
+  it('选补剂落到对照屏，而不是偷偷按食材跑', () => {
+    // 2026-11-07 起补剂线开放：这里是补剂自己的工作台，不是食材那套
+    expect(page).toContain('<SupplementWorkbench />')
+    expect(page).not.toContain('补剂线还没开放')
+    // 入口卡上也不能再挂着「暂未开放」——否则没人会点进来
+    expect(page).not.toContain('暂未开放')
   })
 
   it('没建草稿之前可以换线路', () => {
@@ -48,8 +51,8 @@ describe('AI 添加原料 · 线路闸门', () => {
     expect(page).not.toContain('entryLine:')
   })
 
-  it('「改回食材」直接落到食材线', () => {
-    expect(page).toContain('@click="revertToFood"')
+  it('补剂页仍然留着「换线路」，走的是同一个 resetLine', () => {
+    expect(page).toContain('@click="resetLine"')
   })
 
   it('旧判断页的地址被重定向到唯一入口', () => {

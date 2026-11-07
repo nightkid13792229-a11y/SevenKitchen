@@ -24,6 +24,13 @@ export interface SupplementCardField {
 /** 人必须自己定的两格。界面永远展开、标黄，写入按钮由它们把关。 */
 export const SUPPLEMENT_HUMAN_FIELD_KEYS = ['tagNames', 'addTiming'] as const
 
+/**
+ * 合规那两格：阶段一必须人填，阶段四改由 AI 查目录预填。
+ * 它们不算「AI 不该替你定」，而是「现在还没有 AI，先由人顶上」——
+ * 所以单独一组，免得把"AI 会填"和"AI 不敢填"混成一件事。
+ */
+export const SUPPLEMENT_COMPLIANCE_FIELD_KEYS = ['labelCategory', 'labelNames'] as const
+
 export const SUPPLEMENT_CARD_FIELDS: SupplementCardField[] = [
   { key: 'name', label: '原料名称', group: 'BASIC', owner: 'AI', required: true },
   { key: 'unitDisplayLabel', label: '单位展示名', group: 'BASIC', owner: 'AI', required: true },

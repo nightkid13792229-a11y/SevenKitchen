@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import {
@@ -21,7 +22,7 @@ const body = {
   purchaseUnit: '瓶',
   purchaseToBaseRatio: 120,
   currentPricePerPurchaseUnit: 398,
-  addTiming: 'DURING_PRODUCTION',
+  addTiming: 'BEFORE_MIXING',
   productionLossRate: 1.05,
   diyEnabled: true,
   procurementEnabled: true,
@@ -55,6 +56,19 @@ describe('CreateSupplementIngredientDto', () => {
     const errors = await errorsOf({ ...body, servingUnitsPerDose: 0 });
     expect(errors.map((error) => error.property)).toContain('servingUnitsPerDose');
   });
+
+  it('添加时机用了词表外的值时校验不过', async () => {
+    const errors = await errorsOf({ ...body, addTiming: 'DURING_PRODUCTION' })
+    expect(errors.map((error) => error.property)).toContain('addTiming')
+  })
+
+  it('营养素不是数字时映射阶段直接 400，不做类型转换', async () => {
+    const dto = plainToInstance(CreateSupplementIngredientDto, {
+      ...body,
+      perUnitNutrients: { 'fattyAcids.epa': '650' },
+    })
+    expect(() => toCreateSupplementInput(dto, 'user-1')).toThrow(BadRequestException)
+  })
 
   it('单位不在白名单里时校验不过', async () => {
     const errors = await errorsOf({ ...body, unitDisplayLabel: '袋' });

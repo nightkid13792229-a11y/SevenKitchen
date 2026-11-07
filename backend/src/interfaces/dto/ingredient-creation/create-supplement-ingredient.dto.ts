@@ -12,6 +12,7 @@ import {
   IsOptional,
   IsString,
   MaxLength,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -32,6 +33,9 @@ export const SUPPLEMENT_UNIT_LABELS = [
 ] as const;
 
 const PHYSICAL_FORMS = ['POWDER', 'TABLET', 'CAPSULE', 'LIQUID'] as const;
+
+/** 与 domain/ingredient/supplement-add-timing.ts 同一套词表，别自己造。 */
+export const SUPPLEMENT_ADD_TIMINGS = ['BEFORE_MIXING', 'BEFORE_MEAL'] as const;
 
 export class SupplementEvidenceDto {
   @ApiPropertyOptional({ description: '商品链接' })
@@ -74,7 +78,7 @@ export class CreateSupplementIngredientDto {
   @ApiPropertyOptional({ description: '产品规格' })
   @IsOptional()
   @IsString()
-  @MaxLength(200)
+  @MaxLength(100)
   productModel?: string;
 
   @ApiPropertyOptional({ description: '采购渠道' })
@@ -107,14 +111,14 @@ export class CreateSupplementIngredientDto {
   @Min(0.01)
   currentPricePerPurchaseUnit!: number;
 
-  @ApiProperty({ description: '添加时机' })
-  @IsString()
-  @IsNotEmpty()
+  @ApiProperty({ description: '添加时机', enum: SUPPLEMENT_ADD_TIMINGS })
+  @IsIn(SUPPLEMENT_ADD_TIMINGS)
   addTiming!: string;
 
   @ApiProperty({ description: '生产损耗率', example: 1.05 })
   @IsNumber()
   @Min(1)
+  @Max(2)
   productionLossRate!: number;
 
   @ApiProperty({ description: '用于 DIY 推荐' })
@@ -174,11 +178,10 @@ export function toCreateSupplementInput(
 ): CreateSupplementIngredientInput {
   const nutrientValues: Record<string, number> = {};
   for (const [key, value] of Object.entries(dto.perUnitNutrients ?? {})) {
-    const numeric = typeof value === 'number' ? value : Number(value);
-    if (!Number.isFinite(numeric) || numeric < 0) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
       throw new BadRequestException(`营养素 ${key} 必须是大于等于 0 的数字`);
     }
-    nutrientValues[key] = numeric;
+    nutrientValues[key] = value;
   }
 
   return {

@@ -18,7 +18,7 @@ import {
  * 两处用的必须是同一个数，否则门禁就成了自说自话。
  */
 describe('字段目录', () => {
-  it('只有「标签分类」和「添加时机」归人，其余归 AI 或默认', () => {
+  it('只有「标签分类」和「添加时机」是 AI 不该替人定的', () => {
     const human = SUPPLEMENT_CARD_FIELDS.filter((field) => field.owner === 'HUMAN').map(
       (field) => field.key
     )
@@ -83,7 +83,9 @@ describe('表单 → 提交载荷', () => {
     ...emptySupplementDraft(),
     name: '鱼油（Omega-3）',
     tagNames: ['油脂类'],
-    addTiming: 'DURING_PRODUCTION',
+    addTiming: 'BEFORE_MIXING',
+    labelCategory: 'FEED_ADDITIVE' as const,
+    labelNames: ['鱼油'],
     servingUnitsPerDose: 2,
     servingNutrients: { 'fattyAcids.epa': 650 },
     purchaseToBaseRatio: 120,
@@ -94,6 +96,9 @@ describe('表单 → 提交载荷', () => {
     expect(toCreatePayload({ ...filled, name: '' })).toBeNull()
     expect(toCreatePayload({ ...filled, tagNames: [] })).toBeNull()
     expect(toCreatePayload({ ...filled, addTiming: '' })).toBeNull()
+    expect(toCreatePayload({ ...filled, labelCategory: null })).toBeNull()
+    expect(toCreatePayload({ ...filled, labelNames: [] })).toBeNull()
+    expect(toCreatePayload({ ...filled, purchaseUnit: '  ' })).toBeNull()
   })
 
   it('发出去的是每粒值，不是每份值', () => {

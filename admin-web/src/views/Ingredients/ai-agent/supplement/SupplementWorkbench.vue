@@ -60,7 +60,7 @@
             </div>
             <div class="wb-field">
               <label>单位展示名</label>
-              <el-select v-model="draft.unitDisplayLabel" style="width: 100%">
+              <el-select v-model="draft.unitDisplayLabel" data-anchor="baseUnit" style="width: 100%">
                 <el-option
                   v-for="unit in supplementUsageUnitOptions"
                   :key="unit"
@@ -82,6 +82,7 @@
               <label>每份几粒</label>
               <el-input-number
                 v-model="draft.servingUnitsPerDose"
+                data-anchor="servingUnitsPerDose"
                 :min="1"
                 :precision="0"
                 controls-position="right"
@@ -125,6 +126,7 @@
               <label>当前采购价</label>
               <el-input-number
                 v-model="draft.currentPricePerPurchaseUnit"
+                data-anchor="purchasePricePerPurchaseUnit"
                 :min="0"
                 :precision="2"
                 controls-position="right"
@@ -137,7 +139,7 @@
         <!-- 待你定：永远展开、标黄 -->
         <div class="wb-group wb-group--needs">
           <div class="wb-group__title">
-            <span class="wb-need-dot"></span>这两项 AI 不敢替你定
+            <span class="wb-need-dot"></span>这几项 AI 不替你定（标签类型与名称以后由 AI 查目录预填）
           </div>
           <div class="wb-grid">
             <div class="wb-field">
@@ -162,9 +164,28 @@
             <div class="wb-field">
               <label>添加时机</label>
               <el-select v-model="draft.addTiming" placeholder="请选择" style="width: 100%">
-                <el-option label="制作中" value="DURING_PRODUCTION" />
-                <el-option label="成品后添加" value="AFTER_PRODUCTION" />
+                <el-option label="制作中" value="BEFORE_MIXING" />
+                <el-option label="随餐" value="BEFORE_MEAL" />
               </el-select>
+            </div>
+            <div class="wb-field">
+              <label>标签类型</label>
+              <el-select v-model="draft.labelCategory" placeholder="请选择" style="width: 100%">
+                <el-option label="饲料原料" value="FEED_MATERIAL" />
+                <el-option label="饲料添加剂" value="FEED_ADDITIVE" />
+              </el-select>
+            </div>
+            <div class="wb-field">
+              <label>标签名称</label>
+              <el-select
+                v-model="draft.labelNames"
+                multiple
+                filterable
+                allow-create
+                default-first-option
+                placeholder="按目录规范名填，不带剂型"
+                style="width: 100%"
+              />
             </div>
           </div>
         </div>
@@ -191,7 +212,8 @@
                     @update:model-value="(value: number | undefined) => setServing(field.fieldPath, value)"
                   />
                   <span class="wb-split__calc">
-                    = {{ perUnitPreview(field.fieldPath) }} {{ field.unit }}
+                    ÷ {{ draft.servingUnitsPerDose ?? '?' }} =
+                    {{ perUnitPreview(field.fieldPath) }} {{ field.unit }}
                   </span>
                 </div>
               </div>
@@ -208,8 +230,11 @@
             :key="gate.key"
             class="wb-gate"
             :class="gate.passed ? 'wb-gate--ok' : 'wb-gate--bad'"
+            :title="gate.detail"
+            @click="focusGate(gate.anchor)"
           >
             {{ gate.passed ? '✓' : '⚠' }} {{ gate.label }}
+            <em v-if="!gate.passed" class="wb-gate__why">{{ gate.detail }}</em>
           </span>
         </div>
         <div class="wb-gates__actions">
@@ -275,7 +300,7 @@ const aiFieldCount = computed(
 const missingHuman = computed(() => findMissingHumanFields(draft))
 const gateReport = computed(() => evaluateSupplementGates(toGateInput(draft)))
 const canSubmit = computed(
-  () => !!toCreatePayload(draft) && gateReport.value.passed && !saving.value
+  () => !!toCreatePayload(draft) && gateReport.value.passed && !saving.value && !saved.value
 )
 
 const visibleNutrientGroups = computed(() =>
@@ -286,6 +311,26 @@ const visibleNutrientGroups = computed(() =>
     }))
     .filter((group) => group.fields.length > 0)
 )
+
+function focusGate(anchor: string): void {
+  const el = document.querySelector(`[data-anchor="${anchor}"]`)
+  if (el instanceof HTMLElement) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+}
+
+/** 后端把原因放在 body.message 里；axios 的 error.message 只有状态码。 */
+function apiErrorMessage(error: unknown, fallback: string): string {
+  const body = (error as { response?: { data?: { message?: unknown } } })?.response?.data
+  const message = body?.message
+  if (typeof message === 'string' && message.trim()) {
+    return message
+  }
+  if (Array.isArray(message) && message.length > 0) {
+    return message.join('；')
+  }
+  return fallback
+}
 
 function setServing(fieldPath: string, value: number | undefined): void {
   if (value === undefined || !Number.isFinite(value)) {
@@ -309,9 +354,6 @@ async function submit(): Promise<void> {
   if (!payload) {
     return
   }
-  if (draft.evidence.productUrl) {
-    payload.evidence.productUrl = draft.evidence.productUrl
-  }
   saving.value = true
   errorText.value = ''
   try {
@@ -324,7 +366,7 @@ async function submit(): Promise<void> {
     })
     ElMessage.success('已写入，等确认可用')
   } catch (error) {
-    errorText.value = error instanceof Error ? error.message : '写入失败，请稍后重试'
+    errorText.value = apiErrorMessage(error, '写入失败，请稍后重试')
   } finally {
     saving.value = false
   }
@@ -341,7 +383,7 @@ async function confirm(): Promise<void> {
     confirmed.value = true
     ElMessage.success('已确认可用，配方里现在能选到这条补剂')
   } catch (error) {
-    errorText.value = error instanceof Error ? error.message : '确认失败，请稍后重试'
+    errorText.value = apiErrorMessage(error, '确认失败，请稍后重试')
   } finally {
     confirming.value = false
   }
@@ -484,6 +526,7 @@ async function confirm(): Promise<void> {
   background: #f6fdfa;
   color: #0f7a54;
 }
+.wb-gate__why{display:block;font-size:10.5px;margin-top:2px;opacity:.85}
 .wb-gate--bad {
   border-color: #f0d9a8;
   background: #fff6e8;

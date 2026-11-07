@@ -82,9 +82,28 @@ export class SupplementIngredientService {
   ): Promise<CreateSupplementIngredientResult> {
     this.assertInput(input);
     const profile = this.buildProfile(input);
+    const nutritionFoodName = this.buildNutritionFoodName(input);
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        // 同一条补剂不许建两个档案。
+        // 库里的 @@unique(name, brand, productModel) 挡不住"品牌或规格为空"的情形——
+        // Postgres 把 NULL 当互不相等。所以这里按同样的三件套做一次显式比较。
+        const duplicate = await tx.ingredient.findFirst({
+          where: {
+            type: IngredientType.SUPPLEMENT,
+            name: input.name,
+            brand: input.brand ?? null,
+            productModel: input.productModel ?? null
+          },
+          select: { id: true }
+        });
+        if (duplicate) {
+          throw new ConflictException(
+            '这条补剂已经建过了（同名、同品牌、同规格），不要重复建'
+          );
+        }
+
         const ingredient = await tx.ingredient.create({
           data: {
             name: input.name,
@@ -106,7 +125,6 @@ export class SupplementIngredientService {
               display_unit: input.unitDisplayLabel,
               serving_unit_label: input.unitDisplayLabel,
               serving_units_per_dose: input.servingUnitsPerDose,
-              active_nutrients: Object.keys(input.perUnitNutrients),
               add_timing: input.addTiming,
               production_loss_rate: input.productionLossRate,
               label_category: input.labelCategory,
@@ -119,9 +137,9 @@ export class SupplementIngredientService {
 
         const nutritionFood = await tx.nutritionFood.create({
           data: {
-            name: input.name,
+            name: nutritionFoodName,
             nameEn: null,
-            displayNameZh: input.name,
+            displayNameZh: nutritionFoodName,
             displayNameZhSource: 'MANUAL',
             displayNameZhReviewedAt: new Date(),
             displayNameZhReviewedBy: input.createdBy,
@@ -186,6 +204,12 @@ export class SupplementIngredientService {
     }
   }
 
+  /** 营养档案名带上品牌与规格：库对 (name, dataSource, version) 唯一，同名不同品牌是两个产品。 */
+  private buildNutritionFoodName(input: CreateSupplementIngredientInput): string {
+    const suffix = [input.brand, input.productModel].filter(Boolean).join(' · ');
+    return suffix ? `${input.name}（${suffix}）` : input.name;
+  }
+
   private assertInput(input: CreateSupplementIngredientInput): void {
     if (!Number.isInteger(input.servingUnitsPerDose) || input.servingUnitsPerDose < 1) {
       throw new BadRequestException('每份几粒必须是大于 0 的整数');
@@ -195,6 +219,15 @@ export class SupplementIngredientService {
     }
     if (!Number.isFinite(input.currentPricePerPurchaseUnit) || input.currentPricePerPurchaseUnit <= 0) {
       throw new BadRequestException('采购价必须大于 0');
+    }
+    const nutrients = Object.entries(input.perUnitNutrients ?? {});
+    if (nutrients.length === 0) {
+      throw new BadRequestException('至少要有一种营养素的含量');
+    }
+    for (const [key, value] of nutrients) {
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+        throw new BadRequestException(`营养素 ${key} 必须是大于等于 0 的数字`);
+      }
     }
   }
 

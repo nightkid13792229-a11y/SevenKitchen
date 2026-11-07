@@ -10,7 +10,7 @@ import type { PrismaService } from '../../../src/infrastructure/prisma.service';
  * 折算对不对不在这里判——那是入口的门禁，判完才调到这里。
  */
 type Tx = {
-  ingredient: { create: jest.Mock };
+  ingredient: { create: jest.Mock; findFirst: jest.Mock };
   nutritionFood: { create: jest.Mock };
   nutritionFoodMapping: { create: jest.Mock };
   supplementLabelEvidence: { create: jest.Mock };
@@ -22,6 +22,7 @@ function createTx(overrides: Partial<Tx> = {}): Tx {
   return {
     ingredient: {
       create: jest.fn().mockResolvedValue({ id: 'ing-1' }),
+      findFirst: jest.fn().mockResolvedValue(null),
     },
     nutritionFood: {
       create: jest.fn().mockResolvedValue({ id: 'nf-1' }),
@@ -59,7 +60,7 @@ const input: CreateSupplementIngredientInput = {
   purchaseUnit: '瓶',
   purchaseToBaseRatio: 120,
   currentPricePerPurchaseUnit: 398,
-  addTiming: 'DURING_PRODUCTION',
+  addTiming: 'BEFORE_MIXING',
   productionLossRate: 1.05,
   diyEnabled: true,
   procurementEnabled: true,
@@ -121,6 +122,7 @@ describe('SupplementIngredientService.create', () => {
     const tx = createTx({
       ingredient: {
         create: jest.fn().mockRejectedValue({ code: 'P2002' }),
+        findFirst: jest.fn().mockResolvedValue(null),
       },
     });
     const service = new SupplementIngredientService(createPrisma(tx));
@@ -182,5 +184,50 @@ describe('SupplementIngredientService.create', () => {
     expect(tx.ingredientTagAssignment.create).toHaveBeenCalledWith({
       data: { ingredientId: 'ing-1', tagId: 'tag-9' },
     });
+  });
+
+  it('品牌和规格都空时也要认出来是同一条，不许建第二个', async () => {
+    const tx = createTx({
+      ingredient: {
+        create: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue({ id: 'ing-existing' }),
+      },
+    });
+    const service = new SupplementIngredientService(createPrisma(tx));
+
+    await expect(
+      service.create({ ...input, brand: null, productModel: null }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tx.ingredient.create).not.toHaveBeenCalled();
+    expect(tx.ingredient.findFirst).toHaveBeenCalledWith({
+      where: {
+        type: 'SUPPLEMENT',
+        name: input.name,
+        brand: null,
+        productModel: null,
+      },
+      select: { id: true },
+    });
+  });
+
+  it('一个营养素都没有时拒绝建档', async () => {
+    const tx = createTx();
+    const service = new SupplementIngredientService(createPrisma(tx));
+
+    await expect(
+      service.create({ ...input, perUnitNutrients: {} }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.ingredient.create).not.toHaveBeenCalled();
+  });
+
+  it('营养档案名带上品牌与规格，同名不同品牌不会撞唯一键', async () => {
+    const tx = createTx();
+    const service = new SupplementIngredientService(createPrisma(tx));
+
+    await service.create(input);
+
+    expect(tx.nutritionFood.create.mock.calls[0][0].data.name).toBe(
+      '鱼油（Omega-3）（Nordic Naturals · 120 粒/瓶）',
+    );
   });
 });

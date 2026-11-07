@@ -221,7 +221,7 @@
           <!-- 成品参考价 -->
           <view v-if="referencePriceMap[recipe.id]" class="recipe-order-row">
             <text class="recipe-price-label">成品参考价</text>
-            <text class="recipe-price-text">约¥{{ formatReferencePrice(referencePriceMap[recipe.id].minPricePer100g) }}/100g起</text>
+            <text class="recipe-price-text">约¥{{ formatReferencePrice(referencePriceMap[recipe.id].priceByRecipeId[recipe.id] ?? referencePriceMap[recipe.id].minPricePer100g) }}/100g</text>
           </view>
 
           <!-- 主要原料 (前6名) -->
@@ -495,8 +495,11 @@ const hasMore = ref(true)
 const totalCount = ref(0)
 const currentPage = ref(1)
 const pageSize = 10
-// 参考价（每100g起，已含运费）：由后端参考价接口自动计算，接口未就绪时留空不展示
-const referencePriceMap = ref<Record<string, { minPricePer100g: number }>>({})
+// 参考价（每100g、已含运费）：由后端参考价接口自动计算，接口未就绪时留空不展示。
+// 卡片优先显示"这张卡自己那个生命阶段"的价（priceByRecipeId），拿不到再退回全阶段最低价。
+const referencePriceMap = ref<
+  Record<string, { minPricePer100g: number; priceByRecipeId: Record<string, number> }>
+>({})
 const INITIAL_RECIPE_RENDER_COUNT = 3
 const INITIAL_RECIPE_RENDER_DELAY_MS = 300
 const STALE_RECIPE_COVER_REVEAL_DELAY_MS = 1500
@@ -1550,9 +1553,22 @@ async function loadReferencePrices(recipeIds: string[]) {
     items.forEach((item: any) => {
       const recipeId = item?.recipeId
       const minPricePer100g = Number(item?.minPricePer100g)
-      if (recipeId && Number.isFinite(minPricePer100g)) {
-        referencePriceMap.value[recipeId] = { minPricePer100g }
-      }
+      // 只收有限正数：挡住 Number(null) === 0 → 首页显示 ¥0.00/100g
+      if (!recipeId || !Number.isFinite(minPricePer100g) || !(minPricePer100g > 0)) return
+
+      const priceByRecipeId: Record<string, number> = {}
+      const lifeStagePrices = Array.isArray(item?.lifeStagePrices)
+        ? item.lifeStagePrices
+        : []
+      lifeStagePrices.forEach((entry: any) => {
+        const versionRecipeId = String(entry?.recipeId || '')
+        const price = Number(entry?.pricePer100g)
+        if (versionRecipeId && Number.isFinite(price) && price > 0) {
+          priceByRecipeId[versionRecipeId] = price
+        }
+      })
+
+      referencePriceMap.value[recipeId] = { minPricePer100g, priceByRecipeId }
     })
   } catch (error) {
     console.warn('[Home] Load reference prices failed:', error)

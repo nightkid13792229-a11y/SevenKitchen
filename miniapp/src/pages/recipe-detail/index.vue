@@ -345,12 +345,10 @@
       <view v-if="displayReferencePrice" class="reference-price-strip">
         <view class="reference-price-copy">
           <text class="reference-price-value">
-            约¥{{ formatReferencePrice(displayReferencePrice.amount) }}/100g{{
-              displayReferencePrice.isMin ? '起' : ''
-            }}
+            约¥{{ formatReferencePrice(displayReferencePrice.amount) }}/100g
           </text>
           <text class="reference-price-note">
-            {{ displayReferencePrice.isMin ? '按狗狗体重精确计算最终价格 · 已含冷链配送' : '已含冷链配送' }}
+            {{ displayReferencePrice.isMin ? '已含冷链配送 · 最终价格以下单页为准' : '按狗狗体重精确计算最终价格 · 已含冷链配送' }}
           </text>
         </view>
       </view>

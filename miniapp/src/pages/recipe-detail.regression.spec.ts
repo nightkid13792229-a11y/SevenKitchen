@@ -485,3 +485,18 @@ describe('recipe detail nutrition report regressions', () => {
     )
   })
 })
+
+describe('recipe detail reference price copy', () => {
+  it('详情页参考价不再带"起"，并写清最终价以下单页为准', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    );
+    const template = source.slice(0, source.indexOf('<script setup'));
+
+    expect(template).toContain('约¥');
+    expect(template).not.toContain('/100g起');
+    expect(template).not.toContain("? '起'");
+    expect(template).toContain('最终价格以下单页为准');
+  });
+});

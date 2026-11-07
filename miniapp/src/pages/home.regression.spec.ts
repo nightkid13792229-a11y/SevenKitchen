@@ -370,3 +370,26 @@ describe('home runtime regressions', () => {
     expect(source).toContain('if (HEALTH_TAG_FILTER_ENABLED && selectedHealthTags.length > 0)')
   })
 })
+
+describe('home reference price copy', () => {
+  it('参考价不再带"起"，且按卡片自己的版本价显示', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    );
+    const template = source.slice(0, source.indexOf('<script setup'));
+
+    expect(template).toContain('约¥');
+    expect(template).not.toContain('/100g起');
+    expect(template).toContain('priceByRecipeId[recipe.id]');
+  });
+
+  it('价格为 0 / 空时不写入参考价（避免 ¥0.00）', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    );
+
+    expect(source).toContain('minPricePer100g > 0');
+  });
+});

@@ -11,7 +11,7 @@
     <template v-else>
       <!--
         先给订单，再给汇总。
-        现场是拿着单子干活：从这一屏直接进分装、打标签、发货，
+        现场是拿着单子干活：从这一屏直接打标签或进订单详情，
         而不是看完一堆总量之后还要再绕到「订单中心」找单。
       -->
       <view class="card order-card">
@@ -24,6 +24,9 @@
           <view class="order-main" @tap="openOrder(order)">
             <text class="order-no">{{ order.orderNo }}</text>
             <text class="order-meta">{{ statusText(order.status) }} · {{ order.bagCount }} 袋</text>
+          </view>
+          <view class="order-print" @tap.stop="openLabels(order)">
+            <text>打印标签</text>
           </view>
         </view>
 
@@ -124,6 +127,13 @@ function openOrder(order: PackingOrder) {
   })
 }
 
+// 看板上直接打标签：不用先进详情再找「打印标签」。
+function openLabels(order: PackingOrder) {
+  uni.navigateTo({
+    url: `/pages/staff-supplement-orders/labels?id=${encodeURIComponent(order.id)}`,
+  })
+}
+
 function goAllOrders() {
   uni.navigateTo({ url: '/pages/staff-supplement-orders/index' })
 }
@@ -180,6 +190,8 @@ onMounted(load)
 .order-main { flex: 1; min-width: 0; }
 .order-no { display: block; font-size: 27rpx; font-weight: 600; color: #303133; }
 .order-meta { display: block; margin-top: 4rpx; font-size: 22rpx; color: #909399; }
+.order-print { flex-shrink: 0; margin-left: 16rpx; padding: 12rpx 20rpx; border: 1rpx solid #2b5040; border-radius: 999rpx; font-size: 24rpx; line-height: 1.4; color: #2b5040; background: #fff; }
+.order-print:active { background: #eef2e4; }
 .empty-block { padding: 26rpx 0 8rpx; text-align: center; }
 .empty-hint { display: block; margin-top: 8rpx; font-size: 22rpx; color: #b0b3b8; }
 .ghost-btn { display: inline-block; margin-top: 18rpx; padding: 12rpx 24rpx; border: 1rpx solid #2b5040; border-radius: 999rpx; font-size: 23rpx; color: #2b5040; }

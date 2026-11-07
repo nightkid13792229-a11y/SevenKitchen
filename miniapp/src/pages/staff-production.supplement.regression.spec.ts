@@ -36,10 +36,14 @@ describe('生产管理 · 鲜食 / 补剂分装共用入口', () => {
     expect(packingSource).toContain('{{ order.bagCount }}')
   })
 
-  it('这一块不再放打印标签/去发货按钮，功能只留在订单详情页', () => {
-    expect(packingSource).not.toContain('打印标签')
+  it('看板直接提供「打印标签」入口，但仍不在这里做发货/分装工单', () => {
+    expect(packingSource).toContain('打印标签')
+    expect(packingSource).toContain('openLabels')
+    expect(packingSource).toContain(
+      'url: `/pages/staff-supplement-orders/labels?id=${encodeURIComponent(order.id)}`',
+    )
+    expect(packingSource).toContain('@tap.stop="openLabels(order)"')
     expect(packingSource).not.toContain('去发货')
-    expect(packingSource).not.toContain('openLabels')
     expect(packingSource).not.toContain('openShip')
     expect(packingSource).not.toContain('开始分装')
     expect(packingSource).not.toContain('继续分装')
@@ -52,7 +56,6 @@ describe('生产管理 · 鲜食 / 补剂分装共用入口', () => {
     expect(packingSource).toContain('这天没有待发货的订单')
     expect(packingSource).toContain('去看全部补剂订单')
     expect(packingSource).toContain('全部补剂订单 ›')
-    expect(packingSource).not.toContain('/pages/staff-supplement-orders/labels?id=')
     expect(packingSource).not.toContain('&action=ship')
   })
 

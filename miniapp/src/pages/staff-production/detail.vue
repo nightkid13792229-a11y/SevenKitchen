@@ -145,11 +145,11 @@
         </view>
       </view>
 
-      <!-- 备料照片上传（2-3张） -->
+      <!-- 备料照片上传（至少 2 张、最多 5 张） -->
       <view v-if="taskDetail.status === 'IN_PROGRESS'" class="section">
         <view class="section-title">
-          备料照片（必填，2-3张）
-          <text class="photo-count">当前：{{ totalPhotoCount }}/3</text>
+          备料照片（必填，至少 2 张，最多 5 张）
+          <text class="photo-count">已上传 {{ uploadedPhotos.length }}/{{ MAX_PHOTO_COUNT }}</text>
         </view>
 
         <!-- 照片预览区 -->
@@ -162,8 +162,12 @@
             </view>
           </view>
 
-          <!-- 正在上传的照片 -->
-          <view v-for="(task, index) in uploadingPhotos" :key="'uploading-'+task.id" class="photo-item photo-uploading">
+          <!-- 正在上传的照片：只显示 uploading，失败的照片单独显示，避免一块照片出现两次 -->
+          <view
+            v-for="task in uploadingPhotos.filter((task) => task.status === 'uploading')"
+            :key="'uploading-'+task.id"
+            class="photo-item photo-uploading"
+          >
             <image :src="task.file" mode="aspectFill" class="photo-image uploading-placeholder" />
             <view class="uploading-overlay">
               <text class="uploading-text">上传中...</text>
@@ -171,7 +175,11 @@
           </view>
 
           <!-- 上传失败的照片 -->
-          <view v-for="(task, index) in uploadingPhotos.filter(t => t.status === 'error')" :key="'error-'+task.id" class="photo-item">
+          <view
+            v-for="task in uploadingPhotos.filter((task) => task.status === 'error')"
+            :key="'error-'+task.id"
+            class="photo-item"
+          >
             <image :src="task.file" mode="aspectFill" class="photo-image error-placeholder" />
             <view class="error-overlay">
               <text class="error-text">{{ task.error || '上传失败' }}</text>
@@ -181,7 +189,7 @@
             </view>
           </view>
 
-          <!-- 上传按钮（未满3张时显示） -->
+          <!-- 上传按钮（未满 5 张时显示） -->
           <view v-if="canUploadMore" class="photo-upload" @tap="choosePhoto">
             <text class="upload-icon">+</text>
             <text class="upload-text">上传照片</text>
@@ -189,7 +197,7 @@
         </view>
 
         <view class="photos-hint">
-          <text>支持从相册选择或拍照，自动压缩到200KB以内</text>
+          <text>支持从相册选择或拍照，自动压缩到200KB以内；至少上传 2 张才能完成制作</text>
         </view>
 
         <!-- 确认完成区域 -->
@@ -495,20 +503,22 @@ const totalFoodIngredientWeight = computed(() => {
   return formatDecimal(total);
 });
 
+// 完工照片：至少 2 张才能提交；最多 5 张。
+// 只有「上传成功」的照片才算数，失败和上传中的都不算，避免两张失败照片混过校验。
+const MAX_PHOTO_COUNT = 5;
+const MIN_PHOTO_COUNT = 2;
+
 // 计算属性：是否有正在上传的照片
 const isUploading = computed(() => {
-  return uploadingPhotos.value.some(task => task.status === 'uploading');
+  return uploadingPhotos.value.some((task) => task.status === 'uploading');
 });
 
-// 计算属性：是否可以上传更多照片
+// 计算属性：是否还可以继续选照片（失败的照片不占名额）
 const canUploadMore = computed(() => {
-  const totalPhotos = uploadedPhotos.value.length + uploadingPhotos.value.length;
-  return totalPhotos < 3;
-});
-
-// 计算属性：总照片数（包括正在上传的）
-const totalPhotoCount = computed(() => {
-  return uploadedPhotos.value.length + uploadingPhotos.value.length;
+  const occupied =
+    uploadedPhotos.value.length +
+    uploadingPhotos.value.filter((task) => task.status === 'uploading').length;
+  return occupied < MAX_PHOTO_COUNT;
 });
 
 const completionDeltaValue = computed(() => {
@@ -534,12 +544,20 @@ const hasValidCompletionResult = computed(() => {
 });
 
 const canSubmitCompletion = computed(() => {
-  return totalPhotoCount.value >= 2 && hasValidCompletionResult.value && !isCompleting.value;
+  return (
+    uploadedPhotos.value.length >= MIN_PHOTO_COUNT &&
+    !isUploading.value &&
+    hasValidCompletionResult.value &&
+    !isCompleting.value
+  );
 });
 
 const completeButtonText = computed(() => {
   if (isCompleting.value) return '提交中...';
-  if (totalPhotoCount.value < 2) return '请至少上传2张照片';
+  if (isUploading.value) return '照片上传中，请稍候';
+  if (uploadedPhotos.value.length < MIN_PHOTO_COUNT) {
+    return `请至少上传2张照片（已上传${uploadedPhotos.value.length}张）`;
+  }
   if (!hasValidCompletionResult.value) return `请输入${completionInputLabel.value}克数`;
   return '完成制作任务';
 });
@@ -669,18 +687,21 @@ const choosePhoto = async () => {
     return;
   }
 
-  // 检查是否已达到3张照片上限
-  if (totalPhotoCount.value >= 3) {
+  // 检查是否已达到 5 张照片上限
+  if (!canUploadMore.value) {
     uni.showToast({
-      title: '最多上传3张照片',
+      title: '最多上传5张照片',
       icon: 'none',
     });
     return;
   }
 
   try {
-    // 计算还可以选择多少张照片
-    const maxCount = 3 - totalPhotoCount.value;
+    // 计算还可以选择多少张照片（失败的照片不占名额）
+    const occupied =
+      uploadedPhotos.value.length +
+      uploadingPhotos.value.filter((task) => task.status === 'uploading').length;
+    const maxCount = MAX_PHOTO_COUNT - occupied;
 
     // 选择照片
     const res = await uni.chooseMedia({
@@ -853,6 +874,18 @@ const deletePhoto = async (index: number) => {
 
 // 重试上传失败的照片
 const retryUpload = async (task: UploadTask) => {
+  // 先确认还有空位：已上传 + 正在上传不能超过 5 张
+  const occupied =
+    uploadedPhotos.value.length +
+    uploadingPhotos.value.filter((item) => item.status === 'uploading').length;
+  if (occupied >= MAX_PHOTO_COUNT) {
+    uni.showToast({
+      title: '已满5张，请先删除一张再重试',
+      icon: 'none',
+    });
+    return;
+  }
+
   // 重置任务状态为上传中
   const taskIndex = uploadingPhotos.value.findIndex(t => t.id === task.id);
   if (taskIndex !== -1) {

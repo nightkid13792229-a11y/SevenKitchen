@@ -40,7 +40,7 @@ describe('staff production scheduling guardrails', () => {
 
   it('labels follow-up scheduling as creating an added production task when batches already exist', () => {
     expect(indexSource).toContain('scheduleButtonText');
-    expect(indexSource).toContain('statistics.value.todayOrders');
+    expect(indexSource).toContain('totalTaskCount.value > 0');
     expect(indexSource).toContain('创建新增制作单');
     expect(indexSource).toContain('开始自动排单');
     expect(indexSource).toContain('{{ scheduleButtonText }}');
@@ -61,6 +61,40 @@ describe('staff production scheduling guardrails', () => {
     expect(indexSource).toContain('taskStatusCounts');
     expect(indexSource).toContain('tab.count');
     expect(indexSource).toContain('class="tab-count"');
+  });
+
+  it('首屏四格与列表同源：含跨天未完成，并明确标注跨天数量', () => {
+    expect(indexSource).toContain('totalTaskCount');
+    expect(indexSource).toContain('carryoverTaskCount');
+    expect(indexSource).toContain('含跨天');
+    expect(indexSource).not.toContain('statistics.todayOrders');
+  });
+
+  it('删除按生产批次执行：按钮写「删除整批」，已完成批次不给入口', () => {
+    expect(indexSource).toContain('getBatchUnits');
+    expect(indexSource).toContain('canDeleteTask(task)');
+    expect(indexSource).toContain('删除整批');
+    expect(indexSource).toContain('batchUnits.length');
+    expect(indexSource).toContain("task.status !== 'COMPLETED'");
+    expect(indexSource).toContain("unit.status !== 'COMPLETED'");
+  });
+
+  it('完工照片至少 2 张、最多 5 张，且只统计上传成功的照片', () => {
+    expect(detailSource).toContain('MAX_PHOTO_COUNT = 5');
+    expect(detailSource).toContain('MIN_PHOTO_COUNT = 2');
+    expect(detailSource).toContain('uploadedPhotos.value.length >= MIN_PHOTO_COUNT');
+    expect(detailSource).toContain('!isUploading.value');
+    expect(detailSource).not.toContain('totalPhotoCount');
+    expect(detailSource).toContain('请至少上传2张照片');
+  });
+
+  it('上传失败的照片只出现一次，不再同时显示「上传中」和「失败」', () => {
+    expect(detailSource).toContain(
+      "uploadingPhotos.filter((task) => task.status === 'uploading')",
+    );
+    expect(detailSource).toContain(
+      "uploadingPhotos.filter((task) => task.status === 'error')",
+    );
   });
 
   it('separates current pot production quantity from order packaging totals', () => {

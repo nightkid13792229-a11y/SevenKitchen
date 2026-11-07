@@ -34,25 +34,28 @@
         <text class="date-hint">未完成的历史制作单会继续显示，避免跨天漏单</text>
       </view>
 
-      <!-- 统计卡片 -->
+      <!-- 统计卡片：与下方列表同源，跨天未完成的锅也计入，首屏不再出现「0 但有两张卡」 -->
       <view class="stats-section">
         <view class="stat-card">
-          <text class="stat-value">{{ statistics.todayOrders }}</text>
-          <text class="stat-label">制作单</text>
+          <text class="stat-value">{{ totalTaskCount }}</text>
+          <text class="stat-label">今日制作单</text>
         </view>
         <view class="stat-card">
           <text class="stat-value">{{ statistics.pendingScheduleOrders }}</text>
           <text class="stat-label">待排单订单</text>
         </view>
         <view class="stat-card">
-          <text class="stat-value">{{ statistics.inProgress }}</text>
+          <text class="stat-value">{{ taskStatusCounts.IN_PROGRESS }}</text>
           <text class="stat-label">制作中</text>
         </view>
         <view class="stat-card">
-          <text class="stat-value">{{ statistics.completed }}</text>
+          <text class="stat-value">{{ taskStatusCounts.COMPLETED }}</text>
           <text class="stat-label">已完成</text>
         </view>
       </view>
+      <text v-if="carryoverTaskCount > 0" class="stats-note">
+        含跨天 {{ carryoverTaskCount }} 锅 · {{ carryoverDateText }}
+      </text>
 
       <!-- 自动排单按钮（所选日期仍有未分配订单时显示） -->
       <view v-if="canAutoSchedule" class="schedule-section">
@@ -110,17 +113,20 @@
             </view>
 
             <!-- 操作按钮区 -->
-            <view class="action-buttons">
+            <view
+              v-if="task.status === 'PENDING' || canDeleteTask(task)"
+              class="action-buttons"
+            >
               <!-- PENDING状态：显示开始制作按钮 -->
               <button v-if="task.status === 'PENDING'" class="start-btn" @tap.stop="handleStartTask(task)">
                 <text class="btn-icon">▶️</text>
                 <text class="btn-text">开始制作</text>
               </button>
 
-              <!-- 删除按钮 -->
-              <view class="delete-btn" @tap.stop="handleDelete(task)">
+              <!-- 删除按生产批次执行；已完成和跨天批次不在这里给入口 -->
+              <view v-if="canDeleteTask(task)" class="delete-btn" @tap.stop="handleDelete(task)">
                 <text class="delete-icon">🗑️</text>
-                <text class="delete-text">删除</text>
+                <text class="delete-text">删除整批</text>
               </view>
             </view>
           </view>
@@ -189,12 +195,10 @@ const onSupplementCount = (value: number) => {
   supplementCount.value = Number(value || 0);
 };
 
-// 统计数据
+// 统计数据：只保留「待排单订单」这一项来自后台；
+// 其余三个数字都从下方列表同源计算，避免首屏和列表各说各话。
 const statistics = ref({
-  todayOrders: 0,
   pendingScheduleOrders: 0,
-  inProgress: 0,
-  completed: 0,
 });
 
 // 任务列表
@@ -225,6 +229,9 @@ const taskStatusCounts = computed(() => {
 const freshTodoCount = computed(() => {
   return taskStatusCounts.value.PENDING + taskStatusCounts.value.IN_PROGRESS;
 });
+
+// 首屏「今日制作单」以当前列表为准：所选日期的全部锅 + 跨天未完成的锅。
+const totalTaskCount = computed(() => allTasks.value.length);
 
 const productionModes = computed(() => [
   { value: 'FRESH' as ProductionMode, label: '鲜食生产', count: freshTodoCount.value },
@@ -262,7 +269,7 @@ const canAutoSchedule = computed(() => {
 });
 
 const hasExistingProductionTasks = computed(() => {
-  return Number(statistics.value.todayOrders || 0) > 0;
+  return totalTaskCount.value > 0;
 });
 
 const scheduleButtonText = computed(() => {
@@ -277,6 +284,29 @@ const scheduleHintText = computed(() => {
 
 const isCarryoverTask = (task: any) => {
   return task?.productionDate && task.productionDate !== selectedProductionDate.value && task.status !== 'COMPLETED';
+};
+
+// 首屏统计的「含跨天」说明：让 2 锅里有几锅是昨天/更早的一眼可见。
+const carryoverTasks = computed(() => allTasks.value.filter((task) => isCarryoverTask(task)));
+const carryoverTaskCount = computed(() => carryoverTasks.value.length);
+const carryoverDateText = computed(() => {
+  const dates = Array.from(
+    new Set(carryoverTasks.value.map((task) => task.productionDate).filter(Boolean)),
+  );
+  return dates.join('、');
+});
+
+// 删除按「生产批次」执行，不是按这一张锅卡。
+const getBatchUnits = (task: any) => {
+  if (!task?.productionBatchId) return [];
+  return allTasks.value.filter((unit) => unit.productionBatchId === task.productionBatchId);
+};
+
+// 只允许删未完成的批次；只要这批里已经有一锅完成，就不给删除入口。
+const canDeleteTask = (task: any) => {
+  if (!task?.productionBatchId) return false;
+  if (task.status === 'COMPLETED') return false;
+  return getBatchUnits(task).every((unit) => unit.status !== 'COMPLETED');
 };
 
 // 页面加载
@@ -486,8 +516,7 @@ const completeTask = async (unitId: string) => {
 
 // 删除生产批次
 const handleDelete = async (task: any) => {
-  // 需要从包装单元获取批次ID
-  // 因为删除是按批次ID进行的，而不是按包装单元ID
+  // 删除是按生产批次ID进行的，不是按这一张锅卡。
   const batchId = task.productionBatchId;
   if (!batchId) {
     uni.showToast({
@@ -497,10 +526,29 @@ const handleDelete = async (task: any) => {
     return;
   }
 
+  if (!canDeleteTask(task)) {
+    uni.showToast({
+      title: '这批不能删除',
+      icon: 'none',
+    });
+    return;
+  }
+
+  const batchUnits = getBatchUnits(task);
+  const orderCount = new Set(
+    batchUnits.flatMap((unit) =>
+      (unit.orderItems || []).map((item: any) => item.orderId).filter(Boolean),
+    ),
+  ).size;
+  const hasInProgress = batchUnits.some((unit) => unit.status === 'IN_PROGRESS');
+
   const result = await uni.showModal({
-    title: '确认删除',
-    content: '删除后将无法恢复，相关订单将重新进入采购状态。是否继续？',
-    confirmText: '确认删除',
+    title: '确认删除整批',
+    content:
+      `本批共 ${batchUnits.length} 锅${orderCount > 0 ? `、${orderCount} 个订单` : ''}。` +
+      `删除后这 ${batchUnits.length} 锅都会消失${orderCount > 0 ? '，相关订单退回采购' : ''}。` +
+      `${hasInProgress ? '其中已开始制作的锅，备料照片会一起删除。' : ''}是否继续？`,
+    confirmText: '删除整批',
     confirmColor: '#ff4d4f',
     cancelText: '取消',
   });
@@ -515,7 +563,7 @@ const handleDelete = async (task: any) => {
     uni.hideLoading();
 
     uni.showToast({
-      title: '删除成功',
+      title: '已删除整批',
       icon: 'success',
     });
 
@@ -525,9 +573,16 @@ const handleDelete = async (task: any) => {
   } catch (error: any) {
     uni.hideLoading();
 
+    const rawMessage = String(error?.message || '');
+    // 跨天的批次里可能有已完成的锅没显示在当前列表里；后端的英文拦截
+    // 在这里翻译成现场能看懂的话，别让员工对着 Cannot delete batch 发呆。
+    const friendlyMessage = rawMessage.toLowerCase().includes('completed')
+      ? '这批里已经有完成的锅，不能整批删除。请先处理已完成的锅，或联系管理员。'
+      : rawMessage || '删除失败，请稍后重试';
+
     uni.showModal({
       title: '删除失败',
-      content: error.message || '未知错误',
+      content: friendlyMessage,
       showCancel: false,
     });
   }
@@ -684,6 +739,13 @@ const toggleHistory = (batchId: string) => {
     font-size: 24rpx;
     color: #26261f;
   }
+}
+
+.stats-note {
+  display: block;
+  margin: -8rpx 32rpx 24rpx;
+  font-size: 24rpx;
+  color: #6b6653;
 }
 
 .schedule-section {
@@ -943,7 +1005,6 @@ const toggleHistory = (batchId: string) => {
     align-items: center;
     justify-content: center;
     gap: 8rpx;
-    margin-top: 16rpx;
     padding: 12rpx 24rpx;
     background-color: rgba(180, 85, 63, 0.1);
     border-radius: 8rpx;

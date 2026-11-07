@@ -296,9 +296,13 @@ export class OrderShipmentService {
 
     // 6) 发货通知 + 微信发货信息：每张订单各一条 / 各一次
     //    （老板 2026-11-07 确认通知维持现状；微信按支付单上报，一票多单必须各报）
+    //
+    // ⚠️ **不在这里 await**：10 单合并 ≈ 20 次微信请求，串行等下去会顶到
+    // 小程序 15s 超时（审核 2026-11-07 指出）。数据已经落库，这里发起即可；
+    // 失败的单会落进现有的「微信发货信息待重传」列表，员工能一键补传。
     for (const orderId of orderIds) {
-      await this.sendNotificationSafely(orderId);
-      await this.uploadWechatSafely(orderId);
+      void this.sendNotificationSafely(orderId);
+      void this.uploadWechatSafely(orderId);
     }
 
     return this.getShipment(shipmentId);

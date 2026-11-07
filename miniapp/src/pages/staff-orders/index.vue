@@ -569,6 +569,9 @@ onLoad(() => {
 })
 
 onShow(() => {
+  // 从「确认发货」返回时把选择态收掉，别让上次的勾选留在页面上（2026-11-07 审核）
+  mergeMode.value = false
+  selectedOrderIds.value = []
   loadOrders(true)
   loadStats()
   loadStatusCounts()

@@ -874,9 +874,7 @@ export class ReimbursementService {
       reviewedBy: reimbursement.reviewedBy,
     });
 
-    const saved = await this.reimbursementRepository.save(updated);
-
-    await this.applyPostReimbursedSideEffects(previousStatus, saved);
+    const saved = await this.completeWithProof(updated, previousStatus);
 
     this.logger.log(
       `Payment proof uploaded for reimbursement ${id}, status changed to REIMBURSED`,
@@ -1015,9 +1013,7 @@ export class ReimbursementService {
       reviewedBy: reimbursement.reviewedBy,
     });
 
-    const saved = await this.reimbursementRepository.save(updated);
-
-    await this.applyPostReimbursedSideEffects(previousStatus, saved);
+    const saved = await this.completeWithProof(updated, previousStatus);
 
     this.logger.log(
       `Payment proof files uploaded for reimbursement ${id}, status: ${finalStatus}`,
@@ -1108,22 +1104,49 @@ export class ReimbursementService {
     return saved;
   }
 
-  private async applyPostReimbursedSideEffects(
-    previousStatus: ReimbursementStatus,
+  /**
+   * 上传付款凭证「完成报销」这条路（电脑端主用，2026-11-07 终验 P1-1）
+   *
+   * 以前是「先存成已报销、再在事务外应用价格」：应用失败会留下
+   * 「已报销但价格没生效」，而且不写审核事件，手机端「处理进度」看不到这次通过。
+   * 现在和手机端审核走同一套：应用价格 → 写事件 → 保存，放在一个事务里。
+   */
+  private async completeWithProof(
     reimbursement: Reimbursement,
-  ): Promise<void> {
-    if (
-      previousStatus !== ReimbursementStatus.PENDING_REVIEW ||
-      reimbursement.status !== ReimbursementStatus.REIMBURSED
-    ) {
-      return;
+    previousStatus: ReimbursementStatus,
+  ): Promise<Reimbursement> {
+    const shouldComplete =
+      previousStatus === ReimbursementStatus.PENDING_REVIEW &&
+      reimbursement.status === ReimbursementStatus.REIMBURSED;
+
+    if (!shouldComplete) {
+      return this.reimbursementRepository.save(reimbursement);
     }
 
-    await this.ingredientPricingService.applyApprovedChangesForReimbursement(
-      reimbursement.id,
-      reimbursement.reviewedById ?? null,
-      reimbursement.reviewComment ??
-        '系统在上传报销凭证后自动标记已报销并应用价格变更',
+    const comment =
+      reimbursement.reviewComment ?? '上传付款凭证后完成报销';
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        await this.ingredientPricingService.applyApprovedChangesForReimbursement(
+          reimbursement.id,
+          reimbursement.reviewedById ?? null,
+          comment,
+          tx,
+        );
+
+        await this.recordReviewEvent(tx, {
+          reimbursementId: reimbursement.id,
+          action: 'APPROVE',
+          actorId: reimbursement.reviewedById ?? null,
+          fromStatus: previousStatus,
+          toStatus: reimbursement.status,
+          comment: '上传付款凭证后完成报销',
+        });
+
+        return this.reimbursementRepository.save(reimbursement, tx);
+      },
+      { timeout: 30000 },
     );
   }
 

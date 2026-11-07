@@ -252,7 +252,7 @@
           >
             <text class="col-name">
               {{ change.ingredientName }}
-              <text v-if="change.needsManual" class="price-status warn">需放行</text>
+              <text v-if="change.isHeld" class="price-status warn">需放行</text>
               <text v-else-if="change.statusLabel" class="price-status">{{ change.statusLabel }}</text>
             </text>
             <text class="col-num">{{ change.previousPriceText }}</text>
@@ -262,8 +262,8 @@
         </view>
 
         <text v-if="pendingPriceChangeCount > 0" class="price-footnote">
-          点一行可在上方采购明细里定位。范围内的价格通过后自动生效；标「需放行」的幅度超阈值，
-          通过后仍要回电脑端确认才会变。
+          点一行可在上方采购明细里定位。通过后按价格闸规则生效：幅度在阈值内的直接生效，
+          超出阈值的会挂起、标「需放行」，要到电脑端确认才会变。
         </text>
       </view>
 
@@ -398,13 +398,13 @@
             <text class="confirm-label">付款凭证</text>
             <text class="confirm-value">{{ proofPhotos.length }} 张</text>
           </view>
-          <view v-if="autoApplyPriceChangeCount > 0" class="confirm-row">
+          <view v-if="pendingPriceChangeCount > 0" class="confirm-row">
             <text class="confirm-label">价格变更</text>
-            <text class="confirm-value">{{ autoApplyPriceChangeCount }} 项自动生效</text>
+            <text class="confirm-value">{{ pendingPriceChangeCount }} 项待确认</text>
           </view>
-          <view v-if="manualPriceChangeCount > 0" class="confirm-row">
-            <text class="confirm-label">超出阈值</text>
-            <text class="confirm-value warn">{{ manualPriceChangeCount }} 项需另行放行</text>
+          <view v-if="heldPriceChangeCount > 0" class="confirm-row">
+            <text class="confirm-label">已被挂起</text>
+            <text class="confirm-value warn">{{ heldPriceChangeCount }} 项通过后不会生效</text>
           </view>
         </view>
 
@@ -1054,9 +1054,16 @@ const priceChanges = computed(() => {
     const unit = change.purchaseUnit ? formatMeasurementUnit(change.purchaseUnit) : '';
     const suffix = unit ? `/${unit}` : '';
     const tone = getDeltaTone(change.deltaRate);
+    // 2026-11-07 终验 P0：只认真实闸门结果（gateAction），不再用另一套算法预测
+    const isHeld = change.status === 'PENDING' && change.gateAction === 'HOLD';
     const statusLabel =
-      change.status === 'APPROVED' ? '已生效' : change.status === 'REJECTED' ? '已作废' : '';
-    const needsManual = change.status === 'PENDING' && change.autoApprovalEligible === false;
+      change.status === 'APPROVED'
+        ? '已生效'
+        : change.status === 'REJECTED'
+          ? '已作废'
+          : isHeld
+            ? '需放行'
+            : '';
 
     return {
       ...change,
@@ -1070,7 +1077,7 @@ const priceChanges = computed(() => {
             : '—',
       tone,
       statusLabel,
-      needsManual,
+      isHeld,
     };
   });
 });
@@ -1081,14 +1088,13 @@ const pendingPriceChanges = computed(() =>
 
 const pendingPriceChangeCount = computed(() => pendingPriceChanges.value.length);
 
-/** 通过后会自动生效的（后端预判幅度在阈值内） */
-const autoApplyPriceChangeCount = computed(
-  () => pendingPriceChanges.value.filter((change: any) => change.autoApprovalEligible !== false).length,
-);
-
-/** 超出阈值、通过后仍需到电脑端人工放行的 */
-const manualPriceChangeCount = computed(
-  () => pendingPriceChanges.value.filter((change: any) => change.autoApprovalEligible === false).length,
+/**
+ * 已经被价格闸挂起、通过后不会生效的（真实结果，不是预测）。
+ * 只有跑过一次「通过」才会被打上 gateAction=HOLD，所以在审核前这里通常是 0，
+ * 页面也就不会提前承诺「会自动生效」。
+ */
+const heldPriceChangeCount = computed(
+  () => pendingPriceChanges.value.filter((change: any) => change.gateAction === 'HOLD').length,
 );
 
 const revertedPriceChangeCount = computed(
@@ -1104,8 +1110,8 @@ const maxDeltaRate = computed(() => {
 
 const priceChangeHint = computed(() => {
   if (pendingPriceChangeCount.value > 0) {
-    return manualPriceChangeCount.value > 0
-      ? `${pendingPriceChangeCount.value} 项待确认（${manualPriceChangeCount.value} 项需放行）`
+    return heldPriceChangeCount.value > 0
+      ? `${pendingPriceChangeCount.value} 项待确认（${heldPriceChangeCount.value} 项需放行）`
       : `${pendingPriceChangeCount.value} 项待确认`;
   }
   if (revertedPriceChangeCount.value > 0) {
@@ -1127,18 +1133,20 @@ const summaryAlerts = computed<Array<{ tone: string; text: string }>>(() => {
     alerts.push({ tone: 'warn', text: '还没有付款凭证，暂不能审核通过' });
   }
 
-  if (autoApplyPriceChangeCount.value > 0) {
+  if (pendingPriceChangeCount.value > 0) {
+    // 只陈述事实：有多少项待确认。不预先承诺「会自动生效」——
+    // 是否生效由价格闸按历史中位数判断，前端猜不准（2026-11-07 终验 P0）
     alerts.push({
       tone: 'info',
-      text: `${autoApplyPriceChangeCount.value} 项价格变更，审核通过后自动生效`,
+      text: `${pendingPriceChangeCount.value} 项价格变更待确认（最大 ${formatDeltaPercent(maxDeltaRate.value)}）`,
     });
   }
 
-  if (manualPriceChangeCount.value > 0) {
-    // 这些项被价格闸挂起（幅度超阈值），通过后价格**不会**变，必须说清楚
+  if (heldPriceChangeCount.value > 0) {
+    // 已经被闸门挂起：通过后价格不会变，等于还要去电脑端放行
     alerts.push({
       tone: 'danger',
-      text: `${manualPriceChangeCount.value} 项幅度过大（最大 ${formatDeltaPercent(maxDeltaRate.value)}），通过后仍需在电脑端放行才会生效`,
+      text: `${heldPriceChangeCount.value} 项已被价格闸挂起，通过后价格不会变，需要到电脑端放行`,
     });
   }
 
@@ -1370,11 +1378,18 @@ const submitReject = async () => {
 
   const reason = rejectReason.value;
   const extra = rejectComment.value.trim();
+
+  // 「其它」必须写一句，否则员工看到的原因只有「其它」两个字
+  if (reason === '其它' && !extra) {
+    uni.showToast({ title: '选「其它」时请写一句原因', icon: 'none' });
+    return;
+  }
+
   const comment = extra ? `${reason}：${extra}` : reason;
 
   submitting.value = true;
   try {
-    const res: any = await reviewReimbursement(reimbursementId.value, 'REJECTED', comment);
+    const res: any = await reviewReimbursement(reimbursementId.value, 'REJECT', comment);
     if (res.code !== 0) {
       throw new Error(res.message || '驳回失败');
     }

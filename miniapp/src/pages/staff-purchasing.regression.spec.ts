@@ -97,8 +97,10 @@ describe('staff reimbursement detail guardrails', () => {
 
     // 通过 / 驳回 / 撤销 是三个独立动作
     expect(reimbursementDetailSource).toContain('reviewReimbursement(');
-    // 驳回落到「已驳回」，和列表里的筛选标签一致（2026-11-07 复审）
-    expect(reimbursementDetailSource).toContain("'REJECTED'");
+    // 驳回用后端的 'REJECT'（不是 'REJECTED'，写错会 500；2026-11-07 终验 P0）
+    expect(reimbursementDetailSource).toContain(
+      "reviewReimbursement(reimbursementId.value, 'REJECT', comment)",
+    );
     expect(reimbursementDetailSource).toContain('revertReimbursementReview(');
     expect(reimbursementDetailSource).toContain('审核通过');
     expect(reimbursementDetailSource).toContain('撤销审核');
@@ -124,12 +126,14 @@ describe('staff reimbursement detail guardrails', () => {
   });
 
   it('does not promise that held price changes will take effect', () => {
-    // 价格闸挂起（HOLD）的项通过后不会生效，页面必须分开说
-    expect(reimbursementDetailSource).toContain('autoApprovalEligible');
-    expect(reimbursementDetailSource).toContain('manualPriceChangeCount');
+    // 只能用真实闸门结果 gateAction 判断，不能拿另一套算法预测（2026-11-07 终验 P0）
+    expect(reimbursementDetailSource).toContain("change.gateAction === 'HOLD'");
+    expect(reimbursementDetailSource).toContain('heldPriceChangeCount');
     expect(reimbursementDetailSource).toContain('需放行');
+    expect(reimbursementDetailSource).not.toContain('autoApprovalEligible');
     expect(reimbursementDetailSource).not.toContain('项一次性生效');
     expect(reimbursementDetailSource).not.toContain('项将同时生效');
+    expect(reimbursementDetailSource).not.toContain('审核通过后自动生效');
   });
 });
 

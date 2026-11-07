@@ -16,7 +16,7 @@
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover" class="stat-card warning">
-          <el-statistic title="待报销" :value="stats.pendingReimbursements" />
+          <el-statistic title="待审核" :value="stats.pendingReimbursements" />
         </el-card>
       </el-col>
       <el-col :span="6">
@@ -42,7 +42,7 @@
             style="width: 150px"
             @change="handleFilter"
           >
-            <el-option label="待报销" value="PENDING_REVIEW" />
+            <el-option label="待审核" value="PENDING_REVIEW" />
             <el-option label="已报销" value="REIMBURSED" />
             <el-option label="已驳回" value="REJECTED" />
             <el-option label="需重新提交" value="REQUIRES_RESUBMIT" />
@@ -216,7 +216,7 @@ const pagination = reactive({
 // 计算属性
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
-    'PENDING_REVIEW': '待报销',
+    'PENDING_REVIEW': '待审核',
     'REIMBURSED': '已报销',
     'REJECTED': '已驳回',
     'REQUIRES_RESUBMIT': '需重新提交'

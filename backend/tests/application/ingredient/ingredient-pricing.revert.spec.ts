@@ -52,6 +52,11 @@ function buildService(options: { changes: any[]; skuHistory?: any[] }) {
         currentPricePerPurchaseUnit: 12.38,
       }),
     },
+    procurementSku: {
+      findUnique: jest.fn().mockResolvedValue({
+        currentPurchasePrice: 31.5,
+      }),
+    },
   };
 
   const ingredientRepository = {
@@ -109,8 +114,18 @@ describe('IngredientPricingService 撤销审核的价格回退', () => {
     const { service, procurementSkuService } = buildService({
       changes: [buildChange()],
       skuHistory: [
-        { id: 'history-1', procurementSkuId: 'sku-1', oldPrice: decimal(27.3) },
-        { id: 'history-2', procurementSkuId: 'sku-1', oldPrice: decimal(29.9) },
+        {
+          id: 'history-1',
+          procurementSkuId: 'sku-1',
+          oldPrice: decimal(27.3),
+          newPrice: decimal(31.5),
+        },
+        {
+          id: 'history-2',
+          procurementSkuId: 'sku-1',
+          oldPrice: decimal(29.9),
+          newPrice: decimal(31.5),
+        },
       ],
     });
 
@@ -128,11 +143,41 @@ describe('IngredientPricingService 撤销审核的价格回退', () => {
     );
   });
 
+  it('同一 SKU 被后面的单改过价时，不覆盖别人的价', async () => {
+    const { service, procurementSkuService, prisma } = buildService({
+      changes: [buildChange()],
+      skuHistory: [
+        {
+          id: 'history-1',
+          procurementSkuId: 'sku-1',
+          oldPrice: decimal(27.3),
+          newPrice: decimal(31.5),
+        },
+      ],
+    });
+    // 本单应用价是 31.5，但现在 SKU 已经是 35（另一张单后来改的）
+    prisma.procurementSku.findUnique.mockResolvedValue({
+      currentPurchasePrice: 35,
+    });
+
+    await service.revertApprovedChangesForReimbursement(
+      'reimbursement-1',
+      'admin-1',
+    );
+
+    expect(procurementSkuService.applyCurrentPurchasePrice).not.toHaveBeenCalled();
+  });
+
   it('首次定价（没有旧价）时不回退 SKU 价', async () => {
     const { service, procurementSkuService } = buildService({
       changes: [buildChange()],
       skuHistory: [
-        { id: 'history-1', procurementSkuId: 'sku-1', oldPrice: null },
+        {
+          id: 'history-1',
+          procurementSkuId: 'sku-1',
+          oldPrice: null,
+          newPrice: decimal(31.5),
+        },
       ],
     });
 

@@ -208,13 +208,24 @@ describe('ReimbursementService', () => {
         reviewedById: 'admin-1',
         paymentProofUrls: ['https://example.com/payment-proof-1.jpg'],
       }),
+      expect.anything(),
     );
+    // 2026-11-07 终验 P1-1：电脑端「上传即完成」也要进事务并写审核事件
     expect(
       mockIngredientPricingService.applyApprovedChangesForReimbursement,
     ).toHaveBeenCalledWith(
       'reimbursement-1',
       'admin-1',
-      '系统在上传报销凭证后自动标记已报销并应用价格变更',
+      '上传付款凭证后完成报销',
+      expect.anything(),
+    );
+    expect(mockPrisma.reimbursementReviewEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          reimbursementId: 'reimbursement-1',
+          action: 'APPROVE',
+        }),
+      }),
     );
   });
 
@@ -281,13 +292,24 @@ describe('ReimbursementService', () => {
         paymentProofUrls: ['https://example.com/payment-proof-1.jpg'],
         paymentProofKeys: ['payment-proof-1'],
       }),
+      expect.anything(),
     );
+    // 2026-11-07 终验 P1-1：电脑端「上传即完成」也要进事务并写审核事件
     expect(
       mockIngredientPricingService.applyApprovedChangesForReimbursement,
     ).toHaveBeenCalledWith(
       'reimbursement-1',
       'admin-1',
-      '系统在上传报销凭证后自动标记已报销并应用价格变更',
+      '上传付款凭证后完成报销',
+      expect.anything(),
+    );
+    expect(mockPrisma.reimbursementReviewEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          reimbursementId: 'reimbursement-1',
+          action: 'APPROVE',
+        }),
+      }),
     );
   });
 
@@ -409,6 +431,36 @@ describe('ReimbursementService', () => {
       mockIngredientPricingService.applyApprovedChangesForReimbursement,
     ).not.toHaveBeenCalled();
     expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('驳回走 REJECT：状态变已驳回、价格变更作废、写事件', async () => {
+    mockReimbursementRepository.findById.mockResolvedValue(
+      createPendingReviewReimbursement(),
+    );
+
+    const saved = await service.reviewReimbursement(
+      'reimbursement-1',
+      'admin-1',
+      { decision: 'REJECT', comment: '凭证金额与订单不一致' },
+    );
+
+    expect(saved.status).toBe(ReimbursementStatus.REJECTED);
+    expect(
+      mockIngredientPricingService.rejectChangesForReimbursement,
+    ).toHaveBeenCalledWith(
+      'reimbursement-1',
+      'admin-1',
+      '凭证金额与订单不一致',
+      expect.anything(),
+    );
+    expect(mockPrisma.reimbursementReviewEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'REJECT',
+          comment: '凭证金额与订单不一致',
+        }),
+      }),
+    );
   });
 
   it('驳回必须写明原因，否则不接受', async () => {

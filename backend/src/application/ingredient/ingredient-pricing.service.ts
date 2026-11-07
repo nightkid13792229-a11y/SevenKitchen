@@ -540,12 +540,13 @@ export class IngredientPricingService {
         id: true,
         procurementSkuId: true,
         oldPrice: true,
+        newPrice: true,
       },
     });
 
     const firstRowBySku = new Map<
       string,
-      { id: string; oldPrice: unknown }
+      { id: string; oldPrice: unknown; newPrice: unknown }
     >();
 
     for (const row of historyRows) {
@@ -553,6 +554,7 @@ export class IngredientPricingService {
         firstRowBySku.set(row.procurementSkuId, {
           id: row.id,
           oldPrice: row.oldPrice,
+          newPrice: row.newPrice,
         });
       }
     }
@@ -568,6 +570,28 @@ export class IngredientPricingService {
 
       if (oldPrice === null || !Number.isFinite(oldPrice) || oldPrice <= 0) {
         // 首次定价：应用前没有价格，没有可回退的值
+        continue;
+      }
+
+      // 同一 SKU 可能被这之后的另一张单又改过价：只有当前价仍等于本单应用后的价，
+      // 回退才不会盖掉别人的更新（2026-11-07 终验 P1-2）
+      const appliedPrice = Number(
+        (row.newPrice as any)?.toNumber?.() ?? row.newPrice,
+      );
+      const sku = await db.procurementSku.findUnique({
+        where: { id: procurementSkuId },
+        select: { currentPurchasePrice: true },
+      });
+      const currentPrice = Number(sku?.currentPurchasePrice);
+
+      if (
+        !Number.isFinite(appliedPrice) ||
+        !Number.isFinite(currentPrice) ||
+        Math.abs(currentPrice - appliedPrice) > 0.005
+      ) {
+        this.logger.warn(
+          `Skip SKU price rollback for ${procurementSkuId}: current ${currentPrice} != applied ${appliedPrice}`,
+        );
         continue;
       }
 

@@ -394,13 +394,13 @@
       <!-- 报销处理提示 -->
       <el-card shadow="never" class="action-card" v-if="reimbursement.status === 'PENDING_REVIEW'">
         <div class="pending-reimbursement-note">
-          <el-tag type="warning">待报销</el-tag>
+          <el-tag type="warning">待审核</el-tag>
           <span>上传报销凭证后将完成报销并确认本次价格变更。</span>
         </div>
         <el-button @click="$router.back()">返回列表</el-button>
       </el-card>
 
-      <!-- 返回按钮（非待报销状态） -->
+      <!-- 返回按钮（非待审核状态） -->
       <div v-else class="back-actions">
         <el-button @click="$router.back()">返回列表</el-button>
       </div>
@@ -416,6 +416,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { purchasingApi } from '@/api/purchasing'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getApiErrorMessage } from '@/utils/apiError'
 import { Loading } from '@element-plus/icons-vue'
 import {
   formatReimbursementCustomFeeTitle,
@@ -516,7 +517,7 @@ const getExpenseSummary = (target: any) => {
 // 获取状态文本
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
-    'PENDING_REVIEW': '待报销',
+    'PENDING_REVIEW': '待审核',
     'REIMBURSED': '已报销',
     'REJECTED': '已驳回',
     'REQUIRES_RESUBMIT': '需重新提交'
@@ -761,6 +762,7 @@ const requireResubmit = async () => {
       inputPlaceholder: '例如：请补充 10-31 那笔的支付记录',
       confirmButtonText: '退回补充',
       cancelButtonText: '取消',
+      inputValidator: (input: string) => (input && input.trim() ? true : '请写明原因，员工会看到'),
     })
     actionLoading.value = true
     await purchasingApi.reviewReimbursement(route.query.id as string, {
@@ -773,7 +775,7 @@ const requireResubmit = async () => {
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('退回失败', error)
-      ElMessage.error('操作失败')
+      ElMessage.error(getApiErrorMessage(error, '操作失败'))
     }
   } finally {
     actionLoading.value = false
@@ -786,6 +788,7 @@ const rejectClaim = async () => {
       inputPlaceholder: '例如：凭证金额与订单不一致',
       confirmButtonText: '驳回',
       cancelButtonText: '取消',
+      inputValidator: (input: string) => (input && input.trim() ? true : '请写明原因，员工会看到'),
     })
     actionLoading.value = true
     await purchasingApi.reviewReimbursement(route.query.id as string, {
@@ -798,7 +801,7 @@ const rejectClaim = async () => {
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('驳回失败', error)
-      ElMessage.error('操作失败')
+      ElMessage.error(getApiErrorMessage(error, '操作失败'))
     }
   } finally {
     actionLoading.value = false

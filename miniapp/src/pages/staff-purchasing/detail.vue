@@ -244,7 +244,7 @@
                         v-for="record in (item.records || [])"
                         :key="record.id"
                         class="record-card-v2"
-                        :class="{ 'just-saved': highlightedItemId === item.id }"
+                        :class="{ 'just-saved': highlightedRecordId === record.id }"
                       >
                         <view class="record-card-head">
                           <view class="record-card-title">
@@ -362,7 +362,7 @@
           <view class="record-section-head">
             <text class="record-section-label">商品</text>
             <text
-              v-if="recordProcurementSkuOptions.length > 1"
+              v-if="recordProcurementSkuOptions.length > 0"
               class="record-section-link"
               @tap="openSkuPicker"
             >更换</text>
@@ -371,7 +371,7 @@
           <view
             v-if="selectedRecordProcurementSku"
             class="record-product"
-            @tap="recordProcurementSkuOptions.length > 1 && openSkuPicker()"
+            @tap="recordProcurementSkuOptions.length > 0 && openSkuPicker()"
           >
             <view class="record-product-main">
               <text class="record-product-name">{{ selectedSkuNameParts.main }}</text>
@@ -386,7 +386,19 @@
                 class="record-product-warning"
               >这个商品缺渠道，保存前请让管理员在后台补全</text>
             </view>
-            <text v-if="recordProcurementSkuOptions.length > 1" class="record-product-change">更换 ›</text>
+            <text v-if="recordProcurementSkuOptions.length > 0" class="record-product-change">更换 ›</text>
+          </view>
+
+          <view
+            v-else-if="recordProductUnavailable"
+            class="record-product record-product-unavailable"
+            @tap="openSkuPicker"
+          >
+            <view class="record-product-main">
+              <text class="record-product-name">原商品已停用或已删除</text>
+              <text class="record-product-sub">请重新选择一个采购商品，再保存这条记录。</text>
+            </view>
+            <text class="record-product-change">重新选择 ›</text>
           </view>
 
           <view v-else class="record-empty">
@@ -401,7 +413,7 @@
             >＋ 新增采购商品</view>
           </view>
 
-          <template v-if="selectedRecordProcurementSku">
+          <template v-if="selectedRecordProcurementSku || recordProductUnavailable">
             <view class="record-inputs">
               <view class="record-field" :class="{ focus: recordQuantityFocus }">
                 <text class="record-field-label">买了</text>
@@ -567,6 +579,11 @@ import { formatStaffQuantity } from '../../utils/staff-quantity';
 import { canAddProcurementSku } from './procurement-sku-entry';
 import { buildSkuCreateQuery, isSkuCreatedFor } from './procurement-sku-event';
 import { groupPurchaseItemsForDisplay } from './food-category-order';
+import {
+  computeItemOutcome,
+  computeRecordOutcome,
+  computeRecordProgress,
+} from './record-math';
 import {
   chooseOrderShots,
   importOrderShots,
@@ -780,7 +797,8 @@ const noteOpen = ref(false);
 const recordFormError = ref('');
 const recordQuantityFocus = ref(false);
 const recordFormSnapshot = ref('');
-const highlightedItemId = ref('');
+const highlightedRecordId = ref('');
+let highlightTimer: ReturnType<typeof setTimeout> | null = null;
 const showRecordMenu = ref(false);
 const recordMenuRecord = ref<any>(null);
 
@@ -984,6 +1002,13 @@ const selectedRecordProcurementSku = computed(() => {
 
 const selectedSkuNameParts = computed(() => splitSkuName(selectedRecordProcurementSku.value?.name));
 
+const recordProductUnavailable = computed(() => {
+  if (!recordForm.value.procurementSkuId || selectedRecordProcurementSku.value) {
+    return false;
+  }
+  return recordProcurementSkuOptions.value.length > 0;
+});
+
 const isSameAsLatestRecord = computed(() => {
   const latest = latestRecord.value;
   const sku = selectedRecordProcurementSku.value;
@@ -1044,6 +1069,20 @@ const handleProcurementSkuCreated = async (payload: any) => {
 
   const item = items.value.find((row) => (row.ingredientId || row.id) === ingredientId);
   if (!item) return;
+
+  // 从「编辑一条旧记录」里新建商品：仍然是编辑，不能变成新增一条（会重复记账）
+  if (editingRecord.value?.id) {
+    selectedIngredient.value = item;
+    const sku = recordProcurementSkuOptions.value.find((option) => option.id === payload?.skuId);
+    if (sku) {
+      applyRecordSkuDefaults(sku);
+    }
+    showSkuPicker.value = false;
+    recordFormError.value = '';
+    takeRecordFormSnapshot();
+    showRecordForm.value = true;
+    return;
+  }
 
   handleContinueAdd(item);
 
@@ -1318,23 +1357,18 @@ const existingBoughtBase = computed(() => {
   );
 });
 
-const remainingBase = computed(() => {
-  const item = selectedIngredient.value;
+const getItemTargetShortageBase = (item: any) => {
   if (!item) {
     return 0;
   }
   return convertToBaseQuantity(
-    Number(item.quantityNeeded || 0),
+    getItemRequiredQuantity(item),
     item.quantityUnit || getDisplayUnit(item),
     item,
   );
-});
+};
 
-/** 这条记录要覆盖的量：当前缺口 + 正在编辑的那条旧记录。 */
-const recordNeedBase = computed(() => remainingBase.value + editingRecordBase.value);
-
-const grossNeedBase = computed(() => {
-  const item = selectedIngredient.value;
+const getItemGrossNeedBase = (item: any) => {
   if (!item) {
     return 0;
   }
@@ -1343,25 +1377,34 @@ const grossNeedBase = computed(() => {
     item.quantityUnit || getDisplayUnit(item),
     item,
   );
-});
+};
 
-const totalNeedBase = computed(() => {
-  if (grossNeedBase.value > 0) {
-    return grossNeedBase.value;
-  }
-  return existingBoughtBase.value + remainingBase.value;
-});
+const getItemBoughtBase = (item: any) => {
+  return (item?.records || []).reduce(
+    (sum: number, record: any) => sum + getRecordBaseQuantityOf(record, item),
+    0,
+  );
+};
 
-const recordProgressPercent = computed(() => {
-  if (totalNeedBase.value <= 0) {
-    return 0;
-  }
-  return Math.min(100, Math.round((existingBoughtBase.value / totalNeedBase.value) * 100));
-});
+const targetShortageBase = computed(() => getItemTargetShortageBase(selectedIngredient.value));
 
-const progressOver = computed(() => {
-  return totalNeedBase.value > 0 && existingBoughtBase.value > totalNeedBase.value + 0.0001;
-});
+/**
+ * 后端生成清单后不会再回写「还要买多少」，所以进度要自己算：
+ * 还需 = max(0, 目标缺口 - 已有记录)；编辑时这条记录要覆盖「还需 + 旧记录」。
+ */
+const recordProgress = computed(() =>
+  computeRecordProgress({
+    targetShortage: targetShortageBase.value,
+    existingBought: existingBoughtBase.value,
+    editingBought: editingRecordBase.value,
+  }),
+);
+
+const remainingBase = computed(() => recordProgress.value.remaining);
+const totalNeedBase = computed(() => recordProgress.value.total);
+const recordNeedBase = computed(() => recordProgress.value.needForThisRecord);
+const recordProgressPercent = computed(() => recordProgress.value.progressPercent);
+const progressOver = computed(() => recordProgress.value.progressOver);
 
 const formatRecordBaseWithUnit = (value: number) => {
   return `${formatBaseQuantity(value)}${getBaseUnitLabel(selectedIngredient.value)}`;
@@ -1385,14 +1428,14 @@ const recordOutcome = computed(() => {
   if (!inputBase || inputBase <= 0) {
     return null;
   }
-  const diff = inputBase - recordNeedBase.value;
-  if (diff > 0.0001) {
-    return { text: `多 ${formatRecordBaseWithUnit(diff)}`, tone: 'over' };
+  const outcome = computeRecordOutcome(inputBase, recordNeedBase.value);
+  if (outcome.kind === 'ok') {
+    return { text: '刚好买齐', tone: 'ok' };
   }
-  if (diff < -0.0001) {
-    return { text: `还差 ${formatRecordBaseWithUnit(-diff)}`, tone: 'short' };
-  }
-  return { text: '刚好买齐', tone: 'ok' };
+  return {
+    text: `${outcome.kind === 'over' ? '多' : '还差'} ${formatRecordBaseWithUnit(outcome.value)}`,
+    tone: outcome.kind,
+  };
 });
 
 const getItemOutcome = (item: any) => {
@@ -1400,27 +1443,18 @@ const getItemOutcome = (item: any) => {
   if (records.length === 0) {
     return { text: '待采购', tone: 'pending' };
   }
-  const itemRemaining = convertToBaseQuantity(
-    Number(item?.quantityNeeded || 0),
-    item?.quantityUnit || getDisplayUnit(item),
-    item,
-  );
-  if (itemRemaining > 0.0001) {
-    return { text: `还差 ${formatBaseWithUnitForItem(itemRemaining, item)}`, tone: 'short' };
+  const outcome = computeItemOutcome({
+    targetShortage: getItemTargetShortageBase(item),
+    bought: getItemBoughtBase(item),
+    grossNeed: getItemGrossNeedBase(item),
+  });
+  if (outcome.kind === 'ok') {
+    return { text: '买齐', tone: 'ok' };
   }
-  const bought = records.reduce(
-    (sum: number, record: any) => sum + getRecordBaseQuantityOf(record, item),
-    0,
-  );
-  const gross = convertToBaseQuantity(
-    Number(item?.resolvedGrossQuantityNeeded || 0),
-    item?.quantityUnit || getDisplayUnit(item),
-    item,
-  );
-  if (gross > 0 && bought > gross + 0.0001) {
-    return { text: `多 ${formatBaseWithUnitForItem(bought - gross, item)}`, tone: 'over' };
-  }
-  return { text: '买齐', tone: 'ok' };
+  return {
+    text: `${outcome.kind === 'over' ? '多' : '还差'} ${formatBaseWithUnitForItem(outcome.value, item)}`,
+    tone: outcome.kind,
+  };
 };
 
 const formatPickerSkuMeta = (sku: any) => {
@@ -1556,7 +1590,11 @@ const formatRecordRawSummary = (record: any, item: any) => {
 const formatRecordQuantity = (record: any, item: any) => {
   const rawSummary = formatRecordRawSummary(record, item);
   if (rawSummary) {
-    return rawSummary;
+    const base = Number(record.actualBaseQuantity || 0);
+    const baseUnit = formatMeasurementUnit(record.actualBaseUnit);
+    return base > 0 && baseUnit
+      ? `${rawSummary} = ${formatDecimal(base, 3)}${baseUnit}`
+      : rawSummary;
   }
 
   const quantity = Number(record.actualQuantity || 0);
@@ -1654,6 +1692,10 @@ onShow(() => {
 
 onUnload(() => {
   uni.$off('procurement-sku:created', handleProcurementSkuCreated);
+  if (highlightTimer) {
+    clearTimeout(highlightTimer);
+    highlightTimer = null;
+  }
 });
 
 const goOrderImportReview = () => {
@@ -1993,20 +2035,8 @@ const handleContinueAdd = (item: any) => {
 
   recordForm.value.actualPackageCount = '';
 
-  if (latest?.actualPackageSize) {
-    recordForm.value.actualPackageSize = formatDecimal(Number(latest.actualPackageSize || 0));
-  }
-  if (latest?.actualPackageUnit) {
-    recordForm.value.actualPackageUnit = latest.actualPackageUnit;
-  }
-  if (latest?.purchaseChannel) {
-    recordForm.value.purchaseChannel = normalizeChannelLabel(latest.purchaseChannel);
-  }
-  if (latest?.productModel) {
-    recordForm.value.productModel = latest.productModel;
-    recordForm.value.purchaseUnit = parsePurchaseUnitFromProductModel(latest.productModel) || recordForm.value.purchaseUnit || '件';
-  }
-
+  // 规格/单位/渠道/型号以商品档案为准；不要用上一条记录覆盖，
+  // 否则商品档案缺渠道时会被上一次的渠道「借」过去，界面提示和实际保存对不上。
   channelInputMode.value = recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel) ? 'preset' : 'custom';
   noteOpen.value = false;
   recordFormError.value = '';
@@ -2034,6 +2064,10 @@ const editRecord = (record: any) => {
 
   if (selectedSku) {
     applyRecordSkuDefaults(selectedSku);
+  } else if (record.procurementSkuId) {
+    // 商品被停用/删除：保留原 id 让界面进入「原商品已停用」分支，数量和金额继续显示
+    recordForm.value.procurementSkuId = record.procurementSkuId;
+    recordForm.value.procurementSkuName = record.procurementSkuName || '';
   }
   recordForm.value.purchaseChannel = normalizeChannelLabel(record.purchaseChannel);
   recordForm.value.actualPackageCount = record.actualPackageCount ? formatDecimal(Number(record.actualPackageCount || 0)) : formatDecimal(Number(record.actualQuantity || 0));
@@ -2058,6 +2092,10 @@ const editRecord = (record: any) => {
 
 // 关闭采购表单：填过东西先确认，别让员工白填
 const closeRecordForm = (force = false) => {
+  // 保存中不允许关闭：否则慢网下先关掉再打开另一条，上一笔的回调会把新表单关掉
+  if (submitting.value && !force) {
+    return;
+  }
   if (!force && isRecordFormDirty.value) {
     uni.showModal({
       title: '放弃这次填写？',
@@ -2137,6 +2175,9 @@ const resetRecordForm = () => {
 
 // 提交采购记录
 const submitRecord = async () => {
+  if (submitting.value) {
+    return;
+  }
   const wasEditing = Boolean(editingRecord.value);
   recordFormError.value = '';
   // 表单验证
@@ -2234,7 +2275,6 @@ const submitRecord = async () => {
 
     if (response.code === 0) {
       const savedItemId = selectedIngredient.value?.id;
-      const savedIngredientId = selectedIngredient.value?.ingredientId;
 
       uni.showToast({
         title: wasEditing ? '修改成功' : '保存成功',
@@ -2248,21 +2288,26 @@ const submitRecord = async () => {
 
       // 保存后回到清单：自动展开这张原料，并短暂高亮刚存的那条
       const savedItem = items.value.find(
-        (row) =>
-          (savedItemId && row.id === savedItemId) ||
-          (savedIngredientId && row.ingredientId === savedIngredientId),
+        (row) => savedItemId && row.id === savedItemId,
       );
       if (savedItem) {
         expandedRecordItems.value = {
           ...expandedRecordItems.value,
           [savedItem.id]: true,
         };
-        highlightedItemId.value = savedItem.id;
-        setTimeout(() => {
-          if (highlightedItemId.value === savedItem.id) {
-            highlightedItemId.value = '';
+        const savedRecordId = response.data?.id || response.data?.record?.id || '';
+        if (savedRecordId) {
+          if (highlightTimer) {
+            clearTimeout(highlightTimer);
           }
-        }, 2200);
+          highlightedRecordId.value = savedRecordId;
+          highlightTimer = setTimeout(() => {
+            if (highlightedRecordId.value === savedRecordId) {
+              highlightedRecordId.value = '';
+            }
+            highlightTimer = null;
+          }, 2200);
+        }
       }
 
       closeRecordForm(true);
@@ -5185,7 +5230,8 @@ const confirmDeleteItem = (item: any) => {
   line-height: 1;
   letter-spacing: 2rpx;
   color: #8f8b7d;
-  padding: 0 4rpx;
+  padding: 29rpx 30rpx;
+  margin: -29rpx -30rpx 0 0;
 }
 
 .record-card-mid {

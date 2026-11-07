@@ -353,7 +353,7 @@ describe('staff purchasing purchase record form', () => {
   });
 
   it('returns to the list and expands/highlights the saved record', () => {
-    expect(detailSource).toContain('highlightedItemId.value = savedItem.id');
+    expect(detailSource).toContain('highlightedRecordId.value = savedRecordId');
     expect(detailSource).toContain('expandedRecordItems.value = {');
     expect(detailSource).toContain('closeRecordForm(true)');
   });
@@ -372,6 +372,22 @@ describe('staff purchasing purchase record form', () => {
     expect(detailSource).toContain('record-card-state');
     expect(detailSource).toContain('记录详情');
     expect(detailSource).not.toContain('盒马鲜生 · 17:39 · 截图');
+  });
+
+  it('keeps the change entry available even when only one product exists', () => {
+    expect(recordModalSource).not.toContain('recordProcurementSkuOptions.length > 1');
+    expect(recordModalSource).toContain('recordProcurementSkuOptions.length > 0');
+  });
+
+  it('shows the converted total on the record card', () => {
+    expect(detailSource).toContain('= ${formatDecimal(base, 3)}${baseUnit}');
+  });
+
+  it('guards save-in-flight and handles a deactivated SKU while editing', () => {
+    expect(detailSource).toContain('if (submitting.value) {');
+    expect(detailSource).toContain('if (submitting.value && !force)');
+    expect(detailSource).toContain('recordProductUnavailable');
+    expect(detailSource).toContain('原商品已停用或已删除');
   });
 
   it('does not allow purchase record editing after the list is completed', () => {

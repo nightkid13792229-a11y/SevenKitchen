@@ -75,6 +75,7 @@ export class SupplementChatController {
       reply: string;
       draft: Record<string, unknown>;
       applied: string[];
+      partial?: boolean;
       question: { question: string; options: string[] } | null;
     }>
   > {
@@ -95,6 +96,7 @@ export class SupplementChatController {
         reply: result.reply,
         draft: result.draft,
         applied: result.applied,
+        partial: result.partial ?? false,
         question: result.question
       });
     } catch (error) {

@@ -40,6 +40,8 @@ export interface SupplementAgentResult {
   toolCalls: { name: string; ok: boolean }[];
   /** 本次真正写进草稿的字段路径——前端只按这个清单回写，别的都是回显 */
   applied: string[];
+  /** 中途失败但保留已完成的部分（true 时 reply 里会说明） */
+  partial?: boolean;
   /** 模型用 ask_user 提的问题；没有就是 null */
   question: { question: string; options: string[] } | null;
 }
@@ -125,7 +127,29 @@ export class SupplementAgentService {
           question
         };
       }
-      const assistant = await this.request(runtime, messages);
+      let assistant: Awaited<ReturnType<typeof this.request>>;
+      try {
+        assistant = await this.request(runtime, messages);
+      } catch (error) {
+        // 一步都没跑成：交给上层如实报错（配置/模型/代码问题各不相同）
+        if (step === 0) {
+          throw error;
+        }
+        // 已经跑了几步：**别把已经写进草稿的东西丢掉**，如实告诉用户断在哪
+        const done = [...written];
+        return {
+          reply:
+            `中途出错了（${error instanceof Error ? error.message : '未知原因'}）。` +
+            (done.length > 0
+              ? `已经填好的 ${done.length} 项保留在右边，你核对一下再继续。`
+              : '右边暂时没有改动，你可以再说一次。'),
+          draft: context.draft,
+          toolCalls,
+          applied: done,
+          question,
+          partial: true
+        };
+      }
       messages.push(assistant.message);
 
       const calls = assistant.toolCalls;

@@ -196,4 +196,53 @@ describe('工具循环', () => {
     expect(result.toolCalls.length).toBeLessThanOrEqual(4);
     expect(result.reply).toContain('停在这里');
   });
+
+  it('跑了几步之后模型挂了 → 保住已填的字段，如实说明断在哪', async () => {
+    let call = 0;
+    global.fetch = jest.fn(async () => {
+      call += 1;
+      if (call === 1) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            choices: [
+              {
+                message: {
+                  content: null,
+                  tool_calls: [
+                    {
+                      id: 'c1',
+                      function: {
+                        name: 'write_draft',
+                        arguments: JSON.stringify({ patch: { brand: 'NOW Foods' } })
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          })
+        };
+      }
+      throw new Error('模型返回 500');
+    }) as unknown as typeof fetch;
+
+    const { service: agent } = service();
+    const result = await agent.run(base);
+
+    expect(result.partial).toBe(true);
+    expect(result.applied).toEqual(['brand']);
+    expect(result.draft.brand).toBe('NOW Foods');
+    expect(result.reply).toContain('保留');
+  });
+
+  it('第一步就挂 → 抛出去，交给上层报错（不假装答了）', async () => {
+    global.fetch = jest.fn(async () => {
+      throw new Error('模型返回 500');
+    }) as unknown as typeof fetch;
+
+    const { service: agent } = service();
+    await expect(agent.run(base)).rejects.toThrow();
+  });
 });

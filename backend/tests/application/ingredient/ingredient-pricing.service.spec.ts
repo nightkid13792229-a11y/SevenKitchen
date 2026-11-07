@@ -346,6 +346,108 @@ describe('IngredientPricingService', () => {
     expect(updateCall.data.gateReason).toContain('倍');
   });
 
+  it('提交时把不自动通过的调价直接标为「需放行」，不写价格', async () => {
+    mockPrismaService.ingredientPriceChange.findMany.mockResolvedValueOnce([
+      {
+        id: 'change-big',
+        ingredientId: 'ingredient-1',
+        ingredientName: '猪里脊',
+        reimbursementId: 'reimbursement-1',
+        purchaseRecordId: 'record-1',
+        sourceQuantity: { toNumber: () => 0.4 },
+        sourcePricePerPurchaseUnit: { toNumber: () => 33.74 },
+        previousCurrentPricePerPurchaseUnit: { toNumber: () => 12.38 },
+        previousEffectivePrice: { toNumber: () => 12.38 },
+        proposedEffectivePrice: { toNumber: () => 33.74 },
+        appliedCurrentPricePerPurchaseUnit: null,
+        appliedEffectivePricePerPurchaseUnit: null,
+        deltaRate: { toNumber: () => 1.726 },
+        status: 'PENDING',
+        reviewComment: null,
+        reviewedById: null,
+        reviewedAt: null,
+        createdAt: new Date(),
+      },
+    ]);
+    mockIngredientRepository.findByIds.mockResolvedValue([
+      { id: 'ingredient-1', purchaseToBaseRatio: 1 },
+    ]);
+    mockPurchaseRecordRepository.findByIngredientId.mockResolvedValue([]);
+    mockGlobalConfigService.getGlobalConfig.mockResolvedValue({
+      ingredientPriceAutoApproveThreshold: 0.1,
+    });
+    mockPrismaService.ingredientPriceChange.update.mockResolvedValue({});
+    mockIngredientRepository.update.mockClear();
+
+    await service.autoApproveEligibleChangesForReimbursement('reimbursement-1');
+
+    const updateCall = mockPrismaService.ingredientPriceChange.update.mock.calls
+      .map((call: any[]) => call[0])
+      .find((arg: any) => arg?.where?.id === 'change-big');
+    expect(updateCall.data.gateAction).toBe('HOLD');
+    expect(updateCall.data.gateReason).toContain('超过自动审核阈值');
+    expect(mockIngredientRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('审核通过时不偷偷应用「需放行」的调价', async () => {
+    mockPrismaService.ingredientPriceChange.findMany.mockResolvedValueOnce([
+      {
+        id: 'change-held',
+        ingredientId: 'ingredient-1',
+        reimbursementId: 'reimbursement-1',
+        purchaseRecordId: 'record-1',
+        sourceQuantity: { toNumber: () => 1 },
+        sourcePricePerPurchaseUnit: { toNumber: () => 33.74 },
+        previousEffectivePrice: { toNumber: () => 12.38 },
+        proposedEffectivePrice: { toNumber: () => 33.74 },
+        deltaRate: { toNumber: () => 1.726 },
+        status: 'PENDING',
+        gateAction: 'HOLD',
+        createdAt: new Date(),
+      },
+      {
+        id: 'change-ok',
+        ingredientId: 'ingredient-1',
+        reimbursementId: 'reimbursement-1',
+        purchaseRecordId: 'record-2',
+        sourceQuantity: { toNumber: () => 1 },
+        sourcePricePerPurchaseUnit: { toNumber: () => 10.5 },
+        previousEffectivePrice: { toNumber: () => 10 },
+        proposedEffectivePrice: { toNumber: () => 10.5 },
+        deltaRate: { toNumber: () => 0.05 },
+        status: 'PENDING',
+        gateAction: null,
+        createdAt: new Date(),
+      },
+    ]);
+    mockIngredientRepository.findByIds.mockResolvedValue([
+      {
+        id: 'ingredient-1',
+        purchaseToBaseRatio: 1,
+        currentPricePerPurchaseUnit: 10,
+        getEffectivePricePerPurchaseUnit: () => 10,
+      },
+    ]);
+    mockPurchaseRecordRepository.findById.mockResolvedValue(undefined);
+    mockGlobalConfigService.getGlobalConfig.mockResolvedValue({
+      ingredientPriceAutoApproveThreshold: 0.1,
+    });
+    mockPrismaService.ingredientPriceChange.update.mockResolvedValue({});
+    mockIngredientRepository.update.mockClear();
+
+    await service.applyApprovedChangesForReimbursement(
+      'reimbursement-1',
+      'admin-1',
+      '通过',
+    );
+
+    const touchedIds = mockPrismaService.ingredientPriceChange.update.mock.calls
+      .map((call: any[]) => call[0]?.where?.id)
+      .filter(Boolean);
+    expect(touchedIds).toContain('change-ok');
+    expect(touchedIds).not.toContain('change-held');
+  });
+
   // 2026-11-08：基准改用「档案当前生效价」，阈值 10%
   const buildGateChange = (proposedPrice: number) => ({
     id: 'change-gate',
@@ -409,7 +511,7 @@ describe('IngredientPricingService', () => {
     const updateCall = await runGate(11.1);
 
     expect(updateCall.data.gateAction).toBe('HOLD');
-    expect(updateCall.data.gateReason).toContain('10%');
+    expect(updateCall.data.gateReason).toContain('超过自动生效阈值');
     expect(mockIngredientRepository.update).not.toHaveBeenCalled();
   });
 

@@ -183,8 +183,7 @@
         </view>
 
         <text v-if="pendingPriceChangeCount > 0" class="pending-price-hint">
-          {{ pendingPriceChangeCount }} 项调价待确认：标「预计需放行」的，点「审核通过」时会被拦下，
-          标「需放行」的已经拦下了；这两种都要再点一下「放行」价格才会更新。
+          {{ pendingPriceChangeCount }} 项调价没能自动生效，标「需放行」；点一下「放行」价格才会更新。
         </text>
 
         <view v-if="auditPurchaseRecords.length === 0" class="empty-block">
@@ -1039,7 +1038,11 @@ const canRelease = (record: any) => {
     return false;
   }
   const change = priceChangeOf(record);
-  return !!change && change.status === 'PENDING' && change.gateAction === 'HOLD';
+  return (
+    !!change &&
+    change.status === 'PENDING' &&
+    (change.gateAction === 'HOLD' || change.gatePreviewAction === 'HOLD')
+  );
 };
 
 const releaseHeldChange = (record: any) => {
@@ -1087,16 +1090,13 @@ const recordPriceTag = (record: any) => {
   if (change.status === 'REJECTED') {
     return '已作废';
   }
-  if (change.gateAction === 'HOLD') {
+  // 2026-11-08：提交时就全量判定，所以待确认项要么已被挂起、要么是没判定过的老数据。
+  // 两种都按「需放行」处理：不放行就不会生效。
+  if (change.gateAction === 'HOLD' || change.gatePreviewAction === 'HOLD') {
     return '需放行';
   }
-
-  // 还没被闸门判过的：用后端预演结果提前告知，免得点了通过才冒出「需放行」
-  if (change.gatePreviewAction === 'HOLD') {
-    return '预计需放行';
-  }
   if (change.gatePreviewAction === 'REJECT') {
-    return '通过时会被拒';
+    return '无法放行';
   }
 
   return '';
@@ -1113,11 +1113,8 @@ const recordPriceTagTone = (record: any) => {
   if (change.status === 'REJECTED') {
     return 'muted';
   }
-  if (change.gateAction === 'HOLD') {
+  if (change.gateAction === 'HOLD' || change.gatePreviewAction === 'HOLD') {
     return 'danger';
-  }
-  if (change.gatePreviewAction === 'HOLD') {
-    return 'warn';
   }
   if (change.gatePreviewAction === 'REJECT') {
     return 'muted';
@@ -1159,14 +1156,6 @@ const heldPriceChangeCount = computed(
   () => pendingPriceChanges.value.filter((change: any) => change.gateAction === 'HOLD').length,
 );
 
-/** 还没判定、但按当前阈值一定会被挂起的（预演结果） */
-const predictedHoldCount = computed(
-  () =>
-    pendingPriceChanges.value.filter(
-      (change: any) => change.gateAction !== 'HOLD' && change.gatePreviewAction === 'HOLD',
-    ).length,
-);
-
 const revertedPriceChangeCount = computed(
   () => (reimbursement.value?.priceChanges || []).filter((change: any) => change.status === 'APPROVED').length,
 );
@@ -1203,21 +1192,11 @@ const summaryAlerts = computed<Array<{ tone: string; text: string }>>(() => {
     });
   }
 
-  if (
-    heldPriceChangeCount.value === 0 &&
-    predictedHoldCount.value > 0
-  ) {
-    alerts.push({
-      tone: 'warn',
-      text: `${predictedHoldCount.value} 项调价幅度超过 10%：现在还没判定，点「审核通过」时会被拦下，需要再点「放行」`,
-    });
-  }
-
   if (heldPriceChangeCount.value > 0) {
     // 已经被闸门挂起：通过后价格不会变，等于还要去电脑端放行
     alerts.push({
       tone: 'danger',
-      text: `${heldPriceChangeCount.value} 项被价格闸挂起：审核可以先通过，但这几项价格不会变，在明细里点「放行」才会更新`,
+      text: `${heldPriceChangeCount.value} 项调价被闸门挂起：审核可以通过，但这几项价格不会变，要在明细里点「放行」`,
     });
   }
 

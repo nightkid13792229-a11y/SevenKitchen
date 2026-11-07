@@ -257,19 +257,36 @@ export class IngredientPricingService {
     const eligibleChanges = pendingChanges.filter(
       (change) => evaluations.get(change.id)?.eligible ?? false,
     );
-
-    if (eligibleChanges.length === 0) {
-      return this.getPriceChangesForReimbursement(reimbursementId);
-    }
-
-    await this.applyPriceChanges(
-      eligibleChanges,
-      null,
-      await this.buildAutoApprovalComment(),
+    const ineligibleChanges = pendingChanges.filter(
+      (change) => !(evaluations.get(change.id)?.eligible ?? false),
     );
 
+    if (eligibleChanges.length > 0) {
+      await this.applyPriceChanges(
+        eligibleChanges,
+        null,
+        await this.buildAutoApprovalComment(),
+      );
+    }
+
+    // 2026-11-08：不再把「不够格自动通过」的项留到审核时才判。
+    // 提交时就把它们标成「需放行」并写明理由（首次定价、波动超阈值、数量离群），
+    // 这样审核员在点通过之前就能看到全景，页面也不会再出现「预计需放行」这种半成品状态。
+    // 注意：这里只写判定结果，不写价格；真正放行仍然要点「放行」。
+    for (const change of ineligibleChanges) {
+      const reasons = evaluations.get(change.id)?.reasons ?? [];
+      await this.prisma.ingredientPriceChange.update({
+        where: { id: change.id },
+        data: {
+          gateAction: 'HOLD',
+          gateReason:
+            reasons.join('；') || '需要人工确认后才能生效',
+        } as any,
+      });
+    }
+
     this.logger.log(
-      `Auto-approved ${eligibleChanges.length} ingredient price changes for reimbursement ${reimbursementId}`,
+      `Judged ${pendingChanges.length} price changes for reimbursement ${reimbursementId}: auto-apply ${eligibleChanges.length}, hold ${ineligibleChanges.length}`,
     );
 
     return this.getPriceChangesForReimbursement(reimbursementId);
@@ -292,12 +309,19 @@ export class IngredientPricingService {
       },
     });
 
-    if (pendingChanges.length === 0) {
+    // 2026-11-08：已经被判定为「需放行」的项，审核通过时不自动应用。
+    // 否则「需放行」只是个标签——点通过就悄悄生效了，等于骗人。
+    // 它们必须由管理员逐条点「放行」；这里只处理没判定过的（老单据）。
+    const applicableChanges = pendingChanges.filter(
+      (change) => (change as any).gateAction !== 'HOLD',
+    );
+
+    if (applicableChanges.length === 0) {
       return this.getPriceChangesForReimbursement(reimbursementId);
     }
 
     await this.applyPriceChanges(
-      pendingChanges,
+      applicableChanges,
       reviewerId ?? null,
       reviewComment ?? null,
       new Set(),

@@ -3,7 +3,7 @@ import {
   AgentProviderConfigService,
   type DeepSeekRuntimeConfig
 } from '../nutrition-governance/agent-provider-config.service';
-import { INGREDIENT_INTAKE_AGENT_PURPOSES } from './ingredient-creation-intake.service';
+import { INGREDIENT_INTAKE_AGENT_PURPOSE } from './ingredient-creation-intake.service';
 import type {
   SupplementChatAction,
   SupplementChatDraft,
@@ -84,21 +84,18 @@ export class SupplementChatAgentService {
     return this.parse(body, input);
   }
 
+  /**
+   * 补剂与食材共用「原料入库」这一条模型配置。
+   *
+   * 刻意**不**退到全局默认、也不退到食谱设计（老板 2026-11-07 定）：
+   * 退到别的用途会让人以为"补剂也能用"，实际用的是另一套模型和另一份额度，
+   * 出了问题两边对不上。没开就是没开，如实退回规则版并留日志。
+   */
   private async loadRuntime(): Promise<DeepSeekRuntimeConfig> {
-    let lastError: unknown = null;
-    for (const purpose of INGREDIENT_INTAKE_AGENT_PURPOSES) {
-      try {
-        return await this.providerConfig.getEnabledDeepSeekRuntimeConfig({
-          purpose,
-          fallbackToDefault: false
-        });
-      } catch (error) {
-        lastError = error;
-      }
-    }
-    throw lastError instanceof Error
-      ? lastError
-      : new Error('没有可用的 AI 配置');
+    return this.providerConfig.getEnabledDeepSeekRuntimeConfig({
+      purpose: INGREDIENT_INTAKE_AGENT_PURPOSE,
+      fallbackToDefault: false
+    });
   }
 
   private async request(

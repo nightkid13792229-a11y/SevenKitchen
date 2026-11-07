@@ -106,6 +106,19 @@ describe('SupplementChatAgentService', () => {
     expect(texts).toContain('每份几粒：2');
   });
 
+  it('只用「原料入库」那一条配置，不退到全局默认或食谱设计', async () => {
+    const { service, providerConfig } = build(JSON.stringify({ reply: '好', actions: [] }));
+
+    await service.respond({ message: '嗯', history: [], draft });
+
+    const calls = (providerConfig.getEnabledDeepSeekRuntimeConfig as jest.Mock).mock.calls;
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toMatchObject({
+      purpose: 'INGREDIENT_INTAKE',
+      fallbackToDefault: false
+    });
+  });
+
   it('所有用途都取不到配置时抛错，不静默编一个', async () => {
     const providerConfig = {
       getEnabledDeepSeekRuntimeConfig: jest.fn(async () => {

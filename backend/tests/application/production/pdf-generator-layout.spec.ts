@@ -180,24 +180,14 @@ describe('制作单 PDF：黑白 + 双备注 + 页码', () => {
     expect(countPages(pdf)).toBe(1);
   });
 
-  it('原料名与采购信息分两行，不再用斜杠串成一长条', () => {
+  it('原料列一行装下：类型 + 原料名 + 商品名（品牌）+ 渠道 + 规格', () => {
     const service = new PdfGeneratorService() as any;
 
     expect(
-      service.getIngredientNameLine({
-        name: '生蚝 去壳生蚝肉',
-        procurementSkuName: '生蚝 去壳生蚝肉',
-        typeLabel: '食材',
-        amount: '140.36',
-        unit: 'g',
-        typeClass: 'food',
-      }),
-    ).toBe('食材  生蚝 去壳生蚝肉');
-
-    expect(
-      service.getIngredientMetaLine({
-        name: '生蚝 去壳生蚝肉',
-        procurementSkuName: '生蚝 去壳生蚝肉',
+      service.getIngredientSourceLine({
+        name: '生蚝',
+        standardIngredientName: '生蚝',
+        procurementSkuName: '去壳生蚝肉',
         procurementSkuBrand: '贝司令',
         procurementSkuPurchaseChannel: '淘宝/天猫',
         procurementSkuProductModel: '200g/包',
@@ -206,7 +196,37 @@ describe('制作单 PDF：黑白 + 双备注 + 页码', () => {
         unit: 'g',
         typeClass: 'food',
       }),
-    ).toBe('贝司令 · 淘宝/天猫 · 200g/包');
+    ).toBe('食材 生蚝 贝司令 去壳生蚝肉 / 淘宝/天猫 / 200g/包');
+
+    expect(
+      service.getIngredientSourceLine({
+        name: '猪里脊',
+        standardIngredientName: '猪里脊',
+        procurementSkuName: '猪里脊',
+        procurementSkuPurchaseChannel: '农贸市场',
+        procurementSkuProductModel: '10kg/份',
+        typeLabel: '食材',
+        amount: '884.29',
+        unit: 'g',
+        typeClass: 'food',
+      }),
+    ).toBe('食材 猪里脊 / 农贸市场 / 10kg/份');
+
+    // 占位符品牌不能印成「无 去壳生蚝肉」
+    expect(
+      service.getIngredientSourceLine({
+        name: '生蚝',
+        standardIngredientName: '生蚝',
+        procurementSkuName: '去壳生蚝肉',
+        procurementSkuBrand: '无',
+        procurementSkuPurchaseChannel: '暂无',
+        procurementSkuProductModel: '-',
+        typeLabel: '食材',
+        amount: '1',
+        unit: 'g',
+        typeClass: 'food',
+      }),
+    ).toBe('食材 生蚝 去壳生蚝肉');
   });
 
   it('页脚按真实总页数逐页写「第 x / y 页」', () => {

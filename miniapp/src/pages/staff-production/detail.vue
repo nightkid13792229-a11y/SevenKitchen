@@ -474,10 +474,14 @@ const parsedIngredients = computed(() => {
     };
     const type = item.ingredient_type ? typeMap[item.ingredient_type] : '';
 
-    // 获取部位 / 状态 / 预处理（多个方法用顿号分隔）
-    const preparationMethods = item.preparation_methods && item.preparation_methods.length > 0
+    // 部位 / 状态 / 预处理：优先用设计器里的原话（标点不改写），老数据退回拆词版本
+    const preparationMethods = (
+      item.preparation_method ||
+      item.preparationMethod ||
+      ''
+    ).trim() || (item.preparation_methods && item.preparation_methods.length > 0
       ? item.preparation_methods.join('、')
-      : '';
+      : '');
 
     // 用量：优先用后端算好的，其次本地算
     if (planned && Number.isFinite(planned.requiredAmount)) {

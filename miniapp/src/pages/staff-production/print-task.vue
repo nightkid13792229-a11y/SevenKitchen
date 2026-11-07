@@ -72,7 +72,7 @@
             <view class="section-title">原料清单（{{ realIngredientCount }}项）</view>
             <view class="compact-print-table">
               <view class="compact-table-row compact-table-header">
-                <view class="table-cell source">SKU / 品牌 / 渠道 / 规格</view>
+                <view class="table-cell source">原料 / 商品（品牌）/ 渠道 / 规格</view>
                 <view class="table-cell amount">用量</view>
                 <view class="table-cell method">部位/状态/预处理</view>
               </view>
@@ -83,10 +83,7 @@
                 :class="{ 'total-weight': ingredient.isTotalWeight }"
               >
                 <view class="table-cell source">
-                  <view class="ingredient-sku-source-line">{{ ingredientNameLine(ingredient) }}</view>
-                  <view v-if="ingredientMetaLine(ingredient)" class="ingredient-sku-meta-line">
-                    {{ ingredientMetaLine(ingredient) }}
-                  </view>
+                  <view class="ingredient-sku-source-line">{{ ingredientSourceLine(ingredient) }}</view>
                 </view>
                 <view class="table-cell amount">{{ ingredient.amount }}{{ ingredient.unit }}</view>
                 <view class="table-cell method">
@@ -184,9 +181,13 @@ const parsedIngredients = computed(() => {
     };
     const typeInfo = item.ingredient_type ? typeMap[item.ingredient_type] : null;
 
-    const preparationMethods = Array.isArray(item.preparation_methods) && item.preparation_methods.length > 0
+    // 设计器里「部位 / 状态 / 预处理」的原话优先；老数据没有原话时退回拆词版本
+    const preparationMethods = getFirstString(
+      item.preparation_method,
+      item.preparationMethod,
+    ) || (Array.isArray(item.preparation_methods) && item.preparation_methods.length > 0
       ? item.preparation_methods.join('、')
-      : '';
+      : '');
 
     if (planned && Number.isFinite(planned.requiredAmount)) {
       amount = planned.requiredAmount;
@@ -324,11 +325,18 @@ function formatDecimal(value: number | null | undefined, decimals = 2): string {
   return value.toFixed(decimals);
 }
 
-/** 原料名：类型 + 采购名（加粗第一行） */
-function ingredientNameLine(ingredient: {
+/**
+ * 原料列（一行）：类型 + 原料名 + 商品名（品牌并入）+ 采购渠道 + 规格。
+ * 例：`食材 生蚝 贝司令 去壳生蚝肉 / 淘宝/天猫 / 200g/包`
+ * 原料名和商品名重复时只留一份，避免「生蚝 生蚝 去壳生蚝肉」。
+ */
+function ingredientSourceLine(ingredient: {
   name?: string;
   standardIngredientName?: string;
   procurementSkuName?: string;
+  procurementSkuBrand?: string;
+  procurementSkuPurchaseChannel?: string;
+  procurementSkuProductModel?: string;
   typeLabel?: string;
   isTotalWeight?: boolean;
 }): string {
@@ -336,32 +344,43 @@ function ingredientNameLine(ingredient: {
     return '食材类原料总重（含生产损耗）';
   }
 
-  const name = (
-    ingredient.procurementSkuName ||
-    ingredient.name ||
+  const ingredientName = (
     ingredient.standardIngredientName ||
+    ingredient.name ||
     ''
   ).trim();
+  const skuName = (ingredient.procurementSkuName || '').trim();
+  // 品牌里的「无 / 暂无 / -」是占位符，不能印成「无 去壳生蚝肉」
+  const brand = getPrintablePurchaseSummaryParts(
+    ingredient.procurementSkuBrand,
+  )[0] || '';
+  // 原料名和商品名完全一样时只留一份；其余情况两段都保留（原料 → 商品）
+  const skuHasIngredient =
+    Boolean(skuName) && skuName === ingredientName;
+  const skuPart = [brand, skuName].filter(Boolean).join(' ');
 
-  return [ingredient.typeLabel?.trim(), name || '-'].filter(Boolean).join('  ');
-}
-
-/** 采购信息：品牌 · 渠道 · 规格（灰字第二行，不再用斜杠串一长条） */
-function ingredientMetaLine(ingredient: {
-  procurementSkuBrand?: string;
-  procurementSkuPurchaseChannel?: string;
-  procurementSkuProductModel?: string;
-  isTotalWeight?: boolean;
-}): string {
-  if (ingredient.isTotalWeight) {
-    return '';
+  let main = '';
+  if (!ingredientName) {
+    main = skuPart || '-';
+  } else if (!skuPart) {
+    main = ingredientName;
+  } else if (skuHasIngredient) {
+    main = skuPart;
+  } else {
+    main = `${ingredientName} ${skuPart}`;
   }
 
-  return getPrintablePurchaseSummaryParts(
-    ingredient.procurementSkuBrand,
-    ingredient.procurementSkuPurchaseChannel,
-    ingredient.procurementSkuProductModel,
-  ).join(' · ');
+  const parts = [
+    main,
+    ...getPrintablePurchaseSummaryParts(
+      ingredient.procurementSkuPurchaseChannel,
+      ingredient.procurementSkuProductModel,
+    ),
+  ].filter(Boolean);
+
+  return [ingredient.typeLabel?.trim(), parts.join(' / ')]
+    .filter(Boolean)
+    .join(' ');
 }
 
 function getPrintablePurchaseSummaryParts(...values: unknown[]): string[] {
@@ -818,13 +837,13 @@ const handlePrint = async () => {
 
   /* 用量右对齐 + 等宽数字，方便上下比对 */
   &.amount {
-    flex: 0 0 92rpx;
+    flex: 0 0 84rpx;
     white-space: nowrap;
     text-align: right;
   }
 
   &.method {
-    flex: 0 0 190rpx;
+    flex: 0 0 150rpx;
   }
 }
 
@@ -843,12 +862,6 @@ const handlePrint = async () => {
   font-weight: 600;
 }
 
-.ingredient-sku-meta-line {
-  margin-top: 2rpx;
-  font-size: 15rpx;
-  color: #555555;
-  word-break: break-all;
-}
 
 .method-text {
   color: #000000;

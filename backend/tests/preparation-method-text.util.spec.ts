@@ -2,6 +2,7 @@ import {
   extractLegacyPreparationMethodIds,
   normalizePreparationMethodHistoryText,
   resolvePreparationMethodText,
+  resolvePreparationMethodTextAsIs,
   resolvePreparationMethodTokens,
 } from '../src/application/recipe/preparation-method-text.util';
 
@@ -102,6 +103,31 @@ describe('preparation-method-text util', () => {
     expect(
       resolvePreparationMethodText(`${peelId}, ${missingId}, 切丁`, methodMap),
     ).toBe('去皮、切丁');
+  });
+
+  it('keeps human-written preparation text exactly as typed', () => {
+    // 制作单要的就是设计器里那一格的原话，标点不能被改写
+    expect(resolvePreparationMethodTextAsIs('去筋膜，切 2cm 丁；生重')).toBe(
+      '去筋膜，切 2cm 丁；生重',
+    );
+    expect(resolvePreparationMethodTextAsIs('牛里脊/生/去油')).toBe(
+      '牛里脊/生/去油',
+    );
+    expect(resolvePreparationMethodTextAsIs('  去皮  ')).toBe('去皮');
+  });
+
+  it('still resolves legacy uuid lists to readable names', () => {
+    expect(
+      resolvePreparationMethodTextAsIs(`${steamId}, ${peelId}`, methodMap),
+    ).toBe('蒸熟、去皮');
+    expect(resolvePreparationMethodTextAsIs(`${peelId}, 切丁`, methodMap)).toBe(
+      '去皮、切丁',
+    );
+  });
+
+  it('returns undefined for empty preparation text', () => {
+    expect(resolvePreparationMethodTextAsIs(undefined)).toBeUndefined();
+    expect(resolvePreparationMethodTextAsIs('   ')).toBeUndefined();
   });
 
   it('normalizes history text punctuation for dedupe', () => {

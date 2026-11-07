@@ -142,7 +142,7 @@ describe('staff production scheduling guardrails', () => {
   it('prints production ingredients by procurement sku without counting subtotal rows', () => {
     expect(printTaskSource).toContain('realIngredientCount');
     expect(printTaskSource).toContain('!ingredient.isTotalWeight');
-    expect(printTaskSource).toContain('ingredientNameLine');
+    expect(printTaskSource).toContain('ingredientSourceLine');
     expect(printTaskSource).toContain('standardIngredientName');
     expect(printTaskSource).toContain('procurementSkuName');
     expect(printTaskSource).toContain('procurementSkuBrand');
@@ -161,6 +161,13 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).toContain('customer-note-text');
   });
 
+  it('制作单用设计器里「部位 / 状态 / 预处理」的原话', () => {
+    expect(printTaskSource).toContain('item.preparation_method');
+    expect(printTaskSource).toContain('item.preparationMethod');
+    // 老数据没有原话时才退回拆词版本
+    expect(printTaskSource).toContain('item.preparation_methods');
+  });
+
   it('制作单只印两种备注，系统改价日志不上纸', () => {
     expect(printTaskSource).toContain('管理员备注');
     expect(printTaskSource).toContain('adminRemarkOf');
@@ -175,7 +182,7 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).toContain('orderCardsClass');
     expect(printTaskSource).toContain("'single-order'");
     expect(printTaskSource).toContain('ingredient-sku-source-line');
-    expect(printTaskSource).toContain('SKU / 品牌 / 渠道 / 规格');
+    expect(printTaskSource).toContain('原料 / 商品（品牌）/ 渠道 / 规格');
 
     // 固定比例会让超出部分漏到纸外，改成「只锁下限、允许往下长」
     expect(printTaskSource).toContain('min-height: 1004rpx');
@@ -263,10 +270,10 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).not.toContain('<text class="field-value">{{ formatPackagePlan(order) }}</text>');
   });
 
-  it('shows SKU, brand, channel and spec in two lines inside the first ingredient column', () => {
-    expect(printTaskSource).toContain('ingredientNameLine(ingredient)');
-    expect(printTaskSource).toContain('ingredientMetaLine(ingredient)');
-    expect(printTaskSource).toContain('ingredient-sku-meta-line');
+  it('shows ingredient name, sku, brand, channel and spec on one line', () => {
+    expect(printTaskSource).toContain('ingredientSourceLine(ingredient)');
+    expect(printTaskSource).toContain('standardIngredientName');
+    expect(printTaskSource).toContain('procurementSkuBrand');
     expect(printTaskSource).toContain('getPrintablePurchaseSummaryParts');
     expect(printTaskSource).toContain('word-break: break-all');
     expect(printTaskSource).not.toContain('formatIngredientNameLine');
@@ -278,7 +285,7 @@ describe('staff production scheduling guardrails', () => {
   });
 
   it('shows the inline SKU source column before preparation in production task print preview', () => {
-    const sourceHeaderIndex = printTaskSource.indexOf('<view class="table-cell source">SKU / 品牌 / 渠道 / 规格</view>');
+    const sourceHeaderIndex = printTaskSource.indexOf('<view class="table-cell source">原料 / 商品（品牌）/ 渠道 / 规格</view>');
     const methodHeaderIndex = printTaskSource.indexOf('<view class="table-cell method">部位/状态/预处理</view>');
     const sourceCellIndex = printTaskSource.indexOf('<view class="table-cell source">', sourceHeaderIndex + 1);
     const methodCellIndex = printTaskSource.indexOf('<view class="table-cell method">', methodHeaderIndex + 1);

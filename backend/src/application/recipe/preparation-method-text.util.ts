@@ -77,6 +77,39 @@ export const resolvePreparationMethodText = (
   return undefined;
 };
 
+/**
+ * 展示用（制作单 / 制作单详情）：人写的原文原样返回。
+ *
+ * 和 `resolvePreparationMethodText` 的区别：那个会把句子按逗号拆开、去重、
+ * 再用顿号拼回去（给历史数据做归一化）；制作单上要的是设计器里那一格的原话，
+ * 标点、斜杠、先后顺序都不该被改写。
+ *
+ * 历史数据里存的是字典 UUID，这种必须解析成名字（原文本来就不是人话）。
+ */
+export const resolvePreparationMethodTextAsIs = (
+  value: string | null | undefined,
+  methodMap: Map<string, string> = new Map(),
+): string | undefined => {
+  const trimmedValue = value?.trim();
+  if (!trimmedValue) {
+    return undefined;
+  }
+
+  const segments = splitPreparationMethodSegments(trimmedValue);
+  const hasLegacyId = segments.some((segment) => isUuidLike(segment));
+  if (!hasLegacyId) {
+    return trimmedValue;
+  }
+
+  const resolvedSegments = segments
+    .map((segment) => (isUuidLike(segment) ? methodMap.get(segment) : segment))
+    .filter((segment): segment is string => Boolean(segment && segment.trim()));
+
+  return resolvedSegments.length > 0
+    ? unique(resolvedSegments).join('、')
+    : undefined;
+};
+
 export const resolvePreparationMethodTokens = (
   value: string | null | undefined,
   methodMap: Map<string, string> = new Map(),

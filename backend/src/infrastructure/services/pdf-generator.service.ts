@@ -54,8 +54,9 @@ export class PdfGeneratorService {
   private static readonly CONTENT_BOTTOM = 766;
   private static readonly FOOTER_Y = 786;
   private static readonly TABLE_HEADER_HEIGHT = 18;
-  private static readonly SOURCE_COLUMN_WIDTH = 300;
-  private static readonly AMOUNT_COLUMN_WIDTH = 70;
+  /** 第一列加宽到 336：要让「类型 + 原料名 + 商品名（含品牌）+ 渠道 + 规格」尽量落在一行 */
+  private static readonly SOURCE_COLUMN_WIDTH = 336;
+  private static readonly AMOUNT_COLUMN_WIDTH = 64;
 
   /**
    * Generate PDF for production task
@@ -392,16 +393,10 @@ export class PdfGeneratorService {
     y = this.drawTableHeader(doc, y);
 
     data.parsedIngredients.forEach((ingredient) => {
-      const nameLine = this.getIngredientNameLine(ingredient);
-      const metaLine = this.getIngredientMetaLine(ingredient);
+      const sourceLine = this.getIngredientSourceLine(ingredient);
       const amountText = `${ingredient.amount}${ingredient.unit}`;
       const methodText = ingredient.method || '';
-      const rowHeight = this.measureRowHeight(
-        doc,
-        nameLine,
-        metaLine,
-        methodText,
-      );
+      const rowHeight = this.measureRowHeight(doc, sourceLine, methodText);
 
       if (y + rowHeight > PdfGeneratorService.CONTENT_BOTTOM) {
         doc.addPage();
@@ -413,8 +408,7 @@ export class PdfGeneratorService {
       y = this.drawRow(
         doc,
         {
-          nameLine,
-          metaLine,
+          sourceLine,
           amountText,
           methodText,
           isTotalWeight: Boolean(ingredient.isTotalWeight),
@@ -457,7 +451,7 @@ export class PdfGeneratorService {
       .stroke();
 
     doc.font('CNB').fontSize(8).fillColor(BLACK);
-    doc.text('原料 / 品牌 · 渠道 · 规格', left + 4, y + 5, { lineBreak: false });
+    doc.text('原料 / 商品（品牌）/ 渠道 / 规格', left + 4, y + 5, { lineBreak: false });
     doc.text('用量', amountX + 4, y + 5, {
       width: amountWidth - 8,
       align: 'right',
@@ -477,8 +471,7 @@ export class PdfGeneratorService {
 
   private measureRowHeight(
     doc: any,
-    nameLine: string,
-    metaLine: string,
+    sourceLine: string,
     methodText: string,
   ): number {
     const sourceWidth = PdfGeneratorService.SOURCE_COLUMN_WIDTH - 8;
@@ -489,17 +482,10 @@ export class PdfGeneratorService {
       8;
 
     doc.font('CNB').fontSize(9);
-    const nameHeight = doc.heightOfString(nameLine, {
+    const sourceHeight = doc.heightOfString(sourceLine, {
       width: sourceWidth,
       lineGap: 0,
     });
-
-    const metaHeight = metaLine
-      ? doc
-          .font('CN')
-          .fontSize(7.5)
-          .heightOfString(metaLine, { width: sourceWidth, lineGap: 0 })
-      : 0;
 
     const methodHeight = doc
       .font('CN')
@@ -509,18 +495,13 @@ export class PdfGeneratorService {
         lineGap: 0,
       });
 
-    return Math.max(
-      22,
-      nameHeight + (metaHeight ? metaHeight + 1 : 0) + 8,
-      methodHeight + 8,
-    );
+    return Math.max(22, sourceHeight + 8, methodHeight + 8);
   }
 
   private drawRow(
     doc: any,
     row: {
-      nameLine: string;
-      metaLine: string;
+      sourceLine: string;
       amountText: string;
       methodText: string;
       isTotalWeight: boolean;
@@ -543,18 +524,10 @@ export class PdfGeneratorService {
       .stroke();
 
     doc.font('CNB').fontSize(9).fillColor(BLACK);
-    doc.text(row.nameLine, left + 4, y + 4, {
+    doc.text(row.sourceLine, left + 4, y + 4, {
       width: sourceWidth - 8,
       lineGap: 0,
     });
-
-    if (row.metaLine) {
-      doc.font('CN').fontSize(7.5).fillColor(DARK_GRAY);
-      doc.text(row.metaLine, left + 4, y + 4 + 11, {
-        width: sourceWidth - 8,
-        lineGap: 0,
-      });
-    }
 
     doc.font('CNB').fontSize(9).fillColor(BLACK);
     doc.text(row.amountText, amountX + 4, y + 4, {
@@ -598,31 +571,53 @@ export class PdfGeneratorService {
 
   // ==================== 文本拼装 ====================
 
-  private getIngredientNameLine(ingredient: IngredientItem): string {
+  /**
+   * 原料列（一行）：类型 + 原料名 + 商品名（品牌并入）+ 采购渠道 + 规格。
+   * 例：`食材 生蚝 贝司令 去壳生蚝肉 / 淘宝/天猫 / 200g/包`
+   * 原料名与商品名重复时只留一份，避免「生蚝 生蚝 去壳生蚝肉」。
+   */
+  private getIngredientSourceLine(ingredient: IngredientItem): string {
     if (ingredient.isTotalWeight) {
       return '食材类原料总重（含生产损耗）';
     }
 
-    const name = (
-      ingredient.procurementSkuName ||
-      ingredient.name ||
+    const ingredientName = (
       ingredient.standardIngredientName ||
+      ingredient.name ||
       ''
     ).trim();
-    const typeLabel = (ingredient.typeLabel || '').trim();
-    return [typeLabel, name || '-'].filter(Boolean).join('  ');
-  }
+    const skuName = (ingredient.procurementSkuName || '').trim();
+    // 品牌里的「无 / 暂无 / -」是占位符，不能印成「无 去壳生蚝肉」
+    const brand = this.getPrintablePurchaseSummaryParts(
+      ingredient.procurementSkuBrand,
+    )[0] || '';
+    // 原料名和商品名完全一样时只留一份；其余情况两段都保留（原料 → 商品）
+    const skuHasIngredient =
+      Boolean(skuName) && skuName === ingredientName;
+    const skuPart = [brand, skuName].filter(Boolean).join(' ');
 
-  private getIngredientMetaLine(ingredient: IngredientItem): string {
-    if (ingredient.isTotalWeight) {
-      return '';
+    let main = '';
+    if (!ingredientName) {
+      main = skuPart || '-';
+    } else if (!skuPart) {
+      main = ingredientName;
+    } else if (skuHasIngredient) {
+      main = skuPart;
+    } else {
+      main = `${ingredientName} ${skuPart}`;
     }
 
-    return this.getPrintablePurchaseSummaryParts(
-      ingredient.procurementSkuBrand,
-      ingredient.procurementSkuPurchaseChannel,
-      ingredient.procurementSkuProductModel,
-    ).join(' · ');
+    const parts = [
+      main,
+      ...this.getPrintablePurchaseSummaryParts(
+        ingredient.procurementSkuPurchaseChannel,
+        ingredient.procurementSkuProductModel,
+      ),
+    ].filter(Boolean);
+
+    return [ingredient.typeLabel?.trim(), parts.join(' / ')]
+      .filter(Boolean)
+      .join(' ');
   }
 
   private getPrintablePurchaseSummaryParts(...values: unknown[]): string[] {

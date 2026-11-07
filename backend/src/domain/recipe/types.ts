@@ -40,6 +40,8 @@ export interface RecipeSnapshotItem {
   nutrition_profile_snapshot?: NutritionProfile | null;
   properties?: any; // 补剂类型：完整属性（包含active_nutrients等）
   preparation_methods?: string[]; // 部位 / 状态 / 预处理名称数组
+  /** 部位 / 状态 / 预处理原话（2026-11-07，制作单按这个印，标点/顺序不改写） */
+  preparation_method?: string;
   sort_order?: number; // 原料在食谱中的顺序
   unit_display_label?: string; // 补剂类型：单位显示标签（如"粒"、"片"、"g"）
 }

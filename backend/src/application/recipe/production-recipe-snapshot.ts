@@ -15,6 +15,7 @@ import { IngredientType } from '../../domain/ingredient/enums';
 import type { Ingredient } from '../../domain/ingredient/ingredient.entity';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 import {
+  resolvePreparationMethodTextAsIs,
   resolvePreparationMethodTokens,
 } from './preparation-method-text.util';
 import {
@@ -135,6 +136,11 @@ export function buildProductionRecipeSnapshot(
         prepMethodMap,
         { preserveUnresolvedLegacy: false },
       );
+      // 原话（人写的不改写标点）；历史字典 ID 仍解析成名字
+      const preparationMethodText = resolvePreparationMethodTextAsIs(
+        ri.preparationMethod,
+        prepMethodMap,
+      );
 
       return {
         ingredient_id: ingredient?.id || ri.ingredientId,
@@ -163,6 +169,7 @@ export function buildProductionRecipeSnapshot(
             ? ingredient?.nutritionProfile ?? null
             : undefined,
         properties: ingredient?.properties,
+        preparation_method: preparationMethodText,
         preparation_methods:
           preparationMethodNames.length > 0 ? preparationMethodNames : undefined,
         unit_display_label: ingredient?.unitDisplayLabel ?? undefined,

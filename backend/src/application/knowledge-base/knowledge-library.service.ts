@@ -54,7 +54,7 @@ const TOPIC_ALIASES: Record<string, string[]> = {
   omega3: ['omega', 'fish oil', '鱼油'],
   proteinuria: ['proteinuria', 'upc', '蛋白尿'],
   bloodpressure: ['blood pressure', 'hypertension', '血压', '高血压'],
-  staging: ['stage', 'iris', '分期'],
+  staging: ['staging', 'iris staging', '分期'],
   calcium: ['calcium', '钙'],
   vitaminD: ['vitamin d', 'calcitriol', '维生素 d'],
   energy: ['energy', 'kcal', '能量'],
@@ -189,14 +189,15 @@ export class KnowledgeLibraryService {
     );
     const scored = filteredRows.map((row) => ({
       row,
-      score: this.score(
-        row.text,
-        terms,
-        raw,
-        numericIntent,
-        row.document?.sourceId,
-        weights,
-      ),
+      score:
+        this.score(
+          row.text,
+          terms,
+          raw,
+          numericIntent,
+          row.document?.sourceId,
+          weights,
+        ) * this.filterBoost(row, options),
     }));
     scored.sort((a, b) => b.score - a.score || a.row.id.localeCompare(b.row.id));
 
@@ -248,6 +249,30 @@ export class KnowledgeLibraryService {
       }
     }
     return out.slice(0, 16);
+  }
+
+  private filterBoost(
+    row: {
+      text: string;
+      section?: { title?: string | null } | null;
+    },
+    options: LibrarySearchOptions,
+  ): number {
+    const title = row.section?.title ?? '';
+    const text = row.text ?? '';
+    let boost = 1;
+    if (options.stage) {
+      const stagePattern = new RegExp(`\\bstage\\s*${options.stage}\\b`, 'i');
+      if (stagePattern.test(title)) boost *= 2;
+      else if (stagePattern.test(text)) boost *= 1.2;
+    }
+    if (options.species === 'dog' && /\b(dog|dogs|canine)\b/i.test(title)) {
+      boost *= 1.3;
+    }
+    if (options.species === 'cat' && /\b(cat|cats|feline)\b/i.test(title)) {
+      boost *= 1.3;
+    }
+    return boost;
   }
 
   private score(

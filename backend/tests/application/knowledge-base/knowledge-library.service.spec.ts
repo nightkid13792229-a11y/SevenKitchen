@@ -117,6 +117,33 @@ describe('KnowledgeLibraryService（物种/分期/主题过滤）', () => {
     };
   }
 
+  it('Stage 2 犬章节排在通用章节前面', async () => {
+    const generic = filterRow({
+      id: 'generic',
+      sectionId: 's0',
+      section: { id: 's0', title: '781 Chronic Kidney Disease', pageNo: 9 },
+      text: 'Phosphorus restriction in chronic kidney disease.',
+    });
+    const stageDog = filterRow({
+      id: 'stage-dog',
+      sectionId: 's1',
+      section: { id: 's1', title: 'Stage 2 Canine patients', pageNo: 10 },
+      text: 'Phosphorus target for stage 2 dogs.',
+    });
+    const service = new KnowledgeLibraryService({
+      sourceParagraph: { findMany: jest.fn().mockResolvedValue([generic, stageDog]) },
+    } as any);
+
+    const result = await service.search('phosphorus', {
+      species: 'dog',
+      stage: 2,
+      topics: ['phosphorus'],
+      limit: 2,
+    });
+
+    expect(result[0].id).toBe('stage-dog');
+  });
+
   it('按物种 + 分期 + 主题收窄到犬 Stage 2 磷段落', async () => {
     const rows = [
       filterRow(),

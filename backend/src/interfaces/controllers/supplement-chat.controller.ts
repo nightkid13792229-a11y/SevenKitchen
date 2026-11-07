@@ -66,7 +66,7 @@ export class SupplementChatController {
   @ApiOperation({ summary: '把一句话翻译成回复 + 要执行的动作' })
   async respond(
     @Body() dto: SupplementChatTurnDto
-  ): Promise<ApiResponseDto<SupplementChatReply & { source: 'MODEL' | 'RULES' }>> {
+  ): Promise<ApiResponseDto<SupplementChatReply & { source: 'MODEL' | 'RULES' | 'RULES_FAST' }>> {
     const draft = dto.draft ?? { name: '', servingUnitsPerDose: null, candidateNames: [] };
 
     // 「每份 2 粒」「第二个」「贴了链接」这三种是无歧义的命令：直接走规则，

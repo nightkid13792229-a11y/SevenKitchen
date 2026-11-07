@@ -380,8 +380,13 @@ export interface SupplementNutrientRow {
  * 各写一份迟早漂移成"每公斤加 5g"和"每kg加 5 克"两种说法。
  *
  * · 没有营养素名（老数据只有补剂产品）→ 跳过，不显示一行空白；
- * · 没有数值 → 「—」（不知道 ≠ 0）；
- * · 没有单位 → 只写数字，不猜单位（猜错比不写更糟）。
+ * · 没有数值（含空字符串）→ 「—」（不知道 ≠ 0）；
+ * · 没有单位 → 只写数字，不猜单位（猜错比不写更糟）；
+ * · 不足 1 的正数保留一位小数 —— 直接取整会把 0.4 mg 写成 0 mg，
+ *   顾客会读成"没加"，而它其实是有效添加量；
+ * · **不按营养素合并**：两个补剂都补钙时会出现两行（各自的浓度）。
+ *   合并得分单位、还得解释"合计"，会把这一块从"配方需求"滑成"配方总量"，
+ *   不是这一页要回答的问题。
  */
 export function buildSupplementNutrientRows(
   supplements:
@@ -403,19 +408,38 @@ export function buildSupplementNutrientRows(
       if (!nutrient) continue
 
       const raw = target?.targetValuePerKg
-      const value = raw === null || raw === undefined ? Number.NaN : Number(raw)
+      const value =
+        raw === null ||
+        raw === undefined ||
+        (typeof raw === 'string' && raw.trim() === '')
+          ? Number.NaN
+          : Number(raw)
       const unit = String(target?.unit ?? '').trim()
 
       rows.push({
         nutrient,
         concentration: Number.isFinite(value)
-          ? `每公斤食材添加 ${Math.round(value)} ${unit}`.trim()
+          ? `每公斤食材添加 ${formatConcentrationValue(value)} ${unit}`.trim()
           : '—'
       })
     }
   }
 
   return rows
+}
+
+/**
+ * 添加浓度的数字写法：常规按整数（营养师定的目标就是这个量级），
+ * 只有"取整后会变成 0"的小数值才保留一位小数，极小值写「<0.1」而不是「0」。
+ */
+function formatConcentrationValue(value: number): string {
+  if (value === 0) return '0'
+
+  const rounded = Math.round(value)
+  if (rounded !== 0) return String(rounded)
+
+  const oneDecimal = Math.round(value * 10) / 10
+  return Math.abs(oneDecimal) >= 0.1 ? String(oneDecimal) : '<0.1'
 }
 
 export function calculateSupplementAmountForProduction(

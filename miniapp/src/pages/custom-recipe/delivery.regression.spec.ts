@@ -108,12 +108,23 @@ describe('交付页 · 内容与交互（P1）', () => {
     expect(bottomBarIndex).toBeGreaterThan(reportEntryIndex);
   });
 
-  it('★ 营养报告页地址带食谱编号，且这一页不预取报告明细', () => {
-    expect(source).toContain('recipeId=${encodeURIComponent(selectedRecipeId.value)}');
-    expect(source).toContain('openNutritionReport');
-    // 快照里没有报告明细，页面也不该去拉整份报告（那是报告页的活）
-    expect(source).not.toContain('nutritionDetailedData');
-    expect(source).not.toContain('/recipes/');
+  it('★ 营养报告页地址只带食谱编号（明细由报告页现取）', () => {
+    const openSource = source.match(
+      /const openNutritionReport = \(\) => \{[\s\S]*?\n\};/,
+    )?.[0] || '';
+
+    expect(openSource).toContain('/pages/recipe-nutrition-report/index?recipeId=');
+    expect(openSource).toContain('encodeURIComponent(selectedRecipeId.value)');
+    // 缺编号时给提示，不跳空页
+    expect(openSource).toContain('这条交付缺少食谱编号');
+  });
+
+  it('★ 营养报告卡与上面的「全营养标准」banner 左右对齐', () => {
+    // banner 自带 24rpx 左右外边距，交付页自身内边距也是 24rpx；
+    // 报告卡再补 24rpx 才能与 banner 同宽（2026-11-08 审核修）
+    const slotStyle = source.match(/\.report-entry-slot\s*\{[^}]*\}/)?.[0] || '';
+
+    expect(slotStyle).toContain('margin: 0 24rpx 24rpx;');
   });
 
   it('★ 全营养标准 banner 独立展示，核心营养卡不再重复标准行', () => {

@@ -69,13 +69,19 @@ describe('recipe detail nutrition report regressions', () => {
       resolve(process.cwd(), 'src/components/recipe/NutritionReportEntry.vue'),
       'utf-8',
     )
+      // 只认渲染节点：组件注释里也写着「营养报告」，断言整份源码就等于没断言
+      // （2026-11-08 审核发现：把模板删掉，旧断言照样绿）
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
 
     expect(source).toContain('核心营养成分')
     // 2026-11-07 老板定的文案：标题「营养报告」、按钮「查看报告」，
     // 副标题说清报告里有什么（氨基酸 / 脂肪酸 / 维生素 / 矿物质）
-    expect(reportEntry).toContain('营养报告')
-    expect(reportEntry).toContain('查看报告')
-    expect(reportEntry).toContain('包含氨基酸、脂肪酸、维生素、矿物质在内的详细营养评估')
+    expect(reportEntry).toContain('>营养报告</text>')
+    expect(reportEntry).toContain('>查看报告</text>')
+    expect(reportEntry).toContain(
+      '>包含氨基酸、脂肪酸、维生素、矿物质在内的详细营养评估</text>',
+    )
     expect(source).not.toContain('<text class="card-title">营养成分分析</text>')
     // 旧文案不能再回来
     expect(source).not.toContain('详细营养报告')
@@ -83,7 +89,7 @@ describe('recipe detail nutrition report regressions', () => {
     expect(reportEntry).not.toContain('查看 Setar 生成的完整营养评估')
     // 那个没有信息量的「营养」方块标识已按老板要求去掉
     expect(source).not.toContain('class="report-icon"')
-    expect(reportEntry).not.toContain('营养</text>')
+    expect(reportEntry).not.toContain('>营养</text>')
   })
 
   it('does not render dog-specific feeding recalculation on recipe detail', () => {

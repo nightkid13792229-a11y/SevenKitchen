@@ -4,6 +4,17 @@
       <text>加载营养报告中...</text>
     </view>
 
+    <!--
+      2026-11-08：加载失败与「真的没有报告」要分开。
+      原来两者都显示「暂无完整营养报告」，顾客会以为这道食谱没有报告，
+      实际可能只是网络/接口没通 —— 现在给一次重试机会。
+    -->
+    <view v-else-if="loadFailed" class="state-panel">
+      <text class="state-title">营养报告加载失败</text>
+      <text class="state-copy">网络不稳或这条食谱暂时打不开，可以再试一次。</text>
+      <button class="state-btn" @tap="loadNutritionReport">重新加载</button>
+    </view>
+
     <view v-else-if="!report" class="state-panel">
       <text class="state-title">暂无完整营养报告</text>
       <text class="state-copy">该食谱还没有 Setar 生成的结构化营养报告。</text>
@@ -140,6 +151,8 @@ const recipeId = ref('')
 const shareToken = ref('')
 const recipe = ref<any>({})
 const report = ref<NutritionReport | null>(null)
+/** 接口失败 / 网络失败（与「没有报告」分开显示，2026-11-08） */
+const loadFailed = ref(false)
 const STATIC_LOGO_SRC = '/static/logo.png'
 
 const ingredientRows = computed(() => report.value?.ingredientRows || [])
@@ -168,8 +181,16 @@ onMounted(() => {
 })
 
 function loadNutritionReport() {
-  if (!recipeId.value) return
+  if (!recipeId.value) {
+    // 没有编号不可能加载成功：别让页面永远停在「加载中」
+    loading.value = false
+    loadFailed.value = false
+    report.value = null
+    return
+  }
+
   loading.value = true
+  loadFailed.value = false
   const data: Record<string, string> = {}
   if (shareToken.value) data.shareToken = shareToken.value
 
@@ -181,10 +202,13 @@ function loadNutritionReport() {
     if (res.code === 0 && res.data) {
       recipe.value = res.data
       report.value = res.data.nutritionDetailedData?.report || null
+      return
     }
+    // 接口明确失败（无权限 / 不存在）：按「加载失败」处理，不谎报「没有报告」
+    loadFailed.value = true
   }).catch((error: any) => {
     console.error('[RecipeNutritionReport] Failed to load report:', error)
-    uni.showToast({ title: '营养报告加载失败', icon: 'none' })
+    loadFailed.value = true
   }).finally(() => {
     loading.value = false
   })
@@ -243,6 +267,22 @@ function getRowStatusClass(row: Record<string, any>) {
   font-size: 30rpx;
   font-weight: 600;
   color: #26261f;
+}
+
+.state-btn {
+  margin-top: 20rpx;
+  padding: 0 44rpx;
+  height: 68rpx;
+  line-height: 68rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+  background: #d8bc85;
+  border-radius: 999rpx;
+}
+
+.state-btn::after {
+  border: 0;
 }
 
 .state-copy {

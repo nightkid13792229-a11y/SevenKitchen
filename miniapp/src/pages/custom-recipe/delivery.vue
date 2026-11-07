@@ -431,6 +431,12 @@ const goOrderFinished = () => {
  *
  * 交付快照里没有报告明细（几百个营养项），所以这一页不预取、也不算，
  * 点进来由报告页读 `nutritionDetailedData.report`。
+ *
+ * ⚠️ 已知口径（2026-11-08 审核记录）：报告读的是该食谱的**当前**数据 ——
+ * 私密定制食谱是原地更新、版本号保持 1，无法按 `orderId` 取回交付那一版
+ * （拿到的那份快照本来也不含报告明细）。所以营养师在交付之后、重新交付之前
+ * 又改过配方时，这一页看到的配方是交付版，报告会是改后的数字。
+ * 要彻底对上版本，只能让后端把报告（或报告版本号）写进交付快照。
  */
 const openNutritionReport = () => {
   if (!selectedRecipeId.value) {
@@ -895,9 +901,13 @@ onPullDownRefresh(async () => {
   border-radius: 999rpx;
 }
 
-/* 营养报告入口（2026-11-07）：外层只负责留白，卡片样式在共享组件里 */
+/*
+ * 营养报告入口（2026-11-07）：外层只负责留白，卡片样式在共享组件里。
+ * 左右各 24rpx 是为了与上面的「全营养标准」banner 对齐 —— 两张米金卡
+ * 一宽一窄地叠在同一页上会显得没对齐（sections 之间仍用页面自身 24rpx 内边距）。
+ */
 .report-entry-slot {
-  margin-bottom: 24rpx;
+  margin: 0 24rpx 24rpx;
 }
 
 .state-title {

@@ -112,7 +112,7 @@
 
     </view>
 
-    <!-- 食谱配方：主料与营养补充剂分表展示（口径不同，避免同一列混用） -->
+    <!-- 食谱配方：主料按占比、需额外补充的营养素按每公斤浓度，分块展示（口径不同，避免同一列混用） -->
     <view class="ingredients-card">
       <view class="card-header">
         <text class="card-title">食谱配方</text>
@@ -152,10 +152,10 @@
         现在只列**营养素名 + 每公斤食材添加浓度**，与「我的定制食谱」同一口径；
         具体产品与实际用量放到「自己做」生成的制作单里。
       -->
-      <view v-if="supplementNutrientRows.length > 0" class="ingredient-block ingredient-block--supplement">
+      <view v-if="supplementNutrientRows.length > 0" class="ingredient-block ingredient-block--nutrients">
         <view class="ingredient-block-header">
           <text class="ingredient-block-title">需额外补充的营养素</text>
-          <text class="ingredient-block-count">{{ supplementNutrientRows.length }} 种</text>
+          <text class="ingredient-block-count">{{ supplementNutrientRows.length }} 项</text>
         </view>
         <view class="supplement-nutrient-head">
           <text class="supplement-nutrient-head-name">营养素</text>
@@ -1851,12 +1851,12 @@ function onReviewSubmitted() {
   text-align: right;
 }
 
-/* 配方分组（主料 / 营养补充剂 / 其他物料） */
+/* 配方分组（主料 / 需额外补充的营养素 / 其他物料） */
 .ingredient-block {
   margin-top: 28rpx;
 }
 
-.ingredient-block--supplement .ingredient-block-header {
+.ingredient-block--nutrients .ingredient-block-header {
   margin-bottom: 4rpx;
 }
 
@@ -1873,15 +1873,15 @@ function onReviewSubmitted() {
   color: #1e3a2f;
 }
 
-/* 食材表与营养补充剂表做底色区分 */
-.ingredient-block--supplement {
+/* 食材表与营养素块做底色区分 */
+.ingredient-block--nutrients {
   padding: 20rpx;
   background-color: #f2f4ea;
   border: 1rpx solid #e5e8d4;
   border-radius: 16rpx;
 }
 
-.ingredient-block--supplement .ingredient-block-title {
+.ingredient-block--nutrients .ingredient-block-title {
   color: #8a6b33;
 }
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildSupplementNutrientRows,
   calculateSupplementAmountForProduction,
+  getSupplementTargets,
   formatSupplementTargets,
   getResolvedSupplementDisplayUnit,
   getResolvedSupplementNutrient,
@@ -521,5 +522,64 @@ describe('buildSupplementNutrientRows · 需额外补充的营养素', () => {
     expect(buildSupplementNutrientRows(undefined)).toEqual([])
     expect(buildSupplementNutrientRows([])).toEqual([])
     expect(buildSupplementNutrientRows([{ targets: null }, {}])).toEqual([])
+  })
+
+  it('不足 1 的正数保留一位小数：0.4mg 不能显示成 0mg', () => {
+    expect(
+      buildSupplementNutrientRows([
+        {
+          targets: [
+            { label: '硒', targetValuePerKg: 0.4, unit: 'mg' },
+            { label: '维生素 B12', targetValuePerKg: 0.04, unit: 'μg' },
+            { label: '碘', targetValuePerKg: 0, unit: 'μg' },
+          ],
+        },
+      ])
+    ).toEqual([
+      { nutrient: '硒', concentration: '每公斤食材添加 0.4 mg' },
+      { nutrient: '维生素 B12', concentration: '每公斤食材添加 <0.1 μg' },
+      { nutrient: '碘', concentration: '每公斤食材添加 0 μg' },
+    ])
+  })
+
+  it('空字符串不算 0：给「—」，不能凭空写出 0 g', () => {
+    expect(
+      buildSupplementNutrientRows([
+        { targets: [{ label: '锌', targetValuePerKg: '' as unknown as number, unit: 'mg' }] },
+      ])
+    ).toEqual([{ nutrient: '锌', concentration: '—' }])
+  })
+
+  it('两个补剂补同一营养素时出现两行（各自浓度，不合并）', () => {
+    expect(
+      buildSupplementNutrientRows([
+        { targets: [{ label: '钙', targetValuePerKg: 3, unit: 'g' }] },
+        { targets: [{ label: '钙', targetValuePerKg: 2, unit: 'g' }] },
+      ])
+    ).toEqual([
+      { nutrient: '钙', concentration: '每公斤食材添加 3 g' },
+      { nutrient: '钙', concentration: '每公斤食材添加 2 g' },
+    ])
+  })
+
+  it('老食谱的 legacy 目标（nutrientTargetKey/Value）也能摊成一行', () => {
+    const legacyItem = {
+      nutrientTargetKey: '钙',
+      nutrientTargetValue: 1100,
+      properties: { active_nutrients: { 钙: { value: 115, unit: 'mg' } } },
+    }
+
+    expect(
+      getSupplementTargets(legacyItem)[0]
+    ).toEqual({
+      fieldPath: '钙',
+      label: '钙',
+      targetValuePerKg: 1100,
+      unit: 'mg',
+    })
+
+    expect(
+      buildSupplementNutrientRows([{ targets: getSupplementTargets(legacyItem) }])
+    ).toEqual([{ nutrient: '钙', concentration: '每公斤食材添加 1100 mg' }])
   })
 })

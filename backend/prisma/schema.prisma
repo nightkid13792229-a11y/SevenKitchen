@@ -270,6 +270,7 @@ model User {
   wechatIdentities        UserWechatIdentity[]
   supplementOrders        SupplementOrder[]
   procurementSkusCreated  ProcurementSku[]     @relation("ProcurementSkuCreator")
+  ingredientCostChanges   IngredientPriceHistory[] @relation("IngredientCostOperator")
 
   @@index([wechatOpenid])
   @@index([phone])
@@ -1058,6 +1059,7 @@ model Ingredient {
   inventoryAllocationLines      InventoryAllocationLine[]
   procurementSkus               ProcurementSku[]
   procurementSkuPriceHistories  ProcurementSkuPriceHistory[]
+  priceHistories                IngredientPriceHistory[]
   allergenTags                  IngredientAllergenTag[]
   supplementPackagingRules      SupplementPackagingRule[]
   equivalenceGroup              SupplementEquivalenceGroup?   @relation(fields: [equivalenceGroupId], references: [id], onDelete: SetNull)
@@ -2640,6 +2642,46 @@ model IngredientPriceChange {
   @@index([reimbursementId])
   @@index([status])
   @@map("ingredient_price_change")
+}
+
+/// 食材成本的来源（2026-11-07 成本口径归位）
+enum IngredientPriceHistorySource {
+  /// 建档时用第一条采购商品的价初始化
+  INIT_FROM_SKU
+  /// 采购报销审批后按实付覆盖
+  REIMBURSEMENT
+  /// 后台手工改价
+  MANUAL
+  /// 口径迁移折算
+  MIGRATION
+}
+
+/// 食材成本流水：一条 = 一次「每基准单位成本」的变化。
+///
+/// 为什么不复用 `IngredientPriceChange`：那张表带 `reimbursement_id` /
+/// `purchase_record_id` 非空外键，是**报销审批工作流表**，不是审计流水。
+/// 手工改价和建档初始化没有报销单，塞进去要么改约束、要么造假单号。
+model IngredientPriceHistory {
+  id                 String                       @id @default(uuid()) @db.VarChar(36)
+  ingredientId       String                       @map("ingredient_id") @db.VarChar(36)
+  /// 变更前成本（元/基准单位）；第一条为空
+  oldCostPerBaseUnit Decimal?                     @map("old_cost_per_base_unit") @db.Decimal(14, 6)
+  /// 变更后成本（元/基准单位）
+  newCostPerBaseUnit Decimal                      @map("new_cost_per_base_unit") @db.Decimal(14, 6)
+  source             IngredientPriceHistorySource @map("source")
+  procurementSkuId   String?                      @map("procurement_sku_id") @db.VarChar(36)
+  reimbursementId    String?                      @map("reimbursement_id") @db.VarChar(36)
+  purchaseRecordId   String?                      @map("purchase_record_id") @db.VarChar(36)
+  operatorId         String?                      @map("operator_id") @db.VarChar(36)
+  note               String?
+  createdAt          DateTime                     @default(now()) @map("created_at")
+
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  operator   User?      @relation("IngredientCostOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+
+  @@index([ingredientId, createdAt])
+  @@index([source])
+  @@map("ingredient_price_history")
 }
 
 model CustomRecipeOrder {

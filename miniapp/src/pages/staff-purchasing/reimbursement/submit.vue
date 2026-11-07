@@ -196,23 +196,23 @@
     <view v-if="currentStep === 'RECEIPTS'" class="section">
       <view class="section-head">
         <text class="section-title">上传支付凭证</text>
-        <text class="section-total">{{ receiptUrls.length + privateReceiptKeys.length }} 张</text>
+        <text class="section-total">{{ receiptCount }} 张</text>
       </view>
-      <view v-if="privateReceiptKeys.length > 0" class="notice-strip">
-        <text>已从订单截图带入 {{ privateReceiptKeys.length }} 张凭证，无需重复上传。</text>
-      </view>
-      <view v-if="!resubmitId" class="notice-strip">
-        <text>凭证需要看清金额和支付时间，可上传转账截图、支付记录或发票照片。</text>
-      </view>
-      <view v-else class="notice-strip">
-        <text>重新提交时凭证不能在此修改；如需更换凭证，请先返回报销详情，通过凭证管理处理。</text>
-      </view>
-      <view v-if="!resubmitId" class="notice-strip">
-        <text>农贸市场、便利店没有订单截图时，上传转账截图即可，金额和时间要看得清。</text>
-      </view>
-
-
       <view class="photo-grid">
+        <view
+          v-for="(photo, index) in orderShotPhotos"
+          :key="`order-${index}-${photo.url}`"
+          class="photo-item read-only"
+        >
+          <image
+            :src="photo.url"
+            mode="aspectFill"
+            @tap="previewOrderShot(index)"
+          />
+          <view class="photo-tag">
+            <text>订单截图</text>
+          </view>
+        </view>
         <view
           v-for="(photo, index) in receiptUrls"
           :key="`${photo.url}-${index}`"
@@ -248,7 +248,7 @@
         </view>
         <view class="summary-row">
           <text class="label">支付凭证</text>
-          <text class="value">{{ receiptUrls.length }} 张</text>
+          <text class="value">{{ receiptCount }} 张</text>
         </view>
         <view class="summary-row total">
           <text class="label">报销合计</text>
@@ -731,6 +731,30 @@ const privateReceiptKeys = computed<string[]>(() =>
     .flatMap((item) => (item.imageKeys || []) as string[]),
 );
 
+/**
+ * 第二步确认过的订单截图，在这里当只读凭证显示（2026-11-07）。
+ * 图来自识别结果里的签名图址，和「订单识别」页看到的是同一张。
+ */
+const orderShotPhotos = computed<Array<{ url: string }>>(() =>
+  orderImports.value
+    .filter((item) => item.status === 'CONFIRMED')
+    .flatMap((item) =>
+      ((item.imageUrls || []) as string[])
+        .filter(Boolean)
+        .map((url) => ({ url })),
+    ),
+);
+
+/** 凭证总张数：订单截图 + 员工手动上传，和提交时校验的口径一致 */
+const receiptCount = computed(
+  () => receiptUrls.value.length + privateReceiptKeys.value.length,
+);
+
+const receiptPreviewUrls = computed<string[]>(() => [
+  ...orderShotPhotos.value.map((photo) => photo.url),
+  ...receiptUrls.value.map((photo) => photo.url),
+]);
+
 const differenceAmount = computed(() => {
   if (voucherEffective.value === null) return 0;
   return Math.round((voucherEffective.value - totalAmount.value) * 100) / 100;
@@ -925,11 +949,21 @@ const deletePhoto = async (index: number) => {
   }
 };
 
-const previewPhoto = (index: number) => {
-  const urls = receiptUrls.value.map((photo) => photo.url);
+const previewOrderShot = (index: number) => {
+  const urls = receiptPreviewUrls.value;
   uni.previewImage({
     urls,
     current: urls[index],
+  });
+};
+
+const previewPhoto = (index: number) => {
+  // 订单截图排在最前面，点手动上传的那张时要跳过前面几张。
+  const offset = orderShotPhotos.value.length;
+  const urls = receiptPreviewUrls.value;
+  uni.previewImage({
+    urls,
+    current: urls[offset + index],
   });
 };
 
@@ -1382,6 +1416,20 @@ const formatDate = (dateStr: string) => {
   color: #ffffff;
   background-color: rgba(0, 0, 0, 0.58);
   font-size: 22rpx;
+}
+
+.photo-tag {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  padding: 0 10rpx;
+  height: 36rpx;
+  display: flex;
+  align-items: center;
+  color: #ffffff;
+  background-color: rgba(0, 0, 0, 0.58);
+  font-size: 20rpx;
+  border-top-right-radius: 8rpx;
 }
 
 .upload-tile {

@@ -13,6 +13,7 @@ import type {
   PendingSupplementArchiveDto,
   SupplementEvidenceDto,
   SupplementCandidateDto,
+  SupplementChatReplyDto,
   SupplementLinkPreviewDto,
   CheckDomain,
   CheckRunView,
@@ -37,6 +38,13 @@ export const ingredientCreationApi = {
     payload: CreateSupplementIngredientPayload
   ): Promise<CreateSupplementIngredientResultDto> =>
     api.post(`${BASE}/supplements`, payload),
+
+  /** 补剂对话：把一句话翻译成回复 + 要执行的动作。 */
+  supplementChat: (payload: {
+    message: string
+    draft: { name: string; servingUnitsPerDose: number | null; candidateNames: string[] }
+  }): Promise<SupplementChatReplyDto> =>
+    api.post('/admin/ingredient-supplement-chat/respond', payload),
 
   /** 按关键词去电商搜候选（只有链接、名字、标价，没有成分表）。 */
   searchSupplementCandidates: (keyword: string): Promise<SupplementCandidateDto[]> =>

@@ -642,6 +642,17 @@ export interface SupplementCandidateDto {
   pricePerServingUsd: number | null
 }
 
+export type SupplementChatActionDto =
+  | { type: 'SEARCH_CANDIDATES'; keyword: string }
+  | { type: 'READ_LINK'; url: string }
+  | { type: 'PICK_CANDIDATE'; index: number }
+  | { type: 'SET_FIELD'; field: 'servingUnitsPerDose'; value: number }
+
+export interface SupplementChatReplyDto {
+  reply: string
+  actions: SupplementChatActionDto[]
+}
+
 export interface SupplementLinkPreviewDto {
   productUrl: string
   productName: string | null

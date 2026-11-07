@@ -1,6 +1,16 @@
 <template>
   <div class="supplement-workbench">
-    <!-- 左栏：那瓶东西的真身。手动录入时这里是空的，但能贴链接、传图、抄原文 -->
+    <!-- 最左：对话。说的每一句都会真的落到右边表单上 -->
+    <SupplementChat
+      ref="chatRef"
+      class="wb-chat"
+      :draft-name="draft.name"
+      :serving-units-per-dose="draft.servingUnitsPerDose"
+      @prefill="applyPreview"
+      @set-serving-units="setServingUnits"
+    />
+
+    <!-- 中栏：那瓶东西的真身。手动录入时这里是空的，但能贴链接、传图、抄原文 -->
     <aside class="wb-evidence">
       <div class="wb-evidence__head">
         <b>那瓶东西</b>
@@ -354,6 +364,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import SupplementCompare from './SupplementCompare.vue'
+import SupplementChat from './SupplementChat.vue'
 import { ingredientCatalogApi, type FeedAdditiveMatch } from '@/api/ingredientCatalog'
 import { nutritionFoodApi } from '@/api/ingredients'
 import type {
@@ -518,6 +529,38 @@ async function searchCatalog(keyword: string): Promise<void> {
   }
 }
 
+/** 对话里读到的那瓶：走和"读这个链接"同一条填表路径。 */
+function applyPreview(preview: {
+  productUrl: string
+  productName: string | null
+  servingUnitsPerDose: number | null
+  nutrients: { fieldPath: string; value: number; unit: string; rawName: string }[]
+  unrecognized: string[]
+  labelText: string | null
+}) {
+  const { patch, skipped } = patchFromPreview({
+    productUrl: preview.productUrl,
+    productName: preview.productName,
+    servingUnitsPerDose: preview.servingUnitsPerDose,
+    nutrients: preview.nutrients,
+    unrecognized: preview.unrecognized,
+    labelText: preview.labelText
+  })
+  if (patch.name && !draft.name.trim()) {
+    draft.name = patch.name
+  }
+  draft.evidence.productUrl = preview.productUrl
+  draft.servingUnitsPerDose = patch.servingUnitsPerDose ?? draft.servingUnitsPerDose
+  draft.servingNutrients = { ...(patch.servingNutrients ?? {}) }
+  draft.perUnitOverrides = {}
+  draft.evidence.labelText = patch.evidence?.labelText ?? ''
+  previewSkipped.value = skipped
+}
+
+function setServingUnits(value: number): void {
+  draft.servingUnitsPerDose = value
+}
+
 /** 从对比里挑中一个：把名字、采购价、换算倍数带回表单，其它还是人填。 */
 function adoptCandidate(payload: { name: string; price: number | null; units: number | null }): void {
   if (payload.name && !draft.name.trim()) {
@@ -610,9 +653,12 @@ async function confirm(): Promise<void> {
 <style scoped>
 .supplement-workbench {
   display: grid;
-  grid-template-columns: 340px 1fr;
+  grid-template-columns: 300px 320px minmax(0, 1fr);
   gap: 12px;
   height: 100%;
+  min-height: 0;
+}
+.wb-chat {
   min-height: 0;
 }
 .wb-evidence,

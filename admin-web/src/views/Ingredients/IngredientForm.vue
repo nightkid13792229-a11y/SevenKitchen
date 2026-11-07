@@ -356,6 +356,30 @@
         />
         <span class="hint-text">ML类型必填，用于体积→质量转换</span>
       </el-form-item>
+
+      <!-- 当前成本（只读）：2026-11-07 成本口径归位。
+           食材的成本 = 每基准单位多少钱，由采购结算写入，表单不提供编辑。 -->
+      <el-form-item v-if="formData.id" label="当前成本">
+        <div class="price-info-card">
+          <div class="price-info-line">
+            <span class="label">每 1 {{ baseUnitLabel }} 成本</span>
+            <span class="value">
+              {{ priceInfo ? formatMoney(priceInfo.baseUnitCost) : '未定价' }}
+            </span>
+          </div>
+          <div class="price-info-line">
+            <span class="label">来源</span>
+            <span class="value">{{ formatCostSource(priceInfo?.source) }}</span>
+          </div>
+          <div class="price-info-line">
+            <span class="label">最近变化</span>
+            <span class="value">{{ formatCostAge(priceInfo) }}</span>
+          </div>
+          <el-button link type="primary" @click="openIngredientCostHistory()">
+            价格历史
+          </el-button>
+        </div>
+      </el-form-item>
     </template>
 
     <!-- 补剂属性 -->
@@ -667,7 +691,7 @@
           <div class="price-info-line">
             <span class="label">价格来源</span>
             <span class="value">
-              {{ priceInfo.source === 'LATEST_PURCHASE' ? '采购回写' : '建档手填' }}
+              {{ formatCostSource(priceInfo.source) }}
             </span>
           </div>
           <div class="price-info-line">
@@ -1312,6 +1336,41 @@
     </template>
   </el-dialog>
 
+  <!-- 食材成本历史（2026-11-07）：只读 -->
+  <el-dialog
+    v-model="ingredientCostHistoryVisible"
+    title="成本历史"
+    width="760px"
+    destroy-on-close
+  >
+    <el-table
+      v-loading="ingredientCostHistoryLoading"
+      :data="ingredientCostHistoryRows"
+      size="small"
+      style="width: 100%"
+      empty-text="还没有成本记录"
+    >
+      <el-table-column label="时间" width="160">
+        <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
+      </el-table-column>
+      <el-table-column label="变化" min-width="180">
+        <template #default="{ row }">
+          <span v-if="row.oldCostPerBaseUnit === null">首次定价</span>
+          <span v-else>
+            {{ formatMoney(row.oldCostPerBaseUnit) }} →
+            {{ formatMoney(row.newCostPerBaseUnit) }}
+          </span>
+        </template>
+      </el-table-column>
+      <el-table-column label="来源" width="180">
+        <template #default="{ row }">{{ formatCostSource(row.source) }}</template>
+      </el-table-column>
+      <el-table-column label="操作人" width="120">
+        <template #default="{ row }">{{ row.operatorName || '—' }}</template>
+      </el-table-column>
+    </el-table>
+  </el-dialog>
+
   <el-dialog
     v-model="priceHistoryDialogVisible"
     :title="priceHistorySku ? `${priceHistorySku.name}：价格历史` : '价格历史'"
@@ -1651,6 +1710,35 @@ const priceInputStep = computed(() =>
  * 多少钱一单位、这个价哪来的、哪天变的、多久没变过（>90 天标黄）。
  */
 const priceInfo = ref<IngredientPriceBasis | null>(null)
+/** 食材成本历史（2026-11-07）：只读，回答「这个成本是哪来的」 */
+const ingredientCostHistoryVisible = ref(false)
+const ingredientCostHistoryLoading = ref(false)
+const ingredientCostHistoryRows = ref<
+  Array<{
+    id: string
+    oldCostPerBaseUnit: number | null
+    newCostPerBaseUnit: number
+    source: string
+    note: string | null
+    operatorName: string | null
+    createdAt: string
+  }>
+>([])
+
+async function openIngredientCostHistory() {
+  const id = formData.id
+  if (!id) return
+  ingredientCostHistoryVisible.value = true
+  ingredientCostHistoryLoading.value = true
+  try {
+    const res = await ingredientApi.listIngredientCostHistory(id)
+    ingredientCostHistoryRows.value = res?.items ?? []
+  } catch (error: any) {
+    ElMessage.error(error?.message || '价格历史加载失败')
+  } finally {
+    ingredientCostHistoryLoading.value = false
+  }
+}
 
 const baseUnitLabel = computed(
   () => BaseUnitLabels[formData.baseUnit] || formData.baseUnit,
@@ -1663,6 +1751,29 @@ const formatMoney = (value?: number | null) => {
   if (abs >= 1) return `¥${num.toFixed(2)}`
   if (abs >= 0.01) return `¥${num.toFixed(4)}`
   return `¥${num.toFixed(6)}`
+}
+
+/**
+ * 成本来源翻译（2026-11-07）。
+ * 四个来源对应「这个数是怎么来的」，没有流水时是「未定价」。
+ */
+const COST_SOURCE_LABELS: Record<string, string> = {
+  INIT_FROM_SKU: '建档时按采购商品初始化',
+  REIMBURSEMENT: '采购报销回写',
+  MANUAL: '后台手工改价',
+  MIGRATION: '历史数据折算',
+  NONE: '未定价',
+}
+
+const formatCostSource = (source?: string | null): string =>
+  COST_SOURCE_LABELS[source ?? 'NONE'] ?? '未定价'
+
+/** 距今多久没变过；>90 天标黄，和补剂/包材同一口径 */
+const formatCostAge = (info: IngredientPriceBasis | null): string => {
+  const days = info?.ageDays
+  if (typeof days !== 'number') return '—'
+  if (days <= 0) return '今天'
+  return `${days} 天前`
 }
 
 /** 输入框下方的实时换算，避免「元/克」被写成「元/公斤」还看不出来 */
@@ -2151,8 +2262,7 @@ function sanitizeTopLevelFieldsForFood() {
   formData.diyEnabled = false
   formData.procurementEnabled = false
   formData.purchaseUnit = getResolvedFoodPurchaseUnit()
-  formData.purchaseToBaseRatio = 1
-  formData.currentPricePerPurchaseUnit = 0
+  // 2026-11-07：成本与换算归采购结算管，表单既不改也不下发（见 buildSubmitPayload）
   formData.safetyStock = undefined
   formData.reorderPoint = undefined
   formData.targetStock = undefined
@@ -3288,6 +3398,14 @@ function buildSubmitPayload(): IngredientForm {
 
   if (!formData.id) {
     payload.nutritionProfile = formData.nutritionProfile ?? null
+  }
+
+  // 食材的成本与换算不归表单管（2026-11-07）：
+  // 下发 0/1 会把已有成本抹平，也会被后端以「不能把价格改成 0」拒掉。
+  // 不下发 → 后端按「没填就保留原值」处理。
+  if (formData.type === IngredientType.FOOD) {
+    delete payload.currentPricePerPurchaseUnit
+    delete payload.purchaseToBaseRatio
   }
 
   return payload

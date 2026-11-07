@@ -637,12 +637,21 @@ export interface RecommendedProductForm {
 }
 
 /**
- * 算价信息来源（2026-11-06「单一来源」改造后只剩两种）
+ * 成本来源（2026-11-07 成本口径归位）
  *
- * LATEST_PURCHASE = 有采购历史，价格由报销回写
- * MANUAL_ENTRY    = 从没采购过，建档时手填
+ * 只认「成本流水」的最新一条，不再按「有没有采购记录」推测：
+ *  - INIT_FROM_SKU  建档时用第一条采购商品的价初始化
+ *  - REIMBURSEMENT  采购报销审批后按实付覆盖
+ *  - MANUAL         后台手工改价
+ *  - MIGRATION      2026-11-07 口径迁移折算
+ *  - NONE           还没有任何流水（未定价）
  */
-export type IngredientPriceBasisSource = "LATEST_PURCHASE" | "MANUAL_ENTRY";
+export type IngredientPriceBasisSource =
+  | "INIT_FROM_SKU"
+  | "REIMBURSEMENT"
+  | "MANUAL"
+  | "MIGRATION"
+  | "NONE";
 
 export interface IngredientPriceBasis {
   source: IngredientPriceBasisSource;
@@ -654,6 +663,8 @@ export interface IngredientPriceBasis {
   purchasedAt: string | null;
   /** 最近一次价格生效日期 */
   lastChangedAt?: string | null;
+  /** 最近一次成本变化时间（成本流水） */
+  costChangedAt?: string | null;
   /** 距今多少天没变过（>90 天后台标黄） */
   ageDays?: number | null;
   purchaseToBaseRatio: number;

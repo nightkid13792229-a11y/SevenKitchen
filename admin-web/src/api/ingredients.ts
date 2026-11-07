@@ -177,6 +177,14 @@ export const ingredientApi = {
   listPurchaseChannelSuggestions: (): Promise<string[]> =>
     api.get('/admin/ingredient-suggestions/purchase-channels'),
 
+  /**
+   * 食材成本流水（2026-11-07 成本口径归位）
+   *
+   * 一条 = 一次「每基准单位成本」的变化：建档初始化 / 报销覆盖 / 手工改价 / 口径迁移。
+   */
+  listIngredientCostHistory: (ingredientId: string): Promise<{ items: IngredientCostHistoryItem[] }> =>
+    api.get(`/admin/ingredients/${ingredientId}/cost-history`),
+
   // ==================== 生产/采购SKU ====================
 
   /**
@@ -410,4 +418,15 @@ export interface BatchReplaceExecuteRecipeResult {
   versionBefore: number
   versionAfter: number
   warnings: string[]
+}
+
+/** 成本流水的一行（2026-11-07） */
+export interface IngredientCostHistoryItem {
+  id: string
+  oldCostPerBaseUnit: number | null
+  newCostPerBaseUnit: number
+  source: 'INIT_FROM_SKU' | 'REIMBURSEMENT' | 'MANUAL' | 'MIGRATION'
+  note: string | null
+  operatorName: string | null
+  createdAt: string
 }

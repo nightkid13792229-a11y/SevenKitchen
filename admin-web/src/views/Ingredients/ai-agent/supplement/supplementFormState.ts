@@ -8,8 +8,10 @@
  */
 import type {
   CreateSupplementIngredientPayload,
+  SupplementLinkPreviewDto,
   SupplementPhysicalForm
 } from '@/types/ingredientCreation'
+import { supplementNutrientGroups } from '@/constants/supplementNutrients'
 import type { SupplementGateInput } from './supplementGates'
 import { convertPerUnit } from './supplementGates'
 
@@ -183,4 +185,89 @@ export function toCreatePayload(
       labelText: text(draft.evidence.labelText)
     }
   }
+}
+
+/** 每个规范字段的目标单位，来自补剂营养字段组——换算要对齐它，不能自己另开一套。 */
+export function supplementFieldUnits(): Record<string, string> {
+  const units: Record<string, string> = {}
+  for (const group of supplementNutrientGroups) {
+    for (const field of group.fields) {
+      units[field.fieldPath] = field.unit
+    }
+  }
+  return units
+}
+
+/** 标签单位 → 毫克，只处理质量单位；IU、CFU 这类不换算。 */
+const MASS_TO_MG: Record<string, number> = {
+  g: 1000,
+  mg: 1,
+  mcg: 0.001,
+  'µg': 0.001,
+  'μg': 0.001
+}
+
+function convertUnit(value: number, from: string, to: string): number | null {
+  const source = from.toLowerCase()
+  const target = to.toLowerCase()
+  if (source === target) {
+    return value
+  }
+  const fromMg = MASS_TO_MG[source]
+  const toMg = MASS_TO_MG[target]
+  if (fromMg === undefined || toMg === undefined) {
+    return null
+  }
+  return (value * fromMg) / toMg
+}
+
+export interface PreviewPatchResult {
+  patch: Partial<SupplementDraftValue>
+  /** 单位对不上、没放进来的行，原样交给界面提示 */
+  skipped: string[]
+}
+
+/**
+ * 把「链接读出来的初稿」翻成表单上能填的值。
+ *
+ * 单位对不上就不硬塞——宁可让人手填一格，也不要悄悄把 120µg 记成 120mg。
+ */
+export function patchFromPreview(
+  preview: SupplementLinkPreviewDto
+): PreviewPatchResult {
+  const units = supplementFieldUnits()
+  const servingNutrients: Record<string, number> = {}
+  const skipped: string[] = []
+
+  for (const nutrient of preview.nutrients) {
+    const target = units[nutrient.fieldPath]
+    if (!target) {
+      skipped.push(nutrient.rawName)
+      continue
+    }
+    const converted = convertUnit(nutrient.value, nutrient.unit, target)
+    if (converted === null) {
+      skipped.push(`${nutrient.rawName}（${nutrient.unit || '无单位'}，档案按 ${target} 记）`)
+      continue
+    }
+    servingNutrients[nutrient.fieldPath] = converted
+  }
+
+  const patch: Partial<SupplementDraftValue> = {
+    evidence: {
+      productUrl: preview.productUrl,
+      labelImageUrl: '',
+      labelText: preview.labelText ?? ''
+    },
+    servingNutrients
+  }
+
+  if (preview.servingUnitsPerDose && preview.servingUnitsPerDose > 0) {
+    patch.servingUnitsPerDose = preview.servingUnitsPerDose
+  }
+  if (preview.productName) {
+    patch.name = preview.productName
+  }
+
+  return { patch, skipped: [...skipped, ...preview.unrecognized] }
 }

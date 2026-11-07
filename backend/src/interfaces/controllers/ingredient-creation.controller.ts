@@ -36,6 +36,10 @@ import {
 } from '../../application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCreationCandidateService } from '../../application/ingredient-creation/ingredient-creation-candidate.service';
 import {
+  SupplementLinkPreviewService,
+  type SupplementLinkPreview,
+} from '../../application/ingredient-creation/supplement-link-preview.service';
+import {
   SupplementIngredientService,
   type CreateSupplementIngredientResult,
   type PendingSupplementArchiveView,
@@ -43,6 +47,7 @@ import {
 } from '../../application/ingredient-creation/supplement-ingredient.service';
 import {
   CreateSupplementIngredientDto,
+  PreviewSupplementLinkDto,
   toCreateSupplementInput,
 } from '../dto/ingredient-creation/create-supplement-ingredient.dto';
 import {
@@ -126,6 +131,7 @@ export class IngredientCreationController {
     private readonly agentService: IngredientDraftAgentService,
     private readonly searchPlanService: IngredientSearchPlanService,
     private readonly supplementIngredientService: SupplementIngredientService,
+    private readonly supplementLinkPreviewService: SupplementLinkPreviewService,
   ) {}
 
   /**
@@ -183,6 +189,15 @@ export class IngredientCreationController {
       current: dto.current ?? null,
     });
     return new ApiResponseDto(0, 'Success', result);
+  }
+
+  @Post('supplements/preview-link')
+  @ApiOperation({ summary: '按商品链接读出补剂档案初稿（读不出就让人手填）' })
+  async previewSupplementLink(
+    @Body() dto: PreviewSupplementLinkDto,
+  ): Promise<ApiResponseDto<SupplementLinkPreview>> {
+    const preview = await this.supplementLinkPreviewService.preview(dto.url);
+    return new ApiResponseDto(0, 'Success', preview);
   }
 
   @Get('supplements/pending')

@@ -628,6 +628,22 @@ export interface PendingSupplementArchiveDto {
   createdAt: string
 }
 
+export interface SupplementLinkPreviewNutrientDto {
+  fieldPath: string
+  value: number
+  unit: string
+  rawName: string
+}
+
+export interface SupplementLinkPreviewDto {
+  productUrl: string
+  productName: string | null
+  servingUnitsPerDose: number | null
+  nutrients: SupplementLinkPreviewNutrientDto[]
+  unrecognized: string[]
+  labelText: string | null
+}
+
 export interface CreateSupplementIngredientResultDto {
   ingredientId: string
   nutritionFoodId: string

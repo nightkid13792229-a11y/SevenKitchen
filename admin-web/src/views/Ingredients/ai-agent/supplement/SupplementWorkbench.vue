@@ -9,11 +9,24 @@
 
       <div class="wb-block">
         <label class="wb-label">商品链接</label>
-        <el-input
-          v-model="draft.evidence.productUrl"
-          placeholder="iHerb / 淘宝 / 京东，有就贴，没有也能填"
-          clearable
-        />
+        <div class="wb-link-row">
+          <el-input
+            v-model="draft.evidence.productUrl"
+            placeholder="iHerb / 淘宝 / 京东，有就贴，没有也能填"
+            clearable
+          />
+          <el-button
+            :loading="reading"
+            :disabled="!draft.evidence.productUrl.trim()"
+            data-action="read-link"
+            @click="readLink"
+          >
+            读这个链接
+          </el-button>
+        </div>
+        <p v-if="previewSkipped.length > 0" class="wb-link-skipped">
+          下面这些没自动填上，请照着标签手补：{{ previewSkipped.join('、') }}
+        </p>
       </div>
 
       <div class="wb-block">
@@ -329,6 +342,7 @@ import {
   computePerUnit,
   emptySupplementDraft,
   findMissingHumanFields,
+  patchFromPreview,
   toCreatePayload,
   toGateInput,
   type SupplementDraftValue
@@ -348,6 +362,8 @@ const confirmed = ref(false)
 const pending = ref<PendingSupplementArchiveDto[]>([])
 const pendingOpen = ref(false)
 const evidence = ref<SupplementEvidenceDto | null>(null)
+const reading = ref(false)
+const previewSkipped = ref<string[]>([])
 
 const tagSuggestions = ['油脂类', '矿物质', '维生素', '益生菌', '关节', '膳食纤维']
 
@@ -446,6 +462,40 @@ async function confirmRow(row: PendingSupplementArchiveDto): Promise<void> {
   }
 }
 
+async function readLink(): Promise<void> {
+  const url = draft.evidence.productUrl.trim()
+  if (!url) {
+    return
+  }
+  reading.value = true
+  previewSkipped.value = []
+  errorText.value = ''
+  try {
+    const preview = await ingredientCreationApi.previewSupplementLink(url)
+    const { patch, skipped } = patchFromPreview(preview)
+    if (patch.name && !draft.name.trim()) {
+      draft.name = patch.name
+    }
+    if (patch.servingUnitsPerDose) {
+      draft.servingUnitsPerDose = patch.servingUnitsPerDose
+    }
+    Object.assign(draft.servingNutrients, patch.servingNutrients ?? {})
+    if (patch.evidence?.labelText) {
+      draft.evidence.labelText = patch.evidence.labelText
+    }
+    previewSkipped.value = skipped
+    ElMessage.success(
+      Object.keys(patch.servingNutrients ?? {}).length > 0
+        ? '读到了，核对一下每份几粒和数字'
+        : '页面读到了，但没认出成分表，请手动填',
+    )
+  } catch (error) {
+    errorText.value = apiErrorMessage(error, '这个链接读不出来，请手动填')
+  } finally {
+    reading.value = false
+  }
+}
+
 async function submit(): Promise<void> {
   const payload = toCreatePayload(draft)
   if (!payload) {
@@ -523,6 +573,8 @@ async function confirm(): Promise<void> {
 .wb-block {
   padding: 10px 12px 0;
 }
+.wb-link-row{display:flex;gap:8px;align-items:center}
+.wb-link-skipped{margin:6px 0 0;font-size:11px;color:#b26a00;line-height:1.5}
 .wb-block--grow {
   flex: 1;
   display: flex;

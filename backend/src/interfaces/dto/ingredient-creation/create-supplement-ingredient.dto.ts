@@ -62,6 +62,14 @@ export class SupplementEvidenceDto {
   labelText?: string;
 }
 
+export class PreviewSupplementLinkDto {
+  @ApiProperty({ description: '商品链接', example: 'https://www.iherb.com/pr/x/1' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(1000)
+  url!: string;
+}
+
 export class CreateSupplementIngredientDto {
   @ApiProperty({ description: '原料名称', example: '鱼油（Omega-3）' })
   @IsString()

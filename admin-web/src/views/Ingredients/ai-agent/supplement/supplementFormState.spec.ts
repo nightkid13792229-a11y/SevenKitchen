@@ -6,6 +6,7 @@ import {
 import {
   computePerUnit,
   emptySupplementDraft,
+  patchFromPreview,
   toCreatePayload,
   toGateInput
 } from './supplementFormState'
@@ -113,5 +114,55 @@ describe('表单 → 提交载荷', () => {
       toCreatePayload({ ...filled, evidence: { ...filled.evidence, labelText: 'Serving Size 2' } })
         ?.evidence.labelText
     ).toBe('Serving Size 2')
+  })
+})
+
+describe('链接读出来的初稿 → 表单', () => {
+  const preview = {
+    productUrl: 'https://www.iherb.com/pr/x/1',
+    productName: '北欧 Naturals 儿童 DHA',
+    servingUnitsPerDose: 4,
+    nutrients: [
+      { fieldPath: 'fattyAcids.epa', value: 80, unit: 'mg', rawName: 'EPA' },
+      { fieldPath: 'minerals.selenium', value: 120, unit: 'mcg', rawName: 'Selenium' },
+      { fieldPath: 'minerals.zinc', value: 1, unit: 'g', rawName: 'Zinc' },
+      { fieldPath: 'vitamins.vitaminA', value: 1000, unit: 'IU', rawName: 'Vitamin A' }
+    ],
+    unrecognized: ['Proprietary Blend'],
+    labelText: 'Serving Size: 4 Soft Gels'
+  }
+
+  it('单位一致时原样进表单', () => {
+    const { patch } = patchFromPreview(preview)
+    expect(patch.servingNutrients?.['fattyAcids.epa']).toBe(80)
+  })
+
+  it('µg 与档案的 µg 对得上，就按 µg 记', () => {
+    const { patch } = patchFromPreview(preview)
+    expect(patch.servingNutrients?.['minerals.selenium']).toBe(120)
+  })
+
+  it('克换算成档案要的毫克，不把 1g 记成 1mg', () => {
+    const { patch } = patchFromPreview(preview)
+    expect(patch.servingNutrients?.['minerals.zinc']).toBe(1000)
+  })
+
+  it('单位对不上的行不进表单，但要报出来让人补', () => {
+    const { patch, skipped } = patchFromPreview(preview)
+    expect(patch.servingNutrients?.['vitamins.vitaminA']).toBe(1000)
+    expect(skipped).toContain('Proprietary Blend')
+  })
+
+  it('每份几粒、商品名、标签原文一起带进来', () => {
+    const { patch } = patchFromPreview(preview)
+    expect(patch.servingUnitsPerDose).toBe(4)
+    expect(patch.name).toBe('北欧 Naturals 儿童 DHA')
+    expect(patch.evidence?.labelText).toBe('Serving Size: 4 Soft Gels')
+    expect(patch.evidence?.productUrl).toBe('https://www.iherb.com/pr/x/1')
+  })
+
+  it('页面没给每份几粒时不动表单里的值，不默认成 1', () => {
+    const { patch } = patchFromPreview({ ...preview, servingUnitsPerDose: null })
+    expect(patch.servingUnitsPerDose).toBeUndefined()
   })
 })

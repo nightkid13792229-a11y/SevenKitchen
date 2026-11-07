@@ -11,6 +11,7 @@ import { IngredientCreationIntakeService } from '../../src/application/ingredien
 import { IngredientCreationMergeService } from '../../src/application/ingredient-creation/ingredient-creation-merge.service';
 import { IngredientCreationOnlineService } from '../../src/application/ingredient-creation/ingredient-creation-online.service';
 import { IngredientDraftAgentService } from '../../src/application/ingredient-creation/ingredient-draft-agent.service';
+import { SupplementLinkPreviewService } from '../../src/application/ingredient-creation/supplement-link-preview.service';
 import { SupplementIngredientService } from '../../src/application/ingredient-creation/supplement-ingredient.service';
 import { IngredientCreationController } from '../../src/interfaces/controllers/ingredient-creation.controller';
 import { AuthGuard } from '../../src/interfaces/auth/auth.guard';
@@ -24,6 +25,7 @@ import { AdminGuard } from '../../src/interfaces/guards/role.guard';
 describe('补剂建档接口', () => {
   let app: INestApplication;
   let supplementService: { create: jest.Mock; listPending: jest.Mock; getEvidence: jest.Mock };
+  let previewService: { preview: jest.Mock };
 
   const body = {
     name: '鱼油（Omega-3）',
@@ -71,6 +73,17 @@ describe('补剂建档接口', () => {
       })),
     };
 
+    previewService = {
+      preview: jest.fn(async () => ({
+        productUrl: 'https://www.iherb.com/pr/x/1',
+        productName: '某某鱼油',
+        servingUnitsPerDose: 2,
+        nutrients: [{ fieldPath: 'fattyAcids.epa', value: 650, unit: 'mg', rawName: 'EPA' }],
+        unrecognized: [],
+        labelText: 'Serving Size: 2 Softgels',
+      })),
+    };
+
     const moduleRef: TestingModule = await Test.createTestingModule({
       controllers: [IngredientCreationController],
       providers: [
@@ -85,6 +98,7 @@ describe('补剂建档接口', () => {
         { provide: IngredientDraftAgentService, useValue: {} },
         { provide: IngredientSearchPlanService, useValue: {} },
         { provide: SupplementIngredientService, useValue: supplementService },
+        { provide: SupplementLinkPreviewService, useValue: previewService },
         {
           provide: JwtAuthService,
           useValue: {
@@ -161,5 +175,25 @@ describe('补剂建档接口', () => {
 
     expect(res.body.data.servingUnitsPerDose).toBe(2);
     expect(res.body.data.labelText).toBe('Serving Size 2 Softgels');
+  });
+
+  it('贴链接能读出初稿：每份几粒与营养素一起回来', async () => {
+    const res = await authed(
+      http()
+        .post('/api/v1/admin/ingredient-creation/supplements/preview-link')
+        .send({ url: 'https://www.iherb.com/pr/x/1' }),
+    ).expect(201);
+
+    expect(res.body.data.servingUnitsPerDose).toBe(2);
+    expect(previewService.preview).toHaveBeenCalledWith('https://www.iherb.com/pr/x/1');
+  });
+
+  it('没给链接时 400，且不去抓', async () => {
+    await authed(
+      http()
+        .post('/api/v1/admin/ingredient-creation/supplements/preview-link')
+        .send({}),
+    ).expect(400);
+    expect(previewService.preview).not.toHaveBeenCalled();
   });
 });

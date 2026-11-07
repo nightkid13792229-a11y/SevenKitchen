@@ -13,6 +13,7 @@ import { IngredientCreationOnlineService } from '../../../src/application/ingred
 import { IngredientDraftAgentService } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
 import { AuthGuard } from '../../../src/interfaces/auth/auth.guard';
 import { JwtAuthService } from '../../../src/interfaces/auth/jwt.service';
+import { SupplementLinkPreviewService } from '../../../src/application/ingredient-creation/supplement-link-preview.service';
 import { SupplementIngredientService } from '../../../src/application/ingredient-creation/supplement-ingredient.service';
 import { IngredientCreationController } from '../../../src/interfaces/controllers/ingredient-creation.controller';
 import { AdminGuard } from '../../../src/interfaces/guards/role.guard';
@@ -46,6 +47,7 @@ describe('POST /admin/ingredient-creation/drafts/:id/search-plan/confirm', () =>
         { provide: IngredientDraftAgentService, useValue: {} },
         { provide: IngredientSearchPlanService, useValue: searchPlanService },
         { provide: SupplementIngredientService, useValue: { create: jest.fn() } },
+        { provide: SupplementLinkPreviewService, useValue: { preview: jest.fn() } },
         {
           provide: JwtAuthService,
           useValue: {

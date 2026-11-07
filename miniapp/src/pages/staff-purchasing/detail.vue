@@ -323,11 +323,30 @@
         </template>
       </StaffBottomBar>
 
-      <!-- 已完成提示 -->
-      <view v-if="purchaseList.status === 'COMPLETED'" class="bottom-actions completed">
-        <text class="completed-text">✓ 采购已完成</text>
-        <button v-if="canReopenCompletedPurchase" class="action-btn reopen" @tap="reopenCompletedPurchase" :loading="reopening">撤回完成</button>
-      </view>
+      <!-- 已完成底栏：左边说清「完成了什么」，右边把「撤回完成」收成次要操作 -->
+      <StaffBottomBar
+        v-if="purchaseList.status === 'COMPLETED'"
+        class="completed-bar"
+        :class="{ 'is-solo': !canReopenCompletedPurchase }"
+      >
+        <view class="done-state">
+          <view class="done-check">✓</view>
+          <view class="done-copy">
+            <text class="done-title">采购已完成</text>
+            <text class="done-sub">{{ items.length }} 项 · ¥{{ recordedCost.toFixed(2) }}</text>
+          </view>
+        </view>
+        <button
+          v-if="canReopenCompletedPurchase"
+          class="reopen-btn"
+          :class="{ 'is-busy': reopening }"
+          :disabled="reopening"
+          @tap="reopenCompletedPurchase"
+        >
+          <text class="reopen-icon">↺</text>
+          <text>{{ reopening ? '撤回中…' : '撤回完成' }}</text>
+        </button>
+      </StaffBottomBar>
     </view>
 
     <!-- 错误状态 -->
@@ -3356,7 +3375,7 @@ const confirmDeleteItem = (item: any) => {
   white-space: nowrap;
 }
 
-// 底部操作栏
+// 底部操作栏（待开始 / 进行中）
 .action-btn {
   flex: 1;
   height: 88rpx;
@@ -3368,24 +3387,11 @@ const confirmDeleteItem = (item: any) => {
   align-items: center;
   justify-content: center;
 
-  &.start {
-    background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-    color: #f3eddd;
-    box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
-  }
-
+  &.start,
   &.complete {
     background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
     color: #f3eddd;
     box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
-  }
-
-  &.reopen {
-    width: 100%;
-    background: #f6efe0;
-    color: #7a5c28;
-    border: 1rpx solid #b08d4f;
-    box-shadow: none;
   }
 
   &:active {
@@ -3393,100 +3399,95 @@ const confirmDeleteItem = (item: any) => {
   }
 }
 
-.bottom-actions {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background-color: #fbfcf7;
-  padding: 24rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
-  box-shadow: 0 -4rpx 16rpx rgba(30, 46, 36, 0.05);
-  z-index: 100;
-  display: flex;
-  gap: 12rpx;
+// 已完成底栏：左边状态、右边「撤回完成」
+// 撤回是次要操作，做成安静的描边胶囊；状态用印章式的对勾徽标，一眼能看出已收尾
+.completed-bar {
+  justify-content: space-between;
 
-  .action-btn {
-    flex: 1;
-    height: 88rpx;
-    border-radius: 16rpx;
-    font-size: 32rpx;
-    font-weight: bold;
-    border: none;
-    display: flex;
-    align-items: center;
+  // 已经报销过就没有「撤回完成」了，这时状态居中，别空着一半
+  &.is-solo {
     justify-content: center;
+  }
+}
 
-    &.start {
-      background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-      color: #f3eddd;
-      box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
-    }
+.done-state {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex: 1;
+  min-width: 0;
+}
 
-    &.complete {
-      background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-      color: #f3eddd;
-      box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
-    }
+.done-check {
+  flex: none;
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+  color: #f3eddd;
+  font-size: 28rpx;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6rpx 14rpx rgba(30, 46, 36, 0.22);
+}
 
-    &.reopen {
-      width: 100%;
-      background: #f6efe0;
-      color: #7a5c28;
-      border: 1rpx solid #b08d4f;
-      box-shadow: none;
-    }
+.done-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  min-width: 0;
+}
 
-    &:active {
-      opacity: 0.8;
-    }
+.done-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #1e3a2f;
+  line-height: 1.2;
+}
+
+.done-sub {
+  font-size: 22rpx;
+  color: #8a8a7e;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.reopen-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  height: 72rpx;
+  padding: 0 28rpx;
+  margin: 0;
+  border-radius: 999rpx;
+  border: 1rpx solid rgba(176, 141, 79, 0.4);
+  background: #ffffff;
+  color: #7a5c28;
+  font-size: 28rpx;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 0 4rpx 10rpx rgba(30, 46, 36, 0.06);
+
+  &::after {
+    display: none;
   }
 
-  &.completed {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 32rpx;
-    gap: 12rpx;
+  .reopen-icon {
+    font-size: 30rpx;
+    line-height: 1;
+  }
 
-    .completed-text {
-      font-size: 32rpx;
-      font-weight: bold;
-      color: #1e3a2f;
-    }
+  &:active {
+    background: #f6efe0;
+    border-color: rgba(176, 141, 79, 0.6);
+  }
 
-    .reimburse,
-    .view-reimburse {
-      width: 100%;
-      height: 88rpx;
-      border-radius: 16rpx;
-      font-size: 32rpx;
-      font-weight: bold;
-      border: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .reimburse {
-      background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-      color: #f3eddd;
-      box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
-
-      &:active {
-        opacity: 0.8;
-      }
-    }
-
-    .view-reimburse {
-      background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-      color: #f3eddd;
-      box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
-
-      &:active {
-        opacity: 0.8;
-      }
-    }
+  &.is-busy {
+    opacity: 0.6;
   }
 }
 

@@ -182,6 +182,11 @@
           <text class="section-hint">{{ auditPurchaseRecords.length }} 条 · ¥{{ purchaseRecordsTotal }}</text>
         </view>
 
+        <text v-if="pendingPriceChangeCount > 0" class="pending-price-hint">
+          {{ pendingPriceChangeCount }} 项调价待确认：点「审核通过」时逐项判定，
+          超出阈值的会标「需放行」，那一项价格不会自动变。
+        </text>
+
         <view v-if="auditPurchaseRecords.length === 0" class="empty-block">
           <text class="empty-text">没有关联采购记录</text>
         </view>
@@ -1164,7 +1169,10 @@ const summaryAlerts = computed<Array<{ tone: string; text: string }>>(() => {
     // 是否生效由价格闸按历史中位数判断，前端猜不准（2026-11-07 终验 P0）
     alerts.push({
       tone: 'info',
-      text: `${pendingPriceChangeCount.value} 项价格变更待确认（最大 ${formatDeltaPercent(maxDeltaRate.value)}）`,
+      text:
+        heldPriceChangeCount.value > 0
+          ? `${pendingPriceChangeCount.value} 项价格变更待确认（最大 ${formatDeltaPercent(maxDeltaRate.value)}），其中 ${heldPriceChangeCount.value} 项已被闸门判定需放行`
+          : `${pendingPriceChangeCount.value} 项价格变更待确认（最大 ${formatDeltaPercent(maxDeltaRate.value)}）`,
     });
   }
 
@@ -2124,6 +2132,14 @@ const resubmit = () => {
     color: #6b6653;
     line-height: 1.5;
   }
+}
+
+.pending-price-hint {
+  display: block;
+  margin: -4rpx 0 18rpx;
+  font-size: 22rpx;
+  color: #8a6420;
+  line-height: 1.5;
 }
 
 /* ⑦ 处理进度 */

@@ -65,17 +65,22 @@ describe('营养报告页 · 交付快照优先', () => {
     expect(source).toContain("currentPage.options?.orderId");
     expect(source).toContain('loadFromDeliverySnapshot');
     expect(source).toContain('fetchDelivery(orderId.value');
-    expect(source).toContain('resolveDeliverySelection');
-    expect(source).toContain('nutrition?.report');
+    expect(source).toContain('selectFrozenNutritionReport');
   });
 
-  it('快照里没有报告时退回按食谱编号现取（老交付不空白）', () => {
+  it('★ 取不到交付 / 取到了没报告 —— 都不能退回"按食谱编号现取"', () => {
     const loader = source.match(
       /async function loadFromDeliverySnapshot\(\)[\s\S]*?\n}/,
     )?.[0] || '';
 
-    expect(loader).toContain('if (frozen)');
-    expect(loader).toContain('loadNutritionReport()');
+    // 失败要能被看见：strict 抛错 + 自己展示失败态（不弹重复 toast）
+    expect(loader).toContain('throwOnError: true');
+    expect(loader).toContain('suppressErrorToast: true');
+    expect(loader).toContain('loadFailed.value = true');
+    // 关键：交付路径绝不调活行加载器（活行可能是交付后被改过的版本）
+    expect(loader).not.toContain('loadNutritionReport()');
+    // 取到了但没有报告 → 如实说"这单没有报告"
+    expect(loader).toContain('这份交付没有生成营养报告');
   });
 
   it('报告头（食谱名 / 标准 / 场景）也来自快照，不另外请求食谱', () => {
@@ -83,8 +88,8 @@ describe('营养报告页 · 交付快照优先', () => {
       /async function loadFromDeliverySnapshot\(\)[\s\S]*?\n}/,
     )?.[0] || '';
 
-    expect(loader).toContain('snapshot?.recipe?.name');
-    expect(loader).toContain('snapshot?.nutrition?.standard');
-    expect(loader).toContain('snapshot?.nutrition?.scenario');
+    expect(loader).toContain('frozen.recipeName');
+    expect(loader).toContain('frozen.standard');
+    expect(loader).toContain('frozen.scenario');
   });
 });

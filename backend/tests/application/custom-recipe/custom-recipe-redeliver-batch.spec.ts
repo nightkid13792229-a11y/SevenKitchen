@@ -117,6 +117,28 @@ function buildRecipe(index: number, overrides: Record<string, unknown> = {}) {
     nutritionDetailedData: {
       proteinPercent: 30,
       fatPercent: 15,
+      scenario: 'EARLY_GROWTH_REPRODUCTION',
+      report: {
+        ingredientRows: [{ ingredientName: `新原料 ${index}`, weightPercentLabel: '70%' }],
+        macroRows: [
+          {
+            key: 'crudeProtein',
+            name: '蛋白质',
+            dryMatterLabel: '30.00%',
+            energyPercentLabel: '25.00%',
+            weightPercentLabel: '10.00%',
+          },
+        ],
+        energyDensityRows: [{ label: '每公斤配方', value: '3620 kcal/kg' }],
+        nutrientSections: {
+          minerals: {
+            key: 'minerals',
+            title: '微量元素',
+            dryMatterHeader: '/100gDM',
+            rows: [{ name: '钙', currentLabel: '2100' }],
+          },
+        },
+      },
     },
     isCustomRecipe: true,
     customerOwnerId: 'customer-1',
@@ -408,6 +430,23 @@ describe('CustomRecipeDeliveryService · 按选中份重新交付', () => {
       expect(itemsCreate.data[2].recipeVersion).toBe(2);
       expect(itemsCreate.data[2].contentSnapshot.recipe.name).toBe('新食谱 3');
       expect(itemsCreate.data[2].contentSnapshot.recipe.items).toHaveLength(2);
+
+      /**
+       * 2026-11-08：重新交付时报告也要跟着"当前这一版"重新冻结；
+       * 没选中的那一份保留老快照（老快照没有 report → 入口不显示），
+       * 不能拿当前报告把别人的交付版覆盖掉。
+       */
+      expect(
+        itemsCreate.data[0].contentSnapshot.nutrition.report?.ingredientRows?.[0]
+          ?.ingredientName,
+      ).toBe('新原料 1');
+      expect(
+        itemsCreate.data[2].contentSnapshot.nutrition.report?.ingredientRows?.[0]
+          ?.ingredientName,
+      ).toBe('新原料 3');
+      expect(
+        itemsCreate.data[1].contentSnapshot.nutrition.report,
+      ).toBeUndefined();
 
       // ---- 订单：交付时间 / 闹钟 / 老 recipeId ----
       const orderUpdate = (txProxy.customRecipeOrder.update as jest.Mock).mock

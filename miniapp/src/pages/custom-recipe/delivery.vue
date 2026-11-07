@@ -133,7 +133,7 @@
         这单交付本来就没有报告（老数据可跑回填脚本补），
         不显示入口，避免点进去是「暂无报告」。
       -->
-      <view v-if="frozenNutritionReport" class="report-entry-slot">
+      <view v-if="hasNutritionReport" class="report-entry-slot">
         <NutritionReportEntry @open="openNutritionReport" />
       </view>
 
@@ -186,6 +186,7 @@ import {
   buildDeliveryDiyUrl,
   buildFinishedFoodOrderUrl,
   deliveryBatchCountText,
+  hasFrozenNutritionReport,
   resolveDeliverySelection,
   type CustomRecipeDeliveryResponse,
 } from '@/utils/custom-recipe-delivery';
@@ -437,9 +438,10 @@ const goOrderFinished = () => {
  * 「按食谱编号现取」会拿到营养师后来改过的数字。
  *
  * 老快照没有这个键 → 不显示入口（历史订单由一次性回填脚本补）。
+ * 判断收在 utils 里（有单测），页面只做渲染。
  */
-const frozenNutritionReport = computed(
-  () => content.value.nutrition.report ?? null,
+const hasNutritionReport = computed(() =>
+  hasFrozenNutritionReport(content.value),
 );
 
 /**
@@ -449,8 +451,16 @@ const frozenNutritionReport = computed(
  * 真点到了就回详情页那种按食谱编号现取的旧路径，不至于开空白页。
  */
 const openNutritionReport = () => {
-  if (!frozenNutritionReport.value || !selectedRecipeId.value) {
+  if (!hasNutritionReport.value || !selectedRecipeId.value) {
     uni.showToast({ title: '这份交付没有营养报告', icon: 'none' });
+    return;
+  }
+  /**
+   * 没有订单号就只能走"按食谱编号现取"——那正是这条链路要避免的口径
+   * （交付后被改过的配方会串进来）。宁可不跳，也不给一份可能不是交付版的报告。
+   */
+  if (!orderId.value) {
+    uni.showToast({ title: '缺少订单号，暂时打不开报告', icon: 'none' });
     return;
   }
   const query = [`recipeId=${encodeURIComponent(selectedRecipeId.value)}`];

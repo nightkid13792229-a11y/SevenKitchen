@@ -252,6 +252,8 @@ export function readDeliveryNutritionReport(
     const rows = readReportRows(section.rows, NUTRIENT_ROW_FIELDS);
     if (rows.length === 0) continue;
     nutrientSections[key] = {
+      // 分区键要一起冻结：报告页拿它当列表 key
+      key: typeof section.key === 'string' ? section.key : key,
       title: typeof section.title === 'string' ? section.title : '',
       dryMatterHeader:
         typeof section.dryMatterHeader === 'string'

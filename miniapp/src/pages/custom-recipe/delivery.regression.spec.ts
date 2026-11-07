@@ -109,9 +109,10 @@ describe('交付页 · 内容与交互（P1）', () => {
   });
 
   it('★ 报告入口只在交付快照里冻结了报告时才出现（不点进去看「暂无报告」）', () => {
-    // 2026-11-08：入口 gating 从「有食谱编号」改成「快照里有冻结报告」
-    expect(template).toContain('v-if="frozenNutritionReport"');
-    expect(source).toContain('content.value.nutrition.report');
+    // 2026-11-08：入口 gating 从「有食谱编号」改成「快照里有冻结报告」。
+    // 判断本身收在 utils（有行为测试），页面只引用 —— 这里守"用的是那个判断"。
+    expect(template).toContain('v-if="hasNutritionReport"');
+    expect(source).toContain('hasFrozenNutritionReport(content.value)');
     // 老快照没有 report → 不渲染入口
     expect(template).not.toContain('v-if="selectedRecipeId"');
   });
@@ -128,6 +129,8 @@ describe('交付页 · 内容与交互（P1）', () => {
     expect(openSource).toContain('encodeURIComponent(orderId.value)');
     // 没报告 / 缺编号时给提示，不跳空页
     expect(openSource).toContain('这份交付没有营养报告');
+    // 没有订单号就别跳：否则报告页会退回"按食谱编号现取"的活行口径
+    expect(openSource).toContain('缺少订单号，暂时打不开报告');
   });
 
   it('★ 营养报告卡与上面的「全营养标准」banner 左右对齐', () => {

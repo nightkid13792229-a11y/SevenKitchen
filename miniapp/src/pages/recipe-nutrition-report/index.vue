@@ -17,7 +17,7 @@
 
     <view v-else-if="!report" class="state-panel">
       <text class="state-title">暂无完整营养报告</text>
-      <text class="state-copy">该食谱还没有 Setar 生成的结构化营养报告。</text>
+      <text class="state-copy">{{ emptyHint }}</text>
     </view>
 
     <view v-else>
@@ -131,7 +131,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { request } from '../../utils/api'
 import { fetchDelivery } from '../../api/custom-recipe'
-import { resolveDeliverySelection } from '../../utils/custom-recipe-delivery'
+import {
+  selectFrozenNutritionReport,
+  type CustomRecipeDeliveryResponse,
+} from '../../utils/custom-recipe-delivery'
 import { getScenarioLabel } from '../recipe-designer/assessment'
 
 interface NutritionReport {
@@ -148,7 +151,7 @@ interface NutritionSection {
   rows: Array<Record<string, any>>
 }
 
-const loading = ref(false)
+const loading = ref(true)
 const recipeId = ref('')
 const shareToken = ref('')
 /**
@@ -162,6 +165,8 @@ const recipe = ref<any>({})
 const report = ref<NutritionReport | null>(null)
 /** 接口失败 / 网络失败（与「没有报告」分开显示，2026-11-08） */
 const loadFailed = ref(false)
+/** 空态说明：交付路径与食谱路径说法不同（一个"这单没报告"，一个"这食谱没报告"） */
+const emptyHint = ref('该食谱还没有 Setar 生成的结构化营养报告。')
 const STATIC_LOGO_SRC = '/static/logo.png'
 
 const ingredientRows = computed(() => report.value?.ingredientRows || [])
@@ -210,6 +215,7 @@ function loadNutritionReport() {
 
   loading.value = true
   loadFailed.value = false
+  emptyHint.value = '该食谱还没有 Setar 生成的结构化营养报告。'
   const data: Record<string, string> = {}
   if (shareToken.value) data.shareToken = shareToken.value
 
@@ -236,35 +242,47 @@ function loadNutritionReport() {
 /**
  * 交付页入口：从**交付快照**里取冻结的报告（2026-11-08）。
  *
- * 快照里没有报告（这单交付本来就没生成报告）时退回按食谱编号现取的旧路径，
- * 与点进来之前的行为一致，不会开一个空白页。
+ * ## 两条铁律（2026-11-08 审核修）
+ *
+ * ① **失败要能被看见**：`fetchDelivery` 默认把所有错误吞成 `null`，
+ *    那会跟"这单没报告"混在一起；这里传 `throwOnError`，
+ *    失败就进失败态（有「重新加载」），不再假装成功。
+ * ② **绝不退回按食谱编号现取**：私密定制食谱是原地更新的，
+ *    退回活行就会显示营养师改过之后的数字 —— 那正是这次要消灭的问题。
+ *    取到了交付但没有报告，就如实说"这单没有报告"。
  */
 async function loadFromDeliverySnapshot() {
   loading.value = true
   loadFailed.value = false
 
   try {
-    const delivery = await fetchDelivery(orderId.value, undefined, recipeId.value)
-    const selected = resolveDeliverySelection(delivery as any, recipeId.value)
-    const snapshot = selected?.content
-    const frozen = snapshot?.nutrition?.report
+    const delivery = await fetchDelivery(orderId.value, undefined, recipeId.value, {
+      throwOnError: true,
+      // 失败态由本页展示，别再弹一个 toast
+      suppressErrorToast: true,
+    })
+    const frozen = selectFrozenNutritionReport(
+      delivery as unknown as CustomRecipeDeliveryResponse,
+      recipeId.value,
+    )
 
-    if (frozen) {
-      recipe.value = {
-        name: snapshot?.recipe?.name || '',
-        nutritionStandard: snapshot?.nutrition?.standard || null,
-        nutritionDetailedData: {
-          standard: snapshot?.nutrition?.standard || null,
-          scenario: snapshot?.nutrition?.scenario || null,
-        },
-      }
-      report.value = frozen as unknown as NutritionReport
+    if (!frozen) {
+      report.value = null
+      emptyHint.value = '这份交付没有生成营养报告，想了解细节可以找 Seven爸爸。'
       loading.value = false
       return
     }
 
-    // 老交付没有冻结报告：退回旧路径（历史数据由回填脚本补）
-    loadNutritionReport()
+    recipe.value = {
+      name: frozen.recipeName,
+      nutritionStandard: frozen.standard,
+      nutritionDetailedData: {
+        standard: frozen.standard,
+        scenario: frozen.scenario,
+      },
+    }
+    report.value = frozen.report as unknown as NutritionReport
+    loading.value = false
   } catch (error) {
     console.error('[RecipeNutritionReport] Failed to load delivery report:', error)
     loadFailed.value = true

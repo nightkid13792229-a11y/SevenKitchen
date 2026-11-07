@@ -147,6 +147,8 @@ export interface DeliveryNutritionReport {
 export type DeliveryReportRow = Record<string, string | undefined>;
 
 export interface DeliveryNutrientSection {
+  /** 分区键（minerals / vitamins / aminoAcids / fattyAcids）—— 报告页的列表 key */
+  key?: string;
   title: string;
   dryMatterHeader: string;
   rows: Array<DeliveryReportRow>;
@@ -638,10 +640,26 @@ export async function submitOrder(
  * `recipeId` 会拼进查询串，供后端将来按份收窄；当前后端返回整批，
  * 页面仍需按 recipeId 选择（规则见 `utils/custom-recipe-delivery.ts`）。
  */
+/**
+ * 读交付内容。
+ *
+ * 默认**吞掉错误**返回 `null`：多数调用方（交付页）已经知道订单状态，
+ * 「没交付」和「网络失败」在那边表现一致。
+ *
+ * ⚠️ 但「营养报告」入口不能这么处理（2026-11-08 审核）：报告页拿 `null`
+ * 会以为"这份交付没有报告"，于是退回按食谱编号现取 —— 那正是要修掉的
+ * 「看到改后版本」的问题。所以那边传 `throwOnError`，让失败能被区分出来。
+ */
 export async function fetchDelivery(
   orderId: string,
   version?: number,
   recipeId?: string,
+  options?: {
+    /** 失败时抛错而不是返回 null（报告页要区分"没报告"与"没取到"） */
+    throwOnError?: boolean;
+    /** 页面自己展示错误态时，关掉 api 层的 toast，避免双重提示 */
+    suppressErrorToast?: boolean;
+  },
 ): Promise<OrderDelivery | DeliveryBatchContent | null> {
   try {
     const params: string[] = [];
@@ -655,18 +673,25 @@ export async function fetchDelivery(
     const res: any = await request({
       url: `/custom-recipe/orders/${encodeURIComponent(orderId)}/delivery${query}`,
       method: 'GET',
+      ...(options?.suppressErrorToast ? { suppressErrorToast: true } : {}),
     });
     if (res?.code === 0 && res.data) {
       return res.data as OrderDelivery | DeliveryBatchContent;
     }
+    if (options?.throwOnError) {
+      throw new Error('交付内容接口返回失败');
+    }
     return null;
   } catch (error) {
     /**
-     * 404（还没交付）与网络错误在这里都返回 null，由页面区分：
+     * 404（还没交付）与网络错误在这里默认都返回 null，由页面区分：
      * 页面已经知道订单状态，未交付时本来就不该去请求。
-     * 真要区分得靠更细的错误码，而目前没必要 —— 两种情况页面表现一致。
+     * 报告页传了 `throwOnError`，那就原样抛出去。
      */
     console.warn('[CustomRecipe] 读取交付内容失败:', error);
+    if (options?.throwOnError) {
+      throw error;
+    }
     return null;
   }
 }

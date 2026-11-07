@@ -4,7 +4,9 @@ import {
   buildDeliveryDiyUrl,
   buildFinishedFoodOrderUrl,
   deliveryBatchCountText,
+  hasFrozenNutritionReport,
   resolveDeliverySelection,
+  selectFrozenNutritionReport,
 } from './custom-recipe-delivery';
 
 /**
@@ -171,5 +173,89 @@ describe('多份交付 · 页面路由', () => {
     expect(buildDeliveryDetailUrl('CR 1', 'R/2')).toBe(
       '/pages/custom-recipe/delivery?orderId=CR%201&recipeId=R%2F2',
     );
+  });
+});
+
+
+/**
+ * 冻结营养报告（2026-11-08）
+ *
+ * 这两条判断决定"交付页显不显示报告入口"和"报告页渲染哪一份数据"。
+ * 写在 utils 里是为了**能测行为**：页面模板里的 `v-if` 只能断言源码字符串，
+ * 改坏了测试照样绿（审核实测过）。
+ */
+const report = {
+  ingredientRows: [{ ingredientName: '鸡胸肉', weightPercentLabel: '70%' }],
+  macroRows: [{ key: 'crudeProtein', name: '蛋白质', dryMatterLabel: '38.23%' }],
+  energyDensityRows: [{ label: '每公斤配方', value: '3620 kcal/kg' }],
+  nutrientSections: {
+    minerals: {
+      key: 'minerals',
+      title: '微量元素',
+      dryMatterHeader: '/100gDM',
+      rows: [{ name: '钙', currentLabel: '2192' }],
+    },
+  },
+};
+
+const contentWithReport = (recipeId: string, name: string) => ({
+  ...content(recipeId, name),
+  nutrition: {
+    standard: 'FEDIAF_2025',
+    energyDensityKcalPerKg: 3620,
+    scenario: 'EARLY_GROWTH_REPRODUCTION',
+    report,
+  },
+});
+
+describe('冻结营养报告 · 有没有 / 取哪一份', () => {
+  it('★ 老快照没有 report → 不显示入口（不点进空页）', () => {
+    expect(hasFrozenNutritionReport(content('CR1', '老交付'))).toBe(false);
+  });
+
+  it('report 显式为 null → 同样不显示（这单当场就没有报告）', () => {
+    expect(
+      hasFrozenNutritionReport({
+        ...content('CR1', 'v2 无报告'),
+        nutrition: {
+          standard: 'FEDIAF_2025',
+          energyDensityKcalPerKg: 3620,
+          report: null,
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('有冻结报告 → 显示入口', () => {
+    expect(hasFrozenNutritionReport(contentWithReport('CR1', '有报告'))).toBe(
+      true,
+    );
+  });
+
+  it('★ 报告页按 recipeId 取 —— 多份交付里取中的那一份', () => {
+    const delivery = {
+      ...batch(),
+      items: [
+        {
+          ...batch().items[0],
+          content: contentWithReport('CR1759100000001', '鸡肉南瓜'),
+        },
+        {
+          ...batch().items[1],
+          content: contentWithReport('CR1759100000002', '鸭肉西兰花'),
+        },
+      ],
+    };
+
+    const selected = selectFrozenNutritionReport(delivery, 'CR1759100000002');
+    expect(selected?.recipeName).toBe('鸭肉西兰花');
+    expect(selected?.report.nutrientSections.minerals.rows[0].name).toBe('钙');
+    expect(selected?.standard).toBe('FEDIAF_2025');
+    expect(selected?.scenario).toBe('EARLY_GROWTH_REPRODUCTION');
+  });
+
+  it('★ 没有冻结报告 → null（页面据此说"这单没有报告"，不退回活行）', () => {
+    expect(selectFrozenNutritionReport(null)).toBeNull();
+    expect(selectFrozenNutritionReport(batch(), 'CR1759100000001')).toBeNull();
   });
 });

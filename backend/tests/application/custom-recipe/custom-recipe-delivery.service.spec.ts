@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CustomRecipeStatus } from '@prisma/client';
 import { CustomRecipeDeliveryService } from '../../../src/application/custom-recipe/custom-recipe-delivery.service';
+import { SNAPSHOT_SCHEMA_VERSION } from '../../../src/domain/custom-recipe/custom-recipe.delivery';
 import { CustomRecipeConfigService } from '../../../src/application/custom-recipe/custom-recipe-config.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 
@@ -177,7 +178,8 @@ describe('CustomRecipeDeliveryService', () => {
       const createArg = (txProxy.customRecipeDelivery.create as jest.Mock).mock
         .calls[0][0];
       const snapshot = createArg.data.contentSnapshot;
-      expect(snapshot.schemaVersion).toBe(1);
+      // 2026-11-08：结构版本升到 2（营养报告整份冻结）
+      expect(snapshot.schemaVersion).toBe(SNAPSHOT_SCHEMA_VERSION);
       expect(snapshot.recipe.name).toBe('豆豆的减重食谱');
       expect(snapshot.recipe.items).toHaveLength(2);
     });

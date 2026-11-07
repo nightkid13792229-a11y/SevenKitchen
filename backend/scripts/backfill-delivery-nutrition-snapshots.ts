@@ -19,16 +19,20 @@
  *
  * · 能补：8 项营养数字、宏量报告行、完整营养报告（库里都还在）。
  * · 补的是**食谱当前行**的营养数据 —— 快照里没有存过这些数字，
- *   所以做不到"交付那一刻的原值"。定制食谱是交付后基本不再改的私密行，
- *   这次涉及的 19 份当前都可对上；将来若发现改过，以这条为已知差异。
- * · **不覆盖已有值**：只填 `null`/缺失，跑十遍和跑一遍结果一样。
+ *   所以做不到"交付那一刻的原值"。
+ * · **对得上才补**：快照里若已冻结了 `reportRows`（交付当时的宏量表），
+ *   就拿食谱当前行重算一份跟它比；对不上说明交付后改过配方 →
+ *   跳过并记 `conflicts`，不把"改后的报告"当成交付那一刻的。
+ * · **不覆盖已有值**：只填缺的键，跑十遍和跑一遍结果一样。
+ * · ⚠️ **只补 v1 快照**：v2 起「有没有报告」是交付时的事实，
+ *   `report: null` 表示当场就没有报告，不能再拿当前数据补（否则等于篡改）。
  *
  * ## 安全设计
  *
  * ① 默认**只预演**，不加 `--apply` 一行都不写；
- * ② **幂等**：已有 `macros` 与 `reportRows` 的记录直接跳过；
- * ③ 只写 `content_snapshot.nutrition` 下缺的两个键，其余一律原样；
- * ④ 逐条打印"订单号 / 食谱 / 8 项数字"，人工核对后再落库。
+ * ② **幂等**：目标键已存在（含显式 `null` 的老结构判断见上）就跳过；
+ * ③ 只写 `content_snapshot.nutrition` 下缺的键，其余一律原样；
+ * ④ 逐条打印"订单号 / 食谱 / 8 项数字 / 报告规模"，人工核对后再落库。
  *
  * ## 用法
  *
@@ -48,10 +52,19 @@ import {
   type SnapshotMacros,
 } from '../src/domain/custom-recipe/delivery-nutrition';
 
-/** 先读 `.env` 再建 client（Prisma 连接时才取 DATABASE_URL，顺序仍按稳妥写法放前面） */
-loadEnv({ path: process.env.ENV_FILE || '.env' });
+/**
+ * Prisma client **懒建**：测试只 import 核心函数，不该顺带建连接。
+ * （`new PrismaClient()` 本身不连库，但把 .env 与实例绑在模块顶层会让单测难写。）
+ */
+let prismaClient: PrismaClient | null = null;
+function getPrisma(): PrismaClient {
+  if (!prismaClient) {
+    loadEnv({ path: process.env.ENV_FILE || '.env' });
+    prismaClient = new PrismaClient();
+  }
+  return prismaClient;
+}
 
-const prisma = new PrismaClient();
 const shouldApply = process.argv.includes('--apply');
 
 type Logger = {
@@ -61,8 +74,14 @@ type Logger = {
 
 export interface DeliveryNutritionBackfillCounters {
   scanned: number;
+  /** 该补的都补上了（含"本来就没有报告"的 v2 快照） */
   alreadyComplete: number;
+  /** 快照里没有 nutrition，或食谱没有营养数据 */
   noSourceData: number;
+  /** 已经有 macros / reportRows，但**没有**冻结报告（数得出来才好核对） */
+  missingReport: number;
+  /** 交付后改过配方（当前数据与交付时冻结的宏量表对不上）→ 不补报告 */
+  conflicts: number;
   eligible: number;
   applied: number;
   errors: number;
@@ -105,6 +124,40 @@ interface SnapshotTarget {
   save: (nextSnapshot: unknown) => Promise<unknown>;
 }
 
+/**
+ * 宏量表的比较口径：只比"是什么数值"，不比行顺序/多余键。
+ * 任何一项对不上就说明这条食谱不是交付那一版了。
+ */
+function normalizeMacroRows(rows: unknown[]): string[] {
+  return rows
+    .filter((row): row is Record<string, unknown> => isRecord(row))
+    .map((row) =>
+      [
+        String(row.key ?? ''),
+        String(row.name ?? ''),
+        String(row.dryMatterLabel ?? ''),
+        String(row.energyPercentLabel ?? ''),
+        String(row.weightPercentLabel ?? ''),
+      ].join('|'),
+    );
+}
+
+/** 预演日志里给一行"补进去的报告有多大"，人工核对才有东西可看 */
+function describeReport(report: unknown): string {
+  if (!isRecord(report)) return '空';
+  const sections = isRecord(report.nutrientSections)
+    ? Object.values(report.nutrientSections).filter((section) => isRecord(section))
+    : [];
+  const nutrientRows = sections.reduce((sum, section) => {
+    const rows = (section as Record<string, unknown>).rows;
+    return sum + (Array.isArray(rows) ? rows.length : 0);
+  }, 0);
+  const ingredientRows = Array.isArray(report.ingredientRows)
+    ? report.ingredientRows.length
+    : 0;
+  return `${sections.length} 个分区 / ${nutrientRows} 行营养素 / ${ingredientRows} 行原料`;
+}
+
 export async function runDeliveryNutritionBackfill(input: {
   targets: SnapshotTarget[];
   apply: boolean;
@@ -115,6 +168,8 @@ export async function runDeliveryNutritionBackfill(input: {
     scanned: 0,
     alreadyComplete: 0,
     noSourceData: 0,
+    missingReport: 0,
+    conflicts: 0,
     eligible: 0,
     applied: 0,
     errors: 0,
@@ -137,6 +192,19 @@ export async function runDeliveryNutritionBackfill(input: {
         nutrition[key] !== null &&
         nutrition[key] !== undefined;
 
+      /**
+       * 快照结构版本（2026-11-08 起为 2）。
+       *
+       * v2 的语义是「交付时的事实」：`report: null` 表示这单当场就没有报告，
+       * **不能被回填成当前数据** —— 否则脚本会把一次性的历史修复
+       * 变成永久性的"用活行覆盖冻结值"。
+       */
+      const schemaVersion =
+        typeof (snapshot as Record<string, unknown>).schemaVersion === 'number'
+          ? ((snapshot as Record<string, unknown>).schemaVersion as number)
+          : 1;
+      const isLegacySnapshot = schemaVersion < 2;
+
       const macros = readDeliveryMacros(target.recipe?.nutritionDetailedData);
       const reportRows = readDeliveryMacroRows(
         target.recipe?.nutritionDetailedData,
@@ -149,18 +217,60 @@ export async function runDeliveryNutritionBackfill(input: {
       );
 
       /**
+       * 「交付后改过配方」的判定：快照里已冻结了交付当时的宏量表，
+       * 就拿食谱当前行重算一份跟它比。对不上 → 当前 ≠ 交付，
+       * 不能把当前报告写进这份快照（同一页会出现两张自相矛盾的表）。
+       */
+      const frozenReportRows = Array.isArray(nutrition.reportRows)
+        ? (nutrition.reportRows as unknown[])
+        : null;
+      const currentReportRows = readDeliveryMacroRows(
+        target.recipe?.nutritionDetailedData,
+      );
+      const recipeEditedAfterDelivery =
+        isLegacySnapshot &&
+        Boolean(frozenReportRows?.length) &&
+        Boolean(currentReportRows?.length) &&
+        JSON.stringify(normalizeMacroRows(frozenReportRows)) !==
+          JSON.stringify(normalizeMacroRows(currentReportRows));
+
+      if (recipeEditedAfterDelivery) {
+        counters.conflicts += 1;
+        logger.info(
+          `- ⚠️ 跳过报告（交付后改过配方，宏量表对不上）: ${target.label} · ${
+            target.recipe?.name ?? '食谱缺失'
+          }`,
+        );
+      }
+
+      /**
        * 只补**缺的且有源**的键：老快照缺 `report`、但食谱本来就没报告时
        * 一条都不写 —— 否则每跑一遍都会重写同一份快照，幂等性就没了。
        */
       const patches: Record<string, unknown> = {};
       if (!has('macros') && macros) patches.macros = macros;
       if (!has('reportRows') && reportRows) patches.reportRows = reportRows;
-      if (!has('report') && report) patches.report = report;
-      if (!has('scenario') && scenario) patches.scenario = scenario;
+      if (
+        isLegacySnapshot &&
+        !recipeEditedAfterDelivery &&
+        !has('report') &&
+        report
+      ) {
+        patches.report = report;
+      }
+      if (
+        isLegacySnapshot &&
+        !recipeEditedAfterDelivery &&
+        !has('scenario') &&
+        scenario
+      ) {
+        patches.scenario = scenario;
+      }
 
       if (Object.keys(patches).length === 0) {
         if (has('macros') || has('reportRows') || has('report')) {
           counters.alreadyComplete += 1;
+          if (!has('report')) counters.missingReport += 1;
         } else {
           counters.noSourceData += 1;
           logger.info(
@@ -180,7 +290,9 @@ export async function runDeliveryNutritionBackfill(input: {
         `- ${input.apply ? '补' : '将补'}: ${target.label} · ${
           target.recipe?.name ?? '食谱缺失'
         }${patches.macros ? `\n    ${formatMacros(patches.macros as SnapshotMacros)}` : ''}${
-          patches.report ? '\n    + 完整营养报告（整份冻结）' : ''
+          patches.report
+            ? `\n    + 完整营养报告（${describeReport(patches.report)}）`
+            : ''
         }`,
       );
 
@@ -196,7 +308,7 @@ export async function runDeliveryNutritionBackfill(input: {
   }
 
   logger.info(
-    `Summary: scanned=${counters.scanned}, alreadyComplete=${counters.alreadyComplete}, noSourceData=${counters.noSourceData}, eligible=${counters.eligible}, applied=${counters.applied}, errors=${counters.errors}`,
+    `Summary: scanned=${counters.scanned}, alreadyComplete=${counters.alreadyComplete}, noSourceData=${counters.noSourceData}, missingReport=${counters.missingReport}, conflicts=${counters.conflicts}, eligible=${counters.eligible}, applied=${counters.applied}, errors=${counters.errors}`,
   );
   return counters;
 }
@@ -205,7 +317,7 @@ export async function runDeliveryNutritionBackfill(input: {
  * 多份交付：快照在明细表 `custom_recipe_delivery_item`（每份食谱一条）。
  */
 async function collectItemTargets(): Promise<SnapshotTarget[]> {
-  const rows = await prisma.customRecipeDeliveryItem.findMany({
+  const rows = await getPrisma().customRecipeDeliveryItem.findMany({
     select: {
       id: true,
       contentSnapshot: true,
@@ -224,7 +336,7 @@ async function collectItemTargets(): Promise<SnapshotTarget[]> {
     contentSnapshot: row.contentSnapshot,
     recipe: row.recipe,
     save: (nextSnapshot) =>
-      prisma.customRecipeDeliveryItem.update({
+      getPrisma().customRecipeDeliveryItem.update({
         where: { id: row.id },
         data: { contentSnapshot: toJsonInput(nextSnapshot) },
       }),
@@ -236,7 +348,7 @@ async function collectItemTargets(): Promise<SnapshotTarget[]> {
  * 但历史/别库可能有，一并按同一口径补。
  */
 async function collectLegacyTargets(): Promise<SnapshotTarget[]> {
-  const rows = await prisma.customRecipeDelivery.findMany({
+  const rows = await getPrisma().customRecipeDelivery.findMany({
     select: {
       id: true,
       orderId: true,
@@ -254,7 +366,7 @@ async function collectLegacyTargets(): Promise<SnapshotTarget[]> {
     contentSnapshot: row.contentSnapshot,
     recipe: row.recipe,
     save: (nextSnapshot) =>
-      prisma.customRecipeDelivery.update({
+      getPrisma().customRecipeDelivery.update({
         where: { id: row.id },
         data: { contentSnapshot: toJsonInput(nextSnapshot) },
       }),
@@ -296,6 +408,6 @@ if (require.main === module) {
       process.exitCode = 1;
     })
     .finally(async () => {
-      await prisma.$disconnect();
+      await prismaClient?.$disconnect();
     });
 }

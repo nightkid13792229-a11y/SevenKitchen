@@ -118,7 +118,8 @@ describe('交付内容快照', () => {
     it('带上结构版本号 —— 将来改结构时老快照还能按老版本渲染', () => {
       const snapshot = buildDeliverySnapshot(input());
       expect(snapshot.schemaVersion).toBe(SNAPSHOT_SCHEMA_VERSION);
-      expect(SNAPSHOT_SCHEMA_VERSION).toBe(1);
+      // 2026-11-08：已升到 2（新增营养报告冻结；回填脚本据此区分「当时就没报告」）
+      expect(SNAPSHOT_SCHEMA_VERSION).toBe(2);
     });
 
     it('generatedAt 是可注入的（便于测试与回填时用真实交付时间）', () => {

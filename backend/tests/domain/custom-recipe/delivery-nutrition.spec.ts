@@ -230,6 +230,8 @@ describe('readDeliveryNutritionReport', () => {
       ],
       nutrientSections: {
         minerals: {
+          // 分区键一起冻结（报告页拿它当 v-for 的 key）
+          key: 'minerals',
           title: '微量元素',
           dryMatterHeader: '/100gDM',
           rows: [
@@ -246,6 +248,7 @@ describe('readDeliveryNutritionReport', () => {
           ],
         },
         aminoAcids: {
+          key: 'aminoAcids',
           title: '氨基酸',
           dryMatterHeader: '/100gDM',
           rows: [{ key: 'lysine', name: '赖氨酸', unit: 'g', currentLabel: '1.2' }],

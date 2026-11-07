@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { CustomRecipeStatus } from '@prisma/client';
 import { CustomRecipeDeliveryService } from '../../../src/application/custom-recipe/custom-recipe-delivery.service';
+import { SNAPSHOT_SCHEMA_VERSION } from '../../../src/domain/custom-recipe/custom-recipe.delivery';
 import { CustomRecipeConfigService } from '../../../src/application/custom-recipe/custom-recipe-config.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 
@@ -44,6 +45,41 @@ function buildRecipe(index: number, overrides: Record<string, unknown> = {}) {
     energyDensityKcalPerKg: 3620,
     productionLossRate: 1.07,
     nutritionStandard: 'FEDIAF_2025',
+    /**
+     * 2026-11-08：报告在交付时整份冻结，批量交付每份各冻各的。
+     * 这里给两份不同的原料名，用来证明"不是同一份内容被复用"。
+     */
+    nutritionDetailedData: {
+      standard: 'FEDIAF_2025',
+      scenario: 'EARLY_GROWTH_REPRODUCTION',
+      summary: { protein_dm_pct: 38.23 },
+      report: {
+        ingredientRows: [
+          {
+            ingredientName: index === 1 ? '第一份原料' : '第二份原料',
+            weightPercentLabel: '70%',
+          },
+        ],
+        macroRows: [
+          {
+            key: 'crudeProtein',
+            name: '蛋白质',
+            dryMatterLabel: '38.23%',
+            energyPercentLabel: '31.26%',
+            weightPercentLabel: '10.22%',
+          },
+        ],
+        energyDensityRows: [{ label: '每公斤配方', value: '3620 kcal/kg' }],
+        nutrientSections: {
+          minerals: {
+            key: 'minerals',
+            title: '微量元素',
+            dryMatterHeader: '/100gDM',
+            rows: [{ name: '钙', currentLabel: '2192' }],
+          },
+        },
+      },
+    },
     isCustomRecipe: true,
     customerOwnerId: 'customer-1',
     customerDogId: 'dog-1',
@@ -238,7 +274,9 @@ describe('CustomRecipeDeliveryService · 批量交付（多份）', () => {
       for (const item of itemsCreate.data) {
         expect(item.batchId).toBe('batch-1');
         expect(item.recipeVersion).toBe(1);
-        expect(item.contentSnapshot.schemaVersion).toBe(1);
+        expect(item.contentSnapshot.schemaVersion).toBe(
+          SNAPSHOT_SCHEMA_VERSION,
+        );
         expect(item.contentSnapshot.recipe.items).toHaveLength(2);
         expect(item.items).toEqual([
           'RECIPE',
@@ -254,6 +292,23 @@ describe('CustomRecipeDeliveryService · 批量交付（多份）', () => {
       );
       expect(itemsCreate.data[1].contentSnapshot.recipe.name).toBe(
         '多份食谱 2',
+      );
+
+      // ---- 2026-11-08：批量交付同样要冻结**各自**的完整营养报告 ----
+      const snapshot1 = itemsCreate.data[0].contentSnapshot;
+      const snapshot2 = itemsCreate.data[1].contentSnapshot;
+      expect(snapshot1.nutrition.report?.nutrientSections?.minerals?.rows?.[0]?.name).toBe(
+        '钙',
+      );
+      expect(snapshot2.nutrition.report?.nutrientSections?.minerals?.rows?.[0]?.name).toBe(
+        '钙',
+      );
+      // 两份报告不是同一份内容（名字能区分）
+      expect(snapshot1.nutrition.report?.ingredientRows?.[0]?.ingredientName).toBe(
+        '第一份原料',
+      );
+      expect(snapshot2.nutrition.report?.ingredientRows?.[0]?.ingredientName).toBe(
+        '第二份原料',
       );
 
       // ---- 订单：状态 + 交付时间 + 老字段兼容 ----

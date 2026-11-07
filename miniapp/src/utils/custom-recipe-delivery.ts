@@ -23,6 +23,7 @@ import type {
   DeliveryBatchContent,
   DeliveryBatchContentItem,
   DeliveryContent,
+  DeliveryNutritionReport,
   OrderDelivery,
 } from '../api/custom-recipe';
 
@@ -137,6 +138,53 @@ export function resolveDeliverySelection(
     recipeId: delivery.content?.recipe?.recipeId ?? null,
     recipeName: delivery.content?.recipe?.name ?? null,
     recipeCoverImageUrl: delivery.content?.recipe?.coverImageUrl ?? null,
+  };
+}
+
+/**
+ * 交付快照里有没有**冻结的营养报告**（2026-11-08）。
+ *
+ * 入口显不显示只由这一个判断决定：老快照没有 `report` 键、或者这单交付
+ * 本来就没有报告（`report: null`），都不显示 —— 顾客不该点进一个空页面。
+ *
+ * 抽成纯函数是为了**能被单测**：页面模板里写 `v-if="..."` 时，
+ * 只能靠断言源码字符串，改坏了测试照样绿（2026-11-08 审核实测）。
+ */
+export function hasFrozenNutritionReport(
+  content: DeliveryContent | null | undefined,
+): boolean {
+  const report = content?.nutrition?.report;
+  return Boolean(report && typeof report === 'object');
+}
+
+/** 报告页要渲染的那一份冻结报告 + 报告头要用的字段 */
+export interface FrozenNutritionReportSelection {
+  report: DeliveryNutritionReport;
+  recipeName: string;
+  standard: string | null;
+  scenario: string | null;
+}
+
+/**
+ * 从交付响应里取出这一份的冻结报告（2026-11-08）。
+ *
+ * 规则与页面选份一致：传 `recipeId` 命中那一份，没传就看第一份。
+ * 没有冻结报告 → `null`（页面据此显示「这份交付没有报告」，**不**退回活行）。
+ */
+export function selectFrozenNutritionReport(
+  delivery: CustomRecipeDeliveryResponse | null | undefined,
+  recipeId?: string | null,
+): FrozenNutritionReportSelection | null {
+  const selected = resolveDeliverySelection(delivery, recipeId);
+  const content = selected?.content;
+  const report = content?.nutrition?.report;
+  if (!content || !report) return null;
+
+  return {
+    report,
+    recipeName: content.recipe?.name || selected?.recipeName || '',
+    standard: content.nutrition?.standard ?? null,
+    scenario: content.nutrition?.scenario ?? null,
   };
 }
 

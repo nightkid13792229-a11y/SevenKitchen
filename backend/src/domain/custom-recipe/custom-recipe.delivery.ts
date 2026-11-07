@@ -172,6 +172,13 @@ export interface SnapshotNutritionReportRow {
 }
 
 export interface SnapshotNutrientSection {
+  /**
+   * 分区键（minerals / vitamins / aminoAcids / fattyAcids）。
+   *
+   * 报告页拿它当 `v-for` 的 key —— 不冻结就会渲染出四个 `undefined`，
+   * 分区一变 Vue 认不出是谁（2026-11-08 审核发现）。
+   */
+  key?: string;
   title: string;
   dryMatterHeader: string;
   rows: SnapshotNutritionReportRow[];
@@ -265,8 +272,17 @@ export interface DeliveryContentSnapshot {
   generatedAt: string;
 }
 
-/** 当前快照结构版本。改结构时 +1，并在渲染端保留对旧版本的支持。 */
-export const SNAPSHOT_SCHEMA_VERSION = 1;
+/**
+ * 当前快照结构版本。改结构时 +1，并在渲染端保留对旧版本的支持。
+ *
+ * ## 2（2026-11-08）：营养报告整份冻结
+ *
+ * 渲染端不看这个版本号（新字段都是可选的，老快照照样渲染），
+ * **回填脚本看**：v2 起「有没有报告」是交付时的事实 ——
+ * `report: null` 表示"这单交付当场就没有报告"，
+ * 不能再被回填脚本按"缺字段"补成当前数据。
+ */
+export const SNAPSHOT_SCHEMA_VERSION = 2;
 
 // ==================== 组装 ====================
 
@@ -293,8 +309,9 @@ export interface BuildSnapshotInput {
  * ## 三条口径
  *
  * **一、只放渲染需要的字段。**
- * 完整的营养评估明细有几百个营养项、几十 KB —— 那是"报告页"按需再查的东西，
- * 不该塞进每一条交付记录里。
+ * 营养报告（2026-11-08 起）是**整份冻结**的：私密定制食谱原地更新，
+ * 按需再查只能查到改后的数据。实测报告序列化后十几 KB，
+ * 且只保留渲染字段（见 `delivery-nutrition.ts` 的白名单）。
  *
  * **二、缺失就给 null，不给 0。**
  * `0 g` 和"没填"是两回事：前者会让顾客以为"这道食谱不含脂肪"。

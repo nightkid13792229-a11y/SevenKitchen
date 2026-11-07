@@ -279,7 +279,9 @@ export class RecipeDraftPort {
       : [];
 
     return {
-      isCompliant: Boolean(assessment.isCompliant),
+      isCompliant:
+        assessment.isCompliant === true ||
+        String(assessment.overallStatus ?? '').toUpperCase() === 'COMPLIANT',
       contentRevision: Number(result?.contentRevision ?? 0),
       totalEnergyKcal: toNumber(assessment.totalEnergyKcal),
       counts: {

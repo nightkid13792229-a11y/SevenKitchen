@@ -123,21 +123,26 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
     return Reimbursement.fromPrisma(complete!);
   }
 
-  async save(reimbursement: Reimbursement): Promise<Reimbursement> {
+  async save(
+    reimbursement: Reimbursement,
+    client?: unknown,
+  ): Promise<Reimbursement> {
+    const db = (client as PrismaService | undefined) ?? this.prisma;
+
     // 保存报销单（不包含关联的purchaseLists，因为这需要单独更新）
-    const saved = await this.upsertReimbursement(this.prisma, reimbursement);
+    const saved = await this.upsertReimbursement(db, reimbursement);
 
     // 关联采购清单（如果是新建的）
     await Promise.all(
       reimbursement.purchaseLists.map((list) =>
-        this.prisma.purchaseList.update({
+        db.purchaseList.update({
           where: { id: list.id },
           data: { reimbursementId: saved.id },
         }),
       ),
     );
 
-    return this.findCompleteReimbursement(this.prisma, saved.id);
+    return this.findCompleteReimbursement(db, saved.id);
   }
 
   async saveWithPurchaseListReplacement(

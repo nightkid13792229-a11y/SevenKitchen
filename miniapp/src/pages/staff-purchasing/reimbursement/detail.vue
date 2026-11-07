@@ -875,7 +875,22 @@ const waitingText = computed(() => {
 });
 
 const revertedNotice = computed(() => {
-  if (!isPending.value || !reimbursement.value?.reviewedAt) {
+  if (!isPending.value) {
+    return '';
+  }
+
+  // 优先读事件表里最后一条撤销记录（老单据没有事件时退回 reviewComment）
+  const lastRevert = [...reviewEvents.value]
+    .reverse()
+    .find((event: any) => event.action === 'REVERT');
+
+  if (lastRevert) {
+    return lastRevert.comment
+      ? `上次审核已撤销：${lastRevert.comment}`
+      : '上次审核已撤销';
+  }
+
+  if (!reimbursement.value?.reviewedAt) {
     return '';
   }
 
@@ -1161,8 +1176,51 @@ const receiptPhotos = computed<Array<{ url: string; removableIndex: number }>>((
 
 /* ---------------- 审核记录 ---------------- */
 
+const reviewEventLabels: Record<string, string> = {
+  SUBMIT: '员工提交',
+  RESUBMIT: '员工重新提交',
+  APPROVE: '审核通过',
+  REJECT: '已驳回',
+  REQUIRE_RESUBMIT: '要求补充后重提',
+  REVERT: '审核已撤销',
+};
+
+const reviewEvents = computed<any[]>(() => {
+  const events = reimbursement.value?.reviewEvents;
+  return Array.isArray(events) ? events : [];
+});
+
 const timeline = computed(() => {
   const items: Array<{ title: string; desc: string; tone: string }> = [];
+
+  // 2026-11-07：有事件表就读真实记录；老单据没有事件，退回用当前状态拼一条
+  if (reviewEvents.value.length > 0) {
+    const eventItems = reviewEvents.value.map((event: any) => ({
+      title: reviewEventLabels[event.action] || event.action,
+      desc: `${event.actorName || '-'} · ${formatFullDateTime(event.createdAt)}${
+        event.comment ? ` · ${event.comment}` : ''
+      }`,
+      tone:
+        event.action === 'APPROVE'
+          ? 'done'
+          : event.action === 'REJECT'
+            ? 'danger'
+            : event.action === 'REVERT'
+              ? 'pending'
+              : 'done',
+    }));
+
+    // 老单据没有「提交」事件：补在最前面，保证时间线是从提交开始的
+    if (!reviewEvents.value.some((event: any) => event.action === 'SUBMIT')) {
+      eventItems.unshift({
+        title: '员工提交',
+        desc: `${submitterName.value} · ${formatFullDateTime(reimbursement.value?.submittedAt)}`,
+        tone: 'done',
+      });
+    }
+
+    return eventItems;
+  }
 
   items.push({
     title: '员工提交',

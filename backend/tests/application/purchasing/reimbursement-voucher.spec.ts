@@ -25,12 +25,22 @@ describe('ReimbursementService — 凭证金额与费用归属（2026-11-04）',
     getAllowedReceiptKeys: jest.fn(),
   };
 
+  const prisma: any = {
+    $transaction: jest.fn(async (fn: any) => fn(prisma)),
+    user: { findUnique: jest.fn().mockResolvedValue({ nickname: '管理员' }) },
+    reimbursementReviewEvent: {
+      create: jest.fn().mockResolvedValue({}),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+  };
+
   const service = new ReimbursementService(
     repo,
     listRepo,
     cos,
     pricing,
     importService,
+    prisma,
   );
 
   const dailyList = {

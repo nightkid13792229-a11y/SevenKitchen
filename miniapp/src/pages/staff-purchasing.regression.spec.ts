@@ -116,6 +116,13 @@ describe('staff reimbursement detail guardrails', () => {
     expect(reimbursementDetailSource).not.toContain('月成本影响');
   });
 
+  it('reads the real review events instead of rebuilding history from status', () => {
+    expect(reimbursementDetailSource).toContain('reviewEvents');
+    expect(reimbursementDetailSource).toContain('reviewEventLabels');
+    expect(reimbursementDetailSource).toContain("action === 'REVERT'");
+    expect(reimbursementDetailSource).toContain('处理进度');
+  });
+
   it('does not promise that held price changes will take effect', () => {
     // 价格闸挂起（HOLD）的项通过后不会生效，页面必须分开说
     expect(reimbursementDetailSource).toContain('autoApprovalEligible');

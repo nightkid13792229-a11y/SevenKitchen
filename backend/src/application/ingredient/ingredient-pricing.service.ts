@@ -77,6 +77,13 @@ interface DecimalLike {
   toNumber(): number;
 }
 
+/**
+ * 事务客户端的最小形状（2026-11-07）。
+ * Prisma 的 TransactionClient 与 PrismaService 在这几张表上的方法一致，
+ * 这里只用来把「状态 + 价格」放进同一个事务，不做类型级联。
+ */
+type TransactionClientLike = any;
+
 interface IngredientPriceChangeRecord {
   id: string;
   ingredientId: string;
@@ -265,8 +272,10 @@ export class IngredientPricingService {
     reimbursementId: string,
     reviewerId?: string | null,
     reviewComment?: string,
+    client?: TransactionClientLike,
   ): Promise<IngredientPriceChangeView[]> {
-    const pendingChanges = await this.prisma.ingredientPriceChange.findMany({
+    const db = (client as PrismaService | undefined) ?? this.prisma;
+    const pendingChanges = await db.ingredientPriceChange.findMany({
       where: {
         reimbursementId,
         status: 'PENDING',
@@ -284,6 +293,8 @@ export class IngredientPricingService {
       pendingChanges,
       reviewerId ?? null,
       reviewComment ?? null,
+      new Set(),
+      client,
     );
 
     this.logger.log(
@@ -330,9 +341,12 @@ export class IngredientPricingService {
     reimbursementId: string,
     reviewerId?: string | null,
     reviewComment?: string,
+    client?: TransactionClientLike,
   ): Promise<void> {
+    const db = (client as PrismaService | undefined) ?? this.prisma;
+
     const pendingOrApprovedChanges =
-      await this.prisma.ingredientPriceChange.findMany({
+      await db.ingredientPriceChange.findMany({
         where: {
           reimbursementId,
           status: {
@@ -352,7 +366,7 @@ export class IngredientPricingService {
       (change) => change.status === 'APPROVED',
     ) as IngredientPriceChangeRecord[];
 
-    await this.prisma.ingredientPriceChange.updateMany({
+    await db.ingredientPriceChange.updateMany({
       where: {
         reimbursementId,
         status: {
@@ -371,6 +385,7 @@ export class IngredientPricingService {
       await this.restorePricesAfterRejectedApproval(
         reimbursementId,
         approvedChanges,
+        client,
       );
     }
   }
@@ -387,8 +402,11 @@ export class IngredientPricingService {
   async revertApprovedChangesForReimbursement(
     reimbursementId: string,
     operatorId?: string | null,
+    client?: TransactionClientLike,
   ): Promise<void> {
-    const approvedChanges = (await this.prisma.ingredientPriceChange.findMany({
+    const db = (client as PrismaService | undefined) ?? this.prisma;
+
+    const approvedChanges = (await db.ingredientPriceChange.findMany({
       where: {
         reimbursementId,
         status: 'APPROVED',
@@ -406,20 +424,29 @@ export class IngredientPricingService {
     await this.restorePricesAfterRejectedApproval(
       reimbursementId,
       approvedChanges,
+      client,
     );
 
     // 2. 回退本身也是一次价格变化，必须补一条成本流水，
     //    否则「成本历史」会停在应用后的价，和当前价对不上（2026-11-07 复审 P0）
-    await this.recordRevertCostHistory(reimbursementId, approvedChanges);
+    await this.recordRevertCostHistory(
+      reimbursementId,
+      approvedChanges,
+      client,
+    );
 
     // 3. 采购商品（SKU）价退回本单应用前的值。
     //    当初通过时既写了原料价、也写了 SKU 价；只退原料价会让采购执行价停在新的。
-    await this.rollbackProcurementSkuPrices(reimbursementId, operatorId);
+    await this.rollbackProcurementSkuPrices(
+      reimbursementId,
+      operatorId,
+      client,
+    );
 
     // 4. 变更回到待确认，并把「新价」恢复成来源单价
     //    （通过时 proposed 被改写成加权应用价，不复位会让表格里「新价/涨跌」自相矛盾）
     for (const change of approvedChanges) {
-      await this.prisma.ingredientPriceChange.update({
+      await db.ingredientPriceChange.update({
         where: { id: change.id },
         data: {
           status: 'PENDING',
@@ -444,14 +471,17 @@ export class IngredientPricingService {
   private async recordRevertCostHistory(
     reimbursementId: string,
     changes: IngredientPriceChangeRecord[],
+    client?: TransactionClientLike,
   ): Promise<void> {
+    const db = (client as PrismaService | undefined) ?? this.prisma;
     const byIngredient = new Map<string, IngredientPriceChangeRecord>();
+
     for (const change of changes) {
       byIngredient.set(change.ingredientId, change);
     }
 
     for (const [ingredientId, change] of byIngredient.entries()) {
-      const ingredient = await this.prisma.ingredient.findUnique({
+      const ingredient = await db.ingredient.findUnique({
         where: { id: ingredientId },
         select: { currentPricePerPurchaseUnit: true },
       });
@@ -487,6 +517,7 @@ export class IngredientPricingService {
         reimbursementId,
         purchaseRecordId: change.purchaseRecordId,
         note: '审核撤销，价格回退',
+        tx: client,
       });
     }
   }
@@ -495,8 +526,11 @@ export class IngredientPricingService {
   private async rollbackProcurementSkuPrices(
     reimbursementId: string,
     operatorId?: string | null,
+    client?: TransactionClientLike,
   ): Promise<void> {
-    const historyRows = await this.prisma.procurementSkuPriceHistory.findMany({
+    const db = (client as PrismaService | undefined) ?? this.prisma;
+
+    const historyRows = await db.procurementSkuPriceHistory.findMany({
       where: {
         reimbursementId,
         source: 'REIMBURSEMENT',
@@ -546,6 +580,7 @@ export class IngredientPricingService {
           rollbackFromHistoryId: row.id,
           operatorId: operatorId ?? null,
           note: '审核撤销，价格回退',
+          client,
         },
       );
     }
@@ -636,10 +671,14 @@ export class IngredientPricingService {
      * **不解除**「必须为正」和「5 倍离谱」——那两条是防录错的，人不该拍脑袋放行。
      */
     forceApplyIds: Set<string> = new Set(),
+    /** 传了事务客户端就全程走同一个事务：状态与价格必须一起成功或一起失败 */
+    client?: TransactionClientLike,
   ): Promise<void> {
     if (changes.length === 0) {
       return;
     }
+
+    const db = (client as PrismaService | undefined) ?? this.prisma;
 
     const ingredientCurrentAccumulator = new Map<string, WeightedAccumulator>();
     const procurementSkuCurrentAccumulator = new Map<
@@ -684,7 +723,7 @@ export class IngredientPricingService {
     );
     const procurementSkus =
       procurementSkuIds.length > 0
-        ? await this.prisma.procurementSku.findMany({
+        ? await db.procurementSku.findMany({
             where: {
               id: {
                 in: procurementSkuIds,
@@ -858,6 +897,7 @@ export class IngredientPricingService {
         reimbursementId: change?.reimbursementId ?? null,
         purchaseRecordId: change?.purchaseRecordId ?? null,
         note: '报销凭证确认后自动更新',
+        client,
       });
     }
 
@@ -878,6 +918,7 @@ export class IngredientPricingService {
             purchaseRecordIds.length === 1 ? purchaseRecordIds[0] : null,
           operatorId: reviewerId,
           note: reviewComment ?? '报销凭证确认后自动更新',
+          client,
         },
       );
     }
@@ -893,7 +934,7 @@ export class IngredientPricingService {
 
       // 挂起：价格不写，状态保持待确认，只记下原因等人工放行
       if (gateResult?.action === 'HOLD') {
-        await this.prisma.ingredientPriceChange.update({
+        await db.ingredientPriceChange.update({
           where: { id: change.id },
           data: {
             gateAction: 'HOLD',
@@ -905,7 +946,7 @@ export class IngredientPricingService {
 
       // 拒绝：标记拒绝并留下原因，绝不写库
       if (!gateResult || gateResult.action === 'REJECT') {
-        await this.prisma.ingredientPriceChange.update({
+        await db.ingredientPriceChange.update({
           where: { id: change.id },
           data: {
             status: 'REJECTED',
@@ -925,7 +966,7 @@ export class IngredientPricingService {
 
       // 2026-11-06：生效价与当前价合并成一个字段，这里三个列写同一个值，
       // 只为兼容还没删掉的旧列（阶段 C 会一起删）。
-      await this.prisma.ingredientPriceChange.update({
+      await db.ingredientPriceChange.update({
         where: { id: change.id },
         data: {
           proposedEffectivePrice: appliedCurrentPrice,
@@ -947,65 +988,40 @@ export class IngredientPricingService {
   private async restorePricesAfterRejectedApproval(
     reimbursementId: string,
     approvedChanges: IngredientPriceChangeRecord[],
+    client?: TransactionClientLike,
   ): Promise<void> {
-    const fallbackApprovedByIngredient = new Map<
-      string,
-      IngredientPriceChangeRecord
-    >();
+    const db = (client as PrismaService | undefined) ?? this.prisma;
+    const fallbackByIngredient = new Map<string, IngredientPriceChangeRecord>();
 
     for (const change of approvedChanges) {
-      fallbackApprovedByIngredient.set(change.ingredientId, change);
+      fallbackByIngredient.set(change.ingredientId, change);
     }
 
-    for (const [
-      ingredientId,
-      fallbackChange,
-    ] of fallbackApprovedByIngredient.entries()) {
-      const latestApproved = (await this.prisma.ingredientPriceChange.findFirst(
-        {
-          where: {
-            ingredientId,
-            status: 'APPROVED',
-            reimbursementId: {
-              not: reimbursementId,
-            },
-          },
-          orderBy: [{ reviewedAt: 'desc' }, { createdAt: 'desc' }],
+    for (const [ingredientId, fallbackChange] of fallbackByIngredient.entries()) {
+      // 同一原料可能被别的单子之后又改过价：优先退到「最新一条别单的应用价」
+      const latestApproved = (await db.ingredientPriceChange.findFirst({
+        where: {
+          ingredientId,
+          status: 'APPROVED',
+          reimbursementId: { not: reimbursementId },
         },
-      )) as IngredientPriceChangeRecord | null;
+        orderBy: [{ reviewedAt: 'desc' }, { createdAt: 'desc' }],
+      })) as IngredientPriceChangeRecord | null;
 
-      const restoredCurrentPrice =
-        latestApproved?.appliedCurrentPricePerPurchaseUnit?.toNumber() ??
-        fallbackChange.previousCurrentPricePerPurchaseUnit.toNumber();
-
-      await this.ingredientRepository.update(ingredientId, {
-        currentPricePerPurchaseUnit: restoredCurrentPrice,
-      });
-    }
-
-    for (const [
-      ingredientId,
-      fallbackChange,
-    ] of fallbackApprovedByIngredient.entries()) {
-      const latestApproved = (await this.prisma.ingredientPriceChange.findFirst(
-        {
-          where: {
-            ingredientId,
-            status: 'APPROVED',
-            reimbursementId: {
-              not: reimbursementId,
-            },
-          },
-          orderBy: [{ reviewedAt: 'desc' }, { createdAt: 'desc' }],
-        },
-      )) as IngredientPriceChangeRecord | null;
-
-      // 2026-11-06：只剩一个价格字段，回滚也就是回滚「当前价」
       const restoredPrice =
         latestApproved?.appliedCurrentPricePerPurchaseUnit?.toNumber() ??
         fallbackChange.previousCurrentPricePerPurchaseUnit.toNumber();
 
-      if (Number.isFinite(restoredPrice) && restoredPrice > 0) {
+      if (!Number.isFinite(restoredPrice) || restoredPrice <= 0) {
+        continue;
+      }
+
+      if (client) {
+        await (client as any).ingredient.update({
+          where: { id: ingredientId },
+          data: { currentPricePerPurchaseUnit: restoredPrice },
+        });
+      } else {
         await this.ingredientRepository.update(ingredientId, {
           currentPricePerPurchaseUnit: restoredPrice,
         });
@@ -1279,10 +1295,19 @@ export class IngredientPricingService {
     reimbursementId: string | null;
     purchaseRecordId: string | null;
     note: string | null;
+    client?: TransactionClientLike;
   }): Promise<void> {
-    await this.ingredientRepository.update(params.ingredientId, {
-      currentPricePerPurchaseUnit: params.nextCost,
-    });
+    if (params.client) {
+      // 事务内：走事务客户端，和单据状态一起提交/回滚
+      await (params.client as any).ingredient.update({
+        where: { id: params.ingredientId },
+        data: { currentPricePerPurchaseUnit: params.nextCost },
+      });
+    } else {
+      await this.ingredientRepository.update(params.ingredientId, {
+        currentPricePerPurchaseUnit: params.nextCost,
+      });
+    }
 
     await this.costHistory.record({
       ingredientId: params.ingredientId,
@@ -1292,6 +1317,7 @@ export class IngredientPricingService {
       reimbursementId: params.reimbursementId,
       purchaseRecordId: params.purchaseRecordId,
       note: params.note,
+      tx: params.client,
     });
   }
 

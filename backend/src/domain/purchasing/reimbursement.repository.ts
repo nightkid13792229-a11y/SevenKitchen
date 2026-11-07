@@ -8,8 +8,10 @@ import { Reimbursement, ReimbursementStatus } from './index';
 export interface ReimbursementRepository {
   /**
    * 创建报销单
+   *
+   * 传 client（事务）时所有写入都走同一个事务，用于「状态 + 价格」必须一起成功/失败的场景。
    */
-  save(reimbursement: Reimbursement): Promise<Reimbursement>;
+  save(reimbursement: Reimbursement, client?: unknown): Promise<Reimbursement>;
 
   /**
    * 保存报销单并在同一事务中替换关联采购清单

@@ -8,6 +8,7 @@ import { ORDER_REPOSITORY } from '../../../src/application/order/order.service';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from '../../../src/application/order/order.service';
 import { ReimbursementService } from '../../../src/application/purchasing/reimbursement.service';
 import { PurchaseOrderImportService } from '../../../src/application/purchasing/purchase-order-import.service';
+import { PrismaService } from '../../../src/infrastructure/prisma.service';
 import {
   PURCHASE_LIST_REPOSITORY,
   REIMBURSEMENT_REPOSITORY,
@@ -52,6 +53,16 @@ describe('ReimbursementService', () => {
     getAllowedReceiptKeys: jest.fn(),
   } as any;
 
+  // 2026-11-07：审核/撤销改成事务 + 事件表，这里给一个能跑通事务的假 prisma
+  const mockPrisma: any = {
+    $transaction: jest.fn(async (fn: any) => fn(mockPrisma)),
+    user: { findUnique: jest.fn().mockResolvedValue({ nickname: '管理员' }) },
+    reimbursementReviewEvent: {
+      create: jest.fn().mockResolvedValue({}),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+  };
+
   const mockIngredientPricingService = {
     getPriceChangesForReimbursement: jest.fn(),
     syncPendingChangesForReimbursement: jest.fn(),
@@ -93,6 +104,10 @@ describe('ReimbursementService', () => {
           provide: PurchaseOrderImportService,
           useValue: mockPurchaseOrderImportService,
         },
+        {
+          provide: PrismaService,
+          useValue: mockPrisma,
+        },
       ],
     }).compile();
 
@@ -123,6 +138,10 @@ describe('ReimbursementService', () => {
     mockIngredientPricingService.rejectChangesForReimbursement.mockResolvedValue(
       undefined,
     );
+    mockIngredientPricingService.revertApprovedChangesForReimbursement.mockResolvedValue(
+      undefined,
+    );
+    mockPrisma.reimbursementReviewEvent.create.mockResolvedValue({});
     mockPurchaseListRepository.clearReimbursementId.mockResolvedValue(
       undefined,
     );
@@ -352,7 +371,23 @@ describe('ReimbursementService', () => {
 
     expect(
       mockIngredientPricingService.applyApprovedChangesForReimbursement,
-    ).toHaveBeenCalledWith('reimbursement-1', 'admin-1', '已报销');
+    ).toHaveBeenCalledWith(
+      'reimbursement-1',
+      'admin-1',
+      '已报销',
+      expect.anything(),
+    );
+
+    // 2026-11-07：审核动作要留事件，供「处理进度」还原
+    expect(mockPrisma.reimbursementReviewEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          reimbursementId: 'reimbursement-1',
+          action: 'APPROVE',
+          actorId: 'admin-1',
+        }),
+      }),
+    );
     expect(mockOrderRepository.findById).not.toHaveBeenCalled();
     expect(mockOrderRepository.save).not.toHaveBeenCalled();
     expect(mockStatusHistoryRepository.append).not.toHaveBeenCalled();
@@ -376,6 +411,41 @@ describe('ReimbursementService', () => {
     expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
   });
 
+  it('应用价格失败时整体回滚，不会留下「已报销但价格没生效」', async () => {
+    const reimbursement = createPendingReviewReimbursement();
+    reimbursement.paymentProofUrls.push('https://example.com/proof-1.jpg');
+    mockReimbursementRepository.findById.mockResolvedValue(reimbursement);
+    mockIngredientPricingService.applyApprovedChangesForReimbursement.mockRejectedValue(
+      new Error('price apply failed'),
+    );
+
+    await expect(
+      service.reviewReimbursement('reimbursement-1', 'admin-1', {
+        decision: 'APPROVE',
+      }),
+    ).rejects.toThrow('price apply failed');
+
+    // 价格没应用成功，单据就不能被存成已报销
+    expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
+    expect(mockPrisma.reimbursementReviewEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('撤销时价格回退失败，整体回滚（单据仍是已报销）', async () => {
+    const reimbursement = createPendingReviewReimbursement();
+    reimbursement.review('admin-1', 'APPROVE', '同意');
+    reimbursement.paymentProofUrls.push('https://example.com/proof-1.jpg');
+    mockReimbursementRepository.findById.mockResolvedValue(reimbursement);
+    mockIngredientPricingService.revertApprovedChangesForReimbursement.mockRejectedValue(
+      new Error('revert failed'),
+    );
+
+    await expect(
+      service.revertReimbursement('reimbursement-1', 'admin-1'),
+    ).rejects.toThrow('revert failed');
+
+    expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
+  });
+
   it('reverts an approved reimbursement back to pending within 24h', async () => {
     const reimbursement = createPendingReviewReimbursement();
     reimbursement.review('admin-1', 'APPROVE', '同意');
@@ -390,7 +460,17 @@ describe('ReimbursementService', () => {
 
     expect(
       mockIngredientPricingService.revertApprovedChangesForReimbursement,
-    ).toHaveBeenCalledWith('reimbursement-1', 'admin-1');
+    ).toHaveBeenCalledWith('reimbursement-1', 'admin-1', expect.anything());
+    expect(mockPrisma.reimbursementReviewEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          reimbursementId: 'reimbursement-1',
+          action: 'REVERT',
+          actorId: 'admin-1',
+          comment: '金额录错了',
+        }),
+      }),
+    );
     expect(result.status).toBe(ReimbursementStatus.PENDING_REVIEW);
     expect(result.reviewComment).toBe('审核已撤销：金额录错了');
     // 保留上次审核人和时间，页面要显示「上次审核」

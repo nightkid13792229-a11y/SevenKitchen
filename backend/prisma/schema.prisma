@@ -2539,6 +2539,7 @@ model Reimbursement {
   priceChanges         IngredientPriceChange[]
   purchaseLists        PurchaseList[]
   reviews              ReimbursementReview[]
+  reviewEvents         ReimbursementReviewEvent[]
   paidBy               User?                   @relation("ReimbursementPayer", fields: [paidById], references: [id], onDelete: SetNull)
   reviewedBy           User?                   @relation("ReimbursementReviewer", fields: [reviewedById], references: [id])
   submittedBy          User                    @relation("ReimbursementSubmitter", fields: [submittedById], references: [id])
@@ -5800,6 +5801,38 @@ enum PurchaseOrderImportMatchSource {
 
 /// 报销单的 AI 审核建议（2026-11-04 阶段 E）
 /// 规则 + 模型摘要；只做建议，最终由管理员决定。
+/// 报销单审核事件（2026-11-07）
+///
+/// 只追加、不改写：谁的、什么时候、做了什么决定。
+/// 「处理进度」读这张表，而不是拿当前状态反推——状态会被下一次操作覆盖，
+/// 事件不会。
+model ReimbursementReviewEvent {
+  id              String                        @id @default(uuid()) @db.VarChar(36)
+  reimbursementId String                        @map("reimbursement_id") @db.VarChar(36)
+  action          ReimbursementReviewEventAction
+  actorId         String?                       @map("actor_id") @db.VarChar(36)
+  /// 操作人昵称快照：用户改名后仍要能解释历史
+  actorName       String?                       @map("actor_name") @db.VarChar(64)
+  fromStatus      ReimbursementStatus?          @map("from_status")
+  toStatus        ReimbursementStatus?          @map("to_status")
+  comment         String?                       @db.VarChar(200)
+  createdAt       DateTime                      @default(now()) @map("created_at")
+
+  reimbursement Reimbursement @relation(fields: [reimbursementId], references: [id], onDelete: Cascade)
+
+  @@index([reimbursementId, createdAt])
+  @@map("reimbursement_review_event")
+}
+
+enum ReimbursementReviewEventAction {
+  SUBMIT
+  RESUBMIT
+  APPROVE
+  REJECT
+  REQUIRE_RESUBMIT
+  REVERT
+}
+
 model ReimbursementReview {
   id              String                   @id @default(uuid()) @db.VarChar(36)
   reimbursementId String                   @map("reimbursement_id") @db.VarChar(36)

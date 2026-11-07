@@ -161,6 +161,8 @@ export interface ApplyProcurementSkuPriceOptions {
   rollbackFromHistoryId?: string | null;
   operatorId?: string | null;
   note?: string | null;
+  /** 传了事务客户端就并入外层事务（撤销审核时价格与状态必须一起成功） */
+  client?: any;
 }
 
 const normalizeOptionalText = (
@@ -1199,7 +1201,9 @@ export class ProcurementSkuService {
     const nextPrice = this.roundPrice(currentPurchasePrice);
     this.assertValidPrice(nextPrice);
 
-    const existing = await this.prisma.procurementSku.findUnique({
+    const db = (options.client as any) ?? this.prisma;
+
+    const existing = await db.procurementSku.findUnique({
       where: { id },
       select: {
         id: true,
@@ -1240,9 +1244,11 @@ export class ProcurementSkuService {
       return row;
     };
 
-    const updated = (await (this.prisma.$transaction as any)(
-      applyPrice,
-    )) as ProcurementSkuRecord;
+    const updated = (options.client
+      ? await (applyPrice(options.client) as Promise<ProcurementSkuRecord>)
+      : ((await (this.prisma.$transaction as any)(
+          applyPrice,
+        )) as ProcurementSkuRecord)) as ProcurementSkuRecord;
 
     return toSummary(updated);
   }

@@ -18,6 +18,7 @@ import {
 import type { ReimbursementRepository } from '../../domain/purchasing/reimbursement.repository';
 import type { PurchaseListRepository } from '../../domain/purchasing/purchase-list.repository';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
+import { PrismaService } from '../../infrastructure/prisma.service';
 import { IngredientPricingService } from '../ingredient/ingredient-pricing.service';
 import { PurchaseOrderImportService } from './purchase-order-import.service';
 import {
@@ -75,7 +76,54 @@ export class ReimbursementService {
     private readonly cosService: TencentCosService,
     private readonly ingredientPricingService: IngredientPricingService,
     private readonly purchaseOrderImportService: PurchaseOrderImportService,
+    private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * 记一条审核事件（2026-11-07）
+   * 只追加不改写：状态会被下一次操作覆盖，事件不会。
+   */
+  private async recordReviewEvent(
+    db: { user: any; reimbursementReviewEvent: any },
+    params: {
+      reimbursementId: string;
+      action:
+        | 'SUBMIT'
+        | 'RESUBMIT'
+        | 'APPROVE'
+        | 'REJECT'
+        | 'REQUIRE_RESUBMIT'
+        | 'REVERT';
+      actorId?: string | null;
+      fromStatus?: ReimbursementStatus | null;
+      toStatus?: ReimbursementStatus | null;
+      comment?: string | null;
+    },
+  ): Promise<void> {
+    let actorName: string | null = null;
+
+    if (params.actorId) {
+      const actor = await db.user
+        .findUnique({
+          where: { id: params.actorId },
+          select: { nickname: true },
+        })
+        .catch(() => null);
+      actorName = actor?.nickname ?? null;
+    }
+
+    await db.reimbursementReviewEvent.create({
+      data: {
+        reimbursementId: params.reimbursementId,
+        action: params.action,
+        actorId: params.actorId ?? null,
+        actorName,
+        fromStatus: params.fromStatus ?? null,
+        toStatus: params.toStatus ?? null,
+        comment: params.comment ? params.comment.slice(0, 200) : null,
+      },
+    });
+  }
 
   /**
    * 生成报销单号
@@ -339,6 +387,13 @@ export class ReimbursementService {
       saved.id,
     );
 
+    await this.recordReviewEvent(this.prisma, {
+      reimbursementId: saved.id,
+      action: 'SUBMIT',
+      actorId: reimbursement.submittedById,
+      toStatus: saved.status,
+    });
+
     this.logger.log(
       `Reimbursement ${saved.id} (${claimNumber}) submitted successfully`,
     );
@@ -381,25 +436,48 @@ export class ReimbursementService {
       `Reviewer ${reviewerId} reviewing reimbursement ${id} with decision: ${dto.decision}`,
     );
 
-    // 处理报销单
+    const fromStatus = reimbursement.status;
     reimbursement.review(reviewerId, dto.decision, dto.comment);
+    const toStatus = reimbursement.status;
 
-    // 保存报销单
-    const saved = await this.reimbursementRepository.save(reimbursement);
+    // 2026-11-07 复审：状态和价格必须一起成功/失败。
+    // 以前是「先存 REIMBURSED、再应用价格」，应用失败会留下「已报销但价格没生效」。
+    const saved = await this.prisma.$transaction(
+      async (tx) => {
+        if (dto.decision === 'APPROVE') {
+          await this.ingredientPricingService.applyApprovedChangesForReimbursement(
+            id,
+            reviewerId,
+            dto.comment,
+            tx,
+          );
+        } else {
+          await this.ingredientPricingService.rejectChangesForReimbursement(
+            id,
+            reviewerId,
+            dto.comment,
+            tx,
+          );
+        }
 
-    if (dto.decision === 'APPROVE') {
-      await this.ingredientPricingService.applyApprovedChangesForReimbursement(
-        saved.id,
-        reviewerId,
-        dto.comment,
-      );
-    } else {
-      await this.ingredientPricingService.rejectChangesForReimbursement(
-        saved.id,
-        reviewerId,
-        dto.comment,
-      );
-    }
+        await this.recordReviewEvent(tx, {
+          reimbursementId: id,
+          action:
+            dto.decision === 'APPROVE'
+              ? 'APPROVE'
+              : dto.decision === 'REJECT'
+                ? 'REJECT'
+                : 'REQUIRE_RESUBMIT',
+          actorId: reviewerId,
+          fromStatus,
+          toStatus,
+          comment: dto.comment,
+        });
+
+        return this.reimbursementRepository.save(reimbursement, tx);
+      },
+      { timeout: 20000 },
+    );
 
     this.logger.log(
       `Reimbursement ${id} reviewed successfully: ${dto.decision}`,
@@ -443,18 +521,35 @@ export class ReimbursementService {
       );
     }
 
-    // 先回退价格，再改状态：价格回退失败就不应该把单子变回待审核
-    await this.ingredientPricingService.revertApprovedChangesForReimbursement(
-      id,
-      operatorId,
-    );
-
+    const fromStatus = reimbursement.status;
     const trimmedComment = comment?.trim();
     reimbursement.revertReview(
       trimmedComment ? `审核已撤销：${trimmedComment}` : '审核已撤销',
     );
 
-    const saved = await this.reimbursementRepository.save(reimbursement);
+    // 价格回退 + 变更复位 + 状态回退 在同一个事务里：
+    // 任何一步失败都整体回滚，不会留下「价退了、单还是已报销」
+    const saved = await this.prisma.$transaction(
+      async (tx) => {
+        await this.ingredientPricingService.revertApprovedChangesForReimbursement(
+          id,
+          operatorId,
+          tx,
+        );
+
+        await this.recordReviewEvent(tx, {
+          reimbursementId: id,
+          action: 'REVERT',
+          actorId: operatorId,
+          fromStatus,
+          toStatus: reimbursement.status,
+          comment: trimmedComment ?? null,
+        });
+
+        return this.reimbursementRepository.save(reimbursement, tx);
+      },
+      { timeout: 20000 },
+    );
 
     this.logger.log(
       `Reimbursement ${id} review reverted by ${operatorId} (reviewed at ${reimbursement.reviewedAt.toISOString()})`,
@@ -558,6 +653,13 @@ export class ReimbursementService {
       saved.id,
     );
 
+    await this.recordReviewEvent(this.prisma, {
+      reimbursementId: saved.id,
+      action: 'RESUBMIT',
+      actorId: saved.submittedById,
+      toStatus: saved.status,
+    });
+
     this.logger.log(`Reimbursement ${id} resubmitted successfully`);
 
     return saved;
@@ -622,7 +724,22 @@ export class ReimbursementService {
       ),
     );
 
-    const view: any = { ...reimbursement, priceChanges };
+    const reviewEvents = await this.prisma.reimbursementReviewEvent.findMany({
+      where: { reimbursementId: id },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        action: true,
+        actorId: true,
+        actorName: true,
+        fromStatus: true,
+        toStatus: true,
+        comment: true,
+        createdAt: true,
+      },
+    });
+
+    const view: any = { ...reimbursement, priceChanges, reviewEvents };
     view.receiptSignedUrls = receiptSignedUrls.filter(Boolean);
     // 私有对象 key 不下发：只给签名后的可看图。
     delete view.receiptKeys;

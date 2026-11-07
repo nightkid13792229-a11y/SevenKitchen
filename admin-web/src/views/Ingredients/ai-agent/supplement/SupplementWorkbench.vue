@@ -158,6 +158,7 @@
             </div>
             <div class="wb-field">
               <label>当前采购价</label>
+              <p v-if="priceHint" class="wb-price-hint">{{ priceHint }}</p>
               <el-input-number
                 v-model="draft.currentPricePerPurchaseUnit"
                 data-anchor="purchasePricePerPurchaseUnit"
@@ -403,6 +404,7 @@ const catalogOptions = ref<FeedAdditiveMatch[]>([])
 const catalogLoading = ref(false)
 const catalogHint = ref('')
 const compareOpen = ref(false)
+const priceHint = ref('')
 
 const tagSuggestions = ['油脂类', '矿物质', '维生素', '益生菌', '关节', '膳食纤维']
 
@@ -531,6 +533,7 @@ async function searchCatalog(keyword: string): Promise<void> {
 /** 对话里读到的那瓶：走和"读这个链接"同一条填表路径。 */
 function applyPreview(preview: {
   productUrl: string
+  pagePriceCny?: number | null
   productName: string | null
   servingUnitsPerDose: number | null
   nutrients: { fieldPath: string; value: number; unit: string; rawName: string }[]
@@ -555,6 +558,15 @@ function applyPreview(preview: {
   draft.perUnitOverrides = {}
   draft.evidence.labelText = patch.evidence?.labelText ?? ''
   previewSkipped.value = skipped
+  applyPagePrice(preview.pagePriceCny)
+}
+
+/** 页面标价是人民币，空着就带上；已经填了的不覆盖（人填的优先）。 */
+function applyPagePrice(price: number | null | undefined): void {
+  if (typeof price === 'number' && price > 0 && !draft.currentPricePerPurchaseUnit) {
+    draft.currentPricePerPurchaseUnit = price
+    priceHint.value = `采购价按页面标价 ¥${price} 填的，请核对（运费/汇率另算）`
+  }
 }
 
 function setServingUnits(value: number): void {
@@ -699,6 +711,7 @@ async function confirm(): Promise<void> {
 }
 .wb-link-row{display:flex;gap:8px;align-items:center}
 .wb-option-note{float:right;font-size:11px;color:#9aa2ab}
+.wb-price-hint{margin:0 0 4px;font-size:11px;color:#8a9099}
 .wb-catalog-hint{margin:4px 0 0;font-size:11px;color:#b26a00;line-height:1.5}
 .wb-link-skipped{margin:6px 0 0;font-size:11px;color:#b26a00;line-height:1.5}
 .wb-block--grow {

@@ -40,8 +40,9 @@ describe('读商品页', () => {
     await service.preview('https://www.iherb.com/pr/x/1');
 
     expect(fetchMock.mock.calls[0][0]).toBe('https://api.deepseek.com/v1/tools/fetch');
+    // iHerb 链接会被换成人民币站（见下面的用例）
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
-      url: 'https://www.iherb.com/pr/x/1'
+      url: 'https://cn.iherb.com/pr/x/1'
     });
   });
 
@@ -123,5 +124,36 @@ describe('搜候选', () => {
     const { service } = build(() => ({ results: [] }));
 
     expect(await service.searchCandidates('不存在的营养素')).toEqual([]);
+  });
+
+  it('抓 iHerb 时换成人民币站，拿到的是 ¥ 标价', async () => {
+    const { service, fetchMock } = build(() => ({
+      title: 'x',
+      content: `${LABEL}\n\n¥288.00\n¥92.79`
+    }));
+
+    const preview = await service.preview('https://www.iherb.com/pr/x/1');
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).url).toBe(
+      'https://cn.iherb.com/pr/x/1'
+    );
+    expect(preview.pagePriceCny).toBe(288);
+    expect(preview.productUrl).toContain('cn.iherb.com');
+  });
+
+  it('页面没有 ¥ 价时留空，不拿美元顶', async () => {
+    const { service } = build(() => ({ title: 'x', content: `${LABEL}\n$10.05` }));
+
+    expect((await service.preview('https://www.iherb.com/pr/x/1')).pagePriceCny).toBeNull();
+  });
+
+  it('非 iHerb 的链接不动主机名', async () => {
+    const { service, fetchMock } = build(() => ({ title: 'x', content: LABEL }));
+
+    await service.preview('https://item.taobao.com/item.htm?id=1');
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).url).toBe(
+      'https://item.taobao.com/item.htm?id=1'
+    );
   });
 });

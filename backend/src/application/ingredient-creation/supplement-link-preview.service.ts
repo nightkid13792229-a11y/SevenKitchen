@@ -48,6 +48,8 @@ export interface SupplementCandidate {
 
 export interface SupplementLinkPreview {
   productUrl: string;
+  /** 页面上的人民币标价（从 cn.iherb.com 抓到）；读不到就是 null */
+  pagePriceCny: number | null;
   productName: string | null;
   servingUnitsPerDose: number | null;
   nutrients: LinkPreviewNutrient[];
@@ -61,12 +63,13 @@ export class SupplementLinkPreviewService {
   constructor(private readonly providerConfig: AgentProviderConfigService) {}
 
   async preview(url: string): Promise<SupplementLinkPreview> {
-    const target = this.assertAllowed(url);
+    const target = this.toPriceFriendlyUrl(this.assertAllowed(url));
     const text = await this.fetchThroughProxy(target);
 
     const parsed = parseSupplementLabel(text);
     return {
       productUrl: target.toString(),
+      pagePriceCny: this.extractPriceCny(text),
       productName: this.extractProductName(text),
       servingUnitsPerDose: extractServingUnits(text),
       nutrients: parsed.nutrients.map(
@@ -176,6 +179,30 @@ export class SupplementLinkPreviewService {
     }
 
     return results;
+  }
+
+  /**
+   * iHerb 有人民币站：`www.iherb.com` 给的是美元价，`cn.iherb.com` 同一条商品给的是人民币价，
+   * 成分表一样。抓之前把主机名换过去，免得把 $10.05 当成 ¥10.05 记进档案。
+   */
+  private toPriceFriendlyUrl(target: URL): URL {
+    const host = target.hostname.toLowerCase();
+    if (host.endsWith('iherb.com') && host !== 'cn.iherb.com') {
+      const cn = new URL(target.toString());
+      cn.hostname = 'cn.iherb.com';
+      return cn;
+    }
+    return target;
+  }
+
+  /** 正文里第一个 ¥ 价格就是页面标价（人民币站保证有 ¥，拿不到就是 null）。 */
+  private extractPriceCny(text: string): number | null {
+    const match = text.match(/¥\s*([0-9]+(?:\.[0-9]{1,2})?)/);
+    if (!match) {
+      return null;
+    }
+    const value = Number(match[1]);
+    return Number.isFinite(value) && value > 0 ? value : null;
   }
 
   private assertAllowed(raw: string): URL {

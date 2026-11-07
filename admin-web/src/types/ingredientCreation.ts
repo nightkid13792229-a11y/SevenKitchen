@@ -657,6 +657,8 @@ export interface SupplementChatReplyDto {
 
 export interface SupplementLinkPreviewDto {
   productUrl: string
+  /** 页面上的人民币标价；读不到是 null */
+  pagePriceCny?: number | null
   productName: string | null
   servingUnitsPerDose: number | null
   nutrients: SupplementLinkPreviewNutrientDto[]

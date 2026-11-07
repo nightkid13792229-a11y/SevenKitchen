@@ -6,6 +6,11 @@ const readPage = (path: string) => readFileSync(resolve(__dirname, path), 'utf8'
 
 const indexSource = readPage('staff-purchasing/index.vue');
 const detailSource = readPage('staff-purchasing/detail.vue');
+const recordModalSource = (() => {
+  const start = detailSource.indexOf('<!-- 采购表单弹窗 -->');
+  const end = detailSource.indexOf('<!-- 更换商品：只在需要时展开 -->');
+  return start >= 0 && end > start ? detailSource.slice(start, end) : '';
+})();
 const previewSource = readPage('staff-purchasing/preview.vue');
 const recordFormSource = readPage('staff-purchasing/record-form.vue');
 const stockCreateSource = readPage('staff-purchasing/stock-create.vue');
@@ -247,20 +252,33 @@ describe('staff purchasing detail audit display', () => {
 });
 
 describe('staff purchasing purchase record form', () => {
-  it('keeps the record form focused on task demand, selected SKU, count, and amount', () => {
-    expect(detailSource).toContain('订单需求');
-    expect(detailSource).toContain('formatResolvedQuantity(selectedIngredient.resolvedGrossQuantityNeeded, selectedIngredient)');
-    expect(detailSource).toContain('库存抵扣');
-    expect(detailSource).toContain('formatResolvedQuantity(selectedIngredient.resolvedStockDeductedQuantity, selectedIngredient)');
-    expect(detailSource).toContain('仍需采购');
-    expect(detailSource).toContain('formatQuantity(selectedIngredient) }}{{ getDisplayUnit(selectedIngredient)');
+  it('keeps the record form focused on progress, product, count, amount and result', () => {
+    expect(recordModalSource).toContain('class="record-progress"');
+    expect(recordModalSource).toContain('formatRecordBaseWithUnit(recordNeedBase)');
+    expect(recordModalSource).toContain('recordProgressPercent');
 
-    expect(detailSource).toContain('class="record-sku-list"');
-    expect(detailSource).toContain('record-sku-option');
-    // 2026-11-01：空状态改成可点的「新增一个采购商品」，管理员那句只留作非食材的兜底
+    expect(recordModalSource).toContain('class="record-product"');
+    expect(recordModalSource).toContain('selectedSkuNameParts.main');
+    expect(detailSource).toContain('class="sku-picker-list"');
     expect(detailSource).toContain('这道原料下还没有采购商品');
-    expect(detailSource).toContain('＋ 新增一个采购商品');
-    expect(detailSource).toContain('请联系管理员在该标准原料下新增采购 SKU 后再记录采购。');
+    expect(detailSource).toContain('＋ 新增采购商品');
+    expect(detailSource).toContain('请联系管理员在后台新增。');
+
+    expect(recordModalSource).toContain('class="record-inputs"');
+    expect(recordModalSource).toContain('买了');
+    expect(recordModalSource).toContain('花了');
+    expect(recordModalSource).toContain('recordPurchaseUnitLabel');
+    expect(recordModalSource).toContain('class="record-result"');
+    expect(recordModalSource).toContain('recordOutcome');
+    expect(recordModalSource).toContain('class="record-sheet-footer"');
+    expect(recordModalSource).toContain('record-submit');
+
+    // 旧版的三块指标、内嵌商品列表、取消按钮、再记一条全部退场
+    expect(recordModalSource).not.toContain('订单需求');
+    expect(recordModalSource).not.toContain('库存抵扣');
+    expect(recordModalSource).not.toContain('采购任务');
+    expect(recordModalSource).not.toContain('record-sku-list');
+    expect(recordModalSource).not.toContain('保存并再记一条');
 
     expect(detailSource).not.toContain('推荐参考：{{ getItemSuggestedProductLabel(selectedIngredient) }}');
     expect(detailSource).not.toContain('{{ getItemProcurementSkuLabel(selectedIngredient) }}');
@@ -288,33 +306,28 @@ describe('staff purchasing purchase record form', () => {
       expect(source).not.toContain('规格单位 *');
     });
 
-    expect(detailSource).toContain('class="record-entry-grid"');
-    expect(detailSource).toContain('购买数量 *');
+    expect(detailSource).toContain('class="record-inputs"');
+    expect(detailSource).toContain('买了');
+    expect(detailSource).toContain('花了');
     expect(detailSource).toContain('recordPurchaseUnitLabel');
+    expect(detailSource).not.toContain('购买数量 *');
+    expect(detailSource).not.toContain('付款金额 *');
     expect(detailSource).not.toContain('实际购买件数 *');
     expect(detailSource).not.toContain('实际购买数量 *');
+    expect(detailSource).not.toContain('实际采购金额（元） *');
+
     expect(recordFormSource).toContain('购买数量 *');
     expect(recordFormSource).toContain('purchaseUnitLabel');
     expect(recordFormSource).not.toContain('实际购买件数 *');
     expect(recordFormSource).not.toContain('实际购买数量 *');
-    expect(detailSource).toContain('付款金额 *');
-    expect(detailSource).not.toContain('实际采购金额（元） *');
     expect(recordFormSource).toContain('付款金额 *');
     expect(recordFormSource).not.toContain('实际采购金额（元） *');
-    expect(detailSource).toContain("label: '总量'");
-    expect(detailSource).toContain("label: '余量'");
-    expect(detailSource).toContain("label: '缺口'");
-    expect(detailSource).toContain("label: '单价'");
-    expect(detailSource).toContain("label: '历史单价'");
-    expect(detailSource).toContain('低于历史');
-    expect(detailSource).toContain('高于历史');
-    expect(detailSource).toContain('price-tone-bad');
-    expect(detailSource).toContain('price-tone-good');
+
+    expect(detailSource).toContain('备注（选填）');
+    expect(detailSource).not.toContain('备注信息（选填）');
     expect(detailSource).not.toContain('实际折算单价');
     expect(detailSource).not.toContain('recordReferencePriceText');
     expect(detailSource).not.toContain('折算入库');
-    expect(detailSource).not.toContain('备注（选填）');
-    expect(detailSource).not.toContain('备注信息（选填）');
   });
 
   it('derives the purchase count unit from the selected SKU', () => {
@@ -325,17 +338,40 @@ describe('staff purchasing purchase record form', () => {
     expect(detailSource).not.toContain('selectPurchaseUnit');
   });
 
-  it('does not show redundant normalized purchase summaries when units are identical', () => {
-    expect(detailSource).toContain('const baseSummary');
-    expect(detailSource).toContain('const purchaseSummary');
-    expect(detailSource).toContain('purchaseSummary === baseSummary');
-    expect(detailSource).toContain('return `总量 ${baseSummary}`');
-    expect(detailSource).not.toContain("parts.join(' ≈ ')");
-
+  it('does not show redundant normalized purchase summaries in reimbursement detail', () => {
     expect(reimbursementDetailSource).toContain('const baseSummary');
     expect(reimbursementDetailSource).toContain('const purchaseSummary');
     expect(reimbursementDetailSource).toContain('purchaseSummary === baseSummary');
     expect(reimbursementDetailSource).not.toContain("parts.join(' ≈ ')");
+  });
+
+  it('clears quantity and amount when switching product and confirms dirty close', () => {
+    expect(detailSource).toContain("recordForm.value.actualPackageCount = '';");
+    expect(detailSource).toContain("recordForm.value.actualCost = '';");
+    expect(detailSource).toContain('放弃这次填写？');
+    expect(detailSource).toContain('isRecordFormDirty');
+  });
+
+  it('returns to the list and expands/highlights the saved record', () => {
+    expect(detailSource).toContain('highlightedItemId.value = savedItem.id');
+    expect(detailSource).toContain('expandedRecordItems.value = {');
+    expect(detailSource).toContain('closeRecordForm(true)');
+  });
+
+  it('offers a create entry and filters the picker by channel', () => {
+    expect(detailSource).toContain('＋ 新增采购商品');
+    expect(detailSource).toContain('openCreateProcurementSku');
+    expect(detailSource).toContain('filteredRecordSkuOptions');
+    expect(detailSource).toContain('channel !== pickerChannel.value');
+  });
+
+  it('keeps the record card to name, quantity/amount, channel/status and a more menu', () => {
+    expect(detailSource).toContain('class="record-card-v2"');
+    expect(detailSource).toContain('recordNameParts(record).main');
+    expect(detailSource).toContain('record-card-more');
+    expect(detailSource).toContain('record-card-state');
+    expect(detailSource).toContain('记录详情');
+    expect(detailSource).not.toContain('盒马鲜生 · 17:39 · 截图');
   });
 
   it('does not allow purchase record editing after the list is completed', () => {

@@ -240,32 +240,34 @@
                     class="item-expanded"
                   >
                     <view class="records-list">
-                      <view v-for="record in (item.records || [])" :key="record.id" class="record-item">
-                        <view class="record-main">
-                          <view class="record-title-row">
-                            <text v-if="record.resolvedProcurementSkuName" class="record-sku">
-                              {{ record.resolvedProcurementSkuName }}
-                            </text>
-                            <text v-if="record.sourceImportId" class="record-source">截图</text>
+                      <view
+                        v-for="record in (item.records || [])"
+                        :key="record.id"
+                        class="record-card-v2"
+                        :class="{ 'just-saved': highlightedItemId === item.id }"
+                      >
+                        <view class="record-card-head">
+                          <view class="record-card-title">
+                            <text class="record-card-name">{{ recordNameParts(record).main }}</text>
+                            <text v-if="recordNameParts(record).sub" class="record-card-sub">{{ recordNameParts(record).sub }}</text>
                           </view>
-                          <view class="record-info">
-                            <text class="record-quantity">{{ formatRecordQuantity(record, item) }}</text>
-                            <text class="record-cost">¥{{ record.actualCost.toFixed(2) }}</text>
-                            <text class="record-channel">{{ record.resolvedPurchaseChannel || getRecordSkuLabel(record, item) }}</text>
-                          </view>
-                          <view class="record-details">
-                            <text v-if="record.resolvedProductModel || record.productModel" class="detail">
-                              {{ record.resolvedProductModel || record.productModel }}
-                            </text>
-                            <text v-if="formatRecordNormalizedSummary(record, item)" class="detail">
-                              {{ formatRecordNormalizedSummary(record, item) }}
-                            </text>
-                            <text class="detail-time">{{ formatFullDateTime(record.createdAt) }}</text>
-                          </view>
+                          <text
+                            class="record-card-more"
+                            @tap.stop="openRecordMenu(record)"
+                          >···</text>
                         </view>
-                        <view v-if="canManagePurchaseRecords" class="record-actions">
-                          <button class="edit-btn" @tap="editRecord(record)">编辑</button>
-                          <button class="delete-btn" @tap="deleteRecord(record.id)">删除</button>
+                        <view class="record-card-mid">
+                          <text class="record-card-qty">{{ formatRecordQuantity(record, item) }}</text>
+                          <text class="record-card-cost">¥{{ record.actualCost.toFixed(2) }}</text>
+                        </view>
+                        <view class="record-card-foot">
+                          <text class="record-card-channel">{{ record.resolvedPurchaseChannel || getRecordSkuLabel(record, item) }}</text>
+                          <text class="record-card-state" :class="getItemOutcome(item).tone">{{ getItemOutcome(item).text }}</text>
+                          <text
+                            v-if="canManagePurchaseRecords"
+                            class="record-card-edit"
+                            @tap.stop="editRecord(record)"
+                          >编辑</text>
                         </view>
                       </view>
                     </view>
@@ -329,119 +331,218 @@
     </view>
 
     <!-- 采购表单弹窗 -->
-    <view v-if="showRecordForm" class="record-form-modal" @tap="closeRecordForm">
-      <view class="modal-content" @tap.stop>
-        <view class="modal-header">
-          <text class="modal-title">{{ modalTitle }}</text>
-          <text class="modal-close" @tap="closeRecordForm">×</text>
+    <view v-if="showRecordForm" class="record-form-modal" @tap="closeRecordForm()">
+      <view class="record-sheet" @tap.stop>
+        <view class="sheet-grabber"></view>
+        <view class="record-sheet-head">
+          <text class="record-sheet-title">{{ modalTitle }}</text>
+          <text class="record-sheet-pill">{{ selectedIngredient.ingredientName }}</text>
+          <text class="record-sheet-close" @tap="closeRecordForm()">×</text>
         </view>
 
-        <view class="modal-body">
-          <view class="ingredient-summary-card">
-            <view class="summary-main">
-              <text class="summary-name">{{ selectedIngredient.ingredientName }}</text>
-              <text class="summary-demand">采购任务</text>
+        <view class="record-sheet-body">
+          <view class="record-progress">
+            <view class="record-progress-main">
+              <text class="record-progress-label">还需</text>
+              <text class="record-progress-value">{{ formatRecordBaseWithUnit(recordNeedBase) }}</text>
             </view>
-            <view class="record-demand-metrics">
-              <view class="record-demand-metric">
-                <text class="metric-label">订单需求</text>
-                <text class="metric-value">{{ formatResolvedQuantity(selectedIngredient.resolvedGrossQuantityNeeded, selectedIngredient) }}</text>
-              </view>
-              <view class="record-demand-metric">
-                <text class="metric-label">库存抵扣</text>
-                <text class="metric-value">{{ formatResolvedQuantity(selectedIngredient.resolvedStockDeductedQuantity, selectedIngredient) }}</text>
-              </view>
-              <view class="record-demand-metric primary">
-                <text class="metric-label">仍需采购</text>
-                <text class="metric-value">{{ formatQuantity(selectedIngredient) }}{{ getDisplayUnit(selectedIngredient) }}</text>
-              </view>
-            </view>
-            <text v-if="latestRecordSummary" class="summary-subtext">{{ latestRecordSummary }}</text>
-          </view>
-
-          <view class="form-section">
-            <view class="form-section-head">
-              <text class="form-label">采购商品</text>
-              <text class="form-title-hint">选择本次实际买到的商品</text>
-            </view>
-            <view v-if="recordProcurementSkuOptions.length > 0" class="record-sku-list">
-              <view v-for="sku in recordProcurementSkuOptions" :key="sku.id || sku.name" class="record-sku-option" :class="{ active: recordForm.procurementSkuId === sku.id }" @tap.stop="selectRecordSku(sku)">
-                <view class="record-sku-main">
-                  <view class="record-sku-title-row">
-                    <text class="record-sku-badge">{{ isRecommendedRecordSku(sku) ? '推荐' : '可替换' }}</text>
-                    <text class="record-sku-name">{{ sku.name }}</text>
-                  </view>
-                  <view class="record-sku-meta">
-                    <text v-if="sku.purchaseChannel">{{ sku.purchaseChannel }}</text>
-                    <text v-if="sku.productModel">{{ sku.productModel }}</text>
-                    <text v-if="formatProcurementSkuReferencePrice(sku)">历史单价 {{ formatProcurementSkuReferencePrice(sku) }}</text>
-                  </view>
-                </view>
-                <text class="record-sku-check">✓</text>
-              </view>
-              <view
-                v-if="canAddNewProcurementSku"
-                class="record-sku-add"
-                @tap.stop="openCreateProcurementSku"
-              >
-                ＋ 没有我要买的商品？新增一个
-              </view>
-            </view>
-            <view v-else class="record-sku-empty">
-              <text class="empty-title">这道原料下还没有采购商品</text>
-              <text v-if="canAddNewProcurementSku" class="empty-desc">把这次买的商品加进去，以后大家都能选</text>
-              <text v-else class="empty-desc">请联系管理员在该标准原料下新增采购 SKU 后再记录采购。</text>
-              <view
-                v-if="canAddNewProcurementSku"
-                class="record-sku-add-btn"
-                @tap.stop="openCreateProcurementSku"
-              >
-                ＋ 新增一个采购商品
-              </view>
+            <view class="record-progress-side">
+              <text>已买 {{ formatRecordBaseWithUnit(existingBeforeBase) }}</text>
+              <text>共需 {{ formatRecordBaseWithUnit(totalNeedBase) }}</text>
             </view>
           </view>
-
-          <view class="record-entry-grid">
-            <view class="form-section record-entry-card">
-              <view class="field-label-row">
-                <text class="form-label">购买数量 *</text>
-              </view>
-              <view class="input-with-unit">
-                <input v-model="recordForm.actualPackageCount" type="digit" class="form-input unit-input" :placeholder="recordPurchaseQuantityPlaceholder" placeholder-class="input-placeholder" />
-                <text v-if="recordPurchaseUnitLabel" class="input-unit-label">{{ recordPurchaseUnitLabel }}</text>
-              </view>
-              <view v-if="recordQuantityMetaRows.length > 0" class="record-entry-meta">
-                <view v-for="row in recordQuantityMetaRows" :key="row.label" class="record-entry-meta-row">
-                  <text class="meta-label">{{ row.label }}</text>
-                  <text class="meta-value" :class="row.tone ? `price-tone-${row.tone}` : ''">{{ row.value }}</text>
-                </view>
-              </view>
-            </view>
-
-            <view class="form-section record-entry-card">
-              <view class="field-label-row">
-                <text class="form-label">付款金额 *</text>
-              </view>
-              <view class="input-with-unit">
-                <input v-model="recordForm.actualCost" type="digit" class="form-input unit-input" placeholder="请输入金额，如：156.50" placeholder-class="input-placeholder" />
-                <text class="input-unit-label">元</text>
-              </view>
-              <view v-if="recordPriceMetaRows.length > 0" class="record-entry-meta">
-                <view v-for="row in recordPriceMetaRows" :key="row.label" class="record-entry-meta-row">
-                  <text class="meta-label">{{ row.label }}</text>
-                  <text class="meta-value" :class="row.tone ? `price-tone-${row.tone}` : ''">{{ row.value }}</text>
-                </view>
-              </view>
-            </view>
+          <view class="record-progress-track">
+            <view
+              class="record-progress-fill"
+              :class="{ over: progressOver }"
+              :style="{ width: recordProgressPercent + '%' }"
+            ></view>
           </view>
+
+          <view class="record-section-head">
+            <text class="record-section-label">商品</text>
+            <text
+              v-if="recordProcurementSkuOptions.length > 1"
+              class="record-section-link"
+              @tap="openSkuPicker"
+            >更换</text>
+          </view>
+
+          <view
+            v-if="selectedRecordProcurementSku"
+            class="record-product"
+            @tap="recordProcurementSkuOptions.length > 1 && openSkuPicker()"
+          >
+            <view class="record-product-main">
+              <text class="record-product-name">{{ selectedSkuNameParts.main }}</text>
+              <text v-if="selectedSkuNameParts.sub" class="record-product-sub">{{ selectedSkuNameParts.sub }}</text>
+              <view class="record-product-meta">
+                <text v-if="selectedRecordProcurementSku.purchaseChannel">{{ selectedRecordProcurementSku.purchaseChannel }}</text>
+                <text v-if="isSameAsLatestRecord" class="record-product-tag">上次买过</text>
+                <text v-if="formatProcurementSkuReferencePrice(selectedRecordProcurementSku)">上次 {{ formatProcurementSkuReferencePrice(selectedRecordProcurementSku) }}</text>
+              </view>
+              <text
+                v-if="!selectedRecordProcurementSku.purchaseChannel"
+                class="record-product-warning"
+              >这个商品缺渠道，保存前请让管理员在后台补全</text>
+            </view>
+            <text v-if="recordProcurementSkuOptions.length > 1" class="record-product-change">更换 ›</text>
+          </view>
+
+          <view v-else class="record-empty">
+            <view class="record-empty-icon">＋</view>
+            <text class="record-empty-title">这道原料下还没有采购商品</text>
+            <text v-if="canAddNewProcurementSku" class="record-empty-desc">把这次买的商品加进去，以后大家都能选。</text>
+            <text v-else class="record-empty-desc">请联系管理员在后台新增。</text>
+            <view
+              v-if="canAddNewProcurementSku"
+              class="record-empty-cta"
+              @tap="openCreateProcurementSku"
+            >＋ 新增采购商品</view>
+          </view>
+
+          <template v-if="selectedRecordProcurementSku">
+            <view class="record-inputs">
+              <view class="record-field" :class="{ focus: recordQuantityFocus }">
+                <text class="record-field-label">买了</text>
+                <view class="record-field-line">
+                  <input
+                    v-model="recordForm.actualPackageCount"
+                    type="digit"
+                    class="record-field-input"
+                    placeholder="如 2"
+                    placeholder-class="record-placeholder"
+                    :focus="recordQuantityFocus"
+                    @focus="recordQuantityFocus = true"
+                    @blur="recordQuantityFocus = false"
+                    @input="recordFormError = ''"
+                  />
+                  <text class="record-field-unit">{{ recordPurchaseUnitLabel }}</text>
+                </view>
+              </view>
+              <view class="record-field">
+                <text class="record-field-label">花了</text>
+                <view class="record-field-line">
+                  <input
+                    v-model="recordForm.actualCost"
+                    type="digit"
+                    class="record-field-input"
+                    placeholder="0.00"
+                    placeholder-class="record-placeholder"
+                    @focus="recordQuantityFocus = false"
+                    @input="recordFormError = ''"
+                  />
+                  <text class="record-field-unit">元</text>
+                </view>
+              </view>
+            </view>
+
+            <text v-if="recordFormError" class="record-error">{{ recordFormError }}</text>
+
+            <view v-if="recordResultText" class="record-result">
+              <text class="record-result-main">{{ recordResultText }}</text>
+              <text v-if="recordOutcome" class="record-outcome" :class="recordOutcome.tone">{{ recordOutcome.text }}</text>
+            </view>
+            <view v-else class="record-result">
+              <text class="record-result-main">填数量和金额后，这里会算买完差多少</text>
+            </view>
+
+            <view class="record-note">
+              <text v-if="!noteOpen" class="record-note-trigger" @tap="noteOpen = true">＋ 备注（选填）</text>
+              <textarea
+                v-else
+                v-model="recordForm.notes"
+                class="record-note-input"
+                maxlength="200"
+                placeholder="备注（选填）"
+                placeholder-class="record-placeholder"
+                @blur="noteOpen = !!recordForm.notes"
+              />
+            </view>
+          </template>
+          <text v-else class="record-empty-hint">选好商品后，再填数量和金额</text>
         </view>
 
-        <view class="modal-footer">
-          <button class="modal-btn cancel" @tap="closeRecordForm">取消</button>
-          <button class="modal-btn submit" @tap="submitRecord" :loading="submitting">
-            {{ modalSubmitText }}
-          </button>
+        <view class="record-sheet-footer">
+          <button
+            class="record-submit"
+            :class="{ disabled: !selectedRecordProcurementSku }"
+            :disabled="!selectedRecordProcurementSku || submitting"
+            :loading="submitting"
+            @tap="submitRecord"
+          >{{ modalSubmitText }}</button>
+          <text v-if="!selectedRecordProcurementSku" class="record-submit-hint">先新增或选择一个商品</text>
         </view>
+      </view>
+    </view>
+
+    <!-- 更换商品：只在需要时展开 -->
+    <view v-if="showSkuPicker" class="sku-picker-mask" @tap="closeSkuPicker">
+      <view class="sku-picker-sheet" @tap.stop>
+        <view class="sheet-grabber"></view>
+        <view class="sku-picker-head">
+          <text class="sku-picker-title">更换采购商品</text>
+          <text class="record-sheet-close" @tap="closeSkuPicker">×</text>
+        </view>
+        <text class="sku-picker-sub">默认只看「{{ pickerChannel || '未填渠道' }}」；换渠道再选别家的货</text>
+        <view class="sku-picker-search">
+          <text class="sku-picker-search-icon">⌕</text>
+          <input
+            v-model="skuPickerSearch"
+            class="sku-picker-search-input"
+            placeholder="搜商品名或规格"
+            placeholder-class="record-placeholder"
+          />
+          <text v-if="skuPickerSearch" class="sku-picker-search-clear" @tap="skuPickerSearch = ''">清空</text>
+        </view>
+        <scroll-view scroll-x class="sku-picker-channels">
+          <view
+            v-for="channel in pickerChannelOptions"
+            :key="channel.name"
+            class="sku-picker-channel"
+            :class="{ active: pickerChannel === channel.name }"
+            @tap="pickerChannel = channel.name"
+          >{{ channel.name }} {{ channel.count }}</view>
+        </scroll-view>
+        <scroll-view scroll-y class="sku-picker-list">
+          <view
+            v-for="sku in filteredRecordSkuOptions"
+            :key="sku.id || sku.name"
+            class="sku-picker-row"
+            :class="{ selected: recordForm.procurementSkuId === sku.id }"
+            @tap="chooseSkuFromPicker(sku)"
+          >
+            <view class="sku-picker-row-main">
+              <text class="sku-picker-row-name">{{ splitSkuName(sku.name).main }}</text>
+              <text v-if="splitSkuName(sku.name).sub" class="sku-picker-row-sub">{{ splitSkuName(sku.name).sub }}</text>
+              <text class="sku-picker-row-meta">{{ formatPickerSkuMeta(sku) }}</text>
+            </view>
+            <text v-if="recordForm.procurementSkuId === sku.id" class="sku-picker-check">✓</text>
+          </view>
+          <view v-if="filteredRecordSkuOptions.length === 0" class="sku-picker-empty">没搜到这个商品</view>
+        </scroll-view>
+        <view
+          v-if="canAddNewProcurementSku"
+          class="sku-picker-add"
+          @tap="openCreateProcurementSku"
+        >＋ 新增采购商品</view>
+        <text class="sku-picker-foot">选中后回到记录页，数量和金额要重填</text>
+      </view>
+    </view>
+
+    <!-- 记录卡「···」：时间 / 来源 / 删除 -->
+    <view v-if="showRecordMenu" class="record-menu-mask" @tap="closeRecordMenu">
+      <view class="record-menu-sheet" @tap.stop>
+        <text class="record-menu-title">记录详情</text>
+        <text class="record-menu-name">{{ recordMenuTitle }}</text>
+        <text class="record-menu-meta">{{ recordMenuMeta }}</text>
+        <text class="record-menu-source">{{ recordMenuSource }}</text>
+        <view
+          v-if="canManagePurchaseRecords"
+          class="record-menu-item danger"
+          @tap="deleteRecordFromMenu"
+        >删除记录</view>
+        <view class="record-menu-cancel" @tap="closeRecordMenu">取消</view>
       </view>
     </view>
 
@@ -672,6 +773,16 @@ const submitting = ref(false);
 const channelInputMode = ref<'preset' | 'custom'>('preset');
 const recordChannelChoices = ref<string[]>([]);
 const editingRecord = ref<any>(null);
+const showSkuPicker = ref(false);
+const skuPickerSearch = ref('');
+const pickerChannel = ref('');
+const noteOpen = ref(false);
+const recordFormError = ref('');
+const recordQuantityFocus = ref(false);
+const recordFormSnapshot = ref('');
+const highlightedItemId = ref('');
+const showRecordMenu = ref(false);
+const recordMenuRecord = ref<any>(null);
 
 const recordForm = ref({
   procurementSkuId: '',
@@ -716,14 +827,14 @@ const getUnhandledPurchaseItems = () => {
 };
 
 const modalTitle = computed(() => {
-  return editingRecord.value ? '编辑采购记录' : '添加采购记录';
+  return editingRecord.value ? '修改采购记录' : '记录采购';
 });
 
 const modalSubmitText = computed(() => {
   if (submitting.value) {
     return '保存中...';
   }
-  return editingRecord.value ? '保存修改' : '保存';
+  return editingRecord.value ? '保存修改' : '保存记录';
 });
 
 const normalizeChannelLabel = (channel?: string | null) => {
@@ -735,6 +846,19 @@ const formatCompactLabel = (parts: Array<string | null | undefined>) => {
     .map((part) => (part || '').trim())
     .filter(Boolean)
     .join(' · ');
+};
+
+/** 商品名拆成主名 + 括号里的品牌/系列，第二行用小字，避免长名字被按钮挤掉。 */
+const splitSkuName = (name?: string | null) => {
+  const text = `${name || ''}`.trim();
+  if (!text) {
+    return { main: '', sub: '' };
+  }
+  const match = text.match(/^(.*?)[（(]([^（）()]*)[）)]\s*$/);
+  if (match && match[1].trim() && match[2].trim()) {
+    return { main: match[1].trim(), sub: `（${match[2].trim()}）` };
+  }
+  return { main: text, sub: '' };
 };
 
 const formatMeasurementUnit = (unit?: string | null) => {
@@ -858,6 +982,20 @@ const selectedRecordProcurementSku = computed(() => {
   return recordProcurementSkuOptions.value.find((sku) => sku.id === recordForm.value.procurementSkuId) || null;
 });
 
+const selectedSkuNameParts = computed(() => splitSkuName(selectedRecordProcurementSku.value?.name));
+
+const isSameAsLatestRecord = computed(() => {
+  const latest = latestRecord.value;
+  const sku = selectedRecordProcurementSku.value;
+  if (!latest || !sku) {
+    return false;
+  }
+  return (
+    (latest.procurementSkuId && sku.id && latest.procurementSkuId === sku.id) ||
+    (latest.procurementSkuName && sku.name && latest.procurementSkuName === sku.name)
+  );
+});
+
 const recordProcurementSkuIndex = computed(() => {
   const index = recordProcurementSkuOptions.value.findIndex((sku) => sku.id === recordForm.value.procurementSkuId);
   return index >= 0 ? index : 0;
@@ -916,6 +1054,8 @@ const handleProcurementSkuCreated = async (payload: any) => {
     }
   }
 
+  showSkuPicker.value = false;
+  takeRecordFormSnapshot();
   showRecordForm.value = true;
 };
 
@@ -1034,6 +1174,11 @@ const applyRecordSkuDefaults = (sku: any) => {
 
 const selectRecordSku = (sku: any) => {
   applyRecordSkuDefaults(sku);
+  // 换商品一律重填：不同包装/渠道的价格和规格都不一样，留着旧数字最容易记错。
+  recordForm.value.actualPackageCount = '';
+  recordForm.value.actualCost = '';
+  recordFormError.value = '';
+  recordQuantityFocus.value = true;
 };
 
 const buildRecordProductModel = () => {
@@ -1091,41 +1236,6 @@ const recordTotalQuantityText = computed(() => {
   return `${formatDecimal(baseQuantity, 3)}${getBaseUnitLabel(selectedIngredient.value)}`;
 });
 
-const recordQuantityBalanceRow = computed(() => {
-  const baseQuantity = getRecordBaseQuantity();
-  const shortageBaseQuantity = convertToBaseQuantity(Number(selectedIngredient.value?.quantityNeeded || 0), selectedIngredient.value?.quantityUnit || getDisplayUnit(selectedIngredient.value), selectedIngredient.value);
-
-  if (!Number.isFinite(baseQuantity) || baseQuantity <= 0 || !Number.isFinite(shortageBaseQuantity) || shortageBaseQuantity <= 0) {
-    return null;
-  }
-
-  const diff = baseQuantity - shortageBaseQuantity;
-  const unit = getBaseUnitLabel(selectedIngredient.value);
-  if (diff >= 0) {
-    return {
-      label: '余量',
-      value: `${formatDecimal(diff, 3)}${unit}`,
-      tone: 'good',
-    };
-  }
-  return {
-    label: '缺口',
-    value: `${formatDecimal(Math.abs(diff), 3)}${unit}`,
-    tone: 'bad',
-  };
-});
-
-const recordQuantityMetaRows = computed(() => {
-  const rows: Array<{ label: string; value: string; tone?: string }> = [];
-  if (recordTotalQuantityText.value) {
-    rows.push({ label: '总量', value: recordTotalQuantityText.value });
-  }
-  if (recordQuantityBalanceRow.value) {
-    rows.push(recordQuantityBalanceRow.value);
-  }
-  return rows;
-});
-
 const recordActualUnitPriceValue = computed(() => {
   const cost = Number(recordForm.value.actualCost);
   const baseQuantity = getRecordBaseQuantity();
@@ -1158,50 +1268,6 @@ const recordActualUnitPriceText = computed(() => {
   return `¥${formatDecimal(value, 2)}/${getBaseUnitLabel(selectedIngredient.value)}`;
 });
 
-const recordHistoricalUnitPriceText = computed(() => {
-  const label = formatProcurementSkuReferencePrice(selectedRecordProcurementSku.value);
-  return label || '暂无';
-});
-
-const recordPriceDiffRow = computed(() => {
-  const actual = recordActualUnitPriceValue.value;
-  const reference = getReferencePriceParts(selectedRecordProcurementSku.value);
-  if (actual === null || !reference || !reference.price) {
-    return null;
-  }
-
-  const diff = ((actual - reference.price) / reference.price) * 100;
-  if (diff >= 0) {
-    return {
-      label: '价格提醒',
-      value: `高于历史 ${Math.round(diff)}%`,
-      tone: 'bad',
-    };
-  }
-  return {
-    label: '价格提醒',
-    value: `低于历史 ${Math.round(Math.abs(diff))}%`,
-    tone: 'good',
-  };
-});
-
-const recordPriceMetaRows = computed(() => {
-  const rows: Array<{ label: string; value: string; tone?: string }> = [];
-  if (recordActualUnitPriceText.value) {
-    rows.push({ label: '单价', value: recordActualUnitPriceText.value });
-  }
-  if (recordHistoricalUnitPriceText.value) {
-    rows.push({
-      label: '历史单价',
-      value: recordHistoricalUnitPriceText.value,
-    });
-  }
-  if (recordPriceDiffRow.value) {
-    rows.push(recordPriceDiffRow.value);
-  }
-  return rows;
-});
-
 // 获取系统内部标准采购单位（用于展示归一化结果）
 const getPurchaseRecordUnit = (item: any): string => {
   if (item?.ingredient?.purchaseUnit) {
@@ -1220,6 +1286,255 @@ const formatDecimal = (value: number, maxDecimalPlaces = 3) => {
   return fixed.replace(/\.?0+$/, '');
 };
 
+// ---------- 2026-11-07 采购记录弹窗 / 记录卡改版 ----------
+
+const recordNameParts = (record: any) => {
+  const parts = splitSkuName(record?.resolvedProcurementSkuName || record?.procurementSkuName || '');
+  return { main: parts.main || '采购记录', sub: parts.sub };
+};
+
+const getRecordBaseQuantityOf = (record: any, item: any) => {
+  const base = Number(record?.actualBaseQuantity);
+  if (Number.isFinite(base) && base > 0) {
+    return base;
+  }
+  const count = Number(record?.actualPackageCount || 0);
+  const size = Number(record?.actualPackageSize || 0);
+  const unit = record?.actualPackageUnit;
+  if (count > 0 && size > 0 && unit) {
+    return convertToBaseQuantity(count * size, unit, item);
+  }
+  return 0;
+};
+
+const editingRecordBase = computed(() => {
+  return editingRecord.value ? getRecordBaseQuantityOf(editingRecord.value, selectedIngredient.value) : 0;
+});
+
+const existingBoughtBase = computed(() => {
+  return (selectedIngredient.value?.records || []).reduce(
+    (sum: number, record: any) => sum + getRecordBaseQuantityOf(record, selectedIngredient.value),
+    0,
+  );
+});
+
+const remainingBase = computed(() => {
+  const item = selectedIngredient.value;
+  if (!item) {
+    return 0;
+  }
+  return convertToBaseQuantity(
+    Number(item.quantityNeeded || 0),
+    item.quantityUnit || getDisplayUnit(item),
+    item,
+  );
+});
+
+/** 这条记录要覆盖的量：已买之外的缺口 + 正在编辑的那条旧记录。 */
+const recordNeedBase = computed(() => remainingBase.value + editingRecordBase.value);
+const existingBeforeBase = computed(() => Math.max(0, existingBoughtBase.value - editingRecordBase.value));
+
+const grossNeedBase = computed(() => {
+  const item = selectedIngredient.value;
+  if (!item) {
+    return 0;
+  }
+  return convertToBaseQuantity(
+    Number(item.resolvedGrossQuantityNeeded || 0),
+    item.quantityUnit || getDisplayUnit(item),
+    item,
+  );
+});
+
+const totalNeedBase = computed(() => {
+  if (grossNeedBase.value > 0) {
+    return grossNeedBase.value;
+  }
+  return existingBeforeBase.value + recordNeedBase.value;
+});
+
+const recordProgressPercent = computed(() => {
+  if (totalNeedBase.value <= 0) {
+    return 0;
+  }
+  return Math.min(100, Math.round((existingBeforeBase.value / totalNeedBase.value) * 100));
+});
+
+const progressOver = computed(() => {
+  return totalNeedBase.value > 0 && existingBeforeBase.value > totalNeedBase.value + 0.0001;
+});
+
+const formatRecordBaseWithUnit = (value: number) => {
+  return `${formatBaseQuantity(value)}${getBaseUnitLabel(selectedIngredient.value)}`;
+};
+
+const formatBaseWithUnitForItem = (value: number, item: any) => {
+  return `${formatBaseQuantity(value)}${getBaseUnitLabel(item)}`;
+};
+
+const recordResultText = computed(() => {
+  if (!recordTotalQuantityText.value) {
+    return '';
+  }
+  return recordActualUnitPriceText.value
+    ? `共 ${recordTotalQuantityText.value} · 单价 ${recordActualUnitPriceText.value}`
+    : `共 ${recordTotalQuantityText.value}`;
+});
+
+const recordOutcome = computed(() => {
+  const inputBase = getRecordBaseQuantity();
+  if (!inputBase || inputBase <= 0) {
+    return null;
+  }
+  const diff = inputBase - recordNeedBase.value;
+  if (diff > 0.0001) {
+    return { text: `多 ${formatRecordBaseWithUnit(diff)}`, tone: 'over' };
+  }
+  if (diff < -0.0001) {
+    return { text: `还差 ${formatRecordBaseWithUnit(-diff)}`, tone: 'short' };
+  }
+  return { text: '刚好买齐', tone: 'ok' };
+});
+
+const getItemOutcome = (item: any) => {
+  const records = item?.records || [];
+  if (records.length === 0) {
+    return { text: '待采购', tone: 'pending' };
+  }
+  const itemRemaining = convertToBaseQuantity(
+    Number(item?.quantityNeeded || 0),
+    item?.quantityUnit || getDisplayUnit(item),
+    item,
+  );
+  if (itemRemaining > 0.0001) {
+    return { text: `还差 ${formatBaseWithUnitForItem(itemRemaining, item)}`, tone: 'short' };
+  }
+  const bought = records.reduce(
+    (sum: number, record: any) => sum + getRecordBaseQuantityOf(record, item),
+    0,
+  );
+  const gross = convertToBaseQuantity(
+    Number(item?.resolvedGrossQuantityNeeded || 0),
+    item?.quantityUnit || getDisplayUnit(item),
+    item,
+  );
+  if (gross > 0 && bought > gross + 0.0001) {
+    return { text: `多 ${formatBaseWithUnitForItem(bought - gross, item)}`, tone: 'over' };
+  }
+  return { text: '买齐', tone: 'ok' };
+};
+
+const formatPickerSkuMeta = (sku: any) => {
+  return [
+    sku?.productModel,
+    sku?.purchaseChannel,
+    formatProcurementSkuReferencePrice(sku)
+      ? `上次 ${formatProcurementSkuReferencePrice(sku)}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+};
+
+const pickerChannelOptions = computed(() => {
+  const counts = new Map<string, number>();
+  recordProcurementSkuOptions.value.forEach((sku: any) => {
+    const name = (sku.purchaseChannel || '').trim() || '未填渠道';
+    counts.set(name, (counts.get(name) || 0) + 1);
+  });
+  return Array.from(counts.entries()).map(([name, count]) => ({ name, count }));
+});
+
+const filteredRecordSkuOptions = computed(() => {
+  const keyword = skuPickerSearch.value.trim().toLowerCase();
+  return recordProcurementSkuOptions.value.filter((sku: any) => {
+    const channel = (sku.purchaseChannel || '').trim() || '未填渠道';
+    if (pickerChannel.value && channel !== pickerChannel.value) {
+      return false;
+    }
+    if (!keyword) {
+      return true;
+    }
+    return [sku.name, sku.productModel, channel].some((value) =>
+      `${value || ''}`.toLowerCase().includes(keyword),
+    );
+  });
+});
+
+const openSkuPicker = () => {
+  const options = recordProcurementSkuOptions.value;
+  if (!options.length || !selectedIngredient.value) {
+    return;
+  }
+  const preferred =
+    (selectedRecordProcurementSku.value?.purchaseChannel ||
+      getItemPurchaseChannel(selectedIngredient.value) ||
+      options[0]?.purchaseChannel ||
+      ''
+    ).trim() || '未填渠道';
+  const channels = pickerChannelOptions.value;
+  pickerChannel.value = channels.some((channel) => channel.name === preferred)
+    ? preferred
+    : channels[0]?.name || '';
+  skuPickerSearch.value = '';
+  showSkuPicker.value = true;
+};
+
+const closeSkuPicker = () => {
+  showSkuPicker.value = false;
+  skuPickerSearch.value = '';
+};
+
+const chooseSkuFromPicker = (sku: any) => {
+  if (sku?.id && sku.id === recordForm.value.procurementSkuId) {
+    closeSkuPicker();
+    return;
+  }
+  selectRecordSku(sku);
+  closeSkuPicker();
+};
+
+const takeRecordFormSnapshot = () => {
+  recordFormSnapshot.value = JSON.stringify(recordForm.value);
+};
+
+const isRecordFormDirty = computed(() => {
+  if (!showRecordForm.value || !recordFormSnapshot.value) {
+    return false;
+  }
+  return JSON.stringify(recordForm.value) !== recordFormSnapshot.value;
+});
+
+const openRecordMenu = (record: any) => {
+  recordMenuRecord.value = record;
+  showRecordMenu.value = true;
+};
+
+const closeRecordMenu = () => {
+  showRecordMenu.value = false;
+};
+
+const recordMenuTitle = computed(
+  () => recordMenuRecord.value?.resolvedProcurementSkuName || '采购记录',
+);
+const recordMenuMeta = computed(
+  () =>
+    `${formatFullDateTime(recordMenuRecord.value?.createdAt)} · ${
+      recordMenuRecord.value?.resolvedPurchaseChannel || '未填渠道'
+    }`,
+);
+const recordMenuSource = computed(() =>
+  recordMenuRecord.value?.sourceImportId ? '来源：截图识别' : '来源：手动添加',
+);
+
+const deleteRecordFromMenu = () => {
+  const record = recordMenuRecord.value;
+  closeRecordMenu();
+  if (record?.id) {
+    deleteRecord(record.id);
+  }
+};
+
 const hasMaxDecimalPlaces = (value: string | number, maxDecimalPlaces: number) => {
   const normalized = `${value}`;
   const decimalPart = normalized.split('.')[1];
@@ -1233,7 +1548,7 @@ const formatRecordRawSummary = (record: any, item: any) => {
   const countUnit = parsePurchaseUnitFromProductModel(record.productModel) || getRecordSkuPurchaseUnit(record, item) || '件';
 
   if (Number.isFinite(packageCount) && packageCount > 0 && Number.isFinite(packageSize) && packageSize > 0 && packageUnit) {
-    return `${formatDecimal(packageCount)}${countUnit} x ${formatDecimal(packageSize)}${packageUnit}`;
+    return `${formatDecimal(packageCount)} ${countUnit} × ${formatDecimal(packageSize)}${formatMeasurementUnit(packageUnit) || packageUnit}`;
   }
 
   return '';
@@ -1247,25 +1562,6 @@ const formatRecordQuantity = (record: any, item: any) => {
 
   const quantity = Number(record.actualQuantity || 0);
   return `${formatDecimal(quantity)}${getPurchaseRecordUnit(item)}`;
-};
-
-const formatRecordNormalizedSummary = (record: any, item: any) => {
-  const quantity = Number(record.actualQuantity || 0);
-  const baseQuantity = Number(record.actualBaseQuantity || 0);
-
-  if (!Number.isFinite(baseQuantity) || baseQuantity <= 0 || !record.actualBaseUnit) {
-    return '';
-  }
-
-  const baseSummary = `${formatDecimal(baseQuantity, 3)}${formatMeasurementUnit(record.actualBaseUnit)}`;
-  const purchaseSummary = Number.isFinite(quantity) && quantity > 0 ? `${formatDecimal(quantity, 3)}${getPurchaseRecordUnit(item)}` : '';
-  const rawSummary = formatRecordRawSummary(record, item);
-
-  if (!rawSummary && purchaseSummary === baseSummary) {
-    return '';
-  }
-
-  return `总量 ${baseSummary}`;
 };
 
 const buildRecordChannelChoices = (item: any) => {
@@ -1696,7 +1992,7 @@ const handleContinueAdd = (item: any) => {
     applyRecordSkuDefaults(selectedSku);
   }
 
-  recordForm.value.actualPackageCount = latest?.actualPackageCount ? formatDecimal(Number(latest.actualPackageCount || 0)) : '';
+  recordForm.value.actualPackageCount = '';
 
   if (latest?.actualPackageSize) {
     recordForm.value.actualPackageSize = formatDecimal(Number(latest.actualPackageSize || 0));
@@ -1713,6 +2009,10 @@ const handleContinueAdd = (item: any) => {
   }
 
   channelInputMode.value = recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel) ? 'preset' : 'custom';
+  noteOpen.value = false;
+  recordFormError.value = '';
+  recordQuantityFocus.value = false;
+  takeRecordFormSnapshot();
 
   showRecordForm.value = true;
 };
@@ -1747,17 +2047,42 @@ const editRecord = (record: any) => {
   recordForm.value.productModel = record.productModel || recordProfile.productModel || '';
   recordForm.value.purchaseUnit = parsePurchaseUnitFromProductModel(record.productModel) || parsePurchaseUnitFromProductModel(recordProfile.productModel) || recordForm.value.purchaseUnit || '件';
   recordForm.value.notes = record.notes || '';
+  noteOpen.value = !!recordForm.value.notes;
+  recordFormError.value = '';
+  recordQuantityFocus.value = false;
 
   channelInputMode.value = recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel) ? 'preset' : 'custom';
+  takeRecordFormSnapshot();
 
   showRecordForm.value = true;
 };
 
-// 关闭采购表单
-const closeRecordForm = () => {
+// 关闭采购表单：填过东西先确认，别让员工白填
+const closeRecordForm = (force = false) => {
+  if (!force && isRecordFormDirty.value) {
+    uni.showModal({
+      title: '放弃这次填写？',
+      content: '已填的数量、金额和备注不会保存。',
+      confirmText: '放弃',
+      cancelText: '继续填',
+      success: (res) => {
+        if (res.confirm) {
+          closeRecordForm(true);
+        }
+      },
+    });
+    return;
+  }
+
   showRecordForm.value = false;
+  showSkuPicker.value = false;
+  showRecordMenu.value = false;
   selectedIngredient.value = null;
   editingRecord.value = null;
+  noteOpen.value = false;
+  recordFormError.value = '';
+  recordQuantityFocus.value = false;
+  recordFormSnapshot.value = '';
 };
 
 // 采购渠道快速选择
@@ -1813,6 +2138,8 @@ const resetRecordForm = () => {
 
 // 提交采购记录
 const submitRecord = async () => {
+  const wasEditing = Boolean(editingRecord.value);
+  recordFormError.value = '';
   // 表单验证
   if (!recordForm.value.procurementSkuId || recordForm.value.procurementSkuId.trim().length === 0) {
     uni.showToast({ title: '请选择采购商品', icon: 'none' });
@@ -1820,73 +2147,67 @@ const submitRecord = async () => {
   }
 
   if (!recordForm.value.purchaseChannel || recordForm.value.purchaseChannel.trim().length === 0) {
-    uni.showToast({
-      title: '采购商品缺少采购渠道，请联系管理员补充',
-      icon: 'none',
-    });
+    recordFormError.value = '这个商品缺采购渠道，请让管理员在后台补全';
     return;
   }
 
   if (!recordForm.value.purchaseUnit || recordForm.value.purchaseUnit.trim().length === 0) {
-    uni.showToast({
-      title: '采购商品缺少采购单位，请联系管理员补充',
-      icon: 'none',
-    });
+    recordFormError.value = '这个商品缺采购单位，请让管理员在后台补全';
     return;
   }
 
   if (!recordForm.value.actualPackageCount || recordForm.value.actualPackageCount.toString().trim().length === 0) {
-    uni.showToast({ title: '请输入购买数量', icon: 'none' });
+    recordFormError.value = '请填买了多少';
     return;
   }
 
   const packageCount = Number(recordForm.value.actualPackageCount);
   if (isNaN(packageCount) || packageCount <= 0) {
-    uni.showToast({ title: '购买数量必须大于0', icon: 'none' });
+    recordFormError.value = '购买数量必须大于 0';
     return;
   }
 
   if (!hasMaxDecimalPlaces(recordForm.value.actualPackageCount, 3)) {
-    uni.showToast({ title: '购买数量最多三位小数', icon: 'none' });
+    recordFormError.value = '购买数量最多三位小数';
     return;
   }
 
   if (!recordForm.value.actualPackageSize || recordForm.value.actualPackageSize.toString().trim().length === 0) {
-    uni.showToast({ title: '采购商品缺少换算规格', icon: 'none' });
+    recordFormError.value = '这个商品缺换算规格，请让管理员在后台补全';
     return;
   }
 
   const packageSize = Number(recordForm.value.actualPackageSize);
   if (isNaN(packageSize) || packageSize <= 0) {
-    uni.showToast({ title: '采购商品换算规格必须大于0', icon: 'none' });
+    recordFormError.value = '商品换算规格必须大于 0';
     return;
   }
 
   if (!hasMaxDecimalPlaces(recordForm.value.actualPackageSize, 3)) {
-    uni.showToast({ title: '采购商品换算规格最多三位小数', icon: 'none' });
+    recordFormError.value = '商品换算规格最多三位小数';
     return;
   }
 
   if (!recordForm.value.actualPackageUnit) {
-    uni.showToast({ title: '采购商品缺少换算单位', icon: 'none' });
+    recordFormError.value = '这个商品缺换算单位，请让管理员在后台补全';
     return;
   }
 
   if (!recordForm.value.actualCost || recordForm.value.actualCost.toString().trim().length === 0) {
-    uni.showToast({ title: '请输入付款金额', icon: 'none' });
+    recordFormError.value = '请填付款金额';
     return;
   }
 
   const cost = Number(recordForm.value.actualCost);
   if (isNaN(cost) || cost <= 0) {
-    uni.showToast({ title: '金额必须大于0', icon: 'none' });
+    recordFormError.value = '金额必须大于 0';
     return;
   }
 
   const costStr = recordForm.value.actualCost.toString();
   const decimalIndex = costStr.indexOf('.');
   if (decimalIndex !== -1 && costStr.length - decimalIndex - 1 > 2) {
-    uni.showToast({ title: '金额最多两位小数', icon: 'none' });
+    recordFormError.value = '金额最多两位小数';
     return;
   }
 
@@ -1913,23 +2234,37 @@ const submitRecord = async () => {
         });
 
     if (response.code === 0) {
+      const savedItemId = selectedIngredient.value?.id;
+      const savedIngredientId = selectedIngredient.value?.ingredientId;
+
       uni.showToast({
-        title: editingRecord.value ? '修改成功' : '保存成功',
+        title: wasEditing ? '修改成功' : '保存成功',
         icon: 'success',
       });
 
       // 刷新采购记录
       await loadPurchaseRecords();
 
-      // 如果是清单内原料，保持展开状态
-      if (selectedIngredient.value) {
-        const item = items.value.find((i) => i.ingredientId === selectedIngredient.value.ingredientId);
-        if (item) {
-          item.expanded = true;
-        }
+      // 保存后回到清单：自动展开这张原料，并短暂高亮刚存的那条
+      const savedItem = items.value.find(
+        (row) =>
+          (savedItemId && row.id === savedItemId) ||
+          (savedIngredientId && row.ingredientId === savedIngredientId),
+      );
+      if (savedItem) {
+        expandedRecordItems.value = {
+          ...expandedRecordItems.value,
+          [savedItem.id]: true,
+        };
+        highlightedItemId.value = savedItem.id;
+        setTimeout(() => {
+          if (highlightedItemId.value === savedItem.id) {
+            highlightedItemId.value = '';
+          }
+        }, 2200);
       }
 
-      closeRecordForm();
+      closeRecordForm(true);
     } else {
       uni.showToast({ title: response.message || '保存失败', icon: 'none' });
     }
@@ -4146,5 +4481,852 @@ const confirmDeleteItem = (item: any) => {
   background: #e8f0e6;
   color: #2f6b4f;
 }
+
+// ==========================================
+// 2026-11-07 采购记录弹窗 / 记录卡改版
+// ==========================================
+
+.record-form-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+}
+
+.record-sheet {
+  width: 100%;
+  max-height: 88vh;
+  background: #fbf8ec;
+  border-radius: 40rpx 40rpx 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 -20rpx 60rpx rgba(0, 0, 0, 0.18);
+}
+
+.sheet-grabber {
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 4rpx;
+  background: #d8d1bc;
+  margin: 18rpx auto 0;
+  flex-shrink: 0;
+}
+
+.record-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 20rpx 32rpx 0;
+  flex-shrink: 0;
+}
+
+.record-sheet-title {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #26261f;
+  letter-spacing: -0.5rpx;
+}
+
+.record-sheet-pill {
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  background: #edf3e7;
+  color: #2f6b4f;
+  font-size: 21rpx;
+  font-weight: 600;
+}
+
+.record-sheet-close {
+  margin-left: auto;
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  background: #f0ead7;
+  color: #6f6a58;
+  font-size: 42rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.record-sheet-body {
+  padding: 0 32rpx 12rpx;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.record-progress {
+  margin-top: 28rpx;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.record-progress-main {
+  min-width: 0;
+}
+
+.record-progress-label {
+  display: block;
+  font-size: 22rpx;
+  color: #6b6653;
+  margin-bottom: 4rpx;
+}
+
+.record-progress-value {
+  display: block;
+  font-size: 54rpx;
+  line-height: 1;
+  font-weight: 800;
+  color: #26261f;
+  letter-spacing: -2rpx;
+}
+
+.record-progress-side {
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 21rpx;
+  line-height: 1.55;
+  color: #8f8b7d;
+  padding-bottom: 4rpx;
+}
+
+.record-progress-track {
+  height: 12rpx;
+  border-radius: 999rpx;
+  background: #e9e3d0;
+  margin-top: 18rpx;
+  overflow: hidden;
+}
+
+.record-progress-fill {
+  height: 100%;
+  border-radius: 999rpx;
+  background: linear-gradient(90deg, #cdae74, #b08d4f);
+  transition: width 0.2s ease;
+}
+
+.record-progress-fill.over {
+  background: linear-gradient(90deg, #d7a15a, #b4762f);
+}
+
+.record-section-head {
+  margin: 30rpx 0 16rpx;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.record-section-label {
+  font-size: 23rpx;
+  font-weight: 600;
+  color: #6b6653;
+}
+
+.record-section-link {
+  font-size: 21rpx;
+  color: #2f6b4f;
+  font-weight: 600;
+}
+
+.record-product {
+  background: #fffdf6;
+  border: 1rpx solid #e7dfc9;
+  border-radius: 24rpx;
+  padding: 24rpx 26rpx;
+  display: flex;
+  gap: 20rpx;
+  align-items: center;
+}
+
+.record-product-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.record-product-name {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 650;
+  line-height: 1.36;
+  color: #26261f;
+}
+
+.record-product-sub {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #8a8574;
+}
+
+.record-product-meta {
+  margin-top: 10rpx;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  font-size: 21rpx;
+  color: #6b6653;
+}
+
+.record-product-tag {
+  padding: 4rpx 12rpx;
+  border-radius: 10rpx;
+  background: #eef2e4;
+  color: #2f6b4f;
+  font-size: 19rpx;
+  font-weight: 600;
+}
+
+.record-product-change {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #2f6b4f;
+  white-space: nowrap;
+}
+
+.record-product-warning {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 20rpx;
+  line-height: 1.4;
+  color: #b4453a;
+}
+
+.record-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20rpx;
+  margin-top: 26rpx;
+}
+
+.record-field {
+  min-width: 0;
+  background: #fffdf6;
+  border: 2rpx solid #e7dfc9;
+  border-radius: 24rpx;
+  padding: 20rpx 26rpx 18rpx;
+}
+
+.record-field.focus {
+  border-color: #2f6b4f;
+  box-shadow: 0 0 0 6rpx rgba(47, 107, 79, 0.08);
+}
+
+.record-field-label {
+  display: block;
+  font-size: 21rpx;
+  color: #6b6653;
+}
+
+.record-field-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10rpx;
+  margin-top: 4rpx;
+}
+
+.record-field-input {
+  flex: 1;
+  min-width: 0;
+  height: 72rpx;
+  font-size: 52rpx;
+  font-weight: 800;
+  line-height: 72rpx;
+  color: #26261f;
+}
+
+.record-field-unit {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #6b6653;
+}
+
+.record-placeholder {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #b3ad9c;
+}
+
+.record-error {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #b4453a;
+}
+
+.record-result {
+  margin-top: 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  min-height: 40rpx;
+}
+
+.record-result-main {
+  min-width: 0;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #6b6653;
+}
+
+.record-outcome {
+  flex-shrink: 0;
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 21rpx;
+  font-weight: 700;
+}
+
+.record-outcome.over {
+  background: #f6efe0;
+  color: #8a6420;
+}
+
+.record-outcome.short {
+  background: #fbeeec;
+  color: #b4453a;
+}
+
+.record-outcome.ok {
+  background: #e8f0e6;
+  color: #2f6b4f;
+}
+
+.record-note {
+  margin-top: 24rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx dashed #e7dfc9;
+}
+
+.record-note-trigger {
+  font-size: 23rpx;
+  color: #6b6653;
+}
+
+.record-note-input {
+  width: 100%;
+  min-height: 96rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 16rpx;
+  background: #fffdf6;
+  border: 1rpx solid #e7dfc9;
+  font-size: 25rpx;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+.record-empty {
+  padding: 34rpx 28rpx 28rpx;
+  border-radius: 26rpx;
+  border: 2rpx dashed #cdbb92;
+  background: rgba(255, 253, 246, 0.62);
+  text-align: center;
+}
+
+.record-empty-icon {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 50%;
+  margin: 0 auto 18rpx;
+  background: #eef2e4;
+  color: #2f6b4f;
+  font-size: 46rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.record-empty-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.record-empty-desc {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 23rpx;
+  line-height: 1.55;
+  color: #6b6653;
+}
+
+.record-empty-cta {
+  margin: 26rpx auto 0;
+  max-width: 480rpx;
+  height: 88rpx;
+  border-radius: 22rpx;
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+  color: #f3eddd;
+  font-size: 28rpx;
+  font-weight: 650;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12rpx 26rpx rgba(30, 58, 47, 0.16);
+}
+
+.record-empty-hint {
+  display: block;
+  margin-top: 24rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: #9a9482;
+}
+
+.record-sheet-footer {
+  padding: 16rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
+  flex-shrink: 0;
+}
+
+.record-submit {
+  width: 100%;
+  height: 104rpx;
+  border-radius: 26rpx;
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+  color: #f3eddd;
+  font-size: 34rpx;
+  font-weight: 600;
+  line-height: 104rpx;
+  border: none;
+  box-shadow: 0 16rpx 32rpx rgba(30, 58, 47, 0.16);
+}
+
+.record-submit::after {
+  border: none;
+}
+
+.record-submit.disabled {
+  background: #e9e4d5;
+  color: #5f5a4b;
+  box-shadow: none;
+}
+
+.record-submit-hint {
+  display: block;
+  margin-top: 14rpx;
+  text-align: center;
+  font-size: 21rpx;
+  color: #9a9482;
+}
+
+/* ---------- 更换商品 ---------- */
+
+.sku-picker-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 16, 12, 0.45);
+  z-index: 1100;
+  display: flex;
+  align-items: flex-end;
+}
+
+.sku-picker-sheet {
+  width: 100%;
+  max-height: 84vh;
+  background: #fbf8ec;
+  border-radius: 36rpx 36rpx 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 -20rpx 60rpx rgba(0, 0, 0, 0.18);
+}
+
+.sku-picker-head {
+  display: flex;
+  align-items: center;
+  padding: 18rpx 32rpx 0;
+  flex-shrink: 0;
+}
+
+.sku-picker-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.sku-picker-sub {
+  display: block;
+  padding: 8rpx 32rpx 0;
+  font-size: 21rpx;
+  line-height: 1.5;
+  color: #8f8b7d;
+}
+
+.sku-picker-search {
+  margin: 20rpx 32rpx 0;
+  height: 76rpx;
+  border-radius: 20rpx;
+  background: #f2ecd8;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  padding: 0 24rpx;
+  flex-shrink: 0;
+}
+
+.sku-picker-search-icon {
+  font-size: 30rpx;
+  color: #9a9482;
+}
+
+.sku-picker-search-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 25rpx;
+  color: #26261f;
+}
+
+.sku-picker-search-clear {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  color: #2f6b4f;
+}
+
+.sku-picker-channels {
+  width: 100%;
+  padding: 20rpx 32rpx 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.sku-picker-channel {
+  display: inline-flex;
+  align-items: center;
+  padding: 10rpx 20rpx;
+  margin-right: 14rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid #ded7c2;
+  background: rgba(255, 253, 246, 0.7);
+  font-size: 22rpx;
+  color: #6b6653;
+}
+
+.sku-picker-channel.active {
+  background: #1e3a2f;
+  border-color: #1e3a2f;
+  color: #f3eddd;
+  font-weight: 650;
+}
+
+.sku-picker-list {
+  height: 40vh;
+  margin: 18rpx 24rpx 0;
+  border-radius: 24rpx;
+  border: 1rpx solid #e7dfc9;
+  background: #fffdf6;
+  box-sizing: border-box;
+}
+
+.sku-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 24rpx;
+  border-bottom: 1rpx solid #f1ebda;
+}
+
+.sku-picker-row.selected {
+  background: #f2f6ec;
+}
+
+.sku-picker-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.sku-picker-row-name {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 650;
+  line-height: 1.38;
+  color: #26261f;
+}
+
+.sku-picker-row-sub {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #8a8574;
+}
+
+.sku-picker-row-meta {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 21rpx;
+  line-height: 1.4;
+  color: #6b6653;
+}
+
+.sku-picker-check {
+  flex-shrink: 0;
+  width: 42rpx;
+  height: 42rpx;
+  border-radius: 50%;
+  background: #1e3a2f;
+  color: #f3eddd;
+  font-size: 22rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sku-picker-empty {
+  padding: 50rpx 0;
+  text-align: center;
+  font-size: 24rpx;
+  color: #8f8b7d;
+}
+
+.sku-picker-add {
+  margin: 18rpx 32rpx 0;
+  height: 84rpx;
+  border-radius: 20rpx;
+  border: 2rpx dashed #cdbb92;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  color: #8a6b33;
+  background: rgba(255, 253, 246, 0.55);
+  flex-shrink: 0;
+}
+
+.sku-picker-foot {
+  display: block;
+  padding: 16rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
+  text-align: center;
+  font-size: 21rpx;
+  color: #9a9482;
+}
+
+/* ---------- 记录卡：名字 / 数量金额 / 渠道状态 ---------- */
+
+.record-card-v2 {
+  margin-top: 16rpx;
+  padding: 24rpx 26rpx 22rpx;
+  background: #fffdf6;
+  border: 1rpx solid #e7dfc9;
+  border-radius: 24rpx;
+}
+
+.record-card-v2.just-saved {
+  border-color: #c9a86a;
+  animation: recordSavedPulse 1.8s ease-out 1;
+}
+
+@keyframes recordSavedPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(201, 168, 106, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 14rpx rgba(201, 168, 106, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(201, 168, 106, 0);
+  }
+}
+
+.record-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+
+.record-card-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.record-card-name {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 650;
+  line-height: 1.38;
+  color: #26261f;
+}
+
+.record-card-sub {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #8a8574;
+}
+
+.record-card-more {
+  flex-shrink: 0;
+  font-size: 30rpx;
+  line-height: 1;
+  letter-spacing: 2rpx;
+  color: #8f8b7d;
+  padding: 0 4rpx;
+}
+
+.record-card-mid {
+  margin-top: 16rpx;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.record-card-qty {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #26261f;
+  letter-spacing: -0.2rpx;
+}
+
+.record-card-cost {
+  flex-shrink: 0;
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #b4453a;
+  letter-spacing: -0.5rpx;
+}
+
+.record-card-foot {
+  margin-top: 14rpx;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.record-card-channel {
+  font-size: 21rpx;
+  color: #8a8574;
+}
+
+.record-card-state {
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 21rpx;
+  font-weight: 700;
+}
+
+.record-card-state.ok {
+  background: #e8f0e6;
+  color: #2f6b4f;
+}
+
+.record-card-state.over {
+  background: #f6efe0;
+  color: #8a6420;
+}
+
+.record-card-state.short {
+  background: #fbeeec;
+  color: #b4453a;
+}
+
+.record-card-state.pending {
+  background: #efeee8;
+  color: #5a5648;
+}
+
+.record-card-edit {
+  margin-left: auto;
+  font-size: 22rpx;
+  font-weight: 650;
+  color: #2f6b4f;
+}
+
+/* ---------- 记录卡「···」菜单 ---------- */
+
+.record-menu-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 16, 12, 0.45);
+  z-index: 1200;
+  display: flex;
+  align-items: flex-end;
+}
+
+.record-menu-sheet {
+  width: 100%;
+  background: #fbf8ec;
+  border-radius: 36rpx 36rpx 0 0;
+  padding: 32rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.record-menu-title {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.record-menu-name {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #26261f;
+}
+
+.record-menu-meta {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #6b6653;
+}
+
+.record-menu-source {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 21rpx;
+  color: #8f8b7d;
+}
+
+.record-menu-item {
+  margin-top: 24rpx;
+  padding: 28rpx 0;
+  border-top: 1rpx solid #efe9d8;
+  font-size: 28rpx;
+  color: #26261f;
+}
+
+.record-menu-item.danger {
+  color: #b4453a;
+}
+
+.record-menu-cancel {
+  margin-top: 8rpx;
+  padding: 24rpx 0 4rpx;
+  text-align: center;
+  font-size: 24rpx;
+  color: #6b6653;
+}
+
 
 </style>

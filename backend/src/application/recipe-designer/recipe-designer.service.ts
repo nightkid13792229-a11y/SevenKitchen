@@ -9103,6 +9103,7 @@ export class RecipeDesignerService {
       preparationRequired: boolean;
       preparationMethod?: string | null;
       supplementTargets?: unknown;
+      costPerBaseUnit?: number | null;
     }> = [];
     // 补剂目标按「每 kg 食材」校验，与发布时同一基准
     const launchFoodWeightG = this.resolveSupplementTargetBasisWeightG(
@@ -9149,6 +9150,10 @@ export class RecipeDesignerService {
         preparationRequired,
         preparationMethod: item.preparationMethod,
         supplementTargets,
+        // 0 成本食材会在产品线发布这一关被拦住（2026-11-07）
+        costPerBaseUnit: isSupplement
+          ? undefined
+          : this.resolveItemCostPerBaseUnit(item),
       });
     }
 
@@ -10277,6 +10282,15 @@ export class RecipeDesignerService {
       mappings[0];
 
     return mapping?.ingredient?.name ?? item.nutritionFood.name;
+  }
+
+  /** 这道菜这行食材「每基准单位成本」；原料没加载出来时返回 null（跳过成本判断）。 */
+  private resolveItemCostPerBaseUnit(item: any): number | null {
+    const cost = item?.ingredient?.getUnitCost?.();
+    if (typeof cost !== 'number' || !Number.isFinite(cost)) {
+      return null;
+    }
+    return cost;
   }
 
   private resolveIngredientType(item: DesignRecipeItemWithFood) {

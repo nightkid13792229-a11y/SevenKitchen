@@ -1849,6 +1849,53 @@ export class RecipeService {
   /**
    * Publish recipe (DRAFT -> PUBLIC)
    */
+  /**
+   * 发布前的成本闸（2026-11-07）。
+   *
+   * 只拦 FOOD：补剂与包材不在本次口径改造范围。
+   * 没有成本 = 没有采购商品或没填价，去原料库补一条商品即可。
+   */
+  private async assertItemsHaveCost(
+    items: Array<{ ingredientId: string }>,
+  ): Promise<void> {
+    if (!items || items.length === 0) {
+      return;
+    }
+
+    const ingredientIds = Array.from(
+      new Set(items.map((item) => item.ingredientId).filter(Boolean)),
+    );
+    if (ingredientIds.length === 0) {
+      return;
+    }
+
+    const ingredients = await this.prisma.ingredient.findMany({
+      where: { id: { in: ingredientIds }, type: 'FOOD' },
+      select: {
+        name: true,
+        currentPricePerPurchaseUnit: true,
+        purchaseToBaseRatio: true,
+      },
+    });
+
+    const missing = ingredients.filter((ingredient) => {
+      const price = Number(ingredient.currentPricePerPurchaseUnit ?? 0);
+      const ratio = Number(ingredient.purchaseToBaseRatio ?? 0);
+      return !(price > 0) || !(ratio > 0);
+    });
+
+    if (missing.length === 0) {
+      return;
+    }
+
+    const names = missing.slice(0, 3).map((ingredient) => ingredient.name);
+    throw new BadRequestException(
+      `这些食材还没有成本，不能发布：${names.join('、')}` +
+        (missing.length > 3 ? ` 等 ${missing.length} 种` : '') +
+        '。请先去原料库给它们补一条采购商品',
+    );
+  }
+
   async publishRecipe(id: string): Promise<RecipeDetailResponseDto> {
     const recipe = await this.prisma.recipe.findUnique({
       where: { id },
@@ -1877,6 +1924,10 @@ export class RecipeService {
       recipe.seriesId,
       RecipeStatus.PUBLIC,
     );
+
+    // 0 成本食材拦住发布（2026-11-07 成本口径归位）：
+    // 这类食材在有成本的食谱里等于白送，售价会被算低，且不报错。
+    await this.assertItemsHaveCost(recipe.items);
 
     // 合规校验：「低脂」声称必须在发布前满足法规数值门槛
     await this.assertLowFatClaimThreshold(

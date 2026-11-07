@@ -62,14 +62,16 @@ export type LaunchReadinessBlockerCode =
   | 'SELLING_POINT_REQUIRED'
   | 'ORDER_ID_REQUIRED'
   | 'ORDER_QUANTITY_INVALID'
-  | 'CUSTOMER_DOG_REQUIRED';
+  | 'CUSTOMER_DOG_REQUIRED'
+  | 'INGREDIENT_COST_MISSING';
 
 export type LaunchReadinessWarningCode =
   | 'REVIEW_REQUIRED'
   | 'MISSING_NUTRITION_DATA'
   | 'NUTRIENT_OUT_OF_RANGE'
   | 'AI_DELIVERY_WARNING'
-  | 'TARGET_HEALTH_TAGS_MISSING';
+  | 'TARGET_HEALTH_TAGS_MISSING'
+  | 'INGREDIENT_COST_MISSING';
 
 export interface LaunchReadinessIssue<TCode extends string = string> {
   code: TCode;
@@ -141,6 +143,13 @@ export interface LaunchReadinessItemInput {
   preparationMethod?: string | null;
   /** 仅用于文档说明；判断时只认 preparationMethod */
   supplementTargets?: unknown;
+  /**
+   * 该食材的来源原料「每基准单位成本」（2026-11-07）。
+   *
+   * 不传 = 调用方没有提供（老路径），此时**不做成本判断**，
+   * 免得把没来得及接数据的入口全部拦死；产品线与订单两条主路径都会传。
+   */
+  costPerBaseUnit?: number | null;
 }
 
 /** 从评估结果里摘出门槛需要的字段，避免域函数依赖整份评估实现。 */
@@ -286,6 +295,33 @@ export const buildDraftLaunchReadiness = (
         itemId: item.id,
         field: 'preparationMethod',
       });
+    }
+
+    // 0 成本食材：产品线发布拦住（售价会算低），订单只提醒（顾客已经下单了）
+    if (
+      !item.isSupplement &&
+      item.costPerBaseUnit !== undefined &&
+      item.costPerBaseUnit !== null &&
+      !(Number(item.costPerBaseUnit) > 0)
+    ) {
+      const message = `食材「${item.name}」还没有成本（没有采购商品或没填价），请先去原料库补一条采购商品`;
+      if (input.designMode === 'CATALOG') {
+        blockers.push({
+          code: 'INGREDIENT_COST_MISSING',
+          scope: 'CATALOG',
+          message,
+          itemId: item.id,
+          field: 'costPerBaseUnit',
+        });
+      } else {
+        warnings.push({
+          code: 'INGREDIENT_COST_MISSING',
+          scope: 'ORDER',
+          message,
+          itemId: item.id,
+          field: 'costPerBaseUnit',
+        });
+      }
     }
 
     if (

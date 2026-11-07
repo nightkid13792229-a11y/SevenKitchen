@@ -199,8 +199,9 @@ describe('staff purchasing detail audit display', () => {
     expect(detailSource).not.toContain('<text class="label">采购类型:</text>');
   });
 
-  it('shows the ingredient name for food items and keeps the purchase SKU prefix off the card', () => {
-    // 2026-11-07 BOSS 反馈：食材卡片要显示原料名称，不能拿采购商品名当原料名
+  it('shows the ingredient name for every item type and keeps the purchase SKU prefix off the card', () => {
+    // 2026-11-07 BOSS 反馈：原料明细要显示原料名称，不能拿采购商品名当原料名；
+    // 补剂、包材是单层产品，原料名就是商品名，不需要按类型分叉。
     expect(detailSource).toContain('getPurchaseItemTitle(item)');
     expect(detailSource).toContain("from './purchase-item-title'");
     expect(detailSource).toContain('resolvePurchaseItemTitle(item)');

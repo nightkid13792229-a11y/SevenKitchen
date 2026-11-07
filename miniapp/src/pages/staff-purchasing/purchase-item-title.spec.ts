@@ -14,37 +14,24 @@ describe('resolvePurchaseItemTitle', () => {
     expect(resolvePurchaseItemTitle(item)).toBe('猪里脊');
   });
 
+  it('shows the ingredient name for supplements and packaging too', () => {
+    // 补剂、包材是单层产品：原料名就是商品名，没有另一层商品名可显示
+    const base = {
+      ingredientName: '鱼油',
+      resolvedProcurementSkuName: '鱼油 500ml',
+    };
+
+    expect(resolvePurchaseItemTitle({ ...base, type: 'SUPPLEMENT' })).toBe('鱼油');
+    expect(resolvePurchaseItemTitle({ ...base, type: 'PACKAGING' })).toBe('鱼油');
+  });
+
   it('falls back to the ingredient relation when the snapshot name is missing', () => {
     expect(
       resolvePurchaseItemTitle({ type: 'FOOD', ingredient: { name: '牛霖' } }),
     ).toBe('牛霖');
   });
 
-  it('keeps the purchase SKU name for supplements and packaging', () => {
-    const base = {
-      ingredientName: '鱼油',
-      resolvedProcurementSkuName: '挪威小鱼油 500ml',
-    };
-
-    expect(resolvePurchaseItemTitle({ ...base, type: 'SUPPLEMENT' })).toBe(
-      '挪威小鱼油 500ml',
-    );
-    expect(resolvePurchaseItemTitle({ ...base, type: 'PACKAGING' })).toBe(
-      '挪威小鱼油 500ml',
-    );
-  });
-
-  it('falls back to the suggested product name for non-food items', () => {
-    expect(
-      resolvePurchaseItemTitle({
-        type: 'SUPPLEMENT',
-        ingredientName: '益生菌',
-        resolvedSuggestedProductName: '某某益生菌',
-      }),
-    ).toBe('某某益生菌');
-  });
-
-  it('treats unknown or missing types as food', () => {
+  it('ignores the item type when picking the name', () => {
     expect(
       resolvePurchaseItemTitle({ ingredientName: '南瓜', type: null }),
     ).toBe('南瓜');
@@ -57,6 +44,9 @@ describe('resolvePurchaseItemTitle', () => {
     expect(
       resolvePurchaseItemTitle({ type: 'FOOD', resolvedProcurementSkuName: '牛腩块' }),
     ).toBe('牛腩块');
+    expect(
+      resolvePurchaseItemTitle({ type: 'SUPPLEMENT', resolvedSuggestedProductName: '某某益生菌' }),
+    ).toBe('某某益生菌');
   });
 
   it('shows a safe placeholder when nothing is available', () => {

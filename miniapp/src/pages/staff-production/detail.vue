@@ -16,17 +16,13 @@
         </view>
       </view>
 
-      <!-- 待制作：详情页直接开工，不用退回列表找按钮 -->
-      <view v-if="taskDetail.status === 'PENDING'" class="start-block">
-        <button class="start-production-btn" :disabled="starting" @tap="startProduction">
-          {{ starting ? '开始中...' : '开始制作' }}
-        </button>
-        <text class="start-hint">开始后进入制作中；至少上传 2 张备料照片才能完工。</text>
-      </view>
-
       <!-- 基本信息 -->
       <view class="section">
         <view class="section-title">基本信息</view>
+        <view class="info-row">
+          <text class="label">生产日期：</text>
+          <text class="value">{{ taskDetail.productionDate }}</text>
+        </view>
         <view class="info-row">
           <text class="label">食谱：</text>
           <text class="value">{{ taskDetail.recipeName }} v{{ taskDetail.recipeVersion }}</text>
@@ -58,7 +54,18 @@
         <view class="section-title">订单分装信息</view>
         <view v-for="order in taskDetail.orderItems" :key="order.orderItemId" class="order-item">
           <view class="order-header">
-            <text class="order-id">订单 {{ formatShortOrderId(order.orderId) }}</text>
+            <text class="order-id">订单 {{ order.orderNo || formatShortOrderId(order.orderId) }}</text>
+          </view>
+          <!-- 过敏 / 分装要求放到订单块最上面，不能让它在最后一行被忽略 -->
+          <view
+            v-if="order.customerNote"
+            class="customer-note"
+            :class="{ 'is-allergy': isAllergyNote(order.customerNote) }"
+          >
+            <text class="customer-note-label">
+              {{ isAllergyNote(order.customerNote) ? '⚠️ 过敏提醒' : '顾客备注' }}
+            </text>
+            <text class="customer-note-text">{{ order.customerNote }}</text>
           </view>
           <view class="order-info">
             <view class="info-row">
@@ -90,11 +97,6 @@
             <view v-if="order.adminRemark" class="info-row">
               <text class="label">内部备注：</text>
               <text class="value remark-text">{{ order.adminRemark }}</text>
-            </view>
-            <!-- 顾客下单时填的备注：过敏、分装要求都在这里 -->
-            <view v-if="order.customerNote" class="info-row">
-              <text class="label">顾客备注：</text>
-              <text class="value remark-text">{{ order.customerNote }}</text>
             </view>
           </view>
         </view>
@@ -247,24 +249,33 @@
               <text class="completion-input-unit">g</text>
             </view>
           </view>
-          <button
-            class="complete-btn"
-            :disabled="!canSubmitCompletion"
-            @tap="completeTask"
-          >
-            {{ completeButtonText }}
-          </button>
         </view>
       </view>
 
-      <!-- 打印按钮（非悬浮，在页面底部） -->
-      <view class="print-section">
-        <button class="print-btn primary" @tap="printLabel">
-          🏷️ 打印标签
-        </button>
-        <button class="print-btn secondary" @tap="printTask">
-          🖨️ 打印制作单
-        </button>
+      <!-- 固定底栏：开始 / 完成 / 打印都放在手指够得到的地方 -->
+      <view class="bottom-action-bar">
+        <text v-if="completeHint" class="bar-hint">{{ completeHint }}</text>
+        <view class="bar-buttons">
+          <button
+            v-if="taskDetail.status === 'PENDING'"
+            class="bar-primary"
+            :disabled="starting"
+            @tap="startProduction"
+          >
+            {{ starting ? '开始中...' : '开始制作' }}
+          </button>
+          <button
+            v-else-if="taskDetail.status === 'IN_PROGRESS'"
+            class="bar-primary"
+            :disabled="!canSubmitCompletion"
+            @tap="completeTask"
+          >
+            {{ isCompleting ? '提交中...' : '完成制作' }}
+          </button>
+          <button v-else class="bar-primary" @tap="printLabel">打印标签</button>
+
+          <button class="bar-secondary" @tap="printTask">打印制作单</button>
+        </view>
       </view>
     </view>
 
@@ -348,23 +359,30 @@ function getOrderTotalNetWeight(order: {
   return Number(order.packageSpecG || 0) * Number(order.packageCount || 0);
 }
 
+function isAllergyNote(note?: string): boolean {
+  return String(note || '').includes('过敏');
+}
+
 function formatShortOrderId(orderId?: string): string {
   if (!orderId) return '-';
   if (orderId.length <= 12) return orderId;
   return `${orderId.slice(0, 8)}...${orderId.slice(-4)}`;
 }
 
-function formatAssociatedOrderIds(orderItems?: Array<{ orderId?: string }>): string {
-  const orderIds = Array.from(
-    new Set(
-      (orderItems || [])
-        .map((order) => order.orderId)
-        .filter((orderId): orderId is string => Boolean(orderId)),
-    ),
-  );
+function formatAssociatedOrderIds(
+  orderItems?: Array<{ orderId?: string; orderNo?: string }>,
+): string {
+  const orderLabels = new Map<string, string>();
+  (orderItems || []).forEach((order) => {
+    if (!order.orderId) return;
+    orderLabels.set(
+      order.orderId,
+      order.orderNo || formatShortOrderId(order.orderId),
+    );
+  });
 
-  if (orderIds.length === 0) return '-';
-  return orderIds.map(formatShortOrderId).join('、');
+  if (orderLabels.size === 0) return '-';
+  return Array.from(orderLabels.values()).join('、');
 }
 
 function formatIngredientDisplayName(item: any): string {
@@ -386,8 +404,10 @@ interface UploadTask {
   error?: string;
 }
 
-// 任务ID
+// 任务ID + 生产日期（列表带过来，详情只查这一天）
 const taskId = ref('');
+const taskDate = ref('');
+const pendingAction = ref('');
 
 // 加载状态
 const loading = ref(true);
@@ -568,6 +588,18 @@ const canSubmitCompletion = computed(() => {
   );
 });
 
+const completeHint = computed(() => {
+  if (!taskDetail.value || taskDetail.value.status !== 'IN_PROGRESS') return '';
+  if (isUploading.value) return '照片上传中，请稍候';
+  if (uploadedPhotos.value.length < MIN_PHOTO_COUNT) {
+    return `还需上传 ${MIN_PHOTO_COUNT - uploadedPhotos.value.length} 张备料照片`;
+  }
+  if (!hasValidCompletionResult.value) {
+    return `请填写${completionInputLabel.value}克数`;
+  }
+  return '';
+});
+
 const completeButtonText = computed(() => {
   if (isCompleting.value) return '提交中...';
   if (isUploading.value) return '照片上传中，请稍候';
@@ -621,14 +653,19 @@ const getTypeClass = (type: string) => {
 };
 
 // 页面加载
-onMounted(() => {
+onMounted(async () => {
   const pages = getCurrentPages();
   const currentPage = pages[pages.length - 1];
   const options = currentPage.options as any;
   taskId.value = options.id;
+  taskDate.value = options.date || '';
+  pendingAction.value = options.action || '';
 
   if (taskId.value) {
-    loadTaskDetail();
+    await loadTaskDetail();
+    if (pendingAction.value === 'print' && taskDetail.value?.status === 'COMPLETED') {
+      printLabel();
+    }
   } else {
     loading.value = false;
     loadError.value = '缺少任务ID';
@@ -648,6 +685,9 @@ async function loadTaskDetail() {
       status: undefined,
       page: 1,
       pageSize: 100,
+      ...(taskDate.value
+        ? { targetDate: taskDate.value, includeUnfinishedCarryover: true }
+        : {}),
     });
 
     const task = res.data.list.find((t: any) => t.id === taskId.value);
@@ -986,10 +1026,8 @@ const completeTask = async () => {
           icon: 'success',
         });
 
-        // 延迟返回
-        setTimeout(() => {
-          goBack();
-        }, 1500);
+        // 完成后留在详情页：结果、照片和打印入口都在这里，不自动跳走。
+        await loadTaskDetail();
       } catch (error: any) {
         uni.hideLoading();
         console.error('Complete task failed:', error);
@@ -1042,7 +1080,7 @@ const printTask = () => {
 };
 
 // 打印标签
-const printLabel = () => {
+function printLabel() {
   if (!taskDetail.value) {
     uni.showToast({
       title: '数据加载中',
@@ -1066,18 +1104,18 @@ const printLabel = () => {
   uni.navigateTo({
     url: `/pages/staff-production/print-label?taskData=${encodedData}`,
   });
-};
+}
 </script>
 
 <style scoped lang="scss">
 .detail-page {
   min-height: 100vh;
   background-color: #fbfcf7;
-  padding-bottom: 120rpx; // 为打印按钮留出空间
+  padding-bottom: calc(200rpx + env(safe-area-inset-bottom));
 }
 
 .detail-content {
-  padding-bottom: 100rpx; // 为打印按钮留出空间
+  padding-bottom: 40rpx;
 }
 
 .loading-state,
@@ -1117,33 +1155,6 @@ const printLabel = () => {
   .back-btn {
     background-color: #eef2e4;
     color: #1e3a2f;
-  }
-}
-
-.start-block {
-  margin: 0 32rpx 24rpx;
-  padding: 24rpx;
-  background-color: #fff;
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
-
-  .start-production-btn {
-    width: 100%;
-    height: 88rpx;
-    line-height: 88rpx;
-    background-color: #1e3a2f;
-    color: #f3eddd;
-    border: none;
-    border-radius: 12rpx;
-    font-size: 30rpx;
-    font-weight: 600;
-  }
-
-  .start-hint {
-    display: block;
-    margin-top: 12rpx;
-    font-size: 24rpx;
-    color: #6b6653;
   }
 }
 
@@ -1241,6 +1252,39 @@ const printLabel = () => {
     word-break: break-all;
   }
 
+}
+
+.customer-note {
+  margin-bottom: 16rpx;
+  padding: 14rpx 18rpx;
+  background-color: #fdf6ec;
+  border-left: 6rpx solid #e6a23c;
+  border-radius: 8rpx;
+
+  &.is-allergy {
+    background-color: #fdecea;
+    border-left-color: #b4453a;
+  }
+
+  .customer-note-label {
+    display: block;
+    margin-bottom: 6rpx;
+    font-size: 24rpx;
+    font-weight: 600;
+    color: #7a5c28;
+  }
+
+  &.is-allergy .customer-note-label {
+    color: #b4453a;
+  }
+
+  .customer-note-text {
+    display: block;
+    font-size: 26rpx;
+    line-height: 1.6;
+    color: #26261f;
+    word-break: break-all;
+  }
 }
 
 .order-item {
@@ -1635,64 +1679,51 @@ const printLabel = () => {
   font-size: 26rpx;
 }
 
-.complete-btn {
-  width: 100%;
-  height: 88rpx;
-  line-height: 88rpx;
-  background-color: #1e3a2f;
-  color: #f3eddd;
-  border: none;
-  border-radius: 8rpx;
-  font-size: 32rpx;
-  font-weight: bold;
-  text-align: center;
-
-  &[disabled] {
-    background-color: #f2f4ea;
-    color: #6b6653;
-  }
-}
-
-.print-section {
+.bottom-action-bar {
   position: fixed;
-  bottom: 0;
   left: 0;
   right: 0;
-  display: flex;
-  gap: 16rpx;
-  padding: 24rpx 32rpx;
-  background-color: #fbfcf7;
-  border-top: 1rpx solid #eef1e2;
-  box-shadow: 0 -2rpx 8rpx rgba(30, 46, 36, 0.05);
+  bottom: 0;
   z-index: 999;
+  padding: 12rpx 32rpx calc(16rpx + env(safe-area-inset-bottom));
+  background-color: #fff;
+  border-top: 1rpx solid #eef1e2;
+  box-shadow: 0 -4rpx 16rpx rgba(30, 46, 36, 0.06);
+
+  .bar-hint {
+    display: block;
+    padding: 0 4rpx 10rpx;
+    font-size: 24rpx;
+    color: #8a5a00;
+    text-align: center;
+  }
+
+  .bar-buttons {
+    display: flex;
+    gap: 16rpx;
+  }
 }
 
-.print-btn {
+.bar-primary,
+.bar-secondary {
   flex: 1;
-  height: 72rpx;
-  line-height: 72rpx;
-  border-radius: 8rpx;
-  font-size: 28rpx;
-  font-weight: 500;
+  height: 88rpx;
+  line-height: 88rpx;
   border: none;
-
-  &.primary {
-    background-color: #1e3a2f;
-    color: #f3eddd;
-
-    &:active {
-      background-color: #1e3a2f;
-    }
-  }
-
-  &.secondary {
-    background-color: #fbfcf7;
-    color: #b08d4f;
-    border: 2rpx solid #1e3a2f;
-
-    &:active {
-      background-color: #eef2e4;
-    }
-  }
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  text-align: center;
 }
+
+.bar-primary {
+  background-color: #1e3a2f;
+  color: #f3eddd;
+}
+
+.bar-secondary {
+  background-color: #eef2e4;
+  color: #1e3a2f;
+}
+
 </style>

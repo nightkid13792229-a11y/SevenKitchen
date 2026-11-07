@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 const indexSource = readFileSync(resolve(__dirname, 'staff-production/index.vue'), 'utf8');
 const productionApiSource = readFileSync(resolve(__dirname, 'staff-production/api/production.ts'), 'utf8');
 const detailSource = readFileSync(resolve(__dirname, 'staff-production/detail.vue'), 'utf8');
+const packingSource = readFileSync(resolve(__dirname, 'staff-production/components/SupplementPacking.vue'), 'utf8');
 const printTaskSource = readFileSync(resolve(__dirname, 'staff-production/print-task.vue'), 'utf8');
 const printLabelSource = readFileSync(resolve(__dirname, 'staff-production/print-label.vue'), 'utf8');
 const labelConfigSource = readFileSync(resolve(__dirname, 'staff-production/utils/label-config.ts'), 'utf8');
@@ -60,8 +61,10 @@ describe('staff production scheduling guardrails', () => {
 
   it('moves staff into the task detail immediately after starting production', () => {
     expect(indexSource).toContain('await startProductionTask(task.id)');
-    expect(indexSource).toContain('uni.navigateTo({');
-    expect(indexSource).toContain('url: `/pages/staff-production/detail?id=${task.id}`');
+    expect(indexSource).toContain('viewDetails(task)');
+    expect(indexSource).toContain(
+      'url: `/pages/staff-production/detail?id=${task.id}${date}${extra}`',
+    );
   });
 
   it('keeps the task detail focused on production state instead of duplicate navigation chrome', () => {
@@ -187,7 +190,7 @@ describe('staff production scheduling guardrails', () => {
 
   it('makes production date filtering explicit and keeps carryover tasks visible', () => {
     expect(indexSource).toContain('mode="date"');
-    expect(indexSource).toContain('handleProductionDateChange');
+    expect(indexSource).toContain('handleDateChange');
     expect(indexSource).toContain('autoSchedule({');
     expect(indexSource).toContain('startDate: selectedProductionDate.value');
     expect(indexSource).toContain('isCarryoverTask(task)');
@@ -304,7 +307,7 @@ describe('生产管理 · Phase 1 安全与信任', () => {
   it('待制作任务在详情页可以直接开始制作', () => {
     expect(detailSource).toContain('startProductionTask');
     expect(detailSource).toContain('startProduction');
-    expect(detailSource).toContain('start-production-btn');
+    expect(detailSource).toContain('bar-primary');
     expect(detailSource).toContain("taskDetail.status === 'PENDING'");
   });
 
@@ -327,9 +330,10 @@ describe('生产管理 · Phase 1 安全与信任', () => {
     expect(indexSource).toContain("'逾期'");
   });
 
-  it('制作中可继续制作，已完成可查看详情，不再只剩删除', () => {
+  it('制作中可继续制作，已完成可直接打印标签，不再只剩删除', () => {
     expect(indexSource).toContain('继续制作');
-    expect(indexSource).toContain('查看详情');
+    expect(indexSource).toContain('打印标签');
+    expect(indexSource).toContain("viewDetails(task, 'print')");
     expect(indexSource).toContain("task.status === 'IN_PROGRESS'");
     expect(indexSource).toContain("task.status === 'COMPLETED'");
   });
@@ -347,5 +351,56 @@ describe('生产管理 · Phase 1 安全与信任', () => {
 
   it('开始制作成功后本地切换状态，不再回查最近 100 条', () => {
     expect(detailSource).toContain("taskDetail.value.status = 'IN_PROGRESS'");
+  });
+});
+
+describe('生产管理 · Phase 2 现场流程', () => {
+  it('两个模式共用一个日期控件，标签随模式变，切模式回顶部', () => {
+    expect(indexSource).toContain('datePickerValue');
+    expect(indexSource).toContain('dateLabel');
+    expect(indexSource).toContain('补剂发货日');
+    expect(indexSource).toContain(':date="selectedPackingDate"');
+    expect(indexSource).toContain('handleDateChange');
+    expect(indexSource).toContain('uni.pageScrollTo');
+  });
+});
+
+describe('生产管理 · Phase 2 现场流程（详情 / 过敏 / 补剂 / 搜索）', () => {
+  it('详情页按日期+ID 取数、显示生产日期、底部固定操作条、完工不自动返回', () => {
+    expect(detailSource).toContain('taskDate');
+    expect(detailSource).toContain('includeUnfinishedCarryover: true');
+    expect(detailSource).toContain('生产日期：');
+    expect(detailSource).toContain('bottom-action-bar');
+    expect(detailSource).toContain('bar-primary');
+    expect(detailSource).not.toContain('setTimeout');
+    expect(detailSource).toContain("pendingAction.value === 'print'");
+  });
+
+  it('过敏 / 备注在列表和详情前置', () => {
+    expect(indexSource).toContain('hasAllergyNote');
+    expect(indexSource).toContain('allergy-badge');
+    expect(indexSource).toContain('有备注');
+    expect(detailSource).toContain('customer-note');
+    expect(detailSource).toContain('isAllergyNote');
+    expect(detailSource).toContain('过敏提醒');
+  });
+
+  it('补剂看板显示顾客名、产能预警、空态合并、行可点提示', () => {
+    expect(packingSource).toContain('order.receiverName');
+    expect(packingSource).toContain('capacityOver');
+    expect(packingSource).toContain('v-if="orders.length > 0"');
+    expect(packingSource).toContain('查看详情 ›');
+  });
+
+  it('十锅以上可搜索，默认落到有活的模式', () => {
+    expect(indexSource).toContain('search-bar');
+    expect(indexSource).toContain('totalTaskCount > 8');
+    expect(indexSource).toContain('maybePickInitialMode');
+    expect(indexSource).toContain('userPickedMode');
+  });
+
+  it('详情和打印带订单号，不再只给截断 ID', () => {
+    expect(detailSource).toContain('order.orderNo');
+    expect(printTaskSource).toContain('order.orderNo');
   });
 });

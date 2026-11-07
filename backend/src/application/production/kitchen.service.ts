@@ -417,6 +417,7 @@ export class StaffProductionService {
           infoByOrderItemId.set(item.id, {
             orderId: order.id,
             orderItemId: item.id,
+            orderNo: order.orderNo ?? undefined,
             dogName: order.dog?.name || '未知狗狗', // ✅ 使用真实狗狗名称
             packageSpecG: item.packageSpecG,
             packageCount: item.packageCount,

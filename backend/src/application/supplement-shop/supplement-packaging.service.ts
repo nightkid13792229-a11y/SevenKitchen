@@ -164,6 +164,7 @@ export class SupplementPackagingService {
         orderNo: true,
         status: true,
         bagCount: true,
+        shippingAddressSnapshot: true,
         items: {
           select: {
             ingredientId: true,
@@ -296,6 +297,8 @@ export class SupplementPackagingService {
         orderNo: order.orderNo,
         status: order.status,
         bagCount: order.bagCount,
+        receiverName:
+          (order.shippingAddressSnapshot as any)?.recipientName || '',
       })),
     };
   }

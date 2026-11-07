@@ -31,6 +31,7 @@ export class AutoScheduleDto {
 export class OrderPackagingInfoDto {
   orderId!: string;
   orderItemId!: string;
+  orderNo?: string;
 
   dogName!: string;
 

@@ -32,7 +32,7 @@
                 :key="index"
                 class="order-card"
               >
-                <view class="order-card-title">订单 {{ index + 1 }}</view>
+                <view class="order-card-title">订单 {{ order.orderNo || index + 1 }}</view>
                 <view class="order-grid">
                   <view class="order-field">
                     <text class="field-label">总净重</text>
@@ -117,6 +117,7 @@ interface PrintData {
   createdAt: string;
   completedAt?: string;
   orderItems: Array<{
+    orderNo?: string;
     packageSpecG: number;
     packageCount: number;
     packagePlan?: Array<{ packageSpecG: number; packageCount: number }>;

@@ -14,20 +14,21 @@
       </view>
     </view>
 
-    <view v-show="activeMode === 'FRESH'" class="mode-panel">
-      <view class="date-section">
-        <picker mode="date" :value="selectedProductionDate" @change="handleProductionDateChange">
-          <view class="date-picker">
-            <view>
-              <text class="date-label">生产日期</text>
-              <text class="date-value">{{ selectedProductionDate }}</text>
-            </view>
-            <text class="date-arrow">切换</text>
+    <!-- 生产日期 / 补剂发货日共用一个日期控件，标签随模式变 -->
+    <view class="date-section">
+      <picker mode="date" :value="datePickerValue" @change="handleDateChange">
+        <view class="date-picker">
+          <view>
+            <text class="date-label">{{ dateLabel }}</text>
+            <text class="date-value">{{ datePickerValue }}</text>
           </view>
-        </picker>
-        <text class="date-hint">未完成的历史制作单会继续显示，避免跨天漏单</text>
-      </view>
+          <text class="date-arrow">切换</text>
+        </view>
+      </picker>
+      <text class="date-hint">{{ dateHint }}</text>
+    </view>
 
+    <view v-show="activeMode === 'FRESH'" class="mode-panel">
       <!-- 统计卡片：与下方列表同源，跨天未完成的锅也计入，首屏不再出现「0 但有两张卡」 -->
       <view class="stats-section">
         <view class="stat-card">
@@ -50,6 +51,17 @@
       <text v-if="carryoverTaskCount > 0" class="stats-note">
         含跨天 {{ carryoverTaskCount }} 锅 · {{ carryoverDateText }}
       </text>
+
+      <!-- 十锅以上给搜索：现场找某一锅不用一直滚 -->
+      <view v-if="totalTaskCount > 8 || keyword" class="search-bar">
+        <input
+          v-model="keyword"
+          class="search-input"
+          placeholder="搜索食谱 / 订单号"
+          confirm-type="search"
+        />
+        <text v-if="keyword" class="search-clear" @tap="keyword = ''">清除</text>
+      </view>
 
       <!-- 自动排单按钮（所选日期仍有未分配订单时显示） -->
       <view v-if="canAutoSchedule" class="schedule-section">
@@ -92,7 +104,7 @@
         <!-- 空状态 -->
         <view v-else-if="filteredTasks.length === 0" class="empty-state">
           <text class="empty-icon">👨‍🍳</text>
-          <text class="empty-text">暂无{{ currentTabLabel }}任务</text>
+          <text class="empty-text">{{ emptyText }}</text>
         </view>
 
         <!-- 任务卡片：按生产日期分组，最老的排前面 -->
@@ -119,6 +131,8 @@
                   >
                     {{ isOverdueTask(task) ? '逾期' : '跨天' }}
                   </text>
+                  <text v-if="hasAllergyNote(task)" class="note-badge allergy-badge">过敏</text>
+                  <text v-else-if="hasAnyNote(task)" class="note-badge">有备注</text>
                 </view>
                 <text class="pot-info">({{ task.currentPotNumber }}/{{ task.totalPots }})</text>
               </view>
@@ -165,14 +179,14 @@
                 <text class="btn-text">继续制作</text>
               </button>
 
-              <!-- COMPLETED：查看详情，已完成的删除入口不显示 -->
+              <!-- COMPLETED：直接进标签打印；卡片正文仍可看详情 -->
               <button
                 v-else-if="task.status === 'COMPLETED'"
                 class="start-btn"
-                @tap.stop="viewDetails(task)"
+                @tap.stop="viewDetails(task, 'print')"
               >
-                <text class="btn-icon">🔎</text>
-                <text class="btn-text">查看详情</text>
+                <text class="btn-icon">🏷️</text>
+                <text class="btn-text">打印标签</text>
               </button>
 
               <!-- 删除按生产批次执行；已完成和含完成锅的批次不显示 -->
@@ -208,7 +222,11 @@
 
     <!-- 补剂分装：原来工作台上的「分装备料」整块搬到这里 -->
     <view v-show="activeMode === 'SUPPLEMENT'" class="mode-panel">
-      <SupplementPacking ref="supplementRef" @count="onSupplementCount" />
+      <SupplementPacking
+        ref="supplementRef"
+        :date="selectedPackingDate"
+        @count="onSupplementCount"
+      />
     </view>
   </view>
 </template>
@@ -229,16 +247,36 @@ const getTodayDateText = () => {
 };
 
 const selectedProductionDate = ref(getTodayDateText());
+const selectedPackingDate = ref(getTodayDateText());
 
 // 鲜食 / 补剂同属生产环节，共用一个入口，进来再分。
 type ProductionMode = 'FRESH' | 'SUPPLEMENT';
 const activeMode = ref<ProductionMode>('FRESH');
 const supplementRef = ref<any>(null);
 const supplementCount = ref(0);
+const freshLoaded = ref(false);
+const supplementLoaded = ref(false);
+const modeInitialized = ref(false);
+const userPickedMode = ref(false);
+
+// 两个模式共用一个日期控件，只是标签和值跟着切。
+const datePickerValue = computed(() =>
+  activeMode.value === 'FRESH' ? selectedProductionDate.value : selectedPackingDate.value,
+);
+const dateLabel = computed(() =>
+  activeMode.value === 'FRESH' ? '生产日期' : '补剂发货日',
+);
+const dateHint = computed(() =>
+  activeMode.value === 'FRESH'
+    ? '未完成的历史制作单会继续显示，避免跨天漏单'
+    : '按发货日看订单 / 备料 / 包材 / 缺料',
+);
 
 const switchMode = (mode: ProductionMode) => {
   if (activeMode.value === mode) return;
+  userPickedMode.value = true;
   activeMode.value = mode;
+  uni.pageScrollTo({ scrollTop: 0, duration: 0 });
   if (mode === 'SUPPLEMENT') {
     supplementRef.value?.refresh?.();
   }
@@ -246,7 +284,24 @@ const switchMode = (mode: ProductionMode) => {
 
 const onSupplementCount = (value: number) => {
   supplementCount.value = Number(value || 0);
+  supplementLoaded.value = true;
+  maybePickInitialMode();
 };
+
+// 首屏默认落到有活的模式：鲜食 0 锅、补剂有单时，不用再手动切。
+function maybePickInitialMode() {
+  if (modeInitialized.value || userPickedMode.value) return;
+  if (!freshLoaded.value || !supplementLoaded.value) return;
+
+  if (totalTaskCount.value > 0) {
+    modeInitialized.value = true;
+    return;
+  }
+  if (supplementCount.value > 0) {
+    activeMode.value = 'SUPPLEMENT';
+  }
+  modeInitialized.value = true;
+}
 
 // 统计数据：只保留「待排单订单」这一项来自后台；
 // 其余三个数字都从下方列表同源计算，避免首屏和列表各说各话。
@@ -298,6 +353,14 @@ const isCarryoverTask = (task: any) => {
   );
 };
 
+// 顾客备注里可能写过敏；有就挂个标，别让人非得点进详情才知道。
+const hasAnyNote = (task: any) =>
+  (task?.orderItems || []).some((item: any) => Boolean(item?.customerNote));
+const hasAllergyNote = (task: any) =>
+  (task?.orderItems || []).some((item: any) =>
+    String(item?.customerNote || '').includes('过敏'),
+  );
+
 // 逾期只认「生产日期早于今天」；选未来日期时，今天的单是「跨天」不是「逾期」。
 const isOverdueTask = (task: any) => {
   return Boolean(
@@ -330,6 +393,7 @@ const historyBatches = computed(() => {
 const expandedHistoryId = ref<string | null>(null);
 
 const activeTab = ref('PENDING');
+const keyword = ref('');
 
 const taskStatusCounts = computed(() => {
   return visibleTasks.value.reduce(
@@ -380,9 +444,24 @@ const currentTabLabel = computed(() => {
   return tab ? tab.label : '';
 });
 
-// 计算属性：筛选后的任务列表
+// 计算属性：筛选后的任务列表（状态 + 食谱 / 订单号搜索）
 const filteredTasks = computed(() => {
-  return visibleTasks.value.filter((task) => task.status === activeTab.value);
+  const query = keyword.value.trim().toLowerCase();
+  return visibleTasks.value.filter((task) => {
+    if (task.status !== activeTab.value) return false;
+    if (!query) return true;
+    const recipe = `${task.recipeName || ''} v${task.recipeVersion || ''}`.toLowerCase();
+    const orderText = (task.orderItems || [])
+      .map((item: any) => item.orderNo || item.orderId || '')
+      .join(' ')
+      .toLowerCase();
+    return recipe.includes(query) || orderText.includes(query);
+  });
+});
+
+const emptyText = computed(() => {
+  const query = keyword.value.trim();
+  return query ? `没有匹配「${query}」的任务` : `暂无${currentTabLabel.value}任务`;
 });
 
 const canAutoSchedule = computed(() => {
@@ -478,6 +557,9 @@ async function refreshAll() {
   ]);
   if (!statsOk || !listOk) {
     loadError.value = '请检查网络后重试';
+  } else {
+    freshLoaded.value = true;
+    maybePickInitialMode();
   }
   loading.value = false;
 }
@@ -493,16 +575,21 @@ onPullDownRefresh(async () => {
   }
 });
 
-const handleProductionDateChange = async (event: any) => {
+const handleDateChange = async (event: any) => {
   const nextDate = event?.detail?.value;
-  if (!nextDate || nextDate === selectedProductionDate.value) {
+  if (!nextDate) return;
+
+  if (activeMode.value === 'FRESH') {
+    if (nextDate === selectedProductionDate.value) return;
+    selectedProductionDate.value = nextDate;
+    // 先清空旧日期数据，避免切换瞬间把旧单按新日期标成「逾期」。
+    allTasks.value = [];
+    await refreshAll();
     return;
   }
 
-  selectedProductionDate.value = nextDate;
-  // 先清空旧日期数据，避免切换瞬间把旧单按新日期标成「逾期」。
-  allTasks.value = [];
-  await refreshAll();
+  if (nextDate === selectedPackingDate.value) return;
+  selectedPackingDate.value = nextDate;
 };
 
 // 自动排单
@@ -544,10 +631,12 @@ const switchTab = (tab: string) => {
   activeTab.value = tab;
 };
 
-// 查看详情
-const viewDetails = (task: any) => {
+// 查看详情：带上生产日期，详情页只查这一天，不再全库找最近 100 条。
+const viewDetails = (task: any, action?: 'print') => {
+  const date = task.productionDate ? `&date=${encodeURIComponent(task.productionDate)}` : '';
+  const extra = action ? `&action=${action}` : '';
   uni.navigateTo({
-    url: `/pages/staff-production/detail?id=${task.id}`,
+    url: `/pages/staff-production/detail?id=${task.id}${date}${extra}`,
   });
 };
 
@@ -574,9 +663,7 @@ const handleStartTask = async (task: any) => {
 
           await loadPackagingUnits();
           await loadTodayStatistics();
-          uni.navigateTo({
-            url: `/pages/staff-production/detail?id=${task.id}`,
-          });
+          viewDetails(task);
         } else {
           uni.showToast({
             title: result.message || '操作失败',
@@ -957,6 +1044,45 @@ const toggleHistory = (batchId: string) => {
 
 .task-list {
   padding: 0 32rpx;
+}
+
+.note-badge {
+  padding: 4rpx 12rpx;
+  font-size: 24rpx;
+  color: #7a5c28;
+  background-color: #f6efe0;
+  border-radius: 6rpx;
+  white-space: nowrap;
+}
+
+.allergy-badge {
+  color: #b4453a;
+  background-color: #fdecea;
+  font-weight: 600;
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin: 0 32rpx 24rpx;
+  padding: 0 24rpx;
+  height: 72rpx;
+  background-color: #fff;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
+}
+
+.search-input {
+  flex: 1;
+  font-size: 28rpx;
+  color: #26261f;
+}
+
+.search-clear {
+  padding: 8rpx;
+  font-size: 24rpx;
+  color: #6b6653;
 }
 
 .date-group-title {

@@ -30,7 +30,7 @@ describe('生产管理 · 鲜食 / 补剂分装共用入口', () => {
   it('补剂面板就是原来的分装备料，整块挂在生产管理页里', () => {
     expect(productionSource).toContain('<SupplementPacking')
     expect(packingSource).toContain("url: '/admin/supplement-shop/packing-summary'")
-    expect(packingSource).toContain('data: { date: date.value }')
+    expect(packingSource).toContain('data: { date: props.date }')
     expect(packingSource).toContain('v-for="order in orders"')
     expect(packingSource).toContain('{{ order.orderNo }}')
     expect(packingSource).toContain('{{ order.bagCount }}')
@@ -62,6 +62,7 @@ describe('生产管理 · 鲜食 / 补剂分装共用入口', () => {
   it('补剂面板在组件里，靠父页面 onShow 手动刷新，避免返回后状态还是旧的', () => {
     expect(packingSource).toContain('defineExpose({ refresh: load })')
     expect(packingSource).toContain('onMounted(load)')
+    expect(packingSource).toContain('watch(')
     expect(packingSource).not.toContain("from '@dcloudio/uni-app'")
     expect(productionSource).toContain('supplementRef.value?.refresh?.()')
     expect(productionSource).toContain("activeMode.value === 'SUPPLEMENT'")

@@ -1,12 +1,5 @@
 <template>
   <view class="packing-panel">
-    <view class="panel-head">
-      <text class="panel-sub">按发货日看订单 / 备料 / 包材 / 缺料</text>
-      <picker mode="date" :value="date" @change="onDateChange">
-        <view class="date-btn">{{ date }}</view>
-      </picker>
-    </view>
-
     <view v-if="loading && !data" class="state"><text>加载中…</text></view>
     <view v-else-if="loadError && !data" class="state error-state">
       <text class="state-title">没取到当天的分装备料</text>
@@ -32,7 +25,10 @@
         <view v-for="order in orders" :key="order.id" class="order-row">
           <view class="order-main" @tap="openOrder(order)">
             <text class="order-no">{{ order.orderNo }}</text>
-            <text class="order-meta">{{ statusText(order.status) }} · {{ order.bagCount }} 袋</text>
+            <text class="order-meta">
+              {{ order.receiverName ? order.receiverName + ' · ' : '' }}{{ statusText(order.status) }} · {{ order.bagCount }} 袋
+            </text>
+            <text class="order-hint">查看详情 ›</text>
           </view>
           <view class="order-print" @tap.stop="openLabels(order)">
             <text>打印标签</text>
@@ -41,53 +37,57 @@
 
         <view v-if="orders.length === 0 && !loadError" class="empty-block">
           <text class="empty">这天没有待发货的订单</text>
-          <text class="empty-hint">刚下单还没看到，可能还没确认收款、还没排期，或排到了别的发货日（右上角可切换日期）。</text>
+          <text class="empty-hint">刚下单还没看到，可能还没确认收款、还没排期，或排到了别的发货日（上方可切换日期）。</text>
           <view class="ghost-btn" @tap="goAllOrders">去看全部补剂订单</view>
         </view>
       </view>
 
-      <view class="hero">
-        <view class="hero-item"><text class="hero-value">{{ data?.orderCount || 0 }}</text><text class="hero-label">订单</text></view>
-        <view class="hero-item"><text class="hero-value">{{ data?.bagCount || 0 }}</text><text class="hero-label">总袋数</text></view>
-        <view class="hero-item"><text class="hero-value">{{ data?.capacity || 0 }}</text><text class="hero-label">产能</text></view>
-      </view>
-
-      <view class="card">
-        <text class="section-title">补剂总用量</text>
-        <view v-for="item in data?.ingredientTotals || []" :key="`${item.ingredientId}-${item.unit}`" class="row">
-          <view>
-            <text class="name">{{ item.name }}</text>
-            <text class="desc">{{ item.quantity }} {{ item.unit }} · {{ item.orderCount }} 单</text>
-          </view>
-          <text :class="item.shortage > 0 ? 'badge red' : 'badge green'">
-            {{ item.shortage > 0 ? `缺 ${item.shortage} ${item.unit}` : '足' }}
-          </text>
+      <template v-if="orders.length > 0">
+        <view class="hero">
+          <view class="hero-item"><text class="hero-value">{{ data?.orderCount || 0 }}</text><text class="hero-label">订单</text></view>
+          <view class="hero-item"><text class="hero-value">{{ data?.bagCount || 0 }}</text><text class="hero-label">总袋数</text></view>
+          <view class="hero-item"><text class="hero-value">{{ data?.capacity || 0 }}</text><text class="hero-label">产能（袋/天）</text></view>
         </view>
-        <text v-if="(data?.ingredientTotals || []).length === 0 && !loadError" class="empty">当天没有待发货订单</text>
-      </view>
-
-      <view class="card">
-        <text class="section-title">包材需求</text>
-        <view v-for="item in data?.packagingNeeds || []" :key="item.role + item.name" class="row">
-          <view>
-            <text class="name">{{ item.name }}</text>
-            <text class="desc">{{ roleLabel(item.role) }} · {{ item.configured ? '已配置' : '未配置' }}</text>
-          </view>
-          <text class="qty">{{ item.quantity }}</text>
+        <view v-if="capacityOver > 0" class="capacity-warning">
+          今日 {{ data?.bagCount || 0 }} 袋，超出日产能 {{ capacityOver }} 袋
         </view>
-      </view>
 
-      <view v-if="(data?.missingPouchRules || []).length" class="card warning-card">
-        <text class="section-title">未配置袋型（{{ data?.missingPouchRules?.length }}）</text>
-        <text class="warning-text">{{ data?.missingPouchRules?.join('；') }}</text>
-      </view>
-      <view class="notice">缺料会按账面数量提示，但不阻断分装；请先核对库存，异常时联系管理员。</view>
+        <view class="card">
+          <text class="section-title">补剂总用量</text>
+          <view v-for="item in data?.ingredientTotals || []" :key="`${item.ingredientId}-${item.unit}`" class="row">
+            <view>
+              <text class="name">{{ item.name }}</text>
+              <text class="desc">{{ item.quantity }} {{ item.unit }} · {{ item.orderCount }} 单</text>
+            </view>
+            <text :class="item.shortage > 0 ? 'badge red' : 'badge green'">
+              {{ item.shortage > 0 ? `缺 ${item.shortage} ${item.unit}` : '足' }}
+            </text>
+          </view>
+        </view>
+
+        <view class="card">
+          <text class="section-title">包材需求</text>
+          <view v-for="item in data?.packagingNeeds || []" :key="item.role + item.name" class="row">
+            <view>
+              <text class="name">{{ item.name }}</text>
+              <text class="desc">{{ roleLabel(item.role) }} · {{ item.configured ? '已配置' : '未配置' }}</text>
+            </view>
+            <text class="qty">{{ item.quantity }}</text>
+          </view>
+        </view>
+
+        <view v-if="(data?.missingPouchRules || []).length" class="card warning-card">
+          <text class="section-title">未配置袋型（{{ data?.missingPouchRules?.length }}）</text>
+          <text class="warning-text">{{ data?.missingPouchRules?.join('；') }}</text>
+        </view>
+        <view class="notice">缺料会按账面数量提示，但不阻断分装；请先核对库存，异常时联系管理员。</view>
+      </template>
     </template>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { request } from '../../../utils/api'
 
 interface PackingOrder {
@@ -95,18 +95,22 @@ interface PackingOrder {
   orderNo: string
   status: string
   bagCount: number
+  receiverName?: string
 }
 
+const props = defineProps<{ date: string }>()
 const emit = defineEmits<{ (event: 'count', value: number): void }>()
 
-const loading = ref(false)
-const now = new Date()
-const date = ref(
-  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
-)
+const loading = ref(true)
 const data = ref<any>(null)
 const loadError = ref('')
 const orders = computed<PackingOrder[]>(() => data.value?.orders || [])
+const capacityOver = computed(() =>
+  Math.max(
+    Number(data.value?.bagCount || 0) - Number(data.value?.capacity || 0),
+    0,
+  ),
+)
 
 const STATUS_TEXT: Record<string, string> = {
   PENDING_PAYMENT: '待确认收款',
@@ -124,13 +128,6 @@ function statusText(value: string) {
 
 function roleLabel(role: string) {
   return ({ POUCH: '分装袋', DESICCANT: '干燥剂', LABEL: '标签' } as Record<string, string>)[role] || role
-}
-
-function onDateChange(event: any) {
-  date.value = event.detail.value
-  // 换日期先清掉旧日期的数据，避免日期已经变了、下面还是上一天的单。
-  data.value = null
-  load()
 }
 
 function openOrder(order: PackingOrder) {
@@ -157,7 +154,7 @@ async function load() {
     const res = await request({
       url: '/admin/supplement-shop/packing-summary',
       method: 'GET',
-      data: { date: date.value },
+      data: { date: props.date },
     })
     if (res.code === 0) {
       data.value = res.data
@@ -174,6 +171,14 @@ async function load() {
 
 // 这一块现在是生产管理页里的一个面板，页面的 onShow 不会再自动跑到这里，
 // 所以由父页面在「回到本页」或「切到补剂」时手动调 refresh()。
+// 日期由父页面统一控制，换日期时清掉旧数据再拉。
+watch(
+  () => props.date,
+  () => {
+    data.value = null
+    load()
+  },
+)
 defineExpose({ refresh: load })
 
 onMounted(load)
@@ -191,6 +196,7 @@ onMounted(load)
 .error-state .ghost-btn { margin-top: 24rpx; }
 .inline-error { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16rpx; padding: 14rpx 20rpx; background: #fdf6ec; border-radius: 10rpx; font-size: 24rpx; color: #8a5a00; }
 .inline-error .retry-link { color: #7a5c28; font-weight: 600; padding: 8rpx 12rpx; }
+.capacity-warning { margin-bottom: 20rpx; padding: 12rpx 18rpx; background: #fdecea; color: #b4453a; border-radius: 10rpx; font-size: 24rpx; }
 .hero { display: flex; background: linear-gradient(140deg, #1e3a2f, #2b5040); border-radius: 18rpx; padding: 28rpx; color: #f7f3e8; margin-bottom: 20rpx; }
 .hero-item { flex: 1; text-align: center; }
 .hero-value { display: block; font-size: 40rpx; font-weight: 700; }
@@ -213,6 +219,7 @@ onMounted(load)
 .order-main { flex: 1; min-width: 0; }
 .order-no { display: block; font-size: 27rpx; font-weight: 600; color: #303133; }
 .order-meta { display: block; margin-top: 4rpx; font-size: 22rpx; color: #909399; }
+.order-hint { display: block; margin-top: 4rpx; font-size: 24rpx; color: #2b5040; }
 .order-print { flex-shrink: 0; margin-left: 16rpx; padding: 12rpx 20rpx; border: 1rpx solid #2b5040; border-radius: 999rpx; font-size: 24rpx; line-height: 1.4; color: #2b5040; background: #fff; }
 .order-print:active { background: #eef2e4; }
 .empty-block { padding: 26rpx 0 8rpx; text-align: center; }

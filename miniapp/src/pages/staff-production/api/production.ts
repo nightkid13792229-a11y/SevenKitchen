@@ -101,6 +101,7 @@ export function getPackagingUnits(params: {
       orderItems: Array<{
         orderId: string;
         orderItemId: string;
+        orderNo?: string;
         dogName: string;
         packageSpecG: number; // 单包规格（g）
         packageCount: number; // 总袋数

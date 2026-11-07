@@ -102,7 +102,7 @@ export class SupplementAgentService {
 
   async run(input: SupplementAgentInput): Promise<SupplementAgentResult> {
     const runtime = await this.loadRuntime();
-    const context = this.contextFor(input.draft);
+    const context = this.contextFor(input.draft, input.message);
     const messages: Record<string, unknown>[] = [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: this.describeDraft(input.draft) },
@@ -198,8 +198,15 @@ export class SupplementAgentService {
   }
 
   /** 草稿是这次运行的副本：工具写它，跑完再由调用方决定怎么合回去。 */
-  private contextFor(draft: SupplementDraftRecord): ToolContext {
-    return { knowledge: this.knowledge, preview: this.preview, catalog: this.catalog, draft: { ...draft } };
+  private contextFor(draft: SupplementDraftRecord, message: string): ToolContext {
+    return {
+      knowledge: this.knowledge,
+      preview: this.preview,
+      catalog: this.catalog,
+      draft: { ...draft },
+      // 用户这句话里贴的链接才允许读；搜索返回的链接会在工具执行时加进来
+      allowedUrls: new Set(message.match(/https?:\/\/[^\s"'，。；）)]+/g) ?? [])
+    };
   }
 
   private describeDraft(draft: SupplementDraftRecord): string {

@@ -1807,7 +1807,10 @@ const loadDetail = async (options: { silent?: boolean } = {}) => {
       const expandedIds = silent
         ? new Set(
             items.value
-              .filter((item: any) => item.expanded)
+              .filter(
+                (item: any) =>
+                  item.expanded || expandedRecordItems.value[item.id] === true,
+              )
               .map((item: any) => item.id),
           )
         : new Set<string>();

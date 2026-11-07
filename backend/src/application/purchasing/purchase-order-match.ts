@@ -237,6 +237,55 @@ function pickSku(
   };
 }
 
+/**
+ * 同名商品反查（2026-11-07）。
+ *
+ * 为什么要有这一层：匹配方向是「原料 → 商品」，商品名只有原料认出来之后
+ * 才被看到。可截图写的往往是**商品名**：沃尔玛「冷鲜 鲜切黄牛后腿肉」
+ * 挂在原料「牛霖」下，名字里没有「牛霖」，字面永远认不出原料，
+ * 而清单里恰好就有这个同名商品。
+ *
+ * 规则（宁可不认，也不认错）：
+ *   1. 只在**同一渠道**的商品里找（订单是沃尔玛，就不看山姆的同名商品）；
+ *   2. 只认**名字完全一致**（归一化后相等，含曾用名），不做包含匹配；
+ *   3. 同名商品分属两个不同原料时，说不清是哪一个，交给员工；
+ *   4. 已经靠原料名 / 语义 / 别名认出来的行不会走到这里。
+ */
+function findSkuByExactName(
+  line: ParsedOrderLine,
+  candidates: ListItemCandidate[],
+  importKey: string,
+  channels: ChannelOption[],
+): { candidate: ListItemCandidate; sku: ListSkuCandidate } | null {
+  const normalizedLine = normalizeText(line.rawName);
+  if (!importKey || normalizedLine.length < 2) return null;
+
+  const hits: Array<{ candidate: ListItemCandidate; sku: ListSkuCandidate }> =
+    [];
+  for (const candidate of candidates) {
+    for (const sku of candidate.skus) {
+      if (channelScore(importKey, sku, channels) !== 1) continue;
+      const names = [sku.name, ...(sku.previousNames ?? [])];
+      const sameName = names.some((name) => {
+        const normalized = normalizeText(name);
+        return normalized.length >= 2 && normalized === normalizedLine;
+      });
+      if (sameName) hits.push({ candidate, sku });
+    }
+  }
+  if (hits.length === 0) return null;
+
+  // 同一个名字挂在不同原料下（两个原料各有一个同名商品）：不猜。
+  const ingredientIds = new Set(hits.map((hit) => hit.candidate.ingredientId));
+  if (ingredientIds.size > 1) return null;
+
+  // 同一原料下有多个同名商品时，优先选规格对得上的那个。
+  return (
+    hits.find((hit) => !specConflict(line.spec, hit.sku.productModel)) ??
+    hits[0]
+  );
+}
+
 export function matchOrderLines(
   lines: ParsedOrderLine[],
   candidates: ListItemCandidate[],
@@ -314,11 +363,22 @@ export function matchOrderLines(
         )
       : null;
 
-    const hit = hintedCandidate
+    let hit = hintedCandidate
       ? { candidate: hintedCandidate }
       : normalizedIngredients.find((entry) =>
           normalizedLine.includes(entry.normalized),
         );
+
+    // 原料名没命中时，再反过来在同一渠道的商品里找同名商品（2026-11-07）。
+    // 只在不靠语义提示、不靠别名的情况下兜底，避免盖过员工教过的映射。
+    let exactNameSku: ListSkuCandidate | null = null;
+    if (!hit && !hintedCandidate && channelKey) {
+      const reverse = findSkuByExactName(line, candidates, channelKey, channels);
+      if (reverse) {
+        hit = { candidate: reverse.candidate };
+        exactNameSku = reverse.sku;
+      }
+    }
 
     if (!hit) {
       return {
@@ -333,12 +393,17 @@ export function matchOrderLines(
       };
     }
 
-    const { sku, nameHit, channelMismatch, channelPending } = pickSku(
+    const picked = pickSku(
       line,
       hit.candidate.skus,
       importChannel,
       channels,
     );
+    // 同名商品反查已经认准了是哪一个商品，直接用，不再让 pickSku 按分数重挑。
+    const sku = exactNameSku ?? picked.sku;
+    const nameHit = exactNameSku ? true : picked.nameHit;
+    const channelMismatch = exactNameSku ? false : picked.channelMismatch;
+    const channelPending = exactNameSku ? false : picked.channelPending;
 
     const conflict = sku ? specConflict(line.spec, sku.productModel) : false;
     const needsNewSku = !sku || conflict;
@@ -361,9 +426,11 @@ export function matchOrderLines(
               ? '沿用上次的原料，按截图规格重选了商品'
               : hintedCandidate
                 ? 'AI 语义匹配'
-                : nameHit
-                  ? '命中采购商品'
-                  : '按原料匹配';
+                : exactNameSku
+                  ? '按同名商品匹配'
+                  : nameHit
+                    ? '命中采购商品'
+                    : '按原料匹配';
 
     return {
       ...line,

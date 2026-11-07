@@ -453,3 +453,121 @@ describe('matchOrderLines', () => {
     expect(matched.ingredientId).toBeNull();
   });
 });
+
+/**
+ * 同名商品反查（2026-11-07）。
+ *
+ * 真实案例：沃尔玛「冷鲜 鲜切黄牛后腿肉」挂在原料「牛霖」下，
+ * 截图里的商品名没有「牛霖」两个字 —— 字面原料匹配永远认不到，
+ * 而商品名和截图一模一样。既然清单里的原料名认不出来，
+ * 就反过来在同一渠道的采购商品里找同名的那一个，落到它所属的原料。
+ */
+describe('同名商品反查', () => {
+  const line = (
+    rawName: string,
+    spec: string | null = null,
+  ): any => ({
+    rawName,
+    spec,
+    qty: 3,
+    unit: '盒',
+    unitPrice: 23.98,
+    lineTotal: 71.94,
+  });
+
+  const beefRump: ListItemCandidate = {
+    purchaseItemId: 'item-beef-rump',
+    ingredientId: 'ing-beef-rump',
+    ingredientName: '牛霖',
+    skus: [
+      {
+        id: 'sku-beef-walmart',
+        name: '冷鲜 鲜切黄牛后腿肉 约200g',
+        productModel: '200g',
+        purchaseChannel: '沃尔玛',
+        purchaseToBaseRatio: 200,
+        purchaseUnit: '盒',
+      },
+      {
+        id: 'sku-beef-sams',
+        name: 'MM澳洲谷饲牛霖',
+        productModel: '1.2kg/盒',
+        purchaseChannel: '山姆会员店',
+        purchaseToBaseRatio: 1200,
+        purchaseUnit: '盒',
+      },
+    ],
+  };
+
+  it('原料名没命中，但同渠道有同名商品 → 落到它所属的原料', () => {
+    const [matched] = matchWithChannels(
+      [line('冷鲜 鲜切黄牛后腿肉', '约200g')],
+      [beefRump],
+      '沃尔玛',
+    );
+
+    expect(matched.ingredientId).toBe('ing-beef-rump');
+    expect(matched.procurementSkuId).toBe('sku-beef-walmart');
+    expect(matched.confidence).toBe('HIGH');
+    expect(matched.needsNewSku).toBe(false);
+  });
+
+  it('同名商品在别的渠道 → 不反查，仍留未匹配', () => {
+    const [matched] = matchWithChannels(
+      [line('冷鲜 鲜切黄牛后腿肉', '约200g')],
+      [beefRump],
+      '盒马鲜生',
+    );
+
+    expect(matched.ingredientId).toBeNull();
+    expect(matched.procurementSkuId).toBeNull();
+  });
+
+  it('同名商品同时挂在两个原料下 → 不猜，留未匹配', () => {
+    const duplicate: ListItemCandidate = {
+      purchaseItemId: 'item-other',
+      ingredientId: 'ing-other',
+      ingredientName: '牛腱',
+      skus: [
+        {
+          id: 'sku-other',
+          name: '冷鲜 鲜切黄牛后腿肉',
+          productModel: '200g',
+          purchaseChannel: '沃尔玛',
+          purchaseToBaseRatio: 200,
+          purchaseUnit: '盒',
+        },
+      ],
+    };
+
+    const [matched] = matchWithChannels(
+      [line('冷鲜 鲜切黄牛后腿肉', '约200g')],
+      [beefRump, duplicate],
+      '沃尔玛',
+    );
+
+    expect(matched.ingredientId).toBeNull();
+  });
+
+  it('同名商品规格对不上 → 原料认出来，但要重新选商品', () => {
+    const [matched] = matchWithChannels(
+      [line('冷鲜 鲜切黄牛后腿肉 500g', '500g')],
+      [beefRump],
+      '沃尔玛',
+    );
+
+    expect(matched.ingredientId).toBe('ing-beef-rump');
+    expect(matched.procurementSkuId).toBeNull();
+    expect(matched.needsNewSku).toBe(true);
+  });
+
+  it('渠道还没确认 → 不反查，等员工选渠道', () => {
+    const [matched] = matchWithChannels(
+      [line('冷鲜 鲜切黄牛后腿肉', '约200g')],
+      [beefRump],
+      null,
+    );
+
+    expect(matched.ingredientId).toBeNull();
+  });
+});

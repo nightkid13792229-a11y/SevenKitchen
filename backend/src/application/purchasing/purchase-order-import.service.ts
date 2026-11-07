@@ -1051,6 +1051,10 @@ ${list}
       where: { id },
       data: { status: 'DISCARDED' },
     });
+    // 整单放弃也要留下「员工手动挑过什么」的记忆（2026-11-07）：
+    // 重复上传、传错清单、想重来一遍都很常见，之前只有「生成采购记录」
+    // 那一步才记，放弃过的单里教过的东西全丢了，下次同样的字还得再挑。
+    await this.rememberManualMatches(current);
     for (const key of current.imageKeys ?? []) {
       await this.cosService.deleteImage(key).catch((error: any) => {
         this.logger.warn(
@@ -1059,6 +1063,55 @@ ${list}
       });
     }
     return { id, status: 'DISCARDED' };
+  }
+
+  /**
+   * 记住这张单里员工手动匹配过的「叫法 → 原料/商品」。
+   *
+   * 只记员工动过手的行（自动匹配、个人采购不记）：这是员工确认过的事实，
+   * 与这单最后是生成还是放弃无关。渠道没确认时不记 —— 同一个叫法
+   * 换个渠道就是另一个商品，记了反而会串。
+   */
+  private async rememberManualMatches(row: any): Promise<void> {
+    const lines = await this.prisma.purchaseOrderImportLine.findMany({
+      where: {
+        importId: row.id,
+        matchSource: { notIn: ['AUTO', 'PERSONAL'] },
+        ingredientId: { not: null },
+        procurementSkuId: { not: null },
+      },
+      select: {
+        rawName: true,
+        ingredientId: true,
+        procurementSkuId: true,
+      },
+    });
+    if (!lines || lines.length === 0) return;
+
+    const channels = await this.loadChannelOptions();
+    const channelFamily = channelMatchKey(row.channel, channels);
+    if (!channelFamily) return;
+
+    for (const line of lines) {
+      const normalizedName = normalizeText(line.rawName);
+      if (normalizedName.length < 2) continue;
+      await this.prisma.purchaseOrderMatchAlias.upsert({
+        where: {
+          normalizedName_channelFamily: { normalizedName, channelFamily },
+        },
+        create: {
+          normalizedName,
+          channelFamily,
+          ingredientId: line.ingredientId!,
+          procurementSkuId: line.procurementSkuId,
+          createdById: row.uploadedById ?? null,
+        },
+        update: {
+          ingredientId: line.ingredientId!,
+          procurementSkuId: line.procurementSkuId,
+        },
+      });
+    }
   }
 
   /** 采购清单列表用：每张清单的识别记录数（草稿 + 已确认） */

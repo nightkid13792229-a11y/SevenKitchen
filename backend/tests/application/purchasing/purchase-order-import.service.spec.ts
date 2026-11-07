@@ -57,7 +57,11 @@ describe('PurchaseOrderImportService', () => {
       update: jest.fn(),
       updateMany: jest.fn(),
     },
-    purchaseOrderImportLine: { findFirst: jest.fn(), update: jest.fn() },
+    purchaseOrderImportLine: {
+      findFirst: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+      update: jest.fn(),
+    },
     purchaseRecord: { create: jest.fn() },
     $transaction: jest.fn(),
   };
@@ -745,7 +749,9 @@ describe('PurchaseOrderImportService', () => {
         orderTime: '2026-11-05 09:00',
         items: [
           {
-            name: "Member's Mark 智利大西洋鲑鱼块 1kg",
+            // 刻意不写成商品名：商品名完全一致会被「同名商品反查」直接认走，
+            // 这里要验的是「字面认不出 → 交给模型做语义归一」这条路。
+            name: '智利大西洋鲑鱼排',
             spec: '1kg',
             qty: 1,
             unit: '袋',
@@ -1018,6 +1024,88 @@ describe('PurchaseOrderImportService', () => {
         service.updateImport('import-1', { shippingFee: 1 }),
       ).rejects.toThrow(BadRequestException);
       expect(prisma.purchaseOrderImport.update).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * 放弃识别记录（2026-11-07）。
+   *
+   * 员工手动挑过商品的映射，是「这个叫法 = 这个商品」的事实；
+   * 整笔放弃（重复上传 / 想重来）不该让它白丢。
+   */
+  describe('discard', () => {
+    const draftRow = {
+      id: 'import-9',
+      purchaseListId: 'list-1',
+      channel: '沃尔玛',
+      status: 'DRAFT',
+      imageKeys: [],
+    };
+
+    it('放弃时记住员工手动匹配过的叫法', async () => {
+      prisma.purchaseOrderImport.findUnique.mockResolvedValue(draftRow);
+      prisma.purchaseOrderImport.update.mockResolvedValue({
+        ...draftRow,
+        status: 'DISCARDED',
+      });
+      prisma.purchaseOrderImportLine.findMany.mockResolvedValue([
+        {
+          rawName: '冷鲜 鲜切黄牛后腿肉',
+          ingredientId: 'ing-beef',
+          procurementSkuId: 'sku-beef',
+        },
+      ]);
+      prisma.purchaseOrderMatchAlias.upsert.mockResolvedValue({});
+
+      await service.discard('import-9');
+
+      // 只记员工动手匹配过的行，自动匹配/个人采购的不记
+      expect(prisma.purchaseOrderImportLine.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            importId: 'import-9',
+            matchSource: { notIn: ['AUTO', 'PERSONAL'] },
+            procurementSkuId: { not: null },
+          }),
+        }),
+      );
+      expect(prisma.purchaseOrderMatchAlias.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            normalizedName_channelFamily: {
+              normalizedName: '鲜切黄牛后腿肉',
+              channelFamily: '沃尔玛',
+            },
+          },
+          create: expect.objectContaining({
+            ingredientId: 'ing-beef',
+            procurementSkuId: 'sku-beef',
+            channelFamily: '沃尔玛',
+          }),
+        }),
+      );
+    });
+
+    it('渠道还没确认时不记：同一个叫法换个渠道就是另一个商品', async () => {
+      prisma.purchaseOrderImport.findUnique.mockResolvedValue({
+        ...draftRow,
+        channel: null,
+      });
+      prisma.purchaseOrderImport.update.mockResolvedValue({
+        ...draftRow,
+        status: 'DISCARDED',
+      });
+      prisma.purchaseOrderImportLine.findMany.mockResolvedValue([
+        {
+          rawName: '冷鲜 鲜切黄牛后腿肉',
+          ingredientId: 'ing-beef',
+          procurementSkuId: 'sku-beef',
+        },
+      ]);
+
+      await service.discard('import-9');
+
+      expect(prisma.purchaseOrderMatchAlias.upsert).not.toHaveBeenCalled();
     });
   });
 });

@@ -36,7 +36,7 @@ describe('PurchaseOrderImportService', () => {
     purchaseItem: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
-      updateMany: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     procurementSku: {
       findMany: jest.fn(),
@@ -361,7 +361,6 @@ describe('PurchaseOrderImportService', () => {
       ingredient: { baseUnit: 'G', name: '菠菜', purchaseToBaseRatio: 300 },
     });
     prisma.purchaseItem.findFirst.mockResolvedValue({ id: 'item-1' });
-    prisma.purchaseItem.updateMany.mockResolvedValue({ count: 1 });
     prisma.purchaseRecord.create.mockResolvedValue({ id: 'record-1' });
     prisma.purchaseOrderImportLine.update.mockResolvedValue({});
 
@@ -378,6 +377,63 @@ describe('PurchaseOrderImportService', () => {
         noPurchaseMarkedById: null,
       },
     });
+  });
+
+  it('个人物品行不生成记录，也不会去清别的原料的无需采购标记', async () => {
+    // 一瓶可乐是员工自己喝的：isPersonal 行在确认时直接跳过，
+    // 不能因为「同一张单子里还有别的行」就把它的原料标记也清掉。
+    prisma.purchaseOrderImport.findMany.mockResolvedValue([
+      {
+        id: 'import-1',
+        purchaseListId: 'list-1',
+        status: 'DRAFT',
+        incomplete: false,
+        subtotal: 16.79,
+        channel: '盒马',
+        orderTime: null,
+        imageKeys: [],
+        lines: [
+          {
+            id: 'line-1',
+            rawName: '可口可乐 330ml*6',
+            isPersonal: true,
+            ingredientId: null,
+            procurementSkuId: null,
+            lineTotal: 12,
+            qty: 1,
+          },
+          {
+            id: 'line-2',
+            rawName: '菠菜',
+            isPersonal: false,
+            ingredientId: 'ing-1',
+            procurementSkuId: 'sku-1',
+            lineTotal: 4.79,
+            qty: 1,
+          },
+        ],
+      },
+    ]);
+    prisma.purchaseOrderImport.updateMany.mockResolvedValue({ count: 1 });
+    prisma.procurementSku.findUnique.mockResolvedValue({
+      id: 'sku-1',
+      ingredientId: 'ing-1',
+      name: '菠菜 300g/袋',
+      purchaseChannel: '盒马鲜生',
+      purchaseUnit: '袋',
+      purchaseToBaseRatio: 300,
+      ingredient: { baseUnit: 'G', name: '菠菜', purchaseToBaseRatio: 300 },
+    });
+    prisma.purchaseItem.findFirst.mockResolvedValue({ id: 'item-1' });
+    prisma.purchaseRecord.create.mockResolvedValue({ id: 'record-1' });
+    prisma.purchaseOrderImportLine.update.mockResolvedValue({});
+
+    await expect(service.confirm(['import-1'], 'user-1')).resolves.toEqual({
+      createdCount: 1,
+      renamed: [],
+    });
+    expect(prisma.purchaseItem.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.purchaseRecord.create).toHaveBeenCalledTimes(1);
   });
 
   it('模型判了截图不完整（员工已核对）时，允许确认生成', async () => {

@@ -200,6 +200,13 @@
                         <text class="record-summary-link" @tap="toggleItemRecords(item)">
                           已录入 {{ (item.records || []).length }} 条 · ¥{{ getItemRecordCost(item).toFixed(2) }} · {{ isItemRecordsExpanded(item) ? '收起' : '查看明细' }}
                         </text>
+                        <!-- 老数据可能「已采购」和「无需采购」并存：记录优先显示，
+                             但标记还在（后端口径仍拦截手动记录），留一个取消入口。 -->
+                        <text
+                          v-if="item.noPurchaseNeeded && canManagePurchaseRecords"
+                          class="inline-action"
+                          @tap.stop="clearItemNoPurchase(item)"
+                        >取消无需采购标记</text>
                       </template>
                       <template v-else-if="itemState(item) === 'COVERED'">
                         <view class="state-inline">

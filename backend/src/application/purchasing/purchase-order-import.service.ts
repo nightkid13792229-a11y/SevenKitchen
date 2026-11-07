@@ -880,9 +880,9 @@ ${list}
             }
 
             // 这条原料可能早就被标过「无需采购」（原计划不买，后来又真买了）。
-            // 生成采购记录时把标记清掉：一条原料不能同时是「已采购」和「无需采购」，
-            // 否则详情页按标记优先显示，员工看不到这条记录，容易重复记账。
-            await tx.purchaseItem.updateMany({
+            // 生成采购记录时把标记清掉：数据上不允许一条原料同时是「已采购」和「无需采购」，
+            // 否则旧版小程序/后台（仍按标记优先显示）会把这条记录藏起来，员工容易重复记账。
+            const clearedNoPurchase = await tx.purchaseItem.updateMany({
               where: { id: purchaseItemId, noPurchaseNeeded: true },
               data: {
                 noPurchaseNeeded: false,
@@ -891,6 +891,12 @@ ${list}
                 noPurchaseMarkedById: null,
               },
             });
+            if (clearedNoPurchase.count > 0) {
+              // 清掉的是一条人为决定，留个痕迹方便事后追溯（明细表没有 updatedAt）。
+              this.logger.warn(
+                `Purchase item ${purchaseItemId} (${sku.ingredient.name}) no-purchase marker cleared when creating a record from import ${row.id}`,
+              );
+            }
 
             // 建档时记下渠道码 + 当时的名字（快照），以后改名不回写历史
             const recordChannelCode =

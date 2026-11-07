@@ -67,6 +67,8 @@ const MAX_SEARCH_EXPANSION_TERMS = 8;
 /**
  * 补剂是库存商品：日采清单里默认按「无需采购」处理，采购员不用逐条点。
  * 真要买的时候，先取消无需采购标记，再手动记录采购（2026-11-06）。
+ * 例外：确认 AI 订单截图识别的结果时，生成采购记录会顺手清掉这个标记
+ * （见 purchase-order-import.service.ts），因为钱已经花了，不该再有「无需采购」。
  */
 const SUPPLEMENT_DEFAULT_NO_PURCHASE_REASON = '补剂默认无需采购';
 

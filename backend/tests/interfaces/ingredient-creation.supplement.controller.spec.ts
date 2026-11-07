@@ -31,7 +31,7 @@ const body = {
   labelNameSource: '饲料添加剂品种目录（2023 版）',
   tagNames: ['油脂类'],
   servingUnitsPerDose: 2,
-  perUnitNutrients: { 'fattyAcids.epa': 325 },
+  servingNutrients: { 'fattyAcids.epa': 650 },
   evidence: { labelText: 'Serving Size 2 Softgels' }
 };
 
@@ -65,7 +65,7 @@ describe('CreateSupplementIngredientDto', () => {
   it('营养素不是数字时映射阶段直接 400，不做类型转换', async () => {
     const dto = plainToInstance(CreateSupplementIngredientDto, {
       ...body,
-      perUnitNutrients: { 'fattyAcids.epa': '650' },
+      servingNutrients: { 'fattyAcids.epa': '650' },
     })
     expect(() => toCreateSupplementInput(dto, 'user-1')).toThrow(BadRequestException)
   })
@@ -87,7 +87,8 @@ describe('toCreateSupplementInput', () => {
     const input = toCreateSupplementInput(dto, 'user-1');
 
     expect(input.servingUnitsPerDose).toBe(2);
-    expect(input.perUnitNutrients).toEqual({ 'fattyAcids.epa': 325 });
+    // 服务端收的是「每份」值，折算在服务里做——客户端说了不算
+    expect(input.servingNutrients).toEqual({ 'fattyAcids.epa': 650 });
     expect(input.evidence.labelText).toBe('Serving Size 2 Softgels');
     expect(input.createdBy).toBe('user-1');
     expect(input.unitDisplayLabel).toBe('粒');

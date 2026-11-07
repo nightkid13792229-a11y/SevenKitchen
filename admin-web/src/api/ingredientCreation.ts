@@ -10,6 +10,8 @@ import type {
   AuthorizeResult,
   CreateSupplementIngredientPayload,
   CreateSupplementIngredientResultDto,
+  PendingSupplementArchiveDto,
+  SupplementEvidenceDto,
   CheckDomain,
   CheckRunView,
   CommitIngredientCreationInput,
@@ -33,6 +35,14 @@ export const ingredientCreationApi = {
     payload: CreateSupplementIngredientPayload
   ): Promise<CreateSupplementIngredientResultDto> =>
     api.post(`${BASE}/supplements`, payload),
+
+  /** 待验证的补剂档案：关掉页面后还能找回来确认。 */
+  listPendingSupplements: (): Promise<PendingSupplementArchiveDto[]> =>
+    api.get(`${BASE}/supplements/pending`),
+
+  /** 回查当时那张标签：原文、原图、每份几粒。 */
+  getSupplementEvidence: (ingredientId: string): Promise<SupplementEvidenceDto | null> =>
+    api.get(`${BASE}/supplements/${ingredientId}/evidence`),
 
   /**
    * 确认（可修改）AI 提交的检索方案；确认后 AI 才能写原料卡与营养。

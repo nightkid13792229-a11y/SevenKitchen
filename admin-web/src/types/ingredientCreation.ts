@@ -578,8 +578,9 @@ export type SupplementPhysicalForm = 'POWDER' | 'TABLET' | 'CAPSULE' | 'LIQUID'
 /**
  * 补剂建档载荷。
  *
- * `perUnitNutrients` 的键是规范字段路径（fattyAcids.epa / minerals.zinc），
+ * `servingNutrients` 的键是规范字段路径（fattyAcids.epa / minerals.zinc），
  * 与 admin-web/src/constants/supplementNutrients.ts 里那张表同一套写法。
+ * 值是**标签每份**的含量；每粒的折算由服务端做，客户端只负责预览。
  */
 export interface CreateSupplementIngredientPayload {
   name: string
@@ -600,13 +601,31 @@ export interface CreateSupplementIngredientPayload {
   labelNameSource?: string
   tagNames: string[]
   servingUnitsPerDose: number
-  perUnitNutrients: Record<string, number>
+  servingNutrients: Record<string, number>
   evidence: {
     productUrl?: string | null
     productName?: string | null
     labelImageUrl?: string | null
     labelText?: string | null
   }
+}
+
+export interface SupplementEvidenceDto {
+  evidenceId: string
+  ingredientId: string | null
+  nutritionFoodId: string | null
+  nutritionFoodStatus: string | null
+  servingUnitsPerDose: number
+  labelText: string | null
+  labelImageUrl: string | null
+  productUrl: string | null
+}
+
+export interface PendingSupplementArchiveDto {
+  nutritionFoodId: string
+  ingredientId: string | null
+  name: string
+  createdAt: string
 }
 
 export interface CreateSupplementIngredientResultDto {

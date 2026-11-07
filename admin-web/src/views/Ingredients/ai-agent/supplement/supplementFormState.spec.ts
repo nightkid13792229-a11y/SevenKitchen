@@ -101,9 +101,9 @@ describe('表单 → 提交载荷', () => {
     expect(toCreatePayload({ ...filled, purchaseUnit: '  ' })).toBeNull()
   })
 
-  it('发出去的是每粒值，不是每份值', () => {
+  it('发出去的是标签每份值，折算交给服务端', () => {
     const payload = toCreatePayload(filled)
-    expect(payload?.perUnitNutrients).toEqual({ 'fattyAcids.epa': 325 })
+    expect(payload?.servingNutrients).toEqual({ 'fattyAcids.epa': 650 })
     expect(payload?.servingUnitsPerDose).toBe(2)
   })
 

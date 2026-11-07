@@ -158,11 +158,11 @@ export class CreateSupplementIngredientDto {
   servingUnitsPerDose!: number;
 
   @ApiProperty({
-    description: '每粒含量，键是规范字段路径',
-    example: { 'fattyAcids.epa': 325 }
+    description: '标签每份的含量，键是规范字段路径；折算由服务端做',
+    example: { 'fattyAcids.epa': 650 }
   })
   @IsObject()
-  perUnitNutrients!: Record<string, number>;
+  servingNutrients!: Record<string, number>;
 
   @ApiPropertyOptional({ description: '标签证据', type: SupplementEvidenceDto })
   @IsOptional()
@@ -177,7 +177,7 @@ export function toCreateSupplementInput(
   createdBy: string
 ): CreateSupplementIngredientInput {
   const nutrientValues: Record<string, number> = {};
-  for (const [key, value] of Object.entries(dto.perUnitNutrients ?? {})) {
+  for (const [key, value] of Object.entries(dto.servingNutrients ?? {})) {
     if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
       throw new BadRequestException(`营养素 ${key} 必须是大于等于 0 的数字`);
     }
@@ -203,7 +203,7 @@ export function toCreateSupplementInput(
     labelNameSource: dto.labelNameSource ?? null,
     tagNames: dto.tagNames ?? [],
     servingUnitsPerDose: dto.servingUnitsPerDose,
-    perUnitNutrients: nutrientValues,
+    servingNutrients: nutrientValues,
     evidence: {
       productUrl: dto.evidence?.productUrl ?? null,
       productName: dto.evidence?.productName ?? null,

@@ -45,8 +45,13 @@ export interface CreateSupplementIngredientInput {
   tagNames: string[];
   /** 标签上「Serving Size」后面那个数 */
   servingUnitsPerDose: number;
-  /** 键是规范字段路径，例如 fattyAcids.epa / minerals.zinc */
-  perUnitNutrients: Record<string, number>;
+  /** 标签上每份的含量，键是规范字段路径（fattyAcids.epa / minerals.zinc）。折算由服务端做。 */
+  servingNutrients: Record<string, number>;
+  /**
+   * 可选：调用方自己折好的每粒值。带了就必须与「每份 ÷ N」一致，
+   * 否则 400——折算只有服务端说了算，客户端只能提出、不能决定。
+   */
+  perUnitNutrients?: Record<string, number>;
   evidence: CreateSupplementEvidenceInput;
   createdBy: string;
 }
@@ -56,6 +61,24 @@ export interface CreateSupplementIngredientResult {
   nutritionFoodId: string;
   nutritionFoodStatus: 'PENDING';
   evidenceId: string;
+}
+
+export interface SupplementEvidenceView {
+  evidenceId: string;
+  ingredientId: string | null;
+  nutritionFoodId: string | null;
+  nutritionFoodStatus: string | null;
+  servingUnitsPerDose: number;
+  labelText: string | null;
+  labelImageUrl: string | null;
+  productUrl: string | null;
+}
+
+export interface PendingSupplementArchiveView {
+  nutritionFoodId: string;
+  ingredientId: string | null;
+  name: string;
+  createdAt: string;
 }
 
 /** 档案里可以落数的五个分组；也是字段路径的第一段。 */
@@ -81,7 +104,8 @@ export class SupplementIngredientService {
     input: CreateSupplementIngredientInput
   ): Promise<CreateSupplementIngredientResult> {
     this.assertInput(input);
-    const profile = this.buildProfile(input);
+    const perUnitNutrients = this.derivePerUnitNutrients(input);
+    const profile = this.buildProfile(input, perUnitNutrients);
     const nutritionFoodName = this.buildNutritionFoodName(input);
 
     try {
@@ -180,7 +204,8 @@ export class SupplementIngredientService {
             labelText: input.evidence.labelText ?? null,
             conversionSnapshot: {
               servingUnitsPerDose: input.servingUnitsPerDose,
-              perUnitNutrients: input.perUnitNutrients,
+              servingNutrients: input.servingNutrients,
+              perUnitNutrients,
               unitDisplayLabel: input.unitDisplayLabel
             },
             createdBy: input.createdBy
@@ -220,7 +245,7 @@ export class SupplementIngredientService {
     if (!Number.isFinite(input.currentPricePerPurchaseUnit) || input.currentPricePerPurchaseUnit <= 0) {
       throw new BadRequestException('采购价必须大于 0');
     }
-    const nutrients = Object.entries(input.perUnitNutrients ?? {});
+    const nutrients = Object.entries(input.servingNutrients ?? {});
     if (nutrients.length === 0) {
       throw new BadRequestException('至少要有一种营养素的含量');
     }
@@ -231,7 +256,31 @@ export class SupplementIngredientService {
     }
   }
 
-  private buildProfile(input: CreateSupplementIngredientInput): NutritionProfileV2 {
+  /** 折算只有这一处：每份 ÷ 每份粒数。客户端送来的每粒值只用来核对。 */
+  private derivePerUnitNutrients(
+    input: CreateSupplementIngredientInput
+  ): Record<string, number> {
+    const derived: Record<string, number> = {};
+    for (const [key, servingValue] of Object.entries(input.servingNutrients)) {
+      derived[key] = servingValue / input.servingUnitsPerDose;
+    }
+
+    for (const [key, claimed] of Object.entries(input.perUnitNutrients ?? {})) {
+      const expected = derived[key];
+      if (expected === undefined || Math.abs(claimed - expected) > 1e-4) {
+        throw new BadRequestException(
+          `每粒值对不上折算：${key} 应为 ${expected ?? '（未提供每份值）'}，收到 ${claimed}`
+        );
+      }
+    }
+
+    return derived;
+  }
+
+  private buildProfile(
+    input: CreateSupplementIngredientInput,
+    perUnitNutrients: Record<string, number>
+  ): NutritionProfileV2 {
     const profile = createEmptyNutritionProfile();
     profile.meta = {
       ...profile.meta,
@@ -248,7 +297,7 @@ export class SupplementIngredientService {
       fieldDisplayUnits: {}
     } as unknown as NutritionProfileV2['meta'];
 
-    for (const [path, value] of Object.entries(input.perUnitNutrients)) {
+    for (const [path, value] of Object.entries(perUnitNutrients)) {
       const [group, key] = path.split('.');
       if (!group || !key || !isNutrientGroup(group)) {
         throw new BadRequestException(`营养字段不认识：${path}`);
@@ -286,6 +335,54 @@ export class SupplementIngredientService {
         data: { ingredientId, tagId: tag.id }
       });
     }
+  }
+
+  /** 按原料回查当时那张标签。 */
+  async getEvidence(ingredientId: string): Promise<SupplementEvidenceView | null> {
+    const evidence = await this.prisma.supplementLabelEvidence.findFirst({
+      where: { ingredientId },
+      orderBy: { createdAt: 'desc' }
+    });
+    if (!evidence) {
+      return null;
+    }
+
+    const food = evidence.nutritionFoodId
+      ? await this.prisma.nutritionFood.findFirst({
+          where: { id: evidence.nutritionFoodId },
+          select: { id: true, status: true }
+        })
+      : null;
+
+    return {
+      evidenceId: evidence.id,
+      ingredientId: evidence.ingredientId,
+      nutritionFoodId: evidence.nutritionFoodId,
+      nutritionFoodStatus: food?.status ?? null,
+      servingUnitsPerDose: evidence.servingUnitsPerDose,
+      labelText: evidence.labelText,
+      labelImageUrl: evidence.labelImageUrl,
+      productUrl: evidence.productUrl
+    };
+  }
+
+  /** 待验证的补剂档案：关掉页面后还能找回来确认。 */
+  async listPending(): Promise<PendingSupplementArchiveView[]> {
+    const rows = await this.prisma.nutritionFood.findMany({
+      where: { status: 'PENDING', category: 'SUPPLEMENT' },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        mappings: { where: { isPrimary: true }, select: { ingredientId: true } }
+      }
+    });
+
+    return rows.map((row) => ({
+      nutritionFoodId: row.id,
+      ingredientId: row.mappings?.[0]?.ingredientId ?? null,
+      name: row.name,
+      createdAt: row.createdAt.toISOString()
+    }));
   }
 
   private isUniqueViolation(error: unknown): boolean {

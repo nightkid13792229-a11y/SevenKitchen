@@ -45,6 +45,15 @@
     <section class="wb-archive">
       <div class="wb-archive__head">
         <b>补剂档案</b>
+        <el-button
+          v-if="pending.length > 0"
+          text
+          size="small"
+          data-action="open-pending"
+          @click="openPending"
+        >
+          待验证 {{ pending.length }} 条
+        </el-button>
         <span class="wb-count">
           AI 会填 {{ aiFieldCount }} 项 · 待你定 {{ missingHuman.length }} 项
         </span>
@@ -260,14 +269,59 @@
         </el-button>
       </div>
     </section>
+
+    <el-drawer v-model="pendingOpen" title="待验证的补剂档案" size="460px">
+      <p class="wb-drawer__hint">
+        这些档案已经写进库，但还没确认可用，所以配方里选不到。确认后才会进配方。
+      </p>
+      <div v-for="row in pending" :key="row.nutritionFoodId" class="wb-pending">
+        <div class="wb-pending__main">
+          <b>{{ row.name }}</b>
+          <span class="wb-pending__time">{{ formatTime(row.createdAt) }}</span>
+        </div>
+        <div class="wb-pending__actions">
+          <el-button
+            v-if="row.ingredientId"
+            text
+            size="small"
+            @click="loadEvidence(row.ingredientId)"
+          >
+            看标签
+          </el-button>
+          <el-button type="primary" size="small" @click="confirmRow(row)">确认可用</el-button>
+        </div>
+        <div v-if="evidence && evidence.ingredientId === row.ingredientId" class="wb-evidence">
+          <div>每份 {{ evidence.servingUnitsPerDose }} {{ draft.unitDisplayLabel }}</div>
+          <a v-if="evidence.productUrl" :href="evidence.productUrl" target="_blank" rel="noreferrer">
+            商品链接
+          </a>
+          <pre v-if="evidence.labelText" class="wb-evidence__text">{{ evidence.labelText }}</pre>
+          <el-image
+            v-if="evidence.labelImageUrl"
+            :src="evidence.labelImageUrl"
+            :preview-src-list="[evidence.labelImageUrl]"
+            fit="cover"
+            style="width: 120px; height: 120px; border-radius: 6px"
+          />
+          <span v-if="!evidence.labelText && !evidence.labelImageUrl" class="wb-evidence__empty">
+            这条没有留下标签
+          </span>
+        </div>
+      </div>
+      <el-empty v-if="pending.length === 0" description="没有待验证的补剂档案" :image-size="60" />
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import { nutritionFoodApi } from '@/api/ingredients'
+import type {
+  PendingSupplementArchiveDto,
+  SupplementEvidenceDto
+} from '@/types/ingredientCreation'
 import { supplementUsageUnitOptions, supplementNutrientGroups } from '@/constants/supplementNutrients'
 import { SUPPLEMENT_CARD_FIELDS } from '@/constants/supplementCardFields'
 import { evaluateSupplementGates } from './supplementGates'
@@ -291,6 +345,9 @@ const confirming = ref(false)
 const errorText = ref('')
 const saved = ref<{ ingredientId: string; nutritionFoodId: string; evidenceId: string } | null>(null)
 const confirmed = ref(false)
+const pending = ref<PendingSupplementArchiveDto[]>([])
+const pendingOpen = ref(false)
+const evidence = ref<SupplementEvidenceDto | null>(null)
 
 const tagSuggestions = ['油脂类', '矿物质', '维生素', '益生菌', '关节', '膳食纤维']
 
@@ -349,6 +406,46 @@ const perUnitPreview = (fieldPath: string): string => {
   return value === undefined ? '—' : String(Math.round(value * 10000) / 10000)
 }
 
+onMounted(() => {
+  void refreshPending()
+})
+
+async function refreshPending(): Promise<void> {
+  try {
+    pending.value = await ingredientCreationApi.listPendingSupplements()
+  } catch {
+    pending.value = []
+  }
+}
+
+function openPending(): void {
+  pendingOpen.value = true
+  void refreshPending()
+}
+
+function formatTime(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('zh-CN')
+}
+
+async function loadEvidence(ingredientId: string): Promise<void> {
+  try {
+    evidence.value = await ingredientCreationApi.getSupplementEvidence(ingredientId)
+  } catch {
+    evidence.value = null
+  }
+}
+
+async function confirmRow(row: PendingSupplementArchiveDto): Promise<void> {
+  try {
+    await nutritionFoodApi.verify(row.nutritionFoodId)
+    ElMessage.success('已确认可用，配方里现在能选到这条补剂')
+    await refreshPending()
+  } catch (error) {
+    ElMessage.error(apiErrorMessage(error, '确认失败，请稍后重试'))
+  }
+}
+
 async function submit(): Promise<void> {
   const payload = toCreatePayload(draft)
   if (!payload) {
@@ -364,6 +461,7 @@ async function submit(): Promise<void> {
       nutritionFoodId: result.nutritionFoodId,
       evidenceId: result.evidenceId
     })
+    await refreshPending()
     ElMessage.success('已写入，等确认可用')
   } catch (error) {
     errorText.value = apiErrorMessage(error, '写入失败，请稍后重试')
@@ -543,6 +641,14 @@ async function confirm(): Promise<void> {
   color: #b4232a;
   max-width: 320px;
 }
+.wb-drawer__hint{font-size:12px;color:#8a9099;line-height:1.6;margin-bottom:10px}
+.wb-pending{border-bottom:1px solid #f2f4f6;padding:10px 0}
+.wb-pending__main{display:flex;align-items:baseline;gap:8px}
+.wb-pending__time{margin-left:auto;font-size:11px;color:#9aa2ab}
+.wb-pending__actions{display:flex;justify-content:flex-end;gap:6px;margin-top:6px}
+.wb-evidence{margin-top:8px;background:#fafbfc;border:1px solid #eef0f3;border-radius:6px;padding:8px;font-size:12px;color:#5b6470;display:flex;flex-direction:column;gap:6px}
+.wb-evidence__text{margin:0;white-space:pre-wrap;font-family:inherit;font-size:11.5px;color:#6b7280;max-height:120px;overflow:auto}
+.wb-evidence__empty{color:#9aa2ab}
 .wb-saved {
   display: flex;
   align-items: center;

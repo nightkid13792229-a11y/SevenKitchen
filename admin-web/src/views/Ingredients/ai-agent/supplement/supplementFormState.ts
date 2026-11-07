@@ -175,11 +175,8 @@ export function toCreatePayload(
     labelNameSource: text(draft.labelNameSource) ?? undefined,
     tagNames: draft.tagNames,
     servingUnitsPerDose: draft.servingUnitsPerDose,
-    perUnitNutrients: computePerUnit(
-      draft.servingNutrients,
-      draft.servingUnitsPerDose,
-      draft.perUnitOverrides
-    ),
+    // 送「每份」值：折算只有服务端那一处说了算，这里最多是预览
+    servingNutrients: { ...draft.servingNutrients },
     evidence: {
       productUrl: text(draft.evidence.productUrl),
       labelImageUrl: text(draft.evidence.labelImageUrl),

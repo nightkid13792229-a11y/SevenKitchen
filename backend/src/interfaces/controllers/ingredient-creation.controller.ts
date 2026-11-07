@@ -38,6 +38,8 @@ import { IngredientCreationCandidateService } from '../../application/ingredient
 import {
   SupplementIngredientService,
   type CreateSupplementIngredientResult,
+  type PendingSupplementArchiveView,
+  type SupplementEvidenceView,
 } from '../../application/ingredient-creation/supplement-ingredient.service';
 import {
   CreateSupplementIngredientDto,
@@ -181,6 +183,24 @@ export class IngredientCreationController {
       current: dto.current ?? null,
     });
     return new ApiResponseDto(0, 'Success', result);
+  }
+
+  @Get('supplements/pending')
+  @ApiOperation({ summary: '待验证的补剂档案：关掉页面后还能找回来确认' })
+  async listPendingSupplements(): Promise<
+    ApiResponseDto<PendingSupplementArchiveView[]>
+  > {
+    const rows = await this.supplementIngredientService.listPending();
+    return new ApiResponseDto(0, 'Success', rows);
+  }
+
+  @Get('supplements/:ingredientId/evidence')
+  @ApiOperation({ summary: '回查当时那张标签：原文、原图、每份几粒' })
+  async getSupplementEvidence(
+    @Param('ingredientId') ingredientId: string,
+  ): Promise<ApiResponseDto<SupplementEvidenceView | null>> {
+    const view = await this.supplementIngredientService.getEvidence(ingredientId);
+    return new ApiResponseDto(0, 'Success', view);
   }
 
   @Post('agent/run')

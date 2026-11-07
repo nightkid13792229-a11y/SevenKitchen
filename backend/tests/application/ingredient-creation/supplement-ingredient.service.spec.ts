@@ -11,9 +11,9 @@ import type { PrismaService } from '../../../src/infrastructure/prisma.service';
  */
 type Tx = {
   ingredient: { create: jest.Mock; findFirst: jest.Mock };
-  nutritionFood: { create: jest.Mock };
+  nutritionFood: { create: jest.Mock; findFirst: jest.Mock; findMany: jest.Mock };
   nutritionFoodMapping: { create: jest.Mock };
-  supplementLabelEvidence: { create: jest.Mock };
+  supplementLabelEvidence: { create: jest.Mock; findFirst: jest.Mock };
   ingredientTag: { findFirst: jest.Mock; create: jest.Mock };
   ingredientTagAssignment: { create: jest.Mock };
 };
@@ -26,12 +26,15 @@ function createTx(overrides: Partial<Tx> = {}): Tx {
     },
     nutritionFood: {
       create: jest.fn().mockResolvedValue({ id: 'nf-1' }),
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
     },
     nutritionFoodMapping: {
       create: jest.fn().mockResolvedValue({ id: 'map-1' }),
     },
     supplementLabelEvidence: {
       create: jest.fn().mockResolvedValue({ id: 'ev-1' }),
+      findFirst: jest.fn().mockResolvedValue(null),
     },
     ingredientTag: {
       findFirst: jest.fn().mockResolvedValue(null),
@@ -47,6 +50,8 @@ function createTx(overrides: Partial<Tx> = {}): Tx {
 function createPrisma(tx: Tx): PrismaService {
   return {
     $transaction: jest.fn(async (fn: (client: Tx) => Promise<unknown>) => fn(tx)),
+    nutritionFood: tx.nutritionFood,
+    supplementLabelEvidence: tx.supplementLabelEvidence,
   } as unknown as PrismaService;
 }
 
@@ -69,7 +74,7 @@ const input: CreateSupplementIngredientInput = {
   labelNameSource: '饲料添加剂品种目录（2023 版）',
   tagNames: ['油脂类'],
   servingUnitsPerDose: 2,
-  perUnitNutrients: { 'fattyAcids.epa': 325, 'fattyAcids.dha': 225 },
+  servingNutrients: { 'fattyAcids.epa': 650, 'fattyAcids.dha': 450 },
   evidence: { productUrl: 'https://www.iherb.com/pr/x', labelText: 'Serving Size 2 Softgels' },
   createdBy: 'user-1',
 };
@@ -100,7 +105,7 @@ describe('SupplementIngredientService.create', () => {
     const tx = createTx();
     const service = new SupplementIngredientService(createPrisma(tx));
 
-    await service.create({ ...input, perUnitNutrients: { 'fattyAcids.epa': 325 } });
+    await service.create({ ...input, servingNutrients: { 'fattyAcids.epa': 650 } });
 
     const profile = tx.nutritionFood.create.mock.calls[0][0].data.nutritionData;
     expect(profile.fattyAcids.epa).toBe(325);
@@ -136,7 +141,7 @@ describe('SupplementIngredientService.create', () => {
     const service = new SupplementIngredientService(createPrisma(tx));
 
     await expect(
-      service.create({ ...input, perUnitNutrients: { 'nope.whatever': 1 } }),
+      service.create({ ...input, servingNutrients: { 'nope.whatever': 2 } }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -150,6 +155,7 @@ describe('SupplementIngredientService.create', () => {
     expect(evidence.servingUnitsPerDose).toBe(2);
     expect(evidence.conversionSnapshot).toEqual({
       servingUnitsPerDose: 2,
+      servingNutrients: { 'fattyAcids.epa': 650, 'fattyAcids.dha': 450 },
       perUnitNutrients: { 'fattyAcids.epa': 325, 'fattyAcids.dha': 225 },
       unitDisplayLabel: '粒',
     });
@@ -215,7 +221,7 @@ describe('SupplementIngredientService.create', () => {
     const service = new SupplementIngredientService(createPrisma(tx));
 
     await expect(
-      service.create({ ...input, perUnitNutrients: {} }),
+      service.create({ ...input, servingNutrients: {} }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(tx.ingredient.create).not.toHaveBeenCalled();
   });
@@ -229,5 +235,78 @@ describe('SupplementIngredientService.create', () => {
     expect(tx.nutritionFood.create.mock.calls[0][0].data.name).toBe(
       '鱼油（Omega-3）（Nordic Naturals · 120 粒/瓶）',
     );
+  });
+
+  it('服务端按每份值自己折：写进档案的是每粒值', async () => {
+    const tx = createTx();
+    const service = new SupplementIngredientService(createPrisma(tx));
+
+    await service.create({ ...input, servingNutrients: { 'fattyAcids.epa': 650 } });
+
+    const profile = tx.nutritionFood.create.mock.calls[0][0].data.nutritionData;
+    expect(profile.fattyAcids.epa).toBe(325);
+  });
+
+  it('客户端硬塞的每粒值与折算对不上时 400，不写库', async () => {
+    const tx = createTx();
+    const service = new SupplementIngredientService(createPrisma(tx));
+
+    await expect(
+      service.create({
+        ...input,
+        servingNutrients: { 'fattyAcids.epa': 650 },
+        perUnitNutrients: { 'fattyAcids.epa': 300 },
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.ingredient.create).not.toHaveBeenCalled();
+  });
+
+  it('证据能按原料查回来，带标签原文与每份几粒', async () => {
+    const tx = createTx();
+    tx.supplementLabelEvidence.findFirst.mockResolvedValue({
+      id: 'ev-1',
+      ingredientId: 'ing-1',
+      nutritionFoodId: 'nf-1',
+      servingUnitsPerDose: 2,
+      labelText: 'Serving Size 2 Softgels',
+      labelImageUrl: null,
+      productUrl: 'https://www.iherb.com/pr/x',
+      createdAt: new Date('2026-11-07T00:00:00Z'),
+    });
+    tx.nutritionFood.findFirst.mockResolvedValue({ id: 'nf-1', status: 'PENDING' });
+    const service = new SupplementIngredientService(createPrisma(tx));
+
+    const view = await service.getEvidence('ing-1');
+
+    expect(view?.servingUnitsPerDose).toBe(2);
+    expect(view?.labelText).toBe('Serving Size 2 Softgels');
+    expect(view?.nutritionFoodStatus).toBe('PENDING');
+  });
+
+  it('待验证清单只列补剂、只列 PENDING', async () => {
+    const tx = createTx();
+    tx.nutritionFood.findMany.mockResolvedValue([
+      {
+        id: 'nf-1',
+        name: '鱼油（Omega-3）',
+        status: 'PENDING',
+        createdAt: new Date('2026-11-07T00:00:00Z'),
+        mappings: [{ ingredientId: 'ing-1', isPrimary: true }],
+      },
+    ]);
+    const service = new SupplementIngredientService(createPrisma(tx));
+
+    const list = await service.listPending();
+
+    expect(list).toHaveLength(1);
+    expect(list[0]).toEqual({
+      nutritionFoodId: 'nf-1',
+      ingredientId: 'ing-1',
+      name: '鱼油（Omega-3）',
+      createdAt: '2026-11-07T00:00:00.000Z',
+    });
+    const where = tx.nutritionFood.findMany.mock.calls[0][0].where;
+    expect(where.status).toBe('PENDING');
+    expect(where.category).toBe('SUPPLEMENT');
   });
 });

@@ -58,6 +58,7 @@ describe('补剂对话接口', () => {
     model.run.mockResolvedValueOnce({
       reply: '我去找锌的候选，找到就摆出来',
       draft: { name: '' },
+      applied: [],
       toolCalls: [],
       question: null
     });
@@ -70,10 +71,11 @@ describe('补剂对话接口', () => {
     expect(res.body.data.reply).toContain('摆出来');
     expect(res.body.data.draft).toEqual({ name: '' });
     expect(model.run).toHaveBeenCalled();
+    expect(res.body.data.applied).toEqual([]);
   });
 
-  it('模型挂了就如实报错（这条路没有规则版可退）', async () => {
-    model.run.mockRejectedValueOnce(new Error('模型返回 500'));
+  it('配置没启用 → 503 且说清是配置问题', async () => {
+    model.run.mockRejectedValueOnce(new Error('后台的「原料入库」AI 配置没启用'));
 
     const res = await post({
       message: '为什么这么选',
@@ -88,6 +90,7 @@ describe('补剂对话接口', () => {
     model.run.mockResolvedValueOnce({
       reply: '根据 NRC，螯合与硫酸锌相当，建议甘氨酸锌。',
       draft: { brand: 'NOW Foods', servingUnitsPerDose: 1 },
+      applied: ['brand', 'servingUnitsPerDose'],
       toolCalls: [{ name: 'search_knowledge', ok: true }],
       question: { question: '选哪个形态？', options: ['甘氨酸锌'] }
     });

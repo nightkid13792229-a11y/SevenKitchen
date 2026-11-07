@@ -25,6 +25,11 @@ export interface ToolContext {
   preview: Pick<SupplementLinkPreviewService, 'preview' | 'searchCandidates'>;
   catalog: Pick<FeedAdditiveCatalogService, 'lookup' | 'getSummary'>;
   draft: SupplementDraftRecord;
+  /**
+   * 允许读的网址：用户这句话里贴过的，加上本次搜索返回的。
+   * 商品标题是外部可控的，不能让它们决定"去读哪一页"。
+   */
+  allowedUrls: Set<string>;
 }
 
 export type ToolResult =
@@ -85,7 +90,8 @@ export const SUPPLEMENT_TOOLS: ToolDefinition[] = [
     name: 'write_draft',
     description:
       '往档案草稿里写字段。只写字段与值，不负责判断该不该写。' +
-      '营养档案用 servingNutrients，键是字段路径（如 fattyAcids.epa），值是**每份**含量。',
+      '营养档案用 servingNutrients，键是字段路径（如 fattyAcids.epa），值是**每份**含量。' +
+      '单位按档案标准单位填（矿物质/维生素多为 mg 或 μg、维 A/D 为 IU、脂肪酸为 mg），别自己换算。',
     parameters: {
       type: 'object',
       properties: {
@@ -94,8 +100,8 @@ export const SUPPLEMENT_TOOLS: ToolDefinition[] = [
           description:
             '要写的字段。可用：name / brand / productModel / purchaseChannel / unitDisplayLabel / ' +
             'physicalForm / servingUnitsPerDose / purchaseUnit / purchaseToBaseRatio / ' +
-            'currentPricePerPurchaseUnit / addTiming / productionLossRate / diyEnabled / ' +
-            'procurementEnabled / tagNames / labelCategory / labelNames / labelNameSource / servingNutrients'
+            'currentPricePerPurchaseUnit / productionLossRate / labelCategory / labelNames / ' +
+            'labelNameSource / servingNutrients。标签分类与添加时机由人来定，用 ask_user 问。'
         }
       },
       required: ['patch']
@@ -141,17 +147,27 @@ export async function executeSupplementTool(
         if (!context.knowledge.isAvailable()) {
           return { ok: false, error: '知识库当前不可用（语料未加载），请如实告诉用户并改用人工判断' };
         }
-        const limit = typeof args.limit === 'number' ? args.limit : 4;
+        const limit = Math.max(1, Math.min(typeof args.limit === 'number' ? args.limit : 4, 8));
         return { ok: true, data: context.knowledge.search(query, limit) };
       }
 
       case 'search_products': {
-        const keyword = asString(args.keyword, 'keyword');
-        return { ok: true, data: await context.preview.searchCandidates(keyword) };
+        const keyword = asString(args.keyword, 'keyword').slice(0, 40);
+        const candidates = await context.preview.searchCandidates(keyword);
+        for (const candidate of candidates) {
+          context.allowedUrls.add(candidate.url);
+        }
+        return { ok: true, data: candidates };
       }
 
       case 'fetch_product': {
         const url = asString(args.url, 'url');
+        if (!context.allowedUrls.has(url)) {
+          return {
+            ok: false,
+            error: '这个链接不是用户给的、也不是本次搜索结果里的，不能读；请先问用户'
+          };
+        }
         return { ok: true, data: await context.preview.preview(url) };
       }
 

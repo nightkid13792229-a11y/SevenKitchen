@@ -45,7 +45,8 @@ export const ingredientCreationApi = {
     draft: Record<string, unknown>
     history?: { role: 'user' | 'assistant'; text: string }[]
   }): Promise<SupplementChatReplyDto> =>
-    api.post('/admin/ingredient-supplement-chat/respond', payload),
+    // 一次对话可能要调好几轮工具（读商品页每轮可达 25s），默认 30s 必然超时
+    api.post('/admin/ingredient-supplement-chat/respond', payload, { timeout: 190000 }),
 
   /** 按关键词去电商搜候选（只有链接、名字、标价，没有成分表）。 */
   searchSupplementCandidates: (keyword: string): Promise<SupplementCandidateDto[]> =>

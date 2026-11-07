@@ -1,4 +1,12 @@
-import { Body, Controller, Logger, Post, ServiceUnavailableException, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  InternalServerErrorException,
+  Logger,
+  Post,
+  ServiceUnavailableException,
+  UseGuards
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsArray, IsIn, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -66,6 +74,7 @@ export class SupplementChatController {
     ApiResponseDto<{
       reply: string;
       draft: Record<string, unknown>;
+      applied: string[];
       question: { question: string; options: string[] } | null;
     }>
   > {
@@ -83,17 +92,24 @@ export class SupplementChatController {
       return new ApiResponseDto(0, 'Success', {
         reply: result.reply,
         draft: result.draft,
+        applied: result.applied,
         question: result.question
       });
     } catch (error) {
       // 模型不可用时**没有规则版兜底**：这条路本来就是模型，退不回去。
       // 所以如实报错，别让页面以为"答了但没做事"。
+      const message = error instanceof Error ? error.message : String(error);
+      const notConfigured = /没启用|未启用|没有可用的|no config|Failed to get.*config/i.test(message);
       this.logger.error(
-        `[supplement-agent] reason=NO_MODEL ${error instanceof Error ? error.message : String(error)}`
+        `[supplement-agent] reason=${notConfigured ? 'NO_CONFIG' : 'RUN_FAILED'} ${message}`
       );
-      throw new ServiceUnavailableException(
-        '模型暂时不可用（或后台的「原料入库」AI 配置没启用），这一句没法处理'
-      );
+      if (notConfigured) {
+        throw new ServiceUnavailableException(
+          '后台的「原料入库」AI 配置没启用，补剂对话暂时用不了'
+        );
+      }
+      // 别把代码错误也说成"模型不可用"——那会让人查错方向
+      throw new InternalServerErrorException('这一步没跑完，稍后再试；已填的不会丢');
     }
   }
 }

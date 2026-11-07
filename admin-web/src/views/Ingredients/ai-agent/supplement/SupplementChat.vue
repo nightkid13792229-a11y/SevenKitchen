@@ -23,6 +23,8 @@
         <div class="chat__bubble">
           <p class="chat__text">{{ item.text }}</p>
 
+          <p v-if="item.question" class="chat__question">{{ item.question }}</p>
+
           <div v-if="item.options && item.options.length > 0" class="chat__options">
             <button
               v-for="option in item.options"
@@ -66,6 +68,7 @@ import { ingredientCreationApi } from '@/api/ingredientCreation'
 interface ChatMessage {
   role: 'me' | 'ai'
   text: string
+  question?: string
   options?: string[]
 }
 
@@ -74,7 +77,10 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (event: 'apply-draft', value: Record<string, unknown>): void
+  (
+    event: 'apply-draft',
+    value: { draft: Record<string, unknown>; applied: string[] }
+  ): void
 }>()
 
 const messages = ref<ChatMessage[]>([])
@@ -118,11 +124,13 @@ async function send(text?: string): Promise<void> {
     push({
       role: 'ai',
       text: result.reply,
+      question: result.question?.question,
       options: result.question?.options ?? []
     })
-    if (result.draft && typeof result.draft === 'object') {
-      emit('apply-draft', result.draft)
-    }
+    emit('apply-draft', {
+      draft: result.draft ?? {},
+      applied: result.applied ?? []
+    })
   } catch {
     push({ role: 'ai', text: '这句话没办成，稍后再试一次，或者直接手动填。' })
   } finally {
@@ -198,6 +206,11 @@ async function send(text?: string): Promise<void> {
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
+}
+.chat__question {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 600;
 }
 .chat__options {
   display: flex;

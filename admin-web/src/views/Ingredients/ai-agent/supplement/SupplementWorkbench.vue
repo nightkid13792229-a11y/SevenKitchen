@@ -366,7 +366,7 @@ import type {
   SupplementEvidenceDto
 } from '@/types/ingredientCreation'
 import { supplementUsageUnitOptions, supplementNutrientGroups } from '@/constants/supplementNutrients'
-import { mergeAgentDraft, pickChangedFields } from './agentDraftApply'
+import { applyAgentDraft as applyAgentDraftPayload } from './agentDraftApply'
 import { SUPPLEMENT_CARD_FIELDS } from '@/constants/supplementCardFields'
 import { evaluateSupplementGates } from './supplementGates'
 import {
@@ -585,10 +585,12 @@ const agentDraft = computed<Record<string, unknown>>(() => ({
   servingNutrients: { ...draft.servingNutrients }
 }))
 
-/** 模型改过的字段才落进表单；它在等待期间没动的，不碰。 */
-function applyAgentDraft(next: Record<string, unknown>): void {
-  const changed = pickChangedFields(agentDraft.value, next)
-  mergeAgentDraft(draft as unknown as Record<string, unknown>, changed)
+/** 只按后端给的 applied 清单回写：模型没写的字段（含用户刚手填的）一律不碰。 */
+function applyAgentDraft(payload: {
+  draft: Record<string, unknown>
+  applied: string[]
+}): void {
+  applyAgentDraftPayload(draft as unknown as Record<string, unknown>, payload)
 }
 
 function setServingUnits(value: number): void {

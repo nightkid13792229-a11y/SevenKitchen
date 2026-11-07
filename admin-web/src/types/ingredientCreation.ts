@@ -652,6 +652,8 @@ export interface SupplementChatReplyDto {
   reply: string
   /** 跑完后草稿的样子（模型可能用 write_draft 写过） */
   draft: Record<string, unknown>
+  /** 真正写进草稿的字段路径；前端只按这个清单回写 */
+  applied: string[]
   /** 模型用 ask_user 提的问题 */
   question: { question: string; options: string[] } | null
 }

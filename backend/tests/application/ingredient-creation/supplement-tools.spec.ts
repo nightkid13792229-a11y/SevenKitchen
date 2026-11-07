@@ -44,6 +44,7 @@ function context(overrides: Partial<ToolContext> = {}): ToolContext {
       }))
     },
     draft: { name: '' },
+    allowedUrls: new Set(['https://www.iherb.com/pr/x/1']),
     ...overrides
   };
 }

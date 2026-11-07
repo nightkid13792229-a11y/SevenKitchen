@@ -69,8 +69,22 @@ describe('写不进去的字段', () => {
   });
 
   it('枚举乱填 → 拒绝', () => {
-    const result = applyDraftPatch(draft, { addTiming: 'AFTER_LUNCH' });
+    const result = applyDraftPatch(draft, { physicalForm: 'CHEWABLE' });
     expect(result.rejected[0].reason).toContain('只能取');
+  });
+
+  it('人必须自己定的两格，模型写不了（否则提交闸门被架空）', () => {
+    for (const field of ['tagNames', 'addTiming']) {
+      const result = applyDraftPatch(draft, { [field]: field === 'tagNames' ? ['锌'] : 'BEFORE_MIXING' });
+      expect(result.rejected[0]).toEqual({ field, reason: '草稿里没有这个字段' });
+    }
+  });
+
+  it('表单里没有开关的两格，模型也写不了（写了会骗用户说已开启）', () => {
+    for (const field of ['diyEnabled', 'procurementEnabled']) {
+      const result = applyDraftPatch(draft, { [field]: true });
+      expect(result.rejected[0]).toEqual({ field, reason: '草稿里没有这个字段' });
+    }
   });
 
   it('营养字段路径不认识 → 拒绝，那一项不写', () => {

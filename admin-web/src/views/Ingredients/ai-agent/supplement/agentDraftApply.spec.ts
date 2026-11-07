@@ -1,59 +1,52 @@
 import { describe, expect, it } from 'vitest'
-import { mergeAgentDraft, pickChangedFields } from './agentDraftApply'
+import { applyAgentDraft } from './agentDraftApply'
 
 /**
- * 模型回写的收敛逻辑。
+ * 模型回写只认后端给的 applied 清单。
  *
- * 这一层的存在理由很具体：模型返回的是整份草稿，如果整份覆盖，
- * 用户在等它思考期间手填的采购价会被打回原样。
+ * 有个真实场景必须钉住：用户在模型思考期间手改的价格，不能被回显的旧值冲掉。
  */
-describe('挑出模型改过的字段', () => {
-  it('只挑真的变了的', () => {
-    const sent = { name: '锌', brand: '', servingUnitsPerDose: 2 }
-    const returned = { name: '锌', brand: 'NOW Foods', servingUnitsPerDose: 2 }
-
-    expect(pickChangedFields(sent, returned)).toEqual({ brand: 'NOW Foods' })
-  })
-
-  it('营养档案只挑变了的项', () => {
-    const sent = { servingNutrients: { 'minerals.zinc': 15, 'fattyAcids.epa': 0 } }
-    const returned = { servingNutrients: { 'minerals.zinc': 15, 'fattyAcids.epa': 325 } }
-
-    expect(pickChangedFields(sent, returned)).toEqual({
-      servingNutrients: { 'fattyAcids.epa': 325 }
+describe('按 applied 回写', () => {
+  it('只写清单里的字段', () => {
+    const form = { name: '锌', brand: '' }
+    const touched = applyAgentDraft(form, {
+      draft: { name: '锌', brand: 'NOW Foods' },
+      applied: ['brand']
     })
+
+    expect(form.brand).toBe('NOW Foods')
+    expect(touched).toEqual(['brand'])
   })
 
-  it('什么都没改时返回空', () => {
-    const sent = { name: '锌', servingNutrients: { 'minerals.zinc': 15 } }
-    expect(pickChangedFields(sent, { ...sent })).toEqual({})
+  it('用户在等待期间手改的值不会被冲掉（模型没写这一格）', () => {
+    const form = { name: '锌', currentPricePerPurchaseUnit: 100 }
+    applyAgentDraft(form, {
+      draft: { name: '锌', currentPricePerPurchaseUnit: 92 },
+      applied: ['name']
+    })
+
+    expect(form.currentPricePerPurchaseUnit).toBe(100)
   })
 
-  it('模型多带来的字段也算"变了"（交给下一步决定收不收）', () => {
-    expect(pickChangedFields({ name: '锌' }, { name: '锌', evil: 1 })).toEqual({ evil: 1 })
-  })
-})
-
-describe('合回表单', () => {
-  it('表单里有的字段才写', () => {
-    const form = { name: '', brand: '' }
-    const applied = mergeAgentDraft(form, { name: '锌', evil: 1 })
-
-    expect(form.name).toBe('锌')
-    expect(applied).toEqual(['name'])
-    expect('evil' in form).toBe(false)
-  })
-
-  it('营养档案按项合并，不清空其它项', () => {
+  it('营养档案按项合并', () => {
     const form = { servingNutrients: { 'minerals.zinc': 15 } }
-    mergeAgentDraft(form, { servingNutrients: { 'fattyAcids.epa': 325 } })
+    applyAgentDraft(form, {
+      draft: { servingNutrients: { 'minerals.zinc': 15, 'fattyAcids.epa': 325 } },
+      applied: ['servingNutrients.fattyAcids.epa']
+    })
 
     expect(form.servingNutrients).toEqual({ 'minerals.zinc': 15, 'fattyAcids.epa': 325 })
   })
 
-  it('null 不覆盖已有值（模型没读到，不等于要清空）', () => {
-    const form = { brand: 'NOW Foods' }
-    mergeAgentDraft(form, { brand: null })
-    expect(form.brand).toBe('NOW Foods')
+  it('表单里没有的字段不写', () => {
+    const form = { name: '' }
+    applyAgentDraft(form, { draft: { evil: 1 }, applied: ['evil'] })
+    expect('evil' in form).toBe(false)
+  })
+
+  it('空清单什么都不动', () => {
+    const form = { name: '锌' }
+    expect(applyAgentDraft(form, {})).toEqual([])
+    expect(form.name).toBe('锌')
   })
 })

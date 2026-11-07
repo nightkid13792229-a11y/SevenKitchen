@@ -52,22 +52,19 @@ export const SUPPLEMENT_DRAFT_FIELDS: Record<string, DraftFieldRule> = {
   brand: { kind: 'string', maxLength: 100 },
   productModel: { kind: 'string', maxLength: 100 },
   purchaseChannel: { kind: 'string', maxLength: 200 },
-  unitDisplayLabel: { kind: 'string', maxLength: 20 },
+  unitDisplayLabel: { kind: 'string', oneOf: ['g', 'ml', '粒', '片', '胶囊', '平勺', '份'] },
   physicalForm: { kind: 'string', oneOf: ['POWDER', 'TABLET', 'CAPSULE', 'LIQUID'] },
   servingUnitsPerDose: { kind: 'number', min: 1, max: 20 },
   purchaseUnit: { kind: 'string', maxLength: 50 },
   purchaseToBaseRatio: { kind: 'number', min: 0.01, max: 100000 },
   currentPricePerPurchaseUnit: { kind: 'number', min: 0.01, max: 1000000 },
-  addTiming: { kind: 'string', oneOf: ['BEFORE_MIXING', 'BEFORE_MEAL'] },
+  // addTiming / tagNames 刻意**不给模型写**：这两格是人必须自己定的（见 supplementCardFields），
+  // 让模型填等于把提交闸门架空。模型要它们就 ask_user。
   productionLossRate: { kind: 'number', min: 1, max: 2 },
-  diyEnabled: { kind: 'boolean' },
-  procurementEnabled: { kind: 'boolean' },
-  tagNames: { kind: 'stringArray', maxLength: 100 },
   labelCategory: { kind: 'string', oneOf: ['FEED_MATERIAL', 'FEED_ADDITIVE'] },
   labelNames: { kind: 'stringArray', maxLength: 200 },
   labelNameSource: { kind: 'string', maxLength: 200 },
-  evidenceLabelText: { kind: 'string', maxLength: 20000 },
-  evidenceProductUrl: { kind: 'string', maxLength: 500 }
+  evidenceLabelText: { kind: 'string', maxLength: 4000 }
 };
 
 function checkValue(field: string, rule: DraftFieldRule, value: unknown): string | null {

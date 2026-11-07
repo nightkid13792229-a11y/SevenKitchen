@@ -1,62 +1,62 @@
 /**
- * 把模型改过的草稿合回表单。
+ * 把模型写过的草稿合回表单。
  *
- * 关键点：**只认模型真正改过的那几个字段**。
- * 模型返回的是"整份草稿"，里面大部分字段只是把它收到的原值又抄了回来；
- * 如果整份覆盖，用户在等待期间手填的内容就会被悄悄冲掉。
+ * 关键：**只按后端给的 applied 清单回写**。
+ * 模型返回的是整份草稿（大部分是把它收到的原值抄回来），靠"比对前后差值"判断谁变了
+ * 是错的——用户在模型思考期间手填的值会被判成"变了"，于是被回显的旧值冲掉。
+ * 后端写草稿时就知道自己动了哪几个字段，直接用那份清单，零歧义。
  */
 export type DraftRecord = Record<string, unknown>
 
-/** 从"发出去的"和"还回来的"两份草稿里，挑出模型真正动过的字段。 */
-export function pickChangedFields(
-  sent: DraftRecord,
-  returned: DraftRecord
-): DraftRecord {
-  const changed: DraftRecord = {}
-
-  for (const [key, next] of Object.entries(returned ?? {})) {
-    const before = sent?.[key]
-
-    if (key === 'servingNutrients') {
-      const diff = pickChangedFields(
-        (before ?? {}) as DraftRecord,
-        (next ?? {}) as DraftRecord
-      )
-      if (Object.keys(diff).length > 0) {
-        changed[key] = diff
-      }
-      continue
-    }
-
-    if (JSON.stringify(before) !== JSON.stringify(next)) {
-      changed[key] = next
-    }
-  }
-
-  return changed
+export interface AgentDraftPayload {
+  /** 模型跑完时草稿的样子 */
+  draft?: DraftRecord
+  /** 真正被写进去的字段路径（如 brand、servingNutrients.minerals.zinc） */
+  applied?: string[]
 }
 
 /**
- * 把变更合进表单。表单里没有的字段一律忽略——模型不该能改它看不见的东西。
+ * 按 applied 把值合进表单。表单里没有的字段一律忽略。
  * 营养档案按项合并，不清空其它项。
  */
-export function mergeAgentDraft(form: DraftRecord, changed: DraftRecord): string[] {
-  const applied: string[] = []
+export function applyAgentDraft(
+  form: DraftRecord,
+  payload: AgentDraftPayload
+): string[] {
+  const draft = payload.draft ?? {}
+  const applied = payload.applied ?? []
+  const touched: string[] = []
 
-  for (const [key, value] of Object.entries(changed ?? {})) {
-    if (!(key in form) || value === null || value === undefined) {
+  for (const path of applied) {
+    if (path.startsWith('servingNutrients.')) {
+      const fieldPath = path.slice('servingNutrients.'.length)
+      const nutrients = draft.servingNutrients
+      if (!nutrients || typeof nutrients !== 'object') {
+        continue
+      }
+      const value = (nutrients as DraftRecord)[fieldPath]
+      if (typeof value !== 'number') {
+        continue
+      }
+      const target = form.servingNutrients
+      if (!target || typeof target !== 'object') {
+        continue
+      }
+      ;(target as DraftRecord)[fieldPath] = value
+      touched.push(path)
       continue
     }
 
-    if (key === 'servingNutrients' && typeof value === 'object') {
-      Object.assign(form.servingNutrients as DraftRecord, value as DraftRecord)
-      applied.push(key)
+    if (!Object.prototype.hasOwnProperty.call(form, path)) {
       continue
     }
-
-    form[key] = value
-    applied.push(key)
+    const value = draft[path]
+    if (value === undefined || value === null) {
+      continue
+    }
+    form[path] = value
+    touched.push(path)
   }
 
-  return applied
+  return touched
 }

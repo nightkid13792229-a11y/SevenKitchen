@@ -171,8 +171,54 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
     function: {
       name: 'assess',
       description:
-        '在当前内容上跑营养评估。只回：过没过、各项计数、还差的项（最多 12 条）、命中的过敏原。配方定稿前必须跑通；没跑过就不算完成。',
-      parameters: NO_ARGS,
+        '在当前内容上跑营养评估。只回：过没过、各项计数、还差的项（最多 12 条）、命中的过敏原。配方定稿前必须跑通；没跑过就不算完成。' +
+        '如果疾病目标与内置标准冲突（如 CKD 低磷），先用 search_knowledge_library 查到目标，再在 targetOverrides 里传；每个覆盖必须带 citationId。',
+      parameters: {
+        type: 'object',
+        properties: {
+          targetOverrides: {
+            type: 'array',
+            maxItems: 12,
+            description:
+              '本次评估的目标覆盖；不传则用内置 FEDIAF 标准。每个覆盖必须带本次检索结果的 citationId。',
+            items: {
+              type: 'object',
+              properties: {
+                nutrientKey: {
+                  type: 'string',
+                  description: '评估缺口里的 key，如 phosphorus / crudeProtein',
+                },
+                basis: {
+                  type: 'string',
+                  enum: ['DM', 'PER_1000_KCAL'],
+                  description:
+                    'DM = 每 100g 干物质，数值按百分比填（0.2–0.5）；PER_1000_KCAL = 每 1000 kcal',
+                },
+                minValue: {
+                  anyOf: [{ type: 'number' }, { type: 'null' }],
+                },
+                maxValue: {
+                  anyOf: [{ type: 'number' }, { type: 'null' }],
+                },
+                citationId: {
+                  type: 'string',
+                  description: '本次检索结果里的引用编号，如 K1',
+                },
+              },
+              required: [
+                'nutrientKey',
+                'basis',
+                'minValue',
+                'maxValue',
+                'citationId',
+              ],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: [],
+        additionalProperties: false,
+      },
     },
   },
   {
@@ -334,8 +380,65 @@ export async function executeTool(
       }
 
       case 'assess': {
-        const summary = await context.port.assess();
-        return ok(summary, summarizeAssessment(summary));
+        const rawOverrides = Array.isArray(args.targetOverrides)
+          ? args.targetOverrides
+          : [];
+        const targetOverrides = [];
+        for (const raw of rawOverrides.slice(0, 12)) {
+          if (!isRecord(raw)) {
+            return fail('INVALID_ARGUMENT', 'targetOverrides 的每一项必须是对象');
+          }
+          const nutrientKey = String(raw.nutrientKey ?? '').trim();
+          const citationId = String(raw.citationId ?? '').trim();
+          const basis = String(raw.basis ?? '').trim();
+          if (!nutrientKey) {
+            return fail('INVALID_ARGUMENT', 'targetOverrides 缺少 nutrientKey');
+          }
+          if (basis !== 'DM' && basis !== 'PER_1000_KCAL') {
+            return fail(
+              'INVALID_ARGUMENT',
+              `targetOverrides.${nutrientKey} 的 basis 只能是 DM 或 PER_1000_KCAL`,
+            );
+          }
+          if (!citationId || !context.citations.get(citationId)) {
+            return fail(
+              'INVALID_CITATION',
+              `targetOverrides.${nutrientKey} 的 citationId「${citationId}」不在本次检索结果里`,
+            );
+          }
+          const minValue =
+            raw.minValue === null || raw.minValue === undefined
+              ? null
+              : Number(raw.minValue);
+          const maxValue =
+            raw.maxValue === null || raw.maxValue === undefined
+              ? null
+              : Number(raw.maxValue);
+          if (
+            (minValue !== null && !Number.isFinite(minValue)) ||
+            (maxValue !== null && !Number.isFinite(maxValue))
+          ) {
+            return fail(
+              'INVALID_ARGUMENT',
+              `targetOverrides.${nutrientKey} 的上下限必须是数字或 null`,
+            );
+          }
+          targetOverrides.push({
+            nutrientKey,
+            basis: basis as 'DM' | 'PER_1000_KCAL',
+            minValue,
+            maxValue,
+            citationId,
+          });
+        }
+        const summary = await context.port.assess(targetOverrides);
+        const applied = targetOverrides.length;
+        return ok(
+          { ...summary, appliedTargetOverrides: targetOverrides },
+          `${summarizeAssessment(summary)}${
+            applied > 0 ? `；已应用 ${applied} 个目标覆盖` : ''
+          }`,
+        );
       }
 
       case 'write_copy': {

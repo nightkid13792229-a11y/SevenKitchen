@@ -78,6 +78,7 @@ import {
 import type {
   AssessmentEntry,
   AssessmentExpressionBasis,
+  AssessmentTargetOverride,
   FediafAssessmentTarget,
   FediafDogScenarioCode,
 } from '../../domain/recipe-designer/types';
@@ -6930,9 +6931,7 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ): Promise<ClientDesignRecipeAssessmentResult> {
     const draft = await this.getDraft(id, access);
-    const targets = await this.targetProvider.getTargets(
-      draft.fediafDogScenario,
-    );
+    const targets = await this.targetProvider.getTargets(draft.fediafDogScenario);
     const result = await this.assessLoadedDraft(draft, targets);
     const removableSupplementWarnings = this.buildRemovableSupplementWarnings(
       draft,
@@ -6972,9 +6971,76 @@ export class RecipeDesignerService {
    * 结果与 `assessmentContentRevision` 一起原子写回；
    * 评估期间草稿被改（contentRevision 变了）就冲突，不返回新鲜结果。
    */
+  private applyAssessmentTargetOverrides(
+    targets: FediafAssessmentTarget[],
+    overrides?: AssessmentTargetOverride[],
+  ): FediafAssessmentTarget[] {
+    if (!overrides || overrides.length === 0) return targets;
+    const byKey = new Map(targets.map((target) => [target.nutrientKey, target]));
+    const next = [...targets];
+    for (const override of overrides) {
+      const index = next.findIndex(
+        (target) => target.nutrientKey === override.nutrientKey,
+      );
+      if (index < 0) {
+        throw new BadRequestException(
+          `目标覆盖的营养素 ${override.nutrientKey} 不在当前评估标准里`,
+        );
+      }
+      const target = next[index];
+      const minValue = override.minValue;
+      const maxValue = override.maxValue;
+      if (
+        (minValue !== null && !Number.isFinite(minValue)) ||
+        (maxValue !== null && !Number.isFinite(maxValue))
+      ) {
+        throw new BadRequestException(
+          `目标覆盖 ${override.nutrientKey} 的上下限必须是数字或 null`,
+        );
+      }
+      if (
+        minValue !== null &&
+        maxValue !== null &&
+        minValue > maxValue
+      ) {
+        throw new BadRequestException(
+          `目标覆盖 ${override.nutrientKey} 的下限不能大于上限`,
+        );
+      }
+      if (
+        override.basis === 'DM' &&
+        target.expressionBasis === 'PER_1000_KCAL_ME'
+      ) {
+        next[index] = {
+          ...target,
+          expressionBasis: 'PER_100G_DRY_MATTER',
+          unit: 'g',
+          minValue,
+          maxValue,
+        };
+      } else if (
+        override.basis === 'PER_1000_KCAL' &&
+        target.expressionBasis !== 'PER_1000_KCAL_ME'
+      ) {
+        next[index] = {
+          ...target,
+          expressionBasis: 'PER_1000_KCAL_ME',
+          unit: 'g',
+          minValue,
+          maxValue,
+        };
+      } else {
+        next[index] = { ...target, minValue, maxValue };
+      }
+      byKey.set(override.nutrientKey, next[index]);
+    }
+    return next;
+  }
+
   async assessDraftForAgent(
     id: string,
     access: RecipeDesignerAccessInput,
+    targetOverrides?: AssessmentTargetOverride[],
   ): Promise<{
     contentRevision: number;
     assessment: DesignRecipeAssessmentResult;
@@ -6984,8 +7050,9 @@ export class RecipeDesignerService {
     if (this.isPublishedDraft(draft)) {
       throw new BadRequestException('已发布草稿不能由 Agent 重新评估');
     }
-    const targets = await this.targetProvider.getTargets(
-      draft.fediafDogScenario,
+    const targets = this.applyAssessmentTargetOverrides(
+      await this.targetProvider.getTargets(draft.fediafDogScenario),
+      targetOverrides,
     );
     const result = await this.assessLoadedDraft(draft, targets);
     const allergenWarnings = await this.buildDraftAllergenWarnings(draft);

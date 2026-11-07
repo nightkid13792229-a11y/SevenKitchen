@@ -18,5 +18,6 @@ export function buildSystemPrompt(): string {
 目标不清楚就问一句，不要猜。
 涉及疾病营养（如 CKD、胰腺炎、肾病）时，先用 search_knowledge_library 查原文。
 最终回答里每个数值/结论后面写 [K#] 引用（如 [K1]）；编号只能来自本次检索结果；中间过程不用。
+当疾病目标与内置评估标准冲突时，先用 search_knowledge_library 查到目标，再在 assess 的 targetOverrides 里传；每个覆盖必须带 citationId，不传则用内置标准。
 回答用中文。`;
 }

@@ -42,6 +42,16 @@ export interface FediafAssessmentTarget {
   calculation?: NutrientCalculation;
 }
 
+export interface AssessmentTargetOverride {
+  nutrientKey: string;
+  /** DM = 每 100g 干物质（数值按百分比填写，如 0.2–0.5）；PER_1000_KCAL = 每 1000 kcal */
+  basis: 'DM' | 'PER_1000_KCAL';
+  minValue: number | null;
+  maxValue: number | null;
+  /** 必须来自本次会话的检索结果 */
+  citationId: string;
+}
+
 export interface DesignRecipeAssessmentItemInput {
   id: string;
   name: string;

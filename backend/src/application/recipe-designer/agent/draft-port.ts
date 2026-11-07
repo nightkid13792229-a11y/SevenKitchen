@@ -8,6 +8,7 @@
 import { Injectable } from '@nestjs/common';
 import { RecipeDesignerService } from '../recipe-designer.service';
 import { AgentToolError, type RecipeEditOp } from './agent-types';
+import type { AssessmentTargetOverride } from '../../../domain/recipe-designer/types';
 
 type Access = Parameters<RecipeDesignerService['getDraft']>[1];
 
@@ -239,10 +240,13 @@ export class RecipeDraftPort {
   }
 
   /** 跑评估，只回缺口和一个总数；不回全量明细。 */
-  async assess(): Promise<AssessmentSummary> {
+  async assess(
+    targetOverrides?: AssessmentTargetOverride[],
+  ): Promise<AssessmentSummary> {
     const result: any = await this.designer.assessDraftForAgent(
       this.draftId,
       this.access,
+      targetOverrides,
     );
     const assessment = result?.assessment ?? {};
     const summary = assessment.summary ?? {};

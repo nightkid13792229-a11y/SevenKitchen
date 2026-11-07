@@ -205,7 +205,8 @@ async function main() {
     where: {
       isActive: true,
       ingredient: { type: 'FOOD' },
-      OR: [{ purchaseToBaseRatio: null }, { purchaseToBaseRatio: { lte: 0 } }],
+      // 2026-11-07 起这一列是 NOT NULL + CHECK > 0，只需检查非正数
+      purchaseToBaseRatio: { lte: 0 },
     },
     select: { name: true },
   });

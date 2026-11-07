@@ -89,6 +89,50 @@ describe('IngredientPricingService', () => {
     mockPriceAnchorService.resolveAnchors.mockResolvedValue(new Map());
   });
 
+  it('预览写入闸：幅度超过阈值时提前标出会被挂起', async () => {
+    mockPrismaService.ingredientPriceChange.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 'change-high',
+          ingredientId: 'ingredient-1',
+          ingredientName: '猪里脊',
+          reimbursementId: 'reimbursement-1',
+          purchaseRecordId: 'purchase-record-1',
+          sourceQuantity: { toNumber: () => 0.4 },
+          sourcePricePerPurchaseUnit: { toNumber: () => 33.74 },
+          previousCurrentPricePerPurchaseUnit: { toNumber: () => 12.38 },
+          previousEffectivePrice: { toNumber: () => 12.38 },
+          proposedEffectivePrice: { toNumber: () => 33.74 },
+          appliedCurrentPricePerPurchaseUnit: null,
+          appliedEffectivePricePerPurchaseUnit: null,
+          deltaRate: { toNumber: () => 1.726 },
+          status: 'PENDING',
+          reviewComment: null,
+          reviewedById: null,
+          reviewedAt: null,
+          createdAt: new Date('2026-11-07T00:00:00.000Z'),
+          ingredient: { purchaseUnit: '斤' },
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    mockIngredientRepository.findByIds.mockResolvedValue([
+      { id: 'ingredient-1', purchaseToBaseRatio: 500 },
+    ]);
+    mockPurchaseRecordRepository.findByIngredientId.mockResolvedValue([]);
+    mockGlobalConfigService.getGlobalConfig.mockResolvedValue({
+      ingredientPriceAutoApproveThreshold: 0.1,
+    });
+
+    const result =
+      await service.getPriceChangesForReimbursement('reimbursement-1');
+
+    expect(result[0].gatePreviewAction).toBe('HOLD');
+    expect(result[0].gatePreviewReason).toContain('10%');
+    // 预判不是「已判定」：gateAction 仍然为空
+    expect(result[0].gateAction).toBeNull();
+  });
+
   it('converts decimal source quantities to numbers in reimbursement views', async () => {
     mockPrismaService.ingredientPriceChange.findMany
       .mockResolvedValueOnce([

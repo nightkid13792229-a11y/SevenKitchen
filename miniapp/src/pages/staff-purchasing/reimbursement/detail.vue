@@ -183,8 +183,8 @@
         </view>
 
         <text v-if="pendingPriceChangeCount > 0" class="pending-price-hint">
-          {{ pendingPriceChangeCount }} 项调价待确认：点「审核通过」时逐项判定，
-          超出阈值的会标「需放行」，那一项价格不会自动变。
+          {{ pendingPriceChangeCount }} 项调价待确认：标「预计需放行」的，点「审核通过」时会被拦下，
+          标「需放行」的已经拦下了；这两种都要再点一下「放行」价格才会更新。
         </text>
 
         <view v-if="auditPurchaseRecords.length === 0" class="empty-block">
@@ -1087,9 +1087,19 @@ const recordPriceTag = (record: any) => {
   if (change.status === 'REJECTED') {
     return '已作废';
   }
-  // 普通调价不再打标签：同一行的「涨跌」已经说清楚了，
-  // 只有需要人处理的（被闸门挂起）才标记
-  return change.gateAction === 'HOLD' ? '需放行' : '';
+  if (change.gateAction === 'HOLD') {
+    return '需放行';
+  }
+
+  // 还没被闸门判过的：用后端预演结果提前告知，免得点了通过才冒出「需放行」
+  if (change.gatePreviewAction === 'HOLD') {
+    return '预计需放行';
+  }
+  if (change.gatePreviewAction === 'REJECT') {
+    return '通过时会被拒';
+  }
+
+  return '';
 };
 
 const recordPriceTagTone = (record: any) => {
@@ -1103,7 +1113,16 @@ const recordPriceTagTone = (record: any) => {
   if (change.status === 'REJECTED') {
     return 'muted';
   }
-  return change.gateAction === 'HOLD' ? 'danger' : 'accent';
+  if (change.gateAction === 'HOLD') {
+    return 'danger';
+  }
+  if (change.gatePreviewAction === 'HOLD') {
+    return 'warn';
+  }
+  if (change.gatePreviewAction === 'REJECT') {
+    return 'muted';
+  }
+  return '';
 };
 
 const breakdownMismatchText = computed(() => {
@@ -1140,6 +1159,14 @@ const heldPriceChangeCount = computed(
   () => pendingPriceChanges.value.filter((change: any) => change.gateAction === 'HOLD').length,
 );
 
+/** 还没判定、但按当前阈值一定会被挂起的（预演结果） */
+const predictedHoldCount = computed(
+  () =>
+    pendingPriceChanges.value.filter(
+      (change: any) => change.gateAction !== 'HOLD' && change.gatePreviewAction === 'HOLD',
+    ).length,
+);
+
 const revertedPriceChangeCount = computed(
   () => (reimbursement.value?.priceChanges || []).filter((change: any) => change.status === 'APPROVED').length,
 );
@@ -1173,6 +1200,16 @@ const summaryAlerts = computed<Array<{ tone: string; text: string }>>(() => {
         heldPriceChangeCount.value > 0
           ? `${pendingPriceChangeCount.value} 项价格变更待确认（最大 ${formatDeltaPercent(maxDeltaRate.value)}），其中 ${heldPriceChangeCount.value} 项已被闸门判定需放行`
           : `${pendingPriceChangeCount.value} 项价格变更待确认（最大 ${formatDeltaPercent(maxDeltaRate.value)}）`,
+    });
+  }
+
+  if (
+    heldPriceChangeCount.value === 0 &&
+    predictedHoldCount.value > 0
+  ) {
+    alerts.push({
+      tone: 'warn',
+      text: `${predictedHoldCount.value} 项调价幅度超过 10%：现在还没判定，点「审核通过」时会被拦下，需要再点「放行」`,
     });
   }
 

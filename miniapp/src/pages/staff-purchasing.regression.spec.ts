@@ -122,6 +122,12 @@ describe('staff reimbursement detail guardrails', () => {
     expect(reimbursementDetailSource).not.toContain('月成本影响');
   });
 
+  it('warns before approval which price changes will be held', () => {
+    expect(reimbursementDetailSource).toContain('gatePreviewAction');
+    expect(reimbursementDetailSource).toContain('预计需放行');
+    expect(reimbursementDetailSource).toContain('predictedHoldCount');
+  });
+
   it('lets the submitter approve their own claim without a transfer proof', () => {
     expect(reimbursementDetailSource).toContain('isSelfReview');
     expect(reimbursementDetailSource).toContain('canApprove');

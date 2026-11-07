@@ -49,6 +49,13 @@ export interface IngredientPriceChangeView {
    * 手机端据此把「会自动生效」和「需要人工放行」分开说，不能混着承诺。
    */
   autoApprovalEligible: boolean;
+  /**
+   * 写入闸预演（2026-11-08）：现在闸门基准就是档案价，和 deltaRate 同一把尺子，
+   * 所以可以在审核前准确预告「这一项通过时会被挂起 / 被拒绝」。
+   * 只在 status=PENDING 且有值时才有意义；已判定的以 gateAction 为准。
+   */
+  gatePreviewAction: 'APPLY' | 'HOLD' | 'REJECT' | null;
+  gatePreviewReason: string | null;
   reviewReasons: string[];
   reviewComment: string | null;
   reviewedById: string | null;
@@ -644,6 +651,25 @@ export class IngredientPricingService {
       ) as IngredientPriceChangeRecord[],
     );
 
+    // 写入闸预演：和 applyPriceChanges 用同一个函数、同一个基准（档案价），
+    // 所以「审核前说会被挂起」和「审核后真的被挂起」是一致的。
+    const previewThreshold = await this.getAutoApproveThreshold();
+    const previews = new Map<
+      string,
+      { action: 'APPLY' | 'HOLD' | 'REJECT'; reason: string | null }
+    >();
+    for (const row of rows) {
+      if (row.status !== 'PENDING') {
+        continue;
+      }
+      const preview = evaluatePriceGate({
+        proposedPrice: row.sourcePricePerPurchaseUnit.toNumber(),
+        anchorPrice: row.previousEffectivePrice.toNumber(),
+        thresholdRate: previewThreshold,
+      });
+      previews.set(row.id, { action: preview.action, reason: preview.reason });
+    }
+
     return rows.map((row) => ({
       id: row.id,
       ingredientId: row.ingredientId,
@@ -675,6 +701,14 @@ export class IngredientPricingService {
         row.status === 'PENDING'
           ? (evaluations.get(row.id)?.eligible ?? false)
           : true,
+      gatePreviewAction:
+        row.status === 'PENDING'
+          ? (previews.get(row.id)?.action ?? null)
+          : null,
+      gatePreviewReason:
+        row.status === 'PENDING'
+          ? (previews.get(row.id)?.reason ?? null)
+          : null,
       reviewReasons: this.buildReviewReasonsForView(
         row,
         evaluations.get(row.id),

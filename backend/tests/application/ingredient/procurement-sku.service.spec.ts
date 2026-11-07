@@ -24,6 +24,10 @@ describe('ProcurementSkuService', () => {
     ingredient: {
       findUnique: jest.fn(),
     },
+    // 从识别结果页新建商品时，用来源识别记录校验渠道（2026-11-07）
+    purchaseOrderImport: {
+      findUnique: jest.fn(),
+    },
     // 渠道字典（2026-11-05 第二步）：商品渠道只认这里的码
     platformOptionItem: {
       findMany: jest.fn().mockResolvedValue([
@@ -933,6 +937,61 @@ describe('ProcurementSkuService', () => {
       expect(result.status).toBe('duplicate');
       expect(result.sku.id).toBe('sku-legacy');
       expect(mockPrismaService.procurementSku.create).not.toHaveBeenCalled();
+    });
+
+    it('从识别结果页新建时，渠道和那笔订单不一致直接拒绝（2026-11-07）', async () => {
+      mockPrismaService.ingredient.findUnique.mockResolvedValue({
+        id: 'ing-1',
+        type: 'FOOD',
+        baseUnit: 'G',
+      });
+      mockPrismaService.procurementSku.findMany.mockResolvedValue([]);
+      mockPrismaService.purchaseOrderImport.findUnique.mockResolvedValue({
+        channel: '沃尔玛',
+      });
+
+      await expect(
+        service.createFromStaff({
+          ingredientId: 'ing-1',
+          createdById: 'user-1',
+          name: '冷鲜 鲜切黄牛后腿肉',
+          purchaseChannel: '山姆会员店',
+          purchaseUnit: '袋',
+          packCount: 1,
+          netContentPerPack: 200,
+          sourceImportId: 'import-1',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(mockPrismaService.procurementSku.create).not.toHaveBeenCalled();
+    });
+
+    it('渠道和订单一致（别名写法也算）时正常新建', async () => {
+      mockPrismaService.ingredient.findUnique.mockResolvedValue({
+        id: 'ing-1',
+        type: 'FOOD',
+        baseUnit: 'G',
+      });
+      mockPrismaService.procurementSku.findMany.mockResolvedValue([]);
+      mockPrismaService.purchaseOrderImport.findUnique.mockResolvedValue({
+        channel: '沃尔玛',
+      });
+      mockPrismaService.procurementSku.create.mockImplementation(
+        async ({ data }: any) => baseSkuRow(data),
+      );
+
+      const result = await service.createFromStaff({
+        ingredientId: 'ing-1',
+        createdById: 'user-1',
+        name: '冷鲜 鲜切黄牛后腿肉',
+        purchaseChannel: '沃尔玛',
+        purchaseUnit: '袋',
+        packCount: 1,
+        netContentPerPack: 200,
+        sourceImportId: 'import-1',
+      });
+
+      expect(result.status).toBe('created');
     });
 
     it('拒绝非食材原料', async () => {

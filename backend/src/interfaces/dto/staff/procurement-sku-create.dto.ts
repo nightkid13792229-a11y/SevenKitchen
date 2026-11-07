@@ -58,4 +58,13 @@ export class CreateStaffProcurementSkuDto {
   @IsString()
   @Length(1, 500)
   sourceScreenshotUrl?: string;
+
+  /**
+   * 从识别结果页的新建入口过来时，带上那条订单识别记录（2026-11-07）。
+   * 服务端据此校验「渠道必须是这笔订单的渠道」，防止绕过同名同渠道的判重。
+   */
+  @IsOptional()
+  @IsString()
+  @Length(1, 36)
+  orderImportId?: string;
 }

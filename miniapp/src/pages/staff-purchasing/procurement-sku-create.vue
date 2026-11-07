@@ -122,7 +122,8 @@
           <view class="field-head">
             <text class="field-label">在哪买的</text>
             <text class="req">*</text>
-            <text v-if="aiFilled.purchaseChannel" class="ai-tag">
+            <text v-if="channelLocked" class="ai-tag">本单渠道</text>
+            <text v-else-if="aiFilled.purchaseChannel" class="ai-tag">
               {{ isLowConfidence('purchaseChannel') ? 'AI 推测·可改' : 'AI 识别' }}
             </text>
           </view>
@@ -131,7 +132,10 @@
               v-for="channel in visibleChannels"
               :key="channel"
               class="chip"
-              :class="{ active: form.purchaseChannel === channel }"
+              :class="{
+                active: form.purchaseChannel === channel,
+                locked: channelLocked && form.purchaseChannel !== channel,
+              }"
               @tap="selectChannel(channel)"
             >
               {{ channel }}
@@ -140,6 +144,9 @@
               {{ showAllChannels ? '收起' : '更多' }}
             </view>
           </view>
+          <text v-if="channelLocked" class="field-hint-inline">
+            这笔订单在「{{ form.purchaseChannel }}」，商品只能建在这个渠道下；要换渠道请先回识别结果页改订单渠道。
+          </text>
           <text v-if="allChannels.length === 0" class="field-hint-inline warn-text">
             渠道清单没加载出来，请返回重试；新增渠道请找管理员在后台维护。
           </text>
@@ -265,7 +272,10 @@ import {
 } from './procurement-sku-form';
 import { applyDraftToForm } from './procurement-sku-draft-apply';
 import { decodeRouteParam } from './route-param';
-import { prefillChannel } from '../../utils/purchase-channel';
+import {
+  prefillChannel,
+  withSelectedChannel,
+} from '../../utils/purchase-channel';
 import { buildShotView, type ShotState } from './procurement-sku-shot';
 import { MULTIPACK_UNITS, shouldOpenMultipack } from './procurement-sku-multipack';
 import {
@@ -307,6 +317,14 @@ let createSource: SkuCreateSource | '' = '';
  * 保存后退回识别结果页，要把新商品直接匹配到这一行，不能靠那边猜。
  */
 let createForLineId = '';
+/**
+ * 从识别结果页进来时，这条识别记录本身（2026-11-07）：
+ * 商品就是给这笔订单买的，渠道要锁死，并且服务端还会再校验一次。
+ */
+let createOrderImportId = '';
+
+/** 渠道锁死：从识别结果页进来、且这笔订单的渠道有值 */
+const channelLocked = ref(false);
 
 const loading = ref(false);
 const submitting = ref(false);
@@ -390,7 +408,9 @@ const clerkUnits = computed(() => {
 });
 
 const visibleChannels = computed(() =>
-  showAllChannels.value ? allChannels.value : allChannels.value.slice(0, 6),
+  showAllChannels.value
+    ? allChannels.value
+    : withSelectedChannel(allChannels.value, form.value.purchaseChannel),
 );
 
 const hasMoreChannels = computed(() => allChannels.value.length > 6);
@@ -464,6 +484,8 @@ const hasError = (field: string) => {
 const isLowConfidence = (field: string) => confidence.value[field] === 'low';
 
 const selectChannel = (channel: string) => {
+  // 从识别结果页进来时渠道是这笔订单定死的，点不动（2026-11-07）
+  if (channelLocked.value) return;
   form.value.purchaseChannel = channel;
 };
 
@@ -488,6 +510,7 @@ onLoad(async (options: Record<string, string>) => {
   baseUnit.value = String(options?.baseUnit || 'G');
   createSource = normalizeSkuCreateSource(options?.from);
   createForLineId = String(options?.lineId || '');
+  createOrderImportId = String(options?.importId || '');
 
   if (!ingredientId.value) {
     uni.showToast({ title: '缺少原料信息', icon: 'none' });
@@ -505,12 +528,16 @@ onLoad(async (options: Record<string, string>) => {
       uni.showToast({ title: '渠道清单加载失败，请重试', icon: 'none' });
     }
 
-    // 从识别结果页过来时带着那笔订单的渠道：预选它（还能改）
+    // 从识别结果页过来时带着那笔订单的渠道：预选它，并锁死（2026-11-07）。
+    // 商品是给这笔订单买的，换个渠道建出来的商品根本挂不回这一行。
     const requestedChannel = prefillChannel(
       decodeRouteParam(options?.channel),
       allChannels.value,
     );
-    if (requestedChannel) form.value.purchaseChannel = requestedChannel;
+    if (requestedChannel) {
+      form.value.purchaseChannel = requestedChannel;
+      channelLocked.value = createSource === 'order-import';
+    }
 
     const res: any = await getProcurementSkuFormOptions(ingredientId.value);
     if (res?.code === 0 && res.data) {
@@ -730,6 +757,8 @@ const handleSubmit = async () => {
       netContentPerPack: Number(snapshot.value.netContentPerPack),
       currentPurchasePrice: snapshot.value.currentPurchasePrice ?? undefined,
       sourceScreenshotUrl: uploadedScreenshotUrl.value || undefined,
+      // 服务端拿它校验渠道必须和这笔订单一致（2026-11-07）
+      orderImportId: createOrderImportId || undefined,
     });
 
     if (res?.code !== 0) {
@@ -1084,6 +1113,10 @@ const handleSubmit = async () => {
   background: #fff;
   border: 1px dashed #c9bd9a;
   color: #8a6b33;
+}
+/* 渠道锁死时，别的渠道是「看得见但点不了」，避免以为还能换 */
+.chip.locked {
+  opacity: 0.45;
 }
 
 .switch-row {

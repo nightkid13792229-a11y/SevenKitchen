@@ -4,6 +4,7 @@ import {
   isSameChannel,
   keepSkuForChannel,
   prefillChannel,
+  withSelectedChannel,
 } from './purchase-channel';
 
 /**
@@ -125,5 +126,25 @@ describe('新建采购商品时带上订单渠道', () => {
 
   it('订单渠道已经不在字典里（被停用）：不预选，别让人存一个停用的渠道', () => {
     expect(prefillChannel('家乐福', channels)).toBe('');
+  });
+});
+
+describe('新建采购商品 · 已选/锁定的渠道必须可见（2026-11-07）', () => {
+  const many = ['农贸市场', '山姆会员店', '盒马鲜生', '沃尔玛', '永辉', '大润发', '京东'];
+
+  it('选中的渠道排在前 6 个里时，原样返回前 6 个', () => {
+    expect(withSelectedChannel(many, '盒马鲜生', 6)).toEqual(many.slice(0, 6));
+  });
+
+  it('选中的渠道排在第 7 个时，把它提到最前面，别被「更多」藏起来', () => {
+    const shown = withSelectedChannel(many, '京东', 6);
+    expect(shown[0]).toBe('京东');
+    expect(shown).toHaveLength(6);
+    expect(new Set(shown).size).toBe(6);
+  });
+
+  it('还没选渠道时就是前 6 个', () => {
+    expect(withSelectedChannel(many, '', 6)).toEqual(many.slice(0, 6));
+    expect(withSelectedChannel(many, null, 6)).toEqual(many.slice(0, 6));
   });
 });

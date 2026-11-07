@@ -999,6 +999,8 @@ export interface CreateStaffProcurementSkuInput {
   productModel?: string;
   currentPurchasePrice?: number;
   sourceScreenshotUrl?: string;
+  /** 从识别结果页新建时带上识别记录：服务端据此校验渠道必须和这笔订单一致 */
+  orderImportId?: string;
 }
 
 /** 新增采购商品页的可选项（基准单位 + 允许的采购单位，来自服务端白名单） */

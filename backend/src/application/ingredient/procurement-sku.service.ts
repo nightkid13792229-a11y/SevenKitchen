@@ -672,7 +672,9 @@ export class ProcurementSkuService {
    * 与后台 `create()` 的区别，都是老板定过的规矩：
    *   1. 换算 = 件数 × 每件净含量 —— **服务端算**，不信前端乘好的数（只填单件规格会让账目差 N 倍）；
    *   2. 同一原料下同名商品不重复建，直接返回既有那条，让员工选它；
-   *   3. 记录是谁加的、从哪来（`STAFF_APP`）、当时传的截图。
+   *   3. 记录是谁加的、从哪来（`STAFF_APP`）、当时传的截图；
+   *   4. 从识别结果页过来的（带 `sourceImportId`），渠道必须是那笔订单的渠道 ——
+   *      否则等于绕开「同名同渠道才算重复」的判重，把商品建到别家去（2026-11-07）。
    */
   async createFromStaff(input: {
     ingredientId: string;
@@ -687,6 +689,8 @@ export class ProcurementSkuService {
     brand?: string | null;
     productModel?: string | null;
     sourceScreenshotUrl?: string | null;
+    /** 从识别结果页新建时，带上那条识别记录，用来校验渠道 */
+    sourceImportId?: string | null;
   }): Promise<{
     status: 'created' | 'duplicate';
     sku: ProcurementSkuSummary;
@@ -734,6 +738,34 @@ export class ProcurementSkuService {
       purchaseChannel,
       channelCatalog.options,
     );
+
+    // 从识别结果页新建：商品就是给那笔订单买的，渠道不能换。
+    // 这一道在服务端做，前端把渠道锁了也挡不住旧版本 / 改参数（2026-11-07）。
+    if (input.sourceImportId) {
+      const orderImport = await this.prisma.purchaseOrderImport.findUnique({
+        where: { id: input.sourceImportId },
+        select: { channel: true },
+      });
+      if (!orderImport) {
+        throw new BadRequestException(
+          '对应的订单识别记录不存在，请返回重试',
+        );
+      }
+      const orderChannelKey = channelMatchKey(
+        orderImport.channel,
+        channelCatalog.options,
+      );
+      if (!orderChannelKey) {
+        throw new BadRequestException(
+          '这笔订单还没确认渠道，请先回识别结果页选好渠道',
+        );
+      }
+      if (orderChannelKey !== channelKey) {
+        throw new BadRequestException(
+          `这个商品只能建在这笔订单的渠道（${orderImport.channel}）下，要换渠道请先改订单渠道`,
+        );
+      }
+    }
 
     const sameName = await this.prisma.procurementSku.findMany({
       where: {

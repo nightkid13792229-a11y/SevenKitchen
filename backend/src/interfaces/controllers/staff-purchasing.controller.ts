@@ -189,6 +189,7 @@ export class StaffPurchasingController {
       brand: dto.brand,
       productModel: dto.productModel,
       sourceScreenshotUrl: dto.sourceScreenshotUrl,
+      sourceImportId: dto.orderImportId,
     });
 
     return ApiResponseDto.success(result);

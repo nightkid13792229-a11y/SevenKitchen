@@ -1468,8 +1468,10 @@ function goNewSku() {
       `ingredientId=${encodeURIComponent(ingredient.ingredientId)}` +
       `&ingredientName=${encodeURIComponent(ingredient.ingredientName)}` +
       `&baseUnit=${encodeURIComponent(ingredient.baseUnit)}` +
-      // 新建的商品就属于这笔的渠道，带过去直接预选，省得再选一次（还能改）
+      // 新建的商品就属于这笔的渠道，带过去并锁死（2026-11-07）
       `&channel=${encodeURIComponent(pickerOrderChannel.value)}` +
+      // 带上识别记录：服务端据此校验「渠道必须是这笔订单的渠道」
+      `&importId=${encodeURIComponent(activeImport.value?.id || '')}` +
       (fromLineId ? `&lineId=${encodeURIComponent(fromLineId)}` : '') +
       // 广播只回本页：详情页也听着这条广播，不能让它跟着开抽屉
       `&${buildSkuCreateQuery('order-import')}`,

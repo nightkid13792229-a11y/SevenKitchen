@@ -64,3 +64,20 @@ export function prefillChannel(
   if (!channelKey(channel) || !Array.isArray(options)) return '';
   return options.find((option) => isSameChannel(option, channel)) || '';
 }
+
+/**
+ * 渠道太多时页面只显示前几个（「更多」才展开），但**当前选中/锁定的渠道
+ * 必须留在可见列表里**：从识别结果页进来时这条是锁死的，
+ * 如果它排在第七个，员工会以为没选中渠道（2026-11-07）。
+ */
+export function withSelectedChannel(
+  list: string[] = [],
+  selected: string | null = null,
+  limit = 6,
+): string[] {
+  const head = (Array.isArray(list) ? list : []).slice(0, limit);
+  const value = typeof selected === 'string' ? selected.trim() : '';
+  if (!value || head.includes(value)) return head;
+  // 换掉最后一个，保持「可见几个」不变
+  return [value, ...head.slice(0, Math.max(0, limit - 1))];
+}

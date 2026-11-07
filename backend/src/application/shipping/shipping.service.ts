@@ -79,8 +79,21 @@ export class ShippingService {
       );
 
       if (!template) {
+        // 默认模板被删掉了（运营清理模板时把默认那张一起删了）。
+        // 只要全库只剩一张生效模板，用它就没有歧义；多于一张仍然报错，绝不猜。
+        const activeTemplates = (
+          await this.shippingTemplateRepository.findAll()
+        ).filter((candidate) => candidate.isActive);
+
+        if (activeTemplates.length === 1) {
+          this.logger.warn(
+            `默认运费模板不存在：${globalConfig.defaultShippingTemplateId}，暂时退回唯一生效模板「${activeTemplates[0].name}」；请到「全局配置」重新指定`,
+          );
+          return activeTemplates[0];
+        }
+
         this.logger.error(
-          `默认运费模板不存在：${globalConfig.defaultShippingTemplateId}（请到「全局配置 → 默认运费模板」重新选择）`,
+          `默认运费模板不存在：${globalConfig.defaultShippingTemplateId}，生效模板 ${activeTemplates.length} 张，无法唯一确定`,
         );
         throw new InternalServerErrorException(
           '运费模板配置异常，请稍后重试或联系客服',

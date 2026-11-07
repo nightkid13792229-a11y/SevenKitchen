@@ -68,16 +68,33 @@ describe('ShippingService · 运费模板解析', () => {
     expect(result.templateId).toBe('tpl-9');
   });
 
-  it('默认模板不存在时报错，不偷换别的模板', async () => {
+  it('默认模板被删掉、但只剩一张生效模板时，退回它', async () => {
     config.getGlobalConfig.mockResolvedValue({
       defaultShippingTemplateId: 'tpl-gone',
     });
     repo.findById.mockResolvedValue(null);
+    repo.findAll.mockResolvedValue([template('tpl-23', '顺丰特快（生鲜）')]);
+
+    const result = await service.calculateShippingFeePreview({
+      totalWeightG: 1700,
+    });
+
+    expect(result.templateId).toBe('tpl-23');
+  });
+
+  it('默认模板被删掉、但还有多张生效模板时不猜，直接报错', async () => {
+    config.getGlobalConfig.mockResolvedValue({
+      defaultShippingTemplateId: 'tpl-gone',
+    });
+    repo.findById.mockResolvedValue(null);
+    repo.findAll.mockResolvedValue([
+      template('tpl-23', '顺丰特快（生鲜）'),
+      template('tpl-12', 'Default CN Template'),
+    ]);
 
     await expect(
       service.calculateShippingFeePreview({ totalWeightG: 1700 }),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
-    expect(repo.findAll).not.toHaveBeenCalled();
   });
 
   it('默认模板已停用时拒绝使用', async () => {

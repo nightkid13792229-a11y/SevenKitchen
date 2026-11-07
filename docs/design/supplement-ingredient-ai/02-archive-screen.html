@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>C-2 对照屏</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#eef0f3;--panel:#fff;--line:#e3e6ea;--line2:#eef0f3;
+  --text:#1f2329;--muted:#8a9099;--accent:#3370ff;
+  --ai:#6b4eff;--ai-bg:#f1edff;
+  --ok:#0f8a5f;--ok-bg:#eaf7f1;--ok-ln:#cfe7db;
+  --warn:#b26a00;--warn-bg:#fff6e8;--warn-ln:#f0d9a8;
+  --label-bg:#eef1f4;--label-fg:#5b6572;
+  --hl:#fff3d6;--hl-line:#e8b34a;
+}
+body{font-family:-apple-system,"PingFang SC",system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:13px;padding:8px 20px 16px}
+.cap{max-width:1240px;margin:0 auto;padding:8px 0;font-size:12px;color:#6b7280;display:flex;align-items:baseline;gap:8px}
+.cap b{color:var(--text);font-size:13px}
+.cap .k{background:#fff;border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-size:11px;color:#444}
+
+.app{max-width:1240px;margin:0 auto;height:752px;background:var(--panel);border:1px solid #dbdfe4;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 1px 3px rgba(20,30,50,.06)}
+header{height:52px;flex:0 0 52px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:0 16px}
+header h1{font-size:15px;font-weight:600}
+header .sub{font-size:11.5px;color:var(--muted);margin-top:1px}
+.hr-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.pill{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--ai-bg);color:var(--ai);border:1px solid #ddd4ff}
+.tbtn{font-size:12px;color:var(--muted);border:none;background:none;padding:4px 6px;cursor:pointer}
+
+.body{flex:1;display:flex;min-height:0}
+
+.chat{width:246px;flex:0 0 246px;border-right:1px solid var(--line);display:flex;flex-direction:column;background:#fbfcfd}
+.chat-hd{height:32px;flex:0 0 32px;display:flex;align-items:center;gap:6px;padding:0 11px;border-bottom:1px solid var(--line);font-size:11.5px;color:#4a5159}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.chat-bd{flex:1;padding:10px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.msg{font-size:11.5px;line-height:1.55;padding:7px 9px;border-radius:9px;max-width:95%}
+.msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:3px}
+.msg.ai{align-self:flex-start;background:#fff;border:1px solid var(--line);border-bottom-left-radius:3px}
+.msg .em{color:var(--ai);font-weight:600}
+.chat-ft{border-top:1px solid var(--line);padding:8px 9px;background:#fff}
+.inp{height:30px;border:1px solid var(--line);border-radius:7px;display:flex;align-items:center;padding:0 9px;color:#aeb4bb;font-size:11.5px;background:#fbfcfd}
+
+.work{flex:1;min-width:0;display:flex;background:#f7f9fb}
+
+/* LEFT evidence */
+.evidence{width:372px;flex:0 0 372px;border-right:1px solid var(--line);background:#fff;display:flex;flex-direction:column}
+.ev-hd{height:38px;flex:0 0 38px;display:flex;align-items:center;gap:7px;padding:0 12px;border-bottom:1px solid var(--line);background:#fbfcfd}
+.ev-hd b{font-size:12px}
+.pin{font-size:10px;color:#6b7280;background:#f0f2f5;border:1px solid #e3e6ea;border-radius:3px;padding:1px 5px}
+.ev-hd .r{margin-left:auto;font-size:11px;color:var(--muted)}
+.prod{display:flex;gap:9px;padding:9px 12px;border-bottom:1px solid var(--line2)}
+.thumb{width:52px;height:52px;border-radius:6px;background:linear-gradient(160deg,#e8ebf0,#d7dce4);flex:0 0 52px;display:flex;align-items:center;justify-content:center;font-size:9.5px;color:#98a0aa}
+.prod .nm{font-size:12px;font-weight:600;line-height:1.35}
+.prod .m{font-size:10.5px;color:#7a828c;margin-top:3px;line-height:1.55}
+.facts{flex:1;overflow:hidden}
+.facts .ttl{margin:9px 12px 4px;font-size:10.5px;color:var(--muted);border-bottom:1px solid var(--line2);padding-bottom:4px;display:flex}
+.facts .ttl span{margin-left:auto}
+.facts .ss{font-size:11px;margin:0 12px 5px;color:#3d4650}
+.facts table{width:100%;border-collapse:collapse;font-size:11px}
+.facts td{padding:5px 12px;border-bottom:1px solid #f5f7f9}
+.facts td.num{text-align:right;font-variant-numeric:tabular-nums}
+.facts tr.hl td{background:var(--hl);border-top:1px solid var(--hl-line);border-bottom:1px solid var(--hl-line)}
+.facts .cur{color:var(--accent);font-size:10px;padding-left:3px}
+.hintbar{margin:8px 12px;font-size:10px;color:#8a9099;background:#f7f9fb;border:1px dashed #dbe1e8;border-radius:5px;padding:5px 7px;line-height:1.5}
+.calcbox{margin:0 12px 10px;border:1px solid var(--line2);border-radius:6px;padding:7px 9px;background:#fcfdfe}
+.calcbox .ct{font-size:10px;color:var(--muted);margin-bottom:4px}
+.calcbox .cr{display:flex;font-size:11px;padding:1.5px 0;color:#5b6470}
+.calcbox .cr b{margin-left:auto;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums}
+.photos{border-top:1px solid var(--line2);padding:8px 12px 10px}
+.ph2{font-size:10.5px;color:#5b6470;display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.ph2 span{margin-left:auto;font-size:10px;color:var(--muted)}
+.photos .row{display:flex;gap:7px}
+.photos .shot{flex:1;height:64px;border-radius:5px;background:linear-gradient(160deg,#eef1f5,#dfe4ea);border:1px solid #e3e6ea}
+
+/* RIGHT archive */
+.arch{flex:1;min-width:0;display:flex;flex-direction:column;padding:12px 16px 0;overflow:hidden}
+.pickbar{display:flex;align-items:center;gap:8px;border:1px solid #cfe7db;background:#f6fdfa;border-radius:7px;padding:8px 10px;margin-bottom:12px}
+.pickbar .nm{font-size:12px;font-weight:600}
+.pickbar .meta{font-size:10.5px;color:#6b7280;margin-top:2px}
+.chip{font-size:10px;padding:1px 6px;border-radius:20px;white-space:nowrap;display:inline-block}
+.chip.ok{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-ln)}
+.chip.b{background:#eef4ff;color:#3370ff;border:1px solid #d5e3ff}
+.chip.w{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-ln)}
+.pickbar .r{margin-left:auto;display:flex;gap:8px;align-items:center}
+.mini{font-size:11px;color:var(--accent);background:none;border:none}
+
+.blk{margin-bottom:12px}
+.blk-hd{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.blk-hd h3{font-size:12px;font-weight:600}
+.blk-hd .ln{flex:1;height:1px;background:var(--line2)}
+.s{font-size:9.5px;padding:0 4px;border-radius:3px;line-height:14px;white-space:nowrap}
+.s-ai{background:var(--ai-bg);color:var(--ai)}
+.s-label{background:var(--label-bg);color:var(--label-fg)}
+.s-need{background:var(--warn-bg);color:var(--warn)}
+
+.fold{display:flex;align-items:center;gap:8px;border:1px dashed #d5dbe2;background:#fbfcfd;border-radius:6px;padding:7px 10px;font-size:11.5px;color:#6b7280}
+.fold b{color:#3d4650;font-weight:600}
+.fold .r{margin-left:auto;font-size:10.5px;color:var(--accent)}
+
+.needs{border:1px solid var(--warn-ln);background:#fffdf8;border-radius:7px;padding:8px 10px;margin-top:7px}
+.needs .nh{font-size:10.5px;color:var(--warn);margin-bottom:6px;display:flex;align-items:center;gap:5px}
+.af{display:flex;align-items:center;gap:8px;height:30px}
+.af .lb{width:88px;flex:0 0 88px;text-align:right;color:#5b6470;font-size:11.5px}
+.af .vl{flex:1;min-width:0;border:1px solid #f0c98a;border-radius:5px;height:27px;display:flex;align-items:center;padding:0 8px;background:#fff;overflow:hidden;white-space:nowrap;color:#b26a00}
+.af .dd{margin-left:auto;color:#c9a25e;font-size:10px}
+
+.labrow{display:flex;align-items:center;gap:8px;margin-top:7px;border:1px solid #ddd4ff;background:#fbfaff;border-radius:7px;padding:7px 10px;font-size:11.5px}
+.labrow b{font-size:11.5px;font-weight:600;color:#4a3f8f}
+.labrow .lv{font-weight:600;color:var(--text);background:#fff;border:1px solid #ddd4ff;border-radius:4px;padding:1px 7px}
+.labrow .basis{color:#8a8099;font-size:10.5px;line-height:1.4}
+.labrow .r{margin-left:auto;font-size:10.5px;color:var(--accent)}
+.nt{border:1px solid var(--line);border-radius:7px;overflow:hidden;background:#fff}
+.nt .hd{display:flex;align-items:center;gap:7px;padding:6px 10px;background:#fafbfc;border-bottom:1px solid var(--line2);font-size:11px}
+.nt .hd .r{margin-left:auto;color:#9aa2ab;font-size:10px}
+.nt table{width:100%;border-collapse:collapse;font-size:11.5px}
+.nt th{font-weight:500;color:var(--muted);font-size:10px;text-align:left;padding:4px 10px;background:#fcfdfe;border-bottom:1px solid var(--line2)}
+.nt td{padding:5px 10px;border-bottom:1px solid #f5f7f9}
+.nt td.num{text-align:right;font-variant-numeric:tabular-nums}
+.nt td.calc{font-size:10px;color:#9aa2ab;width:86px;text-align:right;white-space:nowrap}
+.nt tr.hl td{background:var(--hl)}
+.foldline{display:flex;align-items:center;gap:6px;padding:6px 10px;font-size:10.5px;color:#8a9099;background:#fafbfc;border-top:1px solid var(--line2)}
+.foldline .r{margin-left:auto;color:var(--accent)}
+
+.check{margin-top:auto;border-top:1px solid var(--line);padding:10px 0 12px;display:flex;align-items:center;gap:8px}
+.ci{font-size:10.5px;padding:5px 9px;border-radius:6px;border:1px solid var(--ok-ln);background:#f6fdfa;color:#0f7a54;display:flex;align-items:center;gap:5px}
+.ci.warn{border-color:var(--warn-ln);background:var(--warn-bg);color:var(--warn)}
+.stack{display:flex;gap:8px;margin-left:auto}
+.btn{font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid var(--line);background:#fff;color:#3d4650}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+</style>
+</head>
+<body>
+
+<div class="cap"><b>C-2 · 对照屏</b><span class="k">贴链接进来，或选品后落到这</span><span>左边是货的真身，右边是库里的样子；右边只展开「你要改的」和「有值的」。</span></div>
+
+<div class="app">
+  <header>
+    <div>
+      <h1>AI 添加原料</h1>
+      <div class="sub">左边永远是那瓶东西的原样，右边才是要写进库的东西</div>
+    </div>
+    <div class="hr-right">
+      <span class="pill">补剂线</span>
+      <button class="tbtn">换线路</button>
+      <button class="tbtn">返回原料列表</button>
+    </div>
+  </header>
+
+  <div class="body">
+    <aside class="chat">
+      <div class="chat-hd"><span class="dot"></span><b>Agent</b><span style="margin-left:auto;font-size:10.5px;color:#a5adb6">D-2381</span></div>
+      <div class="chat-bd">
+        <div class="msg me">https://www.iherb.com/pr/nordic-naturals-ultimate-omega…</div>
+        <div class="msg ai">读到了：<span class="em">每份 2 粒</span>，EPA 650 / DHA 450。<br>顺手比了 2 个替代品，一个更便宜一个浓度更高，结论在上面那条绿条里。</div>
+        <div class="msg me">就这瓶</div>
+        <div class="msg ai">那我把每粒折好填进去。两项标黄的还需要你定。</div>
+      </div>
+      <div class="chat-ft"><div class="inp">继续说…</div></div>
+    </aside>
+
+    <section class="work">
+      <!-- LEFT: evidence -->
+      <div class="evidence">
+        <div class="ev-hd"><b>那瓶东西</b><span class="pin">📌 钉住</span><span class="r">iHerb · ¥398/120 粒</span></div>
+        <div class="prod">
+          <div class="thumb">瓶身图</div>
+          <div>
+            <div class="nm">Nordic Naturals Ultimate Omega</div>
+            <div class="m">120 粒/瓶 · 柠檬味 · 人用<br>甘油三酯型（rTG）</div>
+          </div>
+        </div>
+        <div class="facts">
+          <div class="ttl">Supplement Facts<span>标签原文</span></div>
+          <div class="ss">Serving Size <b>2 Softgels</b>　Servings Per Container 60</div>
+          <table>
+            <tr><td>Total Fat</td><td class="num">2 g</td><td style="width:30px"></td></tr>
+            <tr><td>Fish Oil Concentrate</td><td class="num">2,000 mg</td><td></td></tr>
+            <tr class="hl"><td>EPA<span class="cur">●</span></td><td class="num">650 mg</td><td></td></tr>
+            <tr><td>DHA</td><td class="num">450 mg</td><td></td></tr>
+            <tr><td>其他 Omega-3</td><td class="num">100 mg</td><td></td></tr>
+            <tr><td>Calories</td><td class="num">20</td><td></td></tr>
+          </table>
+          <div class="hintbar">点右边任一格里，这里对应的行就亮。左右都改不了对方，只能改自己。</div>
+          <div class="calcbox">
+            <div class="ct">算一下（性价比那层靠它）</div>
+            <div class="cr"><span>每瓶份数</span><b>60 份</b></div>
+            <div class="cr"><span>每份价</span><b>¥6.63</b></div>
+            <div class="cr"><span>每 1000mg EPA+DHA</span><b>¥6.03</b></div>
+          </div>
+        </div>
+        <div class="photos">
+          <div class="ph2">标签原图<span>2 张 · 点开放大</span></div>
+          <div class="row"><div class="shot"></div><div class="shot"></div></div>
+        </div>
+      </div>
+
+      <!-- RIGHT: archive -->
+      <div class="arch">
+
+        <div class="pickbar">
+          <div>
+            <div class="nm">Nordic Naturals Ultimate Omega</div>
+            <div class="meta">rTG 型 · 人用 · 比它便宜的有一个（NOW ¥2.9/1000mg），浓度更高的没有</div>
+          </div>
+          <span class="chip ok">已选</span>
+          <div class="r"><button class="mini">回头看比了什么 ▾</button><button class="mini">换一瓶</button></div>
+        </div>
+
+        <div class="blk">
+          <div class="blk-hd"><h3>标准原料档案</h3><span class="s s-ai">AI 填 13 项</span><span class="s s-need">待你定 2 项</span><div class="ln"></div></div>
+
+          <div class="fold">
+            <b>基本与来源</b><span>鱼油（Omega-3）· 补剂 · 个/件（粒）· Nordic Naturals · 120 粒/瓶 · iHerb · ¥398</span>
+            <span class="r">展开 12 项 ▾</span>
+          </div>
+
+          <div class="needs">
+            <div class="nh">⚠ 这两项 AI 不敢替你定</div>
+            <div class="af"><div class="lb">标签分类</div><div class="vl">请选择　<span style="color:#b9a58a;font-size:10.5px">油脂类 / 矿物质 / 维生素…</span></div><span class="dd">▾</span></div>
+            <div class="af"><div class="lb">添加时机</div><div class="vl">请选择　<span style="color:#b9a58a;font-size:10.5px">制作中 / 成品后添加</span></div><span class="dd">▾</span></div>
+          </div>
+
+          <div class="labrow">
+            <span class="s s-ai">AI 填</span>
+            <b>标签名称</b>
+            <span class="lv">鱼油</span>
+            <span class="basis">按《饲料添加剂品种目录（2023 版）》查的规范名，不带「胶囊 / 软胶囊」这类剂型</span>
+            <span class="r">改</span>
+          </div>
+        </div>
+
+        <div class="blk">
+          <div class="blk-hd"><h3>营养档案（每 1 粒）</h3><span class="s s-label">标签 ÷ 2</span><div class="ln"></div></div>
+          <div class="nt">
+            <div class="hd">营养基准：每 1 粒<span class="r">标签写「每份 2 粒」，已对半折</span></div>
+            <table>
+              <tr><th>营养素</th><th style="text-align:right">标签每份(2粒)</th><th style="text-align:right">写入每粒</th><th></th></tr>
+              <tr class="hl"><td>EPA</td><td class="num">650 mg</td><td class="num"><b>325 mg</b></td><td class="calc">650 ÷ 2</td></tr>
+              <tr><td>DHA</td><td class="num">450 mg</td><td class="num"><b>225 mg</b></td><td class="calc">450 ÷ 2</td></tr>
+              <tr><td>其他 Omega-3</td><td class="num">100 mg</td><td class="num">50 mg</td><td class="calc">100 ÷ 2</td></tr>
+              <tr><td>总鱼油</td><td class="num">2,000 mg</td><td class="num">1,000 mg</td><td class="calc">2,000 ÷ 2</td></tr>
+            </table>
+            <div class="foldline">标签上还有 2 项（热量、总脂肪），补剂档案不记这两样<span class="r">仍要记 ▾</span></div>
+            <div class="foldline" style="border-top:1px dashed #e3e6ea">标签上没写的营养素，留空，不猜<span class="r">看缺哪些 ▾</span></div>
+          </div>
+        </div>
+
+        <div class="check">
+          <span class="ci">✓ 每份→每粒 折对了</span>
+          <span class="ci">✓ 单位闭合</span>
+          <span class="ci">✓ 成本算得出</span>
+          <span class="ci warn">⚠ 还剩 2 项</span>
+          <div class="stack">
+            <button class="btn">存草稿</button>
+            <button class="btn primary">核验并写入</button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </div>
+</div>
+
+</body>
+</html>

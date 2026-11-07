@@ -588,7 +588,7 @@ import {
   chooseOrderShots,
   importOrderShots,
 } from './order-import/import-flow';
-import { getPurchaseListDetail, completePurchase as completePurchaseApi, reopenPurchaseList as reopenPurchaseListApi, startPurchase as startPurchaseApi, getPurchaseRecords, getOrderImports, deletePurchaseRecord as deletePurchaseRecordApi, addPurchaseRecord, updatePurchaseRecord as updatePurchaseRecordApi, markPurchaseItemNoPurchase as markPurchaseItemNoPurchaseApi, clearPurchaseItemNoPurchase as clearPurchaseItemNoPurchaseApi, removeItemFromList, checkOrderDateChanges, getPurchaseChannels, previewPurchaseList, addOrdersToList, resolveProcurementSkuProfile, resolvePurchaseItemDisplay, resolvePurchaseRecordDisplay } from './api/purchasing';
+import { getPurchaseListDetail, completePurchase as completePurchaseApi, reopenPurchaseList as reopenPurchaseListApi, startPurchase as startPurchaseApi, getPurchaseRecords, getOrderImports, deletePurchaseRecord as deletePurchaseRecordApi, addPurchaseRecord, updatePurchaseRecord as updatePurchaseRecordApi, markPurchaseItemNoPurchase as markPurchaseItemNoPurchaseApi, clearPurchaseItemNoPurchase as clearPurchaseItemNoPurchaseApi, removeItemFromList, checkOrderDateChanges, previewPurchaseList, addOrdersToList, resolveProcurementSkuProfile, resolvePurchaseItemDisplay, resolvePurchaseRecordDisplay } from './api/purchasing';
 
 // 状态管理
 const purchaseListId = ref('');
@@ -598,7 +598,6 @@ const loading = ref(true);
 const completing = ref(false);
 const reopening = ref(false);
 const noPurchaseMarkingItemId = ref('');
-const allPurchaseChannels = ref<string[]>([]); // 所有采购渠道列表
 const pendingAppendLoading = ref(false);
 const appendingOrders = ref(false);
 const pendingAppendEstimatedCost = ref(0);
@@ -787,8 +786,6 @@ const getTypeLabel = (type: string) => {
 const showRecordForm = ref(false);
 const selectedIngredient = ref<any>(null);
 const submitting = ref(false);
-const channelInputMode = ref<'preset' | 'custom'>('preset');
-const recordChannelChoices = ref<string[]>([]);
 const editingRecord = ref<any>(null);
 const showSkuPicker = ref(false);
 const skuPickerSearch = ref('');
@@ -930,25 +927,6 @@ const recordPurchaseUnitLabel = computed(() => {
   return formatMeasurementUnit(recordForm.value.purchaseUnit) || '件';
 });
 
-const recordPurchaseQuantityPlaceholder = computed(() => {
-  const unit = recordPurchaseUnitLabel.value || '件';
-  return `请输入本次实际买了多少${unit}，如：2`;
-});
-
-// 采购渠道选项（从所有原料数据库中加载）
-const channelOptions = computed(() => {
-  const uniqueChannels = new Set<string>();
-
-  allPurchaseChannels.value.forEach((channel) => {
-    const normalized = normalizeChannelLabel(channel);
-    if (normalized) {
-      uniqueChannels.add(normalized);
-    }
-  });
-
-  return Array.from(uniqueChannels);
-});
-
 const getLatestPurchaseRecord = (item: any) => {
   const records = Array.isArray(item?.records) ? item.records : [];
   if (records.length === 0) {
@@ -961,32 +939,6 @@ const getLatestPurchaseRecord = (item: any) => {
 };
 
 const latestRecord = computed(() => getLatestPurchaseRecord(selectedIngredient.value));
-
-const latestRecordSummary = computed(() => {
-  if (editingRecord.value) {
-    return `正在编辑 ${formatFullDateTime(editingRecord.value.createdAt)} 添加的采购记录`;
-  }
-
-  if (!latestRecord.value) {
-    return '';
-  }
-
-  const parts = ['已预填上次采购习惯', latestRecord.value.procurementSkuName || latestRecord.value.purchaseChannel].filter(Boolean);
-
-  if (latestRecord.value.productModel) {
-    parts.push(latestRecord.value.productModel);
-  }
-
-  return parts.join(' · ');
-});
-
-const isCustomChannelMode = computed(() => {
-  return channelInputMode.value === 'custom' || recordChannelChoices.value.length === 0;
-});
-
-const isPresetChannelSelected = (channel: string) => {
-  return channelInputMode.value === 'preset' && normalizeChannelLabel(recordForm.value.purchaseChannel) === channel;
-};
 
 const procurementSkuProfile = computed(() => resolveProcurementSkuProfile(selectedIngredient.value));
 const recordProcurementSkuOptions = computed(() =>
@@ -1019,11 +971,6 @@ const isSameAsLatestRecord = computed(() => {
     (latest.procurementSkuId && sku.id && latest.procurementSkuId === sku.id) ||
     (latest.procurementSkuName && sku.name && latest.procurementSkuName === sku.name)
   );
-});
-
-const recordProcurementSkuIndex = computed(() => {
-  const index = recordProcurementSkuOptions.value.findIndex((sku) => sku.id === recordForm.value.procurementSkuId);
-  return index >= 0 ? index : 0;
 });
 
 /**
@@ -1145,14 +1092,6 @@ const formatProcurementSkuReferencePrice = (sku: any) => {
   return `¥${formatDecimal(parts.price, 2)}/${parts.unit}`;
 };
 
-const isRecommendedRecordSku = (sku: any) => {
-  const profile = procurementSkuProfile.value;
-  if (profile.procurementSkuId && sku.id) {
-    return profile.procurementSkuId === sku.id;
-  }
-  return Boolean(profile.procurementSkuName && profile.procurementSkuName === sku.name);
-};
-
 const getSkuPackageFacts = (sku: any, item: any) => {
   const ratio = Number(sku?.purchaseToBaseRatio || 0);
   const baseUnit = getIngredientBaseUnit(item);
@@ -1208,7 +1147,6 @@ const applyRecordSkuDefaults = (sku: any) => {
   recordForm.value.purchaseUnit = facts.purchaseUnit || '件';
   recordForm.value.actualPackageSize = facts.size || '';
   recordForm.value.actualPackageUnit = facts.unit || '';
-  channelInputMode.value = recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel) ? 'preset' : 'custom';
 };
 
 const selectRecordSku = (sku: any) => {
@@ -1601,48 +1539,13 @@ const formatRecordQuantity = (record: any, item: any) => {
   return `${formatDecimal(quantity)}${getPurchaseRecordUnit(item)}`;
 };
 
-const buildRecordChannelChoices = (item: any) => {
-  const channels: string[] = [];
-  const seen = new Set<string>();
-
-  const appendChannel = (value?: string | null) => {
-    const normalized = normalizeChannelLabel(value);
-    if (!normalized || seen.has(normalized)) {
-      return;
-    }
-    seen.add(normalized);
-    channels.push(normalized);
-  };
-
-  appendChannel(getLatestPurchaseRecord(item)?.purchaseChannel);
-  appendChannel(item?.purchaseChannel);
-  appendChannel(item?.ingredient?.purchaseChannel);
-  channelOptions.value.forEach((channel) => appendChannel(channel));
-
-  return channels;
-};
-
 const findItemForRecord = (record: any) => {
   return items.value.find((item) => item.id === record.purchaseItemId) || items.value.find((item) => item.ingredientId === record.ingredientId) || null;
-};
-
-const getItemProcurementSkuLabel = (item: any) => {
-  const profile = resolveProcurementSkuProfile(item);
-  return profile.procurementSkuName || formatCompactLabel([profile.purchaseChannel, profile.productModel]) || item?.purchaseChannel || item?.productModel || '';
-};
-
-const getItemSuggestedProductLabel = (item: any) => {
-  return resolveProcurementSkuProfile(item).suggestedProductName;
 };
 
 const getItemPurchaseChannel = (item: any) => {
   const profile = resolveProcurementSkuProfile(item);
   return profile.purchaseChannel || item?.purchaseChannel || item?.ingredient?.purchaseChannel || '';
-};
-
-const getItemProductModel = (item: any) => {
-  const profile = resolveProcurementSkuProfile(item);
-  return profile.productModel || item?.productModel || item?.ingredient?.productModel || '';
 };
 
 const getRecordSkuLabel = (record: any, item: any) => {
@@ -1796,9 +1699,6 @@ const loadDetail = async (options: { silent?: boolean } = {}) => {
   if (!silent) loading.value = true;
 
   try {
-    // 加载采购渠道列表
-    if (!silent) await loadPurchaseChannels();
-
     const res: any = await getPurchaseListDetail(purchaseListId.value);
 
     if (res.code === 0) {
@@ -1967,20 +1867,6 @@ const checkDateChanges = async () => {
   }
 };
 
-// 加载所有采购渠道
-const loadPurchaseChannels = async () => {
-  try {
-    const res: any = await getPurchaseChannels();
-    if (res.code === 0) {
-      allPurchaseChannels.value = res.data || [];
-    } else {
-      console.error('加载采购渠道失败:', res.message);
-    }
-  } catch (error) {
-    console.error('加载采购渠道失败', error);
-  }
-};
-
 // 加载采购记录并按原料分组
 const loadPurchaseRecords = async () => {
   try {
@@ -2023,7 +1909,6 @@ const handleContinueAdd = (item: any) => {
   selectedIngredient.value = item;
   editingRecord.value = null;
   resetRecordForm();
-  recordChannelChoices.value = buildRecordChannelChoices(item);
 
   const latest = getLatestPurchaseRecord(item);
   const latestProfile = resolveProcurementSkuProfile(item, latest?.procurementSkuId);
@@ -2040,7 +1925,6 @@ const handleContinueAdd = (item: any) => {
 
   // 规格/单位/渠道/型号以商品档案为准；不要用上一条记录覆盖，
   // 否则商品档案缺渠道时会被上一次的渠道「借」过去，界面提示和实际保存对不上。
-  channelInputMode.value = recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel) ? 'preset' : 'custom';
   noteOpen.value = false;
   recordFormError.value = '';
   recordQuantityFocus.value = false;
@@ -2060,7 +1944,6 @@ const editRecord = (record: any) => {
   selectedIngredient.value = item;
   editingRecord.value = record;
   resetRecordForm();
-  recordChannelChoices.value = buildRecordChannelChoices(item);
 
   const recordProfile = resolveProcurementSkuProfile(item, record.procurementSkuId);
   const selectedSku = record.procurementSkuId ? recordProcurementSkuOptions.value.find((sku) => sku.id === record.procurementSkuId) : null;
@@ -2087,7 +1970,6 @@ const editRecord = (record: any) => {
   recordFormError.value = '';
   recordQuantityFocus.value = false;
 
-  channelInputMode.value = recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel) ? 'preset' : 'custom';
   takeRecordFormSnapshot();
 
   showRecordForm.value = true;
@@ -2125,39 +2007,6 @@ const closeRecordForm = (force = false) => {
   recordFormSnapshot.value = '';
 };
 
-// 采购渠道快速选择
-const onChannelChange = (e: any) => {
-  const index = e.detail.value;
-  const channel = recordChannelChoices.value[index];
-  if (!channel) {
-    return;
-  }
-  recordForm.value.purchaseChannel = channel;
-  channelInputMode.value = 'preset';
-};
-
-const selectChannel = (channel: string) => {
-  recordForm.value.purchaseChannel = channel;
-  channelInputMode.value = 'preset';
-};
-
-const onProcurementSkuChange = (e: any) => {
-  const sku = recordProcurementSkuOptions.value[e.detail.value];
-  if (!sku) {
-    return;
-  }
-
-  applyRecordSkuDefaults(sku);
-};
-
-const activateCustomChannelInput = () => {
-  const currentChannel = normalizeChannelLabel(recordForm.value.purchaseChannel);
-  channelInputMode.value = 'custom';
-  if (!currentChannel || recordChannelChoices.value.includes(currentChannel)) {
-    recordForm.value.purchaseChannel = '';
-  }
-};
-
 // 重置表单
 const resetRecordForm = () => {
   recordForm.value = {
@@ -2172,8 +2021,6 @@ const resetRecordForm = () => {
     productModel: '',
     notes: '',
   };
-  recordChannelChoices.value = [];
-  channelInputMode.value = 'preset';
 };
 
 // 提交采购记录
@@ -2570,24 +2417,6 @@ const getStatusTone = (status: string): 'pending' | 'done' | 'danger' | 'neutral
   return 'neutral';
 };
 
-const getStatusClass = (status: string) => {
-  const classMap: Record<string, string> = {
-    DRAFT: 'draft',
-    PENDING: 'pending',
-    COMPLETED: 'completed',
-    CANCELLED: 'cancelled',
-  };
-  return classMap[status] || '';
-};
-
-const getListKindText = (kind?: string) => {
-  const kindMap: Record<string, string> = {
-    ORDER_DEMAND: '日采',
-    STOCK_REPLENISHMENT: '补货',
-  };
-  return kindMap[kind || 'ORDER_DEMAND'] || '日采';
-};
-
 const getPurchaseItemTitle = (item: any) => {
   return item?.resolvedProcurementSkuName || item?.resolvedSuggestedProductName || item?.ingredientName || '未知原料';
 };
@@ -2624,27 +2453,6 @@ const formatOrderId = (orderId: string) => {
     return orderId.substring(0, 8) + '...';
   }
   return orderId;
-};
-
-// 复制订单ID
-const copyOrderId = (orderId: string) => {
-  uni.setClipboardData({
-    data: orderId,
-    success: () => {
-      uni.showToast({
-        title: '订单ID已复制',
-        icon: 'success',
-        duration: 2000,
-      });
-    },
-    fail: () => {
-      uni.showToast({
-        title: '复制失败',
-        icon: 'none',
-        duration: 2000,
-      });
-    },
-  });
 };
 
 // 格式化日期
@@ -3482,108 +3290,6 @@ const confirmDeleteItem = (item: any) => {
       gap: 16rpx;
     }
 
-    .record-item {
-      padding: 24rpx;
-      background-color: #fbfcf7;
-      border-radius: 12rpx;
-      border-left: 4rpx solid #1e3a2f;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16rpx;
-
-      .record-main {
-        flex: 1;
-        min-width: 0;
-
-        .record-sku {
-          display: block;
-          margin-bottom: 8rpx;
-          font-size: 24rpx;
-          color: #7a5c28;
-          font-weight: 500;
-        }
-
-        .record-info {
-          display: flex;
-          align-items: center;
-          gap: 12rpx;
-          margin-bottom: 8rpx;
-          flex-wrap: wrap;
-
-          .record-quantity {
-            font-size: 28rpx;
-            font-weight: bold;
-            color: #7a5c28;
-          }
-
-          .record-cost {
-            font-size: 28rpx;
-            font-weight: bold;
-            color: #b4453a;
-          }
-
-          .record-channel {
-            font-size: 24rpx;
-            color: #26261f;
-          }
-        }
-
-        .record-details {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8rpx;
-
-          .detail {
-            font-size: 22rpx;
-            color: #6b6653;
-            padding: 4rpx 8rpx;
-            background-color: #f0f3e9;
-            border-radius: 4rpx;
-          }
-
-          .detail-time {
-            font-size: 22rpx;
-            color: #6b6653;
-          }
-        }
-      }
-
-      .record-actions {
-        flex-shrink: 0;
-        align-self: flex-start;
-        display: flex;
-        gap: 12rpx;
-
-        .edit-btn {
-          padding: 8rpx 24rpx;
-          background-color: #1e3a2f;
-          color: #f3eddd;
-          border-radius: 8rpx;
-          font-size: 22rpx;
-          border: none;
-          line-height: 1.5;
-
-          &:active {
-            opacity: 0.8;
-          }
-        }
-
-        .delete-btn {
-          padding: 8rpx 24rpx;
-          background-color: #b4453a;
-          color: #f3eddd;
-          border-radius: 8rpx;
-          font-size: 22rpx;
-          border: none;
-          line-height: 1.5;
-
-          &:active {
-            opacity: 0.8;
-          }
-        }
-      }
-    }
   }
 }
 
@@ -3775,587 +3481,6 @@ const confirmDeleteItem = (item: any) => {
   }
 }
 
-// 采购表单弹窗
-.record-form-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
-  display: flex;
-  align-items: flex-end;
-}
-
-.modal-content {
-  width: 100%;
-  max-height: 80vh;
-  background-color: #fbfcf7;
-  border-radius: 32rpx 32rpx 0 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
-  padding: 32rpx;
-  border-bottom: 1rpx solid #eef1e2;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-
-  .modal-title {
-    font-size: 32rpx;
-    font-weight: bold;
-    color: #26261f;
-  }
-
-  .modal-close {
-    font-size: 48rpx;
-    color: #6b6653;
-    line-height: 1;
-    padding: 0 16rpx;
-  }
-}
-
-.modal-body {
-  padding: 32rpx;
-  overflow-y: auto;
-}
-
-.ingredient-summary-card {
-  padding: 24rpx;
-  margin-bottom: 24rpx;
-  border-radius: 20rpx;
-  background: linear-gradient(135deg, #f6efe0 0%, #b08d4f 100%);
-  display: flex;
-  flex-direction: column;
-  gap: 10rpx;
-
-  .summary-main {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16rpx;
-  }
-
-  .summary-name {
-    font-size: 30rpx;
-    font-weight: 700;
-    color: #26261f;
-  }
-
-  .summary-demand {
-    font-size: 24rpx;
-    color: #7a5c28;
-    flex-shrink: 0;
-  }
-
-  .summary-subtext {
-    font-size: 22rpx;
-    color: #7a5c28;
-    line-height: 1.5;
-  }
-
-  .summary-subtext.suggestion {
-    font-weight: 500;
-  }
-
-  .record-demand-metrics {
-    display: grid;
-    grid-template-columns: 1.2fr 1fr 1fr;
-    gap: 10rpx;
-  }
-
-  .record-demand-metric {
-    min-width: 0;
-    padding: 14rpx 10rpx;
-    border-radius: 12rpx;
-    background-color: rgba(251, 252, 247, 0.6);
-    border: 1rpx solid rgba(176, 141, 79, 0.48);
-
-    .metric-label {
-      display: block;
-      margin-bottom: 6rpx;
-      font-size: 20rpx;
-      color: #7a5c28;
-      white-space: nowrap;
-    }
-
-    .metric-value {
-      display: block;
-      font-size: 26rpx;
-      font-weight: 700;
-      color: #26261f;
-      white-space: nowrap;
-    }
-
-    &.primary {
-      order: -1;
-      background-color: #ffffff;
-      border-color: #7a5c28;
-
-      .metric-label {
-        color: #26261f;
-        font-weight: 600;
-      }
-
-      .metric-value {
-        font-size: 32rpx;
-        font-weight: 800;
-        color: #7a5c28;
-      }
-    }
-  }
-}
-
-.form-section {
-  margin-bottom: 24rpx;
-
-  .form-section-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16rpx;
-    margin-bottom: 12rpx;
-
-    .form-label {
-      margin-bottom: 0;
-    }
-
-    .form-title-hint {
-      flex-shrink: 0;
-      font-size: 22rpx;
-      color: #6b6653;
-    }
-  }
-
-  .form-label {
-    display: block;
-    font-size: 28rpx;
-    font-weight: 500;
-    color: #26261f;
-    margin-bottom: 12rpx;
-  }
-
-  .field-label-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16rpx;
-    margin-bottom: 12rpx;
-
-    .form-label {
-      margin-bottom: 0;
-    }
-  }
-
-  .field-unit-badge {
-    flex-shrink: 0;
-    padding: 4rpx 14rpx;
-    border-radius: 999rpx;
-    background-color: #eef2e4;
-    color: #7a5c28;
-    font-size: 22rpx;
-    font-weight: 600;
-  }
-
-  .input-with-unit {
-    position: relative;
-
-    .unit-input {
-      padding-right: 108rpx;
-    }
-
-    .input-unit-label {
-      position: absolute;
-      right: 24rpx;
-      top: 50%;
-      transform: translateY(-50%);
-      color: #26261f;
-      font-size: 26rpx;
-      font-weight: 600;
-      pointer-events: none;
-    }
-  }
-
-  .form-input {
-    width: 100%;
-    height: 80rpx;
-    padding: 0 24rpx;
-    font-size: 28rpx;
-    color: #26261f;
-    background-color: #fbfcf7;
-    border-radius: 8rpx;
-    box-sizing: border-box;
-  }
-
-  .form-value {
-    &.readonly {
-      height: 80rpx;
-      padding: 0 24rpx;
-      font-size: 28rpx;
-      color: #26261f;
-      background-color: #fbfcf7;
-      border-radius: 8rpx;
-      display: flex;
-      align-items: center;
-    }
-  }
-
-  .form-hint {
-    display: block;
-    margin-top: 10rpx;
-    font-size: 22rpx;
-    line-height: 1.5;
-    color: #6b6653;
-  }
-
-  .picker-input {
-    height: 80rpx;
-    padding: 0 24rpx;
-    font-size: 28rpx;
-    background-color: #fbfcf7;
-    border-radius: 8rpx;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    .value {
-      color: #26261f;
-    }
-
-    .placeholder {
-      color: #6b6653;
-    }
-
-    .arrow {
-      font-size: 32rpx;
-      color: #6b6653;
-    }
-  }
-
-  .channel-input-wrapper {
-    display: flex;
-    gap: 12rpx;
-    align-items: center;
-
-    .channel-input {
-      flex: 1;
-    }
-
-    .quick-select-btn {
-      flex-shrink: 0;
-      padding: 0 24rpx;
-      height: 80rpx;
-      background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-      border-radius: 8rpx;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-
-      text {
-        font-size: 26rpx;
-        color: #f3eddd;
-        font-weight: 500;
-      }
-
-      &:active {
-        opacity: 0.8;
-      }
-    }
-  }
-
-  .channel-chip-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12rpx;
-  }
-
-  .channel-chip {
-    min-height: 64rpx;
-    padding: 0 24rpx;
-    border-radius: 999rpx;
-    background: #fbfcf7;
-    color: #26261f;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-sizing: border-box;
-    position: relative;
-    z-index: 1;
-
-    text {
-      font-size: 24rpx;
-      font-weight: 500;
-    }
-
-    &.active {
-      background: #1e3a2f;
-      color: #f3eddd;
-      box-shadow: 0 6rpx 16rpx rgba(30, 46, 36, 0.24);
-    }
-
-    &.custom-entry {
-      background: #f6efe0;
-      color: #7a5c28;
-      border: 1rpx dashed rgba(176, 141, 79, 0.5);
-    }
-  }
-
-  .record-sku-list {
-    display: flex;
-    flex-direction: column;
-    gap: 14rpx;
-  }
-
-  .record-sku-empty {
-    padding: 24rpx;
-    border-radius: 16rpx;
-    background-color: #f6efe0;
-    border: 1rpx solid rgba(176, 141, 79, 0.28);
-    display: flex;
-    flex-direction: column;
-    gap: 8rpx;
-
-    .empty-title {
-      font-size: 28rpx;
-      font-weight: 700;
-      color: #7a5c28;
-    }
-
-    .empty-desc {
-      font-size: 24rpx;
-      line-height: 1.5;
-      color: #7a5c28;
-    }
-  }
-
-  .record-sku-add {
-    margin-top: 6rpx;
-    padding: 22rpx;
-    border-radius: 14rpx;
-    border: 2rpx dashed rgba(176, 141, 79, 0.6);
-    background-color: #fffdf6;
-    text-align: center;
-    font-size: 26rpx;
-    color: #8a6b33;
-  }
-
-  .record-sku-add-btn {
-    margin-top: 8rpx;
-    padding: 20rpx;
-    border-radius: 14rpx;
-    background-color: #1e3a2f;
-    color: #f7f2e2;
-    text-align: center;
-    font-size: 28rpx;
-    font-weight: 600;
-  }
-
-  .record-sku-option {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16rpx;
-    padding: 18rpx 20rpx;
-    border-radius: 16rpx;
-    border: 2rpx solid #eef1e2;
-    background-color: #fbfcf7;
-
-    &.active {
-      border-color: #1e3a2f;
-      background-color: #eef2e4;
-      box-shadow: 0 8rpx 20rpx rgba(30, 46, 36, 0.12);
-
-      .record-sku-check {
-        border-color: #1e3a2f;
-        background-color: #1e3a2f;
-        color: #f3eddd;
-      }
-    }
-  }
-
-  .record-sku-main {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .record-sku-title-row {
-    display: flex;
-    align-items: center;
-    gap: 10rpx;
-    margin-bottom: 10rpx;
-  }
-
-  .record-sku-badge {
-    flex-shrink: 0;
-    padding: 4rpx 12rpx;
-    border-radius: 999rpx;
-    background-color: #f0f3e9;
-    color: #26261f;
-    font-size: 20rpx;
-    font-weight: 600;
-  }
-
-  .record-sku-option.active .record-sku-badge {
-    background-color: rgba(30, 58, 47, 0.12);
-    color: #7a5c28;
-  }
-
-  .record-sku-name {
-    flex: 1;
-    min-width: 0;
-    font-size: 28rpx;
-    color: #26261f;
-    font-weight: 700;
-    line-height: 1.35;
-  }
-
-  .record-sku-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8rpx;
-
-    text {
-      padding: 4rpx 10rpx;
-      border-radius: 8rpx;
-      background-color: #f0f3e9;
-      color: #26261f;
-      font-size: 22rpx;
-      line-height: 1.35;
-    }
-  }
-
-  .record-sku-check {
-    flex-shrink: 0;
-    width: 36rpx;
-    height: 36rpx;
-    border-radius: 50%;
-    border: 3rpx solid #e5e8d4;
-    color: transparent;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22rpx;
-    font-weight: 700;
-  }
-
-  .form-textarea {
-    width: 100%;
-    min-height: 160rpx;
-    padding: 16rpx 24rpx;
-    font-size: 28rpx;
-    color: #26261f;
-    background-color: #fbfcf7;
-    border-radius: 8rpx;
-    box-sizing: border-box;
-  }
-
-  .form-hint {
-    display: block;
-    font-size: 22rpx;
-    color: #6b6653;
-    margin-top: 8rpx;
-    line-height: 1.4;
-  }
-
-  .char-count {
-    display: block;
-    font-size: 22rpx;
-    color: #6b6653;
-    text-align: right;
-    margin-top: 8rpx;
-  }
-}
-
-.record-entry-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16rpx;
-  margin-bottom: 24rpx;
-}
-
-.record-entry-card {
-  min-width: 0;
-  margin-bottom: 0;
-  padding: 22rpx;
-  border-radius: 16rpx;
-  background-color: #fbfcf7;
-}
-
-.record-entry-meta {
-  margin-top: 14rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.record-entry-meta-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 10rpx;
-  font-size: 22rpx;
-  line-height: 1.35;
-
-  .meta-label {
-    flex-shrink: 0;
-    color: #6b6653;
-  }
-
-  .meta-value {
-    min-width: 0;
-    color: #26261f;
-    font-weight: 700;
-    text-align: right;
-    overflow-wrap: anywhere;
-
-    &.price-tone-good {
-      color: #1e3a2f;
-    }
-
-    &.price-tone-bad {
-      color: #b4453a;
-    }
-  }
-}
-
-.input-placeholder {
-  color: #6b6653;
-}
-
-.modal-footer {
-  padding: 24rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
-  border-top: 1rpx solid #eef1e2;
-  display: flex;
-  gap: 24rpx;
-
-  .modal-btn {
-    flex: 1;
-    height: 88rpx;
-    border-radius: 12rpx;
-    font-size: 32rpx;
-    font-weight: 500;
-    border: none;
-
-    &.cancel {
-      background-color: #fbfcf7;
-      color: #26261f;
-    }
-
-    &.submit {
-      background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-      color: #f3eddd;
-    }
-
-    &:active {
-      opacity: 0.8;
-    }
-  }
-}
-
 // ==========================================
 // 新增样式：日期变更警告横幅
 // ==========================================
@@ -4515,20 +3640,6 @@ const confirmDeleteItem = (item: any) => {
 .import-mask-note {
   font-size: 21rpx;
   color: #6b6653;
-}
-
-.record-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-}
-
-.record-source {
-  font-size: 18rpx;
-  padding: 2rpx 10rpx;
-  border-radius: 8rpx;
-  background: #e8f0e6;
-  color: #2f6b4f;
 }
 
 // ==========================================

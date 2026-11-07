@@ -34,8 +34,8 @@ describe('staff purchasing wording', () => {
   it('labels list kinds as daily purchase and replenishment', () => {
     expect(indexSource).toContain("ORDER_DEMAND: '日采'");
     expect(indexSource).toContain("STOCK_REPLENISHMENT: '补货'");
-    expect(detailSource).toContain("ORDER_DEMAND: '日采'");
-    expect(detailSource).toContain("STOCK_REPLENISHMENT: '补货'");
+    expect(detailSource).toContain("'日采清单详情'");
+    expect(detailSource).toContain("'补货清单详情'");
     expect(indexSource).not.toContain("ORDER_DEMAND: '订单采购'");
     expect(indexSource).not.toContain("STOCK_REPLENISHMENT: '库存补货'");
     expect(detailSource).not.toContain("ORDER_DEMAND: '订单采购'");

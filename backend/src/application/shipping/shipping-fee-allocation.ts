@@ -96,9 +96,10 @@ export function allocatePackageFee(
       return items[a].orderId.localeCompare(items[b].orderId);
     });
 
-  for (let i = sortedIndexes.length - 1; i >= 0 && left > 0; i -= 1) {
-    centsList[sortedIndexes[i]] += 1;
-    left -= 1;
+  // 零头**全给**排序最后一单（老板说的「最后一单吃零头」），
+  // 不摊到好几单上 —— 合计仍然精确等于包裹运费。
+  if (left > 0) {
+    centsList[sortedIndexes[sortedIndexes.length - 1]] += left;
   }
 
   return items.map((item, index) => ({

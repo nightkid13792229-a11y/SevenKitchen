@@ -506,6 +506,50 @@ describe('WechatShippingUploadService uploadForOrder', () => {
     );
   });
 
+  it('★ 拆成两个包裹时用分拆发货，且只报这单所在的包裹（2026-11-07）', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      paymentMethod: 'WECHAT_PAY',
+      transactionId: '4200000000000000001',
+      trackingNumber: 'SF1',
+      carrierCode: 'SF',
+      customerId: 'customer-1',
+      customer: { id: 'customer-1', phone: '17700000000', wechatOpenid: 'openid-1' },
+      address: { phone: '17700000000' },
+      items: [{ recipeSnapshot: { name: '鲜食套餐' } }],
+    });
+    mockPrisma.paymentConfig.upsert.mockResolvedValue({
+      appId: 'wx-payment-app',
+      mchId: '1900000001',
+    });
+    mockPrisma.userWechatIdentity.findFirst.mockResolvedValue(null);
+    mockPrisma.orderShipmentPackage.findMany.mockResolvedValue([
+      { carrierCode: 'SF', trackingNumber: 'SF1' },
+      { carrierCode: 'SF', trackingNumber: 'SF2' },
+    ]);
+    mockWechatService.uploadShippingInfo.mockResolvedValue({ errcode: 0, errmsg: 'ok' });
+
+    await service.uploadForOrder('order-1');
+
+    expect(mockPrisma.orderShipmentPackage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          items: { some: { orderId: 'order-1' } },
+        }),
+      }),
+    );
+    expect(mockWechatService.uploadShippingInfo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        delivery_mode: 2,
+        shipping_list: [
+          expect.objectContaining({ tracking_no: 'SF1' }),
+          expect.objectContaining({ tracking_no: 'SF2' }),
+        ],
+      }),
+      'wx-payment-app',
+    );
+  });
+
   it('uses the openid for the configured payment app when uploading shipping info', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'order-1',

@@ -24,6 +24,7 @@ import type { OrderRepository } from '../../domain/order/order.repository';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { ORDER_REPOSITORY } from '../order/order.service.tokens';
 import { ShippingNotificationService } from './shipping-notification.service';
+import { WechatShippingUploadService } from './wechat-shipping-upload.service';
 import {
   allocateShipmentFees,
   allocatePackageFee,
@@ -100,6 +101,8 @@ export class OrderShipmentService {
     private readonly orderRepository: OrderRepository,
     @Optional()
     private readonly shippingNotificationService?: ShippingNotificationService,
+    @Optional()
+    private readonly wechatShippingUploadService?: WechatShippingUploadService,
   ) {}
 
   /**
@@ -207,7 +210,8 @@ export class OrderShipmentService {
         data: {
           id: shipmentId,
           shippedAt,
-          shippedBy: actorId ?? null,
+          // 没有具体账号时至少留个来源，别让这一列永远是 null
+          shippedBy: actorId ?? 'staff',
           note: input.note ?? null,
         },
       });
@@ -257,12 +261,17 @@ export class OrderShipmentService {
 
       for (const order of orders as any[]) {
         const total = allocation.orderTotals[order.id] ?? 0;
+        // 订单上的单号 = **这单自己**所在的最靠前那个包裹，
+        // 不能一律取包裹 1 —— 只装在包裹 2 的单会拿到别人的单号。
+        const ownPackage = normalized.find((pkg) =>
+          pkg.items.some((item) => item.orderId === order.id),
+        ) ?? primary;
         await tx.order.update({
           where: { id: order.id },
           data: {
             status: OrderStatus.SHIPPED,
-            trackingNumber: primary.trackingNumber,
-            carrierCode: primary.carrierCode,
+            trackingNumber: ownPackage.trackingNumber,
+            carrierCode: ownPackage.carrierCode,
             shippedAt,
             actualShippingFee: total.toFixed(2),
           },
@@ -285,9 +294,11 @@ export class OrderShipmentService {
       }
     });
 
-    // 6) 发货通知：每张订单一条（老板 2026-11-07 确认维持现状）
+    // 6) 发货通知 + 微信发货信息：每张订单各一条 / 各一次
+    //    （老板 2026-11-07 确认通知维持现状；微信按支付单上报，一票多单必须各报）
     for (const orderId of orderIds) {
       await this.sendNotificationSafely(orderId);
+      await this.uploadWechatSafely(orderId);
     }
 
     return this.getShipment(shipmentId);
@@ -433,38 +444,58 @@ export class OrderShipmentService {
         },
       });
 
-      for (const item of allocated) {
-        await tx.orderShipmentPackageItem.updateMany({
-          where: { packageId, orderId: item.orderId },
-          data: { allocatedFee: item.allocatedFee.toFixed(2) },
+      // 逐行按 id 写回：同一订单在同一包裹里可能有多个规格行，
+      // 用 updateMany(orderId) 会把几行写成同一个数，合计就对不上了。
+      for (let i = 0; i < pkg.items.length; i += 1) {
+        await tx.orderShipmentPackageItem.update({
+          where: { id: pkg.items[i].id },
+          data: { allocatedFee: allocated[i].allocatedFee.toFixed(2) },
         });
       }
 
       for (const orderId of orderIds) {
         const rows = await tx.orderShipmentPackageItem.findMany({
           where: { orderId },
-          select: { allocatedFee: true },
+          select: {
+            allocatedFee: true,
+            package: {
+              select: {
+                trackingNumber: true,
+                carrierCode: true,
+                sortOrder: true,
+              },
+            },
+          },
         });
         const total =
           Math.round(
             rows.reduce((sum, row) => sum + Number(row.allocatedFee), 0) * 100,
           ) / 100;
+        // 主单号 = 这单所在的最靠前那个包裹（改完单号也要跟着更新）
+        const first = [...rows].sort(
+          (a, b) => (a.package?.sortOrder ?? 0) - (b.package?.sortOrder ?? 0),
+        )[0];
         await tx.order.update({
           where: { id: orderId },
-          data: { actualShippingFee: total.toFixed(2) },
+          data: {
+            actualShippingFee: total.toFixed(2),
+            ...(first
+              ? {
+                  trackingNumber: first.package?.trackingNumber,
+                  carrierCode: first.package?.carrierCode,
+                }
+              : {}),
+          },
         });
       }
-
-      // 第 1 个包裹是「主单号」，老读法（订单上的 tracking_number）跟着它走
-      for (const orderId of orderIds) {
-        if (pkg.sortOrder === 1) {
-          await tx.order.update({
-            where: { id: orderId },
-            data: { trackingNumber, carrierCode },
-          });
-        }
-      }
     });
+
+    // 运单号改了，微信那边的物流卡片也得跟着更新（失败不影响本地数据）
+    if (trackingNumber !== pkg.trackingNumber) {
+      for (const orderId of orderIds) {
+        await this.uploadWechatSafely(orderId);
+      }
+    }
 
     return this.getShipment(pkg.shipmentId);
   }
@@ -607,16 +638,27 @@ export class OrderShipmentService {
         throw new BadRequestException(`订单 ${orderId} 不存在或不可发货`);
       }
 
-      for (const [specG, bags] of perOrder) {
-        const expected = pack.specsBags.get(specG);
-        if (!expected) {
+      // 正向遍历分装方案：方案里有几档规格，提交里就必须有几档。
+      // 少一档 = 静默少发货（110g×2 + 250g×1 只交 110g 这种情况必须拦）。
+      for (const [specG, expected] of pack.specsBags) {
+        const bags = perOrder.get(specG);
+        if (bags === undefined) {
           throw new BadRequestException(
-            `订单 ${orderId} 没有 ${specG}g 这个规格`,
+            `订单 ${orderId} 的 ${specG}g 规格有 ${expected} 袋没装进任何包裹`,
           );
         }
         if (bags !== expected) {
           throw new BadRequestException(
             `订单 ${orderId} 的 ${specG}g 规格应装 ${expected} 袋，实际装了 ${bags} 袋`,
+          );
+        }
+      }
+
+      // 反向也查：别塞方案里没有的规格
+      for (const [specG] of perOrder) {
+        if (!pack.specsBags.has(specG)) {
+          throw new BadRequestException(
+            `订单 ${orderId} 没有 ${specG}g 这个规格`,
           );
         }
       }
@@ -637,6 +679,19 @@ export class OrderShipmentService {
     );
     if (signatures.size > 1) {
       throw new BadRequestException('收货地址不同的订单不能合并发货');
+    }
+  }
+
+  private async uploadWechatSafely(orderId: string): Promise<void> {
+    if (!this.wechatShippingUploadService) return;
+    try {
+      await this.wechatShippingUploadService.uploadForOrder(orderId);
+    } catch (error) {
+      this.logger.error(
+        `[Shipment] 微信发货信息上传失败 order=${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 

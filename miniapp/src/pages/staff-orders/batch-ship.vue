@@ -83,7 +83,7 @@
           {{ unassignedBags > 0 ? `还有 ${unassignedBags} 袋没装` : '袋数已分配完' }}
         </text>
       </view>
-      <button class="bottom-btn" :disabled="submitting || loading" @tap="submit">
+      <button class="bottom-btn" :class="{ 'is-disabled': submitting || loading }" :disabled="submitting || loading" @tap="submit">
         {{ submitting ? '提交中...' : '确认发货' }}
       </button>
     </view>
@@ -187,8 +187,15 @@ function buildRows() {
 
       for (const row of plan) {
         if (row.specG < 1 || row.bags < 1) continue
+        const key = `${order.id}::${row.specG}`
+        const existing = built.find((item) => item.key === key)
+        if (existing) {
+          // 多道菜同一个规格：合成一行，别让两行共用一个 key 互相覆盖
+          existing.totalBags += row.bags
+          continue
+        }
         built.push({
-          key: `${order.id}::${row.specG}`,
+          key,
           orderId: order.id,
           orderLabel: label,
           specG: row.specG,
@@ -298,6 +305,10 @@ async function submit() {
 
   if (unassignedBags.value > 0) {
     uni.showToast({ title: `还有 ${unassignedBags.value} 袋没装`, icon: 'none' })
+    return
+  }
+  if (unassignedBags.value < 0) {
+    uni.showToast({ title: '袋数分多了，检查一下', icon: 'none' })
     return
   }
 
@@ -411,5 +422,5 @@ async function submit() {
   margin: 0; padding: 0 44rpx; height: 76rpx; line-height: 76rpx;
   border-radius: 38rpx; background: #23483c; color: #fff; font-size: 28rpx;
 }
-.bottom-btn[disabled] { background: #c9d2cc; }
+.bottom-btn.is-disabled { background: #c9d2cc; }
 </style>

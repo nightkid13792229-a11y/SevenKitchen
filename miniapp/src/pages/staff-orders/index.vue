@@ -76,7 +76,7 @@
         <text class="merge-bar-count">已选 {{ selectedOrderIds.length }} 单</text>
         <text class="merge-bar-hint">同一收货地址才能合并</text>
       </view>
-      <button class="merge-bar-btn" :disabled="selectedOrderIds.length === 0" @tap="startMergeShipment">
+      <button class="merge-bar-btn" :class="{ 'is-disabled': selectedOrderIds.length === 0 }" :disabled="selectedOrderIds.length === 0" @tap="startMergeShipment">
         去发货
       </button>
     </view>
@@ -319,7 +319,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onShow, onLoad, onReachBottom, onShareAppMessage } from '@dcloudio/uni-app'
+import { onShow, onLoad, onUnload, onReachBottom, onShareAppMessage } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 import { confirmOfflinePayment } from '../../api/orders'
 
@@ -458,21 +458,35 @@ function toggleMergeMode() {
   selectedOrderIds.value = []
 }
 
+// 离开页面时清干净，回来不会带着上一次的勾选
+onUnload(() => {
+  mergeMode.value = false
+  selectedOrderIds.value = []
+})
+
 function onCardTap(order: any) {
   if (!mergeMode.value) {
     viewOrderDetail(order.id)
     return
   }
+
+  // 先看「是不是已经选了」：已选的永远能取消，
+  // 否则一张单在勾选后被别人发了，就再也点不掉（2026-11-07 审核提出）。
+  const index = selectedOrderIds.value.indexOf(order.id)
+  if (index >= 0) {
+    selectedOrderIds.value.splice(index, 1)
+    return
+  }
+
   if (!isMergeable(order)) {
     uni.showToast({ title: '只有待发货的订单能合并', icon: 'none' })
     return
   }
-  const index = selectedOrderIds.value.indexOf(order.id)
-  if (index >= 0) {
-    selectedOrderIds.value.splice(index, 1)
-  } else {
-    selectedOrderIds.value.push(order.id)
+  if (selectedOrderIds.value.length >= 10) {
+    uni.showToast({ title: '一票最多 10 张单', icon: 'none' })
+    return
   }
+  selectedOrderIds.value.push(order.id)
 }
 
 function startMergeShipment() {
@@ -2198,5 +2212,5 @@ onShareAppMessage((event: any) => {
   margin: 0; padding: 0 44rpx; height: 72rpx; line-height: 72rpx;
   border-radius: 36rpx; background: #23483c; color: #fff; font-size: 27rpx;
 }
-.merge-bar-btn[disabled] { background: #c9d2cc; color: #fff; }
+.merge-bar-btn.is-disabled { background: #c9d2cc; color: #fff; }
 </style>

@@ -2279,6 +2279,10 @@ export class AdminController {
       if (error instanceof BadRequestException) {
         return ApiResponseDto.error(400, error.message);
       }
+      // 状态机拦截 = 这单刚被别人发了，给 409 而不是 500
+      if (error?.name === 'InvalidStateTransitionError') {
+        return ApiResponseDto.error(409, '这张单刚被别人发了，刷新看看');
+      }
       throw error;
     }
   }

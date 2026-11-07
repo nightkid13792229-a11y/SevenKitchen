@@ -10,6 +10,9 @@ import {
   type ToolContext
 } from './supplement-tools';
 import type { SupplementDraftRecord } from '../../domain/ingredient/supplement-draft-patch';
+import { KnowledgeSearchService } from '../knowledge/knowledge-search.service';
+import { SupplementLinkPreviewService } from './supplement-link-preview.service';
+import { FeedAdditiveCatalogService } from '../../domain/ingredient/feed-additive-catalog.service';
 
 /**
  * 补剂 Agent 的循环：模型自己决定调哪个工具、调几次，直到它给出结论。
@@ -75,11 +78,12 @@ const TOOL_SCHEMA = SUPPLEMENT_TOOLS.map((tool) => ({
 export class SupplementAgentService {
   private readonly logger = new Logger(SupplementAgentService.name);
 
+  // 这里必须写**具体类**：Nest 靠运行时类型注入，写成结构类型会被擦成 Object，启动即失败
   constructor(
     private readonly providerConfig: AgentProviderConfigService,
-    private readonly knowledge: ToolContext['knowledge'],
-    private readonly preview: ToolContext['preview'],
-    private readonly catalog: ToolContext['catalog']
+    private readonly knowledge: KnowledgeSearchService,
+    private readonly preview: SupplementLinkPreviewService,
+    private readonly catalog: FeedAdditiveCatalogService
   ) {}
 
   async run(input: SupplementAgentInput): Promise<SupplementAgentResult> {

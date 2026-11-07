@@ -304,6 +304,13 @@ export function buildDeliverySnapshot(
         nutrition.energyDensityKcalPerKg,
       ),
       macros: nutrition.macros ?? null,
+      /**
+       * 2026-10-28 加的「宏量报告行」：接口、上游取值、读取端都写好了，
+       * 但组装快照的这一行当时**漏了** —— 字段在类型里、值也传进来、
+       * 快照里却没有，所以「历史订单食谱」一直读不到交付当时那张表。
+       * 2026-11-07 补上。
+       */
+      reportRows: nutrition.reportRows ?? null,
     },
     shopping: {
       lines,

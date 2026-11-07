@@ -164,7 +164,13 @@ export interface DeliveryContent {
   nutrition: {
     standard: string | null;
     energyDensityKcalPerKg: number | null;
-    /** 核心营养 8 项（2026-10-18）—— 交付第 1 页的 4×2 网格 */
+    /**
+     * 核心营养 8 项（2026-10-18）—— 交付第 1 页的 4×2 网格。
+     *
+     * 口径（2026-11-07 明确）：蛋白质/脂肪/灰分/膳食纤维/碳水是**干物质（DM）**
+     * 占比，`moisturePercent` 是实际含水率，能量密度是 kcal/kg。
+     * 后端冻结时就是这个口径，前端**不再二次折算**。
+     */
     macros?: {
       proteinPercent: number | null;
       fatPercent: number | null;

@@ -102,6 +102,8 @@ describe('交付内容快照', () => {
           'standard',
           'energyDensityKcalPerKg',
           'macros',
+          // 2026-11-07 补：宏量报告行（2026-10-28 加字段时组装这一层漏了）
+          'reportRows',
         ].sort(),
       );
       expect(Object.keys(snapshot.shopping).sort()).toEqual(
@@ -121,6 +123,41 @@ describe('交付内容快照', () => {
       expect(snapshot.generatedAt).toBe(
         new Date('2026-10-16T10:00:00+08:00').toISOString(),
       );
+    });
+  });
+
+  describe('营养快照', () => {
+    it('核心营养 8 项与宏量报告行都要真的落进快照', () => {
+      const rows = [
+        {
+          key: 'crudeProtein',
+          name: '蛋白质',
+          dryMatterLabel: '38.23%',
+          energyPercentLabel: '31.26%',
+          weightPercentLabel: '10.22%',
+        },
+      ];
+      const snapshot = buildDeliverySnapshot(
+        input({
+          nutrition: {
+            standard: 'FEDIAF_2025',
+            energyDensityKcalPerKg: 1143.7,
+            macros: { proteinPercent: 38.23, fatPercent: 12.44 },
+            reportRows: rows,
+          },
+        }),
+      );
+
+      expect(snapshot.nutrition.macros).toEqual({
+        proteinPercent: 38.23,
+        fatPercent: 12.44,
+      });
+      expect(snapshot.nutrition.reportRows).toEqual(rows);
+    });
+
+    it('没有报告行时给 null（前端不用判 undefined）', () => {
+      const snapshot = buildDeliverySnapshot(input());
+      expect(snapshot.nutrition.reportRows).toBeNull();
     });
   });
 

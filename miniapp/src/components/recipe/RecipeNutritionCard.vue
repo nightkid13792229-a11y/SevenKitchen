@@ -33,6 +33,15 @@
       </view>
     </view>
 
+    <!--
+      口径说明（2026-11-07）：
+      蛋白/脂肪/灰分/纤维/碳水 是**干物质（DM）占比**，含水量是实际含水率 ——
+      与食谱详情页同一句，避免家长拿鲜食的 DM 值去和膨化粮包装上的湿基值比。
+    -->
+    <text v-if="cells.length" class="nutrition-card__basis">
+      以上营养指标按干物质（DM）计，即去除水分后的占比；含水量为实际含水率。
+    </text>
+
     <!-- 报告入口：整块内，居中 -->
     <view
       v-if="reportAvailable"
@@ -177,6 +186,17 @@ const cells = computed(() => {
   font-size: 18rpx;
   color: #9c8b76;
   margin-top: 2rpx;
+}
+
+.nutrition-card__basis {
+  display: block;
+  margin-top: 18rpx;
+  padding-top: 14rpx;
+  border-top: 1px solid #f4ebe0;
+  font-size: 18rpx;
+  line-height: 1.5;
+  color: #9c8b76;
+  text-align: center;
 }
 
 .nutrition-card__report {

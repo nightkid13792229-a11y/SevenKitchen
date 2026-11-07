@@ -278,7 +278,6 @@ import {
   type DeliveryContent,
   type OrderDelivery,
 } from '@/api/custom-recipe';
-import { toDryMatterMacros } from '@/utils/nutrition-dm';
 import { requestCustomRecipeOrderSubscription } from '@/utils/custom-recipe-payment';
 
 interface Attachment {
@@ -618,14 +617,21 @@ function supplementRowsOf(content: DeliveryContent) {
   return rows;
 }
 
+/**
+ * 干物质（DM）占比 —— 交付快照里的 `macros` **本身就是 DM 口径**
+ * （`protein_dm_pct` 等，见后端 `delivery-nutrition.ts`），这里直接显示。
+ *
+ * 2026-11-07 之前这里还会再折算一次（当时误以为快照是湿基）：
+ * 那会让 38.2% 的蛋白显示成 143%。快照口径统一后不再换算。
+ */
 function dmRowsOf(content: DeliveryContent) {
-  const macros = toDryMatterMacros(content.nutrition?.macros);
+  const macros = content.nutrition?.macros;
   return [
-    { label: '蛋白质', value: macros.protein },
-    { label: '脂肪', value: macros.fat },
-    { label: '灰分', value: macros.ash },
-    { label: '纤维', value: macros.fiber },
-    { label: '碳水', value: macros.carbohydrate },
+    { label: '蛋白质', value: macros?.proteinPercent ?? null },
+    { label: '脂肪', value: macros?.fatPercent ?? null },
+    { label: '灰分', value: macros?.ashPercent ?? null },
+    { label: '纤维', value: macros?.crudeFiberPercent ?? null },
+    { label: '碳水', value: macros?.carbohydratePercent ?? null },
   ].map((row) => ({
     label: row.label,
     value: row.value === null ? '—' : `${row.value}%`,

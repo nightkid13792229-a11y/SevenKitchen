@@ -52,4 +52,12 @@ describe('RecipeNutritionCard · 核心营养成分卡', () => {
     expect(source).toContain("if (!value) return ''")
     expect(source).toContain('showStandard?: boolean')
   })
+
+  it('★ 5 项营养标清「干物质（DM）」口径（不标会被拿去和膨化粮湿基值比）', () => {
+    // 2026-11-07：快照里存的就是 DM 占比，卡片必须自己说清口径
+    expect(source).toContain('按干物质（DM）计')
+    expect(source).toContain('含水量为实际含水率')
+    // 只在有数字时出现，空块不该多一行说明
+    expect(source).toContain('v-if="cells.length" class="nutrition-card__basis"')
+  })
 })

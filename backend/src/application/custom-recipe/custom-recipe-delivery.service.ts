@@ -28,6 +28,10 @@ import {
   type SnapshotSupplement,
 } from '../../domain/custom-recipe/custom-recipe.delivery';
 import {
+  readDeliveryMacroRows,
+  readDeliveryMacros,
+} from '../../domain/custom-recipe/delivery-nutrition';
+import {
   buildShoppingList,
   toSnapshotShopping,
 } from '../../domain/custom-recipe/custom-recipe.shopping';
@@ -1576,9 +1580,11 @@ export class CustomRecipeDeliveryService {
           ? energyDensity
           : null,
         // 2026-10-18：核心营养 8 项（交付第 1 页的 4×2 网格）
-        macros: toSnapshotMacros(input.recipe.nutritionDetailedData),
+        // 2026-11-07：取数口径抽到 domain，认库里的 snake_case（此前按 camelCase
+        // 取名全落空 → macros 恒为 null → 交付页只剩标题）
+        macros: readDeliveryMacros(input.recipe.nutritionDetailedData),
         // 2026-10-28：宏量报告行原样冻结，供「历史订单食谱」回看交付当时那张表
-        reportRows: toSnapshotReportRows(input.recipe.nutritionDetailedData),
+        reportRows: readDeliveryMacroRows(input.recipe.nutritionDetailedData),
       },
       /**
        * 采购清单（批次 2.2）—— 这套算法原先在**小程序页面里**，
@@ -1769,63 +1775,10 @@ function round1(value: number): number {
 // ==================== 快照补传字段的转换（2026-10-18）====================
 
 /**
- * 核心营养 8 项 —— 从 `Recipe.nutritionDetailedData` 里挑出**交付第 1 页要显示的**那些。
- *
- * 为什么只挑 8 项：完整的营养评估有几百项、几十 KB，
- * 那是"报告页"按需再查的东西，不该塞进每一条交付记录。
- *
- * ⚠️ 缺失就给 null，不给 0 —— `0%` 和"没算"是两回事。
+ * 核心营养 8 项与宏量报告行的取数口径已抽到
+ * `domain/custom-recipe/delivery-nutrition.ts` —— 交付端与历史回填脚本共用一份，
+ * 避免"两处各写一份、名字对不上"的事故重演。
  */
-function toSnapshotReportRows(
-  detailed: unknown,
-): Array<{
-  key?: string;
-  name: string;
-  dryMatterLabel: string;
-  energyPercentLabel: string;
-  weightPercentLabel: string;
-}> | null {
-  const report =
-    detailed && typeof detailed === 'object'
-      ? (detailed as Record<string, any>).report
-      : null;
-  const rows = report?.macroRows;
-  if (!Array.isArray(rows)) return null;
-  const normalized = rows
-    .map((row: any) => ({
-      ...(typeof row?.key === 'string' ? { key: row.key } : {}),
-      name: String(row?.name ?? '').trim(),
-      dryMatterLabel: String(row?.dryMatterLabel ?? '').trim(),
-      energyPercentLabel: String(row?.energyPercentLabel ?? '').trim(),
-      weightPercentLabel: String(row?.weightPercentLabel ?? '').trim(),
-    }))
-    .filter((row) => row.name);
-  return normalized.length > 0 ? normalized : null;
-}
-
-function toSnapshotMacros(
-  detailed: unknown,
-): Record<string, number | null> | null {
-  if (!detailed || typeof detailed !== 'object') return null;
-  const source = detailed as Record<string, unknown>;
-  const pick = (key: string): number | null => {
-    const value = source[key];
-    return typeof value === 'number' && Number.isFinite(value) ? value : null;
-  };
-  const macros = {
-    proteinPercent: pick('proteinPercent'),
-    fatPercent: pick('fatPercent'),
-    ashPercent: pick('ashPercent'),
-    moisturePercent: pick('moisturePercent'),
-    crudeFiberPercent: pick('crudeFiberPercent'),
-    carbohydratePercent: pick('carbohydratePercent'),
-    energyDensityKcalPerKg: pick('energyDensityKcalPerKg'),
-    calciumPhosphorusRatio: pick('calciumPhosphorusRatio'),
-  };
-  // 全空等于没算 —— 不要给前端一个"8 个 null"的块
-  const hasAny = Object.values(macros).some((value) => value !== null);
-  return hasAny ? macros : null;
-}
 
 /**
  * 补剂的营养素目标。

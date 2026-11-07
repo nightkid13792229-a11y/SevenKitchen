@@ -13,6 +13,11 @@ describe('recipe-order phase one UI contract', () => {
     resolve(process.cwd(), 'src/components/package-plan/QuickCyclePackagePlan.vue'),
     'utf-8',
   );
+  /** 2026-11-07：狗狗选择 + 六项读数也搬进了共享组件 */
+  const dogPanelComponentSource = readFileSync(
+    resolve(process.cwd(), 'src/components/dog/DogContextPanel.vue'),
+    'utf-8',
+  );
   const pagesJsonSource = readFileSync(
     resolve(process.cwd(), 'src/pages.json'),
     'utf-8',
@@ -107,7 +112,7 @@ describe('recipe-order phase one UI contract', () => {
     // 2026-09-21：「说明」这一行标题已按需求删除，两张说明卡片直接跟在「交付与保障」之后。
     const sectionOrder = [
       'recipe-info-section',
-      'dog-profile-context',
+      '<DogContextPanel',
       '快速选择备餐天数',
       '原料明细',
       '交付与保障',
@@ -194,16 +199,8 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).not.toContain('食谱信息');
     expect(templateSource).toContain('营养标准');
     expect(templateSource).toContain('犬营养标准');
-    expect(templateSource).toContain('dog-profile-context');
     expect(templateSource).not.toContain('档案依据');
-    expect(templateSource).toContain('v-for="fact in dogProfileFacts"');
-    expect(templateSource).toContain('{{ fact.label }}');
-    expect(templateSource).toContain('{{ fact.value }}');
-    expect(source).toContain('const dogProfileFacts = computed');
     expect(source).not.toContain('dogProfileSummaryText');
-    // 喂食三要素：每天几餐 / 每天多少克 / 每餐多少克（原「主食能量」因过于技术已移除）
-    expect(templateSource).toContain('每日餐次');
-    expect(source).toContain("label: '每日饭量'");
     expect(templateSource).not.toContain('主食能量');
     expect(templateSource).toContain('packagePlanInlineSummaryText');
     expect(source).toContain('isCustomPackagePlan');
@@ -223,20 +220,27 @@ describe('recipe-order phase one UI contract', () => {
     expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
       .toContain('每袋重量不能少于 ${MIN_PACKAGE_SPEC_G}g');
     expect(source).not.toContain('packageSpecG: Math.max(MIN_PACKAGE_SPEC_G, Math.floor(Number(row.packageSpecG) || MIN_PACKAGE_SPEC_G))');
-    expect(templateSource).toContain('order-dog-scroll');
-    expect(templateSource).toContain('order-dog-chip');
-    expect(templateSource).toContain("['order-dog-chip', { active: dog.id === selectedDogId }]");
-    expect(templateSource).toContain('@tap="selectDog(dog.id)"');
-    expect(templateSource).toContain('order-dog-avatar');
-    expect(templateSource).toContain('resolveDogAvatarSrc(dog.avatarUrl)');
-    expect(templateSource).toContain('order-dog-name');
-    expect(templateSource).toContain('{{ dog.name }}');
-    expect(templateSource).not.toContain('order-dog-meta');
-    expect(templateSource).not.toContain('getDogChipMetaText');
-    expect(templateSource).toContain('每餐约');
-    expect(source).toContain("import { resolveDogAvatarSrc } from '../../utils/dog-avatar'");
+    // 2026-11-07：选狗 + 六项读数搬进共享组件（三页同一份），页面只传数据
+    expect(templateSource).toContain('<DogContextPanel');
+    expect(templateSource).toContain(':dogs="dogs"');
+    expect(templateSource).toContain(':selected-id="selectedDogId"');
+    expect(templateSource).toContain(':state="dogPanelState"');
+    expect(templateSource).toContain(':daily-intake-g="displayDailyIntakeG"');
+    expect(templateSource).toContain(':per-meal-g="perMealG"');
+    expect(templateSource).toContain('@select="selectDog"');
+    expect(templateSource).toContain('@create-dog="goToCreateDog"');
+    expect(templateSource).toContain('@retry="retryDogsLoad"');
+    expect(source).toContain("import DogContextPanel from '@/components/dog/DogContextPanel.vue'");
+    // 页面里不再自己拼六项（以前两页各一份，已经漂移出“296g/天”）
+    expect(source).not.toContain('const dogProfileFacts = computed');
+    expect(source).not.toContain('function calculateDogAgeText');
+    expect(templateSource).not.toContain('order-dog-chip');
+    expect(templateSource).not.toContain('dog-profile-facts');
+    // 空档案 / 加载失败也归组件；判断留在页面，且失败优先于空
+    expect(source).toContain("if (dogsLoadFailed.value) return 'error'");
+    expect(source).toContain("if (dogsLoading.value) return 'loading'");
+    expect(source).toContain("if (dogs.value.length === 0) return 'empty'");
     expect(source).toContain('avatarUrl?: string');
-    expect(source).not.toContain('function getDogChipMetaText');
     expect(source).not.toContain('dogPickerOptions');
     expect(source).not.toContain('onDogPickerChange');
     expect(source).not.toContain("].join(' ｜ ')");
@@ -249,13 +253,14 @@ describe('recipe-order phase one UI contract', () => {
     // 起订量提示改为在 script 里拼成一条 warning（不再写死在模板）
     expect(source).toContain('最低订购量为 1000g');
     expect(source).toContain('getNutritionStandardExplain');
-    expect(source).toContain('calculateDogAgeText');
-    expect(source).toContain("MALE: '弟弟'");
-    expect(source).toContain("FEMALE: '妹妹'");
-    expect(source).toContain('return `${years}岁`');
-    expect(source).not.toContain("MALE: '男孩'");
-    expect(source).not.toContain("FEMALE: '女孩'");
-    expect(source).not.toContain('restMonths > 0 ? `${years}岁${restMonths}个月`');
+    // 2026-11-07：年龄/性别口径跟着六项搬进共享组件
+    expect(dogPanelComponentSource).toContain('function dogAgeText');
+    expect(dogPanelComponentSource).toContain("MALE: '弟弟'");
+    expect(dogPanelComponentSource).toContain("FEMALE: '妹妹'");
+    expect(dogPanelComponentSource).toContain('return `${Math.floor(months / 12)}岁`');
+    expect(dogPanelComponentSource).not.toContain("MALE: '男孩'");
+    expect(dogPanelComponentSource).not.toContain("FEMALE: '女孩'");
+    expect(dogPanelComponentSource).not.toContain('restMonths > 0 ? `${years}岁${restMonths}个月`');
     expect(source).not.toContain('`姓名 ${selectedDog.value.name}`');
     expect(source).not.toContain('`年龄 ${calculateDogAgeText(selectedDog.value)}`');
     expect(source).not.toContain('`性别 ${getDogGenderLabel(selectedDog.value.gender)}`');
@@ -562,12 +567,13 @@ describe('recipe-order phase one UI contract', () => {
   it('shows a retryable error state instead of the empty-dog state when loading fails', () => {
     expect(templateSource).toContain('v-if="pageLoadError"');
     expect(templateSource).toContain('@tap="retryPageLoad"');
-    expect(templateSource).toContain('v-if="dogsLoadFailed"');
-    expect(templateSource).toContain('@tap="retryDogsLoad"');
+    expect(templateSource).toContain(':state="dogPanelState"');
+    expect(templateSource).toContain('@retry="retryDogsLoad"');
     // 加载失败态必须优先于"请先创建狗狗档案"，避免误导家长重复建档
-    expect(templateSource.indexOf('dogsLoadFailed')).toBeLessThan(
-      templateSource.indexOf('请先创建狗狗档案'),
-    );
+    expect(source).toContain("if (dogsLoadFailed.value) return 'error'");
+    expect(source.indexOf("return 'error'")).toBeLessThan(source.indexOf("return 'empty'"));
+    // 失败/空档案的界面文案只在组件里出现一份
+    expect(templateSource).not.toContain('狗狗档案加载失败');
     expect(source).toContain("pageLoadError.value = '食谱信息加载失败，请检查网络后重试'");
     expect(source).toContain('dogsLoadFailed.value = true');
   });

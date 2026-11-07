@@ -107,6 +107,7 @@ import {
   type CandidateFacts,
   type ComparisonResult
 } from './compareCandidates'
+import { findHardExclusion } from '@/constants/supplementHardExclusions'
 
 /**
  * 选品对比。
@@ -171,7 +172,9 @@ const result = computed<ComparisonResult>(() =>
         unitsPerPurchaseUnit: row.units,
         activeMgPerServing: row.activeMg,
         servingUnitsPerDose: row.servingUnits,
-        catalogDogAllowed: row.catalogDogAllowed
+        catalogDogAllowed: row.catalogDogAllowed,
+        // 名字里带「氧化铁 / 碳酸亚铁 / 氧化铜」的直接判不能用，理由来自文献
+        hardExclusionReason: findHardExclusion(row.name)?.reason ?? null
       })
     )
   )

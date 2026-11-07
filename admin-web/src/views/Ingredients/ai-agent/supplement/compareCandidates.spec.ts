@@ -4,6 +4,7 @@ import {
   costPer1000Mg,
   type CandidateFacts
 } from './compareCandidates'
+import { findHardExclusion } from '@/constants/supplementHardExclusions'
 
 /**
  * 选品比较的三层。
@@ -103,5 +104,24 @@ describe('逐层淘汰', () => {
     const result = compareCandidates([])
     expect(result.recommendedKey).toBeNull()
     expect(result.verdicts).toEqual([])
+  })
+})
+
+describe('硬排除清单', () => {
+  it('氧化铜即使形态最好也出局，理由来自文献', () => {
+    const result = compareCandidates([
+      candidate({ key: 'cuo', name: '氧化铜', formGrade: 'BEST', hardExclusionReason: '氧化铜不应被视为铜源' }),
+      candidate({ key: 'ok', name: '甘氨酸铜', pricePerPurchaseUnit: 999 })
+    ])
+    const cuo = result.verdicts.find((item) => item.key === 'cuo')!
+    expect(cuo.eliminatedBy).toBe('HARD_EXCLUSION')
+    expect(cuo.note).toContain('氧化铜')
+    expect(result.recommendedKey).toBe('ok')
+  })
+
+  it('名单里的名字能从候选名里认出来', () => {
+    expect(findHardExclusion('碳酸亚铁（ Iron Carbonate ）')?.source).toBe('NRC 2006')
+    expect(findHardExclusion('甘氨酸铁')).toBeNull()
+    expect(findHardExclusion('')).toBeNull()
   })
 })

@@ -30,9 +30,11 @@ export interface CandidateFacts {
   servingUnitsPerDose: number | null
   /** 目录里查得到、且适用范围含犬；查不到就是 null，仅作提示 */
   catalogDogAllowed: boolean | null
+  /** 命中硬排除清单（氧化铁/碳酸亚铁/氧化铜）；null = 没命中 */
+  hardExclusionReason?: string | null
 }
 
-export type EliminationReason = 'FEED_GRADE' | 'LOWER_FORM'
+export type EliminationReason = 'HARD_EXCLUSION' | 'FEED_GRADE' | 'LOWER_FORM'
 
 export interface CandidateVerdict {
   key: string
@@ -91,6 +93,15 @@ export function compareCandidates(candidates: CandidateFacts[]): ComparisonResul
       name: candidate.name,
       costPer1000Mg: cost
     };
+
+    // 硬排除先于一切：不是"差一点"，是不该作为该营养素的来源
+    if (candidate.hardExclusionReason) {
+      return {
+        ...base,
+        eliminatedBy: 'HARD_EXCLUSION' as const,
+        note: candidate.hardExclusionReason
+      };
+    }
 
     if (candidate.usage === 'FEED_GRADE') {
       return {

@@ -221,18 +221,20 @@ export async function runDeliveryNutritionBackfill(input: {
        * 就拿食谱当前行重算一份跟它比。对不上 → 当前 ≠ 交付，
        * 不能把当前报告写进这份快照（同一页会出现两张自相矛盾的表）。
        */
-      const frozenReportRows = Array.isArray(nutrition.reportRows)
-        ? (nutrition.reportRows as unknown[])
-        : null;
+      const frozenMacroSignature = Array.isArray(nutrition.reportRows)
+        ? JSON.stringify(normalizeMacroRows(nutrition.reportRows))
+        : '';
       const currentReportRows = readDeliveryMacroRows(
         target.recipe?.nutritionDetailedData,
       );
+      const currentMacroSignature = currentReportRows?.length
+        ? JSON.stringify(normalizeMacroRows(currentReportRows))
+        : '';
       const recipeEditedAfterDelivery =
         isLegacySnapshot &&
-        Boolean(frozenReportRows?.length) &&
-        Boolean(currentReportRows?.length) &&
-        JSON.stringify(normalizeMacroRows(frozenReportRows)) !==
-          JSON.stringify(normalizeMacroRows(currentReportRows));
+        Boolean(frozenMacroSignature) &&
+        Boolean(currentMacroSignature) &&
+        frozenMacroSignature !== currentMacroSignature;
 
       if (recipeEditedAfterDelivery) {
         counters.conflicts += 1;

@@ -28,6 +28,9 @@ describe('StaffCustomerServiceController customer and dog workflows', () => {
       customerServiceConversation: {
         findMany: jest.fn().mockResolvedValue([]),
       },
+      orderOperationLog: {
+        create: jest.fn(),
+      },
     };
     const orderService = {
       createOrderDraft: jest.fn(),
@@ -360,10 +363,17 @@ describe('StaffCustomerServiceController customer and dog workflows', () => {
       'order-1',
       108,
     );
-    expect(orderService.updateAdminRemark).toHaveBeenCalledWith(
-      'order-1',
-      expect.stringContaining('线下抹零'),
-    );
+    // 改价只写审计日志，不进 admin_remark（生产单不显示改价）
+    expect(prisma.orderOperationLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        orderId: 'order-1',
+        action: 'PRICE_ADJUST',
+        reason: '线下抹零',
+        beforeAmount: 128,
+        afterAmount: 108,
+      }),
+    });
+    expect(orderService.updateAdminRemark).not.toHaveBeenCalled();
     expect(result.code).toBe(0);
   });
 

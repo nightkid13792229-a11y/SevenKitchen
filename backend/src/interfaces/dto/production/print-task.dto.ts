@@ -21,10 +21,13 @@ export class PrintTaskOrderItemDto {
   @IsOptional()
   packagePlan?: OrderPackagePlanItemDto[];
 
+  /// 订单号：制作单上要跟纸质单对得上号（以前只印「订单 1」）
   @IsString()
   @IsOptional()
+  orderNo?: string;
 
   @IsString()
+  @IsOptional()
   dogName!: string;
 
   @IsString()
@@ -38,6 +41,11 @@ export class PrintTaskOrderItemDto {
   @IsString()
   @IsOptional()
   adminRemark?: string;
+
+  /// 顾客下单时填的备注（过敏 / 分装要求），必印，不能截断
+  @IsString()
+  @IsOptional()
+  customerNote?: string;
 }
 
 export class PrintTaskIngredientDto {

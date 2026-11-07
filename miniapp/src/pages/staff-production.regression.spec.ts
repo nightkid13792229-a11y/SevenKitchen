@@ -142,7 +142,7 @@ describe('staff production scheduling guardrails', () => {
   it('prints production ingredients by procurement sku without counting subtotal rows', () => {
     expect(printTaskSource).toContain('realIngredientCount');
     expect(printTaskSource).toContain('!ingredient.isTotalWeight');
-    expect(printTaskSource).toContain('formatIngredientSkuSourceLine');
+    expect(printTaskSource).toContain('ingredientNameLine');
     expect(printTaskSource).toContain('standardIngredientName');
     expect(printTaskSource).toContain('procurementSkuName');
     expect(printTaskSource).toContain('procurementSkuBrand');
@@ -153,15 +153,22 @@ describe('staff production scheduling guardrails', () => {
 
   it('把顾客备注带到生产单与打印版，别只留在客服后台', () => {
     // 过敏提醒、分装标签都是顾客在确认订单页填的，车间必须看得到；
-    // 打印版还不能按两行截断，否则正好把关键信息截掉。
+    // 打印版的顾客备注要整段显示（粗黑框），不能截断。
     expect(detailSource).toContain('order.customerNote');
     expect(detailSource).toContain('顾客备注');
     expect(printTaskSource).toContain('order.customerNote');
+    expect(printTaskSource).toContain('customer-note-box');
     expect(printTaskSource).toContain('customer-note-text');
-    expect(printTaskSource).toContain('-webkit-line-clamp: unset');
   });
 
-  it('uses the approved one-page A4 compact print preview layout', () => {
+  it('制作单只印两种备注，系统改价日志不上纸', () => {
+    expect(printTaskSource).toContain('管理员备注');
+    expect(printTaskSource).toContain('adminRemarkOf');
+    expect(printTaskSource).toContain('SYSTEM_AUDIT_TAGS');
+    expect(printTaskSource).not.toContain('内部备注');
+  });
+
+  it('打印预览是黑白纸面：内容不再被固定 A4 高度切到纸外', () => {
     expect(printTaskSource).toContain('a4-paper');
     expect(printTaskSource).toContain('print-paper-inner');
     expect(printTaskSource).toContain('compact-print-table');
@@ -169,6 +176,16 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).toContain("'single-order'");
     expect(printTaskSource).toContain('ingredient-sku-source-line');
     expect(printTaskSource).toContain('SKU / 品牌 / 渠道 / 规格');
+
+    // 固定比例会让超出部分漏到纸外，改成「只锁下限、允许往下长」
+    expect(printTaskSource).toContain('min-height: 1004rpx');
+    expect(printTaskSource).not.toContain('aspect-ratio');
+
+    // 纸面不许再用绿色/米色底（打印出来是脏的）
+    expect(printTaskSource).not.toContain('#eef2e4');
+    expect(printTaskSource).not.toContain('#e5e8d4');
+
+    expect(printTaskSource).toContain('paper-hint');
     expect(printTaskSource).not.toContain('<view class="table-cell type">类型</view>');
     expect(printTaskSource).not.toContain('<view class="table-cell type">');
     expect(printTaskSource).not.toContain('原料 / SKU / 来源');
@@ -177,7 +194,7 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).not.toContain('标准原料 / SKU');
     expect(printTaskSource).not.toContain('<view class="table-cell purchase">品牌 / 渠道 / 规格</view>');
     expect(printTaskSource).toContain('remark-text');
-    expect(printTaskSource).toContain('-webkit-line-clamp: 2');
+    expect(printTaskSource).not.toContain('-webkit-line-clamp');
     expect(printTaskSource).not.toContain('标准：{{ ingredient.standardIngredientName }}');
   });
 
@@ -246,8 +263,10 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).not.toContain('<text class="field-value">{{ formatPackagePlan(order) }}</text>');
   });
 
-  it('shows SKU, brand, channel and spec inline in the first ingredient column', () => {
-    expect(printTaskSource).toContain('formatIngredientSkuSourceLine(ingredient)');
+  it('shows SKU, brand, channel and spec in two lines inside the first ingredient column', () => {
+    expect(printTaskSource).toContain('ingredientNameLine(ingredient)');
+    expect(printTaskSource).toContain('ingredientMetaLine(ingredient)');
+    expect(printTaskSource).toContain('ingredient-sku-meta-line');
     expect(printTaskSource).toContain('getPrintablePurchaseSummaryParts');
     expect(printTaskSource).toContain('word-break: break-all');
     expect(printTaskSource).not.toContain('formatIngredientNameLine');

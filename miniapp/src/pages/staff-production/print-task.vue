@@ -5,19 +5,22 @@
         <text>← 返回</text>
       </button>
       <view class="action-title">制作单打印预览</view>
+      <button class="action-btn ghost" aria-hidden="true">
+        <text>← 返回</text>
+      </button>
     </view>
 
     <scroll-view
       scroll-y
       class="print-container"
       enable-flex
-      :style="{ paddingTop: navBarHeight + 20 + 'px', paddingBottom: '132rpx' }"
+      :style="{ paddingTop: navBarHeight + 20 + 'px' }"
     >
       <view class="a4-paper">
         <view class="print-paper-inner">
           <view class="header-section">
             <view class="compact-task-title-line">
-              {{ printData.recipeName }} v{{ printData.recipeVersion }} · 第 {{ printData.currentPotNumber }} 锅 / 共 {{ printData.totalPots }} 锅
+              {{ printData.recipeName }} v{{ printData.recipeVersion }} · 第 {{ printData.currentPotNumber }} / {{ printData.totalPots }} 锅
             </view>
             <view class="meta-info">
               <text>状态: {{ statusText }}</text>
@@ -42,7 +45,7 @@
                     <text class="field-label">狗狗</text>
                     <text class="field-value">{{ order.dogName }}</text>
                   </view>
-                  <view v-if="order.recipientName" class="order-field">
+                  <view v-if="order.recipientName" class="order-field recipient-field">
                     <text class="field-label">收货人</text>
                     <text class="field-value">{{ order.recipientName }}（{{ order.recipientCity }}）</text>
                   </view>
@@ -51,12 +54,13 @@
                     <text class="field-value package-value">{{ formatPackagePlan(order) }}</text>
                   </view>
                 </view>
-                <view v-if="order.adminRemark" class="order-remark">
-                  <text class="field-label">内部备注</text>
-                  <text class="remark-text">{{ order.adminRemark }}</text>
+                <!-- 生产只看两种备注：管理员写的 + 顾客写的；改价日志由后端过滤，不进纸面 -->
+                <view v-if="adminRemarkOf(order)" class="order-remark">
+                  <text class="field-label">管理员备注</text>
+                  <text class="remark-text">{{ adminRemarkOf(order) }}</text>
                 </view>
                 <!-- 顾客下单时填的备注：过敏、分装要求都在这里，不能截断 -->
-                <view v-if="order.customerNote" class="order-remark">
+                <view v-if="order.customerNote" class="order-remark customer-note-box">
                   <text class="field-label">顾客备注</text>
                   <text class="remark-text customer-note-text">{{ order.customerNote }}</text>
                 </view>
@@ -79,17 +83,21 @@
                 :class="{ 'total-weight': ingredient.isTotalWeight }"
               >
                 <view class="table-cell source">
-                  <view class="ingredient-sku-source-line">{{ formatIngredientSkuSourceLine(ingredient) }}</view>
+                  <view class="ingredient-sku-source-line">{{ ingredientNameLine(ingredient) }}</view>
+                  <view v-if="ingredientMetaLine(ingredient)" class="ingredient-sku-meta-line">
+                    {{ ingredientMetaLine(ingredient) }}
+                  </view>
                 </view>
                 <view class="table-cell amount">{{ ingredient.amount }}{{ ingredient.unit }}</view>
                 <view class="table-cell method">
-                  <view class="method-text">{{ ingredient.method || '-' }}</view>
+                  <view class="method-text">{{ displayMethod(ingredient) }}</view>
                 </view>
               </view>
             </view>
           </view>
         </view>
       </view>
+      <view class="paper-hint">A4 · 黑白打印 · 多页自动编号</view>
     </scroll-view>
 
     <view class="bottom-action-bar">
@@ -245,7 +253,7 @@ const parsedIngredients = computed(() => {
 
   if (lastFoodIndex !== undefined) {
     ingredients.splice(lastFoodIndex + 1, 0, {
-      name: '食材类原料总重',
+      name: '食材类原料总重（含生产损耗）',
       standardIngredientName: '',
       procurementSkuName: '',
       procurementSkuBrand: '',
@@ -268,6 +276,29 @@ const realIngredientCount = computed(() => {
     (ingredient) => !ingredient.isTotalWeight,
   ).length;
 });
+
+/** 系统审计日志标签：后端已迁走，这里再兜一层，避免历史数据把 UUID 印到纸上 */
+const SYSTEM_AUDIT_TAGS = ['[客服改价]', '[代客下单]'];
+
+function adminRemarkOf(order: { adminRemark?: string | null }): string {
+  const text = String(order.adminRemark || '');
+  if (!text) return '';
+
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !SYSTEM_AUDIT_TAGS.some((tag) => line.startsWith(tag)))
+    .join('\n');
+}
+
+function displayMethod(ingredient: {
+  method?: string;
+  isTotalWeight?: boolean;
+}): string {
+  if (ingredient.isTotalWeight) return '';
+  return ingredient.method || '-';
+}
 
 const orderCardsClass = computed(() => [
   'order-cards',
@@ -293,35 +324,44 @@ function formatDecimal(value: number | null | undefined, decimals = 2): string {
   return value.toFixed(decimals);
 }
 
-function formatIngredientSkuSourceLine(ingredient: {
-  name?: string
-  standardIngredientName?: string
-  procurementSkuName?: string
-  procurementSkuBrand?: string
-  procurementSkuPurchaseChannel?: string
-  procurementSkuProductModel?: string
-  typeLabel?: string
-  isTotalWeight?: boolean
+/** 原料名：类型 + 采购名（加粗第一行） */
+function ingredientNameLine(ingredient: {
+  name?: string;
+  standardIngredientName?: string;
+  procurementSkuName?: string;
+  typeLabel?: string;
+  isTotalWeight?: boolean;
 }): string {
   if (ingredient.isTotalWeight) {
-    return ingredient.name || '-';
+    return '食材类原料总重（含生产损耗）';
   }
 
-  const skuName = (
+  const name = (
     ingredient.procurementSkuName ||
     ingredient.name ||
     ingredient.standardIngredientName ||
     ''
   ).trim();
-  const sourceParts = getPrintablePurchaseSummaryParts(
+
+  return [ingredient.typeLabel?.trim(), name || '-'].filter(Boolean).join('  ');
+}
+
+/** 采购信息：品牌 · 渠道 · 规格（灰字第二行，不再用斜杠串一长条） */
+function ingredientMetaLine(ingredient: {
+  procurementSkuBrand?: string;
+  procurementSkuPurchaseChannel?: string;
+  procurementSkuProductModel?: string;
+  isTotalWeight?: boolean;
+}): string {
+  if (ingredient.isTotalWeight) {
+    return '';
+  }
+
+  return getPrintablePurchaseSummaryParts(
     ingredient.procurementSkuBrand,
     ingredient.procurementSkuPurchaseChannel,
     ingredient.procurementSkuProductModel,
-  );
-  const skuSource = [skuName || '-', ...sourceParts].join(' / ');
-  const typeLabel = ingredient.typeLabel?.trim() || '';
-
-  return [typeLabel, skuSource].filter(Boolean).join(' ') || '-';
+  ).join(' · ');
 }
 
 function getPrintablePurchaseSummaryParts(...values: unknown[]): string[] {
@@ -497,6 +537,7 @@ const handlePrint = async () => {
 </script>
 
 <style scoped lang="scss">
+/* 纸面只用黑白灰：这是打印预览，屏幕上的颜色在这里不算数 */
 .print-page {
   height: 100vh;
   display: flex;
@@ -533,6 +574,12 @@ const handlePrint = async () => {
     background-color: rgba(251, 252, 247, 0.22);
     color: #f3eddd;
   }
+
+  /* 右侧占位：让标题真正居中，不点也不显示 */
+  &.ghost {
+    visibility: hidden;
+    background: transparent;
+  }
 }
 
 .action-title {
@@ -546,18 +593,20 @@ const handlePrint = async () => {
 .print-container {
   flex: 1;
   padding: 0 20rpx;
+  /* 给固定底栏留位置，含 iPhone 的 Home 指示条 */
+  padding-bottom: calc(180rpx + env(safe-area-inset-bottom));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   box-sizing: border-box;
 }
 
+/* A4 纸：只锁下限，内容多就往下长 —— 不再把最后几行漏到纸外 */
 .a4-paper {
   width: 710rpx;
   min-height: 1004rpx;
-  aspect-ratio: 210 / 297;
-  margin: 0 auto 28rpx;
-  background-color: #fbfcf7;
-  box-shadow: 0 6rpx 24rpx rgba(30, 46, 36, 0.12);
+  margin: 0 auto 12rpx;
+  background-color: #ffffff;
+  box-shadow: 0 6rpx 24rpx rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
 }
 
@@ -569,17 +618,24 @@ const handlePrint = async () => {
   box-sizing: border-box;
 }
 
+.paper-hint {
+  padding: 10rpx 0 4rpx;
+  text-align: center;
+  font-size: 20rpx;
+  color: #8a8a80;
+}
+
 .header-section {
   text-align: center;
   padding-bottom: 14rpx;
-  border-bottom: 2rpx solid #1e3a2f;
+  border-bottom: 2rpx solid #000000;
   margin-bottom: 14rpx;
 }
 
 .compact-task-title-line {
   font-size: 32rpx;
   font-weight: bold;
-  color: #26261f;
+  color: #000000;
   line-height: 1.18;
 }
 
@@ -589,7 +645,7 @@ const handlePrint = async () => {
   justify-content: center;
   gap: 22rpx;
   font-size: 18rpx;
-  color: #26261f;
+  color: #555555;
 }
 
 .section {
@@ -599,11 +655,11 @@ const handlePrint = async () => {
 .section-title {
   font-size: 24rpx;
   font-weight: bold;
-  color: #26261f;
+  color: #000000;
   line-height: 1.2;
   margin-bottom: 12rpx;
   padding-left: 10rpx;
-  border-left: 5rpx solid #1e3a2f;
+  border-left: 5rpx solid #000000;
 }
 
 .order-cards {
@@ -617,17 +673,18 @@ const handlePrint = async () => {
 }
 
 .order-card {
-  border: 1rpx solid #e5e8d4;
-  background-color: #eef2e4;
+  border: 1rpx solid #b5b5ad;
+  background-color: #ffffff;
   overflow: hidden;
 }
 
 .order-card-title {
   padding: 7rpx 10rpx;
-  background-color: #1e3a2f;
-  color: #f3eddd;
+  background-color: #ffffff;
+  color: #000000;
   font-size: 20rpx;
   font-weight: bold;
+  border-bottom: 2rpx solid #000000;
 }
 
 .order-grid {
@@ -649,15 +706,20 @@ const handlePrint = async () => {
   gap: 6rpx;
 }
 
+/* 收货人整行，别在右半格留个空洞 */
+.recipient-field {
+  grid-column: 1 / -1;
+}
+
 .field-label {
-  color: #6b6653;
+  color: #555555;
   flex: 0 0 auto;
 }
 
 .field-value {
   min-width: 0;
   flex: 1;
-  color: #26261f;
+  color: #000000;
   font-weight: 600;
   overflow: hidden;
   white-space: nowrap;
@@ -680,20 +742,23 @@ const handlePrint = async () => {
   padding: 0 10rpx 10rpx;
 }
 
+/* 顾客备注：粗黑框 + 完整显示，过敏信息一个字都不能丢 */
+.customer-note-box {
+  margin: 0 10rpx 10rpx;
+  padding: 8rpx 10rpx;
+  border: 2rpx solid #000000;
+}
+
 .remark-text {
   flex: 1;
   min-width: 0;
-  color: #26261f;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  color: #000000;
+  white-space: normal;
+  word-break: break-word;
 }
 
-/* 顾客备注整段显示：过敏提醒被截掉比版面难看严重得多 */
 .customer-note-text {
   display: block;
-  -webkit-line-clamp: unset;
   white-space: normal;
   word-break: break-word;
 }
@@ -703,7 +768,7 @@ const handlePrint = async () => {
 }
 
 .compact-print-table {
-  border: 1rpx solid #c9c9b8;
+  border: 1rpx solid #000000;
   overflow: hidden;
   font-size: 17rpx;
 }
@@ -711,33 +776,36 @@ const handlePrint = async () => {
 .compact-table-row {
   display: flex;
   min-height: 42rpx;
-  border-bottom: 1rpx solid #e5e8d4;
+  border-bottom: 1rpx solid #d4d4cc;
 
   &:last-child {
     border-bottom: none;
   }
 
+  /* 合计行：加粗 + 上下粗线，不靠底色 */
   &.total-weight {
-    background-color: #eef2e4;
-    color: #1e3a2f;
+    background-color: #ffffff;
+    color: #000000;
     font-weight: bold;
-    border-top: 2rpx solid #1e3a2f;
+    border-top: 3rpx solid #000000;
+    border-bottom: 3rpx solid #000000;
   }
 }
 
 .compact-table-header {
   min-height: 36rpx;
-  background-color: #fbfcf7;
-  color: #26261f;
+  background-color: #ffffff;
+  color: #000000;
   font-size: 16rpx;
   font-weight: bold;
+  border-bottom: 2rpx solid #000000;
 }
 
 .table-cell {
   min-width: 0;
   padding: 6rpx 5rpx;
   box-sizing: border-box;
-  border-right: 1rpx solid #e5e8d4;
+  border-right: 1rpx solid #d4d4cc;
   line-height: 1.22;
 
   &:last-child {
@@ -748,13 +816,15 @@ const handlePrint = async () => {
     flex: 1 1 0;
   }
 
+  /* 用量右对齐 + 等宽数字，方便上下比对 */
   &.amount {
-    flex: 0 0 78rpx;
+    flex: 0 0 92rpx;
     white-space: nowrap;
+    text-align: right;
   }
 
   &.method {
-    flex: 0 0 196rpx;
+    flex: 0 0 190rpx;
   }
 }
 
@@ -769,21 +839,29 @@ const handlePrint = async () => {
 }
 
 .ingredient-sku-source-line {
-  color: #26261f;
+  color: #000000;
   font-weight: 600;
 }
 
-.method-text {
-  color: #26261f;
+.ingredient-sku-meta-line {
+  margin-top: 2rpx;
+  font-size: 15rpx;
+  color: #555555;
+  word-break: break-all;
 }
 
+.method-text {
+  color: #000000;
+}
+
+/* 底部操作栏：避开 iPhone 的 Home 指示条 */
 .bottom-action-bar {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   background-color: #fbfcf7;
-  padding: 20rpx 32rpx;
+  padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
   box-shadow: 0 -2rpx 8rpx rgba(30, 46, 36, 0.1);
   z-index: 100;
 }

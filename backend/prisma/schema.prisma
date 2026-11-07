@@ -56,6 +56,8 @@ model Order {
   costSettlements              OrderCostSettlement[]
   settlementAdjustments        OrderSettlementAdjustment[]
   refundRecords                OrderRefundRecord[]
+  /// 系统审计（改价 / 代客下单等），与 adminRemark 分开：备注只留人写的内容。
+  operationLogs                OrderOperationLog[]
 
   photoShareTokens PhotoShareToken[]
 
@@ -90,6 +92,30 @@ model Order {
   @@index([remakeFromOrderId])
   @@index([reshipFromOrderId])
   @@map("order")
+}
+
+/// 订单操作日志（系统审计）
+/// 为什么单独一张表：改价、代客下单这类动作以前把审计文本直接追加进 order.admin_remark，
+/// 结果「备注」里混进 UUID / ISO 时间戳，打印制作单时又被按字数截断，厨房看到的是半截日志。
+/// 现在审计只写这里，admin_remark 只留人写的话。
+model OrderOperationLog {
+  id           String   @id @default(uuid()) @map("id")
+  orderId      String   @map("order_id")
+  /// PRICE_ADJUST（客服改价） / ASSISTED_ORDER（代客下单）
+  action       String   @map("action") @db.VarChar(40)
+  operatorId   String?  @map("operator_id") @db.VarChar(64)
+  /// 人话原因：改价填「原因」，代客下单填客服备注
+  reason       String?  @map("reason") @db.VarChar(200)
+  beforeAmount Decimal? @map("before_amount") @db.Decimal(10, 2)
+  afterAmount  Decimal? @map("after_amount") @db.Decimal(10, 2)
+  /// 迁移历史数据时保留的原始审计行，便于回滚/追溯
+  rawText      String?  @map("raw_text")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@map("order_operation_log")
 }
 
 // 订单友好短号当日自增序列（SK + YYYYMMDD + -NNN）

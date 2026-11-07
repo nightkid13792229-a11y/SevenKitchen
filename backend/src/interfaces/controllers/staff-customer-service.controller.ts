@@ -263,10 +263,24 @@ export class StaffCustomerServiceController {
       ]
         .filter(Boolean)
         .join(' ');
-      await this.orderService.updateAdminRemark(
-        createdOrder.id,
-        [createdOrder.adminRemark, auditLine].filter(Boolean).join('\n'),
-      );
+      // 审计进日志表；客服写的「备注」是人话，继续留在 admin_remark 里给生产看。
+      await this.prisma.orderOperationLog.create({
+        data: {
+          orderId: createdOrder.id,
+          action: 'ASSISTED_ORDER',
+          operatorId: user.userId,
+          reason: body.remark ? String(body.remark).trim() : null,
+          rawText: auditLine,
+        },
+      });
+      if (body.remark && String(body.remark).trim()) {
+        await this.orderService.updateAdminRemark(
+          createdOrder.id,
+          [createdOrder.adminRemark, String(body.remark).trim()]
+            .filter(Boolean)
+            .join('\n'),
+        );
+      }
 
       const transactionId = `OFFLINE_${Date.now()}_${user.userId.slice(0, 8)}`;
       const paidOrder = await this.orderService.processPayment(
@@ -681,16 +695,24 @@ export class StaffCustomerServiceController {
       const oldAmount = toNumber(order.amountTotal);
       await this.orderService.updateOrderAmount(orderId, amount);
       const reason = String(body.reason || '客服改价').trim();
-      const auditLine = [
-        `[客服改价] ${new Date().toISOString()}`,
-        `操作人:${user.userId}`,
-        `金额:${oldAmount.toFixed(2)} -> ${amount.toFixed(2)}`,
-        `原因:${reason}`,
-      ].join(' ');
-      await this.orderService.updateAdminRemark(
-        orderId,
-        [order.adminRemark, auditLine].filter(Boolean).join('\n'),
-      );
+      // 审计只写日志表，不再污染 admin_remark：备注只留人写的话。
+      // 生产单打印不显示改价信息（2026-11-07）。
+      await this.prisma.orderOperationLog.create({
+        data: {
+          orderId,
+          action: 'PRICE_ADJUST',
+          operatorId: user.userId,
+          reason,
+          beforeAmount: oldAmount,
+          afterAmount: amount,
+          rawText: [
+            `[客服改价] ${new Date().toISOString()}`,
+            `操作人:${user.userId}`,
+            `金额:${oldAmount.toFixed(2)} -> ${amount.toFixed(2)}`,
+            `原因:${reason}`,
+          ].join(' '),
+        },
+      });
 
       return ApiResponseDto.success({
         id: orderId,

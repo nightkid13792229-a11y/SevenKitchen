@@ -13,6 +13,7 @@ import { IngredientCreationMergeService } from '../../../src/application/ingredi
 import { IngredientCreationOnlineService } from '../../../src/application/ingredient-creation/ingredient-creation-online.service';
 import { AuthGuard } from '../../../src/interfaces/auth/auth.guard';
 import { JwtAuthService } from '../../../src/interfaces/auth/jwt.service';
+import { SupplementIngredientService } from '../../../src/application/ingredient-creation/supplement-ingredient.service';
 import { IngredientCreationController } from '../../../src/interfaces/controllers/ingredient-creation.controller';
 import { AdminGuard } from '../../../src/interfaces/guards/role.guard';
 
@@ -71,6 +72,8 @@ describe('IngredientCreationController audits', () => {
           useValue: { run: jest.fn() },
         },
         { provide: IngredientSearchPlanService, useValue: {} },
+      { provide: SupplementIngredientService, useValue: { create: jest.fn() } },
+        { provide: SupplementIngredientService, useValue: { create: jest.fn() } },
         { provide: JwtAuthService, useValue: { validateToken } },
         AuthGuard,
         AdminGuard,

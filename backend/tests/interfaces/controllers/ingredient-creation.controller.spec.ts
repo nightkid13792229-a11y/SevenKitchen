@@ -23,6 +23,7 @@ import type {
 } from '../../../src/application/ingredient-creation/ingredient-creation.types';
 import { JwtAuthService } from '../../../src/interfaces/auth/jwt.service';
 import { AuthGuard } from '../../../src/interfaces/auth/auth.guard';
+import { SupplementIngredientService } from '../../../src/application/ingredient-creation/supplement-ingredient.service';
 import { IngredientCreationController } from '../../../src/interfaces/controllers/ingredient-creation.controller';
 import { AdminGuard } from '../../../src/interfaces/guards/role.guard';
 
@@ -187,6 +188,8 @@ describe('IngredientCreationController', () => {
           useValue: { run: jest.fn() },
         },
         { provide: IngredientSearchPlanService, useValue: {} },
+      { provide: SupplementIngredientService, useValue: { create: jest.fn() } },
+        { provide: SupplementIngredientService, useValue: { create: jest.fn() } },
         { provide: JwtAuthService, useValue: jwtAuthService },
         AuthGuard,
         AdminGuard,

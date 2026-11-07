@@ -22,7 +22,7 @@ describe('recipe diy regressions', () => {
     )
     const mountedSource = source.match(/onMounted\(async \(\) => \{[\s\S]*?\n}\)/)?.[0] || ''
     const loadDogsSource = source.match(
-      /async function loadDogs\(\)[\s\S]*?\n}\n\nasync function selectDog/,
+      /async function loadDogs\(\)[\s\S]*?\n}\n/,
     )?.[0] || ''
 
     expect(source).toContain("const initialDogId = ref('')")
@@ -36,10 +36,9 @@ describe('recipe diy regressions', () => {
     // 来源提示条已按 2026-10-24 要求拿掉；版本锁仍靠 orderId
     expect(source).not.toContain('custom-source-banner')
     expect(source).not.toContain('来自你的定制食谱')
-    // 选中的爱犬排第一位并滚到它
+    // 选中的爱犬排第一位（列表顺序仍由本页决定；滚到选中项在共享组件里）
     expect(source).toContain('const orderedDogs = computed')
-    expect(source).toContain('v-for="dog in orderedDogs"')
-    expect(source).toContain('scroll-into-view')
+    expect(source).toContain(':dogs="orderedDogs"')
   })
 
   it('renders the shared version bar and lets the customer switch versions', () => {
@@ -167,32 +166,28 @@ describe('recipe diy regressions', () => {
     expect(source).not.toContain('formatRecipeFormulaSoftwareLabel')
     expect(source).not.toContain('recipeFormulaSoftwareLabel')
 
-    // 狗狗选择器与成品订购页一致
-    expect(templateSource).toContain('order-dog-scroll')
-    expect(templateSource).toContain('order-dog-chip')
-    expect(templateSource).toContain("['order-dog-chip', { active: dog.id === selectedDogId }]")
-    expect(templateSource).toContain('@tap="selectDog(dog.id)"')
-    expect(templateSource).toContain('order-dog-avatar')
-    expect(templateSource).toContain('resolveDogAvatarSrc(dog.avatarUrl)')
-    expect(templateSource).toContain('v-for="fact in dogProfileFacts"')
-    expect(source).toContain('const dogProfileFacts = computed')
-    expect(source).toContain("MALE: '弟弟'")
-    expect(source).toContain("FEMALE: '妹妹'")
-
-    // 档案 + 喂食参数合并为一行六项（不再另起「确定饭量」网格重复展示）
-    expect(source).toContain("{ label: '每日餐次'")
-    expect(source).toContain("{ label: '每日饭量'")
-    expect(source).toContain("{ label: '每餐约'")
+    // 2026-11-07：狗狗选择器与成品订购页共用同一个组件（不再是两页各写一份）
+    expect(templateSource).toContain('<DogContextPanel');
+    expect(templateSource).toContain(':dogs="orderedDogs"');
+    expect(templateSource).toContain(':selected-id="selectedDogId"');
+    expect(templateSource).toContain(':state="dogPanelState"');
+    expect(templateSource).toContain(':daily-intake-g="displayDailyIntakeG"');
+    expect(templateSource).toContain(':per-meal-g="perMealG"');
+    expect(templateSource).toContain('@select="selectDog"');
+    expect(templateSource).toContain('hint="提示：请先选择爱犬以计算推荐饭量"');
+    expect(source).toContain("import DogContextPanel from '@/components/dog/DogContextPanel.vue'");
+    // 六项与年龄/性别口径都在组件里，页面不再自己拼
+    expect(source).not.toContain('const dogProfileFacts = computed');
+    expect(source).not.toContain('function calculateDogAgeText');
+    expect(templateSource).not.toContain('order-dog-chip');
+    expect(templateSource).not.toContain('dog-profile-facts');
+    // 每日饭量统一成 296g（原来这里多一个 /天，和成品页不一致）
+    expect(source).not.toContain('g/天');
     expect(templateSource).not.toContain('dog-feeding-grid')
     expect(templateSource).not.toContain('每日参考')
     // 主食能量不展示
     expect(templateSource).not.toContain('主食能量')
     expect(source).not.toContain('dailyMainFoodEnergyText')
-
-    // 六项参数照搬成品订购页：单行六列网格 + 卡片式单元格
-    expect(templateSource).toContain('class="dog-profile-facts"')
-    expect(source).toContain('grid-template-columns: repeat(6, minmax(0, 1fr))')
-    expect(source).toContain('border-top: 1rpx solid #e5e8d4')
 
     expect(templateSource).not.toContain('最低订购量')
     expect(templateSource).not.toContain('袋均价')
@@ -289,10 +284,12 @@ describe('recipe diy regressions', () => {
     expect(source).toContain('const dogsLoadFailed = ref(false)')
     expect(source).toContain('async function retryDogsLoad')
     expect(source).toContain('dogsLoadFailed.value = true')
-    expect(templateSource).toContain('v-if="dogsLoadFailed"')
-    expect(templateSource).toContain('狗狗档案加载失败')
-    expect(templateSource).toContain('避免重复建档')
-    expect(templateSource).toContain('@tap="retryDogsLoad"')
+    // 2026-11-07：失败态界面搬进共享组件，页面只判断状态
+    expect(templateSource).toContain(':state="dogPanelState"')
+    expect(templateSource).toContain('@retry="retryDogsLoad"')
+    expect(source).toContain("if (dogsLoadFailed.value) return 'error'")
+    expect(source.indexOf("return 'error'")).toBeLessThan(source.indexOf("return 'empty'"))
+    expect(templateSource).not.toContain('狗狗档案加载失败')
   })
 
   /**

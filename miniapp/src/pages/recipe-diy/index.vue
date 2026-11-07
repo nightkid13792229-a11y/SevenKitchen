@@ -55,117 +55,72 @@
         <text class="title-text">选择爱犬</text>
       </view>
 
-      <!--
-        加载失败 ≠ 没有档案：失败时若退化成「暂无狗狗档案」，
-        顾客可能因此重复建档。这里给独立失败态 + 重试。
-      -->
-      <view v-if="dogsLoadFailed" class="dogs-load-error">
-        <text class="dogs-load-error-title">狗狗档案加载失败</text>
-        <text class="dogs-load-error-copy">请检查网络后重试，避免重复建档</text>
-        <button
-          class="section-action-button dogs-load-error-btn button-reset"
-          @tap="retryDogsLoad"
-        >
-          重新加载
-        </button>
-      </view>
+      <!-- 选狗 + 六项读数：三页共用一个组件（2026-11-07） -->
+      <view class="dog-feeding-content">
+        <DogContextPanel
+          :dogs="orderedDogs"
+          :selected-id="selectedDogId"
+          :state="dogPanelState"
+          :daily-intake-g="displayDailyIntakeG"
+          :per-meal-g="perMealG"
+          hint="提示：请先选择爱犬以计算推荐饭量"
+          @select="selectDog"
+          @create-dog="goToCreateDog"
+          @retry="retryDogsLoad"
+        />
 
-      <view v-else-if="dogs.length === 0" class="empty-dogs">
-        <text class="empty-text">暂无狗狗档案</text>
-        <button class="btn-create-dog" @tap="goToCreateDog">创建狗狗档案</button>
-      </view>
+        <!-- 生命阶段与饭量说明只在“有档案”时出现；空档案/失败由组件自己提示 -->
+        <block v-if="dogPanelState === 'ready'">
+          <!-- 生命阶段版本条（2026-11-02）：紧贴所选狗狗；版本跟着狗走，可手动换版 -->
+          <LifeStageVersionBar
+            :state="lifeStageState"
+            :dog-name="selectedDog?.name"
+            :dog-stage="dogLifeStage"
+            :dog-stage-label="dogLifeStageLabel"
+            :current-label="selectedLifeStageLabel"
+            :suggested-label="suggestedLifeStageVersion?.label"
+            :suggested-stage="suggestedLifeStageVersion?.lifeStage"
+            :version-count="lifeStageVersionOptions.length"
+            @open-selector="versionSheetVisible = true"
+            @select="switchLifeStageVersion"
+            @see-suitable="goSuitableRecipes"
+            @retry="loadRecipe"
+            @add-dog="goToCreateDog"
+          />
 
-      <view v-else class="dog-feeding-content">
-        <!-- 选项卡与下方参数同属一只狗：同一内嵌面板 + 分隔线，建立视觉归属 -->
-        <view class="dog-context-panel">
-          <scroll-view
-            scroll-x
-            scroll-with-animation
-            class="order-dog-scroll"
-            :scroll-into-view="selectedDogId ? `dog-chip-${selectedDogId}` : ''"
-          >
-            <view
-              v-for="dog in orderedDogs"
-              :id="`dog-chip-${dog.id}`"
-              :key="dog.id"
-              :class="['order-dog-chip', { active: dog.id === selectedDogId }]"
-              @tap="selectDog(dog.id)"
-            >
-              <image class="order-dog-avatar" :src="resolveDogAvatarSrc(dog.avatarUrl)" mode="aspectFill" />
-              <view class="order-dog-copy">
-                <text class="order-dog-name">{{ dog.name }}</text>
-              </view>
-            </view>
-          </scroll-view>
+          <LifeStageVersionSheet
+            :visible="versionSheetVisible"
+            :versions="lifeStageVersionOptions"
+            :current-stage="selectedLifeStage"
+            :matched-stage="dogLifeStage"
+            @close="versionSheetVisible = false"
+            @select="switchLifeStageVersion"
+          />
 
-          <view v-if="selectedDog" class="dog-profile-context">
-            <!-- 档案 + 喂食参数合并一行六项：年龄/性别/体重/每日餐次/每日饭量/每餐约 -->
-            <view class="dog-profile-facts">
-              <view
-                v-for="fact in dogProfileFacts"
-                :key="fact.label"
-                class="dog-profile-fact"
-              >
-                <text class="dog-profile-fact-label">{{ fact.label }}</text>
-                <text class="dog-profile-fact-value">{{ fact.value }}</text>
-              </view>
-            </view>
+          <!-- 饭量计算失败：给出原因与重试，避免按钮永久灰着 -->
+          <view v-if="dogCalcFailed" class="dog-calc-error" @tap="retryDogCalc">
+            <text class="dog-calc-error-text">
+              饭量计算失败，可能是网络波动。点这里重新计算。
+            </text>
           </view>
-        </view>
 
-        <view v-if="!selectedDog" class="picker-hint">
-          提示：请先选择爱犬以计算推荐饭量
-        </view>
-
-        <!-- 生命阶段版本条（2026-11-02）：紧贴所选狗狗；版本跟着狗走，可手动换版 -->
-        <LifeStageVersionBar
-          :state="lifeStageState"
-          :dog-name="selectedDog?.name"
-          :dog-stage="dogLifeStage"
-          :dog-stage-label="dogLifeStageLabel"
-          :current-label="selectedLifeStageLabel"
-          :suggested-label="suggestedLifeStageVersion?.label"
-          :suggested-stage="suggestedLifeStageVersion?.lifeStage"
-          :version-count="lifeStageVersionOptions.length"
-          @open-selector="versionSheetVisible = true"
-          @select="switchLifeStageVersion"
-          @see-suitable="goSuitableRecipes"
-          @retry="loadRecipe"
-          @add-dog="goToCreateDog"
-        />
-
-        <LifeStageVersionSheet
-          :visible="versionSheetVisible"
-          :versions="lifeStageVersionOptions"
-          :current-stage="selectedLifeStage"
-          :matched-stage="dogLifeStage"
-          @close="versionSheetVisible = false"
-          @select="switchLifeStageVersion"
-        />
-
-        <!-- 饭量计算失败：给出原因与重试，避免按钮永久灰着 -->
-        <view v-if="dogCalcFailed" class="dog-calc-error" @tap="retryDogCalc">
-          <text class="dog-calc-error-text">
-            饭量计算失败，可能是网络波动。点这里重新计算。
-          </text>
-        </view>
-
-        <!--
-          饭量算法：默认收起。
-          原来这里是「饭量计算过程」+ 5 张计算卡（DER / 零食能量 / 鲜食能量 / 每日饭量 / 每餐饭量，
-          带公式与中间值），对顾客做决定帮助很小；
-          现在改成成品订购页同款的 3 条人话 + 一句观察建议。
-        -->
-        <view class="feeding-note-toggle" @tap="toggleFeedingNote">
-          <text class="feeding-note-toggle-text">每日饭量是怎么算的？</text>
-          <text class="feeding-note-toggle-action">{{ feedingNoteExpanded ? '收起' : '展开' }}</text>
-        </view>
-        <view v-if="feedingNoteExpanded" class="feeding-adjustment-note">
-          <text class="feeding-adjustment-line">① 按它的体重、年龄和每天的活动量，算出它一天大概需要多少热量；</text>
-          <text class="feeding-adjustment-line">② 再根据它是偏胖还是偏瘦、每天吃多少零食，做相应增减；</text>
-          <text class="feeding-adjustment-line">③ 用这个热量除以食谱每 100g 含的热量，就是每天的饭量。</text>
-          <text class="feeding-adjustment-line feeding-adjustment-line--tip">这是首次喂食的保守估算。建议观察 2-4 周，按体重和便便情况增减 5%-10%。</text>
-        </view>
+          <!--
+            饭量算法：默认收起。
+            原来这里是「饭量计算过程」+ 5 张计算卡（DER / 零食能量 / 鲜食能量 / 每日饭量 / 每餐饭量，
+            带公式与中间值），对顾客做决定帮助很小；
+            现在改成成品订购页同款的 3 条人话 + 一句观察建议。
+          -->
+          <view class="feeding-note-toggle" @tap="toggleFeedingNote">
+            <text class="feeding-note-toggle-text">每日饭量是怎么算的？</text>
+            <text class="feeding-note-toggle-action">{{ feedingNoteExpanded ? '收起' : '展开' }}</text>
+          </view>
+          <view v-if="feedingNoteExpanded" class="feeding-adjustment-note">
+            <text class="feeding-adjustment-line">① 按它的体重、年龄和每天的活动量，算出它一天大概需要多少热量；</text>
+            <text class="feeding-adjustment-line">② 再根据它是偏胖还是偏瘦、每天吃多少零食，做相应增减；</text>
+            <text class="feeding-adjustment-line">③ 用这个热量除以食谱每 100g 含的热量，就是每天的饭量。</text>
+            <text class="feeding-adjustment-line feeding-adjustment-line--tip">这是首次喂食的保守估算。建议观察 2-4 周，按体重和便便情况增减 5%-10%。</text>
+          </view>
+        </block>
       </view>
     </view>
 
@@ -236,7 +191,6 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import { trackFunnelEvent } from '../../utils/funnel'
-import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import { navigateToDogCreate } from '../../utils/dog-profile-entry'
 import { getNutritionStandardExplain, getNutritionStandardLabel } from '../../utils/label-mapping'
 import {
@@ -244,6 +198,7 @@ import {
   getLifeStageLabel,
 } from '../../utils/life-stage-match'
 import LifeStageVersionBar from '@/components/recipe/LifeStageVersionBar.vue'
+import DogContextPanel from '@/components/dog/DogContextPanel.vue'
 import LifeStageVersionSheet from '@/components/recipe/LifeStageVersionSheet.vue'
 import CustomerServiceInlineButton from '@/components/CustomerServiceInlineButton.vue'
 import QuickCyclePackagePlan from '@/components/package-plan/QuickCyclePackagePlan.vue'
@@ -373,6 +328,8 @@ const orderedDogs = computed(() => {
 
 // 列表加载失败与「没有档案」是两件事：失败时若显示"暂无档案"会诱导重复建档
 const dogsLoadFailed = ref(false)
+// 首次拉列表期间给骨架：原来这一段是“先闪一下暂无档案，再出现胶囊”
+const dogsLoading = ref(false)
 const isGeneratingSheet = ref(false)
 const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
 
@@ -444,28 +401,6 @@ const suggestedLifeStageVersion = computed(() => {
 function goSuitableRecipes() {
   uni.reLaunch({ url: '/pages/home/index' })
 }
-const dogProfileFacts = computed(() => {
-  if (!selectedDog.value) return []
-
-  // 六项合并一行展示（与成品订购页一致）：
-  // 档案信息（年龄/性别/体重）+ 喂食参数（餐次/每日量/每餐量）
-  return [
-    { label: '年龄', value: calculateDogAgeText(selectedDog.value) },
-    { label: '性别', value: getDogGenderLabel(selectedDog.value.gender) },
-    { label: '体重', value: `${selectedDog.value.currentWeightKg}kg` },
-    { label: '每日餐次', value: selectedDog.value.mealsPerDay ? `${selectedDog.value.mealsPerDay}餐` : '计算中' },
-    { label: '每日饭量', value: dailySuggestedIntakeText.value },
-    { label: '每餐约', value: perMealIntakeText.value },
-  ]
-})
-const dailySuggestedIntakeText = computed(() => {
-  if (!displayDailyIntakeG.value) return '计算中'
-  return `${Math.round(displayDailyIntakeG.value)}g/天`
-})
-const perMealIntakeText = computed(() => {
-  if (!perMealG.value) return '计算中'
-  return `${Math.round(perMealG.value)}g`
-})
 /**
  * 分装区当前的问题清单。
  *
@@ -716,6 +651,7 @@ async function loadHealthTagMapping() {
 async function loadDogs() {
   console.log('[RecipeDiy] loadDogs 开始')
 
+  dogsLoading.value = true
   dogsLoadFailed.value = false
 
   try {
@@ -757,6 +693,8 @@ async function loadDogs() {
     console.error('[RecipeDiy] Load dogs error:', error)
     dogsLoadFailed.value = true
     setDogs([])
+  } finally {
+    dogsLoading.value = false
   }
 
   console.log('[RecipeDiy] loadDogs 结束')
@@ -764,8 +702,20 @@ async function loadDogs() {
 
 /** 狗狗档案加载失败后的重试入口 */
 async function retryDogsLoad() {
+  dogsLoadFailed.value = false
   await loadDogs()
 }
+
+/**
+ * 狗狗面板的四种状态（组件只管好看，判断留在页面）。
+ * 失败优先于空 —— 否则“加载失败”会被说成“还没有档案”，顾客会去重复建档。
+ */
+const dogPanelState = computed<'loading' | 'error' | 'empty' | 'ready'>(() => {
+  if (dogsLoadFailed.value) return 'error'
+  if (dogsLoading.value) return 'loading'
+  if (dogs.value.length === 0) return 'empty'
+  return 'ready'
+})
 
 async function selectDog(dogId: string) {
   if (!dogId) return
@@ -879,36 +829,6 @@ async function switchLifeStageVersion(lifeStage: string) {
   if (selectedDogId.value) {
     await loadDogCalc(selectedDogId.value)
   }
-}
-
-function calculateDogAgeText(dog: Dog): string {
-  if (dog.ageText) return dog.ageText
-  if (!dog.birthday) return '年龄未知'
-
-  const birthday = new Date(dog.birthday)
-  if (Number.isNaN(birthday.getTime())) return '年龄未知'
-
-  const now = new Date()
-  let months = (now.getFullYear() - birthday.getFullYear()) * 12
-    + now.getMonth() - birthday.getMonth()
-
-  if (now.getDate() < birthday.getDate()) {
-    months -= 1
-  }
-
-  if (months < 0) return '年龄未知'
-  if (months < 12) return `${months}个月`
-
-  const years = Math.floor(months / 12)
-  return `${years}岁`
-}
-
-function getDogGenderLabel(gender?: string): string {
-  const map: Record<string, string> = {
-    MALE: '弟弟',
-    FEMALE: '妹妹',
-  }
-  return gender ? map[gender] || gender : '性别未知'
 }
 
 function startEditPerMeal() {
@@ -1226,29 +1146,6 @@ function getHealthTagLabel(tagOrUuid: string): string {
   font-weight: 500;
 }
 
-/* 狗狗选择 */
-.empty-dogs {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 40rpx 0;
-}
-
-.empty-text {
-  font-size: 28rpx;
-  color: #6b6653;
-  margin-bottom: 20rpx;
-}
-
-.btn-create-dog {
-  padding: 16rpx 32rpx;
-  background-color: #1e3a2f;
-  color: #f3eddd;
-  border-radius: 8rpx;
-  font-size: 28rpx;
-  border: none;
-}
-
 .dog-picker {
   padding: 24rpx;
   background-color: #ffffff;
@@ -1281,112 +1178,10 @@ function getHealthTagLabel(tagOrUuid: string): string {
   font-weight: bold;
 }
 
-.picker-hint {
-  margin-top: 12rpx;
-  padding: 0 8rpx;
-  font-size: 24rpx;
-  color: #6b6653;
-  line-height: 1.5;
-}
-
 .dog-feeding-content {
   display: flex;
   flex-direction: column;
   gap: 18rpx;
-}
-
-.order-dog-scroll {
-  width: 100%;
-  white-space: nowrap;
-}
-
-.order-dog-chip {
-  width: 214rpx;
-  min-height: 86rpx;
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  gap: 12rpx;
-  margin-right: 14rpx;
-  padding: 12rpx;
-  border-radius: 8rpx;
-  border: 2rpx solid #eef1e2;
-  background-color: #fbfcf7;
-  color: #26261f;
-  vertical-align: middle;
-}
-
-.order-dog-chip.active {
-  border-color: #1e3a2f;
-  background-color: #eef2e4;
-}
-
-.order-dog-avatar {
-  flex: 0 0 auto;
-  width: 58rpx;
-  height: 58rpx;
-  border-radius: 50%;
-  background-color: #eef2e4;
-}
-
-.order-dog-copy {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-}
-
-.order-dog-name {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 25rpx;
-  font-weight: 800;
-  color: #26261f;
-}
-
-.order-dog-chip.active .order-dog-name {
-  color: #26261f;
-}
-
-.dog-profile-context {
-  margin-top: 16rpx;
-  padding-top: 16rpx;
-  border-top: 1rpx solid #e5e8d4;
-}
-
-.dog-profile-facts {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 6rpx;
-}
-
-.dog-profile-fact {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4rpx;
-  min-width: 0;
-  padding: 14rpx 4rpx;
-  border-radius: 12rpx;
-  background-color: #fbfcf7;
-  line-height: 1.3;
-}
-
-.dog-profile-fact-label {
-  font-size: 20rpx;
-  color: #968f6d;
-  white-space: nowrap;
-}
-
-.dog-profile-fact-value {
-  min-width: 0;
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #1e3a2f;
-  white-space: nowrap;
 }
 
 /* 警告卡片 */
@@ -1675,33 +1470,6 @@ function getHealthTagLabel(tagOrUuid: string): string {
 }
 
 /* 狗狗档案加载失败（区别于"未建档"空态） */
-.dogs-load-error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 60rpx 32rpx;
-  text-align: center;
-}
-
-.dogs-load-error-title {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: #26261f;
-}
-
-.dogs-load-error-copy {
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  color: #968f6d;
-}
-
-.dogs-load-error-btn {
-  width: 320rpx;
-  height: 80rpx;
-  line-height: 80rpx;
-  margin-top: 28rpx;
-}
-
 /* 一句话卖点：与食谱详情页保持同一视觉语言 */
 .recipe-selling-point {
   margin-top: 16rpx;
@@ -1718,7 +1486,6 @@ function getHealthTagLabel(tagOrUuid: string): string {
 }
 
 .hero-dog-action,
-.section-action-button,
 .btn-secondary-full {
   border-radius: 8rpx;
   border: 2rpx solid #1e3a2f;
@@ -1726,43 +1493,6 @@ function getHealthTagLabel(tagOrUuid: string): string {
   background-color: #fbfcf7;
   font-size: 26rpx;
   text-align: center;
-}
-
-.section-action-button {
-  min-width: 136rpx;
-  height: 60rpx;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  padding: 0 18rpx;
-}
-
-.button-reset {
-  padding: 0;
-}
-
-.dog-empty-state {
-  display: flex;
-  flex-direction: column;
-  gap: 10rpx;
-  padding: 24rpx;
-  border-radius: 8rpx;
-  background-color: #fbfcf7;
-  border: 1rpx solid #e5e8d4;
-}
-
-/* 选项卡 + 参数行的统一容器，形成视觉归属 */
-.dog-context-panel {
-  padding: 16rpx;
-  border-radius: 16rpx;
-  background-color: #f2f4ea;
-  border: 1rpx solid #e5e8d4;
-}
-
-.inline-warning-card {
-  margin: 0;
 }
 
 .feeding-note-toggle {

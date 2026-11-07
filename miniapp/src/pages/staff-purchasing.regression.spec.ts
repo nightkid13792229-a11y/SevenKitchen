@@ -436,7 +436,9 @@ describe('staff purchasing purchase record form', () => {
     expect(recordedAt).toBeLessThan(noPurchaseAt);
     // 老数据「已采购 + 无需采购」并存时，卡片上要留一个取消入口，
     // 否则后端口径拦截手动记录，员工在小程序里没地方撤销标记。
-    expect(detailSource).toContain('取消无需采购标记');
+    // 断言带标签（全文件唯一），避免被 console.error 里的同名文案蒙过去。
+    expect(detailSource).toContain('>取消无需采购标记</text>');
+    expect(detailSource).toContain('item.noPurchaseNeeded && canManagePurchaseRecords');
   });
 
   it('shows 无需采购 + 取消 together and keeps the manual record button gated', () => {

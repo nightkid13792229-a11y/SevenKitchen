@@ -26,6 +26,7 @@ import {
 } from '../purchasing/channel-catalog';
 import { PURCHASE_CHANNEL_SET } from '../platform-options/option-sets.registry';
 import {
+  assertCommitProcurementSku,
   buildCommitProcurementSku,
   type CommitProcurementSkuInput,
 } from './commit-procurement-sku';
@@ -557,6 +558,9 @@ export class IngredientCreationCommitService {
     input: CommitIngredientCreationInput,
   ): Promise<CommitIngredientCreationResult> {
     const { primaryProfileIndex, ingredientName } = this.assertInput(input);
+    // 采购商品是硬门禁，先判再进事务（2026-11-08）：判在事务里的话，
+    // 缺了它也会先建一条原料、再整体回滚——白干活，而且报错时机也晚。
+    assertCommitProcurementSku(input.procurementSku);
     const draft = await this.draftService.get(input.draftId);
     // 幂等：同一草稿已经提交过就不再建第二套数据。并发下由事务里的条件更新再兜一道。
     if (draft.step === 'COMMIT') {

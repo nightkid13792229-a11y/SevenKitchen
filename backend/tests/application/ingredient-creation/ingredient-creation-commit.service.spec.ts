@@ -1117,6 +1117,39 @@ describe('IngredientCreationCommitService', () => {
     expect(store.ingredients).toHaveLength(0);
   });
 
+  /**
+   * 2026-11-08：整块采购商品没带时，必须在**开事务之前**就拒掉。
+   * 以前是在事务里才判，于是白建一条原料再整体回滚，还报出「一箱几件必须是正整数」。
+   */
+  it('没带采购商品 → BadRequest 说清要填采购商品，且不开事务', async () => {
+    const { service, prisma, store } = await createHarness();
+
+    await expect(
+      service.commit({
+        ...baseInput,
+        procurementSku: undefined as unknown as typeof baseInput.procurementSku,
+      }),
+    ).rejects.toThrow(/写入前必须填这条原料的采购商品/);
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(store.ingredients).toHaveLength(0);
+    expect(store.procurementSkus).toHaveLength(0);
+  });
+
+  it('件数不是正整数 → 也不开事务（不再白建一条再回滚）', async () => {
+    const { service, prisma, store } = await createHarness();
+
+    await expect(
+      service.commit({
+        ...baseInput,
+        procurementSku: { ...baseInput.procurementSku, packCount: 0 },
+      }),
+    ).rejects.toThrow(/必须是正整数/);
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(store.ingredients).toHaveLength(0);
+  });
+
   it('profiles 为空 → BadRequest，且不写任何数据', async () => {
     const { service, prisma } = await createHarness();
 

@@ -986,6 +986,23 @@
           </div>
 
           <div class="review-feedback">
+            <!-- 旧页面（2026-11-08）：后台已经发布过新版本，这个标签页还停在旧代码上。
+                 不提示的话，人只会看到后端一句跟页面无关的拒绝理由。 -->
+            <el-alert
+              v-if="staleBundle"
+              type="warning"
+              :closable="false"
+              show-icon
+              title="这个页面是旧版本（后台已经更新过），写入会被后端拒绝"
+            >
+              <div class="review-stale__body">
+                <span>页面是在新版本发布之前打开的。刷新后能看到最新的表单项与规则。</span>
+                <el-button size="small" type="primary" @click="reloadForNewVersion">
+                  刷新到最新版本
+                </el-button>
+              </div>
+            </el-alert>
+
             <el-alert
               v-if="saveError"
               type="error"
@@ -1055,6 +1072,59 @@
             </el-alert>
           </div>
 
+          <!-- 收尾：这条原料的采购商品（2026-11-07 成本口径归位）。
+               必须放在「授权写入正式库」**上面**（2026-11-08）：写在按钮下面时，
+               面板高度是固定的，卡片被挤到可视区外，人以为页面上没有这块表单。 -->
+          <div
+            v-if="!commitResult && line === 'FOOD'"
+            ref="closingCardRef"
+            class="closing-card"
+          >
+            <div class="closing-card__head">
+              <h3>写入前必填：这条原料的采购商品</h3>
+              <span class="closing-card__state" :class="`is-${closingState.toLowerCase()}`">
+                {{ closingStateLabel }}
+              </span>
+            </div>
+
+            <el-form label-width="86px" size="small" class="closing-card__form">
+              <el-form-item label="商品名称" required>
+                <el-input v-model="closingForm.name" placeholder="如：山姆 糙米 1kg" />
+              </el-form-item>
+              <el-form-item label="采购单位" required>
+                <el-input v-model="closingForm.purchaseUnit" placeholder="袋 / 盒 / 箱" />
+              </el-form-item>
+              <el-form-item label="每件净含量" required>
+                <el-input-number
+                  v-model="closingForm.netContentPerPack"
+                  :min="0"
+                  controls-position="right"
+                />
+                <span class="closing-card__unit">{{ closingBaseUnitLabel }}</span>
+              </el-form-item>
+              <el-form-item label="这一件多少钱" required>
+                <el-input-number
+                  v-model="closingForm.currentPurchasePrice"
+                  :min="0"
+                  :precision="2"
+                  controls-position="right"
+                />
+                <span class="closing-card__preview">{{ closingPreview }}</span>
+              </el-form-item>
+              <el-form-item
+                label="采购渠道"
+                class="closing-card__form-wide"
+              >
+                <el-input v-model="closingForm.purchaseChannel" placeholder="在哪买的，可不填" />
+              </el-form-item>
+            </el-form>
+
+            <p class="closing-card__hint">
+              它会和原料一起写入，折算成「每{{ closingBaseUnitLabel }}多少钱」作为初始成本；
+              没有它，原料进食谱就是按 0 元算。件数按 1 件算。
+            </p>
+          </div>
+
           <footer class="review-footer">
             <el-button
               type="primary"
@@ -1077,57 +1147,6 @@
             </el-button>
             <span class="review-footer__hint">{{ authorizeHint }}</span>
           </footer>
-
-          <!-- 收尾：补一条采购商品（2026-11-07 成本口径归位）。
-               没有采购商品 = 买不了 = 成本永远 0 = 食谱里按「免费」算。 -->
-          <div v-if="!commitResult && line === 'FOOD'" class="closing-card">
-            <div class="closing-card__head">
-              <h3>写入前必填：这条原料的采购商品</h3>
-              <span class="closing-card__state" :class="`is-${closingState.toLowerCase()}`">
-                {{ closingStateLabel }}
-              </span>
-            </div>
-            <p class="closing-card__hint">
-              这里填的是<b>商品</b>：一件多少克、这一件多少钱。它会和原料一起写入，
-              折算成「每{{ closingBaseUnitLabel }}多少钱」作为这条原料的初始成本——
-              没有它，原料进食谱就是按 0 元算。
-            </p>
-
-            <el-form label-width="120px" size="small" class="closing-card__form">
-              <el-form-item label="商品名称" required>
-                <el-input v-model="closingForm.name" placeholder="如：山姆 糙米 1kg" />
-              </el-form-item>
-              <el-form-item label="采购渠道">
-                <el-input v-model="closingForm.purchaseChannel" placeholder="在哪买的，可不填" />
-              </el-form-item>
-              <el-form-item label="采购单位" required>
-                <el-input v-model="closingForm.purchaseUnit" placeholder="袋 / 盒 / 箱" />
-              </el-form-item>
-              <el-form-item label="每件净含量" required>
-                <el-input-number
-                  v-model="closingForm.netContentPerPack"
-                  :min="0"
-                  controls-position="right"
-                />
-                <span class="closing-card__unit">{{ closingBaseUnitLabel }}</span>
-              </el-form-item>
-              <el-form-item label="这一件多少钱" required>
-                <el-input-number
-                  v-model="closingForm.currentPurchasePrice"
-                  :min="0"
-                  :precision="2"
-                  controls-position="right"
-                />
-                <span class="closing-card__preview">{{ closingPreview }}</span>
-              </el-form-item>
-            </el-form>
-
-            <div class="closing-card__actions">
-              <span class="closing-card__hint" style="margin: 0">
-                填好后点下面的「授权写入正式库」，原料、营养档案和这条采购商品会一起落库。
-              </span>
-            </div>
-          </div>
 
           <CheckReportDialog
             v-model="checkDialogVisible"
@@ -1169,6 +1188,7 @@ import {
   computeClosingState,
   formatCostPreview
 } from './procurementClosing'
+import { indexHtmlPathOf, isStaleBundle } from './staleBundle'
 import { nutritionFoodApi } from '@/api/ingredients'
 import {
   ingredientTagApi,
@@ -1580,6 +1600,71 @@ const closingPreview = computed(() =>
   )
 )
 
+/** 采购商品卡片：缺字段时把视线带过去（卡片在按钮上方，但可能不在视口里）。 */
+const closingCardRef = ref<HTMLElement | null>(null)
+
+/** 食材线：采购商品没填完，就不让点「授权写入正式库」。 */
+const closingReady = computed(
+  () => line.value !== 'FOOD' || closingState.value === 'READY'
+)
+
+/**
+ * 旧页面检测（2026-11-08）。
+ *
+ * 后台是「开一次、一直不刷新」的用法：页面可能在门禁上线前就打开了，
+ * 它按老契约发请求，后端只会回一句和页面无关的拒绝理由。
+ * 判据只看「最新 index.html 的入口脚本 == 本页加载的那个」，
+ * 纯判断在 ./staleBundle 里，这里只负责取与比。
+ */
+const loadedEntrySrc = ref<string | null>(null)
+const staleBundle = ref(false)
+const STALE_CHECK_INTERVAL_MS = 30_000
+let staleCheckedAt = 0
+
+/** 本页加载的入口脚本（构建产物里那个 type="module" 的<script>）。 */
+function readLoadedEntrySrc(): string | null {
+  const script = document.querySelector<HTMLScriptElement>(
+    'script[type="module"][src]'
+  )
+  return script?.getAttribute('src') ?? null
+}
+
+/**
+ * 拉一次最新 index.html 做比对。
+ *
+ * 拉不到（断网 / 接口异常 / 解析不出）就保持原判断：宁可放过，不误拦。
+ */
+async function checkBundleFreshness(force = false): Promise<void> {
+  if (!loadedEntrySrc.value) return
+  const now = Date.now()
+  if (!force && now - staleCheckedAt < STALE_CHECK_INTERVAL_MS) return
+  staleCheckedAt = now
+
+  // index.html 的位置由入口脚本推（SPA 路由下 baseURI 不是站点根）。
+  const indexPath = indexHtmlPathOf(loadedEntrySrc.value)
+  if (!indexPath) return
+
+  try {
+    const response = await fetch(new URL(indexPath, window.location.origin), {
+      cache: 'no-store'
+    })
+    if (!response.ok) return
+    staleBundle.value = isStaleBundle(loadedEntrySrc.value, await response.text())
+  } catch {
+    // 拿不到最新版本就不判旧页面
+  }
+}
+
+/** 回到这个标签页时再查一次（切走很久的情况最常见）。 */
+function handleBundleFreshnessCheck(): void {
+  if (document.visibilityState === 'hidden') return
+  void checkBundleFreshness()
+}
+
+function reloadForNewVersion(): void {
+  window.location.reload()
+}
+
 
 const verifyError = ref('')
 const verifying = ref(false)
@@ -1755,6 +1840,8 @@ const canAuthorize = computed(
     Boolean(draft.value) &&
     !commitResult.value &&
     !submitting.value &&
+    !staleBundle.value &&
+    closingReady.value &&
     gate.value.ready
 )
 
@@ -1764,11 +1851,18 @@ const authorizeHint = computed(() => {
       ? '已确认可用，配方里现在能选到这些档案。'
       : '已写入正式库；确认可用后才会进入配方链路。'
   }
+  // 旧页面先拦：这条不解决，点下去只会拿到一句跟页面无关的后端拒绝理由。
+  if (staleBundle.value) {
+    return '这个页面是旧版本，先刷新（⌘R / Ctrl+R）再写入。'
+  }
   if (checksLoading.value) {
     return '正在读取两页的核验状态…'
   }
   if (!gate.value.ready) {
     return gate.value.reasons[0] ?? '授权条件还没满足。'
+  }
+  if (!closingReady.value) {
+    return `写入前先把上面的「采购商品」填完：${closingStateLabel.value}`
   }
   return '授权前，所有内容只在草稿里；写入后原料与档案都是「待验证」。'
 })
@@ -1864,6 +1958,12 @@ onMounted(() => {
   void scrollToBottom()
   void loadIngredientTags()
   window.addEventListener('beforeunload', handleBeforeUnload)
+
+  // 记下本页加载的入口脚本，并在回到标签页时看一眼是不是已经被新版顶掉。
+  loadedEntrySrc.value = readLoadedEntrySrc()
+  void checkBundleFreshness(true)
+  window.addEventListener('focus', handleBundleFreshnessCheck)
+  document.addEventListener('visibilitychange', handleBundleFreshnessCheck)
 })
 
 async function loadIngredientTags() {
@@ -1907,6 +2007,8 @@ watch(ingredientTags, hydrateTagIdsFromNames)
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('focus', handleBundleFreshnessCheck)
+  document.removeEventListener('visibilitychange', handleBundleFreshnessCheck)
   if (locateTimer) {
     clearTimeout(locateTimer)
     locateTimer = null
@@ -2948,6 +3050,19 @@ async function showAuthorizeBlocked(
  */
 async function handleAuthorize() {
   if (!draft.value || submitting.value || commitResult.value) {
+    return
+  }
+  // 写入前再确认一次页面是不是被后台的新版本顶掉了（2026-11-08）：
+  // 这个动作只写库不读库，拿旧契约的请求发出去，人只会看到一句莫名奇妙的拒绝。
+  await checkBundleFreshness(true)
+  if (staleBundle.value) {
+    submitError.value = ''
+    ElMessage.warning('这个页面是旧版本，先刷新（⌘R / Ctrl+R）再写入')
+    return
+  }
+  if (!closingReady.value) {
+    closingCardRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    ElMessage.warning(`写入前先把这条原料的采购商品填完：${closingStateLabel.value}`)
     return
   }
   if (!gate.value.ready) {
@@ -4375,8 +4490,9 @@ function goBackToList() {
 }
 
 .closing-card {
-  margin-top: 16px;
-  padding: 16px;
+  flex: 0 0 auto;
+  margin: 8px 16px 0;
+  padding: 12px 14px;
   border: 1px solid var(--el-border-color-light);
   border-radius: 8px;
   background: var(--el-fill-color-blank);
@@ -4391,7 +4507,7 @@ function goBackToList() {
 
 .closing-card__head h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -4409,14 +4525,28 @@ function goBackToList() {
 }
 
 .closing-card__hint {
-  margin: 8px 0 12px;
+  margin: 0;
   font-size: 12px;
   color: var(--el-text-color-secondary);
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
+/*
+ * 两列紧凑排布（2026-11-08）：卡片现在常驻按钮上方，
+ * 竖着摊五行会把上面的表单压得只剩一条缝。
+ */
 .closing-card__form {
-  max-width: 560px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 12px;
+}
+
+.closing-card__form :deep(.el-form-item) {
+  margin-bottom: 8px;
+}
+
+.closing-card__form-wide {
+  grid-column: 1 / -1;
 }
 
 .closing-card__unit,
@@ -4424,12 +4554,7 @@ function goBackToList() {
   margin-left: 8px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
-}
-
-.closing-card__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  white-space: nowrap;
 }
 
 .review-commit-result {

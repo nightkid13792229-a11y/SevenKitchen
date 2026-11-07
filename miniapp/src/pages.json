@@ -435,13 +435,20 @@
         {
           "path": "index",
           "style": {
-            "navigationBarTitleText": "生产管理"
+            "navigationBarTitleText": "生产管理",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7",
+            "enablePullDownRefresh": true
           }
         },
         {
           "path": "detail",
           "style": {
-            "navigationBarTitleText": "任务详情"
+            "navigationBarTitleText": "任务详情",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
           }
         },
         {

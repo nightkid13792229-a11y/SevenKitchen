@@ -7,8 +7,17 @@
       </picker>
     </view>
 
-    <view v-if="loading" class="state"><text>加载中…</text></view>
+    <view v-if="loading && !data" class="state"><text>加载中…</text></view>
+    <view v-else-if="loadError && !data" class="state error-state">
+      <text class="state-title">没取到当天的分装备料</text>
+      <text class="state-error">{{ loadError }}</text>
+      <view class="ghost-btn" @tap="load">重试</view>
+    </view>
     <template v-else>
+      <view v-if="loadError" class="inline-error">
+        <text>数据没更新</text>
+        <text class="retry-link" @tap="load">重试</text>
+      </view>
       <!--
         先给订单，再给汇总。
         现场是拿着单子干活：从这一屏直接打标签或进订单详情，
@@ -96,6 +105,7 @@ const date = ref(
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
 )
 const data = ref<any>(null)
+const loadError = ref('')
 const orders = computed<PackingOrder[]>(() => data.value?.orders || [])
 
 const STATUS_TEXT: Record<string, string> = {
@@ -118,6 +128,8 @@ function roleLabel(role: string) {
 
 function onDateChange(event: any) {
   date.value = event.detail.value
+  // 换日期先清掉旧日期的数据，避免日期已经变了、下面还是上一天的单。
+  data.value = null
   load()
 }
 
@@ -140,6 +152,7 @@ function goAllOrders() {
 
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     const res = await request({
       url: '/admin/supplement-shop/packing-summary',
@@ -149,7 +162,11 @@ async function load() {
     if (res.code === 0) {
       data.value = res.data
       emit('count', Number(res.data?.orderCount || 0))
-    } else uni.showToast({ title: res.message || '加载失败', icon: 'none' })
+    } else {
+      loadError.value = res.message || '加载失败，请重试'
+    }
+  } catch (error: any) {
+    loadError.value = error?.message || '加载失败，请重试'
   } finally {
     loading.value = false
   }
@@ -168,6 +185,12 @@ onMounted(load)
 .panel-sub { color: #6b6653; font-size: 23rpx; }
 .date-btn { background: #fff; padding: 12rpx 20rpx; border-radius: 30rpx; font-size: 26rpx; color: #1e3a2f; border: 1rpx solid #e3e6d5; }
 .state { padding-top: 120rpx; text-align: center; color: #909399; }
+.error-state { padding: 80rpx 32rpx; text-align: center; }
+.state-title { display: block; font-size: 30rpx; font-weight: 600; color: #26261f; }
+.state-error { display: block; margin-top: 10rpx; font-size: 24rpx; color: #b4453a; }
+.error-state .ghost-btn { margin-top: 24rpx; }
+.inline-error { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16rpx; padding: 14rpx 20rpx; background: #fdf6ec; border-radius: 10rpx; font-size: 24rpx; color: #8a5a00; }
+.inline-error .retry-link { color: #7a5c28; font-weight: 600; padding: 8rpx 12rpx; }
 .hero { display: flex; background: linear-gradient(140deg, #1e3a2f, #2b5040); border-radius: 18rpx; padding: 28rpx; color: #f7f3e8; margin-bottom: 20rpx; }
 .hero-item { flex: 1; text-align: center; }
 .hero-value { display: block; font-size: 40rpx; font-weight: 700; }

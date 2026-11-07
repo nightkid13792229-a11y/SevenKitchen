@@ -73,6 +73,13 @@ describe('生产管理 · 鲜食 / 补剂分装共用入口', () => {
     expect(productionSource).toContain('supplementCount')
   })
 
+  it('补剂面板加载失败时给重试，不把失败显示成「这天没有订单」', () => {
+    expect(packingSource).toContain('loadError')
+    expect(packingSource).toContain('没取到')
+    expect(packingSource).toContain('@tap="load"')
+    expect(packingSource).toContain('v-else-if="loadError')
+  })
+
   it('★ 旧的「分装备料」独立页和路由已撤掉，不留死页面', () => {
     expect(existsSync(resolve(__dirname, 'staff-supplement-summary/index.vue'))).toBe(
       false,

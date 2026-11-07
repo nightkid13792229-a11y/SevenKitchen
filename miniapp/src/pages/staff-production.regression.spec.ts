@@ -12,6 +12,18 @@ const labelRendererSource = readFileSync(resolve(__dirname, 'staff-production/ut
 const jcingPrinterSource = readFileSync(resolve(__dirname, 'staff-production/utils/jcing-printer.ts'), 'utf8');
 const canvasPrinterSource = readFileSync(resolve(__dirname, 'staff-production/utils/canvas-printer.ts'), 'utf8');
 const sharedCanvasPrinterSource = readFileSync(resolve(__dirname, '../utils/canvas-printer.ts'), 'utf8');
+const pagesConfig = JSON.parse(
+  readFileSync(resolve(__dirname, '../pages.json'), 'utf8'),
+);
+const productionSubPackage = pagesConfig.subPackages.find(
+  (subPackage: any) => subPackage.root === 'pages/staff-production',
+);
+const productionIndexStyle = productionSubPackage.pages.find(
+  (page: any) => page.path === 'index',
+).style;
+const productionDetailStyle = productionSubPackage.pages.find(
+  (page: any) => page.path === 'detail',
+).style;
 
 describe('生产打印 · 预处理列长文案', () => {
   it('生产打印和共享打印都按长度缩字号并最多拆 3 行', () => {
@@ -275,5 +287,50 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).not.toContain('注：用量已包含生产损耗');
     expect(printTaskSource).not.toContain('SevenKitchen 专业鲜食套餐定制');
     expect(printTaskSource).not.toContain('第 1 / 1 页');
+  });
+});
+
+describe('生产管理 · Phase 1 安全与信任', () => {
+  it('页面内不再重复大标题，导航栏深绿白字，并开启下拉刷新', () => {
+    expect(indexSource).not.toContain('class="header"');
+    expect(indexSource).not.toContain('鲜食排单制作');
+    expect(productionIndexStyle.navigationBarBackgroundColor).toBe('#1E3A2F');
+    expect(productionIndexStyle.navigationBarTextStyle).toBe('white');
+    expect(productionIndexStyle.enablePullDownRefresh).toBe(true);
+    expect(productionDetailStyle.navigationBarBackgroundColor).toBe('#1E3A2F');
+    expect(productionDetailStyle.navigationBarTextStyle).toBe('white');
+  });
+
+  it('待制作任务在详情页可以直接开始制作', () => {
+    expect(detailSource).toContain('startProductionTask');
+    expect(detailSource).toContain('startProduction');
+    expect(detailSource).toContain('start-production-btn');
+    expect(detailSource).toContain("taskDetail.status === 'PENDING'");
+  });
+
+  it('加载中、加载失败、空态分开显示，失败可重试', () => {
+    expect(indexSource).toContain('loadError');
+    expect(indexSource).toContain('loading && allTasks.length === 0');
+    expect(indexSource).toContain('数据没加载出来');
+    expect(indexSource).toContain('onPullDownRefresh');
+    expect(indexSource).toContain('uni.stopPullDownRefresh');
+    expect(detailSource).toContain('loadError');
+    expect(detailSource).toContain('@tap="loadTaskDetail"');
+  });
+
+  it('未来任务不进当前列表；逾期只按早于今天，跨天单独标', () => {
+    expect(indexSource).toContain('isFutureTask');
+    expect(indexSource).toContain('visibleTasks');
+    expect(indexSource).toContain('todayDate');
+    expect(indexSource).toContain('isOverdueTask');
+    expect(indexSource).toContain("'跨天'");
+    expect(indexSource).toContain("'逾期'");
+  });
+
+  it('制作中可继续制作，已完成可查看详情，不再只剩删除', () => {
+    expect(indexSource).toContain('继续制作');
+    expect(indexSource).toContain('查看详情');
+    expect(indexSource).toContain("task.status === 'IN_PROGRESS'");
+    expect(indexSource).toContain("task.status === 'COMPLETED'");
   });
 });

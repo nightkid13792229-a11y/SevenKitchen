@@ -1,11 +1,5 @@
 <template>
   <view class="production-page">
-    <!-- 顶部标题 -->
-    <view class="header">
-      <text class="title">生产管理</text>
-      <text class="subtitle">鲜食排单制作 · 补剂分装备料</text>
-    </view>
-
     <!-- 鲜食 / 补剂都属于生产环节，共用一个入口，在这里再分 -->
     <view class="mode-switch">
       <view
@@ -37,19 +31,19 @@
       <!-- 统计卡片：与下方列表同源，跨天未完成的锅也计入，首屏不再出现「0 但有两张卡」 -->
       <view class="stats-section">
         <view class="stat-card">
-          <text class="stat-value">{{ totalTaskCount }}</text>
+          <text class="stat-value">{{ (loading || loadError) && allTasks.length === 0 ? '—' : totalTaskCount }}</text>
           <text class="stat-label">今日制作单</text>
         </view>
         <view class="stat-card">
-          <text class="stat-value">{{ statistics.pendingScheduleOrders }}</text>
+          <text class="stat-value">{{ (loading || loadError) && allTasks.length === 0 ? '—' : statistics.pendingScheduleOrders }}</text>
           <text class="stat-label">待排单订单</text>
         </view>
         <view class="stat-card">
-          <text class="stat-value">{{ taskStatusCounts.IN_PROGRESS }}</text>
+          <text class="stat-value">{{ (loading || loadError) && allTasks.length === 0 ? '—' : taskStatusCounts.IN_PROGRESS }}</text>
           <text class="stat-label">制作中</text>
         </view>
         <view class="stat-card">
-          <text class="stat-value">{{ taskStatusCounts.COMPLETED }}</text>
+          <text class="stat-value">{{ (loading || loadError) && allTasks.length === 0 ? '—' : taskStatusCounts.COMPLETED }}</text>
           <text class="stat-label">已完成</text>
         </view>
       </view>
@@ -76,8 +70,27 @@
 
       <!-- 任务列表 -->
       <view class="task-list">
+        <!-- 有旧数据但这次刷新失败：不遮住旧数据，给一条重试 -->
+        <view v-if="loadError && allTasks.length > 0" class="inline-error">
+          <text>数据可能不是最新的</text>
+          <text class="retry-link" @tap="refreshAll">重试</text>
+        </view>
+
+        <!-- 首次加载：不能把「还没取到」显示成「今天没活」 -->
+        <view v-if="loading && allTasks.length === 0" class="loading-state">
+          <text>加载中…</text>
+        </view>
+
+        <!-- 首次加载失败：明确说失败，并给重试 -->
+        <view v-else-if="loadError && allTasks.length === 0" class="error-state">
+          <text class="error-icon">⚠️</text>
+          <text class="error-text">数据没加载出来</text>
+          <text class="error-hint">{{ loadError }}</text>
+          <button class="retry-btn" @tap="refreshAll">重试</button>
+        </view>
+
         <!-- 空状态 -->
-        <view v-if="filteredTasks.length === 0" class="empty-state">
+        <view v-else-if="filteredTasks.length === 0" class="empty-state">
           <text class="empty-icon">👨‍🍳</text>
           <text class="empty-text">暂无{{ currentTabLabel }}任务</text>
         </view>
@@ -88,7 +101,13 @@
             <view class="task-header" @tap="viewDetails(task)">
               <view class="recipe-title">
                 <text class="recipe-name">{{ task.recipeName }} v{{ task.recipeVersion }}</text>
-                <text v-if="isCarryoverTask(task)" class="carryover-badge">逾期</text>
+                <text
+                  v-if="isCarryoverTask(task)"
+                  class="carryover-badge"
+                  :class="{ 'is-overdue': isOverdueTask(task) }"
+                >
+                  {{ isOverdueTask(task) ? '逾期' : '跨天' }}
+                </text>
               </view>
               <text class="pot-info">({{ task.currentPotNumber }}/{{ task.totalPots }})</text>
             </view>
@@ -108,22 +127,44 @@
               </view>
               <view v-if="isCarryoverTask(task)" class="info-row">
                 <text class="label">生产日期：</text>
-                <text class="value carryover-text">{{ task.productionDate }}</text>
+                <text
+                  class="value"
+                  :class="isOverdueTask(task) ? 'carryover-text' : 'cross-day-text'"
+                >
+                  {{ task.productionDate }}
+                </text>
               </view>
             </view>
 
-            <!-- 操作按钮区 -->
-            <view
-              v-if="task.status === 'PENDING' || canDeleteTask(task)"
-              class="action-buttons"
-            >
-              <!-- PENDING状态：显示开始制作按钮 -->
+            <!-- 操作按钮区：每种状态都给一个明确的主动作 -->
+            <view class="action-buttons">
+              <!-- PENDING：开始制作 -->
               <button v-if="task.status === 'PENDING'" class="start-btn" @tap.stop="handleStartTask(task)">
                 <text class="btn-icon">▶️</text>
                 <text class="btn-text">开始制作</text>
               </button>
 
-              <!-- 删除按生产批次执行；已完成和跨天批次不在这里给入口 -->
+              <!-- IN_PROGRESS：继续制作，进详情 -->
+              <button
+                v-else-if="task.status === 'IN_PROGRESS'"
+                class="start-btn"
+                @tap.stop="viewDetails(task)"
+              >
+                <text class="btn-icon">▶️</text>
+                <text class="btn-text">继续制作</text>
+              </button>
+
+              <!-- COMPLETED：查看详情，已完成的删除入口不显示 -->
+              <button
+                v-else-if="task.status === 'COMPLETED'"
+                class="start-btn"
+                @tap.stop="viewDetails(task)"
+              >
+                <text class="btn-icon">🔎</text>
+                <text class="btn-text">查看详情</text>
+              </button>
+
+              <!-- 删除按生产批次执行；已完成和含完成锅的批次不显示 -->
               <view v-if="canDeleteTask(task)" class="delete-btn" @tap.stop="handleDelete(task)">
                 <text class="delete-icon">🗑️</text>
                 <text class="delete-text">删除整批</text>
@@ -161,8 +202,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
-import { onShow } from '@dcloudio/uni-app';
+import { ref, computed } from 'vue';
+import { onShow, onPullDownRefresh } from '@dcloudio/uni-app';
 import { getTodayStatistics, autoSchedule, getPackagingUnits, completeProductionTask, startProductionTask, deleteProductionBatch } from './api/production';
 import { formatDecimal } from './utils/format';
 import SupplementPacking from './components/SupplementPacking.vue';
@@ -204,14 +245,66 @@ const statistics = ref({
 // 任务列表
 const allTasks = ref<any[]>([]);
 
+// 今天、加载态、失败态：三者要分开，不能把「没取到」显示成「今天没活」。
+const todayDate = ref(getTodayDateText());
+const loading = ref(false);
+const loadError = ref('');
+
+// 未来日期的未完成锅不属于当前生产日，不进入列表、统计和批次操作。
+const isFutureTask = (task: any) => {
+  return Boolean(
+    task?.productionDate &&
+      task.status !== 'COMPLETED' &&
+      task.productionDate > selectedProductionDate.value,
+  );
+};
+
+const visibleTasks = computed(() => allTasks.value.filter((task) => !isFutureTask(task)));
+
+// 跨天：不属于所选日期、但还没做完的锅。
+const isCarryoverTask = (task: any) => {
+  return Boolean(
+    task?.productionDate &&
+      task.productionDate !== selectedProductionDate.value &&
+      task.status !== 'COMPLETED',
+  );
+};
+
+// 逾期只认「生产日期早于今天」；选未来日期时，今天的单是「跨天」不是「逾期」。
+const isOverdueTask = (task: any) => {
+  return Boolean(
+    task?.productionDate &&
+      task.status !== 'COMPLETED' &&
+      task.productionDate < todayDate.value,
+  );
+};
+
 // 历史记录
-const historyBatches = ref<any[]>([]);
+const historyBatches = computed(() => {
+  const historyMap = new Map<string, any[]>();
+  visibleTasks.value
+    .filter((unit) => unit.status === 'COMPLETED')
+    .forEach((unit) => {
+      const date = unit.productionDate || String(unit.createdAt || '').split(' ')[0];
+      if (!historyMap.has(date)) {
+        historyMap.set(date, []);
+      }
+      historyMap.get(date)!.push(unit);
+    });
+
+  return Array.from(historyMap.entries()).map((entry) => ({
+    id: `batch-${entry[0]}`,
+    date: entry[0],
+    count: entry[1].length,
+    units: entry[1],
+  }));
+});
 const expandedHistoryId = ref<string | null>(null);
 
 const activeTab = ref('PENDING');
 
 const taskStatusCounts = computed(() => {
-  return allTasks.value.reduce(
+  return visibleTasks.value.reduce(
     (counts, task) => {
       if (task.status === 'PENDING') counts.PENDING += 1;
       if (task.status === 'IN_PROGRESS') counts.IN_PROGRESS += 1;
@@ -231,7 +324,7 @@ const freshTodoCount = computed(() => {
 });
 
 // 首屏「今日制作单」以当前列表为准：所选日期的全部锅 + 跨天未完成的锅。
-const totalTaskCount = computed(() => allTasks.value.length);
+const totalTaskCount = computed(() => visibleTasks.value.length);
 
 const productionModes = computed(() => [
   { value: 'FRESH' as ProductionMode, label: '鲜食生产', count: freshTodoCount.value },
@@ -261,7 +354,7 @@ const currentTabLabel = computed(() => {
 
 // 计算属性：筛选后的任务列表
 const filteredTasks = computed(() => {
-  return allTasks.value.filter((task) => task.status === activeTab.value);
+  return visibleTasks.value.filter((task) => task.status === activeTab.value);
 });
 
 const canAutoSchedule = computed(() => {
@@ -282,12 +375,8 @@ const scheduleHintText = computed(() => {
   return `将为 ${selectedProductionDate.value} 的 ${pendingCount} 笔待排单订单${actionText}`;
 });
 
-const isCarryoverTask = (task: any) => {
-  return task?.productionDate && task.productionDate !== selectedProductionDate.value && task.status !== 'COMPLETED';
-};
-
 // 首屏统计的「含跨天」说明：让 2 锅里有几锅是昨天/更早的一眼可见。
-const carryoverTasks = computed(() => allTasks.value.filter((task) => isCarryoverTask(task)));
+const carryoverTasks = computed(() => visibleTasks.value.filter((task) => isCarryoverTask(task)));
 const carryoverTaskCount = computed(() => carryoverTasks.value.length);
 const carryoverDateText = computed(() => {
   const dates = Array.from(
@@ -299,7 +388,7 @@ const carryoverDateText = computed(() => {
 // 删除按「生产批次」执行，不是按这一张锅卡。
 const getBatchUnits = (task: any) => {
   if (!task?.productionBatchId) return [];
-  return allTasks.value.filter((unit) => unit.productionBatchId === task.productionBatchId);
+  return visibleTasks.value.filter((unit) => unit.productionBatchId === task.productionBatchId);
 };
 
 // 只允许删未完成的批次；只要这批里已经有一锅完成，就不给删除入口。
@@ -309,37 +398,69 @@ const canDeleteTask = (task: any) => {
   return getBatchUnits(task).every((unit) => unit.status !== 'COMPLETED');
 };
 
-// 页面加载
-onMounted(() => {
-  loadTodayStatistics();
-  loadPackagingUnits();
-});
-
-// 页面显示时刷新数据（从详情页返回时）
+// 页面加载：onShow 在首次进入和从详情返回时都会触发，统一走 refreshAll。
 onShow(() => {
-  loadTodayStatistics();
-  loadPackagingUnits();
-  // 补剂面板在子组件里，页面的 onShow 不会自动触发它；回页时手动刷一次
+  todayDate.value = getTodayDateText();
+  refreshAll();
   if (activeMode.value === 'SUPPLEMENT') {
     supplementRef.value?.refresh?.();
   }
 });
 
 // 加载今日统计
-const loadTodayStatistics = async () => {
+async function loadTodayStatistics(): Promise<boolean> {
   try {
     const res = await getTodayStatistics({
       targetDate: selectedProductionDate.value,
     });
     statistics.value = res.data;
+    return true;
   } catch (error: any) {
     console.error('Failed to load statistics:', error);
-    uni.showToast({
-      title: error.message || '加载统计失败',
-      icon: 'none',
-    });
+    return false;
   }
-};
+}
+
+// 加载分装单元
+async function loadPackagingUnits(): Promise<boolean> {
+  try {
+    const res = await getPackagingUnits({
+      status: undefined, // 获取所有状态
+      page: 1,
+      pageSize: 100,
+      targetDate: selectedProductionDate.value,
+      includeUnfinishedCarryover: true,
+    });
+
+    allTasks.value = res.data.list;
+    return true;
+  } catch (error: any) {
+    console.error('Failed to load packaging units:', error);
+    return false;
+  }
+}
+
+// 统计和列表一起刷新：任一项失败都明确告诉用户，不拿 0 / 空态冒充成功。
+async function refreshAll() {
+  loading.value = true;
+  loadError.value = '';
+  const [statsOk, listOk] = await Promise.all([
+    loadTodayStatistics(),
+    loadPackagingUnits(),
+  ]);
+  if (!statsOk || !listOk) {
+    loadError.value = '请检查网络后重试';
+  }
+  loading.value = false;
+}
+
+onPullDownRefresh(async () => {
+  await refreshAll();
+  if (activeMode.value === 'SUPPLEMENT') {
+    await supplementRef.value?.refresh?.();
+  }
+  uni.stopPullDownRefresh();
+});
 
 const handleProductionDateChange = async (event: any) => {
   const nextDate = event?.detail?.value;
@@ -348,8 +469,9 @@ const handleProductionDateChange = async (event: any) => {
   }
 
   selectedProductionDate.value = nextDate;
-  await loadTodayStatistics();
-  await loadPackagingUnits();
+  // 先清空旧日期数据，避免切换瞬间把旧单按新日期标成「逾期」。
+  allTasks.value = [];
+  await refreshAll();
 };
 
 // 自动排单
@@ -373,8 +495,7 @@ const autoScheduleToday = async () => {
           icon: 'success',
         });
 
-        await loadPackagingUnits();
-        await loadTodayStatistics();
+        await refreshAll();
       } catch (error: any) {
         uni.hideLoading();
         console.error('Auto schedule failed:', error);
@@ -385,49 +506,6 @@ const autoScheduleToday = async () => {
       }
     },
   });
-};
-
-// 加载分装单元
-const loadPackagingUnits = async () => {
-  try {
-    const res = await getPackagingUnits({
-      status: undefined, // 获取所有状态
-      page: 1,
-      pageSize: 100,
-      targetDate: selectedProductionDate.value,
-      includeUnfinishedCarryover: true,
-    });
-
-    const units = res.data.list;
-
-    // 按状态分组：所有任务都在列表中（包括已完成）
-    allTasks.value = units;
-
-    // 按日期分组历史记录（只包含已完成的任务）
-    const historyMap = new Map<string, any[]>();
-    units
-      .filter((unit) => unit.status === 'COMPLETED')
-      .forEach((unit) => {
-        const date = unit.productionDate || unit.createdAt.split(' ')[0];
-        if (!historyMap.has(date)) {
-          historyMap.set(date, []);
-        }
-        historyMap.get(date)!.push(unit);
-      });
-
-    historyBatches.value = Array.from(historyMap.entries()).map(([date, units]) => ({
-      id: `batch-${date}`,
-      date,
-      count: units.length,
-      units,
-    }));
-  } catch (error: any) {
-    console.error('Failed to load packaging units:', error);
-    uni.showToast({
-      title: error.message || '加载任务失败',
-      icon: 'none',
-    });
-  }
 };
 
 // 切换Tab
@@ -602,27 +680,8 @@ const toggleHistory = (batchId: string) => {
 .production-page {
   min-height: 100vh;
   background-color: #fbfcf7;
+  padding-top: 24rpx;
   padding-bottom: 120rpx;
-}
-
-.header {
-  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-  padding: 40rpx 32rpx;
-  margin-bottom: 24rpx;
-
-  .title {
-    display: block;
-    font-size: 44rpx;
-    font-weight: bold;
-    color: #26261f;
-    margin-bottom: 8rpx;
-  }
-
-  .subtitle {
-    display: block;
-    font-size: 24rpx;
-    color: rgba(38, 38, 31, 0.6);
-  }
 }
 
 .mode-switch {
@@ -869,6 +928,66 @@ const toggleHistory = (batchId: string) => {
   padding: 0 32rpx;
 }
 
+.inline-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+  padding: 16rpx 20rpx;
+  background-color: #fdf6ec;
+  border-radius: 10rpx;
+  font-size: 24rpx;
+  color: #8a5a00;
+
+  .retry-link {
+    color: #7a5c28;
+    font-weight: 600;
+    padding: 8rpx 12rpx;
+  }
+}
+
+.loading-state {
+  text-align: center;
+  padding: 120rpx 0;
+  font-size: 28rpx;
+  color: #6b6653;
+}
+
+.error-state {
+  text-align: center;
+  padding: 80rpx 32rpx;
+
+  .error-icon {
+    display: block;
+    font-size: 80rpx;
+    margin-bottom: 16rpx;
+  }
+
+  .error-text {
+    display: block;
+    font-size: 30rpx;
+    font-weight: 600;
+    color: #26261f;
+  }
+
+  .error-hint {
+    display: block;
+    margin-top: 8rpx;
+    font-size: 24rpx;
+    color: #6b6653;
+  }
+
+  .retry-btn {
+    margin-top: 28rpx;
+    padding: 16rpx 48rpx;
+    background-color: #1e3a2f;
+    color: #f3eddd;
+    border: none;
+    border-radius: 12rpx;
+    font-size: 28rpx;
+  }
+}
+
 .empty-state {
   text-align: center;
   padding: 120rpx 0;
@@ -923,13 +1042,18 @@ const toggleHistory = (batchId: string) => {
 
     .carryover-badge {
       font-size: 22rpx;
-      color: #b4553f;
-      background-color: #f8e8e2;
+      color: #7a5c28;
+      background-color: #f6efe0;
       border: 1rpx solid #e5e8d4;
       border-radius: 8rpx;
       padding: 4rpx 10rpx;
       line-height: 1.3;
       white-space: nowrap;
+
+      &.is-overdue {
+        color: #b4553f;
+        background-color: #f8e8e2;
+      }
     }
 
     .pot-info {
@@ -961,6 +1085,11 @@ const toggleHistory = (batchId: string) => {
 
       .carryover-text {
         color: #b4553f;
+        font-weight: 600;
+      }
+
+      .cross-day-text {
+        color: #7a5c28;
         font-weight: 600;
       }
     }

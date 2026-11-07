@@ -16,6 +16,14 @@
         </view>
       </view>
 
+      <!-- 待制作：详情页直接开工，不用退回列表找按钮 -->
+      <view v-if="taskDetail.status === 'PENDING'" class="start-block">
+        <button class="start-production-btn" :disabled="starting" @tap="startProduction">
+          {{ starting ? '开始中...' : '开始制作' }}
+        </button>
+        <text class="start-hint">开始后进入制作中；至少上传 2 张备料照片才能完工。</text>
+      </view>
+
       <!-- 基本信息 -->
       <view class="section">
         <view class="section-title">基本信息</view>
@@ -260,11 +268,14 @@
       </view>
     </view>
 
-    <!-- 错误状态 -->
+    <!-- 错误状态：先给重试，再给返回，不能只让员工退出去 -->
     <view v-else class="error-state">
       <text class="error-icon">⚠️</text>
-      <text class="error-text">加载失败，请返回重试</text>
-      <button class="retry-btn" @tap="goBack">返回</button>
+      <text class="error-text">{{ loadError || '加载失败' }}</text>
+      <view class="error-actions">
+        <button class="retry-btn" @tap="loadTaskDetail">重试</button>
+        <button class="back-btn" @tap="goBack">返回</button>
+      </view>
     </view>
   </view>
 </template>
@@ -273,6 +284,7 @@
 import { ref, computed, onMounted } from 'vue';
 import {
   getPackagingUnits,
+  startProductionTask,
   completeProductionTask,
   deleteProductionPhoto,
   type CompleteProductionTaskPayload,
@@ -379,9 +391,13 @@ const taskId = ref('');
 
 // 加载状态
 const loading = ref(true);
+const loadError = ref('');
 
 // 任务详情
 const taskDetail = ref<any>(null);
+
+// 开始制作进行中
+const starting = ref(false);
 
 // 已上传的照片
 const uploadedPhotos = ref<string[]>([]);
@@ -615,6 +631,7 @@ onMounted(() => {
     loadTaskDetail();
   } else {
     loading.value = false;
+    loadError.value = '缺少任务ID';
     uni.showToast({
       title: '缺少任务ID',
       icon: 'none',
@@ -623,9 +640,10 @@ onMounted(() => {
 });
 
 // 加载任务详情
-const loadTaskDetail = async () => {
+async function loadTaskDetail() {
+  loading.value = true;
+  loadError.value = '';
   try {
-    loading.value = true;
     const res = await getPackagingUnits({
       status: undefined,
       page: 1,
@@ -633,42 +651,52 @@ const loadTaskDetail = async () => {
     });
 
     const task = res.data.list.find((t: any) => t.id === taskId.value);
-    if (task) {
-      taskDetail.value = task;
-      uploadedPhotos.value = task.photosRaw || [];
-
-      // 🔍 调试日志：验证分装信息数据
-      console.log('=== Task Detail Debug ===');
-      console.log('Task ID:', task.id);
-      console.log('Total Production (g):', task.totalProductionG);
-      console.log('Order Items:', task.orderItems);
-      console.log('Recipe Snapshot:', task.recipeSnapshot);
-      console.log('Recipe Items:', task.recipeSnapshot?.items);
-
-      // 验证分装信息字段
-      task.orderItems.forEach((order: any, idx: number) => {
-        console.log(`Order ${idx + 1}:`, {
-          orderId: order.orderId,
-          dogName: order.dogName,
-          recipientName: order.recipientName,
-          recipientCity: order.recipientCity,
-        });
-      });
-    } else {
-      uni.showToast({
-        title: '任务不存在',
-        icon: 'none',
-      });
+    if (!task) {
+      taskDetail.value = null;
+      loadError.value = '任务不存在或已被删除';
+      return;
     }
+
+    taskDetail.value = task;
+    uploadedPhotos.value = task.photosRaw || [];
   } catch (error: any) {
     console.error('Failed to load task detail:', error);
-    uni.showToast({
-      title: error.message || '加载失败',
-      icon: 'none',
-    });
+    taskDetail.value = null;
+    loadError.value = error.message || '加载失败，请重试';
   } finally {
     loading.value = false;
   }
+}
+
+// 待制作任务在详情页直接开始制作
+const startProduction = () => {
+  if (!taskDetail.value || starting.value) return;
+
+  uni.showModal({
+    title: '开始制作',
+    content: `确认开始制作 ${taskDetail.value.recipeName}？`,
+    success: async (res) => {
+      if (!res.confirm) return;
+
+      starting.value = true;
+      uni.showLoading({ title: '开始中...' });
+      try {
+        const result = await startProductionTask(taskId.value);
+        if (result.code === 0) {
+          uni.showToast({ title: '已开始制作', icon: 'success' });
+          await loadTaskDetail();
+        } else {
+          uni.showToast({ title: result.message || '操作失败', icon: 'none' });
+        }
+      } catch (error: any) {
+        console.error('Start production failed:', error);
+        uni.showToast({ title: error.message || '开始制作失败', icon: 'none' });
+      } finally {
+        uni.hideLoading();
+        starting.value = false;
+      }
+    },
+  });
 };
 
 // 返回
@@ -1064,13 +1092,55 @@ const printLabel = () => {
     margin-bottom: 24rpx;
   }
 
-  .retry-btn {
+  .error-actions {
+    display: flex;
+    gap: 16rpx;
     margin-top: 40rpx;
-    padding: 20rpx 48rpx;
+  }
+
+  .retry-btn,
+  .back-btn {
+    padding: 20rpx 40rpx;
+    border: none;
+    border-radius: 8rpx;
+    font-size: 28rpx;
+  }
+
+  .retry-btn {
+    background-color: #1e3a2f;
+    color: #f3eddd;
+  }
+
+  .back-btn {
+    background-color: #eef2e4;
+    color: #1e3a2f;
+  }
+}
+
+.start-block {
+  margin: 0 32rpx 24rpx;
+  padding: 24rpx;
+  background-color: #fff;
+  border-radius: 16rpx;
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
+
+  .start-production-btn {
+    width: 100%;
+    height: 88rpx;
+    line-height: 88rpx;
     background-color: #1e3a2f;
     color: #f3eddd;
     border: none;
-    border-radius: 8rpx;
+    border-radius: 12rpx;
+    font-size: 30rpx;
+    font-weight: 600;
+  }
+
+  .start-hint {
+    display: block;
+    margin-top: 12rpx;
+    font-size: 24rpx;
+    color: #6b6653;
   }
 }
 

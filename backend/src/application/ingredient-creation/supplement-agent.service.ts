@@ -37,7 +37,7 @@ export interface SupplementAgentResult {
   /** 跑完后草稿变成什么样（模型可能写过几次） */
   draft: SupplementDraftRecord;
   /** 模型调用过的工具，按顺序（便于排查与复盘） */
-  toolCalls: { name: string; ok: boolean }[];
+  toolCalls: { name: string; ok: boolean; error?: string }[];
   /** 本次真正写进草稿的字段路径——前端只按这个清单回写，别的都是回显 */
   applied: string[];
   /** 中途失败但保留已完成的部分（true 时 reply 里会说明） */
@@ -104,7 +104,11 @@ export class SupplementAgentService {
 
   async run(input: SupplementAgentInput): Promise<SupplementAgentResult> {
     const runtime = await this.loadRuntime();
-    const context = this.contextFor(input.draft, input.message);
+    const context = this.contextFor(
+      input.draft,
+      input.message,
+      input.history.map((turn) => turn.text).join('\n')
+    );
     const messages: Record<string, unknown>[] = [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: this.describeDraft(input.draft) },
@@ -173,7 +177,11 @@ export class SupplementAgentService {
           continue;
         }
         const result = await executeSupplementTool(call.name, call.arguments, context);
-        toolCalls.push({ name: call.name, ok: result.ok });
+        toolCalls.push({
+          name: call.name,
+          ok: result.ok,
+          ...(result.ok ? {} : { error: String(result.error).slice(0, 120) })
+        });
 
         if (result.ok && call.name === 'write_draft') {
           for (const field of (result.data as { applied?: string[] }).applied ?? []) {
@@ -222,14 +230,21 @@ export class SupplementAgentService {
   }
 
   /** 草稿是这次运行的副本：工具写它，跑完再由调用方决定怎么合回去。 */
-  private contextFor(draft: SupplementDraftRecord, message: string): ToolContext {
+  private contextFor(
+    draft: SupplementDraftRecord,
+    message: string,
+    historyText: string
+  ): ToolContext {
     return {
       knowledge: this.knowledge,
       preview: this.preview,
       catalog: this.catalog,
       draft: { ...draft },
-      // 用户这句话里贴的链接才允许读；搜索返回的链接会在工具执行时加进来
-      allowedUrls: new Set(message.match(/https?:\/\/[^\s"'，。；）)]+/g) ?? [])
+      // 允许读的链接 = 这句话里贴的 + 对话历史里出现过的；
+      // 本次搜索返回的会在工具执行时再加进来。历史也要算，否则"第二个"这种跨轮指代读不了。
+      allowedUrls: new Set(
+        `${message}\n${historyText}`.match(/https?:\/\/[^\s"'，。；）)]+/g) ?? []
+      )
     };
   }
 

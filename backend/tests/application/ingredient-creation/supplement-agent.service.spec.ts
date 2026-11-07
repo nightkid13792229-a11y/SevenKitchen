@@ -246,3 +246,27 @@ describe('工具循环', () => {
     await expect(agent.run(base)).rejects.toThrow();
   });
 });
+
+describe('允许读的链接', () => {
+  it('对话历史里出现过的链接也能读（跨轮"第二个"不至于读不了）', async () => {
+    const fetchMock = buildFetch([
+      {
+        tool: {
+          name: 'fetch_product',
+          args: { url: 'https://www.iherb.com/pr/from-history/9' }
+        }
+      },
+      { content: '读到了' }
+    ]);
+    const { service: agent } = service();
+
+    await agent.run({
+      message: '第二个',
+      history: [{ role: 'assistant', text: '看这个 https://www.iherb.com/pr/from-history/9' }],
+      draft: { name: '' }
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(JSON.stringify(body.messages)).not.toContain('不是用户给的');
+  });
+});

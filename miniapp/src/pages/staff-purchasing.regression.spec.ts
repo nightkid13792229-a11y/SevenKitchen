@@ -199,8 +199,11 @@ describe('staff purchasing detail audit display', () => {
     expect(detailSource).not.toContain('<text class="label">采购类型:</text>');
   });
 
-  it('shows procurement SKU as the primary item name without the purchase SKU prefix', () => {
+  it('shows the ingredient name for food items and keeps the purchase SKU prefix off the card', () => {
+    // 2026-11-07 BOSS 反馈：食材卡片要显示原料名称，不能拿采购商品名当原料名
     expect(detailSource).toContain('getPurchaseItemTitle(item)');
+    expect(detailSource).toContain("from './purchase-item-title'");
+    expect(detailSource).toContain('resolvePurchaseItemTitle(item)');
     expect(detailSource).not.toContain('采购SKU：{{ item.resolvedProcurementSkuName }}');
     expect(detailSource).not.toContain('content: `确认删除原料"${item.ingredientName}"？`');
   });

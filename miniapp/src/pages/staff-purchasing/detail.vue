@@ -579,6 +579,7 @@ import { formatStaffQuantity } from '../../utils/staff-quantity';
 import { canAddProcurementSku } from './procurement-sku-entry';
 import { buildSkuCreateQuery, isSkuCreatedFor } from './procurement-sku-event';
 import { groupPurchaseItemsForDisplay } from './food-category-order';
+import { resolvePurchaseItemTitle } from './purchase-item-title';
 import {
   computeItemOutcome,
   computeRecordOutcome,
@@ -2417,9 +2418,8 @@ const getStatusTone = (status: string): 'pending' | 'done' | 'danger' | 'neutral
   return 'neutral';
 };
 
-const getPurchaseItemTitle = (item: any) => {
-  return item?.resolvedProcurementSkuName || item?.resolvedSuggestedProductName || item?.ingredientName || '未知原料';
-};
+// 食材卡片显示原料名称，补剂/包材仍显示采购商品名（2026-11-07 老板定）
+const getPurchaseItemTitle = (item: any) => resolvePurchaseItemTitle(item);
 
 const formatBrandLabel = (brand?: string | null) => {
   const normalized = (brand || '').trim();

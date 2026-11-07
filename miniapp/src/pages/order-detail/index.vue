@@ -405,8 +405,35 @@
           <text class="value">免费补发（不收费）</text>
         </view>
 
+        <!-- 拆成多个包裹时逐个列单号（2026-11-07）；正常一单仍是一行 -->
         <view
-          v-if="order.status === 'SHIPPED' && order.trackingNumber"
+          v-if="order.status === 'SHIPPED' && customerPackages.length > 1"
+          class="logistics-inline"
+        >
+          <view class="logistics-head">
+            <text class="logistics-title">分了 {{ customerPackages.length }} 个包裹</text>
+            <text class="logistics-status">已发出</text>
+          </view>
+          <view
+            v-for="pkg in customerPackages"
+            :key="pkg.id"
+            class="logistics-row"
+          >
+            <view class="logistics-pkg">
+              <text class="logistics-pkg-label">包裹 {{ pkg.sortOrder }} · {{ getCarrierName(pkg.carrierCode) }}</text>
+              <text class="logistics-no">{{ pkg.trackingNumber }}</text>
+            </view>
+            <button class="btn-copy-tracking" @tap="copyPackageTracking(pkg.trackingNumber)">
+              复制运单号
+            </button>
+          </view>
+          <view v-if="order.shippedAt" class="logistics-time">
+            发货时间 {{ formatDateTime(order.shippedAt) }}
+          </view>
+        </view>
+
+        <view
+          v-else-if="order.status === 'SHIPPED' && order.trackingNumber"
           class="logistics-inline"
         >
           <view class="logistics-head">
@@ -2085,6 +2112,7 @@ async function loadOrderDetail(quiet = false) {
       loadError.value = false;
       order.value = res.data;
       orderId.value = res.data.id || orderId.value;
+      void loadCustomerPackages();
       syncPaymentTimer();
       console.log('[Order Detail] Order loaded:', {
         id: order.value.id,
@@ -2979,6 +3007,34 @@ function copyOrderId() {
       uni.showToast({ title: '订单号已复制', icon: 'success' });
     },
   });
+}
+
+const customerPackages = ref<
+  Array<{ id: string; carrierCode: string; trackingNumber: string; sortOrder: number }>
+>([])
+
+/** 拉这一单的包裹列表（拆包时会有多条）；拿不到就当空，保持老渲染 */
+async function loadCustomerPackages() {
+  const orderIdValue = order.value?.id
+  if (!orderIdValue) {
+    customerPackages.value = []
+    return
+  }
+  try {
+    const response = await request({
+      url: `/orders/${orderIdValue}/shipment`,
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    })
+    customerPackages.value = Array.isArray(response?.data) ? response.data : []
+  } catch (error) {
+    customerPackages.value = []
+  }
+}
+
+function copyPackageTracking(tracking: string) {
+  uni.setClipboardData({ data: tracking })
 }
 
 function copyTrackingNumber() {
@@ -5391,4 +5447,8 @@ async function applyRefund() {
   line-height: 1.6;
   color: #55554a;
 }
+
+/* 拆包后的多包裹列表（2026-11-07） */
+.logistics-pkg { display: flex; flex-direction: column; }
+.logistics-pkg-label { font-size: 22rpx; color: #909399; }
 </style>

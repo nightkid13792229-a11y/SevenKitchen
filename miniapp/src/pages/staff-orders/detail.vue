@@ -102,22 +102,51 @@
 
       <!-- 物流：发了货才有，客服随时能念给顾客 -->
       <view v-if="shippingInfoVisible" class="card">
-        <view class="card-title">物流</view>
-        <view class="ship-row">
-          <view class="ship-main">
-            <text class="ship-carrier">{{ carrierLabel }}</text>
-            <text class="ship-no">{{ order.trackingNumber }}</text>
-          </view>
-          <text class="ship-copy" @tap="copyTrackingNumber">复制单号</text>
+        <view class="card-title">
+          物流
+          <text v-if="shipment && shipment.packages.length > 1" class="ship-tag">
+            {{ shipment.packages.length }} 个包裹
+          </text>
         </view>
-        <view class="ship-meta">
-          <text v-if="order.shippedAt">{{ formatDateTime(order.shippedAt) }} 已交快递</text>
-          <text v-else-if="estimatedShippingText">预计 {{ estimatedShippingText }} 发货</text>
-          <view v-if="typeof order.actualShippingFee === 'number'" class="ship-fee">
-            <text>实际运费 ¥{{ formatAmount(order.actualShippingFee) }}</text>
-            <text v-if="canEditActualShippingFee" class="ship-fee-edit" @tap.stop="openFeePanel">改运费</text>
+
+        <!-- 合并 / 拆包：逐个包裹列出来（2026-11-07） -->
+        <block v-if="shipment && shipment.packages.length">
+          <view v-for="pkg in shipment.packages" :key="pkg.id" class="ship-pkg-row">
+            <view class="ship-pkg-main">
+              <text class="ship-pkg-label">包裹 {{ pkg.sortOrder }} · {{ carrierNameOf(pkg.carrierCode) }}</text>
+              <text class="ship-no">{{ pkg.trackingNumber }}</text>
+            </view>
+            <view class="ship-pkg-right">
+              <text class="ship-pkg-fee">¥{{ formatAmount(pkg.actualShippingFee) }}</text>
+              <text v-if="canEditActualShippingFee" class="ship-fee-edit" @tap.stop="openFeePanel(pkg)">改</text>
+            </view>
           </view>
-        </view>
+          <view class="ship-share-row">
+            <text>本单承担运费</text>
+            <text class="ship-share-value">
+              ¥{{ formatAmount(shipmentOrderShare !== null ? shipmentOrderShare : order.actualShippingFee) }}
+            </text>
+          </view>
+        </block>
+
+        <!-- 老订单：只有一个单号，保持原样 -->
+        <block v-else>
+          <view class="ship-row">
+            <view class="ship-main">
+              <text class="ship-carrier">{{ carrierLabel }}</text>
+              <text class="ship-no">{{ order.trackingNumber }}</text>
+            </view>
+            <text class="ship-copy" @tap="copyTrackingNumber">复制单号</text>
+          </view>
+          <view class="ship-meta">
+            <text v-if="order.shippedAt">{{ formatDateTime(order.shippedAt) }} 已交快递</text>
+            <text v-else-if="estimatedShippingText">预计 {{ estimatedShippingText }} 发货</text>
+            <view v-if="typeof order.actualShippingFee === 'number'" class="ship-fee">
+              <text>实际运费 ¥{{ formatAmount(order.actualShippingFee) }}</text>
+              <text v-if="canEditActualShippingFee" class="ship-fee-edit" @tap.stop="openFeePanel()">改运费</text>
+            </view>
+          </view>
+        </block>
       </view>
 
       <!-- 商品与用量 -->
@@ -928,6 +957,11 @@ const actualShippingFeeDraft = ref('')
 const feeVisible = ref(false)
 const feeDraft = ref('')
 const savingFee = ref(false)
+/** 改的是哪个包裹（合并/拆包后，运费挂在包裹上）；空 = 老订单直接改订单）
+ */
+const feePackageId = ref('')
+/** 这一单所在的那一票（合并 / 拆包）；老订单为 null */
+const shipment = ref<any>(null)
 /** 发货类型：正常发货 / 无需发货（自用单，2026-10-31） */
 const shippingType = ref<'NORMAL' | 'NOT_REQUIRED'>('NORMAL')
 const isShipping = ref(false)
@@ -1499,6 +1533,7 @@ async function loadOrderDetail() {
       remarkDraft.value = response.data.adminRemark || ''
       void ensureProductionPhotoShareToken()
       void loadOrderFinancialSummary()
+      void loadShipment()
     }
   } catch (error: any) {
     console.error('[OrderDetail] Load error:', error)
@@ -2031,9 +2066,47 @@ function onCarrierChange(event: any) {
   selectedCarrierIndex.value = Number(event.detail.value || 0)
 }
 
+/** 拉这一单所在的票（合并 / 拆包），没有就保持 null，走老渲染 */
+async function loadShipment() {
+  if (!orderId.value) return
+  try {
+    const response = await request({
+      url: `/admin/orders/${orderId.value}/shipment`,
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    })
+    shipment.value = response?.data ?? null
+  } catch (error) {
+    shipment.value = null
+  }
+}
+
+/** 这张单在这一票里承担多少运费（各包裹分摊之和） */
+const shipmentOrderShare = computed(() => {
+  const rows = shipment.value?.orders
+  if (!Array.isArray(rows)) return null
+  const hit = rows.find((row: any) => row.orderId === order.value?.id)
+  return hit ? Number(hit.allocatedFee) : null
+})
+
 /** 打开「改运费」：带上当前值，省得员工重打一遍 */
-function openFeePanel() {
-  if (!canEditActualShippingFee.value || !order.value) return
+/** 快递公司代码 → 名字（包裹列表里用） */
+function carrierNameOf(code: string) {
+  const hit = carriers.find((item) => item.code === code)
+  return hit ? hit.name : code || '-'
+}
+
+function openFeePanel(packageRow?: any) {
+  if (!order.value) return
+  if (packageRow) {
+    feePackageId.value = packageRow.id
+    feeDraft.value = Number(packageRow.actualShippingFee).toFixed(2)
+    feeVisible.value = true
+    return
+  }
+  if (!canEditActualShippingFee.value) return
+  feePackageId.value = ''
   feeDraft.value = Number(order.value.actualShippingFee).toFixed(2)
   feeVisible.value = true
 }
@@ -2041,6 +2114,7 @@ function openFeePanel() {
 function closeFeePanel() {
   feeVisible.value = false
   feeDraft.value = ''
+  feePackageId.value = ''
 }
 
 async function saveShippingFee() {
@@ -2059,11 +2133,19 @@ async function saveShippingFee() {
   const orderId = order.value.id
   savingFee.value = true
   try {
-    await request({
-      url: `/admin/orders/${orderId}/shipping-fee`,
-      method: 'PATCH',
-      data: { actualShippingFee: Number(feeText) },
-    })
+    if (feePackageId.value) {
+      await request({
+        url: `/admin/order-shipments/packages/${feePackageId.value}`,
+        method: 'PATCH',
+        data: { actualShippingFee: Number(feeText) },
+      })
+    } else {
+      await request({
+        url: `/admin/orders/${orderId}/shipping-fee`,
+        method: 'PATCH',
+        data: { actualShippingFee: Number(feeText) },
+      })
+    }
     feeVisible.value = false
     feeDraft.value = ''
     uni.showToast({ title: '运费已改', icon: 'success' })
@@ -3756,4 +3838,14 @@ async function saveAddressForm() {
 .settlement-visible-row { display: flex; align-items: center; justify-content: space-between; margin: 8rpx 0 4rpx; }
 .settlement-form-actions { display: flex; gap: 16rpx; margin-top: 18rpx; }
 .settlement-form-actions .address-action-btn { flex: 1; }
+
+/* ===== 合并 / 拆包后的包裹列表（2026-11-07）===== */
+.ship-tag { margin-left: 10rpx; font-size: 20rpx; color: #2b5040; }
+.ship-pkg-row { display: flex; align-items: center; justify-content: space-between; padding: 14rpx 0; border-bottom: 1rpx dashed #f0f2f0; }
+.ship-pkg-main { flex: 1; }
+.ship-pkg-label { display: block; font-size: 22rpx; color: #909399; }
+.ship-pkg-right { display: flex; align-items: center; gap: 14rpx; }
+.ship-pkg-fee { font-size: 24rpx; color: #2b5040; font-weight: 700; }
+.ship-share-row { display: flex; align-items: center; justify-content: space-between; padding-top: 16rpx; font-size: 22rpx; color: #909399; }
+.ship-share-value { color: #b06a1f; font-weight: 700; }
 </style>

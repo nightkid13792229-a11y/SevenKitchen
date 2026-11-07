@@ -481,6 +481,12 @@
           "style": {
             "navigationBarTitleText": "鲜食订单详情"
           }
+        },
+        {
+          "path": "batch-ship",
+          "style": {
+            "navigationBarTitleText": "合并发货"
+          }
         }
       ]
     },

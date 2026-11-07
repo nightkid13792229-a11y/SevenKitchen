@@ -154,6 +154,35 @@ export class WechatShippingUploadService {
       };
     }
 
+    // 合并 / 拆包：一张订单可能落在多个包裹里（2026-11-07）。
+    // 微信按支付单上报，所以每张订单各报一次，只报**这单实际所在的包裹** ——
+    // 不能把整票的单号都塞给它，否则顾客会看到没装他东西的包裹。
+    const shipmentPackages = await this.prisma.orderShipmentPackage.findMany({
+      where: {
+        shipment: { orders: { some: { orderId: order.id } } },
+        items: { some: { orderId: order.id } },
+      },
+      orderBy: { sortOrder: 'asc' },
+      select: { carrierCode: true, trackingNumber: true },
+    });
+
+    const shippingList =
+      shipmentPackages.length > 0
+        ? shipmentPackages.map((pkg) => ({
+            tracking_no: pkg.trackingNumber,
+            express_company: this.normalizeExpressCompany(pkg.carrierCode),
+            item_desc: this.buildItemDesc(order.items),
+            contact: this.buildContact(order.address?.phone),
+          }))
+        : [
+            {
+              tracking_no: order.trackingNumber,
+              express_company: this.normalizeExpressCompany(order.carrierCode),
+              item_desc: this.buildItemDesc(order.items),
+              contact: this.buildContact(order.address?.phone),
+            },
+          ];
+
     const outTradeNo = this.toOutTradeNo(order.id);
     const payload: WechatShippingInfoPayload = {
       order_key: order.transactionId
@@ -168,16 +197,10 @@ export class WechatShippingUploadService {
             out_trade_no: outTradeNo,
           },
       logistics_type: 1,
-      delivery_mode: 1,
+      // 多个包裹 = 分拆发货；单个包裹仍是统一发货
+      delivery_mode: shippingList.length > 1 ? 2 : 1,
       is_all_delivered: true,
-      shipping_list: [
-        {
-          tracking_no: order.trackingNumber,
-          express_company: this.normalizeExpressCompany(order.carrierCode),
-          item_desc: this.buildItemDesc(order.items),
-          contact: this.buildContact(order.address?.phone),
-        },
-      ],
+      shipping_list: shippingList,
       upload_time: this.formatWechatTimestamp(new Date()),
       payer: {
         openid: payerOpenid,

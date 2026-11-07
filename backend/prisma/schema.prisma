@@ -78,6 +78,12 @@ model Order {
   /// 原单反向指向它历史上所有的补发单（有效的最多一张）
   reshipOrders                 Order[]                     @relation("OrderReship")
 
+  /// 这一单所在的那一票发货（2026-11-07 合并/拆包）。
+  /// 老订单没有这行 —— 读的时候降级成「订单上的单号 / 运费 = 1 个虚拟包裹」。
+  shipmentOrder                OrderShipmentOrder?
+  /// 这一单在票里各包裹的重量归属（拆包时会有多行）
+  shipmentPackageItems         OrderShipmentPackageItem[]
+
   @@index([customerId])
   @@index([status])
   @@index([aftersaleType])
@@ -5754,4 +5760,88 @@ model PurchaseOrderMatchAlias {
   @@unique([normalizedName, channelFamily])
   @@index([ingredientId])
   @@map("purchase_order_match_alias")
+}
+
+/// 一次发货 = 一票（2026-11-07）。
+///
+/// 票里装 1~N 张订单、1~M 个包裹：
+///   · 多张订单装进 1 个包裹 = 合并发货
+///   · 1 张订单装进多个包裹 = 拆包发货
+/// 订单级 actual_shipping_fee 从这里的包裹分摊结果回写，老报表不用改。
+model OrderShipment {
+  id          String    @id @default(uuid()) @map("id") @db.VarChar(36)
+  shippedAt   DateTime  @default(now()) @map("shipped_at")
+  shippedBy   String?   @map("shipped_by") @db.VarChar(64)
+  /// 撤销发货（本期不开放写入，先留列，方便以后加）
+  cancelledAt DateTime? @map("cancelled_at")
+  note        String?   @db.VarChar(200)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  orders   OrderShipmentOrder[]
+  packages OrderShipmentPackage[]
+
+  @@index([shippedAt])
+  @@map("order_shipment")
+}
+
+/// 票 ↔ 订单。order_id 唯一：一张单同一时刻只能在一票里（I1）。
+model OrderShipmentOrder {
+  id           String   @id @default(uuid()) @map("id") @db.VarChar(36)
+  shipmentId   String   @map("shipment_id") @db.VarChar(36)
+  orderId      String   @unique @map("order_id") @db.VarChar(36)
+  /// 这单在这票里的净重与袋数快照，用于校验与展示
+  totalWeightG Int      @map("total_weight_g")
+  totalBags    Int      @map("total_bags")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  shipment OrderShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  order    Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@map("order_shipment_order")
+}
+
+/// 一个包裹 = 一个运单号 = 一笔实付运费。
+model OrderShipmentPackage {
+  id                String   @id @default(uuid()) @map("id") @db.VarChar(36)
+  shipmentId        String   @map("shipment_id") @db.VarChar(36)
+  carrierCode       String   @map("carrier_code") @db.VarChar(32)
+  trackingNumber    String   @map("tracking_number") @db.VarChar(64)
+  /// 这个包裹**实付**的运费（不是向顾客收的 amount_shipping）
+  actualShippingFee Decimal  @map("actual_shipping_fee") @db.Decimal(10, 2)
+  /// 包内总净重（信息用，等于 items.weight_g 之和）
+  weightG           Int      @map("weight_g")
+  sortOrder         Int      @default(1) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  shipment OrderShipment             @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  items    OrderShipmentPackageItem[]
+
+  @@unique([shipmentId, trackingNumber])
+  @@index([shipmentId])
+  @@map("order_shipment_package")
+}
+
+/// 包裹 ↔ 订单的重量归属，分摊结果就落在 allocated_fee 上。
+///
+/// 多规格订单按规格拆行（spec_g = 每袋多少克），否则「7 袋」说不出是多少克。
+model OrderShipmentPackageItem {
+  id           String   @id @default(uuid()) @map("id") @db.VarChar(36)
+  packageId    String   @map("package_id") @db.VarChar(36)
+  orderId      String   @map("order_id") @db.VarChar(36)
+  specG        Int      @map("spec_g")
+  bags         Int      @map("bags")
+  weightG      Int      @map("weight_g")
+  /// 这单从这个包裹分到的运费（分摊结果，可审计）
+  allocatedFee Decimal  @map("allocated_fee") @db.Decimal(10, 2)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  package OrderShipmentPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  order   Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([packageId])
+  @@index([orderId])
+  @@map("order_shipment_package_item")
 }

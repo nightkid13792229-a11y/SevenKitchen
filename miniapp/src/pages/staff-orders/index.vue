@@ -9,6 +9,9 @@
         </view>
         <text class="header-title">后台订单</text>
         <view class="header-actions">
+          <view class="merge-mode-btn" :class="{ active: mergeMode }" @tap="toggleMergeMode">
+            <text class="merge-mode-text">{{ mergeMode ? '取消' : '合并发货' }}</text>
+          </view>
           <view class="search-btn" @tap="showSearchModal">
             <text class="search-icon">🔍</text>
           </view>
@@ -67,9 +70,27 @@
       <button class="quick-search-btn" @tap="performSearch">搜索</button>
     </view>
 
+    <!-- 合并发货：底部操作条（2026-11-07） -->
+    <view v-if="mergeMode" class="merge-bar">
+      <view class="merge-bar-info">
+        <text class="merge-bar-count">已选 {{ selectedOrderIds.length }} 单</text>
+        <text class="merge-bar-hint">同一收货地址才能合并</text>
+      </view>
+      <button class="merge-bar-btn" :disabled="selectedOrderIds.length === 0" @tap="startMergeShipment">
+        去发货
+      </button>
+    </view>
+
     <!-- 订单列表 -->
     <view class="order-list">
-      <view v-for="order in orders" :key="order.id" class="order-card" @tap="viewOrderDetail(order.id)">
+      <view
+        v-for="order in orders"
+        :key="order.id"
+        class="order-card"
+        :class="{ 'is-picked': mergeMode && selectedOrderIds.includes(order.id) }"
+        @tap="onCardTap(order)"
+      >
+        <view v-if="mergeMode" class="pick-badge" :class="{ on: selectedOrderIds.includes(order.id) }"></view>
         <!-- 订单头部：订单编号 + 状态 -->
         <view class="order-header">
           <text class="order-id">{{ order.id }}</text>
@@ -416,6 +437,53 @@ const dateOptions = ref([
 // 数据
 const allOrders = ref<Order[]>([])
 const orders = ref<Order[]>([])
+/**
+ * 合并发货（2026-11-07）：勾单 → 进「发货单」页。
+ * 只有待发货（急冻完成 / 试吃装待发）的单能勾。
+ */
+const mergeMode = ref(false)
+const selectedOrderIds = ref<string[]>([])
+
+/** 这张单能不能进合并发货 */
+function isMergeable(order: any) {
+  if (!order) return false
+  if (order.type === 'TASTING_PACK') {
+    return ['PAID', 'FREEZING'].includes(order.status)
+  }
+  return order.status === 'FREEZING'
+}
+
+function toggleMergeMode() {
+  mergeMode.value = !mergeMode.value
+  selectedOrderIds.value = []
+}
+
+function onCardTap(order: any) {
+  if (!mergeMode.value) {
+    viewOrderDetail(order.id)
+    return
+  }
+  if (!isMergeable(order)) {
+    uni.showToast({ title: '只有待发货的订单能合并', icon: 'none' })
+    return
+  }
+  const index = selectedOrderIds.value.indexOf(order.id)
+  if (index >= 0) {
+    selectedOrderIds.value.splice(index, 1)
+  } else {
+    selectedOrderIds.value.push(order.id)
+  }
+}
+
+function startMergeShipment() {
+  if (selectedOrderIds.value.length === 0) {
+    uni.showToast({ title: '先勾两张单', icon: 'none' })
+    return
+  }
+  uni.navigateTo({
+    url: `/pages/staff-orders/batch-ship?orderIds=${selectedOrderIds.value.join(',')}`,
+  })
+}
 const loading = ref(false)
 const loadingMore = ref(false)
 const currentPage = ref(1)
@@ -2096,4 +2164,39 @@ onShareAppMessage((event: any) => {
     opacity: 1;
   }
 }
+
+/* ===== 合并发货（2026-11-07）===== */
+.merge-mode-btn { padding: 6rpx 16rpx; border-radius: 24rpx; border: 1rpx solid #dfe4e1; background: #fff; }
+.merge-mode-btn.active { background: #23483c; border-color: #23483c; }
+.merge-mode-text { font-size: 22rpx; color: #2b5040; }
+.merge-mode-btn.active .merge-mode-text { color: #fff; }
+
+.order-card { position: relative; }
+.order-card.is-picked { border: 2rpx solid #2b5040; }
+.pick-badge {
+  position: absolute; top: 18rpx; left: 18rpx;
+  width: 34rpx; height: 34rpx; border-radius: 50%;
+  border: 2rpx solid #cfd5d1; background: #fff;
+}
+.pick-badge.on { background: #2b5040; border-color: #2b5040; }
+.pick-badge.on::after {
+  content: '✓'; position: absolute; inset: 0;
+  color: #fff; font-size: 20rpx; line-height: 30rpx; text-align: center;
+}
+.is-picked .order-header { padding-left: 44rpx; }
+
+.merge-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18rpx 24rpx 34rpx; background: #fff;
+  border-top: 1rpx solid #eef0ee;
+}
+.merge-bar-info { display: flex; flex-direction: column; }
+.merge-bar-count { font-size: 26rpx; font-weight: 700; color: #1f2d27; }
+.merge-bar-hint { margin-top: 4rpx; font-size: 20rpx; color: #909399; }
+.merge-bar-btn {
+  margin: 0; padding: 0 44rpx; height: 72rpx; line-height: 72rpx;
+  border-radius: 36rpx; background: #23483c; color: #fff; font-size: 27rpx;
+}
+.merge-bar-btn[disabled] { background: #c9d2cc; color: #fff; }
 </style>

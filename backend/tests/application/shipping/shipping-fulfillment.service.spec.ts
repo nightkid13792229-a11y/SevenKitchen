@@ -475,6 +475,8 @@ describe('WechatShippingUploadService uploadForOrder', () => {
     order: { findUnique: jest.Mock };
     paymentConfig: { upsert: jest.Mock };
     userWechatIdentity: { findFirst: jest.Mock };
+    // 2026-11-07 合并/拆包：按订单所在包裹上报，老 mock 里没有这张表
+    orderShipmentPackage: { findMany: jest.Mock };
   };
   let mockWechatService: {
     uploadShippingInfo: jest.Mock;
@@ -487,6 +489,9 @@ describe('WechatShippingUploadService uploadForOrder', () => {
       },
       paymentConfig: {
         upsert: jest.fn(),
+      },
+      orderShipmentPackage: {
+        findMany: jest.fn().mockResolvedValue([]),
       },
       userWechatIdentity: {
         findFirst: jest.fn(),

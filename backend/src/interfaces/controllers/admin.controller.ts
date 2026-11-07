@@ -37,6 +37,7 @@ import {
   type UpdateRecommendedProductDto,
 } from '../../application/ingredient/recommended-product.service';
 import { OrderProcurementDisclosureService } from '../../application/order/order-procurement-disclosure.service';
+import { OrderShipmentService } from '../../application/shipping/order-shipment.service';
 import type {
   CreateIngredientDto,
   UpdateIngredientDto,
@@ -143,6 +144,7 @@ export class AdminController {
     private readonly cosService: TencentCosService,
     private readonly jwtAuthService?: JwtAuthService,
     private readonly orderProcurementDisclosureService?: OrderProcurementDisclosureService,
+    private readonly orderShipmentService?: OrderShipmentService,
   ) {}
 
   private mapNutritionFoodMappings(mappings?: any[]) {
@@ -2233,6 +2235,105 @@ export class AdminController {
       );
 
       return ApiResponseDto.success(result);
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * POST /admin/order-shipments - 一票发货（合并 / 拆包，2026-11-07）
+   *
+   * 一次提交 = 1~N 张订单 + 1~M 个包裹；每个包裹一个单号一笔运费，
+   * 运费按净重分摊到订单。
+   */
+  @Post('order-shipments')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '一票发货（合并 / 拆包）' })
+  @ApiResponse({ status: 200, description: 'Shipped successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request' })
+  async createOrderShipment(
+    @Body() body: any,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      if (!this.orderShipmentService) {
+        return ApiResponseDto.error(500, '发货服务未就绪');
+      }
+      const shipment = await this.orderShipmentService.createShipment(
+        {
+          packages: Array.isArray(body?.packages) ? body.packages : [],
+          note: body?.note ?? null,
+        },
+        null,
+      );
+      return ApiResponseDto.success(shipment);
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * GET /admin/orders/:orderId/shipment - 这单所在的那一票（没有则 data = null）
+   *
+   * 老订单没有票记录，前端按「订单上的单号 / 运费」降级渲染。
+   */
+  @Get('orders/:orderId/shipment')
+  @ApiOperation({ summary: '查订单所属的发货票（合并/拆包）' })
+  async getOrderShipment(
+    @Param('orderId') orderId: string,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      if (!this.orderShipmentService) {
+        return ApiResponseDto.success(null);
+      }
+      const shipment = await this.orderShipmentService.getByOrderId(orderId);
+      return ApiResponseDto.success(shipment);
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * PATCH /admin/order-shipments/packages/:packageId - 改包裹的单号 / 运费
+   *
+   * 升级版「改运费」：运费一改，这包的分摊重算，订单级数字同步回写。
+   */
+  @Patch('order-shipments/packages/:packageId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '改包裹运单号 / 运费' })
+  async updateShipmentPackage(
+    @Param('packageId') packageId: string,
+    @Body() body: any,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      if (!this.orderShipmentService) {
+        return ApiResponseDto.error(500, '发货服务未就绪');
+      }
+      const shipment = await this.orderShipmentService.updatePackage(packageId, {
+        carrierCode: body?.carrierCode,
+        trackingNumber: body?.trackingNumber,
+        actualShippingFee:
+          body?.actualShippingFee === undefined ||
+          body?.actualShippingFee === null ||
+          body?.actualShippingFee === ''
+            ? undefined
+            : Number(body.actualShippingFee),
+      });
+      return ApiResponseDto.success(shipment);
     } catch (error: any) {
       if (error instanceof NotFoundException) {
         return ApiResponseDto.error(404, error.message);

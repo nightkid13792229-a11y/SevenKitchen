@@ -341,6 +341,49 @@ export class OrdersController {
     }
   }
 
+  /**
+   * 顾客端：这一单分了几个包裹、各是哪个单号（2026-11-07 合并/拆包）。
+   * **不返回运费** —— 实际运费是内部成本，顾客端一律不给。
+   */
+  @Get(':orderId/shipment')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: '查订单的包裹与运单号（顾客端）' })
+  async getCustomerShipment(
+    @Param('orderId') orderId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    try {
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        select: { customerId: true },
+      });
+      if (!order || order.customerId !== user.customerId) {
+        return ApiResponseDto.error(404, 'Order not found');
+      }
+
+      const packages = await this.prisma.orderShipmentPackage.findMany({
+        where: {
+          shipment: { orders: { some: { orderId } } },
+          items: { some: { orderId } },
+        },
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          id: true,
+          carrierCode: true,
+          trackingNumber: true,
+          sortOrder: true,
+        },
+      });
+
+      return ApiResponseDto.success(packages);
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      throw error;
+    }
+  }
+
   @Get(':orderId/shipping-notice')
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Get customer shipping notice and cooking tips' })

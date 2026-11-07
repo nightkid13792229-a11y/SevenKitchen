@@ -859,9 +859,9 @@ describe('ProcurementSkuService', () => {
         type: 'FOOD',
         baseUnit: 'G',
       });
-      mockPrismaService.procurementSku.findFirst.mockResolvedValue(
+      mockPrismaService.procurementSku.findMany.mockResolvedValue([
         baseSkuRow({ id: 'sku-exist' }),
-      );
+      ]);
 
       const result = await service.createFromStaff({
         ingredientId: 'ing-1',
@@ -875,6 +875,63 @@ describe('ProcurementSkuService', () => {
 
       expect(result.status).toBe('duplicate');
       expect(result.sku.id).toBe('sku-exist');
+      expect(mockPrismaService.procurementSku.create).not.toHaveBeenCalled();
+    });
+
+    it('同名商品在别的渠道时不算重复，可以各建一条（2026-11-07）', async () => {
+      mockPrismaService.ingredient.findUnique.mockResolvedValue({
+        id: 'ing-1',
+        type: 'FOOD',
+        baseUnit: 'G',
+      });
+      mockPrismaService.procurementSku.findMany.mockResolvedValue([
+        baseSkuRow({ id: 'sku-sams', purchaseChannel: '山姆会员店' }),
+      ]);
+      mockPrismaService.procurementSku.create.mockImplementation(
+        async ({ data }: any) => baseSkuRow(data),
+      );
+
+      const result = await service.createFromStaff({
+        ingredientId: 'ing-1',
+        createdById: 'user-1',
+        name: '沃集鲜 糙米 1kg',
+        purchaseChannel: '沃尔玛',
+        purchaseUnit: '袋',
+        packCount: 1,
+        netContentPerPack: 1000,
+      });
+
+      expect(result.status).toBe('created');
+      expect(mockPrismaService.procurementSku.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ purchaseChannel: '沃尔玛' }),
+        }),
+      );
+    });
+
+    it('历史数据写的是渠道别名时，仍算同名同渠道', async () => {
+      mockPrismaService.ingredient.findUnique.mockResolvedValue({
+        id: 'ing-1',
+        type: 'FOOD',
+        baseUnit: 'G',
+      });
+      // 老数据存的是「山姆」，字典的标准码是「山姆会员店」
+      mockPrismaService.procurementSku.findMany.mockResolvedValue([
+        baseSkuRow({ id: 'sku-legacy', purchaseChannel: '山姆' }),
+      ]);
+
+      const result = await service.createFromStaff({
+        ingredientId: 'ing-1',
+        createdById: 'user-1',
+        name: '沃集鲜 糙米 1kg',
+        purchaseChannel: '山姆会员店',
+        purchaseUnit: '袋',
+        packCount: 1,
+        netContentPerPack: 1000,
+      });
+
+      expect(result.status).toBe('duplicate');
+      expect(result.sku.id).toBe('sku-legacy');
       expect(mockPrismaService.procurementSku.create).not.toHaveBeenCalled();
     });
 

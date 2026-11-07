@@ -8,8 +8,10 @@ import { BaseUnit, IngredientType } from '../../domain/ingredient/enums';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { composePackSpec } from '../purchasing/procurement-sku-net-content';
 import {
+  channelMatchKey,
   resolveChannelCode,
   toChannelOptions,
+  type ChannelOption,
 } from '../purchasing/channel-catalog';
 import { PURCHASE_CHANNEL_SET } from '../platform-options/option-sets.registry';
 import { perBaseUnitCostOrInfinity } from '../../domain/ingredient/unit-price';
@@ -368,24 +370,38 @@ export class ProcurementSkuService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * 渠道字典读一次，判重和归一都用它（2026-11-07）。
+   * 一次建档里会问两遍「这条文字是哪个渠道」，没必要各查一次库。
+   */
+  private async loadChannelCatalog(): Promise<{
+    options: ChannelOption[];
+    known: Set<string>;
+  }> {
+    const items = await this.prisma.platformOptionItem.findMany({
+      where: { setId: PURCHASE_CHANNEL_SET },
+      select: { code: true, label: true, enabled: true, extra: true },
+      orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+    });
+    return {
+      options: toChannelOptions(items.filter((item) => item.enabled)),
+      known: new Set(items.map((item: { code: string }) => item.code)),
+    };
+  }
+
+  /**
    * 「在哪买的」只认字典（2026-11-05 第二步）：
    * 能归一到标准项就归一，归不上就拒绝 —— 商品档案是渠道的身份，
    * 这里放过一个错字，以后每一条采购记录都会继承它。
    */
   private async resolvePurchaseChannel(
     value: string | null | undefined,
+    catalog?: { options: ChannelOption[]; known: Set<string> },
   ): Promise<string | null | undefined> {
     if (value === undefined) return undefined;
     const text = typeof value === 'string' ? value.trim() : '';
     if (!text) return null;
-    const items = await this.prisma.platformOptionItem.findMany({
-      where: { setId: PURCHASE_CHANNEL_SET },
-      select: { code: true, label: true, enabled: true, extra: true },
-      orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
-    });
-    const enabled = toChannelOptions(items.filter((item) => item.enabled));
-    const known = new Set(items.map((item) => item.code));
-    const resolved = resolveChannelCode(text, enabled, known);
+    const { options, known } = catalog ?? (await this.loadChannelCatalog());
+    const resolved = resolveChannelCode(text, options, known);
     if (!resolved) {
       throw new BadRequestException(
         `「${text}」不在采购渠道清单里，请从后台维护的渠道中选择`,
@@ -706,7 +722,20 @@ export class ProcurementSkuService {
       throw new BadRequestException('采购单位不能为空');
     }
 
-    const existing = await this.prisma.procurementSku.findFirst({
+    // 判重按「同一渠道」算（2026-11-07 老板定）：同名商品在不同渠道是两件货，
+    // 比如沃尔玛和山姆各有一条「冷鲜 鲜切黄牛后腿肉」。渠道先归一到字典码，
+    // 老数据里的别名写法（「山姆」）也要认成同一条，否则会悄悄建出重复。
+    const channelCatalog = await this.loadChannelCatalog();
+    const purchaseChannel = await this.resolvePurchaseChannel(
+      input.purchaseChannel,
+      channelCatalog,
+    );
+    const channelKey = channelMatchKey(
+      purchaseChannel,
+      channelCatalog.options,
+    );
+
+    const sameName = await this.prisma.procurementSku.findMany({
       where: {
         ingredientId: input.ingredientId,
         isActive: true,
@@ -714,6 +743,14 @@ export class ProcurementSkuService {
       },
       orderBy: { createdAt: 'asc' },
     });
+    const existing =
+      sameName.find(
+        (row) =>
+          channelMatchKey(
+            (row as ProcurementSkuRecord).purchaseChannel,
+            channelCatalog.options,
+          ) === channelKey,
+      ) ?? null;
 
     if (existing) {
       return {
@@ -749,8 +786,7 @@ export class ProcurementSkuService {
       name,
       brand: normalizeOptionalText(input.brand) ?? null,
       productModel,
-      purchaseChannel:
-        (await this.resolvePurchaseChannel(input.purchaseChannel)) ?? null,
+      purchaseChannel: purchaseChannel ?? null,
       purchaseUnit,
       purchaseToBaseRatio,
       currentPurchasePrice,

@@ -83,6 +83,18 @@ describe('补剂对话接口', () => {
     expect(res.body.data.reply).toContain('形态');
   });
 
+  it('「加个锌」必须交给模型，不能被"去搜"这件事直通掉', async () => {
+    model.respond.mockResolvedValueOnce({ reply: '先说形态', actions: [] });
+
+    const res = await post({
+      message: '添加一款锌补剂',
+      draft: { name: '', servingUnitsPerDose: null, candidateNames: [] }
+    }).expect(201);
+
+    expect(model.respond).toHaveBeenCalled();
+    expect(res.body.data.source).toBe('MODEL');
+  });
+
   it('无歧义的命令不劳模型：直接走规则，并标明 RULES_FAST', async () => {
     const res = await post({
       message: '每份 2 粒',

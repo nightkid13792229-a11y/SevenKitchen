@@ -69,10 +69,14 @@ export class SupplementChatController {
   ): Promise<ApiResponseDto<SupplementChatReply & { source: 'MODEL' | 'RULES' | 'RULES_FAST' }>> {
     const draft = dto.draft ?? { name: '', servingUnitsPerDose: null, candidateNames: [] };
 
-    // 「每份 2 粒」「第二个」「贴了链接」这三种是无歧义的命令：直接走规则，
-    // 不让模型有机会答一句"好的"却什么都不做（也更省钱）
+    // 只有**无歧义的命令**才直通规则：「每份 2 粒」「第二个」「贴了链接」。
+    // 判据是"动作不是搜索"——因为规则版对任何说不清的话都会退化成"去搜关键词"，
+    // 一旦用它直通，「加个锌」就永远到不了模型，也就永远先给形态分析。
     const fast = interpretSupplementMessage({ message: dto.message, draft });
-    if (fast.actions.length > 0) {
+    const isUnambiguousCommand = fast.actions.some(
+      (action) => action.type !== 'SEARCH_CANDIDATES'
+    );
+    if (isUnambiguousCommand) {
       return new ApiResponseDto(0, 'Success', { ...fast, source: 'RULES_FAST' });
     }
 

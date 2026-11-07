@@ -52,7 +52,7 @@ function isPositiveNumber(value: number | null): value is number {
 /** 每份值 ÷ 每份粒数。粒数不是正整数时返回 null——不猜，也不当 1。 */
 export function convertPerUnit(
   servingValue: number,
-  servingUnitsPerDose: number
+  servingUnitsPerDose: number | null
 ): number | null {
   if (!isPositiveInteger(servingUnitsPerDose)) {
     return null
@@ -89,7 +89,11 @@ function checkConversion(input: SupplementGateInput): SupplementGateItem {
 
   const mismatched: string[] = []
   for (const key of keys) {
-    const expected = servingNutrients[key] / servingUnitsPerDose
+    const servingValue = servingNutrients[key]
+    if (typeof servingValue !== 'number') {
+      continue
+    }
+    const expected = servingValue / servingUnitsPerDose
     const actual = perUnitNutrients[key]
     if (typeof actual !== 'number' || Math.abs(actual - expected) > EPSILON) {
       mismatched.push(key.toLowerCase())

@@ -570,3 +570,48 @@ export interface ConfirmSearchPlanInput {
   libraries?: string[]
   selectedRecordIds: string[]
 }
+
+
+/** 补剂物理形态（与 backend IngredientPhysicalForm 对应）。 */
+export type SupplementPhysicalForm = 'POWDER' | 'TABLET' | 'CAPSULE' | 'LIQUID'
+
+/**
+ * 补剂建档载荷。
+ *
+ * `perUnitNutrients` 的键是规范字段路径（fattyAcids.epa / minerals.zinc），
+ * 与 admin-web/src/constants/supplementNutrients.ts 里那张表同一套写法。
+ */
+export interface CreateSupplementIngredientPayload {
+  name: string
+  brand?: string
+  productModel?: string
+  purchaseChannel?: string
+  unitDisplayLabel: string
+  physicalForm: SupplementPhysicalForm
+  purchaseUnit: string
+  purchaseToBaseRatio: number
+  currentPricePerPurchaseUnit: number
+  addTiming: string
+  productionLossRate: number
+  diyEnabled: boolean
+  procurementEnabled: boolean
+  labelCategory?: 'FEED_MATERIAL' | 'FEED_ADDITIVE'
+  labelNames: string[]
+  labelNameSource?: string
+  tagNames: string[]
+  servingUnitsPerDose: number
+  perUnitNutrients: Record<string, number>
+  evidence: {
+    productUrl?: string | null
+    productName?: string | null
+    labelImageUrl?: string | null
+    labelText?: string | null
+  }
+}
+
+export interface CreateSupplementIngredientResultDto {
+  ingredientId: string
+  nutritionFoodId: string
+  nutritionFoodStatus: 'PENDING'
+  evidenceId: string
+}

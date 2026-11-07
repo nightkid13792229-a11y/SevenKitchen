@@ -8,6 +8,8 @@
 import api from './index'
 import type {
   AuthorizeResult,
+  CreateSupplementIngredientPayload,
+  CreateSupplementIngredientResultDto,
   CheckDomain,
   CheckRunView,
   CommitIngredientCreationInput,
@@ -26,6 +28,12 @@ import type {
 const BASE = '/admin/ingredient-creation'
 
 export const ingredientCreationApi = {
+  /** 补剂建档：一条标准原料 + 一份待验证营养档案 + 主映射 + 标签证据。 */
+  createSupplement: (
+    payload: CreateSupplementIngredientPayload
+  ): Promise<CreateSupplementIngredientResultDto> =>
+    api.post(`${BASE}/supplements`, payload),
+
   /**
    * 确认（可修改）AI 提交的检索方案；确认后 AI 才能写原料卡与营养。
    *

@@ -23,6 +23,7 @@ import type {
   RecipeDesignerIngredientOption,
   RecipeDesignerSeriesCard,
   RecipeDesignerSeriesStatusFilter,
+  AiCoverCandidate,
   SeriesAiCoverResult,
   SeriesReleaseReadiness,
   SeriesReleaseResult,
@@ -182,19 +183,23 @@ export const recipeDesignerApi = {
    */
   generateSeriesAiCover: (
     seriesId: string,
+    variants = 3
   ): Promise<SeriesAiCoverResult> =>
     api.post(`/admin/recipe-series/${seriesId}/ai-cover`, {}, {
+      params: { variants },
       timeout: SERIES_AI_COVER_TIMEOUT_MS,
       timeoutErrorMessage: SERIES_AI_COVER_TIMEOUT_MESSAGE,
     }),
 
-  generateDraftAiCover: (draftId: string): Promise<{
+  generateDraftAiCover: (draftId: string, variants = 3): Promise<{
     url: string
     provider: string
     model: string
     foodNames: string[]
+    candidates: AiCoverCandidate[]
   }> =>
     api.post(`/recipe-designer/drafts/${draftId}/ai-cover`, {}, {
+      params: { variants },
       timeout: SERIES_AI_COVER_TIMEOUT_MS,
       timeoutErrorMessage: SERIES_AI_COVER_TIMEOUT_MESSAGE,
     }),

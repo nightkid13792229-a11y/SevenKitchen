@@ -87,7 +87,8 @@ describe('产品展示 · 面板', () => {
     expect(panel).not.toContain('recipeApi.uploadImage')
     const field = clean(fieldSource)
     expect(field).toContain('AI 生成封面')
-    expect(field).toContain('AI 封面预览')
+    expect(field).toContain('AI 封面候选')
+    expect(field).toContain('ai-cover-candidate')
     expect(field).toContain("entityType === 'design'")
   })
 

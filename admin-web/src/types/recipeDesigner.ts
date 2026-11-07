@@ -512,14 +512,26 @@ export interface SeriesUnpublishResult {
   unpublishedAt: string
 }
 
+/** 一张 AI 封面候选（2026-11-07：一次出 1–3 张，运营挑一张） */
+export interface AiCoverCandidate {
+  url: string
+  /** 预设 / 骨架，仅用于给运营看的标签 */
+  preset: string
+  presetLabel: string
+  skeleton: string
+  skeletonLabel: string
+}
+
 /** AI 生成系列封面的结果（2026-10-27，POST /admin/recipe-series/:id/ai-cover） */
 export interface SeriesAiCoverResult {
-  /** 一定是 COS 地址（已转存），不是智谱临时链接 */
+  /** 一定是 COS 地址（已转存），不是智谱临时链接；等于 candidates[0] */
   url: string
   provider: string
   model: string
   /** 实际喂给提示词的食材（最多 5 个） */
   foodNames: string[]
+  /** 本次出的候选（1–3 张） */
+  candidates: AiCoverCandidate[]
 }
 
 /** 原料预处理来源：AUTO = 系统带出；MANUAL = 人工修改 */

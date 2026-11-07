@@ -4,6 +4,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
@@ -13,6 +14,13 @@ import { RecipeDesignerService } from '../../application/recipe-designer/recipe-
 import { AuthGuard, CurrentUser, type RequestUser } from '../auth';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AdminGuard } from '../guards/role.guard';
+
+/** 候选张数：默认 3 张，最多 3 张，至少 1 张 */
+function normalizeVariantCount(value: string | undefined, fallback: number) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(3, parsed));
+}
 
 function toAccess(user: RequestUser) {
   const context: { userId: string; role: string; customerId?: string } = {
@@ -45,10 +53,12 @@ export class DesignRecipeCoverController {
   async generateDraftAiCover(
     @Param('draftId') draftId: string,
     @CurrentUser() user: RequestUser,
+    @Query('variants') variants?: string,
   ): Promise<ApiResponseDto<any>> {
     const result = await this.designRecipeCoverImageService.generateForDraft(
       draftId,
       toAccess(user),
+      { variants: normalizeVariantCount(variants, 3) },
     );
     return ApiResponseDto.success(result);
   }

@@ -1200,8 +1200,10 @@ async function handleGenerateAiCover(): Promise<void> {
   aiCoverGenerating.value = true
   aiCoverError.value = ''
   try {
+    // 发布抽屉只展示一张预览：明确只要 1 张，别把另外两张候选白花钱生成
     const result = await recipeDesignerApi.generateSeriesAiCover(
-      props.seriesId
+      props.seriesId,
+      1
     )
     if (seq !== aiCoverRequestSeq) return
     aiCoverPreviewUrl.value = result.url

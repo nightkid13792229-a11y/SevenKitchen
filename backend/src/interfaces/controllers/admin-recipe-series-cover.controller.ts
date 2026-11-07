@@ -4,6 +4,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
@@ -45,8 +46,16 @@ export class AdminRecipeSeriesCoverController {
   })
   async generateSeriesAiCover(
     @Param('seriesId') seriesId: string,
+    @Query('variants') variants?: string,
   ): Promise<ApiResponseDto<SeriesCoverGenerationResult>> {
-    const result = await this.seriesCoverImageService.generateForSeries(seriesId);
+    const parsed = Number.parseInt(String(variants ?? ''), 10);
+    const variantCount = Number.isFinite(parsed)
+      ? Math.max(1, Math.min(3, parsed))
+      : 3;
+    const result = await this.seriesCoverImageService.generateForSeries(
+      seriesId,
+      { variants: variantCount },
+    );
     return ApiResponseDto.success(result);
   }
 }

@@ -38,14 +38,31 @@ describe('AdminRecipeSeriesCoverController', () => {
     );
   });
 
-  it('只传 seriesId，不再有 save 参数', async () => {
+  it('默认出 3 张候选，不再有 save 参数', async () => {
     const service = { generateForSeries: jest.fn().mockResolvedValue(result) };
     const controller = new AdminRecipeSeriesCoverController(service as any);
 
     const response = await controller.generateSeriesAiCover('series-1');
-    expect(service.generateForSeries).toHaveBeenCalledWith('series-1');
+    expect(service.generateForSeries).toHaveBeenCalledWith('series-1', {
+      variants: 3,
+    });
     expect(response.data).toEqual(result);
     expect(response.data).not.toHaveProperty('saved');
+  });
+
+  it('variants 参数被夹在 1–3 之间', async () => {
+    const service = { generateForSeries: jest.fn().mockResolvedValue(result) };
+    const controller = new AdminRecipeSeriesCoverController(service as any);
+
+    await controller.generateSeriesAiCover('series-1', '9');
+    expect(service.generateForSeries).toHaveBeenLastCalledWith('series-1', {
+      variants: 3,
+    });
+
+    await controller.generateSeriesAiCover('series-1', '0');
+    expect(service.generateForSeries).toHaveBeenLastCalledWith('series-1', {
+      variants: 1,
+    });
   });
 
   it('服务抛错不被吞', async () => {

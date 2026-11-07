@@ -12,7 +12,10 @@ import {
   RecipeStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import { RecipeCoverImageService } from './recipe-cover-image.service';
+import {
+  RecipeCoverImageService,
+  type RecipeCoverCandidate,
+} from './recipe-cover-image.service';
 import type { RecipeCoverIngredient } from './recipe-cover-prompt';
 
 /**
@@ -51,6 +54,8 @@ export interface SeriesCoverGenerationResult {
   foodNames: string[];
   /** 本次用了哪个生命阶段的配方（回退时可能是非优先阶段） */
   stageCode: string | null;
+  /** 本次出的候选（1–3 张，运营挑一张） */
+  candidates: RecipeCoverCandidate[];
 }
 
 type CoverItemLike = {
@@ -95,6 +100,7 @@ export class SeriesCoverImageService {
 
   async generateForSeries(
     seriesId: string,
+    options?: { variants?: number },
   ): Promise<SeriesCoverGenerationResult> {
     const series = await this.prisma.recipeSeries.findUnique({
       where: { id: seriesId },
@@ -148,6 +154,8 @@ export class SeriesCoverImageService {
       // 模型调用 get_recipe_ingredients 时才把该阶段的食材交给它
       loadIngredients: async () => source.ingredients,
       layout: 'COVER_16_9',
+      variants: options?.variants,
+      dedupeKey: `series:${seriesId}`,
     });
 
     this.logger.log(

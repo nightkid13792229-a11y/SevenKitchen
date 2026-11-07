@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 
 import {
   RecipeCoverImageService,
+  type RecipeCoverCandidate,
 } from './recipe-cover-image.service';
 import type { RecipeCoverIngredient } from './recipe-cover-prompt';
 import { RecipeDesignerService } from './recipe-designer.service';
@@ -32,11 +33,13 @@ export class DesignRecipeCoverImageService {
   async generateForDraft(
     draftId: string,
     access: RecipeDesignerAccessInput,
+    options?: { variants?: number },
   ): Promise<{
     url: string;
     provider: string;
     model: string;
     foodNames: string[];
+    candidates: RecipeCoverCandidate[];
   }> {
     const draft = await this.recipeDesignerService.getDraft(draftId, access);
     const items = Array.isArray((draft as any)?.items)
@@ -56,6 +59,8 @@ export class DesignRecipeCoverImageService {
       // 模型调用 get_recipe_ingredients 时才把这份草稿的食材交给它
       loadIngredients: async () => ingredients,
       layout: 'COVER_16_9',
+      variants: options?.variants,
+      dedupeKey: `draft:${draftId}`,
     });
 
     return {

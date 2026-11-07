@@ -16,7 +16,7 @@ import type { RecipeCoverIngredient } from './recipe-cover-prompt';
 const INGREDIENT_TOOL_NAME = 'get_recipe_ingredients';
 const USER_TRIGGER = '生成封面提示词。';
 
-/** 只读工具：模型需要先取当前食谱的食材，才能写提示词 */
+/** 只读工具：模型需要先取当前食谱的食材，才能写形态说明 */
 const INGREDIENT_TOOL: DeepSeekToolDefinition = {
   type: 'function',
   function: {
@@ -46,11 +46,14 @@ const RAW_STATE_TOKENS = new Set([
 ]);
 
 /**
- * 让 DeepSeek 当「摄影指导」（2026-10-31 工具取数版）
+ * 让 DeepSeek 当「食物造型师」（2026-11-07 结构化版）
  *
- * 模型不再被动接收食材 JSON，而是先调用 `get_recipe_ingredients`
- * 取当前草稿 / 系列的食材（名称 + 处理方式，不含占比），再写一段
- * 中文封面提示词。这样提示词里没有数据结构，也没有百分比可抄。
+ * 模型只负责一件事：给每样食材写一句「形态说明」（整块/切片/堆成小堆……）。
+ * 摆在哪、台面是什么、光线怎么打，全部由 `cover-style.ts` 的模板固定，
+ * 这样同一套规则下的输出才稳定、可回归，也不会每张都换一个风格。
+ *
+ * 返回 `名称 → 形态` 的映射；解析失败时返回空对象，调用方会退回
+ * 「处理方式 + 自然形态」，保证不会因为模型话术变化就生成不了封面。
  */
 @Injectable()
 export class RecipeCoverVisualBriefService {
@@ -61,9 +64,9 @@ export class RecipeCoverVisualBriefService {
     private readonly recipeCoverConfigService: RecipeCoverConfigService,
   ) {}
 
-  async build(
+  async buildForms(
     loadIngredients: () => Promise<RecipeCoverIngredient[]>,
-  ): Promise<string> {
+  ): Promise<Record<string, string>> {
     let config: Awaited<
       ReturnType<
         AgentProviderConfigService['getEnabledDeepSeekRuntimeConfig']
@@ -113,9 +116,7 @@ export class RecipeCoverVisualBriefService {
 
     const toolCall = this.pickIngredientToolCall(first.toolCalls);
     if (!toolCall) {
-      throw new BadRequestException(
-        '封面提示词生成失败：模型没有读取食材',
-      );
+      throw new BadRequestException('封面提示词生成失败：模型没有读取食材');
     }
 
     const ingredients = await loadIngredients();
@@ -161,10 +162,10 @@ export class RecipeCoverVisualBriefService {
         messages,
         tools: [INGREDIENT_TOOL],
         toolChoice: 'none',
-        // 写提示词这一步按老板要求先开着 thinking
-        thinking: 'enabled',
-        temperature: 0.7,
-        maxTokens: 8000,
+        // 写形态说明要一点联想，但别太飘；0.4 比 0.7 稳定
+        thinking: 'disabled',
+        temperature: 0.4,
+        maxTokens: 1200,
       });
     } catch (error: any) {
       throw new BadRequestException(
@@ -172,25 +173,30 @@ export class RecipeCoverVisualBriefService {
       );
     }
 
-    const prompt = sanitizePrompt(second.content);
-    if (!prompt) {
-      throw new BadRequestException(
-        '封面提示词生成失败：文本模型没有返回提示词',
+    const forms = parseForms(
+      second.content,
+      rows.map((row) => row.name),
+    );
+    const filled = Object.keys(forms).length;
+    this.logUsage(first.usage, second.usage);
+    this.logger.log(
+      `[cover-forms] ${filled}/${rows.length} 项：${JSON.stringify(forms)}`,
+    );
+
+    if (filled === 0) {
+      // 不阻断：调用方会用「处理方式」兜底
+      this.logger.warn(
+        '[cover-forms] 模型没有按「名称｜形态」返回，改用处理方式兜底',
       );
     }
-
-    this.logUsage(first.usage, second.usage);
-    this.logger.log(`[cover-brief] ${prompt}`);
-    return prompt;
+    return forms;
   }
 
   private pickIngredientToolCall(
     toolCalls: DeepSeekToolCall[],
   ): DeepSeekToolCall | null {
     return (
-      toolCalls.find(
-        (call) => call.function.name === INGREDIENT_TOOL_NAME,
-      ) ??
+      toolCalls.find((call) => call.function.name === INGREDIENT_TOOL_NAME) ??
       toolCalls[0] ??
       null
     );
@@ -230,31 +236,51 @@ function cleanPreparation(value: string): string {
 }
 
 /**
- * 保留中文；去掉代码块、标题、包裹引号，以及模型自己加的“负面提示词”整段。
- * 不按字数截断。
+ * 解析「名称｜形态」行。
+ * 容错：去掉列表符号/序号、全角半角竖线、书名号；名称对不上时按包含匹配。
+ * 没有一条能对上时返回空对象，让调用方兜底。
  */
-function sanitizePrompt(value: unknown): string {
-  let text = String(value ?? '')
-    .replace(/^```[a-zA-Z]*\s*/, '')
-    .replace(/```\s*$/, '')
+export function parseForms(
+  content: unknown,
+  ingredientNames: string[],
+): Record<string, string> {
+  const text = String(content ?? '')
+    .replace(/```[a-zA-Z]*/g, '')
+    .replace(/```/g, '')
     .trim();
+  if (!text) return {};
 
-  // 模型偶尔会附一段“负面提示词”；只保留前面的正文
-  const negativeIndex = text.search(
-    /(?:^|\n)\s*(?:\*\*)?\s*(?:负面提示词|反向提示词|Negative prompt)\s*[:：]/i,
-  );
-  if (negativeIndex > 0) {
-    text = text.slice(0, negativeIndex);
+  const result: Record<string, string> = {};
+  const names = ingredientNames.map((name) => String(name ?? '').trim());
+
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const match = line.match(
+      /^[\s\-*•\d.、)）]*([^｜|:：]{1,30})[｜|:：]\s*(.+)$/,
+    );
+    if (!match) continue;
+
+    const rawName = match[1]
+      .replace(/[《》「」【】"“”']/g, '')
+      .replace(/[（(].*?[)）]/g, '')
+      .trim();
+    const form = match[2].replace(/[。；;]$/, '').trim();
+    if (!rawName || !form) continue;
+
+    const exact = names.find((name) => name === rawName);
+    const loose =
+      exact ??
+      names.find(
+        (name) =>
+          name.includes(rawName) ||
+          rawName.includes(name) ||
+          name.replace(/[（(].*?[)）]/g, '').trim() === rawName,
+      );
+    if (loose && !result[loose]) {
+      result[loose] = form.length > 40 ? form.slice(0, 40) : form;
+    }
   }
 
-  return text
-    .replace(
-      /^[^\n]{0,40}?(?:中文封面提示词|封面提示词|画面描述|提示词|Prompt)\s*[:：]\s*(?:\*\*)?\s*/i,
-      '',
-    )
-    .replace(/\*\*/g, '')
-    .replace(/^["'“”‘’]+/, '')
-    .replace(/["'“”‘’]+$/, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return result;
 }

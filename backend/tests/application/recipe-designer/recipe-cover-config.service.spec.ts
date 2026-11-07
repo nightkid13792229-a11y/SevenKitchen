@@ -21,8 +21,8 @@ describe('RecipeCoverConfigService', () => {
     prisma.recipeCoverConfig.findUnique.mockResolvedValue(null);
     const prompt = await service.getPromptTemplate();
     expect(prompt).toContain('get_recipe_ingredients');
-    expect(prompt).toContain('一律画成生的');
-    expect(prompt).toContain('文字、标签或 LOGO');
+    expect(prompt).toContain('形态说明');
+    expect(prompt).toContain('不要写：摆放位置');
     expect(prompt).toBe(DEFAULT_RECIPE_COVER_PROMPT);
   });
 

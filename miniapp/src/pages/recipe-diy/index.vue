@@ -533,11 +533,21 @@ onMounted(async () => {
   }
 
   if (recipeId.value) {
-    // 【修复】先加载健康标签映射
-    await loadHealthTagMapping()
-    // 【修复】确保品种列表先加载完成，再加载食谱和狗狗数据
-    await loadRecipe()
-    await loadDogs()
+    /*
+     * 2026-11-07 复审修：从第一个 await 之前就进「读取中」。
+     * 原来 dogsLoading 要等 loadDogs 开始才置位，而它排在健康标签和食谱之后，
+     * 弱网下这中间几秒显示的是「请先创建狗狗档案」+ 可点的建档按钮。
+     */
+    dogsLoading.value = true
+    try {
+      // 【修复】先加载健康标签映射
+      await loadHealthTagMapping()
+      // 【修复】确保品种列表先加载完成，再加载食谱和狗狗数据
+      await loadRecipe()
+      await loadDogs()
+    } finally {
+      dogsLoading.value = false
+    }
   }
 
   console.log('========== [RecipeDiy] onMounted 结束 ==========')

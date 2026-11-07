@@ -76,7 +76,7 @@
           facts="none"
           :panel="false"
           @select="selectDogForDetail"
-          @create-dog="goToCreateDog"
+          @create-dog="goCreateDog"
           @retry="retryDogsLoad"
         />
       </view>
@@ -1064,7 +1064,17 @@ async function preGenerateShareToken() {
 
 async function loadDogsForDetail() {
   const token = uni.getStorageSync('token')
-  if (!token) return
+  /*
+   * 2026-11-07 复审修：401 时 api 层会把 token 清掉，
+   * 而 hasToken 原来只在 onMounted/onShow 更新 —— 重试会在
+   * “没有 token 直接 return” 之后永远停在骨架屏（failed=false + loaded=false）。
+   * 这里每次重新读 token 并同步 hasToken：没登录就是「请先建档」，不是「加载中」。
+   */
+  hasToken.value = Boolean(token)
+  if (!token) {
+    dogsLoaded.value = true
+    return
+  }
 
   try {
     const res: any = await request({
@@ -1086,6 +1096,9 @@ async function loadDogsForDetail() {
         uni.setStorageSync('dogId', selectedDogId.value)
         loadRecipeDetail()
       }
+    } else {
+      // 拿到了响应但结论不可用：按失败处理，别一直停在“读取中”
+      dogsLoadFailed.value = true
     }
   } catch (error) {
     console.warn('[RecipeDetail] Load dogs failed:', error)

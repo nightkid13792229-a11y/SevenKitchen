@@ -113,6 +113,25 @@ describe('DogContextPanel · 狗狗选择面板', () => {
     expect(fact).toContain('border-left')
     expect(fact).not.toContain('background')
     expect(fact).not.toContain('border-radius')
+
+    // 第一格不加竖线（用 --first 类，不用 :first-child：小程序 wxss 不保证支持伪类）
+    expect(template).toContain("'dog-fact--first': index === 0")
+    expect(ruleBody('.dog-fact--first')).toContain('border-left: 0')
+  })
+
+  it('★ 事件接线：选狗 / 去建档 / 重试都真的接到 emit 上', () => {
+    // 2026-11-07 复审：只在类型里声明 emit 不算数，按钮没接线照样能过
+    expect(template).toContain("@tap=\"emit('select', dog.id)\"")
+    expect(template).toContain("@tap=\"emit('create-dog')\"")
+    expect(template).toContain("@tap=\"emit('retry')\"")
+  })
+
+  it('★ 读数、滚动、骨架都真的绑到了实现上', () => {
+    expect(template).toContain('v-if="showFacts"')
+    expect(template).toContain(':scroll-into-view="scrollAnchor"')
+    // 详情页没有面板，加载中的骨架也不该是灰绿底卡片
+    expect(template).toContain("{ 'dog-skeleton--plain': !panel }")
+    expect(style).toContain('.dog-skeleton--plain')
   })
 
   it('★ 样式只用类选择器（组件 wxss 的硬限制）', () => {

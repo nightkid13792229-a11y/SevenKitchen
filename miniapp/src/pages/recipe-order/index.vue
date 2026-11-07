@@ -1139,13 +1139,23 @@ onMounted(async () => {
   }
 
   if (recipeId.value) {
-    // 必须先加载品种数据，因为狗狗生命阶段计算需要品种信息
-    await loadHealthTagMapping()  // 加载健康标签映射
-    // 2026-11-02：先定狗再取菜谱 —— 版本由后端按狗一次选好，避免"先成犬版再跳幼犬版"
-    await loadDogs({ silentSelection: true })
-    await loadRecipeDetail()
-    if (selectedDogId.value) {
-      loadDogCalcResult(selectedDogId.value)
+    /*
+     * 2026-11-07 复审修：从第一个 await 之前就进「读取中」。
+     * 原来 dogsLoading 要等 loadDogs 开始才置位，而它排在健康标签之后，
+     * 弱网下这中间几秒显示的是「请先创建狗狗档案」+ 可点的建档按钮。
+     */
+    dogsLoading.value = true
+    try {
+      // 必须先加载品种数据，因为狗狗生命阶段计算需要品种信息
+      await loadHealthTagMapping()  // 加载健康标签映射
+      // 2026-11-02：先定狗再取菜谱 —— 版本由后端按狗一次选好，避免"先成犬版再跳幼犬版"
+      await loadDogs({ silentSelection: true })
+      await loadRecipeDetail()
+      if (selectedDogId.value) {
+        loadDogCalcResult(selectedDogId.value)
+      }
+    } finally {
+      dogsLoading.value = false
     }
   }
 
@@ -3167,6 +3177,38 @@ onShow(() => {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+}
+
+/*
+ * 2026-11-07 复审修：这四条（button-reset / section / section-title / title-text）
+ * 在文件后面还有一份生效定义，删重复 CSS 时被连带删掉了，页面内边距和标题字重
+ * 因此变了（28rpx→24rpx、800→bold、space-between→center）。
+ * 按重构前的值恢复，保持整页视觉不动。
+ */
+.button-reset {
+  padding: 0;
+}
+
+.section {
+  background-color: #fbfcf7;
+  padding: 28rpx;
+  margin-bottom: 20rpx;
+}
+
+.section-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18rpx;
+  margin-bottom: 22rpx;
+}
+
+.title-text {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #26261f;
+  line-height: 1.35;
 }
 
 .dog-feeding-content {

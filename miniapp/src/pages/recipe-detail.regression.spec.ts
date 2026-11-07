@@ -299,7 +299,12 @@ describe('recipe detail nutrition report regressions', () => {
     expect(templateSource).toContain('facts="none"')
     expect(templateSource).toContain(':panel="false"')
     expect(templateSource).toContain('@select="selectDogForDetail"')
-    expect(templateSource).toContain('@create-dog="goToCreateDog"')
+    // 2026-11-07 复审修：原来写成了 goToCreateDog（本页只有 goCreateDog），
+    // 空档案的「创建狗狗档案」点了没反应；这条断言之前把错名字钉死了。
+    expect(templateSource).toContain('@create-dog="goCreateDog"')
+    expect(templateSource).not.toContain('goToCreateDog')
+    expect(templateSource).toContain('@retry="retryDogsLoad"')
+    expect(source).toContain('function retryDogsLoad')
     expect(source).toContain("import DogContextPanel from '@/components/dog/DogContextPanel.vue'")
     // 六项读数不该出现在详情页：facts="none" 已由组件契约兜住（组件测试里断言）
     expect(templateSource).not.toContain('order-dog-chip')

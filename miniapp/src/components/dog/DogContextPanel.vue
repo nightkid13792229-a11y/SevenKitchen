@@ -30,7 +30,7 @@
   -->
   <view class="dog-context">
     <!-- 读取中：给个骨架，页面不会“闪一下又出来” -->
-    <view v-if="state === 'loading'" class="dog-skeleton">
+    <view v-if="state === 'loading'" :class="['dog-skeleton', { 'dog-skeleton--plain': !panel }]">
       <view class="dog-skeleton-row">
         <view class="dog-skeleton-chip"></view>
         <view class="dog-skeleton-chip"></view>
@@ -319,6 +319,9 @@ const factItems = computed(() => {
 
 .dog-fact-value {
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 26rpx;
   font-weight: 700;
   color: #1e3a2f;
@@ -381,6 +384,12 @@ const factItems = computed(() => {
 }
 
 /* 读取中：两条胶囊 + 一条读数的骨架 */
+.dog-skeleton--plain {
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+}
+
 .dog-skeleton {
   padding: 16rpx;
   border-radius: 16rpx;

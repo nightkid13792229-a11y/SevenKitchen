@@ -254,7 +254,7 @@ describe('staff purchasing detail audit display', () => {
 describe('staff purchasing purchase record form', () => {
   it('keeps the record form focused on progress, product, count, amount and result', () => {
     expect(recordModalSource).toContain('class="record-progress"');
-    expect(recordModalSource).toContain('formatRecordBaseWithUnit(recordNeedBase)');
+    expect(recordModalSource).toContain('formatRecordBaseWithUnit(remainingBase)');
     expect(recordModalSource).toContain('recordProgressPercent');
 
     expect(recordModalSource).toContain('class="record-product"');

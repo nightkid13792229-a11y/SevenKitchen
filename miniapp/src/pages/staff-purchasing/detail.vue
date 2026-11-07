@@ -344,10 +344,10 @@
           <view class="record-progress">
             <view class="record-progress-main">
               <text class="record-progress-label">还需</text>
-              <text class="record-progress-value">{{ formatRecordBaseWithUnit(recordNeedBase) }}</text>
+              <text class="record-progress-value">{{ formatRecordBaseWithUnit(remainingBase) }}</text>
             </view>
             <view class="record-progress-side">
-              <text>已买 {{ formatRecordBaseWithUnit(existingBeforeBase) }}</text>
+              <text>已买 {{ formatRecordBaseWithUnit(existingBoughtBase) }}</text>
               <text>共需 {{ formatRecordBaseWithUnit(totalNeedBase) }}</text>
             </view>
           </view>
@@ -1330,9 +1330,8 @@ const remainingBase = computed(() => {
   );
 });
 
-/** 这条记录要覆盖的量：已买之外的缺口 + 正在编辑的那条旧记录。 */
+/** 这条记录要覆盖的量：当前缺口 + 正在编辑的那条旧记录。 */
 const recordNeedBase = computed(() => remainingBase.value + editingRecordBase.value);
-const existingBeforeBase = computed(() => Math.max(0, existingBoughtBase.value - editingRecordBase.value));
 
 const grossNeedBase = computed(() => {
   const item = selectedIngredient.value;
@@ -1350,18 +1349,18 @@ const totalNeedBase = computed(() => {
   if (grossNeedBase.value > 0) {
     return grossNeedBase.value;
   }
-  return existingBeforeBase.value + recordNeedBase.value;
+  return existingBoughtBase.value + remainingBase.value;
 });
 
 const recordProgressPercent = computed(() => {
   if (totalNeedBase.value <= 0) {
     return 0;
   }
-  return Math.min(100, Math.round((existingBeforeBase.value / totalNeedBase.value) * 100));
+  return Math.min(100, Math.round((existingBoughtBase.value / totalNeedBase.value) * 100));
 });
 
 const progressOver = computed(() => {
-  return totalNeedBase.value > 0 && existingBeforeBase.value > totalNeedBase.value + 0.0001;
+  return totalNeedBase.value > 0 && existingBoughtBase.value > totalNeedBase.value + 0.0001;
 });
 
 const formatRecordBaseWithUnit = (value: number) => {

@@ -309,6 +309,30 @@ describe('RecipesController (e2e)', () => {
   });
 
   describe('GET /api/v1/recipes/staff/all', () => {
+    const showcaseWhere = {
+      status: 'PUBLIC',
+      isCustomRecipe: false,
+      AND: [
+        {
+          OR: [
+            { seriesId: null },
+            {
+              series: {
+                is: {
+                  businessStatus: 'PUBLIC',
+                  status: 'ACTIVE',
+                  deletedAt: null,
+                },
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const allVisibleWhere = {
+      OR: [showcaseWhere, { status: 'PRIVATE_CUSTOM' }],
+    };
+
     it('excludes drafts and orders every visible recipe by most recently updated first', async () => {
       mockJwtAuthService.validateToken.mockReturnValueOnce({
         userId: 'staff-1',
@@ -326,6 +350,11 @@ describe('RecipesController (e2e)', () => {
           seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
           name: '成犬鲜食',
           status: 'PUBLIC',
+          series: {
+            businessStatus: 'PUBLIC',
+            status: 'ACTIVE',
+            deletedAt: null,
+          },
           coverImageUrl: null,
           version: 1,
           createdAt: new Date('2026-06-01T08:00:00.000Z'),
@@ -370,7 +399,7 @@ describe('RecipesController (e2e)', () => {
 
       expect(mockPrismaService.recipe.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { status: { not: 'DRAFT' } },
+          where: allVisibleWhere,
           orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
           select: expect.objectContaining({
             seriesId: true,
@@ -383,6 +412,124 @@ describe('RecipesController (e2e)', () => {
         response.body.data.map((recipe: { id: string }) => recipe.id),
       ).toEqual(['private-new', 'public-old']);
       expect(response.body.data[0].updatedAt).toBe(newerUpdate.toISOString());
+    });
+
+    it('shows only showcased public recipes plus private custom recipes in the all tab', async () => {
+      mockJwtAuthService.validateToken.mockReturnValueOnce({
+        userId: 'staff-1',
+        customerId: 'staff-1',
+        role: 'STAFF',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        {
+          id: 'row-showcase',
+          recipeId: 'showcase',
+          seriesId: 'series-showcase',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          name: '橱窗公开食谱',
+          status: 'PUBLIC',
+          isCustomRecipe: false,
+          series: {
+            businessStatus: 'PUBLIC',
+            status: 'ACTIVE',
+            deletedAt: null,
+          },
+          coverImageUrl: null,
+          version: 1,
+          createdAt: new Date('2026-06-01T08:00:00.000Z'),
+          updatedAt: new Date('2026-06-10T08:00:00.000Z'),
+          applicableLifeStages: [],
+          targetHealthTags: [],
+        },
+        {
+          id: 'row-unlisted',
+          recipeId: 'unlisted',
+          seriesId: 'series-unlisted',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          name: '没上橱窗的公开食谱',
+          status: 'PUBLIC',
+          isCustomRecipe: false,
+          series: {
+            businessStatus: 'DRAFT',
+            status: 'ACTIVE',
+            deletedAt: null,
+          },
+          coverImageUrl: null,
+          version: 1,
+          createdAt: new Date('2026-06-02T08:00:00.000Z'),
+          updatedAt: new Date('2026-06-11T08:00:00.000Z'),
+          applicableLifeStages: [],
+          targetHealthTags: [],
+        },
+        {
+          id: 'row-public-custom',
+          recipeId: 'public-custom',
+          seriesId: 'series-custom',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          name: '错误标成公开的定制食谱',
+          status: 'PUBLIC',
+          isCustomRecipe: true,
+          series: {
+            businessStatus: 'PUBLIC',
+            status: 'ACTIVE',
+            deletedAt: null,
+          },
+          coverImageUrl: null,
+          version: 1,
+          createdAt: new Date('2026-06-03T08:00:00.000Z'),
+          updatedAt: new Date('2026-06-12T08:00:00.000Z'),
+          applicableLifeStages: [],
+          targetHealthTags: [],
+        },
+        {
+          id: 'row-private-business',
+          recipeId: 'private-business',
+          seriesId: 'series-private',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          name: '我们做的私密定制',
+          status: 'PRIVATE_CUSTOM',
+          isCustomRecipe: true,
+          customOrderId: null,
+          customerOwnerId: null,
+          sourceDesignRecipeId: null,
+          coverImageUrl: null,
+          version: 1,
+          createdAt: new Date('2026-06-04T08:00:00.000Z'),
+          updatedAt: new Date('2026-06-13T08:00:00.000Z'),
+          applicableLifeStages: [],
+          targetHealthTags: [],
+        },
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/staff/all')
+        .set('Authorization', 'Bearer staff-token')
+        .expect(200);
+
+      expect(mockPrismaService.recipe.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: allVisibleWhere }),
+      );
+      expect(
+        response.body.data.map((recipe: { id: string }) => recipe.id),
+      ).toEqual(['private-business', 'showcase']);
+    });
+
+    it('only queries showcase-visible recipes for the public tab', async () => {
+      mockJwtAuthService.validateToken.mockReturnValueOnce({
+        userId: 'staff-1',
+        customerId: 'staff-1',
+        role: 'STAFF',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([]);
+
+      await request(app.getHttpServer())
+        .get('/api/v1/recipes/staff/all?status=PUBLIC')
+        .set('Authorization', 'Bearer staff-token')
+        .expect(200);
+
+      expect(mockPrismaService.recipe.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: showcaseWhere }),
+      );
     });
 
     it('shows only the latest version of each series stage', async () => {
@@ -400,6 +547,11 @@ describe('RecipesController (e2e)', () => {
           seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
           name: '旧链路 v5',
           status: 'PUBLIC',
+          series: {
+            businessStatus: 'PUBLIC',
+            status: 'ACTIVE',
+            deletedAt: null,
+          },
           coverImageUrl: null,
           version: 5,
           createdAt: new Date('2026-05-01T08:00:00.000Z'),
@@ -414,6 +566,11 @@ describe('RecipesController (e2e)', () => {
           seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
           name: '旧链路 v1',
           status: 'PUBLIC',
+          series: {
+            businessStatus: 'PUBLIC',
+            status: 'ACTIVE',
+            deletedAt: null,
+          },
           coverImageUrl: null,
           version: 1,
           createdAt: new Date('2026-04-01T08:00:00.000Z'),
@@ -428,6 +585,11 @@ describe('RecipesController (e2e)', () => {
           seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
           name: '新链路 v1',
           status: 'PUBLIC',
+          series: {
+            businessStatus: 'PUBLIC',
+            status: 'ACTIVE',
+            deletedAt: null,
+          },
           coverImageUrl: null,
           version: 1,
           createdAt: new Date('2026-07-01T08:00:00.000Z'),
@@ -442,6 +604,11 @@ describe('RecipesController (e2e)', () => {
           seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
           name: '老年版',
           status: 'PUBLIC',
+          series: {
+            businessStatus: 'PUBLIC',
+            status: 'ACTIVE',
+            deletedAt: null,
+          },
           coverImageUrl: null,
           version: 1,
           createdAt: new Date('2026-06-01T08:00:00.000Z'),

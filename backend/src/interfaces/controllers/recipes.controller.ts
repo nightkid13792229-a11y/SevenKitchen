@@ -164,6 +164,42 @@ export class RecipesController {
     };
   }
 
+  /**
+   * 员工食谱管理「公开」的可见口径 = 顾客食谱橱窗的可见口径：
+   * 已发布 + 非定制 + 系列已上线（独立食谱也按橱窗口径展示）。
+   */
+  private buildShowcaseRecipeWhere(): Prisma.RecipeWhereInput {
+    return this.buildPublicRecipeWhere({ isCustomRecipe: false });
+  }
+
+  /**
+   * 与 buildShowcaseRecipeWhere 同一口径的内存兜底：
+   * 数据库条件之外再挡一次，避免旧数据/漏选字段把没上橱窗的公开食谱带出来。
+   */
+  private isShowcasePublicRecipe(recipe: {
+    status: string;
+    isCustomRecipe: boolean;
+    seriesId: string | null;
+    series?: {
+      businessStatus: string;
+      status: string;
+      deletedAt: Date | null;
+    } | null;
+  }): boolean {
+    if (recipe.status !== RecipeStatus.PUBLIC || recipe.isCustomRecipe) {
+      return false;
+    }
+    if (!recipe.seriesId) {
+      return true;
+    }
+    return Boolean(
+      recipe.series &&
+        recipe.series.businessStatus === RecipeSeriesBusinessStatus.PUBLIC &&
+        recipe.series.status === RecipeSeriesStatus.ACTIVE &&
+        !recipe.series.deletedAt,
+    );
+  }
+
   private async isPublicRecipeVisible(recipe: Recipe): Promise<boolean> {
     if (recipe.status !== RecipeStatus.PUBLIC) {
       return false;
@@ -778,9 +814,28 @@ export class RecipesController {
       return ApiResponseDto.success([]);
     }
 
-    const where: any = {
-      status: status || { not: RecipeStatus.DRAFT },
-    };
+    /**
+     * 2026-11-07：
+     *  · 「公开」只取真正上架到食谱橱窗的食谱；
+     *  · 「全部」= 调整后的公开 + 私密定制，不再把其它状态混进来；
+     *  · 「私密定制」保持原口径。
+     */
+    let where: any;
+    if (status === RecipeStatus.PUBLIC) {
+      where = this.buildShowcaseRecipeWhere();
+    } else if (status === RecipeStatus.PRIVATE_CUSTOM) {
+      where = { status: RecipeStatus.PRIVATE_CUSTOM };
+    } else if (status) {
+      // 保留未知状态的原行为，交给数据库校验。
+      where = { status };
+    } else {
+      where = {
+        OR: [
+          this.buildShowcaseRecipeWhere(),
+          { status: RecipeStatus.PRIVATE_CUSTOM },
+        ],
+      };
+    }
 
     // Get all versions; the latest one per recipe (series stage) wins below.
     const recipes = await this.prisma.recipe.findMany({
@@ -803,6 +858,13 @@ export class RecipesController {
         customOrderId: true,
         customerOwnerId: true,
         sourceDesignRecipeId: true,
+        series: {
+          select: {
+            businessStatus: true,
+            status: true,
+            deletedAt: true,
+          },
+        },
       },
     });
 
@@ -811,13 +873,20 @@ export class RecipesController {
       (recipe) => recipe.status !== RecipeStatus.DRAFT,
     );
 
+    // 同样兜一层：公开只留橱窗可见的；私密定制全部保留。
+    const scopedRecipes = nonDraftRecipes.filter(
+      (recipe) =>
+        recipe.status === RecipeStatus.PRIVATE_CUSTOM ||
+        this.isShowcasePublicRecipe(recipe),
+    );
+
     /**
      * 顾客自己用食谱设计器做的食谱不进入员工食谱管理页。
      * 与后台「用户的食谱」分类共用同一套判断（看设计稿是谁建的），
      * 不是看有没有绑定顾客 —— 我们给顾客做的私密定制也绑定顾客。
      */
     const visibleRecipes =
-      await this.recipeService.filterOutUserRecipes(nonDraftRecipes);
+      await this.recipeService.filterOutUserRecipes(scopedRecipes);
 
     /**
      * 只展示最新版本：

@@ -78,6 +78,32 @@ function ownVueFiles(): string[] {
     .filter((file) => !SKIP_DIRS.some((dir) => file.startsWith(dir)))
 }
 
+/**
+ * 模板里 `@事件="裸名字"` 的处理器（去重、排序）。
+ *
+ * 只认「整段就是一个名字」的绑定：`@tap="goBack"`。
+ * `@tap="goBack()"`、`@tap="() => goBack()"`、`@tap="a && b()"` 这些不在此列 ——
+ * 它们是表达式，静态判断根名字容易误报。
+ *
+ * 为什么要单独查这一种（2026-11-07 真 bug）：
+ *   把详情页的选狗器换成共享组件时，事件名写成了 `@create-dog="goToCreateDog"`，
+ *   而页面里只有 `goCreateDog` —— 空档案的「创建狗狗档案」**点了没反应**。
+ *   构建不报错、回归测试全绿（那条测试还把错名字钉死了），
+ *   因为旧守卫只查 `名字(` 调用和 `{{ 名字 }}`，覆盖不到事件绑定。
+ */
+function bareEventHandlersInTemplate(source: string): string[] {
+  const match = source.match(/<template>([\s\S]*)<\/template>/)
+  if (!match) {
+    return []
+  }
+
+  const found = new Set<string>()
+  for (const hit of match[1].matchAll(/@[a-zA-Z:.-]+\s*=\s*"([a-zA-Z_$][\w$]*)"/g)) {
+    found.add(hit[1])
+  }
+  return [...found].sort()
+}
+
 /** 模板里被当函数调用的标识符（去重、排序） */
 function calledInTemplate(source: string): string[] {
   const match = source.match(/<template>([\s\S]*)<\/template>/)
@@ -321,6 +347,37 @@ describe('模板绑定的完整性（2026-10-04 老板报的"点了没反应"）
     expect(problems).toEqual([])
     // 全量并行跑时 CPU 抢不过来：单跑约 1.3s，185 个测试文件一起跑会被拖到 14s。
     // 给足超时，别让"机器忙"被误读成"模板坏了"。
+  }, 30000)
+
+  /**
+   * 模板里**绑定的事件处理器**，脚本里也必须存在（2026-11-07 新增）。
+   *
+   * 上面两条覆盖的是 `名字(` 调用和 `{{ 名字 }}`，都碰不到 `@tap="名字"`。
+   * 2026-11-07 换共享选狗组件时正踩在这里：详情页写成 `@create-dog="goToCreateDog"`，
+   * 页面里只有 `goCreateDog` —— 空档案的「创建狗狗档案」点了没反应，
+   * 而且构建、全量测试全绿。
+   */
+  it('模板里绑定的事件处理器，script 里也有定义', () => {
+    const problems: string[] = []
+
+    for (const file of files) {
+      const source = readFileSync(resolve(process.cwd(), file), 'utf-8')
+      const script = scriptOf(source)
+
+      const propNames = propsDeclaredIn(script)
+
+      for (const name of bareEventHandlersInTemplate(source)) {
+        if (propNames.has(name)) {
+          continue
+        }
+        if (!isDefinedInScript(script, name)) {
+          problems.push(`${file} → @事件="${name}"`)
+        }
+      }
+    }
+
+    expect(problems).toEqual([])
+    // 全量并行跑时 CPU 抢不过来：单跑约 1.3s，185 个测试文件一起跑会被拖到 14s。
   }, 30000)
 
   /**

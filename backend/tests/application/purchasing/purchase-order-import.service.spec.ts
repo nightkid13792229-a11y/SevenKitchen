@@ -33,7 +33,11 @@ describe('PurchaseOrderImportService', () => {
   };
   const prisma: any = {
     purchaseList: { findUnique: jest.fn() },
-    purchaseItem: { findMany: jest.fn(), findFirst: jest.fn() },
+    purchaseItem: {
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      updateMany: jest.fn(),
+    },
     procurementSku: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -317,6 +321,62 @@ describe('PurchaseOrderImportService', () => {
     await expect(service.confirm(['import-1'], 'user-1')).resolves.toEqual({
       createdCount: 1,
       renamed: [],
+    });
+  });
+
+  it('原料已标「无需采购」时，生成采购记录顺手把标记清掉', async () => {
+    // 2026-11-07 老板反馈：先标「无需采购」、后确认 AI 识别，记录生成了但被标记盖住，
+    // 详情页只剩 2 个「已录入」。生成记录时必须把标记清掉，两者不能并存。
+    prisma.purchaseOrderImport.findMany.mockResolvedValue([
+      {
+        id: 'import-1',
+        purchaseListId: 'list-1',
+        status: 'DRAFT',
+        incomplete: false,
+        subtotal: 4.79,
+        channel: '盒马',
+        orderTime: null,
+        imageKeys: [],
+        lines: [
+          {
+            id: 'line-1',
+            rawName: '菠菜',
+            isPersonal: false,
+            ingredientId: 'ing-1',
+            procurementSkuId: 'sku-1',
+            lineTotal: 4.79,
+            qty: 1,
+          },
+        ],
+      },
+    ]);
+    prisma.purchaseOrderImport.updateMany.mockResolvedValue({ count: 1 });
+    prisma.procurementSku.findUnique.mockResolvedValue({
+      id: 'sku-1',
+      ingredientId: 'ing-1',
+      name: '菠菜 300g/袋',
+      purchaseChannel: '盒马鲜生',
+      purchaseUnit: '袋',
+      purchaseToBaseRatio: 300,
+      ingredient: { baseUnit: 'G', name: '菠菜', purchaseToBaseRatio: 300 },
+    });
+    prisma.purchaseItem.findFirst.mockResolvedValue({ id: 'item-1' });
+    prisma.purchaseItem.updateMany.mockResolvedValue({ count: 1 });
+    prisma.purchaseRecord.create.mockResolvedValue({ id: 'record-1' });
+    prisma.purchaseOrderImportLine.update.mockResolvedValue({});
+
+    await expect(service.confirm(['import-1'], 'user-1')).resolves.toEqual({
+      createdCount: 1,
+      renamed: [],
+    });
+    expect(prisma.purchaseItem.updateMany).toHaveBeenCalledWith({
+      where: { id: 'item-1', noPurchaseNeeded: true },
+      data: {
+        noPurchaseNeeded: false,
+        noPurchaseReason: null,
+        noPurchaseMarkedAt: null,
+        noPurchaseMarkedById: null,
+      },
     });
   });
 

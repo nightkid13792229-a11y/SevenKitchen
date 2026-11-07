@@ -879,6 +879,19 @@ ${list}
               );
             }
 
+            // 这条原料可能早就被标过「无需采购」（原计划不买，后来又真买了）。
+            // 生成采购记录时把标记清掉：一条原料不能同时是「已采购」和「无需采购」，
+            // 否则详情页按标记优先显示，员工看不到这条记录，容易重复记账。
+            await tx.purchaseItem.updateMany({
+              where: { id: purchaseItemId, noPurchaseNeeded: true },
+              data: {
+                noPurchaseNeeded: false,
+                noPurchaseReason: null,
+                noPurchaseMarkedAt: null,
+                noPurchaseMarkedById: null,
+              },
+            });
+
             // 建档时记下渠道码 + 当时的名字（快照），以后改名不回写历史
             const recordChannelCode =
               row.channel ||

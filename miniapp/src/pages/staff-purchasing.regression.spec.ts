@@ -421,6 +421,21 @@ describe('staff purchasing purchase record form', () => {
     expect(detailSource).not.toContain('确认将"${getPurchaseItemTitle(item)}"标记为无需采购？');
   });
 
+  it('keeps recorded items out of the no-purchase bucket', () => {
+    // 2026-11-07 BOSS 反馈：原料先被标「无需采购」、后来 AI 识别又生成了采购记录，
+    // 详情页按「无需采购」优先显示，7 条记录被藏起来，已录入只剩 2 项。
+    // 记录是实打实的钱，必须优先于「无需采购」标记。
+    const stateSource = detailSource.slice(
+      detailSource.indexOf('const itemState'),
+      detailSource.indexOf('const canManualRecord'),
+    );
+    const recordedAt = stateSource.indexOf("(item.records || []).length > 0");
+    const noPurchaseAt = stateSource.indexOf('item.noPurchaseNeeded');
+    expect(recordedAt).toBeGreaterThanOrEqual(0);
+    expect(noPurchaseAt).toBeGreaterThanOrEqual(0);
+    expect(recordedAt).toBeLessThan(noPurchaseAt);
+  });
+
   it('shows 无需采购 + 取消 together and keeps the manual record button gated', () => {
     // 2026-11-06 BOSS 反馈：文案统一「无需采购」，取消紧跟其后；
     // 「手动记录」在无需采购 / 库存足够时置灰，先取消才能点。

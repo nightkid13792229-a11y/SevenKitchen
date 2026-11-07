@@ -649,8 +649,10 @@ const isItemCovered = (item: any) => {
 
 type ItemState = 'PENDING' | 'RECORDED' | 'COVERED' | 'NO_PURCHASE';
 const itemState = (item: any): ItemState => {
-  if (item.noPurchaseNeeded) return 'NO_PURCHASE';
+  // 真买过就按「已采购」算，哪怕之前标过「无需采购」（先标记、后补记录的旧数据）。
+  // 记录是实打实的钱，不能被一条过期标记藏起来（2026-11-07 老板反馈）。
   if ((item.records || []).length > 0) return 'RECORDED';
+  if (item.noPurchaseNeeded) return 'NO_PURCHASE';
   if (isItemCovered(item)) return 'COVERED';
   return 'PENDING';
 };

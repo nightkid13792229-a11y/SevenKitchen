@@ -55,6 +55,12 @@
         <el-option label="混合" :value="IngredientProcurementStrategy.HYBRID" />
       </el-select>
 
+      <el-checkbox
+        v-model="filterMissingProcurementSku"
+        label="只看待补采购商品"
+        @change="handleFilter"
+      />
+
       <el-input
         v-model="searchText"
         placeholder="搜索标准原料名称"
@@ -292,6 +298,14 @@
               <el-tag :type="row.hasActiveProcurementSku ? 'success' : 'info'" size="small">
                 {{ row.activeProcurementSkuCount ?? 0 }}/{{ row.procurementSkuCount ?? 0 }}
               </el-tag>
+              <el-tag
+                v-if="isPendingProcurementSku(row)"
+                type="warning"
+                size="small"
+                style="margin-left: 4px"
+              >
+                待补采购商品
+              </el-tag>
             </template>
             <template v-else>
               <el-tag :type="row.procurementEnabled ? 'success' : 'info'" size="small">
@@ -524,6 +538,11 @@ const loading = ref(false)
 const ingredients = ref<Ingredient[]>([])
 const searchText = ref('')
 const filterTypes = ref<string[]>([])
+/**
+ * 只看「待补采购商品」（2026-11-07）。
+ * 这批原料还没法采购，成本是 0，进食谱会按「免费」算 —— 必须能一把筛出来。
+ */
+const filterMissingProcurementSku = ref(false)
 const filterStrategies = ref<string[]>([])
 const dateRange = ref<[Date, Date] | null>(null)
 const dialogVisible = ref(false)
@@ -592,6 +611,9 @@ const typeStats = computed(() => ({
   PACKAGING: ingredients.value.filter(item => item.type === IngredientType.PACKAGING).length
 }))
 
+const isPendingProcurementSku = (item: any): boolean =>
+  item?.type === IngredientType.FOOD && !item?.hasActiveProcurementSku
+
 const missingRecommendedSkuCount = computed(() => (
   ingredients.value.filter(
     item => item.type === IngredientType.FOOD && !item.hasActiveRecommendedProduct
@@ -639,6 +661,10 @@ const filteredData = computed(() => {
 
   if (filterStrategies.value && filterStrategies.value.length > 0) {
     result = result.filter(item => filterStrategies.value.includes(item.procurementStrategy))
+  }
+
+  if (filterMissingProcurementSku.value) {
+    result = result.filter((item) => isPendingProcurementSku(item))
   }
 
   // 日期范围筛选

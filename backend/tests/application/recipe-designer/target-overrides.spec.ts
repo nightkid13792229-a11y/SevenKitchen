@@ -13,13 +13,27 @@ const target = {
   expressionBasis: 'PER_1000_KCAL_ME',
   unit: 'g',
   minValue: 1,
-  maxValue: null,
+  maxValue: 4,
   fieldPaths: ['minerals.phosphorus'],
+};
+const sameTargetPerMj = {
+  ...target,
+  expressionBasis: 'PER_MJ_ME',
+  minValue: 0.24,
+  maxValue: 0.96,
+};
+const sameTargetDm = {
+  ...target,
+  expressionBasis: 'PER_100G_DRY_MATTER',
+  minValue: 0.3,
+  maxValue: 1.2,
 };
 
 describe('RecipeDesignerService · 目标覆盖', () => {
   it('DM 覆盖会转成每 100g 干物质', () => {
-    const next = service().applyAssessmentTargetOverrides([target], [
+    const next = service().applyAssessmentTargetOverrides(
+      [target, sameTargetPerMj, sameTargetDm],
+      [
       {
         nutrientKey: 'phosphorus',
         basis: 'DM',
@@ -28,6 +42,7 @@ describe('RecipeDesignerService · 目标覆盖', () => {
         citationId: 'K1',
       },
     ]);
+    expect(next).toHaveLength(1);
     expect(next[0]).toMatchObject({
       expressionBasis: 'PER_100G_DRY_MATTER',
       unit: 'g',

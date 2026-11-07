@@ -6976,18 +6976,22 @@ export class RecipeDesignerService {
     overrides?: AssessmentTargetOverride[],
   ): FediafAssessmentTarget[] {
     if (!overrides || overrides.length === 0) return targets;
-    const byKey = new Map(targets.map((target) => [target.nutrientKey, target]));
-    const next = [...targets];
+    const overriddenKeys = new Set(
+      overrides.map((override) => override.nutrientKey),
+    );
+    const result = targets.filter(
+      (target) => !overriddenKeys.has(target.nutrientKey),
+    );
+
     for (const override of overrides) {
-      const index = next.findIndex(
+      const candidates = targets.filter(
         (target) => target.nutrientKey === override.nutrientKey,
       );
-      if (index < 0) {
+      if (candidates.length === 0) {
         throw new BadRequestException(
           `目标覆盖的营养素 ${override.nutrientKey} 不在当前评估标准里`,
         );
       }
-      const target = next[index];
       const minValue = override.minValue;
       const maxValue = override.maxValue;
       if (
@@ -7007,34 +7011,23 @@ export class RecipeDesignerService {
           `目标覆盖 ${override.nutrientKey} 的下限不能大于上限`,
         );
       }
-      if (
-        override.basis === 'DM' &&
-        target.expressionBasis === 'PER_1000_KCAL_ME'
-      ) {
-        next[index] = {
-          ...target,
-          expressionBasis: 'PER_100G_DRY_MATTER',
-          unit: 'g',
-          minValue,
-          maxValue,
-        };
-      } else if (
-        override.basis === 'PER_1000_KCAL' &&
-        target.expressionBasis !== 'PER_1000_KCAL_ME'
-      ) {
-        next[index] = {
-          ...target,
-          expressionBasis: 'PER_1000_KCAL_ME',
-          unit: 'g',
-          minValue,
-          maxValue,
-        };
-      } else {
-        next[index] = { ...target, minValue, maxValue };
-      }
-      byKey.set(override.nutrientKey, next[index]);
+      const desiredBasis =
+        override.basis === 'DM'
+          ? 'PER_100G_DRY_MATTER'
+          : 'PER_1000_KCAL_ME';
+      const base =
+        candidates.find(
+          (target) => target.expressionBasis === desiredBasis,
+        ) ?? candidates[0];
+      result.push({
+        ...base,
+        expressionBasis: desiredBasis,
+        unit: 'g',
+        minValue,
+        maxValue,
+      });
     }
-    return next;
+    return result;
   }
 
   async assessDraftForAgent(

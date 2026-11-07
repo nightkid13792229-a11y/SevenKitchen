@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProcurementSkuService } from '../../../src/application/ingredient/procurement-sku.service';
+import { IngredientCostHistoryService } from '../../../src/application/ingredient/ingredient-cost-history.service';
 import { RecommendedProductService } from '../../../src/application/ingredient/recommended-product.service';
 import { IngredientType } from '../../../src/domain/ingredient/enums';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
@@ -26,6 +27,7 @@ describe('Ingredient single-layer guards', () => {
       providers: [
         RecommendedProductService,
         ProcurementSkuService,
+        { provide: IngredientCostHistoryService, useValue: { record: jest.fn() } },
         {
           provide: PrismaService,
           useValue: mockPrismaService,

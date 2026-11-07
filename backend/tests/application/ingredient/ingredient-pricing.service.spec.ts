@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { GlobalConfigService } from '../../../src/application/config/global-config.service';
 import { IngredientPricingService } from '../../../src/application/ingredient/ingredient-pricing.service';
+import { IngredientCostHistoryService } from '../../../src/application/ingredient/ingredient-cost-history.service';
 import { INGREDIENT_REPOSITORY } from '../../../src/application/ingredient/ingredient.service';
 import { ProcurementSkuService } from '../../../src/application/ingredient/procurement-sku.service';
 import { IngredientPriceAnchorService } from '../../../src/application/ingredient/ingredient-price-anchor.service';
@@ -75,6 +76,10 @@ describe('IngredientPricingService', () => {
         {
           provide: IngredientPriceAnchorService,
           useValue: mockPriceAnchorService,
+        },
+        {
+          provide: IngredientCostHistoryService,
+          useValue: { record: jest.fn() },
         },
       ],
     }).compile();

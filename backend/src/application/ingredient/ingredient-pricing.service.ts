@@ -19,6 +19,7 @@ import type { PurchaseRecordRepository } from '../../domain/purchasing/purchase-
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import type { Ingredient } from '../../domain/ingredient';
 import { perBaseUnitCost } from '../../domain/ingredient/unit-price';
+import { IngredientCostHistoryService } from './ingredient-cost-history.service';
 
 export interface IngredientPriceChangeView {
   id: string;
@@ -118,6 +119,7 @@ export class IngredientPricingService {
     private readonly globalConfigService: GlobalConfigService,
     private readonly procurementSkuService: ProcurementSkuService,
     private readonly priceAnchorService: IngredientPriceAnchorService,
+    private readonly costHistory: IngredientCostHistoryService,
   ) {}
 
   async syncPendingChangesForReimbursement(
@@ -706,14 +708,25 @@ export class IngredientPricingService {
     }
 
     const appliedCurrentPriceByIngredient = new Map<string, number>();
+    const changeByIngredient = new Map(
+      effectiveChanges.map((change) => [change.ingredientId, change] as const),
+    );
     for (const [
       ingredientId,
       accumulator,
     ] of ingredientCurrentAccumulator.entries()) {
       const currentPrice = this.toWeightedUnitCost(accumulator);
       appliedCurrentPriceByIngredient.set(ingredientId, currentPrice);
-      await this.ingredientRepository.update(ingredientId, {
-        currentPricePerPurchaseUnit: currentPrice,
+      const change = changeByIngredient.get(ingredientId);
+      await this.applyIngredientCost({
+        ingredientId,
+        previousCost: Number(
+          ingredientMap.get(ingredientId)?.currentPricePerPurchaseUnit ?? 0,
+        ),
+        nextCost: currentPrice,
+        reimbursementId: change?.reimbursementId ?? null,
+        purchaseRecordId: change?.purchaseRecordId ?? null,
+        note: '报销凭证确认后自动更新',
       });
     }
 
@@ -1115,6 +1128,35 @@ export class IngredientPricingService {
     return this.roundCurrency(
       accumulator.totalAmount / accumulator.totalQuantity,
     );
+  }
+
+  /**
+   * 写成本 + 留痕（2026-11-07 成本口径归位）。
+   *
+   * 顺序不能反：先写价，写成功再记流水。
+   * 反过来会留下一条「有流水、价没变」的假记录，比没有流水更糟。
+   */
+  private async applyIngredientCost(params: {
+    ingredientId: string;
+    previousCost: number;
+    nextCost: number;
+    reimbursementId: string | null;
+    purchaseRecordId: string | null;
+    note: string | null;
+  }): Promise<void> {
+    await this.ingredientRepository.update(params.ingredientId, {
+      currentPricePerPurchaseUnit: params.nextCost,
+    });
+
+    await this.costHistory.record({
+      ingredientId: params.ingredientId,
+      oldCost: params.previousCost,
+      newCost: params.nextCost,
+      source: 'REIMBURSEMENT',
+      reimbursementId: params.reimbursementId,
+      purchaseRecordId: params.purchaseRecordId,
+      note: params.note,
+    });
   }
 
   private toWeightedUnitCost(accumulator: WeightedAccumulator): number {

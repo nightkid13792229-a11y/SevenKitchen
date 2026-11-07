@@ -118,7 +118,7 @@ interface IngredientPriceChangeApplyRecord {
 @Injectable()
 export class IngredientPricingService {
   private readonly logger = new Logger(IngredientPricingService.name);
-  private readonly defaultAutoApproveThreshold = 0.08;
+  private readonly defaultAutoApproveThreshold = 0.1;
   private readonly quantityOutlierLowerRatio = 0.35;
   private readonly quantityOutlierUpperRatio = 2.8;
   private readonly quantityOutlierHistoryMinCount = 3;
@@ -804,10 +804,14 @@ export class IngredientPricingService {
       const proposedPrice =
         pricingBasis?.ingredientPricePerPurchaseUnit ??
         change.sourcePricePerPurchaseUnit.toNumber();
-      // 基准：历史采购价中位数；没有历史就退回当前档案价；都没有 = 首次定价
+      // 基准（2026-11-08 口径变更）：原料档案的当前生效价 —— 和页面上的「上次单价」同一把尺子，
+      // 审核员看到的涨跌就是闸门判断的涨跌，不会再出现「页面 0%、闸门 -40%」。
+      // 历史中位数只在档案价缺失（0）时兜底，防止拿 0 当基准把一切都放过去。
+      const currentPrice = this.resolveCurrentPriceOf(sourceIngredient);
       const anchorPrice =
-        anchors.get(change.ingredientId) ??
-        this.resolveCurrentPriceOf(sourceIngredient);
+        currentPrice > 0
+          ? currentPrice
+          : (anchors.get(change.ingredientId) ?? 0);
 
       const gate = evaluatePriceGate({
         proposedPrice,

@@ -302,4 +302,83 @@ describe('IngredientPricingService', () => {
     expect(updateCall.data.gateReason).toContain('倍');
   });
 
+  // 2026-11-08：基准改用「档案当前生效价」，阈值 10%
+  const buildGateChange = (proposedPrice: number) => ({
+    id: 'change-gate',
+    ingredientId: 'ingredient-gate',
+    reimbursementId: 'reimbursement-1',
+    purchaseRecordId: 'purchase-record-gate',
+    sourceQuantity: { toNumber: () => 1 },
+    sourcePricePerPurchaseUnit: { toNumber: () => proposedPrice },
+    previousCurrentPricePerPurchaseUnit: { toNumber: () => 10 },
+    previousEffectivePrice: { toNumber: () => 10 },
+    proposedEffectivePrice: { toNumber: () => proposedPrice },
+    appliedCurrentPricePerPurchaseUnit: null,
+    appliedEffectivePricePerPurchaseUnit: null,
+    deltaRate: { toNumber: () => (proposedPrice - 10) / 10 },
+    status: 'PENDING',
+    reviewComment: null,
+    reviewedById: null,
+    reviewedAt: null,
+    createdAt: new Date(),
+  });
+
+  const runGate = async (proposedPrice: number) => {
+    mockIngredientRepository.findByIds.mockResolvedValue([
+      {
+        id: 'ingredient-gate',
+        name: '测试原料',
+        purchaseToBaseRatio: 1,
+        currentPricePerPurchaseUnit: 10,
+        getEffectivePricePerPurchaseUnit: () => 10,
+      },
+    ]);
+    mockPurchaseRecordRepository.findById.mockResolvedValue(undefined);
+    mockPrismaService.ingredientPriceChange.update.mockResolvedValue({});
+    mockIngredientRepository.update.mockClear();
+    // 2026-11-08 起生产阈值是 10%
+    mockGlobalConfigService.getGlobalConfig.mockResolvedValue({
+      ingredientPriceAutoApproveThreshold: 0.1,
+    });
+
+    await (service as any).applyPriceChanges(
+      [buildGateChange(proposedPrice)],
+      null,
+      null,
+    );
+
+    const updateCall = mockPrismaService.ingredientPriceChange.update.mock.calls
+      .map((call: any[]) => call[0])
+      .find((arg: any) => arg?.where?.id === 'change-gate');
+    return updateCall;
+  };
+
+  it('相对档案价 9%（阈值 10% 内）直接生效', async () => {
+    const updateCall = await runGate(10.9);
+
+    expect(updateCall.data.status).toBe('APPROVED');
+    expect(updateCall.data.gateAction).toBe('APPLY');
+    expect(mockIngredientRepository.update).toHaveBeenCalled();
+  });
+
+  it('相对档案价 11%（超过 10%）挂起，价格不写', async () => {
+    const updateCall = await runGate(11.1);
+
+    expect(updateCall.data.gateAction).toBe('HOLD');
+    expect(updateCall.data.gateReason).toContain('10%');
+    expect(mockIngredientRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('闸门不再看历史中位数：中位数再离谱，也按档案价判定', async () => {
+    // 历史中位数 50（相对档案价 10 是 5 倍），但本单只比档案价贵 9%
+    mockPriceAnchorService.resolveAnchors.mockResolvedValue(
+      new Map([['ingredient-gate', 50]]),
+    );
+
+    const updateCall = await runGate(10.9);
+
+    expect(updateCall.data.status).toBe('APPROVED');
+    expect(updateCall.data.gateAction).toBe('APPLY');
+  });
+
 });

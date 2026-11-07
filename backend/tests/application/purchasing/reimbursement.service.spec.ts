@@ -411,6 +411,21 @@ describe('ReimbursementService', () => {
     expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
   });
 
+  it('驳回必须写明原因，否则不接受', async () => {
+    mockReimbursementRepository.findById.mockResolvedValue(
+      createPendingReviewReimbursement(),
+    );
+
+    await expect(
+      service.reviewReimbursement('reimbursement-1', 'admin-1', {
+        decision: 'REJECT',
+        comment: '   ',
+      }),
+    ).rejects.toThrow('必须写明原因');
+
+    expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
+  });
+
   it('应用价格失败时整体回滚，不会留下「已报销但价格没生效」', async () => {
     const reimbursement = createPendingReviewReimbursement();
     reimbursement.paymentProofUrls.push('https://example.com/proof-1.jpg');

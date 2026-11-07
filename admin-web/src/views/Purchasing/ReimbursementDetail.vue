@@ -724,7 +724,7 @@ const onProofSelected = async (event: Event) => {
   if (files.length === 0) return
   try {
     await ElMessageBox.confirm(
-      `确认通过并上传 ${files.length} 张付款凭证？上传后报销即完成，不可撤销。`,
+      `确认通过并上传 ${files.length} 张付款凭证？上传后报销即完成；24 小时内可在小程序「撤销审核」退回。`,
       '确认完成报销',
       { confirmButtonText: '确认通过', cancelButtonText: '取消', type: 'warning' },
     )

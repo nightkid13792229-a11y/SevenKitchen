@@ -422,6 +422,13 @@ export class ReimbursementService {
       );
     }
 
+    // 2026-11-07：驳回 / 要求补充必须写明原因——员工要看这段说明才知道改什么
+    if (dto.decision !== 'APPROVE' && !dto.comment?.trim()) {
+      throw new BadRequestException(
+        '驳回或要求补充时必须写明原因，员工会看到这段说明',
+      );
+    }
+
     // 2026-11-07：通过之前必须已经有付款凭证。
     // 手机端把「上传付款凭证」和「审核通过」拆成两个动作，凭证是付款的证据；
     // 没有凭证就通过，等于承认一笔没有付款记录的报销。

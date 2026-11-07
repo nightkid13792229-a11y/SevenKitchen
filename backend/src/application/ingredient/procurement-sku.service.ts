@@ -143,6 +143,13 @@ export interface CreateProcurementSkuDto {
   targetStock?: number | null;
   /** 期初库存：按采购单位填写；0/不填表示没有库存 */
   openingStock?: number | null;
+  /**
+   * 一箱/一袋几件 + 每件净含量（2026-11-07）：
+   * 填了这两个就不用填换算，服务端算 `件数 × 净含量` —— 不信前端乘好的数。
+   * 与员工端「新增采购商品」同一口径。
+   */
+  packCount?: number | null;
+  netContentPerPack?: number | null;
 }
 
 export interface UpdateProcurementSkuDto extends Partial<CreateProcurementSkuDto> {}
@@ -386,6 +393,28 @@ export class ProcurementSkuService {
    * 为什么换算固定写成 1：食材的成本口径就是「每基准单位」，
    * 采购口径（一件多少克）留在采购商品上。两处都存一份必然分叉。
    */
+  /**
+   * 「一箱几件 × 每件净含量」→ 换算（2026-11-07）。
+   *
+   * 只在两个都填了正整数时才算，否则返回 null 让调用方用显式换算。
+   * 服务端算的理由和员工端一样：前端乘错一次，库存就差几十倍。
+   */
+  private resolvePurchaseToBaseRatioFromPackFacts(dto: {
+    packCount?: number | null;
+    netContentPerPack?: number | null;
+  }): number | null {
+    const packCount = Number(dto.packCount ?? 0);
+    const netContent = Number(dto.netContentPerPack ?? 0);
+    if (!Number.isFinite(packCount) || packCount <= 0) {
+      return null;
+    }
+    if (!Number.isFinite(netContent) || netContent <= 0) {
+      return null;
+    }
+    const ratio = this.roundPrice(packCount * netContent);
+    return ratio > 0 ? ratio : null;
+  }
+
   private async initializeIngredientCostFromSku(
     tx: PrismaService | any,
     params: {
@@ -611,6 +640,8 @@ export class ProcurementSkuService {
       throw new BadRequestException('填了期初库存时，换算倍数必须大于 0');
     }
 
+    const computedRatio = this.resolvePurchaseToBaseRatioFromPackFacts(dto);
+
     const data = {
       ingredientId,
       name: dto.name,
@@ -621,7 +652,7 @@ export class ProcurementSkuService {
       purchaseUnit:
         normalizeOptionalPurchaseUnit(dto.purchaseUnit, ingredient!.baseUnit) ??
         null,
-      purchaseToBaseRatio: dto.purchaseToBaseRatio ?? null,
+      purchaseToBaseRatio: computedRatio ?? dto.purchaseToBaseRatio ?? null,
       currentPurchasePrice,
       referencePurchasePrice:
         dto.referencePurchasePrice ??

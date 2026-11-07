@@ -44,6 +44,7 @@ import type {
   UpdateIngredientPriceDto,
 } from '../../application/ingredient/ingredient.service';
 import { UserId } from '../auth/user.decorator';
+import { resolveIngredientCostSource } from '../../domain/ingredient/cost-source';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import {
   ProductionService,
@@ -229,11 +230,13 @@ export class AdminController {
       ingredient.currentPricePerPurchaseUnit ?? 0,
     );
 
-    const [latestChange, latestPurchase] = await Promise.all([
-      this.prisma.ingredientPriceChange.findFirst({
-        where: { ingredientId: ingredient.id, status: 'APPROVED' },
-        orderBy: { reviewedAt: 'desc' },
-        select: { reviewedAt: true },
+    // 2026-11-07：来源改读**成本流水**的最新一条。
+    // 旧写法按「有没有已完成采购记录」推测，会把建档初始化错说成「建档手填」。
+    const [latestHistory, latestPurchase] = await Promise.all([
+      this.prisma.ingredientPriceHistory.findFirst({
+        where: { ingredientId: ingredient.id },
+        orderBy: { createdAt: 'desc' },
+        select: { source: true, createdAt: true },
       }),
       this.prisma.purchaseRecord.findFirst({
         where: {
@@ -245,9 +248,9 @@ export class AdminController {
       }),
     ]);
 
-    const lastChangedAt = latestChange?.reviewedAt ?? null;
+    const lastChangedAt = latestHistory?.createdAt ?? null;
     const purchasedAt = latestPurchase?.purchasedAt ?? null;
-    const referenceDate = purchasedAt ?? lastChangedAt;
+    const referenceDate = lastChangedAt ?? purchasedAt;
     const ageDays = referenceDate
       ? Math.floor(
           (Date.now() - referenceDate.getTime()) / (24 * 60 * 60 * 1000),
@@ -255,8 +258,8 @@ export class AdminController {
       : null;
 
     return {
-      /** 价格来源：有采购历史 = 采购回写；没有 = 建档手填 */
-      source: purchasedAt ? 'LATEST_PURCHASE' : 'MANUAL_ENTRY',
+      source: resolveIngredientCostSource(latestHistory),
+      costChangedAt: lastChangedAt ? lastChangedAt.toISOString() : null,
       pricePerPurchaseUnit,
       baseUnitCost: this.roundTo(pricePerPurchaseUnit / ratio, 6),
       purchaseToBaseRatio: ratio,
@@ -754,6 +757,38 @@ export class AdminController {
       }
       throw error;
     }
+  }
+
+  /**
+   * 食材成本流水（2026-11-07 成本口径归位）。
+   *
+   * 只读：后台原料页的「价格历史」用。写入一律走
+   * `IngredientCostHistoryService`，不在这里开写入口。
+   */
+  @Get('ingredients/:id/cost-history')
+  @ApiOperation({ summary: 'Get ingredient cost history' })
+  async getIngredientCostHistory(@Param('id') id: string) {
+    const rows = await this.prisma.ingredientPriceHistory.findMany({
+      where: { ingredientId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { operator: { select: { nickname: true } } },
+    });
+
+    return ApiResponseDto.success({
+      items: rows.map((row) => ({
+        id: row.id,
+        oldCostPerBaseUnit:
+          row.oldCostPerBaseUnit === null
+            ? null
+            : Number(row.oldCostPerBaseUnit),
+        newCostPerBaseUnit: Number(row.newCostPerBaseUnit),
+        source: row.source,
+        note: row.note ?? null,
+        operatorName: row.operator?.nickname ?? null,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    });
   }
 
   @Delete('ingredients/:id')

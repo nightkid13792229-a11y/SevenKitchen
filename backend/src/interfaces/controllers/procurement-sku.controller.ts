@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Optional,
   Param,
   Post,
   Put,
@@ -19,6 +20,7 @@ import type {
   CreateProcurementSkuDto,
   UpdateProcurementSkuDto,
 } from '../../application/ingredient/procurement-sku.service';
+import { ProcurementSkuDraftService } from '../../application/purchasing/procurement-sku-draft.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { AdminGuard, StaffGuard } from '../guards/role.guard';
@@ -29,6 +31,8 @@ import { AdminGuard, StaffGuard } from '../guards/role.guard';
 export class ProcurementSkuController {
   constructor(
     private readonly procurementSkuService: ProcurementSkuService,
+    @Optional()
+    private readonly procurementSkuDraftService?: ProcurementSkuDraftService,
   ) {}
 
   @Get()
@@ -37,6 +41,41 @@ export class ProcurementSkuController {
     return ApiResponseDto.success(
       await this.procurementSkuService.findByIngredientId(ingredientId),
     );
+  }
+
+  /**
+   * 后台版「商品截图识别」（2026-11-07 AI 建档收尾）。
+   *
+   * 与员工端同一套识别服务、同一份每日配额：模型和密钥只有一份，
+   * 两个入口各接一套必然漂移（一个能认、一个认不出）。
+   */
+  @Post('procurement-sku-draft')
+  @ApiOperation({ summary: '从商品详情页截图识别采购商品（只出草稿，不落库）' })
+  async draftFromScreenshot(
+    @Param('ingredientId') ingredientId: string,
+    @Body() body: { imageUrl?: string },
+    @Req() request: { user?: { userId?: string } },
+  ) {
+    if (!this.procurementSkuDraftService) {
+      return ApiResponseDto.success({ draft: null, degraded: true });
+    }
+
+    const imageUrl = body?.imageUrl;
+    if (!imageUrl) {
+      return ApiResponseDto.error(400, '缺少截图地址');
+    }
+
+    try {
+      const draft = await this.procurementSkuDraftService.draftFromScreenshot({
+        imageUrl,
+        ingredientId,
+        userId: request?.user?.userId ?? '',
+      });
+      return ApiResponseDto.success({ draft, degraded: false });
+    } catch (error) {
+      // 识别不了就降级为手填，绝不卡住建档收尾（同员工端口径）
+      return ApiResponseDto.success({ draft: null, degraded: true });
+    }
   }
 
   @Post()

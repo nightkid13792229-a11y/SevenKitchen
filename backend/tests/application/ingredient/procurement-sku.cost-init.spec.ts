@@ -79,6 +79,22 @@ describe('ProcurementSkuService · 建档初始化成本', () => {
     expect(record).not.toHaveBeenCalled();
   });
 
+  it('「一箱几件 × 每件净含量」由服务端算换算，不信前端乘好的数', () => {
+    expect(
+      service['resolvePurchaseToBaseRatioFromPackFacts']({
+        packCount: 6,
+        netContentPerPack: 500,
+      }),
+    ).toBe(3000);
+
+    expect(
+      service['resolvePurchaseToBaseRatioFromPackFacts']({
+        packCount: null,
+        netContentPerPack: 500,
+      }),
+    ).toBeNull();
+  });
+
   it('毫升类商品按基准单位折算：120 元 / 1000ml = 0.12 元/ml', async () => {
     await run(120, 1000);
 

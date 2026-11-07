@@ -393,6 +393,11 @@ describe('AdminController', () => {
         ingredientPriceChange: {
           findFirst: jest.fn().mockResolvedValue(null),
         },
+        // 2026-11-07：来源改读成本流水最新一条
+        ingredientPriceHistory: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          findMany: jest.fn().mockResolvedValue([]),
+        },
         purchaseRecord: {
           findFirst: jest.fn().mockResolvedValue(null),
         },

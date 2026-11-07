@@ -4194,6 +4194,32 @@ model SupplementNutritionDraft {
   @@map("supplement_nutrition_draft")
 }
 
+/// 补剂商品标签证据（2026-11-07）
+///
+/// 建档时就要留下来：商品会下架、改规格、换包装，事后要能翻出"当时那瓶"。
+/// 现有 supplement_nutrition_draft 不适用——它的 ingredient_id 是必填外键，
+/// 而证据必须在原料存在之前就产生。这里刻意不设外键，跟 ingredient_creation_audit 一致。
+model SupplementLabelEvidence {
+  id                  String   @id @default(uuid())
+  /// 建档成功后回填；建档前为空
+  ingredientId        String?  @map("ingredient_id")
+  nutritionFoodId     String?  @map("nutrition_food_id")
+  productUrl          String?  @map("product_url") @db.VarChar(500)
+  productName         String?  @map("product_name") @db.VarChar(200)
+  /// 标签上「Serving Size」后面那个数：每份几粒
+  servingUnitsPerDose Int      @map("serving_units_per_dose")
+  labelImageUrl       String?  @map("label_image_url") @db.VarChar(500)
+  labelText           String?  @map("label_text")
+  /// 折算快照：{ servingUnitsPerDose, perUnitNutrients, unitDisplayLabel }
+  conversionSnapshot  Json     @map("conversion_snapshot")
+  createdBy           String   @map("created_by")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@index([ingredientId])
+  @@index([nutritionFoodId])
+  @@map("supplement_label_evidence")
+}
+
 /// 设计配方 - 配方设计工作台
 model DesignRecipe {
   id                     String                        @id @default(uuid()) @map("id")

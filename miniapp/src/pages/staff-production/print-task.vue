@@ -76,20 +76,28 @@
                 <view class="table-cell amount">用量</view>
                 <view class="table-cell method">部位/状态/预处理</view>
               </view>
-              <view
-                v-for="(ingredient, index) in parsedIngredients"
-                :key="index"
-                class="compact-table-row"
-                :class="{ 'total-weight': ingredient.isTotalWeight }"
-              >
-                <view class="table-cell source">
-                  <view class="ingredient-sku-source-line">{{ ingredientSourceLine(ingredient) }}</view>
+              <template v-for="(row, index) in ingredientRows" :key="index">
+                <view v-if="row.groupLabel" class="group-row">{{ row.groupLabel }}</view>
+                <view
+                  v-else
+                  class="compact-table-row"
+                  :class="{ 'total-weight': row.ingredient.isTotalWeight }"
+                >
+                  <view class="table-cell source">
+                    <view class="ingredient-sku-source-line">
+                      <text class="source-name">{{ ingredientNamePart(row.ingredient) }}</text>
+                      <text
+                        v-if="ingredientDetailPart(row.ingredient)"
+                        class="source-meta"
+                      >　{{ ingredientDetailPart(row.ingredient) }}</text>
+                    </view>
+                  </view>
+                  <view class="table-cell amount">{{ row.ingredient.amount }}{{ row.ingredient.unit }}</view>
+                  <view class="table-cell method">
+                    <view class="method-text">{{ displayMethod(row.ingredient) }}</view>
+                  </view>
                 </view>
-                <view class="table-cell amount">{{ ingredient.amount }}{{ ingredient.unit }}</view>
-                <view class="table-cell method">
-                  <view class="method-text">{{ displayMethod(ingredient) }}</view>
-                </view>
-              </view>
+              </template>
             </view>
           </view>
         </view>
@@ -325,23 +333,35 @@ function formatDecimal(value: number | null | undefined, decimals = 2): string {
   return value.toFixed(decimals);
 }
 
-/**
- * 原料列（一行）：类型 + 原料名 + 商品名（品牌并入）+ 采购渠道 + 规格。
- * 例：`食材 生蚝 贝司令 去壳生蚝肉 / 淘宝/天猫 / 200g/包`
- * 原料名和商品名重复时只留一份，避免「生蚝 生蚝 去壳生蚝肉」。
- */
-function ingredientSourceLine(ingredient: {
+/** 原料名（黑体加粗），不再带「食材 / 补剂」前缀 */
+function ingredientNamePart(ingredient: {
+  name?: string;
+  standardIngredientName?: string;
+  isTotalWeight?: boolean;
+}): string {
+  if (ingredient.isTotalWeight) {
+    return '食材类原料总重（含生产损耗）';
+  }
+
+  return (
+    ingredient.standardIngredientName ||
+    ingredient.name ||
+    '-'
+  ).trim() || '-';
+}
+
+/** 采购信息（灰色小一号）：品牌 + 商品名 / 渠道 / 规格 */
+function ingredientDetailPart(ingredient: {
   name?: string;
   standardIngredientName?: string;
   procurementSkuName?: string;
   procurementSkuBrand?: string;
   procurementSkuPurchaseChannel?: string;
   procurementSkuProductModel?: string;
-  typeLabel?: string;
   isTotalWeight?: boolean;
 }): string {
   if (ingredient.isTotalWeight) {
-    return '食材类原料总重（含生产损耗）';
+    return '';
   }
 
   const ingredientName = (
@@ -350,38 +370,49 @@ function ingredientSourceLine(ingredient: {
     ''
   ).trim();
   const skuName = (ingredient.procurementSkuName || '').trim();
-  // 品牌里的「无 / 暂无 / -」是占位符，不能印成「无 去壳生蚝肉」
   const brand = getPrintablePurchaseSummaryParts(
     ingredient.procurementSkuBrand,
   )[0] || '';
-  // 原料名和商品名完全一样时只留一份；其余情况两段都保留（原料 → 商品）
-  const skuHasIngredient =
-    Boolean(skuName) && skuName === ingredientName;
   const skuPart = [brand, skuName].filter(Boolean).join(' ');
+  // 原料名已经单独印在前面；商品名就是原料名时只留品牌
+  const skuIsIngredientName = Boolean(skuName) && skuName === ingredientName;
+  const main = skuIsIngredientName ? brand : skuPart;
 
-  let main = '';
-  if (!ingredientName) {
-    main = skuPart || '-';
-  } else if (!skuPart) {
-    main = ingredientName;
-  } else if (skuHasIngredient) {
-    main = skuPart;
-  } else {
-    main = `${ingredientName} ${skuPart}`;
-  }
-
-  const parts = [
+  return [
     main,
     ...getPrintablePurchaseSummaryParts(
       ingredient.procurementSkuPurchaseChannel,
       ingredient.procurementSkuProductModel,
     ),
-  ].filter(Boolean);
-
-  return [ingredient.typeLabel?.trim(), parts.join(' / ')]
+  ]
     .filter(Boolean)
-    .join(' ');
+    .join(' / ');
 }
+
+/** 食材 / 补剂分成两组，各带小标题；每一行不再重复写「食材」「补剂」 */
+const ingredientRows = computed(() => {
+  const counts = new Map<string, number>();
+  parsedIngredients.value
+    .filter((ingredient) => !ingredient.isTotalWeight)
+    .forEach((ingredient) => {
+      const group = (ingredient.typeLabel || '').trim() || '其他';
+      counts.set(group, (counts.get(group) || 0) + 1);
+    });
+
+  const rows: Array<{ groupLabel?: string; ingredient?: any }> = [];
+  let currentGroup = '';
+  parsedIngredients.value.forEach((ingredient) => {
+    if (!ingredient.isTotalWeight) {
+      const group = (ingredient.typeLabel || '').trim() || '其他';
+      if (group !== currentGroup) {
+        currentGroup = group;
+        rows.push({ groupLabel: `${group}（${counts.get(group) || 0} 项）` });
+      }
+    }
+    rows.push({ ingredient });
+  });
+  return rows;
+});
 
 function getPrintablePurchaseSummaryParts(...values: unknown[]): string[] {
   return values
@@ -786,6 +817,14 @@ const handlePrint = async () => {
   flex: 1;
 }
 
+.group-row {
+  padding: 7rpx 8rpx 5rpx;
+  border-top: 1rpx solid #000000;
+  font-size: 16rpx;
+  font-weight: bold;
+  color: #000000;
+}
+
 .compact-print-table {
   border: 1rpx solid #000000;
   overflow: hidden;
@@ -859,7 +898,17 @@ const handlePrint = async () => {
 
 .ingredient-sku-source-line {
   color: #000000;
+}
+
+.source-name {
   font-weight: 600;
+  color: #000000;
+}
+
+.source-meta {
+  font-weight: 400;
+  color: #666666;
+  font-size: 15rpx;
 }
 
 

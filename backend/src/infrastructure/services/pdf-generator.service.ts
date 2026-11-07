@@ -388,27 +388,61 @@ export class PdfGeneratorService {
   private drawIngredients(doc: any, data: PrintTaskData, startY: number): number {
     let y = startY;
     const count = this.getPrintableIngredientCount(data);
+    const groupCounts = this.countIngredientGroups(data);
 
     y = this.drawSectionTitle(doc, `原料清单（${count} 项）`, y);
     y = this.drawTableHeader(doc, y);
 
+    let currentGroup = '';
+    let firstGroup = true;
+
     data.parsedIngredients.forEach((ingredient) => {
-      const sourceLine = this.getIngredientSourceLine(ingredient);
+      const group = ingredient.isTotalWeight
+        ? currentGroup
+        : this.getIngredientGroup(ingredient);
+      const groupChanged = !ingredient.isTotalWeight && group !== currentGroup;
+      if (groupChanged) {
+        currentGroup = group;
+      }
+
+      const namePart = this.getIngredientNamePart(ingredient);
+      const detailPart = this.getIngredientDetailPart(ingredient);
       const amountText = `${ingredient.amount}${ingredient.unit}`;
       const methodText = ingredient.method || '';
-      const rowHeight = this.measureRowHeight(doc, sourceLine, methodText);
+      const rowHeight = this.measureRowHeight(
+        doc,
+        namePart,
+        detailPart,
+        methodText,
+      );
+      const groupLabel = `${currentGroup || '其他'}（${
+        groupCounts.get(currentGroup) ?? 0
+      } 项）`;
 
-      if (y + rowHeight > PdfGeneratorService.CONTENT_BOTTOM) {
+      if (
+        y + rowHeight + (groupChanged ? 16 : 0) >
+        PdfGeneratorService.CONTENT_BOTTOM
+      ) {
         doc.addPage();
         y = this.drawHeader(doc, data, true);
         y = this.drawSectionTitle(doc, '原料清单（续）', y);
         y = this.drawTableHeader(doc, y);
+        if (currentGroup) {
+          y = this.drawGroupHeader(doc, groupLabel, y, false);
+        }
+      } else if (groupChanged) {
+        y = this.drawGroupHeader(doc, groupLabel, y, !firstGroup);
+      }
+
+      if (groupChanged) {
+        firstGroup = false;
       }
 
       y = this.drawRow(
         doc,
         {
-          sourceLine,
+          namePart,
+          detailPart,
           amountText,
           methodText,
           isTotalWeight: Boolean(ingredient.isTotalWeight),
@@ -419,6 +453,42 @@ export class PdfGeneratorService {
     });
 
     return y;
+  }
+
+  /** 食材 / 补剂分成两组，各带一个小标题（不再在每一行重复「食材」「补剂」） */
+  private getIngredientGroup(ingredient: IngredientItem): string {
+    return (ingredient.typeLabel || '').trim() || '其他';
+  }
+
+  private countIngredientGroups(data: PrintTaskData): Map<string, number> {
+    const counts = new Map<string, number>();
+    data.parsedIngredients
+      .filter((ingredient) => !ingredient.isTotalWeight)
+      .forEach((ingredient) => {
+        const group = this.getIngredientGroup(ingredient);
+        counts.set(group, (counts.get(group) || 0) + 1);
+      });
+    return counts;
+  }
+
+  private drawGroupHeader(
+    doc: any,
+    label: string,
+    y: number,
+    withRule: boolean,
+  ): number {
+    const left = PdfGeneratorService.PAGE_LEFT;
+    if (withRule) {
+      doc
+        .moveTo(left, y)
+        .lineTo(PdfGeneratorService.PAGE_RIGHT, y)
+        .strokeColor(BLACK)
+        .lineWidth(0.8)
+        .stroke();
+    }
+    doc.font('CNB').fontSize(8).fillColor(BLACK);
+    doc.text(label, left + 4, y + 4, { lineBreak: false });
+    return y + 16;
   }
 
   private getPrintableIngredientCount(data: PrintTaskData): number {
@@ -471,7 +541,8 @@ export class PdfGeneratorService {
 
   private measureRowHeight(
     doc: any,
-    sourceLine: string,
+    namePart: string,
+    detailPart: string,
     methodText: string,
   ): number {
     const sourceWidth = PdfGeneratorService.SOURCE_COLUMN_WIDTH - 8;
@@ -482,10 +553,21 @@ export class PdfGeneratorService {
       8;
 
     doc.font('CNB').fontSize(9);
-    const sourceHeight = doc.heightOfString(sourceLine, {
+    const nameWidth = doc.widthOfString(namePart);
+    const nameHeight = doc.heightOfString(namePart, {
       width: sourceWidth,
       lineGap: 0,
     });
+
+    const detailHeight = detailPart
+      ? doc
+          .font('CN')
+          .fontSize(7.8)
+          .heightOfString(detailPart, {
+            width: Math.max(60, sourceWidth - nameWidth - 6),
+            lineGap: 0,
+          })
+      : 0;
 
     const methodHeight = doc
       .font('CN')
@@ -495,13 +577,14 @@ export class PdfGeneratorService {
         lineGap: 0,
       });
 
-    return Math.max(22, sourceHeight + 8, methodHeight + 8);
+    return Math.max(22, Math.max(nameHeight, detailHeight) + 8, methodHeight + 8);
   }
 
   private drawRow(
     doc: any,
     row: {
-      sourceLine: string;
+      namePart: string;
+      detailPart: string;
       amountText: string;
       methodText: string;
       isTotalWeight: boolean;
@@ -524,10 +607,16 @@ export class PdfGeneratorService {
       .stroke();
 
     doc.font('CNB').fontSize(9).fillColor(BLACK);
-    doc.text(row.sourceLine, left + 4, y + 4, {
+    doc.text(row.namePart, left + 4, y + 4, {
       width: sourceWidth - 8,
       lineGap: 0,
+      continued: Boolean(row.detailPart),
     });
+
+    if (row.detailPart) {
+      doc.font('CN').fontSize(7.8).fillColor(DARK_GRAY);
+      doc.text(`  ${row.detailPart}`, { lineGap: 0 });
+    }
 
     doc.font('CNB').fontSize(9).fillColor(BLACK);
     doc.text(row.amountText, amountX + 4, y + 4, {
@@ -571,14 +660,26 @@ export class PdfGeneratorService {
 
   // ==================== 文本拼装 ====================
 
-  /**
-   * 原料列（一行）：类型 + 原料名 + 商品名（品牌并入）+ 采购渠道 + 规格。
-   * 例：`食材 生蚝 贝司令 去壳生蚝肉 / 淘宝/天猫 / 200g/包`
-   * 原料名与商品名重复时只留一份，避免「生蚝 生蚝 去壳生蚝肉」。
-   */
-  private getIngredientSourceLine(ingredient: IngredientItem): string {
+  /** 原料名（黑体加粗）：只看原料本身，不再带「食材 / 补剂」 */
+  private getIngredientNamePart(ingredient: IngredientItem): string {
     if (ingredient.isTotalWeight) {
       return '食材类原料总重（含生产损耗）';
+    }
+
+    return (
+      ingredient.standardIngredientName ||
+      ingredient.name ||
+      '-'
+    ).trim() || '-';
+  }
+
+  /**
+   * 采购信息（灰色小一号）：品牌 + 商品名 / 渠道 / 规格。
+   * 原料名与商品名完全相同时只保留一份，避免「猪里脊 猪里脊」。
+   */
+  private getIngredientDetailPart(ingredient: IngredientItem): string {
+    if (ingredient.isTotalWeight) {
+      return '';
     }
 
     const ingredientName = (
@@ -588,24 +689,14 @@ export class PdfGeneratorService {
     ).trim();
     const skuName = (ingredient.procurementSkuName || '').trim();
     // 品牌里的「无 / 暂无 / -」是占位符，不能印成「无 去壳生蚝肉」
-    const brand = this.getPrintablePurchaseSummaryParts(
-      ingredient.procurementSkuBrand,
-    )[0] || '';
-    // 原料名和商品名完全一样时只留一份；其余情况两段都保留（原料 → 商品）
-    const skuHasIngredient =
-      Boolean(skuName) && skuName === ingredientName;
+    const brand =
+      this.getPrintablePurchaseSummaryParts(ingredient.procurementSkuBrand)[0] ||
+      '';
     const skuPart = [brand, skuName].filter(Boolean).join(' ');
-
-    let main = '';
-    if (!ingredientName) {
-      main = skuPart || '-';
-    } else if (!skuPart) {
-      main = ingredientName;
-    } else if (skuHasIngredient) {
-      main = skuPart;
-    } else {
-      main = `${ingredientName} ${skuPart}`;
-    }
+    // 原料名已经单独加粗印在前面了，这里不再重复；商品名就是原料名时只留品牌
+    const skuIsIngredientName =
+      Boolean(skuName) && skuName === ingredientName;
+    const main = skuIsIngredientName ? brand : skuPart;
 
     const parts = [
       main,
@@ -615,9 +706,7 @@ export class PdfGeneratorService {
       ),
     ].filter(Boolean);
 
-    return [ingredient.typeLabel?.trim(), parts.join(' / ')]
-      .filter(Boolean)
-      .join(' ');
+    return parts.join(' / ');
   }
 
   private getPrintablePurchaseSummaryParts(...values: unknown[]): string[] {

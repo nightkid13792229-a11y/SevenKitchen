@@ -142,7 +142,7 @@ describe('staff production scheduling guardrails', () => {
   it('prints production ingredients by procurement sku without counting subtotal rows', () => {
     expect(printTaskSource).toContain('realIngredientCount');
     expect(printTaskSource).toContain('!ingredient.isTotalWeight');
-    expect(printTaskSource).toContain('ingredientSourceLine');
+    expect(printTaskSource).toContain('ingredientNamePart');
     expect(printTaskSource).toContain('standardIngredientName');
     expect(printTaskSource).toContain('procurementSkuName');
     expect(printTaskSource).toContain('procurementSkuBrand');
@@ -159,6 +159,12 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).toContain('order.customerNote');
     expect(printTaskSource).toContain('customer-note-box');
     expect(printTaskSource).toContain('customer-note-text');
+  });
+
+  it('食材与补剂分组显示，行内不再重复写「食材」「补剂」', () => {
+    expect(printTaskSource).toContain('ingredientRows');
+    expect(printTaskSource).toContain('group-row');
+    expect(printTaskSource).toContain('groupLabel');
   });
 
   it('制作单用设计器里「部位 / 状态 / 预处理」的原话', () => {
@@ -270,8 +276,11 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).not.toContain('<text class="field-value">{{ formatPackagePlan(order) }}</text>');
   });
 
-  it('shows ingredient name, sku, brand, channel and spec on one line', () => {
-    expect(printTaskSource).toContain('ingredientSourceLine(ingredient)');
+  it('shows ingredient name bold, then sku/brand/channel/spec in smaller grey', () => {
+    expect(printTaskSource).toContain('ingredientNamePart(row.ingredient)');
+    expect(printTaskSource).toContain('ingredientDetailPart(row.ingredient)');
+    expect(printTaskSource).toContain('source-name');
+    expect(printTaskSource).toContain('source-meta');
     expect(printTaskSource).toContain('standardIngredientName');
     expect(printTaskSource).toContain('procurementSkuBrand');
     expect(printTaskSource).toContain('getPrintablePurchaseSummaryParts');

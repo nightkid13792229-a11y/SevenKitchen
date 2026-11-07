@@ -180,26 +180,29 @@ describe('制作单 PDF：黑白 + 双备注 + 页码', () => {
     expect(countPages(pdf)).toBe(1);
   });
 
-  it('原料列一行装下：类型 + 原料名 + 商品名（品牌）+ 渠道 + 规格', () => {
+  it('原料名单独一段，采购信息一段；不再带「食材 / 补剂」前缀', () => {
     const service = new PdfGeneratorService() as any;
+    const oyster = {
+      name: '生蚝',
+      standardIngredientName: '生蚝',
+      procurementSkuName: '去壳生蚝肉',
+      procurementSkuBrand: '贝司令',
+      procurementSkuPurchaseChannel: '淘宝/天猫',
+      procurementSkuProductModel: '200g/包',
+      typeLabel: '补剂',
+      amount: '140.36',
+      unit: 'g',
+      typeClass: 'supplement',
+    };
 
-    expect(
-      service.getIngredientSourceLine({
-        name: '生蚝',
-        standardIngredientName: '生蚝',
-        procurementSkuName: '去壳生蚝肉',
-        procurementSkuBrand: '贝司令',
-        procurementSkuPurchaseChannel: '淘宝/天猫',
-        procurementSkuProductModel: '200g/包',
-        typeLabel: '食材',
-        amount: '140.36',
-        unit: 'g',
-        typeClass: 'food',
-      }),
-    ).toBe('食材 生蚝 贝司令 去壳生蚝肉 / 淘宝/天猫 / 200g/包');
+    expect(service.getIngredientNamePart(oyster)).toBe('生蚝');
+    expect(service.getIngredientDetailPart(oyster)).toBe(
+      '贝司令 去壳生蚝肉 / 淘宝/天猫 / 200g/包',
+    );
 
+    // 原料名与商品名一样时只留一份
     expect(
-      service.getIngredientSourceLine({
+      service.getIngredientDetailPart({
         name: '猪里脊',
         standardIngredientName: '猪里脊',
         procurementSkuName: '猪里脊',
@@ -210,11 +213,11 @@ describe('制作单 PDF：黑白 + 双备注 + 页码', () => {
         unit: 'g',
         typeClass: 'food',
       }),
-    ).toBe('食材 猪里脊 / 农贸市场 / 10kg/份');
+    ).toBe('农贸市场 / 10kg/份');
 
     // 占位符品牌不能印成「无 去壳生蚝肉」
     expect(
-      service.getIngredientSourceLine({
+      service.getIngredientDetailPart({
         name: '生蚝',
         standardIngredientName: '生蚝',
         procurementSkuName: '去壳生蚝肉',
@@ -226,7 +229,29 @@ describe('制作单 PDF：黑白 + 双备注 + 页码', () => {
         unit: 'g',
         typeClass: 'food',
       }),
-    ).toBe('食材 生蚝 去壳生蚝肉');
+    ).toBe('去壳生蚝肉');
+
+    // 合计行不带采购信息
+    expect(
+      service.getIngredientNamePart({
+        name: '食材类原料总重',
+        amount: '2704.80',
+        unit: 'g',
+        typeLabel: '',
+        typeClass: '',
+        isTotalWeight: true,
+      }),
+    ).toBe('食材类原料总重（含生产损耗）');
+    expect(
+      service.getIngredientDetailPart({
+        name: '食材类原料总重',
+        amount: '2704.80',
+        unit: 'g',
+        typeLabel: '',
+        typeClass: '',
+        isTotalWeight: true,
+      }),
+    ).toBe('');
   });
 
   it('页脚按真实总页数逐页写「第 x / y 页」', () => {

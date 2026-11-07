@@ -109,6 +109,9 @@ export class RecipeNamingService {
     const config = await this.resolveRuntimeConfig();
 
     const startedAt = Date.now();
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let retries = 0;
     const parsed = await callDeepSeekJson({
       baseUrl: config.baseUrl,
       model: config.model,
@@ -116,6 +119,22 @@ export class RecipeNamingService {
       requestTimeoutMs: config.requestTimeoutMs,
       systemPrompt: buildRecipeNamingSystemPrompt(),
       temperature: 0.7,
+      /**
+       * 起名是用户盯着转圈的动作，必须快（2026-11-07）。
+       *
+       * 生产实测：开着思考模式一次 21.6 秒——模型先写一段没人看的推理再给结果。
+       * 项目里识别类 / 采购复核的调用都显式关掉，这里补上同一开关。
+       */
+      extraBody: { thinking: { type: 'disabled' } },
+      /** 只要两条名字，512 够用；给了上限才有「刹车」 */
+      maxTokens: 512,
+      onUsage: (usage) => {
+        promptTokens += usage.promptTokens;
+        completionTokens += usage.completionTokens;
+      },
+      onRetry: () => {
+        retries += 1;
+      },
       userPayload: {
         task: 'generate_recipe_names',
         recipe: {
@@ -132,9 +151,12 @@ export class RecipeNamingService {
       },
     });
 
-    // 命名是用户要盯着转圈的动作，耗时值得留痕（模型/超时都能从这一行看出来）
+    /**
+     * 命名是用户要盯着转圈的动作，耗时值得留痕：
+     * 耗时 / token 用量 / 是否重试 —— 下次再慢，直接从这一行看出卡在哪。
+     */
     console.log(
-      `[RecipeNaming] provider=${config.provider} model=${config.model} 耗时=${Date.now() - startedAt}ms`,
+      `[RecipeNaming] provider=${config.provider} model=${config.model} 耗时=${Date.now() - startedAt}ms prompt=${promptTokens} completion=${completionTokens} 重试=${retries}`,
     );
 
     return {
@@ -192,7 +214,9 @@ export function buildRecipeNamingSystemPrompt(): string {
     '输入里没有的事实一律不写；拿不准就换成更保守的说法。',
     '',
     '',
-    '输出 JSON：candidates 数组，2 条，每条含 name / valuePoint / ingredients。',
-    '两条的价值点不能重复：一条讲配方构成，一条讲适用场景或工艺。',
+    '输出 JSON：{"candidates":[{"name":"…"},{"name":"…"}]}，正好 2 条。',
+    // 后台候选列表只显示名字；多写字段既没人看，又白白拉长生成时间（2026-11-07）
+    '每条只写 name 一个字段，不要写解释、理由或食材清单。',
+    '两条的角度不能重复：一条讲配方构成，一条讲适用场景或工艺。',
   ].join('\n');
 }

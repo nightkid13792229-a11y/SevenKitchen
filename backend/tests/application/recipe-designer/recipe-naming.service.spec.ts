@@ -149,11 +149,14 @@ describe('命名提示词', () => {
     expect(prompt).not.toContain('主蛋白放第一位');
   });
 
-  it('只要 2 条候选，且两条的价值点不能重复', () => {
+  it('只要 2 条候选，且两条的角度不能重复', () => {
     const prompt = buildRecipeNamingSystemPrompt();
-    expect(prompt).toContain('candidates 数组，2 条');
-    expect(prompt).toContain('价值点不能重复');
+    expect(prompt).toContain('正好 2 条');
+    expect(prompt).toContain('角度不能重复');
     expect(prompt).not.toContain('reason: string');
+    // 2026-11-07 提速：后台只显示名字，不再让模型写没人看的字段
+    expect(prompt).not.toContain('valuePoint');
+    expect(prompt).not.toContain('ingredients:');
   })
 
   it('保留 12 字硬约束与禁止虚构', () => {

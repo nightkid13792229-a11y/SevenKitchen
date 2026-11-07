@@ -40,6 +40,13 @@ export interface DeepSeekChatOptions {
    * ⚠️ 自动重试会调两次，所以这个回调也可能被调两次 —— 那正是成本要算的 ✓。
    */
   onUsage?: (usage: DeepSeekChatUsage) => void;
+  /**
+   * 「空内容自动重试」发生时回调一次（2026-11-07）。
+   *
+   * 为什么要有：重试会让用户多等一个来回，但日志里只有总耗时，
+   * 分不清是模型慢还是悄悄重试了。起名这类"盯着转圈"的动作要知道真相。
+   */
+  onRetry?: () => void;
 }
 
 /** 一次模型调用的 token 用量 */
@@ -63,6 +70,7 @@ export async function callDeepSeekJson(
       error instanceof BadRequestException &&
       error.message === 'AI 生成失败：无内容'
     ) {
+      options.onRetry?.();
       return callDeepSeekJsonOnce(options);
     }
     throw error;

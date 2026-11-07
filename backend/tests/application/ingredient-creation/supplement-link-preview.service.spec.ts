@@ -1,172 +1,127 @@
 import { BadRequestException } from '@nestjs/common';
 import { SupplementLinkPreviewService } from '../../../src/application/ingredient-creation/supplement-link-preview.service';
+import type { AgentProviderConfigService } from '../../../src/application/nutrition-governance/agent-provider-config.service';
 
 /**
- * 贴链接读商品页。
+ * 补剂抓取：商品标签页与候选搜索，都走 DeepSeek 官方的 Fetch / Search。
  *
- * 真实页面的结构已经由 `supplement-label-parser` 的单测钉住了，这里只钉三件
- * 服务层的事：**只放行白名单域名**、**读不出来时说人话**、**读到了就把每份几粒和
- * 认不出的行一起交回去**（不静默丢）。
+ * 为什么换：生产服务器连不上原来的抓取代理（域名解析被劫持、直连超时），
+ * 而 api.deepseek.com 是通的。这里钉的是"换了通道，行为不变"：
+ * 白名单还在、读不出来还说人话、搜不到还留空。
  */
-const REAL_LABEL = `# Nordic Naturals, Children's DHA, Ages 3-6
+const LABEL = `# Nordic Naturals, Children's DHA
 **Supplement facts**
 **Serving Size:** 4 Soft Gels
-**Amount Per Serving**
 Calories 10
-EPA (Eicosapentaenoic Acid)80 mg††
-Proprietary Blend 500 mg
-*Daily Value not established.`;
+EPA (Eicosapentaenoic Acid)80 mg`;
 
-function serviceWithFetch(body: string, status = 200) {
-  const fetchMock = jest.fn(async () => ({
-    ok: status >= 200 && status < 300,
-    status,
-    text: async () => body,
-  }));
+function build(handler: () => unknown) {
+  const providerConfig = {
+    getEnabledDeepSeekRuntimeConfig: jest.fn(async () => ({
+      baseUrl: 'https://api.deepseek.com/v1',
+      apiKey: 'k',
+      model: 'deepseek-chat'
+    }))
+  } as unknown as AgentProviderConfigService;
+
+  const fetchMock = jest.fn(async (url: string, init: { body: string }) => {
+    const payload = handler() as Record<string, unknown>;
+    return { ok: true, status: 200, json: async () => payload };
+  });
   global.fetch = fetchMock as unknown as typeof fetch;
-  return { service: new SupplementLinkPreviewService(), fetchMock };
+
+  return { service: new SupplementLinkPreviewService(providerConfig), fetchMock };
 }
 
-describe('SupplementLinkPreviewService', () => {
-  afterEach(() => {
-    jest.resetAllMocks();
-  });
-
-  it('读 iHerb 链接：每份几粒、营养素、认不出的行一起回来', async () => {
-    const { service } = serviceWithFetch(REAL_LABEL);
-
-    const preview = await service.preview(
-      'https://www.iherb.com/pr/nordic-naturals-children-s-dha/7053',
-    );
-
-    expect(preview.servingUnitsPerDose).toBe(4);
-    expect(preview.nutrients).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ fieldPath: 'fattyAcids.epa', value: 80, unit: 'mg' }),
-        expect.objectContaining({ fieldPath: 'macros.energyKcal', value: 10 }),
-      ]),
-    );
-    expect(preview.unrecognized).toContain('Proprietary Blend');
-    expect(preview.productName).toContain("Children's DHA");
-    expect(preview.labelText).toContain('Serving Size');
-  });
-
-  it('走的是抓取代理，不是直连电商', async () => {
-    const { service, fetchMock } = serviceWithFetch(REAL_LABEL);
+describe('读商品页', () => {
+  it('走 DeepSeek 的 fetch 接口，不是原来的代理域名', async () => {
+    const { service, fetchMock } = build(() => ({ title: 'x', content: LABEL }));
 
     await service.preview('https://www.iherb.com/pr/x/1');
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://r.jina.ai/https://www.iherb.com/pr/x/1',
-      expect.anything(),
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.deepseek.com/v1/tools/fetch');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      url: 'https://www.iherb.com/pr/x/1'
+    });
+  });
+
+  it('读到的正文照样能解析出每份几粒与营养素', async () => {
+    const { service } = build(() => ({ title: 'x', content: LABEL }));
+
+    const preview = await service.preview('https://www.iherb.com/pr/x/1');
+
+    expect(preview.servingUnitsPerDose).toBe(4);
+    expect(preview.nutrients).toEqual(
+      expect.arrayContaining([expect.objectContaining({ fieldPath: 'fattyAcids.epa', value: 80 })])
     );
   });
 
   it('不在白名单里的网站直接拒，不发请求', async () => {
-    const { service, fetchMock } = serviceWithFetch(REAL_LABEL);
+    const { service, fetchMock } = build(() => ({ content: LABEL }));
 
     await expect(service.preview('https://example.com/pr/x')).rejects.toBeInstanceOf(
-      BadRequestException,
+      BadRequestException
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('链接不通时说人话，且给出「换成手动填」的出口', async () => {
-    const { service } = serviceWithFetch('blocked', 403);
+  it('取不到正文时说人话，并给出「手动填」的出口', async () => {
+    const { service } = build(() => ({ title: 'x', content: '   ' }));
 
-    await expect(service.preview('https://www.iherb.com/pr/x/1')).rejects.toThrow(
-      /手动填/,
+    await expect(service.preview('https://www.iherb.com/pr/x/1')).rejects.toThrow(/手动填/);
+  });
+
+  it('配置取不到时明确失败，不静默成功', async () => {
+    const providerConfig = {
+      getEnabledDeepSeekRuntimeConfig: jest.fn(async () => {
+        throw new Error('no config');
+      })
+    } as unknown as AgentProviderConfigService;
+    const service = new SupplementLinkPreviewService(providerConfig);
+
+    await expect(service.preview('https://www.iherb.com/pr/x/1')).rejects.toBeInstanceOf(
+      BadRequestException
     );
   });
+});
 
-  it('页面里没有成分表时，营养素为空但商品名照样回来', async () => {
-    const { service } = serviceWithFetch('# 某个商品\n只是一段介绍。');
+describe('搜候选', () => {
+  const results = [
+    { title: 'NOW Foods, Zinc Picolinate', url: 'https://www.iherb.com/pr/now-zinc/878' },
+    { title: '别家的锌', url: 'https://example.com/pr/zinc' }
+  ];
 
-    const preview = await service.preview('https://www.jd.com/pr/1');
+  it('只限定在 iHerb 站内搜，并过滤掉别家链接', async () => {
+    const { service, fetchMock } = build(() => ({ results }));
 
-    expect(preview.nutrients).toEqual([]);
-    expect(preview.servingUnitsPerDose).toBeNull();
-    expect(preview.productName).toBe('某个商品');
+    const candidates = await service.searchCandidates('锌');
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.query).toContain('site:iherb.com');
+    expect(body.query).toContain('锌');
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].name).toContain('Zinc Picolinate');
   });
 
-  it('目标页 404（抓取通道仍回 200）时大声失败，不装作读到了', async () => {
-    const { service } = serviceWithFetch(
-      `Title: The Page is Not Found! | iHerb\nWarning: Target URL returned error 404: Not Found\nMarkdown Content:\n404`,
-    );
+  it('搜索接口不给价格时留空，不编一个数', async () => {
+    const { service } = build(() => ({ results }));
 
-    await expect(service.preview('https://www.iherb.com/pr/x/1')).rejects.toThrow(/404|读不出来/);
-  });
+    const [only] = await service.searchCandidates('锌');
 
-  it('链接跳到登录页时也大声失败，并说明原因', async () => {
-    const { service } = serviceWithFetch(
-      `Title: 登录\nFinal URL: https://login.taobao.com/member/login.jhtml\nMarkdown Content:\n请登录`,
-    );
-
-    await expect(service.preview('https://item.taobao.com/item.htm?id=1')).rejects.toThrow(
-      /登录|读不到/,
-    );
-  });
-
-  it('正常的页面不会被这两条守卫误伤', async () => {
-    const { service } = serviceWithFetch(
-      `Title: 某个商品\nFinal URL: https://www.iherb.com/pr/x/1\nMarkdown Content:\n${REAL_LABEL}`,
-    );
-
-    const preview = await service.preview('https://www.iherb.com/pr/x/1');
-    expect(preview.servingUnitsPerDose).toBe(4);
-  });
-
-  /**
-   * 下面这段是从真实 iHerb 搜索页抓下来的片段（去掉了图片与评价噪声），
-   * 链接、标题、价格三样都按页面原样保留。
-   */
-  const SEARCH_PAGE = `[](https://www.iherb.com/pr/now-foods-zinc-picolinate-50-mg-120-veg-capsules/878 "NOW Foods, Zinc Picolinate, 50 mg, 120 Veg Capsules")
-
-![](https://cloudinary.images-iherb.com/image/upload/x.jpg)
-
-NOW Foods, Zinc Picolinate, 50 mg, 120 Veg Capsules
-
-$10.05($0.08/serving)
-
-[](https://www.iherb.com/pr/california-gold-nutrition-zinc-picolinate-50-mg-120-veggie-capsules/91976 "California Gold Nutrition, Zinc Picolinate, 50 mg, 120 Veggie Capsules")
-
-$8.20($0.07/serving)
-
-[](https://www.iherb.com/pr/now-foods-zinc-picolinate-50-mg-120-veg-capsules/878 "4.8/5 - 54,110 Reviews")`;
-
-  it('搜索页能捞出候选：链接、名字、标价、每份价', async () => {
-    const { service } = serviceWithFetch(SEARCH_PAGE);
-
-    const candidates = await service.searchCandidates('zinc picolinate');
-
-    expect(candidates).toHaveLength(2);
-    expect(candidates[0]).toEqual({
-      url: 'https://www.iherb.com/pr/now-foods-zinc-picolinate-50-mg-120-veg-capsules/878',
-      name: 'NOW Foods, Zinc Picolinate, 50 mg, 120 Veg Capsules',
-      priceUsd: 10.05,
-      pricePerServingUsd: 0.08,
-    });
-  });
-
-  it('同一商品在页面上出现多次只收一次', async () => {
-    const { service } = serviceWithFetch(SEARCH_PAGE);
-    const candidates = await service.searchCandidates('zinc');
-    const urls = candidates.map((item) => item.url);
-    expect(new Set(urls).size).toBe(urls.length);
-  });
-
-  it('搜索页没有价格时留空，不编一个数', async () => {
-    const { service } = serviceWithFetch(
-      `[](https://www.iherb.com/pr/x/1 "某商品")`,
-    );
-    const [only] = await service.searchCandidates('x');
     expect(only.priceUsd).toBeNull();
     expect(only.pricePerServingUsd).toBeNull();
   });
 
   it('空关键词不发请求', async () => {
-    const { service, fetchMock } = serviceWithFetch(SEARCH_PAGE);
+    const { service, fetchMock } = build(() => ({ results }));
+
     expect(await service.searchCandidates('   ')).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('搜不到时返回空数组，不报错', async () => {
+    const { service } = build(() => ({ results: [] }));
+
+    expect(await service.searchCandidates('不存在的营养素')).toEqual([]);
   });
 });

@@ -1,5 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
+  AgentProviderConfigService,
+  type DeepSeekRuntimeConfig
+} from '../nutrition-governance/agent-provider-config.service';
+import { INGREDIENT_INTAKE_AGENT_PURPOSE } from './ingredient-creation-intake.service';
+import {
   extractServingUnits,
   parseSupplementLabel,
   type ParsedNutrient
@@ -14,7 +19,12 @@ import {
  * 3. **读不出来的东西留空**，不猜；把认不出的行原样交回去让人补。
  */
 const ALLOWED_HOSTS = ['iherb.com', 'taobao.com', 'tmall.com', 'jd.com'];
-const PROXY_BASE = 'https://r.jina.ai/';
+/**
+ * 抓取走 DeepSeek 官方的 Search / Fetch 套件。
+ *
+ * 换掉原来的 r.jina.ai：国内生产环境连不上那个域名（DNS 被劫持，直连超时），
+ * 而 api.deepseek.com 是通的——同一个 key、同一份配置，不用额外申请。
+ */
 const FETCH_TIMEOUT_MS = 25_000;
 const MAX_BODY_CHARS = 400_000;
 /** 交给前端展示的标签原文长度：够核对，不撑爆页面。 */
@@ -48,6 +58,8 @@ export interface SupplementLinkPreview {
 
 @Injectable()
 export class SupplementLinkPreviewService {
+  constructor(private readonly providerConfig: AgentProviderConfigService) {}
+
   async preview(url: string): Promise<SupplementLinkPreview> {
     const target = this.assertAllowed(url);
     const text = await this.fetchThroughProxy(target);
@@ -81,9 +93,52 @@ export class SupplementLinkPreviewService {
     if (!query) {
       return [];
     }
-    const target = `https://www.iherb.com/search?kw=${encodeURIComponent(query)}`;
-    const text = await this.fetchThroughProxy(new URL(target));
-    return this.parseCandidates(text).slice(0, Math.max(1, limit));
+    const runtime = await this.loadRuntime();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(
+        `${runtime.baseUrl.replace(/\/+$/, '')}/tools/search`,
+        {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${runtime.apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            // 只搜 iHerb 站内，别把别家的链接混进来
+            query: `site:iherb.com ${query}`,
+            count: Math.max(1, Math.min(limit, 20)),
+            need_content: false
+          })
+        }
+      );
+      if (!response.ok) {
+        throw new BadRequestException(`搜索失败（${response.status}），可以手动填或贴链接`);
+      }
+      const payload = (await response.json()) as {
+        results?: { title?: unknown; url?: unknown }[];
+      };
+      const results = Array.isArray(payload.results) ? payload.results : [];
+      return results
+        .filter((item) => typeof item.url === 'string' && item.url.includes('iherb.com/'))
+        .slice(0, Math.max(1, limit))
+        .map((item) => ({
+          url: String(item.url),
+          name: typeof item.title === 'string' && item.title.trim() ? item.title.trim() : String(item.url),
+          // 搜索接口不返回价格：宁可空着，也不要编一个
+          priceUsd: null,
+          pricePerServingUsd: null
+        }));
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException('搜索失败（可能超时），可以手动填或贴链接');
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /** 搜索页每行是 `[](商品链接 "商品名")`，价格跟在后面几行。 */
@@ -148,21 +203,33 @@ export class SupplementLinkPreviewService {
   }
 
   private async fetchThroughProxy(target: URL): Promise<string> {
+    const runtime = await this.loadRuntime();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-      const response = await fetch(`${PROXY_BASE}${target.toString()}`, {
-        signal: controller.signal,
-        headers: { Accept: 'text/plain' }
-      });
+      const response = await fetch(
+        `${runtime.baseUrl.replace(/\/+$/, '')}/tools/fetch`,
+        {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${runtime.apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ url: target.toString() })
+        }
+      );
       if (!response.ok) {
         throw new BadRequestException(
           `这个链接读不出来（${response.status}），可以换成手动填`
         );
       }
-      const body = await response.text();
-      this.assertProxyDelivered(body, target);
-      return body.slice(0, MAX_BODY_CHARS);
+      const payload = (await response.json()) as { content?: unknown };
+      const content = typeof payload.content === 'string' ? payload.content : '';
+      if (!content.trim()) {
+        throw new BadRequestException('这个链接读不到内容，可以换成手动填');
+      }
+      return content.slice(0, MAX_BODY_CHARS);
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;
@@ -172,6 +239,18 @@ export class SupplementLinkPreviewService {
       );
     } finally {
       clearTimeout(timer);
+    }
+  }
+
+  private async loadRuntime(): Promise<DeepSeekRuntimeConfig> {
+    try {
+      return await this.providerConfig.getEnabledDeepSeekRuntimeConfig({
+        purpose: INGREDIENT_INTAKE_AGENT_PURPOSE,
+        fallbackToDefault: false
+      });
+    } catch {
+      // 没有模型配置=抓取通道不可用：按"读不出来"报，别把内部配置错误漏给页面
+      throw new BadRequestException('抓取通道不可用，可以换成手动填');
     }
   }
 

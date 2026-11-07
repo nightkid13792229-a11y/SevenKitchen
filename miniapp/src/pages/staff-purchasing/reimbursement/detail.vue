@@ -189,10 +189,8 @@
         <view v-else class="record-list">
           <view
             v-for="record in auditPurchaseRecords"
-            :id="`record-${record.id}`"
             :key="record.id"
             class="record-card"
-            :class="{ highlighted: record.id === highlightRecordId }"
           >
             <view class="record-head">
               <view class="record-title-wrap">
@@ -207,7 +205,11 @@
               <text class="meta-chip">{{ formatShortDate(record.purchasedAt) }}</text>
               <text v-if="record.productModel" class="meta-chip">{{ record.productModel }}</text>
               <text v-if="isManualRecord(record)" class="meta-chip warn">无订单截图</text>
-              <text v-if="priceChangeOf(record)" class="meta-chip accent">调价</text>
+              <text
+                v-if="recordPriceTag(record)"
+                class="meta-chip"
+                :class="recordPriceTagTone(record)"
+              >{{ recordPriceTag(record) }}</text>
             </view>
 
             <view class="record-metrics">
@@ -223,48 +225,17 @@
                 <text class="metric-label">上次单价</text>
                 <text class="metric-value muted">{{ record.previousUnitPriceText }}</text>
               </view>
+              <view class="metric metric-delta">
+                <text class="metric-label">涨跌</text>
+                <text class="metric-value" :class="recordDeltaTone(record)">
+                  {{ recordDeltaText(record) }}
+                </text>
+              </view>
             </view>
 
             <text v-if="record.notes" class="record-note">备注：{{ record.notes }}</text>
           </view>
         </view>
-      </view>
-
-      <!-- ⑦ 价格变更：只展示，不给逐项确认 -->
-      <view v-if="priceChanges.length > 0" class="section">
-        <view class="section-header">
-          <text class="section-title">价格变更</text>
-          <text class="section-hint">{{ priceChangeHint }}</text>
-        </view>
-
-        <view class="price-table">
-          <view class="price-row price-head">
-            <text class="col-name">原料</text>
-            <text class="col-num">原价</text>
-            <text class="col-num">新价</text>
-            <text class="col-delta">涨跌</text>
-          </view>
-          <view
-            v-for="change in priceChanges"
-            :key="change.id"
-            class="price-row"
-            @tap="focusRecord(change.purchaseRecordId)"
-          >
-            <text class="col-name">
-              {{ change.ingredientName }}
-              <text v-if="change.isHeld" class="price-status warn">需放行</text>
-              <text v-else-if="change.statusLabel" class="price-status">{{ change.statusLabel }}</text>
-            </text>
-            <text class="col-num">{{ change.previousPriceText }}</text>
-            <text class="col-num">{{ change.proposedPriceText }}</text>
-            <text class="col-delta" :class="change.tone">{{ change.deltaText }}</text>
-          </view>
-        </view>
-
-        <text v-if="pendingPriceChangeCount > 0" class="price-footnote">
-          点一行可在上方采购明细里定位。通过后按价格闸规则生效：幅度在阈值内的直接生效，
-          超出阈值的会挂起、标「需放行」，要到电脑端确认才会变。
-        </text>
       </view>
 
       <!-- ⑧ 审核记录 -->
@@ -483,7 +454,6 @@ const uploading = ref(false);
 const uploadingReceipts = ref(false);
 const withdrawing = ref(false);
 const resubmitting = ref(false);
-const highlightRecordId = ref('');
 const purchaseRecordsByListId = ref<Record<string, any[]>>({});
 const recordsLoadFailed = ref(false);
 
@@ -1028,6 +998,46 @@ const isManualRecord = (record: any) => !record?.sourceImportId;
 
 const priceChangeOf = (record: any) => priceChangeMap.value.get(record.id);
 
+/** 行内「涨跌」：后端算好的比率，不拿两个四舍五入后的显示值相除 */
+const recordDeltaText = (record: any) => {
+  const change = priceChangeOf(record);
+  return change ? formatDeltaPercent(change.deltaRate) : '—';
+};
+
+const recordDeltaTone = (record: any) => {
+  const change = priceChangeOf(record);
+  return change ? getDeltaTone(change.deltaRate) : 'flat';
+};
+
+/** 行内标签：把「调价 / 需放行 / 已生效 / 已作废」挂在记录上 */
+const recordPriceTag = (record: any) => {
+  const change = priceChangeOf(record);
+  if (!change) {
+    return '';
+  }
+  if (change.status === 'APPROVED') {
+    return '已生效';
+  }
+  if (change.status === 'REJECTED') {
+    return '已作废';
+  }
+  return change.gateAction === 'HOLD' ? '需放行' : '调价';
+};
+
+const recordPriceTagTone = (record: any) => {
+  const change = priceChangeOf(record);
+  if (!change) {
+    return '';
+  }
+  if (change.status === 'APPROVED') {
+    return 'done';
+  }
+  if (change.status === 'REJECTED') {
+    return 'muted';
+  }
+  return change.gateAction === 'HOLD' ? 'danger' : 'accent';
+};
+
 const breakdownMismatchText = computed(() => {
   // 采购记录没加载全时，明细合计必然是 0 或不全，这时候报「相差多少」是误报
   if (recordsLoadFailed.value) {
@@ -1046,41 +1056,6 @@ const breakdownMismatchText = computed(() => {
 });
 
 /* ---------------- 价格变更 ---------------- */
-
-const priceChanges = computed(() => {
-  const changes = reimbursement.value?.priceChanges || [];
-
-  return changes.map((change: any) => {
-    const unit = change.purchaseUnit ? formatMeasurementUnit(change.purchaseUnit) : '';
-    const suffix = unit ? `/${unit}` : '';
-    const tone = getDeltaTone(change.deltaRate);
-    // 2026-11-07 终验 P0：只认真实闸门结果（gateAction），不再用另一套算法预测
-    const isHeld = change.status === 'PENDING' && change.gateAction === 'HOLD';
-    const statusLabel =
-      change.status === 'APPROVED'
-        ? '已生效'
-        : change.status === 'REJECTED'
-          ? '已作废'
-          : isHeld
-            ? '需放行'
-            : '';
-
-    return {
-      ...change,
-      previousPriceText: `¥${money(change.previousEffectivePrice)}${suffix}`,
-      proposedPriceText: `¥${money(change.proposedEffectivePrice)}${suffix}`,
-      deltaText:
-        tone === 'up'
-          ? `↑ ${formatDeltaPercent(change.deltaRate)}`
-          : tone === 'down'
-            ? `↓ ${formatDeltaPercent(change.deltaRate)}`
-            : '—',
-      tone,
-      statusLabel,
-      isHeld,
-    };
-  });
-});
 
 const pendingPriceChanges = computed(() =>
   (reimbursement.value?.priceChanges || []).filter((change: any) => change.status === 'PENDING'),
@@ -1106,18 +1081,6 @@ const maxDeltaRate = computed(() => {
     .filter((change: any) => change.status === 'PENDING')
     .map((change: any) => Math.abs(Number(change.deltaRate || 0)));
   return rates.length > 0 ? Math.max(...rates) : 0;
-});
-
-const priceChangeHint = computed(() => {
-  if (pendingPriceChangeCount.value > 0) {
-    return heldPriceChangeCount.value > 0
-      ? `${pendingPriceChangeCount.value} 项待确认（${heldPriceChangeCount.value} 项需放行）`
-      : `${pendingPriceChangeCount.value} 项待确认`;
-  }
-  if (revertedPriceChangeCount.value > 0) {
-    return `${revertedPriceChangeCount.value} 项已生效`;
-  }
-  return `${priceChanges.value.length} 项`;
 });
 
 /* ---------------- 摘要提示 ---------------- */
@@ -1541,35 +1504,6 @@ const removeReceiptPhoto = (index: number) => {
   });
 };
 
-/* ---------------- 定位 ---------------- */
-
-const focusRecord = (recordId?: string) => {
-  if (!recordId) return;
-
-  highlightRecordId.value = recordId;
-  setTimeout(() => {
-    const query = uni.createSelectorQuery();
-    query.select(`#record-${recordId}`).boundingClientRect();
-    query.selectViewport().scrollOffset();
-    query.exec((res: any[]) => {
-      const rect = res?.[0];
-      const offset = res?.[1];
-      if (!rect || !offset) {
-        return;
-      }
-      // rect.top 是相对视口的位置，要加上当前滚动量才是页面绝对位置
-      uni.pageScrollTo({
-        scrollTop: Math.max(0, Number(offset.scrollTop || 0) + rect.top - 120),
-        duration: 300,
-      });
-    });
-  }, 30);
-
-  setTimeout(() => {
-    highlightRecordId.value = '';
-  }, 2200);
-};
-
 /* ---------------- 员工动作 ---------------- */
 
 const withdrawReimbursement = () => {
@@ -1991,11 +1925,6 @@ const resubmit = () => {
   padding: 22rpx;
   transition: background-color 0.2s ease;
 
-  &.highlighted {
-    background-color: #fdf6e3;
-    border-color: #d9b96a;
-  }
-
   .record-head {
     display: flex;
     justify-content: space-between;
@@ -2052,6 +1981,21 @@ const resubmit = () => {
         color: #a8402f;
         background-color: #f8eeea;
       }
+
+      &.danger {
+        color: #fff;
+        background-color: #a8402f;
+      }
+
+      &.done {
+        color: #2f6b4f;
+        background-color: #eef2e4;
+      }
+
+      &.muted {
+        color: #8a8472;
+        background-color: #f0eee5;
+      }
     }
   }
 
@@ -2061,17 +2005,23 @@ const resubmit = () => {
 
     .metric {
       flex: 1;
+      min-width: 0;
       display: flex;
       flex-direction: column;
+      padding-right: 8rpx;
+
+      &:last-child {
+        padding-right: 0;
+      }
 
       .metric-label {
-        font-size: 20rpx;
+        font-size: 19rpx;
         color: #8a8472;
         margin-bottom: 4rpx;
       }
 
       .metric-value {
-        font-size: 24rpx;
+        font-size: 22rpx;
         color: #26261f;
         line-height: 1.4;
         word-break: break-word;
@@ -2079,6 +2029,20 @@ const resubmit = () => {
 
         &.muted {
           color: #6b6653;
+        }
+
+        &.up {
+          color: #a8402f;
+          font-weight: 600;
+        }
+
+        &.down {
+          color: #2f6b4f;
+          font-weight: 600;
+        }
+
+        &.flat {
+          color: #8a8472;
         }
       }
     }
@@ -2093,91 +2057,7 @@ const resubmit = () => {
   }
 }
 
-/* ⑦ 价格变更 */
-.price-table {
-  border-radius: 12rpx;
-  overflow: hidden;
-  border: 1rpx solid #ece4d2;
-  background-color: #fffefb;
-
-  .price-row {
-    display: flex;
-    align-items: center;
-    padding: 16rpx 18rpx;
-    border-bottom: 1rpx solid #f1ebdc;
-    font-size: 24rpx;
-
-    &:last-child {
-      border-bottom: none;
-    }
-
-    &.price-head {
-      background-color: #f6f2e6;
-      font-size: 22rpx;
-      color: #6b6653;
-
-      .col-name,
-      .col-num,
-      .col-delta {
-        color: #6b6653;
-      }
-    }
-
-    .col-name {
-      flex: 1;
-      min-width: 0;
-      color: #26261f;
-      padding-right: 8rpx;
-
-      .price-status {
-        margin-left: 6rpx;
-        font-size: 18rpx;
-        color: #6b6653;
-
-        &.warn {
-          color: #a8402f;
-        }
-      }
-    }
-
-    .col-num {
-      width: 150rpx;
-      text-align: right;
-      color: #26261f;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .col-delta {
-      width: 130rpx;
-      text-align: right;
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-
-      &.up {
-        color: #a8402f;
-      }
-
-      &.down {
-        color: #2f6b4f;
-      }
-
-      &.flat {
-        color: #8a8472;
-        font-weight: normal;
-      }
-    }
-  }
-}
-
-.price-footnote {
-  display: block;
-  margin-top: 14rpx;
-  font-size: 22rpx;
-  color: #6b6653;
-  line-height: 1.5;
-}
-
-/* ⑧ 审核记录 */
+/* ⑦ 处理进度 */
 .timeline {
   .timeline-item {
     display: flex;

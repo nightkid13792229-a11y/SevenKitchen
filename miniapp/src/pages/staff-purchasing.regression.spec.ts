@@ -109,11 +109,15 @@ describe('staff reimbursement detail guardrails', () => {
     expect(reimbursementDetailSource).toContain('先上传付款凭证');
   });
 
-  it('shows price changes as a read-only three-column table', () => {
-    expect(reimbursementDetailSource).toContain('>原价<');
-    expect(reimbursementDetailSource).toContain('>新价<');
+  it('shows 涨跌 inline on each purchase record instead of a separate table', () => {
+    // 2026-11-08：折算单价和上次单价都是按 500g 算的，再放一张「每采购单位」的表
+    // 反而要多换算一次；涨跌直接挂在采购记录上，四列一行
+    expect(reimbursementDetailSource).toContain('recordDeltaText(record)');
+    expect(reimbursementDetailSource).toContain('recordDeltaTone(record)');
     expect(reimbursementDetailSource).toContain('>涨跌<');
-    expect(reimbursementDetailSource).toContain('getDeltaTone');
+    expect(reimbursementDetailSource).toContain('recordPriceTag(record)');
+    expect(reimbursementDetailSource).not.toContain('price-table');
+    expect(reimbursementDetailSource).not.toContain('>原价<');
     expect(reimbursementDetailSource).not.toContain('确认应用');
     expect(reimbursementDetailSource).not.toContain('月成本影响');
   });

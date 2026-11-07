@@ -11,13 +11,14 @@ import { IngredientSkillService } from '../../../src/application/ingredient-crea
 describe('IngredientSkillService · 仓库里的真实技能文件', () => {
   const service = new IngredientSkillService();
 
-  it('三份技能都能解析，并且都有 name / description', () => {
+  it('每份技能都能解析，并且都有 name / description', () => {
     const skills = service.list();
 
     expect(skills.map((skill) => skill.name).sort()).toEqual([
       'core',
       'name-expansion',
       'record-selection',
+      'supplement-selection',
     ]);
     for (const skill of skills) {
       expect(skill.description.length).toBeGreaterThan(0);

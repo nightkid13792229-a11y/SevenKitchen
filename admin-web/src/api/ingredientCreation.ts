@@ -12,6 +12,7 @@ import type {
   CreateSupplementIngredientResultDto,
   PendingSupplementArchiveDto,
   SupplementEvidenceDto,
+  SupplementCandidateDto,
   SupplementLinkPreviewDto,
   CheckDomain,
   CheckRunView,
@@ -36,6 +37,10 @@ export const ingredientCreationApi = {
     payload: CreateSupplementIngredientPayload
   ): Promise<CreateSupplementIngredientResultDto> =>
     api.post(`${BASE}/supplements`, payload),
+
+  /** 按关键词去电商搜候选（只有链接、名字、标价，没有成分表）。 */
+  searchSupplementCandidates: (keyword: string): Promise<SupplementCandidateDto[]> =>
+    api.post(`${BASE}/supplements/search-candidates`, { keyword }),
 
   /** 按商品链接读初稿；读不出会 400，调用方退回手填。 */
   previewSupplementLink: (url: string): Promise<SupplementLinkPreviewDto> =>

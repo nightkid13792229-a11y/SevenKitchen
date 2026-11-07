@@ -25,7 +25,7 @@ import { AdminGuard } from '../../src/interfaces/guards/role.guard';
 describe('补剂建档接口', () => {
   let app: INestApplication;
   let supplementService: { create: jest.Mock; listPending: jest.Mock; getEvidence: jest.Mock };
-  let previewService: { preview: jest.Mock };
+  let previewService: { preview: jest.Mock; searchCandidates: jest.Mock };
 
   const body = {
     name: '鱼油（Omega-3）',
@@ -74,6 +74,14 @@ describe('补剂建档接口', () => {
     };
 
     previewService = {
+      searchCandidates: jest.fn(async () => [
+        {
+          url: 'https://www.iherb.com/pr/now-foods-zinc-picolinate-50-mg-120-veg-capsules/878',
+          name: 'NOW Foods, Zinc Picolinate, 50 mg, 120 Veg Capsules',
+          priceUsd: 10.05,
+          pricePerServingUsd: 0.08,
+        },
+      ]),
       preview: jest.fn(async () => ({
         productUrl: 'https://www.iherb.com/pr/x/1',
         productName: '某某鱼油',
@@ -195,5 +203,25 @@ describe('补剂建档接口', () => {
         .send({}),
     ).expect(400);
     expect(previewService.preview).not.toHaveBeenCalled();
+  });
+
+  it('按关键词能搜出候选，带标价', async () => {
+    const res = await authed(
+      http()
+        .post('/api/v1/admin/ingredient-creation/supplements/search-candidates')
+        .send({ keyword: '锌' }),
+    ).expect(201);
+
+    expect(res.body.data[0].name).toContain('Zinc Picolinate');
+    expect(previewService.searchCandidates).toHaveBeenCalledWith('锌');
+  });
+
+  it('没给关键词时 400，且不去搜', async () => {
+    await authed(
+      http()
+        .post('/api/v1/admin/ingredient-creation/supplements/search-candidates')
+        .send({}),
+    ).expect(400);
+    expect(previewService.searchCandidates).not.toHaveBeenCalled();
   });
 });

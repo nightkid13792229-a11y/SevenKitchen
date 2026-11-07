@@ -115,4 +115,58 @@ describe('SupplementLinkPreviewService', () => {
     const preview = await service.preview('https://www.iherb.com/pr/x/1');
     expect(preview.servingUnitsPerDose).toBe(4);
   });
+
+  /**
+   * 下面这段是从真实 iHerb 搜索页抓下来的片段（去掉了图片与评价噪声），
+   * 链接、标题、价格三样都按页面原样保留。
+   */
+  const SEARCH_PAGE = `[](https://www.iherb.com/pr/now-foods-zinc-picolinate-50-mg-120-veg-capsules/878 "NOW Foods, Zinc Picolinate, 50 mg, 120 Veg Capsules")
+
+![](https://cloudinary.images-iherb.com/image/upload/x.jpg)
+
+NOW Foods, Zinc Picolinate, 50 mg, 120 Veg Capsules
+
+$10.05($0.08/serving)
+
+[](https://www.iherb.com/pr/california-gold-nutrition-zinc-picolinate-50-mg-120-veggie-capsules/91976 "California Gold Nutrition, Zinc Picolinate, 50 mg, 120 Veggie Capsules")
+
+$8.20($0.07/serving)
+
+[](https://www.iherb.com/pr/now-foods-zinc-picolinate-50-mg-120-veg-capsules/878 "4.8/5 - 54,110 Reviews")`;
+
+  it('搜索页能捞出候选：链接、名字、标价、每份价', async () => {
+    const { service } = serviceWithFetch(SEARCH_PAGE);
+
+    const candidates = await service.searchCandidates('zinc picolinate');
+
+    expect(candidates).toHaveLength(2);
+    expect(candidates[0]).toEqual({
+      url: 'https://www.iherb.com/pr/now-foods-zinc-picolinate-50-mg-120-veg-capsules/878',
+      name: 'NOW Foods, Zinc Picolinate, 50 mg, 120 Veg Capsules',
+      priceUsd: 10.05,
+      pricePerServingUsd: 0.08,
+    });
+  });
+
+  it('同一商品在页面上出现多次只收一次', async () => {
+    const { service } = serviceWithFetch(SEARCH_PAGE);
+    const candidates = await service.searchCandidates('zinc');
+    const urls = candidates.map((item) => item.url);
+    expect(new Set(urls).size).toBe(urls.length);
+  });
+
+  it('搜索页没有价格时留空，不编一个数', async () => {
+    const { service } = serviceWithFetch(
+      `[](https://www.iherb.com/pr/x/1 "某商品")`,
+    );
+    const [only] = await service.searchCandidates('x');
+    expect(only.priceUsd).toBeNull();
+    expect(only.pricePerServingUsd).toBeNull();
+  });
+
+  it('空关键词不发请求', async () => {
+    const { service, fetchMock } = serviceWithFetch(SEARCH_PAGE);
+    expect(await service.searchCandidates('   ')).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

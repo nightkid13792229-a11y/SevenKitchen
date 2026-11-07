@@ -635,6 +635,13 @@ export interface SupplementLinkPreviewNutrientDto {
   rawName: string
 }
 
+export interface SupplementCandidateDto {
+  url: string
+  name: string
+  priceUsd: number | null
+  pricePerServingUsd: number | null
+}
+
 export interface SupplementLinkPreviewDto {
   productUrl: string
   productName: string | null

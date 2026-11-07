@@ -5,6 +5,20 @@
       目录那一列只是提示，不参与淘汰。
     </p>
 
+    <div class="compare__search">
+      <el-input
+        v-model="keyword"
+        placeholder="要补什么？例如：锌 / 鱼油"
+        style="width: 240px"
+      />
+      <el-button :loading="searching" data-action="search-candidates" @click="searchCandidates">
+        帮我找候选
+      </el-button>
+      <span class="compare__count">
+        搜的是 iHerb，只带名字和标价回来；规格与含量照标签补
+      </span>
+    </div>
+
     <el-table :data="rows" size="small" border>
       <el-table-column label="候选" min-width="150">
         <template #default="{ row }">
@@ -101,13 +115,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import {
   compareCandidates,
   type CandidateFacts,
   type ComparisonResult
 } from './compareCandidates'
 import { findHardExclusion } from '@/constants/supplementHardExclusions'
+import { ingredientCreationApi } from '@/api/ingredientCreation'
 
 /**
  * 选品对比。
@@ -134,6 +150,8 @@ const emit = defineEmits<{
 
 let seq = 0
 const rows = reactive<CompareRow[]>([newRow(), newRow()])
+const keyword = ref('')
+const searching = ref(false)
 
 function newRow(): CompareRow {
   seq += 1
@@ -148,6 +166,35 @@ function newRow(): CompareRow {
     servingUnits: 1,
     catalogDogAllowed: null
   }
+}
+
+/** 搜到的候选直接排成行：名字和标价先填上，规格含量还得照标签补。 */
+async function searchCandidates(): Promise<void> {
+  const q = keyword.value.trim()
+  if (!q) {
+    return
+  }
+  searching.value = true
+  try {
+    const found = await ingredientCreationApi.searchSupplementCandidates(q)
+    rows.splice(0, rows.length, ...found.map(toRow))
+    if (found.length === 0) {
+      ElMessage.info('没搜到候选，换个说法再试，或者直接贴商品链接')
+    }
+  } catch (error) {
+    const body = (error as { response?: { data?: { message?: unknown } } })?.response?.data
+    const message = typeof body?.message === 'string' ? body.message : '搜不到，稍后再试'
+    ElMessage.error(message)
+  } finally {
+    searching.value = false
+  }
+}
+
+function toRow(candidate: { name: string; priceUsd: number | null }): CompareRow {
+  const row = newRow()
+  row.name = candidate.name
+  row.price = candidate.priceUsd
+  return row
 }
 
 function addRow(): void {
@@ -206,6 +253,7 @@ function useCandidate(key: string): void {
   color: #8a9099;
   line-height: 1.6;
 }
+.compare__search{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .compare__actions {
   display: flex;
   align-items: center;

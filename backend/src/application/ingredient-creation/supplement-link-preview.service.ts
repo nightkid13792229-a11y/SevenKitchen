@@ -27,6 +27,15 @@ export interface LinkPreviewNutrient {
   rawName: string;
 }
 
+export interface SupplementCandidate {
+  url: string;
+  name: string;
+  /** 商品页上的标价（美元），读不到就是 null */
+  priceUsd: number | null;
+  /** 每份折算价（美元），读不到就是 null */
+  pricePerServingUsd: number | null;
+}
+
 export interface SupplementLinkPreview {
   productUrl: string;
   productName: string | null;
@@ -59,6 +68,59 @@ export class SupplementLinkPreviewService {
       unrecognized: parsed.unrecognized,
       labelText: this.extractLabelText(text)
     };
+  }
+
+  /**
+   * 按关键词去 iHerb 搜一圈，把候选捞出来。
+   *
+   * 只捞「链接 + 名字 + 标价」——成分表要逐个商品页去读（`preview`），
+   * 搜索页上没有。捞不到就返回空数组，不硬凑。
+   */
+  async searchCandidates(keyword: string, limit = 8): Promise<SupplementCandidate[]> {
+    const query = keyword.trim();
+    if (!query) {
+      return [];
+    }
+    const target = `https://www.iherb.com/search?kw=${encodeURIComponent(query)}`;
+    const text = await this.fetchThroughProxy(new URL(target));
+    return this.parseCandidates(text).slice(0, Math.max(1, limit));
+  }
+
+  /** 搜索页每行是 `[](商品链接 "商品名")`，价格跟在后面几行。 */
+  parseCandidates(text: string): SupplementCandidate[] {
+    const lines = text.split(/\r?\n/);
+    const results: SupplementCandidate[] = [];
+    const seen = new Set<string>();
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const match = lines[index].match(
+        /\[\]\((https:\/\/www\.iherb\.com\/pr\/[^)\s"]+)\s+"([^"]+)"\)/
+      );
+      if (!match) {
+        continue;
+      }
+      const [, url, title] = match;
+      // 同一商品在页面上会出现好几次（图、标题、评价数），只收第一次
+      if (seen.has(url) || /\/5 - /.test(title)) {
+        continue;
+      }
+      seen.add(url);
+
+      let priceUsd: number | null = null;
+      let pricePerServingUsd: number | null = null;
+      for (let probe = index; probe < Math.min(index + 20, lines.length); probe += 1) {
+        const price = lines[probe].match(/\$([\d.]+)\s*\(\$([\d.]+)\/serving\)/);
+        if (price) {
+          priceUsd = Number(price[1]);
+          pricePerServingUsd = Number(price[2]);
+          break;
+        }
+      }
+
+      results.push({ url, name: title.trim(), priceUsd, pricePerServingUsd });
+    }
+
+    return results;
   }
 
   private assertAllowed(raw: string): URL {

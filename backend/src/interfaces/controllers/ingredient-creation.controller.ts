@@ -37,6 +37,7 @@ import {
 import { IngredientCreationCandidateService } from '../../application/ingredient-creation/ingredient-creation-candidate.service';
 import {
   SupplementLinkPreviewService,
+  type SupplementCandidate,
   type SupplementLinkPreview,
 } from '../../application/ingredient-creation/supplement-link-preview.service';
 import {
@@ -48,6 +49,7 @@ import {
 import {
   CreateSupplementIngredientDto,
   PreviewSupplementLinkDto,
+  SearchSupplementCandidatesDto,
   toCreateSupplementInput,
 } from '../dto/ingredient-creation/create-supplement-ingredient.dto';
 import {
@@ -198,6 +200,17 @@ export class IngredientCreationController {
   ): Promise<ApiResponseDto<SupplementLinkPreview>> {
     const preview = await this.supplementLinkPreviewService.preview(dto.url);
     return new ApiResponseDto(0, 'Success', preview);
+  }
+
+  @Post('supplements/search-candidates')
+  @ApiOperation({ summary: '按关键词去电商搜一圈，捞出候选（链接 + 名字 + 标价）' })
+  async searchSupplementCandidates(
+    @Body() dto: SearchSupplementCandidatesDto,
+  ): Promise<ApiResponseDto<SupplementCandidate[]>> {
+    const candidates = await this.supplementLinkPreviewService.searchCandidates(
+      dto.keyword,
+    );
+    return new ApiResponseDto(0, 'Success', candidates);
   }
 
   @Get('supplements/pending')

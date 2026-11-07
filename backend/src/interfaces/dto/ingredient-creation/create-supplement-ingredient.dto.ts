@@ -70,6 +70,14 @@ export class PreviewSupplementLinkDto {
   url!: string;
 }
 
+export class SearchSupplementCandidatesDto {
+  @ApiProperty({ description: '要补什么，例如「锌」「鱼油」', example: '锌' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(60)
+  keyword!: string;
+}
+
 export class CreateSupplementIngredientDto {
   @ApiProperty({ description: '原料名称', example: '鱼油（Omega-3）' })
   @IsString()

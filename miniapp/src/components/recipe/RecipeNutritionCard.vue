@@ -28,7 +28,7 @@
 
     <view v-if="cells.length" class="nutrition-card__grid">
       <view v-for="cell in cells" :key="cell.key" class="nutrition-cell">
-        <text class="nutrition-cell__value">{{ cell.value }}</text>
+        <text class="nutrition-cell__value">{{ cell.value }}<text v-if="cell.unit" class="nutrition-cell__unit">{{ cell.unit }}</text></text>
         <text class="nutrition-cell__label">{{ cell.label }}</text>
       </view>
     </view>
@@ -58,11 +58,14 @@ import { computed } from 'vue'
 import { getNutritionStandardLabel } from '@/utils/label-mapping'
 
 /**
- * 8 项的显示顺序与单位。
+ * 8 项的显示顺序、单位与标签。
  *
  * ⚠️ **顺序写死在这里**，不由后端传 —— 后端只给数字，
  * 顺序是"产品决定"（谁在前谁在后影响阅读）。
  * 8 项正好填满 4×2 网格，多一项少一项都会破版。
+ *
+ * 单位跟数字一起画在格子里（2026-11-07 老板指出：只显示 38.2 没有 %，
+ * 会被读成"38.2 克"或"38.2 倍"）。能量按**每公斤**给，钙磷比给 `N:1`。
  */
 const MACRO_CELLS = [
   { key: 'proteinPercent', label: '蛋白质', unit: '%' },
@@ -71,7 +74,7 @@ const MACRO_CELLS = [
   { key: 'moisturePercent', label: '含水量', unit: '%' },
   { key: 'crudeFiberPercent', label: '膳食纤维', unit: '%' },
   { key: 'carbohydratePercent', label: '碳水', unit: '%' },
-  { key: 'energyDensityKcalPerKg', label: 'kcal/g', unit: '' },
+  { key: 'energyDensityKcalPerKg', label: '能量密度', unit: 'kcal/kg' },
   { key: 'calciumPhosphorusRatio', label: '钙磷比', unit: '' },
 ] as const
 
@@ -105,14 +108,20 @@ const standardLabel = computed(() => {
   return `${getNutritionStandardLabel(value)} 犬营养标准`
 })
 
-/** 能量密度后端按 kcal/kg 存，这里换算成 kcal/g 显示 */
+/**
+ * 数值格式。
+ *
+ * · 能量密度：后端存的就是 **kcal/kg**（如 1144），按每公斤原样显示，
+ *   不再折成每克 —— 鲜食一克只有 1 点几卡，写成 1.14 kcal/g 没人有感觉。
+ * · 钙磷比：必须写成 `1.35:1`。只写 1.35 会被读成"1.35 倍"，
+ *   而它的意思是"钙是磷的 1.35 倍"，即 1.35 : 1。
+ */
 function formatValue(key: MacroKey, raw: number | null): string {
   if (raw === null || raw === undefined || !Number.isFinite(raw)) return '—'
-  if (key === 'energyDensityKcalPerKg') {
-    // 3200 kcal/kg → 3.2 kcal/g。两位小数以内，去掉多余的 0
-    return String(Math.round((raw / 1000) * 100) / 100)
+  if (key === 'energyDensityKcalPerKg') return String(Math.round(raw))
+  if (key === 'calciumPhosphorusRatio') {
+    return `${Math.round(raw * 100) / 100}:1`
   }
-  if (key === 'calciumPhosphorusRatio') return String(Math.round(raw * 100) / 100)
   return String(Math.round(raw * 10) / 10)
 }
 
@@ -122,6 +131,7 @@ const cells = computed(() => {
   return MACRO_CELLS.map((cell) => ({
     key: cell.key,
     label: cell.label,
+    unit: cell.unit,
     value: formatValue(cell.key, (macros[cell.key] ?? null) as number | null),
   }))
 })
@@ -180,6 +190,16 @@ const cells = computed(() => {
   font-size: 28rpx;
   font-weight: 800;
   color: #b45309;
+  /* 「1144 kcal/kg」不能被拆成两行 */
+  white-space: nowrap;
+}
+
+/* 单位跟在数字后面，比数字小一号：不抢眼，但不能少（少了 38.2 就说不清是什么） */
+.nutrition-cell__unit {
+  font-size: 18rpx;
+  font-weight: 700;
+  color: #b45309;
+  margin-left: 2rpx;
 }
 
 .nutrition-cell__label {

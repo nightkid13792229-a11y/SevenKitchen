@@ -43,8 +43,22 @@ describe('RecipeNutritionCard · 核心营养成分卡', () => {
     expect(keys[7]).toContain('calciumPhosphorusRatio')
   })
 
-  it('能量密度从 kcal/kg 换算成 kcal/g 显示', () => {
-    expect(source).toContain('raw / 1000')
+  it('★ 百分比必须带 %：只画数字会被读成"38.2 克/38.2 倍"', () => {
+    // 单位写在 MACRO_CELLS 里还不够 —— 2026-11-07 的毛病就是定义了 unit 却没渲染
+    expect(source).toContain("unit: '%'")
+    expect(source).toContain('{{ cell.unit }}')
+    expect(source).toContain('nutrition-cell__unit')
+  })
+
+  it('★ 能量密度按每公斤显示（1144 kcal/kg），不再折成每克', () => {
+    expect(source).toContain("label: '能量密度'")
+    expect(source).toContain("unit: 'kcal/kg'")
+    expect(source).not.toContain('raw / 1000')
+    expect(source).toContain('Math.round(raw)')
+  })
+
+  it('★ 钙磷比写成 N:1（只写 1.35 会被读成 1.35 倍）', () => {
+    expect(source).toContain('}:1`')
   })
 
   it('没有 standard 时整行不显示（不留空标签）；页面有 banner 时可关闭', () => {

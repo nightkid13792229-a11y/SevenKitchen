@@ -29,12 +29,12 @@
         class="recipe-card"
         @tap="goToDetail(recipe.id)"
       >
-        <!-- 封面图 -->
+        <!-- 封面图：食谱封面统一是 750×422（16:9），预览窗也按同比例，避免方图裁掉两边 -->
         <view class="recipe-cover">
           <image
             v-if="recipe.coverImageUrl"
             :src="recipe.coverImageUrl"
-            mode="aspectFill"
+            mode="aspectFit"
             class="cover-image"
           />
           <view v-else class="cover-placeholder">
@@ -86,7 +86,6 @@ const currentStatus = ref('')
 
 const statusOptions = [
   { label: '全部', value: '' },
-  { label: '草稿', value: 'DRAFT' },
   { label: '公开', value: 'PUBLIC' },
   { label: '私密定制', value: 'PRIVATE_CUSTOM' },
 ]
@@ -127,7 +126,6 @@ function goToDetail(recipeId: string) {
 
 function getStatusLabel(status: string): string {
   const map: Record<string, string> = {
-    'DRAFT': '草稿',
     'PUBLIC': '公开',
     'PRIVATE_CUSTOM': '私密定制',
   }
@@ -136,7 +134,6 @@ function getStatusLabel(status: string): string {
 
 function getStatusClass(status: string): string {
   const map: Record<string, string> = {
-    'DRAFT': 'badge-draft',
     'PUBLIC': 'badge-public',
     'PRIVATE_CUSTOM': 'badge-private',
   }
@@ -194,6 +191,7 @@ function getStatusClass(status: string): string {
 
 .recipe-card {
   display: flex;
+  align-items: center;
   background-color: #fbfcf7;
   border-radius: 16rpx;
   overflow: hidden;
@@ -205,10 +203,12 @@ function getStatusClass(status: string): string {
 }
 
 .recipe-cover {
-  width: 200rpx;
-  height: 200rpx;
+  // 240 × 135 = 16:9，与食谱封面的 750 × 422 同比例
+  width: 240rpx;
+  height: 135rpx;
   flex-shrink: 0;
   position: relative;
+  background-color: #eef2e4;
 }
 
 .cover-image {
@@ -244,10 +244,6 @@ function getStatusClass(status: string): string {
   }
 }
 
-.badge-draft {
-  background-color: rgba(242, 244, 234, 0.6);
-}
-
 .badge-public {
   background-color: rgba(30, 58, 47, 0.6);
 }
@@ -258,15 +254,15 @@ function getStatusClass(status: string): string {
 
 .recipe-info {
   flex: 1;
-  padding: 24rpx;
+  padding: 20rpx 24rpx;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 12rpx;
+  gap: 8rpx;
 }
 
 .recipe-name {
-  font-size: 30rpx;
+  font-size: 28rpx;
   font-weight: bold;
   color: #26261f;
   display: -webkit-box;

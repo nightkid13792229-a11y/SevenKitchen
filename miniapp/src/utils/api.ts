@@ -671,8 +671,8 @@ export function getFavorites(page: number = 1, pageSize: number = 20): Promise<{
 // ==================== Staff Recipes API ====================
 
 /**
- * 获取员工可见的所有食谱列表（含非公开状态）
- * @param status 按状态筛选（可选）
+ * 获取员工可见的食谱列表（草稿不再返回）
+ * @param status 按状态筛选（可选；传 DRAFT 会返回空列表）
  */
 export function getStaffRecipes(status?: string): Promise<Array<{
   id: string

@@ -13,4 +13,15 @@ describe('staff recipes page', () => {
     expect(source).toContain('{{ getLifeStageLabel(stage) }}')
     expect(source).not.toContain('function getLifeStageLabel(stage: string)')
   })
+
+  it('does not offer a draft filter on the recipe management page', () => {
+    expect(source).not.toContain("label: '草稿'")
+  })
+
+  it('previews covers at the same 16:9 ratio used by recipe covers', () => {
+    expect(source).toContain('width: 240rpx')
+    expect(source).toContain('height: 135rpx')
+    expect(source).not.toContain('height: 200rpx')
+    expect(source).toContain('mode="aspectFit"')
+  })
 })

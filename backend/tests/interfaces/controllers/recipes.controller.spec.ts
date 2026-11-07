@@ -299,7 +299,7 @@ describe('RecipesController (e2e)', () => {
   });
 
   describe('GET /api/v1/recipes/staff/all', () => {
-    it('orders private custom recipes by most recently updated first', async () => {
+    it('excludes drafts and orders every visible recipe by most recently updated first', async () => {
       mockJwtAuthService.validateToken.mockReturnValueOnce({
         userId: 'staff-1',
         customerId: 'staff-1',
@@ -310,33 +310,25 @@ describe('RecipesController (e2e)', () => {
 
       mockPrismaService.recipe.findMany.mockResolvedValue([
         {
-          id: 'row-private-a-v2',
-          recipeId: 'private-a',
-          name: '星星的鲜食',
-          status: 'PRIVATE_CUSTOM',
+          id: 'row-public-old-v1',
+          recipeId: 'public-old',
+          seriesId: 'series-public',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          name: '成犬鲜食',
+          status: 'PUBLIC',
           coverImageUrl: null,
-          version: 2,
+          version: 1,
           createdAt: new Date('2026-06-01T08:00:00.000Z'),
           updatedAt: olderUpdate,
           applicableLifeStages: [],
           targetHealthTags: [],
         },
         {
-          id: 'row-private-a-v1',
-          recipeId: 'private-a',
-          name: '星星的鲜食旧版',
-          status: 'PRIVATE_CUSTOM',
-          coverImageUrl: null,
-          version: 1,
-          createdAt: new Date('2026-05-30T08:00:00.000Z'),
-          updatedAt: new Date('2026-06-09T08:00:00.000Z'),
-          applicableLifeStages: [],
-          targetHealthTags: [],
-        },
-        {
-          id: 'row-private-b-v1',
-          recipeId: 'private-b',
-          name: '毛毛的鲜食',
+          id: 'row-private-new-v1',
+          recipeId: 'private-new',
+          seriesId: 'series-private',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          name: '星星的鲜食',
           status: 'PRIVATE_CUSTOM',
           coverImageUrl: null,
           version: 1,
@@ -345,26 +337,149 @@ describe('RecipesController (e2e)', () => {
           applicableLifeStages: [],
           targetHealthTags: [],
         },
+        {
+          id: 'row-draft-newest-v1',
+          recipeId: 'draft-newest',
+          seriesId: 'series-draft',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          name: '未完成的草稿',
+          status: 'DRAFT',
+          coverImageUrl: null,
+          version: 1,
+          createdAt: new Date('2026-06-03T08:00:00.000Z'),
+          updatedAt: new Date('2026-06-15T08:00:00.000Z'),
+          applicableLifeStages: [],
+          targetHealthTags: [],
+        },
       ]);
 
       const response = await request(app.getHttpServer())
-        .get('/api/v1/recipes/staff/all?status=PRIVATE_CUSTOM')
+        .get('/api/v1/recipes/staff/all')
         .set('Authorization', 'Bearer staff-token')
         .expect(200);
 
       expect(mockPrismaService.recipe.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { status: 'PRIVATE_CUSTOM' },
+          where: { status: { not: 'DRAFT' } },
           orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
           select: expect.objectContaining({
+            seriesId: true,
+            seriesLifeStage: true,
             updatedAt: true,
           }),
         }),
       );
       expect(
         response.body.data.map((recipe: { id: string }) => recipe.id),
-      ).toEqual(['private-b', 'private-a']);
+      ).toEqual(['private-new', 'public-old']);
       expect(response.body.data[0].updatedAt).toBe(newerUpdate.toISOString());
+    });
+
+    it('shows only the latest version of each series stage', async () => {
+      mockJwtAuthService.validateToken.mockReturnValueOnce({
+        userId: 'staff-1',
+        customerId: 'staff-1',
+        role: 'STAFF',
+      });
+
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        {
+          id: 'row-chain-v5',
+          recipeId: 'chain-recipe',
+          seriesId: 'series-adult',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          name: '旧链路 v5',
+          status: 'PUBLIC',
+          coverImageUrl: null,
+          version: 5,
+          createdAt: new Date('2026-05-01T08:00:00.000Z'),
+          updatedAt: new Date('2026-06-01T08:00:00.000Z'),
+          applicableLifeStages: [],
+          targetHealthTags: [],
+        },
+        {
+          id: 'row-chain-v1',
+          recipeId: 'chain-recipe',
+          seriesId: 'series-adult',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          name: '旧链路 v1',
+          status: 'PUBLIC',
+          coverImageUrl: null,
+          version: 1,
+          createdAt: new Date('2026-04-01T08:00:00.000Z'),
+          updatedAt: new Date('2026-05-01T08:00:00.000Z'),
+          applicableLifeStages: [],
+          targetHealthTags: [],
+        },
+        {
+          id: 'row-replacement-v1',
+          recipeId: 'replacement-recipe',
+          seriesId: 'series-adult',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          name: '新链路 v1',
+          status: 'PUBLIC',
+          coverImageUrl: null,
+          version: 1,
+          createdAt: new Date('2026-07-01T08:00:00.000Z'),
+          updatedAt: new Date('2026-07-02T08:00:00.000Z'),
+          applicableLifeStages: [],
+          targetHealthTags: [],
+        },
+        {
+          id: 'row-senior-v1',
+          recipeId: 'senior-recipe',
+          seriesId: 'series-adult',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          name: '老年版',
+          status: 'PUBLIC',
+          coverImageUrl: null,
+          version: 1,
+          createdAt: new Date('2026-06-01T08:00:00.000Z'),
+          updatedAt: new Date('2026-06-02T08:00:00.000Z'),
+          applicableLifeStages: [],
+          targetHealthTags: [],
+        },
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/staff/all')
+        .set('Authorization', 'Bearer staff-token')
+        .expect(200);
+
+      expect(
+        response.body.data.map((recipe: { id: string }) => recipe.id),
+      ).toEqual(['replacement-recipe', 'senior-recipe']);
+    });
+
+    it('returns no drafts when the removed draft filter is requested', async () => {
+      mockJwtAuthService.validateToken.mockReturnValueOnce({
+        userId: 'staff-1',
+        customerId: 'staff-1',
+        role: 'STAFF',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        {
+          id: 'row-draft-v1',
+          recipeId: 'draft-only',
+          seriesId: 'series-draft',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          name: '未完成的草稿',
+          status: 'DRAFT',
+          coverImageUrl: null,
+          version: 1,
+          createdAt: new Date('2026-06-03T08:00:00.000Z'),
+          updatedAt: new Date('2026-06-15T08:00:00.000Z'),
+          applicableLifeStages: [],
+          targetHealthTags: [],
+        },
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/staff/all?status=DRAFT')
+        .set('Authorization', 'Bearer staff-token')
+        .expect(200);
+
+      expect(response.body.data).toEqual([]);
     });
   });
 

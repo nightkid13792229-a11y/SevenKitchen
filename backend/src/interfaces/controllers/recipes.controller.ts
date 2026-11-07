@@ -759,27 +759,36 @@ export class RecipesController {
   @Get('staff/all')
   @UseGuards(AuthGuard, StaffGuard)
   @ApiSecurity('bearer')
-  @ApiOperation({ summary: 'List all recipes for staff (all statuses)' })
+  @ApiOperation({ summary: 'List recipes for staff (drafts excluded)' })
   @ApiQuery({
     name: 'status',
     required: false,
-    description: 'Filter by status',
+    description: 'Filter by status; drafts are no longer listed',
   })
   async listStaffRecipes(
     @Query('status') status?: string,
   ): Promise<ApiResponseDto<any>> {
-    const where: any = {};
-    if (status) {
-      where.status = status;
+    /**
+     * 2026-11-07：食谱管理页不再展示草稿。
+     * 旧客户端如果还带着 status=DRAFT，也直接给空列表，避免把草稿又放出来。
+     */
+    if (status === RecipeStatus.DRAFT) {
+      return ApiResponseDto.success([]);
     }
 
-    // Get latest version of each recipe
+    const where: any = {
+      status: status || { not: RecipeStatus.DRAFT },
+    };
+
+    // Get all versions; the latest one per recipe (series stage) wins below.
     const recipes = await this.prisma.recipe.findMany({
       where,
       orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
       select: {
         id: true,
         recipeId: true,
+        seriesId: true,
+        seriesLifeStage: true,
         name: true,
         status: true,
         coverImageUrl: true,
@@ -791,37 +800,80 @@ export class RecipesController {
       },
     });
 
-    // Deduplicate: keep only the latest version per recipeId
-    const seen = new Set<string>();
-    const summaries = recipes
-      .filter((r: any) => {
-        if (seen.has(r.recipeId)) return false;
-        seen.add(r.recipeId);
-        return true;
-      })
-      .map((r: any) => ({
-        id: r.recipeId,
-        version: r.version,
-        name: r.name,
-        status: r.status,
-        coverImageUrl: r.coverImageUrl?.replace('http://', 'https://'),
-        applicableLifeStages: r.applicableLifeStages || [],
-        targetHealthTags: r.targetHealthTags || [],
-        createdAt: r.createdAt,
-        updatedAt: r.updatedAt,
-      }));
+    // 双保险：即使旧查询条件漏了，草稿也不进入食谱管理页。
+    const visibleRecipes = recipes.filter(
+      (recipe) => recipe.status !== RecipeStatus.DRAFT,
+    );
 
-    if (status === RecipeStatus.PRIVATE_CUSTOM) {
-      summaries.sort((left: any, right: any) => {
-        const leftUpdatedAt = new Date(
-          left.updatedAt || left.createdAt,
-        ).getTime();
-        const rightUpdatedAt = new Date(
-          right.updatedAt || right.createdAt,
-        ).getTime();
-        return rightUpdatedAt - leftUpdatedAt;
-      });
+    /**
+     * 只展示最新版本：
+     *  · 同一系列 + 同一生命阶段 = 同一道菜，只保留最新的一版；
+     *  · 正常版本链（recipeId 相同）按 version 取最新；
+     *  · 历史数据里同一阶段可能换过 recipeId，此时以最新创建的那条为准；
+     *  · 不在系列里的独立食谱（老数据）按 recipeId 去重。
+     */
+    const latestBySeriesStage = new Map<
+      string,
+      (typeof visibleRecipes)[number]
+    >();
+    for (const recipe of visibleRecipes) {
+      const key =
+        recipe.seriesId && recipe.seriesLifeStage
+          ? `series:${recipe.seriesId}:${recipe.seriesLifeStage}`
+          : `recipe:${recipe.recipeId}`;
+      const current = latestBySeriesStage.get(key);
+
+      if (!current) {
+        latestBySeriesStage.set(key, recipe);
+        continue;
+      }
+
+      if (current.recipeId === recipe.recipeId) {
+        // orderBy 已保证同一 recipeId 的第一条是最高版本；这里再兜一层。
+        if (recipe.version > current.version) {
+          latestBySeriesStage.set(key, recipe);
+        }
+        continue;
+      }
+
+      if (
+        new Date(recipe.createdAt).getTime() >
+        new Date(current.createdAt).getTime()
+      ) {
+        latestBySeriesStage.set(key, recipe);
+      }
     }
+
+    const summaries = [...latestBySeriesStage.values()].map((r: any) => ({
+      id: r.recipeId,
+      version: r.version,
+      name: r.name,
+      status: r.status,
+      coverImageUrl: r.coverImageUrl?.replace('http://', 'https://'),
+      applicableLifeStages: r.applicableLifeStages || [],
+      targetHealthTags: r.targetHealthTags || [],
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    }));
+
+    // 所有标签页统一按最后更新时间倒序；时间相同再按创建时间 / id 稳定排序。
+    const timestamp = (value: Date | string | null | undefined): number => {
+      if (!value) return 0;
+      const time = new Date(value).getTime();
+      return Number.isFinite(time) ? time : 0;
+    };
+    summaries.sort((left: any, right: any) => {
+      const byUpdatedAt =
+        timestamp(right.updatedAt || right.createdAt) -
+        timestamp(left.updatedAt || left.createdAt);
+      if (byUpdatedAt !== 0) return byUpdatedAt;
+
+      const byCreatedAt =
+        timestamp(right.createdAt) - timestamp(left.createdAt);
+      if (byCreatedAt !== 0) return byCreatedAt;
+
+      return String(right.id).localeCompare(String(left.id));
+    });
 
     return ApiResponseDto.success(summaries);
   }

@@ -85,9 +85,35 @@ describe('交付页 · 内容与交互（P1）', () => {
   });
 
   it('★ 添加浓度用“每公斤食材添加 X 单位”，喂食说明只留头尾', () => {
-    expect(source).toContain('每公斤食材添加');
+    // 2026-11-07：摊平文案收进 utils/supplement-nutrients，与详情页共用一份
+    const nutrientRowsSource = read('src/utils/supplement-nutrients.ts');
+    expect(source).toContain('buildSupplementNutrientRows');
+    expect(nutrientRowsSource).toContain('每公斤食材添加');
     expect(template).toContain('喂食建议仅供参考。可以点击下方【自己做】自定义配置。');
     expect(template).not.toContain('每天喂食量、每日进食次数和每餐喂食量');
+  });
+
+  it('★ 营养报告入口在页面最下方（核心营养成分之后）', () => {
+    expect(template).toContain('NutritionReportEntry');
+    expect(template).toContain('@open="openNutritionReport"');
+    expect(source).toContain('/pages/recipe-nutrition-report/index');
+
+    const nutritionCardIndex = template.indexOf('<RecipeNutritionCard');
+    const reportEntryIndex = template.indexOf('<NutritionReportEntry');
+    const bottomBarIndex = template.indexOf('class="bottom-bar"');
+
+    expect(nutritionCardIndex).toBeGreaterThan(-1);
+    expect(reportEntryIndex).toBeGreaterThan(nutritionCardIndex);
+    // 底栏之前 —— 它是正文最下方，不在固定栏里
+    expect(bottomBarIndex).toBeGreaterThan(reportEntryIndex);
+  });
+
+  it('★ 营养报告页地址带食谱编号，且这一页不预取报告明细', () => {
+    expect(source).toContain('recipeId=${encodeURIComponent(selectedRecipeId.value)}');
+    expect(source).toContain('openNutritionReport');
+    // 快照里没有报告明细，页面也不该去拉整份报告（那是报告页的活）
+    expect(source).not.toContain('nutritionDetailedData');
+    expect(source).not.toContain('/recipes/');
   });
 
   it('★ 全营养标准 banner 独立展示，核心营养卡不再重复标准行', () => {

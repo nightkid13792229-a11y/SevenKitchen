@@ -145,30 +145,33 @@
         </view>
       </view>
 
-      <!-- 营养补充剂表（独立底色，与食材表区分） -->
-      <view v-if="supplementItems.length > 0" class="ingredient-block ingredient-block--supplement">
+      <!--
+        需额外补充的营养素（2026-11-07 改版）：
+        原来这一块列的是**补剂产品**（钙粉、鱼油…）和它们的添加时机 ——
+        顾客真正关心的是"这道食谱要额外补什么、补多少"，不是"买哪瓶"。
+        现在只列**营养素名 + 每公斤食材添加浓度**，与「我的定制食谱」同一口径；
+        具体产品与实际用量放到「自己做」生成的制作单里。
+      -->
+      <view v-if="supplementNutrientRows.length > 0" class="ingredient-block ingredient-block--supplement">
         <view class="ingredient-block-header">
-          <text class="ingredient-block-title">营养补充剂</text>
-          <text class="ingredient-block-count">{{ supplementItems.length }} 种</text>
+          <text class="ingredient-block-title">需额外补充的营养素</text>
+          <text class="ingredient-block-count">{{ supplementNutrientRows.length }} 种</text>
+        </view>
+        <view class="supplement-nutrient-head">
+          <text class="supplement-nutrient-head-name">营养素</text>
+          <text class="supplement-nutrient-head-value">添加浓度</text>
         </view>
         <view
-          v-for="item in supplementItems"
-          :key="item.ingredientId"
-          class="ingredient-item ingredient-item--supplement"
+          v-for="(row, index) in supplementNutrientRows"
+          :key="`${row.nutrient}-${index}`"
+          class="supplement-nutrient-row"
         >
-          <view class="ingredient-name">
-            <text>{{ item.name }}</text>
-            <text v-if="item.nutritionStateLabel" class="nutrition-state-tag">
-              {{ item.nutritionStateLabel }}
-            </text>
-            <text v-if="item.preparationMethod" class="supplement-method">
-              {{ item.preparationMethod }}
-            </text>
-          </view>
-          <text class="ingredient-ratio nutrient-target-value">
-            {{ getNutrientTargetText(item) || '-' }}
-          </text>
+          <text class="supplement-nutrient-name">{{ row.nutrient }}</text>
+          <text class="supplement-nutrient-value">{{ row.concentration }}</text>
         </view>
+        <text class="supplement-nutrient-note">
+          具体的补剂产品和实际用量，可点击下方【自己做】生成制作单后查看。
+        </text>
       </view>
 
       <!-- 其他物料（包材等，无营养口径） -->
@@ -309,18 +312,16 @@
       <text class="nutrition-basis-note">以上营养指标按干物质（DM）计，即去除水分后的占比；含水量为实际含水率。</text>
     </view>
 
-    <!-- 详细营养报告入口 -->
+    <!--
+      营养报告入口（2026-11-07 改版）：
+      样式对齐上面的「全营养标准」卡，去掉没信息量的"营养"方块；
+      标题收成「营养报告」，副标题说清报告里有什么（氨基酸/脂肪酸/维生素/矿物质）。
+    -->
     <view
       v-if="hasStructuredNutritionReport"
       class="nutrition-report-card"
-      @tap="openNutritionReportPage"
     >
-      <view class="report-icon">营养</view>
-      <view class="report-copy">
-        <text class="report-title">详细营养报告</text>
-        <text class="report-subtitle">查看 Setar 生成的完整营养评估</text>
-      </view>
-      <text class="report-action">查看完整报告</text>
+      <NutritionReportEntry @open="openNutritionReportPage" />
     </view>
 
     <!-- 用户评价板块（写评价入口收进标题行，提升可见性） -->
@@ -476,9 +477,10 @@ import { trackFunnelEvent } from '../../utils/funnel'
 import { buildDogCreateRoute, navigateToDogCreate } from '../../utils/dog-profile-entry'
 import { resolveCoverBadgeText } from '../../utils/cover-badge'
 import { getNutritionStandardExplain, getLifeStageLabel } from '../../utils/label-mapping'
-import { formatSupplementTargets } from '../../utils/supplement-nutrients'
+import { buildSupplementNutrientRows, getSupplementTargets } from '../../utils/supplement-nutrients'
 import ReviewList from '../../components/ReviewList.vue'
 import ReviewForm from '../../components/ReviewForm.vue'
+import NutritionReportEntry from '../../components/recipe/NutritionReportEntry.vue'
 
 interface RecipeItem {
   ingredientId: string
@@ -658,7 +660,7 @@ const sortedItems = computed(() => {
   return [...recipe.value.items].sort((a, b) => a.sortOrder - b.sortOrder)
 })
 
-// 配方分组：主料按"占比"口径，补剂按"每kg食材添加量"口径，分开成两张表
+// 配方分组：主料按"占比"口径，补剂按"营养素目标"口径，分开成两块
 const foodItems = computed(() =>
   sortedItems.value.filter((item) => item.ingredientType === 'FOOD'))
 const supplementItems = computed(() =>
@@ -666,6 +668,19 @@ const supplementItems = computed(() =>
 const otherItems = computed(() =>
   sortedItems.value.filter(
     (item) => item.ingredientType !== 'FOOD' && item.ingredientType !== 'SUPPLEMENT',
+  ))
+
+/**
+ * 需额外补充的营养素：**营养素名 + 每公斤食材添加浓度**（2026-11-07）。
+ *
+ * 口径与「我的定制食谱」交付页共用 `buildSupplementNutrientRows` ——
+ * 页面上不再出现补剂产品名与添加时机（那是"买哪瓶/什么时候加"）。
+ * 老数据没有营养素目标时，`getSupplementTargets` 会回退到
+ * `nutrientTargetKey/Value`；都没有的补剂就不产生行。
+ */
+const supplementNutrientRows = computed(() =>
+  buildSupplementNutrientRows(
+    supplementItems.value.map((item) => ({ targets: getSupplementTargets(item) })),
   ))
 
 const hasStructuredNutritionReport = computed(() => {
@@ -1370,13 +1385,6 @@ function formatFoodRatio(item: RecipeItem): string {
   return '-'
 }
 
-function getNutrientTargetText(item: RecipeItem): string {
-  const targetText = formatSupplementTargets(item)
-  if (targetText) return targetText
-  if (!item.nutrientTargetKey || !item.nutrientTargetValue) return ''
-  return `每kg食材添加${item.nutrientTargetValue}${item.nutrientTargetKey}`
-}
-
 function formatNumber(value: number | undefined | null): string {
   if (value === null || value === undefined) return '-'
   return value.toFixed(1)
@@ -1721,51 +1729,9 @@ function onReviewSubmitted() {
   color: #968f6d;
 }
 
+/* 营养报告入口：外层只负责与页面其它卡片对齐的留白，卡片样式在组件里 */
 .nutrition-report-card {
-  background-color: #fbfcf7;
-  border-radius: 16rpx;
-  padding: 22rpx 24rpx;
   margin: 20rpx;
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-}
-
-.report-icon {
-  width: 72rpx;
-  height: 72rpx;
-  border-radius: 8rpx;
-  background-color: #eef2e4;
-  color: #1e3a2f;
-  font-size: 22rpx;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.report-copy {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6rpx;
-}
-
-.report-title {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: #26261f;
-}
-
-.report-subtitle {
-  font-size: 24rpx;
-  color: #6b6653;
-}
-
-.report-action {
-  font-size: 26rpx;
-  font-weight: 600;
-  color: #1e3a2f;
 }
 
 /* 原料卡片 */
@@ -1919,43 +1885,61 @@ function onReviewSubmitted() {
   color: #8a6b33;
 }
 
-.ingredient-block--supplement .ingredient-item:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
 .ingredient-block-count {
   font-size: 22rpx;
   color: #968f6d;
 }
 
-.ingredient-item--supplement {
-  align-items: flex-start;
+/* 需额外补充的营养素：营养素名 + 每公斤添加浓度（2026-11-07） */
+.supplement-nutrient-head {
+  display: flex;
+  align-items: center;
+  padding: 14rpx 0 10rpx;
+  border-bottom: 1rpx solid #e5e8d4;
 }
 
-.ingredient-item--supplement .ingredient-name {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6rpx;
+.supplement-nutrient-head-name {
+  flex: 1;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #1e3a2f;
 }
 
-.ingredient-item--supplement .ingredient-ratio {
+.supplement-nutrient-head-value {
+  flex: 0 0 300rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  text-align: right;
+  color: #1e3a2f;
+}
+
+.supplement-nutrient-row {
+  display: flex;
+  align-items: baseline;
+  padding: 18rpx 0;
+  border-bottom: 1px dashed #e5e8d4;
+}
+
+.supplement-nutrient-name {
+  flex: 1;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #26261f;
+}
+
+.supplement-nutrient-value {
   flex: 0 0 300rpx;
   font-size: 24rpx;
-  font-weight: 500;
-  line-height: 1.5;
-  color: #6b6653;
-}
-
-.supplement-method {
-  font-size: 22rpx;
-  color: #968f6d;
-}
-
-.nutrient-target-value {
-  font-size: 24rpx;
+  text-align: right;
   color: #b4553f;
-  font-weight: normal;
+}
+
+.supplement-nutrient-note {
+  display: block;
+  margin-top: 18rpx;
+  font-size: 21rpx;
+  line-height: 1.6;
+  color: #968f6d;
 }
 
 /* 核心营养成分板块 */

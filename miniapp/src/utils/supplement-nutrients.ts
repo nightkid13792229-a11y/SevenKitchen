@@ -361,6 +361,63 @@ export function formatSupplementTargets(item: any): string {
     .join('、')
 }
 
+/**
+ * 「需额外补充的营养素」的一行：**营养素名 + 每公斤食材添加浓度**。
+ *
+ * 顾客要看的是"补什么、补多少"（钙 / 锌 / 维生素 D），
+ * 不是"买哪瓶"（补剂产品名）或"什么时候加"。
+ */
+export interface SupplementNutrientRow {
+  nutrient: string
+  concentration: string
+}
+
+/**
+ * 把补剂的**营养素目标**摊平成「营养素 / 添加浓度」两列表格行（2026-11-07）。
+ *
+ * 交付页（快照里的 `supplements[].targets`）和食谱详情页（原料上的
+ * `supplementTargets`）都走这一个函数 —— 两个页面的口径必须一模一样，
+ * 各写一份迟早漂移成"每公斤加 5g"和"每kg加 5 克"两种说法。
+ *
+ * · 没有营养素名（老数据只有补剂产品）→ 跳过，不显示一行空白；
+ * · 没有数值 → 「—」（不知道 ≠ 0）；
+ * · 没有单位 → 只写数字，不猜单位（猜错比不写更糟）。
+ */
+export function buildSupplementNutrientRows(
+  supplements:
+    | Array<{
+        targets?: Array<{
+          label?: string | null
+          targetValuePerKg?: number | null
+          unit?: string | null
+        }> | null
+      }>
+    | null
+    | undefined
+): SupplementNutrientRow[] {
+  const rows: SupplementNutrientRow[] = []
+
+  for (const supplement of supplements || []) {
+    for (const target of supplement?.targets || []) {
+      const nutrient = String(target?.label ?? '').trim()
+      if (!nutrient) continue
+
+      const raw = target?.targetValuePerKg
+      const value = raw === null || raw === undefined ? Number.NaN : Number(raw)
+      const unit = String(target?.unit ?? '').trim()
+
+      rows.push({
+        nutrient,
+        concentration: Number.isFinite(value)
+          ? `每公斤食材添加 ${Math.round(value)} ${unit}`.trim()
+          : '—'
+      })
+    }
+  }
+
+  return rows
+}
+
 export function calculateSupplementAmountForProduction(
   item: any,
   totalFoodInputWeightG: number,

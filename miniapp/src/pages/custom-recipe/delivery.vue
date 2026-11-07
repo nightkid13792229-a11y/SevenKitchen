@@ -115,7 +115,7 @@
         </text>
       </view>
 
-      <!-- 核心营养成分：标准 + 8 项 + 报告入口，合成一块（与详情页同一套） -->
+      <!-- 核心营养成分：标准 + 8 项，合成一块（与详情页同一套） -->
       <view class="section">
         <RecipeNutritionCard
           :standard="content.nutrition.standard"
@@ -123,6 +123,15 @@
           :report-available="false"
           :show-standard="false"
         />
+      </view>
+
+      <!--
+        营养报告入口（2026-11-07）：放在页面最下方 —— 核心营养成分之后。
+        样式与详情页共用同一个组件；报告明细不在交付快照里（几十 KB），
+        点进去由报告页按食谱编号现取，看到的就是当下这份完整评估。
+      -->
+      <view v-if="selectedRecipeId" class="report-entry-slot">
+        <NutritionReportEntry @open="openNutritionReport" />
       </view>
 
     </template>
@@ -180,8 +189,10 @@ import {
 import RecipeCover from '@/components/recipe/RecipeCover.vue';
 import RecipeNutritionCard from '@/components/recipe/RecipeNutritionCard.vue';
 import NutritionStandardBanner from '@/components/recipe/NutritionStandardBanner.vue';
+import NutritionReportEntry from '@/components/recipe/NutritionReportEntry.vue';
 import CustomerServiceInlineButton from '@/components/CustomerServiceInlineButton.vue';
 import RecipeIngredientRatioTable from '@/components/recipe/RecipeIngredientRatioTable.vue';
+import { buildSupplementNutrientRows } from '@/utils/supplement-nutrients';
 
 /**
  * 交付内容 · 第 1 页「我的定制食谱」（2026-10-16，批次 2.4；2.6 拆页）
@@ -314,31 +325,18 @@ const sellingPointText = computed(() =>
 );
 
 /**
- * 须额外添加的营养素：**营养素名 + 每公斤添加浓度**。
+ * 须额外添加的营养素：**营养素名 + 每公斤食材添加浓度**。
  *
  * 快照里的 supplements[].targets 已经是营养师定的目标（钙/锌/…），
  * 不再显示补剂原料名或添加时机 —— 那是"买哪瓶"和"什么时候加"，
  * 不是这一页要回答的"补什么、补多少"。
+ *
+ * 2026-11-07：摊平逻辑收进 `buildSupplementNutrientRows`，与食谱详情页共用
+ * 同一份文案，免得两个页面对同一份数据写出两种说法。
  */
-const supplementTargetRows = computed(() => {
-  const rows: Array<{ nutrient: string; concentration: string }> = [];
-  for (const supplement of content.value.supplements || []) {
-    for (const target of supplement.targets || []) {
-      const nutrient = String(target.label || '').trim();
-      if (!nutrient) continue;
-      const raw = target.targetValuePerKg;
-      const value = raw === null || raw === undefined ? NaN : Number(raw);
-      const unit = String(target.unit || 'g').trim();
-      rows.push({
-        nutrient,
-        concentration: Number.isFinite(value)
-          ? `每公斤食材添加 ${Math.round(value)} ${unit}`
-          : '—',
-      });
-    }
-  }
-  return rows;
-});
+const supplementTargetRows = computed(() =>
+  buildSupplementNutrientRows(content.value.supplements || []),
+);
 
 /** 喂食量取整（2026-10-24）；日喂量和每餐量各自四舍五入，允许 1g 误差 */
 function formatFeedingGrams(value: number | null | undefined): string {
@@ -425,6 +423,22 @@ const goOrderFinished = () => {
   }
   uni.navigateTo({
     url: buildFinishedFoodOrderUrl(selectedRecipeId.value, dogId.value),
+  });
+};
+
+/**
+ * 营养报告：进独立报告页，按**食谱编号**现取完整评估。
+ *
+ * 交付快照里没有报告明细（几百个营养项），所以这一页不预取、也不算，
+ * 点进来由报告页读 `nutritionDetailedData.report`。
+ */
+const openNutritionReport = () => {
+  if (!selectedRecipeId.value) {
+    uni.showToast({ title: '这条交付缺少食谱编号', icon: 'none' });
+    return;
+  }
+  uni.navigateTo({
+    url: `/pages/recipe-nutrition-report/index?recipeId=${encodeURIComponent(selectedRecipeId.value)}`,
   });
 };
 
@@ -879,6 +893,11 @@ onPullDownRefresh(async () => {
   background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
   color: #1e3a2f;
   border-radius: 999rpx;
+}
+
+/* 营养报告入口（2026-11-07）：外层只负责留白，卡片样式在共享组件里 */
+.report-entry-slot {
+  margin-bottom: 24rpx;
 }
 
 .state-title {

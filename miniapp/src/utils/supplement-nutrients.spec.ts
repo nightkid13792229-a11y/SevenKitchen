@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildSupplementNutrientRows,
   calculateSupplementAmountForProduction,
   formatSupplementTargets,
   getResolvedSupplementDisplayUnit,
@@ -467,5 +468,58 @@ describe('supplement nutrient resolution', () => {
 
   it('returns display unit from item snapshot', () => {
     expect(getResolvedSupplementDisplayUnit({ unit_display_label: '平勺' })).toBe('平勺')
+  })
+})
+
+describe('buildSupplementNutrientRows · 需额外补充的营养素', () => {
+  it('摊平成「营养素 / 添加浓度」两列，数值取整', () => {
+    expect(
+      buildSupplementNutrientRows([
+        {
+          targets: [
+            { label: '钙', targetValuePerKg: 5.6, unit: 'g' },
+            { label: '锌', targetValuePerKg: 12.4, unit: 'mg' },
+          ],
+        },
+      ])
+    ).toEqual([
+      { nutrient: '钙', concentration: '每公斤食材添加 6 g' },
+      { nutrient: '锌', concentration: '每公斤食材添加 12 mg' },
+    ])
+  })
+
+  it('多个补剂的目标按顺序摊平，不合并成一行', () => {
+    expect(
+      buildSupplementNutrientRows([
+        { targets: [{ label: '钙', targetValuePerKg: 5, unit: 'g' }] },
+        { targets: [{ label: '鱼油', targetValuePerKg: 0, unit: 'g' }] },
+      ])
+    ).toEqual([
+      { nutrient: '钙', concentration: '每公斤食材添加 5 g' },
+      { nutrient: '鱼油', concentration: '每公斤食材添加 0 g' },
+    ])
+  })
+
+  it('没有营养素名就跳过；没数值给「—」；没单位不猜单位', () => {
+    expect(
+      buildSupplementNutrientRows([
+        {
+          targets: [
+            { label: '', targetValuePerKg: 5, unit: 'g' },
+            { label: '维生素 D', targetValuePerKg: null, unit: 'IU' },
+            { label: '碘', targetValuePerKg: 660, unit: null },
+          ],
+        },
+      ])
+    ).toEqual([
+      { nutrient: '维生素 D', concentration: '—' },
+      { nutrient: '碘', concentration: '每公斤食材添加 660' },
+    ])
+  })
+
+  it('空数据不抛错，返回空数组（老快照没有 targets）', () => {
+    expect(buildSupplementNutrientRows(undefined)).toEqual([])
+    expect(buildSupplementNutrientRows([])).toEqual([])
+    expect(buildSupplementNutrientRows([{ targets: null }, {}])).toEqual([])
   })
 })

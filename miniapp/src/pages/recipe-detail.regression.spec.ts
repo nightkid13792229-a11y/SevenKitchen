@@ -10,7 +10,8 @@ describe('recipe detail nutrition report regressions', () => {
     )
 
     expect(source).toContain('hasStructuredNutritionReport')
-    expect(source).toContain('@tap="openNutritionReportPage"')
+    // 2026-11-07：入口卡片抽成共享组件，点击事件从页面模板移进组件的 @open
+    expect(source).toContain('<NutritionReportEntry @open="openNutritionReportPage" />')
     expect(source).toContain('/pages/recipe-nutrition-report/index')
     expect(source).not.toContain('nutritionReportUrl?: string')
     expect(source).not.toContain('v-if="recipe.nutritionReportUrl"')
@@ -64,12 +65,25 @@ describe('recipe detail nutrition report regressions', () => {
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
       'utf-8',
     )
+    const reportEntry = readFileSync(
+      resolve(process.cwd(), 'src/components/recipe/NutritionReportEntry.vue'),
+      'utf-8',
+    )
 
     expect(source).toContain('核心营养成分')
-    expect(source).toContain('详细营养报告')
-    expect(source).toContain('查看完整报告')
+    // 2026-11-07 老板定的文案：标题「营养报告」、按钮「查看报告」，
+    // 副标题说清报告里有什么（氨基酸 / 脂肪酸 / 维生素 / 矿物质）
+    expect(reportEntry).toContain('营养报告')
+    expect(reportEntry).toContain('查看报告')
+    expect(reportEntry).toContain('包含氨基酸、脂肪酸、维生素、矿物质在内的详细营养评估')
     expect(source).not.toContain('<text class="card-title">营养成分分析</text>')
-    expect(source).not.toContain('<text class="report-title">营养报告</text>')
+    // 旧文案不能再回来
+    expect(source).not.toContain('详细营养报告')
+    expect(source).not.toContain('查看完整报告')
+    expect(reportEntry).not.toContain('查看 Setar 生成的完整营养评估')
+    // 那个没有信息量的「营养」方块标识已按老板要求去掉
+    expect(source).not.toContain('class="report-icon"')
+    expect(reportEntry).not.toContain('营养</text>')
   })
 
   it('does not render dog-specific feeding recalculation on recipe detail', () => {
@@ -146,15 +160,40 @@ describe('recipe detail nutrition report regressions', () => {
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
       'utf-8',
     )
+    const nutrientRowsSource = readFileSync(
+      resolve(process.cwd(), 'src/utils/supplement-nutrients.ts'),
+      'utf-8',
+    )
     const snapshotModalSource = readFileSync(
       resolve(process.cwd(), 'src/components/RecipeSnapshotModal.vue'),
       'utf-8',
     )
 
-    expect(recipeDetailSource).toContain('每kg食材添加')
-    expect(recipeDetailSource).not.toContain('每kg添加')
+    // 2026-11-07：详情页的浓度口径收进共享工具，且文案统一成「每公斤食材添加」
+    expect(recipeDetailSource).toContain('buildSupplementNutrientRows')
+    expect(nutrientRowsSource).toContain('每公斤食材添加')
+    expect(nutrientRowsSource).not.toContain('每kg添加')
     expect(snapshotModalSource).toContain('每kg食材添加')
     expect(snapshotModalSource).not.toContain('每kg添加')
+  })
+
+  it('★ 详情页不再列补剂产品，只列需额外补充的营养素（2026-11-07）', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const template = source.slice(0, source.indexOf('<script setup'))
+
+    // 板块标题与两列表头：营养素 / 添加浓度
+    expect(template).toContain('需额外补充的营养素')
+    expect(template).toContain('supplementNutrientRows')
+    expect(template).toContain('营养素')
+    expect(template).toContain('添加浓度')
+    // 补剂产品名、添加时机（出锅前/冷却后）都不再出现在这一块
+    expect(template).not.toContain('营养补充剂</text>')
+    expect(template).not.toContain('supplement-method')
+    expect(template).not.toContain('nutrient-target-value')
+    expect(source).not.toContain('function getNutrientTargetText')
   })
 
   it('uses customer-facing bottom action button labels without a cart shortcut', () => {

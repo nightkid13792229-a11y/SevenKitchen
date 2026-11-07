@@ -282,10 +282,19 @@ async function main() {
     if (decision.action === 'create') {
       counters.create += 1;
       if (shouldApply) {
+        // 2026-11-07 硬门禁：换算已不允许为空，缺换算的直接跳过并计数，
+        // 不要用 1 兜底（那会把「2 盒」记成「2 克」）。
+        if (!(Number(decision.payload.purchaseToBaseRatio) > 0)) {
+          counters.skip += 1;
+          continue;
+        }
+        const { purchaseToBaseRatio: _ratioIgnored, ...rest } =
+          serializePayload(decision.payload);
         await prisma.procurementSku.create({
           data: {
             ingredientId: ingredient.id,
-            ...serializePayload(decision.payload),
+            ...rest,
+            purchaseToBaseRatio: Number(decision.payload.purchaseToBaseRatio),
           },
         });
       }

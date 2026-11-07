@@ -1197,7 +1197,9 @@ model ProcurementSku {
   productModel                  String?                   @map("product_model") @db.VarChar(100)
   purchaseChannel               String?                   @map("purchase_channel") @db.VarChar(200)
   purchaseUnit                  String?                   @map("purchase_unit") @db.VarChar(50)
-  purchaseToBaseRatio           Float?                    @map("purchase_to_base_ratio")
+  /// 2026-11-07 硬门禁：一个采购单位等于多少基准单位，不允许为空、必须 > 0。
+  /// 为空会让采购数量没法折算，只能退回原料档案（食材恒为 1）→「2 盒记成 2 克」。
+  purchaseToBaseRatio           Float                     @map("purchase_to_base_ratio")
   currentPurchasePrice          Decimal?                  @map("current_purchase_price") @db.Decimal(10, 2)
   referencePurchasePrice        Decimal?                  @map("reference_purchase_price") @db.Decimal(10, 2)
   referencePricePerPurchaseUnit Decimal?                  @map("reference_price_per_purchase_unit") @db.Decimal(10, 2)

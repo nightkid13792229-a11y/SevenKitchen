@@ -425,10 +425,10 @@ export class ProcurementSkuService {
   private assertSkuRatioPresent(
     sku: { name: string },
     purchaseToBaseRatio: number | null | undefined,
-  ): void {
+  ): number {
     const ratio = Number(purchaseToBaseRatio);
     if (Number.isFinite(ratio) && ratio > 0) {
-      return;
+      return ratio;
     }
 
     throw new BadRequestException(
@@ -662,8 +662,10 @@ export class ProcurementSkuService {
     }
 
     const computedRatio = this.resolvePurchaseToBaseRatioFromPackFacts(dto);
-    const resolvedRatio = computedRatio ?? dto.purchaseToBaseRatio ?? null;
-    this.assertSkuRatioPresent({ name: dto.name }, resolvedRatio);
+    const resolvedRatio = this.assertSkuRatioPresent(
+      { name: dto.name },
+      computedRatio ?? dto.purchaseToBaseRatio ?? null,
+    );
 
     const data = {
       ingredientId,

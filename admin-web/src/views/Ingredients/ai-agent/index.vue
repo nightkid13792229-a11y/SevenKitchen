@@ -1078,6 +1078,62 @@
             <span class="review-footer__hint">{{ authorizeHint }}</span>
           </footer>
 
+          <!-- 收尾：补一条采购商品（2026-11-07 成本口径归位）。
+               没有采购商品 = 买不了 = 成本永远 0 = 食谱里按「免费」算。 -->
+          <div v-if="commitResult && line === 'FOOD'" class="closing-card">
+            <div class="closing-card__head">
+              <h3>下一步：给这条原料补一条采购商品</h3>
+              <span class="closing-card__state" :class="`is-${closingState.toLowerCase()}`">
+                {{ closingStateLabel }}
+              </span>
+            </div>
+            <p class="closing-card__hint">
+              这里填的是<b>商品</b>：一件多少克、这一件多少钱。系统会折算成「每
+              {{ closingBaseUnitLabel }}多少钱」写进原料档案，食谱立刻能算出成本。
+            </p>
+
+            <el-form label-width="120px" size="small" class="closing-card__form">
+              <el-form-item label="商品名称" required>
+                <el-input v-model="closingForm.name" placeholder="如：山姆 糙米 1kg" />
+              </el-form-item>
+              <el-form-item label="采购渠道">
+                <el-input v-model="closingForm.purchaseChannel" placeholder="在哪买的，可不填" />
+              </el-form-item>
+              <el-form-item label="采购单位" required>
+                <el-input v-model="closingForm.purchaseUnit" placeholder="袋 / 盒 / 箱" />
+              </el-form-item>
+              <el-form-item label="每件净含量" required>
+                <el-input-number
+                  v-model="closingForm.netContentPerPack"
+                  :min="0"
+                  controls-position="right"
+                />
+                <span class="closing-card__unit">{{ closingBaseUnitLabel }}</span>
+              </el-form-item>
+              <el-form-item label="这一件多少钱" required>
+                <el-input-number
+                  v-model="closingForm.currentPurchasePrice"
+                  :min="0"
+                  :precision="2"
+                  controls-position="right"
+                />
+                <span class="closing-card__preview">{{ closingPreview }}</span>
+              </el-form-item>
+            </el-form>
+
+            <div class="closing-card__actions">
+              <el-button
+                type="primary"
+                :loading="closingSaving"
+                :disabled="closingState !== 'READY' || closingDone"
+                @click="submitClosingSku"
+              >
+                保存采购商品
+              </el-button>
+              <el-button text :disabled="closingDone" @click="skipClosing">稍后补</el-button>
+            </div>
+          </div>
+
           <CheckReportDialog
             v-model="checkDialogVisible"
             :domain="checkDialogDomain"
@@ -1112,6 +1168,12 @@ import {
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
+import { ingredientApi } from '@/api/ingredients'
+import {
+  buildCreateSkuPayload,
+  computeClosingState,
+  formatCostPreview
+} from './procurementClosing'
 import { nutritionFoodApi } from '@/api/ingredients'
 import {
   ingredientTagApi,
@@ -1484,6 +1546,82 @@ let locateTimer: ReturnType<typeof setTimeout> | null = null
 const submitError = ref('')
 const submitting = ref(false)
 const commitResult = ref<AuthorizeResult | null>(null)
+
+/**
+ * 收尾「补一条采购商品」（2026-11-07 成本口径归位）。
+ *
+ * 食材的成本 = 每基准单位多少钱，只能由采购结算产生。
+ * 不补商品 = 买不了 = 成本永远 0 = 食谱里按「免费」算。
+ */
+const closingForm = reactive({
+  name: '',
+  purchaseChannel: '',
+  purchaseUnit: '袋',
+  packCount: 1,
+  netContentPerPack: undefined as number | undefined,
+  currentPurchasePrice: undefined as number | undefined
+})
+const closingSaving = ref(false)
+const closingDone = ref(false)
+
+const closingBaseUnitLabel = computed(() => {
+  // 草稿里的原料卡带 baseUnit；取不到时按克处理（食材绝大多数是克）
+  const baseUnit = (draft.value?.payload as any)?.ingredient?.baseUnit
+  return baseUnit === 'ML' ? 'ml' : 'g'
+})
+const closingState = computed(() =>
+  computeClosingState({
+    skuCount: closingDone.value ? 1 : 0,
+    pricePerPackage: closingForm.currentPurchasePrice ?? null,
+    netContent: closingForm.netContentPerPack ?? null
+  })
+)
+const closingStateLabel = computed(() => {
+  if (closingDone.value) return '已保存'
+  if (closingState.value === 'READY') return '填好了，可以保存'
+  if (closingState.value === 'MISSING_PRICE') return '还差「这一件多少钱」'
+  return '还差一条采购商品'
+})
+const closingPreview = computed(() =>
+  formatCostPreview(
+    closingForm.currentPurchasePrice,
+    closingForm.netContentPerPack,
+    closingBaseUnitLabel.value
+  )
+)
+
+async function submitClosingSku() {
+  const ingredientId = commitResult.value?.ingredientId
+  if (!ingredientId || closingSaving.value) return
+  if (closingState.value !== 'READY') {
+    ElMessage.warning(closingStateLabel.value)
+    return
+  }
+  closingSaving.value = true
+  try {
+    await ingredientApi.createProcurementSku(
+      ingredientId,
+      buildCreateSkuPayload({
+        name: closingForm.name,
+        purchaseChannel: closingForm.purchaseChannel,
+        purchaseUnit: closingForm.purchaseUnit,
+        packCount: closingForm.packCount,
+        netContentPerPack: closingForm.netContentPerPack ?? 0,
+        currentPurchasePrice: closingForm.currentPurchasePrice ?? null
+      })
+    )
+    closingDone.value = true
+    ElMessage.success('采购商品已保存，这条原料现在有成本了')
+  } catch (error: any) {
+    ElMessage.error(error?.message || '保存失败，请检查商品信息')
+  } finally {
+    closingSaving.value = false
+  }
+}
+
+function skipClosing() {
+  ElMessage.info('可以先跳过，但补上采购商品之前，这条原料在食谱里不会产生成本')
+}
 
 const verifyError = ref('')
 const verifying = ref(false)
@@ -4262,6 +4400,64 @@ function goBackToList() {
   flex-direction: column;
   gap: 8px;
   padding: 0 16px 8px;
+}
+
+.closing-card {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+}
+
+.closing-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.closing-card__head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.closing-card__state {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+}
+
+.closing-card__state.is-ready {
+  background: var(--el-color-success-light-9);
+  color: var(--el-color-success);
+}
+
+.closing-card__hint {
+  margin: 8px 0 12px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
+}
+
+.closing-card__form {
+  max-width: 560px;
+}
+
+.closing-card__unit,
+.closing-card__preview {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.closing-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .review-commit-result {

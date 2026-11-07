@@ -52,6 +52,35 @@ describe('Agent 工具：search_knowledge_library', () => {
     expect((outcome.data as any).passages[0].citationId).toBe('K1');
   });
 
+  it('把物种/分期/主题过滤传给检索', async () => {
+    const search = jest.fn().mockResolvedValue([]);
+    await executeTool(
+      'search_knowledge_library',
+      {
+        query: 'phosphorus',
+        species: 'dog',
+        stage: 2,
+        topics: ['phosphorus'],
+      },
+      {
+        port: {} as any,
+        catalog: {} as any,
+        library: { search } as any,
+        citations: new CitationRegistry(),
+        onAsk: jest.fn(),
+      },
+    );
+
+    expect(search).toHaveBeenCalledWith(
+      'phosphorus',
+      expect.objectContaining({
+        species: 'dog',
+        stage: 2,
+        topics: ['phosphorus'],
+      }),
+    );
+  });
+
   it('assess 摘要带出缺口数值和目标范围', async () => {
     const outcome = await executeTool(
       'assess',

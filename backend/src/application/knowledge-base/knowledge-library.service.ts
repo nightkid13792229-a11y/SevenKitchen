@@ -34,8 +34,60 @@ export interface LibrarySearchOptions {
   sourceIds?: string[];
   /** 只在这些文档里找；用于试点/专题收窄。 */
   documentIds?: string[];
-  /** 返回条数，默认 6，最多 10。 */
+  /** 只在这些章节里找。 */
+  sectionIds?: string[];
+  /** 物种过滤：dog / cat；同时提到两者的段落保留。 */
+  species?: 'dog' | 'cat';
+  /** 分期过滤：只保留提到该期的章节；没提分期的章节保留。 */
+  stage?: 1 | 2 | 3 | 4;
+  /** 主题过滤：任一同义词命中即可。 */
+  topics?: string[];
+  /** 返回条数，默认 8，最多 10。 */
   limit?: number;
+}
+
+const TOPIC_ALIASES: Record<string, string[]> = {
+  phosphorus: ['phosph', '磷'],
+  protein: ['protein', '蛋白'],
+  sodium: ['sodium', '钠'],
+  potassium: ['potassium', '钾'],
+  omega3: ['omega', 'fish oil', '鱼油'],
+  proteinuria: ['proteinuria', 'upc', '蛋白尿'],
+  bloodpressure: ['blood pressure', 'hypertension', '血压', '高血压'],
+  staging: ['stage', 'iris', '分期'],
+  calcium: ['calcium', '钙'],
+  vitaminD: ['vitamin d', 'calcitriol', '维生素 d'],
+  energy: ['energy', 'kcal', '能量'],
+  water: ['water', 'moisture', '水'],
+  phosphatebinder: ['binder', 'binders', '结合剂'],
+};
+
+function detectSpecies(text: string): 'dog' | 'cat' | 'both' | 'unknown' {
+  const lower = text.toLowerCase();
+  const dog = /\b(dog|dogs|canine)\b/.test(lower) || text.includes('犬');
+  const cat = /\b(cat|cats|feline)\b/.test(lower) || text.includes('猫');
+  if (dog && cat) return 'both';
+  if (dog) return 'dog';
+  if (cat) return 'cat';
+  return 'unknown';
+}
+
+function detectStages(text: string): number[] {
+  const stages = new Set<number>();
+  for (const match of text.matchAll(/\bstage\s*([1-4])\b/gi)) {
+    stages.add(Number(match[1]));
+  }
+  for (const match of text.matchAll(/([1-4])\s*期/g)) {
+    stages.add(Number(match[1]));
+  }
+  return [...stages];
+}
+
+function matchesTopic(text: string, topic: string): boolean {
+  const key = topic.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const aliases = TOPIC_ALIASES[key] ?? [topic.trim().toLowerCase()];
+  const lower = text.toLowerCase();
+  return aliases.some((alias) => lower.includes(alias.toLowerCase()));
 }
 
 const DEFAULT_LIMIT = 8;
@@ -73,6 +125,9 @@ export class KnowledgeLibraryService {
     const documentIds = (options.documentIds ?? [])
       .map((item) => String(item ?? '').trim())
       .filter(Boolean);
+    const sectionIds = (options.sectionIds ?? [])
+      .map((item) => String(item ?? '').trim())
+      .filter(Boolean);
 
     const rows = await this.prisma.sourceParagraph.findMany({
       where: {
@@ -83,6 +138,7 @@ export class KnowledgeLibraryService {
           ? { document: { sourceId: { in: sourceIds } } }
           : {}),
         ...(documentIds.length > 0 ? { documentId: { in: documentIds } } : {}),
+        ...(sectionIds.length > 0 ? { sectionId: { in: sectionIds } } : {}),
       },
       include: {
         document: { select: { id: true, title: true, sourceId: true } },
@@ -92,6 +148,24 @@ export class KnowledgeLibraryService {
       take: MAX_CANDIDATES,
     });
 
+    const filteredRows = rows.filter((row) => {
+      const text = `${row.section?.title ?? ''}\n${row.text ?? ''}`;
+      if (options.species) {
+        const species = detectSpecies(text);
+        if (species === 'dog' && options.species === 'cat') return false;
+        if (species === 'cat' && options.species === 'dog') return false;
+      }
+      if (options.stage) {
+        const stages = detectStages(text);
+        if (stages.length > 0 && !stages.includes(options.stage)) return false;
+      }
+      const topics = (options.topics ?? []).filter(Boolean);
+      if (topics.length > 0 && !topics.some((topic) => matchesTopic(text, topic))) {
+        return false;
+      }
+      return true;
+    });
+
     const numericIntent =
       /(多少|范围|上限|推荐|剂量|百分比|percent|range|how much|mg\/|%)/i.test(raw) ||
       (raw.match(/\d+(?:\.\d+)?%?/g) ?? []).length >= 2;
@@ -99,7 +173,7 @@ export class KnowledgeLibraryService {
     // 稀有词加权：候选里到处都有的词（dog/ckd）权重低，
     // 只有少数段落有的词（phosphorus/UPC）权重高。
     const df = new Map<string, number>();
-    for (const row of rows) {
+    for (const row of filteredRows) {
       const lower = row.text.toLowerCase();
       for (const term of terms) {
         if (lower.includes(term.toLowerCase())) {
@@ -110,10 +184,10 @@ export class KnowledgeLibraryService {
     const weights = new Map(
       terms.map((term) => [
         term,
-        1 + Math.log((rows.length + 1) / (1 + (df.get(term) ?? 0))),
+        1 + Math.log((filteredRows.length + 1) / (1 + (df.get(term) ?? 0))),
       ]),
     );
-    const scored = rows.map((row) => ({
+    const scored = filteredRows.map((row) => ({
       row,
       score: this.score(
         row.text,

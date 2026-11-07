@@ -102,3 +102,46 @@ describe('KnowledgeLibraryService（原文检索）', () => {
     expect(result[0].text.endsWith('…')).toBe(true);
   });
 });
+
+describe('KnowledgeLibraryService（物种/分期/主题过滤）', () => {
+  function filterRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'p1',
+      documentId: 'd1',
+      sectionId: 's1',
+      text: 'Phosphorus target in chronic kidney disease.',
+      pageStart: 10,
+      document: { id: 'd1', title: 'd1', sourceId: 'IRIS-CKD-2026' },
+      section: { id: 's1', title: 'Stage 2 Canine patients', pageNo: 10 },
+      ...overrides,
+    };
+  }
+
+  it('按物种 + 分期 + 主题收窄到犬 Stage 2 磷段落', async () => {
+    const rows = [
+      filterRow(),
+      filterRow({
+        id: 'p2',
+        sectionId: 's2',
+        section: { id: 's2', title: 'Stage 2 Feline patients', pageNo: 11 },
+      }),
+      filterRow({
+        id: 'p3',
+        sectionId: 's3',
+        section: { id: 's3', title: 'Stage 3 Canine patients', pageNo: 12 },
+      }),
+    ];
+    const service = new KnowledgeLibraryService({
+      sourceParagraph: { findMany: jest.fn().mockResolvedValue(rows) },
+    } as any);
+
+    const result = await service.search('phosphorus', {
+      species: 'dog',
+      stage: 2,
+      topics: ['phosphorus'],
+      limit: 10,
+    });
+
+    expect(result.map((item) => item.id)).toEqual(['p1']);
+  });
+});

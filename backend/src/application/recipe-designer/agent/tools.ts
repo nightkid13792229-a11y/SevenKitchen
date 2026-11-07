@@ -107,6 +107,28 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
             items: { type: 'string' },
             description: '可选：只在这些文档 ID 里搜（一般不用传）',
           },
+          sectionIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '可选：只在这些章节 ID 里搜（一般不用传）',
+          },
+          species: {
+            type: 'string',
+            enum: ['dog', 'cat'],
+            description: '可选：犬/猫；不传则不过滤',
+          },
+          stage: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 4,
+            description: '可选：CKD 分期 1–4；不传则不过滤',
+          },
+          topics: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              '可选主题，如 phosphorus / protein / sodium / potassium / proteinuria / bloodpressure / staging',
+          },
         },
         required: ['query'],
         additionalProperties: false,
@@ -320,10 +342,34 @@ export async function executeTool(
             : scope === 'all'
               ? undefined
               : CKD_DOCUMENT_IDS;
+        const sectionIds = Array.isArray(args.sectionIds)
+          ? args.sectionIds
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => item.trim())
+              .filter(Boolean)
+          : undefined;
+        const species =
+          args.species === 'dog' || args.species === 'cat'
+            ? args.species
+            : undefined;
+        const stage =
+          typeof args.stage === 'number' && args.stage >= 1 && args.stage <= 4
+            ? (args.stage as 1 | 2 | 3 | 4)
+            : undefined;
+        const topics = Array.isArray(args.topics)
+          ? args.topics
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => item.trim())
+              .filter(Boolean)
+          : undefined;
         const passages = (
           await context.library.search(query, {
             sourceIds,
             documentIds,
+            sectionIds,
+            species,
+            stage,
+            topics,
             limit,
           })
         ).map((passage) => ({

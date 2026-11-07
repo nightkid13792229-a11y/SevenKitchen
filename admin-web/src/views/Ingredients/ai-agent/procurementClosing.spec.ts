@@ -5,6 +5,7 @@ import {
   computeClosingState,
   formatCostPreview,
   formatRatioText,
+  shouldShowProcurementCard,
   type RecognizedSkuDraft,
 } from './procurementClosing'
 
@@ -183,5 +184,39 @@ describe('截图识别 · 自动填表', () => {
     expect(
       computeClosingState({ pricePerPackage: 39.9, netContent: 500, purchaseUnit: '袋' }),
     ).toBe('READY')
+  })
+})
+
+/**
+ * 板块出现时机（2026-11-08 老板定）：
+ * 先填原料档案、两页核验都通过，才出现「这条原料的采购商品」。
+ * 为什么：识别与倍率都要按原料的基准单位算；档案没定就没法算，也不该让人先填这个。
+ */
+describe('采购商品板块 · 出现时机', () => {
+  const ready = {
+    line: 'FOOD',
+    hasDraft: true,
+    hasIngredientBaseUnit: true,
+    checksReady: true
+  }
+
+  it('原料写全 + 两页核验通过 → 出现', () => {
+    expect(shouldShowProcurementCard(ready)).toBe(true)
+  })
+
+  it('补剂线不出现（补剂没有采购商品）', () => {
+    expect(shouldShowProcurementCard({ ...ready, line: 'SUPPLEMENT' })).toBe(false)
+  })
+
+  it('还没有草稿 → 不出现', () => {
+    expect(shouldShowProcurementCard({ ...ready, hasDraft: false })).toBe(false)
+  })
+
+  it('原料卡还没写全（没有基准单位）→ 不出现', () => {
+    expect(shouldShowProcurementCard({ ...ready, hasIngredientBaseUnit: false })).toBe(false)
+  })
+
+  it('两页核验还没过 → 不出现', () => {
+    expect(shouldShowProcurementCard({ ...ready, checksReady: false })).toBe(false)
   })
 })

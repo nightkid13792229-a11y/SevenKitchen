@@ -535,7 +535,8 @@
         </div>
       </el-card>
 
-      <el-card v-if="reviewVisible" class="review-panel" shadow="never">
+      <div class="review-column">
+        <el-card v-if="reviewVisible" class="review-panel" shadow="never">
         <div class="review-panel__head">
           <div class="review-panel__head-top">
             <div class="review-panel__title">
@@ -1072,174 +1073,6 @@
             </el-alert>
           </div>
 
-          <!-- 收尾：这条原料的采购商品（2026-11-07 成本口径归位）。
-               必须放在「授权写入正式库」**上面**（2026-11-08）：写在按钮下面时，
-               面板高度是固定的，卡片被挤到可视区外，人以为页面上没有这块表单。 -->
-          <div
-            v-if="!commitResult && line === 'FOOD'"
-            ref="closingCardRef"
-            class="closing-card"
-          >
-            <div class="closing-card__head">
-              <h3>写入前必填：这条原料的采购商品</h3>
-              <span class="closing-card__state" :class="`is-${closingState.toLowerCase()}`">
-                {{ closingStateLabel }}
-              </span>
-            </div>
-
-            <!-- 截图识别（2026-11-08）：贴一张商品详情页，AI 把下面几格填好。
-                 与小程序「新增采购商品」同一个识别服务，认得出的字段一样。 -->
-            <div
-              class="closing-card__shot"
-              :class="{ 'is-drag': shotDragging, 'is-busy': shotRecognizing }"
-              @click="pickScreenshot"
-              @dragover.prevent="shotDragging = true"
-              @dragleave.prevent="shotDragging = false"
-              @drop.prevent="handleScreenshotDrop"
-            >
-              <template v-if="shotRecognizing">
-                <span class="closing-card__shot-title">正在识别截图…</span>
-                <span class="closing-card__shot-sub">读商品名、件数、每件净含量、单价和渠道</span>
-              </template>
-              <template v-else>
-                <span class="closing-card__shot-title">
-                  贴一张商品详情页截图 → 自动填好下面几格
-                </span>
-                <span class="closing-card__shot-sub">
-                  {{ shotDropHint }}
-                </span>
-              </template>
-              <input
-                ref="shotInputRef"
-                type="file"
-                accept="image/*"
-                class="closing-card__shot-file"
-                @change="handleScreenshotPick"
-              />
-            </div>
-
-            <el-alert
-              v-if="shotError"
-              class="closing-card__shot-alert"
-              type="warning"
-              :closable="false"
-              show-icon
-              :title="shotError"
-            />
-
-            <p v-if="shotMissingLabels.length > 0" class="closing-card__shot-missing">
-              截图里没读到：{{ shotMissingLabels.join('、') }}——请手动补上（不猜数）。
-            </p>
-
-            <!--
-              两列 + 标签在上（2026-11-08 第二次改版）。
-              第一版把「AI 识别」塞进 86px 的标签里，标签被挤成竖条（AI 识 / 别），
-              还和右边的格子叠在一起。标签在上之后每格都能用满半栏宽度，
-              标记只占标签行右侧，不会再撑坏布局。
-            -->
-            <el-form label-position="top" size="small" class="closing-card__form">
-              <el-form-item required>
-                <template #label>
-                  <span class="closing-card__label">
-                    商品名称
-                    <em v-if="isAiFilled('name')" class="closing-card__ai">AI 识别</em>
-                  </span>
-                </template>
-                <el-input v-model="closingForm.name" placeholder="如：山姆 糙米 1kg" />
-              </el-form-item>
-
-              <el-form-item required>
-                <template #label>
-                  <span class="closing-card__label">
-                    采购单位
-                    <em v-if="isAiFilled('purchaseUnit')" class="closing-card__ai">AI 识别</em>
-                  </span>
-                </template>
-                <el-input v-model="closingForm.purchaseUnit" placeholder="袋 / 盒 / 箱" />
-              </el-form-item>
-
-              <el-form-item required>
-                <template #label>
-                  <span class="closing-card__label">
-                    一箱几件
-                    <em v-if="isAiFilled('packCount')" class="closing-card__ai">AI 识别</em>
-                  </span>
-                </template>
-                <div class="closing-card__field">
-                  <el-input-number
-                    v-model="closingForm.packCount"
-                    :min="1"
-                    :step="1"
-                    :precision="0"
-                    controls-position="right"
-                  />
-                  <span class="closing-card__unit">件</span>
-                </div>
-              </el-form-item>
-
-              <el-form-item required>
-                <template #label>
-                  <span class="closing-card__label">
-                    每件净含量
-                    <em v-if="isAiFilled('netContentPerPack')" class="closing-card__ai">AI 识别</em>
-                  </span>
-                </template>
-                <div class="closing-card__field">
-                  <el-input-number
-                    v-model="closingForm.netContentPerPack"
-                    :min="0"
-                    controls-position="right"
-                  />
-                  <span class="closing-card__unit">{{ closingBaseUnitLabel }}</span>
-                </div>
-              </el-form-item>
-
-              <el-form-item required>
-                <template #label>
-                  <span class="closing-card__label">
-                    这一件多少钱
-                    <em v-if="isAiFilled('currentPurchasePrice')" class="closing-card__ai">AI 识别</em>
-                  </span>
-                </template>
-                <el-input-number
-                  v-model="closingForm.currentPurchasePrice"
-                  :min="0"
-                  :precision="2"
-                  controls-position="right"
-                  class="closing-card__number"
-                />
-              </el-form-item>
-
-              <el-form-item>
-                <template #label>
-                  <span class="closing-card__label">
-                    采购渠道
-                    <em
-                      v-if="isAiFilled('purchaseChannel')"
-                      class="closing-card__ai"
-                      :class="{ 'is-guess': isLowConfidence('purchaseChannel') }"
-                      :title="isLowConfidence('purchaseChannel') ? '是 AI 推测的，请核对' : ''"
-                    >
-                      {{ isLowConfidence('purchaseChannel') ? 'AI 推测' : 'AI 识别' }}
-                    </em>
-                  </span>
-                </template>
-                <el-input v-model="closingForm.purchaseChannel" placeholder="可不填" />
-              </el-form-item>
-            </el-form>
-
-            <!-- 换算汇总：倍率 + 每克单价放在同一行，不再挤在输入框右边 -->
-            <p v-if="closingRatioText || closingPreview" class="closing-card__summary">
-              <span v-if="closingRatioText">{{ closingRatioText }}</span>
-              <span v-if="closingPreview">{{ closingPreview }}</span>
-            </p>
-
-            <p class="closing-card__hint">
-              它会和原料一起写入，折算成「每{{ closingBaseUnitLabel }}多少钱」作为初始成本；
-              没有它，原料进食谱就是按 0 元算。
-            </p>
-          </div>
-
           <footer class="review-footer">
             <el-button
               type="primary"
@@ -1277,7 +1110,177 @@
             @exception="handleRegisterException"
           />
         </div>
-      </el-card>
+        </el-card>
+
+      <!-- 采购商品（2026-11-08 第三次改版）：
+           ① 挪到「草稿审核」板块**下方**——放在里面会把原料档案/营养档案的编辑区压扁；
+           ② 只有「原料卡写全 + 两页核验都通过」才出现（老板定：先填档案并通过核验）；
+              改了原料导致报告变旧时它会自己收起，等重跑核验再出现。 -->
+      <section
+        v-if="showProcurementCard"
+        ref="closingCardRef"
+        class="closing-card"
+      >
+        <div class="closing-card__head">
+          <h3>写入前必填：这条原料的采购商品</h3>
+          <span class="closing-card__state" :class="`is-${closingState.toLowerCase()}`">
+            {{ closingStateLabel }}
+          </span>
+        </div>
+
+        <!-- 截图识别（2026-11-08）：贴一张商品详情页，AI 把下面几格填好。
+             与小程序「新增采购商品」同一个识别服务，认得出的字段一样。 -->
+        <div
+          class="closing-card__shot"
+          :class="{ 'is-drag': shotDragging, 'is-busy': shotRecognizing }"
+          @click="pickScreenshot"
+          @dragover.prevent="shotDragging = true"
+          @dragleave.prevent="shotDragging = false"
+          @drop.prevent="handleScreenshotDrop"
+        >
+          <template v-if="shotRecognizing">
+            <span class="closing-card__shot-title">正在识别截图…</span>
+            <span class="closing-card__shot-sub">读商品名、件数、每件净含量、单价和渠道</span>
+          </template>
+          <template v-else>
+            <span class="closing-card__shot-title">
+              贴一张商品详情页截图 → 自动填好下面几格
+            </span>
+            <span class="closing-card__shot-sub">
+              {{ shotDropHint }}
+            </span>
+          </template>
+          <input
+            ref="shotInputRef"
+            type="file"
+            accept="image/*"
+            class="closing-card__shot-file"
+            @change="handleScreenshotPick"
+          />
+        </div>
+
+        <el-alert
+          v-if="shotError"
+          class="closing-card__shot-alert"
+          type="warning"
+          :closable="false"
+          show-icon
+          :title="shotError"
+        />
+
+        <p v-if="shotMissingLabels.length > 0" class="closing-card__shot-missing">
+          截图里没读到：{{ shotMissingLabels.join('、') }}——请手动补上（不猜数）。
+        </p>
+
+        <!--
+          两列 + 标签在上（2026-11-08 第二次改版）。
+          第一版把「AI 识别」塞进 86px 的标签里，标签被挤成竖条（AI 识 / 别），
+          还和右边的格子叠在一起。标签在上之后每格都能用满半栏宽度，
+          标记只占标签行右侧，不会再撑坏布局。
+        -->
+        <el-form label-position="top" size="small" class="closing-card__form">
+          <el-form-item required>
+            <template #label>
+              <span class="closing-card__label">
+                商品名称
+                <em v-if="isAiFilled('name')" class="closing-card__ai">AI 识别</em>
+              </span>
+            </template>
+            <el-input v-model="closingForm.name" placeholder="如：山姆 糙米 1kg" />
+          </el-form-item>
+
+          <el-form-item required>
+            <template #label>
+              <span class="closing-card__label">
+                采购单位
+                <em v-if="isAiFilled('purchaseUnit')" class="closing-card__ai">AI 识别</em>
+              </span>
+            </template>
+            <el-input v-model="closingForm.purchaseUnit" placeholder="袋 / 盒 / 箱" />
+          </el-form-item>
+
+          <el-form-item required>
+            <template #label>
+              <span class="closing-card__label">
+                一箱几件
+                <em v-if="isAiFilled('packCount')" class="closing-card__ai">AI 识别</em>
+              </span>
+            </template>
+            <div class="closing-card__field">
+              <el-input-number
+                v-model="closingForm.packCount"
+                :min="1"
+                :step="1"
+                :precision="0"
+                controls-position="right"
+              />
+              <span class="closing-card__unit">件</span>
+            </div>
+          </el-form-item>
+
+          <el-form-item required>
+            <template #label>
+              <span class="closing-card__label">
+                每件净含量
+                <em v-if="isAiFilled('netContentPerPack')" class="closing-card__ai">AI 识别</em>
+              </span>
+            </template>
+            <div class="closing-card__field">
+              <el-input-number
+                v-model="closingForm.netContentPerPack"
+                :min="0"
+                controls-position="right"
+              />
+              <span class="closing-card__unit">{{ closingBaseUnitLabel }}</span>
+            </div>
+          </el-form-item>
+
+          <el-form-item required>
+            <template #label>
+              <span class="closing-card__label">
+                这一件多少钱
+                <em v-if="isAiFilled('currentPurchasePrice')" class="closing-card__ai">AI 识别</em>
+              </span>
+            </template>
+            <el-input-number
+              v-model="closingForm.currentPurchasePrice"
+              :min="0"
+              :precision="2"
+              controls-position="right"
+              class="closing-card__number"
+            />
+          </el-form-item>
+
+          <el-form-item>
+            <template #label>
+              <span class="closing-card__label">
+                采购渠道
+                <em
+                  v-if="isAiFilled('purchaseChannel')"
+                  class="closing-card__ai"
+                  :class="{ 'is-guess': isLowConfidence('purchaseChannel') }"
+                  :title="isLowConfidence('purchaseChannel') ? '是 AI 推测的，请核对' : ''"
+                >
+                  {{ isLowConfidence('purchaseChannel') ? 'AI 推测' : 'AI 识别' }}
+                </em>
+              </span>
+            </template>
+            <el-input v-model="closingForm.purchaseChannel" placeholder="可不填" />
+          </el-form-item>
+        </el-form>
+
+        <!-- 换算汇总：倍率 + 每克单价放在同一行，不再挤在输入框右边 -->
+        <p v-if="closingRatioText || closingPreview" class="closing-card__summary">
+          <span v-if="closingRatioText">{{ closingRatioText }}</span>
+          <span v-if="closingPreview">{{ closingPreview }}</span>
+        </p>
+
+        <p class="closing-card__hint">
+          它会和原料一起写入，折算成「每{{ closingBaseUnitLabel }}多少钱」作为初始成本；
+          没有它，原料进食谱就是按 0 元算。
+        </p>
+      </section>
+      </div>
     </div>
   </div>
 </template>
@@ -1304,6 +1307,7 @@ import {
   computeClosingState,
   formatCostPreview,
   formatRatioText,
+  shouldShowProcurementCard,
   type ClosingFieldKey
 } from './procurementClosing'
 import { indexHtmlPathOf, isStaleBundle } from './staleBundle'
@@ -1731,6 +1735,30 @@ const closingReady = computed(
 )
 
 /**
+ * 「采购商品」板块什么时候出现（2026-11-08 老板定）：
+ * 原料卡写全 + 两页核验都通过。改了原料导致报告变旧时它会自己收起。
+ */
+const showProcurementCard = computed(() =>
+  shouldShowProcurementCard({
+    line: line.value ?? '',
+    hasDraft: Boolean(draft.value),
+    hasIngredientBaseUnit: Boolean(
+      (draft.value?.payload as { ingredient?: { baseUnit?: unknown } } | undefined)
+        ?.ingredient?.baseUnit
+    ),
+    checksReady: gate.value.ready && !commitResult.value
+  })
+)
+
+// 板块刚出现时把它带进视口：它在草稿板块下方，窗口不高时可能在屏幕外。
+watch(showProcurementCard, (visible) => {
+  if (!visible) return
+  void nextTick(() => {
+    closingCardRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
+})
+
+/**
  * 商品详情页截图识别（2026-11-08）。
  *
  * 与小程序「新增采购商品」同一个识别服务、同一份提示词与每日配额：
@@ -2132,7 +2160,9 @@ const authorizeHint = computed(() => {
     return gate.value.reasons[0] ?? '授权条件还没满足。'
   }
   if (!closingReady.value) {
-    return `写入前先把上面的「采购商品」填完：${closingStateLabel.value}`
+    return showProcurementCard.value
+      ? `去下面把「采购商品」填完：${closingStateLabel.value}`
+      : '先把原料档案填完、两页核验通过，下方会出现「这条原料的采购商品」。'
   }
   return '授权前，所有内容只在草稿里；写入后原料与档案都是「待验证」。'
 })
@@ -3335,6 +3365,10 @@ async function handleAuthorize() {
     return
   }
   if (!closingReady.value) {
+    if (!showProcurementCard.value) {
+      ElMessage.warning('先把原料档案填完、两页核验通过，再填采购商品')
+      return
+    }
     closingCardRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     ElMessage.warning(`写入前先把这条原料的采购商品填完：${closingStateLabel.value}`)
     return
@@ -4760,9 +4794,28 @@ function goBackToList() {
   padding: 0 16px 8px;
 }
 
+/* 右侧两栏：上面草稿审核（编辑区），下面采购商品 */
+.review-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  height: calc(100vh - 220px);
+  max-height: 860px;
+}
+
+.review-column > .review-panel {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 320px;
+  max-height: none;
+}
+
 .closing-card {
   flex: 0 0 auto;
-  margin: 8px 16px 0;
+  /* 窗口不高时卡片自己滚，不把上面的编辑区挤没 */
+  max-height: 52%;
+  overflow-y: auto;
   padding: 12px 14px;
   border: 1px solid var(--el-border-color-light);
   border-radius: 8px;
@@ -4960,9 +5013,26 @@ function goBackToList() {
   }
 
   .agent-panel,
-  .review-panel {
+  .review-panel,
+  .review-column {
     height: 620px;
     max-height: 720px;
+  }
+
+  /* 单栏时两块叠着放，谁都不需要内部滚动 */
+  .review-column {
+    height: auto;
+    max-height: none;
+  }
+
+  .review-column > .review-panel {
+    flex: 0 0 auto;
+    height: 620px;
+    max-height: 720px;
+  }
+
+  .closing-card {
+    max-height: none;
   }
 }
 

@@ -253,3 +253,23 @@ export function buildClosingSkuInput(form: {
     sourceScreenshotUrl: form.sourceScreenshotUrl ?? undefined,
   }
 }
+
+/**
+ * 「这条原料的采购商品」板块什么时候出现（2026-11-08 老板定）。
+ *
+ * 规则：原料卡写全（有基准单位）+ 两页核验都通过。
+ * 为什么这么严：截图识别要按基准单位归一净含量、倍率要按「件数 × 每件净含量」算；
+ * 原料档案还没定，先让人填采购商品就是让他填一个算不出来的东西。
+ * 改了原料 → 报告变旧 → `checksReady` 变 false → 板块自己收起，重跑核验再出现。
+ */
+export function shouldShowProcurementCard(input: {
+  line: string
+  hasDraft: boolean
+  hasIngredientBaseUnit: boolean
+  checksReady: boolean
+}): boolean {
+  if (input.line !== 'FOOD') return false
+  if (!input.hasDraft) return false
+  if (!input.hasIngredientBaseUnit) return false
+  return input.checksReady
+}

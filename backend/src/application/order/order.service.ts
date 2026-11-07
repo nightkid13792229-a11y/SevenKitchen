@@ -58,6 +58,10 @@ import type { OrderStatusHistoryRepository } from '../../domain/order/order-stat
 import { OrderStatusHistory } from '../../domain/order/order-status-history.entity';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from './order.service.tokens';
 import { ValidationError } from '../../domain/common/errors';
+import {
+  REFERENCE_PACK_SPEC_G,
+  resolveReferencePackCount,
+} from '../../domain/pricing/reference-packaging';
 // import type { CartRepository } from '../../domain/cart';  // Cart功能已移除
 import type { IOrderPricingSnapshotRepository } from '../../domain/order-pricing-snapshot/order-pricing-snapshot.repository.interface';
 import { PrismaService } from '../../infrastructure/prisma.service';
@@ -2495,10 +2499,11 @@ export class OrderService {
    * Compute a recipe's reference price per 100g (shipping included).
    * Used for home showcase and recipe detail reference price display (P0-2).
    *
-   * Caliber:
-   * - 成品鲜食算价口径：最近一次采购价 → 原料创建价（2026-11-02 起）。
-   * - Reference quantity = globalConfig.minOrderWeightG (起订量), a single
-   *   package, one meal per day; shipping is amortized over that weight.
+   * Caliber（2026-11-07 更新）：
+   * - 价格来源：原料档案价（2026-11-06「单一来源」起，不再按最近采购价推导）。
+   * - 参考量 = globalConfig.minOrderWeightG（起订量），按 **100g/袋标准分装**
+   *   （1kg = 10 袋），运费按起订量分摊。真实订单仍按顾客自己的分装算钱。
+   * - 只影响展示；参考价与实际首单实测差 <1%，更大的单会更便宜，文案统一用「约」。
    * - pricePer100g = (productPrice + shippingFee) * 100 / referenceWeightG.
    */
   async computeRecipeReferencePrice(recipeId: string): Promise<{
@@ -2548,6 +2553,11 @@ export class OrderService {
 
     const globalConfig = await this.globalConfigService.getGlobalConfig();
     const referenceWeightG = globalConfig.minOrderWeightG || 1000;
+    const referencePackSpecG = REFERENCE_PACK_SPEC_G;
+    const referencePackCount = resolveReferencePackCount(
+      referenceWeightG,
+      referencePackSpecG,
+    );
 
     const pricing = await this.pricingService.calculateOrderPrice({
       dog: { mealsPerDay: 1 },
@@ -2562,15 +2572,15 @@ export class OrderService {
       discountRate: 1.0,
       globalConfig,
       totalNetFoodWeightG: referenceWeightG,
-      totalPacks: 1,
-      singlePackSpecG: referenceWeightG,
+      totalPacks: referencePackCount,
+      singlePackSpecG: referencePackSpecG,
     });
 
     const totalWeightG = referenceWeightG + (pricing.weightPackagingG || 0);
     const shippingResult =
       await this.shippingService.calculateShippingFeePreview({
         totalWeightG,
-        shippingTemplateId: null, // 默认生效模板（全国一口价）
+        shippingTemplateId: null, // 后台配置的默认运费模板（2026-11-07 起固定走它）
       });
 
     const pricePer100g = this.roundMoney(

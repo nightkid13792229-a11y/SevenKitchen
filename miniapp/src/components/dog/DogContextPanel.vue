@@ -78,7 +78,7 @@
         <view v-if="showFacts" class="dog-facts-wrap">
           <view class="dog-facts">
             <view
-              v-for="(fact, index) in facts"
+              v-for="(fact, index) in factItems"
               :key="fact.label"
               :class="['dog-fact', { 'dog-fact--first': index === 0 }]"
             >
@@ -195,7 +195,7 @@ function dogGenderText(gender?: string): string {
   return gender ? map[gender] || gender : '性别未知'
 }
 
-const facts = computed(() => {
+const factItems = computed(() => {
   const dog = selectedDog.value
   if (!dog) return []
 

@@ -123,15 +123,19 @@ const COVERAGE_SYSTEM_PROMPT = `你是“引用覆盖裁判”。只做拆分和
 分类只能是：
 - clinical：事实性的疾病、分期、化验值/目标值、营养上下限、剂量、风险、因果陈述；
 - numeric：事实性的数字/范围陈述；
-- recipe_action：加原料、改克数、删除等配方操作；
-- system_result：评估是否通过、系统状态；
-- opinion：方案选择、档位建议、推荐做哪种、主观判断；不要求引用；
+- recipe_action：本配方当前加了/没加什么、当前含量、总重、能量、加原料/改克数/删除等配方操作；
+- system_result：评估 revision、是否通过、系统状态；
+- opinion：建议找兽医、建议加结合剂、方案选择、档位建议、推荐做哪种、主观判断；不要求引用；
 - other：其它。
 关键区分：
 - “植物性磷吸收率低”是事实性 clinical，需要引用；
 - “建议取 0.2–0.35% DM”“做通用型/2 期倾向型”“选严格/中间/宽松档”是 opinion，不是 clinical；
 - 即使方案/档位里带数字或范围，只要它是在做选择/推荐，仍归 opinion，不归 numeric；
-- numeric 只用于事实性数值陈述；不要把“建议/方案选择”算成未引用临床结论。
+- numeric 只用于事实性数值陈述；
+- “omega-3 已补充”“没有按 0.3% 下限补磷”“配方总重约 858 g / 1860 kcal”是 recipe_action，不是 clinical；
+- “评估结果 revision 44”是 system_result；
+- “建议找兽医评估加结合剂”是 opinion，不是 clinical；
+- 不要把“建议/方案选择/配方动作/系统状态”算成未引用临床结论。
 只从原文提取 [K#] 引用编号，不要自己补引用，不要用外部知识。
 输出 JSON：{"claims":[{"text":"...","kind":"clinical","citationIds":["K1"]}]}。`;
 

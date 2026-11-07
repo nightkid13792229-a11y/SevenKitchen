@@ -63,32 +63,22 @@
         <text class="price-hint-text">价格按狗狗体重计算，进入订购可见</text>
       </view>
 
-      <view v-if="showNoDogHint" class="no-dog-hint">
-        <text class="no-dog-hint-text">订购前需先创建狗狗档案，才能按体重精确计算份量与价格</text>
-        <button class="no-dog-hint-btn" @tap="goCreateDog">创建狗狗档案</button>
-      </view>
-
-      <view
-        v-if="dogs.length > 0"
-        class="recipe-detail-dog-selector"
-      >
-        <scroll-view scroll-x class="recipe-detail-dog-scroll">
-          <view class="recipe-detail-dog-chip-row">
-            <view
-              v-for="dog in dogs"
-              :key="dog.id"
-              :class="['recipe-detail-dog-chip', { active: dog.id === selectedDogId }]"
-              @tap="selectDogForDetail(dog.id)"
-            >
-              <image
-                class="recipe-detail-dog-avatar"
-                :src="resolveDogAvatarSrc(dog.avatarUrl)"
-                mode="aspectFill"
-              />
-              <text class="recipe-detail-dog-chip-name">{{ dog.name }}</text>
-            </view>
-          </view>
-        </scroll-view>
+      <!--
+        选狗：三页共用同一个组件（2026-11-07）。
+        详情页只放选择器 —— 每日饭量要按食谱现算（只有成品页和 DIY 页会调那个接口），
+        而“这只狗合不合适”由下面的生命阶段卡回答，这里再放六项就是两份档案。
+      -->
+      <view class="recipe-detail-dog-selector">
+        <DogContextPanel
+          :dogs="dogs"
+          :selected-id="selectedDogId"
+          :state="dogPanelState"
+          facts="none"
+          :panel="false"
+          @select="selectDogForDetail"
+          @create-dog="goToCreateDog"
+          @retry="retryDogsLoad"
+        />
       </view>
 
       <!--
@@ -415,6 +405,7 @@
 import { CURRENT_SHARE_CONFIG } from '@/utils/config'
 // 2026-11-02：版本条 + 版本面板，详情/订购/DIY 共用
 import LifeStageVersionBar from '@/components/recipe/LifeStageVersionBar.vue'
+import DogContextPanel from '@/components/dog/DogContextPanel.vue'
 import LifeStageVersionSheet from '@/components/recipe/LifeStageVersionSheet.vue'
 import { resolveLifeStageUiState } from '@/utils/life-stage-ui'
 import { useDogSelection } from '@/composables/useDogSelection'
@@ -483,7 +474,6 @@ import { ref, computed, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareToken, reviewApi, trackRecipeView } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
-import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import { trackFunnelEvent } from '../../utils/funnel'
 import { buildDogCreateRoute, navigateToDogCreate } from '../../utils/dog-profile-entry'
 import { resolveCoverBadgeText } from '../../utils/cover-badge'
@@ -635,6 +625,8 @@ const {
   syncFromMatch,
 } = useDogSelection()
 const dogsLoaded = ref(false)
+// 拉档案失败：失败要能重试，不能一直停在骨架屏上
+const dogsLoadFailed = ref(false)
 // 未登录时也应该看到「订购前需先建档」的预告（原实现只在已登录时才拉列表，导致新用户毫无提示）
 const hasToken = ref(Boolean(uni.getStorageSync('token')))
 
@@ -723,9 +715,27 @@ const showPriceFallbackCopy = computed(
 
 // 未建档时在详情页提前预告，避免进入订购配置页才被拦下。
 // 2026-09-21：未登录也展示（新用户此前完全看不到任何预告），文案不变。
-const showNoDogHint = computed(() =>
-  hasToken.value ? dogsLoaded.value && dogs.value.length === 0 : true,
-)
+/**
+ * 狗狗面板的四种状态（组件只管好看，判断留在页面）。
+ *
+ * · 未登录：直接给“请先创建档案”，点按钮时再拦登录（原来就是这么引导的）
+ * · 失败优先于空：失败时说“暂无档案”，顾客会去重复建档
+ * · 已登录但还没拉到：骨架
+ */
+const dogPanelState = computed<'loading' | 'error' | 'empty' | 'ready'>(() => {
+  if (!hasToken.value) return 'empty'
+  if (dogsLoadFailed.value) return 'error'
+  if (!dogsLoaded.value) return 'loading'
+  if (dogs.value.length === 0) return 'empty'
+  return 'ready'
+})
+
+/** 档案没拉到时的重试（组件里的「重新加载」） */
+function retryDogsLoad() {
+  dogsLoadFailed.value = false
+  dogsLoaded.value = false
+  void loadDogsForDetail()
+}
 
 // 当前生效的生命阶段版本（对应食谱ID）
 const activeLifeStageVersionRecipeId = computed(() => {
@@ -1066,6 +1076,7 @@ async function loadDogsForDetail() {
     if (res.code === 0 && Array.isArray(res.data)) {
       dogs.value = res.data
       dogsLoaded.value = true
+      dogsLoadFailed.value = false
       if (dogs.value.length > 0) {
         selectedDogId.value = initialDogId.value || dogId.value || uni.getStorageSync('dogId') || dogs.value[0].id
         if (!dogs.value.some((dog) => dog.id === selectedDogId.value)) {
@@ -1078,6 +1089,7 @@ async function loadDogsForDetail() {
     }
   } catch (error) {
     console.warn('[RecipeDetail] Load dogs failed:', error)
+    dogsLoadFailed.value = true
   }
 }
 
@@ -1597,97 +1609,9 @@ function onReviewSubmitted() {
   text-align: center;
 }
 
-.no-dog-hint {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-  margin: 16rpx 0;
-  padding: 20rpx 24rpx;
-  background-color: #f6efe0;
-  border: 1rpx solid #b08d4f;
-  border-radius: 12rpx;
-}
-
-.no-dog-hint-text {
-  flex: 1;
-  font-size: 26rpx;
-  color: #8a6b33;
-  line-height: 1.5;
-}
-
-.no-dog-hint-btn {
-  flex-shrink: 0;
-  height: 64rpx;
-  line-height: 64rpx;
-  padding: 0 24rpx;
-  font-size: 26rpx;
-  color: #f3eddd;
-  background-color: #1e3a2f;
-  border-radius: 32rpx;
-  border: none;
-}
-
-.no-dog-hint-btn::after {
-  border: none;
-}
-
+/* 选狗器在页面里的外边距（组件本身不管外部间距） */
 .recipe-detail-dog-selector {
   margin: 16rpx 0 18rpx;
-}
-
-.recipe-detail-dog-scroll {
-  width: 100%;
-  white-space: nowrap;
-}
-
-.recipe-detail-dog-chip-row {
-  display: inline-flex;
-  gap: 12rpx;
-  padding: 0 2rpx;
-}
-
-.recipe-detail-dog-chip {
-  width: 214rpx;
-  min-height: 86rpx;
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  gap: 12rpx;
-  padding: 12rpx;
-  border: 2rpx solid #eef1e2;
-  border-radius: 8rpx;
-  background-color: #fbfcf7;
-  vertical-align: middle;
-}
-
-.recipe-detail-dog-chip.active {
-  border-color: #1e3a2f;
-  background-color: #eef2e4;
-}
-
-.recipe-detail-dog-avatar {
-  flex: 0 0 auto;
-  width: 58rpx;
-  height: 58rpx;
-  border-radius: 50%;
-  background-color: #eef2e4;
-}
-
-.recipe-detail-dog-chip-name {
-  display: block;
-  min-width: 0;
-  flex: 1;
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #26261f;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.recipe-detail-dog-chip.active .recipe-detail-dog-chip-name {
-  color: #1e3a2f;
 }
 
 .life-stage-version-card {

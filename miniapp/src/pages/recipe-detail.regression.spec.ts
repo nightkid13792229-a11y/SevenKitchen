@@ -290,14 +290,20 @@ describe('recipe detail nutrition report regressions', () => {
       /function selectDogForDetail[\s\S]*?\n}\n\nfunction openLifeStageSelector/,
     )?.[0] || ''
 
+    // 2026-11-07：胶囊改用共享组件；详情页只放选择器，不显示六项读数
     expect(templateSource).toContain('recipe-detail-dog-selector')
-    expect(templateSource).toContain('v-for="dog in dogs"')
-    expect(templateSource).toContain('recipe-detail-dog-avatar')
-    expect(templateSource).toContain(':src="resolveDogAvatarSrc(dog.avatarUrl)"')
-    expect(templateSource).toContain("@tap=\"selectDogForDetail(dog.id)\"")
-    expect(templateSource).toContain("['recipe-detail-dog-chip', { active: dog.id === selectedDogId }]")
+    expect(templateSource).toContain('<DogContextPanel')
+    expect(templateSource).toContain(':dogs="dogs"')
+    expect(templateSource).toContain(':selected-id="selectedDogId"')
+    expect(templateSource).toContain(':state="dogPanelState"')
+    expect(templateSource).toContain('facts="none"')
+    expect(templateSource).toContain(':panel="false"')
+    expect(templateSource).toContain('@select="selectDogForDetail"')
+    expect(templateSource).toContain('@create-dog="goToCreateDog"')
+    expect(source).toContain("import DogContextPanel from '@/components/dog/DogContextPanel.vue'")
+    // 六项读数不该出现在详情页：facts="none" 已由组件契约兜住（组件测试里断言）
+    expect(templateSource).not.toContain('order-dog-chip')
     expect(templateSource).not.toContain('匹配狗狗')
-    expect(source).toContain("import { resolveDogAvatarSrc } from '../../utils/dog-avatar'")
     expect(source).toContain('function selectDogForDetail')
     expect(selectDogSource).toContain('uni.setStorageSync(\'dogId\', nextDogId)')
     expect(selectDogSource).toContain("selectedManualLifeStage.value = ''")

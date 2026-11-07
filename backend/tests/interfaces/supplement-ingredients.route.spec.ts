@@ -12,6 +12,7 @@ import { IngredientCreationMergeService } from '../../src/application/ingredient
 import { IngredientCreationOnlineService } from '../../src/application/ingredient-creation/ingredient-creation-online.service';
 import { IngredientDraftAgentService } from '../../src/application/ingredient-creation/ingredient-draft-agent.service';
 import { SupplementLinkPreviewService } from '../../src/application/ingredient-creation/supplement-link-preview.service';
+import { ProcurementSkuDraftService } from '../../src/application/purchasing/procurement-sku-draft.service';
 import { SupplementIngredientService } from '../../src/application/ingredient-creation/supplement-ingredient.service';
 import { IngredientCreationController } from '../../src/interfaces/controllers/ingredient-creation.controller';
 import { AuthGuard } from '../../src/interfaces/auth/auth.guard';
@@ -107,6 +108,8 @@ describe('补剂建档接口', () => {
         { provide: IngredientSearchPlanService, useValue: {} },
         { provide: SupplementIngredientService, useValue: supplementService },
         { provide: SupplementLinkPreviewService, useValue: previewService },
+        // 2026-11-08：收尾的采购商品截图识别（这些用例不走它）
+        { provide: ProcurementSkuDraftService, useValue: { draftFromScreenshotForBaseUnit: jest.fn() } },
         {
           provide: JwtAuthService,
           useValue: {

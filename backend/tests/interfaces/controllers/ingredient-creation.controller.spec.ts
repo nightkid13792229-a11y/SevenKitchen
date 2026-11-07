@@ -24,6 +24,7 @@ import type {
 import { JwtAuthService } from '../../../src/interfaces/auth/jwt.service';
 import { AuthGuard } from '../../../src/interfaces/auth/auth.guard';
 import { SupplementLinkPreviewService } from '../../../src/application/ingredient-creation/supplement-link-preview.service';
+import { ProcurementSkuDraftService } from '../../../src/application/purchasing/procurement-sku-draft.service';
 import { SupplementIngredientService } from '../../../src/application/ingredient-creation/supplement-ingredient.service';
 import { IngredientCreationController } from '../../../src/interfaces/controllers/ingredient-creation.controller';
 import { AdminGuard } from '../../../src/interfaces/guards/role.guard';
@@ -191,8 +192,12 @@ describe('IngredientCreationController', () => {
         { provide: IngredientSearchPlanService, useValue: {} },
       { provide: SupplementIngredientService, useValue: { create: jest.fn() } },
         { provide: SupplementLinkPreviewService, useValue: { preview: jest.fn() } },
+        // 2026-11-08：收尾的采购商品截图识别（这些用例不走它）
+        { provide: ProcurementSkuDraftService, useValue: { draftFromScreenshotForBaseUnit: jest.fn() } },
         { provide: SupplementIngredientService, useValue: { create: jest.fn() } },
         { provide: SupplementLinkPreviewService, useValue: { preview: jest.fn() } },
+        // 2026-11-08：收尾的采购商品截图识别（这些用例不走它）
+        { provide: ProcurementSkuDraftService, useValue: { draftFromScreenshotForBaseUnit: jest.fn() } },
         { provide: JwtAuthService, useValue: jwtAuthService },
         AuthGuard,
         AdminGuard,

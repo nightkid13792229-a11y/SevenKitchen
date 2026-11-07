@@ -149,4 +149,67 @@ describe('ProcurementSkuDraftService', () => {
     expect(quota.consume).not.toHaveBeenCalled();
     expect(model.callDeepSeekJson).not.toHaveBeenCalled();
   });
+
+  /**
+   * AI 建档收尾（2026-11-08）：原料和采购商品是一次提交，
+   * 识别时原料**还没建出来**，没有 ingredientId 可传，只能按草稿的基准单位归一。
+   */
+  it('AI 建档收尾：没有原料 id，按基准单位识别且不查原料表', async () => {
+    model.callDeepSeekJson.mockResolvedValue({
+      name: '秋刀鱼 1kg',
+      netContent: { value: 1, unit: 'kg' },
+      packCount: 1,
+      purchaseChannel: '盒马',
+      purchaseUnit: '袋',
+      unitPrice: 39.9,
+    });
+
+    const result = await service.draftFromScreenshotForBaseUnit({
+      imageUrl: 'https://img.example.com/a.jpg',
+      baseUnit: 'G',
+      userId: 'user-1',
+    });
+
+    expect(prisma.ingredient.findUnique).not.toHaveBeenCalled();
+    expect(result.netContentPerPack).toBe(1000);
+    expect(result.packCount).toBe(1);
+    expect(result.unitPrice).toBe(39.9);
+    // 渠道照样归一到字典项：AI 写「盒马」也要落到「盒马鲜生」
+    expect(result.purchaseChannel).toBe('盒马鲜生');
+    expect(quota.consume).toHaveBeenCalledWith('user-1');
+  });
+
+  it('AI 建档收尾：24×330ml 读出件数与每件净含量（倍率由件数×净含量算）', async () => {
+    model.callDeepSeekJson.mockResolvedValue({
+      name: '椰汁 24×330ml',
+      netContent: { value: 330, unit: 'ml' },
+      packCount: 24,
+      purchaseChannel: '沃尔玛',
+      purchaseUnit: '箱',
+      unitPrice: 96,
+    });
+
+    const result = await service.draftFromScreenshotForBaseUnit({
+      imageUrl: 'https://img.example.com/b.jpg',
+      baseUnit: 'ML',
+      userId: 'user-1',
+    });
+
+    expect(result.packCount).toBe(24);
+    expect(result.netContentPerPack).toBe(330);
+    expect(result.missing).toEqual([]);
+  });
+
+  it('AI 建档收尾：基准单位不是 G / ML / PCS 时直接拒绝，不花钱调模型', async () => {
+    await expect(
+      service.draftFromScreenshotForBaseUnit({
+        imageUrl: 'https://img.example.com/a.jpg',
+        baseUnit: 'KG',
+        userId: 'user-1',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(quota.consume).not.toHaveBeenCalled();
+    expect(model.callDeepSeekJson).not.toHaveBeenCalled();
+  });
 });

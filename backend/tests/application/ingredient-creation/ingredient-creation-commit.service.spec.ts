@@ -1150,6 +1150,43 @@ describe('IngredientCreationCommitService', () => {
     expect(store.ingredients).toHaveLength(0);
   });
 
+  /**
+   * 2026-11-08：建采购商品时把「在哪买的」和「识别用的那张截图」一起落库。
+   * 渠道照旧只认字典码（AI 写「山姆」归一成「山姆会员店」）；认不出来不阻断建档，只是不存。
+   */
+  it('采购商品带上渠道与截图地址：渠道归一到字典码，截图原样存', async () => {
+    const { service, store } = await createHarness();
+
+    await service.commit({
+      ...baseInput,
+      procurementSku: {
+        ...baseInput.procurementSku,
+        purchaseChannel: '山姆',
+        sourceScreenshotUrl: 'https://img.example.com/shot.jpg',
+      },
+    });
+
+    expect(store.procurementSkus[0].purchaseChannel).toBe('山姆会员店');
+    expect(store.procurementSkus[0].sourceScreenshotUrl).toBe(
+      'https://img.example.com/shot.jpg',
+    );
+  });
+
+  it('渠道不在字典里 → 不阻断建档，只把渠道存成空', async () => {
+    const { service, store } = await createHarness();
+
+    await service.commit({
+      ...baseInput,
+      procurementSku: {
+        ...baseInput.procurementSku,
+        purchaseChannel: '楼下小卖部',
+      },
+    });
+
+    expect(store.ingredients).toHaveLength(1);
+    expect(store.procurementSkus[0].purchaseChannel).toBeNull();
+  });
+
   it('profiles 为空 → BadRequest，且不写任何数据', async () => {
     const { service, prisma } = await createHarness();
 

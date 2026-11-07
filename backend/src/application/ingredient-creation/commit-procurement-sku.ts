@@ -22,18 +22,33 @@ export interface CommitProcurementSkuInput {
   netContentPerPack: number;
   /** 这一件多少钱 */
   currentPurchasePrice: number;
+  /**
+   * 在哪买的（2026-11-08）。只认后台维护的渠道字典；
+   * 归不上字典码时由提交服务落空，不阻断建档。
+   */
+  purchaseChannel?: string | null;
+  /** 识别用的那张商品详情页截图（2026-11-08）：以后能追「这个价是从哪张图来的」 */
+  sourceScreenshotUrl?: string | null;
   /** 商品名留空时的兜底（原料名） */
   fallbackName?: string;
 }
 
 export interface BuiltCommitProcurementSku {
   name: string;
+  purchaseChannel: string | null;
   purchaseUnit: string;
   purchaseToBaseRatio: number;
   currentPurchasePrice: number;
+  sourceScreenshotUrl: string | null;
 }
 
 const round6 = (value: number) => Math.round(value * 1e6) / 1e6;
+
+/** 选填文本：空串/空白一律当没填，别把 "  " 存进库。 */
+const optionalText = (value: unknown): string | null => {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text.length > 0 ? text : null;
+};
 
 /**
  * 整块采购商品都没带时的提示（2026-11-08）。
@@ -110,10 +125,12 @@ export function buildCommitProcurementSku(
 
   return {
     name,
+    purchaseChannel: optionalText(input.purchaseChannel),
     purchaseUnit: String(input.purchaseUnit).trim(),
     purchaseToBaseRatio: round6(
       Number(input.packCount) * Number(input.netContentPerPack),
     ),
     currentPurchasePrice: Number(input.currentPurchasePrice),
+    sourceScreenshotUrl: optionalText(input.sourceScreenshotUrl),
   };
 }

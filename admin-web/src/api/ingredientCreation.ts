@@ -32,6 +32,26 @@ import type {
 
 const BASE = '/admin/ingredient-creation'
 
+/**
+ * 商品详情页截图识别出来的采购商品草稿（2026-11-08）。
+ *
+ * 读不到的字段一律 null 并进 `missing`；`confidence` 里 `low` 的表示模型没把握，
+ * 页面上要标「AI 推测·可改」。金额与净含量都已经换算到原料的基准单位。
+ */
+export interface ProcurementSkuDraftDto {
+  name: string | null
+  brand: string | null
+  productModel: string | null
+  purchaseChannel: string | null
+  purchaseUnit: string | null
+  packCount: number | null
+  netContentPerPack: number | null
+  netContentUnitText: string | null
+  unitPrice: number | null
+  missing: string[]
+  confidence: Record<string, 'high' | 'low'>
+}
+
 export const ingredientCreationApi = {
   /** 补剂建档：一条标准原料 + 一份待验证营养档案 + 主映射 + 标签证据。 */
   createSupplement: (
@@ -112,6 +132,33 @@ export const ingredientCreationApi = {
   /** 两域各自最新报告 + 是否仍对应当前草稿（改过一格就会变成 false）。 */
   getDraftChecks: (id: string): Promise<IngredientDraftChecksView> =>
     api.get(`${BASE}/drafts/${id}/checks`),
+
+  /**
+   * 收尾「采购商品」：从商品详情页截图识别（2026-11-08）。
+   *
+   * 与员工端同一套识别服务、同一份提示词与每日配额；**只出草稿不落库**，
+   * 人核对完才随建档一起提交。识别不了时 `degraded=true`、`draft=null`，退回手填。
+   */
+  recognizeProcurementSku: (
+    id: string,
+    imageUrl: string
+  ): Promise<{ draft: ProcurementSkuDraftDto | null; degraded: boolean }> =>
+    api.post(`${BASE}/drafts/${id}/procurement-sku-draft`, { imageUrl }),
+
+  /**
+   * 识别前先把截图传到 COS（复用员工端同一个上传口，同一套存储目录）。
+   *
+   * 视觉模型读的是图片地址，不是文件本身；传这里之后拿到 url 再调识别。
+   */
+  uploadProcurementSkuScreenshot: async (
+    file: File
+  ): Promise<{ url: string; key: string }> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/staff/purchasing/upload-sku-screenshot', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
 
   /**
    * 授权写入正式库：后端四条件全过才写，否则 400 且 body 顶层带 `reasons`。

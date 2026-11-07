@@ -36,6 +36,11 @@ import {
 } from '../../application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCreationCandidateService } from '../../application/ingredient-creation/ingredient-creation-candidate.service';
 import {
+  ProcurementSkuDraftService,
+  type ProcurementSkuDraft,
+} from '../../application/purchasing/procurement-sku-draft.service';
+import { ProcurementSkuDraftNoticeException } from '../../application/purchasing/procurement-sku-draft.errors';
+import {
   SupplementLinkPreviewService,
   type SupplementCandidate,
   type SupplementLinkPreview,
@@ -134,6 +139,7 @@ export class IngredientCreationController {
     private readonly searchPlanService: IngredientSearchPlanService,
     private readonly supplementIngredientService: SupplementIngredientService,
     private readonly supplementLinkPreviewService: SupplementLinkPreviewService,
+    private readonly procurementSkuDraftService: ProcurementSkuDraftService,
   ) {}
 
   /**
@@ -525,6 +531,75 @@ export class IngredientCreationController {
   ): Promise<ApiResponseDto<IngredientDraftChecksView>> {
     const view = await this.checkService.latestChecks(id);
     return new ApiResponseDto(0, 'Success', view);
+  }
+
+  /**
+   * 收尾「采购商品」的截图识别（2026-11-08）。
+   *
+   * 为什么挂在**草稿**上而不是原料上：AI 建档是原料与采购商品一次提交，
+   * 识别时原料还没建出来，没有 ingredientId；能定「净含量怎么归一」的
+   * 只有草稿里的 `payload.ingredient.baseUnit`。
+   *
+   * 识别本身复用员工端那套服务（同一份提示词、同一份渠道字典、同一份每日配额）：
+   * 两个入口各接一套必然漂移，一边认得出、一边认不出。
+   */
+  @Post('drafts/:id/procurement-sku-draft')
+  @ApiOperation({
+    summary: '从商品详情页截图识别采购商品（只出草稿，不落库）',
+  })
+  async draftProcurementSku(
+    @Param('id') id: string,
+    @Body() body: { imageUrl?: string },
+    @CurrentUser() user: RequestUser,
+  ): Promise<
+    ApiResponseDto<{ draft: ProcurementSkuDraft | null; degraded: boolean }>
+  > {
+    const imageUrl =
+      typeof body?.imageUrl === 'string' ? body.imageUrl.trim() : '';
+    if (!imageUrl) {
+      throw new BadRequestException('缺少截图地址');
+    }
+
+    const draft = await this.draftService.get(id);
+    if (draft.type !== 'FOOD') {
+      throw new BadRequestException('只有食材可以新增采购商品');
+    }
+
+    const ingredient = (
+      draft.payload as { ingredient?: { baseUnit?: unknown } }
+    ).ingredient;
+    const baseUnit =
+      typeof ingredient?.baseUnit === 'string' ? ingredient.baseUnit : '';
+    if (!baseUnit) {
+      throw new BadRequestException(
+        '草稿里还没有原料卡（基准单位未知），先让 AI 把原料写出来再识别',
+      );
+    }
+
+    try {
+      const result =
+        await this.procurementSkuDraftService.draftFromScreenshotForBaseUnit({
+          imageUrl,
+          baseUnit,
+          userId: user.userId,
+        });
+      return new ApiResponseDto(0, 'Success', {
+        draft: result,
+        degraded: false,
+      });
+    } catch (error) {
+      // 「这张图不是商品详情页」「配额用完了」是给人看的说明，必须原样抛出去；
+      // 其余（模型超时、网络）降级成手填，绝不卡住建档收尾（同员工端口径）。
+      if (error instanceof ProcurementSkuDraftNoticeException) {
+        throw error;
+      }
+      this.logger.warn(
+        `采购商品识别失败，降级为手填：${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return new ApiResponseDto(0, 'Success', { draft: null, degraded: true });
+    }
   }
 
   @Post('drafts/:id/authorize')

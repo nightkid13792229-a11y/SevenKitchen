@@ -42,6 +42,21 @@ export class AuthorizeProcurementSkuDto {
   @IsNumber()
   @IsPositive()
   currentPurchasePrice!: number;
+
+  /**
+   * 在哪买的（2026-11-08）：只认后台维护的渠道字典；
+   * 归不上字典码时服务端存空，不阻断建档。
+   */
+  @ApiPropertyOptional({ description: '采购渠道（后台维护的渠道名）', example: '山姆' })
+  @IsOptional()
+  @IsString()
+  purchaseChannel?: string;
+
+  /** 识别用的商品详情页截图：留在采购商品上，能追这个价是从哪张图来的。 */
+  @ApiPropertyOptional({ description: '商品详情页截图地址' })
+  @IsOptional()
+  @IsString()
+  sourceScreenshotUrl?: string;
 }
 
 /**

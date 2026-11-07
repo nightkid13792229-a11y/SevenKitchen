@@ -43,6 +43,7 @@ import { AuthGuard } from '../../../src/interfaces/auth/auth.guard';
 import { JwtAuthService } from '../../../src/interfaces/auth/jwt.service';
 import { IngredientCreationController } from '../../../src/interfaces/controllers/ingredient-creation.controller';
 import { SupplementLinkPreviewService } from '../../../src/application/ingredient-creation/supplement-link-preview.service';
+import { ProcurementSkuDraftService } from '../../../src/application/purchasing/procurement-sku-draft.service';
 import { SupplementIngredientService } from '../../../src/application/ingredient-creation/supplement-ingredient.service';
 import { AdminGuard } from '../../../src/interfaces/guards/role.guard';
 
@@ -2532,6 +2533,11 @@ describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
         { provide: IngredientSearchPlanService, useValue: {} },
         { provide: SupplementIngredientService, useValue: { create: jest.fn() } },
         { provide: SupplementLinkPreviewService, useValue: { preview: jest.fn() } },
+        // 2026-11-08：收尾的采购商品截图识别（这些用例不走它，给个空壳就行）
+        {
+          provide: ProcurementSkuDraftService,
+          useValue: { draftFromScreenshotForBaseUnit: jest.fn() },
+        },
         {
           provide: JwtAuthService,
           useValue: {

@@ -588,6 +588,12 @@ export class IngredientCreationCommitService {
     const primaryNutritionData =
       preparedProfiles[primaryProfileIndex].nutritionData;
 
+    // 采购商品的「在哪买的」只能落后台维护的字典码（2026-11-08）：
+    // 认不出来就当没填，绝不因为一个渠道把整批建档拦住。
+    const skuPurchaseChannel = await this.resolveChannelForCommit(
+      input.procurementSku?.purchaseChannel ?? null,
+    );
+
     let createdProcurementSkuId: string | null = null;
 
     return this.prisma.$transaction(async (tx) => {
@@ -632,11 +638,14 @@ export class IngredientCreationCommitService {
         data: {
           ingredientId: createdIngredient.id,
           name: commitSku.name,
+          // 「在哪买的」只存字典码；识别用的截图留着，方便追这个价从哪来（2026-11-08）
+          purchaseChannel: skuPurchaseChannel,
           purchaseUnit: commitSku.purchaseUnit,
           purchaseToBaseRatio: commitSku.purchaseToBaseRatio,
           currentPurchasePrice: commitSku.currentPurchasePrice,
           referencePurchasePrice: null,
           referencePricePerPurchaseUnit: null,
+          sourceScreenshotUrl: commitSku.sourceScreenshotUrl,
           isDefault: false,
           isActive: true,
           sortOrder: 0,

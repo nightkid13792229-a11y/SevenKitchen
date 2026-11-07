@@ -1087,14 +1087,84 @@
               </span>
             </div>
 
+            <!-- 截图识别（2026-11-08）：贴一张商品详情页，AI 把下面几格填好。
+                 与小程序「新增采购商品」同一个识别服务，认得出的字段一样。 -->
+            <div
+              class="closing-card__shot"
+              :class="{ 'is-drag': shotDragging, 'is-busy': shotRecognizing }"
+              @click="pickScreenshot"
+              @dragover.prevent="shotDragging = true"
+              @dragleave.prevent="shotDragging = false"
+              @drop.prevent="handleScreenshotDrop"
+            >
+              <template v-if="shotRecognizing">
+                <span class="closing-card__shot-title">正在识别截图…</span>
+                <span class="closing-card__shot-sub">读商品名、件数、每件净含量、单价和渠道</span>
+              </template>
+              <template v-else>
+                <span class="closing-card__shot-title">
+                  贴一张商品详情页截图 → 自动填好下面几格
+                </span>
+                <span class="closing-card__shot-sub">
+                  {{ shotDropHint }}
+                </span>
+              </template>
+              <input
+                ref="shotInputRef"
+                type="file"
+                accept="image/*"
+                class="closing-card__shot-file"
+                @change="handleScreenshotPick"
+              />
+            </div>
+
+            <el-alert
+              v-if="shotError"
+              class="closing-card__shot-alert"
+              type="warning"
+              :closable="false"
+              show-icon
+              :title="shotError"
+            />
+
+            <p v-if="shotMissingLabels.length > 0" class="closing-card__shot-missing">
+              截图里没读到：{{ shotMissingLabels.join('、') }}——请手动补上（不猜数）。
+            </p>
+
             <el-form label-width="86px" size="small" class="closing-card__form">
-              <el-form-item label="商品名称" required>
+              <el-form-item required>
+                <template #label>
+                  商品名称
+                  <span v-if="isAiFilled('name')" class="closing-card__ai">AI 识别</span>
+                </template>
                 <el-input v-model="closingForm.name" placeholder="如：山姆 糙米 1kg" />
               </el-form-item>
-              <el-form-item label="采购单位" required>
+              <el-form-item required>
+                <template #label>
+                  采购单位
+                  <span v-if="isAiFilled('purchaseUnit')" class="closing-card__ai">AI 识别</span>
+                </template>
                 <el-input v-model="closingForm.purchaseUnit" placeholder="袋 / 盒 / 箱" />
               </el-form-item>
-              <el-form-item label="每件净含量" required>
+              <el-form-item required>
+                <template #label>
+                  一箱几件
+                  <span v-if="isAiFilled('packCount')" class="closing-card__ai">AI 识别</span>
+                </template>
+                <el-input-number
+                  v-model="closingForm.packCount"
+                  :min="1"
+                  :step="1"
+                  :precision="0"
+                  controls-position="right"
+                />
+                <span class="closing-card__unit">件</span>
+              </el-form-item>
+              <el-form-item required>
+                <template #label>
+                  每件净含量
+                  <span v-if="isAiFilled('netContentPerPack')" class="closing-card__ai">AI 识别</span>
+                </template>
                 <el-input-number
                   v-model="closingForm.netContentPerPack"
                   :min="0"
@@ -1102,7 +1172,11 @@
                 />
                 <span class="closing-card__unit">{{ closingBaseUnitLabel }}</span>
               </el-form-item>
-              <el-form-item label="这一件多少钱" required>
+              <el-form-item required>
+                <template #label>
+                  这一件多少钱
+                  <span v-if="isAiFilled('currentPurchasePrice')" class="closing-card__ai">AI 识别</span>
+                </template>
                 <el-input-number
                   v-model="closingForm.currentPurchasePrice"
                   :min="0"
@@ -1112,16 +1186,27 @@
                 <span class="closing-card__preview">{{ closingPreview }}</span>
               </el-form-item>
               <el-form-item
-                label="采购渠道"
                 class="closing-card__form-wide"
               >
+                <template #label>
+                  采购渠道
+                  <span
+                    v-if="isAiFilled('purchaseChannel')"
+                    class="closing-card__ai"
+                    :class="{ 'is-guess': isLowConfidence('purchaseChannel') }"
+                  >
+                    {{ isLowConfidence('purchaseChannel') ? 'AI 推测·可改' : 'AI 识别' }}
+                  </span>
+                </template>
                 <el-input v-model="closingForm.purchaseChannel" placeholder="在哪买的，可不填" />
               </el-form-item>
             </el-form>
 
+            <p v-if="closingRatioText" class="closing-card__ratio">{{ closingRatioText }}</p>
+
             <p class="closing-card__hint">
               它会和原料一起写入，折算成「每{{ closingBaseUnitLabel }}多少钱」作为初始成本；
-              没有它，原料进食谱就是按 0 元算。件数按 1 件算。
+              没有它，原料进食谱就是按 0 元算。
             </p>
           </div>
 
@@ -1184,9 +1269,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import { ingredientApi } from '@/api/ingredients'
 import {
-  buildCreateSkuPayload,
+  applyRecognizedDraft,
+  buildClosingSkuInput,
   computeClosingState,
-  formatCostPreview
+  formatCostPreview,
+  formatRatioText,
+  type ClosingFieldKey
 } from './procurementClosing'
 import { indexHtmlPathOf, isStaleBundle } from './staleBundle'
 import { nutritionFoodApi } from '@/api/ingredients'
@@ -1571,7 +1659,9 @@ const commitResult = ref<AuthorizeResult | null>(null)
 const closingForm = reactive({
   name: '',
   purchaseChannel: '',
-  purchaseUnit: '袋',
+  // 单位默认留空：留成 '袋' 会被「只填空格子」的规则当成"人填过"，
+  // AI 读到的「箱 / 瓶 / 包」就填不进来了（2026-11-08）。
+  purchaseUnit: '',
   packCount: 1,
   netContentPerPack: undefined as number | undefined,
   currentPurchasePrice: undefined as number | undefined
@@ -1585,11 +1675,13 @@ const closingBaseUnitLabel = computed(() => {
 const closingState = computed(() =>
   computeClosingState({
     pricePerPackage: closingForm.currentPurchasePrice ?? null,
-    netContent: closingForm.netContentPerPack ?? null
+    netContent: closingForm.netContentPerPack ?? null,
+    purchaseUnit: closingForm.purchaseUnit
   })
 )
 const closingStateLabel = computed(() => {
   if (closingState.value === 'READY') return '填好了，可以写入'
+  if (closingState.value === 'MISSING_UNIT') return '还差「采购单位」（袋 / 盒 / 箱）'
   return '还差「每件净含量」和「这一件多少钱」'
 })
 const closingPreview = computed(() =>
@@ -1607,6 +1699,154 @@ const closingCardRef = ref<HTMLElement | null>(null)
 const closingReady = computed(
   () => line.value !== 'FOOD' || closingState.value === 'READY'
 )
+
+/**
+ * 商品详情页截图识别（2026-11-08）。
+ *
+ * 与小程序「新增采购商品」同一个识别服务、同一份提示词与每日配额：
+ * 读得出商品名、采购单位、一箱几件、每件净含量、单价、渠道；
+ * 读不出的一律留空并进「待补」——绝不编数字（净含量错一次库存差几十倍）。
+ */
+const shotInputRef = ref<HTMLInputElement | null>(null)
+const shotDragging = ref(false)
+const shotRecognizing = ref(false)
+const shotError = ref('')
+const shotMissing = ref<string[]>([])
+const shotSourceUrl = ref<string | null>(null)
+const closingAiFilled = ref<ClosingFieldKey[]>([])
+const closingLowConfidence = ref<string[]>([])
+
+/** 后端字段名 → 人话（「待补」清单用）。 */
+const SKU_FIELD_LABELS: Record<string, string> = {
+  name: '商品名称',
+  purchaseUnit: '采购单位',
+  packCount: '一箱几件',
+  netContentPerPack: '每件净含量',
+  currentPurchasePrice: '这一件多少钱',
+  purchaseChannel: '采购渠道'
+}
+
+const shotMissingLabels = computed(() =>
+  shotMissing.value
+    .map((field) => SKU_FIELD_LABELS[field])
+    .filter((label): label is string => Boolean(label))
+)
+
+/** 拖拽区提示：识别过一张就提示可以再贴一张重新填。 */
+const shotDropHint = computed(() =>
+  shotSourceUrl.value
+    ? '要么点这里换一张截图重新识别（已填的格子不会被覆盖）'
+    : '直接点这里选文件，或把截图拖进来 / 在页面上按 ⌘V 粘贴'
+)
+
+const isAiFilled = (field: ClosingFieldKey): boolean =>
+  closingAiFilled.value.includes(field)
+
+const isLowConfidence = (field: string): boolean =>
+  closingLowConfidence.value.includes(field)
+
+/** 换算倍率的人话版：`24 件 × 330 ml → 一箱 = 7920 ml`，供人核对。 */
+const closingRatioText = computed(() =>
+  formatRatioText(
+    closingForm.packCount,
+    closingForm.netContentPerPack,
+    closingBaseUnitLabel.value,
+    closingForm.purchaseUnit
+  )
+)
+
+function pickScreenshot(): void {
+  if (shotRecognizing.value) return
+  shotInputRef.value?.click()
+}
+
+function handleScreenshotPick(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (file) void recognizeScreenshot(file)
+}
+
+function handleScreenshotDrop(event: DragEvent): void {
+  shotDragging.value = false
+  const file = event.dataTransfer?.files?.[0]
+  if (file && file.type.startsWith('image/')) {
+    void recognizeScreenshot(file)
+  }
+}
+
+/** 在页面上直接粘贴截图（桌面端最顺手的一条路）。 */
+function handlePaste(event: ClipboardEvent): void {
+  if (commitResult.value || line.value !== 'FOOD' || shotRecognizing.value)
+    return
+
+  const item = Array.from(event.clipboardData?.items ?? []).find((entry) =>
+    entry.type.startsWith('image/')
+  )
+  const file = item?.getAsFile()
+  if (file) {
+    event.preventDefault()
+    void recognizeScreenshot(file)
+  }
+}
+
+/**
+ * 传图 → 识别 → 填表。
+ *
+ * 只填空格子（规则在 `applyRecognizedDraft` 里）：人手打进去的价、名字不被盖掉。
+ * 识别失败只提示、不清空已填内容——手填永远可用。
+ */
+async function recognizeScreenshot(file: File): Promise<void> {
+  const draftId = draft.value?.id
+  if (!draftId) {
+    shotError.value = '还没有草稿，先让 AI 把原料写出来再识别截图'
+    return
+  }
+  if (!file.type.startsWith('image/')) {
+    shotError.value = '请贴一张图片（商品详情页截图）'
+    return
+  }
+
+  shotRecognizing.value = true
+  shotError.value = ''
+  try {
+    const uploaded = await ingredientCreationApi.uploadProcurementSkuScreenshot(
+      file
+    )
+    const result = await ingredientCreationApi.recognizeProcurementSku(
+      draftId,
+      uploaded.url
+    )
+
+    const recognized = result.draft
+    if (!recognized) {
+      shotError.value =
+        '这张图没认出来（可能不是商品详情页），请换一张单个商品的详情页截图，或直接手动填写'
+      return
+    }
+
+    const applied = applyRecognizedDraft(closingForm, recognized)
+    Object.assign(closingForm, applied.form)
+    closingAiFilled.value = applied.aiFilled
+    closingLowConfidence.value = applied.lowConfidence
+    shotMissing.value = applied.missing
+    shotSourceUrl.value = uploaded.url
+
+    if (applied.aiFilled.length === 0) {
+      shotError.value =
+        '这几格都已经有内容了，识别结果没有覆盖它们；要按截图重填，先清空对应格子再识别'
+      return
+    }
+    ElMessage.success('已按截图填好，请核对一遍带「AI 推测」的格子')
+  } catch (error) {
+    shotError.value = getApiErrorMessage(
+      error,
+      '识别失败，请手动填写（不影响写入）'
+    )
+  } finally {
+    shotRecognizing.value = false
+  }
+}
 
 /**
  * 旧页面检测（2026-11-08）。
@@ -1964,6 +2204,9 @@ onMounted(() => {
   void checkBundleFreshness(true)
   window.addEventListener('focus', handleBundleFreshnessCheck)
   document.addEventListener('visibilitychange', handleBundleFreshnessCheck)
+
+  // 截图识别：桌面端最顺手的是直接 ⌘V 粘贴截图（2026-11-08）
+  window.addEventListener('paste', handlePaste)
 })
 
 async function loadIngredientTags() {
@@ -2009,6 +2252,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('focus', handleBundleFreshnessCheck)
   document.removeEventListener('visibilitychange', handleBundleFreshnessCheck)
+  window.removeEventListener('paste', handlePaste)
   if (locateTimer) {
     clearTimeout(locateTimer)
     locateTimer = null
@@ -3142,13 +3386,10 @@ async function handleAuthorize() {
 
     const result = await ingredientCreationApi.authorize(draftId, {
       primaryProfileIndex,
-      procurementSku: {
-        name: closingForm.name.trim() || undefined,
-        purchaseUnit: closingForm.purchaseUnit,
-        packCount: closingForm.packCount,
-        netContentPerPack: closingForm.netContentPerPack ?? 0,
-        currentPurchasePrice: closingForm.currentPurchasePrice ?? 0
-      }
+      procurementSku: buildClosingSkuInput({
+        ...closingForm,
+        sourceScreenshotUrl: shotSourceUrl.value
+      })
     })
     commitResult.value = result
     ElMessage.success('已写入正式库，营养档案当前是「待验证」')
@@ -4547,6 +4788,75 @@ function goBackToList() {
 
 .closing-card__form-wide {
   grid-column: 1 / -1;
+}
+
+.closing-card__shot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 8px 0 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--el-border-color);
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.closing-card__shot:hover,
+.closing-card__shot.is-drag {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.closing-card__shot.is-busy {
+  cursor: progress;
+}
+
+.closing-card__shot-title {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+}
+
+.closing-card__shot-sub {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.closing-card__shot-file {
+  display: none;
+}
+
+.closing-card__shot-alert {
+  margin-bottom: 8px;
+}
+
+.closing-card__shot-missing {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--el-color-warning);
+}
+
+.closing-card__ai {
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.closing-card__ai.is-guess {
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
+}
+
+.closing-card__ratio {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .closing-card__unit,

@@ -116,6 +116,33 @@ describe('建档携带的采购商品', () => {
     ).toThrow(/一箱几件[\s\S]*每件净含量[\s\S]*这一件多少钱[\s\S]*采购单位/);
   });
 
+  it('采购渠道与截图地址带出去：渠道去空白，没填就是 null', () => {
+    const filled = buildCommitProcurementSku({
+      name: '秋刀鱼',
+      purchaseUnit: '袋',
+      packCount: 1,
+      netContentPerPack: 1000,
+      currentPurchasePrice: 39.9,
+      purchaseChannel: '  山姆  ',
+      sourceScreenshotUrl: 'https://img.example.com/shot.jpg',
+    });
+
+    expect(filled.purchaseChannel).toBe('山姆');
+    expect(filled.sourceScreenshotUrl).toBe('https://img.example.com/shot.jpg');
+
+    const blank = buildCommitProcurementSku({
+      name: '秋刀鱼',
+      purchaseUnit: '袋',
+      packCount: 1,
+      netContentPerPack: 1000,
+      currentPurchasePrice: 39.9,
+      purchaseChannel: '   ',
+    });
+
+    expect(blank.purchaseChannel).toBeNull();
+    expect(blank.sourceScreenshotUrl).toBeNull();
+  });
+
   it('商品名留空时用原料名兜底（不要建出空名商品）', () => {
     const sku = buildCommitProcurementSku({
       name: '   ',

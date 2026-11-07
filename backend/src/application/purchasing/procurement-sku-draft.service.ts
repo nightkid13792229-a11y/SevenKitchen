@@ -119,7 +119,33 @@ export class ProcurementSkuDraftService {
       throw new BadRequestException('只有食材可以新增采购商品');
     }
 
-    const baseUnit = ingredient.baseUnit as BaseUnitCode;
+    return this.draftFromScreenshotForBaseUnit({
+      imageUrl: input.imageUrl,
+      baseUnit: ingredient.baseUnit,
+      userId: input.userId,
+    });
+  }
+
+  /**
+   * 同一套识别，但只认**基准单位**（2026-11-08 AI 建档收尾）。
+   *
+   * AI 建档时原料和采购商品是一次提交，识别时原料还没建出来，没有 ingredientId
+   * 可传；草稿里只有 ingredient.baseUnit，归一净含量的口径就是它。
+   * 提示词、渠道字典、配额、降级策略与员工端**完全共用一份**——
+   * 两个入口各接一套必然漂移（一个能认、一个认不出）。
+   */
+  async draftFromScreenshotForBaseUnit(input: {
+    imageUrl: string;
+    baseUnit: string;
+    userId: string;
+  }): Promise<ProcurementSkuDraft> {
+    const baseUnit = toBaseUnitCode(input.baseUnit);
+    if (!baseUnit) {
+      // 归一不了就别花钱调模型：错单位的净含量会让库存差几十倍。
+      throw new BadRequestException(
+        `这条原料的基准单位「${input.baseUnit}」不是 G / ML / PCS，无法折算净含量`,
+      );
+    }
 
     await this.quota.consume(input.userId);
 
@@ -270,3 +296,7 @@ const normalizeConfidence = (
 
   return result;
 };
+
+/** 基准单位只认这三个（与 `BaseUnitCode` 一致）；其它一律判无法折算。 */
+const toBaseUnitCode = (value: string): BaseUnitCode | null =>
+  value === 'G' || value === 'ML' || value === 'PCS' ? value : null;

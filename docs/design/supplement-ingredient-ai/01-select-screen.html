@@ -48,7 +48,7 @@ header .sub{font-size:11.5px;color:var(--muted);margin-top:1px}
 .btn2{font-size:11.5px;padding:5px 11px;border-radius:6px;border:1px solid var(--line);background:#fff;color:#3d4650}
 
 .cmpwrap{flex:1;padding:0 16px;overflow:hidden;display:flex;min-height:0}
-.cmp{display:grid;grid-template-columns:112px repeat(4,1fr);grid-template-rows:80px repeat(5,minmax(0,1fr));gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;flex:1}
+.cmp{display:grid;grid-template-columns:112px repeat(4,1fr);grid-template-rows:80px repeat(4,minmax(0,1fr));gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;flex:1}
 .cmp .c{padding:10px 12px;border-bottom:1px solid var(--line2);border-right:1px solid var(--line2);font-size:11.5px;line-height:1.5;display:flex;flex-direction:column;justify-content:center;align-items:flex-start}
 .cmp .c:nth-child(5n){border-right:none}
 .cmp .c.last{border-bottom:none}
@@ -81,7 +81,7 @@ header .sub{font-size:11.5px;color:var(--muted);margin-top:1px}
 </head>
 <body>
 
-<div class="cap"><b>C-1 · 选品屏</b><span class="k">说“加个锌”从这进</span><span>第一道是《目录》允不允许，然后才是形态、人用、性价比。点完就落到下一屏的对照。</span></div>
+<div class="cap"><b>C-1 · 选品屏</b><span class="k">说“加个锌”从这进</span><span>形态 → 人用犬用 → 性价比，逐层淘汰。目录不在这张表里——它只用来查名字。</span></div>
 
 <div class="app">
   <header>
@@ -101,8 +101,8 @@ header .sub{font-size:11.5px;color:var(--muted);margin-top:1px}
       <div class="chat-hd"><span class="dot"></span><b>Agent</b><span style="margin-left:auto;font-size:10.5px;color:#a5adb6">D-2394</span></div>
       <div class="chat-bd">
         <div class="msg me">给狗狗加个锌</div>
-        <div class="msg ai">第一道不是"哪个吸收好"，是<b>《饲料添加剂品种目录》里有没有这个品种、适用范围含不含犬</b>。不在目录里，吸收再好也不能用。</div>
-        <div class="msg ai">第二道才是形态；第三道是人用还是犬用；<b>饲料级</b>不能进分装零售，那是硬约束，不算性价比。</div>
+        <div class="msg ai">先看<span class="em">吸收和安全</span>：螯合形态比离子型好，离子型还会被钙抢走。这一层不过，后面不用比。</div>
+        <div class="msg ai">再看人用还是犬用——<b>饲料级</b>的进不了分装零售，那不算性价比，是进不了我们的货。前两层打平了，最后才看每 mg 多少钱。</div>
         <div class="msg ai" style="border-style:dashed;background:#fbfcfd;color:#6b7280">四个候选在右边。你要是有现成链接，点右上角贴进来，我直接读那瓶。</div>
       </div>
       <div class="chat-ft"><div class="inp">继续说…（例如“换一批”）</div></div>
@@ -136,49 +136,41 @@ header .sub{font-size:11.5px;color:var(--muted);margin-top:1px}
             <div class="m">饲料级 · 25kg 袋装<br>无零售包装</div>
           </div>
 
-          <!-- layer 0 -->
-          <div class="c rowlab">⓪ 目录里有没有<div class="t">不在目录 = 不能用在狗身上</div></div>
-          <div class="c"><span class="chip ok">在 · 适用范围含犬</span><div class="sm">甘氨酸锌</div></div>
-          <div class="c"><span class="chip ok">在 · 适用范围含犬</span><div class="sm">葡萄糖酸锌</div></div>
-          <div class="c"><span class="chip b">不在</span><div class="sm">目录里只有「吡啶甲酸铬」，没有锌</div></div>
-          <div class="c"><span class="chip ok">在</span><div class="sm">蛋氨酸锌络（螯）合物</div></div>
-
           <!-- layer 1 -->
           <div class="c rowlab">① 化学形态<div class="t">对狗安不安全、吸不吸收</div></div>
           <div class="c"><span class="chip ok">螯合 · 好</span><div class="sm">氨基酸螯合，不进胃酸竞争</div></div>
           <div class="c"><span class="chip w">离子型 · 一般</span><div class="sm">和钙同服会抢吸收</div></div>
-          <div class="c"><span class="chip ok">螯合 · 最好</span><div class="sm">但已在 ⓪ 出局，不再算</div></div>
-          <div class="c"><span class="chip ok">螯合 · 好</span><div class="sm">但已在 ⓪ 出局</div></div>
+          <div class="c"><span class="chip ok">螯合 · 好</span><div class="sm">与甘氨酸锌同档，不分高下</div></div>
+          <div class="c"><span class="chip ok">螯合 · 好</span><div class="sm">形态没问题</div></div>
 
           <!-- layer 2 -->
           <div class="c rowlab">② 人用还是犬用<div class="t">一律先人用，除非有研究说犬用更优</div></div>
           <div class="c"><span class="chip ok">人用</span><div class="sm">无需破例</div></div>
           <div class="c"><span class="chip ok">人用</span><div class="sm">无需破例</div></div>
-          <div class="c"><span class="chip" style="background:#f2f4f6;color:#9aa2ab;border:1px solid #e3e6ea">—</span><div class="sm">已出局</div></div>
-          <div class="c"><span class="chip b">饲料级</span><div class="sm">不能分装零售，出局</div></div>
+          <div class="c"><span class="chip ok">人用</span><div class="sm">无需破例</div></div>
+          <div class="c"><span class="chip b">饲料级</span><div class="sm">进不了分装零售，出局</div></div>
 
           <!-- layer 3 -->
           <div class="c rowlab">③ 性价比<div class="t">前两层打平了才比</div></div>
           <div class="c"><div class="big">¥0.030 / mg</div><div class="sm">¥45 ÷ 100 粒 × 15mg</div></div>
           <div class="c"><div class="big">¥0.012 / mg</div><div class="sm">最便宜，但形态差一档</div></div>
-          <div class="c"><div class="big" style="color:#aeb4bb">—</div><div class="sm">不再算</div></div>
-          <div class="c"><div class="big" style="color:#aeb4bb">—</div><div class="sm">不再算</div></div>
+          <div class="c"><div class="big">¥0.059 / mg</div><div class="sm">形态同级，贵一倍</div></div>
+          <div class="c"><div class="big" style="color:#aeb4bb">—</div><div class="sm">已出局，不再算</div></div>
 
           <!-- verdict row -->
           <div class="c rowlab last" style="background:#fafbfc">结论</div>
-          <div class="c last" style="background:#f7faff"><b style="color:#3370ff">选它</b><div class="sm">唯一一个合规 + 螯合 + 人用的</div></div>
+          <div class="c last" style="background:#f7faff"><b style="color:#3370ff">选它</b><div class="sm">螯合 + 人用 + 三个里最便宜</div></div>
           <div class="c last"><b style="color:#6b7280">留着</b><div class="sm">要极致省钱时再翻出来</div></div>
-          <div class="c last"><b style="color:#b4232a">不能用</b><div class="sm">吸收最好，但不在目录里</div></div>
-          <div class="c last"><b style="color:#b4232a">不能用</b><div class="sm">目录里有，但进不了我们的货</div></div>
+          <div class="c last"><b style="color:#6b7280">不划算</b><div class="sm">形态同级，多花一倍钱不值</div></div>
+          <div class="c last"><b style="color:#b4232a">不能用</b><div class="sm">饲料级，进不了我们的货</div></div>
         </div>
       </div>
 
       <div class="verdict">
         <div class="ic">✓</div>
         <div class="tx">
-          <b>推荐甘氨酸锌 15mg</b>　两个"形态最好"的候选都不能用：吡啶甲酸锌吸收最好，但《目录》里没有这个品种；
-          蛋氨酸锌《目录》里有，但只有饲料级、进不了分装零售。剩下的两个里，甘氨酸锌是螯合、葡萄糖酸锌是离子型——
-          形态优先，选甘氨酸锌。
+          <b>推荐甘氨酸锌 15mg</b>　三个螯合的形态打平、都人用；葡萄糖酸锌便宜但离子型，吸收差一档；
+          吡啶甲酸锌形态同级却贵一倍。按"形态持平就比价"，选甘氨酸锌。
         </div>
       </div>
 

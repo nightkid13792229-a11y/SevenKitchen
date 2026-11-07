@@ -97,7 +97,8 @@ describe('staff reimbursement detail guardrails', () => {
 
     // 通过 / 驳回 / 撤销 是三个独立动作
     expect(reimbursementDetailSource).toContain('reviewReimbursement(');
-    expect(reimbursementDetailSource).toContain("'REQUIRES_RESUBMIT'");
+    // 驳回落到「已驳回」，和列表里的筛选标签一致（2026-11-07 复审）
+    expect(reimbursementDetailSource).toContain("'REJECTED'");
     expect(reimbursementDetailSource).toContain('revertReimbursementReview(');
     expect(reimbursementDetailSource).toContain('审核通过');
     expect(reimbursementDetailSource).toContain('撤销审核');
@@ -113,6 +114,15 @@ describe('staff reimbursement detail guardrails', () => {
     expect(reimbursementDetailSource).toContain('getDeltaTone');
     expect(reimbursementDetailSource).not.toContain('确认应用');
     expect(reimbursementDetailSource).not.toContain('月成本影响');
+  });
+
+  it('does not promise that held price changes will take effect', () => {
+    // 价格闸挂起（HOLD）的项通过后不会生效，页面必须分开说
+    expect(reimbursementDetailSource).toContain('autoApprovalEligible');
+    expect(reimbursementDetailSource).toContain('manualPriceChangeCount');
+    expect(reimbursementDetailSource).toContain('需放行');
+    expect(reimbursementDetailSource).not.toContain('项一次性生效');
+    expect(reimbursementDetailSource).not.toContain('项将同时生效');
   });
 });
 

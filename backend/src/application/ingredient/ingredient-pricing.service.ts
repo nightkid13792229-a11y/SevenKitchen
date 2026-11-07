@@ -43,6 +43,12 @@ export interface IngredientPriceChangeView {
   gateAction: PriceGateAction | null;
   /** 闸门不通过的原因，展示给后台 */
   gateReason: string | null;
+  /**
+   * 待确认项「通过后会不会自动生效」的预判（2026-11-07）。
+   * 幅度超过阈值的项会被挂起（HOLD），通过后价格不会变，
+   * 手机端据此把「会自动生效」和「需要人工放行」分开说，不能混着承诺。
+   */
+  autoApprovalEligible: boolean;
   reviewReasons: string[];
   reviewComment: string | null;
   reviewedById: string | null;
@@ -396,33 +402,153 @@ export class IngredientPricingService {
       return;
     }
 
-    // 先把原料当前价退回变更前的值
+    // 1. 原料当前价退回变更前的值
     await this.restorePricesAfterRejectedApproval(
       reimbursementId,
       approvedChanges,
     );
 
-    // 再把这些变更退回待确认，并清掉「已应用」的痕迹
-    await this.prisma.ingredientPriceChange.updateMany({
-      where: {
-        reimbursementId,
-        status: 'APPROVED',
-      },
-      data: {
-        status: 'PENDING',
-        reviewedById: null,
-        reviewedAt: null,
-        reviewComment: null,
-        appliedCurrentPricePerPurchaseUnit: null,
-        appliedEffectivePricePerPurchaseUnit: null,
-        gateAction: null,
-        gateReason: null,
-      },
-    });
+    // 2. 回退本身也是一次价格变化，必须补一条成本流水，
+    //    否则「成本历史」会停在应用后的价，和当前价对不上（2026-11-07 复审 P0）
+    await this.recordRevertCostHistory(reimbursementId, approvedChanges);
+
+    // 3. 采购商品（SKU）价退回本单应用前的值。
+    //    当初通过时既写了原料价、也写了 SKU 价；只退原料价会让采购执行价停在新的。
+    await this.rollbackProcurementSkuPrices(reimbursementId, operatorId);
+
+    // 4. 变更回到待确认，并把「新价」恢复成来源单价
+    //    （通过时 proposed 被改写成加权应用价，不复位会让表格里「新价/涨跌」自相矛盾）
+    for (const change of approvedChanges) {
+      await this.prisma.ingredientPriceChange.update({
+        where: { id: change.id },
+        data: {
+          status: 'PENDING',
+          proposedEffectivePrice: change.sourcePricePerPurchaseUnit,
+          reviewedById: null,
+          reviewedAt: null,
+          reviewComment: null,
+          appliedCurrentPricePerPurchaseUnit: null,
+          appliedEffectivePricePerPurchaseUnit: null,
+          gateAction: null,
+          gateReason: null,
+        } as any,
+      });
+    }
 
     this.logger.log(
       `Reverted ${approvedChanges.length} approved price changes for reimbursement ${reimbursementId} by ${operatorId ?? 'unknown'}`,
     );
+  }
+
+  /** 撤销时补记原料成本流水（每个原料一条，记录「应用价 → 回退后的价」） */
+  private async recordRevertCostHistory(
+    reimbursementId: string,
+    changes: IngredientPriceChangeRecord[],
+  ): Promise<void> {
+    const byIngredient = new Map<string, IngredientPriceChangeRecord>();
+    for (const change of changes) {
+      byIngredient.set(change.ingredientId, change);
+    }
+
+    for (const [ingredientId, change] of byIngredient.entries()) {
+      const ingredient = await this.prisma.ingredient.findUnique({
+        where: { id: ingredientId },
+        select: { currentPricePerPurchaseUnit: true },
+      });
+
+      if (!ingredient) {
+        continue;
+      }
+
+      const appliedPrice = change.appliedCurrentPricePerPurchaseUnit;
+      const oldCost =
+        appliedPrice && typeof appliedPrice === 'object' && 'toNumber' in appliedPrice
+          ? appliedPrice.toNumber()
+          : (appliedPrice as number | null);
+
+      const newCost = Number(ingredient.currentPricePerPurchaseUnit);
+
+      if (
+        oldCost === null ||
+        oldCost === undefined ||
+        !Number.isFinite(Number(oldCost)) ||
+        !Number.isFinite(newCost) ||
+        Math.abs(Number(oldCost) - newCost) < 1e-9
+      ) {
+        continue;
+      }
+
+      await this.costHistory.record({
+        ingredientId,
+        oldCost: Number(oldCost),
+        newCost,
+        source: 'REIMBURSEMENT',
+        procurementSkuId: null,
+        reimbursementId,
+        purchaseRecordId: change.purchaseRecordId,
+        note: '审核撤销，价格回退',
+      });
+    }
+  }
+
+  /** 撤销时把本单写过的采购商品价退回应用前的值（首次定价没有旧值，跳过） */
+  private async rollbackProcurementSkuPrices(
+    reimbursementId: string,
+    operatorId?: string | null,
+  ): Promise<void> {
+    const historyRows = await this.prisma.procurementSkuPriceHistory.findMany({
+      where: {
+        reimbursementId,
+        source: 'REIMBURSEMENT',
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        procurementSkuId: true,
+        oldPrice: true,
+      },
+    });
+
+    const firstRowBySku = new Map<
+      string,
+      { id: string; oldPrice: unknown }
+    >();
+
+    for (const row of historyRows) {
+      if (!firstRowBySku.has(row.procurementSkuId)) {
+        firstRowBySku.set(row.procurementSkuId, {
+          id: row.id,
+          oldPrice: row.oldPrice,
+        });
+      }
+    }
+
+    for (const [procurementSkuId, row] of firstRowBySku.entries()) {
+      const rawOldPrice = row.oldPrice as any;
+      const oldPrice =
+        rawOldPrice === null || rawOldPrice === undefined
+          ? null
+          : typeof rawOldPrice === 'object' && 'toNumber' in rawOldPrice
+            ? rawOldPrice.toNumber()
+            : Number(rawOldPrice);
+
+      if (oldPrice === null || !Number.isFinite(oldPrice) || oldPrice <= 0) {
+        // 首次定价：应用前没有价格，没有可回退的值
+        continue;
+      }
+
+      await this.procurementSkuService.applyCurrentPurchasePrice(
+        procurementSkuId,
+        oldPrice,
+        {
+          source: 'ROLLBACK',
+          reimbursementId,
+          rollbackFromHistoryId: row.id,
+          operatorId: operatorId ?? null,
+          note: '审核撤销，价格回退',
+        },
+      );
+    }
   }
 
   async getPriceChangesForReimbursement(
@@ -486,6 +612,10 @@ export class IngredientPricingService {
             : 'AUTO',
       gateAction: ((row as any).gateAction ?? null) as PriceGateAction | null,
       gateReason: (row as any).gateReason ?? null,
+      autoApprovalEligible:
+        row.status === 'PENDING'
+          ? (evaluations.get(row.id)?.eligible ?? false)
+          : true,
       reviewReasons: this.buildReviewReasonsForView(
         row,
         evaluations.get(row.id),

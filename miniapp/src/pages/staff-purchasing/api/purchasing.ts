@@ -840,7 +840,7 @@ export function deleteReimbursement(id: string) {
  * 追加支付凭证（发票照片）
  * 由于微信小程序限制，需要逐个上传文件
  */
-export function appendReceiptUrls(reimbursementId: string, files: string[]) {
+export async function appendReceiptUrls(reimbursementId: string, files: string[]) {
   // 逐个上传文件（因为uni.uploadFile每次只能上传一个文件）
   const uploadFile = (filePath: string): Promise<void> => {
     return new Promise((resolve, reject) => {
@@ -881,15 +881,18 @@ export function appendReceiptUrls(reimbursementId: string, files: string[]) {
     });
   };
 
-  // 使用顺序上传，确保文件按顺序上传
-  const uploadPromises = files.map((file, index) => {
-    return uploadFile(file).catch(err => {
-      console.error(`文件 ${index + 1} 上传失败:`, err);
-      throw err;
-    });
-  });
-
-  return Promise.all(uploadPromises);
+  // 必须一张一张串行上传（2026-11-07 复审 P0）。
+  // 原来用 files.map + Promise.all，是**并发**发出的：后端每个请求都
+  // 「读旧凭证 → 传 COS → 旧+自己整表写回」，并发时后写的会覆盖前面的，
+  // 一次选 3 张经常只剩 1 张，而且不报错。
+  for (let index = 0; index < files.length; index += 1) {
+    try {
+      await uploadFile(files[index]);
+    } catch (error) {
+      console.error(`文件 ${index + 1} 上传失败:`, error);
+      throw error;
+    }
+  }
 }
 
 /**
@@ -946,7 +949,7 @@ export function clearPaymentProof(reimbursementId: string) {
  * 2026-11-07：手机端只挂凭证、不完成报销（autoComplete=false）。
  * 真正「审核通过」由 reviewReimbursement 单独触发。
  */
-export function uploadPaymentProofFiles(reimbursementId: string, files: string[]) {
+export async function uploadPaymentProofFiles(reimbursementId: string, files: string[]) {
   const token = uni.getStorageSync('token');
 
   if (!token) {
@@ -989,15 +992,18 @@ export function uploadPaymentProofFiles(reimbursementId: string, files: string[]
     });
   };
 
-  // 使用顺序上传，确保文件按顺序上传
-  const uploadPromises = files.map((file, index) => {
-    return uploadFile(file).catch(err => {
-      console.error(`文件 ${index + 1} 上传失败:`, err);
-      throw err;
-    });
-  });
-
-  return Promise.all(uploadPromises);
+  // 必须一张一张串行上传（2026-11-07 复审 P0）。
+  // 原来用 files.map + Promise.all，是**并发**发出的：后端每个请求都
+  // 「读旧凭证 → 传 COS → 旧+自己整表写回」，并发时后写的会覆盖前面的，
+  // 一次选 3 张经常只剩 1 张，而且不报错。
+  for (let index = 0; index < files.length; index += 1) {
+    try {
+      await uploadFile(files[index]);
+    } catch (error) {
+      console.error(`文件 ${index + 1} 上传失败:`, error);
+      throw error;
+    }
+  }
 }
 
 // ==========================================

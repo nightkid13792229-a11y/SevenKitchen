@@ -277,7 +277,7 @@ describe('ReimbursementService — 凭证金额与费用归属（2026-11-04）',
     expect(saved.receiptKeys).toEqual(['purchase-order-screenshots/s.jpg']);
   });
 
-  it('清空付款凭证会把「已报销」退回「待报销」', async () => {
+  it('已报销的单不能走「清空付款凭证」，要改必须先用撤销审核', async () => {
     const entity = new Reimbursement({
       claimNumber: 'BX202611040004',
       status: ReimbursementStatus.REIMBURSED,
@@ -295,18 +295,14 @@ describe('ReimbursementService — 凭证金额与费用归属（2026-11-04）',
     repo.findById.mockResolvedValue(entity);
     cos.deleteImage = jest.fn().mockResolvedValue(undefined);
 
-    const saved = await service.clearPaymentProof('reimb-1');
-
-    expect(saved.status).toBe(ReimbursementStatus.PENDING_REVIEW);
-    expect(saved.reviewedAt).toBeUndefined();
-    expect(saved.reviewedById).toBeUndefined();
-    expect(saved.reviewComment).toContain('退回待报销');
-    // 已生效的价格变更要一起回滚
-    expect(pricing.rejectChangesForReimbursement).toHaveBeenCalledWith(
-      'reimb-1',
-      undefined,
-      expect.stringContaining('回滚'),
+    // 2026-11-07 复审：这条老路可以绕开 24 小时撤销窗口，
+    // 而且会把价格变更标成 REJECTED（之后通过永远不生效），所以必须堵掉
+    await expect(service.clearPaymentProof('reimb-1')).rejects.toThrow(
+      '请先「撤销审核」再改凭证',
     );
+
+    expect(repo.save).not.toHaveBeenCalled();
+    expect(pricing.rejectChangesForReimbursement).not.toHaveBeenCalled();
   });
 
   it('对「待报销」单据清空凭证：不改状态、不动原审核备注', async () => {

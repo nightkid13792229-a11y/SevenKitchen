@@ -252,7 +252,8 @@
           >
             <text class="col-name">
               {{ change.ingredientName }}
-              <text v-if="change.statusLabel" class="price-status">{{ change.statusLabel }}</text>
+              <text v-if="change.needsManual" class="price-status warn">需放行</text>
+              <text v-else-if="change.statusLabel" class="price-status">{{ change.statusLabel }}</text>
             </text>
             <text class="col-num">{{ change.previousPriceText }}</text>
             <text class="col-num">{{ change.proposedPriceText }}</text>
@@ -261,14 +262,15 @@
         </view>
 
         <text v-if="pendingPriceChangeCount > 0" class="price-footnote">
-          点一行可在上方采购明细里定位；审核通过后这 {{ pendingPriceChangeCount }} 项一次性生效
+          点一行可在上方采购明细里定位。范围内的价格通过后自动生效；标「需放行」的幅度超阈值，
+          通过后仍要回电脑端确认才会变。
         </text>
       </view>
 
       <!-- ⑧ 审核记录 -->
       <view class="section">
         <view class="section-header">
-          <text class="section-title">审核记录</text>
+          <text class="section-title">处理进度</text>
         </view>
         <view class="timeline">
           <view
@@ -296,9 +298,6 @@
     <view v-if="reimbursement && hasBottomActions" class="bottom-actions">
       <text v-if="canReview && !hasPaymentProof" class="bottom-hint">
         先上传付款凭证，才能点「审核通过」
-      </text>
-      <text v-else-if="isPending && isOwner" class="bottom-hint">
-        这是你自己提交的单，需要其他管理员审核
       </text>
 
       <view class="action-row">
@@ -399,9 +398,13 @@
             <text class="confirm-label">付款凭证</text>
             <text class="confirm-value">{{ proofPhotos.length }} 张</text>
           </view>
-          <view v-if="pendingPriceChangeCount > 0" class="confirm-row">
+          <view v-if="autoApplyPriceChangeCount > 0" class="confirm-row">
             <text class="confirm-label">价格变更</text>
-            <text class="confirm-value">{{ pendingPriceChangeCount }} 项将同时生效</text>
+            <text class="confirm-value">{{ autoApplyPriceChangeCount }} 项自动生效</text>
+          </view>
+          <view v-if="manualPriceChangeCount > 0" class="confirm-row">
+            <text class="confirm-label">超出阈值</text>
+            <text class="confirm-value warn">{{ manualPriceChangeCount }} 项需另行放行</text>
           </view>
         </view>
 
@@ -467,10 +470,7 @@ import {
   revertReimbursementReview,
 } from '../api/purchasing';
 import { formatStaffQuantity } from '../../../utils/staff-quantity';
-import {
-  formatReimbursementCustomFeeTitle,
-  getReimbursementCustomFeeCategoryLabel,
-} from '../constants/reimbursement';
+import { formatReimbursementCustomFeeTitle } from '../constants/reimbursement';
 
 const REVERT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -485,6 +485,7 @@ const withdrawing = ref(false);
 const resubmitting = ref(false);
 const highlightRecordId = ref('');
 const purchaseRecordsByListId = ref<Record<string, any[]>>({});
+const recordsLoadFailed = ref(false);
 
 const rejectReasons = [
   '金额对不上',
@@ -519,7 +520,9 @@ const hasPaymentProof = computed(
 const proofPhotos = computed<string[]>(() => reimbursement.value?.paymentProofUrls || []);
 
 const canManageProof = computed(() => isAdmin.value && isPending.value);
-const canReview = computed(() => isAdmin.value && isPending.value && !isOwner.value);
+// 2026-11-07 复审：不再挡「自己审自己」——老板很可能既是提交人又是唯一管理员，
+// 挡了会导致自己的单在手机上永远过不了。要严格隔离的话应在服务端统一做。
+const canReview = computed(() => isAdmin.value && isPending.value);
 
 const canRevert = computed(() => {
   if (!isAdmin.value || status.value !== 'REIMBURSED') {
@@ -911,12 +914,8 @@ const customFees = computed<any[]>(() => {
   return Array.isArray(fees) ? fees : [];
 });
 
-const customFeeLabel = (fee: any) => {
-  if (fee?.category) {
-    return getReimbursementCustomFeeCategoryLabel(fee.category);
-  }
-  return formatReimbursementCustomFeeTitle(fee);
-};
+// 分类 + 说明（「其它 · 燃气费」），不能只显示分类，否则两条「其它」长得一样
+const customFeeLabel = (fee: any) => formatReimbursementCustomFeeTitle(fee);
 
 const voucherAmountText = computed(() => {
   const amount = reimbursement.value?.voucherAmount;
@@ -1015,6 +1014,11 @@ const isManualRecord = (record: any) => !record?.sourceImportId;
 const priceChangeOf = (record: any) => priceChangeMap.value.get(record.id);
 
 const breakdownMismatchText = computed(() => {
+  // 采购记录没加载全时，明细合计必然是 0 或不全，这时候报「相差多少」是误报
+  if (recordsLoadFailed.value) {
+    return '';
+  }
+
   const total = Number(reimbursement.value?.totalActualCost || 0);
   const parts =
     Number(purchaseRecordsTotal.value) + shippingFee.value + packagingFee.value +
@@ -1037,6 +1041,7 @@ const priceChanges = computed(() => {
     const tone = getDeltaTone(change.deltaRate);
     const statusLabel =
       change.status === 'APPROVED' ? '已生效' : change.status === 'REJECTED' ? '已作废' : '';
+    const needsManual = change.status === 'PENDING' && change.autoApprovalEligible === false;
 
     return {
       ...change,
@@ -1050,12 +1055,25 @@ const priceChanges = computed(() => {
             : '—',
       tone,
       statusLabel,
+      needsManual,
     };
   });
 });
 
-const pendingPriceChangeCount = computed(
-  () => (reimbursement.value?.priceChanges || []).filter((change: any) => change.status === 'PENDING').length,
+const pendingPriceChanges = computed(() =>
+  (reimbursement.value?.priceChanges || []).filter((change: any) => change.status === 'PENDING'),
+);
+
+const pendingPriceChangeCount = computed(() => pendingPriceChanges.value.length);
+
+/** 通过后会自动生效的（后端预判幅度在阈值内） */
+const autoApplyPriceChangeCount = computed(
+  () => pendingPriceChanges.value.filter((change: any) => change.autoApprovalEligible !== false).length,
+);
+
+/** 超出阈值、通过后仍需到电脑端人工放行的 */
+const manualPriceChangeCount = computed(
+  () => pendingPriceChanges.value.filter((change: any) => change.autoApprovalEligible === false).length,
 );
 
 const revertedPriceChangeCount = computed(
@@ -1071,7 +1089,9 @@ const maxDeltaRate = computed(() => {
 
 const priceChangeHint = computed(() => {
   if (pendingPriceChangeCount.value > 0) {
-    return `${pendingPriceChangeCount.value} 项待生效`;
+    return manualPriceChangeCount.value > 0
+      ? `${pendingPriceChangeCount.value} 项待确认（${manualPriceChangeCount.value} 项需放行）`
+      : `${pendingPriceChangeCount.value} 项待确认`;
   }
   if (revertedPriceChangeCount.value > 0) {
     return `${revertedPriceChangeCount.value} 项已生效`;
@@ -1092,19 +1112,19 @@ const summaryAlerts = computed<Array<{ tone: string; text: string }>>(() => {
     alerts.push({ tone: 'warn', text: '还没有付款凭证，暂不能审核通过' });
   }
 
-  if (pendingPriceChangeCount.value > 0) {
-    const maxText = formatDeltaPercent(maxDeltaRate.value);
-    if (maxDeltaRate.value >= 0.3) {
-      alerts.push({
-        tone: 'danger',
-        text: `${pendingPriceChangeCount.value} 项价格变更将通过后生效，最大幅度 ${maxText}，请核对`,
-      });
-    } else {
-      alerts.push({
-        tone: 'info',
-        text: `${pendingPriceChangeCount.value} 项价格变更将通过后一次性生效`,
-      });
-    }
+  if (autoApplyPriceChangeCount.value > 0) {
+    alerts.push({
+      tone: 'info',
+      text: `${autoApplyPriceChangeCount.value} 项价格变更，审核通过后自动生效`,
+    });
+  }
+
+  if (manualPriceChangeCount.value > 0) {
+    // 这些项被价格闸挂起（幅度超阈值），通过后价格**不会**变，必须说清楚
+    alerts.push({
+      tone: 'danger',
+      text: `${manualPriceChangeCount.value} 项幅度过大（最大 ${formatDeltaPercent(maxDeltaRate.value)}），通过后仍需在电脑端放行才会生效`,
+    });
   }
 
   if (manualRecordCount.value > 0) {
@@ -1206,6 +1226,7 @@ const loadDetail = async () => {
 
 const loadPurchaseRecordsForReimbursement = async () => {
   purchaseRecordsByListId.value = {};
+  recordsLoadFailed.value = false;
 
   const purchaseLists = reimbursement.value?.purchaseLists || [];
   if (purchaseLists.length === 0) {
@@ -1245,6 +1266,7 @@ const loadPurchaseRecordsForReimbursement = async () => {
   });
 
   purchaseRecordsByListId.value = nextMap;
+  recordsLoadFailed.value = failedCount > 0;
 
   if (failedCount > 0) {
     uni.showToast({
@@ -1294,7 +1316,7 @@ const submitReject = async () => {
 
   submitting.value = true;
   try {
-    const res: any = await reviewReimbursement(reimbursementId.value, 'REQUIRES_RESUBMIT', comment);
+    const res: any = await reviewReimbursement(reimbursementId.value, 'REJECTED', comment);
     if (res.code !== 0) {
       throw new Error(res.message || '驳回失败');
     }
@@ -1369,10 +1391,11 @@ const uploadProof = async () => {
   try {
     await uploadPaymentProofFiles(reimbursementId.value, res.tempFilePaths);
     uni.showToast({ title: '已上传，待审核通过', icon: 'none' });
-    await loadDetail();
   } catch (error: any) {
     uni.showToast({ title: error?.message || '上传失败', icon: 'none' });
   } finally {
+    // 中途失败也要刷新：已经传上去的那几张要看得见
+    await loadDetail();
     uploading.value = false;
   }
 };
@@ -2037,6 +2060,10 @@ const resubmit = () => {
         margin-left: 6rpx;
         font-size: 18rpx;
         color: #6b6653;
+
+        &.warn {
+          color: #a8402f;
+        }
       }
     }
 
@@ -2293,6 +2320,10 @@ const resubmit = () => {
       .confirm-value {
         color: #26261f;
         font-weight: 600;
+
+        &.warn {
+          color: #a8402f;
+        }
       }
     }
   }

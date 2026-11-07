@@ -363,7 +363,7 @@ export class ReimbursementService {
     // 验证状态
     if (reimbursement.status !== ReimbursementStatus.PENDING_REVIEW) {
       throw new BadRequestException(
-        `只有待报销状态的报销单可以处理。当前状态：${reimbursement.status}`,
+        `只有待审核状态的报销单可以处理。当前状态：${reimbursement.status}`,
       );
     }
 
@@ -913,6 +913,15 @@ export class ReimbursementService {
       throw new BadRequestException('报销单不存在');
     }
 
+    // 2026-11-07 复审：已报销的单不能走「清空凭证」这条老路。
+    // 它不受 24 小时撤销窗口限制，而且会把价格变更标成 REJECTED，
+    // 之后重新通过时找不到待生效条目，价格就永远不生效。要改就先用「撤销审核」。
+    if (reimbursement.status === ReimbursementStatus.REIMBURSED) {
+      throw new BadRequestException(
+        '已报销的报销单请先「撤销审核」再改凭证',
+      );
+    }
+
     this.logger.log(`Clearing payment proof for reimbursement ${id}`);
 
     // 2. 如果有COS文件，先删除
@@ -938,28 +947,11 @@ export class ReimbursementService {
     }
 
     // 3. 创建新的报销单实体（清空凭证）
-    // 已报销的单子清空凭证后要退回「待报销」，否则传错一张图就永久锁死：
-    // 员工撤不回、报销单删不掉、清单也解不开。
-    // 退回前用 rejectChangesForReimbursement 把已生效的原料价格一并回滚（见下方）。
-    const revertedFromReimbursed =
-      reimbursement.status === ReimbursementStatus.REIMBURSED;
-
-    if (revertedFromReimbursed) {
-      // 退回待报销前，把这次报销已生效的原料价格变更一起回滚，
-      // 否则单据可以撤回删除，但价格仍停在已生效值，价格历史还会留悬空引用。
-      await this.ingredientPricingService.rejectChangesForReimbursement(
-        id,
-        undefined,
-        '付款凭证已清空，价格变更一并回滚',
-      );
-    }
-
+    // 已报销的单在这里之前就被拦掉了（改用「撤销审核」），所以状态、审核人、备注都原样保留
     const updated = new Reimbursement({
       id: reimbursement.id,
       claimNumber: reimbursement.claimNumber,
-      status: revertedFromReimbursed
-        ? ReimbursementStatus.PENDING_REVIEW
-        : reimbursement.status,
+      status: reimbursement.status,
       totalActualCost: reimbursement.totalActualCost,
       totalEstimatedCost: reimbursement.totalEstimatedCost,
       receiptUrls: reimbursement.receiptUrls,
@@ -970,13 +962,9 @@ export class ReimbursementService {
 
       submittedById: reimbursement.submittedById,
       submittedAt: reimbursement.submittedAt,
-      reviewedById: revertedFromReimbursed
-        ? undefined
-        : reimbursement.reviewedById,
-      reviewedAt: revertedFromReimbursed ? undefined : reimbursement.reviewedAt,
-      reviewComment: revertedFromReimbursed
-        ? '付款凭证已清空，退回待报销'
-        : reimbursement.reviewComment,
+      reviewedById: reimbursement.reviewedById,
+      reviewedAt: reimbursement.reviewedAt,
+      reviewComment: reimbursement.reviewComment,
       createdAt: reimbursement.createdAt,
       updatedAt: new Date(),
       purchaseLists: reimbursement.purchaseLists,

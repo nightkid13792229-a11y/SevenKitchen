@@ -297,7 +297,7 @@
         {{ lastSubmittedReimbursement.claimNumber }}
       </text>
       <text class="success-amount">¥{{ totalReimbursementAmount }}</text>
-      <text class="success-desc">当前状态：待报销。管理员处理后会更新状态。</text>
+      <text class="success-desc">当前状态：待审核。管理员处理后会更新状态。</text>
       <view class="success-actions">
         <button
           v-if="lastSubmittedReimbursement?.id"

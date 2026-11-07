@@ -20,16 +20,15 @@ import {
   UpdateShippingTemplateDto,
 } from '../dto/shipping-template.dto';
 import { AuthGuard } from '../auth/auth.guard';
+import { StaffGuard } from '../guards/role.guard';
 import { ApiResponseDto } from '../dto/common/response.dto';
-import { GlobalConfigService } from '../../application/config/global-config.service';
 
 @Controller('api/v1/admin/shipping-templates')
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, StaffGuard)
 export class ShippingTemplateController {
   constructor(
     private readonly shippingTemplateRepo: PrismaShippingTemplateRepository,
     private readonly shippingFeeService: ShippingFeeService,
-    private readonly globalConfigService: GlobalConfigService,
   ) {}
 
   /**
@@ -120,13 +119,9 @@ export class ShippingTemplateController {
       return ApiResponseDto.error(404, 'Shipping template not found');
     }
 
-    const activated = await this.shippingTemplateRepo.activate(id);
-
-    // 激活会把其他模板全部停用 —— 包括原来那张"默认运费模板"。
-    // 不同步的话，算价会读到一张已停用的默认模板并直接报错（顾客下不了单）。
-    await this.globalConfigService.updateGlobalConfig({
-      defaultShippingTemplateId: activated.id,
-    });
+    // 激活 + 同步默认模板在同一个事务里完成（见 repository.activateAndSetDefault）：
+    // 激活会停用其他模板，分两次写会留下"默认模板已停用"的窗口，期间顾客下不了单。
+    const activated = await this.shippingTemplateRepo.activateAndSetDefault(id);
 
     return ApiResponseDto.success(activated);
   }

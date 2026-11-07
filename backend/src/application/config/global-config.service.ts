@@ -261,7 +261,8 @@ export class GlobalConfigService {
     if (dto.defaultIcePackId !== undefined)
       updateData.defaultIcePackId = dto.defaultIcePackId;
     if (dto.defaultShippingTemplateId !== undefined)
-      updateData.defaultShippingTemplateId = dto.defaultShippingTemplateId;
+      // 后台下拉框 clearable 会把"清空"发成空串；列是 nullable，统一存 null
+      updateData.defaultShippingTemplateId = dto.defaultShippingTemplateId || null;
 
     // Convert empty strings to null for URL fields
     if (dto.packageExampleImageUrl !== undefined) {

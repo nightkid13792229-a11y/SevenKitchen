@@ -2529,7 +2529,7 @@ export class OrderService {
     amountShipping: number;
   }> {
     const recipe =
-      version !== undefined && version !== null
+      version !== undefined
         ? await this.recipeRepository.findByIdAndVersion(recipeId, version)
         : await this.recipeRepository.findById(recipeId);
     if (!recipe) {

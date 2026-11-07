@@ -219,6 +219,7 @@
               :key="template.id"
               :label="template.name"
               :value="template.id"
+              :disabled="!template.isActive"
             >
               <span>{{ template.name }}</span>
               <el-tag v-if="template.isActive" type="success" size="small" style="margin-left: 8px">激活</el-tag>
@@ -989,6 +990,9 @@ const handleDeleteTemplate = async (template: ShippingTemplate) => {
 const handleActivateTemplate = async (template: ShippingTemplate) => {
   try {
     await shippingTemplateApi.activate(template.id)
+    // 后端在激活时会把「默认运费模板」同步成它；表单也要跟上，
+    // 否则下一次保存会带着旧的（已被停用的）默认模板被校验拦住。
+    form.value.defaultShippingTemplateId = template.id
     ElMessage.success('模板激活成功')
     await loadShippingTemplates()
   } catch (error) {

@@ -1,5 +1,5 @@
 <template>
-  <view class="recipe-detail-page" :class="{ 'has-reference-price': !!displayReferencePrice }">
+  <view class="recipe-detail-page" :class="{ 'has-reference-price': !!displayReferencePrice && canBuyFinishedFood }">
     <!-- 首次加载骨架屏 -->
     <view v-if="showDetailSkeleton" class="detail-skeleton">
       <view class="skeleton-cover"></view>
@@ -349,7 +349,7 @@
             约¥{{ formatReferencePrice(displayReferencePrice.amount) }}/100g
           </text>
           <text class="reference-price-note">
-            按 1kg 起订量估算 · 已含冷链配送 · 最终价格以下单页为准
+            按起订量估算 · 已含冷链配送 · 最终价格以下单页为准
           </text>
         </view>
       </view>

@@ -500,6 +500,8 @@ const pageSize = 10
 const referencePriceMap = ref<
   Record<string, { minPricePer100g: number; priceByRecipeId: Record<string, number> }>
 >({})
+// 参考价请求代次：刷新时自增，用来丢弃「刷新前发出、刷新后才回来」的旧响应
+let referencePriceRequestSeq = 0
 const INITIAL_RECIPE_RENDER_COUNT = 3
 const INITIAL_RECIPE_RENDER_DELAY_MS = 300
 const STALE_RECIPE_COVER_REVEAL_DELAY_MS = 1500
@@ -1215,13 +1217,24 @@ function openHealthTagsDrawer() {
   showHealthTagsDrawer.value = true
 }
 
-function refreshRecipesWithFilters() {
+/**
+ * 列表刷新前的统一复位。
+ *
+ * 参考价必须一起清空：loadReferencePrices 会跳过"已经在 map 里"的 id，
+ * 不清的话刷新后永远显示上一次的价格；同时把请求代次 +1，
+ * 让刷新前发出的旧请求回来时不再写进 map。
+ */
+function resetRecipeListForRefresh() {
   recipes.value = []
   visibleRecipesCount.value = 0
   hasMore.value = true
   currentPage.value = 1
-  // 参考价也要重新拉：否则下拉刷新后仍显示上一次的价格（运费/成本变动看不到）
   referencePriceMap.value = {}
+  referencePriceRequestSeq += 1
+}
+
+function refreshRecipesWithFilters() {
+  resetRecipeListForRefresh()
   loadRecipes(true)
 }
 
@@ -1540,6 +1553,8 @@ async function loadReferencePrices(recipeIds: string[]) {
   const targetIds = recipeIds.filter((id) => Boolean(id) && !referencePriceMap.value[id])
   if (targetIds.length === 0) return
 
+  const requestSeq = referencePriceRequestSeq
+
   try {
     const res: any = await request({
       url: '/recipes/reference-prices',
@@ -1550,6 +1565,8 @@ async function loadReferencePrices(recipeIds: string[]) {
     })
 
     if (res?.code !== 0) return
+    // 刷新已经发生：这份响应属于上一轮，丢弃，等新请求的结果
+    if (requestSeq !== referencePriceRequestSeq) return
 
     const items = Array.isArray(res?.data?.items) ? res.data.items : []
     items.forEach((item: any) => {
@@ -1591,9 +1608,7 @@ function formatStatNum(num: number | undefined): string {
 
 // 下拉刷新
 onPullDownRefresh(() => {
-  recipes.value = []
-  hasMore.value = true
-  currentPage.value = 1
+  resetRecipeListForRefresh()
   loadRecipes(true)
 })
 

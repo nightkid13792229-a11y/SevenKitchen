@@ -395,15 +395,24 @@ describe('home reference price copy', () => {
 });
 
 describe('home reference price freshness', () => {
-  it('下拉刷新时清空参考价，价格更新后能看到新价', () => {
+  it('下拉刷新会清空参考价并丢弃刷新前的旧响应', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),
       'utf-8',
     );
-    const start = source.indexOf('function refreshRecipesWithFilters()');
-    expect(start).toBeGreaterThan(-1);
-    const block = source.slice(start, start + 400);
 
-    expect(block).toContain('referencePriceMap.value = {}');
+    // 下拉刷新必须走统一复位，而复位里必须清空参考价
+    const pullStart = source.indexOf('onPullDownRefresh(')
+    expect(pullStart).toBeGreaterThan(-1)
+    expect(source.slice(pullStart, pullStart + 260)).toContain(
+      'resetRecipeListForRefresh()',
+    )
+
+    const resetStart = source.indexOf('function resetRecipeListForRefresh()')
+    expect(resetStart).toBeGreaterThan(-1)
+    const resetBlock = source.slice(resetStart, resetStart + 500)
+    expect(resetBlock).toContain('referencePriceMap.value = {}')
+    expect(resetBlock).toContain('referencePriceRequestSeq += 1')
+    expect(source).toContain('requestSeq !== referencePriceRequestSeq')
   });
 });

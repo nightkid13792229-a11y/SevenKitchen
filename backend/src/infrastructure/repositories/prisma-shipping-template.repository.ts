@@ -85,6 +85,28 @@ export class PrismaShippingTemplateRepository implements ShippingTemplateReposit
     });
   }
 
+  /**
+   * 激活某张模板，并在同一个事务里把它设成「默认运费模板」。
+   *
+   * 为什么必须原子：activate 会把其他模板全部停用 —— 如果被停用的正好是
+   * 默认模板，而配置又没同步过去，算价会读到一张已停用的默认模板、直接报错。
+   * 拆成两次写就有"激活成功、配置没写成"的窗口，顾客会在这几秒内下不了单。
+   */
+  async activateAndSetDefault(id: string): Promise<ShippingTemplate> {
+    const [, activated] = await this.prisma.$transaction([
+      this.prisma.shippingTemplate.updateMany({ data: { isActive: false } }),
+      this.prisma.shippingTemplate.update({
+        where: { id },
+        data: { isActive: true },
+      }),
+      this.prisma.globalConfig.updateMany({
+        data: { defaultShippingTemplateId: id },
+      }),
+    ]);
+
+    return this.toDomain(activated);
+  }
+
   async activate(id: string): Promise<ShippingTemplate> {
     // Deactivate all templates first (only one can be active)
     await this.prisma.shippingTemplate.updateMany({

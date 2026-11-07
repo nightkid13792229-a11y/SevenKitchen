@@ -1819,9 +1819,11 @@ export class RecipesController {
      * 没有生命阶段的老/独立食谱：取**最新已发布**版本。
      * 以前这里只回 recipeId，算价会按"版本号最大"取 —— 可能是草稿。
      */
-    const latestPublic = [...candidates].sort(
-      (left, right) => (right.version ?? 0) - (left.version ?? 0),
-    )[0];
+    // 只在"同一个 recipeId"里挑版本：candidates 可能包含同系列的别的食谱，
+    // 跨 recipeId 比版本号会把别的菜的价拿过来（仓库里已有这个坑的注释）。
+    const latestPublic = candidates
+      .filter((candidate) => candidate.recipeId === id)
+      .sort((left, right) => (right.version ?? 0) - (left.version ?? 0))[0];
     if (latestPublic) {
       return [
         {
@@ -1848,10 +1850,16 @@ export class RecipesController {
   async getReferencePrices(
     @Query('ids') ids?: string,
   ): Promise<ApiResponseDto<any>> {
-    const idList = (ids || '')
-      .split(',')
-      .map((id) => id.trim())
-      .filter((id) => Boolean(id));
+    // 去重 + 上限：这是公开、免登录接口，一次最多算 30 个（首页一页只有 10 个）。
+    // 没有上限的话，有人拿几百个 id 就能把连接池占满、拖慢结账。
+    const idList = [
+      ...new Set(
+        (ids || '')
+          .split(',')
+          .map((id) => id.trim())
+          .filter((id) => Boolean(id)),
+      ),
+    ].slice(0, 30);
 
     /**
      * 并行算：首页一次要 10 张卡片、约 24 个生命阶段，串行在生产实测 1.3 秒+。

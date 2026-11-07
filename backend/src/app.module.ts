@@ -137,6 +137,10 @@ import { GlobalConfigService } from './application/config/global-config.service'
 import { PricingService } from './domain/pricing/pricing.service';
 import { ShippingFeeService } from './domain/shipping/shipping-fee.service';
 import { ShippingService } from './application/shipping/shipping.service';
+import {
+  CANONICAL_SHIPPING_TEMPLATE_ID,
+  seedCanonicalShippingTemplate,
+} from './application/shipping/shipping-template-seed';
 import { ShippingFulfillmentService } from './application/shipping/shipping-fulfillment.service';
 import { WechatShippingUploadService } from './application/shipping/wechat-shipping-upload.service';
 import { ShippingNotificationService } from './application/shipping/shipping-notification.service';
@@ -1075,34 +1079,17 @@ export class AppModule implements OnModuleInit {
    * Fixed UUID v4 for idempotent seeding
    */
   private async seedShippingTemplate(): Promise<void> {
-    const CANONICAL_SHIPPING_TEMPLATE_ID =
-      '8fa85f64-5717-4562-b3fc-2c963f66afa6';
-
-    // Check if template already exists (idempotent)
-    const existingTemplate = await this.shippingTemplateRepository.findById(
-      CANONICAL_SHIPPING_TEMPLATE_ID,
+    const result = await seedCanonicalShippingTemplate(
+      this.shippingTemplateRepository,
     );
-    if (existingTemplate) {
-      console.log('[Seed] Shipping template exists, skipping seed');
+
+    if (result === 'seeded') {
+      console.log(
+        `[Seed] Seeded shipping template: Default CN Template (id=${CANONICAL_SHIPPING_TEMPLATE_ID})`,
+      );
       return;
     }
 
-    // Create default CN shipping template
-    // Based on 07_Core_Architecture.md Section 2.5 ShippingTemplate schema
-    const template: ShippingTemplate = {
-      id: CANONICAL_SHIPPING_TEMPLATE_ID,
-      name: 'Default CN Template',
-      baseWeightKg: 1.0,
-      baseFee: 12.0, // CNY
-      stepWeightKg: 1.0,
-      stepFee: 5.0, // CNY per step
-      vasFeePerOrder: 3.0, // CNY
-      isActive: true,
-    };
-
-    await this.shippingTemplateRepository.save(template);
-    console.log(
-      `[Seed] Seeded shipping template: Default CN Template (id=${CANONICAL_SHIPPING_TEMPLATE_ID})`,
-    );
+    console.log('[Seed] 已有运费模板，跳过内置模板播种');
   }
 }

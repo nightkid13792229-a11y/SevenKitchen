@@ -55,8 +55,11 @@ const NUTRIENT_ALIASES: Record<string, string> = {
   vitaminaretinol: 'vitamins.vitaminA',
   vitamind: 'vitamins.vitaminD',
   vitamind3: 'vitamins.vitaminD',
+  vitamind2: 'vitamins.vitaminD',
   vitamine: 'vitamins.vitaminE',
   vitamink: 'vitamins.vitaminK',
+  vitamink1: 'vitamins.vitaminK',
+  vitamink2: 'vitamins.vitaminK',
   vitaminb1: 'vitamins.vitaminB1',
   thiamin: 'vitamins.vitaminB1',
   thiamine: 'vitamins.vitaminB1',
@@ -127,14 +130,30 @@ export function toCanonicalFieldPath(rawName: string): string | null {
 /** 成分表从这一行开始；页面里通常写作 `**Supplement facts**`。 */
 const FACTS_HEADER = /supplement\s*facts/i
 
-/** `Serving Size: 4 Soft Gels` → 4。读不出返回 null，不默认成 1。 */
+/**
+ * `Serving Size: 4 Soft Gels` → 4。读不出返回 null，不默认成 1。
+ *
+ * 只认"数 + 计数名词"（粒/片/胶囊/勺…）。遇到 `1/2 Teaspoon` 或 `5 g` 一律返回 null：
+ * 前者是分数，后者是质量，都不是"每份几粒"——猜错会让整份档案按错的倍数记。
+ */
+const COUNT_NOUN = /capsule|soft\s*gel|tablet|chew|scoop|teaspoon|tablespoon|drop|gummy|粒|片|胶囊|勺/i;
+
 export function extractServingUnits(text: string): number | null {
-  const match = text.match(/serving\s*size\s*:?\s*\**\s*(\d+)/i)
+  const match = text.match(
+    /serving\s*size\s*:?\s*\**\s*(\d+(?:\.\d+)?)\s*([A-Za-z\u4e00-\u9fa5\s]*)/i
+  );
   if (!match) {
-    return null
+    return null;
   }
-  const value = Number(match[1])
-  return Number.isInteger(value) && value > 0 ? value : null
+  const raw = match[1];
+  if (raw.includes('.') || raw.includes('/')) {
+    return null;
+  }
+  if (!COUNT_NOUN.test(match[2] ?? '')) {
+    return null;
+  }
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : null;
 }
 
 /**
@@ -142,8 +161,18 @@ export function extractServingUnits(text: string): number | null {
  * 名字里允许括号和逗号（`EPA (Eicosapentaenoic Acid)`），
  * 数值后面可能紧跟百分号、†、♢，所以单位只在被空白分开时才认。
  */
-const ROW =
-  /^(.+?)\s*([\d,]+(?:\.\d+)?)\s*(mg|mcg|µg|μg|g|kg|IU|CFU|billion|kcal)?(?=\s|$|[%†♢‡*])/i
+/**
+ * 带单位的一行。**单位是必填的**：`Vitamin D3 (as Cholecalciferol)125 mcg`
+ * 去掉括号后是 `Vitamin D3 125 mcg`，若单位可选，`3` 会被当成数值读走。
+ */
+const ROW_WITH_UNIT =
+  /^(.*?)\s*([\d,]+(?:\.\d+)?)\s*(mg|mcg|µg|μg|g|kg|IU|CFU|billion|kcal)(?=[\s%†♢‡*]|$)/i
+
+/** 没有单位、且数字在行尾：只用来认 `Calories 10` 这种能量行。 */
+const ROW_NO_UNIT = /^(.*?)\s+([\d,]+(?:\.\d+)?)\s*$/
+
+/** 成分表到这些标题就结束了，别把「其他成分 / 建议用量」也当成营养素。 */
+const BLOCK_END = /^(other\s*ingredients|ingredients|suggested\s*use|directions|warnings?)\b/i
 
 function cleanName(raw: string): string {
   return raw
@@ -169,11 +198,19 @@ export function parseSupplementLabel(text: string): ParsedLabel {
     }
     // 先把 markdown 的加粗标记拿掉，否则表头 `**Amount Per Serving…` 会被当成脚注
     const plain = line.replace(/\*\*/g, '').trim()
-    // 成分表的脚注以单个 * † ♢ 开头，到这儿就结束了
-    if (/^[*†♢‡]/.test(plain)) {
+    // 脚注：单个 * 开头，或 `**Percent Daily…` 这种加粗脚注，或 † ♢
+    const leadingStars = line.match(/^\*+/)?.[0] ?? '';
+    const isFootnote =
+      leadingStars === '*' ||
+      /^\*{1,2}\s*(percent daily|daily value)/i.test(line) ||
+      /^[†♢‡]/.test(line);
+    if (isFootnote) {
       break
     }
     if (/^#{1,6}\s/.test(plain)) {
+      break
+    }
+    if (BLOCK_END.test(plain)) {
       break
     }
     if (/^servings\s*per\s*container/i.test(plain)) {
@@ -186,14 +223,29 @@ export function parseSupplementLabel(text: string): ParsedLabel {
       continue
     }
 
-    const match = plain.match(ROW)
-    if (!match) {
-      continue
+    // 括号里是形态说明（as Cholecalciferol），对拆"名字+数值"只有干扰
+    const bare = plain.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim()
+
+    let name = ''
+    let value = Number.NaN
+    let unit = ''
+    const withUnit = bare.match(ROW_WITH_UNIT)
+    if (withUnit) {
+      name = withUnit[1]
+      value = Number(withUnit[2].replace(/,/g, ''))
+      unit = withUnit[3].toLowerCase()
+    } else {
+      const noUnit = bare.match(ROW_NO_UNIT)
+      const label = noUnit ? cleanName(noUnit[1]).toLowerCase() : ''
+      // 只有能量行允许没单位；其它无单位行不猜
+      if (noUnit && /^(calories|energy)/.test(label)) {
+        name = noUnit[1]
+        value = Number(noUnit[2].replace(/,/g, ''))
+        unit = 'kcal'
+      }
     }
 
-    const name = cleanName(match[1])
-    const value = Number(match[2].replace(/,/g, ''))
-    const unit = (match[3] ?? '').toLowerCase()
+    name = cleanName(name)
     if (!name || !Number.isFinite(value)) {
       continue
     }

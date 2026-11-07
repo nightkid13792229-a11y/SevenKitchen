@@ -71,6 +71,8 @@ export class SupplementLinkPreviewService {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       throw new BadRequestException('只支持 http / https 链接');
     }
+    // 复制来的链接常带 #reviews 之类，没必要连同锚点一起转给抓取通道
+    parsed.hash = '';
     const host = parsed.hostname.toLowerCase();
     const allowed = ALLOWED_HOSTS.some(
       (domain) => host === domain || host.endsWith(`.${domain}`)
@@ -97,6 +99,7 @@ export class SupplementLinkPreviewService {
         );
       }
       const body = await response.text();
+      this.assertProxyDelivered(body, target);
       return body.slice(0, MAX_BODY_CHARS);
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -107,6 +110,41 @@ export class SupplementLinkPreviewService {
       );
     } finally {
       clearTimeout(timer);
+    }
+  }
+
+  /**
+   * 抓取通道对"目标页 404 / 需要登录"也回 200，只在头部写一行 Warning/Final URL。
+   * 不认这两行的话，站长会看到"读到了"，拿到的却是一张空表。
+   */
+  private assertProxyDelivered(body: string, target: URL): void {
+    const header = body.slice(0, 2000);
+
+    const warning = header.match(/^Warning:\s*(.+)$/im);
+    if (warning) {
+      throw new BadRequestException(
+        `这个链接读不出来：${warning[1].trim()}。可以换成手动填`
+      );
+    }
+
+    const finalUrl = header.match(/^Final URL:\s*(\S+)/im);
+    if (finalUrl) {
+      const strip = (host: string) => host.toLowerCase().replace(/^www\./, '');
+      let finalHost = '';
+      try {
+        finalHost = strip(new URL(finalUrl[1]).hostname);
+      } catch {
+        finalHost = '';
+      }
+      // 只认「同一个站点」：`item.taobao.com` 跳到 `login.taobao.com` 也是同一域名，
+      // 但那是登录墙，读到的不是商品页，必须拒。
+      const requestedHost = strip(target.hostname);
+      const sameSite = finalHost === requestedHost || finalHost.endsWith(`.${requestedHost}`);
+      if (!sameSite) {
+        throw new BadRequestException(
+          '这个链接跳到了别的页面（多半是要登录或已下架），读不到标签，请手动填'
+        );
+      }
     }
   }
 

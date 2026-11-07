@@ -476,13 +476,11 @@ async function readLink(): Promise<void> {
     if (patch.name && !draft.name.trim()) {
       draft.name = patch.name
     }
-    if (patch.servingUnitsPerDose) {
-      draft.servingUnitsPerDose = patch.servingUnitsPerDose
-    }
-    Object.assign(draft.servingNutrients, patch.servingNutrients ?? {})
-    if (patch.evidence?.labelText) {
-      draft.evidence.labelText = patch.evidence.labelText
-    }
+    // 换一个链接就是换一瓶东西：整份替换，不和上一瓶的数字混在一起
+    draft.servingUnitsPerDose = patch.servingUnitsPerDose ?? null
+    draft.servingNutrients = { ...(patch.servingNutrients ?? {}) }
+    draft.perUnitOverrides = {}
+    draft.evidence.labelText = patch.evidence?.labelText ?? ''
     previewSkipped.value = skipped
     ElMessage.success(
       Object.keys(patch.servingNutrients ?? {}).length > 0

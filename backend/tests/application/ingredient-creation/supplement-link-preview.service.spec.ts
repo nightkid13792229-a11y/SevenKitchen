@@ -88,4 +88,31 @@ describe('SupplementLinkPreviewService', () => {
     expect(preview.servingUnitsPerDose).toBeNull();
     expect(preview.productName).toBe('某个商品');
   });
+
+  it('目标页 404（抓取通道仍回 200）时大声失败，不装作读到了', async () => {
+    const { service } = serviceWithFetch(
+      `Title: The Page is Not Found! | iHerb\nWarning: Target URL returned error 404: Not Found\nMarkdown Content:\n404`,
+    );
+
+    await expect(service.preview('https://www.iherb.com/pr/x/1')).rejects.toThrow(/404|读不出来/);
+  });
+
+  it('链接跳到登录页时也大声失败，并说明原因', async () => {
+    const { service } = serviceWithFetch(
+      `Title: 登录\nFinal URL: https://login.taobao.com/member/login.jhtml\nMarkdown Content:\n请登录`,
+    );
+
+    await expect(service.preview('https://item.taobao.com/item.htm?id=1')).rejects.toThrow(
+      /登录|读不到/,
+    );
+  });
+
+  it('正常的页面不会被这两条守卫误伤', async () => {
+    const { service } = serviceWithFetch(
+      `Title: 某个商品\nFinal URL: https://www.iherb.com/pr/x/1\nMarkdown Content:\n${REAL_LABEL}`,
+    );
+
+    const preview = await service.preview('https://www.iherb.com/pr/x/1');
+    expect(preview.servingUnitsPerDose).toBe(4);
+  });
 });

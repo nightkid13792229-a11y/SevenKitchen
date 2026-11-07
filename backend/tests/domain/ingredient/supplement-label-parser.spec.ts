@@ -34,8 +34,8 @@ describe('parseSupplementLabel', () => {
     const result = parseSupplementLabel(REAL_IHERB_LABEL);
     expect(result.nutrients).toEqual(
       expect.arrayContaining([
-        { fieldPath: 'fattyAcids.epa', value: 80, unit: 'mg', rawName: 'EPA (Eicosapentaenoic Acid)' },
-        { fieldPath: 'fattyAcids.dha', value: 120, unit: 'mg', rawName: 'DHA (Docosahexaenoic Acid)' },
+        { fieldPath: 'fattyAcids.epa', value: 80, unit: 'mg', rawName: 'EPA' },
+        { fieldPath: 'fattyAcids.dha', value: 120, unit: 'mg', rawName: 'DHA' },
       ]),
     );
   });
@@ -73,5 +73,59 @@ describe('toCanonicalFieldPath', () => {
 
   it('认不出就返回 null，不硬套', () => {
     expect(toCanonicalFieldPath('Proprietary Blend')).toBeNull();
+  });
+
+  /**
+   * 评审用真实页面抓出来的几种排版：名字里带数字（D3 / B12 / K2）、
+   * 括号里写形态、没单位的能量行。这几类以前全被读错。
+   */
+  const D3_LABEL = `**Supplement facts**
+**Serving Size:** 1 Capsule
+**Amount Per Serving**
+Vitamin D3 (as Cholecalciferol)125 mcg (5,000 IU)625%
+Calories 10`;
+
+  const B_LABEL = `**Supplement facts**
+**Serving Size:** 1 Capsule
+Vitamin B12 1000 mcg
+Vitamin K2 100 mcg
+Coenzyme Q10 100 mg`;
+
+  it('名字里带数字的维生素不会被拆错（D3 读成 125 mcg，不是 3）', () => {
+    const result = parseSupplementLabel(D3_LABEL);
+    const d3 = result.nutrients.find((item) => item.fieldPath === 'vitamins.vitaminD');
+    expect(d3?.value).toBe(125);
+    expect(d3?.unit).toBe('mcg');
+  });
+
+  it('B12 / K2 的数值不会掉', () => {
+    const result = parseSupplementLabel(B_LABEL);
+    expect(result.nutrients).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ fieldPath: 'vitamins.vitaminB12', value: 1000 }),
+        expect.objectContaining({ fieldPath: 'vitamins.vitaminK', value: 100 }),
+      ]),
+    );
+  });
+
+  it('认不出的名字（Coenzyme Q10）原样报出来，不硬套', () => {
+    expect(parseSupplementLabel(B_LABEL).unrecognized).toContain('Coenzyme Q10');
+  });
+
+  it('没有单位的能量行按 kcal 算，不会因为「没单位」被丢掉', () => {
+    const result = parseSupplementLabel(D3_LABEL);
+    expect(result.nutrients).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ fieldPath: 'macros.energyKcal', value: 10, unit: 'kcal' }),
+      ]),
+    );
+  });
+
+  it('每份是分数（1/2 勺）时不认，免得整份档案按错的倍数记', () => {
+    expect(extractServingUnits('**Serving Size:** 1/2 Teaspoon')).toBeNull();
+  });
+
+  it('每份是质量（5 g）时不认，那不是「几粒」', () => {
+    expect(extractServingUnits('**Serving Size:** 5 g')).toBeNull();
   });
 });

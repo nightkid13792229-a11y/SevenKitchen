@@ -2,7 +2,6 @@
   <div class="supplement-workbench">
     <!-- 最左：对话。说的每一句都会真的落到右边表单上 -->
     <SupplementChat
-      ref="chatRef"
       class="wb-chat"
       :draft-name="draft.name"
       :serving-units-per-dose="draft.servingUnitsPerDose"
@@ -550,7 +549,8 @@ function applyPreview(preview: {
     draft.name = patch.name
   }
   draft.evidence.productUrl = preview.productUrl
-  draft.servingUnitsPerDose = patch.servingUnitsPerDose ?? draft.servingUnitsPerDose
+  // 和「读这个链接」同一套：换一瓶就整份替换，读不到就清空，不沿用上一瓶的除数
+  draft.servingUnitsPerDose = patch.servingUnitsPerDose ?? null
   draft.servingNutrients = { ...(patch.servingNutrients ?? {}) }
   draft.perUnitOverrides = {}
   draft.evidence.labelText = patch.evidence?.labelText ?? ''
@@ -655,8 +655,17 @@ async function confirm(): Promise<void> {
   display: grid;
   grid-template-columns: 300px 320px minmax(0, 1fr);
   gap: 12px;
-  height: 100%;
-  min-height: 0;
+  /* 必须给一个确定高度：否则三栏会被右边档案撑开，
+     对话输入框被顶到页面最底下，正文也滚不动 */
+  height: calc(100vh - 220px);
+  min-height: 620px;
+}
+
+@media (max-width: 1280px) {
+  .supplement-workbench {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
 }
 .wb-chat {
   min-height: 0;

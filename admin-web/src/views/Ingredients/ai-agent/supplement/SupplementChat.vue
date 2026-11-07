@@ -25,6 +25,7 @@
               type="button"
               class="chat__candidate"
               :data-candidate="candidateIndex"
+              :disabled="busy || item.stale"
               @click="pickCandidate(index, candidateIndex)"
             >
               <span class="chat__candidate-name">{{ candidate.name }}</span>
@@ -32,6 +33,7 @@
                 {{ candidate.priceUsd === null ? '价格未读到' : `$${candidate.priceUsd}` }}
               </span>
             </button>
+            <span v-if="item.stale" class="chat__stale">这批已经作废（你又搜了一次）</span>
           </div>
         </div>
       </div>
@@ -72,6 +74,8 @@ interface ChatMessage {
   role: 'me' | 'ai'
   text: string
   candidates?: SupplementCandidateDto[]
+  /** 又搜了一批之后，上一批就作废：还能看，但不能再点 */
+  stale?: boolean
 }
 
 const props = defineProps<{
@@ -144,12 +148,22 @@ async function runAction(action: SupplementChatActionDto): Promise<void> {
     }
     return
   }
-  emit('set-serving-units', action.value)
+  if (action.field === 'servingUnitsPerDose') {
+    emit('set-serving-units', action.value)
+  }
+  // 以后后端多出别的字段时，这里不会把值错写到每份粒数上
+
 }
 
 async function search(keyword: string): Promise<void> {
   try {
     const found = await ingredientCreationApi.searchSupplementCandidates(keyword)
+    // 新的一批来了，之前的卡片全部作废——否则「第二个」会指到用户已经忘掉的那批
+    for (const message of messages.value) {
+      if (message.candidates) {
+        message.stale = true
+      }
+    }
     candidatePool.value = found
     if (found.length === 0) {
       push({ role: 'ai', text: `没搜到「${keyword}」的候选。换个说法，或者直接把商品链接贴进来。` })
@@ -182,13 +196,22 @@ async function readLink(url: string): Promise<void> {
   }
 }
 
-function pickCandidate(messageIndex: number, candidateIndex: number): void {
-  const candidate = messages.value[messageIndex]?.candidates?.[candidateIndex]
-  if (!candidate) {
+async function pickCandidate(messageIndex: number, candidateIndex: number): Promise<void> {
+  if (busy.value) {
     return
   }
+  const message = messages.value[messageIndex]
+  const candidate = message?.candidates?.[candidateIndex]
+  if (!candidate || message?.stale) {
+    return
+  }
+  busy.value = true
   push({ role: 'me', text: `就它：${candidate.name}` })
-  void readLink(candidate.url)
+  try {
+    await readLink(candidate.url)
+  } finally {
+    busy.value = false
+  }
 }
 
 function apiErrorMessage(error: unknown): string {
@@ -203,7 +226,7 @@ function apiErrorMessage(error: unknown): string {
   return '这句话没办成，稍后再试'
 }
 
-defineExpose({ send, messages })
+
 </script>
 
 <style scoped>
@@ -295,8 +318,16 @@ defineExpose({ send, messages })
   font-size: 12px;
   cursor: pointer;
 }
-.chat__candidate:hover {
+.chat__candidate:hover:not(:disabled) {
   border-color: #3370ff;
+}
+.chat__candidate:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.chat__stale {
+  font-size: 11px;
+  color: #9aa2ab;
 }
 .chat__candidate-name {
   flex: 1;

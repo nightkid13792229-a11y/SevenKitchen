@@ -92,3 +92,55 @@ describe('问理由与听不懂', () => {
     expect(interpretSupplementMessage({ message: '   ', draft: empty }).reply).toContain('补什么');
   });
 });
+
+describe('评审抓出来的坑', () => {
+  it('「帮我找一下锌」不会拿「找」去搜', () => {
+    expect(interpretSupplementMessage({ message: '帮我找一下锌', draft: empty }).actions[0]).toMatchObject({
+      type: 'SEARCH_CANDIDATES',
+      keyword: '锌'
+    });
+  });
+
+  it('「给狗狗加个锌吧」去掉语气词', () => {
+    expect(interpretSupplementMessage({ message: '给狗狗加个锌吧', draft: empty }).actions[0]).toMatchObject({
+      keyword: '锌'
+    });
+  });
+
+  it('「加个 500mg 的鱼油」不拿剂量当关键词', () => {
+    const result = interpretSupplementMessage({ message: '加个 500mg 的鱼油', draft: empty });
+    expect(JSON.stringify(result.actions)).not.toContain('500mg');
+  });
+
+  it('「第五个」能认（候选最多 8 个）', () => {
+    const draft = { name: '', servingUnitsPerDose: null, candidateNames: ['a', 'b', 'c', 'd', 'e'] };
+    expect(interpretSupplementMessage({ message: '第五个', draft }).actions).toEqual([
+      { type: 'PICK_CANDIDATE', index: 4 }
+    ]);
+  });
+
+  it('「每份 2 克」不会当成每份 2 粒', () => {
+    const result = interpretSupplementMessage({ message: '每份 2 克', draft: empty });
+    expect(result.actions).toEqual([]);
+    expect(result.reply).toContain('几粒');
+  });
+
+  it('「不要加锌」不会去搜「不」', () => {
+    const result = interpretSupplementMessage({ message: '不要加锌', draft: empty });
+    expect(result.actions).toEqual([]);
+  });
+
+  it('「选 2 粒那种」不再被当成选第 2 个候选', () => {
+    const result = interpretSupplementMessage({
+      message: '选 2 粒那种',
+      draft: { name: '', servingUnitsPerDose: null, candidateNames: ['a', 'b'] }
+    });
+    expect(result.actions.some((a) => a.type === 'PICK_CANDIDATE')).toBe(false);
+  });
+
+  it('draft 缺字段时不炸', () => {
+    expect(() =>
+      interpretSupplementMessage({ message: '第二个', draft: {} as never })
+    ).not.toThrow();
+  });
+});

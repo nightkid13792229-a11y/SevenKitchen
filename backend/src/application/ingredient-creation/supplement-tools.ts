@@ -172,6 +172,8 @@ export async function executeSupplementTool(
           return { ok: false, error: 'patch 必须是对象' };
         }
         const result = applyDraftPatch(context.draft, patch as SupplementDraftRecord);
+        // 写进去的要留在上下文里：后续工具与最终结果看到的都是这一份
+        context.draft = result.draft;
         return {
           ok: true,
           data: {

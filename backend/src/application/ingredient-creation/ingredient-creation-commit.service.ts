@@ -25,6 +25,10 @@ import {
   toChannelOptions,
 } from '../purchasing/channel-catalog';
 import { PURCHASE_CHANNEL_SET } from '../platform-options/option-sets.registry';
+import {
+  buildCommitProcurementSku,
+  type CommitProcurementSkuInput,
+} from './commit-procurement-sku';
 import { IngredientCreationDraftService } from './ingredient-creation-draft.service';
 import type {
   ExceptionRecord,
@@ -47,10 +51,19 @@ export interface CommitIngredientCreationInput {
   profiles: ProfileDraft[];
   /** 主档案在 `profiles` 里的下标；必须指向存在的档案。 */
   primaryProfileIndex: number;
+  /**
+   * 建档必须同时带一条采购商品（2026-11-07 硬门禁）。
+   *
+   * 它是成本的第一个、也是唯一的初始来源：没有它，原料建出来就没有价，
+   * 一进食谱按 0 元算。放在同一次提交里，库里就不会出现「有原料没价」的中间态。
+   */
+  procurementSku: CommitProcurementSkuInput;
 }
 
 export interface CommitIngredientCreationResult {
   ingredientId: string;
+  /** 建档时一起落库的采购商品 */
+  procurementSkuId: string;
   /** 与 `profiles` 顺序一一对应的营养档案 id。 */
   nutritionFoodIds: string[];
   auditId: string;
@@ -571,6 +584,8 @@ export class IngredientCreationCommitService {
     const primaryNutritionData =
       preparedProfiles[primaryProfileIndex].nutritionData;
 
+    let createdProcurementSkuId: string | null = null;
+
     return this.prisma.$transaction(async (tx) => {
       // Postgres 唯一索引把 NULL 当互不相等，而向导提交的 brand/productModel 都是 NULL：
       // `findFirst` 与唯一键都挡不住并发同名提交，用同名咨询锁把它们串行化。
@@ -602,6 +617,52 @@ export class IngredientCreationCommitService {
         primaryNutritionData,
       );
       await this.createTagAssignments(tx, createdIngredient.id, ingredient);
+
+      // 建档必须同时落一条采购商品（2026-11-07 硬门禁）：
+      // 成本的第一个来源就在这里，缺席的话这条原料一进食谱就是 0 元。
+      const commitSku = buildCommitProcurementSku({
+        ...input.procurementSku,
+        fallbackName: ingredientName,
+      });
+      const createdSku = await tx.procurementSku.create({
+        data: {
+          ingredientId: createdIngredient.id,
+          name: commitSku.name,
+          purchaseUnit: commitSku.purchaseUnit,
+          purchaseToBaseRatio: commitSku.purchaseToBaseRatio,
+          currentPurchasePrice: commitSku.currentPurchasePrice,
+          referencePurchasePrice: null,
+          referencePricePerPurchaseUnit: null,
+          isDefault: false,
+          isActive: true,
+          sortOrder: 0,
+        },
+        select: { id: true },
+      });
+
+      const initialCost =
+        Math.round(
+          (commitSku.currentPurchasePrice / commitSku.purchaseToBaseRatio) *
+            1e6,
+        ) / 1e6;
+      await tx.ingredient.update({
+        where: { id: createdIngredient.id },
+        data: {
+          currentPricePerPurchaseUnit: initialCost,
+          purchaseToBaseRatio: 1,
+        },
+      });
+      await tx.ingredientPriceHistory.create({
+        data: {
+          ingredientId: createdIngredient.id,
+          oldCostPerBaseUnit: null,
+          newCostPerBaseUnit: initialCost,
+          source: 'INIT_FROM_SKU',
+          procurementSkuId: createdSku.id,
+          note: '建档时同时新增的采购商品',
+        },
+      });
+      createdProcurementSkuId = createdSku.id;
       const stateCounts = new Map<string, number>();
       for (const prepared of preparedProfiles) {
         const state = prepared.profile.preparationState;
@@ -655,6 +716,7 @@ export class IngredientCreationCommitService {
         ingredientId: createdIngredient.id,
         nutritionFoodIds,
         auditId: audit.id,
+        procurementSkuId: createdProcurementSkuId!,
       };
     });
   }

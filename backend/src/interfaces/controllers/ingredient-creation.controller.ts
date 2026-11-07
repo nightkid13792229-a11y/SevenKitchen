@@ -541,6 +541,7 @@ export class IngredientCreationController {
       draftId: id,
       userId: user.userId,
       primaryProfileIndex: dto.primaryProfileIndex,
+      procurementSku: dto.procurementSku,
     });
 
     return new ApiResponseDto(0, 'Success', result);
@@ -564,6 +565,7 @@ export class IngredientCreationController {
       draftId: id,
       userId: user.userId,
       primaryProfileIndex: dto.primaryProfileIndex,
+      procurementSku: dto.procurementSku,
     });
 
     return new ApiResponseDto(0, 'Success', result);

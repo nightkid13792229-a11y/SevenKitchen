@@ -1,5 +1,48 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsInt, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+
+/**
+ * 建档时必须一起提交的采购商品（2026-11-07 硬门禁）。
+ *
+ * 它是原料成本的第一个、也是唯一的初始来源。允许它为空的话，
+ * 库里就会出现「有原料、没价」的状态，一进食谱按 0 元算。
+ */
+export class AuthorizeProcurementSkuDto {
+  @ApiPropertyOptional({ description: '商品名；留空时用原料名' })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @ApiProperty({ description: '采购单位', example: '袋' })
+  @IsString()
+  @IsNotEmpty()
+  purchaseUnit!: string;
+
+  @ApiProperty({ description: '一箱/一袋几件', example: 1 })
+  @IsInt()
+  @Min(1)
+  packCount!: number;
+
+  @ApiProperty({ description: '每件净含量（基准单位）', example: 500 })
+  @IsNumber()
+  @IsPositive()
+  netContentPerPack!: number;
+
+  @ApiProperty({ description: '这一件多少钱', example: 39.9 })
+  @IsNumber()
+  @IsPositive()
+  currentPurchasePrice!: number;
+}
 
 /**
  * `POST drafts/:id/authorize`：只收主档案下标。
@@ -15,4 +58,12 @@ export class AuthorizeIngredientCreationDto {
   @IsInt()
   @Min(0)
   primaryProfileIndex!: number;
+
+  @ApiProperty({
+    description: '建档同时新增的采购商品（含价格与换算）',
+    type: AuthorizeProcurementSkuDto,
+  })
+  @ValidateNested()
+  @Type(() => AuthorizeProcurementSkuDto)
+  procurementSku!: AuthorizeProcurementSkuDto;
 }

@@ -62,6 +62,7 @@ interface Store {
   tagAssignments: Array<Record<string, any> & { id: string }>;
   inventoryAdjustments: Array<Record<string, any> & { id: string }>;
   inventoryLedgerEntries: Array<Record<string, any> & { id: string }>;
+  costHistory: Array<Record<string, any> & { id: string }>;
 }
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -85,6 +86,7 @@ function createPrismaMock(options: HarnessOptions = {}) {
     tagAssignments: [],
     inventoryAdjustments: [],
     inventoryLedgerEntries: [],
+    costHistory: [],
   };
   const sourceRecords = options.sourceRecords ?? [];
   const draftState =
@@ -154,6 +156,11 @@ function createPrismaMock(options: HarnessOptions = {}) {
         store.ingredients.push(row);
         return { id: row.id };
       }),
+      update: jest.fn(async ({ where, data }: any) => {
+        const row = store.ingredients.find((item) => item.id === where.id);
+        if (row) Object.assign(row, clone(data));
+        return row ?? { id: where.id };
+      }),
     },
     nutritionFood: {
       create: jest.fn(async ({ data }: any) => {
@@ -187,6 +194,13 @@ function createPrismaMock(options: HarnessOptions = {}) {
       create: jest.fn(async ({ data }: any) => {
         const row = { id: nextId('sku'), ...clone(data) };
         store.procurementSkus.push(row);
+        return { id: row.id };
+      }),
+    },
+    ingredientPriceHistory: {
+      create: jest.fn(async ({ data }: any) => {
+        const row = { id: nextId('cost'), ...clone(data) };
+        store.costHistory.push(row);
         return { id: row.id };
       }),
     },
@@ -254,6 +268,7 @@ function createPrismaMock(options: HarnessOptions = {}) {
     recommendedProduct: client.recommendedProduct,
     procurementSku: client.procurementSku,
     procurementSkuPriceHistory: client.procurementSkuPriceHistory,
+    ingredientPriceHistory: client.ingredientPriceHistory,
     ingredientTag: client.ingredientTag,
     ingredientTagAssignment: client.ingredientTagAssignment,
     inventoryAdjustment: client.inventoryAdjustment,
@@ -275,6 +290,7 @@ function createPrismaMock(options: HarnessOptions = {}) {
         store.audits = snapshot.audits;
         store.recommendedProducts = snapshot.recommendedProducts;
         store.procurementSkus = snapshot.procurementSkus;
+        store.costHistory = snapshot.costHistory;
         store.procurementSkuPriceHistories =
           snapshot.procurementSkuPriceHistories;
         store.tagAssignments = snapshot.tagAssignments;
@@ -526,6 +542,14 @@ const baseInput = {
   ingredient: ingredientDraft,
   profiles: [rawProfile, cookedProfile],
   primaryProfileIndex: 0,
+  // 2026-11-07 硬门禁：建档必须同时带一条采购商品（成本的第一来源）
+  procurementSku: {
+    name: '测试糙米 500g',
+    purchaseUnit: '袋',
+    packCount: 1,
+    netContentPerPack: 500,
+    currentPurchasePrice: 39.9,
+  },
 };
 
 describe('IngredientCreationCommitService', () => {
@@ -538,6 +562,8 @@ describe('IngredientCreationCommitService', () => {
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       ingredientId: 'ingredient-1',
+      // 2026-11-07：建档同时落一条采购商品，返回它的 id
+      procurementSkuId: 'sku-1',
       nutritionFoodIds: ['food-1', 'food-2'],
       auditId: 'audit-1',
     });
@@ -842,6 +868,7 @@ describe('IngredientCreationCommitService', () => {
       },
       profiles: [rawProfile],
       primaryProfileIndex: 0,
+      procurementSku: baseInput.procurementSku,
     });
 
     const row = store.ingredients.find((i) => i.id === result.ingredientId)!;
@@ -852,8 +879,10 @@ describe('IngredientCreationCommitService', () => {
       productModel: '1kg/袋',
       purchaseChannel: '京东',
       purchaseUnit: '袋',
-      purchaseToBaseRatio: 1000,
-      currentPricePerPurchaseUnit: 128,
+      // 2026-11-07：成本不再从草稿的旧价格字段来，而是由随提交带进来的
+      // 采购商品折算（39.9 ÷ 500g = 0.0798 元/g）；换算恒为 1。
+      purchaseToBaseRatio: 1,
+      currentPricePerPurchaseUnit: 0.0798,
       weightG: 150,
       maxCapacityG: 500,
       shelfLifeMonths: 12,
@@ -897,6 +926,7 @@ describe('IngredientCreationCommitService', () => {
       },
       profiles: [rawProfile],
       primaryProfileIndex: 0,
+      procurementSku: baseInput.procurementSku,
     });
 
     const row = store.ingredients.find((i) => i.id === result.ingredientId)!;
@@ -904,7 +934,8 @@ describe('IngredientCreationCommitService', () => {
     expect(row.productModel).toBeNull();
     expect(row.purchaseUnit).toBe('克');
     expect(row.purchaseToBaseRatio).toBe(1);
-    expect(row.currentPricePerPurchaseUnit).toBe(0);
+    // 2026-11-07：草稿不带价也没关系，成本由随提交带进来的采购商品折算
+    expect(row.currentPricePerPurchaseUnit).toBe(0.0798);
     expect(row.weightG).toBe(0);
     expect(row.maxCapacityG).toBe(0);
     expect(row.diyEnabled).toBe(false);
@@ -934,6 +965,7 @@ describe('IngredientCreationCommitService', () => {
       },
       profiles: [rawProfile],
       primaryProfileIndex: 0,
+      procurementSku: baseInput.procurementSku,
     });
 
     const row = store.ingredients.find((i) => i.id === result.ingredientId)!;
@@ -958,6 +990,7 @@ describe('IngredientCreationCommitService', () => {
       ingredient: { ...baseIngredient, rawPageHtml: '<html>' } as never,
       profiles: [rawProfile],
       primaryProfileIndex: 0,
+      procurementSku: baseInput.procurementSku,
     });
 
     const row = store.ingredients.find((i) => i.id === result.ingredientId)!;

@@ -119,7 +119,20 @@ export const ingredientCreationApi = {
    */
   authorize: (
     id: string,
-    input: { primaryProfileIndex: number }
+    input: {
+      primaryProfileIndex: number
+      /**
+       * 建档必须一起提交的采购商品（2026-11-07 硬门禁）。
+       * 它是原料成本的唯一初始来源：没有它，这条原料建出来就是 0 元。
+       */
+      procurementSku: {
+        name?: string
+        purchaseUnit: string
+        packCount: number
+        netContentPerPack: number
+        currentPurchasePrice: number
+      }
+    }
   ): Promise<AuthorizeResult> =>
     api.post(`${BASE}/drafts/${id}/authorize`, input),
 

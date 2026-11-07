@@ -9,6 +9,7 @@ import {
   IngredientCreationCommitService,
   type CommitIngredientCreationResult,
 } from './ingredient-creation-commit.service';
+import type { CommitProcurementSkuInput } from './commit-procurement-sku';
 import { IngredientCreationDraftService } from './ingredient-creation-draft.service';
 import { LINE_NOT_OPEN_MESSAGE } from './ingredient-line';
 import type {
@@ -44,6 +45,11 @@ export interface AuthorizeInput {
   draftId: string;
   userId: string;
   primaryProfileIndex: number;
+  /**
+   * 建档必须同时带的一条采购商品（2026-11-07 硬门禁）。
+   * 成本的初始值只从这里来；不随请求带的话原料就没有价。
+   */
+  procurementSku: CommitProcurementSkuInput;
 }
 
 /** 授权成功 = 提交结果 + 授权时间（审计与页面显示用）。 */
@@ -201,6 +207,7 @@ export class IngredientCreationAuthorizeService {
       ingredient: material.ingredient,
       profiles: material.profiles,
       primaryProfileIndex: input.primaryProfileIndex,
+      procurementSku: input.procurementSku,
     });
 
     return { ...result, authorizedAt: new Date().toISOString() };

@@ -1080,16 +1080,17 @@
 
           <!-- 收尾：补一条采购商品（2026-11-07 成本口径归位）。
                没有采购商品 = 买不了 = 成本永远 0 = 食谱里按「免费」算。 -->
-          <div v-if="commitResult && line === 'FOOD'" class="closing-card">
+          <div v-if="!commitResult && line === 'FOOD'" class="closing-card">
             <div class="closing-card__head">
-              <h3>下一步：给这条原料补一条采购商品</h3>
+              <h3>写入前必填：这条原料的采购商品</h3>
               <span class="closing-card__state" :class="`is-${closingState.toLowerCase()}`">
                 {{ closingStateLabel }}
               </span>
             </div>
             <p class="closing-card__hint">
-              这里填的是<b>商品</b>：一件多少克、这一件多少钱。系统会折算成「每
-              {{ closingBaseUnitLabel }}多少钱」写进原料档案，食谱立刻能算出成本。
+              这里填的是<b>商品</b>：一件多少克、这一件多少钱。它会和原料一起写入，
+              折算成「每{{ closingBaseUnitLabel }}多少钱」作为这条原料的初始成本——
+              没有它，原料进食谱就是按 0 元算。
             </p>
 
             <el-form label-width="120px" size="small" class="closing-card__form">
@@ -1122,15 +1123,9 @@
             </el-form>
 
             <div class="closing-card__actions">
-              <el-button
-                type="primary"
-                :loading="closingSaving"
-                :disabled="closingState !== 'READY' || closingDone"
-                @click="submitClosingSku"
-              >
-                保存采购商品
-              </el-button>
-              <el-button text :disabled="closingDone" @click="skipClosing">稍后补</el-button>
+              <span class="closing-card__hint" style="margin: 0">
+                填好后点下面的「授权写入正式库」，原料、营养档案和这条采购商品会一起落库。
+              </span>
             </div>
           </div>
 
@@ -1561,8 +1556,6 @@ const closingForm = reactive({
   netContentPerPack: undefined as number | undefined,
   currentPurchasePrice: undefined as number | undefined
 })
-const closingSaving = ref(false)
-const closingDone = ref(false)
 
 const closingBaseUnitLabel = computed(() => {
   // 草稿里的原料卡带 baseUnit；取不到时按克处理（食材绝大多数是克）
@@ -1576,8 +1569,7 @@ const closingState = computed(() =>
   })
 )
 const closingStateLabel = computed(() => {
-  if (closingDone.value) return '已保存'
-  if (closingState.value === 'READY') return '填好了，可以保存'
+  if (closingState.value === 'READY') return '填好了，可以写入'
   return '还差「每件净含量」和「这一件多少钱」'
 })
 const closingPreview = computed(() =>
@@ -1588,38 +1580,6 @@ const closingPreview = computed(() =>
   )
 )
 
-async function submitClosingSku() {
-  const ingredientId = commitResult.value?.ingredientId
-  if (!ingredientId || closingSaving.value) return
-  if (closingState.value !== 'READY') {
-    ElMessage.warning(closingStateLabel.value)
-    return
-  }
-  closingSaving.value = true
-  try {
-    await ingredientApi.createProcurementSku(
-      ingredientId,
-      buildCreateSkuPayload({
-        name: closingForm.name,
-        purchaseChannel: closingForm.purchaseChannel,
-        purchaseUnit: closingForm.purchaseUnit,
-        packCount: closingForm.packCount,
-        netContentPerPack: closingForm.netContentPerPack ?? 0,
-        currentPurchasePrice: closingForm.currentPurchasePrice ?? null
-      })
-    )
-    closingDone.value = true
-    ElMessage.success('采购商品已保存，这条原料现在有成本了')
-  } catch (error: any) {
-    ElMessage.error(error?.message || '保存失败，请检查商品信息')
-  } finally {
-    closingSaving.value = false
-  }
-}
-
-function skipClosing() {
-  ElMessage.info('可以先跳过，但补上采购商品之前，这条原料在食谱里不会产生成本')
-}
 
 const verifyError = ref('')
 const verifying = ref(false)
@@ -3058,8 +3018,22 @@ async function handleAuthorize() {
       return
     }
 
+    // 2026-11-07 硬门禁：采购商品必须和建档一起提交（同一次事务）。
+    // 没有它，这条原料建出来就没有价，一进食谱按 0 元算。
+    if (line.value === 'FOOD' && closingState.value !== 'READY') {
+      ElMessage.warning(closingStateLabel.value)
+      return
+    }
+
     const result = await ingredientCreationApi.authorize(draftId, {
-      primaryProfileIndex
+      primaryProfileIndex,
+      procurementSku: {
+        name: closingForm.name.trim() || undefined,
+        purchaseUnit: closingForm.purchaseUnit,
+        packCount: closingForm.packCount,
+        netContentPerPack: closingForm.netContentPerPack ?? 0,
+        currentPurchasePrice: closingForm.currentPurchasePrice ?? 0
+      }
     })
     commitResult.value = result
     ElMessage.success('已写入正式库，营养档案当前是「待验证」')

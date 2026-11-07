@@ -45,9 +45,10 @@ describe('seriesAiCover', () => {
   });
 
   it('提示文案随封面 / 上线状态变化', () => {
-    expect(resolveSeriesAiCoverHint(base)).toContain('预览');
+    expect(resolveSeriesAiCoverHint(base)).toContain('3 张候选');
+    expect(resolveSeriesAiCoverHint(base)).toContain('用这张');
     expect(resolveSeriesAiCoverHint({ ...base, isLive: true })).toContain(
-      '预览',
+      '保存发布设置',
     );
     expect(resolveSeriesAiCoverHint({ ...base, hasCover: true })).toContain(
       '用这张',

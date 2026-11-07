@@ -296,7 +296,7 @@
                     >
                       {{
                         aiCoverGenerating
-                          ? 'AI 正在生成封面…（约 20–40 秒）'
+                          ? 'AI 正在生成 3 张候选…（约 40–70 秒）'
                           : '上传中…'
                       }}
                     </div>
@@ -347,26 +347,43 @@
                   </span>
                 </div>
               </div>
-              <div v-if="aiCoverPreviewUrl" class="series-release__ai-preview">
-                <img
-                  :src="aiCoverPreviewUrl"
-                  alt="AI 生成封面预览"
-                  class="series-release__ai-preview-image"
-                  @click="openCoverPreview(aiCoverPreviewUrl)"
-                />
+              <div v-if="aiCoverCandidates.length > 0" class="series-release__ai-preview">
+                <div class="series-release__ai-candidates">
+                  <div
+                    v-for="candidate in aiCoverCandidates"
+                    :key="candidate.url"
+                    class="series-release__ai-candidate"
+                    :class="{ 'is-active': aiCoverSelectedUrl === candidate.url }"
+                    @click="aiCoverSelectedUrl = candidate.url"
+                  >
+                    <img
+                      :src="candidate.url"
+                      alt="AI 生成封面候选"
+                      class="series-release__ai-candidate-image"
+                      @click.stop="openCoverPreview(candidate.url)"
+                    />
+                    <span class="series-release__ai-candidate-label">
+                      {{ candidate.presetLabel }}
+                      <template v-if="candidate.skeletonLabel">
+                        · {{ candidate.skeletonLabel }}
+                      </template>
+                    </span>
+                  </div>
+                </div>
                 <div class="series-release__ai-preview-actions">
                   <el-button
                     size="small"
                     type="primary"
+                    :disabled="!aiCoverSelectedUrl"
                     @click="applyAiCoverPreview"
                   >用这张</el-button>
                   <el-button
                     size="small"
                     @click="discardAiCoverPreview"
-                  >不要</el-button>
+                  >都不要</el-button>
                 </div>
                 <span class="series-release__hint">
-                  点「用这张」后，还要点「保存发布设置」才会生效。
+                  点「用这张」后，还要点「保存发布设置」才会生效；没选中的会自动丢弃。
                 </span>
               </div>
               <div v-if="aiCoverError" class="series-release__ai-error">
@@ -714,6 +731,7 @@ import {
   type SeriesReleaseForm
 } from '@/utils/recipeDesigner/seriesRelease'
 import type {
+  AiCoverCandidate,
   SeriesReleaseReadiness,
   SeriesReleaseResult,
   SeriesUnpublishResult
@@ -788,7 +806,8 @@ const error = ref('')
 /** AI 系列封面（2026-10-27）：可用性 / 生成中 / 预览 / 失败 */
 const aiCoverAvailable = ref<boolean | null>(null)
 const aiCoverGenerating = ref(false)
-const aiCoverPreviewUrl = ref('')
+const aiCoverCandidates = ref<AiCoverCandidate[]>([])
+const aiCoverSelectedUrl = ref('')
 const pendingCoverUrl = ref('')
 const pendingCoverReason = ref<'PREVIEW_DISCARDED' | 'UPLOAD_DISCARDED'>(
   'PREVIEW_DISCARDED'
@@ -1180,7 +1199,7 @@ async function handleGenerateAiCover(): Promise<void> {
   if (hasCover) {
     try {
       await ElMessageBox.confirm(
-        '重新生成需要再调用一次 AI（约 0.2 元/张）。生成后先看预览，点「用这张」才会替换当前封面。继续？',
+        '重新生成需要再调用一次 AI（一次 3 张，约 0.6 元）。生成后挑一张，点「用这张」才会替换当前封面。继续？',
         '重新生成封面',
         {
           type: 'warning',
@@ -1193,21 +1212,32 @@ async function handleGenerateAiCover(): Promise<void> {
     }
   }
 
-  if (aiCoverPreviewUrl.value) {
+  if (aiCoverCandidates.value.length > 0) {
     discardAiCoverPreview()
   }
   const seq = ++aiCoverRequestSeq
   aiCoverGenerating.value = true
   aiCoverError.value = ''
   try {
-    // 发布抽屉只展示一张预览：明确只要 1 张，别把另外两张候选白花钱生成
     const result = await recipeDesignerApi.generateSeriesAiCover(
       props.seriesId,
-      1
+      3
     )
     if (seq !== aiCoverRequestSeq) return
-    aiCoverPreviewUrl.value = result.url
-    ElMessage.success('已生成预览，确认后才会替换')
+    aiCoverCandidates.value =
+      result.candidates && result.candidates.length > 0
+        ? result.candidates
+        : [
+            {
+              url: result.url,
+              preset: '',
+              presetLabel: '默认',
+              skeleton: '',
+              skeletonLabel: ''
+            }
+          ]
+    aiCoverSelectedUrl.value = aiCoverCandidates.value[0]?.url ?? ''
+    ElMessage.success('已生成 3 张候选，挑一张再保存')
   } catch (error: any) {
     if (seq !== aiCoverRequestSeq) return
     // 全局拦截器已经弹过一次；这里只保留可回看的红字
@@ -1222,24 +1252,34 @@ async function handleGenerateAiCover(): Promise<void> {
   }
 }
 
-/** 丢弃预览：未采用的图进回收站，不留孤儿 */
+/** 丢弃全部候选：未采用的图进回收站，不留孤儿 */
 function discardAiCoverPreview(): void {
-  const url = aiCoverPreviewUrl.value
-  aiCoverPreviewUrl.value = ''
-  if (url) {
+  const urls = aiCoverCandidates.value.map((item) => item.url)
+  aiCoverCandidates.value = []
+  aiCoverSelectedUrl.value = ''
+  for (const url of urls) {
     void recipeDesignerApi
       .discardAiCoverPreview(url, 'PREVIEW_DISCARDED')
       .catch(() => undefined)
   }
 }
 
-/** 用预览替换抽屉里的封面；真正落库 / 上线仍由「保存发布设置」完成 */
+/** 用选中的候选替换抽屉里的封面；真正落库 / 上线仍由「保存发布设置」完成 */
 function applyAiCoverPreview(): void {
-  if (!aiCoverPreviewUrl.value) return
-  pendingCoverUrl.value = aiCoverPreviewUrl.value
+  const chosen = aiCoverSelectedUrl.value
+  if (!chosen) return
+  pendingCoverUrl.value = chosen
   pendingCoverReason.value = 'PREVIEW_DISCARDED'
-  form.coverImageUrl = aiCoverPreviewUrl.value
-  aiCoverPreviewUrl.value = ''
+  form.coverImageUrl = chosen
+  // 没选中的候选直接丢弃，别在 COS 里堆垃圾
+  for (const candidate of aiCoverCandidates.value) {
+    if (candidate.url === chosen) continue
+    void recipeDesignerApi
+      .discardAiCoverPreview(candidate.url, 'PREVIEW_DISCARDED')
+      .catch(() => undefined)
+  }
+  aiCoverCandidates.value = []
+  aiCoverSelectedUrl.value = ''
   aiCoverError.value = ''
   ElMessage.success('封面已替换，记得点「保存发布设置」')
 }
@@ -1460,11 +1500,12 @@ watch(
     // 关闭、重新打开、甚至在打开状态下切换系列，都要清掉旧预览 / 旧错误。
     aiCoverRequestSeq += 1
     aiCoverGenerating.value = false
-    if (aiCoverPreviewUrl.value) {
-      const previewUrl = aiCoverPreviewUrl.value
-      void recipeDesignerApi
-        .discardAiCoverPreview(previewUrl, 'PREVIEW_DISCARDED')
-        .catch(() => undefined)
+    if (aiCoverCandidates.value.length > 0) {
+      for (const candidate of aiCoverCandidates.value) {
+        void recipeDesignerApi
+          .discardAiCoverPreview(candidate.url, 'PREVIEW_DISCARDED')
+          .catch(() => undefined)
+      }
     }
     if (
       pendingCoverUrl.value &&
@@ -1476,7 +1517,8 @@ watch(
         .catch(() => undefined)
     }
     pendingCoverUrl.value = ''
-    aiCoverPreviewUrl.value = ''
+    aiCoverCandidates.value = []
+    aiCoverSelectedUrl.value = ''
     aiCoverError.value = ''
     aiCoverAvailable.value = null
     coverPreviewUrl.value = ''
@@ -1934,6 +1976,47 @@ watch(
   object-fit: cover;
   border-radius: 6px;
   background: #f0f2f5;
+}
+
+.series-release__ai-preview:has(.series-release__ai-candidates) {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.series-release__ai-candidates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.series-release__ai-candidate {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color 0.15s ease;
+}
+
+.series-release__ai-candidate.is-active {
+  border-color: #1e3a2f;
+}
+
+.series-release__ai-candidate .series-release__ai-candidate-image {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 0;
+  background: #f0f2f5;
+}
+
+.series-release__ai-candidate-label {
+  display: block;
+  padding: 4px 6px;
+  font-size: 12px;
+  color: #606266;
+  text-align: center;
 }
 
 .series-release__ai-preview-actions {

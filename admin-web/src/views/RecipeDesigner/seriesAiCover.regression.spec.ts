@@ -34,17 +34,20 @@ describe('系列 AI 封面 · 源码契约', () => {
     ).toBe(1)
   })
 
-  it('预览与重试入口存在', () => {
+  it('三张候选与重试入口存在', () => {
     expect(drawerSource).toContain('用这张')
-    expect(drawerSource).toContain('不要')
+    expect(drawerSource).toContain('都不要')
     expect(drawerSource).toContain('applyAiCoverPreview')
     expect(drawerSource).toContain('aiCoverError')
-    expect(drawerSource).toContain('aiCoverPreviewUrl')
+    expect(drawerSource).toContain('aiCoverCandidates')
+    expect(drawerSource).toContain('aiCoverSelectedUrl')
+    expect(drawerSource).toContain('series-release__ai-candidate')
   })
 
-  it('覆盖前确认、只出预览、超时用中文常量', () => {
-    expect(drawerSource).toContain('约 0.2 元/张')
-    expect(drawerSource).toContain('aiCoverPreviewUrl.value = result.url')
+  it('覆盖前确认、一次要 3 张、超时用中文常量', () => {
+    expect(drawerSource).toContain('一次 3 张，约 0.6 元')
+    expect(drawerSource).toContain('props.seriesId,')
+    expect(drawerSource).toContain('aiCoverCandidates.value =')
     expect(drawerSource).not.toContain('result.saved')
     expect(drawerSource).toContain("error?.code === 'ECONNABORTED'")
     expect(drawerSource).toContain('SERIES_AI_COVER_TIMEOUT_MESSAGE')
@@ -54,7 +57,7 @@ describe('系列 AI 封面 · 源码契约', () => {
     const watchBlock = drawerSource.slice(
       drawerSource.indexOf('() => [props.modelValue, props.seriesId]')
     )
-    const resetIndex = watchBlock.indexOf("aiCoverPreviewUrl.value = ''")
+    const resetIndex = watchBlock.indexOf('aiCoverCandidates.value = []')
     const closeIndex = watchBlock.indexOf('if (!open)')
     expect(resetIndex).toBeGreaterThan(-1)
     // 复位必须在 open/close 分支之前：切换系列（open 仍为 true）也要清掉旧预览

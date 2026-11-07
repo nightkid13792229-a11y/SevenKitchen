@@ -100,9 +100,9 @@
                 <span v-else class="placeholder">-</span>
               </template>
             </el-table-column>
-            <el-table-column label="采购单价" width="150" align="right">
+            <el-table-column label="成本" width="160" align="right">
               <template #default="{ row }">
-                ¥{{ formatPrice(row.currentPricePerPurchaseUnit) }} / {{ row.purchaseUnit }}
+                ¥{{ formatPrice(row.currentPricePerPurchaseUnit) }} / {{ formatCostUnit(row) }}
               </template>
             </el-table-column>
             <el-table-column label="操作" width="240" fixed="right">
@@ -111,7 +111,7 @@
                   <el-button size="small" @click="openLedgerForIngredient(row)">流水</el-button>
                   <el-button size="small" @click="openAdjustmentDialog(row)">调库存</el-button>
                   <el-button type="primary" size="small" @click="editPrice(row)">
-                    改价格
+                    改成本
                   </el-button>
                 </div>
               </template>
@@ -264,18 +264,21 @@
       </el-tabs>
     </el-card>
 
-    <el-dialog v-model="priceDialogVisible" title="修改价格" width="400px">
-      <el-form :model="priceForm" label-width="100px">
+    <el-dialog v-model="priceDialogVisible" title="修改成本" width="420px">
+      <el-form :model="priceForm" label-width="110px">
         <el-form-item label="原料名称">
           <el-input v-model="priceForm.name" disabled />
         </el-form-item>
-        <el-form-item label="新价格">
+        <el-form-item :label="`每 ${priceForm.unitLabel} 成本`">
           <el-input-number
             v-model="priceForm.price"
             :min="0"
             :precision="priceForm.precision"
             :step="priceForm.precision === 6 ? 0.000001 : 0.1"
           />
+          <div class="hint-text" style="margin-top: 4px">
+            {{ costPreviewText }}
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -441,7 +444,11 @@ const priceForm = reactive({
   name: '',
   price: 0,
   // 采购单位是 1g / 1ml / 1个 时单价就是「元/克」，2 位小数会截断成 0.01/0.02
-  precision: 2
+  precision: 2,
+  /** 展示用的单位（食材是 g/ml，补剂/包材是采购单位） */
+  unitLabel: 'g',
+  /** 默认采购商品的换算，用来把「元/克」折回「一件多少钱」给人看 */
+  defaultRatio: null as number | null
 })
 
 const ledgerFilter = reactive({
@@ -658,11 +665,34 @@ const openLedgerForIngredient = async (item: InventoryOverviewItem) => {
   await loadLedger()
 }
 
+const isFoodRow = (row: any): boolean =>
+  row?.type === 'FOOD' || row?.type === 'FOOD' || row?.ingredientType === 'FOOD'
+
+/** 食材的单价单位一律是基准单位（元/g、元/ml），补剂/包材仍按采购单位 */
+const formatCostUnit = (row: any): string => {
+  if (isFoodRow(row)) {
+    return row?.baseUnit === 'ML' ? 'ml' : 'g'
+  }
+  return row?.purchaseUnit || row?.stockUnitLabel || ''
+}
+
+const costPreviewText = computed(() => {
+  const price = Number(priceForm.price ?? 0)
+  const ratio = Number(priceForm.defaultRatio ?? 0)
+  if (!(price > 0) || !(ratio > 0)) return ''
+  return `折合约 ¥${(price * ratio).toFixed(2)} / 1 件（按默认商品 ${ratio}${priceForm.unitLabel}）`
+})
+
 const editPrice = (item: InventoryOverviewItem) => {
   priceForm.id = item.id
   priceForm.name = item.name
   priceForm.price = item.currentPricePerPurchaseUnit
-  priceForm.precision = (item.purchaseToBaseRatio ?? 1) === 1 ? 6 : 2
+  priceForm.unitLabel = formatCostUnit(item)
+  // 食材成本是「元/g」，量级很小，必须放到 6 位小数
+  priceForm.precision = isFoodRow(item) ? 6 : ((item.purchaseToBaseRatio ?? 1) === 1 ? 6 : 2)
+  // 库存列表不返回商品明细，只按原料档案的换算折（食材恒为 1，预览就不显示）
+  priceForm.defaultRatio =
+    isFoodRow(item) ? null : (item.purchaseToBaseRatio ?? null)
   priceDialogVisible.value = true
 }
 

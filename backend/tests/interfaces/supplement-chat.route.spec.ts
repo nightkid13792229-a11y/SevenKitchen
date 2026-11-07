@@ -2,17 +2,20 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { SupplementChatController } from '../../src/interfaces/controllers/supplement-chat.controller';
+import { SupplementChatAgentService } from '../../src/application/ingredient-creation/supplement-chat-agent.service';
 import { AuthGuard } from '../../src/interfaces/auth/auth.guard';
 import { JwtAuthService } from '../../src/interfaces/auth/jwt.service';
 import { AdminGuard } from '../../src/interfaces/guards/role.guard';
 
 describe('补剂对话接口', () => {
   let app: INestApplication;
+  const model = { respond: jest.fn() };
 
   beforeEach(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
       controllers: [SupplementChatController],
       providers: [
+        { provide: SupplementChatAgentService, useValue: model },
         {
           provide: JwtAuthService,
           useValue: {
@@ -50,7 +53,38 @@ describe('补剂对话接口', () => {
       .expect(401);
   });
 
+  it('模型可用时用模型的答案，并标明来自模型', async () => {
+    model.respond.mockResolvedValueOnce({
+      reply: '我去找锌的候选，找到就摆出来',
+      actions: [{ type: 'SEARCH_CANDIDATES', keyword: '锌' }]
+    });
+
+    const res = await post({
+      message: '给狗狗加个锌',
+      draft: { name: '', servingUnitsPerDose: null, candidateNames: [] }
+    }).expect(201);
+
+    expect(res.body.data.source).toBe('MODEL');
+    expect(res.body.data.reply).toContain('摆出来');
+  });
+
+  it('模型挂了就回退到规则，并如实标明来源', async () => {
+    model.respond.mockRejectedValueOnce(new Error('模型返回 500'));
+
+    const res = await post({
+      message: '给狗狗加个锌',
+      draft: { name: '', servingUnitsPerDose: null, candidateNames: [] }
+    }).expect(201);
+
+    expect(res.body.data.source).toBe('RULES');
+    expect(res.body.data.actions).toEqual([{ type: 'SEARCH_CANDIDATES', keyword: '锌' }]);
+  });
+
   it('「加个锌」→ 回一句 + 一个搜索动作', async () => {
+    model.respond.mockResolvedValueOnce({
+      reply: '我去找「锌」的候选',
+      actions: [{ type: 'SEARCH_CANDIDATES', keyword: '锌' }]
+    });
     const res = await post({
       message: '给狗狗加个锌',
       draft: { name: '', servingUnitsPerDose: null, candidateNames: [] }

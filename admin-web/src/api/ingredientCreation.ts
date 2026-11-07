@@ -43,6 +43,7 @@ export const ingredientCreationApi = {
   supplementChat: (payload: {
     message: string
     draft: { name: string; servingUnitsPerDose: number | null; candidateNames: string[] }
+    history?: { role: 'user' | 'assistant'; text: string }[]
   }): Promise<SupplementChatReplyDto> =>
     api.post('/admin/ingredient-supplement-chat/respond', payload),
 

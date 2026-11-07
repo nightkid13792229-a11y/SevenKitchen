@@ -17,6 +17,9 @@
       <div v-for="(item, index) in messages" :key="index" class="chat__row" :class="`chat__row--${item.role}`">
         <div class="chat__bubble">
           <p class="chat__text">{{ item.text }}</p>
+          <p v-if="item.fromRules" class="chat__fallback">
+            这句是按固定规则回的（模型暂时不可用）
+          </p>
 
           <div v-if="item.candidates && item.candidates.length > 0" class="chat__candidates">
             <button
@@ -76,6 +79,8 @@ interface ChatMessage {
   candidates?: SupplementCandidateDto[]
   /** 又搜了一批之后，上一批就作废：还能看，但不能再点 */
   stale?: boolean
+  /** 这句不是模型答的（模型不可用，退回规则） */
+  fromRules?: boolean
 }
 
 const props = defineProps<{
@@ -97,6 +102,13 @@ const bodyRef = ref<HTMLElement | null>(null)
 const candidatePool = ref<SupplementCandidateDto[]>([])
 const candidateNames = computed(() => candidatePool.value.map((item) => item.name))
 
+/** 最近几轮，用来理解「第二个」「那它呢」这类指代。 */
+function recentHistory(): { role: 'user' | 'assistant'; text: string }[] {
+  return messages.value
+    .slice(-8)
+    .map((item) => ({ role: item.role === 'me' ? ('user' as const) : ('assistant' as const), text: item.text }))
+}
+
 function push(message: ChatMessage): void {
   messages.value.push(message)
   void nextTick(() => {
@@ -115,13 +127,14 @@ async function send(): Promise<void> {
   try {
     const result = await ingredientCreationApi.supplementChat({
       message: text,
+      history: recentHistory(),
       draft: {
         name: props.draftName,
         servingUnitsPerDose: props.servingUnitsPerDose,
         candidateNames: candidateNames.value
       }
     })
-    push({ role: 'ai', text: result.reply })
+    push({ role: 'ai', text: result.reply, fromRules: result.source === 'RULES' })
     for (const action of result.actions) {
       await runAction(action)
     }
@@ -324,6 +337,11 @@ function apiErrorMessage(error: unknown): string {
 .chat__candidate:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+.chat__fallback {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #b26a00;
 }
 .chat__stale {
   font-size: 11px;

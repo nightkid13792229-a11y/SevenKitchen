@@ -28,6 +28,7 @@ import {
 import { AuthGuard } from '../../../src/interfaces/auth/auth.guard';
 import { JwtAuthService } from '../../../src/interfaces/auth/jwt.service';
 import { IngredientCreationController } from '../../../src/interfaces/controllers/ingredient-creation.controller';
+import { SupplementIngredientService } from '../../../src/application/ingredient-creation/supplement-ingredient.service';
 import { AdminGuard } from '../../../src/interfaces/guards/role.guard';
 
 const INTAKE_PURPOSE = 'INGREDIENT_INTAKE';
@@ -824,6 +825,7 @@ describe('POST /api/v1/admin/ingredient-creation/intake/classify', () => {
           useValue: { run: jest.fn() },
         },
         { provide: IngredientSearchPlanService, useValue: {} },
+        { provide: SupplementIngredientService, useValue: { create: jest.fn() } },
         {
           provide: JwtAuthService,
           useValue: {

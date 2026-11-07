@@ -23,6 +23,7 @@ import {
 } from '../../domain/recipe/enums';
 import { RecipeCopywritingService } from '../recipe-designer/recipe-copywriting.service';
 import { RecipeNamingService, type RecipeNamingResult } from '../recipe-designer/recipe-naming.service';
+import { RecipeDesignerService } from '../recipe-designer/recipe-designer.service';
 import type { RecipeCopywritingResult } from '../recipe-designer/recipe-copywriting.service';
 import { UserRole } from '../../domain/user/enums';
 import {
@@ -67,6 +68,14 @@ export class RecipeService {
     @Optional()
     @Inject(IngredientPreparationHistoryService)
     private readonly ingredientPreparationHistoryService?: IngredientPreparationHistoryService,
+    /**
+     * 定制单在「加入本单待提交」之前还没有正式食谱，命名只能退回设计草稿。
+     * 放在参数表**最后**并 @Optional：既有测试按位置构造本服务，
+     * 插在中间会让它们全部错位。
+     */
+    @Optional()
+    @Inject(RecipeDesignerService)
+    private readonly recipeDesignerService?: RecipeDesignerService,
   ) {}
 
   private readonly recipeDetailInclude = {
@@ -1585,20 +1594,6 @@ export class RecipeService {
     };
 
     const recipe = pickCanonicalRecipe(series.recipes);
-    if (!recipe) {
-      throw new BadRequestException('这个系列还没有配方，先设计再起名');
-    }
-
-    const detailed = (recipe.nutritionDetailedData as any) || {};
-    const nutrition = detailed.summary || detailed;
-
-    const foodItems = recipe.items
-      .filter((item) => item.ingredient?.type === 'FOOD')
-      .map((item) => ({
-        name: item.ingredient?.name || '',
-        ratio: item.ratioPercent ?? null,
-      }))
-      .filter((item) => Boolean(item.name));
 
     // 在架产品线的名字：既要让模型避重，也要在服务端兜一次
     const existing = await this.prisma.recipeSeries.findMany({
@@ -1612,9 +1607,43 @@ export class RecipeService {
       orderBy: { updatedAt: 'desc' },
       take: 200,
     });
+    const existingNames = existing.map((item) => item.name).filter(Boolean);
+
+    if (!recipe) {
+      /**
+       * 订单定制的设计草稿要等「加入本单待提交」才生成正式食谱。
+       * 在那之前系列下一条 `Recipe` 都没有，但草稿里原料早就齐了——
+       * 这时用草稿当事实来源起名，否则定制单入仓前永远起不了名。
+       * 草稿也还是空的，才继续报「先设计再起名」（那时这句话才是准的）。
+       */
+      const draftFacts =
+        await this.recipeDesignerService?.resolveDesignDraftNamingFacts(
+          seriesId,
+        );
+      if (!draftFacts) {
+        throw new BadRequestException('这个系列还没有配方，先设计再起名');
+      }
+
+      return this.recipeNamingService.generate({
+        existingNames,
+        ...draftFacts,
+        currentName: series.name,
+      });
+    }
+
+    const detailed = (recipe.nutritionDetailedData as any) || {};
+    const nutrition = detailed.summary || detailed;
+
+    const foodItems = recipe.items
+      .filter((item) => item.ingredient?.type === 'FOOD')
+      .map((item) => ({
+        name: item.ingredient?.name || '',
+        ratio: item.ratioPercent ?? null,
+      }))
+      .filter((item) => Boolean(item.name));
 
     return this.recipeNamingService.generate({
-      existingNames: existing.map((item) => item.name).filter(Boolean),
+      existingNames,
       foodItems,
       energyDensityKcalPerKg: recipe.energyDensityKcalPerKg ?? null,
       moisturePercent: nutrition?.moisture_pct ?? null,

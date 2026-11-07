@@ -146,7 +146,10 @@ import {
   resolvePreparationMethodText,
 } from '../recipe/preparation-method-text.util';
 import { SearchGovernanceService } from '../search-governance/search-governance.service';
-import { LifeStage as RecipeLifeStage } from '../../domain/recipe/enums';
+import {
+  LifeStage as RecipeLifeStage,
+  RECIPE_LIFE_STAGE_LABELS,
+} from '../../domain/recipe/enums';
 import {
   DEFAULT_PRODUCTION_LOSS_RATE,
   MAX_PRODUCTION_LOSS_RATE,
@@ -166,6 +169,21 @@ import {
 
 /** 「最近吃过的食材」时间窗口（天）默认值 */
 const RECENT_EATEN_WINDOW_DAYS = 90;
+
+/**
+ * 从设计草稿读出的事实，喂给 AI 命名。
+ *
+ * 与 `RecipeNamingInput` 同名同口径（只是不含 existingNames / currentName）：
+ * 定制单在「加入本单待提交」之前没有正式食谱，只能拿草稿当事实来源。
+ */
+export interface DesignDraftNamingFacts {
+  foodItems: Array<{ name: string; ratio: number | null }>;
+  energyDensityKcalPerKg: number | null;
+  moisturePercent: number | null;
+  fatPercentDm: number | null;
+  proteinPercentDm: number | null;
+  lifeStageLabels: string[];
+}
 
 /** 「最近吃过的食材」时间窗口（天）允许范围 */
 const RECENT_EATEN_WINDOW_MIN_DAYS = 7;
@@ -9058,6 +9076,113 @@ export class RecipeDesignerService {
     }
 
     return this.buildPublishedNutritionDetailedData(draft, resolvedAssessment);
+  }
+
+  /**
+   * 只有设计草稿、还没有正式食谱时的 AI 起名事实。
+   *
+   * 订单定制的设计草稿要等「加入本单待提交」才会生成 `Recipe` 行；
+   * 在这之前系列下一条正式食谱都没有，命名接口若只读正式食谱，
+   * 就会在草稿已经有 24 种原料的情况下仍然回「这个系列还没有配方」。
+   * 这里把草稿读成与正式食谱同名同口径的事实（主料 + 配比 + 能量 + 营养）。
+   *
+   * 草稿里一条可起名的主料都没有（刚建的空白草稿）时返回 null，
+   * 让调用方继续报「先设计再起名」——那时这句话才是准的。
+   */
+  async resolveDesignDraftNamingFacts(
+    seriesId: string,
+  ): Promise<DesignDraftNamingFacts | null> {
+    const id = seriesId?.trim();
+    if (!id) {
+      return null;
+    }
+
+    const drafts = await this.prisma.designRecipe.findMany({
+      // 归档草稿是退役版本，不能拿来起名
+      where: { seriesId: id, status: { not: 'ARCHIVED' } },
+      include: DESIGN_RECIPE_INCLUDE,
+      orderBy: { updatedAt: 'desc' },
+      take: 10,
+    });
+    if (drafts.length === 0) {
+      return null;
+    }
+
+    /**
+     * 与正式食谱同一套挑选规则：普通成年犬 → 已发布 → 最近更新。
+     * 订单槽位通常只有一份草稿，这里是为了同时兜住「只有草稿的产品线」。
+     */
+    const canonical =
+      drafts.find(
+        (item) =>
+          item.seriesLifeStage === RecipeLifeStage.HIGH_ACTIVITY_ADULT,
+      ) ??
+      drafts.find((item) => Boolean(item.publishedRecipeId)) ??
+      drafts[0];
+    const draft = canonical as unknown as DesignRecipeWithItems;
+
+    const foodItems = draft.items
+      .filter((item) => this.isItemIncludedInAssessment(item))
+      .filter((item) => this.resolveIngredientType(item) === IngredientType.FOOD)
+      .map((item) => ({
+        name: this.resolveIngredientDisplayName(item),
+        ratio: item.ratioPercent ?? null,
+      }))
+      .filter((item) => Boolean(item.name));
+    if (foodItems.length === 0) {
+      return null;
+    }
+
+    let energyDensityKcalPerKg =
+      typeof draft.energyDensityKcalPerKg === 'number'
+        ? draft.energyDensityKcalPerKg
+        : null;
+    let moisturePercent: number | null = null;
+    let fatPercentDm: number | null = null;
+    let proteinPercentDm: number | null = null;
+    try {
+      const assessment = await this.assessLoadedDraft(draft);
+      energyDensityKcalPerKg =
+        assessment.energyDensityKcalPerKg ?? energyDensityKcalPerKg;
+      moisturePercent = this.roundNullable(
+        this.calculatePublishedMoisturePercent(assessment),
+        2,
+      );
+      proteinPercentDm = this.roundNullable(
+        assessment.macroMetrics.crudeProtein.dryMatterPercent,
+        2,
+      );
+      fatPercentDm = this.roundNullable(
+        assessment.macroMetrics.crudeFat.dryMatterPercent,
+        2,
+      );
+    } catch (error) {
+      // 营养算不出来不该拦住起名：名字的价值点主要来自原料与配比，
+      // 营养只是给模型的补充事实。
+      this.logger.warn(
+        `草稿 ${draft.id} 起名时营养评估失败，按缺值处理：${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+
+    const stageCodes = Array.isArray(draft.applicableLifeStages)
+      ? draft.applicableLifeStages.filter(Boolean)
+      : [];
+    if (stageCodes.length === 0 && draft.seriesLifeStage) {
+      stageCodes.push(draft.seriesLifeStage);
+    }
+
+    return {
+      foodItems,
+      energyDensityKcalPerKg,
+      moisturePercent,
+      fatPercentDm,
+      proteinPercentDm,
+      lifeStageLabels: stageCodes
+        .map((stage) => RECIPE_LIFE_STAGE_LABELS[stage] || stage)
+        .filter(Boolean),
+    };
   }
 
   /**

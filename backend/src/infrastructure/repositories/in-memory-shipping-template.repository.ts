@@ -27,6 +27,10 @@ export class InMemoryShippingTemplateRepository implements ShippingTemplateRepos
     return Promise.resolve(activeTemplates[0]);
   }
 
+  async findAll(): Promise<ShippingTemplate[]> {
+    return Promise.resolve(Array.from(this.templates.values()));
+  }
+
   async save(template: ShippingTemplate): Promise<ShippingTemplate> {
     this.templates.set(template.id, template);
     return Promise.resolve(template);

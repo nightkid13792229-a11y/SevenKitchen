@@ -1627,103 +1627,6 @@ function onReviewSubmitted() {
   margin: 16rpx 0 18rpx;
 }
 
-.life-stage-version-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18rpx;
-  margin: 18rpx 0;
-  padding: 22rpx;
-  border-radius: 12rpx;
-  background: #eef2e4;
-  border: 1rpx solid #e5e8d4;
-}
-
-.life-stage-version-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.life-stage-version-head {
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-}
-
-/* 未匹配：整卡转为警示色，用颜色承担提示，而不是再堆一行文字 */
-.life-stage-version-card--mismatch {
-  background-color: var(--sk-danger-soft, #f7e9e3);
-  border-color: var(--sk-danger, #b4553f);
-}
-
-.life-stage-version-warn {
-  flex: none;
-  width: 30rpx;
-  height: 30rpx;
-  border-radius: 50%;
-  background-color: var(--sk-danger, #b4553f);
-  color: #fff;
-  font-size: 22rpx;
-  font-weight: 700;
-  line-height: 30rpx;
-  text-align: center;
-}
-
-.life-stage-version-card--mismatch .life-stage-version-title,
-.life-stage-version-card--mismatch .life-stage-version-copy {
-  color: var(--sk-danger, #b4553f);
-}
-
-.life-stage-version-title,
-.life-stage-version-copy {
-  display: block;
-}
-
-.life-stage-version-title {
-  font-size: 28rpx;
-  font-weight: 800;
-  color: #26261f;
-}
-
-.life-stage-version-copy {
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: #26261f;
-  line-height: 1.45;
-}
-
-.life-stage-version-plain {
-  display: block;
-  margin-top: 6rpx;
-  font-size: 22rpx;
-  color: #6b6653;
-  line-height: 1.45;
-}
-
-.life-stage-version-options {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  color: #8a6b33;
-  line-height: 1.45;
-}
-
-.life-stage-version-action {
-  flex: 0 0 auto;
-  padding: 8rpx 16rpx;
-  border-radius: 6rpx;
-  color: #1e3a2f;
-  background-color: #fbfcf7;
-  font-size: 24rpx;
-  font-weight: 700;
-}
-
-/* 未匹配时「切换」按钮也要跟着变，否则白底按钮压在粉底上很突兀 */
-.life-stage-version-card--mismatch .life-stage-version-action {
-  color: #fff;
-  background-color: var(--sk-danger, #b4553f);
-}
-
 /* 一句话卖点：金色竖条强调，作为核心价值主张 */
 .recipe-selling-point {
   display: flex;
@@ -1739,15 +1642,6 @@ function onReviewSubmitted() {
   color: #1e3a2f;
 }
 
-.recipe-description {
-  font-size: 28rpx;
-  color: #26261f;
-  line-height: 1.6;
-  display: block;
-}
-
-/* 营养数据卡片 */
-/* 营养标准背书卡 */
 /* 营养标准背书卡：作为卖点做金色强调 */
 .standard-card {
   display: flex;
@@ -1827,18 +1721,6 @@ function onReviewSubmitted() {
   font-size: 22rpx;
   line-height: 1.6;
   color: #968f6d;
-}
-
-.nutrition-item .label {
-  font-size: 24rpx;
-  color: #26261f;
-  margin-bottom: 4rpx;
-}
-
-.nutrition-item .value {
-  font-size: 28rpx;
-  font-weight: bold;
-  color: #26261f;
 }
 
 .nutrition-report-card {
@@ -2238,104 +2120,6 @@ function onReviewSubmitted() {
 .reference-price-note {
   font-size: 20rpx;
   color: #6b6653;
-}
-
-.life-stage-sheet-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 99;
-  display: flex;
-  align-items: flex-end;
-  background: rgba(0, 0, 0, 0.42);
-}
-
-.life-stage-sheet {
-  width: 100%;
-  max-height: 70vh;
-  box-sizing: border-box;
-  padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
-  border-radius: 24rpx 24rpx 0 0;
-  background: #fbfcf7;
-}
-
-.life-stage-sheet-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 18rpx;
-}
-
-.life-stage-sheet-title {
-  font-size: 32rpx;
-  font-weight: 800;
-  color: #26261f;
-}
-
-.life-stage-sheet-close {
-  width: 56rpx;
-  height: 56rpx;
-  line-height: 56rpx;
-  border-radius: 50%;
-  background: #f0f3e9;
-  color: #6b6653;
-  text-align: center;
-  font-size: 34rpx;
-}
-
-.life-stage-version-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18rpx;
-  padding: 22rpx 0;
-  border-bottom: 1rpx solid #eef1e2;
-}
-
-.life-stage-version-option.active {
-  color: #1e3a2f;
-}
-
-.life-stage-version-option-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.life-stage-version-option-title,
-.life-stage-version-option-copy {
-  display: block;
-}
-
-.life-stage-version-option-title {
-  font-size: 28rpx;
-  font-weight: 800;
-}
-
-.life-stage-version-option-copy {
-  margin-top: 6rpx;
-  color: #6b6653;
-  font-size: 24rpx;
-  line-height: 1.45;
-}
-
-.life-stage-version-selected {
-  flex: 0 0 auto;
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #1e3a2f;
-}
-
-.life-stage-version-option-side {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6rpx;
-}
-
-.life-stage-version-option-price {
-  font-size: 26rpx;
-  font-weight: 800;
-  color: #b4553f;
 }
 
 .quick-actions {

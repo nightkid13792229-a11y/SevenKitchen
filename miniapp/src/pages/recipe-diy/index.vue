@@ -1052,20 +1052,6 @@ function getHealthTagLabel(tagOrUuid: string): string {
 </script>
 
 <style scoped>
-/* 后端结论未取到：既不静默放行，也不误报"不匹配"，给一条中性提示 */
-.life-stage-unknown-note {
-  margin-bottom: 20rpx;
-  padding: 16rpx 20rpx;
-  border-radius: 10rpx;
-  background-color: #f7f8f2;
-  border: 1rpx solid var(--sk-line, #e3e6d4);
-}
-
-.life-stage-unknown-text {
-  font-size: 24rpx;
-  line-height: 1.5;
-  color: var(--sk-ink-2, #6b6653);
-}
 
 .recipe-diy-page {
   min-height: 100vh;
@@ -1140,135 +1126,10 @@ function getHealthTagLabel(tagOrUuid: string): string {
   display: block;
 }
 
-.health-tag {
-  background-color: #f6efe0;
-  color: #8a6b33;
-}
-
-.nutrition-item .label {
-  font-size: 24rpx;
-  color: #6b6653;
-}
-
-.nutrition-item .value {
-  font-size: 28rpx;
-  color: #26261f;
-  font-weight: 500;
-}
-
-.dog-picker {
-  padding: 24rpx;
-  background-color: #ffffff;
-  border: 2rpx solid #1e3a2f;
-  border-radius: 12rpx;
-  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.1);
-}
-
-.picker-placeholder {
-  font-size: 28rpx;
-  color: #b08d4f;
-  font-weight: 500;
-}
-
-.dog-selected {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.dog-text {
-  font-size: 28rpx;
-  color: #26261f;
-  font-weight: 500;
-}
-
-.picker-check {
-  font-size: 32rpx;
-  color: #1e3a2f;
-  font-weight: bold;
-}
-
 .dog-feeding-content {
   display: flex;
   flex-direction: column;
   gap: 18rpx;
-}
-
-/* 警告卡片 */
-.warning-card {
-  background-color: var(--sk-danger-soft, #f7e9e3);
-  border: 1rpx solid var(--sk-danger, #b4553f);
-  border-radius: 12rpx;
-  padding: 20rpx;
-  margin-bottom: 20rpx;
-}
-
-.warning-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 16rpx;
-}
-
-.warning-icon {
-  font-size: 32rpx;
-  margin-right: 8rpx;
-}
-
-.warning-title {
-  font-size: 30rpx;
-  font-weight: bold;
-  color: var(--sk-danger, #b4553f);
-}
-
-.warning-text {
-  font-size: 26rpx;
-  color: var(--sk-danger, #b4553f);
-  line-height: 1.6;
-  display: block;
-  margin-bottom: 8rpx;
-}
-
-.warning-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-  margin-top: 16rpx;
-}
-
-.btn-switch-stage,
-.btn-continue {
-  width: 100%;
-  padding: 16rpx;
-  border-radius: 8rpx;
-  font-size: 28rpx;
-  border: none;
-}
-
-.btn-switch-stage {
-  background-color: #1e3a2f;
-  color: #f3eddd;
-}
-
-.btn-continue {
-  background-color: var(--sk-danger, #b4553f);
-  color: #fff;
-}
-
-/* 饭量配置 */
-.feeding-info {
-  display: flex;
-  flex-direction: column;
-  gap: 24rpx;
-}
-
-.feeding-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.feeding-value.readonly {
-  color: #26261f;
 }
 
 .feeding-adjustment-note {
@@ -1280,136 +1141,6 @@ function getHealthTagLabel(tagOrUuid: string): string {
   background-color: #eef2e4;
   border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
-}
-
-.feeding-adjustment-title {
-  font-size: 25rpx;
-  font-weight: 700;
-  color: #1e3a2f;
-}
-
-.feeding-adjustment-copy {
-  font-size: 24rpx;
-  line-height: 1.6;
-  color: #26261f;
-}
-
-.feeding-value-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-}
-
-.feeding-edit-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
-.feeding-input-small {
-  width: 120rpx;
-  height: 60rpx;
-  padding: 0 12rpx;
-  border: 1rpx solid #e5e8d4;
-  border-radius: 6rpx;
-  font-size: 28rpx;
-  text-align: center;
-}
-
-.feeding-unit {
-  font-size: 26rpx;
-  color: #26261f;
-}
-
-.btn-edit,
-.btn-save,
-.btn-cancel,
-.btn-reset {
-  padding: 12rpx 24rpx;
-  border-radius: 6rpx;
-  font-size: 26rpx;
-  border: none;
-}
-
-.btn-edit {
-  background-color: #1e3a2f;
-  color: #f3eddd;
-}
-
-.btn-reset {
-  background-color: #b4553f;
-  color: #f3eddd;
-}
-
-.btn-save {
-  background-color: #1e3a2f;
-  color: #f3eddd;
-}
-
-.btn-cancel {
-  background-color: #f2f4ea;
-  color: #26261f;
-}
-
-/* 周期选择 */
-.custom-cycle-inline {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  padding: 20rpx 16rpx;
-  background-color: #fbfcf7;
-  border: 2rpx solid #e5e8d4;
-  border-radius: 12rpx;
-}
-
-.custom-label {
-  font-size: 26rpx;
-  color: #26261f;
-}
-
-.custom-input-white {
-  width: 80rpx;
-  height: 56rpx;
-  text-align: center;
-  border: 2rpx solid #e5e8d4;
-  border-radius: 8rpx;
-  font-size: 26rpx;
-  color: #26261f;
-  background-color: #fbfcf7;
-}
-
-.custom-unit {
-  font-size: 24rpx;
-  color: #6b6653;
-}
-
-.btn-confirm-custom {
-  padding: 8rpx 16rpx;
-  background-color: #1e3a2f;
-  color: #f3eddd;
-  border: none;
-  border-radius: 8rpx;
-  font-size: 24rpx;
-  line-height: 1.2;
-  margin-left: 8rpx;
-}
-
-.custom-days-display {
-  font-size: 26rpx;
-  font-weight: bold;
-  color: #b08d4f;
-  padding: 0 12rpx;
-}
-
-.btn-edit-custom {
-  padding: 8rpx 20rpx;
-  background-color: #1e3a2f;
-  color: #f3eddd;
-  border: none;
-  border-radius: 8rpx;
-  font-size: 24rpx;
-  line-height: 1.2;
-  margin-left: 8rpx;
 }
 
 /* 底部操作栏 */
@@ -1493,16 +1224,6 @@ function getHealthTagLabel(tagOrUuid: string): string {
   font-size: 26rpx;
   line-height: 1.55;
   color: #6b6653;
-}
-
-.hero-dog-action,
-.btn-secondary-full {
-  border-radius: 8rpx;
-  border: 2rpx solid #1e3a2f;
-  color: #1e3a2f;
-  background-color: #fbfcf7;
-  font-size: 26rpx;
-  text-align: center;
 }
 
 .feeding-note-toggle {

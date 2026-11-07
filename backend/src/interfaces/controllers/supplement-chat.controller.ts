@@ -3,7 +3,6 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsArray, IsIn, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
-import type { SupplementChatDraft } from '../../domain/ingredient/supplement-chat';
 import { SupplementAgentService } from '../../application/ingredient-creation/supplement-agent.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
@@ -39,14 +38,15 @@ export class SupplementChatTurnDto {
     example: { name: '', servingUnitsPerDose: null, candidateNames: [] }
   })
   @IsObject()
-  draft!: SupplementChatDraft;
+  /** 当前草稿（模型可读可写；这里只是原样递过去） */
+  draft!: Record<string, unknown>;
 }
 
 /**
  * 补剂对话。
  *
  * 单独一支控制器：不进 ingredient-creation 那个（它已经十几个依赖），
- * 而且这一层现在只是把话翻译成动作，判断逻辑都在 `supplement-chat` 里，
+ * 模型自己决定调哪些工具，这里只负责把结果交回页面，
  * 以后换模型驱动也只换那一处。
  */
 @ApiTags('Admin Supplement Chat')
@@ -73,7 +73,7 @@ export class SupplementChatController {
       const result = await this.agent.run({
         message: dto.message,
         history: dto.history ?? [],
-        draft: (dto.draft ?? {}) as unknown as Record<string, unknown>
+        draft: dto.draft ?? {}
       });
 
       this.logger.log(

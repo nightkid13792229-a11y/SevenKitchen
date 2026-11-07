@@ -218,7 +218,6 @@ import { NutritionGovernanceService } from './application/nutrition-governance/n
 import { IngredientCreationController } from './interfaces/controllers/ingredient-creation.controller';
 import { IngredientCatalogController } from './interfaces/controllers/ingredient-catalog.controller';
 import { SupplementChatController } from './interfaces/controllers/supplement-chat.controller';
-import { SupplementChatAgentService } from './application/ingredient-creation/supplement-chat-agent.service';
 import { SupplementAgentService } from './application/ingredient-creation/supplement-agent.service';
 import { KnowledgeSearchService } from './application/knowledge/knowledge-search.service';
 import { IngredientCreationAuditService } from './application/ingredient-creation/ingredient-creation-audit.service';
@@ -1027,7 +1026,6 @@ validatePrismaConfig();
     SupplementIngredientService,
     SupplementLinkPreviewService,
     FeedAdditiveCatalogService,
-    SupplementChatAgentService,
     SupplementAgentService,
     KnowledgeSearchService,
     IngredientCreationIntakeService,

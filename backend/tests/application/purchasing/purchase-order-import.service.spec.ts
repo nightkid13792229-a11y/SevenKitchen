@@ -628,6 +628,30 @@ describe('PurchaseOrderImportService', () => {
       expect(result.renamed).toEqual([]);
       expect(prisma.procurementSku.update).not.toHaveBeenCalled();
     });
+
+    it('截图叫法只是商品名去掉规格时，不把商品名改短（同名商品反查带出来的行）', async () => {
+      primeConfirm({
+        matchConfidence: 'HIGH',
+        rawName: '冷鲜 鲜切黄牛后腿肉',
+        spec: '约200g',
+      });
+      prisma.procurementSku.findUnique.mockResolvedValue({
+        id: 'sku-beef',
+        ingredientId: 'ing-beef',
+        name: '冷鲜 鲜切黄牛后腿肉 约200g',
+        productModel: '200g',
+        purchaseChannel: '沃尔玛',
+        purchaseUnit: '盒',
+        purchaseToBaseRatio: 200,
+        ingredient: { baseUnit: 'G', name: '牛霖', purchaseToBaseRatio: 200 },
+      });
+
+      const result = await service.confirm(['import-1'], 'user-1');
+
+      // 归一化后是同一个名字，只是规格写法不同 —— 不该写一条改名历史
+      expect(result.renamed).toEqual([]);
+      expect(prisma.procurementSku.update).not.toHaveBeenCalled();
+    });
   });
 
   it('手动匹配现有商品时同步商品名并写改名记录', async () => {
@@ -779,6 +803,55 @@ describe('PurchaseOrderImportService', () => {
     expect(model.callDeepSeekJson).toHaveBeenCalledTimes(2);
     expect(result.lines[0].ingredientId).toBe('ing-salmon');
     expect(result.lines[0].procurementSkuId).toBe('sku-salmon');
+    expect(result.lines[0].state).toBe('MATCHED');
+  });
+
+  it('截图商品名与清单商品完全同名时直接匹配，不再花一次模型调用做语义', async () => {
+    prisma.purchaseItem.findMany.mockResolvedValue([
+      { id: 'item-beef', ingredientId: 'ing-beef', ingredientName: '牛霖' },
+    ]);
+    prisma.procurementSku.findMany.mockResolvedValue([
+      {
+        id: 'sku-beef',
+        ingredientId: 'ing-beef',
+        name: '冷鲜 鲜切黄牛后腿肉 约200g',
+        productModel: '200g',
+        purchaseChannel: '沃尔玛',
+        purchaseToBaseRatio: 200,
+        purchaseUnit: '盒',
+      },
+    ]);
+    model.callDeepSeekJson.mockResolvedValue({
+      channel: '沃尔玛',
+      items: [
+        {
+          name: '冷鲜 鲜切黄牛后腿肉',
+          spec: '约200g',
+          qty: 3,
+          unit: '盒',
+          unitPrice: 23.98,
+          lineTotal: 71.94,
+        },
+      ],
+      subtotal: 71.94,
+      shippingFee: 0,
+      packagingFee: 0,
+      paid: 71.94,
+      incomplete: false,
+      note: '',
+    });
+
+    const [result] = await service.importFromScreenshots({
+      purchaseListId: 'list-1',
+      userId: 'user-1',
+      imageUrls: ['https://img.example.com/a.jpg'],
+    });
+
+    // 只调了读图那一次：同名反查已经把行认掉了，没有第二次语义调用
+    expect(model.callDeepSeekJson).toHaveBeenCalledTimes(1);
+    expect(result.lines[0].ingredientId).toBe('ing-beef');
+    expect(result.lines[0].procurementSkuId).toBe('sku-beef');
+    expect(result.lines[0].confidence).toBe('HIGH');
     expect(result.lines[0].state).toBe('MATCHED');
   });
 
@@ -1106,6 +1179,62 @@ describe('PurchaseOrderImportService', () => {
       await service.discard('import-9');
 
       expect(prisma.purchaseOrderMatchAlias.upsert).not.toHaveBeenCalled();
+    });
+
+    it('写别名失败不影响放弃，截图照常删掉（记忆是缓存，不该让主操作失败）', async () => {
+      prisma.purchaseOrderImport.findUnique.mockResolvedValue({
+        ...draftRow,
+        imageKeys: ['purchase-order-screenshots/a.jpg'],
+      });
+      prisma.purchaseOrderImport.update.mockResolvedValue({
+        ...draftRow,
+        status: 'DISCARDED',
+      });
+      prisma.purchaseOrderImportLine.findMany.mockResolvedValue([
+        {
+          rawName: '冷鲜 鲜切黄牛后腿肉',
+          ingredientId: 'ing-beef',
+          procurementSkuId: 'sku-beef',
+        },
+      ]);
+      prisma.purchaseOrderMatchAlias.upsert.mockRejectedValue(
+        new Error('db is down'),
+      );
+
+      await expect(service.discard('import-9')).resolves.toEqual({
+        id: 'import-9',
+        status: 'DISCARDED',
+      });
+      expect(cosService.deleteImage).toHaveBeenCalledWith(
+        'purchase-order-screenshots/a.jpg',
+      );
+    });
+
+    it('记别名时带上操作人，而不是上传人', async () => {
+      prisma.purchaseOrderImport.findUnique.mockResolvedValue({
+        ...draftRow,
+        uploadedById: 'uploader-1',
+      });
+      prisma.purchaseOrderImport.update.mockResolvedValue({
+        ...draftRow,
+        status: 'DISCARDED',
+      });
+      prisma.purchaseOrderImportLine.findMany.mockResolvedValue([
+        {
+          rawName: '冷鲜 鲜切黄牛后腿肉',
+          ingredientId: 'ing-beef',
+          procurementSkuId: 'sku-beef',
+        },
+      ]);
+      prisma.purchaseOrderMatchAlias.upsert.mockResolvedValue({});
+
+      await service.discard('import-9', 'operator-1');
+
+      expect(prisma.purchaseOrderMatchAlias.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ createdById: 'operator-1' }),
+        }),
+      );
     });
   });
 });

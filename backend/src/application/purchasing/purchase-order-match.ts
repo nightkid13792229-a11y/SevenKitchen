@@ -238,6 +238,45 @@ function pickSku(
 }
 
 /**
+ * 规格「正命中」得分（2026-11-07，评审补强）：
+ *   2 = 能证明两边是同一个规格；
+ *   1 = 信息不足（一边没写规格，无从比较）；
+ *   0 = 两边都写了，但明确对不上。
+ *
+ * 为什么不能直接用 specConflict：它把「信息不足」和「不冲突」都返回 false，
+ * 于是「同名但规格没写清」会被当成「规格对得上」，静默挂错商品。
+ */
+function specMatchScore(
+  specText: string | null | undefined,
+  skuModel: string | null | undefined,
+): number {
+  const lineTokens = extractSpecTokens(specText);
+  const skuTokens = extractSpecTokens(skuModel);
+  const lineWeighted = lineTokens.filter(
+    (token) => token.dimension !== 'count',
+  );
+  const skuWeighted = skuTokens.filter((token) => token.dimension !== 'count');
+
+  if (lineWeighted.length > 0 && skuWeighted.length > 0) {
+    return lineWeighted.some((line) =>
+      skuWeighted.some((sku) => sku.key === line.key),
+    )
+      ? 2
+      : 0;
+  }
+
+  if (lineWeighted.length === 0 && skuWeighted.length === 0) {
+    const lineCounts = countValues(lineTokens).filter((value) => value > 1);
+    const skuCounts = countValues(skuTokens).filter((value) => value > 1);
+    if (lineCounts.length > 0 && skuCounts.length > 0) {
+      return lineCounts.some((value) => skuCounts.includes(value)) ? 2 : 0;
+    }
+  }
+
+  return 1;
+}
+
+/**
  * 同名商品反查（2026-11-07）。
  *
  * 为什么要有这一层：匹配方向是「原料 → 商品」，商品名只有原料认出来之后
@@ -249,14 +288,20 @@ function pickSku(
  *   1. 只在**同一渠道**的商品里找（订单是沃尔玛，就不看山姆的同名商品）；
  *   2. 只认**名字完全一致**（归一化后相等，含曾用名），不做包含匹配；
  *   3. 同名商品分属两个不同原料时，说不清是哪一个，交给员工；
- *   4. 已经靠原料名 / 语义 / 别名认出来的行不会走到这里。
+ *   4. 已经靠原料名 / 语义 / 别名认出来的行不会走到这里；
+ *   5. 同一原料下有多个同名商品时，只有**能证明规格一致**才挂商品；
+ *      证明不了就只挂原料（specVerified=false），交给员工选。
  */
 function findSkuByExactName(
   line: ParsedOrderLine,
   candidates: ListItemCandidate[],
   importKey: string,
   channels: ChannelOption[],
-): { candidate: ListItemCandidate; sku: ListSkuCandidate } | null {
+): {
+  candidate: ListItemCandidate;
+  sku: ListSkuCandidate;
+  specVerified: boolean;
+} | null {
   const normalizedLine = normalizeText(line.rawName);
   if (!importKey || normalizedLine.length < 2) return null;
 
@@ -279,11 +324,37 @@ function findSkuByExactName(
   const ingredientIds = new Set(hits.map((hit) => hit.candidate.ingredientId));
   if (ingredientIds.size > 1) return null;
 
-  // 同一原料下有多个同名商品时，优先选规格对得上的那个。
-  return (
-    hits.find((hit) => !specConflict(line.spec, hit.sku.productModel)) ??
-    hits[0]
-  );
+  // 截图的规格可能只写在名字里（「… 约200g」），spec 字段为空时用名字兜底。
+  const specText = line.spec?.trim() || line.rawName;
+  const scored = hits.map((hit) => ({
+    ...hit,
+    score: specMatchScore(specText, hit.sku.productModel),
+  }));
+  const exact = scored.filter((hit) => hit.score === 2);
+  if (exact.length > 0) {
+    return {
+      candidate: exact[0].candidate,
+      sku: exact[0].sku,
+      specVerified: true,
+    };
+  }
+
+  // 一个同名商品、截图也没写规格：没有第二个可能，直接挂。
+  const hasLineSpec = extractSpecTokens(specText).length > 0;
+  if (hits.length === 1 && !hasLineSpec) {
+    return {
+      candidate: hits[0].candidate,
+      sku: hits[0].sku,
+      specVerified: true,
+    };
+  }
+
+  // 证明不了规格：只挂原料，商品留给员工按截图选（别再蒙一个）。
+  return {
+    candidate: hits[0].candidate,
+    sku: hits[0].sku,
+    specVerified: false,
+  };
 }
 
 export function matchOrderLines(
@@ -372,11 +443,18 @@ export function matchOrderLines(
     // 原料名没命中时，再反过来在同一渠道的商品里找同名商品（2026-11-07）。
     // 只在不靠语义提示、不靠别名的情况下兜底，避免盖过员工教过的映射。
     let exactNameSku: ListSkuCandidate | null = null;
+    let exactNameSpecVerified = false;
     if (!hit && !hintedCandidate && channelKey) {
-      const reverse = findSkuByExactName(line, candidates, channelKey, channels);
+      const reverse = findSkuByExactName(
+        line,
+        candidates,
+        channelKey,
+        channels,
+      );
       if (reverse) {
         hit = { candidate: reverse.candidate };
         exactNameSku = reverse.sku;
+        exactNameSpecVerified = reverse.specVerified;
       }
     }
 
@@ -393,23 +471,27 @@ export function matchOrderLines(
       };
     }
 
-    const picked = pickSku(
-      line,
-      hit.candidate.skus,
-      importChannel,
-      channels,
-    );
+    const picked = pickSku(line, hit.candidate.skus, importChannel, channels);
     // 同名商品反查已经认准了是哪一个商品，直接用，不再让 pickSku 按分数重挑。
     const sku = exactNameSku ?? picked.sku;
     const nameHit = exactNameSku ? true : picked.nameHit;
     const channelMismatch = exactNameSku ? false : picked.channelMismatch;
     const channelPending = exactNameSku ? false : picked.channelPending;
 
-    const conflict = sku ? specConflict(line.spec, sku.productModel) : false;
-    const needsNewSku = !sku || conflict;
+    // 反查路径的规格要按「名字兜底」算：截图的克重常常只写在名字里。
+    const conflict = sku
+      ? specConflict(
+          exactNameSku ? line.spec?.trim() || line.rawName : line.spec,
+          sku.productModel,
+        )
+      : false;
+    // 反查出来的同名商品如果证明不了规格一致，就不能自动挂（会按错的净含量折算成本）。
+    const exactNameUnconfirmed =
+      Boolean(exactNameSku) && !exactNameSpecVerified;
+    const needsNewSku = !sku || conflict || exactNameUnconfirmed;
 
     let confidence: MatchConfidence = 'MEDIUM';
-    if (sku && nameHit && !conflict) confidence = 'HIGH';
+    if (sku && nameHit && !conflict && !needsNewSku) confidence = 'HIGH';
     else if (!sku) confidence = 'LOW';
 
     const reason = channelPending
@@ -422,15 +504,17 @@ export function matchOrderLines(
             : `商品规格是 ${sku?.productModel ?? '未知'}，与截图不一致`
           : !sku
             ? '原料对上了，但这道原料还没有采购商品'
-            : aliasCandidate
-              ? '沿用上次的原料，按截图规格重选了商品'
-              : hintedCandidate
-                ? 'AI 语义匹配'
-                : exactNameSku
-                  ? '按同名商品匹配'
-                  : nameHit
-                    ? '命中采购商品'
-                    : '按原料匹配';
+            : exactNameUnconfirmed
+              ? '同名商品无法确认规格，请按截图选一个'
+              : aliasCandidate
+                ? '沿用上次的原料，按截图规格重选了商品'
+                : hintedCandidate
+                  ? 'AI 语义匹配'
+                  : exactNameSku
+                    ? '按同名商品匹配'
+                    : nameHit
+                      ? '命中采购商品'
+                      : '按原料匹配';
 
     return {
       ...line,

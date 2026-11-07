@@ -290,9 +290,10 @@ export class StaffPurchasingController {
   @ApiOperation({ summary: '放弃一条识别记录' })
   async discardOrderImport(
     @Param('id') id: string,
+    @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
     return ApiResponseDto.success(
-      await this.purchaseOrderImportService.discard(id),
+      await this.purchaseOrderImportService.discard(id, userId),
     );
   }
 

@@ -1005,6 +1005,9 @@ ${list}
       sku.productModel ?? null,
     ).slice(0, 200);
     if (!desired || desired === sku.name) return null;
+    // 「冷鲜 鲜切黄牛后腿肉」vs「冷鲜 鲜切黄牛后腿肉 约200g」是同一个名字，
+    // 只是截图没写规格：不要为了这点排版差异去改商品主数据、写改名历史（2026-11-07）。
+    if (normalizeText(desired) === normalizeText(sku.name)) return null;
     // 「300g」「×2」这种认岔的名字不要写进商品表
     if (!/[\u4e00-\u9fa5a-zA-Z]/.test(desired)) return null;
 
@@ -1039,7 +1042,10 @@ ${list}
     return { skuId: sku.id, from: sku.name, to: desired };
   }
 
-  async discard(id: string): Promise<{ id: string; status: string }> {
+  async discard(
+    id: string,
+    userId?: string,
+  ): Promise<{ id: string; status: string }> {
     const current = await this.prisma.purchaseOrderImport.findUnique({
       where: { id },
     });
@@ -1051,16 +1057,24 @@ ${list}
       where: { id },
       data: { status: 'DISCARDED' },
     });
-    // 整单放弃也要留下「员工手动挑过什么」的记忆（2026-11-07）：
-    // 重复上传、传错清单、想重来一遍都很常见，之前只有「生成采购记录」
-    // 那一步才记，放弃过的单里教过的东西全丢了，下次同样的字还得再挑。
-    await this.rememberManualMatches(current);
     for (const key of current.imageKeys ?? []) {
       await this.cosService.deleteImage(key).catch((error: any) => {
         this.logger.warn(
           `Failed to delete discarded screenshot ${key}: ${error?.message}`,
         );
       });
+    }
+    // 整单放弃也要留下「员工手动挑过什么」的记忆（2026-11-07）：
+    // 重复上传、传错清单、想重来一遍都很常见，之前只有「生成采购记录」
+    // 那一步才记，放弃过的单里教过的东西全丢了，下次同样的字还得再挑。
+    // 这只是记忆缓存：写失败不能让「已经放弃」的请求变成 500，也不能
+    // 连带把删图跳过（那会留下孤儿截图），所以放最后并兜住错误。
+    try {
+      await this.rememberManualMatches(current, userId);
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to remember manual matches of discarded import ${id}: ${error?.message}`,
+      );
     }
     return { id, status: 'DISCARDED' };
   }
@@ -1072,7 +1086,10 @@ ${list}
    * 与这单最后是生成还是放弃无关。渠道没确认时不记 —— 同一个叫法
    * 换个渠道就是另一个商品，记了反而会串。
    */
-  private async rememberManualMatches(row: any): Promise<void> {
+  private async rememberManualMatches(
+    row: any,
+    userId?: string,
+  ): Promise<void> {
     const lines = await this.prisma.purchaseOrderImportLine.findMany({
       where: {
         importId: row.id,
@@ -1104,7 +1121,7 @@ ${list}
           channelFamily,
           ingredientId: line.ingredientId!,
           procurementSkuId: line.procurementSkuId,
-          createdById: row.uploadedById ?? null,
+          createdById: userId ?? row.uploadedById ?? null,
         },
         update: {
           ingredientId: line.ingredientId!,

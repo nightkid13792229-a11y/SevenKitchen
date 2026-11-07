@@ -570,4 +570,140 @@ describe('同名商品反查', () => {
 
     expect(matched.ingredientId).toBeNull();
   });
+
+  // 评审补充（2026-11-07）：同一原料下有多个同名商品时，必须按规格选对；
+  // 选不出来就只挂原料，绝不按排序蒙一个（挂错会按错的净含量折算成本）。
+  const beefRumpTwoSizes: ListItemCandidate = {
+    purchaseItemId: 'item-beef-rump',
+    ingredientId: 'ing-beef-rump',
+    ingredientName: '牛霖',
+    skus: [
+      {
+        id: 'sku-beef-500',
+        name: '冷鲜 鲜切黄牛后腿肉 500g',
+        productModel: '500g',
+        purchaseChannel: '沃尔玛',
+        purchaseToBaseRatio: 500,
+        purchaseUnit: '盒',
+      },
+      {
+        id: 'sku-beef-200',
+        name: '冷鲜 鲜切黄牛后腿肉 约200g',
+        productModel: '200g',
+        purchaseChannel: '沃尔玛',
+        purchaseToBaseRatio: 200,
+        purchaseUnit: '盒',
+      },
+    ],
+  };
+
+  it('同一原料下有多个同名商品 → 按截图规格选对的那一个', () => {
+    const [matched] = matchWithChannels(
+      [line('冷鲜 鲜切黄牛后腿肉', '约200g')],
+      [beefRumpTwoSizes],
+      '沃尔玛',
+    );
+
+    expect(matched.ingredientId).toBe('ing-beef-rump');
+    expect(matched.procurementSkuId).toBe('sku-beef-200');
+    expect(matched.confidence).toBe('HIGH');
+    expect(matched.needsNewSku).toBe(false);
+  });
+
+  it('克重只写在截图名字里（spec 为空）→ 仍按名字里的克重选', () => {
+    const [matched] = matchWithChannels(
+      [line('冷鲜 鲜切黄牛后腿肉 200g', null)],
+      [beefRumpTwoSizes],
+      '沃尔玛',
+    );
+
+    expect(matched.procurementSkuId).toBe('sku-beef-200');
+    expect(matched.needsNewSku).toBe(false);
+  });
+
+  it('截图没写规格、同名商品又有多个 → 只挂原料，请员工选商品', () => {
+    const [matched] = matchWithChannels(
+      [line('冷鲜 鲜切黄牛后腿肉', null)],
+      [beefRumpTwoSizes],
+      '沃尔玛',
+    );
+
+    expect(matched.ingredientId).toBe('ing-beef-rump');
+    expect(matched.procurementSkuId).toBeNull();
+    expect(matched.needsNewSku).toBe(true);
+    expect(matched.confidence).not.toBe('HIGH');
+  });
+
+  it('只有一个同名商品、截图没写规格 → 直接挂上（没有第二个可能）', () => {
+    const [matched] = matchWithChannels(
+      [line('冷鲜 鲜切黄牛后腿肉', null)],
+      [beefRump],
+      '沃尔玛',
+    );
+
+    expect(matched.procurementSkuId).toBe('sku-beef-walmart');
+    expect(matched.needsNewSku).toBe(false);
+  });
+
+  it('商品改过名：曾用名和截图完全一致时也能反查到', () => {
+    const renamed: ListItemCandidate = {
+      purchaseItemId: 'item-beef-rump',
+      ingredientId: 'ing-beef-rump',
+      ingredientName: '牛霖',
+      skus: [
+        {
+          id: 'sku-beef-renamed',
+          name: '沃尔玛黄牛后腿肉 200g',
+          productModel: '200g',
+          purchaseChannel: '沃尔玛',
+          purchaseToBaseRatio: 200,
+          purchaseUnit: '盒',
+          previousNames: ['冷鲜 鲜切黄牛后腿肉 约200g'],
+        },
+      ],
+    };
+
+    const [matched] = matchWithChannels(
+      [line('冷鲜 鲜切黄牛后腿肉', '约200g')],
+      [renamed],
+      '沃尔玛',
+    );
+
+    expect(matched.procurementSkuId).toBe('sku-beef-renamed');
+    expect(matched.confidence).toBe('HIGH');
+  });
+
+  it('员工教过的别名优先于同名反查，不会被盖掉', () => {
+    const another: ListItemCandidate = {
+      purchaseItemId: 'item-other',
+      ingredientId: 'ing-other',
+      ingredientName: '牛腱',
+      skus: [
+        {
+          id: 'sku-other',
+          name: '牛腱',
+          productModel: null,
+          purchaseChannel: '沃尔玛',
+          purchaseToBaseRatio: null,
+          purchaseUnit: '盒',
+        },
+      ],
+    };
+
+    const [matched] = matchWithChannels(
+      [line('冷鲜 鲜切黄牛后腿肉', '约200g')],
+      [beefRump, another],
+      '沃尔玛',
+      [
+        {
+          normalizedName: '鲜切黄牛后腿肉',
+          channelFamily: '沃尔玛',
+          ingredientId: 'ing-other',
+          procurementSkuId: null,
+        },
+      ],
+    );
+
+    expect(matched.ingredientId).toBe('ing-other');
+  });
 });

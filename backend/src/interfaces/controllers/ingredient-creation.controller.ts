@@ -36,6 +36,14 @@ import {
 } from '../../application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCreationCandidateService } from '../../application/ingredient-creation/ingredient-creation-candidate.service';
 import {
+  SupplementIngredientService,
+  type CreateSupplementIngredientResult,
+} from '../../application/ingredient-creation/supplement-ingredient.service';
+import {
+  CreateSupplementIngredientDto,
+  toCreateSupplementInput,
+} from '../dto/ingredient-creation/create-supplement-ingredient.dto';
+import {
   IngredientCreationCheckService,
   type IngredientDraftChecksView,
 } from '../../application/ingredient-creation/ingredient-creation-check.service';
@@ -115,6 +123,7 @@ export class IngredientCreationController {
     private readonly intakeService: IngredientCreationIntakeService,
     private readonly agentService: IngredientDraftAgentService,
     private readonly searchPlanService: IngredientSearchPlanService,
+    private readonly supplementIngredientService: SupplementIngredientService,
   ) {}
 
   /**
@@ -312,6 +321,21 @@ export class IngredientCreationController {
       draftId: draft.id,
       step: draft.step,
     });
+  }
+
+  @Post('supplements')
+  @ApiOperation({
+    summary: '补剂建档：一条标准原料 + 一份待验证营养档案 + 主映射 + 标签证据',
+  })
+  async createSupplement(
+    @Body() dto: CreateSupplementIngredientDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<CreateSupplementIngredientResult>> {
+    const result = await this.supplementIngredientService.create(
+      toCreateSupplementInput(dto, user.userId),
+    );
+
+    return new ApiResponseDto(0, 'Success', result);
   }
 
   @Get('drafts/:id')

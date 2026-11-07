@@ -235,7 +235,9 @@ function setPrintState(index: number, state: LabelPrintState) {
   next[index] = state
   printStates.value = next
   // 退出页面再回来仍知道哪些已打，避免重复出纸。
-  uni.setStorageSync(printStorageKey.value, next)
+  // printing 是瞬时状态，不落盘，否则中途退出再进会永久显示“打印中…”。
+  const persisted = next.map((item) => (item === 'printing' ? 'idle' : item))
+  uni.setStorageSync(printStorageKey.value, persisted)
 }
 
 function sleep(ms: number) {

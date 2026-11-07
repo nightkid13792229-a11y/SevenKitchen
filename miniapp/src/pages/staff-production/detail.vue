@@ -1673,7 +1673,7 @@ function printLabel() {
 }
 
 .completion-placeholder {
-  color: #968f6d;
+  color: #6b6653;
   font-size: 26rpx;
 }
 

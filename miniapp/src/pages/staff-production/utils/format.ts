@@ -16,6 +16,7 @@ export function formatDecimal(value: number | null | undefined, decimals: number
 export function formatWeightG(value: number | null | undefined): string {
   const amount = Number(value);
   if (value === null || value === undefined || !Number.isFinite(amount)) return '-';
-  if (Math.abs(amount) >= 1000) return `${(amount / 1000).toFixed(2)}kg`;
-  return `${amount.toFixed(0)}g`;
+  const rounded = Math.round(amount);
+  if (Math.abs(rounded) >= 1000) return `${(amount / 1000).toFixed(2)}kg`;
+  return `${rounded}g`;
 }

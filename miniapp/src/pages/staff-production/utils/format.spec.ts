@@ -6,6 +6,7 @@ describe('现场重量格式', () => {
     expect(formatWeightG(2576)).toBe('2.58kg');
     expect(formatWeightG(1750)).toBe('1.75kg');
     expect(formatWeightG(1000)).toBe('1.00kg');
+    expect(formatWeightG(999.5)).toBe('1.00kg');
   });
 
   it('1kg 以下用整数 g', () => {

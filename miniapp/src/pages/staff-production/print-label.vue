@@ -1098,19 +1098,19 @@ function goBack() {
 }
 
 .current-badge {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #f3eddd;
-  background-color: #b08d4f;
+  background-color: #7a5c28;
   padding: 4rpx 12rpx;
   border-radius: 8rpx;
 }
 
 .order-card {
-  background-color: #fbfcf7;
-  border-radius: 16rpx;
+  background-color: #fff;
+  border-radius: 20rpx;
   padding: 24rpx;
   margin-bottom: 24rpx;
-  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
+  box-shadow: 0 6rpx 18rpx rgba(30, 46, 36, 0.05);
   position: relative;
 }
 

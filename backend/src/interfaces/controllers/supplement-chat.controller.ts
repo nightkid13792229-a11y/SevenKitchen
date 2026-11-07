@@ -1,14 +1,10 @@
-import { Body, Controller, Logger, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Logger, Post, ServiceUnavailableException, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsArray, IsIn, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  interpretSupplementMessage,
-  type SupplementChatDraft,
-  type SupplementChatReply
-} from '../../domain/ingredient/supplement-chat';
-import { SupplementChatAgentService } from '../../application/ingredient-creation/supplement-chat-agent.service';
+import type { SupplementChatDraft } from '../../domain/ingredient/supplement-chat';
+import { SupplementAgentService } from '../../application/ingredient-creation/supplement-agent.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { AdminGuard } from '../guards/role.guard';
@@ -60,41 +56,44 @@ export class SupplementChatTurnDto {
 export class SupplementChatController {
   private readonly logger = new Logger(SupplementChatController.name);
 
-  constructor(private readonly agent: SupplementChatAgentService) {}
+  constructor(private readonly agent: SupplementAgentService) {}
 
   @Post('respond')
-  @ApiOperation({ summary: '把一句话翻译成回复 + 要执行的动作' })
+  @ApiOperation({ summary: '补剂 Agent：模型自己调工具（查资料/搜商品/写草稿），最后给结论' })
   async respond(
     @Body() dto: SupplementChatTurnDto
-  ): Promise<ApiResponseDto<SupplementChatReply & { source: 'MODEL' | 'RULES' | 'RULES_FAST' }>> {
-    const draft = dto.draft ?? { name: '', servingUnitsPerDose: null, candidateNames: [] };
-
-    // 只有**无歧义的命令**才直通规则：「每份 2 粒」「第二个」「贴了链接」。
-    // 判据是"动作不是搜索"——因为规则版对任何说不清的话都会退化成"去搜关键词"，
-    // 一旦用它直通，「加个锌」就永远到不了模型，也就永远先给形态分析。
-    const fast = interpretSupplementMessage({ message: dto.message, draft });
-    const isUnambiguousCommand = fast.actions.some(
-      (action) => action.type !== 'SEARCH_CANDIDATES'
-    );
-    if (isUnambiguousCommand) {
-      return new ApiResponseDto(0, 'Success', { ...fast, source: 'RULES_FAST' });
-    }
-
+  ): Promise<
+    ApiResponseDto<{
+      reply: string;
+      draft: Record<string, unknown>;
+      question: { question: string; options: string[] } | null;
+    }>
+  > {
     try {
-      const reply = await this.agent.respond({
+      const result = await this.agent.run({
         message: dto.message,
         history: dto.history ?? [],
-        draft
+        draft: (dto.draft ?? {}) as unknown as Record<string, unknown>
       });
-      return new ApiResponseDto(0, 'Success', { ...reply, source: 'MODEL' });
-    } catch (error) {
-      // 模型不可用不能把整条线弄死：退回规则解析，并如实告诉页面这次不是模型答的
-      // 用固定标记，方便按关键字搜日志：reason=NO_MODEL
-      this.logger.error(
-        `[supplement-chat] reason=NO_MODEL 回退规则：${error instanceof Error ? error.message : String(error)}`
+
+      this.logger.log(
+        `[supplement-agent] tools=${result.toolCalls.map((call) => `${call.name}:${call.ok ? 'ok' : 'fail'}`).join(',') || 'none'}`
       );
-      const reply = interpretSupplementMessage({ message: dto.message, draft });
-      return new ApiResponseDto(0, 'Success', { ...reply, source: 'RULES' });
+
+      return new ApiResponseDto(0, 'Success', {
+        reply: result.reply,
+        draft: result.draft,
+        question: result.question
+      });
+    } catch (error) {
+      // 模型不可用时**没有规则版兜底**：这条路本来就是模型，退不回去。
+      // 所以如实报错，别让页面以为"答了但没做事"。
+      this.logger.error(
+        `[supplement-agent] reason=NO_MODEL ${error instanceof Error ? error.message : String(error)}`
+      );
+      throw new ServiceUnavailableException(
+        '模型暂时不可用（或后台的「原料入库」AI 配置没启用），这一句没法处理'
+      );
     }
   }
 }

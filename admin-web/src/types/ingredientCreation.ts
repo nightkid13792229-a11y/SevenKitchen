@@ -650,9 +650,10 @@ export type SupplementChatActionDto =
 
 export interface SupplementChatReplyDto {
   reply: string
-  actions: SupplementChatActionDto[]
-  /** MODEL = 模型答的；RULES = 模型不可用时退回规则解析 */
-  source?: 'MODEL' | 'RULES' | 'RULES_FAST'
+  /** 跑完后草稿的样子（模型可能用 write_draft 写过） */
+  draft: Record<string, unknown>
+  /** 模型用 ask_user 提的问题 */
+  question: { question: string; options: string[] } | null
 }
 
 export interface SupplementLinkPreviewDto {

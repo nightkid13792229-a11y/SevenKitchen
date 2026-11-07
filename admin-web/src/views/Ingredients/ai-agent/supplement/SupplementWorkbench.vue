@@ -1,13 +1,7 @@
 <template>
   <div class="supplement-workbench">
     <!-- 最左：对话。说的每一句都会真的落到右边表单上 -->
-    <SupplementChat
-      class="wb-chat"
-      :draft-name="draft.name"
-      :serving-units-per-dose="draft.servingUnitsPerDose"
-      @prefill="applyPreview"
-      @set-serving-units="setServingUnits"
-    />
+    <SupplementChat class="wb-chat" :draft="agentDraft" @apply-draft="applyAgentDraft" />
 
     <!-- 中栏：那瓶东西的真身。手动录入时这里是空的，但能贴链接、传图、抄原文 -->
     <aside class="wb-evidence">
@@ -566,6 +560,42 @@ function applyPagePrice(price: number | null | undefined): void {
   if (typeof price === 'number' && price > 0 && !draft.currentPricePerPurchaseUnit) {
     draft.currentPricePerPurchaseUnit = price
     priceHint.value = `采购价按页面标价 ¥${price} 填的，请核对（运费/汇率另算）`
+  }
+}
+
+/** 交给模型的草稿快照：它可写的字段都在这里。 */
+const agentDraft = computed<Record<string, unknown>>(() => ({
+  name: draft.name,
+  brand: draft.brand,
+  productModel: draft.productModel,
+  purchaseChannel: draft.purchaseChannel,
+  unitDisplayLabel: draft.unitDisplayLabel,
+  physicalForm: draft.physicalForm,
+  servingUnitsPerDose: draft.servingUnitsPerDose,
+  purchaseUnit: draft.purchaseUnit,
+  purchaseToBaseRatio: draft.purchaseToBaseRatio,
+  currentPricePerPurchaseUnit: draft.currentPricePerPurchaseUnit,
+  addTiming: draft.addTiming,
+  productionLossRate: draft.productionLossRate,
+  tagNames: draft.tagNames,
+  labelCategory: draft.labelCategory,
+  labelNames: draft.labelNames,
+  labelNameSource: draft.labelNameSource,
+  servingNutrients: { ...draft.servingNutrients }
+}))
+
+/** 模型写了什么，就落进表单什么。它没提到的字段一律不动。 */
+function applyAgentDraft(next: Record<string, unknown>): void {
+  const writable = agentDraft.value
+  for (const [key, value] of Object.entries(next)) {
+    if (!(key in writable) || value === null || value === undefined) {
+      continue
+    }
+    if (key === 'servingNutrients' && typeof value === 'object') {
+      Object.assign(draft.servingNutrients, value as Record<string, number>)
+      continue
+    }
+    ;(draft as Record<string, unknown>)[key] = value
   }
 }
 

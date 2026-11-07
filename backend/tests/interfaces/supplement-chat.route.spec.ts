@@ -2,21 +2,21 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { SupplementChatController } from '../../src/interfaces/controllers/supplement-chat.controller';
-import { SupplementChatAgentService } from '../../src/application/ingredient-creation/supplement-chat-agent.service';
+import { SupplementAgentService } from '../../src/application/ingredient-creation/supplement-agent.service';
 import { AuthGuard } from '../../src/interfaces/auth/auth.guard';
 import { JwtAuthService } from '../../src/interfaces/auth/jwt.service';
 import { AdminGuard } from '../../src/interfaces/guards/role.guard';
 
 describe('补剂对话接口', () => {
   let app: INestApplication;
-  const model = { respond: jest.fn() };
+  const model = { run: jest.fn() };
 
   beforeEach(async () => {
-    model.respond.mockReset();
+    model.run.mockReset();
     const moduleRef: TestingModule = await Test.createTestingModule({
       controllers: [SupplementChatController],
       providers: [
-        { provide: SupplementChatAgentService, useValue: model },
+        { provide: SupplementAgentService, useValue: model },
         {
           provide: JwtAuthService,
           useValue: {
@@ -55,9 +55,11 @@ describe('补剂对话接口', () => {
   });
 
   it('模型可用时用模型的答案，并标明来自模型', async () => {
-    model.respond.mockResolvedValueOnce({
+    model.run.mockResolvedValueOnce({
       reply: '我去找锌的候选，找到就摆出来',
-      actions: [{ type: 'SEARCH_CANDIDATES', keyword: '锌' }]
+      draft: { name: '' },
+      toolCalls: [],
+      question: null
     });
 
     const res = await post({
@@ -65,61 +67,39 @@ describe('补剂对话接口', () => {
       draft: { name: '', servingUnitsPerDose: null, candidateNames: [] }
     }).expect(201);
 
-    expect(res.body.data.source).toBe('MODEL');
     expect(res.body.data.reply).toContain('摆出来');
-    expect(model.respond).toHaveBeenCalled();
+    expect(res.body.data.draft).toEqual({ name: '' });
+    expect(model.run).toHaveBeenCalled();
   });
 
-  it('模型挂了就回退到规则，并如实标明来源', async () => {
-    model.respond.mockRejectedValueOnce(new Error('模型返回 500'));
+  it('模型挂了就如实报错（这条路没有规则版可退）', async () => {
+    model.run.mockRejectedValueOnce(new Error('模型返回 500'));
 
     const res = await post({
       message: '为什么这么选',
       draft: { name: '', servingUnitsPerDose: null, candidateNames: [] }
-    }).expect(201);
+    }).expect(503);
 
-    expect(res.body.data.source).toBe('RULES');
-    // 回退用的是规则版对「为什么」的回答
-    expect(res.body.data.reply).toContain('形态');
+    // 没有规则版兜底了：如实报错，不让页面以为"答了但没做事"
+    expect(res.status).toBe(503);
   });
 
-  it('「加个锌」必须交给模型，不能被"去搜"这件事直通掉', async () => {
-    model.respond.mockResolvedValueOnce({ reply: '先说形态', actions: [] });
-
-    const res = await post({
-      message: '添加一款锌补剂',
-      draft: { name: '', servingUnitsPerDose: null, candidateNames: [] }
-    }).expect(201);
-
-    expect(model.respond).toHaveBeenCalled();
-    expect(res.body.data.source).toBe('MODEL');
-  });
-
-  it('无歧义的命令不劳模型：直接走规则，并标明 RULES_FAST', async () => {
-    const res = await post({
-      message: '每份 2 粒',
-      draft: { name: '', servingUnitsPerDose: null, candidateNames: [] }
-    }).expect(201);
-
-    expect(res.body.data.source).toBe('RULES_FAST');
-    expect(res.body.data.actions).toEqual([
-      { type: 'SET_FIELD', field: 'servingUnitsPerDose', value: 2 }
-    ]);
-    expect(model.respond).not.toHaveBeenCalled();
-  });
-
-  it('「加个锌」→ 回一句 + 一个搜索动作', async () => {
-    model.respond.mockResolvedValueOnce({
-      reply: '我去找「锌」的候选',
-      actions: [{ type: 'SEARCH_CANDIDATES', keyword: '锌' }]
+  it('模型自己调工具后给结论：回复、草稿、提问一起回来', async () => {
+    model.run.mockResolvedValueOnce({
+      reply: '根据 NRC，螯合与硫酸锌相当，建议甘氨酸锌。',
+      draft: { brand: 'NOW Foods', servingUnitsPerDose: 1 },
+      toolCalls: [{ name: 'search_knowledge', ok: true }],
+      question: { question: '选哪个形态？', options: ['甘氨酸锌'] }
     });
+
     const res = await post({
-      message: '给狗狗加个锌',
+      message: '加个锌',
       draft: { name: '', servingUnitsPerDose: null, candidateNames: [] }
     }).expect(201);
 
-    expect(res.body.data.reply).toContain('锌');
-    expect(res.body.data.actions).toEqual([{ type: 'SEARCH_CANDIDATES', keyword: '锌' }]);
+    expect(res.body.data.reply).toContain('甘氨酸锌');
+    expect(res.body.data.draft).toEqual({ brand: 'NOW Foods', servingUnitsPerDose: 1 });
+    expect(res.body.data.question.options).toEqual(['甘氨酸锌']);
   });
 
   it('没有 message 时 400', async () => {

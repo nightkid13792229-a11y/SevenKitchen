@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProcurementSkuService } from '../../../src/application/ingredient/procurement-sku.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
+import { IngredientCostHistoryService } from '../../../src/application/ingredient/ingredient-cost-history.service';
 
 describe('ProcurementSkuService', () => {
   let service: ProcurementSkuService;
@@ -23,6 +24,8 @@ describe('ProcurementSkuService', () => {
     },
     ingredient: {
       findUnique: jest.fn(),
+      // 建档初始化成本（2026-11-07）：默认命中 0 行 = 原料已有价，不改动
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     // 从识别结果页新建商品时，用来源识别记录校验渠道（2026-11-07）
     purchaseOrderImport: {
@@ -52,6 +55,10 @@ describe('ProcurementSkuService', () => {
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: IngredientCostHistoryService,
+          useValue: { record: jest.fn() },
         },
       ],
     }).compile();

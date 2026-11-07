@@ -263,6 +263,7 @@ import { WeightGoalPlanService } from './application/weight-goal-plan/weight-goa
 import { WeightGoalPlanController } from './interfaces/controllers/weight-goal-plan.controller';
 import { AdminWeightGoalPlanController } from './interfaces/controllers/admin-weight-goal-plan.controller';
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
+import { IngredientCostHistoryService } from './application/ingredient/ingredient-cost-history.service';
 import {
   ProcurementSkuDraftService,
   PROCUREMENT_SKU_DRAFT_MODEL,
@@ -964,6 +965,7 @@ validatePrismaConfig();
     ProductFunnelAnalyticsService,
     WeightGoalPlanService,
     ProcurementSkuService,
+    IngredientCostHistoryService,
     ProcurementSkuDraftQuotaService,
     ProcurementSkuDraftService,
     {

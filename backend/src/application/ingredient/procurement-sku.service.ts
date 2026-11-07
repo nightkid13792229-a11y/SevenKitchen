@@ -15,6 +15,7 @@ import {
 } from '../purchasing/channel-catalog';
 import { PURCHASE_CHANNEL_SET } from '../platform-options/option-sets.registry';
 import { perBaseUnitCostOrInfinity } from '../../domain/ingredient/unit-price';
+import { IngredientCostHistoryService } from './ingredient-cost-history.service';
 
 type DecimalLike = {
   toNumber: () => number;
@@ -367,7 +368,64 @@ const sortProcurementSkus = <T extends ProcurementSkuRecord>(skus: T[]): T[] =>
 
 @Injectable()
 export class ProcurementSkuService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly costHistory: IngredientCostHistoryService,
+  ) {}
+
+  /**
+   * 建档初始化成本（2026-11-07 成本口径归位）。
+   *
+   * 规则：**只补空，不覆盖**。成本已是 0 的原料，用第一条带价的采购商品
+   * 算出「元/基准单位」写进去；已经有成本的一律不动。
+   *
+   * 为什么用 `updateMany + where 成本=0` 而不是先读后写：
+   * 两个会话同时给同一原料建商品时，先读后写会把成本写两遍（第二遍覆盖第一遍），
+   * 而这里由数据库保证只有一个能命中。
+   *
+   * 为什么换算固定写成 1：食材的成本口径就是「每基准单位」，
+   * 采购口径（一件多少克）留在采购商品上。两处都存一份必然分叉。
+   */
+  private async initializeIngredientCostFromSku(
+    tx: PrismaService | any,
+    params: {
+      ingredientId: string;
+      skuId: string;
+      pricePerPurchaseUnit: number | null;
+      purchaseToBaseRatio: number | null;
+    },
+  ): Promise<void> {
+    const price = Number(params.pricePerPurchaseUnit);
+    const ratio = Number(params.purchaseToBaseRatio);
+
+    if (!Number.isFinite(price) || price <= 0) {
+      return;
+    }
+    if (!Number.isFinite(ratio) || ratio <= 0) {
+      return;
+    }
+
+    const cost = Math.round((price / ratio) * 1e6) / 1e6;
+
+    const result = await tx.ingredient.updateMany({
+      where: { id: params.ingredientId, currentPricePerPurchaseUnit: 0 },
+      data: { currentPricePerPurchaseUnit: cost, purchaseToBaseRatio: 1 },
+    });
+
+    if (!result || result.count === 0) {
+      return;
+    }
+
+    await this.costHistory.record({
+      ingredientId: params.ingredientId,
+      oldCost: 0,
+      newCost: cost,
+      source: 'INIT_FROM_SKU',
+      procurementSkuId: params.skuId,
+      note: '建档时用第一条采购商品的价初始化',
+      tx: tx as any,
+    });
+  }
 
   /**
    * 渠道字典读一次，判重和归一都用它（2026-11-07）。
@@ -599,6 +657,14 @@ export class ProcurementSkuService {
           }),
         });
       }
+
+      // 建档初始化：只在原料还没有成本时生效（只补空，不覆盖）
+      await this.initializeIngredientCostFromSku(tx, {
+        ingredientId,
+        skuId: created.id,
+        pricePerPurchaseUnit: currentPurchasePrice,
+        purchaseToBaseRatio: data.purchaseToBaseRatio,
+      });
 
       if (openingStock > 0) {
         const ratio = dto.purchaseToBaseRatio as number;
@@ -854,6 +920,14 @@ export class ProcurementSkuService {
           }),
         });
       }
+
+      // 建档初始化：只在原料还没有成本时生效（只补空，不覆盖）
+      await this.initializeIngredientCostFromSku(tx, {
+        ingredientId: input.ingredientId,
+        skuId: created.id,
+        pricePerPurchaseUnit: currentPurchasePrice,
+        purchaseToBaseRatio,
+      });
 
       return created;
     };

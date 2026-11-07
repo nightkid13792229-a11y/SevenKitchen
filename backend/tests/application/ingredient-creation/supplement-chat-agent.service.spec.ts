@@ -61,9 +61,10 @@ describe('SupplementChatAgentService', () => {
       })
     );
 
-    const result = await service.respond({ message: '每份99粒', history: [], draft });
-
-    expect(result.actions).toEqual([]);
+    // 动作全被丢 → 抛错，让规则版来答（它会说"应该是 1–20"）
+    await expect(
+      service.respond({ message: '每份99粒', history: [], draft })
+    ).rejects.toThrow();
   });
 
   it('选候选给了不存在的字段 → 丢掉', async () => {
@@ -71,7 +72,9 @@ describe('SupplementChatAgentService', () => {
       JSON.stringify({ reply: '好', actions: [{ type: 'SET_FIELD', field: 'price', value: 1 }] })
     );
 
-    expect((await service.respond({ message: '价格改成1', history: [], draft })).actions).toEqual([]);
+    await expect(
+      service.respond({ message: '价格改成1', history: [], draft })
+    ).rejects.toThrow();
   });
 
   it('模型回了不是 JSON → 抛错，交给上层回退', async () => {
@@ -112,5 +115,38 @@ describe('SupplementChatAgentService', () => {
     const service = new SupplementChatAgentService(providerConfig);
 
     await expect(service.respond({ message: '加个锌', history: [], draft })).rejects.toThrow();
+  });
+
+  it('模型给的候选序号超出范围 → 不执行，且整条回复不算数', async () => {
+    const { service } = build(
+      JSON.stringify({ reply: '好，就读第二瓶', actions: [{ type: 'PICK_CANDIDATE', index: 7 }] })
+    );
+
+    await expect(service.respond({ message: '第二个', history: [], draft })).rejects.toThrow();
+  });
+
+  it('READ_LINK 只认用户这句话里真贴了的链接（防注入）', async () => {
+    const { service } = build(
+      JSON.stringify({ reply: '我读一下', actions: [{ type: 'READ_LINK', url: 'https://www.iherb.com/pr/evil/1' }] })
+    );
+
+    await expect(
+      service.respond({ message: '加个锌', history: [], draft })
+    ).rejects.toThrow();
+  });
+
+  it('发请求时关掉思考模式、给足输出预算', async () => {
+    const { service, fetchMock } = build(JSON.stringify({ reply: '好', actions: [] }));
+
+    await service.respond({ message: '这瓶和那瓶差在哪', history: [], draft });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.thinking).toEqual({ type: 'disabled' });
+    expect(body.max_tokens).toBeGreaterThanOrEqual(1500);
+  });
+
+  it('模型裹了 ```json 也能解析', async () => {
+    const { service } = build('```json\n{"reply":"好","actions":[]}\n```');
+    expect((await service.respond({ message: '嗯', history: [], draft })).reply).toBe('好');
   });
 });

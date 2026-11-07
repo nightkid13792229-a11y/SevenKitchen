@@ -1,6 +1,6 @@
 import { Body, Controller, Logger, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsArray, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
+import { IsArray, IsIn, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import {
@@ -15,7 +15,7 @@ import { AdminGuard } from '../guards/role.guard';
 
 export class SupplementChatHistoryDto {
   @ApiProperty({ enum: ['user', 'assistant'] })
-  @IsString()
+  @IsIn(['user', 'assistant'])
   role!: 'user' | 'assistant';
 
   @ApiProperty()
@@ -69,6 +69,13 @@ export class SupplementChatController {
   ): Promise<ApiResponseDto<SupplementChatReply & { source: 'MODEL' | 'RULES' }>> {
     const draft = dto.draft ?? { name: '', servingUnitsPerDose: null, candidateNames: [] };
 
+    // 「每份 2 粒」「第二个」「贴了链接」这三种是无歧义的命令：直接走规则，
+    // 不让模型有机会答一句"好的"却什么都不做（也更省钱）
+    const fast = interpretSupplementMessage({ message: dto.message, draft });
+    if (fast.actions.length > 0) {
+      return new ApiResponseDto(0, 'Success', { ...fast, source: 'RULES_FAST' });
+    }
+
     try {
       const reply = await this.agent.respond({
         message: dto.message,
@@ -78,8 +85,9 @@ export class SupplementChatController {
       return new ApiResponseDto(0, 'Success', { ...reply, source: 'MODEL' });
     } catch (error) {
       // 模型不可用不能把整条线弄死：退回规则解析，并如实告诉页面这次不是模型答的
-      this.logger.warn(
-        `[supplement-chat] 模型不可用，回退规则：${error instanceof Error ? error.message : String(error)}`
+      // 用固定标记，方便按关键字搜日志：reason=NO_MODEL
+      this.logger.error(
+        `[supplement-chat] reason=NO_MODEL 回退规则：${error instanceof Error ? error.message : String(error)}`
       );
       const reply = interpretSupplementMessage({ message: dto.message, draft });
       return new ApiResponseDto(0, 'Success', { ...reply, source: 'RULES' });

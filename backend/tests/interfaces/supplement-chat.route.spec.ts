@@ -12,6 +12,7 @@ describe('补剂对话接口', () => {
   const model = { respond: jest.fn() };
 
   beforeEach(async () => {
+    model.respond.mockReset();
     const moduleRef: TestingModule = await Test.createTestingModule({
       controllers: [SupplementChatController],
       providers: [
@@ -60,24 +61,39 @@ describe('补剂对话接口', () => {
     });
 
     const res = await post({
-      message: '给狗狗加个锌',
+      message: '为什么这么选',
       draft: { name: '', servingUnitsPerDose: null, candidateNames: [] }
     }).expect(201);
 
     expect(res.body.data.source).toBe('MODEL');
     expect(res.body.data.reply).toContain('摆出来');
+    expect(model.respond).toHaveBeenCalled();
   });
 
   it('模型挂了就回退到规则，并如实标明来源', async () => {
     model.respond.mockRejectedValueOnce(new Error('模型返回 500'));
 
     const res = await post({
-      message: '给狗狗加个锌',
+      message: '为什么这么选',
       draft: { name: '', servingUnitsPerDose: null, candidateNames: [] }
     }).expect(201);
 
     expect(res.body.data.source).toBe('RULES');
-    expect(res.body.data.actions).toEqual([{ type: 'SEARCH_CANDIDATES', keyword: '锌' }]);
+    // 回退用的是规则版对「为什么」的回答
+    expect(res.body.data.reply).toContain('形态');
+  });
+
+  it('无歧义的命令不劳模型：直接走规则，并标明 RULES_FAST', async () => {
+    const res = await post({
+      message: '每份 2 粒',
+      draft: { name: '', servingUnitsPerDose: null, candidateNames: [] }
+    }).expect(201);
+
+    expect(res.body.data.source).toBe('RULES_FAST');
+    expect(res.body.data.actions).toEqual([
+      { type: 'SET_FIELD', field: 'servingUnitsPerDose', value: 2 }
+    ]);
+    expect(model.respond).not.toHaveBeenCalled();
   });
 
   it('「加个锌」→ 回一句 + 一个搜索动作', async () => {

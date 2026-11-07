@@ -652,7 +652,7 @@ export interface SupplementChatReplyDto {
   reply: string
   actions: SupplementChatActionDto[]
   /** MODEL = 模型答的；RULES = 模型不可用时退回规则解析 */
-  source?: 'MODEL' | 'RULES'
+  source?: 'MODEL' | 'RULES' | 'RULES_FAST'
 }
 
 export interface SupplementLinkPreviewDto {

@@ -203,11 +203,27 @@
                 v-model="draft.labelNames"
                 multiple
                 filterable
+                remote
                 allow-create
                 default-first-option
+                :remote-method="searchCatalog"
+                :loading="catalogLoading"
                 placeholder="按目录规范名填，不带剂型"
                 style="width: 100%"
-              />
+              >
+                <el-option
+                  v-for="item in catalogOptions"
+                  :key="item.name"
+                  :label="item.name"
+                  :value="item.name"
+                >
+                  <span>{{ item.name }}</span>
+                  <span class="wb-option-note">
+                    {{ item.dogAllowed ? '可用于犬' : '范围不含犬' }}
+                  </span>
+                </el-option>
+              </el-select>
+              <p v-if="catalogHint" class="wb-catalog-hint">{{ catalogHint }}</p>
             </div>
           </div>
         </div>
@@ -330,6 +346,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
+import { ingredientCatalogApi, type FeedAdditiveMatch } from '@/api/ingredientCatalog'
 import { nutritionFoodApi } from '@/api/ingredients'
 import type {
   PendingSupplementArchiveDto,
@@ -364,6 +381,9 @@ const pendingOpen = ref(false)
 const evidence = ref<SupplementEvidenceDto | null>(null)
 const reading = ref(false)
 const previewSkipped = ref<string[]>([])
+const catalogOptions = ref<FeedAdditiveMatch[]>([])
+const catalogLoading = ref(false)
+const catalogHint = ref('')
 
 const tagSuggestions = ['油脂类', '矿物质', '维生素', '益生菌', '关节', '膳食纤维']
 
@@ -459,6 +479,33 @@ async function confirmRow(row: PendingSupplementArchiveDto): Promise<void> {
     await refreshPending()
   } catch (error) {
     ElMessage.error(apiErrorMessage(error, '确认失败，请稍后重试'))
+  }
+}
+
+/** 标签名称：只查规范写法与适用范围，不做选品判断。 */
+async function searchCatalog(keyword: string): Promise<void> {
+  const q = keyword.trim()
+  if (!q) {
+    catalogOptions.value = []
+    catalogHint.value = ''
+    return
+  }
+  catalogLoading.value = true
+  try {
+    const result = await ingredientCatalogApi.lookupFeedAdditives(q)
+    catalogOptions.value = result.matches
+    if (result.matches.length === 0) {
+      catalogHint.value = `目录（${result.summary.total} 个品种）里查不到「${q}」，请核对写法，或者先手填、事后补`
+    } else if (!result.matches.some((item) => item.dogAllowed)) {
+      catalogHint.value = '目录里查到了，但适用范围不含犬——印标签前先确认'
+    } else {
+      catalogHint.value = ''
+    }
+  } catch {
+    catalogOptions.value = []
+    catalogHint.value = '目录暂时查不了，可以手填'
+  } finally {
+    catalogLoading.value = false
   }
 }
 
@@ -572,6 +619,8 @@ async function confirm(): Promise<void> {
   padding: 10px 12px 0;
 }
 .wb-link-row{display:flex;gap:8px;align-items:center}
+.wb-option-note{float:right;font-size:11px;color:#9aa2ab}
+.wb-catalog-hint{margin:4px 0 0;font-size:11px;color:#b26a00;line-height:1.5}
 .wb-link-skipped{margin:6px 0 0;font-size:11px;color:#b26a00;line-height:1.5}
 .wb-block--grow {
   flex: 1;

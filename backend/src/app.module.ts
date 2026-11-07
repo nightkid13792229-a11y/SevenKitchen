@@ -216,6 +216,7 @@ import { NutritionFoodService } from './application/nutrition-food/nutrition-foo
 import { NutritionGovernanceController } from './interfaces/controllers/nutrition-governance.controller';
 import { NutritionGovernanceService } from './application/nutrition-governance/nutrition-governance.service';
 import { IngredientCreationController } from './interfaces/controllers/ingredient-creation.controller';
+import { IngredientCatalogController } from './interfaces/controllers/ingredient-catalog.controller';
 import { IngredientCreationAuditService } from './application/ingredient-creation/ingredient-creation-audit.service';
 import { IngredientCreationCandidateService } from './application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationAuthorizeService } from './application/ingredient-creation/ingredient-creation-authorize.service';
@@ -226,6 +227,7 @@ import { IngredientCreationCheckService } from './application/ingredient-creatio
 import { IngredientCreationCommitService } from './application/ingredient-creation/ingredient-creation-commit.service';
 import { SupplementIngredientService } from './application/ingredient-creation/supplement-ingredient.service';
 import { SupplementLinkPreviewService } from './application/ingredient-creation/supplement-link-preview.service';
+import { FeedAdditiveCatalogService } from './domain/ingredient/feed-additive-catalog.service';
 import { IngredientCreationIntakeService } from './application/ingredient-creation/ingredient-creation-intake.service';
 import { IngredientNameClassifierService } from './application/ingredient-creation/ingredient-name-classifier.service';
 import { IngredientDraftAgentService } from './application/ingredient-creation/ingredient-draft-agent.service';
@@ -486,6 +488,7 @@ validatePrismaConfig();
     NutritionFoodController,
     NutritionGovernanceController,
     IngredientCreationController,
+    IngredientCatalogController,
     SearchGovernanceController,
     RecommendedProductController,
     ReviewsController,
@@ -1016,6 +1019,7 @@ validatePrismaConfig();
     IngredientCreationCommitService,
     SupplementIngredientService,
     SupplementLinkPreviewService,
+    FeedAdditiveCatalogService,
     IngredientCreationIntakeService,
     IngredientNameClassifierService,
     IngredientDraftAgentService,

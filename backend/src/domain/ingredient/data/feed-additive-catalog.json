@@ -1,0 +1,3185 @@
+{
+  "source": "饲料添加剂品种目录（根据农业部第2045号公告及后续修订公告汇总，截至2025年6月）",
+  "sourceUrl": "https://www.nahs.org.cn/xxcm/slpj/202109/P020250714562168149044.docx",
+  "generatedAt": "2026-11-07",
+  "entries": [
+    {
+      "name": "25-羟基胆钙化醇（25-羟基维生素D3）",
+      "category": "维生素及类维生素",
+      "scope": "猪、家禽",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "4,7-二羟基异黄酮（大豆黄酮）",
+      "category": "其他",
+      "scope": "猪、产蛋家禽",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "阿拉伯树胶",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氨法i）",
+      "category": "着色剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氨基酸锰络合物（氨基酸来源于水解植物蛋白）",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氨基酸锰络合物（氨基酸为L-赖氨酸和谷氨酸）l",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "畜禽",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氨基酸铁络合物（氨基酸来源于水解植物蛋白）",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氨基酸铁络合物（氨基酸为L-赖氨酸和谷氨酸）l",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "家禽和猪",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氨基酸铜络合物（氨基酸来源于水解植物蛋白）",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氨基酸铜络合物（氨基酸为L-赖氨酸和谷氨酸）l",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "畜禽",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氨基酸锌络合物（氨基酸来源于水解植物蛋白）",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氨基酸锌络合物（氨基酸为L-赖氨酸和谷氨酸）g",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "断奶仔猪、肉仔鸡和蛋鸡",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氨水",
+      "category": "非蛋白氮",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "半胱胺盐酸盐",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "畜禽",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "半乳甘露寡糖",
+      "category": "多糖和寡糖",
+      "scope": "猪、肉鸡、兔和水产养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "贝莱斯芽孢杆菌（CECT 5940 / CICC 11068s）n",
+      "category": "微生物",
+      "scope": "肉鸡",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "苯丙氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "苯甲酸",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "苯甲酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "吡啶甲酸铬",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "猪、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "毕赤酵母）",
+      "category": "酶制剂2",
+      "scope": "玉米、豆粕等含有植酸的植物籽实及其加工副产品类饲料原料",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "丙二醇",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "丙二醇脂肪酸酯",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "丙三醇",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "猪、鸡和鱼、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "丙酸",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "丙酸铵",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "丙酸钙",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "丙酸铬",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "猪、奶牛b、肉仔鸡j、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "丙酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "丙酸锌",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "猪、牛和家禽",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "菠萝蛋白酶（源自菠萝）",
+      "category": "酶制剂2",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "不溶性聚乙烯聚吡咯烷酮（PVPP）",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "布氏乳杆菌",
+      "category": "微生物",
+      "scope": "青贮饲料、牛饲料",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "菜油甾醇",
+      "category": "其他",
+      "scope": "家禽、生长育肥猪、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "侧孢短芽孢杆菌（原名：侧孢芽孢杆菌）",
+      "category": "微生物",
+      "scope": "肉鸡、肉鸭、猪、虾",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "茶多酚",
+      "category": "抗氧化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "产丙酸丙酸杆菌",
+      "category": "微生物",
+      "scope": "青贮饲料、牛饲料",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "产朊假丝酵母",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "迟缓芽孢杆菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "赤藓红",
+      "category": "着色剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "刺槐豆胶",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "醋酸酯淀粉",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "大麦芽",
+      "category": "酶制剂2",
+      "scope": "青贮玉米、玉米、玉米蛋白粉、豆粕、小麦、次粉、大麦、高粱、燕麦、豌豆、木薯、小米、大米",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "单硬脂酸甘油酯",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "蛋氨酸铬",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "猪、泌乳奶牛k、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "蛋氨酸锰络（螯）合物",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "蛋氨酸羟基类似物",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "猪、鸡、牛和水产养殖动物、犬d、猫d、鸭h",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "蛋氨酸羟基类似物钙盐",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "猪、鸡、牛和水产养殖动物、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "蛋氨酸羟基类似物异丙酯h",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "蛋氨酸铁络（螯）合物",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "蛋氨酸铜络（螯）合物",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "蛋氨酸锌络（螯）合物",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "蛋白酶（产自黑曲霉",
+      "category": "酶制剂2",
+      "scope": "植物和动物蛋白",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "蛋白锰",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物（反刍动物除外）",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "蛋白铁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物（反刍动物除外）",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "蛋白铜",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物（反刍动物除外）",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "蛋白锌",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物（反刍动物仅限于泌乳奶牛n）",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "德氏乳杆菌保加利亚亚种（原名：保加利亚乳杆菌）",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "德式乳杆菌乳酸亚种（原名：乳酸乳杆菌）",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "地顶孢霉培养物",
+      "category": "其他",
+      "scope": "猪、鸡、泌乳奶牛j",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "地衣芽孢杆菌",
+      "category": "酶制剂2",
+      "scope": "青贮玉米、玉米、玉米蛋白粉、豆粕、小麦、次粉、大麦、高粱、燕麦、豌豆、木薯、小米、大米",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "低聚半乳糖",
+      "category": "多糖和寡糖",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "低聚壳聚糖",
+      "category": "多糖和寡糖",
+      "scope": "猪、鸡和水产养殖动物、犬c、猫c",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "低聚木糖（木寡糖）",
+      "category": "多糖和寡糖",
+      "scope": "鸡、猪、水产养殖动物、犬c、猫c",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "碘化钾",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "碘化钠",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "碘酸钙",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "碘酸钾",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "淀粉酶（产自黑曲霉",
+      "category": "酶制剂2",
+      "scope": "青贮玉米、玉米、玉米蛋白粉、豆粕、小麦、次粉、大麦、高粱、燕麦、豌豆、木薯、小米、大米",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "靛蓝",
+      "category": "着色剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "丁基羟基茴香醚（BHA）",
+      "category": "抗氧化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "丁酸",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "丁酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "动物双歧杆菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "豆甾醇）",
+      "category": "其他",
+      "scope": "家禽、生长育肥猪、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "杜仲多糖",
+      "category": "其他",
+      "scope": "生长育肥猪、鱼、虾",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "杜仲黄酮）",
+      "category": "其他",
+      "scope": "生长育肥猪、鱼、虾",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "杜仲叶提取物（有效成分为绿原酸",
+      "category": "其他",
+      "scope": "生长育肥猪、鱼、虾",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "短双歧杆菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "短小芽孢杆菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "二丁基羟基甲苯（BHT）",
+      "category": "抗氧化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "二甲基砜（MSM）",
+      "category": "其他",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "二甲基嘧啶醇亚硫酸甲萘醌",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "二甲酸钾",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "猪",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "二氢碘酸乙二胺（EDDI）",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "二十二碳六烯酸（DHA）",
+      "category": "其他",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "二十碳五烯酸（EPA）",
+      "category": "其他",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "二氧化硅（沉淀并经干燥的硅酸）a",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "二氧化钛",
+      "category": "着色剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "发酵乳杆菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "番茄红素",
+      "category": "着色剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "粪肠球菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "茯苓提取物（有效成分为β-1,3-D-葡聚糖）n",
+      "category": "其他",
+      "scope": "生长育肥猪、肉仔鸡",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "副干酪乳杆菌",
+      "category": "微生物",
+      "scope": "青贮饲料",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "富马酸",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "富马酸亚铁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "甘氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "甘氨酸钙",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "甘氨酸铁络（螯）合物",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "甘氨酸铜络（螯）合物",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "甘氨酸锌",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "猪、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "甘草抗氧化物",
+      "category": "抗氧化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "甘草提取物o",
+      "category": "其他",
+      "scope": "肉仔鸡",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "甘露寡糖",
+      "category": "多糖和寡糖",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "甘露糖醇",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "甘油脂肪酸酯",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "干酪乳杆菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "高粱红",
+      "category": "着色剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "共轭亚油酸",
+      "category": "其他",
+      "scope": "仔猪、蛋鸡、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "孤独腐质霉",
+      "category": "酶制剂2",
+      "scope": "玉米、大麦、小麦、麦麸、黑麦、高粱",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "谷氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "谷氨酰胺",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "谷氨酰胺转氨酶",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "瓜尔胶",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "胱氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硅铝酸钠",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硅酸钙",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "果寡糖",
+      "category": "多糖和寡糖",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "果胶",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "果胶酶（产自黑曲霉",
+      "category": "酶制剂2",
+      "scope": "玉米、小麦",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "海藻酸铵",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "海藻酸钾",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "海藻酸钠",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "核黄素（维生素B2）",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "黑曲霉",
+      "category": "酶制剂2",
+      "scope": "玉米、大麦、小麦、麦麸、黑麦、高粱",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "黑曲霉）",
+      "category": "酶制剂2",
+      "scope": "葡萄糖",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "红法夫酵母",
+      "category": "着色剂",
+      "scope": "水产养殖动物、观赏鱼、产蛋鸡o",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "红曲红",
+      "category": "着色剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "红曲米",
+      "category": "着色剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "琥珀酸",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "黄酮）",
+      "category": "其他",
+      "scope": "猪、肉鸡和鱼、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "黄原胶",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "肌醇",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "棘孢曲霉）",
+      "category": "酶制剂2",
+      "scope": "小麦、大麦、菜籽粕、小麦副产物、去壳燕麦、黑麦、黑小麦、高粱",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "甲酸",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "甲酸铵",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "甲酸钙",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "甲酸钠m",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "碱式氯化铜",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "碱式氯化锌",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "焦磷酸二钠",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "焦磷酸二氢二钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "焦磷酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "焦磷酸铁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "焦磷酸一氢三钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "焦糖色（亚硫酸铵法",
+      "category": "着色剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "焦亚硫酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "宠物、猪c",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "角蛋白酶（产自地衣芽孢杆菌）",
+      "category": "酶制剂2",
+      "scope": "植物和动物蛋白",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "酵母铬",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "猪、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "酵母锰",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "酵母铁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "酵母铜",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "酵母硒",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "结冷胶",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "解淀粉芽孢杆菌",
+      "category": "酶制剂2",
+      "scope": "青贮玉米、玉米、玉米蛋白粉、豆粕、小麦、次粉、大麦、高粱、燕麦、豌豆、木薯、小米、大米",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "酒石酸",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "酒石酸氢胆碱",
+      "category": "维生素及类维生素",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "聚丙烯酸钠",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "聚丙烯酸树脂Ⅱ",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "聚葡萄糖",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "聚氧乙烯20山梨醇酐单油酸酯",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "聚乙二醇400",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "聚乙二醇甘油蓖麻酸酯",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "聚乙烯醇f",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "决明胶",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "卡拉胶",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "壳寡糖（寡聚β-（1-4）-2-氨基-2-脱氧-D-葡萄糖）（n=2～10）",
+      "category": "多糖和寡糖",
+      "scope": "猪、鸡、肉鸭、虹鳟鱼、犬c、猫c",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "可得然胶",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "可食用脂肪酸单/双甘油酯",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "可食脂肪酸钙盐",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "枯草芽孢杆菌",
+      "category": "酶制剂2",
+      "scope": "青贮玉米、玉米、玉米蛋白粉、豆粕、小麦、次粉、大麦、高粱、燕麦、豌豆、木薯、小米、大米",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "辣椒红",
+      "category": "着色剂",
+      "scope": "家禽",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "赖氨酸铜络（螯）合物",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "赖氨酸锌络（螯）合物",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "酪蛋白钙肽（CCP）",
+      "category": "其他",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "酪蛋白磷酸肽（CPP）",
+      "category": "其他",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "酪蛋白酸钠",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "两歧双歧杆菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "亮蓝",
+      "category": "着色剂",
+      "scope": "宠物和观赏鱼",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "磷酸",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "磷酸二氢铵",
+      "category": "非蛋白氮",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "磷酸二氢钙",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "磷酸二氢钾",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "磷酸二氢钠",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "磷酸脲",
+      "category": "非蛋白氮",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "磷酸氢二铵",
+      "category": "非蛋白氮",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "磷酸氢二钾",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "磷酸氢二钠",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "磷酸氢钙",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "磷酸氢锰",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "磷酸三钙",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "磷酸三钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "磷脂",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硫代二丙酸二月桂酯",
+      "category": "抗氧化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "硫酸铵",
+      "category": "非蛋白氮",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硫酸钙",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硫酸钴",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硫酸钾",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "畜禽e",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硫酸镁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硫酸锰",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硫酸钠",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硫酸软骨素",
+      "category": "其他",
+      "scope": "猫、狗",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "硫酸软骨素钠",
+      "category": "其他",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "硫酸铜",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硫酸锌",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硫酸亚铁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "六偏磷酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氯化铵",
+      "category": "非蛋白氮",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氯化胆碱",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氯化钙",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氯化钴",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氯化钾",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氯化镁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氯化锰",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氯化钠",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氯化钠（源于甜菜碱/甜菜碱盐酸盐联产）",
+      "category": "1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "AMENDED"
+    },
+    {
+      "name": "氯化铁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氯化铜",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氯化锌",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氯化亚铁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "卵磷脂",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "罗伊氏乳杆菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "萝卜红",
+      "category": "着色剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "麦芽糖醇",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "麦芽糖酶（产自枯草芽孢杆菌）",
+      "category": "酶制剂2",
+      "scope": "麦芽糖",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "没食子酸丙酯",
+      "category": "抗氧化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "迷迭香提取物",
+      "category": "抗氧化剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "米曲霉",
+      "category": "酶制剂2",
+      "scope": "青贮玉米、玉米、玉米蛋白粉、豆粕、小麦、次粉、大麦、高粱、燕麦、豌豆、木薯、小米、大米",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "米曲霉）",
+      "category": "酶制剂2",
+      "scope": "动物或植物源性油脂或脂肪",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "木瓜蛋白酶（源自木瓜）",
+      "category": "酶制剂2",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "木聚糖酶（产自米曲霉",
+      "category": "酶制剂2",
+      "scope": "玉米、大麦、黑麦、小麦、高粱、黑小麦、燕麦",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "木薯多糖铁l",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "仔猪",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "木质素磺酸盐",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "苜蓿黄酮",
+      "category": "其他",
+      "scope": "仔猪、生长育肥猪、肉鸡、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "苜蓿提取物（有效成分为苜蓿多糖",
+      "category": "其他",
+      "scope": "仔猪、生长育肥猪、肉鸡、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "苜蓿皂甙）",
+      "category": "其他",
+      "scope": "仔猪、生长育肥猪、肉鸡、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "钼酸钠",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "酿酒酵母",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "尿素",
+      "category": "非蛋白氮",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "柠檬黄",
+      "category": "着色剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "柠檬酸",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "柠檬酸钙",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "柠檬酸钾",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "柠檬酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "柠檬酸亚铁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "凝结芽孢杆菌",
+      "category": "微生物",
+      "scope": "肉鸡、生长育肥猪和水产养殖动物、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "牛磺酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "苹果酸",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "葡萄糖酸-δ-内酯",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "葡萄糖酸钙",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "葡萄糖酸锰",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "葡萄糖酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "葡萄糖酸铜",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "葡萄糖酸锌",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "葡萄糖酸亚铁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "葡萄糖氧化酶（产自特异青霉",
+      "category": "酶制剂2",
+      "scope": "葡萄糖",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "普通法i",
+      "category": "着色剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "其他",
+      "category": "调味和诱食物质4",
+      "scope": "",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "羟丙基淀粉",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "羟丙基二淀粉磷酸酯",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "羟丙基甲基纤维素c",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物h",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "羟丙基纤维素",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "羟基蛋氨酸类似物络（螯）合锰",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "奶牛、肉牛、家禽和猪",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "羟基蛋氨酸类似物络（螯）合铜",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "奶牛、肉牛、家禽和猪",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "羟基蛋氨酸类似物络（螯）合锌",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "奶牛、肉牛、家禽和猪",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "禽类的胃组织）",
+      "category": "酶制剂2",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "青春双歧杆菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氢氧化钙",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "氢氧化钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "轻质碳酸钙",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氰钴胺（维生素B12）",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "琼脂",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "日落黄",
+      "category": "着色剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "乳酸",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "乳酸肠球菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "乳酸钙",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "乳酸链球菌素",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "乳酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "乳酸片球菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "乳酸锌（α-羟基丙酸锌）",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "生长育肥猪、家禽、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "乳酸亚铁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "乳糖发酵短杆菌，L-赖氨酸含量不低于51%）",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "乳铁蛋白",
+      "category": "其他",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "三聚磷酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "三氧化二铝",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "三氧化二铁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "山梨醇酐单硬脂酸酯",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "山梨醇酐脂肪酸酯",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "山梨酸",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "山梨酸钾",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "山梨酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "绳状青霉",
+      "category": "酶制剂2",
+      "scope": "小麦、大麦、菜籽粕、小麦副产物、去壳燕麦、黑麦、黑小麦、高粱",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "绳状青霉）",
+      "category": "酶制剂2",
+      "scope": "玉米、大麦、小麦、麦麸、黑麦、高粱",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "屎肠球菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "嗜热链球菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "嗜酸乳杆菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "双乙酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "丝氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "酸解支链淀粉芽孢杆菌）",
+      "category": "酶制剂2",
+      "scope": "青贮玉米、玉米、玉米蛋白粉、豆粕、小麦、次粉、大麦、高粱、燕麦、豌豆、木薯、小米、大米",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "酸性红",
+      "category": "着色剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "羧甲基淀粉钠",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "羧甲基纤维素钠",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "碳酸钴",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "反刍动物、猫、狗",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "碳酸钾",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "碳酸镁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "碳酸锰",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "碳酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "碳酸氢铵",
+      "category": "非蛋白氮",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "碳酸氢钾l",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "泌乳奶牛",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "碳酸氢钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "碳酸锌",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "碳酸亚铁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "糖萜素（源自山茶籽饼）",
+      "category": "其他",
+      "scope": "猪和家禽",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "特丁基对苯二酚（TBHQ）",
+      "category": "抗氧化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "天（门）冬氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "天然类固醇萨洒皂角苷（源自丝兰）",
+      "category": "其他",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "天然三萜烯皂角苷（源自可来雅皂角树）",
+      "category": "其他",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "天然维生素E",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "天然叶黄素（源自万寿菊）",
+      "category": "着色剂",
+      "scope": "家禽、水产养殖动物、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "甜菜碱",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "甜菜碱盐酸盐",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "甜味物质",
+      "category": "调味和诱食物质4",
+      "scope": "猪",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "通用名称",
+      "category": "序号",
+      "scope": "申请单位",
+      "dogAllowed": false,
+      "table": "AMENDED"
+    },
+    {
+      "name": "透明质酸",
+      "category": "其他",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "透明质酸钠",
+      "category": "其他",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "脱氢乙酸",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "脱氢乙酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "微晶纤维素",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "维生素A",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "维生素A乙酸酯",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "维生素A棕榈酸酯",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "维生素D2",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "维生素D3",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "维生素E",
+      "category": "抗氧化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "维生素K1",
+      "category": "维生素及类维生素",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "胃蛋白酶（源自猪",
+      "category": "酶制剂2",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "戊糖片球菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "稀土（铈和镧）壳糖胺螯合盐",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "畜禽、鱼和虾",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "虾青素",
+      "category": "着色剂",
+      "scope": "水产养殖动物、观赏鱼、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "纤维二糖乳杆菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "纤维素酶（产自长柄木霉3",
+      "category": "酶制剂2",
+      "scope": "玉米、大麦、小麦、麦麸、黑麦、高粱",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "苋菜红",
+      "category": "着色剂",
+      "scope": "宠物和观赏鱼",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "香味物质",
+      "category": "调味和诱食物质4",
+      "scope": "",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硝酸硫胺（维生素B1）",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "小牛",
+      "category": "酶制剂2",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "小羊",
+      "category": "酶制剂2",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "缬氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "辛烯基琥珀酸淀粉钠a",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "新红",
+      "category": "着色剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "亚硫酸钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "青贮饲料",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "亚硫酸氢钠甲萘醌（维生素K3）",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "亚硫酸氢烟酰胺甲萘醌",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "亚麻酸",
+      "category": "其他",
+      "scope": "猪、肉鸡和鱼、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "亚麻籽胶",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "亚硒酸钠",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "亚硝酸钠6",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "烟酸",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "烟酸铬",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "猪、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "烟酰胺",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "胭脂虫红",
+      "category": "着色剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "胭脂红",
+      "category": "着色剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "盐酸吡哆醇（维生素B6）",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "盐酸硫胺（维生素B1）",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氧化镁",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氧化锰",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氧化铁红",
+      "category": "着色剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "氧化铜",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "氧化锌",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "叶绿素铜钠（钾）盐",
+      "category": "着色剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "叶酸",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "液氨",
+      "category": "非蛋白氮",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "液体L-赖氨酸（L-赖氨酸含量不低于50％）",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "一水硫酸锌",
+      "category": "1",
+      "scope": "杭州富阳新兴实业有限公司",
+      "dogAllowed": false,
+      "table": "AMENDED"
+    },
+    {
+      "name": "胰蛋白酶（源自猪或牛的胰腺）",
+      "category": "酶制剂2",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "乙二胺四乙酸二钠",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "乙基纤维素f",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "乙酸",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "乙酸钙",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "畜禽",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "乙酸钴",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "乙酸锌",
+      "category": "矿物元素及其络（螯）合物1",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "乙酰化二淀粉磷酸酯",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "乙酰氧肟酸",
+      "category": "其他",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "乙氧基喹啉",
+      "category": "抗氧化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "异丁叉二脲",
+      "category": "非蛋白氮",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "异亮氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "淫羊藿提取物（有效成分为淫羊藿苷）",
+      "category": "其他",
+      "scope": "鸡、猪、绵羊、奶牛",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "婴儿双歧杆菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硬脂酸",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "猪、牛和家禽、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "硬脂酸钙",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "硬脂酸镁",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "诱惑红",
+      "category": "着色剂",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "长柄木霉3",
+      "category": "酶制剂2",
+      "scope": "青贮玉米、玉米、玉米蛋白粉、豆粕、小麦、次粉、大麦、高粱、燕麦、豌豆、木薯、小米、大米",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "长柄木霉3）",
+      "category": "酶制剂2",
+      "scope": "玉米、豆粕、椰子粕",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "长双歧杆菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "沼泽红假单胞菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "蔗糖脂肪酸酯",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "栀子黄",
+      "category": "着色剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "栀子蓝",
+      "category": "着色剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "脂肪酶（产自黑曲霉",
+      "category": "酶制剂2",
+      "scope": "动物或植物源性油脂或脂肪",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "植酸（肌醇六磷酸）",
+      "category": "抗氧化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "植酸酶（产自黑曲霉",
+      "category": "酶制剂2",
+      "scope": "玉米、豆粕等含有植酸的植物籽实及其加工副产品类饲料原料",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "植物乳杆菌",
+      "category": "微生物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "植物甾醇（源于大豆油/菜籽油，有效成分为β-谷甾醇",
+      "category": "其他",
+      "scope": "家禽、生长育肥猪、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "中链甘油三酯",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "紫胶h",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "紫苏籽提取物（有效成分为α-亚油酸",
+      "category": "其他",
+      "scope": "猪、肉鸡和鱼、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "D-泛醇",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "D-泛酸钙",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "D-泛酸钙（产自重组大肠杆菌PT06/CCTCC M 2023146）",
+      "category": "2",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "AMENDED"
+    },
+    {
+      "name": "D-生物素",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "D-异抗坏血酸",
+      "category": "抗氧化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "D-异抗坏血酸钠",
+      "category": "抗氧化剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "DL-蛋氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "DL-泛酸钙",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "dl-α-生育酚",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "dl-α-生育酚乙酸酯",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-半胱氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-半胱氨酸盐酸盐",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-丙氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-精氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-精氨酸盐酸盐",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-抗坏血酸-2-磷酸酯",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-抗坏血酸-6-棕榈酸酯",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-抗坏血酸（维生素C）",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-抗坏血酸钙",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-抗坏血酸钠",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-抗坏血酸钠h",
+      "category": "抗氧化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-抗坏血酸k",
+      "category": "抗氧化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-赖氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-赖氨酸硫酸盐及其发酵副产物（产自谷氨酸棒杆菌",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-赖氨酸盐酸盐",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-酪氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-亮氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-脯氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-肉碱",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-肉碱酒石酸盐",
+      "category": "维生素及类维生素",
+      "scope": "宠物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-肉碱盐酸盐",
+      "category": "维生素及类维生素",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-色氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-苏氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "L-组氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "N-羟甲基蛋氨酸钙",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "反刍动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "N,O-羧甲基壳聚糖",
+      "category": "多糖和寡糖",
+      "scope": "猪、鸡",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "α-半乳糖苷酶（产自黑曲霉）",
+      "category": "酶制剂2",
+      "scope": "豆粕",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "α-淀粉",
+      "category": "粘结剂、抗结块剂、稳定剂和乳化剂",
+      "scope": "养殖动物",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "α-环丙氨酸",
+      "category": "氨基酸、氨基酸盐及其类似物",
+      "scope": "鸡",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "β-1,3-D-葡聚糖（源自酿酒酵母）",
+      "category": "多糖和寡糖",
+      "scope": "水产养殖动物、犬c、猫c",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "β-阿朴-8’-胡萝卜素醛",
+      "category": "着色剂",
+      "scope": "家禽",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "β-阿朴-8’-胡萝卜素酸乙酯",
+      "category": "着色剂",
+      "scope": "家禽",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "β-半乳糖苷酶（产自黑曲霉）",
+      "category": "酶制剂2",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "β-甘露聚糖酶（产自迟缓芽孢杆菌",
+      "category": "酶制剂2",
+      "scope": "玉米、豆粕、椰子粕",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "β-胡萝卜素",
+      "category": "着色剂",
+      "scope": "家禽、犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    },
+    {
+      "name": "β-葡聚糖酶（产自黑曲霉",
+      "category": "酶制剂2",
+      "scope": "小麦、大麦、菜籽粕、小麦副产物、去壳燕麦、黑麦、黑小麦、高粱",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "β,β-胡萝卜素-4,4-二酮（斑蝥黄）",
+      "category": "着色剂",
+      "scope": "家禽",
+      "dogAllowed": false,
+      "table": "MAIN"
+    },
+    {
+      "name": "ε-聚赖氨酸盐酸盐",
+      "category": "防腐剂、防霉剂和酸度调节剂",
+      "scope": "犬d、猫d",
+      "dogAllowed": true,
+      "table": "MAIN"
+    }
+  ]
+}

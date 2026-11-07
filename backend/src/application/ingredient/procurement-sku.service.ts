@@ -632,10 +632,10 @@ export class ProcurementSkuService {
     }
     if (
       openingStock > 0 &&
-      (dto.purchaseToBaseRatio === undefined ||
-        dto.purchaseToBaseRatio === null ||
-        !Number.isFinite(dto.purchaseToBaseRatio) ||
-        dto.purchaseToBaseRatio <= 0)
+      !(
+        Number(this.resolvePurchaseToBaseRatioFromPackFacts(dto) ?? 0) > 0 ||
+        Number(dto.purchaseToBaseRatio ?? 0) > 0
+      )
     ) {
       throw new BadRequestException('填了期初库存时，换算倍数必须大于 0');
     }
@@ -698,7 +698,9 @@ export class ProcurementSkuService {
       });
 
       if (openingStock > 0) {
-        const ratio = dto.purchaseToBaseRatio as number;
+        // 用**实际落库**的换算折期初库存：填了「一箱几件 × 净含量」时 dto 里没有换算，
+        // 照 dto 取会把 3kg 记成 3g（2026-11-07 复核发现）。
+        const ratio = Number(data.purchaseToBaseRatio ?? 0);
         const deltaG = openingStock * ratio;
         const balance = await tx.inventoryLedgerEntry.aggregate({
           where: { ingredientId },
@@ -1143,6 +1145,19 @@ export class ProcurementSkuService {
     const updated = shouldRecordManualPriceHistory
       ? await this.prisma.$transaction(runUpdate as any)
       : await runUpdate(this.prisma);
+
+    // 补价也能初始化成本（2026-11-07）：先建商品、后补价是最常见的操作顺序，
+    // 如果只在创建时初始化，这条原料的成本会永远停在 0。
+    if (nextCurrentPurchasePrice !== undefined && nextCurrentPurchasePrice !== null) {
+      await this.initializeIngredientCostFromSku(this.prisma, {
+        ingredientId: existing.ingredientId,
+        skuId: existing.id,
+        pricePerPurchaseUnit: nextCurrentPurchasePrice,
+        purchaseToBaseRatio: Number(
+          (updated as ProcurementSkuRecord).purchaseToBaseRatio ?? 0,
+        ),
+      });
+    }
 
     return toSummary(updated as ProcurementSkuRecord);
   }

@@ -1571,7 +1571,6 @@ const closingBaseUnitLabel = computed(() => {
 })
 const closingState = computed(() =>
   computeClosingState({
-    skuCount: closingDone.value ? 1 : 0,
     pricePerPackage: closingForm.currentPurchasePrice ?? null,
     netContent: closingForm.netContentPerPack ?? null
   })
@@ -1579,8 +1578,7 @@ const closingState = computed(() =>
 const closingStateLabel = computed(() => {
   if (closingDone.value) return '已保存'
   if (closingState.value === 'READY') return '填好了，可以保存'
-  if (closingState.value === 'MISSING_PRICE') return '还差「这一件多少钱」'
-  return '还差一条采购商品'
+  return '还差「每件净含量」和「这一件多少钱」'
 })
 const closingPreview = computed(() =>
   formatCostPreview(

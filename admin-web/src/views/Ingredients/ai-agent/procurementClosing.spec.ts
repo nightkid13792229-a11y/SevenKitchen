@@ -12,22 +12,22 @@ import {
  * 食谱里这条食材按「免费」算，售价跟着偏低。
  */
 describe('AI 建档收尾 · 采购商品', () => {
-  it('没商品时是 MISSING_SKU', () => {
+  it('没填价时是 MISSING_PRICE（不算走完）', () => {
     expect(
-      computeClosingState({ skuCount: 0, pricePerPackage: null, netContent: null }),
-    ).toBe('MISSING_SKU')
-  })
-
-  it('有商品但没填价时是 MISSING_PRICE（不算走完）', () => {
-    expect(
-      computeClosingState({ skuCount: 1, pricePerPackage: null, netContent: 500 }),
+      computeClosingState({ pricePerPackage: null, netContent: 500 }),
     ).toBe('MISSING_PRICE')
   })
 
-  it('商品和价都齐了才是 READY', () => {
+  it('价和净含量都填了才是 READY', () => {
     expect(
-      computeClosingState({ skuCount: 1, pricePerPackage: 39.9, netContent: 500 }),
+      computeClosingState({ pricePerPackage: 39.9, netContent: 500 }),
     ).toBe('READY')
+  })
+
+  it('只填了价、没填净含量也不算走完（否则算不出每克成本）', () => {
+    expect(
+      computeClosingState({ pricePerPackage: 39.9, netContent: null }),
+    ).toBe('MISSING_PRICE')
   })
 
   it('提交体只带「人话」字段，换算交给服务端算', () => {

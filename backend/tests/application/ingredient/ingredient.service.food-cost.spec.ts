@@ -99,6 +99,29 @@ describe('IngredientService · 食材成本', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('手工把成本改成 500 倍会被拒（食材成本是元/克，39.9 这种多半是填成了一件的价）', async () => {
+    findById.mockResolvedValue(buildIngredient());
+
+    await expect(
+      service.updateIngredientPrice(
+        'i1',
+        { currentPricePerPurchaseUnit: 39.9 } as any,
+        'u1',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('建档时食材带非 1 的换算会被拒（否则成本会被静默除以 500）', async () => {
+    await expect(
+      service.createIngredient({
+        name: '糙米',
+        type: IngredientType.FOOD,
+        baseUnit: 'G',
+        purchaseToBaseRatio: 500,
+      } as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('补剂改成别的换算不受这条约束（它们的采购口径本来就挂在原料上）', () => {
     expect(() =>
       (service as any).assertFoodPurchaseRatioInvariant(

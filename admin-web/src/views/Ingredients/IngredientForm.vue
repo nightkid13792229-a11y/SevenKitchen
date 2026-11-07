@@ -1277,7 +1277,8 @@
           style="width: 180px"
         />
         <span class="hint-text" style="margin-left: 8px"
-          >只用于采购建议与采购单估算，<b>不参与成品鲜食与补剂的成本计算</b>（2026-11-06）</span
+          >原料还<b>没有成本</b>时，这一格会折算成「每{{ baseUnitLabel }}多少钱」
+          写进原料档案，直接决定食谱成本（2026-11-07）。已有成本时不覆盖。</span
         >
       </el-form-item>
       <el-form-item v-if="!procurementEditingId" label="期初库存">

@@ -1197,30 +1197,34 @@ export class PurchasingService {
    */
   private async resolvePurchaseToBaseRatio(
     purchaseItem: PurchaseItem,
+    /** 员工这一次实际选中的商品（可能和清单上预选的不同） */
+    selectedProcurementSkuId?: string | null,
   ): Promise<number> {
+    const effectiveSkuId =
+      selectedProcurementSkuId || purchaseItem.procurementSkuId || null;
     const loadedSkus = purchaseItem.ingredient?.procurementSkus ?? [];
     let ratio = resolvePurchaseLineRatio({
-      procurementSkuId: purchaseItem.procurementSkuId,
+      procurementSkuId: effectiveSkuId,
       skus: loadedSkus,
       ingredientRatio: purchaseItem.ingredient?.purchaseToBaseRatio,
     });
 
     if (
       ratio === null &&
-      purchaseItem.procurementSkuId &&
-      !loadedSkus.some((sku) => sku.id === purchaseItem.procurementSkuId)
+      effectiveSkuId &&
+      !loadedSkus.some((sku) => sku.id === effectiveSkuId)
     ) {
       // 商品可能已被删除（采购记录只存 id，没有外键）：查不到就当没有，
       // 退回原料档案的换算，不能让一条历史采购记录因此改不动。
       const sku = await this.procurementSkuService
-        .findById(purchaseItem.procurementSkuId)
+        .findById(effectiveSkuId)
         .catch(() => null);
       ratio = resolvePurchaseLineRatio({
-        procurementSkuId: purchaseItem.procurementSkuId,
+        procurementSkuId: effectiveSkuId,
         skus: sku
           ? [
               {
-                id: purchaseItem.procurementSkuId,
+                id: effectiveSkuId,
                 purchaseToBaseRatio: sku.purchaseToBaseRatio,
               },
             ]
@@ -1490,7 +1494,10 @@ export class PurchasingService {
     dto: AddPurchaseRecordDto | UpdatePurchaseRecordDto,
     existingRecord?: PurchaseRecord,
   ): Promise<NormalizedPurchaseRecordData> {
-    const purchaseToBaseRatio = await this.resolvePurchaseToBaseRatio(purchaseItem);
+    const purchaseToBaseRatio = await this.resolvePurchaseToBaseRatio(
+      purchaseItem,
+      (dto as { procurementSkuId?: string | null }).procurementSkuId ?? null,
+    );
     const baseUnit = this.resolveBaseUnit(purchaseItem);
     const density = this.resolveDensity(purchaseItem);
     const rawFactsProvided =

@@ -86,8 +86,33 @@ async function main() {
     },
   });
 
+  // 折算前的老价 / 老换算（只备份过「换算 ≠ 1」的行，其余按原值即新值）
+  const oldPriceByIngredient = new Map<
+    string,
+    { price: number; ratio: number }
+  >();
+  if (backupTableExists) {
+    const backupRows = await prisma.$queryRaw<
+      Array<{ id: string; old_price: string; old_ratio: number }>
+    >(Prisma.sql`
+      SELECT "id",
+             "current_price_per_purchase_unit"::text AS old_price,
+             "purchase_to_base_ratio" AS old_ratio
+      FROM "ingredient_food_cost_backup_20261107"
+    `);
+    for (const row of backupRows) {
+      oldPriceByIngredient.set(row.id, {
+        price: Number(row.old_price),
+        ratio: Number(row.old_ratio) || 1,
+      });
+    }
+  }
+
   let compared = 0;
   let drifted = 0;
+  let maxDelta = 0;
+  const driftedRecipes: Array<{ name: string; oldCost: number; newCost: number }> =
+    [];
   for (const recipe of recipes) {
     const ids = recipe.items.map((item) => item.ingredientId);
     if (ids.length === 0) continue;
@@ -112,6 +137,7 @@ async function main() {
     if (!(totalRatio > 0)) continue;
 
     let cost = 0;
+    let oldCost = 0;
     for (const item of recipe.items) {
       const ingredient = byId.get(item.ingredientId);
       if (!ingredient || ingredient.type !== 'FOOD') continue;
@@ -127,16 +153,52 @@ async function main() {
       const netG = 1000 * share;
       const grossG =
         (netG / (yieldRate > 0 ? yieldRate : 1)) * recipe.productionLossRate;
+
       cost += (grossG / ratio) * price;
+
+      // 折算前：价 ÷ 换算（没有备份的行说明本来就等价）
+      const old = oldPriceByIngredient.get(ingredient.id);
+      const oldRatio = old?.ratio && old.ratio > 0 ? old.ratio : ratio;
+      const oldPrice = old ? old.price : price;
+      oldCost += (grossG / oldRatio) * oldPrice;
     }
 
     compared += 1;
-    if (!Number.isFinite(cost)) drifted += 1;
+    if (!Number.isFinite(cost) || !Number.isFinite(oldCost)) {
+      drifted += 1;
+      continue;
+    }
+
+    const delta = Math.abs(cost - oldCost);
+    if (delta > maxDelta) maxDelta = delta;
+    if (delta > 0.005) {
+      drifted += 1;
+      driftedRecipes.push({
+        name: recipe.name,
+        oldCost: Number(oldCost.toFixed(4)),
+        newCost: Number(cost.toFixed(4)),
+      });
+    }
   }
 
   console.log(
-    `[② ] 成本双跑：${compared} 个已发布食谱参与复算，异常 ${drifted} 个`,
+    `[② ] 成本双跑：${compared} 个已发布食谱，新旧差最大 ¥${maxDelta.toFixed(4)}，` +
+      `超过 1 分钱的 ${drifted} 个`,
   );
+  for (const row of driftedRecipes.slice(0, 10)) {
+    console.log(
+      `     ✗ ${row.name}: 旧 ¥${row.oldCost} → 新 ¥${row.newCost}`,
+    );
+  }
+
+  // ②b 上线前体检：换算为 0 的食材会让迁移直接除零失败
+  const zeroRatio = foodIngredients.filter(
+    (item) => !(Number(item.purchaseToBaseRatio) > 0),
+  );
+  console.log(`[②b] 换算为 0 的食材：${zeroRatio.length} 条（必须为 0，否则迁移会失败）`);
+  for (const item of zeroRatio.slice(0, 10)) {
+    console.log(`     ✗ ${item.name}`);
+  }
 
   // ③ 待补清单
   const pending = foodIngredients.filter((item) => item.procurementSkus.length === 0);

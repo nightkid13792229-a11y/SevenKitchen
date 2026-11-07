@@ -184,6 +184,7 @@ export class IngredientService {
     });
     const purchaseUnit = this.resolvePurchaseUnitForPersistence(dto);
     const purchaseToBaseRatio = dto.purchaseToBaseRatio ?? 1;
+    this.assertFoodPurchaseRatioInvariant(dto.type, purchaseToBaseRatio);
     const currentPricePerPurchaseUnit = dto.currentPricePerPurchaseUnit ?? 0;
 
     const ingredient = new Ingredient(
@@ -365,6 +366,11 @@ export class IngredientService {
       previousPrice: existing.currentPricePerPurchaseUnit,
       nextPrice: dto.currentPricePerPurchaseUnit,
     });
+    this.assertPriceChangeNotAbsurd({
+      ingredientName: existing.name,
+      previousPrice: existing.currentPricePerPurchaseUnit,
+      nextPrice: dto.currentPricePerPurchaseUnit,
+    });
 
     const ingredient = await this.ingredientRepository.updatePrice(
       id,
@@ -404,6 +410,35 @@ export class IngredientService {
    * 换算恒为 1 时，这一列就是「元/基准单位」。一旦有人把换算写成 500，
    * 成本会静默变成原来的 1/500 —— 没有任何报错，只有售价悄悄变低。
    */
+  /**
+   * 手工改价的「离谱」闸（2026-11-07）。
+   *
+   * 采购报销那条路有 0 元 / 5 倍 / 8% 三道闸，库存页这条只有「不能改 0」。
+   * 折算后食材成本是「元/克」，39.9 这种「本来想填一件的价」会被当成 39.9 元/克 ——
+   * 差 500 倍，已发布食谱的售价跟着错。这里至少拦住 5 倍以上的跳变。
+   */
+  private assertPriceChangeNotAbsurd(params: {
+    ingredientName: string;
+    previousPrice: number;
+    nextPrice: number;
+  }): void {
+    const previous = Number(params.previousPrice ?? 0);
+    const next = Number(params.nextPrice ?? 0);
+    if (!(previous > 0) || !(next > 0)) {
+      return;
+    }
+
+    const multiple = next / previous;
+    if (multiple <= 5 && multiple >= 1 / 5) {
+      return;
+    }
+
+    throw new BadRequestException(
+      `「${params.ingredientName}」这次改价是原价的 ${multiple.toFixed(2)} 倍，` +
+        `疑似单位或数量录错（食材成本是「元/克」）。确认无误请分两步改，或走采购报销`,
+    );
+  }
+
   private assertFoodPurchaseRatioInvariant(
     type: IngredientType | string,
     purchaseToBaseRatio: number,

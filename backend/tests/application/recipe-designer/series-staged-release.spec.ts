@@ -76,6 +76,8 @@ describe('RecipeDesignerService · staged series release', () => {
 
   const prisma = {
     user: { findMany: jest.fn() },
+    // 2026-11-07：整系列发布前要查一次食材成本
+    recipeItem: { findMany: jest.fn().mockResolvedValue([]) },
     designRecipe: {
       findMany: jest.fn(),
     },

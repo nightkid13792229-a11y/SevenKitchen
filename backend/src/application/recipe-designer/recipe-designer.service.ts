@@ -203,6 +203,10 @@ const DESIGN_RECIPE_INCLUDE = {
           properties: true,
           brand: true,
           productModel: true,
+          // 发布门槛要判断「这条食材有没有成本」（2026-11-07）。
+          // 不选这两列，成本判断会永远拿到 null 而静默跳过。
+          currentPricePerPurchaseUnit: true,
+          purchaseToBaseRatio: true,
         },
       },
       nutritionFood: {
@@ -219,6 +223,8 @@ const DESIGN_RECIPE_INCLUDE = {
                   properties: true,
                   brand: true,
                   productModel: true,
+                  currentPricePerPurchaseUnit: true,
+                  purchaseToBaseRatio: true,
                 },
               },
             },
@@ -4460,6 +4466,11 @@ export class RecipeDesignerService {
       return stage !== null && selectedStageCodeSet.has(stage);
     });
     const releaseTargetIds = releaseTargets.map((recipe) => recipe.id);
+
+    // 整系列发布是真正的「上架」按钮，必须和阶段发布同一道成本闸（2026-11-07）。
+    // 只在阶段发布时拦，会漏掉所有「之前就绪、这次一起发」的阶段。
+    await this.assertSeriesReleaseTargetsHaveCost(releaseTargetIds);
+
     const presentationData = this.buildSeriesPresentationUpdateData(series);
 
     return this.prisma.$transaction(async (tx) => {
@@ -10285,12 +10296,68 @@ export class RecipeDesignerService {
   }
 
   /** 这道菜这行食材「每基准单位成本」；原料没加载出来时返回 null（跳过成本判断）。 */
+  /**
+   * 整系列发布前的成本闸（2026-11-07 成本口径归位）。
+   *
+   * 与阶段发布的判断同源：只查 FOOD，只要求「每基准单位成本 > 0」。
+   * 命名里带上原料名，运营才知道去补哪一条。
+   */
+  private async assertSeriesReleaseTargetsHaveCost(
+    recipeIds: string[],
+  ): Promise<void> {
+    if (recipeIds.length === 0) {
+      return;
+    }
+
+    const items = await this.prisma.recipeItem.findMany({
+      where: { recipeId: { in: recipeIds } },
+      select: {
+        recipeId: true,
+        ingredient: {
+          select: {
+            name: true,
+            type: true,
+            currentPricePerPurchaseUnit: true,
+            purchaseToBaseRatio: true,
+          },
+        },
+      },
+    });
+
+    const missing = new Set<string>();
+    for (const item of items) {
+      const ingredient = item.ingredient;
+      if (!ingredient || ingredient.type !== IngredientType.FOOD) {
+        continue;
+      }
+      const price = Number(ingredient.currentPricePerPurchaseUnit);
+      const ratio = Number(ingredient.purchaseToBaseRatio);
+      if (!(price > 0) || !(ratio > 0)) {
+        missing.add(ingredient.name);
+      }
+    }
+
+    if (missing.size === 0) {
+      return;
+    }
+
+    const names = Array.from(missing).slice(0, 3);
+    throw new BadRequestException(
+      `这些食材还没有成本，不能发布：${names.join('、')}` +
+        (missing.size > 3 ? ` 等 ${missing.size} 种` : '') +
+        '。请先去原料库给它们补一条采购商品',
+    );
+  }
+
   private resolveItemCostPerBaseUnit(item: any): number | null {
-    const cost = item?.ingredient?.getUnitCost?.();
-    if (typeof cost !== 'number' || !Number.isFinite(cost)) {
+    // 草稿里的 `item.ingredient` 是 Prisma 行（POJO），没有 getUnitCost()；
+    // 早先按方法调用写，结果永远拿到 null，门槛静默跳过 —— 见 2026-11-07 复核。
+    const price = Number(item?.ingredient?.currentPricePerPurchaseUnit);
+    const ratio = Number(item?.ingredient?.purchaseToBaseRatio);
+    if (!Number.isFinite(price) || !Number.isFinite(ratio) || ratio <= 0) {
       return null;
     }
-    return cost;
+    return Math.round((price / ratio) * 1e6) / 1e6;
   }
 
   private resolveIngredientType(item: DesignRecipeItemWithFood) {

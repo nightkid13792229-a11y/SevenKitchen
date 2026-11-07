@@ -7,20 +7,25 @@
  * 这里只放纯判断，页面只负责把表单值喂进来、把结果发出去。
  */
 
-export type ClosingState = 'MISSING_SKU' | 'MISSING_PRICE' | 'READY'
+export type ClosingState = 'MISSING_PRICE' | 'READY'
 
 export interface ClosingInput {
-  skuCount: number
   pricePerPackage: number | null | undefined
   netContent: number | null | undefined
 }
 
+/**
+ * 这一屏本身就是「新建一条采购商品」，所以不判断「有没有商品」——
+ * 只看这两格能不能算出每克成本。缺任一个都不能存：只填价不填净含量，
+ * 系统没法把「一件 39.9 元」折成「每克多少钱」。
+ */
 export function computeClosingState(input: ClosingInput): ClosingState {
-  if (!(Number(input.skuCount) > 0)) {
-    return 'MISSING_SKU'
-  }
   const price = Number(input.pricePerPackage)
+  const net = Number(input.netContent)
   if (!Number.isFinite(price) || price <= 0) {
+    return 'MISSING_PRICE'
+  }
+  if (!Number.isFinite(net) || net <= 0) {
     return 'MISSING_PRICE'
   }
   return 'READY'

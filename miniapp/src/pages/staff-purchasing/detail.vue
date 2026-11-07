@@ -2244,6 +2244,8 @@ const submitRecord = async () => {
 
       // 刷新采购记录
       await loadPurchaseRecords();
+      // 刚存完的原料会从「待采购」变成「已录入」，回到全部再展开，别让它从当前筛选里消失
+      activeItemFilter.value = 'ALL';
 
       // 保存后回到清单：自动展开这张原料，并短暂高亮刚存的那条
       const savedItem = items.value.find(

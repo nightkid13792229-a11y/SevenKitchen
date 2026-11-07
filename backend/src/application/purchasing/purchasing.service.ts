@@ -209,6 +209,11 @@ interface NormalizedPurchaseRecordData {
 
 interface ProcurementExecutionProfile {
   procurementSku?: ProcurementSkuSummary;
+  /**
+   * 这条原料还没有任何采购商品（2026-11-07）。
+   * 此时单位退回基准单位，采购的人要去补一条商品 —— 不能拿档案的换算假装「买几袋」。
+   */
+  needsProcurementSku: boolean;
   purchaseUnit: string;
   purchaseToBaseRatio: number;
   displayUnit?: string | null;
@@ -659,16 +664,22 @@ export class PurchasingService {
       0;
     const effectivePricePerPurchaseUnit = currentPricePerPurchaseUnit;
 
+    const needsProcurementSku = !procurementSku;
+
     return {
       procurementSku,
-      purchaseUnit:
-        procurementSku?.purchaseUnit ||
-        ingredient?.purchaseUnit ||
-        ingredient?.baseUnit,
-      purchaseToBaseRatio:
-        procurementSku?.purchaseToBaseRatio ??
-        ingredient?.purchaseToBaseRatio ??
-        1,
+      needsProcurementSku,
+      // 没有商品时只认基准单位：档案上的采购单位对食材已经退休，拿它显示「几袋」会骗人
+      purchaseUnit: needsProcurementSku
+        ? ingredient?.baseUnit
+        : procurementSku?.purchaseUnit ||
+          ingredient?.purchaseUnit ||
+          ingredient?.baseUnit,
+      purchaseToBaseRatio: needsProcurementSku
+        ? 1
+        : procurementSku?.purchaseToBaseRatio ??
+          ingredient?.purchaseToBaseRatio ??
+          1,
       displayUnit:
         procurementSku?.purchaseUnit ||
         ingredient?.unitDisplayLabel ||

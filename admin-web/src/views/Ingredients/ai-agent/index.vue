@@ -1131,78 +1131,108 @@
               截图里没读到：{{ shotMissingLabels.join('、') }}——请手动补上（不猜数）。
             </p>
 
-            <el-form label-width="86px" size="small" class="closing-card__form">
+            <!--
+              两列 + 标签在上（2026-11-08 第二次改版）。
+              第一版把「AI 识别」塞进 86px 的标签里，标签被挤成竖条（AI 识 / 别），
+              还和右边的格子叠在一起。标签在上之后每格都能用满半栏宽度，
+              标记只占标签行右侧，不会再撑坏布局。
+            -->
+            <el-form label-position="top" size="small" class="closing-card__form">
               <el-form-item required>
                 <template #label>
-                  商品名称
-                  <span v-if="isAiFilled('name')" class="closing-card__ai">AI 识别</span>
+                  <span class="closing-card__label">
+                    商品名称
+                    <em v-if="isAiFilled('name')" class="closing-card__ai">AI 识别</em>
+                  </span>
                 </template>
                 <el-input v-model="closingForm.name" placeholder="如：山姆 糙米 1kg" />
               </el-form-item>
+
               <el-form-item required>
                 <template #label>
-                  采购单位
-                  <span v-if="isAiFilled('purchaseUnit')" class="closing-card__ai">AI 识别</span>
+                  <span class="closing-card__label">
+                    采购单位
+                    <em v-if="isAiFilled('purchaseUnit')" class="closing-card__ai">AI 识别</em>
+                  </span>
                 </template>
                 <el-input v-model="closingForm.purchaseUnit" placeholder="袋 / 盒 / 箱" />
               </el-form-item>
+
               <el-form-item required>
                 <template #label>
-                  一箱几件
-                  <span v-if="isAiFilled('packCount')" class="closing-card__ai">AI 识别</span>
+                  <span class="closing-card__label">
+                    一箱几件
+                    <em v-if="isAiFilled('packCount')" class="closing-card__ai">AI 识别</em>
+                  </span>
                 </template>
-                <el-input-number
-                  v-model="closingForm.packCount"
-                  :min="1"
-                  :step="1"
-                  :precision="0"
-                  controls-position="right"
-                />
-                <span class="closing-card__unit">件</span>
+                <div class="closing-card__field">
+                  <el-input-number
+                    v-model="closingForm.packCount"
+                    :min="1"
+                    :step="1"
+                    :precision="0"
+                    controls-position="right"
+                  />
+                  <span class="closing-card__unit">件</span>
+                </div>
               </el-form-item>
+
               <el-form-item required>
                 <template #label>
-                  每件净含量
-                  <span v-if="isAiFilled('netContentPerPack')" class="closing-card__ai">AI 识别</span>
+                  <span class="closing-card__label">
+                    每件净含量
+                    <em v-if="isAiFilled('netContentPerPack')" class="closing-card__ai">AI 识别</em>
+                  </span>
                 </template>
-                <el-input-number
-                  v-model="closingForm.netContentPerPack"
-                  :min="0"
-                  controls-position="right"
-                />
-                <span class="closing-card__unit">{{ closingBaseUnitLabel }}</span>
+                <div class="closing-card__field">
+                  <el-input-number
+                    v-model="closingForm.netContentPerPack"
+                    :min="0"
+                    controls-position="right"
+                  />
+                  <span class="closing-card__unit">{{ closingBaseUnitLabel }}</span>
+                </div>
               </el-form-item>
+
               <el-form-item required>
                 <template #label>
-                  这一件多少钱
-                  <span v-if="isAiFilled('currentPurchasePrice')" class="closing-card__ai">AI 识别</span>
+                  <span class="closing-card__label">
+                    这一件多少钱
+                    <em v-if="isAiFilled('currentPurchasePrice')" class="closing-card__ai">AI 识别</em>
+                  </span>
                 </template>
                 <el-input-number
                   v-model="closingForm.currentPurchasePrice"
                   :min="0"
                   :precision="2"
                   controls-position="right"
+                  class="closing-card__number"
                 />
-                <span class="closing-card__preview">{{ closingPreview }}</span>
               </el-form-item>
-              <el-form-item
-                class="closing-card__form-wide"
-              >
+
+              <el-form-item>
                 <template #label>
-                  采购渠道
-                  <span
-                    v-if="isAiFilled('purchaseChannel')"
-                    class="closing-card__ai"
-                    :class="{ 'is-guess': isLowConfidence('purchaseChannel') }"
-                  >
-                    {{ isLowConfidence('purchaseChannel') ? 'AI 推测·可改' : 'AI 识别' }}
+                  <span class="closing-card__label">
+                    采购渠道
+                    <em
+                      v-if="isAiFilled('purchaseChannel')"
+                      class="closing-card__ai"
+                      :class="{ 'is-guess': isLowConfidence('purchaseChannel') }"
+                      :title="isLowConfidence('purchaseChannel') ? '是 AI 推测的，请核对' : ''"
+                    >
+                      {{ isLowConfidence('purchaseChannel') ? 'AI 推测' : 'AI 识别' }}
+                    </em>
                   </span>
                 </template>
-                <el-input v-model="closingForm.purchaseChannel" placeholder="在哪买的，可不填" />
+                <el-input v-model="closingForm.purchaseChannel" placeholder="可不填" />
               </el-form-item>
             </el-form>
 
-            <p v-if="closingRatioText" class="closing-card__ratio">{{ closingRatioText }}</p>
+            <!-- 换算汇总：倍率 + 每克单价放在同一行，不再挤在输入框右边 -->
+            <p v-if="closingRatioText || closingPreview" class="closing-card__summary">
+              <span v-if="closingRatioText">{{ closingRatioText }}</span>
+              <span v-if="closingPreview">{{ closingPreview }}</span>
+            </p>
 
             <p class="closing-card__hint">
               它会和原料一起写入，折算成「每{{ closingBaseUnitLabel }}多少钱」作为初始成本；
@@ -4779,15 +4809,53 @@ function goBackToList() {
 .closing-card__form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 12px;
+  column-gap: 14px;
 }
 
 .closing-card__form :deep(.el-form-item) {
   margin-bottom: 8px;
 }
 
-.closing-card__form-wide {
-  grid-column: 1 / -1;
+/* 标签在上：整行都留给「标签 + AI 标记」，输入框再用满整格 */
+.closing-card__form :deep(.el-form-item__label) {
+  width: 100%;
+  padding: 0 0 2px;
+  line-height: 18px;
+}
+
+.closing-card__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  white-space: nowrap;
+}
+
+.closing-card__form :deep(.el-input-number) {
+  width: 100%;
+}
+
+.closing-card__field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.closing-card__field :deep(.el-input-number) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.closing-card__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .closing-card__shot {
@@ -4838,12 +4906,14 @@ function goBackToList() {
 }
 
 .closing-card__ai {
-  margin-left: 4px;
+  flex: 0 0 auto;
   padding: 0 5px;
   border-radius: 8px;
-  font-size: 11px;
+  font-size: 10px;
+  font-style: normal;
   font-weight: 400;
-  line-height: 16px;
+  line-height: 15px;
+  white-space: nowrap;
   color: var(--el-color-primary);
   background: var(--el-color-primary-light-9);
 }
@@ -4853,15 +4923,8 @@ function goBackToList() {
   background: var(--el-color-warning-light-9);
 }
 
-.closing-card__ratio {
-  margin: 0 0 4px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.closing-card__unit,
-.closing-card__preview {
-  margin-left: 8px;
+.closing-card__unit {
+  flex: 0 0 auto;
   font-size: 12px;
   color: var(--el-text-color-secondary);
   white-space: nowrap;

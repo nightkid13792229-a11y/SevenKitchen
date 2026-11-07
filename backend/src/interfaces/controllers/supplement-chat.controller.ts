@@ -86,7 +86,9 @@ export class SupplementChatController {
       });
 
       this.logger.log(
-        `[supplement-agent] tools=${result.toolCalls.map((call) => `${call.name}:${call.ok ? 'ok' : 'fail'}`).join(',') || 'none'}`
+        `[supplement-agent] tools=${result.toolCalls.map((call) => `${call.name}:${call.ok ? 'ok' : 'fail'}`).join(',') || 'none'} ` +
+          `applied=${result.applied.join(',') || 'none'} question=${result.question ? 'yes' : 'no'} ` +
+          `msgLen=${dto.message.length}`
       );
 
       return new ApiResponseDto(0, 'Success', {

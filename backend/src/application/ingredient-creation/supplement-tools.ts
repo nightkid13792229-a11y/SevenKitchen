@@ -3,6 +3,7 @@ import type { SupplementLinkPreviewService } from './supplement-link-preview.ser
 import type { FeedAdditiveCatalogService } from '../../domain/ingredient/feed-additive-catalog.service';
 import {
   applyDraftPatch,
+  describeNutrientUnits,
   type SupplementDraftRecord
 } from '../../domain/ingredient/supplement-draft-patch';
 
@@ -91,7 +92,7 @@ export const SUPPLEMENT_TOOLS: ToolDefinition[] = [
     description:
       '往档案草稿里写字段。只写字段与值，不负责判断该不该写。' +
       '营养档案用 servingNutrients，键是字段路径（如 fattyAcids.epa），值是**每份**含量。' +
-      '单位按档案标准单位填（矿物质/维生素多为 mg 或 μg、维 A/D 为 IU、脂肪酸为 mg），别自己换算。',
+      '单位按档案标准单位填，别自己换算。各字段的标准单位：' + describeNutrientUnits(),
     parameters: {
       type: 'object',
       properties: {

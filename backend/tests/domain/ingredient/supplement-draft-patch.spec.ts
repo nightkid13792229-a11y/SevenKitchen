@@ -1,5 +1,6 @@
 import {
   applyDraftPatch,
+  describeNutrientUnits,
   SUPPLEMENT_DRAFT_FIELDS
 } from '../../../src/domain/ingredient/supplement-draft-patch';
 
@@ -117,5 +118,28 @@ describe('字段表本身', () => {
   it('每份粒数与损耗率的范围跟界面一致', () => {
     expect(SUPPLEMENT_DRAFT_FIELDS.servingUnitsPerDose).toMatchObject({ min: 1, max: 20 });
     expect(SUPPLEMENT_DRAFT_FIELDS.productionLossRate).toMatchObject({ min: 1, max: 2 });
+  });
+});
+
+describe('单位护栏', () => {
+  it('每份值大得离谱 → 拒绝，并提示单位可能写错', () => {
+    const result = applyDraftPatch({}, { servingNutrients: { 'minerals.selenium': 55000 } });
+    // 硒的标准单位是 μg，55000 μg 每份不可能是真的
+
+    expect(result.rejected[0].field).toBe('servingNutrients.minerals.selenium');
+    expect(result.rejected[0].reason).toContain('单位');
+  });
+
+  it('正常含量照写', () => {
+    const result = applyDraftPatch({}, { servingNutrients: { 'minerals.zinc': 15 } });
+
+    expect(result.applied).toContain('servingNutrients.minerals.zinc');
+    expect(result.rejected).toEqual([]);
+  });
+
+  it('能给出"字段 → 单位"对照，给模型用', () => {
+    const text = describeNutrientUnits();
+    expect(text).toContain('minerals.zinc');
+    expect(text.length).toBeGreaterThan(50);
   });
 });

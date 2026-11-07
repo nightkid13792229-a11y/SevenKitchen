@@ -9,6 +9,10 @@
  * 真正的业务门禁不在这里，在"草稿 → 正式档案"那一步。
  */
 import {
+  listSupplementTargetFields,
+  type NutritionFieldDefinition
+} from './nutrition-field-catalog';
+import {
   AMINO_ACID_NUTRIENT_KEYS,
   FATTY_ACID_NUTRIENT_KEYS,
   MACRO_NUTRIENT_KEYS,
@@ -66,6 +70,47 @@ export const SUPPLEMENT_DRAFT_FIELDS: Record<string, DraftFieldRule> = {
   labelNameSource: { kind: 'string', maxLength: 200 },
   evidenceLabelText: { kind: 'string', maxLength: 4000 }
 };
+
+/** 每个营养字段的标准单位（来自档案自己的字段目录，不另写一份）。 */
+const NUTRIENT_UNITS: ReadonlyMap<string, string> = new Map(
+  listSupplementTargetFields().map((field: NutritionFieldDefinition) => [
+    field.fieldPath,
+    field.unit
+  ])
+);
+
+/**
+ * 按标准单位给一个"每份不可能超过"的粗上限。
+ *
+ * 它能挡住**明显**的量级错误（比如把 55 微克写成 55000），但**挡不住 μg/mg 互换**
+ * ——那种错两边数值都"看着正常"，必须有每种营养素的合理区间才能判，属于数据活。
+ * 这里先把能挡的挡住，别让粗错一路走到库里。
+ */
+const MAX_BY_UNIT: Record<string, number> = {
+  'μg': 20_000,
+  µg: 20_000,
+  mg: 5_000,
+  g: 200,
+  IU: 200_000,
+  'kcal': 5_000
+};
+
+function maxForUnit(unit: string | undefined): number {
+  return (unit && MAX_BY_UNIT[unit]) || 100_000;
+}
+
+/** 给模型看的"字段 → 单位"对照，塞进工具说明，省得它自己猜。 */
+export function describeNutrientUnits(): string {
+  const groups = new Map<string, string[]>();
+  for (const [path, unit] of NUTRIENT_UNITS) {
+    const list = groups.get(unit) ?? [];
+    list.push(path);
+    groups.set(unit, list);
+  }
+  return [...groups.entries()]
+    .map(([unit, paths]) => `${unit}: ${paths.join('、')}`)
+    .join('；');
+}
 
 function checkValue(field: string, rule: DraftFieldRule, value: unknown): string | null {
   if (rule.kind === 'boolean') {
@@ -138,6 +183,14 @@ export function applyDraftPatch(
         }
         if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0) {
           rejected.push({ field: `${field}.${path}`, reason: '应为大于等于 0 的数字' });
+          continue;
+        }
+        const unit = NUTRIENT_UNITS.get(path);
+        if (amount > maxForUnit(unit)) {
+          rejected.push({
+            field: `${field}.${path}`,
+            reason: `每份 ${amount} 太大，八成是单位写错（该字段标准单位是 ${unit ?? '见档案'}）`
+          });
           continue;
         }
         accepted[path] = amount;

@@ -1,22 +1,25 @@
 <template>
   <view class="page">
     <view class="head">
-      <view>
+      <view class="head-text">
         <text class="title">订单中心</text>
         <text class="sub">鲜食 / 定制食谱 / 补剂统一查看</text>
       </view>
-      <text class="refresh" @tap="load()">刷新</text>
+      <!-- 代客下单（2026-11-08，老板要求）：只给管理员。
+           原本单独占一行、还带一句说明，太占地方；收成标题右侧一个小按钮。
+           员工要看订单就从下面搜，不能从这里替顾客下单 —— 后端也一起收口了。 -->
+      <view
+        v-if="isAdmin"
+        class="assist-btn"
+        hover-class="assist-btn-hover"
+        @tap="openAssistedOrder"
+      >
+        代客下单
+      </view>
     </view>
 
-    <!-- 代客下单（2026-11-08）：只给管理员。员工要看订单就从下面搜，
-         不能从这里替顾客下单 —— 后端接口也一起收口了。 -->
-    <view v-if="isAdmin" class="assist-entry" @tap="openAssistedOrder">
-      <view class="assist-main">
-        <text class="assist-title">＋ 代客下单</text>
-        <text class="assist-sub">帮顾客补一单成品鲜食，线下收款</text>
-      </view>
-      <text class="assist-arrow">›</text>
-    </view>
+    <!-- 2026-11-08：右上角的「刷新」去掉（老板要求）。进页面、从详情页返回都会自动刷新，
+         换类型 / 换状态 / 搜索也会重新查，这个按钮纯属多余。 -->
 
     <!-- 搜索（2026-11-02）：老「后台订单」页的关键词搜索平移过来。
          订单号 / 顾客姓名 / 手机号 / 狗狗名都能搜；状态仍用下面的状态栏 -->
@@ -479,9 +482,13 @@ onShow(() => load())
 <style scoped>
 .page { min-height: 100vh; background: #f5f6f8; padding: 24rpx; box-sizing: border-box; }
 .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18rpx; }
+/* 标题区让出右侧按钮的位置；窄屏时副标题省略，不要把按钮挤出去 */
+.head-text { flex: 1; min-width: 0; }
 .title { display: block; font-size: 38rpx; font-weight: 700; color: #1e3a2f; }
-.sub { display: block; margin-top: 6rpx; color: #909399; font-size: 23rpx; }
-.refresh { color: #1e3a2f; font-size: 25rpx; padding: 10rpx 4rpx; }
+.sub { display: block; margin-top: 6rpx; color: #909399; font-size: 23rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 代客下单：标题右侧的小胶囊，沿用搜索按钮的主色，不另起一套视觉 */
+.assist-btn { flex: none; margin-left: 16rpx; padding: 0 26rpx; height: 64rpx; line-height: 64rpx; border-radius: 32rpx; background: #1e3a2f; color: #fff; font-size: 25rpx; font-weight: 600; }
+.assist-btn-hover { background: #2f5a48; }
 
 /* 搜索：跟卡片同一套白底圆角，按钮用主色，别做成另一套视觉 */
 .search-bar { display: flex; align-items: center; gap: 14rpx; margin-bottom: 16rpx; }
@@ -547,12 +554,6 @@ onShow(() => load())
 .order-actions { display: flex; justify-content: flex-end; margin-top: 16rpx; padding-top: 14rpx; border-top: 1rpx solid #f2f3f5; }
 .entry { margin-left: 14rpx; padding: 8rpx 20rpx; border-radius: 24rpx; background: #f5f6f8; color: #2b5040; font-size: 22rpx; }
 .entry.primary { background: #1e3a2f; color: #fff; font-weight: 600; }
-
-.assist-entry { display: flex; align-items: center; gap: 16rpx; padding: 22rpx 24rpx; margin-bottom: 18rpx; background: #eef3ef; border: 1rpx solid #d7e4da; border-radius: 16rpx; }
-.assist-main { flex: 1; min-width: 0; }
-.assist-title { display: block; font-size: 29rpx; font-weight: 800; color: #1e3a2f; }
-.assist-sub { display: block; margin-top: 6rpx; font-size: 22rpx; color: #606266; }
-.assist-arrow { color: #1e3a2f; font-size: 34rpx; }
 
 .state { padding: 120rpx 0; text-align: center; color: #909399; font-size: 24rpx; }
 .load-more { padding: 20rpx; text-align: center; color: #2b5040; font-size: 24rpx; }

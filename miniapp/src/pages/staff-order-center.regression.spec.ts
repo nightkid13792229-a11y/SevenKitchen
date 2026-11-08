@@ -247,3 +247,19 @@ describe('staff order center · 返回列表不显示旧状态（2026-11-08 老�
     expect(orderCenter).not.toContain('onMounted(')
   })
 })
+
+describe('staff order center · 头部精简（2026-11-08 老板要求）', () => {
+  it('★ 代客下单不再单独占一行，收成标题右侧的小按钮，文案只有「代客下单」', () => {
+    expect(orderCenter).toContain('class="assist-btn"')
+    expect(orderCenter).not.toContain('class="assist-entry"')
+    // 原来那行说明文字跟着一起下掉，按钮上不再带「＋」和箭头
+    expect(orderCenter).not.toContain('帮顾客补一单成品鲜食')
+    expect(orderCenter).not.toContain('assist-arrow')
+    expect(orderCenter).not.toMatch(/＋\s*代客下单/)
+  })
+
+  it('★ 右上角的「刷新」已删（进页面/返回/换筛选都会自动拉最新数据）', () => {
+    expect(orderCenter).not.toContain('>刷新<')
+    expect(orderCenter).not.toContain('class="refresh"')
+  })
+})

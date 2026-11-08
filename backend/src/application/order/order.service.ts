@@ -42,6 +42,7 @@ import {
 import { DogBreed } from '../../domain/dog/dog-breed.entity';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 import { ORDER_REPOSITORY } from './order.service.tokens';
+import { buildPortionPreview, type PortionPreview } from './assisted-portion';
 import { INGREDIENT_REPOSITORY } from '../ingredient/ingredient.service';
 import {
   PricingService,
@@ -2250,6 +2251,59 @@ export class OrderService {
    * Phase 6: Pricing Preview API
    * Returns pricing breakdown including product amount, shipping amount, and total
    */
+  /**
+   * 代客下单用的饭量预览：给"顾客的狗 + 一条食谱"，算出每天吃多少克、
+   * 每顿多少、以及"1 袋 = 1 顿"的分装建议。
+   *
+   * 与顾客端算饭量走同一条链路（体重计划、犬种生长曲线都算进去），
+   * 不另写一套公式 —— 两套算法迟早会算出两个数。
+   */
+  async previewPortionForDog(
+    dogId: string,
+    recipeId: string,
+    days = 7,
+  ): Promise<PortionPreview> {
+    const dog = await this.dogRepository.findById(dogId);
+    if (!dog) {
+      throw new NotFoundException('Dog not found');
+    }
+
+    const recipe = await this.recipeRepository.findById(recipeId);
+    if (!recipe) {
+      throw new NotFoundException('Recipe not found');
+    }
+
+    const weight = Number((dog as any).currentWeightKg);
+    if (!Number.isFinite(weight) || weight <= 0) {
+      throw new BadRequestException('狗狗档案缺少体重，无法计算饭量');
+    }
+
+    const energyDensity = Number(recipe.energyDensityKcalPerKg);
+    if (!Number.isFinite(energyDensity) || energyDensity <= 0) {
+      throw new BadRequestException('食谱缺少能量密度，无法计算饭量');
+    }
+
+    const dogCalcResult = calculateDogEnergy(
+      dog,
+      recipe.energyDensityKcalPerKg,
+      await this.loadDogBreed(dog.breedId),
+    );
+    const finalKcal = await this.resolvePlanAwareFinalKcal(
+      dog.id,
+      dogCalcResult,
+    );
+    const dailyIntakeG = calculateDailyIntakeG(
+      finalKcal,
+      recipe.energyDensityKcalPerKg,
+    );
+
+    return buildPortionPreview({
+      dailyIntakeG,
+      mealsPerDay: Number((dog as any).mealsPerDay) || 2,
+      days,
+    });
+  }
+
   async previewPricing(dto: CreateOrderDraftDto): Promise<{
     amountProduct: number;
     amountShipping: number;

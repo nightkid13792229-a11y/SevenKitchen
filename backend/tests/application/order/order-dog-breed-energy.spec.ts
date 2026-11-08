@@ -112,13 +112,17 @@ describe('下单链路的犬种参数', () => {
   });
 
   describe('订单服务确实把犬种传下去了', () => {
-    it('两处 calculateDogEnergy 调用都带上 loadDogBreed', () => {
+    it('每一处 calculateDogEnergy 调用都带上 loadDogBreed', () => {
       const matches = orderServiceSource.match(
         /calculateDogEnergy\(\s*dog,\s*recipe\.energyDensityKcalPerKg,\s*await this\.loadDogBreed\(dog\.breedId\),/g,
       );
+      const callSites = orderServiceSource.match(/calculateDogEnergy\(/g);
 
       expect(matches).not.toBeNull();
-      expect(matches!.length).toBe(2);
+      // 不写死数字：调用点数会随功能增加（代客下单的饭量预览就是第三处），
+      // 真正要守的是"每一处都传了犬种"，所以两边必须相等。
+      expect(matches!.length).toBe(callSites!.length);
+      expect(callSites!.length).toBeGreaterThanOrEqual(2);
     });
 
     it('确实按 breedId 去查犬种，而不是写死 null', () => {

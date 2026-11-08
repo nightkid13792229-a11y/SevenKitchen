@@ -43,7 +43,7 @@ import { assessmentGapSignature } from './assessment-progress';
 import type { RecipeAgentActor } from './agent-types';
 
 /** 一次运行最多调多少次工具。旧版 200 次，实测平均就要 59 次。 */
-const MAX_TOOL_CALLS = 60;
+const MAX_TOOL_CALLS = 80;
 const MAX_NO_PROGRESS_ASSESSMENTS = 3;
 /** 一次运行最长多久。 */
 const MAX_RUN_MS = 6 * 60 * 1000;

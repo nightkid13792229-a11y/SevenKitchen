@@ -52,6 +52,12 @@ export interface AssessmentGap {
   min: number | null;
   max: number | null;
   unit: string;
+  /** 这个缺口主要来自哪些原料；用于让模型改对 item，而不是盲试。 */
+  contributors?: Array<{
+    itemName: string;
+    amount: number | null;
+    unit: string;
+  }>;
 }
 
 export interface AssessmentSummary {
@@ -270,6 +276,13 @@ export class RecipeDraftPort {
         min: toNumber(entry.minValue ?? entry.min),
         max: toNumber(entry.maxValue ?? entry.max),
         unit: String(entry.unit ?? ''),
+        contributors: Array.isArray(entry.contributors)
+          ? entry.contributors.slice(0, 3).map((contributor: any) => ({
+              itemName: String(contributor.itemName ?? ''),
+              amount: toNumber(contributor.amount),
+              unit: String(contributor.unit ?? ''),
+            }))
+          : [],
       }));
 
     const allergens = Array.isArray(result?.allergenWarnings)

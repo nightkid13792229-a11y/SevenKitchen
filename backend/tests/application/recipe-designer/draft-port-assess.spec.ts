@@ -46,6 +46,7 @@ describe('RecipeDraftPort · assess 缺口', () => {
         min: 0.2,
         max: 0.5,
         unit: '%DM',
+        contributors: [],
       },
     ]);
   });

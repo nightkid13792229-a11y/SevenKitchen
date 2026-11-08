@@ -380,3 +380,23 @@ describe('staff order detail · 预约制作日', () => {
     expect(detailSource).toContain('getUTCFullYear()');
   });
 });
+
+describe('staff order detail · 管理员改预约制作日（2026-11-08）', () => {
+  it('只有管理员、且采购还没开始时才露出「改期」入口', () => {
+    expect(detailSource).toContain('canEditProductionDate');
+    expect(detailSource).toContain('canAdminEditOrderProductionDate');
+    expect(detailSource).toContain('isAdminUser.value &&');
+    expect(detailSource).toContain('mode="date"');
+  });
+
+  it('复用顾客改期的那个接口，不新开后台接口', () => {
+    expect(ordersApiSource).toContain('updateOrderProductionDate');
+    expect(ordersApiSource).toContain('/orders/${orderId}/production-date');
+    expect(detailSource).toContain('updateOrderProductionDate');
+  });
+
+  it('改之前先让管理员确认「从哪天改到哪天」', () => {
+    expect(detailSource).toContain('确认改期');
+    expect(detailSource).toContain('预约制作日将从');
+  });
+});

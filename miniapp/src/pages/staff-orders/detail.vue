@@ -61,6 +61,17 @@
           <text class="kv-value production-date" :class="{ muted: !order.targetProductionDate }">
             {{ formatProductionDate(order.targetProductionDate) }}
           </text>
+          <!-- 管理员改期（2026-11-08）：采购一开始就锁死，和后台保持一致 -->
+          <picker
+            v-if="canEditProductionDate"
+            class="production-date-picker"
+            mode="date"
+            :value="productionDatePickerState.selectedDate"
+            :start="productionDatePickerState.minDate"
+            @change="onProductionDateSelected"
+          >
+            <text class="kv-action">改期</text>
+          </picker>
         </view>
         <view v-if="order.createdAt" class="kv">
           <text class="kv-key">下单时间</text>
@@ -783,6 +794,7 @@ import {
   updateAdminOrderRemark,
   updateOrderCustomerAddress,
   updateOrderItemPackagePlan,
+  updateOrderProductionDate,
   updateOrderSettlementAdjustmentStatus,
   updateStaffCustomerServiceAmount,
   type CustomerOrderFinancialSummary,
@@ -790,8 +802,13 @@ import {
   type StaffOrderAddress,
   type StaffOrderDog,
 } from '../../api/orders'
-import { formatShortDateTime } from '../../utils/date'
+import {
+  formatShanghaiDateOnly,
+  formatShortDateTime,
+  resolveProductionDatePickerState,
+} from '../../utils/date'
 import { normalizeImageUrl } from '../../utils/config'
+import { canAdminEditOrderProductionDate } from '../../utils/order-production-date'
 
 // 获取页面参数
 const orderId = ref('')
@@ -816,6 +833,8 @@ interface OrderDetail {
   /** 新订单号（SK20261030-003）；老数据可能为空 */
   orderNo?: string | null
   status: string
+  /** 订单类型；试吃装是现货，没有制作日期可改 */
+  type?: string | null
   /** 顾客下单时预约的制作日期（当天零点）；老订单/现货单可能为空 */
   targetProductionDate?: string | null
   cancellationReason?: string | null
@@ -1091,6 +1110,24 @@ const canAdminRefund = computed(() => {
 /* ===== 成品调整（2026-10-31）===== */
 /** 员工能录入，只有管理员能标记已处理；钱不在这里动。 */
 const isAdminUser = computed(() => getStoredUser()?.role === 'ADMIN')
+
+/**
+ * 管理员改预约制作日（2026-11-08）。
+ * 员工端不露入口 —— 后台只放管理员改，员工点了只会报「没有权限」。
+ * 采购一开始日期就锁死，入口直接消失，和后台判断保持一致。
+ */
+const canEditProductionDate = computed(
+  () => isAdminUser.value && canAdminEditOrderProductionDate(order.value),
+)
+
+/** 日期选择器：管理员最早可以选今天（顾客自己改最早只能次日） */
+const productionDatePickerState = computed(() =>
+  resolveProductionDatePickerState({
+    orderDate: order.value?.targetProductionDate ?? null,
+    isAdmin: true,
+  }),
+)
+
 const settlementShortageG = computed(() =>
   Math.max(0, Math.round(toNumber(financialSummary.value?.latestSettlement?.shortageG))),
 )
@@ -1773,6 +1810,68 @@ function formatProductionDate(value?: string | null): string {
   if (Number.isNaN(date.getTime())) return String(value)
   const shanghai = new Date(date.getTime() + SHANGHAI_OFFSET_MS)
   return `${shanghai.getUTCFullYear()}年${shanghai.getUTCMonth() + 1}月${shanghai.getUTCDate()}日 ${WEEKDAY_LABELS[shanghai.getUTCDay()]}`
+}
+
+/**
+ * 管理员选了新日期（2026-11-08）。
+ * 先让管理员看清「从哪天改到哪天」再保存 —— 点开选择器直接确定就把订单推迟，
+ * 排产和采购都会跟着变，不能点错。
+ */
+function onProductionDateSelected(event: any) {
+  const newDateStr = String(event?.detail?.value || '')
+  if (!newDateStr || !order.value) return
+
+  if (newDateStr < productionDatePickerState.value.minDate) {
+    uni.showToast({ title: '最早只能选今天', icon: 'none' })
+    return
+  }
+
+  const currentDateStr = order.value.targetProductionDate
+    ? formatShanghaiDateOnly(order.value.targetProductionDate)
+    : ''
+
+  if (currentDateStr && newDateStr === currentDateStr) {
+    uni.showToast({ title: '制作日期没有变化', icon: 'none' })
+    return
+  }
+
+  const content = currentDateStr
+    ? `预约制作日将从 ${formatProductionDate(order.value.targetProductionDate)} 改到 ${formatProductionDate(newDateStr)}，确认吗？`
+    : `预约制作日将设为 ${formatProductionDate(newDateStr)}，确认吗？`
+
+  uni.showModal({
+    title: '确认改期',
+    content,
+    success: (result) => {
+      if (result.confirm) {
+        void updateProductionDate(newDateStr)
+      }
+    },
+  })
+}
+
+async function updateProductionDate(newDateStr: string) {
+  if (!order.value) return
+
+  uni.showLoading({ title: '保存中...' })
+  try {
+    const response = await updateOrderProductionDate(order.value.id, newDateStr)
+    if (response.code !== 0) {
+      throw new Error(response.message || '改期失败')
+    }
+
+    uni.hideLoading()
+    uni.showToast({ title: '改期成功', icon: 'success' })
+    await loadOrderDetail()
+  } catch (error: any) {
+    uni.hideLoading()
+    console.error('[OrderDetail] Update production date error:', error)
+    // 采购已经开始 / 状态刚翻转 —— 后台的提示原样给管理员看
+    uni.showToast({
+      title: error?.message || '改期失败',
+      icon: 'none',
+    })
+  }
 }
 
 function copyTrackingNumber() {
@@ -3771,6 +3870,13 @@ async function saveAddressForm() {
 .production-date { font-size: 28rpx; font-weight: 600; color: #1e3a2f; }
 .production-date.muted { font-size: 24rpx; font-weight: 400; }
 .kv-action { flex: none; margin-left: 12rpx; font-size: 20rpx; color: #2b5040; }
+/* 管理员改期：小圆角按钮，日期旁边一眼看得见，不抢日期本身的注意力 */
+.production-date-picker { flex: none; margin-left: 16rpx; }
+.production-date-picker .kv-action {
+  display: inline-block; margin-left: 0; padding: 4rpx 18rpx;
+  border-radius: 999rpx; border: 1rpx solid #c9d6cc; background: #f5f8f5;
+  font-size: 20rpx; font-weight: 600; color: #2b5040;
+}
 
 .fee { display: flex; justify-content: space-between; padding: 12rpx 0; font-size: 24rpx; }
 .fee-key { color: #606266; }

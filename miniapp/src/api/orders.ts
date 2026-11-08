@@ -400,6 +400,25 @@ export function updateOrderItemPackagePlan(
   });
 }
 
+/**
+ * 改「预约制作日期」（2026-11-08）。
+ *
+ * 复用顾客改期的那个接口，不新开后台接口：后台只放管理员和下单本人改，
+ * 员工会被拦，所以员工端不露入口。采购一开始，后台会返回
+ * 「采购已开始，不能修改制作日期」——错误交给页面提示。
+ */
+export function updateOrderProductionDate(
+  orderId: string,
+  targetProductionDate: string,
+) {
+  return request<{ id?: string; targetProductionDate?: string | null }>({
+    url: `/orders/${orderId}/production-date`,
+    method: 'PUT',
+    data: { targetProductionDate },
+    suppressErrorToast: true,
+  });
+}
+
 export function getStaffCustomerServiceOrder(orderId: string) {
   return request({
     url: `/staff/customer-service/orders/${orderId}`,

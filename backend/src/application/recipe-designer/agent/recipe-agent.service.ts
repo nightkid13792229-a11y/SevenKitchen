@@ -39,10 +39,12 @@ import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
 import { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
 import { AGENT_TOOLS, executeTool } from './tools';
+import { assessmentGapSignature } from './assessment-progress';
 import type { RecipeAgentActor } from './agent-types';
 
 /** 一次运行最多调多少次工具。旧版 200 次，实测平均就要 59 次。 */
 const MAX_TOOL_CALLS = 60;
+const MAX_NO_PROGRESS_ASSESSMENTS = 3;
 /** 一次运行最长多久。 */
 const MAX_RUN_MS = 6 * 60 * 1000;
 /** 回灌给模型的历史条数（只含用户与助手）。 */
@@ -222,6 +224,8 @@ export class RecipeAgentService implements OnModuleInit {
     const messages = await this.buildMessages(sessionId, message, flow);
     const citations = await this.loadCitationRegistry(sessionId);
     let toolCalls = 0;
+    let lastGapSignature: string | null = null;
+    let sameGapCount = 0;
 
     while (true) {
       if (this.stopped.has(sessionId)) return;
@@ -363,6 +367,47 @@ export class RecipeAgentService implements OnModuleInit {
         toolCalls += 1;
 
         await this.recordTool(sessionId, call, outcome.result);
+
+        if (call.function.name === 'assess') {
+          const signature = assessmentGapSignature(outcome.result);
+          if (signature === 'compliant') {
+            lastGapSignature = null;
+            sameGapCount = 0;
+          } else if (signature) {
+            if (signature === lastGapSignature) {
+              sameGapCount += 1;
+            } else {
+              lastGapSignature = signature;
+              sameGapCount = 1;
+            }
+            if (sameGapCount >= MAX_NO_PROGRESS_ASSESSMENTS) {
+              const gaps = Array.isArray((outcome.result as any)?.data?.gaps)
+                ? (outcome.result as any).data.gaps
+                : [];
+              const gapText = gaps
+                .slice(0, 5)
+                .map((gap: any) => {
+                  const value =
+                    gap.value === null || gap.value === undefined
+                      ? '?'
+                      : Number(gap.value).toFixed(2);
+                  return `${gap.label ?? gap.key} ${value}${gap.unit ?? ''}（目标 ${gap.min ?? '?'}–${gap.max ?? '?'}${gap.unit ?? ''}）`;
+                })
+                .join('；');
+              await this.appendMessage(
+                sessionId,
+                'ASSISTANT',
+                `连续 ${MAX_NO_PROGRESS_ASSESSMENTS} 次评估没有实质进展，我先停止，避免继续空转。当前缺口：${gapText || '见评估结果'}。请把这份缺口和已经试过的调整交给营养师/用户确认，不要继续盲试。`,
+              );
+              await this.fail(sessionId, '连续3次评估无实质进展');
+              return;
+            }
+          } else {
+            lastGapSignature = null;
+            sameGapCount = 0;
+          }
+        }
+
         messages.push({
           role: 'tool',
           tool_call_id: call.id,

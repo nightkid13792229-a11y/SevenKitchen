@@ -2,7 +2,7 @@
   <view class="page">
     <view class="hero">
       <text class="title">确认订单</text>
-      <text class="sub">{{ recipeName }} · 线下收款</text>
+      <text class="sub">{{ dogSummary }} · {{ recipeName }} · 线下收款</text>
     </view>
 
     <view v-if="portionLoading" class="state">正在按体重算饭量…</view>
@@ -18,7 +18,8 @@
         </view>
 
         <view v-if="daysRaised" class="notice">
-          这只狗按 7 天算不够 {{ minOrderG }}g，已自动改成 {{ selectedCycleDays }} 天。
+          按默认天数算总重不足 {{ minOrderG }}g（后端定价会直接拒绝），已自动改成
+          {{ selectedCycleDays }} 天。
         </view>
 
         <QuickCyclePackagePlan
@@ -83,7 +84,13 @@
         </view>
         <view class="field-group">
           <text class="field-label">实收金额</text>
-          <input class="field-input" type="digit" v-model="actualAmount" placeholder="实际收到的钱" />
+          <input
+            class="field-input"
+            type="digit"
+            v-model="actualAmount"
+            placeholder="实际收到的钱"
+            @input="onActualAmountInput"
+          />
         </view>
         <view v-if="adjustNeeded" class="field-group">
           <text class="field-label">差额原因（必填）</text>
@@ -109,6 +116,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
+import { dogApi } from '../../api/dogs'
 import QuickCyclePackagePlan from '../../components/package-plan/QuickCyclePackagePlan.vue'
 import { usePackagePlan } from '../../composables/usePackagePlan'
 import {
@@ -125,7 +133,7 @@ import {
 import {
   MIN_ASSISTED_ORDER_G,
   needsAmountAdjustReason,
-  resolveDaysForMinOrder,
+  resolveDaysUntilMinOrder,
 } from '../../utils/assistedOrder'
 
 const customerId = ref('')
@@ -133,6 +141,14 @@ const dogId = ref('')
 const recipeId = ref('')
 const recipeName = ref('')
 const ownershipKind = ref('')
+
+const dogInfo = ref<any>(null)
+const dogSummary = computed(() => {
+  const dog = dogInfo.value
+  if (!dog) return '狗狗'
+  const weight = Number(dog.currentWeightKg || 0)
+  return weight > 0 ? `${dog.name} · ${weight.toFixed(1)}kg` : dog.name || '狗狗'
+})
 
 const portion = ref<PortionPreview | null>(null)
 const portionLoading = ref(false)
@@ -142,10 +158,14 @@ const minOrderG = MIN_ASSISTED_ORDER_G
 
 const addresses = ref<StaffCustomerAddressOption[]>([])
 const selectedAddressId = ref('')
+/** 刚从"新增地址"页回来时带回来的地址 id，用于自动选中 */
+const pendingAddressId = ref('')
 
 const pricing = ref<AssistedPricing | null>(null)
 const pricingLoading = ref(false)
 const actualAmount = ref('')
+/** 员工是否手动改过实收：没改过就跟最新报价走，改过就不再覆盖 */
+const amountTouched = ref(false)
 const adjustReason = ref('')
 const remark = ref('')
 const targetProductionDate = ref('')
@@ -178,9 +198,14 @@ const {
   onPlanChanged: () => schedulePricing(),
 })
 
-const packagePlanWarnings = computed(() =>
-  validationMessage.value ? [validationMessage.value] : [],
-)
+const packagePlanWarnings = computed(() => {
+  const warnings: string[] = []
+  if (validationMessage.value) warnings.push(validationMessage.value)
+  if (portion.value && totalGrams.value > 0 && totalGrams.value < MIN_ASSISTED_ORDER_G) {
+    warnings.push(`当前总重 ${Math.round(totalGrams.value)}g，低于最低订购量 ${MIN_ASSISTED_ORDER_G}g`)
+  }
+  return warnings
+})
 
 const today = computed(() => {
   const now = new Date()
@@ -189,8 +214,9 @@ const today = computed(() => {
 
 const adjustNeeded = computed(() => {
   if (!pricing.value) return false
+  if (String(actualAmount.value).trim() === '') return false
   const actual = Number(actualAmount.value)
-  if (!Number.isFinite(actual) || actualAmount.value === '') return false
+  if (!Number.isFinite(actual)) return false
   return needsAmountAdjustReason(pricing.value.amountTotal, actual)
 })
 
@@ -208,16 +234,41 @@ onLoad((options: any) => {
     portionError.value = '缺少顾客、狗狗或食谱信息，请返回重选。'
     return
   }
+  void loadDogInfo()
   void loadPortion()
 })
 
 onShow(() => {
-  if (customerId.value) void loadAddresses()
+  if (!customerId.value) return
+  const created = readCreatedAddressId()
+  if (created) {
+    pendingAddressId.value = created
+  }
+  void loadAddresses()
 })
+
+function readCreatedAddressId(): string {
+  try {
+    const id = String(uni.getStorageSync('assisted_address_created') || '')
+    if (id) uni.removeStorageSync('assisted_address_created')
+    return id
+  } catch (error) {
+    return ''
+  }
+}
 
 function money(value: unknown) {
   const num = Number(value || 0)
   return Number.isFinite(num) ? num.toFixed(2) : '0.00'
+}
+
+async function loadDogInfo() {
+  try {
+    const response = await dogApi.detail(dogId.value)
+    dogInfo.value = (response as any).data || null
+  } catch (error) {
+    // 拿不到狗信息不影响下单，顶部就只显示"狗狗"
+  }
 }
 
 async function loadPortion() {
@@ -230,10 +281,7 @@ async function loadPortion() {
       portionError.value = '算不出这只狗的饭量，请检查档案里的体重。'
       return
     }
-    const resolved = resolveDaysForMinOrder(portion.value.dailyIntakeG, 7)
-    daysRaised.value = resolved.raised
-    selectedCycleDays.value = resolved.days
-    rebuildPackagePlan()
+    ensureMinOrderDays(7)
     void loadAddresses()
     schedulePricing(0)
   } catch (error: any) {
@@ -247,6 +295,13 @@ async function loadAddresses() {
   try {
     const response = await listStaffCustomerAddresses(customerId.value)
     addresses.value = Array.isArray(response.data) ? response.data : []
+    if (pendingAddressId.value) {
+      // 刚从"新增地址"回来：一定选新建的那一条，别让员工以为已经换了、
+      // 实际还发去旧地址。
+      const found = addresses.value.find((item) => item.id === pendingAddressId.value)
+      if (found) selectedAddressId.value = found.id
+      pendingAddressId.value = ''
+    }
     if (!selectedAddressId.value) {
       const preferred =
         addresses.value.find((item) => item.isDefault) || addresses.value[0]
@@ -257,6 +312,10 @@ async function loadAddresses() {
   }
 }
 
+function onActualAmountInput() {
+  amountTouched.value = true
+}
+
 function selectAddress(addressId: string) {
   selectedAddressId.value = addressId
 }
@@ -265,16 +324,46 @@ function onDateChange(event: any) {
   targetProductionDate.value = String(event?.detail?.value || '')
 }
 
+/**
+ * 天数变了就按"真实分装总重"复核最低订购量。
+ *
+ * 不能只按 `daily × days` 估：每袋克数要按餐次取整，3 餐时估够 1000g、
+ * 实际拆出来可能只有 990g，后端定价照样 400。
+ */
+function ensureMinOrderDays(startDays: number) {
+  const result = resolveDaysUntilMinOrder(
+    startDays,
+    (days) => {
+      selectedCycleDays.value = days
+      rebuildPackagePlan()
+      return Math.round(Number(totalGrams.value) || 0)
+    },
+    MIN_ASSISTED_ORDER_G,
+  )
+  selectedCycleDays.value = result.days
+  rebuildPackagePlan()
+  daysRaised.value = result.raised
+  return result
+}
+
 function selectCycle(days: number) {
   if (isCustomPackagePlan.value) return
-  selectedCycleDays.value = days
-  rebuildPackagePlan()
+  const result = ensureMinOrderDays(days)
+  if (result.raised) {
+    uni.showToast({
+      title: `不足 ${MIN_ASSISTED_ORDER_G}g，已改成 ${result.days} 天`,
+      icon: 'none',
+    })
+  }
+  schedulePricing(0)
 }
 
 function buildItems() {
   const quantityG = Math.round(Number(totalGrams.value) || 0)
   const packageCount = Math.max(1, Number(totalPackages.value) || 1)
-  const packageSpecG = Number(getPrimaryPackageSpecG()) || 0
+  // ⚠️ 必须把分装计划传进去：这个函数体第一句就是 [...plan]，
+  // 不传参直接抛 TypeError，报价和提交会一起挂掉。
+  const packageSpecG = Number(getPrimaryPackageSpecG(normalizedPackagePlan.value)) || 0
   return [
     {
       recipeId: recipeId.value,
@@ -307,7 +396,7 @@ async function runPricing() {
       items: buildItems(),
     })
     pricing.value = (response.data as any) || null
-    if (pricing.value && actualAmount.value === '') {
+    if (pricing.value && !amountTouched.value) {
       actualAmount.value = money(pricing.value.amountTotal)
     }
   } catch (error: any) {
@@ -334,6 +423,10 @@ async function submit() {
   }
   if (validationMessage.value) {
     uni.showToast({ title: validationMessage.value, icon: 'none' })
+    return
+  }
+  if (String(actualAmount.value).trim() === '') {
+    uni.showToast({ title: '请填实收金额', icon: 'none' })
     return
   }
   const actual = Number(actualAmount.value)

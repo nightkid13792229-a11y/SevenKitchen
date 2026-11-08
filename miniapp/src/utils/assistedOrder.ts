@@ -51,3 +51,36 @@ export function needsAmountAdjustReason(
   if (!Number.isFinite(system) || !Number.isFinite(actual)) return false
   return Math.abs(system - actual) > AMOUNT_EPSILON
 }
+
+/**
+ * 抬天数直到"分装计划总重"够最低订购量。
+ *
+ * 为什么不能直接 `minOrderG / dailyIntakeG` 取整：真正提交的克数不是
+ * `daily × days`，而是分装计划的总和（每袋克数要取整、还要按餐次拆），
+ * 3 餐的时候按天数算够 1000g、实际拆出来可能只有 990g，后端定价照样拒。
+ * 所以这里接受一个"给定天数能算出的总重"回调，按真实总重往上试。
+ */
+export function resolveDaysUntilMinOrder(
+  startDaysInput: number,
+  totalGForDays: (days: number) => number,
+  minOrderGInput: number = MIN_ASSISTED_ORDER_G,
+  maxDaysInput = 90,
+): { days: number; raised: boolean } {
+  const startDays = Math.max(1, Math.floor(Number(startDaysInput) || 1))
+  const minOrderG = Number(minOrderGInput)
+  const maxDays = Math.max(startDays, Number(maxDaysInput) || 90)
+
+  if (!Number.isFinite(minOrderG) || minOrderG <= 0) {
+    throw new Error('最低订购量不合法')
+  }
+  if (totalGForDays(startDays) >= minOrderG) {
+    return { days: startDays, raised: false }
+  }
+
+  for (let days = startDays + 1; days <= maxDays; days += 1) {
+    if (totalGForDays(days) >= minOrderG) {
+      return { days, raised: true }
+    }
+  }
+  return { days: maxDays, raised: true }
+}

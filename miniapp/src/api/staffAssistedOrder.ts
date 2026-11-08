@@ -99,7 +99,13 @@ export function searchCustomersForAssist(keyword: string) {
 /** 代客下单可选的食谱：橱窗 + 全部定制（含别人家狗狗的） */
 export function listAssistedRecipeOptions(
   dogId: string,
-  params: { customerId: string; keyword?: string; page?: number; pageSize?: number },
+  params: {
+    customerId: string
+    keyword?: string
+    ownership?: string
+    page?: number
+    pageSize?: number
+  },
 ) {
   return request<AssistedRecipeOptionsResult>({
     url: `/staff/customer-service/dogs/${dogId}/assisted-recipe-options`,

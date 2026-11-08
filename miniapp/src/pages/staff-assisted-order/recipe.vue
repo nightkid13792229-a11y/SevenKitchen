@@ -102,10 +102,9 @@ const selected = ref<AssistedRecipeOption | null>(null)
 
 const hasMore = computed(() => items.value.length < total.value)
 
-const visibleItems = computed(() => {
-  if (!activeFilter.value) return items.value
-  return items.value.filter((item) => item.ownership.kind === activeFilter.value)
-})
+/** 筛选在服务端做（`ownership` 参数）：只在已加载的那 20 条里筛会把
+ *  「这位顾客的定制」误显示成 0 条 —— 它其实在第 5 页。 */
+const visibleItems = computed(() => items.value)
 
 onLoad((options: any) => {
   customerId.value = String(options?.customerId || '')
@@ -145,12 +144,16 @@ function ownershipText(item: AssistedRecipeOption) {
 }
 
 function filterCount(kind: string) {
-  if (!kind) return ` ${total.value}`
-  return ` ${items.value.filter((item) => item.ownership.kind === kind).length}`
+  return ` ${total.value}`
 }
 
 function switchFilter(kind: string) {
+  if (activeFilter.value === kind) return
   activeFilter.value = kind
+  // 换筛选就把选中项清掉：否则底部按钮会带着一条已经看不见的食谱进入下一步
+  selectedKey.value = ''
+  selected.value = null
+  void reload()
 }
 
 async function reload() {
@@ -171,6 +174,7 @@ async function load(append: boolean) {
     const response = await listAssistedRecipeOptions(dogId.value, {
       customerId: customerId.value,
       keyword: keyword.value.trim() || undefined,
+      ownership: activeFilter.value || undefined,
       page: page.value,
       pageSize,
     })

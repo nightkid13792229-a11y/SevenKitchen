@@ -54,6 +54,13 @@
       </view>
 
       <view class="field-group">
+        <text class="field-label">生命阶段</text>
+        <picker :range="lifeStageLabels" :value="lifeStageIndex" @change="onLifeStageChange">
+          <view class="picker-box">{{ lifeStageLabels[lifeStageIndex] }}</view>
+        </picker>
+      </view>
+
+      <view class="field-group">
         <text class="field-label">活动量</text>
         <picker :range="activityLabels" :value="activityIndex" @change="onActivityChange">
           <view class="picker-box">{{ activityLabels[activityIndex] }}</view>
@@ -96,6 +103,17 @@ const activityIndex = ref(2)
 
 const bcsLabels = ['1 分 · 极瘦', '2 分', '3 分 · 偏瘦', '4 分', '5 分 · 标准', '6 分', '7 分 · 偏胖', '8 分', '9 分 · 肥胖']
 const bcsIndex = ref(4)
+
+/**
+ * 生命阶段。
+ *
+ * ⚠️ 后端 `CreateGuestDogDto.lifeStageOverride` 是**必填枚举**（没有 @IsOptional），
+ * 不传直接 400。默认给 `NONE` = 不覆盖、按生日自动算，绝大多数情况这就对了；
+ * 怀孕/哺乳/已确诊早衰这些特殊情况再手动选。
+ */
+const lifeStageLabels = ['不指定（按生日算）', '幼犬期', '成犬期', '老年期', '怀孕', '哺乳']
+const lifeStageValues = ['NONE', 'PUPPY', 'ADULT', 'SENIOR', 'PREGNANCY', 'LACTATION']
+const lifeStageIndex = ref(0)
 
 const form = reactive({
   name: '',
@@ -146,6 +164,9 @@ function onNeuteredChange(event: any) {
 function onBcsChange(event: any) {
   bcsIndex.value = Number(event?.detail?.value || 0)
 }
+function onLifeStageChange(event: any) {
+  lifeStageIndex.value = Number(event?.detail?.value || 0)
+}
 function onActivityChange(event: any) {
   activityIndex.value = Number(event?.detail?.value || 0)
 }
@@ -182,6 +203,7 @@ async function submit() {
       currentWeightKg: weight,
       bcsScore: bcsIndex.value + 1,
       activityLevel: activityValues[activityIndex.value],
+      lifeStageOverride: lifeStageValues[lifeStageIndex.value],
       mealsPerDay: 2,
     })
     const dogId = (response.data as any)?.dogId

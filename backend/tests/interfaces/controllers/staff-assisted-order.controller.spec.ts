@@ -266,4 +266,62 @@ describe('staff assisted order controller', () => {
     expect((res as any).code).toBe(0);
     expect(orderService.updateOrderAmount).toHaveBeenCalledWith('order-1', 400);
   });
+
+  it('没传收货地址 → 400（鲜食必须冷链发货，接口层也要挡）', async () => {
+    const { controller } = buildController();
+
+    const res = await controller.createAssistedOrder(
+      {
+        customerId: 'cust-1',
+        dogId: 'dog-1',
+        items: [{ recipeId: 'recipe-1', quantityG: 1000, packageCount: 5, packageSpecG: 200 }],
+        actualAmount: 428,
+      },
+      ADMIN,
+    );
+
+    expect((res as any).code).toBe(400);
+    expect((res as any).message).toContain('收货地址');
+  });
+
+  it('ownership 过滤只返回该档的食谱（筛选不能只在前端做）', async () => {
+    const { controller, prisma } = buildController();
+    prisma.recipe.findMany.mockResolvedValue([
+      {
+        id: 'i1', recipeId: 'r-window', version: 1, name: '橱窗餐', status: 'PUBLIC',
+        coverImageUrl: null, applicableLifeStages: [], customerOwnerId: null,
+        customerDogId: null, seriesId: null,
+      },
+      {
+        id: 'i2', recipeId: 'r-other', version: 2, name: '别人家的定制', status: 'PRIVATE_CUSTOM',
+        coverImageUrl: null, applicableLifeStages: [], customerOwnerId: 'cust-2',
+        customerDogId: null, seriesId: null,
+      },
+    ]);
+
+    const res = await controller.listAssistedRecipeOptions('dog-1', {
+      customerId: 'cust-1',
+      ownership: 'OTHER_CUSTOM',
+    });
+
+    const items = (res as any).data.items;
+    expect(items).toHaveLength(1);
+    expect(items[0].ownership.kind).toBe('OTHER_CUSTOM');
+    expect((res as any).data.total).toBe(1);
+  });
+
+  it('给非顾客账号建地址 → 404（防止把地址挂到员工/老板身上）', async () => {
+    const { controller, prisma, addressService } = buildController();
+    prisma.user.findUnique.mockResolvedValue({ id: 'staff-1', role: 'STAFF' });
+
+    const res = await controller.createCustomerAddress('staff-1', {
+      recipientName: '张三',
+      phone: '13800000000',
+      region: { province: '上海市', city: '上海市', district: '徐汇区' },
+      detail: '田林路 1 号',
+    });
+
+    expect((res as any).code).toBe(404);
+    expect(addressService.createAddress).not.toHaveBeenCalled();
+  });
 });

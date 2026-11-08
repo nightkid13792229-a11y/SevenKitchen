@@ -50,7 +50,8 @@ const form = reactive({
   recipientName: '',
   phone: '',
   detail: '',
-  isDefault: true,
+  // 默认不抢顾客原有的默认地址：建一条新地址不该悄悄改掉他原来的默认
+  isDefault: false,
 })
 
 onLoad((options: any) => {
@@ -107,7 +108,11 @@ async function submit() {
     })
     // 地址建好后直接返回；确认页在 onShow 里重新拉一次地址列表，
     // 比在页面之间传对象更稳（返回时列表已经刷新）。
-    void response
+    const createdId = String((response.data as any)?.id || '')
+    if (createdId) {
+      // 让确认页回来时自动选中这一条（否则会继续用旧地址）
+      uni.setStorageSync('assisted_address_created', createdId)
+    }
     uni.showToast({ title: '地址已保存', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 400)
   } catch (error: any) {

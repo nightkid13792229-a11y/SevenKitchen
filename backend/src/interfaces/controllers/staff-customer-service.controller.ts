@@ -240,6 +240,10 @@ export class StaffCustomerServiceController {
       if (!customerId || !dogId || items.length === 0) {
         return ApiResponseDto.error(400, 'customerId, dogId and items are required');
       }
+      if (!addressId) {
+        // 成品鲜食要冷链发货；没有地址的单既发不出去，也会被算成免运费。
+        return ApiResponseDto.error(400, '请选择收货地址');
+      }
 
       const dog = await this.prisma.dog.findUnique({
         where: { id: dogId },
@@ -322,6 +326,7 @@ export class StaffCustomerServiceController {
           ? `实际收款:${actualAmount.toFixed(2)}`
           : `实际收款:${toNumber(createdOrder.amountTotal).toFixed(2)}`,
         amountAdjustReason ? `差额原因:${amountAdjustReason}` : '',
+        body.recipeSource ? `食谱来源:${String(body.recipeSource)}` : '',
         body.remark ? `备注:${String(body.remark).trim()}` : '',
       ]
         .filter(Boolean)
@@ -813,6 +818,7 @@ export class StaffCustomerServiceController {
     query: {
       customerId?: string;
       keyword?: string;
+      ownership?: string;
       page?: string;
       pageSize?: string;
     },
@@ -872,7 +878,8 @@ export class StaffCustomerServiceController {
         seriesId: true,
       },
       orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
-      take: 500,
+      // ⚠️ 不要加 take：多版本食谱会吃掉配额，超出的部分会**静默消失**，
+      // total 也跟着被截断，员工翻页翻不到。当前规模（几百条）全量取回没问题。
     });
 
     // 2) 同一 recipeId 只留最高版本
@@ -975,15 +982,19 @@ export class StaffCustomerServiceController {
             where: { recipeId: { in: recipeIds } },
             select: {
               recipeId: true,
+              recipeVersion: true,
               ingredient: { select: { name: true } },
             },
           })
         : [];
+    // 按「recipeId@version」建索引：同一个食谱的不同版本原料可能不一样，
+    // 混在一起判过敏会给出假的"不能吃"提示。
     const ingredientNamesByRecipe = new Map<string, string[]>();
     for (const row of ingredientRows) {
-      const list = ingredientNamesByRecipe.get(row.recipeId) ?? [];
+      const key = `${row.recipeId}@${row.recipeVersion}`;
+      const list = ingredientNamesByRecipe.get(key) ?? [];
       list.push(String(row.ingredient?.name || '').toLowerCase());
-      ingredientNamesByRecipe.set(row.recipeId, list);
+      ingredientNamesByRecipe.set(key, list);
     }
 
     const dogLifeStage = this.resolveLifeStageKeyword(dog);
@@ -1004,7 +1015,8 @@ export class StaffCustomerServiceController {
           : 'OTHER_CUSTOM';
 
       const reasons: string[] = [];
-      const ingredientNames = ingredientNamesByRecipe.get(recipe.recipeId) ?? [];
+      const ingredientNames =
+        ingredientNamesByRecipe.get(`${recipe.recipeId}@${recipe.version}`) ?? [];
       for (const allergen of allergens) {
         const hit = ingredientNames.find(
           (name) => name.includes(allergen) || allergen.includes(name),
@@ -1052,8 +1064,15 @@ export class StaffCustomerServiceController {
       };
     });
 
+    const ownershipFilter = String(query.ownership || '').toUpperCase();
+    const ownershipFiltered = ['WINDOW', 'OWN_CUSTOM', 'OTHER_CUSTOM'].includes(
+      ownershipFilter,
+    )
+      ? items.filter((item) => item.ownership.kind === ownershipFilter)
+      : items;
+
     const filtered = keyword
-      ? items.filter((item) =>
+      ? ownershipFiltered.filter((item) =>
           [
             item.name,
             item.ownership.customerName,
@@ -1064,7 +1083,7 @@ export class StaffCustomerServiceController {
               .includes(keyword),
           ),
         )
-      : items;
+      : ownershipFiltered;
 
     const start = (page - 1) * pageSize;
     return ApiResponseDto.success({
@@ -1187,9 +1206,9 @@ export class StaffCustomerServiceController {
 
     const customer = await this.prisma.user.findUnique({
       where: { id: customerId },
-      select: { id: true },
+      select: { id: true, role: true },
     });
-    if (!customer) {
+    if (!customer || customer.role !== 'CUSTOMER') {
       return ApiResponseDto.error(404, 'Customer not found');
     }
 

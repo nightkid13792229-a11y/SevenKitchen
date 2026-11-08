@@ -16,6 +16,7 @@ const readiness = {
   designMode: 'CATALOG',
   businessStatus: 'PUBLIC',
   releaseState: 'NEEDS_UPDATE',
+  name: '幼犬鸡肉',
   ready: true,
   canRelease: true,
   releaseDraft: { exists: false, updatedAt: null, changedFields: [] },
@@ -27,7 +28,8 @@ const readiness = {
     coverTitle: '幼犬鸡肉',
     sellingPoint: '鲜肉低敏，幼犬日常',
     targetHealthTags: ['tag-1'],
-    coverBadges: ['低脂']
+    coverBadges: ['低脂'],
+    coverBadgeIds: ['tag-1']
   },
   blockers: [],
   warnings: [],
@@ -42,17 +44,18 @@ const readiness = {
   }
 }
 
-const settingsSnapshot = {
-  seriesId: 'series-1',
-  name: '幼犬鸡肉',
-  designMode: 'CATALOG',
-  businessStatus: 'DRAFT',
-  requiredLifeStages: ['PUPPY_UNDER_14_WEEKS'],
-  coverImageUrl: 'https://img.example.com/cover.jpg',
-  coverTitle: '幼犬鸡肉',
-  sellingPoint: '鲜肉低敏，幼犬日常',
-  targetHealthTags: ['tag-1'],
-  updatedAt: '2026-10-22T12:00:00.000Z'
+const draftResult = {
+  changedFields: ['name'],
+  updatedAt: '2026-11-08T12:00:00.000Z',
+  name: '幼犬鸡肉 · 新',
+  presentation: {
+    coverImageUrl: 'https://img.example.com/cover.jpg',
+    coverTitle: '幼犬鸡肉',
+    sellingPoint: '鲜肉低敏，幼犬日常',
+    targetHealthTags: ['tag-1'],
+    coverBadges: ['低脂'],
+    coverBadgeIds: ['tag-1']
+  }
 }
 
 const releaseResult = {
@@ -93,24 +96,23 @@ describe('系列发布 API', () => {
     expect(result).toBe(readiness)
   })
 
-  it('保存设置走 PATCH /recipe-designer/series/:id/release-settings', async () => {
-    transport.patch.mockResolvedValue(settingsSnapshot)
+  it('保存草稿走 PATCH /recipe-designer/series/:id/release-draft（带乐观锁）', async () => {
+    transport.patch.mockResolvedValue(draftResult)
     const payload = {
-      coverImageUrl: 'https://img.example.com/cover.jpg',
-      coverTitle: '幼犬鸡肉',
-      sellingPoint: '鲜肉低敏，幼犬日常'
+      name: '幼犬鸡肉 · 新',
+      expectedUpdatedAt: '2026-11-08T11:59:00.000Z'
     }
 
-    const result = await recipeDesignerApi.updateSeriesReleaseSettings(
+    const result = await recipeDesignerApi.saveSeriesReleaseDraft(
       'series-1',
       payload
     )
 
     expect(transport.patch).toHaveBeenCalledWith(
-      '/recipe-designer/series/series-1/release-settings',
+      '/recipe-designer/series/series-1/release-draft',
       payload
     )
-    expect(result).toBe(settingsSnapshot)
+    expect(result).toBe(draftResult)
   })
 
   it('发布走 POST /recipe-designer/series/:id/release', async () => {
@@ -125,16 +127,16 @@ describe('系列发布 API', () => {
     expect(result).toBe(releaseResult)
   })
 
-  it('更新时把勾选的阶段代码放进 POST body', async () => {
+  it('发布时带上草稿时间做并发保护，不再传阶段代码', async () => {
     transport.post.mockResolvedValue(releaseResult)
 
     await recipeDesignerApi.releaseSeries('series-1', {
-      stageCodes: ['HIGH_ACTIVITY_ADULT']
+      expectedDraftUpdatedAt: '2026-11-08T12:00:00.000Z'
     })
 
     expect(transport.post).toHaveBeenCalledWith(
       '/recipe-designer/series/series-1/release',
-      { stageCodes: ['HIGH_ACTIVITY_ADULT'] }
+      { expectedDraftUpdatedAt: '2026-11-08T12:00:00.000Z' }
     )
   })
 

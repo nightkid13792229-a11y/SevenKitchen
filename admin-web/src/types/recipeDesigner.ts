@@ -422,6 +422,11 @@ export type SeriesReleaseDraftField =
 
 /** PATCH /recipe-designer/series/:seriesId/release-draft · 只传要改的字段 */
 export interface SaveSeriesReleaseDraftPayload {
+  /**
+   * 乐观锁：打开抽屉 / 上次保存拿到的 `releaseDraft.updatedAt`。
+   * 传 null 表示认为当前没有草稿；与数据库不一致时后端 409。
+   */
+  expectedUpdatedAt?: string | null
   /** 食谱名称：最多 12 个字，空名 400 */
   name?: string | null
   coverImageUrl?: string | null
@@ -439,6 +444,8 @@ export interface SeriesReleasePresentation {
   targetHealthTags: string[]
   /** 系列封面角标（合规词表名称，只读回传，便于预览） */
   coverBadges: string[]
+  /** 生效角标 id（顺序即展示顺序）：编辑下拉直接可用 */
+  coverBadgeIds: string[]
 }
 
 /** GET /recipe-designer/series/:seriesId/release-readiness */
@@ -487,31 +494,6 @@ export interface SeriesReleaseReadiness {
     /** 可操作阶段数（READY + PUBLIC 待更新） */
     actionableStageCount: number
   }
-}
-
-/**
- * PATCH `/recipe-designer/series/:seriesId/release-settings`
- *
- * patch semantics：只传需要修改的字段；显式 null 表示清空。
- */
-export interface UpdateRecipeSeriesReleaseSettingsPayload {
-  coverImageUrl?: string | null
-  coverTitle?: string | null
-  sellingPoint?: string | null
-}
-
-/** 发布设置保存后的响应（只返回系列发布相关字段） */
-export interface SeriesReleaseSettingsSnapshot {
-  seriesId: string
-  name: string
-  designMode: string
-  businessStatus: string
-  requiredLifeStages: string[]
-  coverImageUrl: string | null
-  coverTitle: string | null
-  sellingPoint: string | null
-  targetHealthTags: string[]
-  updatedAt: string
 }
 
 /** POST /recipe-designer/series/:seriesId/release */
@@ -1035,4 +1017,6 @@ export interface TaxonomySeriesItem {
   links: TaxonomySeriesLink[]
   /** 还没归的分类 code，顺序与分类 sort 一致 */
   missingKindCodes: string[]
+  /** 归类改在发布草稿里、还没发布（2026-11-08） */
+  hasDraftTaxonomy: boolean
 }

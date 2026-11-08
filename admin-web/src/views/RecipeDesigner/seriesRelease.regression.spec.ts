@@ -37,8 +37,9 @@ describe('产品线发布 · 草稿化契约（2026-11-08）', () => {
     expect(drawerSource).toContain('改完自动存成草稿')
   })
 
-  it('发布是整版发：不再带 stageCodes', () => {
-    expect(drawerSource).toContain('releaseSeries(props.seriesId)')
+  it('发布是整版发：不再带 stageCodes，只带草稿并发锁', () => {
+    expect(drawerSource).toContain('releaseSeries(props.seriesId, {')
+    expect(drawerSource).toContain('expectedDraftUpdatedAt')
     expect(drawerSource).not.toContain('stageCodes')
     expect(drawerSource).not.toContain('selectedStageCodes')
   })
@@ -64,6 +65,30 @@ describe('产品线发布 · 草稿化契约（2026-11-08）', () => {
     expect(drawerSource).toContain("emit('design-stage', stage.stageCode)")
     expect(indexSource).toContain('@design-stage="handleDesignStage"')
     expect(indexSource).toContain('function handleDesignStage')
+  })
+
+  it('保存排队合并，失败明确提示，发布前等队列 flush', () => {
+    expect(drawerSource).toContain('saveQueue.push')
+    expect(drawerSource).toContain('Object.assign(mergedPatch, item.patch)')
+    expect(drawerSource).toContain('await flushDraftSaves()')
+    expect(drawerSource).toContain('草稿保存失败，请重试')
+    expect(drawerSource).toContain('expectedUpdatedAt: expectedUpdatedAt.value')
+  })
+
+  it('封面只有草稿保存成功后才提示「已存进草稿」', () => {
+    expect(drawerSource).toContain(
+      'await enqueueDraftPatch({ coverImageUrl: result.url })'
+    )
+    expect(drawerSource).toContain('封面已存进草稿，发布后生效')
+    expect(drawerSource).toContain('UPLOAD_DISCARDED')
+  })
+
+  it('「只看有草稿」下推到后端分页，不再只过滤当前页', () => {
+    expect(indexSource).toContain(
+      'hasReleaseDraft: onlyDraft.value || undefined'
+    )
+    expect(indexSource).not.toContain('visibleSeries')
+    expect(apiSource).toContain('hasReleaseDraft?: boolean')
   })
 
   it('卡片入口按状态显示「查看 / 上线」', () => {

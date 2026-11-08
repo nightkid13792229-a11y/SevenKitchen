@@ -66,9 +66,9 @@ export function resolveSeriesAiCoverHint(ctx: SeriesAiCoverContext): string {
     return '重新生成会先出预览，点「用这张」才替换。'
   }
   if (ctx.isLive) {
-    return '生成后先看预览，确认后点「保存发布设置」才会生效。'
+    return '生成后先看预览，确认后点「用这张」存进发布草稿，发布后才替换线上封面。'
   }
-  return '按系列名和最近一份草稿的食材一次生成 3 张候选，约 40–70 秒；挑一张点「用这张」再保存。'
+  return '按系列名和最近一份草稿的食材一次生成 3 张候选，约 40–70 秒；挑一张点「用这张」存进发布草稿。'
 }
 
 export function resolveSeriesAiCoverButtonLabel(

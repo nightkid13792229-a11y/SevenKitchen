@@ -30,7 +30,6 @@ import type {
   SeriesReleaseReadiness,
   SeriesReleaseResult,
   SaveSeriesReleaseDraftPayload,
-  SeriesReleaseSettingsSnapshot,
   SeriesUnpublishResult,
   SupplementLabelExtractionDraft,
   SupplementNutritionBasisType,
@@ -38,8 +37,7 @@ import type {
   UpdateDesignRecipeDraftPayload,
   UpdateDesignRecipeProductionStepsPayload,
   UpdateDogDesignNotesPayload,
-  UpdateDraftPresentationPayload,
-  UpdateRecipeSeriesReleaseSettingsPayload
+  UpdateDraftPresentationPayload
 } from '@/types/recipeDesigner'
 
 export interface RecipeDesignerSeriesListQuery {
@@ -48,6 +46,8 @@ export interface RecipeDesignerSeriesListQuery {
   search?: string
   page?: number
   pageSize?: number
+  /** 只看有发布草稿的系列（2026-11-08：下推到后端 where / count） */
+  hasReleaseDraft?: boolean
 }
 
 export interface RecipeDesignerSeriesListResult {
@@ -152,12 +152,6 @@ export const recipeDesignerApi = {
    */
   getSeriesReleaseReadiness: (seriesId: string): Promise<SeriesReleaseReadiness> =>
     api.get(`/recipe-designer/series/${seriesId}/release-readiness`),
-  /** 保存系列级发布设置（必填阶段 + 系列展示资料），patch semantics */
-  updateSeriesReleaseSettings: (
-    seriesId: string,
-    data: UpdateRecipeSeriesReleaseSettingsPayload,
-  ): Promise<SeriesReleaseSettingsSnapshot> =>
-    api.patch(`/recipe-designer/series/${seriesId}/release-settings`, data),
   /**
    * 保存产品线发布草稿（2026-11-08）。
    *
@@ -182,7 +176,12 @@ export const recipeDesignerApi = {
    */
   releaseSeries: (
     seriesId: string,
-    payload: { stageCodes?: string[] } = {},
+    payload: {
+      /** @deprecated 2026-11-08 起整版发布，服务层忽略 */
+      stageCodes?: string[]
+      /** 发布前 flush 完保存队列后的草稿时间，服务端据此做 409 并发保护 */
+      expectedDraftUpdatedAt?: string | null
+    } = {},
   ): Promise<SeriesReleaseResult> =>
     api.post(`/recipe-designer/series/${seriesId}/release`, payload),
   /**

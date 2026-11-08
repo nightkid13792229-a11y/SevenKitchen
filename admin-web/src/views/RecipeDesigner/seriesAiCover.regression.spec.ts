@@ -76,8 +76,15 @@ describe('系列 AI 封面 · 源码契约', () => {
     expect(drawerSource).toContain('更换封面')
   })
 
-  it('生成不阻断保存发布设置', () => {
-    expect(drawerSource).toContain(':disabled="saving || uploading || !dirty"')
-    expect(drawerSource).not.toContain('aiCoverGenerating || !dirty')
+  it('生成不阻断其它字段保存（采用后写草稿队列）', () => {
+    // 保存队列本身不看生成状态：生成 40–70 秒期间仍可改卖点 / 角标
+    const saveBlock = drawerSource.slice(
+      drawerSource.indexOf('function enqueueDraftPatch'),
+      drawerSource.indexOf('async function flushDraftSaves')
+    )
+    expect(saveBlock).not.toContain('aiCoverGenerating')
+    expect(drawerSource).toContain(
+      'aiCoverGenerating || !!aiCoverUnavailableReason'
+    )
   })
 })

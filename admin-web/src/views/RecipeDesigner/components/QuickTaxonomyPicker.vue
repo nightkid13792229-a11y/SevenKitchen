@@ -21,7 +21,7 @@
     </div>
 
     <div class="quick-note">
-      双拼 / 多拼菜可以不挂主蛋白，挂其它任一分类即可发布。
+      双拼 / 多拼菜可以不挂主蛋白，挂其它任一分类即可发布。改动先存发布草稿，点「发布这一版」后才影响顾客筛选。
     </div>
 
     <el-dialog
@@ -113,14 +113,15 @@ async function load() {
   if (!props.seriesId) return
   loading.value = true
   try {
-    const [tree, seriesList] = await Promise.all([
+    // 2026-11-08：归类先存发布草稿，这里读「草稿 ?? 线上」的生效值；
+    // 顺便不再去 200 条的列表里找（系列一多就会找不到、显示成全空）。
+    const [tree, current] = await Promise.all([
       recipeTaxonomyApi.getTree({ designMode: 'CATALOG' }),
-      recipeTaxonomyApi.listSeries({ page: 1, pageSize: 200 })
+      recipeTaxonomyApi.getSeriesLinks(props.seriesId)
     ])
     kinds.value = tree.kinds ?? []
-    const current = seriesList.items.find((item) => item.id === props.seriesId)
     const next: Record<string, string> = {}
-    for (const link of current?.links ?? []) {
+    for (const link of current.links ?? []) {
       next[link.kindId] = link.nodeId
     }
     linked.value = next
@@ -150,7 +151,7 @@ async function save() {
       )
       .filter((value): value is string => Boolean(value))
     await recipeTaxonomyApi.replaceLinks(props.seriesId, nodeIds)
-    ElMessage.success('归类已保存')
+    ElMessage.success('归类已存进发布草稿，发布后生效')
     pickerVisible.value = false
     await load()
     emit('saved')

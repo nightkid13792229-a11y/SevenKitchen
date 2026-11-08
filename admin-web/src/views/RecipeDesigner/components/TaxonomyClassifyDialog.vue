@@ -53,7 +53,7 @@
     </div>
 
     <template #footer>
-      <span class="footer-note">只写归属关系，不改配方、不触发发布</span>
+      <span class="footer-note">先存发布草稿，点「发布这一版」后才影响顾客筛选</span>
       <el-button @click="emit('update:modelValue', false)">取消</el-button>
       <el-button type="primary" :loading="saving" @click="save">保存归类</el-button>
     </template>
@@ -149,7 +149,7 @@ async function save() {
     } else {
       await recipeTaxonomyApi.batchLinks(props.seriesIds, nodeIds)
     }
-    ElMessage.success('归类已保存')
+    ElMessage.success('归类已存进发布草稿，发布后生效')
     emit('saved')
     emit('update:modelValue', false)
   } catch (error: any) {

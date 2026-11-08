@@ -135,6 +135,9 @@
                   ⓘ 本设置对<b>整个系列</b>生效（全部生命阶段版本共用），改一次即可
                 </div>
                 <div class="cover-badge-editor__hint">
+                  ⓘ 产品线的角标先存进<b>发布草稿</b>，点「发布这一版」后才对顾客生效
+                </div>
+                <div class="cover-badge-editor__hint">
                   ⓘ 显示位置：<b>封面图片底部</b>的渐变条上（不是左上角）
                 </div>
                 <div class="cover-badge-editor__hint">
@@ -1768,6 +1771,8 @@ const loadSeriesCoverBadges = async () => {
   const seriesId = currentSeriesId.value;
   if (!seriesId) return;
   try {
+    // 2026-11-08：后端已按系列类型分流 —— 产品线读「草稿 ?? 线上」，
+    // 订单定制读线上；这里仍然只认这一个接口。
     const res = await recipeSeriesCoverBadgeApi.get(seriesId);
     seriesCoverBadgeIds.value = (res?.badges || [])
       .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -1783,6 +1788,7 @@ const saveSeriesCoverBadges = async () => {
   const seriesId = currentSeriesId.value;
   if (!seriesId) return;
   try {
+    // 2026-11-08：产品线由后端写发布草稿（发布后生效），订单定制直接写线上
     await recipeSeriesCoverBadgeApi.save(seriesId, seriesCoverBadgeIds.value);
   } catch (error: any) {
     ElMessage.warning(

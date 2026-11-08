@@ -80,6 +80,13 @@ const props = defineProps<{
   modelValue: string
   seriesId: string
   placeholder?: string
+  /**
+   * 采用 / 失焦时怎么落库（2026-11-08）。
+   *
+   * 不传 = 直接改系列名（产品线未上线时的旧路径 / 其它调用方）；
+   * 传了 = 写发布草稿，随「发布这一版」生效，成功后组件再标记已保存。
+   */
+  persistName?: (name: string) => Promise<void>
 }>()
 
 const emit = defineEmits<{
@@ -153,9 +160,14 @@ async function commitTypedName() {
   if (!name || name === savedValue.value) return
   adopting.value = name
   try {
-    await recipeDesignerApi.renameSeries(props.seriesId, { name })
+    if (props.persistName) {
+      await props.persistName(name)
+      ElMessage.success('名称已存进发布草稿，发布后生效')
+    } else {
+      await recipeDesignerApi.renameSeries(props.seriesId, { name })
+      ElMessage.success('名称已保存')
+    }
     savedValue.value = name
-    ElMessage.success('名称已保存')
     emit('saved', name)
   } catch (error: any) {
     ElMessage.error(error?.message || '保存失败，请重试')

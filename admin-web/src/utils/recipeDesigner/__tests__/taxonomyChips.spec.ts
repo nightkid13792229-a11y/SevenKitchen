@@ -21,7 +21,8 @@ const item: TaxonomySeriesItem = {
     { kindId: 'k-protein', kindCode: 'MAIN_PROTEIN', kindName: '主蛋白', nodeId: 'n1', nodeName: '三文鱼' },
     { kindId: 'k-decoration', kindCode: 'SCENARIO', kindName: '场景', nodeId: 'n2', nodeName: '日常主食' }
   ],
-  missingKindCodes: ['HEALTH_NEED']
+  missingKindCodes: ['HEALTH_NEED'],
+  hasDraftTaxonomy: false
 }
 
 describe('buildTaxonomyChips', () => {

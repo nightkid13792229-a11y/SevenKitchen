@@ -735,9 +735,11 @@ const handleCoverUpload: UploadProps['beforeUpload'] = async (file) => {
     try {
       await enqueueDraftPatch({ coverImageUrl: result.url })
     } catch {
-      void recipeDesignerApi
-        .discardAiCoverPreview(result.url, 'UPLOAD_DISCARDED')
-        .catch(() => undefined)
+      /**
+       * 保存失败时**不**回收刚上传的图：请求可能已经在服务端成功、只是
+       * 响应没回来，贸然回收会让草稿指向一张已删除的图。宁可留一张孤儿图，
+       * 也不能把草稿弄坏；用户重试保存即可。
+       */
       return false
     }
     const previous = pendingCoverUrl.value

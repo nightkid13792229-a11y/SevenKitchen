@@ -303,6 +303,7 @@
       @released="handleSeriesReleased"
       @updated="handleSeriesUpdated"
       @saved="handleSeriesUpdated"
+      @design-stage="handleDesignStage"
     />
   </div>
 </template>
@@ -472,9 +473,12 @@ function hasCardPendingUpdates(card: RecipeDesignerSeriesCard): boolean {
   )
 }
 
-/** 卡片入口文案：已上线叫「更新」，未上线叫「发布」（设计 6.1） */
+/**
+ * 卡片入口文案（2026-11-08 草稿化之后）：
+ * 已上线只进详情看，未上线才是真的「上线」。
+ */
 function seriesReleaseEntryLabel(card: RecipeDesignerSeriesCard): string {
-  return card.businessStatus === 'PUBLIC' ? '更新' : '发布'
+  return card.businessStatus === 'PUBLIC' ? '查看' : '上线'
 }
 
 function openSeriesReleaseDrawer(card: RecipeDesignerSeriesCard): void {
@@ -508,6 +512,17 @@ function openReleaseDrawerFromQuery(): void {
 /** 发布成功后刷新列表：卡片状态与阶段进度立即反映整系列已发布 */
 async function handleSeriesReleased(): Promise<void> {
   await loadSeries(filters.page)
+}
+
+/** 发布抽屉里点「还没设计」的阶段：复用列表卡片的进编辑器逻辑 */
+function handleDesignStage(stageCode: string): void {
+  const card = series.value.find((item) => item.id === releaseDrawerSeriesId.value)
+  const stage = card?.stages?.find((item) => item.lifeStage === stageCode)
+  if (!card || !stage) {
+    ElMessage.warning('这条产品线不在当前列表页，请回列表点该阶段进入')
+    return
+  }
+  void openStage(card, stage)
 }
 
 /** 下架 / 系列状态变化后刷新列表，卡片入口文案与进度同步更新 */

@@ -25,8 +25,11 @@ import type {
   RecipeDesignerSeriesStatusFilter,
   AiCoverCandidate,
   SeriesAiCoverResult,
+  SeriesReleaseDraftField,
+  SeriesReleasePresentation,
   SeriesReleaseReadiness,
   SeriesReleaseResult,
+  SaveSeriesReleaseDraftPayload,
   SeriesReleaseSettingsSnapshot,
   SeriesUnpublishResult,
   SupplementLabelExtractionDraft,
@@ -155,6 +158,21 @@ export const recipeDesignerApi = {
     data: UpdateRecipeSeriesReleaseSettingsPayload,
   ): Promise<SeriesReleaseSettingsSnapshot> =>
     api.patch(`/recipe-designer/series/${seriesId}/release-settings`, data),
+  /**
+   * 保存产品线发布草稿（2026-11-08）。
+   *
+   * 只写草稿，顾客端不变；patch semantics，省略 = 不动，显式 null / 空数组 = 清空。
+   * 草稿最终和线上值一致时后端会直接删草稿，返回 changedFields 为空。
+   */
+  saveSeriesReleaseDraft: (
+    seriesId: string,
+    data: SaveSeriesReleaseDraftPayload,
+  ): Promise<{
+    changedFields: SeriesReleaseDraftField[]
+    updatedAt: string | null
+    presentation: SeriesReleasePresentation
+  }> =>
+    api.patch(`/recipe-designer/series/${seriesId}/release-draft`, data),
   /**
    * 发布整条产品线（仅管理员；后端会再次校验门槛与角色）。
    *

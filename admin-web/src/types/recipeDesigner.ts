@@ -408,6 +408,24 @@ export interface SeriesReleaseStageReadiness {
   actionable: boolean
 }
 
+/** 草稿里会被比较 / 展示的字段（与后端 series-release-draft.ts 一致） */
+export type SeriesReleaseDraftField =
+  | 'coverImageUrl'
+  | 'coverTitle'
+  | 'sellingPoint'
+  | 'targetHealthTags'
+  | 'coverBadges'
+  | 'taxonomy'
+
+/** PATCH /recipe-designer/series/:seriesId/release-draft · 只传要改的字段 */
+export interface SaveSeriesReleaseDraftPayload {
+  coverImageUrl?: string | null
+  coverTitle?: string | null
+  sellingPoint?: string | null
+  targetHealthTags?: string[]
+  badgeHealthTagIds?: string[]
+}
+
 /** 系列级产品展示资料（发布时复制到每条阶段食谱） */
 export interface SeriesReleasePresentation {
   coverImageUrl: string | null
@@ -428,11 +446,20 @@ export interface SeriesReleaseReadiness {
   releaseState: SeriesReleaseState
   /** 展示资料是否齐全（封面图 + 一句话卖点） */
   ready: boolean
-  /** 是否可点「发布 / 更新」：展示资料齐全，且至少有一个可操作阶段 */
+  /**
+   * 是否可点「发布这一版」：
+   * 展示资料齐全，且（有可操作阶段 或 已上线系列的资料草稿有改动）
+   */
   canRelease: boolean
   /** 全量阶段（便于后台展示「其它已设计阶段」） */
   stages: SeriesReleaseStageReadiness[]
   presentation: SeriesReleasePresentation
+  /** 发布草稿（2026-11-08）：顾客端看不到，点「发布这一版」才生效 */
+  releaseDraft: {
+    exists: boolean
+    updatedAt: string | null
+    changedFields: SeriesReleaseDraftField[]
+  }
   blockers: SeriesReleaseBlocker[]
   warnings: SeriesReleaseWarning[]
   /** 是否存在「已发布过、但又有更新草稿」的阶段 */

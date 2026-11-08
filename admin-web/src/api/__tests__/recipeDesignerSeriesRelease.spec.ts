@@ -18,6 +18,7 @@ const readiness = {
   releaseState: 'NEEDS_UPDATE',
   ready: true,
   canRelease: true,
+  releaseDraft: { exists: false, updatedAt: null, changedFields: [] },
   hasPendingUpdates: true,
   pendingStageCodes: ['PUPPY_UNDER_14_WEEKS'],
   stages: [],

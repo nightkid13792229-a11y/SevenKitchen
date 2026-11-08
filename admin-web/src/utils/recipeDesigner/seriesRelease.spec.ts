@@ -37,6 +37,7 @@ const readiness: SeriesReleaseReadiness = {
   releaseState: 'NEEDS_UPDATE',
   ready: false,
   canRelease: false,
+  releaseDraft: { exists: true, updatedAt: '2026-11-08T03:52:00.000Z', changedFields: ['sellingPoint'] },
   hasPendingUpdates: true,
   pendingStageCodes: ['HIGH_ACTIVITY_ADULT'],
   stages: [

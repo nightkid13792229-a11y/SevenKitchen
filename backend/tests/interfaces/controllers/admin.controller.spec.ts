@@ -1393,10 +1393,12 @@ describe('AdminController', () => {
 
     it('保存白名单内的词会写进发布草稿，而不是直接改线上角标', async () => {
       const update = jest.fn(async ({ data }: any) => data);
+      const updateMany = jest.fn(async ({ data }: any) => ({ count: 1, data }));
       const prisma = {
         recipeSeries: {
           findUnique: jest.fn().mockResolvedValue(seriesRow),
           update,
+          updateMany,
         },
         recipeSeriesCoverBadge: {
           findMany: jest.fn().mockResolvedValue([]),
@@ -1418,9 +1420,10 @@ describe('AdminController', () => {
       );
 
       expect(result.code).toBe(0);
-      const data = update.mock.calls.at(-1)?.[0].data;
+      const data = updateMany.mock.calls.at(-1)?.[0].data;
       expect(data.releaseDraft.badgeHealthTagIds).toEqual(['tag-low-fat']);
       expect(data.releaseDraft.touched).toContain('coverBadges');
+      expect(update).not.toHaveBeenCalled();
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });

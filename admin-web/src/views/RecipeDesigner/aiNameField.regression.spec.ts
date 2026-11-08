@@ -39,7 +39,9 @@ describe('AI 命名字段', () => {
     expect(fieldSource).toContain('.slice(0, 2)')
   })
 
-  it('点「采用」直接落库，不再要求二次点保存', () => {
+  it('点「采用」直接落库：有 persistName 写草稿，没有才改系列名', () => {
+    expect(fieldSource).toContain('if (props.persistName) {')
+    expect(fieldSource).toContain('await props.persistName(name)')
     expect(fieldSource).toContain('recipeDesignerApi.renameSeries')
     expect(fieldSource).toContain("emit('saved', name)")
     expect(fieldSource).not.toContain('再点一次保存')

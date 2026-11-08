@@ -423,6 +423,11 @@ export class UpdateRecipeDesignPresentationDto {
  * 全部字段可选（patch semantics）：没传的字段保持原值，显式 null 表示清空。
  */
 export class UpdateRecipeSeriesReleaseSettingsDto {
+  /** 乐观锁：上次拿到的草稿时间；不传 = 老客户端，不做校验 */
+  @IsOptional()
+  @IsString()
+  expectedUpdatedAt?: string | null;
+
   /**
    * @deprecated 2026-10-26：发布范围改由阶段状态推导。
    * DTO 仍接受该字段以兼容旧前端，但服务层忽略、不再写库。

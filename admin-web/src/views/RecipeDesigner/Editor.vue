@@ -463,6 +463,7 @@ import SupplementTargetDialog from './components/SupplementTargetDialog.vue'
 import PreparationMethodField from './components/PreparationMethodField.vue'
 import { PREPARATION_FIELD_LABEL } from '@/constants/preparationField'
 import { isTemporarySeriesName } from '@/utils/recipeDesigner/seriesName'
+import { getApiErrorMessage } from '@/utils/apiError'
 import {
   DEFAULT_PANE_WIDTHS,
   PANE_MAX_WIDTH,
@@ -737,7 +738,8 @@ async function confirmRename() {
     renameDialogVisible.value = false
     ElMessage.success('系列名称已更新，旗下所有配方同步生效')
   } catch (error) {
-    ElMessage.error('改名失败，请重试')
+    // 已上线 / 有发布草稿的产品线会被后端拦下，直接展示原因（去发布抽屉改名）
+    ElMessage.error(getApiErrorMessage(error, '改名失败，请重试'))
   } finally {
     renaming.value = false
   }

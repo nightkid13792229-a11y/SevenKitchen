@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { RecipeTaxonomyService } from 'src/application/recipe-taxonomy/recipe-taxonomy.service';
 
 const salmon = {
@@ -72,6 +72,7 @@ function createService(options: {
       findUnique: jest.fn().mockResolvedValue(series),
       findMany: jest.fn().mockResolvedValue(seriesRows),
       update: jest.fn(async ({ data }: any) => data),
+      updateMany: jest.fn(async ({ data }: any) => ({ count: 1, data })),
     },
     recipeSeriesCoverBadge: {
       findMany: jest.fn().mockResolvedValue(options.badges ?? []),
@@ -92,7 +93,10 @@ function createService(options: {
 
 /** 从 update 调用里取出写进草稿的 taxonomy。 */
 function draftTaxonomyOf(prisma: any) {
-  const calls = prisma.recipeSeries.update.mock.calls;
+  const calls = [
+    ...prisma.recipeSeries.update.mock.calls,
+    ...prisma.recipeSeries.updateMany.mock.calls,
+  ];
   const last = calls[calls.length - 1]?.[0];
   return last?.data?.releaseDraft?.taxonomy;
 }
@@ -150,13 +154,22 @@ describe('RecipeTaxonomyService.replaceSeriesLinks · 写发布草稿', () => {
       { kindId: 'k-protein', nodeId: 'n-salmon' },
       { kindId: 'k-health', nodeId: 'n-soft' },
     ]);
-    expect(prisma.recipeSeries.update).toHaveBeenCalledWith({
-      where: { id: 's1' },
+    expect(prisma.recipeSeries.updateMany).toHaveBeenCalledWith({
+      where: { id: 's1', releaseDraftUpdatedAt: null },
       data: expect.objectContaining({
         releaseDraftUpdatedBy: 'staff-1',
       }),
     });
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('保存时草稿被他人改过 → 409，不覆盖', async () => {
+    const { prisma, service } = createService({ nodes: [salmon] });
+    prisma.recipeSeries.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      service.replaceSeriesLinks('s1', ['n-salmon'], null),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('订单定制系列仍直接写线上（不改交付流程）', async () => {
@@ -194,7 +207,7 @@ describe('RecipeTaxonomyService.batchClassify · 写发布草稿', () => {
       null,
     );
     expect(result.updated).toBe(2);
-    expect(prisma.recipeSeries.update).toHaveBeenCalledTimes(2);
+    expect(prisma.recipeSeries.updateMany).toHaveBeenCalledTimes(2);
     expect(draftTaxonomyOf(prisma)).toEqual([
       { kindId: 'k-protein', nodeId: 'n-salmon' },
     ]);

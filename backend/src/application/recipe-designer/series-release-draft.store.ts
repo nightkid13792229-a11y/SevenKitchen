@@ -148,7 +148,7 @@ export async function persistSeriesReleaseDraft(
    * 仍等于调用方手上的时间才写得进去。检查与写入是同一条 SQL，避免
    * 「两个请求都通过检查、后写的覆盖先写的」。省略 = 内部调用不做锁。
    */
-  expectedUpdatedAt?: string | null,
+  expectedUpdatedAt?: string | Date | null,
 ): Promise<{
   changedFields: SeriesReleaseDraftField[];
   updatedAt: Date | null;
@@ -168,7 +168,11 @@ export async function persistSeriesReleaseDraft(
     await prisma.recipeSeries.update({ where: { id: seriesId }, data });
   } else {
     const expected =
-      expectedUpdatedAt === null ? null : new Date(expectedUpdatedAt);
+      expectedUpdatedAt === null
+        ? null
+        : expectedUpdatedAt instanceof Date
+          ? expectedUpdatedAt
+          : new Date(expectedUpdatedAt);
     if (expected !== null && Number.isNaN(expected.getTime())) {
       throw new ConflictException('发布草稿版本不合法，请刷新后重试');
     }
@@ -193,9 +197,12 @@ export async function persistSeriesReleaseDraft(
 export async function clearStaleSeriesReleaseDraft(
   prisma: Pick<PrismaService, 'recipeSeries'>,
   seriesId: string,
+  expectedUpdatedAt: Date | string | null,
 ): Promise<void> {
-  await prisma.recipeSeries.update({
-    where: { id: seriesId },
+  const expected =
+    expectedUpdatedAt === null ? null : new Date(expectedUpdatedAt);
+  await prisma.recipeSeries.updateMany({
+    where: { id: seriesId, releaseDraftUpdatedAt: expected },
     data: {
       releaseDraft: Prisma.DbNull,
       releaseDraftUpdatedAt: null,

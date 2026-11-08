@@ -174,6 +174,14 @@ const isSameStringSet = (left: string[], right: string[]): boolean => {
   return sortedLeft.every((value, index) => value === sortedRight[index]);
 };
 
+/** 顺序敏感的比较：封面角标数组顺序就是封面上的展示顺序。 */
+const isSameOrderedStringList = (
+  left: string[],
+  right: string[],
+): boolean =>
+  left.length === right.length &&
+  left.every((value, index) => value === right[index]);
+
 const taxonomySignature = (links: SeriesReleaseDraftTaxonomyLink[]): string =>
   links
     .map((link) => `${link.kindId}:${link.nodeId}`)
@@ -198,7 +206,9 @@ export function diffSeriesReleaseDraft(
   if (!isSameStringSet(draft.targetHealthTags, live.targetHealthTags)) {
     changed.push('targetHealthTags');
   }
-  if (!isSameStringSet(draft.badgeHealthTagIds, live.badgeHealthTagIds)) {
+  if (
+    !isSameOrderedStringList(draft.badgeHealthTagIds, live.badgeHealthTagIds)
+  ) {
     changed.push('coverBadges');
   }
   if (taxonomySignature(draft.taxonomy) !== taxonomySignature(live.taxonomy)) {

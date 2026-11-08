@@ -7415,7 +7415,11 @@ describe('RecipeDesignerService', () => {
       ]);
       expect(prisma.recipeSeries.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: { in: ['series-stale'] } },
+          // 条件清理：时间戳变了（别人刚写了新草稿）就不清
+          where: {
+            id: 'series-stale',
+            releaseDraftUpdatedAt: new Date('2026-11-08T03:52:00.000Z'),
+          },
           data: expect.objectContaining({ releaseDraftUpdatedAt: null }),
         }),
       );

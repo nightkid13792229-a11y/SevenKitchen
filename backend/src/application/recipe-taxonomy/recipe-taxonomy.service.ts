@@ -209,6 +209,7 @@ export class RecipeTaxonomyService {
       merged,
       context.live,
       actorId,
+      series.releaseDraftUpdatedAt ?? null,
     );
   }
 
@@ -262,6 +263,7 @@ export class RecipeTaxonomyService {
         merged,
         context.live,
         actorId,
+        series.releaseDraftUpdatedAt ?? null,
       );
     }
     if (liveSeriesIds.length > 0) {

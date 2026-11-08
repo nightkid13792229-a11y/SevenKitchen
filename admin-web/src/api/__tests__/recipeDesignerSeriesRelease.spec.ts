@@ -65,6 +65,7 @@ const releaseResult = {
   releasedStageCodes: ['PUPPY_UNDER_14_WEEKS'],
   publishedRecipeCount: 1,
   updatedRecipeCount: 1,
+  appliedDraftFields: [],
   releasedAt: '2026-10-22T12:05:00.000Z'
 }
 

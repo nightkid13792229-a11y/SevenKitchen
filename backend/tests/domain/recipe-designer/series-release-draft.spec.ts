@@ -41,14 +41,18 @@ describe('series-release-draft', () => {
     expect(draft.taxonomy).toEqual([{ kindId: 'kind-1', nodeId: 'node-2' }]);
   });
 
-  it('差异按固定顺序返回，角标 / 分类与顺序无关', () => {
+  it('差异按固定顺序返回；健康标签 / 分类与顺序无关，角标顺序算改动', () => {
     const draft = {
       ...liveValues,
       sellingPoint: '鲜肉低敏，肠胃更稳',
       badgeHealthTagIds: ['tag-b', 'tag-a'],
       taxonomy: [{ kindId: 'kind-1', nodeId: 'node-1' }],
     };
-    expect(diffSeriesReleaseDraft(draft, liveValues)).toEqual(['sellingPoint']);
+    // 角标顺序就是封面展示顺序：调换也要能发布
+    expect(diffSeriesReleaseDraft(draft, liveValues)).toEqual([
+      'sellingPoint',
+      'coverBadges',
+    ]);
   });
 
   it('封面 / 角标 / 分类改动都能识别', () => {
@@ -104,7 +108,7 @@ describe('series-release-draft', () => {
   it('草稿回到线上值时视为没有草稿', () => {
     const merged = mergeSeriesReleaseDraft(
       null,
-      { badgeHealthTagIds: ['tag-b', 'tag-a'] },
+      { badgeHealthTagIds: ['tag-a', 'tag-b'] },
       liveValues,
     );
     expect(isSeriesReleaseDraftEqualToLive(merged, liveValues)).toBe(true);

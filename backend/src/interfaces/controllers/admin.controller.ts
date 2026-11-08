@@ -18,6 +18,7 @@ import {
   HttpStatus,
   NotFoundException,
   BadRequestException,
+  ConflictException,
   Inject,
   UseGuards,
   UploadedFile,
@@ -4937,13 +4938,21 @@ export class AdminController {
       { badgeHealthTagIds: healthTagIds },
       context.live,
     );
-    await persistSeriesReleaseDraft(
-      this.prisma,
-      seriesId,
-      merged,
-      context.live,
-      user?.userId ?? null,
-    );
+    try {
+      await persistSeriesReleaseDraft(
+        this.prisma,
+        seriesId,
+        merged,
+        context.live,
+        user?.userId ?? null,
+        series.releaseDraftUpdatedAt ?? null,
+      );
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        return ApiResponseDto.error(409, error.message);
+      }
+      throw error;
+    }
 
     return this.getSeriesCoverBadges(seriesId);
   }

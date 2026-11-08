@@ -170,24 +170,38 @@ async function commitTypedName() {
     savedValue.value = name
     emit('saved', name)
   } catch (error: any) {
-    ElMessage.error(error?.message || '保存失败，请重试')
+    if (!(error as { __apiErrorToasted?: boolean })?.__apiErrorToasted) {
+      ElMessage.error(error?.message || '保存失败，请重试')
+    }
   } finally {
     adopting.value = ''
   }
 }
 
-/** 点「采用」= 直接落库。名字是用户一眼就能定的东西，不该再点第二次。 */
+/**
+ * 点「采用」= 直接落库。名字是用户一眼就能定的东西，不该再点第二次。
+ *
+ * 2026-11-08：和失焦路径一样，发布抽屉注入 `persistName` 时必须写发布草稿；
+ * 之前这里漏了判断，点「采用」会绕过草稿直接 renameSeries（已上线系列必 400）。
+ */
 async function use(name: string) {
   emit('update:modelValue', name)
   if (!props.seriesId) return
   adopting.value = name
   try {
-    await recipeDesignerApi.renameSeries(props.seriesId, { name })
+    if (props.persistName) {
+      await props.persistName(name)
+      ElMessage.success('名称已存进发布草稿，发布后生效')
+    } else {
+      await recipeDesignerApi.renameSeries(props.seriesId, { name })
+      ElMessage.success('名称已保存')
+    }
     savedValue.value = name
-    ElMessage.success('名称已保存')
     emit('saved', name)
   } catch (error: any) {
-    ElMessage.error(error?.message || '保存失败，请重试')
+    if (!(error as { __apiErrorToasted?: boolean })?.__apiErrorToasted) {
+      ElMessage.error(error?.message || '保存失败，请重试')
+    }
   } finally {
     adopting.value = ''
   }

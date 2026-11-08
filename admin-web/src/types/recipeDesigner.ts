@@ -507,6 +507,8 @@ export interface SeriesReleaseResult {
   publishedRecipeCount: number
   /** 本次实际写入（含已公开行刷新展示资料）的食谱行数 */
   updatedRecipeCount: number
+  /** 本次发布真正应用的草稿字段 */
+  appliedDraftFields: SeriesReleaseDraftField[]
   releasedAt: string
 }
 

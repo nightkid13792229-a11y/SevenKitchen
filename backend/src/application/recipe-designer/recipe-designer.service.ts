@@ -4350,7 +4350,11 @@ export class RecipeDesignerService {
       draftContext.hasStoredDraft &&
       draftContext.changedFields.length === 0
     ) {
-      await clearStaleSeriesReleaseDraft(this.prisma, seriesId);
+      await clearStaleSeriesReleaseDraft(
+        this.prisma,
+        seriesId,
+        series.releaseDraftUpdatedAt ?? null,
+      );
     }
     return this.buildSeriesReleaseReadinessForSeries({
       series,
@@ -4605,6 +4609,14 @@ export class RecipeDesignerService {
     if (!releaseName || releaseName.startsWith('未命名')) {
       throw new BadRequestException(
         '系列名称还是临时名称，先在发布抽屉里改成正式名称再发布',
+      );
+    }
+    // 存量数据可能绕过保存入口：发布这一道也按标签 12 字上限再拦一次
+    try {
+      assertRecipeNameLength(releaseName);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : '食谱名称不合法',
       );
     }
 
@@ -5265,11 +5277,15 @@ export class RecipeDesignerService {
       taxonomyBySeries.set(row.seriesId, list);
     }
 
-    const staleIds: string[] = [];
+    const staleDrafts: Array<{ id: string; updatedAt: Date | string | null }> =
+      [];
     for (const record of candidates) {
       if (!record.releaseDraft) {
         result.set(record.id, false);
-        staleIds.push(record.id);
+        staleDrafts.push({
+          id: record.id,
+          updatedAt: record.releaseDraftUpdatedAt ?? null,
+        });
         continue;
       }
       const live = buildSeriesReleaseLiveValues({
@@ -5288,20 +5304,23 @@ export class RecipeDesignerService {
       const resolved = resolveSeriesReleaseDraftApplied(draft, live);
       const hasDraft = resolved.fields.length > 0;
       result.set(record.id, hasDraft);
-      if (!hasDraft) staleIds.push(record.id);
+      if (!hasDraft) {
+        staleDrafts.push({
+          id: record.id,
+          updatedAt: record.releaseDraftUpdatedAt ?? null,
+        });
+      }
     }
 
-    if (staleIds.length > 0) {
-      await this.prisma.recipeSeries.updateMany({
-        where: { id: { in: staleIds } },
-        data: {
-          releaseDraft: Prisma.DbNull,
-          releaseDraftUpdatedAt: null,
-          releaseDraftUpdatedBy: null,
-        },
-      });
+    // 条件清理：期间别人刚写了新草稿（时间戳变了）就不要清掉它
+    for (const stale of staleDrafts) {
+      await clearStaleSeriesReleaseDraft(
+        this.prisma,
+        stale.id,
+        stale.updatedAt,
+      );
     }
-    return { map: result, cleared: staleIds.length };
+    return { map: result, cleared: staleDrafts.length };
   }
 
   private buildSeriesWorkbenchCard(

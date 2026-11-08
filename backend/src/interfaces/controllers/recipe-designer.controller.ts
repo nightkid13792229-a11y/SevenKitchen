@@ -515,6 +515,7 @@ export class RecipeDesignerController {
     const draft = await this.recipeDesignerService.saveSeriesReleaseDraft(
       seriesId,
       {
+        expectedUpdatedAt: dto.expectedUpdatedAt,
         coverImageUrl: dto.coverImageUrl,
         coverTitle: dto.coverTitle,
         sellingPoint: dto.sellingPoint,

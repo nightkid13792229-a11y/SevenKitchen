@@ -249,23 +249,6 @@
       </div>
     </el-card>
 
-    <!-- 重命名 -->
-    <el-dialog v-model="renameDialogVisible" title="重命名系列" width="420px">
-      <el-input
-        v-model="renameForm.name"
-        maxlength="12"
-        show-word-limit
-        placeholder="例如：均衡营养|三文鱼南瓜"
-      />
-      <div class="form-tip">
-        价值点在前、食材在后，最多 12 个字——多了标签印不下。
-      </div>
-      <template #footer>
-        <el-button @click="renameDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="renaming" @click="confirmRename">保存</el-button>
-      </template>
-    </el-dialog>
-
     <!-- 复制其他阶段原料：选择来源阶段 -->
     <el-dialog v-model="copyItemsDialogVisible" title="复制其他阶段原料" width="460px">
       <div v-if="copySourceStages.length === 0" class="form-tip">
@@ -351,7 +334,6 @@ const entryOrderId = ref('')
 
 const loading = ref(false)
 const creating = ref(false)
-const renaming = ref(false)
 const series = ref<RecipeDesignerSeriesCard[]>([])
 /** 产品线 / 订单定制的选项；新增模式只需要改这里 */
 const designModeOptions = [
@@ -393,9 +375,6 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null
 const pendingReferenceDogId = ref<string | null>(null)
 const pendingReferenceDogName = ref<string | null>(null)
 const pendingScenario = ref<FediafDogScenario | undefined>(undefined)
-
-const renameDialogVisible = ref(false)
-const renameForm = reactive<{ id: string; name: string }>({ id: '', name: '' })
 
 // 系列发布（阶段设计先入系列仓库，整条系列就绪后一次性发布）
 const releaseDrawerVisible = ref(false)
@@ -717,11 +696,6 @@ async function handleCardCommand(command: string, card: RecipeDesignerSeriesCard
     } catch {
       // 已提示
     }
-  } else if (command === 'rename') {
-    renameForm.id = card.id
-    // 临时名（未命名…）只是占位，直接清空，让用户填正式名称
-    renameForm.name = isTemporarySeriesName(card.name) ? '' : card.name
-    renameDialogVisible.value = true
   } else if (command === 'delete') {
     try {
       await ElMessageBox.confirm(
@@ -743,23 +717,6 @@ async function handleCardCommand(command: string, card: RecipeDesignerSeriesCard
       if (error === 'cancel' || error === 'close') return
       // 其它错误已由拦截器提示
     }
-  }
-}
-
-async function confirmRename() {
-  const name = renameForm.name.trim()
-  if (!name) {
-    ElMessage.warning('名称不能为空')
-    return
-  }
-  renaming.value = true
-  try {
-    await recipeDesignerApi.renameSeries(renameForm.id, { name })
-    ElMessage.success('已重命名')
-    renameDialogVisible.value = false
-    await loadSeries(filters.page)
-  } finally {
-    renaming.value = false
   }
 }
 

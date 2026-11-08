@@ -185,6 +185,54 @@ describe('runDeliveryNutritionBackfill', () => {
     expect(save).not.toHaveBeenCalled();
   });
 
+  it('★ 判定改过配方后，一个键都不补（宏量表缺失也不拿当前数据填）', async () => {
+    const save = jest.fn().mockResolvedValue(undefined);
+    // 只有交付时的 reportRows，macros 缺 —— 老逻辑会在这里把"改后的 macros"写进去
+    const snapshot = legacySnapshot({
+      reportRows: [
+        {
+          key: 'crudeProtein',
+          name: '蛋白质',
+          dryMatterLabel: '30.00%',
+          energyPercentLabel: '28.00%',
+          weightPercentLabel: '9.00%',
+        },
+      ],
+    });
+
+    const result = await runDeliveryNutritionBackfill({
+      targets: [target('改过配方且缺 macros', snapshot, save)],
+      apply: true,
+      logger: silentLogger,
+    });
+
+    expect(result.conflicts).toBe(1);
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('★ v2 快照里 macros: null 是事实，不许补成当前数据', async () => {
+    const save = jest.fn().mockResolvedValue(undefined);
+    const snapshot = {
+      ...legacySnapshot({
+        macros: null,
+        reportRows: null,
+        report: null,
+        scenario: null,
+        reportStandard: null,
+      }),
+      schemaVersion: 2,
+    };
+
+    const result = await runDeliveryNutritionBackfill({
+      targets: [target('v2 没有营养数据', snapshot, save)],
+      apply: true,
+      logger: silentLogger,
+    });
+
+    expect(save).not.toHaveBeenCalled();
+    expect(result.applied).toBe(0);
+  });
+
   it('宏量表一致（交付后没改过）→ 正常补报告', async () => {
     const save = jest.fn().mockResolvedValue(undefined);
     const snapshot = legacySnapshot({

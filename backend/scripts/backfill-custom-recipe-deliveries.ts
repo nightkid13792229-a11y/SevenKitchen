@@ -36,7 +36,6 @@
  */
 import { CustomRecipeStatus, Prisma, PrismaClient } from '@prisma/client';
 import {
-  SNAPSHOT_SCHEMA_VERSION,
   type SnapshotRecipeItem,
 } from '../src/domain/custom-recipe/custom-recipe.delivery';
 
@@ -109,12 +108,16 @@ function toSnapshotItems(recipe: RecipeWithItems): SnapshotRecipeItem[] {
 /**
  * 组装回填用的内容快照。
  *
- * 结构与真实交付**完全一致**（同一个 `schemaVersion`），
- * 只是内容上缺了当年没存的那几块 —— 读取端不用为此写分支。
+ * ⚠️ 结构版本**固定写 1**（2026-11-08 审核）。
+ *
+ * 这份快照是"按当前食谱倒推"的，缺当年没存的那几块（营养 8 项、报告、采购）。
+ * 写成当前版本（v2）等于声称"这些字段是交付时的事实、`null` 就是没有"，
+ * 于是 `backfill-delivery-nutrition-snapshots` 会把整份都跳过，
+ * 这些订单永远看不到营养报告入口。写 1 才是实话：老结构、还能被回填脚本补。
  */
 function buildBackfillSnapshot(recipe: RecipeWithItems, deliveredAt: Date) {
   return {
-    schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+    schemaVersion: 1,
     recipe: {
       recipeId: recipe.recipeId,
       name: recipe.name,
@@ -137,10 +140,9 @@ function buildBackfillSnapshot(recipe: RecipeWithItems, deliveredAt: Date) {
           ? null
           : Number(recipe.energyDensityKcalPerKg),
       macros: null,
-      plainConclusion: null,
     },
-    // 当年没存采购清单 —— 如实留空
-    shopping: { lines: [], totalNetG: 0, totalPurchaseG: 0, lossRate: 1 },
+    // 当年没存采购清单 —— 如实留空（`totalPurchaseG`/`lossRate` 已从契约删除）
+    shopping: { lines: [], totalNetG: 0 },
     supplements: [],
     steps: [],
     storage: null,

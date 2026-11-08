@@ -429,6 +429,22 @@ export function buildSupplementNutrientRows(
 }
 
 /**
+ * 从**食谱原料**里摊出「需额外补充的营养素」行（2026-11-08）。
+ *
+ * 详情页原来在 computed 里自己 `map + getSupplementTargets`，接线一改（比如漏传
+ * items）整块就永远不渲染，而页面级守卫只会断言"源码里出现过某个函数名"。
+ * 收成一个函数后，行为可以在单测里用真实原料夹具验。
+ */
+export function buildSupplementNutrientRowsFromItems(
+  items: any[] | null | undefined
+): SupplementNutrientRow[] {
+  const groups = (items || []).map((item) => ({
+    targets: getSupplementTargets(item),
+  }));
+  return buildSupplementNutrientRows(groups);
+}
+
+/**
  * 添加浓度的数字写法：常规按整数（营养师定的目标就是这个量级），
  * 只有"取整后会变成 0"的小数值才保留一位小数，极小值写「<0.1」而不是「0」。
  */

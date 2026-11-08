@@ -31,6 +31,14 @@ async function main() {
   console.log('');
 
   const problems: Problem[] = [];
+  /**
+   * 只是"老结构、新代码能读"的提示，不算问题（2026-11-08）。
+   *
+   * 回填脚本只补 `nutrition` 下的键、**不改** `schemaVersion`，
+   * 所以历史快照会永远停在 v1；把它判成"版本不认识"等于每次校验都报一堆假故障。
+   * 只有**比当前版本更新**（代码读不懂）才算真问题。
+   */
+  const legacyVersionWarnings: string[] = [];
 
   const orders = await prisma.customRecipeOrder.findMany({
     where: {
@@ -93,12 +101,17 @@ async function main() {
       }
 
       const version = snapshot.schemaVersion;
-      if (version !== SNAPSHOT_SCHEMA_VERSION) {
+      const versionNumber = typeof version === 'number' ? version : 0;
+      if (versionNumber > SNAPSHOT_SCHEMA_VERSION) {
         problems.push({
           orderNo: order.orderId,
           kind: '快照结构版本不认识',
-          detail: `第 ${delivery.version} 版 schemaVersion=${String(version)}，当前支持 ${SNAPSHOT_SCHEMA_VERSION}`,
+          detail: `第 ${delivery.version} 版 schemaVersion=${String(version)} 比当前代码（${SNAPSHOT_SCHEMA_VERSION}）还新，这份小程序可能读不了`,
         });
+      } else if (versionNumber < SNAPSHOT_SCHEMA_VERSION) {
+        legacyVersionWarnings.push(
+          `第 ${delivery.version} 版 schemaVersion=${String(version)}（老结构，代码仍兼容）`,
+        );
       }
 
       if (!snapshot.recipe) {
@@ -129,9 +142,18 @@ async function main() {
   console.log(`  交付记录：${totalDeliveries} 条`);
   console.log(`  其中脚本回填的：${backfilledCount} 条`);
   console.log(`  快照缺失：${missingSnapshot} 条`);
+  if (legacyVersionWarnings.length > 0) {
+    console.log(
+      `  老结构快照：${legacyVersionWarnings.length} 条（v${SNAPSHOT_SCHEMA_VERSION} 之前，代码仍兼容）`,
+    );
+  }
   console.log('');
 
   if (problems.length === 0) {
+    if (legacyVersionWarnings.length > 0) {
+      console.log('✓ 全部通过（老结构快照按兼容处理，不影响渲染）。');
+      return;
+    }
     console.log('✓ 全部通过：没有漏、版本号连续、快照结构都认识。');
     return;
   }

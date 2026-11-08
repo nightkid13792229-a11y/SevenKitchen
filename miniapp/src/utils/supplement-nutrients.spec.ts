@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildSupplementNutrientRows,
+  buildSupplementNutrientRowsFromItems,
   calculateSupplementAmountForProduction,
   getSupplementTargets,
   formatSupplementTargets,
@@ -583,3 +584,44 @@ describe('buildSupplementNutrientRows · 需额外补充的营养素', () => {
     ).toEqual([{ nutrient: '钙', concentration: '每公斤食材添加 1100 mg' }])
   })
 })
+
+
+describe('buildSupplementNutrientRowsFromItems · 详情页接线', () => {
+  it('★ 从原料里摊出行（补剂有目标就出现，食材不产生行）', () => {
+    const rows = buildSupplementNutrientRowsFromItems([
+      {
+        ingredientType: 'SUPPLEMENT',
+        name: '钙粉',
+        supplementTargets: [
+          { fieldPath: 'minerals.calcium', label: '钙', targetValuePerKg: 5.6, unit: 'g' },
+        ],
+      },
+      { ingredientType: 'FOOD', name: '鸡胸肉' },
+    ]);
+
+    expect(rows).toEqual([{ nutrient: '钙', concentration: '每公斤食材添加 6 g' }]);
+  });
+
+  it('★ 老食谱只有 nutrientTargetKey/Value 也能摊出来', () => {
+    const rows = buildSupplementNutrientRowsFromItems([
+      {
+        ingredientType: 'SUPPLEMENT',
+        nutrientTargetKey: '钙',
+        nutrientTargetValue: 1100,
+        properties: { active_nutrients: { 钙: { value: 115, unit: 'mg' } } },
+      },
+    ]);
+
+    expect(rows).toEqual([
+      { nutrient: '钙', concentration: '每公斤食材添加 1100 mg' },
+    ]);
+  });
+
+  it('补剂没有目标 / 空数组 → 不产生行（页面据此整块隐藏）', () => {
+    expect(buildSupplementNutrientRowsFromItems([])).toEqual([]);
+    expect(buildSupplementNutrientRowsFromItems(null)).toEqual([]);
+    expect(
+      buildSupplementNutrientRowsFromItems([{ ingredientType: 'SUPPLEMENT', name: '某补剂' }]),
+    ).toEqual([]);
+  });
+});

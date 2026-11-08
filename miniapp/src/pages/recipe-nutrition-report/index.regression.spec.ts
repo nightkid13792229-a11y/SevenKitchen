@@ -66,6 +66,12 @@ describe('营养报告页 · 交付快照优先', () => {
     expect(source).toContain('loadFromDeliverySnapshot');
     expect(source).toContain('fetchDelivery(orderId.value');
     expect(source).toContain('selectFrozenNutritionReport');
+    // 必须把这一份的编号传下去：丢了它，多份订单会渲染成第一份的报告
+    expect(source).toMatch(
+      /selectFrozenNutritionReport\([\s\S]{0,80}recipeId\.value/,
+    );
+    // 只要这一份（整批会白下几十 KB）
+    expect(source).toContain('singleItem: true');
   });
 
   it('★ 取不到交付 / 取到了没报告 —— 都不能退回"按食谱编号现取"', () => {

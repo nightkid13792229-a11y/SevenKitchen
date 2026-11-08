@@ -176,7 +176,11 @@ describe('recipe detail nutrition report regressions', () => {
     )
 
     // 2026-11-07：详情页的浓度口径收进共享工具，且文案统一成「每公斤食材添加」
-    expect(recipeDetailSource).toContain('buildSupplementNutrientRows')
+    // 2026-11-08：接线也收成 `buildSupplementNutrientRowsFromItems(supplementItems)`
+    // —— 原来在页面里自己 map，漏传 items 时整块永不渲染，而守卫只查函数名
+    expect(recipeDetailSource).toContain(
+      'buildSupplementNutrientRowsFromItems(supplementItems.value)',
+    )
     expect(nutrientRowsSource).toContain('每公斤食材添加')
     expect(nutrientRowsSource).not.toContain('每kg添加')
     expect(snapshotModalSource).toContain('每kg食材添加')

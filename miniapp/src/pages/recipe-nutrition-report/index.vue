@@ -84,7 +84,7 @@
         </view>
         <view v-if="energyDensityRows.length > 0" class="energy-density-list">
           <view v-for="row in energyDensityRows" :key="row.label" class="energy-density-row">
-            <text class="energy-density-label">能量密度</text>
+            <text class="energy-density-label">{{ row.label || '能量密度' }}</text>
             <text class="energy-density-value">{{ row.value }}</text>
           </view>
         </view>
@@ -92,7 +92,7 @@
 
       <view
         v-for="section in nutrientSections"
-        :key="section.key"
+        :key="section.key || section.title"
         class="section"
       >
         <text class="section-title">{{ section.title }}</text>
@@ -136,6 +136,7 @@ import {
   type CustomRecipeDeliveryResponse,
 } from '../../utils/custom-recipe-delivery'
 import { getScenarioLabel } from '../recipe-designer/assessment'
+import { getNutritionStandardLabel } from '../../utils/label-mapping'
 
 interface NutritionReport {
   ingredientRows?: Array<Record<string, any>>
@@ -176,8 +177,8 @@ const standardName = computed(() => {
   const standard = recipe.value?.nutritionDetailedData?.standard || recipe.value?.nutritionStandard
   const scenario = recipe.value?.nutritionDetailedData?.scenario
   return scenario
-    ? `${getNutritionStandardLabel(standard)} · ${getScenarioLabel(scenario)}`
-    : getNutritionStandardLabel(standard)
+    ? `${resolveStandardLabel(standard)} · ${getScenarioLabel(scenario)}`
+    : resolveStandardLabel(standard)
 })
 const nutrientSections = computed(() => {
   const sections = report.value?.nutrientSections || {}
@@ -260,6 +261,8 @@ async function loadFromDeliverySnapshot() {
       throwOnError: true,
       // 失败态由本页展示，别再弹一个 toast
       suppressErrorToast: true,
+      // 只取这一份（整批会有几十 KB 的报告）
+      singleItem: true,
     })
     const frozen = selectFrozenNutritionReport(
       delivery as unknown as CustomRecipeDeliveryResponse,
@@ -290,14 +293,12 @@ async function loadFromDeliverySnapshot() {
   }
 }
 
-function getNutritionStandardLabel(standard: string): string {
-  const map: Record<string, string> = {
-    FEDIAF_2021: 'FEDIAF 2021',
-    FEDIAF_2025: 'FEDIAF 2025',
-    AAFCO_2019: 'AAFCO 2019',
-    GB_T_31216: '国标 GB/T 31216',
-  }
-  return map[standard] || standard || '-'
+/**
+ * 标准名统一走 label-mapping（2026-11-08 审核：页面里抄过一份同样的映射，
+ * 将来新增标准只会改到一处）。空值仍显示「-」，跟原来的观感一致。
+ */
+function resolveStandardLabel(standard: string | null | undefined): string {
+  return getNutritionStandardLabel(String(standard || '')) || '-'
 }
 
 function getRowStatusClass(row: Record<string, any>) {

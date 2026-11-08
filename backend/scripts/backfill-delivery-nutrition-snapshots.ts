@@ -188,10 +188,10 @@ export async function runDeliveryNutritionBackfill(input: {
         continue;
       }
 
-      const has = (key: string) =>
-        Object.prototype.hasOwnProperty.call(nutrition, key) &&
-        nutrition[key] !== null &&
-        nutrition[key] !== undefined;
+      const hasOwn = (key: string) =>
+        Object.prototype.hasOwnProperty.call(nutrition, key);
+      const hasValue = (key: string) =>
+        hasOwn(key) && nutrition[key] !== null && nutrition[key] !== undefined;
 
       /**
        * 快照结构版本（2026-11-08 起为 2）。
@@ -205,6 +205,15 @@ export async function runDeliveryNutritionBackfill(input: {
           ? ((snapshot as Record<string, unknown>).schemaVersion as number)
           : 1;
       const isLegacySnapshot = schemaVersion < 2;
+      /**
+       * 「这个键算不算已经有了」——v1 / v2 语义不同（2026-11-08 审核）：
+       *
+       * · v1（老快照）：只有**有值**才算有；显式 null 视作没写过，可以补。
+       * · v2（本版起）：键存在就是交付时的事实（`macros: null` = 当场没有营养数据、
+       *   `report: null` = 当场没有报告），**一律不许补**。
+       */
+      const isFilled = (key: string) =>
+        isLegacySnapshot ? hasValue(key) : hasOwn(key);
 
       const macros = readDeliveryMacros(target.recipe?.nutritionDetailedData);
       const reportRows = readDeliveryMacroRows(
@@ -250,41 +259,31 @@ export async function runDeliveryNutritionBackfill(input: {
       }
 
       /**
-       * 只补**缺的且有源**的键：老快照缺 `report`、但食谱本来就没报告时
-       * 一条都不写 —— 否则每跑一遍都会重写同一份快照，幂等性就没了。
+       * 只补**缺的且有源**的键，而且**一旦判定"交付后改过配方"就一个键都不补**
+       * （2026-11-08 审核：原来 macros / reportRows 绕过了冲突闸，
+       * 结果同一份快照里会出现"交付时的报告 + 改后的宏量表"）。
        */
       const patches: Record<string, unknown> = {};
-      if (!has('macros') && macros) patches.macros = macros;
-      if (!has('reportRows') && reportRows) patches.reportRows = reportRows;
-      if (
-        isLegacySnapshot &&
-        !recipeEditedAfterDelivery &&
-        !has('report') &&
-        report
-      ) {
-        patches.report = report;
-      }
-      if (
-        isLegacySnapshot &&
-        !recipeEditedAfterDelivery &&
-        !has('scenario') &&
-        scenario
-      ) {
-        patches.scenario = scenario;
-      }
-      if (
-        isLegacySnapshot &&
-        !recipeEditedAfterDelivery &&
-        !has('reportStandard') &&
-        reportStandard
-      ) {
-        patches.reportStandard = reportStandard;
+      if (!recipeEditedAfterDelivery) {
+        if (!isFilled('macros') && macros) patches.macros = macros;
+        if (!isFilled('reportRows') && reportRows) {
+          patches.reportRows = reportRows;
+        }
+        if (isLegacySnapshot && !isFilled('report') && report) {
+          patches.report = report;
+        }
+        if (isLegacySnapshot && !isFilled('scenario') && scenario) {
+          patches.scenario = scenario;
+        }
+        if (isLegacySnapshot && !isFilled('reportStandard') && reportStandard) {
+          patches.reportStandard = reportStandard;
+        }
       }
 
       if (Object.keys(patches).length === 0) {
-        if (has('macros') || has('reportRows') || has('report')) {
+        if (hasValue('macros') || hasValue('reportRows') || hasValue('report')) {
           counters.alreadyComplete += 1;
-          if (!has('report')) counters.missingReport += 1;
+          if (!hasValue('report')) counters.missingReport += 1;
         } else {
           counters.noSourceData += 1;
           logger.info(

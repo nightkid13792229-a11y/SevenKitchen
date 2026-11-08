@@ -385,7 +385,7 @@ describe('定制食谱 API 层', () => {
       expect(delivery.items[1].recipeId).toBe('R2')
     })
 
-    it('★ 带 recipeId 时拼进查询串（页面按份选择，后端可忽略）', async () => {
+    it('★ 带 recipeId 时拼进查询串（页面按份选择）', async () => {
       mockedRequest.mockResolvedValue({ code: 0, data: {} } as never)
 
       await fetchDelivery('CR1', 2, 'CR1759100000002')
@@ -394,6 +394,53 @@ describe('定制食谱 API 层', () => {
       expect(arg.url).toBe(
         '/custom-recipe/orders/CR1/delivery?version=2&recipeId=CR1759100000002',
       )
+    })
+
+    it('★ singleItem 时带 items=one（服务端据此只回一份）', async () => {
+      mockedRequest.mockResolvedValue({ code: 0, data: {} } as never)
+
+      await fetchDelivery('CR1', undefined, 'CR1759100000002', {
+        singleItem: true,
+      })
+
+      const arg = mockedRequest.mock.calls[0][0] as { url: string }
+      expect(arg.url).toBe(
+        '/custom-recipe/orders/CR1/delivery?recipeId=CR1759100000002&items=one',
+      )
+    })
+
+    /**
+     * 2026-11-08 审核：报告页靠 `throwOnError` 区分「没取到」和「这单没报告」。
+     * 这两条断言必须落在 API 层 —— 报告页只写了 `throwOnError: true` 这个字符串，
+     * 把下面两处 rethrow 删掉，页面测试照样全绿。
+     */
+    it('★ throwOnError：接口返回失败码时抛错，而不是假装"没有报告"', async () => {
+      mockedRequest.mockResolvedValue({ code: 1, message: '无权限' } as never)
+
+      await expect(
+        fetchDelivery('CR1', undefined, 'R1', { throwOnError: true }),
+      ).rejects.toBeTruthy()
+    })
+
+    it('★ throwOnError：网络失败时抛错', async () => {
+      mockedRequest.mockRejectedValue(new Error('timeout') as never)
+
+      await expect(
+        fetchDelivery('CR1', undefined, 'R1', { throwOnError: true }),
+      ).rejects.toBeTruthy()
+    })
+
+    it('★ suppressErrorToast 透传给 request（页面自己展示失败态）', async () => {
+      mockedRequest.mockResolvedValue({ code: 0, data: {} } as never)
+
+      await fetchDelivery('CR1', undefined, undefined, {
+        suppressErrorToast: true,
+      })
+
+      const arg = mockedRequest.mock.calls[0][0] as {
+        suppressErrorToast?: boolean
+      }
+      expect(arg.suppressErrorToast).toBe(true)
     })
   })
 

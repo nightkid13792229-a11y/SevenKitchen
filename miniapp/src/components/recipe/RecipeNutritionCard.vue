@@ -42,14 +42,14 @@
       以上营养指标按干物质（DM）计，即去除水分后的占比；含水量为实际含水率。
     </text>
 
-    <!-- 报告入口：整块内，居中 -->
-    <view
-      v-if="reportAvailable"
-      class="nutrition-card__report"
-      @tap="emit('open-report')"
-    >
-      <text class="nutrition-card__report-text">查看完整营养报告 ›</text>
-    </view>
+    <!--
+      2026-11-08 审核：卡内的「查看完整营养报告」入口已删除。
+      它唯一的调用方（交付页）一直传 `report-available=false`，
+      `open-report` 也没有任何监听者 —— 是死代码。
+      报告入口现在是独立板块（`NutritionReportEntry`），显示与否由
+      「交付快照里有没有冻结报告」决定；留着旧入口的默认值 true，
+      将来谁再用这张卡就会把旧文案带回来。
+    -->
   </view>
 </template>
 
@@ -86,20 +86,15 @@ const props = withDefaults(
     standard?: string | null
     /** 快照里的 `nutrition.macros`；缺项显示「—」 */
     macros?: Record<string, number | null> | null
-    /** 有没有"完整报告"可看；没有就不显示那个入口 */
-    reportAvailable?: boolean
     /** 页面已有独立的全营养标准 banner 时，关掉卡片里这行，避免重复 */
     showStandard?: boolean
   }>(),
   {
     standard: null,
     macros: null,
-    reportAvailable: true,
     showStandard: true,
   },
 )
-
-const emit = defineEmits<{ (event: 'open-report'): void }>()
 
 const standardLabel = computed(() => {
   const value = (props.standard || '').trim()
@@ -219,17 +214,4 @@ const cells = computed(() => {
   text-align: center;
 }
 
-.nutrition-card__report {
-  display: flex;
-  justify-content: center;
-  margin-top: 24rpx;
-  padding-top: 20rpx;
-  border-top: 1px dashed #f0e6d8;
-}
-
-.nutrition-card__report-text {
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #b45309;
-}
 </style>

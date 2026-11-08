@@ -656,7 +656,14 @@ export class CustomRecipeController {
     name: 'recipeId',
     required: false,
     description:
-      '只看这一份（多份交付时按业务编号过滤，避免整批快照都传一遍）',
+      '只看这一份（配合 items=one 使用；单独传不影响返回内容）',
+  })
+  @ApiQuery({
+    name: 'items',
+    required: false,
+    enum: ['one', 'all'],
+    description:
+      'items=one：多份交付只回 `recipeId` 命中的那一份（新客户端用，省流量）；默认整批',
   })
   @ApiOperation({ summary: 'Get the current delivery of an order' })
   async getOrderDelivery(
@@ -664,6 +671,7 @@ export class CustomRecipeController {
     @Param('orderId') orderId: string,
     @Query('version') version?: string,
     @Query('recipeId') recipeId?: string,
+    @Query('items') items?: string,
   ) {
     const userId = req.user.userId;
     const order = await this.customRecipeService.getOrderByOrderId(orderId);
@@ -696,19 +704,26 @@ export class CustomRecipeController {
 
     if (batch) {
       /**
-       * 按份过滤（2026-11-08）：一份快照带着整份营养报告（十几 KB），
-       * 5 份订单整批返回就是几十 KB —— 而交付页/报告页一次只看一份。
+       * 按份过滤（2026-11-08）——**必须显式带 `items=one` 才生效**。
        *
-       * · 传了 `recipeId` 且命中：只回这一份；
-       * · 没传 / 没命中：整批原样回（链接旧了也不能白屏）。
+       * 老客户端从多份交付上线起就一直带 `?recipeId=`，却只会用
+       * `items.length` 算「本次共交付 N 份」；如果服务端看到 recipeId 就过滤，
+       * 线上已发布的小程序会立刻少掉那句提示（2026-11-08 审核指出）。
+       * 所以过滤做成新客户端显式开关：老包照旧拿整批，行为一个字不变。
+       *
+       * · `items=one` 且 recipeId 命中：只回这一份；
+       * · 其它情况：整批原样回。
        * `batchSize` 始终是**真实份数** —— 过滤后 items 只剩一条，
-       * 页面的「本次共交付 N 份」还得对。
+       * 新客户端的「本次共交付 N 份」还得对。
        */
       const allItems = batch.items ?? [];
+      const wantsSingleItem =
+        String(items ?? '').trim().toLowerCase() === 'one';
       const wantedRecipeId = String(recipeId ?? '').trim();
-      const matchedItems = wantedRecipeId
-        ? allItems.filter((item) => item.recipe?.recipeId === wantedRecipeId)
-        : [];
+      const matchedItems =
+        wantsSingleItem && wantedRecipeId
+          ? allItems.filter((item) => item.recipe?.recipeId === wantedRecipeId)
+          : [];
       const visibleItems = matchedItems.length > 0 ? matchedItems : allItems;
 
       return ApiResponseDto.success({

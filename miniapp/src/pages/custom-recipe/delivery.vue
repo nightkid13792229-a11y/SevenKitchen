@@ -120,7 +120,6 @@
         <RecipeNutritionCard
           :standard="content.nutrition.standard"
           :macros="content.nutrition.macros || null"
-          :report-available="false"
           :show-standard="false"
         />
       </view>
@@ -372,6 +371,8 @@ const load = async () => {
       orderId.value,
       undefined,
       recipeId.value,
+      // 一次只看一份：只要这一份的快照，别把整批都下下来（2026-11-08）
+      { singleItem: true },
     );
     orderDogId.value = '';
     if (delivery.value && !(delivery.value as any).dogId) {
@@ -463,10 +464,11 @@ const openNutritionReport = () => {
     uni.showToast({ title: '缺少订单号，暂时打不开报告', icon: 'none' });
     return;
   }
-  const query = [`recipeId=${encodeURIComponent(selectedRecipeId.value)}`];
-  if (orderId.value) {
-    query.push(`orderId=${encodeURIComponent(orderId.value)}`);
-  }
+  // 上面已保证 orderId 非空：这里直接拼，不再留一个永远为真的分支
+  const query = [
+    `recipeId=${encodeURIComponent(selectedRecipeId.value)}`,
+    `orderId=${encodeURIComponent(orderId.value)}`,
+  ];
   uni.navigateTo({
     url: `/pages/recipe-nutrition-report/index?${query.join('&')}`,
   });

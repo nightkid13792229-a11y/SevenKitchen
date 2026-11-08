@@ -353,7 +353,26 @@ describe('CustomRecipeController · 顾客端多份交付', () => {
       expect(deliveryService.findForCustomer).not.toHaveBeenCalled();
     });
 
-    it('★ 传 recipeId 只回这一份（省流量），但 batchSize 仍是真实份数', async () => {
+    it('★ items=one + recipeId 只回这一份（省流量），batchSize 仍是真实份数', async () => {
+      const { controller } = createController({
+        batchContent: batchContent(),
+      });
+
+      const res: any = await controller.getOrderDelivery(
+        req,
+        'CR202610210001',
+        undefined,
+        'CR1759100000002',
+        'one',
+      );
+
+      expect(res.data.items).toHaveLength(1);
+      expect(res.data.items[0].recipeId).toBe('CR1759100000002');
+      // 「本次共交付 N 份」不能用 items.length 冒充
+      expect(res.data.batchSize).toBe(2);
+    });
+
+    it('★ 只传 recipeId（线上旧包）→ 仍然整批回，不能悄悄少传', async () => {
       const { controller } = createController({
         batchContent: batchContent(),
       });
@@ -365,13 +384,12 @@ describe('CustomRecipeController · 顾客端多份交付', () => {
         'CR1759100000002',
       );
 
-      expect(res.data.items).toHaveLength(1);
-      expect(res.data.items[0].recipeId).toBe('CR1759100000002');
-      // 「本次共交付 N 份」不能用 items.length 冒充
+      // 旧客户端用 items.length 算份数：过滤会让「共 2 份」变成「共 1 份」
+      expect(res.data.items).toHaveLength(2);
       expect(res.data.batchSize).toBe(2);
     });
 
-    it('recipeId 查不到时整批原样回（旧链接不白屏）', async () => {
+    it('items=one 但 recipeId 查不到时整批原样回（旧链接不白屏）', async () => {
       const { controller } = createController({
         batchContent: batchContent(),
       });
@@ -381,6 +399,7 @@ describe('CustomRecipeController · 顾客端多份交付', () => {
         'CR202610210001',
         undefined,
         'CR-NOT-EXIST',
+        'one',
       );
 
       expect(res.data.items).toHaveLength(2);

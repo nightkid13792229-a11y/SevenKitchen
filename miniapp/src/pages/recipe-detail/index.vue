@@ -477,7 +477,7 @@ import { trackFunnelEvent } from '../../utils/funnel'
 import { buildDogCreateRoute, navigateToDogCreate } from '../../utils/dog-profile-entry'
 import { resolveCoverBadgeText } from '../../utils/cover-badge'
 import { getNutritionStandardExplain, getLifeStageLabel } from '../../utils/label-mapping'
-import { buildSupplementNutrientRows, getSupplementTargets } from '../../utils/supplement-nutrients'
+import { buildSupplementNutrientRowsFromItems } from '../../utils/supplement-nutrients'
 import ReviewList from '../../components/ReviewList.vue'
 import ReviewForm from '../../components/ReviewForm.vue'
 import NutritionReportEntry from '../../components/recipe/NutritionReportEntry.vue'
@@ -679,9 +679,7 @@ const otherItems = computed(() =>
  * `nutrientTargetKey/Value`；都没有的补剂就不产生行。
  */
 const supplementNutrientRows = computed(() =>
-  buildSupplementNutrientRows(
-    supplementItems.value.map((item) => ({ targets: getSupplementTargets(item) })),
-  ))
+  buildSupplementNutrientRowsFromItems(supplementItems.value))
 
 const hasStructuredNutritionReport = computed(() => {
   const report = recipe.value.nutritionDetailedData?.report

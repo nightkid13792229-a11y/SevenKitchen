@@ -673,6 +673,12 @@ export async function fetchDelivery(
     throwOnError?: boolean;
     /** 页面自己展示错误态时，关掉 api 层的 toast，避免双重提示 */
     suppressErrorToast?: boolean;
+    /**
+     * 多份交付只要这一份（`items=one`）。2026-11-08：
+     * 一份快照带着整份营养报告，整批下会白传几十 KB。
+     * 老客户端不带这个参数，服务端仍回整批（不影响线上旧包）。
+     */
+    singleItem?: boolean;
   },
 ): Promise<OrderDelivery | DeliveryBatchContent | null> {
   try {
@@ -682,6 +688,7 @@ export async function fetchDelivery(
     if (wantedRecipeId) {
       params.push(`recipeId=${encodeURIComponent(wantedRecipeId)}`);
     }
+    if (options?.singleItem) params.push('items=one');
     const query = params.length ? `?${params.join('&')}` : '';
 
     const res: any = await request({

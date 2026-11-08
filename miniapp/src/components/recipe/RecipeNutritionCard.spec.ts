@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
  *
  * 这块是**交付第 1 页 + 详情页共用**的。三条口径很容易被改坏：
  *   ① 缺失显示「—」不是 0（0% 会被读成"不含脂肪"）
- *   ② 报告入口在**块内**（老板要求并进来，不是页面底部）
+ *   ② 卡内不再带报告入口（2026-11-08 起报告是独立板块）
  *   ③ 8 项顺序写死在前端（后端只给数字）
  */
 describe('RecipeNutritionCard · 核心营养成分卡', () => {
@@ -15,6 +15,8 @@ describe('RecipeNutritionCard · 核心营养成分卡', () => {
     resolve(process.cwd(), 'src/components/recipe/RecipeNutritionCard.vue'),
     'utf-8',
   )
+  // 注释里会提到"旧入口"，断言只认代码本身
+  const markup = source.replace(/<!--[\s\S]*?-->/g, '')
 
   it('★ 缺失值显示「—」而不是 0', () => {
     // 这是最容易"顺手改成 0"的地方
@@ -24,11 +26,13 @@ describe('RecipeNutritionCard · 核心营养成分卡', () => {
     expect(source).not.toMatch(/\?\?\s*0\b/)
   })
 
-  it('★ 报告入口在卡片内，不是页面底部', () => {
-    expect(source).toContain('nutrition-card__report')
-    expect(source).toContain('查看完整营养报告')
-    // 入口必须 emit 出去，由页面决定怎么跳（组件不该知道路由）
-    expect(source).toContain("emit('open-report')")
+  it('★ 卡内不再带报告入口（2026-11-08：报告是独立板块）', () => {
+    // 旧入口是死代码：调用方固定 report-available=false，open-report 无人监听。
+    // 留着默认值 true，将来谁复用这张卡就会把「查看完整营养报告」旧文案带回来。
+    expect(markup).not.toContain('nutrition-card__report')
+    expect(markup).not.toContain('查看完整营养报告')
+    expect(markup).not.toContain('reportAvailable')
+    expect(markup).not.toContain('open-report')
   })
 
   it('8 项营养按固定顺序，且正好 8 个', () => {

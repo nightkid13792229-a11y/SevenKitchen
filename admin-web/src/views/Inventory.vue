@@ -102,7 +102,7 @@
             </el-table-column>
             <el-table-column label="成本" width="160" align="right">
               <template #default="{ row }">
-                ¥{{ formatPrice(row.currentPricePerPurchaseUnit) }} / {{ formatCostUnit(row) }}
+                {{ formatUnitCost(row.currentPricePerPurchaseUnit, isFoodRow(row) ? 6 : 2) }} / {{ formatCostUnit(row) }}
               </template>
             </el-table-column>
             <el-table-column label="操作" width="240" fixed="right">
@@ -384,6 +384,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { inventoryApi } from '@/api'
+import { formatUnitCost } from '@/utils/costFormat'
 import {
   IngredientProcurementStrategy,
   IngredientProcurementStrategyLabels,

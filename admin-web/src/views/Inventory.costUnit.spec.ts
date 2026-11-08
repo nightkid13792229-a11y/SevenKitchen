@@ -13,6 +13,13 @@ describe('库存页 · 成本单位', () => {
     expect(inventorySource).toMatch(/isFoodRow[\s\S]{0,160}baseUnit/)
   })
 
+  it('食材成本保留 6 位小数，不把 0.04995 显示成 0.05', () => {
+    expect(inventorySource).toContain('formatUnitCost')
+    expect(inventorySource).toMatch(
+      /formatUnitCost\(row\.currentPricePerPurchaseUnit,\s*isFoodRow\(row\)\s*\?\s*6\s*:\s*2\)/,
+    )
+  })
+
   it('不再提供手工改成本的入口（成本只能来自采购商品与报销）', () => {
     expect(inventorySource).not.toContain('改成本')
     expect(inventorySource).not.toContain('costPreviewText')

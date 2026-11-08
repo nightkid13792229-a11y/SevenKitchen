@@ -364,7 +364,7 @@
           <div class="price-info-line">
             <span class="label">每 1 {{ baseUnitLabel }} 成本</span>
             <span class="value">
-              {{ priceInfo ? formatMoney(priceInfo.baseUnitCost) : '未定价' }}
+              {{ priceInfo ? formatUnitCost(priceInfo.baseUnitCost) : '未定价' }}
             </span>
           </div>
           <div class="price-info-line">
@@ -686,7 +686,7 @@
         <div class="price-info-card">
           <div class="price-info-line">
             <span class="label">每 {{ baseUnitLabel }} 单价</span>
-            <span class="value">{{ formatMoney(priceInfo.baseUnitCost) }}</span>
+            <span class="value">{{ formatUnitCost(priceInfo.baseUnitCost, 2) }}</span>
           </div>
           <div class="price-info-line">
             <span class="label">价格来源</span>
@@ -1358,8 +1358,8 @@
         <template #default="{ row }">
           <span v-if="row.oldCostPerBaseUnit === null">首次定价</span>
           <span v-else>
-            {{ formatMoney(row.oldCostPerBaseUnit) }} →
-            {{ formatMoney(row.newCostPerBaseUnit) }}
+            {{ formatUnitCost(row.oldCostPerBaseUnit) }} →
+            {{ formatUnitCost(row.newCostPerBaseUnit) }}
           </span>
         </template>
       </el-table-column>
@@ -1457,6 +1457,7 @@ import {
   type PublicOptionItem,
 } from '@/api/platformOptions'
 import { buildSupplementActiveNutrientsFromNutritionProfile } from '@/utils/ingredientNutrition'
+import { formatUnitCost } from '@/utils/costFormat'
 import {
   isEdibleYieldPercentInRange,
   toEdibleYieldPercent,
@@ -1745,15 +1746,6 @@ const baseUnitLabel = computed(
   () => BaseUnitLabels[formData.baseUnit] || formData.baseUnit,
 )
 
-const formatMoney = (value?: number | null) => {
-  const num = Number(value ?? 0)
-  if (!Number.isFinite(num)) return '¥0'
-  const abs = Math.abs(num)
-  if (abs >= 1) return `¥${num.toFixed(2)}`
-  if (abs >= 0.01) return `¥${num.toFixed(4)}`
-  return `¥${num.toFixed(6)}`
-}
-
 /**
  * 成本来源翻译（2026-11-07）。
  * 四个来源对应「这个数是怎么来的」，没有流水时是「未定价」。
@@ -1782,7 +1774,7 @@ const formatUnitPricePreview = computed(() => {
   const price = Number(formData.currentPricePerPurchaseUnit ?? 0)
   const ratio = Number(formData.purchaseToBaseRatio ?? 0)
   if (!(price > 0) || !(ratio > 0)) return ''
-  return `≈ ${formatMoney(price / ratio)} / ${baseUnitLabel.value}`
+  return `≈ ${formatUnitCost(price / ratio, 2)} / ${baseUnitLabel.value}`
 })
 
 const isPriceStale = computed(() => {

@@ -910,6 +910,35 @@ describe('IngredientCreationCommitService', () => {
     expect(row.targetStock).toBeUndefined();
   });
 
+  it('建档同时给采购商品写一条初始价历史，并保留 6 位成本（9.99 / 200g）', async () => {
+    const { service, store } = await createHarness();
+
+    const result = await service.commit({
+      ...baseInput,
+      procurementSku: {
+        ...baseInput.procurementSku,
+        packCount: 1,
+        netContentPerPack: 200,
+        currentPurchasePrice: 9.99,
+      },
+    });
+
+    expect(store.procurementSkuPriceHistories).toHaveLength(1);
+    expect(store.procurementSkuPriceHistories[0]).toMatchObject({
+      procurementSkuId: result.procurementSkuId,
+      ingredientId: result.ingredientId,
+      oldPrice: null,
+      newPrice: 9.99,
+      source: 'MANUAL',
+      operatorId: 'admin-1',
+      note: '建档时初始采购价',
+    });
+    expect(
+      store.ingredients.find((row) => row.id === result.ingredientId)
+        ?.currentPricePerPurchaseUnit,
+    ).toBe(0.04995);
+  });
+
   it('没传的字段保持默认，0 不被当成空', async () => {
     const { service, store } = await createHarness();
 

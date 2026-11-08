@@ -653,6 +653,22 @@ export class IngredientCreationCommitService {
         select: { id: true },
       });
 
+      // 采购商品价格历史的第一条：建档时填的价就是这条 SKU 的初始价。
+      // 手工新增 SKU 时 ProcurementSkuService 会写这一条；AI 建档走的是
+      // 这里的直写事务，漏了它 SKU 的「价格历史」就是空表（2026-11-08）。
+      // source 沿用 MANUAL：价格是人在草稿审核页填的，只是没有单独枚举。
+      await tx.procurementSkuPriceHistory.create({
+        data: {
+          procurementSkuId: createdSku.id,
+          ingredientId: createdIngredient.id,
+          oldPrice: null,
+          newPrice: commitSku.currentPurchasePrice,
+          source: 'MANUAL',
+          operatorId: input.userId,
+          note: '建档时初始采购价',
+        },
+      });
+
       const initialCost =
         Math.round(
           (commitSku.currentPurchasePrice / commitSku.purchaseToBaseRatio) *

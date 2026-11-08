@@ -30,6 +30,11 @@ describe('原料表单 · 食材成本', () => {
     expect(ingredientFormSource).toContain('每 1 {{ baseUnitLabel }} 成本')
   })
 
+  it('每克成本保留 6 位小数，不再按 2/4 位四舍五入', () => {
+    expect(ingredientFormSource).toContain('formatUnitCost')
+    expect(ingredientFormSource).not.toContain('formatMoney')
+  })
+
   it('成本来源按四个流水来源翻译成人话，不再用「建档手填」', () => {
     expect(ingredientFormSource).toContain('INIT_FROM_SKU')
     expect(ingredientFormSource).not.toContain('建档手填')

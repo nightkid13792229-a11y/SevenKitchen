@@ -100,6 +100,47 @@ describe('Agent 工具：search_knowledge_library', () => {
     );
   });
 
+  it('find_food 按 nutrientKey 找原料并透出含量', async () => {
+    const findFoods = jest.fn().mockResolvedValue([
+      {
+        ingredientId: 'i1',
+        nutritionFoodId: 'f1',
+        name: '火麻仁',
+        category: 'FOOD',
+        preparationState: '生',
+        isPrimary: true,
+        nutrientMatch: {
+          nutrientKey: 'magnesium',
+          label: '镁',
+          amount: 700,
+          unit: 'mg',
+          basis: 'PER_100_G',
+          basisLabel: '/100g',
+          displayText: '700mg/100g',
+        },
+      },
+    ]);
+    const outcome = await executeTool(
+      'find_food',
+      { nutrientKey: 'magnesium', limit: 5 },
+      {
+        port: { findFoods } as any,
+        catalog: {} as any,
+        library: {} as any,
+        citations: new CitationRegistry(),
+        onAsk: jest.fn(),
+      },
+    );
+
+    expect(findFoods).toHaveBeenCalledWith({
+      search: undefined,
+      nutrientKey: 'magnesium',
+      limit: 5,
+    });
+    expect(outcome.ok).toBe(true);
+    expect(outcome.data?.[0]?.nutrientMatch?.displayText).toBe('700mg/100g');
+  });
+
   it('assess 摘要带出缺口数值和目标范围', async () => {
     const outcome = await executeTool(
       'assess',
@@ -237,5 +278,51 @@ describe('Agent 工具：search_knowledge_library', () => {
 
     expect(outcome.ok).toBe(false);
     expect(search).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('assess 摘要的缺口与缺数据', () => {
+  it('显示还差多少、剂量提示和缺数据覆盖', async () => {
+    const port = {
+      assess: jest.fn().mockResolvedValue({
+        isCompliant: false,
+        contentRevision: 1,
+        totalEnergyKcal: 3515,
+        counts: { compliant: 2, deficient: 1, excess: 0, missingData: 1 },
+        gaps: [
+          {
+            key: 'iodine',
+            label: '碘',
+            status: 'DEFICIENT',
+            value: 0.064,
+            min: 0.26,
+            max: 2.72,
+            unit: 'mg',
+            deficit: 0.196,
+            doseGuidance: '1片 ≈ 0.064mg/1000kcal；目标 0.26mg；约需 4片',
+          },
+        ],
+        missingData: [
+          { key: 'chloride', label: '氯', missingItemCount: 11, totalItemCount: 11 },
+        ],
+        allergens: [],
+      }),
+    };
+    const outcome = await executeTool(
+      'assess',
+      {},
+      {
+        port: port as any,
+        catalog: {} as any,
+        library: {} as any,
+        citations: new CitationRegistry(),
+        onAsk: jest.fn(),
+      },
+    );
+
+    expect(outcome.summary).toContain('还差 0.196 mg');
+    expect(outcome.summary).toContain('1片');
+    expect(outcome.summary).toContain('缺数据：氯（11/11 原料无数据）');
   });
 });

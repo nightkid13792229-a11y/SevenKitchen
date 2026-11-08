@@ -77,6 +77,7 @@ export interface AssessmentNutrientContributor {
   itemName: string;
   weightG: number;
   amountUnit?: string;
+  ingredientType?: string;
   amount: number | null;
   unit: string;
   contributionPercent: number | null;

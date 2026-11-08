@@ -20,5 +20,6 @@ export function buildSystemPrompt(): string {
 最终回答里每个数值/结论后面写 [K#] 引用（如 [K1]）；编号只能来自本次检索结果；中间过程不用。
 当疾病目标与内置评估标准冲突时，先用 search_knowledge_library 查到目标，再在 assess 的 targetOverrides 里传；每个覆盖必须带 citationId，不传则用内置标准。
 检索时，如果问题指定了犬/猫或 CKD 分期，带上 species/stage；只查某主题时带 topics。
+缺某个营养素时，先 find_food 传 nutrientKey（如 iodine / chloride / magnesium）找原料；改补剂时在 edit_recipe 传 trackNutrients，看改动前后缺口。
 回答用中文。`;
 }

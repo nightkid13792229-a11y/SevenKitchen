@@ -42,6 +42,15 @@ export interface FoodCandidate {
   category: string | null;
   preparationState: string | null;
   isPrimary: boolean;
+  nutrientMatch?: {
+    nutrientKey: string;
+    label: string;
+    amount: number;
+    unit: string;
+    basis: string;
+    basisLabel: string;
+    displayText: string;
+  } | null;
 }
 
 export interface AssessmentGap {
@@ -52,11 +61,19 @@ export interface AssessmentGap {
   min: number | null;
   max: number | null;
   unit: string;
+  /** 还差多少（DEFICIENT: max(0, min - value)；EXCESS: max(0, value - max)）。 */
+  deficit?: number | null;
+  /** 补剂剂量的可执行提示，如「1 片 ≈ 0.064/1000kcal；目标 0.26；约需 4 片」。 */
+  doseGuidance?: string;
   /** 这个缺口主要来自哪些原料；用于让模型改对 item，而不是盲试。 */
   contributors?: Array<{
     itemName: string;
+    amountUnit?: string;
+    ingredientType?: string;
     amount: number | null;
     unit: string;
+    missing?: boolean;
+    missingAsZero?: boolean;
   }>;
 }
 
@@ -71,6 +88,14 @@ export interface AssessmentSummary {
     missingData: number;
   };
   gaps: AssessmentGap[];
+  /** 全部或部分原料缺字段、无法判断的营养素。 */
+  missingData: Array<{
+    key: string;
+    label: string;
+    missingItemCount: number;
+    totalItemCount: number;
+    allMissing?: boolean;
+  }>;
   allergens: string[];
 }
 
@@ -143,6 +168,7 @@ export class RecipeDraftPort {
     const limit = Math.min(20, Math.max(1, Number(input.limit ?? 8)));
     const result = (await this.designer.listIngredientOptions({
       search: input.search,
+      nutrientKey: input.nutrientKey,
       page: 1,
       pageSize: limit,
     } as any)) as any;
@@ -163,6 +189,7 @@ export class RecipeDraftPort {
         category: row.category ?? primary.category ?? null,
         preparationState: primary.preparationStateLabel ?? null,
         isPrimary: Boolean(primary.isPrimary),
+        nutrientMatch: primary.nutrientMatch ?? row.nutrientMatch ?? null,
       });
       if (candidates.length >= limit) break;
     }
@@ -245,10 +272,20 @@ export class RecipeDraftPort {
     return results;
   }
 
+  private lastTargetOverrides?: AssessmentTargetOverride[];
+
+  /** 本次会话最后一次评估使用的目标覆盖；edit_recipe 做前后对比时沿用。 */
+  getLastTargetOverrides(): AssessmentTargetOverride[] | undefined {
+    return this.lastTargetOverrides;
+  }
+
   /** 跑评估，只回缺口和一个总数；不回全量明细。 */
   async assess(
     targetOverrides?: AssessmentTargetOverride[],
   ): Promise<AssessmentSummary> {
+    if (targetOverrides !== undefined) {
+      this.lastTargetOverrides = targetOverrides;
+    }
     const result: any = await this.designer.assessDraftForAgent(
       this.draftId,
       this.access,
@@ -260,30 +297,121 @@ export class RecipeDraftPort {
       ? assessment.groupedEntries
       : [];
 
-    const gaps: AssessmentGap[] = groups
+    const allGroups = groups;
+    const isAllMissing = (entry: any): boolean => {
+      const contributors = Array.isArray(entry?.contributors)
+        ? entry.contributors
+        : [];
+      return (
+        entry?.missingAsZero === true &&
+        contributors.length > 0 &&
+        contributors.every(
+          (contributor: any) =>
+            contributor?.missing === true ||
+            contributor?.missingAsZero === true ||
+            contributor?.amount === null ||
+            contributor?.amount === undefined,
+        )
+      );
+    };
+    const missingData = allGroups
       .filter((entry) => {
         const status = String(entry?.status ?? '');
-        return status === 'DEFICIENT' || status === 'EXCESS';
+        return status === 'MISSING_DATA' || isAllMissing(entry);
+      })
+      .map((entry) => {
+        const contributors = Array.isArray(entry.contributors)
+          ? entry.contributors
+          : [];
+        return {
+          key: String(entry.nutrientKey ?? entry.key ?? ''),
+          label: String(
+            entry.label ?? entry.name ?? entry.nutrientKey ?? entry.key ?? '',
+          ),
+          missingItemCount: contributors.filter(
+            (contributor: any) =>
+              contributor?.missing === true ||
+              contributor?.missingAsZero === true ||
+              contributor?.amount === null ||
+              contributor?.amount === undefined,
+          ).length,
+          totalItemCount: contributors.length,
+          allMissing: isAllMissing(entry),
+        };
+      });
+    const allMissingDeficientCount = missingData.filter(
+      (item) => item.allMissing,
+    ).length;
+
+    const totalEnergyKcal = toNumber(assessment.totalEnergyKcal);
+    const gaps: AssessmentGap[] = allGroups
+      .filter((entry) => {
+        const status = String(entry?.status ?? '');
+        return (
+          (status === 'DEFICIENT' || status === 'EXCESS') &&
+          !isAllMissing(entry)
+        );
       })
       .slice(0, 12)
-      .map((entry) => ({
-        key: String(entry.nutrientKey ?? entry.key ?? ''),
-        label: String(
-          entry.label ?? entry.name ?? entry.nutrientKey ?? entry.key ?? '',
-        ),
-        status: String(entry.status ?? ''),
-        value: toNumber(entry.currentValue ?? entry.value),
-        min: toNumber(entry.minValue ?? entry.min),
-        max: toNumber(entry.maxValue ?? entry.max),
-        unit: String(entry.unit ?? ''),
-        contributors: Array.isArray(entry.contributors)
-          ? entry.contributors.slice(0, 3).map((contributor: any) => ({
-              itemName: String(contributor.itemName ?? ''),
-              amount: toNumber(contributor.amount),
-              unit: String(contributor.unit ?? ''),
-            }))
-          : [],
-      }));
+      .map((entry) => {
+        const value = toNumber(entry.currentValue ?? entry.value);
+        const min = toNumber(entry.minValue ?? entry.min);
+        const max = toNumber(entry.maxValue ?? entry.max);
+        const status = String(entry.status ?? '');
+        const contributors = Array.isArray(entry.contributors)
+          ? entry.contributors
+          : [];
+        const mappedContributors = contributors.slice(0, 3).map((contributor: any) => ({
+          itemName: String(contributor.itemName ?? ''),
+          amountUnit:
+            typeof contributor.amountUnit === 'string'
+              ? contributor.amountUnit
+              : undefined,
+          ingredientType:
+            typeof contributor.ingredientType === 'string'
+              ? contributor.ingredientType
+              : undefined,
+          amount: toNumber(contributor.amount),
+          unit: String(contributor.unit ?? ''),
+          missing: contributor.missing === true,
+          missingAsZero: contributor.missingAsZero === true,
+        }));
+        const deficit =
+          status === 'DEFICIENT' && min !== null && value !== null
+            ? Math.max(0, min - value)
+            : status === 'EXCESS' && max !== null && value !== null
+              ? Math.max(0, value - max)
+              : null;
+        const supplement = contributors.find(
+          (contributor: any) =>
+            contributor?.ingredientType === 'SUPPLEMENT' &&
+            toNumber(contributor.amount) !== null &&
+            toNumber(contributor.amount)! > 0,
+        );
+        let doseGuidance: string | undefined;
+        if (supplement && min !== null && value !== null && totalEnergyKcal) {
+          const amount = toNumber(supplement.amount)!;
+          const perUnit = (amount / totalEnergyKcal) * 1000;
+          if (perUnit > 0) {
+            const units = Math.ceil(Math.max(0, min - value) / perUnit);
+            doseGuidance = `1${supplement.amountUnit ?? '份'} ≈ ${round(perUnit)}${String(entry.unit ?? '')}/1000kcal；目标 ${min}${String(entry.unit ?? '')}；约需 ${units}${supplement.amountUnit ?? '份'}`;
+          }
+        }
+        return {
+          key: String(entry.nutrientKey ?? entry.key ?? ''),
+          label: String(
+            entry.label ?? entry.name ?? entry.nutrientKey ?? entry.key ?? '',
+          ),
+          status,
+          value,
+          min,
+          max,
+          unit: String(entry.unit ?? ''),
+          deficit,
+          ...(doseGuidance ? { doseGuidance } : {}),
+          contributors: mappedContributors,
+        };
+      });
 
     const allergens = Array.isArray(result?.allergenWarnings)
       ? result.allergenWarnings.map((warning: any) =>
@@ -296,14 +424,19 @@ export class RecipeDraftPort {
         assessment.isCompliant === true ||
         String(assessment.overallStatus ?? '').toUpperCase() === 'COMPLIANT',
       contentRevision: Number(result?.contentRevision ?? 0),
-      totalEnergyKcal: toNumber(assessment.totalEnergyKcal),
+      totalEnergyKcal,
       counts: {
         compliant: Number(summary.compliant ?? 0),
-        deficient: Number(summary.deficient ?? 0),
+        deficient: Math.max(
+          0,
+          Number(summary.deficient ?? 0) - allMissingDeficientCount,
+        ),
         excess: Number(summary.excess ?? 0),
-        missingData: Number(summary.missingData ?? 0),
+        missingData:
+          Number(summary.missingData ?? 0) + allMissingDeficientCount,
       },
       gaps,
+      missingData,
       allergens,
     };
   }
@@ -366,4 +499,8 @@ export class RecipeDraftPort {
 function toNumber(value: unknown): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function round(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(3) : '?';
 }

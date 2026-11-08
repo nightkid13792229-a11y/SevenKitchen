@@ -140,14 +140,18 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
     function: {
       name: 'find_food',
       description:
-        '按关键词找原料，每条只回名称、分类、状态和一个可直接使用的档案 id。一次最多 8 条。',
+        '按关键词或营养素找原料。按营养素找时，每条会带该营养素的含量、单位和基准。一次最多 8 条。',
       parameters: {
         type: 'object',
         properties: {
-          search: { type: 'string', description: '关键词，如「鸭肉」「南瓜」' },
+          search: { type: 'string', description: '关键词，如「鸭肉」「南瓜」；按营养素找时可只传 nutrientKey' },
+          nutrientKey: {
+            type: 'string',
+            description: '可选：按营养素找，如 magnesium / iron / zinc / iodine / chloride / vitaminD',
+          },
           limit: { type: 'integer', minimum: 1, maximum: 20 },
         },
-        required: ['search'],
+        required: [],
         additionalProperties: false,
       },
     },
@@ -181,6 +185,12 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
               required: ['op'],
               additionalProperties: false,
             },
+          },
+          trackNutrients: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              '可选：要跟踪的缺口 nutrientKey（如 iodine / chloride / magnesium）；传了会返回改动前后缺口变化和剂量提示。',
           },
         },
         required: ['ops'],
@@ -401,17 +411,23 @@ export async function executeTool(
       case 'find_food': {
         const search =
           typeof args.search === 'string' ? args.search.trim() : '';
-        if (!search) {
-          return fail('INVALID_ARGUMENT', 'search 不能为空');
+        const nutrientKey =
+          typeof args.nutrientKey === 'string'
+            ? args.nutrientKey.trim()
+            : '';
+        if (!search && !nutrientKey) {
+          return fail('INVALID_ARGUMENT', 'search 或 nutrientKey 至少给一个');
         }
         const candidates = await context.port.findFoods({
-          search,
+          search: search || undefined,
+          nutrientKey: nutrientKey || undefined,
           limit: typeof args.limit === 'number' ? args.limit : undefined,
         });
+        const label = nutrientKey ? `营养素 ${nutrientKey}` : `「${search}」`;
         return ok(
           candidates,
           candidates.length === 0
-            ? `没有找到「${search}」，换个说法或先入库`
+            ? `没有找到${label}，换个说法或先入库`
             : `找到 ${candidates.length} 条`,
         );
       }
@@ -425,15 +441,65 @@ export async function executeTool(
         if (!parsed.ok) {
           return fail('INVALID_ARGUMENT', parsed.message);
         }
+        const trackNutrients = Array.isArray(args.trackNutrients)
+          ? args.trackNutrients
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => item.trim())
+              .filter(Boolean)
+              .slice(0, 12)
+          : [];
+        const trackOverrides = context.port.getLastTargetOverrides();
+        const before =
+          trackNutrients.length > 0
+            ? await context.port.assess(trackOverrides)
+            : null;
         const results = await context.port.editRecipe(parsed.ops);
         const failed = results.filter((item) => !item.ok);
+        let impact:
+          | Array<{
+              key: string;
+              label: string;
+              before: number | null;
+              after: number | null;
+              deficitBefore: number | null;
+              deficitAfter: number | null;
+              doseGuidance?: string;
+            }>
+          | undefined;
+        if (trackNutrients.length > 0) {
+          const after = await context.port.assess(trackOverrides);
+          impact = trackNutrients.map((key) => {
+            const b = before?.gaps.find((gap) => gap.key === key);
+            const a = after.gaps.find((gap) => gap.key === key);
+            return {
+              key,
+              label: a?.label ?? b?.label ?? key,
+              before: b?.value ?? null,
+              after: a?.value ?? null,
+              deficitBefore: b?.deficit ?? null,
+              deficitAfter: a?.deficit ?? null,
+              ...(a?.doseGuidance ? { doseGuidance: a.doseGuidance } : {}),
+            };
+          });
+        }
         const summary =
           failed.length === 0
             ? `${results.length} 项已执行`
             : `${results.length - failed.length} 项成功，${failed.length} 项失败：${failed
                 .map((item) => item.message)
                 .join('；')}`;
-        return { ok: failed.length === 0, data: results, summary };
+        return {
+          ok: failed.length === 0,
+          data: impact ? { results, impact } : results,
+          summary: impact
+            ? `${summary}；${impact
+                .map(
+                  (item) =>
+                    `${item.label}：${item.before ?? '?'} → ${item.after ?? '?'}，还差 ${item.deficitAfter ?? '?'}${item.doseGuidance ? `（${item.doseGuidance}）` : ''}`,
+                )
+                .join('；')}`
+            : summary,
+        };
       }
 
       case 'assess': {
@@ -652,6 +718,13 @@ function summarizeAssessment(summary: {
     min: number | null;
     max: number | null;
     unit: string;
+    deficit?: number | null;
+    doseGuidance?: string;
+  }>;
+  missingData?: Array<{
+    label: string;
+    missingItemCount: number;
+    totalItemCount: number;
   }>;
   allergens: string[];
 }): string {
@@ -670,8 +743,23 @@ function summarizeAssessment(summary: {
             gap.min == null && gap.max == null
               ? ''
               : `（目标 ${gap.min ?? '?'}–${gap.max ?? '?'}${unit}）`;
-          return `${gap.label} ${actual}${target}`;
+          const deficit =
+            gap.deficit == null
+              ? ''
+              : `，还差 ${gap.deficit}${unit}`;
+          const dose = gap.doseGuidance ? `；${gap.doseGuidance}` : '';
+          return `${gap.label} ${actual}${target}${deficit}${dose}`;
         })
+        .join('、')}`,
+    );
+  }
+  if (summary.missingData && summary.missingData.length > 0) {
+    parts.push(
+      `缺数据：${summary.missingData
+        .map(
+          (item) =>
+            `${item.label}（${item.missingItemCount}/${item.totalItemCount} 原料无数据）`,
+        )
         .join('、')}`,
     );
   }

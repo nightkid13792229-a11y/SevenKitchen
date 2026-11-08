@@ -1139,6 +1139,7 @@ function buildTargetContributors(
       itemName: item.name,
       weightG: item.weightG,
       amountUnit: getItemAmountUnit(item),
+      ingredientType: item.ingredientType ?? undefined,
       amount: contribution.amount,
       unit: target.unit,
       contributionPercent: null,

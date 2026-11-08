@@ -4568,6 +4568,16 @@ export class RecipeDesignerService {
         '发布草稿已被其他人修改，请关闭抽屉重新打开后再发布',
       );
     }
+    /**
+     * 事务里再锁一次：上面的检查到真正写库之间还有窗口，
+     * 用条件 updateMany 保证「读到的草稿 = 发出去的草稿」。
+     */
+    const expectedDraftUpdatedAt =
+      options.expectedDraftUpdatedAt === undefined
+        ? undefined
+        : options.expectedDraftUpdatedAt === null
+          ? null
+          : new Date(options.expectedDraftUpdatedAt);
     const [sources, draftContext] = await Promise.all([
       this.loadSeriesReleaseStageSources(seriesId),
       this.loadSeriesReleaseDraftContext(series),
@@ -4674,20 +4684,41 @@ export class RecipeDesignerService {
       });
 
       // 草稿一次性落到系列上，顺手把草稿清空。
-      const updatedSeries = await tx.recipeSeries.update({
-        where: { id: seriesId },
-        data: {
-          businessStatus: RecipeSeriesBusinessStatus.PUBLIC,
-          name: effective.name ?? series.name,
-          coverImageUrl: effective.coverImageUrl,
-          coverTitle: effective.coverTitle,
-          sellingPoint: effective.sellingPoint,
-          targetHealthTags: effective.targetHealthTags,
-          releaseDraft: Prisma.DbNull,
-          releaseDraftUpdatedAt: null,
-          releaseDraftUpdatedBy: null,
-        },
-      });
+      const seriesUpdateData = {
+        businessStatus: RecipeSeriesBusinessStatus.PUBLIC,
+        name: effective.name ?? series.name,
+        coverImageUrl: effective.coverImageUrl,
+        coverTitle: effective.coverTitle,
+        sellingPoint: effective.sellingPoint,
+        targetHealthTags: effective.targetHealthTags,
+        releaseDraft: Prisma.DbNull,
+        releaseDraftUpdatedAt: null,
+        releaseDraftUpdatedBy: null,
+      };
+      let updatedSeries: RecipeSeries;
+      if (expectedDraftUpdatedAt === undefined) {
+        updatedSeries = await tx.recipeSeries.update({
+          where: { id: seriesId },
+          data: seriesUpdateData,
+        });
+      } else {
+        const locked = await tx.recipeSeries.updateMany({
+          where: { id: seriesId, releaseDraftUpdatedAt: expectedDraftUpdatedAt },
+          data: seriesUpdateData,
+        });
+        if (locked.count === 0) {
+          throw new ConflictException(
+            '发布草稿已被其他人修改，请关闭抽屉重新打开后再发布',
+          );
+        }
+        const refreshed = await tx.recipeSeries.findUnique({
+          where: { id: seriesId },
+        });
+        if (!refreshed) {
+          throw new NotFoundException(`Recipe series ${seriesId} not found`);
+        }
+        updatedSeries = refreshed;
+      }
 
       /**
        * 改名必须同步到已上线食谱（2026-11-08 审核修复）。

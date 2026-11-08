@@ -759,6 +759,32 @@ describe('RecipeDesignerService · staged series release', () => {
       expect(result).not.toHaveProperty('requiredLifeStages');
     });
 
+    it('发布时用条件更新锁住草稿（expected 一致）', async () => {
+      mockFirstReleaseSeries();
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({ businessStatus: 'DRAFT', releaseDraftUpdatedAt: null }),
+      );
+      prisma.recipe.updateMany
+        .mockResolvedValueOnce({ count: 2 })
+        .mockResolvedValueOnce({ count: 0 });
+
+      await service.releaseSeries('series-1', ADMIN_ACCESS, {
+        expectedDraftUpdatedAt: null,
+      });
+
+      expect(prisma.recipeSeries.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'series-1', releaseDraftUpdatedAt: null },
+          data: expect.objectContaining({
+            businessStatus: 'PUBLIC',
+            releaseDraftUpdatedAt: null,
+          }),
+        }),
+      );
+      // 条件更新成功后再读回系列（返回值用）
+      expect(prisma.recipeSeries.findUnique).toHaveBeenCalledTimes(2);
+    });
+
     it('releases a single READY stage when it is the only ready one', async () => {
       prisma.recipe.findMany.mockResolvedValue([
         recipeRecord({

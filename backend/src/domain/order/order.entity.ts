@@ -755,27 +755,44 @@ export class Order {
   }
 
   /**
-   * Update target production date
-   * Allowed when order.status < PURCHASING
-   * Date must be >= today in Shanghai time
-   * @param newDate New target production date
-   * @throws InvalidStateTransitionError if order is already in purchasing
-   * @throws ValidationError if date is invalid or earlier than today
+   * 校验这张订单是否还允许改制作日期（不看具体日期，只看订单本身）。
+   *
+   * 规则：
+   *   - 试吃装是现货，没有制作日期；
+   *   - 采购开始以后（采购中/制作/急冻/发货/完成/取消/售后）不允许再改。
+   *
+   * @throws ValidationError 试吃装订单
+   * @throws InvalidStateTransitionError 采购开始后
    */
-  updateTargetProductionDate(newDate: Date): void {
-    // Cannot change date after purchasing started
+  assertTargetDateEditable(): void {
+    if (this.type === OrderType.TASTING_PACK) {
+      throw new ValidationError('试吃装是现货，没有制作日期');
+    }
+
     if (
       this.status === OrderStatus.PURCHASING ||
       this.status === OrderStatus.IN_PRODUCTION ||
       this.status === OrderStatus.FREEZING ||
       this.status === OrderStatus.SHIPPED ||
       this.status === OrderStatus.COMPLETED ||
-      this.status === OrderStatus.CANCELLED
+      this.status === OrderStatus.CANCELLED ||
+      this.status === OrderStatus.AFTERSALE
     ) {
       throw new InvalidStateTransitionError(
         `Cannot update target production date for order in status: ${this.status}`,
       );
     }
+  }
+
+  /**
+   * Update target production date
+   * Only before purchasing starts; date must be >= today in Shanghai time
+   * @param newDate New target production date
+   * @throws InvalidStateTransitionError if order is already in purchasing or later
+   * @throws ValidationError if date is invalid or earlier than today
+   */
+  updateTargetProductionDate(newDate: Date): void {
+    this.assertTargetDateEditable();
 
     // Preserve the first scheduled date for audit/history on the first edit.
     if (!this.originalTargetProductionDate && this.targetProductionDate) {
@@ -784,7 +801,7 @@ export class Order {
       );
     }
 
-    // Allow moving a future order back to today, but never into the past.
+    // 可以前后调整，但不能改到今天以前。
     const todayDateStr = TimezoneUtil.toShanghaiDateString(new Date());
     const newDateStr = TimezoneUtil.toShanghaiDateString(newDate);
 

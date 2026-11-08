@@ -29,6 +29,7 @@ import {
   ApiHeader,
 } from '@nestjs/swagger';
 import { OrderService } from '../../application/order/order.service';
+import { parseProductionDateInput } from '../../application/order/production-date';
 import { OrderProcurementDisclosureService } from '../../application/order/order-procurement-disclosure.service';
 import { OrderSummaryService } from '../../application/order/order-summary.service';
 import { WechatPaymentService } from '../../application/payment/wechat-payment.service';
@@ -141,9 +142,9 @@ export class OrdersController {
         customerId,
         dogId: createOrderDto.dogId,
         type: createOrderDto.type,
-        targetProductionDate: createOrderDto.targetProductionDate
-          ? new Date(createOrderDto.targetProductionDate)
-          : null,
+        targetProductionDate: parseProductionDateInput(
+          createOrderDto.targetProductionDate,
+        ),
         items: createOrderDto.items,
         cartItemIds: createOrderDto.cartItemIds,
         snapshotId: createOrderDto.snapshotId,
@@ -1822,9 +1823,14 @@ export class OrdersController {
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
     try {
+      const targetDate = parseProductionDateInput(body.targetProductionDate);
+      if (!targetDate) {
+        return ApiResponseDto.error(400, '请选择制作日期');
+      }
+
       const updatedOrder = await this.orderService.updateOrderTargetDate(
         id,
-        new Date(body.targetProductionDate),
+        targetDate,
         user.userId,
         user.role,
       );

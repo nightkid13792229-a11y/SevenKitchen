@@ -15,6 +15,7 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { OrderService } from '../../application/order/order.service';
+import { parseProductionDateInput } from '../../application/order/production-date';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard, CurrentUser, type RequestUser } from '../auth';
 import { StaffGuard } from '../guards/role.guard';
@@ -237,9 +238,9 @@ export class StaffCustomerServiceController {
         customerId,
         dogId,
         type: body.type || 'FRESH_FOOD',
-        targetProductionDate: body.targetProductionDate
-          ? new Date(body.targetProductionDate)
-          : null,
+        targetProductionDate: parseProductionDateInput(
+          body.targetProductionDate,
+        ),
         // 内部代客下单不受顾客「早上 6 点后最早次日」限制，可以约今天
         actorRole: actor,
         items,

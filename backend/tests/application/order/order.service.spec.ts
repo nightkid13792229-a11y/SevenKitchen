@@ -161,6 +161,9 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
     },
+    purchaseList: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
   };
 
   const mockSearchGovernance = {
@@ -550,6 +553,29 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
   });
 
   describe('createOrderDraft - 顾客制作日期规则', () => {
+    const arrangeSuccessfulItemsOrder = () => {
+      const dog = createMockDog();
+      const recipe = createMockRecipe();
+      const ingredient = createMockIngredient();
+
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([ingredient]);
+      mockPricingService.calculateOrderPrice.mockReturnValue({
+        costIngredients: 50,
+        costPackaging: 10,
+        costLabor: 20,
+        costOverhead: 5,
+        totalProductCost: 85,
+        productPrice: 141.67,
+      });
+      mockShippingService.calculateShippingFeePreview.mockResolvedValue({
+        amountShipping: 10,
+        templateId: 'template-1',
+      });
+      orderRepository.save.mockImplementation(async (order: Order) => order);
+    };
+
     it('顾客早上 6 点后不能把制作日期选在今天，且在读取订单数据前就拒绝', async () => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date('2026-11-09T08:00:00+08:00'));
@@ -582,29 +608,6 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date('2026-11-09T08:00:00+08:00'));
 
-      const arrangeSuccessfulItemsOrder = () => {
-        const dog = createMockDog();
-        const recipe = createMockRecipe();
-        const ingredient = createMockIngredient();
-
-        dogRepository.findById.mockResolvedValue(dog);
-        recipeRepository.findById.mockResolvedValue(recipe);
-        mockIngredientRepository.findByIds.mockResolvedValue([ingredient]);
-        mockPricingService.calculateOrderPrice.mockReturnValue({
-          costIngredients: 50,
-          costPackaging: 10,
-          costLabor: 20,
-          costOverhead: 5,
-          totalProductCost: 85,
-          productPrice: 141.67,
-        });
-        mockShippingService.calculateShippingFeePreview.mockResolvedValue({
-          amountShipping: 10,
-          templateId: 'template-1',
-        });
-        orderRepository.save.mockImplementation(async (order: Order) => order);
-      };
-
       try {
         arrangeSuccessfulItemsOrder();
 
@@ -633,6 +636,122 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
         jest.useRealTimers();
       }
     });
+
+    it('顾客 items 下单没带日期时，自动补最早可预约日', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-11-09T08:00:00+08:00'));
+
+      try {
+        arrangeSuccessfulItemsOrder();
+
+        const order = await service.createOrderDraft({
+          customerId: 'customer-id-1',
+          dogId: 'dog-id-1',
+          type: OrderType.FRESH_FOOD,
+          items: [
+            {
+              recipeId: 'recipe-id-1',
+              quantityG: 1000,
+              packageSpecG: 200,
+              packageCount: 5,
+            },
+          ],
+        });
+
+        expect(order.targetProductionDate?.toISOString()).toBe(
+          '2026-11-10T00:00:00.000Z',
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('客服 items 下单没带日期时保持不指定', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-11-09T08:00:00+08:00'));
+
+      try {
+        arrangeSuccessfulItemsOrder();
+
+        const order = await service.createOrderDraft({
+          customerId: 'customer-id-1',
+          dogId: 'dog-id-1',
+          type: OrderType.FRESH_FOOD,
+          actorRole: 'staff',
+          items: [
+            {
+              recipeId: 'recipe-id-1',
+              quantityG: 1000,
+              packageSpecG: 200,
+              packageCount: 5,
+            },
+          ],
+        });
+
+        expect(order.targetProductionDate).toBeNull();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('试吃装类型不能借制作日期绕过顾客 6 点规则', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-11-09T08:00:00+08:00'));
+
+      try {
+        await expect(
+          service.createOrderDraft({
+            customerId: 'customer-id-1',
+            type: OrderType.TASTING_PACK,
+            targetProductionDate: new Date('2026-11-09T00:00:00Z'),
+            items: [
+              {
+                recipeId: 'recipe-id-1',
+                quantityG: 1000,
+                packageSpecG: 200,
+                packageCount: 5,
+              },
+            ],
+          }),
+        ).rejects.toThrow(/试吃装是现货/);
+
+        expect(orderRepository.save).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('试吃装类型不能配鲜食价格快照', async () => {
+      mockPricingSnapshotRepository.findById.mockResolvedValue({
+        requestParams: { kind: 'FRESH_FOOD' },
+      } as any);
+
+      await expect(
+        service.createOrderDraft({
+          customerId: 'customer-id-1',
+          type: OrderType.TASTING_PACK,
+          snapshotId: 'snapshot-fresh-food',
+        }),
+      ).rejects.toThrow(/试吃装订单必须使用试吃装价格快照/);
+
+      expect(orderRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('鲜食类型不能配试吃装价格快照', async () => {
+      mockPricingSnapshotRepository.findById.mockResolvedValue({
+        requestParams: { kind: 'TASTING_PACK' },
+      } as any);
+
+      await expect(
+        service.createOrderDraft({
+          customerId: 'customer-id-1',
+          type: OrderType.FRESH_FOOD,
+          snapshotId: 'snapshot-tasting-pack',
+        }),
+      ).rejects.toThrow(/试吃装价格快照只能用于试吃装订单/);
+
+      expect(orderRepository.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateOrderTargetDate - 顾客改期规则', () => {
@@ -646,7 +765,10 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       items: [],
     });
 
-    const buildOrder = (targetProductionDate: Date) => {
+    const buildOrder = (
+      targetProductionDate: Date,
+      options: { status?: OrderStatus; type?: OrderType } = {},
+    ) => {
       const item = new OrderItem(
         'item-1',
         'order-1',
@@ -662,8 +784,8 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       return new Order(
         'order-1',
         'customer-1',
-        OrderStatus.PAID,
-        OrderType.FRESH_FOOD,
+        options.status ?? OrderStatus.PAID,
+        options.type ?? OrderType.FRESH_FOOD,
         new Date('2026-11-01T00:00:00Z'),
         targetProductionDate,
         targetProductionDate,
@@ -769,6 +891,61 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       } finally {
         jest.useRealTimers();
       }
+    });
+
+    it('试吃装订单不能改制作日期', async () => {
+      const order = buildOrder(new Date('2026-11-10T00:00:00Z'), {
+        type: OrderType.TASTING_PACK,
+      });
+      orderRepository.findById.mockResolvedValue(order);
+
+      await expect(
+        service.updateOrderTargetDate(
+          'order-1',
+          new Date('2026-11-11T00:00:00Z'),
+          'customer-1',
+          'CUSTOMER',
+        ),
+      ).rejects.toThrow(/试吃装是现货/);
+
+      expect(orderRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('售后中的订单不能改制作日期', async () => {
+      const order = buildOrder(new Date('2026-11-10T00:00:00Z'), {
+        status: OrderStatus.AFTERSALE,
+      });
+      orderRepository.findById.mockResolvedValue(order);
+
+      await expect(
+        service.updateOrderTargetDate(
+          'order-1',
+          new Date('2026-11-11T00:00:00Z'),
+          'customer-1',
+          'CUSTOMER',
+        ),
+      ).rejects.toThrow(/Cannot update target production date/);
+
+      expect(orderRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('采购单已经生成、状态还没转过去时也不能改制作日期', async () => {
+      const order = buildOrder(new Date('2026-11-10T00:00:00Z'));
+      orderRepository.findById.mockResolvedValue(order);
+      mockPrismaService.purchaseList.findFirst.mockResolvedValueOnce({
+        id: 'purchase-list-1',
+      });
+
+      await expect(
+        service.updateOrderTargetDate(
+          'order-1',
+          new Date('2026-11-11T00:00:00Z'),
+          'customer-1',
+          'CUSTOMER',
+        ),
+      ).rejects.toThrow(/采购已开始/);
+
+      expect(orderRepository.save).not.toHaveBeenCalled();
     });
   });
 

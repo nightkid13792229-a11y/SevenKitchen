@@ -1,7 +1,6 @@
 /**
  * 日期格式化工具（MiniApp端）
- * 统一处理日期显示格式
- * 自动转换为浏览器本地时区（中国用户为UTC+8）
+ * 通用显示按手机本地时区；制作日期等业务规则按上海时区（UTC+8）计算。
  */
 
 /**
@@ -23,18 +22,68 @@ export function todayDateText(): string {
   return formatLocalDateText(new Date());
 }
 
+/** 上海时区固定偏移；制作日期规则以后台上海时间为准，不看手机时区 */
+const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+/** 传入的 Date 已经平移到上海时区，用 UTC 方法读它的“上海日历日” */
+function formatShiftedShanghaiDate(date: Date): string {
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${date.getUTCFullYear()}-${month}-${day}`;
+}
+
+/** 某个时刻对应的上海日历日（YYYY-MM-DD） */
+export function formatShanghaiDateText(at?: Date): string {
+  const value = at ?? new Date();
+  return formatShiftedShanghaiDate(
+    new Date(value.getTime() + SHANGHAI_OFFSET_MS),
+  );
+}
+
+/** 上海时区的“今天”（YYYY-MM-DD） */
+export function shanghaiTodayText(now?: Date): string {
+  return formatShanghaiDateText(now ?? new Date());
+}
+
 /**
- * 顾客可预约的最早制作日期（YYYY-MM-DD，按本地时区算）。
+ * 把后台返回的 ISO 时间（制作日期存的是 UTC 零点）按上海日历日显示。
+ * 避免手机在负时区时把 UTC 零点显示成前一天。
+ */
+export function formatShanghaiDateOnly(
+  isoString: string | null | undefined,
+): string {
+  if (!isoString) return '-';
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return '-';
+  return formatShanghaiDateText(date);
+}
+
+/**
+ * 顾客可预约的最早制作日期（YYYY-MM-DD，按上海时区算）。
  *
  * 老板 2026-11-08 定：顾客仍按老规矩 —— 每天早上 6 点前下单可约当天，
  * 6 点起最早次日制作。管理员 / 客服代客下单不受这条限制，调用方按角色决定。
  */
-export function earliestCustomerProductionDate(now: Date = new Date()): string {
-  const date = new Date(now);
-  if (date.getHours() >= 6) {
-    date.setDate(date.getDate() + 1);
+export function earliestCustomerProductionDate(now?: Date): string {
+  const at = now ?? new Date();
+  const shanghai = new Date(at.getTime() + SHANGHAI_OFFSET_MS);
+  if (shanghai.getUTCHours() >= 6) {
+    shanghai.setUTCDate(shanghai.getUTCDate() + 1);
   }
-  return formatLocalDateText(date);
+  return formatShiftedShanghaiDate(shanghai);
+}
+
+/** 给 YYYY-MM-DD 加减天数，纯日历运算，不受手机时区影响 */
+export function addDaysToDateText(dateText: string, days: number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateText);
+  if (!match) return dateText;
+
+  const date = new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days),
+  );
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${date.getUTCFullYear()}-${month}-${day}`;
 }
 
 export interface ProductionDatePickerState {
@@ -63,9 +112,7 @@ export function resolveProductionDatePickerState(options: {
   now?: Date;
 }): ProductionDatePickerState {
   const now = options.now ?? new Date();
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  const todayText = formatLocalDateText(today);
+  const todayText = formatShanghaiDateText(now);
   const minDate = options.isAdmin
     ? todayText
     : earliestCustomerProductionDate(now);
@@ -74,8 +121,7 @@ export function resolveProductionDatePickerState(options: {
   if (options.orderDate) {
     const orderDate = new Date(options.orderDate);
     if (!Number.isNaN(orderDate.getTime())) {
-      orderDate.setHours(0, 0, 0, 0);
-      orderDateText = formatLocalDateText(orderDate);
+      orderDateText = formatShanghaiDateText(orderDate);
     }
   }
 

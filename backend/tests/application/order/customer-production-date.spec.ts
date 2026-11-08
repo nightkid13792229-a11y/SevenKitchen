@@ -6,7 +6,10 @@
  *   - 管理员 / 客服代客下单不受这条限制，可以把制作日期定在今天。
  */
 import { BadRequestException } from '@nestjs/common';
-import { resolveDraftProductionDate } from '../../../src/application/order/production-date';
+import {
+  parseProductionDateInput,
+  resolveDraftProductionDate,
+} from '../../../src/application/order/production-date';
 
 const shanghai = (iso: string) => new Date(iso);
 const dateOnly = (iso: string) => shanghai(iso).toISOString();
@@ -93,5 +96,36 @@ describe('resolveDraftProductionDate · 顾客制作日期规则', () => {
     expect(() =>
       resolveDraftProductionDate(new Date('not-a-date'), 'customer'),
     ).toThrow(BadRequestException);
+  });
+});
+
+describe('parseProductionDateInput · 接口入参', () => {
+  it('严格解析 YYYY-MM-DD，并拒绝不存在的日历日期', () => {
+    expect(parseProductionDateInput('2026-11-09')?.toISOString()).toBe(
+      '2026-11-09T00:00:00.000Z',
+    );
+    // new Date('2026-02-30') 会自动滚到 3 月 2 日，必须先严格挡住
+    expect(() => parseProductionDateInput('2026-02-30')).toThrow(
+      BadRequestException,
+    );
+    expect(() => parseProductionDateInput('not-a-date')).toThrow(
+      BadRequestException,
+    );
+    // 完整 ISO 串也要先看日期部分，不能靠 Date 自动滚到 3 月 2 日
+    expect(() => parseProductionDateInput('2026-02-30T00:00:00Z')).toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('完整 ISO 时间串照常解析', () => {
+    expect(
+      parseProductionDateInput('2026-11-09T00:00:00.000Z')?.toISOString(),
+    ).toBe('2026-11-09T00:00:00.000Z');
+  });
+
+  it('空值返回 null', () => {
+    expect(parseProductionDateInput(null)).toBeNull();
+    expect(parseProductionDateInput(undefined)).toBeNull();
+    expect(parseProductionDateInput('   ')).toBeNull();
   });
 });

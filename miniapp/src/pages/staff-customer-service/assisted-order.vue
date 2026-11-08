@@ -79,7 +79,7 @@
         <picker
           mode="date"
           :value="form.targetProductionDate"
-          :start="minProductionDate"
+          :start="minProductionDate()"
           @change="onDateChange"
         >
           <view class="picker-box">{{ form.targetProductionDate || '不指定' }}</view>
@@ -115,10 +115,13 @@ import {
   type StaffCustomerAddressOption,
   type StaffFinishedFoodRecipeOption,
 } from '../../api/orders'
-import { todayDateText } from '../../utils/date'
+import { shanghaiTodayText } from '../../utils/date'
 
-// 代客下单是内部通道：可以选今天，但不能选到过去
-const minProductionDate = todayDateText()
+// 代客下单是内部通道：可以选今天，但不能选到过去。
+// 用函数而不是启动时算一次，页面跨过午夜也不会拿到昨天的下限。
+function minProductionDate(): string {
+  return shanghaiTodayText()
+}
 
 const customerId = ref('')
 const dogId = ref('')

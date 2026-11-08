@@ -1206,38 +1206,81 @@ export class OrderService {
    */
   async createOrderDraft(dto: CreateOrderDraftDto): Promise<Order> {
     const orderId = randomUUID();
+    // 同一次下单只取一个“现在”，避免校验和默认值跨过 6 点边界后互相矛盾
+    const now = new Date();
+    const actorRole = dto.actorRole ?? 'customer';
 
-    // 成品鲜食：所有下单入口共用同一套制作日期准入规则。
-    // 试吃装是现货、不排产，带不带日期都不参与这条规则。
-    // 用副本而不是直接改调用方传进来的 dto，避免副作用。
-    const draft: CreateOrderDraftDto =
-      dto.type !== OrderType.TASTING_PACK && dto.targetProductionDate
-        ? {
-            ...dto,
-            targetProductionDate: resolveDraftProductionDate(
-              dto.targetProductionDate,
-              dto.actorRole ?? 'customer',
-            ),
-          }
-        : dto;
+    // 试吃装是现货，没有制作日期；带日期一律拒绝，避免用它绕过顾客 6 点规则
+    if (dto.type === OrderType.TASTING_PACK && dto.targetProductionDate) {
+      throw new BadRequestException('试吃装是现货，不能指定制作日期');
+    }
+
+    // 只要带了制作日期，不分订单类型先统一校验（试吃装已在上面拒绝）
+    let draft: CreateOrderDraftDto = dto;
+    if (dto.targetProductionDate) {
+      draft = {
+        ...dto,
+        targetProductionDate: resolveDraftProductionDate(
+          dto.targetProductionDate,
+          actorRole,
+          now,
+        ),
+      };
+    }
+
+    // 顾客自己走 items 老路径却没带日期时，补上默认的最早可预约日；
+    // 客服代客下单允许“不指定”，保持 null。
+    if (
+      draft.type === OrderType.FRESH_FOOD &&
+      !draft.targetProductionDate &&
+      actorRole === 'customer'
+    ) {
+      draft = {
+        ...draft,
+        targetProductionDate: resolveDraftProductionDate(
+          TimezoneUtil.calculateProductionDate(now),
+          actorRole,
+          now,
+        ),
+      };
+    }
 
     // ✅ Priority 1: 如果提供 snapshotId，从快照创建（立即购买）
     if (draft.snapshotId) {
       const snapshot = await this.pricingSnapshotRepository.findById(
         draft.snapshotId,
       );
+      const snapshotKind = (snapshot?.requestParams as any)?.kind;
+
       // 试吃装是现货：下单只扣成品库存，不采购、不排产、不生产，
       // 与鲜食订单是两条完全不同的履约路径，因此在这里分流而不是塞进同一个方法
-      if (
-        (snapshot?.requestParams as any)?.kind === TASTING_PACK_SNAPSHOT_KIND
-      ) {
+      if (snapshotKind === TASTING_PACK_SNAPSHOT_KIND) {
+        if (draft.type !== OrderType.TASTING_PACK) {
+          throw new BadRequestException('试吃装价格快照只能用于试吃装订单');
+        }
         return this.createTastingPackOrderFromSnapshot(
           draft,
           draft.snapshotId,
           orderId,
         );
       }
-      return this.createOrderFromSnapshot(draft, draft.snapshotId, orderId);
+
+      // 类型与快照必须一致，否则会造出“试吃装类型 + 鲜食日期”的脏单
+      if (draft.type === OrderType.TASTING_PACK) {
+        throw new BadRequestException('试吃装订单必须使用试吃装价格快照');
+      }
+
+      return this.createOrderFromSnapshot(
+        draft,
+        draft.snapshotId,
+        orderId,
+        now,
+      );
+    }
+
+    // 试吃装只能走试吃装快照，不能从 items/购物车造出来
+    if (draft.type === OrderType.TASTING_PACK) {
+      throw new BadRequestException('试吃装订单必须使用试吃装价格快照');
     }
 
     // Priority 2: 如果提供 cartItemIds，从购物车创建
@@ -1257,6 +1300,7 @@ export class OrderService {
     dto: CreateOrderDraftDto,
     snapshotId: string,
     orderId: string,
+    now: Date,
   ): Promise<Order> {
     console.log('[CreateOrderFromSnapshot] Loading snapshot:', snapshotId);
 
@@ -1283,14 +1327,13 @@ export class OrderService {
     }
 
     // 2. 处理制作日期
-    // 已提供的日期在 createOrderDraft 入口已校验并归一化，这里只补默认值，
-    // 避免同一次请求用两个不同的“现在”重复判断、跨过 6 点边界。
-    const productionDate =
-      dto.targetProductionDate ??
-      resolveDraftProductionDate(
-        TimezoneUtil.calculateProductionDate(),
-        dto.actorRole ?? 'customer',
-      )!;
+    // 用同一个“现在”再校验一次（防御性）：即使有人绕过 createOrderDraft
+    // 直接走到这里，也不会把今天/过去/超 90 天的日期落库。
+    const productionDate = resolveDraftProductionDate(
+      dto.targetProductionDate ?? TimezoneUtil.calculateProductionDate(now),
+      dto.actorRole ?? 'customer',
+      now,
+    )!;
 
     console.log(
       '[CreateOrderFromSnapshot] Production date validated:',
@@ -4742,9 +4785,28 @@ export class OrderService {
       );
     }
 
-    // 3. 日期准入：顾客仍按「早上 6 点」规则，管理员改期可以把日期定在今天。
-    //    两种角色都沿用下单时的“不能早于今天 / 最多 90 天 / 日期必须合法”上限，
-    //    域对象还会再挡一次「不能早于今天」和「已采购后不能改」。
+    // 3. 先看订单本身还能不能改：试吃装没有制作日期；采购开始后不能改。
+    //    先挡这个，顾客看到的才是“采购已开始”，而不是误导性的 6 点提示。
+    if (order.type === OrderType.TASTING_PACK) {
+      throw new BadRequestException('试吃装是现货，没有制作日期');
+    }
+    order.assertTargetDateEditable();
+
+    // 4. 采购单可能已经生成、但订单状态还没来得及转成 PURCHASING；
+    //    以采购单为准再挡一次，避免这个时间差里被改期。
+    const purchaseList = await this.prisma.purchaseList.findFirst({
+      where: {
+        kind: 'ORDER_DEMAND',
+        sourceOrderIds: { has: orderId },
+      },
+      select: { id: true },
+    });
+    if (purchaseList) {
+      throw new BadRequestException('采购已开始，不能修改制作日期');
+    }
+
+    // 5. 日期准入：顾客仍按「早上 6 点」规则，管理员改期可以把日期定在今天。
+    //    两种角色都沿用下单时的“不能早于今天 / 最多 90 天 / 日期必须合法”上限。
     const normalizedTargetDate = resolveDraftProductionDate(
       targetDate,
       isAdmin ? 'admin' : 'customer',
@@ -4752,7 +4814,7 @@ export class OrderService {
 
     order.updateTargetProductionDate(normalizedTargetDate);
 
-    // 4. Save and return
+    // 6. Save and return
     return this.orderRepository.save(order);
   }
 }

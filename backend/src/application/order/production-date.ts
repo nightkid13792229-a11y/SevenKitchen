@@ -17,6 +17,52 @@ export type ProductionDateActorRole = 'customer' | 'staff' | 'admin';
 const MAX_PRODUCTION_DATE_DAYS = 90;
 
 /**
+ * 把接口收到的原始日期字符串解析成 Date。
+ *
+ * 为什么要单独做：`new Date('2026-02-30')` 会被 JavaScript 自动滚到 3 月 2 日，
+ * 直接进 service 的话“非法日期”会变成另一个合法日期，顾客/客服看到的日期就变了。
+ * 所以 YYYY-MM-DD 走严格按上海日历日解析；完整 ISO 时间串再交给 Date。
+ */
+export function parseProductionDateInput(
+  value: string | null | undefined,
+): Date | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const text = String(value).trim();
+  if (!text) {
+    return null;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    try {
+      return TimezoneUtil.parseDateOnly(text);
+    } catch {
+      throw new BadRequestException('制作日期不合法');
+    }
+  }
+
+  // 完整 ISO 时间串：先严格校验日期部分，避免 2026-02-30 被 Date 自动滚到 3 月
+  const isoDateMatch = /^(\d{4})-(\d{2})-(\d{2})[T ]/.exec(text);
+  if (isoDateMatch) {
+    try {
+      TimezoneUtil.parseDateOnly(
+        `${isoDateMatch[1]}-${isoDateMatch[2]}-${isoDateMatch[3]}`,
+      );
+    } catch {
+      throw new BadRequestException('制作日期不合法');
+    }
+  }
+
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new BadRequestException('制作日期不合法');
+  }
+  return parsed;
+}
+
+/**
  * 把用户提交的日期归一化为「上海日历日」的 date-only，并校验是否可预约。
  *
  * @param requested 用户提交的制作日期；为空表示不指定（代客下单允许）

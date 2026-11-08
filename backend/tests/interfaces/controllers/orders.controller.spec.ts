@@ -761,6 +761,38 @@ describe('OrdersController (e2e)', () => {
       expect(response.body.data).toBeNull();
     });
 
+    it('rejects a non-existent calendar date (2026-02-30) with code 400', async () => {
+      const customerId = 'test-customer-invalid-date';
+      const dogId = '550e8400-e29b-41d4-a716-446655440010';
+      const recipeId = '550e8400-e29b-41d4-a716-446655440011';
+      const ingredientId = '550e8400-e29b-41d4-a716-446655440012';
+
+      await createTestDog(customerId, dogId);
+      await createTestIngredient(ingredientId);
+      await createTestRecipeWithItems(recipeId, ingredientId);
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/orders')
+        .set('X-Customer-Id', customerId)
+        .send({
+          dogId,
+          type: OrderType.FRESH_FOOD,
+          items: [
+            {
+              recipeId,
+              quantityG: 1000,
+              packageSpecG: 200,
+              packageCount: 5,
+            },
+          ],
+          targetProductionDate: '2026-02-30',
+        });
+
+      expect(response.body).toHaveProperty('code', 400);
+      expect(response.body.message).toContain('制作日期不合法');
+      expect(response.body.data).toBeNull();
+    });
+
     it('should return 401 when X-Customer-Id header is missing', async () => {
       const recipe: Recipe = {
         id: '550e8400-e29b-41d4-a716-446655440001',

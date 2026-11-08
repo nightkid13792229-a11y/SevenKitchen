@@ -375,7 +375,7 @@
         <view class="info-row" v-if="!isStockOrder && order.targetProductionDate">
           <text class="label">目标制作日期:</text>
           <text class="value">{{
-            formatDate(order.targetProductionDate)
+            formatShanghaiDateOnly(order.targetProductionDate)
           }}</text>
           <picker
             v-if="canEditDate"
@@ -387,8 +387,9 @@
             <view class="btn-edit" @tap="prepareProductionDatePicker">修改</view>
           </picker>
           <text v-if="canEditDate && postponingOnly" class="date-lock-hint">
-            当前日期已不可选，最早只能改到
-            {{ formatDate(minDateStr) }}
+            当前订单仍按
+            {{ formatShanghaiDateOnly(order.targetProductionDate) }}
+            制作；如需往后改期，最早可选 {{ minDateStr }}
           </text>
         </view>
 
@@ -1056,6 +1057,7 @@ import OrderProgressSteps from '../../components/OrderProgressSteps.vue';
 import { normalizeImageUrl } from '../../utils/config';
 import {
   formatDateTime,
+  formatShanghaiDateOnly,
   resolveProductionDatePickerState,
 } from '../../utils/date';
 import { getNutritionStandardLabel } from '../../utils/label-mapping';
@@ -2576,8 +2578,28 @@ function onDateSelected(e: any) {
     return;
   }
 
-  // 调用API更新日期
-  updateOrderDate(newDateStr);
+  const currentDateStr = order.value?.targetProductionDate
+    ? formatShanghaiDateOnly(order.value.targetProductionDate)
+    : '';
+
+  if (currentDateStr && newDateStr === currentDateStr) {
+    uni.showToast({
+      title: '制作日期没有变化',
+      icon: 'none',
+    });
+    return;
+  }
+
+  // 明确让顾客看到“从哪天改到哪天”，避免点开→直接确定就把订单推迟
+  uni.showModal({
+    title: '确认改期',
+    content: `制作日期将从 ${currentDateStr || '未设置'} 改到 ${newDateStr}，确认吗？`,
+    success: (result) => {
+      if (result.confirm) {
+        void updateOrderDate(newDateStr);
+      }
+    },
+  });
 }
 
 async function updateOrderDate(newDateStr: string) {

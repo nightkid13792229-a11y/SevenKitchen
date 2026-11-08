@@ -11,12 +11,15 @@ describe('Order domain behaviors', () => {
     jest.useRealTimers();
   });
 
-  function createOrder(targetProductionDate: Date): Order {
+  function createOrder(
+    targetProductionDate: Date,
+    options: { status?: OrderStatus; type?: OrderType } = {},
+  ): Order {
     return new Order(
       'order-1',
       'customer-1',
-      OrderStatus.PAID,
-      OrderType.FRESH_FOOD,
+      options.status ?? OrderStatus.PAID,
+      options.type ?? OrderType.FRESH_FOOD,
       new Date('2026-03-30T00:00:00.000Z'),
       targetProductionDate,
       null,
@@ -62,6 +65,36 @@ describe('Order domain behaviors', () => {
     expect(() =>
       order.updateTargetProductionDate(new Date('2026-03-31T00:00:00.000Z')),
     ).toThrow('Target production date cannot be earlier than today');
+  });
+
+  it('rejects date changes after purchasing starts, including aftersale', () => {
+    jest.setSystemTime(new Date('2026-03-31T17:00:00.000Z'));
+
+    for (const status of [
+      OrderStatus.PURCHASING,
+      OrderStatus.IN_PRODUCTION,
+      OrderStatus.AFTERSALE,
+    ]) {
+      const order = createOrder(new Date('2026-04-02T00:00:00.000Z'), {
+        status,
+      });
+
+      expect(() =>
+        order.updateTargetProductionDate(new Date('2026-04-01T00:00:00.000Z')),
+      ).toThrow('Cannot update target production date');
+    }
+  });
+
+  it('rejects date changes for tasting-pack orders', () => {
+    jest.setSystemTime(new Date('2026-03-31T17:00:00.000Z'));
+
+    const order = createOrder(new Date('2026-04-02T00:00:00.000Z'), {
+      type: OrderType.TASTING_PACK,
+    });
+
+    expect(() =>
+      order.updateTargetProductionDate(new Date('2026-04-01T00:00:00.000Z')),
+    ).toThrow('试吃装是现货');
   });
 
   it('stores and clears admin remark for production notes', () => {

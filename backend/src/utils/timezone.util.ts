@@ -79,7 +79,7 @@ export class TimezoneUtil {
 
   /**
    * 把任意时间转成“上海日历日”的 date-only（UTC 零点）。
-   * 用于 @db.Date 字段：数据库里存 UTC 零点，语义是上海那一天。
+   * 用于制作日期等 date-only 字段：数据库里存 UTC 零点，语义是上海那一天。
    */
   static toShanghaiDateOnly(input: Date): Date {
     const shanghai = new Date(input.getTime() + 8 * 60 * 60 * 1000);

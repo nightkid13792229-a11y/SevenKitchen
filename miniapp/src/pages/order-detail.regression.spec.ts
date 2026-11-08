@@ -445,10 +445,13 @@ describe('order detail runtime regressions', () => {
     )
 
     // 采购没开始前保留“修改”入口；原日期不可选时，选择器从最早可选日开始，
-    // 并明确提示“当前日期已不可选，最早只能改到 X”，避免悄悄推迟。
+    // 并明确提示“当前订单仍按 X 制作；如需往后改期，最早可选 Y”，避免悄悄推迟。
     expect(source).toContain('resolveProductionDatePickerState')
     expect(source).toContain('postponingOnly')
-    expect(source).toContain('当前日期已不可选，最早只能改到')
+    expect(source).toContain('当前订单仍按')
+    expect(source).toContain('如需往后改期，最早可选')
+    expect(source).toContain('确认改期')
+    expect(source).toContain('formatShanghaiDateOnly')
     expect(source).not.toContain('canChangeProductionDate')
     expect(source).not.toContain('canEditDate && canChangeProductionDate')
     expect(source).not.toContain(

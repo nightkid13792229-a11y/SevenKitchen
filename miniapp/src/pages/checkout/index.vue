@@ -357,7 +357,10 @@ import { quoteTastingPack } from '../../api/tastingPack';
 import { ensurePhoneBound } from '../../utils/account';
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue'
 import { trackFunnelEvent } from '../../utils/funnel';
-import { earliestCustomerProductionDate } from '../../utils/date';
+import {
+  addDaysToDateText,
+  earliestCustomerProductionDate,
+} from '../../utils/date';
 import {
   buildDefaultPackagePlan,
   estimateFeedDays,
@@ -485,23 +488,18 @@ function syncProductionDateFloor(): boolean {
 }
 
 // 计算发货日期（制作日期 + 1天）
-const calculatedShippingDate = computed(() => {
-  if (!selectedProductionDate.value) return '';
-  const productionDate = new Date(selectedProductionDate.value);
-  const shippingDate = new Date(productionDate);
-  shippingDate.setDate(shippingDate.getDate() + 1);
-  return formatDateToString(shippingDate);
-});
+const calculatedShippingDate = computed(() =>
+  selectedProductionDate.value
+    ? addDaysToDateText(selectedProductionDate.value, 1)
+    : '',
+);
 
 // 计算预计收货日期范围（发货日期 + 1~2天）
 const estimatedDeliveryDateRange = computed(() => {
   if (!calculatedShippingDate.value) return '';
-  const shipping = new Date(calculatedShippingDate.value);
-  const start = new Date(shipping);
-  start.setDate(start.getDate() + 1);
-  const end = new Date(shipping);
-  end.setDate(end.getDate() + 2);
-  return `${formatDisplayDate(formatDateToString(start))}-${formatDisplayDate(formatDateToString(end))}`;
+  const start = addDaysToDateText(calculatedShippingDate.value, 1);
+  const end = addDaysToDateText(calculatedShippingDate.value, 2);
+  return `${formatDisplayDate(start)}-${formatDisplayDate(end)}`;
 });
 
 // ========== 计算属性 ==========
@@ -550,15 +548,15 @@ const canSubmitOrder = computed(() => {
 });
 
 // ========== 工具函数 ==========
-function formatDateToString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 function formatDisplayDate(dateStr: string): string {
   if (!dateStr) return '请选择日期';
+
+  // YYYY-MM-DD 直接按字符串取月日，避免负时区把 UTC 零点显示成前一天
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (match) {
+    return `${Number(match[2])}月${Number(match[3])}日`;
+  }
+
   const date = new Date(dateStr);
   const month = date.getMonth() + 1;
   const day = date.getDate();

@@ -388,8 +388,10 @@ const carriers = [
 
 const STATUS_TEXT: Record<SupplementOrderStatus, string> = {
   PENDING_PAYMENT: '待确认收款',
+  // 补剂没有生产环节：付了钱就能打标签发货（2026-11-02 起也不再录分装）
   PAID: '待发货',
-  PACKING: '待发货',
+  // 只留给历史遗留的分装单，和订单中心筛选同口径（2026-11-08）
+  PACKING: '分装中',
   PACKED: '待发货',
   SHIPPED: '已发货',
   COMPLETED: '已完成',

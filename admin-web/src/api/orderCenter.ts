@@ -10,9 +10,22 @@ export type UnifiedStatusGroup =
   | 'COMPLETED'
   | 'CANCELLED'
 
+/**
+ * 按真实阶段筛选（2026-11-08）：已付款 / 采购中 / 生产中 / 分装中 / 制作中 / 已交付。
+ * 统一组继续兼容旧客户端；'PENDING'（草稿单）已不再显示。
+ */
+export type OrderCenterStatusFilter =
+  | UnifiedStatusGroup
+  | 'PAID'
+  | 'PURCHASING'
+  | 'IN_PRODUCTION'
+  | 'PACKING'
+  | 'MAKING'
+  | 'DELIVERED'
+
 export interface OrderCenterQuery {
   type?: OrderCenterType
-  status?: UnifiedStatusGroup
+  status?: OrderCenterStatusFilter
   dateFrom?: string
   dateTo?: string
   dateField?: 'created' | 'packing'
@@ -35,7 +48,10 @@ export interface OrderCenterItem {
   customerRole: string | null
   statusGroup: UnifiedStatusGroup
   rawStatus: string
+  /** 统一状态组的中文名（兼容旧接口，列表优先用 stageLabel） */
   statusLabel: string
+  /** 真实阶段：已付款 / 采购中 / 生产中 / 分装中 / 制作中 / 已交付（2026-11-08） */
+  stageLabel?: string
   subtypeLabel: string | null
   amountTotal: number | null
   /** 赠送单（2026-10-30）：金额 0，列表上要标出来 */

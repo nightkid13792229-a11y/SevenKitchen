@@ -1235,6 +1235,7 @@ const heroTone = computed(() => {
  *
  * 之前这里用的是专业状态名：列表说「待发货」，详情说「急冻中」——
  * 同一张单两个叫法，员工对不上号（2026-10-30 自检发现）。
+ * 2026-11-08 起列表把「处理中」拆成已付款 / 采购中 / 生产中，这里同步。
  */
 const heroStatusLabel = computed(() => {
   const o = order.value
@@ -1246,9 +1247,11 @@ const heroStatusLabel = computed(() => {
     case 'PENDING_PAYMENT':
       return '待付款'
     case 'PAID':
+      return '已付款'
     case 'PURCHASING':
+      return '采购中'
     case 'IN_PRODUCTION':
-      return '处理中'
+      return '生产中'
     case 'FREEZING':
       return '待发货'
     case 'SHIPPED':
@@ -1756,10 +1759,10 @@ function getStatusText(orderOrStatus: OrderDetail | string): string {
   const statusMap: Record<string, string> = {
     INIT: '待确认',
     PENDING_PAYMENT: '待付款',
-    PAID: '已支付',
+    PAID: '已付款',
     PURCHASING: '采购中',
-    IN_PRODUCTION: '制作中',
-    FREEZING: '急冻中',
+    IN_PRODUCTION: '生产中',
+    FREEZING: '待发货',
     SHIPPED: '已发货',
     COMPLETED: '已完成',
     CANCELLED: '已取消',

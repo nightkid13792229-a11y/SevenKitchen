@@ -35,18 +35,33 @@ describe('staff order center · 三类订单一眼分开', () => {
 
   it('状态栏按类型收窄：定制没有待发货/已发货', () => {
     expect(orderCenter).toContain('TYPE_STATUS_VALUES')
-    const customLine = orderCenter
-      .split('\n')
-      .find((line) => line.includes('CUSTOM_RECIPE: ['))
-    expect(customLine).toBeTruthy()
-    expect(customLine).not.toContain("'TO_SHIP'")
-    expect(customLine).not.toContain("'SHIPPED'")
+    // 数组现在跨多行，按块取，不能只看 CUSTOM_RECIPE: [ 那一行
+    const from = orderCenter.indexOf('CUSTOM_RECIPE: [')
+    const to = orderCenter.indexOf('SUPPLEMENT: [')
+    expect(from).toBeGreaterThan(-1)
+    const customBlock = orderCenter.slice(from, to)
+    expect(customBlock).not.toContain("'TO_SHIP'")
+    expect(customBlock).not.toContain("'SHIPPED'")
   })
 
-  it('待付款、已取消都能单独筛', () => {
+  it('★ 已付款 / 采购中 / 生产中 / 制作中都能单独筛，不再有「处理中」', () => {
+    expect(orderCenter).toContain("{ label: '已付款', value: 'PAID' }")
+    expect(orderCenter).toContain("{ label: '采购中', value: 'PURCHASING' }")
+    expect(orderCenter).toContain("{ label: '生产中', value: 'IN_PRODUCTION' }")
+    expect(orderCenter).toContain("{ label: '制作中', value: 'MAKING' }")
+    expect(orderCenter).not.toContain("label: '处理中'")
+  })
+
+  it('★ 待付款、已取消都能单独筛；草稿「待处理」已移除', () => {
     expect(orderCenter).toContain("{ label: '待付款', value: 'PENDING_PAYMENT' }")
     expect(orderCenter).toContain("{ label: '已取消', value: 'CANCELLED' }")
-    expect(orderCenter).toContain("{ label: '待处理', value: 'PENDING' }")
+    // 2026-11-08：草稿单（INIT）不是员工待办，入口和列表一起撤掉
+    expect(orderCenter).not.toContain("{ label: '待处理', value: 'PENDING' }")
+    expect(orderCenter).not.toContain("'PENDING'")
+  })
+
+  it('★ 卡片写真实阶段（已付款/采购中/生产中），不再统一写「处理中」', () => {
+    expect(orderCenter).toContain('item.stageLabel || item.statusLabel')
   })
 
   it('换类型后当前状态不存在时自动回到「全部」', () => {

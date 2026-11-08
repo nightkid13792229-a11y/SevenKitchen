@@ -13,9 +13,32 @@ export type UnifiedStatusGroup =
   | 'COMPLETED'
   | 'CANCELLED';
 
+/**
+ * 订单中心筛选状态（2026-11-08）。
+ *
+ * 统一状态组（IN_PROGRESS）把「已付款 / 采购中 / 生产中」压成了一句
+ * 「处理中」，员工看不出这单到底停在哪一步，所以筛选也改成按真实阶段：
+ *
+ *   · PAID / PURCHASING / IN_PRODUCTION：鲜食的真实阶段
+ *   · PACKING：补剂分装中
+ *   · MAKING：定制的「制作中」（后端原始状态就叫 IN_PROGRESS，
+ *     和统一组重名，所以筛选键单独叫 MAKING）
+ *   · DELIVERED：定制已交付
+ *
+ * 原来的统一组键继续保留：旧版小程序还在用，不能一上线就报 400。
+ */
+export type OrderCenterStatusFilter =
+  | UnifiedStatusGroup
+  | 'PAID'
+  | 'PURCHASING'
+  | 'IN_PRODUCTION'
+  | 'PACKING'
+  | 'MAKING'
+  | 'DELIVERED';
+
 export interface OrderCenterQuery {
   type?: OrderCenterType;
-  status?: UnifiedStatusGroup;
+  status?: OrderCenterStatusFilter;
   dateFrom?: string;
   dateTo?: string;
   dateField?: 'created' | 'packing';
@@ -38,7 +61,17 @@ export interface OrderCenterItem {
   customerRole: string | null;
   statusGroup: UnifiedStatusGroup;
   rawStatus: string;
+  /**
+   * 统一状态组的中文名（待付款 / 处理中 / 待发货…）。
+   * 2026-11-08 起列表不再用它显示主状态，只在拿不到 stageLabel 时兜底。
+   */
   statusLabel: string;
+  /**
+   * 真实阶段的中文名（2026-11-08）：已付款 / 采购中 / 生产中 / 分装中 /
+   * 制作中 / 已交付…，员工卡片和筛选都用这一份，避免「处理中」把三个阶段
+   * 压成一句话。取不到时回落到 statusLabel。
+   */
+  stageLabel: string;
   subtypeLabel: string | null;
   amountTotal: number | null;
   /** 赠送单（2026-10-30）：金额 0，列表上必须标出来，否则像价格出错 */
@@ -89,6 +122,49 @@ const GROUP_LABELS: Record<UnifiedStatusGroup, string> = {
   SHIPPED: '已发货',
   COMPLETED: '已完成',
   CANCELLED: '已取消',
+};
+
+/**
+ * 各类型订单的**真实阶段**文案（2026-11-08）。
+ *
+ * 为什么不复用统一组：鲜食的「已付款 / 采购中 / 生产中」在组里都叫
+ * 「处理中」，员工看到这三个字不知道单子停在哪一步（老板提的）。
+ * 这里按订单原始状态各给一个说法，卡片和筛选共用同一份。
+ *
+ * 补剂为什么没有「已付款」：补剂没有采购/生产环节，员工端 2026-11-02 起
+ * 也不再录分装信息，付了钱就能直接打标签发货 —— 所以 PAID 就是「待发货」，
+ * 和补剂详情页的说法一致。PACKING 只留给历史遗留的分装单。
+ */
+const STAGE_LABELS: Record<OrderCenterType, Record<string, string>> = {
+  FOOD: {
+    PENDING_PAYMENT: '待付款',
+    PAID: '已付款',
+    PURCHASING: '采购中',
+    IN_PRODUCTION: '生产中',
+    FREEZING: '待发货',
+    SHIPPED: '已发货',
+    COMPLETED: '已完成',
+    CANCELLED: '已取消',
+    AFTERSALE: '售后中',
+  },
+  CUSTOM_RECIPE: {
+    PENDING_PAYMENT: '待付款',
+    PAID: '已付款',
+    IN_PROGRESS: '制作中',
+    DELIVERED: '已交付',
+    COMPLETED: '已完成',
+    CANCELLED: '已取消',
+  },
+  SUPPLEMENT: {
+    PENDING_PAYMENT: '待付款',
+    PAID: '待发货',
+    PACKING: '分装中',
+    PACKED: '待发货',
+    SHIPPED: '已发货',
+    COMPLETED: '已完成',
+    CANCELLED: '已取消',
+    AFTERSALE: '售后中',
+  },
 };
 
 /** 卡片标签用的售后摘要：一单取最新那条 */
@@ -243,9 +319,8 @@ export class OrderCenterService {
         ? this.prisma.order.findMany({
             where: {
               ...dateWhere,
-              ...(query.status
-                ? { status: { in: this.foodStatuses(query.status) as never[] } }
-                : {}),
+              // 草稿单（INIT）不是员工要处理的订单：默认不进列表（2026-11-08）
+              ...this.foodStatusWhere(query),
               ...(query.keyword
                 ? {
                     OR: [
@@ -259,7 +334,6 @@ export class OrderCenterService {
                     ],
                   }
                 : {}),
-              ...(query.aftersale ? { status: 'AFTERSALE' as never } : {}),
             },
             select: {
               id: true,
@@ -736,6 +810,11 @@ export class OrderCenterService {
       statusGroup: input.group,
       rawStatus: input.rawStatus,
       statusLabel: GROUP_LABELS[input.group],
+      stageLabel: this.stageLabelFor(
+        input.type,
+        input.rawStatus,
+        input.group,
+      ),
       subtypeLabel: input.subtypeLabel,
       amountTotal: input.amount,
       isGift: input.isGift === true,
@@ -777,6 +856,18 @@ export class OrderCenterService {
     return 'IN_PROGRESS';
   }
 
+  /**
+   * 真实阶段文案（2026-11-08）：取不到就回落到统一组，绝不漏英文状态码。
+   */
+  private stageLabelFor(
+    type: OrderCenterType,
+    rawStatus: string,
+    group: UnifiedStatusGroup,
+  ): string {
+    const key = String(rawStatus || '').toUpperCase();
+    return STAGE_LABELS[type]?.[key] || GROUP_LABELS[group];
+  }
+
   private customGroup(status: string): UnifiedStatusGroup {
     if (status === 'PENDING_PAYMENT') return 'PENDING_PAYMENT';
     if (['PAID', 'IN_PROGRESS'].includes(status)) return 'IN_PROGRESS';
@@ -790,7 +881,14 @@ export class OrderCenterService {
     shippedAt: Date | null,
   ): UnifiedStatusGroup {
     if (status === 'PENDING_PAYMENT') return 'PENDING_PAYMENT';
-    if (['PAID', 'PACKING'].includes(status)) return 'IN_PROGRESS';
+    /**
+     * 补剂没有采购/生产环节：钱到账就能打标签、直接发货
+     * （员工端 2026-11-02 起也不再录分装信息）。
+     * 所以 PAID 归到「待发货」，和补剂详情页的说法保持一致；
+     * PACKING 只留给历史遗留的分装单。
+     */
+    if (status === 'PAID') return 'TO_SHIP';
+    if (status === 'PACKING') return 'IN_PROGRESS';
     if (status === 'PACKED') return 'TO_SHIP';
     if (status === 'SHIPPED') return 'SHIPPED';
     if (status === 'COMPLETED') return 'COMPLETED';
@@ -799,12 +897,34 @@ export class OrderCenterService {
     return 'IN_PROGRESS';
   }
 
-  private foodStatuses(group: UnifiedStatusGroup): string[] {
+  /**
+   * 鲜食的状态条件（2026-11-08）。
+   *
+   * · 草稿单（INIT）不是员工待办：默认不进列表，也不进「共 X 单」；
+   * · 选了具体阶段就按阶段筛；旧版小程序还可能传统一组，继续兼容；
+   * · 勾了「只看售后」仍以售后为准（和改动前一致）。
+   */
+  private foodStatusWhere(query: OrderCenterQuery): {
+    status: Prisma.OrderWhereInput['status'];
+  } {
+    if (query.aftersale) return { status: 'AFTERSALE' };
+    if (!query.status) return { status: { not: 'INIT' } };
+    return { status: { in: this.foodStatuses(query.status) as never[] } };
+  }
+
+  private foodStatuses(group: OrderCenterStatusFilter): string[] {
     switch (group) {
       case 'PENDING':
-        return ['INIT'];
+        // 草稿单已从订单中心移除；旧版小程序点到「待处理」也不会再冒出单子
+        return [];
       case 'PENDING_PAYMENT':
         return ['PENDING_PAYMENT'];
+      case 'PAID':
+        return ['PAID'];
+      case 'PURCHASING':
+        return ['PURCHASING'];
+      case 'IN_PRODUCTION':
+        return ['IN_PRODUCTION'];
       case 'IN_PROGRESS':
         return ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'AFTERSALE'];
       case 'TO_SHIP':
@@ -815,15 +935,23 @@ export class OrderCenterService {
         return ['COMPLETED'];
       case 'CANCELLED':
         return ['CANCELLED'];
+      default:
+        return [];
     }
   }
 
-  private customStatuses(group: UnifiedStatusGroup): string[] {
+  private customStatuses(group: OrderCenterStatusFilter): string[] {
     switch (group) {
       case 'PENDING_PAYMENT':
         return ['PENDING_PAYMENT'];
+      case 'PAID':
+        return ['PAID'];
+      case 'MAKING':
+        return ['IN_PROGRESS'];
       case 'IN_PROGRESS':
         return ['PAID', 'IN_PROGRESS'];
+      case 'DELIVERED':
+        return ['DELIVERED'];
       case 'COMPLETED':
         return ['DELIVERED', 'COMPLETED'];
       case 'CANCELLED':
@@ -833,14 +961,17 @@ export class OrderCenterService {
     }
   }
 
-  private supplementStatuses(group: UnifiedStatusGroup): string[] {
+  private supplementStatuses(group: OrderCenterStatusFilter): string[] {
     switch (group) {
       case 'PENDING_PAYMENT':
         return ['PENDING_PAYMENT'];
+      case 'PACKING':
+        return ['PACKING'];
       case 'IN_PROGRESS':
-        return ['PAID', 'PACKING', 'AFTERSALE'];
+        // 补剂的 PAID 已经归到「待发货」；这里只剩历史分装单
+        return ['PACKING', 'AFTERSALE'];
       case 'TO_SHIP':
-        return ['PACKED'];
+        return ['PAID', 'PACKED'];
       case 'SHIPPED':
         return ['SHIPPED'];
       case 'COMPLETED':
@@ -858,9 +989,8 @@ export class OrderCenterService {
   ) {
     return {
       ...this.buildDateWhere(query),
-      ...(query.status
-        ? { status: { in: this.foodStatuses(query.status) as never[] } }
-        : {}),
+      // 和列表同口径：草稿单不计入「共 X 单」
+      ...this.foodStatusWhere(query),
       ...(query.keyword
         ? {
             OR: [
@@ -890,7 +1020,6 @@ export class OrderCenterService {
             ],
           }
         : {}),
-      ...(query.aftersale ? { status: 'AFTERSALE' as never } : {}),
     };
   }
 

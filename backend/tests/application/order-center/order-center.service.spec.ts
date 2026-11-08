@@ -94,10 +94,15 @@ describe('OrderCenterService', () => {
     expect(result.total).toBe(2);
     expect(result.items).toHaveLength(2);
     expect(result.items[0].type).toBe('SUPPLEMENT');
-    expect(result.items[0].statusGroup).toBe('IN_PROGRESS');
+    // 2026-11-08：补剂付了钱就能发货 → 统一组归「待发货」，卡片写「待发货」
+    expect(result.items[0].statusGroup).toBe('TO_SHIP');
+    expect(result.items[0].statusLabel).toBe('待发货');
+    expect(result.items[0].stageLabel).toBe('待发货');
     expect(result.items[0].scheduledDate).toBe('2026-10-21');
     expect(result.items[1].type).toBe('FOOD');
     expect(result.items[1].statusGroup).toBe('IN_PROGRESS');
+    // 鲜食不再统一写「处理中」，按真实阶段显示「生产中」
+    expect(result.items[1].stageLabel).toBe('生产中');
     expect(result.items[1].customerName).toBe('张三');
   });
 

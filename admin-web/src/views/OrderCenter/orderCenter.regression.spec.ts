@@ -100,7 +100,7 @@ describe('订单中心 · 定制状态显示原始状态', () => {
     expect(clean).toContain('CUSTOM_RAW_STATUS_LABELS')
   })
 
-  it('其他订单仍用后端下发的 statusLabel', () => {
+  it('其他订单仍用后端下发的 statusLabel 兜底（旧接口）', () => {
     expect(clean).toContain('return row.statusLabel')
   })
 
@@ -108,6 +108,28 @@ describe('订单中心 · 定制状态显示原始状态', () => {
     expect(clean).toContain('statusTagTypeForRow(row)')
     expect(clean).toContain("case 'PAID':")
     expect(clean).toContain("case 'DELIVERED':")
+  })
+})
+
+describe('订单中心 · 状态按真实阶段显示与筛选（2026-11-08）', () => {
+  const clean = stripComments(page)
+
+  it('★ 卡片优先用后端下发的 stageLabel（已付款 / 采购中 / 生产中）', () => {
+    expect(clean).toContain('if (row.stageLabel) return row.stageLabel')
+  })
+
+  it('★ 筛选按类型收窄，带已付款 / 采购中 / 生产中，不再有「处理中」「待处理」', () => {
+    expect(clean).toContain("{ label: '已付款', value: 'PAID' }")
+    expect(clean).toContain("{ label: '采购中', value: 'PURCHASING' }")
+    expect(clean).toContain("{ label: '生产中', value: 'IN_PRODUCTION' }")
+    expect(clean).toContain("{ label: '制作中', value: 'MAKING' }")
+    expect(clean).not.toContain("label: '处理中'")
+    expect(clean).not.toContain("label: '待处理'")
+  })
+
+  it('★ 换类型后当前阶段不存在就回到「全部」，避免筛出空列表', () => {
+    expect(clean).toContain('const allowed = statusOptions.value.map')
+    expect(clean).toContain('query.status = undefined')
   })
 })
 

@@ -74,7 +74,8 @@
             <text class="type-tag">{{ typeLabel(item.type) }}</text>
             <text class="order-no">{{ item.orderNo }}</text>
           </view>
-          <text class="status">{{ item.statusLabel }}</text>
+          <!-- 2026-11-08：显示真实阶段（已付款/采购中/生产中…），不再统一写「处理中」 -->
+          <text class="status">{{ item.stageLabel || item.statusLabel }}</text>
         </view>
 
         <!-- 主行显示食谱名；三类卡片下面都补一行顾客/狗狗（2026-11-02 老板要求）。
@@ -145,7 +146,10 @@ interface OrderCenterItem {
   id: string
   orderNo: string
   type: 'FOOD' | 'CUSTOM_RECIPE' | 'SUPPLEMENT'
+  /** 统一状态组的中文名（兼容旧接口；卡片优先用 stageLabel） */
   statusLabel: string
+  /** 真实阶段：已付款 / 采购中 / 生产中 / 分装中 / 制作中 / 已交付（2026-11-08） */
+  stageLabel?: string
   /** 统一状态组（TO_SHIP = 待发货）；列表上据此决定要不要给「发货」 */
   statusGroup: string
   /** 卡片主行显示的食谱名；空 = 这单没绑定食谱（多数补剂单） */
@@ -184,30 +188,68 @@ const typeTabs = [
   { label: '补剂', value: 'SUPPLEMENT' },
 ]
 
+/**
+ * 状态筛选（2026-11-08）：按**真实阶段**筛，卡片写什么就筛什么。
+ *
+ * 「处理中」把已付款 / 采购中 / 生产中压成一句话，员工看不出单子停在哪一步；
+ * 草稿单（原来的「待处理」）顾客还没提交支付、员工做不了任何事，入口去掉，
+ * 后端也不再把它放进列表。
+ */
 const ALL_STATUS_TABS = [
   { label: '全部', value: '' },
-  { label: '待处理', value: 'PENDING' },
   { label: '待付款', value: 'PENDING_PAYMENT' },
-  { label: '处理中', value: 'IN_PROGRESS' },
+  { label: '已付款', value: 'PAID' },
+  { label: '采购中', value: 'PURCHASING' },
+  { label: '生产中', value: 'IN_PRODUCTION' },
+  { label: '分装中', value: 'PACKING' },
+  { label: '制作中', value: 'MAKING' },
   { label: '待发货', value: 'TO_SHIP' },
   { label: '已发货', value: 'SHIPPED' },
+  { label: '已交付', value: 'DELIVERED' },
   { label: '已完成', value: 'COMPLETED' },
   { label: '已取消', value: 'CANCELLED' },
 ]
 
 /**
- * 每个类型**真实存在**的状态。
+ * 每个类型**真实存在**的阶段。
  *
- * 定制是食谱交付，没有「待发货 / 已发货」这一段流程；
- * 鲜食没有「待付款」以外的定制式状态差异（保留全套）。
+ * 定制是食谱交付，没有采购 / 发货这一段流程；
+ * 补剂没有采购 / 生产：付了钱就能打标签发货，所以没有「已付款」这一档，
+ * PAID 直接算「待发货」（和补剂详情页一致）。
  * 以前这三类共用一套 tab，点「已发货」时定制单会整片消失，
  * 看起来像丢数据 —— 实际是它压根没有这个状态。
  */
 const TYPE_STATUS_VALUES: Record<string, string[]> = {
   '': ALL_STATUS_TABS.map((tab) => tab.value),
-  FOOD: ['', 'PENDING', 'PENDING_PAYMENT', 'IN_PROGRESS', 'TO_SHIP', 'SHIPPED', 'COMPLETED', 'CANCELLED'],
-  CUSTOM_RECIPE: ['', 'PENDING_PAYMENT', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'],
-  SUPPLEMENT: ['', 'PENDING_PAYMENT', 'IN_PROGRESS', 'TO_SHIP', 'SHIPPED', 'COMPLETED', 'CANCELLED'],
+  FOOD: [
+    '',
+    'PENDING_PAYMENT',
+    'PAID',
+    'PURCHASING',
+    'IN_PRODUCTION',
+    'TO_SHIP',
+    'SHIPPED',
+    'COMPLETED',
+    'CANCELLED',
+  ],
+  CUSTOM_RECIPE: [
+    '',
+    'PENDING_PAYMENT',
+    'PAID',
+    'MAKING',
+    'DELIVERED',
+    'COMPLETED',
+    'CANCELLED',
+  ],
+  SUPPLEMENT: [
+    '',
+    'PENDING_PAYMENT',
+    'PACKING',
+    'TO_SHIP',
+    'SHIPPED',
+    'COMPLETED',
+    'CANCELLED',
+  ],
 }
 
 const type = ref('')

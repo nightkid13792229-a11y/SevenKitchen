@@ -152,14 +152,49 @@ export class OrderCenterQueryDto {
   type?: 'FOOD' | 'CUSTOM_RECIPE' | 'SUPPLEMENT';
 
   @ApiPropertyOptional({
-    enum: ['PENDING', 'PENDING_PAYMENT', 'IN_PROGRESS', 'TO_SHIP', 'SHIPPED', 'COMPLETED', 'CANCELLED'],
-    description: '统一状态组；售后用 aftersale 单独筛选',
+    enum: [
+      'PENDING',
+      'PENDING_PAYMENT',
+      'PAID',
+      'PURCHASING',
+      'IN_PRODUCTION',
+      'PACKING',
+      'MAKING',
+      'DELIVERED',
+      'IN_PROGRESS',
+      'TO_SHIP',
+      'SHIPPED',
+      'COMPLETED',
+      'CANCELLED',
+    ],
+    description:
+      '按真实阶段筛选（PAID/PURCHASING/IN_PRODUCTION/PACKING/MAKING/DELIVERED）；统一状态组继续兼容旧客户端；售后用 aftersale 单独筛选',
   })
   @IsOptional()
-  @IsIn(['PENDING', 'PENDING_PAYMENT', 'IN_PROGRESS', 'TO_SHIP', 'SHIPPED', 'COMPLETED', 'CANCELLED'])
+  @IsIn([
+    'PENDING',
+    'PENDING_PAYMENT',
+    'PAID',
+    'PURCHASING',
+    'IN_PRODUCTION',
+    'PACKING',
+    'MAKING',
+    'DELIVERED',
+    'IN_PROGRESS',
+    'TO_SHIP',
+    'SHIPPED',
+    'COMPLETED',
+    'CANCELLED',
+  ])
   status?:
     | 'PENDING'
     | 'PENDING_PAYMENT'
+    | 'PAID'
+    | 'PURCHASING'
+    | 'IN_PRODUCTION'
+    | 'PACKING'
+    | 'MAKING'
+    | 'DELIVERED'
     | 'IN_PROGRESS'
     | 'TO_SHIP'
     | 'SHIPPED'

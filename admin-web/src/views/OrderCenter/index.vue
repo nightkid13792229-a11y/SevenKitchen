@@ -212,12 +212,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { orderCenterApi } from '@/api/orderCenter'
 import type {
   OrderCenterItem,
   OrderCenterQuery,
+  OrderCenterStatusFilter,
   OrderCenterType,
   UnifiedStatusGroup,
 } from '@/api/orderCenter'
@@ -263,15 +264,59 @@ const query = reactive<OrderCenterQuery>({
   pageSize: 20,
 })
 
-const statusOptions: Array<{ label: string; value: UnifiedStatusGroup }> = [
-  { label: '待处理', value: 'PENDING' },
-  { label: '待付款', value: 'PENDING_PAYMENT' },
-  { label: '处理中', value: 'IN_PROGRESS' },
-  { label: '待发货', value: 'TO_SHIP' },
-  { label: '已发货', value: 'SHIPPED' },
-  { label: '已完成', value: 'COMPLETED' },
-  { label: '已取消', value: 'CANCELLED' },
-]
+/**
+ * 状态筛选按类型收窄（2026-11-08）。
+ *
+ * 「处理中」把已付款 / 采购中 / 生产中压成一句，运营看不出单子停在哪一步；
+ * 现在筛选直接对应卡片上的真实阶段，卡片写什么、下拉里就有什么。
+ * 草稿单（原来的「待处理」）不是员工待办，入口一并去掉。
+ */
+const STATUS_OPTIONS: Record<
+  'ALL' | OrderCenterType,
+  Array<{ label: string; value: OrderCenterStatusFilter }>
+> = {
+  ALL: [
+    { label: '待付款', value: 'PENDING_PAYMENT' },
+    { label: '已付款', value: 'PAID' },
+    { label: '采购中', value: 'PURCHASING' },
+    { label: '生产中', value: 'IN_PRODUCTION' },
+    { label: '分装中', value: 'PACKING' },
+    { label: '制作中', value: 'MAKING' },
+    { label: '待发货', value: 'TO_SHIP' },
+    { label: '已发货', value: 'SHIPPED' },
+    { label: '已交付', value: 'DELIVERED' },
+    { label: '已完成', value: 'COMPLETED' },
+    { label: '已取消', value: 'CANCELLED' },
+  ],
+  FOOD: [
+    { label: '待付款', value: 'PENDING_PAYMENT' },
+    { label: '已付款', value: 'PAID' },
+    { label: '采购中', value: 'PURCHASING' },
+    { label: '生产中', value: 'IN_PRODUCTION' },
+    { label: '待发货', value: 'TO_SHIP' },
+    { label: '已发货', value: 'SHIPPED' },
+    { label: '已完成', value: 'COMPLETED' },
+    { label: '已取消', value: 'CANCELLED' },
+  ],
+  CUSTOM_RECIPE: [
+    { label: '待付款', value: 'PENDING_PAYMENT' },
+    { label: '已付款', value: 'PAID' },
+    { label: '制作中', value: 'MAKING' },
+    { label: '已交付', value: 'DELIVERED' },
+    { label: '已完成', value: 'COMPLETED' },
+    { label: '已取消', value: 'CANCELLED' },
+  ],
+  SUPPLEMENT: [
+    { label: '待付款', value: 'PENDING_PAYMENT' },
+    { label: '分装中', value: 'PACKING' },
+    { label: '待发货', value: 'TO_SHIP' },
+    { label: '已发货', value: 'SHIPPED' },
+    { label: '已完成', value: 'COMPLETED' },
+    { label: '已取消', value: 'CANCELLED' },
+  ],
+}
+
+const statusOptions = computed(() => STATUS_OPTIONS[query.type || 'ALL'])
 
 /**
  * 定制单在订单中心显示**自己的原始状态**，不并到「处理中」。
@@ -310,6 +355,9 @@ function showSubtype(row: OrderCenterItem) {
 }
 
 function displayStatusLabel(row: OrderCenterItem) {
+  // 2026-11-08：后端下发真实阶段（已付款 / 采购中 / 生产中 / 分装中 / 制作中…）
+  if (row.stageLabel) return row.stageLabel
+  // 旧接口兜底：定制单继续用原始状态，其余用统一组
   if (row.type === 'CUSTOM_RECIPE') {
     return CUSTOM_RAW_STATUS_LABELS[String(row.rawStatus || '').toUpperCase()] || row.statusLabel
   }
@@ -357,10 +405,14 @@ function formatTime(value: string | null) {
   return date.toLocaleString('zh-CN', { hour12: false })
 }
 
-/** 切换类型：离开食谱定制时，赠送筛选必须一起清掉 */
+/** 切换类型：离开食谱定制时清赠送筛选；状态不在新类型里就回到「全部」 */
 function handleTypeChange() {
   if (query.type !== 'CUSTOM_RECIPE') {
     query.gift = false
+  }
+  const allowed = statusOptions.value.map((item) => item.value)
+  if (query.status && !allowed.includes(query.status)) {
+    query.status = undefined
   }
   handleSearch()
 }

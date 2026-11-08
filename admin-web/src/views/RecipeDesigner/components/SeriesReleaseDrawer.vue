@@ -252,6 +252,11 @@ const DRAFT_FIELD_LABELS: Record<SeriesReleaseDraftField, string> = {
 
 const hasLive = computed(() => readiness.value?.businessStatus === 'PUBLIC')
 const hasDraft = computed(() => readiness.value?.releaseDraft?.exists === true)
+/** 有待上线 / 待更新的配方版本（只有新版本、没改资料时也要能发） */
+const actionableCount = computed(
+  () => readiness.value?.stages.filter((stage) => stage.actionable).length ?? 0
+)
+const hasPendingStages = computed(() => actionableCount.value > 0)
 
 const effectiveName = computed(
   () => readiness.value?.name || props.seriesName || '未命名系列'
@@ -274,9 +279,9 @@ const statePill = computed<{ label: string; type: 'info' | 'success' | 'warning'
   if (!value) return { label: '未就绪', type: 'info' }
   if (value.blockers.length > 0) return { label: '还不能发布', type: 'warning' }
   if (!hasLive.value) return { label: '未上线', type: 'info' }
-  return hasDraft.value
-    ? { label: '有草稿待发布', type: 'warning' }
-    : { label: '已是最新', type: 'success' }
+  if (hasDraft.value) return { label: '有草稿待发布', type: 'warning' }
+  if (hasPendingStages.value) return { label: '有新版本待发布', type: 'warning' }
+  return { label: '已是最新', type: 'success' }
 })
 
 /** 这次发布会改变什么：展示资料按字段、配方按阶段。 */
@@ -323,12 +328,16 @@ const footerTip = computed(() => {
   if (!value) return ''
   if (value.blockers.length > 0) return '补齐后才能发布'
   if (!hasLive.value) return '上线后顾客就能在货架上看到'
+  if (hasDraft.value && hasPendingStages.value) return '发布后顾客立即可见'
   if (hasDraft.value) return '发布后顾客立即可见'
+  if (hasPendingStages.value) return '有新版本待上线，发布后顾客立即可见'
   return '没有待发布的内容，顾客看到的就是最新版'
 })
 
-/** 「已是最新」时唯一的主操作是关闭；有草稿 / 未上线才有发布按钮 */
-const showPublish = computed(() => hasDraft.value || !hasLive.value)
+/** 「已是最新」时唯一的主操作是关闭；有草稿 / 有新版本 / 未上线都要能发 */
+const showPublish = computed(
+  () => hasDraft.value || hasPendingStages.value || !hasLive.value
+)
 const canUnpublish = computed(() => hasLive.value)
 
 const draftSavedText = computed(() => {
@@ -409,18 +418,11 @@ async function saveDraft(patch: Record<string, unknown>): Promise<void> {
       patch as never
     )
     draftSavedAt.value = result.updatedAt ? new Date(result.updatedAt) : null
-    if (readiness.value) {
-      readiness.value = {
-        ...readiness.value,
-        name: result.name ?? readiness.value.name,
-        presentation: result.presentation,
-        releaseDraft: {
-          exists: result.changedFields.length > 0,
-          updatedAt: result.updatedAt,
-          changedFields: result.changedFields
-        }
-      }
-    }
+    // 保存会改变 canRelease / blockers（例如首次补齐封面卖点、或只剩资料草稿），
+    // 必须重拉门槛，否则发布按钮会一直停在旧的禁用状态。
+    const fresh = await recipeDesignerApi.getSeriesReleaseReadiness(props.seriesId)
+    readiness.value = fresh
+    emit('saved')
   } catch {
     ElMessage.error('草稿保存失败，请重试')
   } finally {

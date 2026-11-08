@@ -908,6 +908,33 @@ describe('RecipeDesignerService · staged series release', () => {
       );
     });
 
+    it('rejects a draft-only release when the series has never been public', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          businessStatus: 'DRAFT',
+          releaseDraft: {
+            name: '鸡肉双阶段',
+            coverImageUrl: 'https://img.example.com/series-cover.jpg',
+            sellingPoint: '两种能量一套配方',
+            targetHealthTags: ['JOINT'],
+            badgeHealthTagIds: [],
+            taxonomy: [{ kindId: 'kind-1', nodeId: 'node-1' }],
+          },
+          releaseDraftUpdatedAt: new Date('2026-11-08T03:52:00.000Z'),
+        }),
+      );
+      // 没有任何阶段写进系列仓库：0 个 READY。
+      prisma.recipe.findMany.mockResolvedValue([]);
+      prisma.designRecipe.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.releaseSeries('series-1', ADMIN_ACCESS),
+      ).rejects.toThrow(/还没有可发布的阶段/);
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
+    });
+
     it('rejects a first release when no stage is READY', async () => {
       prisma.recipeSeries.findUnique.mockResolvedValue(
         seriesRecord({ businessStatus: 'DRAFT' }),

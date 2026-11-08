@@ -4643,11 +4643,27 @@ export class RecipeDesignerService {
     const selectedStageCodes = readiness.stages
       .filter((stage) => stage.actionable)
       .map((stage) => stage.stageCode);
-    if (selectedStageCodes.length === 0 && draftContext.changedFields.length === 0) {
+    /**
+     * 统一以 readiness.canRelease 为总闸（2026-11-08 审核修复）：
+     *  · 未上线系列必须至少有一个 READY 阶段——只存资料草稿不能上线；
+     *  · 已上线系列可以只发资料草稿（canRelease 已放行这种组合）。
+     * 之前只看「有没有阶段或草稿」，会让 DRAFT 系列靠一条草稿被置为 PUBLIC。
+     */
+    if (!readiness.canRelease) {
       throw new BadRequestException(
-        readiness.releaseState === 'UNPUBLISHED'
-          ? '还没有可发布的阶段，请先完成阶段上线检查'
-          : '当前没有待发布的内容',
+        readiness.blockers.length > 0
+          ? readiness.blockers.map((blocker) => blocker.message).join('；')
+          : readiness.releaseState === 'UNPUBLISHED'
+            ? '还没有可发布的阶段，请先完成阶段上线检查'
+            : '当前没有待发布的内容',
+      );
+    }
+    if (
+      readiness.releaseState === 'UNPUBLISHED' &&
+      selectedStageCodes.length === 0
+    ) {
+      throw new BadRequestException(
+        '还没有可发布的阶段，请先完成阶段上线检查',
       );
     }
     const selectedStageCodeSet = new Set(selectedStageCodes);

@@ -81,6 +81,25 @@ describe('Agent 工具：search_knowledge_library', () => {
     );
   });
 
+  it('query 里写了 stage 2 dog 时自动补过滤', async () => {
+    const search = jest.fn().mockResolvedValue([]);
+    await executeTool(
+      'search_knowledge_library',
+      { query: 'IRIS stage 2 dog phosphorus' },
+      {
+        port: {} as any,
+        catalog: {} as any,
+        library: { search } as any,
+        citations: new CitationRegistry(),
+        onAsk: jest.fn(),
+      },
+    );
+    expect(search).toHaveBeenCalledWith(
+      'IRIS stage 2 dog phosphorus',
+      expect.objectContaining({ species: 'dog', stage: 2 }),
+    );
+  });
+
   it('assess 摘要带出缺口数值和目标范围', async () => {
     const outcome = await executeTool(
       'assess',

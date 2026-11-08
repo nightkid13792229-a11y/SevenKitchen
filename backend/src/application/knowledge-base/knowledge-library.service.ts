@@ -199,7 +199,12 @@ export class KnowledgeLibraryService {
           weights,
         ) * this.filterBoost(row, options),
     }));
-    scored.sort((a, b) => b.score - a.score || a.row.id.localeCompare(b.row.id));
+    scored.sort((a, b) => {
+      const aExact = this.isExactFilterMatch(a.row, options);
+      const bExact = this.isExactFilterMatch(b.row, options);
+      if (aExact !== bExact) return aExact ? -1 : 1;
+      return b.score - a.score || a.row.id.localeCompare(b.row.id);
+    });
 
     return scored.slice(0, limit).map(({ row, score }) => {
       const sourceId = row.document?.sourceId ?? null;
@@ -249,6 +254,28 @@ export class KnowledgeLibraryService {
       }
     }
     return out.slice(0, 16);
+  }
+
+  private isExactFilterMatch(
+    row: {
+      text: string;
+      section?: { title?: string | null } | null;
+    },
+    options: LibrarySearchOptions,
+  ): boolean {
+    const title = row.section?.title ?? '';
+    if (options.stage) {
+      if (!new RegExp(`\\bstage\\s*${options.stage}\\b`, 'i').test(title)) {
+        return false;
+      }
+    }
+    if (options.species === 'dog' && !/\b(dog|dogs|canine)\b/i.test(title)) {
+      return false;
+    }
+    if (options.species === 'cat' && !/\b(cat|cats|feline)\b/i.test(title)) {
+      return false;
+    }
+    return Boolean(options.stage || options.species);
   }
 
   private filterBoost(

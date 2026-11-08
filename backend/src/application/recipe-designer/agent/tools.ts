@@ -348,14 +348,25 @@ export async function executeTool(
               .map((item) => item.trim())
               .filter(Boolean)
           : undefined;
+        const querySpecies = /\b(dog|dogs|canine)\b|犬/i.test(query)
+          ? 'dog'
+          : /\b(cat|cats|feline)\b|猫/i.test(query)
+            ? 'cat'
+            : undefined;
+        const queryStageMatch = query.match(/\bstage\s*([1-4])\b|([1-4])\s*期/i);
+        const queryStage = queryStageMatch
+          ? Number(queryStageMatch[1] ?? queryStageMatch[2])
+          : undefined;
         const species =
           args.species === 'dog' || args.species === 'cat'
             ? args.species
-            : undefined;
+            : querySpecies;
         const stage =
           typeof args.stage === 'number' && args.stage >= 1 && args.stage <= 4
             ? (args.stage as 1 | 2 | 3 | 4)
-            : undefined;
+            : queryStage && queryStage >= 1 && queryStage <= 4
+              ? (queryStage as 1 | 2 | 3 | 4)
+              : undefined;
         const topics = Array.isArray(args.topics)
           ? args.topics
               .filter((item): item is string => typeof item === 'string')

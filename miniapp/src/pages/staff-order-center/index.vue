@@ -8,6 +8,16 @@
       <text class="refresh" @tap="load()">刷新</text>
     </view>
 
+    <!-- 代客下单（2026-11-08）：只给管理员。员工要看订单就从下面搜，
+         不能从这里替顾客下单 —— 后端接口也一起收口了。 -->
+    <view v-if="isAdmin" class="assist-entry" @tap="openAssistedOrder">
+      <view class="assist-main">
+        <text class="assist-title">＋ 代客下单</text>
+        <text class="assist-sub">帮顾客补一单成品鲜食，线下收款</text>
+      </view>
+      <text class="assist-arrow">›</text>
+    </view>
+
     <!-- 搜索（2026-11-02）：老「后台订单」页的关键词搜索平移过来。
          订单号 / 顾客姓名 / 手机号 / 狗狗名都能搜；状态仍用下面的状态栏 -->
     <view class="search-bar">
@@ -144,6 +154,10 @@
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
+import { getStoredUser } from '../../utils/account'
+
+/** 代客下单只对管理员开放（后端接口同步收口到 AdminGuard） */
+const isAdmin = getStoredUser()?.role === 'ADMIN'
 
 interface OrderCenterItem {
   id: string
@@ -447,6 +461,10 @@ function openOrder(item: OrderCenterItem) {
   uni.navigateTo({ url: `/pages/staff-orders/detail?id=${encodeURIComponent(item.id)}` })
 }
 
+function openAssistedOrder() {
+  uni.navigateTo({ url: '/pages/staff-assisted-order/index' })
+}
+
 /**
  * 每次页面显示都重新拉一次（2026-11-08 修）。
  *
@@ -529,6 +547,12 @@ onShow(() => load())
 .order-actions { display: flex; justify-content: flex-end; margin-top: 16rpx; padding-top: 14rpx; border-top: 1rpx solid #f2f3f5; }
 .entry { margin-left: 14rpx; padding: 8rpx 20rpx; border-radius: 24rpx; background: #f5f6f8; color: #2b5040; font-size: 22rpx; }
 .entry.primary { background: #1e3a2f; color: #fff; font-weight: 600; }
+
+.assist-entry { display: flex; align-items: center; gap: 16rpx; padding: 22rpx 24rpx; margin-bottom: 18rpx; background: #eef3ef; border: 1rpx solid #d7e4da; border-radius: 16rpx; }
+.assist-main { flex: 1; min-width: 0; }
+.assist-title { display: block; font-size: 29rpx; font-weight: 800; color: #1e3a2f; }
+.assist-sub { display: block; margin-top: 6rpx; font-size: 22rpx; color: #606266; }
+.assist-arrow { color: #1e3a2f; font-size: 34rpx; }
 
 .state { padding: 120rpx 0; text-align: center; color: #909399; font-size: 24rpx; }
 .load-more { padding: 20rpx; text-align: center; color: #2b5040; font-size: 24rpx; }

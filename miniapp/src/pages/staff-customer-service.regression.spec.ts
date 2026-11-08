@@ -19,7 +19,10 @@ describe('staff customer service customer and dog workflows', () => {
   it('registers customer search and assisted order staff pages', () => {
     expect(pagesJson).toContain('"root": "pages/staff-customer-service"')
     expect(pagesJson).toContain('"path": "customers"')
-    expect(pagesJson).toContain('"path": "assisted-order"')
+    // 旧的 assisted-order 页已下线（2026-11-08）：代客下单搬到
+    // `pages/staff-assisted-order` 分包，旧路径不再注册。
+    expect(pagesJson).not.toContain('"path": "assisted-order"')
+    expect(pagesJson).toContain('"root": "pages/staff-assisted-order"')
     expect(pagesJson).toContain('客户与狗狗')
     expect(pagesJson).toContain('代客下单')
   })
@@ -54,19 +57,10 @@ describe('staff customer service customer and dog workflows', () => {
     expect(customerPage).toContain('getStaffDogFinishedFoodHistory')
   })
 
-  it('assisted order page creates offline-payment orders and opens staff order detail', () => {
-    const assistedOrderPage = readOptionalPage('staff-customer-service/assisted-order.vue')
-    expect(assistedOrderPage).toContain('createStaffAssistedOrder')
-    expect(assistedOrderPage).toContain('listStaffCustomerAddresses')
-    expect(assistedOrderPage).toContain('listStaffDogFinishedFoodRecipeOptions')
-    expect(assistedOrderPage).toContain('selectedAddressId')
-    expect(assistedOrderPage).toContain('selectedRecipeId')
-    expect(assistedOrderPage).toContain('选择成品食谱')
-    expect(assistedOrderPage).toContain('选择收货地址')
-    expect(assistedOrderPage).toContain('线下收款')
-    expect(assistedOrderPage).toContain('实际收款金额')
-    expect(assistedOrderPage).not.toContain('食谱ID')
-    expect(assistedOrderPage).not.toContain('收货地址ID')
-    expect(assistedOrderPage).toContain('/pages/staff-orders/detail')
+  it('旧代客下单页已下线，新流程接管', () => {
+    const retiredPage = readOptionalPage('staff-customer-service/assisted-order.vue')
+    expect(retiredPage).toBe('')
+    const customerPage = readOptionalPage('staff-customer-service/customers.vue')
+    expect(customerPage).toContain('/pages/staff-assisted-order/index')
   })
 })

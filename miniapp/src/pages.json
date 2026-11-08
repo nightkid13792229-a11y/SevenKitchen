@@ -287,7 +287,6 @@
         "navigationBarTitleText": "食谱调整"
       }
     },
-
     {
       "path": "pages/custom-recipe/refund",
       "style": {
@@ -311,6 +310,41 @@
     }
   ],
   "subPackages": [
+    {
+      "root": "pages/staff-assisted-order",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "代客下单"
+          }
+        },
+        {
+          "path": "recipe",
+          "style": {
+            "navigationBarTitleText": "选食谱"
+          }
+        },
+        {
+          "path": "confirm",
+          "style": {
+            "navigationBarTitleText": "确认订单"
+          }
+        },
+        {
+          "path": "guest-dog",
+          "style": {
+            "navigationBarTitleText": "新建狗狗档案"
+          }
+        },
+        {
+          "path": "address",
+          "style": {
+            "navigationBarTitleText": "新增收货地址"
+          }
+        }
+      ]
+    },
     {
       "root": "pages/staff-inventory",
       "pages": [
@@ -546,12 +580,6 @@
           "style": {
             "navigationBarTitleText": "客户与狗狗",
             "enablePullDownRefresh": true
-          }
-        },
-        {
-          "path": "assisted-order",
-          "style": {
-            "navigationBarTitleText": "代客下单"
           }
         }
       ]

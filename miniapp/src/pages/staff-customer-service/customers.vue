@@ -37,7 +37,13 @@
           </text>
         </view>
         <view class="dog-actions">
-          <button class="mini-btn primary" @tap="openAssistedOrder(customer, dog)">代客下单</button>
+          <button
+            v-if="isAdmin"
+            class="mini-btn primary"
+            @tap="openAssistedOrder(customer, dog)"
+          >
+            代客下单
+          </button>
           <button class="mini-btn" @tap="openDogHistory(dog)">成品食谱历史</button>
         </view>
       </view>
@@ -82,6 +88,11 @@ import {
   type StaffCustomerSearchResult,
 } from '../../api/orders'
 
+import { getStoredUser } from '../../utils/account'
+
+/** 代客下单入口只给管理员（后端接口已收口到 AdminGuard） */
+const isAdmin = getStoredUser()?.role === 'ADMIN'
+
 const keyword = ref('')
 const loading = ref(false)
 const searched = ref(false)
@@ -123,7 +134,7 @@ function openAssistedOrder(customer: StaffCustomerSearchResult, dog: StaffCustom
     `dogName=${encodeURIComponent(dog.name)}`,
     `customerName=${encodeURIComponent(customer.nickname || customer.phone || customer.id)}`,
   ].join('&')
-  uni.navigateTo({ url: `/pages/staff-customer-service/assisted-order?${query}` })
+  uni.navigateTo({ url: `/pages/staff-assisted-order/index?${query}` })
 }
 
 async function openDogHistory(dog: StaffCustomerDogSummary) {

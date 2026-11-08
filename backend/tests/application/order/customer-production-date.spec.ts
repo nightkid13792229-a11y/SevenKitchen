@@ -88,4 +88,10 @@ describe('resolveDraftProductionDate · 顾客制作日期规则', () => {
     expect(resolveDraftProductionDate(null, 'staff')).toBeNull();
     expect(resolveDraftProductionDate(undefined, 'customer')).toBeNull();
   });
+
+  it('非法日期直接拒绝，不落到数据库', () => {
+    expect(() =>
+      resolveDraftProductionDate(new Date('not-a-date'), 'customer'),
+    ).toThrow(BadRequestException);
+  });
 });

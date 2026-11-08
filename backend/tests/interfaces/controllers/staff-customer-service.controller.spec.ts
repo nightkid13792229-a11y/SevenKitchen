@@ -157,6 +157,7 @@ describe('StaffCustomerServiceController customer and dog workflows', () => {
         dogId: 'dog-1',
         addressId: 'address-1',
         type: 'FRESH_FOOD',
+        actorRole: 'staff',
       }),
     );
     expect(orderService.confirmOrder).toHaveBeenCalledWith(

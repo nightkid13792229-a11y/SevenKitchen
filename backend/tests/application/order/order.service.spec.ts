@@ -577,6 +577,174 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
         jest.useRealTimers();
       }
     });
+
+    it('客服 / 管理员代客下单可以把制作日期选在今天', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-11-09T08:00:00+08:00'));
+
+      const arrangeSuccessfulItemsOrder = () => {
+        const dog = createMockDog();
+        const recipe = createMockRecipe();
+        const ingredient = createMockIngredient();
+
+        dogRepository.findById.mockResolvedValue(dog);
+        recipeRepository.findById.mockResolvedValue(recipe);
+        mockIngredientRepository.findByIds.mockResolvedValue([ingredient]);
+        mockPricingService.calculateOrderPrice.mockReturnValue({
+          costIngredients: 50,
+          costPackaging: 10,
+          costLabor: 20,
+          costOverhead: 5,
+          totalProductCost: 85,
+          productPrice: 141.67,
+        });
+        mockShippingService.calculateShippingFeePreview.mockResolvedValue({
+          amountShipping: 10,
+          templateId: 'template-1',
+        });
+        orderRepository.save.mockImplementation(async (order: Order) => order);
+      };
+
+      try {
+        arrangeSuccessfulItemsOrder();
+
+        for (const actorRole of ['staff', 'admin'] as const) {
+          const order = await service.createOrderDraft({
+            customerId: 'customer-id-1',
+            dogId: 'dog-id-1',
+            type: OrderType.FRESH_FOOD,
+            actorRole,
+            targetProductionDate: new Date('2026-11-09T00:00:00Z'),
+            items: [
+              {
+                recipeId: 'recipe-id-1',
+                quantityG: 1000,
+                packageSpecG: 200,
+                packageCount: 5,
+              },
+            ],
+          });
+
+          expect(order.targetProductionDate?.toISOString()).toBe(
+            '2026-11-09T00:00:00.000Z',
+          );
+        }
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
+
+  describe('updateOrderTargetDate - 顾客改期规则', () => {
+    const createMockRecipeSnapshot = () => ({
+      id: 'recipe-1',
+      version: 1,
+      name: 'Test Recipe',
+      production_loss_rate: 1.07,
+      energy_density_kcal_per_kg: 1450,
+      nutrition_standard: 'FEDIAF_2021',
+      items: [],
+    });
+
+    const buildOrder = (targetProductionDate: Date) => {
+      const item = new OrderItem(
+        'item-1',
+        'order-1',
+        'dog-1',
+        createMockRecipeSnapshot(),
+        1000,
+        10,
+        100,
+        null,
+        310.34,
+      );
+
+      return new Order(
+        'order-1',
+        'customer-1',
+        OrderStatus.PAID,
+        OrderType.FRESH_FOOD,
+        new Date('2026-11-01T00:00:00Z'),
+        targetProductionDate,
+        targetProductionDate,
+        100,
+        10,
+        110,
+        [item],
+      );
+    };
+
+    it('顾客早上 6 点后不能把制作日期改到今天', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-11-09T08:00:00+08:00'));
+
+      try {
+        orderRepository.findById.mockResolvedValue(
+          buildOrder(new Date('2026-11-10T00:00:00Z')),
+        );
+
+        await expect(
+          service.updateOrderTargetDate(
+            'order-1',
+            new Date('2026-11-09T00:00:00Z'),
+            'customer-1',
+            'CUSTOMER',
+          ),
+        ).rejects.toThrow(/早上 6 点/);
+
+        expect(orderRepository.save).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('顾客早上 6 点前可以把制作日期改到今天', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-11-09T05:00:00+08:00'));
+
+      try {
+        const order = buildOrder(new Date('2026-11-10T00:00:00Z'));
+        orderRepository.findById.mockResolvedValue(order);
+        orderRepository.save.mockResolvedValue(order);
+
+        await service.updateOrderTargetDate(
+          'order-1',
+          new Date('2026-11-09T00:00:00Z'),
+          'customer-1',
+          'CUSTOMER',
+        );
+
+        expect(order.targetProductionDate?.toISOString()).toBe(
+          '2026-11-09T00:00:00.000Z',
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('管理员早上 6 点后可以把制作日期改到今天', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-11-09T08:00:00+08:00'));
+
+      try {
+        const order = buildOrder(new Date('2026-11-10T00:00:00Z'));
+        orderRepository.findById.mockResolvedValue(order);
+        orderRepository.save.mockResolvedValue(order);
+
+        await service.updateOrderTargetDate(
+          'order-1',
+          new Date('2026-11-09T00:00:00Z'),
+          'admin-1',
+          'ADMIN',
+        );
+
+        expect(order.targetProductionDate?.toISOString()).toBe(
+          '2026-11-09T00:00:00.000Z',
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   describe('createOrderDraft - dailyIntakeG calculation', () => {

@@ -378,14 +378,17 @@
             formatDate(order.targetProductionDate)
           }}</text>
           <picker
-            v-if="canEditDate"
+            v-if="canEditDate && canChangeProductionDate"
             mode="date"
             :value="selectedDate"
             :start="minDateStr"
             @change="onDateSelected"
           >
-            <view class="btn-edit">修改</view>
+            <view class="btn-edit" @tap="prepareProductionDatePicker">修改</view>
           </picker>
+          <text v-else-if="canEditDate" class="date-lock-hint"
+            >当前制作日已不可选，如需改期请联系客服</text
+          >
         </view>
 
         <view class="info-row">
@@ -1023,7 +1026,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { onShareAppMessage, onPullDownRefresh } from '@dcloudio/uni-app';
+import {
+  onShareAppMessage,
+  onPullDownRefresh,
+  onShow,
+} from '@dcloudio/uni-app';
 import { request, requestSubscriptionMessage } from '../../utils/api';
 import { getLifeStageLabel } from '../../utils/label-mapping';
 import {
@@ -1047,8 +1054,8 @@ import OrderProgressBar from '../../components/OrderProgressBar.vue';
 import OrderProgressSteps from '../../components/OrderProgressSteps.vue';
 import { normalizeImageUrl } from '../../utils/config';
 import {
-  earliestCustomerProductionDate,
   formatDateTime,
+  resolveProductionDatePickerState,
 } from '../../utils/date';
 import { getNutritionStandardLabel } from '../../utils/label-mapping';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
@@ -1893,6 +1900,9 @@ const canEditDate = computed(() => {
 // 日期选择器状态
 const selectedDate = ref('');
 const minDateStr = ref('');
+// 当前制作日已经早于“顾客最早可选日”时，不再给修改入口：
+// 否则选择器会把值顶到明天，顾客点开 → 直接确认就把订单悄悄推迟一天。
+const canChangeProductionDate = ref(false);
 
 // 监控计算属性的变化
 watch(
@@ -2035,6 +2045,13 @@ onMounted(async () => {
   if (orderId.value) {
     loadOrderDetail();
     loadCustomerServiceConfig();
+  }
+});
+
+// 从后台切回来时可能已经过了早上 6 点，重新收紧可选日期
+onShow(() => {
+  if (order.value) {
+    syncProductionDatePicker(order.value.targetProductionDate ?? null);
   }
 });
 
@@ -2523,41 +2540,41 @@ async function saveAddressForm() {
   }
 }
 
-// 初始化日期选择器的值。
+// 重新计算可选日期和选择器初始值。
 // 角色也要一起监听：用户信息可能比订单晚一步从 storage / 接口拿到。
+function syncProductionDatePicker(newDate?: string | null) {
+  const state = resolveProductionDatePickerState({
+    orderDate: newDate,
+    isAdmin: userInfo.value.role === 'ADMIN',
+  });
+
+  minDateStr.value = state.minDate;
+  selectedDate.value = state.selectedDate;
+  canChangeProductionDate.value = state.canChange;
+}
+
 watch(
   [() => order.value?.targetProductionDate, () => userInfo.value.role],
-  ([newDate]) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = formatDateToYYYYMMDD(today);
-
-    // 顾客仍按「早上 6 点」规则；管理员改期可以选择今天
-    minDateStr.value =
-      userInfo.value.role === 'ADMIN'
-        ? todayStr
-        : earliestCustomerProductionDate();
-
-    const currentDate = newDate ? new Date(newDate) : new Date(today);
-    currentDate.setHours(0, 0, 0, 0);
-    const currentStr = formatDateToYYYYMMDD(currentDate);
-
-    selectedDate.value =
-      currentStr < minDateStr.value ? minDateStr.value : currentStr;
-  },
+  ([newDate]) => syncProductionDatePicker(newDate),
   { immediate: true },
 );
 
-function formatDateToYYYYMMDD(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+// 页面停留跨过早上 6 点、或从后台切回来时，打开选择器前再收紧一次
+function prepareProductionDatePicker() {
+  syncProductionDatePicker(order.value?.targetProductionDate ?? null);
 }
 
 // 日期选择确认
 function onDateSelected(e: any) {
-  const newDateStr = e.detail.value;
+  const newDateStr = String(e?.detail?.value || '');
+  // 页面跨过 6 点后，选择器里的旧日期可能已经不合规，兜底再挡一次
+  if (!newDateStr || newDateStr < minDateStr.value) {
+    uni.showToast({
+      title: '最早可选日期已更新，请重试',
+      icon: 'none',
+    });
+    return;
+  }
 
   // 调用API更新日期
   updateOrderDate(newDateStr);
@@ -3936,7 +3953,8 @@ async function applyRefund() {
 }
 
 .address-empty-text,
-.address-lock-hint {
+.address-lock-hint,
+.date-lock-hint {
   font-size: 24rpx;
   color: #6b6653;
   line-height: 1.5;

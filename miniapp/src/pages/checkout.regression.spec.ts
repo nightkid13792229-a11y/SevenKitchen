@@ -135,4 +135,12 @@ describe('checkout direct-buy storage contract', () => {
     expect(source).toContain('lifeStageLabel')
     expect(source).toContain('orderConfig.lifeStageLabel')
   })
+
+  it('顾客最早制作日每次现算，避免页面跨过 6 点后仍缓存“今天”', () => {
+    // 2026-11-08 审查：computed 没有响应式依赖会缓存一整天，
+    // 6 点后仍允许选“今天”；这里必须用函数在打开选择器/提交前现算。
+    expect(source).toContain('function currentMinProductionDate()')
+    expect(source).toContain('syncProductionDateFloor')
+    expect(source).not.toContain('const minProductionDate = computed')
+  })
 })

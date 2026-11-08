@@ -13,11 +13,14 @@
  * 2026-10-09 从当时的疫苗板块提到这里（多处都要用它算"今天"，
  * 两处各写一份迟早不一致）。
  */
+function formatLocalDateText(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 export function todayDateText(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
+  return formatLocalDateText(new Date());
 }
 
 /**
@@ -31,9 +34,55 @@ export function earliestCustomerProductionDate(now: Date = new Date()): string {
   if (date.getHours() >= 6) {
     date.setDate(date.getDate() + 1);
   }
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}`;
+  return formatLocalDateText(date);
+}
+
+export interface ProductionDatePickerState {
+  /** 选择器允许的最早日期 */
+  minDate: string;
+  /** 选择器打开时的初始值：订单自己的日期，只有订单日期早于今天才兜底到今天 */
+  selectedDate: string;
+  /** 当前订单日期是否还允许通过选择器修改 */
+  canChange: boolean;
+}
+
+/**
+ * 订单详情页「修改制作日期」选择器的初始状态。
+ *
+ * 关键：初始值必须取订单自己的日期，不能取“最早可选日”。
+ * 否则一张今天制作的订单，在 6 点后打开选择器会被顶到明天，
+ * 顾客点「修改 → 确定」就会在没改日期的情况下把订单推迟一天。
+ */
+export function resolveProductionDatePickerState(options: {
+  orderDate?: string | null;
+  isAdmin: boolean;
+  now?: Date;
+}): ProductionDatePickerState {
+  const now = options.now ?? new Date();
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const todayText = formatLocalDateText(today);
+  const minDate = options.isAdmin
+    ? todayText
+    : earliestCustomerProductionDate(now);
+
+  let orderDateText = '';
+  if (options.orderDate) {
+    const orderDate = new Date(options.orderDate);
+    if (!Number.isNaN(orderDate.getTime())) {
+      orderDate.setHours(0, 0, 0, 0);
+      orderDateText = formatLocalDateText(orderDate);
+    }
+  }
+
+  const selectedDate =
+    orderDateText && orderDateText >= todayText ? orderDateText : todayText;
+
+  return {
+    minDate,
+    selectedDate,
+    canChange: !orderDateText || orderDateText >= minDate,
+  };
 }
 
 /**

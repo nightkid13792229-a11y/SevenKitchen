@@ -1209,17 +1209,22 @@ export class OrderService {
 
     // 成品鲜食：所有下单入口共用同一套制作日期准入规则。
     // 试吃装是现货、不排产，带不带日期都不参与这条规则。
-    if (dto.type !== OrderType.TASTING_PACK && dto.targetProductionDate) {
-      dto.targetProductionDate = resolveDraftProductionDate(
-        dto.targetProductionDate,
-        dto.actorRole ?? 'customer',
-      );
-    }
+    // 用副本而不是直接改调用方传进来的 dto，避免副作用。
+    const draft: CreateOrderDraftDto =
+      dto.type !== OrderType.TASTING_PACK && dto.targetProductionDate
+        ? {
+            ...dto,
+            targetProductionDate: resolveDraftProductionDate(
+              dto.targetProductionDate,
+              dto.actorRole ?? 'customer',
+            ),
+          }
+        : dto;
 
     // ✅ Priority 1: 如果提供 snapshotId，从快照创建（立即购买）
-    if (dto.snapshotId) {
+    if (draft.snapshotId) {
       const snapshot = await this.pricingSnapshotRepository.findById(
-        dto.snapshotId,
+        draft.snapshotId,
       );
       // 试吃装是现货：下单只扣成品库存，不采购、不排产、不生产，
       // 与鲜食订单是两条完全不同的履约路径，因此在这里分流而不是塞进同一个方法
@@ -1227,21 +1232,21 @@ export class OrderService {
         (snapshot?.requestParams as any)?.kind === TASTING_PACK_SNAPSHOT_KIND
       ) {
         return this.createTastingPackOrderFromSnapshot(
-          dto,
-          dto.snapshotId,
+          draft,
+          draft.snapshotId,
           orderId,
         );
       }
-      return this.createOrderFromSnapshot(dto, dto.snapshotId, orderId);
+      return this.createOrderFromSnapshot(draft, draft.snapshotId, orderId);
     }
 
     // Priority 2: 如果提供 cartItemIds，从购物车创建
-    if (dto.cartItemIds && dto.cartItemIds.length > 0) {
-      return this.createOrderFromCart(dto, orderId);
+    if (draft.cartItemIds && draft.cartItemIds.length > 0) {
+      return this.createOrderFromCart(draft, orderId);
     }
 
     // Priority 3: 从items参数创建（DEPRECATED - 仅用于向后兼容）
-    return this.createOrderFromItems(dto, orderId);
+    return this.createOrderFromItems(draft, orderId);
   }
 
   /**
@@ -1278,13 +1283,14 @@ export class OrderService {
     }
 
     // 2. 处理制作日期
-    // 未提供时按上海时区取默认值（0-6点当日，6点后次日）；
-    // 提供了就统一交给 resolveDraftProductionDate 校验：
-    // 顾客 6 点后不能选今天，管理员 / 客服代客下单可以。
-    const productionDate = resolveDraftProductionDate(
-      dto.targetProductionDate ?? TimezoneUtil.calculateProductionDate(),
-      dto.actorRole ?? 'customer',
-    )!;
+    // 已提供的日期在 createOrderDraft 入口已校验并归一化，这里只补默认值，
+    // 避免同一次请求用两个不同的“现在”重复判断、跨过 6 点边界。
+    const productionDate =
+      dto.targetProductionDate ??
+      resolveDraftProductionDate(
+        TimezoneUtil.calculateProductionDate(),
+        dto.actorRole ?? 'customer',
+      )!;
 
     console.log(
       '[CreateOrderFromSnapshot] Production date validated:',
@@ -4737,10 +4743,12 @@ export class OrderService {
     }
 
     // 3. 日期准入：顾客仍按「早上 6 点」规则，管理员改期可以把日期定在今天。
+    //    两种角色都沿用下单时的“不能早于今天 / 最多 90 天 / 日期必须合法”上限，
     //    域对象还会再挡一次「不能早于今天」和「已采购后不能改」。
-    const normalizedTargetDate = isAdmin
-      ? TimezoneUtil.toShanghaiDateOnly(targetDate)
-      : resolveDraftProductionDate(targetDate, 'customer')!;
+    const normalizedTargetDate = resolveDraftProductionDate(
+      targetDate,
+      isAdmin ? 'admin' : 'customer',
+    )!;
 
     order.updateTargetProductionDate(normalizedTargetDate);
 

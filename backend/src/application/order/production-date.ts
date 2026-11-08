@@ -34,6 +34,10 @@ export function resolveDraftProductionDate(
     return null;
   }
 
+  if (Number.isNaN(requested.getTime())) {
+    throw new BadRequestException('制作日期不合法');
+  }
+
   const dateOnly = TimezoneUtil.toShanghaiDateOnly(requested);
   const today = TimezoneUtil.toShanghaiDateOnly(now);
 

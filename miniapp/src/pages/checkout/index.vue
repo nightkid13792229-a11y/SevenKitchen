@@ -68,7 +68,7 @@
         v-if="showProductionDatePicker"
         mode="date"
         :value="selectedProductionDate"
-        :start="minProductionDate"
+        :start="currentMinProductionDate()"
         @change="onProductionDateChange"
         @cancel="showProductionDatePicker = false"
       >
@@ -464,14 +464,25 @@ const customerNote = ref('');
 const showProductionDatePicker = ref(false);
 
 // 顾客最早只能约到这里：
-// 每天早上 6 点前下单可约当天，6 点起最早次日制作（管理员代下单不受限）
-const minProductionDate = computed(() => earliestCustomerProductionDate());
-
-// 默认制作日期与最早可选日期一致，避免默认值本身就不合法
-const defaultProductionDate = computed(() => minProductionDate.value);
+// 每天早上 6 点前下单可约当天，6 点起最早次日制作（管理员代下单不受限）。
+// 必须每次现算，不能放进 computed —— computed 没有响应式依赖时会把 6 点前的
+// 结果缓存一整天，页面跨过 6 点后仍会允许选“今天”。
+function currentMinProductionDate(): string {
+  return earliestCustomerProductionDate();
+}
 
 // 选中的制作日期
-const selectedProductionDate = ref(defaultProductionDate.value);
+const selectedProductionDate = ref(currentMinProductionDate());
+
+/** 页面可能跨过 6 点：把已经不合法的“今天”拉回当前最早可选日 */
+function syncProductionDateFloor(): boolean {
+  const min = currentMinProductionDate();
+  if (!selectedProductionDate.value || selectedProductionDate.value < min) {
+    selectedProductionDate.value = min;
+    return true;
+  }
+  return false;
+}
 
 // 计算发货日期（制作日期 + 1天）
 const calculatedShippingDate = computed(() => {
@@ -875,19 +886,15 @@ function selectAddress(addr: Address) {
 // ========== 制作日期相关 ==========
 function openProductionDatePicker() {
   // 页面可能跨过早上 6 点：打开选择器时把已经不合法的“今天”拉回最早可选日
-  if (selectedProductionDate.value < minProductionDate.value) {
-    selectedProductionDate.value = minProductionDate.value;
-  }
+  syncProductionDateFloor();
   showProductionDatePicker.value = true;
 }
 
 function onProductionDateChange(e: any) {
   const picked = String(e?.detail?.value || '');
+  const min = currentMinProductionDate();
   // 兜底：某些机型对 picker 的 start 限制不生效，选到更早的日期就拉回最早可选日
-  selectedProductionDate.value =
-    picked && picked >= minProductionDate.value
-      ? picked
-      : minProductionDate.value;
+  selectedProductionDate.value = picked && picked >= min ? picked : min;
   showProductionDatePicker.value = false;
   console.log('[Checkout] Production date changed:', {
     productionDate: selectedProductionDate.value,
@@ -905,11 +912,14 @@ onMounted(() => {
 
   loadDirectBuyItem(options);
   loadDefaultAddress();
-  selectedProductionDate.value = defaultProductionDate.value;
+  selectedProductionDate.value = currentMinProductionDate();
 });
 
 // onShow - 每次页面显示时重新加载地址
 onShow(async () => {
+  // 从后台切回来时可能已经过了早上 6 点，先按最新规则收紧日期
+  syncProductionDateFloor();
+
   // 漏斗：进入结算页（漏斗第 7 步）
   trackFunnelEvent({
     eventName: 'checkout_view',
@@ -1220,6 +1230,18 @@ async function refreshDirectBuyPricingSnapshot(): Promise<{
 // ========== 订单提交 ==========
 async function submitOrder(hasRefreshedSnapshot = false) {
   if (!canSubmitOrder.value) return;
+
+  // 页面可能从早上 6 点前一直停留到 6 点后：提交前再按最新规则收紧一次，
+  // 避免把已经被规则淘汰的“今天”发到后端。
+  const dateBeforeSync = selectedProductionDate.value;
+  syncProductionDateFloor();
+  if (!isStockOrder.value && selectedProductionDate.value !== dateBeforeSync) {
+    uni.showToast({
+      title: '制作日期已更新，请确认后重新提交',
+      icon: 'none',
+    });
+    return;
+  }
 
   // 手机号唯一的强制点：下单后需要用它做订单履约与售后联系。
   // 放在这一秒而不是页面加载时，是为了不打断顾客核对订单的过程。

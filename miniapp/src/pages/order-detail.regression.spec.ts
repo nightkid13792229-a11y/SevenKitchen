@@ -273,8 +273,15 @@ describe('order detail runtime regressions', () => {
 
     expect(source).toContain("uni.$on('address-selected', handleAddressSelected)")
     expect(source).toContain("uni.$off('address-selected', handleAddressSelected)")
-    // 不再在 onShow 里重复注册（旧实现会累积监听导致多笔订单地址串改）
-    expect(source).not.toContain('onShow(() =>')
+    // onShow 可以存在（用于跨 6 点刷新制作日期），但绝不能再注册地址监听，
+    // 旧实现会累积监听导致多笔订单地址串改。
+    const onShowStart = source.indexOf('onShow(')
+    expect(onShowStart).toBeGreaterThan(-1)
+    const onShowBody = source.slice(
+      onShowStart,
+      source.indexOf('onUnmounted(', onShowStart),
+    )
+    expect(onShowBody).not.toContain('uni.$on')
   })
 
   it('shows a load error state with retry and back actions', () => {
@@ -429,5 +436,21 @@ describe('order detail runtime regressions', () => {
     expect(source).toContain('formatDateTime(order.createdAt)')
     expect(source).toContain('customerRequirementText')
     expect(source).toContain('production-photos-section')
+  })
+
+  it('顾客打开今天制作的订单时，不会因为 6 点规则被悄悄推迟一天', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    // 初始值取订单自己的日期；订单日期早于最早可选日时直接收起“修改”，
+    // 不能用“最早可选日”顶替订单日期。
+    expect(source).toContain('resolveProductionDatePickerState')
+    expect(source).toContain('canChangeProductionDate')
+    expect(source).toContain('当前制作日已不可选，如需改期请联系客服')
+    expect(source).not.toContain(
+      'currentStr < minDateStr.value ? minDateStr.value : currentStr',
+    )
   })
 })

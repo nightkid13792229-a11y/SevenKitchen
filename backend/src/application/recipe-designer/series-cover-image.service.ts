@@ -17,6 +17,7 @@ import {
   type RecipeCoverCandidate,
 } from './recipe-cover-image.service';
 import type { RecipeCoverIngredient } from './recipe-cover-prompt';
+import { parseSeriesReleaseDraft } from '../../domain/recipe-designer/series-release-draft';
 
 /**
  * 阶段优先级（老板 2026-10-27 定）：
@@ -111,6 +112,7 @@ export class SeriesCoverImageService {
         deletedAt: true,
         designMode: true,
         businessStatus: true,
+        releaseDraft: true,
       },
     });
     if (
@@ -125,8 +127,14 @@ export class SeriesCoverImageService {
       throw new BadRequestException('订单定制系列不支持 AI 封面生成');
     }
 
-    // 临时名通常意味着系列还没准备好；提示词不再用系列名，但这条门槛仍然保留
-    const recipeName = String(series.name ?? '').trim();
+    /**
+     * 2026-11-08：名称先进发布草稿。AI 封面应该按管理员**当前打算用的名字**
+     * 生成；用线上旧名会出现「抽屉里已经改成正式名，点生成还说临时名」。
+     */
+    const draftName = series.releaseDraft
+      ? parseSeriesReleaseDraft(series.releaseDraft).name
+      : null;
+    const recipeName = String(draftName || series.name || '').trim();
     if (!recipeName || recipeName.startsWith('未命名')) {
       throw new BadRequestException(
         '系列名称还是临时名称，先改成正式名称再生成封面',

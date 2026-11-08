@@ -24,6 +24,7 @@ import {
 import { RecipeCopywritingService } from '../recipe-designer/recipe-copywriting.service';
 import { RecipeNamingService, type RecipeNamingResult } from '../recipe-designer/recipe-naming.service';
 import { RecipeDesignerService } from '../recipe-designer/recipe-designer.service';
+import { parseSeriesReleaseDraft } from '../../domain/recipe-designer/series-release-draft';
 import type { RecipeCopywritingResult } from '../recipe-designer/recipe-copywriting.service';
 import { UserRole } from '../../domain/user/enums';
 import {
@@ -1608,6 +1609,14 @@ export class RecipeService {
       take: 200,
     });
     const existingNames = existing.map((item) => item.name).filter(Boolean);
+    /**
+     * 2026-11-08：名字先进发布草稿。AI 起名要避重的是「管理员当前打算用的名字」，
+     * 不是线上还没发布的旧名，否则会一直推荐同一个旧名字。
+     */
+    const draftName = series.releaseDraft
+      ? parseSeriesReleaseDraft(series.releaseDraft).name
+      : null;
+    const effectiveSeriesName = String(draftName || series.name || '').trim();
 
     if (!recipe) {
       /**
@@ -1627,7 +1636,7 @@ export class RecipeService {
       return this.recipeNamingService.generate({
         existingNames,
         ...draftFacts,
-        currentName: series.name,
+        currentName: effectiveSeriesName,
       });
     }
 
@@ -1652,7 +1661,7 @@ export class RecipeService {
       lifeStageLabels: ((recipe.applicableLifeStages as string[]) || [])
         .map((stage) => RECIPE_LIFE_STAGE_LABELS[stage] || stage)
         .filter(Boolean),
-      currentName: series.name,
+      currentName: effectiveSeriesName,
     });
   }
 

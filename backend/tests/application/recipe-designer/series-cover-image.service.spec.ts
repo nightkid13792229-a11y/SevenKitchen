@@ -117,6 +117,21 @@ describe('SeriesCoverImageService', () => {
     expect(coverImageService.generate).not.toHaveBeenCalled();
   });
 
+  it('名称优先用发布草稿：线上临时名 + 草稿正式名也能生成', async () => {
+    prisma.recipeSeries.findUnique.mockResolvedValue(
+      series({
+        name: '未命名系列 · 10-27 11:00',
+        releaseDraft: { name: '均衡营养｜三文鱼南瓜', touched: ['name'] },
+      }),
+    );
+
+    await service.generateForSeries('series-1');
+
+    expect(coverImageService.generate).toHaveBeenCalledWith(
+      expect.objectContaining({ recipeName: '均衡营养｜三文鱼南瓜' }),
+    );
+  });
+
   it('AI 未配置：400，且不调 generate', async () => {
     coverImageService.isAvailable.mockResolvedValue(false);
     await expect(service.generateForSeries('series-1')).rejects.toThrow(

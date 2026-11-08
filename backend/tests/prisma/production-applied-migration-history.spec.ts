@@ -51,6 +51,10 @@ const APPLIED_MIGRATION_CHECKSUMS = [
     '20260425120000_add_diy_sheet_header_bg_config',
     'aff1df589798f939704902c9d09153380c531200253b18eef50cd002b3aa12e2',
   ],
+  [
+    '20261108150000_backfill_procurement_sku_initial_price_history',
+    '1a6650f5922f1bd325955a68f49c5835f3000330219a5035d55542d55b10e37a',
+  ],
 ] as const;
 
 function migrationChecksum(migrationName: string): string {

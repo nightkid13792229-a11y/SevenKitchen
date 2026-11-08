@@ -146,6 +146,15 @@ describe('applyLocalIngredientImport', () => {
         name: 'Duck egg supplier tray',
       }),
     });
+    expect(prisma.procurementSkuPriceHistory.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        procurementSkuId: 'procurement-sku-1',
+        ingredientId: 'ingredient-1',
+        oldPrice: null,
+        newPrice: 42,
+        source: 'MANUAL',
+      }),
+    });
     expect(writeAuditFile).toHaveBeenCalledWith(
       '/tmp/duck-egg.local-apply.json',
       expect.objectContaining<Partial<LocalIngredientImportAudit>>({
@@ -489,6 +498,9 @@ function makePrisma(
     },
     procurementSku: {
       create: jest.fn().mockResolvedValue({ id: 'procurement-sku-1' }),
+    },
+    procurementSkuPriceHistory: {
+      create: jest.fn().mockResolvedValue({ id: 'procurement-sku-history-1' }),
     },
   };
 

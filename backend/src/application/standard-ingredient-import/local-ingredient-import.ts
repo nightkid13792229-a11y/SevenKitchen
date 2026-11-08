@@ -88,6 +88,9 @@ export interface StandardIngredientImportTransaction {
   procurementSku: {
     create(args: unknown): Promise<{ id: string }>;
   };
+  procurementSkuPriceHistory: {
+    create(args: unknown): Promise<{ id: string }>;
+  };
 }
 
 export interface StandardIngredientImportPrismaClient extends StandardIngredientImportTransaction {
@@ -710,6 +713,22 @@ async function applyFoodProcurementSkus(
       data: buildProcurementSkuData(sku, ingredientId),
     });
     result.procurementSkuIds.push(procurementSku.id);
+
+    // 与手工新增 SKU 同一口径：有初始价就写一条价格历史。
+    // 这里少了它，导入出来的 SKU 价格历史又是空表（2026-11-08 复核）。
+    const price = Number(sku.currentPurchasePrice);
+    if (Number.isFinite(price) && price > 0) {
+      await tx.procurementSkuPriceHistory.create({
+        data: {
+          procurementSkuId: procurementSku.id,
+          ingredientId,
+          oldPrice: null,
+          newPrice: price,
+          source: 'MANUAL',
+          note: '导入原料时初始采购价',
+        },
+      });
+    }
   }
 }
 

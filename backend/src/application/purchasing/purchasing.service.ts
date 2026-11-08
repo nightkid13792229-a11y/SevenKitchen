@@ -60,7 +60,10 @@ import {
 import { InventoryService } from '../inventory/inventory.service';
 import { resolvePreparationMethodTokens } from '../recipe/preparation-method-text.util';
 import { SearchGovernanceService } from '../search-governance/search-governance.service';
-import { perBaseUnitCostOrInfinity } from '../../domain/ingredient/unit-price';
+import {
+  perBaseUnitCost,
+  perBaseUnitCostOrInfinity,
+} from '../../domain/ingredient/unit-price';
 import { resolvePurchaseLineRatio } from '../../domain/purchasing/purchase-line-ratio';
 
 const MAX_SEARCH_EXPANSION_TERMS = 8;
@@ -185,6 +188,8 @@ export interface StockReplenishmentInsight {
   procurementSkuId?: string;
   procurementSkuName?: string;
   currentPricePerPurchaseUnit: number;
+  /** 元 / 基准单位（食材是元/g、元/ml；补剂/包材是每个基准单位） */
+  unitCost: number;
   effectivePricePerPurchaseUnit?: number | null;
   currentStock: number;
   safetyStock?: number | null;
@@ -1936,6 +1941,15 @@ export class PurchasingService {
                 3,
               )
             : 0;
+        // 每基准单位成本：食材的库存成本列必须用这个，不能直接拿
+        // 「每个采购单位」的价（秋刀鱼 9.99/袋 ÷ 200g = 0.049950/g）。
+        const unitCost = this.roundNumber(
+          perBaseUnitCost(
+            profile.currentPricePerPurchaseUnit,
+            profile.purchaseToBaseRatio,
+          ) ?? 0,
+          6,
+        );
 
         return {
           id: ingredient.id,
@@ -1952,6 +1966,7 @@ export class PurchasingService {
           procurementSkuId: profile.procurementSku?.id,
           procurementSkuName: profile.procurementSku?.name,
           currentPricePerPurchaseUnit: profile.currentPricePerPurchaseUnit,
+          unitCost,
           effectivePricePerPurchaseUnit: profile.effectivePricePerPurchaseUnit,
           currentStock,
           safetyStock: profile.safetyStock,

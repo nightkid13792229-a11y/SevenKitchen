@@ -364,7 +364,7 @@
           <div class="price-info-line">
             <span class="label">每 1 {{ baseUnitLabel }} 成本</span>
             <span class="value">
-              {{ priceInfo ? formatUnitCost(priceInfo.baseUnitCost) : '未定价' }}
+              {{ priceInfo ? formatBaseUnitCost(priceInfo.baseUnitCost) : '未定价' }}
             </span>
           </div>
           <div class="price-info-line">
@@ -686,7 +686,7 @@
         <div class="price-info-card">
           <div class="price-info-line">
             <span class="label">每 {{ baseUnitLabel }} 单价</span>
-            <span class="value">{{ formatUnitCost(priceInfo.baseUnitCost, 2) }}</span>
+            <span class="value">{{ formatAdaptiveUnitCost(priceInfo.baseUnitCost) }}</span>
           </div>
           <div class="price-info-line">
             <span class="label">价格来源</span>
@@ -1358,8 +1358,8 @@
         <template #default="{ row }">
           <span v-if="row.oldCostPerBaseUnit === null">首次定价</span>
           <span v-else>
-            {{ formatUnitCost(row.oldCostPerBaseUnit) }} →
-            {{ formatUnitCost(row.newCostPerBaseUnit) }}
+            {{ formatBaseUnitCost(row.oldCostPerBaseUnit) }} →
+            {{ formatBaseUnitCost(row.newCostPerBaseUnit) }}
           </span>
         </template>
       </el-table-column>
@@ -1457,7 +1457,7 @@ import {
   type PublicOptionItem,
 } from '@/api/platformOptions'
 import { buildSupplementActiveNutrientsFromNutritionProfile } from '@/utils/ingredientNutrition'
-import { formatUnitCost } from '@/utils/costFormat'
+import { formatAdaptiveUnitCost, formatBaseUnitCost } from '@/utils/costFormat'
 import {
   isEdibleYieldPercentInRange,
   toEdibleYieldPercent,
@@ -1774,7 +1774,7 @@ const formatUnitPricePreview = computed(() => {
   const price = Number(formData.currentPricePerPurchaseUnit ?? 0)
   const ratio = Number(formData.purchaseToBaseRatio ?? 0)
   if (!(price > 0) || !(ratio > 0)) return ''
-  return `≈ ${formatUnitCost(price / ratio, 2)} / ${baseUnitLabel.value}`
+  return `≈ ${formatAdaptiveUnitCost(price / ratio)} / ${baseUnitLabel.value}`
 })
 
 const isPriceStale = computed(() => {
@@ -2689,7 +2689,7 @@ const getPriceHistorySourceText = (
   value: ProcurementSkuPriceHistorySource,
 ) => {
   const sourceMap: Record<ProcurementSkuPriceHistorySource, string> = {
-    MANUAL: '手动修改',
+    MANUAL: '手动录入',
     REIMBURSEMENT: '报销确认',
     ROLLBACK: '价格回退',
   }

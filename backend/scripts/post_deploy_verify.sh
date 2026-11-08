@@ -211,12 +211,49 @@ test_database_connection() {
   fi
 }
 
+# Test 6: every priced procurement SKU has at least one price-history row
+test_procurement_sku_history_complete() {
+  echo ""
+  echo "Test 6: Checking procurement SKU initial price history..."
+
+  if [ -z "${DATABASE_URL:-}" ]; then
+    warn "DATABASE_URL not set, skipping SKU history check"
+    return 0
+  fi
+
+  if ! command -v psql >/dev/null 2>&1; then
+    warn "psql not found, skipping SKU history check"
+    return 0
+  fi
+
+  PSQL_URL=$(printf '%s' "$DATABASE_URL" | perl -0pe 's/([?&])timezone=[^&]*//g; s/([?&])schema=[^&]*//g; s/[?&]$//; s/\?&/?/g')
+
+  local missing
+  if ! missing=$(psql "$PSQL_URL" -Atc "SELECT count(*) FROM procurement_sku s WHERE s.current_purchase_price IS NOT NULL AND NOT EXISTS (SELECT 1 FROM procurement_sku_price_history h WHERE h.procurement_sku_id = s.id);" 2>/dev/null); then
+    warn "Could not query procurement SKU history; skipping check"
+    return 0
+  fi
+
+  missing=$(printf '%s' "$missing" | tr -d '[:space:]')
+  if [ "$missing" = "0" ]; then
+    ok "Every priced procurement SKU has price history"
+    PASSED+=("SKU initial price history")
+    return 0
+  fi
+
+  fail "Found $missing priced procurement SKU(s) without any price-history row"
+  info "This usually means a SKU-creation path bypassed the initial history write."
+  FAILED+=("SKU initial price history")
+  return 1
+}
+
 # Run all tests
 test_service_running
 test_port_listening
 test_health_local
 test_health_public
 test_database_connection
+test_procurement_sku_history_complete
 
 # Summary
 echo ""

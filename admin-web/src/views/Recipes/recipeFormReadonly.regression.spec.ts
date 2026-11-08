@@ -24,4 +24,11 @@ describe('旧食谱编辑页 · 设计器托管字段只读（2026-10-22）', ()
     expect(source).toContain('maxlength="20"')
     expect(source).toContain('preparation-length-hint')
   })
+
+  it('原料下拉的食材单价走 6 位格式化，不再直接拼原始数字', () => {
+    expect(source).toContain('formatRecipeIngredientPrice(ingredient)')
+    expect(source).not.toContain(
+      'ingredient.effectivePricePerPurchaseUnit ?? ingredient.currentPricePerPurchaseUnit',
+    )
+  })
 })

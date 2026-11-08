@@ -158,6 +158,7 @@ describe('PurchasingService stock replenishment procurement sku flow', () => {
         purchaseChannel: '山姆',
         productModel: '2kg/包',
         currentPricePerPurchaseUnit: 88,
+        unitCost: 44,
         stockStatus: 'NEEDS_REPLENISHMENT',
         suggestedBaseQuantity: 24,
         suggestedPurchaseQuantity: 12,

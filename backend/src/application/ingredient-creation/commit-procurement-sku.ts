@@ -43,6 +43,7 @@ export interface BuiltCommitProcurementSku {
 }
 
 const round6 = (value: number) => Math.round(value * 1e6) / 1e6;
+const round2 = (value: number) => Math.round(value * 100) / 100;
 
 /** 选填文本：空串/空白一律当没填，别把 "  " 存进库。 */
 const optionalText = (value: unknown): string | null => {
@@ -130,7 +131,7 @@ export function buildCommitProcurementSku(
     purchaseToBaseRatio: round6(
       Number(input.packCount) * Number(input.netContentPerPack),
     ),
-    currentPurchasePrice: Number(input.currentPurchasePrice),
+    currentPurchasePrice: round2(Number(input.currentPurchasePrice)),
     sourceScreenshotUrl: optionalText(input.sourceScreenshotUrl),
   };
 }

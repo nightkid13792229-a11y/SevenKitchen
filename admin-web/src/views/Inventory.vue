@@ -102,7 +102,7 @@
             </el-table-column>
             <el-table-column label="成本" width="160" align="right">
               <template #default="{ row }">
-                {{ formatUnitCost(row.currentPricePerPurchaseUnit, isFoodRow(row) ? 6 : 2) }} / {{ formatCostUnit(row) }}
+                {{ formatInventoryCost(row) }}
               </template>
             </el-table-column>
             <el-table-column label="操作" width="240" fixed="right">
@@ -384,7 +384,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { inventoryApi } from '@/api'
-import { formatUnitCost } from '@/utils/costFormat'
+import { formatInventoryCost } from '@/utils/costFormat'
 import {
   IngredientProcurementStrategy,
   IngredientProcurementStrategyLabels,
@@ -628,17 +628,6 @@ const openLedgerForIngredient = async (item: InventoryOverviewItem) => {
   ledgerFilter.ingredientId = item.id
   activeTab.value = 'ledger'
   await loadLedger()
-}
-
-const isFoodRow = (row: any): boolean =>
-  row?.type === 'FOOD' || row?.type === 'FOOD' || row?.ingredientType === 'FOOD'
-
-/** 食材的单价单位一律是基准单位（元/g、元/ml），补剂/包材仍按采购单位 */
-const formatCostUnit = (row: any): string => {
-  if (isFoodRow(row)) {
-    return row?.baseUnit === 'ML' ? 'ml' : 'g'
-  }
-  return row?.purchaseUnit || row?.stockUnitLabel || ''
 }
 
 const resetAdjustmentForm = () => {

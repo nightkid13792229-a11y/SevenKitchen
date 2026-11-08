@@ -155,4 +155,16 @@ describe('建档携带的采购商品', () => {
 
     expect(sku.name).toBe('糙米');
   });
+
+  it('采购价先四舍五入到 2 位，和 SKU 落库口径一致', () => {
+    const sku = buildCommitProcurementSku({
+      name: '秋刀鱼',
+      purchaseUnit: '袋',
+      packCount: 1,
+      netContentPerPack: 200,
+      currentPurchasePrice: 9.999,
+    });
+
+    expect(sku.currentPurchasePrice).toBe(10);
+  });
 });

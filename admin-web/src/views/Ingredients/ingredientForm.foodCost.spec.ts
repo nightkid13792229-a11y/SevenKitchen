@@ -30,8 +30,15 @@ describe('原料表单 · 食材成本', () => {
     expect(ingredientFormSource).toContain('每 1 {{ baseUnitLabel }} 成本')
   })
 
-  it('每克成本保留 6 位小数，不再按 2/4 位四舍五入', () => {
-    expect(ingredientFormSource).toContain('formatUnitCost')
+  it('食材成本卡 / 成本历史固定走 6 位格式化，不再按 2/4 位四舍五入', () => {
+    // 具体数值行为见 src/utils/costFormat.spec.ts；
+    // 这里只守页面确实用了食材专用的 6 位格式化，而不是通用 2 位。
+    expect(ingredientFormSource).toContain(
+      'formatBaseUnitCost(priceInfo.baseUnitCost)',
+    )
+    expect(ingredientFormSource).toContain(
+      'formatBaseUnitCost(row.oldCostPerBaseUnit)',
+    )
     expect(ingredientFormSource).not.toContain('formatMoney')
   })
 

@@ -771,7 +771,7 @@
                     📍 {{ ingredient.purchaseChannel }}
                   </span>
                   <span>
-                    💰 ¥{{ ingredient.effectivePricePerPurchaseUnit ?? ingredient.currentPricePerPurchaseUnit }}/{{ ingredient.purchaseUnit }}
+                    💰 {{ formatRecipeIngredientPrice(ingredient) }}
                   </span>
                   <span style="color: #909399">
                     {{ IngredientTypeLabels[ingredient.type] || ingredient.type }}
@@ -1153,6 +1153,7 @@ import { inventoryApi } from '@/api';
 import { IngredientTypeLabels, type NutritionFoodMapping } from '@/types/ingredient';
 import { SUPPLEMENT_TARGET_FIELD_OPTIONS } from '@/constants/ingredientNutrition';
 import { getDefaultPreparationMethodFromHistory } from '@/utils/preparationMethodText';
+import { formatRecipeIngredientPrice } from '@/utils/costFormat';
 import {
   PREPARATION_METHOD_MAX_CONTENT_LENGTH,
   countPreparationMethodContentCharacters,

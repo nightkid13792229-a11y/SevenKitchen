@@ -14,6 +14,10 @@ const ordersApiSource = readFileSync(
   resolve(__dirname, '../api/orders.ts'),
   'utf8',
 );
+const productionDateUtilSource = readFileSync(
+  resolve(__dirname, '../utils/order-production-date.ts'),
+  'utf8',
+);
 
 describe('staff orders quick search', () => {
   it('searches by order number, dog name, phone suffix, or status through the common keyword query', () => {
@@ -376,14 +380,18 @@ describe('staff order detail · 预约制作日', () => {
   });
 
   it('按东八区取日期，避免零点存库导致差一天', () => {
-    expect(detailSource).toContain('SHANGHAI_OFFSET_MS');
-    expect(detailSource).toContain('getUTCFullYear()');
+    // 显示逻辑抽到 utils 里单测（order-production-date.spec.ts）；
+    // 这里只守住「页面用的是这个函数、不是自己再截一遍字符串」。
+    expect(detailSource).toContain('formatProductionDateLabel');
+    expect(detailSource).not.toContain('SHANGHAI_OFFSET_MS');
+    expect(productionDateUtilSource).toContain('SHANGHAI_OFFSET_MS');
+    expect(productionDateUtilSource).toContain('getUTCFullYear()');
   });
 });
 
 describe('staff order detail · 管理员改预约制作日（2026-11-08）', () => {
   it('只有管理员、且采购还没开始时才露出「改期」入口', () => {
-    expect(detailSource).toContain('canEditProductionDate');
+    expect(detailSource).toContain('v-if="canEditProductionDate"');
     expect(detailSource).toContain('canAdminEditOrderProductionDate');
     expect(detailSource).toContain('isAdminUser.value &&');
     expect(detailSource).toContain('mode="date"');
@@ -398,5 +406,12 @@ describe('staff order detail · 管理员改预约制作日（2026-11-08）', ()
   it('改之前先让管理员确认「从哪天改到哪天」', () => {
     expect(detailSource).toContain('确认改期');
     expect(detailSource).toContain('预约制作日将从');
+  });
+
+  it('失败提示翻成人话，不把后台英文直接抛给客服', () => {
+    expect(detailSource).toContain('describeProductionDateUpdateError');
+    expect(detailSource).not.toContain('Cannot update target production date');
+    // 状态/权限被拒后刷新页面，入口按真实状态消失
+    expect(detailSource).toContain('shouldRefresh');
   });
 });

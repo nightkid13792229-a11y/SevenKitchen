@@ -59,7 +59,7 @@
         <view class="kv">
           <text class="kv-key">预约制作日</text>
           <text class="kv-value production-date" :class="{ muted: !order.targetProductionDate }">
-            {{ formatProductionDate(order.targetProductionDate) }}
+            {{ formatProductionDateLabel(order.targetProductionDate) }}
           </text>
           <!-- 管理员改期（2026-11-08）：采购一开始就锁死，和后台保持一致 -->
           <picker
@@ -808,7 +808,12 @@ import {
   resolveProductionDatePickerState,
 } from '../../utils/date'
 import { normalizeImageUrl } from '../../utils/config'
-import { canAdminEditOrderProductionDate } from '../../utils/order-production-date'
+import {
+  canAdminEditOrderProductionDate,
+  checkProductionDateSelection,
+  describeProductionDateUpdateError,
+  formatProductionDateLabel,
+} from '../../utils/order-production-date'
 
 // 获取页面参数
 const orderId = ref('')
@@ -1798,23 +1803,6 @@ function formatShortDate(value?: string | null): string {
   return `${month}-${day}`
 }
 
-const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000
-
-/**
- * 预约制作日只显示日期（带星期，方便排产）。
- *
- * 这个字段是"某一天"，不是某个时刻：后端按当天零点存，直接截 ISO 字符串
- * 或者用设备本地时区都可能差一天，所以统一按东八区取年月日。
- */
-function formatProductionDate(value?: string | null): string {
-  if (!value) return '未设置'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value)
-  const shanghai = new Date(date.getTime() + SHANGHAI_OFFSET_MS)
-  return `${shanghai.getUTCFullYear()}年${shanghai.getUTCMonth() + 1}月${shanghai.getUTCDate()}日 ${WEEKDAY_LABELS[shanghai.getUTCDay()]}`
-}
-
 /**
  * 管理员选了新日期（2026-11-08）。
  * 先让管理员看清「从哪天改到哪天」再保存 —— 点开选择器直接确定就把订单推迟，
@@ -1822,25 +1810,30 @@ function formatProductionDate(value?: string | null): string {
  */
 function onProductionDateSelected(event: any) {
   const newDateStr = String(event?.detail?.value || '')
-  if (!newDateStr || !order.value) return
-
-  if (newDateStr < productionDatePickerState.value.minDate) {
-    uni.showToast({ title: '最早只能选今天', icon: 'none' })
-    return
-  }
+  if (!order.value) return
 
   const currentDateStr = order.value.targetProductionDate
     ? formatShanghaiDateOnly(order.value.targetProductionDate)
     : ''
 
-  if (currentDateStr && newDateStr === currentDateStr) {
+  const check = checkProductionDateSelection({
+    selectedDate: newDateStr,
+    minDate: productionDatePickerState.value.minDate,
+    currentDate: currentDateStr,
+  })
+
+  if (check === 'before-min') {
+    uni.showToast({ title: '最早只能选今天', icon: 'none' })
+    return
+  }
+  if (check === 'unchanged') {
     uni.showToast({ title: '制作日期没有变化', icon: 'none' })
     return
   }
 
   const content = currentDateStr
-    ? `预约制作日将从 ${formatProductionDate(order.value.targetProductionDate)} 改到 ${formatProductionDate(newDateStr)}，确认吗？`
-    : `预约制作日将设为 ${formatProductionDate(newDateStr)}，确认吗？`
+    ? `预约制作日将从 ${formatProductionDateLabel(order.value.targetProductionDate)} 改到 ${formatProductionDateLabel(newDateStr)}，确认吗？`
+    : `预约制作日将设为 ${formatProductionDateLabel(newDateStr)}，确认吗？`
 
   uni.showModal({
     title: '确认改期',
@@ -1870,11 +1863,14 @@ async function updateProductionDate(newDateStr: string) {
   } catch (error: any) {
     uni.hideLoading()
     console.error('[OrderDetail] Update production date error:', error)
-    // 采购已经开始 / 状态刚翻转 —— 后台的提示原样给管理员看
-    uni.showToast({
-      title: error?.message || '改期失败',
-      icon: 'none',
-    })
+
+    // 后台报错一半是英文（状态刚翻、权限），统一翻成人话再弹
+    const copy = describeProductionDateUpdateError(error?.message)
+    if (copy.shouldRefresh) {
+      // 采购已经开始 —— 刷一次，让「改期」入口按真实状态消失
+      await loadOrderDetail()
+    }
+    uni.showToast({ title: copy.text, icon: 'none' })
   }
 }
 

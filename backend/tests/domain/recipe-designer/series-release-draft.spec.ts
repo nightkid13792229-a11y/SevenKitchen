@@ -6,6 +6,7 @@ import {
   isSeriesReleaseDraftEqualToLive,
   mergeSeriesReleaseDraft,
   parseSeriesReleaseDraft,
+  resolveSeriesReleaseDraftApplied,
 } from '../../../src/domain/recipe-designer/series-release-draft';
 import { buildSeriesReleaseReadiness } from '../../../src/domain/recipe-designer/series-release-readiness';
 
@@ -185,3 +186,41 @@ describe('readiness · 草稿参与 canRelease', () => {
     expect(readiness.canRelease).toBe(false);
   });
 });
+
+describe('resolveSeriesReleaseDraftApplied · 只应用真正改过的字段', () => {
+  it('只改卖点时，期间别人改的角标 / 归类取线上值', () => {
+    // 草稿存的是当时的快照：角标 [tag-a, tag-b]、归类 node-1
+    const draft = {
+      ...liveValues,
+      sellingPoint: '鲜肉低敏，肠胃更稳',
+      touched: ['sellingPoint'] as const,
+    }
+    // 期间别人把线上角标改成 [tag-c]、归类改成 node-9
+    const liveNow = {
+      ...liveValues,
+      badgeHealthTagIds: ['tag-c'],
+      taxonomy: [{ kindId: 'kind-1', nodeId: 'node-9' }],
+    }
+
+    const { applied, fields } = resolveSeriesReleaseDraftApplied(
+      { ...draft, touched: [...draft.touched] },
+      liveNow,
+    )
+
+    expect(fields).toEqual(['sellingPoint'])
+    expect(applied.sellingPoint).toBe('鲜肉低敏，肠胃更稳')
+    expect(applied.badgeHealthTagIds).toEqual(['tag-c'])
+    expect(applied.taxonomy).toEqual([{ kindId: 'kind-1', nodeId: 'node-9' }])
+  })
+
+  it('老草稿没有 touched 时退回按差异算，行为与改造前一致', () => {
+    const draft = {
+      ...liveValues,
+      sellingPoint: '鲜肉低敏，肠胃更稳',
+      touched: [] as never,
+    }
+    const { fields, applied } = resolveSeriesReleaseDraftApplied(draft, liveValues)
+    expect(fields).toEqual(['sellingPoint'])
+    expect(applied.sellingPoint).toBe('鲜肉低敏，肠胃更稳')
+  })
+})

@@ -81,6 +81,7 @@ import {
   diffSeriesReleaseDraft,
   isSeriesReleaseDraftEqualToLive,
   mergeSeriesReleaseDraft,
+  resolveSeriesReleaseDraftApplied,
   parseSeriesReleaseDraft,
   type SeriesReleaseDraftField,
   type SeriesReleaseDraftPatch,
@@ -4441,7 +4442,10 @@ export class RecipeDesignerService {
       throw new BadRequestException('已上线系列不能清空一句话卖点');
     }
 
-    const changedFields = diffSeriesReleaseDraft(merged, draftContext.live);
+    const changedFields = diffSeriesReleaseDraft(
+      merged,
+      draftContext.live,
+    ).filter((field) => merged.touched.includes(field));
     const savedAt =
       changedFields.length === 0 ? null : new Date();
     await this.prisma.recipeSeries.update({
@@ -5025,9 +5029,12 @@ export class RecipeDesignerService {
     if (draft && !draft.name) {
       draft.name = live.name;
     }
-    const changedFields = draft ? diffSeriesReleaseDraft(draft, live) : [];
+    // 生效值 = 线上值 + 管理员真正动过的字段（老草稿按差异兜底），
+    // 这样别人期间改的归类 / 角标不会被草稿里的旧值覆盖。
+    const resolved = resolveSeriesReleaseDraftApplied(draft, live);
+    const changedFields = resolved.fields;
     const hasDraft = changedFields.length > 0;
-    const effective = hasDraft && draft ? draft : live;
+    const effective = hasDraft ? resolved.applied : live;
     // 线上角标名走同一条合规词表过滤；草稿换了角标时再按 id 查一次名称。
     const liveNames = pickCoverBadgeNames(
       badgeRows.map((row) => row.healthTag?.name),

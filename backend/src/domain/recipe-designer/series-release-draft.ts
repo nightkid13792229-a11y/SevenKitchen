@@ -28,6 +28,13 @@ export interface SeriesReleaseDraftPayload {
   /** 封面角标（health_tag id，顺序即展示顺序） */
   badgeHealthTagIds: string[];
   taxonomy: SeriesReleaseDraftTaxonomyLink[];
+  /**
+   * 管理员真正动过的字段（2026-11-08 审核修复）。
+   *
+   * 草稿存的是全量快照，发布时如果整份应用，会把期间别人改过的
+   * 归类 / 角标 / 名称一起回滚。只有这里列出的字段才允许覆盖线上值。
+   */
+  touched: SeriesReleaseDraftField[];
 }
 
 /** 草稿里会被比较 / 展示的字段；`coverBadges` 对应 badgeHealthTagIds。 */
@@ -108,7 +115,17 @@ export function parseSeriesReleaseDraft(
     targetHealthTags: normalizeStringList(source.targetHealthTags),
     badgeHealthTagIds: normalizeStringList(source.badgeHealthTagIds),
     taxonomy: normalizeSeriesReleaseDraftTaxonomy(source.taxonomy),
+    touched: normalizeTouchedFields(source.touched),
   };
+}
+
+const FIELD_SET = new Set<string>(SERIES_RELEASE_DRAFT_FIELDS);
+
+function normalizeTouchedFields(value: unknown): SeriesReleaseDraftField[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((entry) => String(entry).trim()))].filter(
+    (entry): entry is SeriesReleaseDraftField => FIELD_SET.has(entry),
+  );
 }
 
 export function emptySeriesReleaseDraft(): SeriesReleaseDraftPayload {
@@ -120,6 +137,7 @@ export function emptySeriesReleaseDraft(): SeriesReleaseDraftPayload {
     targetHealthTags: [],
     badgeHealthTagIds: [],
     taxonomy: [],
+    touched: [],
   };
 }
 
@@ -145,6 +163,7 @@ export function buildSeriesReleaseLiveValues(
     targetHealthTags: normalizeStringList(live.targetHealthTags),
     badgeHealthTagIds: normalizeStringList(live.badgeHealthTagIds),
     taxonomy: normalizeSeriesReleaseDraftTaxonomy(live.taxonomy),
+    touched: [],
   };
 }
 
@@ -233,7 +252,24 @@ export function mergeSeriesReleaseDraft(
       patch.taxonomy === undefined
         ? [...base.taxonomy]
         : normalizeSeriesReleaseDraftTaxonomy(patch.taxonomy),
+    touched: [...base.touched],
   };
+  const touched = new Set<SeriesReleaseDraftField>(merged.touched);
+  const mapPatchKey = (key: string): SeriesReleaseDraftField | null => {
+    if (key === 'badgeHealthTagIds') return 'coverBadges';
+    return FIELD_SET.has(key) ? (key as SeriesReleaseDraftField) : null;
+  };
+  for (const key of Object.keys(patch)) {
+    const field = mapPatchKey(key);
+    if (field) touched.add(field);
+  }
+  // 改回和线上一样 = 这个字段不再算「改过」
+  for (const field of [...touched]) {
+    if (!diffSeriesReleaseDraft(merged, live).includes(field)) {
+      touched.delete(field);
+    }
+  }
+  merged.touched = [...touched];
   return merged;
 }
 
@@ -252,4 +288,39 @@ export function formatSeriesReleaseDraftFieldList(
   return fields
     .map((field) => SERIES_RELEASE_DRAFT_FIELD_LABELS[field] ?? field)
     .join(' · ');
+}
+
+
+/**
+ * 发布时真正生效的字段：线上值 + 管理员动过的字段。
+ *
+ * 没动过的字段一律取**发布这一刻的线上值**，这样别人在期间改的
+ * 归类 / 角标 / 名称不会被草稿里的旧值覆盖。
+ * 老草稿没有 `touched`：退回「按差异算」，保持与改造前一致。
+ */
+export function resolveSeriesReleaseDraftApplied(
+  draft: SeriesReleaseDraftPayload | null,
+  live: SeriesReleaseDraftPayload,
+): { applied: SeriesReleaseDraftPayload; fields: SeriesReleaseDraftField[] } {
+  if (!draft) return { applied: live, fields: [] };
+  const fields = draft.touched.length
+    ? draft.touched
+    : diffSeriesReleaseDraft(draft, live);
+  const fieldSet = new Set(fields);
+  const applied: SeriesReleaseDraftPayload = {
+    ...live,
+    touched: [...fields],
+  };
+  if (fieldSet.has('name')) applied.name = draft.name;
+  if (fieldSet.has('coverImageUrl')) applied.coverImageUrl = draft.coverImageUrl;
+  if (fieldSet.has('coverTitle')) applied.coverTitle = draft.coverTitle;
+  if (fieldSet.has('sellingPoint')) applied.sellingPoint = draft.sellingPoint;
+  if (fieldSet.has('targetHealthTags')) {
+    applied.targetHealthTags = [...draft.targetHealthTags];
+  }
+  if (fieldSet.has('coverBadges')) {
+    applied.badgeHealthTagIds = [...draft.badgeHealthTagIds];
+  }
+  if (fieldSet.has('taxonomy')) applied.taxonomy = [...draft.taxonomy];
+  return { applied, fields: fields.filter((field) => diffSeriesReleaseDraft(applied, live).includes(field)) };
 }

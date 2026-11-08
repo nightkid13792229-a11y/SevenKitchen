@@ -227,6 +227,8 @@ describe('CustomRecipeDeliveryService', () => {
         '钙',
       );
       expect(snapshot.nutrition.scenario).toBe('EARLY_GROWTH_REPRODUCTION');
+      // 报告限值按 detailedData.standard 算，跟食谱业务字段分开冻结
+      expect(snapshot.nutrition.reportStandard).toBe('FEDIAF_2025');
       // 8 项仍然同时冻结（报告与核心营养同一份来源）
       expect(snapshot.nutrition.macros.proteinPercent).toBe(38.23);
     });

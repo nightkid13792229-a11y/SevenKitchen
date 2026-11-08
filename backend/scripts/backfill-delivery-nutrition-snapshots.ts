@@ -48,6 +48,7 @@ import {
   readDeliveryMacroRows,
   readDeliveryMacros,
   readDeliveryNutritionReport,
+  readDeliveryReportStandard,
   readDeliveryScenario,
   type SnapshotMacros,
 } from '../src/domain/custom-recipe/delivery-nutrition';
@@ -215,6 +216,9 @@ export async function runDeliveryNutritionBackfill(input: {
       const scenario = readDeliveryScenario(
         target.recipe?.nutritionDetailedData,
       );
+      const reportStandard = readDeliveryReportStandard(
+        target.recipe?.nutritionDetailedData,
+      );
 
       /**
        * 「交付后改过配方」的判定：快照里已冻结了交付当时的宏量表，
@@ -267,6 +271,14 @@ export async function runDeliveryNutritionBackfill(input: {
         scenario
       ) {
         patches.scenario = scenario;
+      }
+      if (
+        isLegacySnapshot &&
+        !recipeEditedAfterDelivery &&
+        !has('reportStandard') &&
+        reportStandard
+      ) {
+        patches.reportStandard = reportStandard;
       }
 
       if (Object.keys(patches).length === 0) {

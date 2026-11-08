@@ -279,3 +279,18 @@ export function readDeliveryScenario(detailed: unknown): string | null {
   const scenario = detailed.scenario;
   return typeof scenario === 'string' && scenario.trim() ? scenario.trim() : null;
 }
+
+
+/**
+ * 报告是按哪个标准算的（2026-11-08）。
+ *
+ * `nutritionDetailedData.standard` 才是报告限值的来源；
+ * 食谱业务字段 `nutritionStandard` 是"声称符合"，两者可能不同。
+ */
+export function readDeliveryReportStandard(detailed: unknown): string | null {
+  if (!isRecord(detailed)) return null;
+  const standard = detailed.standard;
+  return typeof standard === 'string' && standard.trim()
+    ? standard.trim()
+    : null;
+}

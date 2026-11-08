@@ -104,9 +104,10 @@ describe('交付内容快照', () => {
           'macros',
           // 2026-11-07 补：宏量报告行（2026-10-28 加字段时组装这一层漏了）
           'reportRows',
-          // 2026-11-08 加：完整营养报告整份冻结 + 报告头要用的场景
+          // 2026-11-08 加：完整营养报告整份冻结 + 报告头要用的场景/标准
           'report',
           'scenario',
+          'reportStandard',
         ].sort(),
       );
       expect(Object.keys(snapshot.shopping).sort()).toEqual(

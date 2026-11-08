@@ -113,7 +113,11 @@ export function resolveDeliverySelection(
     const item = delivery.items[index];
     return {
       isBatch: true,
-      batchSize: delivery.items.length,
+      /**
+       * 服务端可能按 recipeId 只回一份（2026-11-08）：真实份数用它给的，
+       * 拿 `items.length` 会把"共 2 份"说成"共 1 份"。
+       */
+      batchSize: delivery.batchSize ?? delivery.items.length,
       selectedIndex: index,
       content: item.content,
       version: delivery.version,
@@ -183,7 +187,11 @@ export function selectFrozenNutritionReport(
   return {
     report,
     recipeName: content.recipe?.name || selected?.recipeName || '',
-    standard: content.nutrition?.standard ?? null,
+    // 报告头的标准用"报告按哪个标准算的"那个，跟表里的限值同源
+    standard:
+      content.nutrition?.reportStandard ??
+      content.nutrition?.standard ??
+      null,
     scenario: content.nutrition?.scenario ?? null,
   };
 }

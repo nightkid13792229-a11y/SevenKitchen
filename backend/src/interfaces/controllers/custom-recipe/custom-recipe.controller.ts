@@ -22,7 +22,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
 import { CustomRecipeDeliveryService } from '../../../application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from '../../../application/custom-recipe/custom-recipe-aftersale.service';
@@ -651,11 +651,19 @@ export class CustomRecipeController {
    * 但默认看到的是最新的。要看历史版本走 `?version=N`。
    */
   @Get('orders/:orderId/delivery')
+  @ApiQuery({ name: 'version', required: false })
+  @ApiQuery({
+    name: 'recipeId',
+    required: false,
+    description:
+      '只看这一份（多份交付时按业务编号过滤，避免整批快照都传一遍）',
+  })
   @ApiOperation({ summary: 'Get the current delivery of an order' })
   async getOrderDelivery(
     @Req() req: any,
     @Param('orderId') orderId: string,
     @Query('version') version?: string,
+    @Query('recipeId') recipeId?: string,
   ) {
     const userId = req.user.userId;
     const order = await this.customRecipeService.getOrderByOrderId(orderId);
@@ -687,11 +695,29 @@ export class CustomRecipeController {
     });
 
     if (batch) {
+      /**
+       * 按份过滤（2026-11-08）：一份快照带着整份营养报告（十几 KB），
+       * 5 份订单整批返回就是几十 KB —— 而交付页/报告页一次只看一份。
+       *
+       * · 传了 `recipeId` 且命中：只回这一份；
+       * · 没传 / 没命中：整批原样回（链接旧了也不能白屏）。
+       * `batchSize` 始终是**真实份数** —— 过滤后 items 只剩一条，
+       * 页面的「本次共交付 N 份」还得对。
+       */
+      const allItems = batch.items ?? [];
+      const wantedRecipeId = String(recipeId ?? '').trim();
+      const matchedItems = wantedRecipeId
+        ? allItems.filter((item) => item.recipe?.recipeId === wantedRecipeId)
+        : [];
+      const visibleItems = matchedItems.length > 0 ? matchedItems : allItems;
+
       return ApiResponseDto.success({
         batchId: batch.id,
         version: batch.version,
         deliveredAt: batch.deliveredAt,
         confirmedAt: batch.confirmedAt,
+        /** 整批真实份数（不受按份过滤影响） */
+        batchSize: allItems.length,
         /**
          * 这只狗（2026-10-24）：交付页要拿它预选 DIY / 成品下单，
          * 不能让顾客进去再选一次、更不能选错。
@@ -710,7 +736,7 @@ export class CustomRecipeController {
             ),
           ),
         ),
-        items: (batch.items ?? []).map((item) => ({
+        items: visibleItems.map((item) => ({
           /** 交付明细 id —— 售后指定"哪一份"时要用它 */
           id: item.id,
           recipeId: item.recipe?.recipeId ?? null,

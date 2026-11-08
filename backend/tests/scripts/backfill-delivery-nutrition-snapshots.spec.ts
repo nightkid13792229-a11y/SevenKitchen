@@ -105,6 +105,8 @@ describe('runDeliveryNutritionBackfill', () => {
     const next = save.mock.calls[0][0] as any;
     expect(next.nutrition.report.nutrientSections.minerals.rows[0].name).toBe('钙');
     expect(next.nutrition.scenario).toBe('EARLY_GROWTH_REPRODUCTION');
+    // 报告"按哪个标准算的"也一起补，缺了报告头会跟表里的限值打架
+    expect(next.nutrition.reportStandard).toBe('FEDIAF_2025');
     // 原有字段原样保留
     expect(next.nutrition.standard).toBe('FEDIAF_2025');
     expect(next.nutrition.energyDensityKcalPerKg).toBe(3620);

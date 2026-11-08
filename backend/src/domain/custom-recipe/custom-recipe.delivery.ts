@@ -141,6 +141,14 @@ export interface SnapshotNutrition {
   report?: SnapshotNutritionReport | null;
   /** 报告头要显示的场景（如 `EARLY_GROWTH_REPRODUCTION`）；没有就不写 */
   scenario?: string | null;
+  /**
+   * 报告**按哪个标准算的**（2026-11-08 加）。
+   *
+   * 与 `standard`（食谱业务字段）分开存：`standard` 是"这道食谱声称符合哪个标准"，
+   * 报告里的上下限却是按 `nutritionDetailedData.standard` 算出来的。
+   * 两者一旦不同，报告头就会跟表里的限值打架 —— 报告页用这一个。
+   */
+  reportStandard?: string | null;
 }
 
 /** 宏量报告行（与 `nutritionDetailedData.report.macroRows` 同结构） */
@@ -375,6 +383,7 @@ export function buildDeliverySnapshot(
       // 2026-11-08：报告整份冻结（见 SnapshotNutrition.report 的说明）
       report: nutrition.report ?? null,
       scenario: nutrition.scenario ?? null,
+      reportStandard: nutrition.reportStandard ?? null,
     },
     shopping: {
       lines,

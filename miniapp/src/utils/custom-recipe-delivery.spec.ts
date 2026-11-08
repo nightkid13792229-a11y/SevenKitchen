@@ -259,3 +259,73 @@ describe('冻结营养报告 · 有没有 / 取哪一份', () => {
     expect(selectFrozenNutritionReport(batch(), 'CR1759100000001')).toBeNull();
   });
 });
+
+
+/**
+ * 按份返回（2026-11-08）
+ *
+ * 服务端可能只回一份（省流量），但「本次共交付 N 份」必须用真实份数。
+ */
+describe('按份返回 · 份数不能被 items.length 冒充', () => {
+  it('★ 服务端给了 batchSize 就用它（只回一份时也是「共 2 份」）', () => {
+    const oneItem = {
+      ...batch(),
+      batchSize: 2,
+      items: [batch().items[1]],
+    };
+
+    const resolved = resolveDeliverySelection(oneItem, 'CR1759100000002');
+    expect(resolved?.batchSize).toBe(2);
+    expect(resolved?.recipeName).toBe('鸭肉西兰花');
+    expect(deliveryBatchCountText(resolved!.batchSize)).toBe('本次共交付 2 份');
+  });
+
+  it('没给 batchSize 时按 items.length（老接口行为不变）', () => {
+    expect(resolveDeliverySelection(batch())?.batchSize).toBe(2);
+  });
+});
+
+describe('报告标准口径（2026-11-08）', () => {
+  it('★ 报告头用 reportStandard（与表里限值同源），不是食谱业务字段', () => {
+    const delivery = {
+      id: 'delivery-1',
+      version: 1,
+      deliveredAt: '2026-10-21T02:00:00.000Z',
+      confirmedAt: null,
+      itemCodes: ['RECIPE'],
+      content: {
+        ...contentWithReport('CR1', '口径'),
+        nutrition: {
+          ...contentWithReport('CR1', '口径').nutrition,
+          standard: 'AAFCO_2019',
+          reportStandard: 'FEDIAF_2025',
+        },
+      },
+    };
+
+    expect(selectFrozenNutritionReport(delivery as any)?.standard).toBe(
+      'FEDIAF_2025',
+    );
+  });
+
+  it('老快照没有 reportStandard 时退回 standard', () => {
+    const delivery = {
+      id: 'delivery-1',
+      version: 1,
+      deliveredAt: '2026-10-21T02:00:00.000Z',
+      confirmedAt: null,
+      itemCodes: ['RECIPE'],
+      content: {
+        ...contentWithReport('CR1', '老口径'),
+        nutrition: {
+          ...contentWithReport('CR1', '老口径').nutrition,
+          standard: 'AAFCO_2019',
+        },
+      },
+    };
+
+    expect(selectFrozenNutritionReport(delivery as any)?.standard).toBe(
+      'AAFCO_2019',
+    );
+  });
+});

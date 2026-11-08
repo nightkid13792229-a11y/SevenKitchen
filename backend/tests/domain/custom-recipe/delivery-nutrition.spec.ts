@@ -2,6 +2,7 @@ import {
   readDeliveryMacroRows,
   readDeliveryMacros,
   readDeliveryNutritionReport,
+  readDeliveryReportStandard,
   readDeliveryScenario,
 } from '../../../src/domain/custom-recipe/delivery-nutrition';
 
@@ -280,5 +281,24 @@ describe('readDeliveryScenario', () => {
     expect(readDeliveryScenario({ scenario: '   ' })).toBeNull();
     expect(readDeliveryScenario({})).toBeNull();
     expect(readDeliveryScenario(null)).toBeNull();
+  });
+});
+
+
+describe('readDeliveryReportStandard', () => {
+  it('★ 报告限值按哪个标准算的，就取哪个（不是食谱业务字段）', () => {
+    expect(
+      readDeliveryReportStandard({ standard: 'FEDIAF_2025' }),
+    ).toBe('FEDIAF_2025');
+    expect(readDeliveryReportStandard({ standard: '  FEDIAF_2021  ' })).toBe(
+      'FEDIAF_2021',
+    );
+  });
+
+  it('没有 / 空值给 null', () => {
+    expect(readDeliveryReportStandard({})).toBeNull();
+    expect(readDeliveryReportStandard({ standard: '   ' })).toBeNull();
+    expect(readDeliveryReportStandard(null)).toBeNull();
+    expect(readDeliveryReportStandard('FEDIAF_2025')).toBeNull();
   });
 });

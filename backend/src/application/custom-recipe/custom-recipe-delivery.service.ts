@@ -31,6 +31,7 @@ import {
   readDeliveryMacroRows,
   readDeliveryMacros,
   readDeliveryNutritionReport,
+  readDeliveryReportStandard,
   readDeliveryScenario,
 } from '../../domain/custom-recipe/delivery-nutrition';
 import {
@@ -1597,6 +1598,10 @@ export class CustomRecipeDeliveryService {
          */
         report: readDeliveryNutritionReport(input.recipe.nutritionDetailedData),
         scenario: readDeliveryScenario(input.recipe.nutritionDetailedData),
+        // 报告限值是按这个标准算的，跟食谱业务字段分开冻结（2026-11-08）
+        reportStandard: readDeliveryReportStandard(
+          input.recipe.nutritionDetailedData,
+        ),
       },
       /**
        * 采购清单（批次 2.2）—— 这套算法原先在**小程序页面里**，

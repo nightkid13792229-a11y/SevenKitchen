@@ -216,6 +216,13 @@ export interface DeliveryContent {
     report?: DeliveryNutritionReport | null;
     /** 报告头要显示的场景（如 `EARLY_GROWTH_REPRODUCTION`） */
     scenario?: string | null;
+    /**
+     * 报告是按哪个标准算的（2026-11-08）。
+     *
+     * 与 `standard` 分开：`standard` 是食谱"声称符合"的业务字段，
+     * 报告的上下限却按这个算。两者不同时，报告头要用这一个。
+     */
+    reportStandard?: string | null;
   };
   shopping: {
     /**
@@ -328,6 +335,13 @@ export interface DeliveryBatchContentItem {
 export interface DeliveryBatchContent {
   batchId: string;
   version: number;
+  /**
+   * 整批真实份数（2026-11-08）。
+   *
+   * 服务端可能按 `recipeId` 只返回一份（省流量），此时 `items` 只有一条 ——
+   * 「本次共交付 N 份」必须用这个字段，不能拿 `items.length` 冒充。
+   */
+  batchSize?: number;
   deliveredAt: string;
   confirmedAt?: string | null;
   /** 这只狗（2026-10-24）：交付页预选 DIY / 成品下单用 */

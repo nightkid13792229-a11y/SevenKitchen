@@ -336,8 +336,12 @@ export class OrderCenterService {
               isGift: true,
               /** 交付后的食谱（未交付为 null）：员工端「看食谱」靠它 */
               recipeId: true,
-              /** 卡片上要显示的是食谱名，不是顾客名 */
-              recipe: { select: { name: true } },
+              /**
+               * 卡片上要显示的是食谱名，不是顾客名；
+               * `recipeId` 一起取，是因为小程序要的是**业务编号**
+               * （食谱详情页按 `recipe.recipe_id` 查，给主键会 404）。
+               */
+              recipe: { select: { recipeId: true, name: true } },
               dogId: true,
               /** 卡片上要显示狗狗名（2026-11-02） */
               dog: { select: { name: true } },
@@ -641,8 +645,12 @@ export class OrderCenterService {
       /**
        * 定制单下单时还没有食谱（营养师下单后才设计），
        * 所以这里只可能是**交付后**的食谱；未交付为 null，前端不显示入口。
+       *
+       * ⚠️ 给的是 `recipe.recipeId`（业务编号），不是 `row.recipeId`（主键）。
+       * 小程序拿它去开食谱详情页，那一页按业务编号查；给主键会 404 ——
+       * 2026-11-08 员工端「看食谱」打不开就是这个原因。
        */
-      recipeId: row.recipeId ?? null,
+      recipeId: row.recipe?.recipeId ?? null,
       recipeName: row.recipe?.name ?? null,
       dogId: row.dogId ?? null,
       dogName: row.dog?.name ?? null,

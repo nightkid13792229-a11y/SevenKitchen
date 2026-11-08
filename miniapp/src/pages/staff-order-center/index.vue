@@ -376,13 +376,27 @@ function openDog(item: OrderCenterItem) {
   })
 }
 
+/**
+ * 卡片点开到哪里（2026-11-08 修）。
+ *
+ * 定制单一度指到**顾客侧**的订单详情页，那一页只认 `orderId=<订单号>`
+ * （这里传的却是主键），而且只允许下单顾客本人访问 ——
+ * 员工点进去永远停在「订单加载失败」。
+ *
+ * 员工端能看的就是「这单交付的食谱」（食谱详情页对 STAFF/ADMIN 有放行），
+ * 所以定制单的卡片和「看食谱」走同一个入口；还没交付就明说，不跳空页。
+ */
 function openOrder(item: OrderCenterItem) {
   if (item.type === 'SUPPLEMENT') {
     uni.navigateTo({ url: `/pages/staff-supplement-orders/detail?id=${encodeURIComponent(item.id)}` })
     return
   }
   if (item.type === 'CUSTOM_RECIPE') {
-    uni.navigateTo({ url: `/pages/custom-recipe/order-detail?id=${encodeURIComponent(item.id)}` })
+    if (!canOpenRecipe(item)) {
+      uni.showToast({ title: '这单还没交付食谱', icon: 'none' })
+      return
+    }
+    openRecipe(item)
     return
   }
   uni.navigateTo({ url: `/pages/staff-orders/detail?id=${encodeURIComponent(item.id)}` })

@@ -201,3 +201,18 @@ describe('staff order center · 关键词搜索', () => {
     expect(orderCenter).toContain("searchKeyword.value = ''")
   })
 })
+
+describe('staff order center · 定制单卡片（2026-11-08 老板点开报「订单加载失败」）', () => {
+  it('★ 不再把定制单卡片指到顾客侧订单详情页（那页只认 orderId、只给下单顾客看）', () => {
+    expect(orderCenter).not.toContain('/pages/custom-recipe/order-detail')
+  })
+
+  it('★ 定制单卡片点开的是这单交付的食谱；还没交付就给提示，不跳空页', () => {
+    const openOrder =
+      orderCenter.match(/function openOrder[\s\S]*?\n\}/)?.[0] || ''
+
+    expect(openOrder).toContain('CUSTOM_RECIPE')
+    expect(openOrder).toContain('openRecipe(item)')
+    expect(openOrder).toContain('这单还没交付食谱')
+  })
+})

@@ -317,12 +317,38 @@ describe('OrderCenterService', () => {
     ).toBeNull();
 
     prisma.customRecipeOrder.findMany.mockResolvedValue([
-      customRow({ recipeId: 'r9' }),
+      customRow({
+        recipeId: 'recipe-pk',
+        recipe: { recipeId: 'r9', name: '低脂护心餐' },
+      }),
     ]);
     const after = await service.list({ pageSize: 20 });
     expect(
       after.items.find((item) => item.type === 'CUSTOM_RECIPE')?.recipeId,
     ).toBe('r9');
+  });
+
+  it('★ 定制单给前端的 recipeId 必须是业务编号，不能给主键（否则员工端看食谱打不开）', async () => {
+    // 2026-11-08：员工端点「看食谱」传的是这个字段，食谱详情页只认
+    // `recipe.recipe_id`（业务编号）。给主键会 404，页面一片空白。
+    prisma.customRecipeOrder.findMany.mockResolvedValue([
+      customRow({
+        recipeId: '3180ba21-3f4e-4b3a-9d1f-0a2b3c4d5e6f',
+        recipe: {
+          recipeId: '819df2dd-f98b-41ee-8af8-6a7ca91ba96c',
+          name: '多元搭配｜紫薯小米羊里脊',
+        },
+      }),
+    ]);
+    prisma.customRecipeOrder.count.mockResolvedValue(1);
+
+    const result = await service.list({ pageSize: 20 });
+    const custom = result.items.find((item) => item.type === 'CUSTOM_RECIPE');
+
+    expect(custom?.recipeId).toBe('819df2dd-f98b-41ee-8af8-6a7ca91ba96c');
+    // 查询本身也必须把业务编号取出来，否则线上永远是 null（单测用 mock 盖不住）
+    const select = prisma.customRecipeOrder.findMany.mock.calls[0][0].select;
+    expect(select.recipe.select.recipeId).toBe(true);
   });
 
   it('★ 只看售后时，定制的售后单必须被查出来（以前是 id in []，直接漏掉）', async () => {

@@ -192,6 +192,7 @@
               <QuickTaxonomyPicker
                 :series-id="seriesId"
                 :show-title="false"
+                :persist-links="persistTaxonomyDraft"
                 @saved="refreshReadiness"
               />
               <div class="sr-hint">归类先存进发布草稿，点「发布这一版」后才进货架分组。</div>
@@ -691,6 +692,13 @@ function toggleEditing(): void {
 /** AI 起名：采用 / 失焦都写发布草稿，随发布生效 */
 async function persistNameDraft(name: string): Promise<void> {
   await enqueueDraftPatch({ name })
+}
+
+/** 快速归类也走同一个保存队列，避免和名字/卖点并发时把乐观锁基线冲掉 */
+async function persistTaxonomyDraft(
+  links: Array<{ kindId: string; nodeId: string }>
+): Promise<void> {
+  await enqueueDraftPatch({ taxonomy: links })
 }
 
 function onNameAdopted(name: string): void {

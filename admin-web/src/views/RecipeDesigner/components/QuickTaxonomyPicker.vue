@@ -64,6 +64,15 @@ const props = defineProps<{
   seriesId: string | null
   /** 外层已经有「快速归类」标签时，隐藏组件自己的标题 */
   showTitle?: boolean
+  /**
+   * 保存方式（2026-11-08）。
+   *
+   * 不传 = 直接调归类接口（页面会自己刷新）；
+   * 传了 = 交给调用方（发布抽屉）放进草稿保存队列，和其他字段串行、共用乐观锁。
+   */
+  persistLinks?: (
+    links: Array<{ kindId: string; nodeId: string }>
+  ) => Promise<void>
 }>()
 
 const emit = defineEmits<{ (event: 'saved'): void }>()
@@ -145,12 +154,26 @@ async function save() {
   if (!props.seriesId || !activeKind.value) return
   saving.value = true
   try {
-    const nodeIds = kinds.value
-      .map((kind) =>
-        kind.id === activeKind.value?.id ? picked.value : linked.value[kind.id]
+    const links = kinds.value
+      .map((kind) => ({
+        kindId: kind.id,
+        nodeId:
+          kind.id === activeKind.value?.id
+            ? picked.value
+            : linked.value[kind.id]
+      }))
+      .filter(
+        (link): link is { kindId: string; nodeId: string } =>
+          Boolean(link.nodeId)
       )
-      .filter((value): value is string => Boolean(value))
-    await recipeTaxonomyApi.replaceLinks(props.seriesId, nodeIds)
+    if (props.persistLinks) {
+      await props.persistLinks(links)
+    } else {
+      await recipeTaxonomyApi.replaceLinks(
+        props.seriesId,
+        links.map((link) => link.nodeId)
+      )
+    }
     ElMessage.success('归类已存进发布草稿，发布后生效')
     pickerVisible.value = false
     await load()

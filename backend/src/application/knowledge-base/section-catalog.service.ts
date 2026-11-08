@@ -32,6 +32,8 @@ export interface CatalogSection {
   topics: string[];
   allTopics: string[];
   sectionType: CatalogSectionType;
+  documentType?: string;
+  authority?: string;
 }
 
 export interface CatalogDocument {
@@ -174,6 +176,8 @@ export class SectionCatalogService {
           ...section,
           documentId: document.id,
           sourceId: document.sourceId ?? null,
+          documentType,
+          authority,
         });
       }
     }

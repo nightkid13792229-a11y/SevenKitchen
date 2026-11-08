@@ -1,0 +1,166 @@
+[
+  {
+    "id": "staging",
+    "question": "CKD 犬按肌酐和 SDMA 怎么分期？",
+    "top3": [
+      "iris-IRIS-staging-guidelines-2026-s002",
+      "iris-IRIS-staging-guidelines-2026-s007",
+      "iris-IRIS-staging-guidelines-2026-s003"
+    ],
+    "hit3": true,
+    "hit5": true,
+    "noSource": false
+  },
+  {
+    "id": "stage2-phosphate",
+    "question": "犬 CKD Stage 2 的血磷目标是多少？",
+    "top3": [
+      "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s004",
+      "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s004",
+      "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005"
+    ],
+    "hit3": true,
+    "hit5": true,
+    "noSource": false
+  },
+  {
+    "id": "stage4-phosphate",
+    "question": "犬 CKD Stage 4 的血磷目标是多少？",
+    "top3": [
+      "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s006",
+      "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s006",
+      "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s006"
+    ],
+    "hit3": true,
+    "hit5": true,
+    "noSource": false
+  },
+  {
+    "id": "dietary-phosphorus",
+    "question": "CKD 犬膳食磷 0.2–0.5% DM 的推荐出处是什么？",
+    "top3": [
+      "sacn5-chapters-SACN5-37-s017",
+      "sacn5-chapters-SACN5-37-s014",
+      "sacn5-chapters-SACN5-37-s021"
+    ],
+    "hit3": true,
+    "hit5": true,
+    "noSource": false
+  },
+  {
+    "id": "protein",
+    "question": "CKD 犬蛋白推荐 14–20% DM 的依据是什么？",
+    "top3": [
+      "sacn5-chapters-SACN5-37-s015",
+      "sacn5-chapters-SACN5-37-s009",
+      "sacn5-chapters-SACN5-37-s021"
+    ],
+    "hit3": true,
+    "hit5": true,
+    "noSource": false
+  },
+  {
+    "id": "sodium",
+    "question": "CKD 犬钠的上限是多少？",
+    "top3": [
+      "sacn5-chapters-SACN5-37-s018",
+      "sacn5-chapters-SACN5-37-s014",
+      "sacn5-chapters-SACN5-37-s018"
+    ],
+    "hit3": true,
+    "hit5": true,
+    "noSource": false
+  },
+  {
+    "id": "potassium",
+    "question": "CKD 犬钾的推荐范围是多少？",
+    "top3": [
+      "sacn5-chapters-SACN5-37-s018",
+      "sacn5-chapters-SACN5-37-s022",
+      "sacn5-chapters-SACN5-37-s014"
+    ],
+    "hit3": true,
+    "hit5": true,
+    "noSource": false
+  },
+  {
+    "id": "omega3",
+    "question": "CKD 犬需要补充 omega-3 吗？",
+    "top3": [
+      "sacn5-chapters-SACN5-37-s019",
+      "sacn5-chapters-SACN5-37-s019",
+      "sacn5-chapters-SACN5-37-s019"
+    ],
+    "hit3": true,
+    "hit5": true,
+    "noSource": false
+  },
+  {
+    "id": "upc",
+    "question": "CKD 犬 UPC 蛋白尿如何亚分期？",
+    "top3": [
+      "iris-IRIS-staging-guidelines-2026-s004",
+      "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
+      "iris-IRIS-staging-guidelines-2026-s004"
+    ],
+    "hit3": true,
+    "hit5": true,
+    "noSource": false
+  },
+  {
+    "id": "blood-pressure",
+    "question": "CKD 犬血压如何亚分期？",
+    "top3": [
+      "iris-IRIS-staging-guidelines-2026-s006",
+      "iris-IRIS-staging-guidelines-2026-s007",
+      "iris-IRIS-staging-guidelines-2026-s006"
+    ],
+    "hit3": true,
+    "hit5": true,
+    "noSource": false
+  },
+  {
+    "id": "binder",
+    "question": "CKD 犬什么时候需要加肠道磷结合剂？",
+    "top3": [
+      "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s006",
+      "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s004",
+      "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s006"
+    ],
+    "hit3": true,
+    "hit5": true,
+    "noSource": false
+  },
+  {
+    "id": "chloride",
+    "question": "CKD 犬氯的需要量是多少？",
+    "top3": [
+      "sacn5-chapters-SACN5-37-s028",
+      "sacn5-chapters-SACN5-37-s017",
+      "sacn5-chapters-SACN5-37-s018"
+    ],
+    "hit3": true,
+    "hit5": true,
+    "noSource": false
+  },
+  {
+    "id": "iodine-gap",
+    "question": "CKD 犬碘的推荐量是多少？",
+    "top3": [],
+    "hit3": true,
+    "hit5": false,
+    "noSource": true
+  },
+  {
+    "id": "stage4-anemia",
+    "question": "CKD 4 期犬贫血和生活质量怎么管理？",
+    "top3": [
+      "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s006",
+      "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s006",
+      "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s006"
+    ],
+    "hit3": true,
+    "hit5": true,
+    "noSource": false
+  }
+]

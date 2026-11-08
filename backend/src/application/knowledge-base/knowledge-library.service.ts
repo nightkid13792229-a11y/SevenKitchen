@@ -99,8 +99,9 @@ function detectStages(text: string): number[] {
 
 function matchesTopic(text: string, topic: string): boolean {
   const key = topic.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-  const aliases = TOPIC_ALIASES[key] ?? [topic.trim().toLowerCase()];
   const lower = text.toLowerCase();
+  if (lower.trim() === key) return true;
+  const aliases = TOPIC_ALIASES[key] ?? [topic.trim().toLowerCase()];
   return aliases.some((alias) => lower.includes(alias.toLowerCase()));
 }
 
@@ -294,7 +295,7 @@ export class KnowledgeLibraryService {
             numericIntent,
             row.document?.sourceId,
             weights,
-          ) * this.filterBoost(row, options, meta),
+          ) * this.filterBoost(row, options, meta, raw),
       };
     });
     scored.sort((a, b) => {
@@ -383,11 +384,19 @@ export class KnowledgeLibraryService {
         return false;
       }
     }
-    if (options.species === 'dog' && !/\b(dog|dogs|canine)\b/i.test(title)) {
-      return false;
+    if (options.species === 'dog') {
+      if (meta) {
+        if (meta.species === 'cat') return false;
+      } else if (!/\b(dog|dogs|canine)\b/i.test(title)) {
+        return false;
+      }
     }
-    if (options.species === 'cat' && !/\b(cat|cats|feline)\b/i.test(title)) {
-      return false;
+    if (options.species === 'cat') {
+      if (meta) {
+        if (meta.species === 'dog') return false;
+      } else if (!/\b(cat|cats|feline)\b/i.test(title)) {
+        return false;
+      }
     }
     return Boolean(options.stage || options.species);
   }
@@ -399,10 +408,31 @@ export class KnowledgeLibraryService {
     },
     options: LibrarySearchOptions,
     meta?: CatalogSection,
+    raw = '',
   ): number {
     const title = row.section?.title ?? '';
     const text = row.text ?? '';
     let boost = 1;
+    if (!options.stage && /staging|substaging|分期|亚分期/i.test(raw)) {
+      if (meta?.sectionType === 'staging' || meta?.documentType === 'staging_guideline') {
+        boost *= 3;
+      }
+    }
+    if (
+      !options.stage &&
+      /%\s*dm|dietary|recommend|推荐|范围|上限|下限/i.test(raw)
+    ) {
+      if (meta?.documentType === 'textbook_chapter') boost *= 3;
+    }
+    if (/treatment|manage|when|binder|结合剂/i.test(raw)) {
+      if (meta?.sectionType === 'treatment') boost *= 1.5;
+    }
+    for (const topic of options.topics ?? []) {
+      if (matchesTopic(title, topic)) {
+        boost *= 1.4;
+        break;
+      }
+    }
     if (options.stage) {
       if (meta?.stages?.includes(options.stage)) boost *= 2;
       else {

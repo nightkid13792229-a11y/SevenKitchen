@@ -9,6 +9,8 @@
 | `section-catalog.json` | 5 份 CKD 文档的文档/章节级元数据，机器可读 |
 | `section-catalog.md` | 同一份目录，给人看 |
 | `coverage-map.md` | CKD 主题 → 文档/章节覆盖；列出未覆盖主题 |
+| `retrieval-questions.json` | 14 个固定 CKD 目录路由验收问题 |
+| `retrieval-evaluation.md` | 路由验收结果（当前 14/14） |
 
 ## 元数据
 
@@ -24,6 +26,16 @@ npx ts-node --transpile-only -r dotenv/config -r tsconfig-paths/register \
 ```
 
 脚本只读 source layer，不写数据库；生成的文件提交到本目录。
+
+路由验收：
+
+```bash
+cd backend
+npx ts-node --transpile-only -r dotenv/config -r tsconfig-paths/register \
+  scripts/knowledge-base/evaluate-ckd-routing.ts
+```
+
+验收只测目录/检索，不测 Agent；`expectNoSource` 的碘问题用于验证“知识库没覆盖”能被识别。
 
 ## 已知限制
 

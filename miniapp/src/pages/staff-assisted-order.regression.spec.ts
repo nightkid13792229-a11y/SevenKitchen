@@ -75,7 +75,6 @@ describe('订单中心 · 代客下单（成品鲜食）', () => {
     expect(confirmPage).toContain('previewPortion')
     expect(confirmPage).toContain('previewAssistedPricing')
     expect(confirmPage).toContain('amountAdjustReason')
-    expect(confirmPage).toContain('resolveDaysForMinOrder')
     expect(confirmPage).toContain('不会给顾客发微信通知')
     expect(confirmPage).toContain('请选择收货地址')
     expect(confirmPage).toContain('QuickCyclePackagePlan')
@@ -107,5 +106,38 @@ describe('订单中心 · 代客下单（成品鲜食）', () => {
     expect(apiSource).toContain('/portion-preview')
     expect(apiSource).toContain('/orders/pricing-preview')
     expect(apiSource).toContain('/customers/${customerId}/addresses')
+  })
+
+  it('确认页把分装计划传给 getPrimaryPackageSpecG（不传会 TypeError，报价/提交全挂）', () => {
+    expect(confirmPage).toContain(
+      'getPrimaryPackageSpecG(normalizedPackagePlan.value)',
+    )
+    expect(confirmPage).not.toContain('getPrimaryPackageSpecG()')
+  })
+
+  it('建狗提交体带上必填的 lifeStageOverride（后端 DTO 没有 @IsOptional）', () => {
+    expect(guestDogPage).toContain('lifeStageOverride')
+    expect(guestDogPage).toContain("'NONE'")
+  })
+
+  it('新增地址后确认页会自动选中这一条，不会继续发旧地址', () => {
+    expect(addressPage).toContain('assisted_address_created')
+    expect(confirmPage).toContain('pendingAddressId')
+  })
+
+  it('建地址不再默认抢顾客原有的默认地址', () => {
+    expect(addressPage).toContain('isDefault: false')
+  })
+
+  it('食谱筛选下推到后端（ownership 参数），不是前端只筛已加载页', () => {
+    expect(recipePage).toContain('ownership: activeFilter.value')
+  })
+
+  it('确认页用真实分装总重抬天数（3 餐向下取整也要够 1000g）', () => {
+    expect(confirmPage).toContain('resolveDaysUntilMinOrder')
+  })
+
+  it('实收金额在员工没手动改过时跟随最新报价', () => {
+    expect(confirmPage).toContain('amountTouched')
   })
 })

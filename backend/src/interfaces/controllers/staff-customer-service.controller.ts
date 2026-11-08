@@ -1054,9 +1054,10 @@ export class StaffCustomerServiceController {
       ) {
         // 界面上只放中文短标签，不要把 PUPPY_14_WEEKS_PLUS 这种枚举值甩给员工
         const stageText = stages.map(getRecipeLifeStageShortLabel).join('、');
-        reasons.push(
-          `适合「${stageText}」，${dog.name}目前是${this.getDogLifeStageLabel(dogLifeStage)}`,
-        );
+        const dogStageLabel = dogLifeStage
+          ? this.getDogLifeStageLabel(dogLifeStage)
+          : '';
+        reasons.push(`适合「${stageText}」，${dog.name}目前是${dogStageLabel}`);
       }
 
       return {

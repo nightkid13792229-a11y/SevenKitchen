@@ -139,7 +139,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 
 interface OrderCenterItem {
@@ -444,7 +445,15 @@ function openOrder(item: OrderCenterItem) {
   uni.navigateTo({ url: `/pages/staff-orders/detail?id=${encodeURIComponent(item.id)}` })
 }
 
-onMounted(() => load())
+/**
+ * 每次页面显示都重新拉一次（2026-11-08 修）。
+ *
+ * 以前只在 onMounted 加载：从详情页返回时页面不会重建，卡片永远停在
+ * 「进去之前」那一份。员工在详情页点了「无需发货」，回到订单中心
+ * 仍然写着「待发货」、还挂着「发货」按钮（数据库里其实已经结案），
+ * 看起来就像点了没生效。现在改成页面一显示就刷新，状态和按钮都跟着变。
+ */
+onShow(() => load())
 </script>
 
 <style scoped>

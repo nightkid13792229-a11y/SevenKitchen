@@ -231,3 +231,12 @@ describe('staff order center · 定制单卡片（2026-11-08 老板点开报「�
     expect(openOrder).toContain('这单还没交付食谱')
   })
 })
+
+describe('staff order center · 返回列表不显示旧状态（2026-11-08 老板反馈）', () => {
+  it('★ 页面每次显示都重新拉列表，从详情页返回不再是进去之前那一份', () => {
+    expect(orderCenter).toContain("import { onShow } from '@dcloudio/uni-app'")
+    expect(orderCenter).toMatch(/onShow\(\(\) => load\(\)\)/)
+    // 只在 onMounted 加载一次，正是「详情页点了无需发货、列表还写待发货」的根因
+    expect(orderCenter).not.toContain('onMounted(')
+  })
+})

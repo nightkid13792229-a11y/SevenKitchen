@@ -114,7 +114,7 @@ export interface CreateOrderDraftDto {
   customerId: string;
   dogId?: string;
   type: OrderType;
-  pricingPurpose?: 'ORDER' | 'DIY_SHEET';
+  pricingPurpose?: 'ORDER' | 'DIY_SHEET' | 'STAFF_PREVIEW';
   targetProductionDate?: Date | null;
   items?: CreateOrderItemDto[];
   cartItemIds?: string[];
@@ -2331,6 +2331,9 @@ export class OrderService {
     }
 
     const isDiySheetPreview = dto.pricingPurpose === 'DIY_SHEET';
+    // 员工代客下单的报价预览只给人看一眼，不生成可被拿来下单的防篡改快照
+    const isNonPersistingPreview =
+      isDiySheetPreview || dto.pricingPurpose === 'STAFF_PREVIEW';
 
     const itemDto = dto.items[0];
     const packageInput = this.resolveOrderItemPackageInput(itemDto);
@@ -2503,7 +2506,7 @@ export class OrderService {
       },
     };
 
-    if (isDiySheetPreview) {
+    if (isNonPersistingPreview) {
       return pricingResult;
     }
 

@@ -141,7 +141,7 @@ export class PricingPreviewRequestDto {
   })
   @IsOptional()
   @IsEnum(PRICING_PURPOSE_CODES)
-  pricingPurpose?: 'ORDER' | 'DIY_SHEET';
+  pricingPurpose?: 'ORDER' | 'DIY_SHEET' | 'STAFF_PREVIEW';
 }
 
 /**

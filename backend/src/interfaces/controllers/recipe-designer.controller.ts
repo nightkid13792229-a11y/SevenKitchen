@@ -505,16 +505,24 @@ export class RecipeDesignerController {
     @Body() dto: UpdateRecipeSeriesReleaseSettingsDto,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<any>> {
-    const settings =
-      await this.recipeDesignerService.updateSeriesReleaseSettings(
-        seriesId,
-        dto,
-        toRecipeDesignerAccessContext(user),
-        // 这是「人点保存发布设置」的唯一入口：立即同步线上阶段门面。
-        // AI set_copy 直接调服务、不传该选项，避免 AI 改文案立即影响线上。
-        { applyToLive: true },
-      );
-    return ApiResponseDto.success(settings);
+    /**
+     * 2026-11-08：这个旧入口不再直接写线上。
+     *
+     * 改造前它会 `applyToLive: true` 把封面 / 卖点立刻同步到所有已上线食谱，
+     * 于是「编辑即草稿」被绕开、草稿里别人刚改的内容也会过期。
+     * 现在统一落到发布草稿，点「发布这一版」才生效；DTO 保持不变以兼容旧前端。
+     */
+    const draft = await this.recipeDesignerService.saveSeriesReleaseDraft(
+      seriesId,
+      {
+        coverImageUrl: dto.coverImageUrl,
+        coverTitle: dto.coverTitle,
+        sellingPoint: dto.sellingPoint,
+        targetHealthTags: dto.targetHealthTags,
+      },
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(draft);
   }
 
   @Patch('series/:seriesId/release-draft')
@@ -550,7 +558,10 @@ export class RecipeDesignerController {
     const result = await this.recipeDesignerService.releaseSeries(
       seriesId,
       toRecipeDesignerAccessContext(user),
-      { stageCodes: dto?.stageCodes },
+      {
+        stageCodes: dto?.stageCodes,
+        expectedDraftUpdatedAt: dto?.expectedDraftUpdatedAt,
+      },
     );
     return ApiResponseDto.success(result);
   }

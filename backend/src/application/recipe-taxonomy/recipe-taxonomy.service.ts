@@ -10,13 +10,22 @@ import {
   type TaxonomyKindView,
   type TaxonomyNodeRow,
 } from '../../domain/recipe-taxonomy/taxonomy-tree';
+import {
+  mergeSeriesReleaseDraft,
+  parseSeriesReleaseDraft,
+  type SeriesReleaseDraftPayload,
+  type SeriesReleaseDraftTaxonomyLink,
+} from '../../domain/recipe-designer/series-release-draft';
+import {
+  loadSeriesReleaseDraftContext,
+  persistSeriesReleaseDraft,
+} from '../recipe-designer/series-release-draft.store';
+import {
+  validateTaxonomyNodeSelection,
+  type ValidatedTaxonomyNode,
+} from './taxonomy-node-validation';
 
-interface TaxonomyNodeRef {
-  id: string;
-  kindId: string;
-  name: string;
-  status: string;
-}
+type TaxonomyNodeRef = ValidatedTaxonomyNode;
 
 export interface ListTaxonomySeriesQuery {
   nodeId?: string;
@@ -45,6 +54,8 @@ export interface TaxonomySeriesItem {
   }>;
   /** 还没有归属的分类 code，顺序与分类排序一致 */
   missingKindCodes: string[];
+  /** 归类改在草稿里、还没发布（2026-11-08） */
+  hasDraftTaxonomy: boolean;
 }
 
 /**
@@ -53,6 +64,42 @@ export interface TaxonomySeriesItem {
  * 只负责三张表的读写，不认识"食谱内容"——归属是独立关系表，
  * 所以菜的配方怎么改都不会影响这里的分类。
  */
+
+const taxonomySignature = (links: SeriesReleaseDraftTaxonomyLink[]): string =>
+  links
+    .map((link) => `${link.kindId}:${link.nodeId}`)
+    .sort()
+    .join('|');
+
+/**
+ * 把一次归类选择合并进发布草稿。
+ *
+ * - `replace`：本次选择就是最终状态（归类弹窗勾的是全量）；
+ * - `merge`：只改本次涉及的分类，其余分类保持「草稿 ?? 线上」。
+ */
+function mergeTaxonomyIntoDraft(
+  context: Awaited<ReturnType<typeof loadSeriesReleaseDraftContext>>,
+  taxonomy: SeriesReleaseDraftTaxonomyLink[],
+  mode: 'replace' | 'merge',
+): SeriesReleaseDraftPayload {
+  const kindIds = new Set(taxonomy.map((link) => link.kindId));
+  // 空数组 = 清空全部归属（与旧接口语义一致），不能当成「没选任何分类」。
+  const next =
+    mode === 'replace' || taxonomy.length === 0
+      ? [...taxonomy]
+      : [
+          ...context.effective.taxonomy.filter(
+            (link) => !kindIds.has(link.kindId),
+          ),
+          ...taxonomy,
+        ];
+  return mergeSeriesReleaseDraft(
+    context.draft,
+    { taxonomy: next },
+    context.live,
+  );
+}
+
 @Injectable()
 export class RecipeTaxonomyService {
   constructor(private readonly prisma: PrismaService) {}
@@ -101,49 +148,21 @@ export class RecipeTaxonomyService {
   }
 
   /**
-   * 校验待归类的节点。四条规则缺一不可：
-   * 存在、启用、叶子、同一分类只能一个。
+   * 校验待归类的节点。四条规则缺一不可：存在、启用、叶子、同一分类只能一个。
+   *
+   * 实现抽到 `taxonomy-node-validation.ts`，发布草稿保存也走同一份。
    */
   private async validateNodes(nodeIds: string[]): Promise<TaxonomyNodeRef[]> {
-    const unique = [...new Set(nodeIds)];
-    if (unique.length === 0) return [];
-
-    const nodes = await this.prisma.recipeTaxonomyNode.findMany({
-      where: { id: { in: unique } },
-      select: { id: true, kindId: true, name: true, status: true },
-    });
-
-    if (nodes.length !== unique.length) {
-      throw new BadRequestException('节点不存在，可能已被删除，请刷新后重试');
-    }
-
-    const disabled = nodes.filter((node) => node.status !== 'ACTIVE');
-    if (disabled.length > 0) {
-      throw new BadRequestException(
-        `节点已停用，不能再归类：${disabled.map((node) => node.name).join('、')}`,
-      );
-    }
-
-    const childCount = await this.prisma.recipeTaxonomyNode.count({
-      where: { parentId: { in: unique } },
-    });
-    if (childCount > 0) {
-      throw new BadRequestException('只能归到叶子节点，父节点只做汇总');
-    }
-
-    const kindIds = new Set(nodes.map((node) => node.kindId));
-    if (kindIds.size !== nodes.length) {
-      throw new BadRequestException('同一分类只能选一个节点');
-    }
-
-    return nodes;
+    return validateTaxonomyNodeSelection(this.prisma, nodeIds);
   }
 
   /**
-   * 覆盖一个系列的归属。
+   * 覆盖一个系列的归属（2026-11-08 起写发布草稿）。
    *
-   * 语义：`nodeIds` 是这些分类的最终状态——未出现的分类不动；
-   * **传空数组等于清空该系列的全部归属**。
+   * 语义：`nodeIds` 是这些分类的最终状态，**传空数组等于清空该系列的全部归属**。
+   * 顾客端继续看线上归类，点「发布这一版」才生效。
+   *
+   * 订单定制系列不进分类页，仍沿用直接写线上的旧行为（避免影响交付流程）。
    */
   async replaceSeriesLinks(
     seriesId: string,
@@ -151,36 +170,53 @@ export class RecipeTaxonomyService {
     actorId: string | null,
   ): Promise<void> {
     const nodes = await this.validateNodes(nodeIds);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const operations: any[] = [];
-
-    if (nodes.length === 0) {
-      operations.push(
-        this.prisma.recipeSeriesTaxonomy.deleteMany({ where: { seriesId } }),
-      );
-    } else {
-      operations.push(
-        this.prisma.recipeSeriesTaxonomy.deleteMany({
-          where: {
-            seriesId,
-            kindId: { in: nodes.map((node) => node.kindId) },
-          },
-        }),
-        this.prisma.recipeSeriesTaxonomy.createMany({
-          data: nodes.map((node) => ({
-            seriesId,
-            kindId: node.kindId,
-            nodeId: node.id,
-            createdBy: actorId,
-          })),
-        }),
-      );
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: seriesId },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        deletedAt: true,
+        designMode: true,
+        coverImageUrl: true,
+        coverTitle: true,
+        sellingPoint: true,
+        targetHealthTags: true,
+        releaseDraft: true,
+        releaseDraftUpdatedAt: true,
+      },
+    });
+    if (!series || series.deletedAt || series.status !== 'ACTIVE') {
+      throw new NotFoundException('食谱系列不存在');
+    }
+    if (series.designMode === 'ORDER') {
+      await this.writeLiveLinks(seriesId, nodes, actorId, 'replace');
+      return;
     }
 
-    await this.prisma.$transaction(operations);
+    const context = await loadSeriesReleaseDraftContext(
+      this.prisma,
+      series as any,
+    );
+    const taxonomy = nodes.map((node) => ({
+      kindId: node.kindId,
+      nodeId: node.id,
+    }));
+    const merged = mergeTaxonomyIntoDraft(context, taxonomy, 'replace');
+    await persistSeriesReleaseDraft(
+      this.prisma,
+      seriesId,
+      merged,
+      context.live,
+      actorId,
+    );
   }
 
-  /** 批量归类：同一批节点写到多个系列，语义与单道一致。 */
+  /**
+   * 批量归类：同一批节点写到多个系列，语义与单道一致。
+   *
+   * 草稿模式下按分类合并：只覆盖本次选中的分类，其它分类保持原值。
+   */
   async batchClassify(
     seriesIds: string[],
     nodeIds: string[],
@@ -189,9 +225,63 @@ export class RecipeTaxonomyService {
     if (seriesIds.length === 0) return { updated: 0 };
 
     const nodes = await this.validateNodes(nodeIds);
+    const seriesRows = await this.prisma.recipeSeries.findMany({
+      where: { id: { in: seriesIds } },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        deletedAt: true,
+        designMode: true,
+        coverImageUrl: true,
+        coverTitle: true,
+        sellingPoint: true,
+        targetHealthTags: true,
+        releaseDraft: true,
+        releaseDraftUpdatedAt: true,
+      },
+    });
+    const liveSeriesIds: string[] = [];
+    for (const series of seriesRows) {
+      if (series.designMode === 'ORDER') {
+        liveSeriesIds.push(series.id);
+        continue;
+      }
+      const context = await loadSeriesReleaseDraftContext(
+        this.prisma,
+        series as any,
+      );
+      const taxonomy = nodes.map((node) => ({
+        kindId: node.kindId,
+        nodeId: node.id,
+      }));
+      const merged = mergeTaxonomyIntoDraft(context, taxonomy, 'merge');
+      await persistSeriesReleaseDraft(
+        this.prisma,
+        series.id,
+        merged,
+        context.live,
+        actorId,
+      );
+    }
+    if (liveSeriesIds.length > 0) {
+      await this.writeLiveLinks(liveSeriesIds, nodes, actorId, 'merge');
+    }
+    return { updated: seriesIds.length };
+  }
+
+  /** 旧的直接写线上路径：只留给订单定制系列 / 历史调用。 */
+  private async writeLiveLinks(
+    seriesIdOrIds: string | string[],
+    nodes: TaxonomyNodeRef[],
+    actorId: string | null,
+    mode: 'replace' | 'merge',
+  ): Promise<void> {
+    const seriesIds = Array.isArray(seriesIdOrIds)
+      ? seriesIdOrIds
+      : [seriesIdOrIds];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const operations: any[] = [];
-
     if (nodes.length === 0) {
       operations.push(
         this.prisma.recipeSeriesTaxonomy.deleteMany({
@@ -199,10 +289,12 @@ export class RecipeTaxonomyService {
         }),
       );
     } else {
-      const kindIds = nodes.map((node) => node.kindId);
       operations.push(
         this.prisma.recipeSeriesTaxonomy.deleteMany({
-          where: { seriesId: { in: seriesIds }, kindId: { in: kindIds } },
+          where: {
+            seriesId: { in: seriesIds },
+            kindId: { in: nodes.map((node) => node.kindId) },
+          },
         }),
         this.prisma.recipeSeriesTaxonomy.createMany({
           data: seriesIds.flatMap((seriesId) =>
@@ -216,9 +308,81 @@ export class RecipeTaxonomyService {
         }),
       );
     }
-
+    if (mode === 'replace' && nodes.length > 0) {
+      // 全量覆盖：先清掉这个系列未在本次选择里的分类
+      operations.unshift(
+        this.prisma.recipeSeriesTaxonomy.deleteMany({
+          where: {
+            seriesId: { in: seriesIds },
+            kindId: { notIn: nodes.map((node) => node.kindId) },
+          },
+        }),
+      );
+    }
     await this.prisma.$transaction(operations);
-    return { updated: seriesIds.length };
+  }
+
+  /**
+   * 单个系列生效中的归类（草稿 ?? 线上）。
+   *
+   * 发布抽屉里的「快速归类」用它加载当前值：不能再去 200 条的列表里找，
+   * 系列一多就会找不到、显示成全空。
+   */
+  async getSeriesLinks(seriesId: string): Promise<{
+    links: Array<{
+      kindId: string;
+      nodeId: string;
+      kindCode: string;
+      kindName: string;
+      nodeName: string;
+    }>;
+    hasDraftTaxonomy: boolean;
+  }> {
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: seriesId },
+      select: { id: true, releaseDraft: true },
+    });
+    if (!series) {
+      throw new NotFoundException('食谱系列不存在');
+    }
+    const live = await this.prisma.recipeSeriesTaxonomy.findMany({
+      where: { seriesId },
+      select: { kindId: true, nodeId: true },
+    });
+    const draft = series.releaseDraft
+      ? parseSeriesReleaseDraft(series.releaseDraft)
+      : null;
+    const hasDraftTaxonomy =
+      draft !== null &&
+      taxonomySignature(draft.taxonomy) !== taxonomySignature(live);
+    const effective = hasDraftTaxonomy ? draft!.taxonomy : live;
+    const nodes = effective.length
+      ? await this.prisma.recipeTaxonomyNode.findMany({
+          where: { id: { in: effective.map((link) => link.nodeId) } },
+          select: {
+            id: true,
+            name: true,
+            kind: { select: { code: true, name: true } },
+          },
+        })
+      : [];
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    return {
+      links: effective
+        .map((link) => {
+          const node = nodeById.get(link.nodeId);
+          if (!node) return null;
+          return {
+            kindId: link.kindId,
+            nodeId: link.nodeId,
+            kindCode: node.kind.code,
+            kindName: node.kind.name,
+            nodeName: node.name,
+          };
+        })
+        .filter((link): link is NonNullable<typeof link> => Boolean(link)),
+      hasDraftTaxonomy,
+    };
   }
 
   /**
@@ -257,8 +421,7 @@ export class RecipeTaxonomyService {
     query: ListTaxonomySeriesQuery,
   ): Promise<{ items: TaxonomySeriesItem[]; total: number }> {
     const page = query.page && query.page > 0 ? query.page : 1;
-    const pageSize =
-      query.pageSize && query.pageSize > 0 ? query.pageSize : 20;
+    const pageSize = query.pageSize && query.pageSize > 0 ? query.pageSize : 20;
 
     const kinds = await this.prisma.recipeTaxonomyKind.findMany({
       orderBy: { sort: 'asc' },
@@ -304,14 +467,68 @@ export class RecipeTaxonomyService {
       : [];
     const dogNameById = new Map(dogs.map((dog) => [dog.id, dog.name]));
 
-    const items: TaxonomySeriesItem[] = rows.map((row: any) => {
-      const links = (row.taxonomyLinks ?? []).map((link: any) => ({
+    /**
+     * 2026-11-08：归类先写发布草稿，归类页必须显示「草稿 ?? 线上」的生效值，
+     * 并标出「待发布」。只读线上值会让人以为「点了归类页面没反应」。
+     */
+    const effectiveLinksBySeries = new Map<
+      string,
+      SeriesReleaseDraftTaxonomyLink[]
+    >();
+    const draftTaxonomySeriesIds = new Set<string>();
+    for (const row of rows as any[]) {
+      const liveLinks = (row.taxonomyLinks ?? []).map((link: any) => ({
         kindId: link.node.kindId,
-        kindCode: link.node.kind.code,
-        kindName: link.node.kind.name,
         nodeId: link.nodeId,
-        nodeName: link.node.name,
       }));
+      const draft = row.releaseDraft
+        ? parseSeriesReleaseDraft(row.releaseDraft)
+        : null;
+      const hasDraftTaxonomy =
+        draft !== null &&
+        taxonomySignature(draft.taxonomy) !== taxonomySignature(liveLinks);
+      if (hasDraftTaxonomy) {
+        draftTaxonomySeriesIds.add(row.id);
+        effectiveLinksBySeries.set(row.id, draft!.taxonomy);
+      } else {
+        effectiveLinksBySeries.set(row.id, liveLinks);
+      }
+    }
+
+    const nodeIds = [
+      ...new Set(
+        [...effectiveLinksBySeries.values()].flatMap((links) =>
+          links.map((link) => link.nodeId),
+        ),
+      ),
+    ];
+    const nodeRows = nodeIds.length
+      ? await this.prisma.recipeTaxonomyNode.findMany({
+          where: { id: { in: nodeIds } },
+          select: {
+            id: true,
+            kindId: true,
+            name: true,
+            kind: { select: { code: true, name: true } },
+          },
+        })
+      : [];
+    const nodeById = new Map(nodeRows.map((node) => [node.id, node]));
+
+    const items: TaxonomySeriesItem[] = (rows as any[]).map((row) => {
+      const links = (effectiveLinksBySeries.get(row.id) ?? [])
+        .map((link) => {
+          const node = nodeById.get(link.nodeId);
+          if (!node) return null;
+          return {
+            kindId: node.kindId,
+            kindCode: node.kind.code,
+            kindName: node.kind.name,
+            nodeId: node.id,
+            nodeName: node.name,
+          };
+        })
+        .filter((link): link is NonNullable<typeof link> => Boolean(link));
       const linkedKindIds = new Set(
         links.map((link: { kindId: string }) => link.kindId),
       );
@@ -328,6 +545,7 @@ export class RecipeTaxonomyService {
         missingKindCodes: kinds
           .filter((kind) => !linkedKindIds.has(kind.id))
           .map((kind) => kind.code),
+        hasDraftTaxonomy: draftTaxonomySeriesIds.has(row.id),
       };
     });
 

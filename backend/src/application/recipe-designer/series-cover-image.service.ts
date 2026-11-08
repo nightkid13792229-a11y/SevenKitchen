@@ -83,11 +83,11 @@ type CoverItemLike = {
  * ## 保存语义
  *
  * 前端按「封面为空 + 系列未上线」传 `save=true`；写库前会再判一次是否已上线，
- * 已上线一律按预览返回 `saved=false`，门面只能由人点「保存发布设置」同步线上。
+ * 已上线一律按预览返回 `saved=false`，门面只能由人点「发布这一版」同步线上。
  *
  * ## 它绝不做什么
  *
- * 不写 `Recipe` 行、不传 `applyToLive`、不碰角标、不碰配方与营养数据。
+ * 不写 `Recipe` 行、不碰角标、不碰配方与营养数据。
  */
 @Injectable()
 export class SeriesCoverImageService {

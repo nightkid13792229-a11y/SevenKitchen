@@ -105,7 +105,6 @@ import { TencentCosService } from '../../infrastructure/services/tencent-cos.ser
 import {
   NutritionStandard,
   RecipeStatus,
-  RecipeHealthTag,
   LifeStage,
   RECIPE_LIFE_STAGE_OPTIONS,
 } from '../../domain/recipe/enums';
@@ -115,10 +114,13 @@ import type { IngredientPreparationMethodHistoryDto } from '../dto/recipes/admin
 import type { Ingredient } from '../../domain/ingredient';
 import { resolveOrderProductionPhotos } from './order-production-photos';
 import { scanForbiddenClaims } from '../../application/recipe-designer/recipe-copywriting-compliance';
+import { isCoverBadgeEligibleName } from '../../domain/recipe-designer/cover-badge-policy';
+import { mergeSeriesReleaseDraft } from '../../domain/recipe-designer/series-release-draft';
 import {
-  COVER_BADGE_ALLOWED_NAMES,
-  isCoverBadgeEligibleName,
-} from '../../domain/recipe-designer/cover-badge-policy';
+  loadSeriesReleaseDraftContext,
+  persistSeriesReleaseDraft,
+} from '../../application/recipe-designer/series-release-draft.store';
+import { resolveSeriesCoverBadgeIds } from '../../application/recipe-designer/cover-badge-selection';
 
 const CUSTOMER_TEST_USER_ID = 'production-experience-customer-test-user';
 const CUSTOMER_TEST_USER_PHONE = '19900000001';
@@ -4804,117 +4806,144 @@ export class AdminController {
   // 这样运营**只改一次**即可全系列生效，并且从结构上不可能填入违规词。
 
   @Get('recipe-series/:seriesId/cover-badges')
-  @ApiOperation({ summary: '获取食谱系列的封面角标' })
+  @ApiOperation({ summary: '获取食谱系列的封面角标（含待发布草稿）' })
   async getSeriesCoverBadges(
     @Param('seriesId') seriesId: string,
   ): Promise<ApiResponseDto<any>> {
-    const rows = await this.prisma.recipeSeriesCoverBadge.findMany({
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: seriesId },
+      select: {
+        id: true,
+        name: true,
+        coverImageUrl: true,
+        coverTitle: true,
+        sellingPoint: true,
+        targetHealthTags: true,
+        releaseDraft: true,
+        releaseDraftUpdatedAt: true,
+      },
+    });
+
+    const liveRows = await this.prisma.recipeSeriesCoverBadge.findMany({
       where: { seriesId },
-      include: { healthTag: { select: { id: true, name: true, parentId: true } } },
+      include: {
+        healthTag: { select: { id: true, name: true, parentId: true } },
+      },
       orderBy: { sortOrder: 'asc' },
     });
-    const badges: Array<{
-      healthTagId: string;
-      name: string;
-      sortOrder: number;
-    }> = [];
     const hiddenBadges: string[] = [];
-    for (const row of rows) {
+    for (const row of liveRows) {
       const name = row.healthTag?.name ?? '';
-      if (!name) continue;
-      if (isCoverBadgeEligibleName(name)) {
-        badges.push({
-          healthTagId: row.healthTagId,
-          name,
-          sortOrder: row.sortOrder,
-        });
-      } else {
-        hiddenBadges.push(name);
-      }
+      if (name && !isCoverBadgeEligibleName(name)) hiddenBadges.push(name);
     }
+
+    /**
+     * 2026-11-08：角标保存改成写发布草稿，读取也要回「草稿 ?? 线上」的生效值，
+     * 否则 RecipeForm 保存后重新打开还是旧角标，看起来像没保存。
+     */
+    let effectiveIds = liveRows.map((row) => row.healthTagId);
+    if (series) {
+      const context = await loadSeriesReleaseDraftContext(
+        this.prisma,
+        series as any,
+      );
+      effectiveIds = context.badgeIds;
+    }
+    const tags = effectiveIds.length
+      ? await this.prisma.recipeHealthTag.findMany({
+          where: { id: { in: effectiveIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const nameById = new Map(tags.map((tag) => [tag.id, tag.name]));
+    const badges = effectiveIds
+      .map((healthTagId, index) => ({
+        healthTagId,
+        name: nameById.get(healthTagId) ?? '',
+        sortOrder: index,
+      }))
+      .filter((badge) => badge.name && isCoverBadgeEligibleName(badge.name));
 
     return ApiResponseDto.success({
       seriesId,
       badges,
-      hiddenBadges,
+      hiddenBadges: [...new Set(hiddenBadges)],
     });
   }
 
   @Put('recipe-series/:seriesId/cover-badges')
   @ApiOperation({
-    summary: '设置食谱系列的封面角标（最多 2 个，仅限合规词表内的词）',
+    summary: '设置食谱系列的封面角标（写发布草稿，发布后生效）',
   })
   async setSeriesCoverBadges(
     @Param('seriesId') seriesId: string,
     @Body() dto: { healthTagIds?: string[] },
+    @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<any>> {
     const series = await this.prisma.recipeSeries.findUnique({
       where: { id: seriesId },
-      select: { id: true },
+      select: {
+        id: true,
+        name: true,
+        designMode: true,
+        coverImageUrl: true,
+        coverTitle: true,
+        sellingPoint: true,
+        targetHealthTags: true,
+        releaseDraft: true,
+        releaseDraftUpdatedAt: true,
+      },
     });
     if (!series) {
       return ApiResponseDto.error(404, '食谱系列不存在');
     }
 
-    const rawIds = Array.isArray(dto?.healthTagIds) ? dto.healthTagIds : [];
-    const healthTagIds = Array.from(
-      new Set(rawIds.filter((id): id is string => typeof id === 'string' && id.trim() !== '')),
-    );
-
-    if (healthTagIds.length > MAX_SERIES_COVER_BADGES) {
+    let healthTagIds: string[];
+    try {
+      healthTagIds = await resolveSeriesCoverBadgeIds(
+        this.prisma,
+        Array.isArray(dto?.healthTagIds) ? dto.healthTagIds : [],
+      );
+    } catch (error) {
       return ApiResponseDto.error(
         400,
-        `封面角标最多 ${MAX_SERIES_COVER_BADGES} 个（当前 ${healthTagIds.length} 个）`,
+        error instanceof Error ? error.message : '封面角标不合法',
       );
     }
 
-    if (healthTagIds.length > 0) {
-      const found = await this.prisma.recipeHealthTag.findMany({
-        where: { id: { in: healthTagIds } },
-        select: { id: true, name: true },
+    /**
+     * 2026-11-08：产品线的角标保存改走发布草稿，
+     * 否则会把发布抽屉里的草稿冲成过期值。
+     * 订单定制系列没有发布抽屉，保持直接写线上。
+     */
+    if (series.designMode === 'ORDER') {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.recipeSeriesCoverBadge.deleteMany({ where: { seriesId } });
+        for (const [index, healthTagId] of healthTagIds.entries()) {
+          await tx.recipeSeriesCoverBadge.create({
+            data: { seriesId, healthTagId, sortOrder: index },
+          });
+        }
       });
-      if (found.length !== healthTagIds.length) {
-        const foundIds = new Set(found.map((tag) => tag.id));
-        const missing = healthTagIds.filter((id) => !foundIds.has(id));
-        return ApiResponseDto.error(
-          400,
-          `以下标签不在合规词表中，无法作为封面角标：${missing.join('、')}`,
-        );
-      }
-
-      // 2026-10-27：角标只允许老板确认的 6 个词；「含…」/工艺特性/FEDIAF 2021 一律拒绝
-      const ineligible = found.filter(
-        (tag) => !isCoverBadgeEligibleName(tag.name),
-      );
-      if (ineligible.length > 0) {
-        return ApiResponseDto.error(
-          400,
-          `以下词不能作为封面角标：${ineligible
-            .map((tag) => tag.name)
-            .join('、')}。只允许：${COVER_BADGE_ALLOWED_NAMES.join('、')}`,
-        );
-      }
-
-      // 双保险：即使词表被历史数据污染，也不允许违规词出现在角标上
-      const violations = found
-        .map((tag) => ({ name: tag.name, hits: scanForbiddenClaims(tag.name) }))
-        .filter((item) => item.hits.length > 0);
-      if (violations.length > 0) {
-        return ApiResponseDto.error(
-          400,
-          `标签「${violations.map((v) => v.name).join('、')}」包含法规禁止的表述，不能作为封面角标`,
-        );
-      }
+      return this.getSeriesCoverBadges(seriesId);
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.recipeSeriesCoverBadge.deleteMany({ where: { seriesId } });
-      for (const [index, healthTagId] of healthTagIds.entries()) {
-        await tx.recipeSeriesCoverBadge.create({
-          data: { seriesId, healthTagId, sortOrder: index },
-        });
-      }
-    });
+    const context = await loadSeriesReleaseDraftContext(
+      this.prisma,
+      series as any,
+    );
+    const merged = mergeSeriesReleaseDraft(
+      context.draft,
+      { badgeHealthTagIds: healthTagIds },
+      context.live,
+    );
+    await persistSeriesReleaseDraft(
+      this.prisma,
+      seriesId,
+      merged,
+      context.live,
+      user?.userId ?? null,
+    );
 
     return this.getSeriesCoverBadges(seriesId);
   }
@@ -5339,6 +5368,3 @@ function assertHealthTagNameCompliant(
     data: null,
   };
 }
-
-/** 封面角标上限：超过 2 个在封面上会挤成一团，也与"一眼看懂这袋里有什么"的定位相悖 */
-const MAX_SERIES_COVER_BADGES = 2;

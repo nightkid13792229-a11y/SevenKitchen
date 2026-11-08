@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
 import { SupplementTargetService } from '../../../src/application/recipe-designer/supplement-target.service';
 import type { PrismaService } from '../../../src/infrastructure/prisma.service';
@@ -80,6 +84,8 @@ describe('RecipeDesignerService · staged series release', () => {
     recipeItem: { findMany: jest.fn().mockResolvedValue([]) },
     designRecipe: {
       findMany: jest.fn(),
+      update: jest.fn(),
+      aggregate: jest.fn().mockResolvedValue({ _max: { version: null } }),
     },
     recipe: {
       findMany: jest.fn(),
@@ -89,6 +95,7 @@ describe('RecipeDesignerService · staged series release', () => {
     recipeSeries: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     // 2026-10-27 发布门禁「已归类」：这些用例都假设系列已可发布，
     // 默认给一条归属，避免被新门禁打成阻断。
@@ -108,6 +115,10 @@ describe('RecipeDesignerService · staged series release', () => {
     },
     recipeHealthTag: {
       findMany: jest.fn().mockResolvedValue([]),
+    },
+    recipeTaxonomyNode: {
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
     },
     $transaction: jest.fn(),
   } as any;
@@ -151,6 +162,7 @@ describe('RecipeDesignerService · staged series release', () => {
     // 已上线判定：默认认为系列里还有 PUBLIC 食谱行，具体用例可覆盖。
     prisma.recipe.count.mockResolvedValue(1);
     prisma.recipeSeriesCoverBadge.findMany.mockResolvedValue([]);
+    prisma.recipeSeries.updateMany.mockResolvedValue({ count: 1 });
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma),
     );
@@ -454,216 +466,213 @@ describe('RecipeDesignerService · staged series release', () => {
     });
   });
 
-  describe('updateSeriesReleaseSettings', () => {
-    it('patches only supplied facade fields and ignores legacy required life stages', async () => {
-      const result = await (service as any).updateSeriesReleaseSettings(
+  describe('saveSeriesReleaseDraft', () => {
+    function mockEditableSeries(overrides: Record<string, unknown> = {}) {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({ businessStatus: 'DRAFT', ...overrides }),
+      );
+      // 未上线：可以清空封面 / 卖点
+      prisma.recipe.count.mockResolvedValue(0);
+    }
+
+    it('员工保存名称进草稿，只写 releaseDraft、不碰线上名', async () => {
+      mockEditableSeries();
+      const result = await service.saveSeriesReleaseDraft(
         'series-1',
-        {
-          requiredLifeStages: [
-            'LOW_ACTIVITY_ADULT_OR_SENIOR',
-            'HIGH_ACTIVITY_ADULT',
-            'HIGH_ACTIVITY_ADULT',
-          ],
-          coverTitle: '  鲜肉双阶段  ',
-          sellingPoint: '  新卖点  ',
-          targetHealthTags: ['JOINT', 'JOINT', 'SKIN'],
-        },
+        { name: '均衡营养｜三文鱼南瓜' },
         STAFF_ACCESS,
       );
 
-      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(prisma.recipeSeries.update).toHaveBeenCalledWith({
-        where: { id: 'series-1' },
-        data: {
-          coverTitle: '鲜肉双阶段',
-          sellingPoint: '新卖点',
-          targetHealthTags: ['JOINT', 'SKIN'],
-        },
-      });
-      // 默认 applyToLive=false：只保存系列设置，不同步线上食谱行。
-      expect(prisma.recipe.updateMany).not.toHaveBeenCalled();
-      expect(result).toMatchObject({
-        seriesId: 'series-1',
-        coverTitle: '鲜肉双阶段',
-        sellingPoint: '新卖点',
-        targetHealthTags: ['JOINT', 'SKIN'],
-      });
+      expect(result.changedFields).toEqual(['name']);
+      expect(result.name).toBe('均衡营养｜三文鱼南瓜');
+      expect(result.updatedAt).toBeTruthy();
+      const data = prisma.recipeSeries.update.mock.calls.at(-1)?.[0].data;
+      expect(data.releaseDraft.name).toBe('均衡营养｜三文鱼南瓜');
+      expect(data.releaseDraft.touched).toContain('name');
+      // 线上系列名不动，发布时才改
+      expect(data.name).toBeUndefined();
     });
 
-    it('returns the current settings without writing on an empty patch', async () => {
-      const result = await service.updateSeriesReleaseSettings(
+    it('顾客不能维护发布草稿', async () => {
+      mockEditableSeries();
+      await expect(
+        service.saveSeriesReleaseDraft('series-1', { name: '新名字' }, CUSTOMER_ACCESS),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
+    });
+
+    it('空名与超长名直接 400', async () => {
+      mockEditableSeries();
+      await expect(
+        service.saveSeriesReleaseDraft('series-1', { name: '   ' }, STAFF_ACCESS),
+      ).rejects.toThrow('食谱名称不能为空');
+      await expect(
+        service.saveSeriesReleaseDraft(
+          'series-1',
+          { name: '这个系列名称明显超过十二个字' },
+          STAFF_ACCESS,
+        ),
+      ).rejects.toThrow('食谱名称最多 12 个字');
+    });
+
+    it('显式 null 可以清空卖点（未上线）', async () => {
+      mockEditableSeries();
+      const result = await service.saveSeriesReleaseDraft(
+        'series-1',
+        { sellingPoint: null },
+        STAFF_ACCESS,
+      );
+      expect(result.changedFields).toContain('sellingPoint');
+      const data = prisma.recipeSeries.update.mock.calls.at(-1)?.[0].data;
+      expect(data.releaseDraft.sellingPoint).toBeNull();
+    });
+
+    it('改回和线上一致时删掉草稿，不留 stale 标记', async () => {
+      mockEditableSeries({
+        name: '鸡肉双阶段',
+        releaseDraft: {
+          name: '鸡肉双阶段',
+          coverImageUrl: 'https://img.example.com/series-cover.jpg',
+          coverTitle: '鸡肉双阶段',
+          sellingPoint: '两种能量一套配方',
+          targetHealthTags: ['JOINT'],
+          badgeHealthTagIds: [],
+          taxonomy: [{ kindId: 'kind-1', nodeId: 'node-1' }],
+          touched: ['name'],
+        },
+        releaseDraftUpdatedAt: new Date('2026-11-08T03:52:00.000Z'),
+      });
+
+      const result = await service.saveSeriesReleaseDraft(
         'series-1',
         {},
         STAFF_ACCESS,
       );
 
-      expect(prisma.$transaction).not.toHaveBeenCalled();
-      expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
-      expect(result).toMatchObject({
-        seriesId: 'series-1',
-        coverImageUrl: 'https://img.example.com/series-cover.jpg',
-        sellingPoint: '两种能量一套配方',
-      });
+      expect(result.changedFields).toEqual([]);
+      const data = prisma.recipeSeries.update.mock.calls.at(-1)?.[0].data;
+      expect(data.releaseDraftUpdatedAt).toBeNull();
+      expect(data.releaseDraftUpdatedBy).toBeNull();
     });
 
-    it('rejects over-long presentation text', async () => {
+    it('角标复用白名单校验：白名单外的词、不存在的 id 都拒绝', async () => {
+      mockEditableSeries();
+      prisma.recipeHealthTag.findMany.mockResolvedValue([
+        { id: 'tag-chicken', name: '含鸡胸' },
+      ]);
       await expect(
-        service.updateSeriesReleaseSettings(
+        service.saveSeriesReleaseDraft(
           'series-1',
-          { coverTitle: '鸡'.repeat(21) },
+          { badgeHealthTagIds: ['tag-chicken'] },
           STAFF_ACCESS,
         ),
-      ).rejects.toThrow('封面标题不能超过20个字符');
+      ).rejects.toThrow(/不能作为封面角标/);
 
+      prisma.recipeHealthTag.findMany.mockResolvedValue([]);
       await expect(
-        service.updateSeriesReleaseSettings(
+        service.saveSeriesReleaseDraft(
           'series-1',
-          { sellingPoint: '卖'.repeat(201) },
+          { badgeHealthTagIds: ['tag-gone'] },
           STAFF_ACCESS,
         ),
-      ).rejects.toThrow('一句话卖点不能超过200个字符');
-
+      ).rejects.toThrow(/合规词表/);
       expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
-      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('applies facade fields to live recipes only when applyToLive is true', async () => {
-      await service.updateSeriesReleaseSettings(
-        'series-1',
-        { sellingPoint: '线上新卖点' },
-        STAFF_ACCESS,
-        { applyToLive: true },
-      );
+    it('归类复用四条校验：停用 / 父节点 / 同分类重复都拒绝', async () => {
+      mockEditableSeries();
+      prisma.recipeTaxonomyNode.findMany.mockResolvedValue([
+        { id: 'node-1', kindId: 'kind-1', name: '软便', status: 'DISABLED' },
+      ]);
+      await expect(
+        service.saveSeriesReleaseDraft(
+          'series-1',
+          { taxonomy: [{ kindId: 'kind-1', nodeId: 'node-1' }] },
+          STAFF_ACCESS,
+        ),
+      ).rejects.toThrow(/停用/);
 
-      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(prisma.recipe.updateMany).toHaveBeenCalledTimes(1);
-      expect(prisma.recipe.updateMany).toHaveBeenCalledWith({
-        where: { seriesId: 'series-1', status: 'PUBLIC' },
-        data: {
-          coverImageUrl: 'https://img.example.com/series-cover.jpg',
-          sellingPoint: '线上新卖点',
-          coverTitle: '鸡肉双阶段',
-          targetHealthTags: ['JOINT'],
-        },
+      prisma.recipeTaxonomyNode.findMany.mockResolvedValue([
+        { id: 'node-1', kindId: 'kind-1', name: '软便', status: 'ACTIVE' },
+      ]);
+      prisma.recipeTaxonomyNode.count.mockResolvedValue(1);
+      await expect(
+        service.saveSeriesReleaseDraft(
+          'series-1',
+          { taxonomy: [{ kindId: 'kind-1', nodeId: 'node-1' }] },
+          STAFF_ACCESS,
+        ),
+      ).rejects.toThrow(/叶子/);
+
+      prisma.recipeTaxonomyNode.count.mockResolvedValue(0);
+      prisma.recipeTaxonomyNode.findMany.mockResolvedValue([
+        { id: 'node-1', kindId: 'kind-1', name: '三文鱼', status: 'ACTIVE' },
+        { id: 'node-2', kindId: 'kind-1', name: '鸡', status: 'ACTIVE' },
+      ]);
+      await expect(
+        service.saveSeriesReleaseDraft(
+          'series-1',
+          {
+            taxonomy: [
+              { kindId: 'kind-1', nodeId: 'node-1' },
+              { kindId: 'kind-1', nodeId: 'node-2' },
+            ],
+          },
+          STAFF_ACCESS,
+        ),
+      ).rejects.toThrow(/同一分类只能选一个节点/);
+    });
+
+    it('并发保存：expectedUpdatedAt 对不上直接 409', async () => {
+      mockEditableSeries({
+        releaseDraftUpdatedAt: new Date('2026-11-08T03:52:00.000Z'),
       });
-
-      prisma.recipe.updateMany.mockClear();
-      // AI set_copy 直连服务、不传 applyToLive：不能顺带改线上行。
-      await service.updateSeriesReleaseSettings(
-        'series-1',
-        { sellingPoint: 'AI 改的文案' },
-        STAFF_ACCESS,
-      );
-      expect(prisma.recipe.updateMany).not.toHaveBeenCalled();
+      await expect(
+        service.saveSeriesReleaseDraft(
+          'series-1',
+          {
+            sellingPoint: '新卖点',
+            expectedUpdatedAt: '2026-11-08T03:51:00.000Z',
+          },
+          STAFF_ACCESS,
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
     });
 
-    it('omits empty cover title and health tags when syncing live recipes', async () => {
-      prisma.recipeSeries.findUnique.mockResolvedValue(
-        seriesRecord({
-          businessStatus: 'PUBLIC',
-          coverTitle: '   ',
-          targetHealthTags: [],
+    it('expectedUpdatedAt 一致时用条件更新写入（原子乐观锁）', async () => {
+      const at = new Date('2026-11-08T03:52:00.000Z');
+      mockEditableSeries({ releaseDraftUpdatedAt: at });
+
+      const result = await service.saveSeriesReleaseDraft(
+        'series-1',
+        { sellingPoint: '新卖点', expectedUpdatedAt: at.toISOString() },
+        STAFF_ACCESS,
+      );
+
+      expect(result.changedFields).toEqual(['sellingPoint']);
+      expect(prisma.recipeSeries.updateMany).toHaveBeenCalledWith({
+        where: { id: 'series-1', releaseDraftUpdatedAt: at },
+        data: expect.objectContaining({
+          releaseDraft: expect.objectContaining({ sellingPoint: '新卖点' }),
         }),
-      );
-
-      await service.updateSeriesReleaseSettings(
-        'series-1',
-        { sellingPoint: '新卖点' },
-        STAFF_ACCESS,
-        { applyToLive: true },
-      );
-
-      const data = prisma.recipe.updateMany.mock.calls[0][0].data;
-      expect(data).toEqual({
-        coverImageUrl: 'https://img.example.com/series-cover.jpg',
-        sellingPoint: '新卖点',
       });
-      expect(data).not.toHaveProperty('coverTitle');
-      expect(data).not.toHaveProperty('targetHealthTags');
-    });
-
-    it('rejects clearing cover or selling point on a live series', async () => {
-      // 系列本身仍是 DRAFT，但已有 PUBLIC 食谱行（例如曾经发布过）。
-      prisma.recipeSeries.findUnique.mockResolvedValue(
-        seriesRecord({ businessStatus: 'DRAFT' }),
-      );
-      prisma.recipe.count.mockResolvedValue(1);
-
-      await expect(
-        service.updateSeriesReleaseSettings(
-          'series-1',
-          { coverImageUrl: null },
-          STAFF_ACCESS,
-        ),
-      ).rejects.toThrow('已上线系列不能清空封面图');
-
-      await expect(
-        service.updateSeriesReleaseSettings(
-          'series-1',
-          { sellingPoint: '' },
-          STAFF_ACCESS,
-        ),
-      ).rejects.toThrow('已上线系列不能清空一句话卖点');
-
-      expect(prisma.$transaction).not.toHaveBeenCalled();
+      // 不再用无条件 update：检查和写入必须是同一条 SQL
       expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
-      expect(prisma.recipe.updateMany).not.toHaveBeenCalled();
     });
 
-    it('treats a PUBLIC business status as live without counting recipes', async () => {
+    it('已上线系列不能通过草稿清空封面图', async () => {
       prisma.recipeSeries.findUnique.mockResolvedValue(
         seriesRecord({ businessStatus: 'PUBLIC' }),
       );
-      prisma.recipe.count.mockResolvedValue(0);
-
+      prisma.recipe.count.mockResolvedValue(1);
       await expect(
-        service.updateSeriesReleaseSettings(
+        service.saveSeriesReleaseDraft(
           'series-1',
           { coverImageUrl: null },
           STAFF_ACCESS,
         ),
       ).rejects.toThrow('已上线系列不能清空封面图');
-      expect(prisma.recipe.count).not.toHaveBeenCalled();
-    });
-
-    it('allows clearing facade fields before the series goes live', async () => {
-      prisma.recipe.count.mockResolvedValue(0);
-
-      const result = await service.updateSeriesReleaseSettings(
-        'series-1',
-        { coverImageUrl: null, sellingPoint: '   ' },
-        STAFF_ACCESS,
-      );
-
-      expect(prisma.recipeSeries.update).toHaveBeenCalledWith({
-        where: { id: 'series-1' },
-        data: { coverImageUrl: null, sellingPoint: null },
-      });
-      expect(result).toMatchObject({
-        coverImageUrl: null,
-        sellingPoint: null,
-      });
-    });
-
-    it('lets staff maintain settings but rejects customers and order series', async () => {
-      await expect(
-        service.updateSeriesReleaseSettings(
-          'series-1',
-          { coverTitle: '新标题' },
-          CUSTOMER_ACCESS,
-        ),
-      ).rejects.toThrow('只有员工可以维护产品线发布设置');
-
-      prisma.recipeSeries.findUnique.mockResolvedValue(
-        seriesRecord({ designMode: 'ORDER' }),
-      );
-      await expect(
-        service.updateSeriesReleaseSettings(
-          'series-1',
-          { coverTitle: '新标题' },
-          STAFF_ACCESS,
-        ),
-      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -906,6 +915,191 @@ describe('RecipeDesignerService · staged series release', () => {
           data: [{ seriesId: 'series-1', kindId: 'kind-1', nodeId: 'node-2' }],
         }),
       );
+    });
+
+    it('releases every actionable stage in one go for a public series', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({ businessStatus: 'PUBLIC' }),
+      );
+      prisma.recipe.findMany.mockResolvedValue([
+        recipeRecord({
+          id: 'adult-v1',
+          recipeId: 'recipe-adult',
+          version: 1,
+          status: 'PUBLIC',
+        }),
+        recipeRecord({
+          id: 'adult-v2',
+          recipeId: 'recipe-adult',
+          version: 2,
+          status: 'DRAFT',
+        }),
+        recipeRecord({
+          id: 'senior-v1',
+          recipeId: 'recipe-senior',
+          version: 1,
+          status: 'PUBLIC',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        }),
+        recipeRecord({
+          id: 'senior-v2',
+          recipeId: 'recipe-senior',
+          version: 2,
+          status: 'DRAFT',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        }),
+      ]);
+      prisma.recipe.updateMany
+        .mockResolvedValueOnce({ count: 2 })
+        .mockResolvedValueOnce({ count: 0 });
+
+      const result = await service.releaseSeries('series-1', ADMIN_ACCESS);
+
+      // 不再让前端挑阶段：两个待更新阶段一次全发
+      expect(result.releasedStageCodes).toEqual([
+        'HIGH_ACTIVITY_ADULT',
+        'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      ]);
+      expect(prisma.recipe.updateMany).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: { in: ['adult-v2', 'senior-v2'] },
+            status: 'DRAFT',
+          }),
+        }),
+      );
+    });
+
+    it('syncs the name to published recipes when the draft renames the series', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          businessStatus: 'PUBLIC',
+          name: '旧名字',
+          releaseDraft: {
+            name: '新名字',
+            coverImageUrl: 'https://img.example.com/series-cover.jpg',
+            coverTitle: '鸡肉双阶段',
+            sellingPoint: '两种能量一套配方',
+            targetHealthTags: ['JOINT'],
+            badgeHealthTagIds: [],
+            taxonomy: [{ kindId: 'kind-1', nodeId: 'node-1' }],
+            touched: ['name'],
+          },
+          releaseDraftUpdatedAt: new Date('2026-11-08T03:52:00.000Z'),
+        }),
+      );
+      prisma.recipe.findMany.mockResolvedValue([
+        recipeRecord({
+          id: 'recipe-row-adult',
+          recipeId: 'recipe-adult',
+          version: 1,
+          status: 'PUBLIC',
+        }),
+      ]);
+      prisma.designRecipe.findMany.mockResolvedValue([
+        {
+          id: 'design-1',
+          seriesLifeStage: null,
+          status: 'DRAFT',
+          publishedRecipeId: null,
+          publishedAt: null,
+          updatedAt: new Date('2026-11-01T00:00:00.000Z'),
+        },
+      ]);
+      prisma.designRecipe.aggregate.mockResolvedValue({
+        _max: { version: 2 },
+      });
+      prisma.recipe.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.releaseSeries('series-1', ADMIN_ACCESS);
+
+      expect(result.appliedDraftFields).toEqual(['name']);
+      // 设计稿版本号顺延，名字跟着系列走
+      expect(prisma.designRecipe.update).toHaveBeenCalledWith({
+        where: { id: 'design-1' },
+        data: { name: '新名字', version: 3 },
+      });
+      // 未交付的正式食谱行同步改名；已交付的历史不动
+      expect(prisma.recipe.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            seriesId: 'series-1',
+            name: { not: '新名字' },
+            deliveryItems: { none: {} },
+            deliveries: { none: {} },
+          }),
+          data: { name: '新名字' },
+        }),
+      );
+    });
+
+    it('only applies the fields the admin touched (selling point) and leaves badges / taxonomy alone', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          businessStatus: 'PUBLIC',
+          releaseDraft: {
+            name: '鸡肉双阶段',
+            coverImageUrl: 'https://img.example.com/series-cover.jpg',
+            coverTitle: '鸡肉双阶段',
+            sellingPoint: '新卖点',
+            targetHealthTags: ['JOINT'],
+            badgeHealthTagIds: ['tag-stale'],
+            taxonomy: [{ kindId: 'kind-1', nodeId: 'node-stale' }],
+            touched: ['sellingPoint'],
+          },
+          releaseDraftUpdatedAt: new Date('2026-11-08T03:52:00.000Z'),
+        }),
+      );
+      prisma.recipe.findMany.mockResolvedValue([
+        recipeRecord({
+          id: 'recipe-row-adult',
+          recipeId: 'recipe-adult',
+          version: 1,
+          status: 'PUBLIC',
+        }),
+      ]);
+      // 别人在草稿保存之后改了线上角标 / 归类
+      prisma.recipeSeriesCoverBadge.findMany.mockResolvedValue([
+        { healthTagId: 'tag-live', healthTag: { name: '低脂' } },
+      ]);
+      prisma.recipeSeriesTaxonomy.findMany.mockResolvedValue([
+        { kindId: 'kind-1', nodeId: 'node-live' },
+      ]);
+      prisma.recipe.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.releaseSeries('series-1', ADMIN_ACCESS);
+
+      expect(result.appliedDraftFields).toEqual(['sellingPoint']);
+      // 没动过的角标 / 归类不允许被整组重建
+      expect(prisma.recipeSeriesCoverBadge.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.recipeSeriesTaxonomy.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.recipeSeries.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            sellingPoint: '新卖点',
+            coverImageUrl: 'https://img.example.com/series-cover.jpg',
+          }),
+        }),
+      );
+    });
+
+    it('rejects a release when the draft changed after the drawer loaded (409)', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          businessStatus: 'PUBLIC',
+          releaseDraftUpdatedAt: new Date('2026-11-08T03:52:00.000Z'),
+        }),
+      );
+
+      await expect(
+        service.releaseSeries('series-1', ADMIN_ACCESS, {
+          expectedDraftUpdatedAt: '2026-11-08T03:51:00.000Z',
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('rejects a draft-only release when the series has never been public', async () => {

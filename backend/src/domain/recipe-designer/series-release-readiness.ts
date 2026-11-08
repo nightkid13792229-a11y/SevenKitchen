@@ -67,8 +67,9 @@ export type SeriesReleaseState = (typeof SERIES_RELEASE_STATES)[number];
 /** 问题归属：系列级设置 / 产品展示 / 单个生命阶段。 */
 export type SeriesReleaseIssueScope = 'SERIES' | 'PRESENTATION' | 'STAGE';
 
-/** 阻断发布的问题（封面图 / 一句话卖点 / 需求分类）。 */
+/** 阻断发布的问题（名称 / 封面图 / 一句话卖点 / 需求分类）。 */
 export type SeriesReleaseBlockerCode =
+  | 'NAME_REQUIRED'
   | 'COVER_IMAGE_REQUIRED'
   | 'SELLING_POINT_REQUIRED'
   | 'TAXONOMY_REQUIRED';
@@ -99,6 +100,8 @@ export interface SeriesReleasePresentation {
   targetHealthTags?: string[] | null;
   /** 系列封面角标（合规词表名称，只读回传，便于发布抽屉预览） */
   coverBadges?: string[] | null;
+  /** 生效角标 id（顺序即展示顺序）：编辑下拉直接可用，不必按名称反查 */
+  coverBadgeIds?: string[] | null;
 }
 
 /** 一个生命阶段在系列仓库里的现状（由服务层查库后传入）。 */
@@ -198,6 +201,8 @@ export interface SeriesReleaseReadiness {
     sellingPoint: string | null;
     targetHealthTags: string[];
     coverBadges: string[];
+    /** 生效角标 id（顺序即展示顺序） */
+    coverBadgeIds: string[];
   };
   blockers: SeriesReleaseBlocker[];
   warnings: SeriesReleaseWarning[];
@@ -286,6 +291,7 @@ export const buildSeriesReleaseReadiness = (
   const sellingPoint = normalizeText(presentation.sellingPoint) || null;
   const targetHealthTags = normalizeStringList(presentation.targetHealthTags);
   const coverBadges = normalizeStringList(presentation.coverBadges);
+  const coverBadgeIds = normalizeStringList(presentation.coverBadgeIds);
 
   const stages: SeriesReleaseStageReadiness[] = input.stages.map((stage) => {
     const latestRecipeVersion = normalizeVersion(stage.latestRecipeVersion);
@@ -315,6 +321,23 @@ export const buildSeriesReleaseReadiness = (
         ? 'NEEDS_UPDATE'
         : 'PUBLISHED'
       : 'UNPUBLISHED';
+
+  /**
+   * 名称门禁（2026-11-08）：临时名（「未命名系列 · 10-21」）会印在标签上，
+   * 不能发布。只有调用方显式传了 name 才校验，避免影响不关心名称的旧调用。
+   */
+  const releaseName = normalizeText(input.name);
+  if (
+    input.name !== undefined &&
+    (!releaseName || releaseName.startsWith('未命名'))
+  ) {
+    blockers.push({
+      code: 'NAME_REQUIRED',
+      scope: 'SERIES',
+      field: 'name',
+      message: '系列还是临时名称，先在发布抽屉里改成正式名称再发布',
+    });
+  }
 
   if (!coverImageUrl) {
     blockers.push({
@@ -394,9 +417,7 @@ export const buildSeriesReleaseReadiness = (
         (businessStatus === 'PUBLIC' && hasDraftChanges)),
     releaseDraft: {
       exists: hasDraftChanges,
-      updatedAt: draftUpdatedAt
-        ? new Date(draftUpdatedAt).toISOString()
-        : null,
+      updatedAt: draftUpdatedAt ? new Date(draftUpdatedAt).toISOString() : null,
       changedFields: draftChangedFields,
     },
     stages,
@@ -406,6 +427,7 @@ export const buildSeriesReleaseReadiness = (
       sellingPoint,
       targetHealthTags,
       coverBadges,
+      coverBadgeIds,
     },
     blockers,
     warnings,

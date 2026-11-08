@@ -347,6 +347,7 @@ describe('RecipeDesignerController', () => {
     copySeriesStageIngredients: jest.fn(),
     getSeriesReleaseReadiness: jest.fn(),
     updateSeriesReleaseSettings: jest.fn(),
+    saveSeriesReleaseDraft: jest.fn(),
     releaseSeries: jest.fn(),
     unpublishSeries: jest.fn(),
     updateDraft: jest.fn(),
@@ -748,9 +749,10 @@ describe('RecipeDesignerController', () => {
       blockers: [],
       warnings: [],
     });
-    service.updateSeriesReleaseSettings.mockResolvedValue({
-      seriesId: 'series-1',
-      requiredLifeStages: ['HIGH_ACTIVITY_ADULT'],
+    service.saveSeriesReleaseDraft.mockResolvedValue({
+      changedFields: ['coverImageUrl'],
+      updatedAt: '2026-11-08T12:00:00.000Z',
+      name: '幼犬鸡肉',
     });
     service.releaseSeries.mockResolvedValue({
       seriesId: 'series-1',
@@ -790,15 +792,21 @@ describe('RecipeDesignerController', () => {
       'series-1',
       access,
     );
-    // PATCH release-settings 是「人点保存」的唯一入口：必须同步线上门面。
-    expect(service.updateSeriesReleaseSettings).toHaveBeenCalledWith(
+    // 旧入口 PATCH release-settings 不再直接写线上，统一落到发布草稿。
+    expect(service.saveSeriesReleaseDraft).toHaveBeenCalledWith(
       'series-1',
-      { requiredLifeStages: ['HIGH_ACTIVITY_ADULT'] },
+      {
+        coverImageUrl: undefined,
+        coverTitle: undefined,
+        sellingPoint: undefined,
+        targetHealthTags: undefined,
+      },
       access,
-      { applyToLive: true },
     );
+    expect(service.updateSeriesReleaseSettings).not.toHaveBeenCalled();
     expect(service.releaseSeries).toHaveBeenCalledWith('series-1', access, {
       stageCodes: ['HIGH_ACTIVITY_ADULT'],
+      expectedDraftUpdatedAt: undefined,
     });
   });
 
@@ -817,7 +825,10 @@ describe('RecipeDesignerController', () => {
     expect(service.releaseSeries).toHaveBeenCalledWith(
       's1',
       expect.anything(),
-      { stageCodes: ['HIGH_ACTIVITY_ADULT'] },
+      {
+        stageCodes: ['HIGH_ACTIVITY_ADULT'],
+        expectedDraftUpdatedAt: undefined,
+      },
     );
   });
 
@@ -832,7 +843,7 @@ describe('RecipeDesignerController', () => {
     expect(service.releaseSeries).toHaveBeenCalledWith(
       's1',
       expect.anything(),
-      { stageCodes: undefined },
+      { stageCodes: undefined, expectedDraftUpdatedAt: undefined },
     );
   });
 

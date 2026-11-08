@@ -1311,9 +1311,23 @@ describe('AdminController', () => {
     });
   });
 
-  describe('系列封面角标白名单（2026-10-27）', () => {
+  describe('系列封面角标白名单（发布草稿，2026-11-08）', () => {
+    const seriesRow = {
+      id: 'series-1',
+      name: '三文鱼',
+      coverImageUrl: 'https://img.example.com/cover.jpg',
+      coverTitle: null,
+      sellingPoint: '鲜肉低敏',
+      targetHealthTags: [],
+      releaseDraft: null,
+      releaseDraftUpdatedAt: null,
+    };
+
     it('只返回白名单角标，并把旧词放进 hiddenBadges', async () => {
       const prisma = {
+        recipeSeries: {
+          findUnique: jest.fn().mockResolvedValue(seriesRow),
+        },
         recipeSeriesCoverBadge: {
           findMany: jest.fn().mockResolvedValue([
             {
@@ -1333,6 +1347,12 @@ describe('AdminController', () => {
             },
           ]),
         },
+        recipeSeriesTaxonomy: { findMany: jest.fn().mockResolvedValue([]) },
+        recipeHealthTag: {
+          findMany: jest
+            .fn()
+            .mockResolvedValue([{ id: 'tag-low-fat', name: '低脂' }]),
+        },
       };
       const controller = buildController({ prisma });
 
@@ -1348,7 +1368,8 @@ describe('AdminController', () => {
     it('保存时拒绝白名单外的词，且不写库', async () => {
       const prisma = {
         recipeSeries: {
-          findUnique: jest.fn().mockResolvedValue({ id: 'series-1' }),
+          findUnique: jest.fn().mockResolvedValue(seriesRow),
+          update: jest.fn(),
         },
         recipeHealthTag: {
           findMany: jest
@@ -1359,60 +1380,48 @@ describe('AdminController', () => {
       };
       const controller = buildController({ prisma });
 
-      const result = await controller.setSeriesCoverBadges('series-1', {
-        healthTagIds: ['tag-chicken'],
-      });
+      const result = await controller.setSeriesCoverBadges(
+        'series-1',
+        { healthTagIds: ['tag-chicken'] },
+        { userId: 'staff-1', role: 'STAFF' } as any,
+      );
 
       expect(result.code).toBe(400);
       expect(result.message).toContain('含鸡胸');
-      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
     });
 
-    it('保存白名单内的词会替换整组角标', async () => {
-      const deleteMany = jest.fn();
-      const create = jest.fn();
+    it('保存白名单内的词会写进发布草稿，而不是直接改线上角标', async () => {
+      const update = jest.fn(async ({ data }: any) => data);
       const prisma = {
         recipeSeries: {
-          findUnique: jest.fn().mockResolvedValue({ id: 'series-1' }),
+          findUnique: jest.fn().mockResolvedValue(seriesRow),
+          update,
         },
+        recipeSeriesCoverBadge: {
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+        recipeSeriesTaxonomy: { findMany: jest.fn().mockResolvedValue([]) },
         recipeHealthTag: {
           findMany: jest
             .fn()
             .mockResolvedValue([{ id: 'tag-low-fat', name: '低脂' }]),
         },
-        $transaction: jest.fn(async (callback: any) =>
-          callback({ recipeSeriesCoverBadge: { deleteMany, create } }),
-        ),
-        recipeSeriesCoverBadge: {
-          findMany: jest.fn().mockResolvedValue([
-            {
-              healthTagId: 'tag-low-fat',
-              sortOrder: 0,
-              healthTag: { name: '低脂' },
-            },
-          ]),
-        },
+        $transaction: jest.fn(),
       };
       const controller = buildController({ prisma });
 
-      const result = await controller.setSeriesCoverBadges('series-1', {
-        healthTagIds: ['tag-low-fat'],
-      });
+      const result = await controller.setSeriesCoverBadges(
+        'series-1',
+        { healthTagIds: ['tag-low-fat'] },
+        { userId: 'staff-1', role: 'STAFF' } as any,
+      );
 
       expect(result.code).toBe(0);
-      expect(deleteMany).toHaveBeenCalledWith({
-        where: { seriesId: 'series-1' },
-      });
-      expect(create).toHaveBeenCalledWith({
-        data: {
-          seriesId: 'series-1',
-          healthTagId: 'tag-low-fat',
-          sortOrder: 0,
-        },
-      });
-      expect(result.data?.badges).toEqual([
-        { healthTagId: 'tag-low-fat', name: '低脂', sortOrder: 0 },
-      ]);
+      const data = update.mock.calls.at(-1)?.[0].data;
+      expect(data.releaseDraft.badgeHealthTagIds).toEqual(['tag-low-fat']);
+      expect(data.releaseDraft.touched).toContain('coverBadges');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 });

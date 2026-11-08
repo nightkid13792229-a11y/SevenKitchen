@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsPreparationMethodContentLength } from '../recipes/preparation-method-content.validator';
 
 import {
@@ -136,6 +136,16 @@ export class ListRecipeDesignerSeriesDto {
   @Min(1)
   @Max(50)
   pageSize?: number;
+
+  /**
+   * 只看「有发布草稿」的系列（2026-11-08）。
+   *
+   * 下推到 where / count，避免前端只过滤当前页导致分页总数不对。
+   */
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true' || value === '1')
+  @IsBoolean()
+  hasReleaseDraft?: boolean;
 }
 
 export class CreateRecipeSeriesDto {
@@ -407,8 +417,8 @@ export class UpdateRecipeDesignPresentationDto {
  * 产品线发布设置（2026-10-26 · 系列级展示资料）。
  *
  * 阶段设计只以 `Recipe.status=DRAFT` 存入系列仓库；展示资料统一在系列上
- * 维护，保存后由 `release-readiness` 重新评估，并以 `applyToLive` 决定是否
- * 立即同步到已上线食谱行。
+ * 维护。2026-11-08 起这个旧接口只写发布草稿（不再立即同步线上），
+ * 保存后由 `release-readiness` 重新评估，点「发布这一版」才生效。
  *
  * 全部字段可选（patch semantics）：没传的字段保持原值，显式 null 表示清空。
  */
@@ -461,6 +471,14 @@ export class ReleaseRecipeSeriesDto {
   @ArrayMaxSize(RECIPE_SERIES_RELEASE_STAGE_CODES.length)
   @IsString({ each: true })
   stageCodes?: string[];
+
+  /**
+   * 乐观锁：发布前前端已 flush 完保存队列，把最后一次草稿时间带上来。
+   * 与数据库不一致 = 期间有别人改过草稿，409 让前端刷新，不静默覆盖。
+   */
+  @IsOptional()
+  @IsString()
+  expectedDraftUpdatedAt?: string | null;
 }
 
 /** 一个分类维度的草稿值：kindId 唯一，nodeId 是挂在哪个叶子。 */
@@ -481,6 +499,17 @@ export class SeriesReleaseDraftTaxonomyDto {
  * 写进去的只是草稿，顾客端看不到，直到管理员点「发布这一版」。
  */
 export class SaveSeriesReleaseDraftDto {
+  /**
+   * 乐观锁：调用方上次拿到的 `releaseDraft.updatedAt`。
+   *
+   * - 省略 = 老客户端，不做校验；
+   * - null = 认为当前没有草稿；
+   * - 字符串 = 与数据库不一致时 409，避免连点 / 两个人同时改互相覆盖。
+   */
+  @IsOptional()
+  @IsString()
+  expectedUpdatedAt?: string | null;
+
   /** 食谱名称：最多 12 个字（标签印不下），空名 400 */
   @IsOptional()
   @IsString()

@@ -92,11 +92,23 @@ describe('RecipeDesignerService', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       count: jest.fn(),
     },
     // 2026-10-27 发布门禁「已归类」：默认当作已归类，避免所有就绪用例被新门禁打成阻断
     recipeSeriesTaxonomy: {
       count: jest.fn().mockResolvedValue(1),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    recipeSeriesCoverBadge: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    recipeHealthTag: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    recipeTaxonomyNode: {
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
     },
     recipeItem: {
       findMany: jest.fn(),
@@ -167,6 +179,12 @@ describe('RecipeDesignerService', () => {
     prisma.nutritionFood.findUnique.mockResolvedValue(null);
     prisma.preparationMethod.findMany.mockResolvedValue([]);
     prisma.dogBreed.findUnique.mockResolvedValue(null);
+    prisma.recipeSeriesCoverBadge.findMany.mockResolvedValue([]);
+    prisma.recipeHealthTag.findMany.mockResolvedValue([]);
+    prisma.recipeSeriesTaxonomy.findMany.mockResolvedValue([]);
+    prisma.recipeTaxonomyNode.findMany.mockResolvedValue([]);
+    prisma.recipeTaxonomyNode.count.mockResolvedValue(0);
+    prisma.recipeSeries.updateMany.mockResolvedValue({ count: 1 });
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma),
     );
@@ -7357,6 +7375,48 @@ describe('RecipeDesignerService', () => {
             },
             AND: [{ designMode: 'CATALOG' }],
           },
+        }),
+      );
+    });
+
+    it('pushes hasReleaseDraft down to where/count and drops stale markers', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({
+          id: 'series-draft',
+          createdBy: 'staff-1',
+          name: '旧名',
+          releaseDraft: { name: '新名', touched: ['name'] },
+          releaseDraftUpdatedAt: new Date('2026-11-08T03:52:00.000Z'),
+        }),
+        seriesRecord({
+          id: 'series-stale',
+          createdBy: 'staff-1',
+          name: '同名',
+          releaseDraft: { name: '同名', touched: ['name'] },
+          releaseDraftUpdatedAt: new Date('2026-11-08T03:52:00.000Z'),
+        }),
+      ]);
+      prisma.recipeSeries.count.mockResolvedValue(2);
+
+      const result: any = await service.listSeries(
+        { userId: 'staff-1', role: 'STAFF' },
+        { hasReleaseDraft: true, page: 1, pageSize: 20 },
+      );
+
+      const query = prisma.recipeSeries.findMany.mock.calls[0][0];
+      // 下推到 SQL：不是前端只过滤当前页
+      expect(query.where.releaseDraftUpdatedAt).toEqual({ not: null });
+      expect(prisma.recipeSeries.count).toHaveBeenCalledWith({
+        where: query.where,
+      });
+      // 真草稿保留；和线上一样的 stale 标记被清掉
+      expect(result.items.map((card: any) => card.id)).toEqual([
+        'series-draft',
+      ]);
+      expect(prisma.recipeSeries.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: { in: ['series-stale'] } },
+          data: expect.objectContaining({ releaseDraftUpdatedAt: null }),
         }),
       );
     });

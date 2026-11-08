@@ -34,15 +34,22 @@ function linkRow(
 }
 
 function createService(options: {
-  rows?: unknown[];
+  rows?: any[];
   childNodes?: unknown[];
 }) {
+  const linkNodes = (options.rows ?? []).flatMap((row) =>
+    (row.taxonomyLinks ?? []).map((link: any) => link.node),
+  );
   const prisma = {
     recipeTaxonomyKind: {
       findMany: jest.fn().mockResolvedValue(kinds),
     },
     recipeTaxonomyNode: {
-      findMany: jest.fn().mockResolvedValue(options.childNodes ?? []),
+      findMany: jest.fn(async ({ where }: any) => {
+        if (where?.parentId) return options.childNodes ?? [];
+        const ids: string[] = where?.id?.in ?? [];
+        return linkNodes.filter((node: any) => ids.includes(node.id));
+      }),
     },
     recipeSeries: {
       findMany: jest.fn().mockResolvedValue(options.rows ?? []),
@@ -218,5 +225,35 @@ describe('RecipeTaxonomyService.listSeries', () => {
       businessStatus: 'PUBLIC',
       updatedAt: '2026-10-20T10:00:00.000Z',
     });
+  });
+
+  it('归类草稿优先于线上值展示，并标出待发布', async () => {
+    const { prisma, service } = createService({
+      rows: [
+        seriesRow({
+          taxonomyLinks: [linkRow('n-salmon', '三文鱼', 'k-protein')],
+          releaseDraft: {
+            taxonomy: [{ kindId: 'k-health', nodeId: 'n-soft' }],
+            touched: ['taxonomy'],
+          },
+        }),
+      ],
+    });
+    // 草稿里的节点不在 taxonomyLinks 里，需要能按 id 查回来
+    prisma.recipeTaxonomyNode.findMany.mockResolvedValueOnce([
+      {
+        id: 'n-soft',
+        name: '软便',
+        kindId: 'k-health',
+        kind: kinds.find((kind) => kind.id === 'k-health'),
+      },
+    ]);
+
+    const result = await service.listSeries({});
+
+    expect(result.items[0].hasDraftTaxonomy).toBe(true);
+    expect(result.items[0].links.map((link) => link.nodeId)).toEqual([
+      'n-soft',
+    ]);
   });
 });

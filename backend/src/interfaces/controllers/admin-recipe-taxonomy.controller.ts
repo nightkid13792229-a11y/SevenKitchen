@@ -67,6 +67,12 @@ export class AdminRecipeTaxonomyController {
     return ApiResponseDto.success(result);
   }
 
+  @Get('series/:seriesId/links')
+  @ApiOperation({ summary: '单个系列生效中的归类（草稿 ?? 线上）' })
+  async getSeriesLinks(@Param('seriesId') seriesId: string) {
+    return ApiResponseDto.success(await this.taxonomy.getSeriesLinks(seriesId));
+  }
+
   @Put('series/:seriesId/links')
   @ApiOperation({ summary: '覆盖一个系列的归属' })
   async replaceLinks(

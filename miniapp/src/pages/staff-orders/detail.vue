@@ -1861,8 +1861,9 @@ async function updateProductionDate(newDateStr: string) {
     }
 
     uni.hideLoading()
-    uni.showToast({ title: '改期成功', icon: 'success' })
+    // 先刷新整页再提示：loadOrderDetail 会弹「加载中」，会把成功提示顶掉
     await loadOrderDetail()
+    uni.showToast({ title: '改期成功', icon: 'success' })
   } catch (error: any) {
     uni.hideLoading()
     console.error('[OrderDetail] Update production date error:', error)

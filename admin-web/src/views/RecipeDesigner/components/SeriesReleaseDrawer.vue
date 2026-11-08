@@ -36,6 +36,12 @@
         <span class="sr-link" @click="editing = true">去填写</span>
       </div>
 
+      <div v-if="isTemporaryName" class="sr-notice">
+        <el-icon class="sr-notice__icon"><WarningFilled /></el-icon>
+        <span>还是临时名称，不能发布：先改成正式名称（最多 12 个字）</span>
+        <span class="sr-link" @click="editing = true">去改名</span>
+      </div>
+
       <!-- 这次会上线什么 -->
       <section v-if="changeRows.length" class="sr-sec">
         <h3 class="sr-sec__title">{{ hasLive ? '这次发布会改变顾客看到的内容' : '这次上线包含什么' }}</h3>
@@ -171,10 +177,10 @@
       <div v-if="readiness" class="sr-foot">
         <span class="sr-foot__tip">{{ footerTip }}</span>
         <div class="sr-foot__actions">
-          <el-button v-if="canUnpublish" type="danger" text :loading="unpublishing" @click="handleUnpublish">
+          <el-button v-if="canUnpublish && isAdmin" type="danger" text :loading="unpublishing" @click="handleUnpublish">
             下架整个系列
           </el-button>
-          <el-button v-if="showPublish" type="success" :loading="publishing" :disabled="!readiness.canRelease" @click="handleRelease">
+          <el-button v-if="showPublish && isAdmin" type="success" :loading="publishing" :disabled="!readiness.canRelease || isTemporaryName" @click="handleRelease">
             {{ hasLive ? '发布这一版' : '上线这条产品线' }}
           </el-button>
           <el-button v-else @click="visible = false">关闭</el-button>
@@ -196,6 +202,8 @@ import {
   RECIPE_PRESENTATION_LIMITS,
   validatePresentationCoverFile
 } from '@/utils/recipeDesigner/presentation'
+import { isTemporarySeriesName } from '@/utils/recipeDesigner/seriesName'
+import { useIsAdmin } from '@/composables/useAdminRole'
 import type {
   SeriesReleaseDraftField,
   SeriesReleaseReadiness,
@@ -222,6 +230,7 @@ const visible = computed({
   set: (value: boolean) => emit('update:modelValue', value)
 })
 
+const isAdmin = useIsAdmin()
 const readiness = ref<SeriesReleaseReadiness | null>(null)
 const loading = ref(false)
 const error = ref('')
@@ -261,6 +270,8 @@ const hasPendingStages = computed(() => actionableCount.value > 0)
 const effectiveName = computed(
   () => readiness.value?.name || props.seriesName || '未命名系列'
 )
+
+const isTemporaryName = computed(() => isTemporarySeriesName(effectiveName.value))
 
 const nameChanged = computed(
   () => readiness.value?.releaseDraft?.changedFields.includes('name') === true

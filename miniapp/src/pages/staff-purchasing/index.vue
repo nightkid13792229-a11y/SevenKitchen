@@ -232,7 +232,6 @@ const todayString = ref('');
 const selectedTargetDate = ref('');
 const dateOverviewMap = ref<Record<string, DateOverview>>({});
 const overviewLoadingMap = ref<Record<string, boolean>>({});
-const hasInitializedDateSelection = ref(false);
 
 const getLocalDateString = (date = new Date()) => {
   const year = date.getFullYear();
@@ -669,23 +668,13 @@ const fetchDateOverview = async (date: string) => {
   }
 };
 
-const refreshDateOverviews = async (autoPick = false) => {
+const refreshDateOverviews = async () => {
   const dates = new Set<string>(quickDateOptions.value.map((option) => option.date));
   if (selectedTargetDate.value) {
     dates.add(selectedTargetDate.value);
   }
 
   await Promise.all(Array.from(dates).map((date) => fetchDateOverview(date)));
-
-  if (autoPick && !hasInitializedDateSelection.value) {
-    const preferredDate =
-      quickDateOptions.value.find((option) => getDateOverview(option.date).actionType === 'generate')?.date ||
-      quickDateOptions.value.find((option) => getDateOverview(option.date).actionType === 'view')?.date ||
-      todayString.value;
-
-    selectedTargetDate.value = preferredDate;
-    hasInitializedDateSelection.value = true;
-  }
 
   if (selectedTargetDate.value && !dateOverviewMap.value[selectedTargetDate.value]) {
     await fetchDateOverview(selectedTargetDate.value);
@@ -813,7 +802,7 @@ const generateList = async () => {
         });
         await Promise.all([
           loadPurchaseLists(true),
-          refreshDateOverviews(false),
+          refreshDateOverviews(),
         ]);
       } else {
         uni.showToast({ title: response.message || '生成失败', icon: 'none' });
@@ -958,7 +947,7 @@ const confirmDeletePurchaseList = (id: string) => {
             uni.showToast({ title: '删除成功', icon: 'success' });
             await Promise.all([
               loadPurchaseLists(true),
-              refreshDateOverviews(false),
+              refreshDateOverviews(),
             ]);
           } else {
             uni.showToast({ title: response.message || '删除失败', icon: 'none' });
@@ -973,10 +962,11 @@ const confirmDeletePurchaseList = (id: string) => {
 };
 
 onMounted(() => {
+  // 进入页面固定落在「今天」，不再自动跳到其他有订单的日期
   todayString.value = getLocalDateString();
   selectedTargetDate.value = todayString.value;
   loadPurchaseLists();
-  refreshDateOverviews(true);
+  refreshDateOverviews();
   isMounted.value = true;
 });
 
@@ -984,7 +974,7 @@ onShow(() => {
   if (isMounted.value) {
     todayString.value = getLocalDateString();
     loadPurchaseLists(true);
-    refreshDateOverviews(false);
+    refreshDateOverviews();
   }
 });
 </script>

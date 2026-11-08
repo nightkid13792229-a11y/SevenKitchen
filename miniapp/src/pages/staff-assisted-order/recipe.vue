@@ -100,6 +100,23 @@ const loading = ref(false)
 const selectedKey = ref('')
 const selected = ref<AssistedRecipeOption | null>(null)
 
+type FilterCounts = {
+  all: number
+  window: number
+  ownCustom: number
+  otherCustom: number
+}
+
+/** 四档筛选各自的条数，由后端按“当前搜索词”统一算好（不是当前档的 total） */
+const counts = ref<FilterCounts | null>(null)
+
+const FILTER_COUNT_KEY: Record<string, keyof FilterCounts> = {
+  '': 'all',
+  WINDOW: 'window',
+  OWN_CUSTOM: 'ownCustom',
+  OTHER_CUSTOM: 'otherCustom',
+}
+
 const hasMore = computed(() => items.value.length < total.value)
 
 /** 筛选在服务端做（`ownership` 参数）：只在已加载的那 20 条里筛会把
@@ -144,7 +161,8 @@ function ownershipText(item: AssistedRecipeOption) {
 }
 
 function filterCount(kind: string) {
-  return ` ${total.value}`
+  if (!counts.value) return ''
+  return ` ${counts.value[FILTER_COUNT_KEY[kind] || 'all']}`
 }
 
 function switchFilter(kind: string) {
@@ -181,6 +199,15 @@ async function load(append: boolean) {
     const next = (response.data as any)?.items || []
     items.value = append ? [...items.value, ...next] : next
     total.value = Number((response.data as any)?.total || 0)
+    const rawCounts = (response.data as any)?.counts
+    if (rawCounts) {
+      counts.value = {
+        all: Number(rawCounts.all || 0),
+        window: Number(rawCounts.window || 0),
+        ownCustom: Number(rawCounts.ownCustom || 0),
+        otherCustom: Number(rawCounts.otherCustom || 0),
+      }
+    }
   } catch (error: any) {
     uni.showToast({ title: error?.message || '加载失败', icon: 'none' })
   } finally {

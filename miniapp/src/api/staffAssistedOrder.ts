@@ -37,6 +37,13 @@ export interface AssistedRecipeOption {
 export interface AssistedRecipeOptionsResult {
   items: AssistedRecipeOption[]
   total: number
+  /** 四档筛选各自的数量（按当前搜索词统计，不受当前选中档影响） */
+  counts?: {
+    all: number
+    window: number
+    ownCustom: number
+    otherCustom: number
+  }
 }
 
 export interface PortionPreview {

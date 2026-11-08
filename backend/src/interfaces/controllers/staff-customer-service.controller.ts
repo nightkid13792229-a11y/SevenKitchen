@@ -17,6 +17,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import { OrderService } from '../../application/order/order.service';
 import { AddressService } from '../../application/address/address.service';
 import { parseProductionDateInput } from '../../application/order/production-date';
+import { getRecipeLifeStageShortLabel } from '../../domain/recipe/enums';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard, CurrentUser, type RequestUser } from '../auth';
 import { AdminGuard, StaffGuard } from '../guards/role.guard';
@@ -876,6 +877,7 @@ export class StaffCustomerServiceController {
         customerOwnerId: true,
         customerDogId: true,
         seriesId: true,
+        updatedAt: true,
       },
       orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
       // ⚠️ 不要加 take：多版本食谱会吃掉配额，超出的部分会**静默消失**，
@@ -928,6 +930,17 @@ export class StaffCustomerServiceController {
         return creatorRole.get(series.createdBy ?? '') !== 'CUSTOMER';
       });
     }
+
+    // 3.5) 按最近更新时间倒序。之前按 recipeId 升序排，而 recipeId 是随机 UUID，
+    //      列表看起来就是乱序的（老板 2026-11-09 在体验版上指出）。
+    const updatedAtMs = (value: Date | string | null | undefined) => {
+      if (!value) return 0;
+      const time = new Date(value).getTime();
+      return Number.isNaN(time) ? 0 : time;
+    };
+    recipes = [...recipes].sort(
+      (a, b) => updatedAtMs(b.updatedAt) - updatedAtMs(a.updatedAt),
+    );
 
     // 4) 归属信息（谁的定制、哪只狗）
     const ownerIds = Array.from(
@@ -998,6 +1011,12 @@ export class StaffCustomerServiceController {
     }
 
     const dogLifeStage = this.resolveLifeStageKeyword(dog);
+    // 妊娠/哺乳在配方里统一归到「繁殖期」，不转一下会拿 PREGNANCY 去比 REPRODUCTION，
+    // 把本来对得上的配方误判成阶段不符。
+    const dogLifeStageForMatch =
+      dogLifeStage === 'PREGNANCY' || dogLifeStage === 'LACTATION'
+        ? 'REPRODUCTION'
+        : dogLifeStage;
 
     const items = recipes.map((recipe) => {
       const owner = recipe.customerOwnerId
@@ -1022,9 +1041,7 @@ export class StaffCustomerServiceController {
           (name) => name.includes(allergen) || allergen.includes(name),
         );
         if (hit) {
-          reasons.push(
-            `${dog.name} 的档案里记了「${allergen}」过敏，这条配方用到 ${hit}`,
-          );
+          reasons.push(`含「${hit}」，${dog.name}对它过敏`);
           break;
         }
       }
@@ -1032,11 +1049,13 @@ export class StaffCustomerServiceController {
       const stages = this.normalizeLifeStages(recipe.applicableLifeStages);
       if (
         stages.length > 0 &&
-        dogLifeStage &&
-        !stages.some((stage) => stage.includes(dogLifeStage))
+        dogLifeStageForMatch &&
+        !stages.some((stage) => stage.includes(dogLifeStageForMatch))
       ) {
+        // 界面上只放中文短标签，不要把 PUPPY_14_WEEKS_PLUS 这种枚举值甩给员工
+        const stageText = stages.map(getRecipeLifeStageShortLabel).join('、');
         reasons.push(
-          `这条配方的适用阶段是 ${stages.join('/')}，${dog.name} 目前按 ${dogLifeStage} 算`,
+          `适合「${stageText}」，${dog.name}目前是${this.getDogLifeStageLabel(dogLifeStage)}`,
         );
       }
 
@@ -1064,15 +1083,11 @@ export class StaffCustomerServiceController {
       };
     });
 
-    const ownershipFilter = String(query.ownership || '').toUpperCase();
-    const ownershipFiltered = ['WINDOW', 'OWN_CUSTOM', 'OTHER_CUSTOM'].includes(
-      ownershipFilter,
-    )
-      ? items.filter((item) => item.ownership.kind === ownershipFilter)
-      : items;
-
-    const filtered = keyword
-      ? ownershipFiltered.filter((item) =>
+    // 6) 搜索 + 四档计数 + 筛选 + 分页
+    //    计数必须按「搜索后、分档前」的集合算：否则四个标签都只能显示当前档的
+    //    total，看起来四个数字永远一样（老板 2026-11-09 在体验版上指出）。
+    const keywordFiltered = keyword
+      ? items.filter((item) =>
           [
             item.name,
             item.ownership.customerName,
@@ -1083,12 +1098,34 @@ export class StaffCustomerServiceController {
               .includes(keyword),
           ),
         )
-      : ownershipFiltered;
+      : items;
+
+    const counts = {
+      all: keywordFiltered.length,
+      window: keywordFiltered.filter((item) => item.ownership.kind === 'WINDOW')
+        .length,
+      ownCustom: keywordFiltered.filter(
+        (item) => item.ownership.kind === 'OWN_CUSTOM',
+      ).length,
+      otherCustom: keywordFiltered.filter(
+        (item) => item.ownership.kind === 'OTHER_CUSTOM',
+      ).length,
+    };
+
+    const ownershipFilter = String(query.ownership || '').toUpperCase();
+    const filtered = ['WINDOW', 'OWN_CUSTOM', 'OTHER_CUSTOM'].includes(
+      ownershipFilter,
+    )
+      ? keywordFiltered.filter(
+          (item) => item.ownership.kind === ownershipFilter,
+        )
+      : keywordFiltered;
 
     const start = (page - 1) * pageSize;
     return ApiResponseDto.success({
       items: filtered.slice(start, start + pageSize),
       total: filtered.length,
+      counts,
     });
   }
 
@@ -1255,13 +1292,20 @@ export class StaffCustomerServiceController {
     return Array.from(new Set(keywords));
   }
 
-  /** 粗判狗狗所处生命阶段（只用于"这条配方适用阶段对不对"的提示） */
+  /**
+   * 狗狗自己的生命阶段（只用于"这条配方适用阶段对不对"的提示）。
+   *
+   * ⚠️ NONE 是「没手动指定」的默认值，不是一种阶段。这里以前把 NONE 当成有效
+   * 阶段返回，于是所有用默认档案的狗都被判成「按 NONE 算」，每条带适用阶段的
+   * 配方都会亮红字（老板 2026-11-09 在体验版上看到满屏红字、文案里还有英文枚举）。
+   * 现在 NONE / AUTO 都回落到生日推算；生日也没有就返回 null —— 判断不了就不提示。
+   */
   private resolveLifeStageKeyword(dog: {
     birthday?: Date | string | null;
     lifeStageOverride?: string | null;
   }): string | null {
     const override = String(dog.lifeStageOverride || '').toUpperCase();
-    if (override && override !== 'AUTO') {
+    if (override && override !== 'AUTO' && override !== 'NONE') {
       return override;
     }
     if (!dog.birthday) return null;
@@ -1272,6 +1316,22 @@ export class StaffCustomerServiceController {
     if (ageMonths < 12) return 'PUPPY';
     if (ageMonths >= 84) return 'SENIOR';
     return 'ADULT';
+  }
+
+  private getDogLifeStageLabel(stage: string): string {
+    const labels: Record<string, string> = {
+      PUPPY: '幼犬',
+      ADULT: '成犬',
+      SENIOR: '老年犬',
+      PREGNANCY: '妊娠期',
+      LACTATION: '哺乳期',
+      PUPPY_UNDER_14_WEEKS: '幼犬（14 周内）',
+      PUPPY_14_WEEKS_PLUS: '幼犬（14 周以上）',
+      HIGH_ACTIVITY_ADULT: '成犬（普通或高活动）',
+      LOW_ACTIVITY_ADULT_OR_SENIOR: '低活动成犬或老年犬',
+      REPRODUCTION: '妊娠或哺乳期',
+    };
+    return labels[stage] || stage;
   }
 
   private normalizeLifeStages(value: any): string[] {

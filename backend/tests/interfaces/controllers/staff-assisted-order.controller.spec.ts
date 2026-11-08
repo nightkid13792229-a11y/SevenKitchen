@@ -308,6 +308,86 @@ describe('staff assisted order controller', () => {
     expect(items).toHaveLength(1);
     expect(items[0].ownership.kind).toBe('OTHER_CUSTOM');
     expect((res as any).data.total).toBe(1);
+    // 四档计数按“筛档之前”的集合算：否则四个标签永远显示同一个数字
+    expect((res as any).data.counts).toEqual({
+      all: 2,
+      window: 1,
+      ownCustom: 0,
+      otherCustom: 1,
+    });
+  });
+
+  it('默认 NONE 的生命阶段按生日推算，不会满屏误报；文案里不出现英文枚举', async () => {
+    const { controller, prisma } = buildController();
+    prisma.dog.findUnique.mockResolvedValue({
+      id: 'dog-1',
+      ownerId: 'cust-1',
+      name: '烟花',
+      birthday: new Date('2022-01-01'),
+      lifeStageOverride: 'NONE',
+    });
+    prisma.recipe.findMany.mockResolvedValue([
+      {
+        id: 'i1', recipeId: 'r-adult', version: 1, name: '成犬餐', status: 'PUBLIC',
+        coverImageUrl: null, applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        customerOwnerId: null, customerDogId: null, seriesId: null,
+        updatedAt: new Date('2026-11-01T00:00:00Z'),
+      },
+      {
+        id: 'i2', recipeId: 'r-puppy', version: 1, name: '幼犬餐', status: 'PUBLIC',
+        coverImageUrl: null, applicableLifeStages: ['PUPPY_14_WEEKS_PLUS'],
+        customerOwnerId: null, customerDogId: null, seriesId: null,
+        updatedAt: new Date('2026-11-02T00:00:00Z'),
+      },
+    ]);
+
+    const res = await controller.listAssistedRecipeOptions('dog-1', {
+      customerId: 'cust-1',
+    });
+    const items = (res as any).data.items;
+    const adult = items.find((item: any) => item.name === '成犬餐');
+    const puppy = items.find((item: any) => item.name === '幼犬餐');
+
+    // 「NONE」不是阶段：烟花是成犬，成犬配方不该亮红字
+    expect(adult.fit.level).toBe('OK');
+    expect(puppy.fit.level).toBe('WARN');
+    expect(puppy.fit.reasons[0]).toBe('适合「幼犬（14 周以上）」，烟花目前是成犬');
+    expect(puppy.fit.reasons[0]).not.toContain('PUPPY_14_WEEKS_PLUS');
+    expect(puppy.fit.reasons[0]).not.toContain('NONE');
+  });
+
+  it('列表按最近更新时间倒序（recipeId 是随机 UUID，不能拿它当排序依据）', async () => {
+    const { controller, prisma } = buildController();
+    prisma.recipe.findMany.mockResolvedValue([
+      {
+        id: 'i1', recipeId: 'r-old', version: 1, name: '很早就没动过', status: 'PUBLIC',
+        coverImageUrl: null, applicableLifeStages: [], customerOwnerId: null,
+        customerDogId: null, seriesId: null,
+        updatedAt: new Date('2026-10-01T00:00:00Z'),
+      },
+      {
+        id: 'i2', recipeId: 'r-new', version: 1, name: '刚改过', status: 'PUBLIC',
+        coverImageUrl: null, applicableLifeStages: [], customerOwnerId: null,
+        customerDogId: null, seriesId: null,
+        updatedAt: new Date('2026-11-08T12:00:00Z'),
+      },
+      {
+        id: 'i3', recipeId: 'r-mid', version: 1, name: '中间改的', status: 'PUBLIC',
+        coverImageUrl: null, applicableLifeStages: [], customerOwnerId: null,
+        customerDogId: null, seriesId: null,
+        updatedAt: new Date('2026-11-05T00:00:00Z'),
+      },
+    ]);
+
+    const res = await controller.listAssistedRecipeOptions('dog-1', {
+      customerId: 'cust-1',
+    });
+
+    expect((res as any).data.items.map((item: any) => item.name)).toEqual([
+      '刚改过',
+      '中间改的',
+      '很早就没动过',
+    ]);
   });
 
   it('给非顾客账号建地址 → 404（防止把地址挂到员工/老板身上）', async () => {

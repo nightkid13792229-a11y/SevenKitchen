@@ -8,6 +8,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsNotEmpty,
   IsNumber,
   IsObject,
   IsOptional,
@@ -450,6 +451,9 @@ export class UpdateRecipeSeriesReleaseSettingsDto {
  * - 首次发布不需要 body：服务端取当前全部 READY 阶段，传了也忽略；
  * - 已上线更新时传本次要更新的阶段代码；省略 = 全量更新（兼容旧前端），
  *   空数组 = 400，非法 / 不可操作代码 = 400。
+ *
+ * 2026-11-08：改成「草稿 → 发布」后，发布一律发草稿里的全部可操作阶段，
+ * `stageCodes` 仅为旧前端保留，服务层忽略。
  */
 export class ReleaseRecipeSeriesDto {
   @IsOptional()
@@ -457,6 +461,60 @@ export class ReleaseRecipeSeriesDto {
   @ArrayMaxSize(RECIPE_SERIES_RELEASE_STAGE_CODES.length)
   @IsString({ each: true })
   stageCodes?: string[];
+}
+
+/** 一个分类维度的草稿值：kindId 唯一，nodeId 是挂在哪个叶子。 */
+export class SeriesReleaseDraftTaxonomyDto {
+  @IsString()
+  @IsNotEmpty()
+  kindId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  nodeId!: string;
+}
+
+/**
+ * 发布草稿（2026-11-08）。
+ *
+ * 全部字段可省略，省略 = 不动；显式 null / 空数组 = 清空。
+ * 写进去的只是草稿，顾客端看不到，直到管理员点「发布这一版」。
+ */
+export class SaveSeriesReleaseDraftDto {
+  @IsOptional()
+  @IsString()
+  coverImageUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(RECIPE_PRESENTATION_LIMITS.coverTitle)
+  coverTitle?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(RECIPE_PRESENTATION_LIMITS.sellingPoint)
+  sellingPoint?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  targetHealthTags?: string[];
+
+  /** 封面角标（health_tag id，顺序即展示顺序，最多 2 个） */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(2)
+  @IsString({ each: true })
+  badgeHealthTagIds?: string[];
+
+  /** 需求分类：一个维度只能挂一个节点，整体覆盖 */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => SeriesReleaseDraftTaxonomyDto)
+  taxonomy?: SeriesReleaseDraftTaxonomyDto[];
 }
 
 /**

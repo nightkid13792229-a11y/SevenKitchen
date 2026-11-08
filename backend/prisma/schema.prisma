@@ -773,6 +773,16 @@ model RecipeSeries {
   coverTitle         String?  @map("cover_title") @db.VarChar(20)
   sellingPoint       String?  @map("selling_point") @db.VarChar(200)
   targetHealthTags   String[] @default([]) @map("target_health_tags")
+  /// ===== 2026-11-08 发布草稿 =====
+  ///
+  /// 展示资料（封面 / 标题 / 卖点 / 健康标签）、封面角标、需求分类先写进
+  /// `release_draft`，顾客端看到的仍是上面那组线上值；管理员点「发布这一版」
+  /// 时才把草稿应用到系列、已上线食谱门面、角标表和归类表，然后清空草稿。
+  ///
+  /// JSON 结构见 `SeriesReleaseDraftPayload`（series-release-draft.ts）。
+  releaseDraft          Json?    @map("release_draft")
+  releaseDraftUpdatedAt DateTime? @map("release_draft_updated_at")
+  releaseDraftUpdatedBy String?  @map("release_draft_updated_by")
   createdAt      DateTime                   @default(now()) @map("created_at")
   updatedAt      DateTime                   @updatedAt @map("updated_at")
   recipes        Recipe[]

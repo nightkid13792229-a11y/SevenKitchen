@@ -94,9 +94,20 @@ describe('RecipeDesignerService · staged series release', () => {
     // 默认给一条归属，避免被新门禁打成阻断。
     recipeSeriesTaxonomy: {
       count: jest.fn().mockResolvedValue(1),
+      // 2026-11-08 草稿：生成「生效值」时要读一次线上归类
+      findMany: jest
+        .fn()
+        .mockResolvedValue([{ kindId: 'kind-1', nodeId: 'node-1' }]),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      createMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     recipeSeriesCoverBadge: {
       findMany: jest.fn(),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      createMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    recipeHealthTag: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
     $transaction: jest.fn(),
   } as any;
@@ -191,17 +202,17 @@ describe('RecipeDesignerService · staged series release', () => {
       });
       expect(prisma.recipeSeriesCoverBadge.findMany).toHaveBeenCalledWith({
         where: { seriesId: 'series-1' },
-        select: { healthTag: { select: { name: true } } },
+        select: { healthTagId: true, healthTag: { select: { name: true } } },
         orderBy: { sortOrder: 'asc' },
       });
     });
 
     it('includes cover badge names in readiness presentation', async () => {
       prisma.recipeSeriesCoverBadge.findMany.mockResolvedValue([
-        { healthTag: { name: '低脂' } },
-        { healthTag: { name: '含鸭胸' } },
-        { healthTag: { name: '易消化' } },
-        { healthTag: { name: '鲜肉现制' } },
+        { healthTagId: 'tag-1', healthTag: { name: '低脂' } },
+        { healthTagId: 'tag-2', healthTag: { name: '含鸭胸' } },
+        { healthTagId: 'tag-3', healthTag: { name: '易消化' } },
+        { healthTagId: 'tag-4', healthTag: { name: '鲜肉现制' } },
       ]);
 
       const readiness = await service.getSeriesReleaseReadiness(
@@ -720,7 +731,11 @@ describe('RecipeDesignerService · staged series release', () => {
       });
       expect(prisma.recipeSeries.update).toHaveBeenCalledWith({
         where: { id: 'series-1' },
-        data: { businessStatus: 'PUBLIC' },
+        data: expect.objectContaining({
+          businessStatus: 'PUBLIC',
+          coverImageUrl: 'https://img.example.com/series-cover.jpg',
+          sellingPoint: '两种能量一套配方',
+        }),
       });
       expect(result).toMatchObject({
         seriesId: 'series-1',
@@ -816,138 +831,81 @@ describe('RecipeDesignerService · staged series release', () => {
       });
     });
 
-    it('releases only the selected pending stages and leaves the others DRAFT', async () => {
+    it('applies the release draft without touching any stage recipe', async () => {
       prisma.recipeSeries.findUnique.mockResolvedValue(
-        seriesRecord({ businessStatus: 'PUBLIC' }),
+        seriesRecord({
+          businessStatus: 'PUBLIC',
+          releaseDraft: {
+            coverImageUrl: 'https://img.example.com/series-cover-v2.jpg',
+            coverTitle: '鸡肉双阶段',
+            sellingPoint: '两种能量，一套配方',
+            targetHealthTags: ['JOINT'],
+            badgeHealthTagIds: ['tag-1'],
+            taxonomy: [{ kindId: 'kind-1', nodeId: 'node-2' }],
+          },
+          releaseDraftUpdatedAt: new Date('2026-11-08T03:52:00.000Z'),
+        }),
       );
+      // 阶段已经全是最新：没有 DRAFT 行可发，只有资料草稿。
       prisma.recipe.findMany.mockResolvedValue([
         recipeRecord({
-          id: 'recipe-row-adult-v1',
+          id: 'recipe-row-adult-v4',
           recipeId: 'recipe-adult',
-          version: 1,
+          version: 4,
           status: 'PUBLIC',
-        }),
-        recipeRecord({
-          id: 'recipe-row-adult-v2',
-          recipeId: 'recipe-adult',
-          version: 2,
-          status: 'DRAFT',
-        }),
-        recipeRecord({
-          id: 'recipe-row-senior-v1',
-          recipeId: 'recipe-senior',
-          version: 1,
-          status: 'PUBLIC',
-          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
-          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
-        }),
-        recipeRecord({
-          id: 'recipe-row-senior-v2',
-          recipeId: 'recipe-senior',
-          version: 2,
-          status: 'DRAFT',
-          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
-          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
         }),
       ]);
       prisma.recipe.updateMany
-        .mockResolvedValueOnce({ count: 1 })
-        .mockResolvedValueOnce({ count: 2 });
+        .mockResolvedValueOnce({ count: 0 })
+        .mockResolvedValueOnce({ count: 1 });
 
-      const result = await service.releaseSeries('series-1', ADMIN_ACCESS, {
-        stageCodes: ['HIGH_ACTIVITY_ADULT'],
-      });
+      const result = await service.releaseSeries('series-1', ADMIN_ACCESS);
 
-      const firstCall = prisma.recipe.updateMany.mock.calls[0][0];
-      expect(firstCall.where).toEqual({
-        id: { in: ['recipe-row-adult-v2'] },
-        seriesId: 'series-1',
-        status: 'DRAFT',
-      });
-      // 未选中的 B 阶段新 DRAFT 不在本次发布目标里。
-      expect(firstCall.where.id.in).not.toContain('recipe-row-senior-v2');
-      const secondCall = prisma.recipe.updateMany.mock.calls[1][0];
-      expect(secondCall.where).toEqual({
-        seriesId: 'series-1',
-        status: 'PUBLIC',
-        id: { notIn: ['recipe-row-adult-v2'] },
-      });
-      expect(secondCall.data).not.toHaveProperty('status');
-      expect(result).toMatchObject({
-        businessStatus: 'PUBLIC',
-        releasedStageCodes: ['HIGH_ACTIVITY_ADULT'],
-        publishedRecipeCount: 1,
-        updatedRecipeCount: 3,
-      });
-    });
-
-    it('rejects an empty stageCodes array on an already published series', async () => {
-      prisma.recipeSeries.findUnique.mockResolvedValue(
-        seriesRecord({ businessStatus: 'PUBLIC' }),
-      );
-      prisma.recipe.findMany.mockResolvedValue([
-        recipeRecord({
-          id: 'recipe-row-adult-v1',
-          recipeId: 'recipe-adult',
-          version: 1,
-          status: 'PUBLIC',
-        }),
-        recipeRecord({
-          id: 'recipe-row-adult-v2',
-          recipeId: 'recipe-adult',
-          version: 2,
-          status: 'DRAFT',
-        }),
+      expect(result.releasedStageCodes).toEqual([]);
+      expect(result.appliedDraftFields).toEqual([
+        'coverImageUrl',
+        'sellingPoint',
+        'coverBadges',
+        'taxonomy',
       ]);
-
-      await expect(
-        service.releaseSeries('series-1', ADMIN_ACCESS, { stageCodes: [] }),
-      ).rejects.toThrow('请至少选择一个要更新的阶段');
-
-      expect(prisma.$transaction).not.toHaveBeenCalled();
-      expect(prisma.recipe.updateMany).not.toHaveBeenCalled();
-    });
-
-    it('rejects stage codes that are not actionable', async () => {
-      prisma.recipeSeries.findUnique.mockResolvedValue(
-        seriesRecord({ businessStatus: 'PUBLIC' }),
+      // 门面用草稿值刷新所有已上线食谱
+      expect(prisma.recipe.updateMany).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: expect.objectContaining({ status: 'PUBLIC' }),
+          data: expect.objectContaining({
+            coverImageUrl: 'https://img.example.com/series-cover-v2.jpg',
+            sellingPoint: '两种能量，一套配方',
+          }),
+        }),
       );
-      prisma.recipe.findMany.mockResolvedValue([
-        recipeRecord({
-          id: 'recipe-row-adult-v1',
-          recipeId: 'recipe-adult',
-          version: 1,
-          status: 'PUBLIC',
+      // 草稿落到系列上并清空
+      expect(prisma.recipeSeries.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            coverImageUrl: 'https://img.example.com/series-cover-v2.jpg',
+            releaseDraft: expect.anything(),
+            releaseDraftUpdatedAt: null,
+          }),
         }),
-        recipeRecord({
-          id: 'recipe-row-adult-v2',
-          recipeId: 'recipe-adult',
-          version: 2,
-          status: 'DRAFT',
+      );
+      // 角标 / 归类整体覆盖成草稿
+      expect(prisma.recipeSeriesCoverBadge.deleteMany).toHaveBeenCalledWith({
+        where: { seriesId: 'series-1' },
+      });
+      expect(prisma.recipeSeriesCoverBadge.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: [{ seriesId: 'series-1', healthTagId: 'tag-1', sortOrder: 0 }],
         }),
-        recipeRecord({
-          id: 'recipe-row-senior-v1',
-          recipeId: 'recipe-senior',
-          version: 1,
-          status: 'PUBLIC',
-          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
-          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+      );
+      expect(prisma.recipeSeriesTaxonomy.deleteMany).toHaveBeenCalledWith({
+        where: { seriesId: 'series-1' },
+      });
+      expect(prisma.recipeSeriesTaxonomy.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: [{ seriesId: 'series-1', kindId: 'kind-1', nodeId: 'node-2' }],
         }),
-      ]);
-
-      await expect(
-        service.releaseSeries('series-1', ADMIN_ACCESS, {
-          stageCodes: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
-        }),
-      ).rejects.toThrow('以下阶段当前不可更新：LOW_ACTIVITY_ADULT_OR_SENIOR');
-      await expect(
-        service.releaseSeries('series-1', ADMIN_ACCESS, {
-          stageCodes: ['NOT_A_LIFE_STAGE'],
-        }),
-      ).rejects.toThrow('以下阶段当前不可更新：NOT_A_LIFE_STAGE');
-
-      expect(prisma.$transaction).not.toHaveBeenCalled();
-      expect(prisma.recipe.updateMany).not.toHaveBeenCalled();
+      );
     });
 
     it('rejects a first release when no stage is READY', async () => {
@@ -994,7 +952,7 @@ describe('RecipeDesignerService · staged series release', () => {
 
       await expect(
         service.releaseSeries('series-1', ADMIN_ACCESS),
-      ).rejects.toThrow('当前没有可更新的阶段');
+      ).rejects.toThrow('当前没有待发布的内容');
 
       expect(prisma.$transaction).not.toHaveBeenCalled();
       expect(prisma.recipe.updateMany).not.toHaveBeenCalled();

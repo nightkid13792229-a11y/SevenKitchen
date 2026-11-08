@@ -56,6 +56,7 @@ import {
   UpdateRecipeDesignItemDto,
   UpdateRecipeProductionStepsDto,
   UpdateRecipeSeriesReleaseSettingsDto,
+  SaveSeriesReleaseDraftDto,
 } from '../dto/recipe-designer/recipe-designer.dto';
 import { Roles, StaffGuard } from '../guards/role.guard';
 
@@ -514,6 +515,24 @@ export class RecipeDesignerController {
         { applyToLive: true },
       );
     return ApiResponseDto.success(settings);
+  }
+
+  @Patch('series/:seriesId/release-draft')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Save the release draft of a recipe series',
+  })
+  async saveSeriesReleaseDraft(
+    @Param('seriesId') seriesId: string,
+    @Body() dto: SaveSeriesReleaseDraftDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const draft = await this.recipeDesignerService.saveSeriesReleaseDraft(
+      seriesId,
+      dto,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(draft);
   }
 
   @Post('series/:seriesId/release')

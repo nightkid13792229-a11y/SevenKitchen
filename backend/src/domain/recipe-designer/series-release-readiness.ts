@@ -146,6 +146,17 @@ export interface BuildSeriesReleaseReadinessInput {
   taxonomyLinkCount?: number;
   /** 全量阶段快照，顺序即后台展示顺序 */
   stages: SeriesReleaseStageSnapshot[];
+  /**
+   * 发布草稿（2026-11-08）。
+   *
+   * `presentation` 传的是「草稿 ?? 线上」算出来的**生效值**；这里再传一份
+   * 差异信息，让 canRelease 与后台文案都用同一份结论：
+   * 已上线系列只要资料有草稿就能单独发布一次（不要求同时有阶段版本）。
+   */
+  releaseDraft?: {
+    updatedAt?: Date | string | null;
+    changedFields: string[];
+  } | null;
 }
 
 export interface SeriesReleaseReadiness {
@@ -162,8 +173,19 @@ export interface SeriesReleaseReadiness {
   releaseState: SeriesReleaseState;
   /** 展示资料是否齐全（封面图 + 一句话卖点） */
   ready: boolean;
-  /** 是否可点「发布 / 更新」：展示资料齐全，且至少有一个可操作阶段 */
+  /**
+   * 是否可点「发布这一版」：
+   *  · 展示资料齐全；
+   *  · 且（有可操作阶段，或已上线系列的资料草稿有改动）。
+   * 已上线系列只改封面 / 卖点时也要能发出去，否则草稿永远发不了。
+   */
   canRelease: boolean;
+  /** 发布草稿（2026-11-08）：顾客端看不到，发布后才生效 */
+  releaseDraft: {
+    exists: boolean;
+    updatedAt: string | null;
+    changedFields: string[];
+  };
   /** 全量阶段（便于后台展示「其它已设计阶段」） */
   stages: SeriesReleaseStageReadiness[];
   presentation: {
@@ -351,6 +373,9 @@ export const buildSeriesReleaseReadiness = (
   ).length;
 
   const ready = blockers.length === 0;
+  const draftChangedFields = [...(input.releaseDraft?.changedFields ?? [])];
+  const hasDraftChanges = draftChangedFields.length > 0;
+  const draftUpdatedAt = input.releaseDraft?.updatedAt ?? null;
 
   return {
     seriesId: input.seriesId,
@@ -358,7 +383,17 @@ export const buildSeriesReleaseReadiness = (
     businessStatus,
     releaseState,
     ready,
-    canRelease: ready && actionableStageCount > 0,
+    canRelease:
+      ready &&
+      (actionableStageCount > 0 ||
+        (businessStatus === 'PUBLIC' && hasDraftChanges)),
+    releaseDraft: {
+      exists: hasDraftChanges,
+      updatedAt: draftUpdatedAt
+        ? new Date(draftUpdatedAt).toISOString()
+        : null,
+      changedFields: draftChangedFields,
+    },
     stages,
     presentation: {
       coverImageUrl,

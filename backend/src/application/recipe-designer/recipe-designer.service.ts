@@ -72,9 +72,21 @@ import {
   type SeriesReleaseReadiness,
   type SeriesReleaseStageReadiness,
   type SeriesReleaseStageSnapshot,
+  type SeriesReleasePresentation,
   type SeriesReleaseStageStatus,
   type SeriesReleaseState,
 } from '../../domain/recipe-designer/series-release-readiness';
+import {
+  buildSeriesReleaseLiveValues,
+  diffSeriesReleaseDraft,
+  isSeriesReleaseDraftEqualToLive,
+  mergeSeriesReleaseDraft,
+  parseSeriesReleaseDraft,
+  type SeriesReleaseDraftField,
+  type SeriesReleaseDraftPatch,
+  type SeriesReleaseDraftPayload,
+  type SeriesReleaseDraftTaxonomyLink,
+} from '../../domain/recipe-designer/series-release-draft';
 import type {
   AssessmentEntry,
   AssessmentExpressionBasis,
@@ -100,6 +112,7 @@ import type {
   PublishRecipeDesignDraftDto,
   RenameRecipeSeriesDto,
   ReorderRecipeDesignItemsDto,
+  SaveSeriesReleaseDraftDto,
   UpdateDogDesignNotesDto,
   UpdateRecipeDesignDraftDto,
   UpdateRecipeDesignPresentationDto,
@@ -320,6 +333,8 @@ type SeriesReleaseResult = {
   publishedRecipeCount: number;
   /** 本次实际写入（含已公开行刷新展示资料）的食谱行数 */
   updatedRecipeCount: number;
+  /** 本次随发布一起应用的草稿字段（空 = 只发了阶段版本） */
+  appliedDraftFields: SeriesReleaseDraftField[];
   releasedAt: Date;
 };
 
@@ -4281,17 +4296,166 @@ export class RecipeDesignerService {
   ): Promise<SeriesReleaseReadiness> {
     const context = normalizeRecipeDesignerAccessContext(access);
     const series = await this.loadCatalogSeriesForRelease(seriesId, context);
-    const [sources, coverBadges, taxonomyLinkCount] = await Promise.all([
+    const [sources, draftContext] = await Promise.all([
       this.loadSeriesReleaseStageSources(seriesId),
-      this.loadSeriesCoverBadgeNames(seriesId),
-      this.countSeriesTaxonomyLinks(seriesId),
+      this.loadSeriesReleaseDraftContext(series),
     ]);
-    return this.buildSeriesReleaseReadinessForSeries(
+    return this.buildSeriesReleaseReadinessForSeries({
       series,
       sources,
-      coverBadges,
-      taxonomyLinkCount,
+      presentation: this.toSeriesReleasePresentation({
+        ...draftContext,
+        badgeNames: draftContext.badgeNames,
+      }),
+      taxonomyLinkCount: draftContext.effective.taxonomy.length,
+      releaseDraft: draftContext.changedFields.length
+        ? {
+            updatedAt: draftContext.updatedAt,
+            changedFields: draftContext.changedFields,
+          }
+        : null,
+    });
+  }
+
+  /**
+   * 保存发布草稿（2026-11-08）。
+   *
+   * - 只写 `release_draft`，顾客端不变；点「发布这一版」才应用；
+   * - patch semantics：省略 = 不动，显式 null / 空数组 = 清空；
+   * - 草稿最终和线上值一样时直接删草稿，不留空草稿；
+   * - 已上线系列不允许把封面图 / 卖点清空（发布时就晚了，提前拦）；
+   * - 需求分类按节点反查 kindId，不信任前端传来的 kindId。
+   */
+  async saveSeriesReleaseDraft(
+    seriesId: string,
+    dto: SaveSeriesReleaseDraftDto,
+    access: RecipeDesignerAccessInput,
+  ): Promise<{
+    changedFields: SeriesReleaseDraftField[];
+    updatedAt: string | null;
+    presentation: {
+      coverImageUrl: string | null;
+      coverTitle: string | null;
+      sellingPoint: string | null;
+      targetHealthTags: string[];
+      coverBadges: string[];
+    };
+  }> {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    if (!isInternalRecipeDesignerRole(context)) {
+      throw new BadRequestException('只有员工可以维护产品线发布设置');
+    }
+    const series = await this.loadCatalogSeriesForRelease(seriesId, context);
+    const draftContext = await this.loadSeriesReleaseDraftContext(series);
+
+    const patch: SeriesReleaseDraftPatch = {};
+    if (dto.coverImageUrl !== undefined) {
+      patch.coverImageUrl = this.normalizeSeriesReleaseText(
+        dto.coverImageUrl,
+        '封面图地址',
+      );
+    }
+    if (dto.coverTitle !== undefined) {
+      patch.coverTitle = this.normalizeSeriesReleaseText(
+        dto.coverTitle,
+        '封面标题',
+        RECIPE_PRESENTATION_LIMITS.coverTitle,
+      );
+    }
+    if (dto.sellingPoint !== undefined) {
+      patch.sellingPoint = this.normalizeSeriesReleaseText(
+        dto.sellingPoint,
+        '一句话卖点',
+        RECIPE_PRESENTATION_LIMITS.sellingPoint,
+      );
+    }
+    if (dto.targetHealthTags !== undefined) {
+      patch.targetHealthTags = this.normalizeSeriesReleaseStringList(
+        dto.targetHealthTags,
+        '目标健康标签',
+      );
+    }
+    if (dto.badgeHealthTagIds !== undefined) {
+      const ids = [...new Set(dto.badgeHealthTagIds.map((id) => String(id).trim()))]
+        .filter(Boolean)
+        .slice(0, 2);
+      if (ids.length > 0) {
+        const found = await this.prisma.recipeHealthTag.findMany({
+          where: { id: { in: ids } },
+          select: { id: true },
+        });
+        if (found.length !== ids.length) {
+          throw new BadRequestException('封面角标只能从合规词表里选');
+        }
+      }
+      patch.badgeHealthTagIds = ids;
+    }
+    if (dto.taxonomy !== undefined) {
+      const nodeIds = [...new Set(dto.taxonomy.map((link) => link.nodeId))];
+      const nodes = nodeIds.length
+        ? await this.prisma.recipeTaxonomyNode.findMany({
+            where: { id: { in: nodeIds } },
+            select: { id: true, kindId: true },
+          })
+        : [];
+      const kindByNode = new Map(nodes.map((node) => [node.id, node.kindId]));
+      const missing = nodeIds.filter((id) => !kindByNode.has(id));
+      if (missing.length > 0) {
+        throw new BadRequestException('需求分类节点不存在或已删除，请重新选择');
+      }
+      patch.taxonomy = [...kindByNode.entries()].map(([nodeId, kindId]) => ({
+        kindId,
+        nodeId,
+      }));
+    }
+
+    const merged = mergeSeriesReleaseDraft(
+      draftContext.draft,
+      patch,
+      draftContext.live,
     );
+    const liveCount = await this.prisma.recipe.count({
+      where: { seriesId, status: RecipeStatus.PUBLIC },
+    });
+    const isLive =
+      series.businessStatus === RecipeSeriesBusinessStatus.PUBLIC ||
+      liveCount > 0;
+    if (isLive && !merged.coverImageUrl) {
+      throw new BadRequestException('已上线系列不能清空封面图');
+    }
+    if (isLive && !merged.sellingPoint) {
+      throw new BadRequestException('已上线系列不能清空一句话卖点');
+    }
+
+    const changedFields = diffSeriesReleaseDraft(merged, draftContext.live);
+    const savedAt =
+      changedFields.length === 0 ? null : new Date();
+    await this.prisma.recipeSeries.update({
+      where: { id: seriesId },
+      data: {
+        releaseDraft:
+          changedFields.length === 0 ? Prisma.DbNull : (merged as any),
+        releaseDraftUpdatedAt: savedAt,
+        releaseDraftUpdatedBy: savedAt ? context.userId : null,
+      },
+    });
+
+    const effective =
+      changedFields.length === 0 ? draftContext.live : merged;
+    const coverBadges = await this.loadHealthTagNamesByIds(
+      effective.badgeHealthTagIds,
+    );
+    return {
+      changedFields,
+      updatedAt: savedAt ? savedAt.toISOString() : null,
+      presentation: {
+        coverImageUrl: effective.coverImageUrl,
+        coverTitle: effective.coverTitle,
+        sellingPoint: effective.sellingPoint,
+        targetHealthTags: effective.targetHealthTags,
+        coverBadges,
+      },
+    };
   }
 
   /**
@@ -4432,44 +4596,41 @@ export class RecipeDesignerService {
         '系列名称还是临时名称，先在「发布设置」里改成正式名称再发布',
       );
     }
-    const [sources, coverBadges, taxonomyLinkCount] = await Promise.all([
+    const [sources, draftContext] = await Promise.all([
       this.loadSeriesReleaseStageSources(seriesId),
-      this.loadSeriesCoverBadgeNames(seriesId),
-      this.countSeriesTaxonomyLinks(seriesId),
+      this.loadSeriesReleaseDraftContext(series),
     ]);
-    const readiness = this.buildSeriesReleaseReadinessForSeries(
+    const readiness = this.buildSeriesReleaseReadinessForSeries({
       series,
       sources,
-      coverBadges,
-      taxonomyLinkCount,
-    );
+      presentation: this.toSeriesReleasePresentation(draftContext),
+      taxonomyLinkCount: draftContext.effective.taxonomy.length,
+      releaseDraft: draftContext.changedFields.length
+        ? {
+            updatedAt: draftContext.updatedAt,
+            changedFields: draftContext.changedFields,
+          }
+        : null,
+    });
     if (!readiness.ready) {
       throw new BadRequestException(
         readiness.blockers.map((blocker) => blocker.message).join('；'),
       );
     }
 
-    const actionableStages = readiness.stages.filter(
-      (stage) => stage.actionable,
-    );
-    const selectedStageCodes =
-      readiness.releaseState === 'UNPUBLISHED'
-        ? actionableStages
-            .filter((stage) => stage.status === 'READY')
-            .map((stage) => stage.stageCode)
-        : this.resolveSeriesReleaseSelectedStageCodes(
-            actionableStages,
-            options.stageCodes,
-          );
     /**
-     * 空发布必须拒绝：首次发布没有 READY、或更新时没有可操作阶段，
-     * 都不能开事务把系列置 PUBLIC。只改门面走「保存发布设置」。
+     * 2026-11-08：发布 = 把草稿整版发出去，不再让前端挑阶段。
+     * 可操作阶段（待发布 + 有更新）全部一起上；一个都没有时，只有
+     * 「已上线 + 资料草稿有改动」还能发（纯改封面 / 卖点）。
      */
-    if (selectedStageCodes.length === 0) {
+    const selectedStageCodes = readiness.stages
+      .filter((stage) => stage.actionable)
+      .map((stage) => stage.stageCode);
+    if (selectedStageCodes.length === 0 && draftContext.changedFields.length === 0) {
       throw new BadRequestException(
         readiness.releaseState === 'UNPUBLISHED'
           ? '还没有可发布的阶段，请先完成阶段上线检查'
-          : '当前没有可更新的阶段',
+          : '当前没有待发布的内容',
       );
     }
     const selectedStageCodeSet = new Set(selectedStageCodes);
@@ -4490,7 +4651,15 @@ export class RecipeDesignerService {
     // 只在阶段发布时拦，会漏掉所有「之前就绪、这次一起发」的阶段。
     await this.assertSeriesReleaseTargetsHaveCost(releaseTargetIds);
 
-    const presentationData = this.buildSeriesPresentationUpdateData(series);
+    // 门面按「草稿 ?? 线上」的生效值写，顾客端这次看到的就是它。
+    const effective = draftContext.effective;
+    const presentationData = this.buildSeriesPresentationUpdateData({
+      coverImageUrl: effective.coverImageUrl,
+      coverTitle: effective.coverTitle,
+      sellingPoint: effective.sellingPoint,
+      targetHealthTags: effective.targetHealthTags,
+    });
+    const appliedDraftFields = [...draftContext.changedFields];
 
     return this.prisma.$transaction(async (tx) => {
       const publishedRecipes = await tx.recipe.updateMany({
@@ -4510,10 +4679,47 @@ export class RecipeDesignerService {
         data: presentationData,
       });
 
+      // 草稿一次性落到系列上，顺手把草稿清空。
       const updatedSeries = await tx.recipeSeries.update({
         where: { id: seriesId },
-        data: { businessStatus: RecipeSeriesBusinessStatus.PUBLIC },
+        data: {
+          businessStatus: RecipeSeriesBusinessStatus.PUBLIC,
+          coverImageUrl: effective.coverImageUrl,
+          coverTitle: effective.coverTitle,
+          sellingPoint: effective.sellingPoint,
+          targetHealthTags: effective.targetHealthTags,
+          releaseDraft: Prisma.DbNull,
+          releaseDraftUpdatedAt: null,
+          releaseDraftUpdatedBy: null,
+        },
       });
+
+      if (appliedDraftFields.length > 0) {
+        // 角标：整体覆盖成草稿里的那组（顺序即展示顺序）
+        await tx.recipeSeriesCoverBadge.deleteMany({ where: { seriesId } });
+        if (effective.badgeHealthTagIds.length > 0) {
+          await tx.recipeSeriesCoverBadge.createMany({
+            data: effective.badgeHealthTagIds.map((healthTagId, index) => ({
+              seriesId,
+              healthTagId,
+              sortOrder: index,
+            })),
+            skipDuplicates: true,
+          });
+        }
+        // 需求分类：一个维度一个节点，整体覆盖
+        await tx.recipeSeriesTaxonomy.deleteMany({ where: { seriesId } });
+        if (effective.taxonomy.length > 0) {
+          await tx.recipeSeriesTaxonomy.createMany({
+            data: effective.taxonomy.map((link) => ({
+              seriesId,
+              kindId: link.kindId,
+              nodeId: link.nodeId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
 
       return {
         seriesId,
@@ -4522,6 +4728,7 @@ export class RecipeDesignerService {
         releasedStageCodes: selectedStageCodes,
         publishedRecipeCount: publishedRecipes.count,
         updatedRecipeCount: publishedRecipes.count + refreshedRecipes.count,
+        appliedDraftFields,
         releasedAt: updatedSeries.updatedAt,
       };
     });
@@ -4695,36 +4902,145 @@ export class RecipeDesignerService {
     );
   }
 
-  private buildSeriesReleaseReadinessForSeries(
+  /**
+   * 发布草稿上下文（2026-11-08）。
+   *
+   * 一次查齐：线上值（系列 + 角标 + 归类）、草稿、生效值、差异、生效角标名。
+   * 抽屉、保存草稿、发布三处都走它，避免各自拼一份口径。
+   */
+  private async loadSeriesReleaseDraftContext(
     series: Pick<
       RecipeSeries,
       | 'id'
-      | 'designMode'
-      | 'businessStatus'
       | 'coverImageUrl'
       | 'coverTitle'
       | 'sellingPoint'
       | 'targetHealthTags'
+      | 'releaseDraft'
+      | 'releaseDraftUpdatedAt'
     >,
+  ): Promise<{
+    live: SeriesReleaseDraftPayload;
+    draft: SeriesReleaseDraftPayload | null;
+    effective: SeriesReleaseDraftPayload;
+    changedFields: SeriesReleaseDraftField[];
+    updatedAt: Date | null;
+    /** 生效角的标名称（已按合规词表过滤，顺序即展示顺序） */
+    badgeNames: string[];
+  }> {
+    const [badgeRows, taxonomyRows] = await Promise.all([
+      this.prisma.recipeSeriesCoverBadge.findMany({
+        where: { seriesId: series.id },
+        select: { healthTagId: true, healthTag: { select: { name: true } } },
+        orderBy: { sortOrder: 'asc' },
+      }),
+      this.prisma.recipeSeriesTaxonomy.findMany({
+        where: { seriesId: series.id },
+        select: { kindId: true, nodeId: true },
+      }),
+    ]);
+
+    const live = buildSeriesReleaseLiveValues({
+      coverImageUrl: series.coverImageUrl,
+      coverTitle: series.coverTitle,
+      sellingPoint: series.sellingPoint,
+      targetHealthTags: series.targetHealthTags,
+      badgeHealthTagIds: badgeRows.map((row) => row.healthTagId),
+      taxonomy: taxonomyRows,
+    });
+    const draft = series.releaseDraft
+      ? parseSeriesReleaseDraft(series.releaseDraft)
+      : null;
+    const changedFields = draft ? diffSeriesReleaseDraft(draft, live) : [];
+    const hasDraft = changedFields.length > 0;
+    const effective = hasDraft && draft ? draft : live;
+    // 线上角标名走同一条合规词表过滤；草稿换了角标时再按 id 查一次名称。
+    const liveNames = pickCoverBadgeNames(
+      badgeRows.map((row) => row.healthTag?.name),
+    );
+    const sameBadges =
+      effective.badgeHealthTagIds.length === badgeRows.length &&
+      effective.badgeHealthTagIds.every(
+        (id, index) => id === badgeRows[index]?.healthTagId,
+      );
+    const badgeNames = sameBadges
+      ? liveNames
+      : pickCoverBadgeNames(
+          (
+            await this.prisma.recipeHealthTag.findMany({
+              where: { id: { in: effective.badgeHealthTagIds } },
+              select: { id: true, name: true },
+            })
+          ).reduce<string[]>((names, row) => {
+            const index = effective.badgeHealthTagIds.indexOf(row.id);
+            if (index >= 0) names[index] = row.name;
+            return names;
+          }, []),
+        );
+    return {
+      live,
+      draft: hasDraft ? draft : null,
+      effective,
+      changedFields,
+      updatedAt: hasDraft ? (series.releaseDraftUpdatedAt ?? null) : null,
+      badgeNames,
+    };
+  }
+
+  /** 角标 id → 名称，按传入顺序返回（未找到的静默丢弃）。 */
+  private async loadHealthTagNamesByIds(ids: string[]): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.prisma.recipeHealthTag.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true },
+    });
+    const byId = new Map(rows.map((row) => [row.id, row.name]));
+    return ids
+      .map((id) => byId.get(id))
+      .filter((name): name is string => Boolean(name));
+  }
+
+  /** 生效值 → 发布抽屉 / 门槛用的展示资料（角标已是名称）。 */
+  private toSeriesReleasePresentation(context: {
+    effective: SeriesReleaseDraftPayload;
+    changedFields: SeriesReleaseDraftField[];
+    badgeNames?: string[];
+  }): SeriesReleasePresentation {
+    return {
+      coverImageUrl: context.effective.coverImageUrl,
+      coverTitle: context.effective.coverTitle,
+      sellingPoint: context.effective.sellingPoint,
+      targetHealthTags: context.effective.targetHealthTags,
+      coverBadges: context.badgeNames ?? [],
+    };
+  }
+
+  private buildSeriesReleaseReadinessForSeries(params: {
+    series: Pick<RecipeSeries, 'id' | 'designMode' | 'businessStatus'>;
     sources: {
       recipes: SeriesReleaseRecipeRecord[];
       designs: SeriesReleaseDesignRecord[];
-    },
-    coverBadges: string[],
-    taxonomyLinkCount = 0,
-  ): SeriesReleaseReadiness {
+    };
+    presentation: SeriesReleasePresentation;
+    taxonomyLinkCount?: number;
+    releaseDraft?: {
+      updatedAt: Date | null;
+      changedFields: SeriesReleaseDraftField[];
+    } | null;
+  }): SeriesReleaseReadiness {
+    const { series, sources, presentation } = params;
     return buildSeriesReleaseReadiness({
       seriesId: series.id,
-      taxonomyLinkCount,
       designMode: series.designMode ?? RecipeDesignMode.CATALOG,
       businessStatus: series.businessStatus,
-      presentation: {
-        coverImageUrl: series.coverImageUrl,
-        coverTitle: series.coverTitle,
-        sellingPoint: series.sellingPoint,
-        targetHealthTags: series.targetHealthTags,
-        coverBadges,
-      },
+      presentation,
+      taxonomyLinkCount: params.taxonomyLinkCount,
+      releaseDraft: params.releaseDraft
+        ? {
+            updatedAt: params.releaseDraft.updatedAt,
+            changedFields: params.releaseDraft.changedFields,
+          }
+        : null,
       stages: this.buildSeriesReleaseStageSnapshots(
         sources.recipes,
         sources.designs,

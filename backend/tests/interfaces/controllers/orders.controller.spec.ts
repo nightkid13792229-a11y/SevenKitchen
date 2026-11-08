@@ -689,7 +689,11 @@ describe('OrdersController (e2e)', () => {
           },
         ],
         addressId,
-        targetProductionDate: '2025-12-22T00:00:00Z',
+        // 顾客现在受「6 点后最早次日」限制，固定历史日期会被挡住；
+        // 这条用例只关心下单载荷与抵扣字段，取一个始终合法的未来日期。
+        targetProductionDate: new Date(
+          Date.now() + 7 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
       };
 
       const response = await request(app.getHttpServer())

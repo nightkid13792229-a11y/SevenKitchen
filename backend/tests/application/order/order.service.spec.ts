@@ -549,6 +549,36 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
     });
   });
 
+  describe('createOrderDraft - 顾客制作日期规则', () => {
+    it('顾客早上 6 点后不能把制作日期选在今天，且在读取订单数据前就拒绝', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-11-09T08:00:00+08:00'));
+
+      try {
+        await expect(
+          service.createOrderDraft({
+            customerId: 'customer-id-1',
+            type: OrderType.FRESH_FOOD,
+            targetProductionDate: new Date('2026-11-09T00:00:00Z'),
+            items: [
+              {
+                recipeId: 'recipe-id-1',
+                quantityG: 1000,
+                packageSpecG: 200,
+                packageCount: 5,
+              },
+            ],
+          }),
+        ).rejects.toThrow(/早上 6 点/);
+
+        expect(dogRepository.findById).not.toHaveBeenCalled();
+        expect(orderRepository.save).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
+
   describe('createOrderDraft - dailyIntakeG calculation', () => {
     it('should calculate dailyIntakeG from DogCalc.finalFoodKcal and Recipe.energyDensityKcalPerKg', async () => {
       // Arrange

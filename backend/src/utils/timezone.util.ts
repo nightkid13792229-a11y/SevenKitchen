@@ -30,26 +30,30 @@ export class TimezoneUtil {
     }
   }
 
-  /**
-   * 根据上海时区计算制作日期
-   * 规则：0-6点当日制作，6-24点次日制作
-   * 返回的是UTC日期对象
-   */
-  static calculateProductionDate(): Date {
-    const hour = this.getShanghaiHour();
-    const now = new Date();
+  /** 上海时区某时刻的小时数（0-23），按传入时刻算，便于测试与补算 */
+  private static getShanghaiHourAt(input: Date): number {
+    const shanghai = new Date(input.getTime() + 8 * 60 * 60 * 1000);
+    return shanghai.getUTCHours();
+  }
 
-    if (hour >= 0 && hour < 6) {
-      // 0-6点：当日制作（返回UTC日期）
-      return new Date(
-        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-      );
-    } else {
-      // 6-24点：次日制作（返回UTC日期）
-      return new Date(
-        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
-      );
-    }
+  /**
+   * 顾客可预约的最早制作日（date-only，UTC 零点，语义是上海日历日）。
+   * 规则：上海时间 0:00-5:59 下单可约当天，6:00 起最早次日。
+   *
+   * 管理员 / 客服代客下单不受这条限制，由调用方按角色决定是否使用。
+   */
+  static getEarliestCustomerProductionDate(now: Date = new Date()): Date {
+    const today = this.toShanghaiDateOnly(now);
+    return this.getShanghaiHourAt(now) < 6 ? today : this.addDays(today, 1);
+  }
+
+  /**
+   * 根据上海时区计算默认制作日期
+   * 规则与顾客一致：0-6点当日制作，6-24点次日制作
+   * 返回的是 date-only（UTC 零点，语义是上海日历日）
+   */
+  static calculateProductionDate(now: Date = new Date()): Date {
+    return this.getEarliestCustomerProductionDate(now);
   }
 
   /**

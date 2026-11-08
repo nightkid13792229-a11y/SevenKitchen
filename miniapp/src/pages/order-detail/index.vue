@@ -1046,7 +1046,10 @@ import {
 import OrderProgressBar from '../../components/OrderProgressBar.vue';
 import OrderProgressSteps from '../../components/OrderProgressSteps.vue';
 import { normalizeImageUrl } from '../../utils/config';
-import { formatDateTime } from '../../utils/date';
+import {
+  earliestCustomerProductionDate,
+  formatDateTime,
+} from '../../utils/date';
 import { getNutritionStandardLabel } from '../../utils/label-mapping';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { openCustomerServiceChat } from '../../utils/customer-service';
@@ -2520,21 +2523,27 @@ async function saveAddressForm() {
   }
 }
 
-// 初始化日期选择器的值
+// 初始化日期选择器的值。
+// 角色也要一起监听：用户信息可能比订单晚一步从 storage / 接口拿到。
 watch(
-  () => order.value?.targetProductionDate,
-  (newDate) => {
+  [() => order.value?.targetProductionDate, () => userInfo.value.role],
+  ([newDate]) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const todayStr = formatDateToYYYYMMDD(today);
 
-    minDateStr.value = formatDateToYYYYMMDD(today);
+    // 顾客仍按「早上 6 点」规则；管理员改期可以选择今天
+    minDateStr.value =
+      userInfo.value.role === 'ADMIN'
+        ? todayStr
+        : earliestCustomerProductionDate();
 
     const currentDate = newDate ? new Date(newDate) : new Date(today);
     currentDate.setHours(0, 0, 0, 0);
+    const currentStr = formatDateToYYYYMMDD(currentDate);
 
-    selectedDate.value = formatDateToYYYYMMDD(
-      currentDate < today ? today : currentDate,
-    );
+    selectedDate.value =
+      currentStr < minDateStr.value ? minDateStr.value : currentStr;
   },
   { immediate: true },
 );

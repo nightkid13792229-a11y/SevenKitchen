@@ -76,7 +76,12 @@
       </view>
       <view class="field-group">
         <text class="field-label">目标制作日期</text>
-        <picker mode="date" :value="form.targetProductionDate" @change="onDateChange">
+        <picker
+          mode="date"
+          :value="form.targetProductionDate"
+          :start="minProductionDate"
+          @change="onDateChange"
+        >
           <view class="picker-box">{{ form.targetProductionDate || '不指定' }}</view>
         </picker>
       </view>
@@ -110,6 +115,10 @@ import {
   type StaffCustomerAddressOption,
   type StaffFinishedFoodRecipeOption,
 } from '../../api/orders'
+import { todayDateText } from '../../utils/date'
+
+// 代客下单是内部通道：可以选今天，但不能选到过去
+const minProductionDate = todayDateText()
 
 const customerId = ref('')
 const dogId = ref('')

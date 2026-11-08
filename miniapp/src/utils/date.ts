@@ -21,6 +21,22 @@ export function todayDateText(): string {
 }
 
 /**
+ * 顾客可预约的最早制作日期（YYYY-MM-DD，按本地时区算）。
+ *
+ * 老板 2026-11-08 定：顾客仍按老规矩 —— 每天早上 6 点前下单可约当天，
+ * 6 点起最早次日制作。管理员 / 客服代客下单不受这条限制，调用方按角色决定。
+ */
+export function earliestCustomerProductionDate(now: Date = new Date()): string {
+  const date = new Date(now);
+  if (date.getHours() >= 6) {
+    date.setDate(date.getDate() + 1);
+  }
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/**
  * 格式化为完整日期时间（YYYY/MM/DD HH:mm）
  * 用于订单详情页
  */

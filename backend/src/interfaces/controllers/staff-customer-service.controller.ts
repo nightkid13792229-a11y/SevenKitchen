@@ -240,6 +240,8 @@ export class StaffCustomerServiceController {
         targetProductionDate: body.targetProductionDate
           ? new Date(body.targetProductionDate)
           : null,
+        // 内部代客下单不受顾客「早上 6 点后最早次日」限制，可以约今天
+        actorRole: actor,
         items,
         addressId,
       });

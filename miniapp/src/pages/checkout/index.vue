@@ -91,6 +91,7 @@
 
       <!-- 提示文字 -->
       <view class="date-tips">
+        <text class="tip-text">每天早上6点前下单可预约当天，6点后最早次日制作</text>
         <text class="tip-text">制作完成后，需要急冻24小时后再发货</text>
       </view>
 
@@ -356,6 +357,7 @@ import { quoteTastingPack } from '../../api/tastingPack';
 import { ensurePhoneBound } from '../../utils/account';
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue'
 import { trackFunnelEvent } from '../../utils/funnel';
+import { earliestCustomerProductionDate } from '../../utils/date';
 import {
   buildDefaultPackagePlan,
   estimateFeedDays,
@@ -461,34 +463,12 @@ const customerNote = ref('');
 // ========== 制作日期相关 ==========
 const showProductionDatePicker = ref(false);
 
-// 判断当前时间是否在6点前
-const isBefore6AM = computed(() => {
-  const now = new Date();
-  const hour = now.getHours();
-  return hour < 6;
-});
+// 顾客最早只能约到这里：
+// 每天早上 6 点前下单可约当天，6 点起最早次日制作（管理员代下单不受限）
+const minProductionDate = computed(() => earliestCustomerProductionDate());
 
-// 计算最小可选制作日期（可以选择当天，不能选昨天及以前）
-const minProductionDate = computed(() => {
-  const now = new Date();
-  return formatDateToString(now);
-});
-
-// 默认制作日期：根据当前时间判断（0-6点当日，6-24点次日）
-const defaultProductionDate = computed(() => {
-  const now = new Date();
-  const hour = now.getHours(); // 使用本地时间
-
-  if (hour >= 0 && hour < 6) {
-    // 0-6点：当日制作
-    return formatDateToString(now);
-  } else {
-    // 6-24点：次日制作
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return formatDateToString(tomorrow);
-  }
-});
+// 默认制作日期与最早可选日期一致，避免默认值本身就不合法
+const defaultProductionDate = computed(() => minProductionDate.value);
 
 // 选中的制作日期
 const selectedProductionDate = ref(defaultProductionDate.value);
@@ -894,11 +874,20 @@ function selectAddress(addr: Address) {
 
 // ========== 制作日期相关 ==========
 function openProductionDatePicker() {
+  // 页面可能跨过早上 6 点：打开选择器时把已经不合法的“今天”拉回最早可选日
+  if (selectedProductionDate.value < minProductionDate.value) {
+    selectedProductionDate.value = minProductionDate.value;
+  }
   showProductionDatePicker.value = true;
 }
 
 function onProductionDateChange(e: any) {
-  selectedProductionDate.value = e.detail.value;
+  const picked = String(e?.detail?.value || '');
+  // 兜底：某些机型对 picker 的 start 限制不生效，选到更早的日期就拉回最早可选日
+  selectedProductionDate.value =
+    picked && picked >= minProductionDate.value
+      ? picked
+      : minProductionDate.value;
   showProductionDatePicker.value = false;
   console.log('[Checkout] Production date changed:', {
     productionDate: selectedProductionDate.value,

@@ -69,6 +69,10 @@ import { SearchGovernanceService } from '../search-governance/search-governance.
 import { normalizeSearchText } from '../../domain/search-governance/search-text';
 import { TimezoneUtil } from '../../utils/timezone.util';
 import {
+  resolveDraftProductionDate,
+  type ProductionDateActorRole,
+} from './production-date';
+import {
   extractLegacyPreparationMethodIds,
   resolvePreparationMethodText,
   resolvePreparationMethodTokens,
@@ -116,6 +120,12 @@ export interface CreateOrderDraftDto {
   cartItemIds?: string[];
   snapshotId?: string; // ✅ 新增：快照ID（立即购买）
   addressId?: string;
+  /**
+   * 下单人角色。顾客受「每天早上 6 点后下单最早次日制作」限制；
+   * 客服 / 管理员代客下单可以把制作日期定在今天。
+   * 不传时按 customer 处理，避免绕过顾客规则。
+   */
+  actorRole?: ProductionDateActorRole;
   /**
    * 顾客在确认订单页填的备注。
    *
@@ -1197,6 +1207,15 @@ export class OrderService {
   async createOrderDraft(dto: CreateOrderDraftDto): Promise<Order> {
     const orderId = randomUUID();
 
+    // 成品鲜食：所有下单入口共用同一套制作日期准入规则。
+    // 试吃装是现货、不排产，带不带日期都不参与这条规则。
+    if (dto.type !== OrderType.TASTING_PACK && dto.targetProductionDate) {
+      dto.targetProductionDate = resolveDraftProductionDate(
+        dto.targetProductionDate,
+        dto.actorRole ?? 'customer',
+      );
+    }
+
     // ✅ Priority 1: 如果提供 snapshotId，从快照创建（立即购买）
     if (dto.snapshotId) {
       const snapshot = await this.pricingSnapshotRepository.findById(
@@ -1259,42 +1278,13 @@ export class OrderService {
     }
 
     // 2. 处理制作日期
-    let productionDate = dto.targetProductionDate;
-
-    // 默认值：如果未提供制作日期，根据上海时区判断（0-6点当日，6-24点次日）
-    if (!productionDate) {
-      productionDate = TimezoneUtil.calculateProductionDate();
-      console.log(
-        '[CreateOrderFromSnapshot] No production date provided, calculated from Shanghai timezone:',
-        productionDate.toISOString(),
-      );
-    } else {
-      // 如果提供了日期，将时间部分清零（使用UTC时间）
-      const year = productionDate.getUTCFullYear();
-      const month = productionDate.getUTCMonth();
-      const day = productionDate.getUTCDate();
-      productionDate = new Date(Date.UTC(year, month, day));
-    }
-
-    // 验证：制作日期不能早于今天（使用UTC日期）
-    const today = new Date(
-      Date.UTC(
-        new Date().getUTCFullYear(),
-        new Date().getUTCMonth(),
-        new Date().getUTCDate(),
-      ),
-    );
-    if (productionDate < today) {
-      throw new BadRequestException('制作日期不能早于今天');
-    }
-
-    // 验证：制作日期不能超过90天
-    const maxDate = new Date();
-    maxDate.setDate(maxDate.getDate() + 90);
-    maxDate.setHours(0, 0, 0, 0);
-    if (productionDate > maxDate) {
-      throw new BadRequestException('制作日期不能超过90天后');
-    }
+    // 未提供时按上海时区取默认值（0-6点当日，6点后次日）；
+    // 提供了就统一交给 resolveDraftProductionDate 校验：
+    // 顾客 6 点后不能选今天，管理员 / 客服代客下单可以。
+    const productionDate = resolveDraftProductionDate(
+      dto.targetProductionDate ?? TimezoneUtil.calculateProductionDate(),
+      dto.actorRole ?? 'customer',
+    )!;
 
     console.log(
       '[CreateOrderFromSnapshot] Production date validated:',
@@ -4746,8 +4736,13 @@ export class OrderService {
       );
     }
 
-    // 3. Update target date (domain logic will validate state and date)
-    order.updateTargetProductionDate(targetDate);
+    // 3. 日期准入：顾客仍按「早上 6 点」规则，管理员改期可以把日期定在今天。
+    //    域对象还会再挡一次「不能早于今天」和「已采购后不能改」。
+    const normalizedTargetDate = isAdmin
+      ? TimezoneUtil.toShanghaiDateOnly(targetDate)
+      : resolveDraftProductionDate(targetDate, 'customer')!;
+
+    order.updateTargetProductionDate(normalizedTargetDate);
 
     // 4. Save and return
     return this.orderRepository.save(order);

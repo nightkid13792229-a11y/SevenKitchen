@@ -824,6 +824,8 @@ type RecipeSeriesWorkbenchRecord = {
   orderQuantity?: number | null;
   deletedAt?: Date | null;
   updatedAt?: Date | string | null;
+  /** 草稿更新时间：有值 = 有未发布的改动（2026-11-08） */
+  releaseDraftUpdatedAt?: Date | string | null;
   designs: Array<{
     id: string;
     seriesId?: string | null;
@@ -5390,6 +5392,8 @@ export class RecipeDesignerService {
       id: series.id,
       initialDraftId,
       name: series.name,
+      /** 有未发布的草稿（名称 / 封面 / 卖点 / 角标 / 归类 / 新版本之一） */
+      hasReleaseDraft: Boolean(series.releaseDraftUpdatedAt),
       businessStatus,
       businessStatusLabel:
         RECIPE_SERIES_BUSINESS_STATUS_LABELS[businessStatus] ?? businessStatus,

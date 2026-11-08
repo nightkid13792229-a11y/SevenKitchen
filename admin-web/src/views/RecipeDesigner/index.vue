@@ -100,6 +100,7 @@
                 :value="option.value"
               >{{ option.label }}</el-radio-button>
             </el-radio-group>
+            <el-checkbox v-model="onlyDraft" size="small" label="只看有草稿" />
             <el-radio-group v-model="filters.status" size="small" @change="onStatusFilterChange">
               <el-radio-button
                 v-for="option in statusFilterOptions"
@@ -132,7 +133,7 @@
       />
 
       <div v-if="viewMode === 'SERIES'" v-loading="loading" class="series-grid">
-        <div v-for="card in series" :key="card.id" class="series-card">
+        <div v-for="card in visibleSeries" :key="card.id" class="series-card">
           <div class="series-card-head">
             <div class="series-name-wrap">
               <span class="series-name">{{ card.name }}</span>
@@ -201,6 +202,9 @@
           <div v-if="filters.mode === 'CATALOG'" class="release-progress">
             <el-tag size="small" type="info" effect="plain">
               已发布 {{ stageProgressLabel(card) }} 阶段
+            </el-tag>
+            <el-tag v-if="card.hasReleaseDraft" size="small" type="primary" effect="plain">
+              有草稿待发布
             </el-tag>
             <el-tag
               v-if="cardPendingStageCount(card) > 0"
@@ -395,6 +399,14 @@ const renameForm = reactive<{ id: string; name: string }>({ id: '', name: '' })
 
 // 系列发布（阶段设计先入系列仓库，整条系列就绪后一次性发布）
 const releaseDrawerVisible = ref(false)
+const onlyDraft = ref(false)
+/** 只筛「有草稿待发布」：批量改完归类 / 资料后，在这里逐条发 */
+const visibleSeries = computed(() =>
+  onlyDraft.value
+    ? series.value.filter((card) => card.hasReleaseDraft === true)
+    : series.value
+)
+
 const releaseDrawerSeriesId = ref('')
 const releaseDrawerSeriesName = ref('')
 

@@ -39,6 +39,8 @@ export interface RecipeDesignerSeriesStage {
 }
 
 export interface RecipeDesignerSeriesCard {
+  /** 有未发布的草稿（名称 / 封面 / 卖点 / 角标 / 归类 / 新版本之一） */
+  hasReleaseDraft?: boolean
   id: string
   name: string
   businessStatus?: RecipeDesignerSeriesStatusFilter

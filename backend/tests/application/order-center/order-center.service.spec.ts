@@ -111,6 +111,63 @@ describe('OrderCenterService', () => {
     expect(result.items.every((item) => item.amountTotal === null)).toBe(true);
   });
 
+  it('★ 草稿单（INIT）不进订单中心：列表和总数都排除', async () => {
+    await service.list({ pageSize: 20 });
+
+    expect(prisma.order.findMany.mock.calls[0][0].where.status).toEqual({
+      not: 'INIT',
+    });
+    expect(prisma.order.count.mock.calls[0][0].where.status).toEqual({
+      not: 'INIT',
+    });
+  });
+
+  it('★ 真实阶段筛选真的落到查询：PAID 只查 PAID，草稿「待处理」查空', async () => {
+    await service.list({ type: 'FOOD', status: 'PAID', pageSize: 20 });
+    expect(prisma.order.findMany.mock.calls[0][0].where.status).toEqual({
+      in: ['PAID'],
+    });
+
+    await service.list({ type: 'FOOD', status: 'PENDING', pageSize: 20 });
+    expect(prisma.order.findMany.mock.lastCall?.[0].where.status).toEqual({
+      in: [],
+    });
+  });
+
+  it('★ 只看售后仍按 AFTERSALE 查，不被阶段条件覆盖', async () => {
+    await service.list({
+      type: 'FOOD',
+      status: 'PAID',
+      aftersale: true,
+      pageSize: 20,
+    });
+
+    expect(prisma.order.findMany.mock.calls[0][0].where.status).toBe('AFTERSALE');
+  });
+
+  it('★ 卡片阶段：售后中 / 已交付 / 分装中 都按原始状态取', async () => {
+    prisma.order.findMany.mockResolvedValue([foodRow({ status: 'AFTERSALE' })]);
+    prisma.customRecipeOrder.findMany.mockResolvedValue([
+      customRow({ status: 'DELIVERED' }),
+    ]);
+    prisma.customRecipeOrder.count.mockResolvedValue(1);
+    prisma.supplementOrder.findMany.mockResolvedValue([
+      supplementRow({ status: 'PACKING' }),
+    ]);
+
+    const result = await service.list({ pageSize: 20 });
+
+    expect(
+      result.items.find((item) => item.type === 'FOOD')?.stageLabel,
+    ).toBe('售后中');
+    expect(
+      result.items.find((item) => item.type === 'CUSTOM_RECIPE')?.stageLabel,
+    ).toBe('已交付');
+    expect(
+      result.items.find((item) => item.type === 'SUPPLEMENT')?.stageLabel,
+    ).toBe('分装中');
+  });
+
   it('补剂有未完结退款 → 标记退款中', async () => {
     prisma.aftersaleCase.findMany.mockResolvedValue([
       { orderId: 's1', status: 'PROCESSING', requestType: 'REFUND' },

@@ -77,9 +77,10 @@ describe('OrderCenterService · 真实阶段文案', () => {
       'IN_PRODUCTION',
       'AFTERSALE',
     ]);
-    expect(statuses('customStatuses', 'COMPLETED')).toEqual([
-      'DELIVERED',
-      'COMPLETED',
-    ]);
+    // 2026-11-08：已完成只算 COMPLETED。DELIVERED 有自己的「已交付」筛选，
+    // 再并进「已完成」会出现「卡片写已交付、筛已完成却筛到」。
+    // 旧版小程序短期在「全部」里还能看到已交付单。
+    expect(statuses('customStatuses', 'COMPLETED')).toEqual(['COMPLETED']);
+    expect(statuses('customStatuses', 'DELIVERED')).toEqual(['DELIVERED']);
   });
 });

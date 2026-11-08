@@ -698,10 +698,15 @@ onLoad((options) => {
     return
   }
 
-  // 订单中心卡片上点了「发货」→ 加载完直接弹填单号
+  // 订单中心卡片上点了「发货」→ 加载完直接弹填单号。
+  // 2026-11-08：补剂的 PAID 也算「待发货」（付了钱就能发），不能再只认 PACKED，
+  // 否则列表点「发货」进来不会弹窗，员工以为按钮没反应。
+  // 后端发货校验只接受 PAID / PACKED；历史 PACKING 单要先标分装完成，不在此列。
   const autoShip = options?.action === 'ship'
   void fetchOrder().then(() => {
-    if (autoShip && order.value?.status === 'PACKED') handleShip()
+    if (autoShip && ['PAID', 'PACKED'].includes(order.value?.status || '')) {
+      handleShip()
+    }
   })
 })
 </script>

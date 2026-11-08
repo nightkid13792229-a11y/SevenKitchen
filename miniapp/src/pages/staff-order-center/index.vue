@@ -94,9 +94,11 @@
         <view class="tags-row">
           <!-- 售后标签（2026-10-30）：进行中橙色、已结束灰色。
                已结束的也要标出来——退款成功后订单会变成「已取消」，
-               不标的话员工根本看不出这单退过款。 -->
+               不标的话员工根本看不出这单退过款。
+               2026-11-08：主状态已经是「售后中」时不再重复挂同一个词；
+               「退款中 / 售后待处理」这类不同的说法照常显示。 -->
           <text
-            v-if="item.aftersaleLabel"
+            v-if="item.aftersaleLabel && item.aftersaleLabel !== item.stageLabel"
             class="mini-tag"
             :class="item.hasOpenAftersale ? 'aftersale' : 'aftersale-closed'"
           >

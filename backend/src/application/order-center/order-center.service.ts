@@ -953,7 +953,15 @@ export class OrderCenterService {
       case 'DELIVERED':
         return ['DELIVERED'];
       case 'COMPLETED':
-        return ['DELIVERED', 'COMPLETED'];
+        /**
+         * 2026-11-08：只算真正完成的单。DELIVERED 在卡片上写「已交付」，
+         * 有自己的筛选；再并进「已完成」就变成「卡片写已交付、筛已完成却筛到」，
+         * 正好违反这次「卡片写什么、筛选就筛什么」的口径。
+         *
+         * 代价：还没更新的旧版小程序没有「已交付」tab，短期只能在「全部」里
+         * 看到这类单。旧包很快会被体验版替换，接受这个过渡。
+         */
+        return ['COMPLETED'];
       case 'CANCELLED':
         return ['CANCELLED'];
       default:

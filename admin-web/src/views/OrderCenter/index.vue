@@ -131,7 +131,14 @@
             <el-tag :type="statusTagTypeForRow(row)" size="small">
               {{ displayStatusLabel(row) }}
             </el-tag>
-            <el-tag v-if="row.hasOpenAftersale" type="warning" size="small" class="aftersale-tag">
+            <!-- 2026-11-08：主状态已是「售后中」时不再重复挂同一个词；
+                 退款中 / 售后待处理 这类不同说法照常显示 -->
+            <el-tag
+              v-if="row.hasOpenAftersale && (row.aftersaleLabel || '售后中') !== row.stageLabel"
+              type="warning"
+              size="small"
+              class="aftersale-tag"
+            >
               {{ row.aftersaleLabel || '售后中' }}
             </el-tag>
           </template>

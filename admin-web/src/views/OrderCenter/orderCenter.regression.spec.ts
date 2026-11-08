@@ -131,6 +131,12 @@ describe('订单中心 · 状态按真实阶段显示与筛选（2026-11-08）',
     expect(clean).toContain('const allowed = statusOptions.value.map')
     expect(clean).toContain('query.status = undefined')
   })
+
+  it('★ 主状态已是「售后中」时不再重复挂同一个售后标签', () => {
+    expect(clean).toContain(
+      "(row.aftersaleLabel || '售后中') !== row.stageLabel",
+    )
+  })
 })
 
 describe('订单中心 · 内部测试账号标记（2026-10-21）', () => {

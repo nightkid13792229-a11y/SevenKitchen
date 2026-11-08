@@ -82,7 +82,7 @@ describe('staff order center · 售后单独筛', () => {
 
   it('★ 已结束的售后也要标出来（退款成功后订单会变成「已取消」）', () => {
     // 有文案就显示，不再只看 hasOpenAftersale
-    expect(orderCenter).toContain('v-if="item.aftersaleLabel"')
+    expect(orderCenter).toContain('item.aftersaleLabel && item.aftersaleLabel !== item.stageLabel')
     expect(orderCenter).toContain(':class="item.hasOpenAftersale ? \'aftersale\' : \'aftersale-closed\'"')
     expect(orderCenter).toContain('.mini-tag.aftersale-closed')
   })
@@ -102,6 +102,13 @@ describe('staff order center · 补剂订单详情里的售后记录', () => {
     expect(supplementDetail).toContain("REJECTED: '已驳回'")
     expect(supplementDetail).toContain("CANCELLED: '已撤回'")
     expect(supplementDetail).toContain("? 'is-open' : 'is-closed'")
+  })
+
+  it('★ 列表点「发货」进来，PAID / PACKED 都要自动弹填单号', () => {
+    // 2026-11-08：补剂 PAID 也算待发货；只认 PACKED 会让入口像没反应
+    expect(supplementDetail).toContain(
+      "['PAID', 'PACKED'].includes(order.value?.status || '')",
+    )
   })
 
   it('★ 员工端不展示退款金额（后端已脱敏，前端也别画出来）', () => {

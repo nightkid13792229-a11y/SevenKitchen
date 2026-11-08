@@ -438,17 +438,19 @@ describe('order detail runtime regressions', () => {
     expect(source).toContain('production-photos-section')
   })
 
-  it('顾客打开今天制作的订单时，不会因为 6 点规则被悄悄推迟一天', () => {
+  it('顾客打开今天制作的订单时，只能往后改且会明确提示最早可选日', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
       'utf-8',
     )
 
-    // 初始值取订单自己的日期；订单日期早于最早可选日时直接收起“修改”，
-    // 不能用“最早可选日”顶替订单日期。
+    // 采购没开始前保留“修改”入口；原日期不可选时，选择器从最早可选日开始，
+    // 并明确提示“当前日期已不可选，最早只能改到 X”，避免悄悄推迟。
     expect(source).toContain('resolveProductionDatePickerState')
-    expect(source).toContain('canChangeProductionDate')
-    expect(source).toContain('当前制作日已不可选，如需改期请联系客服')
+    expect(source).toContain('postponingOnly')
+    expect(source).toContain('当前日期已不可选，最早只能改到')
+    expect(source).not.toContain('canChangeProductionDate')
+    expect(source).not.toContain('canEditDate && canChangeProductionDate')
     expect(source).not.toContain(
       'currentStr < minDateStr.value ? minDateStr.value : currentStr',
     )

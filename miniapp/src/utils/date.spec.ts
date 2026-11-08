@@ -37,7 +37,7 @@ describe("resolveProductionDatePickerState", () => {
   const orderToday = new Date(2026, 10, 9, 12, 0).toISOString();
   const orderTomorrow = new Date(2026, 10, 10, 12, 0).toISOString();
 
-  it("顾客 6 点后打开今天制作的订单：初始值仍是今天，但不再允许改期", () => {
+  it("顾客 6 点后打开今天制作的订单：只能往后改，选择器从明天开始", () => {
     const state = resolveProductionDatePickerState({
       orderDate: orderToday,
       isAdmin: false,
@@ -46,12 +46,12 @@ describe("resolveProductionDatePickerState", () => {
 
     expect(state).toEqual({
       minDate: "2026-11-10",
-      selectedDate: "2026-11-09",
-      canChange: false,
+      selectedDate: "2026-11-10",
+      postponingOnly: true,
     });
   });
 
-  it("顾客 6 点前打开今天制作的订单：允许改期", () => {
+  it("顾客 6 点前打开今天制作的订单：今天仍可选", () => {
     const state = resolveProductionDatePickerState({
       orderDate: orderToday,
       isAdmin: false,
@@ -61,11 +61,11 @@ describe("resolveProductionDatePickerState", () => {
     expect(state).toEqual({
       minDate: "2026-11-09",
       selectedDate: "2026-11-09",
-      canChange: true,
+      postponingOnly: false,
     });
   });
 
-  it("管理员 6 点后打开今天制作的订单：允许改期", () => {
+  it("管理员 6 点后打开今天制作的订单：今天仍可选", () => {
     const state = resolveProductionDatePickerState({
       orderDate: orderToday,
       isAdmin: true,
@@ -75,7 +75,7 @@ describe("resolveProductionDatePickerState", () => {
     expect(state).toEqual({
       minDate: "2026-11-09",
       selectedDate: "2026-11-09",
-      canChange: true,
+      postponingOnly: false,
     });
   });
 
@@ -89,7 +89,35 @@ describe("resolveProductionDatePickerState", () => {
     expect(state).toEqual({
       minDate: "2026-11-10",
       selectedDate: "2026-11-10",
-      canChange: true,
+      postponingOnly: false,
+    });
+  });
+
+  it("管理员可以把已经过去的历史日期改到今天", () => {
+    const state = resolveProductionDatePickerState({
+      orderDate: new Date(2026, 10, 8, 12, 0).toISOString(),
+      isAdmin: true,
+      now: new Date(2026, 10, 9, 8, 0),
+    });
+
+    expect(state).toEqual({
+      minDate: "2026-11-09",
+      selectedDate: "2026-11-09",
+      postponingOnly: true,
+    });
+  });
+
+  it("顾客可以把历史日期往后改到最早可选日", () => {
+    const state = resolveProductionDatePickerState({
+      orderDate: new Date(2026, 10, 8, 12, 0).toISOString(),
+      isAdmin: false,
+      now: new Date(2026, 10, 9, 8, 0),
+    });
+
+    expect(state).toEqual({
+      minDate: "2026-11-10",
+      selectedDate: "2026-11-10",
+      postponingOnly: true,
     });
   });
 });

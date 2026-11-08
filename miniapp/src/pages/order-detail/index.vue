@@ -378,7 +378,7 @@
             formatDate(order.targetProductionDate)
           }}</text>
           <picker
-            v-if="canEditDate && canChangeProductionDate"
+            v-if="canEditDate"
             mode="date"
             :value="selectedDate"
             :start="minDateStr"
@@ -386,9 +386,10 @@
           >
             <view class="btn-edit" @tap="prepareProductionDatePicker">修改</view>
           </picker>
-          <text v-else-if="canEditDate" class="date-lock-hint"
-            >当前制作日已不可选，如需改期请联系客服</text
-          >
+          <text v-if="canEditDate && postponingOnly" class="date-lock-hint">
+            当前日期已不可选，最早只能改到
+            {{ formatDate(minDateStr) }}
+          </text>
         </view>
 
         <view class="info-row">
@@ -1900,9 +1901,8 @@ const canEditDate = computed(() => {
 // 日期选择器状态
 const selectedDate = ref('');
 const minDateStr = ref('');
-// 当前制作日已经早于“顾客最早可选日”时，不再给修改入口：
-// 否则选择器会把值顶到明天，顾客点开 → 直接确认就把订单悄悄推迟一天。
-const canChangeProductionDate = ref(false);
+// 原制作日已经不可选、只能往后改（例如今天制作的订单在 6 点后打开）
+const postponingOnly = ref(false);
 
 // 监控计算属性的变化
 watch(
@@ -2550,7 +2550,7 @@ function syncProductionDatePicker(newDate?: string | null) {
 
   minDateStr.value = state.minDate;
   selectedDate.value = state.selectedDate;
-  canChangeProductionDate.value = state.canChange;
+  postponingOnly.value = state.postponingOnly;
 }
 
 watch(

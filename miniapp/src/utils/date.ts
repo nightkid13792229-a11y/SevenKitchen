@@ -40,18 +40,22 @@ export function earliestCustomerProductionDate(now: Date = new Date()): string {
 export interface ProductionDatePickerState {
   /** 选择器允许的最早日期 */
   minDate: string;
-  /** 选择器打开时的初始值：订单自己的日期，只有订单日期早于今天才兜底到今天 */
+  /** 选择器打开时的初始值：原日期还能选就沿用，不能选就从最早可选日开始 */
   selectedDate: string;
-  /** 当前订单日期是否还允许通过选择器修改 */
-  canChange: boolean;
+  /**
+   * 原制作日已经不可选，只能往后改。
+   * 典型场景：今天制作的订单，过了早上 6 点顾客再打开改期。
+   */
+  postponingOnly: boolean;
 }
 
 /**
  * 订单详情页「修改制作日期」选择器的初始状态。
  *
- * 关键：初始值必须取订单自己的日期，不能取“最早可选日”。
- * 否则一张今天制作的订单，在 6 点后打开选择器会被顶到明天，
- * 顾客点「修改 → 确定」就会在没改日期的情况下把订单推迟一天。
+ * 采购没开始前，顾客可以往后改日期。
+ * 如果原日期已经不可选（例如今天制作的订单在 6 点后打开），
+ * 选择器直接从“最早可选日”开始，并提示顾客当前日期已不可选，
+ * 避免顾客以为没改日期、实际却被推迟一天。
  */
 export function resolveProductionDatePickerState(options: {
   orderDate?: string | null;
@@ -75,13 +79,13 @@ export function resolveProductionDatePickerState(options: {
     }
   }
 
-  const selectedDate =
-    orderDateText && orderDateText >= todayText ? orderDateText : todayText;
+  const orderDateSelectable =
+    Boolean(orderDateText) && orderDateText >= minDate;
 
   return {
     minDate,
-    selectedDate,
-    canChange: !orderDateText || orderDateText >= minDate,
+    selectedDate: orderDateSelectable ? orderDateText : minDate,
+    postponingOnly: Boolean(orderDateText) && !orderDateSelectable,
   };
 }
 

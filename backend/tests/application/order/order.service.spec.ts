@@ -722,6 +722,31 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       }
     });
 
+    it('顾客 6 点后可以把今天制作的订单往后改到明天', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-11-09T08:00:00+08:00'));
+
+      try {
+        const order = buildOrder(new Date('2026-11-09T00:00:00Z'));
+        orderRepository.findById.mockResolvedValue(order);
+        orderRepository.save.mockResolvedValue(order);
+
+        await service.updateOrderTargetDate(
+          'order-1',
+          new Date('2026-11-10T00:00:00Z'),
+          'customer-1',
+          'CUSTOMER',
+        );
+
+        expect(order.targetProductionDate?.toISOString()).toBe(
+          '2026-11-10T00:00:00.000Z',
+        );
+        expect(orderRepository.save).toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('管理员早上 6 点后可以把制作日期改到今天', async () => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date('2026-11-09T08:00:00+08:00'));

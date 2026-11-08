@@ -15,10 +15,11 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { OrderService } from '../../application/order/order.service';
+import { AddressService } from '../../application/address/address.service';
 import { parseProductionDateInput } from '../../application/order/production-date';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard, CurrentUser, type RequestUser } from '../auth';
-import { StaffGuard } from '../guards/role.guard';
+import { AdminGuard, StaffGuard } from '../guards/role.guard';
 
 const LOCKED_ADDRESS_STATUSES = new Set(['SHIPPED', 'COMPLETED', 'CANCELLED']);
 const LOCKED_AMOUNT_STATUSES = new Set(['SHIPPED', 'COMPLETED', 'CANCELLED']);
@@ -94,6 +95,7 @@ export class StaffCustomerServiceController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orderService: OrderService,
+    private readonly addressService: AddressService,
   ) {}
 
   @Get('customers/search')
@@ -117,6 +119,15 @@ export class StaffCustomerServiceController {
             },
           },
           { orders: { some: { id: { contains: keyword } } } },
+          // 无账号顾客（isGuest）的 phone 恒为 null，手机号只存在这里。
+          // 电话打来下单的顾客，就靠这两个字段被搜到。
+          { guestContactPhone: { contains: keyword } },
+          {
+            guestContactName: {
+              contains: keyword,
+              mode: 'insensitive',
+            },
+          },
         ],
       },
       select: {
@@ -124,6 +135,9 @@ export class StaffCustomerServiceController {
         nickname: true,
         phone: true,
         avatarUrl: true,
+        isGuest: true,
+        guestContactName: true,
+        guestContactPhone: true,
         dogs: {
           select: {
             id: true,
@@ -161,6 +175,9 @@ export class StaffCustomerServiceController {
         nickname: customer.nickname,
         phone: customer.phone,
         avatarUrl: customer.avatarUrl,
+        isGuest: Boolean(customer.isGuest),
+        guestContactName: customer.guestContactName ?? null,
+        guestContactPhone: customer.guestContactPhone ?? null,
         dogs: customer.dogs.map((dog) => ({
           id: dog.id,
           name: dog.name,
@@ -193,6 +210,7 @@ export class StaffCustomerServiceController {
   }
 
   @Post('orders/assisted')
+  @UseGuards(AdminGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Create staff-assisted offline-payment order' })
   async createAssistedOrder(
@@ -201,6 +219,20 @@ export class StaffCustomerServiceController {
   ) {
     try {
       const customerId = String(body.customerId || '').trim();
+      const amountAdjustReason = String(body.amountAdjustReason || '').trim();
+      const rawActualAmount = body.actualAmount;
+      const actualAmount =
+        rawActualAmount === undefined ||
+        rawActualAmount === null ||
+        rawActualAmount === ''
+          ? undefined
+          : Number(rawActualAmount);
+      if (
+        actualAmount !== undefined &&
+        (!Number.isFinite(actualAmount) || actualAmount < 0)
+      ) {
+        return ApiResponseDto.error(400, '请填写正确的收款金额');
+      }
       const dogId = String(body.dogId || '').trim();
       const addressId = body.addressId ? String(body.addressId).trim() : undefined;
       const items = Array.isArray(body.items) ? body.items : [];
@@ -233,6 +265,34 @@ export class StaffCustomerServiceController {
         }
       }
 
+      /**
+       * 实收与系统报价不一致时，必须写一句原因。
+       *
+       * 这里先用 STAFF_PREVIEW 算一遍系统报价（不落价格快照），
+       * 才建单 —— 否则金额校验只能放在下单之后，一旦拦下就留下
+       * 一张建了一半的草稿单。
+       */
+      if (actualAmount !== undefined) {
+        const preview = await this.orderService.previewPricing({
+          customerId,
+          dogId,
+          type: body.type || 'FRESH_FOOD',
+          pricingPurpose: 'STAFF_PREVIEW',
+          addressId,
+          items,
+        } as any);
+        const systemAmount = toNumber(preview.amountTotal);
+        if (
+          Math.abs(systemAmount - actualAmount) > 0.005 &&
+          !amountAdjustReason
+        ) {
+          return ApiResponseDto.error(
+            400,
+            '实收金额与系统报价不一致，请填写差额原因',
+          );
+        }
+      }
+
       const actor = user.role === 'ADMIN' ? 'admin' : 'staff';
       const createdOrder = await this.orderService.createOrderDraft({
         customerId,
@@ -249,8 +309,7 @@ export class StaffCustomerServiceController {
 
       await this.orderService.confirmOrder(createdOrder.id, actor, user.userId);
 
-      const actualAmount = Number(body.actualAmount);
-      if (Number.isFinite(actualAmount) && actualAmount >= 0) {
+      if (actualAmount !== undefined) {
         await this.orderService.updateOrderAmount(createdOrder.id, actualAmount);
       }
 
@@ -259,9 +318,10 @@ export class StaffCustomerServiceController {
         `操作人:${user.userId}`,
         `客户:${customerId}`,
         `狗狗:${dogId}`,
-        Number.isFinite(actualAmount) && actualAmount >= 0
+        actualAmount !== undefined
           ? `实际收款:${actualAmount.toFixed(2)}`
           : `实际收款:${toNumber(createdOrder.amountTotal).toFixed(2)}`,
+        amountAdjustReason ? `差额原因:${amountAdjustReason}` : '',
         body.remark ? `备注:${String(body.remark).trim()}` : '',
       ]
         .filter(Boolean)
@@ -733,4 +793,491 @@ export class StaffCustomerServiceController {
       throw error;
     }
   }
+
+  // ===== 代客下单（成品鲜食）· 2026-11-08 =====
+
+  /**
+   * 代客下单可选的食谱：橱窗已上架 + **全部**定制食谱（含别人家狗狗的）。
+   *
+   * 与旧接口 `finished-food-recipe-options` 的区别只有一个：旧接口把定制食谱
+   * 限死在"这位顾客的"，而老板要求员工能复用任何一条已经交付过的定制配方。
+   * 旧接口保留原样，避免发版窗口里打断线上旧页面。
+   */
+  @Get('dogs/:dogId/assisted-recipe-options')
+  @UseGuards(AdminGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Admin assisted-order recipe options' })
+  async listAssistedRecipeOptions(
+    @Param('dogId') dogId: string,
+    @Query()
+    query: {
+      customerId?: string;
+      keyword?: string;
+      page?: string;
+      pageSize?: string;
+    },
+  ) {
+    const dog = await this.prisma.dog.findUnique({
+      where: { id: dogId },
+      select: {
+        id: true,
+        ownerId: true,
+        name: true,
+        birthday: true,
+        allergyFoods: true,
+        lifeStageOverride: true,
+      },
+    });
+    if (!dog) {
+      return ApiResponseDto.error(404, 'Dog not found');
+    }
+
+    const customerId = String(query.customerId || '').trim() || dog.ownerId;
+    const keyword = String(query.keyword || '').trim().toLowerCase();
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(50, Math.max(1, Number(query.pageSize) || 20));
+
+    // 1) 取候选：橱窗（只在系列已发布时算上架）+ 全部私密定制
+    let recipes = await this.prisma.recipe.findMany({
+      where: {
+        OR: [
+          { status: 'PRIVATE_CUSTOM' },
+          {
+            status: 'PUBLIC',
+            OR: [
+              { seriesId: null },
+              {
+                series: {
+                  is: {
+                    businessStatus: 'PUBLIC',
+                    status: 'ACTIVE',
+                    deletedAt: null,
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+      select: {
+        id: true,
+        recipeId: true,
+        version: true,
+        name: true,
+        status: true,
+        coverImageUrl: true,
+        applicableLifeStages: true,
+        customerOwnerId: true,
+        customerDogId: true,
+        seriesId: true,
+      },
+      orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
+      take: 500,
+    });
+
+    // 2) 同一 recipeId 只留最高版本
+    const seen = new Set<string>();
+    recipes = recipes.filter((recipe) => {
+      if (seen.has(recipe.recipeId)) return false;
+      seen.add(recipe.recipeId);
+      return true;
+    });
+
+    // 3) 剔除顾客自己 DIY 设计的系列（下单链路会拦，摆出来只会让人点了报错）
+    //    以及已删除 / 已停用的系列
+    const seriesIds = Array.from(
+      new Set(recipes.map((r) => r.seriesId).filter(Boolean)),
+    ) as string[];
+    if (seriesIds.length > 0) {
+      const seriesRows = await this.prisma.recipeSeries.findMany({
+        where: { id: { in: seriesIds } },
+        select: {
+          id: true,
+          createdBy: true,
+          status: true,
+          deletedAt: true,
+          businessStatus: true,
+        },
+      });
+      const creatorIds = Array.from(
+        new Set(seriesRows.map((row) => row.createdBy).filter(Boolean)),
+      ) as string[];
+      const creators =
+        creatorIds.length > 0
+          ? await this.prisma.user.findMany({
+              where: { id: { in: creatorIds } },
+              select: { id: true, role: true },
+            })
+          : [];
+      const creatorRole = new Map(creators.map((row) => [row.id, row.role]));
+      const seriesMap = new Map(seriesRows.map((row) => [row.id, row]));
+
+      recipes = recipes.filter((recipe) => {
+        if (!recipe.seriesId) return true;
+        const series = seriesMap.get(recipe.seriesId);
+        if (!series) return true;
+        if (series.deletedAt) return false;
+        if (series.status && series.status !== 'ACTIVE') return false;
+        return creatorRole.get(series.createdBy ?? '') !== 'CUSTOMER';
+      });
+    }
+
+    // 4) 归属信息（谁的定制、哪只狗）
+    const ownerIds = Array.from(
+      new Set(recipes.map((r) => r.customerOwnerId).filter(Boolean)),
+    ) as string[];
+    const ownedDogIds = Array.from(
+      new Set(recipes.map((r) => r.customerDogId).filter(Boolean)),
+    ) as string[];
+
+    const [owners, ownedDogs] = await Promise.all([
+      ownerIds.length > 0
+        ? this.prisma.user.findMany({
+            where: { id: { in: ownerIds } },
+            select: {
+              id: true,
+              nickname: true,
+              phone: true,
+              guestContactName: true,
+              guestContactPhone: true,
+            },
+          })
+        : Promise.resolve([]),
+      ownedDogIds.length > 0
+        ? this.prisma.dog.findMany({
+            where: { id: { in: ownedDogIds } },
+            select: { id: true, name: true, breedId: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const breedIds = Array.from(
+      new Set(ownedDogs.map((d) => d.breedId).filter(Boolean)),
+    ) as string[];
+    const breeds =
+      breedIds.length > 0
+        ? await this.prisma.dogBreed.findMany({
+            where: { id: { in: breedIds } },
+            select: { id: true, name: true },
+          })
+        : [];
+
+    const ownerMap = new Map(owners.map((row) => [row.id, row]));
+    const dogMap = new Map(ownedDogs.map((row) => [row.id, row]));
+    const breedMap = new Map(breeds.map((row) => [row.id, row.name]));
+
+    // 5) 适配提示：过敏原（名称包含匹配，宁多勿漏）+ 生命阶段
+    const allergens = await this.loadDogAllergenKeywords(dog);
+    const recipeIds = recipes.map((recipe) => recipe.recipeId);
+    const ingredientRows =
+      recipeIds.length > 0
+        ? await this.prisma.recipeItem.findMany({
+            where: { recipeId: { in: recipeIds } },
+            select: {
+              recipeId: true,
+              ingredient: { select: { name: true } },
+            },
+          })
+        : [];
+    const ingredientNamesByRecipe = new Map<string, string[]>();
+    for (const row of ingredientRows) {
+      const list = ingredientNamesByRecipe.get(row.recipeId) ?? [];
+      list.push(String(row.ingredient?.name || '').toLowerCase());
+      ingredientNamesByRecipe.set(row.recipeId, list);
+    }
+
+    const dogLifeStage = this.resolveLifeStageKeyword(dog);
+
+    const items = recipes.map((recipe) => {
+      const owner = recipe.customerOwnerId
+        ? ownerMap.get(recipe.customerOwnerId)
+        : undefined;
+      const ownedDog = recipe.customerDogId
+        ? dogMap.get(recipe.customerDogId)
+        : undefined;
+
+      const isCustom = recipe.status === 'PRIVATE_CUSTOM';
+      const kind = !isCustom
+        ? 'WINDOW'
+        : recipe.customerOwnerId && recipe.customerOwnerId === customerId
+          ? 'OWN_CUSTOM'
+          : 'OTHER_CUSTOM';
+
+      const reasons: string[] = [];
+      const ingredientNames = ingredientNamesByRecipe.get(recipe.recipeId) ?? [];
+      for (const allergen of allergens) {
+        const hit = ingredientNames.find(
+          (name) => name.includes(allergen) || allergen.includes(name),
+        );
+        if (hit) {
+          reasons.push(
+            `${dog.name} 的档案里记了「${allergen}」过敏，这条配方用到 ${hit}`,
+          );
+          break;
+        }
+      }
+
+      const stages = this.normalizeLifeStages(recipe.applicableLifeStages);
+      if (
+        stages.length > 0 &&
+        dogLifeStage &&
+        !stages.some((stage) => stage.includes(dogLifeStage))
+      ) {
+        reasons.push(
+          `这条配方的适用阶段是 ${stages.join('/')}，${dog.name} 目前按 ${dogLifeStage} 算`,
+        );
+      }
+
+      return {
+        id: recipe.recipeId,
+        internalId: recipe.id,
+        version: recipe.version,
+        name: recipe.name,
+        status: recipe.status,
+        sourceLabel: isCustom ? '专属成品' : '公开成品',
+        coverImageUrl:
+          recipe.coverImageUrl?.replace('http://', 'https://') ?? null,
+        ownership: {
+          kind,
+          customerId: recipe.customerOwnerId ?? null,
+          customerName: this.resolveCustomerName(owner),
+          dogId: recipe.customerDogId ?? null,
+          dogName: ownedDog?.name ?? null,
+          breedName: ownedDog ? breedMap.get(ownedDog.breedId) ?? null : null,
+        },
+        fit: {
+          level: reasons.length > 0 ? 'WARN' : 'OK',
+          reasons,
+        },
+      };
+    });
+
+    const filtered = keyword
+      ? items.filter((item) =>
+          [
+            item.name,
+            item.ownership.customerName,
+            item.ownership.dogName,
+          ].some((value) =>
+            String(value || '')
+              .toLowerCase()
+              .includes(keyword),
+          ),
+        )
+      : items;
+
+    const start = (page - 1) * pageSize;
+    return ApiResponseDto.success({
+      items: filtered.slice(start, start + pageSize),
+      total: filtered.length,
+    });
+  }
+
+  /**
+   * 代客下单的饭量预览：按狗狗体重 + 食谱能量密度算每天吃多少克。
+   */
+  @Get('dogs/:dogId/portion-preview')
+  @UseGuards(AdminGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Admin assisted-order portion preview' })
+  async previewPortion(
+    @Param('dogId') dogId: string,
+    @Query() query: { recipeId?: string; days?: string },
+  ) {
+    const recipeId = String(query.recipeId || '').trim();
+    if (!recipeId) {
+      return ApiResponseDto.error(400, 'recipeId is required');
+    }
+    const days = Number(query.days) > 0 ? Number(query.days) : 7;
+
+    try {
+      const data = await this.orderService.previewPortionForDog(
+        dogId,
+        recipeId,
+        days,
+      );
+      return ApiResponseDto.success(data);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * 员工报价预览：用**顾客**的身份算，但不落价格快照。
+   */
+  @Post('orders/pricing-preview')
+  @UseGuards(AdminGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Admin assisted-order pricing preview' })
+  async previewAssistedPricing(@Body() body: any) {
+    try {
+      const customerId = String(body?.customerId || '').trim();
+      const dogId = String(body?.dogId || '').trim();
+      const items = Array.isArray(body?.items) ? body.items : [];
+      const addressId = body?.addressId ? String(body.addressId).trim() : undefined;
+
+      if (!customerId || !dogId || items.length === 0) {
+        return ApiResponseDto.error(400, 'customerId, dogId and items are required');
+      }
+
+      const dog = await this.prisma.dog.findUnique({
+        where: { id: dogId },
+        select: { id: true, ownerId: true },
+      });
+      if (!dog) {
+        return ApiResponseDto.error(404, 'Dog not found');
+      }
+      if (dog.ownerId !== customerId) {
+        return ApiResponseDto.error(400, 'Dog does not belong to this customer');
+      }
+
+      const preview = await this.orderService.previewPricing({
+        customerId,
+        dogId,
+        type: body?.type || 'FRESH_FOOD',
+        pricingPurpose: 'STAFF_PREVIEW',
+        addressId,
+        items,
+      } as any);
+
+      return ApiResponseDto.success({
+        amountProduct: preview.amountProduct,
+        amountShipping: preview.amountShipping,
+        amountTotal: preview.amountTotal,
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * 给指定顾客建一条收货地址（无账号顾客没有小程序，只能由管理员代录）。
+   */
+  @Post('customers/:customerId/addresses')
+  @UseGuards(AdminGuard)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create an address for a customer (admin)' })
+  async createCustomerAddress(
+    @Param('customerId') customerId: string,
+    @Body() body: any,
+  ) {
+    const recipientName = String(body?.recipientName || '').trim();
+    const phone = String(body?.phone || '').trim();
+    const detail = String(body?.detail || '').trim();
+    const region = body?.region || {};
+
+    if (!recipientName || !phone || !detail) {
+      return ApiResponseDto.error(400, '收货人、电话、详细地址都不能为空');
+    }
+    if (!region.province || !region.city) {
+      return ApiResponseDto.error(400, '请选择省市区');
+    }
+
+    const customer = await this.prisma.user.findUnique({
+      where: { id: customerId },
+      select: { id: true },
+    });
+    if (!customer) {
+      return ApiResponseDto.error(404, 'Customer not found');
+    }
+
+    const address = await this.addressService.createAddress({
+      userId: customerId,
+      recipientName,
+      phone,
+      region: {
+        province: String(region.province),
+        city: String(region.city),
+        district: String(region.district || ''),
+      },
+      detail,
+      isDefault: Boolean(body?.isDefault),
+    } as any);
+
+    return ApiResponseDto.success({
+      id: (address as any).id,
+      userId: customerId,
+      recipientName,
+      phone,
+      region: (address as any).region,
+      detail,
+      isDefault: Boolean((address as any).isDefault),
+    });
+  }
+
+  /** 狗狗档案里的过敏原关键词（自由文本 + 过敏记录），统一小写去重 */
+  private async loadDogAllergenKeywords(dog: {
+    id: string;
+    allergyFoods?: string | null;
+  }): Promise<string[]> {
+    const records = await this.prisma.allergyRecord.findMany({
+      where: { dogId: dog.id },
+      select: { allergen: true },
+    });
+    const raw = [
+      ...String(dog.allergyFoods || '').split(/[,，、;；/\\s]+/),
+      ...records.map((row) => row.allergen),
+    ];
+    const keywords = raw
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter((value) => value.length >= 1);
+    return Array.from(new Set(keywords));
+  }
+
+  /** 粗判狗狗所处生命阶段（只用于"这条配方适用阶段对不对"的提示） */
+  private resolveLifeStageKeyword(dog: {
+    birthday?: Date | string | null;
+    lifeStageOverride?: string | null;
+  }): string | null {
+    const override = String(dog.lifeStageOverride || '').toUpperCase();
+    if (override && override !== 'AUTO') {
+      return override;
+    }
+    if (!dog.birthday) return null;
+    const birthday = new Date(dog.birthday);
+    if (Number.isNaN(birthday.getTime())) return null;
+    const ageMonths =
+      (Date.now() - birthday.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
+    if (ageMonths < 12) return 'PUPPY';
+    if (ageMonths >= 84) return 'SENIOR';
+    return 'ADULT';
+  }
+
+  private normalizeLifeStages(value: any): string[] {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((stage) => {
+        if (typeof stage === 'string') return stage;
+        if (stage && typeof stage === 'object') {
+          return String(stage.code || stage.stage || stage.lifeStage || '');
+        }
+        return '';
+      })
+      .map((stage) => stage.toUpperCase())
+      .filter(Boolean);
+  }
+
+  private resolveCustomerName(owner: any): string | null {
+    if (!owner) return null;
+    return (
+      owner.nickname ||
+      owner.guestContactName ||
+      owner.phone ||
+      owner.guestContactPhone ||
+      null
+    );
+  }
+
 }

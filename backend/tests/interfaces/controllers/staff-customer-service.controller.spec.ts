@@ -39,10 +39,16 @@ describe('StaffCustomerServiceController customer and dog workflows', () => {
       updateAdminRemark: jest.fn(),
       processPayment: jest.fn(),
       listDogFinishedFoodHistory: jest.fn(),
+      previewPricing: jest.fn().mockResolvedValue({
+        amountProduct: 108,
+        amountShipping: 10,
+        amountTotal: 118,
+      }),
     };
     const controller = new StaffCustomerServiceController(
       prisma as any,
       orderService as any,
+      { createAddress: jest.fn() } as any,
     );
 
     return { controller, prisma, orderService };

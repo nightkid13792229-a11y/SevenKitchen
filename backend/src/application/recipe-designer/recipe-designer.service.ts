@@ -4728,6 +4728,40 @@ export class RecipeDesignerService {
         },
       });
 
+      /**
+       * 改名必须同步到已上线食谱（2026-11-08 审核修复）。
+       *
+       * 发布只写 `recipe_series.name` 时，顾客首页 / 详情读的还是每条
+       * `recipe.name`，改名等于没生效。这里复用 renameSeries 的口径：
+       * 未交付过的版本行一起改名；**已交付的私密食谱不动**（交付快照里
+       * 才是顾客手里那份的历史）。
+       */
+      if (effective.name && effective.name !== String(series.name ?? '').trim()) {
+        const designsToRename = await tx.designRecipe.findMany({
+          where: { seriesId, name: { not: effective.name } },
+          select: { id: true },
+        });
+        for (const design of designsToRename) {
+          const version = await this.allocateNextDesignRecipeVersion(
+            tx,
+            effective.name,
+          );
+          await tx.designRecipe.update({
+            where: { id: design.id },
+            data: { name: effective.name, version },
+          });
+        }
+        await tx.recipe.updateMany({
+          where: {
+            seriesId,
+            name: { not: effective.name },
+            deliveryItems: { none: {} },
+            deliveries: { none: {} },
+          },
+          data: { name: effective.name },
+        });
+      }
+
       if (appliedDraftFields.length > 0) {
         // 角标：整体覆盖成草稿里的那组（顺序即展示顺序）
         await tx.recipeSeriesCoverBadge.deleteMany({ where: { seriesId } });

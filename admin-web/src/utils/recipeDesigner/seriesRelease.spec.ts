@@ -35,6 +35,7 @@ const readiness: SeriesReleaseReadiness = {
   designMode: 'CATALOG',
   businessStatus: 'PUBLIC',
   releaseState: 'NEEDS_UPDATE',
+  name: '鸡肉双阶段',
   ready: false,
   canRelease: false,
   releaseDraft: { exists: true, updatedAt: '2026-11-08T03:52:00.000Z', changedFields: ['sellingPoint'] },

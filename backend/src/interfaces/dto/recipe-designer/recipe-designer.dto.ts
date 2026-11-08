@@ -481,6 +481,11 @@ export class SeriesReleaseDraftTaxonomyDto {
  * 写进去的只是草稿，顾客端看不到，直到管理员点「发布这一版」。
  */
 export class SaveSeriesReleaseDraftDto {
+  /** 食谱名称：最多 12 个字（标签印不下），空名 400 */
+  @IsOptional()
+  @IsString()
+  name?: string | null;
+
   @IsOptional()
   @IsString()
   coverImageUrl?: string | null;

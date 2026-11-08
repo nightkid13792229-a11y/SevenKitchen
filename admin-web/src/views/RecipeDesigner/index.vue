@@ -226,7 +226,6 @@
           <div v-if="filters.mode === 'CATALOG'" class="series-card-actions">
             <el-button size="small" text type="primary" @click="openSeriesReleaseDrawer(card)">{{ seriesReleaseEntryLabel(card) }}</el-button>
             <el-button size="small" text @click="handleCardCommand('duplicate', card)">复制系列</el-button>
-            <el-button size="small" text @click="handleCardCommand('rename', card)">重命名</el-button>
             <el-button size="small" text type="danger" @click="handleCardCommand('delete', card)">删除系列</el-button>
           </div>
         </div>

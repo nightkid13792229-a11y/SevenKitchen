@@ -410,6 +410,7 @@ export interface SeriesReleaseStageReadiness {
 
 /** 草稿里会被比较 / 展示的字段（与后端 series-release-draft.ts 一致） */
 export type SeriesReleaseDraftField =
+  | 'name'
   | 'coverImageUrl'
   | 'coverTitle'
   | 'sellingPoint'
@@ -419,6 +420,8 @@ export type SeriesReleaseDraftField =
 
 /** PATCH /recipe-designer/series/:seriesId/release-draft · 只传要改的字段 */
 export interface SaveSeriesReleaseDraftPayload {
+  /** 食谱名称：最多 12 个字，空名 400 */
+  name?: string | null
   coverImageUrl?: string | null
   coverTitle?: string | null
   sellingPoint?: string | null
@@ -444,6 +447,8 @@ export interface SeriesReleaseReadiness {
   businessStatus: string
   /** 整条系列的展示状态：未上线 / 已上线（最新）/ 待重新发布 */
   releaseState: SeriesReleaseState
+  /** 生效的食谱名称（草稿 ?? 线上）：顾客看到的就是它 */
+  name: string
   /** 展示资料是否齐全（封面图 + 一句话卖点） */
   ready: boolean
   /**

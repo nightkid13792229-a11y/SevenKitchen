@@ -75,7 +75,7 @@
             <span v-if="editing" class="sr-link sr-cover__change">更换封面</span>
           </div>
           <div class="sr-look__info">
-            <div class="sr-look__name">{{ seriesName || '未命名系列' }}</div>
+            <div class="sr-look__name">{{ effectiveName }}</div>
             <div class="sr-look__selling" :class="{ 'is-empty': !readiness.presentation.sellingPoint }">
               {{ readiness.presentation.sellingPoint || '还没有填写一句话卖点' }}
             </div>
@@ -97,6 +97,20 @@
           <div class="sr-edit__head">
             改完自动存成草稿，发布后才对顾客生效
             <span class="sr-edit__state">{{ draftSavedText }}</span>
+          </div>
+
+          <div class="sr-field">
+            <label class="sr-field__label">食谱名称</label>
+            <div class="sr-field__body">
+              <el-input
+                v-model="nameDraft"
+                maxlength="12"
+                show-word-limit
+                placeholder="例如：均衡营养｜三文鱼南瓜"
+                @change="saveName"
+              />
+              <div class="sr-hint">价值点在前、食材在后，最多 12 个字——多了标签印不下。</div>
+            </div>
           </div>
 
           <div class="sr-field">
@@ -219,6 +233,7 @@ const unpublishing = ref(false)
 const draftSaving = ref(false)
 const draftSavedAt = ref<Date | null>(null)
 
+const nameDraft = ref('')
 const sellingDraft = ref('')
 const badgeDraft = ref<string[]>([])
 
@@ -226,6 +241,7 @@ const healthTags = ref<RecipeHealthTag[]>([])
 const healthTagsLoading = ref(false)
 
 const DRAFT_FIELD_LABELS: Record<SeriesReleaseDraftField, string> = {
+  name: '食谱名称',
   coverImageUrl: '封面图',
   coverTitle: '封面标题',
   sellingPoint: '一句话卖点',
@@ -237,11 +253,20 @@ const DRAFT_FIELD_LABELS: Record<SeriesReleaseDraftField, string> = {
 const hasLive = computed(() => readiness.value?.businessStatus === 'PUBLIC')
 const hasDraft = computed(() => readiness.value?.releaseDraft?.exists === true)
 
+const effectiveName = computed(
+  () => readiness.value?.name || props.seriesName || '未命名系列'
+)
+
+const nameChanged = computed(
+  () => readiness.value?.releaseDraft?.changedFields.includes('name') === true
+)
+
 const headSubtitle = computed(() => {
-  const name = props.seriesName || '产品线'
+  const parts = [effectiveName.value]
+  if (nameChanged.value) parts.push('名称已改，发布后生效')
   const at = readiness.value?.releaseDraft?.updatedAt
-  if (!at) return name
-  return `${name} · 草稿已保存 ${formatTime(at)}`
+  if (at) parts.push(`草稿已保存 ${formatTime(at)}`)
+  return parts.join(' · ')
 })
 
 const statePill = computed<{ label: string; type: 'info' | 'success' | 'warning' }>(() => {
@@ -337,6 +362,7 @@ async function loadReadiness(): Promise<void> {
   try {
     const result = await recipeDesignerApi.getSeriesReleaseReadiness(props.seriesId)
     readiness.value = result
+    nameDraft.value = result.name || props.seriesName || ''
     sellingDraft.value = result.presentation.sellingPoint ?? ''
     badgeDraft.value = result.presentation.coverBadges.length
       ? await resolveBadgeIds(result.presentation.coverBadges)
@@ -386,6 +412,7 @@ async function saveDraft(patch: Record<string, unknown>): Promise<void> {
     if (readiness.value) {
       readiness.value = {
         ...readiness.value,
+        name: result.name ?? readiness.value.name,
         presentation: result.presentation,
         releaseDraft: {
           exists: result.changedFields.length > 0,
@@ -399,6 +426,16 @@ async function saveDraft(patch: Record<string, unknown>): Promise<void> {
   } finally {
     draftSaving.value = false
   }
+}
+
+function saveName(): void {
+  const next = nameDraft.value.trim()
+  if (!next) {
+    ElMessage.warning('食谱名称不能为空')
+    nameDraft.value = readiness.value?.name ?? ''
+    return
+  }
+  void saveDraft({ name: next })
 }
 
 function saveSellingPoint(): void {

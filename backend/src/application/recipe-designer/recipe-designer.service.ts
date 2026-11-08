@@ -4303,10 +4303,8 @@ export class RecipeDesignerService {
     return this.buildSeriesReleaseReadinessForSeries({
       series,
       sources,
-      presentation: this.toSeriesReleasePresentation({
-        ...draftContext,
-        badgeNames: draftContext.badgeNames,
-      }),
+      name: draftContext.effective.name,
+      presentation: this.toSeriesReleasePresentation(draftContext),
       taxonomyLinkCount: draftContext.effective.taxonomy.length,
       releaseDraft: draftContext.changedFields.length
         ? {
@@ -4333,6 +4331,7 @@ export class RecipeDesignerService {
   ): Promise<{
     changedFields: SeriesReleaseDraftField[];
     updatedAt: string | null;
+    name: string | null;
     presentation: {
       coverImageUrl: string | null;
       coverTitle: string | null;
@@ -4349,6 +4348,19 @@ export class RecipeDesignerService {
     const draftContext = await this.loadSeriesReleaseDraftContext(series);
 
     const patch: SeriesReleaseDraftPatch = {};
+    if (dto.name !== undefined) {
+      const trimmed = String(dto.name ?? '').trim();
+      if (!trimmed) {
+        throw new BadRequestException('食谱名称不能为空');
+      }
+      try {
+        patch.name = assertRecipeNameLength(trimmed);
+      } catch (error) {
+        throw new BadRequestException(
+          error instanceof Error ? error.message : '食谱名称不合法',
+        );
+      }
+    }
     if (dto.coverImageUrl !== undefined) {
       patch.coverImageUrl = this.normalizeSeriesReleaseText(
         dto.coverImageUrl,
@@ -4448,6 +4460,7 @@ export class RecipeDesignerService {
     return {
       changedFields,
       updatedAt: savedAt ? savedAt.toISOString() : null,
+      name: effective.name,
       presentation: {
         coverImageUrl: effective.coverImageUrl,
         coverTitle: effective.coverTitle,
@@ -4590,12 +4603,6 @@ export class RecipeDesignerService {
     }
 
     const series = await this.loadCatalogSeriesForRelease(seriesId, context);
-    // 临时名（「未命名系列 · 10-21 22:15」）不能上线：它会印在标签上
-    if (String(series.name ?? '').trim().startsWith('未命名')) {
-      throw new BadRequestException(
-        '系列名称还是临时名称，先在「发布设置」里改成正式名称再发布',
-      );
-    }
     const [sources, draftContext] = await Promise.all([
       this.loadSeriesReleaseStageSources(seriesId),
       this.loadSeriesReleaseDraftContext(series),
@@ -4603,6 +4610,7 @@ export class RecipeDesignerService {
     const readiness = this.buildSeriesReleaseReadinessForSeries({
       series,
       sources,
+      name: draftContext.effective.name,
       presentation: this.toSeriesReleasePresentation(draftContext),
       taxonomyLinkCount: draftContext.effective.taxonomy.length,
       releaseDraft: draftContext.changedFields.length
@@ -4615,6 +4623,13 @@ export class RecipeDesignerService {
     if (!readiness.ready) {
       throw new BadRequestException(
         readiness.blockers.map((blocker) => blocker.message).join('；'),
+      );
+    }
+    // 临时名（「未命名系列 · 10-21 22:15」）不能上线：它会印在标签上
+    const releaseName = String(readiness.name ?? '').trim();
+    if (!releaseName || releaseName.startsWith('未命名')) {
+      throw new BadRequestException(
+        '系列名称还是临时名称，先在发布抽屉里改成正式名称再发布',
       );
     }
 
@@ -4684,6 +4699,7 @@ export class RecipeDesignerService {
         where: { id: seriesId },
         data: {
           businessStatus: RecipeSeriesBusinessStatus.PUBLIC,
+          name: effective.name ?? series.name,
           coverImageUrl: effective.coverImageUrl,
           coverTitle: effective.coverTitle,
           sellingPoint: effective.sellingPoint,
@@ -4912,6 +4928,7 @@ export class RecipeDesignerService {
     series: Pick<
       RecipeSeries,
       | 'id'
+      | 'name'
       | 'coverImageUrl'
       | 'coverTitle'
       | 'sellingPoint'
@@ -4941,6 +4958,7 @@ export class RecipeDesignerService {
     ]);
 
     const live = buildSeriesReleaseLiveValues({
+      name: series.name,
       coverImageUrl: series.coverImageUrl,
       coverTitle: series.coverTitle,
       sellingPoint: series.sellingPoint,
@@ -4951,6 +4969,10 @@ export class RecipeDesignerService {
     const draft = series.releaseDraft
       ? parseSeriesReleaseDraft(series.releaseDraft)
       : null;
+    // 老草稿（名称进草稿之前存的）没有 name：一律继承线上名，不能当成「清空」。
+    if (draft && !draft.name) {
+      draft.name = live.name;
+    }
     const changedFields = draft ? diffSeriesReleaseDraft(draft, live) : [];
     const hasDraft = changedFields.length > 0;
     const effective = hasDraft && draft ? draft : live;
@@ -5022,6 +5044,7 @@ export class RecipeDesignerService {
       designs: SeriesReleaseDesignRecord[];
     };
     presentation: SeriesReleasePresentation;
+    name?: string | null;
     taxonomyLinkCount?: number;
     releaseDraft?: {
       updatedAt: Date | null;
@@ -5033,6 +5056,7 @@ export class RecipeDesignerService {
       seriesId: series.id,
       designMode: series.designMode ?? RecipeDesignMode.CATALOG,
       businessStatus: series.businessStatus,
+      name: params.name,
       presentation,
       taxonomyLinkCount: params.taxonomyLinkCount,
       releaseDraft: params.releaseDraft

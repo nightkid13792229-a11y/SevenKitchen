@@ -170,6 +170,7 @@ export const recipeDesignerApi = {
   ): Promise<{
     changedFields: SeriesReleaseDraftField[]
     updatedAt: string | null
+    name: string | null
     presentation: SeriesReleasePresentation
   }> =>
     api.patch(`/recipe-designer/series/${seriesId}/release-draft`, data),

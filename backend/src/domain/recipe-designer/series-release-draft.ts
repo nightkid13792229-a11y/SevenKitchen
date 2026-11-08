@@ -19,6 +19,8 @@ export interface SeriesReleaseDraftTaxonomyLink {
 }
 
 export interface SeriesReleaseDraftPayload {
+  /** 食谱名称：顾客看到的第一行字，也是印在标签上的名字 */
+  name: string | null;
   coverImageUrl: string | null;
   coverTitle: string | null;
   sellingPoint: string | null;
@@ -30,6 +32,7 @@ export interface SeriesReleaseDraftPayload {
 
 /** 草稿里会被比较 / 展示的字段；`coverBadges` 对应 badgeHealthTagIds。 */
 export const SERIES_RELEASE_DRAFT_FIELDS = [
+  'name',
   'coverImageUrl',
   'coverTitle',
   'sellingPoint',
@@ -45,6 +48,7 @@ export const SERIES_RELEASE_DRAFT_FIELD_LABELS: Record<
   SeriesReleaseDraftField,
   string
 > = {
+  name: '食谱名称',
   coverImageUrl: '封面图',
   coverTitle: '封面标题',
   sellingPoint: '一句话卖点',
@@ -97,6 +101,7 @@ export function parseSeriesReleaseDraft(
   }
   const source = raw as Record<string, unknown>;
   return {
+    name: normalizeText(source.name) || null,
     coverImageUrl: normalizeText(source.coverImageUrl) || null,
     coverTitle: normalizeText(source.coverTitle) || null,
     sellingPoint: normalizeText(source.sellingPoint) || null,
@@ -108,6 +113,7 @@ export function parseSeriesReleaseDraft(
 
 export function emptySeriesReleaseDraft(): SeriesReleaseDraftPayload {
   return {
+    name: null,
     coverImageUrl: null,
     coverTitle: null,
     sellingPoint: null,
@@ -119,6 +125,7 @@ export function emptySeriesReleaseDraft(): SeriesReleaseDraftPayload {
 
 /** 线上值（系列 + 角标表 + 归类表）——用来算差异，也用来做兜底基线。 */
 export interface SeriesReleaseLiveValues {
+  name?: string | null;
   coverImageUrl?: string | null;
   coverTitle?: string | null;
   sellingPoint?: string | null;
@@ -131,6 +138,7 @@ export function buildSeriesReleaseLiveValues(
   live: SeriesReleaseLiveValues,
 ): SeriesReleaseDraftPayload {
   return {
+    name: normalizeText(live.name) || null,
     coverImageUrl: normalizeText(live.coverImageUrl) || null,
     coverTitle: normalizeText(live.coverTitle) || null,
     sellingPoint: normalizeText(live.sellingPoint) || null,
@@ -164,6 +172,7 @@ export function diffSeriesReleaseDraft(
   live: SeriesReleaseDraftPayload,
 ): SeriesReleaseDraftField[] {
   const changed: SeriesReleaseDraftField[] = [];
+  if (draft.name !== live.name) changed.push('name');
   if (draft.coverImageUrl !== live.coverImageUrl) changed.push('coverImageUrl');
   if (draft.coverTitle !== live.coverTitle) changed.push('coverTitle');
   if (draft.sellingPoint !== live.sellingPoint) changed.push('sellingPoint');
@@ -198,6 +207,8 @@ export function mergeSeriesReleaseDraft(
 ): SeriesReleaseDraftPayload {
   const base = current ?? live;
   const merged: SeriesReleaseDraftPayload = {
+    name:
+      patch.name === undefined ? base.name : normalizeText(patch.name) || null,
     coverImageUrl:
       patch.coverImageUrl === undefined
         ? base.coverImageUrl

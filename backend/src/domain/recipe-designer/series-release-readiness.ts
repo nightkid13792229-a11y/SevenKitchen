@@ -139,6 +139,8 @@ export interface BuildSeriesReleaseReadinessInput {
   /** 系列业务状态 DRAFT | PUBLIC | PRIVATE_CUSTOM；缺省按 DRAFT 处理 */
   businessStatus?: string | null;
   presentation?: SeriesReleasePresentation | null;
+  /** 生效的食谱名称（草稿 ?? 线上）：临时名不允许上线 */
+  name?: string | null;
   /**
    * 该系列挂了几个需求分类（2026-10-27）。
    * 只数条数，不区分分类种类：双拼菜不挂主蛋白、只挂场景，也算已归类。
@@ -180,6 +182,8 @@ export interface SeriesReleaseReadiness {
    * 已上线系列只改封面 / 卖点时也要能发出去，否则草稿永远发不了。
    */
   canRelease: boolean;
+  /** 生效的食谱名称（草稿 ?? 线上） */
+  name: string;
   /** 发布草稿（2026-11-08）：顾客端看不到，发布后才生效 */
   releaseDraft: {
     exists: boolean;
@@ -381,6 +385,7 @@ export const buildSeriesReleaseReadiness = (
     seriesId: input.seriesId,
     designMode: input.designMode,
     businessStatus,
+    name: normalizeText(input.name),
     releaseState,
     ready,
     canRelease:

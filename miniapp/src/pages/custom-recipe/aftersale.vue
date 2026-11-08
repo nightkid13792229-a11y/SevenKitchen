@@ -149,9 +149,9 @@
                 <text class="supplement-label">须额外添加：</text>
                 <text
                   v-for="(row, index) in supplementRowsOf(activeItem.content)"
-                  :key="row.label + row.unit"
+                  :key="row.nutrient + index"
                   class="supplement-item"
-                >{{ row.label }} 每公斤食材添加 {{ row.value }}{{ row.unit }}<text v-if="index < supplementRowsOf(activeItem.content).length - 1">，</text></text>
+                >{{ row.nutrient }} {{ row.concentration }}<text v-if="index < supplementRowsOf(activeItem.content).length - 1">，</text></text>
               </view>
 
               <text class="macro-caption">干物质（DM）占比</text>
@@ -279,6 +279,10 @@ import {
   type OrderDelivery,
 } from '@/api/custom-recipe';
 import { requestCustomRecipeOrderSubscription } from '@/utils/custom-recipe-payment';
+import {
+  buildSupplementNutrientRows,
+  type SupplementNutrientRow,
+} from '@/utils/supplement-nutrients';
 
 interface Attachment {
   id: string;
@@ -596,25 +600,15 @@ function formatRatio(value: number | null): string {
   return `${numeric.toFixed(2)}%`;
 }
 
-function supplementRowsOf(content: DeliveryContent) {
-  const rows: Array<{ label: string; value: string; unit: string }> = [];
-  const seen = new Set<string>();
-  for (const supplement of content.supplements || []) {
-    for (const target of supplement.targets || []) {
-      const value = Number(target.targetValuePerKg);
-      if (!target.label || !Number.isFinite(value)) continue;
-      const unit = target.unit || '';
-      const key = `${target.label}:${unit}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      rows.push({
-        label: target.label,
-        value: Number.isInteger(value) ? String(value) : value.toFixed(1),
-        unit,
-      });
-    }
-  }
-  return rows;
+/**
+ * 须额外添加的营养素（2026-11-08 收口）：
+ *
+ * 和食谱详情页、交付页共用 `buildSupplementNutrientRows` ——
+ * 原来这一页自己摊平、按 `${label}:${unit}` 去重只留第一条，
+ * 两个钙源（钙粉 + 骨粉）时第二个钙被静默丢掉，口径与另外两页对不上。
+ */
+function supplementRowsOf(content: DeliveryContent): SupplementNutrientRow[] {
+  return buildSupplementNutrientRows(content.supplements || []);
 }
 
 /**

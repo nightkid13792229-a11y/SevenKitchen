@@ -84,4 +84,12 @@ describe('食谱调整页', () => {
     expect(detail).toContain('查看进展');
     expect(detail).toContain('查看记录');
   });
+
+  it('★ 「须额外添加」走共用的营养素行，不再自己按名称去重只留第一条（2026-11-08）', () => {
+    // 原来这一页自己摊平、按 `${label}:${unit}` 去重 —— 两个钙源时
+    // 第二个钙被静默丢掉，和详情页 / 交付页的合计口径对不上。
+    expect(page).toContain('buildSupplementNutrientRows');
+    expect(page).toContain('row.concentration');
+    expect(page).not.toContain('seen.has');
+  });
 });

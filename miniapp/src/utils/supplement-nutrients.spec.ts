@@ -490,7 +490,7 @@ describe('buildSupplementNutrientRows · 需额外补充的营养素', () => {
     ])
   })
 
-  it('多个补剂的目标按顺序摊平，不合并成一行', () => {
+  it('不同营养素按补剂顺序摊平，各占一行', () => {
     expect(
       buildSupplementNutrientRows([
         { targets: [{ label: '钙', targetValuePerKg: 5, unit: 'g' }] },
@@ -551,15 +551,58 @@ describe('buildSupplementNutrientRows · 需额外补充的营养素', () => {
     ).toEqual([{ nutrient: '锌', concentration: '—' }])
   })
 
-  it('两个补剂补同一营养素时出现两行（各自浓度，不合并）', () => {
+  it('★ 两个补剂补同一营养素时合并成一行（浓度相加，2026-11-08）', () => {
+    // 老板反馈：钙粉 + 骨粉各带一个「钙」目标时，页面出现两行钙，
+    // 顾客读成「要加两次钙 / 加多了」。合并成合计才是这一块要回答的问题。
     expect(
       buildSupplementNutrientRows([
         { targets: [{ label: '钙', targetValuePerKg: 3, unit: 'g' }] },
         { targets: [{ label: '钙', targetValuePerKg: 2, unit: 'g' }] },
       ])
+    ).toEqual([{ nutrient: '钙', concentration: '每公斤食材添加 5 g' }])
+  })
+
+  it('★ 合并时单位不同但可换算：1364mg + 0.719g = 2083mg', () => {
+    expect(
+      buildSupplementNutrientRows([
+        { targets: [{ label: '钙', targetValuePerKg: 1364, unit: 'mg' }] },
+        { targets: [{ label: '钙', targetValuePerKg: 0.719, unit: 'g' }] },
+      ])
+    ).toEqual([{ nutrient: '钙', concentration: '每公斤食材添加 2083 mg' }])
+  })
+
+  it('★ 合并后行序按营养素首次出现，三个及以上也合并', () => {
+    expect(
+      buildSupplementNutrientRows([
+        { targets: [{ label: '钙', targetValuePerKg: 1000, unit: 'mg' }] },
+        { targets: [{ label: '锌', targetValuePerKg: 12, unit: 'mg' }] },
+        { targets: [{ label: '钙', targetValuePerKg: 719, unit: 'mg' }] },
+        { targets: [{ label: '钙', targetValuePerKg: 364, unit: 'mg' }] },
+      ])
     ).toEqual([
-      { nutrient: '钙', concentration: '每公斤食材添加 3 g' },
-      { nutrient: '钙', concentration: '每公斤食材添加 2 g' },
+      { nutrient: '钙', concentration: '每公斤食材添加 2083 mg' },
+      { nutrient: '锌', concentration: '每公斤食材添加 12 mg' },
+    ])
+  })
+
+  it('★ 同一营养素里有一个值未知时合计给「—」，不假装知道总数', () => {
+    expect(
+      buildSupplementNutrientRows([
+        { targets: [{ label: '钙', targetValuePerKg: 1364, unit: 'mg' }] },
+        { targets: [{ label: '钙', targetValuePerKg: null, unit: 'mg' }] },
+      ])
+    ).toEqual([{ nutrient: '钙', concentration: '—' }])
+  })
+
+  it('★ 单位不可换算（IU 与 μg）时不硬加，各占一行', () => {
+    expect(
+      buildSupplementNutrientRows([
+        { targets: [{ label: '维生素 D', targetValuePerKg: 500, unit: 'IU' }] },
+        { targets: [{ label: '维生素 D', targetValuePerKg: 5, unit: 'μg' }] },
+      ])
+    ).toEqual([
+      { nutrient: '维生素 D', concentration: '每公斤食材添加 500 IU' },
+      { nutrient: '维生素 D', concentration: '每公斤食材添加 5 μg' },
     ])
   })
 
@@ -623,5 +666,36 @@ describe('buildSupplementNutrientRowsFromItems · 详情页接线', () => {
     expect(
       buildSupplementNutrientRowsFromItems([{ ingredientType: 'SUPPLEMENT', name: '某补剂' }]),
     ).toEqual([]);
+  });
+
+  it('★ 钙粉 + 骨粉两个钙源只出一行钙（老板截图里的那两行）', () => {
+    const rows = buildSupplementNutrientRowsFromItems([
+      {
+        ingredientType: 'SUPPLEMENT',
+        name: '蛋壳粉',
+        supplementTargets: [
+          { fieldPath: 'minerals.calcium', label: '钙', targetValuePerKg: 1364, unit: 'mg' },
+        ],
+      },
+      {
+        ingredientType: 'SUPPLEMENT',
+        name: '骨粉',
+        supplementTargets: [
+          { fieldPath: 'minerals.calcium', label: '钙', targetValuePerKg: 719, unit: 'mg' },
+        ],
+      },
+      {
+        ingredientType: 'SUPPLEMENT',
+        name: '海藻粉',
+        supplementTargets: [
+          { fieldPath: 'minerals.iodine', label: '碘', targetValuePerKg: 497, unit: 'μg' },
+        ],
+      },
+    ]);
+
+    expect(rows).toEqual([
+      { nutrient: '钙', concentration: '每公斤食材添加 2083 mg' },
+      { nutrient: '碘', concentration: '每公斤食材添加 497 μg' },
+    ]);
   });
 });

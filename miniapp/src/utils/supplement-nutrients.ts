@@ -384,9 +384,14 @@ export interface SupplementNutrientRow {
  * · 没有单位 → 只写数字，不猜单位（猜错比不写更糟）；
  * · 不足 1 的正数保留一位小数 —— 直接取整会把 0.4 mg 写成 0 mg，
  *   顾客会读成"没加"，而它其实是有效添加量；
- * · **不按营养素合并**：两个补剂都补钙时会出现两行（各自的浓度）。
- *   合并得分单位、还得解释"合计"，会把这一块从"配方需求"滑成"配方总量"，
- *   不是这一页要回答的问题。
+ * · **同一营养素合并成一行**（2026-11-08 老板反馈改的）：
+ *   一个食谱里常有不止一种钙源（钙粉 + 骨粉，为了调钙磷比），
+ *   每个补剂的目标值只代表**它自己那一份**贡献，
+ *   原来分成两行「钙 1364 mg」「钙 719 mg」，顾客会读成"钙要加两次"。
+ *   现在合成一行合计（2083 mg）—— 这才是"每公斤要补多少钙"。
+ *   合并只在**单位可换算**时做（都是质量单位，按最小单位相加）；
+ *   单位不可换算（如 IU 与 μg）时宁可不合并，也不硬加；
+ *   组里只要有一个值未知，合计就给「—」，不用已知部分冒充总数。
  */
 export function buildSupplementNutrientRows(
   supplements:
@@ -400,7 +405,7 @@ export function buildSupplementNutrientRows(
     | null
     | undefined
 ): SupplementNutrientRow[] {
-  const rows: SupplementNutrientRow[] = []
+  const groups = new Map<string, Array<{ value: number; unit: string }>>()
 
   for (const supplement of supplements || []) {
     for (const target of supplement?.targets || []) {
@@ -416,16 +421,115 @@ export function buildSupplementNutrientRows(
           : Number(raw)
       const unit = String(target?.unit ?? '').trim()
 
-      rows.push({
-        nutrient,
-        concentration: Number.isFinite(value)
-          ? `每公斤食材添加 ${formatConcentrationValue(value)} ${unit}`.trim()
-          : '—'
-      })
+      const bucket = groups.get(nutrient)
+      if (bucket) {
+        bucket.push({ value, unit })
+      } else {
+        groups.set(nutrient, [{ value, unit }])
+      }
     }
   }
 
+  const rows: SupplementNutrientRow[] = []
+
+  for (const [nutrient, entries] of groups) {
+    if (entries.length === 1) {
+      rows.push({
+        nutrient,
+        concentration: buildConcentrationText(entries[0].value, entries[0].unit)
+      })
+      continue
+    }
+
+    const merged = mergeSameNutrient(entries)
+    if (!merged) {
+      // 单位不可换算：不硬加，各自成行（比编一个错的合计更诚实）
+      for (const entry of entries) {
+        rows.push({
+          nutrient,
+          concentration: buildConcentrationText(entry.value, entry.unit)
+        })
+      }
+      continue
+    }
+
+    rows.push({ nutrient, concentration: merged })
+  }
+
   return rows
+}
+
+/** 质量单位 → mg 的换算系数；不在表里的（IU、片、勺…）不参与合并 */
+const MASS_UNIT_TO_MG: Record<string, number> = {
+  μg: 0.001,
+  ug: 0.001,
+  mcg: 0.001,
+  mg: 1,
+  g: 1000,
+  kg: 1000000
+}
+
+function normalizeUnitForMerge(unit: string): string {
+  return unit.trim().replace(/µ/g, 'μ').toLowerCase()
+}
+
+/** 质量单位 → mg 的系数；不是质量单位（IU / 片 / 勺…）时返回 undefined */
+function massUnitFactor(unit: string): number | undefined {
+  const key = normalizeUnitForMerge(unit)
+  return Object.prototype.hasOwnProperty.call(MASS_UNIT_TO_MG, key)
+    ? MASS_UNIT_TO_MG[key]
+    : undefined
+}
+
+/**
+ * 合计同一营养素的多个目标值；单位不可换算时返回 `null`（调用方各自成行）。
+ *
+ * 换算规则：都是质量单位就统一到**其中最小的单位**（如 mg + g → mg），
+ * 避免先换到 g 再取整时把 719 mg 抹成 1 g。
+ */
+function mergeSameNutrient(
+  entries: Array<{ value: number; unit: string }>
+): string | null {
+  const factors = entries.map((entry) => massUnitFactor(entry.unit))
+  const normalizedUnits = entries.map((entry) => normalizeUnitForMerge(entry.unit))
+  const unitsAreIdentical = normalizedUnits.every(
+    (unit) => unit === normalizedUnits[0]
+  )
+
+  if (!unitsAreIdentical && factors.some((factor) => factor === undefined)) {
+    return null
+  }
+
+  // 单位一致时按原样相加；不一致时统一到其中最小的质量单位
+  const displayFactor = unitsAreIdentical
+    ? 1
+    : Math.min(...(factors as number[]))
+  const displayUnitIndex = unitsAreIdentical
+    ? 0
+    : factors.findIndex((factor) => factor === displayFactor)
+  const displayUnit = entries[displayUnitIndex].unit
+
+  if (!entries.every((entry) => Number.isFinite(entry.value))) {
+    return '—'
+  }
+
+  const total = entries.reduce((sum, entry, index) => {
+    const factor = unitsAreIdentical ? 1 : (factors[index] as number)
+    return sum + (entry.value * factor) / displayFactor
+  }, 0)
+
+  return buildConcentrationText(roundConcentrationTotal(total), displayUnit)
+}
+
+/** 合并相加后的浮点噪声（0.1 + 0.2）：小数位比显示精度多留两位再格式化 */
+function roundConcentrationTotal(value: number): number {
+  return Math.round(value * 1000) / 1000
+}
+
+function buildConcentrationText(value: number, unit: string): string {
+  return Number.isFinite(value)
+    ? `每公斤食材添加 ${formatConcentrationValue(value)} ${unit}`.trim()
+    : '—'
 }
 
 /**

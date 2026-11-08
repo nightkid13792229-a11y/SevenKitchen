@@ -83,6 +83,14 @@
               >
                 {{ statusLabel(item.businessStatus) }}
               </el-tag>
+              <el-tag
+                v-if="item.hasDraftTaxonomy"
+                size="small"
+                type="warning"
+                effect="plain"
+              >
+                归类待发布
+              </el-tag>
               <span v-if="item.referenceDogName" class="dog-chip">
                 🐶 {{ item.referenceDogName }}
               </span>

@@ -32,6 +32,17 @@ export interface TaxonomySeriesResult {
   total: number
 }
 
+export interface SeriesTaxonomyLinksResult {
+  links: Array<{
+    kindId: string
+    nodeId: string
+    kindCode: string
+    kindName: string
+    nodeName: string
+  }>
+  hasDraftTaxonomy: boolean
+}
+
 export interface CreateTaxonomyNodePayload {
   kindId: string
   parentId?: string | null
@@ -58,6 +69,9 @@ export const recipeTaxonomyApi = {
         unclassified: params.unclassified ? 'true' : undefined
       }
     }),
+
+  getSeriesLinks: (seriesId: string): Promise<SeriesTaxonomyLinksResult> =>
+    api.get(`/admin/recipe-taxonomy/series/${seriesId}/links`),
 
   replaceLinks: (seriesId: string, nodeIds: string[]): Promise<{ ok: boolean }> =>
     api.put(`/admin/recipe-taxonomy/series/${seriesId}/links`, { nodeIds }),

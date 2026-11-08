@@ -133,7 +133,7 @@
       />
 
       <div v-if="viewMode === 'SERIES'" v-loading="loading" class="series-grid">
-        <div v-for="card in visibleSeries" :key="card.id" class="series-card">
+        <div v-for="card in series" :key="card.id" class="series-card">
           <div class="series-card-head">
             <div class="series-name-wrap">
               <span class="series-name">{{ card.name }}</span>
@@ -400,12 +400,14 @@ const renameForm = reactive<{ id: string; name: string }>({ id: '', name: '' })
 // 系列发布（阶段设计先入系列仓库，整条系列就绪后一次性发布）
 const releaseDrawerVisible = ref(false)
 const onlyDraft = ref(false)
-/** 只筛「有草稿待发布」：批量改完归类 / 资料后，在这里逐条发 */
-const visibleSeries = computed(() =>
-  onlyDraft.value
-    ? series.value.filter((card) => card.hasReleaseDraft === true)
-    : series.value
-)
+/**
+ * 「只看有草稿」下推到后端 where / count（2026-11-08）：
+ * 之前只过滤当前页，total 不变、翻页还会看到没草稿的系列。
+ */
+watch(onlyDraft, () => {
+  filters.page = 1
+  void loadSeries(1)
+})
 
 const releaseDrawerSeriesId = ref('')
 const releaseDrawerSeriesName = ref('')
@@ -550,6 +552,7 @@ async function loadSeries(targetPage = filters.page) {
       designMode: filters.mode,
       status: filters.status,
       search: filters.search.trim() || undefined,
+      hasReleaseDraft: onlyDraft.value || undefined,
       page,
       pageSize: SERIES_PAGE_SIZE
     })

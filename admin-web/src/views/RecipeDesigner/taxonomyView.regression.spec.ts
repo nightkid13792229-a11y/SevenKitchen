@@ -35,7 +35,8 @@ describe('需求分类视图', () => {
     expect(dialogSource).toContain('batchLinks')
   })
 
-  it('弹窗底部说明归属不影响发布', () => {
-    expect(dialogSource).toContain('不改配方、不触发发布')
+  it('弹窗底部说明归类先进草稿、发布后才影响顾客', () => {
+    expect(dialogSource).toContain('先存发布草稿')
+    expect(dialogSource).toContain('发布这一版')
   })
 })

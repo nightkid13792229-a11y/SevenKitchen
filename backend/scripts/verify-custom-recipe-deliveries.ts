@@ -4,6 +4,9 @@
  * ## 它回答三个问题
  *
  *   ① **有没有漏**：每张"已交付/已完成"且挂着食谱的订单，是不是都有交付记录？
+ *      ⚠️ 2026-11-08：多份交付走 `custom_recipe_delivery_item`（批次明细），
+ *      老表单份交付表 `custom_recipe_delivery` 早已无人写。只查老表会把
+ *      每一张多份订单都误报成"缺少交付记录"—— 两张表都要查。
  *   ② **版本号连不连**：同一订单的交付版本是不是 1、2、3… 中间不断？
  *      （重交时靠它算"第几版"，断了会让顾客看到"第 3 版"却找不到第 2 版）
  *   ③ **快照能不能用**：每条交付记录都有内容快照，且结构版本号是认识的？
@@ -49,6 +52,11 @@ async function main() {
     },
     include: {
       deliveries: { orderBy: { version: 'asc' } },
+      /** 多份交付：内容是批次明细里的快照（2026-11-08 补） */
+      deliveryBatches: {
+        orderBy: { version: 'asc' },
+        include: { items: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] } },
+      },
     },
     orderBy: { createdAt: 'asc' },
   });
@@ -60,14 +68,79 @@ async function main() {
   let backfilledCount = 0;
   let missingSnapshot = 0;
 
+  /** 单份快照的通用校验（老表单份 / 批次明细共用一份口径，2026-11-08） */
+  function checkSnapshot(input: {
+    orderNo: string;
+    snapshot: Record<string, unknown> | null;
+    label: string;
+  }): void {
+    const { orderNo, snapshot, label } = input;
+    if (!snapshot || typeof snapshot !== 'object') {
+      missingSnapshot += 1;
+      problems.push({
+        orderNo,
+        kind: '快照缺失',
+        detail: `${label}没有内容快照 —— 顾客点开会是空白`,
+      });
+      return;
+    }
+
+    const version = snapshot.schemaVersion;
+    const versionNumber = typeof version === 'number' ? version : 0;
+    if (versionNumber > SNAPSHOT_SCHEMA_VERSION) {
+      problems.push({
+        orderNo,
+        kind: '快照结构版本不认识',
+        detail: `${label}schemaVersion=${String(version)} 比当前代码（${SNAPSHOT_SCHEMA_VERSION}）还新，这份小程序可能读不了`,
+      });
+    } else if (versionNumber < SNAPSHOT_SCHEMA_VERSION) {
+      legacyVersionWarnings.push(
+        `${label}schemaVersion=${String(version)}（老结构，代码仍兼容）`,
+      );
+    }
+
+    if (!snapshot.recipe) {
+      problems.push({
+        orderNo,
+        kind: '快照缺少食谱主体',
+        detail: `${label}快照里没有 recipe`,
+      });
+    }
+
+    if (snapshot.backfilled) {
+      backfilledCount += 1;
+    }
+  }
+
   for (const order of orders) {
-    // ① 有没有漏
-    if (order.deliveries.length === 0) {
+    const batchItemCount = (order.deliveryBatches ?? []).reduce(
+      (sum, batch) => sum + batch.items.length,
+      0,
+    );
+
+    // ① 有没有漏（老表单份 + 批次明细，任一有交付就算交付过）
+    if (order.deliveries.length === 0 && batchItemCount === 0) {
       problems.push({
         orderNo: order.orderId,
         kind: '缺少交付记录',
         detail: `订单挂着食谱 ${order.recipeId}，但一条交付记录都没有`,
       });
+      continue;
+    }
+
+    // 批次明细的快照也要逐条校验（2026-11-08）
+    for (const batch of order.deliveryBatches ?? []) {
+      for (const item of batch.items) {
+        totalDeliveries += 1;
+        checkSnapshot({
+          orderNo: order.orderId,
+          snapshot: item.contentSnapshot as Record<string, unknown> | null,
+          label: `第 ${batch.version} 版 · 明细 ${item.id} `,
+        });
+      }
+    }
+
+    if (order.deliveries.length === 0) {
       continue;
     }
 
@@ -89,42 +162,11 @@ async function main() {
 
     for (const delivery of order.deliveries) {
       // ③ 快照能不能用
-      const snapshot = delivery.contentSnapshot as Record<string, unknown> | null;
-      if (!snapshot || typeof snapshot !== 'object') {
-        missingSnapshot += 1;
-        problems.push({
-          orderNo: order.orderId,
-          kind: '快照缺失',
-          detail: `第 ${delivery.version} 版没有内容快照 —— 顾客点开会是空白`,
-        });
-        continue;
-      }
-
-      const version = snapshot.schemaVersion;
-      const versionNumber = typeof version === 'number' ? version : 0;
-      if (versionNumber > SNAPSHOT_SCHEMA_VERSION) {
-        problems.push({
-          orderNo: order.orderId,
-          kind: '快照结构版本不认识',
-          detail: `第 ${delivery.version} 版 schemaVersion=${String(version)} 比当前代码（${SNAPSHOT_SCHEMA_VERSION}）还新，这份小程序可能读不了`,
-        });
-      } else if (versionNumber < SNAPSHOT_SCHEMA_VERSION) {
-        legacyVersionWarnings.push(
-          `第 ${delivery.version} 版 schemaVersion=${String(version)}（老结构，代码仍兼容）`,
-        );
-      }
-
-      if (!snapshot.recipe) {
-        problems.push({
-          orderNo: order.orderId,
-          kind: '快照缺少食谱主体',
-          detail: `第 ${delivery.version} 版快照里没有 recipe`,
-        });
-      }
-
-      if (snapshot.backfilled) {
-        backfilledCount += 1;
-      }
+      checkSnapshot({
+        orderNo: order.orderId,
+        snapshot: delivery.contentSnapshot as Record<string, unknown> | null,
+        label: `第 ${delivery.version} 版`,
+      });
 
       // 交付时间不该是未来（时间轴会显示成"还没发生"）
       if (delivery.deliveredAt.getTime() > Date.now() + 60_000) {

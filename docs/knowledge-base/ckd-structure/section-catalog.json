@@ -1,0 +1,4290 @@
+{
+  "documents": [
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION",
+      "title": "AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf",
+      "sourceName": "AAHA 营养与体重管理指南",
+      "version": "2021",
+      "role": "个体化营养评估、体重管理、自制膳食风险",
+      "authority": "guideline",
+      "documentType": "guideline",
+      "species": "both",
+      "stages": [],
+      "sectionCount": 27,
+      "paragraphCount": 178,
+      "sections": [
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s000",
+          "title": "(文档开头)",
+          "pageNo": 1,
+          "sortOrder": 0,
+          "paragraphCount": 0,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "allTopics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s002",
+          "title": "2021 AAHA Nutrition and Weight Management Guidelines for Dogs and Cats\u0001",
+          "pageNo": 1,
+          "sortOrder": 1,
+          "paragraphCount": 10,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy",
+            "staging"
+          ],
+          "allTopics": [
+            "energy",
+            "staging"
+          ],
+          "sectionType": "treatment"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s003",
+          "title": "VETERINARY PRACTICE GUIDELINES",
+          "pageNo": 1,
+          "sortOrder": 2,
+          "paragraphCount": 0,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "allTopics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s004",
+          "title": "Introduction",
+          "pageNo": 2,
+          "sortOrder": 3,
+          "paragraphCount": 8,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "iron",
+            "staging"
+          ],
+          "allTopics": [
+            "iron",
+            "staging"
+          ],
+          "sectionType": "introduction"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s005",
+          "title": "How to Perform a Complete Nutritional Assessment",
+          "pageNo": 2,
+          "sortOrder": 4,
+          "paragraphCount": 2,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "iron"
+          ],
+          "allTopics": [
+            "iron"
+          ],
+          "sectionType": "nutrition"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s006",
+          "title": "Screening Evaluation",
+          "pageNo": 2,
+          "sortOrder": 5,
+          "paragraphCount": 12,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "iron",
+            "energy"
+          ],
+          "allTopics": [
+            "iron",
+            "energy"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s007",
+          "title": "Screening Assessment for Hospitalized Patients",
+          "pageNo": 4,
+          "sortOrder": 6,
+          "paragraphCount": 2,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy"
+          ],
+          "allTopics": [
+            "energy"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s008",
+          "title": "Nutritional Risk Factors",
+          "pageNo": 5,
+          "sortOrder": 7,
+          "paragraphCount": 4,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "staging",
+            "energy"
+          ],
+          "allTopics": [
+            "staging",
+            "energy"
+          ],
+          "sectionType": "nutrition"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s009",
+          "title": "Extended Evaluation",
+          "pageNo": 5,
+          "sortOrder": 8,
+          "paragraphCount": 1,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "allTopics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s010",
+          "title": "How to Create Individualized Nutritional Recommendations Feeding Plans for Healthy, Appropriate-Weight Cats and Dogs",
+          "pageNo": 5,
+          "sortOrder": 9,
+          "paragraphCount": 14,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "staging",
+            "energy",
+            "iron",
+            "protein"
+          ],
+          "allTopics": [
+            "staging",
+            "energy",
+            "iron",
+            "protein"
+          ],
+          "sectionType": "treatment"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s011",
+          "title": "Feeding Plans for Hospitalized Patients",
+          "pageNo": 8,
+          "sortOrder": 10,
+          "paragraphCount": 2,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy"
+          ],
+          "allTopics": [
+            "energy"
+          ],
+          "sectionType": "nutrition"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s012",
+          "title": "Prevention of Obesity",
+          "pageNo": 8,
+          "sortOrder": 11,
+          "paragraphCount": 9,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy",
+            "protein",
+            "staging"
+          ],
+          "allTopics": [
+            "energy",
+            "protein",
+            "staging"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s013",
+          "title": "Weight Reduction in the Obese Pet",
+          "pageNo": 9,
+          "sortOrder": 12,
+          "paragraphCount": 8,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy"
+          ],
+          "allTopics": [
+            "energy"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s014",
+          "title": "Use of Therapeutic Diets Designed to Promote Weight Loss",
+          "pageNo": 11,
+          "sortOrder": 13,
+          "paragraphCount": 2,
+          "species": "cat",
+          "stages": [],
+          "topics": [
+            "protein",
+            "water"
+          ],
+          "allTopics": [
+            "protein",
+            "water"
+          ],
+          "sectionType": "nutrition"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s015",
+          "title": "Use of Therapeutic Diets Not Related to Weight Loss",
+          "pageNo": 11,
+          "sortOrder": 14,
+          "paragraphCount": 2,
+          "species": "dog",
+          "stages": [],
+          "topics": [
+            "staging"
+          ],
+          "allTopics": [
+            "staging"
+          ],
+          "sectionType": "nutrition"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s016",
+          "title": "Communicating with Clients",
+          "pageNo": 11,
+          "sortOrder": 15,
+          "paragraphCount": 6,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "allTopics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s017",
+          "title": "Gathering a Comprehensive Nutrition History",
+          "pageNo": 14,
+          "sortOrder": 16,
+          "paragraphCount": 5,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "iron"
+          ],
+          "allTopics": [
+            "iron"
+          ],
+          "sectionType": "nutrition"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s018",
+          "title": "Communicating a Nutrition Recommendation to the Client",
+          "pageNo": 14,
+          "sortOrder": 17,
+          "paragraphCount": 14,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "iron"
+          ],
+          "allTopics": [
+            "iron"
+          ],
+          "sectionType": "treatment"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s019",
+          "title": "Managing Challenging Nutrition Conversations",
+          "pageNo": 16,
+          "sortOrder": 18,
+          "paragraphCount": 4,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "staging"
+          ],
+          "allTopics": [
+            "staging"
+          ],
+          "sectionType": "nutrition"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s020",
+          "title": "Intrateam Nutrition Communication",
+          "pageNo": 16,
+          "sortOrder": 19,
+          "paragraphCount": 2,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "allTopics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "sectionType": "nutrition"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s021",
+          "title": "How to Navigate the Emotional Connections Between Pet Food Recommendations and People",
+          "pageNo": 16,
+          "sortOrder": 20,
+          "paragraphCount": 4,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "iron"
+          ],
+          "allTopics": [
+            "iron"
+          ],
+          "sectionType": "treatment"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s022",
+          "title": "Other Timely Nutrition Topics of Interest Diet-Associated Dilated Cardiomyopathy",
+          "pageNo": 17,
+          "sortOrder": 21,
+          "paragraphCount": 5,
+          "species": "dog",
+          "stages": [],
+          "topics": [
+            "energy",
+            "protein",
+            "staging"
+          ],
+          "allTopics": [
+            "energy",
+            "protein",
+            "staging"
+          ],
+          "sectionType": "nutrition"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s023",
+          "title": "Home-Prepared Diets",
+          "pageNo": 17,
+          "sortOrder": 22,
+          "paragraphCount": 3,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "allTopics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "sectionType": "nutrition"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s024",
+          "title": "Raw Protein Diet Age-Specific and Breed-Specific Diets",
+          "pageNo": 17,
+          "sortOrder": 23,
+          "paragraphCount": 6,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "calcium",
+            "energy",
+            "phosphorus",
+            "protein"
+          ],
+          "allTopics": [
+            "calcium",
+            "energy",
+            "phosphorus",
+            "protein"
+          ],
+          "sectionType": "nutrition"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s025",
+          "title": "Microbiome, Prebiotics, Postbiotics",
+          "pageNo": 18,
+          "sortOrder": 24,
+          "paragraphCount": 2,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "allTopics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s026",
+          "title": "Opportunities and Resources to Leverage the Value of Proper Nutrition in Your Practice",
+          "pageNo": 18,
+          "sortOrder": 25,
+          "paragraphCount": 3,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "allTopics": [
+            "energy",
+            "staging",
+            "protein",
+            "iron",
+            "calcium",
+            "phosphorus",
+            "water",
+            "magnesium"
+          ],
+          "sectionType": "nutrition"
+        },
+        {
+          "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s027",
+          "title": "A Team Approach Summary",
+          "pageNo": 18,
+          "sortOrder": 26,
+          "paragraphCount": 48,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy",
+            "protein",
+            "iron",
+            "calcium",
+            "magnesium",
+            "phosphorus",
+            "staging",
+            "water"
+          ],
+          "allTopics": [
+            "energy",
+            "protein",
+            "iron",
+            "calcium",
+            "magnesium",
+            "phosphorus",
+            "staging",
+            "water"
+          ],
+          "sectionType": "other"
+        }
+      ]
+    },
+    {
+      "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026",
+      "sourceId": "IRIS-CKD-2026",
+      "title": "IRIS-DOG-Treatment_Recommendations_may-2026.pdf",
+      "sourceName": "IRIS 肾病指南",
+      "version": "2026",
+      "role": "肾病分期口径、SDMA 与肌酐判读前提、AKI 分级、复查节奏",
+      "authority": "guideline",
+      "documentType": "treatment_guideline",
+      "species": "dog",
+      "stages": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sectionCount": 9,
+      "paragraphCount": 190,
+      "sections": [
+        {
+          "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s000",
+          "title": "(文档开头)",
+          "pageNo": 1,
+          "sortOrder": 0,
+          "paragraphCount": 5,
+          "species": "dog",
+          "stages": [],
+          "topics": [
+            "staging"
+          ],
+          "allTopics": [
+            "staging"
+          ],
+          "sectionType": "treatment"
+        },
+        {
+          "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s002",
+          "title": "Stage 1 canine patients:",
+          "pageNo": 2,
+          "sortOrder": 1,
+          "paragraphCount": 8,
+          "species": "dog",
+          "stages": [
+            1
+          ],
+          "topics": [
+            "bloodpressure",
+            "staging",
+            "protein",
+            "water"
+          ],
+          "allTopics": [
+            "bloodpressure",
+            "staging",
+            "protein",
+            "water"
+          ],
+          "sectionType": "treatment"
+        },
+        {
+          "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s003",
+          "title": "Treatment recommendations for Dogs with Chronic Kidney Disease",
+          "pageNo": 2,
+          "sortOrder": 2,
+          "paragraphCount": 24,
+          "species": "dog",
+          "stages": [],
+          "topics": [
+            "staging",
+            "proteinuria",
+            "protein",
+            "bloodpressure",
+            "calcium",
+            "sodium"
+          ],
+          "allTopics": [
+            "staging",
+            "proteinuria",
+            "protein",
+            "bloodpressure",
+            "calcium",
+            "sodium"
+          ],
+          "sectionType": "treatment"
+        },
+        {
+          "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s004",
+          "title": "Stage 2 Canine patients:",
+          "pageNo": 6,
+          "sortOrder": 3,
+          "paragraphCount": 33,
+          "species": "dog",
+          "stages": [
+            2
+          ],
+          "topics": [
+            "staging",
+            "bloodpressure",
+            "phosphorus",
+            "proteinuria",
+            "phosphatebinder",
+            "protein",
+            "calcium",
+            "water"
+          ],
+          "allTopics": [
+            "staging",
+            "bloodpressure",
+            "phosphorus",
+            "proteinuria",
+            "phosphatebinder",
+            "protein",
+            "calcium",
+            "water"
+          ],
+          "sectionType": "treatment"
+        },
+        {
+          "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+          "title": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
+          "pageNo": 10,
+          "sortOrder": 4,
+          "paragraphCount": 59,
+          "species": "both",
+          "stages": [
+            2
+          ],
+          "topics": [
+            "staging",
+            "anemia",
+            "bloodpressure",
+            "phosphorus",
+            "proteinuria",
+            "phosphatebinder",
+            "protein",
+            "calcium",
+            "iron",
+            "sodium",
+            "potassium",
+            "water"
+          ],
+          "allTopics": [
+            "staging",
+            "anemia",
+            "bloodpressure",
+            "phosphorus",
+            "proteinuria",
+            "phosphatebinder",
+            "protein",
+            "calcium",
+            "iron",
+            "sodium",
+            "potassium",
+            "water"
+          ],
+          "sectionType": "treatment"
+        },
+        {
+          "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s006",
+          "title": "Stage 4 Canine patients:",
+          "pageNo": 18,
+          "sortOrder": 5,
+          "paragraphCount": 55,
+          "species": "both",
+          "stages": [
+            4
+          ],
+          "topics": [
+            "staging",
+            "bloodpressure",
+            "phosphorus",
+            "protein",
+            "proteinuria",
+            "anemia",
+            "phosphatebinder",
+            "calcium",
+            "sodium",
+            "iron",
+            "potassium",
+            "water"
+          ],
+          "allTopics": [
+            "staging",
+            "bloodpressure",
+            "phosphorus",
+            "protein",
+            "proteinuria",
+            "anemia",
+            "phosphatebinder",
+            "calcium",
+            "sodium",
+            "iron",
+            "potassium",
+            "water"
+          ],
+          "sectionType": "treatment"
+        },
+        {
+          "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s007",
+          "title": "Appendix 1 Adapted Blood Pressure Substaging",
+          "pageNo": 24,
+          "sortOrder": 6,
+          "paragraphCount": 3,
+          "species": "dog",
+          "stages": [],
+          "topics": [
+            "bloodpressure",
+            "staging"
+          ],
+          "allTopics": [
+            "bloodpressure",
+            "staging"
+          ],
+          "sectionType": "appendix"
+        },
+        {
+          "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s008",
+          "title": "Appendix 2 Reasons for Undertaking Renal Biopsy",
+          "pageNo": 25,
+          "sortOrder": 7,
+          "paragraphCount": 1,
+          "species": "dog",
+          "stages": [],
+          "topics": [
+            "protein",
+            "proteinuria",
+            "omega3"
+          ],
+          "allTopics": [
+            "protein",
+            "proteinuria",
+            "omega3"
+          ],
+          "sectionType": "appendix"
+        },
+        {
+          "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s009",
+          "title": "Footnote Disclaimer",
+          "pageNo": 25,
+          "sortOrder": 8,
+          "paragraphCount": 2,
+          "species": "dog",
+          "stages": [],
+          "topics": [
+            "potassium",
+            "sodium",
+            "staging"
+          ],
+          "allTopics": [
+            "potassium",
+            "sodium",
+            "staging"
+          ],
+          "sectionType": "appendix"
+        }
+      ]
+    },
+    {
+      "id": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g",
+      "sourceId": "IRIS-CKD-2026",
+      "title": "IRIS_Pocket_Guide_to_CKD_June-2026-cn6g.pdf",
+      "sourceName": "IRIS 肾病指南",
+      "version": "2026",
+      "role": "肾病分期口径、SDMA 与肌酐判读前提、AKI 分级、复查节奏",
+      "authority": "guideline",
+      "documentType": "quick_reference",
+      "species": "both",
+      "stages": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sectionCount": 5,
+      "paragraphCount": 19,
+      "sections": [
+        {
+          "id": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s000",
+          "title": "(文档开头)",
+          "pageNo": 1,
+          "sortOrder": 0,
+          "paragraphCount": 3,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "staging",
+            "bloodpressure",
+            "protein",
+            "proteinuria"
+          ],
+          "allTopics": [
+            "staging",
+            "bloodpressure",
+            "protein",
+            "proteinuria"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s002",
+          "title": "Step 1: Diagnose CKD",
+          "pageNo": 2,
+          "sortOrder": 1,
+          "paragraphCount": 3,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "staging",
+            "bloodpressure"
+          ],
+          "allTopics": [
+            "staging",
+            "bloodpressure"
+          ],
+          "sectionType": "diagnosis"
+        },
+        {
+          "id": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s003",
+          "title": "Both of these diagnostic ﬁndings: OR",
+          "pageNo": 2,
+          "sortOrder": 2,
+          "paragraphCount": 0,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "staging",
+            "protein",
+            "proteinuria",
+            "bloodpressure",
+            "phosphorus",
+            "anemia",
+            "phosphatebinder",
+            "water"
+          ],
+          "allTopics": [
+            "staging",
+            "protein",
+            "proteinuria",
+            "bloodpressure",
+            "phosphorus",
+            "anemia",
+            "phosphatebinder",
+            "water"
+          ],
+          "sectionType": "diagnosis"
+        },
+        {
+          "id": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s004",
+          "title": "plus Persistent increased SDMA* >14 µg/dL",
+          "pageNo": 2,
+          "sortOrder": 3,
+          "paragraphCount": 8,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "staging",
+            "protein",
+            "proteinuria",
+            "bloodpressure"
+          ],
+          "allTopics": [
+            "staging",
+            "protein",
+            "proteinuria",
+            "bloodpressure"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
+          "title": "Step 2: Stage CKD Step 3: Treat CKD",
+          "pageNo": 3,
+          "sortOrder": 4,
+          "paragraphCount": 5,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "staging",
+            "phosphorus",
+            "proteinuria",
+            "bloodpressure",
+            "anemia",
+            "phosphatebinder",
+            "protein",
+            "water"
+          ],
+          "allTopics": [
+            "staging",
+            "phosphorus",
+            "proteinuria",
+            "bloodpressure",
+            "anemia",
+            "phosphatebinder",
+            "protein",
+            "water"
+          ],
+          "sectionType": "staging"
+        }
+      ]
+    },
+    {
+      "id": "iris-IRIS-staging-guidelines-2026",
+      "sourceId": "IRIS-CKD-2026",
+      "title": "IRIS_staging_guidelines-2026.pdf",
+      "sourceName": "IRIS 肾病指南",
+      "version": "2026",
+      "role": "肾病分期口径、SDMA 与肌酐判读前提、AKI 分级、复查节奏",
+      "authority": "guideline",
+      "documentType": "staging_guideline",
+      "species": "both",
+      "stages": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sectionCount": 7,
+      "paragraphCount": 46,
+      "sections": [
+        {
+          "id": "iris-IRIS-staging-guidelines-2026-s000",
+          "title": "(文档开头)",
+          "pageNo": 1,
+          "sortOrder": 0,
+          "paragraphCount": 1,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "staging"
+          ],
+          "allTopics": [
+            "staging"
+          ],
+          "sectionType": "staging"
+        },
+        {
+          "id": "iris-IRIS-staging-guidelines-2026-s002",
+          "title": "1. Staging of Chronic Kidney Disease based on blood creatinine and SDMA concentrations",
+          "pageNo": 1,
+          "sortOrder": 1,
+          "paragraphCount": 5,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "staging",
+            "bloodpressure",
+            "protein",
+            "proteinuria"
+          ],
+          "allTopics": [
+            "staging",
+            "bloodpressure",
+            "protein",
+            "proteinuria"
+          ],
+          "sectionType": "staging"
+        },
+        {
+          "id": "iris-IRIS-staging-guidelines-2026-s003",
+          "title": "Comments Discrepancies between creatinine and SDMA",
+          "pageNo": 2,
+          "sortOrder": 2,
+          "paragraphCount": 17,
+          "species": "both",
+          "stages": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "topics": [
+            "staging",
+            "protein",
+            "proteinuria"
+          ],
+          "allTopics": [
+            "staging",
+            "protein",
+            "proteinuria"
+          ],
+          "sectionType": "staging"
+        },
+        {
+          "id": "iris-IRIS-staging-guidelines-2026-s004",
+          "title": "2a. Substaging by Proteinuria",
+          "pageNo": 4,
+          "sortOrder": 3,
+          "paragraphCount": 7,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "protein",
+            "proteinuria",
+            "staging",
+            "bloodpressure"
+          ],
+          "allTopics": [
+            "protein",
+            "proteinuria",
+            "staging",
+            "bloodpressure"
+          ],
+          "sectionType": "staging"
+        },
+        {
+          "id": "iris-IRIS-staging-guidelines-2026-s005",
+          "title": "Breed and size associated effects on serum creatinine and SDMA",
+          "pageNo": 4,
+          "sortOrder": 4,
+          "paragraphCount": 3,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "staging",
+            "bloodpressure"
+          ],
+          "allTopics": [
+            "staging",
+            "bloodpressure"
+          ],
+          "sectionType": "staging"
+        },
+        {
+          "id": "iris-IRIS-staging-guidelines-2026-s006",
+          "title": "2b. Substaging by Blood pressure",
+          "pageNo": 5,
+          "sortOrder": 5,
+          "paragraphCount": 6,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "bloodpressure",
+            "staging",
+            "protein",
+            "proteinuria"
+          ],
+          "allTopics": [
+            "bloodpressure",
+            "staging",
+            "protein",
+            "proteinuria"
+          ],
+          "sectionType": "staging"
+        },
+        {
+          "id": "iris-IRIS-staging-guidelines-2026-s007",
+          "title": "3. Revision of staging and substaging after treatment",
+          "pageNo": 7,
+          "sortOrder": 6,
+          "paragraphCount": 7,
+          "species": "both",
+          "stages": [
+            2,
+            3
+          ],
+          "topics": [
+            "staging",
+            "bloodpressure",
+            "protein"
+          ],
+          "allTopics": [
+            "staging",
+            "bloodpressure",
+            "protein"
+          ],
+          "sectionType": "staging"
+        }
+      ]
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5",
+      "title": "SACN5_37.pdf",
+      "sourceName": "小动物临床营养学（第5版）",
+      "version": "2010（第5版）",
+      "role": "疾病营养解读、关键营养素、自制膳食风险（现有 202 条的主力出处）",
+      "authority": "textbook",
+      "documentType": "textbook_chapter",
+      "species": "both",
+      "stages": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sectionCount": 30,
+      "paragraphCount": 424,
+      "sections": [
+        {
+          "id": "sacn5-chapters-SACN5-37-s000",
+          "title": "(文档开头)",
+          "pageNo": 1,
+          "sortOrder": 0,
+          "paragraphCount": 0,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "protein",
+            "phosphorus",
+            "proteinuria",
+            "bloodpressure",
+            "sodium",
+            "potassium",
+            "staging",
+            "omega3",
+            "energy",
+            "anemia",
+            "vitaminD",
+            "chloride"
+          ],
+          "allTopics": [
+            "protein",
+            "phosphorus",
+            "proteinuria",
+            "bloodpressure",
+            "sodium",
+            "potassium",
+            "staging",
+            "omega3",
+            "energy",
+            "anemia",
+            "vitaminD",
+            "chloride"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s002",
+          "title": "INTRODUCTION",
+          "pageNo": 1,
+          "sortOrder": 1,
+          "paragraphCount": 4,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "staging",
+            "phosphorus",
+            "protein",
+            "proteinuria"
+          ],
+          "allTopics": [
+            "staging",
+            "phosphorus",
+            "protein",
+            "proteinuria"
+          ],
+          "sectionType": "introduction"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s003",
+          "title": "“When things are investigated, then true knowledge is achieved.” Confucius",
+          "pageNo": 1,
+          "sortOrder": 2,
+          "paragraphCount": 1,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "staging"
+          ],
+          "allTopics": [
+            "staging"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s004",
+          "title": "CLINICAL IMPORTANCE",
+          "pageNo": 2,
+          "sortOrder": 3,
+          "paragraphCount": 5,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "protein",
+            "phosphorus",
+            "proteinuria",
+            "bloodpressure",
+            "sodium",
+            "potassium",
+            "staging",
+            "omega3",
+            "energy",
+            "anemia",
+            "vitaminD",
+            "chloride"
+          ],
+          "allTopics": [
+            "protein",
+            "phosphorus",
+            "proteinuria",
+            "bloodpressure",
+            "sodium",
+            "potassium",
+            "staging",
+            "omega3",
+            "energy",
+            "anemia",
+            "vitaminD",
+            "chloride"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s005",
+          "title": "Causes of Kidney Disease Familial Kidney Diseases Juvenile kidney disease increases suspicion of a familial",
+          "pageNo": 2,
+          "sortOrder": 4,
+          "paragraphCount": 10,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "protein",
+            "proteinuria",
+            "bloodpressure",
+            "staging"
+          ],
+          "allTopics": [
+            "protein",
+            "proteinuria",
+            "bloodpressure",
+            "staging"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s006",
+          "title": "767 Chronic Kidney Disease",
+          "pageNo": 3,
+          "sortOrder": 5,
+          "paragraphCount": 6,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "staging"
+          ],
+          "allTopics": [
+            "staging"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s007",
+          "title": "PATIENT ASSESSMENT",
+          "pageNo": 4,
+          "sortOrder": 6,
+          "paragraphCount": 19,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "bloodpressure",
+            "staging",
+            "protein",
+            "proteinuria",
+            "anemia",
+            "iron",
+            "omega3"
+          ],
+          "allTopics": [
+            "bloodpressure",
+            "staging",
+            "protein",
+            "proteinuria",
+            "anemia",
+            "iron",
+            "omega3"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s008",
+          "title": "769 Chronic Kidney Disease",
+          "pageNo": 5,
+          "sortOrder": 7,
+          "paragraphCount": 17,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "protein",
+            "proteinuria",
+            "bloodpressure",
+            "staging",
+            "vitaminD",
+            "iron",
+            "phosphorus",
+            "water"
+          ],
+          "allTopics": [
+            "protein",
+            "proteinuria",
+            "bloodpressure",
+            "staging",
+            "vitaminD",
+            "iron",
+            "phosphorus",
+            "water"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s009",
+          "title": "771 Chronic Kidney Disease",
+          "pageNo": 7,
+          "sortOrder": 8,
+          "paragraphCount": 22,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "proteinuria",
+            "protein",
+            "phosphorus",
+            "staging",
+            "vitaminD",
+            "calcium",
+            "water",
+            "anemia",
+            "potassium"
+          ],
+          "allTopics": [
+            "proteinuria",
+            "protein",
+            "phosphorus",
+            "staging",
+            "vitaminD",
+            "calcium",
+            "water",
+            "anemia",
+            "potassium"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s010",
+          "title": "773 Chronic Kidney Disease",
+          "pageNo": 9,
+          "sortOrder": 9,
+          "paragraphCount": 20,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "protein",
+            "proteinuria",
+            "bloodpressure",
+            "iron",
+            "staging",
+            "anemia",
+            "potassium",
+            "phosphorus"
+          ],
+          "allTopics": [
+            "protein",
+            "proteinuria",
+            "bloodpressure",
+            "iron",
+            "staging",
+            "anemia",
+            "potassium",
+            "phosphorus"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s011",
+          "title": "775 Chronic Kidney Disease",
+          "pageNo": 11,
+          "sortOrder": 10,
+          "paragraphCount": 15,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "phosphorus",
+            "bloodpressure",
+            "sodium",
+            "staging",
+            "anemia",
+            "protein",
+            "calcium",
+            "energy",
+            "iron",
+            "proteinuria"
+          ],
+          "allTopics": [
+            "phosphorus",
+            "bloodpressure",
+            "sodium",
+            "staging",
+            "anemia",
+            "protein",
+            "calcium",
+            "energy",
+            "iron",
+            "proteinuria"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s012",
+          "title": "777 Chronic Kidney Disease",
+          "pageNo": 13,
+          "sortOrder": 11,
+          "paragraphCount": 16,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "potassium",
+            "protein",
+            "proteinuria",
+            "phosphorus",
+            "staging",
+            "vitaminD"
+          ],
+          "allTopics": [
+            "potassium",
+            "protein",
+            "proteinuria",
+            "phosphorus",
+            "staging",
+            "vitaminD"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s013",
+          "title": "779 Chronic Kidney Disease",
+          "pageNo": 15,
+          "sortOrder": 12,
+          "paragraphCount": 17,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "protein",
+            "sodium",
+            "phosphorus",
+            "water",
+            "omega3",
+            "proteinuria",
+            "potassium",
+            "bloodpressure",
+            "phosphatebinder",
+            "anemia",
+            "calcium",
+            "staging"
+          ],
+          "allTopics": [
+            "protein",
+            "sodium",
+            "phosphorus",
+            "water",
+            "omega3",
+            "proteinuria",
+            "potassium",
+            "bloodpressure",
+            "phosphatebinder",
+            "anemia",
+            "calcium",
+            "staging",
+            "vitaminD"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s014",
+          "title": "781 Chronic Kidney Disease",
+          "pageNo": 17,
+          "sortOrder": 13,
+          "paragraphCount": 13,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "protein",
+            "staging",
+            "phosphorus",
+            "proteinuria",
+            "omega3",
+            "phosphatebinder",
+            "potassium",
+            "bloodpressure",
+            "energy",
+            "sodium",
+            "water",
+            "anemia"
+          ],
+          "allTopics": [
+            "protein",
+            "staging",
+            "phosphorus",
+            "proteinuria",
+            "omega3",
+            "phosphatebinder",
+            "potassium",
+            "bloodpressure",
+            "energy",
+            "sodium",
+            "water",
+            "anemia",
+            "vitaminD",
+            "chloride"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s015",
+          "title": "783 Chronic Kidney Disease",
+          "pageNo": 19,
+          "sortOrder": 14,
+          "paragraphCount": 34,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "protein",
+            "phosphorus",
+            "proteinuria",
+            "energy",
+            "potassium",
+            "sodium",
+            "chloride",
+            "omega3",
+            "staging"
+          ],
+          "allTopics": [
+            "protein",
+            "phosphorus",
+            "proteinuria",
+            "energy",
+            "potassium",
+            "sodium",
+            "chloride",
+            "omega3",
+            "staging"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s016",
+          "title": "785 Chronic Kidney Disease",
+          "pageNo": 21,
+          "sortOrder": 15,
+          "paragraphCount": 14,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "phosphorus",
+            "protein",
+            "omega3",
+            "potassium"
+          ],
+          "allTopics": [
+            "phosphorus",
+            "protein",
+            "omega3",
+            "potassium"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s017",
+          "title": "787 Chronic Kidney Disease",
+          "pageNo": 23,
+          "sortOrder": 16,
+          "paragraphCount": 23,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "protein",
+            "phosphorus",
+            "sodium",
+            "bloodpressure",
+            "energy",
+            "proteinuria",
+            "chloride"
+          ],
+          "allTopics": [
+            "protein",
+            "phosphorus",
+            "sodium",
+            "bloodpressure",
+            "energy",
+            "proteinuria",
+            "chloride"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s018",
+          "title": "789 Chronic Kidney Disease",
+          "pageNo": 25,
+          "sortOrder": 17,
+          "paragraphCount": 18,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "sodium",
+            "potassium",
+            "chloride",
+            "protein",
+            "phosphorus",
+            "bloodpressure",
+            "omega3",
+            "proteinuria",
+            "staging"
+          ],
+          "allTopics": [
+            "sodium",
+            "potassium",
+            "chloride",
+            "protein",
+            "phosphorus",
+            "bloodpressure",
+            "omega3",
+            "proteinuria",
+            "staging"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s019",
+          "title": "791 Chronic Kidney Disease",
+          "pageNo": 27,
+          "sortOrder": 18,
+          "paragraphCount": 20,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "omega3",
+            "protein",
+            "proteinuria",
+            "bloodpressure",
+            "staging",
+            "phosphorus",
+            "potassium"
+          ],
+          "allTopics": [
+            "omega3",
+            "protein",
+            "proteinuria",
+            "bloodpressure",
+            "staging",
+            "phosphorus",
+            "potassium"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s020",
+          "title": "793 Chronic Kidney Disease",
+          "pageNo": 29,
+          "sortOrder": 19,
+          "paragraphCount": 11,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "vitaminD",
+            "protein",
+            "phosphorus",
+            "phosphatebinder",
+            "fiber",
+            "potassium",
+            "sodium",
+            "staging",
+            "anemia",
+            "calcium",
+            "copper",
+            "energy"
+          ],
+          "allTopics": [
+            "vitaminD",
+            "protein",
+            "phosphorus",
+            "phosphatebinder",
+            "fiber",
+            "potassium",
+            "sodium",
+            "staging",
+            "anemia",
+            "calcium",
+            "copper",
+            "energy",
+            "magnesium",
+            "proteinuria",
+            "zinc"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s021",
+          "title": "FEEDING PLAN 795 Chronic Kidney Disease",
+          "pageNo": 31,
+          "sortOrder": 20,
+          "paragraphCount": 20,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy",
+            "omega3",
+            "protein",
+            "sodium",
+            "phosphorus",
+            "staging",
+            "chloride",
+            "water",
+            "iron",
+            "potassium",
+            "proteinuria"
+          ],
+          "allTopics": [
+            "energy",
+            "omega3",
+            "protein",
+            "sodium",
+            "phosphorus",
+            "staging",
+            "chloride",
+            "water",
+            "iron",
+            "potassium",
+            "proteinuria"
+          ],
+          "sectionType": "nutrition"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s022",
+          "title": "797 Chronic Kidney Disease",
+          "pageNo": 33,
+          "sortOrder": 21,
+          "paragraphCount": 16,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "energy",
+            "omega3",
+            "protein",
+            "sodium",
+            "phosphorus",
+            "iron",
+            "phosphatebinder",
+            "staging",
+            "potassium"
+          ],
+          "allTopics": [
+            "energy",
+            "omega3",
+            "protein",
+            "sodium",
+            "phosphorus",
+            "iron",
+            "phosphatebinder",
+            "staging",
+            "potassium"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s023",
+          "title": "REASSESSMENT SUMMARY",
+          "pageNo": 35,
+          "sortOrder": 22,
+          "paragraphCount": 9,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "proteinuria",
+            "protein",
+            "water",
+            "anemia",
+            "chloride",
+            "omega3",
+            "phosphorus",
+            "sodium",
+            "staging"
+          ],
+          "allTopics": [
+            "proteinuria",
+            "protein",
+            "water",
+            "anemia",
+            "chloride",
+            "omega3",
+            "phosphorus",
+            "sodium",
+            "staging"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s024",
+          "title": "799 Chronic Kidney Disease",
+          "pageNo": 35,
+          "sortOrder": 23,
+          "paragraphCount": 1,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "protein",
+            "phosphorus",
+            "proteinuria",
+            "bloodpressure",
+            "sodium",
+            "potassium",
+            "staging",
+            "omega3",
+            "energy",
+            "anemia",
+            "vitaminD",
+            "chloride"
+          ],
+          "allTopics": [
+            "protein",
+            "phosphorus",
+            "proteinuria",
+            "bloodpressure",
+            "sodium",
+            "potassium",
+            "staging",
+            "omega3",
+            "energy",
+            "anemia",
+            "vitaminD",
+            "chloride"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s025",
+          "title": "ACKNOWLEDGMENT REFERENCES",
+          "pageNo": 36,
+          "sortOrder": 24,
+          "paragraphCount": 6,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "protein",
+            "phosphorus",
+            "bloodpressure",
+            "calcium",
+            "chloride",
+            "magnesium",
+            "potassium",
+            "proteinuria",
+            "sodium"
+          ],
+          "allTopics": [
+            "protein",
+            "phosphorus",
+            "bloodpressure",
+            "calcium",
+            "chloride",
+            "magnesium",
+            "potassium",
+            "proteinuria",
+            "sodium"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s026",
+          "title": "CASE 37-1 801 Chronic Kidney Disease",
+          "pageNo": 36,
+          "sortOrder": 25,
+          "paragraphCount": 22,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "anemia",
+            "protein",
+            "phosphorus",
+            "staging",
+            "omega3",
+            "bloodpressure",
+            "sodium",
+            "vitaminD",
+            "energy",
+            "iron"
+          ],
+          "allTopics": [
+            "anemia",
+            "protein",
+            "phosphorus",
+            "staging",
+            "omega3",
+            "bloodpressure",
+            "sodium",
+            "vitaminD",
+            "energy",
+            "iron"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s027",
+          "title": "803 Chronic Kidney Disease",
+          "pageNo": 39,
+          "sortOrder": 26,
+          "paragraphCount": 6,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "anemia",
+            "vitaminD"
+          ],
+          "allTopics": [
+            "anemia",
+            "vitaminD"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s028",
+          "title": "CASE 37-2 805 Chronic Kidney Disease",
+          "pageNo": 40,
+          "sortOrder": 27,
+          "paragraphCount": 13,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "phosphorus",
+            "energy",
+            "potassium",
+            "protein",
+            "water",
+            "chloride",
+            "omega3",
+            "sodium",
+            "anemia",
+            "bloodpressure",
+            "phosphatebinder",
+            "staging"
+          ],
+          "allTopics": [
+            "phosphorus",
+            "energy",
+            "potassium",
+            "protein",
+            "water",
+            "chloride",
+            "omega3",
+            "sodium",
+            "anemia",
+            "bloodpressure",
+            "phosphatebinder",
+            "staging"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s029",
+          "title": "CASE 37-3 807 Chronic Kidney Disease",
+          "pageNo": 41,
+          "sortOrder": 28,
+          "paragraphCount": 22,
+          "species": "cat",
+          "stages": [],
+          "topics": [
+            "potassium",
+            "protein",
+            "chloride",
+            "staging",
+            "energy",
+            "phosphorus",
+            "anemia",
+            "sodium",
+            "water"
+          ],
+          "allTopics": [
+            "potassium",
+            "protein",
+            "chloride",
+            "staging",
+            "energy",
+            "phosphorus",
+            "anemia",
+            "sodium",
+            "water"
+          ],
+          "sectionType": "other"
+        },
+        {
+          "id": "sacn5-chapters-SACN5-37-s030",
+          "title": "CASE 37-4 809 Chronic Kidney Disease",
+          "pageNo": 44,
+          "sortOrder": 29,
+          "paragraphCount": 24,
+          "species": "both",
+          "stages": [],
+          "topics": [
+            "protein",
+            "proteinuria",
+            "bloodpressure",
+            "energy",
+            "staging",
+            "calcium",
+            "phosphorus",
+            "potassium",
+            "sodium",
+            "water"
+          ],
+          "allTopics": [
+            "protein",
+            "proteinuria",
+            "bloodpressure",
+            "energy",
+            "staging",
+            "calcium",
+            "phosphorus",
+            "potassium",
+            "sodium",
+            "water"
+          ],
+          "sectionType": "other"
+        }
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s000",
+      "title": "(文档开头)",
+      "pageNo": 1,
+      "sortOrder": 0,
+      "paragraphCount": 0,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "allTopics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "sectionType": "other",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s002",
+      "title": "2021 AAHA Nutrition and Weight Management Guidelines for Dogs and Cats\u0001",
+      "pageNo": 1,
+      "sortOrder": 1,
+      "paragraphCount": 10,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy",
+        "staging"
+      ],
+      "allTopics": [
+        "energy",
+        "staging"
+      ],
+      "sectionType": "treatment",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s003",
+      "title": "VETERINARY PRACTICE GUIDELINES",
+      "pageNo": 1,
+      "sortOrder": 2,
+      "paragraphCount": 0,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "allTopics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "sectionType": "other",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s004",
+      "title": "Introduction",
+      "pageNo": 2,
+      "sortOrder": 3,
+      "paragraphCount": 8,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "iron",
+        "staging"
+      ],
+      "allTopics": [
+        "iron",
+        "staging"
+      ],
+      "sectionType": "introduction",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s005",
+      "title": "How to Perform a Complete Nutritional Assessment",
+      "pageNo": 2,
+      "sortOrder": 4,
+      "paragraphCount": 2,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "iron"
+      ],
+      "allTopics": [
+        "iron"
+      ],
+      "sectionType": "nutrition",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s006",
+      "title": "Screening Evaluation",
+      "pageNo": 2,
+      "sortOrder": 5,
+      "paragraphCount": 12,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "iron",
+        "energy"
+      ],
+      "allTopics": [
+        "iron",
+        "energy"
+      ],
+      "sectionType": "other",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s007",
+      "title": "Screening Assessment for Hospitalized Patients",
+      "pageNo": 4,
+      "sortOrder": 6,
+      "paragraphCount": 2,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy"
+      ],
+      "allTopics": [
+        "energy"
+      ],
+      "sectionType": "other",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s008",
+      "title": "Nutritional Risk Factors",
+      "pageNo": 5,
+      "sortOrder": 7,
+      "paragraphCount": 4,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "staging",
+        "energy"
+      ],
+      "allTopics": [
+        "staging",
+        "energy"
+      ],
+      "sectionType": "nutrition",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s009",
+      "title": "Extended Evaluation",
+      "pageNo": 5,
+      "sortOrder": 8,
+      "paragraphCount": 1,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "allTopics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "sectionType": "other",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s010",
+      "title": "How to Create Individualized Nutritional Recommendations Feeding Plans for Healthy, Appropriate-Weight Cats and Dogs",
+      "pageNo": 5,
+      "sortOrder": 9,
+      "paragraphCount": 14,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "staging",
+        "energy",
+        "iron",
+        "protein"
+      ],
+      "allTopics": [
+        "staging",
+        "energy",
+        "iron",
+        "protein"
+      ],
+      "sectionType": "treatment",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s011",
+      "title": "Feeding Plans for Hospitalized Patients",
+      "pageNo": 8,
+      "sortOrder": 10,
+      "paragraphCount": 2,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy"
+      ],
+      "allTopics": [
+        "energy"
+      ],
+      "sectionType": "nutrition",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s012",
+      "title": "Prevention of Obesity",
+      "pageNo": 8,
+      "sortOrder": 11,
+      "paragraphCount": 9,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy",
+        "protein",
+        "staging"
+      ],
+      "allTopics": [
+        "energy",
+        "protein",
+        "staging"
+      ],
+      "sectionType": "other",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s013",
+      "title": "Weight Reduction in the Obese Pet",
+      "pageNo": 9,
+      "sortOrder": 12,
+      "paragraphCount": 8,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy"
+      ],
+      "allTopics": [
+        "energy"
+      ],
+      "sectionType": "other",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s014",
+      "title": "Use of Therapeutic Diets Designed to Promote Weight Loss",
+      "pageNo": 11,
+      "sortOrder": 13,
+      "paragraphCount": 2,
+      "species": "cat",
+      "stages": [],
+      "topics": [
+        "protein",
+        "water"
+      ],
+      "allTopics": [
+        "protein",
+        "water"
+      ],
+      "sectionType": "nutrition",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s015",
+      "title": "Use of Therapeutic Diets Not Related to Weight Loss",
+      "pageNo": 11,
+      "sortOrder": 14,
+      "paragraphCount": 2,
+      "species": "dog",
+      "stages": [],
+      "topics": [
+        "staging"
+      ],
+      "allTopics": [
+        "staging"
+      ],
+      "sectionType": "nutrition",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s016",
+      "title": "Communicating with Clients",
+      "pageNo": 11,
+      "sortOrder": 15,
+      "paragraphCount": 6,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "allTopics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "sectionType": "other",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s017",
+      "title": "Gathering a Comprehensive Nutrition History",
+      "pageNo": 14,
+      "sortOrder": 16,
+      "paragraphCount": 5,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "iron"
+      ],
+      "allTopics": [
+        "iron"
+      ],
+      "sectionType": "nutrition",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s018",
+      "title": "Communicating a Nutrition Recommendation to the Client",
+      "pageNo": 14,
+      "sortOrder": 17,
+      "paragraphCount": 14,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "iron"
+      ],
+      "allTopics": [
+        "iron"
+      ],
+      "sectionType": "treatment",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s019",
+      "title": "Managing Challenging Nutrition Conversations",
+      "pageNo": 16,
+      "sortOrder": 18,
+      "paragraphCount": 4,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "staging"
+      ],
+      "allTopics": [
+        "staging"
+      ],
+      "sectionType": "nutrition",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s020",
+      "title": "Intrateam Nutrition Communication",
+      "pageNo": 16,
+      "sortOrder": 19,
+      "paragraphCount": 2,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "allTopics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "sectionType": "nutrition",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s021",
+      "title": "How to Navigate the Emotional Connections Between Pet Food Recommendations and People",
+      "pageNo": 16,
+      "sortOrder": 20,
+      "paragraphCount": 4,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "iron"
+      ],
+      "allTopics": [
+        "iron"
+      ],
+      "sectionType": "treatment",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s022",
+      "title": "Other Timely Nutrition Topics of Interest Diet-Associated Dilated Cardiomyopathy",
+      "pageNo": 17,
+      "sortOrder": 21,
+      "paragraphCount": 5,
+      "species": "dog",
+      "stages": [],
+      "topics": [
+        "energy",
+        "protein",
+        "staging"
+      ],
+      "allTopics": [
+        "energy",
+        "protein",
+        "staging"
+      ],
+      "sectionType": "nutrition",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s023",
+      "title": "Home-Prepared Diets",
+      "pageNo": 17,
+      "sortOrder": 22,
+      "paragraphCount": 3,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "allTopics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "sectionType": "nutrition",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s024",
+      "title": "Raw Protein Diet Age-Specific and Breed-Specific Diets",
+      "pageNo": 17,
+      "sortOrder": 23,
+      "paragraphCount": 6,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "calcium",
+        "energy",
+        "phosphorus",
+        "protein"
+      ],
+      "allTopics": [
+        "calcium",
+        "energy",
+        "phosphorus",
+        "protein"
+      ],
+      "sectionType": "nutrition",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s025",
+      "title": "Microbiome, Prebiotics, Postbiotics",
+      "pageNo": 18,
+      "sortOrder": 24,
+      "paragraphCount": 2,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "allTopics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "sectionType": "other",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s026",
+      "title": "Opportunities and Resources to Leverage the Value of Proper Nutrition in Your Practice",
+      "pageNo": 18,
+      "sortOrder": 25,
+      "paragraphCount": 3,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "allTopics": [
+        "energy",
+        "staging",
+        "protein",
+        "iron",
+        "calcium",
+        "phosphorus",
+        "water",
+        "magnesium"
+      ],
+      "sectionType": "nutrition",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s027",
+      "title": "A Team Approach Summary",
+      "pageNo": 18,
+      "sortOrder": 26,
+      "paragraphCount": 48,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy",
+        "protein",
+        "iron",
+        "calcium",
+        "magnesium",
+        "phosphorus",
+        "staging",
+        "water"
+      ],
+      "allTopics": [
+        "energy",
+        "protein",
+        "iron",
+        "calcium",
+        "magnesium",
+        "phosphorus",
+        "staging",
+        "water"
+      ],
+      "sectionType": "other",
+      "documentId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "sourceId": "AAHA-2021-NUTRITION"
+    },
+    {
+      "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s000",
+      "title": "(文档开头)",
+      "pageNo": 1,
+      "sortOrder": 0,
+      "paragraphCount": 5,
+      "species": "dog",
+      "stages": [],
+      "topics": [
+        "staging"
+      ],
+      "allTopics": [
+        "staging"
+      ],
+      "sectionType": "treatment",
+      "documentId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s002",
+      "title": "Stage 1 canine patients:",
+      "pageNo": 2,
+      "sortOrder": 1,
+      "paragraphCount": 8,
+      "species": "dog",
+      "stages": [
+        1
+      ],
+      "topics": [
+        "bloodpressure",
+        "staging",
+        "protein",
+        "water"
+      ],
+      "allTopics": [
+        "bloodpressure",
+        "staging",
+        "protein",
+        "water"
+      ],
+      "sectionType": "treatment",
+      "documentId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s003",
+      "title": "Treatment recommendations for Dogs with Chronic Kidney Disease",
+      "pageNo": 2,
+      "sortOrder": 2,
+      "paragraphCount": 24,
+      "species": "dog",
+      "stages": [],
+      "topics": [
+        "staging",
+        "proteinuria",
+        "protein",
+        "bloodpressure",
+        "calcium",
+        "sodium"
+      ],
+      "allTopics": [
+        "staging",
+        "proteinuria",
+        "protein",
+        "bloodpressure",
+        "calcium",
+        "sodium"
+      ],
+      "sectionType": "treatment",
+      "documentId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s004",
+      "title": "Stage 2 Canine patients:",
+      "pageNo": 6,
+      "sortOrder": 3,
+      "paragraphCount": 33,
+      "species": "dog",
+      "stages": [
+        2
+      ],
+      "topics": [
+        "staging",
+        "bloodpressure",
+        "phosphorus",
+        "proteinuria",
+        "phosphatebinder",
+        "protein",
+        "calcium",
+        "water"
+      ],
+      "allTopics": [
+        "staging",
+        "bloodpressure",
+        "phosphorus",
+        "proteinuria",
+        "phosphatebinder",
+        "protein",
+        "calcium",
+        "water"
+      ],
+      "sectionType": "treatment",
+      "documentId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+      "title": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
+      "pageNo": 10,
+      "sortOrder": 4,
+      "paragraphCount": 59,
+      "species": "both",
+      "stages": [
+        2
+      ],
+      "topics": [
+        "staging",
+        "anemia",
+        "bloodpressure",
+        "phosphorus",
+        "proteinuria",
+        "phosphatebinder",
+        "protein",
+        "calcium",
+        "iron",
+        "sodium",
+        "potassium",
+        "water"
+      ],
+      "allTopics": [
+        "staging",
+        "anemia",
+        "bloodpressure",
+        "phosphorus",
+        "proteinuria",
+        "phosphatebinder",
+        "protein",
+        "calcium",
+        "iron",
+        "sodium",
+        "potassium",
+        "water"
+      ],
+      "sectionType": "treatment",
+      "documentId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s006",
+      "title": "Stage 4 Canine patients:",
+      "pageNo": 18,
+      "sortOrder": 5,
+      "paragraphCount": 55,
+      "species": "both",
+      "stages": [
+        4
+      ],
+      "topics": [
+        "staging",
+        "bloodpressure",
+        "phosphorus",
+        "protein",
+        "proteinuria",
+        "anemia",
+        "phosphatebinder",
+        "calcium",
+        "sodium",
+        "iron",
+        "potassium",
+        "water"
+      ],
+      "allTopics": [
+        "staging",
+        "bloodpressure",
+        "phosphorus",
+        "protein",
+        "proteinuria",
+        "anemia",
+        "phosphatebinder",
+        "calcium",
+        "sodium",
+        "iron",
+        "potassium",
+        "water"
+      ],
+      "sectionType": "treatment",
+      "documentId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s007",
+      "title": "Appendix 1 Adapted Blood Pressure Substaging",
+      "pageNo": 24,
+      "sortOrder": 6,
+      "paragraphCount": 3,
+      "species": "dog",
+      "stages": [],
+      "topics": [
+        "bloodpressure",
+        "staging"
+      ],
+      "allTopics": [
+        "bloodpressure",
+        "staging"
+      ],
+      "sectionType": "appendix",
+      "documentId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s008",
+      "title": "Appendix 2 Reasons for Undertaking Renal Biopsy",
+      "pageNo": 25,
+      "sortOrder": 7,
+      "paragraphCount": 1,
+      "species": "dog",
+      "stages": [],
+      "topics": [
+        "protein",
+        "proteinuria",
+        "omega3"
+      ],
+      "allTopics": [
+        "protein",
+        "proteinuria",
+        "omega3"
+      ],
+      "sectionType": "appendix",
+      "documentId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s009",
+      "title": "Footnote Disclaimer",
+      "pageNo": 25,
+      "sortOrder": 8,
+      "paragraphCount": 2,
+      "species": "dog",
+      "stages": [],
+      "topics": [
+        "potassium",
+        "sodium",
+        "staging"
+      ],
+      "allTopics": [
+        "potassium",
+        "sodium",
+        "staging"
+      ],
+      "sectionType": "appendix",
+      "documentId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s000",
+      "title": "(文档开头)",
+      "pageNo": 1,
+      "sortOrder": 0,
+      "paragraphCount": 3,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "staging",
+        "bloodpressure",
+        "protein",
+        "proteinuria"
+      ],
+      "allTopics": [
+        "staging",
+        "bloodpressure",
+        "protein",
+        "proteinuria"
+      ],
+      "sectionType": "other",
+      "documentId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s002",
+      "title": "Step 1: Diagnose CKD",
+      "pageNo": 2,
+      "sortOrder": 1,
+      "paragraphCount": 3,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "staging",
+        "bloodpressure"
+      ],
+      "allTopics": [
+        "staging",
+        "bloodpressure"
+      ],
+      "sectionType": "diagnosis",
+      "documentId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s003",
+      "title": "Both of these diagnostic ﬁndings: OR",
+      "pageNo": 2,
+      "sortOrder": 2,
+      "paragraphCount": 0,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "staging",
+        "protein",
+        "proteinuria",
+        "bloodpressure",
+        "phosphorus",
+        "anemia",
+        "phosphatebinder",
+        "water"
+      ],
+      "allTopics": [
+        "staging",
+        "protein",
+        "proteinuria",
+        "bloodpressure",
+        "phosphorus",
+        "anemia",
+        "phosphatebinder",
+        "water"
+      ],
+      "sectionType": "diagnosis",
+      "documentId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s004",
+      "title": "plus Persistent increased SDMA* >14 µg/dL",
+      "pageNo": 2,
+      "sortOrder": 3,
+      "paragraphCount": 8,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "staging",
+        "protein",
+        "proteinuria",
+        "bloodpressure"
+      ],
+      "allTopics": [
+        "staging",
+        "protein",
+        "proteinuria",
+        "bloodpressure"
+      ],
+      "sectionType": "other",
+      "documentId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
+      "title": "Step 2: Stage CKD Step 3: Treat CKD",
+      "pageNo": 3,
+      "sortOrder": 4,
+      "paragraphCount": 5,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "staging",
+        "phosphorus",
+        "proteinuria",
+        "bloodpressure",
+        "anemia",
+        "phosphatebinder",
+        "protein",
+        "water"
+      ],
+      "allTopics": [
+        "staging",
+        "phosphorus",
+        "proteinuria",
+        "bloodpressure",
+        "anemia",
+        "phosphatebinder",
+        "protein",
+        "water"
+      ],
+      "sectionType": "staging",
+      "documentId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-staging-guidelines-2026-s000",
+      "title": "(文档开头)",
+      "pageNo": 1,
+      "sortOrder": 0,
+      "paragraphCount": 1,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "staging"
+      ],
+      "allTopics": [
+        "staging"
+      ],
+      "sectionType": "staging",
+      "documentId": "iris-IRIS-staging-guidelines-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-staging-guidelines-2026-s002",
+      "title": "1. Staging of Chronic Kidney Disease based on blood creatinine and SDMA concentrations",
+      "pageNo": 1,
+      "sortOrder": 1,
+      "paragraphCount": 5,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "staging",
+        "bloodpressure",
+        "protein",
+        "proteinuria"
+      ],
+      "allTopics": [
+        "staging",
+        "bloodpressure",
+        "protein",
+        "proteinuria"
+      ],
+      "sectionType": "staging",
+      "documentId": "iris-IRIS-staging-guidelines-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-staging-guidelines-2026-s003",
+      "title": "Comments Discrepancies between creatinine and SDMA",
+      "pageNo": 2,
+      "sortOrder": 2,
+      "paragraphCount": 17,
+      "species": "both",
+      "stages": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "topics": [
+        "staging",
+        "protein",
+        "proteinuria"
+      ],
+      "allTopics": [
+        "staging",
+        "protein",
+        "proteinuria"
+      ],
+      "sectionType": "staging",
+      "documentId": "iris-IRIS-staging-guidelines-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-staging-guidelines-2026-s004",
+      "title": "2a. Substaging by Proteinuria",
+      "pageNo": 4,
+      "sortOrder": 3,
+      "paragraphCount": 7,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "protein",
+        "proteinuria",
+        "staging",
+        "bloodpressure"
+      ],
+      "allTopics": [
+        "protein",
+        "proteinuria",
+        "staging",
+        "bloodpressure"
+      ],
+      "sectionType": "staging",
+      "documentId": "iris-IRIS-staging-guidelines-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-staging-guidelines-2026-s005",
+      "title": "Breed and size associated effects on serum creatinine and SDMA",
+      "pageNo": 4,
+      "sortOrder": 4,
+      "paragraphCount": 3,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "staging",
+        "bloodpressure"
+      ],
+      "allTopics": [
+        "staging",
+        "bloodpressure"
+      ],
+      "sectionType": "staging",
+      "documentId": "iris-IRIS-staging-guidelines-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-staging-guidelines-2026-s006",
+      "title": "2b. Substaging by Blood pressure",
+      "pageNo": 5,
+      "sortOrder": 5,
+      "paragraphCount": 6,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "bloodpressure",
+        "staging",
+        "protein",
+        "proteinuria"
+      ],
+      "allTopics": [
+        "bloodpressure",
+        "staging",
+        "protein",
+        "proteinuria"
+      ],
+      "sectionType": "staging",
+      "documentId": "iris-IRIS-staging-guidelines-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "iris-IRIS-staging-guidelines-2026-s007",
+      "title": "3. Revision of staging and substaging after treatment",
+      "pageNo": 7,
+      "sortOrder": 6,
+      "paragraphCount": 7,
+      "species": "both",
+      "stages": [
+        2,
+        3
+      ],
+      "topics": [
+        "staging",
+        "bloodpressure",
+        "protein"
+      ],
+      "allTopics": [
+        "staging",
+        "bloodpressure",
+        "protein"
+      ],
+      "sectionType": "staging",
+      "documentId": "iris-IRIS-staging-guidelines-2026",
+      "sourceId": "IRIS-CKD-2026"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s000",
+      "title": "(文档开头)",
+      "pageNo": 1,
+      "sortOrder": 0,
+      "paragraphCount": 0,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "protein",
+        "phosphorus",
+        "proteinuria",
+        "bloodpressure",
+        "sodium",
+        "potassium",
+        "staging",
+        "omega3",
+        "energy",
+        "anemia",
+        "vitaminD",
+        "chloride"
+      ],
+      "allTopics": [
+        "protein",
+        "phosphorus",
+        "proteinuria",
+        "bloodpressure",
+        "sodium",
+        "potassium",
+        "staging",
+        "omega3",
+        "energy",
+        "anemia",
+        "vitaminD",
+        "chloride"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s002",
+      "title": "INTRODUCTION",
+      "pageNo": 1,
+      "sortOrder": 1,
+      "paragraphCount": 4,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "staging",
+        "phosphorus",
+        "protein",
+        "proteinuria"
+      ],
+      "allTopics": [
+        "staging",
+        "phosphorus",
+        "protein",
+        "proteinuria"
+      ],
+      "sectionType": "introduction",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s003",
+      "title": "“When things are investigated, then true knowledge is achieved.” Confucius",
+      "pageNo": 1,
+      "sortOrder": 2,
+      "paragraphCount": 1,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "staging"
+      ],
+      "allTopics": [
+        "staging"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s004",
+      "title": "CLINICAL IMPORTANCE",
+      "pageNo": 2,
+      "sortOrder": 3,
+      "paragraphCount": 5,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "protein",
+        "phosphorus",
+        "proteinuria",
+        "bloodpressure",
+        "sodium",
+        "potassium",
+        "staging",
+        "omega3",
+        "energy",
+        "anemia",
+        "vitaminD",
+        "chloride"
+      ],
+      "allTopics": [
+        "protein",
+        "phosphorus",
+        "proteinuria",
+        "bloodpressure",
+        "sodium",
+        "potassium",
+        "staging",
+        "omega3",
+        "energy",
+        "anemia",
+        "vitaminD",
+        "chloride"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s005",
+      "title": "Causes of Kidney Disease Familial Kidney Diseases Juvenile kidney disease increases suspicion of a familial",
+      "pageNo": 2,
+      "sortOrder": 4,
+      "paragraphCount": 10,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "protein",
+        "proteinuria",
+        "bloodpressure",
+        "staging"
+      ],
+      "allTopics": [
+        "protein",
+        "proteinuria",
+        "bloodpressure",
+        "staging"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s006",
+      "title": "767 Chronic Kidney Disease",
+      "pageNo": 3,
+      "sortOrder": 5,
+      "paragraphCount": 6,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "staging"
+      ],
+      "allTopics": [
+        "staging"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s007",
+      "title": "PATIENT ASSESSMENT",
+      "pageNo": 4,
+      "sortOrder": 6,
+      "paragraphCount": 19,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "bloodpressure",
+        "staging",
+        "protein",
+        "proteinuria",
+        "anemia",
+        "iron",
+        "omega3"
+      ],
+      "allTopics": [
+        "bloodpressure",
+        "staging",
+        "protein",
+        "proteinuria",
+        "anemia",
+        "iron",
+        "omega3"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s008",
+      "title": "769 Chronic Kidney Disease",
+      "pageNo": 5,
+      "sortOrder": 7,
+      "paragraphCount": 17,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "protein",
+        "proteinuria",
+        "bloodpressure",
+        "staging",
+        "vitaminD",
+        "iron",
+        "phosphorus",
+        "water"
+      ],
+      "allTopics": [
+        "protein",
+        "proteinuria",
+        "bloodpressure",
+        "staging",
+        "vitaminD",
+        "iron",
+        "phosphorus",
+        "water"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s009",
+      "title": "771 Chronic Kidney Disease",
+      "pageNo": 7,
+      "sortOrder": 8,
+      "paragraphCount": 22,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "proteinuria",
+        "protein",
+        "phosphorus",
+        "staging",
+        "vitaminD",
+        "calcium",
+        "water",
+        "anemia",
+        "potassium"
+      ],
+      "allTopics": [
+        "proteinuria",
+        "protein",
+        "phosphorus",
+        "staging",
+        "vitaminD",
+        "calcium",
+        "water",
+        "anemia",
+        "potassium"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s010",
+      "title": "773 Chronic Kidney Disease",
+      "pageNo": 9,
+      "sortOrder": 9,
+      "paragraphCount": 20,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "protein",
+        "proteinuria",
+        "bloodpressure",
+        "iron",
+        "staging",
+        "anemia",
+        "potassium",
+        "phosphorus"
+      ],
+      "allTopics": [
+        "protein",
+        "proteinuria",
+        "bloodpressure",
+        "iron",
+        "staging",
+        "anemia",
+        "potassium",
+        "phosphorus"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s011",
+      "title": "775 Chronic Kidney Disease",
+      "pageNo": 11,
+      "sortOrder": 10,
+      "paragraphCount": 15,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "phosphorus",
+        "bloodpressure",
+        "sodium",
+        "staging",
+        "anemia",
+        "protein",
+        "calcium",
+        "energy",
+        "iron",
+        "proteinuria"
+      ],
+      "allTopics": [
+        "phosphorus",
+        "bloodpressure",
+        "sodium",
+        "staging",
+        "anemia",
+        "protein",
+        "calcium",
+        "energy",
+        "iron",
+        "proteinuria"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s012",
+      "title": "777 Chronic Kidney Disease",
+      "pageNo": 13,
+      "sortOrder": 11,
+      "paragraphCount": 16,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "potassium",
+        "protein",
+        "proteinuria",
+        "phosphorus",
+        "staging",
+        "vitaminD"
+      ],
+      "allTopics": [
+        "potassium",
+        "protein",
+        "proteinuria",
+        "phosphorus",
+        "staging",
+        "vitaminD"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s013",
+      "title": "779 Chronic Kidney Disease",
+      "pageNo": 15,
+      "sortOrder": 12,
+      "paragraphCount": 17,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "protein",
+        "sodium",
+        "phosphorus",
+        "water",
+        "omega3",
+        "proteinuria",
+        "potassium",
+        "bloodpressure",
+        "phosphatebinder",
+        "anemia",
+        "calcium",
+        "staging"
+      ],
+      "allTopics": [
+        "protein",
+        "sodium",
+        "phosphorus",
+        "water",
+        "omega3",
+        "proteinuria",
+        "potassium",
+        "bloodpressure",
+        "phosphatebinder",
+        "anemia",
+        "calcium",
+        "staging",
+        "vitaminD"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s014",
+      "title": "781 Chronic Kidney Disease",
+      "pageNo": 17,
+      "sortOrder": 13,
+      "paragraphCount": 13,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "protein",
+        "staging",
+        "phosphorus",
+        "proteinuria",
+        "omega3",
+        "phosphatebinder",
+        "potassium",
+        "bloodpressure",
+        "energy",
+        "sodium",
+        "water",
+        "anemia"
+      ],
+      "allTopics": [
+        "protein",
+        "staging",
+        "phosphorus",
+        "proteinuria",
+        "omega3",
+        "phosphatebinder",
+        "potassium",
+        "bloodpressure",
+        "energy",
+        "sodium",
+        "water",
+        "anemia",
+        "vitaminD",
+        "chloride"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s015",
+      "title": "783 Chronic Kidney Disease",
+      "pageNo": 19,
+      "sortOrder": 14,
+      "paragraphCount": 34,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "protein",
+        "phosphorus",
+        "proteinuria",
+        "energy",
+        "potassium",
+        "sodium",
+        "chloride",
+        "omega3",
+        "staging"
+      ],
+      "allTopics": [
+        "protein",
+        "phosphorus",
+        "proteinuria",
+        "energy",
+        "potassium",
+        "sodium",
+        "chloride",
+        "omega3",
+        "staging"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s016",
+      "title": "785 Chronic Kidney Disease",
+      "pageNo": 21,
+      "sortOrder": 15,
+      "paragraphCount": 14,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "phosphorus",
+        "protein",
+        "omega3",
+        "potassium"
+      ],
+      "allTopics": [
+        "phosphorus",
+        "protein",
+        "omega3",
+        "potassium"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s017",
+      "title": "787 Chronic Kidney Disease",
+      "pageNo": 23,
+      "sortOrder": 16,
+      "paragraphCount": 23,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "protein",
+        "phosphorus",
+        "sodium",
+        "bloodpressure",
+        "energy",
+        "proteinuria",
+        "chloride"
+      ],
+      "allTopics": [
+        "protein",
+        "phosphorus",
+        "sodium",
+        "bloodpressure",
+        "energy",
+        "proteinuria",
+        "chloride"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s018",
+      "title": "789 Chronic Kidney Disease",
+      "pageNo": 25,
+      "sortOrder": 17,
+      "paragraphCount": 18,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "sodium",
+        "potassium",
+        "chloride",
+        "protein",
+        "phosphorus",
+        "bloodpressure",
+        "omega3",
+        "proteinuria",
+        "staging"
+      ],
+      "allTopics": [
+        "sodium",
+        "potassium",
+        "chloride",
+        "protein",
+        "phosphorus",
+        "bloodpressure",
+        "omega3",
+        "proteinuria",
+        "staging"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s019",
+      "title": "791 Chronic Kidney Disease",
+      "pageNo": 27,
+      "sortOrder": 18,
+      "paragraphCount": 20,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "omega3",
+        "protein",
+        "proteinuria",
+        "bloodpressure",
+        "staging",
+        "phosphorus",
+        "potassium"
+      ],
+      "allTopics": [
+        "omega3",
+        "protein",
+        "proteinuria",
+        "bloodpressure",
+        "staging",
+        "phosphorus",
+        "potassium"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s020",
+      "title": "793 Chronic Kidney Disease",
+      "pageNo": 29,
+      "sortOrder": 19,
+      "paragraphCount": 11,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "vitaminD",
+        "protein",
+        "phosphorus",
+        "phosphatebinder",
+        "fiber",
+        "potassium",
+        "sodium",
+        "staging",
+        "anemia",
+        "calcium",
+        "copper",
+        "energy"
+      ],
+      "allTopics": [
+        "vitaminD",
+        "protein",
+        "phosphorus",
+        "phosphatebinder",
+        "fiber",
+        "potassium",
+        "sodium",
+        "staging",
+        "anemia",
+        "calcium",
+        "copper",
+        "energy",
+        "magnesium",
+        "proteinuria",
+        "zinc"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s021",
+      "title": "FEEDING PLAN 795 Chronic Kidney Disease",
+      "pageNo": 31,
+      "sortOrder": 20,
+      "paragraphCount": 20,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy",
+        "omega3",
+        "protein",
+        "sodium",
+        "phosphorus",
+        "staging",
+        "chloride",
+        "water",
+        "iron",
+        "potassium",
+        "proteinuria"
+      ],
+      "allTopics": [
+        "energy",
+        "omega3",
+        "protein",
+        "sodium",
+        "phosphorus",
+        "staging",
+        "chloride",
+        "water",
+        "iron",
+        "potassium",
+        "proteinuria"
+      ],
+      "sectionType": "nutrition",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s022",
+      "title": "797 Chronic Kidney Disease",
+      "pageNo": 33,
+      "sortOrder": 21,
+      "paragraphCount": 16,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "energy",
+        "omega3",
+        "protein",
+        "sodium",
+        "phosphorus",
+        "iron",
+        "phosphatebinder",
+        "staging",
+        "potassium"
+      ],
+      "allTopics": [
+        "energy",
+        "omega3",
+        "protein",
+        "sodium",
+        "phosphorus",
+        "iron",
+        "phosphatebinder",
+        "staging",
+        "potassium"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s023",
+      "title": "REASSESSMENT SUMMARY",
+      "pageNo": 35,
+      "sortOrder": 22,
+      "paragraphCount": 9,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "proteinuria",
+        "protein",
+        "water",
+        "anemia",
+        "chloride",
+        "omega3",
+        "phosphorus",
+        "sodium",
+        "staging"
+      ],
+      "allTopics": [
+        "proteinuria",
+        "protein",
+        "water",
+        "anemia",
+        "chloride",
+        "omega3",
+        "phosphorus",
+        "sodium",
+        "staging"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s024",
+      "title": "799 Chronic Kidney Disease",
+      "pageNo": 35,
+      "sortOrder": 23,
+      "paragraphCount": 1,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "protein",
+        "phosphorus",
+        "proteinuria",
+        "bloodpressure",
+        "sodium",
+        "potassium",
+        "staging",
+        "omega3",
+        "energy",
+        "anemia",
+        "vitaminD",
+        "chloride"
+      ],
+      "allTopics": [
+        "protein",
+        "phosphorus",
+        "proteinuria",
+        "bloodpressure",
+        "sodium",
+        "potassium",
+        "staging",
+        "omega3",
+        "energy",
+        "anemia",
+        "vitaminD",
+        "chloride"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s025",
+      "title": "ACKNOWLEDGMENT REFERENCES",
+      "pageNo": 36,
+      "sortOrder": 24,
+      "paragraphCount": 6,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "protein",
+        "phosphorus",
+        "bloodpressure",
+        "calcium",
+        "chloride",
+        "magnesium",
+        "potassium",
+        "proteinuria",
+        "sodium"
+      ],
+      "allTopics": [
+        "protein",
+        "phosphorus",
+        "bloodpressure",
+        "calcium",
+        "chloride",
+        "magnesium",
+        "potassium",
+        "proteinuria",
+        "sodium"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s026",
+      "title": "CASE 37-1 801 Chronic Kidney Disease",
+      "pageNo": 36,
+      "sortOrder": 25,
+      "paragraphCount": 22,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "anemia",
+        "protein",
+        "phosphorus",
+        "staging",
+        "omega3",
+        "bloodpressure",
+        "sodium",
+        "vitaminD",
+        "energy",
+        "iron"
+      ],
+      "allTopics": [
+        "anemia",
+        "protein",
+        "phosphorus",
+        "staging",
+        "omega3",
+        "bloodpressure",
+        "sodium",
+        "vitaminD",
+        "energy",
+        "iron"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s027",
+      "title": "803 Chronic Kidney Disease",
+      "pageNo": 39,
+      "sortOrder": 26,
+      "paragraphCount": 6,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "anemia",
+        "vitaminD"
+      ],
+      "allTopics": [
+        "anemia",
+        "vitaminD"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s028",
+      "title": "CASE 37-2 805 Chronic Kidney Disease",
+      "pageNo": 40,
+      "sortOrder": 27,
+      "paragraphCount": 13,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "phosphorus",
+        "energy",
+        "potassium",
+        "protein",
+        "water",
+        "chloride",
+        "omega3",
+        "sodium",
+        "anemia",
+        "bloodpressure",
+        "phosphatebinder",
+        "staging"
+      ],
+      "allTopics": [
+        "phosphorus",
+        "energy",
+        "potassium",
+        "protein",
+        "water",
+        "chloride",
+        "omega3",
+        "sodium",
+        "anemia",
+        "bloodpressure",
+        "phosphatebinder",
+        "staging"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s029",
+      "title": "CASE 37-3 807 Chronic Kidney Disease",
+      "pageNo": 41,
+      "sortOrder": 28,
+      "paragraphCount": 22,
+      "species": "cat",
+      "stages": [],
+      "topics": [
+        "potassium",
+        "protein",
+        "chloride",
+        "staging",
+        "energy",
+        "phosphorus",
+        "anemia",
+        "sodium",
+        "water"
+      ],
+      "allTopics": [
+        "potassium",
+        "protein",
+        "chloride",
+        "staging",
+        "energy",
+        "phosphorus",
+        "anemia",
+        "sodium",
+        "water"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37-s030",
+      "title": "CASE 37-4 809 Chronic Kidney Disease",
+      "pageNo": 44,
+      "sortOrder": 29,
+      "paragraphCount": 24,
+      "species": "both",
+      "stages": [],
+      "topics": [
+        "protein",
+        "proteinuria",
+        "bloodpressure",
+        "energy",
+        "staging",
+        "calcium",
+        "phosphorus",
+        "potassium",
+        "sodium",
+        "water"
+      ],
+      "allTopics": [
+        "protein",
+        "proteinuria",
+        "bloodpressure",
+        "energy",
+        "staging",
+        "calcium",
+        "phosphorus",
+        "potassium",
+        "sodium",
+        "water"
+      ],
+      "sectionType": "other",
+      "documentId": "sacn5-chapters-SACN5-37",
+      "sourceId": "SACN5"
+    }
+  ]
+}

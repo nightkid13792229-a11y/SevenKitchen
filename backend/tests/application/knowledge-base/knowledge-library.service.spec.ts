@@ -172,3 +172,62 @@ describe('KnowledgeLibraryService（物种/分期/主题过滤）', () => {
     expect(result.map((item) => item.id)).toEqual(['p1']);
   });
 });
+
+describe('KnowledgeLibraryService（章节目录路由）', () => {
+  it('用目录元数据过滤并回传来源类型/权威性/主题', async () => {
+    const documentId = 'iris-IRIS-DOG-Treatment-Recommendations-may-2026';
+    const prisma = {
+      sourceDocument: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: documentId,
+            sourceId: 'IRIS-CKD-2026',
+            title: 'IRIS dog treatment',
+            sections: [
+              {
+                id: 's2',
+                title: 'Stage 2 Canine patients:',
+                pageNo: 6,
+                sortOrder: 2,
+                paragraphs: [{ text: 'Dietary phosphate restriction for dogs with CKD.' }],
+              },
+            ],
+          },
+        ]),
+      },
+      sourceParagraph: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'p1',
+            documentId,
+            sectionId: 's2',
+            text: 'Dietary phosphate restriction for dogs with CKD.',
+            pageStart: 6,
+            document: { id: documentId, title: 'IRIS dog treatment', sourceId: 'IRIS-CKD-2026' },
+            section: { id: 's2', title: 'Stage 2 Canine patients:', pageNo: 6 },
+          },
+        ]),
+      },
+    };
+    const service = new KnowledgeLibraryService(prisma as any);
+    const result = await service.search('phosphorus', {
+      documentIds: [documentId],
+      species: 'dog',
+      stage: 2,
+      topics: ['phosphorus'],
+      limit: 5,
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: 'p1',
+      documentType: 'treatment_guideline',
+      authority: 'guideline',
+      sectionType: 'treatment',
+      species: 'dog',
+      stages: [2],
+    });
+    expect(result[0].topics).toContain('phosphorus');
+    expect(result[0].sourceVersion).toBeTruthy();
+  });
+});

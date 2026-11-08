@@ -2,6 +2,11 @@ import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { getKnowledgeSource } from '../../domain/recipe-designer/knowledge-base/source-registry';
+import {
+  CKD_DOCUMENT_IDS,
+  SectionCatalogService,
+  type CatalogSection,
+} from './section-catalog.service';
 
 /**
  * 知识库原文检索（只读）。
@@ -21,12 +26,21 @@ export interface LibraryPassage {
   truncated: boolean;
   sourceId: string | null;
   sourceName: string | null;
+  sourceVersion?: string | null;
+  sourceRole?: string | null;
   documentId: string;
   documentTitle: string | null;
   sectionId: string;
   sectionTitle: string;
   pageStart: number | null;
   score: number;
+  /** CKD 章节目录元数据；全库检索时不返回。 */
+  documentType?: string;
+  authority?: string;
+  sectionType?: string;
+  species?: string;
+  stages?: number[];
+  topics?: string[];
 }
 
 export interface LibrarySearchOptions {
@@ -103,7 +117,36 @@ const STOP = new Set(
 
 @Injectable()
 export class KnowledgeLibraryService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly catalog: SectionCatalogService;
+  private catalogCache:
+    | { key: string; at: number; sections: Map<string, CatalogSection>; documents: Map<string, any> }
+    | undefined;
+
+  constructor(private readonly prisma: PrismaService) {
+    this.catalog = new SectionCatalogService(prisma);
+  }
+
+  private async loadCkdCatalog(
+    documentIds: string[],
+  ): Promise<{
+    sections: Map<string, CatalogSection>;
+    documents: Map<string, any>;
+  } | null> {
+    if (documentIds.length === 0) return null;
+    if (!documentIds.every((id) => (CKD_DOCUMENT_IDS as readonly string[]).includes(id))) {
+      return null;
+    }
+    if (!(this.prisma as any).sourceDocument?.findMany) return null;
+    const key = [...documentIds].sort().join('|');
+    if (this.catalogCache && this.catalogCache.key === key && Date.now() - this.catalogCache.at < 60_000) {
+      return this.catalogCache;
+    }
+    const built = await this.catalog.build(documentIds);
+    const sections = new Map(built.sections.map((section) => [section.id, section]));
+    const documents = new Map(built.documents.map((document) => [document.id, document]));
+    this.catalogCache = { key, at: Date.now(), sections, documents };
+    return this.catalogCache;
+  }
 
   async search(
     query: string,
@@ -128,6 +171,47 @@ export class KnowledgeLibraryService {
     const sectionIds = (options.sectionIds ?? [])
       .map((item) => String(item ?? '').trim())
       .filter(Boolean);
+    const catalog = await this.loadCkdCatalog(documentIds);
+    const catalogSectionIds =
+      catalog && (options.species || options.stage || (options.topics ?? []).length > 0)
+        ? [...catalog.sections.values()]
+            .filter((section) => {
+              if (options.species) {
+                if (
+                  section.species === 'dog' &&
+                  options.species === 'cat'
+                ) return false;
+                if (
+                  section.species === 'cat' &&
+                  options.species === 'dog'
+                ) return false;
+              }
+              if (
+                options.stage &&
+                section.stages.length > 0 &&
+                !section.stages.includes(options.stage)
+              ) {
+                return false;
+              }
+              const topics = (options.topics ?? []).filter(Boolean);
+              if (
+                topics.length > 0 &&
+                !topics.some((topic) =>
+                  section.topics.some((item) => matchesTopic(item, topic)),
+                )
+              ) {
+                return false;
+              }
+              return true;
+            })
+            .map((section) => section.id)
+        : [];
+    const routedSectionIds =
+      catalogSectionIds.length > 0
+        ? sectionIds.length > 0
+          ? sectionIds.filter((id) => catalogSectionIds.includes(id))
+          : catalogSectionIds
+        : sectionIds;
 
     const rows = await this.prisma.sourceParagraph.findMany({
       where: {
@@ -138,7 +222,9 @@ export class KnowledgeLibraryService {
           ? { document: { sourceId: { in: sourceIds } } }
           : {}),
         ...(documentIds.length > 0 ? { documentId: { in: documentIds } } : {}),
-        ...(sectionIds.length > 0 ? { sectionId: { in: sectionIds } } : {}),
+        ...(routedSectionIds.length > 0
+          ? { sectionId: { in: routedSectionIds } }
+          : {}),
       },
       include: {
         document: { select: { id: true, title: true, sourceId: true } },
@@ -150,17 +236,25 @@ export class KnowledgeLibraryService {
 
     const filteredRows = rows.filter((row) => {
       const text = `${row.section?.title ?? ''}\n${row.text ?? ''}`;
+      const meta = catalog?.sections.get(row.sectionId);
       if (options.species) {
-        const species = detectSpecies(text);
+        const species = meta?.species ?? detectSpecies(text);
         if (species === 'dog' && options.species === 'cat') return false;
         if (species === 'cat' && options.species === 'dog') return false;
       }
       if (options.stage) {
-        const stages = detectStages(text);
+        const stages = meta?.stages?.length ? meta.stages : detectStages(text);
         if (stages.length > 0 && !stages.includes(options.stage)) return false;
       }
       const topics = (options.topics ?? []).filter(Boolean);
-      if (topics.length > 0 && !topics.some((topic) => matchesTopic(text, topic))) {
+      if (
+        topics.length > 0 &&
+        !topics.some((topic) =>
+          meta?.topics?.length
+            ? meta.topics.some((item) => matchesTopic(item, topic))
+            : matchesTopic(text, topic),
+        )
+      ) {
         return false;
       }
       return true;
@@ -187,28 +281,33 @@ export class KnowledgeLibraryService {
         1 + Math.log((filteredRows.length + 1) / (1 + (df.get(term) ?? 0))),
       ]),
     );
-    const scored = filteredRows.map((row) => ({
-      row,
-      score:
-        this.score(
-          row.text,
-          terms,
-          raw,
-          numericIntent,
-          row.document?.sourceId,
-          weights,
-        ) * this.filterBoost(row, options),
-    }));
+    const scored = filteredRows.map((row) => {
+      const meta = catalog?.sections.get(row.sectionId);
+      return {
+        row,
+        meta,
+        score:
+          this.score(
+            row.text,
+            terms,
+            raw,
+            numericIntent,
+            row.document?.sourceId,
+            weights,
+          ) * this.filterBoost(row, options, meta),
+      };
+    });
     scored.sort((a, b) => {
-      const aExact = this.isExactFilterMatch(a.row, options);
-      const bExact = this.isExactFilterMatch(b.row, options);
+      const aExact = this.isExactFilterMatch(a.row, options, a.meta);
+      const bExact = this.isExactFilterMatch(b.row, options, b.meta);
       if (aExact !== bExact) return aExact ? -1 : 1;
       return b.score - a.score || a.row.id.localeCompare(b.row.id);
     });
 
-    return scored.slice(0, limit).map(({ row, score }) => {
+    return scored.slice(0, limit).map(({ row, score, meta }) => {
       const sourceId = row.document?.sourceId ?? null;
       const source = sourceId ? getKnowledgeSource(sourceId) : undefined;
+      const documentMeta = catalog?.documents.get(row.documentId);
       const text = row.text ?? '';
       const truncated = text.length > MAX_TEXT_CHARS;
       return {
@@ -217,12 +316,24 @@ export class KnowledgeLibraryService {
         truncated,
         sourceId,
         sourceName: source?.name ?? sourceId,
+        sourceVersion: source?.version ?? null,
+        sourceRole: source?.role ?? null,
         documentId: row.documentId,
         documentTitle: row.document?.title ?? null,
         sectionId: row.sectionId,
         sectionTitle: row.section?.title ?? '',
         pageStart: row.pageStart ?? row.section?.pageNo ?? null,
         score: Math.round(score * 100) / 100,
+        ...(meta
+          ? {
+              documentType: documentMeta?.documentType,
+              authority: documentMeta?.authority,
+              sectionType: meta.sectionType,
+              species: meta.species,
+              stages: meta.stages,
+              topics: meta.topics,
+            }
+          : {}),
       };
     });
   }
@@ -262,10 +373,13 @@ export class KnowledgeLibraryService {
       section?: { title?: string | null } | null;
     },
     options: LibrarySearchOptions,
+    meta?: CatalogSection,
   ): boolean {
     const title = row.section?.title ?? '';
     if (options.stage) {
-      if (!new RegExp(`\\bstage\\s*${options.stage}\\b`, 'i').test(title)) {
+      if (meta?.stages?.length) {
+        if (!meta.stages.includes(options.stage)) return false;
+      } else if (!new RegExp(`\\bstage\\s*${options.stage}\\b`, 'i').test(title)) {
         return false;
       }
     }
@@ -284,14 +398,18 @@ export class KnowledgeLibraryService {
       section?: { title?: string | null } | null;
     },
     options: LibrarySearchOptions,
+    meta?: CatalogSection,
   ): number {
     const title = row.section?.title ?? '';
     const text = row.text ?? '';
     let boost = 1;
     if (options.stage) {
-      const stagePattern = new RegExp(`\\bstage\\s*${options.stage}\\b`, 'i');
-      if (stagePattern.test(title)) boost *= 2;
-      else if (stagePattern.test(text)) boost *= 1.2;
+      if (meta?.stages?.includes(options.stage)) boost *= 2;
+      else {
+        const stagePattern = new RegExp(`\\bstage\\s*${options.stage}\\b`, 'i');
+        if (stagePattern.test(title)) boost *= 2;
+        else if (stagePattern.test(text)) boost *= 1.2;
+      }
     }
     if (options.species === 'dog' && /\b(dog|dogs|canine)\b/i.test(title)) {
       boost *= 1.3;

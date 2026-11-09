@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
 import 'dotenv/config';
 import { Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
@@ -127,34 +128,45 @@ describe('KnowledgeSearchService（可用性）', () => {
 /**
  * describe.skip 必须在收集阶段决定，而 Prisma 查询是异步的；
  * 所以用一个子进程同步问一次「数据库连得上、且 source_paragraph 非空吗」。
- * 没配 DATABASE_URL、连不上、或库是空的，都整组跳过——不假装通过。
+ * 没配 DATABASE_URL、连不上、或库是空的都整组跳过——不假装通过；
+ * 跳过原因打到 console.warn，避免「显示 PASS 但一条没跑」。
+ *
+ * cwd 固定到 backend 根（`__dirname` = backend/tests/application/knowledge），
+ * 子进程才解析得到 `@prisma/client`，不受执行目录影响。
  */
-function databaseReady(): boolean {
+function databaseSkipReason(): string | null {
   if (!(process.env.DATABASE_URL ?? '').trim()) {
-    return false;
+    return '未配置 DATABASE_URL';
   }
   const script = [
     "const { PrismaClient } = require('@prisma/client');",
     'const prisma = new PrismaClient();',
     'prisma.sourceParagraph',
     '  .count()',
-    '  .then((count) => process.exit(count > 0 ? 0 : 1))',
+    '  .then((count) => process.exit(count > 0 ? 0 : 2))',
     '  .catch(() => process.exit(1));'
   ].join('\n');
   try {
     execFileSync(process.execPath, ['-e', script], {
-      cwd: process.cwd(),
+      cwd: resolve(__dirname, '../../..'),
       env: process.env,
       stdio: 'ignore',
-      timeout: 20_000
+      timeout: 8_000
     });
-    return true;
-  } catch {
-    return false;
+    return null;
+  } catch (error) {
+    // 子进程用退出码区分：2 = 连得上但库是空的，其余按连不上处理。
+    const status = (error as { status?: number | null }).status;
+    return status === 2 ? 'source_paragraph 为空' : '数据库连不上';
   }
 }
 
-(databaseReady() ? describe : describe.skip)('KnowledgeSearchService（真实数据库召回）', () => {
+const skipReason = databaseSkipReason();
+if (skipReason) {
+  console.warn(`[knowledge-search] 真实数据库召回用例跳过：${skipReason}`);
+}
+
+(skipReason === null ? describe : describe.skip)('KnowledgeSearchService（真实数据库召回）', () => {
   const prisma = new PrismaClient();
   const prismaService = prisma as unknown as PrismaService;
   const service = new KnowledgeSearchService(
@@ -187,7 +199,7 @@ function databaseReady(): boolean {
     const texts = hits.map((hit) => hit.text.toLowerCase()).join(' ');
 
     expect(hits.length).toBeGreaterThan(0);
-    expect(texts).toContain('copper');
+    expect(texts).toContain('copper oxide');
   });
 
   it('每条结果都带出处，text 不超过 600 字', async () => {
@@ -199,5 +211,9 @@ function databaseReady(): boolean {
       expect(hit.docId).toBeTruthy();
       expect(hit.text.length).toBeLessThanOrEqual(600);
     }
+  });
+
+  it('完全无关的查询返回空', async () => {
+    await expect(service.search('zzzzqqqq')).resolves.toEqual([]);
   });
 });

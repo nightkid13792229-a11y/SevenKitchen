@@ -78,6 +78,7 @@ export interface InventoryStocktakeLineItem {
   deltaG: number | null;
   isCounted: boolean;
   countedAt?: string | null;
+  withinTolerance: boolean | null;
 }
 
 export interface InventoryStocktakeItem {
@@ -125,6 +126,9 @@ export interface StocktakePreviewItem {
   overCount: number;
   lines: Array<{
     ingredientId: string;
+    ingredientName: string;
+    ingredientType?: string | null;
+    stockUnitLabel: string;
     expectedQuantityG: number;
     countedQuantityG: number | null;
     deltaG: number | null;
@@ -217,5 +221,16 @@ export function cancelStocktake(id: string) {
   return request<{ cancelled: boolean }>({
     url: `/staff/inventory/stocktakes/${id}`,
     method: 'DELETE',
+  });
+}
+
+export function reviewStocktake(
+  id: string,
+  data: { approve: boolean; note?: string },
+) {
+  return request<InventoryStocktakeItem>({
+    url: `/admin/inventory/stocktakes/${id}/review`,
+    method: 'POST',
+    data,
   });
 }

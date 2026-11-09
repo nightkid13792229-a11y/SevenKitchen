@@ -113,6 +113,7 @@ export interface InventoryStocktakeLineDto {
   deltaG: number | null;
   isCounted: boolean;
   countedAt: string | null;
+  withinTolerance: boolean | null;
 }
 
 export interface InventoryStocktakeDto {
@@ -1406,7 +1407,13 @@ export class InventoryService {
       where: { stocktakeId: id },
       include: {
         ingredient: {
-          select: { baseUnit: true, unitDisplayLabel: true },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            baseUnit: true,
+            unitDisplayLabel: true,
+          },
         },
       },
       orderBy: { ingredientId: 'asc' },
@@ -1427,6 +1434,12 @@ export class InventoryService {
         counted === null ? null : Number(counted) - Number(line.expectedQuantityG);
       return {
         ingredientId: line.ingredientId,
+        ingredientName: line.ingredient?.name ?? line.ingredientId,
+        ingredientType: line.ingredient?.type ?? null,
+        stockUnitLabel:
+          line.ingredient?.unitDisplayLabel ||
+          line.ingredient?.baseUnit ||
+          'G',
         expectedQuantityG: Number(line.expectedQuantityG),
         countedQuantityG: counted === null ? null : Number(counted),
         deltaG: delta,
@@ -1790,6 +1803,15 @@ export class InventoryService {
         line.countedQuantityG !== null &&
         line.countedQuantityG !== undefined,
       countedAt: line.countedAt?.toISOString() ?? null,
+      withinTolerance:
+        line.countedQuantityG === null ||
+        line.countedQuantityG === undefined
+          ? null
+          : isWithinTolerance(
+              Number(line.deltaG ?? 0),
+              Number(line.expectedQuantityG ?? 0),
+              line.ingredient?.baseUnit ?? 'G',
+            ),
     }));
 
     return {

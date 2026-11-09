@@ -99,6 +99,22 @@
           "style": {
             "navigationBarTitleText": "盘点"
           }
+        },
+        {
+          "path": "stocktake-records",
+          "style": {
+            "navigationBarTitleText": "盘点记录",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white"
+          }
+        },
+        {
+          "path": "stocktake-result",
+          "style": {
+            "navigationBarTitleText": "盘点结果",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white"
+          }
         }
       ]
     },

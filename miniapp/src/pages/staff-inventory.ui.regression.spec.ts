@@ -41,3 +41,36 @@ describe('staff inventory stocktake entry (C5)', () => {
     expect(page).toContain('previewStocktake(stocktakeId.value, skipped > 0)');
   });
 });
+
+describe('staff inventory stocktake result and records (C6)', () => {
+  const result = readPage('staff-inventory/stocktake-result.vue');
+  const records = readPage('staff-inventory/stocktake-records.vue');
+  const pagesJson = readFileSync(
+    resolve(__dirname, '../pages.json'),
+    'utf8',
+  );
+
+  it('separates auto-applied and pending review lines', () => {
+    expect(result).toContain('自动入账');
+    expect(result).toContain('待复核');
+    expect(result).toContain('未盘');
+    expect(result).toContain('提交复核');
+  });
+
+  it('does not sum absolute deltas as a number', () => {
+    expect(result).not.toContain('totalAbsDeltaG');
+  });
+
+  it('records page shows review actions and a restart path', () => {
+    expect(records).toContain('待复核');
+    expect(records).toContain('通过并入账');
+    expect(records).toContain('驳回');
+    expect(records).toContain('重新盘点');
+    expect(records).toContain("role === 'ADMIN'");
+  });
+
+  it('registers both new pages', () => {
+    expect(pagesJson).toContain('"path": "stocktake-records"');
+    expect(pagesJson).toContain('"path": "stocktake-result"');
+  });
+});

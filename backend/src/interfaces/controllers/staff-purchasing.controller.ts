@@ -42,7 +42,10 @@ import type {
   UpdatePurchaseRecordDto,
 } from '../../application/purchasing/purchasing.service';
 import { ReimbursementService } from '../../application/purchasing/reimbursement.service';
-import type { SubmitReimbursementDto } from '../../application/purchasing/reimbursement.service';
+import type {
+  SubmitReimbursementDto,
+  PurchaseRecordPriceComparisonView,
+} from '../../application/purchasing/reimbursement.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import {
   PurchaseListKind,
@@ -1265,7 +1268,7 @@ export class StaffPurchasingController {
     @Param('recordId') recordId: string,
     @UserId() userId: string,
     @UserRole() userRole: string,
-  ): Promise<ApiResponseDto<any>> {
+  ): Promise<ApiResponseDto<PurchaseRecordPriceComparisonView>> {
     const result =
       await this.reimbursementService.getPurchaseRecordPriceComparison(
         recordId,

@@ -1152,10 +1152,29 @@ const priceCompareSections = computed(() => {
 });
 
 const priceCompareNote = computed(() => {
-  const current = priceCompareData.value?.current;
-  if (!current?.previousPriceText) return '';
+  const data = priceCompareData.value;
+  const current = data?.current;
+  if (!current?.previousPriceText || current.priceText === '—') return '';
+
   const sku = current.procurementSkuName || current.ingredientName;
-  return `这次是拿「${sku} ${current.priceText}」跟「原料基准价 ${current.previousPriceText}」在比，不是同一个商品。`;
+  const baseline = [
+    ...(data?.sameIngredientOthers || []),
+    ...(data?.sameSkuHistory || []),
+  ].find((row: any) => row.isBaseline);
+
+  if (baseline) {
+    const sameSku = baseline.procurementSkuId === current.procurementSkuId;
+    const baselineName =
+      [baseline.procurementSkuName, baseline.productModel]
+        .filter(Boolean)
+        .join(' ') || '其他商品';
+    return sameSku
+      ? `这次是拿「${sku} ${current.priceText}」跟「${sku} 上次 ${current.previousPriceText}」在比，是同一个商品。`
+      : `这次是拿「${sku} ${current.priceText}」跟「${baselineName} ${current.previousPriceText}」在比，不是同一个商品。`;
+  }
+
+  // 基准价那行可能已经掉出最近 5 条，这时不硬说「不是同一个商品」。
+  return `这次是拿「${sku} ${current.priceText}」跟「原料基准价 ${current.previousPriceText}」在比；基准价来自原料档案，可能不是同一个商品。`;
 });
 
 const formatHistoryRowName = (row: any) => {

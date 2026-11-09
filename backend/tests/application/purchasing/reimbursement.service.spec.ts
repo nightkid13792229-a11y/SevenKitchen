@@ -871,48 +871,44 @@ describe('ReimbursementService', () => {
       previousEffectivePrice: 0.006653,
       deltaRate: 0.8725,
     });
-    mockPrisma.purchaseRecord.findMany.mockResolvedValue([
-      history('record-1108', {
-        procurementSkuId: 'sku-240',
-        procurementSkuName: '西葫芦片 约240g',
-        productModel: '240g',
-        actualCost: 2.99,
-        actualBaseQuantity: 240,
-        purchasedAt: new Date('2026-11-08T10:00:00.000Z'),
-      }),
-      history('record-rejected', {
-        procurementSkuId: 'sku-240',
-        actualCost: 2.99,
-        actualBaseQuantity: 240,
-        purchasedAt: new Date('2026-11-01T10:00:00.000Z'),
-        purchaseList: { reimbursement: { status: 'REJECTED' } },
-      }),
-      history('record-0826'),
-      history('record-0726', {
-        actualCost: 4.81,
-        purchasedAt: new Date('2026-07-26T00:00:00.000Z'),
-      }),
-      history('record-0721', {
-        actualCost: 3.98,
-        purchasedAt: new Date('2026-07-21T00:00:00.000Z'),
-      }),
-      history('record-0714', {
-        actualCost: 4.81,
-        purchasedAt: new Date('2026-07-14T00:00:00.000Z'),
-      }),
-      history('record-0622', {
-        procurementSkuId: 'sku-kg',
-        productModel: '散称',
-        actualCost: 6.8,
-        actualBaseQuantity: 755,
-        purchasedAt: new Date('2026-06-22T00:00:00.000Z'),
-      }),
-      history('record-0604', {
-        actualCost: 3.6,
-        actualBaseQuantity: 450,
-        purchasedAt: new Date('2026-06-04T00:00:00.000Z'),
-      }),
-    ]);
+    mockPrisma.purchaseRecord.findMany
+      .mockResolvedValueOnce([
+        history('record-1108', {
+          procurementSkuId: 'sku-240',
+          procurementSkuName: '西葫芦片 约240g',
+          productModel: '240g',
+          actualCost: 2.99,
+          actualBaseQuantity: 240,
+          purchasedAt: new Date('2026-11-08T10:00:00.000Z'),
+        }),
+      ])
+      .mockResolvedValueOnce([
+        history('record-0826'),
+        history('record-0726', {
+          actualCost: 4.81,
+          purchasedAt: new Date('2026-07-26T00:00:00.000Z'),
+        }),
+        history('record-0721', {
+          actualCost: 3.98,
+          purchasedAt: new Date('2026-07-21T00:00:00.000Z'),
+        }),
+        history('record-0714', {
+          actualCost: 4.81,
+          purchasedAt: new Date('2026-07-14T00:00:00.000Z'),
+        }),
+        history('record-0622', {
+          procurementSkuId: 'sku-kg',
+          productModel: '散称',
+          actualCost: 6.8,
+          actualBaseQuantity: 755,
+          purchasedAt: new Date('2026-06-22T00:00:00.000Z'),
+        }),
+        history('record-0604', {
+          actualCost: 3.6,
+          actualBaseQuantity: 450,
+          purchasedAt: new Date('2026-06-04T00:00:00.000Z'),
+        }),
+      ]);
 
     const result = await service.getPurchaseRecordPriceComparison(
       'record-current',
@@ -943,6 +939,63 @@ describe('ReimbursementService', () => {
     ]);
     expect(result.sameSkuHistory[0].deltaRate).toBe(0);
     expect(result.sameSkuHistory[0].isBaseline).toBe(false);
+
+    const historyCalls = mockPrisma.purchaseRecord.findMany.mock.calls;
+    expect(historyCalls).toHaveLength(2);
+    expect(historyCalls[0][0].take).toBe(5);
+    expect(historyCalls[1][0].take).toBe(5);
+    expect(
+      historyCalls[0][0].where.purchaseList.reimbursement.is.status.not,
+    ).toBe('REJECTED');
+    expect(
+      historyCalls[1][0].where.purchaseList.reimbursement.is.status.not,
+    ).toBe('REJECTED');
+  });
+
+  it('falls back to actualQuantity × ratio when actualBaseQuantity is missing', async () => {
+    mockPrisma.purchaseRecord.findUnique.mockResolvedValue({
+      id: 'record-current',
+      ingredientId: 'ingredient-1',
+      procurementSkuId: 'sku-240',
+      procurementSkuName: '西葫芦片 约240g',
+      productModel: '240g',
+      purchaseChannel: '盒马鲜生',
+      purchaseChannelName: null,
+      actualCost: 2.99,
+      actualQuantity: 120,
+      actualBaseQuantity: null,
+      purchasedAt: new Date('2026-11-09T16:10:00.000Z'),
+      purchaseList: {
+        reimbursement: {
+          id: 'reimbursement-1',
+          submittedById: 'user-1',
+          status: 'PENDING_REVIEW',
+        },
+      },
+    });
+    mockPrisma.ingredient.findUnique.mockResolvedValue({
+      id: 'ingredient-1',
+      name: '西葫芦',
+      baseUnit: 'G',
+      purchaseUnit: 'g',
+      unitDisplayLabel: null,
+      purchaseToBaseRatio: 2,
+      type: 'SUPPLEMENT',
+    });
+    mockPrisma.ingredientPriceChange.findUnique.mockResolvedValue(null);
+    mockPrisma.purchaseRecord.findMany.mockResolvedValue([]);
+
+    const result = await service.getPurchaseRecordPriceComparison(
+      'record-current',
+      { requesterId: 'user-1', isAdmin: false },
+    );
+
+    expect(result.current.priceText).toBe('¥6.23/500g');
+    expect(result.current.deltaRate).toBeNull();
+    expect(result.current.previousPriceText).toBeNull();
+    expect(result.current.purchaseChannelName).toBe('盒马鲜生');
+    expect(result.sameIngredientOthers).toEqual([]);
+    expect(result.sameSkuHistory).toEqual([]);
   });
 
   it('rejects a requester who cannot view the owning reimbursement', async () => {

@@ -32,6 +32,7 @@ import {
   type ReimbursementCustomFee,
 } from '../../domain/purchasing';
 import { isWithinRevertWindow } from '../../domain/purchasing/reimbursement-review-window';
+import { resolvePurchaseRecordBaseQuantity } from '../../domain/ingredient/unit-price';
 
 export interface SubmitReimbursementDto {
   purchaseListIds?: string[];
@@ -856,6 +857,7 @@ export class ReimbursementService {
         purchaseUnit: true,
         unitDisplayLabel: true,
         purchaseToBaseRatio: true,
+        type: true,
       },
     })) as any;
 
@@ -871,13 +873,6 @@ export class ReimbursementService {
         : baseUnit === 'ML'
           ? '500ml'
           : ingredient.unitDisplayLabel || ingredient.purchaseUnit || '个';
-
-    const currentPerBase = this.pricePerBaseUnit(record);
-    if (currentPerBase === null) {
-      throw new BadRequestException(
-        '这条采购记录的数量或金额不完整，无法折算单价',
-      );
-    }
 
     const priceChange = (await this.prisma.ingredientPriceChange.findUnique({
       where: { purchaseRecordId: record.id },
@@ -901,99 +896,162 @@ export class ReimbursementService {
       previousPerBase !== null
         ? this.roundPrice(previousPerBase * scale)
         : null;
+    const storedDeltaRate =
+      priceChange?.deltaRate !== null && priceChange?.deltaRate !== undefined
+        ? this.toNumber(priceChange.deltaRate)
+        : null;
 
-    const historyRows = (await this.prisma.purchaseRecord.findMany({
-      where: { ingredientId: record.ingredientId },
-      orderBy: [{ purchasedAt: 'desc' }, { createdAt: 'desc' }],
-      take: 200,
-      include: {
-        purchaseList: {
-          select: { reimbursement: { select: { status: true } } },
+    const currentPerBase = this.pricePerBaseUnit(record, ingredient);
+    const currentBase = {
+      recordId: record.id,
+      ingredientId: record.ingredientId,
+      ingredientName: ingredient.name,
+      procurementSkuId: record.procurementSkuId ?? null,
+      procurementSkuName: record.procurementSkuName ?? null,
+      productModel: record.productModel ?? null,
+      purchaseChannelName:
+        record.purchaseChannelName || record.purchaseChannel || null,
+      purchasedAt: new Date(record.purchasedAt).toISOString(),
+      unitLabel,
+      previousPriceValue,
+      previousPriceText:
+        previousPriceValue !== null
+          ? `¥${previousPriceValue.toFixed(2)}/${unitLabel}`
+          : null,
+      deltaRate: storedDeltaRate,
+    };
+
+    // 算不出当前价（数量/金额缺失、又没有可用的兜底）时不 500：
+    // 卡片上可能还有「涨跌」，弹层至少要把上次单价和「暂时算不出」说清楚。
+    if (currentPerBase === null) {
+      return {
+        current: {
+          ...currentBase,
+          priceValue: 0,
+          priceText: '—',
         },
-      },
-    })) as any[];
+        sameIngredientOthers: [],
+        sameSkuHistory: [],
+      };
+    }
 
-    const points: PriceComparisonPoint[] = historyRows
-      .filter((row) => row.id !== record.id)
-      .filter((row) => {
-        const status = row.purchaseList?.reimbursement?.status;
-        // 驳回的单不算历史；还没关联报销单的草稿也不算。
-        return !!status && status !== 'REJECTED';
-      })
-      .map((row) => {
-        const perBase = this.pricePerBaseUnit(row);
-        if (perBase === null) {
-          return null;
-        }
+    const reimbursementFilter = {
+      is: { status: { not: 'REJECTED' as const } },
+    };
 
-        const priceValue = this.roundPrice(perBase * scale);
-        return {
-          recordId: row.id,
-          purchasedAt: new Date(row.purchasedAt).toISOString(),
-          procurementSkuId: row.procurementSkuId ?? null,
-          procurementSkuName: row.procurementSkuName ?? null,
-          productModel: row.productModel ?? null,
-          purchaseChannelName: row.purchaseChannelName ?? null,
-          priceValue,
-          priceText: `¥${priceValue.toFixed(2)}/${unitLabel}`,
-          deltaRate:
-            perBase > 0
+    // 两条查询各自 take 5：一定要在 SQL 里先按「报销单非驳回」过滤再截断，
+    // 不能先取一大把再在内存里筛——高频原料的窗口会被驳回单/草稿/当前商品
+    // 占满，第一段直接空掉（2026-11-10 审核）。
+    const [sameSkuRows, otherRows] = await Promise.all([
+      record.procurementSkuId
+        ? this.findRecentPriceHistory(
+            {
+              ingredientId: record.ingredientId,
+              procurementSkuId: record.procurementSkuId,
+              id: { not: record.id },
+              purchaseList: { reimbursement: reimbursementFilter },
+            },
+            5,
+          )
+        : Promise.resolve([] as any[]),
+      this.findRecentPriceHistory(
+        {
+          ingredientId: record.ingredientId,
+          id: { not: record.id },
+          procurementSkuId: record.procurementSkuId
+            ? { not: record.procurementSkuId }
+            : { not: null },
+          purchaseList: { reimbursement: reimbursementFilter },
+        },
+        5,
+      ),
+    ]);
+
+    const toPoint = (row: any): PriceComparisonPoint | null => {
+      const perBase = this.pricePerBaseUnit(row, ingredient);
+      if (perBase === null) {
+        return null;
+      }
+
+      const priceValue = this.roundPrice(perBase * scale);
+      const isBaseline =
+        previousPerBase !== null &&
+        Math.abs(perBase - previousPerBase) <= 1e-6;
+
+      return {
+        recordId: row.id,
+        purchasedAt: new Date(row.purchasedAt).toISOString(),
+        procurementSkuId: row.procurementSkuId ?? null,
+        procurementSkuName: row.procurementSkuName ?? null,
+        productModel: row.productModel ?? null,
+        purchaseChannelName:
+          row.purchaseChannelName || row.purchaseChannel || null,
+        priceValue,
+        priceText: `¥${priceValue.toFixed(2)}/${unitLabel}`,
+        deltaRate:
+          isBaseline && storedDeltaRate !== null
+            ? storedDeltaRate
+            : perBase > 0
               ? this.roundDelta((currentPerBase - perBase) / perBase)
               : null,
-          isBaseline:
-            previousPerBase !== null &&
-            Math.abs(perBase - previousPerBase) <= 1e-6,
-        };
-      })
-      .filter((point): point is PriceComparisonPoint => point !== null);
+        isBaseline,
+      };
+    };
 
-    points.sort((a, b) => (a.purchasedAt < b.purchasedAt ? 1 : -1));
-
-    const sameSkuHistory = record.procurementSkuId
-      ? points
-          .filter(
-            (point) => point.procurementSkuId === record.procurementSkuId,
-          )
-          .slice(0, 5)
-      : [];
-
-    const sameIngredientOthers = points
-      .filter(
-        (point) =>
-          point.procurementSkuId &&
-          point.procurementSkuId !== record.procurementSkuId,
-      )
-      .slice(0, 5);
+    const toPoints = (rows: any[]) =>
+      rows
+        .map(toPoint)
+        .filter((point): point is PriceComparisonPoint => point !== null)
+        .slice(0, 5);
 
     const currentPriceValue = this.roundPrice(currentPerBase * scale);
 
     return {
       current: {
-        recordId: record.id,
-        ingredientId: record.ingredientId,
-        ingredientName: ingredient.name,
-        procurementSkuId: record.procurementSkuId ?? null,
-        procurementSkuName: record.procurementSkuName ?? null,
-        productModel: record.productModel ?? null,
-        purchaseChannelName: record.purchaseChannelName ?? null,
-        purchasedAt: new Date(record.purchasedAt).toISOString(),
+        ...currentBase,
         priceValue: currentPriceValue,
         priceText: `¥${currentPriceValue.toFixed(2)}/${unitLabel}`,
-        unitLabel,
-        previousPriceValue,
-        previousPriceText:
-          previousPriceValue !== null
-            ? `¥${previousPriceValue.toFixed(2)}/${unitLabel}`
-            : null,
-        deltaRate:
-          priceChange?.deltaRate !== null &&
-          priceChange?.deltaRate !== undefined
-            ? this.toNumber(priceChange.deltaRate)
-            : null,
       },
-      sameIngredientOthers,
-      sameSkuHistory,
+      sameIngredientOthers: toPoints(otherRows),
+      sameSkuHistory: toPoints(sameSkuRows),
     };
+  }
+
+  /**
+   * 取某原料下最近几条采购流水。
+   *
+   * 关键：**过滤和 take 都放在 SQL 里**。先取 200 再在内存里筛，
+   * 遇到高频原料（每天买、7 个月就 200 条）时窗口会被驳回单/草稿/当前商品
+   * 占满，第一段会空掉，基准价行也可能被挤出 5 条。
+   */
+  private async findRecentPriceHistory(
+    where: any,
+    take: number,
+  ): Promise<any[]> {
+    return (await this.prisma.purchaseRecord.findMany({
+      where,
+      orderBy: [
+        { purchasedAt: 'desc' },
+        { createdAt: 'desc' },
+        { id: 'desc' },
+      ],
+      take,
+      select: {
+        id: true,
+        purchasedAt: true,
+        procurementSkuId: true,
+        procurementSkuName: true,
+        productModel: true,
+        purchaseChannel: true,
+        purchaseChannelName: true,
+        actualCost: true,
+        actualBaseQuantity: true,
+        actualQuantity: true,
+        purchaseList: {
+          select: { reimbursement: { select: { status: true } } },
+        },
+      },
+    })) as any[];
   }
 
   private toNumber(value: unknown): number {
@@ -1007,17 +1065,24 @@ export class ReimbursementService {
     return Number(value);
   }
 
-  private pricePerBaseUnit(record: {
-    actualCost?: unknown;
-    actualBaseQuantity?: unknown;
-  }): number | null {
+  private pricePerBaseUnit(
+    record: {
+      actualCost?: unknown;
+      actualQuantity?: unknown;
+      actualBaseQuantity?: unknown;
+    },
+    ingredient: {
+      purchaseToBaseRatio?: unknown;
+      type?: unknown;
+    },
+  ): number | null {
     const cost = this.toNumber(record.actualCost);
-    const quantity = this.toNumber(record.actualBaseQuantity);
+    const quantity = resolvePurchaseRecordBaseQuantity(record, ingredient);
 
     if (!Number.isFinite(cost) || cost <= 0) {
       return null;
     }
-    if (!Number.isFinite(quantity) || quantity <= 0) {
+    if (quantity === null || !Number.isFinite(quantity) || quantity <= 0) {
       return null;
     }
 

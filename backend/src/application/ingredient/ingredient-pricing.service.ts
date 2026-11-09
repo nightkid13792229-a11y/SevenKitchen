@@ -18,8 +18,10 @@ import { PURCHASE_RECORD_REPOSITORY } from '../purchasing/purchasing.service.tok
 import type { PurchaseRecordRepository } from '../../domain/purchasing/purchase-record.repository';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import type { Ingredient } from '../../domain/ingredient';
-import { perBaseUnitCost } from '../../domain/ingredient/unit-price';
-import { IngredientType } from '../../domain/ingredient/enums';
+import {
+  perBaseUnitCost,
+  resolvePurchaseRecordBaseQuantity,
+} from '../../domain/ingredient/unit-price';
 import { IngredientCostHistoryService } from './ingredient-cost-history.service';
 
 export interface IngredientPriceChangeView {
@@ -1309,23 +1311,9 @@ export class IngredientPricingService {
     },
     ingredient: Pick<Ingredient, 'purchaseToBaseRatio' | 'type'>,
   ): number {
-    if (
-      record.actualBaseQuantity !== undefined &&
-      Number.isFinite(record.actualBaseQuantity) &&
-      record.actualBaseQuantity > 0
-    ) {
-      return record.actualBaseQuantity;
-    }
-
-    const ratio = this.resolvePurchaseToBaseRatio(ingredient.purchaseToBaseRatio);
-
-    // 2026-11-07 复核：食材档案的换算恒为 1，拿它乘「几袋」等于把 2 记成 2 克，
-    // 报销随后会把 39.9 ÷ 2 = 19.95 元/g 写进档案。宁可不给这条记录调价。
-    if (ingredient.type === IngredientType.FOOD && ratio === 1) {
-      return 0;
-    }
-
-    return record.actualQuantity * ratio;
+    // 口径统一收在 unit-price（2026-11-10）：报销价格对比用同一个函数，
+    // 不再出现「卡片有涨跌、弹层算不出价」的两套行为。
+    return resolvePurchaseRecordBaseQuantity(record, ingredient) ?? 0;
   }
 
   /** 取原料当前价：真实实体走 getter，测试/裸对象走字段 */

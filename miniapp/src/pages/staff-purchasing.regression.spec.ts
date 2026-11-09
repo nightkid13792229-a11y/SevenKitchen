@@ -136,6 +136,10 @@ describe('staff reimbursement detail guardrails', () => {
     expect(reimbursementDetailSource).toContain('② 同商品 · 历史采购');
     expect(reimbursementDetailSource).toContain('现在比它');
     expect(reimbursementDetailSource).toContain('≈ 基准价');
+    expect(reimbursementDetailSource).toContain(
+      'class="metric metric-delta" @tap.stop="openPriceCompare(record)"',
+    );
+    expect(reimbursementDetailSource).toContain('是同一个商品');
     expect(purchasingApiSource).toContain(
       '/staff/purchasing/purchase-records/${recordId}/price-comparison',
     );

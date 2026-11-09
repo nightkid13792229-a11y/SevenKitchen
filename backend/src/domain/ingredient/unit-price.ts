@@ -1,3 +1,5 @@
+import { IngredientType } from './enums';
+
 /**
  * 单价换算（2026-11-06「单一来源」改造 · 阶段 D）
  *
@@ -50,4 +52,53 @@ export function perBaseUnitCostOrInfinity(
   purchaseToBaseRatio: number | null | undefined,
 ): number {
   return perBaseUnitCost(pricePerPurchaseUnit, purchaseToBaseRatio) ?? Number.POSITIVE_INFINITY;
+}
+
+/**
+ * 一条采购记录的「基准数量」（2026-11-10 从调价服务抽出来）。
+ *
+ * 为什么需要兜底：早期采购记录只写了 actualQuantity（按采购单位），
+ * 没有写 actualBaseQuantity；只认后者会让这些记录算不出折算价。
+ *
+ * 为什么食材 ratio=1 不兜底：食材档案的换算比经常是 1（按克记），
+ * 拿它乘「几袋」会把 2 袋记成 2 克（2026-11-07 红薯事故的口径）。
+ * 这种情况宁可不给数，也不猜。
+ */
+export function resolvePurchaseRecordBaseQuantity(
+  record: {
+    actualQuantity?: unknown;
+    actualBaseQuantity?: unknown;
+  },
+  ingredient: {
+    purchaseToBaseRatio?: unknown;
+    type?: unknown;
+  },
+): number | null {
+  const toNumber = (value: unknown): number => {
+    if (
+      value !== null &&
+      value !== undefined &&
+      typeof (value as { toNumber?: () => number }).toNumber === 'function'
+    ) {
+      return (value as { toNumber: () => number }).toNumber();
+    }
+    return Number(value);
+  };
+
+  const baseQuantity = toNumber(record.actualBaseQuantity);
+  if (Number.isFinite(baseQuantity) && baseQuantity > 0) {
+    return baseQuantity;
+  }
+
+  const ratio = toNumber(ingredient.purchaseToBaseRatio);
+  if (!Number.isFinite(ratio) || ratio <= 0) {
+    return null;
+  }
+
+  if (ingredient.type === IngredientType.FOOD && ratio === 1) {
+    return null;
+  }
+
+  const quantity = toNumber(record.actualQuantity);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity * ratio : null;
 }

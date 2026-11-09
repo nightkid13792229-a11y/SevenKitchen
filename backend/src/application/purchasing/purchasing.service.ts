@@ -1852,6 +1852,8 @@ export class PurchasingService {
     type?: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
     onlyNeedsReplenishment?: boolean;
     includeDaily?: boolean;
+    /** 预取好的余额（员工端首页一次 groupBy），传了就不再逐个原料查 */
+    balances?: Map<string, number>;
   }): Promise<StockReplenishmentInsight[]> {
     const keywordTerms = await this.expandIngredientSearchTerms(
       params?.keyword,
@@ -1895,14 +1897,18 @@ export class PurchasingService {
           });
       });
 
-    const currentStocks = await Promise.all(
-      filteredIngredients.map(async (ingredient) => {
-        const balance = await this.inventoryService.getBalanceByIngredient(
-          ingredient.id,
+    const currentStocks: Array<readonly [string, number]> = params?.balances
+      ? filteredIngredients.map(
+          (ingredient) =>
+            [ingredient.id, params.balances!.get(ingredient.id) ?? 0] as const,
+        )
+      : await Promise.all(
+          filteredIngredients.map(async (ingredient) => {
+            const balance =
+              await this.inventoryService.getBalanceByIngredient(ingredient.id);
+            return [ingredient.id, balance] as const;
+          }),
         );
-        return [ingredient.id, balance] as const;
-      }),
-    );
     const currentStockMap = new Map(currentStocks);
     const ingredientLookup = new Map(
       filteredIngredients.map((ingredient) => [ingredient.id, ingredient]),

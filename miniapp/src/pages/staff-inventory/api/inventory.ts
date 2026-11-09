@@ -266,3 +266,28 @@ export function createInventoryAdjustment(data: {
     data,
   });
 }
+
+export interface InventoryHomeItem extends InventoryOverviewItem {
+  lastMovement: {
+    at: string;
+    deltaBaseQuantity: number;
+    sourceLabel: string;
+  } | null;
+}
+
+export interface InventoryHome {
+  summary: {
+    needsReplenishment: number;
+    lowStock: number;
+    noPolicy: number;
+    lastStocktakeAt: string | null;
+  };
+  items: InventoryHomeItem[];
+}
+
+export function getInventoryHome() {
+  return request<InventoryHome>({
+    url: '/staff/inventory/home',
+    method: 'GET',
+  });
+}

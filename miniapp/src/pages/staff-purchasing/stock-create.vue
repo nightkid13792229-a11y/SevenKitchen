@@ -359,17 +359,21 @@ const loadChannelOptions = async () => {
   }
 };
 
-onLoad(() => {
+const pendingIngredientId = ref('');
+
+onLoad((options: any) => {
+  pendingIngredientId.value = options?.ingredientId || '';
   targetDate.value = getTodayString();
   loadChannelOptions();
   loadIngredients();
 });
 
-onShow(() => {
+onShow(async () => {
   if (!targetDate.value) {
     targetDate.value = getTodayString();
   }
-  loadIngredients();
+  await loadIngredients();
+  applyPendingIngredient();
 });
 
 const getUnitPrice = (ingredient: StockPurchaseIngredient) => {
@@ -527,6 +531,17 @@ const addAllSuggestions = () => {
     title: `已载入 ${replenishmentSuggestions.value.length} 条补货建议`,
     icon: 'success',
   });
+};
+
+const applyPendingIngredient = () => {
+  if (!pendingIngredientId.value) return;
+  const found = ingredients.value.find(
+    (item) => item.id === pendingIngredientId.value,
+  );
+  if (found) {
+    addIngredient(found);
+    pendingIngredientId.value = '';
+  }
 };
 
 const removeIngredient = (ingredientId: string) => {

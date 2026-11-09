@@ -1,1004 +1,476 @@
 <template>
-  <view class="inventory-page">
-    <view class="header">
-      <text class="title">库存管理</text>
-      <text class="subtitle">查看库存预警、补货建议、最近流水和盘点记录</text>
+  <view class="page">
+    <view class="date-row">
+      <text class="date">{{ dateText }} · 数据截至 {{ asOf }}</text>
+      <text class="last" @tap="goRecords">上次盘库 {{ lastStocktakeText }}</text>
     </view>
 
-    <view class="summary-grid">
-      <view class="summary-card">
-        <text class="summary-value">{{ overviewItems.length }}</text>
-        <text class="summary-label">库存条目</text>
-      </view>
-      <view class="summary-card danger">
-        <text class="summary-value">{{ replenishmentCount }}</text>
-        <text class="summary-label">需要补货</text>
-      </view>
-      <view class="summary-card warning">
-        <text class="summary-value">{{ lowStockCount }}</text>
-        <text class="summary-label">低于安全库存</text>
-      </view>
-      <view class="summary-card">
-        <text class="summary-value">{{ noPolicyCount }}</text>
-        <text class="summary-label">未设阈值</text>
-      </view>
+    <view class="warning" @tap="openDrawer('needs')">
+      <text class="warning-text">
+        {{ summary.needsReplenishment }} 项需要补货 · {{ summary.lowStock }} 项低于安全库存
+      </text>
+      <text class="arrow">›</text>
     </view>
 
-    <view class="quick-actions">
-      <button class="action-btn primary" @tap="goToStockCreate">创建补货采购单</button>
-      <button class="action-btn" @tap="goToStocktakeCreate">开始盘点</button>
-      <button class="action-btn" @tap="refreshActiveTab">刷新当前视图</button>
+    <view class="search">
+      <input
+        v-model="keyword"
+        class="search-input"
+        placeholder="搜原料、渠道、规格"
+        confirm-type="search"
+      />
     </view>
 
-    <view class="tabs">
+    <view class="filters">
       <view
-        v-for="tab in tabs"
-        :key="tab.value"
-        class="tab-item"
-        :class="{ active: activeTab === tab.value }"
-        @tap="switchTab(tab.value)"
+        v-for="item in filters"
+        :key="item.value"
+        class="chip"
+        :class="{ active: filter === item.value }"
+        @tap="filter = item.value"
       >
-        <text>{{ tab.label }}</text>
+        {{ item.label }}
+        <text v-if="item.count > 0" class="chip-count">{{ item.count }}</text>
       </view>
     </view>
 
-    <view v-if="activeTab === 'overview'" class="overview-section">
-      <view class="filter-card">
-        <input
-          v-model="keyword"
-          class="search-input"
-          placeholder="搜索原料名称、采购渠道或规格"
-          confirm-type="search"
-        />
-
-        <view class="filter-row">
-          <view class="filter-group">
-            <view
-              v-for="option in typeOptions"
-              :key="option.value || 'ALL'"
-              class="filter-chip"
-              :class="{ active: selectedType === option.value }"
-              @tap="selectType(option.value)"
-            >
-              <text>{{ option.label }}</text>
-            </view>
-          </view>
-
-          <view class="warning-toggle" @tap="toggleOnlyWarnings">
-            <text class="toggle-label">仅看预警</text>
-            <switch :checked="onlyWarnings" color="#0f766e" />
-          </view>
-        </view>
-      </view>
-
-      <view v-if="loadingOverview" class="state-card">
-        <text>正在加载库存总览...</text>
-      </view>
-
-      <view v-else-if="displayOverview.length === 0" class="state-card">
-        <text class="state-title">暂无符合条件的库存条目</text>
-        <text class="state-hint">可以调整筛选条件，或者先在后台配置库存阈值。</text>
-      </view>
-
-      <view v-else class="inventory-list">
-        <view
-          v-for="item in displayOverview"
-          :key="item.id"
-          class="inventory-card"
-        >
-          <view class="card-header">
-            <view class="title-block">
-              <text class="ingredient-name">{{ item.name }}</text>
-              <text class="ingredient-meta">
-                {{ getTypeText(item.type) }} · {{ getStrategyText(item.procurementStrategy) }}
-              </text>
-            </view>
-            <view class="status-badge" :class="getStatusClass(item.stockStatus)">
-              <text>{{ getStockStatusText(item.stockStatus) }}</text>
-            </view>
-          </view>
-
-          <view class="metric-grid">
-            <view class="metric-item">
-              <text class="metric-label">当前库存</text>
-              <text class="metric-value">{{ formatQuantity(item.currentStock) }} {{ item.stockUnitLabel }}</text>
-            </view>
-            <view class="metric-item">
-              <text class="metric-label">建议补货</text>
-              <text class="metric-value">
-                {{ item.suggestedPurchaseQuantity > 0 ? `${formatQuantity(item.suggestedPurchaseQuantity)} ${item.purchaseUnit}` : '暂无' }}
-              </text>
-            </view>
-            <view class="metric-item">
-              <text class="metric-label">预估金额</text>
-              <text class="metric-value">¥{{ formatPrice(item.suggestedEstimatedCost) }}</text>
-            </view>
-          </view>
-
-          <view class="detail-line">
-            <text class="detail-label">阈值</text>
-            <text class="detail-value">{{ formatThresholds(item) || '未设置' }}</text>
-          </view>
-
-          <view class="detail-line">
-            <text class="detail-label">采购信息</text>
-            <text class="detail-value">{{ formatPurchaseInfo(item) }}</text>
-          </view>
-
-          <view v-if="item.suggestedProductName" class="detail-line">
-            <text class="detail-label">推荐商品</text>
-            <text class="detail-value">{{ item.suggestedProductName }}</text>
-          </view>
-
-          <view class="card-actions">
-            <button class="mini-btn" @tap="viewLedger(item)">查看流水</button>
-            <button class="mini-btn primary" @tap="goToStockCreate">去补货</button>
-          </view>
-        </view>
-      </view>
+    <view v-if="loading" class="state">正在加载库存…</view>
+    <view v-else-if="error" class="state">
+      <text class="state-title">加载失败</text>
+      <text class="state-hint">{{ error }}</text>
+      <button class="retry" @tap="load">重试</button>
+    </view>
+    <view v-else-if="filteredItems.length === 0" class="state">
+      <text class="state-title">{{ keyword ? '没搜到' : '这个分组是空的' }}</text>
+      <text class="state-hint">换个关键词或筛选看看。</text>
     </view>
 
-    <view v-else-if="activeTab === 'ledger'" class="ledger-section">
-      <view class="sub-header">
-        <view>
-          <text class="section-title">最近库存流水</text>
-          <text class="section-subtitle">库存余额始终来自流水累加，方便追溯来源</text>
+    <view v-else class="list">
+      <view
+        v-for="item in filteredItems"
+        :key="item.id"
+        class="card"
+        :class="{ negative: item.currentStock < 0 }"
+      >
+        <view class="card-head">
+          <text class="name">{{ item.name }}</text>
+          <text class="badge" :class="badgeClass(item)">{{ badgeText(item) }}</text>
         </view>
-        <button v-if="selectedIngredientId" class="inline-btn" @tap="clearLedgerFilter">查看全部</button>
-      </view>
 
-      <view v-if="selectedIngredientId" class="filter-pill">
-        <text>当前筛选：{{ selectedIngredientName }}</text>
-      </view>
-
-      <view v-if="loadingLedger" class="state-card">
-        <text>正在加载库存流水...</text>
-      </view>
-
-      <view v-else-if="ledgerItems.length === 0" class="state-card">
-        <text class="state-title">暂无库存流水</text>
-        <text class="state-hint">采购入库、手工调整和盘点差异都会显示在这里。</text>
-      </view>
-
-      <view v-else class="ledger-list">
-        <view
-          v-for="item in ledgerItems"
-          :key="item.id"
-          class="ledger-card"
-        >
-          <view class="ledger-header">
-            <view>
-              <text class="ledger-name">{{ item.ingredientName }}</text>
-              <text class="ledger-time">{{ formatDateTime(item.createdAt) }}</text>
-            </view>
-            <text class="ledger-delta" :class="item.deltaG >= 0 ? 'positive' : 'negative'">
-              {{ formatSignedQuantity(item.deltaG) }} {{ item.stockUnitLabel }}
-            </text>
-          </view>
-
-          <view class="ledger-line">
-            <text class="ledger-tag">{{ item.sourceLabel || getSourceText(item.sourceType) }}</text>
-            <text class="ledger-detail">{{ formatLedgerDetail(item) }}</text>
-          </view>
-
-          <view v-if="item.sourceDescription" class="ledger-note">
-            <text>{{ item.sourceDescription }}</text>
-          </view>
-          <view v-else-if="item.procurementSkuName" class="ledger-note">
-            <text>采购 SKU · {{ item.procurementSkuName }}</text>
+        <view class="card-main">
+          <text class="big">{{ fmt(item.currentStock) }}</text>
+          <text class="unit">{{ item.stockUnitLabel }}</text>
+          <view v-if="item.suggestedPurchaseQuantity > 0" class="suggest">
+            <text>建议补 {{ fmt(item.suggestedPurchaseQuantity) }}{{ item.purchaseUnit }}</text>
+            <text class="suggest-cost">约 ¥{{ fmt(item.suggestedEstimatedCost) }}</text>
           </view>
         </view>
-      </view>
-    </view>
 
-    <view v-else class="stocktake-section">
-      <view class="sub-header">
-        <view>
-          <text class="section-title">盘点记录</text>
-          <text class="section-subtitle">这里展示最近的盘点结果和差异入账状态</text>
-        </view>
-        <button class="inline-btn primary" @tap="goToStocktakeCreate">开始盘点</button>
-      </view>
-
-      <view v-if="loadingStocktakes" class="state-card">
-        <text>正在加载盘点记录...</text>
-      </view>
-
-      <view v-else-if="stocktakes.length === 0" class="state-card">
-        <text class="state-title">暂无盘点记录</text>
-        <text class="state-hint">后续在后台或移动端执行盘点后，会在这里显示。</text>
-      </view>
-
-      <view v-else class="stocktake-list">
-        <view
-          v-for="stocktake in stocktakes"
-          :key="stocktake.id"
-          class="stocktake-card"
-        >
-          <view class="stocktake-header">
-            <view>
-              <text class="stocktake-title">{{ stocktake.note || '库存盘点' }}</text>
-              <text class="stocktake-time">创建于 {{ formatDateTime(stocktake.createdAt) }}</text>
-            </view>
-            <view class="stocktake-status" :class="stocktake.status === 'APPLIED' ? 'applied' : 'draft'">
-              <text>{{ stocktake.status === 'APPLIED' ? '已入账' : '草稿' }}</text>
-            </view>
-          </view>
-
-          <view class="stocktake-metrics">
-            <text>原料 {{ stocktake.lineCount }} 项</text>
-            <text>差异 {{ stocktake.varianceCount }} 项</text>
-            <text>绝对值 {{ formatQuantity(stocktake.totalAbsDeltaG) }}</text>
-          </view>
-
-          <view
-            v-for="line in stocktake.lines"
-            :key="line.id"
-            class="stocktake-line"
+        <view v-if="item.lastMovement" class="last">
+          <text class="last-text">
+            {{ formatTime(item.lastMovement.at) }} {{ item.lastMovement.sourceLabel }}
+          </text>
+          <text
+            class="last-delta"
+            :class="item.lastMovement.deltaBaseQuantity >= 0 ? 'up' : 'down'"
           >
-            <view class="stocktake-line-head">
-              <text class="line-name">{{ line.ingredientName }}</text>
-              <text class="line-delta" :class="line.deltaG >= 0 ? 'positive' : 'negative'">
-                {{ formatSignedQuantity(line.deltaG) }} {{ line.stockUnitLabel }}
-              </text>
-            </view>
-            <text class="line-detail">
-              账面 {{ formatQuantity(line.expectedQuantityG) }} / 盘点 {{ formatQuantity(line.countedQuantityG) }} {{ line.stockUnitLabel }}
-            </text>
-            <text v-if="line.procurementSkuName" class="line-detail">
-              采购 SKU · {{ line.procurementSkuName }}
-            </text>
-          </view>
+            {{ signed(item.lastMovement.deltaBaseQuantity) }}{{ item.stockUnitLabel }}
+          </text>
+        </view>
 
-          <view v-if="stocktake.status === 'DRAFT'" class="stocktake-actions">
-            <button
-              class="inline-btn primary"
-              :loading="applyingStocktakeId === stocktake.id"
-              @tap="applyStocktake(stocktake)"
-            >
-              立即入账
-            </button>
-          </view>
+        <view class="actions">
+          <button class="btn ghost" @tap="openDrawer('ledger', item)">看流水</button>
+          <button class="btn primary" @tap="goReplenish(item)">去补货</button>
         </view>
       </view>
     </view>
+
+    <view class="bottom">
+      <button class="btn ghost" @tap="goAdjust">记一笔</button>
+      <button class="btn primary" @tap="openDrawer('needs')">
+        补货清单 {{ summary.needsReplenishment }}
+      </button>
+    </view>
+
+    <InventoryDrawer
+      :visible="drawerVisible"
+      :tab="drawerTab"
+      :ingredient-id="drawerIngredientId"
+      @close="drawerVisible = false"
+      @update:tab="drawerTab = $event"
+      @go-replenish="goReplenish"
+    />
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
+import InventoryDrawer from './components/InventoryDrawer.vue';
 import {
-  getInventoryLedger,
-  getInventoryOverview,
-  getInventoryStocktakes,
-  type InventoryIngredientType,
-  type InventoryLedgerItem,
-  type InventoryOverviewItem,
-  type InventorySourceType,
-  type InventoryStockStatus,
-  type InventoryStocktakeItem,
+  getInventoryHome,
+  type InventoryHome,
+  type InventoryHomeItem,
 } from './api/inventory';
 
-const PENDING_TAB_STORAGE_KEY = 'staff_inventory_pending_tab';
-
-const tabs = [
-  { label: '库存总览', value: 'overview' },
-  { label: '库存流水', value: 'ledger' },
-  { label: '盘点记录', value: 'stocktakes' },
-] as const;
-
-const typeOptions: Array<{ label: string; value: InventoryIngredientType | '' }> = [
-  { label: '全部', value: '' },
-  { label: '食材', value: 'FOOD' },
-  { label: '补剂', value: 'SUPPLEMENT' },
-  { label: '包材', value: 'PACKAGING' },
-];
-
-const activeTab = ref<'overview' | 'ledger' | 'stocktakes'>('overview');
-const loadingOverview = ref(false);
-const loadingLedger = ref(false);
-const loadingStocktakes = ref(false);
-const overviewItems = ref<InventoryOverviewItem[]>([]);
-const ledgerItems = ref<InventoryLedgerItem[]>([]);
-const stocktakes = ref<InventoryStocktakeItem[]>([]);
+const home = ref<InventoryHome | null>(null);
+const loading = ref(true);
+const error = ref('');
 const keyword = ref('');
-const selectedType = ref<InventoryIngredientType | ''>('');
-const onlyWarnings = ref(false);
-const selectedIngredientId = ref('');
-const selectedIngredientName = ref('');
-const hasLoadedLedger = ref(false);
-const hasLoadedStocktakes = ref(false);
-const applyingStocktakeId = ref('');
+const filter = ref<'ALL' | 'NEEDS' | 'LOW' | 'NO_POLICY'>('ALL');
+const asOf = ref('');
+const drawerVisible = ref(false);
+const drawerTab = ref<'needs' | 'ledger'>('needs');
+const drawerIngredientId = ref<string | undefined>(undefined);
 
-const replenishmentCount = computed(() => (
-  overviewItems.value.filter((item) => item.stockStatus === 'NEEDS_REPLENISHMENT').length
-));
+const summary = computed(
+  () =>
+    home.value?.summary ?? {
+      needsReplenishment: 0,
+      lowStock: 0,
+      noPolicy: 0,
+      lastStocktakeAt: null,
+    },
+);
 
-const lowStockCount = computed(() => (
-  overviewItems.value.filter((item) => item.stockStatus === 'LOW_STOCK').length
-));
+const items = computed(() => home.value?.items ?? []);
 
-const noPolicyCount = computed(() => (
-  overviewItems.value.filter((item) => item.stockStatus === 'NO_POLICY').length
-));
+const filters = computed(() => [
+  { value: 'ALL' as const, label: '全部', count: items.value.length },
+  {
+    value: 'NEEDS' as const,
+    label: '需补货',
+    count: summary.value.needsReplenishment,
+  },
+  { value: 'LOW' as const, label: '低库存', count: summary.value.lowStock },
+  {
+    value: 'NO_POLICY' as const,
+    label: '未设阈值',
+    count: summary.value.noPolicy,
+  },
+]);
 
-const displayOverview = computed(() => {
-  const normalizedKeyword = keyword.value.trim().toLowerCase();
-
-  return overviewItems.value
-    .filter((item) => !selectedType.value || item.type === selectedType.value)
-    .filter((item) => !onlyWarnings.value || item.stockStatus === 'NEEDS_REPLENISHMENT' || item.stockStatus === 'LOW_STOCK')
-    .filter((item) => {
-      if (!normalizedKeyword) {
-        return true;
-      }
-
-      return [item.name, item.procurementSkuName, item.purchaseChannel, item.productModel]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalizedKeyword));
-    });
+const filteredItems = computed(() => {
+  const term = keyword.value.trim().toLowerCase();
+  return items.value.filter((item) => {
+    if (filter.value === 'NEEDS' && item.stockStatus !== 'NEEDS_REPLENISHMENT') {
+      return false;
+    }
+    if (filter.value === 'LOW' && item.stockStatus !== 'LOW_STOCK') {
+      return false;
+    }
+    if (filter.value === 'NO_POLICY' && item.stockStatus !== 'NO_POLICY') {
+      return false;
+    }
+    if (!term) return true;
+    return [item.name, item.purchaseChannel, item.productModel]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(term));
+  });
 });
 
-onMounted(() => {
-  if (applyPendingTabPreference()) {
-    refreshActiveTab();
-    return;
+const dateText = computed(() => {
+  const now = new Date();
+  const week = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
+  return `${now.getMonth() + 1}月${now.getDate()}日 周${week}`;
+});
+
+const lastStocktakeText = computed(() => {
+  const value = summary.value.lastStocktakeAt;
+  if (!value) return '还没盘过';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '还没盘过';
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+});
+
+const fmt = (value: number | null | undefined) => {
+  if (value === null || value === undefined) return '0';
+  const number = Number(value);
+  return Number.isInteger(number) ? String(number) : number.toFixed(1);
+};
+
+const signed = (value: number) => `${value > 0 ? '+' : ''}${fmt(value)}`;
+
+const formatTime = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+const badgeText = (item: InventoryHomeItem) => {
+  if (item.currentStock < 0) return '待核实';
+  if (item.stockStatus === 'NEEDS_REPLENISHMENT') return '需要补货';
+  if (item.stockStatus === 'LOW_STOCK') return '低于安全';
+  if (item.stockStatus === 'NO_POLICY') return '未设阈值';
+  return '库存充足';
+};
+
+const badgeClass = (item: InventoryHomeItem) => {
+  if (item.currentStock < 0) return 'danger';
+  if (item.stockStatus === 'NEEDS_REPLENISHMENT') return 'danger';
+  if (item.stockStatus === 'LOW_STOCK') return 'warn';
+  if (item.stockStatus === 'NO_POLICY') return 'muted';
+  return 'ok';
+};
+
+const load = async () => {
+  loading.value = true;
+  error.value = '';
+  try {
+    home.value = await getInventoryHome();
+    const now = new Date();
+    asOf.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  } catch (err: any) {
+    error.value = err?.message || '请稍后重试';
+  } finally {
+    loading.value = false;
   }
-
-  loadOverview();
-});
+};
 
 onShow(() => {
-  if (applyPendingTabPreference()) {
-    refreshActiveTab();
-    return;
-  }
-
-  if (activeTab.value === 'overview') {
-    loadOverview();
-    return;
-  }
-
-  if (activeTab.value === 'ledger') {
-    loadLedger();
-    return;
-  }
-
-  loadStocktakes();
+  load();
 });
 
-const applyPendingTabPreference = () => {
-  try {
-    const pending = uni.getStorageSync(PENDING_TAB_STORAGE_KEY);
-    if (
-      pending === 'overview' ||
-      pending === 'ledger' ||
-      pending === 'stocktakes'
-    ) {
-      activeTab.value = pending;
-      uni.removeStorageSync(PENDING_TAB_STORAGE_KEY);
-      return true;
-    }
-  } catch (error) {
-    console.warn('读取库存页待切换 tab 失败', error);
-  }
-
-  return false;
+const openDrawer = (tab: 'needs' | 'ledger', item?: InventoryHomeItem) => {
+  drawerTab.value = tab;
+  drawerIngredientId.value = item?.id;
+  drawerVisible.value = true;
 };
 
-const loadOverview = async () => {
-  loadingOverview.value = true;
-  try {
-    const res = await getInventoryOverview();
-    overviewItems.value = res.data || [];
-  } catch (error: any) {
-    console.error('加载库存总览失败', error);
-    uni.showToast({
-      title: error?.message || '加载库存总览失败',
-      icon: 'none',
-    });
-  } finally {
-    loadingOverview.value = false;
-  }
-};
-
-const loadLedger = async () => {
-  loadingLedger.value = true;
-  try {
-    const res = await getInventoryLedger({
-      ingredientId: selectedIngredientId.value || undefined,
-      limit: 50,
-    });
-    ledgerItems.value = res.data || [];
-    hasLoadedLedger.value = true;
-  } catch (error: any) {
-    console.error('加载库存流水失败', error);
-    uni.showToast({
-      title: error?.message || '加载库存流水失败',
-      icon: 'none',
-    });
-  } finally {
-    loadingLedger.value = false;
-  }
-};
-
-const loadStocktakes = async () => {
-  loadingStocktakes.value = true;
-  try {
-    const res = await getInventoryStocktakes({ limit: 10 });
-    stocktakes.value = res.data || [];
-    hasLoadedStocktakes.value = true;
-  } catch (error: any) {
-    console.error('加载盘点记录失败', error);
-    uni.showToast({
-      title: error?.message || '加载盘点记录失败',
-      icon: 'none',
-    });
-  } finally {
-    loadingStocktakes.value = false;
-  }
-};
-
-const switchTab = async (tab: 'overview' | 'ledger' | 'stocktakes') => {
-  activeTab.value = tab;
-
-  if (tab === 'ledger' && !hasLoadedLedger.value) {
-    await loadLedger();
-    return;
-  }
-
-  if (tab === 'stocktakes' && !hasLoadedStocktakes.value) {
-    await loadStocktakes();
-  }
-};
-
-const refreshActiveTab = async () => {
-  if (activeTab.value === 'overview') {
-    await loadOverview();
-    return;
-  }
-
-  if (activeTab.value === 'ledger') {
-    await loadLedger();
-    return;
-  }
-
-  await loadStocktakes();
-};
-
-const selectType = (value: InventoryIngredientType | '') => {
-  selectedType.value = value;
-};
-
-const toggleOnlyWarnings = () => {
-  onlyWarnings.value = !onlyWarnings.value;
-};
-
-const viewLedger = async (item: InventoryOverviewItem) => {
-  selectedIngredientId.value = item.id;
-  selectedIngredientName.value = item.name;
-  activeTab.value = 'ledger';
-  await loadLedger();
-};
-
-const clearLedgerFilter = async () => {
-  selectedIngredientId.value = '';
-  selectedIngredientName.value = '';
-  await loadLedger();
-};
-
-const goToStockCreate = () => {
-  uni.navigateTo({ url: '/pages/staff-purchasing/stock-create' });
-};
-
-const goToStocktakeCreate = () => {
-  uni.navigateTo({ url: '/pages/staff-inventory/stocktake-create' });
-};
-
-const applyStocktake = (_stocktake: InventoryStocktakeItem) => {
-  uni.showToast({
-    title: '盘点差异由管理员复核，员工端不能直接入账',
-    icon: 'none',
+const goReplenish = (item: InventoryHomeItem) => {
+  drawerVisible.value = false;
+  uni.navigateTo({
+    url: `/pages/staff-purchasing/stock-create?ingredientId=${item.id}`,
   });
 };
 
-const getTypeText = (type: InventoryIngredientType) => {
-  const labels: Record<InventoryIngredientType, string> = {
-    FOOD: '食材',
-    SUPPLEMENT: '补剂',
-    PACKAGING: '包材',
-  };
-  return labels[type] || type;
+const goAdjust = () => {
+  uni.navigateTo({ url: '/pages/staff-inventory/adjustment-create' });
 };
 
-const getStrategyText = (strategy: string) => {
-  const labels: Record<string, string> = {
-    DAILY_PURCHASE: '日采',
-    STOCK_REPLENISHMENT: '库存补货',
-    HYBRID: '混合',
-  };
-  return labels[strategy] || strategy;
-};
-
-const getStockStatusText = (status: InventoryStockStatus) => {
-  const labels: Record<InventoryStockStatus, string> = {
-    NO_POLICY: '未设阈值',
-    SUFFICIENT: '库存充足',
-    LOW_STOCK: '低于安全库存',
-    NEEDS_REPLENISHMENT: '需要补货',
-  };
-  return labels[status] || status;
-};
-
-const getStatusClass = (status: InventoryStockStatus) => {
-  const classMap: Record<InventoryStockStatus, string> = {
-    NO_POLICY: 'neutral',
-    SUFFICIENT: 'success',
-    LOW_STOCK: 'warning',
-    NEEDS_REPLENISHMENT: 'danger',
-  };
-  return classMap[status] || 'neutral';
-};
-
-const getSourceText = (sourceType: InventorySourceType) => {
-  const labels: Record<InventorySourceType, string> = {
-    KITCHEN_TASK: '厨房领用',
-    PURCHASE_RECORD: '采购入库',
-    MANUAL_ADJUSTMENT: '手工调整',
-    STOCKTAKE: '盘点差异',
-  };
-  return labels[sourceType] || sourceType;
-};
-
-const formatQuantity = (value: number | null | undefined) => Number(value || 0).toFixed(2);
-const formatPrice = (value: number | null | undefined) => Number(value || 0).toFixed(2);
-
-const formatSignedQuantity = (value: number | null | undefined) => {
-  const num = Number(value || 0);
-  return `${num >= 0 ? '+' : ''}${num.toFixed(2)}`;
-};
-
-const formatDateTime = (value: string) => {
-  if (!value) {
-    return '-';
-  }
-
-  const date = new Date(value);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
-};
-
-const formatThresholds = (item: InventoryOverviewItem) => {
-  const parts = [
-    item.safetyStock !== null && item.safetyStock !== undefined
-      ? `安全 ${formatQuantity(item.safetyStock)} ${item.stockUnitLabel}`
-      : '',
-    item.reorderPoint !== null && item.reorderPoint !== undefined
-      ? `补货 ${formatQuantity(item.reorderPoint)} ${item.stockUnitLabel}`
-      : '',
-    item.targetStock !== null && item.targetStock !== undefined
-      ? `目标 ${formatQuantity(item.targetStock)} ${item.stockUnitLabel}`
-      : '',
-  ].filter(Boolean);
-
-  return parts.join(' / ');
-};
-
-const formatPurchaseInfo = (item: InventoryOverviewItem) => {
-  const parts = [
-    item.procurementSkuName,
-    item.purchaseChannel || '未设置渠道',
-    item.productModel || '未设置规格',
-  ].filter(Boolean);
-
-  return parts.join(' · ');
-};
-
-const formatLedgerDetail = (item: InventoryLedgerItem) => {
-  if (item.quantityBeforeG !== null && item.quantityAfterG !== null) {
-    return `${formatQuantity(item.quantityBeforeG)} -> ${formatQuantity(item.quantityAfterG)} ${item.stockUnitLabel}`;
-  }
-
-  if (item.expectedQuantityG !== null && item.countedQuantityG !== null) {
-    return `账面 ${formatQuantity(item.expectedQuantityG)} / 盘点 ${formatQuantity(item.countedQuantityG)} ${item.stockUnitLabel}`;
-  }
-
-  return '库存变动';
+const goRecords = () => {
+  uni.navigateTo({ url: '/pages/staff-inventory/stocktake-records' });
 };
 </script>
 
-<style scoped lang="scss">
-.inventory-page {
+<style scoped>
+.page {
   min-height: 100vh;
-  padding: 32rpx 24rpx 48rpx;
-  background: linear-gradient(180deg, #eef2e4 0%, #e2e8d4 100%);
-}
-
-.header {
-  margin-bottom: 24rpx;
-}
-
-.title {
-  display: block;
-  font-size: 44rpx;
-  font-weight: 700;
-  color: #26261f;
-}
-
-.subtitle {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  color: #26261f;
-  line-height: 1.6;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16rpx;
-  margin-bottom: 20rpx;
-}
-
-.summary-card {
-  padding: 24rpx;
-  border-radius: 24rpx;
-  background: #ffffff;
-  box-shadow: 0 10rpx 28rpx rgba(30, 46, 36, 0.06);
-}
-
-.summary-card.danger {
-  background: linear-gradient(135deg, #f8e8e2 0%, #ffffff 100%);
-}
-
-.summary-card.warning {
-  background: linear-gradient(135deg, #f6efe0 0%, #ffffff 100%);
-}
-
-.summary-value {
-  display: block;
-  font-size: 42rpx;
-  font-weight: 700;
-  color: #26261f;
-}
-
-.summary-label {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: #6b6653;
-}
-
-.quick-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16rpx;
-  margin-bottom: 20rpx;
-}
-
-.action-btn {
-  flex: 1 1 calc(50% - 8rpx);
-  height: 84rpx;
-  line-height: 84rpx;
-  border-radius: 999rpx;
-  border: none;
-  background: #ffffff;
-  color: #26261f;
-  font-size: 28rpx;
-  font-weight: 600;
-}
-
-.action-btn::after,
-.mini-btn::after,
-.inline-btn::after {
-  border: none;
-}
-
-.action-btn.primary,
-.mini-btn.primary,
-.inline-btn.primary {
-  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-  color: #ffffff;
-}
-
-.tabs {
-  display: flex;
-  padding: 8rpx;
-  margin-bottom: 20rpx;
-  border-radius: 999rpx;
-  background: rgba(30, 58, 47, 0.08);
-}
-
-.tab-item {
-  flex: 1;
-  padding: 18rpx 0;
-  text-align: center;
-  border-radius: 999rpx;
-  color: #26261f;
-  font-size: 26rpx;
-}
-
-.tab-item.active {
-  background: #ffffff;
-  color: #1e3a2f;
-  font-weight: 700;
-  box-shadow: 0 8rpx 20rpx rgba(30, 46, 36, 0.12);
-}
-
-.filter-card,
-.state-card,
-.inventory-card,
-.ledger-card,
-.stocktake-card {
-  padding: 24rpx;
-  border-radius: 24rpx;
-  background: #ffffff;
-  box-shadow: 0 10rpx 28rpx rgba(30, 46, 36, 0.06);
-}
-
-.filter-card,
-.state-card {
-  margin-bottom: 20rpx;
-}
-
-.search-input {
-  width: 100%;
-  height: 80rpx;
-  padding: 0 24rpx;
-  border-radius: 18rpx;
-  background: #eef2e4;
-  font-size: 26rpx;
-  color: #26261f;
+  padding: 20rpx 24rpx calc(150rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
+  background: #fbfcf7;
 }
-
-.filter-row {
-  margin-top: 18rpx;
-}
-
-.filter-group {
+.date-row {
   display: flex;
-  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 12rpx;
 }
-
-.filter-chip {
-  padding: 12rpx 24rpx;
-  border-radius: 999rpx;
-  background: #eef2e4;
-  color: #26261f;
+.date {
   font-size: 24rpx;
+  color: #7a8a80;
 }
-
-.filter-chip.active {
-  background: #1e3a2f;
-  color: #1e3a2f;
-  font-weight: 700;
+.last {
+  font-size: 24rpx;
+  color: #4b5b51;
 }
-
-.warning-toggle {
+.warning {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 18rpx;
-  padding-top: 18rpx;
-  border-top: 1rpx solid #eef1e2;
+  margin-top: 16rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 16rpx;
+  background: #f8e9e4;
+  color: #8a3a28;
 }
-
-.toggle-label,
-.section-subtitle,
-.state-hint,
-.ingredient-meta,
-.detail-label,
-.detail-value,
-.ledger-time,
-.ledger-detail,
-.ledger-note,
-.stocktake-time,
-.line-detail,
-.filter-pill text,
-.stocktake-metrics text {
+.warning-text {
+  font-size: 26rpx;
+}
+.arrow {
+  font-size: 30rpx;
+}
+.search {
+  margin-top: 16rpx;
+}
+.search-input {
+  height: 72rpx;
+  padding: 0 24rpx;
+  border-radius: 999rpx;
+  background: #fff;
+  border: 1rpx solid #e8ede7;
+  font-size: 26rpx;
+}
+.filters {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 16rpx;
+  overflow-x: auto;
+}
+.chip {
+  flex-shrink: 0;
+  padding: 10rpx 22rpx;
+  border-radius: 999rpx;
+  background: #f1f4ee;
+  color: #4b5b51;
   font-size: 24rpx;
-  color: #26261f;
 }
-
-.state-title,
-.section-title {
+.chip.active {
+  background: #1e3a2f;
+  color: #fbfcf7;
+}
+.chip-count {
+  margin-left: 6rpx;
+  opacity: 0.8;
+}
+.state {
+  padding: 80rpx 24rpx;
+  text-align: center;
+  color: #7a8a80;
+  font-size: 26rpx;
+}
+.state-title {
   display: block;
   font-size: 30rpx;
-  font-weight: 700;
-  color: #26261f;
+  color: #1e3a2f;
+  margin-bottom: 8rpx;
 }
-
-.state-hint,
-.section-subtitle {
+.state-hint {
   display: block;
-  margin-top: 10rpx;
   line-height: 1.6;
 }
-
-.inventory-list,
-.ledger-list,
-.stocktake-list {
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-}
-
-.card-header,
-.ledger-header,
-.stocktake-header,
-.stocktake-line-head,
-.sub-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16rpx;
-}
-
-.ingredient-name,
-.ledger-name,
-.stocktake-title,
-.line-name {
-  display: block;
-  font-size: 30rpx;
-  font-weight: 700;
-  color: #26261f;
-}
-
-.status-badge,
-.stocktake-status,
-.ledger-tag {
-  flex-shrink: 0;
-  padding: 8rpx 16rpx;
+.retry {
+  margin-top: 20rpx;
+  padding: 0 40rpx;
+  height: 68rpx;
+  line-height: 68rpx;
   border-radius: 999rpx;
-  font-size: 22rpx;
-  font-weight: 700;
+  background: #1e3a2f;
+  color: #fbfcf7;
+  font-size: 26rpx;
 }
-
-.status-badge.success {
-  background: #eef2e4;
+.list {
+  margin-top: 16rpx;
+}
+.card {
+  padding: 22rpx;
+  margin-bottom: 14rpx;
+  border-radius: 22rpx;
+  background: #fff;
+  border: 1rpx solid #e8ede7;
+}
+.card.negative {
+  border-color: #e6b8ae;
+  background: #fffaf8;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+.name {
+  font-size: 30rpx;
+  font-weight: 600;
   color: #1e3a2f;
 }
-
-.status-badge.warning {
-  background: #b08d4f;
-  color: #8a6b33;
-}
-
-.status-badge.danger,
-.stocktake-status.applied {
-  background: #f8e8e2;
-  color: #b4553f;
-}
-
-.status-badge.neutral,
-.stocktake-status.draft {
-  background: #eef2e4;
-  color: #b08d4f;
-}
-
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12rpx;
-  margin: 22rpx 0 18rpx;
-}
-
-.metric-item {
-  padding: 18rpx;
-  border-radius: 18rpx;
-  background: #eef2e4;
-}
-
-.metric-label {
-  display: block;
+.badge {
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
   font-size: 22rpx;
-  color: #6b6653;
 }
-
-.metric-value {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 26rpx;
-  font-weight: 700;
-  color: #26261f;
-  line-height: 1.4;
+.badge.ok {
+  background: #e4f0e6;
+  color: #1f6b3a;
 }
-
-.detail-line,
-.ledger-line {
+.badge.warn {
+  background: #f6ead9;
+  color: #8a5a1e;
+}
+.badge.danger {
+  background: #f6e3df;
+  color: #a33a2a;
+}
+.badge.muted {
+  background: #eef1ec;
+  color: #7a8a80;
+}
+.card-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
   margin-top: 12rpx;
 }
-
-.detail-label {
-  display: block;
-}
-
-.detail-value {
-  display: block;
-  margin-top: 6rpx;
-  line-height: 1.6;
-}
-
-.card-actions {
-  display: flex;
-  gap: 16rpx;
-  margin-top: 20rpx;
-}
-
-.mini-btn,
-.inline-btn {
-  height: 72rpx;
-  line-height: 72rpx;
-  padding: 0 28rpx;
-  border-radius: 999rpx;
-  border: none;
-  background: #eef2e4;
-  color: #26261f;
-  font-size: 24rpx;
+.big {
+  font-size: 48rpx;
   font-weight: 600;
-}
-
-.mini-btn {
-  flex: 1;
-}
-
-.filter-pill {
-  margin-bottom: 16rpx;
-  padding: 16rpx 20rpx;
-  border-radius: 18rpx;
-  background: #eef2e4;
-}
-
-.ledger-delta,
-.line-delta {
-  font-size: 28rpx;
-  font-weight: 700;
-}
-
-.positive {
   color: #1e3a2f;
 }
-
-.negative {
-  color: #b4553f;
+.unit {
+  font-size: 24rpx;
+  color: #7a8a80;
 }
-
-.ledger-tag {
-  display: inline-flex;
-  margin-bottom: 10rpx;
-  background: #eef2e4;
-  color: #b08d4f;
-}
-
-.ledger-note {
-  margin-top: 10rpx;
-  padding-top: 10rpx;
-  border-top: 1rpx solid #eef1e2;
-  line-height: 1.6;
-}
-
-.stocktake-metrics {
+.suggest {
+  margin-left: auto;
   display: flex;
-  flex-wrap: wrap;
-  gap: 18rpx;
-  margin: 18rpx 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4rpx;
+  font-size: 24rpx;
+  color: #4b5b51;
 }
-
-.stocktake-actions {
+.suggest-cost {
+  color: #7a8a80;
+}
+.last {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 20rpx;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #7a8a80;
 }
-
-.stocktake-line {
-  padding: 18rpx 0;
-  border-top: 1rpx solid #eef1e2;
+.up {
+  color: #1f6b3a;
+}
+.down {
+  color: #a33a2a;
+}
+.actions {
+  display: flex;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+.btn {
+  flex: 1;
+  height: 72rpx;
+  line-height: 72rpx;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+}
+.btn.ghost {
+  background: #f1f4ee;
+  color: #1e3a2f;
+}
+.btn.primary {
+  background: #1e3a2f;
+  color: #fbfcf7;
+}
+.bottom {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 14rpx;
+  padding: 14rpx 24rpx calc(14rpx + env(safe-area-inset-bottom));
+  background: #fff;
+  border-top: 1rpx solid #e8ede7;
+}
+.bottom .btn {
+  height: 84rpx;
+  line-height: 84rpx;
 }
 </style>

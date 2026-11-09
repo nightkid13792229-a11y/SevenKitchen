@@ -98,3 +98,44 @@ describe('staff inventory adjustment create (C7)', () => {
     expect(pagesJson).toContain('"path": "adjustment-create"');
   });
 });
+
+describe('staff inventory home (C8)', () => {
+  const page = readPage('staff-inventory/index.vue');
+  const drawer = readPage('staff-inventory/components/InventoryDrawer.vue');
+  const stockCreate = readPage('staff-purchasing/stock-create.vue');
+
+  it('shows freshness, warning, search and four filters', () => {
+    expect(page).toContain('数据截至');
+    expect(page).toContain('上次盘库');
+    expect(page).toContain('需要补货');
+    expect(page).toContain('低于安全');
+    expect(page).toContain('未设阈值');
+    expect(page).toContain('全部');
+    expect(page).toContain('搜原料、渠道、规格');
+  });
+
+  it('shows last movement, negative-stock flag and both actions', () => {
+    expect(page).toContain('lastMovement');
+    expect(page).toContain('待核实');
+    expect(page).toContain('看流水');
+    expect(page).toContain('去补货');
+  });
+
+  it('uses the drawer instead of dead navigation', () => {
+    expect(page).toContain('InventoryDrawer');
+    expect(page).toContain("openDrawer('needs')");
+    expect(page).toContain("openDrawer('ledger'");
+    expect(drawer).toContain('缺什么');
+    expect(drawer).toContain('最近流水');
+  });
+
+  it('prefills the replenishment page with the ingredient', () => {
+    expect(stockCreate).toContain('options?.ingredientId');
+    expect(stockCreate).toContain('applyPendingIngredient');
+  });
+
+  it('has no in-page big title', () => {
+    expect(page).not.toContain('<h1');
+    expect(page).not.toContain('class="page-title"');
+  });
+});

@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { PurchasingService } from '../../application/purchasing/purchasing.service';
 import { InventoryService } from '../../application/inventory/inventory.service';
+import { InventoryHomeService } from '../../application/inventory/inventory-home.service';
 import {
   InventoryAdjustmentCategory,
   InventoryAdjustmentMode,
@@ -44,6 +45,7 @@ export class StaffInventoryController {
   constructor(
     private readonly purchasingService: PurchasingService,
     private readonly inventoryService: InventoryService,
+    private readonly inventoryHomeService: InventoryHomeService,
   ) {}
 
   @Get('overview')
@@ -82,6 +84,13 @@ export class StaffInventoryController {
       });
 
     return ApiResponseDto.success(inventory);
+  }
+
+  @Get('home')
+  @ApiOperation({ summary: '员工端库存首页（余额、缺什么、最近一笔、上次盘点）' })
+  async getHome(): Promise<ApiResponseDto<any>> {
+    const home = await this.inventoryHomeService.getHome();
+    return ApiResponseDto.success(home);
   }
 
   @Get('ledger')

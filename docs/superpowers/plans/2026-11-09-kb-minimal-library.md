@@ -680,6 +680,8 @@ Expected: FAIL。
 
 - `library-eval.ts`：纯函数 `judgeQuestion`，按 spec 附录 A 判分。
 - `library-questions.json`：26 题，按 spec 附录 A（含 `species/stage/topics` 提示、修正后的期望节）。
+- **先做通用 nutrition-section 加成**：查询含 `dietary / % DM / range / recommendation / 膳食 / 范围 / 推荐` 时，给「首段或表格 caption 出现 Key nutritional factors / feeding plan」的节加分（禁止硬编码 sectionId）；重跑 26 题。
+- 若 Q12/Q13/Q24 仍因「同文档第 3 节」被裁：把 `MAX_SECTIONS_PER_DOCUMENT` 从 2 调到 3（总数仍 ≤5），同步改 spec 6.1/7.3 + 加测试。**不要放宽期望**；Q13 的实际 #2 是「Evaluation of Renal Function」，不是蛋白推荐。
 - `evaluate-library.ts`：
   - `import 'dotenv/config'`；
   - 实例化 `KnowledgeLibraryService`、`SourceLayerService`、`CitationRegistry`；
@@ -700,7 +702,7 @@ cd backend
 npm test -- tests/application/knowledge-base/library-eval.spec.ts
 npm run kb:eval
 ```
-Expected: 26 题结果；整体 ≥21/26，Stage 3 1/1，表格 2/2，中文 ≥5/6，负样本 4/4，对抗 4/4；5 组核心表全部可打开；p95 <300ms、max <1s。未达标先回去调 Task 1 的焦点/软排序或 Task 2 的表格视图，不降低整体门槛；如果某题期望本身不合理（例如语料里没有该物种/分期证据），改该题期望并在报告里写理由，不动其他题的期望。
+Expected: 26 题结果；整体 ≥21/26，Stage 3 1/1，表格 2/2，中文 ≥5/6，负样本 4/4，对抗 4/4；5 组核心表全部可打开；p95 <300ms、max <1s。未达标先回去调 Task 1 的焦点/软排序或 Task 2 的表格视图，不降低整体门槛；中文 ≥5/6、对抗 4/4 是硬指标；21/24 不是最终验收。若某题期望确实不可达，必须先按上面的「通用加成 → cap 2→3」处理；只有 owner 明确同意且记录理由才改期望，不动其他题。
 
 - [ ] **Step 5: 提交**
 

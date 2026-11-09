@@ -311,6 +311,8 @@ extractQueryFocus(query: string): {
 5. 按组分数排序，**同一 documentId 最多保留 2 节**；
 6. 取前 5 节。
 
+> **Task 6 已知失败与授权**：Q12 zh-dietary / Q13 zh-protein / Q24 synonym 可能因「同一文档最多 2 节」被裁掉第 3 节。优先做通用 nutrition-section 加成（不硬编码 sectionId）；仍不过，授权把 `MAX_SECTIONS_PER_DOCUMENT` 从 2 调到 3（总数仍 ≤5），同步更新本节和测试。**不要通过放宽期望解决**；Q13 的实际 #2 是「Evaluation of Renal Function」，不是蛋白推荐，放宽会把错误节写成期望。
+
 ### 7.4 显示标题与子标题
 
 - 页眉型标题（`^\d{3}\s+Chronic Kidney Disease$`、`(文档开头)`）不再直接展示；`displayTitle` 用「来源名 · 第37章 · p{书内页}」。书内页从标题的前 3 位数字取（如 `781`），取不到再用 DB `pageNo`。
@@ -344,7 +346,7 @@ extractQueryFocus(query: string): {
 
 | 指标 | 目标 |
 |---|---|
-| 26 题整体节命中（前 3 节含预期节） | ≥21/26（80%）；基线在 Phase 0 先跑，必要时加软 sectionType 加权，不降门槛 |
+| 26 题整体节命中（前 3 节含预期节） | ≥21/26（80%）；中文 ≥5/6、对抗 4/4 是硬指标；Task 1 基线 21/24 不是最终验收 |
 | Stage 3 | 1/1，且 `s005` 不被排除 |
 | 表格题 | 2/2，能从表 37-9/37-11/37-1 取到值 |
 | 中文题 | ≥5/6 |

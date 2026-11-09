@@ -44,6 +44,12 @@ import { InventoryService } from '../inventory/inventory.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { calculateProductionUsage } from './production-ingredient-usage';
 
+export type InventoryDeductionStatus = 'DEDUCTED' | 'SKIPPED_OFF' | 'FAILED';
+export interface InventoryDeductionResult {
+  status: InventoryDeductionStatus;
+  message?: string;
+}
+
 @Injectable()
 export class StaffProductionService {
   private readonly logger = new Logger(StaffProductionService.name);
@@ -179,28 +185,54 @@ export class StaffProductionService {
    *
    * 快照无论开关是否打开都会生成 —— 这样后台的手工补扣随时可用。
    */
-  private async deductInventoryIfEnabled(unitId: string): Promise<void> {
-    try {
-      const config = await this.globalConfigService.getGlobalConfig();
-      if (!config.autoDeductInventoryOnProduction) {
-        this.logger.log(
-          `[KitchenService] 锅 ${unitId} 已生成用量快照，但「完工自动扣减原料库存」未开启，暂不扣减`,
-        );
-        return;
-      }
+  private async deductInventoryIfEnabled(
+    unitId: string,
+  ): Promise<InventoryDeductionResult> {
+    const config = await this.globalConfigService.getGlobalConfig();
+    if (!config.autoDeductInventoryOnProduction) {
+      this.logger.log(
+        `[KitchenService] 锅 ${unitId} 已生成用量快照，但「完工自动扣减原料库存」未开启，暂不扣减`,
+      );
+      return { status: 'SKIPPED_OFF' };
+    }
 
+    try {
       await this.inventoryService.deductFromKitchenTask(unitId);
+      await this.markDeductionState(unitId, {
+        deductedAt: new Date(),
+        error: null,
+      });
       this.logger.log(`[KitchenService] 锅 ${unitId} 已按配方扣减原料库存`);
+      return { status: 'DEDUCTED' };
     } catch (error) {
-      // 与既有实现一致：扣减失败不回滚完工状态（可以稍后手工补扣），
-      // 但必须留下明确的错误日志，不能静默
+      const message = error instanceof Error ? error.message : String(error);
+      await this.markDeductionState(unitId, {
+        deductedAt: null,
+        error: message,
+      });
       this.logger.error(
-        `[KitchenService] 锅 ${unitId} 扣减原料库存失败，可在后台用「库存扣减」手工补扣`,
+        `[KitchenService] 锅 ${unitId} 扣减原料库存失败，可在后台补扣：${message}`,
         error as any,
       );
+      return { status: 'FAILED', message };
     }
   }
 
+  private async markDeductionState(
+    unitId: string,
+    state: { deductedAt: Date | null; error: string | null },
+  ): Promise<void> {
+    const unit = await this.productionRepository.findPackagingUnitById(unitId);
+    if (!unit) {
+      this.logger.warn(
+        `[KitchenService] 锅 ${unitId} 不存在，无法记录扣料状态`,
+      );
+      return;
+    }
+    unit.inventoryDeductedAt = state.deductedAt;
+    unit.inventoryDeductionError = state.error;
+    await this.productionRepository.updatePackagingUnit(unit);
+  }
 
   /**
    * Get packaging units with filtering and pagination
@@ -854,7 +886,10 @@ export class StaffProductionService {
     unitId: string,
     dto: CompleteProductionDto = {},
     actorId?: string,
-  ): Promise<PackagingUnit> {
+  ): Promise<{
+    unit: PackagingUnit;
+    deduction: InventoryDeductionResult;
+  }> {
     const unit = await this.productionRepository.findPackagingUnitById(unitId);
 
     if (!unit) {
@@ -900,7 +935,14 @@ export class StaffProductionService {
     this.logger.log(`[KitchenService] Completed production task ${unitId}`);
 
     // 按配方扣减原料库存（默认关闭：开启前需先盘点，避免账面与实际不符时误判）
-    await this.deductInventoryIfEnabled(updated.id);
+    const deduction = await this.deductInventoryIfEnabled(updated.id);
+    if (deduction.status === 'DEDUCTED') {
+      updated.inventoryDeductedAt = new Date();
+      updated.inventoryDeductionError = null;
+    } else if (deduction.status === 'FAILED') {
+      updated.inventoryDeductedAt = null;
+      updated.inventoryDeductionError = deduction.message ?? null;
+    }
 
     const batch = await this.productionRepository.findById(
       unit.productionBatchId,
@@ -976,7 +1018,39 @@ export class StaffProductionService {
       );
     }
 
-    return updated;
+    return { unit: updated, deduction };
+  }
+
+  /**
+   * 补扣：已完工但扣料失败/未扣的锅，重跑一次扣料。
+   */
+  async retryInventoryDeduction(unitId: string): Promise<{
+    unit: PackagingUnit;
+    deduction: InventoryDeductionResult;
+  }> {
+    const unit = await this.productionRepository.findPackagingUnitById(unitId);
+    if (!unit) {
+      throw new NotFoundException(`Production task not found: ${unitId}`);
+    }
+    if (unit.status !== PackagingUnitStatus.COMPLETED) {
+      throw new BadRequestException('只有已完工的锅可以补扣原料');
+    }
+    if (!unit.ingredientsUsageSnapshot) {
+      throw new BadRequestException(
+        '这口锅没有用量快照，无法补扣；请到后台用「库存扣减」处理',
+      );
+    }
+
+    const deduction = await this.deductInventoryIfEnabled(unitId);
+    const refreshed =
+      (await this.productionRepository.findPackagingUnitById(unitId)) ?? unit;
+    if (deduction.status === 'DEDUCTED') {
+      refreshed.inventoryDeductedAt = new Date();
+      refreshed.inventoryDeductionError = null;
+    } else if (deduction.status === 'FAILED') {
+      refreshed.inventoryDeductionError = deduction.message ?? null;
+    }
+    return { unit: refreshed, deduction };
   }
 
   /**

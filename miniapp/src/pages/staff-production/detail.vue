@@ -1019,13 +1019,24 @@ const completeTask = async () => {
       uni.showLoading({ title: '提交中...' });
 
       try {
-        await completeProductionTask(taskId.value, buildCompletionPayload());
+        const completeResult = await completeProductionTask(
+          taskId.value,
+          buildCompletionPayload()
+        );
         uni.hideLoading();
 
-        uni.showToast({
-          title: '已完成制作',
-          icon: 'success',
-        });
+        if (completeResult.deduction?.status === 'FAILED') {
+          uni.showModal({
+            title: '完工成功，但扣料失败',
+            content: `${completeResult.deduction.message || '未知原因'}。请在后台「未扣料」里补扣。`,
+            showCancel: false,
+          });
+        } else {
+          uni.showToast({
+            title: '已完成制作',
+            icon: 'success',
+          });
+        }
 
         // 完成后留在详情页：结果、照片和打印入口都在这里，不自动跳走。
         await loadTaskDetail();

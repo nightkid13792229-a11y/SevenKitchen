@@ -69,6 +69,10 @@ export class PackagingUnit {
     } | null = null,
     /** 完工操作人（团队两人、一人一号） */
     public completedBy: string | null = null,
+    /** 完工后是否已成功扣料（null = 没扣过 / 失败） */
+    public inventoryDeductedAt: Date | null = null,
+    /** 扣料失败原因（成功时清空） */
+    public inventoryDeductionError: string | null = null,
   ) {
     this.validateInvariants();
   }

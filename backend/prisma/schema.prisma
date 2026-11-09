@@ -1009,6 +1009,10 @@ model PackagingUnit {
   completedAt              DateTime?           @map("completed_at")
   /// 完工操作人（团队两人、一人一号）
   completedBy              String?             @map("completed_by") @db.VarChar(36)
+  /// 完工后是否已成功扣料（null = 没扣过 / 失败）
+  inventoryDeductedAt      DateTime?           @map("inventory_deducted_at")
+  /// 扣料失败原因（成功时清空）
+  inventoryDeductionError  String?             @map("inventory_deduction_error") @db.VarChar(500)
   updatedAt                DateTime            @updatedAt @map("updated_at")
   productionBatch          ProductionBatch     @relation(fields: [productionBatchId], references: [id], onDelete: Cascade)
 

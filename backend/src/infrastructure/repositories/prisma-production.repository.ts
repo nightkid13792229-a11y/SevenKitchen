@@ -185,6 +185,8 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
               resultPhotoUrls: unit.resultPhotoUrls || [],
               completedAt: unit.completedAt,
               completedBy: unit.completedBy,
+              inventoryDeductedAt: unit.inventoryDeductedAt,
+              inventoryDeductionError: unit.inventoryDeductionError,
               // 备货批次的分装计划（订单批次为空，看订单明细即可）
               stockPortionPlan:
                 ((unit as any).stockPortionPlan as any) ?? undefined,
@@ -259,6 +261,8 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
         resultPhotoUrls: unit.resultPhotoUrls,
         completedAt: unit.completedAt,
         completedBy: unit.completedBy,
+        inventoryDeductedAt: unit.inventoryDeductedAt,
+        inventoryDeductionError: unit.inventoryDeductionError,
       },
     });
 
@@ -503,6 +507,8 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       // 备货锅的分装计划（订单锅为 null）
       pu.stockPortionPlan ?? null,
       pu.completedBy ?? null,
+      pu.inventoryDeductedAt ? new Date(pu.inventoryDeductedAt) : null,
+      pu.inventoryDeductionError ?? null,
     );
     unit.recipeSnapshotRefOrderItemId = recipeSnapshotRefOrderItemId;
     return unit;

@@ -13,6 +13,7 @@ import {
   HttpCode,
   HttpStatus,
   UsePipes,
+  UseGuards,
   ValidationPipe,
   NotFoundException,
   Logger,
@@ -32,9 +33,12 @@ import {
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { PackagingUnitStatus } from '../../domain/production';
 import { BadRequestException } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
+import { StaffGuard } from '../guards/role.guard';
 
 @ApiTags('Staff Kitchen')
 @Controller('api/v1/staff/kitchen')
+@UseGuards(AuthGuard, StaffGuard)
 @UsePipes(
   new ValidationPipe({
     transform: true,

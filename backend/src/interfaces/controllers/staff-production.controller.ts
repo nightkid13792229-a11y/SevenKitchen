@@ -329,11 +329,12 @@ export class StaffProductionController {
     @Body() dto: CompleteProductionDto,
     @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
-    const unit = await this.staffProductionService.completeProductionTask(
-      id,
-      dto,
-      userId,
-    );
+    const { unit, deduction } =
+      await this.staffProductionService.completeProductionTask(
+        id,
+        dto,
+        userId,
+      );
     return {
       code: 0,
       message: '制作完成',
@@ -345,6 +346,27 @@ export class StaffProductionController {
         surplusG: unit.surplusG,
         shortageG: unit.shortageG,
         resultPhotoUrls: unit.resultPhotoUrls,
+        deduction,
+      },
+    };
+  }
+
+  @Post('packaging-units/:id/deduct')
+  @ApiOperation({ summary: '补扣已完工锅次的原料库存' })
+  @ApiParam({ name: 'id', description: 'Packaging unit ID' })
+  @ApiResponse({ status: 200, description: '补扣结果' })
+  async retryInventoryDeduction(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.staffProductionService.retryInventoryDeduction(
+      id,
+    );
+    return {
+      code: 0,
+      message: '补扣完成',
+      data: {
+        id: result.unit.id,
+        deduction: result.deduction,
       },
     };
   }

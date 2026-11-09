@@ -79,11 +79,14 @@ describe('production completion result', () => {
       } as any,
     );
 
-    const result = await (service as any).completeProductionTask('unit-1', {
-      resultStatus: 'SHORTAGE',
-      shortageG: 300,
-      resultPhotoUrls: ['https://example.com/shortage.jpg'],
-    });
+    const { unit: result } = await (service as any).completeProductionTask(
+      'unit-1',
+      {
+        resultStatus: 'SHORTAGE',
+        shortageG: 300,
+        resultPhotoUrls: ['https://example.com/shortage.jpg'],
+      },
+    );
 
     expect(result.status).toBe(PackagingUnitStatus.COMPLETED);
     expect(result.resultStatus).toBe('SHORTAGE');

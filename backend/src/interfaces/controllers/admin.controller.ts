@@ -438,6 +438,20 @@ export class AdminController {
     return ApiResponseDto.success(ledger);
   }
 
+  @Get('inventory/undeducted-units')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: 'List completed packaging units without inventory deduction' })
+  async getUndeductedUnits(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<ApiResponseDto<any[]>> {
+    const units = await this.inventoryService.listUndeductedUnits({
+      from: from ? new Date(`${from}T00:00:00`) : undefined,
+      to: to ? new Date(`${to}T23:59:59.999`) : undefined,
+    });
+    return ApiResponseDto.success(units);
+  }
+
   @Post('inventory/adjustments')
   @ApiOperation({ summary: 'Create and apply a manual inventory adjustment' })
   async createInventoryAdjustment(

@@ -879,7 +879,7 @@ describe('StaffProductionService', () => {
       productionService,
     } as any);
 
-    await service.completeProductionTask(
+    const result = await service.completeProductionTask(
       'unit-current',
       {
         resultStatus: 'NORMAL',
@@ -891,7 +891,146 @@ describe('StaffProductionService', () => {
     expect(productionRepository.updatePackagingUnit).toHaveBeenCalledWith(
       expect.objectContaining({ completedBy: 'user-1' }),
     );
+    expect(result.deduction.status).toBe('SKIPPED_OFF');
     expect(order.markAsFreezing).not.toHaveBeenCalled();
     expect(orderRepository.save).not.toHaveBeenCalled();
+  });
+  it('returns DEDUCTED and stamps the unit when deduction succeeds', async () => {
+    const recipeSnapshot = {
+      id: 'recipe-1',
+      name: '糙米鸡蛋牛肉',
+      version: 4,
+      items: [],
+    } as any;
+    const currentUnit = new PackagingUnit(
+      'unit-deducted',
+      'batch-1',
+      recipeSnapshot,
+      1000,
+      ['item-1'],
+      new Date('2026-04-21T15:15:00.000Z'),
+      PackagingUnitStatus.IN_PROGRESS,
+    );
+    const productionRepository = {
+      findPackagingUnitById: jest.fn().mockResolvedValue(currentUnit),
+      updatePackagingUnit: jest.fn().mockImplementation(async (unit) => unit),
+      findOrderItemsByIds: jest.fn().mockResolvedValue([]),
+      findById: jest.fn().mockResolvedValue({
+        id: 'batch-1',
+        status: ProductionBatchStatus.IN_PRODUCTION,
+        packagingUnits: [currentUnit],
+      }),
+    };
+    const inventoryService = {
+      deductFromKitchenTask: jest.fn().mockResolvedValue(undefined),
+    };
+    const globalConfigService = {
+      getGlobalConfig: jest.fn().mockResolvedValue({
+        autoDeductInventoryOnProduction: true,
+        supplementLossRate: 1.02,
+      }),
+    };
+    const service = await buildService({
+      productionRepository,
+      inventoryService,
+      globalConfigService,
+      productionService: { checkAndCompleteBatch: jest.fn() },
+    } as any);
+
+    const result = await service.completeProductionTask(
+      'unit-deducted',
+      { resultStatus: 'NORMAL' },
+      'user-1',
+    );
+
+    expect(result.deduction.status).toBe('DEDUCTED');
+    expect(inventoryService.deductFromKitchenTask).toHaveBeenCalledWith(
+      'unit-deducted',
+    );
+    expect(result.unit.inventoryDeductedAt).toBeInstanceOf(Date);
+    expect(productionRepository.updatePackagingUnit).toHaveBeenCalledWith(
+      expect.objectContaining({ inventoryDeductedAt: expect.any(Date) }),
+    );
+  });
+
+  it('returns FAILED and records the error when deduction throws', async () => {
+    const recipeSnapshot = {
+      id: 'recipe-1',
+      name: '糙米鸡蛋牛肉',
+      version: 4,
+      items: [],
+    } as any;
+    const currentUnit = new PackagingUnit(
+      'unit-failed',
+      'batch-1',
+      recipeSnapshot,
+      1000,
+      ['item-1'],
+      new Date('2026-04-21T15:15:00.000Z'),
+      PackagingUnitStatus.IN_PROGRESS,
+    );
+    const productionRepository = {
+      findPackagingUnitById: jest.fn().mockResolvedValue(currentUnit),
+      updatePackagingUnit: jest.fn().mockImplementation(async (unit) => unit),
+      findOrderItemsByIds: jest.fn().mockResolvedValue([]),
+      findById: jest.fn().mockResolvedValue({
+        id: 'batch-1',
+        status: ProductionBatchStatus.IN_PRODUCTION,
+        packagingUnits: [currentUnit],
+      }),
+    };
+    const inventoryService = {
+      deductFromKitchenTask: jest
+        .fn()
+        .mockRejectedValue(new Error('库存服务超时')),
+    };
+    const globalConfigService = {
+      getGlobalConfig: jest.fn().mockResolvedValue({
+        autoDeductInventoryOnProduction: true,
+        supplementLossRate: 1.02,
+      }),
+    };
+    const service = await buildService({
+      productionRepository,
+      inventoryService,
+      globalConfigService,
+      productionService: { checkAndCompleteBatch: jest.fn() },
+    } as any);
+
+    const result = await service.completeProductionTask(
+      'unit-failed',
+      { resultStatus: 'NORMAL' },
+      'user-1',
+    );
+
+    expect(result.deduction).toEqual({
+      status: 'FAILED',
+      message: '库存服务超时',
+    });
+    expect(result.unit.inventoryDeductionError).toBe('库存服务超时');
+    expect(productionRepository.updatePackagingUnit).toHaveBeenCalledWith(
+      expect.objectContaining({ inventoryDeductionError: '库存服务超时' }),
+    );
+  });
+
+  it('rejects retry when the unit is not completed', async () => {
+    const unit = new PackagingUnit(
+      'unit-pending',
+      'batch-1',
+      { id: 'recipe-1', name: 'x', version: 1, items: [] } as any,
+      1000,
+      ['item-1'],
+      new Date(),
+      PackagingUnitStatus.IN_PROGRESS,
+    );
+    const service = await buildService({
+      productionRepository: {
+        findPackagingUnitById: jest.fn().mockResolvedValue(unit),
+      },
+    } as any);
+
+    await expect(service.retryInventoryDeduction('unit-pending')).rejects.toThrow(
+      '只有已完工的锅可以补扣原料',
+    );
   });
 });

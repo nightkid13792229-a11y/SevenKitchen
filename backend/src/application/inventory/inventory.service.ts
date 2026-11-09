@@ -413,6 +413,38 @@ export class InventoryService {
   }
 
   /**
+   * 已完工但未成功扣料的锅次（B2）：给后台"补扣"用。
+   */
+  async listUndeductedUnits(params: { from?: Date; to?: Date } = {}) {
+    const completedAt: Record<string, Date> = {};
+    if (params.from) completedAt.gte = params.from;
+    if (params.to) completedAt.lte = params.to;
+
+    const rows = await this.prisma.packagingUnit.findMany({
+      where: {
+        status: 'COMPLETED' as any,
+        inventoryDeductedAt: null,
+        ...(Object.keys(completedAt).length > 0 ? { completedAt } : {}),
+      },
+      orderBy: { completedAt: 'desc' },
+      take: 200,
+      select: {
+        id: true,
+        productionBatchId: true,
+        completedAt: true,
+        completedBy: true,
+        inventoryDeductionError: true,
+        totalProductionG: true,
+        ingredientsUsageSnapshot: true,
+      },
+    });
+
+    return rows
+      .filter((row) => row.ingredientsUsageSnapshot !== null)
+      .map(({ ingredientsUsageSnapshot, ...rest }) => rest);
+  }
+
+  /**
    * Get current inventory balance for an ingredient (SUM(delta_g)).
    */
   async getBalanceByIngredient(ingredientId: string): Promise<number> {

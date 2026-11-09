@@ -267,6 +267,10 @@ export function completeProductionTask(
     surplusG?: number;
     shortageG?: number;
     resultPhotoUrls?: string[];
+    deduction?: {
+      status: 'DEDUCTED' | 'SKIPPED_OFF' | 'FAILED';
+      message?: string;
+    };
   }>({
     url: `/staff/production/packaging-units/${unitId}/complete`,
     method: 'POST',

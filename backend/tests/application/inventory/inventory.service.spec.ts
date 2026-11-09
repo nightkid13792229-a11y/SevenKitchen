@@ -51,6 +51,9 @@ describe('InventoryService - Phase 8.13', () => {
     purchaseRecord: {
       update: jest.fn(),
     },
+    packagingUnit: {
+      findMany: jest.fn(),
+    },
   };
 
   beforeEach(async () => {
@@ -470,6 +473,34 @@ describe('InventoryService - Phase 8.13', () => {
       await service.reversePurchaseRecordInboundsForPurchaseList([record]);
       expect(balance()).toBe(0);
       expect(ledger).toHaveLength(4);
+    });
+  });
+  describe('listUndeductedUnits', () => {
+    it('只返回有用量快照且未扣料的完工锅次', async () => {
+      mockPrisma.packagingUnit.findMany.mockResolvedValue([
+        {
+          id: 'unit-1',
+          ingredientsUsageSnapshot: { ing: { required_g: 1, actual_g: 1 } },
+          completedAt: new Date(),
+        },
+        {
+          id: 'unit-2',
+          ingredientsUsageSnapshot: null,
+          completedAt: new Date(),
+        },
+      ]);
+
+      const rows = await service.listUndeductedUnits({});
+
+      expect(rows.map((row) => row.id)).toEqual(['unit-1']);
+      expect(mockPrisma.packagingUnit.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'COMPLETED',
+            inventoryDeductedAt: null,
+          }),
+        }),
+      );
     });
   });
 });

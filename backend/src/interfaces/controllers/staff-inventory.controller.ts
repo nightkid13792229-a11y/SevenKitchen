@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -15,13 +17,12 @@ import {
   ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
-import type { CreateInventoryStocktakeDto } from '../../application/inventory/inventory.service';
 import { PurchasingService } from '../../application/purchasing/purchasing.service';
 import { InventoryService } from '../../application/inventory/inventory.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { StaffGuard } from '../guards/role.guard';
-import { UserId } from '../auth/user.decorator';
+import { UserId, UserRole } from '../auth/user.decorator';
 
 @ApiTags('Staff Inventory')
 @Controller('api/v1/staff/inventory')
@@ -122,20 +123,99 @@ export class StaffInventoryController {
     return ApiResponseDto.success(stocktakes);
   }
 
-  @Post('stocktakes')
-  @ApiOperation({ summary: '创建移动端盘点单' })
-  async createStocktake(
-    @Body() dto: CreateInventoryStocktakeDto,
+  @Get('stocktakes/draft')
+  @ApiOperation({ summary: '获取当前盘点草稿（没有则 204）' })
+  async getDraftStocktake(
     @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
-    const stocktake = await this.inventoryService.createStocktake(dto, userId);
-    return ApiResponseDto.success(stocktake, '盘点单创建成功');
+    const draft = await this.inventoryService.getDraftStocktake(userId);
+    return ApiResponseDto.success(draft);
   }
 
-  @Post('stocktakes/:id/apply')
-  @ApiOperation({ summary: '将移动端盘点草稿立即入账' })
-  async applyStocktake(@Param('id') id: string): Promise<ApiResponseDto<any>> {
-    const stocktake = await this.inventoryService.applyStocktake(id);
-    return ApiResponseDto.success(stocktake, '盘点差异已入账');
+  @Post('stocktakes')
+  @ApiOperation({ summary: '开始盘点（开单即锁账面）' })
+  async startStocktake(
+    @Body() body: { note?: string },
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    const stocktake = await this.inventoryService.startStocktake({
+      userId,
+      note: body?.note ?? null,
+    });
+    return ApiResponseDto.success(stocktake, '盘点已开始');
+  }
+
+  @Get('stocktakes/:id')
+  @ApiOperation({ summary: '查看盘点（草稿盲盘）' })
+  async getStocktake(
+    @Param('id') id: string,
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    const stocktake = await this.inventoryService.getStocktakeForStaff(
+      id,
+      userId,
+    );
+    return ApiResponseDto.success(stocktake);
+  }
+
+  @Delete('stocktakes/:id')
+  @ApiOperation({ summary: '取消盘点草稿' })
+  async cancelStocktake(
+    @Param('id') id: string,
+    @UserId() userId: string,
+    @UserRole() role: string,
+  ): Promise<ApiResponseDto<any>> {
+    await this.inventoryService.cancelStocktakeDraft(
+      id,
+      userId,
+      role === 'ADMIN',
+    );
+    return ApiResponseDto.success({ cancelled: true }, '草稿已取消');
+  }
+
+  @Patch('stocktakes/:id/lines')
+  @ApiOperation({ summary: '保存盘点草稿' })
+  async saveStocktakeLines(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      lines: Array<{ ingredientId: string; countedQuantityG: number | null }>;
+    },
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    const stocktake = await this.inventoryService.saveStocktakeLines(
+      id,
+      body?.lines ?? [],
+      userId,
+    );
+    return ApiResponseDto.success(stocktake, '已保存');
+  }
+
+  @Get('stocktakes/:id/preview')
+  @ApiOperation({ summary: '完成录入后的差异预览（不写库）' })
+  async previewStocktake(
+    @Param('id') id: string,
+    @UserId() userId: string,
+    @Query('confirmPartial') confirmPartial?: string,
+  ): Promise<ApiResponseDto<any>> {
+    const preview = await this.inventoryService.previewStocktake(id, userId, {
+      confirmPartial: confirmPartial === 'true' || confirmPartial === '1',
+    });
+    return ApiResponseDto.success(preview);
+  }
+
+  @Post('stocktakes/:id/submit')
+  @ApiOperation({ summary: '提交盘点复核' })
+  async submitStocktake(
+    @Param('id') id: string,
+    @Body() body: { note?: string },
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    const stocktake = await this.inventoryService.submitStocktake(
+      id,
+      userId,
+      body?.note ?? null,
+    );
+    return ApiResponseDto.success(stocktake, '盘点已提交');
   }
 }

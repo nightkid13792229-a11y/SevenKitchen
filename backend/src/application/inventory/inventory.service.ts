@@ -98,7 +98,6 @@ export interface CreateInventoryStocktakeLineDto {
 export interface CreateInventoryStocktakeDto {
   note?: string | null;
   lines: CreateInventoryStocktakeLineDto[];
-  applyImmediately?: boolean;
 }
 
 export interface InventoryStocktakeLineDto {
@@ -1087,9 +1086,8 @@ export class InventoryService {
     const balances = await this.getBalancesByIngredientIds(ingredientIds);
     const now = new Date();
     const stocktakeId = randomUUID();
-    const status = dto.applyImmediately
-      ? InventoryStocktakeStatus.APPLIED
-      : InventoryStocktakeStatus.DRAFT;
+    // 创建永远是草稿；入账只走"提交 →（必要时）复核"。
+    const status = InventoryStocktakeStatus.DRAFT;
     const lines = ingredientIds.map((ingredientId) => {
       const expectedQuantityG = balances.get(ingredientId) ?? 0;
       const sourceLine = lineMap.get(ingredientId)!;
@@ -1112,7 +1110,7 @@ export class InventoryService {
       status,
       dto.note?.trim() || null,
       now,
-      status === InventoryStocktakeStatus.APPLIED ? now : null,
+      null,
       lines,
     );
 
@@ -1140,29 +1138,6 @@ export class InventoryService {
         })),
       });
 
-      if (dto.applyImmediately) {
-        const ledgerEntries = stocktake.lines
-          .filter(
-          (line) =>
-            line.deltaG !== null && Math.abs(line.deltaG) > 0.0001,
-        )
-          .map((line) => ({
-            id: randomUUID(),
-            ingredientId: line.ingredientId,
-            procurementSkuId: line.procurementSkuId,
-            deltaG: line.deltaG as number,
-            sourceType: InventorySourceType.STOCKTAKE as any,
-            sourceId: stocktake.id,
-            createdAt: now,
-          }));
-
-        if (ledgerEntries.length > 0) {
-          await tx.inventoryLedgerEntry.createMany({
-            data: ledgerEntries,
-            skipDuplicates: true,
-          });
-        }
-      }
     });
 
     return this.getStocktakeById(stocktake.id);
@@ -1299,6 +1274,25 @@ export class InventoryService {
       return null;
     }
     return this.toBlindStocktakeDto(await this.getStocktakeById(draft.id));
+  }
+
+  /** 员工查看：草稿盲盘（仅本人），提交后可见差异。 */
+  async getStocktakeForStaff(id: string, userId: string) {
+    const header = await this.prisma.inventoryStocktake.findUnique({
+      where: { id },
+      select: { id: true, status: true, createdBy: true },
+    });
+    if (!header) throw new NotFoundException(`Stocktake not found: ${id}`);
+    if (
+      header.status === ('DRAFT' as any) &&
+      header.createdBy !== userId
+    ) {
+      throw new ForbiddenException('只能查看自己开的盘点草稿');
+    }
+    const dto = await this.getStocktakeById(id);
+    return header.status === ('DRAFT' as any)
+      ? this.toBlindStocktakeDto(dto)
+      : dto;
   }
 
   /** 取消草稿：只允许自己的（管理员可取消任何人的）；草稿没有流水，可以删。 */

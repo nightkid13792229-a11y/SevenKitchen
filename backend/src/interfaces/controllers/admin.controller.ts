@@ -486,13 +486,20 @@ export class AdminController {
     return ApiResponseDto.success(stocktake, '盘点单创建成功');
   }
 
-  @Post('inventory/stocktakes/:id/apply')
-  @ApiOperation({ summary: 'Apply a draft stocktake to inventory ledger' })
-  async applyInventoryStocktake(
+  @Post('inventory/stocktakes/:id/review')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: 'Review a submitted stocktake' })
+  async reviewInventoryStocktake(
     @Param('id') id: string,
+    @Body() body: { approve: boolean; note?: string },
+    @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
-    const stocktake = await this.inventoryService.applyStocktake(id);
-    return ApiResponseDto.success(stocktake, '盘点差异已入账');
+    const stocktake = await this.inventoryService.reviewStocktake(
+      id,
+      { approve: body?.approve === true, note: body?.note ?? null },
+      userId,
+    );
+    return ApiResponseDto.success(stocktake, '复核完成');
   }
 
   @Get('ingredients')

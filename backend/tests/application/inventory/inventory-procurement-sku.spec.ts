@@ -298,10 +298,10 @@ describe('InventoryService procurement sku traceability', () => {
     ]);
     prisma.inventoryStocktake.findUnique.mockResolvedValue({
       id: 'stocktake-1',
-      status: 'APPLIED',
+      status: 'DRAFT',
       note: '晚班盘点',
       createdAt: new Date('2026-04-11T13:00:00.000Z'),
-      appliedAt: new Date('2026-04-11T13:00:00.000Z'),
+      appliedAt: null,
       lines: [
         {
           id: 'line-1',
@@ -329,7 +329,6 @@ describe('InventoryService procurement sku traceability', () => {
     const result = await service.createStocktake(
       {
         note: '晚班盘点',
-        applyImmediately: true,
         lines: [
           {
             ingredientId: 'ingredient-1',
@@ -346,6 +345,8 @@ describe('InventoryService procurement sku traceability', () => {
         data: expect.objectContaining({ createdBy: 'user-1' }),
       }),
     );
+    await service.applyStocktake('stocktake-1');
+
     expect(prisma.inventoryStocktakeLine.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.arrayContaining([

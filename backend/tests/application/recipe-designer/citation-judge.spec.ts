@@ -1,6 +1,11 @@
 import { callDeepSeekJson } from '../../../src/application/recipe-designer/deepseek-chat';
 import { CitationRegistry } from '../../../src/application/recipe-designer/agent/citation-registry';
-import { citationGatePassed, judgeAnswer, rewriteAnswer } from '../../../src/application/recipe-designer/agent/citation-judge';
+import {
+  citationGatePassed,
+  isStructuralLine,
+  judgeAnswer,
+  rewriteAnswer,
+} from '../../../src/application/recipe-designer/agent/citation-judge';
 
 jest.mock('../../../src/application/recipe-designer/deepseek-chat', () => ({
   callDeepSeekJson: jest.fn(),
@@ -190,5 +195,20 @@ describe('citationGatePassed 覆盖率', () => {
         citedClinicalClaims: 15,
       }),
     ).toBe(false);
+  });
+});
+
+
+describe('isStructuralLine', () => {
+  it('标题与表格行不算临床结论', () => {
+    expect(isStructuralLine('### 1) CKD 2 期膳食磷目标（已查证）')).toBe(true);
+    expect(isStructuralLine('| 鸡胸 | 150 g | 煮 |')).toBe(true);
+    expect(isStructuralLine('|---|---|')).toBe(true);
+    expect(isStructuralLine('')).toBe(true);
+  });
+
+  it('正文结论仍要判', () => {
+    expect(isStructuralLine('膳食磷目标为 0.2–0.5% DM [K1]。')).toBe(false);
+    expect(isStructuralLine('钙磷比 0.14，远低于 1–2。')).toBe(false);
   });
 });

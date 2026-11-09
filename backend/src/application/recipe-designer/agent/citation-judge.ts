@@ -37,6 +37,16 @@ export interface UncitedClinicalClaim {
   kind: ClaimKind;
 }
 
+/** Markdown 标题/表格行/分隔线：不是临床结论，不参与引用门禁。 */
+export function isStructuralLine(text: string): boolean {
+  const value = String(text ?? '').trim();
+  if (!value) return true;
+  if (/^#{1,6}\s/.test(value)) return true;
+  if (/^\|/.test(value)) return true;
+  if (/^\|?[\s:|-]+\|?$/.test(value)) return true;
+  return false;
+}
+
 export interface JudgeAudit {
   model: string;
   totalClaims: number;
@@ -146,7 +156,8 @@ const SUPPORT_SYSTEM_PROMPT = `你是知识库引用裁判。只判断“给定�
 - 数字对但用法错（单位、域、分期、因果）也要判 partial 或 unsupported。
 - 允许直接算术和单位换算：原文给出数值，claim 只是比较大小、判断是否超出范围、做单位换算（如 5.2 > 4.6、mg/dL ↔ mmol/L），且不引入新事实时，可以判 supported；不要求原文显式写出比较句。
 - 引用段落给出某阶段的目标值，claim 只是把患者数值与该目标做大小比较时，可以判 supported；不要求原文在比较句旁再次复述分期。
-- 如果原文写“Stage 2 Same as Stage 1”或类似“与上一期相同”，视为 Stage 2 继承 Stage 1 的目标；不要因为目标值只写在 Stage 1 就判 unsupported。
+- 如果原文写“Stage 2 Same as Stage 1”或类似“与上一期相同”，视为 Stage 2 继承 Stage 1 的目标；不要因为目标值只写在 Stage 1 就判 unsupported。\n- 原文表格/章节的表头或列名已标明口径（% DM、plasma/serum）时，claim 只是复述该口径，可判 supported；不要求原文在数值旁再次注明。
+- claim 不含新数值、只是对原文的流程性复述或合理推论（如“先排除其他原因”“最终值看反馈”）时，判 supported 或 partial；只有新增数值、改变口径/物种/分期，或与原文矛盾时才判 unsupported。
 - 患者数值可以来自 claim，不要求原文出现该患者数值；只要目标值在原文里即可。
 - 不允许用常识补全原文没有的内容。
 输出 JSON：{"verdict":"supported|partial|unsupported|not_checkable","reason":"一句话理由","quote":"原文中支持或不支持的那一句"}。`;
@@ -402,6 +413,9 @@ export async function judgeAnswer(input: {
     error = `引用覆盖裁判失败：${(caught as Error)?.message ?? '未知错误'}`;
     classified = fallbackClassify(input.answer);
   }
+  // Markdown 标题/表格行不是临床结论：把它们算成"未引用数值"会让每个
+  // 排版正常的回答都过不了门禁（实测一条 18 个假阳性）。
+  classified = classified.filter((claim) => !isStructuralLine(claim.text));
 
   // 后端确定性兜底：裁判可能漏掉某句；带数字且没有 [K#] 的句子必须至少被标出来。
   const sentences = String(input.answer ?? '')
@@ -410,6 +424,7 @@ export async function judgeAnswer(input: {
     .filter(Boolean);
   for (const sentence of sentences) {
     if (!/\d/.test(sentence)) continue;
+    if (isStructuralLine(sentence)) continue;
     if (extractCitationIds(sentence).length > 0) continue;
     const already = classified.some(
       (claim) => claim.text.includes(sentence) || sentence.includes(claim.text),

@@ -22,6 +22,8 @@ export function buildSystemPrompt(): string {
 涉及疾病营养（如 CKD、胰腺炎、肾病）时，先查原文；检索不到就说「知识库未覆盖」，不要用常识补。
 最终回答里每个数值/结论后面写 [K#] 引用（如 [K1]）；编号只能来自本次检索/打开结果；中间过程不用。
 引用表格数值时，要区分膳食口径（% DM）和血清口径（mg/dl、mmol/l），并把引用落到那张表。
+不要给出药物剂量（如 mg/kg）；涉及用药只说「按兽医处方」，可以引用指南里的目标值，但不要复述给药剂量。
+通用安全提示（如「用药按兽医处方」「本食谱不涉及药物剂量」）不要挂 [K#]；[K#] 只挂在知识库原文能支持的结论上。
 当疾病目标与内置评估标准冲突时，先用 search_knowledge_library 查到目标，再在 assess 的 targetOverrides 里传；每个覆盖必须带 citationId，不传则用内置标准。
 缺某个营养素时，先 find_food 传 nutrientKey（如 iodine / chloride / magnesium）找原料；改补剂时在 edit_recipe 传 trackNutrients，看改动前后缺口。
 回答用中文。`;

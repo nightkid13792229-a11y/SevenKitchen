@@ -30,7 +30,7 @@
   .navbar { height:44px; background:var(--brand); color:#fff; display:flex; align-items:center; padding:0 14px; gap:8px; flex:none; }
   .navbar .back { font-size:20px; line-height:1; opacity:.9; }
   .navbar .title { font-size:16px; font-weight:600; }
-  .navbar .more { margin-left:auto; font-size:16px; opacity:.75; }
+  .navbar .more { margin-left:auto; font-size:13px; opacity:.95; font-weight:600; }
   .scroll { flex:1; overflow:hidden; padding:14px 16px 84px; display:flex; flex-direction:column; gap:10px; }
   .dateline { font-size:12px; color:var(--ink3); display:flex; justify-content:space-between; }
   .alert { background:var(--dangersoft); border-radius:10px; padding:12px 14px; display:flex; align-items:center; gap:10px; }
@@ -116,9 +116,9 @@
     <div class="col">
       <div class="phone">
         <div class="statusbar"><span>9:41</span><span>●●● ▮</span></div>
-        <div class="navbar"><span class="back">‹</span><span class="title">库存管理</span><span class="more">⋯</span></div>
+        <div class="navbar"><span class="back">‹</span><span class="title">库存管理</span><span class="more">盘点</span></div>
         <div class="scroll">
-          <div class="dateline"><span>11月10日 周二</span><span>数据截至 17:20</span></div>
+          <div class="dateline"><span>11月10日 周二 · 数据截至 17:20</span><span>上次盘库 11/8</span></div>
 
           <div class="alert">
             <span class="dot"></span>
@@ -126,10 +126,7 @@
             <span class="arrow">›</span>
           </div>
 
-          <div class="task">
-            <span class="txt"><b>本半月盘库</b> · 11月16日前完成</span>
-            <span class="go">开始盘点</span>
-          </div>
+
 
           <div class="search"><span class="ico"></span><span>搜原料、渠道、规格</span></div>
 
@@ -166,18 +163,17 @@
           <span class="btn dark">补货清单 <span class="n">3</span></span>
         </div>
       </div>
-      <div class="label">① 库存首页：先给“今天要做什么”，再给清单</div>
+      <div class="label">① 库存首页：先给“缺什么”，盘点放在右上角</div>
     </div>
 
     <!-- ② 记一笔 -->
     <div class="col">
       <div class="phone">
         <div class="statusbar"><span>9:41</span><span>●●● ▮</span></div>
-        <div class="navbar"><span class="back">‹</span><span class="title">库存管理</span><span class="more">⋯</span></div>
+        <div class="navbar"><span class="back">‹</span><span class="title">库存管理</span><span class="more">盘点</span></div>
         <div class="scroll" style="opacity:.5">
-          <div class="dateline"><span>11月10日 周二</span><span>数据截至 17:20</span></div>
+          <div class="dateline"><span>11月10日 周二 · 数据截至 17:20</span><span>上次盘库 11/8</span></div>
           <div class="alert"><span class="dot"></span><span class="txt"><b>3 项需要补货</b> · 5 项低于安全库存</span><span class="arrow">›</span></div>
-          <div class="task"><span class="txt"><b>本半月盘库</b> · 11月16日前完成</span><span class="go">开始盘点</span></div>
           <div class="search"><span class="ico"></span><span>搜原料、渠道、规格</span></div>
           <div class="chips"><span class="chip on">全部</span><span class="chip warn">需补货 3</span><span class="chip">低库存 5</span></div>
           <div class="card">
@@ -222,9 +218,9 @@
     <div class="col">
       <div class="phone">
         <div class="statusbar"><span>9:41</span><span>●●● ▮</span></div>
-        <div class="navbar"><span class="back">‹</span><span class="title">盘点</span><span class="more">⋯</span></div>
+        <div class="navbar"><span class="back">‹</span><span class="title">盘点</span></div>
         <div class="scroll">
-          <div class="dateline"><span>本半月 · 11月1日–16日</span><span>已盘 32 / 42 项</span></div>
+          <div class="dateline"><span>盘点记录</span><span>共 3 次</span></div>
 
           <div class="tip">盘点时只看实称，不显示账面数；提交后才看差异。差异 ≤ max(2%, 50克) 自动入账，超出才需要复核。</div>
 
@@ -247,7 +243,7 @@
           <span class="btn dark" style="flex:1">开始盘点（42 项）</span>
         </div>
       </div>
-      <div class="label">③ 盘点：任务 + 差异 + 复核（管理员视角）</div>
+      <div class="label">③ 盘点：手动发起 · 差异 · 复核（管理员视角）</div>
     </div>
 
   </div>

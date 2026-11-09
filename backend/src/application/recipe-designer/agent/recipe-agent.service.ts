@@ -30,6 +30,7 @@ import {
 } from '../deepseek-tools-chat';
 import { RecipeDesignerService } from '../recipe-designer.service';
 import { buildSystemPrompt } from './prompt';
+import { redactDrugDoses } from './dose-redaction';
 import { CitationRegistry, formatTableCitationText } from './citation-registry';
 import {
   citationGatePassed,
@@ -262,7 +263,9 @@ export class RecipeAgentService implements OnModuleInit {
       const calls = response.toolCalls ?? [];
       if (calls.length === 0) {
         if (response.content) {
-          let finalContent = response.content;
+          const firstRedaction = redactDrugDoses(response.content);
+          let finalContent = firstRedaction.text;
+          let doseRedactions = firstRedaction.redactions;
           let audit = citations.audit(finalContent);
           const onUsage = (usage: {
             promptTokens: number;
@@ -295,7 +298,9 @@ export class RecipeAgentService implements OnModuleInit {
               rewritten.answer.trim() &&
               rewritten.answer !== finalContent
             ) {
-              finalContent = rewritten.answer;
+              const rewriteRedaction = redactDrugDoses(rewritten.answer);
+              finalContent = rewriteRedaction.text;
+              doseRedactions += rewriteRedaction.redactions;
               audit = citations.audit(finalContent);
               semantic = await judgeAnswer({
                 config,
@@ -323,6 +328,7 @@ export class RecipeAgentService implements OnModuleInit {
           await this.appendMessage(sessionId, 'ASSISTANT', finalContent);
           const gate = {
             mode: 'rewrite',
+            doseRedactions,
             passed: citationGatePassed({
               uncitedClinicalClaims: semantic.uncitedClinicalClaims,
               invalidCitationCount: audit.invalidCitationCount,

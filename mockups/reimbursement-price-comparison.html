@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>报销单详情 · 价格对比弹层原型</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #fbfcf7;
+    --card: #fffefb;
+    --line: #ece4d2;
+    --ink: #26261f;
+    --muted: #6b6653;
+    --muted2: #8a8472;
+    --red: #a8402f;
+    --green: #2f6b4f;
+    --amber: #8a6420;
+    --chip: #f4f1e6;
+  }
+  body {
+    background: #e9e6dc;
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    color: var(--ink);
+    padding: 26px 24px 36px;
+  }
+  .board { display: flex; gap: 40px; justify-content: center; align-items: flex-start; }
+  .col { width: 390px; }
+  .col-title { font-size: 15px; font-weight: 700; color: #4a4636; margin-bottom: 2px; }
+  .col-sub { font-size: 12px; color: #82806f; margin-bottom: 12px; line-height: 1.5; }
+
+  .phone {
+    width: 390px; height: 844px; background: var(--bg);
+    border-radius: 34px; overflow: hidden; position: relative;
+    box-shadow: 0 18px 46px rgba(30, 30, 20, .18), 0 0 0 1px rgba(0,0,0,.06);
+  }
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; }
+
+  .statusbar {
+    height: 40px; flex: none; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px; font-size: 13px; font-weight: 600; color: #111;
+  }
+  .statusbar .right { font-size: 10px; letter-spacing: .5px; color: #3a3a3a; }
+
+  .navbar {
+    height: 44px; flex: none; display: flex; align-items: center; justify-content: center;
+    position: relative; font-size: 16px; font-weight: 600; color: #111;
+  }
+  .navbar .back { position: absolute; left: 16px; font-size: 20px; color: #111; }
+  .capsule {
+    position: absolute; right: 12px; top: 6px; width: 88px; height: 30px;
+    border-radius: 15px; border: 1px solid #e2e4e8; background: #fff;
+    display: flex; align-items: center; justify-content: space-around;
+    font-size: 12px; color: #111;
+  }
+  .capsule .dot { width: 6px; height: 6px; border-radius: 50%; background: #111; }
+  .capsule .ring { width: 11px; height: 11px; border-radius: 50%; border: 3px solid #111; }
+
+  .content { flex: 1; overflow: hidden; padding: 6px 14px 0; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 15px; margin-bottom: 12px;
+  }
+
+  .claim-row { display: flex; align-items: center; justify-content: space-between; }
+  .claim-no { font-size: 17px; font-weight: 700; letter-spacing: .3px; }
+  .badge-pending {
+    font-size: 11px; color: #8a6420; background: #f8efd9;
+    border: 1px solid #ecd9ac; border-radius: 6px; padding: 3px 9px; font-weight: 600;
+  }
+  .submit-line { margin-top: 7px; font-size: 12px; color: var(--muted); }
+  .submit-line .dot { margin: 0 5px; color: #c0b9a5; }
+
+  .section-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin: 4px 2px 8px;
+  }
+  .section-title { font-size: 15px; font-weight: 700; }
+  .section-hint { font-size: 11px; color: var(--muted2); }
+
+  .pending-hint {
+    font-size: 11px; color: var(--amber); line-height: 1.5;
+    margin: 0 2px 9px;
+  }
+
+  .record-head { display: flex; justify-content: space-between; align-items: flex-start; }
+  .record-name { font-size: 15px; font-weight: 600; line-height: 1.4; }
+  .record-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .record-cost { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .chips { display: flex; flex-wrap: wrap; margin-top: 8px; }
+  .chip {
+    font-size: 10px; color: var(--muted); background: var(--chip);
+    border-radius: 5px; padding: 3px 7px; margin: 0 6px 5px 0;
+  }
+  .chip.warn { color: var(--amber); background: #f8efd9; }
+  .chip.danger { color: #fff; background: var(--red); }
+  .chip.release { color: #fbfcf7; background: #22301f; font-weight: 600; }
+
+  .metrics { display: flex; margin-top: 5px; }
+  .metric { flex: 1; min-width: 0; padding-right: 4px; }
+  .metric:last-child { padding-right: 0; }
+  .m-label { font-size: 10px; color: var(--muted2); margin-bottom: 3px; }
+  .m-value { font-size: 12px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+  .m-value.muted { color: var(--muted); }
+  .m-value.up { color: var(--red); font-weight: 700; }
+  .m-value.down { color: var(--green); font-weight: 700; }
+
+  .q {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 1px solid #d3c8ae; background: #fffdf7;
+    color: #6b6653; font-size: 11px; font-weight: 700;
+    vertical-align: 0;
+  }
+  .hot { display: inline-flex; padding: 2px; border: 1px dashed #c98a2e; border-radius: 999px; }
+
+  .note {
+    margin: 2px 4px 0; font-size: 11px; color: #a06a1e; line-height: 1.4;
+  }
+  .note b { font-weight: 700; }
+
+  .peek-card { opacity: .75; }
+  .peek-name { font-size: 14px; font-weight: 600; }
+  .peek-cost { font-size: 14px; font-weight: 700; }
+
+  .actionbar {
+    flex: none; background: #fbfcf7; border-top: 1px solid #eae4d4;
+    padding: 10px 14px 22px; display: flex; gap: 10px;
+  }
+  .btn { flex: 1; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; }
+  .btn.reject { color: var(--red); background: #fdf3ef; border: 1px solid #efd3c8; }
+  .btn.approve { color: #fbfcf7; background: #22301f; }
+
+  /* ===== 弹层 ===== */
+  .mask { position: absolute; inset: 0; background: rgba(20, 22, 16, .45); }
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    background: #fbfcf7; border-radius: 22px 22px 0 0;
+    padding: 10px 18px 18px; max-height: 760px;
+  }
+  .grab { width: 38px; height: 4px; border-radius: 2px; background: #ddd6c4; margin: 0 auto 12px; }
+
+  .sheet-head { display: flex; align-items: flex-start; justify-content: space-between; }
+  .sheet-title { font-size: 17px; font-weight: 700; }
+  .sheet-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .close { width: 26px; height: 26px; border-radius: 50%; background: #f1eee3; color: #6b6653; display: flex; align-items: center; justify-content: center; font-size: 14px; margin-top: -2px; }
+
+  .summary {
+    margin-top: 12px; background: #f4f1e6; border-radius: 12px; padding: 11px 12px 9px;
+  }
+  .summary-grid { display: flex; }
+  .sum-cell { flex: 1; min-width: 0; }
+  .sum-cell + .sum-cell { border-left: 1px solid #e2dac6; padding-left: 11px; }
+  .sum-label { font-size: 10px; color: var(--muted2); }
+  .sum-value { font-size: 15px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .sum-value.red { color: var(--red); }
+  .sum-note { font-size: 10.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+
+  .list-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin: 16px 2px 2px;
+  }
+  .list-title { font-size: 13px; font-weight: 700; }
+  .list-hint { font-size: 10px; color: var(--muted2); }
+  .list-cap { font-size: 10.5px; color: var(--muted); margin: 2px 2px 7px; line-height: 1.45; }
+
+  .rows { border-top: 1px solid #ece4d2; }
+  .row { display: flex; align-items: center; padding: 9px 2px; border-bottom: 1px solid #f0e9da; }
+  .row:last-child { border-bottom: none; }
+  .row-left { flex: 1; min-width: 0; }
+  .row-date { font-size: 10px; color: var(--muted2); }
+  .row-name { font-size: 12.5px; font-weight: 600; margin-top: 1px; }
+  .row-meta { font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .row-right { text-align: right; flex: none; margin-left: 8px; }
+  .row-price { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .row-delta { font-size: 10px; margin-top: 2px; }
+  .row-delta.down { color: var(--green); }
+  .row-delta.flat { color: var(--muted2); }
+  .base-tag {
+    display: inline-block; font-size: 9px; color: #8a6420; background: #f8efd9;
+    border-radius: 4px; padding: 1px 4px; margin-left: 4px; vertical-align: 2px;
+  }
+
+  .sheet-foot {
+    font-size: 10px; color: var(--muted2); line-height: 1.5;
+    margin-top: 12px; padding-top: 10px; border-top: 1px dashed #e2dac6;
+  }
+</style>
+</head>
+<body>
+<div class="board">
+
+  <!-- ============ 左：采购明细里的问号 ============ -->
+  <div class="col">
+    <div class="col-title">① 采购明细：涨跌后面加一个「?」</div>
+    <div class="col-sub">每条采购记录都有。点数字或问号，弹出价格对比。</div>
+
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>00:36</span><span class="right">5G&nbsp;&nbsp;26%</span></div>
+        <div class="navbar">
+          <span class="back">‹</span>
+          报销单详情
+          <div class="capsule"><span class="dot"></span><span class="ring"></span></div>
+        </div>
+
+        <div class="content">
+          <div class="card">
+            <div class="claim-row">
+              <span class="claim-no">BX202611090001</span>
+              <span class="badge-pending">待审核</span>
+            </div>
+            <div class="submit-line">seven爸爸<span class="dot">·</span>2026-11-10 00:10</div>
+          </div>
+
+          <div class="section-head">
+            <span class="section-title">采购明细</span>
+            <span class="section-hint">14 条 · ¥228.56</span>
+          </div>
+          <div class="pending-hint">5 项调价没能自动生效，标「需放行」；点一下「放行」价格才会更新。</div>
+
+          <div class="card">
+            <div class="record-head">
+              <div>
+                <div class="record-name">西葫芦片 约240g</div>
+                <div class="record-sub">标准原料：西葫芦</div>
+              </div>
+              <div class="record-cost">¥2.99</div>
+            </div>
+            <div class="chips">
+              <span class="chip">盒马鲜生</span>
+              <span class="chip">11月10日</span>
+              <span class="chip">240g</span>
+              <span class="chip danger">需放行</span>
+              <span class="chip release">放行</span>
+            </div>
+            <div class="metrics">
+              <div class="metric">
+                <div class="m-label">实际采购</div>
+                <div class="m-value">1 × 240 g</div>
+              </div>
+              <div class="metric">
+                <div class="m-label">折算单价</div>
+                <div class="m-value">¥6.23/500g</div>
+              </div>
+              <div class="metric">
+                <div class="m-label">上次单价</div>
+                <div class="m-value muted">¥3.33/500g</div>
+              </div>
+              <div class="metric">
+                <div class="m-label">涨跌</div>
+                <div class="m-value up">+87.3%<span class="hot"><span class="q">?</span></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="note">↑ 新增：涨跌旁边的「?」，点开看最近 5 条价格对比</div>
+
+          <div class="card peek-card">
+            <div class="record-head">
+              <div><div class="peek-name">鲜香菇</div></div>
+              <div class="peek-cost">¥2.70</div>
+            </div>
+          </div>
+
+          <div class="card peek-card">
+            <div class="record-head">
+              <div><div class="peek-name">切片南瓜</div></div>
+              <div class="peek-cost">¥1.39</div>
+            </div>
+          </div>
+
+          <div class="card peek-card">
+            <div class="record-head">
+              <div><div class="peek-name">绿豆芽</div></div>
+              <div class="peek-cost">¥1.59</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="actionbar">
+          <div class="btn reject">驳回</div>
+          <div class="btn approve">审核通过</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 右：弹层 ============ -->
+  <div class="col">
+    <div class="col-title">② 点开：同原料其他商品 + 同商品历史</div>
+    <div class="col-sub">两段各自最多 5 条，按时间倒序；被驳回的单据不计入。</div>
+
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>00:36</span><span class="right">5G&nbsp;&nbsp;26%</span></div>
+        <div class="navbar">
+          <span class="back">‹</span>
+          报销单详情
+          <div class="capsule"><span class="dot"></span><span class="ring"></span></div>
+        </div>
+
+        <div class="content" style="filter: blur(.3px);">
+          <div class="card">
+            <div class="claim-row">
+              <span class="claim-no">BX202611090001</span>
+              <span class="badge-pending">待审核</span>
+            </div>
+            <div class="submit-line">seven爸爸<span class="dot">·</span>2026-11-10 00:10</div>
+          </div>
+        </div>
+
+        <div class="mask"></div>
+
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="sheet-head">
+            <div>
+              <div class="sheet-title">价格对比</div>
+              <div class="sheet-sub">西葫芦 · 西葫芦片 约240g · 11月10日</div>
+            </div>
+            <div class="close">×</div>
+          </div>
+
+          <div class="summary">
+            <div class="summary-grid">
+              <div class="sum-cell">
+                <div class="sum-label">本次</div>
+                <div class="sum-value">¥6.23/500g</div>
+              </div>
+              <div class="sum-cell">
+                <div class="sum-label">上次单价</div>
+                <div class="sum-value">¥3.33/500g</div>
+              </div>
+              <div class="sum-cell">
+                <div class="sum-label">涨跌</div>
+                <div class="sum-value red">+87.3%</div>
+              </div>
+            </div>
+            <div class="sum-note">这次是拿「西葫芦片 6.23」跟「原料基准价 3.33」在比，不是同一个商品。</div>
+          </div>
+
+          <div class="list-head">
+            <span class="list-title">① 同原料 · 其他商品</span>
+            <span class="list-hint">最近 5 条</span>
+          </div>
+          <div class="list-cap">西葫芦这个原料下，别的商品最近 5 次采购；右边是现在这条比它贵多少</div>
+          <div class="rows">
+            <div class="row">
+              <div class="row-left">
+                <div class="row-date">08-26</div>
+                <div class="row-name">西葫芦 · 750g/份</div>
+                <div class="row-meta">盒马鲜生</div>
+              </div>
+              <div class="row-right">
+                <div class="row-price">¥3.33/500g<span class="base-tag">≈ 基准价</span></div>
+                <div class="row-delta up">现在比它 +87.3%</div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-left">
+                <div class="row-date">07-26</div>
+                <div class="row-name">西葫芦 · 750g/份</div>
+                <div class="row-meta">盒马鲜生</div>
+              </div>
+              <div class="row-right">
+                <div class="row-price">¥3.21/500g</div>
+                <div class="row-delta up">现在比它 +94.3%</div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-left">
+                <div class="row-date">07-21</div>
+                <div class="row-name">西葫芦 · 750g/份</div>
+                <div class="row-meta">盒马鲜生</div>
+              </div>
+              <div class="row-right">
+                <div class="row-price">¥2.65/500g</div>
+                <div class="row-delta up">现在比它 +134.8%</div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-left">
+                <div class="row-date">07-14</div>
+                <div class="row-name">西葫芦 · 750g/份</div>
+                <div class="row-meta">盒马鲜生</div>
+              </div>
+              <div class="row-right">
+                <div class="row-price">¥3.21/500g</div>
+                <div class="row-delta up">现在比它 +94.3%</div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-left">
+                <div class="row-date">06-22</div>
+                <div class="row-name">西葫芦 · 散称</div>
+                <div class="row-meta">农贸市场</div>
+              </div>
+              <div class="row-right">
+                <div class="row-price">¥4.50/500g</div>
+                <div class="row-delta up">现在比它 +38.3%</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="list-head">
+            <span class="list-title">② 同商品 · 历史采购</span>
+            <span class="list-hint">最近 5 条</span>
+          </div>
+          <div class="rows">
+            <div class="row">
+              <div class="row-left">
+                <div class="row-date">11-08</div>
+                <div class="row-name">西葫芦片 约240g</div>
+                <div class="row-meta">盒马鲜生 · 240g</div>
+              </div>
+              <div class="row-right">
+                <div class="row-price">¥6.23/500g</div>
+                <div class="row-delta flat">现在跟它持平</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sheet-foot">右边 = 现在这条采购的折算价，比这一行历史价的折算价；和卡片上的涨跌同一个算法、同一个方向。<br>「≈ 基准价」= 这一行的折算价正好等于上面的「上次单价」。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

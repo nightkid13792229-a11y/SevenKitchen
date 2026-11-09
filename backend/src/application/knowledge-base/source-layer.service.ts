@@ -164,13 +164,15 @@ function coreTableSortBonus(tableId: string): number {
 
 /**
  * 表格视图相关性权重（spec 未规定数值，这里登记）：
- * - 表题点名 → 3；
  * - 第一列（行标签）就是查询词（`Phosphorus` / `Protein`）→ 4，最强信号；
+ * - 表题点名 → 3；
+ * - 列头点名（`Serum creatinine (dogs)`，T0253 的 SDMA/肌酐只在列头）→ 2；
  * - 只出现在其他单元格里（正文顺带提到）→ 1。
  * 只影响排序，不做分期/物种排除。
  */
 const CAPTION_MATCH_WEIGHT = 3;
 const ROW_LABEL_MATCH_WEIGHT = 4;
+const COLUMN_MATCH_WEIGHT = 2;
 const ROW_BODY_MATCH_WEIGHT = 1;
 
 function normalizeIdList(values: readonly string[] | undefined): string[] {
@@ -244,24 +246,26 @@ function isRowLabelMatch(cells: string[], needle: string): boolean {
 }
 
 /**
- * 表格命中强度：门禁先看 `caption + 行文本`，命中后再按位置加权
- * （行标签 > 表题 > 其他单元格）。
+ * 表格命中强度：门禁先看 `caption + 列头 + 行文本`，命中后再按位置加权
+ * （行标签 > 表题 > 列头 > 其他单元格）。
  */
 function scoreTableRow(
-  row: { caption: string; rows: unknown },
+  row: { caption: string; columns: unknown; rows: unknown },
   needles: string[],
 ): number {
   const caption = String(row.caption ?? '');
+  const columns = toTextArray(row.columns);
   const rows = toTextMatrix(row.rows);
-  const haystack = `${caption} ${JSON.stringify(rows)}`;
+  const haystack = `${caption} ${columns.join(' ')} ${JSON.stringify(rows)}`;
   let score = 0;
   for (const needle of needles) {
     if (!matchesNeedle(haystack, needle)) continue;
-    const labelHit = rows.some((cells) => isRowLabelMatch(cells, needle));
-    if (labelHit) {
+    if (rows.some((cells) => isRowLabelMatch(cells, needle))) {
       score += ROW_LABEL_MATCH_WEIGHT;
     } else if (matchesNeedle(caption, needle)) {
       score += CAPTION_MATCH_WEIGHT;
+    } else if (columns.some((column) => matchesNeedle(column, needle))) {
+      score += COLUMN_MATCH_WEIGHT;
     } else {
       score += ROW_BODY_MATCH_WEIGHT;
     }
@@ -661,7 +665,7 @@ export class SourceLayerService {
   /**
    * 表格视图（spec v1.1 §7.5）。
    *
-   * 在指定文档/来源里按 `caption + 行文本` 找表：
+   * 在指定文档/来源里按 `caption + 列头 + 行文本` 找表：
    * - topicPhrases 非空时必须命中 topicPhrase（vitamin K 不能命中 vitamin E 表）；
    * - 否则用 focusTerms/stagePhrases；没有可匹配的焦点词就不返回表格，
    *   避免给「分期/馆藏」这类查询随便塞 3 张无关表；

@@ -127,23 +127,48 @@ const CKD_T0263 = {
   ],
 };
 
-/** IRIS 分期表 37-1：最后一行是很长的脚注（首列 >80 字符且含换行）。 */
+/** IRIS 分期表 37-1： creatinine 只在列头，行里是数字；最后一行是很长的脚注。 */
 const CKD_T0253 = {
   id: 'T0253',
   documentId: 'sacn5-chapters-SACN5-37',
   pageNo: null,
   caption:
     'Table 37-1. International Renal Interest Society (IRIS) Staging System for Chronic Kidney Disease in Dogs and Cats.',
-  columns: ['Stage', 'Creatinine (dogs)', 'Comments'],
+  columns: [
+    'Stage',
+    'Serum creatinine (dogs)',
+    'Serum creatinine (cats)',
+    'Substrate based on proteinuria and hypertension',
+    'Comments',
+  ],
   rowCount: 5,
   rows: [
-    ['1', '<1.4 mg/dl', 'Non-azotemic CKD'],
-    ['2', '1.4-2.0 mg/dl', 'Mild renal azotemia'],
+    ['1', '<1.4 mg/dl (<125 µmol/l)', '<1.6 mg/dl (<140 µmol/l)', 'Proteinuria: NP/BP/P*', 'Non-azotemic CKD'],
+    ['2', '1.4-2.0 mg/dl (125-179 µmol/l)', '1.6-2.8 mg/dl (140-249 µmol/l)', 'Proteinuria: NP/BP/P*', 'Mild renal azotemia'],
+    ['3', '2.1-5.0 mg/dl (180-439 µmol/l)', '2.9-5.0 mg/dl (250-439 µmol/l)', 'Proteinuria: NP/BP/P*', 'Moderate renal azotemia'],
+    ['4', '>5.0 mg/dl (>440 µmol/l)', '>5.0 mg/dl (>440 µmol/l)', 'Proteinuria: NP/BP/P*', 'Severe renal azotemia'],
     [
       'Key: PU/PD = polyuria/polydipsia, UPC = urine protein-creatinine ratio.\n*NP = non-proteinuric (UPC <0.2), BP = borderline proteinuric (UPC = 0.2 to 0.4 in cats and 0.2 to 0.5 in dogs).',
       '',
       '',
+      '',
+      '',
     ],
+  ],
+};
+
+/** 表 37-12（猫）：Q25 的候选之一。 */
+const CKD_T0261 = {
+  id: 'T0261',
+  documentId: 'sacn5-chapters-SACN5-37',
+  pageNo: null,
+  caption:
+    'Table 37-12. Key nutritional factors in selected commercial veterinary therapeutic foods for cats with chronic kidney disease compared to recommended levels.*',
+  columns: ['', 'Protein (%)', 'P (%)', 'Na (%)'],
+  rowCount: 2,
+  rows: [
+    ['Diet C', '28.0', '0.35', '0.30'],
+    ['Diet D', '30.0', '0.40', '0.32'],
   ],
 };
 
@@ -152,6 +177,7 @@ const TABLE_FIXTURES = [
   CKD_T0258,
   CKD_T0259,
   CKD_T0260,
+  CKD_T0261,
   CKD_T0262,
   CKD_T0263,
   CKD_T0253,
@@ -589,6 +615,49 @@ describe('SourceLayerService', () => {
     });
     expect(vitaminK.map((table) => table.tableId)).not.toContain('T0025');
     expect(vitaminK).toEqual([]);
+  });
+
+  it('表格视图：列头参与匹配，Q26 召回 IRIS 分期表 T0253', async () => {
+    const { service } = makeService({
+      sourceTable: {
+        count: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue(TABLE_FIXTURES),
+      },
+    });
+
+    const hits = await service.searchTableViews(
+      'IRIS staging creatinine SDMA table',
+      { documentIds: [...CKD_DOCUMENT_IDS] },
+    );
+    expect(hits.map((table) => table.tableId)).toContain('T0253');
+    expect(hits[0].tableId).toBe('T0253');
+    // creatinine 只在 T0253 的列头出现（行里是数字），没有列头匹配就召回不到
+    expect(hits[0].columns).toEqual(
+      expect.arrayContaining([
+        'Serum creatinine (dogs)',
+        'Serum creatinine (cats)',
+      ]),
+    );
+  });
+
+  it('表格视图：Q25 关键营养因子表仍在 top 3', async () => {
+    const { service } = makeService({
+      sourceTable: {
+        count: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue(TABLE_FIXTURES),
+      },
+    });
+
+    const hits = await service.searchTableViews(
+      'CKD dog key nutritional factors phosphorus protein',
+      { documentIds: [...CKD_DOCUMENT_IDS] },
+    );
+    expect(hits.map((table) => table.tableId)).toEqual(
+      expect.arrayContaining(['T0497', 'T0260', 'T0261']),
+    );
+    expect(hits).toHaveLength(3);
   });
 
   it('表格视图：泛问题（三组焦点词全空）不返回表格', async () => {

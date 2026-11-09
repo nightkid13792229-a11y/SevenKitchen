@@ -141,6 +141,22 @@
           </div>
         </el-form-item>
 
+        <el-form-item label="日采也按净额下单">
+          <el-switch v-model="form.dailyNetOrderingEnabled" />
+          <div class="form-tip form-tip-block">
+            开启后日采也按「需求 − 现存 + 已占用 − 在途」下单，避免重复买。
+            <br />
+            <strong>建议先跑一周影子模式</strong>，对比新旧缺口再正式开。
+          </div>
+        </el-form-item>
+
+        <el-form-item label="净额影子模式">
+          <el-switch v-model="form.inventoryNetShadowEnabled" />
+          <div class="form-tip form-tip-block">
+            开关关着时也算一遍净额，只在日志里对比新旧缺口，不改变下单。
+          </div>
+        </el-form-item>
+
         <el-divider content-position="left">订单配置</el-divider>
 
         <el-form-item label="最小订单重量（克）" prop="minOrderWeightG">
@@ -586,6 +602,8 @@ const form = ref<GlobalConfig>({
   minOrderWeightG: 1000,
   autoDeductInventoryOnProduction: true,
   packagingDeductionEnabled: false,
+  dailyNetOrderingEnabled: false,
+  inventoryNetShadowEnabled: false,
   defaultBatchCapacityG: 5000,
   minPotWeightG: 2000,
   targetMargin: 0.4,

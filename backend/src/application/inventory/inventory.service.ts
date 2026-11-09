@@ -147,7 +147,10 @@ export interface InventoryAvailabilitySnapshot {
   ingredientId: string;
   onHandQuantityG: number;
   allocatedQuantityG: number;
+  /** 可用 = 现存 − 已占用；**不减在途** */
   availableQuantityG: number;
+  /** 已下单未到货（只减"还差多少要买"，不减可用） */
+  inTransitQuantityG: number;
 }
 
 export interface ProcurementSkuInventoryBalance {
@@ -524,13 +527,14 @@ export class InventoryService {
    */
   async getAvailabilityByIngredientIds(
     ingredientIds: string[],
+    dateRange?: { start: Date; end: Date },
   ): Promise<Map<string, InventoryAvailabilitySnapshot>> {
     const uniqueIds = Array.from(new Set(ingredientIds.filter(Boolean)));
     if (uniqueIds.length === 0) {
       return new Map();
     }
 
-    const [balances, allocationLines] = await Promise.all([
+    const [balances, allocationLines, inTransitMap] = await Promise.all([
       Promise.all(
         uniqueIds.map(
           async (ingredientId) =>
@@ -554,6 +558,7 @@ export class InventoryService {
           quantityG: true,
         },
       }),
+      this.getInTransitByIngredientIds(uniqueIds, dateRange),
     ]);
 
     const balanceMap = new Map(balances);
@@ -579,10 +584,75 @@ export class InventoryService {
               onHandQuantityG - allocatedQuantityG,
               0,
             ),
+            inTransitQuantityG: Number(inTransitMap.get(ingredientId) ?? 0),
           },
         ];
       }),
     );
+  }
+
+  /**
+   * 在途 = 目标日期内、状态 PENDING 的订单需求采购单里"还没买到的部分"。
+   * COMPLETED 不算（已经进 onHand）；作废单不算。
+   */
+  private async getInTransitByIngredientIds(
+    ingredientIds: string[],
+    dateRange?: { start: Date; end: Date },
+  ): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+    if (!dateRange || ingredientIds.length === 0) {
+      return result;
+    }
+
+    const items = await this.prisma.purchaseItem.findMany({
+      where: {
+        ingredientId: { in: ingredientIds },
+        purchaseList: {
+          status: 'PENDING' as any,
+          kind: 'ORDER_DEMAND' as any,
+          targetDate: { gte: dateRange.start, lte: dateRange.end },
+        },
+      },
+      select: {
+        ingredientId: true,
+        procurementSkuId: true,
+        purchaseShortageQuantity: true,
+        ingredient: { select: { purchaseToBaseRatio: true } },
+      },
+    });
+    if (items.length === 0) return result;
+
+    const skuIds = Array.from(
+      new Set(
+        items
+          .map((item) => item.procurementSkuId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+    const skus = skuIds.length
+      ? await this.prisma.procurementSku.findMany({
+          where: { id: { in: skuIds } },
+          select: { id: true, purchaseToBaseRatio: true },
+        })
+      : [];
+    const skuMap = new Map(
+      skus.map((sku) => [sku.id, Number(sku.purchaseToBaseRatio ?? 0)]),
+    );
+
+    for (const item of items) {
+      const shortage = Number(item.purchaseShortageQuantity ?? 0);
+      if (!Number.isFinite(shortage) || shortage <= 0) continue;
+      const ratio =
+        skuMap.get(item.procurementSkuId ?? '') ??
+        Number(item.ingredient?.purchaseToBaseRatio ?? 1);
+      const baseQuantity = shortage * (ratio > 0 ? ratio : 1);
+      result.set(
+        item.ingredientId,
+        (result.get(item.ingredientId) ?? 0) + baseQuantity,
+      );
+    }
+
+    return result;
   }
 
   async createAllocationForOrderDemand(

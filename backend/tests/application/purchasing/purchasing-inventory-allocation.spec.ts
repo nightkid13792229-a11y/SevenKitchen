@@ -132,6 +132,9 @@ const makePendingPurchaseList = () =>
 const prismaMock: any = {
   $transaction: jest.fn(async (callback: any) => callback(prismaMock)),
   purchaseList: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+  globalConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+  purchaseItem: { findMany: jest.fn().mockResolvedValue([]) },
+  procurementSku: { findMany: jest.fn().mockResolvedValue([]) },
   purchaseRecord: { findMany: jest.fn().mockResolvedValue([]) },
 };
 
@@ -1103,5 +1106,121 @@ describe('PurchasingService inventory allocation calculation', () => {
         noPurchaseReason: null,
       }),
     ]);
+  });
+  describe('D4 net ordering', () => {
+    const netService: any = new PurchasingService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      prismaMock,
+      undefined,
+    );
+
+    it('在途只减缺口：需求 5、现存 1、在途 3 → 还差 1', () => {
+      const result = (netService as any).applyInventoryOffset({
+        requirement: {
+          ingredientId: 'i1',
+          ingredientName: '冷冻三文鱼',
+          type: 'FOOD',
+          quantityNeeded: 5,
+          quantityUnit: 'kg',
+          estimatedCost: 0,
+          ingredientBaseUnit: 'G',
+        },
+        ingredient: {
+          procurementStrategy: 'DAILY_PURCHASE',
+          purchaseToBaseRatio: 1000,
+        },
+        availability: {
+          onHandQuantityG: 1000,
+          allocatedQuantityG: 0,
+          availableQuantityG: 1000,
+          inTransitQuantityG: 3000,
+        },
+        usesInventoryOverride: true,
+        useInTransit: true,
+      });
+
+      expect(result.purchaseShortageQuantity).toBe(1);
+      expect(result.inTransitQuantity).toBe(3);
+    });
+
+    it('超额占用时可用按 0 算，在途只抵扣缺口：需求 5、现存 2、已占 2、在途 3 → 还差 2', () => {
+      const result = (netService as any).applyInventoryOffset({
+        requirement: {
+          ingredientId: 'i1',
+          ingredientName: '冷冻三文鱼',
+          type: 'FOOD',
+          quantityNeeded: 5,
+          quantityUnit: 'kg',
+          estimatedCost: 0,
+          ingredientBaseUnit: 'G',
+        },
+        ingredient: {
+          procurementStrategy: 'DAILY_PURCHASE',
+          purchaseToBaseRatio: 1000,
+        },
+        availability: {
+          onHandQuantityG: 2000,
+          allocatedQuantityG: 2000,
+          availableQuantityG: 0,
+          inTransitQuantityG: 3000,
+        },
+        usesInventoryOverride: true,
+        useInTransit: true,
+      });
+
+      expect(result.purchaseShortageQuantity).toBe(2);
+    });
+
+    it('在途只认待处理的订单需求采购单', async () => {
+      prismaMock.purchaseItem.findMany.mockResolvedValue([
+        {
+          ingredientId: 'i1',
+          procurementSkuId: 'sku-1',
+          purchaseShortageQuantity: 2,
+          ingredient: { purchaseToBaseRatio: 1000 },
+        },
+      ]);
+      prismaMock.procurementSku.findMany.mockResolvedValue([
+        { id: 'sku-1', purchaseToBaseRatio: 1000 },
+      ]);
+
+      prismaMock.inventoryAllocationLine = {
+        groupBy: jest.fn().mockResolvedValue([]),
+      };
+      const inventoryService = new InventoryService(
+        {
+          getCurrentBalanceByIngredient: jest.fn().mockResolvedValue(0),
+        } as any,
+        {} as any,
+        prismaMock,
+      );
+      const map = await (inventoryService as any).getInTransitByIngredientIds(
+        ['i1'],
+        {
+          start: new Date('2026-04-20T00:00:00.000Z'),
+          end: new Date('2026-04-20T23:59:59.999Z'),
+        },
+      );
+
+      expect(map.get('i1')).toBe(2000);
+      expect(prismaMock.purchaseItem.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            purchaseList: expect.objectContaining({
+              status: 'PENDING',
+              kind: 'ORDER_DEMAND',
+            }),
+          }),
+        }),
+      );
+    });
   });
 });

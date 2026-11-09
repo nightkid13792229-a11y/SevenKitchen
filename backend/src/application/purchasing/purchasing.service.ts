@@ -153,6 +153,8 @@ export interface PurchaseRequirement {
   onHandQuantity?: number;
   allocatedQuantity?: number;
   availableQuantity?: number;
+  inTransitQuantity?: number;
+  inTransitDeductedBaseQuantity?: number;
   usesInventory?: boolean;
   allocationRequired?: boolean;
   preparationMethods?: string[];
@@ -854,7 +856,10 @@ export class PurchasingService {
       onHandQuantityG: number;
       allocatedQuantityG: number;
       availableQuantityG: number;
+      inTransitQuantityG?: number;
     };
+    usesInventoryOverride?: boolean;
+    useInTransit?: boolean;
   }): PurchaseRequirement {
     const grossQuantity = this.roundNumber(
       params.requirement.grossQuantityNeeded ??
@@ -866,22 +871,42 @@ export class PurchasingService {
       params.ingredient,
       grossQuantity,
     );
-    const usesInventory = this.usesInventoryForRequirement(params.ingredient);
+    const usesInventory =
+      params.usesInventoryOverride ??
+      this.usesInventoryForRequirement(params.ingredient);
     const unitCost =
       grossQuantity > 0
         ? Number(params.requirement.estimatedCost || 0) / grossQuantity
         : 0;
+    const available = Math.max(
+      Number(params.availability?.availableQuantityG ?? 0),
+      0,
+    );
+    const inTransit =
+      usesInventory && params.useInTransit
+        ? Math.max(
+            Number(params.availability?.inTransitQuantityG ?? 0),
+            0,
+          )
+        : 0;
     const stockDeductedBaseQuantity = usesInventory
-      ? this.roundNumber(
-          Math.min(
-            grossBaseQuantity,
-            params.availability?.availableQuantityG ?? 0,
-          ),
-          3,
-        )
+      ? this.roundNumber(Math.min(grossBaseQuantity, available), 3)
       : 0;
+    // 在途只减"还差多少要买"，不减可用
+    const inTransitDeductedBaseQuantity = this.roundNumber(
+      Math.min(
+        Math.max(grossBaseQuantity - stockDeductedBaseQuantity, 0),
+        inTransit,
+      ),
+      3,
+    );
     const shortageBaseQuantity = this.roundNumber(
-      Math.max(grossBaseQuantity - stockDeductedBaseQuantity, 0),
+      Math.max(
+        grossBaseQuantity -
+          stockDeductedBaseQuantity -
+          inTransitDeductedBaseQuantity,
+        0,
+      ),
       3,
     );
     const stockDeductedQuantity =
@@ -916,8 +941,14 @@ export class PurchasingService {
       availableQuantity: this.convertInventoryBaseQuantityToRequirementUnit(
         params.requirement,
         params.ingredient,
-        params.availability?.availableQuantityG ?? 0,
+        available,
       ),
+      inTransitQuantity: this.convertInventoryBaseQuantityToRequirementUnit(
+        params.requirement,
+        params.ingredient,
+        inTransit,
+      ),
+      inTransitDeductedBaseQuantity,
       usesInventory,
       allocationRequired: stockDeductedBaseQuantity > 0,
     };
@@ -926,19 +957,34 @@ export class PurchasingService {
   private async applyInventoryAvailability(
     requirements: PurchaseRequirement[],
     ingredientLookup: Map<string, any>,
+    dateRange?: { start: Date; end: Date },
   ): Promise<PurchaseRequirement[]> {
-    const stockManagedIngredientIds = requirements
-      .filter((requirement) =>
-        this.usesInventoryForRequirement(
-          ingredientLookup.get(requirement.ingredientId),
-        ),
+    const flags = await this.prisma.globalConfig.findUnique({
+      where: { id: 'singleton' },
+      select: {
+        dailyNetOrderingEnabled: true,
+        inventoryNetShadowEnabled: true,
+      },
+    });
+    const useNet = flags?.dailyNetOrderingEnabled === true;
+    const shadow = !useNet && flags?.inventoryNetShadowEnabled === true;
+
+    const candidateIds = requirements
+      .filter(
+        (requirement) =>
+          useNet ||
+          shadow ||
+          this.usesInventoryForRequirement(
+            ingredientLookup.get(requirement.ingredientId),
+          ),
       )
       .map((requirement) => requirement.ingredientId);
 
     const availabilityMap =
-      stockManagedIngredientIds.length > 0
+      candidateIds.length > 0
         ? await this.inventoryService.getAvailabilityByIngredientIds(
-            stockManagedIngredientIds,
+            candidateIds,
+            dateRange,
           )
         : new Map();
 
@@ -950,24 +996,45 @@ export class PurchasingService {
         ],
       ),
     );
+    const remainingInTransitQuantityGByIngredient = new Map(
+      Array.from(availabilityMap.entries()).map(
+        ([ingredientId, availability]) => [
+          ingredientId,
+          availability.inTransitQuantityG,
+        ],
+      ),
+    );
 
     return requirements.map((requirement) => {
       const ingredient = ingredientLookup.get(requirement.ingredientId);
-      const availability = availabilityMap.get(requirement.ingredientId);
-      const remainingAvailableQuantityG =
-        remainingAvailableQuantityGByIngredient.get(requirement.ingredientId) ??
-        availability?.availableQuantityG ??
-        0;
+      const baseAvailability = availabilityMap.get(requirement.ingredientId);
+      const availability = baseAvailability
+        ? {
+            ...baseAvailability,
+            availableQuantityG: Math.max(
+              remainingAvailableQuantityGByIngredient.get(
+                requirement.ingredientId,
+              ) ?? baseAvailability.availableQuantityG,
+              0,
+            ),
+            inTransitQuantityG: Math.max(
+              remainingInTransitQuantityGByIngredient.get(
+                requirement.ingredientId,
+              ) ?? baseAvailability.inTransitQuantityG,
+              0,
+            ),
+          }
+        : undefined;
+      const usesInventory =
+        useNet || this.usesInventoryForRequirement(ingredient);
       const result = this.applyInventoryOffset({
         requirement,
         ingredient,
-        availability: availability
-          ? {
-              ...availability,
-              availableQuantityG: Math.max(remainingAvailableQuantityG, 0),
-            }
-          : undefined,
+        availability,
+        usesInventoryOverride: usesInventory,
+        useInTransit: useNet,
       });
+
       const deductedBaseQuantity =
         this.convertRequirementQuantityToInventoryBase(
           result,
@@ -977,8 +1044,51 @@ export class PurchasingService {
       if (deductedBaseQuantity > 0) {
         remainingAvailableQuantityGByIngredient.set(
           requirement.ingredientId,
-          Math.max(remainingAvailableQuantityG - deductedBaseQuantity, 0),
+          Math.max(
+            (remainingAvailableQuantityGByIngredient.get(
+              requirement.ingredientId,
+            ) ?? 0) - deductedBaseQuantity,
+            0,
+          ),
         );
+      }
+      const usedInTransit = Number(
+        result.inTransitDeductedBaseQuantity ?? 0,
+      );
+      if (usedInTransit > 0) {
+        remainingInTransitQuantityGByIngredient.set(
+          requirement.ingredientId,
+          Math.max(
+            (remainingInTransitQuantityGByIngredient.get(
+              requirement.ingredientId,
+            ) ?? 0) - usedInTransit,
+            0,
+          ),
+        );
+      }
+
+      // 影子模式：开关没开时也算一遍净额，只记日志不改结果
+      if (
+        shadow &&
+        !this.usesInventoryForRequirement(ingredient) &&
+        baseAvailability
+      ) {
+        const shadowResult = this.applyInventoryOffset({
+          requirement,
+          ingredient,
+          availability: baseAvailability,
+          usesInventoryOverride: true,
+          useInTransit: true,
+        });
+        const oldShortage = Number(result.purchaseShortageQuantity ?? 0);
+        const netShortage = Number(
+          shadowResult.purchaseShortageQuantity ?? 0,
+        );
+        if (Math.abs(oldShortage - netShortage) > 0.001) {
+          this.logger.warn(
+            `[Net-Shadow] ${ingredient?.name ?? requirement.ingredientId} 旧缺口 ${oldShortage} / 净额缺口 ${netShortage}（在途 ${baseAvailability.inTransitQuantityG}）`,
+          );
+        }
       }
 
       return result;
@@ -1841,9 +1951,32 @@ export class PurchasingService {
       ingredientLookup,
     );
 
+    const targetDates = orders
+      .map((order) => order.targetProductionDate)
+      .filter(Boolean)
+      .map((value) => new Date(value as any).getTime());
+    let inTransitRange: { start: Date; end: Date } | undefined;
+    if (targetDates.length > 0) {
+      const min = new Date(Math.min(...targetDates));
+      const max = new Date(Math.max(...targetDates));
+      inTransitRange = {
+        start: new Date(min.getFullYear(), min.getMonth(), min.getDate()),
+        end: new Date(
+          max.getFullYear(),
+          max.getMonth(),
+          max.getDate(),
+          23,
+          59,
+          59,
+          999,
+        ),
+      };
+    }
+
     return this.applyInventoryAvailability(
       enrichedRequirements,
       ingredientLookup,
+      inTransitRange,
     );
   }
 

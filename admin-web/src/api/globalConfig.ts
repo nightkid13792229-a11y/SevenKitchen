@@ -13,6 +13,10 @@ export interface GlobalConfig {
   autoDeductInventoryOnProduction?: boolean;
   /** 发货/备货分装时是否自动扣包材（默认关闭，需先做包材期初） */
   packagingDeductionEnabled?: boolean;
+  /** 日采也按净额下单（默认关） */
+  dailyNetOrderingEnabled?: boolean;
+  /** 净额影子模式：只记日志不改下单（默认关） */
+  inventoryNetShadowEnabled?: boolean;
   defaultBatchCapacityG: number;
   minPotWeightG: number;
   targetMargin: number;

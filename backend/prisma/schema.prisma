@@ -2230,6 +2230,10 @@ model GlobalConfig {
   autoDeductInventoryOnProduction     Boolean  @default(true) @map("auto_deduct_inventory_on_production")
   /// 发货/分装时是否自动扣包材（包材期初完成后才打开）
   packagingDeductionEnabled           Boolean  @default(false) @map("packaging_deduction_enabled")
+  /// 日采也按净额下单（在途/预占都算），D4
+  dailyNetOrderingEnabled             Boolean  @default(false) @map("daily_net_ordering_enabled")
+  /// 影子模式：开关关着也算一遍净额，只记日志
+  inventoryNetShadowEnabled           Boolean  @default(false) @map("inventory_net_shadow_enabled")
   /// 2026-11-08：闸门基准改成档案价后，阈值从 8% 放宽到 10%
   ingredientPriceAutoApproveThreshold Decimal? @default(0.10) @map("ingredient_price_auto_approve_threshold") @db.Decimal(5, 4)
   homeHeaderBgImageUrl                String?  @map("home_header_bg_image_url")

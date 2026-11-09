@@ -66,12 +66,14 @@ describe('InventoryService allocations', () => {
       onHandQuantityG: 5000,
       allocatedQuantityG: 1200,
       availableQuantityG: 3800,
+      inTransitQuantityG: 0,
     });
     expect(result.get('spinach')).toEqual({
       ingredientId: 'spinach',
       onHandQuantityG: 800,
       allocatedQuantityG: 0,
       availableQuantityG: 800,
+      inTransitQuantityG: 0,
     });
   });
 

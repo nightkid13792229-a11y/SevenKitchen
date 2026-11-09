@@ -102,6 +102,10 @@ export class GlobalConfigService {
         (config as any).autoDeductInventoryOnProduction ?? true,
       packagingDeductionEnabled:
         (config as any).packagingDeductionEnabled ?? false,
+      dailyNetOrderingEnabled:
+        (config as any).dailyNetOrderingEnabled ?? false,
+      inventoryNetShadowEnabled:
+        (config as any).inventoryNetShadowEnabled ?? false,
       defaultProductLabelId: config.defaultProductLabelId,
       defaultIcePackId: config.defaultIcePackId,
       defaultShippingTemplateId: config.defaultShippingTemplateId,
@@ -199,6 +203,8 @@ export class GlobalConfigService {
       productionLossRate: number;
       autoDeductInventoryOnProduction: boolean;
       packagingDeductionEnabled: boolean;
+      dailyNetOrderingEnabled: boolean;
+      inventoryNetShadowEnabled: boolean;
       defaultVacuumBagId: string | null;
       defaultProductLabelId: string | null;
       defaultShippingLabelId: string | null;
@@ -237,6 +243,12 @@ export class GlobalConfigService {
     if ((dto as any).packagingDeductionEnabled !== undefined)
       updateData.packagingDeductionEnabled = (dto as any)
         .packagingDeductionEnabled;
+    if ((dto as any).dailyNetOrderingEnabled !== undefined)
+      updateData.dailyNetOrderingEnabled = (dto as any)
+        .dailyNetOrderingEnabled;
+    if ((dto as any).inventoryNetShadowEnabled !== undefined)
+      updateData.inventoryNetShadowEnabled = (dto as any)
+        .inventoryNetShadowEnabled;
     if (dto.defaultBatchCapacityG !== undefined)
       updateData.defaultBatchCapacityG = dto.defaultBatchCapacityG;
     if (dto.minPotWeightG !== undefined)
@@ -367,6 +379,10 @@ export class GlobalConfigService {
         (config as any).autoDeductInventoryOnProduction ?? true,
       packagingDeductionEnabled:
         (config as any).packagingDeductionEnabled ?? false,
+      dailyNetOrderingEnabled:
+        (config as any).dailyNetOrderingEnabled ?? false,
+      inventoryNetShadowEnabled:
+        (config as any).inventoryNetShadowEnabled ?? false,
       defaultProductLabelId: config.defaultProductLabelId,
       defaultIcePackId: config.defaultIcePackId,
       defaultShippingTemplateId: config.defaultShippingTemplateId,
@@ -399,6 +415,8 @@ export class GlobalConfigService {
       minOrderWeightG: 1000,
       autoDeductInventoryOnProduction: true,
       packagingDeductionEnabled: false,
+      dailyNetOrderingEnabled: false,
+      inventoryNetShadowEnabled: false,
       defaultBatchCapacityG: 5000,
       minPotWeightG: 2000,
       targetMargin: 0.4,

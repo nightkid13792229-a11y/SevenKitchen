@@ -67,6 +67,8 @@ export class PackagingUnit {
       packageSpecG: number;
       packageCount: number;
     } | null = null,
+    /** 完工操作人（团队两人、一人一号） */
+    public completedBy: string | null = null,
   ) {
     this.validateInvariants();
   }

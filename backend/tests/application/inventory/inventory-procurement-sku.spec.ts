@@ -248,19 +248,23 @@ describe('InventoryService procurement sku traceability', () => {
       unitDisplayLabel: '克',
     });
 
-    await service.createManualAdjustment({
-      ingredientId: 'ingredient-1',
-      procurementSkuId: 'proc-sku-1',
-      adjustmentMode: 'DELTA' as any,
-      quantity: 2,
-      reason: '补录库存',
-    });
+    await service.createManualAdjustment(
+      {
+        ingredientId: 'ingredient-1',
+        procurementSkuId: 'proc-sku-1',
+        adjustmentMode: 'DELTA' as any,
+        quantity: 2,
+        reason: '补录库存',
+      },
+      'user-1',
+    );
 
     expect(prisma.inventoryAdjustment.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           ingredientId: 'ingredient-1',
           procurementSkuId: 'proc-sku-1',
+          createdBy: 'user-1',
         }),
       }),
     );
@@ -322,18 +326,26 @@ describe('InventoryService procurement sku traceability', () => {
       },
     ]);
 
-    const result = await service.createStocktake({
-      note: '晚班盘点',
-      applyImmediately: true,
-      lines: [
-        {
-          ingredientId: 'ingredient-1',
-          procurementSkuId: 'proc-sku-1',
-          countedQuantityG: 10,
-        },
-      ],
-    });
+    const result = await service.createStocktake(
+      {
+        note: '晚班盘点',
+        applyImmediately: true,
+        lines: [
+          {
+            ingredientId: 'ingredient-1',
+            procurementSkuId: 'proc-sku-1',
+            countedQuantityG: 10,
+          },
+        ],
+      },
+      'user-1',
+    );
 
+    expect(prisma.inventoryStocktake.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ createdBy: 'user-1' }),
+      }),
+    );
     expect(prisma.inventoryStocktakeLine.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.arrayContaining([

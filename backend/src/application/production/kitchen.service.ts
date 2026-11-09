@@ -853,6 +853,7 @@ export class StaffProductionService {
   async completeProductionTask(
     unitId: string,
     dto: CompleteProductionDto = {},
+    actorId?: string,
   ): Promise<PackagingUnit> {
     const unit = await this.productionRepository.findPackagingUnitById(unitId);
 
@@ -892,6 +893,7 @@ export class StaffProductionService {
       }
     }
 
+    unit.completedBy = actorId ?? null;
     unit.transitionTo(PackagingUnitStatus.COMPLETED);
     const updated = await this.productionRepository.updatePackagingUnit(unit);
 

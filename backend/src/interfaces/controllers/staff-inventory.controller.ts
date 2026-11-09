@@ -21,6 +21,7 @@ import { InventoryService } from '../../application/inventory/inventory.service'
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { StaffGuard } from '../guards/role.guard';
+import { UserId } from '../auth/user.decorator';
 
 @ApiTags('Staff Inventory')
 @Controller('api/v1/staff/inventory')
@@ -125,8 +126,9 @@ export class StaffInventoryController {
   @ApiOperation({ summary: '创建移动端盘点单' })
   async createStocktake(
     @Body() dto: CreateInventoryStocktakeDto,
+    @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
-    const stocktake = await this.inventoryService.createStocktake(dto);
+    const stocktake = await this.inventoryService.createStocktake(dto, userId);
     return ApiResponseDto.success(stocktake, '盘点单创建成功');
   }
 

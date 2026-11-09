@@ -879,11 +879,18 @@ describe('StaffProductionService', () => {
       productionService,
     } as any);
 
-    await service.completeProductionTask('unit-current', {
-      resultStatus: 'NORMAL',
-      resultPhotoUrls: ['result-photo.jpg'],
-    });
+    await service.completeProductionTask(
+      'unit-current',
+      {
+        resultStatus: 'NORMAL',
+        resultPhotoUrls: ['result-photo.jpg'],
+      },
+      'user-1',
+    );
 
+    expect(productionRepository.updatePackagingUnit).toHaveBeenCalledWith(
+      expect.objectContaining({ completedBy: 'user-1' }),
+    );
     expect(order.markAsFreezing).not.toHaveBeenCalled();
     expect(orderRepository.save).not.toHaveBeenCalled();
   });

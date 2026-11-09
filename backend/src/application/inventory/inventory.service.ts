@@ -890,6 +890,7 @@ export class InventoryService {
    */
   async createManualAdjustment(
     dto: CreateInventoryAdjustmentDto,
+    createdBy?: string,
   ): Promise<InventoryAdjustmentDto> {
     if (!dto.ingredientId?.trim()) {
       throw new BadRequestException('ingredientId is required');
@@ -969,6 +970,7 @@ export class InventoryService {
           deltaG: adjustment.deltaG,
           reason: adjustment.reason,
           note: adjustment.note,
+          createdBy: createdBy ?? null,
           createdAt: adjustment.createdAt,
         },
       });
@@ -1007,6 +1009,7 @@ export class InventoryService {
    */
   async createStocktake(
     dto: CreateInventoryStocktakeDto,
+    createdBy?: string,
   ): Promise<InventoryStocktakeDto> {
     if (!Array.isArray(dto.lines) || dto.lines.length === 0) {
       throw new BadRequestException('盘点单至少需要一条原料明细');
@@ -1069,6 +1072,7 @@ export class InventoryService {
           id: stocktake.id,
           status: stocktake.status as any,
           note: stocktake.note,
+          createdBy: createdBy ?? null,
           createdAt: stocktake.createdAt,
           appliedAt: stocktake.appliedAt,
         },
@@ -1394,6 +1398,7 @@ export class InventoryService {
       [InventorySourceType.KITCHEN_TASK]: '厨房领用',
       [InventorySourceType.PURCHASE_RECORD]: '采购入库',
       [InventorySourceType.PURCHASE_RECORD_REVERSAL]: '采购撤回',
+      [InventorySourceType.OPENING_BALANCE]: '期初结转',
       [InventorySourceType.MANUAL_ADJUSTMENT]: '手工调整',
       [InventorySourceType.STOCKTAKE]: '盘点差异',
       [InventorySourceType.PRODUCTION_ALLOCATION_CONSUMPTION]: '生产领用',

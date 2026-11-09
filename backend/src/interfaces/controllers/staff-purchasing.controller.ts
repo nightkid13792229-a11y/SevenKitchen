@@ -989,10 +989,15 @@ export class StaffPurchasingController {
   async completePurchase(
     @Param('id') id: string,
     @Body() dto: CompletePurchaseDto,
+    @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(`Completing purchase list: ${id}`);
 
-    const purchaseList = await this.purchasingService.completePurchase(id, dto);
+    const purchaseList = await this.purchasingService.completePurchase(
+      id,
+      dto,
+      userId,
+    );
 
     return ApiResponseDto.success(purchaseList, '采购完成确认成功');
   }

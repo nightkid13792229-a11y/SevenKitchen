@@ -610,8 +610,13 @@ export class AdminPurchasingController {
   async completePurchase(
     @Param('id') id: string,
     @Body() dto: CompletePurchaseDto,
+    @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
-    const purchaseList = await this.purchasingService.completePurchase(id, dto);
+    const purchaseList = await this.purchasingService.completePurchase(
+      id,
+      dto,
+      userId,
+    );
 
     return ApiResponseDto.success(purchaseList, '采购完成');
   }

@@ -43,6 +43,7 @@ import { PrintTaskDto } from '../../interfaces/dto/production/print-task.dto';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { StaffGuard } from '../guards/role.guard';
+import { UserId } from '../auth/user.decorator';
 
 @ApiTags('Staff Production')
 @Controller('api/v1/staff/production')
@@ -326,10 +327,12 @@ export class StaffProductionController {
   async completeProductionTask(
     @Param('id') id: string,
     @Body() dto: CompleteProductionDto,
+    @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
     const unit = await this.staffProductionService.completeProductionTask(
       id,
       dto,
+      userId,
     );
     return {
       code: 0,

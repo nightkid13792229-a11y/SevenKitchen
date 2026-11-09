@@ -3818,6 +3818,7 @@ export class PurchasingService {
   async completePurchase(
     id: string,
     dto: CompletePurchaseDto,
+    actorId?: string,
   ): Promise<PurchaseList> {
     const purchaseList = await this.purchaseListRepository.findById(id);
 
@@ -3879,6 +3880,7 @@ export class PurchasingService {
         data: {
           status: PurchaseListStatus.COMPLETED as any,
           completedAt: new Date(),
+          completedById: actorId ?? null,
         },
       });
 
@@ -4013,6 +4015,7 @@ export class PurchasingService {
         data: {
           status: PurchaseListStatus.PENDING as any,
           completedAt: null,
+          reopenedById: userId ?? null,
         },
       });
 

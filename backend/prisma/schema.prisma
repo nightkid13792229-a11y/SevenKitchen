@@ -1007,6 +1007,8 @@ model PackagingUnit {
   shortageG                Float?              @map("shortage_g")
   resultPhotoUrls          String[]            @default([]) @map("result_photo_urls")
   completedAt              DateTime?           @map("completed_at")
+  /// 完工操作人（团队两人、一人一号）
+  completedBy              String?             @map("completed_by") @db.VarChar(36)
   updatedAt                DateTime            @updatedAt @map("updated_at")
   productionBatch          ProductionBatch     @relation(fields: [productionBatchId], references: [id], onDelete: Cascade)
 
@@ -1449,6 +1451,8 @@ model InventoryAdjustment {
   deltaG           Float                   @map("delta_g")
   reason           String                  @db.VarChar(200)
   note             String?
+  /// 操作人（报废/内部领用/后台调整）
+  createdBy        String?                 @map("created_by") @db.VarChar(36)
   createdAt        DateTime                @default(now()) @map("created_at")
   ingredient       Ingredient              @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
 
@@ -2439,6 +2443,9 @@ model PurchaseList {
   createdAt            DateTime              @default(now()) @map("created_at")
   updatedAt            DateTime              @updatedAt @map("updated_at")
   completedAt          DateTime?             @map("completed_at")
+  /// 完成采购 / 撤回完成的操作人
+  completedById        String?               @map("completed_by_id") @db.VarChar(36)
+  reopenedById         String?               @map("reopened_by_id") @db.VarChar(36)
   startedAt            DateTime?             @map("started_at")
   orderDateSnapshot    Json?                 @map("order_date_snapshot")
   items                PurchaseItem[]
@@ -2452,6 +2459,7 @@ model PurchaseList {
   @@index([kind])
   @@index([status])
   @@index([createdById])
+  @@index([completedById])
   @@index([sourceTastingPackPlanId])
   @@map("purchase_list")
 }

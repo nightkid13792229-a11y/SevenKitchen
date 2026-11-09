@@ -442,8 +442,12 @@ export class AdminController {
   @ApiOperation({ summary: 'Create and apply a manual inventory adjustment' })
   async createInventoryAdjustment(
     @Body() dto: CreateInventoryAdjustmentDto,
+    @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
-    const adjustment = await this.inventoryService.createManualAdjustment(dto);
+    const adjustment = await this.inventoryService.createManualAdjustment(
+      dto,
+      userId,
+    );
     return ApiResponseDto.success(adjustment, '库存调整成功');
   }
 
@@ -462,8 +466,9 @@ export class AdminController {
   @ApiOperation({ summary: 'Create a stocktake' })
   async createInventoryStocktake(
     @Body() dto: CreateInventoryStocktakeDto,
+    @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
-    const stocktake = await this.inventoryService.createStocktake(dto);
+    const stocktake = await this.inventoryService.createStocktake(dto, userId);
     return ApiResponseDto.success(stocktake, '盘点单创建成功');
   }
 

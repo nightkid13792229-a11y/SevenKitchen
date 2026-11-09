@@ -1547,9 +1547,14 @@ describe('PurchasingService procurement sku separation', () => {
     });
 
     const service = moduleRef.get(PurchasingService);
-    const result = await service.completePurchase('list-1', {});
+    const result = await service.completePurchase('list-1', {}, 'user-1');
 
     expect(result.status).toBe(PurchaseListStatus.COMPLETED);
+    expect(prismaMock.purchaseList.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ completedById: 'user-1' }),
+      }),
+    );
     expect(inventoryService.inboundFromPurchaseRecords).toHaveBeenCalledWith(
       [expect.objectContaining({ id: 'record-1' })],
       prismaMock,
@@ -1760,6 +1765,11 @@ describe('PurchasingService procurement sku separation', () => {
 
     expect(result.status).toBe(PurchaseListStatus.PENDING);
     expect(result.completedAt).toBeUndefined();
+    expect(prismaMock.purchaseList.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ reopenedById: 'admin-1' }),
+      }),
+    );
     expect(
       inventoryService.reversePurchaseRecordInboundsForPurchaseList,
     ).toHaveBeenCalledWith(

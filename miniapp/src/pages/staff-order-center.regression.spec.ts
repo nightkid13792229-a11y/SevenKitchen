@@ -274,6 +274,14 @@ describe('staff order center · 合并 / 拆分发货入口（2026-11-10）', ()
     expect(toggle).toContain("status.value = 'TO_SHIP'")
   })
 
+  it('★ 开过「只看售后」也能合并：进入选择态必须把售后过滤关掉', () => {
+    const toggle = orderCenter.match(/function toggleMergeMode[\s\S]*?\n\}/)?.[0] || ''
+    // 后端 foodStatusWhere 里 aftersale 会直接覆盖 status（order-center.service.ts），
+    // 不关掉的话列表只剩售后单，整页勾不动 —— 2026-11-10 独立评审发现
+    expect(toggle).toContain('onlyAftersale.value = false')
+    expect(toggle).toMatch(/needReload =\s*onlyAftersale\.value \|\|/)
+  })
+
   it('★ 列表上有「合并发货」开关；不点它时点卡片还是进详情', () => {
     expect(orderCenter).toContain('class="merge-toggle"')
     expect(orderCenter).toContain('toggleMergeMode')
@@ -289,12 +297,27 @@ describe('staff order center · 合并 / 拆分发货入口（2026-11-10）', ()
     const cardTap = orderCenter.match(/function onCardTap[\s\S]*?\n\}/)?.[0] || ''
     expect(cardTap).toContain('只有待发货的鲜食单能合并')
     // 已经勾上的单永远能取消（哪怕期间被别处发了）
+    expect(cardTap.indexOf('indexOf')).toBeGreaterThan(-1)
     expect(cardTap.indexOf('indexOf')).toBeLessThan(cardTap.indexOf('canMergeItem'))
+  })
+
+  it('★ 勾第二张前先比顾客；不同顾客直接提示，不让人白填一屏运单', () => {
+    expect(orderCenter).toContain('customerId')
+    const cardTap = orderCenter.match(/function onCardTap[\s\S]*?\n\}/)?.[0] || ''
+    expect(cardTap).toContain('customerId')
+    expect(cardTap).toContain('不是同一个顾客')
+    // 取消到一张不剩时，顾客锚点也要清空，否则会拿上一轮的顾客误拦
+    const reset = orderCenter.match(/function resetMergeSelection[\s\S]*?\n\}/)?.[0] || ''
+    expect(reset).toContain('selectedCustomerId.value = null')
   })
 
   it('★ 勾完点「去发货」进「发货单」页，一票最多 10 单', () => {
     expect(orderCenter).toContain('/pages/staff-orders/batch-ship?orderIds=')
     expect(orderCenter).toContain('const MAX_MERGE_ORDERS = 10')
+    // 上限必须真的用 >= 比较，且把勾到的单全部带过去
+    const cardTap = orderCenter.match(/function onCardTap[\s\S]*?\n\}/)?.[0] || ''
+    expect(cardTap).toContain('selectedOrderIds.value.length >= MAX_MERGE_ORDERS')
+    expect(orderCenter).toContain("selectedOrderIds.value.join(',')")
     expect(orderCenter).toContain('一票最多')
     expect(orderCenter).toContain('已选')
     expect(orderCenter).toContain('同一收货地址才能合并')
@@ -307,8 +330,15 @@ describe('staff order center · 合并 / 拆分发货入口（2026-11-10）', ()
       const body = orderCenter.match(new RegExp(`function ${fn}\\([\\s\\S]*?\\n\\}`))?.[0] || ''
       expect(body, `${fn} 应该清掉勾选`).toContain('resetMergeSelection()')
     }
-    const onShow = orderCenter.match(/onShow\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
-    expect(onShow).toContain('resetMergeSelection()')
+    // 有界截取：无界 [\s\S]*? 会跨到文件后面任意一个 load()，等于没守住 onShow
+    const onShow = orderCenter.match(/onShow\(\(\) => \{[\s\S]{0,600}?\n\}\)/)?.[0] || ''
     expect(onShow).toContain('load()')
+    // 切微信回前台也会触发 onShow：只应在「从发货单返回」时清空，
+    // 否则老板勾了 8 单去看一眼消息，回来全没了（2026-11-10 独立评审发现）
+    expect(onShow).toContain('leavingForShipment')
+    expect(onShow).toContain('if (leavingForShipment)')
+    const start = orderCenter.match(/function startMergeShipment[\s\S]*?\n\}/)?.[0] || ''
+    expect(start).toContain('leavingForShipment = true')
+    expect(start).toContain('leavingForShipment')
   })
 })

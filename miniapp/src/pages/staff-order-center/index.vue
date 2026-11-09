@@ -210,6 +210,8 @@ interface OrderCenterItem {
   statusGroup: string
   /** 卡片主行显示的食谱名；空 = 这单没绑定食谱（多数补剂单） */
   recipeName: string | null
+  /** 顾客主键：合并发货前用来拦「不同顾客不能同票」；接口一直有返回 */
+  customerId: string
   /** 顾客昵称；三类卡片上都显示（2026-11-02） */
   customerName: string | null
   /** 狗狗名；三类卡片上都显示（2026-11-02） */
@@ -318,6 +320,10 @@ const onlyAftersale = ref(false)
  */
 const mergeMode = ref(false)
 const selectedOrderIds = ref<string[]>([])
+/** 这次选择锁定的顾客：勾第二张前先比，免得白填一屏运单才被后端拒 */
+const selectedCustomerId = ref<string | null>(null)
+/** 正在往「发货单」页跳：既防双击 push 两个页面，也用来区分「从发货单返回」和「切微信回前台」 */
+let leavingForShipment = false
 /** 一票上限，跟后端 MAX_ORDERS_PER_SHIPMENT 对齐 */
 const MAX_MERGE_ORDERS = 10
 /** 关键词：订单号 / 顾客姓名 / 手机号 / 狗狗名（后端统一处理三类订单） */
@@ -435,9 +441,13 @@ function canShipItem(item: OrderCenterItem) {
 /**
  * 能不能进合并发货。
  *
- * 后端「一票发货」只认成品鲜食（含试吃装）的待发货单；补剂、定制单
- * 各有各的发货 / 交付流程，混进来后端也会拒。这里提前拦住，别让员工
- * 勾了半天、填完单号才报错。
+ * 后端「一票发货」只认鲜食的待发货单（FREEZING）；补剂、定制单各有各的
+ * 发货 / 交付流程，混进来后端也会拒。这里提前拦住，别让员工勾了半天、
+ * 填完单号才报错。
+ *
+ * ⚠️ 试吃装暂不在内：它是现货，付款（PAID）即视为可发，但订单中心把
+ * 鲜食 PAID 归到「已付款」、不在「待发货」组，这类单目前连单笔发货入口
+ * 都没有。要支持得先补试吃装发货（涉及后端状态口径），不在本次范围。
  */
 function canMergeItem(item: OrderCenterItem) {
   return item.type === 'FOOD' && item.statusGroup === 'TO_SHIP'
@@ -447,6 +457,7 @@ function canMergeItem(item: OrderCenterItem) {
 function resetMergeSelection() {
   mergeMode.value = false
   selectedOrderIds.value = []
+  selectedCustomerId.value = null
 }
 
 function toggleMergeMode() {
@@ -454,14 +465,25 @@ function toggleMergeMode() {
     resetMergeSelection()
     return
   }
-  // 合并只发生在「待发货的鲜食」上：进来先把筛选收到这一档，
-  // 否则满屏都是勾不动的单，员工会以为功能坏了
-  const needReload = type.value !== 'FOOD' || status.value !== 'TO_SHIP'
+
+  /**
+   * 合并不是只看状态就够：后端「只看售后」会直接覆盖状态条件
+   * （foodStatusWhere 里 aftersale 优先），不关掉的话进来只剩售后单，
+   * 整页点不动。所以三个筛选一起收口，别再手写漏字段。
+   */
+  const needReload =
+    onlyAftersale.value || type.value !== 'FOOD' || status.value !== 'TO_SHIP'
+
+  onlyAftersale.value = false
   type.value = 'FOOD'
   status.value = 'TO_SHIP'
   mergeMode.value = true
   selectedOrderIds.value = []
-  if (needReload) load()
+  selectedCustomerId.value = null
+  if (needReload) {
+    load()
+    uni.showToast({ title: '已切到鲜食 / 待发货', icon: 'none' })
+  }
 }
 
 /** 选择态点卡片 = 勾选 / 取消勾选；平时还是进详情 */
@@ -475,6 +497,7 @@ function onCardTap(item: OrderCenterItem) {
   const index = selectedOrderIds.value.indexOf(item.id)
   if (index >= 0) {
     selectedOrderIds.value.splice(index, 1)
+    if (selectedOrderIds.value.length === 0) selectedCustomerId.value = null
     return
   }
 
@@ -482,20 +505,32 @@ function onCardTap(item: OrderCenterItem) {
     uni.showToast({ title: '只有待发货的鲜食单能合并', icon: 'none' })
     return
   }
+  // 同顾客才可能同地址：先拦顾客，地址仍由后端在提交时校验
+  if (selectedCustomerId.value && item.customerId !== selectedCustomerId.value) {
+    uni.showToast({ title: '不是同一个顾客，不能合并', icon: 'none' })
+    return
+  }
   if (selectedOrderIds.value.length >= MAX_MERGE_ORDERS) {
     uni.showToast({ title: `一票最多 ${MAX_MERGE_ORDERS} 张单`, icon: 'none' })
     return
   }
   selectedOrderIds.value.push(item.id)
+  selectedCustomerId.value = item.customerId
 }
 
 function startMergeShipment() {
+  if (leavingForShipment) return
   if (selectedOrderIds.value.length === 0) {
     uni.showToast({ title: '先勾选订单', icon: 'none' })
     return
   }
+  leavingForShipment = true
   uni.navigateTo({
     url: `/pages/staff-orders/batch-ship?orderIds=${selectedOrderIds.value.join(',')}`,
+    fail: () => {
+      leavingForShipment = false
+      uni.showToast({ title: '打开发货单失败，再试一次', icon: 'none' })
+    },
   })
 }
 
@@ -595,8 +630,14 @@ function openAssistedOrder() {
  * 看起来就像点了没生效。现在改成页面一显示就刷新，状态和按钮都跟着变。
  */
 onShow(() => {
-  // 从「发货单」返回时把选择态收掉，别让上次的勾选留在页面上
-  resetMergeSelection()
+  /**
+   * 只清「从发货单返回」这一种：小程序切到后台再回来也会触发 onShow，
+   * 不能因为老板去看了一眼微信就把勾好的单全清掉（2026-11-10 评审）。
+   */
+  if (leavingForShipment) {
+    leavingForShipment = false
+    resetMergeSelection()
+  }
   load()
 })
 </script>
@@ -635,10 +676,10 @@ onShow(() => {
 
 .filter-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16rpx; }
 .filter-left { display: flex; align-items: center; gap: 12rpx; min-width: 0; }
-.aftersale-toggle { padding: 8rpx 22rpx; border-radius: 24rpx; background: #fff; color: #909399; font-size: 23rpx; border: 1rpx solid #e4e7ed; }
+.aftersale-toggle { padding: 14rpx 26rpx; border-radius: 26rpx; background: #fff; color: #909399; font-size: 23rpx; line-height: 1.2; border: 1rpx solid #e4e7ed; }
 .aftersale-toggle.active { background: #fdf6ec; color: #b88230; border-color: #f0d9b5; font-weight: 600; }
 /* 合并发货开关：跟「只看售后」同尺寸，选中后变主色，跟底部操作条呼应 */
-.merge-toggle { padding: 8rpx 22rpx; border-radius: 24rpx; background: #fff; color: #2b5040; font-size: 23rpx; border: 1rpx solid #c9dccf; }
+.merge-toggle { padding: 14rpx 26rpx; border-radius: 26rpx; background: #fff; color: #2b5040; font-size: 23rpx; line-height: 1.2; border: 1rpx solid #c9dccf; }
 .merge-toggle.active { background: #1e3a2f; color: #fff; border-color: #1e3a2f; font-weight: 600; }
 .total { flex: none; margin-left: 12rpx; color: #909399; font-size: 22rpx; }
 
@@ -691,11 +732,11 @@ onShow(() => {
 
 .state { padding: 120rpx 0; text-align: center; color: #909399; font-size: 24rpx; }
 /* 合并发货底部操作条：固定在最下面，给页面留出等高空白，别盖住最后一张单 */
-.page.with-merge-bar { padding-bottom: 180rpx; }
+.page.with-merge-bar { padding-bottom: calc(180rpx + env(safe-area-inset-bottom)); }
 .merge-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom)); background: #fff; border-top: 1rpx solid #eef0f2; box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.04); }
 .merge-bar-info { display: flex; flex-direction: column; min-width: 0; }
 .merge-bar-count { font-size: 26rpx; font-weight: 700; color: #1f2d27; }
-.merge-bar-hint { margin-top: 4rpx; font-size: 20rpx; color: #909399; }
+.merge-bar-hint { margin-top: 4rpx; font-size: 22rpx; color: #909399; }
 .merge-bar-btn { flex: none; margin: 0; padding: 0 44rpx; height: 72rpx; line-height: 72rpx; border-radius: 36rpx; background: #1e3a2f; color: #fff; font-size: 26rpx; font-weight: 600; }
 .merge-bar-btn.is-disabled { background: #c9d2cc; color: #fff; }
 

@@ -12,13 +12,16 @@ const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
 const pagesJson = read('src/pages.json');
 const listSource = read('src/pages/staff-orders/index.vue');
+const orderCenterSource = read('src/pages/staff-order-center/index.vue');
 const batchSource = read('src/pages/staff-orders/batch-ship.vue');
 const detailSource = read('src/pages/staff-orders/detail.vue');
 const customerSource = read('src/pages/order-detail/index.vue');
 
 describe('合并 / 拆包发货', () => {
-  it('★ 「发货单」页已注册，能从列表跳进来', () => {
+  it('★ 「发货单」页已注册，能从订单中心跳进来（旧后台订单页已无入口）', () => {
     expect(pagesJson).toContain('"path": "batch-ship"');
+    expect(orderCenterSource).toContain('/pages/staff-orders/batch-ship?orderIds=');
+    // 旧页还留着同样代码，但不能只靠它守入口
     expect(listSource).toContain('/pages/staff-orders/batch-ship?orderIds=');
   });
 

@@ -166,6 +166,22 @@ const BACKGROUND_TERM_WEIGHT = 0.25;
 const HEADING_TOPIC_BOOST = 2;
 const HEADING_STAGE_BOOST = 1.3;
 
+/**
+ * 通用 nutrition-section 加成（spec §7.3 的 Task 6 授权，2026-11-09 校准）。
+ *
+ * 问题：`犬慢性肾病 膳食磷 范围` / `CKD dog dietary phosphate target` 这类
+ * 「要范围/推荐」的问法，命中最多的是顺手提到磷的正文节（肾性甲状旁腺功能亢进、
+ * 尿蛋白检测），而真正列「Key nutritional factors / feeding plan」的营养节
+ * （例如 37-9 所在节）反被挤到第 3–4 位，再被「同一文档 ≤2 节」裁掉。
+ *
+ * 处理：查询带「膳食/范围/推荐/dietary/% DM/range/recommendation」时，给
+ * 「首段或候选段表格 caption 出现 `Key nutritional factors` / `feeding plan`」的节 ×1.15。
+ * **不硬编码任何 sectionId**，也不排除任何节，只在 `searchSections` 的组分数上加分。
+ */
+const NUTRITION_INTENT = /dietary|%\s*dm|range|recommendation|膳食|范围|推荐/i;
+const NUTRITION_SECTION_PHRASE = /key nutritional factors|feeding plan/i;
+const NUTRITION_SECTION_BOOST = 1.15;
+
 const STOP = new Set(
   'a an the and or of to in on for with by is are was were be been being this that these those as at from it its their there can may should could would not no than then when where which who whom whose what how why'.split(
     ' ',
@@ -332,7 +348,8 @@ export class KnowledgeLibraryService {
   /**
    * 按节分组的检索：
    * 1. 取最多 200 段候选；2. 按 sectionId 分组；3. 每组取最高分 2 段；
-   * 4. 组分数 = 最高段分 ×（标题/子标题命中加成）；5. 同一文档最多 2 节；6. 取前 5 节。
+   * 4. 组分数 = 最高段分 ×（标题/子标题命中加成）×（营养节加成）；
+   * 5. 同一文档最多 2 节；6. 取前 5 节。
    */
   async searchSections(
     query: string,
@@ -368,6 +385,9 @@ export class KnowledgeLibraryService {
     }
 
     const hits: Array<SectionHit & { groupScore: number }> = [];
+    const nutritionSections = NUTRITION_INTENT.test(query)
+      ? await this.findNutritionSections([...groups.keys()])
+      : new Set<string>();
     for (const [sectionId, list] of groups) {
       const top = list[0];
       const subheading = extractSubheading(top.text);
@@ -387,6 +407,9 @@ export class KnowledgeLibraryService {
         : stageHit
           ? HEADING_STAGE_BOOST
           : 1;
+      const nutritionBoost = nutritionSections.has(sectionId)
+        ? NUTRITION_SECTION_BOOST
+        : 1;
       const pageStarts = list
         .map((passage) => passage.pageStart)
         .filter((value): value is number => typeof value === 'number');
@@ -414,9 +437,9 @@ export class KnowledgeLibraryService {
             : pageStarts.length > 0
               ? Math.max(...pageStarts)
               : null,
-        score: Math.round(top.score * headingBoost * 100) / 100,
+        score: Math.round(top.score * headingBoost * nutritionBoost * 100) / 100,
         passages: list,
-        groupScore: top.score * headingBoost,
+        groupScore: top.score * headingBoost * nutritionBoost,
       });
     }
 
@@ -435,6 +458,60 @@ export class KnowledgeLibraryService {
       if (selected.length >= limit) break;
     }
     return selected;
+  }
+
+  /**
+   * 哪些候选节是「营养节」：首段或表格 caption 出现 `Key nutritional factors` / `feeding plan`。
+   *
+   * 只看候选节（`searchSections` 已分组），两次查询都走 `section_id` 索引：
+   * 1. 捞含短语的段 → 候选节；
+   * 2. 捞这些节的段（按 id 升序，每节第一条就是首段）→ 判断首段是否含短语。
+   *
+   * 不硬编码 sectionId；查不到就返回空集（不加分，也不影响检索本身）。
+   */
+  private async findNutritionSections(
+    sectionIds: string[],
+  ): Promise<Set<string>> {
+    const out = new Set<string>();
+    if (sectionIds.length === 0) return out;
+    if (!(this.prisma as any).sourceParagraph?.findMany) return out;
+
+    const phraseMatches = await this.prisma.sourceParagraph.findMany({
+      where: {
+        sectionId: { in: sectionIds },
+        OR: [
+          {
+            text: {
+              contains: 'Key nutritional factors',
+              mode: 'insensitive' as const,
+            },
+          },
+          {
+            text: { contains: 'feeding plan', mode: 'insensitive' as const },
+          },
+        ],
+      },
+      select: { sectionId: true },
+    });
+    const candidates = [
+      ...new Set(phraseMatches.map((row) => String(row.sectionId ?? ''))),
+    ].filter(Boolean);
+    if (candidates.length === 0) return out;
+
+    const firstParagraphs = await this.prisma.sourceParagraph.findMany({
+      where: { sectionId: { in: candidates } },
+      select: { id: true, sectionId: true, text: true },
+      orderBy: { id: 'asc' },
+    });
+    const seen = new Set<string>();
+    for (const row of firstParagraphs) {
+      if (seen.has(row.sectionId)) continue;
+      seen.add(row.sectionId);
+      if (NUTRITION_SECTION_PHRASE.test(row.text ?? '')) {
+        out.add(row.sectionId);
+      }
+    }
+    return out;
   }
 
   private queryTerms(query: string): string[] {

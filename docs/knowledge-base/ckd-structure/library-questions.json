@@ -1,0 +1,310 @@
+{
+  "version": "1.0",
+  "source": "docs/knowledge-base/2026-11-09-kb-minimal-library-design.md 附录 A（26 题回归集）",
+  "note": "节 ID 一律使用完整 ID。缩写：S=sacn5-chapters-SACN5-37，I=iris-IRIS-DOG-Treatment-Recommendations-may-2026，G=iris-IRIS-staging-guidelines-2026，P=iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g，A=aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines。species/stage/topics 只是检索提示，不排除证据。",
+  "questions": [
+    {
+      "id": "dietary-phosphorus",
+      "query": "CKD dog dietary phosphorus 0.2 0.5 % DM",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-37-s014",
+        "sacn5-chapters-SACN5-37-s017",
+        "sacn5-chapters-SACN5-37-s021"
+      ],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "numeric",
+      "topics": ["phosphorus"]
+    },
+    {
+      "id": "protein",
+      "query": "CKD dog protein 14 20 % DM",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-37-s014",
+        "sacn5-chapters-SACN5-37-s015",
+        "sacn5-chapters-SACN5-37-s017"
+      ],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "numeric",
+      "topics": ["protein"]
+    },
+    {
+      "id": "sodium",
+      "query": "CKD dog sodium 0.3 % DM",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-37-s017",
+        "sacn5-chapters-SACN5-37-s018"
+      ],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "numeric",
+      "topics": ["sodium"]
+    },
+    {
+      "id": "potassium",
+      "query": "CKD dog potassium 0.4 0.8 % DM",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-37-s014",
+        "sacn5-chapters-SACN5-37-s018",
+        "sacn5-chapters-SACN5-37-s021"
+      ],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "numeric",
+      "topics": ["potassium"]
+    },
+    {
+      "id": "chloride",
+      "query": "CKD dog chloride requirement",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-37-s014",
+        "sacn5-chapters-SACN5-37-s018"
+      ],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "numeric",
+      "topics": ["chloride"]
+    },
+    {
+      "id": "omega3",
+      "query": "CKD dog omega-3 supplementation",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-37-s014",
+        "sacn5-chapters-SACN5-37-s019",
+        "sacn5-chapters-SACN5-37-s021"
+      ],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "numeric",
+      "topics": ["omega3"]
+    },
+    {
+      "id": "staging",
+      "query": "CKD dog staging creatinine SDMA",
+      "expectedSections": [
+        "iris-IRIS-staging-guidelines-2026-s002",
+        "iris-IRIS-staging-guidelines-2026-s003"
+      ],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "staging",
+      "topics": ["staging"]
+    },
+    {
+      "id": "upc",
+      "query": "CKD dog UPC proteinuria substaging",
+      "expectedSections": ["iris-IRIS-staging-guidelines-2026-s004"],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "staging",
+      "topics": ["proteinuria"]
+    },
+    {
+      "id": "bp",
+      "query": "CKD dog blood pressure substaging",
+      "expectedSections": ["iris-IRIS-staging-guidelines-2026-s006"],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "staging",
+      "topics": ["bloodpressure"]
+    },
+    {
+      "id": "stage3",
+      "query": "stage 3 canine patients phosphate target",
+      "expectedSections": ["iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005"],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "staging",
+      "stage": 3
+    },
+    {
+      "id": "zh-stage3",
+      "query": "犬 CKD 3期 血磷 目标",
+      "expectedSections": ["iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005"],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "zh",
+      "stage": 3
+    },
+    {
+      "id": "zh-dietary",
+      "query": "犬慢性肾病 膳食磷 范围",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-37-s014",
+        "sacn5-chapters-SACN5-37-s017"
+      ],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "zh",
+      "topics": ["phosphorus"]
+    },
+    {
+      "id": "zh-protein",
+      "query": "犬 CKD 蛋白 推荐范围",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-37-s015",
+        "sacn5-chapters-SACN5-37-s014"
+      ],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "zh",
+      "topics": ["protein"]
+    },
+    {
+      "id": "zh-upc",
+      "query": "犬 CKD 蛋白尿 UPC 怎么分期",
+      "expectedSections": ["iris-IRIS-staging-guidelines-2026-s004"],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "zh",
+      "topics": ["proteinuria"]
+    },
+    {
+      "id": "zh-bp",
+      "query": "犬 CKD 血压 怎么分期",
+      "expectedSections": ["iris-IRIS-staging-guidelines-2026-s006"],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "zh",
+      "topics": ["bloodpressure"]
+    },
+    {
+      "id": "zh-sodium",
+      "query": "犬 CKD 钠 上限",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-37-s018",
+        "sacn5-chapters-SACN5-37-s017"
+      ],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "zh",
+      "topics": ["sodium"]
+    },
+    {
+      "id": "no-vitamin-k",
+      "query": "CKD dog vitamin K target",
+      "expectedSections": [],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": true,
+      "category": "negative"
+    },
+    {
+      "id": "no-biotin",
+      "query": "CKD dog biotin requirement",
+      "expectedSections": [],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": true,
+      "category": "negative"
+    },
+    {
+      "id": "no-manganese",
+      "query": "CKD dog manganese requirement",
+      "expectedSections": [],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": true,
+      "category": "negative"
+    },
+    {
+      "id": "no-chromium",
+      "query": "CKD dog chromium requirement",
+      "expectedSections": [],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": true,
+      "category": "negative"
+    },
+    {
+      "id": "stage2-vs4",
+      "query": "CKD dog stage 2 serum phosphate target",
+      "expectedSections": [
+        "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s004",
+        "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005"
+      ],
+      "forbiddenSections": [
+        "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s006"
+      ],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "adversarial",
+      "stage": 2,
+      "topics": ["phosphorus"]
+    },
+    {
+      "id": "dietary-vs-serum",
+      "query": "CKD dog serum phosphate target stage 3",
+      "expectedSections": ["iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005"],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "adversarial",
+      "stage": 3
+    },
+    {
+      "id": "dog-protein-hint",
+      "query": "CKD dog protein requirement",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-37-s015",
+        "sacn5-chapters-SACN5-37-s014"
+      ],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "adversarial",
+      "species": "dog",
+      "topics": ["protein"]
+    },
+    {
+      "id": "synonym",
+      "query": "CKD dog dietary phosphate target",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-37-s014",
+        "sacn5-chapters-SACN5-37-s017"
+      ],
+      "forbiddenSections": [],
+      "expectedTables": [],
+      "expectNoSource": false,
+      "category": "adversarial",
+      "topics": ["phosphorus"]
+    },
+    {
+      "id": "table-37-9",
+      "query": "CKD dog key nutritional factors phosphorus protein",
+      "expectedSections": [],
+      "forbiddenSections": [],
+      "expectedTables": ["T0497", "T0260", "T0261"],
+      "expectNoSource": false,
+      "category": "table",
+      "topics": ["phosphorus"]
+    },
+    {
+      "id": "table-37-1",
+      "query": "IRIS staging creatinine SDMA table",
+      "expectedSections": [],
+      "forbiddenSections": [],
+      "expectedTables": ["T0253"],
+      "expectNoSource": false,
+      "category": "table",
+      "topics": ["staging"]
+    }
+  ]
+}

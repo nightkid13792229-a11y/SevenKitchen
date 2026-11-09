@@ -619,6 +619,81 @@ describe('KnowledgeLibraryService（门禁/排序/分组）', () => {
     expect(sections.filter((section) => section.documentId === docId)).toHaveLength(2);
   });
 
+  it('通用 nutrition-section 加成：问范围/推荐时，首段是营养因素的节排前面（不加不减节）', async () => {
+    const docId = 'sacn5-chapters-SACN5-37';
+    const rows = [
+      ...Array.from({ length: 2 }, (_, i) =>
+        filterRow({
+          id: `prose-${i}`,
+          documentId: docId,
+          sectionId: 'prose',
+          text: 'Phosphorus phosphorus dietary phosphorus chronic kidney disease dogs range.',
+          section: { id: 'prose', title: '781 Chronic Kidney Disease', pageNo: 17 },
+        }),
+      ),
+      ...Array.from({ length: 2 }, (_, i) =>
+        filterRow({
+          id: `nutri-${i}`,
+          documentId: docId,
+          sectionId: 'nutri',
+          text: 'Phosphorus dietary phosphorus chronic kidney disease dogs range.',
+          section: { id: 'nutri', title: '787 Chronic Kidney Disease', pageNo: 17 },
+        }),
+      ),
+    ];
+    const findMany = jest.fn(async (args: any) => {
+      const where = args?.where ?? {};
+      // 第 1 次：捞含短语的段 → 候选节；第 2 次：捞这些节的段，按 id 升序取首段。
+      if (where.sectionId?.in && where.OR) return [{ sectionId: 'nutri' }];
+      if (where.sectionId?.in) {
+        return [
+          {
+            id: 'p0',
+            sectionId: 'nutri',
+            text: 'Key nutritional factors for dogs and cats with chronic kidney disease.',
+          },
+        ];
+      }
+      return rows;
+    });
+    const service = new KnowledgeLibraryService({
+      sourceParagraph: { findMany },
+    } as any);
+
+    // nutri 的段内命中次数比 prose 少（原始分更低），靠营养节加成排到前面。
+    const sections = await service.searchSections(
+      'CKD dog dietary phosphorus range',
+      { limit: 5 },
+    );
+
+    expect(sections.map((section) => section.sectionId)).toEqual([
+      'nutri',
+      'prose',
+    ]);
+    // 只影响排序：两节都还在，没有被排除。
+    expect(sections).toHaveLength(2);
+  });
+
+  it('nutrition-section 加成只在「膳食/范围/推荐」类查询上触发', async () => {
+    const docId = 'sacn5-chapters-SACN5-37';
+    const rows = [
+      filterRow({
+        id: 'p1',
+        documentId: docId,
+        sectionId: 's1',
+        section: { id: 's1', title: '781 Chronic Kidney Disease', pageNo: 17 },
+      }),
+    ];
+    const findMany = jest.fn().mockResolvedValue(rows);
+    const service = new KnowledgeLibraryService({
+      sourceParagraph: { findMany },
+    } as any);
+
+    await service.searchSections('phosphorus', { limit: 5 });
+
+    expect(findMany).toHaveBeenCalledTimes(1);
+  });
+
   it('staging 意图：staging 节 ×1.25 排在通用节前（只加分，不排除）', async () => {
     const docId = 'sacn5-chapters-SACN5-37';
     const text = 'Staging creatinine SDMA reference range for dogs.';

@@ -296,6 +296,7 @@ extractQueryFocus(query: string): {
   - `species` 提示：匹配或 both ×1.15，相反 ×0.85；
   - `stage` 提示：`stagePhrases` 或命中段正文出现该期 ×1.25；明确其他期 ×0.95（只降权，不排除）；
   - `topics` 提示：命中 ×1.15，未命中不惩罚。
+  - 营养节加成（2026-11-09 Task 6 校准）：查询含 `dietary / % DM / range / recommendation / 膳食 / 范围 / 推荐`，且该节首段或候选段表格 caption 出现 `Key nutritional factors` / `feeding plan` ×1.15。不硬编码 sectionId，只看文本信号，只影响排序。
 - **结构性软加权（不是硬过滤）**：查询含 `staging/substaging/分期/亚分期` 且 `sectionType==="staging"` 或 `documentType==="staging_guideline"` ×1.25；查询含 stage 短语且 `sectionType==="treatment"` ×1.15。用来补回去掉旧 `×3` 后的路由能力，但只影响排序。
 - 删除 `×3`、`×1.05`、`×1.03` 这类针对 CKD 题集手调的系数。
 - 去重（在 `searchSections` 分组时做）：同一节最多 2 段；**同一文档最多 2 节**；跨查询不缓存结果。
@@ -307,11 +308,13 @@ extractQueryFocus(query: string): {
 1. 调 `search` 取最多 200 段候选（避免单节段落太多把别的节挤掉）；
 2. 按 `sectionId` 分组；
 3. 每组取分数最高的 2 段；
-4. 组分数 = 最高段分 + 标题/子标题命中加成；
+4. 组分数 = 最高段分 × 标题/子标题命中加成 ×（营养节加成，见 §7.2）；
 5. 按组分数排序，**同一 documentId 最多保留 2 节**；
 6. 取前 5 节。
 
 > **Task 6 已知失败与授权**：Q12 zh-dietary / Q13 zh-protein / Q24 synonym 可能因「同一文档最多 2 节」被裁掉第 3 节。优先做通用 nutrition-section 加成（不硬编码 sectionId）；仍不过，授权把 `MAX_SECTIONS_PER_DOCUMENT` 从 2 调到 3（总数仍 ≤5），同步更新本节和测试。**不要通过放宽期望解决**；Q13 的实际 #2 是「Evaluation of Renal Function」，不是蛋白推荐，放宽会把错误节写成期望。
+>
+> **Task 6 校准结果（2026-11-09）**：只加 §7.2 的营养节加成（×1.15）就够，`MAX_SECTIONS_PER_DOCUMENT` 保持 2；26 题 26/26（中文 6/6、对抗 4/4），Q12/Q13/Q24 的期望没有放宽。见 `docs/knowledge-base/ckd-structure/library-evaluation.md`。
 
 ### 7.4 显示标题与子标题
 

@@ -1,0 +1,1486 @@
+{
+  "generatedAt": "2026-11-09T11:12:59.871Z",
+  "questionsFile": "docs/knowledge-base/ckd-structure/library-questions.json",
+  "judge": "spec v1.1 附录 A（前 3 节命中 / 禁止节 / 负样本 no_match / 表格命中 + open）",
+  "tool": "executeTool('search_knowledge_library', { query, species, stage, topics, limit: 5 })",
+  "thresholds": {
+    "overall": 21,
+    "stage3": 1,
+    "table": 2,
+    "zh": 5,
+    "negative": 4,
+    "adversarial": 4
+  },
+  "checks": [
+    {
+      "name": "整体",
+      "actual": "26/26",
+      "target": "≥21/26",
+      "passed": true
+    },
+    {
+      "name": "Stage 3",
+      "actual": "1/1",
+      "target": "1/1",
+      "passed": true
+    },
+    {
+      "name": "表格",
+      "actual": "2/2",
+      "target": "2/2",
+      "passed": true
+    },
+    {
+      "name": "中文",
+      "actual": "6/6",
+      "target": "≥5/6",
+      "passed": true
+    },
+    {
+      "name": "负样本",
+      "actual": "4/4",
+      "target": "4/4",
+      "passed": true
+    },
+    {
+      "name": "对抗",
+      "actual": "4/4",
+      "target": "4/4",
+      "passed": true
+    }
+  ],
+  "coreTables": {
+    "passed": 6,
+    "total": 6,
+    "results": [
+      {
+        "tableId": "T0253",
+        "ok": true,
+        "citationId": "K1",
+        "pageNo": null,
+        "rowCount": 5
+      },
+      {
+        "tableId": "T0497",
+        "ok": true,
+        "citationId": "K1",
+        "pageNo": 17,
+        "rowCount": 10
+      },
+      {
+        "tableId": "T0260",
+        "ok": true,
+        "citationId": "K1",
+        "pageNo": null,
+        "rowCount": 23
+      },
+      {
+        "tableId": "T0261",
+        "ok": true,
+        "citationId": "K1",
+        "pageNo": null,
+        "rowCount": 18
+      },
+      {
+        "tableId": "T0025",
+        "ok": true,
+        "citationId": "K1",
+        "pageNo": null,
+        "rowCount": 20
+      },
+      {
+        "tableId": "T0026",
+        "ok": true,
+        "citationId": "K1",
+        "pageNo": null,
+        "rowCount": 22
+      }
+    ]
+  },
+  "timing": {
+    "p50": 61.4,
+    "p95": 81.5,
+    "max": 194.3
+  },
+  "summary": {
+    "overall": 26,
+    "total": 26,
+    "stage3": {
+      "passed": 1,
+      "total": 1
+    },
+    "table": {
+      "passed": 2,
+      "total": 2
+    },
+    "zh": {
+      "passed": 6,
+      "total": 6
+    },
+    "negative": {
+      "passed": 4,
+      "total": 4
+    },
+    "adversarial": {
+      "passed": 4,
+      "total": 4
+    }
+  },
+  "results": [
+    {
+      "index": 1,
+      "id": "dietary-phosphorus",
+      "category": "numeric",
+      "query": "CKD dog dietary phosphorus 0.2 0.5 % DM",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s017",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p787",
+          "pageStart": 24,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s016",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p785",
+          "pageStart": 22,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s004",
+          "displayTitle": "plus Persistent increased SDMA* >14 µg/dL",
+          "pageStart": 2,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s004",
+          "displayTitle": "2a. Substaging by Proteinuria",
+          "pageStart": 4,
+          "citationId": "K7"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s004",
+          "displayTitle": "Stage 2 Canine patients:",
+          "pageStart": 8,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0253",
+          "caption": "Table 37-1. International Renal Interest Society (IRIS) Staging System for Chronic Kidney Disease in Dogs and Cats.",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0260",
+          "caption": "Table 37-11. Key nutritional factors in selected commercial veterinary therapeutic foods for dogs with chronic kidney disease compared to recommended levels.*",
+          "citationId": "K12"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s017",
+      "ms": 194.3
+    },
+    {
+      "index": 2,
+      "id": "protein",
+      "category": "numeric",
+      "query": "CKD dog protein 14 20 % DM",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s015",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p783",
+          "pageStart": 20,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s018",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p789",
+          "pageStart": 27,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s027",
+          "displayTitle": "A Team Approach Summary",
+          "pageStart": 20,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s012",
+          "displayTitle": "Prevention of Obesity",
+          "pageStart": 9,
+          "citationId": "K7"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+          "displayTitle": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
+          "pageStart": 13,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0260",
+          "caption": "Table 37-11. Key nutritional factors in selected commercial veterinary therapeutic foods for dogs with chronic kidney disease compared to recommended levels.*",
+          "citationId": "K9"
+        },
+        {
+          "tableId": "T0261",
+          "caption": "Table 37-12. Key nutritional factors in selected commercial veterinary therapeutic foods for cats with chronic kidney disease compared to recommended levels.*",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K11"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s015",
+      "ms": 61.4
+    },
+    {
+      "index": 3,
+      "id": "sodium",
+      "category": "numeric",
+      "query": "CKD dog sodium 0.3 % DM",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s018",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p789",
+          "pageStart": 26,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s017",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p787",
+          "pageStart": 24,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s027",
+          "displayTitle": "A Team Approach Summary",
+          "pageStart": 20,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+          "displayTitle": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
+          "pageStart": 12,
+          "citationId": "K6"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s006",
+          "displayTitle": "Stage 4 Canine patients:",
+          "pageStart": 19,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0262",
+          "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0025",
+          "caption": "TABLE 8 Nutrients of Concern for Diseases and Select Specific Conditions",
+          "citationId": "K12"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s018、sacn5-chapters-SACN5-37-s017",
+      "ms": 67.5
+    },
+    {
+      "index": 4,
+      "id": "potassium",
+      "category": "numeric",
+      "query": "CKD dog potassium 0.4 0.8 % DM",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s018",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p789",
+          "pageStart": 27,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s022",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p797",
+          "pageStart": 33,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s007",
+          "displayTitle": "3. Revision of staging and substaging after treatment",
+          "pageStart": 7,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s004",
+          "displayTitle": "plus Persistent increased SDMA* >14 µg/dL",
+          "pageStart": 2,
+          "citationId": "K7"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s004",
+          "displayTitle": "2a. Substaging by Proteinuria",
+          "pageStart": 4,
+          "citationId": "K9"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0260",
+          "caption": "Table 37-11. Key nutritional factors in selected commercial veterinary therapeutic foods for dogs with chronic kidney disease compared to recommended levels.*",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0261",
+          "caption": "Table 37-12. Key nutritional factors in selected commercial veterinary therapeutic foods for cats with chronic kidney disease compared to recommended levels.*",
+          "citationId": "K12"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s018",
+      "ms": 78.9
+    },
+    {
+      "index": 5,
+      "id": "chloride",
+      "category": "numeric",
+      "query": "CKD dog chloride requirement",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s018",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p789",
+          "pageStart": 27,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s014",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
+          "pageStart": 17,
+          "citationId": "K3"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K4"
+        },
+        {
+          "tableId": "T0262",
+          "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+          "citationId": "K5"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s018、sacn5-chapters-SACN5-37-s014",
+      "ms": 44.2
+    },
+    {
+      "index": 6,
+      "id": "omega3",
+      "category": "numeric",
+      "query": "CKD dog omega-3 supplementation",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s019",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p791",
+          "pageStart": 28,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s021",
+          "displayTitle": "FEEDING PLAN 795 Chronic Kidney Disease",
+          "pageStart": 32,
+          "citationId": "K3"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K5"
+        },
+        {
+          "tableId": "T0260",
+          "caption": "Table 37-11. Key nutritional factors in selected commercial veterinary therapeutic foods for dogs with chronic kidney disease compared to recommended levels.*",
+          "citationId": "K6"
+        },
+        {
+          "tableId": "T0261",
+          "caption": "Table 37-12. Key nutritional factors in selected commercial veterinary therapeutic foods for cats with chronic kidney disease compared to recommended levels.*",
+          "citationId": "K7"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s019、sacn5-chapters-SACN5-37-s021",
+      "ms": 58.1
+    },
+    {
+      "index": 7,
+      "id": "staging",
+      "category": "staging",
+      "query": "CKD dog staging creatinine SDMA",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s002",
+          "displayTitle": "1. Staging of Chronic Kidney Disease based on blood creatinine and SDMA concentrations",
+          "pageStart": 1,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s003",
+          "displayTitle": "Comments Discrepancies between creatinine and SDMA",
+          "pageStart": 2,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s004",
+          "displayTitle": "plus Persistent increased SDMA* >14 µg/dL",
+          "pageStart": 2,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s009",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p771",
+          "pageStart": 7,
+          "citationId": "K7"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s000",
+          "displayTitle": "卷首 · p1",
+          "pageStart": 1,
+          "citationId": "K9"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0253",
+          "caption": "Table 37-1. International Renal Interest Society (IRIS) Staging System for Chronic Kidney Disease in Dogs and Cats.",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0255",
+          "caption": "Table 37-4. Diagnostic tests for evaluating patients with suspected chronic kidney disease.",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0262",
+          "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+          "citationId": "K12"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 iris-IRIS-staging-guidelines-2026-s002、iris-IRIS-staging-guidelines-2026-s003",
+      "ms": 57.8
+    },
+    {
+      "index": 8,
+      "id": "upc",
+      "category": "staging",
+      "query": "CKD dog UPC proteinuria substaging",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s009",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p771",
+          "pageStart": 8,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s004",
+          "displayTitle": "2a. Substaging by Proteinuria",
+          "pageStart": 4,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s030",
+          "displayTitle": "病例 37-4 · p809",
+          "pageStart": 45,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s002",
+          "displayTitle": "1. Staging of Chronic Kidney Disease based on blood creatinine and SDMA concentrations",
+          "pageStart": 1,
+          "citationId": "K7"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
+          "displayTitle": "Step 2: Stage CKD Step 3: Treat CKD",
+          "pageStart": 4,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0253",
+          "caption": "Table 37-1. International Renal Interest Society (IRIS) Staging System for Chronic Kidney Disease in Dogs and Cats.",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0258",
+          "caption": "Table 37-8. Potential etiopathogenic mechanisms in chronic kidney disease and therapeutic approaches for each.",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0262",
+          "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+          "citationId": "K12"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 iris-IRIS-staging-guidelines-2026-s004",
+      "ms": 62.6
+    },
+    {
+      "index": 9,
+      "id": "bp",
+      "category": "staging",
+      "query": "CKD dog blood pressure substaging",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s002",
+          "displayTitle": "1. Staging of Chronic Kidney Disease based on blood creatinine and SDMA concentrations",
+          "pageStart": 1,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s007",
+          "displayTitle": "Appendix 1 Adapted Blood Pressure Substaging",
+          "pageStart": 24,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s006",
+          "displayTitle": "2b. Substaging by Blood pressure",
+          "pageStart": 5,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s005",
+          "displayTitle": "Causes of Kidney Disease Familial Kidney Diseases Juvenile kidney disease increases suspicion of a familial",
+          "pageStart": 2,
+          "citationId": "K7"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s004",
+          "displayTitle": "Stage 2 Canine patients:",
+          "pageStart": 6,
+          "citationId": "K9"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0255",
+          "caption": "Table 37-4. Diagnostic tests for evaluating patients with suspected chronic kidney disease.",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0262",
+          "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+          "citationId": "K12"
+        },
+        {
+          "tableId": "T0256",
+          "caption": "Table 37-5. Standard protocol for measuring blood pressure in dogs and cats.*",
+          "citationId": "K13"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 iris-IRIS-staging-guidelines-2026-s006",
+      "ms": 73.2
+    },
+    {
+      "index": 10,
+      "id": "stage3",
+      "category": "staging",
+      "query": "stage 3 canine patients phosphate target",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+          "displayTitle": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
+          "pageStart": 11,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
+          "displayTitle": "Step 2: Stage CKD Step 3: Treat CKD",
+          "pageStart": 4,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s003",
+          "displayTitle": "Comments Discrepancies between creatinine and SDMA",
+          "pageStart": 2,
+          "citationId": "K4"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s014",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
+          "pageStart": 17,
+          "citationId": "K6"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s007",
+          "displayTitle": "3. Revision of staging and substaging after treatment",
+          "pageStart": 7,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0262",
+          "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0263",
+          "caption": "Table 1. Results of initial laboratory evaluation including CBC, serum biochemistries and urinalysis.",
+          "citationId": "K12"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+      "ms": 57.4
+    },
+    {
+      "index": 11,
+      "id": "zh-stage3",
+      "category": "zh",
+      "query": "犬 CKD 3期 血磷 目标",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+          "displayTitle": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
+          "pageStart": 11,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
+          "displayTitle": "Step 2: Stage CKD Step 3: Treat CKD",
+          "pageStart": 4,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s003",
+          "displayTitle": "Comments Discrepancies between creatinine and SDMA",
+          "pageStart": 2,
+          "citationId": "K4"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s014",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
+          "pageStart": 17,
+          "citationId": "K6"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s007",
+          "displayTitle": "3. Revision of staging and substaging after treatment",
+          "pageStart": 7,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0262",
+          "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0263",
+          "caption": "Table 1. Results of initial laboratory evaluation including CBC, serum biochemistries and urinalysis.",
+          "citationId": "K12"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+      "ms": 63.7
+    },
+    {
+      "index": 12,
+      "id": "zh-dietary",
+      "category": "zh",
+      "query": "犬慢性肾病 膳食磷 范围",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s011",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p775",
+          "pageStart": 12,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s014",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
+          "pageStart": 17,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
+          "displayTitle": "Step 2: Stage CKD Step 3: Treat CKD",
+          "pageStart": 4,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s004",
+          "displayTitle": "Stage 2 Canine patients:",
+          "pageStart": 10,
+          "citationId": "K6"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+          "displayTitle": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
+          "pageStart": 16,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0262",
+          "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0263",
+          "caption": "Table 1. Results of initial laboratory evaluation including CBC, serum biochemistries and urinalysis.",
+          "citationId": "K12"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s014",
+      "ms": 71.5
+    },
+    {
+      "index": 13,
+      "id": "zh-protein",
+      "category": "zh",
+      "query": "犬 CKD 蛋白 推荐范围",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s014",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
+          "pageStart": 17,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s021",
+          "displayTitle": "FEEDING PLAN 795 Chronic Kidney Disease",
+          "pageStart": 32,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s027",
+          "displayTitle": "A Team Approach Summary",
+          "pageStart": 21,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s012",
+          "displayTitle": "Prevention of Obesity",
+          "pageStart": 9,
+          "citationId": "K7"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+          "displayTitle": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
+          "pageStart": 13,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0260",
+          "caption": "Table 37-11. Key nutritional factors in selected commercial veterinary therapeutic foods for dogs with chronic kidney disease compared to recommended levels.*",
+          "citationId": "K9"
+        },
+        {
+          "tableId": "T0261",
+          "caption": "Table 37-12. Key nutritional factors in selected commercial veterinary therapeutic foods for cats with chronic kidney disease compared to recommended levels.*",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K11"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s014",
+      "ms": 50.9
+    },
+    {
+      "index": 14,
+      "id": "zh-upc",
+      "category": "zh",
+      "query": "犬 CKD 蛋白尿 UPC 怎么分期",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s009",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p771",
+          "pageStart": 8,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s004",
+          "displayTitle": "2a. Substaging by Proteinuria",
+          "pageStart": 4,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s002",
+          "displayTitle": "1. Staging of Chronic Kidney Disease based on blood creatinine and SDMA concentrations",
+          "pageStart": 1,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s030",
+          "displayTitle": "病例 37-4 · p809",
+          "pageStart": 45,
+          "citationId": "K6"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s004",
+          "displayTitle": "plus Persistent increased SDMA* >14 µg/dL",
+          "pageStart": 2,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0253",
+          "caption": "Table 37-1. International Renal Interest Society (IRIS) Staging System for Chronic Kidney Disease in Dogs and Cats.",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0258",
+          "caption": "Table 37-8. Potential etiopathogenic mechanisms in chronic kidney disease and therapeutic approaches for each.",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0262",
+          "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+          "citationId": "K12"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 iris-IRIS-staging-guidelines-2026-s004",
+      "ms": 67.9
+    },
+    {
+      "index": 15,
+      "id": "zh-bp",
+      "category": "zh",
+      "query": "犬 CKD 血压 怎么分期",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s006",
+          "displayTitle": "2b. Substaging by Blood pressure",
+          "pageStart": 5,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s007",
+          "displayTitle": "Appendix 1 Adapted Blood Pressure Substaging",
+          "pageStart": 24,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s002",
+          "displayTitle": "1. Staging of Chronic Kidney Disease based on blood creatinine and SDMA concentrations",
+          "pageStart": 1,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s017",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p787",
+          "pageStart": 25,
+          "citationId": "K6"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s030",
+          "displayTitle": "病例 37-4 · p809",
+          "pageStart": 44,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0253",
+          "caption": "Table 37-1. International Renal Interest Society (IRIS) Staging System for Chronic Kidney Disease in Dogs and Cats.",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0255",
+          "caption": "Table 37-4. Diagnostic tests for evaluating patients with suspected chronic kidney disease.",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0256",
+          "caption": "Table 37-5. Standard protocol for measuring blood pressure in dogs and cats.*",
+          "citationId": "K12"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 iris-IRIS-staging-guidelines-2026-s006",
+      "ms": 65.7
+    },
+    {
+      "index": 16,
+      "id": "zh-sodium",
+      "category": "zh",
+      "query": "犬 CKD 钠 上限",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s018",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p789",
+          "pageStart": 26,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s014",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
+          "pageStart": 17,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+          "displayTitle": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
+          "pageStart": 12,
+          "citationId": "K4"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s006",
+          "displayTitle": "Stage 4 Canine patients:",
+          "pageStart": 19,
+          "citationId": "K6"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K8"
+        },
+        {
+          "tableId": "T0262",
+          "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+          "citationId": "K9"
+        },
+        {
+          "tableId": "T0025",
+          "caption": "TABLE 8 Nutrients of Concern for Diseases and Select Specific Conditions",
+          "citationId": "K10"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s018",
+      "ms": 51.5
+    },
+    {
+      "index": 17,
+      "id": "no-vitamin-k",
+      "category": "negative",
+      "query": "CKD dog vitamin K target",
+      "status": "no_match",
+      "sections": [],
+      "tables": [],
+      "opened": [],
+      "passed": true,
+      "reason": "负样本：0 节",
+      "ms": 46.3
+    },
+    {
+      "index": 18,
+      "id": "no-biotin",
+      "category": "negative",
+      "query": "CKD dog biotin requirement",
+      "status": "no_match",
+      "sections": [],
+      "tables": [],
+      "opened": [],
+      "passed": true,
+      "reason": "负样本：0 节",
+      "ms": 41.2
+    },
+    {
+      "index": 19,
+      "id": "no-manganese",
+      "category": "negative",
+      "query": "CKD dog manganese requirement",
+      "status": "no_match",
+      "sections": [],
+      "tables": [],
+      "opened": [],
+      "passed": true,
+      "reason": "负样本：0 节",
+      "ms": 36.7
+    },
+    {
+      "index": 20,
+      "id": "no-chromium",
+      "category": "negative",
+      "query": "CKD dog chromium requirement",
+      "status": "no_match",
+      "sections": [],
+      "tables": [],
+      "opened": [],
+      "passed": true,
+      "reason": "负样本：0 节",
+      "ms": 38.3
+    },
+    {
+      "index": 21,
+      "id": "stage2-vs4",
+      "category": "adversarial",
+      "query": "CKD dog stage 2 serum phosphate target",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s003",
+          "displayTitle": "Comments Discrepancies between creatinine and SDMA",
+          "pageStart": 3,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s004",
+          "displayTitle": "Stage 2 Canine patients:",
+          "pageStart": 8,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+          "displayTitle": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
+          "pageStart": 11,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
+          "displayTitle": "Step 2: Stage CKD Step 3: Treat CKD",
+          "pageStart": 4,
+          "citationId": "K7"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s011",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p775",
+          "pageStart": 12,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0262",
+          "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0263",
+          "caption": "Table 1. Results of initial laboratory evaluation including CBC, serum biochemistries and urinalysis.",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K12"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 iris-IRIS-DOG-Treatment-Recommendations-may-2026-s004、iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+      "ms": 75.4
+    },
+    {
+      "index": 22,
+      "id": "dietary-vs-serum",
+      "category": "adversarial",
+      "query": "CKD dog serum phosphate target stage 3",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+          "displayTitle": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
+          "pageStart": 11,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
+          "displayTitle": "Step 2: Stage CKD Step 3: Treat CKD",
+          "pageStart": 4,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s014",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
+          "pageStart": 17,
+          "citationId": "K4"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s003",
+          "displayTitle": "Comments Discrepancies between creatinine and SDMA",
+          "pageStart": 2,
+          "citationId": "K6"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s011",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p775",
+          "pageStart": 12,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0262",
+          "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0263",
+          "caption": "Table 1. Results of initial laboratory evaluation including CBC, serum biochemistries and urinalysis.",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K12"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+      "ms": 74.2
+    },
+    {
+      "index": 23,
+      "id": "dog-protein-hint",
+      "category": "adversarial",
+      "query": "CKD dog protein requirement",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s017",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p787",
+          "pageStart": 23,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s015",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p783",
+          "pageStart": 20,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s024",
+          "displayTitle": "Raw Protein Diet Age-Specific and Breed-Specific Diets",
+          "pageStart": 17,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s012",
+          "displayTitle": "Prevention of Obesity",
+          "pageStart": 9,
+          "citationId": "K7"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+          "displayTitle": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
+          "pageStart": 13,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0260",
+          "caption": "Table 37-11. Key nutritional factors in selected commercial veterinary therapeutic foods for dogs with chronic kidney disease compared to recommended levels.*",
+          "citationId": "K9"
+        },
+        {
+          "tableId": "T0261",
+          "caption": "Table 37-12. Key nutritional factors in selected commercial veterinary therapeutic foods for cats with chronic kidney disease compared to recommended levels.*",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K11"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s015",
+      "ms": 35.5
+    },
+    {
+      "index": 24,
+      "id": "synonym",
+      "category": "adversarial",
+      "query": "CKD dog dietary phosphate target",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s014",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
+          "pageStart": 17,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s011",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p775",
+          "pageStart": 12,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s006",
+          "displayTitle": "Stage 4 Canine patients:",
+          "pageStart": 22,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
+          "displayTitle": "Step 2: Stage CKD Step 3: Treat CKD",
+          "pageStart": 4,
+          "citationId": "K7"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s004",
+          "displayTitle": "Stage 2 Canine patients:",
+          "pageStart": 10,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0262",
+          "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0263",
+          "caption": "Table 1. Results of initial laboratory evaluation including CBC, serum biochemistries and urinalysis.",
+          "citationId": "K12"
+        }
+      ],
+      "opened": [],
+      "passed": true,
+      "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s014",
+      "ms": 69.7
+    },
+    {
+      "index": 25,
+      "id": "table-37-9",
+      "category": "table",
+      "query": "CKD dog key nutritional factors phosphorus protein",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s022",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p797",
+          "pageStart": 33,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s008",
+          "displayTitle": "Nutritional Risk Factors",
+          "pageStart": 5,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s021",
+          "displayTitle": "FEEDING PLAN 795 Chronic Kidney Disease",
+          "pageStart": 31,
+          "citationId": "K4"
+        },
+        {
+          "sectionId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s005",
+          "displayTitle": "How to Perform a Complete Nutritional Assessment",
+          "pageStart": 2,
+          "citationId": "K6"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
+          "displayTitle": "Step 2: Stage CKD Step 3: Treat CKD",
+          "pageStart": 4,
+          "citationId": "K7"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0497",
+          "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
+          "citationId": "K8"
+        },
+        {
+          "tableId": "T0260",
+          "caption": "Table 37-11. Key nutritional factors in selected commercial veterinary therapeutic foods for dogs with chronic kidney disease compared to recommended levels.*",
+          "citationId": "K9"
+        },
+        {
+          "tableId": "T0261",
+          "caption": "Table 37-12. Key nutritional factors in selected commercial veterinary therapeutic foods for cats with chronic kidney disease compared to recommended levels.*",
+          "citationId": "K10"
+        }
+      ],
+      "opened": [
+        {
+          "tableId": "T0497",
+          "ok": true,
+          "citationId": "K1",
+          "pageNo": 17,
+          "rowCount": 10
+        },
+        {
+          "tableId": "T0260",
+          "ok": true,
+          "citationId": "K1",
+          "pageNo": null,
+          "rowCount": 23
+        },
+        {
+          "tableId": "T0261",
+          "ok": true,
+          "citationId": "K1",
+          "pageNo": null,
+          "rowCount": 18
+        }
+      ],
+      "passed": true,
+      "reason": "表格命中 T0497、T0260、T0261",
+      "ms": 81.5
+    },
+    {
+      "index": 26,
+      "id": "table-37-1",
+      "category": "table",
+      "query": "IRIS staging creatinine SDMA table",
+      "status": "ok",
+      "sections": [
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s003",
+          "displayTitle": "Comments Discrepancies between creatinine and SDMA",
+          "pageStart": 2,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s004",
+          "displayTitle": "plus Persistent increased SDMA* >14 µg/dL",
+          "pageStart": 3,
+          "citationId": "K3"
+        },
+        {
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s002",
+          "displayTitle": "1. Staging of Chronic Kidney Disease based on blood creatinine and SDMA concentrations",
+          "pageStart": 1,
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s000",
+          "displayTitle": "卷首 · p1",
+          "pageStart": 1,
+          "citationId": "K7"
+        },
+        {
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+          "displayTitle": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
+          "pageStart": 11,
+          "citationId": "K8"
+        }
+      ],
+      "tables": [
+        {
+          "tableId": "T0253",
+          "caption": "Table 37-1. International Renal Interest Society (IRIS) Staging System for Chronic Kidney Disease in Dogs and Cats.",
+          "citationId": "K10"
+        },
+        {
+          "tableId": "T0255",
+          "caption": "Table 37-4. Diagnostic tests for evaluating patients with suspected chronic kidney disease.",
+          "citationId": "K11"
+        },
+        {
+          "tableId": "T0262",
+          "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
+          "citationId": "K12"
+        }
+      ],
+      "opened": [
+        {
+          "tableId": "T0253",
+          "ok": true,
+          "citationId": "K1",
+          "pageNo": null,
+          "rowCount": 5
+        }
+      ],
+      "passed": true,
+      "reason": "表格命中 T0253",
+      "ms": 35.8
+    }
+  ]
+}

@@ -24,7 +24,7 @@
 | 测什么 | 目录/章节路由（裸检索服务） | Agent 实际看到的工具返回：节分组、`citationId`、表格摘要 |
 | 怎么测 | 直接调检索/目录服务 | 每题一个 `CitationRegistry`，调 `executeTool('search_knowledge_library')`；表格题再用检索返回的 `citationId` 调 `open_knowledge` |
 | 判分 | 目录 top-k 是否命中期望章节 | spec v1.1 附录 A：前 3 节命中 / 禁止节 / 负样本 `no_match` 或 0 节 0 表 / 表格命中且按 K 打开 |
-| 状态 | 14/14（保留作历史对照） | 26/26（当前验收口径） |
+| 状态 | 14/14（保留作历史对照） | 26/26（**本地库实测；生产未跑全量**） |
 
 > 结论：**新改动看 `library-evaluation.*`**；`retrieval-evaluation.*` 只作为早期目录路由的历史基线，不再作为 Agent 可用性的验收依据。
 
@@ -63,11 +63,14 @@ npm run kb:eval -- --questions <path>   # 换题集做对照
 cd backend
 npm run kb:smoke                 # 5 场景 + 写入 citation-smoke.md
 npm run kb:smoke -- --no-write   # 只打印，不覆盖报告
+npm run kb:smoke -- --out <path> # 写到指定路径（值不能为空；父目录不存在会自动创建）
 ```
 
 - 前 4 个场景：检索 → 取 top 节第一段 `citationId` → `open_knowledge({ citationId })` → 断言节里仍有该段、K 号一致、`CitationRegistry.audit` 引用有效；
-- 第 5 个场景（`CKD dog vitamin K target`）：必须 `no_match` 且 0 节 0 表；
+- 第 5 个场景（`CKD dog vitamin K target`）：标签是**「未覆盖营养素对照」**（它仍在 CKD 检索范围内，只是 CKD 语料没有覆盖 vitamin K），必须 `no_match` 且 0 节 0 表；
 - 期望：5/5 通过、无效引用 0。
+- 附加诊断（**不计入 5/5**）：非 CKD `documentIds`/`sourceIds` 被 `OUT_OF_SCOPE` 拒绝；表格按 K 复用/回源；`new CitationRegistry().restore(record)` 后 audit 仍有效。真正的会话恢复主证据在 `citation-registry.spec.ts`。
+- 报告是**本地库实测；生产未跑全量**。
 
 ## 旧 14 题目录路由（历史对照）
 

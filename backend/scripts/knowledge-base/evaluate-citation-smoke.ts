@@ -16,8 +16,8 @@
  * 退出码：任一场景不通过 → 1。
  */
 import 'dotenv/config';
-import { writeFileSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, relative, resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { KnowledgeLibraryService } from '../../src/application/knowledge-base/knowledge-library.service';
 import { SourceLayerService } from '../../src/application/knowledge-base/source-layer.service';
@@ -78,10 +78,10 @@ const SCENARIOS: SmokeScenario[] = [
   },
   {
     id: 'negative-vitamin-k',
-    label: '非 CKD 对照（维生素 K）',
+    label: '未覆盖营养素对照（维生素 K）',
     query: 'CKD dog vitamin K target',
     expectNoMatch: true,
-    note: '负样本：topicPhrase 门禁，必须 no_match',
+    note: '负样本：仍在 CKD 检索范围内，但 CKD 语料未覆盖 vitamin K；topicPhrase 门禁必须 no_match',
   },
 ];
 
@@ -123,13 +123,19 @@ interface OpenData {
   };
 }
 
-interface TableRecovery {
+interface TableReuse {
   tableId: string;
   citationId: string;
   ok: boolean;
-  /** 打开后 registry 里的记录（K 号恢复/去重）。 */
+  /** 打开后 registry 里的记录（同一 registry 按 K 复用/回源，不是会话恢复）。 */
   registryKind: string | null;
   error?: string;
+}
+
+interface ScopeGuardResult {
+  documentRejected: boolean;
+  sourceRejected: boolean;
+  detail: string;
 }
 
 interface ScenarioResult {
@@ -150,7 +156,11 @@ interface ScenarioResult {
   auditCitationCount: number;
   auditValidCount: number;
   auditInvalidCount: number;
-  tableRecovery: TableRecovery | null;
+  /** 新 registry `restore(record)` 后 audit 是否仍有效（会话恢复的附加证据）。 */
+  restoreOk: boolean;
+  restoreValidCount: number;
+  restoreInvalidCount: number;
+  tableReuse: TableReuse | null;
   passed: boolean;
   reason: string;
   ms: number;
@@ -163,12 +173,18 @@ interface CliOptions {
 }
 
 function parseArgv(argv: string[]): CliOptions {
+  const write = !(argv.includes('--no-write') || argv.includes('--check'));
   const index = argv.findIndex((item) => item === '--out');
-  const value = index >= 0 ? String(argv[index + 1] ?? '').trim() : '';
-  return {
-    write: !(argv.includes('--no-write') || argv.includes('--check')),
-    outPath: value ? resolve(process.cwd(), value) : DEFAULT_OUT,
-  };
+  if (index >= 0) {
+    const value = String(argv[index + 1] ?? '').trim();
+    if (!value || value.startsWith('--')) {
+      throw new Error(
+        '--out 需要一个输出路径（例：--out docs/knowledge-base/ckd-structure/citation-smoke.md）',
+      );
+    }
+    return { write, outPath: resolve(process.cwd(), value) };
+  }
+  return { write, outPath: DEFAULT_OUT };
 }
 
 function makeContext(
@@ -195,13 +211,16 @@ function roundMs(value: number): number {
 }
 
 /**
- * 表格 K 恢复（可选，不计入 5/5）：检索命中表格时，用检索登记的 K 打开，
- * 断言打开的是同一张表，且 registry 里仍能按 K 找回。
+ * 表格 K 复用/回源（可选，不计入 5/5）：检索命中表格时，用检索登记的 K 打开，
+ * 断言打开的是同一张表，且同一 registry 里仍能按 K 找回。
+ *
+ * 注意：这里验的是「同一会话内 K 号复用/回源」，不是跨会话恢复；
+ * 真正的 session restore 由 `citation-registry.spec.ts` 覆盖。
  */
-async function checkTableRecovery(
+async function checkTableReuse(
   table: SearchTable,
   context: ToolExecutionContext,
-): Promise<TableRecovery> {
+): Promise<TableReuse> {
   if (!table.citationId) {
     return {
       tableId: table.tableId,
@@ -244,6 +263,39 @@ async function checkTableRecovery(
   };
 }
 
+/**
+ * 范围校验（附加，不计入 5/5）：配方侧传非 CKD `documentIds`/`sourceIds`
+ * 必须被 `OUT_OF_SCOPE` 拒绝，不能悄悄退化成全库。
+ */
+async function runScopeGuard(
+  library: KnowledgeLibraryService,
+  sourceLayer: SourceLayerService,
+): Promise<ScopeGuardResult> {
+  const context = makeContext(library, sourceLayer);
+  const documentOutcome = await executeTool(
+    'search_knowledge_library',
+    { query: 'CKD dog phosphorus', documentIds: ['not-in-ckd-library'] },
+    context,
+  );
+  const sourceOutcome = await executeTool(
+    'search_knowledge_library',
+    { query: 'CKD dog phosphorus', sourceIds: ['NOT-A-CKD-SOURCE'] },
+    context,
+  );
+  const documentRejected =
+    !documentOutcome.ok && documentOutcome.error?.code === 'OUT_OF_SCOPE';
+  const sourceRejected =
+    !sourceOutcome.ok && sourceOutcome.error?.code === 'OUT_OF_SCOPE';
+  return {
+    documentRejected,
+    sourceRejected,
+    detail: [
+      `非 CKD documentIds：${documentRejected ? 'OUT_OF_SCOPE ✔' : `未拒绝（${documentOutcome.error?.code ?? 'ok'}）`}`,
+      `非 CKD sourceIds：${sourceRejected ? 'OUT_OF_SCOPE ✔' : `未拒绝（${sourceOutcome.error?.code ?? 'ok'}）`}`,
+    ].join('；'),
+  };
+}
+
 async function runScenario(
   spec: SmokeScenario,
   library: KnowledgeLibraryService,
@@ -269,7 +321,10 @@ async function runScenario(
     auditCitationCount: 0,
     auditValidCount: 0,
     auditInvalidCount: 0,
-    tableRecovery: null,
+    restoreOk: false,
+    restoreValidCount: 0,
+    restoreInvalidCount: 0,
+    tableReuse: null,
     passed: false,
     reason: '',
     ms: 0,
@@ -357,17 +412,30 @@ async function runScenario(
       openedPassage?.citationId === passage.citationId &&
       (openData.citationIds ?? []).includes(passage.citationId);
 
-    // 用「数值 + [K#]」的短句走一遍 audit：引用必须能在本次 registry 里对上。
-    const audit = context.citations.audit(
-      `磷 0.2–0.5% DM [${passage.citationId}]`,
-    );
+    // 用「数值 + [K#]」的固定句式走一遍 audit：只验引用格式能对上，不代表临床结论。
+    const fixture = `磷 0.2–0.5% DM [${passage.citationId}]`;
+    const audit = context.citations.audit(fixture);
     result.auditCitationCount = audit.citationCount;
     result.auditValidCount = audit.validCitationCount;
     result.auditInvalidCount = audit.invalidCitationCount;
 
-    // 表格 K 恢复：检索命中表格时顺手验一次（可选，不影响 5/5）。
+    // 会话恢复（可选）：把 record 灌进一个全新的 registry，再 audit 同一句。
+    // 这不是本次 5/5 的判定项；主证据在 citation-registry.spec.ts。
+    const record = context.citations.get(passage.citationId);
+    if (record) {
+      const restored = new CitationRegistry();
+      restored.restore(record);
+      const restoredAudit = restored.audit(fixture);
+      result.restoreOk =
+        restoredAudit.validCitationCount === 1 &&
+        restoredAudit.invalidCitationCount === 0;
+      result.restoreValidCount = restoredAudit.validCitationCount;
+      result.restoreInvalidCount = restoredAudit.invalidCitationCount;
+    }
+
+    // 表格 K 复用/回源：检索命中表格时顺手验一次（可选，不影响 5/5）。
     if (data.tables[0]) {
-      result.tableRecovery = await checkTableRecovery(data.tables[0], context);
+      result.tableReuse = await checkTableReuse(data.tables[0], context);
     }
 
     const problems: string[] = [];
@@ -416,14 +484,18 @@ function buildMarkdown(
   results: ScenarioResult[],
   options: CliOptions,
   exitCode: 0 | 1,
+  scopeGuard: ScopeGuardResult,
 ): string {
   const passed = results.filter((item) => item.passed).length;
   const invalid = results.reduce(
     (sum, item) => sum + item.auditInvalidCount,
     0,
   );
-  const tables = results.filter((item) => item.tableRecovery);
-  const tableOk = tables.filter((item) => item.tableRecovery?.ok).length;
+  const tables = results.filter((item) => item.tableReuse);
+  const tableOk = tables.filter((item) => item.tableReuse?.ok).length;
+  const restores = results.filter((item) => !item.expectedNoMatch);
+  const restoreOk = restores.filter((item) => item.restoreOk).length;
+  const scopeOk = scopeGuard.documentRejected && scopeGuard.sourceRejected;
 
   const lines: string[] = [
     '# CKD 知识库 5 场景引用冒烟（自动生成）',
@@ -431,7 +503,9 @@ function buildMarkdown(
     `> 生成时间：${shortDate(new Date())}　|　脚本：\`backend/scripts/knowledge-base/evaluate-citation-smoke.ts\``,
     '>',
     '> 走 Agent 工具层：`executeTool(\'search_knowledge_library\')` → 取 top 节第一段的 `citationId` → `executeTool(\'open_knowledge\', { citationId })` → 断言打开的节里仍有该段、K 号一致 → `CitationRegistry.audit(\'磷 0.2–0.5% DM [K#]\')`。',
-    '> 第 5 个场景是负样本：`CKD dog vitamin K target` 必须 `no_match` 且 0 节 0 表。',
+    '> 第 5 个场景是**未覆盖营养素对照**：仍在 CKD 检索范围内，但 CKD 语料未覆盖 `vitamin K`；必须 `no_match` 且 0 节 0 表。',
+    '>',
+    '> 本报告为**本地库实测（159 份文档 / 27,902 段）；生产未跑全量**。',
     ...(options.write
       ? []
       : ['>', '> 本次以 `--no-write` 运行：只验证，未覆盖仓库里的报告文件。']),
@@ -442,13 +516,15 @@ function buildMarkdown(
     '|---|---|---|---|',
     `| 场景通过 | ${passed}/${results.length} | 5/5 | ${passed === results.length ? '通过' : '未通过'} |`,
     `| 无效引用 | ${invalid} | 0 | ${invalid === 0 ? '通过' : '未通过'} |`,
-    `| 表格 K 恢复（可选） | ${tables.length === 0 ? '本组无表格命中' : `${tableOk}/${tables.length}`} | — | — |`,
+    `| 表格 K 复用/回源（可选） | ${tables.length === 0 ? '本组无表格命中' : `${tableOk}/${tables.length}`} | — | — |`,
+    `| 会话恢复（可选） | ${restoreOk}/${restores.length} | — | — |`,
+    `| 范围校验（附加） | ${scopeGuard.documentRejected ? 'documentIds ✔' : 'documentIds ✘'} / ${scopeGuard.sourceRejected ? 'sourceIds ✔' : 'sourceIds ✘'} | 非 CKD 被拒 | ${scopeOk ? '通过' : '未通过'} |`,
     `| 退出码 | ${exitCode} | 0 | ${exitCode === 0 ? '通过' : '未通过'} |`,
     '',
     '## 5 场景明细',
     '',
-    '| # | 场景 | 查询 | 提示 | status | 节/表 | top 节 | 引用 K | 打开 | audit 有效/无效 | 结果 | 耗时 |',
-    '|---|---|---|---|---|---|---|---|---|---|---|---|',
+    '| # | 场景 | 查询 | 提示 | status | 节/表 | top 节 | 引用 K | 打开 | audit 有效/无效 | 会话恢复（可选） | 结果 | 耗时 |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|---|',
   ];
 
   for (const [index, item] of results.entries()) {
@@ -468,8 +544,13 @@ function buildMarkdown(
       : item.passed
         ? `✔${item.anchorFound ? '（锚点命中）' : ''}`
         : '✘';
+    const restoreCell = item.expectedNoMatch
+      ? '—'
+      : item.restoreOk
+        ? '✔'
+        : '✘';
     lines.push(
-      `| ${index + 1} | ${item.label} | ${item.query} | ${hints || '—'} | ${item.status} | ${item.sectionCount}/${item.tableCount} | ${topSection} | ${item.topCitationId ?? '—'} | ${openCell} | ${item.auditValidCount}/${item.auditInvalidCount} | ${item.passed ? '✅' : '❌'} | ${item.ms}ms |`,
+      `| ${index + 1} | ${item.label} | ${item.query} | ${hints || '—'} | ${item.status} | ${item.sectionCount}/${item.tableCount} | ${topSection} | ${item.topCitationId ?? '—'} | ${openCell} | ${item.auditValidCount}/${item.auditInvalidCount} | ${restoreCell} | ${item.passed ? '✅' : '❌'} | ${item.ms}ms |`,
     );
   }
 
@@ -478,9 +559,14 @@ function buildMarkdown(
     lines.push(
       `${index + 1}. **${item.label}**（\`${item.query}\`）：${item.passed ? '通过' : '未通过'} — ${item.reason}`,
     );
-    if (item.tableRecovery) {
+    if (item.tableReuse) {
       lines.push(
-        `   - 表格 K 恢复（可选）：${item.tableRecovery.tableId} / ${item.tableRecovery.citationId || '—'} ${item.tableRecovery.ok ? '✔' : `✘（${item.tableRecovery.error ?? '打不开'}）`}`,
+        `   - 表格 K 复用/回源（可选）：${item.tableReuse.tableId} / ${item.tableReuse.citationId || '—'} ${item.tableReuse.ok ? '✔' : `✘（${item.tableReuse.error ?? '打不开'}）`}`,
+      );
+    }
+    if (!item.expectedNoMatch) {
+      lines.push(
+        `   - 会话恢复（可选）：\`new CitationRegistry().restore(record)\` 后 audit ${item.restoreOk ? '仍有效 ✔' : '失效 ✘'}（有效/无效 ${item.restoreValidCount}/${item.restoreInvalidCount}）`,
       );
     }
   }
@@ -490,8 +576,14 @@ function buildMarkdown(
     '## 说明',
     '',
     '- 引用冒烟只验「检索 → 打开 → K 号有效」，不验临床结论对错。',
-    '- 第 5 个场景（`CKD dog vitamin K target`）是负样本：`topicPhrases` 门禁要求命中 `vitamin k` 短语，不能因为命中 `vitamin` 就算过；0 节 0 表才算通过。',
-    '- 表格 K 恢复是可选诊断：检索命中表格时，用检索登记的 K 打开同一张表并确认 registry 里仍有该记录；不参与 5/5 判定。',
+    '- `磷 0.2–0.5% DM [K#]` 是固定引用句式 fixture，只验证引用能对上，**不代表任何临床结论或推荐值**。',
+    '- 第 5 个场景标签是**「未覆盖营养素对照」**：它仍在 CKD 检索范围内，只是 CKD 语料未覆盖 `vitamin K`；不要把它理解成「非 CKD 范围」用例。',
+    '- 非 CKD 范围拒绝在「范围校验（附加）」里校验：非 CKD `documentIds`/`sourceIds` 必须 `OUT_OF_SCOPE`（' +
+      scopeGuard.detail +
+      '）。',
+    '- 表格 K 复用/回源（可选）：同一 registry 内用检索登记的 K 打开同一张表并确认记录仍在；**这不是会话恢复**。',
+    '- 会话恢复（可选）：`new CitationRegistry().restore(record)` 后 audit 同一句仍有效；真正的 session restore 主证据在 `citation-registry.spec.ts`。',
+    '- 本报告是**本地库实测；生产未跑全量**。',
     '- 退出码：任一场景不通过 → 1。',
     '',
   );
@@ -523,20 +615,23 @@ function buildMarkdown(
     );
     exitCode = passed === results.length && invalid === 0 ? 0 : 1;
 
-    const markdown = buildMarkdown(results, options, exitCode);
+    const scopeGuard = await runScopeGuard(library, sourceLayer);
+    const markdown = buildMarkdown(results, options, exitCode, scopeGuard);
     if (options.write) {
+      mkdirSync(dirname(options.outPath), { recursive: true });
       writeFileSync(options.outPath, markdown);
     }
 
     console.log('');
     console.log(`引用冒烟：${passed}/${results.length} 通过；无效引用 ${invalid}`);
-    const tableResults = results.filter((item) => item.tableRecovery);
+    console.log(`范围校验（附加）：${scopeGuard.detail}`);
+    const tableResults = results.filter((item) => item.tableReuse);
     if (tableResults.length > 0) {
       console.log(
-        `表格 K 恢复（可选）：${tableResults
+        `表格 K 复用/回源（可选）：${tableResults
           .map(
             (item) =>
-              `${item.tableRecovery!.tableId}${item.tableRecovery!.ok ? '✔' : '✘'}`,
+              `${item.tableReuse!.tableId}${item.tableReuse!.ok ? '✔' : '✘'}`,
           )
           .join(' ')}`,
       );
@@ -553,6 +648,10 @@ function buildMarkdown(
   }
   process.exitCode = exitCode;
 })().catch((error) => {
-  console.error(error);
+  if (error instanceof Error && error.message.startsWith('--out ')) {
+    console.error(error.message);
+  } else {
+    console.error(error);
+  }
   process.exit(1);
 });

@@ -4,6 +4,10 @@ import {
   type ToolExecutionContext,
 } from '../../../src/application/recipe-designer/agent/tools';
 import { CitationRegistry } from '../../../src/application/recipe-designer/agent/citation-registry';
+import {
+  allDocumentsScope,
+  resolveKnowledgeScope,
+} from '../../../src/domain/knowledge/knowledge-scope';
 import { RecipeAgentService } from '../../../src/application/recipe-designer/agent/recipe-agent.service';
 import { TOPIC_KEYS } from '../../../src/domain/knowledge/topic-aliases';
 import type {
@@ -115,6 +119,7 @@ function context(
   overrides: Partial<ToolExecutionContext> = {},
 ): ToolExecutionContext {
   return {
+    scope: resolveKnowledgeScope(['ckd']),
     port: {} as any,
     catalog: {} as any,
     library: {
@@ -143,6 +148,37 @@ describe('Agent 工具：知识库检索与打开', () => {
     expect(
       (searchTool!.function.parameters as any).properties.scope,
     ).toBeUndefined();
+  });
+
+  it('全库 scope 接受非 CKD 文档', async () => {
+    const searchSections = jest.fn().mockResolvedValue([]);
+    const searchTableViews = jest.fn().mockResolvedValue([]);
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'nutritional assessment', documentIds: [NON_CKD_DOCUMENT] },
+      context({
+        scope: allDocumentsScope(),
+        library: { searchSections } as any,
+        sourceLayer: { searchTableViews } as any,
+      }),
+    );
+
+    expect(outcome.ok).toBe(true);
+    expect(searchSections).toHaveBeenCalledWith(
+      'nutritional assessment',
+      expect.objectContaining({ documentIds: [NON_CKD_DOCUMENT] }),
+    );
+  });
+
+  it('ckd scope 拒绝非 CKD 文档', async () => {
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'nutritional assessment', documentIds: [NON_CKD_DOCUMENT] },
+      context(),
+    );
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.code).toBe('OUT_OF_SCOPE');
   });
 
   it('search 返回节和段落，带 K 号与页码摘要', async () => {

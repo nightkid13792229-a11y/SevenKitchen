@@ -22,6 +22,7 @@ import { PrismaClient } from '@prisma/client';
 import { KnowledgeLibraryService } from '../../src/application/knowledge-base/knowledge-library.service';
 import { SourceLayerService } from '../../src/application/knowledge-base/source-layer.service';
 import { CitationRegistry } from '../../src/application/recipe-designer/agent/citation-registry';
+import { resolveKnowledgeScope } from '../../src/domain/knowledge/knowledge-scope';
 import {
   executeTool,
   type ToolExecutionContext,
@@ -192,6 +193,7 @@ function makeContext(
   sourceLayer: SourceLayerService,
 ): ToolExecutionContext {
   return {
+    scope: resolveKnowledgeScope(['ckd']),
     port: {} as any,
     catalog: {} as any,
     library,

@@ -16,7 +16,7 @@ import type {
   SourceLayerService,
   TableView,
 } from '../../knowledge-base/source-layer.service';
-import { CKD_DOCUMENT_IDS } from '../../knowledge-base/section-catalog.service';
+import type { KnowledgeScope } from '../../../domain/knowledge/knowledge-scope';
 import { normalizeTopics } from '../../knowledge-base/query-expansion';
 import { TOPIC_KEYS } from '../../../domain/knowledge/topic-aliases';
 import type { CitationRegistry } from './citation-registry';
@@ -27,13 +27,6 @@ import {
   type RecipeEditOp,
   type ToolOutcome,
 } from './agent-types';
-
-/** 配方侧只开放 CKD 三个来源（spec v1.1 §6.2/§7.6）。 */
-const CKD_SOURCE_IDS = [
-  'SACN5',
-  'IRIS-CKD-2026',
-  'AAHA-2021-NUTRITION',
-] as const;
 
 const NO_ARGS = {
   type: 'object',
@@ -370,6 +363,8 @@ export interface TableHitSummary {
 }
 
 export interface ToolExecutionContext {
+  /** 本次运行开放的知识范围（领域配置）。 */
+  scope: KnowledgeScope;
   port: RecipeDraftPort;
   catalog: RecipeCatalogPort;
   library: KnowledgeLibraryService;
@@ -419,12 +414,12 @@ export async function executeTool(
 
         const sourceIds = readStringArray(args.sourceIds, 'sourceIds');
         const invalidSourceId = sourceIds?.find(
-          (sourceId) => !isCkdSourceId(sourceId),
+          (sourceId) => !isSourceInScope(context.scope, sourceId),
         );
         if (invalidSourceId) {
           return fail(
             'OUT_OF_SCOPE',
-            `来源「${invalidSourceId}」不在 CKD 范围；配方本阶段只开放 CKD（可用：${CKD_SOURCE_IDS.join('、')}）`,
+            `来源「${invalidSourceId}」不在「${context.scope.label}」范围；可用：${listScopeValues(context.scope.sourceIds)}`,
           );
         }
 
@@ -433,12 +428,12 @@ export async function executeTool(
           'documentIds',
         );
         const invalidDocumentId = explicitDocumentIds?.find(
-          (documentId) => !isCkdDocument(documentId),
+          (documentId) => !isDocumentInScope(context.scope, documentId),
         );
         if (invalidDocumentId) {
           return fail(
             'OUT_OF_SCOPE',
-            `文档「${invalidDocumentId}」不在 CKD 范围；配方本阶段只开放 CKD（可用：${CKD_DOCUMENT_IDS.join('、')}）`,
+            `文档「${invalidDocumentId}」不在「${context.scope.label}」范围；可用：${listScopeValues(context.scope.documentIds)}`,
           );
         }
 
@@ -477,7 +472,9 @@ export async function executeTool(
         const documentIds =
           explicitDocumentIds && explicitDocumentIds.length > 0
             ? explicitDocumentIds
-            : [...CKD_DOCUMENT_IDS];
+            : context.scope.allDocuments
+              ? undefined
+              : [...context.scope.documentIds];
         const querySpecies = /\b(dog|dogs|canine)\b|犬/i.test(query)
           ? 'dog'
           : /\b(cat|cats|feline)\b|猫/i.test(query)
@@ -639,10 +636,10 @@ export async function executeTool(
           if (!table) {
             return fail('NOT_FOUND', `没有这张表：${resolvedTableId}`);
           }
-          if (!isCkdDocument(table.documentId)) {
+          if (!isDocumentInScope(context.scope, table.documentId)) {
             return fail(
               'OUT_OF_SCOPE',
-              `表格 ${table.tableId} 属于 ${table.documentId}；本阶段只开放 CKD 知识库`,
+              `表格 ${table.tableId} 属于 ${table.documentId}；不在「${context.scope.label}」范围`,
             );
           }
           const record = context.citations.registerTable(table);
@@ -665,10 +662,10 @@ export async function executeTool(
         if (!section) {
           return fail('NOT_FOUND', `没有这一节：${resolvedSectionId}`);
         }
-        if (!isCkdDocument(section.documentId)) {
+        if (!isDocumentInScope(context.scope, section.documentId)) {
           return fail(
             'OUT_OF_SCOPE',
-            `节 ${section.sectionId} 属于 ${section.documentId}；本阶段只开放 CKD 知识库`,
+            `节 ${section.sectionId} 属于 ${section.documentId}；不在「${context.scope.label}」范围`,
           );
         }
         if (!section.anchorFound) {
@@ -730,19 +727,21 @@ export async function executeTool(
 
       case 'knowledge_scope': {
         const sourceId = readText(args.sourceId);
-        if (sourceId && !isCkdSourceId(sourceId)) {
+        if (sourceId && !isSourceInScope(context.scope, sourceId)) {
           return fail(
             'OUT_OF_SCOPE',
-            `来源「${sourceId}」不在 CKD 范围；本阶段只开放 CKD（可用：${CKD_SOURCE_IDS.join('、')}）`,
+            `来源「${sourceId}」不在「${context.scope.label}」范围；可用：${listScopeValues(context.scope.sourceIds)}`,
           );
         }
-        const scope = await context.sourceLayer.scope({
-          documentIds: [...CKD_DOCUMENT_IDS],
+        const inventory = await context.sourceLayer.scope({
+          documentIds: context.scope.allDocuments
+            ? undefined
+            : [...context.scope.documentIds],
           sourceId,
         });
         return ok(
-          { status: 'ok', ...scope },
-          `馆藏 ${scope.totals.documents} 份文档、${scope.totals.sections} 节、${scope.totals.paragraphs} 段、${scope.totals.tables} 张表`,
+          { status: 'ok', scope: context.scope.id, ...inventory },
+          `馆藏 ${inventory.totals.documents} 份文档、${inventory.totals.sections} 节、${inventory.totals.paragraphs} 段、${inventory.totals.tables} 张表（范围：${context.scope.label}）`,
         );
       }
 
@@ -1118,16 +1117,24 @@ function readText(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-/** 配方侧范围：本阶段只开放 CKD 5 份（spec v1.1 §6.4）。 */
-function isCkdDocument(documentId: string | null | undefined): boolean {
-  return (CKD_DOCUMENT_IDS as readonly string[]).includes(
-    String(documentId ?? ''),
-  );
+/** 文档是否在当前范围：全库范围放行一切；否则必须在白名单里。 */
+function isDocumentInScope(
+  scope: KnowledgeScope,
+  documentId: string | null | undefined,
+): boolean {
+  if (scope.allDocuments) return true;
+  return scope.documentIds.includes(String(documentId ?? ''));
 }
 
-/** 配方侧来源：只允许 CKD 三个来源（spec v1.1 §6.2/§6.4）。 */
-function isCkdSourceId(sourceId: string): boolean {
-  return (CKD_SOURCE_IDS as readonly string[]).includes(sourceId);
+/** 来源是否在当前范围：全库放行；白名单为空时一律拒绝（fail closed）。 */
+function isSourceInScope(scope: KnowledgeScope, sourceId: string): boolean {
+  if (scope.allDocuments) return true;
+  return scope.sourceIds.includes(sourceId);
+}
+
+/** 错误文案里列出可用值；全库范围直接说"全库"。 */
+function listScopeValues(values: readonly string[]): string {
+  return values.length > 0 ? values.join('、') : '（本领域未配置）';
 }
 
 /** 参数是否真的传了值（空字符串 / 空数组 / null 都算没传）。 */

@@ -41,6 +41,10 @@ import { RecipeCatalogPort } from './catalog-port';
 import { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
 import { SourceLayerService } from '../../knowledge-base/source-layer.service';
 import { AGENT_TOOLS, executeTool } from './tools';
+import {
+  scopeFromEnv,
+  type KnowledgeScope,
+} from '../../../domain/knowledge/knowledge-scope';
 import { assessmentGapSignature } from './assessment-progress';
 import type { RecipeAgentActor } from './agent-types';
 
@@ -218,6 +222,7 @@ export class RecipeAgentService implements OnModuleInit {
   ): Promise<void> {
     const startedAt = Date.now();
     const config = await this.resolveConfig(flow);
+    const scope = scopeFromEnv();
     const port = new RecipeDraftPort(
       this.designer,
       this.accessFor(actor),
@@ -361,6 +366,7 @@ export class RecipeAgentService implements OnModuleInit {
         // 顺序反了会出现"执行记录有、问题没显示"（2026-11-01 实测）。
         let pendingAsk: { question: string; options: string[] } | null = null;
         const outcome = await this.runTool(
+          scope,
           port,
           catalog,
           this.library,
@@ -535,6 +541,7 @@ export class RecipeAgentService implements OnModuleInit {
   }
 
   private async runTool(
+    scope: KnowledgeScope,
     port: RecipeDraftPort,
     catalog: RecipeCatalogPort,
     library: KnowledgeLibraryService,
@@ -552,6 +559,7 @@ export class RecipeAgentService implements OnModuleInit {
       args = {};
     }
     const result = await executeTool(call.function.name, args, {
+      scope,
       port,
       catalog,
       library,

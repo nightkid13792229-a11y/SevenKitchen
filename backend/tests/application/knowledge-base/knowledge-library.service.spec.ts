@@ -979,3 +979,39 @@ describe('matchesNormalized（热路径）', () => {
     }
   });
 });
+
+
+describe('全库候选（按文档限额）', () => {
+  it('无 documentIds 时走 lateral 查询，并映射成统一形状', async () => {
+    const queryRaw = jest.fn().mockResolvedValue([
+      {
+        id: 'p1',
+        document_id: 'wsava-x',
+        section_id: 'wsava-x-s1',
+        text: 'phosphorus target in renal diet',
+        page_start: 3,
+        page_end: 3,
+        document_title: 'WSAVA',
+        source_id: 'WSAVA',
+        section_title: 'Renal nutrition',
+        section_page_no: 3,
+      },
+    ]);
+    const findMany = jest.fn();
+    const service = new KnowledgeLibraryService({
+      $queryRaw: queryRaw,
+      sourceParagraph: { findMany },
+    } as any);
+
+    const result = await service.search('phosphorus renal diet');
+
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(findMany).not.toHaveBeenCalled();
+    expect(result[0]).toMatchObject({
+      id: 'p1',
+      documentId: 'wsava-x',
+      sectionTitle: 'Renal nutrition',
+      sourceId: 'WSAVA',
+    });
+  });
+});

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { getKnowledgeSource } from '../../domain/recipe-designer/knowledge-base/source-registry';
@@ -193,6 +194,22 @@ const STOP = new Set(
   ),
 );
 
+interface ParagraphRow {
+  id: string;
+  documentId: string;
+  sectionId: string;
+  text: string;
+  pageStart: number | null;
+  pageEnd: number | null;
+  document: { id: string; title: string | null; sourceId: string | null };
+  section: { id: string; title: string; pageNo: number | null };
+}
+
+/** ILIKE 里的通配符要转义，否则查询里的 % / _ 会变成"匹配一切"。 */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
 @Injectable()
 export class KnowledgeLibraryService {
   private readonly catalog: SectionCatalogService;
@@ -256,30 +273,48 @@ export class KnowledgeLibraryService {
       .map((item) => String(item ?? '').trim())
       .filter(Boolean);
 
-    // 宽召回：扩展词 OR；正文与节标题都进 OR（标题写 blood pressure、正文只写 BP 的段也要召到）。
-    const rows = await this.prisma.sourceParagraph.findMany({
-      where: {
-        OR: [
-          ...terms.map((term) => ({
-            text: { contains: term, mode: 'insensitive' as const },
-          })),
-          ...terms.map((term) => ({
-            section: { title: { contains: term, mode: 'insensitive' as const } },
-          })),
-        ],
-        ...(sourceIds.length > 0
-          ? { document: { sourceId: { in: sourceIds } } }
-          : {}),
-        ...(documentIds.length > 0 ? { documentId: { in: documentIds } } : {}),
-        ...(sectionIds.length > 0 ? { sectionId: { in: sectionIds } } : {}),
-      },
-      include: {
-        document: { select: { id: true, title: true, sourceId: true } },
-        section: { select: { id: true, title: true, pageNo: true } },
-      },
-      orderBy: { id: 'asc' },
-      take: MAX_CANDIDATES,
-    });
+    // 全库检索按"每个文档限额"取候选；小范围（CKD 5 份）仍走原来的
+    // findMany，避免为小库付出 lateral 的固定成本。
+    // 为什么全库不能按 id 取前 2 万行：宽查询下字母序靠后的文档（如 wsava-*）
+    // 会被整段截掉，等于从未进入检索。
+    let rows: ParagraphRow[];
+    const usePerDocument =
+      documentIds.length === 0 &&
+      sourceIds.length === 0 &&
+      typeof (this.prisma as any).$queryRaw === 'function';
+    if (usePerDocument) {
+      rows = await this.fetchPerDocumentCandidates(terms, sectionIds);
+    } else {
+      rows = await this.prisma.sourceParagraph.findMany({
+        where: {
+          OR: [
+            ...terms.map((term) => ({
+              text: { contains: term, mode: 'insensitive' as const },
+            })),
+            ...terms.map((term) => ({
+              section: {
+                title: { contains: term, mode: 'insensitive' as const },
+              },
+            })),
+          ],
+          ...(sourceIds.length > 0
+            ? { document: { sourceId: { in: sourceIds } } }
+            : {}),
+          ...(documentIds.length > 0
+            ? { documentId: { in: documentIds } }
+            : {}),
+          ...(sectionIds.length > 0
+            ? { sectionId: { in: sectionIds } }
+            : {}),
+        },
+        include: {
+          document: { select: { id: true, title: true, sourceId: true } },
+          section: { select: { id: true, title: true, pageNo: true } },
+        },
+        orderBy: { id: 'asc' },
+        take: MAX_CANDIDATES,
+      });
+    }
 
     // 相关性门禁（不做分期/物种/主题排除）
     const candidates = rows.filter(
@@ -563,6 +598,76 @@ export class KnowledgeLibraryService {
    * 2. 否则 → 命中任一 `focusTerms` 或任一 `stagePhrases`；
    * 3. 三组都空（只问 `CKD dog` 这类泛问题）→ 不门禁，退回背景词召回。
    */
+  /**
+   * 全库候选：每个文档最多取 60 段（文档少时 200），保证 159 份文档都有机会。
+   * 最多约 9.5k 行，比原来固定 2 万行更小。
+   */
+  private async fetchPerDocumentCandidates(
+    terms: string[],
+    sectionIds: string[],
+  ): Promise<ParagraphRow[]> {
+    const patterns = terms.map((term) => `%${escapeLikePattern(term)}%`);
+    const sectionFilter =
+      sectionIds.length > 0
+        ? Prisma.sql`AND pp.section_id = ANY(${sectionIds}::text[])`
+        : Prisma.empty;
+    const perDocumentLimit = 300;
+    const rawRows = await this.prisma.$queryRaw<
+      {
+        id: string;
+        document_id: string;
+        section_id: string;
+        text: string;
+        page_start: number | null;
+        page_end: number | null;
+        document_title: string | null;
+        source_id: string | null;
+        section_title: string;
+        section_page_no: number | null;
+      }[]
+    >(Prisma.sql`
+      SELECT p.id, p.document_id, p.section_id, p.text, p.page_start, p.page_end,
+             d.title AS document_title, d.source_id,
+             s.title AS section_title, s.page_no AS section_page_no
+      FROM source_document d
+      JOIN LATERAL (
+        SELECT pp.*
+        FROM source_paragraph pp
+        WHERE pp.document_id = d.id
+          AND (
+            pp.text ILIKE ANY(${patterns}::text[])
+            OR EXISTS (
+              SELECT 1 FROM source_section sx
+              WHERE sx.id = pp.section_id
+                AND sx.title ILIKE ANY(${patterns}::text[])
+            )
+          )
+          ${sectionFilter}
+        ORDER BY pp.id
+        LIMIT ${perDocumentLimit}
+      ) p ON TRUE
+      JOIN source_section s ON s.id = p.section_id
+    `);
+    return rawRows.map((row) => ({
+      id: row.id,
+      documentId: row.document_id,
+      sectionId: row.section_id,
+      text: row.text,
+      pageStart: row.page_start,
+      pageEnd: row.page_end,
+      document: {
+        id: row.document_id,
+        title: row.document_title,
+        sourceId: row.source_id,
+      },
+      section: {
+        id: row.section_id,
+        title: row.section_title,
+        pageNo: row.section_page_no,
+      },
+    }));
+  }
+
   private passesGate(
     row: { text?: string | null; section?: { title?: string | null } | null },
     focus: QueryFocus,

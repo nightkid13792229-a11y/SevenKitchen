@@ -16,6 +16,7 @@
 import 'dotenv/config';
 import { writeFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
+import { isEvalCreatedBy } from '../../src/application/knowledge-base/eval-identity';
 
 const TOOL_NAMES = [
   'search_knowledge_library',
@@ -35,6 +36,7 @@ interface MessageRow {
   toolArgs: unknown;
   toolResult: unknown;
   createdAt: Date;
+  session?: { createdBy: string } | null;
 }
 
 interface ToolStats {
@@ -44,13 +46,14 @@ interface ToolStats {
   recentZeroResult: number;
 }
 
-function parseArgs(argv: string[]): { out?: string } {
+function parseArgs(argv: string[]): { out?: string; includeEval: boolean } {
+  const includeEval = argv.includes('--include-eval');
   const index = argv.findIndex((item) => item === '--out');
   if (index >= 0) {
     const value = String(argv[index + 1] ?? '').trim();
-    if (value) return { out: value };
+    if (value) return { out: value, includeEval };
   }
-  return {};
+  return { includeEval };
 }
 
 function asRecord(value: unknown): Record<string, any> {
@@ -262,21 +265,31 @@ export function summarizeMessages(
 
 async function buildReport(
   prisma: PrismaClient,
+  options: { includeEval?: boolean } = {},
 ): Promise<{ markdown: string; summary: string }> {
   const rows = (await prisma.recipeDesignAgentMessage.findMany({
     where: { toolName: { in: [...TOOL_NAMES] } },
-    select: { toolName: true, toolArgs: true, toolResult: true, createdAt: true },
+    select: {
+      toolName: true,
+      toolArgs: true,
+      toolResult: true,
+      createdAt: true,
+      session: { select: { createdBy: true } },
+    },
     orderBy: { createdAt: 'desc' },
   })) as MessageRow[];
-  return summarizeMessages(rows, new Date());
+  const used = options.includeEval
+    ? rows
+    : rows.filter((row) => !isEvalCreatedBy(row.session?.createdBy));
+  return summarizeMessages(used, new Date());
 }
 
 if (require.main === module) {
   (async () => {
     const prisma = new PrismaClient();
     try {
-      const { markdown, summary } = await buildReport(prisma);
-      const { out } = parseArgs(process.argv.slice(2));
+      const { out, includeEval } = parseArgs(process.argv.slice(2));
+      const { markdown, summary } = await buildReport(prisma, { includeEval });
       if (out) {
         writeFileSync(out, markdown);
         console.log(`报告已写入：${out}`);
@@ -284,6 +297,11 @@ if (require.main === module) {
         process.stdout.write(`${markdown}\n`);
       }
       console.log(summary);
+      console.log(
+        includeEval
+          ? '口径：包含 kb-eval-* 测试会话（--include-eval）'
+          : '口径：已排除 kb-eval-* 测试会话',
+      );
     } finally {
       await prisma.$disconnect();
     }

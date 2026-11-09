@@ -4,6 +4,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import { getKnowledgeSource } from '../../domain/recipe-designer/knowledge-base/source-registry';
 import { normalizeTopic, TOPIC_ALIASES } from '../../domain/knowledge/topic-aliases';
 import { domainRoutingBoost } from '../../domain/knowledge/domain-routing';
+import { isUsableSection } from './section-quality';
 import {
   SectionCatalogService,
   type CatalogSection,
@@ -281,7 +282,9 @@ export class KnowledgeLibraryService {
     });
 
     // 相关性门禁（不做分期/物种/主题排除）
-    const candidates = rows.filter((row) => this.passesGate(row, focus));
+    const candidates = rows.filter(
+      (row) => isUsableSection(row.section) && this.passesGate(row, focus),
+    );
 
     // 目录只为候选里出现的文档构建；全库检索也不会一次拉起 159 份。
     await this.ensureCatalogs(candidates.map((row) => row.documentId));

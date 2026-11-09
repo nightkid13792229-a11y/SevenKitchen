@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { KnowledgeLibraryService } from '../../src/application/knowledge-base/knowledge-library.service';
+import { isUsableSection } from '../../src/application/knowledge-base/section-quality';
 import {
   allDocumentsScope,
   resolveKnowledgeScope,
@@ -68,6 +69,14 @@ function percentile(sorted: number[], p: number): number {
   return Math.round(sorted[index] * 10) / 10;
 }
 
+/** 节标题常带引用串（`（Anfinsen et al., 2011; …）`），直接当 query 会匹配到参考文献。
+ *  取括号前的主题部分；太短就退回原标题。 */
+function cleanTitleQuery(title: string): string {
+  const cut = String(title ?? '').split(/[（(]/)[0].trim();
+  const base = cut.length >= 6 ? cut : String(title ?? '').trim();
+  return base.slice(0, 80);
+}
+
 function loadQuestions(): QuestionSpec[] {
   const raw = JSON.parse(readFileSync(QUESTIONS_PATH, 'utf8')) as {
     questions: QuestionSpec[];
@@ -93,8 +102,12 @@ async function main(): Promise<void> {
     });
     // 固定间隔抽样，保证可复现；全库 6,090 节约取 100 条。
     const step = Math.max(1, Math.floor(sectionRows.length / 100));
-    const sampled = sectionRows
-      .filter((_, index) => index % step === 0)
+    const usableSections = sectionRows.filter((section) =>
+      isUsableSection(section),
+    );
+    const usableStep = Math.max(1, Math.floor(usableSections.length / 100));
+    const sampled = usableSections
+      .filter((_, index) => index % usableStep === 0)
       .slice(0, 100);
 
     const results: CaseResult[] = [];
@@ -106,6 +119,7 @@ async function main(): Promise<void> {
         limit,
       });
       const ms = performance.now() - started;
+      const top3 = hits.slice(0, 3).map((hit) => hit.sectionId);
       results.push({
         kind: 'question',
         id: question.id,
@@ -117,26 +131,28 @@ async function main(): Promise<void> {
         hit:
           expected.length === 0
             ? null
-            : expected.includes(String(hits[0]?.sectionId)),
+            : top3.some((id) => expected.includes(id)),
       });
     }
 
     for (const section of sampled) {
       const started = performance.now();
-      const hits = await library.searchSections(section.title, {
+      const query = cleanTitleQuery(section.title);
+      const hits = await library.searchSections(query, {
         documentIds,
         limit,
       });
       const ms = performance.now() - started;
+      const top3 = hits.slice(0, 3).map((hit) => hit.sectionId);
       results.push({
         kind: 'section',
         id: section.id,
-        query: section.title,
+        query,
         ms,
         hits: hits.length,
         top1: hits[0]?.sectionId,
         expected: [section.id],
-        hit: hits[0]?.sectionId === section.id,
+        hit: top3.includes(section.id),
       });
     }
 
@@ -151,7 +167,7 @@ async function main(): Promise<void> {
       p95: percentile(timings, 95),
       max: Math.round(Math.max(...timings) * 10) / 10,
       avgHits: Math.round((results.reduce((sum, item) => sum + item.hits, 0) / results.length) * 10) / 10,
-      firstHitRate:
+      top3HitRate:
         judgedQuestions.length === 0
           ? null
           : Math.round(
@@ -159,7 +175,7 @@ async function main(): Promise<void> {
                 judgedQuestions.length) *
                 1000,
             ) / 1000,
-      sectionSelfHitRate:
+      sectionSelfTop3Rate:
         sectionResults.length === 0
           ? null
           : Math.round(
@@ -177,7 +193,7 @@ async function main(): Promise<void> {
         `范围 ${scope.id}：${summary.queries} 条查询；p50 ${summary.p50}ms、p95 ${summary.p95}ms、max ${summary.max}ms`,
       );
       console.log(
-        `平均命中 ${summary.avgHits} 节；题集首中率 ${summary.firstHitRate ?? '—'}；节标题自中率 ${summary.sectionSelfHitRate ?? '—'}`,
+        `平均命中 ${summary.avgHits} 节；题集 top3 命中率 ${summary.top3HitRate ?? '—'}；节标题 top3 自中率 ${summary.sectionSelfTop3Rate ?? '—'}`,
       );
       console.log(
         `最慢：${summary.slowest

@@ -758,7 +758,7 @@ describe('KnowledgeLibraryService（门禁/排序/分组）', () => {
           },
           {
             id: 'generic-section',
-            title: 'Introduction',
+            title: 'General feeding considerations',
             pageNo: 2,
             sortOrder: 2,
             paragraphs: [{ text }],
@@ -777,7 +777,7 @@ describe('KnowledgeLibraryService（门禁/排序/分组）', () => {
           title:
             sectionId === 'staging-section'
               ? 'Staging of Chronic Kidney Disease'
-              : 'Introduction',
+              : 'General feeding considerations',
           pageNo: 1,
         },
         text,

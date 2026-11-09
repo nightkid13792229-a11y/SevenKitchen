@@ -47,7 +47,7 @@
             订单号 {{ order.orderNo || formatOrderId(order.id) }}
             <text class="hero-no__copy">复制</text>
           </text>
-          <text class="hero-time">{{ formatDateTime(order.createdAt) }}</text>
+          <text class="hero-time">{{ formatMonthDayTime(order.createdAt) }}</text>
         </view>
       </view>
 
@@ -109,7 +109,7 @@
                 <text class="package-value">{{ stockPackCode }}</text>
               </view>
             </view>
-            <!-- 第4层：原料清单（可展开/收起） -->
+            <!-- 原料清单：一条摘要，点开看全部（2026-11-09） -->
             <view
               class="ingredients-section"
               v-if="
@@ -117,59 +117,37 @@
                 item.recipeSnapshot.items.length > 0
               "
             >
-              <view
-                class="ingredients-header"
-                @tap="toggleIngredients(item.id)"
-              >
-                <view class="ingredients-title-row">
-                  <text class="ingredients-title">原料清单</text>
-                  <text class="ingredients-count"
-                    >共{{ item.recipeSnapshot.items.length }}种</text
-                  >
-                  <text
-                    v-if="hasProcurementDisclosure"
-                    class="ingredients-procurement-badge"
-                    >实际采购</text
-                  >
-                  <text
-                    v-else-if="actualProcurement?.status === 'IN_PROGRESS'"
-                    class="ingredients-procurement-badge pending"
-                    >采购中</text
-                  >
-                </view>
-                <text class="expand-icon">{{
-                  isIngredientSectionOpen(item.id) ? '收起' : '展开'
+              <view class="ing-bar" @tap="toggleIngredients(item.id)">
+                <text class="ing-title">原料清单</text>
+                <text class="ing-count">{{ item.recipeSnapshot.items.length }} 种</text>
+                <text
+                  v-if="procurementBadgeText"
+                  class="ing-pill"
+                  :class="{ pending: actualProcurement?.status !== 'COMPLETED' }"
+                  >{{ procurementBadgeText }}</text
+                >
+                <text class="ing-toggle">{{
+                  isIngredientSectionOpen(item.id) ? '收起 ⌃' : '展开 ⌄'
                 }}</text>
               </view>
 
               <view
-                class="ingredients-content"
-                :class="{ expanded: isIngredientSectionOpen(item.id) }"
                 v-if="isIngredientSectionOpen(item.id)"
+                class="ingredients-content"
               >
-                <!-- 实际采购：采购完成后公开；未完成时给一句明确的预期 -->
-                <view v-if="procurementStatusText" class="procurement-status">
-                  <text
-                    class="procurement-status-dot"
-                    :class="{
-                      done: actualProcurement?.status === 'COMPLETED',
-                    }"
-                    >{{ actualProcurement?.status === 'COMPLETED' ? '✓' : '·' }}</text
-                  >
-                  <text class="procurement-status-text">{{
-                    procurementStatusText
-                  }}</text>
-                </view>
+                <text v-if="procurementStatusText" class="procurement-note">{{
+                  procurementStatusText
+                }}</text>
 
                 <view
-                  v-if="visibleFoodIngredients(item).length"
+                  v-if="foodIngredients(item).length"
                   class="ingredient-group"
                 >
                   <view class="category-title"
                     >食材 {{ foodIngredientCount(item) }}</view
                   >
                   <view
-                    v-for="(ingredient, iIdx) in visibleFoodIngredients(item)"
+                    v-for="(ingredient, iIdx) in foodIngredients(item)"
                     :key="ingredient.ingredient_id || iIdx"
                     class="ingredient-item proc-row"
                     @longpress="showIngredientDetail(ingredient, item)"
@@ -218,33 +196,19 @@
                           getProcurementDisclosure(ingredient)?.productName
                         }}</text
                       >
-                      <text
-                        v-if="
-                          getProcurementDisclosure(ingredient)?.source ===
-                            'FROM_INVENTORY' &&
-                          getProcurementDisclosure(ingredient)?.purchasedAt
-                        "
-                        class="proc-date"
-                        >库存采购日期
-                        {{
-                          formatChineseDate(
-                            getProcurementDisclosure(ingredient)?.purchasedAt,
-                          )
-                        }}</text
-                      >
                     </view>
                   </view>
                 </view>
 
                 <view
-                  v-if="visibleSupplementIngredients(item).length"
+                  v-if="supplementIngredients(item).length"
                   class="ingredient-group"
                 >
                   <view class="category-title"
                     >补剂 {{ supplementIngredientCount(item) }}</view
                   >
                   <view
-                    v-for="(ingredient, iIdx) in visibleSupplementIngredients(item)"
+                    v-for="(ingredient, iIdx) in supplementIngredients(item)"
                     :key="ingredient.ingredient_id || iIdx"
                     class="ingredient-item proc-row"
                     @longpress="showIngredientDetail(ingredient, item)"
@@ -257,46 +221,45 @@
                     </view>
                     <view
                       v-if="getProcurementDisclosure(ingredient)"
-                      class="proc-supp"
+                      class="proc-meta"
                     >
-                      <view class="supp-line">
-                        <text class="supp-k">渠道</text>
-                        <text class="supp-v">{{
-                          getProcurementDisclosure(ingredient)?.channel || '—'
-                        }}</text>
-                      </view>
-                      <view class="supp-line">
-                        <text class="supp-k">品牌</text>
-                        <text class="supp-v">{{
-                          getProcurementDisclosure(ingredient)?.brand || '—'
-                        }}</text>
-                      </view>
-                      <view class="supp-line">
-                        <text class="supp-k">采购产品</text>
-                        <text class="supp-v">{{
-                          getProcurementDisclosure(ingredient)?.productName || '—'
-                        }}</text>
-                      </view>
+                      <text class="proc-tag ref">参考商品</text>
+                      <text
+                        v-if="getProcurementDisclosure(ingredient)?.channel"
+                        class="proc-text"
+                        >{{ getProcurementDisclosure(ingredient)?.channel }}</text
+                      >
+                      <text
+                        v-if="
+                          getProcurementDisclosure(ingredient)?.channel &&
+                          (getProcurementDisclosure(ingredient)?.brand ||
+                            getProcurementDisclosure(ingredient)?.productName)
+                        "
+                        class="proc-dot"
+                        >·</text
+                      >
+                      <text
+                        v-if="getProcurementDisclosure(ingredient)?.brand"
+                        class="proc-text"
+                        >{{ getProcurementDisclosure(ingredient)?.brand }}</text
+                      >
+                      <text
+                        v-if="
+                          getProcurementDisclosure(ingredient)?.brand &&
+                          getProcurementDisclosure(ingredient)?.productName
+                        "
+                        class="proc-dot"
+                        >·</text
+                      >
+                      <text
+                        v-if="getProcurementDisclosure(ingredient)?.productName"
+                        class="proc-text"
+                        >{{
+                          getProcurementDisclosure(ingredient)?.productName
+                        }}</text
+                      >
                     </view>
                   </view>
-                </view>
-
-                <view
-                  v-if="hiddenIngredientCount(item) > 0"
-                  class="ingredient-toggle-more"
-                  @tap="toggleIngredientList(item.id)"
-                >
-                  {{ expandIngredientsText(item) }} ⌄
-                </view>
-                <view
-                  v-else-if="
-                    expandedIngredientLists[item.id] &&
-                    supplementIngredientCount(item) > 0
-                  "
-                  class="ingredient-toggle-more"
-                  @tap="toggleIngredientList(item.id)"
-                >
-                  收起 ⌃
                 </view>
               </view>
             </view>
@@ -375,7 +338,7 @@
         <view class="info-row" v-if="!isStockOrder && order.targetProductionDate">
           <text class="label">目标制作日期:</text>
           <text class="value">{{
-            formatShanghaiDateOnly(order.targetProductionDate)
+            formatMonthDay(formatShanghaiDateOnly(order.targetProductionDate))
           }}</text>
           <picker
             v-if="canEditDate"
@@ -388,14 +351,16 @@
           </picker>
           <text v-if="canEditDate && postponingOnly" class="date-lock-hint">
             当前订单仍按
-            {{ formatShanghaiDateOnly(order.targetProductionDate) }}
-            制作；如需往后改期，最早可选 {{ minDateStr }}
+            {{ formatMonthDay(formatShanghaiDateOnly(order.targetProductionDate)) }}
+            制作；如需往后改期，最早可选 {{ formatMonthDay(minDateStr) }}
           </text>
         </view>
 
         <view class="info-row">
           <text class="label">预计发货:</text>
-          <text class="value">{{ formatDate(effectiveShippingDate) }}</text>
+          <text class="value">{{
+            formatMonthDay(formatDate(effectiveShippingDate))
+          }}</text>
         </view>
         <view class="info-row">
           <text class="label">配送说明:</text>
@@ -433,7 +398,7 @@
             </button>
           </view>
           <view v-if="order.shippedAt" class="logistics-time">
-            发货时间 {{ formatDateTime(order.shippedAt) }}
+            发货时间 {{ formatMonthDayTime(order.shippedAt) }}
           </view>
         </view>
 
@@ -454,7 +419,7 @@
             </button>
           </view>
           <view v-if="order.shippedAt" class="logistics-time">
-            发货时间 {{ formatDateTime(order.shippedAt) }}
+            发货时间 {{ formatMonthDayTime(order.shippedAt) }}
           </view>
         </view>
       </view>
@@ -522,7 +487,7 @@
             退款单号：{{ orderRefundStatus.outRefundNo }}
           </text>
           <text v-if="orderRefundStatus.successTime" class="refund-status-row">
-            成功时间：{{ formatDateTime(orderRefundStatus.successTime) }}
+            成功时间：{{ formatMonthDayTime(orderRefundStatus.successTime) }}
           </text>
         </view>
       </view>
@@ -701,7 +666,7 @@
           <view class="section-title-left">
             <text class="section-title-text">原料照片</text>
             <text class="photos-time">{{
-              formatDateTime(order.productionPhotos.uploadedAt)
+              formatMonthDayTime(order.productionPhotos.uploadedAt)
             }}</text>
           </view>
           <button
@@ -778,7 +743,7 @@
           <view class="info-row">
             <text class="label">申请时间:</text>
             <text class="value">{{
-              formatDateTime(order.aftersaleSince)
+              formatMonthDayTime(order.aftersaleSince)
             }}</text>
           </view>
           <view class="info-row">
@@ -1056,7 +1021,6 @@ import OrderProgressBar from '../../components/OrderProgressBar.vue';
 import OrderProgressSteps from '../../components/OrderProgressSteps.vue';
 import { normalizeImageUrl } from '../../utils/config';
 import {
-  formatDateTime,
   formatShanghaiDateOnly,
   resolveProductionDatePickerState,
 } from '../../utils/date';
@@ -1506,10 +1470,6 @@ const procurementDisclosureMap = computed(() => {
   return map
 })
 
-const hasProcurementDisclosure = computed(
-  () => procurementDisclosureMap.value.size > 0,
-)
-
 function getProcurementDisclosure(
   ingredient: RecipeSnapshotItem,
 ): ActualProcurementItem | null {
@@ -1525,19 +1485,34 @@ function isSupplementIngredient(ingredient: RecipeSnapshotItem): boolean {
   )
 }
 
-function formatChineseDate(value?: string | null): string {
-  if (!value) return ''
-  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (!match) return String(value)
-  return `${match[1]}年${Number(match[2])}月${Number(match[3])}日`
+function formatMonthDayTime(value?: string | null): string {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${month}月${day}日 ${hour}:${minute}`
 }
+
+/** 摘要条上的采购状态：只出现一次，不再和绿色状态框重复 */
+const procurementBadgeText = computed(() => {
+  const data = actualProcurement.value
+  if (!data) return ''
+  if (data.status === 'COMPLETED') return '✓ 采购已完成'
+  if (data.status === 'IN_PROGRESS') return '采购中'
+  return ''
+})
 
 const procurementStatusText = computed(() => {
   const data = actualProcurement.value
   if (!data) return ''
   if (data.status === 'COMPLETED') {
-    const date = data.completedAt ? formatChineseDate(data.completedAt) : ''
-    return date ? `采购已完成 · ${date}` : '采购已完成'
+    const date = data.completedAt ? formatMonthDay(data.completedAt) : ''
+    return date
+      ? `已于 ${date} 完成采购 · 渠道和商品按实际采购记录展示`
+      : '已完成采购 · 渠道和商品按实际采购记录展示'
   }
   if (data.status === 'IN_PROGRESS') {
     return '采购进行中，已完成的原料会陆续显示实际采购信息'
@@ -1545,15 +1520,8 @@ const procurementStatusText = computed(() => {
   return '采购完成后，这里会显示每种原料的实际采购渠道和采购产品。'
 })
 
-// 原料清单展开状态
+// 原料清单展开状态（只有一层：收起 / 全部展开）
 const expandedIngredients = ref<Record<string, boolean>>({});
-/** 原料清单内部的「5 个食材」折叠，和外层整块展开分开 */
-const expandedIngredientLists = ref<Record<string, boolean>>({});
-
-function toggleIngredientList(itemId: string) {
-  expandedIngredientLists.value[itemId] =
-    !expandedIngredientLists.value[itemId];
-}
 
 function allIngredientItems(item: OrderItem): RecipeSnapshotItem[] {
   return item.recipeSnapshot?.items ?? [];
@@ -1578,38 +1546,21 @@ function sortedFoodIngredients(item: OrderItem): RecipeSnapshotItem[] {
     .sort((a, b) => (b.ratio || 0) - (a.ratio || 0));
 }
 
-function visibleFoodIngredients(item: OrderItem): RecipeSnapshotItem[] {
-  const sorted = sortedFoodIngredients(item);
-  return expandedIngredientLists.value[item.id] ? sorted : sorted.slice(0, 5);
+/**
+ * 展开后一次给出全部原料（2026-11-09）。
+ *
+ * 原来有两层折叠：整块可以收起，里面又只露前 5 个。两个入口分不清谁控制谁，
+ * 顾客看到的是“清单停下来、却不知道还有多少”。现在只有一层：
+ * 收起时是一条摘要，展开就是全部食材 + 补剂。
+ */
+function foodIngredients(item: OrderItem): RecipeSnapshotItem[] {
+  return sortedFoodIngredients(item);
 }
 
-function visibleSupplementIngredients(item: OrderItem): RecipeSnapshotItem[] {
-  if (!expandedIngredientLists.value[item.id]) {
-    return [];
-  }
+function supplementIngredients(item: OrderItem): RecipeSnapshotItem[] {
   return allIngredientItems(item).filter((ingredient) =>
     isSupplementIngredient(ingredient),
   );
-}
-
-function hiddenIngredientCount(item: OrderItem): number {
-  const hiddenFood = Math.max(
-    0,
-    foodIngredientCount(item) - visibleFoodIngredients(item).length,
-  );
-  const hiddenSupplement = Math.max(
-    0,
-    supplementIngredientCount(item) - visibleSupplementIngredients(item).length,
-  );
-  return hiddenFood + hiddenSupplement;
-}
-
-function expandIngredientsText(item: OrderItem): string {
-  const hidden = hiddenIngredientCount(item);
-  const supplementCount = supplementIngredientCount(item);
-  return supplementCount > 0
-    ? `展开其余 ${hidden} 项原料（含 ${supplementCount} 种补剂）`
-    : `展开其余 ${hidden} 项原料`;
 }
 
 function ingredientAmountText(
@@ -1730,6 +1681,11 @@ const orderCenterDescription = computed(() => {
 /** 「11月2日」这种顾客读得出来的日期 */
 function formatMonthDay(value?: string | null): string {
   if (!value) return '';
+  // 纯日期串（YYYY-MM-DD）直接取字段：new Date 会按 UTC 解析，非东八区会差一天
+  const dateOnly = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnly) {
+    return `${Number(dateOnly[2])}月${Number(dateOnly[3])}日`;
+  }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return `${date.getMonth() + 1}月${date.getDate()}日`;
@@ -1926,9 +1882,14 @@ function toggleIngredients(itemId: string) {
     !isIngredientSectionOpen(itemId);
 }
 
-/** 原料清单整块默认展开：直接看到 5 个占比最高的食材（2026-11-03 老板确认） */
+/**
+ * 原料清单默认收起（2026-11-09 老板确认）。
+ *
+ * 原来默认展开，15 种原料把首屏撑满，备注和配送要滚很久才看得到；
+ * 现在首屏只留一条摘要，点一下才展开全部。
+ */
 function isIngredientSectionOpen(itemId: string): boolean {
-  return expandedIngredients.value[itemId] !== false;
+  return expandedIngredients.value[itemId] === true;
 }
 
 // 获取补剂的实际用量（从pricingBreakdownSnapshot）
@@ -1979,6 +1940,16 @@ function showIngredientDetail(ingredient: RecipeSnapshotItem, item: OrderItem) {
     const actualAmountG = Math.round(item.quantityG * (ingredient.ratio / 100));
     content += `比例：${ratio}%\n`;
     content += `实际用量：${actualAmountG}g\n`;
+  }
+
+  const disclosure = getProcurementDisclosure(ingredient);
+  if (disclosure) {
+    content += `来源：${
+      disclosure.source === 'FROM_INVENTORY' ? '来自库存' : '本单采购'
+    }\n`;
+    if (disclosure.channel) content += `渠道：${disclosure.channel}\n`;
+    if (disclosure.brand) content += `品牌：${disclosure.brand}\n`;
+    if (disclosure.productName) content += `商品：${disclosure.productName}\n`;
   }
 
   uni.showModal({
@@ -3503,7 +3474,8 @@ async function applyRefund() {
 .order-detail-page {
   min-height: 100vh;
   background-color: #fbfcf7;
-  padding-bottom: 140rpx;
+  /* 和固定底栏等高 + 安全区，最后一段不会被压住（2026-11-09） */
+  padding-bottom: calc(150rpx + env(safe-area-inset-bottom));
 }
 
 .order-error-state {
@@ -3577,7 +3549,7 @@ async function applyRefund() {
   left: 0;
   right: 0;
   background-color: #fbfcf7;
-  padding: 16rpx 20rpx;
+  padding: 16rpx 20rpx calc(16rpx + env(safe-area-inset-bottom));
   border-top: 1rpx solid #e3e6d4;
   box-shadow: 0 -2rpx 8rpx rgba(30, 46, 36, 0.06);
   z-index: 100;
@@ -4260,9 +4232,6 @@ async function applyRefund() {
   display: flex;
   align-items: center;
   gap: 12rpx;
-  margin-bottom: 16rpx;
-  padding-bottom: 16rpx;
-  border-bottom: 1rpx solid #e3e6d4;
   flex-wrap: wrap;
 }
 
@@ -4336,56 +4305,66 @@ async function applyRefund() {
 
 /* 原料清单 */
 .ingredients-section {
-  margin-top: 16rpx;
-  padding-top: 16rpx;
-  border-top: 1rpx solid #e3e6d4;
+  margin-top: 22rpx;
 }
 
-.ingredients-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16rpx;
-  background-color: #fbfcf7;
-  border-radius: 8rpx;
-  margin-bottom: 16rpx;
-}
-
-.ingredients-title-row {
+.ing-bar {
   display: flex;
   align-items: center;
-  gap: 8rpx;
-  flex: 1;
+  gap: 10rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 18rpx;
+  background-color: #f2f4e9;
+  border: 1rpx solid #eaeddf;
 }
 
-.ingredients-title {
-  font-size: 24rpx;
-  font-weight: 500;
+.ing-bar:active {
+  background-color: #edf0e2;
+}
+
+.ing-title {
+  font-size: 26rpx;
+  font-weight: 700;
   color: #26261f;
 }
 
-.ingredients-count {
-  font-size: 20rpx;
-  color: #6b6653;
+.ing-count {
+  font-size: 21rpx;
+  color: #968f6d;
 }
 
-.expand-icon {
-  font-size: 20rpx;
+.ing-pill {
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  background-color: #e5efe4;
+  color: #2f6b4f;
+  font-size: 19rpx;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.ing-pill.pending {
+  background-color: #f2f4ea;
+  color: #8a8a70;
+}
+
+.ing-toggle {
+  margin-left: auto;
+  font-size: 22rpx;
+  font-weight: 700;
   color: #b08d4f;
-  padding: 4rpx 8rpx;
 }
 
 .ingredients-content {
-  padding: 16rpx;
-  background-color: #fbfcf7;
-  border-radius: 8rpx;
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease-out;
+  padding: 4rpx 0 0;
 }
 
-.ingredients-content.expanded {
-  max-height: 2000rpx;
+.procurement-note {
+  display: block;
+  margin: 14rpx 0 2rpx;
+  font-size: 20rpx;
+  line-height: 1.5;
+  color: #9a9a86;
 }
 
 .expand-hint {
@@ -5019,56 +4998,6 @@ async function applyRefund() {
 }
 
 /* ===== 实际采购披露（2026-11-02） ===== */
-.ingredients-procurement-badge.pending {
-  background-color: #f2f4ea;
-  color: #8a8a70;
-}
-
-.ingredients-procurement-badge {
-  margin-left: 8rpx;
-  padding: 2rpx 10rpx;
-  border-radius: 999rpx;
-  background-color: #eef3ea;
-  color: #2f6b4f;
-  font-size: 18rpx;
-  font-weight: 700;
-  line-height: 1.6;
-}
-
-.procurement-status {
-  display: flex;
-  align-items: flex-start;
-  gap: 10rpx;
-  margin-bottom: 16rpx;
-  padding: 14rpx 16rpx;
-  border-radius: 12rpx;
-  background-color: #f7f9f2;
-  border: 1rpx dashed #d5ddc8;
-}
-
-.procurement-status-dot {
-  flex: none;
-  width: 28rpx;
-  height: 28rpx;
-  border-radius: 50%;
-  background-color: #d5ddc8;
-  color: #ffffff;
-  font-size: 18rpx;
-  line-height: 28rpx;
-  text-align: center;
-}
-
-.procurement-status-dot.done {
-  background-color: #2f6b4f;
-}
-
-.procurement-status-text {
-  flex: 1;
-  font-size: 22rpx;
-  line-height: 1.55;
-  color: #6b6653;
-}
-
 .ingredient-category--disclosed {
   grid-template-columns: 1fr;
 }
@@ -5238,7 +5167,7 @@ async function applyRefund() {
 
 .proc-amount {
   font-size: 24rpx;
-  font-weight: 800;
+  font-weight: 500;
   color: #26261f;
   white-space: nowrap;
 }
@@ -5278,36 +5207,9 @@ async function applyRefund() {
   color: #c6c8b8;
 }
 
-.proc-date {
-  width: 100%;
-  font-size: 19rpx;
-  color: #9a9a86;
-}
-
-.proc-supp {
-  display: grid;
-  grid-template-columns: 96rpx 1fr;
-  gap: 4rpx 12rpx;
-  margin-top: 8rpx;
-  font-size: 21rpx;
-}
-
-.supp-k {
-  color: #9a9a86;
-}
-
-.supp-v {
-  color: #4d4d40;
-  line-height: 1.5;
-  word-break: break-all;
-}
-
-.ingredient-toggle-more {
-  margin-top: 16rpx;
-  padding: 8rpx 0;
-  text-align: center;
-  font-size: 21rpx;
-  color: #7d7d6a;
+.proc-tag.ref {
+  background: #f0f0e8;
+  color: #6f6d5c;
 }
 
 /* 食用与保存 */

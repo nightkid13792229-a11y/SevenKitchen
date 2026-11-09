@@ -358,15 +358,46 @@ describe('order detail runtime regressions', () => {
     expect(source).toContain('getProcurementDisclosure')
     expect(source).toContain('本单采购')
     expect(source).toContain('来自库存')
-    expect(source).toContain('库存采购日期')
     expect(source).toContain('采购完成后，这里会显示每种原料的实际采购渠道和采购产品')
+    // 2026-11-09 老板定：来自库存的原料一律不带日期，页面不再出现「库存采购日期」
+    expect(source).not.toContain('库存采购日期')
+    expect(source).not.toContain('?.purchasedAt')
     // 食材只给内容，不写「渠道 / 采购产品」两个词（2026-11-03）
     expect(source).toContain('>{{ getProcurementDisclosure(ingredient)?.channel }}</text')
-    // 补剂另走一套：渠道 / 品牌 / 采购产品，且不显示来源标签与库存日期
+    // 补剂和食材同一套排版：参考商品 + 渠道 · 品牌 · 商品（2026-11-09）
     expect(source).toContain('isSupplementIngredient')
-    expect(source).toContain('品牌')
+    expect(source).toContain('参考商品')
     expect(source).toContain('getProcurementDisclosure(ingredient)?.brand')
     expect(source).not.toContain('规格 {{')
+    // 三行标签排版已下线
+    expect(source).not.toContain('supp-k')
+    expect(source).not.toContain('supp-v')
+  })
+
+  it('2026-11-09 原料清单：一条摘要、单层折叠、库存不带日期、底栏留白', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    // 食谱名下面不再有两条边线：商品头和原料清单之间换成一条可点的摘要条
+    expect(source).toContain('class="ing-bar"')
+    expect(source).toContain('ing-pill')
+    expect(source).toContain('procurementBadgeText')
+    expect(source).not.toContain('ingredients-header')
+    // 采购状态只出现一次，不再有绿色虚线状态框
+    expect(source).not.toContain('procurement-status-text')
+
+    // 只有一层折叠：底部不再有「展开其余 N 项」
+    expect(source).not.toContain('visibleSupplementIngredients')
+    expect(source).not.toContain('hiddenIngredientCount')
+
+    // 来自库存的原料不带日期
+    expect(source).not.toContain('库存采购日期')
+    expect(source).not.toContain('proc-date')
+
+    // 底栏固定，页面底部留白 + 安全区，最后一段不被压住
+    expect(source).toContain('env(safe-area-inset-bottom)')
   })
 
   it('shows the life-stage version frozen in the order snapshot', () => {
@@ -402,15 +433,18 @@ describe('order detail runtime regressions', () => {
     expect(source).not.toContain('package-label">总净重')
     expect(source).not.toContain('order-note-row')
 
-    // 原料清单：默认展开，直接看到 5 个占比最高的食材；其余（含补剂）折叠
+    // 原料清单：一条摘要 + 单层折叠（2026-11-09 改版）
     expect(source).toContain('isIngredientSectionOpen')
-    expect(source).toContain('!== false')
+    // 默认收起：首屏只看到一条摘要，点开才展开全部（2026-11-09）
+    expect(source).toContain('expandedIngredients.value[itemId] === true')
     expect(source).not.toContain('v-if="expandedIngredients[item.id]"')
-    expect(source).toContain('visibleFoodIngredients')
-    expect(source).toContain('slice(0, 5)')
-    expect(source).toContain('ingredient-toggle-more')
-    expect(source).toContain('含')
-    expect(source).toContain('种补剂')
+    expect(source).toContain('foodIngredients')
+    expect(source).toContain('supplementIngredients')
+    expect(source).toContain('procurementBadgeText')
+    // 内部的「只露 5 个」折叠已经下线
+    expect(source).not.toContain('slice(0, 5)')
+    expect(source).not.toContain('expandedIngredientLists')
+    expect(source).not.toContain('ingredient-toggle-more')
 
     // 物流并入收货与配送，不再有独立的物流卡
     expect(source).toContain('logistics-inline')
@@ -433,7 +467,7 @@ describe('order detail runtime regressions', () => {
 
     // 订单号 / 下单时间 / 备注 / 原料照片保留
     expect(source).toContain('copyOrderId')
-    expect(source).toContain('formatDateTime(order.createdAt)')
+    expect(source).toContain('formatMonthDayTime(order.createdAt)')
     expect(source).toContain('customerRequirementText')
     expect(source).toContain('production-photos-section')
   })

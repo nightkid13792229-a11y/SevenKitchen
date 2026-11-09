@@ -12,6 +12,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import type { InventoryRepository } from '../../domain/inventory/inventory.repository';
 import {
@@ -26,7 +27,13 @@ import {
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import { PackagingUnitStatus } from '../../domain/production/enums';
 import { PRODUCTION_BATCH_REPOSITORY } from '../production/production.service';
-import type { PurchaseRecord } from '../../domain/purchasing';
+export interface PurchaseInboundRecord {
+  id: string;
+  ingredientId: string;
+  actualBaseQuantity?: number | { toString(): string } | null;
+  procurementSkuId?: string | null;
+  inboundVersion?: number | null;
+}
 
 export const INVENTORY_REPOSITORY = Symbol('INVENTORY_REPOSITORY');
 
@@ -267,88 +274,142 @@ export class InventoryService {
    * Uses actualBaseQuantity as the canonical warehouse delta.
    */
   async inboundFromPurchaseRecords(
-    purchaseRecords: PurchaseRecord[],
+    purchaseRecords: PurchaseInboundRecord[],
+    tx?: Prisma.TransactionClient,
   ): Promise<{ createdCount: number; skippedCount: number }> {
     if (purchaseRecords.length === 0) {
       return { createdCount: 0, skippedCount: 0 };
     }
 
-    const ledgerEntries: InventoryLedgerEntry[] = [];
-    let skippedCount = 0;
+    const run = async (client: Prisma.TransactionClient) => {
+      let skippedCount = 0;
+      const rows: any[] = [];
+      const versions: Array<{ id: string; version: number }> = [];
 
-    for (const record of purchaseRecords) {
-      const baseQuantity = Number(record.actualBaseQuantity || 0);
-      if (!Number.isFinite(baseQuantity) || baseQuantity <= 0) {
-        this.logger.warn(
-          `Skipping purchase record ${record.id}: actualBaseQuantity is ${record.actualBaseQuantity}`,
-        );
-        skippedCount++;
-        continue;
+      for (const record of purchaseRecords) {
+        const baseQuantity = Number(record.actualBaseQuantity || 0);
+        if (!Number.isFinite(baseQuantity) || baseQuantity <= 0) {
+          this.logger.warn(
+            `Skipping purchase record ${record.id}: actualBaseQuantity is ${record.actualBaseQuantity}`,
+          );
+          skippedCount++;
+          continue;
+        }
+
+        // 同一采购记录的第几次入库：撤回不递减，再完成时 +1。
+        const version = Number(record.inboundVersion ?? 0) + 1;
+        const exists = await client.inventoryLedgerEntry.count({
+          where: {
+            sourceType: InventorySourceType.PURCHASE_RECORD as any,
+            sourceId: record.id,
+            sourceVersion: version,
+            ingredientId: record.ingredientId,
+          },
+        });
+
+        if (exists > 0) {
+          skippedCount++;
+          continue;
+        }
+
+        rows.push({
+          id: randomUUID(),
+          ingredientId: record.ingredientId,
+          deltaG: baseQuantity,
+          procurementSkuId: record.procurementSkuId ?? null,
+          sourceType: InventorySourceType.PURCHASE_RECORD as any,
+          sourceId: record.id,
+          sourceVersion: version,
+          costAmount: null,
+          createdAt: new Date(),
+        });
+        versions.push({ id: record.id, version });
       }
 
-      // 日采与补货一视同仁：采购完成即入库（方案 §4）。
-      const exists =
-        await this.inventoryRepository.existsBySourceVersionAndIngredient(
-          InventorySourceType.PURCHASE_RECORD,
-          record.id,
-          1,
-          record.ingredientId,
-        );
+      const result = rows.length
+        ? await client.inventoryLedgerEntry.createMany({
+            data: rows,
+            skipDuplicates: true,
+          })
+        : { count: 0 };
 
-      if (exists) {
-        skippedCount++;
-        continue;
+      for (const item of versions) {
+        await client.purchaseRecord.update({
+          where: { id: item.id },
+          data: { inboundVersion: item.version },
+        });
       }
 
-      ledgerEntries.push(
-        new InventoryLedgerEntry(
-          randomUUID(),
-          record.ingredientId,
-          baseQuantity,
-          InventorySourceType.PURCHASE_RECORD,
-          record.id,
-          new Date(),
-          record.procurementSkuId,
-        ),
-      );
-    }
+      if (result.count > 0) {
+        this.logger.log(
+          `Successfully inbounded ${result.count} purchase records into inventory`,
+        );
+      }
 
-    if (ledgerEntries.length > 0) {
-      await this.inventoryRepository.recordEntries(ledgerEntries);
-      this.logger.log(
-        `Successfully inbounded ${ledgerEntries.length} purchase records into inventory`,
-      );
-    }
-
-    return {
-      createdCount: ledgerEntries.length,
-      skippedCount,
+      return { createdCount: result.count, skippedCount };
     };
+
+    return tx ? run(tx) : this.prisma.$transaction(run);
   }
 
-  async releasePurchaseRecordInboundsForPurchaseList(
-    purchaseListId: string,
-  ): Promise<{ deletedCount: number }> {
-    const purchaseRecords = await this.prisma.purchaseRecord.findMany({
-      where: { purchaseListId },
-      select: { id: true },
-    });
+  /**
+   * 撤回采购完成：按"当前版本"的入库流水写等量负数冲红，不删历史。
+   * 金额从原流水读，不能用采购记录上的当前数量（撤回后可能被改过）。
+   */
+  async reversePurchaseRecordInboundsForPurchaseList(
+    purchaseRecords: PurchaseInboundRecord[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ reversedCount: number }> {
+    const run = async (client: Prisma.TransactionClient) => {
+      let reversedCount = 0;
 
-    const purchaseRecordIds = purchaseRecords.map((record) => record.id);
-    if (purchaseRecordIds.length === 0) {
-      return { deletedCount: 0 };
-    }
+      for (const record of purchaseRecords) {
+        const version = Number(record.inboundVersion ?? 0);
+        if (!version) {
+          continue;
+        }
 
-    // This is limited to pre-reimbursement correction: reopening a just-completed
-    // purchase list should undo the automatic inbound entries before staff edit it.
-    const result = await this.prisma.inventoryLedgerEntry.deleteMany({
-      where: {
-        sourceType: InventorySourceType.PURCHASE_RECORD,
-        sourceId: { in: purchaseRecordIds },
-      },
-    });
+        const originals = await client.inventoryLedgerEntry.findMany({
+          where: {
+            sourceType: InventorySourceType.PURCHASE_RECORD as any,
+            sourceId: record.id,
+            sourceVersion: version,
+          },
+        });
 
-    return { deletedCount: result.count };
+        if (originals.length === 0) {
+          this.logger.warn(
+            `Cannot reverse purchase record ${record.id}: no inbound entries at version ${version}`,
+          );
+          continue;
+        }
+
+        const rows = originals.map((entry) => ({
+          id: randomUUID(),
+          ingredientId: entry.ingredientId,
+          deltaG: -Math.abs(Number(entry.deltaG)),
+          procurementSkuId: entry.procurementSkuId,
+          sourceType: InventorySourceType.PURCHASE_RECORD_REVERSAL as any,
+          sourceId: record.id,
+          sourceVersion: version,
+          costAmount:
+            entry.costAmount === null
+              ? null
+              : -Math.abs(Number(entry.costAmount)),
+          createdAt: new Date(),
+        }));
+
+        const result = await client.inventoryLedgerEntry.createMany({
+          data: rows,
+          skipDuplicates: true,
+        });
+        reversedCount += result.count;
+      }
+
+      return { reversedCount };
+    };
+
+    return tx ? run(tx) : this.prisma.$transaction(run);
   }
 
   /**
@@ -1350,6 +1411,7 @@ export class InventoryService {
     const labelMap: Record<InventorySourceType, string> = {
       [InventorySourceType.KITCHEN_TASK]: '厨房领用',
       [InventorySourceType.PURCHASE_RECORD]: '采购入库',
+      [InventorySourceType.PURCHASE_RECORD_REVERSAL]: '采购撤回',
       [InventorySourceType.MANUAL_ADJUSTMENT]: '手工调整',
       [InventorySourceType.STOCKTAKE]: '盘点差异',
       [InventorySourceType.PRODUCTION_ALLOCATION_CONSUMPTION]: '生产领用',

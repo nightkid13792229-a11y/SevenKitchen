@@ -38,9 +38,18 @@ describe('InventoryService - Phase 8.13', () => {
     findBatchesByPackagingUnitStatus: jest.fn(),
   };
 
-  const mockPrisma = {
+  const mockPrisma: any = {
     ingredient: {
       findMany: jest.fn(),
+    },
+    $transaction: jest.fn(async (callback: any) => callback(mockPrisma)),
+    inventoryLedgerEntry: {
+      count: jest.fn(),
+      createMany: jest.fn(),
+      findMany: jest.fn(),
+    },
+    purchaseRecord: {
+      update: jest.fn(),
     },
   };
 
@@ -282,11 +291,8 @@ describe('InventoryService - Phase 8.13', () => {
   });
   describe('inboundFromPurchaseRecords', () => {
     it('日采原料也入库', async () => {
-      mockPrisma.ingredient.findMany.mockResolvedValue([
-        { id: 'ing-stock', procurementStrategy: 'STOCK_REPLENISHMENT' },
-      ]);
-      inventoryRepository.existsBySourceVersionAndIngredient.mockResolvedValue(false);
-      inventoryRepository.recordEntries.mockResolvedValue(undefined);
+      mockPrisma.inventoryLedgerEntry.count.mockResolvedValue(0);
+      mockPrisma.inventoryLedgerEntry.createMany.mockResolvedValue({ count: 2 });
 
       const result = await service.inboundFromPurchaseRecords([
         { id: 'pr-daily', ingredientId: 'ing-daily', actualBaseQuantity: 500 },
@@ -294,26 +300,176 @@ describe('InventoryService - Phase 8.13', () => {
       ] as any);
 
       expect(result.createdCount).toBe(2);
-      const entries = inventoryRepository.recordEntries.mock.calls[0][0];
-      expect(entries.map((entry) => entry.ingredientId)).toEqual([
+      const rows =
+        mockPrisma.inventoryLedgerEntry.createMany.mock.calls[0][0].data;
+      expect(rows.map((row: any) => row.ingredientId)).toEqual([
         'ing-daily',
         'ing-stock',
       ]);
     });
 
     it('入账行带来源版本 1', async () => {
-      mockPrisma.ingredient.findMany.mockResolvedValue([
-        { id: 'ing-stock', procurementStrategy: 'STOCK_REPLENISHMENT' },
-      ]);
-      inventoryRepository.existsBySourceVersionAndIngredient.mockResolvedValue(false);
-      inventoryRepository.recordEntries.mockResolvedValue(undefined);
+      mockPrisma.inventoryLedgerEntry.count.mockResolvedValue(0);
+      mockPrisma.inventoryLedgerEntry.createMany.mockResolvedValue({ count: 1 });
 
       await service.inboundFromPurchaseRecords([
         { id: 'pr-stock', ingredientId: 'ing-stock', actualBaseQuantity: 1200 },
       ] as any);
 
-      const entries = inventoryRepository.recordEntries.mock.calls[0][0];
-      expect((entries[0] as any).sourceVersion).toBe(1);
+      const rows =
+        mockPrisma.inventoryLedgerEntry.createMany.mock.calls[0][0].data;
+      expect(rows[0].sourceVersion).toBe(1);
+    });
+  });
+
+  describe('purchase inbound versions / reversal', () => {
+    it('同一采购记录再完成时版本递增', async () => {
+      mockPrisma.inventoryLedgerEntry.count.mockResolvedValue(0);
+      mockPrisma.inventoryLedgerEntry.createMany.mockResolvedValue({ count: 1 });
+      mockPrisma.purchaseRecord.update.mockResolvedValue({});
+
+      await service.inboundFromPurchaseRecords([
+        {
+          id: 'pr-1',
+          ingredientId: 'ing-1',
+          actualBaseQuantity: 500,
+          inboundVersion: 1,
+        },
+      ] as any);
+
+      expect(mockPrisma.inventoryLedgerEntry.createMany).toHaveBeenCalled();
+      const rows =
+        mockPrisma.inventoryLedgerEntry.createMany.mock.calls[0][0].data;
+      expect(rows[0].sourceVersion).toBe(2);
+      expect(mockPrisma.purchaseRecord.update).toHaveBeenCalledWith({
+        where: { id: 'pr-1' },
+        data: { inboundVersion: 2 },
+      });
+    });
+
+    it('撤回按当前版本写负数冲红', async () => {
+      mockPrisma.inventoryLedgerEntry.findMany.mockResolvedValue([
+        {
+          ingredientId: 'ing-1',
+          deltaG: 500,
+          procurementSkuId: null,
+          costAmount: null,
+        },
+      ]);
+      mockPrisma.inventoryLedgerEntry.createMany.mockResolvedValue({ count: 1 });
+
+      const result =
+        await service.reversePurchaseRecordInboundsForPurchaseList([
+          { id: 'pr-1', inboundVersion: 2 },
+        ] as any);
+
+      expect(result.reversedCount).toBe(1);
+      const rows =
+        mockPrisma.inventoryLedgerEntry.createMany.mock.calls[0][0].data;
+      expect(rows[0]).toEqual(
+        expect.objectContaining({
+          ingredientId: 'ing-1',
+          deltaG: -500,
+          sourceType: 'PURCHASE_RECORD_REVERSAL',
+          sourceVersion: 2,
+        }),
+      );
+    });
+
+    it('撤回不动版本号', async () => {
+      mockPrisma.inventoryLedgerEntry.findMany.mockResolvedValue([
+        { ingredientId: 'ing-1', deltaG: 500, procurementSkuId: null, costAmount: null },
+      ]);
+      mockPrisma.inventoryLedgerEntry.createMany.mockResolvedValue({ count: 1 });
+
+      await service.reversePurchaseRecordInboundsForPurchaseList([
+        { id: 'pr-1', inboundVersion: 2 },
+      ] as any);
+
+      expect(mockPrisma.purchaseRecord.update).not.toHaveBeenCalled();
+    });
+
+    it('没有入库行时撤回跳过', async () => {
+      mockPrisma.inventoryLedgerEntry.findMany.mockResolvedValue([]);
+
+      const result =
+        await service.reversePurchaseRecordInboundsForPurchaseList([
+          { id: 'pr-1', inboundVersion: 2 },
+        ] as any);
+
+      expect(result.reversedCount).toBe(0);
+      expect(mockPrisma.inventoryLedgerEntry.createMany).not.toHaveBeenCalled();
+    });
+
+    it('完成 → 撤回 → 再完成：余额按新数量，版本递增', async () => {
+      const ledger: any[] = [];
+      const key = (row: any) =>
+        `${row.sourceType}|${row.sourceId}|${row.sourceVersion}|${row.ingredientId}`;
+      const record: any = {
+        id: 'pr-1',
+        ingredientId: 'ing-1',
+        actualBaseQuantity: 1200,
+        inboundVersion: 0,
+      };
+
+      mockPrisma.inventoryLedgerEntry.count.mockImplementation(
+        async ({ where }: any) =>
+          ledger.filter(
+            (row) =>
+              row.sourceType === where.sourceType &&
+              row.sourceId === where.sourceId &&
+              row.sourceVersion === where.sourceVersion &&
+              row.ingredientId === where.ingredientId,
+          ).length,
+      );
+      mockPrisma.inventoryLedgerEntry.createMany.mockImplementation(
+        async ({ data }: any) => {
+          let count = 0;
+          for (const row of data) {
+            if (!ledger.some((existing) => key(existing) === key(row))) {
+              ledger.push(row);
+              count++;
+            }
+          }
+          return { count };
+        },
+      );
+      mockPrisma.inventoryLedgerEntry.findMany.mockImplementation(
+        async ({ where }: any) =>
+          ledger.filter(
+            (row) =>
+              row.sourceType === where.sourceType &&
+              row.sourceId === where.sourceId &&
+              row.sourceVersion === where.sourceVersion,
+          ),
+      );
+      mockPrisma.purchaseRecord.update.mockImplementation(
+        async ({ where, data }: any) => {
+          if (where.id === record.id) {
+            record.inboundVersion = data.inboundVersion;
+          }
+          return record;
+        },
+      );
+
+      const balance = () =>
+        ledger.reduce((sum, row) => sum + row.deltaG, 0);
+
+      await service.inboundFromPurchaseRecords([record]);
+      expect(balance()).toBe(1200);
+      expect(record.inboundVersion).toBe(1);
+
+      await service.reversePurchaseRecordInboundsForPurchaseList([record]);
+      expect(balance()).toBe(0);
+
+      record.actualBaseQuantity = 800;
+      await service.inboundFromPurchaseRecords([record]);
+      expect(balance()).toBe(800);
+      expect(record.inboundVersion).toBe(2);
+
+      await service.reversePurchaseRecordInboundsForPurchaseList([record]);
+      expect(balance()).toBe(0);
+      expect(ledger).toHaveLength(4);
     });
   });
 });

@@ -61,6 +61,7 @@ export type StockLevelStatus =
 export enum InventorySourceType {
   KITCHEN_TASK = "KITCHEN_TASK",
   PURCHASE_RECORD = "PURCHASE_RECORD",
+  PURCHASE_RECORD_REVERSAL = "PURCHASE_RECORD_REVERSAL",
   MANUAL_ADJUSTMENT = "MANUAL_ADJUSTMENT",
   STOCKTAKE = "STOCKTAKE",
 }
@@ -85,6 +86,7 @@ export const StockLevelStatusLabels: Record<StockLevelStatus, string> = {
 export const InventorySourceTypeLabels: Record<string, string> = {
   [InventorySourceType.KITCHEN_TASK]: "厨房领用",
   [InventorySourceType.PURCHASE_RECORD]: "采购入库",
+  [InventorySourceType.PURCHASE_RECORD_REVERSAL]: "采购撤回",
   [InventorySourceType.MANUAL_ADJUSTMENT]: "手工调整",
   [InventorySourceType.STOCKTAKE]: "盘点差异",
 };

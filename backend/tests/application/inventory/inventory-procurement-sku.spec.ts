@@ -14,7 +14,7 @@ describe('InventoryService procurement sku traceability', () => {
   const mockInventoryRepository: jest.Mocked<InventoryRepository> = {
     recordEntries: jest.fn(),
     existsBySourceAndIngredient: jest.fn(),
-      existsBySourceVersionAndIngredient: jest.fn(),
+    existsBySourceVersionAndIngredient: jest.fn(),
     getCurrentBalanceByIngredient: jest.fn(),
     findBySource: jest.fn(),
   };
@@ -34,6 +34,7 @@ describe('InventoryService procurement sku traceability', () => {
     inventoryLedgerEntry: {
       findMany: jest.fn(),
       groupBy: jest.fn(),
+      count: jest.fn(),
       create: jest.fn(),
       createMany: jest.fn(),
       deleteMany: jest.fn(),
@@ -44,6 +45,7 @@ describe('InventoryService procurement sku traceability', () => {
     },
     purchaseRecord: {
       findMany: jest.fn(),
+      update: jest.fn(),
     },
     procurementSku: {
       findMany: jest.fn(),
@@ -94,14 +96,9 @@ describe('InventoryService procurement sku traceability', () => {
   });
 
   it('records procurement sku id when purchase records are inbounded into inventory', async () => {
-    inventoryRepository.existsBySourceAndIngredient.mockResolvedValue(false);
-    inventoryRepository.recordEntries.mockResolvedValue(undefined);
-    prisma.ingredient.findMany.mockResolvedValue([
-      {
-        id: 'ingredient-1',
-        procurementStrategy: 'HYBRID',
-      },
-    ]);
+    prisma.inventoryLedgerEntry.count.mockResolvedValue(0);
+    prisma.inventoryLedgerEntry.createMany.mockResolvedValue({ count: 1 });
+    prisma.purchaseRecord.update.mockResolvedValue({});
 
     await service.inboundFromPurchaseRecords([
       {
@@ -112,25 +109,25 @@ describe('InventoryService procurement sku traceability', () => {
       } as any,
     ]);
 
-    expect(inventoryRepository.recordEntries).toHaveBeenCalledTimes(1);
-    const [entries] = inventoryRepository.recordEntries.mock.calls[0];
-    expect(entries).toHaveLength(1);
-    expect(entries[0]).toEqual(
+    const rows =
+      prisma.inventoryLedgerEntry.createMany.mock.calls[0][0].data;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual(
       expect.objectContaining({
         ingredientId: 'ingredient-1',
         deltaG: 12,
         sourceType: InventorySourceType.PURCHASE_RECORD,
         sourceId: 'purchase-record-1',
         procurementSkuId: 'proc-sku-1',
+        sourceVersion: 1,
       }),
     );
   });
 
   it('inbounds daily purchase records too (A1: no strategy filter)', async () => {
-    inventoryRepository.existsBySourceVersionAndIngredient.mockResolvedValue(
-      false,
-    );
-    inventoryRepository.recordEntries.mockResolvedValue(undefined);
+    prisma.inventoryLedgerEntry.count.mockResolvedValue(0);
+    prisma.inventoryLedgerEntry.createMany.mockResolvedValue({ count: 2 });
+    prisma.purchaseRecord.update.mockResolvedValue({});
 
     const result = await service.inboundFromPurchaseRecords([
       {
@@ -146,14 +143,13 @@ describe('InventoryService procurement sku traceability', () => {
     ]);
 
     expect(result).toEqual({ createdCount: 2, skippedCount: 0 });
-    expect(inventoryRepository.recordEntries).toHaveBeenCalledTimes(1);
-    const [entries] = inventoryRepository.recordEntries.mock.calls[0];
-    expect(entries).toHaveLength(2);
-    expect(entries.map((entry) => entry.ingredientId)).toEqual([
+    const rows =
+      prisma.inventoryLedgerEntry.createMany.mock.calls[0][0].data;
+    expect(rows.map((row: any) => row.ingredientId)).toEqual([
       'beef',
       'spinach',
     ]);
-    expect(entries[1]).toEqual(
+    expect(rows[1]).toEqual(
       expect.objectContaining({
         ingredientId: 'spinach',
         deltaG: 500,
@@ -164,23 +160,35 @@ describe('InventoryService procurement sku traceability', () => {
     );
   });
 
-  it('deletes purchase-record inbound ledger entries when a completed purchase list is reopened', async () => {
-    prisma.purchaseRecord.findMany.mockResolvedValue([
-      { id: 'purchase-record-1' },
-      { id: 'purchase-record-2' },
+  it('reverses purchase-record inbounds with a negative row when a completed purchase list is reopened', async () => {
+    prisma.inventoryLedgerEntry.findMany.mockResolvedValue([
+      {
+        ingredientId: 'ingredient-1',
+        deltaG: 500,
+        procurementSkuId: null,
+        costAmount: null,
+      },
     ]);
-    prisma.inventoryLedgerEntry.deleteMany.mockResolvedValue({ count: 2 });
+    prisma.inventoryLedgerEntry.createMany.mockResolvedValue({ count: 1 });
 
     const result =
-      await service.releasePurchaseRecordInboundsForPurchaseList('list-1');
+      await service.reversePurchaseRecordInboundsForPurchaseList([
+        { id: 'purchase-record-1', inboundVersion: 1 },
+      ] as any);
 
-    expect(result).toEqual({ deletedCount: 2 });
-    expect(prisma.inventoryLedgerEntry.deleteMany).toHaveBeenCalledWith({
-      where: {
-        sourceType: InventorySourceType.PURCHASE_RECORD,
-        sourceId: { in: ['purchase-record-1', 'purchase-record-2'] },
-      },
-    });
+    expect(result).toEqual({ reversedCount: 1 });
+    const rows =
+      prisma.inventoryLedgerEntry.createMany.mock.calls[0][0].data;
+    expect(rows[0]).toEqual(
+      expect.objectContaining({
+        ingredientId: 'ingredient-1',
+        deltaG: -500,
+        sourceType: InventorySourceType.PURCHASE_RECORD_REVERSAL,
+        sourceId: 'purchase-record-1',
+        sourceVersion: 1,
+      }),
+    );
+    expect(prisma.inventoryLedgerEntry.deleteMany).not.toHaveBeenCalled();
   });
 
   it('includes procurement sku details when listing purchase-record ledger entries', async () => {

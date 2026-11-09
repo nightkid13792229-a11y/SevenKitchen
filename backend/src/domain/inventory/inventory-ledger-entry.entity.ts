@@ -51,6 +51,15 @@ export class InventoryLedgerEntry {
       );
     }
 
+    if (
+      this.sourceType === InventorySourceType.PURCHASE_RECORD_REVERSAL &&
+      this.deltaG > 0
+    ) {
+      throw new ValidationError(
+        `Purchase record reversal entries must be negative, got: ${this.deltaG}`,
+      );
+    }
+
     if (!this.ingredientId || this.ingredientId.trim() === '') {
       throw new ValidationError('ingredientId cannot be empty');
     }

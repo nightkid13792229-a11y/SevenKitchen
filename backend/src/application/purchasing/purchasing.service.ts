@@ -58,6 +58,7 @@ import {
   type RecommendedProductSummary,
 } from '../ingredient/recommended-product.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { PrismaService } from '../../infrastructure/prisma.service';
 import { resolvePreparationMethodTokens } from '../recipe/preparation-method-text.util';
 import { SearchGovernanceService } from '../search-governance/search-governance.service';
 import {
@@ -256,6 +257,7 @@ export class PurchasingService {
     @Inject(PURCHASE_RECORD_REPOSITORY)
     private readonly purchaseRecordRepository: PurchaseRecordRepository,
     private readonly platformOptions: PlatformOptionsService,
+    private readonly prisma: PrismaService,
     @Optional()
     private readonly searchGovernanceService?: SearchGovernanceService,
   ) {}
@@ -3871,23 +3873,42 @@ export class PurchasingService {
       );
     }
 
-    if (purchaseRecords.length > 0) {
-      const inboundResult =
-        await this.inventoryService.inboundFromPurchaseRecords(purchaseRecords);
-      this.logger.log(
-        `Purchase list ${id} inbounded ${inboundResult.createdCount} purchase records into inventory (${inboundResult.skippedCount} skipped)`,
-      );
-    } else {
-      this.logger.warn(
-        `Purchase list ${id} completed without purchase records, skipping inventory inbound`,
-      );
+    await this.prisma.$transaction(async (tx) => {
+      const transition = await tx.purchaseList.updateMany({
+        where: { id, status: PurchaseListStatus.PENDING as any },
+        data: {
+          status: PurchaseListStatus.COMPLETED as any,
+          completedAt: new Date(),
+        },
+      });
+
+      if (transition.count === 0) {
+        throw new BadRequestException(
+          '采购清单已完成或状态不允许，请刷新后重试',
+        );
+      }
+
+      const records = await tx.purchaseRecord.findMany({
+        where: { purchaseListId: id },
+      });
+
+      if (records.length > 0) {
+        const inboundResult =
+          await this.inventoryService.inboundFromPurchaseRecords(records, tx);
+        this.logger.log(
+          `Purchase list ${id} inbounded ${inboundResult.createdCount} purchase records into inventory (${inboundResult.skippedCount} skipped)`,
+        );
+      } else {
+        this.logger.warn(
+          `Purchase list ${id} completed without purchase records, skipping inventory inbound`,
+        );
+      }
+    });
+
+    const saved = await this.purchaseListRepository.findById(id);
+    if (!saved) {
+      throw new BadRequestException(`未找到采购清单：${id}`);
     }
-
-    // 确认采购完成
-    purchaseList.complete();
-
-    // 保存到数据库
-    const saved = await this.purchaseListRepository.save(purchaseList);
 
     this.logger.log(`Purchase list ${id} marked as completed`);
 
@@ -3983,17 +4004,41 @@ export class PurchasingService {
       throw new BadRequestException('已关联报销单的采购清单不能撤回完成');
     }
 
-    const releaseResult =
-      await this.inventoryService.releasePurchaseRecordInboundsForPurchaseList(
-        id,
+    await this.prisma.$transaction(async (tx) => {
+      const transition = await tx.purchaseList.updateMany({
+        where: {
+          id,
+          status: PurchaseListStatus.COMPLETED as any,
+        },
+        data: {
+          status: PurchaseListStatus.PENDING as any,
+          completedAt: null,
+        },
+      });
+
+      if (transition.count === 0) {
+        throw new BadRequestException('只有已完成的采购清单可以撤回完成');
+      }
+
+      const records = await tx.purchaseRecord.findMany({
+        where: { purchaseListId: id },
+      });
+
+      const releaseResult =
+        await this.inventoryService.reversePurchaseRecordInboundsForPurchaseList(
+          records,
+          tx,
+        );
+
+      this.logger.log(
+        `Purchase list ${id} reopened by ${userId || 'unknown'}; reversed ${releaseResult.reversedCount} inbound inventory entries`,
       );
+    });
 
-    purchaseList.reopen();
-    const saved = await this.purchaseListRepository.save(purchaseList);
-
-    this.logger.log(
-      `Purchase list ${id} reopened by ${userId || 'unknown'}; released ${releaseResult.deletedCount} inbound inventory entries`,
-    );
+    const saved = await this.purchaseListRepository.findById(id);
+    if (!saved) {
+      throw new BadRequestException(`未找到采购清单：${id}`);
+    }
 
     return saved;
   }

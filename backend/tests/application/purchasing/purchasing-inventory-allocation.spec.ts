@@ -19,6 +19,7 @@ import {
   PurchaseList,
   PurchaseListStatus,
 } from 'src/domain/purchasing';
+import { PrismaService } from 'src/infrastructure/prisma.service';
 
 jest.mock('uuid', () => ({
   v4: () => 'test-uuid',
@@ -128,6 +129,12 @@ const makePendingPurchaseList = () =>
     ],
   });
 
+const prismaMock: any = {
+  $transaction: jest.fn(async (callback: any) => callback(prismaMock)),
+  purchaseList: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+  purchaseRecord: { findMany: jest.fn().mockResolvedValue([]) },
+};
+
 describe('PurchasingService inventory allocation calculation', () => {
   async function createService(params?: {
     orders?: any[];
@@ -197,6 +204,7 @@ describe('PurchasingService inventory allocation calculation', () => {
 
     const module = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {

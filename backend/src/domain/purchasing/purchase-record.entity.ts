@@ -24,6 +24,7 @@ export interface PurchaseRecordConstructor {
   actualPackageUnit?: string; // 原始录入：单件规格单位
   actualBaseQuantity?: number; // 归一化后的基础单位数量
   actualBaseUnit?: string; // G / ML / PCS
+  inboundVersion?: number; // 已入账到第几版（0 = 未入账；撤回不递减）
   actualCost: number; // 实际采购金额（元）
   productModel?: string; // 产品型号（选填）
   notes?: string; // 备注信息（选填）
@@ -68,6 +69,7 @@ export class PurchaseRecord {
   public actualPackageUnit?: string;
   public actualBaseQuantity?: number;
   public actualBaseUnit?: string;
+  public inboundVersion: number;
   public actualCost: number; // 实际采购金额（元），两位小数
   public productModel?: string;
   public notes?: string;
@@ -91,6 +93,7 @@ export class PurchaseRecord {
     this.actualPackageUnit = data.actualPackageUnit;
     this.actualBaseQuantity = data.actualBaseQuantity;
     this.actualBaseUnit = data.actualBaseUnit;
+    this.inboundVersion = data.inboundVersion ?? 0;
     this.actualCost = data.actualCost;
     this.productModel = data.productModel;
     this.notes = data.notes;
@@ -264,6 +267,7 @@ export class PurchaseRecord {
       actualPackageUnit: this.actualPackageUnit || null,
       actualBaseQuantity: this.actualBaseQuantity ?? null,
       actualBaseUnit: this.actualBaseUnit || null,
+      inboundVersion: this.inboundVersion,
       actualCost: this.actualCost,
       productModel: this.productModel || null,
       notes: this.notes || null,
@@ -302,6 +306,7 @@ export class PurchaseRecord {
           ? Number(data.actualBaseQuantity)
           : undefined,
       actualBaseUnit: data.actualBaseUnit || undefined,
+      inboundVersion: Number(data.inboundVersion ?? 0),
       actualCost: Number(data.actualCost),
       productModel: data.productModel || undefined,
       notes: data.notes || undefined,

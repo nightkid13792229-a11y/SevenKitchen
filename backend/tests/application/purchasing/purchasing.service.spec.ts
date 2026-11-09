@@ -21,6 +21,13 @@ import {
 import { PurchaseItem } from 'src/domain/purchasing/purchase-item.entity';
 import { PurchaseRecord } from 'src/domain/purchasing/purchase-record.entity';
 import { DateUtil } from 'src/utils/date.util';
+import { PrismaService } from 'src/infrastructure/prisma.service';
+
+const prismaMock: any = {
+  $transaction: jest.fn(async (callback: any) => callback(prismaMock)),
+  purchaseList: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+  purchaseRecord: { findMany: jest.fn().mockResolvedValue([]) },
+};
 
 jest.mock('uuid', () => ({
   v4: () => 'test-uuid',
@@ -47,6 +54,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -140,6 +148,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -242,6 +251,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -433,6 +443,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -551,6 +562,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -651,6 +663,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -764,6 +777,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -890,6 +904,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -1010,6 +1025,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -1128,6 +1144,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -1223,6 +1240,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -1366,6 +1384,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -1455,6 +1474,15 @@ describe('PurchasingService procurement sku separation', () => {
       purchaseListId: 'list-1',
       purchaseItemId: 'item-recorded',
       ingredientId: 'ingredient-beef',
+      ingredientName: '牛霖',
+      purchaseChannel: '盒马鲜生',
+      actualQuantity: 2.286,
+      actualBaseQuantity: 2286,
+      actualCost: 228.06,
+      inboundVersion: 0,
+      purchasedAt: new Date('2026-04-21T11:40:00.000Z'),
+      createdAt: new Date('2026-04-21T11:40:00.000Z'),
+      updatedAt: new Date('2026-04-21T11:40:00.000Z'),
     };
     const purchaseRecordRepository = {
       findByPurchaseListId: jest.fn().mockResolvedValue([purchaseRecord]),
@@ -1472,6 +1500,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -1510,14 +1539,22 @@ describe('PurchasingService procurement sku separation', () => {
       ],
     }).compile();
 
+    prismaMock.purchaseRecord.findMany.mockResolvedValue([purchaseRecord]);
+    prismaMock.purchaseList.updateMany.mockImplementation(async () => {
+      purchaseList.status = PurchaseListStatus.COMPLETED;
+      purchaseList.completedAt = new Date();
+      return { count: 1 };
+    });
+
     const service = moduleRef.get(PurchasingService);
     const result = await service.completePurchase('list-1', {});
 
     expect(result.status).toBe(PurchaseListStatus.COMPLETED);
-    expect(inventoryService.inboundFromPurchaseRecords).toHaveBeenCalledWith([
-      purchaseRecord,
-    ]);
-    expect(purchaseListRepository.save).toHaveBeenCalledWith(purchaseList);
+    expect(inventoryService.inboundFromPurchaseRecords).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: 'record-1' })],
+      prismaMock,
+    );
+    expect(purchaseListRepository.save).not.toHaveBeenCalled();
   });
 
   it('rejects marking an item as no purchase needed when it already has purchase records', async () => {
@@ -1560,6 +1597,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -1641,9 +1679,9 @@ describe('PurchasingService procurement sku separation', () => {
     const inventoryService = {
       getBalanceByIngredient: jest.fn(),
       inboundFromPurchaseRecords: jest.fn(),
-      releasePurchaseRecordInboundsForPurchaseList: jest
+      reversePurchaseRecordInboundsForPurchaseList: jest
         .fn()
-        .mockResolvedValue({ deletedCount: 1 }),
+        .mockResolvedValue({ reversedCount: 1 }),
     } as any;
     const purchaseListRepository = {
       findById: jest.fn().mockResolvedValue(purchaseList),
@@ -1652,6 +1690,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -1693,15 +1732,41 @@ describe('PurchasingService procurement sku separation', () => {
       ],
     }).compile();
 
+    prismaMock.purchaseRecord.findMany.mockResolvedValue([
+      {
+        id: 'record-1',
+        purchaseListId: 'list-1',
+        purchaseItemId: 'item-1',
+        ingredientId: 'ingredient-beef',
+        ingredientName: '牛霖',
+        purchaseChannel: '盒马鲜生',
+        actualQuantity: 2.286,
+        actualBaseQuantity: 2286,
+        actualCost: 228.06,
+        inboundVersion: 1,
+        purchasedAt: new Date('2026-04-21T11:40:00.000Z'),
+        createdAt: new Date('2026-04-21T11:40:00.000Z'),
+        updatedAt: new Date('2026-04-21T11:40:00.000Z'),
+      },
+    ]);
+    prismaMock.purchaseList.updateMany.mockImplementation(async () => {
+      purchaseList.status = PurchaseListStatus.PENDING;
+      purchaseList.completedAt = undefined;
+      return { count: 1 };
+    });
+
     const service = moduleRef.get(PurchasingService);
     const result = await service.reopenPurchaseList('list-1', 'admin-1');
 
     expect(result.status).toBe(PurchaseListStatus.PENDING);
     expect(result.completedAt).toBeUndefined();
     expect(
-      inventoryService.releasePurchaseRecordInboundsForPurchaseList,
-    ).toHaveBeenCalledWith('list-1');
-    expect(purchaseListRepository.save).toHaveBeenCalledWith(purchaseList);
+      inventoryService.reversePurchaseRecordInboundsForPurchaseList,
+    ).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: 'record-1', inboundVersion: 1 })],
+      prismaMock,
+    );
+    expect(purchaseListRepository.save).not.toHaveBeenCalled();
   });
 
   it('rejects deleting a purchase record from a completed list until it is reopened', async () => {
@@ -1753,6 +1818,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -1846,6 +1912,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,
@@ -1964,6 +2031,7 @@ describe('PurchasingService procurement sku separation', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         {
           provide: PlatformOptionsService,

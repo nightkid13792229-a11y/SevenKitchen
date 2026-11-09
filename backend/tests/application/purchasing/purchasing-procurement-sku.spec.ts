@@ -14,10 +14,17 @@ import {
   PURCHASE_RECORD_REPOSITORY,
 } from 'src/application/purchasing/purchasing.service.tokens';
 import { IngredientProcurementStrategy } from 'src/domain/ingredient/enums';
+import { PrismaService } from 'src/infrastructure/prisma.service';
 
 jest.mock('uuid', () => ({
   v4: () => 'test-uuid',
 }));
+
+const prismaMock: any = {
+  $transaction: jest.fn(async (callback: any) => callback(prismaMock)),
+  purchaseList: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+  purchaseRecord: { findMany: jest.fn().mockResolvedValue([]) },
+};
 
 describe('PurchasingService stock replenishment procurement sku flow', () => {
   const legacyIngredient = {
@@ -107,6 +114,7 @@ describe('PurchasingService stock replenishment procurement sku flow', () => {
 
     const moduleRef = await Test.createTestingModule({
       providers: [
+        { provide: PrismaService, useValue: prismaMock },
         PurchasingService,
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
         {

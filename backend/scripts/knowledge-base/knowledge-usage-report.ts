@@ -78,7 +78,7 @@ function openTargetOf(row: MessageRow): string {
   return String(target);
 }
 
-function isZeroResult(row: MessageRow): boolean {
+export function isZeroResult(row: MessageRow): boolean {
   // `toolResult` 落的是整个 ToolOutcome `{ ok, data, summary }`（见 recipe-agent.service）。
   const outcome = asRecord(row.toolResult);
   const data = asRecord(outcome.data);
@@ -86,7 +86,15 @@ function isZeroResult(row: MessageRow): boolean {
     if (data.status === 'no_match') return true;
     const sections = Array.isArray(data.sections) ? data.sections : [];
     const tables = Array.isArray(data.tables) ? data.tables : [];
-    return sections.length === 0 && tables.length === 0;
+    // 历史消息（2026-11-08 之前）存的是 `{count, passages}`，没有 status/sections；
+    // 不能把"没这两个字段"当成 0 结果，否则整周报表会显示 100% 零结果。
+    const passages = Array.isArray(data.passages) ? data.passages : [];
+    if (sections.length > 0 || tables.length > 0 || passages.length > 0) {
+      return false;
+    }
+    const count = typeof data.count === 'number' ? data.count : undefined;
+    if (count !== undefined) return count === 0;
+    return false;
   }
   if (row.toolName === 'open_knowledge') {
     return outcome.ok === false;

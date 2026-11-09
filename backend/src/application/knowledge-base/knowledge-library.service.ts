@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { getKnowledgeSource } from '../../domain/recipe-designer/knowledge-base/source-registry';
 import { normalizeTopic, TOPIC_ALIASES } from '../../domain/knowledge/topic-aliases';
+import { domainRoutingBoost } from '../../domain/knowledge/domain-routing';
 import {
   SectionCatalogService,
   type CatalogSection,
@@ -254,7 +255,6 @@ export class KnowledgeLibraryService {
       .filter(Boolean);
 
     // 宽召回：扩展词 OR；正文与节标题都进 OR（标题写 blood pressure、正文只写 BP 的段也要召到）。
-    // 不在 SQL 里做焦点 AND —— 焦点词只在标题里时会被排掉，门禁放到应用层。
     const rows = await this.prisma.sourceParagraph.findMany({
       where: {
         OR: [
@@ -585,6 +585,7 @@ export class KnowledgeLibraryService {
    */
   private softBoost(
     row: {
+      documentId?: string | null;
       text?: string | null;
       section?: { title?: string | null } | null;
     },
@@ -595,7 +596,7 @@ export class KnowledgeLibraryService {
   ): number {
     const title = row.section?.title ?? '';
     const text = row.text ?? '';
-    let boost = 1;
+    let boost = domainRoutingBoost(raw, row.documentId);
 
     const needles = [
       ...focus.topicPhrases,

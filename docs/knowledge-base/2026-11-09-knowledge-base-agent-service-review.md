@@ -1,6 +1,8 @@
 # 知识库结构评审：以「为 Agent 调用服务」为唯一标准
 
-> **2026-11-09 晚更新**：按老板意见，方案改为「最小图书馆版」——编目只做检索提示、不做硬门禁，金标准移到产品外。后续以 [最小图书馆版设计](2026-11-09-kb-minimal-library-design.md) 和 [实施计划](../superpowers/plans/2026-11-09-kb-minimal-library.md) 为准；本报告第 6 章的「逐节人工确认 / 50 题 / 覆盖矩阵」不再作为 v1 主方案。
+> **2026-11-09 晚更新**：按老板意见，方案改为「最小图书馆版」——编目只做检索提示、不做硬门禁，金标准移到产品外。后续以 [最小图书馆版设计 v1.1](2026-11-09-kb-minimal-library-design.md)、[实施计划](../superpowers/plans/2026-11-09-kb-minimal-library.md) 和 [运行时说明](README.md#五最小图书馆版2026-11-09) 为准；本报告第 6 章的「逐节人工确认 / 50 题 / 覆盖矩阵」不再作为 v1 主方案。
+>
+> **当前状态（2026-11-09）**：Task 1–6 已落地；26 题工具层回归 **26/26**（[library-evaluation.md](ckd-structure/library-evaluation.md)），5 场景引用冒烟 **5/5、无效引用 0**（[citation-smoke.md](ckd-structure/citation-smoke.md)）；全库章节编目留到 v2（[full-library-decision.md](ckd-structure/full-library-decision.md)）。
 
 **日期**：2026-11-09
 **评审对象**：CKD 试点落地的知识库结构，以及它服务的三条 Agent / 调用链

@@ -85,7 +85,51 @@
 
 ---
 
-## 五、相关文档
+## 五、最小图书馆版（2026-11-09）
+
+这一节是**运行时（给 Agent 用）**的当前形态；上面的治理层（来源登记、证据政策、SOP）不变。
+
+**一句话**：知识库只做图书馆——藏书、编目、索引、借阅；不做临床判断；一个语料、一个服务入口；物种/分期只做检索提示，不做硬门禁。
+
+| 工具 | 用途 | 关键约束 |
+|---|---|---|
+| `search_knowledge_library` | 按问题找「节」 | 返回 ≤5 节；每节 ≤2 段；同一文档 ≤2 节；带表格命中；分期只扩召回 |
+| `open_knowledge` | 打开节/表/引用 | `sectionId` / `tableId` / `citationId` 三选一；每段/每表登记 `K#` |
+| `knowledge_scope` | 看馆藏 | 配方侧默认 CKD 5 份；列文档/节/段/表 |
+
+**检索规则（v1.1）**：
+
+- **分期只扩召回、软排序，不做硬过滤**：`stage 1–4` 短语只用来把对应分期内容召回，不排除其他分期；
+  排序里对匹配分期加权、对其他分期只降权。Stage 3 证据不会因为标签写成 2 期而消失。
+- **焦点门禁按优先级**：`topicPhrases`（如 `vitamin k` / `fish oil` / `omega-3`）非空时**必须命中短语**；
+  否则命中任一 `focusTerms` 或 `stagePhrases`；三组都空才不做门禁。`CKD dog vitamin K target`
+  不会因为命中 `vitamin` 就返回 `vitamin D`。
+- **查不到就说没覆盖**：门禁后为空返回 `status:"no_match"`（0 节 0 表），不拿常识补。
+
+**范围**：
+
+- **配方 Agent 只开放 CKD 5 份文档**；传非 CKD 的 `documentIds`/`sourceIds` 或打开非 CKD 节/表 → `ok:false`。
+- **补剂 Agent 可查全库**（不传 `documentIds`），走同一个 `KnowledgeLibraryService`；`chunks.jsonl` 不再是运行时依赖。
+- **全库章节编目/表格扩展留到 v2**，不在本阶段。
+
+**质量在产品外**：
+
+- 在 `backend/` 下跑 `npm run kb:eval`：**26 题**（走 Agent 工具层 `executeTool`），每次改动后跑，记录基线；
+  产品运行时不加载金标准。`--no-write` 只验证、不覆盖已提交报告。
+- 在 `backend/` 下跑 `npm run kb:smoke`：**5 场景引用冒烟**（检索 → 打开 → `K#` 有效 + 1 个负样本）。
+- 两者都在**产品外**跑，不参与运行时。
+
+**文档指针**：
+
+- 设计与阶段目标：[2026-11-09-kb-minimal-library-design.md](2026-11-09-kb-minimal-library-design.md)
+- 实施计划：[2026-11-09-kb-minimal-library.md](../superpowers/plans/2026-11-09-kb-minimal-library.md)
+- 26 题回归结果：[ckd-structure/library-evaluation.md](ckd-structure/library-evaluation.md)
+- 5 场景引用冒烟：[ckd-structure/citation-smoke.md](ckd-structure/citation-smoke.md)
+- 全库扩展开关：[ckd-structure/full-library-decision.md](ckd-structure/full-library-decision.md)
+
+---
+
+## 六、相关文档
 
 - 《健康管理 · 需求报告》：`docs/_archive/plans/2026-09-30-health-management-requirements.md`
 - 《知识库 · 技术评审 + 来源清单 + 扩充计划》：

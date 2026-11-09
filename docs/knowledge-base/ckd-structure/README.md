@@ -9,8 +9,24 @@
 | `section-catalog.json` | 5 份 CKD 文档的文档/章节级元数据，机器可读 |
 | `section-catalog.md` | 同一份目录，给人看 |
 | `coverage-map.md` | CKD 主题 → 文档/章节覆盖；列出未覆盖主题 |
-| `retrieval-questions.json` | 14 个固定 CKD 目录路由验收问题 |
-| `retrieval-evaluation.md` | 路由验收结果（当前 14/14） |
+| `retrieval-questions.json` | **旧 14 题**：CKD 目录路由验收问题（裸服务/目录层） |
+| `retrieval-evaluation.md` | 旧 14 题目录路由验收结果 |
+| `library-questions.json` | **新 26 题**：最小图书馆版回归集（走 Agent 工具层，spec v1.1 附录 A） |
+| `library-evaluation.md` / `.json` | 新 26 题回归结果（`npm run kb:eval` 生成） |
+| `citation-smoke.md` | 5 场景引用冒烟结果（`npm run kb:smoke` 生成） |
+| `full-library-decision.md` | 是否扩全库的决策与 v1 范围 |
+
+## 两套评估的分工（不要混用）
+
+| 维度 | `retrieval-evaluation.*`（旧） | `library-evaluation.*`（新） |
+|---|---|---|
+| 题集 | `retrieval-questions.json`，14 题 | `library-questions.json`，26 题 |
+| 测什么 | 目录/章节路由（裸检索服务） | Agent 实际看到的工具返回：节分组、`citationId`、表格摘要 |
+| 怎么测 | 直接调检索/目录服务 | 每题一个 `CitationRegistry`，调 `executeTool('search_knowledge_library')`；表格题再用检索返回的 `citationId` 调 `open_knowledge` |
+| 判分 | 目录 top-k 是否命中期望章节 | spec v1.1 附录 A：前 3 节命中 / 禁止节 / 负样本 `no_match` 或 0 节 0 表 / 表格命中且按 K 打开 |
+| 状态 | 14/14（保留作历史对照） | 26/26（当前验收口径） |
+
+> 结论：**新改动看 `library-evaluation.*`**；`retrieval-evaluation.*` 只作为早期目录路由的历史基线，不再作为 Agent 可用性的验收依据。
 
 ## 元数据
 
@@ -27,7 +43,33 @@ npx ts-node --transpile-only -r dotenv/config -r tsconfig-paths/register \
 
 脚本只读 source layer，不写数据库；生成的文件提交到本目录。
 
-路由验收：
+## 26 题工具层回归（`npm run kb:eval`）
+
+```bash
+cd backend
+npm run kb:eval                 # 跑 26 题并写入 library-evaluation.md/.json
+npm run kb:eval -- --no-write   # 只验证，不覆盖已提交的报告（Task 7 / 改动后自检用）
+npm run kb:eval -- --check      # --no-write 的别名
+npm run kb:eval -- --questions <path>   # 换题集做对照
+```
+
+- 题集：`library-questions.json`（26 题；来源见 `docs/knowledge-base/2026-11-09-kb-minimal-library-design.md` 附录 A）。
+- 退出码：整体/Stage 3/表格/中文/负样本/对抗/核心表/p95/max 任一条不过 → 1。
+- 26 题是**产品外**的质量门禁，运行时不加载；不要把它接进 Agent 运行时。
+
+## 5 场景引用冒烟（`npm run kb:smoke`）
+
+```bash
+cd backend
+npm run kb:smoke                 # 5 场景 + 写入 citation-smoke.md
+npm run kb:smoke -- --no-write   # 只打印，不覆盖报告
+```
+
+- 前 4 个场景：检索 → 取 top 节第一段 `citationId` → `open_knowledge({ citationId })` → 断言节里仍有该段、K 号一致、`CitationRegistry.audit` 引用有效；
+- 第 5 个场景（`CKD dog vitamin K target`）：必须 `no_match` 且 0 节 0 表；
+- 期望：5/5 通过、无效引用 0。
+
+## 旧 14 题目录路由（历史对照）
 
 ```bash
 cd backend
@@ -35,11 +77,12 @@ npx ts-node --transpile-only -r dotenv/config -r tsconfig-paths/register \
   scripts/knowledge-base/evaluate-ckd-routing.ts
 ```
 
-验收只测目录/检索，不测 Agent；`expectNoSource` 的碘问题用于验证“知识库没覆盖”能被识别。
+验收只测目录/检索，不测 Agent；`expectNoSource` 的碘问题用于验证“知识库没覆盖”能被识别。**这条路径已被 `npm run kb:eval` 取代，保留只为对照。**
 
 ## 已知限制
 
 - 主题是从章节标题/正文关键词统计出来的，只表示“这段文字提到过”，不表示“讲清楚了”；
 - 物种/分期是从标题和正文判断的；跨物种/跨分期的章节会标 `both` 或列出多个分期；
 - 碘在 5 份 CKD 文档中没有出现（覆盖地图“未覆盖主题”），这是 **知识库来源缺口**，不是食物营养数据问题；
-- 权威性只区分 guideline / textbook / reference，**不做临床冲突裁决**。
+- 权威性只区分 guideline / textbook / reference，**不做临床冲突裁决**；
+- 表格没有 `section_id`（文档级命中），5 张核心表页码暂为 `null`，留待 v2 补导入。

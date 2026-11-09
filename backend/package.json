@@ -104,6 +104,7 @@
     "repair:food-ratio-totals:apply": "ts-node -r tsconfig-paths/register scripts/repair-food-ratio-totals.ts --apply",
     "repair:local-recipe-designer-schema": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} prisma db execute --schema prisma/schema.prisma --file prisma/local-repairs/recipe-designer-schema.sql",
     "kb:eval": "ts-node -r tsconfig-paths/register scripts/knowledge-base/evaluate-library.ts",
+    "kb:smoke": "ts-node -r tsconfig-paths/register scripts/knowledge-base/evaluate-citation-smoke.ts",
     "kb:usage": "ts-node -r tsconfig-paths/register scripts/knowledge-base/knowledge-usage-report.ts",
     "smoke:pricing-purchase": "node scripts/smoke_pricing_purchase_flow.js",
     "smoke:supplement-purchase": "node scripts/smoke_supplement_purchase_flow.js",

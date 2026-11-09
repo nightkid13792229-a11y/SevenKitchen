@@ -88,14 +88,23 @@
                 <span v-else class="placeholder">-</span>
               </template>
             </el-table-column>
-            <el-table-column label="建议补货" min-width="220">
+            <el-table-column label="在途 / 建议补货" min-width="240">
               <template #default="{ row }">
-                <div v-if="row.suggestedPurchaseQuantity > 0" class="suggestion-block">
-                  <div>{{ formatQuantity(row.suggestedPurchaseQuantity) }} {{ row.purchaseUnit }}</div>
-                  <div class="suggestion-meta">
-                    约 ¥{{ formatPrice(row.suggestedEstimatedCost) }}
+                <div
+                  v-if="row.suggestedPurchaseQuantity > 0 || row.inTransitQuantity > 0"
+                  class="suggestion-block"
+                >
+                  <div v-if="row.inTransitQuantity > 0" class="suggestion-meta">
+                    在途 {{ formatQuantity(row.inTransitQuantity) }} {{ row.purchaseUnit }}
+                  </div>
+                  <div v-if="row.netShortageQuantity > 0">
+                    {{ formatQuantity(row.netShortageQuantity) }} {{ row.purchaseUnit }}
+                  </div>
+                  <div v-if="row.netShortageQuantity > 0" class="suggestion-meta">
+                    还差 · 约 ¥{{ formatPrice(row.netShortageEstimatedCost) }}
                     <span v-if="row.suggestedProductName"> · {{ row.suggestedProductName }}</span>
                   </div>
+                  <div v-else class="suggestion-meta">在途已覆盖</div>
                 </div>
                 <span v-else class="placeholder">-</span>
               </template>

@@ -595,7 +595,7 @@ export class InventoryService {
    * 在途 = 目标日期内、状态 PENDING 的订单需求采购单里"还没买到的部分"。
    * COMPLETED 不算（已经进 onHand）；作废单不算。
    */
-  private async getInTransitByIngredientIds(
+  async getInTransitByIngredientIds(
     ingredientIds: string[],
     dateRange?: { start: Date; end: Date },
   ): Promise<Map<string, number>> {

@@ -36,8 +36,14 @@
               <text class="name">{{ item.name }}</text>
               <text class="meta">
                 现存 {{ fmt(item.currentStock) }}{{ item.stockUnitLabel }}
-                · 建议补 {{ fmt(item.suggestedPurchaseQuantity) }}{{ item.purchaseUnit }}
-                · 约 ¥{{ fmt(item.suggestedEstimatedCost) }}
+                <text v-if="(item.inTransitQuantity || 0) > 0">
+                  · 在途 {{ fmt(item.inTransitQuantity) }}{{ item.purchaseUnit }}
+                </text>
+                <text v-if="(item.netShortageQuantity || 0) > 0">
+                  · 还差 {{ fmt(item.netShortageQuantity) }}{{ item.purchaseUnit }}
+                  · 约 ¥{{ fmt(item.netShortageEstimatedCost) }}
+                </text>
+                <text v-else> · 已覆盖</text>
               </text>
             </view>
             <button class="mini" @tap="onGoReplenish(item)">去补货</button>

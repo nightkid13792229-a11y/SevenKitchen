@@ -139,3 +139,21 @@ describe('staff inventory home (C8)', () => {
     expect(page).not.toContain('class="page-title"');
   });
 });
+
+describe('staff inventory in-transit display (D5)', () => {
+  const page = readPage('staff-inventory/index.vue');
+  const drawer = readPage('staff-inventory/components/InventoryDrawer.vue');
+
+  it('shows in-transit and remaining shortage separately', () => {
+    expect(page).toContain('在途');
+    expect(page).toContain('还差');
+    expect(page).toContain('已覆盖');
+    expect(drawer).toContain('在途');
+    expect(drawer).toContain('还差');
+  });
+
+  it('uses the net shortage for the estimated cost', () => {
+    expect(page).toContain('netShortageEstimatedCost');
+    expect(page).not.toContain('建议补 {{ fmt(item.suggestedPurchaseQuantity) }}');
+  });
+});

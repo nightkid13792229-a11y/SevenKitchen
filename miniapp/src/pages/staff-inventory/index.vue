@@ -60,9 +60,20 @@
         <view class="card-main">
           <text class="big">{{ fmt(item.currentStock) }}</text>
           <text class="unit">{{ item.stockUnitLabel }}</text>
-          <view v-if="item.suggestedPurchaseQuantity > 0" class="suggest">
-            <text>建议补 {{ fmt(item.suggestedPurchaseQuantity) }}{{ item.purchaseUnit }}</text>
-            <text class="suggest-cost">约 ¥{{ fmt(item.suggestedEstimatedCost) }}</text>
+          <view
+            v-if="item.suggestedPurchaseQuantity > 0 || (item.inTransitQuantity || 0) > 0"
+            class="suggest"
+          >
+            <text v-if="(item.inTransitQuantity || 0) > 0">
+              在途 {{ fmt(item.inTransitQuantity) }}{{ item.purchaseUnit }}
+            </text>
+            <text v-if="(item.netShortageQuantity || 0) > 0">
+              还差 {{ fmt(item.netShortageQuantity) }}{{ item.purchaseUnit }}
+            </text>
+            <text v-if="(item.netShortageQuantity || 0) > 0" class="suggest-cost">
+              约 ¥{{ fmt(item.netShortageEstimatedCost) }}
+            </text>
+            <text v-else class="suggest-cost">已覆盖</text>
           </view>
         </view>
 

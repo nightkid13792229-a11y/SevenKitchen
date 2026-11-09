@@ -354,6 +354,27 @@ describe('PurchasingService procurement sku separation', () => {
     ]);
   });
 
+  it('计算在途和扣掉在途后的净缺口', async () => {
+    const service = await createPurchasingServiceForStockSearch({
+      ingredients: [stockIngredient()],
+      searchGovernance: {
+        expandQuery: jest.fn().mockResolvedValue([]),
+        recordSearchEvent: jest.fn().mockResolvedValue({ id: 'q1' }),
+      },
+    });
+    (service as any).inventoryService.getInTransitByIngredientIds = jest
+      .fn()
+      .mockResolvedValue(new Map([['ingredient-chicken', 500]]));
+
+    const [row] = await service.getStockReplenishmentIngredients({
+      includeDaily: true,
+    });
+
+    expect(row.suggestedPurchaseQuantity).toBe(2000);
+    expect(row.inTransitQuantity).toBe(500);
+    expect(row.netShortageQuantity).toBe(1500);
+  });
+
   it('records stock replenishment searches with the final insight count', async () => {
     const searchGovernance = {
       expandQuery: jest.fn(async (_domain, rawQuery) =>

@@ -42,6 +42,11 @@ export interface InventoryOverviewItem {
   suggestedBaseQuantity: number;
   suggestedPurchaseQuantity: number;
   suggestedEstimatedCost: number;
+  inTransitBaseQuantity?: number;
+  inTransitQuantity?: number;
+  netShortageBaseQuantity?: number;
+  netShortageQuantity?: number;
+  netShortageEstimatedCost?: number;
   suggestedProductId?: string;
   suggestedProductName?: string;
 }

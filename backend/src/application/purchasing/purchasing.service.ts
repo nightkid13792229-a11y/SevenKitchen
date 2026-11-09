@@ -202,6 +202,13 @@ export interface StockReplenishmentInsight {
   suggestedBaseQuantity: number;
   suggestedPurchaseQuantity: number;
   suggestedEstimatedCost: number;
+  /** 已下单未到货（基准单位 / 采购单位） */
+  inTransitBaseQuantity: number;
+  inTransitQuantity: number;
+  /** 扣掉在途后真正还差的量 */
+  netShortageBaseQuantity: number;
+  netShortageQuantity: number;
+  netShortageEstimatedCost: number;
   suggestedProductId?: string;
   suggestedProductName?: string;
 }
@@ -2043,6 +2050,18 @@ export class PurchasingService {
           }),
         );
     const currentStockMap = new Map(currentStocks);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    const inTransitMap =
+      typeof (this.inventoryService as any).getInTransitByIngredientIds ===
+      'function'
+        ? await this.inventoryService.getInTransitByIngredientIds(
+            filteredIngredients.map((ingredient) => ingredient.id),
+            { start: todayStart, end: todayEnd },
+          )
+        : new Map<string, number>();
     const ingredientLookup = new Map(
       filteredIngredients.map((ingredient) => [ingredient.id, ingredient]),
     );
@@ -2082,6 +2101,28 @@ export class PurchasingService {
                 3,
               )
             : 0;
+        const inTransitBaseQuantity = this.roundNumber(
+          inTransitMap.get(ingredient.id) ?? 0,
+          3,
+        );
+        const netShortageBaseQuantity = this.roundNumber(
+          Math.max(suggestedBaseQuantity - inTransitBaseQuantity, 0),
+          3,
+        );
+        const inTransitQuantity =
+          profile.purchaseToBaseRatio > 0
+            ? this.roundNumber(
+                inTransitBaseQuantity / profile.purchaseToBaseRatio,
+                3,
+              )
+            : 0;
+        const netShortageQuantity =
+          profile.purchaseToBaseRatio > 0
+            ? this.roundNumber(
+                netShortageBaseQuantity / profile.purchaseToBaseRatio,
+                3,
+              )
+            : 0;
         // 每基准单位成本：食材的库存成本列必须用这个，不能直接拿
         // 「每个采购单位」的价（秋刀鱼 9.99/袋 ÷ 200g = 0.049950/g）。
         const unitCost = this.roundNumber(
@@ -2118,6 +2159,14 @@ export class PurchasingService {
           suggestedPurchaseQuantity,
           suggestedEstimatedCost: this.roundNumber(
             suggestedPurchaseQuantity * profile.effectivePricePerPurchaseUnit,
+            2,
+          ),
+          inTransitBaseQuantity,
+          inTransitQuantity,
+          netShortageBaseQuantity,
+          netShortageQuantity,
+          netShortageEstimatedCost: this.roundNumber(
+            netShortageQuantity * profile.effectivePricePerPurchaseUnit,
             2,
           ),
         };

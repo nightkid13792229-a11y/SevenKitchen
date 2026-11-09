@@ -1066,7 +1066,12 @@ const canStartProduction = computed(() => {
 })
 
 const canShip = computed(() => {
-  return order.value && order.value.status === 'FREEZING'
+  const o = order.value
+  if (!o) return false
+  // 试吃装是现货：付款即可发货（后端 markAsShipped 同一口径）；
+  // 普通鲜食仍要等急冻完成，不然会把还在生产的单发出去
+  if (o.type === 'TASTING_PACK') return ['PAID', 'FREEZING'].includes(o.status)
+  return o.status === 'FREEZING'
 })
 
 /**

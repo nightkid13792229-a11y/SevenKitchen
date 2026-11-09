@@ -266,6 +266,15 @@ describe('staff order detail · 状态改版', () => {
     expect(detailSource).toContain('if (autoShip && canShip.value) shipOrder()');
   });
 
+  it('★ 试吃装付款即可发货：canShip 认 PAID，普通鲜食仍只认急冻完成（2026-11-10）', () => {
+    const canShip =
+      detailSource.match(/const canShip = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] ||
+      '';
+    expect(canShip).toContain("o.type === 'TASTING_PACK'");
+    expect(canShip).toContain("['PAID', 'FREEZING']");
+    expect(canShip).toContain("o.status === 'FREEZING'");
+  });
+
   it('制作中不给按钮，只给一句提示（这步不归这个页面管）', () => {
     expect(detailSource).toContain('stageHint');
     expect(detailSource).toContain('制作进度在「生产任务」里推进');

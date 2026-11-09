@@ -2,7 +2,8 @@ jest.mock('@prisma/client', () => ({
   PrismaClient: class PrismaClient {},
   AftersaleType: { REFUND: 'REFUND' },
   InventoryStocktakeStatus: { DRAFT: 'DRAFT' },
-  OrderStatus: { FREEZING: 'FREEZING', AFTERSALE: 'AFTERSALE' },
+  OrderStatus: { FREEZING: 'FREEZING', PAID: 'PAID', AFTERSALE: 'AFTERSALE' },
+  OrderType: { TASTING_PACK: 'TASTING_PACK' },
   PackagingUnitStatus: { PENDING: 'PENDING', IN_PROGRESS: 'IN_PROGRESS' },
   PurchaseListStatus: { PENDING: 'PENDING' },
   ReimbursementStatus: {
@@ -51,6 +52,37 @@ describe('StaffWorkbenchController summary', () => {
       inventory: 6,
     });
     expect(response.data.pendingTasks).toBe(26);
+  });
+
+  it('★ 试吃装付款即待发货：订单徽标和待发数都要算进去（2026-11-10）', async () => {
+    const prisma = {
+      order: {
+        count: jest
+          .fn()
+          .mockResolvedValueOnce(12)
+          .mockResolvedValueOnce(5)
+          .mockResolvedValueOnce(5)
+          .mockResolvedValueOnce(2),
+      },
+      purchaseList: { count: jest.fn().mockResolvedValue(3) },
+      packagingUnit: { count: jest.fn().mockResolvedValue(5) },
+      reimbursement: { count: jest.fn().mockResolvedValue(1) },
+      inventoryStocktake: { count: jest.fn().mockResolvedValue(6) },
+      supplementOrder: { count: jest.fn().mockResolvedValue(4) },
+    };
+
+    await new StaffWorkbenchController(prisma as any).getSummary(
+      'admin-1',
+      'ADMIN',
+    );
+
+    const calls = prisma.order.count.mock.calls;
+    const expected = {
+      OR: [{ status: 'FREEZING' }, { status: 'PAID', type: 'TASTING_PACK' }],
+    };
+    // 第 2、3 次 count 分别是「订单待办」和「待发货数」
+    expect(calls[1][0].where).toEqual(expected);
+    expect(calls[2][0].where).toEqual(expected);
   });
 
   it('does not expose refund work to staff', async () => {

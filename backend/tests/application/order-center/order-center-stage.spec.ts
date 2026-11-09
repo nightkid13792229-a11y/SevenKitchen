@@ -13,11 +13,20 @@ describe('OrderCenterService · 真实阶段文案', () => {
   const stageLabel = (
     type: 'FOOD' | 'CUSTOM_RECIPE' | 'SUPPLEMENT',
     rawStatus: string,
-    group: 'PENDING' | 'PENDING_PAYMENT' | 'IN_PROGRESS' | 'TO_SHIP' | 'SHIPPED' | 'COMPLETED' | 'CANCELLED' = 'IN_PROGRESS',
+    group:
+      | 'PENDING'
+      | 'PENDING_PAYMENT'
+      | 'IN_PROGRESS'
+      | 'TO_SHIP'
+      | 'SHIPPED'
+      | 'COMPLETED'
+      | 'CANCELLED' = 'IN_PROGRESS',
   ) =>
-    (service as unknown as {
-      stageLabelFor: (t: string, raw: string, g: string) => string;
-    }).stageLabelFor(type, rawStatus, group);
+    (
+      service as unknown as {
+        stageLabelFor: (t: string, raw: string, g: string) => string;
+      }
+    ).stageLabelFor(type, rawStatus, group);
 
   const statuses = (method: string, value: string): string[] =>
     (service as unknown as Record<string, (v: string) => string[]>)[method](
@@ -62,10 +71,49 @@ describe('OrderCenterService · 真实阶段文案', () => {
     ]);
   });
 
+  it('★ 试吃装是现货：付款即待发货，不跟普通鲜食的「已付款」混（2026-11-10）', () => {
+    const foodGroup = (status: string, type: string) =>
+      (
+        service as unknown as {
+          foodGroup: (s: string, shippedAt: Date | null, t: string) => string;
+        }
+      ).foodGroup(status, null, type);
+
+    expect(foodGroup('PAID', 'TASTING_PACK')).toBe('TO_SHIP');
+    expect(foodGroup('PAID', 'FRESH_FOOD')).toBe('IN_PROGRESS');
+    // 卡片在「待发货」里要写待发货，不能还写已付款
+    expect(stageLabel('FOOD', 'PAID', 'TO_SHIP')).toBe('待发货');
+    expect(stageLabel('FOOD', 'PAID', 'IN_PROGRESS')).toBe('已付款');
+  });
+
+  it('★ 待发货筛选带上试吃装 PAID；已付款 / 处理中把它排除，避免同一单进两个 tab', () => {
+    const where = (q: Record<string, unknown>) =>
+      (
+        service as unknown as {
+          foodStatusWhere: (query: Record<string, unknown>) => unknown;
+        }
+      ).foodStatusWhere(q);
+
+    expect(where({ status: 'TO_SHIP' })).toEqual({
+      OR: [{ status: 'FREEZING' }, { status: 'PAID', type: 'TASTING_PACK' }],
+    });
+    expect(where({ status: 'PAID' })).toEqual({
+      status: 'PAID',
+      type: { not: 'TASTING_PACK' },
+    });
+    const inProgress: any = where({ status: 'IN_PROGRESS' });
+    expect(inProgress.status).toEqual({
+      in: ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'AFTERSALE'],
+    });
+    expect(inProgress.NOT).toEqual({ status: 'PAID', type: 'TASTING_PACK' });
+  });
+
   it('草稿单（INIT）不再是员工待办：默认排除，「待处理」筛出空', () => {
-    const where = (service as unknown as {
-      foodStatusWhere: (q: Record<string, unknown>) => unknown;
-    }).foodStatusWhere({});
+    const where = (
+      service as unknown as {
+        foodStatusWhere: (q: Record<string, unknown>) => unknown;
+      }
+    ).foodStatusWhere({});
     expect(where).toEqual({ status: { not: 'INIT' } });
     expect(statuses('foodStatuses', 'PENDING')).toEqual([]);
   });

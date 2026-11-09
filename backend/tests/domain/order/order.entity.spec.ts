@@ -97,6 +97,21 @@ describe('Order domain behaviors', () => {
     ).toThrow('试吃装是现货');
   });
 
+  it('★ 试吃装是现货：付款（PAID）即可发货；普通鲜食仍要等急冻完成（2026-11-10）', () => {
+    const tasting = createOrder(new Date('2026-04-02T00:00:00.000Z'), {
+      type: OrderType.TASTING_PACK,
+      status: OrderStatus.PAID,
+    });
+    expect(() => tasting.markAsShipped('SF123456', 'SF')).not.toThrow();
+
+    const fresh = createOrder(new Date('2026-04-02T00:00:00.000Z'), {
+      status: OrderStatus.PAID,
+    });
+    expect(() => fresh.markAsShipped('SF123456', 'SF')).toThrow(
+      /Cannot mark order as shipped/,
+    );
+  });
+
   it('stores and clears admin remark for production notes', () => {
     const order = createOrder(new Date('2026-04-02T00:00:00.000Z'));
 

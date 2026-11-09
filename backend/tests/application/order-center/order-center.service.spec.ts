@@ -16,9 +16,7 @@ function foodRow(overrides: any = {}) {
     shippingAddressSnapshot: null,
     dogId: 'd1',
     dog: { name: '旺财' },
-    items: [
-      { id: 'f1-item', recipeSnapshot: { id: 'r1', name: '鸡肉餐' } },
-    ],
+    items: [{ id: 'f1-item', recipeSnapshot: { id: 'r1', name: '鸡肉餐' } }],
     ...overrides,
   };
 }
@@ -106,6 +104,32 @@ describe('OrderCenterService', () => {
     expect(result.items[1].customerName).toBe('张三');
   });
 
+  it('★ 试吃装 PAID 进「待发货」，卡片写待发货，能走发货（2026-11-10）', async () => {
+    prisma.order.findMany.mockResolvedValue([
+      foodRow({
+        id: 't1',
+        orderNo: 'TP-1',
+        type: 'TASTING_PACK',
+        status: 'PAID',
+      }),
+    ]);
+
+    const result = await service.list({
+      type: 'FOOD',
+      status: 'TO_SHIP',
+      pageSize: 20,
+    });
+
+    const item = result.items.find((row) => row.type === 'FOOD');
+    expect(item?.statusGroup).toBe('TO_SHIP');
+    expect(item?.stageLabel).toBe('待发货');
+    expect(item?.subtypeLabel).toBe('试吃装');
+    // 筛选条件：FREEZING 或 试吃装 PAID
+    expect(prisma.order.findMany.mock.calls[0][0].where.AND[0]).toEqual({
+      OR: [{ status: 'FREEZING' }, { status: 'PAID', type: 'TASTING_PACK' }],
+    });
+  });
+
   it('员工端后端脱敏：金额为 null', async () => {
     const result = await service.list({ pageSize: 20 }, { role: 'STAFF' });
     expect(result.items.every((item) => item.amountTotal === null)).toBe(true);
@@ -114,22 +138,25 @@ describe('OrderCenterService', () => {
   it('★ 草稿单（INIT）不进订单中心：列表和总数都排除', async () => {
     await service.list({ pageSize: 20 });
 
-    expect(prisma.order.findMany.mock.calls[0][0].where.status).toEqual({
+    expect(prisma.order.findMany.mock.calls[0][0].where.AND[0].status).toEqual({
       not: 'INIT',
     });
-    expect(prisma.order.count.mock.calls[0][0].where.status).toEqual({
+    expect(prisma.order.count.mock.calls[0][0].where.AND[0].status).toEqual({
       not: 'INIT',
     });
   });
 
   it('★ 真实阶段筛选真的落到查询：PAID 只查 PAID，草稿「待处理」查空', async () => {
     await service.list({ type: 'FOOD', status: 'PAID', pageSize: 20 });
-    expect(prisma.order.findMany.mock.calls[0][0].where.status).toEqual({
-      in: ['PAID'],
+    expect(prisma.order.findMany.mock.calls[0][0].where.AND[0]).toEqual({
+      status: 'PAID',
+      type: { not: 'TASTING_PACK' },
     });
 
     await service.list({ type: 'FOOD', status: 'PENDING', pageSize: 20 });
-    expect(prisma.order.findMany.mock.lastCall?.[0].where.status).toEqual({
+    expect(
+      prisma.order.findMany.mock.lastCall?.[0].where.AND[0].status,
+    ).toEqual({
       in: [],
     });
   });
@@ -142,7 +169,9 @@ describe('OrderCenterService', () => {
       pageSize: 20,
     });
 
-    expect(prisma.order.findMany.mock.calls[0][0].where.status).toBe('AFTERSALE');
+    expect(prisma.order.findMany.mock.calls[0][0].where.AND[0].status).toBe(
+      'AFTERSALE',
+    );
   });
 
   it('★ 卡片阶段：售后中 / 已交付 / 分装中 都按原始状态取', async () => {
@@ -157,9 +186,9 @@ describe('OrderCenterService', () => {
 
     const result = await service.list({ pageSize: 20 });
 
-    expect(
-      result.items.find((item) => item.type === 'FOOD')?.stageLabel,
-    ).toBe('售后中');
+    expect(result.items.find((item) => item.type === 'FOOD')?.stageLabel).toBe(
+      '售后中',
+    );
     expect(
       result.items.find((item) => item.type === 'CUSTOM_RECIPE')?.stageLabel,
     ).toBe('已交付');
@@ -232,7 +261,7 @@ describe('OrderCenterService', () => {
     await service.list({ pageSize: 20, keyword: '张三' });
 
     const where = prisma.order.findMany.mock.calls[0][0].where;
-    expect(where.OR).toEqual(
+    expect(where.AND[1].OR).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ customerId: { in: ['u1'] } }),
       ]),
@@ -249,7 +278,7 @@ describe('OrderCenterService', () => {
     const supplementWhere =
       prisma.supplementOrder.findMany.mock.calls[0][0].where;
 
-    expect(foodWhere.OR).toEqual(
+    expect(foodWhere.AND[1].OR).toEqual(
       expect.arrayContaining([
         { dog: { name: { contains: '旺财', mode: 'insensitive' } } },
       ]),
@@ -265,7 +294,7 @@ describe('OrderCenterService', () => {
       ]),
     );
     // 总数也要按同一个条件收窄，否则分页会按「没搜索」的总数算
-    expect(prisma.order.count.mock.calls[0][0].where.OR).toEqual(
+    expect(prisma.order.count.mock.calls[0][0].where.AND[1].OR).toEqual(
       expect.arrayContaining([
         { dog: { name: { contains: '旺财', mode: 'insensitive' } } },
       ]),
@@ -420,7 +449,8 @@ describe('OrderCenterService', () => {
 
     await service.list({ pageSize: 20, aftersale: true });
 
-    const customWhere = prisma.customRecipeOrder.findMany.mock.calls[0][0].where;
+    const customWhere =
+      prisma.customRecipeOrder.findMany.mock.calls[0][0].where;
     expect(customWhere.id).toEqual({ in: ['c1'] });
   });
 

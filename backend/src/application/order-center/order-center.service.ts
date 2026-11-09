@@ -267,8 +267,7 @@ export class OrderCenterService {
 
     const keywordUserIds = await this.resolveKeywordUserIds(query.keyword);
     const dateWhere = this.buildDateWhere(query);
-    const want = (type: OrderCenterType) =>
-      !query.type || query.type === type;
+    const want = (type: OrderCenterType) => !query.type || query.type === type;
 
     /**
      * 「只看赠送单」只对食谱定制有意义（2026-10-30）。
@@ -319,21 +318,45 @@ export class OrderCenterService {
         ? this.prisma.order.findMany({
             where: {
               ...dateWhere,
-              // 草稿单（INIT）不是员工要处理的订单：默认不进列表（2026-11-08）
-              ...this.foodStatusWhere(query),
-              ...(query.keyword
-                ? {
-                    OR: [
-                      { orderNo: { contains: query.keyword, mode: 'insensitive' } },
-                      { id: { contains: query.keyword, mode: 'insensitive' } },
-                      // 老「后台订单」页的搜索支持狗狗名，平移过来不能丢
-                      { dog: { name: { contains: query.keyword, mode: 'insensitive' } } },
-                      ...(keywordUserIds && keywordUserIds.length > 0
-                        ? [{ customerId: { in: keywordUserIds } }]
-                        : []),
-                    ],
-                  }
-                : {}),
+              /**
+               * 状态条件和关键词条件都放进 AND：试吃装待发货本身是 OR
+               * （FREEZING 或 试吃装 PAID），再和关键词的 OR 平铺会互相覆盖。
+               */
+              AND: [
+                this.foodStatusWhere(query),
+                ...(query.keyword
+                  ? [
+                      {
+                        OR: [
+                          {
+                            orderNo: {
+                              contains: query.keyword,
+                              mode: 'insensitive' as const,
+                            },
+                          },
+                          {
+                            id: {
+                              contains: query.keyword,
+                              mode: 'insensitive' as const,
+                            },
+                          },
+                          // 老「后台订单」页的搜索支持狗狗名，平移过来不能丢
+                          {
+                            dog: {
+                              name: {
+                                contains: query.keyword,
+                                mode: 'insensitive' as const,
+                              },
+                            },
+                          },
+                          ...(keywordUserIds && keywordUserIds.length > 0
+                            ? [{ customerId: { in: keywordUserIds } }]
+                            : []),
+                        ],
+                      },
+                    ]
+                  : []),
+              ],
             },
             select: {
               id: true,
@@ -372,15 +395,31 @@ export class OrderCenterService {
             where: {
               ...dateWhere,
               ...(query.status
-                ? { status: { in: this.customStatuses(query.status) as never[] } }
+                ? {
+                    status: {
+                      in: this.customStatuses(query.status) as never[],
+                    },
+                  }
                 : {}),
               ...(query.keyword
                 ? {
                     OR: [
-                      { orderId: { contains: query.keyword, mode: 'insensitive' } },
+                      {
+                        orderId: {
+                          contains: query.keyword,
+                          mode: 'insensitive',
+                        },
+                      },
                       { id: { contains: query.keyword, mode: 'insensitive' } },
                       // 定制单也按狗狗名搜（老搜索的同一口径）
-                      { dog: { name: { contains: query.keyword, mode: 'insensitive' } } },
+                      {
+                        dog: {
+                          name: {
+                            contains: query.keyword,
+                            mode: 'insensitive',
+                          },
+                        },
+                      },
                       ...(keywordUserIds && keywordUserIds.length > 0
                         ? [{ customerId: { in: keywordUserIds } }]
                         : []),
@@ -427,19 +466,34 @@ export class OrderCenterService {
       wantRows('SUPPLEMENT')
         ? this.prisma.supplementOrder.findMany({
             where: {
-              ...(query.dateField === 'packing' && (query.dateFrom || query.dateTo)
+              ...(query.dateField === 'packing' &&
+              (query.dateFrom || query.dateTo)
                 ? this.buildPackingDateWhere(query)
                 : dateWhere),
               ...(query.status
-                ? { status: { in: this.supplementStatuses(query.status) as never[] } }
+                ? {
+                    status: {
+                      in: this.supplementStatuses(query.status) as never[],
+                    },
+                  }
                 : {}),
               ...(query.keyword
                 ? {
                     OR: [
-                      { orderNo: { contains: query.keyword, mode: 'insensitive' } },
+                      {
+                        orderNo: {
+                          contains: query.keyword,
+                          mode: 'insensitive',
+                        },
+                      },
                       { id: { contains: query.keyword, mode: 'insensitive' } },
                       // 补剂单的狗名是下单快照，直接在这张表上搜
-                      { dogName: { contains: query.keyword, mode: 'insensitive' } },
+                      {
+                        dogName: {
+                          contains: query.keyword,
+                          mode: 'insensitive',
+                        },
+                      },
                       ...(keywordUserIds && keywordUserIds.length > 0
                         ? [{ userId: { in: keywordUserIds } }]
                         : []),
@@ -487,11 +541,7 @@ export class OrderCenterService {
         : 0,
       want('CUSTOM_RECIPE')
         ? this.prisma.customRecipeOrder.count({
-            where: this.customCountWhere(
-              query,
-              keywordUserIds,
-              customOpenIds,
-            ),
+            where: this.customCountWhere(query, keywordUserIds, customOpenIds),
           })
         : 0,
       want('SUPPLEMENT')
@@ -560,13 +610,12 @@ export class OrderCenterService {
       : undefined;
     const to = query.dateTo
       ? TimezoneUtil.startOfShanghaiDay(
-          TimezoneUtil.addDays(
-            TimezoneUtil.parseDateOnly(query.dateTo),
-            1,
-          ),
+          TimezoneUtil.addDays(TimezoneUtil.parseDateOnly(query.dateTo), 1),
         )
       : undefined;
-    return { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) } };
+    return {
+      createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) },
+    };
   }
 
   private buildPackingDateWhere(query: OrderCenterQuery): {
@@ -654,7 +703,7 @@ export class OrderCenterService {
   }
 
   private mapFood(row: any, users: Map<string, any>): OrderCenterItem {
-    const group = this.foodGroup(row.status, row.shippedAt);
+    const group = this.foodGroup(row.status, row.shippedAt, row.type);
     /** 鲜食单一项一道食谱；下单链路写死单商品，这里取第一条 */
     const firstItem = Array.isArray(row.items) ? row.items[0] : null;
     const snapshot = (firstItem?.recipeSnapshot ?? null) as any;
@@ -810,11 +859,7 @@ export class OrderCenterService {
       statusGroup: input.group,
       rawStatus: input.rawStatus,
       statusLabel: GROUP_LABELS[input.group],
-      stageLabel: this.stageLabelFor(
-        input.type,
-        input.rawStatus,
-        input.group,
-      ),
+      stageLabel: this.stageLabelFor(input.type, input.rawStatus, input.group),
       subtypeLabel: input.subtypeLabel,
       amountTotal: input.amount,
       isGift: input.isGift === true,
@@ -842,9 +887,12 @@ export class OrderCenterService {
   private foodGroup(
     status: string,
     shippedAt: Date | null,
+    type: string,
   ): UnifiedStatusGroup {
     if (status === 'INIT') return 'PENDING';
     if (status === 'PENDING_PAYMENT') return 'PENDING_PAYMENT';
+    // 试吃装是现货：付款就能发，归「待发货」；普通鲜食的 PAID 才是「处理中」
+    if (status === 'PAID' && type === 'TASTING_PACK') return 'TO_SHIP';
     if (['PAID', 'PURCHASING', 'IN_PRODUCTION'].includes(status)) {
       return 'IN_PROGRESS';
     }
@@ -865,6 +913,9 @@ export class OrderCenterService {
     group: UnifiedStatusGroup,
   ): string {
     const key = String(rawStatus || '').toUpperCase();
+    // 试吃装付款即待发货：卡片别在「待发货」tab 里写「已付款」
+    if (type === 'FOOD' && key === 'PAID' && group === 'TO_SHIP')
+      return '待发货';
     return STAGE_LABELS[type]?.[key] || GROUP_LABELS[group];
   }
 
@@ -904,11 +955,27 @@ export class OrderCenterService {
    * · 选了具体阶段就按阶段筛；旧版小程序还可能传统一组，继续兼容；
    * · 勾了「只看售后」仍以售后为准（和改动前一致）。
    */
-  private foodStatusWhere(query: OrderCenterQuery): {
-    status: Prisma.OrderWhereInput['status'];
-  } {
+  private foodStatusWhere(query: OrderCenterQuery): Prisma.OrderWhereInput {
     if (query.aftersale) return { status: 'AFTERSALE' };
     if (!query.status) return { status: { not: 'INIT' } };
+    /**
+     * 试吃装是现货：PAID 就是可发货。它不能同时算「已付款」，否则同一张单
+     * 会出现在两个 tab 里、卡片文案也对不上，所以按订单类型把两边拆开。
+     */
+    if (query.status === 'TO_SHIP') {
+      return {
+        OR: [{ status: 'FREEZING' }, { status: 'PAID', type: 'TASTING_PACK' }],
+      };
+    }
+    if (query.status === 'PAID') {
+      return { status: 'PAID', type: { not: 'TASTING_PACK' } };
+    }
+    if (query.status === 'IN_PROGRESS') {
+      return {
+        status: { in: ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'AFTERSALE'] },
+        NOT: { status: 'PAID', type: 'TASTING_PACK' },
+      };
+    }
     return { status: { in: this.foodStatuses(query.status) as never[] } };
   }
 
@@ -991,43 +1058,44 @@ export class OrderCenterService {
     }
   }
 
-  private foodCountWhere(
-    query: OrderCenterQuery,
-    userIds: string[] | null,
-  ) {
+  private foodCountWhere(query: OrderCenterQuery, userIds: string[] | null) {
     return {
       ...this.buildDateWhere(query),
       // 和列表同口径：草稿单不计入「共 X 单」
-      ...this.foodStatusWhere(query),
-      ...(query.keyword
-        ? {
-            OR: [
+      AND: [
+        this.foodStatusWhere(query),
+        ...(query.keyword
+          ? [
               {
-                orderNo: {
-                  contains: query.keyword,
-                  mode: 'insensitive' as const,
-                },
-              },
-              {
-                id: {
-                  contains: query.keyword,
-                  mode: 'insensitive' as const,
-                },
-              },
-              {
-                dog: {
-                  name: {
-                    contains: query.keyword,
-                    mode: 'insensitive' as const,
+                OR: [
+                  {
+                    orderNo: {
+                      contains: query.keyword,
+                      mode: 'insensitive' as const,
+                    },
                   },
-                },
+                  {
+                    id: {
+                      contains: query.keyword,
+                      mode: 'insensitive' as const,
+                    },
+                  },
+                  {
+                    dog: {
+                      name: {
+                        contains: query.keyword,
+                        mode: 'insensitive' as const,
+                      },
+                    },
+                  },
+                  ...(userIds && userIds.length > 0
+                    ? [{ customerId: { in: userIds } }]
+                    : []),
+                ],
               },
-              ...(userIds && userIds.length > 0
-                ? [{ customerId: { in: userIds } }]
-                : []),
-            ],
-          }
-        : {}),
+            ]
+          : []),
+      ],
     };
   }
 

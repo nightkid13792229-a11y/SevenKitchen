@@ -445,9 +445,8 @@ function canShipItem(item: OrderCenterItem) {
  * 发货 / 交付流程，混进来后端也会拒。这里提前拦住，别让员工勾了半天、
  * 填完单号才报错。
  *
- * ⚠️ 试吃装暂不在内：它是现货，付款（PAID）即视为可发，但订单中心把
- * 鲜食 PAID 归到「已付款」、不在「待发货」组，这类单目前连单笔发货入口
- * 都没有。要支持得先补试吃装发货（涉及后端状态口径），不在本次范围。
+ * 试吃装是现货：后端订单中心把「试吃装 PAID」归进 TO_SHIP（和普通鲜食
+ * 的 PAID 分开），所以这里不用再单独判类型，statusGroup 已经能区分。
  */
 function canMergeItem(item: OrderCenterItem) {
   return item.type === 'FOOD' && item.statusGroup === 'TO_SHIP'

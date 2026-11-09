@@ -4,6 +4,7 @@ import {
   AftersaleType,
   InventoryStocktakeStatus,
   OrderStatus,
+  OrderType,
   PackagingUnitStatus,
   PurchaseListStatus,
   ReimbursementStatus,
@@ -89,11 +90,20 @@ export class StaffWorkbenchController {
       }),
       this.prisma.order.count({
         where: {
-          status: OrderStatus.FREEZING,
+          OR: [
+            { status: OrderStatus.FREEZING },
+            // 试吃装是现货：付款就能发，别让待发货徽标漏掉它
+            { status: OrderStatus.PAID, type: OrderType.TASTING_PACK },
+          ],
         },
       }),
       this.prisma.order.count({
-        where: { status: OrderStatus.FREEZING },
+        where: {
+          OR: [
+            { status: OrderStatus.FREEZING },
+            { status: OrderStatus.PAID, type: OrderType.TASTING_PACK },
+          ],
+        },
       }),
       this.prisma.order.count({
         where: {

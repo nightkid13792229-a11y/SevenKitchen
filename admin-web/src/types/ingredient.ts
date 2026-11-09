@@ -74,7 +74,9 @@ export enum InventoryAdjustmentMode {
 
 export enum InventoryStocktakeStatus {
   DRAFT = "DRAFT",
+  SUBMITTED = "SUBMITTED",
   APPLIED = "APPLIED",
+  REJECTED = "REJECTED",
 }
 
 export const StockLevelStatusLabels: Record<StockLevelStatus, string> = {
@@ -100,7 +102,9 @@ export const InventoryAdjustmentModeLabels: Record<string, string> = {
 
 export const InventoryStocktakeStatusLabels: Record<string, string> = {
   [InventoryStocktakeStatus.DRAFT]: "草稿",
+  [InventoryStocktakeStatus.SUBMITTED]: "待复核",
   [InventoryStocktakeStatus.APPLIED]: "已入账",
+  [InventoryStocktakeStatus.REJECTED]: "已驳回",
 };
 
 export const BaseUnitLabels: Record<string, string> = {

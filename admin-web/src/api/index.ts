@@ -236,8 +236,8 @@ export const inventoryApi = {
     api.get('/admin/inventory/stocktakes', { params }),
   createStocktake: (data: any): Promise<any> =>
     api.post('/admin/inventory/stocktakes', data),
-  applyStocktake: (id: string): Promise<any> =>
-    api.post(`/admin/inventory/stocktakes/${id}/apply`),
+  reviewStocktake: (id: string, data: { approve: boolean; note?: string }): Promise<any> =>
+    api.post(`/admin/inventory/stocktakes/${id}/review`, data),
   updatePrice: (id: string, price: number): Promise<any> =>
     api.put(`/admin/ingredients/${id}/price`, { currentPricePerPurchaseUnit: price })
 }

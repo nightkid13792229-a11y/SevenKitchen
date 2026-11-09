@@ -176,7 +176,7 @@
 
         <el-tab-pane label="盘点记录" name="stocktakes">
           <div class="tab-toolbar">
-            <div class="muted-text">创建盘点后可直接入账，也可以先保存为草稿再审核应用。</div>
+            <div class="muted-text">盘点提交后由管理员复核；容差内自动入账，超容差才需要人工通过或驳回。驳回后需重新盘点（新建一张单）。</div>
           </div>
 
           <el-table :data="stocktakes" v-loading="loadingStocktakes" style="width: 100%">
@@ -196,14 +196,15 @@
                     </el-table-column>
                     <el-table-column label="盘点库存" width="160" align="right">
                       <template #default="{ row: line }">
-                        {{ formatQuantity(line.countedQuantityG) }} {{ line.stockUnitLabel }}
+                        {{ line.countedQuantityG === null || line.countedQuantityG === undefined ? '未盘' : formatQuantity(line.countedQuantityG) + ' ' + line.stockUnitLabel }}
                       </template>
                     </el-table-column>
                     <el-table-column label="差异" width="160" align="right">
                       <template #default="{ row: line }">
-                        <span :class="line.deltaG >= 0 ? 'positive' : 'negative'">
+                        <span v-if="line.deltaG !== null && line.deltaG !== undefined" :class="line.deltaG >= 0 ? 'positive' : 'negative'">
                           {{ formatSignedQuantity(line.deltaG) }} {{ line.stockUnitLabel }}
                         </span>
+                        <span v-else class="placeholder">-</span>
                       </template>
                     </el-table-column>
                   </el-table>
@@ -217,7 +218,7 @@
             </el-table-column>
             <el-table-column label="状态" width="120">
               <template #default="{ row }">
-                <el-tag :type="row.status === InventoryStocktakeStatus.APPLIED ? 'success' : 'warning'">
+                <el-tag :type="stocktakeTagType(row.status)">
                   {{ getStocktakeStatusText(row.status) }}
                 </el-tag>
               </template>
@@ -243,17 +244,17 @@
                 <span v-else class="placeholder">-</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="120" fixed="right">
+            <el-table-column label="操作" width="190" fixed="right">
               <template #default="{ row }">
-                <el-button
-                  v-if="row.status === InventoryStocktakeStatus.DRAFT"
-                  type="primary"
-                  size="small"
-                  @click="applyStocktake(row.id)"
-                >
-                  入账
-                </el-button>
-                <span v-else class="placeholder">已完成</span>
+                <template v-if="row.status === InventoryStocktakeStatus.SUBMITTED">
+                  <el-button type="success" size="small" @click="approveStocktake(row)">
+                    通过并入账
+                  </el-button>
+                  <el-button type="danger" size="small" @click="rejectStocktake(row)">
+                    驳回
+                  </el-button>
+                </template>
+                <span v-else class="placeholder">{{ stocktakeStatusHint(row.status) }}</span>
               </template>
             </el-table-column>
           </el-table>
@@ -320,11 +321,7 @@
 
     <el-dialog v-model="stocktakeDialogVisible" title="新建盘点单" width="760px">
       <div class="stocktake-toolbar">
-        <el-switch
-          v-model="stocktakeForm.applyImmediately"
-          active-text="创建后立即入账"
-          inactive-text="先保存为草稿"
-        />
+        <span class="muted-text">后台新建只用于补录/抽盘；主流程从员工端开单。留空表示未盘。</span>
         <el-button text @click="addStocktakeLine">添加原料</el-button>
       </div>
 
@@ -359,11 +356,9 @@
             :disabled="isIngredientSelected(line.ingredientId, item.id)"
           />
         </el-select>
-        <el-input-number
-          v-model="line.countedQuantityG"
-          :min="0"
-          :precision="2"
-          :step="1"
+        <el-input
+          v-model="line.countedText"
+          placeholder="留空=未盘"
           style="width: 180px"
         />
         <div class="line-unit">{{ getLineUnit(line.ingredientId) }}</div>
@@ -373,7 +368,7 @@
       <template #footer>
         <el-button @click="stocktakeDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submittingStocktake" @click="submitStocktake">
-          {{ stocktakeForm.applyImmediately ? '创建并入账' : '保存草稿' }}
+          保存草稿
         </el-button>
       </template>
     </el-dialog>
@@ -430,11 +425,10 @@ const adjustmentForm = reactive({
 
 const stocktakeForm = reactive({
   note: '',
-  applyImmediately: true,
   lines: [] as Array<{
     key: string
     ingredientId: string
-    countedQuantityG: number
+    countedText: string
   }>
 })
 
@@ -690,7 +684,6 @@ const submitAdjustment = async () => {
 
 const resetStocktakeForm = () => {
   stocktakeForm.note = ''
-  stocktakeForm.applyImmediately = true
   stocktakeForm.lines = []
   addStocktakeLine()
 }
@@ -704,7 +697,7 @@ const addStocktakeLine = () => {
   stocktakeForm.lines.push({
     key: `${Date.now()}-${Math.random()}`,
     ingredientId: '',
-    countedQuantityG: 0
+    countedText: ''
   })
 }
 
@@ -734,27 +727,34 @@ const submitStocktake = async () => {
     return
   }
 
+  let lines: Array<{ ingredientId: string; countedQuantityG: number | null }>
+  try {
+    lines = validLines.map((line) => {
+      const text = line.countedText.trim()
+      if (!text) {
+        return { ingredientId: line.ingredientId, countedQuantityG: null }
+      }
+      const value = Number(text)
+      if (!Number.isFinite(value) || value < 0) {
+        throw new Error('实盘数量必须是非负数字，或留空表示未盘')
+      }
+      return { ingredientId: line.ingredientId, countedQuantityG: value }
+    })
+  } catch (error: any) {
+    ElMessage.warning(error.message || '实盘数量不合法')
+    return
+  }
+
   submittingStocktake.value = true
   try {
     await inventoryApi.createStocktake({
       note: stocktakeForm.note.trim() || undefined,
-      applyImmediately: stocktakeForm.applyImmediately,
-      lines: validLines.map((line) => ({
-        ingredientId: line.ingredientId,
-        countedQuantityG: line.countedQuantityG
-      }))
+      lines
     })
 
-    ElMessage.success(
-      stocktakeForm.applyImmediately ? '盘点单已创建并入账' : '盘点草稿已保存'
-    )
+    ElMessage.success('盘点草稿已保存')
     stocktakeDialogVisible.value = false
-
-    const tasks = [loadStocktakes()]
-    if (stocktakeForm.applyImmediately) {
-      tasks.push(loadInventory(), loadLedger())
-    }
-    await Promise.all(tasks)
+    await loadStocktakes()
     activeTab.value = 'stocktakes'
   } catch (error) {
     ElMessage.error('创建盘点单失败')
@@ -763,19 +763,55 @@ const submitStocktake = async () => {
   }
 }
 
-const applyStocktake = async (id: string) => {
+const stocktakeTagType = (status: InventoryStocktakeStatus) => {
+  if (status === InventoryStocktakeStatus.APPLIED) return 'success'
+  if (status === InventoryStocktakeStatus.SUBMITTED) return 'warning'
+  if (status === InventoryStocktakeStatus.REJECTED) return 'danger'
+  return 'info'
+}
+
+const stocktakeStatusHint = (status: InventoryStocktakeStatus) => {
+  if (status === InventoryStocktakeStatus.DRAFT) return '草稿（员工端录入）'
+  if (status === InventoryStocktakeStatus.APPLIED) return '已入账'
+  if (status === InventoryStocktakeStatus.REJECTED) return '已驳回，需重盘'
+  return ''
+}
+
+const approveStocktake = async (row: any) => {
   try {
-    await ElMessageBox.confirm('确认将该盘点单差异入账吗？入账后库存会按盘点结果纠偏。', '提示', {
-      type: 'warning'
-    })
-    await inventoryApi.applyStocktake(id)
-    ElMessage.success('盘点差异已入账')
+    await ElMessageBox.confirm(
+      '确认通过并补入超容差的差异吗？通过后库存会按盘点结果纠偏。',
+      '复核通过',
+      { type: 'warning' }
+    )
+    await inventoryApi.reviewStocktake(row.id, { approve: true })
+    ElMessage.success('已通过并入账')
     await Promise.all([loadStocktakes(), loadInventory(), loadLedger()])
   } catch (error: any) {
-    if (error === 'cancel' || error?.message === 'cancel') {
-      return
-    }
-    ElMessage.error('盘点入账失败')
+    if (error === 'cancel' || error?.message === 'cancel' || error === 'close') return
+    ElMessage.error(error?.message || '复核失败')
+  }
+}
+
+const rejectStocktake = async (row: any) => {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '填写驳回原因（至少 4 个字），员工需要重新盘点。',
+      '驳回盘点',
+      {
+        inputValidator: (v: string) =>
+          (v && v.trim().length >= 4) || '请填写至少 4 个字'
+      }
+    )
+    await inventoryApi.reviewStocktake(row.id, {
+      approve: false,
+      note: value.trim()
+    })
+    ElMessage.success('已驳回，需重新盘点')
+    await loadStocktakes()
+  } catch (error: any) {
+    if (error === 'cancel' || error?.message === 'cancel' || error === 'close') return
+    ElMessage.error(error?.message || '驳回失败')
   }
 }
 

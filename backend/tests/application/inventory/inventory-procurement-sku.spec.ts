@@ -14,6 +14,7 @@ describe('InventoryService procurement sku traceability', () => {
   const mockInventoryRepository: jest.Mocked<InventoryRepository> = {
     recordEntries: jest.fn(),
     existsBySourceAndIngredient: jest.fn(),
+      existsBySourceVersionAndIngredient: jest.fn(),
     getCurrentBalanceByIngredient: jest.fn(),
     findBySource: jest.fn(),
   };
@@ -125,19 +126,11 @@ describe('InventoryService procurement sku traceability', () => {
     );
   });
 
-  it('skips daily purchase records when inbounding purchases into inventory', async () => {
-    inventoryRepository.existsBySourceAndIngredient.mockResolvedValue(false);
+  it('inbounds daily purchase records too (A1: no strategy filter)', async () => {
+    inventoryRepository.existsBySourceVersionAndIngredient.mockResolvedValue(
+      false,
+    );
     inventoryRepository.recordEntries.mockResolvedValue(undefined);
-    prisma.ingredient.findMany.mockResolvedValue([
-      {
-        id: 'beef',
-        procurementStrategy: 'HYBRID',
-      },
-      {
-        id: 'spinach',
-        procurementStrategy: 'DAILY_PURCHASE',
-      },
-    ]);
 
     const result = await service.inboundFromPurchaseRecords([
       {
@@ -152,16 +145,21 @@ describe('InventoryService procurement sku traceability', () => {
       } as any,
     ]);
 
-    expect(result).toEqual({ createdCount: 1, skippedCount: 1 });
+    expect(result).toEqual({ createdCount: 2, skippedCount: 0 });
     expect(inventoryRepository.recordEntries).toHaveBeenCalledTimes(1);
     const [entries] = inventoryRepository.recordEntries.mock.calls[0];
-    expect(entries).toHaveLength(1);
-    expect(entries[0]).toEqual(
+    expect(entries).toHaveLength(2);
+    expect(entries.map((entry) => entry.ingredientId)).toEqual([
+      'beef',
+      'spinach',
+    ]);
+    expect(entries[1]).toEqual(
       expect.objectContaining({
-        ingredientId: 'beef',
-        deltaG: 1200,
+        ingredientId: 'spinach',
+        deltaG: 500,
         sourceType: InventorySourceType.PURCHASE_RECORD,
-        sourceId: 'purchase-record-beef',
+        sourceId: 'purchase-record-spinach',
+        sourceVersion: 1,
       }),
     );
   });

@@ -22,6 +22,7 @@ describe('InventoryService - Phase 8.13', () => {
   const mockInventoryRepository: jest.Mocked<InventoryRepository> = {
     recordEntries: jest.fn(),
     existsBySourceAndIngredient: jest.fn(),
+    existsBySourceVersionAndIngredient: jest.fn(),
     getCurrentBalanceByIngredient: jest.fn(),
     findBySource: jest.fn(),
   };
@@ -35,6 +36,12 @@ describe('InventoryService - Phase 8.13', () => {
     findPackagingUnitById: jest.fn(),
     updatePackagingUnit: jest.fn(),
     findBatchesByPackagingUnitStatus: jest.fn(),
+  };
+
+  const mockPrisma = {
+    ingredient: {
+      findMany: jest.fn(),
+    },
   };
 
   beforeEach(async () => {
@@ -51,7 +58,7 @@ describe('InventoryService - Phase 8.13', () => {
         },
         {
           provide: PrismaService,
-          useValue: {},
+          useValue: mockPrisma,
         },
       ],
     }).compile();
@@ -271,6 +278,42 @@ describe('InventoryService - Phase 8.13', () => {
       await expect(service.deductFromKitchenTask('non-existent')).rejects.toThrow(
         'PackagingUnit not found: non-existent',
       );
+    });
+  });
+  describe('inboundFromPurchaseRecords', () => {
+    it('日采原料也入库', async () => {
+      mockPrisma.ingredient.findMany.mockResolvedValue([
+        { id: 'ing-stock', procurementStrategy: 'STOCK_REPLENISHMENT' },
+      ]);
+      inventoryRepository.existsBySourceVersionAndIngredient.mockResolvedValue(false);
+      inventoryRepository.recordEntries.mockResolvedValue(undefined);
+
+      const result = await service.inboundFromPurchaseRecords([
+        { id: 'pr-daily', ingredientId: 'ing-daily', actualBaseQuantity: 500 },
+        { id: 'pr-stock', ingredientId: 'ing-stock', actualBaseQuantity: 1200 },
+      ] as any);
+
+      expect(result.createdCount).toBe(2);
+      const entries = inventoryRepository.recordEntries.mock.calls[0][0];
+      expect(entries.map((entry) => entry.ingredientId)).toEqual([
+        'ing-daily',
+        'ing-stock',
+      ]);
+    });
+
+    it('入账行带来源版本 1', async () => {
+      mockPrisma.ingredient.findMany.mockResolvedValue([
+        { id: 'ing-stock', procurementStrategy: 'STOCK_REPLENISHMENT' },
+      ]);
+      inventoryRepository.existsBySourceVersionAndIngredient.mockResolvedValue(false);
+      inventoryRepository.recordEntries.mockResolvedValue(undefined);
+
+      await service.inboundFromPurchaseRecords([
+        { id: 'pr-stock', ingredientId: 'ing-stock', actualBaseQuantity: 1200 },
+      ] as any);
+
+      const entries = inventoryRepository.recordEntries.mock.calls[0][0];
+      expect((entries[0] as any).sourceVersion).toBe(1);
     });
   });
 });

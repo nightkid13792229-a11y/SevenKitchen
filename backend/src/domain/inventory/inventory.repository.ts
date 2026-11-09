@@ -25,6 +25,17 @@ export interface InventoryRepository {
   ): Promise<boolean>;
 
   /**
+   * 同上，但把"第几次写入"算进去。
+   * 采购撤回后再完成时，同一采购记录会有多个版本，不能只看来源+原料。
+   */
+  existsBySourceVersionAndIngredient(
+    sourceType: InventorySourceType,
+    sourceId: string,
+    sourceVersion: number,
+    ingredientId: string,
+  ): Promise<boolean>;
+
+  /**
    * Get current balance for an ingredient (derived from SUM(delta_g))
    * Returns 0 if no entries exist
    */

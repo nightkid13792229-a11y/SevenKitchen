@@ -30,6 +30,7 @@ export class PrismaInventoryRepository implements InventoryRepository {
           procurementSkuId: entry.procurementSkuId ?? null,
           sourceType: entry.sourceType as any,
           sourceId: entry.sourceId,
+          sourceVersion: entry.sourceVersion ?? 1,
           costAmount: entry.costAmount ?? null,
           createdAt: entry.createdAt,
         })),
@@ -45,10 +46,25 @@ export class PrismaInventoryRepository implements InventoryRepository {
     sourceId: string,
     ingredientId: string,
   ): Promise<boolean> {
+    return this.existsBySourceVersionAndIngredient(
+      sourceType,
+      sourceId,
+      1,
+      ingredientId,
+    );
+  }
+
+  async existsBySourceVersionAndIngredient(
+    sourceType: InventorySourceType,
+    sourceId: string,
+    sourceVersion: number,
+    ingredientId: string,
+  ): Promise<boolean> {
     const count = await this.prisma.inventoryLedgerEntry.count({
       where: {
         sourceType: sourceType as any,
         sourceId,
+        sourceVersion,
         ingredientId,
       },
     });

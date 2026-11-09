@@ -19,6 +19,8 @@ export class InventoryLedgerEntry {
     public readonly createdAt: Date,
     public readonly procurementSkuId?: string,
     public readonly costAmount?: number,
+    /** 同一来源的第几次写入；采购撤回后再完成时递增 */
+    public readonly sourceVersion: number = 1,
   ) {
     this.validateInvariants();
   }

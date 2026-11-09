@@ -1283,10 +1283,12 @@ model InventoryLedgerEntry {
   procurementSkuId String?             @map("procurement_sku_id") @db.VarChar(36)
   sourceType       InventorySourceType @map("source_type")
   sourceId         String              @map("source_id")
+  /// 同一来源的第几次写入（采购撤回后再完成时 +1）
+  sourceVersion    Int                 @default(1) @map("source_version")
   costAmount       Decimal?            @map("cost_amount") @db.Decimal(10, 2)
   createdAt        DateTime            @default(now()) @map("created_at")
 
-  @@unique([sourceType, sourceId, ingredientId])
+  @@unique([sourceType, sourceId, sourceVersion, ingredientId], map: "inventory_ledger_entry_source_ver_ing_key")
   @@index([ingredientId])
   @@index([procurementSkuId])
   @@index([sourceType, sourceId])
@@ -2501,6 +2503,8 @@ model PurchaseRecord {
   actualPackageUnit  String?      @map("actual_package_unit") @db.VarChar(20)
   actualBaseQuantity Decimal?     @map("actual_base_quantity") @db.Decimal(18, 6)
   actualBaseUnit     String?      @map("actual_base_unit") @db.VarChar(20)
+  /// 已入账到第几版（0 = 未入账；撤回不递减，再完成时 +1）
+  inboundVersion     Int          @default(0) @map("inbound_version")
   actualCost         Decimal      @map("actual_cost") @db.Decimal(10, 2)
   productModel       String?      @map("product_model") @db.VarChar(100)
   notes              String?      @map("notes")

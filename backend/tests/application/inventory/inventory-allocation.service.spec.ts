@@ -16,6 +16,7 @@ describe('InventoryService allocations', () => {
     inventoryRepository = {
       recordEntries: jest.fn(),
       existsBySourceAndIngredient: jest.fn(),
+      existsBySourceVersionAndIngredient: jest.fn(),
       getCurrentBalanceByIngredient: jest.fn(),
       findBySource: jest.fn(),
     };

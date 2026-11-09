@@ -275,35 +275,6 @@ export class InventoryService {
 
     const ledgerEntries: InventoryLedgerEntry[] = [];
     let skippedCount = 0;
-    const stockManagedStrategies = new Set([
-      'STOCK_REPLENISHMENT',
-      'HYBRID',
-    ]);
-    const stockManagedIngredientIds = new Set(
-      (
-        await this.prisma.ingredient.findMany({
-          where: {
-            id: {
-              in: Array.from(
-                new Set(
-                  purchaseRecords
-                    .map((record) => record.ingredientId)
-                    .filter(Boolean),
-                ),
-              ),
-            },
-          },
-          select: {
-            id: true,
-            procurementStrategy: true,
-          },
-        })
-      )
-        .filter((ingredient) =>
-          stockManagedStrategies.has(ingredient.procurementStrategy),
-        )
-        .map((ingredient) => ingredient.id),
-    );
 
     for (const record of purchaseRecords) {
       const baseQuantity = Number(record.actualBaseQuantity || 0);
@@ -315,19 +286,14 @@ export class InventoryService {
         continue;
       }
 
-      if (!stockManagedIngredientIds.has(record.ingredientId)) {
-        this.logger.log(
-          `Skipping purchase record ${record.id}: ingredient ${record.ingredientId} is not stock-managed`,
+      // 日采与补货一视同仁：采购完成即入库（方案 §4）。
+      const exists =
+        await this.inventoryRepository.existsBySourceVersionAndIngredient(
+          InventorySourceType.PURCHASE_RECORD,
+          record.id,
+          1,
+          record.ingredientId,
         );
-        skippedCount++;
-        continue;
-      }
-
-      const exists = await this.inventoryRepository.existsBySourceAndIngredient(
-        InventorySourceType.PURCHASE_RECORD,
-        record.id,
-        record.ingredientId,
-      );
 
       if (exists) {
         skippedCount++;

@@ -26,6 +26,7 @@ import {
 import { GlobalConfigService } from 'src/config/global-config.service';
 import type { ProductionBatchSummaryDto } from 'src/production.service';
 import { PRODUCTION_COST_SETTLEMENT_SERVICE } from 'src/production/production-cost-settlement.tokens';
+import { PrismaService } from 'src/infrastructure/prisma.service';
 
 describe('ProductionService - Phase 8.10', () => {
   let service: ProductionService;
@@ -67,6 +68,14 @@ describe('ProductionService - Phase 8.10', () => {
       findByOrderId: jest.fn(),
     };
 
+  const mockPrisma = {
+    purchaseList: {
+      findMany: jest
+        .fn()
+        .mockResolvedValue([{ id: 'pl-1', status: 'COMPLETED' }]),
+    },
+  };
+
   const mockGlobalConfigService = {
     getGlobalConfig: jest.fn().mockResolvedValue({
       defaultBatchCapacityG: 5000,
@@ -96,6 +105,10 @@ describe('ProductionService - Phase 8.10', () => {
         {
           provide: GlobalConfigService,
           useValue: mockGlobalConfigService,
+        },
+        {
+          provide: PrismaService,
+          useValue: mockPrisma,
         },
         {
           provide: PRODUCTION_COST_SETTLEMENT_SERVICE,
@@ -1260,6 +1273,72 @@ describe('ProductionService - Phase 8.10', () => {
       expect(productionRepository.areAllUnitsCompleted).not.toHaveBeenCalled(); // Should not check if batch is not IN_PRODUCTION
       expect(batch.status).toBe(ProductionBatchStatus.COMPLETED);
       expect(productionRepository.save).not.toHaveBeenCalled();
+    });
+  });
+  describe('purchase gate', () => {
+    it('没有采购清单时拒绝排产', async () => {
+      mockPrisma.purchaseList.findMany.mockResolvedValueOnce([]);
+      await expect(
+        service.createProductionBatch({ productionDate: '2026-04-22' }),
+      ).rejects.toThrow('请先生成 2026-04-22 的采购清单');
+    });
+
+    it('有未完成清单时拒绝排产', async () => {
+      mockPrisma.purchaseList.findMany.mockResolvedValueOnce([
+        { id: 'pl-1', status: 'PENDING' },
+      ]);
+      await expect(
+        service.createProductionBatch({ productionDate: '2026-04-22' }),
+      ).rejects.toThrow('请先完成 2026-04-22 的采购任务');
+    });
+
+    it('员工不能强制排产', async () => {
+      mockPrisma.purchaseList.findMany.mockResolvedValueOnce([
+        { id: 'pl-1', status: 'PENDING' },
+      ]);
+      await expect(
+        service.createProductionBatch(
+          {
+            productionDate: '2026-04-22',
+            force: true,
+            forceReason: '紧急订单',
+          },
+          { userId: 'staff-1', role: 'STAFF' },
+        ),
+      ).rejects.toThrow('只有管理员可以强制排产');
+    });
+
+    it('管理员强制排产必须填原因', async () => {
+      mockPrisma.purchaseList.findMany.mockResolvedValueOnce([
+        { id: 'pl-1', status: 'PENDING' },
+      ]);
+      await expect(
+        service.createProductionBatch(
+          { productionDate: '2026-04-22', force: true },
+          { userId: 'admin-1', role: 'ADMIN' },
+        ),
+      ).rejects.toThrow('强制排产必须填写原因');
+    });
+
+    it('管理员带原因可跳过门禁', async () => {
+      mockPrisma.purchaseList.findMany.mockResolvedValueOnce([
+        { id: 'pl-1', status: 'PENDING' },
+      ]);
+      mockOrderRepository.findByTargetProductionDateRange.mockResolvedValueOnce({
+        list: [],
+        total: 0,
+      });
+
+      await expect(
+        service.createProductionBatch(
+          {
+            productionDate: '2026-04-22',
+            force: true,
+            forceReason: '门店临时加单',
+          },
+          { userId: 'admin-1', role: 'ADMIN' },
+        ),
+      ).rejects.toThrow('No PURCHASING orders found');
     });
   });
 });

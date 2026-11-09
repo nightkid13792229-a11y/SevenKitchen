@@ -7,6 +7,7 @@ import {
   Injectable,
   Inject,
   BadRequestException,
+  ForbiddenException,
   Logger,
   Optional,
 } from '@nestjs/common';
@@ -25,6 +26,8 @@ import {
   ORDER_STATUS_HISTORY_REPOSITORY,
 } from '../order/order.service';
 import { GlobalConfigService } from '../config/global-config.service';
+import { PrismaService } from '../../infrastructure/prisma.service';
+import { assertPurchaseListsCompleted } from './production-gate';
 import { DateUtil } from '../../utils/date.util';
 import {
   PRODUCTION_COST_SETTLEMENT_SERVICE,
@@ -36,6 +39,9 @@ export const PRODUCTION_BATCH_REPOSITORY = Symbol('ProductionBatchRepository');
 export interface CreateProductionBatchDto {
   productionDate: string; // YYYY-MM-DD format
   orderIds?: string[]; // Optional: specific orders to include; if not provided, includes all PURCHASING unassigned orders for the production date
+  /** 管理员强制排产：跳过采购门禁，必须填原因 */
+  force?: boolean;
+  forceReason?: string;
 }
 
 export interface ProductionBatchSummaryDto {
@@ -65,6 +71,7 @@ export class ProductionService {
     @Inject(ORDER_STATUS_HISTORY_REPOSITORY)
     private readonly statusHistoryRepository: OrderStatusHistoryRepository,
     private readonly globalConfigService: GlobalConfigService,
+    private readonly prisma: PrismaService,
     @Optional()
     @Inject(PRODUCTION_COST_SETTLEMENT_SERVICE)
     private readonly productionCostSettlementService?: ProductionCostSettlementRunner,
@@ -106,6 +113,7 @@ export class ProductionService {
    */
   async createProductionBatch(
     dto: CreateProductionBatchDto,
+    actor?: { userId: string; role: string },
   ): Promise<ProductionBatch> {
     // 使用统一的日期工具解析生产日期（中午12点避免时区问题）
     const productionDate = DateUtil.getStartOfDay(dto.productionDate);
@@ -113,6 +121,32 @@ export class ProductionService {
       throw new BadRequestException(
         `Invalid production date format: ${dto.productionDate}. Expected YYYY-MM-DD`,
       );
+    }
+
+    // 采购门禁：与自动排单共用同一段判断（B3）
+    const { start: gateStart, end: gateEnd } = DateUtil.createDateRange(
+      dto.productionDate,
+    );
+    const purchaseLists = await this.prisma.purchaseList.findMany({
+      where: {
+        targetDate: { gte: gateStart, lte: gateEnd },
+        kind: 'ORDER_DEMAND' as any,
+      },
+      select: { id: true, status: true },
+    });
+
+    if (dto.force) {
+      if (actor?.role !== 'ADMIN') {
+        throw new ForbiddenException('只有管理员可以强制排产');
+      }
+      if (!dto.forceReason?.trim()) {
+        throw new BadRequestException('强制排产必须填写原因');
+      }
+      this.logger.warn(
+        `[createProductionBatch] 强制排产 ${dto.productionDate}，原因：${dto.forceReason}，操作人：${actor?.userId ?? 'unknown'}`,
+      );
+    } else {
+      assertPurchaseListsCompleted(purchaseLists, dto.productionDate);
     }
 
     // Load orders

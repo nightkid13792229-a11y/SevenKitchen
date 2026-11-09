@@ -44,7 +44,7 @@ import type {
   UpdateIngredientDto,
   UpdateIngredientPriceDto,
 } from '../../application/ingredient/ingredient.service';
-import { UserId } from '../auth/user.decorator';
+import { UserId, UserRole } from '../auth/user.decorator';
 import { resolveIngredientCostSource } from '../../domain/ingredient/cost-source';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import {
@@ -1022,9 +1022,14 @@ export class AdminController {
   })
   async createProductionBatch(
     @Body() dto: CreateProductionBatchDto,
+    @UserId() userId: string,
+    @UserRole() role: string,
   ): Promise<ApiResponseDto<ProductionBatchSummaryDto> | ApiResponseDto<null>> {
     try {
-      const batch = await this.productionService.createProductionBatch(dto);
+      const batch = await this.productionService.createProductionBatch(dto, {
+        userId,
+        role,
+      });
 
       // Map to summary DTO
       const packagingUnits = batch.packagingUnits.map((unit) => ({

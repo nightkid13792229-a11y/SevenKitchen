@@ -43,7 +43,7 @@ import { PrintTaskDto } from '../../interfaces/dto/production/print-task.dto';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { StaffGuard } from '../guards/role.guard';
-import { UserId } from '../auth/user.decorator';
+import { UserId, UserRole } from '../auth/user.decorator';
 
 @ApiTags('Staff Production')
 @Controller('api/v1/staff/production')
@@ -136,8 +136,13 @@ export class StaffProductionController {
   })
   async autoSchedule(
     @Body() dto: AutoScheduleDto,
+    @UserId() userId: string,
+    @UserRole() role: string,
   ): Promise<ApiResponseDto<any>> {
-    const batch = await this.staffProductionService.autoScheduleToday(dto);
+    const batch = await this.staffProductionService.autoScheduleToday(dto, {
+      userId,
+      role,
+    });
     return {
       code: 0,
       message: '排单成功',

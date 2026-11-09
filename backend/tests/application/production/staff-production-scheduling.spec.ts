@@ -66,7 +66,7 @@ describe('StaffProductionService production scheduling gate', () => {
 
     await expect(
       service.autoScheduleToday({ startDate: '2026-04-20' }),
-    ).rejects.toThrow('请先完成 2026-04-20 的所有采购任务后再进行排单');
+    ).rejects.toThrow('请先完成 2026-04-20 的采购任务后再排产');
 
     expect(productionService.createProductionBatch).not.toHaveBeenCalled();
   });
@@ -98,9 +98,12 @@ describe('StaffProductionService production scheduling gate', () => {
         kind: PurchaseListKind.ORDER_DEMAND,
       }),
     );
-    expect(productionService.createProductionBatch).toHaveBeenCalledWith({
-      productionDate: '2026-04-20',
-      orderIds: undefined,
-    });
+    expect(productionService.createProductionBatch).toHaveBeenCalledWith(
+      {
+        productionDate: '2026-04-20',
+        orderIds: undefined,
+      },
+      undefined,
+    );
   });
 });

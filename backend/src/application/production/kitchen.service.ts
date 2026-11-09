@@ -26,6 +26,7 @@ import {
 import { PurchaseListKind, PurchaseListStatus } from '../../domain/purchasing';
 import { Order, OrderStatus } from '../../domain';
 import { PRODUCTION_BATCH_REPOSITORY } from './production.service';
+import { assertPurchaseListsCompleted } from './production-gate';
 import { PURCHASE_LIST_REPOSITORY } from '../purchasing/purchasing.service.tokens';
 import { ORDER_REPOSITORY } from '../order/order.service';
 import {
@@ -73,7 +74,10 @@ export class StaffProductionService {
    * Auto-schedule production for today
    * Follows the 07 document batch/pot algorithm (lines 823-926)
    */
-  async autoScheduleToday(dto: AutoScheduleDto): Promise<ProductionBatch> {
+  async autoScheduleToday(
+    dto: AutoScheduleDto,
+    actor?: { userId: string; role: string },
+  ): Promise<ProductionBatch> {
     this.logger.log(
       `[AutoSchedule] Starting auto-schedule for ${dto.startDate}`,
     );
@@ -94,20 +98,7 @@ export class StaffProductionService {
       endDate: tomorrow,
     });
 
-    if (purchaseLists.length === 0) {
-      throw new BadRequestException(
-        `未找到 ${dto.startDate} 的采购清单，请先生成采购清单`,
-      );
-    }
-
-    const pendingPurchaseLists = purchaseLists.filter(
-      (list) => list.status !== PurchaseListStatus.COMPLETED,
-    );
-    if (pendingPurchaseLists.length > 0) {
-      throw new BadRequestException(
-        `请先完成 ${dto.startDate} 的所有采购任务后再进行排单`,
-      );
-    }
+    assertPurchaseListsCompleted(purchaseLists as any, dto.startDate);
 
     this.logger.log(
       `[AutoSchedule] Purchase list check passed for ${dto.startDate}`,
@@ -121,10 +112,13 @@ export class StaffProductionService {
     // - FIFO allocates orders to pots
 
     // Passing undefined includes all eligible PURCHASING orders for the date.
-    const batch = await this.productionService.createProductionBatch({
-      productionDate: dto.startDate,
-      orderIds: undefined, // Include all eligible PAID orders
-    });
+    const batch = await this.productionService.createProductionBatch(
+      {
+        productionDate: dto.startDate,
+        orderIds: undefined, // Include all eligible PAID orders
+      },
+      actor,
+    );
 
     this.logger.log(
       `[AutoSchedule] Created batch ${batch.id} with ${batch.packagingUnits.length} packaging units`,

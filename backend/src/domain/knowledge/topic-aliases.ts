@@ -9,8 +9,8 @@
  */
 
 export const TOPIC_ALIASES: Record<string, string[]> = {
-  phosphorus: ['phosph', '磷'],
-  protein: ['protein', '蛋白'],
+  phosphorus: ['phosph', '磷', '血磷', '膳食磷'],
+  protein: ['protein', '蛋白', '蛋白质'],
   sodium: ['sodium', '钠'],
   potassium: ['potassium', '钾'],
   chloride: ['chloride', '氯'],
@@ -25,6 +25,7 @@ export const TOPIC_ALIASES: Record<string, string[]> = {
   bloodpressure: ['blood pressure', 'hypertension', '血压', '高血压'],
   staging: ['staging', 'stage', 'iris', '分期'],
   vitaminD: ['vitamin d', 'calcitriol', '维生素 d'],
+  vitaminK: ['vitamin k', '维生素k', '维生素 K'],
   energy: ['energy', 'kcal', '能量'],
   water: ['water', 'moisture', '水'],
   phosphatebinder: ['binder', 'binders', '结合剂'],

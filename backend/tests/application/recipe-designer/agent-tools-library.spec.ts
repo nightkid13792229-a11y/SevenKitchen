@@ -5,6 +5,7 @@ import {
 } from '../../../src/application/recipe-designer/agent/tools';
 import { CitationRegistry } from '../../../src/application/recipe-designer/agent/citation-registry';
 import { RecipeAgentService } from '../../../src/application/recipe-designer/agent/recipe-agent.service';
+import { TOPIC_KEYS } from '../../../src/domain/knowledge/topic-aliases';
 import type {
   LibraryPassage,
   SectionHit,
@@ -260,6 +261,59 @@ describe('Agent 工具：知识库检索与打开', () => {
     );
   });
 
+  it('血磷归一成 phosphorus', async () => {
+    const searchSections = jest.fn().mockResolvedValue([]);
+    await executeTool(
+      'search_knowledge_library',
+      { query: '血磷', topics: ['血磷'] },
+      context({ library: { searchSections } as any }),
+    );
+    expect(searchSections).toHaveBeenCalledWith(
+      '血磷',
+      expect.objectContaining({ topics: ['phosphorus'] }),
+    );
+  });
+
+  it('维生素 K 归一成 vitaminK 且 TOPIC_KEYS 包含它', async () => {
+    const searchSections = jest.fn().mockResolvedValue([]);
+    await executeTool(
+      'search_knowledge_library',
+      { query: 'vitamin k', topics: ['维生素 K'] },
+      context({ library: { searchSections } as any }),
+    );
+    expect(searchSections).toHaveBeenCalledWith(
+      'vitamin k',
+      expect.objectContaining({ topics: ['vitaminK'] }),
+    );
+    expect(TOPIC_KEYS).toContain('vitaminK');
+  });
+
+  it('合法与非法主题混传时报错并列非法项', async () => {
+    const searchSections = jest.fn();
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'phosphorus', topics: ['磷', 'foo'] },
+      context({ library: { searchSections } as any }),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.message).toContain('未知主题');
+    expect(outcome.error?.message).toContain('foo');
+    expect(searchSections).not.toHaveBeenCalled();
+  });
+
+  it('topics 显式空数组按没传处理，照常检索', async () => {
+    const searchSections = jest.fn().mockResolvedValue([]);
+    await executeTool(
+      'search_knowledge_library',
+      { query: 'phosphorus', topics: [] },
+      context({ library: { searchSections } as any }),
+    );
+    expect(searchSections).toHaveBeenCalledWith(
+      'phosphorus',
+      expect.objectContaining({ topics: undefined }),
+    );
+  });
+
   it('合法 CKD sourceIds/documentIds 仍正常检索', async () => {
     const searchSections = jest.fn().mockResolvedValue([]);
     const searchTableViews = jest.fn().mockResolvedValue([]);
@@ -316,6 +370,84 @@ describe('Agent 工具：知识库检索与打开', () => {
     expect(searchSections).not.toHaveBeenCalled();
   });
 
+  it('documentIds 传字符串时按单个文档收窄', async () => {
+    const searchSections = jest.fn().mockResolvedValue([]);
+    await executeTool(
+      'search_knowledge_library',
+      { query: 'phosphorus', documentIds: CKD_DOCUMENT },
+      context({ library: { searchSections } as any }),
+    );
+    expect(searchSections).toHaveBeenCalledWith(
+      'phosphorus',
+      expect.objectContaining({ documentIds: [CKD_DOCUMENT] }),
+    );
+  });
+
+  it('documentIds 传数字时明确报错，不退化成全库', async () => {
+    const searchSections = jest.fn();
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'phosphorus', documentIds: 123 },
+      context({ library: { searchSections } as any }),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.message).toContain('documentIds');
+    expect(outcome.error?.message).toContain('字符串数组');
+    expect(searchSections).not.toHaveBeenCalled();
+  });
+
+  it('sourceIds 传对象时明确报错，不退化成全库', async () => {
+    const searchSections = jest.fn();
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'phosphorus', sourceIds: { id: 'SACN5' } },
+      context({ library: { searchSections } as any }),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.message).toContain('sourceIds');
+    expect(outcome.error?.message).toContain('字符串数组');
+    expect(searchSections).not.toHaveBeenCalled();
+  });
+
+  it('sectionIds 传布尔值时明确报错', async () => {
+    const searchSections = jest.fn();
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'phosphorus', sectionIds: true },
+      context({ library: { searchSections } as any }),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.message).toContain('sectionIds');
+    expect(outcome.error?.message).toContain('字符串数组');
+    expect(searchSections).not.toHaveBeenCalled();
+  });
+
+  it('非 CKD sectionId 仍受 CKD documentIds 约束，不会泄漏全库', async () => {
+    const searchSections = jest.fn().mockResolvedValue([]);
+    const searchTableViews = jest.fn().mockResolvedValue([]);
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'phosphorus', sectionIds: ['non-ckd-section-1'] },
+      context({
+        library: { searchSections } as any,
+        sourceLayer: { searchTableViews } as any,
+      }),
+    );
+    expect(searchSections).toHaveBeenCalledWith(
+      'phosphorus',
+      expect.objectContaining({
+        sectionIds: ['non-ckd-section-1'],
+        documentIds: expect.arrayContaining([CKD_DOCUMENT]),
+      }),
+    );
+    const options = searchSections.mock.calls[0][1] as {
+      documentIds: string[];
+    };
+    expect(options.documentIds).toHaveLength(5);
+    expect(options.documentIds).toContain(CKD_DOCUMENT);
+    expect((outcome.data as any).status).toBe('no_match');
+  });
+
   it('documentIds 显式空数组不退化成全库', async () => {
     const searchSections = jest.fn();
     const searchTableViews = jest.fn();
@@ -330,8 +462,12 @@ describe('Agent 工具：知识库检索与打开', () => {
     const data = outcome.data as any;
     expect(data.status).toBe('no_match');
     expect(data.count).toBe(0);
-    expect(data.hints.length).toBeGreaterThan(0);
-    expect(outcome.summary).toContain('未覆盖');
+    expect(data.hints).toEqual([
+      '这次没有检索：documentIds/sourceIds/sectionIds 传了空数组',
+      '去掉空的范围参数再查，或用 knowledge_scope 看馆藏',
+    ]);
+    expect(outcome.summary).toContain('范围为空');
+    expect(outcome.summary).toContain('未执行检索');
     expect(searchSections).not.toHaveBeenCalled();
     expect(searchTableViews).not.toHaveBeenCalled();
   });
@@ -627,6 +763,27 @@ describe('Agent 工具：知识库检索与打开', () => {
     expect(outcome.ok).toBe(false);
     expect(outcome.error?.message).toContain('CKD');
     expect(scope).not.toHaveBeenCalled();
+  });
+
+  it('knowledge_scope 合法 CKD sourceId 正常收窄透传', async () => {
+    const scope = jest.fn().mockResolvedValue({
+      documents: [],
+      totals: { documents: 0, sections: 0, paragraphs: 0, tables: 0 },
+    });
+    const outcome = await executeTool(
+      'knowledge_scope',
+      { sourceId: 'IRIS-CKD-2026' },
+      context({ sourceLayer: { scope } as any }),
+    );
+    expect(scope).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: 'IRIS-CKD-2026',
+        documentIds: expect.arrayContaining([CKD_DOCUMENT]),
+      }),
+    );
+    expect(scope.mock.calls[0][0].documentIds).toHaveLength(5);
+    expect(outcome.ok).toBe(true);
+    expect((outcome.data as any).status).toBe('ok');
   });
 
   it('open_knowledge 三选一缺失时报错', async () => {

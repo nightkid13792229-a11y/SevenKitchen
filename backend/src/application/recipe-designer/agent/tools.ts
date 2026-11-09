@@ -417,7 +417,7 @@ export async function executeTool(
           );
         }
 
-        const sourceIds = readStringArray(args.sourceIds);
+        const sourceIds = readStringArray(args.sourceIds, 'sourceIds');
         const invalidSourceId = sourceIds?.find(
           (sourceId) => !isCkdSourceId(sourceId),
         );
@@ -428,7 +428,10 @@ export async function executeTool(
           );
         }
 
-        const explicitDocumentIds = readStringArray(args.documentIds);
+        const explicitDocumentIds = readStringArray(
+          args.documentIds,
+          'documentIds',
+        );
         const invalidDocumentId = explicitDocumentIds?.find(
           (documentId) => !isCkdDocument(documentId),
         );
@@ -447,13 +450,14 @@ export async function executeTool(
           );
         }
 
-        const sectionIds = readStringArray(args.sectionIds);
+        const sectionIds = readStringArray(args.sectionIds, 'sectionIds');
         if (
           isExplicitEmpty(args.sourceIds, sourceIds) ||
           isExplicitEmpty(args.documentIds, explicitDocumentIds) ||
           isExplicitEmpty(args.sectionIds, sectionIds)
         ) {
-          // 显式 [] = 范围为空，不是「不限制」：不能悄悄退化成全库。
+          // 显式 [] = 范围为空，不是「不限制」：不能悄悄退化成全库，也不能
+          // 把「这次没检索」说成「本库没有」（模型会直接转述摘要）。
           return ok(
             {
               status: 'no_match',
@@ -462,12 +466,11 @@ export async function executeTool(
               tables: [],
               count: 0,
               hints: [
-                '换同义词',
-                '用 knowledge_scope 看馆藏',
-                '检查空的范围参数',
+                '这次没有检索：documentIds/sourceIds/sectionIds 传了空数组',
+                '去掉空的范围参数再查，或用 knowledge_scope 看馆藏',
               ],
             },
-            '知识库未覆盖该问题（显式范围为空，不会退回全库）',
+            '显式范围为空，未执行检索（不代表本库未覆盖该问题）',
           );
         }
 
@@ -1146,9 +1149,27 @@ function isExplicitEmpty(
   return Array.isArray(raw) && (parsed?.length ?? 0) === 0;
 }
 
-/** 读字符串数组；不是数组返回 undefined（= 没传）。 */
-function readStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
+/**
+ * 读字符串数组参数：
+ * - 字符串按单个值处理（模型偶尔把数组写成字符串）；
+ * - 数组沿用原来的清洗逻辑；
+ * - 传了别的类型（数字/对象/布尔）明确报错，不能静默当没传退化成全库。
+ */
+function readStringArray(
+  value: unknown,
+  name: string,
+): string[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  if (!Array.isArray(value)) {
+    throw new AgentToolError(
+      'INVALID_ARGUMENT',
+      `${name} 需要字符串数组`,
+    );
+  }
   return value
     .filter((item): item is string => typeof item === 'string')
     .map((item) => item.trim())

@@ -1445,6 +1445,20 @@ model InventoryAllocationLine {
   @@map("inventory_allocation_line")
 }
 
+enum InventoryAdjustmentCategory {
+  INTERNAL_USE
+  EXPIRED
+  DAMAGED
+  OTHER
+}
+
+enum InventoryAdjustmentReviewStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model InventoryAdjustment {
   id               String                  @id @default(uuid()) @map("id")
   ingredientId     String                  @map("ingredient_id")
@@ -1455,14 +1469,27 @@ model InventoryAdjustment {
   deltaG           Float                   @map("delta_g")
   reason           String                  @db.VarChar(200)
   note             String?
+  /// 报废/领用的分类；后台普通调整默认 OTHER
+  category         InventoryAdjustmentCategory @default(OTHER) @map("category")
+  /// 报废 ≥50 元进待复核；内部领用/普通调整 NONE
+  reviewStatus     InventoryAdjustmentReviewStatus @default(NONE) @map("review_status")
+  /// 发生当时单价 × 数量（元）；缺价为空
+  costAmount       Decimal?                @map("cost_amount") @db.Decimal(10, 2)
   /// 操作人（报废/内部领用/后台调整）
   createdBy        String?                 @map("created_by") @db.VarChar(36)
+  reviewedBy       String?                 @map("reviewed_by") @db.VarChar(36)
+  reviewedAt       DateTime?               @map("reviewed_at")
+  reviewNote       String?                 @map("review_note")
+  /// 驳回冲回时指向原调整单
+  reversesAdjustmentId String?             @map("reverses_adjustment_id") @db.VarChar(36)
   createdAt        DateTime                @default(now()) @map("created_at")
   ingredient       Ingredient              @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
 
   @@index([ingredientId])
   @@index([procurementSkuId])
   @@index([createdAt])
+  @@index([category])
+  @@index([reviewStatus])
   @@map("inventory_adjustment")
 }
 

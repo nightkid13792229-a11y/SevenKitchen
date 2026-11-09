@@ -26,18 +26,6 @@ export class InventoryAdjustment {
       throw new ValidationError('procurementSkuId cannot be blank');
     }
 
-    if (this.quantityBeforeG < 0) {
-      throw new ValidationError(
-        `quantityBeforeG must be non-negative, got: ${this.quantityBeforeG}`,
-      );
-    }
-
-    if (this.quantityAfterG < 0) {
-      throw new ValidationError(
-        `quantityAfterG must be non-negative, got: ${this.quantityAfterG}`,
-      );
-    }
-
     if (this.deltaG === 0) {
       throw new ValidationError('deltaG cannot be zero');
     }

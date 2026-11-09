@@ -259,6 +259,55 @@
             </el-table-column>
           </el-table>
         </el-tab-pane>
+        <el-tab-pane label="报废/领用" name="adjustments">
+          <div class="tab-toolbar">
+            <div class="muted-text">报废单笔 ≥50 元进待复核；内部领用免批。驳回会写一笔反向调整，把扣掉的加回来。</div>
+            <el-button size="small" @click="loadAdjustments">刷新</el-button>
+          </div>
+
+          <div class="adjust-summary">
+            <div class="summary-cell"><span>内部领用</span><strong>{{ adjustmentSummary.internalUseCount }}</strong></div>
+            <div class="summary-cell"><span>报废</span><strong>{{ adjustmentSummary.scrapCount }}</strong></div>
+            <div class="summary-cell"><span>待复核金额</span><strong>¥{{ formatQuantity(adjustmentSummary.pendingAmount) }}</strong></div>
+            <div class="summary-cell"><span>本期盘亏</span><strong>{{ formatQuantity(adjustmentSummary.stocktakeLoss) }}</strong></div>
+          </div>
+
+          <el-table :data="adjustments" v-loading="loadingAdjustments" style="width: 100%">
+            <el-table-column label="时间" width="160">
+              <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
+            </el-table-column>
+            <el-table-column prop="ingredientName" label="原料" min-width="140" />
+            <el-table-column label="分类" width="110">
+              <template #default="{ row }">{{ adjustmentCategoryText(row.category) }}</template>
+            </el-table-column>
+            <el-table-column label="数量" width="140" align="right">
+              <template #default="{ row }">
+                {{ formatSignedQuantity(row.deltaG) }} {{ row.stockUnitLabel }}
+              </template>
+            </el-table-column>
+            <el-table-column label="金额" width="100" align="right">
+              <template #default="{ row }">
+                {{ row.costAmount === null ? '-' : '¥' + formatQuantity(row.costAmount) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="adjustmentTagType(row.reviewStatus)">
+                  {{ adjustmentStatusText(row.reviewStatus) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="170" fixed="right">
+              <template #default="{ row }">
+                <template v-if="row.reviewStatus === 'PENDING'">
+                  <el-button type="success" size="small" @click="approveAdjustment(row)">通过</el-button>
+                  <el-button type="danger" size="small" @click="rejectAdjustment(row)">驳回</el-button>
+                </template>
+                <span v-else class="placeholder">-</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
       </el-tabs>
     </el-card>
 
@@ -403,6 +452,15 @@ const loadingStocktakes = ref(false)
 const inventory = ref<InventoryOverviewItem[]>([])
 const ledgerEntries = ref<InventoryLedgerItem[]>([])
 const stocktakes = ref<InventoryStocktakeItem[]>([])
+const adjustments = ref<any[]>([])
+const loadingAdjustments = ref(false)
+const adjustmentSummary = ref({
+  internalUseCount: 0,
+  scrapCount: 0,
+  pendingAmount: 0,
+  stocktakeLoss: 0
+})
+
 const adjustmentDialogVisible = ref(false)
 const stocktakeDialogVisible = ref(false)
 const onlyWarnings = ref(false)
@@ -601,6 +659,78 @@ const loadStocktakes = async () => {
   }
 }
 
+const loadAdjustments = async () => {
+  loadingAdjustments.value = true
+  try {
+    const [rows, summary] = await Promise.all([
+      inventoryApi.adjustments({}),
+      inventoryApi.adjustmentSummary({})
+    ])
+    adjustments.value = (rows || []) as any[]
+    adjustmentSummary.value = {
+      internalUseCount: Number(summary?.internalUseCount || 0),
+      scrapCount: Number(summary?.scrapCount || 0),
+      pendingAmount: Number(summary?.pendingAmount || 0),
+      stocktakeLoss: Number(summary?.stocktakeLoss || 0)
+    }
+  } catch (error) {
+    ElMessage.error('加载报废/领用失败')
+  } finally {
+    loadingAdjustments.value = false
+  }
+}
+
+const adjustmentCategoryText = (category: string) =>
+  ({
+    INTERNAL_USE: '内部领用',
+    EXPIRED: '过期报废',
+    DAMAGED: '破损污染',
+    OTHER: '其他'
+  })[category] || category
+
+const adjustmentStatusText = (status: string) =>
+  ({
+    NONE: '已入账',
+    PENDING: '待复核',
+    APPROVED: '已通过',
+    REJECTED: '已驳回'
+  })[status] || status
+
+const adjustmentTagType = (status: string) => {
+  if (status === 'PENDING') return 'warning'
+  if (status === 'REJECTED') return 'danger'
+  if (status === 'APPROVED') return 'success'
+  return 'info'
+}
+
+const approveAdjustment = async (row: any) => {
+  try {
+    await ElMessageBox.confirm('确认通过这条报废吗？通过后不再改动库存。', '复核通过', {
+      type: 'warning'
+    })
+    await inventoryApi.reviewAdjustment(row.id, { approve: true })
+    ElMessage.success('已通过')
+    await Promise.all([loadAdjustments(), loadInventory(), loadLedger()])
+  } catch (error: any) {
+    if (error === 'cancel' || error?.message === 'cancel') return
+    ElMessage.error(error?.message || '复核失败')
+  }
+}
+
+const rejectAdjustment = async (row: any) => {
+  try {
+    const { value } = await ElMessageBox.prompt('填写驳回原因（至少 4 个字），系统会把扣掉的库存加回来。', '驳回报废', {
+      inputValidator: (v: string) => (v && v.trim().length >= 4) || '请填写至少 4 个字'
+    })
+    await inventoryApi.reviewAdjustment(row.id, { approve: false, note: value.trim() })
+    ElMessage.success('已驳回并冲回')
+    await Promise.all([loadAdjustments(), loadInventory(), loadLedger()])
+  } catch (error: any) {
+    if (error === 'cancel' || error?.message === 'cancel') return
+    ElMessage.error(error?.message || '驳回失败')
+  }
+}
+
 const refreshActiveTab = async () => {
   if (activeTab.value === 'overview') {
     await loadInventory()
@@ -609,6 +739,11 @@ const refreshActiveTab = async () => {
 
   if (activeTab.value === 'ledger') {
     await loadLedger()
+    return
+  }
+
+  if (activeTab.value === 'adjustments') {
+    await loadAdjustments()
     return
   }
 
@@ -816,7 +951,7 @@ const rejectStocktake = async (row: any) => {
 }
 
 onMounted(async () => {
-  await Promise.all([loadInventory(), loadLedger(), loadStocktakes()])
+  await Promise.all([loadInventory(), loadLedger(), loadStocktakes(), loadAdjustments()])
 })
 </script>
 
@@ -1007,5 +1142,28 @@ onMounted(async () => {
   .row-actions {
     flex-wrap: wrap;
   }
+}
+.adjust-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.summary-cell {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f7f9f5;
+  border: 1px solid #e8ede7;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.summary-cell span {
+  font-size: 12px;
+  color: #7a8a80;
+}
+.summary-cell strong {
+  font-size: 22px;
+  color: #1e3a2f;
 }
 </style>

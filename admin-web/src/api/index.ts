@@ -236,6 +236,12 @@ export const inventoryApi = {
     api.get('/admin/inventory/stocktakes', { params }),
   createStocktake: (data: any): Promise<any> =>
     api.post('/admin/inventory/stocktakes', data),
+  adjustments: (params?: any): Promise<any[]> =>
+    api.get('/admin/inventory/adjustments', { params }),
+  adjustmentSummary: (params?: any): Promise<any> =>
+    api.get('/admin/inventory/adjustments/summary', { params }),
+  reviewAdjustment: (id: string, data: { approve: boolean; note?: string }): Promise<any> =>
+    api.post(`/admin/inventory/adjustments/${id}/review`, data),
   reviewStocktake: (id: string, data: { approve: boolean; note?: string }): Promise<any> =>
     api.post(`/admin/inventory/stocktakes/${id}/review`, data),
   updatePrice: (id: string, price: number): Promise<any> =>

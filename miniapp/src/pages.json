@@ -115,6 +115,14 @@
             "navigationBarBackgroundColor": "#1E3A2F",
             "navigationBarTextStyle": "white"
           }
+        },
+        {
+          "path": "adjustment-create",
+          "style": {
+            "navigationBarTitleText": "记一笔",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white"
+          }
         }
       ]
     },

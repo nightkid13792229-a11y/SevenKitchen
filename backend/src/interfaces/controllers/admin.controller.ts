@@ -438,6 +438,54 @@ export class AdminController {
     return ApiResponseDto.success(ledger);
   }
 
+  @Get('inventory/adjustments')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: 'List scrap / internal-use adjustments' })
+  async getInventoryAdjustments(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('category') category?: string,
+    @Query('pending') pending?: string,
+  ): Promise<ApiResponseDto<any[]>> {
+    const rows = await this.inventoryService.listAdjustments({
+      from: from ? new Date(`${from}T00:00:00`) : undefined,
+      to: to ? new Date(`${to}T23:59:59.999`) : undefined,
+      category,
+      pending: pending === 'true' || pending === '1',
+    });
+    return ApiResponseDto.success(rows);
+  }
+
+  @Get('inventory/adjustments/summary')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: 'Scrap / internal-use summary' })
+  async getInventoryAdjustmentSummary(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<ApiResponseDto<any>> {
+    const summary = await this.inventoryService.getAdjustmentSummary({
+      from: from ? new Date(`${from}T00:00:00`) : undefined,
+      to: to ? new Date(`${to}T23:59:59.999`) : undefined,
+    });
+    return ApiResponseDto.success(summary);
+  }
+
+  @Post('inventory/adjustments/:id/review')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: 'Review a pending scrap adjustment' })
+  async reviewInventoryAdjustment(
+    @Param('id') id: string,
+    @Body() body: { approve: boolean; note?: string },
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    const adjustment = await this.inventoryService.reviewAdjustment(
+      id,
+      { approve: body?.approve === true, note: body?.note ?? null },
+      userId,
+    );
+    return ApiResponseDto.success(adjustment, '复核完成');
+  }
+
   @Get('inventory/undeducted-units')
   @UseGuards(AuthGuard, AdminGuard)
   @ApiOperation({ summary: 'List completed packaging units without inventory deduction' })

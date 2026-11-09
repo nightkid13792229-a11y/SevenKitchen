@@ -74,3 +74,27 @@ describe('staff inventory stocktake result and records (C6)', () => {
     expect(pagesJson).toContain('"path": "stocktake-result"');
   });
 });
+
+describe('staff inventory adjustment create (C7)', () => {
+  const page = readPage('staff-inventory/adjustment-create.vue');
+  const pagesJson = readFileSync(resolve(__dirname, '../pages.json'), 'utf8');
+
+  it('offers the four categories and explains approval', () => {
+    expect(page).toContain('内部领用');
+    expect(page).toContain('过期报废');
+    expect(page).toContain('破损污染');
+    expect(page).toContain('其他');
+    expect(page).toContain('免审批');
+    expect(page).toContain('待复核');
+  });
+
+  it('shows the estimated amount and posts a positive quantity', () => {
+    expect(page).toContain('estimatedAmount');
+    expect(page).toContain('createInventoryAdjustment');
+    expect(page).toContain('quantity: quantity.value');
+  });
+
+  it('registers the page', () => {
+    expect(pagesJson).toContain('"path": "adjustment-create"');
+  });
+});

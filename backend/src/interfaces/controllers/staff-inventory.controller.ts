@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -19,6 +20,10 @@ import {
 } from '@nestjs/swagger';
 import { PurchasingService } from '../../application/purchasing/purchasing.service';
 import { InventoryService } from '../../application/inventory/inventory.service';
+import {
+  InventoryAdjustmentCategory,
+  InventoryAdjustmentMode,
+} from '../../domain/inventory';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { StaffGuard } from '../guards/role.guard';
@@ -121,6 +126,42 @@ export class StaffInventoryController {
     );
 
     return ApiResponseDto.success(stocktakes);
+  }
+
+  @Post('adjustments')
+  @ApiOperation({ summary: '记一笔：报废 / 内部领用' })
+  async createAdjustment(
+    @Body()
+    body: {
+      ingredientId: string;
+      quantity: number;
+      category: InventoryAdjustmentCategory;
+      note?: string;
+    },
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    const labels: Record<string, string> = {
+      INTERNAL_USE: '内部领用',
+      EXPIRED: '过期报废',
+      DAMAGED: '破损污染',
+      OTHER: '其他',
+    };
+    const quantity = Math.abs(Number(body.quantity));
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      throw new BadRequestException('数量必须大于 0');
+    }
+    const adjustment = await this.inventoryService.createManualAdjustment(
+      {
+        ingredientId: body.ingredientId,
+        adjustmentMode: InventoryAdjustmentMode.DELTA,
+        quantity: -quantity,
+        reason: labels[body.category] || '其他',
+        note: body.note,
+        category: body.category,
+      },
+      userId,
+    );
+    return ApiResponseDto.success(adjustment, '已记账');
   }
 
   @Get('stocktakes/draft')

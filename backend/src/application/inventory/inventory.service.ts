@@ -19,7 +19,9 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import type { InventoryRepository } from '../../domain/inventory/inventory.repository';
 import {
   InventoryAdjustment,
+  InventoryAdjustmentCategory,
   InventoryAdjustmentMode,
+  InventoryAdjustmentReviewStatus,
   InventoryLedgerEntry,
   InventorySourceType,
   InventoryStocktake,
@@ -71,6 +73,8 @@ export interface CreateInventoryAdjustmentDto {
   quantity: number;
   reason: string;
   note?: string | null;
+  /** 报废/领用分类；不传 = 后台普通调整，不进复核 */
+  category?: InventoryAdjustmentCategory;
 }
 
 export interface InventoryAdjustmentDto {
@@ -85,6 +89,13 @@ export interface InventoryAdjustmentDto {
   deltaG: number;
   reason: string;
   note: string | null;
+  category: InventoryAdjustmentCategory;
+  reviewStatus: InventoryAdjustmentReviewStatus;
+  costAmount: number | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  reversesAdjustmentId: string | null;
   createdAt: string;
 }
 
@@ -938,11 +949,9 @@ export class InventoryService {
     if (!dto.ingredientId?.trim()) {
       throw new BadRequestException('ingredientId is required');
     }
-
     if (!dto.reason?.trim()) {
       throw new BadRequestException('reason is required');
     }
-
     if (
       dto.adjustmentMode !== InventoryAdjustmentMode.DELTA &&
       dto.adjustmentMode !== InventoryAdjustmentMode.SET
@@ -951,21 +960,19 @@ export class InventoryService {
     }
 
     const ingredient = await this.prisma.ingredient.findUnique({
-      where: {
-        id: dto.ingredientId,
-      },
+      where: { id: dto.ingredientId },
       select: {
         id: true,
         name: true,
         baseUnit: true,
         unitDisplayLabel: true,
+        purchaseToBaseRatio: true,
+        currentPricePerPurchaseUnit: true,
       },
     });
-
     if (!ingredient) {
       throw new NotFoundException(`Ingredient not found: ${dto.ingredientId}`);
     }
-
     if (!Number.isFinite(dto.quantity)) {
       throw new BadRequestException('quantity must be a finite number');
     }
@@ -984,9 +991,23 @@ export class InventoryService {
       throw new BadRequestException('quantity cannot be negative in SET mode');
     }
 
-    if (quantityAfterG < 0) {
-      throw new BadRequestException('库存调整后不能为负数');
-    }
+    // 报废/领用是物理已发生的事实：允许账面变负，首页会标红进"待核实"。
+    const ratio = Number((ingredient as any).purchaseToBaseRatio ?? 0);
+    const price = Number(
+      (ingredient as any).currentPricePerPurchaseUnit ?? 0,
+    );
+    const category = dto.category ?? InventoryAdjustmentCategory.OTHER;
+    const costAmount =
+      deltaG < 0 && ratio > 0 && price > 0
+        ? this.roundNumber((Math.abs(deltaG) / ratio) * price, 2)
+        : null;
+    const isScrap = dto.category !== undefined;
+    const reviewStatus =
+      isScrap &&
+      category !== InventoryAdjustmentCategory.INTERNAL_USE &&
+      (costAmount === null || costAmount >= 50)
+        ? InventoryAdjustmentReviewStatus.PENDING
+        : InventoryAdjustmentReviewStatus.NONE;
 
     const adjustment = new InventoryAdjustment(
       randomUUID(),
@@ -1013,11 +1034,13 @@ export class InventoryService {
           deltaG: adjustment.deltaG,
           reason: adjustment.reason,
           note: adjustment.note,
+          category: category as any,
+          reviewStatus: reviewStatus as any,
+          costAmount,
           createdBy: createdBy ?? null,
           createdAt: adjustment.createdAt,
         },
       });
-
       await tx.inventoryLedgerEntry.create({
         data: {
           id: randomUUID(),
@@ -1036,14 +1059,233 @@ export class InventoryService {
       ingredientId: adjustment.ingredientId,
       ingredientName: ingredient.name,
       procurementSkuId: adjustment.procurementSkuId,
-      stockUnitLabel: this.resolveStockUnitLabel(ingredient),
+      stockUnitLabel: this.resolveStockUnitLabel(ingredient as any),
       adjustmentMode: adjustment.adjustmentMode,
       quantityBeforeG: adjustment.quantityBeforeG,
       quantityAfterG: adjustment.quantityAfterG,
       deltaG: adjustment.deltaG,
       reason: adjustment.reason,
       note: adjustment.note,
+      category,
+      reviewStatus,
+      costAmount,
+      reviewedBy: null,
+      reviewedAt: null,
+      reviewNote: null,
+      reversesAdjustmentId: null,
       createdAt: adjustment.createdAt.toISOString(),
+    };
+  }
+
+  /**
+   * 报废复核：通过不动账；驳回写一笔反向调整，把已扣的加回来。
+   */
+  async reviewAdjustment(
+    id: string,
+    input: { approve: boolean; note?: string | null },
+    reviewerId: string,
+  ) {
+    const adjustment = await this.prisma.inventoryAdjustment.findUnique({
+      where: { id },
+    });
+    if (!adjustment) {
+      throw new NotFoundException(`Adjustment not found: ${id}`);
+    }
+    if (adjustment.reviewStatus === 'APPROVED' && input.approve) {
+      return this.getAdjustmentDto(id);
+    }
+    if (adjustment.reviewStatus !== 'PENDING') {
+      throw new ConflictException('这条报废不在待复核状态');
+    }
+    if (!input.approve && !input.note?.trim()) {
+      throw new BadRequestException('驳回必须填写原因');
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      const transition = await tx.inventoryAdjustment.updateMany({
+        where: { id, reviewStatus: 'PENDING' as any },
+        data: {
+          reviewStatus: (input.approve ? 'APPROVED' : 'REJECTED') as any,
+          reviewedBy: reviewerId,
+          reviewedAt: now,
+          reviewNote: input.note ?? null,
+        },
+      });
+      if (transition.count === 0) {
+        throw new ConflictException('这条报废已被处理，请刷新');
+      }
+      if (input.approve) return;
+
+      const existing = await tx.inventoryAdjustment.findFirst({
+        where: { reversesAdjustmentId: id },
+        select: { id: true },
+      });
+      if (existing) return;
+
+      const balance = await tx.inventoryLedgerEntry.aggregate({
+        where: { ingredientId: adjustment.ingredientId },
+        _sum: { deltaG: true },
+      });
+      const before = Number(balance._sum?.deltaG ?? 0);
+      const delta = -Number(adjustment.deltaG);
+      const reversalId = randomUUID();
+
+      await tx.inventoryAdjustment.create({
+        data: {
+          id: reversalId,
+          ingredientId: adjustment.ingredientId,
+          procurementSkuId: adjustment.procurementSkuId,
+          adjustmentMode: InventoryAdjustmentMode.DELTA as any,
+          quantityBeforeG: before,
+          quantityAfterG: before + delta,
+          deltaG: delta,
+          reason: '报废复核驳回',
+          note: input.note ?? null,
+          category: adjustment.category,
+          reviewStatus: InventoryAdjustmentReviewStatus.NONE as any,
+          costAmount:
+            adjustment.costAmount === null
+              ? null
+              : -Math.abs(Number(adjustment.costAmount)),
+          createdBy: reviewerId,
+          reversesAdjustmentId: id,
+          createdAt: now,
+        },
+      });
+      await tx.inventoryLedgerEntry.create({
+        data: {
+          id: randomUUID(),
+          ingredientId: adjustment.ingredientId,
+          procurementSkuId: adjustment.procurementSkuId,
+          deltaG: delta,
+          sourceType: InventorySourceType.MANUAL_ADJUSTMENT as any,
+          sourceId: reversalId,
+          createdAt: now,
+        },
+      });
+    });
+
+    return this.getAdjustmentDto(id);
+  }
+
+  async listAdjustments(query: {
+    from?: Date;
+    to?: Date;
+    category?: string;
+    pending?: boolean;
+    limit?: number;
+  }) {
+    const createdAt: Record<string, Date> = {};
+    if (query.from) createdAt.gte = query.from;
+    if (query.to) createdAt.lte = query.to;
+
+    const rows = await this.prisma.inventoryAdjustment.findMany({
+      where: {
+        ...(Object.keys(createdAt).length ? { createdAt } : {}),
+        ...(query.category ? { category: query.category as any } : {}),
+        ...(query.pending ? { reviewStatus: 'PENDING' as any } : {}),
+      },
+      include: {
+        ingredient: {
+          select: { name: true, baseUnit: true, unitDisplayLabel: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Math.max(query.limit ?? 100, 1), 200),
+    });
+
+    return rows.map((row: any) => this.mapAdjustmentRow(row));
+  }
+
+  async getAdjustmentSummary(query: { from?: Date; to?: Date } = {}) {
+    const createdAt: Record<string, Date> = {};
+    if (query.from) createdAt.gte = query.from;
+    if (query.to) createdAt.lte = query.to;
+
+    const rows = await this.prisma.inventoryAdjustment.findMany({
+      where: {
+        ...(Object.keys(createdAt).length ? { createdAt } : {}),
+        reversesAdjustmentId: null,
+      },
+      select: {
+        category: true,
+        reviewStatus: true,
+        costAmount: true,
+      },
+    });
+
+    const internalUseCount = rows.filter(
+      (row) => row.category === 'INTERNAL_USE',
+    ).length;
+    const scrapCount = rows.filter(
+      (row) => row.category !== 'INTERNAL_USE',
+    ).length;
+    const pendingAmount = rows
+      .filter((row) => row.reviewStatus === 'PENDING')
+      .reduce((sum, row) => sum + Number(row.costAmount ?? 0), 0);
+
+    const stocktakeLines = await this.prisma.inventoryStocktakeLine.findMany({
+      where: {
+        deltaG: { lt: 0 },
+        stocktake: {
+          status: 'APPLIED' as any,
+          type: 'ROUTINE' as any,
+          ...(Object.keys(createdAt).length ? { appliedAt: createdAt } : {}),
+        },
+      },
+      select: { deltaG: true },
+    });
+    const stocktakeLoss = stocktakeLines.reduce(
+      (sum, line) => sum + Math.abs(Number(line.deltaG ?? 0)),
+      0,
+    );
+
+    return {
+      internalUseCount,
+      scrapCount,
+      pendingAmount: this.roundNumber(pendingAmount, 2),
+      stocktakeLoss: this.roundNumber(stocktakeLoss, 2),
+    };
+  }
+
+  private async getAdjustmentDto(id: string) {
+    const row = await this.prisma.inventoryAdjustment.findUnique({
+      where: { id },
+      include: {
+        ingredient: {
+          select: { name: true, baseUnit: true, unitDisplayLabel: true },
+        },
+      },
+    });
+    if (!row) throw new NotFoundException(`Adjustment not found: ${id}`);
+    return this.mapAdjustmentRow(row);
+  }
+
+  private mapAdjustmentRow(row: any) {
+    return {
+      id: row.id,
+      ingredientId: row.ingredientId,
+      ingredientName: row.ingredient?.name ?? row.ingredientId,
+      procurementSkuId: row.procurementSkuId ?? null,
+      stockUnitLabel: this.resolveStockUnitLabel(row.ingredient),
+      adjustmentMode: row.adjustmentMode as InventoryAdjustmentMode,
+      quantityBeforeG: Number(row.quantityBeforeG),
+      quantityAfterG: Number(row.quantityAfterG),
+      deltaG: Number(row.deltaG),
+      reason: row.reason,
+      note: row.note ?? null,
+      category: row.category as InventoryAdjustmentCategory,
+      reviewStatus: row.reviewStatus as InventoryAdjustmentReviewStatus,
+      costAmount:
+        row.costAmount === null || row.costAmount === undefined
+          ? null
+          : Number(row.costAmount),
+      reviewedBy: row.reviewedBy ?? null,
+      reviewedAt: row.reviewedAt?.toISOString() ?? null,
+      reviewNote: row.reviewNote ?? null,
+      reversesAdjustmentId: row.reversesAdjustmentId ?? null,
+      createdAt: row.createdAt.toISOString(),
     };
   }
 

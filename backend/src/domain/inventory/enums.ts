@@ -20,6 +20,20 @@ export enum InventoryAdjustmentMode {
   SET = 'SET',
 }
 
+export enum InventoryAdjustmentCategory {
+  INTERNAL_USE = 'INTERNAL_USE',
+  EXPIRED = 'EXPIRED',
+  DAMAGED = 'DAMAGED',
+  OTHER = 'OTHER',
+}
+
+export enum InventoryAdjustmentReviewStatus {
+  NONE = 'NONE',
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
 export enum InventoryStocktakeStatus {
   DRAFT = 'DRAFT',
   SUBMITTED = 'SUBMITTED',

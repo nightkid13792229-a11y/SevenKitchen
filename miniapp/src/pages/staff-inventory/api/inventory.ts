@@ -234,3 +234,35 @@ export function reviewStocktake(
     data,
   });
 }
+
+export type InventoryAdjustmentCategory =
+  | 'INTERNAL_USE'
+  | 'EXPIRED'
+  | 'DAMAGED'
+  | 'OTHER';
+
+export interface InventoryAdjustmentItem {
+  id: string;
+  ingredientId: string;
+  ingredientName: string;
+  stockUnitLabel: string;
+  deltaG: number;
+  category: InventoryAdjustmentCategory;
+  reviewStatus: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  costAmount: number | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export function createInventoryAdjustment(data: {
+  ingredientId: string;
+  quantity: number;
+  category: InventoryAdjustmentCategory;
+  note?: string;
+}) {
+  return request<InventoryAdjustmentItem>({
+    url: '/staff/inventory/adjustments',
+    method: 'POST',
+    data,
+  });
+}

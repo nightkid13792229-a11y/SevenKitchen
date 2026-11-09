@@ -326,6 +326,7 @@ extractQueryFocus(query: string): {
 
 - `SourceLayerService.searchTableViews(query, {documentIds, sourceIds, limit})`：取指定文档/来源的表（CKD 23 张），用 `extractQueryFocus` 的门禁（`topicPhrases` 非空时必须命中；否则 focus 词/分期；不做分期排除）匹配 `caption + 行文本`；返回 ≤3 张，带 `tableId/caption/pageNo/rowCount/documentId/sourceId`。
 - `SourceLayerService.openTable(tableId)`：返回列、行、页码、来源、文档标题；`pageNo` 允许为 null（核心表里 5 张暂时没有页码，v2 补导入）。
+- **泛问题不回表格**：三组焦点词（`topicPhrases` / `focusTerms` / `stagePhrases`）全空时（如 `CKD dog`、`IRIS staging table`）返回空表列表，避免噪声；不要退化成「随便给 3 张」。
 - 表格命中是**文档级**，不是节级；因为 `source_table` 没有 `section_id`，v2 再补。
 - 核心 5 组表优先：37-1（T0253）、37-9（T0497）、37-11/12（T0260/T0261）、AAHA 表 8（T0025/T0026）。
 

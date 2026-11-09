@@ -29,6 +29,9 @@ const STATIC_ASSET_DIRECTORIES = ['tabbar'];
 const CODE_QUALITY_NO_DEPENDENCY_FILES = ['project.private.config.json'];
 const SUBPACKAGE_ONLY_HELPER_MODULES = [
   'api/orders.js',
+  'api/staff-supplement-orders.js',
+  'api/staffAssistedOrder.js',
+  'utils/assistedOrder.js',
   'utils/diy-sheet-format.js',
   'utils/dog-breed-search.js',
   'utils/dog-breed-search-catalog.js',
@@ -39,9 +42,17 @@ const SUBPACKAGE_ONLY_HELPER_MODULES = [
   'utils/dog-profile-overview.js',
   'utils/dog-recommendation-summary.js',
   'utils/label-mapping.js',
+  'utils/order-import-block.js',
+  'utils/order-import-check.js',
+  'utils/order-import-fees.js',
+  'utils/order-import-spec.js',
   'utils/order-package-plan.js',
+  'utils/order-production-date.js',
   'utils/page-scroll.js',
   'utils/print-canvas.js',
+  'utils/purchase-channel.js',
+  'utils/staff-quantity.js',
+  'utils/supplement-label-print.js',
 ];
 const DIST_DIRS = [
   path.join(__dirname, '../dist/build/mp-weixin'),

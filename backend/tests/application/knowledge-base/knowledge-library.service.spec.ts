@@ -3,6 +3,8 @@ import {
   expandQuery,
   extractQueryFocus,
   matchesNeedle,
+  matchesNormalized,
+  normalizeForMatch,
 } from '../../../src/application/knowledge-base/query-expansion';
 import {
   TOPIC_KEYS,
@@ -965,5 +967,15 @@ describe('ensureCatalogs（全库目录懒加载）', () => {
   it('没有 sourceDocument 的测试桩直接跳过', async () => {
     const service = new KnowledgeLibraryService({} as any);
     await expect(service.ensureCatalogs(['d1'])).resolves.toBeUndefined();
+  });
+});
+
+
+describe('matchesNormalized（热路径）', () => {
+  it('已归一化的 haystack 与 matchesNeedle 结果一致', () => {
+    const hay = normalizeForMatch('Stage 3 Canine patients: phosphorus 0.2-0.5%');
+    for (const needle of ['phosphorus', 'kidney', 'stage 3', '0.2']) {
+      expect(matchesNormalized(hay, needle)).toBe(matchesNeedle(hay, needle));
+    }
   });
 });

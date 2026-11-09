@@ -203,7 +203,15 @@ function needlePattern(needle: string): RegExp | null {
  * - 两侧都先 `normalizeForMatch`（小写、连字符归一）。
  */
 export function matchesNeedle(haystack: string, needle: string): boolean {
-  const hay = normalizeForMatch(haystack);
+  return matchesNormalized(haystack ? normalizeForMatch(haystack) : '', needle);
+}
+
+/**
+ * 已经 normalize 过的 haystack 用这个，避免热路径里对同一段文本反复做
+ * `toLowerCase + 正则替换`（全库 2 万候选时这里是主要开销）。
+ */
+export function matchesNormalized(haystack: string, needle: string): boolean {
+  const hay = String(haystack ?? '');
   const target = normalizeForMatch(needle);
   if (!hay || !target) return false;
   const pattern = needlePattern(target);

@@ -14,6 +14,7 @@ import {
   isBackgroundTerm,
   matchesNeedle,
   normalizeForMatch,
+  matchesNormalized,
   type QueryFocus,
 } from './query-expansion';
 import {
@@ -422,10 +423,10 @@ export class KnowledgeLibraryService {
       // 节标题点名了查询主题（`2a. Substaging by Proteinuria`）是最强的“找节”信号；
       // 只命中分期号（`Stage 2 Canine patients:`）弱一些，但仍然算加成。
       const contentHit = contentNeedles.some((needle) =>
-        matchesNeedle(headingHay, needle),
+        matchesNormalized(headingHay, needle),
       );
       const stageHit = stageNeedles.some((needle) =>
-        matchesNeedle(headingHay, needle),
+        matchesNormalized(headingHay, needle),
       );
       const headingBoost = contentHit
         ? HEADING_TOPIC_BOOST
@@ -567,14 +568,14 @@ export class KnowledgeLibraryService {
       `${row.section?.title ?? ''}\n${row.text ?? ''}`,
     );
     if (focus.topicPhrases.length > 0) {
-      return focus.topicPhrases.some((phrase) => matchesNeedle(haystack, phrase));
+      return focus.topicPhrases.some((phrase) => matchesNormalized(haystack, phrase));
     }
     if (focus.focusTerms.length === 0 && focus.stagePhrases.length === 0) {
       return true;
     }
     return (
-      focus.focusTerms.some((term) => matchesNeedle(haystack, term)) ||
-      focus.stagePhrases.some((phrase) => matchesNeedle(haystack, phrase))
+      focus.focusTerms.some((term) => matchesNormalized(haystack, term)) ||
+      focus.stagePhrases.some((phrase) => matchesNormalized(haystack, phrase))
     );
   }
 
@@ -604,7 +605,7 @@ export class KnowledgeLibraryService {
       ...focus.focusTerms,
     ].filter(Boolean);
     const matches = (hay: string) =>
-      Boolean(hay) && needles.some((needle) => matchesNeedle(hay, needle));
+      Boolean(hay) && needles.some((needle) => matchesNormalized(hay, needle));
 
     const subheading = extractSubheading(text);
     const titleOrSubheading = normalizeForMatch(

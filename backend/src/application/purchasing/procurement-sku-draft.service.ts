@@ -25,6 +25,13 @@ import {
   normalizeNetContentToBaseUnit,
   type BaseUnitCode,
 } from './procurement-sku-net-content';
+import {
+  BASE_UNIT_LABEL,
+  parseSpecLinks,
+  resolveSpecChain,
+  type SpecChainSource,
+  type SpecLink,
+} from './procurement-sku-spec-chain';
 import { ProcurementSkuDraftNoticeException } from './procurement-sku-draft.errors';
 import {
   canonicalChannelCode,
@@ -59,6 +66,16 @@ export interface ProcurementSkuDraft {
   packCount: number | null;
   netContentPerPack: number | null;
   netContentUnitText: string | null;
+  /** 规格链；最后一层一定已折算成基准单位（如 30 枚 × 53 克） */
+  specChain: SpecLink[] | null;
+  /** 包装规格原文（如 30枚 1.59kg），存进 productModel 给订单匹配用 */
+  specText: string | null;
+  /** perUnit 是包装上印的（printed）还是用整件总重折算出来的（derived） */
+  netContentSource: SpecChainSource | null;
+  /** 一采购单位合计（基准单位），用在页面"整盒 1590 克"那句提示上 */
+  totalNetContentInBase: number | null;
+  /** 最后一层用什么单位说话（按个记账时可能是「张/枚」，其余是基准单位） */
+  amountUnitText: string | null;
   unitPrice: number | null;
   missing: string[];
   confidence: Record<string, DraftConfidence>;
@@ -69,26 +86,43 @@ const NO_THINKING = { thinking: { type: 'disabled' } };
 const SYSTEM_PROMPT = `你是采购助理。用户会给你一张中国商超/网店 App 的**商品详情页截图**，
 你要读出这件商品的信息，输出 JSON。
 
-只认商品详情页：一屏一个商品，图上有商品标题、净含量（如 1kg / 500g / 24×330ml）、单价（如 ¥14.99/袋）。
+只认商品详情页：一屏一个商品，图上有商品标题、包装规格（如 30枚 1.59kg / 500g×2袋 / 24×330ml）、
+单价（如 ¥21.8/盒）。
 如果截图其实是**订单列表**（一屏多个商品、每个只有一行），返回 {"productList": [...]}，不要硬猜其中一个。
 
 输出字段（读不到的必须给 null，绝不编造）：
 {
   "name": "商品标题原文",
   "brand": "品牌，没有就是 null",
-  "purchaseUnit": "按件卖的单位，如 袋/箱/瓶/包",
-  "packCount": 一箱里有几件（单件商品给 1；图上没写就 null）,
-  "netContent": { "value": 单件净含量的数字, "unit": "单位原文，如 kg/g/ml/L/个" },
+  "purchaseUnit": "你要买的这一整件的包装单位，如 盒/袋/箱/瓶",
+  "specText": "包装规格原文，照抄，如 30枚 1.59kg",
+  "specChain": [{"count": 30, "unit": "枚"}],
+  "totalNetContent": { "value": 1.59, "unit": "kg" },
   "purchaseChannel": "从下面的渠道清单里选一个；看不出就给 null，不要自己编店名",
   "unitPrice": 单价数字（元）,
-  "confidence": { "name": "high|low", "purchaseChannel": "high|low", "netContent": "high|low" }
+  "confidence": { "name": "high|low", "purchaseChannel": "high|low", "specChain": "high|low" }
 }
 
+specChain 怎么写：
+- 从「一{purchaseUnit}」往下一层层写，每一层是 {"count": 数量, "unit": 那一层的单位}。
+- 最后一层写**单件**的重量/体积/个数（如 500g、330ml、1 个）。
+- **只写包装上真的印出来的层**。印的是整件总重，就不要写进链条，写进 totalNetContent。
+
+中国商超的写法怎么读（最容易错，务必按这个来）：
+- 「30枚 1.59kg」= 一盒 30 枚、**整盒一共** 1.59kg。1.59kg 不是一枚的重量！
+  这时 specChain 只填 [{"count":30,"unit":"枚"}]，totalNetContent 填 1.59kg，**不要自己去除**。
+- 「500g×2袋」= 2 袋、每袋 500g：specChain 填 [{"count":2,"unit":"袋"},{"count":500,"unit":"g"}]，totalNetContent 填 null。
+- 「24×330ml」= 24 瓶、每瓶 330ml：specChain 填 [{"count":24,"unit":"瓶"},{"count":330,"unit":"ml"}]。
+- 「10捆×50张」= 一箱 10 捆、每捆 50 张：specChain 填 [{"count":10,"unit":"捆"},{"count":50,"unit":"张"}]。
+- 「净含量 5kg」= 一袋 5kg：specChain 填 [{"count":5,"unit":"kg"}]。
+- 只有单价、没有任何规格：specChain 填 null。
+
 规则：
-- netContent 填**单件**的净含量；如果图上是"24×330ml"，packCount=24、netContent 填 330ml。
-- 图上是"1.5kg"就填 {"value":1.5,"unit":"kg"}，不要自己换算成克。
-- 净含量只印在包装图上、正文没有时，也要读出来；实在看不清就 null。
-- 单价必须是这件商品的单价，不是合计金额。`;
+- 件数和总重是两件事，不要混：件数写在 specChain 里，整件总重写在 totalNetContent 里。
+- totalNetContent 只在包装上明确写"整件/整箱/整盒总共多少"时给；不确定就 null。
+- 图上是 1.5kg 就填 {"value":1.5,"unit":"kg"}，不要自己换算成克。
+- 单价必须是这件商品的单价，不是合计金额；页面有多个价格（原价/折后价/券后价）时选"这件商品的到手单价"，
+  不要自己乘、也不要填整单合计。`;
 
 @Injectable()
 export class ProcurementSkuDraftService {
@@ -221,9 +255,6 @@ ${list}`;
       channels,
     );
     const purchaseUnit = toStringOrNull(raw.purchaseUnit);
-    const netContentUnitText = toStringOrNull(
-      (raw.netContent as { unit?: unknown } | undefined)?.unit,
-    );
 
     const missing: string[] = [];
 
@@ -231,34 +262,85 @@ ${list}`;
     if (!purchaseChannel) missing.push('purchaseChannel');
     if (!purchaseUnit) missing.push('purchaseUnit');
 
-    const packCount = toPositiveIntegerOrNull(raw.packCount);
-    if (packCount === null) missing.push('packCount');
-
-    const normalizedNetContent = normalizeNetContentToBaseUnit(
-      {
-        value: toNumberOrNull(
-          (raw.netContent as { value?: unknown } | undefined)?.value,
-        ),
-        unit: netContentUnitText,
-      },
+    // 规格链是主路径：件数、单件重量、整件总重都由它一次算清
+    // （30枚 1.59kg → 30 × 53 克，折算来源标成 derived 让页面提示核对）。
+    const chain = resolveSpecChain({
+      links: raw.specChain,
+      totalNetContent: raw.totalNetContent as
+        | { value: unknown; unit: unknown }
+        | null
+        | undefined,
       baseUnit,
-    );
+    });
 
-    const netContentPerPack = normalizedNetContent.ok
-      ? normalizedNetContent.inBaseUnit
-      : null;
+    let packCount: number | null = null;
+    let netContentPerPack: number | null = null;
+    let netContentUnitText: string | null = null;
+    let specChain: SpecLink[] | null = null;
+    let netContentSource: SpecChainSource | null = null;
+    let totalNetContentInBase: number | null = null;
+    let amountUnitText: string | null = null;
 
+    if (chain.ok) {
+      packCount = chain.value.packCount;
+      netContentPerPack = chain.value.perUnitAmount;
+      netContentUnitText = BASE_UNIT_LABEL[baseUnit];
+      specChain = chain.value.links;
+      netContentSource = chain.value.source;
+      totalNetContentInBase = chain.value.totalInBaseUnit;
+      amountUnitText = chain.value.amountUnitText;
+    } else {
+      // 兼容旧口径（或模型仍按老格式作答）：件数 + 单件净含量两个平铺字段
+      packCount = toPositiveIntegerOrNull(raw.packCount);
+      netContentUnitText = toStringOrNull(
+        (raw.netContent as { unit?: unknown } | undefined)?.unit,
+      );
+      const normalized = normalizeNetContentToBaseUnit(
+        {
+          value: toNumberOrNull(
+            (raw.netContent as { value?: unknown } | undefined)?.value,
+          ),
+          unit: netContentUnitText,
+        },
+        baseUnit,
+      );
+      netContentPerPack = normalized.ok ? normalized.inBaseUnit : null;
+      netContentSource = netContentPerPack === null ? null : 'printed';
+      amountUnitText = netContentUnitText;
+      // 重量没读出来，件数层该留还得留：表单要显示"30 枚 × ? 克"，
+      // 只留一个空重量，员工才补得上（2026-11-09）。重量读出来了就
+      // 走"件数 + 单件净含量"的老口径，不再拼半条链。
+      if (netContentPerPack === null) {
+        const partial = parseSpecLinks(raw.specChain);
+        specChain = partial.length > 0 ? partial : null;
+      }
+      totalNetContentInBase =
+        packCount !== null && netContentPerPack !== null
+          ? packCount * netContentPerPack
+          : null;
+    }
+
+    if (packCount === null) missing.push('packCount');
     if (netContentPerPack === null) missing.push('netContentPerPack');
+
+    const specText = toStringOrNull(raw.specText);
 
     return {
       name,
       brand: toStringOrNull(raw.brand),
-      productModel: toStringOrNull(raw.productModel),
+      // 规格原文优先：订单截图那边也按同一段文字认规格，
+      // 存成 30×53克 反而对不上 1.59kg(30枚) 那种写法（2026-11-09）。
+      productModel: toStringOrNull(raw.productModel) ?? specText,
       purchaseChannel,
       purchaseUnit,
       packCount,
       netContentPerPack,
       netContentUnitText,
+      specChain,
+      specText,
+      netContentSource,
+      totalNetContentInBase,
+      amountUnitText,
       unitPrice: toNumberOrNull(raw.unitPrice),
       missing,
       confidence: normalizeConfidence(raw.confidence),

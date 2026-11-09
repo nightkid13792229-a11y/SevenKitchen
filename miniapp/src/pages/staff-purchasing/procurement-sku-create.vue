@@ -174,54 +174,89 @@
           </view>
         </view>
 
-        <view v-if="canBeMultipack" class="switch-row" @tap="toggleMultipack">
-          <view class="switch-text">
-            <text class="switch-title">一{{ unitWord }}里装了好几件</text>
-            <text class="switch-desc">整箱、组合装打开这个；单件不用管</text>
-          </view>
-          <switch :checked="multipack" color="#1e3a2f" @change="toggleMultipack" />
-        </view>
-
-        <view v-if="multipack" class="field">
-          <view class="field-head">
-            <text class="field-label">一{{ unitWord }}有几件</text>
-            <text class="req">*</text>
-          </view>
-          <input
-            v-model="packCountText"
-            class="field-input"
-            :class="{ error: hasError('packCount') }"
-            type="number"
-            placeholder="如 24"
-            placeholder-class="ph"
-          />
-          <view v-if="hasError('packCount')" class="error-text">
-            截图里没看清一箱几件，请看一下包装补上（这里填错，库存会差几十倍）
-          </view>
-        </view>
-
         <view class="field">
           <view class="field-head">
-            <text class="field-label">{{ netContentLabel }}</text>
+            <text class="field-label">一{{ unitWord }}的规格</text>
             <text class="req">*</text>
-            <text v-if="aiFilled.netContentPerPack" class="ai-tag">AI 识别</text>
+            <text v-if="aiFilled.specChain" class="ai-tag">AI 识别</text>
           </view>
-          <input
-            v-model="netContentText"
-            class="field-input"
-            :class="{ error: hasError('netContentPerPack') }"
-            type="digit"
-            placeholder="如 1000"
-            placeholder-class="ph"
-          />
-          <view v-if="ratio > 0" class="ratio-hint">
-            1 {{ form.purchaseUnit || '件' }} =
-            {{ multipack ? `${packCountText} 件 × ${netContentText}` : netContentText }}
-            = {{ ratio }} {{ baseUnitText }}
+
+          <view class="chain">
+            <view
+              v-for="(link, index) in specLinks"
+              :key="'spec-link-' + index"
+              class="chain-row"
+            >
+              <input
+                v-model="link.count"
+                class="chain-count"
+                :class="{ error: linkUnfilled(index) }"
+                type="number"
+                placeholder="数量"
+                placeholder-class="ph"
+                @input="markSpecEdited"
+              />
+              <input
+                v-model="link.unit"
+                class="chain-unit"
+                :class="{ error: linkUnfilled(index) }"
+                maxlength="2"
+                placeholder="单位"
+                placeholder-class="ph"
+                @input="markSpecEdited"
+              />
+              <text class="chain-times">×</text>
+            </view>
+
+            <view class="chain-row">
+              <input
+                v-model="netContentText"
+                class="chain-count"
+                :class="{ error: hasError('netContentPerPack') }"
+                type="digit"
+                placeholder="如 500"
+                placeholder-class="ph"
+                @input="markSpecEdited"
+              />
+              <text class="chain-unit-fixed">{{ amountUnit }}</text>
+            </view>
+
+            <view class="chain-tools">
+              <text class="chain-add" @tap="addLink">+ 再加一层</text>
+              <text
+                v-if="specLinks.length > 0"
+                class="chain-remove"
+                @tap="removeLink(specLinks.length - 1)"
+              >
+                删掉最后一层
+              </text>
+              <text
+                v-if="innerLayerMissing"
+                class="chain-single"
+                @tap="confirmSingle"
+              >
+                这件只有一件
+              </text>
+            </view>
           </view>
-          <view v-else-if="hasError('netContentPerPack')" class="error-text">
+
+          <text
+            v-if="innerLayerMissing"
+            :class="submitted ? 'error-text' : 'chain-warn'"
+          >
+            整{{ unitWord }}的商品，请先「再加一层」填一{{ unitWord }}几件（这里少填，库存会差好几倍）。
+          </text>
+          <text v-else-if="ratio > 0 && specLinks.length > 0" class="ratio-hint">
+            一{{ unitWord }} = {{ chainText }} = {{ ratio }} {{ amountUnit }}
+          </text>
+
+          <text v-if="netContentDerived && ratio > 0" class="derived-hint">
+            包装上印的是整{{ unitWord }} {{ totalNetContentInBase }} {{ amountUnit }}，
+            每{{ innerUnitWord }} {{ netContentText }} {{ amountUnit }} 是折算出来的，请核对
+          </text>
+          <text v-else-if="hasError('netContentPerPack')" class="error-text">
             截图里没看出多重，请看一下包装补上（这一格不填，账就算不准）
-          </view>
+          </text>
         </view>
 
         <view class="field">
@@ -266,7 +301,6 @@ import {
   uploadProcurementSkuScreenshot,
 } from './api/purchasing';
 import {
-  computePurchaseToBaseRatio,
   pickStillMissingFields,
   validateProcurementSkuForm,
 } from './procurement-sku-form';
@@ -277,7 +311,15 @@ import {
   withSelectedChannel,
 } from '../../utils/purchase-channel';
 import { buildShotView, type ShotState } from './procurement-sku-shot';
-import { MULTIPACK_UNITS, shouldOpenMultipack } from './procurement-sku-multipack';
+import { MULTIPACK_UNITS } from './procurement-sku-multipack';
+import {
+  computeSpecRatio,
+  firstIncompleteLinkIndex,
+  formatSpecChain,
+  multiplySpecLinks,
+  needsInnerLayer,
+  type SpecLinkInput,
+} from './procurement-sku-spec-chain';
 import {
   normalizeSkuCreateSource,
   type SkuCreateSource,
@@ -346,11 +388,24 @@ const form = ref({
   purchaseUnit: '',
 });
 
-const packCountText = ref('1');
+/**
+ * 规格链的计数层（最后一层基准数量在 netContentText 里）：
+ * 一盒鸡蛋 = [{count:'30', unit:'枚'}] × 53 克。
+ */
+const specLinks = ref<SpecLinkInput[]>([]);
 const netContentText = ref('');
 const unitPriceText = ref('');
 
-const multipack = ref(false);
+/** 53 克是包装上印的（false），还是用整盒 1.59kg 除出来的（true） */
+const netContentDerived = ref(false);
+const totalNetContentInBase = ref<number | null>(null);
+/** 最后一层用什么单位说话：按个记账时可能是包装上的「张/枚」 */
+const amountUnitText = ref('');
+/** 包装规格原文，如「30枚 1.59kg」；没改过就原样存进 productModel */
+const specText = ref('');
+const specEdited = ref(false);
+/** 整箱商品确认"只有一件"，不再逼他补一层 */
+const singleConfirmed = ref(false);
 
 /**
  * 截图上传区四种状态（2026-11-05 老板反馈：图传完了，页面还是"没传"的样子）：
@@ -397,7 +452,7 @@ const hasFormContent = computed(() =>
       form.value.purchaseChannel.trim() ||
       netContentText.value.trim() ||
       unitPriceText.value.trim() ||
-      multipack.value,
+      specLinks.value.length > 0,
   ),
 );
 
@@ -423,14 +478,37 @@ const hasMoreUnits = computed(() => clerkUnits.value.length > 5);
 
 const unitWord = computed(() => form.value.purchaseUnit || '件');
 
-const canBeMultipack = computed(() =>
-  MULTIPACK_UNITS.includes(form.value.purchaseUnit),
+const amountUnit = computed(
+  () => amountUnitText.value.trim() || baseUnitText.value,
 );
 
-const netContentLabel = computed(() =>
-  multipack.value
-    ? `每件多少${baseUnitText.value}`
-    : `一${unitWord.value}多少${baseUnitText.value}`,
+/** 计数层连乘；有一层没填好返回 null（表单标红、挡住保存） */
+const packCount = computed(() => {
+  if (specLinks.value.length === 0) return 1;
+  return multiplySpecLinks(specLinks.value);
+});
+
+/** 紧挨着基准数量的那一层用什么量词：「枚」「瓶」「捆」 */
+const innerUnitWord = computed(() => {
+  const last = specLinks.value[specLinks.value.length - 1];
+  return last?.unit?.trim() || '件';
+});
+
+/** 箱/桶/提/件一层都没填：必须拦住，不能按 1 件算 */
+const innerLayerMissing = computed(() =>
+  needsInnerLayer({
+    purchaseUnit: form.value.purchaseUnit,
+    linkCount: specLinks.value.length,
+    confirmedSingle: singleConfirmed.value,
+  }),
+);
+
+const chainText = computed(() =>
+  formatSpecChain({
+    links: specLinks.value,
+    amountText: netContentText.value,
+    baseUnitText: amountUnit.value,
+  }),
 );
 
 const toNumberOrNull = (value: string) => {
@@ -444,15 +522,15 @@ const snapshot = computed(() => ({
   name: form.value.name,
   purchaseChannel: form.value.purchaseChannel,
   purchaseUnit: form.value.purchaseUnit,
-  packCount: multipack.value ? toNumberOrNull(packCountText.value) : 1,
+  packCount: packCount.value,
   netContentPerPack: toNumberOrNull(netContentText.value),
   currentPurchasePrice: toNumberOrNull(unitPriceText.value),
 }));
 
 const ratio = computed(() =>
-  computePurchaseToBaseRatio({
-    packCount: snapshot.value.packCount,
-    netContentPerPack: snapshot.value.netContentPerPack,
+  computeSpecRatio({
+    links: specLinks.value,
+    amountText: netContentText.value,
   }),
 );
 
@@ -461,7 +539,18 @@ const errors = computed(() => {
     purchaseUnits: allUnits.value,
     baseUnitText: baseUnitText.value,
   });
-  return result.ok ? [] : result.errors;
+  const list: Array<{ field: string; message: string }> = result.ok
+    ? []
+    : [...result.errors];
+
+  if (innerLayerMissing.value) {
+    list.push({
+      field: 'packCount',
+      message: '整箱商品请先填一箱几件',
+    });
+  }
+
+  return list;
 });
 
 const stillMissing = computed(() =>
@@ -491,17 +580,38 @@ const selectChannel = (channel: string) => {
 
 const pickUnit = (unit: string) => {
   form.value.purchaseUnit = unit;
+  // 换成袋/包/盒这类单件单位后，原来"整箱只有一件"的确认就不作数了
   if (!MULTIPACK_UNITS.includes(unit)) {
-    multipack.value = false;
-    packCountText.value = '1';
+    singleConfirmed.value = false;
   }
 };
 
-const toggleMultipack = () => {
-  multipack.value = !multipack.value;
-  if (!multipack.value) {
-    packCountText.value = '1';
-  }
+const addLink = () => {
+  // 新的一层加在最里面（紧挨着基准数量）：一箱 = 10 捆 × [?] × 500 克
+  specLinks.value.push({ count: '', unit: '' });
+  singleConfirmed.value = false;
+  markSpecEdited();
+};
+
+const removeLink = (index: number) => {
+  specLinks.value.splice(index, 1);
+  markSpecEdited();
+};
+
+const confirmSingle = () => {
+  singleConfirmed.value = true;
+};
+
+/** 员工动过规格：折算提示作废，原文规格也不再照抄进 productModel */
+const markSpecEdited = () => {
+  specEdited.value = true;
+  netContentDerived.value = false;
+};
+
+const linkUnfilled = (index: number) => {
+  if (!submitted.value) return false;
+  const link = specLinks.value[index];
+  return link ? firstIncompleteLinkIndex([link]) >= 0 : false;
 };
 
 onLoad(async (options: Record<string, string>) => {
@@ -701,25 +811,28 @@ const applyDraft = (draft: any, screenshotUrl: string) => {
     pickUnit(result.patch.purchaseUnit);
     filled.purchaseUnit = true;
   }
-  if (typeof result.patch.packCountText === 'string') {
-    packCountText.value = result.patch.packCountText;
-    // 箱/桶/提/件：读不出件数时也必须把开关打开，让"一箱几件"露出来并标红；
-    // 否则页面会按 1 件算，库存和成本静默差 N 倍（2026-11-05 老板反馈）。
-    if (
-      shouldOpenMultipack({
-        purchaseUnit: form.value.purchaseUnit,
-        packCountText: result.patch.packCountText,
-        packCountMissing: result.missing.includes('packCount'),
-      })
-    ) {
-      multipack.value = true;
-    }
-    filled.packCount = result.patch.packCountText.length > 0;
+  if (result.patch.specLinks) {
+    specLinks.value = result.patch.specLinks.map((link) => ({ ...link }));
+    // 读到件数、或至少读到重量，都算"规格有东西"，截图区据此显示识别成功
+    filled.specChain =
+      result.patch.specLinks.length > 0 ||
+      Boolean(result.patch.netContentText);
   }
   if (typeof result.patch.netContentText === 'string') {
     netContentText.value = result.patch.netContentText;
-    filled.netContentPerPack = true;
+    filled.netContentPerPack = result.patch.netContentText.length > 0;
   }
+  netContentDerived.value = Boolean(result.patch.netContentDerived);
+  totalNetContentInBase.value = result.patch.totalNetContentInBase ?? null;
+  amountUnitText.value = result.patch.amountUnitText ?? '';
+  specText.value = result.patch.specText ?? '';
+  specEdited.value = false;
+  // AI 明确读到"一箱只有 1 件"时才替员工确认，否则整箱必须让他补一层
+  singleConfirmed.value =
+    typeof draft?.packCount === 'number' &&
+    draft.packCount === 1 &&
+    !(Array.isArray(draft?.missing) ? draft.missing : []).includes('packCount');
+
   if (typeof result.patch.unitPriceText === 'string') {
     unitPriceText.value = result.patch.unitPriceText;
     filled.currentPurchasePrice = true;
@@ -755,6 +868,9 @@ const handleSubmit = async () => {
       purchaseUnit: snapshot.value.purchaseUnit,
       packCount: Number(snapshot.value.packCount),
       netContentPerPack: Number(snapshot.value.netContentPerPack),
+      // 没改过规格就把包装原文存进去：订单截图按「1.59kg(30枚)」也能认出同一样货
+      productModel:
+        specText.value && !specEdited.value ? specText.value : undefined,
       currentPurchasePrice: snapshot.value.currentPurchasePrice ?? undefined,
       sourceScreenshotUrl: uploadedScreenshotUrl.value || undefined,
       // 服务端拿它校验渠道必须和这笔订单一致（2026-11-07）
@@ -1119,28 +1235,91 @@ const handleSubmit = async () => {
   opacity: 0.45;
 }
 
-.switch-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: #f8f5ec;
-  border-radius: 10px;
-  padding: 10px 12px;
-  margin-bottom: 14px;
-}
-.switch-text {
+.chain {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 8px;
+  background: #faf8f0;
+  border: 1px solid #f0ebdc;
+  border-radius: 10px;
+  padding: 10px;
 }
-.switch-title {
-  font-size: 12.5px;
-  color: #26261f;
+.chain-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.switch-desc {
-  font-size: 10.5px;
+.chain-count {
+  width: 92px;
+  height: 36px;
+  border: 1px solid #e6dfc9;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 13px;
+  background: #fff;
+}
+.chain-count.error {
+  border-color: #d8a292;
+  background: #fdf6f3;
+}
+.chain-unit {
+  width: 60px;
+  height: 36px;
+  border: 1px solid #e6dfc9;
+  border-radius: 8px;
+  padding: 0 8px;
+  font-size: 13px;
+  background: #fff;
+  text-align: center;
+}
+.chain-unit.error {
+  border-color: #d8a292;
+  background: #fdf6f3;
+}
+.chain-times {
+  font-size: 13px;
   color: #9a9384;
+}
+.chain-unit-fixed {
+  font-size: 13px;
+  color: #5d5747;
+}
+.chain-remove {
+  margin-left: auto;
+  font-size: 12px;
+  color: #b4553f;
+}
+.chain-tools {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.chain-add {
+  font-size: 12px;
+  color: #1e3a2f;
+  text-decoration: underline;
+}
+.chain-single {
+  font-size: 12px;
+  color: #8a6b33;
+  text-decoration: underline;
+}
+
+.chain-warn {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #8a6b33;
+  line-height: 1.5;
+}
+
+.derived-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #8a6b33;
+  background: #fdf3e4;
+  border-radius: 8px;
+  padding: 7px 9px;
+  line-height: 1.6;
 }
 
 .ratio-hint {

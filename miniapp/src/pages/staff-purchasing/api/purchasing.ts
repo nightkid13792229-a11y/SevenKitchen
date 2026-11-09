@@ -1036,6 +1036,16 @@ export interface ProcurementSkuDraft {
   packCount: number | null;
   netContentPerPack: number | null;
   netContentUnitText: string | null;
+  /** 规格链：最后一层一定是基准单位，如 [{30,枚},{53,克}] */
+  specChain: Array<{ count: number; unit: string }> | null;
+  /** 包装规格原文，如「30枚 1.59kg」 */
+  specText: string | null;
+  /** perUnit 是包装上印的（printed）还是按整件总重折算的（derived） */
+  netContentSource: 'printed' | 'derived' | null;
+  /** 一采购单位合计（基准单位），用在"整盒 1590 克"那句提示上 */
+  totalNetContentInBase: number | null;
+  /** 最后一层用什么单位说话（按个记账时可能是「张」，其余是基准单位） */
+  amountUnitText: string | null;
   unitPrice: number | null;
   missing: string[];
   confidence: Record<string, 'high' | 'low'>;
@@ -1045,9 +1055,12 @@ export interface CreateStaffProcurementSkuInput {
   name: string;
   purchaseChannel: string;
   purchaseUnit: string;
+  /** 一采购单位里几件（规格链上各计数层的连乘） */
   packCount: number;
+  /** 最后一层的数量，单位固定为原料基准单位 */
   netContentPerPack: number;
   brand?: string;
+  /** 包装规格原文（如 30枚 1.59kg），服务端优先存它，订单匹配才对得上 */
   productModel?: string;
   currentPurchasePrice?: number;
   sourceScreenshotUrl?: string;

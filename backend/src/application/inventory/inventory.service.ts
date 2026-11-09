@@ -8,6 +8,8 @@ import {
   Injectable,
   Inject,
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
@@ -25,6 +27,7 @@ import {
   InventoryStocktakeStatus,
 } from '../../domain/inventory';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
+import { assertRejectNote, canEdit, isWithinTolerance } from './stocktake-rules';
 import { PackagingUnitStatus } from '../../domain/production/enums';
 import { PRODUCTION_BATCH_REPOSITORY } from '../production/production.service';
 export interface PurchaseInboundRecord {
@@ -1227,6 +1230,490 @@ export class InventoryService {
   /**
    * List recent stocktakes with line-level variances.
    */
+  /**
+   * 开一张草稿盘点单：账面在开单时冻结（盲盘 DTO 不含账面/差异）。
+   * 全局只允许一张 DRAFT；别人有草稿时 409。
+   */
+  async startStocktake(params: { userId: string; note?: string | null }) {
+    const existing = await this.prisma.inventoryStocktake.findFirst({
+      where: { status: 'DRAFT' as any },
+      select: { id: true, createdBy: true, createdAt: true },
+    });
+    if (existing) {
+      if (existing.createdBy === params.userId) {
+        return this.toBlindStocktakeDto(
+          await this.getStocktakeById(existing.id),
+        );
+      }
+      throw new ConflictException(
+        `已有未完成的盘点（${existing.createdBy ?? '未知'} / ${existing.createdAt.toLocaleString('zh-CN')}）`,
+      );
+    }
+
+    const ingredients = await this.loadStocktakeScope();
+    if (ingredients.length === 0) {
+      throw new BadRequestException('没有需要盘点的原料');
+    }
+
+    const balances = await this.getBalancesByIngredientIds(
+      ingredients.map((ingredient) => ingredient.id),
+    );
+    const stocktakeId = randomUUID();
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.inventoryStocktake.create({
+        data: {
+          id: stocktakeId,
+          type: 'ROUTINE' as any,
+          status: 'DRAFT' as any,
+          note: params.note ?? null,
+          createdBy: params.userId,
+          createdAt: now,
+        },
+      });
+      await tx.inventoryStocktakeLine.createMany({
+        data: ingredients.map((ingredient) => ({
+          id: randomUUID(),
+          stocktakeId,
+          ingredientId: ingredient.id,
+          procurementSkuId: null,
+          expectedQuantityG: balances.get(ingredient.id) ?? 0,
+          countedQuantityG: null,
+          deltaG: null,
+          countedAt: null,
+        })),
+      });
+    });
+
+    return this.toBlindStocktakeDto(await this.getStocktakeById(stocktakeId));
+  }
+
+  /** 当前草稿（只看自己的）。 */
+  async getDraftStocktake(userId: string) {
+    const draft = await this.prisma.inventoryStocktake.findFirst({
+      where: { status: 'DRAFT' as any },
+      select: { id: true, createdBy: true },
+    });
+    if (!draft || draft.createdBy !== userId) {
+      return null;
+    }
+    return this.toBlindStocktakeDto(await this.getStocktakeById(draft.id));
+  }
+
+  /** 取消草稿：只允许自己的（管理员可取消任何人的）；草稿没有流水，可以删。 */
+  async cancelStocktakeDraft(
+    id: string,
+    userId: string,
+    isAdmin = false,
+  ) {
+    const header = await this.prisma.inventoryStocktake.findUnique({
+      where: { id },
+      select: { id: true, status: true, createdBy: true },
+    });
+    if (!header) throw new NotFoundException(`Stocktake not found: ${id}`);
+    if (header.status !== ('DRAFT' as any)) {
+      throw new ConflictException('只有草稿可以取消');
+    }
+    if (!isAdmin && header.createdBy !== userId) {
+      throw new ForbiddenException('只能取消自己开的盘点单');
+    }
+    const ledgerCount = await this.prisma.inventoryLedgerEntry.count({
+      where: { sourceId: id },
+    });
+    if (ledgerCount > 0) {
+      throw new ConflictException('这张盘点单已经有流水，不能删除');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.inventoryStocktakeLine.deleteMany({ where: { stocktakeId: id } });
+      await tx.inventoryStocktake.delete({ where: { id } });
+    });
+  }
+
+  /** 保存草稿：只改实盘和计数时刻，不动账面。 */
+  async saveStocktakeLines(
+    id: string,
+    lines: Array<{ ingredientId: string; countedQuantityG: number | null }>,
+    userId: string,
+  ) {
+    const header = await this.prisma.inventoryStocktake.findUnique({
+      where: { id },
+      select: { id: true, status: true, createdBy: true },
+    });
+    if (!header) throw new NotFoundException(`Stocktake not found: ${id}`);
+    if (!canEdit(header.status)) {
+      throw new ConflictException('盘点已提交或已入账，不能再改');
+    }
+    if (header.createdBy !== userId) {
+      throw new ForbiddenException('只能编辑自己开的盘点单');
+    }
+
+    const existing = await this.prisma.inventoryStocktakeLine.findMany({
+      where: { stocktakeId: id },
+      select: { ingredientId: true, expectedQuantityG: true },
+    });
+    const expectedMap = new Map(
+      existing.map((line) => [line.ingredientId, line.expectedQuantityG]),
+    );
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const line of lines) {
+        const expected = expectedMap.get(line.ingredientId);
+        if (expected === undefined) {
+          throw new BadRequestException(
+            `盘点单里没有原料 ${line.ingredientId}`,
+          );
+        }
+        const counted = line.countedQuantityG ?? null;
+        if (counted !== null && (!Number.isFinite(counted) || counted < 0)) {
+          throw new BadRequestException(
+            '实盘数量必须是非负数字，或留空表示未盘',
+          );
+        }
+        await tx.inventoryStocktakeLine.updateMany({
+          where: { stocktakeId: id, ingredientId: line.ingredientId },
+          data: {
+            countedQuantityG: counted,
+            deltaG: counted === null ? null : counted - expected,
+            countedAt: counted === null ? null : now,
+          },
+        });
+      }
+    });
+
+    return this.toBlindStocktakeDto(await this.getStocktakeById(id));
+  }
+
+  /**
+   * 完成录入后的差异预览：只算不写。
+   * 有未盘行时必须显式 confirmPartial，防止录到一半偷看账面。
+   */
+  async previewStocktake(
+    id: string,
+    userId: string,
+    opts: { confirmPartial?: boolean } = {},
+  ) {
+    const header = await this.prisma.inventoryStocktake.findUnique({
+      where: { id },
+      select: { id: true, status: true, createdBy: true },
+    });
+    if (!header) throw new NotFoundException(`Stocktake not found: ${id}`);
+    if (header.status !== ('DRAFT' as any)) {
+      throw new ConflictException('只有草稿可以预览');
+    }
+    if (header.createdBy !== userId) {
+      throw new ForbiddenException('只能预览自己开的盘点单');
+    }
+
+    const lines = await this.prisma.inventoryStocktakeLine.findMany({
+      where: { stocktakeId: id },
+      include: {
+        ingredient: {
+          select: { baseUnit: true, unitDisplayLabel: true },
+        },
+      },
+      orderBy: { ingredientId: 'asc' },
+    });
+
+    const skipped = lines.filter(
+      (line) => line.countedQuantityG === null,
+    ).length;
+    if (skipped > 0 && !opts.confirmPartial) {
+      throw new BadRequestException(
+        `还有 ${skipped} 项未盘；确认按未盘处理后才能预览`,
+      );
+    }
+
+    const previewLines = lines.map((line) => {
+      const counted = line.countedQuantityG;
+      const delta =
+        counted === null ? null : Number(counted) - Number(line.expectedQuantityG);
+      return {
+        ingredientId: line.ingredientId,
+        expectedQuantityG: Number(line.expectedQuantityG),
+        countedQuantityG: counted === null ? null : Number(counted),
+        deltaG: delta,
+        isCounted: counted !== null,
+        withinTolerance:
+          delta === null
+            ? null
+            : isWithinTolerance(
+                delta,
+                Number(line.expectedQuantityG),
+                line.ingredient?.baseUnit ?? 'G',
+              ),
+      };
+    });
+
+    return {
+      id,
+      status: header.status,
+      lines: previewLines,
+      countedCount: previewLines.filter((line) => line.isCounted).length,
+      skippedCount: skipped,
+      withinCount: previewLines.filter((line) => line.withinTolerance === true)
+        .length,
+      overCount: previewLines.filter((line) => line.withinTolerance === false)
+        .length,
+    };
+  }
+
+  /**
+   * 提交盘点：
+   *  - 容差内的行立即入账；
+   *  - 只要有一行超容差，整单进入 SUBMITTED 等复核（容差内的行照常入账）。
+   */
+  async submitStocktake(id: string, userId: string, note?: string | null) {
+    const header = await this.prisma.inventoryStocktake.findUnique({
+      where: { id },
+      select: { id: true, status: true, createdBy: true },
+    });
+    if (!header) throw new NotFoundException(`Stocktake not found: ${id}`);
+    if (header.status !== ('DRAFT' as any)) {
+      throw new ConflictException('盘点已提交或已入账，不能重复提交');
+    }
+    if (header.createdBy !== userId) {
+      throw new ForbiddenException('只能提交自己开的盘点单');
+    }
+
+    const lines = await this.prisma.inventoryStocktakeLine.findMany({
+      where: { stocktakeId: id },
+      include: { ingredient: { select: { baseUnit: true } } },
+    });
+    const counted = lines.filter((line) => line.countedQuantityG !== null);
+    if (counted.length === 0) {
+      throw new BadRequestException('至少盘一项才能提交');
+    }
+
+    const evaluated = counted.map((line) => {
+      const countedQuantityG = Number(line.countedQuantityG);
+      const expected = Number(line.expectedQuantityG);
+      const delta = Number((countedQuantityG - expected).toFixed(3));
+      return {
+        line,
+        countedQuantityG,
+        delta,
+        within: isWithinTolerance(
+          delta,
+          expected,
+          line.ingredient?.baseUnit ?? 'G',
+        ),
+      };
+    });
+    const overs = evaluated.filter((item) => !item.within);
+    const nextStatus = overs.length > 0 ? 'SUBMITTED' : 'APPLIED';
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      const transition = await tx.inventoryStocktake.updateMany({
+        where: {
+          id,
+          status: 'DRAFT' as any,
+          createdBy: userId,
+        },
+        data: {
+          status: nextStatus as any,
+          submittedAt: now,
+          appliedAt: nextStatus === 'APPLIED' ? now : null,
+          note: note ?? undefined,
+        },
+      });
+      if (transition.count === 0) {
+        throw new ConflictException('盘点状态已变化，请刷新后重试');
+      }
+
+      for (const item of evaluated) {
+        await tx.inventoryStocktakeLine.update({
+          where: { id: item.line.id },
+          data: { deltaG: item.delta },
+        });
+      }
+
+      const ledgerRows = evaluated
+        .filter((item) => item.within && Math.abs(item.delta) > 0.0001)
+        .map((item) => ({
+          id: randomUUID(),
+          ingredientId: item.line.ingredientId,
+          procurementSkuId: item.line.procurementSkuId ?? null,
+          deltaG: item.delta,
+          sourceType: InventorySourceType.STOCKTAKE as any,
+          sourceId: id,
+          sourceVersion: 1,
+          costAmount: null,
+          createdAt: now,
+        }));
+
+      if (ledgerRows.length > 0) {
+        await tx.inventoryLedgerEntry.createMany({
+          data: ledgerRows,
+          skipDuplicates: true,
+        });
+      }
+    });
+
+    return this.getStocktakeById(id);
+  }
+
+  /**
+   * 复核：通过补入超容差的行；驳回写原因、不写流水、终态。
+   */
+  async reviewStocktake(
+    id: string,
+    input: { approve: boolean; note?: string | null },
+    reviewerId: string,
+  ) {
+    assertRejectNote(input.approve, input.note);
+
+    const header = await this.prisma.inventoryStocktake.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+    if (!header) throw new NotFoundException(`Stocktake not found: ${id}`);
+    if (header.status !== ('SUBMITTED' as any)) {
+      throw new ConflictException('只有待复核的盘点可以复核');
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      const transition = await tx.inventoryStocktake.updateMany({
+        where: { id, status: 'SUBMITTED' as any },
+        data: {
+          status: (input.approve ? 'APPLIED' : 'REJECTED') as any,
+          reviewedBy: reviewerId,
+          reviewedAt: now,
+          reviewNote: input.note ?? null,
+          appliedAt: input.approve ? now : null,
+        },
+      });
+      if (transition.count === 0) {
+        throw new ConflictException('盘点状态已变化，请刷新后重试');
+      }
+
+      if (!input.approve) return;
+
+      const lines = await tx.inventoryStocktakeLine.findMany({
+        where: { stocktakeId: id, countedQuantityG: { not: null } },
+      });
+      const ledgerRows = lines
+        .filter(
+          (line) =>
+            line.deltaG !== null && Math.abs(Number(line.deltaG)) > 0.0001,
+        )
+        .map((line) => ({
+          id: randomUUID(),
+          ingredientId: line.ingredientId,
+          procurementSkuId: line.procurementSkuId ?? null,
+          deltaG: Number(line.deltaG),
+          sourceType: InventorySourceType.STOCKTAKE as any,
+          sourceId: id,
+          sourceVersion: 1,
+          costAmount: null,
+          createdAt: now,
+        }));
+      if (ledgerRows.length > 0) {
+        await tx.inventoryLedgerEntry.createMany({
+          data: ledgerRows,
+          skipDuplicates: true,
+        });
+      }
+    });
+
+    return this.getStocktakeById(id);
+  }
+
+  private toBlindStocktakeDto(dto: InventoryStocktakeDto) {
+    return {
+      id: dto.id,
+      status: dto.status,
+      note: dto.note,
+      createdAt: dto.createdAt,
+      lineCount: dto.lineCount,
+      countedCount: dto.lines.filter((line) => line.isCounted).length,
+      lines: dto.lines.map((line) => ({
+        id: line.id,
+        ingredientId: line.ingredientId,
+        ingredientName: line.ingredientName,
+        stockUnitLabel: line.stockUnitLabel,
+        countedQuantityG: line.countedQuantityG,
+        isCounted: line.isCounted,
+        countedAt: line.countedAt,
+      })),
+    };
+  }
+
+  private async loadStocktakeScope() {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [ingredients, balances, recent, counted] = await Promise.all([
+      this.prisma.ingredient.findMany({
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          baseUnit: true,
+          unitDisplayLabel: true,
+        },
+      }),
+      this.prisma.inventoryLedgerEntry.groupBy({
+        by: ['ingredientId'],
+        _sum: { deltaG: true },
+      }),
+      this.prisma.inventoryLedgerEntry.findMany({
+        where: { createdAt: { gte: since } },
+        select: { ingredientId: true },
+        distinct: ['ingredientId'],
+      }),
+      this.prisma.inventoryStocktakeLine.groupBy({
+        by: ['ingredientId'],
+        where: { countedAt: { not: null } },
+        _min: { countedAt: true },
+      }),
+    ]);
+
+    const balanceMap = new Map(
+      balances.map((row) => [
+        row.ingredientId,
+        Number(row._sum?.deltaG ?? 0),
+      ]),
+    );
+    const recentSet = new Set(recent.map((row) => row.ingredientId));
+    const lastCounted = new Map(
+      counted.map((row) => [
+        row.ingredientId,
+        row._min?.countedAt
+          ? new Date(row._min.countedAt as any).getTime()
+          : Number.POSITIVE_INFINITY,
+      ]),
+    );
+
+    const typeRank: Record<string, number> = {
+      FOOD: 0,
+      SUPPLEMENT: 1,
+      PACKAGING: 2,
+    };
+
+    return ingredients
+      .filter(
+        (ingredient) =>
+          (balanceMap.get(ingredient.id) ?? 0) !== 0 ||
+          recentSet.has(ingredient.id),
+      )
+      .sort((left, right) => {
+        const leftCounted =
+          lastCounted.get(left.id) ?? Number.POSITIVE_INFINITY;
+        const rightCounted =
+          lastCounted.get(right.id) ?? Number.POSITIVE_INFINITY;
+        if (leftCounted !== rightCounted) {
+          return leftCounted - rightCounted;
+        }
+        const rankDiff =
+          (typeRank[left.type] ?? 9) - (typeRank[right.type] ?? 9);
+        if (rankDiff !== 0) return rankDiff;
+        return left.name.localeCompare(right.name, 'zh-CN');
+      });
+  }
+
   async listStocktakes(limit = 20): Promise<InventoryStocktakeDto[]> {
     const stocktakes = await this.prisma.inventoryStocktake.findMany({
       orderBy: {

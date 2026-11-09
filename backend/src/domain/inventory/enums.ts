@@ -22,5 +22,7 @@ export enum InventoryAdjustmentMode {
 
 export enum InventoryStocktakeStatus {
   DRAFT = 'DRAFT',
+  SUBMITTED = 'SUBMITTED',
   APPLIED = 'APPLIED',
+  REJECTED = 'REJECTED',
 }

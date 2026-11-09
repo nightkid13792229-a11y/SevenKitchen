@@ -12,8 +12,8 @@ import {
 function context(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
     knowledge: {
-      isAvailable: () => true,
-      search: jest.fn(() => [
+      isAvailable: async () => true,
+      search: jest.fn(async () => [
         { chunkId: 'C1', docId: 'nrc', text: 'zinc sulfate is bioavailable', score: 9 }
       ])
     },
@@ -79,7 +79,7 @@ describe('执行工具', () => {
 
   it('知识库不可用时如实报错，不装作查过', async () => {
     const ctx = context({
-      knowledge: { isAvailable: () => false, search: jest.fn(() => []) }
+      knowledge: { isAvailable: async () => false, search: jest.fn(async () => []) }
     });
     const result = await executeSupplementTool('search_knowledge', { query: 'zinc' }, ctx);
     expect(result).toEqual(

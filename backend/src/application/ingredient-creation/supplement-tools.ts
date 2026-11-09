@@ -145,11 +145,11 @@ export async function executeSupplementTool(
     switch (name) {
       case 'search_knowledge': {
         const query = asString(args.query, 'query');
-        if (!context.knowledge.isAvailable()) {
-          return { ok: false, error: '知识库当前不可用（语料未加载），请如实告诉用户并改用人工判断' };
+        if (!(await context.knowledge.isAvailable())) {
+          return { ok: false, error: '知识库数据库不可用或为空，请如实告诉用户并改用人工判断' };
         }
         const limit = Math.max(1, Math.min(typeof args.limit === 'number' ? args.limit : 4, 8));
-        return { ok: true, data: context.knowledge.search(query, limit) };
+        return { ok: true, data: await context.knowledge.search(query, limit) };
       }
 
       case 'search_products': {

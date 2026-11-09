@@ -959,51 +959,41 @@ export class OrderCenterService {
     if (query.aftersale) return { status: 'AFTERSALE' };
     if (!query.status) return { status: { not: 'INIT' } };
     /**
-     * 试吃装是现货：PAID 就是可发货。它不能同时算「已付款」，否则同一张单
-     * 会出现在两个 tab 里、卡片文案也对不上，所以按订单类型把两边拆开。
+     * 鲜食筛选的**唯一口径**（2026-11-10 收口）。
+     *
+     * 之前这里和另一个状态表各写一份，试吃装/PAID 的规则分叉后
+     * 那张表成了骗人的死代码。现在只留这一个 switch：
+     * · 试吃装是现货：PAID 归「待发货」，不能再算「已付款」；
+     * · 普通鲜食 PAID 仍是「已付款 / 处理中」。
      */
-    if (query.status === 'TO_SHIP') {
-      return {
-        OR: [{ status: 'FREEZING' }, { status: 'PAID', type: 'TASTING_PACK' }],
-      };
-    }
-    if (query.status === 'PAID') {
-      return { status: 'PAID', type: { not: 'TASTING_PACK' } };
-    }
-    if (query.status === 'IN_PROGRESS') {
-      return {
-        status: { in: ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'AFTERSALE'] },
-        NOT: { status: 'PAID', type: 'TASTING_PACK' },
-      };
-    }
-    return { status: { in: this.foodStatuses(query.status) as never[] } };
-  }
-
-  private foodStatuses(group: OrderCenterStatusFilter): string[] {
-    switch (group) {
+    switch (query.status) {
       case 'PENDING':
         // 草稿单已从订单中心移除；旧版小程序点到「待处理」也不会再冒出单子
-        return [];
+        return { status: { in: [] } };
       case 'PENDING_PAYMENT':
-        return ['PENDING_PAYMENT'];
-      case 'PAID':
-        return ['PAID'];
       case 'PURCHASING':
-        return ['PURCHASING'];
       case 'IN_PRODUCTION':
-        return ['IN_PRODUCTION'];
-      case 'IN_PROGRESS':
-        return ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'AFTERSALE'];
-      case 'TO_SHIP':
-        return ['FREEZING'];
       case 'SHIPPED':
-        return ['SHIPPED'];
       case 'COMPLETED':
-        return ['COMPLETED'];
       case 'CANCELLED':
-        return ['CANCELLED'];
+        return { status: query.status };
+      case 'PAID':
+        return { status: 'PAID', type: { not: 'TASTING_PACK' } };
+      case 'IN_PROGRESS':
+        return {
+          status: { in: ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'AFTERSALE'] },
+          NOT: { status: 'PAID', type: 'TASTING_PACK' },
+        };
+      case 'TO_SHIP':
+        return {
+          OR: [
+            { status: 'FREEZING' },
+            { status: 'PAID', type: 'TASTING_PACK' },
+          ],
+        };
       default:
-        return [];
+        // 不属于鲜食的阶段（MAKING / DELIVERED / PACKING…）查空
+        return { status: { in: [] } };
     }
   }
 

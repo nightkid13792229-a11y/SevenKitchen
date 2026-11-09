@@ -266,6 +266,13 @@ describe('staff order detail · 状态改版', () => {
     expect(detailSource).toContain('if (autoShip && canShip.value) shipOrder()');
   });
 
+  it('★ 旧后台订单列表：能否发货与能否合并同一口径（试吃装 PAID 也算可发）', () => {
+    const canShip =
+      source.match(/function canShip\(order: Order\): boolean \{[\s\S]*?\n\}/)?.[0] || '';
+    expect(canShip).toContain("order.type === 'TASTING_PACK'");
+    expect(canShip).toContain("['PAID', 'FREEZING'].includes(order.status)");
+  });
+
   it('★ 试吃装详情口径和列表一致：待发货 / 现货可发 / 无需制作（2026-11-10）', () => {
     const hero =
       detailSource.match(/const heroStatusLabel = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] ||

@@ -14,6 +14,7 @@ describe('OrderShipmentService', () => {
     overrides: {
       customerId?: string;
       addressId?: string | null;
+      shippingAddressSnapshot?: Record<string, unknown> | null;
       status?: OrderStatus;
     } = {},
   ) =>
@@ -31,8 +32,9 @@ describe('OrderShipmentService', () => {
       totalAmount: 110,
       pricingBreakdownSnapshot: null,
       dogId: null,
-      addressId: overrides.addressId ?? 'address-1',
-      shippingAddressSnapshot: null,
+      addressId:
+        overrides.addressId === undefined ? 'address-1' : overrides.addressId,
+      shippingAddressSnapshot: overrides.shippingAddressSnapshot ?? null,
       trackingNumber: null,
       carrierCode: null,
       shippedAt: null,
@@ -160,6 +162,28 @@ describe('OrderShipmentService', () => {
       items: [
         { orderId: 'order-1', specG: 110, bags: 14 },
         { orderId: 'order-2', specG: 110, bags: 8 },
+      ],
+    });
+
+    await expect(service.createShipment({ packages: [two] })).rejects.toThrow(
+      '收货地址',
+    );
+  });
+
+  it('★ 两张都没有收货地址：不能拿 null 当「同地址」放过去（2026-11-10）', async () => {
+    orderRepository.findById
+      .mockResolvedValueOnce(buildOrder('order-1', { addressId: null }))
+      .mockResolvedValueOnce(buildOrder('order-2', { addressId: null }));
+
+    prisma.orderItem.findMany.mockResolvedValue([
+      { orderId: 'order-1', packagePlan: null, packageSpecG: 110, packageCount: 4 },
+      { orderId: 'order-2', packagePlan: null, packageSpecG: 110, packageCount: 4 },
+    ]);
+
+    const two = pkg({
+      items: [
+        { orderId: 'order-1', specG: 110, bags: 4 },
+        { orderId: 'order-2', specG: 110, bags: 4 },
       ],
     });
 

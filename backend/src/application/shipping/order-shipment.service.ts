@@ -671,6 +671,13 @@ export class OrderShipmentService {
 
   /** 合并发货要求同一个收货地址 */
   private assertSameAddress(orders: any[]) {
+    // 两张都没地址时，下面会拿 "snapshot:null" 判成同地址 —— 不能这么放过去
+    for (const order of orders) {
+      if (!order.addressId && !order.shippingAddressSnapshot) {
+        throw new BadRequestException('订单没有收货地址，不能合并发货');
+      }
+    }
+
     const signatures = new Set(
       orders.map((order) => {
         if (order.addressId) return `id:${order.addressId}`;

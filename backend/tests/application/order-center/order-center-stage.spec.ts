@@ -33,6 +33,13 @@ describe('OrderCenterService · 真实阶段文案', () => {
       value,
     );
 
+  const foodWhere = (status: string): any =>
+    (
+      service as unknown as {
+        foodStatusWhere: (q: Record<string, unknown>) => unknown;
+      }
+    ).foodStatusWhere({ status });
+
   it('鲜食：已付款 / 采购中 / 生产中 各说各的，不再写「处理中」', () => {
     expect(stageLabel('FOOD', 'PAID')).toBe('已付款');
     expect(stageLabel('FOOD', 'PURCHASING')).toBe('采购中');
@@ -57,10 +64,10 @@ describe('OrderCenterService · 真实阶段文案', () => {
   });
 
   it('阶段筛选按原始状态收窄', () => {
-    expect(statuses('foodStatuses', 'PAID')).toEqual(['PAID']);
-    expect(statuses('foodStatuses', 'IN_PRODUCTION')).toEqual([
-      'IN_PRODUCTION',
-    ]);
+    expect(foodWhere('PENDING_PAYMENT')).toEqual({ status: 'PENDING_PAYMENT' });
+    expect(foodWhere('PURCHASING')).toEqual({ status: 'PURCHASING' });
+    expect(foodWhere('IN_PRODUCTION')).toEqual({ status: 'IN_PRODUCTION' });
+    expect(foodWhere('PENDING')).toEqual({ status: { in: [] } });
     expect(statuses('customStatuses', 'MAKING')).toEqual(['IN_PROGRESS']);
     expect(statuses('supplementStatuses', 'PACKING')).toEqual(['PACKING']);
     // 补剂的 PAID 归「待发货」，不在「已付款」里
@@ -115,16 +122,14 @@ describe('OrderCenterService · 真实阶段文案', () => {
       }
     ).foodStatusWhere({});
     expect(where).toEqual({ status: { not: 'INIT' } });
-    expect(statuses('foodStatuses', 'PENDING')).toEqual([]);
+    expect(foodWhere('PENDING')).toEqual({ status: { in: [] } });
   });
 
   it('旧版小程序还在用的统一组不会被弄坏', () => {
-    expect(statuses('foodStatuses', 'IN_PROGRESS')).toEqual([
-      'PAID',
-      'PURCHASING',
-      'IN_PRODUCTION',
-      'AFTERSALE',
-    ]);
+    const inProgress = foodWhere('IN_PROGRESS');
+    expect(inProgress.status).toEqual({
+      in: ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'AFTERSALE'],
+    });
     // 2026-11-08：已完成只算 COMPLETED。DELIVERED 有自己的「已交付」筛选，
     // 再并进「已完成」会出现「卡片写已交付、筛已完成却筛到」。
     // 旧版小程序短期在「全部」里还能看到已交付单。

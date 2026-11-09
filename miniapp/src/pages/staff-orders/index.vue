@@ -1094,6 +1094,10 @@ function canConfirmPayment(order: Order): boolean {
 }
 
 function canShip(order: Order): boolean {
+  // 和 isMergeable 同一口径：试吃装是现货，付款即可发；其余鲜食等急冻完成
+  if (order.type === 'TASTING_PACK') {
+    return ['PAID', 'FREEZING'].includes(order.status)
+  }
   return order.status === 'FREEZING'
 }
 

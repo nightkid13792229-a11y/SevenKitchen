@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view class="page" :class="{ 'with-merge-bar': mergeMode }">
     <view class="head">
       <view class="head-text">
         <text class="title">订单中心</text>
@@ -64,10 +64,17 @@
       </view>
     </scroll-view>
 
+    <!-- 合并发货（2026-11-10）：入口从旧「后台订单」列表搬过来。
+         进选择态后才能勾单，平时点卡片照旧进详情，不打扰日常看单。 -->
     <view class="filter-row">
-      <text class="aftersale-toggle" :class="{ active: onlyAftersale }" @tap="toggleAftersale">
-        只看售后
-      </text>
+      <view class="filter-left">
+        <text class="aftersale-toggle" :class="{ active: onlyAftersale }" @tap="toggleAftersale">
+          只看售后
+        </text>
+        <text class="merge-toggle" :class="{ active: mergeMode }" @tap="toggleMergeMode">
+          {{ mergeMode ? '取消' : '合并发货' }}
+        </text>
+      </view>
       <text class="total">共 {{ total }} 单</text>
     </view>
 
@@ -77,12 +84,24 @@
         v-for="item in items"
         :key="`${item.type}-${item.id}`"
         class="order-card"
-        :class="typeClass(item.type)"
-        @tap="openOrder(item)"
+        :class="[
+          typeClass(item.type),
+          {
+            'is-picked': mergeMode && selectedOrderIds.includes(item.id),
+            'is-unmergeable': mergeMode && !canMergeItem(item),
+          },
+        ]"
+        @tap="onCardTap(item)"
       >
         <view class="type-bar"></view>
+        <!-- 选择态下的勾：已经选中的永远能取消，没选中的只有待发货鲜食能勾 -->
+        <view
+          v-if="mergeMode"
+          class="pick-badge"
+          :class="{ on: selectedOrderIds.includes(item.id) }"
+        ></view>
 
-        <view class="order-top">
+        <view class="order-top" :class="{ 'with-pick': mergeMode }">
           <view class="order-left">
             <text class="type-tag">{{ typeLabel(item.type) }}</text>
             <text class="order-no">{{ item.orderNo }}</text>
@@ -133,9 +152,10 @@
           </text>
         </view>
 
-        <!-- 入口：没东西可看就整块不出现，不置灰 -->
+        <!-- 入口：没东西可看就整块不出现，不置灰。
+             勾选态整块收起，整张卡片都是"勾"的热区，避免误点单笔发货 -->
         <view
-          v-if="canShipItem(item) || canOpenRecipe(item) || canOpenDog(item)"
+          v-if="!mergeMode && (canShipItem(item) || canOpenRecipe(item) || canOpenDog(item))"
           class="order-actions"
         >
           <!-- 待发货的单直接在列表上发货（老板 2026-10-30：以前列表就有这个） -->
@@ -150,6 +170,22 @@
       <view v-if="items.length === 0" class="state">没有符合条件的订单</view>
       <view v-if="hasMore" class="load-more" @tap="loadMore">加载更多</view>
     </template>
+
+    <!-- 合并发货：底部操作条（同旧后台订单页，2026-11-10 搬过来） -->
+    <view v-if="mergeMode" class="merge-bar">
+      <view class="merge-bar-info">
+        <text class="merge-bar-count">已选 {{ selectedOrderIds.length }} 单</text>
+        <text class="merge-bar-hint">同一顾客、同一收货地址才能合并</text>
+      </view>
+      <button
+        class="merge-bar-btn"
+        :class="{ 'is-disabled': selectedOrderIds.length === 0 }"
+        :disabled="selectedOrderIds.length === 0"
+        @tap="startMergeShipment"
+      >
+        去发货
+      </button>
+    </view>
   </view>
 </template>
 
@@ -275,6 +311,15 @@ const TYPE_STATUS_VALUES: Record<string, string[]> = {
 const type = ref('')
 const status = ref('')
 const onlyAftersale = ref(false)
+/**
+ * 合并发货（2026-11-10）：入口从旧「后台订单」列表搬过来。
+ * 合并 / 拆包共用一个「发货单」页：勾 1 张单 + 加包裹就是拆包，
+ * 勾 2~10 张同地址的待发货鲜食单就是合并。
+ */
+const mergeMode = ref(false)
+const selectedOrderIds = ref<string[]>([])
+/** 一票上限，跟后端 MAX_ORDERS_PER_SHIPMENT 对齐 */
+const MAX_MERGE_ORDERS = 10
 /** 关键词：订单号 / 顾客姓名 / 手机号 / 狗狗名（后端统一处理三类订单） */
 const searchKeyword = ref('')
 const items = ref<OrderCenterItem[]>([])
@@ -308,12 +353,14 @@ function formatTime(value: string) {
 /** 点搜索 / 键盘回车都走这里：从第 1 页重新查，别把上一次的结果留在后面 */
 function performSearch() {
   searchKeyword.value = searchKeyword.value.trim()
+  resetMergeSelection()
   load()
 }
 
 function clearSearchKeyword() {
   if (!searchKeyword.value) return
   searchKeyword.value = ''
+  resetMergeSelection()
   load()
 }
 
@@ -350,6 +397,8 @@ async function load(reset = true) {
 }
 
 function switchType(next: string) {
+  // 换筛选就清掉勾选：否则选中的单可能已经不在当前列表里，员工看不见却还被带上
+  resetMergeSelection()
   type.value = next
   // 换类型后当前状态可能不存在了（比如「已发货」在定制里没有）
   const allowed = TYPE_STATUS_VALUES[next] || TYPE_STATUS_VALUES['']
@@ -358,11 +407,13 @@ function switchType(next: string) {
 }
 
 function switchStatus(next: string) {
+  resetMergeSelection()
   status.value = next
   load()
 }
 
 function toggleAftersale() {
+  resetMergeSelection()
   onlyAftersale.value = !onlyAftersale.value
   load()
 }
@@ -379,6 +430,73 @@ function loadMore() {
  */
 function canShipItem(item: OrderCenterItem) {
   return item.statusGroup === 'TO_SHIP' && item.type !== 'CUSTOM_RECIPE'
+}
+
+/**
+ * 能不能进合并发货。
+ *
+ * 后端「一票发货」只认成品鲜食（含试吃装）的待发货单；补剂、定制单
+ * 各有各的发货 / 交付流程，混进来后端也会拒。这里提前拦住，别让员工
+ * 勾了半天、填完单号才报错。
+ */
+function canMergeItem(item: OrderCenterItem) {
+  return item.type === 'FOOD' && item.statusGroup === 'TO_SHIP'
+}
+
+/** 退出选择态并清空勾选（换筛选、返回列表、取消时都走这里） */
+function resetMergeSelection() {
+  mergeMode.value = false
+  selectedOrderIds.value = []
+}
+
+function toggleMergeMode() {
+  if (mergeMode.value) {
+    resetMergeSelection()
+    return
+  }
+  // 合并只发生在「待发货的鲜食」上：进来先把筛选收到这一档，
+  // 否则满屏都是勾不动的单，员工会以为功能坏了
+  const needReload = type.value !== 'FOOD' || status.value !== 'TO_SHIP'
+  type.value = 'FOOD'
+  status.value = 'TO_SHIP'
+  mergeMode.value = true
+  selectedOrderIds.value = []
+  if (needReload) load()
+}
+
+/** 选择态点卡片 = 勾选 / 取消勾选；平时还是进详情 */
+function onCardTap(item: OrderCenterItem) {
+  if (!mergeMode.value) {
+    openOrder(item)
+    return
+  }
+
+  // 已勾上的永远能取消：勾完被别处发了，也得能点掉
+  const index = selectedOrderIds.value.indexOf(item.id)
+  if (index >= 0) {
+    selectedOrderIds.value.splice(index, 1)
+    return
+  }
+
+  if (!canMergeItem(item)) {
+    uni.showToast({ title: '只有待发货的鲜食单能合并', icon: 'none' })
+    return
+  }
+  if (selectedOrderIds.value.length >= MAX_MERGE_ORDERS) {
+    uni.showToast({ title: `一票最多 ${MAX_MERGE_ORDERS} 张单`, icon: 'none' })
+    return
+  }
+  selectedOrderIds.value.push(item.id)
+}
+
+function startMergeShipment() {
+  if (selectedOrderIds.value.length === 0) {
+    uni.showToast({ title: '先勾选订单', icon: 'none' })
+    return
+  }
+  uni.navigateTo({
+    url: `/pages/staff-orders/batch-ship?orderIds=${selectedOrderIds.value.join(',')}`,
+  })
 }
 
 /**
@@ -476,7 +594,11 @@ function openAssistedOrder() {
  * 仍然写着「待发货」、还挂着「发货」按钮（数据库里其实已经结案），
  * 看起来就像点了没生效。现在改成页面一显示就刷新，状态和按钮都跟着变。
  */
-onShow(() => load())
+onShow(() => {
+  // 从「发货单」返回时把选择态收掉，别让上次的勾选留在页面上
+  resetMergeSelection()
+  load()
+})
 </script>
 
 <style scoped>
@@ -512,11 +634,21 @@ onShow(() => load())
 .status-tab.active { background: #e8f1ec; color: #1e3a2f; font-weight: 600; }
 
 .filter-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16rpx; }
+.filter-left { display: flex; align-items: center; gap: 12rpx; min-width: 0; }
 .aftersale-toggle { padding: 8rpx 22rpx; border-radius: 24rpx; background: #fff; color: #909399; font-size: 23rpx; border: 1rpx solid #e4e7ed; }
 .aftersale-toggle.active { background: #fdf6ec; color: #b88230; border-color: #f0d9b5; font-weight: 600; }
-.total { color: #909399; font-size: 22rpx; }
+/* 合并发货开关：跟「只看售后」同尺寸，选中后变主色，跟底部操作条呼应 */
+.merge-toggle { padding: 8rpx 22rpx; border-radius: 24rpx; background: #fff; color: #2b5040; font-size: 23rpx; border: 1rpx solid #c9dccf; }
+.merge-toggle.active { background: #1e3a2f; color: #fff; border-color: #1e3a2f; font-weight: 600; }
+.total { flex: none; margin-left: 12rpx; color: #909399; font-size: 22rpx; }
 
 .order-card { position: relative; background: #fff; border-radius: 16rpx; padding: 22rpx 22rpx 18rpx 30rpx; margin-bottom: 16rpx; overflow: hidden; }
+/* 选择态：勾中的描边，不能合并的压暗（还能点，点了会给提示） */
+.order-card.is-picked { box-shadow: 0 0 0 2rpx #1e3a2f inset; }
+.order-card.is-unmergeable { opacity: 0.55; }
+.pick-badge { position: absolute; top: 16rpx; right: 16rpx; width: 34rpx; height: 34rpx; border-radius: 50%; border: 2rpx solid #c9d2cc; background: #fff; box-sizing: border-box; z-index: 2; }
+.pick-badge.on { border-color: #1e3a2f; background: #1e3a2f; }
+.pick-badge.on::after { content: ''; position: absolute; left: 10rpx; top: 5rpx; width: 8rpx; height: 15rpx; border-right: 3rpx solid #fff; border-bottom: 3rpx solid #fff; transform: rotate(45deg); }
 /* 左侧色条：三类各一个颜色，扫列表时靠它分辨 */
 .type-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 8rpx; background: #1e3a2f; }
 .order-card.is-custom .type-bar { background: #2f5f9e; }
@@ -529,6 +661,8 @@ onShow(() => load())
 .order-card.is-supp .type-tag { background: #fbf1e6; color: #b1722c; }
 .order-no { font-size: 25rpx; color: #303133; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status { flex: none; margin-left: 14rpx; color: #b88230; font-size: 23rpx; }
+/* 选择态右上角有勾选框，状态文字让开，别叠在一起 */
+.order-top.with-pick .status { margin-right: 46rpx; }
 
 .order-main { display: flex; align-items: baseline; margin-top: 16rpx; }
 .recipe-name { font-size: 29rpx; font-weight: 600; color: #1e3a2f; }
@@ -556,5 +690,14 @@ onShow(() => load())
 .entry.primary { background: #1e3a2f; color: #fff; font-weight: 600; }
 
 .state { padding: 120rpx 0; text-align: center; color: #909399; font-size: 24rpx; }
+/* 合并发货底部操作条：固定在最下面，给页面留出等高空白，别盖住最后一张单 */
+.page.with-merge-bar { padding-bottom: 180rpx; }
+.merge-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom)); background: #fff; border-top: 1rpx solid #eef0f2; box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.04); }
+.merge-bar-info { display: flex; flex-direction: column; min-width: 0; }
+.merge-bar-count { font-size: 26rpx; font-weight: 700; color: #1f2d27; }
+.merge-bar-hint { margin-top: 4rpx; font-size: 20rpx; color: #909399; }
+.merge-bar-btn { flex: none; margin: 0; padding: 0 44rpx; height: 72rpx; line-height: 72rpx; border-radius: 36rpx; background: #1e3a2f; color: #fff; font-size: 26rpx; font-weight: 600; }
+.merge-bar-btn.is-disabled { background: #c9d2cc; color: #fff; }
+
 .load-more { padding: 20rpx; text-align: center; color: #2b5040; font-size: 24rpx; }
 </style>

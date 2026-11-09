@@ -129,7 +129,10 @@ describe('staff order center · 食谱 / 狗狗入口', () => {
   })
 
   it('没有可看的食谱/狗狗时整块入口不出现，而不是置灰', () => {
-    expect(orderCenter).toContain('v-if="canShipItem(item) || canOpenRecipe(item) || canOpenDog(item)"')
+    // 2026-11-10：攒了合并选择后整块收起（整张卡都是勾选热区），条件多了一层
+    expect(orderCenter).toContain(
+      'v-if="!mergeMode && (canShipItem(item) || canOpenRecipe(item) || canOpenDog(item))"',
+    )
     expect(orderCenter).toContain('return Boolean(item.itemId || item.recipeId)')
     expect(orderCenter).toContain('return Boolean(item.dogId)')
   })
@@ -242,7 +245,7 @@ describe('staff order center · 定制单卡片（2026-11-08 老板点开报「�
 describe('staff order center · 返回列表不显示旧状态（2026-11-08 老板反馈）', () => {
   it('★ 页面每次显示都重新拉列表，从详情页返回不再是进去之前那一份', () => {
     expect(orderCenter).toContain("import { onShow } from '@dcloudio/uni-app'")
-    expect(orderCenter).toMatch(/onShow\(\(\) => load\(\)\)/)
+    expect(orderCenter).toMatch(/onShow\(\(\) => \{[\s\S]*?load\(\)/)
     // 只在 onMounted 加载一次，正是「详情页点了无需发货、列表还写待发货」的根因
     expect(orderCenter).not.toContain('onMounted(')
   })
@@ -261,5 +264,51 @@ describe('staff order center · 头部精简（2026-11-08 老板要求）', () =
   it('★ 右上角的「刷新」已删（进页面/返回/换筛选都会自动拉最新数据）', () => {
     expect(orderCenter).not.toContain('>刷新<')
     expect(orderCenter).not.toContain('class="refresh"')
+  })
+})
+
+describe('staff order center · 合并 / 拆分发货入口（2026-11-10）', () => {
+  it('★ 点「合并发货」先把列表收到鲜食 / 待发货，免得满屏都是勾不动的单', () => {
+    const toggle = orderCenter.match(/function toggleMergeMode[\s\S]*?\n\}/)?.[0] || ''
+    expect(toggle).toContain("type.value = 'FOOD'")
+    expect(toggle).toContain("status.value = 'TO_SHIP'")
+  })
+
+  it('★ 列表上有「合并发货」开关；不点它时点卡片还是进详情', () => {
+    expect(orderCenter).toContain('class="merge-toggle"')
+    expect(orderCenter).toContain('toggleMergeMode')
+    const cardTap = orderCenter.match(/function onCardTap[\s\S]*?\n\}/)?.[0] || ''
+    expect(cardTap).toContain('mergeMode.value')
+    expect(cardTap).toContain('openOrder(item)')
+  })
+
+  it('★ 只有「待发货的鲜食」能进合并；补剂 / 定制 / 其它阶段都拦住', () => {
+    const guard = orderCenter.match(/function canMergeItem[\s\S]*?\n\}/)?.[0] || ''
+    expect(guard).toContain("item.type === 'FOOD'")
+    expect(guard).toContain("item.statusGroup === 'TO_SHIP'")
+    const cardTap = orderCenter.match(/function onCardTap[\s\S]*?\n\}/)?.[0] || ''
+    expect(cardTap).toContain('只有待发货的鲜食单能合并')
+    // 已经勾上的单永远能取消（哪怕期间被别处发了）
+    expect(cardTap.indexOf('indexOf')).toBeLessThan(cardTap.indexOf('canMergeItem'))
+  })
+
+  it('★ 勾完点「去发货」进「发货单」页，一票最多 10 单', () => {
+    expect(orderCenter).toContain('/pages/staff-orders/batch-ship?orderIds=')
+    expect(orderCenter).toContain('const MAX_MERGE_ORDERS = 10')
+    expect(orderCenter).toContain('一票最多')
+    expect(orderCenter).toContain('已选')
+    expect(orderCenter).toContain('同一收货地址才能合并')
+  })
+
+  it('★ 换类型 / 状态 / 搜索、从详情返回都清掉勾选，不带着上次的选择', () => {
+    const reset = orderCenter.match(/function resetMergeSelection[\s\S]*?\n\}/)?.[0] || ''
+    expect(reset).toContain('selectedOrderIds.value = []')
+    for (const fn of ['switchType', 'switchStatus', 'performSearch', 'toggleAftersale']) {
+      const body = orderCenter.match(new RegExp(`function ${fn}\\([\\s\\S]*?\\n\\}`))?.[0] || ''
+      expect(body, `${fn} 应该清掉勾选`).toContain('resetMergeSelection()')
+    }
+    const onShow = orderCenter.match(/onShow\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
+    expect(onShow).toContain('resetMergeSelection()')
+    expect(onShow).toContain('load()')
   })
 })

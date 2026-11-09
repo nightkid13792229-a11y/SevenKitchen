@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-11-09T11:23:42.865Z",
-  "questionsFile": "docs/knowledge-base/ckd-structure/library-questions.json",
+  "generatedAt": "2026-11-09T18:49:27.167Z",
+  "questionsFile": "docs/knowledge-base/eval/ckd/questions.json",
   "written": true,
   "judge": "spec v1.1 附录 A（前 3 节命中 / 禁止节 / 负样本 no_match 或 0 节 0 表 / 表格命中 + 按检索 K 打开）",
   "tool": "executeTool('search_knowledge_library', { query, species, stage, topics, limit: 5 })；表格题再 executeTool('open_knowledge', { citationId })",
   "thresholds": {
-    "overall": 21,
+    "overall": 26,
     "stage3": 1,
     "table": 2,
-    "zh": 5,
+    "zh": 6,
     "negative": 4,
     "adversarial": 4,
     "coreTables": 6,
@@ -19,7 +19,7 @@
     {
       "name": "整体",
       "actual": "26/26",
-      "target": "≥21/26",
+      "target": "≥26/26",
       "passed": true
     },
     {
@@ -37,7 +37,7 @@
     {
       "name": "中文",
       "actual": "6/6",
-      "target": "≥5/6",
+      "target": "≥6/6",
       "passed": true
     },
     {
@@ -60,13 +60,13 @@
     },
     {
       "name": "检索 p95",
-      "actual": "85.5ms",
+      "actual": "102.9ms",
       "target": "<300ms",
       "passed": true
     },
     {
       "name": "单次工具调用 max",
-      "actual": "190.6ms",
+      "actual": "251.6ms",
       "target": "<1000ms",
       "passed": true
     }
@@ -121,9 +121,9 @@
     ]
   },
   "timing": {
-    "p50": 59.4,
-    "p95": 85.5,
-    "max": 190.6
+    "p50": 77.4,
+    "p95": 102.9,
+    "max": 251.6
   },
   "summary": {
     "overall": 26,
@@ -208,7 +208,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s017",
-      "ms": 190.6
+      "ms": 251.6
     },
     {
       "index": 2,
@@ -268,7 +268,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s015",
-      "ms": 69.5
+      "ms": 82.9
     },
     {
       "index": 3,
@@ -328,7 +328,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s018、sacn5-chapters-SACN5-37-s017",
-      "ms": 67.6
+      "ms": 82.8
     },
     {
       "index": 4,
@@ -388,7 +388,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s018、sacn5-chapters-SACN5-37-s021",
-      "ms": 70.2
+      "ms": 83.9
     },
     {
       "index": 5,
@@ -425,7 +425,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s018、sacn5-chapters-SACN5-37-s014",
-      "ms": 47.7
+      "ms": 66
     },
     {
       "index": 6,
@@ -467,7 +467,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s019、sacn5-chapters-SACN5-37-s021",
-      "ms": 59.4
+      "ms": 102.9
     },
     {
       "index": 7,
@@ -501,9 +501,9 @@
           "citationId": "K7"
         },
         {
-          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s000",
-          "displayTitle": "卷首 · p1",
-          "pageStart": 1,
+          "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
+          "displayTitle": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
+          "pageStart": 11,
           "citationId": "K9"
         }
       ],
@@ -511,23 +511,23 @@
         {
           "tableId": "T0253",
           "caption": "Table 37-1. International Renal Interest Society (IRIS) Staging System for Chronic Kidney Disease in Dogs and Cats.",
-          "citationId": "K10"
+          "citationId": "K11"
         },
         {
           "tableId": "T0255",
           "caption": "Table 37-4. Diagnostic tests for evaluating patients with suspected chronic kidney disease.",
-          "citationId": "K11"
+          "citationId": "K12"
         },
         {
           "tableId": "T0262",
           "caption": "Table 37-13. Reassessment of patients with chronic kidney disease.",
-          "citationId": "K12"
+          "citationId": "K13"
         }
       ],
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-staging-guidelines-2026-s002、iris-IRIS-staging-guidelines-2026-s003",
-      "ms": 57.6
+      "ms": 77.4
     },
     {
       "index": 8,
@@ -549,16 +549,16 @@
           "citationId": "K3"
         },
         {
-          "sectionId": "sacn5-chapters-SACN5-37-s030",
-          "displayTitle": "病例 37-4 · p809",
-          "pageStart": 45,
-          "citationId": "K5"
-        },
-        {
           "sectionId": "iris-IRIS-staging-guidelines-2026-s002",
           "displayTitle": "1. Staging of Chronic Kidney Disease based on blood creatinine and SDMA concentrations",
           "pageStart": 1,
-          "citationId": "K7"
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s030",
+          "displayTitle": "病例 37-4 · p809",
+          "pageStart": 45,
+          "citationId": "K6"
         },
         {
           "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
@@ -587,7 +587,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-staging-guidelines-2026-s004",
-      "ms": 57.6
+      "ms": 75.4
     },
     {
       "index": 9,
@@ -647,7 +647,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-staging-guidelines-2026-s006",
-      "ms": 79.1
+      "ms": 101.2
     },
     {
       "index": 10,
@@ -675,15 +675,15 @@
           "citationId": "K4"
         },
         {
-          "sectionId": "sacn5-chapters-SACN5-37-s014",
-          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
-          "pageStart": 17,
-          "citationId": "K6"
-        },
-        {
           "sectionId": "iris-IRIS-staging-guidelines-2026-s007",
           "displayTitle": "3. Revision of staging and substaging after treatment",
           "pageStart": 7,
+          "citationId": "K6"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s014",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
+          "pageStart": 17,
           "citationId": "K8"
         }
       ],
@@ -707,7 +707,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
-      "ms": 58
+      "ms": 74.9
     },
     {
       "index": 11,
@@ -735,15 +735,15 @@
           "citationId": "K4"
         },
         {
-          "sectionId": "sacn5-chapters-SACN5-37-s014",
-          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
-          "pageStart": 17,
-          "citationId": "K6"
-        },
-        {
           "sectionId": "iris-IRIS-staging-guidelines-2026-s007",
           "displayTitle": "3. Revision of staging and substaging after treatment",
           "pageStart": 7,
+          "citationId": "K6"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s014",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
+          "pageStart": 17,
           "citationId": "K8"
         }
       ],
@@ -767,7 +767,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
-      "ms": 64.5
+      "ms": 76.6
     },
     {
       "index": 12,
@@ -827,7 +827,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s014",
-      "ms": 63.7
+      "ms": 78
     },
     {
       "index": 13,
@@ -887,7 +887,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s014",
-      "ms": 57.9
+      "ms": 74.9
     },
     {
       "index": 14,
@@ -915,15 +915,15 @@
           "citationId": "K5"
         },
         {
-          "sectionId": "sacn5-chapters-SACN5-37-s030",
-          "displayTitle": "病例 37-4 · p809",
-          "pageStart": 45,
-          "citationId": "K6"
-        },
-        {
           "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s004",
           "displayTitle": "plus Persistent increased SDMA* >14 µg/dL",
           "pageStart": 2,
+          "citationId": "K6"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s030",
+          "displayTitle": "病例 37-4 · p809",
+          "pageStart": 45,
           "citationId": "K8"
         }
       ],
@@ -947,7 +947,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-staging-guidelines-2026-s004",
-      "ms": 68.4
+      "ms": 82.3
     },
     {
       "index": 15,
@@ -975,39 +975,39 @@
           "citationId": "K5"
         },
         {
-          "sectionId": "sacn5-chapters-SACN5-37-s017",
-          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p787",
-          "pageStart": 25,
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
+          "displayTitle": "Step 2: Stage CKD Step 3: Treat CKD",
+          "pageStart": 4,
           "citationId": "K6"
         },
         {
-          "sectionId": "sacn5-chapters-SACN5-37-s030",
-          "displayTitle": "病例 37-4 · p809",
-          "pageStart": 44,
-          "citationId": "K8"
+          "sectionId": "sacn5-chapters-SACN5-37-s017",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p787",
+          "pageStart": 25,
+          "citationId": "K7"
         }
       ],
       "tables": [
         {
           "tableId": "T0253",
           "caption": "Table 37-1. International Renal Interest Society (IRIS) Staging System for Chronic Kidney Disease in Dogs and Cats.",
-          "citationId": "K10"
+          "citationId": "K9"
         },
         {
           "tableId": "T0255",
           "caption": "Table 37-4. Diagnostic tests for evaluating patients with suspected chronic kidney disease.",
-          "citationId": "K11"
+          "citationId": "K10"
         },
         {
           "tableId": "T0256",
           "caption": "Table 37-5. Standard protocol for measuring blood pressure in dogs and cats.*",
-          "citationId": "K12"
+          "citationId": "K11"
         }
       ],
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-staging-guidelines-2026-s006",
-      "ms": 65.7
+      "ms": 78.9
     },
     {
       "index": 16,
@@ -1061,7 +1061,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s018",
-      "ms": 51.2
+      "ms": 55.8
     },
     {
       "index": 17,
@@ -1074,7 +1074,7 @@
       "opened": [],
       "passed": true,
       "reason": "负样本：0 节 0 表",
-      "ms": 52.1
+      "ms": 67.2
     },
     {
       "index": 18,
@@ -1087,7 +1087,7 @@
       "opened": [],
       "passed": true,
       "reason": "负样本：0 节 0 表",
-      "ms": 41.8
+      "ms": 56.7
     },
     {
       "index": 19,
@@ -1100,7 +1100,7 @@
       "opened": [],
       "passed": true,
       "reason": "负样本：0 节 0 表",
-      "ms": 36
+      "ms": 58.1
     },
     {
       "index": 20,
@@ -1113,7 +1113,7 @@
       "opened": [],
       "passed": true,
       "reason": "负样本：0 节 0 表",
-      "ms": 31.7
+      "ms": 46.2
     },
     {
       "index": 21,
@@ -1173,7 +1173,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-DOG-Treatment-Recommendations-may-2026-s004、iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
-      "ms": 79.7
+      "ms": 101.7
     },
     {
       "index": 22,
@@ -1195,21 +1195,21 @@
           "citationId": "K3"
         },
         {
-          "sectionId": "sacn5-chapters-SACN5-37-s014",
-          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
-          "pageStart": 17,
-          "citationId": "K4"
-        },
-        {
           "sectionId": "iris-IRIS-staging-guidelines-2026-s003",
           "displayTitle": "Comments Discrepancies between creatinine and SDMA",
           "pageStart": 2,
+          "citationId": "K4"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s014",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
+          "pageStart": 17,
           "citationId": "K6"
         },
         {
-          "sectionId": "sacn5-chapters-SACN5-37-s011",
-          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p775",
-          "pageStart": 12,
+          "sectionId": "iris-IRIS-staging-guidelines-2026-s007",
+          "displayTitle": "3. Revision of staging and substaging after treatment",
+          "pageStart": 7,
           "citationId": "K8"
         }
       ],
@@ -1233,7 +1233,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
-      "ms": 74.5
+      "ms": 88.8
     },
     {
       "index": 23,
@@ -1243,9 +1243,9 @@
       "status": "ok",
       "sections": [
         {
-          "sectionId": "sacn5-chapters-SACN5-37-s017",
-          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p787",
-          "pageStart": 23,
+          "sectionId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s024",
+          "displayTitle": "Raw Protein Diet Age-Specific and Breed-Specific Diets",
+          "pageStart": 17,
           "citationId": "K1"
         },
         {
@@ -1255,9 +1255,9 @@
           "citationId": "K3"
         },
         {
-          "sectionId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s024",
-          "displayTitle": "Raw Protein Diet Age-Specific and Breed-Specific Diets",
-          "pageStart": 17,
+          "sectionId": "sacn5-chapters-SACN5-37-s017",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p787",
+          "pageStart": 23,
           "citationId": "K5"
         },
         {
@@ -1293,7 +1293,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s015",
-      "ms": 36.9
+      "ms": 43.1
     },
     {
       "index": 24,
@@ -1353,7 +1353,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s014",
-      "ms": 65
+      "ms": 79.3
     },
     {
       "index": 25,
@@ -1375,67 +1375,67 @@
           "citationId": "K3"
         },
         {
-          "sectionId": "sacn5-chapters-SACN5-37-s021",
-          "displayTitle": "FEEDING PLAN 795 Chronic Kidney Disease",
-          "pageStart": 31,
-          "citationId": "K4"
-        },
-        {
           "sectionId": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s005",
           "displayTitle": "How to Perform a Complete Nutritional Assessment",
           "pageStart": 2,
-          "citationId": "K6"
+          "citationId": "K5"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s021",
+          "displayTitle": "FEEDING PLAN 795 Chronic Kidney Disease",
+          "pageStart": 31,
+          "citationId": "K7"
         },
         {
           "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
           "displayTitle": "Step 2: Stage CKD Step 3: Treat CKD",
           "pageStart": 4,
-          "citationId": "K7"
+          "citationId": "K9"
         }
       ],
       "tables": [
         {
           "tableId": "T0497",
           "caption": "Table 37-9. Key nutritional factors for dogs and cats with chronic kidney disease.*",
-          "citationId": "K8"
+          "citationId": "K10"
         },
         {
           "tableId": "T0260",
           "caption": "Table 37-11. Key nutritional factors in selected commercial veterinary therapeutic foods for dogs with chronic kidney disease compared to recommended levels.*",
-          "citationId": "K9"
+          "citationId": "K11"
         },
         {
           "tableId": "T0261",
           "caption": "Table 37-12. Key nutritional factors in selected commercial veterinary therapeutic foods for cats with chronic kidney disease compared to recommended levels.*",
-          "citationId": "K10"
+          "citationId": "K12"
         }
       ],
       "opened": [
         {
           "tableId": "T0497",
           "ok": true,
-          "citationId": "K8",
+          "citationId": "K10",
           "pageNo": 17,
           "rowCount": 10
         },
         {
           "tableId": "T0260",
           "ok": true,
-          "citationId": "K9",
+          "citationId": "K11",
           "pageNo": null,
           "rowCount": 23
         },
         {
           "tableId": "T0261",
           "ok": true,
-          "citationId": "K10",
+          "citationId": "K12",
           "pageNo": null,
           "rowCount": 18
         }
       ],
       "passed": true,
       "reason": "表格命中且可打开 T0497、T0260、T0261",
-      "ms": 85.5
+      "ms": 93.4
     },
     {
       "index": 26,
@@ -1463,16 +1463,16 @@
           "citationId": "K5"
         },
         {
-          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s000",
-          "displayTitle": "卷首 · p1",
-          "pageStart": 1,
-          "citationId": "K7"
-        },
-        {
           "sectionId": "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
           "displayTitle": "Additional recommendations for Stage 2 patients aimed at improving quality of life:",
           "pageStart": 11,
-          "citationId": "K8"
+          "citationId": "K7"
+        },
+        {
+          "sectionId": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g-s005",
+          "displayTitle": "Step 2: Stage CKD Step 3: Treat CKD",
+          "pageStart": 4,
+          "citationId": "K9"
         }
       ],
       "tables": [
@@ -1503,7 +1503,7 @@
       ],
       "passed": true,
       "reason": "表格命中且可打开 T0253",
-      "ms": 35.6
+      "ms": 43
     }
   ]
 }

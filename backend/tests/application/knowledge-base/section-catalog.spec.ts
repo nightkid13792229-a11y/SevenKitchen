@@ -33,6 +33,7 @@ describe('SectionCatalogService', () => {
     expect(document.documentType).toBe('treatment_guideline');
     expect(document.species).toBe('dog');
     expect(document.authority).toBe('guideline');
+    expect(document.year).toBe(2026);
     expect(section.species).toBe('dog');
     expect(section.stages).toEqual([2]);
     expect(section.topics).toEqual(

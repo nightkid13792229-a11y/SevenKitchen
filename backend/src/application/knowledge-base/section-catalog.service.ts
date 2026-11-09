@@ -43,6 +43,8 @@ export interface CatalogDocument {
   title: string;
   sourceName: string | null;
   version: string | null;
+  /** 从 version 里解析出的四位年份；用于「新版优先」排序。 */
+  year: number | null;
   role: string | null;
   authority: CatalogAuthority;
   documentType: string;
@@ -142,6 +144,7 @@ export class SectionCatalogService {
         title: document.title ?? document.id,
         sourceName: source?.name ?? null,
         version: source?.version ?? null,
+        year: parseYear(source?.version),
         role: source?.role ?? null,
         authority,
         documentType,
@@ -270,4 +273,11 @@ function detectTopics(text: string, fallback: string[] = [], limit = 12): string
     .slice(0, limit)
     .map(([topic]) => topic);
   return topics.length > 0 ? topics : fallback;
+}
+
+
+/** 从版本串（`2026`、`2021 update`、`v2 2019`）里取四位年份。 */
+export function parseYear(version?: string | null): number | null {
+  const match = String(version ?? '').match(/(19|20)\d{2}/);
+  return match ? Number(match[0]) : null;
 }

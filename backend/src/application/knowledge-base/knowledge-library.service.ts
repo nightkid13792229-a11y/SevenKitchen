@@ -194,6 +194,30 @@ const STOP = new Set(
   ),
 );
 
+/** 权威度权重：专科指南 > 教科书 > 综述 > 内部经验；未知按中性。 */
+export function authorityWeight(authority?: string | null): number {
+  switch (String(authority ?? '').toLowerCase()) {
+    case 'guideline':
+      return 1.15;
+    case 'textbook':
+      return 1.1;
+    case 'reference':
+      return 1;
+    case 'internal':
+      return 0.9;
+    default:
+      return 1;
+  }
+}
+
+/** 时效权重：2020 年后小幅加成，2012 年前小幅降权；未知不惩罚。 */
+export function recencyWeight(year?: number | null): number {
+  if (!year) return 1;
+  if (year >= 2020) return 1.08;
+  if (year <= 2012) return 0.92;
+  return 1;
+}
+
 interface ParagraphRow {
   id: string;
   documentId: string;
@@ -348,12 +372,13 @@ export class KnowledgeLibraryService {
     );
     const scored = candidates.map((row) => {
       const meta = this.catalogSections.get(row.sectionId);
+      const documentMeta = this.catalogDocuments.get(row.documentId);
       return {
         row,
         meta,
         score:
           this.score(row.text ?? '', terms, raw, numericIntent, weights) *
-          this.softBoost(row, meta, options, raw, focus),
+          this.softBoost(row, meta, documentMeta, options, raw, focus),
       };
     });
     scored.sort((a, b) => b.score - a.score || a.row.id.localeCompare(b.row.id));
@@ -699,13 +724,19 @@ export class KnowledgeLibraryService {
       section?: { title?: string | null } | null;
     },
     meta: CatalogSection | undefined,
+    documentMeta:
+      | { authority?: string | null; year?: number | null }
+      | undefined,
     options: LibrarySearchOptions,
     raw: string,
     focus: QueryFocus,
   ): number {
     const title = row.section?.title ?? '';
     const text = row.text ?? '';
-    let boost = domainRoutingBoost(raw, row.documentId);
+    let boost =
+      domainRoutingBoost(raw, row.documentId) *
+      authorityWeight(documentMeta?.authority) *
+      recencyWeight(documentMeta?.year);
 
     const needles = [
       ...focus.topicPhrases,

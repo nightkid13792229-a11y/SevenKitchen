@@ -52,7 +52,11 @@
       "domain": "oa",
       "query": "dog osteoarthritis omega-3 fatty acids",
       "category": "table",
-      "expectedTables": ["T0241", "T0242", "T0243"]
+      "expectedTables": [
+        "T0241",
+        "T0242",
+        "T0243"
+      ]
     },
     {
       "id": "oa-zh-nutrition",
@@ -70,7 +74,12 @@
       "domain": "oa",
       "query": "dog vitamin K requirement",
       "category": "negative",
-      "expectNoSource": true
+      "expectNoSource": true,
+      "documentIds": [
+        "sacn5-chapters-SACN5-34",
+        "sacn5-chapters-SACN5-33",
+        "aaha-AAHA-2022-Pain-Management-Guidelines"
+      ]
     }
   ]
 }

@@ -269,7 +269,7 @@ describe('Agent 工具：知识库检索与打开', () => {
     );
     expect(outcome.ok).toBe(false);
     expect(outcome.error?.message).toContain('scope');
-    expect(outcome.error?.message).toContain('CKD');
+    expect(outcome.error?.message).toContain('领域配置');
   });
 
   it('未知主题报错并列出合法值', async () => {

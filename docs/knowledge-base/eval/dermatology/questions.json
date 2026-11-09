@@ -52,7 +52,10 @@
       "domain": "dermatology",
       "query": "dog pruritus essential fatty acids",
       "category": "table",
-      "expectedTables": ["T0226", "T0228"]
+      "expectedTables": [
+        "T0226",
+        "T0228"
+      ]
     },
     {
       "id": "derm-zh-skin",
@@ -81,7 +84,13 @@
       "domain": "dermatology",
       "query": "dog vitamin K requirement",
       "category": "negative",
-      "expectNoSource": true
+      "expectNoSource": true,
+      "documentIds": [
+        "sacn5-chapters-SACN5-31",
+        "sacn5-chapters-SACN5-32",
+        "merck-皮肤病维生素与矿物质",
+        "merck-营养性皮肤病"
+      ]
     }
   ]
 }

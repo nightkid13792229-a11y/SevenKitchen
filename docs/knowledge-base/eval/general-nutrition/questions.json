@@ -61,14 +61,20 @@
       "domain": "general-nutrition",
       "query": "body condition score BCS scale dog",
       "category": "table",
-      "expectedTables": ["T0021", "T0022"]
+      "expectedTables": [
+        "T0021",
+        "T0022"
+      ]
     },
     {
       "id": "gn-life-stage-table",
       "domain": "general-nutrition",
       "query": "canine life stage definitions puppy adult senior",
       "category": "table",
-      "expectedTables": ["T0006", "T0007"]
+      "expectedTables": [
+        "T0006",
+        "T0007"
+      ]
     },
     {
       "id": "gn-zh-assessment",
@@ -96,7 +102,13 @@
       "domain": "general-nutrition",
       "query": "dog vitamin K requirement",
       "category": "negative",
-      "expectNoSource": true
+      "expectNoSource": true,
+      "documentIds": [
+        "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+        "aaha-AAHA-2010-Nutritional-Assessment-Guidelines",
+        "aaha-AAHA-2014-Weight-Management-Guidelines",
+        "aaha-AAHA-2019-Canine-Life-Stage-Guidelines"
+      ]
     }
   ]
 }

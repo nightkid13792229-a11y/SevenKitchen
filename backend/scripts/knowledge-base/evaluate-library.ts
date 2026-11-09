@@ -23,6 +23,7 @@ import { CitationRegistry } from '../../src/application/recipe-designer/agent/ci
 import {
   allDocumentsScope,
   resolveKnowledgeScope,
+  scopeFromEnv,
 } from '../../src/domain/knowledge/knowledge-scope';
 import {
   executeTool,
@@ -160,7 +161,9 @@ function makeContext(
       scopeOverride ??
       (process.env.KB_EVAL_SCOPE === 'all'
         ? allDocumentsScope()
-        : resolveKnowledgeScope([domain], { allowUnaudited: true })),
+        : process.env.KB_EVAL_SCOPE === 'env'
+          ? scopeFromEnv()
+          : resolveKnowledgeScope([domain], { allowUnaudited: true })),
     port: {} as any,
     catalog: {} as any,
     library,
@@ -292,7 +295,9 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
     const scope =
       process.env.KB_EVAL_SCOPE === 'all'
         ? allDocumentsScope()
-        : resolveKnowledgeScope([options.domain], { allowUnaudited: true });
+        : process.env.KB_EVAL_SCOPE === 'env'
+          ? scopeFromEnv()
+          : resolveKnowledgeScope([options.domain], { allowUnaudited: true });
     const payload = JSON.parse(
       readFileSync(options.questionsPath, 'utf8'),
     ) as {
@@ -315,6 +320,9 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
             ...(spec.stage ? { stage: spec.stage } : {}),
             ...(spec.topics && spec.topics.length > 0
               ? { topics: spec.topics }
+              : {}),
+            ...(spec.documentIds && spec.documentIds.length > 0
+              ? { documentIds: spec.documentIds }
               : {}),
             limit: 5,
           },

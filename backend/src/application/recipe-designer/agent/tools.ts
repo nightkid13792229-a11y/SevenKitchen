@@ -17,6 +17,8 @@ import type {
   TableView,
 } from '../../knowledge-base/source-layer.service';
 import type { KnowledgeScope } from '../../../domain/knowledge/knowledge-scope';
+import { KNOWLEDGE_DOMAINS } from '../../../domain/knowledge/knowledge-domains';
+import { detectQueryDomains } from '../../../domain/knowledge/domain-routing';
 import { normalizeTopics } from '../../knowledge-base/query-expansion';
 import { TOPIC_KEYS } from '../../../domain/knowledge/topic-aliases';
 import type { CitationRegistry } from './citation-registry';
@@ -408,7 +410,7 @@ export async function executeTool(
         if (hasValue(args.scope)) {
           return fail(
             'INVALID_ARGUMENT',
-            '本阶段只开放 CKD；scope 参数已移除',
+            'scope 参数已移除；检索范围由服务端领域配置决定',
           );
         }
 
@@ -469,12 +471,17 @@ export async function executeTool(
           );
         }
 
+        // 查询里出现明确疾病信号（CKD/胰腺炎/关节炎/皮肤病…）时，自动收窄到
+        // 对应领域的文档：多域同时开启时，避免"维生素 K 在别的病种里也有"这类串台。
+        const autoDocumentIds = scopeByQueryDomain(query, context.scope);
         const documentIds =
           explicitDocumentIds && explicitDocumentIds.length > 0
             ? explicitDocumentIds
-            : context.scope.allDocuments
-              ? undefined
-              : [...context.scope.documentIds];
+            : autoDocumentIds
+              ? autoDocumentIds
+              : context.scope.allDocuments
+                ? undefined
+                : [...context.scope.documentIds];
         const querySpecies = /\b(dog|dogs|canine)\b|犬/i.test(query)
           ? 'dog'
           : /\b(cat|cats|feline)\b|猫/i.test(query)
@@ -1115,6 +1122,32 @@ function readText(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
+}
+
+/**
+ * 按查询信号自动收窄文档范围：
+ * - 命中一个或多个已映射领域 → 这些领域的文档（与当前 scope 取交集）；
+ * - 没有信号 → undefined（交给 scope 默认值，全库/白名单）。
+ */
+function scopeByQueryDomain(
+  query: string,
+  scope: KnowledgeScope,
+): string[] | undefined {
+  const domains = detectQueryDomains(query);
+  if (domains.length === 0) return undefined;
+  const documents = new Set<string>();
+  for (const domainId of domains) {
+    const domain = KNOWLEDGE_DOMAINS.find((item) => item.id === domainId);
+    for (const documentId of domain?.documentIds ?? []) {
+      if (
+        scope.allDocuments ||
+        scope.documentIds.includes(documentId)
+      ) {
+        documents.add(documentId);
+      }
+    }
+  }
+  return documents.size > 0 ? [...documents] : undefined;
 }
 
 /** 文档是否在当前范围：全库范围放行一切；否则必须在白名单里。 */

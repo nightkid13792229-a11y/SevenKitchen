@@ -61,7 +61,9 @@
       "domain": "pancreatitis",
       "query": "canine pancreatitis nutrition low fat",
       "category": "table",
-      "expectedTables": ["T0498"]
+      "expectedTables": [
+        "T0498"
+      ]
     },
     {
       "id": "panc-zh-diet",
@@ -89,7 +91,11 @@
       "domain": "pancreatitis",
       "query": "dog vitamin K requirement",
       "category": "negative",
-      "expectNoSource": true
+      "expectNoSource": true,
+      "documentIds": [
+        "acvim-ACVIM-2021-猫胰腺炎共识",
+        "sacn5-chapters-SACN5-67"
+      ]
     }
   ]
 }

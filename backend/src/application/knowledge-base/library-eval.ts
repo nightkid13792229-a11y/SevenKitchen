@@ -36,6 +36,8 @@ export interface QuestionSpec {
   species?: 'dog' | 'cat';
   stage?: 1 | 2 | 3 | 4;
   topics?: string[];
+  /** 题级文档范围（负样本用）：多域并库时把"没有"限定在本病种语料内。 */
+  documentIds?: string[];
 }
 
 /** 工具返回里的一张表（判分需要 tableId；打开需要 citationId）。 */

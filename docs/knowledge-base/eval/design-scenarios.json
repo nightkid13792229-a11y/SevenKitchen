@@ -239,6 +239,33 @@
         "dose",
         "diagnosis"
       ]
+    },
+    {
+      "id": "D7",
+      "domain": "ckd",
+      "title": "多轮正式流程：全食物 4 种，先规划再落草稿",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "先只做规划：一只 5 岁、12kg、已绝育、CKD 2 期、血磷 5.2 mg/dl 的母犬，一天熟自制食谱怎么配？要求：查知识库确认膳食磷目标；只使用 4 种普通食材（不要用补剂或补剂类原料）；给出每日热量和每种食材的克数。不要改草稿、不要跑评估。",
+        "按上面的方案，把这 4 种普通食材加进这份草稿；评估时把库里的膳食磷目标通过 targetOverrides 传进去（必须带 citationId）；只跑一次评估，然后如实报告结果和缺口，不要再反复微调。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 1
+      },
+      "targetOverrides": [
+        {
+          "nutrientKey": "phosphorus",
+          "basis": "DM",
+          "min": 0.2,
+          "max": 0.5
+        }
+      ],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
     }
   ]
 }

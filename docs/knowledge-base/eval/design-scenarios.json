@@ -1,0 +1,64 @@
+{
+  "version": "2026-11-10",
+  "scenarios": [
+    {
+      "id": "D1",
+      "domain": "ckd",
+      "title": "CKD 2 期：按库里的磷目标设计一天食谱",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "请给一只 5 岁、12kg、已绝育的母犬设计一天熟自制食谱。它有 CKD 2 期，血磷 5.2 mg/dl。磷的目标要按知识库里的 CKD 目标来，并在回答里标引用。"
+      ],
+      "expectTools": { "search": 1, "open": 1, "assess": 1 },
+      "targetOverrides": [
+        { "nutrientKey": "phosphorus", "basis": "DM", "min": 0.2, "max": 0.5 }
+      ],
+      "minValidCitations": 2,
+      "forbid": ["dose", "diagnosis"]
+    },
+    {
+      "id": "D2",
+      "domain": "ckd",
+      "title": "CKD 2 期 + UPC + 血压：多个口径分开处理",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "同一只犬，UPC 0.8，收缩压 165 mmHg。请把蛋白尿和血压这两个问题分别在食谱设计里处理，钠的目标按知识库来，并标引用。"
+      ],
+      "expectTools": { "search": 1, "assess": 1 },
+      "targetOverrides": [
+        { "nutrientKey": "sodium", "basis": "DM", "max": 0.3 }
+      ],
+      "minValidCitations": 2,
+      "forbid": ["dose", "diagnosis"]
+    },
+    {
+      "id": "D3",
+      "domain": "ckd",
+      "title": "边界：胰腺炎（知识库未覆盖）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "换一只犬：怀疑胰腺炎，想按低脂设计食谱。知识库里有胰腺炎的针对性营养目标吗？没有的话请明确说没有，不要拿别的病的证据凑。"
+      ],
+      "expectTools": { "search": 1, "assess": 0 },
+      "targetOverrides": [],
+      "minValidCitations": 0,
+      "expectUncovered": true,
+      "forbid": []
+    },
+    {
+      "id": "D4",
+      "domain": "ckd",
+      "title": "稳定性：D1 重跑",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "请给一只 5 岁、12kg、已绝育的母犬设计一天熟自制食谱。它有 CKD 2 期，血磷 5.2 mg/dl。磷的目标要按知识库里的 CKD 目标来，并在回答里标引用。"
+      ],
+      "expectTools": { "search": 1, "open": 1, "assess": 1 },
+      "targetOverrides": [
+        { "nutrientKey": "phosphorus", "basis": "DM", "min": 0.2, "max": 0.5 }
+      ],
+      "minValidCitations": 2,
+      "forbid": ["dose", "diagnosis"]
+    }
+  ]
+}

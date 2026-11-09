@@ -1458,10 +1458,17 @@ model InventoryAdjustment {
   @@map("inventory_adjustment")
 }
 
+enum InventoryStocktakeType {
+  OPENING
+  ROUTINE
+}
+
 model InventoryStocktake {
   id        String                   @id @default(uuid()) @map("id")
+  type      InventoryStocktakeType   @default(ROUTINE) @map("type")
   status    InventoryStocktakeStatus @default(DRAFT) @map("status")
   note      String?
+  createdBy String?                  @map("created_by") @db.VarChar(36)
   createdAt DateTime                 @default(now()) @map("created_at")
   appliedAt DateTime?                @map("applied_at")
   lines     InventoryStocktakeLine[]
@@ -3686,6 +3693,7 @@ enum InventorySourceType {
   KITCHEN_TASK
   PURCHASE_RECORD
   PURCHASE_RECORD_REVERSAL
+  OPENING_BALANCE
   MANUAL_ADJUSTMENT
   STOCKTAKE
   PRODUCTION_ALLOCATION_CONSUMPTION

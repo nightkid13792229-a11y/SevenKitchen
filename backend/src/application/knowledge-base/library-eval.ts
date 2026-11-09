@@ -278,9 +278,11 @@ export function buildGateChecks(
       name: 'Stage 3',
       actual: `${summary.stage3.passed}/${summary.stage3.total}`,
       target: `${thresholds.stage3}/${summary.stage3.total}`,
+      // 分域题集里没有 Stage 3 题时（total=0）不适用，不判红。
       passed:
-        summary.stage3.total > 0 &&
-        summary.stage3.passed === summary.stage3.total,
+        summary.stage3.total === 0
+          ? thresholds.stage3 === 0
+          : summary.stage3.passed === summary.stage3.total,
     },
     {
       name: '表格',
@@ -310,7 +312,10 @@ export function buildGateChecks(
       name: '核心表可打开',
       actual: `${summary.coreTables.passed}/${summary.coreTables.total}`,
       target: `${thresholds.coreTables}/${summary.coreTables.total}`,
-      passed: summary.coreTables.passed === summary.coreTables.total,
+      passed:
+        summary.coreTables.total === 0
+          ? thresholds.coreTables === 0
+          : summary.coreTables.passed === summary.coreTables.total,
     },
     {
       name: '检索 p95',

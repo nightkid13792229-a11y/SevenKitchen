@@ -1,0 +1,102 @@
+{
+  "version": "2026-11-10",
+  "domain": "general-nutrition",
+  "note": "基础营养域 10 题：AAHA 2021/2010/2014 + 2019 生命阶段。期望节/表来自本地库实测。",
+  "questions": [
+    {
+      "id": "gn-assessment",
+      "domain": "general-nutrition",
+      "query": "AAHA complete nutritional assessment steps dogs cats",
+      "category": "numeric",
+      "expectedSections": [
+        "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s008",
+        "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s007",
+        "aaha-AAHA-2019-Canine-Life-Stage-Guidelines-s026"
+      ]
+    },
+    {
+      "id": "gn-screening",
+      "domain": "general-nutrition",
+      "query": "screening evaluation nutritional risk factors dog",
+      "category": "numeric",
+      "expectedSections": [
+        "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s006",
+        "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s008",
+        "aaha-AAHA-2019-Canine-Life-Stage-Guidelines-s026"
+      ]
+    },
+    {
+      "id": "gn-feeding-plan",
+      "domain": "general-nutrition",
+      "query": "individualized feeding plan dog cat",
+      "category": "numeric",
+      "expectedSections": [
+        "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s010"
+      ]
+    },
+    {
+      "id": "gn-calories",
+      "domain": "general-nutrition",
+      "query": "calculate daily caloric intake weight loss dog",
+      "category": "numeric",
+      "expectedSections": [
+        "aaha-AAHA-2014-Weight-Management-Guidelines-s012",
+        "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s013",
+        "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s010"
+      ]
+    },
+    {
+      "id": "gn-weight-program",
+      "domain": "general-nutrition",
+      "query": "designing a weight loss program dog",
+      "category": "numeric",
+      "expectedSections": [
+        "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s013",
+        "aaha-AAHA-2014-Weight-Management-Guidelines-s003",
+        "aaha-AAHA-2014-Weight-Management-Guidelines-s025"
+      ]
+    },
+    {
+      "id": "gn-bcs-table",
+      "domain": "general-nutrition",
+      "query": "body condition score BCS scale dog",
+      "category": "table",
+      "expectedTables": ["T0021", "T0022"]
+    },
+    {
+      "id": "gn-life-stage-table",
+      "domain": "general-nutrition",
+      "query": "canine life stage definitions puppy adult senior",
+      "category": "table",
+      "expectedTables": ["T0006", "T0007"]
+    },
+    {
+      "id": "gn-zh-assessment",
+      "domain": "general-nutrition",
+      "query": "如何做营养评估",
+      "category": "zh",
+      "expectedSections": [
+        "aaha-AAHA-2019-Canine-Life-Stage-Guidelines-s026",
+        "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s005"
+      ]
+    },
+    {
+      "id": "gn-zh-weight",
+      "domain": "general-nutrition",
+      "query": "减重 每日热量 犬",
+      "category": "zh",
+      "expectedSections": [
+        "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s013",
+        "aaha-AAHA-2014-Weight-Management-Guidelines-s025",
+        "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines-s014"
+      ]
+    },
+    {
+      "id": "gn-negative-vitamin-k",
+      "domain": "general-nutrition",
+      "query": "dog vitamin K requirement",
+      "category": "negative",
+      "expectNoSource": true
+    }
+  ]
+}

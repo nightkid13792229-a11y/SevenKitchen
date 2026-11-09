@@ -14,7 +14,7 @@
  * （整体/Stage 3/表格/中文/负样本/对抗/核心表/p95/max）。
  */
 import 'dotenv/config';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { KnowledgeLibraryService } from '../../src/application/knowledge-base/knowledge-library.service';
@@ -70,10 +70,18 @@ function parseArgv(argv: string[]): CliOptions {
   const domainValue =
     domainIndex >= 0 ? String(argv[domainIndex + 1] ?? '').trim() : '';
   const domain = domainValue || 'ckd';
+  const domainQuestions = resolve(
+    REPO_ROOT,
+    'docs/knowledge-base/eval',
+    domain,
+    'questions.json',
+  );
   return {
     questionsPath: questionValue
       ? resolve(process.cwd(), questionValue)
-      : DEFAULT_QUESTIONS_PATH,
+      : existsSync(domainQuestions)
+        ? domainQuestions
+        : DEFAULT_QUESTIONS_PATH,
     domain,
     write:
       !(argv.includes('--no-write') || argv.includes('--check')) &&
@@ -145,12 +153,14 @@ function makeContext(
   library: KnowledgeLibraryService,
   sourceLayer: SourceLayerService,
   domain = 'ckd',
+  scopeOverride?: ReturnType<typeof resolveKnowledgeScope>,
 ): ToolExecutionContext {
   return {
     scope:
-      process.env.KB_EVAL_SCOPE === 'all'
+      scopeOverride ??
+      (process.env.KB_EVAL_SCOPE === 'all'
         ? allDocumentsScope()
-        : resolveKnowledgeScope([domain], { allowUnaudited: true }),
+        : resolveKnowledgeScope([domain], { allowUnaudited: true })),
     port: {} as any,
     catalog: {} as any,
     library,
@@ -234,8 +244,9 @@ async function checkOpenTable(
   library: KnowledgeLibraryService,
   sourceLayer: SourceLayerService,
   domain = 'ckd',
+  scopeOverride?: ReturnType<typeof resolveKnowledgeScope>,
 ): Promise<OpenCheck> {
-  const context = makeContext(library, sourceLayer, domain);
+  const context = makeContext(library, sourceLayer, domain, scopeOverride);
   const outcome = await executeTool('open_knowledge', { tableId }, context);
   if (!outcome.ok) {
     return {
@@ -278,6 +289,10 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
   try {
     const library = new KnowledgeLibraryService(prisma as any);
     const sourceLayer = new SourceLayerService(prisma as any);
+    const scope =
+      process.env.KB_EVAL_SCOPE === 'all'
+        ? allDocumentsScope()
+        : resolveKnowledgeScope([options.domain], { allowUnaudited: true });
     const payload = JSON.parse(
       readFileSync(options.questionsPath, 'utf8'),
     ) as {
@@ -288,7 +303,7 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
 
     for (const [index, spec] of questions.entries()) {
       // 每个问题一个引用登记表：跨题复用会把 K 号算串（会话恢复也按题算）。
-      const context = makeContext(library, sourceLayer, options.domain);
+      const context = makeContext(library, sourceLayer, options.domain, scope);
       const startedAt = performance.now();
       let run: QuestionRun;
       try {
@@ -386,9 +401,18 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
 
     // 6 张核心表：独立上下文逐张打开（能力检查）。
     const coreTables: OpenCheck[] = [];
-    for (const tableId of CORE_TABLE_IDS) {
+    const coreTableIds = scope.allDocuments
+      ? CORE_TABLE_IDS
+      : [...scope.coreTableIds];
+    for (const tableId of coreTableIds) {
       coreTables.push(
-        await checkOpenTable(tableId, library, sourceLayer, options.domain),
+        await checkOpenTable(
+          tableId,
+          library,
+          sourceLayer,
+          options.domain,
+          scope,
+        ),
       );
     }
 

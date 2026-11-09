@@ -133,6 +133,22 @@ describe('rewriteAnswer 修订器', () => {
     expect(payload.userPayload.availableCitations[0].citationId).toBe('K1');
   });
 
+  it('只有"引用不支持"的结论时也触发修订', async () => {
+    mockedCall.mockResolvedValueOnce({ answer: '修订后：该结论待核对。' });
+    const result = await rewriteAnswer({
+      config: CONFIG,
+      answer: '原文',
+      uncited: [],
+      unsupported: [{ claim: '零食≤10%', reason: '原文没写阈值' }],
+      registry: new CitationRegistry(),
+    });
+    expect(result.answer).toContain('修订后');
+    expect(mockedCall).toHaveBeenCalledTimes(1);
+    expect(
+      mockedCall.mock.calls[0][0].userPayload.unsupportedClaims,
+    ).toEqual([{ claim: '零食≤10%', reason: '原文没写阈值' }]);
+  });
+
   it('没有未引用结论时不调模型', async () => {
     const result = await rewriteAnswer({
       config: CONFIG,

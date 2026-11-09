@@ -319,6 +319,7 @@ const REWRITE_SYSTEM_PROMPT = `你是食谱 Agent 的引用修订器。只修订
 规则：
 1. 保留原结构、已有 [K#] 和已有事实；
 2. 对“未引用临床结论”：删除、改成“待核对”，或改写成已有 [K#] 支持的表述；
+2b. 对“引用不支持的结论”：删除该句，或改成“待核对/需兽医确认”；不得保留原断言，也不得换一个不相干的 [K#] 硬撑；
 3. 不得新增未提供的 [K#]，不得新增未引用的事实；
 4. 不要解释修订过程。
 只输出 JSON：{"answer":"修订后的完整回答"}。`;
@@ -338,10 +339,12 @@ export async function rewriteAnswer(input: {
   };
   answer: string;
   uncited: UncitedClinicalClaim[];
+  /** 被裁判判为"原文不支持"的结论；同样需要修订，不能只修"没引用"。 */
+  unsupported?: Array<{ claim: string; reason?: string }>;
   registry: CitationRegistry;
   onUsage?: (usage: { promptTokens: number; completionTokens: number }) => void;
 }): Promise<RewriteResult> {
-  if (input.uncited.length === 0) {
+  if (input.uncited.length === 0 && (input.unsupported?.length ?? 0) === 0) {
     return { answer: input.answer };
   }
   try {
@@ -361,6 +364,7 @@ export async function rewriteAnswer(input: {
       userPayload: {
         answer: input.answer,
         uncitedClinical: input.uncited,
+        unsupportedClaims: input.unsupported ?? [],
         availableCitations,
       },
       temperature: 0.2,

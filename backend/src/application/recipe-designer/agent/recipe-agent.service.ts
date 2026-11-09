@@ -284,12 +284,17 @@ export class RecipeAgentService implements OnModuleInit {
             onUsage,
           });
           const beforeUncited = semantic.uncitedClinicalClaims;
+          const beforeUnsupported = semantic.unsupported;
+          const unsupportedClaims = semantic.claims
+            .filter((claim) => claim.verdict === 'unsupported')
+            .map((claim) => ({ claim: claim.claim, reason: claim.reason }));
           let rewrite: Record<string, unknown> | null = null;
-          if (beforeUncited > 0) {
+          if (beforeUncited > 0 || beforeUnsupported > 0) {
             const rewritten = await rewriteAnswer({
               config,
               answer: finalContent,
               uncited: semantic.uncitedClinical,
+              unsupported: unsupportedClaims,
               registry: citations,
               onUsage,
             });
@@ -313,6 +318,8 @@ export class RecipeAgentService implements OnModuleInit {
                 changed: true,
                 beforeUncited,
                 afterUncited: semantic.uncitedClinicalClaims,
+                beforeUnsupported,
+                afterUnsupported: semantic.unsupported,
                 error: rewritten.error ?? null,
               };
             } else {
@@ -321,6 +328,8 @@ export class RecipeAgentService implements OnModuleInit {
                 changed: false,
                 beforeUncited,
                 afterUncited: beforeUncited,
+                beforeUnsupported,
+                afterUnsupported: beforeUnsupported,
                 error: rewritten.error ?? null,
               };
             }

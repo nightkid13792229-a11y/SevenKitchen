@@ -71,7 +71,7 @@ export const KNOWLEDGE_DOMAINS: readonly KnowledgeDomain[] = [
   {
     id: 'gi',
     label: '胃肠',
-    audited: false,
+    audited: true,
     documentIds: [
       'acvim-ACVIM-2022-犬慢性肠病-现状综述',
       'acvim-ACVIM-2023-猫慢性肠病-低级别肿瘤与炎症鉴别',
@@ -97,7 +97,7 @@ export const KNOWLEDGE_DOMAINS: readonly KnowledgeDomain[] = [
   {
     id: 'oa',
     label: '骨关节',
-    audited: false,
+    audited: true,
     documentIds: [
       'sacn5-chapters-SACN5-34',
       'sacn5-chapters-SACN5-33',

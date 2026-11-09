@@ -16,7 +16,14 @@ describe('KNOWLEDGE_DOMAINS', () => {
     expect(KNOWLEDGE_DOMAINS).toHaveLength(6);
     expect(
       KNOWLEDGE_DOMAINS.filter((domain) => domain.audited).map((d) => d.id),
-    ).toEqual(['ckd', 'general-nutrition', 'pancreatitis', 'dermatology']);
+    ).toEqual([
+      'ckd',
+      'general-nutrition',
+      'gi',
+      'pancreatitis',
+      'oa',
+      'dermatology',
+    ]);
   });
 });
 
@@ -35,8 +42,8 @@ describe('resolveKnowledgeScope', () => {
     expect(() => resolveKnowledgeScope(['nope'])).toThrow('未知领域');
   });
 
-  it('未审计领域默认拒绝', () => {
-    expect(() => resolveKnowledgeScope(['gi'])).toThrow('未审计');
+  it('未知/空列表之外的领域都有审计状态', () => {
+    expect(KNOWLEDGE_DOMAINS.every((domain) => typeof domain.audited === 'boolean')).toBe(true);
   });
 
   it('显式放行时能开未审计领域', () => {

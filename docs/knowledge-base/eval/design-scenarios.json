@@ -109,6 +109,82 @@
         "dose",
         "diagnosis"
       ]
+    },
+    {
+      "id": "G2",
+      "domain": "gi",
+      "title": "慢性肠病：饮食与 B12 监测（问答口径）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "一只犬慢性腹泻，怀疑慢性肠病。按知识库说明饮食治疗和维生素 B12 监测要点，标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
+    },
+    {
+      "id": "G3",
+      "domain": "pancreatitis",
+      "title": "猫胰腺炎：饮食注意（问答口径）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "一只猫怀疑胰腺炎，饮食上要注意什么？按知识库说，标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
+    },
+    {
+      "id": "G4",
+      "domain": "oa",
+      "title": "犬骨关节炎：体重与 omega-3（问答口径）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "一只 8 岁犬确诊骨关节炎，营养上怎么管理（体重、omega-3）？按知识库说，标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
+    },
+    {
+      "id": "G5",
+      "domain": "dermatology",
+      "title": "犬过敏性皮炎：营养依据（问答口径）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "一只犬过敏性皮炎、反复瘙痒，营养上有什么依据？按知识库说，标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
     }
   ]
 }

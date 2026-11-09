@@ -1,0 +1,95 @@
+{
+  "version": "2026-11-10",
+  "domain": "pancreatitis",
+  "note": "胰腺炎域 9 题：ACVIM 2021 猫共识 + SACN5 67 章。负样本用维生素 K（本域实测 no_match）。",
+  "questions": [
+    {
+      "id": "panc-canine-nutrition",
+      "domain": "pancreatitis",
+      "query": "canine pancreatitis nutrition low fat",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-67-s008",
+        "sacn5-chapters-SACN5-67-s009",
+        "sacn5-chapters-SACN5-67-s010"
+      ]
+    },
+    {
+      "id": "panc-feline-consensus",
+      "domain": "pancreatitis",
+      "query": "feline pancreatitis consensus diagnosis treatment",
+      "category": "numeric",
+      "expectedSections": [
+        "acvim-ACVIM-2021-猫胰腺炎共识-s029",
+        "acvim-ACVIM-2021-猫胰腺炎共识-s036"
+      ]
+    },
+    {
+      "id": "panc-enteral",
+      "domain": "pancreatitis",
+      "query": "pancreatitis enteral nutrition feeding tube cat",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-67-s009",
+        "sacn5-chapters-SACN5-67-s010",
+        "acvim-ACVIM-2021-猫胰腺炎共识-s028"
+      ]
+    },
+    {
+      "id": "panc-fat-restriction",
+      "domain": "pancreatitis",
+      "query": "dog pancreatitis fat restriction diet",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-67-s010",
+        "sacn5-chapters-SACN5-67-s008",
+        "acvim-ACVIM-2021-猫胰腺炎共识-s028"
+      ]
+    },
+    {
+      "id": "panc-supportive",
+      "domain": "pancreatitis",
+      "query": "cat pancreatitis fluid therapy pain management",
+      "category": "numeric",
+      "expectedSections": [
+        "acvim-ACVIM-2021-猫胰腺炎共识-s023",
+        "acvim-ACVIM-2021-猫胰腺炎共识-s024"
+      ]
+    },
+    {
+      "id": "panc-table",
+      "domain": "pancreatitis",
+      "query": "canine pancreatitis nutrition low fat",
+      "category": "table",
+      "expectedTables": ["T0498"]
+    },
+    {
+      "id": "panc-zh-diet",
+      "domain": "pancreatitis",
+      "query": "胰腺炎 猫 饮食",
+      "category": "zh",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-67-s013",
+        "sacn5-chapters-SACN5-67-s008",
+        "acvim-ACVIM-2021-猫胰腺炎共识-s036"
+      ]
+    },
+    {
+      "id": "panc-zh-lowfat",
+      "domain": "pancreatitis",
+      "query": "犬 胰腺炎 低脂",
+      "category": "zh",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-67-s008",
+        "sacn5-chapters-SACN5-67-s010"
+      ]
+    },
+    {
+      "id": "panc-negative-vitamin-k",
+      "domain": "pancreatitis",
+      "query": "dog vitamin K requirement",
+      "category": "negative",
+      "expectNoSource": true
+    }
+  ]
+}

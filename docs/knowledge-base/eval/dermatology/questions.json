@@ -1,0 +1,87 @@
+{
+  "version": "2026-11-10",
+  "domain": "dermatology",
+  "note": "皮肤域 8 题：SACN5 31/32 + MERCK 皮肤文档。负样本维生素 K 实测 no_match。",
+  "questions": [
+    {
+      "id": "derm-atopic",
+      "domain": "dermatology",
+      "query": "canine atopic dermatitis nutrition",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-31-s020",
+        "sacn5-chapters-SACN5-32-s005",
+        "sacn5-chapters-SACN5-32-s013"
+      ]
+    },
+    {
+      "id": "derm-pruritus",
+      "domain": "dermatology",
+      "query": "dog pruritus essential fatty acids",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-32-s012",
+        "sacn5-chapters-SACN5-32-s022",
+        "sacn5-chapters-SACN5-31-s013"
+      ]
+    },
+    {
+      "id": "derm-zinc",
+      "domain": "dermatology",
+      "query": "zinc responsive dermatosis dog",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-32-s021",
+        "sacn5-chapters-SACN5-32-s005",
+        "merck-皮肤病维生素与矿物质-s000"
+      ]
+    },
+    {
+      "id": "derm-barrier",
+      "domain": "dermatology",
+      "query": "skin barrier nutrition dog",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-32-s006",
+        "sacn5-chapters-SACN5-32-s005",
+        "sacn5-chapters-SACN5-31-s008"
+      ]
+    },
+    {
+      "id": "derm-table",
+      "domain": "dermatology",
+      "query": "dog pruritus essential fatty acids",
+      "category": "table",
+      "expectedTables": ["T0226", "T0228"]
+    },
+    {
+      "id": "derm-zh-skin",
+      "domain": "dermatology",
+      "query": "犬 皮肤 营养",
+      "category": "zh",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-32-s005",
+        "sacn5-chapters-SACN5-32-s012",
+        "sacn5-chapters-SACN5-31-s006"
+      ]
+    },
+    {
+      "id": "derm-zh-itch",
+      "domain": "dermatology",
+      "query": "犬 瘙痒 营养",
+      "category": "zh",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-31-s019",
+        "sacn5-chapters-SACN5-32-s012",
+        "sacn5-chapters-SACN5-32-s022"
+      ]
+    },
+    {
+      "id": "derm-negative-vitamin-k",
+      "domain": "dermatology",
+      "query": "dog vitamin K requirement",
+      "category": "negative",
+      "expectNoSource": true
+    }
+  ]
+}

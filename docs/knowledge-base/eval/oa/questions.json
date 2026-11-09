@@ -1,0 +1,76 @@
+{
+  "version": "2026-11-10",
+  "domain": "oa",
+  "note": "骨关节域 7 题：SACN5 33/34 + AAHA 2022 疼痛指南。负样本维生素 K 实测 no_match。",
+  "questions": [
+    {
+      "id": "oa-nutrition",
+      "domain": "oa",
+      "query": "canine osteoarthritis nutritional management",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-34-s008",
+        "sacn5-chapters-SACN5-34-s009",
+        "aaha-AAHA-2022-Pain-Management-Guidelines-s017"
+      ]
+    },
+    {
+      "id": "oa-omega3",
+      "domain": "oa",
+      "query": "dog osteoarthritis omega-3 fatty acids",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-34-s009",
+        "sacn5-chapters-SACN5-34-s010",
+        "sacn5-chapters-SACN5-33-s007"
+      ]
+    },
+    {
+      "id": "oa-weight",
+      "domain": "oa",
+      "query": "weight management osteoarthritis dog",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-34-s012",
+        "sacn5-chapters-SACN5-34-s010",
+        "sacn5-chapters-SACN5-33-s010"
+      ]
+    },
+    {
+      "id": "oa-supplement",
+      "domain": "oa",
+      "query": "joint supplement glucosamine chondroitin dog",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-34-s010",
+        "sacn5-chapters-SACN5-34-s011",
+        "sacn5-chapters-SACN5-33-s015"
+      ]
+    },
+    {
+      "id": "oa-table",
+      "domain": "oa",
+      "query": "dog osteoarthritis omega-3 fatty acids",
+      "category": "table",
+      "expectedTables": ["T0241", "T0242", "T0243"]
+    },
+    {
+      "id": "oa-zh-nutrition",
+      "domain": "oa",
+      "query": "犬 骨关节炎 营养",
+      "category": "zh",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-34-s009",
+        "sacn5-chapters-SACN5-34-s013",
+        "aaha-AAHA-2022-Pain-Management-Guidelines-s017"
+      ]
+    },
+    {
+      "id": "oa-negative-vitamin-k",
+      "domain": "oa",
+      "query": "dog vitamin K requirement",
+      "category": "negative",
+      "expectNoSource": true
+    }
+  ]
+}

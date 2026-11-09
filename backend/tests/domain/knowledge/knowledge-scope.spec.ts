@@ -16,7 +16,7 @@ describe('KNOWLEDGE_DOMAINS', () => {
     expect(KNOWLEDGE_DOMAINS).toHaveLength(6);
     expect(
       KNOWLEDGE_DOMAINS.filter((domain) => domain.audited).map((d) => d.id),
-    ).toEqual(['ckd', 'general-nutrition']);
+    ).toEqual(['ckd', 'general-nutrition', 'pancreatitis', 'dermatology']);
   });
 });
 
@@ -44,7 +44,7 @@ describe('resolveKnowledgeScope', () => {
     process.env.KB_ALLOW_UNAUDITED = '1';
     try {
       const scope = resolveKnowledgeScope(['gi']);
-      expect(scope.documentIds).toHaveLength(0);
+      expect(scope.documentIds).toHaveLength(6);
       expect(scope.domains).toEqual(['gi']);
     } finally {
       if (previous === undefined) delete process.env.KB_ALLOW_UNAUDITED;

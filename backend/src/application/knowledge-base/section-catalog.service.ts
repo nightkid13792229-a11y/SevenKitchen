@@ -65,7 +65,7 @@ export { TOPIC_ALIASES };
 export class SectionCatalogService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async build(documentIds: readonly string[] = CKD_DOCUMENT_IDS): Promise<SectionCatalog> {
+  async build(documentIds: readonly string[]): Promise<SectionCatalog> {
     const documents = await this.prisma.sourceDocument.findMany({
       where: { id: { in: [...documentIds] } },
       include: {

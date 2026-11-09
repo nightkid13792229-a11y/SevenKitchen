@@ -4,7 +4,6 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import { getKnowledgeSource } from '../../domain/recipe-designer/knowledge-base/source-registry';
 import { normalizeTopic, TOPIC_ALIASES } from '../../domain/knowledge/topic-aliases';
 import {
-  CKD_DOCUMENT_IDS,
   SectionCatalogService,
   type CatalogSection,
 } from './section-catalog.service';
@@ -136,6 +135,8 @@ const DEFAULT_LIMIT = 8;
 const MAX_LIMIT = 200;
 /** 全库保护：常见 CKD 查询 11,973 段命中时也不至于把库拖死。 */
 const MAX_CANDIDATES = 20000;
+/** 目录缓存时间：10 分钟内同一文档不重复构建。 */
+const CATALOG_TTL_MS = 10 * 60 * 1000;
 /** searchSections 的候选段数（避免单节段落太多把别的节挤掉）。 */
 const MAX_SECTION_CANDIDATES = 200;
 const MAX_SECTION_PASSAGES = 2;
@@ -192,34 +193,39 @@ const STOP = new Set(
 @Injectable()
 export class KnowledgeLibraryService {
   private readonly catalog: SectionCatalogService;
-  private catalogCache:
-    | { key: string; at: number; sections: Map<string, CatalogSection>; documents: Map<string, any> }
-    | undefined;
+  /** 按文档缓存目录；只建"这次候选里出现过的文档"，不再一次性建全库。 */
+  private readonly catalogSections = new Map<string, CatalogSection>();
+  private readonly catalogDocuments = new Map<string, any>();
+  private readonly catalogBuiltAt = new Map<string, number>();
 
   constructor(private readonly prisma: PrismaService) {
     this.catalog = new SectionCatalogService(prisma);
   }
 
-  private async loadCkdCatalog(
-    documentIds: string[],
-  ): Promise<{
-    sections: Map<string, CatalogSection>;
-    documents: Map<string, any>;
-  } | null> {
-    if (documentIds.length === 0) return null;
-    if (!documentIds.every((id) => (CKD_DOCUMENT_IDS as readonly string[]).includes(id))) {
-      return null;
+  /**
+   * 只构建缺失/过期的文档目录；任何文档都能建，不再受 CKD 白名单限制。
+   * 传空数组是 no-op；没有 sourceDocument 表的单测环境直接跳过。
+   */
+  async ensureCatalogs(documentIds: readonly string[]): Promise<void> {
+    if (!(this.prisma as any).sourceDocument?.findMany) return;
+    const now = Date.now();
+    const missing = [
+      ...new Set(
+        documentIds.map((id) => String(id ?? '').trim()).filter(Boolean),
+      ),
+    ].filter((id) => {
+      const at = this.catalogBuiltAt.get(id);
+      return at === undefined || now - at > CATALOG_TTL_MS;
+    });
+    if (missing.length === 0) return;
+    const built = await this.catalog.build(missing);
+    for (const section of built.sections) {
+      this.catalogSections.set(section.id, section);
     }
-    if (!(this.prisma as any).sourceDocument?.findMany) return null;
-    const key = [...documentIds].sort().join('|');
-    if (this.catalogCache && this.catalogCache.key === key && Date.now() - this.catalogCache.at < 60_000) {
-      return this.catalogCache;
+    for (const document of built.documents) {
+      this.catalogDocuments.set(document.id, document);
     }
-    const built = await this.catalog.build(documentIds);
-    const sections = new Map(built.sections.map((section) => [section.id, section]));
-    const documents = new Map(built.documents.map((document) => [document.id, document]));
-    this.catalogCache = { key, at: Date.now(), sections, documents };
-    return this.catalogCache;
+    for (const id of missing) this.catalogBuiltAt.set(id, now);
   }
 
   async search(
@@ -246,7 +252,6 @@ export class KnowledgeLibraryService {
     const sectionIds = (options.sectionIds ?? [])
       .map((item) => String(item ?? '').trim())
       .filter(Boolean);
-    const catalog = await this.loadCkdCatalog(documentIds);
 
     // 宽召回：扩展词 OR；正文与节标题都进 OR（标题写 blood pressure、正文只写 BP 的段也要召到）。
     // 不在 SQL 里做焦点 AND —— 焦点词只在标题里时会被排掉，门禁放到应用层。
@@ -277,6 +282,9 @@ export class KnowledgeLibraryService {
     // 相关性门禁（不做分期/物种/主题排除）
     const candidates = rows.filter((row) => this.passesGate(row, focus));
 
+    // 目录只为候选里出现的文档构建；全库检索也不会一次拉起 159 份。
+    await this.ensureCatalogs(candidates.map((row) => row.documentId));
+
     const numericIntent =
       /(多少|范围|上限|推荐|剂量|百分比|percent|range|how much|mg\/|%)/i.test(raw) ||
       (raw.match(/\d+(?:\.\d+)?%?/g) ?? []).length >= 2;
@@ -300,7 +308,7 @@ export class KnowledgeLibraryService {
       ]),
     );
     const scored = candidates.map((row) => {
-      const meta = catalog?.sections.get(row.sectionId);
+      const meta = this.catalogSections.get(row.sectionId);
       return {
         row,
         meta,
@@ -314,7 +322,7 @@ export class KnowledgeLibraryService {
     return scored.slice(0, limit).map(({ row, score, meta }) => {
       const sourceId = row.document?.sourceId ?? null;
       const source = sourceId ? getKnowledgeSource(sourceId) : undefined;
-      const documentMeta = catalog?.documents.get(row.documentId);
+      const documentMeta = this.catalogDocuments.get(row.documentId);
       const text = row.text ?? '';
       const truncated = text.length > MAX_TEXT_CHARS;
       return {

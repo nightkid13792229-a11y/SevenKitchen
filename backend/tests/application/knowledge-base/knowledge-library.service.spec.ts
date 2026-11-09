@@ -934,3 +934,36 @@ describe('KnowledgeLibraryService（章节目录元数据）', () => {
     expect(result[0].sourceVersion).toBeTruthy();
   });
 });
+
+describe('ensureCatalogs（全库目录懒加载）', () => {
+  function withCatalog() {
+    const prisma = {
+      sourceDocument: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new KnowledgeLibraryService(prisma as any);
+    const build = jest.spyOn((service as any).catalog, 'build');
+    return { service, build };
+  }
+
+  it('同一文档第二次不重建', async () => {
+    const { service, build } = withCatalog();
+    await service.ensureCatalogs(['d1']);
+    await service.ensureCatalogs(['d1']);
+    expect(build).toHaveBeenCalledTimes(1);
+  });
+
+  it('非 CKD 文档也能建目录', async () => {
+    const { service, build } = withCatalog();
+    await service.ensureCatalogs([
+      'aaha-AAHA-2010-Nutritional-Assessment-Guidelines',
+    ]);
+    expect(build).toHaveBeenCalledWith([
+      'aaha-AAHA-2010-Nutritional-Assessment-Guidelines',
+    ]);
+  });
+
+  it('没有 sourceDocument 的测试桩直接跳过', async () => {
+    const service = new KnowledgeLibraryService({} as any);
+    await expect(service.ensureCatalogs(['d1'])).resolves.toBeUndefined();
+  });
+});

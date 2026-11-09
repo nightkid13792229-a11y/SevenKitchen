@@ -73,6 +73,12 @@ export interface SectionView {
   paragraphs: SectionParagraph[];
   totalParagraphs: number;
   nextOffset: number | null;
+  /**
+   * 锚点是否可用：没传 anchor 或找到了 → true；传了但不在本节 → false，
+   * 此时 `paragraphs` 为空、`nextOffset=null`，调用方应显式提示「引用段不在本节」，
+   * 不能静默退回第一页。
+   */
+  anchorFound: boolean;
   tables: TableSummary[];
   previousSectionId: string | null;
   nextSectionId: string | null;
@@ -136,7 +142,7 @@ const MAX_TABLE_CANDIDATES = 500;
 
 /**
  * spec §7.5「核心 5 组表优先」：37-1 / 37-9 / 37-11/12 / AAHA 表 8。
- * 只做同分时的排序优先，不额外加权 —— 相关性仍由命中位置决定。
+ * 排序分 +2（不做排除）：核心表落后非核心表 1 分时仍能进前 3。
  */
 const CORE_TABLE_IDS = new Set([
   'T0253',
@@ -146,9 +152,14 @@ const CORE_TABLE_IDS = new Set([
   'T0025',
   'T0026',
 ]);
+const CORE_TABLE_SORT_BONUS = 2;
 
 function coreTableRank(tableId: string): number {
   return CORE_TABLE_IDS.has(String(tableId ?? '').trim()) ? 0 : 1;
+}
+
+function coreTableSortBonus(tableId: string): number {
+  return coreTableRank(tableId) === 0 ? CORE_TABLE_SORT_BONUS : 0;
 }
 
 /**
@@ -162,7 +173,7 @@ const CAPTION_MATCH_WEIGHT = 3;
 const ROW_LABEL_MATCH_WEIGHT = 4;
 const ROW_BODY_MATCH_WEIGHT = 1;
 
-function normalizeIdList(values: string[] | undefined): string[] {
+function normalizeIdList(values: readonly string[] | undefined): string[] {
   return (values ?? [])
     .map((value) => String(value ?? '').trim())
     .filter(Boolean);
@@ -218,6 +229,20 @@ function compactMax(
   return max;
 }
 
+/** 行标签必须是短单元格；脚注/长句落在首列不算「标签命中」。 */
+const ROW_LABEL_MAX_LENGTH = 80;
+/** 纯数字/小数 needle 不做行标签加权（0.2 / 0.5% 会在脚注里到处命中）。 */
+const NUMERIC_NEEDLE = /^[\d.,]+%?$/;
+
+function isRowLabelMatch(cells: string[], needle: string): boolean {
+  if (cells.length === 0) return false;
+  const label = String(cells[0] ?? '');
+  if (!label || label.length > ROW_LABEL_MAX_LENGTH) return false;
+  if (/[\r\n]/.test(label)) return false;
+  if (NUMERIC_NEEDLE.test(needle.trim())) return false;
+  return matchesNeedle(label, needle);
+}
+
 /**
  * 表格命中强度：门禁先看 `caption + 行文本`，命中后再按位置加权
  * （行标签 > 表题 > 其他单元格）。
@@ -232,9 +257,7 @@ function scoreTableRow(
   let score = 0;
   for (const needle of needles) {
     if (!matchesNeedle(haystack, needle)) continue;
-    const labelHit = rows.some(
-      (cells) => cells.length > 0 && matchesNeedle(cells[0], needle),
-    );
+    const labelHit = rows.some((cells) => isRowLabelMatch(cells, needle));
     if (labelHit) {
       score += ROW_LABEL_MATCH_WEIGHT;
     } else if (matchesNeedle(caption, needle)) {
@@ -457,16 +480,21 @@ export class SourceLayerService {
         Math.floor(options.paragraphLimit ?? DEFAULT_PARAGRAPHS_PER_PAGE),
       ),
     );
-    const anchorIndex = options.anchorParagraphId
-      ? paragraphs.findIndex((row) => row.id === options.anchorParagraphId)
+    const anchorId = String(options.anchorParagraphId ?? '').trim();
+    const anchorIndex = anchorId
+      ? paragraphs.findIndex((row) => row.id === anchorId)
       : -1;
+    // 传了锚点却不在本节：显式返回空窗口，不静默退回第一页。
+    const anchorFound = anchorId ? anchorIndex >= 0 : true;
     const offset =
       anchorIndex >= 0
         ? Math.max(0, anchorIndex - ANCHOR_LEAD_PARAGRAPHS)
         : Math.max(0, Math.floor(options.paragraphOffset ?? 0));
-    const page = paragraphs.slice(offset, offset + limit);
+    const page = anchorFound ? paragraphs.slice(offset, offset + limit) : [];
     const nextOffset =
-      offset + page.length < totalParagraphs ? offset + page.length : null;
+      anchorFound && offset + page.length < totalParagraphs
+        ? offset + page.length
+        : null;
 
     const paragraphPageStart = compactMin(
       paragraphs.map((row) => row.pageStart),
@@ -547,6 +575,7 @@ export class SourceLayerService {
       })),
       totalParagraphs,
       nextOffset,
+      anchorFound,
       tables,
       previousSectionId,
       nextSectionId,
@@ -574,12 +603,13 @@ export class SourceLayerService {
    * `sourceId` 只做收窄，不做扩权。
    */
   async scope(
-    options: { sourceId?: string; documentIds?: string[] } = {},
+    options: { sourceId?: string; documentIds?: readonly string[] } = {},
   ): Promise<ScopeView> {
     const sourceId = String(options.sourceId ?? '').trim() || undefined;
     const documentIds = normalizeIdList(options.documentIds);
+    // 显式传 [] 是「范围为空」，不是「不限制」：保留 in: []，Prisma 自然返回空。
     const where =
-      documentIds.length > 0
+      options.documentIds !== undefined
         ? { id: { in: documentIds }, ...(sourceId ? { sourceId } : {}) }
         : sourceId
           ? { sourceId }
@@ -635,11 +665,15 @@ export class SourceLayerService {
    * - topicPhrases 非空时必须命中 topicPhrase（vitamin K 不能命中 vitamin E 表）；
    * - 否则用 focusTerms/stagePhrases；没有可匹配的焦点词就不返回表格，
    *   避免给「分期/馆藏」这类查询随便塞 3 张无关表；
-   * - 不做分期/物种排除；返回 ≤3 张，按命中强度排序，同分时核心表优先。
+   * - 不做分期/物种排除；返回 ≤3 张，按命中强度排序，核心表 +2 排序分。
    */
   async searchTableViews(
     query: string,
-    options: { documentIds?: string[]; sourceIds?: string[]; limit?: number } = {},
+    options: {
+      documentIds?: readonly string[];
+      sourceIds?: readonly string[];
+      limit?: number;
+    } = {},
   ): Promise<TableView[]> {
     const raw = String(query ?? '').trim();
     if (!raw) return [];
@@ -655,8 +689,11 @@ export class SourceLayerService {
     const sourceIds = normalizeIdList(options.sourceIds);
     const rows = await this.prisma.sourceTable.findMany({
       where: {
-        ...(documentIds.length > 0 ? { documentId: { in: documentIds } } : {}),
-        ...(sourceIds.length > 0
+        // 显式 [] 是「范围为空」，不是「全库」。
+        ...(options.documentIds !== undefined
+          ? { documentId: { in: documentIds } }
+          : {}),
+        ...(options.sourceIds !== undefined
           ? { document: { sourceId: { in: sourceIds } } }
           : {}),
       },
@@ -673,14 +710,18 @@ export class SourceLayerService {
     );
 
     return rows
-      .map((row) => ({ row, score: scoreTableRow(row, needles) }))
-      .filter(({ score }) => score > 0)
-      .sort(
-        (a, b) =>
-          b.score - a.score ||
+      .map((row) => ({ row, relevance: scoreTableRow(row, needles) }))
+      // 先按真实命中门禁，再加核心表排序分——没有命中的核心表不能被放进来。
+      .filter(({ relevance }) => relevance > 0)
+      .sort((a, b) => {
+        const scoreA = a.relevance + coreTableSortBonus(a.row.id);
+        const scoreB = b.relevance + coreTableSortBonus(b.row.id);
+        return (
+          scoreB - scoreA ||
           coreTableRank(a.row.id) - coreTableRank(b.row.id) ||
-          a.row.id.localeCompare(b.row.id),
-      )
+          a.row.id.localeCompare(b.row.id)
+        );
+      })
       .slice(0, limit)
       .map(({ row }) => this.toTableView(row));
   }

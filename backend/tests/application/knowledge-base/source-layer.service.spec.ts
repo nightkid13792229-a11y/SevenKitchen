@@ -98,7 +98,7 @@ const CKD_T0260 = {
   ],
 };
 
-/** 非核心表：行标签也叫 Phosphorus，同分时不能把核心表 37-9 挤出前 3。 */
+/** 非核心表：首列也叫 Phosphorus，用来验证核心表排序分不被同分/略高分挤掉。 */
 const CKD_T0262 = {
   id: 'T0262',
   documentId: 'sacn5-chapters-SACN5-37',
@@ -127,6 +127,26 @@ const CKD_T0263 = {
   ],
 };
 
+/** IRIS 分期表 37-1：最后一行是很长的脚注（首列 >80 字符且含换行）。 */
+const CKD_T0253 = {
+  id: 'T0253',
+  documentId: 'sacn5-chapters-SACN5-37',
+  pageNo: null,
+  caption:
+    'Table 37-1. International Renal Interest Society (IRIS) Staging System for Chronic Kidney Disease in Dogs and Cats.',
+  columns: ['Stage', 'Creatinine (dogs)', 'Comments'],
+  rowCount: 5,
+  rows: [
+    ['1', '<1.4 mg/dl', 'Non-azotemic CKD'],
+    ['2', '1.4-2.0 mg/dl', 'Mild renal azotemia'],
+    [
+      'Key: PU/PD = polyuria/polydipsia, UPC = urine protein-creatinine ratio.\n*NP = non-proteinuric (UPC <0.2), BP = borderline proteinuric (UPC = 0.2 to 0.4 in cats and 0.2 to 0.5 in dogs).',
+      '',
+      '',
+    ],
+  ],
+};
+
 const TABLE_FIXTURES = [
   CKD_T0497,
   CKD_T0258,
@@ -134,6 +154,7 @@ const TABLE_FIXTURES = [
   CKD_T0260,
   CKD_T0262,
   CKD_T0263,
+  CKD_T0253,
   CKD_T0025,
 ];
 
@@ -179,6 +200,46 @@ describe('SourceLayerService', () => {
       ...overrides,
     };
     return { service: new SourceLayerService(prisma), prisma };
+  }
+
+  /** openSection 用的桩：20 段、3 个相邻节、4 张同文档表。 */
+  function makeOpenSectionService() {
+    return makeService({
+      sourceSection: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 's1',
+          documentId: 'sacn5-chapters-SACN5-37',
+          title: '787 Chronic Kidney Disease',
+          pageNo: 787,
+          sortOrder: 3,
+          document: {
+            id: 'sacn5-chapters-SACN5-37',
+            title: 'SACN5_37.pdf',
+            sourceId: 'SACN5',
+          },
+        }),
+        findMany: jest.fn().mockResolvedValue([
+          { id: 's0', sortOrder: 2 },
+          { id: 's1', sortOrder: 3 },
+          { id: 's2', sortOrder: 4 },
+        ]),
+      },
+      sourceParagraph: {
+        count: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue(makeParagraphs(20)),
+      },
+      sourceTable: {
+        count: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'T0497', documentId: 'sacn5-chapters-SACN5-37', caption: 'Table 37-9', pageNo: 17, rowCount: 10 },
+          { id: 'T0253', documentId: 'sacn5-chapters-SACN5-37', caption: 'Table 37-1', pageNo: null, rowCount: 5 },
+          { id: 'T0260', documentId: 'sacn5-chapters-SACN5-37', caption: 'Table 37-11', pageNo: null, rowCount: 23 },
+          { id: 'T0270', documentId: 'sacn5-chapters-SACN5-37', caption: 'Table 40-1', pageNo: 40, rowCount: 3 },
+        ]),
+      },
+    });
   }
 
   it('getScope 返回四类计数', async () => {
@@ -273,47 +334,13 @@ describe('SourceLayerService', () => {
   });
 
   it('打开节：≤12 段、nextOffset、显示标题、相邻节', async () => {
-    const { service } = makeService({
-      sourceSection: {
-        findUnique: jest.fn().mockResolvedValue({
-          id: 's1',
-          documentId: 'sacn5-chapters-SACN5-37',
-          title: '787 Chronic Kidney Disease',
-          pageNo: 787,
-          sortOrder: 3,
-          document: {
-            id: 'sacn5-chapters-SACN5-37',
-            title: 'SACN5_37.pdf',
-            sourceId: 'SACN5',
-          },
-        }),
-        findMany: jest.fn().mockResolvedValue([
-          { id: 's0', sortOrder: 2 },
-          { id: 's1', sortOrder: 3 },
-          { id: 's2', sortOrder: 4 },
-        ]),
-      },
-      sourceParagraph: {
-        count: jest.fn(),
-        findUnique: jest.fn(),
-        findMany: jest.fn().mockResolvedValue(makeParagraphs(20)),
-      },
-      sourceTable: {
-        count: jest.fn(),
-        findUnique: jest.fn(),
-        findMany: jest.fn().mockResolvedValue([
-          { id: 'T0497', documentId: 'sacn5-chapters-SACN5-37', caption: 'Table 37-9', pageNo: 17, rowCount: 10 },
-          { id: 'T0253', documentId: 'sacn5-chapters-SACN5-37', caption: 'Table 37-1', pageNo: null, rowCount: 5 },
-          { id: 'T0260', documentId: 'sacn5-chapters-SACN5-37', caption: 'Table 37-11', pageNo: null, rowCount: 23 },
-          { id: 'T0270', documentId: 'sacn5-chapters-SACN5-37', caption: 'Table 40-1', pageNo: 40, rowCount: 3 },
-        ]),
-      },
-    });
+    const { service } = makeOpenSectionService();
 
     const view = await service.openSection('s1');
     expect(view?.paragraphs).toHaveLength(12);
     expect(view?.totalParagraphs).toBe(20);
     expect(view?.nextOffset).toBe(12);
+    expect(view?.anchorFound).toBe(true);
     expect(view?.displayTitle).toContain('第37章');
     expect(view?.displayTitle).toContain('p787');
     expect(view?.previousSectionId).toBe('s0');
@@ -326,37 +353,33 @@ describe('SourceLayerService', () => {
     expect(view?.sourceName).toBe('小动物临床营养学（第5版）');
   });
 
+  it('打开节：paragraphOffset 翻页', async () => {
+    const { service } = makeOpenSectionService();
+
+    const view = await service.openSection('s1', { paragraphOffset: 12 });
+    expect(view?.paragraphs).toHaveLength(8);
+    expect(view?.paragraphs[0].id).toBe('p13');
+    expect(view?.nextOffset).toBeNull();
+    expect(view?.anchorFound).toBe(true);
+  });
+
   it('打开节：anchorParagraphId 让被引用段出现在第一页', async () => {
-    const { service } = makeService({
-      sourceSection: {
-        findUnique: jest.fn().mockResolvedValue({
-          id: 's1',
-          documentId: 'sacn5-chapters-SACN5-37',
-          title: '787 Chronic Kidney Disease',
-          pageNo: 787,
-          sortOrder: 3,
-          document: {
-            id: 'sacn5-chapters-SACN5-37',
-            title: 'SACN5_37.pdf',
-            sourceId: 'SACN5',
-          },
-        }),
-        findMany: jest.fn().mockResolvedValue([
-          { id: 's0', sortOrder: 2 },
-          { id: 's1', sortOrder: 3 },
-          { id: 's2', sortOrder: 4 },
-        ]),
-      },
-      sourceParagraph: {
-        count: jest.fn(),
-        findUnique: jest.fn(),
-        findMany: jest.fn().mockResolvedValue(makeParagraphs(20)),
-      },
-    });
+    const { service } = makeOpenSectionService();
 
     const view = await service.openSection('s1', { anchorParagraphId: 'p15' });
     expect(view?.paragraphs[0].id).toBe('p13');
     expect(view?.paragraphs.map((row) => row.id)).toContain('p15');
+    expect(view?.totalParagraphs).toBe(20);
+    expect(view?.anchorFound).toBe(true);
+  });
+
+  it('打开节：锚点不在本节时返回空窗口而不是第一页', async () => {
+    const { service } = makeOpenSectionService();
+
+    const view = await service.openSection('s1', { anchorParagraphId: 'p99' });
+    expect(view?.anchorFound).toBe(false);
+    expect(view?.paragraphs).toEqual([]);
+    expect(view?.nextOffset).toBeNull();
     expect(view?.totalParagraphs).toBe(20);
   });
 
@@ -388,6 +411,38 @@ describe('SourceLayerService', () => {
     expect(table?.documentTitle).toBe('SACN5_37.pdf');
     expect(table?.sourceId).toBe('SACN5');
     expect(table?.sourceName).toBe('小动物临床营养学（第5版）');
+  });
+
+  it('打开表：pageNo=null 的核心表也能打开', async () => {
+    const fixtures = [
+      { id: 'T0253', caption: 'Table 37-1. IRIS Staging System.', rowCount: 5 },
+      { id: 'T0260', caption: 'Table 37-11. Key nutritional factors (dogs).', rowCount: 23 },
+      { id: 'T0261', caption: 'Table 37-12. Key nutritional factors (cats).', rowCount: 18 },
+      { id: 'T0025', caption: 'TABLE 8 Nutrients of Concern', rowCount: 20 },
+      { id: 'T0026', caption: 'TABLE 8 (Continued) Nutrients of Concern', rowCount: 22 },
+    ];
+
+    for (const fixture of fixtures) {
+      const { service } = makeService({
+        sourceTable: {
+          count: jest.fn(),
+          findMany: jest.fn(),
+          findUnique: jest.fn().mockResolvedValue({
+            ...fixture,
+            documentId: 'a-doc',
+            pageNo: null,
+            columns: ['a'],
+            rows: [['x']],
+            document: { id: 'a-doc', title: 'doc.pdf', sourceId: 'SACN5' },
+          }),
+        },
+      });
+
+      const view = await service.openTable(fixture.id);
+      expect(view?.tableId).toBe(fixture.id);
+      expect(view?.pageNo).toBeNull();
+      expect(view?.rowCount).toBe(fixture.rowCount);
+    }
   });
 
   it('馆藏：传 CKD 5 份 documentIds 返回 5 份，按来源可收窄', async () => {
@@ -461,6 +516,55 @@ describe('SourceLayerService', () => {
     });
   });
 
+  it('馆藏：sourceId + documentIds 同时传时条件叠加', async () => {
+    const { service, prisma } = makeService({
+      sourceDocument: {
+        count: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'sacn5-chapters-SACN5-37',
+            title: 'SACN5_37.pdf',
+            sourceId: 'SACN5',
+            pageCount: 46,
+            _count: { sections: 30, paragraphs: 424, tables: 12 },
+          },
+        ]),
+      },
+    });
+
+    const result = await service.scope({
+      sourceId: 'SACN5',
+      documentIds: ['sacn5-chapters-SACN5-37'],
+    });
+    expect(result.totals.documents).toBe(1);
+    expect(result.documents[0].sourceId).toBe('SACN5');
+    expect(prisma.sourceDocument.findMany.mock.calls[0][0].where).toEqual({
+      id: { in: ['sacn5-chapters-SACN5-37'] },
+      sourceId: 'SACN5',
+    });
+  });
+
+  it('馆藏：显式空 documentIds 返回空馆藏，不退化成全库', async () => {
+    const { service, prisma } = makeService({
+      sourceDocument: {
+        count: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    });
+
+    const result = await service.scope({ documentIds: [] });
+    expect(result.documents).toEqual([]);
+    expect(result.totals).toEqual({
+      documents: 0,
+      sections: 0,
+      paragraphs: 0,
+      tables: 0,
+    });
+    expect(prisma.sourceDocument.findMany.mock.calls[0][0].where).toEqual({
+      id: { in: [] },
+    });
+  });
+
   it('表格视图：按行文本命中 T0497，焦点门禁排除 vitamin E 表', async () => {
     const { service, prisma } = makeService({
       sourceTable: {
@@ -485,5 +589,90 @@ describe('SourceLayerService', () => {
     });
     expect(vitaminK.map((table) => table.tableId)).not.toContain('T0025');
     expect(vitaminK).toEqual([]);
+  });
+
+  it('表格视图：泛问题（三组焦点词全空）不返回表格', async () => {
+    const { service, prisma } = makeService({
+      sourceTable: {
+        count: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue(TABLE_FIXTURES),
+      },
+    });
+
+    await expect(service.searchTableViews('CKD dog')).resolves.toEqual([]);
+    await expect(
+      service.searchTableViews('IRIS staging table'),
+    ).resolves.toEqual([]);
+    expect(prisma.sourceTable.findMany).not.toHaveBeenCalled();
+  });
+
+  it('表格视图：脚注长首列不算行标签，T0253 不能顶掉 T0497', async () => {
+    const { service } = makeService({
+      sourceTable: {
+        count: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue(TABLE_FIXTURES),
+      },
+    });
+
+    const hits = await service.searchTableViews('dietary phosphorus 0.2 0.5', {
+      documentIds: [...CKD_DOCUMENT_IDS],
+    });
+    expect(hits[0].tableId).toBe('T0497');
+    expect(hits.map((table) => table.tableId)).not.toContain('T0253');
+  });
+
+  it('表格视图：核心表落后 1 分仍进前 3（+2 排序分，不排除）', async () => {
+    const competitors = ['T0300', 'T0301', 'T0302'].map((id) => ({
+      id,
+      documentId: 'sacn5-chapters-SACN5-37',
+      pageNo: null,
+      caption: `Table ${id}`,
+      columns: ['Factor', 'Value'],
+      rowCount: 2,
+      rows: [
+        ['Phosphate retention', 'Phosphorus retention and hyperphosphatemia'],
+        ['Other', ''],
+      ],
+    }));
+    const { service } = makeService({
+      sourceTable: {
+        count: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([...competitors, CKD_T0497]),
+      },
+    });
+
+    const hits = await service.searchTableViews('phosphorus', {
+      documentIds: [...CKD_DOCUMENT_IDS],
+    });
+    expect(hits.map((table) => table.tableId)).toContain('T0497');
+    expect(hits[0].tableId).toBe('T0497');
+    expect(hits.length).toBeLessThanOrEqual(3);
+  });
+
+  it('表格视图：显式空数组返回空，不退化成全库', async () => {
+    const { service, prisma } = makeService({
+      sourceTable: {
+        count: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    });
+
+    await expect(
+      service.searchTableViews('phosphorus', { documentIds: [] }),
+    ).resolves.toEqual([]);
+    expect(prisma.sourceTable.findMany.mock.calls[0][0].where).toEqual({
+      documentId: { in: [] },
+    });
+
+    await expect(
+      service.searchTableViews('phosphorus', { sourceIds: [] }),
+    ).resolves.toEqual([]);
+    expect(prisma.sourceTable.findMany.mock.calls[1][0].where).toEqual({
+      document: { sourceId: { in: [] } },
+    });
   });
 });

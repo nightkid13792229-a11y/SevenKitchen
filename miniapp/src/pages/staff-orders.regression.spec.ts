@@ -266,6 +266,29 @@ describe('staff order detail · 状态改版', () => {
     expect(detailSource).toContain('if (autoShip && canShip.value) shipOrder()');
   });
 
+  it('★ 试吃装详情口径和列表一致：待发货 / 现货可发 / 无需制作（2026-11-10）', () => {
+    const hero =
+      detailSource.match(/const heroStatusLabel = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] ||
+      '';
+    const subline =
+      detailSource.match(/const heroSubline = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] ||
+      '';
+    const steps =
+      detailSource.match(/const progressSteps = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] ||
+      '';
+    const hint =
+      detailSource.match(/const stageHint = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] ||
+      '';
+
+    expect(hero).toContain("isTastingPack.value ? '待发货' : '已付款'");
+    expect(subline).toContain('现货在库，可以直接发货');
+    expect(steps).toContain('无需制作');
+    // 制作格子对试吃装直接算完成，下一步高亮「发货」
+    expect(steps).toContain('isTastingPack.value');
+    // PAID 不再提示去生产管理里开工
+    expect(hint).toContain('试吃装是现货');
+  });
+
   it('★ 试吃装付款即可发货：canShip 认 PAID，普通鲜食仍只认急冻完成（2026-11-10）', () => {
     const canShip =
       detailSource.match(/const canShip = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] ||

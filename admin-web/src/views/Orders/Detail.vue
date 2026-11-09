@@ -481,11 +481,18 @@
             />
           </template>
 
-          <!-- PAID状态：管理员可以取消订单（等待生产批次系统自动处理） -->
+          <!-- PAID状态：试吃装是现货，付款后可直接发货；普通鲜食等生产批次 -->
           <template v-if="order.status === OrderStatusEnum.PAID">
+            <el-button
+              v-if="canShipFromAdmin(order)"
+              type="primary"
+              @click="handleShip"
+            >
+              发货
+            </el-button>
             <el-button type="danger" @click="handleCancelOrder">取消订单</el-button>
             <el-alert
-              title="生产批次系统将自动处理此订单"
+              :title="paidOrderHint(order)"
               type="info"
               :closable="false"
               style="margin-top: 10px"
@@ -632,6 +639,10 @@ import type {
   OrderSettlementAdjustment,
   RecipeSnapshot
 } from '@/types/order'
+import {
+  canShipFromAdmin,
+  paidOrderHint
+} from './orderShippingActions'
 import {
   formatFinancialAmount,
   getAdjustmentTagType,

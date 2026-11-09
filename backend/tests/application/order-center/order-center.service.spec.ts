@@ -104,6 +104,28 @@ describe('OrderCenterService', () => {
     expect(result.items[1].customerName).toBe('张三');
   });
 
+  it('★ 待发货 + 关键词：状态和关键词各占一个 AND 分支，count 与列表同口径', async () => {
+    await service.list({
+      type: 'FOOD',
+      status: 'TO_SHIP',
+      keyword: '旺财',
+      pageSize: 20,
+    });
+
+    const listWhere = prisma.order.findMany.mock.calls[0][0].where;
+    const countWhere = prisma.order.count.mock.calls[0][0].where;
+
+    expect(listWhere.AND).toHaveLength(2);
+    expect(listWhere.AND[0]).toEqual({
+      OR: [
+        { status: 'FREEZING' },
+        { status: 'PAID', type: 'TASTING_PACK' },
+      ],
+    });
+    // 分页总数必须和列表完全同条件，否则会出现“第 2 页是空的”
+    expect(countWhere).toEqual(listWhere);
+  });
+
   it('★ 试吃装 PAID 进「待发货」，卡片写待发货，能走发货（2026-11-10）', async () => {
     prisma.order.findMany.mockResolvedValue([
       foodRow({

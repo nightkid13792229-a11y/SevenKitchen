@@ -1065,6 +1065,9 @@ const canStartProduction = computed(() => {
   return order.value && (order.value.status === 'PAID' || order.value.status === 'PURCHASING')
 })
 
+/** 试吃装是现货：页面文案和进度都要按「不用生产」来说，别把人引去生产管理 */
+const isTastingPack = computed(() => order.value?.type === 'TASTING_PACK')
+
 const canShip = computed(() => {
   const o = order.value
   if (!o) return false
@@ -1257,7 +1260,7 @@ const heroStatusLabel = computed(() => {
     case 'PENDING_PAYMENT':
       return '待付款'
     case 'PAID':
-      return '已付款'
+      return isTastingPack.value ? '待发货' : '已付款'
     case 'PURCHASING':
       return '采购中'
     case 'IN_PRODUCTION':
@@ -1287,7 +1290,9 @@ const heroSubline = computed(() => {
       return '顾客还没付钱'
     case 'PAID':
       // 这页不再有「开始制作」，文案不能再引着人去点
-      return '钱已到账，等生产管理里开工'
+      return isTastingPack.value
+        ? '现货在库，可以直接发货'
+        : '钱已到账，等生产管理里开工'
     case 'PURCHASING':
       return '原料采购中'
     case 'IN_PRODUCTION':
@@ -1331,7 +1336,11 @@ const progressSteps = computed(() => {
   const paidDone =
     Boolean(o.paidAt) ||
     ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'FREEZING', 'SHIPPED', 'COMPLETED'].includes(o.status)
-  const madeDone = Boolean(o.shippedAt) || ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(o.status)
+  // 试吃装是现货：没有「制作」这一步，直接算完成
+  const madeDone =
+    isTastingPack.value ||
+    Boolean(o.shippedAt) ||
+    ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(o.status)
   const shippedDone = Boolean(o.shippedAt) || ['SHIPPED', 'COMPLETED'].includes(o.status)
 
   const rows = [
@@ -1344,12 +1353,24 @@ const progressSteps = computed(() => {
     {
       name: '制作',
       done: madeDone,
-      time: madeDone ? '已完成' : o.status === 'IN_PRODUCTION' ? '进行中' : paidDone ? '待开始' : '—',
+      time: isTastingPack.value
+        ? '无需制作'
+        : madeDone
+          ? '已完成'
+          : o.status === 'IN_PRODUCTION'
+            ? '进行中'
+            : paidDone
+              ? '待开始'
+              : '—',
     },
     {
       name: '发货',
       done: shippedDone,
-      time: shippedDone ? formatShortDate(o.shippedAt) : o.status === 'FREEZING' ? '待发货' : '—',
+      time: shippedDone
+        ? formatShortDate(o.shippedAt)
+        : o.status === 'FREEZING' || (isTastingPack.value && o.status === 'PAID')
+          ? '待发货'
+          : '—',
     },
   ]
 
@@ -1398,6 +1419,9 @@ const addressLockHint = computed(() => {
 const stageHint = computed(() => {
   const o = order.value
   if (!o) return ''
+  if (isTastingPack.value && o.status === 'PAID') {
+    return '试吃装是现货，直接点「发货」填运单就行，不用等生产。'
+  }
   if (o.status === 'PAID' || o.status === 'PURCHASING') {
     return '原料齐了就等工作台「生产管理」里开工，这页不用点。'
   }

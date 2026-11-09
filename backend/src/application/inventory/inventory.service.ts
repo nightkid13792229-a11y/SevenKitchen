@@ -88,7 +88,8 @@ export interface InventoryAdjustmentDto {
 export interface CreateInventoryStocktakeLineDto {
   ingredientId: string;
   procurementSkuId?: string;
-  countedQuantityG: number;
+  /** null / 省略 = 未盘，不生成流水 */
+  countedQuantityG?: number | null;
 }
 
 export interface CreateInventoryStocktakeDto {
@@ -105,8 +106,10 @@ export interface InventoryStocktakeLineDto {
   ingredientName: string;
   stockUnitLabel: string;
   expectedQuantityG: number;
-  countedQuantityG: number;
-  deltaG: number;
+  countedQuantityG: number | null;
+  deltaG: number | null;
+  isCounted: boolean;
+  countedAt: string | null;
 }
 
 export interface InventoryStocktakeDto {
@@ -115,6 +118,10 @@ export interface InventoryStocktakeDto {
   note: string | null;
   createdAt: string;
   appliedAt: string | null;
+  submittedAt: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
   lineCount: number;
   varianceCount: number;
   totalAbsDeltaG: number;
@@ -1052,8 +1059,14 @@ export class InventoryService {
       if (!line?.ingredientId?.trim()) {
         throw new BadRequestException('ingredientId is required');
       }
-      if (!Number.isFinite(line.countedQuantityG) || line.countedQuantityG < 0) {
-        throw new BadRequestException('countedQuantityG must be a non-negative number');
+      const countedQuantityG = line.countedQuantityG ?? null;
+      if (
+        countedQuantityG !== null &&
+        (!Number.isFinite(countedQuantityG) || countedQuantityG < 0)
+      ) {
+        throw new BadRequestException(
+          'countedQuantityG must be a non-negative number',
+        );
       }
       if (lineMap.has(line.ingredientId)) {
         throw new BadRequestException(`盘点单中存在重复原料: ${line.ingredientId}`);
@@ -1077,7 +1090,7 @@ export class InventoryService {
     const lines = ingredientIds.map((ingredientId) => {
       const expectedQuantityG = balances.get(ingredientId) ?? 0;
       const sourceLine = lineMap.get(ingredientId)!;
-      const countedQuantityG = sourceLine.countedQuantityG;
+      const countedQuantityG = sourceLine.countedQuantityG ?? null;
       return new InventoryStocktakeLine(
         randomUUID(),
         stocktakeId,
@@ -1085,7 +1098,9 @@ export class InventoryService {
         sourceLine.procurementSkuId?.trim() || null,
         expectedQuantityG,
         countedQuantityG,
-        countedQuantityG - expectedQuantityG,
+        countedQuantityG === null
+          ? null
+          : countedQuantityG - expectedQuantityG,
       );
     });
 
@@ -1124,12 +1139,15 @@ export class InventoryService {
 
       if (dto.applyImmediately) {
         const ledgerEntries = stocktake.lines
-          .filter((line) => Math.abs(line.deltaG) > 0.0001)
+          .filter(
+          (line) =>
+            line.deltaG !== null && Math.abs(line.deltaG) > 0.0001,
+        )
           .map((line) => ({
             id: randomUUID(),
             ingredientId: line.ingredientId,
             procurementSkuId: line.procurementSkuId,
-            deltaG: line.deltaG,
+            deltaG: line.deltaG as number,
             sourceType: InventorySourceType.STOCKTAKE as any,
             sourceId: stocktake.id,
             createdAt: now,
@@ -1171,12 +1189,15 @@ export class InventoryService {
     const appliedAt = new Date();
     await this.prisma.$transaction(async (tx) => {
       const ledgerEntries = existing.lines
-        .filter((line) => Math.abs(line.deltaG) > 0.0001)
+        .filter(
+          (line) =>
+            line.deltaG !== null && Math.abs(line.deltaG) > 0.0001,
+        )
         .map((line) => ({
           id: randomUUID(),
           ingredientId: line.ingredientId,
           procurementSkuId: line.procurementSkuId ?? null,
-          deltaG: line.deltaG,
+          deltaG: line.deltaG as number,
           sourceType: InventorySourceType.STOCKTAKE as any,
           sourceId: stocktakeId,
           createdAt: appliedAt,
@@ -1278,8 +1299,12 @@ export class InventoryService {
       ingredientName: line.ingredient?.name ?? line.ingredientId,
       stockUnitLabel: this.resolveStockUnitLabel(line.ingredient),
       expectedQuantityG: line.expectedQuantityG,
-      countedQuantityG: line.countedQuantityG,
-      deltaG: line.deltaG,
+      countedQuantityG: line.countedQuantityG ?? null,
+      deltaG: line.deltaG ?? null,
+      isCounted:
+        line.countedQuantityG !== null &&
+        line.countedQuantityG !== undefined,
+      countedAt: line.countedAt?.toISOString() ?? null,
     }));
 
     return {
@@ -1288,10 +1313,16 @@ export class InventoryService {
       note: stocktake.note ?? null,
       createdAt: stocktake.createdAt.toISOString(),
       appliedAt: stocktake.appliedAt?.toISOString() ?? null,
+      submittedAt: stocktake.submittedAt?.toISOString() ?? null,
+      reviewedBy: stocktake.reviewedBy ?? null,
+      reviewedAt: stocktake.reviewedAt?.toISOString() ?? null,
+      reviewNote: stocktake.reviewNote ?? null,
       lineCount: lines.length,
-      varianceCount: lines.filter((line) => Math.abs(line.deltaG) > 0.0001).length,
+      varianceCount: lines.filter(
+        (line) => line.isCounted && Math.abs(line.deltaG ?? 0) > 0.0001,
+      ).length,
       totalAbsDeltaG: lines.reduce(
-        (sum, line) => sum + Math.abs(line.deltaG),
+        (sum, line) => sum + Math.abs(line.deltaG ?? 0),
         0,
       ),
       lines,

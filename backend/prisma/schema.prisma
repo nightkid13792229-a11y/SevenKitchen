@@ -1475,10 +1475,14 @@ model InventoryStocktake {
   id        String                   @id @default(uuid()) @map("id")
   type      InventoryStocktakeType   @default(ROUTINE) @map("type")
   status    InventoryStocktakeStatus @default(DRAFT) @map("status")
-  note      String?
-  createdBy String?                  @map("created_by") @db.VarChar(36)
-  createdAt DateTime                 @default(now()) @map("created_at")
-  appliedAt DateTime?                @map("applied_at")
+  note       String?
+  createdBy  String?                  @map("created_by") @db.VarChar(36)
+  submittedAt DateTime?               @map("submitted_at")
+  reviewedBy String?                  @map("reviewed_by") @db.VarChar(36)
+  reviewedAt DateTime?                @map("reviewed_at")
+  reviewNote String?                  @map("review_note")
+  createdAt  DateTime                 @default(now()) @map("created_at")
+  appliedAt  DateTime?                @map("applied_at")
   lines     InventoryStocktakeLine[]
 
   @@index([status, createdAt])
@@ -1491,8 +1495,10 @@ model InventoryStocktakeLine {
   ingredientId      String             @map("ingredient_id")
   procurementSkuId  String?            @map("procurement_sku_id") @db.VarChar(36)
   expectedQuantityG Float              @map("expected_quantity_g")
-  countedQuantityG  Float              @map("counted_quantity_g")
-  deltaG            Float              @map("delta_g")
+  /// 实盘；null = 未盘（不生成流水）
+  countedQuantityG  Float?             @map("counted_quantity_g")
+  deltaG            Float?             @map("delta_g")
+  countedAt         DateTime?          @map("counted_at")
   stocktake         InventoryStocktake @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
   ingredient        Ingredient         @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
 
@@ -3726,7 +3732,9 @@ enum InventoryAdjustmentMode {
 
 enum InventoryStocktakeStatus {
   DRAFT
+  SUBMITTED
   APPLIED
+  REJECTED
 }
 
 enum InventoryAllocationStatus {

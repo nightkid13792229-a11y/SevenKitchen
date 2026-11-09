@@ -389,4 +389,58 @@ describe('InventoryService procurement sku traceability', () => {
       }),
     );
   });
+  it('marks null counted lines as not counted and keeps 0 as counted', async () => {
+    prisma.inventoryStocktake.findMany.mockResolvedValue([
+      {
+        id: 'stocktake-1',
+        status: 'DRAFT',
+        note: null,
+        createdAt: new Date('2026-11-10T10:00:00.000Z'),
+        appliedAt: null,
+        lines: [
+          {
+            id: 'line-1',
+            ingredientId: 'ingredient-1',
+            procurementSkuId: null,
+            expectedQuantityG: 100,
+            countedQuantityG: null,
+            deltaG: null,
+            countedAt: null,
+            ingredient: {
+              id: 'ingredient-1',
+              name: '猪里脊',
+              baseUnit: 'G',
+              unitDisplayLabel: '克',
+            },
+          },
+          {
+            id: 'line-2',
+            ingredientId: 'ingredient-2',
+            procurementSkuId: null,
+            expectedQuantityG: 0,
+            countedQuantityG: 0,
+            deltaG: 0,
+            countedAt: new Date('2026-11-10T10:01:00.000Z'),
+            ingredient: {
+              id: 'ingredient-2',
+              name: '南瓜',
+              baseUnit: 'G',
+              unitDisplayLabel: '克',
+            },
+          },
+        ],
+      },
+    ]);
+    prisma.procurementSku.findMany.mockResolvedValue([]);
+
+    const rows = await service.listStocktakes();
+
+    expect(rows[0].lines[0].isCounted).toBe(false);
+    expect(rows[0].lines[0].deltaG).toBeNull();
+    expect(rows[0].lines[0].countedAt).toBeNull();
+    expect(rows[0].lines[1].isCounted).toBe(true);
+    expect(rows[0].lines[1].deltaG).toBe(0);
+    expect(rows[0].varianceCount).toBe(0);
+    expect(rows[0].totalAbsDeltaG).toBe(0);
+  });
 });

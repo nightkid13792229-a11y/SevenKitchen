@@ -8,8 +8,9 @@ export class InventoryStocktakeLine {
     public readonly ingredientId: string,
     public readonly procurementSkuId: string | null,
     public readonly expectedQuantityG: number,
-    public readonly countedQuantityG: number,
-    public readonly deltaG: number,
+    public readonly countedQuantityG: number | null,
+    public readonly deltaG: number | null,
+    public readonly countedAt: Date | null = null,
   ) {
     this.validateInvariants();
   }
@@ -33,6 +34,15 @@ export class InventoryStocktakeLine {
       );
     }
 
+    if (this.countedQuantityG === null) {
+      if (this.deltaG !== null) {
+        throw new ValidationError(
+          'deltaG must be null when the line is not counted',
+        );
+      }
+      return;
+    }
+
     if (this.countedQuantityG < 0) {
       throw new ValidationError(
         `countedQuantityG must be non-negative, got: ${this.countedQuantityG}`,
@@ -40,8 +50,9 @@ export class InventoryStocktakeLine {
     }
 
     if (
+      this.deltaG === null ||
       Math.abs(this.countedQuantityG - this.expectedQuantityG - this.deltaG) >
-      0.0001
+        0.0001
     ) {
       throw new ValidationError(
         'deltaG must equal countedQuantityG minus expectedQuantityG',
@@ -58,6 +69,10 @@ export class InventoryStocktake {
     public readonly createdAt: Date,
     public readonly appliedAt: Date | null,
     public readonly lines: InventoryStocktakeLine[],
+    public readonly submittedAt: Date | null = null,
+    public readonly reviewedBy: string | null = null,
+    public readonly reviewedAt: Date | null = null,
+    public readonly reviewNote: string | null = null,
   ) {
     this.validateInvariants();
   }

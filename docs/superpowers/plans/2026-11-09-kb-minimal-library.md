@@ -186,8 +186,17 @@ it('不再按 1000 段截断候选', async () => {
 });
 
 it('按节分组：≤5 节、每节 ≤2 段、同一文档 ≤2 节', async () => {
-  // 构造 3 个 SACN5 section + 1 个 IRIS section，每节 3 段
-  // 断言 sections.length <= 5；每节 passages.length <= 2；SACN5 节数 <= 2
+  const rows = [
+    ...Array.from({ length: 3 }, (_, i) => filterRow({ id: `s1-${i}`, sectionId: 's1', text: 'phosphorus target' })),
+    ...Array.from({ length: 3 }, (_, i) => filterRow({ id: `s2-${i}`, sectionId: 's2', text: 'phosphorus target' })),
+    ...Array.from({ length: 3 }, (_, i) => filterRow({ id: `s3-${i}`, sectionId: 's3', text: 'phosphorus target' })),
+    filterRow({ id: 'i1', sectionId: 'i1', documentId: 'iris-doc', text: 'phosphorus target' }),
+  ];
+  const service = new KnowledgeLibraryService({ sourceParagraph: { findMany: jest.fn().mockResolvedValue(rows) } } as any);
+  const sections = await service.searchSections('phosphorus', { limit: 5 });
+  expect(sections.length).toBeLessThanOrEqual(5);
+  for (const section of sections) expect(section.passages.length).toBeLessThanOrEqual(2);
+  expect(sections.filter((section) => section.documentId === 'sacn5-chapters-SACN5-37')).toHaveLength(2);
 });
 
 it('页眉标题降级，书内页从标题取', () => {
@@ -240,7 +249,7 @@ Expected: FAIL，`expandQuery`/`extractQueryFocus`/`searchSections`/`deriveDispl
 - `SectionHit` 加 `displayTitle`/`subheading`，用 `section-display.ts`；
 - `MAX_LIMIT` 内部改成 200；工具层仍限制 10。
 
-- [ ] **Step 5: 跑测试并提交**
+- [ ] **Step 5: 跑单测**
 
 Run:
 ```bash
@@ -249,6 +258,20 @@ npm test -- tests/application/knowledge-base/knowledge-library.service.spec.ts
 npx tsc --noEmit
 ```
 Expected: PASS。
+
+- [ ] **Step 6: Task 1 后的 26 题硬门禁（Task 2 前必须过）**
+
+用 Phase 0 的 `/tmp` 26 题脚本，切到新 `KnowledgeLibraryService` 再跑一遍（先不带提示，再带附录 A 提示）。硬门禁：
+- Q8 `upc` 前 3 含 `G-s004`；
+- Q9 `bp` 前 3 含 `G-s006`；
+- Q14 `zh-upc` 前 3 含 `G-s004`；
+- Q15 `zh-bp` 前 3 含 `G-s006`；
+- Q21 `stage2-vs4` 前 3 含 `I-s004` 或 `I-s005`；
+- Q10 `stage3`、Q11 `zh-stage3` 前 3 含 `I-s005`。
+
+未过就先调 Task 1 的 `staging ×1.25` / `stage+treatment ×1.15` 软加权，再复跑；**不要进入 Task 2，也不要改期望来绕门禁**。把这 6 组结果贴进执行记录。
+
+- [ ] **Step 7: 提交**
 
 提交（在工位根目录）：
 ```bash
@@ -284,24 +307,35 @@ bash scripts/session.sh commit -m "feat(knowledge): 查询扩展/焦点门禁/�
 
 ```ts
 it('打开节：≤12 段、nextOffset、显示标题、相邻节', async () => {
-  // sourceSection.findUnique 返回 20 段；断言 paragraphs.length === 12，nextOffset === 12，displayTitle 含 '第37章'
+  // mock sourceSection.findUnique 返回 title='787 Chronic Kidney Disease'、pageNo=17、20 段
+  const view = await service.openSection('s1');
+  expect(view?.paragraphs).toHaveLength(12);
+  expect(view?.nextOffset).toBe(12);
+  expect(view?.displayTitle).toContain('第37章');
 });
 
 it('打开节：anchorParagraphId 让被引用段出现在第一页', async () => {
-  // anchor 指向第 15 段；断言 paragraphs[0].id 是 anchor 前 2 段
+  const view = await service.openSection('s1', { anchorParagraphId: 'p15' });
+  expect(view?.paragraphs[0].id).toBe('p13');
 });
 
 it('打开表：返回列/行/页码/文档标题', async () => {
-  // T0497：columns/rows/pageNo=17/documentTitle；rowCount=10
+  const table = await service.openTable('T0497');
+  expect(table?.rowCount).toBe(10);
+  expect(table?.pageNo).toBe(17);
+  expect(table?.caption).toContain('37-9');
 });
 
 it('馆藏：传 CKD 5 份 documentIds 返回 5 份，按来源可收窄', async () => {
-  // scope({ documentIds: CKD_DOCUMENT_IDS }) 返回 5 份；断言 totals.documents=5
+  const result = await service.scope({ documentIds: CKD_DOCUMENT_IDS });
+  expect(result.totals.documents).toBe(5);
 });
 
 it('表格视图：按行文本命中 T0497，焦点门禁排除 vitamin E 表', async () => {
-  // searchTableViews('phosphorus') 返回 T0497
-  // searchTableViews('CKD dog vitamin K target') 不返回 T0025（只有 vitamin E）
+  const hits = await service.searchTableViews('phosphorus', { documentIds: CKD_DOCUMENT_IDS });
+  expect(hits.map((table) => table.tableId)).toContain('T0497');
+  const vitaminK = await service.searchTableViews('CKD dog vitamin K target', { documentIds: CKD_DOCUMENT_IDS });
+  expect(vitaminK.map((table) => table.tableId)).not.toContain('T0025');
 });
 ```
 
@@ -315,7 +349,7 @@ Expected: FAIL，新方法不存在。
 - `openSection`：`sourceSection.findUnique` + document + paragraphs（按 id 升序）；有 `anchorParagraphId` 时算序号，`paragraphOffset = max(0, index - 2)`；切最多 12 段；`tables` 取该文档表（页码在节范围优先，null 的也允许，最多 3 张）；前后节按 `documentId + sortOrder`。
 - `openTable`：`sourceTable.findUnique` + document；返回 columns/rows/pageNo/documentTitle/sourceId/sourceName；`pageNo` 允许 null。
 - `scope({ sourceId?, documentIds? })`：`sourceDocument.findMany` 的 `where` 用 Prisma 合法写法：有 `documentIds` 时 `{ id: { in: documentIds }, ...(sourceId ? { sourceId } : {}) }`；没有 `documentIds` 时 `sourceId ? { sourceId } : undefined`；`select` 带 `_count: { select: { sections: true, paragraphs: true, tables: true } }`；汇总 totals。默认由调用方传 CKD documentIds，服务本身不硬编码 CKD。
-- `searchTableViews`：按 documentIds/sourceIds 取表（CKD 23 张），用 `extractQueryFocus` 的门禁（**topicPhrases 非空时只认 topicPhrases**；否则 focusTerms/stagePhrases）匹配 `caption + JSON.stringify(rows)`；返回 ≤3 张。
+- `searchTableViews`：按 documentIds/sourceIds 取表（CKD 23 张），用 `extractQueryFocus` 的门禁（**topicPhrases 非空时必须命中 topicPhrases**；否则 focusTerms/stagePhrases）匹配 `caption + JSON.stringify(rows)`；返回 ≤3 张。
 - 保留现有 `searchTables` 供 HTTP 接口使用；`searchTableViews` 是新方法，不改旧签名。
 
 - [ ] **Step 4: 跑测试并提交**
@@ -472,15 +506,21 @@ it('未知主题报错并列合法值', async () => {
 });
 
 it('中文主题归一成英文', async () => {
-  // topics:['磷'] → searchSections 收到 topics:['phosphorus']
+  const searchSections = jest.fn().mockResolvedValue([]);
+  await executeTool('search_knowledge_library', { query: 'x', topics: ['磷'] }, { ...ctx, library: { searchSections } });
+  expect(searchSections).toHaveBeenCalledWith('x', expect.objectContaining({ topics: ['phosphorus'] }));
 });
 
 it('0 结果返回 no_match 和未覆盖摘要', async () => {
-  // searchSections 返回 []；断言 data.status === 'no_match'，summary 含 '未覆盖'
+  const outcome = await executeTool('search_knowledge_library', { query: 'x' }, { ...ctx, library: { searchSections: jest.fn().mockResolvedValue([]) } });
+  expect((outcome.data as any).status).toBe('no_match');
+  expect(outcome.summary).toContain('未覆盖');
 });
 
 it('非 CKD 文档被拒绝', async () => {
-  // documentIds:['aaha-AAHA-2010-...'] → ok:false，message 含 'CKD'
+  const outcome = await executeTool('search_knowledge_library', { query: 'x', documentIds: ['aaha-AAHA-2010-Nutritional-Assessment-Guidelines'] }, ctx);
+  expect(outcome.ok).toBe(false);
+  expect(outcome.error?.message).toContain('CKD');
 });
 ```
 

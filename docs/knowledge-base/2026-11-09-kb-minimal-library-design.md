@@ -32,7 +32,7 @@
 
 - **分期短语只做召回扩展，不做门禁**（`stage 3` 可以命中 `s005`，但不排斥其他分期）；
 - **焦点词 = 查询内容词减去背景词**（未知营养素天然是焦点，0 命中就是 `no_match`）；
-- **门禁是「焦点短语 OR 焦点词 OR 分期短语」三者任一**，不是「必须同时满足」；
+- **门禁有优先级**：`topicPhrases` 非空时必须命中 topic 短语；否则 `focusTerms OR stagePhrases`；三组都空才不做门禁。不是「必须同时满足」，也不是「全部 OR 平权」；
 - **评估走 `executeTool`**，用和 Agent 一样的路径；
 - **复用现有 `SourceLayerService`** 做打开/馆藏，不再新建第三个查询服务。
 
@@ -322,7 +322,7 @@ extractQueryFocus(query: string): {
 
 ### 7.5 表格
 
-- `SourceLayerService.searchTableViews(query, {documentIds, sourceIds, limit})`：取指定文档/来源的表（CKD 23 张），用 `extractQueryFocus` 的门禁（topic 短语优先，其次 focus 词/分期；不做分期排除）匹配 `caption + 行文本`；返回 ≤3 张，带 `tableId/caption/pageNo/rowCount/documentId/sourceId`。
+- `SourceLayerService.searchTableViews(query, {documentIds, sourceIds, limit})`：取指定文档/来源的表（CKD 23 张），用 `extractQueryFocus` 的门禁（`topicPhrases` 非空时必须命中；否则 focus 词/分期；不做分期排除）匹配 `caption + 行文本`；返回 ≤3 张，带 `tableId/caption/pageNo/rowCount/documentId/sourceId`。
 - `SourceLayerService.openTable(tableId)`：返回列、行、页码、来源、文档标题；`pageNo` 允许为 null（核心表里 5 张暂时没有页码，v2 补导入）。
 - 表格命中是**文档级**，不是节级；因为 `source_table` 没有 `section_id`，v2 再补。
 - 核心 5 组表优先：37-1（T0253）、37-9（T0497）、37-11/12（T0260/T0261）、AAHA 表 8（T0025/T0026）。

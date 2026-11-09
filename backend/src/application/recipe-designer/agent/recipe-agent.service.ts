@@ -49,11 +49,20 @@ import {
 import { assessmentGapSignature } from './assessment-progress';
 import type { RecipeAgentActor } from './agent-types';
 
-/** 一次运行最多调多少次工具。旧版 200 次，实测平均就要 59 次。 */
-const MAX_TOOL_CALLS = 80;
+/**
+ * 一次运行最多调多少次工具。
+ * 旧版 200 次；最小图书馆版收紧到 80。加入知识库检索后，完整"设计一天食谱"
+ * 会超过 80（实测 80 次仍停在 find_food/edit_recipe 循环），因此支持环境变量覆盖：
+ * `AGENT_MAX_TOOL_CALLS`（默认 80）、`AGENT_MAX_RUN_MS`（默认 6 分钟）。
+ */
+function positiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+const MAX_TOOL_CALLS = positiveInt(process.env.AGENT_MAX_TOOL_CALLS, 80);
 const MAX_NO_PROGRESS_ASSESSMENTS = 3;
 /** 一次运行最长多久。 */
-const MAX_RUN_MS = 6 * 60 * 1000;
+const MAX_RUN_MS = positiveInt(process.env.AGENT_MAX_RUN_MS, 6 * 60 * 1000);
 /** 回灌给模型的历史条数（只含用户与助手）。 */
 const HISTORY_MESSAGES = 30;
 

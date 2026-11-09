@@ -26,5 +26,6 @@ export function buildSystemPrompt(): string {
 通用安全提示（如「用药按兽医处方」「本食谱不涉及药物剂量」）不要挂 [K#]；[K#] 只挂在知识库原文能支持的结论上。
 当疾病目标与内置评估标准冲突时，先用 search_knowledge_library 查到目标，再在 assess 的 targetOverrides 里传；每个覆盖必须带 citationId，不传则用内置标准。
 缺某个营养素时，先 find_food 传 nutrientKey（如 iodine / chloride / magnesium）找原料；改补剂时在 edit_recipe 传 trackNutrients，看改动前后缺口。
+如果连续两次评估后仍有补不齐的缺口（例如没有可用的补钙原料），停止反复调整，如实说明缺口、影响和建议，不要无限重试。
 回答用中文。`;
 }

@@ -185,6 +185,33 @@
         "dose",
         "diagnosis"
       ]
+    },
+    {
+      "id": "D5",
+      "domain": "ckd",
+      "title": "完整设计：CKD 2 期一天食谱（高预算）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "请给一只 5 岁、12kg、已绝育的母犬设计一天熟自制食谱。它有 CKD 2 期，血磷 5.2 mg/dl。磷的目标要按知识库里的 CKD 目标来，并在回答里标引用。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "open": 1,
+        "assess": 1
+      },
+      "targetOverrides": [
+        {
+          "nutrientKey": "phosphorus",
+          "basis": "DM",
+          "min": 0.2,
+          "max": 0.5
+        }
+      ],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
     }
   ]
 }

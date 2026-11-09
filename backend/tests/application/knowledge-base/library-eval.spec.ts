@@ -1,5 +1,6 @@
 import {
   HIT_DEPTH,
+  LIBRARY_THRESHOLDS,
   buildGateChecks,
   exitCodeFor,
   judgeQuestion,
@@ -359,7 +360,7 @@ describe('buildGateChecks / exitCodeFor（阶段出口）', () => {
     ).toBe(1);
   });
 
-  it('整体 <21、负样本/对抗/表格/Stage 3 不满也 exit 1', () => {
+  it('整体 20/26、负样本/对抗/表格/Stage 3 不满也 exit 1', () => {
     const cases: Array<Partial<LibraryGateSummary>> = [
       { overall: 20 },
       { stage3: { passed: 0, total: 1 } },
@@ -372,7 +373,13 @@ describe('buildGateChecks / exitCodeFor（阶段出口）', () => {
     for (const item of cases) {
       expect(exitCodeFor(buildGateChecks(summary(item)))).toBe(1);
     }
-    // 中文 5/6 达标（下限），不拦
-    expect(exitCodeFor(buildGateChecks(summary({ zh: { passed: 5, total: 6 } })))).toBe(0);
+    // 中文 5/6 不达标（门槛 6）
+    expect(exitCodeFor(buildGateChecks(summary({ zh: { passed: 5, total: 6 } })))).toBe(1);
+  });
+
+  it('阈值常量是 26/6，25/26 必须判失败', () => {
+    expect(LIBRARY_THRESHOLDS.overall).toBe(26);
+    expect(LIBRARY_THRESHOLDS.zh).toBe(6);
+    expect(exitCodeFor(buildGateChecks(summary({ overall: 25 })))).toBe(1);
   });
 });

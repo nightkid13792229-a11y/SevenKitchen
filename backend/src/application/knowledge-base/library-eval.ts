@@ -207,10 +207,10 @@ export function judgeQuestion(
 
 /** 阶段出口阈值（spec §8）。 */
 export const LIBRARY_THRESHOLDS = {
-  overall: 21,
+  overall: 26,
   stage3: 1,
   table: 2,
-  zh: 5,
+  zh: 6,
   negative: 4,
   adversarial: 4,
   coreTables: 6,

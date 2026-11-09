@@ -9,6 +9,8 @@
  * 3. `topicPhrases` 只在 query 里出现才返回；`stagePhrases` 只扩召回，不做门禁。
  */
 
+import { normalizeTopic } from '../../domain/knowledge/topic-aliases';
+
 export interface QueryFocus {
   /** 可做相关性门禁的高风险短语（vitamin k / vitamin d / fish oil / omega-3 …）。 */
   topicPhrases: string[];
@@ -360,4 +362,32 @@ export function extractQueryFocus(query: string): QueryFocus {
     focusTerms,
     backgroundTerms: [...new Set(backgroundTerms.map((term) => canonicalTerm(term)))],
   };
+}
+
+/**
+ * 工具参数 `topics` 归一/校验（spec v1.1 §6.2/§7.6）：
+ * - 中文/别名 → 受控主题 key（磷 → phosphorus、upc → proteinuria）；
+ * - 未知主题收进 `invalid`，由工具层报错并列合法值；
+ * - 不是数组、空数组都当没传（空范围由工具层单独处理）。
+ */
+export function normalizeTopics(values: unknown): {
+  topics: string[];
+  invalid: string[];
+} {
+  const topics: string[] = [];
+  const invalid: string[] = [];
+  if (!Array.isArray(values)) return { topics, invalid };
+
+  for (const raw of values) {
+    const text = typeof raw === 'string' ? raw.trim() : String(raw ?? '').trim();
+    if (!text) continue;
+    const key = normalizeTopic(text);
+    if (!key) {
+      if (!invalid.includes(text)) invalid.push(text);
+      continue;
+    }
+    if (!topics.includes(key)) topics.push(key);
+  }
+
+  return { topics, invalid };
 }

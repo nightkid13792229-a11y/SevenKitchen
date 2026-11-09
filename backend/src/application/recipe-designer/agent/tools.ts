@@ -16,6 +16,9 @@ import type {
   SourceLayerService,
   TableView,
 } from '../../knowledge-base/source-layer.service';
+import { CKD_DOCUMENT_IDS } from '../../knowledge-base/section-catalog.service';
+import { normalizeTopics } from '../../knowledge-base/query-expansion';
+import { TOPIC_KEYS } from '../../../domain/knowledge/topic-aliases';
 import type { CitationRegistry } from './citation-registry';
 import {
   AgentToolError,
@@ -25,13 +28,12 @@ import {
   type ToolOutcome,
 } from './agent-types';
 
-const CKD_DOCUMENT_IDS = [
-  'sacn5-chapters-SACN5-37',
-  'iris-IRIS-staging-guidelines-2026',
-  'iris-IRIS-DOG-Treatment-Recommendations-may-2026',
-  'iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g',
-  'aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines',
-];
+/** 配方侧只开放 CKD 三个来源（spec v1.1 §6.2/§7.6）。 */
+const CKD_SOURCE_IDS = [
+  'SACN5',
+  'IRIS-CKD-2026',
+  'AAHA-2021-NUTRITION',
+] as const;
 
 const NO_ARGS = {
   type: 'object',
@@ -87,7 +89,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
       name: 'search_knowledge_library',
       description:
         '在知识库原文里按问题找「节」（只读）。返回最多 5 节、每节最多 2 段原文，带来源、章节、页码和引用编号 K#；同时返回命中的表格摘要。' +
-        '配方侧默认只查 CKD 5 份文档。设计疾病营养配方（如 CKD、胰腺炎、肾病）前先用它查证据；可以换关键词、换来源多次查。' +
+        '配方侧只开放 CKD 5 份文档（SACN5 / IRIS-CKD-2026 / AAHA-2021-NUTRITION），不会查 CKD 之外的库。设计疾病营养配方（如 CKD、胰腺炎、肾病）前先用它查证据；可以换关键词、换来源多次查。' +
         '它返回的是原文，不是结论；需要整节/表格全文时用 open_knowledge，最终回答用 [K#] 引用。',
       parameters: {
         type: 'object',
@@ -101,7 +103,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
             type: 'array',
             items: { type: 'string' },
             description:
-              '可选：限定来源，如 ["SACN5","IRIS-CKD-2026","AAHA-2021-NUTRITION"]',
+              '可选：限定来源，仅限 CKD 来源：SACN5 / IRIS-CKD-2026 / AAHA-2021-NUTRITION；不传则查全部 CKD 5 份。',
           },
           limit: {
             type: 'integer',
@@ -112,12 +114,14 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
           documentIds: {
             type: 'array',
             items: { type: 'string' },
-            description: '可选：只在这些文档 ID 里搜（一般不用传；配方侧默认 CKD）',
+            description:
+              '可选：只在这些文档 ID 里搜，仅限 CKD 5 份；不传则查全部 CKD 5 份。',
           },
           sectionIds: {
             type: 'array',
             items: { type: 'string' },
-            description: '可选：只在这些章节 ID 里搜（一般不用传）',
+            description:
+              '可选：只在这些章节 ID 里搜；显式传空数组会返回 no_match，不会退回全库。',
           },
           species: {
             type: 'string',
@@ -134,7 +138,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
             type: 'array',
             items: { type: 'string' },
             description:
-              '可选主题提示，如 phosphorus / protein / sodium / potassium / proteinuria / bloodpressure / staging',
+              '可选主题提示（只排序、不排除），中英文皆可并自动归一；未知主题会报错并列合法值，如 phosphorus / protein / sodium / proteinuria / bloodpressure / staging。',
           },
         },
         required: ['query'],
@@ -181,7 +185,8 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
         properties: {
           sourceId: {
             type: 'string',
-            description: '可选：只收窄到某个来源，如 IRIS-CKD-2026',
+            description:
+              '可选：只收窄到某个 CKD 来源，如 IRIS-CKD-2026；非 CKD 来源会被拒绝。',
           },
         },
         required: [],
@@ -405,31 +410,71 @@ export async function executeTool(
         if (!query) {
           return fail('INVALID_ARGUMENT', 'query 不能为空');
         }
-        const sourceIds = Array.isArray(args.sourceIds)
-          ? args.sourceIds
-              .filter((item): item is string => typeof item === 'string')
-              .map((item) => item.trim())
-              .filter(Boolean)
-          : undefined;
-        const limit =
-          typeof args.limit === 'number' ? args.limit : undefined;
-        const explicitDocumentIds = Array.isArray(args.documentIds)
-          ? args.documentIds
-              .filter((item): item is string => typeof item === 'string')
-              .map((item) => item.trim())
-              .filter(Boolean)
-          : undefined;
-        // 配方侧默认只开放 CKD 5 份；Task 4 再做非 CKD 的显式拒绝。
+        if (hasValue(args.scope)) {
+          return fail(
+            'INVALID_ARGUMENT',
+            '本阶段只开放 CKD；scope 参数已移除',
+          );
+        }
+
+        const sourceIds = readStringArray(args.sourceIds);
+        const invalidSourceId = sourceIds?.find(
+          (sourceId) => !isCkdSourceId(sourceId),
+        );
+        if (invalidSourceId) {
+          return fail(
+            'OUT_OF_SCOPE',
+            `来源「${invalidSourceId}」不在 CKD 范围；配方本阶段只开放 CKD（可用：${CKD_SOURCE_IDS.join('、')}）`,
+          );
+        }
+
+        const explicitDocumentIds = readStringArray(args.documentIds);
+        const invalidDocumentId = explicitDocumentIds?.find(
+          (documentId) => !isCkdDocument(documentId),
+        );
+        if (invalidDocumentId) {
+          return fail(
+            'OUT_OF_SCOPE',
+            `文档「${invalidDocumentId}」不在 CKD 范围；配方本阶段只开放 CKD（可用：${CKD_DOCUMENT_IDS.join('、')}）`,
+          );
+        }
+
+        const normalizedTopics = normalizeTopics(args.topics);
+        if (normalizedTopics.invalid.length > 0) {
+          return fail(
+            'INVALID_ARGUMENT',
+            `未知主题：${normalizedTopics.invalid.join('、')}；可用：${TOPIC_KEYS.join('、')}`,
+          );
+        }
+
+        const sectionIds = readStringArray(args.sectionIds);
+        if (
+          isExplicitEmpty(args.sourceIds, sourceIds) ||
+          isExplicitEmpty(args.documentIds, explicitDocumentIds) ||
+          isExplicitEmpty(args.sectionIds, sectionIds)
+        ) {
+          // 显式 [] = 范围为空，不是「不限制」：不能悄悄退化成全库。
+          return ok(
+            {
+              status: 'no_match',
+              query,
+              sections: [],
+              tables: [],
+              count: 0,
+              hints: [
+                '换同义词',
+                '用 knowledge_scope 看馆藏',
+                '检查空的范围参数',
+              ],
+            },
+            '知识库未覆盖该问题（显式范围为空，不会退回全库）',
+          );
+        }
+
         const documentIds =
           explicitDocumentIds && explicitDocumentIds.length > 0
             ? explicitDocumentIds
             : [...CKD_DOCUMENT_IDS];
-        const sectionIds = Array.isArray(args.sectionIds)
-          ? args.sectionIds
-              .filter((item): item is string => typeof item === 'string')
-              .map((item) => item.trim())
-              .filter(Boolean)
-          : undefined;
         const querySpecies = /\b(dog|dogs|canine)\b|犬/i.test(query)
           ? 'dog'
           : /\b(cat|cats|feline)\b|猫/i.test(query)
@@ -449,12 +494,12 @@ export async function executeTool(
             : queryStage && queryStage >= 1 && queryStage <= 4
               ? (queryStage as 1 | 2 | 3 | 4)
               : undefined;
-        const topics = Array.isArray(args.topics)
-          ? args.topics
-              .filter((item): item is string => typeof item === 'string')
-              .map((item) => item.trim())
-              .filter(Boolean)
-          : undefined;
+        const topics =
+          normalizedTopics.topics.length > 0
+            ? normalizedTopics.topics
+            : undefined;
+        const limit =
+          typeof args.limit === 'number' ? args.limit : undefined;
 
         const sections = await context.library.searchSections(query, {
           sourceIds,
@@ -466,7 +511,7 @@ export async function executeTool(
           limit,
         });
         const tableViews = await context.sourceLayer.searchTableViews(query, {
-          documentIds: documentIds ?? [...CKD_DOCUMENT_IDS],
+          documentIds,
           sourceIds,
           limit: 3,
         });
@@ -519,6 +564,10 @@ export async function executeTool(
                   ? `；表格 ${citedTables.length} 张`
                   : ''
               }`;
+        const hints =
+          status === 'no_match'
+            ? ['换同义词', '用 knowledge_scope 看馆藏']
+            : undefined;
         return ok(
           {
             status,
@@ -526,6 +575,7 @@ export async function executeTool(
             sections: citedSections,
             tables: citedTables,
             count: citedSections.length,
+            ...(hints ? { hints } : {}),
           },
           summary,
         );
@@ -677,8 +727,14 @@ export async function executeTool(
 
       case 'knowledge_scope': {
         const sourceId = readText(args.sourceId);
+        if (sourceId && !isCkdSourceId(sourceId)) {
+          return fail(
+            'OUT_OF_SCOPE',
+            `来源「${sourceId}」不在 CKD 范围；本阶段只开放 CKD（可用：${CKD_SOURCE_IDS.join('、')}）`,
+          );
+        }
         const scope = await context.sourceLayer.scope({
-          documentIds: CKD_DOCUMENT_IDS,
+          documentIds: [...CKD_DOCUMENT_IDS],
           sourceId,
         });
         return ok(
@@ -1061,7 +1117,42 @@ function readText(value: unknown): string | undefined {
 
 /** 配方侧范围：本阶段只开放 CKD 5 份（spec v1.1 §6.4）。 */
 function isCkdDocument(documentId: string | null | undefined): boolean {
-  return CKD_DOCUMENT_IDS.includes(String(documentId ?? ''));
+  return (CKD_DOCUMENT_IDS as readonly string[]).includes(
+    String(documentId ?? ''),
+  );
+}
+
+/** 配方侧来源：只允许 CKD 三个来源（spec v1.1 §6.2/§6.4）。 */
+function isCkdSourceId(sourceId: string): boolean {
+  return (CKD_SOURCE_IDS as readonly string[]).includes(sourceId);
+}
+
+/** 参数是否真的传了值（空字符串 / 空数组 / null 都算没传）。 */
+function hasValue(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+/**
+ * 显式传了数组、清空后为空 —— 这是「范围为空」，不是「不限制」。
+ * 必须和「没传」区分开，否则会退化成全库。
+ */
+function isExplicitEmpty(
+  raw: unknown,
+  parsed: string[] | undefined,
+): boolean {
+  return Array.isArray(raw) && (parsed?.length ?? 0) === 0;
+}
+
+/** 读字符串数组；不是数组返回 undefined（= 没传）。 */
+function readStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

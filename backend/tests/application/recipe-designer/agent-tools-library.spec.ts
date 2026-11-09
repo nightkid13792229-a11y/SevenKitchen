@@ -210,7 +210,7 @@ describe('Agent 工具：知识库检索与打开', () => {
     expect(outcome.summary).toContain('表格 1 张');
   });
 
-  it('0 节返回 no_match 和未覆盖摘要', async () => {
+  it('0 节返回 no_match、未覆盖摘要和下一步提示', async () => {
     const outcome = await executeTool(
       'search_knowledge_library',
       { query: 'CKD dog biotin requirement' },
@@ -221,6 +221,157 @@ describe('Agent 工具：知识库检索与打开', () => {
     expect(data.count).toBe(0);
     expect(data.sections).toEqual([]);
     expect(outcome.summary).toContain('知识库未覆盖');
+    expect(data.hints).toEqual(['换同义词', '用 knowledge_scope 看馆藏']);
+  });
+
+  it('传已移除的 scope 参数时明确拒绝', async () => {
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'phosphorus', scope: 'all' },
+      context(),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.message).toContain('scope');
+    expect(outcome.error?.message).toContain('CKD');
+  });
+
+  it('未知主题报错并列出合法值', async () => {
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'phosphorus', topics: ['foo'] },
+      context(),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.message).toContain('未');
+    expect(outcome.error?.message).toContain('foo');
+    expect(outcome.error?.message).toContain('phosphorus');
+  });
+
+  it('中文主题归一成受控 key 后透传给检索', async () => {
+    const searchSections = jest.fn().mockResolvedValue([]);
+    await executeTool(
+      'search_knowledge_library',
+      { query: '磷', topics: ['磷'] },
+      context({ library: { searchSections } as any }),
+    );
+    expect(searchSections).toHaveBeenCalledWith(
+      '磷',
+      expect.objectContaining({ topics: ['phosphorus'] }),
+    );
+  });
+
+  it('合法 CKD sourceIds/documentIds 仍正常检索', async () => {
+    const searchSections = jest.fn().mockResolvedValue([]);
+    const searchTableViews = jest.fn().mockResolvedValue([]);
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      {
+        query: 'phosphorus',
+        sourceIds: ['IRIS-CKD-2026'],
+        documentIds: ['iris-IRIS-staging-guidelines-2026'],
+      },
+      context({
+        library: { searchSections } as any,
+        sourceLayer: { searchTableViews } as any,
+      }),
+    );
+    expect(searchSections).toHaveBeenCalledWith(
+      'phosphorus',
+      expect.objectContaining({
+        sourceIds: ['IRIS-CKD-2026'],
+        documentIds: ['iris-IRIS-staging-guidelines-2026'],
+      }),
+    );
+    expect(searchTableViews).toHaveBeenCalledWith(
+      'phosphorus',
+      expect.objectContaining({
+        sourceIds: ['IRIS-CKD-2026'],
+        documentIds: ['iris-IRIS-staging-guidelines-2026'],
+      }),
+    );
+    expect((outcome.data as any).status).toBe('no_match');
+  });
+
+  it('非 CKD 来源直接拒绝', async () => {
+    const searchSections = jest.fn();
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'phosphorus', sourceIds: ['FEDIAF-2025'] },
+      context({ library: { searchSections } as any }),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.message).toContain('CKD');
+    expect(searchSections).not.toHaveBeenCalled();
+  });
+
+  it('非 CKD 文档直接拒绝', async () => {
+    const searchSections = jest.fn();
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'phosphorus', documentIds: [NON_CKD_DOCUMENT] },
+      context({ library: { searchSections } as any }),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.message).toContain('CKD');
+    expect(searchSections).not.toHaveBeenCalled();
+  });
+
+  it('documentIds 显式空数组不退化成全库', async () => {
+    const searchSections = jest.fn();
+    const searchTableViews = jest.fn();
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'phosphorus', documentIds: [] },
+      context({
+        library: { searchSections } as any,
+        sourceLayer: { searchTableViews } as any,
+      }),
+    );
+    const data = outcome.data as any;
+    expect(data.status).toBe('no_match');
+    expect(data.count).toBe(0);
+    expect(data.hints.length).toBeGreaterThan(0);
+    expect(outcome.summary).toContain('未覆盖');
+    expect(searchSections).not.toHaveBeenCalled();
+    expect(searchTableViews).not.toHaveBeenCalled();
+  });
+
+  it('sourceIds 显式空数组不退化成全库', async () => {
+    const searchSections = jest.fn();
+    const searchTableViews = jest.fn();
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'phosphorus', sourceIds: [] },
+      context({
+        library: { searchSections } as any,
+        sourceLayer: { searchTableViews } as any,
+      }),
+    );
+    const data = outcome.data as any;
+    expect(data.status).toBe('no_match');
+    expect(data.count).toBe(0);
+    expect(data.hints.length).toBeGreaterThan(0);
+    expect(searchSections).not.toHaveBeenCalled();
+    expect(searchTableViews).not.toHaveBeenCalled();
+  });
+
+  it('sectionIds 显式空数组不退化成全库', async () => {
+    const searchSections = jest.fn();
+    const searchTableViews = jest.fn();
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'phosphorus', sectionIds: [] },
+      context({
+        library: { searchSections } as any,
+        sourceLayer: { searchTableViews } as any,
+      }),
+    );
+    const data = outcome.data as any;
+    expect(data.status).toBe('no_match');
+    expect(data.count).toBe(0);
+    expect(data.hints.length).toBeGreaterThan(0);
+    expect(searchSections).not.toHaveBeenCalled();
+    expect(searchTableViews).not.toHaveBeenCalled();
   });
 
   it('0 节但命中表格时状态为 ok，摘要指向表格', async () => {
@@ -464,6 +615,18 @@ describe('Agent 工具：知识库检索与打开', () => {
     expect(data.status).toBe('ok');
     expect(data.documents).toHaveLength(5);
     expect(outcome.summary).toContain('5 份文档');
+  });
+
+  it('knowledge_scope 的 sourceId 只允许 CKD 来源', async () => {
+    const scope = jest.fn();
+    const outcome = await executeTool(
+      'knowledge_scope',
+      { sourceId: 'FEDIAF-2025' },
+      context({ sourceLayer: { scope } as any }),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.message).toContain('CKD');
+    expect(scope).not.toHaveBeenCalled();
   });
 
   it('open_knowledge 三选一缺失时报错', async () => {

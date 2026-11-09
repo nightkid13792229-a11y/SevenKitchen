@@ -15,7 +15,10 @@
       "expectedTables": [],
       "expectNoSource": false,
       "category": "numeric",
-      "topics": ["phosphorus"]
+      "topics": [
+        "phosphorus"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "protein",
@@ -29,7 +32,10 @@
       "expectedTables": [],
       "expectNoSource": false,
       "category": "numeric",
-      "topics": ["protein"]
+      "topics": [
+        "protein"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "sodium",
@@ -42,7 +48,10 @@
       "expectedTables": [],
       "expectNoSource": false,
       "category": "numeric",
-      "topics": ["sodium"]
+      "topics": [
+        "sodium"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "potassium",
@@ -56,7 +65,10 @@
       "expectedTables": [],
       "expectNoSource": false,
       "category": "numeric",
-      "topics": ["potassium"]
+      "topics": [
+        "potassium"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "chloride",
@@ -69,7 +81,10 @@
       "expectedTables": [],
       "expectNoSource": false,
       "category": "numeric",
-      "topics": ["chloride"]
+      "topics": [
+        "chloride"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "omega3",
@@ -83,7 +98,10 @@
       "expectedTables": [],
       "expectNoSource": false,
       "category": "numeric",
-      "topics": ["omega3"]
+      "topics": [
+        "omega3"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "staging",
@@ -96,47 +114,66 @@
       "expectedTables": [],
       "expectNoSource": false,
       "category": "staging",
-      "topics": ["staging"]
+      "topics": [
+        "staging"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "upc",
       "query": "CKD dog UPC proteinuria substaging",
-      "expectedSections": ["iris-IRIS-staging-guidelines-2026-s004"],
+      "expectedSections": [
+        "iris-IRIS-staging-guidelines-2026-s004"
+      ],
       "forbiddenSections": [],
       "expectedTables": [],
       "expectNoSource": false,
       "category": "staging",
-      "topics": ["proteinuria"]
+      "topics": [
+        "proteinuria"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "bp",
       "query": "CKD dog blood pressure substaging",
-      "expectedSections": ["iris-IRIS-staging-guidelines-2026-s006"],
+      "expectedSections": [
+        "iris-IRIS-staging-guidelines-2026-s006"
+      ],
       "forbiddenSections": [],
       "expectedTables": [],
       "expectNoSource": false,
       "category": "staging",
-      "topics": ["bloodpressure"]
+      "topics": [
+        "bloodpressure"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "stage3",
       "query": "stage 3 canine patients phosphate target",
-      "expectedSections": ["iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005"],
+      "expectedSections": [
+        "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005"
+      ],
       "forbiddenSections": [],
       "expectedTables": [],
       "expectNoSource": false,
       "category": "staging",
-      "stage": 3
+      "stage": 3,
+      "domain": "ckd"
     },
     {
       "id": "zh-stage3",
       "query": "犬 CKD 3期 血磷 目标",
-      "expectedSections": ["iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005"],
+      "expectedSections": [
+        "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005"
+      ],
       "forbiddenSections": [],
       "expectedTables": [],
       "expectNoSource": false,
       "category": "zh",
-      "stage": 3
+      "stage": 3,
+      "domain": "ckd"
     },
     {
       "id": "zh-dietary",
@@ -149,7 +186,10 @@
       "expectedTables": [],
       "expectNoSource": false,
       "category": "zh",
-      "topics": ["phosphorus"]
+      "topics": [
+        "phosphorus"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "zh-protein",
@@ -162,27 +202,40 @@
       "expectedTables": [],
       "expectNoSource": false,
       "category": "zh",
-      "topics": ["protein"]
+      "topics": [
+        "protein"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "zh-upc",
       "query": "犬 CKD 蛋白尿 UPC 怎么分期",
-      "expectedSections": ["iris-IRIS-staging-guidelines-2026-s004"],
+      "expectedSections": [
+        "iris-IRIS-staging-guidelines-2026-s004"
+      ],
       "forbiddenSections": [],
       "expectedTables": [],
       "expectNoSource": false,
       "category": "zh",
-      "topics": ["proteinuria"]
+      "topics": [
+        "proteinuria"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "zh-bp",
       "query": "犬 CKD 血压 怎么分期",
-      "expectedSections": ["iris-IRIS-staging-guidelines-2026-s006"],
+      "expectedSections": [
+        "iris-IRIS-staging-guidelines-2026-s006"
+      ],
       "forbiddenSections": [],
       "expectedTables": [],
       "expectNoSource": false,
       "category": "zh",
-      "topics": ["bloodpressure"]
+      "topics": [
+        "bloodpressure"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "zh-sodium",
@@ -195,7 +248,10 @@
       "expectedTables": [],
       "expectNoSource": false,
       "category": "zh",
-      "topics": ["sodium"]
+      "topics": [
+        "sodium"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "no-vitamin-k",
@@ -204,7 +260,8 @@
       "forbiddenSections": [],
       "expectedTables": [],
       "expectNoSource": true,
-      "category": "negative"
+      "category": "negative",
+      "domain": "ckd"
     },
     {
       "id": "no-biotin",
@@ -213,7 +270,8 @@
       "forbiddenSections": [],
       "expectedTables": [],
       "expectNoSource": true,
-      "category": "negative"
+      "category": "negative",
+      "domain": "ckd"
     },
     {
       "id": "no-manganese",
@@ -222,7 +280,8 @@
       "forbiddenSections": [],
       "expectedTables": [],
       "expectNoSource": true,
-      "category": "negative"
+      "category": "negative",
+      "domain": "ckd"
     },
     {
       "id": "no-chromium",
@@ -231,7 +290,8 @@
       "forbiddenSections": [],
       "expectedTables": [],
       "expectNoSource": true,
-      "category": "negative"
+      "category": "negative",
+      "domain": "ckd"
     },
     {
       "id": "stage2-vs4",
@@ -247,17 +307,23 @@
       "expectNoSource": false,
       "category": "adversarial",
       "stage": 2,
-      "topics": ["phosphorus"]
+      "topics": [
+        "phosphorus"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "dietary-vs-serum",
       "query": "CKD dog serum phosphate target stage 3",
-      "expectedSections": ["iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005"],
+      "expectedSections": [
+        "iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005"
+      ],
       "forbiddenSections": [],
       "expectedTables": [],
       "expectNoSource": false,
       "category": "adversarial",
-      "stage": 3
+      "stage": 3,
+      "domain": "ckd"
     },
     {
       "id": "dog-protein-hint",
@@ -271,7 +337,10 @@
       "expectNoSource": false,
       "category": "adversarial",
       "species": "dog",
-      "topics": ["protein"]
+      "topics": [
+        "protein"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "synonym",
@@ -284,27 +353,42 @@
       "expectedTables": [],
       "expectNoSource": false,
       "category": "adversarial",
-      "topics": ["phosphorus"]
+      "topics": [
+        "phosphorus"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "table-37-9",
       "query": "CKD dog key nutritional factors phosphorus protein",
       "expectedSections": [],
       "forbiddenSections": [],
-      "expectedTables": ["T0497", "T0260", "T0261"],
+      "expectedTables": [
+        "T0497",
+        "T0260",
+        "T0261"
+      ],
       "expectNoSource": false,
       "category": "table",
-      "topics": ["phosphorus"]
+      "topics": [
+        "phosphorus"
+      ],
+      "domain": "ckd"
     },
     {
       "id": "table-37-1",
       "query": "IRIS staging creatinine SDMA table",
       "expectedSections": [],
       "forbiddenSections": [],
-      "expectedTables": ["T0253"],
+      "expectedTables": [
+        "T0253"
+      ],
       "expectNoSource": false,
       "category": "table",
-      "topics": ["staging"]
+      "topics": [
+        "staging"
+      ],
+      "domain": "ckd"
     }
   ]
 }

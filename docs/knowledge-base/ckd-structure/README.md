@@ -11,7 +11,7 @@
 | `coverage-map.md` | CKD 主题 → 文档/章节覆盖；列出未覆盖主题 |
 | `retrieval-questions.json` | **旧 14 题**：CKD 目录路由验收问题（裸服务/目录层） |
 | `retrieval-evaluation.md` | 旧 14 题目录路由验收结果 |
-| `library-questions.json` | **新 26 题**：最小图书馆版回归集（走 Agent 工具层，spec v1.1 附录 A） |
+| `docs/knowledge-base/eval/ckd/questions.json` | **新 26 题**：最小图书馆版回归集（走 Agent 工具层，spec v1.1 附录 A） |
 | `library-evaluation.md` / `.json` | 新 26 题回归结果（`npm run kb:eval` 生成） |
 | `citation-smoke.md` | 5 场景引用冒烟结果（`npm run kb:smoke` 生成） |
 | `full-library-decision.md` | 是否扩全库的决策与 v1 范围 |
@@ -20,7 +20,7 @@
 
 | 维度 | `retrieval-evaluation.*`（旧） | `library-evaluation.*`（新） |
 |---|---|---|
-| 题集 | `retrieval-questions.json`，14 题 | `library-questions.json`，26 题 |
+| 题集 | `retrieval-questions.json`，14 题 | `docs/knowledge-base/eval/ckd/questions.json`，26 题 |
 | 测什么 | 目录/章节路由（裸检索服务） | Agent 实际看到的工具返回：节分组、`citationId`、表格摘要 |
 | 怎么测 | 直接调检索/目录服务 | 每题一个 `CitationRegistry`，调 `executeTool('search_knowledge_library')`；表格题再用检索返回的 `citationId` 调 `open_knowledge` |
 | 判分 | 目录 top-k 是否命中期望章节 | spec v1.1 附录 A：前 3 节命中 / 禁止节 / 负样本 `no_match` 或 0 节 0 表 / 表格命中且按 K 打开 |
@@ -53,7 +53,7 @@ npm run kb:eval -- --check      # --no-write 的别名
 npm run kb:eval -- --questions <path>   # 换题集做对照
 ```
 
-- 题集：`library-questions.json`（26 题；来源见 `docs/knowledge-base/2026-11-09-kb-minimal-library-design.md` 附录 A）。
+- 题集：`docs/knowledge-base/eval/ckd/questions.json`（26 题；来源见 `docs/knowledge-base/2026-11-09-kb-minimal-library-design.md` 附录 A）。
 - 退出码：整体/Stage 3/表格/中文/负样本/对抗/核心表/p95/max 任一条不过 → 1。
 - 26 题是**产品外**的质量门禁，运行时不加载；不要把它接进 Agent 运行时。
 

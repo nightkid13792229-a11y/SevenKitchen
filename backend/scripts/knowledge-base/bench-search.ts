@@ -25,7 +25,7 @@ import {
 const REPO_ROOT = resolve(__dirname, '../../..');
 const QUESTIONS_PATH = resolve(
   REPO_ROOT,
-  'docs/knowledge-base/ckd-structure/library-questions.json',
+  'docs/knowledge-base/eval/ckd/questions.json',
 );
 
 interface QuestionSpec {

@@ -20,7 +20,7 @@ export type QuestionCategory =
   | 'adversarial'
   | 'table';
 
-/** 一道题的期望（字段与 `docs/knowledge-base/ckd-structure/library-questions.json` 对齐）。 */
+/** 一道题的期望（字段与 `docs/knowledge-base/eval/ckd/questions.json` 对齐）。 */
 export interface QuestionSpec {
   id: string;
   query: string;
@@ -205,8 +205,20 @@ export function judgeQuestion(
       };
 }
 
-/** 阶段出口阈值（spec §8）。 */
-export const LIBRARY_THRESHOLDS = {
+export interface LibraryThresholds {
+  overall: number;
+  stage3: number;
+  table: number;
+  zh: number;
+  negative: number;
+  adversarial: number;
+  coreTables: number;
+  p95Ms: number;
+  maxMs: number;
+}
+
+/** CKD 的阶段出口阈值（spec §8）。 */
+export const LIBRARY_THRESHOLDS: LibraryThresholds = {
   overall: 26,
   stage3: 1,
   table: 2,
@@ -251,8 +263,10 @@ export interface GateCheck {
  * 覆盖率类指标（整体/中文）是下限，硬指标（Stage 3/表格/负样本/对抗/核心表）是全过，
  * 耗时类看 p95 与 max；任何一条不过，`exitCodeFor` 返回 1。
  */
-export function buildGateChecks(summary: LibraryGateSummary): GateCheck[] {
-  const thresholds = LIBRARY_THRESHOLDS;
+export function buildGateChecks(
+  summary: LibraryGateSummary,
+  thresholds: LibraryThresholds = LIBRARY_THRESHOLDS,
+): GateCheck[] {
   return [
     {
       name: '整体',
@@ -314,6 +328,35 @@ export function buildGateChecks(summary: LibraryGateSummary): GateCheck[] {
 }
 
 /** 有任一阶段出口指标不过 → 1。 */
+/**
+ * 分域阈值：CKD 沿用 26/6；其他域"整体 ≥90%，其余类目全过"，
+ * p95/max 用全库标准（1500/3000），不再套 CKD 的 300/1000。
+ */
+export function thresholdsForDomain(
+  domain: string,
+  summary: LibraryGateSummary,
+): LibraryThresholds {
+  if (domain === 'ckd') return LIBRARY_THRESHOLDS;
+  return {
+    overall: Math.ceil(summary.total * 0.9),
+    stage3: summary.stage3.total,
+    table: summary.table.total,
+    zh: summary.zh.total,
+    negative: summary.negative.total,
+    adversarial: summary.adversarial.total,
+    coreTables: summary.coreTables.total,
+    p95Ms: 1500,
+    maxMs: 3000,
+  };
+}
+
+/** 聚合退出码：任一域不过 → 1。 */
+export function aggregateExitCode(
+  summaries: Array<{ domain: string; passed: boolean }>,
+): 0 | 1 {
+  return summaries.every((item) => item.passed) ? 0 : 1;
+}
+
 export function exitCodeFor(checks: GateCheck[]): 0 | 1 {
   return checks.some((check) => !check.passed) ? 1 : 0;
 }

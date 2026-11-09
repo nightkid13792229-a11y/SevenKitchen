@@ -32,6 +32,7 @@ import {
   LIBRARY_THRESHOLDS,
   buildGateChecks,
   exitCodeFor,
+  thresholdsForDomain,
   judgeQuestion,
   tableQuestionTargets,
   type GateCheck,
@@ -49,22 +50,34 @@ const CORE_TABLE_IDS = ['T0253', 'T0497', 'T0260', 'T0261', 'T0025', 'T0026'];
 const REPO_ROOT = resolve(__dirname, '../../..');
 const DEFAULT_QUESTIONS_PATH = resolve(
   REPO_ROOT,
-  'docs/knowledge-base/ckd-structure/library-questions.json',
+  'docs/knowledge-base/eval/ckd/questions.json',
 );
 const OUTPUT_DIR = resolve(REPO_ROOT, 'docs/knowledge-base/ckd-structure');
 
 interface CliOptions {
   questionsPath: string;
+  /** 领域 id；决定阈值与检索 scope，默认 ckd。 */
+  domain: string;
   /** `--no-write` / `--check`：只验证，不覆盖已提交的报告。 */
   write: boolean;
 }
 
 function parseArgv(argv: string[]): CliOptions {
-  const index = argv.findIndex((item) => item === '--questions');
-  const value = index >= 0 ? String(argv[index + 1] ?? '').trim() : '';
+  const questionIndex = argv.findIndex((item) => item === '--questions');
+  const questionValue =
+    questionIndex >= 0 ? String(argv[questionIndex + 1] ?? '').trim() : '';
+  const domainIndex = argv.findIndex((item) => item === '--domain');
+  const domainValue =
+    domainIndex >= 0 ? String(argv[domainIndex + 1] ?? '').trim() : '';
+  const domain = domainValue || 'ckd';
   return {
-    questionsPath: value ? resolve(process.cwd(), value) : DEFAULT_QUESTIONS_PATH,
-    write: !(argv.includes('--no-write') || argv.includes('--check')),
+    questionsPath: questionValue
+      ? resolve(process.cwd(), questionValue)
+      : DEFAULT_QUESTIONS_PATH,
+    domain,
+    write:
+      !(argv.includes('--no-write') || argv.includes('--check')) &&
+      domain === 'ckd',
   };
 }
 
@@ -131,12 +144,13 @@ interface QuestionRun {
 function makeContext(
   library: KnowledgeLibraryService,
   sourceLayer: SourceLayerService,
+  domain = 'ckd',
 ): ToolExecutionContext {
   return {
     scope:
       process.env.KB_EVAL_SCOPE === 'all'
         ? allDocumentsScope()
-        : resolveKnowledgeScope(['ckd']),
+        : resolveKnowledgeScope([domain], { allowUnaudited: true }),
     port: {} as any,
     catalog: {} as any,
     library,
@@ -219,8 +233,9 @@ async function checkOpenTable(
   tableId: string,
   library: KnowledgeLibraryService,
   sourceLayer: SourceLayerService,
+  domain = 'ckd',
 ): Promise<OpenCheck> {
-  const context = makeContext(library, sourceLayer);
+  const context = makeContext(library, sourceLayer, domain);
   const outcome = await executeTool('open_knowledge', { tableId }, context);
   if (!outcome.ok) {
     return {
@@ -273,7 +288,7 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
 
     for (const [index, spec] of questions.entries()) {
       // 每个问题一个引用登记表：跨题复用会把 K 号算串（会话恢复也按题算）。
-      const context = makeContext(library, sourceLayer);
+      const context = makeContext(library, sourceLayer, options.domain);
       const startedAt = performance.now();
       let run: QuestionRun;
       try {
@@ -372,7 +387,9 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
     // 6 张核心表：独立上下文逐张打开（能力检查）。
     const coreTables: OpenCheck[] = [];
     for (const tableId of CORE_TABLE_IDS) {
-      coreTables.push(await checkOpenTable(tableId, library, sourceLayer));
+      coreTables.push(
+        await checkOpenTable(tableId, library, sourceLayer, options.domain),
+      );
     }
 
     const overall = runs.filter((run) => run.passed).length;
@@ -399,7 +416,10 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
       coreTables: { passed: coreTablePassed, total: coreTables.length },
       timing: { p50, p95, max },
     };
-    const checks: GateCheck[] = buildGateChecks(gateSummary);
+    const checks: GateCheck[] = buildGateChecks(
+      gateSummary,
+      thresholdsForDomain(options.domain, gateSummary),
+    );
     exitCode = exitCodeFor(checks);
     const questionsFile = displayPath(options.questionsPath);
 

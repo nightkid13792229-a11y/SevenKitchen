@@ -600,6 +600,17 @@ export function getPurchaseRecords(purchaseListId: string) {
 }
 
 /**
+ * 一条采购记录的价格对比：
+ * 同原料其他商品（最近 5 条流水）+ 同商品（最近 5 条流水）。
+ */
+export function getPurchaseRecordPriceComparison(recordId: string) {
+  return request({
+    url: `/staff/purchasing/purchase-records/${recordId}/price-comparison`,
+    method: 'GET',
+  });
+}
+
+/**
  * 更新采购记录
  */
 export function updatePurchaseRecord(purchaseListId: string, recordId: string, data: {

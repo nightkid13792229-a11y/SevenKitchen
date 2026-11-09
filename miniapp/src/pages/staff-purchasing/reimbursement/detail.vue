@@ -236,9 +236,12 @@
               </view>
               <view class="metric metric-delta">
                 <text class="metric-label">涨跌</text>
-                <text class="metric-value" :class="recordDeltaTone(record)">
-                  {{ recordDeltaText(record) }}
-                </text>
+                <view class="metric-delta-line">
+                  <text class="metric-value" :class="recordDeltaTone(record)">
+                    {{ recordDeltaText(record) }}
+                  </text>
+                  <text class="metric-help" @tap.stop="openPriceCompare(record)">?</text>
+                </view>
               </view>
             </view>
 
@@ -438,6 +441,85 @@
         </view>
       </view>
     </view>
+
+    <!-- 价格对比弹层（2026-11-10） -->
+    <view v-if="priceCompareVisible" class="sheet-mask" @tap="closePriceCompare">
+      <view class="sheet price-compare-sheet" @tap.stop>
+        <view class="pc-head">
+          <view class="pc-head-text">
+            <text class="sheet-title">价格对比</text>
+            <text class="sheet-sub">{{ priceCompareSubtitle }}</text>
+          </view>
+          <text class="pc-close" @tap="closePriceCompare">×</text>
+        </view>
+
+        <view v-if="priceCompareLoading" class="pc-state">加载中...</view>
+        <view v-else-if="priceCompareError" class="pc-state">{{ priceCompareError }}</view>
+        <template v-else-if="priceCompareData">
+          <view class="pc-summary">
+            <view class="pc-sum-cell">
+              <text class="pc-sum-label">本次</text>
+              <text class="pc-sum-value">{{ priceCompareData.current.priceText }}</text>
+            </view>
+            <view class="pc-sum-cell">
+              <text class="pc-sum-label">上次单价</text>
+              <text class="pc-sum-value">{{ priceCompareData.current.previousPriceText || '暂无' }}</text>
+            </view>
+            <view class="pc-sum-cell">
+              <text class="pc-sum-label">涨跌</text>
+              <text
+                class="pc-sum-value"
+                :class="getDeltaTone(priceCompareData.current.deltaRate)"
+              >
+                {{ formatDeltaPercent(priceCompareData.current.deltaRate) }}
+              </text>
+            </view>
+          </view>
+
+          <text v-if="priceCompareNote" class="pc-note">{{ priceCompareNote }}</text>
+
+          <view
+            v-for="section in priceCompareSections"
+            :key="section.key"
+            class="pc-section"
+          >
+            <view class="pc-list-head">
+              <text class="pc-list-title">{{ section.title }}</text>
+              <text class="pc-list-hint">最近 5 条</text>
+            </view>
+            <text v-if="section.caption" class="pc-list-cap">{{ section.caption }}</text>
+
+            <view v-if="section.rows.length === 0" class="pc-empty">
+              {{ section.empty }}
+            </view>
+            <view v-else class="pc-rows">
+              <view
+                v-for="row in section.rows"
+                :key="row.recordId"
+                class="pc-row"
+              >
+                <view class="pc-row-left">
+                  <text class="pc-row-date">{{ formatShortDate(row.purchasedAt) }}</text>
+                  <text class="pc-row-name">{{ formatHistoryRowName(row) }}</text>
+                  <text class="pc-row-meta">{{ row.purchaseChannelName || '未填渠道' }}</text>
+                </view>
+                <view class="pc-row-right">
+                  <view class="pc-row-price-line">
+                    <text class="pc-row-price">{{ row.priceText }}</text>
+                    <text v-if="row.isBaseline" class="pc-base-tag">≈ 基准价</text>
+                  </view>
+                  <text class="pc-row-delta" :class="getDeltaTone(row.deltaRate)">{{ formatComparisonDelta(row.deltaRate) }}</text>
+                </view>
+              </view>
+            </view>
+          </view>
+
+          <text class="pc-foot">
+            右边 = 现在这条采购的折算价，比这一行历史价的折算价；和卡片上的涨跌同一个算法、同一个方向。驳回的单据不计入。
+          </text>
+        </template>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -456,6 +538,7 @@ import {
   reviewReimbursement,
   revertReimbursementReview,
   applyHeldPriceChange,
+  getPurchaseRecordPriceComparison,
 } from '../api/purchasing';
 import { formatStaffQuantity } from '../../../utils/staff-quantity';
 import { formatReimbursementCustomFeeTitle } from '../constants/reimbursement';
@@ -463,6 +546,10 @@ import { formatReimbursementCustomFeeTitle } from '../constants/reimbursement';
 const REVERT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const activeSheet = ref<'' | 'reject' | 'approve' | 'revert'>('');
+const priceCompareVisible = ref(false);
+const priceCompareLoading = ref(false);
+const priceCompareError = ref('');
+const priceCompareData = ref<any>(null);
 const reimbursementId = ref('');
 const reimbursement = ref<any>(null);
 const loading = ref(true);
@@ -1030,6 +1117,94 @@ const recordDeltaText = (record: any) => {
 const recordDeltaTone = (record: any) => {
   const change = priceChangeOf(record);
   return change ? getDeltaTone(change.deltaRate) : 'flat';
+};
+
+/* ---------------- 价格对比（2026-11-10） ---------------- */
+
+const priceCompareSubtitle = computed(() => {
+  const current = priceCompareData.value?.current;
+  if (!current) return '';
+  const sku =
+    current.procurementSkuName || current.productModel || current.ingredientName;
+  return `${current.ingredientName} · ${sku} · ${formatShortDate(current.purchasedAt)}`;
+});
+
+const priceCompareSections = computed(() => {
+  const data = priceCompareData.value;
+  if (!data) return [];
+
+  return [
+    {
+      key: 'others',
+      title: '① 同原料 · 其他商品',
+      caption: '右边是现在这条比它贵多少',
+      rows: data.sameIngredientOthers || [],
+      empty: '这个原料下还没有其他商品的采购记录',
+    },
+    {
+      key: 'same',
+      title: '② 同商品 · 历史采购',
+      caption: '',
+      rows: data.sameSkuHistory || [],
+      empty: '这个商品还没有历史采购',
+    },
+  ];
+});
+
+const priceCompareNote = computed(() => {
+  const current = priceCompareData.value?.current;
+  if (!current?.previousPriceText) return '';
+  const sku = current.procurementSkuName || current.ingredientName;
+  return `这次是拿「${sku} ${current.priceText}」跟「原料基准价 ${current.previousPriceText}」在比，不是同一个商品。`;
+});
+
+const formatHistoryRowName = (row: any) => {
+  const name = row.procurementSkuName || '未关联商品';
+  return row.productModel ? `${name} · ${row.productModel}` : name;
+};
+
+/**
+ * 历史行右侧的对比：当前这条采购的折算价 vs 这一行历史价。
+ * 和卡片上的「涨跌」同一个算法、同一个方向，所以基准价那一行会算出
+ * 和卡片一模一样的百分比。
+ */
+const formatComparisonDelta = (deltaRate?: number | null) => {
+  if (
+    deltaRate === undefined ||
+    deltaRate === null ||
+    !Number.isFinite(Number(deltaRate))
+  ) {
+    return '暂无可比价';
+  }
+
+  if (Math.abs(Number(deltaRate)) < 0.0005) {
+    return '现在跟它持平';
+  }
+
+  return `现在比它 ${formatDeltaPercent(deltaRate)}`;
+};
+
+const openPriceCompare = async (record: any) => {
+  priceCompareVisible.value = true;
+  priceCompareLoading.value = true;
+  priceCompareError.value = '';
+  priceCompareData.value = null;
+
+  try {
+    const res: any = await getPurchaseRecordPriceComparison(record.id);
+    if (res.code !== 0) {
+      throw new Error(res.message || '加载失败');
+    }
+    priceCompareData.value = res.data;
+  } catch (error: any) {
+    priceCompareError.value = error?.message || '加载失败，请稍后再试';
+  } finally {
+    priceCompareLoading.value = false;
+  }
+};
+
+const closePriceCompare = () => {
+  priceCompareVisible.value = false;
 };
 
 /** 被价格闸挂起的调价，管理员可以在手机上直接放行 */
@@ -2438,5 +2613,249 @@ const resubmit = () => {
       }
     }
   }
+}
+
+/* ---------------- 价格对比（2026-11-10） ---------------- */
+
+.metric-delta-line {
+  display: flex;
+  align-items: center;
+}
+
+.metric-help {
+  width: 28rpx;
+  height: 28rpx;
+  line-height: 28rpx;
+  text-align: center;
+  border-radius: 50%;
+  border: 1rpx solid #d3c8ae;
+  background-color: #fffdf7;
+  color: #6b6653;
+  font-size: 20rpx;
+  font-weight: 700;
+  margin-left: 6rpx;
+  flex: none;
+}
+
+.price-compare-sheet {
+  max-height: 82vh;
+  overflow-y: auto;
+}
+
+.pc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.pc-head-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.pc-close {
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  text-align: center;
+  border-radius: 50%;
+  background-color: #f1eee3;
+  color: #6b6653;
+  font-size: 32rpx;
+  flex: none;
+  margin-left: 16rpx;
+}
+
+.pc-state {
+  display: block;
+  padding: 60rpx 0;
+  text-align: center;
+  font-size: 26rpx;
+  color: #8a8472;
+}
+
+.pc-summary {
+  display: flex;
+  margin-top: 20rpx;
+  padding: 18rpx 20rpx;
+  background-color: #f4f1e6;
+  border-radius: 14rpx;
+}
+
+.pc-sum-cell {
+  flex: 1;
+  min-width: 0;
+
+  & + & {
+    border-left: 1rpx solid #e2dac6;
+    padding-left: 18rpx;
+  }
+}
+
+.pc-sum-label {
+  display: block;
+  font-size: 20rpx;
+  color: #8a8472;
+}
+
+.pc-sum-value {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #26261f;
+  font-variant-numeric: tabular-nums;
+
+  &.up {
+    color: #a8402f;
+  }
+
+  &.down {
+    color: #2f6b4f;
+  }
+
+  &.flat {
+    color: #8a8472;
+  }
+}
+
+.pc-note {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: #6b6653;
+  line-height: 1.55;
+}
+
+.pc-section {
+  margin-top: 26rpx;
+}
+
+.pc-list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.pc-list-title {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.pc-list-hint {
+  font-size: 20rpx;
+  color: #8a8472;
+}
+
+.pc-list-cap {
+  display: block;
+  margin: 6rpx 0 4rpx;
+  font-size: 21rpx;
+  color: #6b6653;
+  line-height: 1.5;
+}
+
+.pc-rows {
+  border-top: 1rpx solid #ece4d2;
+}
+
+.pc-row {
+  display: flex;
+  align-items: center;
+  padding: 16rpx 2rpx;
+  border-bottom: 1rpx solid #f0e9da;
+}
+
+.pc-row-left {
+  flex: 1;
+  min-width: 0;
+  padding-right: 16rpx;
+}
+
+.pc-row-date {
+  display: block;
+  font-size: 20rpx;
+  color: #8a8472;
+}
+
+.pc-row-name {
+  display: block;
+  margin-top: 2rpx;
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #26261f;
+}
+
+.pc-row-meta {
+  display: block;
+  margin-top: 2rpx;
+  font-size: 20rpx;
+  color: #6b6653;
+}
+
+.pc-row-right {
+  flex: none;
+  text-align: right;
+}
+
+.pc-row-price-line {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.pc-row-price {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #26261f;
+  font-variant-numeric: tabular-nums;
+}
+
+.pc-base-tag {
+  margin-left: 8rpx;
+  padding: 2rpx 8rpx;
+  border-radius: 6rpx;
+  background-color: #f8efd9;
+  color: #8a6420;
+  font-size: 18rpx;
+  line-height: 1.4;
+}
+
+.pc-row-delta {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: #8a8472;
+
+  &.up {
+    color: #a8402f;
+  }
+
+  &.down {
+    color: #2f6b4f;
+  }
+
+  &.flat {
+    color: #8a8472;
+  }
+}
+
+.pc-empty {
+  display: block;
+  padding: 26rpx 0;
+  font-size: 22rpx;
+  color: #8a8472;
+  text-align: center;
+}
+
+.pc-foot {
+  display: block;
+  margin-top: 22rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx dashed #e2dac6;
+  font-size: 20rpx;
+  color: #8a8472;
+  line-height: 1.55;
 }
 </style>

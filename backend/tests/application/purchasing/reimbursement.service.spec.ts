@@ -61,6 +61,16 @@ describe('ReimbursementService', () => {
       create: jest.fn().mockResolvedValue({}),
       findMany: jest.fn().mockResolvedValue([]),
     },
+    purchaseRecord: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+    },
+    ingredient: {
+      findUnique: jest.fn(),
+    },
+    ingredientPriceChange: {
+      findUnique: jest.fn(),
+    },
   };
 
   const mockIngredientPricingService = {
@@ -810,5 +820,149 @@ describe('ReimbursementService', () => {
     expect(
       mockIngredientPricingService.syncPendingChangesForReimbursement,
     ).toHaveBeenCalledWith('reimbursement-1', ['purchase-list-2']);
+  });
+
+  it('shows the current purchase against every historical price, same ingredient and same sku', async () => {
+    const currentRecord = {
+      id: 'record-current',
+      ingredientId: 'ingredient-1',
+      procurementSkuId: 'sku-240',
+      procurementSkuName: '西葫芦片 约240g',
+      productModel: '240g',
+      purchaseChannelName: '盒马鲜生',
+      actualCost: 2.99,
+      actualBaseQuantity: 240,
+      actualBaseUnit: 'G',
+      purchasedAt: new Date('2026-11-09T16:10:00.000Z'),
+      purchaseList: {
+        reimbursement: {
+          id: 'reimbursement-1',
+          submittedById: 'user-1',
+          status: 'PENDING_REVIEW',
+        },
+      },
+    };
+
+    const history = (id: string, overrides: Record<string, unknown> = {}) => ({
+      id,
+      ingredientId: 'ingredient-1',
+      procurementSkuId: 'sku-750',
+      procurementSkuName: '西葫芦',
+      productModel: '750g/份',
+      purchaseChannelName: '盒马鲜生',
+      actualCost: 4.99,
+      actualBaseQuantity: 750,
+      actualBaseUnit: 'G',
+      purchasedAt: new Date('2026-08-26T00:00:00.000Z'),
+      purchaseList: { reimbursement: { status: 'REIMBURSED' } },
+      ...overrides,
+    });
+
+    mockPrisma.purchaseRecord.findUnique.mockResolvedValue(currentRecord);
+    mockPrisma.ingredient.findUnique.mockResolvedValue({
+      id: 'ingredient-1',
+      name: '西葫芦',
+      baseUnit: 'G',
+      purchaseUnit: 'g',
+      unitDisplayLabel: null,
+      purchaseToBaseRatio: 1,
+    });
+    mockPrisma.ingredientPriceChange.findUnique.mockResolvedValue({
+      previousEffectivePrice: 0.006653,
+      deltaRate: 0.8725,
+    });
+    mockPrisma.purchaseRecord.findMany.mockResolvedValue([
+      history('record-1108', {
+        procurementSkuId: 'sku-240',
+        procurementSkuName: '西葫芦片 约240g',
+        productModel: '240g',
+        actualCost: 2.99,
+        actualBaseQuantity: 240,
+        purchasedAt: new Date('2026-11-08T10:00:00.000Z'),
+      }),
+      history('record-rejected', {
+        procurementSkuId: 'sku-240',
+        actualCost: 2.99,
+        actualBaseQuantity: 240,
+        purchasedAt: new Date('2026-11-01T10:00:00.000Z'),
+        purchaseList: { reimbursement: { status: 'REJECTED' } },
+      }),
+      history('record-0826'),
+      history('record-0726', {
+        actualCost: 4.81,
+        purchasedAt: new Date('2026-07-26T00:00:00.000Z'),
+      }),
+      history('record-0721', {
+        actualCost: 3.98,
+        purchasedAt: new Date('2026-07-21T00:00:00.000Z'),
+      }),
+      history('record-0714', {
+        actualCost: 4.81,
+        purchasedAt: new Date('2026-07-14T00:00:00.000Z'),
+      }),
+      history('record-0622', {
+        procurementSkuId: 'sku-kg',
+        productModel: '散称',
+        actualCost: 6.8,
+        actualBaseQuantity: 755,
+        purchasedAt: new Date('2026-06-22T00:00:00.000Z'),
+      }),
+      history('record-0604', {
+        actualCost: 3.6,
+        actualBaseQuantity: 450,
+        purchasedAt: new Date('2026-06-04T00:00:00.000Z'),
+      }),
+    ]);
+
+    const result = await service.getPurchaseRecordPriceComparison(
+      'record-current',
+      { requesterId: 'user-1', isAdmin: false },
+    );
+
+    expect(result.current.priceText).toBe('¥6.23/500g');
+    expect(result.current.previousPriceText).toBe('¥3.33/500g');
+    expect(result.current.deltaRate).toBe(0.8725);
+
+    expect(
+      result.sameIngredientOthers.map((row: any) => row.recordId),
+    ).toEqual([
+      'record-0826',
+      'record-0726',
+      'record-0721',
+      'record-0714',
+      'record-0622',
+    ]);
+    expect(result.sameIngredientOthers[0].priceText).toBe('¥3.33/500g');
+    expect(result.sameIngredientOthers[0].deltaRate).toBe(0.8725);
+    expect(result.sameIngredientOthers[0].isBaseline).toBe(true);
+    expect(result.sameIngredientOthers[1].deltaRate).toBe(0.9426);
+    expect(result.sameIngredientOthers[4].deltaRate).toBe(0.3831);
+
+    expect(result.sameSkuHistory.map((row: any) => row.recordId)).toEqual([
+      'record-1108',
+    ]);
+    expect(result.sameSkuHistory[0].deltaRate).toBe(0);
+    expect(result.sameSkuHistory[0].isBaseline).toBe(false);
+  });
+
+  it('rejects a requester who cannot view the owning reimbursement', async () => {
+    mockPrisma.purchaseRecord.findUnique.mockResolvedValue({
+      id: 'record-current',
+      ingredientId: 'ingredient-1',
+      purchaseList: {
+        reimbursement: {
+          id: 'reimbursement-1',
+          submittedById: 'user-1',
+          status: 'PENDING_REVIEW',
+        },
+      },
+    });
+
+    await expect(
+      service.getPurchaseRecordPriceComparison('record-current', {
+        requesterId: 'user-2',
+        isAdmin: false,
+      }),
+    ).rejects.toThrow('只能查看自己提交的报销单');
   });
 });

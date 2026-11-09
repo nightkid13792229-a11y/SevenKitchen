@@ -1252,6 +1252,32 @@ export class StaffPurchasingController {
     return ApiResponseDto.success(records, '获取采购记录列表成功');
   }
 
+  @Get('purchase-records/:recordId/price-comparison')
+  @ApiOperation({
+    summary: '采购记录价格对比（同原料其他商品 / 同商品历史，各最近 5 条）',
+  })
+  @ApiParam({ name: 'recordId', description: '采购记录ID' })
+  @ApiResponse({
+    status: 200,
+    description: '价格对比',
+  })
+  async getPurchaseRecordPriceComparison(
+    @Param('recordId') recordId: string,
+    @UserId() userId: string,
+    @UserRole() userRole: string,
+  ): Promise<ApiResponseDto<any>> {
+    const result =
+      await this.reimbursementService.getPurchaseRecordPriceComparison(
+        recordId,
+        {
+          requesterId: userId,
+          isAdmin: userRole === 'ADMIN',
+        },
+      );
+
+    return ApiResponseDto.success(result, '获取价格对比成功');
+  }
+
   @Put('lists/:id/records/:recordId')
   @ApiOperation({ summary: '更新采购记录' })
   @ApiParam({ name: 'id', description: '采购清单ID' })

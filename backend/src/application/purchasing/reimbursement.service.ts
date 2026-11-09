@@ -10,6 +10,7 @@ import {
   Logger,
   BadRequestException,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   REIMBURSEMENT_REPOSITORY,
@@ -50,6 +51,45 @@ export interface SubmitReimbursementDto {
 export interface ReviewReimbursementDto {
   decision: 'APPROVE' | 'REJECT' | 'REQUIRES_RESUBMIT';
   comment?: string;
+}
+
+/** 价格对比里的一条历史采购（折算到同一个展示单位） */
+export interface PriceComparisonPoint {
+  recordId: string;
+  purchasedAt: string;
+  procurementSkuId: string | null;
+  procurementSkuName: string | null;
+  productModel: string | null;
+  purchaseChannelName: string | null;
+  priceValue: number;
+  priceText: string;
+  /** 当前这条采购相对这一条历史价的涨跌；0 表示持平 */
+  deltaRate: number | null;
+  /** 这一行是否正好等于当前单据的「上次单价」 */
+  isBaseline: boolean;
+}
+
+export interface PurchaseRecordPriceComparisonView {
+  current: {
+    recordId: string;
+    ingredientId: string;
+    ingredientName: string;
+    procurementSkuId: string | null;
+    procurementSkuName: string | null;
+    productModel: string | null;
+    purchaseChannelName: string | null;
+    purchasedAt: string;
+    priceValue: number;
+    priceText: string;
+    unitLabel: string;
+    previousPriceValue: number | null;
+    previousPriceText: string | null;
+    deltaRate: number | null;
+  };
+  /** 同原料、其他商品：最近 5 条采购流水 */
+  sameIngredientOthers: PriceComparisonPoint[];
+  /** 同商品：最近 5 条采购流水 */
+  sameSkuHistory: PriceComparisonPoint[];
 }
 
 interface PreparedReimbursementSubmission {
@@ -759,6 +799,239 @@ export class ReimbursementService {
     // 私有对象 key 不下发：只给签名后的可看图。
     delete view.receiptKeys;
     return view;
+  }
+
+  /**
+   * 一条采购记录的价格对比（2026-11-10）。
+   *
+   * 口径只有一条：**当前这条采购的折算价 ÷ 每一行历史价的折算价 − 1**。
+   * 卡片上的「涨跌」就是它跟「上次单价」那一行的结果，
+   * 所以历史里基准价那一行会算出和卡片一模一样的百分比。
+   *
+   * 两段各取最近 5 条：
+   * - 同原料、其他商品（回答「上次单价 3.33 是哪个商品的价格」）
+   * - 同商品（回答「这个商品自己有没有涨价」）
+   *
+   * 驳回的单据不算历史；还没关联报销单的采购记录也不算。
+   */
+  async getPurchaseRecordPriceComparison(
+    purchaseRecordId: string,
+    options: { requesterId?: string; isAdmin?: boolean } = {},
+  ): Promise<PurchaseRecordPriceComparisonView> {
+    const record = (await this.prisma.purchaseRecord.findUnique({
+      where: { id: purchaseRecordId },
+      include: {
+        purchaseList: {
+          select: {
+            reimbursement: {
+              select: { id: true, submittedById: true, status: true },
+            },
+          },
+        },
+      },
+    })) as any;
+
+    if (!record) {
+      throw new NotFoundException(`未找到采购记录：${purchaseRecordId}`);
+    }
+
+    const reimbursement = record.purchaseList?.reimbursement;
+    if (!reimbursement) {
+      throw new BadRequestException('这条采购记录还没有关联报销单');
+    }
+    if (
+      options.requesterId &&
+      !options.isAdmin &&
+      reimbursement.submittedById !== options.requesterId
+    ) {
+      throw new ForbiddenException('只能查看自己提交的报销单');
+    }
+
+    const ingredient = (await this.prisma.ingredient.findUnique({
+      where: { id: record.ingredientId },
+      select: {
+        id: true,
+        name: true,
+        baseUnit: true,
+        purchaseUnit: true,
+        unitDisplayLabel: true,
+        purchaseToBaseRatio: true,
+      },
+    })) as any;
+
+    if (!ingredient) {
+      throw new BadRequestException('采购记录关联的原料不存在');
+    }
+
+    const baseUnit = `${ingredient.baseUnit || ''}`.toUpperCase();
+    const scale = baseUnit === 'G' || baseUnit === 'ML' ? 500 : 1;
+    const unitLabel =
+      baseUnit === 'G'
+        ? '500g'
+        : baseUnit === 'ML'
+          ? '500ml'
+          : ingredient.unitDisplayLabel || ingredient.purchaseUnit || '个';
+
+    const currentPerBase = this.pricePerBaseUnit(record);
+    if (currentPerBase === null) {
+      throw new BadRequestException(
+        '这条采购记录的数量或金额不完整，无法折算单价',
+      );
+    }
+
+    const priceChange = (await this.prisma.ingredientPriceChange.findUnique({
+      where: { purchaseRecordId: record.id },
+      select: { previousEffectivePrice: true, deltaRate: true },
+    })) as any;
+
+    const rawPreviousPrice = priceChange
+      ? this.toNumber(priceChange.previousEffectivePrice)
+      : null;
+    const ingredientRatio =
+      this.toNumber(ingredient.purchaseToBaseRatio) > 0
+        ? this.toNumber(ingredient.purchaseToBaseRatio)
+        : 1;
+    const previousPerBase =
+      rawPreviousPrice !== null &&
+      Number.isFinite(rawPreviousPrice) &&
+      rawPreviousPrice > 0
+        ? rawPreviousPrice / ingredientRatio
+        : null;
+    const previousPriceValue =
+      previousPerBase !== null
+        ? this.roundPrice(previousPerBase * scale)
+        : null;
+
+    const historyRows = (await this.prisma.purchaseRecord.findMany({
+      where: { ingredientId: record.ingredientId },
+      orderBy: [{ purchasedAt: 'desc' }, { createdAt: 'desc' }],
+      take: 200,
+      include: {
+        purchaseList: {
+          select: { reimbursement: { select: { status: true } } },
+        },
+      },
+    })) as any[];
+
+    const points: PriceComparisonPoint[] = historyRows
+      .filter((row) => row.id !== record.id)
+      .filter((row) => {
+        const status = row.purchaseList?.reimbursement?.status;
+        // 驳回的单不算历史；还没关联报销单的草稿也不算。
+        return !!status && status !== 'REJECTED';
+      })
+      .map((row) => {
+        const perBase = this.pricePerBaseUnit(row);
+        if (perBase === null) {
+          return null;
+        }
+
+        const priceValue = this.roundPrice(perBase * scale);
+        return {
+          recordId: row.id,
+          purchasedAt: new Date(row.purchasedAt).toISOString(),
+          procurementSkuId: row.procurementSkuId ?? null,
+          procurementSkuName: row.procurementSkuName ?? null,
+          productModel: row.productModel ?? null,
+          purchaseChannelName: row.purchaseChannelName ?? null,
+          priceValue,
+          priceText: `¥${priceValue.toFixed(2)}/${unitLabel}`,
+          deltaRate:
+            perBase > 0
+              ? this.roundDelta((currentPerBase - perBase) / perBase)
+              : null,
+          isBaseline:
+            previousPerBase !== null &&
+            Math.abs(perBase - previousPerBase) <= 1e-6,
+        };
+      })
+      .filter((point): point is PriceComparisonPoint => point !== null);
+
+    points.sort((a, b) => (a.purchasedAt < b.purchasedAt ? 1 : -1));
+
+    const sameSkuHistory = record.procurementSkuId
+      ? points
+          .filter(
+            (point) => point.procurementSkuId === record.procurementSkuId,
+          )
+          .slice(0, 5)
+      : [];
+
+    const sameIngredientOthers = points
+      .filter(
+        (point) =>
+          point.procurementSkuId &&
+          point.procurementSkuId !== record.procurementSkuId,
+      )
+      .slice(0, 5);
+
+    const currentPriceValue = this.roundPrice(currentPerBase * scale);
+
+    return {
+      current: {
+        recordId: record.id,
+        ingredientId: record.ingredientId,
+        ingredientName: ingredient.name,
+        procurementSkuId: record.procurementSkuId ?? null,
+        procurementSkuName: record.procurementSkuName ?? null,
+        productModel: record.productModel ?? null,
+        purchaseChannelName: record.purchaseChannelName ?? null,
+        purchasedAt: new Date(record.purchasedAt).toISOString(),
+        priceValue: currentPriceValue,
+        priceText: `¥${currentPriceValue.toFixed(2)}/${unitLabel}`,
+        unitLabel,
+        previousPriceValue,
+        previousPriceText:
+          previousPriceValue !== null
+            ? `¥${previousPriceValue.toFixed(2)}/${unitLabel}`
+            : null,
+        deltaRate:
+          priceChange?.deltaRate !== null &&
+          priceChange?.deltaRate !== undefined
+            ? this.toNumber(priceChange.deltaRate)
+            : null,
+      },
+      sameIngredientOthers,
+      sameSkuHistory,
+    };
+  }
+
+  private toNumber(value: unknown): number {
+    if (
+      value !== null &&
+      value !== undefined &&
+      typeof (value as any).toNumber === 'function'
+    ) {
+      return (value as any).toNumber();
+    }
+    return Number(value);
+  }
+
+  private pricePerBaseUnit(record: {
+    actualCost?: unknown;
+    actualBaseQuantity?: unknown;
+  }): number | null {
+    const cost = this.toNumber(record.actualCost);
+    const quantity = this.toNumber(record.actualBaseQuantity);
+
+    if (!Number.isFinite(cost) || cost <= 0) {
+      return null;
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return null;
+    }
+
+    return this.roundPrice(cost / quantity);
+  }
+
+  private roundPrice(value: number): number {
+    return Number.isFinite(value)
+      ? Math.round(value * 1_000_000) / 1_000_000
+      : 0;
+  }
+
+  private roundDelta(value: number): number {
+    return Number.isFinite(value) ? Math.round(value * 10_000) / 10_000 : 0;
   }
 
   /**

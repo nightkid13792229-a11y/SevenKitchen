@@ -129,6 +129,18 @@ describe('staff reimbursement detail guardrails', () => {
     expect(reimbursementDetailSource).toContain('staleVerdict');
   });
 
+  it('opens a price comparison from the 涨跌 field (2026-11-10)', () => {
+    // 涨跌后面加问号；点开是「同原料其他商品 + 同商品」两段历史
+    expect(reimbursementDetailSource).toContain('openPriceCompare(record)');
+    expect(reimbursementDetailSource).toContain('① 同原料 · 其他商品');
+    expect(reimbursementDetailSource).toContain('② 同商品 · 历史采购');
+    expect(reimbursementDetailSource).toContain('现在比它');
+    expect(reimbursementDetailSource).toContain('≈ 基准价');
+    expect(purchasingApiSource).toContain(
+      '/staff/purchasing/purchase-records/${recordId}/price-comparison',
+    );
+  });
+
   it('judges every price change before approval, no "预计" state', () => {
     expect(reimbursementDetailSource).toContain('gatePreviewAction');
     expect(reimbursementDetailSource).toContain('需放行');

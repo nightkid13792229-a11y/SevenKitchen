@@ -1,5 +1,5 @@
 /**
- * 8 个工具（2026-10-31 重建，2026-11-03 增加原文检索、移除旧摘要工具）。
+ * 10 个工具（2026-10-31 重建；2026-11-09 最小图书馆版新增 open / scope）。
  *
  * 原则：工具的数量和返回体积，就是模型的"操作规程"。
  * 所以不加"你必须先…"的说明，而是让工具本身只回这一步需要的东西。
@@ -7,7 +7,15 @@
 import type { DeepSeekToolDefinition } from '../deepseek-tools-chat';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
-import type { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
+import type {
+  KnowledgeLibraryService,
+  LibraryPassage,
+  SectionHit,
+} from '../../knowledge-base/knowledge-library.service';
+import type {
+  SourceLayerService,
+  TableView,
+} from '../../knowledge-base/source-layer.service';
 import type { CitationRegistry } from './citation-registry';
 import {
   AgentToolError,
@@ -78,9 +86,9 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
     function: {
       name: 'search_knowledge_library',
       description:
-        '在知识库原文里按关键词找段落（只读）。返回 5–8 段原文，带来源、章节、页码和引用编号 K#。' +
-        '设计疾病营养配方（如 CKD、胰腺炎、肾病）前先用它查证据；可以换关键词、换来源多次查。' +
-        '它返回的是原文，不是结论；最终回答用 [K#] 引用。',
+        '在知识库原文里按问题找「节」（只读）。返回最多 5 节、每节最多 2 段原文，带来源、章节、页码和引用编号 K#；同时返回命中的表格摘要。' +
+        '配方侧默认只查 CKD 5 份文档。设计疾病营养配方（如 CKD、胰腺炎、肾病）前先用它查证据；可以换关键词、换来源多次查。' +
+        '它返回的是原文，不是结论；需要整节/表格全文时用 open_knowledge，最终回答用 [K#] 引用。',
       parameters: {
         type: 'object',
         properties: {
@@ -93,19 +101,18 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
             type: 'array',
             items: { type: 'string' },
             description:
-              '可选：限定来源，如 ["SACN5","IRIS-CKD-2026","AAHA-2021-NUTRITION"]；不传则全库',
+              '可选：限定来源，如 ["SACN5","IRIS-CKD-2026","AAHA-2021-NUTRITION"]',
           },
-          limit: { type: 'integer', minimum: 1, maximum: 10 },
-          scope: {
-            type: 'string',
-            enum: ['ckd', 'all'],
-            description:
-              '试点范围：ckd=只搜 CKD 的 5 份文档（默认）；all=全库',
+          limit: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 10,
+            description: '最多返回几节，默认 5',
           },
           documentIds: {
             type: 'array',
             items: { type: 'string' },
-            description: '可选：只在这些文档 ID 里搜（一般不用传）',
+            description: '可选：只在这些文档 ID 里搜（一般不用传；配方侧默认 CKD）',
           },
           sectionIds: {
             type: 'array',
@@ -115,22 +122,69 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
           species: {
             type: 'string',
             enum: ['dog', 'cat'],
-            description: '可选：犬/猫；不传则不过滤',
+            description: '可选：犬/猫；只是排序提示，不会排除',
           },
           stage: {
             type: 'integer',
             minimum: 1,
             maximum: 4,
-            description: '可选：CKD 分期 1–4；不传则不过滤',
+            description: '可选：CKD 分期 1–4；只扩召回和排序，不会排除其他分期',
           },
           topics: {
             type: 'array',
             items: { type: 'string' },
             description:
-              '可选主题，如 phosphorus / protein / sodium / potassium / proteinuria / bloodpressure / staging',
+              '可选主题提示，如 phosphorus / protein / sodium / potassium / proteinuria / bloodpressure / staging',
           },
         },
         required: ['query'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'open_knowledge',
+      description:
+        '打开知识库里的节或表格（只读）。三选一：sectionId / tableId / citationId；打开节默认一页 12 段，可用 paragraphOffset 翻页。' +
+        '打开的每一段/每张表都会登记引用编号 K#，最终回答用 [K#] 引用。配方侧只开放 CKD。',
+      parameters: {
+        type: 'object',
+        properties: {
+          sectionId: { type: 'string', description: '要打开的节 id' },
+          tableId: { type: 'string', description: '要打开的表格 id，如 T0497' },
+          citationId: {
+            type: 'string',
+            description: '之前结果里的引用编号，如 K2；按它重新打开对应段落或表格',
+          },
+          paragraphOffset: {
+            type: 'integer',
+            minimum: 0,
+            description: '可选：打开节时的段落偏移，默认 0，每页 12 段',
+          },
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'knowledge_scope',
+      description:
+        '看知识库馆藏（只读）：有哪些文档、各有多少节/段/表。不确定库里有没有某份资料时先看它。' +
+        '配方侧默认只列 CKD 5 份，不会暴露 CKD 之外的馆藏。',
+      parameters: {
+        type: 'object',
+        properties: {
+          sourceId: {
+            type: 'string',
+            description: '可选：只收窄到某个来源，如 IRIS-CKD-2026',
+          },
+        },
+        required: [],
         additionalProperties: false,
       },
     },
@@ -291,10 +345,30 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
   },
 ];
 
+/** 检索返回的段落 + 本次登记的 K 号。 */
+export type CitedPassage = LibraryPassage & { citationId: string };
+
+/** 检索返回的节 + 每段的 K 号。 */
+export type CitedSection = Omit<SectionHit, 'passages'> & {
+  passages: CitedPassage[];
+};
+
+/** 表格命中摘要（spec v1.1 §6.3）：文档级，≤3 张。 */
+export interface TableHitSummary {
+  tableId: string;
+  caption: string;
+  pageNo: number | null;
+  rowCount: number;
+  documentId: string;
+  sourceId: string | null;
+  citationId: string;
+}
+
 export interface ToolExecutionContext {
   port: RecipeDraftPort;
   catalog: RecipeCatalogPort;
   library: KnowledgeLibraryService;
+  sourceLayer: SourceLayerService;
   citations: CitationRegistry;
   /** ask 工具把问题交回运行时：运行时暂停并等用户回答。 */
   onAsk: (question: string, options: string[]) => void;
@@ -339,19 +413,17 @@ export async function executeTool(
           : undefined;
         const limit =
           typeof args.limit === 'number' ? args.limit : undefined;
-        const scope = args.scope === 'all' ? 'all' : 'ckd';
         const explicitDocumentIds = Array.isArray(args.documentIds)
           ? args.documentIds
               .filter((item): item is string => typeof item === 'string')
               .map((item) => item.trim())
               .filter(Boolean)
           : undefined;
+        // 配方侧默认只开放 CKD 5 份；Task 4 再做非 CKD 的显式拒绝。
         const documentIds =
           explicitDocumentIds && explicitDocumentIds.length > 0
             ? explicitDocumentIds
-            : scope === 'all'
-              ? undefined
-              : CKD_DOCUMENT_IDS;
+            : [...CKD_DOCUMENT_IDS];
         const sectionIds = Array.isArray(args.sectionIds)
           ? args.sectionIds
               .filter((item): item is string => typeof item === 'string')
@@ -383,28 +455,194 @@ export async function executeTool(
               .map((item) => item.trim())
               .filter(Boolean)
           : undefined;
-        const passages = (
-          await context.library.search(query, {
-            sourceIds,
-            documentIds,
-            sectionIds,
-            species,
-            stage,
-            topics,
-            limit,
-          })
-        ).map((passage) => ({
-          ...passage,
-          citationId: context.citations.register(passage).citationId,
+
+        const sections = await context.library.searchSections(query, {
+          sourceIds,
+          documentIds,
+          sectionIds,
+          species,
+          stage,
+          topics,
+          limit,
+        });
+        const tableViews = await context.sourceLayer.searchTableViews(query, {
+          documentIds: documentIds ?? [...CKD_DOCUMENT_IDS],
+          sourceIds,
+          limit: 3,
+        });
+
+        const citedSections: CitedSection[] = sections.map((section) => ({
+          ...section,
+          passages: section.passages.map((passage) => ({
+            ...passage,
+            citationId: context.citations.register(passage).citationId,
+          })),
         }));
+        const citedTables: TableHitSummary[] = tableViews.map((table) => ({
+          tableId: table.tableId,
+          caption: table.caption,
+          pageNo: table.pageNo,
+          rowCount: table.rowCount,
+          documentId: table.documentId,
+          sourceId: table.sourceId,
+          citationId: context.citations.registerTable(table).citationId,
+        }));
+
+        const status = citedSections.length > 0 ? 'ok' : 'no_match';
+        const summary =
+          citedSections.length === 0
+            ? '知识库未覆盖该问题'
+            : `找到 ${citedSections.length} 节：${citedSections
+                .slice(0, 3)
+                .map((section) => {
+                  const page =
+                    section.pageStart === null
+                      ? ''
+                      : `（p${section.pageStart}）`;
+                  const citationId =
+                    section.passages[0]?.citationId ?? '';
+                  return `${section.displayTitle}${page}[${citationId}]`;
+                })
+                .join('；')}${
+                citedTables.length > 0
+                  ? `；表格 ${citedTables.length} 张`
+                  : ''
+              }`;
         return ok(
-          { query, passages, count: passages.length },
-          passages.length === 0
-            ? `知识库原文里没有找到「${query}」；换个关键词或来源再查`
-            : `找到 ${passages.length} 段原文：${passages
-                .map((item) => `${item.sourceName ?? item.sourceId}${item.sourceId ? `（${item.sourceId}）` : ''}${item.pageStart ? ` p${item.pageStart}` : ''} [${item.citationId}]`)
-                .slice(0, 4)
-                .join('；')}`,
+          {
+            status,
+            query,
+            sections: citedSections,
+            tables: citedTables,
+            count: citedSections.length,
+          },
+          summary,
+        );
+      }
+
+      case 'open_knowledge': {
+        const sectionId = readText(args.sectionId);
+        const requestedTableId = readText(args.tableId);
+        const citationId = readText(args.citationId);
+
+        let resolvedSectionId = sectionId;
+        let resolvedTableId = requestedTableId;
+        let anchorParagraphId: string | undefined;
+
+        if (citationId) {
+          const record = context.citations.get(citationId);
+          if (!record) {
+            return fail(
+              'INVALID_CITATION',
+              `引用编号「${citationId}」不在本次会话里；请先检索或打开`,
+            );
+          }
+          if (record.kind === 'table') {
+            resolvedTableId = record.tableId ?? record.recordId;
+            resolvedSectionId = undefined;
+          } else {
+            if (!record.sectionId) {
+              return fail(
+                'INVALID_CITATION',
+                `引用「${citationId}」没有所属节，无法打开`,
+              );
+            }
+            resolvedSectionId = record.sectionId;
+            resolvedTableId = undefined;
+            anchorParagraphId = record.passageId ?? record.recordId;
+          }
+        }
+
+        if (!resolvedSectionId && !resolvedTableId) {
+          return fail(
+            'INVALID_ARGUMENT',
+            'open_knowledge 需要 sectionId、tableId、citationId 三选一',
+          );
+        }
+
+        if (resolvedTableId) {
+          const table = await context.sourceLayer.openTable(resolvedTableId);
+          if (!table) {
+            return fail('NOT_FOUND', `没有这张表：${resolvedTableId}`);
+          }
+          if (!isCkdDocument(table.documentId)) {
+            return fail(
+              'OUT_OF_SCOPE',
+              `表格 ${table.tableId} 属于 ${table.documentId}；本阶段只开放 CKD 知识库`,
+            );
+          }
+          const record = context.citations.registerTable(table);
+          return ok(
+            { status: 'ok', table, citationId: record.citationId },
+            `打开表格 ${table.tableId}：${table.caption}${table.pageNo === null ? '' : `（p${table.pageNo}）`}，共 ${table.rowCount} 行 [${record.citationId}]`,
+          );
+        }
+
+        const paragraphOffset =
+          typeof args.paragraphOffset === 'number' &&
+          Number.isFinite(args.paragraphOffset) &&
+          args.paragraphOffset >= 0
+            ? Math.floor(args.paragraphOffset)
+            : undefined;
+        const section = await context.sourceLayer.openSection(
+          resolvedSectionId!,
+          { paragraphOffset, anchorParagraphId },
+        );
+        if (!section) {
+          return fail('NOT_FOUND', `没有这一节：${resolvedSectionId}`);
+        }
+        if (!isCkdDocument(section.documentId)) {
+          return fail(
+            'OUT_OF_SCOPE',
+            `节 ${section.sectionId} 属于 ${section.documentId}；本阶段只开放 CKD 知识库`,
+          );
+        }
+
+        const paragraphs = section.paragraphs.map((paragraph) => {
+          const passage: LibraryPassage = {
+            id: paragraph.id,
+            text: paragraph.text,
+            truncated: false,
+            sourceId: section.sourceId,
+            sourceName: section.sourceName,
+            sourceVersion: section.sourceVersion,
+            documentId: section.documentId,
+            documentTitle: section.documentTitle,
+            sectionId: paragraph.sectionId,
+            sectionTitle: section.title,
+            pageStart: paragraph.pageStart,
+            pageEnd: paragraph.pageEnd,
+            score: 0,
+          };
+          return {
+            ...passage,
+            citationId: context.citations.register(passage).citationId,
+          };
+        });
+        const citationIds = paragraphs.map((paragraph) => paragraph.citationId);
+        return ok(
+          {
+            status: 'ok',
+            section: { ...section, paragraphs },
+            citationIds,
+          },
+          `打开 ${section.displayTitle}：${paragraphs.length}/${section.totalParagraphs} 段${
+            section.nextOffset === null
+              ? ''
+              : `（下一页 paragraphOffset=${section.nextOffset}）`
+          }${paragraphs.length > 0 ? `，引用 ${citationIds.join('、')}` : ''}`,
+        );
+      }
+
+      case 'knowledge_scope': {
+        const sourceId = readText(args.sourceId);
+        const scope = await context.sourceLayer.scope({
+          documentIds: CKD_DOCUMENT_IDS,
+          sourceId,
+        });
+        return ok(
+          { status: 'ok', ...scope },
+          `馆藏 ${scope.totals.documents} 份文档、${scope.totals.sections} 节、${scope.totals.paragraphs} 段、${scope.totals.tables} 张表`,
         );
       }
 
@@ -778,6 +1016,11 @@ function readText(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
+}
+
+/** 配方侧范围：本阶段只开放 CKD 5 份（spec v1.1 §6.4）。 */
+function isCkdDocument(documentId: string | null | undefined): boolean {
+  return CKD_DOCUMENT_IDS.includes(String(documentId ?? ''));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

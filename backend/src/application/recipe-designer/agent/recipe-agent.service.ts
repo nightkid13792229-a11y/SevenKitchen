@@ -12,6 +12,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   type OnModuleInit,
 } from '@nestjs/common';
@@ -29,7 +30,7 @@ import {
 } from '../deepseek-tools-chat';
 import { RecipeDesignerService } from '../recipe-designer.service';
 import { buildSystemPrompt } from './prompt';
-import { CitationRegistry } from './citation-registry';
+import { CitationRegistry, formatTableCitationText } from './citation-registry';
 import {
   citationGatePassed,
   judgeAnswer,
@@ -38,6 +39,7 @@ import {
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
 import { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
+import { SourceLayerService } from '../../knowledge-base/source-layer.service';
 import { AGENT_TOOLS, executeTool } from './tools';
 import { assessmentGapSignature } from './assessment-progress';
 import type { RecipeAgentActor } from './agent-types';
@@ -52,6 +54,7 @@ const HISTORY_MESSAGES = 30;
 
 @Injectable()
 export class RecipeAgentService implements OnModuleInit {
+  private readonly logger = new Logger(RecipeAgentService.name);
   /** 一个草稿同一时间只允许一次运行。 */
   private readonly active = new Set<string>();
   private readonly stopped = new Set<string>();
@@ -61,6 +64,7 @@ export class RecipeAgentService implements OnModuleInit {
     private readonly providerConfig: AgentProviderConfigService,
     private readonly designer: RecipeDesignerService,
     private readonly library: KnowledgeLibraryService,
+    private readonly sourceLayer: SourceLayerService,
   ) {}
 
   /**
@@ -358,6 +362,7 @@ export class RecipeAgentService implements OnModuleInit {
           port,
           catalog,
           this.library,
+          this.sourceLayer,
           citations,
           call,
           (question, options) => {
@@ -427,7 +432,7 @@ export class RecipeAgentService implements OnModuleInit {
     }
   }
 
-  /** 会话级引用登记：从本会话所有检索工具结果恢复 K 号。 */
+  /** 会话级引用登记：从本会话所有检索/打开工具结果恢复 K 号。 */
   private async loadCitationRegistry(
     sessionId: string,
   ): Promise<CitationRegistry> {
@@ -436,27 +441,91 @@ export class RecipeAgentService implements OnModuleInit {
       where: {
         sessionId,
         role: 'TOOL',
-        toolName: 'search_knowledge_library',
+        toolName: {
+          in: ['search_knowledge_library', 'open_knowledge'],
+        },
       },
       orderBy: { seq: 'asc' },
       select: { toolResult: true },
     });
     for (const row of rows) {
-      const result = row.toolResult as any;
-      const passages = Array.isArray(result?.data?.passages)
-        ? result.data.passages
-        : [];
+      const data = (row.toolResult as any)?.data;
+      if (!data) continue;
+
+      const passages = [
+        ...(Array.isArray(data.passages) ? data.passages : []),
+        ...(Array.isArray(data.sections)
+          ? data.sections.flatMap((section: any) =>
+              Array.isArray(section?.passages) ? section.passages : [],
+            )
+          : []),
+        ...(Array.isArray(data.section?.paragraphs)
+          ? data.section.paragraphs
+          : []),
+      ];
       for (const passage of passages) {
-        if (!passage?.citationId || !passage?.id) continue;
+        const citationId = String(passage?.citationId ?? '').trim();
+        const passageId = String(
+          passage?.id ?? passage?.passageId ?? '',
+        ).trim();
+        if (!citationId || !passageId) continue;
         registry.restore({
-          citationId: String(passage.citationId),
-          passageId: String(passage.id),
+          citationId,
+          recordId: passageId,
+          kind: 'passage',
+          sectionId: passage.sectionId ? String(passage.sectionId) : null,
+          passageId,
           sourceId: passage.sourceId ?? null,
           sourceName: passage.sourceName ?? null,
           documentTitle: passage.documentTitle ?? null,
           sectionTitle: String(passage.sectionTitle ?? ''),
           pageStart: passage.pageStart ?? null,
           text: String(passage.text ?? ''),
+        });
+      }
+
+      // open_knowledge 返回完整 table；search 返回表格摘要（无全文）。
+      const tables = [
+        ...(data.table
+          ? [{ ...data.table, citationId: data.citationId }]
+          : []),
+        ...(Array.isArray(data.tables) ? data.tables : []),
+      ];
+      for (const table of tables) {
+        const citationId = String(table?.citationId ?? '').trim();
+        const tableId = String(table?.tableId ?? table?.id ?? '').trim();
+        if (!citationId || !tableId) continue;
+        let full = table;
+        let text =
+          typeof table.text === 'string' && table.text.trim()
+            ? table.text
+            : '';
+        if (!text) {
+          const opened = await this.sourceLayer
+            .openTable(tableId)
+            .catch(() => null);
+          if (!opened) {
+            this.logger.warn(
+              `引用恢复：表格 ${tableId} 找不到全文，跳过 ${citationId}`,
+            );
+            continue;
+          }
+          full = { ...table, ...opened };
+          text = formatTableCitationText(opened);
+        }
+        registry.restore({
+          citationId,
+          recordId: tableId,
+          kind: 'table',
+          tableId,
+          passageId: tableId,
+          sectionId: table.sectionId ?? null,
+          sourceId: full.sourceId ?? null,
+          sourceName: full.sourceName ?? null,
+          documentTitle: full.documentTitle ?? null,
+          sectionTitle: String(full.caption ?? ''),
+          pageStart: full.pageNo ?? null,
+          text,
         });
       }
     }
@@ -467,6 +536,7 @@ export class RecipeAgentService implements OnModuleInit {
     port: RecipeDraftPort,
     catalog: RecipeCatalogPort,
     library: KnowledgeLibraryService,
+    sourceLayer: SourceLayerService,
     citations: CitationRegistry,
     call: DeepSeekToolCall,
     onAsk: (question: string, options: string[]) => void,
@@ -483,8 +553,9 @@ export class RecipeAgentService implements OnModuleInit {
       port,
       catalog,
       library,
+      sourceLayer,
       citations,
-      onAsk: (question, options) => onAsk(question, options),
+      onAsk: (question: string, options: string[]) => onAsk(question, options),
     });
     return { result };
   }

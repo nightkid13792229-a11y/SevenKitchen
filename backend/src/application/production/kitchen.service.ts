@@ -6,6 +6,7 @@
 
 import {
   Injectable,
+  Optional,
   Inject,
   BadRequestException,
   Logger,
@@ -43,6 +44,7 @@ import { TencentCosService } from '../../infrastructure/services/tencent-cos.ser
 import { PdfGeneratorService } from '../../infrastructure/services/pdf-generator.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { GlobalConfigService } from '../config/global-config.service';
+import { PackagingConsumptionService } from '../inventory/packaging-consumption.service';
 import { calculateProductionUsage } from './production-ingredient-usage';
 
 export type InventoryDeductionStatus = 'DEDUCTED' | 'SKIPPED_OFF' | 'FAILED';
@@ -68,6 +70,8 @@ export class StaffProductionService {
     private readonly pdfGenerator: PdfGeneratorService,
     private readonly inventoryService: InventoryService,
     private readonly globalConfigService: GlobalConfigService,
+    @Optional()
+    private readonly packagingConsumption?: PackagingConsumptionService,
   ) {}
 
   /**
@@ -927,6 +931,21 @@ export class StaffProductionService {
     const updated = await this.productionRepository.updatePackagingUnit(unit);
 
     this.logger.log(`[KitchenService] Completed production task ${unitId}`);
+
+    // 备货锅（试吃装）分装完工时扣包材；失败了只记日志，不阻断完工
+    if (this.packagingConsumption) {
+      try {
+        await this.packagingConsumption.consumeForPackagingUnit(
+          updated,
+          actorId,
+        );
+      } catch (error) {
+        this.logger.error(
+          `[KitchenService] 备货锅 ${updated.id} 扣包材失败`,
+          error as any,
+        );
+      }
+    }
 
     // 按配方扣减原料库存（默认关闭：开启前需先盘点，避免账面与实际不符时误判）
     const deduction = await this.deductInventoryIfEnabled(updated.id);

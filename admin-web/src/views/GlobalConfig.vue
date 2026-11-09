@@ -132,6 +132,15 @@
           </div>
         </el-form-item>
 
+        <el-form-item label="发货自动扣减包材">
+          <el-switch v-model="form.packagingDeductionEnabled" />
+          <div class="form-tip form-tip-block">
+            发货确认时按包裹扣真空袋/标签/泡沫箱/保温袋/冰袋；备货锅在分装完工时扣。
+            <br />
+            <strong>开启前请先做一次包材期初</strong>，否则第一次扣完会全是负数。
+          </div>
+        </el-form-item>
+
         <el-divider content-position="left">订单配置</el-divider>
 
         <el-form-item label="最小订单重量（克）" prop="minOrderWeightG">
@@ -576,6 +585,7 @@ const form = ref<GlobalConfig>({
   laborHourlyRate: 30.0,
   minOrderWeightG: 1000,
   autoDeductInventoryOnProduction: true,
+  packagingDeductionEnabled: false,
   defaultBatchCapacityG: 5000,
   minPotWeightG: 2000,
   targetMargin: 0.4,

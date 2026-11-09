@@ -22,6 +22,7 @@ import { randomUUID } from 'crypto';
 import { OrderStatus } from '../../domain/order';
 import type { OrderRepository } from '../../domain/order/order.repository';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { PackagingConsumptionService } from '../inventory/packaging-consumption.service';
 import { ORDER_REPOSITORY } from '../order/order.service.tokens';
 import { ShippingNotificationService } from './shipping-notification.service';
 import { WechatShippingUploadService } from './wechat-shipping-upload.service';
@@ -103,6 +104,8 @@ export class OrderShipmentService {
     private readonly shippingNotificationService?: ShippingNotificationService,
     @Optional()
     private readonly wechatShippingUploadService?: WechatShippingUploadService,
+    @Optional()
+    private readonly packagingConsumption?: PackagingConsumptionService,
   ) {}
 
   /**
@@ -256,6 +259,13 @@ export class OrderShipmentService {
             weightG: item.weightG,
             allocatedFee: item.allocatedFee.toFixed(2),
           })),
+        });
+      }
+
+      if (this.packagingConsumption) {
+        await this.packagingConsumption.consumePackagingForShipment(tx, {
+          shipmentId,
+          orderIds,
         });
       }
 

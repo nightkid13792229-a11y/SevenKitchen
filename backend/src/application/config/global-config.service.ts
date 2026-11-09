@@ -100,6 +100,8 @@ export class GlobalConfigService {
       ),
       autoDeductInventoryOnProduction:
         (config as any).autoDeductInventoryOnProduction ?? true,
+      packagingDeductionEnabled:
+        (config as any).packagingDeductionEnabled ?? false,
       defaultProductLabelId: config.defaultProductLabelId,
       defaultIcePackId: config.defaultIcePackId,
       defaultShippingTemplateId: config.defaultShippingTemplateId,
@@ -196,6 +198,7 @@ export class GlobalConfigService {
       /** 内部生产损耗系数（1–2，1.07 = 损耗 7%）；只影响之后新建的食谱 */
       productionLossRate: number;
       autoDeductInventoryOnProduction: boolean;
+      packagingDeductionEnabled: boolean;
       defaultVacuumBagId: string | null;
       defaultProductLabelId: string | null;
       defaultShippingLabelId: string | null;
@@ -231,6 +234,9 @@ export class GlobalConfigService {
     if (dto.autoDeductInventoryOnProduction !== undefined)
       updateData.autoDeductInventoryOnProduction =
         dto.autoDeductInventoryOnProduction;
+    if ((dto as any).packagingDeductionEnabled !== undefined)
+      updateData.packagingDeductionEnabled = (dto as any)
+        .packagingDeductionEnabled;
     if (dto.defaultBatchCapacityG !== undefined)
       updateData.defaultBatchCapacityG = dto.defaultBatchCapacityG;
     if (dto.minPotWeightG !== undefined)
@@ -359,6 +365,8 @@ export class GlobalConfigService {
       ),
       autoDeductInventoryOnProduction:
         (config as any).autoDeductInventoryOnProduction ?? true,
+      packagingDeductionEnabled:
+        (config as any).packagingDeductionEnabled ?? false,
       defaultProductLabelId: config.defaultProductLabelId,
       defaultIcePackId: config.defaultIcePackId,
       defaultShippingTemplateId: config.defaultShippingTemplateId,
@@ -390,6 +398,7 @@ export class GlobalConfigService {
       laborHourlyRate: 30.0,
       minOrderWeightG: 1000,
       autoDeductInventoryOnProduction: true,
+      packagingDeductionEnabled: false,
       defaultBatchCapacityG: 5000,
       minPotWeightG: 2000,
       targetMargin: 0.4,

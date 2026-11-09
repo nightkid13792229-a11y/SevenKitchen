@@ -47,6 +47,7 @@ export interface GlobalConfig {
   productionLossRate?: number;
   /** 车间完工时是否自动按配方扣减原料库存（默认关闭，需先盘点） */
   autoDeductInventoryOnProduction?: boolean;
+  packagingDeductionEnabled?: boolean;
   defaultProductLabelId: string | null;
   defaultIcePackId: string | null;
   defaultShippingTemplateId: string | null;

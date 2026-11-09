@@ -11,6 +11,8 @@ export interface GlobalConfig {
   /** 车间完工时是否自动按配方扣减原料库存（默认关闭，需先盘点） */
 
   autoDeductInventoryOnProduction?: boolean;
+  /** 发货/备货分装时是否自动扣包材（默认关闭，需先做包材期初） */
+  packagingDeductionEnabled?: boolean;
   defaultBatchCapacityG: number;
   minPotWeightG: number;
   targetMargin: number;

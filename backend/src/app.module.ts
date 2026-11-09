@@ -163,6 +163,7 @@ import {
 } from './application/inventory/inventory.service';
 import { PrismaInventoryRepository } from './infrastructure/repositories/prisma-inventory.repository';
 import { InventoryHomeService } from './application/inventory/inventory-home.service';
+import { PackagingConsumptionService } from './application/inventory/packaging-consumption.service';
 import { PrismaOrderStatusHistoryRepository } from './infrastructure/repositories/prisma-order-status-history.repository';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from './application/order/order.service.tokens';
 import { PrismaDogBreedRepository } from './infrastructure/repositories/prisma-dog-breed.repository';
@@ -704,6 +705,7 @@ validatePrismaConfig();
     // Phase 8.13: Inventory Service
     InventoryService,
     InventoryHomeService,
+    PackagingConsumptionService,
     // Phase 8.14: Shipping Fulfillment Service
     ShippingFulfillmentService,
     WechatShippingUploadService,

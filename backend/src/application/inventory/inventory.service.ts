@@ -2211,6 +2211,7 @@ export class InventoryService {
       [InventorySourceType.PURCHASE_RECORD]: '采购入库',
       [InventorySourceType.PURCHASE_RECORD_REVERSAL]: '采购撤回',
       [InventorySourceType.OPENING_BALANCE]: '期初结转',
+      [InventorySourceType.PACKAGING_CONSUMPTION]: '包材扣减',
       [InventorySourceType.MANUAL_ADJUSTMENT]: '手工调整',
       [InventorySourceType.STOCKTAKE]: '盘点差异',
       [InventorySourceType.PRODUCTION_ALLOCATION_CONSUMPTION]: '生产领用',

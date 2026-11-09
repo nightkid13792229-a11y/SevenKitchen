@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { readAllPagePaths } from '../../test-utils/pages-json';
 
 const ordersApiSource = readFileSync(resolve(__dirname, '../api/orders.ts'), 'utf8');
 const orderDetailSource = readFileSync(resolve(__dirname, 'order-detail/index.vue'), 'utf8');
@@ -28,7 +29,7 @@ describe('customer shipping notification subscription flow', () => {
   });
 
   it('registers the customer shipping notice page route', () => {
-    expect(pagesConfigSource).toContain('pages/order-shipping-notice/index');
+    expect(readAllPagePaths()).toContain('pages/order-shipping-notice/index');
     expect(pagesConfigSource).toContain('物流与食用提醒');
   });
 

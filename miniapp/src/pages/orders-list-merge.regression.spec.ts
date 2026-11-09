@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readAllPagePaths } from '../../test-utils/pages-json'
 
 /**
  * 顾客「我的订单」已并入「我的补剂订单」：一个列表管两类订单、一套状态筛选。
@@ -127,8 +128,8 @@ describe('我的订单合并补剂订单', () => {
     ].length
     expect(redirectCount).toBe(1)
 
-    const pagesJson = readPage('src/pages.json')
-    expect(pagesJson).toContain('pages/supplement-order-detail/index')
+    const pagePaths = readAllPagePaths()
+    expect(pagePaths).toContain('pages/supplement-order-detail/index')
     // 合并后的「我的订单」仍要拉补剂订单
     expect(source).toContain('fetchSupplementOrders(')
   })

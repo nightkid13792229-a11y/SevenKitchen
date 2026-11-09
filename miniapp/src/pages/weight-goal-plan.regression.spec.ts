@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readAllPagePaths } from '../../test-utils/pages-json'
 
 const read = (path: string) =>
   readFileSync(resolve(process.cwd(), path), 'utf-8')
@@ -22,8 +23,8 @@ const CARD = 'src/components/dog-profile/WeightManagementSection.vue'
  */
 describe('体重管理计划 · 接线', () => {
   it('页面已在 pages.json 注册（否则点进去是死链）', () => {
-    const pagesJson = read('src/pages.json')
-    expect(pagesJson).toContain('pages/weight-goal-plan/index')
+    const pagePaths = readAllPagePaths()
+    expect(pagePaths).toContain('pages/weight-goal-plan/index')
   })
 
   it('页面文件存在且走统一的 request 封装', () => {

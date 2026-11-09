@@ -27,6 +27,7 @@ import {
   shouldShowAssessmentDetailTrigger,
   shouldShowAssessmentDryMatterInline,
 } from './recipe-designer/assessment'
+import { readAllPagePaths } from '../../test-utils/pages-json'
 import { buildPublishNutritionReport } from './recipe-designer/publish-report'
 
 const readSource = (path: string) => {
@@ -111,10 +112,10 @@ describe('recipe designer mobile entry', () => {
   })
 
   it('registers recipe designer pages in pages.json', () => {
-    expect(pagesJsonSource).toContain('pages/recipe-designer/list')
-    expect(pagesJsonSource).toContain('pages/recipe-designer/editor')
-    expect(pagesJsonSource).toContain('pages/recipe-designer/publish')
-    expect(pagesJsonSource).toContain('pages/recipe-designer/supplement-library')
+    expect(readAllPagePaths()).toContain('pages/recipe-designer/list')
+    expect(readAllPagePaths()).toContain('pages/recipe-designer/editor')
+    expect(readAllPagePaths()).toContain('pages/recipe-designer/publish')
+    expect(readAllPagePaths()).toContain('pages/recipe-designer/supplement-library')
   })
 
   it('places supplement maintenance as a separate recipe designer library entry', () => {

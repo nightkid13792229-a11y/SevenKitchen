@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readAllPagePaths } from '../../test-utils/pages-json'
 
 describe('recipe detail nutrition report regressions', () => {
   it('renders the structured nutrition report entry when Setar report data exists', () => {
@@ -106,13 +107,13 @@ describe('recipe detail nutrition report regressions', () => {
   })
 
   it('registers the standalone nutrition report page', () => {
-    const pagesJson = readFileSync(resolve(process.cwd(), 'src/pages.json'), 'utf-8')
+    const pagePaths = readAllPagePaths()
     const reportPage = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-nutrition-report/index.vue'),
       'utf-8',
     )
 
-    expect(pagesJson).toContain('pages/recipe-nutrition-report/index')
+    expect(pagePaths).toContain('pages/recipe-nutrition-report/index')
     expect(reportPage).toContain('完整营养报告')
     expect(reportPage).toContain('nutrientSections')
     expect(reportPage).toContain('macroRows')

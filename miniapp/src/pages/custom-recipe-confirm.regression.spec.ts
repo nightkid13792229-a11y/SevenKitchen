@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { readAllPagePaths } from '../../test-utils/pages-json';
 
 const read = (path: string) =>
   readFileSync(resolve(process.cwd(), path), 'utf-8');
@@ -22,7 +23,7 @@ const PAGE_DIR = 'src/pages/custom-recipe';
 describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
   const page = read(`${PAGE_DIR}/index.vue`);
   const confirm = read(`${PAGE_DIR}/confirm.vue`);
-  const pagesJson = read('src/pages.json');
+  const pagePaths = readAllPagePaths();
 
   it('定制页按钮是「确认订单」，可点校验后只跳确认页，不在这里下单', () => {
     expect(page).toContain('@tap="goToOrderConfirm"');
@@ -53,7 +54,7 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
   });
 
   it('确认页有只读汇总、附件预览和确认并支付', () => {
-    expect(pagesJson).toContain('"pages/custom-recipe/confirm"');
+    expect(pagePaths).toContain('pages/custom-recipe/confirm');
     expect(confirm).toContain('定制对象');
     expect(confirm).toContain('体重管理方向');
     expect(confirm).toContain('过敏情况');

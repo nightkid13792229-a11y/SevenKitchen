@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { readAllPagePaths } from '../../../test-utils/pages-json';
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf-8');
 
@@ -13,10 +14,10 @@ describe('定制退款页（2026-10-25）', () => {
   const page = read(PAGE);
   const detail = read(DETAIL);
   const api = read(API);
-  const pagesJson = read(PAGES_JSON);
+  const pagePaths = readAllPagePaths();
 
   it('★ 已注册退款页，订单详情只留一个退款入口', () => {
-    expect(pagesJson).toContain('"pages/custom-recipe/refund"');
+    expect(pagePaths).toContain('pages/custom-recipe/refund');
     expect(detail).toContain('showRefundEntry');
     expect(detail).toContain('refundEntryLabel');
     expect(detail).toContain('goRefund');

@@ -11,39 +11,9 @@
       }
     },
     {
-      "path": "pages/staff-order-center/index",
-      "style": {
-        "navigationBarTitleText": "订单中心"
-      }
-    },
-    {
-      "path": "pages/staff-recipe-snapshot/index",
-      "style": {
-        "navigationBarTitleText": "食谱快照"
-      }
-    },
-    {
-      "path": "pages/staff-dog-profile/index",
-      "style": {
-        "navigationBarTitleText": "狗狗档案"
-      }
-    },
-    {
       "path": "pages/me/index",
       "style": {
         "navigationBarTitleText": "我的"
-      }
-    },
-    {
-      "path": "pages/dog-profile-list/index",
-      "style": {
-        "navigationBarTitleText": "爱犬信息"
-      }
-    },
-    {
-      "path": "pages/dog-profile-health/index",
-      "style": {
-        "navigationBarTitleText": "健康管理"
       }
     },
     {
@@ -52,85 +22,6 @@
         "navigationBarTitleText": "健康摘要",
         "navigationBarBackgroundColor": "#1E3A2F",
         "navigationBarTextStyle": "white"
-      }
-    },
-    {
-      "path": "pages/weight-goal-plan/index",
-      "style": {
-        "navigationBarTitleText": "体重管理计划"
-      }
-    },
-    {
-      "path": "pages/recipe-detail/index",
-      "style": {
-        "navigationBarTitleText": "食谱详情"
-      }
-    },
-    {
-      "path": "pages/recipe-nutrition-report/index",
-      "style": {
-        "navigationBarTitleText": "完整营养报告"
-      }
-    },
-    {
-      "path": "pages/customer-service-entry/index",
-      "style": {
-        "navigationBarTitleText": "客服咨询"
-      }
-    },
-    {
-      "path": "pages/address-list/index",
-      "style": {
-        "navigationBarTitleText": "收货地址"
-      }
-    },
-    {
-      "path": "pages/address-edit/index",
-      "style": {
-        "navigationBarTitleText": "编辑地址"
-      }
-    },
-    {
-      "path": "pages/orders-list/index",
-      "style": {
-        "navigationBarTitleText": "我的订单",
-        "enablePullDownRefresh": true
-      }
-    },
-    {
-      "path": "pages/order-shipping-notice/index",
-      "style": {
-        "navigationBarTitleText": "物流与食用提醒"
-      }
-    },
-    {
-      "path": "pages/aftersale-apply/index",
-      "style": {
-        "navigationBarTitleText": "申请售后"
-      }
-    },
-    {
-      "path": "pages/calculate-portion/index",
-      "style": {
-        "navigationBarTitleText": "饭量计算"
-      }
-    },
-    {
-      "path": "pages/snapshot/index",
-      "style": {
-        "navigationBarTitleText": "食谱快照"
-      }
-    },
-    {
-      "path": "pages/favorite-recipes/index",
-      "style": {
-        "navigationBarTitleText": "收藏的食谱"
-      }
-    },
-    {
-      "path": "pages/network-settings/index",
-      "style": {
-        "navigationBarTitleText": "网络设置"
       }
     },
     {
@@ -146,166 +37,15 @@
       }
     },
     {
-      "path": "pages/profile-setup/index",
-      "style": {
-        "navigationBarTitleText": "完善个人资料"
-      }
-    },
-    {
-      "path": "pages/phone-bind/index",
-      "style": {
-        "navigationBarTitleText": "手机号快捷登录"
-      }
-    },
-    {
-      "path": "pages/recipe-diy/index",
-      "style": {
-        "navigationBarTitleText": "DIY食谱配置"
-      }
-    },
-    {
-      "path": "pages/diy-sheet-list/index",
-      "style": {
-        "navigationBarTitleText": "我的制作单"
-      }
-    },
-    {
-      "path": "pages/supplement-order/index",
-      "style": {
-        "navigationBarTitleText": "购买预分装补剂",
-        "enablePullDownRefresh": false
-      }
-    },
-    {
-      "path": "pages/supplement-order-detail/index",
-      "style": {
-        "navigationBarTitleText": "补剂订单详情"
-      }
-    },
-    {
-      "path": "pages/supplement-aftersale/index",
-      "style": {
-        "navigationBarTitleText": "补剂售后"
-      }
-    },
-    {
-      "path": "pages/supplement-orders/index",
-      "style": {
-        "navigationBarTitleText": "我的补剂订单",
-        "enablePullDownRefresh": true
-      }
-    },
-    {
       "path": "pages/staff-workbench/index",
       "style": {
         "navigationBarTitleText": "工作台"
       }
     },
     {
-      "path": "pages/recipe-designer/list",
-      "style": {
-        "navigationBarTitleText": "食谱设计器"
-      }
-    },
-    {
-      "path": "pages/recipe-designer/editor",
-      "style": {
-        "navigationBarTitleText": "食谱编辑"
-      }
-    },
-    {
-      "path": "pages/recipe-designer/publish",
-      "style": {
-        "navigationBarTitleText": "发布食谱"
-      }
-    },
-    {
-      "path": "pages/recipe-designer/supplement-library",
-      "style": {
-        "navigationBarTitleText": "补剂库"
-      }
-    },
-    {
-      "path": "pages/shared-photos/index",
-      "style": {
-        "navigationBarTitleText": "原料照片"
-      }
-    },
-    {
       "path": "pages/common/webview",
       "style": {
         "navigationBarTitleText": "网页"
-      }
-    },
-    {
-      "path": "pages/privacy/index",
-      "style": {
-        "navigationBarTitleText": "隐私政策"
-      }
-    },
-    {
-      "path": "pages/terms/index",
-      "style": {
-        "navigationBarTitleText": "用户协议"
-      }
-    },
-    {
-      "path": "pages/feedback-list/index",
-      "style": {
-        "navigationBarTitleText": "建议反馈",
-        "enablePullDownRefresh": true
-      }
-    },
-    {
-      "path": "pages/feedback-form/index",
-      "style": {
-        "navigationBarTitleText": "提交反馈"
-      }
-    },
-    {
-      "path": "pages/custom-recipe/index",
-      "style": {
-        "navigationBarTitleText": "食谱定制"
-      }
-    },
-    {
-      "path": "pages/custom-recipe/confirm",
-      "style": {
-        "navigationBarTitleText": "确认订单"
-      }
-    },
-    {
-      "path": "pages/custom-recipe/order-detail",
-      "style": {
-        "navigationBarTitleText": "定制订单详情",
-        "enablePullDownRefresh": true
-      }
-    },
-    {
-      "path": "pages/custom-recipe/aftersale",
-      "style": {
-        "navigationBarTitleText": "食谱调整"
-      }
-    },
-    {
-      "path": "pages/custom-recipe/refund",
-      "style": {
-        "navigationBarTitleText": "退款",
-        "enablePullDownRefresh": true
-      }
-    },
-    {
-      "path": "pages/custom-recipe/delivery",
-      "style": {
-        "navigationBarTitleText": "我的定制食谱",
-        "enablePullDownRefresh": true
-      }
-    },
-    {
-      "path": "pages/messages/index",
-      "style": {
-        "navigationBarTitleText": "消息",
-        "enablePullDownRefresh": true
       }
     }
   ],
@@ -710,6 +450,436 @@
           "path": "analysis",
           "style": {
             "navigationBarTitleText": "健康分析与建议"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-order-center",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "订单中心"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-recipe-snapshot",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "食谱快照"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-dog-profile",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "狗狗档案"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/dog-profile-list",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "爱犬信息"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/dog-profile-health",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "健康管理"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/weight-goal-plan",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "体重管理计划"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/recipe-detail",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "食谱详情"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/recipe-nutrition-report",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "完整营养报告"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/customer-service-entry",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "客服咨询"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/address-list",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "收货地址"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/address-edit",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "编辑地址"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/orders-list",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "我的订单",
+            "enablePullDownRefresh": true
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/order-shipping-notice",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "物流与食用提醒"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/aftersale-apply",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "申请售后"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/calculate-portion",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "饭量计算"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/snapshot",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "食谱快照"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/favorite-recipes",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "收藏的食谱"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/network-settings",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "网络设置"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/profile-setup",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "完善个人资料"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/phone-bind",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "手机号快捷登录"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/recipe-diy",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "DIY食谱配置"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/diy-sheet-list",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "我的制作单"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/supplement-order",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "购买预分装补剂",
+            "enablePullDownRefresh": false
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/supplement-order-detail",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "补剂订单详情"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/supplement-aftersale",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "补剂售后"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/supplement-orders",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "我的补剂订单",
+            "enablePullDownRefresh": true
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/recipe-designer",
+      "pages": [
+        {
+          "path": "list",
+          "style": {
+            "navigationBarTitleText": "食谱设计器"
+          }
+        },
+        {
+          "path": "editor",
+          "style": {
+            "navigationBarTitleText": "食谱编辑"
+          }
+        },
+        {
+          "path": "publish",
+          "style": {
+            "navigationBarTitleText": "发布食谱"
+          }
+        },
+        {
+          "path": "supplement-library",
+          "style": {
+            "navigationBarTitleText": "补剂库"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/shared-photos",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "原料照片"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/privacy",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "隐私政策"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/terms",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "用户协议"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/feedback-list",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "建议反馈",
+            "enablePullDownRefresh": true
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/feedback-form",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "提交反馈"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/custom-recipe",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "食谱定制"
+          }
+        },
+        {
+          "path": "confirm",
+          "style": {
+            "navigationBarTitleText": "确认订单"
+          }
+        },
+        {
+          "path": "order-detail",
+          "style": {
+            "navigationBarTitleText": "定制订单详情",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "aftersale",
+          "style": {
+            "navigationBarTitleText": "食谱调整"
+          }
+        },
+        {
+          "path": "refund",
+          "style": {
+            "navigationBarTitleText": "退款",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "delivery",
+          "style": {
+            "navigationBarTitleText": "我的定制食谱",
+            "enablePullDownRefresh": true
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/messages",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "消息",
+            "enablePullDownRefresh": true
           }
         }
       ]

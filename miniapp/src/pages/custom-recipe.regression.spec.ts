@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readAllPagePaths } from '../../test-utils/pages-json'
 
 const read = (path: string) =>
   readFileSync(resolve(process.cwd(), path), 'utf-8')
@@ -30,14 +31,14 @@ const PAGE_DIR = 'src/pages/custom-recipe'
  */
 describe('custom recipe customer flow', () => {
   it('registers every custom recipe page in pages.json', () => {
-    const pagesJson = read('src/pages.json')
+    const pagePaths = readAllPagePaths()
 
-    expect(pagesJson).toContain('pages/custom-recipe/index')
-    expect(pagesJson).not.toContain('pages/custom-recipe/success')
-    expect(pagesJson).toContain('pages/custom-recipe/confirm')
+    expect(pagePaths).toContain('pages/custom-recipe/index')
+    expect(pagePaths).not.toContain('pages/custom-recipe/success')
+    expect(pagePaths).toContain('pages/custom-recipe/confirm')
     // 2026-10-24：定制专属列表已删除，所有订单在「我的订单」统一列表
-    expect(pagesJson).not.toContain('pages/custom-recipe/orders')
-    expect(pagesJson).toContain('pages/custom-recipe/order-detail')
+    expect(pagePaths).not.toContain('pages/custom-recipe/orders')
+    expect(pagePaths).toContain('pages/custom-recipe/order-detail')
   })
 
   it('ships an order detail page so the list entry is not a dead link', () => {

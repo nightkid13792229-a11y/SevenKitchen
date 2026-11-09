@@ -1,15 +1,19 @@
 {
-  "generatedAt": "2026-11-09T11:12:59.871Z",
+  "generatedAt": "2026-11-09T11:23:42.865Z",
   "questionsFile": "docs/knowledge-base/ckd-structure/library-questions.json",
-  "judge": "spec v1.1 附录 A（前 3 节命中 / 禁止节 / 负样本 no_match / 表格命中 + open）",
-  "tool": "executeTool('search_knowledge_library', { query, species, stage, topics, limit: 5 })",
+  "written": true,
+  "judge": "spec v1.1 附录 A（前 3 节命中 / 禁止节 / 负样本 no_match 或 0 节 0 表 / 表格命中 + 按检索 K 打开）",
+  "tool": "executeTool('search_knowledge_library', { query, species, stage, topics, limit: 5 })；表格题再 executeTool('open_knowledge', { citationId })",
   "thresholds": {
     "overall": 21,
     "stage3": 1,
     "table": 2,
     "zh": 5,
     "negative": 4,
-    "adversarial": 4
+    "adversarial": 4,
+    "coreTables": 6,
+    "p95Ms": 300,
+    "maxMs": 1000
   },
   "checks": [
     {
@@ -47,8 +51,27 @@
       "actual": "4/4",
       "target": "4/4",
       "passed": true
+    },
+    {
+      "name": "核心表可打开",
+      "actual": "6/6",
+      "target": "6/6",
+      "passed": true
+    },
+    {
+      "name": "检索 p95",
+      "actual": "85.5ms",
+      "target": "<300ms",
+      "passed": true
+    },
+    {
+      "name": "单次工具调用 max",
+      "actual": "190.6ms",
+      "target": "<1000ms",
+      "passed": true
     }
   ],
+  "exitCode": 0,
   "coreTables": {
     "passed": 6,
     "total": 6,
@@ -98,9 +121,9 @@
     ]
   },
   "timing": {
-    "p50": 61.4,
-    "p95": 81.5,
-    "max": 194.3
+    "p50": 59.4,
+    "p95": 85.5,
+    "max": 190.6
   },
   "summary": {
     "overall": 26,
@@ -185,7 +208,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s017",
-      "ms": 194.3
+      "ms": 190.6
     },
     {
       "index": 2,
@@ -245,7 +268,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s015",
-      "ms": 61.4
+      "ms": 69.5
     },
     {
       "index": 3,
@@ -305,7 +328,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s018、sacn5-chapters-SACN5-37-s017",
-      "ms": 67.5
+      "ms": 67.6
     },
     {
       "index": 4,
@@ -321,9 +344,9 @@
           "citationId": "K1"
         },
         {
-          "sectionId": "sacn5-chapters-SACN5-37-s022",
-          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p797",
-          "pageStart": 33,
+          "sectionId": "sacn5-chapters-SACN5-37-s021",
+          "displayTitle": "FEEDING PLAN 795 Chronic Kidney Disease",
+          "pageStart": 32,
           "citationId": "K3"
         },
         {
@@ -364,8 +387,8 @@
       ],
       "opened": [],
       "passed": true,
-      "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s018",
-      "ms": 78.9
+      "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s018、sacn5-chapters-SACN5-37-s021",
+      "ms": 70.2
     },
     {
       "index": 5,
@@ -402,7 +425,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s018、sacn5-chapters-SACN5-37-s014",
-      "ms": 44.2
+      "ms": 47.7
     },
     {
       "index": 6,
@@ -444,7 +467,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s019、sacn5-chapters-SACN5-37-s021",
-      "ms": 58.1
+      "ms": 59.4
     },
     {
       "index": 7,
@@ -504,7 +527,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-staging-guidelines-2026-s002、iris-IRIS-staging-guidelines-2026-s003",
-      "ms": 57.8
+      "ms": 57.6
     },
     {
       "index": 8,
@@ -564,7 +587,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-staging-guidelines-2026-s004",
-      "ms": 62.6
+      "ms": 57.6
     },
     {
       "index": 9,
@@ -624,7 +647,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-staging-guidelines-2026-s006",
-      "ms": 73.2
+      "ms": 79.1
     },
     {
       "index": 10,
@@ -684,7 +707,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
-      "ms": 57.4
+      "ms": 58
     },
     {
       "index": 11,
@@ -744,7 +767,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
-      "ms": 63.7
+      "ms": 64.5
     },
     {
       "index": 12,
@@ -804,7 +827,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s014",
-      "ms": 71.5
+      "ms": 63.7
     },
     {
       "index": 13,
@@ -814,15 +837,15 @@
       "status": "ok",
       "sections": [
         {
-          "sectionId": "sacn5-chapters-SACN5-37-s014",
-          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
-          "pageStart": 17,
-          "citationId": "K1"
-        },
-        {
           "sectionId": "sacn5-chapters-SACN5-37-s021",
           "displayTitle": "FEEDING PLAN 795 Chronic Kidney Disease",
           "pageStart": 32,
+          "citationId": "K1"
+        },
+        {
+          "sectionId": "sacn5-chapters-SACN5-37-s014",
+          "displayTitle": "小动物临床营养学（第5版） · 第37章 · p781",
+          "pageStart": 17,
           "citationId": "K3"
         },
         {
@@ -864,7 +887,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s014",
-      "ms": 50.9
+      "ms": 57.9
     },
     {
       "index": 14,
@@ -924,7 +947,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-staging-guidelines-2026-s004",
-      "ms": 67.9
+      "ms": 68.4
     },
     {
       "index": 15,
@@ -1038,7 +1061,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s018",
-      "ms": 51.5
+      "ms": 51.2
     },
     {
       "index": 17,
@@ -1050,8 +1073,8 @@
       "tables": [],
       "opened": [],
       "passed": true,
-      "reason": "负样本：0 节",
-      "ms": 46.3
+      "reason": "负样本：0 节 0 表",
+      "ms": 52.1
     },
     {
       "index": 18,
@@ -1063,8 +1086,8 @@
       "tables": [],
       "opened": [],
       "passed": true,
-      "reason": "负样本：0 节",
-      "ms": 41.2
+      "reason": "负样本：0 节 0 表",
+      "ms": 41.8
     },
     {
       "index": 19,
@@ -1076,8 +1099,8 @@
       "tables": [],
       "opened": [],
       "passed": true,
-      "reason": "负样本：0 节",
-      "ms": 36.7
+      "reason": "负样本：0 节 0 表",
+      "ms": 36
     },
     {
       "index": 20,
@@ -1089,8 +1112,8 @@
       "tables": [],
       "opened": [],
       "passed": true,
-      "reason": "负样本：0 节",
-      "ms": 38.3
+      "reason": "负样本：0 节 0 表",
+      "ms": 31.7
     },
     {
       "index": 21,
@@ -1150,7 +1173,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-DOG-Treatment-Recommendations-may-2026-s004、iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
-      "ms": 75.4
+      "ms": 79.7
     },
     {
       "index": 22,
@@ -1210,7 +1233,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 iris-IRIS-DOG-Treatment-Recommendations-may-2026-s005",
-      "ms": 74.2
+      "ms": 74.5
     },
     {
       "index": 23,
@@ -1270,7 +1293,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s015",
-      "ms": 35.5
+      "ms": 36.9
     },
     {
       "index": 24,
@@ -1330,7 +1353,7 @@
       "opened": [],
       "passed": true,
       "reason": "前 3 节命中 sacn5-chapters-SACN5-37-s014",
-      "ms": 69.7
+      "ms": 65
     },
     {
       "index": 25,
@@ -1391,28 +1414,28 @@
         {
           "tableId": "T0497",
           "ok": true,
-          "citationId": "K1",
+          "citationId": "K8",
           "pageNo": 17,
           "rowCount": 10
         },
         {
           "tableId": "T0260",
           "ok": true,
-          "citationId": "K1",
+          "citationId": "K9",
           "pageNo": null,
           "rowCount": 23
         },
         {
           "tableId": "T0261",
           "ok": true,
-          "citationId": "K1",
+          "citationId": "K10",
           "pageNo": null,
           "rowCount": 18
         }
       ],
       "passed": true,
-      "reason": "表格命中 T0497、T0260、T0261",
-      "ms": 81.5
+      "reason": "表格命中且可打开 T0497、T0260、T0261",
+      "ms": 85.5
     },
     {
       "index": 26,
@@ -1473,14 +1496,14 @@
         {
           "tableId": "T0253",
           "ok": true,
-          "citationId": "K1",
+          "citationId": "K10",
           "pageNo": null,
           "rowCount": 5
         }
       ],
       "passed": true,
-      "reason": "表格命中 T0253",
-      "ms": 35.8
+      "reason": "表格命中且可打开 T0253",
+      "ms": 35.6
     }
   ]
 }

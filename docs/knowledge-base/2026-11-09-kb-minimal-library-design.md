@@ -431,6 +431,6 @@ extractQueryFocus(query: string): {
 **判分**：
 
 - 节题：前 3 节中至少 1 个期望节 → 通过；有 `forbiddenSections` 时，前 3 节出现禁止节 → 不通过。Q21 的禁止项用于检查排序，不用于排除；若 `I-s006` 因 phosphate 进前 3，先加强 stage/treatment 软排序；仍不行就把禁止项降为诊断指标并记录，不改变「不硬过滤」原则。
-- 负样本：`status === "no_match"` 或返回 0 节 → 通过。
-- 表格题：`tables` 中包含期望 `tableId`，且 `open_knowledge` 能打开 → 通过。
+- 负样本：`status === "no_match"`，或「0 节且 0 表」→ 通过（只返回表格也算有证据）。
+- 表格题：`tables` 中包含期望 `tableId`，且按**检索返回的 citationId** 调 `open_knowledge` 能打开 → 通过（只命中不算）。
 - 中文题与英文题同一判分；单字术语（磷/钠/钾/氯/镁/碘/钙）必须能展开。

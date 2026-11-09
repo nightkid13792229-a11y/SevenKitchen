@@ -175,7 +175,8 @@ const HEADING_STAGE_BOOST = 1.3;
  * （例如 37-9 所在节）反被挤到第 3–4 位，再被「同一文档 ≤2 节」裁掉。
  *
  * 处理：查询带「膳食/范围/推荐/dietary/% DM/range/recommendation」时，给
- * 「首段或候选段表格 caption 出现 `Key nutritional factors` / `feeding plan`」的节 ×1.15。
+ * 「首段出现 `Key nutritional factors` / `feeding plan`」或「候选段的表格 caption
+ * 是这类营养因素表」的节 ×1.15。
  * **不硬编码任何 sectionId**，也不排除任何节，只在 `searchSections` 的组分数上加分。
  */
 const NUTRITION_INTENT = /dietary|%\s*dm|range|recommendation|膳食|范围|推荐/i;
@@ -385,9 +386,25 @@ export class KnowledgeLibraryService {
     }
 
     const hits: Array<SectionHit & { groupScore: number }> = [];
-    const nutritionSections = NUTRITION_INTENT.test(query)
-      ? await this.findNutritionSections([...groups.keys()])
-      : new Set<string>();
+    const nutritionSections = new Set<string>();
+    if (NUTRITION_INTENT.test(query)) {
+      for (const sectionId of await this.findNutritionSections([
+        ...groups.keys(),
+      ])) {
+        nutritionSections.add(sectionId);
+      }
+      // 第二个信号：候选段的表格 caption 就是营养因素表（`Table 37-9. Key nutritional factors…`）。
+      for (const [sectionId, list] of groups) {
+        if (
+          list.some((passage) => {
+            const caption = extractTableCaption(passage.text);
+            return caption ? NUTRITION_SECTION_PHRASE.test(caption) : false;
+          })
+        ) {
+          nutritionSections.add(sectionId);
+        }
+      }
+    }
     for (const [sectionId, list] of groups) {
       const top = list[0];
       const subheading = extractSubheading(top.text);

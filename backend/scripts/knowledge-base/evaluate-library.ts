@@ -4,13 +4,18 @@
  * 与旧的 `evaluate-ckd-routing.ts` 的区别：这里调 `executeTool('search_knowledge_library')`，
  * 判分的是模型真正看到的东西（节分组、citationId、表格摘要），不是裸服务。
  *
- * 用法：`npm run kb:eval`（需要 `.env` 里的 DATABASE_URL）
- *       `npm run kb:eval -- --questions <其它题集.json>`（换题集做对照）
- * 产物：`docs/knowledge-base/ckd-structure/library-evaluation.md` + `.json`
+ * 用法（需要 `.env` 里的 DATABASE_URL）：
+ * - `npm run kb:eval`                     → 跑 26 题并写入 `library-evaluation.md/.json`
+ * - `npm run kb:eval -- --no-write`       → 只验证，不覆盖已提交的报告（Task 7 用这个）
+ * - `npm run kb:eval -- --check`          → `--no-write` 的别名
+ * - `npm run kb:eval -- --questions <x>`  → 换题集做对照（JSON 里会写实际路径）
+ *
+ * 退出码：`library-eval.ts` 的 `buildGateChecks` 有任何一条不过 → 1
+ * （整体/Stage 3/表格/中文/负样本/对抗/核心表/p95/max）。
  */
 import 'dotenv/config';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { KnowledgeLibraryService } from '../../src/application/knowledge-base/knowledge-library.service';
 import { SourceLayerService } from '../../src/application/knowledge-base/source-layer.service';
@@ -20,20 +25,16 @@ import {
   type ToolExecutionContext,
 } from '../../src/application/recipe-designer/agent/tools';
 import {
+  LIBRARY_THRESHOLDS,
+  buildGateChecks,
+  exitCodeFor,
   judgeQuestion,
+  tableQuestionTargets,
+  type GateCheck,
+  type LibraryGateSummary,
   type QuestionCategory,
   type QuestionSpec,
 } from '../../src/application/knowledge-base/library-eval';
-
-/** 阶段出口阈值（spec §8）。 */
-const THRESHOLDS = {
-  overall: 21,
-  stage3: 1,
-  table: 2,
-  zh: 5,
-  negative: 4,
-  adversarial: 4,
-} as const;
 
 /** Stage 3 硬指标的那一题（spec 附录 A Q10；Q11 中文题另计入中文）。 */
 const STAGE3_QUESTION_IDS = ['stage3'];
@@ -41,17 +42,32 @@ const STAGE3_QUESTION_IDS = ['stage3'];
 /** 5 组核心表（spec §7.5；T0253=37-1、T0497=37-9、T0260/61=37-11/12、T0025/26=AAHA 表 8）。 */
 const CORE_TABLE_IDS = ['T0253', 'T0497', 'T0260', 'T0261', 'T0025', 'T0026'];
 
+const REPO_ROOT = resolve(__dirname, '../../..');
 const DEFAULT_QUESTIONS_PATH = resolve(
-  __dirname,
-  '../../../docs/knowledge-base/ckd-structure/library-questions.json',
+  REPO_ROOT,
+  'docs/knowledge-base/ckd-structure/library-questions.json',
 );
-const OUTPUT_DIR = resolve(__dirname, '../../../docs/knowledge-base/ckd-structure');
+const OUTPUT_DIR = resolve(REPO_ROOT, 'docs/knowledge-base/ckd-structure');
 
-/** `--questions <path>`：换题集做对照（默认用仓库里的 26 题）。 */
-function questionsPath(argv: string[]): string {
+interface CliOptions {
+  questionsPath: string;
+  /** `--no-write` / `--check`：只验证，不覆盖已提交的报告。 */
+  write: boolean;
+}
+
+function parseArgv(argv: string[]): CliOptions {
   const index = argv.findIndex((item) => item === '--questions');
   const value = index >= 0 ? String(argv[index + 1] ?? '').trim() : '';
-  return value ? resolve(process.cwd(), value) : DEFAULT_QUESTIONS_PATH;
+  return {
+    questionsPath: value ? resolve(process.cwd(), value) : DEFAULT_QUESTIONS_PATH,
+    write: !(argv.includes('--no-write') || argv.includes('--check')),
+  };
+}
+
+/** 报告里展示的题集路径：仓库内用相对路径，仓库外保留绝对路径。 */
+function displayPath(absolute: string): string {
+  const rel = relative(REPO_ROOT, absolute);
+  return rel && !rel.startsWith('..') ? rel : absolute;
 }
 
 interface LibraryToolData {
@@ -100,7 +116,7 @@ interface QuestionRun {
     caption: string;
     citationId: string;
   }>;
-  /** 表格题的 open_knowledge 校验结果。 */
+  /** 表格题的 open_knowledge 校验结果（只含检索命中的表）。 */
   opened: OpenCheck[];
   passed: boolean;
   reason: string;
@@ -135,6 +151,62 @@ function roundMs(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
+/**
+ * 按**检索返回的 citationId** 打开表格，复用同一题的 context/registry：
+ * 验的是「模型看到的 K 号真能打开」，而不是「用表 id 另行打开」。
+ */
+async function openByCitation(
+  target: { tableId: string; citationId: string },
+  context: ToolExecutionContext,
+): Promise<OpenCheck> {
+  if (!target.citationId) {
+    return {
+      tableId: target.tableId,
+      ok: false,
+      error: '检索未登记 citationId，无法按 K 打开',
+    };
+  }
+  const outcome = await executeTool(
+    'open_knowledge',
+    { citationId: target.citationId },
+    context,
+  );
+  if (!outcome.ok) {
+    return {
+      tableId: target.tableId,
+      ok: false,
+      citationId: target.citationId,
+      error: `${outcome.error?.code}: ${outcome.error?.message}`,
+    };
+  }
+  const data = outcome.data as {
+    status: string;
+    table?: { tableId: string; pageNo: number | null; rowCount: number };
+    citationId?: string;
+  };
+  const openedTableId = String(data.table?.tableId ?? '').trim();
+  const problems: string[] = [];
+  if (data.status !== 'ok') problems.push(`status=${data.status}`);
+  if (!data.citationId) problems.push('open 未返回 citationId');
+  if (openedTableId && openedTableId !== target.tableId) {
+    problems.push(`按 ${target.citationId} 打开的是 ${openedTableId}`);
+  }
+  return {
+    tableId: target.tableId,
+    ok: problems.length === 0,
+    citationId: data.citationId ?? target.citationId,
+    pageNo: data.table?.pageNo ?? null,
+    rowCount: data.table?.rowCount,
+    ...(problems.length > 0 ? { error: problems.join('；') } : {}),
+  };
+}
+
+/**
+ * 核心表能力检查：库里有没有这张表、`open_knowledge({tableId})` 能不能打开、有没有 K 号。
+ *
+ * 这一组不挂在某道题上（T0025/T0026 没有任何检索题必然命中），所以单独用新 context；
+ * 表格题的「命中且按 K 打开」在上面的 `openByCitation` 里验。
+ */
 async function checkOpenTable(
   tableId: string,
   library: KnowledgeLibraryService,
@@ -178,11 +250,14 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
 
 (async () => {
   const prisma = new PrismaClient();
-  let exitCode = 0;
+  const options = parseArgv(process.argv.slice(2));
+  let exitCode: 0 | 1 = 0;
   try {
     const library = new KnowledgeLibraryService(prisma as any);
     const sourceLayer = new SourceLayerService(prisma as any);
-    const payload = JSON.parse(readFileSync(questionsPath(process.argv.slice(2)), 'utf8')) as {
+    const payload = JSON.parse(
+      readFileSync(options.questionsPath, 'utf8'),
+    ) as {
       questions: QuestionSpec[];
     };
     const questions = payload.questions;
@@ -226,19 +301,21 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
           };
         } else {
           const data = outcome.data as LibraryToolData;
+          // 表格题：只打开「检索真的返回了、且属于期望表」的那几张，并且用检索登记的 K。
+          const targets = tableQuestionTargets(spec, data.tables);
+          const opened: OpenCheck[] = [];
+          for (const target of targets) {
+            opened.push(await openByCitation(target, context));
+          }
           const verdict = judgeQuestion(
             {
               status: data.status,
               sections: data.sections,
               tables: data.tables,
+              openedTables: opened,
             },
             spec,
           );
-          // 表格题：再调 open_knowledge 证明「打开后能拿全文 + K 号」。
-          const opened: OpenCheck[] = [];
-          for (const tableId of spec.expectedTables ?? []) {
-            opened.push(await checkOpenTable(tableId, library, sourceLayer));
-          }
           run = {
             index: index + 1,
             id: spec.id,
@@ -284,7 +361,7 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
       );
     }
 
-    // 6 张核心表：独立上下文逐张打开。
+    // 6 张核心表：独立上下文逐张打开（能力检查）。
     const coreTables: OpenCheck[] = [];
     for (const tableId of CORE_TABLE_IDS) {
       coreTables.push(await checkOpenTable(tableId, library, sourceLayer));
@@ -301,56 +378,34 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
     const p50 = percentile(timings, 0.5);
     const p95 = percentile(timings, 0.95);
     const max = timings.length > 0 ? Math.max(...timings) : 0;
-
-    const checks = [
-      {
-        name: '整体',
-        actual: `${overall}/${runs.length}`,
-        target: `≥${THRESHOLDS.overall}/${runs.length}`,
-        passed: overall >= THRESHOLDS.overall,
-      },
-      {
-        name: 'Stage 3',
-        actual: `${stage3Passed}/${stage3Runs.length}`,
-        target: `${THRESHOLDS.stage3}/${stage3Runs.length}`,
-        passed: stage3Runs.length > 0 && stage3Passed === stage3Runs.length,
-      },
-      {
-        name: '表格',
-        actual: `${tableStats.passed}/${tableStats.total}`,
-        target: `${THRESHOLDS.table}/${tableStats.total}`,
-        passed: tableStats.passed >= THRESHOLDS.table,
-      },
-      {
-        name: '中文',
-        actual: `${zhStats.passed}/${zhStats.total}`,
-        target: `≥${THRESHOLDS.zh}/${zhStats.total}`,
-        passed: zhStats.passed >= THRESHOLDS.zh,
-      },
-      {
-        name: '负样本',
-        actual: `${negativeStats.passed}/${negativeStats.total}`,
-        target: `${THRESHOLDS.negative}/${negativeStats.total}`,
-        passed: negativeStats.passed === negativeStats.total,
-      },
-      {
-        name: '对抗',
-        actual: `${adversarialStats.passed}/${adversarialStats.total}`,
-        target: `${THRESHOLDS.adversarial}/${adversarialStats.total}`,
-        passed: adversarialStats.passed === adversarialStats.total,
-      },
-    ];
     const coreTablePassed = coreTables.filter((table) => table.ok).length;
-    if (checks.some((check) => !check.passed)) exitCode = 1;
+
+    const gateSummary: LibraryGateSummary = {
+      overall,
+      total: runs.length,
+      stage3: { passed: stage3Passed, total: stage3Runs.length },
+      table: tableStats,
+      zh: zhStats,
+      negative: negativeStats,
+      adversarial: adversarialStats,
+      coreTables: { passed: coreTablePassed, total: coreTables.length },
+      timing: { p50, p95, max },
+    };
+    const checks: GateCheck[] = buildGateChecks(gateSummary);
+    exitCode = exitCodeFor(checks);
+    const questionsFile = displayPath(options.questionsPath);
 
     const generatedAt = new Date();
     const lines: string[] = [
       '# CKD 知识库 26 题回归结果（自动生成）',
       '',
-      `> 生成时间：${shortDate(generatedAt)}　|　题集：\`docs/knowledge-base/ckd-structure/library-questions.json\`　|　脚本：\`backend/scripts/knowledge-base/evaluate-library.ts\``,
+      `> 生成时间：${shortDate(generatedAt)}　|　题集：\`${questionsFile}\`　|　脚本：\`backend/scripts/knowledge-base/evaluate-library.ts\``,
       '>',
-      '> 走 Agent 工具层：每题一个全新的 `CitationRegistry`，调 `executeTool(\'search_knowledge_library\', { query, species, stage, topics, limit: 5 })`。',
-      '> 判分：spec v1.1 附录 A —— 前 3 节含任一期望节即通过；前 3 节出现禁止节即不通过；负样本要求 `no_match` 或 0 节；表格题要求表命中且 `open_knowledge` 能打开。',
+      '> 走 Agent 工具层：每题一个全新的 `CitationRegistry`，调 `executeTool(\'search_knowledge_library\', { query, species, stage, topics, limit: 5 })`；表格题再用**检索返回的 citationId** 调 `open_knowledge`。',
+      '> 判分：spec v1.1 附录 A —— 前 3 节含任一期望节即通过；前 3 节出现禁止节即不通过；负样本要求 `no_match` 或「0 节 0 表」；表格题要求命中期望表**且**按检索的 K 打开成功。',
+      ...(options.write
+        ? []
+        : ['>', '> 本次以 `--no-write` 运行：只验证，未覆盖仓库里的报告文件。']),
       '',
       '## 阶段出口',
       '',
@@ -360,13 +415,14 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
         (check) =>
           `| ${check.name} | ${check.actual} | ${check.target} | ${check.passed ? '通过' : '未通过'} |`,
       ),
-      `| 核心表可打开 | ${coreTablePassed}/${coreTables.length} | ${CORE_TABLE_IDS.length}/${CORE_TABLE_IDS.length} | ${coreTablePassed === CORE_TABLE_IDS.length ? '通过' : '未通过'} |`,
       '',
-      '## 耗时（单次工具调用，含检索 + 表格视图 + 引用登记）',
+      '## 耗时（单次工具调用，含检索 + 表格视图 + 引用登记；表格题另含按 K 打开）',
       '',
-      `- p50：${p50}ms　p95：${p95}ms　max：${max}ms（目标 p95 <300ms、单次 <1s）`,
+      `- p50：${p50}ms　p95：${p95}ms　max：${max}ms（目标 p95 <${LIBRARY_THRESHOLDS.p95Ms}ms、单次 <${LIBRARY_THRESHOLDS.maxMs / 1000}s）`,
       '',
       '## 6 张核心表',
+      '',
+      '> 核心表用 `open_knowledge({ tableId })` 直接打开（能力检查，不对应某道题）。',
       '',
       '| 表 | 打开 | citationId | 页码 | 行数 | 备注 |',
       '|---|---|---|---|---|---|',
@@ -397,7 +453,7 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
           : '—';
       const openedNote =
         run.opened.length > 0
-          ? `<br>open：${run.opened
+          ? `<br>按 K 打开：${run.opened
               .map(
                 (item) =>
                   `${item.tableId}${item.ok ? `✔（${item.citationId}）` : `✘（${item.error ?? '打不开'}）`}`,
@@ -436,20 +492,31 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
       '',
       '- 节 ID 用完整 ID；`S`=`sacn5-chapters-SACN5-37`、`I`=`iris-IRIS-DOG-Treatment-Recommendations-may-2026`、`G`=`iris-IRIS-staging-guidelines-2026`、`P`=`iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g`、`A`=`aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines`。',
       '- 这是「图书馆」验收，不是临床答案验收：通过与否只看 Agent 能不能找到该看的原文/表，不看结论对错。',
-      '- 负样本若返回表格，报告也在「表格」列列出；负样本判分只看节（spec 附录 A）。',
+      '- 负样本要求「无节也无表」：只返回表格也算有证据（spec 附录 A 的「未覆盖」语义）。',
+      '- 退出码由本节 9 条指标共同决定：任一不过 → `process.exitCode = 1`。',
       '',
     );
 
-    writeFileSync(resolve(OUTPUT_DIR, 'library-evaluation.md'), lines.join('\n'));
+    const markdown = lines.join('\n');
+    if (options.write) {
+      writeFileSync(resolve(OUTPUT_DIR, 'library-evaluation.md'), markdown);
+    }
 
     const json = {
       generatedAt: generatedAt.toISOString(),
-      questionsFile: 'docs/knowledge-base/ckd-structure/library-questions.json',
-      judge: 'spec v1.1 附录 A（前 3 节命中 / 禁止节 / 负样本 no_match / 表格命中 + open）',
-      tool: "executeTool('search_knowledge_library', { query, species, stage, topics, limit: 5 })",
-      thresholds: THRESHOLDS,
+      questionsFile,
+      written: options.write,
+      judge:
+        'spec v1.1 附录 A（前 3 节命中 / 禁止节 / 负样本 no_match 或 0 节 0 表 / 表格命中 + 按检索 K 打开）',
+      tool: "executeTool('search_knowledge_library', { query, species, stage, topics, limit: 5 })；表格题再 executeTool('open_knowledge', { citationId })",
+      thresholds: LIBRARY_THRESHOLDS,
       checks,
-      coreTables: { passed: coreTablePassed, total: coreTables.length, results: coreTables },
+      exitCode,
+      coreTables: {
+        passed: coreTablePassed,
+        total: coreTables.length,
+        results: coreTables,
+      },
       timing: { p50, p95, max },
       summary: {
         overall,
@@ -462,7 +529,12 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
       },
       results: runs,
     };
-    writeFileSync(resolve(OUTPUT_DIR, 'library-evaluation.json'), JSON.stringify(json, null, 2));
+    if (options.write) {
+      writeFileSync(
+        resolve(OUTPUT_DIR, 'library-evaluation.json'),
+        JSON.stringify(json, null, 2),
+      );
+    }
 
     console.log('');
     console.log(
@@ -477,9 +549,15 @@ function categoryStats(runs: QuestionRun[], category: QuestionCategory) {
     console.log(
       exitCode === 0 ? '阶段出口：全部达标' : '阶段出口：未达标（exitCode=1）',
     );
-    console.log(
-      `报告：${resolve(OUTPUT_DIR, 'library-evaluation.md')}、${resolve(OUTPUT_DIR, 'library-evaluation.json')}`,
-    );
+    if (options.write) {
+      console.log(
+        `报告：${resolve(OUTPUT_DIR, 'library-evaluation.md')}、${resolve(OUTPUT_DIR, 'library-evaluation.json')}`,
+      );
+    } else {
+      console.log(`--no-write：未写入报告（题集 ${questionsFile}）`);
+      console.log('');
+      console.log(markdown);
+    }
   } finally {
     await prisma.$disconnect();
   }

@@ -1,7 +1,7 @@
 {
   "version": "2026-11-10",
   "domain": "gi",
-  "note": "胃肠域 9 题：ACVIM 2022/2023/2026/2018 + SACN5 57/62。无稳定负样本（GI 文档普遍提到维生素 K/甲状腺），负样本类目留空。",
+  "note": "胃肠域 10 题：ACVIM 2022/2023/2026/2018 + SACN5 57/62。负样本用\"猫糖尿病饮食\"（GI 语料实测 no_match）。",
   "questions": [
     {
       "id": "gi-enteropathy-consensus",
@@ -72,7 +72,10 @@
       "domain": "gi",
       "query": "dog chronic diarrhea dietary fiber",
       "category": "table",
-      "expectedTables": ["T0388", "T0391"]
+      "expectedTables": [
+        "T0388",
+        "T0391"
+      ]
     },
     {
       "id": "gi-zh-enteropathy",
@@ -92,6 +95,21 @@
       "expectedSections": [
         "sacn5-chapters-SACN5-62-s007",
         "sacn5-chapters-SACN5-62-s005"
+      ]
+    },
+    {
+      "id": "gi-negative-diabetes",
+      "domain": "gi",
+      "query": "feline diabetes mellitus diet",
+      "category": "negative",
+      "expectNoSource": true,
+      "documentIds": [
+        "acvim-ACVIM-2022-犬慢性肠病-现状综述",
+        "acvim-ACVIM-2023-猫慢性肠病-低级别肿瘤与炎症鉴别",
+        "acvim-ACVIM-2026-慢性肠病诊断与治疗共识",
+        "acvim-ACVIM-2018-胃肠道保护剂合理使用",
+        "sacn5-chapters-SACN5-62",
+        "sacn5-chapters-SACN5-57"
       ]
     }
   ]

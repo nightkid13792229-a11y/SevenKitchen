@@ -19,11 +19,11 @@
 |---|---|---|
 | 1 | [`2026-11-09-inventory-ledger-design.md`](2026-11-09-inventory-ledger-design.md) | 台账与盘点方案：七个动作、四条原则、三期落地、老板拍板的决定、我的判断 |
 | 2 | [`2026-11-10-inventory-ui-design.md`](2026-11-10-inventory-ui-design.md) | 界面与交互：五屏结构、盲盘、容差、草稿、排序规则 |
-| 3 | [`../plans/2026-11-10-inventory-ledger-phase1.md`](../plans/2026-11-10-inventory-ledger-phase1.md) | 一期实施计划：8 个任务，含文件、接口、测试与上线顺序 |
+| 3 | [`../plans/2026-11-10-inventory-ledger-implementation.md`](../plans/2026-11-10-inventory-ledger-implementation.md) | **完整实施计划**：三期共 21 个任务，含文件、接口、测试、上线顺序与验收 |
 | 4 | [`mockups/inventory-ledger-ui-2026-11-10.html`](../../../mockups/inventory-ledger-ui-2026-11-10.html) | 原型图：库存首页 / 记一笔 / 盘点记录（同目录 `.png`） |
 | 5 | [`mockups/inventory-stocktake-ui-2026-11-10.html`](../../../mockups/inventory-stocktake-ui-2026-11-10.html) | 原型图：盘点录入 / 盘点结果（同目录 `.png`） |
 
-阅读顺序：**1 → 3 → 2 → 4/5**。方案讲「账怎么记」，计划讲「先改哪几行」，界面讲「人怎么用」。
+阅读顺序：**1 → 3 → 2 → 4/5**。方案讲「账怎么记」，计划讲「分三期怎么落地」，界面讲「人怎么用」。
 
 ## 3. 审核请重点看这几处
 

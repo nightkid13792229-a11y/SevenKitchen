@@ -62,6 +62,7 @@ export enum InventorySourceType {
   KITCHEN_TASK = "KITCHEN_TASK",
   PURCHASE_RECORD = "PURCHASE_RECORD",
   PURCHASE_RECORD_REVERSAL = "PURCHASE_RECORD_REVERSAL",
+  OPENING_BALANCE = "OPENING_BALANCE",
   MANUAL_ADJUSTMENT = "MANUAL_ADJUSTMENT",
   STOCKTAKE = "STOCKTAKE",
 }
@@ -87,6 +88,7 @@ export const InventorySourceTypeLabels: Record<string, string> = {
   [InventorySourceType.KITCHEN_TASK]: "厨房领用",
   [InventorySourceType.PURCHASE_RECORD]: "采购入库",
   [InventorySourceType.PURCHASE_RECORD_REVERSAL]: "采购撤回",
+  [InventorySourceType.OPENING_BALANCE]: "期初结转",
   [InventorySourceType.MANUAL_ADJUSTMENT]: "手工调整",
   [InventorySourceType.STOCKTAKE]: "盘点差异",
 };

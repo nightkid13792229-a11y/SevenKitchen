@@ -205,3 +205,33 @@ describe('GlobalConfigService · 内部生产损耗系数', () => {
     expect(prisma.recipe.update).not.toHaveBeenCalled();
   });
 });
+
+describe('auto deduct inventory default (B4)', () => {
+  it('未配置时默认开启', async () => {
+    const row = buildRow();
+    delete (row as any).autoDeductInventoryOnProduction;
+    const { service } = buildService(row);
+
+    const config = await service.getGlobalConfig();
+
+    expect(config.autoDeductInventoryOnProduction).toBe(true);
+  });
+
+  it('显式关闭仍然生效', async () => {
+    const { service } = buildService(
+      buildRow({ autoDeductInventoryOnProduction: false }),
+    );
+
+    const config = await service.getGlobalConfig();
+
+    expect(config.autoDeductInventoryOnProduction).toBe(false);
+  });
+
+  it('新建配置默认开启', () => {
+    const { service } = buildService(buildRow());
+
+    expect(
+      (service as any).getDefaultConfig().autoDeductInventoryOnProduction,
+    ).toBe(true);
+  });
+});

@@ -2194,7 +2194,7 @@ model GlobalConfig {
   minPotWeightG                       Int      @default(2000) @map("min_pot_weight_g")
   /// 车间完工时是否自动按配方扣减原料库存。
   /// 默认关闭：开启前需要先盘点一次，否则账面与实际对不上会让人怀疑系统。
-  autoDeductInventoryOnProduction     Boolean  @default(false) @map("auto_deduct_inventory_on_production")
+  autoDeductInventoryOnProduction     Boolean  @default(true) @map("auto_deduct_inventory_on_production")
   /// 2026-11-08：闸门基准改成档案价后，阈值从 8% 放宽到 10%
   ingredientPriceAutoApproveThreshold Decimal? @default(0.10) @map("ingredient_price_auto_approve_threshold") @db.Decimal(5, 4)
   homeHeaderBgImageUrl                String?  @map("home_header_bg_image_url")

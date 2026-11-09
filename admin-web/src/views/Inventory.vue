@@ -516,6 +516,8 @@ const getSourceTagType = (sourceType: InventorySourceType) => {
   const typeMap: Record<InventorySourceType, string> = {
     [InventorySourceType.KITCHEN_TASK]: 'warning',
     [InventorySourceType.PURCHASE_RECORD]: 'success',
+    [InventorySourceType.PURCHASE_RECORD_REVERSAL]: 'info',
+    [InventorySourceType.OPENING_BALANCE]: 'info',
     [InventorySourceType.MANUAL_ADJUSTMENT]: 'primary',
     [InventorySourceType.STOCKTAKE]: 'danger'
   }

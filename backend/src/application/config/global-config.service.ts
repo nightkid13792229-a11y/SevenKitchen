@@ -99,7 +99,7 @@ export class GlobalConfigService {
         config.productionLossRate,
       ),
       autoDeductInventoryOnProduction:
-        (config as any).autoDeductInventoryOnProduction ?? false,
+        (config as any).autoDeductInventoryOnProduction ?? true,
       defaultProductLabelId: config.defaultProductLabelId,
       defaultIcePackId: config.defaultIcePackId,
       defaultShippingTemplateId: config.defaultShippingTemplateId,
@@ -358,7 +358,7 @@ export class GlobalConfigService {
         config.productionLossRate,
       ),
       autoDeductInventoryOnProduction:
-        (config as any).autoDeductInventoryOnProduction ?? false,
+        (config as any).autoDeductInventoryOnProduction ?? true,
       defaultProductLabelId: config.defaultProductLabelId,
       defaultIcePackId: config.defaultIcePackId,
       defaultShippingTemplateId: config.defaultShippingTemplateId,
@@ -389,7 +389,7 @@ export class GlobalConfigService {
     return {
       laborHourlyRate: 30.0,
       minOrderWeightG: 1000,
-      autoDeductInventoryOnProduction: false,
+      autoDeductInventoryOnProduction: true,
       defaultBatchCapacityG: 5000,
       minPotWeightG: 2000,
       targetMargin: 0.4,

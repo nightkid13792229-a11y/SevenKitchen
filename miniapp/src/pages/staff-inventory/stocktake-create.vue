@@ -378,7 +378,7 @@ onUnload(() => {
   white-space: nowrap;
 }
 .unit {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #7a8a80;
 }
 .input {

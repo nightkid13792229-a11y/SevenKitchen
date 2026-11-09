@@ -1,7 +1,6 @@
 <template>
   <view class="page">
     <view class="top">
-      <text class="title">盘点记录</text>
       <text class="total">共 {{ items.length }} 次</text>
     </view>
 
@@ -234,7 +233,7 @@ const restart = () => {
   padding: 2rpx 12rpx;
   border-radius: 999rpx;
   background: #e8ede7;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 .card {
   padding: 20rpx;
@@ -256,7 +255,7 @@ const restart = () => {
 .status {
   padding: 4rpx 14rpx;
   border-radius: 999rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
   background: #eef1ec;
   color: #4b5b51;
 }

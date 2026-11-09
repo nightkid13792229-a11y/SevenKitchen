@@ -1,7 +1,6 @@
 <template>
   <view class="page">
     <view class="header">
-      <text class="title">记一笔</text>
       <text class="hint">报废 / 内部领用，约 30 秒。内部领用免审批；报废单笔 ≥50 元进待复核。</text>
     </view>
 

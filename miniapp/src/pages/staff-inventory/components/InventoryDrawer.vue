@@ -231,7 +231,7 @@ const onGoReplenish = (item: InventoryOverviewItem) =>
   color: #1e3a2f;
 }
 .meta {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #7a8a80;
 }
 .mini {
@@ -241,7 +241,7 @@ const onGoReplenish = (item: InventoryOverviewItem) =>
   border-radius: 999rpx;
   background: #1e3a2f;
   color: #fbfcf7;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 .ledger-row {
   display: flex;

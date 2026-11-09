@@ -30,6 +30,12 @@ const PAGES = [
   'staff-production/index.vue',
   'staff-production/detail.vue',
   'staff-production/components/SupplementPacking.vue',
+  'staff-inventory/index.vue',
+  'staff-inventory/stocktake-create.vue',
+  'staff-inventory/stocktake-records.vue',
+  'staff-inventory/stocktake-result.vue',
+  'staff-inventory/adjustment-create.vue',
+  'staff-inventory/components/InventoryDrawer.vue',
 ];
 
 const readPage = (path: string) =>
@@ -178,6 +184,30 @@ describe('采购管理 UI 可读性守门人', () => {
         offenders.push(path);
       }
     });
+
+    expect(offenders).toEqual([]);
+  });
+  it('库存页不写页内大标题（标题只出现一次）', () => {
+    const offenders = PAGES.filter((path) =>
+      path.startsWith('staff-inventory'),
+    ).filter((path) => /<h1|class="page-title"|class="title"/.test(readPage(path)));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('库存页最小字号不小于 24rpx', () => {
+    const offenders: string[] = [];
+
+    PAGES.filter((path) => path.startsWith('staff-inventory')).forEach(
+      (path) => {
+        const source = readPage(path);
+        for (const match of source.matchAll(/font-size:\s*(\d+)rpx/g)) {
+          if (Number(match[1]) < 24) {
+            offenders.push(`${path} → ${match[1]}rpx`);
+          }
+        }
+      },
+    );
 
     expect(offenders).toEqual([]);
   });

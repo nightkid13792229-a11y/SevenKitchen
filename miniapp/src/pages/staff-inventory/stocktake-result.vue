@@ -262,7 +262,7 @@ const goRecords = () => {
   padding: 2rpx 12rpx;
   border-radius: 999rpx;
   background: #e8ede7;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 .row {
   padding: 18rpx 20rpx;
@@ -285,7 +285,7 @@ const goRecords = () => {
 .badge {
   padding: 4rpx 14rpx;
   border-radius: 999rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 .badge.ok {
   background: #e4f0e6;
@@ -297,7 +297,7 @@ const goRecords = () => {
 }
 .badge.muted {
   background: #eef1ec;
-  color: #7a8a80;
+  color: #5b6b60;
 }
 .row-nums {
   display: flex;

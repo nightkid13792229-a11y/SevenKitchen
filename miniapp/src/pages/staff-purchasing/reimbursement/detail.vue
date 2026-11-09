@@ -2293,7 +2293,7 @@ const resubmit = () => {
       }
 
       &.muted {
-        color: #8a8472;
+        color: #6b6555;
         background-color: #f0eee5;
       }
 

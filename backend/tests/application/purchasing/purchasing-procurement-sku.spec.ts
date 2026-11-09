@@ -23,6 +23,7 @@ jest.mock('uuid', () => ({
 const prismaMock: any = {
   $transaction: jest.fn(async (callback: any) => callback(prismaMock)),
   purchaseList: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+  globalConfig: { findUnique: jest.fn().mockResolvedValue(null) },
   purchaseRecord: { findMany: jest.fn().mockResolvedValue([]) },
 };
 

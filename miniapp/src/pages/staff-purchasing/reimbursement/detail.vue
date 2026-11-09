@@ -234,13 +234,13 @@
                 <text class="metric-label">上次单价</text>
                 <text class="metric-value muted">{{ record.previousUnitPriceText }}</text>
               </view>
-              <view class="metric metric-delta">
+              <view class="metric metric-delta" @tap.stop="openPriceCompare(record)">
                 <text class="metric-label">涨跌</text>
                 <view class="metric-delta-line">
                   <text class="metric-value" :class="recordDeltaTone(record)">
                     {{ recordDeltaText(record) }}
                   </text>
-                  <text class="metric-help" @tap.stop="openPriceCompare(record)">?</text>
+                  <text class="metric-help">?</text>
                 </view>
               </view>
             </view>

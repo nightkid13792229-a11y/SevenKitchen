@@ -53,7 +53,7 @@ export const KNOWLEDGE_DOMAINS: readonly KnowledgeDomain[] = [
   {
     id: 'general-nutrition',
     label: '基础营养',
-    audited: false,
+    audited: true,
     documentIds: [
       'aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines',
       'aaha-AAHA-2010-Nutritional-Assessment-Guidelines',

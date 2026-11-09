@@ -14,9 +14,9 @@ import {
 describe('KNOWLEDGE_DOMAINS', () => {
   it('6 个领域，只有 ckd 审计通过', () => {
     expect(KNOWLEDGE_DOMAINS).toHaveLength(6);
-    expect(KNOWLEDGE_DOMAINS.filter((domain) => domain.audited).map((d) => d.id)).toEqual([
-      'ckd',
-    ]);
+    expect(
+      KNOWLEDGE_DOMAINS.filter((domain) => domain.audited).map((d) => d.id),
+    ).toEqual(['ckd', 'general-nutrition']);
   });
 });
 
@@ -36,16 +36,16 @@ describe('resolveKnowledgeScope', () => {
   });
 
   it('未审计领域默认拒绝', () => {
-    expect(() => resolveKnowledgeScope(['general-nutrition'])).toThrow('未审计');
+    expect(() => resolveKnowledgeScope(['gi'])).toThrow('未审计');
   });
 
   it('显式放行时能开未审计领域', () => {
     const previous = process.env.KB_ALLOW_UNAUDITED;
     process.env.KB_ALLOW_UNAUDITED = '1';
     try {
-      const scope = resolveKnowledgeScope(['general-nutrition']);
-      expect(scope.documentIds).toHaveLength(4);
-      expect(scope.domains).toEqual(['general-nutrition']);
+      const scope = resolveKnowledgeScope(['gi']);
+      expect(scope.documentIds).toHaveLength(0);
+      expect(scope.domains).toEqual(['gi']);
     } finally {
       if (previous === undefined) delete process.env.KB_ALLOW_UNAUDITED;
       else process.env.KB_ALLOW_UNAUDITED = previous;

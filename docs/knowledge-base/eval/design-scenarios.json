@@ -90,6 +90,25 @@
         "dose",
         "diagnosis"
       ]
+    },
+    {
+      "id": "G1",
+      "domain": "general-nutrition",
+      "title": "减重：按 AAHA 体重管理原则算热量与速度（问答口径）",
+      "scenario": "ADULT_MER_95",
+      "turns": [
+        "一只 8 岁、20kg、BCS 8/9 的已绝育母犬要减重。请按知识库里的体重管理原则，算出每日热量和合理的减重速度，说明依据并标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
     }
   ]
 }

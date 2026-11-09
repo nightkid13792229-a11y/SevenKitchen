@@ -63,6 +63,18 @@
             <input class="v-input" v-model="pkg.tracking" placeholder="请输入运单号" :maxlength="64" />
           </view>
           <view class="field">
+            <text class="k">箱型</text>
+            <picker
+              mode="selector"
+              :range="boxOptions"
+              range-key="name"
+              :value="pkg.boxIndex"
+              @change="onBoxChange(pIndex, $event)"
+            >
+              <text class="v">{{ boxOptions[pkg.boxIndex]?.name || '按重量推荐' }} ▾</text>
+            </picker>
+          </view>
+          <view class="field">
             <text class="k">包裹运费</text>
             <input class="v-input price" v-model="pkg.fee" type="digit" placeholder="实付多少" :maxlength="8" />
           </view>
@@ -102,6 +114,8 @@ interface PlanRow {
 
 interface PackageState {
   carrierIndex: number
+  /** 0 = 按重量推荐；1..n = boxOptions 里的箱型 */
+  boxIndex: number
   tracking: string
   fee: string
   /** rowKey → 这包里装了几袋 */
@@ -133,8 +147,20 @@ const rows = ref<
   }>
 >([])
 const packages = ref<PackageState[]>([])
+const boxOptions = ref<Array<{ id: string; name: string; productModel?: string }>>([
+  { id: '', name: '按重量推荐' },
+])
 
 onLoad(async (options: any) => {
+  try {
+    const res: any = await request({ url: '/admin/order-shipments/box-options', method: 'GET' })
+    boxOptions.value = [
+      { id: '', name: '按重量推荐' },
+      ...(Array.isArray(res) ? res : []),
+    ]
+  } catch {
+    boxOptions.value = [{ id: '', name: '按重量推荐' }]
+  }
   const ids = String(options?.orderIds || '')
     .split(',')
     .map((id) => id.trim())
@@ -217,6 +243,7 @@ function resetPackages() {
   packages.value = [
     {
       carrierIndex: 0,
+      boxIndex: 0,
       tracking: '',
       fee: '',
       bags,
@@ -229,7 +256,7 @@ function addPackage() {
     uni.showToast({ title: '一票最多 6 个包裹', icon: 'none' })
     return
   }
-  packages.value.push({ carrierIndex: 0, tracking: '', fee: '', bags: {} })
+  packages.value.push({ carrierIndex: 0, boxIndex: 0, tracking: '', fee: '', bags: {} })
 }
 
 function removePackage(index: number) {
@@ -270,6 +297,10 @@ function step(index: number, row: { key: string; totalBags: number }, delta: num
 
   if (current <= 0) return
   pkg.bags[row.key] = current - 1
+}
+
+function onBoxChange(index: number, event: any) {
+  packages.value[index].boxIndex = Number(event.detail.value || 0)
 }
 
 function onCarrierChange(index: number, event: any) {
@@ -335,6 +366,7 @@ async function submit() {
       carrierCode: carriers[pkg.carrierIndex].code,
       trackingNumber: pkg.tracking.trim(),
       actualShippingFee: Number(pkg.fee),
+      boxIngredientId: boxOptions.value[pkg.boxIndex]?.id || undefined,
       items: rows.value
         .filter((row) => (pkg.bags[row.key] || 0) > 0)
         .map((row) => ({

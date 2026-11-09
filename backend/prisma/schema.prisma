@@ -6015,6 +6015,9 @@ model OrderShipmentPackage {
   actualShippingFee Decimal  @map("actual_shipping_fee") @db.Decimal(10, 2)
   /// 包内总净重（信息用，等于 items.weight_g 之和）
   weightG           Int      @map("weight_g")
+  /// 发货时选的泡沫箱 / 匹配的保温袋（D2）
+  boxIngredientId   String?  @map("box_ingredient_id") @db.VarChar(36)
+  thermalBagIngredientId String? @map("thermal_bag_ingredient_id") @db.VarChar(36)
   sortOrder         Int      @default(1) @map("sort_order")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")

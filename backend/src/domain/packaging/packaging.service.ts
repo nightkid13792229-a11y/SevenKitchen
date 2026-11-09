@@ -64,6 +64,15 @@ export interface PackagingCost {
   };
 }
 
+export const ICE_PACK_INGREDIENT_ID =
+  '1e3d5990-e553-44fb-8bb9-6144593b6899';
+
+/** 箱号 → 冰袋个数；4 号 3 个、3 号 5 个，其它按 3 个兜底。 */
+export const ICE_PACKS_BY_BOX_NUMBER: Record<string, number> = {
+  '4': 3,
+  '3': 5,
+};
+
 interface GlobalConfig {
   defaultProductLabelId: string;
   defaultIcePackId: string;
@@ -119,6 +128,38 @@ export class PackagingService {
    * Calculate shipping containers using greedy bin packing algorithm
    * Dynamically queries foam boxes from database
    */
+  /**
+   * 给发货时手选的箱型配对应的保温袋和冰袋数。
+   * 找不到保温袋直接抛错——宁可不发，也不扣一半。
+   */
+  async resolveBoxContainer(box: Ingredient): Promise<{
+    thermalBag: Ingredient;
+    icePacks: number;
+  }> {
+    const boxNumMatch = box.productModel?.match(/(\d+)号/);
+    const boxNum = boxNumMatch ? boxNumMatch[1] : '';
+
+    const allPackaging = await this.ingredientRepo.findByType(
+      IngredientType.PACKAGING,
+    );
+    const thermalBags = allPackaging.filter((item) =>
+      item.name.includes('保温袋'),
+    );
+    const thermalBag = thermalBags.find((item) =>
+      item.productModel?.includes(`适配${boxNum}号`),
+    );
+    if (!thermalBag) {
+      throw new NotFoundException(
+        `箱型「${box.name}」找不到匹配的保温袋（适配${boxNum}号）`,
+      );
+    }
+
+    return {
+      thermalBag,
+      icePacks: ICE_PACKS_BY_BOX_NUMBER[boxNum] ?? 3,
+    };
+  }
+
   async calculateShippingContainers(
     foodWeightG: number,
   ): Promise<ShippingContainer[]> {
@@ -183,7 +224,7 @@ export class PackagingService {
 
       // Get ice pack
       const ice = await this.ingredientRepo.findById(
-        '1e3d5990-e553-44fb-8bb9-6144593b6899', // Ice pack
+        ICE_PACK_INGREDIENT_ID, // Ice pack
       );
 
       if (!ice) {
@@ -192,11 +233,7 @@ export class PackagingService {
 
       // Calculate ice packs based on box number
       // 4号箱: 3个冰袋, 3号箱: 5个冰袋
-      const icePacksMap: Record<string, number> = {
-        '4': 3,
-        '3': 5,
-      };
-      const icePacks = icePacksMap[boxNum] || 3; // Default to 3 if box number not found
+      const icePacks = ICE_PACKS_BY_BOX_NUMBER[boxNum] ?? 3;
 
       containers.push({
         boxItem: selectedBox,
@@ -276,7 +313,7 @@ export class PackagingService {
 
     const containers = await this.calculateShippingContainers(totalFoodWeightG);
     const ice = await this.ingredientRepo.findById(
-      '1e3d5990-e553-44fb-8bb9-6144593b6899',
+      ICE_PACK_INGREDIENT_ID,
     );
 
     if (!ice) {
@@ -411,7 +448,7 @@ export class PackagingService {
     // ==========================================
     const containers = await this.calculateShippingContainers(totalFoodWeightG);
     const ice = await this.ingredientRepo.findById(
-      '1e3d5990-e553-44fb-8bb9-6144593b6899',
+      ICE_PACK_INGREDIENT_ID,
     );
 
     if (!ice) {

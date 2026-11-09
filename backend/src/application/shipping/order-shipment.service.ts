@@ -47,6 +47,8 @@ export interface ShipmentPackageInput {
   carrierCode: string;
   trackingNumber: string;
   actualShippingFee: number;
+  /** 发货人选定的泡沫箱；不传按总重推荐 */
+  boxIngredientId?: string | null;
   items: ShipmentPackageItemInput[];
 }
 
@@ -59,6 +61,8 @@ export interface ShipmentPackageDto {
   id: string;
   carrierCode: string;
   trackingNumber: string;
+  boxIngredientId?: string | null;
+  thermalBagIngredientId?: string | null;
   actualShippingFee: number;
   weightG: number;
   sortOrder: number;
@@ -113,6 +117,18 @@ export class OrderShipmentService {
    *
    * 校验全部前置，任何一条不满足直接 400 —— 不做「发一半」。
    */
+  /** 发货页的箱型下拉：所有泡沫箱原料 */
+  async listBoxOptions() {
+    return this.prisma.ingredient.findMany({
+      where: {
+        type: 'PACKAGING' as any,
+        name: { contains: '泡沫箱' },
+      },
+      select: { id: true, name: true, productModel: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async createShipment(
     input: CreateShipmentInput,
     actorId?: string | null,
@@ -236,6 +252,12 @@ export class OrderShipmentService {
         const pkg = normalized[i];
         const packageId = randomUUID();
         const packageAllocation = allocation.packages[i];
+        const container = this.packagingConsumption
+          ? await this.packagingConsumption.resolvePackageContainer(
+              packageAllocation.totalWeightG,
+              pkg.boxIngredientId,
+            )
+          : null;
 
         await tx.orderShipmentPackage.create({
           data: {
@@ -245,6 +267,9 @@ export class OrderShipmentService {
             trackingNumber: pkg.trackingNumber,
             actualShippingFee: pkg.actualShippingFee.toFixed(2),
             weightG: packageAllocation.totalWeightG,
+            boxIngredientId: container?.boxIngredientId ?? null,
+            thermalBagIngredientId:
+              container?.thermalBagIngredientId ?? null,
             sortOrder: i + 1,
           },
         });
@@ -561,6 +586,9 @@ export class OrderShipmentService {
       carrierCode,
       trackingNumber,
       actualShippingFee: Math.round(fee * 100) / 100,
+      boxIngredientId: pkg.boxIngredientId
+        ? String(pkg.boxIngredientId).trim()
+        : null,
       items: normalizedItems,
     };
   }

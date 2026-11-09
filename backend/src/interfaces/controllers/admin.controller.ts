@@ -2372,6 +2372,14 @@ export class AdminController {
    * 一次提交 = 1~N 张订单 + 1~M 个包裹；每个包裹一个单号一笔运费，
    * 运费按净重分摊到订单。
    */
+  @Get('order-shipments/box-options')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: '发货箱型选项（泡沫箱）' })
+  async getShipmentBoxOptions(): Promise<ApiResponseDto<any[]>> {
+    const options = (await this.orderShipmentService?.listBoxOptions()) ?? [];
+    return ApiResponseDto.success(options);
+  }
+
   @Post('order-shipments')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '一票发货（合并 / 拆包）' })

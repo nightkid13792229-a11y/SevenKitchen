@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
   DEFAULT_PRODUCT_LABEL_INGREDIENT_ID,
+  ICE_PACK_INGREDIENT_ID,
   PackagingService,
 } from '../../domain/packaging/packaging.service';
 import { GlobalConfigService } from '../config/global-config.service';
@@ -10,7 +11,7 @@ import { InventorySourceType } from '../../domain/inventory/enums';
 
 interface PendingRow {
   ingredientId: string;
-  orderId: string | null;
+  sourceId: string;
   quantity: number;
 }
 
@@ -53,22 +54,59 @@ export class PackagingConsumptionService {
       config.defaultProductLabelId || DEFAULT_PRODUCT_LABEL_INGREDIENT_ID;
 
     const aggregates = new Map<string, PendingRow>();
-    const bump = (orderId: string, ingredientId: string, quantity: number) => {
+    const bump = (
+      sourceId: string,
+      ingredientId: string,
+      quantity: number,
+    ) => {
       if (quantity <= 0) return;
-      const key = `${orderId}|${ingredientId}`;
+      const key = `${sourceId}|${ingredientId}`;
       const existing = aggregates.get(key);
       if (existing) {
         existing.quantity += quantity;
       } else {
-        aggregates.set(key, { ingredientId, orderId, quantity });
+        aggregates.set(key, { ingredientId, sourceId, quantity });
       }
     };
 
     for (const item of items) {
       if (tastingOrderIds.has(item.orderId)) continue;
+      const sourceId = `${input.shipmentId}:${item.orderId}`;
       const bag = await this.packagingService.selectVacuumBag(item.specG);
-      bump(item.orderId, bag.id, item.bags);
-      bump(item.orderId, labelId, item.bags);
+      bump(sourceId, bag.id, item.bags);
+      bump(sourceId, labelId, item.bags);
+    }
+
+    // 箱 / 保温袋 / 冰袋：按包裹扣（一个运单 = 一个箱子）
+    const packages = await tx.orderShipmentPackage.findMany({
+      where: { shipmentId: input.shipmentId },
+      select: {
+        id: true,
+        boxIngredientId: true,
+        thermalBagIngredientId: true,
+      },
+    });
+    for (const pkg of packages) {
+      if (!pkg.boxIngredientId) continue;
+      const box = await tx.ingredient.findUnique({
+        where: { id: pkg.boxIngredientId },
+        select: { id: true, name: true, productModel: true },
+      });
+      if (!box) {
+        this.logger.warn(
+          `[Packaging] 包裹 ${pkg.id} 的箱型 ${pkg.boxIngredientId} 不存在，跳过`,
+        );
+        continue;
+      }
+      const { icePacks } = await this.packagingService.resolveBoxContainer(
+        box as any,
+      );
+      const sourceId = `${input.shipmentId}:pkg:${pkg.id}`;
+      bump(sourceId, box.id, 1);
+      if (pkg.thermalBagIngredientId) {
+        bump(sourceId, pkg.thermalBagIngredientId, 1);
+      }
+      bump(sourceId, ICE_PACK_INGREDIENT_ID, icePacks);
     }
 
     const rows = Array.from(aggregates.values()).map((row) => ({
@@ -76,7 +114,7 @@ export class PackagingConsumptionService {
       deltaG: -Math.abs(row.quantity),
       procurementSkuId: null,
       sourceType: InventorySourceType.PACKAGING_CONSUMPTION as any,
-      sourceId: `${input.shipmentId}:${row.orderId}`,
+      sourceId: row.sourceId,
       sourceVersion: 1,
       costAmount: null,
       createdAt: new Date(),
@@ -99,6 +137,48 @@ export class PackagingConsumptionService {
       `[Packaging] 发货 ${input.shipmentId} 扣包材 ${rows.length} 行`,
     );
     return { entryCount: rows.length };
+  }
+
+  /**
+   * 决定一个包裹用什么箱、配什么保温袋。
+   * 没传箱型就按总重推荐；传了必须是泡沫箱，且能配到保温袋。
+   */
+  async resolvePackageContainer(
+    weightG: number,
+    boxIngredientId?: string | null,
+  ): Promise<{
+    boxIngredientId: string;
+    thermalBagIngredientId: string;
+    icePacks: number;
+  }> {
+    if (boxIngredientId) {
+      const box = await this.prisma.ingredient.findUnique({
+        where: { id: boxIngredientId },
+        select: { id: true, name: true, type: true, productModel: true },
+      });
+      if (!box || box.type !== 'PACKAGING' || !box.name.includes('泡沫箱')) {
+        throw new BadRequestException('箱型必须是泡沫箱原料');
+      }
+      const { thermalBag, icePacks } =
+        await this.packagingService.resolveBoxContainer(box as any);
+      return {
+        boxIngredientId: box.id,
+        thermalBagIngredientId: thermalBag.id,
+        icePacks,
+      };
+    }
+
+    const containers =
+      await this.packagingService.calculateShippingContainers(weightG);
+    const first = containers[0];
+    if (!first) {
+      throw new BadRequestException('算不出合适的箱型');
+    }
+    return {
+      boxIngredientId: first.boxItem.id,
+      thermalBagIngredientId: first.thermalItem.id,
+      icePacks: first.icePacks,
+    };
   }
 
   /** 备货锅完工时按分装计划扣袋/标签（订单锅不走这条）。 */

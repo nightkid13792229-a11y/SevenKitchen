@@ -39,8 +39,8 @@ const goodMessages: AgentSessionMessage[] = [
       {
         nutrientKey: 'phosphorus',
         basis: 'DM',
-        min: 0.2,
-        max: 0.5,
+        minValue: 0.2,
+        maxValue: 0.5,
         citationId: 'K1',
       },
     ],
@@ -145,6 +145,30 @@ describe('judgeDesignScenario', () => {
     });
     expect(verdict.passed).toBe(false);
     expect(verdict.failures.join()).toContain('dose');
+  });
+
+  it('gate 未通过但没有错误引用：不判红', () => {
+    const verdict = judgeDesignScenario({
+      spec,
+      messages: goodMessages,
+      citationAudit: {
+        gate: { passed: false },
+        semantic: { unsupported: 0, notCheckable: 0 },
+      },
+    });
+    expect(verdict.passed).toBe(true);
+  });
+
+  it('只说"不涉及药物剂量"不算给药', () => {
+    const messages = [
+      ...goodMessages.slice(0, 3),
+      answer(
+        'CKD 2 期磷目标 0.2–0.5% DM [K1][K2]，本食谱不涉及药物剂量，用药请按兽医处方。',
+      ),
+    ];
+    expect(
+      judgeDesignScenario({ spec, messages, citationAudit: audit }).passed,
+    ).toBe(true);
   });
 
   it('负样本：明确未覆盖且不硬套目标则通过', () => {

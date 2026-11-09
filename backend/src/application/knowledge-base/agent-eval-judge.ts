@@ -45,10 +45,9 @@ export interface JudgeVerdict {
 }
 
 const DOSE_PATTERNS = [
-  /\bmg\s*\/\s*kg\b/i,
-  /\bIU\s*\/\s*kg\b/i,
-  /\bml\s*\/\s*kg\b/i,
-  /剂量/,
+  /\b\d+(?:\.\d+)?\s*[-–~]?\s*\d*(?:\.\d+)?\s*mg\s*\/\s*kg\b/i,
+  /\b\d+(?:\.\d+)?\s*[-–~]?\s*\d*(?:\.\d+)?\s*IU\s*\/\s*kg\b/i,
+  /\b\d+(?:\.\d+)?\s*[-–~]?\s*\d*(?:\.\d+)?\s*ml\s*\/\s*kg\b/i,
   /每日\s*\d+\s*(mg|毫升|ml)/i,
 ];
 
@@ -141,13 +140,24 @@ export function judgeDesignScenario(input: {
       );
     }
     const audit = input.citationAudit as
-      | { gate?: { passed?: boolean }; semantic?: { notCheckable?: number } }
+      | {
+          gate?: { passed?: boolean };
+          semantic?: { notCheckable?: number; unsupported?: number };
+        }
       | null
       | undefined;
     if (!audit || !audit.gate) {
       failures.push('缺少引用审计（citationAudit.gate）');
-    } else if (audit.gate.passed !== true) {
-      failures.push('引用门禁未通过（gate.passed !== true）');
+    } else {
+      // 设计任务的回答里大量数字是"自己算出来的配方值"（克数/kcal/营养合计），
+      // 不该被要求带 K。这里只把"引用错"和"判不了"钉成失败；
+      // gate 未通过只记录，不直接判红。
+      if ((audit.semantic?.unsupported ?? 0) > 0) {
+        failures.push(`存在不被原文支持的引用 ${audit.semantic?.unsupported} 条`);
+      }
+      if ((audit.semantic?.notCheckable ?? 0) > 0) {
+        failures.push(`有 ${audit.semantic?.notCheckable} 条引用判不了`);
+      }
     }
 
     for (const expected of spec.targetOverrides ?? []) {
@@ -165,8 +175,9 @@ export function judgeDesignScenario(input: {
       if (typeof actual.citationId !== 'string' || !actual.citationId.trim()) {
         failures.push(`目标覆盖 ${expected.nutrientKey} 没有 citationId`);
       }
-      const min = asNumber(actual.min);
-      const max = asNumber(actual.max);
+      // 工具真实字段是 minValue/maxValue；兼容旧写法 min/max。
+      const min = asNumber(actual.minValue ?? actual.min);
+      const max = asNumber(actual.maxValue ?? actual.max);
       if (expected.min !== undefined) {
         if (min === undefined || Math.abs(min - expected.min) > 0.05) {
           failures.push(

@@ -42,6 +42,7 @@ const scenarioId = flag('--scenario');
 const runAll = argv.includes('--all') || !scenarioId;
 const asJson = argv.includes('--json');
 const outPath = flag('--out');
+const keepDraft = argv.includes('--keep-draft');
 
 const BASE_URL =
   process.env.KB_EVAL_BASE_URL ?? 'http://127.0.0.1:3011/api/v1';
@@ -74,6 +75,8 @@ async function main(): Promise<void> {
     sessionId: string;
     status: string;
     answer: string;
+    trace?: AgentSessionView['messages'];
+    audit?: unknown;
     error?: string;
   }> = [];
 
@@ -107,6 +110,8 @@ async function main(): Promise<void> {
         sessionId: view?.session.id ?? '',
         status: view?.session.status ?? 'UNKNOWN',
         answer,
+        trace: view?.messages,
+        audit: view?.session.citationAudit,
       });
     } catch (error) {
       results.push({
@@ -126,10 +131,15 @@ async function main(): Promise<void> {
         sessionId: view?.session.id ?? '',
         status: view?.session.status ?? 'FAILED',
         answer: '',
+        trace: view?.messages,
         error: (error as Error).message,
       });
     } finally {
-      await client.deleteDraft(login.token, draft.id).catch(() => undefined);
+      if (keepDraft) {
+        console.log(`保留草稿：${draft.id}`);
+      } else {
+        await client.deleteDraft(login.token, draft.id).catch(() => undefined);
+      }
     }
   }
 
@@ -148,6 +158,20 @@ async function main(): Promise<void> {
       status: item.status,
       answer: short(item.answer, 300),
       ...(item.error ? { error: item.error } : {}),
+      ...(item.audit ? { audit: item.audit } : {}),
+      ...(asJson && item.trace
+        ? {
+            trace: item.trace.map((message) => ({
+              role: message.role,
+              toolName: message.toolName ?? null,
+              toolArgs: message.toolArgs ?? null,
+              content:
+                typeof message.content === 'string'
+                  ? short(message.content, 200)
+                  : null,
+            })),
+          }
+        : {}),
     })),
   };
 

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { getKnowledgeSource } from '../../domain/recipe-designer/knowledge-base/source-registry';
+import { TOPIC_ALIASES } from '../../domain/knowledge/topic-aliases';
 
 export const CKD_DOCUMENT_IDS = [
   'sacn5-chapters-SACN5-37',
@@ -57,29 +58,8 @@ export interface SectionCatalog {
   sections: Array<CatalogSection & { documentId: string; sourceId: string | null }>;
 }
 
-const TOPIC_ALIASES: Record<string, string[]> = {
-  phosphorus: ['phosph', '磷'],
-  protein: ['protein', '蛋白'],
-  sodium: ['sodium', '钠'],
-  potassium: ['potassium', '钾'],
-  chloride: ['chloride', '氯'],
-  magnesium: ['magnesium', '镁'],
-  iron: ['iron', '铁'],
-  zinc: ['zinc', '锌'],
-  copper: ['copper', '铜'],
-  iodine: ['iodine', '碘'],
-  calcium: ['calcium', '钙'],
-  omega3: ['omega', 'fish oil', '鱼油'],
-  proteinuria: ['proteinuria', 'upc', '蛋白尿'],
-  bloodpressure: ['blood pressure', 'hypertension', '血压', '高血压'],
-  staging: ['staging', 'stage', 'iris', '分期'],
-  vitaminD: ['vitamin d', 'calcitriol', '维生素 d'],
-  energy: ['energy', 'kcal', '能量'],
-  water: ['water', 'moisture', '水'],
-  phosphatebinder: ['binder', 'binders', '结合剂'],
-  fiber: ['fiber', 'fibre', '纤维'],
-  anemia: ['anemia', 'anaemia', '贫血'],
-};
+/** 历史上从本模块取过词表，保留兼容；真源在 `domain/knowledge/topic-aliases.ts`。 */
+export { TOPIC_ALIASES };
 
 @Injectable()
 export class SectionCatalogService {

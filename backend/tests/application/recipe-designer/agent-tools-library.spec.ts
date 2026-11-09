@@ -4,6 +4,7 @@ import {
   type ToolExecutionContext,
 } from '../../../src/application/recipe-designer/agent/tools';
 import { CitationRegistry } from '../../../src/application/recipe-designer/agent/citation-registry';
+import { RecipeAgentService } from '../../../src/application/recipe-designer/agent/recipe-agent.service';
 import type {
   LibraryPassage,
   SectionHit,
@@ -222,6 +223,28 @@ describe('Agent 工具：知识库检索与打开', () => {
     expect(outcome.summary).toContain('知识库未覆盖');
   });
 
+  it('0 节但命中表格时状态为 ok，摘要指向表格', async () => {
+    const searchSections = jest.fn().mockResolvedValue([]);
+    const searchTableViews = jest
+      .fn()
+      .mockResolvedValue([tableView()]);
+    const outcome = await executeTool(
+      'search_knowledge_library',
+      { query: 'CKD dog key nutritional factors phosphorus' },
+      context({
+        library: { searchSections } as any,
+        sourceLayer: { searchTableViews } as any,
+      }),
+    );
+    const data = outcome.data as any;
+    expect(data.status).toBe('ok');
+    expect(data.sections).toEqual([]);
+    expect(data.tables[0].citationId).toBe('K1');
+    expect(outcome.summary).toContain('未找到节');
+    expect(outcome.summary).toContain('表');
+    expect(outcome.summary).toContain('[K1]');
+  });
+
   it('把物种/分期/主题提示传给检索', async () => {
     const searchSections = jest.fn().mockResolvedValue([]);
     await executeTool(
@@ -334,6 +357,45 @@ describe('Agent 工具：知识库检索与打开', () => {
     );
   });
 
+  it('锚点段落不在本节时明确失败，不返回空页成功', async () => {
+    const citations = new CitationRegistry();
+    const record = citations.register(passage('p2'));
+    const openSection = jest.fn().mockResolvedValue(
+      sectionView({
+        anchorFound: false,
+        paragraphs: [],
+        totalParagraphs: 20,
+      }),
+    );
+    const outcome = await executeTool(
+      'open_knowledge',
+      { citationId: record.citationId },
+      context({ sourceLayer: { openSection } as any, citations }),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.message).toContain('引用段');
+    expect(citations.records()).toHaveLength(1); // 只有打开前登记的 K1
+  });
+
+  it('offset 越界返回空页时提示重新从 0 开始', async () => {
+    const openSection = jest.fn().mockResolvedValue(
+      sectionView({
+        paragraphs: [],
+        totalParagraphs: 20,
+        nextOffset: null,
+      }),
+    );
+    const outcome = await executeTool(
+      'open_knowledge',
+      { sectionId: 'sacn5-chapters-SACN5-37-s014', paragraphOffset: 99 },
+      context({ sourceLayer: { openSection } as any }),
+    );
+    expect(outcome.ok).toBe(true);
+    expect((outcome.data as any).citationIds).toEqual([]);
+    expect(outcome.summary).toContain('本页无段落');
+    expect(outcome.summary).toContain('paragraphOffset=0');
+  });
+
   it('非 CKD 表格被拒，且不登记 K 号', async () => {
     const citations = new CitationRegistry();
     const openTable = jest
@@ -408,6 +470,32 @@ describe('Agent 工具：知识库检索与打开', () => {
     const outcome = await executeTool('open_knowledge', {}, context());
     expect(outcome.ok).toBe(false);
     expect(outcome.error?.message).toContain('三选一');
+  });
+
+  it('open_knowledge 同时给多个目标时明确拒绝', async () => {
+    const openTable = jest.fn();
+    const outcome = await executeTool(
+      'open_knowledge',
+      { sectionId: 'sacn5-chapters-SACN5-37-s014', tableId: 'T0497' },
+      context({ sourceLayer: { openTable } as any }),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.message).toContain('三选一');
+    expect(openTable).not.toHaveBeenCalled();
+  });
+
+  it('open_knowledge 同时给 citationId 和 sectionId 时明确拒绝', async () => {
+    const citations = new CitationRegistry();
+    citations.registerTable(tableView());
+    const openSection = jest.fn();
+    const outcome = await executeTool(
+      'open_knowledge',
+      { citationId: 'K1', sectionId: 'sacn5-chapters-SACN5-37-s014' },
+      context({ sourceLayer: { openSection } as any, citations }),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.message).toContain('三选一');
+    expect(openSection).not.toHaveBeenCalled();
   });
 
   it('find_food 按 nutrientKey 找原料并透出含量', async () => {
@@ -587,5 +675,140 @@ describe('assess 摘要的缺口与缺数据', () => {
     expect(outcome.summary).toContain('还差 0.196 mg');
     expect(outcome.summary).toContain('1片');
     expect(outcome.summary).toContain('缺数据：氯（11/11 原料无数据）');
+  });
+});
+
+describe('RecipeAgentService：会话引用恢复', () => {
+  it('恢复 5 种历史形状，表格摘要用 openTable 补全文', async () => {
+    const tableA = tableView({
+      tableId: 'T0497',
+      caption: 'Table 37-9. Key nutritional factors for dogs with CKD',
+    });
+    const tableB = tableView({
+      tableId: 'T0260',
+      caption: 'Table 37-11. Dietary phosphorus targets',
+    });
+    const findMany = jest.fn().mockResolvedValue([
+      {
+        toolResult: {
+          data: {
+            status: 'ok',
+            sections: [{ passages: [{ ...passage('p1'), citationId: 'K1' }] }],
+            passages: [{ ...passage('p2'), citationId: 'K2' }],
+            tables: [
+              {
+                tableId: 'T0497',
+                citationId: 'K3',
+                caption: tableA.caption,
+                pageNo: tableA.pageNo,
+                rowCount: tableA.rowCount,
+                documentId: tableA.documentId,
+                sourceId: tableA.sourceId,
+              },
+            ],
+          },
+        },
+      },
+      {
+        toolResult: {
+          data: {
+            status: 'ok',
+            section: {
+              paragraphs: [{ ...passage('p3'), citationId: 'K4' }],
+            },
+            table: { ...tableB, citationId: 'K5' },
+            citationId: 'K5',
+          },
+        },
+      },
+    ]);
+    const openTable = jest
+      .fn()
+      .mockImplementation(async (tableId: string) =>
+        tableId === 'T0497' ? tableA : tableB,
+      );
+    const service = new RecipeAgentService(
+      { recipeDesignAgentMessage: { findMany } } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { openTable } as any,
+    );
+
+    const registry = await (service as any).loadCitationRegistry('session-1');
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          toolName: {
+            in: ['search_knowledge_library', 'open_knowledge'],
+          },
+        }),
+      }),
+    );
+    expect(registry.get('K1')).toMatchObject({
+      kind: 'passage',
+      recordId: 'p1',
+    });
+    expect(registry.get('K2')).toMatchObject({
+      kind: 'passage',
+      recordId: 'p2',
+    });
+    expect(registry.get('K3')).toMatchObject({
+      kind: 'table',
+      recordId: 'T0497',
+      tableId: 'T0497',
+    });
+    expect(registry.get('K3')?.text).toContain('Table 37-9');
+    expect(registry.get('K4')).toMatchObject({
+      kind: 'passage',
+      recordId: 'p3',
+    });
+    expect(registry.get('K5')).toMatchObject({
+      kind: 'table',
+      recordId: 'T0260',
+      tableId: 'T0260',
+    });
+    expect(openTable).toHaveBeenCalledWith('T0497');
+    expect(openTable).toHaveBeenCalledWith('T0260');
+    expect(
+      registry.audit('磷 0.2–0.5 [K1][K3][K5]').validCitationCount,
+    ).toBe(3);
+  });
+
+  it('表格全文找不到时跳过该条，其余引用仍恢复', async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      {
+        toolResult: {
+          data: {
+            status: 'ok',
+            sections: [{ passages: [{ ...passage('p1'), citationId: 'K1' }] }],
+            tables: [
+              {
+                tableId: 'T9999',
+                citationId: 'K2',
+                caption: 'Missing table',
+              },
+            ],
+          },
+        },
+      },
+    ]);
+    const service = new RecipeAgentService(
+      { recipeDesignAgentMessage: { findMany } } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { openTable: jest.fn().mockResolvedValue(null) } as any,
+    );
+
+    const registry = await (service as any).loadCitationRegistry('session-1');
+
+    expect(registry.get('K1')?.recordId).toBe('p1');
+    expect(registry.get('K2')).toBeUndefined();
+    expect(registry.audit('[K1][K2]')).toMatchObject({
+      validCitationCount: 1,
+      invalidIds: ['K2'],
+    });
   });
 });

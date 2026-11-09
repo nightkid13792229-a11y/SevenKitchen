@@ -488,10 +488,21 @@ export async function executeTool(
           citationId: context.citations.registerTable(table).citationId,
         }));
 
-        const status = citedSections.length > 0 ? 'ok' : 'no_match';
+        const status =
+          citedSections.length > 0 || citedTables.length > 0
+            ? 'ok'
+            : 'no_match';
         const summary =
           citedSections.length === 0
-            ? '知识库未覆盖该问题'
+            ? citedTables.length === 0
+              ? '知识库未覆盖该问题'
+              : `未找到节；命中 ${citedTables.length} 张表：${citedTables
+                  .slice(0, 3)
+                  .map(
+                    (table) =>
+                      `${table.tableId}${table.caption ? `（${table.caption}）` : ''}[${table.citationId}]`,
+                  )
+                  .join('；')}`
             : `找到 ${citedSections.length} 节：${citedSections
                 .slice(0, 3)
                 .map((section) => {
@@ -524,6 +535,16 @@ export async function executeTool(
         const sectionId = readText(args.sectionId);
         const requestedTableId = readText(args.tableId);
         const citationId = readText(args.citationId);
+
+        const targetCount = [sectionId, requestedTableId, citationId].filter(
+          Boolean,
+        ).length;
+        if (targetCount > 1) {
+          return fail(
+            'INVALID_ARGUMENT',
+            'sectionId/tableId/citationId 三选一',
+          );
+        }
 
         let resolvedSectionId = sectionId;
         let resolvedTableId = requestedTableId;
@@ -597,6 +618,22 @@ export async function executeTool(
             `节 ${section.sectionId} 属于 ${section.documentId}；本阶段只开放 CKD 知识库`,
           );
         }
+        if (!section.anchorFound) {
+          return fail(
+            'NOT_FOUND',
+            `引用段不在 ${section.displayTitle || section.sectionId}：原段落已不存在或已重切，请重新检索`,
+          );
+        }
+        if (section.totalParagraphs === 0) {
+          return ok(
+            {
+              status: 'ok',
+              section: { ...section, paragraphs: [] },
+              citationIds: [],
+            },
+            `本节没有段落：${section.displayTitle}`,
+          );
+        }
 
         const paragraphs = section.paragraphs.map((paragraph) => {
           const passage: LibraryPassage = {
@@ -620,6 +657,10 @@ export async function executeTool(
           };
         });
         const citationIds = paragraphs.map((paragraph) => paragraph.citationId);
+        const emptyPageHint =
+          paragraphs.length === 0 && section.totalParagraphs > 0
+            ? '；本页无段落，可用 paragraphOffset=0'
+            : '';
         return ok(
           {
             status: 'ok',
@@ -630,7 +671,7 @@ export async function executeTool(
             section.nextOffset === null
               ? ''
               : `（下一页 paragraphOffset=${section.nextOffset}）`
-          }${paragraphs.length > 0 ? `，引用 ${citationIds.join('、')}` : ''}`,
+          }${paragraphs.length > 0 ? `，引用 ${citationIds.join('、')}` : ''}${emptyPageHint}`,
         );
       }
 

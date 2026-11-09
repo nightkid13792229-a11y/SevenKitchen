@@ -594,7 +594,7 @@ export class InventoryService {
 
   async consumeAllocationsForOrderIds(
     orderIds: string[],
-    batchId: string,
+    _batchId: string,
   ): Promise<ConsumeInventoryAllocationResult> {
     const uniqueOrderIds = Array.from(new Set(orderIds.filter(Boolean)));
     if (uniqueOrderIds.length === 0) {
@@ -620,27 +620,8 @@ export class InventoryService {
       });
 
       const now = new Date();
-      const ledgerEntries = allocations.flatMap((allocation: any) =>
-        (allocation.lines || []).map((line: any) => ({
-          id: randomUUID(),
-          ingredientId: line.ingredientId,
-          deltaG: -Math.abs(Number(line.quantityG || 0)),
-          procurementSkuId: line.procurementSkuId ?? null,
-          sourceType: InventorySourceType.PRODUCTION_ALLOCATION_CONSUMPTION as any,
-          sourceId: `${batchId}:${allocation.id}`,
-          costAmount: 0,
-          createdAt: now,
-        })),
-      ).filter((entry: any) => entry.deltaG < 0);
-
-      if (ledgerEntries.length > 0) {
-        await tx.inventoryLedgerEntry.createMany({
-          data: ledgerEntries,
-          skipDuplicates: true,
-        });
-      }
-
       const allocationIds = allocations.map((allocation: any) => allocation.id);
+
       if (allocationIds.length > 0) {
         await tx.inventoryAllocation.updateMany({
           where: {
@@ -656,23 +637,24 @@ export class InventoryService {
         });
       }
 
+      // 预占只负责"占用"：消耗时只改状态，不再写第二笔扣减。
+      // 汇总数仍按预占行算，供成本快照展示。
+      const totalConsumedQuantityG = this.roundNumber(
+        allocations
+          .flatMap((allocation: any) => allocation.lines || [])
+          .reduce(
+            (sum: number, line: any) =>
+              sum + Math.abs(Number(line.quantityG || 0)),
+            0,
+          ),
+        3,
+      );
+
       return {
         consumedAllocationCount: allocationIds.length,
-        ledgerEntryCount: ledgerEntries.length,
-        totalConsumedQuantityG: this.roundNumber(
-          ledgerEntries.reduce(
-            (sum: number, entry: any) => sum + Math.abs(entry.deltaG),
-            0,
-          ),
-          3,
-        ),
-        totalInventoryCost: this.roundNumber(
-          ledgerEntries.reduce(
-            (sum: number, entry: any) => sum + Number(entry.costAmount || 0),
-            0,
-          ),
-          2,
-        ),
+        ledgerEntryCount: 0,
+        totalConsumedQuantityG,
+        totalInventoryCost: 0,
       };
     });
   }

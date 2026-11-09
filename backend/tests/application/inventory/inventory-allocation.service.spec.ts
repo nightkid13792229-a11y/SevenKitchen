@@ -130,7 +130,7 @@ describe('InventoryService allocations', () => {
     });
   });
 
-  it('consumes active allocations for produced orders as inventory ledger entries', async () => {
+  it('消耗预占只改状态，不再写库存流水', async () => {
     prisma.inventoryAllocation.findMany.mockResolvedValue([
       {
         id: 'allocation-1',
@@ -152,23 +152,11 @@ describe('InventoryService allocations', () => {
 
     expect(result).toEqual({
       consumedAllocationCount: 1,
-      ledgerEntryCount: 1,
+      ledgerEntryCount: 0,
       totalConsumedQuantityG: 1200,
       totalInventoryCost: 0,
     });
-    expect(prisma.inventoryLedgerEntry.createMany).toHaveBeenCalledWith({
-      data: [
-        expect.objectContaining({
-          ingredientId: 'beef',
-          deltaG: -1200,
-          procurementSkuId: 'sku-beef',
-          sourceType: 'PRODUCTION_ALLOCATION_CONSUMPTION',
-          sourceId: 'batch-1:allocation-1',
-          costAmount: 0,
-        }),
-      ],
-      skipDuplicates: true,
-    });
+    expect(prisma.inventoryLedgerEntry.createMany).not.toHaveBeenCalled();
     expect(prisma.inventoryAllocation.updateMany).toHaveBeenCalledWith({
       where: {
         id: {
@@ -181,5 +169,26 @@ describe('InventoryService allocations', () => {
         consumedAt: expect.any(Date),
       },
     });
+  });
+
+  it('汇总数量仍按预占行计算', async () => {
+    prisma.inventoryAllocation.findMany.mockResolvedValue([
+      {
+        id: 'allocation-1',
+        sourceOrderIds: ['order-1'],
+        lines: [
+          { ingredientId: 'beef', procurementSkuId: null, quantityG: 300 },
+          { ingredientId: 'beef', procurementSkuId: null, quantityG: 200 },
+        ],
+      },
+    ]);
+
+    const result = await (service as any).consumeAllocationsForOrderIds(
+      ['order-1'],
+      'batch-1',
+    );
+
+    expect(result.ledgerEntryCount).toBe(0);
+    expect(result.totalConsumedQuantityG).toBe(500);
   });
 });

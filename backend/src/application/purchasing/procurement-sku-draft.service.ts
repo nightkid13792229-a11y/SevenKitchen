@@ -27,7 +27,7 @@ import {
 } from './procurement-sku-net-content';
 import {
   BASE_UNIT_LABEL,
-  parseSpecLinks,
+  countOnlySpecLinks,
   resolveSpecChain,
   type SpecChainSource,
   type SpecLink,
@@ -68,6 +68,11 @@ export interface ProcurementSkuDraft {
   netContentUnitText: string | null;
   /** 规格链；最后一层一定已折算成基准单位（如 30 枚 × 53 克） */
   specChain: SpecLink[] | null;
+  /**
+   * 链是否折算成功。false 时 specChain 里只剩"计数层"（30 枚），
+   * 重量要员工自己补 —— 前端据此提示"规格没读全"，绝不把重量层当件数。
+   */
+  specChainResolved: boolean;
   /** 包装规格原文（如 30枚 1.59kg），存进 productModel 给订单匹配用 */
   specText: string | null;
   /** perUnit 是包装上印的（printed）还是用整件总重折算出来的（derived） */
@@ -277,6 +282,7 @@ ${list}`;
     let netContentPerPack: number | null = null;
     let netContentUnitText: string | null = null;
     let specChain: SpecLink[] | null = null;
+    let specChainResolved = false;
     let netContentSource: SpecChainSource | null = null;
     let totalNetContentInBase: number | null = null;
     let amountUnitText: string | null = null;
@@ -286,6 +292,7 @@ ${list}`;
       netContentPerPack = chain.value.perUnitAmount;
       netContentUnitText = BASE_UNIT_LABEL[baseUnit];
       specChain = chain.value.links;
+      specChainResolved = true;
       netContentSource = chain.value.source;
       totalNetContentInBase = chain.value.totalInBaseUnit;
       amountUnitText = chain.value.amountUnitText;
@@ -306,12 +313,15 @@ ${list}`;
       );
       netContentPerPack = normalized.ok ? normalized.inBaseUnit : null;
       netContentSource = netContentPerPack === null ? null : 'printed';
-      amountUnitText = netContentUnitText;
+      // 回来后这里的数字已经折成基准单位了（kg → 克），单位标签必须跟着改，
+      // 否则页面会出现「1000 kg」这种把员工带沟里的写法。
+      amountUnitText = BASE_UNIT_LABEL[baseUnit];
       // 重量没读出来，件数层该留还得留：表单要显示"30 枚 × ? 克"，
       // 只留一个空重量，员工才补得上（2026-11-09）。重量读出来了就
       // 走"件数 + 单件净含量"的老口径，不再拼半条链。
       if (netContentPerPack === null) {
-        const partial = parseSpecLinks(raw.specChain);
+        // 只留计数层：折不出基准单位的重量层绝不能当件数
+        const partial = countOnlySpecLinks(raw.specChain);
         specChain = partial.length > 0 ? partial : null;
       }
       totalNetContentInBase =
@@ -323,20 +333,36 @@ ${list}`;
     if (packCount === null) missing.push('packCount');
     if (netContentPerPack === null) missing.push('netContentPerPack');
 
-    const specText = toStringOrNull(raw.specText);
+    // 箱/桶/提/件读出来只有一层（没有"一箱几件"）：当成"读漏了"，
+    // 否则前端会按 packCount=1 自动确认"这件只有一件"，少填一层静默差 N 倍。
+    const hasCountLayer = specChainResolved
+      ? (specChain?.length ?? 1) > 1
+      : (specChain?.length ?? 0) > 0 || packCount !== null;
+    if (
+      purchaseUnit &&
+      MULTIPACK_UNITS.includes(purchaseUnit) &&
+      !hasCountLayer &&
+      !missing.includes('packCount')
+    ) {
+      missing.push('packCount');
+    }
+
+    const specText = clampText(toStringOrNull(raw.specText), 100);
 
     return {
       name,
       brand: toStringOrNull(raw.brand),
       // 规格原文优先：订单截图那边也按同一段文字认规格，
       // 存成 30×53克 反而对不上 1.59kg(30枚) 那种写法（2026-11-09）。
-      productModel: toStringOrNull(raw.productModel) ?? specText,
+      productModel:
+        clampText(toStringOrNull(raw.productModel), 100) ?? specText,
       purchaseChannel,
       purchaseUnit,
       packCount,
       netContentPerPack,
       netContentUnitText,
       specChain,
+      specChainResolved,
       specText,
       netContentSource,
       totalNetContentInBase,
@@ -347,6 +373,12 @@ ${list}`;
     };
   }
 }
+
+/** 规格原文最长 100 字（入库字段与 DTO 的限制）；超了截断，别让员工吃 400 */
+const MULTIPACK_UNITS = ['箱', '桶', '提', '件'];
+
+const clampText = (value: string | null, max: number): string | null =>
+  value === null ? null : value.slice(0, max);
 
 const toStringOrNull = (value: unknown): string | null =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;

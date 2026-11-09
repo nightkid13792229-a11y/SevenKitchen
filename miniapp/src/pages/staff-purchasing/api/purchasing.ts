@@ -1038,6 +1038,8 @@ export interface ProcurementSkuDraft {
   netContentUnitText: string | null;
   /** 规格链：最后一层一定是基准单位，如 [{30,枚},{53,克}] */
   specChain: Array<{ count: number; unit: string }> | null;
+  /** 链是否折算成功；false 时 specChain 里只剩计数层，重量要人补 */
+  specChainResolved: boolean;
   /** 包装规格原文，如「30枚 1.59kg」 */
   specText: string | null;
   /** perUnit 是包装上印的（printed）还是按整件总重折算的（derived） */

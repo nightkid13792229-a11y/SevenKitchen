@@ -30,6 +30,8 @@ export interface ApplyDraftPatch {
   amountUnitText?: string | null;
   /** 包装规格原文，如「30枚 1.59kg」 */
   specText?: string | null;
+  /** 链是否折算成功；false 时只把计数层灌进表单，重量留空 */
+  specChainResolved?: boolean;
   unitPriceText?: string;
 }
 
@@ -92,6 +94,7 @@ export function applyDraftToForm(
   patch.totalNetContentInBase = draft.totalNetContentInBase ?? null;
   patch.amountUnitText = draft.amountUnitText ?? null;
   patch.specText = draft.specText ?? null;
+  patch.specChainResolved = draft.specChainResolved !== false;
 
   if (typeof draft.unitPrice === 'number' && draft.unitPrice >= 0) {
     patch.unitPriceText = String(draft.unitPrice);

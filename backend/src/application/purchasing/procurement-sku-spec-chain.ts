@@ -78,19 +78,45 @@ const toPositiveNumber = (value: unknown): number | null => {
   return null;
 };
 
+const toSpecLink = (entry: unknown): SpecLink | null => {
+  if (!entry || typeof entry !== 'object') return null;
+  const item = entry as Record<string, unknown>;
+  const count = toPositiveNumber(item.count);
+  const unit = typeof item.unit === 'string' ? item.unit.trim() : '';
+  if (count === null || unit.length === 0) return null;
+  return { count, unit };
+};
+
 export const parseSpecLinks = (raw: unknown): SpecLink[] => {
   if (!Array.isArray(raw)) return [];
+  return raw
+    .map(toSpecLink)
+    .filter((link): link is SpecLink => link !== null);
+};
 
-  const links: SpecLink[] = [];
+/**
+ * 只保留「计数层」。
+ *
+ * 链折不出基准单位（比如按个记账却只读到「5kg」、按克记账却只读到「330ml」）时，
+ * 不能把重量/体积那一层当成"件数"塞给前端 —— 那会把 5kg 变成 5 件，静默差 N 倍。
+ * 这里只留下能按个数的层（枚/瓶/捆/张…），遇到第一个非计数层就停。
+ */
+export const countOnlySpecLinks = (raw: unknown): SpecLink[] => {
+  if (!Array.isArray(raw)) return [];
+
+  const counted: SpecLink[] = [];
   for (const entry of raw) {
-    if (!entry || typeof entry !== 'object') continue;
-    const item = entry as Record<string, unknown>;
-    const count = toPositiveNumber(item.count);
-    const unit = typeof item.unit === 'string' ? item.unit.trim() : '';
-    if (count === null || unit.length === 0) continue;
-    links.push({ count, unit });
+    const link = toSpecLink(entry);
+    // 中途读坏了一层就停：跳过它继续乘等于少算一截
+    if (!link) break;
+    const asCount = normalizeNetContentToBaseUnit(
+      { value: link.count, unit: link.unit },
+      'PCS',
+    );
+    if (!asCount.ok) break;
+    counted.push(link);
   }
-  return links;
+  return counted;
 };
 
 /**
@@ -109,9 +135,14 @@ export function resolveSpecChain(input: {
   totalNetContent?: { value: unknown; unit: unknown } | null;
   baseUnit: BaseUnitCode;
 }): SpecChainResolution {
+  const rawLinks = Array.isArray(input.links) ? input.links : [];
   const links = parseSpecLinks(input.links);
   if (links.length === 0) {
     return { ok: false, reason: 'NO_LINKS' };
+  }
+  // 有一层读坏了（数量 0 / 单位空）就整条不认：静默丢掉那一层等于少算一截
+  if (links.length !== rawLinks.length) {
+    return { ok: false, reason: 'INVALID_LINKS' };
   }
 
   const last = links[links.length - 1];

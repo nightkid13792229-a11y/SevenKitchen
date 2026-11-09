@@ -123,3 +123,100 @@ describe('其它常见规格', () => {
     );
   });
 });
+
+describe('规格链折算失败时（评审 C1 / I2）', () => {
+  it('★ 按个记账只读到「净含量 5kg」：不把 5kg 当 5 件，链留空、标未折算', () => {
+    const draft = draftOf(
+      {
+        name: '整箱西瓜',
+        purchaseUnit: '箱',
+        specText: '净含量 5kg',
+        specChain: [{ count: 5, unit: 'kg' }],
+      },
+      'PCS',
+    );
+
+    expect(draft.specChain).toBeNull();
+    expect(draft.specChainResolved).toBe(false);
+    expect(draft.packCount).toBeNull();
+    expect(draft.netContentPerPack).toBeNull();
+  });
+
+  it('★ 按克记账读到「24瓶 × 330ml」：只留 24 瓶，330ml 不进件数', () => {
+    const draft = draftOf({
+      name: '某某牛奶',
+      purchaseUnit: '箱',
+      specText: '24×330ml',
+      specChain: [
+        { count: 24, unit: '瓶' },
+        { count: 330, unit: 'ml' },
+      ],
+    });
+
+    expect(draft.specChainResolved).toBe(false);
+    expect(draft.specChain).toEqual([{ count: 24, unit: '瓶' }]);
+    expect(draft.netContentPerPack).toBeNull();
+  });
+
+  it('箱/桶/提/件 只有一层（没读到一箱几件）时，必须报件数缺失', () => {
+    for (const purchaseUnit of ['箱', '桶', '提', '件']) {
+      const draft = draftOf({
+        name: '某商品',
+        purchaseUnit,
+        specChain: [{ count: 5000, unit: 'g' }],
+      });
+
+      expect(draft.missing).toContain('packCount');
+      expect(draft.packCount).toBe(1);
+    }
+  });
+
+  it('袋/包 单件商品只有一层时，不算件数缺失', () => {
+    const draft = draftOf({
+      name: '沃集鲜 糙米 5kg',
+      purchaseUnit: '袋',
+      specChain: [{ count: 5, unit: 'kg' }],
+    });
+
+    expect(draft.missing).not.toContain('packCount');
+    expect(draft.specChainResolved).toBe(true);
+  });
+
+  it('折算成功时 specChainResolved 为 true', () => {
+    const draft = draftOf({
+      name: '盒马 鲜鸡蛋',
+      purchaseUnit: '盒',
+      specText: '30枚 1.59kg',
+      specChain: [{ count: 30, unit: '枚' }],
+      totalNetContent: { value: 1.59, unit: 'kg' },
+    });
+
+    expect(draft.specChainResolved).toBe(true);
+  });
+});
+
+describe('规格原文口径（评审 M2 / M4）', () => {
+  it('老口径回退时，最后一层的单位必须是基准单位，不能写 kg', () => {
+    const draft = draftOf({
+      name: '沃集鲜 糙米 1kg',
+      purchaseUnit: '袋',
+      packCount: 1,
+      netContent: { value: 1, unit: 'kg' },
+    });
+
+    expect(draft.netContentPerPack).toBe(1000);
+    expect(draft.amountUnitText).toBe('克');
+  });
+
+  it('超长规格原文截到 100 字，避免入库时吃 400', () => {
+    const draft = draftOf({
+      name: '某商品',
+      purchaseUnit: '袋',
+      specText: '长'.repeat(180),
+      specChain: [{ count: 5, unit: 'kg' }],
+    });
+
+    expect(draft.specText).toHaveLength(100);
+    expect(draft.productModel).toHaveLength(100);
+  });
+});

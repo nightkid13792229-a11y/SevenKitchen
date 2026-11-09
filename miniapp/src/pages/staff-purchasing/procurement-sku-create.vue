@@ -86,7 +86,7 @@
           </view>
           <view class="sample-points">
             <text class="sample-point">① 商品标题（带规格那种）</text>
-            <text class="sample-point">② 净含量 —— 1kg / 500g</text>
+            <text class="sample-point">② 包装规格 —— 30枚 1.59kg / 24×330ml</text>
             <text class="sample-point">③ 单价 —— ¥14.99/袋</text>
           </view>
         </view>
@@ -181,6 +181,8 @@
             <text v-if="aiFilled.specChain" class="ai-tag">AI 识别</text>
           </view>
 
+          <text v-if="specText" class="spec-origin">包装原文：{{ specText }}</text>
+
           <view class="chain">
             <view
               v-for="(link, index) in specLinks"
@@ -194,7 +196,7 @@
                 type="number"
                 placeholder="数量"
                 placeholder-class="ph"
-                @input="markSpecEdited"
+                @input="markStructureEdited"
               />
               <input
                 v-model="link.unit"
@@ -203,7 +205,7 @@
                 maxlength="2"
                 placeholder="单位"
                 placeholder-class="ph"
-                @input="markSpecEdited"
+                @input="markStructureEdited"
               />
               <text class="chain-times">×</text>
             </view>
@@ -216,7 +218,6 @@
                 type="digit"
                 placeholder="如 500"
                 placeholder-class="ph"
-                @input="markSpecEdited"
               />
               <text class="chain-unit-fixed">{{ amountUnit }}</text>
             </view>
@@ -241,16 +242,35 @@
           </view>
 
           <text
-            v-if="innerLayerMissing"
+            v-if="specText && !specChainResolved"
+            class="chain-warn"
+          >
+            这张图只读到「{{ specText }}」，规格没折算全，请照包装把上面的层数和重量补齐。
+          </text>
+          <text
+            v-else-if="innerLayerMissing"
             :class="submitted ? 'error-text' : 'chain-warn'"
           >
             整{{ unitWord }}的商品，请先「再加一层」填一{{ unitWord }}几件（这里少填，库存会差好几倍）。
+          </text>
+          <text
+            v-else-if="submitted && packCountInvalid"
+            class="error-text"
+          >
+            每一层都要填数量和单位，填不全不能保存。
           </text>
           <text v-else-if="ratio > 0 && specLinks.length > 0" class="ratio-hint">
             一{{ unitWord }} = {{ chainText }} = {{ ratio }} {{ amountUnit }}
           </text>
 
-          <text v-if="netContentDerived && ratio > 0" class="derived-hint">
+          <text v-if="totalMismatch" class="error-text">
+            包装上印的是整{{ unitWord }} {{ totalNetContentInBase }} {{ amountUnit }}，
+            现在算出来 {{ ratio }} {{ amountUnit }}，对不上，请核对。
+          </text>
+          <text
+            v-else-if="netContentDerived && ratio > 0"
+            class="derived-hint"
+          >
             包装上印的是整{{ unitWord }} {{ totalNetContentInBase }} {{ amountUnit }}，
             每{{ innerUnitWord }} {{ netContentText }} {{ amountUnit }} 是折算出来的，请核对
           </text>
@@ -317,6 +337,7 @@ import {
   firstIncompleteLinkIndex,
   formatSpecChain,
   multiplySpecLinks,
+  isTotalMismatch,
   needsInnerLayer,
   type SpecLinkInput,
 } from './procurement-sku-spec-chain';
@@ -403,7 +424,10 @@ const totalNetContentInBase = ref<number | null>(null);
 const amountUnitText = ref('');
 /** 包装规格原文，如「30枚 1.59kg」；没改过就原样存进 productModel */
 const specText = ref('');
-const specEdited = ref(false);
+/** 链是否折算成功；false = 只读到计数层，重量要人补 */
+const specChainResolved = ref(true);
+/** 员工动过"层数/单位"，包装原文就不再照抄（改了重量不算） */
+const structureEdited = ref(false);
 /** 整箱商品确认"只有一件"，不再逼他补一层 */
 const singleConfirmed = ref(false);
 
@@ -590,12 +614,12 @@ const addLink = () => {
   // 新的一层加在最里面（紧挨着基准数量）：一箱 = 10 捆 × [?] × 500 克
   specLinks.value.push({ count: '', unit: '' });
   singleConfirmed.value = false;
-  markSpecEdited();
+  markStructureEdited();
 };
 
 const removeLink = (index: number) => {
   specLinks.value.splice(index, 1);
-  markSpecEdited();
+  markStructureEdited();
 };
 
 const confirmSingle = () => {
@@ -603,10 +627,23 @@ const confirmSingle = () => {
 };
 
 /** 员工动过规格：折算提示作废，原文规格也不再照抄进 productModel */
-const markSpecEdited = () => {
-  specEdited.value = true;
-  netContentDerived.value = false;
+const markStructureEdited = () => {
+  structureEdited.value = true;
 };
+
+/** 件数连乘不成立（某层没填）——保存时才提示，避免一进页面就红 */
+const packCountInvalid = computed(() => packCount.value === null);
+
+/**
+ * 合计和包装上印的总重对不上：员工改了件数/重量，或 AI 两处读数矛盾。
+ * 这一条不能随编辑消失 —— 编辑之后恰恰最需要它（评审 I4）。
+ */
+const totalMismatch = computed(() =>
+  isTotalMismatch({
+    ratio: ratio.value,
+    printedTotalInBase: totalNetContentInBase.value,
+  }),
+);
 
 const linkUnfilled = (index: number) => {
   if (!submitted.value) return false;
@@ -824,9 +861,10 @@ const applyDraft = (draft: any, screenshotUrl: string) => {
   }
   netContentDerived.value = Boolean(result.patch.netContentDerived);
   totalNetContentInBase.value = result.patch.totalNetContentInBase ?? null;
+  specChainResolved.value = result.patch.specChainResolved !== false;
   amountUnitText.value = result.patch.amountUnitText ?? '';
   specText.value = result.patch.specText ?? '';
-  specEdited.value = false;
+  structureEdited.value = false;
   // AI 明确读到"一箱只有 1 件"时才替员工确认，否则整箱必须让他补一层
   singleConfirmed.value =
     typeof draft?.packCount === 'number' &&
@@ -869,8 +907,12 @@ const handleSubmit = async () => {
       packCount: Number(snapshot.value.packCount),
       netContentPerPack: Number(snapshot.value.netContentPerPack),
       // 没改过规格就把包装原文存进去：订单截图按「1.59kg(30枚)」也能认出同一样货
+      // 包装原文只在"没动过层数、且和总重算得对"时照抄：
+      // 员工改了件数或重量，原文就和账对不上了，宁可让服务端按数字拼规格
       productModel:
-        specText.value && !specEdited.value ? specText.value : undefined,
+        specText.value && !structureEdited.value && !totalMismatch.value
+          ? specText.value
+          : undefined,
       currentPurchasePrice: snapshot.value.currentPurchasePrice ?? undefined,
       sourceScreenshotUrl: uploadedScreenshotUrl.value || undefined,
       // 服务端拿它校验渠道必须和这笔订单一致（2026-11-07）
@@ -1233,6 +1275,13 @@ const handleSubmit = async () => {
 /* 渠道锁死时，别的渠道是「看得见但点不了」，避免以为还能换 */
 .chip.locked {
   opacity: 0.45;
+}
+
+.spec-origin {
+  display: block;
+  font-size: 11px;
+  color: #6b6653;
+  margin-bottom: 8px;
 }
 
 .chain {

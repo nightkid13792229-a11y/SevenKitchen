@@ -1,5 +1,8 @@
 
-import { resolveSpecChain } from '../procurement-sku-spec-chain';
+import {
+  countOnlySpecLinks,
+  resolveSpecChain,
+} from '../procurement-sku-spec-chain';
 
 const ok = (input: Parameters<typeof resolveSpecChain>[0]) => {
   const result = resolveSpecChain(input);
@@ -41,6 +44,23 @@ describe('规格链折算', () => {
     expect(value.perUnitAmount).toBe(53);
     expect(value.totalInBaseUnit).toBe(1590);
     expect(value.source).toBe('derived');
+  });
+
+  it('已知边界（评审 I1）：没有整件总重时，程序认不出「总重被写成单件重」', () => {
+    // 提示词明确要求「30枚 1.59kg」把 1.59kg 放到 totalNetContent，
+    // 模型若仍写成链尾，仅凭原文无法与「500g×2袋」（单件重）区分 ——
+    // 猜错会反向差 24 倍，所以这里保持"按印刷值采信"，用测试钉住现状。
+    const value = ok({
+      links: [
+        { count: 30, unit: '枚' },
+        { count: 1590, unit: 'g' },
+      ],
+      baseUnit: 'G',
+    });
+
+    expect(value.perUnitAmount).toBe(1590);
+    expect(value.totalInBaseUnit).toBe(47700);
+    expect(value.source).toBe('printed');
   });
 
   it('24瓶 × 330ml：包装上印的单价重量，不标折算', () => {
@@ -154,6 +174,19 @@ describe('规格链读不出来时判失败', () => {
     expect(result).toEqual({ ok: false, reason: 'NO_BASE_AMOUNT' });
   });
 
+  it('有一层读坏了（数量 0）就整条不认，不静默丢掉那一层', () => {
+    const result = resolveSpecChain({
+      links: [
+        { count: 0, unit: '箱' },
+        { count: 24, unit: '瓶' },
+        { count: 330, unit: 'ml' },
+      ],
+      baseUnit: 'ML',
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'INVALID_LINKS' });
+  });
+
   it('件数不是整数（1.5 箱）不认，避免折算出半个件', () => {
     const result = resolveSpecChain({
       links: [
@@ -165,5 +198,36 @@ describe('规格链读不出来时判失败', () => {
 
     // 1.5 箱 × 500g 在账上说不清，宁可不认
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('countOnlySpecLinks：折不出基准单位时只能留下计数层', () => {
+  it('盒马鸡蛋「30枚」整层留下（枚是计数单位）', () => {
+    expect(countOnlySpecLinks([{ count: 30, unit: '枚' }])).toEqual([
+      { count: 30, unit: '枚' },
+    ]);
+  });
+
+  it('★ 按克记账读到「24瓶 × 330ml」：只留 24 瓶，绝不把 330ml 当件数', () => {
+    expect(
+      countOnlySpecLinks([
+        { count: 24, unit: '瓶' },
+        { count: 330, unit: 'ml' },
+      ]),
+    ).toEqual([{ count: 24, unit: '瓶' }]);
+  });
+
+  it('★ 按个记账读到「净含量 5kg」：一层都不留（5kg 不是 5 件）', () => {
+    expect(countOnlySpecLinks([{ count: 5, unit: 'kg' }])).toEqual([]);
+  });
+
+  it('读到一半坏掉的层就停，不跳过继续乘', () => {
+    expect(
+      countOnlySpecLinks([
+        { count: 10, unit: '捆' },
+        { count: '', unit: '张' },
+        { count: 50, unit: '张' },
+      ]),
+    ).toEqual([{ count: 10, unit: '捆' }]);
   });
 });

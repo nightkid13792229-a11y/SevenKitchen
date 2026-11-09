@@ -83,6 +83,23 @@ export function formatSpecChain(input: {
 }
 
 /**
+ * 算出来的合计和包装上印的总重对不上（员工改了件数/重量，或 AI 两处读数矛盾）。
+ *
+ * 这条必须实时存在：员工一改数字，原来的"折算，请核对"就不该再假装没事。
+ */
+export function isTotalMismatch(input: {
+  ratio: number;
+  printedTotalInBase: number | null;
+}): boolean {
+  const { ratio, printedTotalInBase } = input;
+  if (!printedTotalInBase || printedTotalInBase <= 0 || ratio <= 0) {
+    return false;
+  }
+  const diff = Math.abs(ratio - printedTotalInBase);
+  return diff > 0.5 && diff / Math.max(ratio, printedTotalInBase) > 0.01;
+}
+
+/**
  * 箱/桶/提/件这类"整件"单位，一层都没填时必须提醒补一层：
  * 少填这一层会按 1 件算，库存和成本静默差 N 倍。
  *

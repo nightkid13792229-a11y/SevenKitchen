@@ -18,6 +18,7 @@ const baseDraft: ProcurementSkuDraft = {
     { count: 330, unit: '毫升' },
   ],
   specText: '24×330ml',
+  specChainResolved: true,
   netContentSource: 'printed',
   totalNetContentInBase: 7920,
   unitPrice: 3.5,
@@ -101,6 +102,23 @@ describe('applyDraftToForm', () => {
 
     expect(result.patch.specLinks).toEqual([{ count: '24', unit: '件' }]);
     expect(result.patch.netContentText).toBe('330');
+  });
+
+  it('★ 链折算失败时只灌计数层，重量留空（不把 330ml 当件数）', () => {
+    const result = applyDraftToForm(
+      {
+        ...baseDraft,
+        netContentPerPack: null,
+        specChain: [{ count: 24, unit: '瓶' }],
+        specChainResolved: false,
+        missing: ['netContentPerPack', 'packCount'],
+      },
+      options,
+    );
+
+    expect(result.patch.specLinks).toEqual([{ count: '24', unit: '瓶' }]);
+    expect(result.patch.netContentText).toBe('');
+    expect(result.patch.specChainResolved).toBe(false);
   });
 
   it('采购单位不在白名单里时不套用（免得保存被服务端拒）', () => {

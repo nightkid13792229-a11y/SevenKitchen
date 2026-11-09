@@ -3,6 +3,7 @@ import {
   computeSpecRatio,
   firstIncompleteLinkIndex,
   formatSpecChain,
+  isTotalMismatch,
   multiplySpecLinks,
   needsInnerLayer,
 } from './procurement-sku-spec-chain';
@@ -127,5 +128,31 @@ describe('needsInnerLayer', () => {
         needsInnerLayer({ purchaseUnit, linkCount: 0, confirmedSingle: false }),
       ).toBe(false);
     }
+  });
+});
+
+describe('isTotalMismatch', () => {
+  it('★ 把 30 枚改成 20 枚：算出来 1060 克，和包装的 1590 克对不上', () => {
+    expect(isTotalMismatch({ ratio: 1060, printedTotalInBase: 1590 })).toBe(
+      true,
+    );
+  });
+
+  it('没动过时 30 × 53 = 1590，不算对不上', () => {
+    expect(isTotalMismatch({ ratio: 1590, printedTotalInBase: 1590 })).toBe(
+      false,
+    );
+  });
+
+  it('只差舍入（1589.98 vs 1590）不算对不上', () => {
+    expect(isTotalMismatch({ ratio: 1589.98, printedTotalInBase: 1590 })).toBe(
+      false,
+    );
+  });
+
+  it('没有印总重（单件商品）时不判', () => {
+    expect(isTotalMismatch({ ratio: 5000, printedTotalInBase: null })).toBe(
+      false,
+    );
   });
 });

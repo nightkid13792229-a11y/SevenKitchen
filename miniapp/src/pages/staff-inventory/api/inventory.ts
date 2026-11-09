@@ -16,7 +16,7 @@ export type InventorySourceType =
   | 'PURCHASE_RECORD'
   | 'MANUAL_ADJUSTMENT'
   | 'STOCKTAKE';
-export type InventoryStocktakeStatus = 'DRAFT' | 'APPLIED';
+export type InventoryStocktakeStatus = 'DRAFT' | 'SUBMITTED' | 'APPLIED' | 'REJECTED';
 
 export interface InventoryOverviewItem {
   id: string;
@@ -68,13 +68,16 @@ export interface InventoryLedgerItem {
 export interface InventoryStocktakeLineItem {
   id: string;
   ingredientId: string;
+  ingredientName: string;
+  ingredientType?: string | null;
   procurementSkuId?: string | null;
   procurementSkuName?: string | null;
-  ingredientName: string;
   stockUnitLabel: string;
   expectedQuantityG: number;
-  countedQuantityG: number;
-  deltaG: number;
+  countedQuantityG: number | null;
+  deltaG: number | null;
+  isCounted: boolean;
+  countedAt?: string | null;
 }
 
 export interface InventoryStocktakeItem {
@@ -83,22 +86,51 @@ export interface InventoryStocktakeItem {
   note: string | null;
   createdAt: string;
   appliedAt: string | null;
+  submittedAt?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  reviewNote?: string | null;
   lineCount: number;
+  countedCount?: number;
   varianceCount: number;
   totalAbsDeltaG: number;
   lines: InventoryStocktakeLineItem[];
 }
 
-export interface CreateInventoryStocktakeLinePayload {
-  ingredientId: string;
-  procurementSkuId?: string;
-  countedQuantityG: number;
+export interface StocktakeDraftItem {
+  id: string;
+  status: InventoryStocktakeStatus;
+  note: string | null;
+  createdAt: string;
+  lineCount: number;
+  countedCount: number;
+  lines: Array<{
+    id: string;
+    ingredientId: string;
+    ingredientName: string;
+    ingredientType?: string | null;
+    stockUnitLabel: string;
+    countedQuantityG: number | null;
+    isCounted: boolean;
+    countedAt?: string | null;
+  }>;
 }
 
-export interface CreateInventoryStocktakePayload {
-  note?: string;
-  applyImmediately?: boolean;
-  lines: CreateInventoryStocktakeLinePayload[];
+export interface StocktakePreviewItem {
+  id: string;
+  status: InventoryStocktakeStatus;
+  countedCount: number;
+  skippedCount: number;
+  withinCount: number;
+  overCount: number;
+  lines: Array<{
+    ingredientId: string;
+    expectedQuantityG: number;
+    countedQuantityG: number | null;
+    deltaG: number | null;
+    isCounted: boolean;
+    withinTolerance: boolean | null;
+  }>;
 }
 
 export function getInventoryOverview(params?: {
@@ -124,9 +156,7 @@ export function getInventoryLedger(params?: {
   });
 }
 
-export function getInventoryStocktakes(params?: {
-  limit?: number;
-}) {
+export function getInventoryStocktakes(params?: { limit?: number }) {
   return request<InventoryStocktakeItem[]>({
     url: '/staff/inventory/stocktakes',
     method: 'GET',
@@ -134,17 +164,58 @@ export function getInventoryStocktakes(params?: {
   });
 }
 
-export function createInventoryStocktake(data: CreateInventoryStocktakePayload) {
-  return request<InventoryStocktakeItem>({
-    url: '/staff/inventory/stocktakes',
-    method: 'POST',
-    data,
+export function getStocktakeDraft() {
+  return request<StocktakeDraftItem | null>({
+    url: '/staff/inventory/stocktakes/draft',
+    method: 'GET',
   });
 }
 
-export function applyInventoryStocktake(stocktakeId: string) {
-  return request<InventoryStocktakeItem>({
-    url: `/staff/inventory/stocktakes/${stocktakeId}/apply`,
+export function startStocktake(note?: string) {
+  return request<StocktakeDraftItem>({
+    url: '/staff/inventory/stocktakes',
     method: 'POST',
+    data: note ? { note } : {},
+  });
+}
+
+export function getStocktake(id: string) {
+  return request<StocktakeDraftItem | InventoryStocktakeItem>({
+    url: `/staff/inventory/stocktakes/${id}`,
+    method: 'GET',
+  });
+}
+
+export function saveStocktakeLines(
+  id: string,
+  lines: Array<{ ingredientId: string; countedQuantityG: number | null }>,
+) {
+  return request<StocktakeDraftItem>({
+    url: `/staff/inventory/stocktakes/${id}/lines`,
+    method: 'PATCH',
+    data: { lines },
+  });
+}
+
+export function previewStocktake(id: string, confirmPartial = false) {
+  return request<StocktakePreviewItem>({
+    url: `/staff/inventory/stocktakes/${id}/preview`,
+    method: 'GET',
+    data: confirmPartial ? { confirmPartial: 'true' } : {},
+  });
+}
+
+export function submitStocktake(id: string, note?: string) {
+  return request<InventoryStocktakeItem>({
+    url: `/staff/inventory/stocktakes/${id}/submit`,
+    method: 'POST',
+    data: { note },
+  });
+}
+
+export function cancelStocktake(id: string) {
+  return request<{ cancelled: boolean }>({
+    url: `/staff/inventory/stocktakes/${id}`,
+    method: 'DELETE',
   });
 }

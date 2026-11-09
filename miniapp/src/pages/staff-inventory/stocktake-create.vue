@@ -1,773 +1,422 @@
 <template>
-  <view class="stocktake-create-page">
-    <view class="hero">
-      <text class="hero-title">移动端盘点录入</text>
-      <text class="hero-subtitle">选择已盘点原料，录入实际库存，可先存草稿，也可直接入账</text>
+  <view class="page">
+    <view v-if="loading" class="state">
+      <text>正在准备盘点…</text>
     </view>
 
-    <view class="section">
-      <view class="section-header">
-        <text class="section-title">盘点说明</text>
-        <text class="section-subtitle">可选填写班次、区域或盘点备注，方便后续追溯</text>
-      </view>
-
-      <textarea
-        v-model="note"
-        class="note-input"
-        maxlength="120"
-        auto-height
-        placeholder="例如：4月2日晚班海产盘点"
-      />
-
-      <view class="summary-pills">
-        <view class="summary-pill">
-          <text>可选原料 {{ ingredients.length }}</text>
-        </view>
-        <view class="summary-pill accent">
-          <text>已选 {{ selectedLines.length }}</text>
-        </view>
-        <view class="summary-pill warning">
-          <text>有差异 {{ varianceCount }}</text>
-        </view>
-      </view>
+    <view v-else-if="error" class="state">
+      <text class="state-title">盘点没开起来</text>
+      <text class="state-hint">{{ error }}</text>
+      <button class="btn primary" @tap="bootstrap">重试</button>
     </view>
 
-    <view class="section">
-      <view class="section-header">
-        <text class="section-title">选择原料</text>
-        <text class="section-subtitle">默认会带入当前账面库存，你可以再改成实际盘点值</text>
+    <template v-else>
+      <view class="top">
+        <view class="top-line">
+          <text class="progress-text">已盘 {{ countedCount }} / {{ lines.length }}</text>
+          <text class="cancel" @tap="onCancel">取消盘点</text>
+        </view>
+        <view class="bar">
+          <view class="bar-fill" :style="{ width: progressPercent + '%' }" />
+        </view>
+        <text class="hint">只填实称；留空表示没盘，不会调整库存。</text>
       </view>
 
-      <input
-        v-model="keyword"
-        class="search-input"
-        placeholder="搜索原料名 / 渠道 / 型号"
-        confirm-type="search"
-        @confirm="loadIngredients"
-      />
-
-      <view class="filter-group">
+      <view class="filters">
         <view
-          v-for="option in typeOptions"
-          :key="option.value || 'ALL'"
-          class="filter-chip"
-          :class="{ active: selectedType === option.value }"
-          @tap="selectType(option.value)"
+          v-for="item in filters"
+          :key="item.value"
+          class="chip"
+          :class="{ active: filter === item.value }"
+          @tap="filter = item.value"
         >
-          <text>{{ option.label }}</text>
+          {{ item.label }}
         </view>
       </view>
 
-      <view v-if="loading" class="state-card">
-        <text>正在加载原料...</text>
-      </view>
-
-      <view v-else-if="ingredients.length === 0" class="state-card">
-        <text class="state-title">暂无可盘点原料</text>
-        <text class="state-hint">可以调整筛选条件，或者稍后再试。</text>
-      </view>
-
-      <view v-else class="ingredient-list">
+      <scroll-view scroll-y class="list">
         <view
-          v-for="ingredient in ingredients"
-          :key="ingredient.id"
-          class="ingredient-card"
-          :class="getStatusClass(ingredient.stockStatus)"
-        >
-          <view class="ingredient-main">
-            <view class="ingredient-copy">
-              <view class="ingredient-top">
-                <text class="ingredient-name">{{ ingredient.name }}</text>
-                <text class="status-badge" :class="getStatusClass(ingredient.stockStatus)">
-                  {{ getStockStatusLabel(ingredient.stockStatus) }}
-                </text>
-              </view>
-              <text class="ingredient-meta">
-                {{ getTypeLabel(ingredient.type) }} · 当前库存 {{ formatQuantity(ingredient.currentStock) }} {{ ingredient.stockUnitLabel }}
-              </text>
-              <text class="ingredient-meta">
-                {{ ingredient.purchaseChannel || '未设置渠道' }}
-                <text v-if="ingredient.productModel"> · {{ ingredient.productModel }}</text>
-              </text>
-              <text v-if="ingredient.procurementSkuName" class="ingredient-meta">
-                默认采购 SKU · {{ ingredient.procurementSkuName }}
-              </text>
-            </view>
-            <button
-              class="add-btn"
-              size="mini"
-              :disabled="isSelected(ingredient.id)"
-              @tap="addIngredient(ingredient)"
-            >
-              {{ isSelected(ingredient.id) ? '已选择' : '加入盘点' }}
-            </button>
-          </view>
-        </view>
-      </view>
-    </view>
-
-    <view class="section">
-      <view class="section-header">
-        <text class="section-title">盘点明细</text>
-        <text class="section-subtitle">请按库存单位录入实际盘点值</text>
-      </view>
-
-      <view v-if="selectedLines.length === 0" class="state-card soft">
-        <text class="state-title">还没有选择盘点原料</text>
-        <text class="state-hint">从上方原料列表中加入需要盘点的项目。</text>
-      </view>
-
-      <view v-else class="selected-list">
-        <view
-          v-for="line in selectedLines"
+          v-for="(line, index) in visibleLines"
           :key="line.ingredientId"
-          class="selected-card"
+          class="row"
+          :class="{ done: isCounted(line) }"
         >
-          <view class="selected-header">
-            <view>
-              <text class="selected-name">{{ line.name }}</text>
-              <text class="selected-meta">
-                {{ getTypeLabel(line.type) }} · 账面 {{ formatQuantity(line.currentStock) }} {{ line.stockUnitLabel }}
-              </text>
-            </view>
-            <view class="remove-btn" @tap="removeIngredient(line.ingredientId)">
-              <text>删除</text>
-            </view>
+          <view class="row-copy">
+            <text class="name">{{ line.ingredientName }}</text>
+            <text class="unit">{{ line.stockUnitLabel }}</text>
           </view>
-
-          <view class="field-row">
-            <view class="field">
-              <text class="field-label">实际盘点值</text>
-              <view class="input-wrapper">
-                <input
-                  v-model="line.countedQuantity"
-                  type="digit"
-                  class="field-input"
-                  placeholder="请输入盘点值"
-                />
-                <text class="input-suffix">{{ line.stockUnitLabel }}</text>
-              </view>
-            </view>
-          </view>
-
-          <view class="selected-actions">
-            <view class="ghost-btn" @tap="setCountedToCurrent(line)">
-              <text>带入账面值</text>
-            </view>
-            <text class="delta-text" :class="getDeltaClass(line)">
-              差异 {{ formatSignedQuantity(getLineDelta(line)) }} {{ line.stockUnitLabel }}
-            </text>
-          </view>
+          <input
+            class="input"
+            type="digit"
+            :value="inputs[line.ingredientId] || ''"
+            :focus="focusIndex === index"
+            confirm-type="next"
+            placeholder="未盘"
+            @input="onInput(line, $event)"
+            @confirm="focusNext(index)"
+          />
+          <text class="check" :class="{ on: isCounted(line) }">
+            {{ isCounted(line) ? '✓' : '' }}
+          </text>
         </view>
-      </view>
-    </view>
 
-    <view class="bottom-bar">
-      <view class="bottom-summary">
-        <text class="summary-label">盘点项目</text>
-        <text class="summary-value">{{ selectedLines.length }} 项</text>
+        <view v-if="visibleLines.length === 0" class="state soft">
+          <text>这个分组里没有原料</text>
+        </view>
+      </scroll-view>
+
+      <view class="bottom">
+        <button class="btn ghost" :loading="saving" @tap="saveDraft()">存草稿</button>
+        <button class="btn primary" :loading="saving" @tap="onNext">
+          下一步（核对）
+        </button>
       </view>
-      <button
-        class="submit-btn secondary"
-        :disabled="submittingImmediately"
-        :loading="submittingDraft"
-        @tap="submit(false)"
-      >
-        存草稿
-      </button>
-      <button
-        class="submit-btn primary"
-        :disabled="submittingDraft"
-        :loading="submittingImmediately"
-        @tap="submit(true)"
-      >
-        立即入账
-      </button>
-    </view>
+    </template>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { onLoad, onShow } from '@dcloudio/uni-app';
+import { computed, nextTick, ref } from 'vue';
+import { onLoad, onUnload } from '@dcloudio/uni-app';
 import {
-  createInventoryStocktake,
-  getInventoryOverview,
-  type InventoryIngredientType,
-  type InventoryOverviewItem,
-  type InventoryStockStatus,
+  cancelStocktake,
+  getStocktakeDraft,
+  previewStocktake,
+  saveStocktakeLines,
+  startStocktake,
 } from './api/inventory';
 
-const PENDING_TAB_STORAGE_KEY = 'staff_inventory_pending_tab';
-
-interface SelectedStocktakeLine {
+type DraftLine = {
   ingredientId: string;
-  procurementSkuId?: string;
-  name: string;
-  type: InventoryIngredientType;
+  ingredientName: string;
+  ingredientType?: string | null;
   stockUnitLabel: string;
-  currentStock: number;
-  countedQuantity: string;
-}
+  countedQuantityG: number | null;
+};
 
-const typeOptions: Array<{ label: string; value: InventoryIngredientType | '' }> = [
-  { label: '全部', value: '' },
-  { label: '食材', value: 'FOOD' },
-  { label: '补剂', value: 'SUPPLEMENT' },
-  { label: '包材', value: 'PACKAGING' },
-];
+const filters = [
+  { value: 'ALL', label: '全部' },
+  { value: 'FOOD', label: '食材' },
+  { value: 'SUPPLEMENT', label: '补剂' },
+] as const;
 
-const note = ref('');
-const keyword = ref('');
-const selectedType = ref<InventoryIngredientType | ''>('');
-const ingredients = ref<InventoryOverviewItem[]>([]);
-const selectedLines = ref<SelectedStocktakeLine[]>([]);
-const loading = ref(false);
-const submittingDraft = ref(false);
-const submittingImmediately = ref(false);
+const loading = ref(true);
+const error = ref('');
+const saving = ref(false);
+const stocktakeId = ref('');
+const lines = ref<DraftLine[]>([]);
+const inputs = ref<Record<string, string>>({});
+const filter = ref<(typeof filters)[number]['value']>('ALL');
+const focusIndex = ref(-1);
 
-const varianceCount = computed(() => {
-  return selectedLines.value.filter((line) => Math.abs(getLineDelta(line)) > 0.0001).length;
-});
+const isCounted = (line: DraftLine) =>
+  (inputs.value[line.ingredientId] || '').trim() !== '';
 
-onLoad(() => {
-  loadIngredients();
-});
+const countedCount = computed(
+  () => lines.value.filter((line) => isCounted(line)).length,
+);
 
-onShow(() => {
-  loadIngredients();
-});
+const progressPercent = computed(() =>
+  lines.value.length
+    ? Math.round((countedCount.value / lines.value.length) * 100)
+    : 0,
+);
 
-const loadIngredients = async () => {
+const visibleLines = computed(() =>
+  filter.value === 'ALL'
+    ? lines.value
+    : lines.value.filter((line) => line.ingredientType === filter.value),
+);
+
+const hydrate = (draft: any) => {
+  stocktakeId.value = draft.id;
+  lines.value = (draft.lines || []).map((line: any) => ({
+    ingredientId: line.ingredientId,
+    ingredientName: line.ingredientName,
+    ingredientType: line.ingredientType,
+    stockUnitLabel: line.stockUnitLabel,
+    countedQuantityG: line.countedQuantityG,
+  }));
+  const nextInputs: Record<string, string> = {};
+  for (const line of lines.value) {
+    nextInputs[line.ingredientId] =
+      line.countedQuantityG === null || line.countedQuantityG === undefined
+        ? ''
+        : String(line.countedQuantityG);
+  }
+  inputs.value = nextInputs;
+};
+
+const bootstrap = async () => {
   loading.value = true;
-
+  error.value = '';
   try {
-    const res = await getInventoryOverview({
-      keyword: keyword.value.trim() || undefined,
-      type: selectedType.value || undefined,
-    });
-    ingredients.value = res.data || [];
-  } catch (error: any) {
-    uni.showToast({ title: error?.message || '加载原料失败', icon: 'none' });
+    const draft = await getStocktakeDraft();
+    const current = draft || (await startStocktake());
+    hydrate(current);
+  } catch (err: any) {
+    error.value = err?.message || '加载失败，请重试';
   } finally {
     loading.value = false;
   }
 };
 
-const selectType = (value: InventoryIngredientType | '') => {
-  selectedType.value = value;
-  loadIngredients();
+onLoad(() => {
+  bootstrap();
+});
+
+const onInput = (line: DraftLine, event: any) => {
+  inputs.value = {
+    ...inputs.value,
+    [line.ingredientId]: event?.detail?.value ?? '',
+  };
 };
 
-const formatQuantity = (value: number | null | undefined) => {
-  return String(Number(Number(value || 0).toFixed(3)));
-};
-
-const formatSignedQuantity = (value: number | null | undefined) => {
-  const num = Number(value || 0);
-  return `${num >= 0 ? '+' : ''}${Number(num.toFixed(3))}`;
-};
-
-const parseQuantity = (value: string) => {
-  return Number.parseFloat(String(value || '').trim());
-};
-
-const isSelected = (ingredientId: string) => {
-  return selectedLines.value.some((line) => line.ingredientId === ingredientId);
-};
-
-const addIngredient = (ingredient: InventoryOverviewItem) => {
-  if (isSelected(ingredient.id)) {
-    return;
-  }
-
-  selectedLines.value.push({
-    ingredientId: ingredient.id,
-    procurementSkuId: ingredient.procurementSkuId || undefined,
-    name: ingredient.name,
-    type: ingredient.type,
-    stockUnitLabel: ingredient.stockUnitLabel,
-    currentStock: ingredient.currentStock,
-    countedQuantity: formatQuantity(ingredient.currentStock),
+const focusNext = (index: number) => {
+  focusIndex.value = -1;
+  nextTick(() => {
+    focusIndex.value = Math.min(index + 1, visibleLines.value.length - 1);
   });
 };
 
-const removeIngredient = (ingredientId: string) => {
-  selectedLines.value = selectedLines.value.filter((line) => line.ingredientId !== ingredientId);
-};
+const buildPayload = () =>
+  lines.value.map((line) => {
+    const text = (inputs.value[line.ingredientId] || '').trim();
+    return {
+      ingredientId: line.ingredientId,
+      countedQuantityG: text === '' ? null : Number(text),
+    };
+  });
 
-const setCountedToCurrent = (line: SelectedStocktakeLine) => {
-  line.countedQuantity = formatQuantity(line.currentStock);
-};
-
-const getLineDelta = (line: SelectedStocktakeLine) => {
-  const counted = parseQuantity(line.countedQuantity);
-  if (!Number.isFinite(counted)) {
-    return 0;
-  }
-
-  return counted - line.currentStock;
-};
-
-const getDeltaClass = (line: SelectedStocktakeLine) => {
-  const delta = getLineDelta(line);
-  if (delta > 0.0001) {
-    return 'positive';
-  }
-  if (delta < -0.0001) {
-    return 'negative';
-  }
-  return 'neutral';
-};
-
-const getTypeLabel = (type: InventoryIngredientType) => {
-  const labels: Record<InventoryIngredientType, string> = {
-    FOOD: '食材',
-    SUPPLEMENT: '补剂',
-    PACKAGING: '包材',
-  };
-  return labels[type] || type;
-};
-
-const getStockStatusLabel = (status: InventoryStockStatus) => {
-  const labels: Record<InventoryStockStatus, string> = {
-    NO_POLICY: '未设阈值',
-    SUFFICIENT: '库存充足',
-    LOW_STOCK: '低库存',
-    NEEDS_REPLENISHMENT: '需要补货',
-  };
-  return labels[status] || status;
-};
-
-const getStatusClass = (status: InventoryStockStatus) => {
-  if (status === 'NEEDS_REPLENISHMENT') {
-    return 'danger';
-  }
-  if (status === 'LOW_STOCK') {
-    return 'warning';
-  }
-  if (status === 'SUFFICIENT') {
-    return 'success';
-  }
-  return 'neutral';
-};
-
-const backToInventory = () => {
+const saveDraft = async (silent = false) => {
+  if (!stocktakeId.value || saving.value) return;
+  saving.value = true;
   try {
-    uni.setStorageSync(PENDING_TAB_STORAGE_KEY, 'stocktakes');
-  } catch (error) {
-    console.warn('写入库存页跳转偏好失败', error);
-  }
-
-  const pages = getCurrentPages();
-  if (pages.length > 1) {
-    uni.navigateBack();
-    return;
-  }
-
-  uni.redirectTo({ url: '/pages/staff-inventory/index' });
-};
-
-const submit = async (applyImmediately: boolean) => {
-  if (selectedLines.value.length === 0) {
-    uni.showToast({ title: '请先选择盘点原料', icon: 'none' });
-    return;
-  }
-
-  const lines = selectedLines.value.map((line) => ({
-    ingredientId: line.ingredientId,
-    procurementSkuId: line.procurementSkuId,
-    countedQuantityG: parseQuantity(line.countedQuantity),
-  }));
-
-  const invalidLine = lines.find(
-    (line) => !Number.isFinite(line.countedQuantityG) || line.countedQuantityG < 0,
-  );
-  if (invalidLine) {
-    uni.showToast({ title: '请填写有效的盘点值', icon: 'none' });
-    return;
-  }
-
-  if (applyImmediately) {
-    submittingImmediately.value = true;
-  } else {
-    submittingDraft.value = true;
-  }
-
-  try {
-    await createInventoryStocktake({
-      note: note.value.trim() || undefined,
-      applyImmediately,
-      lines,
-    });
-
-    uni.showToast({
-      title: applyImmediately ? '盘点已入账' : '盘点草稿已保存',
-      icon: 'success',
-    });
-
-    setTimeout(() => {
-      backToInventory();
-    }, 500);
-  } catch (error: any) {
-    uni.showToast({
-      title: error?.message || (applyImmediately ? '盘点入账失败' : '盘点草稿保存失败'),
-      icon: 'none',
-    });
+    const payload = buildPayload();
+    if (payload.some((line) => line.countedQuantityG !== null && (!Number.isFinite(line.countedQuantityG) || line.countedQuantityG < 0))) {
+      throw new Error('实盘数量必须是非负数字');
+    }
+    await saveStocktakeLines(stocktakeId.value, payload);
+    if (!silent) {
+      uni.showToast({ title: '已存草稿', icon: 'success' });
+    }
+  } catch (err: any) {
+    if (!silent) {
+      uni.showToast({ title: err?.message || '保存失败', icon: 'none' });
+    }
   } finally {
-    submittingDraft.value = false;
-    submittingImmediately.value = false;
+    saving.value = false;
   }
 };
+
+const onNext = async () => {
+  const skipped = lines.value.length - countedCount.value;
+  if (skipped > 0) {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '还有未盘项',
+        content: `还有 ${skipped} 项没盘，这些不会调整库存。继续吗？`,
+        confirmText: '继续',
+        success: (res) => resolve(Boolean(res.confirm)),
+        fail: () => resolve(false),
+      });
+    });
+    if (!confirmed) return;
+  }
+
+  await saveDraft(true);
+  try {
+    await previewStocktake(stocktakeId.value, skipped > 0);
+    uni.navigateTo({
+      url: `/pages/staff-inventory/stocktake-result?id=${stocktakeId.value}&mode=preview`,
+    });
+  } catch (err: any) {
+    uni.showToast({ title: err?.message || '预览失败', icon: 'none' });
+  }
+};
+
+const onCancel = async () => {
+  const confirmed = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '取消盘点',
+      content: '已填的数字会丢失，库存流水不会有变化。确定取消吗？',
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    });
+  });
+  if (!confirmed) return;
+  try {
+    await cancelStocktake(stocktakeId.value);
+  } finally {
+    uni.navigateBack();
+  }
+};
+
+onUnload(() => {
+  if (stocktakeId.value) {
+    void saveDraft(true);
+  }
+});
 </script>
 
-<style scoped lang="scss">
-.stocktake-create-page {
-  min-height: 100vh;
-  padding-bottom: 240rpx;
-  background: linear-gradient(180deg, #eef2e4 0%, #e2e8d4 100%);
-}
-
-.hero {
-  padding: 40rpx 32rpx 28rpx;
-  background: linear-gradient(135deg, #1e3a2f 0%, #b08d4f 100%);
-}
-
-.hero-title {
-  display: block;
-  font-size: 40rpx;
-  font-weight: 700;
-  color: #26261f;
-}
-
-.hero-subtitle {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  line-height: 1.6;
-  color: rgba(38, 38, 31, 0.6);
-}
-
-.section {
-  margin: 24rpx 24rpx 0;
-  padding: 28rpx;
-  border-radius: 24rpx;
-  background: #ffffff;
-  box-shadow: 0 10rpx 28rpx rgba(30, 46, 36, 0.06);
-}
-
-.section-header {
+<style scoped>
+.page {
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
-  margin-bottom: 20rpx;
-}
-
-.section-title,
-.state-title {
-  display: block;
-  font-size: 30rpx;
-  font-weight: 700;
-  color: #26261f;
-}
-
-.section-subtitle,
-.state-hint,
-.ingredient-meta,
-.selected-meta,
-.field-label,
-.summary-label,
-.summary-pill,
-.delta-text {
-  font-size: 24rpx;
-  color: #26261f;
-}
-
-.section-subtitle,
-.state-hint {
-  line-height: 1.6;
-}
-
-.note-input,
-.search-input,
-.field-input {
-  width: 100%;
-  box-sizing: border-box;
-  border-radius: 18rpx;
   background: #fbfcf7;
-  color: #26261f;
+}
+.state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  padding: 48rpx;
+  color: #4b5b51;
   font-size: 26rpx;
 }
-
-.note-input {
-  min-height: 140rpx;
-  padding: 22rpx 24rpx;
+.state.soft {
+  padding: 40rpx;
+  color: #7a8a80;
 }
-
-.search-input {
-  height: 80rpx;
-  padding: 0 24rpx;
-}
-
-.summary-pills,
-.filter-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-}
-
-.summary-pills {
-  margin-top: 18rpx;
-}
-
-.summary-pill,
-.filter-chip,
-.status-badge {
-  padding: 12rpx 20rpx;
-  border-radius: 999rpx;
-}
-
-.summary-pill {
-  background: #eef2e4;
-}
-
-.summary-pill.accent {
-  background: #1e3a2f;
+.state-title {
+  font-size: 32rpx;
+  font-weight: 600;
   color: #1e3a2f;
 }
-
-.summary-pill.warning {
-  background: #f6efe0;
-  color: #8a6b33;
-}
-
-.filter-group {
-  margin-top: 18rpx;
-}
-
-.filter-chip {
-  background: #eef2e4;
-  color: #26261f;
-  font-size: 24rpx;
-}
-
-.filter-chip.active {
-  background: #1e3a2f;
-  color: #1e3a2f;
-  font-weight: 700;
-}
-
-.state-card,
-.ingredient-card,
-.selected-card {
-  padding: 24rpx;
-  border-radius: 22rpx;
-  background: #ffffff;
-  box-shadow: 0 8rpx 24rpx rgba(30, 46, 36, 0.05);
-}
-
-.state-card.soft {
-  background: #eef2e4;
-  box-shadow: none;
-}
-
-.ingredient-list,
-.selected-list {
-  display: flex;
-  flex-direction: column;
-  gap: 18rpx;
-}
-
-.ingredient-card.danger {
-  background: linear-gradient(135deg, #f8e8e2 0%, #ffffff 100%);
-}
-
-.ingredient-card.warning {
-  background: linear-gradient(135deg, #f6efe0 0%, #ffffff 100%);
-}
-
-.ingredient-main,
-.ingredient-top,
-.selected-header,
-.selected-actions {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16rpx;
-}
-
-.ingredient-copy {
-  flex: 1;
-}
-
-.ingredient-name,
-.selected-name {
-  display: block;
-  font-size: 30rpx;
-  font-weight: 700;
-  color: #26261f;
-}
-
-.ingredient-meta,
-.selected-meta {
-  display: block;
-  margin-top: 10rpx;
+.state-hint {
+  text-align: center;
   line-height: 1.6;
 }
-
-.status-badge {
-  flex-shrink: 0;
-  font-size: 22rpx;
-  font-weight: 700;
+.top {
+  padding: 24rpx 32rpx 16rpx;
+  background: #fff;
+  border-bottom: 1rpx solid #e8ede7;
 }
-
-.status-badge.success {
-  background: #eef2e4;
-  color: #1e3a2f;
-}
-
-.status-badge.warning {
-  background: #b08d4f;
-  color: #8a6b33;
-}
-
-.status-badge.danger {
-  background: #f8e8e2;
-  color: #b4553f;
-}
-
-.status-badge.neutral {
-  background: #eef2e4;
-  color: #b08d4f;
-}
-
-.add-btn,
-.submit-btn {
-  border: none;
-  border-radius: 999rpx;
-}
-
-.add-btn {
-  flex-shrink: 0;
-  min-width: 156rpx;
-  height: 68rpx;
-  line-height: 68rpx;
-  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
-  color: #ffffff;
-  font-size: 24rpx;
-  font-weight: 600;
-}
-
-.add-btn[disabled] {
-  background: #eef2e4;
-  color: #6b6653;
-}
-
-.field-row {
-  margin-top: 18rpx;
-}
-
-.field-label {
-  display: block;
-  margin-bottom: 10rpx;
-}
-
-.input-wrapper {
+.top-line {
   display: flex;
   align-items: center;
-  padding-right: 24rpx;
-  border-radius: 18rpx;
-  background: #fbfcf7;
+  justify-content: space-between;
 }
-
-.field-input {
-  flex: 1;
-  height: 80rpx;
-  padding: 0 24rpx;
-  background: transparent;
-}
-
-.input-suffix {
-  font-size: 24rpx;
-  color: #26261f;
-}
-
-.remove-btn,
-.ghost-btn {
-  flex-shrink: 0;
-  padding: 10rpx 18rpx;
-  border-radius: 999rpx;
-  background: #eef2e4;
-  font-size: 22rpx;
-  color: #26261f;
-}
-
-.selected-actions {
-  margin-top: 16rpx;
-  align-items: center;
-}
-
-.delta-text.positive {
+.progress-text {
+  font-size: 30rpx;
+  font-weight: 600;
   color: #1e3a2f;
 }
-
-.delta-text.negative {
-  color: #b4553f;
+.cancel {
+  font-size: 24rpx;
+  color: #8a5a44;
 }
-
-.delta-text.neutral {
-  color: #26261f;
+.bar {
+  margin-top: 14rpx;
+  height: 10rpx;
+  border-radius: 999rpx;
+  background: #eef2ec;
+  overflow: hidden;
 }
-
-.bottom-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+.bar-fill {
+  height: 100%;
+  background: #1e3a2f;
+  transition: width 0.2s ease;
+}
+.hint {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #7a8a80;
+}
+.filters {
+  display: flex;
+  gap: 16rpx;
+  padding: 20rpx 32rpx 8rpx;
+  background: #fff;
+}
+.chip {
+  padding: 10rpx 28rpx;
+  border-radius: 999rpx;
+  background: #f1f4ee;
+  color: #4b5b51;
+  font-size: 24rpx;
+}
+.chip.active {
+  background: #1e3a2f;
+  color: #fbfcf7;
+}
+.list {
+  flex: 1;
+  padding: 12rpx 24rpx;
+  box-sizing: border-box;
+}
+.row {
   display: flex;
   align-items: center;
   gap: 16rpx;
-  padding: 20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom));
-  background: #fbfcf7;
-  box-shadow: 0 -10rpx 30rpx rgba(30, 46, 36, 0.08);
+  padding: 20rpx 16rpx;
+  margin-bottom: 10rpx;
+  border-radius: 20rpx;
+  background: #fff;
+  border: 1rpx solid #e8ede7;
 }
-
-.bottom-summary {
-  min-width: 120rpx;
+.row.done {
+  border-color: #bcd3c3;
+  background: #f4f8f2;
 }
-
-.summary-value {
-  display: block;
-  margin-top: 6rpx;
+.row-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  min-width: 0;
+}
+.name {
   font-size: 28rpx;
-  font-weight: 700;
-  color: #26261f;
+  color: #1e3a2f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-.submit-btn {
+.unit {
+  font-size: 22rpx;
+  color: #7a8a80;
+}
+.input {
+  width: 180rpx;
+  height: 64rpx;
+  padding: 0 16rpx;
+  border-radius: 12rpx;
+  background: #f7f9f5;
+  border: 1rpx solid #dde5da;
+  font-size: 28rpx;
+  text-align: right;
+}
+.check {
+  width: 36rpx;
+  font-size: 30rpx;
+  color: #1e3a2f;
+  text-align: center;
+}
+.bottom {
+  display: flex;
+  gap: 16rpx;
+  padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
+  background: #fff;
+  border-top: 1rpx solid #e8ede7;
+}
+.btn {
   flex: 1;
   height: 84rpx;
   line-height: 84rpx;
+  border-radius: 999rpx;
   font-size: 28rpx;
-  font-weight: 700;
 }
-
-.submit-btn.secondary {
-  background: #eef2e4;
-  color: #26261f;
+.btn.ghost {
+  background: #f1f4ee;
+  color: #1e3a2f;
 }
-
-.submit-btn.primary {
-  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
-  color: #ffffff;
-}
-
-.submit-btn[disabled] {
-  opacity: 0.6;
-}
-
-.add-btn::after,
-.submit-btn::after {
-  border: none;
+.btn.primary {
+  background: #1e3a2f;
+  color: #fbfcf7;
 }
 </style>

@@ -269,7 +269,6 @@
 import { computed, onMounted, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import {
-  applyInventoryStocktake,
   getInventoryLedger,
   getInventoryOverview,
   getInventoryStocktakes,
@@ -497,43 +496,11 @@ const goToStocktakeCreate = () => {
   uni.navigateTo({ url: '/pages/staff-inventory/stocktake-create' });
 };
 
-const applyStocktake = async (stocktake: InventoryStocktakeItem) => {
-  if (applyingStocktakeId.value) {
-    return;
-  }
-
-  const confirmed = await new Promise<boolean>((resolve) => {
-    uni.showModal({
-      title: '确认入账',
-      content: '这会把盘点差异写入库存流水，是否继续？',
-      success: (res) => resolve(Boolean(res.confirm)),
-      fail: () => resolve(false),
-    });
+const applyStocktake = (_stocktake: InventoryStocktakeItem) => {
+  uni.showToast({
+    title: '盘点差异由管理员复核，员工端不能直接入账',
+    icon: 'none',
   });
-
-  if (!confirmed) {
-    return;
-  }
-
-  applyingStocktakeId.value = stocktake.id;
-
-  try {
-    await applyInventoryStocktake(stocktake.id);
-    uni.showToast({ title: '盘点差异已入账', icon: 'success' });
-
-    await Promise.all([
-      loadStocktakes(),
-      loadOverview(),
-      hasLoadedLedger.value ? loadLedger() : Promise.resolve(),
-    ]);
-  } catch (error: any) {
-    uni.showToast({
-      title: error?.message || '盘点入账失败',
-      icon: 'none',
-    });
-  } finally {
-    applyingStocktakeId.value = '';
-  }
 };
 
 const getTypeText = (type: InventoryIngredientType) => {

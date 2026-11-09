@@ -97,7 +97,7 @@
         {
           "path": "stocktake-create",
           "style": {
-            "navigationBarTitleText": "移动端盘点录入"
+            "navigationBarTitleText": "盘点"
           }
         }
       ]

@@ -106,6 +106,7 @@ export interface InventoryStocktakeLineDto {
   procurementSkuId?: string | null;
   procurementSkuName?: string | null;
   ingredientName: string;
+  ingredientType?: string | null;
   stockUnitLabel: string;
   expectedQuantityG: number;
   countedQuantityG: number | null;
@@ -1629,6 +1630,7 @@ export class InventoryService {
         id: line.id,
         ingredientId: line.ingredientId,
         ingredientName: line.ingredientName,
+        ingredientType: line.ingredientType ?? null,
         stockUnitLabel: line.stockUnitLabel,
         countedQuantityG: line.countedQuantityG,
         isCounted: line.isCounted,
@@ -1724,6 +1726,7 @@ export class InventoryService {
               select: {
                 id: true,
                 name: true,
+                type: true,
                 baseUnit: true,
                 unitDisplayLabel: true,
               },
@@ -1778,6 +1781,7 @@ export class InventoryService {
       procurementSkuId: line.procurementSkuId ?? null,
       procurementSkuName: line.procurementSkuName ?? null,
       ingredientName: line.ingredient?.name ?? line.ingredientId,
+      ingredientType: line.ingredient?.type ?? null,
       stockUnitLabel: this.resolveStockUnitLabel(line.ingredient),
       expectedQuantityG: line.expectedQuantityG,
       countedQuantityG: line.countedQuantityG ?? null,

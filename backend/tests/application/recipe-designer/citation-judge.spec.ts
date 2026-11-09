@@ -147,6 +147,7 @@ describe('citationGatePassed', () => {
       citationGatePassed({
         uncitedClinicalClaims: 0,
         invalidCitationCount: 0,
+        notCheckable: 0,
         unsupported: 0,
         judgedClaims: 1,
         citedClinicalClaims: 1,
@@ -156,6 +157,7 @@ describe('citationGatePassed', () => {
       citationGatePassed({
         uncitedClinicalClaims: 0,
         invalidCitationCount: 0,
+        notCheckable: 0,
         unsupported: 1,
         judgedClaims: 1,
         citedClinicalClaims: 1,
@@ -165,6 +167,7 @@ describe('citationGatePassed', () => {
       citationGatePassed({
         uncitedClinicalClaims: 1,
         invalidCitationCount: 0,
+        notCheckable: 0,
         unsupported: 0,
         judgedClaims: 1,
         citedClinicalClaims: 1,
@@ -181,6 +184,7 @@ describe('citationGatePassed 覆盖率', () => {
       citationGatePassed({
         uncitedClinicalClaims: 0,
         invalidCitationCount: 0,
+        notCheckable: 0,
         unsupported: 0,
         judgedClaims: 6,
         citedClinicalClaims: 15,

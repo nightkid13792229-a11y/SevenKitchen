@@ -322,6 +322,8 @@ export class RecipeAgentService implements OnModuleInit {
               uncitedClinicalClaims: semantic.uncitedClinicalClaims,
               invalidCitationCount: audit.invalidCitationCount,
               unsupported: semantic.unsupported,
+              notCheckable: semantic.notCheckable,
+              judgeError: semantic.error,
               judgedClaims: semantic.judgedClaims,
               citedClinicalClaims: semantic.citedClinicalClaims,
             }),

@@ -151,11 +151,15 @@ const SUPPORT_SYSTEM_PROMPT = `你是知识库引用裁判。只判断“给定�
 - 不允许用常识补全原文没有的内容。
 输出 JSON：{"verdict":"supported|partial|unsupported|not_checkable","reason":"一句话理由","quote":"原文中支持或不支持的那一句"}。`;
 
-/** 引用门槛：未引用、无效引用、语义不支持，三者都为 0 才通过。 */
+/** 引用门槛：未引用、无效引用、语义不支持、判不了、裁判失败，全部为 0 才通过。 */
 export function citationGatePassed(input: {
   uncitedClinicalClaims: number;
   invalidCitationCount: number;
   unsupported: number;
+  /** 裁判说"判不了"的结论数：裁判挂了/返回不规范时会计到这里。 */
+  notCheckable: number;
+  /** 覆盖裁判整体失败时的错误信息；有值即视为门禁失败。 */
+  judgeError?: string | null;
   judgedClaims: number;
   citedClinicalClaims: number;
 }): boolean {
@@ -163,6 +167,8 @@ export function citationGatePassed(input: {
     input.uncitedClinicalClaims === 0 &&
     input.invalidCitationCount === 0 &&
     input.unsupported === 0 &&
+    input.notCheckable === 0 &&
+    input.judgeError == null &&
     input.judgedClaims === input.citedClinicalClaims
   );
 }

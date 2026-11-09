@@ -223,7 +223,20 @@
                       v-if="getProcurementDisclosure(ingredient)"
                       class="proc-meta"
                     >
-                      <text class="proc-tag ref">库存商品</text>
+                      <text
+                        class="proc-tag"
+                        :class="{
+                          ref:
+                            getProcurementDisclosure(ingredient)?.source !==
+                            'ORDER_PURCHASE',
+                        }"
+                        >{{
+                          getProcurementDisclosure(ingredient)?.source ===
+                          'ORDER_PURCHASE'
+                            ? '本单采购'
+                            : '库存商品'
+                        }}</text
+                      >
                       <text
                         v-if="getProcurementDisclosure(ingredient)?.channel"
                         class="proc-text"
@@ -1511,8 +1524,8 @@ const procurementStatusText = computed(() => {
   if (data.status === 'COMPLETED') {
     const date = data.completedAt ? formatMonthDay(data.completedAt) : ''
     return date
-      ? `已于 ${date} 完成采购 · 渠道和商品按实际采购记录展示`
-      : '已完成采购 · 渠道和商品按实际采购记录展示'
+      ? `已于 ${date} 完成采购 · 渠道和商品以采购记录为准`
+      : '已完成采购 · 渠道和商品以采购记录为准'
   }
   if (data.status === 'IN_PROGRESS') {
     return '采购进行中，已完成的原料会陆续显示实际采购信息'
@@ -1944,9 +1957,11 @@ function showIngredientDetail(ingredient: RecipeSnapshotItem, item: OrderItem) {
 
   const disclosure = getProcurementDisclosure(ingredient);
   if (disclosure) {
-    // 补剂的信息来自商品档案，不是本单采购，写「来源」会和行里的「参考商品」冲突
+    // 补剂不是本单采购：有历史采购记录就按记录说，没有就按商品档案说
     if (isSupplementIngredient(ingredient)) {
-      content += '来源：库存商品（按商品档案展示）\n';
+      content += disclosure.purchasedAt
+        ? '来源：库存商品（最近一次采购）\n'
+        : '来源：库存商品（按商品档案展示）\n';
     } else {
       content += `来源：${
         disclosure.source === 'FROM_INVENTORY' ? '来自库存' : '本单采购'

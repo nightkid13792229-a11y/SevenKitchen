@@ -239,6 +239,13 @@ describe('OrderProcurementDisclosureService', () => {
     });
 
     expect(spy).toHaveBeenCalledWith(expect.any(Array), cutoff);
+
+    // 光 spy 不够：条件必须真的拼进 SQL，否则删掉 beforeClause 测试照样绿
+    const sqlArg: any = (service as any).prisma.$queryRaw.mock.calls[0][0];
+    expect(String(sqlArg.sql ?? sqlArg.text)).toContain(
+      'pr.purchased_at <=',
+    );
+    expect(sqlArg.values).toContain(cutoff);
   });
 
   it('采购记录没有商品名时回落到商品当前名', async () => {

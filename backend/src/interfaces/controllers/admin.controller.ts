@@ -2685,8 +2685,12 @@ export class AdminController {
     return this.orderProcurementDisclosureService.build({
       orderId: order.id,
       ingredients: Array.from(ingredientMap.values()),
-      // 和顾客端同一口径：只用订单完成之前的采购记录兜底
-      before: order.completedAt ?? null,
+      // 和顾客端同一口径：只用做完这单之前的采购兜底
+      before:
+        order.completedAt ??
+        order.targetProductionDate ??
+        order.createdAt ??
+        null,
     });
   }
 

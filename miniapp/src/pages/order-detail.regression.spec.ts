@@ -368,7 +368,7 @@ describe('order detail runtime regressions', () => {
     expect(source).not.toContain('?.purchasedAt')
     // 食材只给内容，不写「渠道 / 采购产品」两个词（2026-11-03）
     expect(source).toContain('>{{ getProcurementDisclosure(ingredient)?.channel }}</text')
-    // 补剂和食材同一套排版：参考商品 + 渠道 · 品牌 · 商品（2026-11-09）
+    // 补剂和食材同一套排版：库存商品 + 渠道 · 品牌 · 商品（标签 2026-11-10 改）
     expect(source).toContain('isSupplementIngredient')
     expect(source).toContain('库存商品')
     expect(source).toContain('getProcurementDisclosure(ingredient)?.brand')

@@ -1123,8 +1123,13 @@ export class OrdersController {
     return this.procurementDisclosureService.build({
       orderId: order.id,
       ingredients: Array.from(ingredientMap.values()),
-      // 只拿「做完这单之前」的采购：之后补的货不能算到这一单头上
-      before: order.completedAt ?? null,
+      // 只拿「做完这单之前」的采购：之后补的货不能算到这一单头上。
+      // 未完成的订单还没有 completedAt，退到制作日；再没有就退到下单项时间。
+      before:
+        order.completedAt ??
+        order.targetProductionDate ??
+        order.createdAt ??
+        null,
     });
   }
 

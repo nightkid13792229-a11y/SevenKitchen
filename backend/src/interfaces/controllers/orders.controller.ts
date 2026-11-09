@@ -1108,7 +1108,15 @@ export class OrdersController {
         if (!id || ingredientMap.has(id)) {
           continue;
         }
-        ingredientMap.set(id, { id, name: String(row?.name || '') });
+        // 补剂的「商品档案兜底」依赖 type / skuId（2026-11-09 修）：
+        // 以前只传 id/name，顾客端 actualProcurement 里永远没有补剂，
+        // 员工端（admin.controller 传了这两个字段）却能看到，两边不一致。
+        ingredientMap.set(id, {
+          id,
+          name: String(row?.name || ''),
+          type: row?.ingredient_type ?? null,
+          skuId: row?.properties?.procurement_sku_id ?? null,
+        });
       }
     }
 

@@ -39,7 +39,7 @@
 
         <view class="hero-price-row">
           <text class="hero-price-label">实付金额</text>
-          <text class="hero-price-value">¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text>
+          <text class="hero-price-value">¥{{ formatAmount(order.amountTotal ?? order.totalAmount) }}</text>
         </view>
 
         <view class="hero-foot">
@@ -127,7 +127,7 @@
                   >{{ procurementBadgeText }}</text
                 >
                 <text class="ing-toggle">{{
-                  isIngredientSectionOpen(item.id) ? '收起 ⌃' : '展开 ⌄'
+                  isIngredientSectionOpen(item.id) ? '收起 ▲' : '展开 ▼'
                 }}</text>
               </view>
 
@@ -359,7 +359,7 @@
         <view class="info-row">
           <text class="label">预计发货:</text>
           <text class="value">{{
-            formatMonthDay(formatDate(effectiveShippingDate))
+            formatMonthDay(formatDate(effectiveShippingDate)) || '-'
           }}</text>
         </view>
         <view class="info-row">
@@ -576,7 +576,7 @@
           <view class="order-amount-info">
             <text class="amount-label">待支付金额</text>
             <text class="amount-value"
-              >¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text
+              >¥{{ formatAmount(order.amountTotal ?? order.totalAmount) }}</text
             >
           </view>
 
@@ -1944,9 +1944,14 @@ function showIngredientDetail(ingredient: RecipeSnapshotItem, item: OrderItem) {
 
   const disclosure = getProcurementDisclosure(ingredient);
   if (disclosure) {
-    content += `来源：${
-      disclosure.source === 'FROM_INVENTORY' ? '来自库存' : '本单采购'
-    }\n`;
+    // 补剂的信息来自商品档案，不是本单采购，写「来源」会和行里的「参考商品」冲突
+    if (isSupplementIngredient(ingredient)) {
+      content += '来源：参考商品（按商品档案展示）\n';
+    } else {
+      content += `来源：${
+        disclosure.source === 'FROM_INVENTORY' ? '来自库存' : '本单采购'
+      }\n`;
+    }
     if (disclosure.channel) content += `渠道：${disclosure.channel}\n`;
     if (disclosure.brand) content += `品牌：${disclosure.brand}\n`;
     if (disclosure.productName) content += `商品：${disclosure.productName}\n`;
@@ -2564,7 +2569,9 @@ function onDateSelected(e: any) {
   // 明确让顾客看到“从哪天改到哪天”，避免点开→直接确定就把订单推迟
   uni.showModal({
     title: '确认改期',
-    content: `制作日期将从 ${currentDateStr || '未设置'} 改到 ${newDateStr}，确认吗？`,
+    content: `制作日期将从 ${
+      formatMonthDay(currentDateStr) || '未设置'
+    } 改到 ${formatMonthDay(newDateStr)}，确认吗？`,
     success: (result) => {
       if (result.confirm) {
         void updateOrderDate(newDateStr);

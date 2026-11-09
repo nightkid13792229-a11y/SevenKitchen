@@ -343,7 +343,11 @@ describe('order detail runtime regressions', () => {
     expect(source).not.toContain('credit-applied')
     // 只删抵扣：金额行仍在（2026-10-30 改版后并入首屏主卡，文案为「实付金额」）
     expect(source).toContain('实付金额')
+    // 0 元是合法实付：必须用 ?? 兜底，用 || 会把 0 当空值
     expect(source).toContain(
+      'formatAmount(order.amountTotal ?? order.totalAmount)',
+    )
+    expect(source).not.toContain(
       'formatAmount(order.amountTotal || order.totalAmount)',
     )
   })
@@ -437,6 +441,10 @@ describe('order detail runtime regressions', () => {
     expect(source).toContain('isIngredientSectionOpen')
     // 默认收起：首屏只看到一条摘要，点开才展开全部（2026-11-09）
     expect(source).toContain('expandedIngredients.value[itemId] === true')
+    // 展开区真的挂在 v-if 上（只钉默认值、不钉模板，把 v-if 删掉也能过）
+    expect(source).toContain('v-if="isIngredientSectionOpen(item.id)"')
+    expect(source).not.toContain('visibleFoodIngredients')
+    expect(source).not.toContain('expandIngredientsText')
     expect(source).not.toContain('v-if="expandedIngredients[item.id]"')
     expect(source).toContain('foodIngredients')
     expect(source).toContain('supplementIngredients')

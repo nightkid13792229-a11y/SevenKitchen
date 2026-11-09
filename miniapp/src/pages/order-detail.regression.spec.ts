@@ -370,7 +370,7 @@ describe('order detail runtime regressions', () => {
     expect(source).toContain('>{{ getProcurementDisclosure(ingredient)?.channel }}</text')
     // 补剂和食材同一套排版：参考商品 + 渠道 · 品牌 · 商品（2026-11-09）
     expect(source).toContain('isSupplementIngredient')
-    expect(source).toContain('参考商品')
+    expect(source).toContain('库存商品')
     expect(source).toContain('getProcurementDisclosure(ingredient)?.brand')
     expect(source).not.toContain('规格 {{')
     // 三行标签排版已下线

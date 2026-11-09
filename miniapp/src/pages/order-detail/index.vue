@@ -223,7 +223,7 @@
                       v-if="getProcurementDisclosure(ingredient)"
                       class="proc-meta"
                     >
-                      <text class="proc-tag ref">参考商品</text>
+                      <text class="proc-tag ref">库存商品</text>
                       <text
                         v-if="getProcurementDisclosure(ingredient)?.channel"
                         class="proc-text"
@@ -1946,7 +1946,7 @@ function showIngredientDetail(ingredient: RecipeSnapshotItem, item: OrderItem) {
   if (disclosure) {
     // 补剂的信息来自商品档案，不是本单采购，写「来源」会和行里的「参考商品」冲突
     if (isSupplementIngredient(ingredient)) {
-      content += '来源：参考商品（按商品档案展示）\n';
+      content += '来源：库存商品（按商品档案展示）\n';
     } else {
       content += `来源：${
         disclosure.source === 'FROM_INVENTORY' ? '来自库存' : '本单采购'

@@ -8,8 +8,10 @@ import { PrismaService } from '../../infrastructure/prisma.service';
  * 口径：
  * - 只认**已完成**的采购清单；未完成时返回状态占位。
  * - 本单某原料有采购记录 → ORDER_PURCHASE（渠道 + 采购产品名）。
- * - 没有记录、但采购明细显示库存抵扣 → FROM_INVENTORY，
- *   给该原料**最近一次**真实采购，并在前端标注「库存采购日期」。
+ * - 本单没有记录 → FROM_INVENTORY：给该原料**最近一次**真实采购
+ *   （2026-11-10 起不再要求采购明细里有「库存抵扣」，因为「无需采购」
+ *   的原料本来就查不到抵扣；截止到订单完成时间，避免把之后买的算进来）。
+ *   前端不再展示日期，只说「来自库存 / 库存商品」。
  * - 产品名取采购时冻结的名字（渠道商原始名称，不改写），
  *   没有才回落到商品当前名；仍没有则用原料名。
  */
@@ -63,6 +65,11 @@ export class OrderProcurementDisclosureService {
       /** 订单快照里选定的采购商品，补剂兜底用 */
       skuId?: string | null;
     }>;
+    /**
+     * 库存兜底的截止时间（订单完成时间）。
+     * 不传就不限时间——只给「这单之后又补货」的场景兜底，避免把后买的算进来。
+     */
+    before?: Date | null;
   }): Promise<ProcurementDisclosure | null> {
     const ingredientIds = Array.from(
       new Set(params.ingredients.map((item) => item.id).filter(Boolean)),
@@ -103,48 +110,32 @@ export class OrderProcurementDisclosureService {
       };
     }
 
-    const [records, purchaseItems] = await Promise.all([
-      this.prisma.purchaseRecord.findMany({
-        where: {
-          purchaseListId: { in: completedIds },
-          ingredientId: { in: ingredientIds },
-        },
-        orderBy: [{ purchasedAt: 'desc' }, { createdAt: 'desc' }],
-        select: {
-          ingredientId: true,
-          purchaseChannel: true,
-          purchaseChannelName: true,
-          procurementSkuName: true,
-          procurementSkuId: true,
-          purchasedAt: true,
-        },
-      }),
-      this.prisma.purchaseItem.findMany({
-        where: {
-          purchaseListId: { in: completedIds },
-          ingredientId: { in: ingredientIds },
-        },
-        select: {
-          ingredientId: true,
-          stockDeductedQuantity: true,
-        },
-      }),
-    ]);
+    const records = await this.prisma.purchaseRecord.findMany({
+      where: {
+        purchaseListId: { in: completedIds },
+        ingredientId: { in: ingredientIds },
+      },
+      orderBy: [{ purchasedAt: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        ingredientId: true,
+        purchaseChannel: true,
+        purchaseChannelName: true,
+        procurementSkuName: true,
+        procurementSkuId: true,
+        purchasedAt: true,
+      },
+    });
 
     const latestByIngredient = this.pickLatestByIngredient(records);
 
-    const inventoryCovered = new Set(
-      purchaseItems
-        .filter((item) => Number(item.stockDeductedQuantity ?? 0) > 0)
-        .map((item) => item.ingredientId),
-    );
-
+    // 本单没有记录的原料，一律用「最近一次真实采购」兜底（2026-11-10）
     const needFallback = ingredientIds.filter(
-      (ingredientId) =>
-        !latestByIngredient.has(ingredientId) &&
-        inventoryCovered.has(ingredientId),
+      (ingredientId) => !latestByIngredient.has(ingredientId),
     );
-    const fallbackRecords = await this.findLatestCompletedRecords(needFallback);
+    const fallbackRecords = await this.findLatestCompletedRecords(
+      needFallback,
+      params.before ?? null,
+    );
 
     const supplementSkuIds = params.ingredients
       .filter(
@@ -179,16 +170,14 @@ export class OrderProcurementDisclosureService {
         continue;
       }
 
-      if (inventoryCovered.has(ingredient.id)) {
-        const fallback = fallbackRecords.find(
-          (record) => record.ingredientId === ingredient.id,
+      const fallback = fallbackRecords.find(
+        (record) => record.ingredientId === ingredient.id,
+      );
+      if (fallback) {
+        items.push(
+          this.toItem(ingredient, fallback, 'FROM_INVENTORY', skuInfoById),
         );
-        if (fallback) {
-          items.push(
-            this.toItem(ingredient, fallback, 'FROM_INVENTORY', skuInfoById),
-          );
-          continue;
-        }
+        continue;
       }
 
       /**
@@ -275,10 +264,15 @@ export class OrderProcurementDisclosureService {
 
   private async findLatestCompletedRecords(
     ingredientIds: string[],
+    before: Date | null,
   ): Promise<PurchaseRecordLite[]> {
     if (ingredientIds.length === 0) {
       return [];
     }
+
+    const beforeClause = before
+      ? Prisma.sql`AND pr.purchased_at <= ${before}`
+      : Prisma.sql``;
 
     return this.prisma.$queryRaw<PurchaseRecordLite[]>(Prisma.sql`
       SELECT DISTINCT ON (pr.ingredient_id)
@@ -292,6 +286,7 @@ export class OrderProcurementDisclosureService {
       JOIN purchase_list pl ON pl.id = pr.purchase_list_id
       WHERE pl.status = 'COMPLETED'
         AND pr.ingredient_id IN (${Prisma.join(ingredientIds)})
+        ${beforeClause}
       ORDER BY pr.ingredient_id, pr.purchased_at DESC, pr.created_at DESC
     `);
   }

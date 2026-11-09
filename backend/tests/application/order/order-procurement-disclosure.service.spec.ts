@@ -156,7 +156,7 @@ describe('OrderProcurementDisclosureService', () => {
     ]);
   });
 
-  it('既没有本单记录、也没有库存抵扣的原料不展示', async () => {
+  it('既没有本单记录、历史上也从没采购过的原料不展示', async () => {
     const { service } = buildService({
       lists: [
         {
@@ -175,6 +175,70 @@ describe('OrderProcurementDisclosureService', () => {
     });
 
     expect(result?.items).toEqual([]);
+  });
+
+  it('本单没记录、但历史上有采购：按最近一次采购展示为「来自库存」', async () => {
+    const { service, prisma } = buildService({
+      lists: [
+        {
+          id: 'list-1',
+          status: 'COMPLETED',
+          completedAt: new Date('2026-11-05T10:00:00.000Z'),
+        },
+      ],
+      records: [],
+      fallbackRecords: [
+        {
+          ingredientId: 'ingredient-rice',
+          purchaseChannel: 'WALMART',
+          purchaseChannelName: '沃尔玛',
+          procurementSkuName: '东北糙米 1kg',
+          procurementSkuId: null,
+          purchasedAt: new Date('2026-10-20T02:00:00.000Z'),
+        },
+      ],
+    });
+
+    const result = await service.build({
+      orderId: 'order-1',
+      ingredients,
+    });
+
+    expect(result?.items).toEqual([
+      {
+        ingredientId: 'ingredient-rice',
+        ingredientName: '糙米',
+        source: 'FROM_INVENTORY',
+        channel: '沃尔玛',
+        brand: null,
+        productName: '东北糙米 1kg',
+        purchasedAt: '2026-10-20',
+      },
+    ]);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('库存兜底带上订单完成时间作为截止，避免把之后补的货算进来', async () => {
+    const cutoff = new Date('2026-11-08T14:42:22.000Z');
+    const { service } = buildService({
+      lists: [
+        {
+          id: 'list-1',
+          status: 'COMPLETED',
+          completedAt: new Date('2026-11-05T10:00:00.000Z'),
+        },
+      ],
+      records: [],
+    });
+    const spy = jest.spyOn(service as any, 'findLatestCompletedRecords');
+
+    await service.build({
+      orderId: 'order-1',
+      ingredients,
+      before: cutoff,
+    });
+
+    expect(spy).toHaveBeenCalledWith(expect.any(Array), cutoff);
   });
 
   it('采购记录没有商品名时回落到商品当前名', async () => {

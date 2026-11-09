@@ -12,6 +12,7 @@ import {
   extractQueryFocus,
   expandQuery,
   isBackgroundTerm,
+  matchesNeedle,
   normalizeForMatch,
   type QueryFocus,
 } from './query-expansion';
@@ -143,10 +144,27 @@ const MAX_SECTIONS = 5;
 const MAX_QUERY_TERMS = 16;
 const MAX_TEXT_CHARS = 900;
 /**
- * 背景词在打分里的权重。背景词（ckd/dog/staging/…）只用来排序，
- * 不能让「任何一段 CKD 原文」靠堆背景词把真正的焦点段挤下去。
+ * 背景词在打分里的权重（已登记，见 `knowledge-library.service.spec.ts`
+ * 「背景词不得压过焦点词」用例）。
+ *
+ * 背景词（ckd / dog / canine / staging / treatment / target …）只参与排序，
+ * 权重压到 0.25：否则「一段反复说 CKD、犬、管理」的长段落能靠堆背景词
+ * 盖过真正讲 phosphorus / UPC 的段落 —— 这正是 spec 说的
+ * 「中文查询返回任意结果」的成因。
  */
 const BACKGROUND_TERM_WEIGHT = 0.25;
+
+/**
+ * 组级「标题点名查询主题」加成（spec §7.3 第 4 步的「标题/子标题命中加成」，
+ * spec 未规定数值，这里正式登记）：
+ * - 节标题/子标题点名了查询主题（`2a. Substaging by Proteinuria`）→ ×2；
+ * - 只命中分期号（`Stage 2 Canine patients:`）→ ×1.3。
+ *
+ * 为什么比段级 ×1.3 重：一节的名字就叫这个主题，比正文里提一次强得多；
+ * 这是「找节」最强的信号，但仍然只影响排序、不排除任何节。
+ */
+const HEADING_TOPIC_BOOST = 2;
+const HEADING_STAGE_BOOST = 1.3;
 
 const STOP = new Set(
   'a an the and or of to in on for with by is are was were be been being this that these those as at from it its their there can may should could would not no than then when where which who whom whose what how why'.split(
@@ -358,13 +376,17 @@ export class KnowledgeLibraryService {
       );
       // 节标题点名了查询主题（`2a. Substaging by Proteinuria`）是最强的“找节”信号；
       // 只命中分期号（`Stage 2 Canine patients:`）弱一些，但仍然算加成。
-      const contentHit =
-        Boolean(headingHay) &&
-        contentNeedles.some((needle) => headingHay.includes(needle));
-      const stageHit =
-        Boolean(headingHay) &&
-        stageNeedles.some((needle) => headingHay.includes(needle));
-      const headingBoost = contentHit ? 2 : stageHit ? 1.3 : 1;
+      const contentHit = contentNeedles.some((needle) =>
+        matchesNeedle(headingHay, needle),
+      );
+      const stageHit = stageNeedles.some((needle) =>
+        matchesNeedle(headingHay, needle),
+      );
+      const headingBoost = contentHit
+        ? HEADING_TOPIC_BOOST
+        : stageHit
+          ? HEADING_STAGE_BOOST
+          : 1;
       const pageStarts = list
         .map((passage) => passage.pageStart)
         .filter((value): value is number => typeof value === 'number');
@@ -443,18 +465,14 @@ export class KnowledgeLibraryService {
       `${row.section?.title ?? ''}\n${row.text ?? ''}`,
     );
     if (focus.topicPhrases.length > 0) {
-      return focus.topicPhrases.some((phrase) =>
-        haystack.includes(normalizeForMatch(phrase)),
-      );
+      return focus.topicPhrases.some((phrase) => matchesNeedle(haystack, phrase));
     }
     if (focus.focusTerms.length === 0 && focus.stagePhrases.length === 0) {
       return true;
     }
     return (
-      focus.focusTerms.some((term) => haystack.includes(normalizeForMatch(term))) ||
-      focus.stagePhrases.some((phrase) =>
-        haystack.includes(normalizeForMatch(phrase)),
-      )
+      focus.focusTerms.some((term) => matchesNeedle(haystack, term)) ||
+      focus.stagePhrases.some((phrase) => matchesNeedle(haystack, phrase))
     );
   }
 
@@ -481,11 +499,9 @@ export class KnowledgeLibraryService {
       ...focus.topicPhrases,
       ...focus.stagePhrases,
       ...focus.focusTerms,
-    ]
-      .map((needle) => normalizeForMatch(needle))
-      .filter(Boolean);
+    ].filter(Boolean);
     const matches = (hay: string) =>
-      Boolean(hay) && needles.some((needle) => hay.includes(needle));
+      Boolean(hay) && needles.some((needle) => matchesNeedle(hay, needle));
 
     const subheading = extractSubheading(text);
     const titleOrSubheading = normalizeForMatch(
@@ -515,12 +531,10 @@ export class KnowledgeLibraryService {
       if (hit) boost *= 1.15;
     }
 
-    // 结构性软加权：补回去掉旧 ×3 后的路由能力，但只影响排序。
-    // staging 意图下：节标题点名了查询主题（`2a. Substaging by Proteinuria`）→ ×1.4，
-    // 其它 staging 节仍 ×1.25；只影响排序，不排除任何节。
+    // 结构性软加权：补回去掉旧 ×3 后的路由能力，但只影响排序（spec §7.2 的 ×1.25）。
     if (/staging|substaging|分期|亚分期/i.test(raw)) {
       if (meta?.sectionType === 'staging' || meta?.documentType === 'staging_guideline') {
-        boost *= titleOrSubheadingHit ? 1.4 : 1.25;
+        boost *= 1.25;
       }
     }
     if (focus.stagePhrases.length > 0 && meta?.sectionType === 'treatment') {

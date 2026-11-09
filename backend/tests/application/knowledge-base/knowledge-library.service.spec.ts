@@ -2,7 +2,12 @@ import { KnowledgeLibraryService } from '../../../src/application/knowledge-base
 import {
   expandQuery,
   extractQueryFocus,
+  matchesNeedle,
 } from '../../../src/application/knowledge-base/query-expansion';
+import {
+  TOPIC_KEYS,
+  normalizeTopic,
+} from '../../../src/domain/knowledge/topic-aliases';
 import {
   deriveDisplayTitle,
   detectStageHints,
@@ -57,6 +62,24 @@ function serviceWith(rows: unknown[]) {
     findMany,
     service: new KnowledgeLibraryService({
       sourceParagraph: { findMany },
+    } as any),
+  };
+}
+
+/**
+ * 目录 + 段落 mock：验证依赖 `meta`（sectionType / documentType）的软排序。
+ * documentIds 必须是 CKD 文档，目录才会被构建。
+ */
+function serviceWithCatalog(
+  documents: Array<Record<string, unknown>>,
+  rows: unknown[],
+) {
+  const findManyParagraphs = jest.fn().mockResolvedValue(rows);
+  return {
+    findManyParagraphs,
+    service: new KnowledgeLibraryService({
+      sourceDocument: { findMany: jest.fn().mockResolvedValue(documents) },
+      sourceParagraph: { findMany: findManyParagraphs },
     } as any),
   };
 }
@@ -152,6 +175,23 @@ describe('KnowledgeLibraryService（原文检索）', () => {
     expect(result[0].truncated).toBe(true);
     expect(result[0].text.endsWith('…')).toBe(true);
   });
+
+  it('显式 limit=999 被夹到 200（内部上限）', async () => {
+    const rows = Array.from({ length: 300 }, (_, i) =>
+      filterRow({
+        id: `p${String(i).padStart(3, '0')}`,
+        documentId: `doc-${i}`,
+        sectionId: `s-${i}`,
+        document: { id: `doc-${i}`, title: `doc-${i}`, sourceId: 'IRIS-CKD-2026' },
+        section: { id: `s-${i}`, title: 'Stage 2 Canine patients', pageNo: 10 },
+      }),
+    );
+    const { service } = serviceWith(rows);
+
+    const result = await service.search('phosphorus', { limit: 999 });
+    expect(result).toHaveLength(200);
+    expect(result.length).toBeLessThanOrEqual(200);
+  });
 });
 
 describe('查询扩展与焦点（query-expansion）', () => {
@@ -233,6 +273,77 @@ describe('查询扩展与焦点（query-expansion）', () => {
     const focus = extractQueryFocus('CKD dog stage 3 phosphate target');
     expect(focus.focusTerms).toContain('phosphate');
     expect(focus.focusTerms).not.toContain('stage 3');
+  });
+
+  it('单字「水」不映射 water，也不误伤「血磷 水平」', () => {
+    const expanded = expandQuery('犬 CKD 血磷 水平');
+    expect(expanded).not.toContain('water');
+    expect(expanded).toContain('phosphorus');
+    const focus = extractQueryFocus('犬 CKD 血磷 水平');
+    expect(focus.focusTerms).not.toContain('water');
+    expect(focus.focusTerms).not.toContain('水平');
+  });
+
+  it('staging 归入背景词，不进 focusTerms', () => {
+    const focus = extractQueryFocus('CKD dog staging creatinine SDMA');
+    expect(focus.backgroundTerms).toContain('staging');
+    expect(focus.focusTerms).not.toContain('staging');
+    expect(focus.focusTerms).toContain('creatinine');
+  });
+});
+
+describe('词边界匹配（matchesNeedle）', () => {
+  it('protein 不命中 proteinuria，proteinuria 仍命中', () => {
+    expect(matchesNeedle('2a. Substaging by Proteinuria', 'protein')).toBe(false);
+    expect(matchesNeedle('Dietary protein 14 to 20 % DM', 'protein')).toBe(true);
+    expect(matchesNeedle('2a. Substaging by Proteinuria', 'proteinuria')).toBe(true);
+    expect(matchesNeedle('UPC >0.5 is proteinuric', 'proteinuria')).toBe(false);
+  });
+
+  it('中文没有词边界，继续用 includes', () => {
+    expect(matchesNeedle('犬 CKD 蛋白尿', '蛋白')).toBe(true);
+    expect(matchesNeedle('犬 CKD 血磷', '血磷')).toBe(true);
+    expect(matchesNeedle('犬 CKD 血磷', '水平')).toBe(false);
+  });
+
+  it('分期短语与数字按词边界', () => {
+    expect(matchesNeedle('Stage 3 Canine patients', 'stage 3')).toBe(true);
+    expect(matchesNeedle('Stage 30 Canine patients', 'stage 3')).toBe(false);
+    expect(matchesNeedle('phosphorus 0.2 to 0.5% DM', '0.2')).toBe(true);
+    expect(matchesNeedle('phosphorus 0.25% DM', '0.2')).toBe(false);
+  });
+
+  it('连字符归一后再比（omega-3 / omega 3）', () => {
+    expect(matchesNeedle('omega-3 fatty acids', 'omega 3')).toBe(true);
+    expect(matchesNeedle('omega 3 fatty acids', 'omega-3')).toBe(true);
+  });
+});
+
+describe('主题词表（topic-aliases）', () => {
+  it('normalizeTopic 归一中文/别名，未知返回 null', () => {
+    expect(normalizeTopic('磷')).toBe('phosphorus');
+    expect(normalizeTopic('Phosph')).toBe('phosphorus');
+    expect(normalizeTopic('UPC')).toBe('proteinuria');
+    expect(normalizeTopic('血压')).toBe('bloodpressure');
+    expect(normalizeTopic('blood pressure')).toBe('bloodpressure');
+    expect(normalizeTopic('staging')).toBe('staging');
+    expect(normalizeTopic('foo')).toBeNull();
+    expect(normalizeTopic('')).toBeNull();
+  });
+
+  it('TOPIC_KEYS 是合并后的唯一真源（含单字术语主题）', () => {
+    expect(TOPIC_KEYS).toEqual(
+      expect.arrayContaining([
+        'phosphorus',
+        'chloride',
+        'magnesium',
+        'iodine',
+        'calcium',
+        'proteinuria',
+        'bloodpressure',
+      ]),
+    );
+    expect(new Set(TOPIC_KEYS).size).toBe(TOPIC_KEYS.length);
   });
 });
 
@@ -340,11 +451,84 @@ describe('KnowledgeLibraryService（门禁/排序/分组）', () => {
     await expect(service.search('CKD dog vitamin D target')).resolves.toHaveLength(1);
   });
 
-  it('负样本：未知营养素 0 命中返回空', async () => {
+  it('负样本：未知营养素（biotin / manganese / chromium）0 命中返回空', async () => {
     const { service } = serviceWith([
       filterRow({ text: 'Minimum protein requirements for CKD.' }),
     ]);
-    await expect(service.search('CKD dog biotin requirement')).resolves.toEqual([]);
+    for (const query of [
+      'CKD dog biotin requirement',
+      'CKD dog manganese requirement',
+      'CKD dog chromium requirement',
+    ]) {
+      await expect(service.search(query)).resolves.toEqual([]);
+    }
+  });
+
+  it('门禁：protein 不因 proteinuria 命中（词边界）', async () => {
+    const rows = [
+      filterRow({
+        id: 'protein',
+        sectionId: 'p',
+        section: { id: 'p', title: '783 Chronic Kidney Disease', pageNo: 19 },
+        text: 'Dietary protein 14 to 20 % DM for dogs with CKD.',
+      }),
+      filterRow({
+        id: 'proteinuria',
+        sectionId: 'u',
+        section: { id: 'u', title: '2a. Substaging by Proteinuria', pageNo: 4 },
+        text: 'UPC 0.5 indicates proteinuria in dogs.',
+      }),
+    ];
+    const { service } = serviceWith(rows);
+
+    const result = await service.search('CKD dog protein 14 20 % DM', { limit: 10 });
+    expect(result.map((item) => item.id)).toEqual(['protein']);
+  });
+
+  it('门禁：proteinuria 查询仍能命中蛋白尿节（反向）', async () => {
+    const rows = [
+      filterRow({
+        id: 'protein',
+        sectionId: 'p',
+        section: { id: 'p', title: '783 Chronic Kidney Disease', pageNo: 19 },
+        text: 'Dietary protein 14 to 20 % DM for dogs with CKD.',
+      }),
+      filterRow({
+        id: 'proteinuria',
+        sectionId: 'u',
+        section: { id: 'u', title: '2a. Substaging by Proteinuria', pageNo: 4 },
+        text: 'UPC 0.5 indicates proteinuria in dogs.',
+      }),
+    ];
+    const { service } = serviceWith(rows);
+
+    const result = await service.search('CKD dog proteinuria', { limit: 10 });
+    expect(result.map((item) => item.id)).toEqual(['proteinuria']);
+  });
+
+  it('背景词不得压过焦点词（BACKGROUND_TERM_WEIGHT 已登记）', async () => {
+    const rows = [
+      filterRow({
+        id: 'background-heavy',
+        sectionId: 'bg',
+        section: { id: 'bg', title: '781 Chronic Kidney Disease', pageNo: 17 },
+        text: 'CKD chronic kidney disease dogs canine phosphorus.',
+      }),
+      filterRow({
+        id: 'focus-dense',
+        sectionId: 'fd',
+        section: { id: 'fd', title: '783 Chronic Kidney Disease', pageNo: 19 },
+        text: 'Phosphorus phosphorus phosphorus phosphate phosphate phosphate.',
+      }),
+    ];
+    const { service } = serviceWith(rows);
+
+    const result = await service.search('CKD dog phosphorus', { limit: 5 });
+    // 背景词（CKD/犬/慢性肾病）只按 0.25 权重打分：堆背景词不能盖过重复讲磷的段落。
+    expect(result.map((item) => item.id)).toEqual([
+      'focus-dense',
+      'background-heavy',
+    ]);
   });
 
   it('不再按 1000 段截断候选', async () => {
@@ -433,6 +617,117 @@ describe('KnowledgeLibraryService（门禁/排序/分组）', () => {
       expect(section.passages.length).toBeLessThanOrEqual(2);
     }
     expect(sections.filter((section) => section.documentId === docId)).toHaveLength(2);
+  });
+
+  it('staging 意图：staging 节 ×1.25 排在通用节前（只加分，不排除）', async () => {
+    const docId = 'sacn5-chapters-SACN5-37';
+    const text = 'Staging creatinine SDMA reference range for dogs.';
+    const documents = [
+      {
+        id: docId,
+        sourceId: 'SACN5',
+        title: 'SACN5_37.pdf',
+        sections: [
+          {
+            id: 'staging-section',
+            title: 'Staging of Chronic Kidney Disease',
+            pageNo: 1,
+            sortOrder: 1,
+            paragraphs: [{ text }],
+          },
+          {
+            id: 'generic-section',
+            title: 'Introduction',
+            pageNo: 2,
+            sortOrder: 2,
+            paragraphs: [{ text }],
+          },
+        ],
+      },
+    ];
+    const rows = ['staging-section', 'generic-section'].map((sectionId) =>
+      filterRow({
+        id: `p-${sectionId}`,
+        documentId: docId,
+        sectionId,
+        document: { id: docId, title: 'SACN5_37.pdf', sourceId: 'SACN5' },
+        section: {
+          id: sectionId,
+          title:
+            sectionId === 'staging-section'
+              ? 'Staging of Chronic Kidney Disease'
+              : 'Introduction',
+          pageNo: 1,
+        },
+        text,
+      }),
+    );
+    const { service } = serviceWithCatalog(documents, rows);
+
+    const result = await service.search('CKD dog staging creatinine SDMA', {
+      documentIds: [docId],
+      limit: 5,
+    });
+
+    expect(result.map((item) => item.id)[0]).toBe('p-staging-section');
+    // 其他节只降权/不排除
+    expect(result.map((item) => item.id)).toContain('p-generic-section');
+    // 段分相同，只差 staging ×1.25
+    expect(result[0].score).toBeCloseTo(result[1].score * 1.25, 1);
+  });
+
+  it('组级「标题点名查询主题」加成：同名段落按节标题排序', async () => {
+    const text = 'UPC 0.5 borderline proteinuria in dogs.';
+    const rows = [
+      filterRow({
+        id: 'a',
+        sectionId: 'a',
+        section: { id: 'a', title: '2a. Substaging by Proteinuria', pageNo: 4 },
+        text,
+      }),
+      filterRow({
+        id: 'b',
+        sectionId: 'b',
+        section: { id: 'b', title: '771 Chronic Kidney Disease', pageNo: 9 },
+        text,
+      }),
+    ];
+    const { service } = serviceWith(rows);
+
+    const sections = await service.searchSections('CKD dog UPC proteinuria substaging', {
+      limit: 5,
+    });
+
+    expect(sections.map((section) => section.sectionId)).toEqual(['a', 'b']);
+    // 段内标题命中 ×1.3，组级“标题点名主题”再 ×2 → 合计约 ×2.6
+    expect(sections[0].score / sections[1].score).toBeCloseTo(2.6, 0);
+  });
+
+  it('分组：6 组候选只取前 5 节', async () => {
+    const rows = Array.from({ length: 6 }, (_, i) => {
+      const sectionId = `s${i + 1}`;
+      const documentId = `doc-${i + 1}`;
+      return filterRow({
+        id: `p${i + 1}`,
+        documentId,
+        sectionId,
+        document: { id: documentId, title: documentId, sourceId: 'IRIS-CKD-2026' },
+        section: { id: sectionId, title: '781 Chronic Kidney Disease', pageNo: 10 + i },
+      });
+    });
+    const { service } = serviceWith(rows);
+
+    const sections = await service.searchSections('phosphorus', { limit: 5 });
+
+    expect(sections).toHaveLength(5);
+    expect(new Set(sections.map((section) => section.documentId)).size).toBe(5);
+    expect(sections.map((section) => section.sectionId)).toEqual([
+      's1',
+      's2',
+      's3',
+      's4',
+      's5',
+    ]);
   });
 
   it('SectionHit 带 displayTitle/subheading', async () => {

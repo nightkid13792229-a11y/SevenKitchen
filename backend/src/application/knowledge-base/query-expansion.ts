@@ -53,7 +53,6 @@ const CHINESE_TERMS: Array<[string, string[]]> = [
   ['铁', ['iron']],
   ['锌', ['zinc']],
   ['铜', ['copper']],
-  ['水', ['water']],
   ['犬', ['dog', 'canine']],
   ['狗', ['dog', 'canine']],
   ['猫', ['cat', 'feline']],
@@ -102,6 +101,8 @@ const BACKGROUND_TERMS = [
   'feline',
   'stage',
   'stages',
+  // `分期 → staging` 是“意图”词（结构性软加权已单独处理），不能当焦点词：
+  // 否则「UPC 怎么分期」「血压 怎么分期」会被通用 staging 章节抢走。
   'staging',
   'target',
   'range',
@@ -149,6 +150,10 @@ const CJK_GENERIC = new Set([
   '狗',
   '猫',
   '期',
+  // 单字「水」不再映射 water（会误伤「血磷 水平」「水分」），
+  // 这些词是泛用词，不算内容词。
+  '水平',
+  '水分',
 ]);
 
 const STOP = new Set(
@@ -166,6 +171,42 @@ export function normalizeForMatch(text: string): string {
     .replace(/[\u2010-\u2015\u2212-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+const NEEDLE_PATTERN_CACHE = new Map<string, RegExp | null>();
+const NEEDLE_PATTERN_CACHE_LIMIT = 500;
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function needlePattern(needle: string): RegExp | null {
+  if (NEEDLE_PATTERN_CACHE.has(needle)) {
+    return NEEDLE_PATTERN_CACHE.get(needle) ?? null;
+  }
+  const pattern = /[a-z0-9]/.test(needle)
+    ? new RegExp(`(^|[^a-z0-9])${escapeRegExp(needle)}(?=[^a-z0-9]|$)`)
+    : null;
+  if (NEEDLE_PATTERN_CACHE.size >= NEEDLE_PATTERN_CACHE_LIMIT) {
+    NEEDLE_PATTERN_CACHE.clear();
+  }
+  NEEDLE_PATTERN_CACHE.set(needle, pattern);
+  return pattern;
+}
+
+/**
+ * 词边界匹配（门禁/标题命中/表格 caption 共用）：
+ * - 拉丁词/短语必须整词命中：`protein` 不能命中 `proteinuria`，`stage 3` 不能命中 `stage 30`；
+ * - 中文没有词边界，继续用 `includes`（`蛋白` 可以命中 `蛋白尿`）；
+ * - 两侧都先 `normalizeForMatch`（小写、连字符归一）。
+ */
+export function matchesNeedle(haystack: string, needle: string): boolean {
+  const hay = normalizeForMatch(haystack);
+  const target = normalizeForMatch(needle);
+  if (!hay || !target) return false;
+  const pattern = needlePattern(target);
+  if (!pattern) return hay.includes(target);
+  return pattern.test(hay);
 }
 
 /** 从 query 里取分期号（英文 stage N / 中文 N 期 / 第 N 期）。 */

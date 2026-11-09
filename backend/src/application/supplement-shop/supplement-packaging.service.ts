@@ -6,6 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { GlobalConfigService } from '../config/global-config.service';
 import { TimezoneUtil } from '../../utils/timezone.util';
 
 export type PackagingRoleCode = 'POUCH' | 'DESICCANT' | 'LABEL';
@@ -51,6 +52,7 @@ export class SupplementPackagingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly inventoryService: InventoryService,
+    private readonly globalConfigService: GlobalConfigService,
   ) {}
 
   async listRules(): Promise<PackagingRuleDto[]> {
@@ -301,6 +303,99 @@ export class SupplementPackagingService {
           (order.shippingAddressSnapshot as any)?.recipientName || '',
       })),
     };
+  }
+
+  /**
+   * 补剂分装/发货时扣包材：袋按件数、标签和干燥剂按总袋数。
+   * 与原料扣减同一个 sourceId 规则（orderId:supplement），重复调用靠唯一键幂等。
+   */
+  async consumePackagingForOrder(
+    tx: any,
+    orderId: string,
+  ): Promise<{ entryCount: number }> {
+    const order = await tx.supplementOrder.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        bagCount: true,
+        items: {
+          select: {
+            ingredientId: true,
+            name: true,
+            unit: true,
+            physicalForm: true,
+            packedAmount: true,
+            bags: true,
+          },
+        },
+      },
+    });
+    if (!order) return { entryCount: 0 };
+
+    const rules = await tx.supplementPackagingRule.findMany({
+      where: { enabled: true },
+      include: { ingredient: { select: { id: true, name: true } } },
+      orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+    });
+
+    const totals = new Map<string, number>();
+    const bump = (ingredientId: string | undefined, quantity: number) => {
+      if (!ingredientId || quantity <= 0) return;
+      totals.set(ingredientId, (totals.get(ingredientId) ?? 0) + quantity);
+    };
+
+    for (const item of order.items) {
+      const rule = this.resolveRule(
+        rules as any,
+        'POUCH',
+        item.physicalForm,
+        item.unit,
+        Number(item.packedAmount),
+      );
+      if (rule) {
+        bump(
+          (rule as any).ingredientId ?? (rule as any).ingredient?.id,
+          Math.max(1, Number(item.bags) || 1),
+        );
+      } else {
+        console.warn(
+          `[SupplementPackaging] 没有匹配的袋型规则：${item.name}（${item.unit}）`,
+        );
+      }
+    }
+
+    for (const role of ['DESICCANT', 'LABEL'] as const) {
+      const rule = rules.find((row: any) => row.role === role);
+      if (rule) bump((rule as any).ingredientId, order.bagCount);
+    }
+
+    const config = await this.globalConfigService.getGlobalConfig();
+    if (!config.packagingDeductionEnabled) {
+      console.log(
+        `[SupplementPackaging] 包材扣减开关关闭，跳过订单 ${orderId}（应扣 ${totals.size} 行）`,
+      );
+      return { entryCount: 0 };
+    }
+
+    const rows = Array.from(totals.entries()).map(
+      ([ingredientId, quantity]) => ({
+        ingredientId,
+        deltaG: -Math.abs(quantity),
+        procurementSkuId: null,
+        sourceType: 'PACKAGING_CONSUMPTION',
+        sourceId: `${orderId}:supplement`,
+        sourceVersion: 1,
+        costAmount: null,
+        createdAt: new Date(),
+      }),
+    );
+    if (rows.length > 0) {
+      await tx.inventoryLedgerEntry.createMany({
+        data: rows,
+        skipDuplicates: true,
+      });
+    }
+    return { entryCount: rows.length };
   }
 
   private resolveRule(

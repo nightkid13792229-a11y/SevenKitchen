@@ -30,6 +30,7 @@ import {
 import type { IngredientPhysicalFormCode } from './supplement-catalog.service';
 import { SupplementSchedulingService } from './supplement-scheduling.service';
 import { SupplementInventoryService } from './supplement-inventory.service';
+import { SupplementPackagingService } from './supplement-packaging.service';
 import { SupplementSnapshotService } from './supplement-snapshot.service';
 import { SupplementNotificationService } from './supplement-notification.service';
 import {
@@ -290,6 +291,8 @@ export class SupplementOrderService {
     private readonly notificationService?: SupplementNotificationService,
     @Optional()
     private readonly candidateService?: SupplementCandidateService,
+    @Optional()
+    private readonly supplementPackagingService?: SupplementPackagingService,
   ) {}
 
   /**
@@ -912,6 +915,10 @@ export class SupplementOrderService {
         // 当前阶段不因库存/预占缺失阻断分装；缺料在响应和事件中提示
         allowMissing: true,
       });
+      await this.supplementPackagingService?.consumePackagingForOrder(
+        tx,
+        orderId,
+      );
       if (typeof (tx.supplementOrder as any).updateMany !== 'function') {
         await tx.supplementOrder.update({
           where: { id: orderId },
@@ -1049,6 +1056,10 @@ export class SupplementOrderService {
       await this.inventoryService?.consumeForOrder(tx, orderId, {
         allowMissing: true,
       });
+      await this.supplementPackagingService?.consumePackagingForOrder(
+        tx,
+        orderId,
+      );
 
       if (shippingType === 'NOT_REQUIRED') {
         await tx.supplementOrder.update({

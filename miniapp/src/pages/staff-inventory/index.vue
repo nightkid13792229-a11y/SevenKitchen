@@ -251,8 +251,11 @@ const openDrawer = (tab: 'needs' | 'ledger', item?: InventoryHomeItem) => {
 
 const goReplenish = (item: InventoryHomeItem) => {
   drawerVisible.value = false;
+  const suggested = Number(
+    item.netShortageQuantity ?? item.suggestedPurchaseQuantity ?? 0,
+  );
   uni.navigateTo({
-    url: `/pages/staff-purchasing/stock-create?ingredientId=${item.id}`,
+    url: `/pages/staff-purchasing/stock-create?ingredientId=${item.id}&suggested=${suggested}`,
   });
 };
 

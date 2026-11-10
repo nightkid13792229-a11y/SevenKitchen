@@ -360,9 +360,14 @@ const loadChannelOptions = async () => {
 };
 
 const pendingIngredientId = ref('');
+const pendingSuggestedQuantity = ref<number | null>(null);
 
 onLoad((options: any) => {
   pendingIngredientId.value = options?.ingredientId || '';
+  pendingSuggestedQuantity.value =
+    options?.suggested !== undefined && options?.suggested !== ''
+      ? Number(options.suggested)
+      : null;
   targetDate.value = getTodayString();
   loadChannelOptions();
   loadIngredients();
@@ -491,12 +496,17 @@ const toPlannedQuantityInput = (value: number) => {
   return formatQuantity(value);
 };
 
-const addIngredient = (ingredient: StockPurchaseIngredient) => {
+const addIngredient = (
+  ingredient: StockPurchaseIngredient,
+  suggestedOverride?: number,
+) => {
   const existing = selectedItems.value.find(
     (item) => item.ingredientId === ingredient.id,
   );
   const suggestedQuantity = toPlannedQuantityInput(
-    ingredient.suggestedPurchaseQuantity,
+    suggestedOverride !== undefined
+      ? suggestedOverride
+      : ingredient.suggestedPurchaseQuantity,
   );
 
   if (existing) {
@@ -539,8 +549,14 @@ const applyPendingIngredient = () => {
     (item) => item.id === pendingIngredientId.value,
   );
   if (found) {
-    addIngredient(found);
+    addIngredient(
+      found,
+      pendingSuggestedQuantity.value !== null && pendingSuggestedQuantity.value >= 0
+        ? pendingSuggestedQuantity.value
+        : undefined,
+    );
     pendingIngredientId.value = '';
+    pendingSuggestedQuantity.value = null;
   }
 };
 

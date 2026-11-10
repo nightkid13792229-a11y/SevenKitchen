@@ -157,3 +157,14 @@ describe('staff inventory in-transit display (D5)', () => {
     expect(page).not.toContain('建议补 {{ fmt(item.suggestedPurchaseQuantity) }}');
   });
 });
+
+describe('staff inventory net prefill (final)', () => {
+  const page = readPage('staff-inventory/index.vue');
+  const stockCreate = readPage('staff-purchasing/stock-create.vue');
+
+  it('passes the net shortage to the purchase page', () => {
+    expect(page).toContain('suggested=');
+    expect(page).toContain('netShortageQuantity');
+    expect(stockCreate).toContain('pendingSuggestedQuantity');
+  });
+});

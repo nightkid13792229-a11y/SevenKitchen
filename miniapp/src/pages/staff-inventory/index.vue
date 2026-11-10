@@ -249,13 +249,12 @@ const openDrawer = (tab: 'needs' | 'ledger', item?: InventoryHomeItem) => {
   drawerVisible.value = true;
 };
 
-const goReplenish = (item: InventoryHomeItem) => {
+const goReplenish = (_item: InventoryHomeItem) => {
   drawerVisible.value = false;
-  const suggested = Number(
-    item.netShortageQuantity ?? item.suggestedPurchaseQuantity ?? 0,
-  );
+  // 补货改版：不再先建计划单，统一到「补货」页传订单截图记账。
   uni.navigateTo({
-    url: `/pages/staff-purchasing/stock-create?ingredientId=${item.id}&suggested=${suggested}`,
+    url: '/pages/staff-purchasing/replenishment/index',
+  });
   });
 };
 

@@ -206,35 +206,44 @@
           <el-descriptions-item label="计划日期">{{ formatDate(currentList.targetDate) }}</el-descriptions-item>
           <el-descriptions-item label="开始时间">{{ formatTime(currentList.startedAt) }}</el-descriptions-item>
           <el-descriptions-item label="完成时间">{{ formatTime(currentList.completedAt) }}</el-descriptions-item>
+          <template v-if="currentList.kind === 'STOCK_REPLENISHMENT'">
+            <el-descriptions-item label="渠道">{{ currentList.channel || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="订单号">{{ currentList.orderNo || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="到货时间">{{ formatTime(currentList.arrivedAt) }}</el-descriptions-item>
+            <el-descriptions-item label="实付">¥{{ formatAmount(currentList.paidAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="本次报销">¥{{ formatAmount(currentList.reimbursementAmount) }}</el-descriptions-item>
+          </template>
         </el-descriptions>
 
         <div class="detail-actions">
-          <el-button
-            :loading="detailActionLoading"
-            :disabled="currentList.status !== 'PENDING'"
-            @click="checkDateChanges"
-          >
-            检查日期变更
-          </el-button>
-          <el-button
-            :loading="detailActionLoading"
-            :disabled="currentList.status !== 'PENDING'"
-            @click="recalculateCurrentList"
-          >
-            重新计算
-          </el-button>
-          <el-button
-            :disabled="currentList.status !== 'PENDING'"
-            @click="openOrderDialog('add')"
-          >
-            追加订单
-          </el-button>
-          <el-button
-            :disabled="currentList.status !== 'PENDING'"
-            @click="openOrderDialog('remove')"
-          >
-            剔除订单
-          </el-button>
+          <template v-if="currentList.kind !== 'STOCK_REPLENISHMENT'">
+            <el-button
+              :loading="detailActionLoading"
+              :disabled="currentList.status !== 'PENDING'"
+              @click="checkDateChanges"
+            >
+              检查日期变更
+            </el-button>
+            <el-button
+              :loading="detailActionLoading"
+              :disabled="currentList.status !== 'PENDING'"
+              @click="recalculateCurrentList"
+            >
+              重新计算
+            </el-button>
+            <el-button
+              :disabled="currentList.status !== 'PENDING'"
+              @click="openOrderDialog('add')"
+            >
+              追加订单
+            </el-button>
+            <el-button
+              :disabled="currentList.status !== 'PENDING'"
+              @click="openOrderDialog('remove')"
+            >
+              剔除订单
+            </el-button>
+          </template>
         </div>
 
         <el-tabs v-model="detailTab">

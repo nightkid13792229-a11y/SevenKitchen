@@ -12,7 +12,11 @@ describe('ReplenishmentService · 草稿', () => {
     const repository = {
       save: jest.fn(async (list: any) => list),
     } as any;
-    const service = new ReplenishmentService(repository);
+    const service = new ReplenishmentService(
+      repository,
+      {} as any,
+      { confirm: jest.fn() } as any,
+    );
 
     const saved = await service.createDraft('user-1');
 

@@ -35,6 +35,7 @@ describe('PurchaseOrderImportService', () => {
     purchaseList: { findUnique: jest.fn() },
     purchaseItem: {
       findMany: jest.fn(),
+      findUnique: jest.fn(),
       findFirst: jest.fn(),
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
@@ -376,6 +377,66 @@ describe('PurchaseOrderImportService', () => {
         noPurchaseMarkedAt: null,
         noPurchaseMarkedById: null,
       },
+    });
+  });
+
+  it('按重量买的行（没有采购商品）直接按斤换算成克，不要求 SKU', async () => {
+    // 补货改版：淘宝「新鲜羊心 3斤」这类没有商品档案，也应当能记账。
+    prisma.purchaseOrderImport.findMany.mockResolvedValue([
+      {
+        id: 'import-1',
+        purchaseListId: 'list-1',
+        status: 'DRAFT',
+        incomplete: false,
+        subtotal: 37.39,
+        channel: '淘宝',
+        orderTime: null,
+        imageKeys: [],
+        lines: [
+          {
+            id: 'line-1',
+            rawName: '新鲜羊心 3斤',
+            isPersonal: false,
+            ingredientId: 'ing-1',
+            procurementSkuId: null,
+            purchaseItemId: 'item-1',
+            unit: '斤',
+            lineTotal: 37.39,
+            qty: 3,
+          },
+        ],
+      },
+    ]);
+    prisma.purchaseOrderImport.updateMany.mockResolvedValue({ count: 1 });
+    prisma.purchaseItem.findUnique.mockResolvedValue({
+      id: 'item-1',
+      ingredientId: 'ing-1',
+      ingredientName: '羊心',
+      ingredient: {
+        name: '羊心',
+        baseUnit: 'G',
+        purchaseChannel: '淘宝',
+      },
+    });
+    prisma.purchaseRecord.create.mockResolvedValue({ id: 'record-1' });
+    prisma.purchaseOrderImportLine.update.mockResolvedValue({});
+
+    await expect(service.confirm(['import-1'], 'user-1')).resolves.toEqual({
+      createdCount: 1,
+      renamed: [],
+    });
+
+    expect(prisma.purchaseRecord.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        procurementSkuId: null,
+        actualQuantity: 3,
+        actualPackageCount: 3,
+        actualPackageSize: 1,
+        actualPackageUnit: '斤',
+        actualBaseQuantity: 1500,
+        actualBaseUnit: 'G',
+        actualCost: 37.39,
+      }),
     });
   });
 

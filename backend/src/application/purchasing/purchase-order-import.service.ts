@@ -98,6 +98,17 @@ const WEIGHT_OR_VOLUME_UNITS = new Set([
   '升',
 ]);
 
+/** 按重量买：单位 → 基准单位（克）换算。只用于「没有采购商品」的重量行。 */
+const WEIGHT_UNIT_TO_BASE_RATIO: Record<string, number> = {
+  斤: 500,
+  两: 50,
+  克: 1,
+  g: 1,
+  公斤: 1000,
+  千克: 1000,
+  kg: 1000,
+};
+
 interface RecognizedOrder {
   url: string;
   imageKey: string | null;
@@ -770,7 +781,7 @@ ${list}
     }
 
     const list = await this.assertListImportable(listIds[0]);
-    if (!list.startedAt) {
+    if (!list.startedAt && !list.isDraft) {
       throw new BadRequestException('请先开始采购，再生成采购记录');
     }
 
@@ -823,6 +834,109 @@ ${list}
               );
             }
 
+            const lineUnit = (line.unit ?? '').trim();
+            const weightBaseRatio =
+              lineUnit && !line.procurementSkuId
+                ? WEIGHT_UNIT_TO_BASE_RATIO[lineUnit.toLowerCase()]
+                : undefined;
+
+            // 补货改版：按斤/公斤/克/两买的，不强制采购商品，直接按重量记。
+            if (weightBaseRatio !== undefined) {
+              const weightItemId =
+                line.purchaseItemId ??
+                (
+                  await tx.purchaseItem.findFirst({
+                    where: {
+                      purchaseListId: row.purchaseListId,
+                      ingredientId: line.ingredientId!,
+                    },
+                    select: { id: true },
+                  })
+                )?.id;
+              if (!weightItemId) {
+                throw new BadRequestException(
+                  `「${line.rawName}」在清单里找不到对应原料`,
+                );
+              }
+              const weightItem = await tx.purchaseItem.findUnique({
+                where: { id: weightItemId },
+                select: {
+                  id: true,
+                  ingredientId: true,
+                  ingredientName: true,
+                  ingredient: {
+                    select: {
+                      name: true,
+                      baseUnit: true,
+                      purchaseChannel: true,
+                    },
+                  },
+                },
+              });
+              if (!weightItem) {
+                throw new BadRequestException(
+                  `「${line.rawName}」在清单里找不到对应原料`,
+                );
+              }
+              if (weightItem.ingredient?.baseUnit !== 'G') {
+                throw new BadRequestException(
+                  `「${line.rawName}」按重量只支持基准单位为克的原料，请改用商品净含量`,
+                );
+              }
+
+              const weightChannelCode =
+                row.channel ||
+                canonicalChannelCode(
+                  weightItem.ingredient?.purchaseChannel ?? null,
+                  channels,
+                ) ||
+                '';
+              const weightChannelName =
+                channels.find((item) => item.code === weightChannelCode)?.label ??
+                weightChannelCode;
+
+              const weightRecord = await tx.purchaseRecord.create({
+                data: {
+                  purchaseListId: row.purchaseListId,
+                  purchaseItemId: weightItem.id,
+                  ingredientId: weightItem.ingredientId,
+                  procurementSkuId: null,
+                  procurementSkuName: line.rawName,
+                  ingredientName:
+                    weightItem.ingredientName ||
+                    weightItem.ingredient?.name ||
+                    line.rawName,
+                  purchaseChannel: weightChannelCode,
+                  purchaseChannelName: weightChannelName,
+                  actualQuantity: qty,
+                  actualPackageCount: qty,
+                  actualPackageSize: 1,
+                  actualPackageUnit: lineUnit,
+                  actualBaseQuantity: qty * weightBaseRatio,
+                  actualBaseUnit: 'G',
+                  actualCost: amount,
+                  productModel: line.spec,
+                  purchasedAt: row.orderTime ?? new Date(),
+                  sourceImportId: row.id,
+                  sourceImportLineId: line.id,
+                  sourceImageKey: row.imageKeys?.[0] ?? null,
+                },
+              });
+
+              await tx.purchaseOrderImportLine.update({
+                where: { id: line.id },
+                data: { purchaseRecordId: weightRecord.id },
+              });
+              createdCount += 1;
+              continue;
+            }
+
+            if (!line.procurementSkuId) {
+              throw new BadRequestException(
+                `「${line.rawName}」缺少采购商品，请先新建商品`,
+              );
+            }
+
             const sku = await tx.procurementSku.findUnique({
               where: { id: line.procurementSkuId! },
               select: {
@@ -861,10 +975,12 @@ ${list}
               renames.push({ lineId: line.id, ...renamed });
             }
 
-            const unit = (line.unit ?? '').trim();
-            if (unit && WEIGHT_OR_VOLUME_UNITS.has(unit.toLowerCase())) {
+            if (
+              lineUnit &&
+              WEIGHT_OR_VOLUME_UNITS.has(lineUnit.toLowerCase())
+            ) {
               throw new BadRequestException(
-                `「${line.rawName}」是按重量/体积买的（${unit}），请改成件数再生成`,
+                `「${line.rawName}」是按重量/体积买的（${lineUnit}），请改成件数再生成`,
               );
             }
 
@@ -1359,6 +1475,7 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
         id: true,
         status: true,
         startedAt: true,
+        isDraft: true,
         reimbursementId: true,
         items: { select: { purchaseChannel: true }, take: 1 },
       },
@@ -1583,6 +1700,7 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
       isPersonal: boolean;
       ingredientId: string | null;
       procurementSkuId: string | null;
+      unit?: string | null;
       lineTotal: unknown;
       qty: unknown;
     }>;
@@ -1607,7 +1725,13 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
     }
 
     const missingSku = row.lines.filter(
-      (line) => !line.isPersonal && line.ingredientId && !line.procurementSkuId,
+      (line) =>
+        !line.isPersonal &&
+        line.ingredientId &&
+        !line.procurementSkuId &&
+        WEIGHT_UNIT_TO_BASE_RATIO[
+          String(line.unit ?? '').trim().toLowerCase()
+        ] === undefined,
     );
     if (missingSku.length > 0) {
       throw new BadRequestException(

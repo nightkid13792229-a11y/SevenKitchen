@@ -69,6 +69,7 @@ import {
 } from '../dto/staff/purchase-order-import.dto';
 import { PurchaseOrderImportService } from '../../application/purchasing/purchase-order-import.service';
 import { ReplenishmentService } from '../../application/purchasing/replenishment.service';
+import type { SaveReplenishmentRecordDto } from '../../application/purchasing/replenishment.service';
 
 @ApiTags('Staff Purchasing')
 @Controller('api/v1/staff/purchasing')
@@ -620,6 +621,18 @@ export class StaffPurchasingController {
     const draft = await this.replenishmentService.createDraft(userId);
 
     return ApiResponseDto.success({ id: draft.id }, '草稿已创建');
+  }
+
+  @Post('replenishment/:id/save')
+  @ApiOperation({ summary: '保存补货记录（核对完成后）' })
+  async saveReplenishmentRecord(
+    @Param('id') id: string,
+    @Body() dto: SaveReplenishmentRecordDto,
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    const record = await this.replenishmentService.saveRecord(id, dto, userId);
+
+    return ApiResponseDto.success(record, '补货记录已保存');
   }
 
   @Get('lists')

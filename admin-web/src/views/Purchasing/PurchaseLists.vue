@@ -76,14 +76,14 @@
           <template #default="{ row }">
             <el-button size="small" type="primary" @click="openDetail(row)">详情</el-button>
             <el-button
-              v-if="row.status === 'PENDING' && !row.startedAt"
+              v-if="row.status === 'PENDING' && !row.startedAt && !isNewReplenishment(row)"
               size="small"
               @click="startPurchase(row)"
             >
               开始
             </el-button>
             <el-button
-              v-if="row.status === 'PENDING'"
+              v-if="row.status === 'PENDING' && !isNewReplenishment(row)"
               size="small"
               type="success"
               @click="completePurchase(row)"
@@ -91,14 +91,14 @@
               完成
             </el-button>
             <el-button
-              v-if="row.status === 'COMPLETED' && !row.reimbursementId"
+              v-if="row.status === 'COMPLETED' && !row.reimbursementId && !isNewReplenishment(row)"
               size="small"
               @click="reopenPurchase(row)"
             >
               撤回
             </el-button>
             <el-button
-              v-if="row.status !== 'COMPLETED' && !row.reimbursementId"
+              v-if="row.status !== 'COMPLETED' && !row.reimbursementId && !isNewReplenishment(row)"
               size="small"
               type="danger"
               @click="deleteList(row)"
@@ -768,6 +768,11 @@ function getStatusText(status?: string) {
     COMPLETED: '已完成'
   }
   return map[status || ''] || status || '-'
+}
+
+/** 补货改版的新记录（有实付金额）不再走采购单的 开始/完成/撤回/删除。 */
+function isNewReplenishment(row?: Record<string, any> | null) {
+  return row?.kind === 'STOCK_REPLENISHMENT' && row?.paidAmount != null
 }
 
 function getStatusTag(status?: string): 'success' | 'warning' | 'info' {

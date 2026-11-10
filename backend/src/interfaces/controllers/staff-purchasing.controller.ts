@@ -68,6 +68,7 @@ import {
   UpdateOrderImportLineDto,
 } from '../dto/staff/purchase-order-import.dto';
 import { PurchaseOrderImportService } from '../../application/purchasing/purchase-order-import.service';
+import { ReplenishmentService } from '../../application/purchasing/replenishment.service';
 
 @ApiTags('Staff Purchasing')
 @Controller('api/v1/staff/purchasing')
@@ -92,6 +93,7 @@ export class StaffPurchasingController {
     private readonly procurementSkuService: ProcurementSkuService,
     private readonly procurementSkuDraftService: ProcurementSkuDraftService,
     private readonly purchaseOrderImportService: PurchaseOrderImportService,
+    private readonly replenishmentService: ReplenishmentService,
   ) {}
 
   /**
@@ -604,6 +606,20 @@ export class StaffPurchasingController {
     );
 
     return ApiResponseDto.success(purchaseList, '库存补货采购单创建成功');
+  }
+
+  /**
+   * 补货改版（2026-11-10）：开始记一笔。
+   * 先建一条对用户不可见的草稿，识别成功后在保存时转正。
+   */
+  @Post('replenishment/drafts')
+  @ApiOperation({ summary: '创建补货记录草稿（识别前）' })
+  async createReplenishmentDraft(
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    const draft = await this.replenishmentService.createDraft(userId);
+
+    return ApiResponseDto.success({ id: draft.id }, '草稿已创建');
   }
 
   @Get('lists')

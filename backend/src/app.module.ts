@@ -209,6 +209,7 @@ import type { IOrderPricingSnapshotRepository } from './domain/order-pricing-sna
 import {
   PurchasingService,
   ReimbursementService,
+  ReplenishmentService,
   PURCHASE_LIST_REPOSITORY,
   REIMBURSEMENT_REPOSITORY,
   PURCHASE_RECORD_REPOSITORY,
@@ -883,6 +884,7 @@ validatePrismaConfig();
     // Phase 1: Purchasing Management Services
     PurchasingService,
     ReimbursementService,
+    ReplenishmentService,
     ExpenseBillService,
     ExpenseTemplateService,
     FinanceReportService,

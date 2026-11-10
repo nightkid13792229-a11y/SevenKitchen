@@ -70,7 +70,8 @@ export interface ListSkuCandidate {
 }
 
 export interface ListItemCandidate {
-  purchaseItemId: string;
+  /** 清单里的明细 id；补货草稿按全库匹配时为 null（保存时再建明细） */
+  purchaseItemId: string | null;
   ingredientId: string;
   ingredientName: string;
   skus: ListSkuCandidate[];

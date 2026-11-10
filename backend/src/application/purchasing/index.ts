@@ -5,4 +5,5 @@
 
 export * from './purchasing.service';
 export * from './reimbursement.service';
+export * from './replenishment.service';
 export * from './purchasing.service.tokens';

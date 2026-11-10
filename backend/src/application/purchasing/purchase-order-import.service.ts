@@ -48,6 +48,7 @@ import { PlatformOptionsService } from '../platform-options/platform-options.ser
 import { PURCHASE_CHANNEL_SET } from '../platform-options/option-sets.registry';
 import type {
   ListItemCandidate,
+  ListSkuCandidate,
   MatchedOrderLine,
   ParsedOrderDraft,
 } from './purchase-order-import.types';
@@ -1412,6 +1413,11 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
       },
     });
 
+    // 补货草稿没有明细：按全库原料 + 启用商品匹配（2026-11-10）。
+    if (items.length === 0) {
+      return this.buildCatalogCandidates();
+    }
+
     const ingredientIds = Array.from(
       new Set(items.map((item) => item.ingredientId)),
     );
@@ -1442,20 +1448,70 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
         ingredientName: item.ingredientName,
         skus: skus
           .filter((sku) => sku.ingredientId === item.ingredientId)
-          .map((sku) => ({
-            id: sku.id,
-            name: sku.name,
-            productModel: sku.productModel,
-            purchaseChannel: sku.purchaseChannel,
-            purchaseToBaseRatio: sku.purchaseToBaseRatio
-              ? Number(sku.purchaseToBaseRatio)
-              : null,
-            purchaseUnit: sku.purchaseUnit,
-            previousNames: previousNames.get(sku.id) ?? [],
-          })),
+          .map((sku) => this.mapSkuCandidate(sku, previousNames)),
       });
     }
     return Array.from(byIngredient.values());
+  }
+
+  /**
+   * 补货没有计划清单，匹配候选就是全库原料 + 各自启用中的采购商品。
+   * `purchaseItemId` 为 null：明细在保存时才创建。
+   */
+  private async buildCatalogCandidates(): Promise<ListItemCandidate[]> {
+    const ingredients = await this.prisma.ingredient.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    if (ingredients.length === 0) {
+      return [];
+    }
+
+    const skus = await this.prisma.procurementSku.findMany({
+      where: {
+        ingredientId: { in: ingredients.map((ingredient) => ingredient.id) },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        ingredientId: true,
+        name: true,
+        productModel: true,
+        purchaseChannel: true,
+        purchaseToBaseRatio: true,
+        purchaseUnit: true,
+      },
+      orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }],
+    });
+    const previousNames = await this.loadPreviousSkuNames(
+      skus.map((sku) => sku.id),
+    );
+
+    return ingredients.map((ingredient) => ({
+      purchaseItemId: null,
+      ingredientId: ingredient.id,
+      ingredientName: ingredient.name,
+      skus: skus
+        .filter((sku) => sku.ingredientId === ingredient.id)
+        .map((sku) => this.mapSkuCandidate(sku, previousNames)),
+    }));
+  }
+
+  private mapSkuCandidate(
+    sku: any,
+    previousNames: Map<string, string[]>,
+  ): ListSkuCandidate {
+    return {
+      id: sku.id,
+      name: sku.name,
+      productModel: sku.productModel,
+      purchaseChannel: sku.purchaseChannel,
+      purchaseToBaseRatio: sku.purchaseToBaseRatio
+        ? Number(sku.purchaseToBaseRatio)
+        : null,
+      purchaseUnit: sku.purchaseUnit,
+      previousNames: previousNames.get(sku.id) ?? [],
+    };
   }
 
   /** 每个商品最近改过什么名字（最多留 5 个，够匹配用） */

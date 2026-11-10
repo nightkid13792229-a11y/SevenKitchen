@@ -182,6 +182,50 @@ describe('PurchaseOrderImportService', () => {
     expect(result.summary.matchedAmount).toBe(2.99);
   });
 
+  it('rejects an order-list screenshot', async () => {
+    model.callDeepSeekJson.mockResolvedValue({
+      channel: '盒马鲜生',
+      pageType: 'order_list',
+      items: [
+        { name: '生菜', qty: 1, unit: '份', unitPrice: 2.99, lineTotal: 2.99 },
+      ],
+      subtotal: 2.99,
+      paid: 2.99,
+    });
+
+    await expect(
+      service.importFromScreenshots({
+        purchaseListId: 'list-1',
+        userId: 'user-1',
+        imageUrls: ['https://img.example.com/list.jpg'],
+      }),
+    ).rejects.toThrow('这是订单列表页');
+  });
+
+  it('persists page type and expected delivery', async () => {
+    model.callDeepSeekJson.mockResolvedValue({
+      channel: '盒马鲜生',
+      pageType: 'order_detail',
+      expectedDeliveryAt: '2026-11-10',
+      deliveredAt: '2026-11-09 11:33',
+      items: [
+        { name: '生菜', qty: 1, unit: '份', unitPrice: 2.99, lineTotal: 2.99 },
+      ],
+      subtotal: 2.99,
+      paid: 2.99,
+    });
+
+    const [result] = await service.importFromScreenshots({
+      purchaseListId: 'list-1',
+      userId: 'user-1',
+      imageUrls: ['https://img.example.com/detail.jpg'],
+    });
+
+    expect(result.pageType).toBe('order_detail');
+    expect(result.expectedDeliveryAt).toBeInstanceOf(Date);
+    expect(result.deliveredAt).toBeInstanceOf(Date);
+  });
+
   it('没匹配到原料的行先标成个人采购，不再堵住生成（员工要报销会自己改回来）', async () => {
     model.callDeepSeekJson.mockResolvedValue({
       channel: '盒马鲜生',

@@ -5828,6 +5828,10 @@ model PurchaseOrderImport {
   channel          String?                   @db.VarChar(30)
   orderNo          String?                   @map("order_no") @db.VarChar(40)
   orderTime        DateTime?                 @map("order_time")
+  /// 补货改版：页面类型 / 预计到货 / 已送达（截图能读到时）
+  pageType         String?                   @map("page_type") @db.VarChar(20)
+  expectedDeliveryAt DateTime?               @map("expected_delivery_at")
+  deliveredAt      DateTime?                 @map("delivered_at")
   subtotal         Decimal?                  @db.Decimal(10, 2)
   shippingFee      Decimal?                  @map("shipping_fee") @db.Decimal(10, 2)
   packagingFee     Decimal?                  @map("packaging_fee") @db.Decimal(10, 2)

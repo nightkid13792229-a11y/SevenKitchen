@@ -37,6 +37,10 @@ export interface ParsedOrderDraft {
   channel: OrderChannel | null;
   orderNo: string | null;
   orderTime: string | null;
+  /** order_detail / product_detail / order_list / unknown */
+  pageType: string | null;
+  expectedDeliveryAt: string | null;
+  deliveredAt: string | null;
   items: ParsedOrderLine[];
   subtotal: number | null;
   shippingFee: number | null;

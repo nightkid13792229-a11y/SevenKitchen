@@ -113,6 +113,41 @@ describe('parseOrderDraft', () => {
     expect(parseDraft({ ...raw, channel: '楼下小卖部' }).channel).toBeNull();
     expect(parseDraft({ ...raw, channel: null }).channel).toBeNull();
   });
+
+  it('parses page type and delivery dates', () => {
+    const draft = parseDraft({
+      ...raw,
+      pageType: 'order_detail',
+      expectedDeliveryAt: '2026-11-10',
+      deliveredAt: '2026-11-09 11:33',
+    });
+
+    expect(draft.pageType).toBe('order_detail');
+    expect(draft.expectedDeliveryAt).toBe('2026-11-10');
+    expect(draft.deliveredAt).toBe('2026-11-09 11:33');
+  });
+
+  it('keeps weight units as-is', () => {
+    const draft = parseDraft({
+      ...raw,
+      items: [
+        {
+          name: '新鲜羊心 3斤',
+          spec: '3斤',
+          qty: 3,
+          unit: '斤',
+          unitPrice: 12.46,
+          lineTotal: 37.39,
+        },
+      ],
+      subtotal: 37.39,
+      paid: 37.39,
+    });
+
+    expect(draft.items[0].unit).toBe('斤');
+    expect(draft.items[0].qty).toBe(3);
+    expect(draft.items[0].lineTotal).toBe(37.39);
+  });
 });
 
 describe('matchOrderLines', () => {

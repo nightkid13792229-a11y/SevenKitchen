@@ -154,7 +154,10 @@ export class PurchaseOrderImportService {
   "channel": "从下面的渠道清单里选一个；如果截图上看不出、或者明显不在清单里，给 null",
   "orderNo": "字符串或null",
   "orderTime": "YYYY-MM-DD HH:mm 或null",
-  "items": [{"name":"商品名原文","spec":"规格原文或null","qty":数字或null,"unit":"盒/袋/份/瓶或null","unitPrice":数字或null,"lineTotal":数字或null}],
+  "pageType": "order_detail / product_detail / order_list / unknown",
+  "expectedDeliveryAt": "YYYY-MM-DD 或 YYYY-MM-DD HH:mm，或null（预计送达、送达日期）",
+  "deliveredAt": "YYYY-MM-DD HH:mm 或null（截图明确显示已送达/已签收时）",
+  "items": [{"name":"商品名原文","spec":"规格原文或null","qty":数字或null,"unit":"盒/袋/份/瓶/斤/公斤/克/两或null","unitPrice":数字或null,"lineTotal":数字或null}],
   "subtotal": 数字或null,
   "shippingFee": 数字或null,
   "packagingFee": 数字或null,
@@ -177,7 +180,11 @@ ${list}
 6. 金额一律输出数字（元），不要带 ¥ 符号、不要千分位。
 7. 读不到的字段一律给 null，绝不编造。不要输出姓名、电话、地址。
 8. 图上的「称重退差价」只是标签，不代表真的发生退款；只有出现「补差退款 X 元」这种带金额的文字，才把 weightAdjustment.exists 置为 true。
-9. 渠道只凭截图上的店名/App 界面判断。认不出就给 null，绝对不要写「其他」「未知」或自己编一个店名 —— 员工会自己确认。`;
+9. 渠道只凭截图上的店名/App 界面判断。认不出就给 null，绝对不要写「其他」「未知」或自己编一个店名 —— 员工会自己确认。
+10. pageType 只凭页面判断：单个订单的详情页 = order_detail；商品详情页 = product_detail；「我的订单」列表（一屏里有多笔订单）= order_list；拿不准 = unknown。
+11. 预计送达/签收：淘宝「预计今天送达」、盒马/沃尔玛的「送达时间/签收时间」、iHerb 的「送达日期」。读到才填；读不到给 null，不要推算。
+12. 按重量买的（斤/公斤/克/两/kg/g）unit 原样输出，不要把斤换算成件；规格照抄原文。
+13. iHerb/淘宝字段名：iHerb「小计/运费/关税及税项/订单总额」；淘宝「商品总价/店铺优惠/实付款」。支付方式为「先用后付」时，实付看「实付价/实付款」，不要因为「实付款¥0」就填 0。`;
   }
 
   /**
@@ -324,6 +331,13 @@ ${list}
                 orderNo: item.draft.orderNo,
                 orderTime: item.draft.orderTime
                   ? parseOrderTime(item.draft.orderTime)
+                  : null,
+                pageType: item.draft.pageType,
+                expectedDeliveryAt: item.draft.expectedDeliveryAt
+                  ? parseDateOnlyOrTime(item.draft.expectedDeliveryAt)
+                  : null,
+                deliveredAt: item.draft.deliveredAt
+                  ? parseDateOnlyOrTime(item.draft.deliveredAt)
                   : null,
                 subtotal: item.draft.subtotal,
                 shippingFee: item.draft.shippingFee,
@@ -1379,6 +1393,16 @@ ${list}
     });
 
     const draft = parseOrderDraft(raw, channels);
+    if (draft.pageType === 'order_list') {
+      throw new BadRequestException(
+        '这是订单列表页，请打开单个订单、进入订单详情后再截图',
+      );
+    }
+    if (draft.pageType === 'product_detail') {
+      throw new BadRequestException(
+        '这是商品详情页，请上传订单详情截图（商品详情页只用于新建采购商品）',
+      );
+    }
     if (draft.items.length === 0) {
       throw new BadRequestException(
         '这张图里没读出商品，请确认是订单详情截图后重试',
@@ -1804,6 +1828,9 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
         typeof rawDraft.channel === 'string' ? rawDraft.channel : null,
       orderNo: row.orderNo,
       orderTime: row.orderTime,
+      pageType: row.pageType ?? null,
+      expectedDeliveryAt: row.expectedDeliveryAt ?? null,
+      deliveredAt: row.deliveredAt ?? null,
       subtotal: numOrNull(row.subtotal),
       shippingFee: numOrNull(row.shippingFee),
       packagingFee: numOrNull(row.packagingFee),
@@ -1904,6 +1931,16 @@ function parseOrderTime(value: string): Date | null {
     : normalized;
   const parsed = new Date(withSeconds.replace(' ', 'T') + '+08:00');
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/** 到货相关日期可能只有年月日，也可能带时间。 */
+function parseDateOnlyOrTime(value: string): Date | null {
+  const normalized = value.trim().replace(/\//g, '-');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    const parsed = new Date(`${normalized}T12:00:00+08:00`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return parseOrderTime(normalized);
 }
 
 function summarizeLines(

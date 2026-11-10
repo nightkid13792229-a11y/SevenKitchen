@@ -79,7 +79,11 @@
         </view>
       </view>
 
-      <view class="fee-grid">
+      <view v-if="selectedOnlyReplenishment" class="notice-strip">
+        <text>补货记录的费用已经包含在订单实付里，不用再填运费和包装费。</text>
+      </view>
+
+      <view v-else class="fee-grid">
         <view class="field">
           <text class="field-label">采购相关运费</text>
           <view class="money-input">
@@ -439,6 +443,15 @@ const selectedPurchaseLists = computed(() => {
   return completedPurchaseLists.value.filter((list) => selected.has(list.id));
 });
 
+/** 只选了补货记录：费用已经包含在实付里，不再让员工重复填运费/包装费。 */
+const selectedOnlyReplenishment = computed(
+  () =>
+    selectedPurchaseLists.value.length > 0 &&
+    selectedPurchaseLists.value.every(
+      (list: any) => list.kind !== 'ORDER_DEMAND',
+    ),
+);
+
 const filteredPurchaseLists = computed(() => {
   return completedPurchaseLists.value.filter((list) => {
     if (activePurchaseFilter.value === 'ALL') return true;
@@ -507,8 +520,12 @@ const totalAmount = computed(() => {
   return calculateReimbursementTotal({
     purchaseLists: completedPurchaseLists.value,
     selectedListIds: selectedListIds.value,
-    platformShippingFee: platformShippingFee.value,
-    platformPackagingFee: platformPackagingFee.value,
+    platformShippingFee: selectedOnlyReplenishment.value
+      ? 0
+      : platformShippingFee.value,
+    platformPackagingFee: selectedOnlyReplenishment.value
+      ? 0
+      : platformPackagingFee.value,
     customFees: [],
   });
 });
@@ -870,7 +887,13 @@ const getPurchaseItems = (list: any) => {
 };
 
 const getPurchaseListAmount = (list: any) => {
-  const amount = Number(list?.totalActualCost ?? list?.totalEstimatedCost ?? 0);
+  const amount = Number(
+    list?.kind === 'STOCK_REPLENISHMENT' &&
+      list?.reimbursementAmount !== null &&
+      list?.reimbursementAmount !== undefined
+      ? list.reimbursementAmount
+      : list?.totalActualCost ?? list?.totalEstimatedCost ?? 0,
+  );
   return Number.isFinite(amount) ? amount : 0;
 };
 
@@ -1022,8 +1045,12 @@ const submitReimbursement = async () => {
                 ? `含个人采购 ¥${personalAmount.value.toFixed(2)}`
                 : undefined,
             totalActualCost: totalAmount.value,
-            platformShippingFee: shippingFeeAmount.value,
-            platformPackagingFee: packagingFeeAmount.value,
+            platformShippingFee: selectedOnlyReplenishment.value
+              ? 0
+              : shippingFeeAmount.value,
+            platformPackagingFee: selectedOnlyReplenishment.value
+              ? 0
+              : packagingFeeAmount.value,
             customFees: [],
           };
 

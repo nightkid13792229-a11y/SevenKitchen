@@ -26,6 +26,26 @@ describe('reimbursement form state', () => {
     expect(total).toBe(466);
   });
 
+  it('uses the replenishment reimbursement amount instead of the record sum', () => {
+    const total = calculateReimbursementTotal({
+      purchaseLists: [
+        {
+          id: 'rec-1',
+          kind: 'STOCK_REPLENISHMENT',
+          totalActualCost: 100,
+          reimbursementAmount: 113.03,
+        },
+        { id: 'daily-1', kind: 'ORDER_DEMAND', totalActualCost: 50 },
+      ],
+      selectedListIds: ['rec-1', 'daily-1'],
+      platformShippingFee: 0,
+      platformPackagingFee: 0,
+      customFees: [],
+    });
+
+    expect(total).toBe(163.03);
+  });
+
   it('drops blank operating rows and normalizes valid fees', () => {
     const result = normalizeOperatingExpenseFees([
       { category: 'RENT', description: '', amount: '200' },

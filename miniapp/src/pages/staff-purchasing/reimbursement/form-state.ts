@@ -23,6 +23,8 @@ export interface ReimbursementPurchaseListLike {
   kind?: string | null;
   totalActualCost?: number | string | null;
   totalEstimatedCost?: number | string | null;
+  /** 补货记录：实付 − 个人商品；有值时优先用它 */
+  reimbursementAmount?: number | string | null;
   items?: Array<{ type?: string | null }>;
 }
 
@@ -136,12 +138,13 @@ export const calculateReimbursementTotal = (params: {
   const purchaseListsTotal = (params.purchaseLists || [])
     .filter((list) => selectedIds.has(list.id))
     .reduce((sum, list) => {
-      return (
-        sum +
-        toAmount(
-          list.totalActualCost ?? list.totalEstimatedCost,
-        )
-      );
+      const amount =
+        list.kind === 'STOCK_REPLENISHMENT' &&
+        list.reimbursementAmount !== null &&
+        list.reimbursementAmount !== undefined
+          ? list.reimbursementAmount
+          : list.totalActualCost ?? list.totalEstimatedCost;
+      return sum + toAmount(amount);
     }, 0);
   const customFeesResult = normalizeOperatingExpenseFees(params.customFees);
   const customFeesTotal = customFeesResult.ok

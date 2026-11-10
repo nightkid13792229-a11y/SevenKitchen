@@ -212,7 +212,17 @@ export class ReplenishmentService {
     list.orderNo = importRow.orderNo ?? null;
     list.channel = importRow.channel ?? null;
     list.orderPlacedAt = importRow.orderTime ?? null;
-    list.expectedDeliveryAt = this.parseOptionalDate(dto.expectedDeliveryAt);
+    const deliveredAt = importRow.deliveredAt
+      ? new Date(importRow.deliveredAt)
+      : null;
+    const validDeliveredAt =
+      deliveredAt && !Number.isNaN(deliveredAt.getTime())
+        ? deliveredAt
+        : null;
+    list.expectedDeliveryAt =
+      this.parseOptionalDate(dto.expectedDeliveryAt) ??
+      importRow.expectedDeliveryAt ??
+      this.defaultExpectedDeliveryAt(list.channel, list.orderPlacedAt);
     list.subtotalAmount = round2(Number(subtotalAmount));
     list.shippingFee = round2(shippingFee);
     list.packagingFee = round2(packagingFee);
@@ -232,6 +242,14 @@ export class ReplenishmentService {
     list.completedAt = new Date();
     list.isDraft = false;
     list.updatedAt = new Date();
+
+    // 截图已经显示「已送达/已签收」：保存时直接算到货并入库，省掉一次点击。
+    if (validDeliveredAt) {
+      const records =
+        await this.purchaseRecordRepository.findByPurchaseListId(listId);
+      await this.inventoryService.inboundFromPurchaseRecords(records);
+      list.arrivedAt = validDeliveredAt;
+    }
 
     return this.purchaseListRepository.save(list);
   }
@@ -405,6 +423,26 @@ export class ReplenishmentService {
     if (role !== 'ADMIN' && list.createdById !== userId) {
       throw new ForbiddenException('只能操作自己创建的补货记录');
     }
+  }
+
+  private defaultExpectedDeliveryAt(
+    channel: string | null,
+    orderPlacedAt: Date | null,
+  ): Date | null {
+    if (!orderPlacedAt) {
+      return null;
+    }
+    const text = String(channel ?? '');
+    const days = /盒马|沃尔玛|山姆/.test(text)
+      ? 1
+      : /淘宝|天猫/.test(text)
+        ? 3
+        : /iherb|跨境/i.test(text)
+          ? 14
+          : 3;
+    const date = new Date(orderPlacedAt);
+    date.setDate(date.getDate() + days);
+    return date;
   }
 
   private async createItemForLine(

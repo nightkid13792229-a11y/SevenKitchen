@@ -258,6 +258,49 @@ describe('ReplenishmentService · 保存', () => {
     expect(saved.itemCount).toBe(1);
   });
 
+  it('marks a delivered screenshot as arrived and inbounds on save', async () => {
+    const draft = createDraft();
+    const importRow = createImport([
+      {
+        id: 'line-1',
+        rawName: '青花鱼',
+        qty: 1,
+        unit: '袋',
+        lineTotal: 26.99,
+        isPersonal: false,
+        ingredientId: 'ing-1',
+        procurementSkuId: 'sku-1',
+        purchaseItemId: 'item-1',
+      },
+    ]);
+    importRow.subtotal = 26.99;
+    importRow.packagingFee = 0;
+    importRow.paid = 26.99;
+    importRow.deliveredAt = new Date('2026-11-09T11:33:00+08:00');
+    const { service, inventory } = createService({
+      draft,
+      importRow,
+      itemRows: [
+        {
+          id: 'item-1',
+          purchaseListId: 'draft-1',
+          ingredientId: 'ing-1',
+          procurementSkuId: 'sku-1',
+          ingredientName: '青花鱼',
+          type: 'FOOD',
+          quantityNeeded: 1,
+          quantityUnit: '袋',
+          estimatedCost: 26.99,
+        },
+      ],
+    });
+
+    const saved = await service.saveRecord('draft-1', {}, 'user-1');
+
+    expect(saved.arrivedAt).toBeInstanceOf(Date);
+    expect(inventory.inboundFromPurchaseRecords).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects a record without a paid amount', async () => {
     const draft = createDraft();
     const importRow = createImport([

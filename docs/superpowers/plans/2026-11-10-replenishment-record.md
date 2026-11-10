@@ -10,6 +10,18 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-10-replenishment-record-design.md`
 
+## 执行状态（2026-11-10）
+
+- **已完成并提交**：Task 1～11。Task 12 的回归执行如下。
+- **后端**：`purchasing + inventory + domain` 302 条通过；`prisma validate` 通过；改动文件 `tsc --noEmit` 无新增错误。
+- **小程序**：补货页、详情、核对、报销相关 102 条通过；1 条既有红灯（报销提交页文案，非本改动）。
+- **构建**：`miniapp npm run build:mp-weixin`、`admin-web npm run build` 均通过。
+- **未做/已知缺口**：
+  - 保存后编辑明细（详情页目前只读到货/作废/报销；设计 §6.2 的「未报销可编辑行」未实现）。
+  - 撤销到货（已到货后改数量；当前只能作废在途记录）。
+  - 同一订单多张截图合并（当前一次一笔订单；设计允许 1～5 张但前端按单张走）。
+  - 开发者工具真机冒烟（需要登录态，本会话未做）。
+
 ## Global Constraints
 
 - 补货不建计划单、不列购物清单；没有「开始采购 / 确认完成」。

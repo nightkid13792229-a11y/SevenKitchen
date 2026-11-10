@@ -52,7 +52,10 @@ import type {
   MatchedOrderLine,
   ParsedOrderDraft,
 } from './purchase-order-import.types';
-import { WEIGHT_UNIT_TO_BASE_RATIO } from './purchase-order-weight-units';
+import {
+  WEIGHT_UNIT_TO_BASE_RATIO,
+  isWeightUnit,
+} from './purchase-order-weight-units';
 
 /** 与商品截图识别共用「采购报销 Agent」配置；未单独配置时回退全局默认 */
 export const PURCHASE_ORDER_IMPORT_PURPOSE =
@@ -249,24 +252,43 @@ ${list}
 
       // 补货草稿是一张图一条记录：重复图要按「上传人 + 指纹」跨草稿拦，
       // 否则同一张订单截图会被记成两笔。日采仍按清单维度去重（跨清单允许重复）。
-      const duplicated = await this.prisma.purchaseOrderImport.findFirst({
-        where: targetList.isDraft
-          ? {
-              uploadedById: input.userId,
-              imageHash,
-              status: { not: 'DISCARDED' },
-            }
-          : {
-              purchaseListId: input.purchaseListId,
-              imageHash,
-              status: { not: 'DISCARDED' },
-            },
-        select: { id: true },
-      });
-      if (duplicated) {
-        throw new BadRequestException(
-          '这张截图已经导入过，请勿重复上传（可在识别记录里放弃后重试）',
-        );
+      if (targetList.isDraft) {
+        const duplicated = await this.prisma.purchaseOrderImport.findFirst({
+          where: {
+            uploadedById: input.userId,
+            imageHash,
+            status: { not: 'DISCARDED' },
+          },
+          include: { purchaseList: { select: { isDraft: true } } },
+        });
+        if (duplicated) {
+          // 上一次识别到一半放弃的草稿：把旧导入作废，让这张图可以重来，
+          // 不能因为一个废弃草稿把员工永久挡在门外（2026-11-10 审核 I2）。
+          if (duplicated.status === 'DRAFT' && duplicated.purchaseList?.isDraft) {
+            await this.prisma.purchaseOrderImport.update({
+              where: { id: duplicated.id },
+              data: { status: 'DISCARDED' },
+            });
+          } else {
+            throw new BadRequestException(
+              '这张截图已经导入过，请勿重复上传（可在识别记录里放弃后重试）',
+            );
+          }
+        }
+      } else {
+        const duplicated = await this.prisma.purchaseOrderImport.findFirst({
+          where: {
+            purchaseListId: input.purchaseListId,
+            imageHash,
+            status: { not: 'DISCARDED' },
+          },
+          select: { id: true },
+        });
+        if (duplicated) {
+          throw new BadRequestException(
+            '这张截图已经导入过，请勿重复上传（可在识别记录里放弃后重试）',
+          );
+        }
       }
 
       const { draft, raw, model } = await this.recognize(buffer, url, channels);
@@ -406,6 +428,7 @@ ${list}
       orderTime?: string | null;
       shippingFee?: number | null;
       packagingFee?: number | null;
+      paid?: number | null;
     },
   ): Promise<any> {
     const current = await this.prisma.purchaseOrderImport.findUnique({
@@ -442,6 +465,9 @@ ${list}
     }
     if (dto.packagingFee !== undefined) {
       data.packagingFee = normalizeFee(dto.packagingFee, '包装费');
+    }
+    if (dto.paid !== undefined) {
+      data.paid = normalizeFee(dto.paid, '实付');
     }
 
     const updated = await this.prisma.purchaseOrderImport.update({
@@ -871,10 +897,10 @@ ${list}
             }
 
             const lineUnit = (line.unit ?? '').trim();
-            const weightBaseRatio =
-              lineUnit && !line.procurementSkuId
-                ? WEIGHT_UNIT_TO_BASE_RATIO[lineUnit.toLowerCase()]
-                : undefined;
+            // 按重量买的一律按重量记，不要求/不使用采购商品。
+            const weightBaseRatio = lineUnit
+              ? WEIGHT_UNIT_TO_BASE_RATIO[lineUnit.toLowerCase()]
+              : undefined;
 
             // 补货改版：按斤/公斤/克/两买的，不强制采购商品，直接按重量记。
             if (weightBaseRatio !== undefined) {
@@ -1876,13 +1902,16 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
 
   private toLineView(line: any, rawItem?: any): any {
     const ingredientId = line.ingredientId ?? null;
+    const weightUnit = isWeightUnit(line.unit);
     const state = line.isPersonal
       ? 'PERSONAL'
       : !ingredientId
         ? 'UNMATCHED'
-        : !line.procurementSkuId
-          ? 'NEEDS_SKU'
-          : 'MATCHED';
+        : weightUnit
+          ? 'MATCHED'
+          : !line.procurementSkuId
+            ? 'NEEDS_SKU'
+            : 'MATCHED';
     return {
       id: line.id,
       lineNo: line.lineNo,
@@ -1895,7 +1924,7 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
       // 模型当时读到的金额，用于「和原图对照」；员工改过之后 lineTotal 会变。
       aiLineTotal: numOrNull(rawItem?.lineTotal ?? rawItem?.total),
       ingredientId,
-      procurementSkuId: line.procurementSkuId ?? null,
+      procurementSkuId: weightUnit ? null : (line.procurementSkuId ?? null),
       isPersonal: line.isPersonal,
       editedByUser: line.editedByUser,
       confidence: line.matchConfidence ?? 'LOW',

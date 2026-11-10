@@ -205,6 +205,36 @@ describe('ReimbursementService', () => {
     expect(result.calculatedTotal).toBe(113.03);
   });
 
+  it('rejects a voided replenishment record', async () => {
+    const list = new PurchaseList({
+      id: 'rec-1',
+      targetDate: new Date('2026-11-10T12:00:00'),
+      kind: PurchaseListKind.STOCK_REPLENISHMENT,
+      status: PurchaseListStatus.COMPLETED,
+      totalEstimatedCost: 100,
+      itemCount: 0,
+      createdById: 'user-1',
+      sourceOrderIds: [],
+      isDraft: true,
+    });
+    list.isDraft = false;
+    list.voidedAt = new Date('2026-11-10T13:00:00');
+    list.reimbursementAmount = 113.03;
+    mockPurchaseListRepository.findById.mockResolvedValue(list);
+
+    await expect(
+      (service as any).prepareReimbursementSubmission({
+        purchaseListIds: ['rec-1'],
+        totalActualCost: 113.03,
+        platformShippingFee: 0,
+        platformPackagingFee: 0,
+        receiptUrls: ['https://example.com/receipt-1.jpg'],
+        receiptKeys: [],
+        customFees: [],
+      }),
+    ).rejects.toThrow('已作废');
+  });
+
   it('unlocks purchase lists when a claim is rejected', async () => {
     mockReimbursementRepository.findById.mockResolvedValue(
       createPendingReviewReimbursement(),

@@ -207,6 +207,9 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
             personalAmount: data.personalAmount ?? null,
             reimbursementAmount: data.reimbursementAmount ?? null,
             voidedAt: data.voidedAt ?? null,
+            voidedById: data.voidedById ?? null,
+            updatedById: data.updatedById ?? null,
+            arrivedById: data.arrivedById ?? null,
             updatedAt: data.updatedAt,
           },
         });
@@ -279,6 +282,9 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
             personalAmount: data.personalAmount ?? null,
             reimbursementAmount: data.reimbursementAmount ?? null,
             voidedAt: data.voidedAt ?? null,
+            voidedById: data.voidedById ?? null,
+            updatedById: data.updatedById ?? null,
+            arrivedById: data.arrivedById ?? null,
             items: {
               create: data.items,
             },
@@ -352,6 +358,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
   ): Promise<PurchaseList[]> {
     const lists = await this.findManyWithFallback({
       where: {
+        isDraft: false,
         targetDate: {
           gte: startDate,
           lt: endDate,
@@ -408,7 +415,8 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       excludeReimbursed,
     } = params;
 
-    const where: any = {};
+    // 识别阶段的草稿对用户不可见；只在补货页的草稿流程里按 id 读取。
+    const where: any = { isDraft: false };
     if (kind) where.kind = kind;
     if (status) where.status = status;
     if (createdById) where.createdById = createdById;

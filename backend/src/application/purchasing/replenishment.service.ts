@@ -255,6 +255,7 @@ export class ReplenishmentService {
     list.completedAt = new Date();
     list.isDraft = false;
     list.updatedAt = new Date();
+    list.updatedById = userId;
 
     // 截图已经显示「已送达/已签收」：保存时直接算到货并入库，省掉一次点击。
     if (validDeliveredAt) {
@@ -295,6 +296,8 @@ export class ReplenishmentService {
       await this.inventoryService.inboundFromPurchaseRecords(records);
 
     list.arrivedAt = new Date();
+    list.arrivedById = userId;
+    list.updatedById = userId;
     list.updatedAt = new Date();
     await this.purchaseListRepository.save(list);
 
@@ -395,8 +398,20 @@ export class ReplenishmentService {
       (item as any).estimatedCost = amount;
     }
 
+    // repository.save 会按 list.items 重新 upsert 明细；
+    // 必须用刚写进库的值刷新，否则会把旧数量/旧单价盖回去（2026-11-10 审核 C2）。
+    const refreshedItems = await this.prisma.purchaseItem.findMany({
+      where: { purchaseListId: listId },
+      orderBy: { createdAt: 'asc' },
+    });
+    list.items = refreshedItems.map((row) => PurchaseItem.fromPrisma(row));
+    list.itemCount = list.items.length;
+
     const itemTotal = round2(
-      items.reduce((sum, item) => sum + Number(item.estimatedCost ?? 0), 0),
+      refreshedItems.reduce(
+        (sum, item) => sum + Number(item.estimatedCost ?? 0),
+        0,
+      ),
     );
     const paidAmount = round2(
       dto.paidAmount ?? Number(list.paidAmount ?? 0),
@@ -429,6 +444,7 @@ export class ReplenishmentService {
     );
     list.reimbursementAmount = reimbursementAmount;
     list.totalEstimatedCost = itemTotal;
+    list.updatedById = userId;
     list.updatedAt = new Date();
 
     return this.purchaseListRepository.save(list);
@@ -485,6 +501,7 @@ export class ReplenishmentService {
       records,
     );
     list.arrivedAt = null;
+    list.updatedById = userId;
     list.updatedAt = new Date();
     return this.purchaseListRepository.save(list);
   }
@@ -514,6 +531,8 @@ export class ReplenishmentService {
     }
 
     list.voidedAt = new Date();
+    list.voidedById = userId;
+    list.updatedById = userId;
     list.updatedAt = new Date();
     return this.purchaseListRepository.save(list);
   }
@@ -532,6 +551,8 @@ export class ReplenishmentService {
     const where: any = {
       kind: 'STOCK_REPLENISHMENT',
       isDraft: false,
+      // 老的计划式补货单没有实付金额；新记录一定有，用它把两代数据分开。
+      paidAmount: { not: null },
     };
     if (!params.includeVoided) {
       where.voidedAt = null;
@@ -660,100 +681,101 @@ export class ReplenishmentService {
       throw new BadRequestException(`「${line.rawName}」没有金额，不能保存`);
     }
 
-    if (line.procurementSkuId) {
-      const sku = await this.prisma.procurementSku.findUnique({
-        where: { id: line.procurementSkuId },
+    // 按重量买的一律走重量行：即使截图行误挂了商品，也不按商品净含量折算。
+    const weightRatio = WEIGHT_UNIT_TO_BASE_RATIO[unit.toLowerCase()];
+    if (weightRatio !== undefined) {
+      const ingredient = await this.prisma.ingredient.findUnique({
+        where: { id: line.ingredientId },
         select: {
           id: true,
           name: true,
-          productModel: true,
+          type: true,
+          baseUnit: true,
+          unitDisplayLabel: true,
           purchaseChannel: true,
-          purchaseUnit: true,
-          ingredient: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-              baseUnit: true,
-              unitDisplayLabel: true,
-              purchaseChannel: true,
-            },
-          },
         },
       });
-      if (!sku) {
+      if (!ingredient) {
         throw new BadRequestException(
-          `「${line.rawName}」的采购商品不存在，请重新选择`,
+          `「${line.rawName}」的原料不存在，请重新选择`,
+        );
+      }
+      if (ingredient.baseUnit !== 'G') {
+        throw new BadRequestException(
+          `「${line.rawName}」按重量只支持基准单位为克的原料，请改用商品净含量`,
         );
       }
 
       return this.prisma.purchaseItem.create({
         data: {
           purchaseListId: listId,
-          ingredientId: sku.ingredient.id,
-          procurementSkuId: sku.id,
-          procurementSkuName: sku.name,
-          ingredientName: sku.ingredient.name,
-          type: sku.ingredient.type,
+          ingredientId: ingredient.id,
+          procurementSkuId: null,
+          procurementSkuName: null,
+          ingredientName: ingredient.name,
+          type: ingredient.type,
           quantityNeeded: quantity,
-          quantityUnit:
-            unit || sku.purchaseUnit || sku.ingredient.baseUnit,
+          quantityUnit: unit,
           estimatedCost: amount,
-          purchaseChannel:
-            channel ?? sku.purchaseChannel ?? sku.ingredient.purchaseChannel,
-          productModel: line.spec ?? sku.productModel,
+          purchaseChannel: channel ?? ingredient.purchaseChannel,
+          productModel: line.spec ?? null,
           displayUnit:
-            unit ||
-            sku.purchaseUnit ||
-            sku.ingredient.unitDisplayLabel ||
-            sku.ingredient.baseUnit,
+            unit || ingredient.unitDisplayLabel || ingredient.baseUnit,
         },
       });
     }
 
-    const weightRatio = WEIGHT_UNIT_TO_BASE_RATIO[unit.toLowerCase()];
-    if (weightRatio === undefined) {
+    if (!line.procurementSkuId) {
       throw new BadRequestException(
         `「${line.rawName}」缺少采购商品，请先新建商品`,
       );
     }
 
-    const ingredient = await this.prisma.ingredient.findUnique({
-      where: { id: line.ingredientId },
+    const sku = await this.prisma.procurementSku.findUnique({
+      where: { id: line.procurementSkuId },
       select: {
         id: true,
         name: true,
-        type: true,
-        baseUnit: true,
-        unitDisplayLabel: true,
+        productModel: true,
         purchaseChannel: true,
+        purchaseUnit: true,
+        ingredient: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            baseUnit: true,
+            unitDisplayLabel: true,
+            purchaseChannel: true,
+          },
+        },
       },
     });
-    if (!ingredient) {
+    if (!sku) {
       throw new BadRequestException(
-        `「${line.rawName}」的原料不存在，请重新选择`,
-      );
-    }
-    if (ingredient.baseUnit !== 'G') {
-      throw new BadRequestException(
-        `「${line.rawName}」按重量只支持基准单位为克的原料，请改用商品净含量`,
+        `「${line.rawName}」的采购商品不存在，请重新选择`,
       );
     }
 
     return this.prisma.purchaseItem.create({
       data: {
         purchaseListId: listId,
-        ingredientId: ingredient.id,
-        procurementSkuId: null,
-        procurementSkuName: null,
-        ingredientName: ingredient.name,
-        type: ingredient.type,
+        ingredientId: sku.ingredient.id,
+        procurementSkuId: sku.id,
+        procurementSkuName: sku.name,
+        ingredientName: sku.ingredient.name,
+        type: sku.ingredient.type,
         quantityNeeded: quantity,
-        quantityUnit: unit,
+        quantityUnit: unit || sku.purchaseUnit || sku.ingredient.baseUnit,
         estimatedCost: amount,
-        purchaseChannel: channel ?? ingredient.purchaseChannel,
-        productModel: line.spec ?? null,
-        displayUnit: unit || ingredient.unitDisplayLabel || ingredient.baseUnit,
+        purchaseChannel:
+          channel ?? sku.purchaseChannel ?? sku.ingredient.purchaseChannel,
+        productModel: line.spec ?? sku.productModel,
+        displayUnit:
+          unit ||
+          sku.purchaseUnit ||
+          sku.ingredient.unitDisplayLabel ||
+          sku.ingredient.baseUnit,
       },
     });
   }

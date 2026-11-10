@@ -16,6 +16,7 @@ import {
 import { SearchGovernanceService } from 'src/application/search-governance/search-governance.service';
 import {
   PurchaseList,
+  PurchaseListKind,
   PurchaseListStatus,
 } from 'src/domain/purchasing';
 import { PurchaseItem } from 'src/domain/purchasing/purchase-item.entity';
@@ -2162,5 +2163,32 @@ describe('PurchasingService procurement sku separation', () => {
         procurementSkuHasStockLedger: true,
       }),
     );
+  });
+});
+
+describe('PurchasingService · 补货记录不走旧流程', () => {
+  it('rejects reopening a new replenishment record', async () => {
+    const list = new PurchaseList({
+      id: 'rec-1',
+      targetDate: new Date('2026-11-10T12:00:00'),
+      kind: PurchaseListKind.STOCK_REPLENISHMENT,
+      status: PurchaseListStatus.COMPLETED,
+      totalEstimatedCost: 113.03,
+      itemCount: 0,
+      createdById: 'user-1',
+      sourceOrderIds: [],
+      isDraft: true,
+      reimbursementAmount: 113.03,
+    });
+    list.isDraft = false;
+
+    const service: any = Object.create(PurchasingService.prototype);
+    service.purchaseListRepository = {
+      findById: jest.fn().mockResolvedValue(list),
+    };
+
+    await expect(
+      service.reopenPurchaseList('rec-1', 'user-1'),
+    ).rejects.toThrow('撤销到货');
   });
 });

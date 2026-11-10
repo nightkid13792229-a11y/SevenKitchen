@@ -56,6 +56,9 @@ export interface PurchaseListConstructor {
   personalAmount?: number | null;
   reimbursementAmount?: number | null;
   voidedAt?: Date | null;
+  voidedById?: string | null;
+  updatedById?: string | null;
+  arrivedById?: string | null;
   items?: PurchaseItem[];
   records?: any[]; // PurchaseRecord array for calculating aggregates
   recordsCount?: number; // Computed field: number of purchase records
@@ -96,6 +99,9 @@ export class PurchaseList {
   public personalAmount?: number | null;
   public reimbursementAmount?: number | null;
   public voidedAt?: Date | null;
+  public voidedById?: string | null;
+  public updatedById?: string | null;
+  public arrivedById?: string | null;
   public items: PurchaseItem[];
   public recordsCount?: number; // Computed field: number of purchase records
   public totalActualCost?: number; // Computed field: total actual cost from records
@@ -133,6 +139,9 @@ export class PurchaseList {
     this.personalAmount = data.personalAmount ?? null;
     this.reimbursementAmount = data.reimbursementAmount ?? null;
     this.voidedAt = data.voidedAt ?? null;
+    this.voidedById = data.voidedById ?? null;
+    this.updatedById = data.updatedById ?? null;
+    this.arrivedById = data.arrivedById ?? null;
     this.items = data.items || [];
     this.recordsCount = data.recordsCount;
     this.totalActualCost = data.totalActualCost;
@@ -297,6 +306,9 @@ export class PurchaseList {
       personalAmount: this.personalAmount,
       reimbursementAmount: this.reimbursementAmount,
       voidedAt: this.voidedAt,
+      voidedById: this.voidedById,
+      updatedById: this.updatedById,
+      arrivedById: this.arrivedById,
       items: this.items.map((item) => item.toPrisma()),
     };
   }
@@ -350,6 +362,9 @@ export class PurchaseList {
       personalAmount: toNullableNumber(data.personalAmount),
       reimbursementAmount: toNullableNumber(data.reimbursementAmount),
       voidedAt: data.voidedAt ?? null,
+      voidedById: data.voidedById ?? null,
+      updatedById: data.updatedById ?? null,
+      arrivedById: data.arrivedById ?? null,
       items,
       recordsCount,
       totalActualCost,

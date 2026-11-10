@@ -2510,6 +2510,10 @@ model PurchaseList {
   reimbursementAmount  Decimal?              @map("reimbursement_amount") @db.Decimal(10, 2)
   /// 补货记录：作废（取消/退款）
   voidedAt             DateTime?             @map("voided_at")
+  /// 补货记录：作废人 / 最后修改人 / 到货确认人（操作留痕）
+  voidedById           String?               @map("voided_by_id") @db.VarChar(36)
+  updatedById          String?               @map("updated_by_id") @db.VarChar(36)
+  arrivedById          String?               @map("arrived_by_id") @db.VarChar(36)
   orderDateSnapshot    Json?                 @map("order_date_snapshot")
   items                PurchaseItem[]
   inventoryAllocations InventoryAllocation[]

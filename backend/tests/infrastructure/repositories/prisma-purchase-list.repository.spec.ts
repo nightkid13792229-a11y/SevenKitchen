@@ -45,6 +45,7 @@ describe('PrismaPurchaseListRepository', () => {
     expect(mockPrismaService.purchaseList.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          isDraft: false,
           targetDate: {
             gte: startDate,
             lt: endDate,
@@ -54,6 +55,7 @@ describe('PrismaPurchaseListRepository', () => {
     );
     expect(mockPrismaService.purchaseList.count).toHaveBeenCalledWith({
       where: {
+        isDraft: false,
         targetDate: {
           gte: startDate,
           lt: endDate,

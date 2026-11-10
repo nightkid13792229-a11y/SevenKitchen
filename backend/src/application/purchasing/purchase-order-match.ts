@@ -528,7 +528,11 @@ export function matchOrderLines(
       ...line,
       ingredientId: hit.candidate.ingredientId,
       ingredientName: hit.candidate.ingredientName,
-      procurementSkuId: needsNewSku ? null : (sku?.id ?? null),
+      procurementSkuId: allowWeight
+        ? null
+        : needsNewSku
+          ? null
+          : (sku?.id ?? null),
       purchaseItemId: hit.candidate.purchaseItemId,
       confidence,
       reason,

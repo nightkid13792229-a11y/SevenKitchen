@@ -76,7 +76,29 @@ const createService = (list = createList()) => {
 
 describe('ReplenishmentService · 保存后改明细', () => {
   it('updates a weight line and recalculates the reimbursement amount', async () => {
-    const { service, prisma } = createService();
+    const { service, prisma, repository } = createService();
+    const updatedItem = {
+      id: 'item-1',
+      purchaseListId: 'rec-1',
+      ingredientId: 'ing-1',
+      ingredientName: '羊心',
+      quantityNeeded: 4,
+      quantityUnit: '斤',
+      estimatedCost: 49.84,
+    };
+    prisma.purchaseItem.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 'item-1',
+          purchaseListId: 'rec-1',
+          ingredientId: 'ing-1',
+          ingredientName: '羊心',
+          quantityNeeded: 3,
+          quantityUnit: '斤',
+          estimatedCost: 37.39,
+        },
+      ])
+      .mockResolvedValueOnce([updatedItem]);
 
     const saved = await service.updateRecord(
       'rec-1',
@@ -107,6 +129,10 @@ describe('ReplenishmentService · 保存后改明细', () => {
     });
     expect(saved.reimbursementAmount).toBe(49.84);
     expect(saved.paidAmount).toBe(49.84);
+    // repository.save 拿到的是刷新后的明细，不能把旧数量/旧单价盖回去。
+    const savedItems = repository.save.mock.calls[0][0].items;
+    expect(savedItems[0].quantityNeeded).toBe(4);
+    expect(savedItems[0].estimatedCost).toBe(49.84);
   });
 
   it('rejects editing an arrived record', async () => {

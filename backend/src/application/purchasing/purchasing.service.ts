@@ -4069,6 +4069,15 @@ export class PurchasingService {
       throw new BadRequestException(`未找到采购清单：${id}`);
     }
 
+    if (
+      purchaseList.kind === PurchaseListKind.STOCK_REPLENISHMENT &&
+      (purchaseList.isDraft || purchaseList.reimbursementAmount != null)
+    ) {
+      throw new BadRequestException(
+        '补货记录请用「已到货」确认入库，不要走采购清单的确认完成',
+      );
+    }
+
     // 验证操作时间（6:00-14:00）和目标日期
     // TODO: 测试期间临时注释时间限制
     // validatePurchasingOperation(purchaseList.targetDate, '确认采购完成');
@@ -4249,6 +4258,17 @@ export class PurchasingService {
       throw new BadRequestException('已关联报销单的采购清单不能撤回完成');
     }
 
+    // 补货改版的新记录有自己的「撤销到货」；不能走采购清单的撤回完成，
+    // 否则会绕过「未消耗」检查，库存可能变负（2026-11-10 审核 C4）。
+    if (
+      purchaseList.kind === PurchaseListKind.STOCK_REPLENISHMENT &&
+      purchaseList.reimbursementAmount != null
+    ) {
+      throw new BadRequestException(
+        '补货记录请用「撤销到货」，不要走采购清单的撤回完成',
+      );
+    }
+
     await this.prisma.$transaction(async (tx) => {
       const transition = await tx.purchaseList.updateMany({
         where: {
@@ -4298,6 +4318,13 @@ export class PurchasingService {
 
     if (!purchaseList) {
       throw new BadRequestException(`未找到采购清单：${id}`);
+    }
+
+    if (
+      purchaseList.kind === PurchaseListKind.STOCK_REPLENISHMENT &&
+      (purchaseList.isDraft || purchaseList.reimbursementAmount != null)
+    ) {
+      throw new BadRequestException('补货记录没有「开始采购」这一步');
     }
 
     // 验证操作时间（6:00-14:00）和目标日期

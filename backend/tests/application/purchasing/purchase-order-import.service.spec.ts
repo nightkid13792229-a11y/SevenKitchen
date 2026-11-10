@@ -286,7 +286,32 @@ describe('PurchaseOrderImportService', () => {
     ).rejects.toThrow('这张截图已经导入过');
   });
 
-  it('补货草稿：同一张图跨草稿也拒绝', async () => {
+  it('按重量的行即使没商品也算匹配', () => {
+    const view = (service as any).toLineView(
+      {
+        id: 'line-1',
+        lineNo: 1,
+        rawName: '新鲜羊心',
+        spec: '3斤',
+        qty: 3,
+        unit: '斤',
+        unitPrice: 12.46,
+        lineTotal: 37.39,
+        ingredientId: 'ing-1',
+        procurementSkuId: null,
+        isPersonal: false,
+        editedByUser: false,
+        matchConfidence: 'HIGH',
+        matchSource: 'MANUAL',
+      },
+      {},
+    );
+
+    expect(view.state).toBe('MATCHED');
+    expect(view.procurementSkuId).toBeNull();
+  });
+
+  it('补货草稿：跨草稿的重复图会被旧草稿导入替换', async () => {
     prisma.purchaseList.findUnique.mockResolvedValue({
       id: 'draft-1',
       status: 'PENDING',
@@ -295,16 +320,22 @@ describe('PurchaseOrderImportService', () => {
       reimbursementId: null,
       items: [],
     });
-    prisma.purchaseOrderImport.findFirst.mockResolvedValue({ id: 'old' });
+    prisma.purchaseOrderImport.findFirst.mockResolvedValue({
+      id: 'old',
+      status: 'DRAFT',
+      purchaseList: { isDraft: true },
+    });
 
-    await expect(
-      service.importFromScreenshots({
-        purchaseListId: 'draft-1',
-        userId: 'user-1',
-        imageUrls: ['https://img.example.com/same.jpg'],
-      }),
-    ).rejects.toThrow('已经导入过');
+    await service.importFromScreenshots({
+      purchaseListId: 'draft-1',
+      userId: 'user-1',
+      imageUrls: ['https://img.example.com/same.jpg'],
+    });
 
+    expect(prisma.purchaseOrderImport.update).toHaveBeenCalledWith({
+      where: { id: 'old' },
+      data: { status: 'DISCARDED' },
+    });
     expect(prisma.purchaseOrderImport.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ uploadedById: 'user-1' }),

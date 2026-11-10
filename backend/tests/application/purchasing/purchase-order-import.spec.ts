@@ -517,6 +517,46 @@ describe('matchOrderLines', () => {
     expect(matched.needsNewSku).toBe(false);
     expect(matched.procurementSkuId).toBeNull();
   });
+
+  it('按重量买且原料有商品时，仍然走重量行，不挂商品', () => {
+    const weightCandidates: ListItemCandidate[] = [
+      {
+        purchaseItemId: null,
+        ingredientId: 'ing-heart',
+        ingredientName: '羊心',
+        skus: [
+          {
+            id: 'sku-heart',
+            name: '羊心 500g/袋',
+            productModel: '500g/袋',
+            purchaseChannel: '盒马鲜生',
+            purchaseToBaseRatio: 500,
+            purchaseUnit: '袋',
+          },
+        ],
+      },
+    ];
+
+    const [matched] = matchWithChannels(
+      [
+        {
+          rawName: '新鲜羊心',
+          spec: '3斤',
+          qty: 3,
+          unit: '斤',
+          unitPrice: 12.46,
+          lineTotal: 37.39,
+        },
+      ],
+      weightCandidates,
+      '盒马鲜生',
+    );
+
+    expect(matched.ingredientId).toBe('ing-heart');
+    expect(matched.needsNewSku).toBe(false);
+    expect(matched.procurementSkuId).toBeNull();
+    expect(matched.reason).toContain('重量');
+  });
 });
 
 /**

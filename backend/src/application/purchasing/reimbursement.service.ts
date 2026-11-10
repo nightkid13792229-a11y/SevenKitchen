@@ -241,6 +241,13 @@ export class ReimbursementService {
         );
       }
 
+      // 作废的补货记录（取消/退款）不能再报销。
+      if (list.voidedAt) {
+        throw new BadRequestException(
+          `采购清单 ${listId} 已作废，不能报销`,
+        );
+      }
+
       // 验证采购清单未被其他报销单关联
       const allowedReimbursementId = options?.reimbursementId;
       if (

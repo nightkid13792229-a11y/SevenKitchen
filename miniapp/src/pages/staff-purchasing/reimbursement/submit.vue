@@ -582,7 +582,7 @@ const selectLoadedPurchaseList = (purchaseListId: string) => {
 const mergePurchaseLists = (lists: any[]) => {
   const map = new Map<string, any>();
   [...completedPurchaseLists.value, ...lists].forEach((list) => {
-    if (list?.id) {
+    if (list?.id && !list.voidedAt) {
       map.set(list.id, list);
     }
   });
@@ -599,7 +599,7 @@ const loadCompletedPurchaseLists = async (extraLists: any[] = []) => {
 
     if (res.code === 0) {
       completedPurchaseLists.value = Array.isArray(res.data?.list)
-        ? res.data.list
+        ? res.data.list.filter((list: any) => !list.voidedAt)
         : [];
       mergePurchaseLists(extraLists);
     } else {

@@ -636,6 +636,7 @@ const fetchDateOverview = async (date: string) => {
   try {
     const [listRes, previewRes]: any = await Promise.all([
       getPurchaseLists({
+        kind: 'ORDER_DEMAND',
         startDate: date,
         endDate: date,
         page: 1,
@@ -691,6 +692,7 @@ const loadPurchaseLists = async (refresh = false) => {
 
   try {
     const params: any = {
+      kind: 'ORDER_DEMAND',
       page: currentPage.value,
       pageSize,
     };

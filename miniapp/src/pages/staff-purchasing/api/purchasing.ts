@@ -1295,6 +1295,7 @@ export function updateOrderImport(
     orderTime?: string | null;
     shippingFee?: number | null;
     packagingFee?: number | null;
+    paid?: number | null;
   },
 ) {
   return request({

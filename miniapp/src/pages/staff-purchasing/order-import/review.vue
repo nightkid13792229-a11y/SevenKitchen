@@ -45,6 +45,7 @@
 
         <!-- 再传一笔：钉在订单卡片这一行的最右边，卡片横向滚动时它不动 -->
         <view
+          v-if="pageMode !== 'replenishment'"
           class="side-add"
           :class="{ busy: importing }"
           hover-class="side-add-hover"
@@ -134,7 +135,7 @@
         <view class="fees-head">
           <text class="fees-title">费用</text>
           <text class="fees-action" @tap="openFeeEdit">
-            {{ feesEdited ? '已修改 · 再改 ›' : '改运费 / 包装费 ›' }}
+            {{ feesEdited ? '已修改 · 再改 ›' : '改实付 / 费用 ›' }}
           </text>
         </view>
         <view class="fee-row">
@@ -282,7 +283,7 @@
         <text class="sheet-sub">只影响这行怎么显示；多少克是按商品自带的净含量算的。</text>
         <view class="unit-grid">
           <view
-            v-for="unit in UNIT_OPTIONS"
+            v-for="unit in unitOptions"
             :key="unit"
             class="unit-option"
             :class="{ active: editing && editing.unitText === unit }"
@@ -295,9 +296,18 @@
     <!-- 改运费 / 包装费 -->
     <view v-if="feeEditing" class="sheet-mask" @tap="closeFeeEdit">
       <view class="sheet" @tap.stop>
-        <text class="sheet-title">运费 / 包装费</text>
+        <text class="sheet-title">实付 / 运费 / 包装费</text>
         <text class="sheet-sub">{{ feeOriginText }}。读错了可以直接改，留空按没读到处理。</text>
 
+        <view class="field">
+          <text class="field-label">实付</text>
+          <input
+            v-model="feeEditing.paidText"
+            type="digit"
+            class="field-input"
+            placeholder="订单实际支付"
+          />
+        </view>
         <view class="field">
           <text class="field-label">运费</text>
           <input
@@ -538,12 +548,23 @@ const pickerIngredientId = ref('');
 let pickerClosedAt = 0;
 let sheetOpenedAt = 0;
 const UNIT_OPTIONS = ['袋', '盒', '份', '包', '瓶', '个', '组', '罐'];
+/** 按重量记的原料（基准单位克）额外给斤/公斤/克/两；不用商品净含量折算。 */
+const unitOptions = computed(() => {
+  const baseUnit = String(editing.value?.baseUnit || '').toUpperCase();
+  return baseUnit === 'G'
+    ? [...UNIT_OPTIONS, '斤', '公斤', '克', '两']
+    : UNIT_OPTIONS;
+});
 /** 渠道清单：唯一来源是后台字典 purchase_channel，页面不写死 */
 const channelOptions = ref<string[]>([]);
 const channelPicking = ref(false);
 const saving = ref(false);
 const submitting = ref(false);
-const feeEditing = ref<{ shippingText: string; packagingText: string } | null>(null);
+const feeEditing = ref<{
+  paidText: string;
+  shippingText: string;
+  packagingText: string;
+} | null>(null);
 const feeSaving = ref(false);
 const importing = ref(false);
 const orderShotHint = ORDER_SHOT_HINT;
@@ -696,15 +717,16 @@ const feeEditPreview = computed(() => {
   if (!summary || !form || !item) return '';
   const shipping = parseNumber(form.shippingText);
   const packaging = parseNumber(form.packagingText);
+  const paid = form.paidText ? parseNumber(form.paidText) : item.paid;
   const expected = round2(summary.lineSum + (shipping ?? 0) + (packaging ?? 0));
-  if (item.paid === null) {
+  if (paid === null) {
     return `合计 ¥${money(expected)}（实付没读到，先按这个数核对）`;
   }
-  const gap = round2(item.paid - expected);
+  const gap = round2(paid - expected);
   if (Math.abs(gap) <= IMPORT_FEE_TOLERANCE) {
-    return `合计 ¥${money(expected)}，和实付 ¥${money(item.paid)} 一致`;
+    return `合计 ¥${money(expected)}，和实付 ¥${money(paid)} 一致`;
   }
-  return `合计 ¥${money(expected)}，和实付 ¥${money(item.paid)} 差 ¥${Math.abs(gap).toFixed(2)}`;
+  return `合计 ¥${money(expected)}，和实付 ¥${money(paid)} 差 ¥${Math.abs(gap).toFixed(2)}`;
 });
 
 /** 这笔订单的渠道：选商品只列这一家的商品（渠道是商品的身份之一） */
@@ -1413,6 +1435,8 @@ function openFeeEdit() {
   const item = activeImport.value;
   if (!item) return;
   feeEditing.value = {
+    paidText:
+      item.paid === null || item.paid === undefined ? '' : String(item.paid),
     shippingText: item.shippingFee === null ? '' : String(item.shippingFee),
     packagingText: item.packagingFee === null ? '' : String(item.packagingFee),
   };
@@ -1441,10 +1465,16 @@ async function saveFeeEdit() {
     uni.showToast({ title: packagingResult.error, icon: 'none' });
     return;
   }
+  const paid = parseNumber(form.paidText);
+  if (paid === null || paid <= 0) {
+    uni.showToast({ title: '请填订单实付金额', icon: 'none' });
+    return;
+  }
 
   feeSaving.value = true;
   try {
     const res: any = await updateOrderImport(item.id, {
+      paid,
       shippingFee: shippingResult.value,
       packagingFee: packagingResult.value,
     });
@@ -1717,14 +1747,30 @@ async function submit() {
         ),
       );
       let savedCount = 0;
+      let skippedCount = 0;
+      const failures: string[] = [];
       for (const id of listIdsToSave) {
-        const saved: any = await saveReplenishmentRecord(id, {});
-        if (saved.code !== 0) throw new Error(saved.message || '保存失败');
-        savedCount += 1;
+        try {
+          const saved: any = await saveReplenishmentRecord(id, {});
+          if (saved.code !== 0) throw new Error(saved.message || '保存失败');
+          savedCount += 1;
+        } catch (error: any) {
+          const message = String(error?.message || '保存失败');
+          // 整单都是个人商品：不生成记录是正常的，别让一笔个人单拖垮整批。
+          if (message.includes('整单都是个人商品')) {
+            skippedCount += 1;
+            continue;
+          }
+          failures.push(message);
+        }
+      }
+      if (failures.length > 0) {
+        throw new Error(`${failures.length} 笔没保存成功：${failures[0]}`);
       }
       submitted.value = true;
+      const suffix = skippedCount > 0 ? `，跳过 ${skippedCount} 笔个人单` : '';
       uni.showToast({
-        title: `已保存 ${savedCount} 笔补货记录`,
+        title: `已保存 ${savedCount} 笔补货记录${suffix}`,
         icon: 'success',
       });
       setTimeout(() => uni.navigateBack(), 800);

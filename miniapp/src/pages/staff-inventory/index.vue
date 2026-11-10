@@ -61,11 +61,21 @@
           <text class="big">{{ fmt(item.currentStock) }}</text>
           <text class="unit">{{ item.stockUnitLabel }}</text>
           <view
-            v-if="item.suggestedPurchaseQuantity > 0 || (item.inTransitQuantity || 0) > 0"
+            v-if="
+              item.suggestedPurchaseQuantity > 0 ||
+              (item.inTransitBaseQuantity || 0) > 0 ||
+              (item.replenishmentInTransitBaseQuantity || 0) > 0
+            "
             class="suggest"
           >
-            <text v-if="(item.inTransitQuantity || 0) > 0">
-              在途 {{ fmt(item.inTransitQuantity) }}{{ item.purchaseUnit }}
+            <text v-if="(item.inTransitBaseQuantity || 0) > 0">
+              日采待买 {{ fmt(item.inTransitBaseQuantity) }}{{ item.stockUnitLabel }}
+            </text>
+            <text v-if="(item.replenishmentInTransitBaseQuantity || 0) > 0">
+              补货在途 {{ fmt(item.replenishmentInTransitBaseQuantity) }}{{ item.stockUnitLabel }}
+            </text>
+            <text v-if="(item.availableBaseQuantity || 0) > 0" class="suggest-cost">
+              可用 {{ fmt(item.availableBaseQuantity) }}{{ item.stockUnitLabel }}
             </text>
             <text v-if="(item.netShortageQuantity || 0) > 0">
               还差 {{ fmt(item.netShortageQuantity) }}{{ item.purchaseUnit }}

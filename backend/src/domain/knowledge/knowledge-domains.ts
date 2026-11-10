@@ -457,7 +457,7 @@ export const KNOWLEDGE_DOMAINS: readonly KnowledgeDomain[] = [
   {
     id: 'endocrinology',
     label: '内分泌',
-    audited: false,
+    audited: true,
     documentIds: ENDOCRINOLOGY_DOCUMENT_IDS,
     sourceIds: ENDOCRINOLOGY_SOURCE_IDS,
     coreTableIds: [],
@@ -466,7 +466,7 @@ export const KNOWLEDGE_DOMAINS: readonly KnowledgeDomain[] = [
   {
     id: 'urology',
     label: '泌尿',
-    audited: false,
+    audited: true,
     documentIds: UROLOGY_DOCUMENT_IDS,
     sourceIds: UROLOGY_SOURCE_IDS,
     coreTableIds: [],
@@ -475,7 +475,7 @@ export const KNOWLEDGE_DOMAINS: readonly KnowledgeDomain[] = [
   {
     id: 'cardiology',
     label: '心脏',
-    audited: false,
+    audited: true,
     documentIds: CARDIOLOGY_DOCUMENT_IDS,
     sourceIds: CARDIOLOGY_SOURCE_IDS,
     coreTableIds: [],
@@ -484,7 +484,7 @@ export const KNOWLEDGE_DOMAINS: readonly KnowledgeDomain[] = [
   {
     id: 'hepatology',
     label: '肝胆',
-    audited: false,
+    audited: true,
     documentIds: HEPATOLOGY_DOCUMENT_IDS,
     sourceIds: HEPATOLOGY_SOURCE_IDS,
     coreTableIds: [],

@@ -1,0 +1,90 @@
+{
+  "version": "2026-11-10",
+  "domain": "endocrinology",
+  "note": "内分泌域 8 题：AAHA 2018 糖尿病 + SACN5 27（肥胖，副域）/28（脂质代谢）/29（内分泌）。期望只写证据位置；负样本用 documentIds 钉住本域，多域并库后不串。",
+  "questions": [
+    {
+      "id": "endo-dog-fiber",
+      "domain": "endocrinology",
+      "query": "diabetic dog increased fiber high carbohydrate food",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-29-s005"
+      ]
+    },
+    {
+      "id": "endo-cat-lowcarb",
+      "domain": "endocrinology",
+      "query": "diabetic cat low carbohydrate high protein food",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-29-s005",
+        "sacn5-chapters-SACN5-29-s009"
+      ]
+    },
+    {
+      "id": "endo-hyperthyroid-iodine",
+      "domain": "endocrinology",
+      "query": "feline hyperthyroidism iodine nutrition management",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-29-s014",
+        "sacn5-chapters-SACN5-29-s011"
+      ],
+      "species": "cat"
+    },
+    {
+      "id": "endo-hypothyroid",
+      "domain": "endocrinology",
+      "query": "dog hypothyroidism nutrition feeding",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-29-s015"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "endo-hyperlipidemia",
+      "domain": "endocrinology",
+      "query": "hyperlipidemia dog low fat diet key nutritional factors",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-28-s007",
+        "sacn5-chapters-SACN5-28-s003"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "endo-table-fiber-cat",
+      "domain": "endocrinology",
+      "query": "fiber-enhanced veterinary therapeutic foods cats diabetes mellitus",
+      "category": "table",
+      "expectedTables": [
+        "T0207",
+        "T0206"
+      ]
+    },
+    {
+      "id": "endo-zh-diabetes",
+      "domain": "endocrinology",
+      "query": "糖尿病猫 低碳水化合物 高蛋白 处方粮",
+      "category": "zh",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-29-s009"
+      ]
+    },
+    {
+      "id": "endo-negative-vitd",
+      "domain": "endocrinology",
+      "query": "diabetic cat vitamin D dose",
+      "category": "negative",
+      "expectNoSource": true,
+      "documentIds": [
+        "aaha-AAHA-2018-Diabetes-Management-Guidelines",
+        "sacn5-chapters-SACN5-27",
+        "sacn5-chapters-SACN5-28",
+        "sacn5-chapters-SACN5-29"
+      ]
+    }
+  ]
+}

@@ -266,6 +266,82 @@
         "dose",
         "diagnosis"
       ]
+    },
+    {
+      "id": "G6",
+      "domain": "endocrinology",
+      "title": "糖尿病猫：碳水/蛋白/纤维方向与能否只靠换粮（问答口径）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "一只 10 岁、8kg 的已绝育母猫刚确诊糖尿病，主人问饮食上该怎么调（碳水、蛋白、纤维的方向），以及能不能只靠换粮控制。按知识库说，标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
+    },
+    {
+      "id": "G7",
+      "domain": "urology",
+      "title": "草酸钙结石犬：防复发饮食（问答口径）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "一只 6 岁、12kg 公犬反复尿路结石，上次取石报告是草酸钙。主人问以后饮食怎么防复发（限钙、限草酸、喝水量这些方向）。按知识库说，标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
+    },
+    {
+      "id": "G8",
+      "domain": "cardiology",
+      "title": "MMVD B2 犬：膳食限钠口径（问答口径）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "一只 9 岁、10kg 已绝育母犬确诊 MMVD（B2 期），主人问家里做饭要不要限盐、按知识库该限到什么方向。按知识库说，标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
+    },
+    {
+      "id": "G9",
+      "domain": "hepatology",
+      "title": "铜相关性慢性肝炎犬：控铜与蛋白质（问答口径）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "一只 7 岁、15kg 母犬确诊铜相关性慢性肝炎，主人问饮食上怎么控铜、蛋白质要不要限制。按知识库说，标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
     }
   ]
 }

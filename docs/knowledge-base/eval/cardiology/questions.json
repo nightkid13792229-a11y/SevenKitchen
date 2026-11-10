@@ -1,0 +1,115 @@
+{
+  "version": "2026-11-10",
+  "domain": "cardiology",
+  "note": "心脏域 8 题：SACN5-36 心血管营养 + ACVIM MMVD/心肌病/肺动脉高压/系统性高血压/心肾轴。期望只写证据位置；负样本用 documentIds 钉住本域。",
+  "questions": [
+    {
+      "id": "card-chf-sodium",
+      "domain": "cardiology",
+      "query": "dog congestive heart failure sodium restriction diet",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-36-s010",
+        "sacn5-chapters-SACN5-36-s015",
+        "acvim-ACVIM-2019-犬MMVD-诊断与治疗共识全文-s009"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "card-dcm-taurine",
+      "domain": "cardiology",
+      "query": "dilated cardiomyopathy dog taurine carnitine nutrition",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-36-s025",
+        "sacn5-chapters-SACN5-36-s023",
+        "acvim-ACVIM-2020-心肌病分类诊断与管理-s021"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "card-mmvd-factors",
+      "domain": "cardiology",
+      "query": "canine MMVD nutritional management key nutritional factors",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-36-s012",
+        "acvim-ACVIM-2019-犬MMVD-诊断与治疗共识全文-s008",
+        "sacn5-chapters-SACN5-36-s010"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "card-feline-taurine",
+      "domain": "cardiology",
+      "query": "feline cardiomyopathy taurine deficiency diet",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-36-s009",
+        "sacn5-chapters-SACN5-36-s010",
+        "acvim-ACVIM-2020-心肌病分类诊断与管理-s021"
+      ],
+      "species": "cat"
+    },
+    {
+      "id": "card-cachexia",
+      "domain": "cardiology",
+      "query": "cardiac cachexia nutrition cat dog",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-36-s009",
+        "sacn5-chapters-SACN5-36-s011",
+        "acvim-ACVIM-2020-心肌病分类诊断与管理-s013"
+      ]
+    },
+    {
+      "id": "card-hypertension",
+      "domain": "cardiology",
+      "query": "systemic hypertension dog nutrition management",
+      "category": "numeric",
+      "expectedSections": [
+        "acvim-ACVIM-2018-系统性高血压-识别评估与管理-s011",
+        "acvim-ACVIM-2018-系统性高血压-识别评估与管理-s015",
+        "acvim-ACVIM-2015-心血管-肾脏轴疾病-s016"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "card-table-food",
+      "domain": "cardiology",
+      "query": "key nutritional factors heart disease commercial foods table",
+      "category": "table",
+      "expectedTables": [
+        "T0246",
+        "T0247",
+        "T0248"
+      ]
+    },
+    {
+      "id": "card-zh-heart",
+      "domain": "cardiology",
+      "query": "犬 心脏病 钠 限制 饮食",
+      "category": "zh",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-36-s010",
+        "sacn5-chapters-SACN5-36-s012"
+      ]
+    },
+    {
+      "id": "card-negative-vitk",
+      "domain": "cardiology",
+      "query": "cardiac disease vitamin K requirement dog",
+      "category": "negative",
+      "expectNoSource": true,
+      "documentIds": [
+        "acvim-ACVIM-2015-心血管-肾脏轴疾病",
+        "acvim-ACVIM-2018-系统性高血压-识别评估与管理",
+        "acvim-ACVIM-2019-犬MMVD-分期与治疗-官方摘要卡片",
+        "acvim-ACVIM-2019-犬MMVD-诊断与治疗共识全文",
+        "acvim-ACVIM-2020-心肌病分类诊断与管理",
+        "acvim-ACVIM-2020-肺动脉高压",
+        "sacn5-chapters-SACN5-36"
+      ]
+    }
+  ]
+}

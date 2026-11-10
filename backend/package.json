@@ -132,7 +132,8 @@
     "audit:supplement-shop-catalog": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-supplement-shop-catalog.ts",
     "audit:nutrition-duplicates": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-nutrition-duplicates.ts",
     "audit:nutrition-coverage": "ts-node -r tsconfig-paths/register scripts/audit-nutrition-coverage.ts",
-    "audit:food-cost-basis": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-food-cost-basis.ts"
+    "audit:food-cost-basis": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-food-cost-basis.ts",
+    "kb:sections": "ts-node -r tsconfig-paths/register scripts/knowledge-base/inspect-domain.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

@@ -1,0 +1,103 @@
+{
+  "version": "2026-11-10",
+  "domain": "urology",
+  "note": "泌尿域 8 题：SACN5 38-46 各型尿石 + FLUTD，ACVIM 2016 尿石共识。ACVIM 2024 犬尿失禁以诊断/治疗为主、无营养学证据，本域题集不覆盖（见签字）。负样本用 documentIds 钉住本域。",
+  "questions": [
+    {
+      "id": "urol-struvite",
+      "domain": "urology",
+      "query": "canine struvite urolith key nutritional factors dissolution prevention",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-43-s005",
+        "sacn5-chapters-SACN5-43-s006",
+        "sacn5-chapters-SACN5-43-s013"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "urol-caox",
+      "domain": "urology",
+      "query": "canine calcium oxalate uroliths recommendations management prevention",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-40-s010",
+        "sacn5-chapters-SACN5-40-s012",
+        "sacn5-chapters-SACN5-40-s015"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "urol-cystine",
+      "domain": "urology",
+      "query": "canine cystine urolith dissolution key nutritional factors",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-42-s007",
+        "sacn5-chapters-SACN5-42-s009"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "urol-purine",
+      "domain": "urology",
+      "query": "canine purine urate urolith low purine diet",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-39-s013",
+        "sacn5-chapters-SACN5-39-s014"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "urol-flutd",
+      "domain": "urology",
+      "query": "cat idiopathic cystitis FLUTD dietary management",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-46-s014",
+        "sacn5-chapters-SACN5-46-s003"
+      ],
+      "species": "cat"
+    },
+    {
+      "id": "urol-table-struvite",
+      "domain": "urology",
+      "query": "commercial veterinary therapeutic foods canine struvite dissolution",
+      "category": "table",
+      "expectedTables": [
+        "T0309",
+        "T0332"
+      ]
+    },
+    {
+      "id": "urol-zh-struvite",
+      "domain": "urology",
+      "query": "猫 鸟粪石 溶解 处方粮",
+      "category": "zh",
+      "expectedSections": [
+        "acvim-ACVIM-2016-犬猫尿石症治疗与预防共识-s029"
+      ]
+    },
+    {
+      "id": "urol-negative-vitk",
+      "domain": "urology",
+      "query": "cat urolithiasis vitamin K requirement",
+      "category": "negative",
+      "expectNoSource": true,
+      "documentIds": [
+        "acvim-ACVIM-2016-犬猫尿石症治疗与预防共识",
+        "acvim-ACVIM-2024-犬尿失禁诊断与管理",
+        "sacn5-chapters-SACN5-38",
+        "sacn5-chapters-SACN5-39",
+        "sacn5-chapters-SACN5-40",
+        "sacn5-chapters-SACN5-41",
+        "sacn5-chapters-SACN5-42",
+        "sacn5-chapters-SACN5-43",
+        "sacn5-chapters-SACN5-44",
+        "sacn5-chapters-SACN5-45",
+        "sacn5-chapters-SACN5-46"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "version": "2026-11-10",
+  "domain": "hepatology",
+  "note": "肝胆域 8 题：SACN5-68 肝胆疾病 + ACVIM 2019 犬慢性肝炎 + MERCK 肝功能检查。负样本用「biotin 需求」（本域语料实测 no_match）并以 documentIds 钉住本域。",
+  "questions": [
+    {
+      "id": "hep-copper",
+      "domain": "hepatology",
+      "query": "copper associated chronic hepatitis dog diet copper restriction",
+      "category": "numeric",
+      "expectedSections": [
+        "acvim-ACVIM-2019-犬慢性肝炎诊断与治疗-s021",
+        "acvim-ACVIM-2019-犬慢性肝炎诊断与治疗-s019",
+        "sacn5-chapters-SACN5-68-s021"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "hep-protein-encephalopathy",
+      "domain": "hepatology",
+      "query": "liver disease dog protein restriction hepatic encephalopathy",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-68-s003",
+        "sacn5-chapters-SACN5-68-s006",
+        "merck-肝功能检查-s000"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "hep-chronic-factors",
+      "domain": "hepatology",
+      "query": "canine chronic hepatitis nutritional management key nutritional factors",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-68-s019",
+        "sacn5-chapters-SACN5-68-s027",
+        "acvim-ACVIM-2019-犬慢性肝炎诊断与治疗-s002"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "hep-feline-lipidosis",
+      "domain": "hepatology",
+      "query": "hepatic encephalopathy cat protein carbohydrate feeding",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-68-s026",
+        "sacn5-chapters-SACN5-68-s006",
+        "merck-肝功能检查-s000"
+      ],
+      "species": "cat"
+    },
+    {
+      "id": "hep-support",
+      "domain": "hepatology",
+      "query": "liver support antioxidants SAMe milk thistle dog",
+      "category": "numeric",
+      "expectedSections": [
+        "acvim-ACVIM-2019-犬慢性肝炎诊断与治疗-s020",
+        "sacn5-chapters-SACN5-68-s031",
+        "sacn5-chapters-SACN5-68-s002"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "hep-table-factors",
+      "domain": "hepatology",
+      "query": "key nutritional factors liver disease commercial foods table",
+      "category": "table",
+      "expectedTables": [
+        "T0433",
+        "T0434",
+        "T0436"
+      ]
+    },
+    {
+      "id": "hep-zh-hepatitis",
+      "domain": "hepatology",
+      "query": "犬 慢性肝炎 铜 限制 饮食",
+      "category": "zh",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-68-s023",
+        "acvim-ACVIM-2019-犬慢性肝炎诊断与治疗-s019"
+      ]
+    },
+    {
+      "id": "hep-negative-biotin",
+      "domain": "hepatology",
+      "query": "dog biotin requirement",
+      "category": "negative",
+      "expectNoSource": true,
+      "documentIds": [
+        "acvim-ACVIM-2019-犬慢性肝炎诊断与治疗",
+        "merck-肝功能检查",
+        "sacn5-chapters-SACN5-68"
+      ]
+    }
+  ]
+}

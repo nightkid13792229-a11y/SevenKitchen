@@ -6,7 +6,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Reflector } from '@nestjs/core';
 import { JwtAuthService } from 'src/interfaces/auth/jwt.service';
-import { StaffKitchenController } from 'src/staff-kitchen.controller';
+import { StaffKitchenController } from 'src/interfaces/controllers/staff-kitchen.controller';
 import { KitchenService } from 'src/application/kitchen/kitchen.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PackagingUnitStatus } from 'src/domain/production';
@@ -46,7 +46,7 @@ describe('StaffKitchenController', () => {
   describe('listBatches', () => {
     it('should return batches when status=PENDING', async () => {
       // Arrange
-      const mockBatches = [
+      const mockBatches: any[] = [
         {
           id: 'batch-1',
           productionDate: '2025-01-20',
@@ -114,7 +114,7 @@ describe('StaffKitchenController', () => {
 
     it('should handle case-insensitive status', async () => {
       // Arrange
-      const mockBatches = [];
+      const mockBatches: any[] = [];
       kitchenService.listBatchesByStatus.mockResolvedValue(mockBatches);
 
       // Act

@@ -1210,6 +1210,40 @@ describe('PurchasingService inventory allocation calculation', () => {
       );
     });
 
+    it('补货单没有 shortage 时按 quantityNeeded 统计在途', async () => {
+      prismaMock.purchaseItem.findMany.mockResolvedValue([
+        {
+          ingredientId: 'i1',
+          procurementSkuId: 'sku-1',
+          purchaseShortageQuantity: null,
+          quantityNeeded: 2,
+          ingredient: { purchaseToBaseRatio: 1000 },
+        },
+      ]);
+      prismaMock.procurementSku.findMany.mockResolvedValue([
+        { id: 'sku-1', purchaseToBaseRatio: 1000 },
+      ]);
+      const inventoryService = new InventoryService(
+        {
+          getCurrentBalanceByIngredient: jest.fn().mockResolvedValue(0),
+        } as any,
+        {} as any,
+        prismaMock,
+      );
+
+      const map = await (inventoryService as any).getInTransitByIngredientIds(
+        ['i1'],
+        {
+          start: new Date('2026-04-20T00:00:00.000Z'),
+          end: new Date('2026-04-20T23:59:59.999Z'),
+        },
+        undefined,
+        true,
+      );
+
+      expect(map.get('i1')).toBe(2000);
+    });
+
     it('在途只认待处理的订单需求采购单', async () => {
       prismaMock.purchaseItem.findMany.mockResolvedValue([
         {

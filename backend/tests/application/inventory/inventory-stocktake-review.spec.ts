@@ -149,6 +149,13 @@ describe('InventoryService stocktake review', () => {
     ).resolves.toEqual(
       expect.objectContaining({ countedCount: 0, skippedCount: 2 }),
     );
+
+    const preview = await service.previewStocktake('s1', 'u1', {
+      confirmPartial: true,
+    });
+    expect(preview.lines.every((line: any) => line.expectedQuantityG === null)).toBe(
+      true,
+    );
   });
 
   it('预览按单位把行分成容差内和超容差', async () => {

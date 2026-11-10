@@ -35,7 +35,8 @@
 
           <view class="meta">
             <text>{{ item.lineCount }} 项</text>
-            <text>差异 {{ item.varianceCount }} 项</text>
+            <text v-if="item.status !== 'DRAFT'">差异 {{ item.varianceCount }} 项</text>
+            <text v-else>盘点中</text>
             <text v-if="item.countedCount !== undefined">
               已盘 {{ item.countedCount }} / {{ item.lineCount }}
             </text>

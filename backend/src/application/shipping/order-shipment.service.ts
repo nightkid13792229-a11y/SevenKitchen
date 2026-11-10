@@ -271,7 +271,8 @@ export class OrderShipmentService {
             trackingNumber: pkg.trackingNumber,
             actualShippingFee: pkg.actualShippingFee.toFixed(2),
             weightG: packageAllocation.totalWeightG,
-            boxIngredientId: container?.boxIngredientId ?? null,
+            boxIngredientId:
+              container?.boxIngredientId ?? pkg.boxIngredientId ?? null,
             thermalBagIngredientId:
               container?.thermalBagIngredientId ?? null,
             sortOrder: i + 1,

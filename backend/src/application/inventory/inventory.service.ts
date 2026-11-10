@@ -629,6 +629,7 @@ export class InventoryService {
         ingredientId: true,
         procurementSkuId: true,
         purchaseShortageQuantity: true,
+        quantityNeeded: true,
         ingredient: { select: { purchaseToBaseRatio: true } },
       },
     });
@@ -652,12 +653,17 @@ export class InventoryService {
     );
 
     for (const item of items) {
-      const shortage = Number(item.purchaseShortageQuantity ?? 0);
-      if (!Number.isFinite(shortage) || shortage <= 0) continue;
+      // 订单需求单写 shortage；补货单不写 shortage，退回用 quantityNeeded。
+      const pendingQuantity =
+        item.purchaseShortageQuantity !== null &&
+        item.purchaseShortageQuantity !== undefined
+          ? Number(item.purchaseShortageQuantity)
+          : Number(item.quantityNeeded ?? 0);
+      if (!Number.isFinite(pendingQuantity) || pendingQuantity <= 0) continue;
       const ratio =
         skuMap.get(item.procurementSkuId ?? '') ??
         Number(item.ingredient?.purchaseToBaseRatio ?? 1);
-      const baseQuantity = shortage * (ratio > 0 ? ratio : 1);
+      const baseQuantity = pendingQuantity * (ratio > 0 ? ratio : 1);
       result.set(
         item.ingredientId,
         (result.get(item.ingredientId) ?? 0) + baseQuantity,
@@ -1764,7 +1770,9 @@ export class InventoryService {
           line.ingredient?.unitDisplayLabel ||
           line.ingredient?.baseUnit ||
           'G',
-        expectedQuantityG: Number(line.expectedQuantityG),
+        // 未盘的行不返回账面，避免用「预览一次再退出」绕过盲盘
+        expectedQuantityG:
+          counted === null ? null : Number(line.expectedQuantityG),
         countedQuantityG: counted === null ? null : Number(counted),
         deltaG: delta,
         isCounted: counted !== null,

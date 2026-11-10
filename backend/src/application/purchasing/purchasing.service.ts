@@ -3202,7 +3202,10 @@ export class PurchasingService {
     // 3. 计算新增订单的原料需求，并按当前可用库存抵扣。
     // 已有采购单的库存分配仍保持 ACTIVE，因此这里的可用库存天然排除了已占用库存。
     const enrichedRequirements =
-      await this.calculatePurchaseRequirementsFromOrders(validOrders);
+      await this.calculatePurchaseRequirementsFromOrders(
+        validOrders,
+        purchaseListId,
+      );
     const purchaseRequirements = enrichedRequirements;
 
     // 4. 合并到现有采购清单
@@ -3504,7 +3507,10 @@ export class PurchasingService {
       (order): order is Order => order !== null,
     );
     const remainingRequirements =
-      await this.calculatePurchaseRequirementsFromOrders(remainingOrders);
+      await this.calculatePurchaseRequirementsFromOrders(
+        remainingOrders,
+        purchaseListId,
+      );
     await this.createInventoryAllocationForRequirements({
       requirements: remainingRequirements,
       targetDate: new Date(purchaseList.targetDate),

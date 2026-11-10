@@ -16,6 +16,7 @@ import {
 import {
   PurchaseItem,
   PurchaseList,
+  PurchaseListKind,
   PurchaseListStatus,
   Reimbursement,
   ReimbursementStatus,
@@ -64,6 +65,9 @@ describe('ReimbursementService', () => {
     purchaseRecord: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
+    },
+    purchaseList: {
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     ingredient: {
       findUnique: jest.fn(),
@@ -169,6 +173,53 @@ describe('ReimbursementService', () => {
       submittedAt: new Date('2026-04-14T00:00:00.000Z'),
       purchaseLists: [],
     });
+
+  it('uses the replenishment reimbursement amount instead of the record sum', async () => {
+    const list = new PurchaseList({
+      id: 'rec-1',
+      targetDate: new Date('2026-11-10T12:00:00'),
+      kind: PurchaseListKind.STOCK_REPLENISHMENT,
+      status: PurchaseListStatus.COMPLETED,
+      totalEstimatedCost: 100,
+      itemCount: 0,
+      createdById: 'user-1',
+      sourceOrderIds: [],
+      isDraft: true,
+    });
+    list.isDraft = false;
+    list.totalActualCost = 100;
+    list.reimbursementAmount = 113.03;
+    mockPurchaseListRepository.findById.mockResolvedValue(list);
+
+    const result = await (service as any).prepareReimbursementSubmission({
+      purchaseListIds: ['rec-1'],
+      totalActualCost: 113.03,
+      platformShippingFee: 0,
+      platformPackagingFee: 0,
+      receiptUrls: ['https://example.com/receipt-1.jpg'],
+      receiptKeys: [],
+      customFees: [],
+    });
+
+    expect(result.purchaseListsTotal).toBe(113.03);
+    expect(result.calculatedTotal).toBe(113.03);
+  });
+
+  it('unlocks purchase lists when a claim is rejected', async () => {
+    mockReimbursementRepository.findById.mockResolvedValue(
+      createPendingReviewReimbursement(),
+    );
+
+    await service.reviewReimbursement('reimbursement-1', 'admin-1', {
+      decision: 'REJECT',
+      comment: '金额不对',
+    });
+
+    expect(mockPrisma.purchaseList.updateMany).toHaveBeenCalledWith({
+      where: { reimbursementId: 'reimbursement-1' },
+      data: { reimbursementId: null },
+    });
+  });
 
   it('accepts pending price changes when payment proof URLs complete reimbursement', async () => {
     mockReimbursementRepository.findById.mockResolvedValue(

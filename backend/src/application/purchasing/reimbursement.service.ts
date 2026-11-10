@@ -276,9 +276,15 @@ export class ReimbursementService {
     }
 
     // 计算采购清单总金额
+    // 补货记录用「实付 − 个人商品」（reimbursementAmount）；历史补货单没有这个字段时退回原口径。
     const purchaseListsTotal = purchaseLists.reduce((sum, list) => {
-      const actualCost = list.totalActualCost ?? list.totalEstimatedCost;
-      return sum + Number(actualCost);
+      const amount =
+        list.kind === PurchaseListKind.STOCK_REPLENISHMENT &&
+        list.reimbursementAmount !== null &&
+        list.reimbursementAmount !== undefined
+          ? Number(list.reimbursementAmount)
+          : Number(list.totalActualCost ?? list.totalEstimatedCost);
+      return sum + amount;
     }, 0);
 
     const normalizedCustomFees =
@@ -530,7 +536,21 @@ export class ReimbursementService {
           comment: reviewComment,
         });
 
-        return this.reimbursementRepository.save(reimbursement, tx);
+        const savedReimbursement = await this.reimbursementRepository.save(
+          reimbursement,
+          tx,
+        );
+
+        // 驳回/需重提：解锁采购记录，员工改完可以重新提交。
+        // 必须在 save 之后做——save 会把 purchaseLists 重新挂回这张报销单。
+        if (dto.decision !== 'APPROVE') {
+          await tx.purchaseList.updateMany({
+            where: { reimbursementId: id },
+            data: { reimbursementId: null },
+          });
+        }
+
+        return savedReimbursement;
       },
       { timeout: 20000 },
     );

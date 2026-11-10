@@ -6,24 +6,21 @@
        文案一律由 `utils/waybill-receipt-view.ts` 的 buildReceiptView 给，
        组件只负责画和收点击，不自己拼句子。 -->
   <view class="receipt" :class="`receipt--${view.tone}`">
+    <!-- 整块就是「传/换一张存根」的热区：员工点一下就能重拍，
+         不用再去找一个小按钮（2026-11-10 第一版把标签写成"预览"，误导）。 -->
     <view class="receipt__row" @tap="onRowTap">
       <text class="receipt__icon">{{ icon }}</text>
       <view class="receipt__text">
         <text class="receipt__title">{{ view.title }}</text>
         <text v-if="view.desc" class="receipt__desc">{{ view.desc }}</text>
       </view>
-      <text v-if="canPick" class="receipt__action">{{ actionLabel }}</text>
+      <text class="receipt__action">{{ actionLabel }}</text>
     </view>
 
-    <view v-if="view.canManual || canRepick" class="receipt__extra">
-      <text v-if="canRepick" class="receipt__link" @tap.stop="emit('pick')">
-        {{ hasImage ? '换一张' : '上传存根' }}
+    <view v-if="view.canManual" class="receipt__extra">
+      <text class="receipt__link receipt__link--warn" @tap.stop="emit('manual')">
+        手动填写单号
       </text>
-      <text
-        v-if="view.canManual"
-        class="receipt__link receipt__link--warn"
-        @tap.stop="emit('manual')"
-      >手动填写单号</text>
     </view>
   </view>
 </template>
@@ -36,7 +33,7 @@ const props = defineProps<{
   view: ReceiptView;
   /** 正在上传/识别：整块不可点 */
   busy?: boolean;
-  /** 已经传过一张（决定"换一张"还是"上传存根"） */
+  /** 已经传过一张（决定标签是「换一张」还是「上传」） */
   hasImage?: boolean;
 }>();
 
@@ -52,10 +49,10 @@ const icon = computed(() => {
   return '📷';
 });
 
-const canPick = computed(() => !props.busy && !!props.hasImage);
-const canRepick = computed(() => !props.busy && !props.view.canManual && !props.hasImage);
-
-const actionLabel = computed(() => (props.busy ? '识别中…' : '预览'));
+const actionLabel = computed(() => {
+  if (props.busy) return '识别中…';
+  return props.hasImage ? '换一张' : '上传';
+});
 
 function onRowTap() {
   if (props.busy) return;
@@ -84,7 +81,7 @@ function onRowTap() {
 .receipt--error .receipt__desc { color: #b4463c; }
 .receipt__action { flex: none; margin-left: 12rpx; font-size: 22rpx; color: #2b5040; }
 
-.receipt__extra { display: flex; justify-content: flex-end; gap: 28rpx; margin-top: 12rpx; }
+.receipt__extra { display: flex; justify-content: flex-end; margin-top: 12rpx; }
 .receipt__link { font-size: 23rpx; color: #2b5040; }
 .receipt__link--warn { color: #a97b33; }
 </style>

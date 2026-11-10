@@ -6085,3 +6085,36 @@ model OrderShipmentPackageItem {
   @@index([orderId])
   @@map("order_shipment_package_item")
 }
+
+/// 快递存根核对记录（2026-11-10）：一行 = 一次识别 / 一次手动填写。
+///
+/// 为什么要有这张表：发货被做成了**硬锁** —— 提交时必须能查到
+/// 「这个运单号，是对着这单的收货人核对过的」。前端说"验过了"不算数。
+///
+/// 顺带承担两件事：
+///   · 配额计数（按 created_by + created_at 数当天行数，不再单开一张配额表）
+///   · 审计（谁、哪单、读出什么、判了什么，事后能查）
+///
+/// ⚠️ 存根图片**不入库**，这里只有结论。
+model WaybillReceiptRecord {
+  id                  String   @id @default(uuid()) @db.VarChar(36)
+  /// 识别/手填的运单号；彻底失败为 null
+  trackingNumber      String?  @map("tracking_number") @db.VarChar(64)
+  carrierCode         String?  @map("carrier_code") @db.VarChar(32)
+  orderIds            String[] @map("order_ids")
+  /// MATCH / UNKNOWN / MISMATCH / DUPLICATE / MANUAL / DEGRADED / NOT_WAYBILL
+  status              String   @map("status") @db.VarChar(20)
+  conflicts           Json?    @map("conflicts")
+  receipt             Json?    @map("receipt")
+  /// orderId → 当时的收货信息指纹；地址一改，旧记录自动失效
+  addressFingerprints Json?    @map("address_fingerprints")
+  degradedReason      String?  @map("degraded_reason") @db.VarChar(40)
+  manualReason        String?  @map("manual_reason") @db.VarChar(200)
+  createdBy           String   @map("created_by") @db.VarChar(36)
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@index([trackingNumber])
+  @@index([createdAt])
+  @@index([createdBy, createdAt])
+  @@map("waybill_receipt_record")
+}

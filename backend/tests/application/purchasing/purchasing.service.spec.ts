@@ -39,6 +39,8 @@ describe('PurchasingService procurement sku separation', () => {
     ingredients: any[];
     searchGovernance: any;
     procurementSkuMap?: Record<string, any[]>;
+    balance?: number;
+    replenishmentInTransit?: Record<string, number>;
   }) {
     const ingredientRepository = {
       findByIds: jest.fn().mockResolvedValue([]),
@@ -49,7 +51,15 @@ describe('PurchasingService procurement sku separation', () => {
       listActivePurchaseChannels: jest.fn().mockResolvedValue([]),
     } as any;
     const inventoryService = {
-      getBalanceByIngredient: jest.fn().mockResolvedValue(0),
+      getBalanceByIngredient: jest
+        .fn()
+        .mockResolvedValue(params.balance ?? 0),
+      getInTransitByIngredientIds: jest.fn().mockResolvedValue(new Map()),
+      getReplenishmentInTransitByIngredientIds: jest
+        .fn()
+        .mockResolvedValue(
+          new Map(Object.entries(params.replenishmentInTransit ?? {})),
+        ),
       inboundFromPurchaseRecords: jest.fn(),
     } as any;
 
@@ -325,6 +335,41 @@ describe('PurchasingService procurement sku separation', () => {
         displayUnit: '平勺',
       }),
     );
+  });
+
+  it('counts replenishment in-transit in available stock and suggests less', async () => {
+    const service = await createPurchasingServiceForStockSearch({
+      ingredients: [stockIngredient({ targetStock: 2000 })],
+      searchGovernance: {
+        expandQuery: jest.fn().mockResolvedValue([]),
+        recordSearchEvent: jest.fn().mockResolvedValue({ id: 'query-log-1' }),
+      },
+      procurementSkuMap: {
+        'ingredient-chicken': [
+          {
+            id: 'sku-chicken',
+            name: '鸡胸 1kg',
+            purchaseUnit: 'kg',
+            purchaseToBaseRatio: 1000,
+            currentPurchasePrice: 40,
+            purchaseChannel: '盒马鲜生',
+            isActive: true,
+          },
+        ],
+      },
+      balance: 200,
+      replenishmentInTransit: { 'ingredient-chicken': 1500 },
+    });
+
+    const [row] = await service.getStockReplenishmentIngredients({});
+
+    expect(row.currentStock).toBe(200);
+    expect(row.replenishmentInTransitBaseQuantity).toBe(1500);
+    expect(row.availableBaseQuantity).toBe(1700);
+    expect(row.suggestedBaseQuantity).toBe(300);
+    expect(row.suggestedPurchaseQuantity).toBe(0.3);
+    expect(row.replenishmentInTransitQuantity).toBe(1.5);
+    expect(row.availableQuantity).toBe(1.7);
   });
 
   it('uses search governance expansion when filtering stock replenishment ingredients', async () => {

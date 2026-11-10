@@ -673,6 +673,45 @@ export class InventoryService {
     return result;
   }
 
+  /**
+   * 补货在途 = 已下单、还没确认到货的补货记录里，各原料的已购数量（基准单位）。
+   * 和 getInTransitByIngredientIds（日采待买）是两个口径，不能相加。
+   */
+  async getReplenishmentInTransitByIngredientIds(
+    ingredientIds: string[],
+  ): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+    if (ingredientIds.length === 0) {
+      return result;
+    }
+
+    const rows = await this.prisma.purchaseRecord.findMany({
+      where: {
+        ingredientId: { in: ingredientIds },
+        purchaseList: {
+          kind: 'STOCK_REPLENISHMENT' as any,
+          isDraft: false,
+          arrivedAt: null,
+          voidedAt: null,
+        },
+      },
+      select: { ingredientId: true, actualBaseQuantity: true },
+    });
+
+    for (const row of rows) {
+      const quantity = Number(row.actualBaseQuantity ?? 0);
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        continue;
+      }
+      result.set(
+        row.ingredientId,
+        (result.get(row.ingredientId) ?? 0) + quantity,
+      );
+    }
+
+    return result;
+  }
+
   async createAllocationForOrderDemand(
     dto: CreateInventoryAllocationDto,
   ): Promise<{ id: string }> {

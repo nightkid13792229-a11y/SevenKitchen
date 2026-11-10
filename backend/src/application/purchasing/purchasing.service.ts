@@ -205,6 +205,12 @@ export interface StockReplenishmentInsight {
   /** 已下单未到货（基准单位 / 采购单位） */
   inTransitBaseQuantity: number;
   inTransitQuantity: number;
+  /** 补货在途（已下单未到货，基准单位 / 采购单位）；与日采待买是两个口径 */
+  replenishmentInTransitBaseQuantity: number;
+  replenishmentInTransitQuantity: number;
+  /** 在库 + 补货在途（基准单位 / 采购单位） */
+  availableBaseQuantity: number;
+  availableQuantity: number;
   /** 扣掉在途后真正还差的量 */
   netShortageBaseQuantity: number;
   netShortageQuantity: number;
@@ -2070,6 +2076,13 @@ export class PurchasingService {
             true,
           )
         : new Map<string, number>();
+    const replenishmentInTransitMap =
+      typeof (this.inventoryService as any)
+        .getReplenishmentInTransitByIngredientIds === 'function'
+        ? await this.inventoryService.getReplenishmentInTransitByIngredientIds(
+            filteredIngredients.map((ingredient) => ingredient.id),
+          )
+        : new Map<string, number>();
     const ingredientLookup = new Map(
       filteredIngredients.map((ingredient) => [ingredient.id, ingredient]),
     );
@@ -2084,6 +2097,27 @@ export class PurchasingService {
           currentStockMap.get(ingredient.id) ?? 0,
           3,
         );
+        const replenishmentInTransitBaseQuantity = this.roundNumber(
+          replenishmentInTransitMap.get(ingredient.id) ?? 0,
+          3,
+        );
+        const availableBaseQuantity = this.roundNumber(
+          currentStock + replenishmentInTransitBaseQuantity,
+          3,
+        );
+        const baseRatio =
+          profile.purchaseToBaseRatio > 0 ? profile.purchaseToBaseRatio : 0;
+        const replenishmentInTransitQuantity =
+          baseRatio > 0
+            ? this.roundNumber(
+                replenishmentInTransitBaseQuantity / baseRatio,
+                3,
+              )
+            : 0;
+        const availableQuantity =
+          baseRatio > 0
+            ? this.roundNumber(availableBaseQuantity / baseRatio, 3)
+            : 0;
         const stockStatus = this.getStockLevelStatus({
           currentStock,
           safetyStock: profile.safetyStock,
@@ -2098,7 +2132,7 @@ export class PurchasingService {
         const suggestedBaseQuantity =
           stockStatus === 'NEEDS_REPLENISHMENT' && targetBaseQuantity !== null
             ? this.roundNumber(
-                Math.max(targetBaseQuantity - currentStock, 0),
+                Math.max(targetBaseQuantity - availableBaseQuantity, 0),
                 3,
               )
             : 0;
@@ -2171,6 +2205,10 @@ export class PurchasingService {
           ),
           inTransitBaseQuantity,
           inTransitQuantity,
+          replenishmentInTransitBaseQuantity,
+          replenishmentInTransitQuantity,
+          availableBaseQuantity,
+          availableQuantity,
           netShortageBaseQuantity,
           netShortageQuantity,
           netShortageEstimatedCost: this.roundNumber(

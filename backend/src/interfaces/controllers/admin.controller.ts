@@ -501,6 +501,7 @@ export class AdminController {
   }
 
   @Post('inventory/adjustments')
+  @UseGuards(AuthGuard, AdminGuard)
   @ApiOperation({ summary: 'Create and apply a manual inventory adjustment' })
   async createInventoryAdjustment(
     @Body() dto: CreateInventoryAdjustmentDto,
@@ -514,6 +515,7 @@ export class AdminController {
   }
 
   @Get('inventory/stocktakes')
+  @UseGuards(AuthGuard, AdminGuard)
   @ApiOperation({ summary: 'Get recent stocktakes' })
   async getInventoryStocktakes(
     @Query('limit') limit?: string,
@@ -522,16 +524,6 @@ export class AdminController {
       limit ? Number(limit) : undefined,
     );
     return ApiResponseDto.success(stocktakes);
-  }
-
-  @Post('inventory/stocktakes')
-  @ApiOperation({ summary: 'Create a stocktake' })
-  async createInventoryStocktake(
-    @Body() dto: CreateInventoryStocktakeDto,
-    @UserId() userId: string,
-  ): Promise<ApiResponseDto<any>> {
-    const stocktake = await this.inventoryService.createStocktake(dto, userId);
-    return ApiResponseDto.success(stocktake, '盘点单创建成功');
   }
 
   @Post('inventory/stocktakes/:id/review')

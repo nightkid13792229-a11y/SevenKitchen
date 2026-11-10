@@ -1179,6 +1179,37 @@ describe('PurchasingService inventory allocation calculation', () => {
       expect(result.purchaseShortageQuantity).toBe(2);
     });
 
+    it('重算时排除当前采购单，避免把自己当在途', async () => {
+      prismaMock.purchaseItem.findMany.mockResolvedValue([]);
+      prismaMock.procurementSku.findMany.mockResolvedValue([]);
+      const inventoryService = new InventoryService(
+        {
+          getCurrentBalanceByIngredient: jest.fn().mockResolvedValue(0),
+        } as any,
+        {} as any,
+        prismaMock,
+      );
+
+      await (inventoryService as any).getInTransitByIngredientIds(
+        ['i1'],
+        {
+          start: new Date('2026-04-20T00:00:00.000Z'),
+          end: new Date('2026-04-20T23:59:59.999Z'),
+        },
+        'list-1',
+      );
+
+      expect(prismaMock.purchaseItem.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            purchaseList: expect.objectContaining({
+              id: { not: 'list-1' },
+            }),
+          }),
+        }),
+      );
+    });
+
     it('在途只认待处理的订单需求采购单', async () => {
       prismaMock.purchaseItem.findMany.mockResolvedValue([
         {

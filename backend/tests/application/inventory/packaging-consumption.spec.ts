@@ -124,6 +124,23 @@ describe('PackagingConsumptionService (D1)', () => {
     expect(tx.inventoryLedgerEntry.createMany).not.toHaveBeenCalled();
   });
 
+  it('开关关闭时不解析包材，缺袋型也不阻断发货', async () => {
+    const { service, tx, packagingService } = createService({
+      packagingDeductionEnabled: false,
+    });
+    packagingService.selectVacuumBag.mockRejectedValue(
+      new Error('没有真空袋'),
+    );
+
+    const result = await service.consumePackagingForShipment(tx, {
+      shipmentId: 's1',
+      orderIds: ['o1'],
+    });
+
+    expect(result.entryCount).toBe(0);
+    expect(packagingService.selectVacuumBag).not.toHaveBeenCalled();
+  });
+
   it('备货锅完工按分装计划扣，来源是锅号:stock', async () => {
     const { service, tx } = createService();
 

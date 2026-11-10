@@ -153,7 +153,7 @@ const boxOptions = ref<Array<{ id: string; name: string; productModel?: string }
 
 onLoad(async (options: any) => {
   try {
-    const res: any = await request({ url: '/admin/order-shipments/box-options', method: 'GET' })
+    const res: any = await request({ url: '/staff/shipping/box-options', method: 'GET' })
     boxOptions.value = [
       { id: '', name: '按重量推荐' },
       ...(Array.isArray(res) ? res : []),

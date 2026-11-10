@@ -130,7 +130,7 @@ export class StaffInventoryController {
   async getStocktakes(
     @Query('limit') limit?: string,
   ): Promise<ApiResponseDto<any[]>> {
-    const stocktakes = await this.inventoryService.listStocktakes(
+    const stocktakes = await this.inventoryService.listStocktakesForStaff(
       limit ? Number(limit) : undefined,
     );
 
@@ -155,6 +155,15 @@ export class StaffInventoryController {
       DAMAGED: '破损污染',
       OTHER: '其他',
     };
+    const allowedCategories = [
+      InventoryAdjustmentCategory.INTERNAL_USE,
+      InventoryAdjustmentCategory.EXPIRED,
+      InventoryAdjustmentCategory.DAMAGED,
+      InventoryAdjustmentCategory.OTHER,
+    ];
+    if (!allowedCategories.includes(body.category)) {
+      throw new BadRequestException('分类不对');
+    }
     const quantity = Math.abs(Number(body.quantity));
     if (!Number.isFinite(quantity) || quantity <= 0) {
       throw new BadRequestException('数量必须大于 0');

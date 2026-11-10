@@ -4,6 +4,8 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
+import { Reflector } from '@nestjs/core';
+import { JwtAuthService } from 'src/interfaces/auth/jwt.service';
 import { StaffKitchenController } from 'src/staff-kitchen.controller';
 import { KitchenService } from 'src/application/kitchen/kitchen.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
@@ -27,6 +29,11 @@ describe('StaffKitchenController', () => {
           provide: KitchenService,
           useValue: mockKitchenService,
         },
+        {
+          provide: JwtAuthService,
+          useValue: { validateToken: jest.fn() },
+        },
+        Reflector,
       ],
     }).compile();
 

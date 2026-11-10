@@ -87,8 +87,12 @@ function createPrismaFake() {
         return { count: data.length };
       }),
     },
-    inventoryStocktake: { create: jest.fn() },
+    inventoryStocktake: {
+      create: jest.fn(),
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
     inventoryStocktakeLine: { createMany: jest.fn() },
+    $executeRawUnsafe: jest.fn(),
     $transaction: jest.fn(async (callback: any) => callback(fake)),
   };
   return { fake, created };
@@ -182,6 +186,31 @@ describe('opening stocktake', () => {
     expect(
       created.find((row) => row.ingredientId === 'ing-bag'),
     ).toBeUndefined();
+  });
+
+  it('已经执行过期初盘点时拒绝重复 apply', async () => {
+    const { fake } = createPrismaFake();
+    fake.inventoryStocktake.findFirst.mockResolvedValue({
+      id: 'opening-old',
+      appliedAt: new Date('2026-11-09T10:00:00.000Z'),
+    });
+    const path = writeCsv(
+      csv(
+        'ing-salmon,冷冻三文鱼,1180,克,\ning-pumpkin,南瓜,8600,克,\ning-oil,鱼油,28,粒,\ning-bag,食品真空袋,100,个,\n',
+      ),
+    );
+
+    const result = await runOpeningStocktake(fake, {
+      csvPath: path,
+      apply: true,
+      scope: 'all',
+      allowPartial: false,
+      createdBy: 'tester',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(String(result.errors)).toContain('不能重复执行');
+    expect(fake.inventoryStocktake.create).not.toHaveBeenCalled();
   });
 
   it('refuses to apply while ingredients are missing unless allowPartial', async () => {

@@ -25,6 +25,12 @@ export class PackagingConsumptionService {
     private readonly globalConfigService: GlobalConfigService,
   ) {}
 
+  /** 开关是否开启（关着时连包材解析都不做，避免缺数据阻断发货）。 */
+  async isEnabled(): Promise<boolean> {
+    const config = await this.globalConfigService.getGlobalConfig();
+    return config.packagingDeductionEnabled === true;
+  }
+
   /**
    * 发货确认时扣袋/标签。
    * 数据源是发货明细（每行：订单 + 每袋克数 + 袋数），不是价格快照。
@@ -34,6 +40,14 @@ export class PackagingConsumptionService {
     tx: Prisma.TransactionClient,
     input: { shipmentId: string; orderIds: string[] },
   ): Promise<{ entryCount: number }> {
+    const config = await this.globalConfigService.getGlobalConfig();
+    if (!config.packagingDeductionEnabled) {
+      this.logger.log(
+        `[Packaging] 包材扣减开关关闭，跳过发货 ${input.shipmentId}`,
+      );
+      return { entryCount: 0 };
+    }
+
     const items = await tx.orderShipmentPackageItem.findMany({
       where: { package: { shipmentId: input.shipmentId } },
       select: { orderId: true, specG: true, bags: true },
@@ -49,7 +63,6 @@ export class PackagingConsumptionService {
     });
     const tastingOrderIds = new Set(tasting.map((row) => row.orderId));
 
-    const config = await this.globalConfigService.getGlobalConfig();
     const labelId =
       config.defaultProductLabelId || DEFAULT_PRODUCT_LABEL_INGREDIENT_ID;
 
@@ -120,13 +133,6 @@ export class PackagingConsumptionService {
       createdAt: new Date(),
     }));
 
-    if (!config.packagingDeductionEnabled) {
-      this.logger.log(
-        `[Packaging] 包材扣减开关关闭，跳过发货 ${input.shipmentId}（应扣 ${rows.length} 行）`,
-      );
-      return { entryCount: 0 };
-    }
-
     if (rows.length > 0) {
       await tx.inventoryLedgerEntry.createMany({
         data: rows,
@@ -193,8 +199,15 @@ export class PackagingConsumptionService {
     if (!unit.stockPortionPlan) return { entryCount: 0 };
     if ((unit.sourceOrderItemIds || []).length > 0) return { entryCount: 0 };
 
+    const config = await this.globalConfigService.getGlobalConfig();
+    if (!config.packagingDeductionEnabled) {
+      this.logger.log(
+        `[Packaging] 包材扣减开关关闭，跳过备货锅 ${unit.id}`,
+      );
+      return { entryCount: 0 };
+    }
+
     return this.prisma.$transaction(async (tx) => {
-      const config = await this.globalConfigService.getGlobalConfig();
       const labelId =
         config.defaultProductLabelId || DEFAULT_PRODUCT_LABEL_INGREDIENT_ID;
       const bag = await this.packagingService.selectVacuumBag(
@@ -216,13 +229,6 @@ export class PackagingConsumptionService {
           costAmount: null,
           createdAt: new Date(),
         }));
-
-      if (!config.packagingDeductionEnabled) {
-        this.logger.log(
-          `[Packaging] 包材扣减开关关闭，跳过备货锅 ${unit.id}（应扣 ${rows.length} 行）`,
-        );
-        return { entryCount: 0 };
-      }
 
       if (rows.length > 0) {
         await tx.inventoryLedgerEntry.createMany({

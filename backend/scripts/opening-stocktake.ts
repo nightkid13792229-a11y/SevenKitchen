@@ -356,8 +356,23 @@ export async function runOpeningStocktake(
   const now = new Date();
   const note = ['期初盘点', args.reason].filter(Boolean).join(' / ');
 
-  await prisma.$transaction(async (tx: any) => {
-    await tx.inventoryStocktake.create({
+  try {
+    await prisma.$transaction(async (tx: any) => {
+      // 同一时间只允许一个期初任务执行；已执行过则拒绝，避免重复写差额。
+      await tx.$executeRawUnsafe(
+        "SELECT pg_advisory_xact_lock(hashtext('opening-stocktake'))",
+      );
+      const existing = await tx.inventoryStocktake.findFirst({
+        where: { type: 'OPENING', status: 'APPLIED' },
+        select: { id: true, appliedAt: true },
+      });
+      if (existing) {
+        throw new Error(
+          `已经执行过期初盘点（${existing.id} / ${existing.appliedAt?.toISOString?.() ?? existing.appliedAt}），不能重复执行`,
+        );
+      }
+
+      await tx.inventoryStocktake.create({
       data: {
         id: stocktakeId,
         type: 'OPENING',
@@ -401,7 +416,15 @@ export async function runOpeningStocktake(
         skipDuplicates: true,
       });
     }
-  });
+    });
+  } catch (error: any) {
+    return {
+      ...plan,
+      ok: false,
+      dryRun: false,
+      errors: [String(error?.message || error)],
+    };
+  }
 
   return { ok: true, dryRun: false, stocktakeId, ...plan };
 }

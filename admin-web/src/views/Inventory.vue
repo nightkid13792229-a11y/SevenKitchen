@@ -28,7 +28,6 @@
           </div>
           <div class="header-actions">
             <el-button @click="openAdjustmentDialog()">手工调整</el-button>
-            <el-button type="primary" @click="openStocktakeDialog">新建盘点</el-button>
             <el-button @click="refreshActiveTab">刷新</el-button>
           </div>
         </div>

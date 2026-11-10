@@ -528,6 +528,7 @@ export class InventoryService {
   async getAvailabilityByIngredientIds(
     ingredientIds: string[],
     dateRange?: { start: Date; end: Date },
+    excludePurchaseListId?: string,
   ): Promise<Map<string, InventoryAvailabilitySnapshot>> {
     const uniqueIds = Array.from(new Set(ingredientIds.filter(Boolean)));
     if (uniqueIds.length === 0) {
@@ -558,7 +559,11 @@ export class InventoryService {
           quantityG: true,
         },
       }),
-      this.getInTransitByIngredientIds(uniqueIds, dateRange),
+      this.getInTransitByIngredientIds(
+        uniqueIds,
+        dateRange,
+        excludePurchaseListId,
+      ),
     ]);
 
     const balanceMap = new Map(balances);
@@ -598,6 +603,8 @@ export class InventoryService {
   async getInTransitByIngredientIds(
     ingredientIds: string[],
     dateRange?: { start: Date; end: Date },
+    excludePurchaseListId?: string,
+    includeReplenishment = false,
   ): Promise<Map<string, number>> {
     const result = new Map<string, number>();
     if (!dateRange || ingredientIds.length === 0) {
@@ -609,8 +616,13 @@ export class InventoryService {
         ingredientId: { in: ingredientIds },
         purchaseList: {
           status: 'PENDING' as any,
-          kind: 'ORDER_DEMAND' as any,
+          kind: includeReplenishment
+            ? { in: ['ORDER_DEMAND', 'STOCK_REPLENISHMENT'] as any }
+            : ('ORDER_DEMAND' as any),
           targetDate: { gte: dateRange.start, lte: dateRange.end },
+          ...(excludePurchaseListId
+            ? { id: { not: excludePurchaseListId } }
+            : {}),
         },
       },
       select: {
@@ -1911,7 +1923,40 @@ export class InventoryService {
         throw new ConflictException('盘点状态已变化，请刷新后重试');
       }
 
-      if (!input.approve) return;
+      if (!input.approve) {
+        // 提交时容差内的行已经入账；驳回必须把已入账的冲回去，否则账上撤不回来。
+        const appliedEntries = await tx.inventoryLedgerEntry.findMany({
+          where: {
+            sourceType: InventorySourceType.STOCKTAKE as any,
+            sourceId: id,
+          },
+          select: {
+            ingredientId: true,
+            procurementSkuId: true,
+            deltaG: true,
+          },
+        });
+        const reversals = appliedEntries
+          .filter((entry) => Math.abs(Number(entry.deltaG)) > 0.0001)
+          .map((entry) => ({
+            id: randomUUID(),
+            ingredientId: entry.ingredientId,
+            procurementSkuId: entry.procurementSkuId ?? null,
+            deltaG: -Number(entry.deltaG),
+            sourceType: InventorySourceType.STOCKTAKE as any,
+            sourceId: `${id}:reject`,
+            sourceVersion: 1,
+            costAmount: null,
+            createdAt: now,
+          }));
+        if (reversals.length > 0) {
+          await tx.inventoryLedgerEntry.createMany({
+            data: reversals,
+            skipDuplicates: true,
+          });
+        }
+        return;
+      }
 
       const lines = await tx.inventoryStocktakeLine.findMany({
         where: { stocktakeId: id, countedQuantityG: { not: null } },
@@ -2063,6 +2108,14 @@ export class InventoryService {
 
     const enriched = await this.attachProcurementSkuNamesToStocktakes(stocktakes);
     return enriched.map((stocktake) => this.mapStocktake(stocktake));
+  }
+
+  /** 员工端列表：草稿只返回盲盘字段，避免盲盘期间读到账面/差异。 */
+  async listStocktakesForStaff(limit = 20): Promise<any[]> {
+    const rows = await this.listStocktakes(limit);
+    return rows.map((row) =>
+      row.status === 'DRAFT' ? this.toBlindStocktakeDto(row) : row,
+    );
   }
 
   private async getStocktakeById(id: string): Promise<InventoryStocktakeDto> {

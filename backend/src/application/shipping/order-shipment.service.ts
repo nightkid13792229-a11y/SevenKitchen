@@ -248,12 +248,16 @@ export class OrderShipmentService {
         }),
       });
 
+      const packagingEnabled = this.packagingConsumption
+        ? await this.packagingConsumption.isEnabled()
+        : false;
+
       for (let i = 0; i < normalized.length; i += 1) {
         const pkg = normalized[i];
         const packageId = randomUUID();
         const packageAllocation = allocation.packages[i];
-        const container = this.packagingConsumption
-          ? await this.packagingConsumption.resolvePackageContainer(
+        const container = packagingEnabled
+          ? await this.packagingConsumption!.resolvePackageContainer(
               packageAllocation.totalWeightG,
               pkg.boxIngredientId,
             )

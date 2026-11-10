@@ -965,6 +965,7 @@ export class PurchasingService {
     requirements: PurchaseRequirement[],
     ingredientLookup: Map<string, any>,
     dateRange?: { start: Date; end: Date },
+    excludePurchaseListId?: string,
   ): Promise<PurchaseRequirement[]> {
     const flags = await this.prisma.globalConfig.findUnique({
       where: { id: 'singleton' },
@@ -992,6 +993,7 @@ export class PurchasingService {
         ? await this.inventoryService.getAvailabilityByIngredientIds(
             candidateIds,
             dateRange,
+            excludePurchaseListId,
           )
         : new Map();
 
@@ -1074,16 +1076,18 @@ export class PurchasingService {
         );
       }
 
-      // 影子模式：开关没开时也算一遍净额，只记日志不改结果
+      // 影子模式：开关没开时也算一遍净额，只记日志不改结果。
+      // 库存策略原料「只差在途」、以及日采原料，都要能看见差异。
       if (
         shadow &&
-        !this.usesInventoryForRequirement(ingredient) &&
-        baseAvailability
+        availability &&
+        (!this.usesInventoryForRequirement(ingredient) ||
+          Number(availability.inTransitQuantityG ?? 0) > 0)
       ) {
         const shadowResult = this.applyInventoryOffset({
           requirement,
           ingredient,
-          availability: baseAvailability,
+          availability,
           usesInventoryOverride: true,
           useInTransit: true,
         });
@@ -1093,7 +1097,7 @@ export class PurchasingService {
         );
         if (Math.abs(oldShortage - netShortage) > 0.001) {
           this.logger.warn(
-            `[Net-Shadow] ${ingredient?.name ?? requirement.ingredientId} 旧缺口 ${oldShortage} / 净额缺口 ${netShortage}（在途 ${baseAvailability.inTransitQuantityG}）`,
+            `[Net-Shadow] ${ingredient?.name ?? requirement.ingredientId} 旧缺口 ${oldShortage} / 净额缺口 ${netShortage}（在途 ${availability.inTransitQuantityG}）`,
           );
         }
       }
@@ -1822,6 +1826,7 @@ export class PurchasingService {
 
   private async calculatePurchaseRequirementsFromOrders(
     orders: Order[],
+    excludePurchaseListId?: string,
   ): Promise<PurchaseRequirement[]> {
     if (orders.length === 0) {
       return [];
@@ -1984,6 +1989,7 @@ export class PurchasingService {
       enrichedRequirements,
       ingredientLookup,
       inTransitRange,
+      excludePurchaseListId,
     );
   }
 
@@ -2060,6 +2066,8 @@ export class PurchasingService {
         ? await this.inventoryService.getInTransitByIngredientIds(
             filteredIngredients.map((ingredient) => ingredient.id),
             { start: todayStart, end: todayEnd },
+            undefined,
+            true,
           )
         : new Map<string, number>();
     const ingredientLookup = new Map(
@@ -3675,7 +3683,10 @@ export class PurchasingService {
     );
 
     const calculatedRequirements =
-      await this.calculatePurchaseRequirementsFromOrders(sourceOrders);
+      await this.calculatePurchaseRequirementsFromOrders(
+        sourceOrders,
+        purchaseListId,
+      );
 
     if (calculatedRequirements.length === 0) {
       throw new BadRequestException('没有找到可以纳入的订单');

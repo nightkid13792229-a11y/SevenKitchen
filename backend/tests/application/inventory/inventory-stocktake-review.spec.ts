@@ -54,7 +54,7 @@ describe('InventoryService stocktake review', () => {
       ingredient: { findMany: jest.fn() },
       inventoryLedgerEntry: {
         groupBy: jest.fn(),
-        findMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn(),
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
@@ -259,6 +259,34 @@ describe('InventoryService stocktake review', () => {
       }),
     );
     expect(prisma.inventoryLedgerEntry.createMany).not.toHaveBeenCalled();
+  });
+
+  it('驳回把提交时自动入账的行冲回去', async () => {
+    prisma.inventoryLedgerEntry.findMany.mockResolvedValue([
+      { ingredientId: 'i1', procurementSkuId: null, deltaG: -40 },
+    ]);
+    prisma.inventoryStocktake.findUnique
+      .mockResolvedValueOnce({ id: 's1', status: 'SUBMITTED' })
+      .mockResolvedValueOnce(
+        stocktake([line({ countedQuantityG: 960, deltaG: -40 })], 'REJECTED'),
+      );
+    prisma.inventoryStocktake.updateMany.mockResolvedValue({ count: 1 });
+
+    await service.reviewStocktake(
+      's1',
+      { approve: false, note: '盘错单了' },
+      'admin-1',
+    );
+
+    const rows = prisma.inventoryLedgerEntry.createMany.mock.calls[0][0].data;
+    expect(rows).toEqual([
+      expect.objectContaining({
+        ingredientId: 'i1',
+        deltaG: 40,
+        sourceId: 's1:reject',
+        sourceType: 'STOCKTAKE',
+      }),
+    ]);
   });
 
   it('未盘一项都没有时不能提交', async () => {

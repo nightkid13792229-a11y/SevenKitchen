@@ -16,6 +16,7 @@ import {
   UseGuards,
   ValidationPipe,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -27,6 +28,7 @@ import {
 } from '@nestjs/swagger';
 import { IsString, IsNotEmpty } from 'class-validator';
 import { ShippingFulfillmentService } from '../../application/shipping/shipping-fulfillment.service';
+import { OrderShipmentService } from '../../application/shipping/order-shipment.service';
 import type { WechatShippingOrderStatusResult } from '../../application/shipping/wechat-shipping-upload.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { OrderStatus } from '../../domain';
@@ -73,7 +75,17 @@ export class OrderReadyForShipmentResponseDto {
 export class StaffShippingController {
   constructor(
     private readonly shippingFulfillmentService: ShippingFulfillmentService,
+    @Optional()
+    private readonly orderShipmentService?: OrderShipmentService,
   ) {}
+
+  @Get('box-options')
+  @UseGuards(AuthGuard, StaffGuard)
+  @ApiOperation({ summary: '发货箱型选项（员工端）' })
+  async getBoxOptions(): Promise<ApiResponseDto<any[]>> {
+    const options = (await this.orderShipmentService?.listBoxOptions()) ?? [];
+    return ApiResponseDto.success(options);
+  }
 
   @Get('orders')
   @ApiOperation({ summary: 'List orders ready for shipment' })

@@ -1070,6 +1070,7 @@ const receiptView = computed<ReceiptView>(() =>
     state: receiptState.value,
     carrierName: receiptCarrierName.value || null,
     trackingNumber: trackingNumber.value || receiptTracking.value || null,
+    recognizedTrackingNumber: receiptTracking.value || null,
     shippingFee: receiptFee.value,
     conflicts: receiptConflicts.value,
     duplicateLabel: receiptDuplicateLabel.value || null,

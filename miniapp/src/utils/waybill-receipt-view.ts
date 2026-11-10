@@ -36,6 +36,8 @@ export interface ReceiptViewInput {
   conflicts?: ReceiptConflictView[];
   /** duplicate 时点名"这个号已经在哪张单上" */
   duplicateLabel?: string | null;
+  /** 识别那一刻的运单号：员工事后改过单号，核对结论就作废了 */
+  recognizedTrackingNumber?: string | null;
   /** 员工已经手动确认过（AI 认不出来 / 没能核对时） */
   manualConfirmed?: boolean;
   /** 后端给的补充说明（模型超时等） */
@@ -60,6 +62,9 @@ const CONFLICT_TEXT: Record<string, (expected: string, actual: string) => string
 };
 
 const money = (value: number): string => Number(value).toFixed(2);
+
+const sameTracking = (left: string, right: string): boolean =>
+  left.trim().toUpperCase() === right.trim().toUpperCase();
 
 const buildTitle = (input: ReceiptViewInput): string => {
   const parts: string[] = [];
@@ -104,6 +109,22 @@ export function buildReceiptView(input: ReceiptViewInput): ReceiptView {
   }
 
   if (state === 'match') {
+    // 单号是"要验的东西"：员工核对通过后又手动改了号，那条核对结论就作废了。
+    // 承运商和运费改了不影响（它们不在核对范围里）。
+    if (
+      input.trackingNumber &&
+      input.recognizedTrackingNumber &&
+      !sameTracking(input.trackingNumber, input.recognizedTrackingNumber)
+    ) {
+      return {
+        tone: 'warn',
+        title: '单号改过了，需要重新核对',
+        desc: '存根核对的是原来那个单号，改过号要重新传一张存根（或者手动确认）',
+        canShip: false,
+        canManual: true,
+      };
+    }
+
     const hints = buildHints(input);
     return {
       tone: 'ok',

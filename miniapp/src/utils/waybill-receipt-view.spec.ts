@@ -100,6 +100,32 @@ describe('存根上传块 · buildReceiptView', () => {
     expect(view.desc).toContain('手动');
   });
 
+  it('★ 核对通过后员工又改了单号 → 绿条必须变回「要重新核对」', () => {
+    const view = buildReceiptView({
+      state: 'match',
+      carrierName: '顺丰速运',
+      trackingNumber: 'SF0999999999999',
+      recognizedTrackingNumber: 'SF0204691009893',
+      shippingFee: 56,
+    });
+
+    expect(view.tone).toBe('warn');
+    expect(view.canShip).toBe(false);
+    expect(view.desc).toContain('改');
+  });
+
+  it('单号没改（只有大小写/空格差异）不算改', () => {
+    const view = buildReceiptView({
+      state: 'match',
+      carrierName: '顺丰速运',
+      trackingNumber: ' sf0204691009893 ',
+      recognizedTrackingNumber: 'SF0204691009893',
+      shippingFee: 56,
+    });
+
+    expect(view.canShip).toBe(true);
+  });
+
   it('没读到运费时标题不写金额', () => {
     const view = buildReceiptView({
       state: 'match',

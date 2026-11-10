@@ -382,6 +382,7 @@ function receiptViewOf(pkg: PackageState): ReceiptView {
     state: pkg.receipt.state,
     carrierName: pkg.receipt.carrierName || null,
     trackingNumber: pkg.tracking || pkg.receipt.trackingNumber || null,
+    recognizedTrackingNumber: pkg.receipt.trackingNumber || null,
     shippingFee: pkg.receipt.fee,
     conflicts: pkg.receipt.conflicts,
     duplicateLabel: pkg.receipt.duplicateLabel || null,

@@ -79,8 +79,6 @@
   "src/pages/staff-orders/detail.vue → gradient()（脚本里调用了 9 次，但文件里找不到定义）",
   "src/pages/staff-orders/detail.vue → orderOrStatus()（脚本里调用了 2 次，但文件里找不到定义）",
   "src/pages/staff-orders/detail.vue → region()（脚本里调用了 3 次，但文件里找不到定义）",
-  "src/pages/staff-orders/index.vue → address()（脚本里调用了 3 次，但文件里找不到定义）",
-  "src/pages/staff-orders/index.vue → orderOrStatus()（脚本里调用了 2 次，但文件里找不到定义）",
   "src/pages/staff-production/detail.vue → Production()（脚本里调用了 1 次，但文件里找不到定义）",
   "src/pages/staff-production/detail.vue → orderId()（脚本里调用了 3 次，但文件里找不到定义）",
   "src/pages/staff-production/print-label.vue → n1()（脚本里调用了 2 次，但文件里找不到定义）",

@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const source = readFileSync(
-  resolve(__dirname, 'staff-orders/index.vue'),
-  'utf8',
-);
 const detailSource = readFileSync(
   resolve(__dirname, 'staff-orders/detail.vue'),
   'utf8',
@@ -18,16 +14,6 @@ const productionDateUtilSource = readFileSync(
   resolve(__dirname, '../utils/order-production-date.ts'),
   'utf8',
 );
-
-describe('staff orders quick search', () => {
-  it('searches by order number, dog name, phone suffix, or status through the common keyword query', () => {
-    expect(source).toContain('按订单号/狗狗名/手机号后四位/状态搜索');
-    expect(source).toContain('v-model="searchKeyword"');
-    expect(source).toContain('params.keyword = keyword');
-    expect(source).not.toContain('params.orderId =');
-    expect(source).not.toContain('orderIdKeyword');
-  });
-});
 
 describe('staff order address reuse', () => {
   it('exposes staff order address API helpers', () => {
@@ -92,9 +78,7 @@ describe('staff order mobile operations', () => {
   });
 
   it('syncs WeChat shipping info after mobile staff shipment', () => {
-    expect(source).toContain('/staff/shipping/orders/${orderId}/wechat-shipping-upload');
     expect(detailSource).toContain('/staff/shipping/orders/${orderId}/wechat-shipping-upload');
-    expect(source).toContain('微信发货同步失败');
     expect(detailSource).toContain('微信发货同步失败');
   });
 
@@ -264,13 +248,6 @@ describe('staff order detail · 状态改版', () => {
   it('★ 从列表带 action=ship 进来会自动打开发货弹窗', () => {
     expect(detailSource).toContain("options.action === 'ship'");
     expect(detailSource).toContain('if (autoShip && canShip.value) shipOrder()');
-  });
-
-  it('★ 旧后台订单列表：能否发货与能否合并同一口径（试吃装 PAID 也算可发）', () => {
-    const canShip =
-      source.match(/function canShip\(order: Order\): boolean \{[\s\S]*?\n\}/)?.[0] || '';
-    expect(canShip).toContain("order.type === 'TASTING_PACK'");
-    expect(canShip).toContain("['PAID', 'FREEZING'].includes(order.status)");
   });
 
   it('★ 试吃装详情口径和列表一致：待发货 / 现货可发 / 无需制作（2026-11-10）', () => {
@@ -495,5 +472,35 @@ describe('staff order detail · 发货弹窗顶部顾客/狗狗/收货地址', (
   it('没录地址时给提示，不留一个空白的「复制地址」按钮', () => {
     expect(detailSource).toContain('未录入收货地址');
     expect(detailSource).toContain('v-if="order.address" class="ship-copy-pill"');
+  });
+});
+
+/**
+ * 2026-11-10：旧「后台订单」列表页整页撤掉（老板点头）。
+ *
+ * 员工端订单入口早已是「订单中心」，这个页面没有任何入口，
+ * 里面那套发货弹窗（只有物流公司 + 单号、连运费都没有）也跟着下线，
+ * 免得以后维护时把两套发货流程看混。
+ */
+describe('staff order detail · 旧后台订单列表已下线', () => {
+  it('页面文件和路由一起删掉，不留没有入口的死页面', () => {
+    expect(existsSync(resolve(__dirname, 'staff-orders/index.vue'))).toBe(false);
+
+    const pagesConfig = JSON.parse(
+      readFileSync(resolve(__dirname, '../pages.json'), 'utf8'),
+    );
+    const subPackage = pagesConfig.subPackages.find(
+      (item: { root: string }) => item.root === 'pages/staff-orders',
+    );
+    expect(subPackage.pages.map((page: { path: string }) => page.path)).toEqual([
+      'detail',
+      'batch-ship',
+    ]);
+  });
+
+  it('工作台里指向旧列表的跳转也一起清掉', () => {
+    const workbench = readFileSync(resolve(__dirname, 'staff-workbench/index.vue'), 'utf8');
+    expect(workbench).not.toContain('/pages/staff-orders/index');
+    expect(workbench).toContain('/pages/staff-order-center/index');
   });
 });

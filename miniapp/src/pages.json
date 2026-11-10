@@ -302,13 +302,6 @@
       "root": "pages/staff-orders",
       "pages": [
         {
-          "path": "index",
-          "style": {
-            "navigationBarTitleText": "后台订单",
-            "navigationStyle": "custom"
-          }
-        },
-        {
           "path": "detail",
           "style": {
             "navigationBarTitleText": "鲜食订单详情"

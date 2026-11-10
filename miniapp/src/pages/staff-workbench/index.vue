@@ -151,10 +151,6 @@ function goToProduction() {
   uni.navigateTo({ url: '/pages/staff-production/index' })
 }
 
-function viewTodayOrders() {
-  uni.navigateTo({ url: '/pages/staff-orders/index' })
-}
-
 function goToCustomerDogs() {
   uni.navigateTo({ url: '/pages/staff-customer-service/customers' })
 }

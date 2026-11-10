@@ -11,7 +11,6 @@ const root = resolve(__dirname, '../..');
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
 const pagesJson = read('src/pages.json');
-const listSource = read('src/pages/staff-orders/index.vue');
 const orderCenterSource = read('src/pages/staff-order-center/index.vue');
 const batchSource = read('src/pages/staff-orders/batch-ship.vue');
 const detailSource = read('src/pages/staff-orders/detail.vue');
@@ -21,17 +20,17 @@ describe('合并 / 拆包发货', () => {
   it('★ 「发货单」页已注册，能从订单中心跳进来（旧后台订单页已无入口）', () => {
     expect(pagesJson).toContain('"path": "batch-ship"');
     expect(orderCenterSource).toContain('/pages/staff-orders/batch-ship?orderIds=');
-    // 旧页还留着同样代码，但不能只靠它守入口
-    expect(listSource).toContain('/pages/staff-orders/batch-ship?orderIds=');
+    // 2026-11-10：旧「后台订单」列表页已下线，入口只由订单中心守
   });
 
   it('★ 列表只有点了「合并发货」才进选择态，平时不打扰', () => {
-    expect(listSource).toContain('mergeMode');
-    expect(listSource).toContain('toggleMergeMode');
+    expect(orderCenterSource).toContain('mergeMode');
+    expect(orderCenterSource).toContain('toggleMergeMode');
     // 非选择态点卡片还是进详情
-    expect(listSource).toContain('viewOrderDetail(order.id)');
-    // 只有待发货的单能勾
-    expect(listSource).toContain("['PAID', 'FREEZING'].includes(order.status)");
+    expect(orderCenterSource).toContain('@tap="onCardTap(item)"');
+    expect(orderCenterSource).toContain('/pages/staff-orders/detail?id=');
+    // 只有待发货的鲜食能勾（后端 TO_SHIP 已含试吃装 PAID）
+    expect(orderCenterSource).toContain("item.statusGroup === 'TO_SHIP'");
   });
 
   it('★ 发货单页：默认 1 个包裹、能再拆、最多 6 个', () => {

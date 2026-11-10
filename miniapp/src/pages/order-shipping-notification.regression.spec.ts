@@ -5,7 +5,6 @@ import { readAllPagePaths } from '../../test-utils/pages-json';
 
 const ordersApiSource = readFileSync(resolve(__dirname, '../api/orders.ts'), 'utf8');
 const orderDetailSource = readFileSync(resolve(__dirname, 'order-detail/index.vue'), 'utf8');
-const staffOrdersSource = readFileSync(resolve(__dirname, 'staff-orders/index.vue'), 'utf8');
 const staffOrderDetailSource = readFileSync(resolve(__dirname, 'staff-orders/detail.vue'), 'utf8');
 const pagesConfigSource = readFileSync(resolve(__dirname, '../pages.json'), 'utf8');
 
@@ -34,9 +33,6 @@ describe('customer shipping notification subscription flow', () => {
   });
 
   it('shows a staff fallback share action after shipment', () => {
-    expect(staffOrdersSource).toContain('showShippingShareFallback');
-    expect(staffOrdersSource).toContain('转发给用户');
-    expect(staffOrdersSource).toContain('data-share-type="shipping-notice"');
     expect(staffOrderDetailSource).toContain('showShippingShareFallback');
     expect(staffOrderDetailSource).toContain('转发给用户');
     expect(staffOrderDetailSource).toContain('data-share-type="shipping-notice"');

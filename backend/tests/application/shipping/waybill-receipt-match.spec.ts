@@ -169,6 +169,60 @@ describe('存根比对 · compareRecipient', () => {
     expect(result.conflicts[0].actual).toBe('昆都仑区');
   });
 
+  it('★ "开发区"不能被当成区县（否则正确的存根被判对不上）', () => {
+    const result = compareRecipient(
+      {
+        name: '张赛珺',
+        phoneMasked: '186****2107',
+        address: '河南省郑州市经济技术开发区第五大街1号',
+      },
+      expected,
+    );
+
+    expect(result.status).toBe('unknown');
+    expect(result.conflicts).toEqual([]);
+  });
+
+  it('★ "XX小区"不能被当成区县', () => {
+    const result = compareRecipient(
+      {
+        name: '张赛珺',
+        phoneMasked: '186****2107',
+        address: '阳光小区5栋301',
+      },
+      expected,
+    );
+
+    expect(result.status).toBe('unknown');
+    expect(result.conflicts).toEqual([]);
+  });
+
+  it('"市辖区"也不能把"辖区"当成区县', () => {
+    const result = compareRecipient(
+      {
+        name: '张赛珺',
+        phoneMasked: '186****2107',
+        address: '某某市市辖区幸福路1号',
+      },
+      expected,
+    );
+
+    expect(result.status).toBe('unknown');
+  });
+
+  it('★ 地址里没写"区"字，但详细地址对得上 → 算一致', () => {
+    const result = compareRecipient(
+      {
+        name: '张赛珺',
+        phoneMasked: '186****2107',
+        address: '礼泉路700弄55号703 普陀',
+      },
+      expected,
+    );
+
+    expect(result.status).toBe('match');
+  });
+
   it('订单侧地址是空的 → unknown（不能反过来拦死）', () => {
     const result = compareRecipient(
       { name: '张赛珺', phoneMasked: '186****2107', address: '上海市普陀区礼泉路700弄55号703' },

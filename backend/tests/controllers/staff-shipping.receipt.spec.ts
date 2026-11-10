@@ -156,7 +156,7 @@ describe('StaffShippingController · 存根接口', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('补剂改地址：正常 → 转给服务层并带上操作人', async () => {
+  it('补剂改地址：员工改的，审计要记成 STAFF（不是 ADMIN）', async () => {
     const { controller } = build();
     const dto = {
       recipientName: '张赛珺',
@@ -169,13 +169,38 @@ describe('StaffShippingController · 存根接口', () => {
     };
 
     await controller.updateSupplementAddress('s1', dto, {
-      user: { userId: 'u1' },
+      user: { userId: 'u1', role: 'STAFF' },
     });
 
     expect(controller.supplementOrderService.adminUpdateAddress).toHaveBeenCalledWith(
       's1',
       dto,
       'u1',
+      'STAFF',
+    );
+  });
+
+  it('补剂改地址：管理员改的就记 ADMIN', async () => {
+    const { controller } = build();
+    const dto = {
+      recipientName: '张赛珺',
+      phone: '18612342107',
+      province: '上海市',
+      city: '上海市',
+      district: '普陀区',
+      detail: '礼泉路700号',
+      reason: '顾客微信说搬家了',
+    };
+
+    await controller.updateSupplementAddress('s1', dto, {
+      user: { userId: 'boss', role: 'ADMIN' },
+    });
+
+    expect(controller.supplementOrderService.adminUpdateAddress).toHaveBeenCalledWith(
+      's1',
+      dto,
+      'boss',
+      'ADMIN',
     );
   });
 });

@@ -27,6 +27,7 @@ describe('存根识别 · parseWaybillReceipt', () => {
     expect(parsed).toEqual({
       documentType: 'waybill_receipt',
       carrierCode: 'SF',
+      carrierName: '顺丰速运',
       trackingNumber: 'SF0204691009893',
       shippingFee: 56,
       recipientName: '张赛珺',
@@ -46,6 +47,7 @@ describe('存根识别 · parseWaybillReceipt', () => {
     expect(parsed).toEqual({
       documentType: 'other',
       carrierCode: null,
+      carrierName: null,
       trackingNumber: null,
       shippingFee: null,
       recipientName: null,
@@ -126,6 +128,26 @@ describe('存根识别 · parseWaybillReceipt', () => {
     expect(parsed.recipientName).toBeNull();
     expect(parsed.recipientPhoneMasked).toBeNull();
     expect(parsed.recipientAddress).toBeNull();
+  });
+
+  it('★ 快递公司名要原样带出来（页面绿条要显示"顺丰速运"）', () => {
+    expect(
+      parseWaybillReceipt({
+        documentType: 'waybill_receipt',
+        carrierName: ' 顺丰速运 ',
+        trackingNumber: 'SF0204691009893',
+      }).carrierName,
+    ).toBe('顺丰速运');
+  });
+
+  it('★ 认不出快递公司时，公司名也给 null（页面会说"没认出快递公司"）', () => {
+    expect(
+      parseWaybillReceipt({
+        documentType: 'waybill_receipt',
+        carrierName: '某某快运',
+        trackingNumber: 'SF0204691009893',
+      }).carrierName,
+    ).toBeNull();
   });
 
   it('模型返回 null / 字符串这种废数据不炸', () => {

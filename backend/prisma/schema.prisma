@@ -6101,7 +6101,7 @@ model WaybillReceiptRecord {
   /// 识别/手填的运单号；彻底失败为 null
   trackingNumber      String?  @map("tracking_number") @db.VarChar(64)
   carrierCode         String?  @map("carrier_code") @db.VarChar(32)
-  orderIds            String[] @map("order_ids")
+  orderIds            String[] @default([]) @map("order_ids")
   /// MATCH / UNKNOWN / MISMATCH / DUPLICATE / MANUAL / DEGRADED / NOT_WAYBILL
   status              String   @map("status") @db.VarChar(20)
   conflicts           Json?    @map("conflicts")

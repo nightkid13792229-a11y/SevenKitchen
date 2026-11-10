@@ -244,6 +244,15 @@ export class ShipSupplementOrderDto {
   @IsIn(['NORMAL', 'NOT_REQUIRED'])
   shippingType?: 'NORMAL' | 'NOT_REQUIRED';
 
+  /**
+   * 小程序发货要求先验存根（2026-11-10 硬锁）。
+   * 后台网页不传 → 不受锁约束（管理员保留最终裁量权）。
+   */
+  @ApiPropertyOptional({ description: '要求先校验快递存根（小程序发货用）' })
+  @IsOptional()
+  @IsBoolean()
+  enforceWaybillCheck?: boolean;
+
   @ApiPropertyOptional({ description: '快递单号（正常发货必填）' })
   @IsOptional()
   @IsString()

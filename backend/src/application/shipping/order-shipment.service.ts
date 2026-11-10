@@ -31,6 +31,8 @@ import {
   allocatePackageFee,
   type AllocationItemInput,
 } from './shipping-fee-allocation';
+import { enforceWaybillLock } from './waybill-lock';
+import type { WaybillReceiptGuardService } from './waybill-receipt-guard.service';
 
 /** 一票上限（2026-11-07 老板确认）：最多 10 单 / 6 个包裹 */
 export const MAX_ORDERS_PER_SHIPMENT = 10;
@@ -55,6 +57,8 @@ export interface ShipmentPackageInput {
 export interface CreateShipmentInput {
   packages: ShipmentPackageInput[];
   note?: string | null;
+  /** 小程序发货要求先验存根（2026-11-10 硬锁）；后台网页不传 */
+  enforceWaybillCheck?: boolean;
 }
 
 export interface ShipmentPackageDto {
@@ -110,6 +114,9 @@ export class OrderShipmentService {
     private readonly wechatShippingUploadService?: WechatShippingUploadService,
     @Optional()
     private readonly packagingConsumption?: PackagingConsumptionService,
+    /** 发货硬锁（2026-11-10）：小程序来的发货要求每个包裹的每个单号都验过存根 */
+    @Optional()
+    private readonly waybillReceiptGuard?: WaybillReceiptGuardService,
   ) {}
 
   /**
@@ -212,6 +219,21 @@ export class OrderShipmentService {
         })),
       })),
     );
+
+    // 3.5) 发货硬锁：**每个包裹的每个单号**都要各自验过存根
+    //      （拆包时一张单会出现在多个包裹里，每个包裹的号都要核过；
+    //        合并时一个号覆盖几张单，那几条核对记录都得在）
+    if (input.enforceWaybillCheck === true) {
+      for (const pkg of normalized) {
+        for (const item of pkg.items) {
+          await enforceWaybillLock(this.waybillReceiptGuard, {
+            enabled: true,
+            orderIds: [item.orderId],
+            trackingNumber: pkg.trackingNumber,
+          });
+        }
+      }
+    }
 
     // 4) 域校验：状态机允许发货吗（会抛 InvalidStateTransitionError）
     const shippedAt = new Date();
@@ -762,3 +784,4 @@ export class OrderShipmentService {
     }
   }
 }
+

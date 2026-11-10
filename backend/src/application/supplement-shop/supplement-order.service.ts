@@ -293,6 +293,9 @@ export class SupplementOrderService {
     private readonly candidateService?: SupplementCandidateService,
     @Optional()
     private readonly supplementPackagingService?: SupplementPackagingService,
+    /** 发货硬锁（2026-11-10）：小程序来的发货要求先验存根；缺失时 fail closed */
+    @Optional()
+    private readonly waybillReceiptGuard?: WaybillReceiptGuardService,
   ) {}
 
   /**
@@ -1004,6 +1007,8 @@ export class SupplementOrderService {
       trackingNumber?: string;
       carrierCode?: string;
       actualShippingFee?: number | null;
+      /** 小程序发货要求先验存根（2026-11-10 硬锁） */
+      enforceWaybillCheck?: boolean;
     },
     actor: { type: 'STAFF' | 'ADMIN' | 'SYSTEM'; id?: string | null } = {
       type: 'STAFF',
@@ -1034,6 +1039,15 @@ export class SupplementOrderService {
         Number.isFinite(dto.actualShippingFee)
           ? Number(dto.actualShippingFee.toFixed(2)).toFixed(2)
           : null;
+    }
+
+    // 发货硬锁：验过存根才允许发（自用单不寄快递，不校验）
+    if (shippingType === 'NORMAL') {
+      await enforceWaybillLock(this.waybillReceiptGuard, {
+        enabled: dto.enforceWaybillCheck === true,
+        orderIds: [orderId],
+        trackingNumber: trackingNumber ?? '',
+      });
     }
 
     const now = new Date();
@@ -2739,3 +2753,6 @@ export class SupplementOrderService {
     };
   }
 }
+
+import { enforceWaybillLock } from '../shipping/waybill-lock';
+import type { WaybillReceiptGuardService } from '../shipping/waybill-receipt-guard.service';

@@ -57,6 +57,9 @@ import { Address, AddressRegion } from '../../domain/address/address.entity';
 import { ADDRESS_REPOSITORY } from '../address/address.service';
 import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { OrderStatusHistory } from '../../domain/order/order-status-history.entity';
+
+import { enforceWaybillLock } from '../shipping/waybill-lock';
+import type { WaybillReceiptGuardService } from '../shipping/waybill-receipt-guard.service';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from './order.service.tokens';
 import { ValidationError } from '../../domain/common/errors';
 import {
@@ -356,6 +359,13 @@ export class OrderService {
      */
     @Optional()
     private readonly weightGoalPlanService?: WeightGoalPlanService,
+    /**
+     * 发货硬锁（2026-11-10）：小程序来的发货请求要求"这单的运单号核对过"。
+     * @Optional 是为了不把下单链路绑死在这些可选能力上；真缺失时
+     * `enforceWaybillLock` 会**报错而不是放行**（fail closed）。
+     */
+    @Optional()
+    private readonly waybillReceiptGuard?: WaybillReceiptGuardService,
   ) {}
 
   /**
@@ -3170,6 +3180,8 @@ export class OrderService {
       trackingNumber?: string;
       carrierCode?: string;
       actualShippingFee?: number | null;
+      /** 小程序发货要求先验存根（2026-11-10 硬锁） */
+      enforceWaybillCheck?: boolean;
     },
     actorId?: string | null,
   ): Promise<Order> {
@@ -3201,6 +3213,13 @@ export class OrderService {
 
     const trackingNumber = String(options.trackingNumber || '').trim();
     const carrierCode = String(options.carrierCode || '').trim();
+
+    // 发货硬锁：验过存根才允许发（小程序来的请求才要求，后台网页不受影响）
+    await enforceWaybillLock(this.waybillReceiptGuard, {
+      enabled: options.enforceWaybillCheck === true,
+      orderIds: [order.id],
+      trackingNumber,
+    });
 
     order.markAsShipped(trackingNumber, carrierCode);
     const savedOrder = await this.orderRepository.save(order);

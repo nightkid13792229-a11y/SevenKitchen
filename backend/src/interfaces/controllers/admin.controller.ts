@@ -2215,6 +2215,8 @@ export class AdminController {
       trackingNumber?: string;
       actualShippingFee?: number | string | null;
       shippingType?: 'NORMAL' | 'NOT_REQUIRED';
+      /** 小程序发货要求先验存根（2026-11-10 硬锁）；后台网页不传 */
+      enforceWaybillCheck?: boolean;
     },
   ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
     try {
@@ -2254,7 +2256,13 @@ export class AdminController {
 
       const order = await this.orderService.shipOrder(
         orderId,
-        { shippingType, carrierCode, trackingNumber, actualShippingFee },
+        {
+          shippingType,
+          carrierCode,
+          trackingNumber,
+          actualShippingFee,
+          enforceWaybillCheck: body.enforceWaybillCheck === true,
+        },
         null, // Admin ID not available in current implementation
       );
 
@@ -2388,6 +2396,7 @@ export class AdminController {
         {
           packages: Array.isArray(body?.packages) ? body.packages : [],
           note: body?.note ?? null,
+          enforceWaybillCheck: body?.enforceWaybillCheck === true,
         },
         null,
       );

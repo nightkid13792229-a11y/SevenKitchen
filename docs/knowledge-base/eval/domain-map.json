@@ -280,21 +280,17 @@
     },
     {
       "id": "infectious-disease",
-      "documents": 7,
+      "documents": 5,
       "documentIds": [
         "aaha-AAHA-2022-Canine-Vaccination-Guidelines-2024update",
         "acvim-ACVIM-2015-治疗性抗菌药使用与耐药性",
         "acvim-ACVIM-2018-犬猫莱姆病-更新共识",
         "acvim-ACVIM-2023-犬钩端螺旋体病-更新共识",
-        "cn-regulation-中华人民共和国动物防疫法-全国人大公报版",
-        "cn-regulation-狂犬病防治技术规范-中国动物疫病预防控制中心",
         "wsava-vaccination-WSAVA-Vaccination-guidelines-2024"
       ],
       "sourceIds": [
         "AAHA-VACC-2022",
         "ACVIM-CONSENSUS",
-        "CN-EPIDEMIC-LAW",
-        "CN-RABIES-TECH",
         "WSAVA-VACC-2024"
       ]
     },
@@ -356,7 +352,7 @@
     },
     {
       "id": "other-clinical",
-      "documents": 9,
+      "documents": 11,
       "documentIds": [
         "acvim-ACVIM-2015-犬癫痫管理",
         "acvim-ACVIM-2019-免疫介导性溶血性贫血-治疗",
@@ -364,12 +360,16 @@
         "acvim-ACVIM-2024-免疫性血小板减少症-治疗",
         "acvim-ACVIM-2024-免疫性血小板减少症-诊断",
         "acvim-ACVIM-2024-癫痫持续状态与集群发作",
+        "cn-regulation-中华人民共和国动物防疫法-全国人大公报版",
+        "cn-regulation-狂犬病防治技术规范-中国动物疫病预防控制中心",
         "wsava-welfare-PWG-福祉提示",
         "wsava-welfare-WSAVA-Animal-Welfare-Charter-Feb-2020",
         "wsava-welfare-WSAVA-Animal-Welfare-Guidelines-2018"
       ],
       "sourceIds": [
         "ACVIM-CONSENSUS",
+        "CN-EPIDEMIC-LAW",
+        "CN-RABIES-TECH",
         "WSAVA-WELFARE"
       ]
     }
@@ -781,23 +781,23 @@
       "id": "cn-regulation-中华人民共和国动物防疫法-全国人大公报版",
       "title": "中华人民共和国动物防疫法-全国人大公报版.pdf",
       "sourceId": "CN-EPIDEMIC-LAW",
-      "primaryDomain": "infectious-disease",
+      "primaryDomain": "other-clinical",
       "secondaryDomains": [],
       "candidateDomains": [
-        "infectious-disease"
+        "other-clinical"
       ],
-      "reason": "中国动物防疫/狂犬病法规"
+      "reason": "法规类；节切分失败（100 节标题为单字），检索不可用，不开放"
     },
     {
       "id": "cn-regulation-狂犬病防治技术规范-中国动物疫病预防控制中心",
       "title": "狂犬病防治技术规范-中国动物疫病预防控制中心.pdf",
       "sourceId": "CN-RABIES-TECH",
-      "primaryDomain": "infectious-disease",
+      "primaryDomain": "other-clinical",
       "secondaryDomains": [],
       "candidateDomains": [
-        "infectious-disease"
+        "other-clinical"
       ],
-      "reason": "中国动物防疫/狂犬病法规"
+      "reason": "法规类；0 节（仅段落），节级检索不可用，不开放"
     },
     {
       "id": "fediaf-FEDIAF-Nutritional-Guidelines-2025-ONLINE",

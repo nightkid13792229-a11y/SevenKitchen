@@ -1,0 +1,88 @@
+{
+  "version": "2026-11-10",
+  "domain": "dentistry",
+  "note": "牙科域 7 题：SACN5 47（牙周）/49（口腔疾病）+ AAHA 2019 牙科 + WSAVA 牙科中文准则。期望只写证据位置；负样本用 documentIds 钉住本域。",
+  "questions": [
+    {
+      "id": "dent-periodontal",
+      "domain": "dentistry",
+      "query": "dog periodontal disease diet dental food",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-47-s006",
+        "sacn5-chapters-SACN5-47-s004",
+        "aaha-AAHA-2019-Dental-Care-Guidelines-s003"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "dent-resorption",
+      "domain": "dentistry",
+      "query": "feline tooth resorption nutrition",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-47-s005",
+        "sacn5-chapters-SACN5-49-s006",
+        "sacn5-chapters-SACN5-47-s004"
+      ],
+      "species": "cat"
+    },
+    {
+      "id": "dent-brushing",
+      "domain": "dentistry",
+      "query": "daily toothbrushing home care dog cat",
+      "category": "numeric",
+      "expectedSections": [
+        "aaha-AAHA-2019-Dental-Care-Guidelines-s035",
+        "sacn5-chapters-SACN5-47-s002"
+      ]
+    },
+    {
+      "id": "dent-mechanical",
+      "domain": "dentistry",
+      "query": "dental diet mechanical cleaning plaque calculus",
+      "category": "numeric",
+      "expectedSections": [
+        "aaha-AAHA-2019-Dental-Care-Guidelines-s037",
+        "sacn5-chapters-SACN5-47-s010",
+        "sacn5-chapters-SACN5-47-s008"
+      ]
+    },
+    {
+      "id": "dent-table-factors",
+      "domain": "dentistry",
+      "query": "dental diet clinical efficacy table",
+      "category": "table",
+      "expectedTables": [
+        "T0339",
+        "T0340",
+        "T0338"
+      ]
+    },
+    {
+      "id": "dent-zh-periodontal",
+      "domain": "dentistry",
+      "query": "犬 牙周病 口腔 营养",
+      "category": "zh",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-47-s006",
+        "sacn5-chapters-SACN5-47-s007"
+      ]
+    },
+    {
+      "id": "dent-negative-vitk",
+      "domain": "dentistry",
+      "query": "dental disease vitamin K requirement",
+      "category": "negative",
+      "expectNoSource": true,
+      "documentIds": [
+        "aaha-AAHA-2019-Dental-Care-Guidelines",
+        "sacn5-chapters-SACN5-47",
+        "sacn5-chapters-SACN5-49",
+        "wsava-dental-GDC-Oral-Cancer",
+        "wsava-dental-GDC-Toothbrushing-Toolkit-1",
+        "wsava-dental-WSAVA-Global-Dental-Guidelines-JSAPMandarin"
+      ]
+    }
+  ]
+}

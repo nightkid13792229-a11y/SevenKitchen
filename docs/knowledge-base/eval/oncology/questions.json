@@ -1,0 +1,85 @@
+{
+  "version": "2026-11-10",
+  "domain": "oncology",
+  "note": "肿瘤域 7 题：SACN5-30 癌症营养为主，ACVIM 2018 化疗安全（职业防护，非营养）与 WSAVA 口腔肿瘤/癌痛为副。原文全英文，中文题靠新增的中文词典（肿瘤/癌症）落到英文证据；纯中文在补词典前实测 no_match，已记入签字。",
+  "questions": [
+    {
+      "id": "onco-cachexia",
+      "domain": "oncology",
+      "query": "dog cancer cachexia key nutritional factors management",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-30-s009",
+        "sacn5-chapters-SACN5-30-s007"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "onco-omega3",
+      "domain": "oncology",
+      "query": "cancer patient omega-3 EPA fish oil diet",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-30-s007",
+        "sacn5-chapters-SACN5-30-s008"
+      ]
+    },
+    {
+      "id": "onco-feline",
+      "domain": "oncology",
+      "query": "feline cancer nutrition arginine requirement",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-30-s009",
+        "sacn5-chapters-SACN5-30-s007"
+      ],
+      "species": "cat"
+    },
+    {
+      "id": "onco-chemo",
+      "domain": "oncology",
+      "query": "chemotherapy nutritional implications patient",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-30-s006",
+        "sacn5-chapters-SACN5-30-s007",
+        "acvim-ACVIM-2018-细胞毒化疗药物安全使用-s014"
+      ]
+    },
+    {
+      "id": "onco-table-foods",
+      "domain": "oncology",
+      "query": "selected commercial foods canine cancer patients table",
+      "category": "table",
+      "expectedTables": [
+        "T0220",
+        "T0221",
+        "T0492"
+      ]
+    },
+    {
+      "id": "onco-zh-cancer",
+      "domain": "oncology",
+      "query": "犬 肿瘤 营养 管理",
+      "category": "zh",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-30-s005",
+        "sacn5-chapters-SACN5-30-s007"
+      ]
+    },
+    {
+      "id": "onco-negative-vitk",
+      "domain": "oncology",
+      "query": "cancer patient vitamin K requirement",
+      "category": "negative",
+      "expectNoSource": true,
+      "documentIds": [
+        "acvim-ACVIM-2018-细胞毒化疗药物安全使用",
+        "sacn5-chapters-SACN5-30",
+        "wsava-dental-GDC-Oral-Cancer",
+        "wsava-pain-topic-sheets-Cancer-Pain",
+        "wsava-position-statements-WSAVA-微芯片与肿瘤立场声明"
+      ]
+    }
+  ]
+}

@@ -11,7 +11,7 @@
  * 不要手改下面的数组。
  *
  * 16 个审计域 + 1 个边界域（`other-clinical`：非营养主线的临床共识，
- * 归位但不开放，见计划 §2）。
+ * 以及解析质量不可用的法规文档——归位但不开放，见计划 §2 与签字）。
  */
 
 export type DomainId =
@@ -321,16 +321,12 @@ const INFECTIOUS_DISEASE_DOCUMENT_IDS = [
   'acvim-ACVIM-2015-治疗性抗菌药使用与耐药性',
   'acvim-ACVIM-2018-犬猫莱姆病-更新共识',
   'acvim-ACVIM-2023-犬钩端螺旋体病-更新共识',
-  'cn-regulation-中华人民共和国动物防疫法-全国人大公报版',
-  'cn-regulation-狂犬病防治技术规范-中国动物疫病预防控制中心',
   'wsava-vaccination-WSAVA-Vaccination-guidelines-2024',
 ] as const;
 
 const INFECTIOUS_DISEASE_SOURCE_IDS = [
   'AAHA-VACC-2022',
   'ACVIM-CONSENSUS',
-  'CN-EPIDEMIC-LAW',
-  'CN-RABIES-TECH',
   'WSAVA-VACC-2024',
 ] as const;
 
@@ -395,6 +391,8 @@ const OTHER_CLINICAL_DOCUMENT_IDS = [
   'acvim-ACVIM-2024-免疫性血小板减少症-治疗',
   'acvim-ACVIM-2024-免疫性血小板减少症-诊断',
   'acvim-ACVIM-2024-癫痫持续状态与集群发作',
+  'cn-regulation-中华人民共和国动物防疫法-全国人大公报版',
+  'cn-regulation-狂犬病防治技术规范-中国动物疫病预防控制中心',
   'wsava-welfare-PWG-福祉提示',
   'wsava-welfare-WSAVA-Animal-Welfare-Charter-Feb-2020',
   'wsava-welfare-WSAVA-Animal-Welfare-Guidelines-2018',
@@ -402,6 +400,8 @@ const OTHER_CLINICAL_DOCUMENT_IDS = [
 
 const OTHER_CLINICAL_SOURCE_IDS = [
   'ACVIM-CONSENSUS',
+  'CN-EPIDEMIC-LAW',
+  'CN-RABIES-TECH',
   'WSAVA-WELFARE',
 ] as const;
 
@@ -493,7 +493,7 @@ export const KNOWLEDGE_DOMAINS: readonly KnowledgeDomain[] = [
   {
     id: 'oncology',
     label: '肿瘤',
-    audited: false,
+    audited: true,
     documentIds: ONCOLOGY_DOCUMENT_IDS,
     sourceIds: ONCOLOGY_SOURCE_IDS,
     coreTableIds: [],
@@ -502,7 +502,7 @@ export const KNOWLEDGE_DOMAINS: readonly KnowledgeDomain[] = [
   {
     id: 'dentistry',
     label: '牙科',
-    audited: false,
+    audited: true,
     documentIds: DENTISTRY_DOCUMENT_IDS,
     sourceIds: DENTISTRY_SOURCE_IDS,
     coreTableIds: [],
@@ -520,7 +520,7 @@ export const KNOWLEDGE_DOMAINS: readonly KnowledgeDomain[] = [
   {
     id: 'reproduction',
     label: '生殖',
-    audited: false,
+    audited: true,
     documentIds: REPRODUCTION_DOCUMENT_IDS,
     sourceIds: REPRODUCTION_SOURCE_IDS,
     coreTableIds: [],
@@ -529,7 +529,7 @@ export const KNOWLEDGE_DOMAINS: readonly KnowledgeDomain[] = [
   {
     id: 'senior-care',
     label: '老年护理',
-    audited: false,
+    audited: true,
     documentIds: SENIOR_CARE_DOCUMENT_IDS,
     sourceIds: SENIOR_CARE_SOURCE_IDS,
     coreTableIds: [],
@@ -538,7 +538,7 @@ export const KNOWLEDGE_DOMAINS: readonly KnowledgeDomain[] = [
   {
     id: 'reference',
     label: '参考库',
-    audited: false,
+    audited: true,
     documentIds: REFERENCE_DOCUMENT_IDS,
     sourceIds: REFERENCE_SOURCE_IDS,
     coreTableIds: [],

@@ -1,0 +1,87 @@
+{
+  "version": "2026-11-10",
+  "domain": "senior-care",
+  "note": "老年护理域 7 题：AAHA 2023 老年护理（指南+工具包）、SACN5-14（中老年犬）/21（中老年猫）/35（犬认知障碍）。负样本用 documentIds 钉住本域 5 份。",
+  "questions": [
+    {
+      "id": "sen-assessment",
+      "domain": "senior-care",
+      "query": "senior dog nutrition assessment life stage",
+      "category": "numeric",
+      "expectedSections": [
+        "aaha-AAHA-2023-Senior-Care-Guidelines-s004",
+        "aaha-AAHA-2023-Senior-Care-Guidelines-s002",
+        "aaha-AAHA-2023-Senior-Care-Toolkit-s014"
+      ]
+    },
+    {
+      "id": "sen-cat-muscle",
+      "domain": "senior-care",
+      "query": "senior cat weight loss muscle mass",
+      "category": "numeric",
+      "expectedSections": [
+        "aaha-AAHA-2023-Senior-Care-Guidelines-s008",
+        "sacn5-chapters-SACN5-21-s010"
+      ],
+      "species": "cat"
+    },
+    {
+      "id": "sen-cognitive",
+      "domain": "senior-care",
+      "query": "cognitive dysfunction dog diet antioxidants",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-35-s009",
+        "aaha-AAHA-2023-Senior-Care-Guidelines-s010",
+        "sacn5-chapters-SACN5-35-s010"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "sen-screening",
+      "domain": "senior-care",
+      "query": "senior care annual screening toolkit",
+      "category": "numeric",
+      "expectedSections": [
+        "aaha-AAHA-2023-Senior-Care-Guidelines-s026",
+        "aaha-AAHA-2023-Senior-Care-Guidelines-s009",
+        "aaha-AAHA-2023-Senior-Care-Toolkit-s002"
+      ]
+    },
+    {
+      "id": "sen-table-plan",
+      "domain": "senior-care",
+      "query": "senior dog feeding plan table",
+      "category": "table",
+      "expectedTables": [
+        "T0106",
+        "T0151",
+        "T0033"
+      ]
+    },
+    {
+      "id": "sen-zh-elderly",
+      "domain": "senior-care",
+      "query": "犬 老年 营养 评估",
+      "category": "zh",
+      "expectedSections": [
+        "aaha-AAHA-2023-Senior-Care-Guidelines-s002",
+        "aaha-AAHA-2023-Senior-Care-Guidelines-s004"
+      ]
+    },
+    {
+      "id": "sen-negative-vitk",
+      "domain": "senior-care",
+      "query": "senior care vitamin K requirement",
+      "category": "negative",
+      "expectNoSource": true,
+      "documentIds": [
+        "aaha-AAHA-2023-Senior-Care-Guidelines",
+        "aaha-AAHA-2023-Senior-Care-Toolkit",
+        "sacn5-chapters-SACN5-14",
+        "sacn5-chapters-SACN5-21",
+        "sacn5-chapters-SACN5-35"
+      ]
+    }
+  ]
+}

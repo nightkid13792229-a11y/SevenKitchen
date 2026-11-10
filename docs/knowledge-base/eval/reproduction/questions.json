@@ -1,0 +1,91 @@
+{
+  "version": "2026-11-10",
+  "domain": "reproduction",
+  "note": "生殖域 7 题：WSAVA 生殖管理指南（英文全文/中文版/执行摘要）+ SACN5 15（繁殖犬）/22（繁殖猫）/16/23（新生幼犬猫）+ WSAVA 遗传病立场。负样本用 documentIds 钉住本域 10 份。",
+  "questions": [
+    {
+      "id": "rep-breeding-timing",
+      "domain": "reproduction",
+      "query": "dog breeding estrus timing ovulation management",
+      "category": "numeric",
+      "expectedSections": [
+        "wsava-reproduction-J-of-Small-Animal-Practice-2024-Romagnoli-s008",
+        "wsava-reproduction-J-of-Small-Animal-Practice-2024-Romagnoli-s007"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "rep-queen-pregnancy",
+      "domain": "reproduction",
+      "query": "queen pregnancy lactation nutrition energy",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-22-s006",
+        "sacn5-chapters-SACN5-23-s009",
+        "sacn5-chapters-SACN5-23-s008"
+      ],
+      "species": "cat"
+    },
+    {
+      "id": "rep-neonate",
+      "domain": "reproduction",
+      "query": "puppy weaning neonatal feeding",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-16-s004",
+        "sacn5-chapters-SACN5-23-s009",
+        "sacn5-chapters-SACN5-16-s010"
+      ]
+    },
+    {
+      "id": "rep-hereditary",
+      "domain": "reproduction",
+      "query": "hereditary disease genetic testing breeding dog",
+      "category": "numeric",
+      "expectedSections": [
+        "wsava-hereditary-WSAVA-Hereditary-Disease-Committee-Position-s003",
+        "wsava-reproduction-J-of-Small-Animal-Practice-2024-Romagnoli-s008"
+      ]
+    },
+    {
+      "id": "rep-table-factors",
+      "domain": "reproduction",
+      "query": "pregnancy lactation nutrition table",
+      "category": "table",
+      "expectedTables": [
+        "T0111",
+        "T0153",
+        "T0489"
+      ]
+    },
+    {
+      "id": "rep-zh-breeding",
+      "domain": "reproduction",
+      "query": "犬 繁殖 配种 管理",
+      "category": "zh",
+      "expectedSections": [
+        "wsava-reproduction-J-of-Small-Animal-Practice-2024-Romagnoli-s008",
+        "sacn5-chapters-SACN5-15-s009"
+      ]
+    },
+    {
+      "id": "rep-negative-vitk",
+      "domain": "reproduction",
+      "query": "breeding vitamin K requirement",
+      "category": "negative",
+      "expectNoSource": true,
+      "documentIds": [
+        "sacn5-chapters-SACN5-15",
+        "sacn5-chapters-SACN5-16",
+        "sacn5-chapters-SACN5-22",
+        "sacn5-chapters-SACN5-23",
+        "wsava-hereditary-WSAVA-Hereditary-Disease-Committee-Position",
+        "wsava-pain-topic-sheets-Caesarean-section",
+        "wsava-pain-topic-sheets-Pregnant-or-lactating-patients",
+        "wsava-reproduction-Executive-Summary",
+        "wsava-reproduction-J-of-Small-Animal-Practice-2024-Romagnoli",
+        "wsava-reproduction-WSAVA犬猫生殖管理指南-中文版"
+      ]
+    }
+  ]
+}

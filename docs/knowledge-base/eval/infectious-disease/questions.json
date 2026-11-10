@@ -1,0 +1,84 @@
+{
+  "version": "2026-11-10",
+  "domain": "infectious-disease",
+  "note": "传染病与免疫域 5 题源：AAHA 2022 犬免疫 + WSAVA 2024 免疫 + ACVIM 2018 莱姆/2023 钩端螺旋体 + ACVIM 2015 抗菌药。两部中国法规文档（动物防疫法节切分为单字、狂犬病规范 0 节）已改归边界域 other-clinical、不开放。",
+  "questions": [
+    {
+      "id": "inf-core-vaccine",
+      "domain": "infectious-disease",
+      "query": "dog core vaccine schedule puppies",
+      "category": "numeric",
+      "expectedSections": [
+        "aaha-AAHA-2022-Canine-Vaccination-Guidelines-2024update-s046",
+        "aaha-AAHA-2022-Canine-Vaccination-Guidelines-2024update-s013"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "inf-lepto",
+      "domain": "infectious-disease",
+      "query": "leptospirosis vaccination risk exposure dog",
+      "category": "numeric",
+      "expectedSections": [
+        "aaha-AAHA-2022-Canine-Vaccination-Guidelines-2024update-s039",
+        "aaha-AAHA-2022-Canine-Vaccination-Guidelines-2024update-s017"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "inf-lyme",
+      "domain": "infectious-disease",
+      "query": "lyme disease prevention dog",
+      "category": "numeric",
+      "expectedSections": [
+        "acvim-ACVIM-2018-犬猫莱姆病-更新共识-s015",
+        "aaha-AAHA-2022-Canine-Vaccination-Guidelines-2024update-s021"
+      ]
+    },
+    {
+      "id": "inf-antimicrobial",
+      "domain": "infectious-disease",
+      "query": "antimicrobial stewardship resistance veterinary",
+      "category": "numeric",
+      "expectedSections": [
+        "acvim-ACVIM-2015-治疗性抗菌药使用与耐药性-s007",
+        "acvim-ACVIM-2015-治疗性抗菌药使用与耐药性-s014"
+      ]
+    },
+    {
+      "id": "inf-table-vaccines",
+      "domain": "infectious-disease",
+      "query": "vaccination guideline table core noncore",
+      "category": "table",
+      "expectedTables": [
+        "T0484",
+        "T0477",
+        "T0483"
+      ]
+    },
+    {
+      "id": "inf-zh-vaccine",
+      "domain": "infectious-disease",
+      "query": "犬 疫苗 免疫 程序",
+      "category": "zh",
+      "expectedSections": [
+        "aaha-AAHA-2022-Canine-Vaccination-Guidelines-2024update-s046",
+        "aaha-AAHA-2022-Canine-Vaccination-Guidelines-2024update-s018"
+      ]
+    },
+    {
+      "id": "inf-negative-vitk",
+      "domain": "infectious-disease",
+      "query": "vaccine vitamin K requirement",
+      "category": "negative",
+      "expectNoSource": true,
+      "documentIds": [
+        "aaha-AAHA-2022-Canine-Vaccination-Guidelines-2024update",
+        "acvim-ACVIM-2015-治疗性抗菌药使用与耐药性",
+        "acvim-ACVIM-2018-犬猫莱姆病-更新共识",
+        "acvim-ACVIM-2023-犬钩端螺旋体病-更新共识",
+        "wsava-vaccination-WSAVA-Vaccination-guidelines-2024"
+      ]
+    }
+  ]
+}

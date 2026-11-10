@@ -1,0 +1,80 @@
+{
+  "version": "2026-11-10",
+  "domain": "reference",
+  "note": "参考库 7 题：NRC 2006、FEDIAF 2025、SACN5-2（循证方法学）/69（药物-营养相互作用）、MERCK 临床生化/血液学。按要求只做可达性与引用题，不写临床结论。负样本用「兔子饲喂」——本库只有犬猫，实测 0 节 0 表。 负样本特殊处理：NRC(5588 段)/FEDIAF(852 段) 覆盖全部营养素词表，全域网关内任何查询都能命中，无法构造 0 节 0 表；改为钉住「纯参考」文档 MERCK 临床血液学（体内无磷需求目标），实测 no_match。",
+  "questions": [
+    {
+      "id": "ref-energy",
+      "domain": "reference",
+      "query": "adult dog maintenance energy requirement metabolizable energy NRC",
+      "category": "numeric",
+      "expectedSections": [
+        "fediaf-FEDIAF-Nutritional-Guidelines-2025-ONLINE-s101",
+        "fediaf-FEDIAF-Nutritional-Guidelines-2025-ONLINE-s096",
+        "nrc-NRC-2006-Nutrient-Requirements-Dogs-Cats-s004"
+      ],
+      "species": "dog"
+    },
+    {
+      "id": "ref-adequacy",
+      "domain": "reference",
+      "query": "FEDIAF nutritional adequacy complete food dog",
+      "category": "numeric",
+      "expectedSections": [
+        "fediaf-FEDIAF-Nutritional-Guidelines-2025-ONLINE-s159",
+        "fediaf-FEDIAF-Nutritional-Guidelines-2025-ONLINE-s008"
+      ]
+    },
+    {
+      "id": "ref-drug-interaction",
+      "domain": "reference",
+      "query": "food drug interaction nutrient absorption",
+      "category": "numeric",
+      "expectedSections": [
+        "sacn5-chapters-SACN5-69-s002",
+        "sacn5-chapters-SACN5-69-s004"
+      ]
+    },
+    {
+      "id": "ref-biochem",
+      "domain": "reference",
+      "query": "liver enzyme interpretation biochemistry dog",
+      "category": "numeric",
+      "expectedSections": [
+        "merck-临床生化-s000",
+        "sacn5-chapters-SACN5-69-s026"
+      ]
+    },
+    {
+      "id": "ref-table-energy",
+      "domain": "reference",
+      "query": "energy requirement table dog cat",
+      "category": "table",
+      "expectedTables": [
+        "T0056",
+        "T0040",
+        "T0041"
+      ]
+    },
+    {
+      "id": "ref-zh-energy",
+      "domain": "reference",
+      "query": "犬 能量 需求 营养",
+      "category": "zh",
+      "expectedSections": [
+        "fediaf-FEDIAF-Nutritional-Guidelines-2025-ONLINE-s087",
+        "fediaf-FEDIAF-Nutritional-Guidelines-2025-ONLINE-s011"
+      ]
+    },
+    {
+      "id": "ref-negative-phosphorus",
+      "domain": "reference",
+      "query": "dog phosphorus requirement",
+      "category": "negative",
+      "expectNoSource": true,
+      "documentIds": [
+        "merck-临床血液学"
+      ]
+    }
+  ]
+}

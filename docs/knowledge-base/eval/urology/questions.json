@@ -1,7 +1,7 @@
 {
   "version": "2026-11-10",
   "domain": "urology",
-  "note": "泌尿域 8 题：SACN5 38-46 各型尿石 + FLUTD，ACVIM 2016 尿石共识。ACVIM 2024 犬尿失禁以诊断/治疗为主、无营养学证据，本域题集不覆盖（见签字）。负样本用 documentIds 钉住本域。",
+  "note": "泌尿域 8 题：SACN5 38-46 各型尿石 + FLUTD，ACVIM 2016 尿石共识。ACVIM 2024 犬尿失禁以诊断/治疗为主、无营养学证据，本域题集不覆盖（见签字）。负样本用 documentIds 钉住本域。 2026-11-10 中文检索补词典后，该题原期望（ACVIM-2016-s029，讲尿酸盐/别嘌醇）与「猫鸟粪石溶解」不符，改为猫专用 struvite 证据（46-19 管理流程、46-17 饱和度、43 水摄入）。",
   "questions": [
     {
       "id": "urol-struvite",
@@ -76,7 +76,9 @@
       "query": "猫 鸟粪石 溶解 处方粮",
       "category": "zh",
       "expectedSections": [
-        "acvim-ACVIM-2016-犬猫尿石症治疗与预防共识-s029"
+        "sacn5-chapters-SACN5-46-s022",
+        "sacn5-chapters-SACN5-46-s017",
+        "sacn5-chapters-SACN5-43-s007"
       ]
     },
     {

@@ -342,6 +342,120 @@
         "dose",
         "diagnosis"
       ]
+    },
+    {
+      "id": "G10",
+      "domain": "oncology",
+      "title": "化疗中的肥大细胞瘤犬：omega-3 与碳水（问答口径）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "一只 9 岁、25kg 已绝育母犬确诊肥大细胞瘤，正在化疗。主人问饮食上要不要补 omega-3、要不要减少碳水。按知识库说，标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
+    },
+    {
+      "id": "G11",
+      "domain": "dentistry",
+      "title": "牙结石犬：饮食与家庭口腔护理（问答口径）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "一只 6 岁、8kg 已绝育犬，牙结石多、医生说要洗牙。主人问平时饮食和家里能做什么来减少牙结石。按知识库说，标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
+    },
+    {
+      "id": "G12",
+      "domain": "infectious-disease",
+      "title": "幼犬免疫：核心疫苗必要性 + 钩端螺旋体适用情形（问答口径）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "一只 4 月龄幼犬要来打疫苗，主人问为什么核心疫苗必须打、钩端螺旋体疫苗什么情况下建议打。按知识库说，标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
+    },
+    {
+      "id": "G13",
+      "domain": "reproduction",
+      "title": "母犬配种：排卵判断与孕哺期饲喂（问答口径）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "一只 3 岁母犬准备配种，主人问发情期怎么判断排卵、怀孕后期和哺乳期怎么喂。按知识库说，标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
+    },
+    {
+      "id": "G14",
+      "domain": "senior-care",
+      "title": "11 岁犬体重下降：老年营养与是否换老年粮（问答口径）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "一只 11 岁、7kg 已绝育犬，最近体重下降、走路慢。主人问老年犬营养上要注意什么、要不要换老年粮。按知识库说，标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
+    },
+    {
+      "id": "G15",
+      "domain": "reference",
+      "title": "营养标准的换算口径：代谢体重与能量需求（问答口径）",
+      "scenario": "ADULT_MER_110",
+      "turns": [
+        "客户问为什么营养标准里的能量需求要按代谢体重（kg 的 0.75 次方）换算，而不是按体重线性换算。请按知识库里的营养标准说明口径。按知识库说，标引用；不用改草稿，也不用跑评估。"
+      ],
+      "expectTools": {
+        "search": 1,
+        "assess": 0
+      },
+      "targetOverrides": [],
+      "minValidCitations": 2,
+      "forbid": [
+        "dose",
+        "diagnosis"
+      ]
     }
   ]
 }

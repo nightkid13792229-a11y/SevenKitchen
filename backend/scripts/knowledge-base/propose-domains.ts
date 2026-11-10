@@ -198,7 +198,12 @@ export const RULES: readonly Rule[] = [
 
   // 其他来源
   { match: /^aspca-/, assign: () => ({ primary: 'general-nutrition', secondary: [], reason: 'ASPCA 应避免的人食（食品安全）' }) },
-  { match: /^cn-regulation-/, assign: () => ({ primary: 'infectious-disease', secondary: [], reason: '中国动物防疫/狂犬病法规' }) },
+  // 法规类两份解析质量不可用：动物防疫法 100 节标题全是单字（"中/第/一"），
+  // 狂犬病技术规范 0 节（只有段落，节级检索取不到）。留在传染病域会把垃圾节
+  // 带进生产检索，因此归到边界域不开放，而不是硬塞进某个临床域。
+  { match: /^cn-regulation-中华人民共和国动物防疫法/, assign: () => ({ primary: 'other-clinical', secondary: [], reason: '法规类；节切分失败（100 节标题为单字），检索不可用，不开放' }) },
+  { match: /^cn-regulation-狂犬病防治技术规范/, assign: () => ({ primary: 'other-clinical', secondary: [], reason: '法规类；0 节（仅段落），节级检索不可用，不开放' }) },
+  { match: /^cn-regulation-/, assign: () => ({ primary: 'other-clinical', secondary: [], reason: '中国动物防疫/狂犬病法规（解析质量不足，不开放）' }) },
   { match: /^fediaf-/, assign: () => ({ primary: 'reference', secondary: [], reason: 'FEDIAF 营养指南（法规基线）' }) },
   { match: /^nrc-/, assign: () => ({ primary: 'reference', secondary: [], reason: 'NRC 2006 犬猫营养需求' }) },
   { match: /^merck-临床生化/, assign: () => ({ primary: 'reference', secondary: [], reason: 'MERCK 临床生化（检验参考）' }) },

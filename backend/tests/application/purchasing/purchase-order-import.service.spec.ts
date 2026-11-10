@@ -286,6 +286,32 @@ describe('PurchaseOrderImportService', () => {
     ).rejects.toThrow('这张截图已经导入过');
   });
 
+  it('补货草稿：同一张图跨草稿也拒绝', async () => {
+    prisma.purchaseList.findUnique.mockResolvedValue({
+      id: 'draft-1',
+      status: 'PENDING',
+      startedAt: null,
+      isDraft: true,
+      reimbursementId: null,
+      items: [],
+    });
+    prisma.purchaseOrderImport.findFirst.mockResolvedValue({ id: 'old' });
+
+    await expect(
+      service.importFromScreenshots({
+        purchaseListId: 'draft-1',
+        userId: 'user-1',
+        imageUrls: ['https://img.example.com/same.jpg'],
+      }),
+    ).rejects.toThrow('已经导入过');
+
+    expect(prisma.purchaseOrderImport.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ uploadedById: 'user-1' }),
+      }),
+    );
+  });
+
   it('超过 5 张 → 拒绝', async () => {
     await expect(
       service.importFromScreenshots({

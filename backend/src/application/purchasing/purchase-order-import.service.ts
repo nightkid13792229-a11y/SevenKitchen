@@ -198,7 +198,7 @@ ${list}
       throw new BadRequestException('一次最多识别 5 笔订单');
     }
 
-    await this.assertListImportable(input.purchaseListId);
+    const targetList = await this.assertListImportable(input.purchaseListId);
     await this.assertQuota(input.userId, imageUrls.length);
 
     const candidates = await this.buildCandidates(input.purchaseListId);
@@ -247,12 +247,20 @@ ${list}
       const buffer = await this.downloadImage(url, imageKey);
       const imageHash = createHash('sha256').update(buffer).digest('hex');
 
+      // 补货草稿是一张图一条记录：重复图要按「上传人 + 指纹」跨草稿拦，
+      // 否则同一张订单截图会被记成两笔。日采仍按清单维度去重（跨清单允许重复）。
       const duplicated = await this.prisma.purchaseOrderImport.findFirst({
-        where: {
-          purchaseListId: input.purchaseListId,
-          imageHash,
-          status: { not: 'DISCARDED' },
-        },
+        where: targetList.isDraft
+          ? {
+              uploadedById: input.userId,
+              imageHash,
+              status: { not: 'DISCARDED' },
+            }
+          : {
+              purchaseListId: input.purchaseListId,
+              imageHash,
+              status: { not: 'DISCARDED' },
+            },
         select: { id: true },
       });
       if (duplicated) {

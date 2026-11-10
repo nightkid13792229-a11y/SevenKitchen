@@ -277,6 +277,11 @@ import {
   PROCUREMENT_SKU_DRAFT_MODEL,
 } from './application/purchasing/procurement-sku-draft.service';
 import {
+  WAYBILL_RECEIPT_MODEL,
+  WaybillReceiptService,
+} from './application/shipping/waybill-receipt.service';
+import { WaybillReceiptGuardService } from './application/shipping/waybill-receipt-guard.service';
+import {
   PurchaseOrderImportService,
   PURCHASE_ORDER_IMPORT_MODEL,
 } from './application/purchasing/purchase-order-import.service';
@@ -991,6 +996,13 @@ validatePrismaConfig();
     ReimbursementReviewService,
     {
       provide: REIMBURSEMENT_REVIEW_MODEL,
+      useValue: { callDeepSeekJson },
+    },
+    // 快递存根识别（2026-11-10）：模型配置与采购识别**共用同一份**
+    WaybillReceiptService,
+    WaybillReceiptGuardService,
+    {
+      provide: WAYBILL_RECEIPT_MODEL,
       useValue: { callDeepSeekJson },
     },
     SupplementCatalogService,

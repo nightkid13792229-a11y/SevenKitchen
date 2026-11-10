@@ -867,7 +867,7 @@ const goToDetail = (id: string) => {
 
 const goToStockCreate = () => {
   uni.navigateTo({
-    url: '/pages/staff-purchasing/stock-create',
+    url: '/pages/staff-purchasing/replenishment/index',
   });
 };
 

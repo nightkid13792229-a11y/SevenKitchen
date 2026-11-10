@@ -1339,3 +1339,85 @@ export function discardOrderImport(importId: string) {
     method: 'DELETE',
   });
 }
+
+// ==========================================
+// 补货改版（2026-11-10）：下单即记 + 到货确认
+// ==========================================
+
+export interface ReplenishmentRecordSummary {
+  id: string;
+  channel?: string | null;
+  orderNo?: string | null;
+  orderPlacedAt?: string | null;
+  expectedDeliveryAt?: string | null;
+  arrivedAt?: string | null;
+  voidedAt?: string | null;
+  itemCount: number;
+  recordsCount: number;
+  paidAmount?: number | null;
+  personalAmount?: number | null;
+  reimbursementAmount?: number | null;
+  reimbursementId?: string | null;
+  reimbursementStatus?: string | null;
+  claimNumber?: string | null;
+  createdAt: string;
+}
+
+export function createReplenishmentDraft() {
+  return request({
+    url: '/staff/purchasing/replenishment/drafts',
+    method: 'POST',
+  });
+}
+
+export function saveReplenishmentRecord(
+  id: string,
+  data: {
+    paidAmount?: number;
+    shippingFee?: number;
+    packagingFee?: number;
+    expectedDeliveryAt?: string;
+  },
+) {
+  return request({
+    url: `/staff/purchasing/replenishment/${id}/save`,
+    method: 'POST',
+    data,
+  });
+}
+
+export function listReplenishmentRecords(params: {
+  arrival?: 'IN_TRANSIT' | 'ARRIVED';
+  claim?: 'UNSUBMITTED' | 'SUBMITTED' | 'REIMBURSED';
+  page?: number;
+  pageSize?: number;
+  includeVoided?: boolean;
+}) {
+  return request({
+    url: '/staff/purchasing/replenishment',
+    method: 'GET',
+    data: params,
+  });
+}
+
+export function getReplenishmentRecord(id: string) {
+  return request({
+    url: `/staff/purchasing/replenishment/${id}`,
+    method: 'GET',
+  });
+}
+
+export function confirmReplenishmentArrival(id: string) {
+  return request({
+    url: `/staff/purchasing/replenishment/${id}/arrive`,
+    method: 'POST',
+  });
+}
+
+export function voidReplenishmentRecord(id: string, reason?: string) {
+  return request({
+    url: `/staff/purchasing/replenishment/${id}/void`,
+    method: 'POST',
+    data: { reason },
+  });
+}

@@ -467,7 +467,7 @@ ${list}
       data.packagingFee = normalizeFee(dto.packagingFee, '包装费');
     }
     if (dto.paid !== undefined) {
-      data.paid = normalizeFee(dto.paid, '实付');
+      data.paid = normalizePaid(dto.paid);
     }
 
     const updated = await this.prisma.purchaseOrderImport.update({
@@ -492,11 +492,18 @@ ${list}
         feeChanges.push(`包装费 ${fmtFee(before)} → ${fmtFee(after)}`);
       }
     }
+    if (dto.paid !== undefined) {
+      const before = toNum(current.paid);
+      const after = toNum(updated.paid);
+      if (before !== after) {
+        feeChanges.push(`实付 ${fmtFee(before)} → ${fmtFee(after)}`);
+      }
+    }
     if (feeChanges.length > 0) {
       const aiRaw = (current.rawResult ?? {}) as Record<string, unknown>;
       this.logger.log(
         `[order-import ${id}] ${feeChanges.join('，')}；模型原值 ` +
-          `运费 ${fmtFee(toNum(aiRaw.shippingFee))}、包装费 ${fmtFee(toNum(aiRaw.packagingFee))}`,
+          `运费 ${fmtFee(toNum(aiRaw.shippingFee))}、包装费 ${fmtFee(toNum(aiRaw.packagingFee))}、实付 ${fmtFee(toNum(aiRaw.paid))}`,
       );
     }
 
@@ -1957,6 +1964,18 @@ function round2(value: number): number {
  * 运费/包装费人工修正的入口校验：只收 0 或正数，最多两位小数。
  * null 表示「明确清空」，按 0 计；不传则不改。
  */
+function normalizePaid(value: number | null): number | null {
+  if (value === null) return null;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new BadRequestException('实付必须是 0 或正数');
+  }
+  // 大批量订单可能超过运费/包装费的上限，实付单独放宽。
+  if (value > 1_000_000) {
+    throw new BadRequestException('实付金额过大，请核对后再填');
+  }
+  return round2(value);
+}
+
 function normalizeFee(value: number | null, label: string): number | null {
   if (value === null) return null;
   if (!Number.isFinite(value) || value < 0) {

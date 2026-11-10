@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -54,6 +55,13 @@ export class UpdateOrderImportDto {
   @IsNumber()
   @Min(0)
   packagingFee?: number | null;
+
+  /** 实付：模型没读到（先用后付/截图截断）时人工补填 */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1000000)
+  paid?: number | null;
 }
 
 export class UpdateOrderImportLineDto {

@@ -12,8 +12,10 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import type { PurchaseListRepository } from '../../domain/purchasing/purchase-list.repository';
 import type { PurchaseRecordRepository } from '../../domain/purchasing/purchase-record.repository';
 import { PurchaseList } from '../../domain/purchasing/purchase-list.entity';
@@ -82,6 +84,7 @@ const toNumberOrNull = (value: unknown): number | null => {
 
 @Injectable()
 export class ReplenishmentService {
+  private readonly logger = new Logger(ReplenishmentService.name);
   constructor(
     @Inject(PURCHASE_LIST_REPOSITORY)
     private readonly purchaseListRepository: PurchaseListRepository,
@@ -263,6 +266,8 @@ export class ReplenishmentService {
         await this.purchaseRecordRepository.findByPurchaseListId(listId);
       await this.inventoryService.inboundFromPurchaseRecords(records);
       list.arrivedAt = validDeliveredAt;
+      list.arrivedById = userId;
+      list.updatedById = userId;
     }
 
     return this.purchaseListRepository.save(list);
@@ -501,6 +506,7 @@ export class ReplenishmentService {
       records,
     );
     list.arrivedAt = null;
+    list.arrivedById = null;
     list.updatedById = userId;
     list.updatedAt = new Date();
     return this.purchaseListRepository.save(list);
@@ -790,4 +796,42 @@ export class ReplenishmentService {
     }
     return date;
   }
+
+  /**
+   * 每天清理超过 48 小时没保存的识别草稿，避免废弃草稿、识别行和截图无限堆积。
+   * 只删 isDraft 且仍 PENDING 的记录，不碰已保存的补货记录。
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async cleanupStaleDrafts(): Promise<number> {
+    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const drafts = await this.prisma.purchaseList.findMany({
+      where: {
+        isDraft: true,
+        status: 'PENDING' as any,
+        createdAt: { lt: cutoff },
+      },
+      select: { id: true },
+    });
+    let deleted = 0;
+    for (const draft of drafts) {
+      try {
+        await this.prisma.purchaseOrderImport.deleteMany({
+          where: { purchaseListId: draft.id },
+        });
+        await this.prisma.purchaseList.delete({
+          where: { id: draft.id },
+        });
+        deleted += 1;
+      } catch (error) {
+        this.logger.warn(
+          `清理补货草稿 ${draft.id} 失败：${(error as Error)?.message ?? error}`,
+        );
+      }
+    }
+    if (deleted > 0) {
+      this.logger.log(`已清理 ${deleted} 个过期补货草稿`);
+    }
+    return deleted;
+  }
+
 }

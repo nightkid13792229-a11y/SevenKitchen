@@ -487,6 +487,36 @@ describe('matchOrderLines', () => {
     );
     expect(matched.ingredientId).toBeNull();
   });
+
+  it('按重量买的行没有商品也允许匹配', () => {
+    const weightCandidates: ListItemCandidate[] = [
+      {
+        purchaseItemId: null,
+        ingredientId: 'ing-heart',
+        ingredientName: '羊心',
+        skus: [],
+      },
+    ];
+
+    const [matched] = matchWithChannels(
+      [
+        {
+          rawName: '新鲜羊心',
+          spec: '3斤',
+          qty: 3,
+          unit: '斤',
+          unitPrice: 12.46,
+          lineTotal: 37.39,
+        },
+      ],
+      weightCandidates,
+      '盒马',
+    );
+
+    expect(matched.ingredientId).toBe('ing-heart');
+    expect(matched.needsNewSku).toBe(false);
+    expect(matched.procurementSkuId).toBeNull();
+  });
 });
 
 /**

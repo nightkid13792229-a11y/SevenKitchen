@@ -19,6 +19,7 @@ import type {
   ParsedOrderLine,
 } from './purchase-order-import.types';
 import { channelMatchKey, type ChannelOption } from './channel-catalog';
+import { isWeightUnit } from './purchase-order-weight-units';
 
 const BRAND_NOISE = [
   "member's mark",
@@ -488,13 +489,20 @@ export function matchOrderLines(
     // 反查出来的同名商品如果证明不了规格一致，就不能自动挂（会按错的净含量折算成本）。
     const exactNameUnconfirmed =
       Boolean(exactNameSku) && !exactNameSpecVerified;
-    const needsNewSku = !sku || conflict || exactNameUnconfirmed;
+    // 补货改版：按斤/公斤/克/两买的，不要求采购商品；原料对上就能记。
+    const allowWeight = isWeightUnit(line.unit);
+    const needsNewSku = allowWeight
+      ? false
+      : !sku || conflict || exactNameUnconfirmed;
 
     let confidence: MatchConfidence = 'MEDIUM';
-    if (sku && nameHit && !conflict && !needsNewSku) confidence = 'HIGH';
+    if (allowWeight && nameHit) confidence = 'HIGH';
+    else if (sku && nameHit && !conflict && !needsNewSku) confidence = 'HIGH';
     else if (!sku) confidence = 'LOW';
 
-    const reason = channelPending
+    const reason = allowWeight
+      ? '按重量记，不需要采购商品'
+      : channelPending
       ? '这笔订单还没确认渠道，确认后会自动匹配商品'
       : channelMismatch
         ? `该渠道（${importChannel}）还没有对应的采购商品，请手动选择或新建`

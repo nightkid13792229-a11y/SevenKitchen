@@ -164,7 +164,7 @@
 
       <view class="footer">
         <button class="primary-btn" :disabled="!canConfirm || submitting" :loading="submitting" @tap="submit">
-          {{ blockReason || '生成采购记录' }}
+          {{ blockReason || (pageMode === 'replenishment' ? '保存补货记录' : '生成采购记录') }}
         </button>
         <!-- 按钮下方一行：左边「放弃」，右边「几笔订单 · 几条记录 + 金额」 -->
         <view class="footer-links">
@@ -474,6 +474,8 @@ import {
   getOrderImports,
   getPurchaseChannels,
   getPurchaseListDetail,
+  getStockPurchaseIngredients,
+  saveReplenishmentRecord,
   updateOrderImport,
   updateOrderImportLine,
 } from '../api/purchasing';
@@ -514,6 +516,8 @@ interface IngredientOption {
 }
 
 const listId = ref('');
+const pageMode = ref<'order-demand' | 'replenishment'>('order-demand');
+const catalogIngredients = ref<any[]>([]);
 const loading = ref(true);
 const loaded = ref(false);
 const submitted = ref(false);
@@ -703,6 +707,28 @@ const feeEditPreview = computed(() => {
 const pickerOrderChannel = computed(() => activeImport.value?.channel || '');
 
 const ingredientOptions = computed<IngredientOption[]>(() => {
+  // 补货没有计划清单：从全库原料里选，商品只带「这笔渠道下」的推荐项。
+  if (pageMode.value === 'replenishment' && catalogIngredients.value.length > 0) {
+    return catalogIngredients.value.map((item) => {
+      const skus = item.procurementSkuId
+        ? [
+            {
+              id: item.procurementSkuId,
+              name: item.procurementSkuName || item.name,
+              productModel: item.productModel || null,
+              purchaseChannel: item.purchaseChannel || null,
+              purchaseToBaseRatio: item.purchaseToBaseRatio || null,
+            },
+          ]
+        : [];
+      return {
+        ingredientId: item.id,
+        ingredientName: item.name,
+        baseUnit: item.baseUnit,
+        skus: keepSkuForChannel(skus, pickerOrderChannel.value),
+      };
+    });
+  }
   // 「匹配原料」抽屉列的是本次清单里的原料，顺序跟采购详情页一致：
   // 食材（按 CFCT 分类）→ 补剂 → 包装材料（2026-11-05 定）
   const items = sortPurchaseItemsForDisplay(list.value?.items || []);
@@ -997,6 +1023,10 @@ const amountStateText = computed(() =>
 /** 底部合计：一笔就直说，多笔要讲清是「几笔订单」的总数 */
 const footerLabel = computed(() => {
   const count = imports.value.length;
+  if (pageMode.value === 'replenishment') {
+    if (count <= 1) return `将保存 ${matchedLineCount.value} 条补货明细`;
+    return `${count} 笔订单 · 共 ${matchedLineCount.value} 条补货明细`;
+  }
   if (count <= 1) return `将生成 ${matchedLineCount.value} 条采购记录`;
   return `${count} 笔订单 · 共 ${matchedLineCount.value} 条采购记录`;
 });
@@ -1019,6 +1049,8 @@ const canConfirm = computed(() => blockReason.value === '' && !submitted.value);
 
 onLoad((options: Record<string, string>) => {
   listId.value = String(options?.id || '');
+  pageMode.value =
+    options?.mode === 'replenishment' ? 'replenishment' : 'order-demand';
   focusLastOnce = options?.focus === 'last';
   uni.$on('procurement-sku:created', handleSkuCreated);
   void load().finally(() => {
@@ -1054,6 +1086,15 @@ async function load() {
   }
   if (imports.value.length === 0) loading.value = true;
   if (channelOptions.value.length === 0) void loadChannelOptions();
+  if (pageMode.value === 'replenishment' && catalogIngredients.value.length === 0) {
+    getStockPurchaseIngredients({})
+      .then((res: any) => {
+        if (res?.code === 0 && Array.isArray(res.data)) {
+          catalogIngredients.value = res.data;
+        }
+      })
+      .catch(() => undefined);
+  }
   const settled = await Promise.allSettled([
     getPurchaseListDetail(listId.value),
     getOrderImports(listId.value),
@@ -1621,6 +1662,15 @@ async function submit() {
 
   submitting.value = true;
   try {
+    if (pageMode.value === 'replenishment') {
+      const saved: any = await saveReplenishmentRecord(listId.value, {});
+      if (saved.code !== 0) throw new Error(saved.message || '保存失败');
+      submitted.value = true;
+      uni.showToast({ title: '补货记录已保存', icon: 'success' });
+      setTimeout(() => uni.navigateBack(), 700);
+      return;
+    }
+
     const res: any = await confirmOrderImports(ids);
     if (res.code !== 0) throw new Error(res.message || '生成失败');
     submitted.value = true;

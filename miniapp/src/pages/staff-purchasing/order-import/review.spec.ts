@@ -256,3 +256,16 @@ describe('识别结果页 · 新建商品回来自动匹配', () => {
     expect(autoMatchBlock).toContain('没有自动匹配');
   });
 });
+
+describe('补货模式', () => {
+  it('saves through the replenishment endpoint instead of generating order-demand records', () => {
+    expect(source).toContain("pageMode.value === 'replenishment'");
+    expect(source).toContain('saveReplenishmentRecord');
+    expect(source).toContain("'保存补货记录'");
+  });
+
+  it('loads the whole catalog for matching when there is no plan', () => {
+    expect(source).toContain('getStockPurchaseIngredients');
+    expect(source).toContain('catalogIngredients');
+  });
+});

@@ -33,6 +33,7 @@ describe('PurchaseOrderImportService', () => {
   };
   const prisma: any = {
     purchaseList: { findUnique: jest.fn() },
+    ingredient: { findUnique: jest.fn() },
     purchaseItem: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -1167,6 +1168,22 @@ describe('PurchaseOrderImportService', () => {
       });
       const data = prisma.purchaseOrderImportLine.update.mock.calls[0][0].data;
       expect(data.procurementSkuId).toBeNull();
+    });
+
+    it('补货草稿可以从全库选原料，不要求在清单里有明细', async () => {
+      prisma.purchaseList.findUnique.mockResolvedValue({ isDraft: true });
+      prisma.ingredient.findUnique.mockResolvedValue({ id: 'ing-9' });
+
+      await service.updateLine({
+        importId: 'import-1',
+        lineId: 'line-1',
+        dto: { ingredientId: 'ing-9' },
+      });
+
+      const data = prisma.purchaseOrderImportLine.update.mock.calls[0][0].data;
+      expect(data.ingredientId).toBe('ing-9');
+      expect(data.purchaseItemId).toBeNull();
+      expect(data.isPersonal).toBe(false);
     });
 
     it('可以改单位（重量行改成件数）', async () => {

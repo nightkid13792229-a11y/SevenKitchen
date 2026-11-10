@@ -52,6 +52,7 @@ import type {
   MatchedOrderLine,
   ParsedOrderDraft,
 } from './purchase-order-import.types';
+import { WEIGHT_UNIT_TO_BASE_RATIO } from './purchase-order-weight-units';
 
 /** 与商品截图识别共用「采购报销 Agent」配置；未单独配置时回退全局默认 */
 export const PURCHASE_ORDER_IMPORT_PURPOSE =
@@ -98,16 +99,6 @@ const WEIGHT_OR_VOLUME_UNITS = new Set([
   '升',
 ]);
 
-/** 按重量买：单位 → 基准单位（克）换算。只用于「没有采购商品」的重量行。 */
-const WEIGHT_UNIT_TO_BASE_RATIO: Record<string, number> = {
-  斤: 500,
-  两: 50,
-  克: 1,
-  g: 1,
-  公斤: 1000,
-  千克: 1000,
-  kg: 1000,
-};
 
 interface RecognizedOrder {
   url: string;
@@ -659,24 +650,47 @@ ${list}
 
     if (dto.ingredientId !== undefined) {
       if (dto.ingredientId) {
-        const item = await this.prisma.purchaseItem.findFirst({
-          where: {
-            purchaseListId: line.import.purchaseListId,
-            ingredientId: dto.ingredientId,
-          },
-          select: { id: true },
+        // 补货草稿没有计划明细：允许从全库选原料，明细在保存时创建。
+        const draftList = await this.prisma.purchaseList.findUnique({
+          where: { id: line.import.purchaseListId },
+          select: { isDraft: true },
         });
-        if (!item) {
-          throw new BadRequestException('这个原料不在本次采购清单里');
-        }
-        data.ingredientId = dto.ingredientId;
-        data.purchaseItemId = item.id;
-        data.isPersonal = false;
-        data.matchSource = 'MANUAL';
-        data.matchConfidence = 'HIGH';
-        // 只有真的换了原料才清掉商品；重复保存同一个原料时保留已选商品。
-        if (dto.ingredientId !== line.ingredientId) {
-          data.procurementSkuId = null;
+        if (draftList?.isDraft) {
+          const ingredient = await this.prisma.ingredient.findUnique({
+            where: { id: dto.ingredientId },
+            select: { id: true },
+          });
+          if (!ingredient) {
+            throw new BadRequestException('原料不存在，请重新选择');
+          }
+          data.ingredientId = dto.ingredientId;
+          data.purchaseItemId = null;
+          data.isPersonal = false;
+          data.matchSource = 'MANUAL';
+          data.matchConfidence = 'HIGH';
+          if (dto.ingredientId !== line.ingredientId) {
+            data.procurementSkuId = null;
+          }
+        } else {
+          const item = await this.prisma.purchaseItem.findFirst({
+            where: {
+              purchaseListId: line.import.purchaseListId,
+              ingredientId: dto.ingredientId,
+            },
+            select: { id: true },
+          });
+          if (!item) {
+            throw new BadRequestException('这个原料不在本次采购清单里');
+          }
+          data.ingredientId = dto.ingredientId;
+          data.purchaseItemId = item.id;
+          data.isPersonal = false;
+          data.matchSource = 'MANUAL';
+          data.matchConfidence = 'HIGH';
+          // 只有真的换了原料才清掉商品；重复保存同一个原料时保留已选商品。
+          if (dto.ingredientId !== line.ingredientId) {
+            data.procurementSkuId = null;
+          }
         }
       } else {
         data.ingredientId = null;

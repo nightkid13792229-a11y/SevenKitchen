@@ -158,13 +158,11 @@ describe('staff inventory in-transit display (D5)', () => {
   });
 });
 
-describe('staff inventory net prefill (final)', () => {
+describe('staff inventory replenishment entry (2026-11-10)', () => {
   const page = readPage('staff-inventory/index.vue');
-  const stockCreate = readPage('staff-purchasing/stock-create.vue');
 
-  it('passes the net shortage to the purchase page', () => {
-    expect(page).toContain('suggested=');
-    expect(page).toContain('netShortageQuantity');
-    expect(stockCreate).toContain('pendingSuggestedQuantity');
+  it('opens the new replenishment page instead of the legacy plan page', () => {
+    expect(page).toContain('/pages/staff-purchasing/replenishment/index');
+    expect(page).not.toContain('stock-create?ingredientId=');
   });
 });

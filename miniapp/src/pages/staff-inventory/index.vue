@@ -265,7 +265,6 @@ const goReplenish = (_item: InventoryHomeItem) => {
   uni.navigateTo({
     url: '/pages/staff-purchasing/replenishment/index',
   });
-  });
 };
 
 const goAdjust = () => {

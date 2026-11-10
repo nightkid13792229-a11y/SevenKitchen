@@ -426,23 +426,17 @@ export class WaybillReceiptService {
 
   private async isOverQuota(userId: string): Promise<boolean> {
     const now = new Date();
-    const [monthTotal, dailyCount] = await Promise.all([
-      this.prisma.waybillReceiptRecord.aggregate({
+    const [monthCount, dailyCount] = await Promise.all([
+      // 一行 = 一次识别，所以"本月用了多少"就是数行数
+      this.prisma.waybillReceiptRecord.count({
         where: { createdAt: { gte: startOfLocalMonth(now) } },
-        _sum: { count: true },
       }),
       this.prisma.waybillReceiptRecord.count({
         where: { createdBy: userId, createdAt: { gte: startOfLocalDay(now) } },
       }),
     ]);
 
-    if (
-      (monthTotal as any)?._sum?.count !== null &&
-      (monthTotal as any)?._sum?.count !== undefined &&
-      Number((monthTotal as any)._sum.count) >= MONTHLY_RECEIPT_LIMIT_SYSTEM
-    ) {
-      return true;
-    }
+    if (Number(monthCount ?? 0) >= MONTHLY_RECEIPT_LIMIT_SYSTEM) return true;
 
     return Number(dailyCount ?? 0) >= DAILY_RECEIPT_LIMIT_PER_USER;
   }

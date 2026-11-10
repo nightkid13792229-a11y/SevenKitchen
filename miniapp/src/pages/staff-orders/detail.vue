@@ -585,6 +585,41 @@
           <text class="modal-title">填写发货信息</text>
           <text class="modal-close" @tap="closeShippingModal">×</text>
         </view>
+
+        <!-- 填单号之前先看清寄给谁、哪只狗、寄到哪（2026-11-10）：
+             以前要关掉弹窗回详情页翻地址，再手抄到顺丰下单 -->
+        <view class="ship-recipient">
+          <view class="ship-recipient-row">
+            <text class="ship-recipient-label">顾客</text>
+            <text class="ship-recipient-value">
+              {{ orderCustomerName || '未记录顾客' }}
+              <text v-if="orderCustomerPhone" class="ship-recipient-sub">{{ orderCustomerPhone }}</text>
+            </text>
+          </view>
+          <view class="ship-recipient-row">
+            <text class="ship-recipient-label">狗狗</text>
+            <text class="ship-recipient-value" :class="{ 'ship-recipient-missing': !shipDogSummary }">
+              {{ shipDogSummary || '未绑定狗狗' }}
+            </text>
+          </view>
+          <view class="ship-recipient-row">
+            <text class="ship-recipient-label">收货</text>
+            <view class="ship-recipient-address">
+              <block v-if="order.address">
+                <text class="ship-recipient-value">
+                  {{ order.address.recipientName }}
+                  <text class="ship-recipient-sub">{{ getOrderAddressPhone(order.address) }}</text>
+                </text>
+                <text class="ship-recipient-detail">
+                  {{ getOrderAddressRegionText(order.address) }} {{ getOrderAddressDetail(order.address) }}
+                </text>
+              </block>
+              <text v-else class="ship-recipient-value ship-recipient-missing">未录入收货地址</text>
+            </view>
+            <text v-if="order.address" class="ship-copy-pill" @tap.stop="copyFullAddress">复制地址</text>
+          </view>
+        </view>
+
         <view class="form-item">
           <text class="form-label">发货类型</text>
           <view class="ship-type-row">
@@ -1470,6 +1505,23 @@ const dogLine = computed(() => {
   if (dog.breedName) parts.push(dog.breedName)
   if (dog.weightKg) parts.push(`${dog.weightKg}kg`)
   return `给 ${parts.filter(Boolean).join(' · ')}`
+})
+
+/**
+ * 发货弹窗顶部的那一行「狗狗」：一单可能有多个明细、绑了不同的狗，
+ * 寄件时要一次看清寄给谁家的哪几只。
+ */
+const shipDogSummary = computed(() => {
+  const seen = new Map<string, any>()
+  orderItems.value.forEach((item) => {
+    const dog: any = item.dog
+    const key = String(dog?.id || dog?.name || '')
+    if (key && !seen.has(key)) seen.set(key, dog)
+  })
+  return Array.from(seen.values())
+    .map((dog) => [dog.name, dog.breedName, dog.weightKg ? `${dog.weightKg}kg` : ''].filter(Boolean).join(' · '))
+    .filter(Boolean)
+    .join('；')
 })
 
 /**
@@ -3686,6 +3738,76 @@ async function saveAddressForm() {
   &::after {
     border: none;
   }
+}
+
+// 发货弹窗顶部：寄给谁、哪只狗、寄到哪（2026-11-10）
+.ship-recipient {
+  margin-bottom: 24rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 14rpx;
+  border: 2rpx solid #e6ecd8;
+  background-color: #f2f5ea;
+}
+
+.ship-recipient-row {
+  display: flex;
+  align-items: flex-start;
+
+  & + .ship-recipient-row {
+    margin-top: 12rpx;
+  }
+}
+
+.ship-recipient-label {
+  flex: 0 0 68rpx;
+  font-size: 24rpx;
+  line-height: 38rpx;
+  color: #6b6653;
+}
+
+.ship-recipient-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 26rpx;
+  line-height: 38rpx;
+  color: #26261f;
+  word-break: break-all;
+}
+
+.ship-recipient-sub {
+  margin-left: 10rpx;
+  font-size: 24rpx;
+  color: #6b6653;
+}
+
+.ship-recipient-address {
+  flex: 1;
+  min-width: 0;
+}
+
+.ship-recipient-detail {
+  display: block;
+  margin-top: 2rpx;
+  font-size: 25rpx;
+  line-height: 36rpx;
+  color: #464b3c;
+  word-break: break-all;
+}
+
+.ship-recipient-missing {
+  color: #b0b4bb;
+}
+
+.ship-copy-pill {
+  flex: none;
+  margin-left: 16rpx;
+  padding: 4rpx 18rpx;
+  border: 2rpx solid #1e3a2f;
+  border-radius: 999rpx;
+  background-color: #ffffff;
+  font-size: 22rpx;
+  line-height: 34rpx;
+  color: #1e3a2f;
 }
 
 // 费用列表

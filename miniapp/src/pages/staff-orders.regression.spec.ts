@@ -454,3 +454,46 @@ describe('staff order detail · 管理员改预约制作日（2026-11-08）', ()
     expect(detailSource).toContain('shouldRefresh');
   });
 });
+
+/**
+ * 2026-11-10：填单号之前先能看清「寄给谁、哪只狗、寄到哪」。
+ *
+ * 老板的原话：以前发货弹窗只有物流公司/单号/运费，
+ * 得先关掉弹窗回详情页翻地址，再手抄到顺丰下单。
+ */
+describe('staff order detail · 发货弹窗顶部顾客/狗狗/收货地址', () => {
+  it('顾客、狗狗、收货三行放在发货类型之前', () => {
+    expect(detailSource).toContain('class="ship-recipient"');
+    expect(detailSource).toContain('ship-recipient-label">顾客');
+    expect(detailSource).toContain('ship-recipient-label">狗狗');
+    expect(detailSource).toContain('ship-recipient-label">收货');
+    expect(detailSource).toContain('shipDogSummary');
+    // 位置在「发货类型」前面：一打开弹窗就看得到
+    const recipientAt = detailSource.indexOf('class="ship-recipient"');
+    const shippingTypeAt = detailSource.indexOf('v-if="shippingType === \'NORMAL\'"');
+    const modalAt = detailSource.indexOf('v-if="showShippingModal"');
+    expect(modalAt).toBeGreaterThan(-1);
+    expect(recipientAt).toBeGreaterThan(modalAt);
+    expect(recipientAt).toBeLessThan(shippingTypeAt);
+  });
+
+  it('地址一键复制，复用详情页的复制地址逻辑', () => {
+    expect(detailSource).toContain('class="ship-copy-pill" @tap.stop="copyFullAddress"');
+    expect(detailSource).toContain('地址已复制');
+    // 复制内容带上收货人和电话，粘到顺丰就能用
+    expect(detailSource).toContain('getOrderAddressPhone(address)');
+    expect(detailSource).toContain('getOrderAddressRegionText(address)');
+    expect(detailSource).toContain('getOrderAddressDetail(address)');
+  });
+
+  it('一单多只狗时并列写出来，不是只显示第一只', () => {
+    expect(detailSource).toContain('const shipDogSummary = computed');
+    expect(detailSource).toContain("if (key && !seen.has(key)) seen.set(key, dog)");
+    expect(detailSource).toContain(".join('；')");
+  });
+
+  it('没录地址时给提示，不留一个空白的「复制地址」按钮', () => {
+    expect(detailSource).toContain('未录入收货地址');
+    expect(detailSource).toContain('v-if="order.address" class="ship-copy-pill"');
+  });
+});

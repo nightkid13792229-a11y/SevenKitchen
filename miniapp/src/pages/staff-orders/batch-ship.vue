@@ -436,7 +436,10 @@ async function recognizeFor(index: number, imageUrl: string) {
     }
 
     pkg.receipt.state = 'failed'
-    pkg.receipt.message = status === 'not_waybill' ? '这张图里没找到运单号' : ''
+    pkg.receipt.message =
+      status === 'not_waybill'
+        ? '这张不是快递存根（没有运单号），换一张或者手动填写'
+        : ''
   } catch (error: any) {
     pkg.receipt.state = 'failed'
     pkg.receipt.message = error?.message || '识别失败，可以手动填写'

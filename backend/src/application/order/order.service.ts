@@ -59,7 +59,10 @@ import type { OrderStatusHistoryRepository } from '../../domain/order/order-stat
 import { OrderStatusHistory } from '../../domain/order/order-status-history.entity';
 
 import { enforceWaybillLock } from '../shipping/waybill-lock';
-import type { WaybillReceiptGuardService } from '../shipping/waybill-receipt-guard.service';
+// ⚠️ 必须是**值导入**，不能写 `import type`：`@Optional()` 构造参数的类型要靠
+// `design:paramtypes` 元数据暴露给 Nest，`import type` 编译期会被擦除，
+// 容器解析不到就会注入 undefined，而 enforceWaybillLock 是 fail closed 的。
+import { WaybillReceiptGuardService } from '../shipping/waybill-receipt-guard.service';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from './order.service.tokens';
 import { ValidationError } from '../../domain/common/errors';
 import {

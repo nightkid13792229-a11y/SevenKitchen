@@ -32,7 +32,8 @@ import {
   type AllocationItemInput,
 } from './shipping-fee-allocation';
 import { enforceWaybillLock } from './waybill-lock';
-import type { WaybillReceiptGuardService } from './waybill-receipt-guard.service';
+// ⚠️ 值导入（不是 `import type`）：@Optional 参数的类型要靠 design:paramtypes 暴露给 Nest
+import { WaybillReceiptGuardService } from './waybill-receipt-guard.service';
 
 /** 一票上限（2026-11-07 老板确认）：最多 10 单 / 6 个包裹 */
 export const MAX_ORDERS_PER_SHIPMENT = 10;

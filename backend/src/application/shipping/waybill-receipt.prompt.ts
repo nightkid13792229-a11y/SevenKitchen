@@ -18,6 +18,8 @@ import { toCarrierCode } from './carrier-catalog';
 export interface ParsedReceipt {
   documentType: 'waybill_receipt' | 'other';
   carrierCode: string | null;
+  /** 归一后的快递公司名（页面绿条要显示）；认不出是哪家时与 carrierCode 一起为 null */
+  carrierName: string | null;
   trackingNumber: string | null;
   shippingFee: number | null;
   recipientName: string | null;
@@ -113,6 +115,7 @@ const toFee = (value: unknown): number | null => {
 const EMPTY_RECEIPT: ParsedReceipt = {
   documentType: 'other',
   carrierCode: null,
+  carrierName: null,
   trackingNumber: null,
   shippingFee: null,
   recipientName: null,
@@ -136,7 +139,9 @@ export function parseWaybillReceipt(raw: unknown): ParsedReceipt {
     .trim()
     .toLowerCase();
 
-  // 只认「存根 / 面单」；显式 other 或任何没见过的取值都当"不是存根"
+  // 认「存根 / 面单」；显式 other、以及任何没见过的取值都当"不是存根"。
+  // 只有**字段缺失**（空串）时宽容按存根处理 —— 模型偶尔漏字段不该让整张作废，
+  // 号码读不出来自然会落到 DEGRADED。
   const isReceipt =
     documentType === 'waybill_receipt' ||
     documentType === 'shipping_label' ||
@@ -151,11 +156,16 @@ export function parseWaybillReceipt(raw: unknown): ParsedReceipt {
       ? (source.recipient as Record<string, unknown>)
       : {};
 
+  const rawCarrierName =
+    typeof source.carrierName === 'string' ? source.carrierName.trim() : null;
+  const carrierCode = toCarrierCode(rawCarrierName);
+
   return {
     documentType: 'waybill_receipt',
-    carrierCode: toCarrierCode(
-      typeof source.carrierName === 'string' ? source.carrierName : null,
-    ),
+    carrierCode,
+    // 名字只在**认得出是哪家**时才往外给：认不出来还照抄，
+    // 页面会显示一个下拉里根本不存在的快递公司。
+    carrierName: carrierCode ? rawCarrierName : null,
     trackingNumber: toTrackingNumber(source.trackingNumber),
     shippingFee: toFee(source.shippingFee),
     recipientName: trimOrNull(recipient.name),

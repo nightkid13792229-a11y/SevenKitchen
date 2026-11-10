@@ -83,14 +83,17 @@ export interface RecognizeResult {
 }
 
 /**
- * 取「本地日历上的今天」，用 UTC 零点表示。
- * 坑见 `procurement-sku-draft-quota.service.ts`：DATE 列会把本地零点退回前一天。
+ * 本地日历零点。
+ *
+ * 这里比的是 `created_at` 这种**时间戳**列，所以直接用本地零点即可。
+ * （采购那边用的是 DATE 列，才有"UTC 零点会被退回前一天"的坑；
+ *  照抄那里的写法会让额度在早上 8 点而不是零点重置 —— 2026-11-10 审核指出。）
  */
 const startOfLocalDay = (now: Date): Date =>
-  new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
 const startOfLocalMonth = (now: Date): Date =>
-  new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+  new Date(now.getFullYear(), now.getMonth(), 1);
 
 const toExpectedView = (view: AddressView): ExpectedView => ({
   recipientName: view.recipientName,
@@ -421,7 +424,24 @@ export class WaybillReceiptService {
     );
     if (!foreign) return null;
 
-    return { kind: 'PACKAGE', label: String(foreign.id) };
+    // 给员工看的是**订单号**，不是一坨 uuid 或包裹 id
+    const foreignOrders = await this.prisma.orderShipmentOrder.findMany({
+      where: { shipmentId: foreign.shipmentId },
+      select: { orderId: true },
+      take: 1,
+    });
+    const foreignOrderId = (foreignOrders as any[])[0]?.orderId;
+    if (!foreignOrderId) {
+      return { kind: 'PACKAGE', label: '另一票发货' };
+    }
+    const foreignOrder = await this.prisma.order.findUnique({
+      where: { id: foreignOrderId },
+      select: { orderNo: true, id: true },
+    });
+    return {
+      kind: 'PACKAGE',
+      label: String((foreignOrder as any)?.orderNo ?? foreignOrderId),
+    };
   }
 
   private async isOverQuota(userId: string): Promise<boolean> {

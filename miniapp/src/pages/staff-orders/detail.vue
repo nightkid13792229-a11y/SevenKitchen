@@ -646,6 +646,10 @@
           @pick="pickReceipt"
           @manual="onManualReceipt"
         />
+        <!-- 存根对不上时唯一的正路：先把地址改对，再回来传存根 -->
+        <view class="addr-link-row">
+          <text class="addr-link" @tap="goFixAddress">收件人对不上？改收货地址</text>
+        </view>
         <view class="form-item">
           <text class="form-label">物流公司</text>
           <picker
@@ -1161,11 +1165,19 @@ async function recognizeByUrl(imageUrl: string) {
     // degraded / not_waybill：认不出来，给手动出口
     receiptState.value = 'failed'
     receiptMessage.value =
-      status === 'not_waybill' ? '这张图里没找到运单号' : ''
+      status === 'not_waybill'
+        ? '这张不是快递存根（没有运单号），换一张或者手动填写'
+        : ''
   } catch (error: any) {
     receiptState.value = 'failed'
     receiptMessage.value = error?.message || '识别失败，可以手动填写'
   }
+}
+
+/** 关掉发货弹窗、直接打开这单已有的地址面板 */
+function goFixAddress() {
+  showShippingModal.value = false
+  openEditAddressForm()
 }
 
 async function pickReceipt() {
@@ -4313,4 +4325,8 @@ async function saveAddressForm() {
 .ship-pkg-fee { font-size: 24rpx; color: #2b5040; font-weight: 700; }
 .ship-share-row { display: flex; align-items: center; justify-content: space-between; padding-top: 16rpx; font-size: 22rpx; color: #909399; }
 .ship-share-value { color: #b06a1f; font-weight: 700; }
+
+/* 存根块下面的改地址入口（2026-11-10）：小字靠右，不抢主流程 */
+.addr-link-row { display: flex; justify-content: flex-end; margin: -8rpx 0 12rpx; }
+.addr-link { font-size: 23rpx; color: #2b5040; }
 </style>

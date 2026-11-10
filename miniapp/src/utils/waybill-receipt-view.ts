@@ -63,8 +63,11 @@ const CONFLICT_TEXT: Record<string, (expected: string, actual: string) => string
 
 const money = (value: number): string => Number(value).toFixed(2);
 
-const sameTracking = (left: string, right: string): boolean =>
-  left.trim().toUpperCase() === right.trim().toUpperCase();
+function sameTracking(current: string, recognized: string): boolean {
+  return (
+    current.trim().toUpperCase() === recognized.trim().toUpperCase()
+  );
+}
 
 const buildTitle = (input: ReceiptViewInput): string => {
   const parts: string[] = [];

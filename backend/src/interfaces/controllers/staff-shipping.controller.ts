@@ -218,7 +218,7 @@ export class StaffShippingController {
   async updateSupplementAddress(
     @Param('id') id: string,
     @Body() dto: AdminUpdateSupplementAddressDto,
-    @Req() request: { user?: { userId?: string } },
+    @Req() request: { user?: { userId?: string; role?: string } },
   ): Promise<ApiResponseDto<any>> {
     const reason = String(dto?.reason ?? '').trim();
     if (reason.length === 0) {
@@ -233,6 +233,8 @@ export class StaffShippingController {
       id,
       dto,
       request?.user?.userId ?? null,
+      // 员工端改的地址，审计里就要记成员工改的 —— 记成管理员等于把追责链弄断
+      request?.user?.role === 'ADMIN' ? 'ADMIN' : 'STAFF',
     );
 
     return ApiResponseDto.success(result);

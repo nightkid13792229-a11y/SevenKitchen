@@ -53,8 +53,15 @@ export interface MatchResult {
  */
 const DISTRICT_LEFT_BOUNDARY = /[省市区县旗盟州\s\d]/;
 
-/** 不是区县、但长得像的写法（「内蒙古自治区」会被当成「自治区」） */
-const DISTRICT_BLACKLIST = /自治|特区|林区|矿区|境外/;
+/**
+ * 不是区县、但长得像的写法。
+ *
+ * 这份名单是**误拦的护栏**：漏一个，正确存根就会被判"区县不同"、红条拦死、
+ * 还不给手动出口 —— 员工只能去改地址，实际什么都没错。
+ * 「阳光小区」「经济技术开发区」「市辖区」都是实测踩到的写法。
+ */
+const DISTRICT_BLACKLIST =
+  /自治|特区|林区|矿区|境外|开发区|小区|辖区|园区|景区|街区|社区|校区|厂区|片区|管区/;
 
 /** 区县名最多几个字（含最后一个「区/县」），再长就不是地名了 */
 const DISTRICT_MAX_LENGTH = 4;
@@ -178,24 +185,39 @@ export function compareRecipient(
     }
   }
 
-  // 2) 区县（订单侧地址为空时根本不比 —— 不能因为订单没填地址就拦人）
+  // 2) 地址
+  //
+  // 顺序很关键（2026-11-10 审核后改）：
+  //   ① 先在整句里找**订单的区县原文** —— 存根上印的就是这个，最稳也不会误判；
+  //   ② 找不到才去"抽区县"，抽出来跟订单不同才算冲突（黑名单挡掉小区/开发区）；
+  //   ③ 连区县都抽不出来，就看详细地址能不能对上（≥8 字才认，短了容易撞）。
+  // 只做①②容易把"XX小区"当区县，把正确的单拦死。
   const expectedDistrict = compact(expected.district);
+  const expectedDetail = compact(expected.detail);
   const addressText = String(receipt.address ?? '').trim();
-  if (expectedDistrict && addressText.length > 0) {
-    const actualDistrict = extractDistrict(addressText);
-    if (actualDistrict) {
-      if (compact(actualDistrict) !== expectedDistrict) {
+
+  if (addressText.length > 0) {
+    const normalizedAddress = compact(addressText);
+
+    if (expectedDistrict && normalizedAddress.includes(expectedDistrict)) {
+      agree += 1;
+    } else {
+      const actualDistrict = expectedDistrict
+        ? extractDistrict(addressText)
+        : null;
+
+      if (actualDistrict) {
         conflicts.push({
           field: 'district',
           expected: expectedDistrict,
           actual: actualDistrict,
         });
-      } else {
+      } else if (
+        expectedDetail.length >= 8 &&
+        normalizedAddress.includes(expectedDetail)
+      ) {
         agree += 1;
       }
-    } else if (compact(addressText).includes(expectedDistrict)) {
-      // 抽不出区县（比如地址写得随意），但整句里确实出现了订单的区县
-      agree += 1;
     }
   }
 

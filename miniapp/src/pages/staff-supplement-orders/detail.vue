@@ -543,7 +543,10 @@ async function recognizeByUrl(imageUrl: string) {
     }
 
     receiptState.value = 'failed'
-    receiptMessage.value = status === 'not_waybill' ? '这张图里没找到运单号' : ''
+    receiptMessage.value =
+      status === 'not_waybill'
+        ? '这张不是快递存根（没有运单号），换一张或者手动填写'
+        : ''
   } catch (error: any) {
     receiptState.value = 'failed'
     receiptMessage.value = error?.message || '识别失败，可以手动填写'

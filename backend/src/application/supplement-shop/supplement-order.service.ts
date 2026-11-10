@@ -43,6 +43,9 @@ import {
   isSupplementUnitOneToOne,
   toSupplementBaseQuantity,
 } from './supplement-unit.util';
+import { enforceWaybillLock } from '../shipping/waybill-lock';
+// ⚠️ 值导入（不是 `import type`）：@Optional 参数的类型要靠 design:paramtypes 暴露给 Nest
+import { WaybillReceiptGuardService } from '../shipping/waybill-receipt-guard.service';
 
 /** 分装结果的有效期：取「原瓶到期日」与「分装日 + 效期系数」的较小值 */
 export function addMonths(date: Date, months: number): Date {
@@ -1374,6 +1377,8 @@ export class SupplementOrderService {
       reason?: string;
     },
     adminId: string | null,
+    /** 谁改的：后台网页是管理员，员工端打包间是员工（2026-11-10 审计口径） */
+    actorType: 'ADMIN' | 'STAFF' = 'ADMIN',
   ): Promise<{ order: SupplementOrderView; needsReprint: boolean }> {
     const order = await this.requireOrder(orderId);
     if (!['PENDING_PAYMENT', 'PAID', 'PACKED'].includes(order.status)) {
@@ -1411,7 +1416,7 @@ export class SupplementOrderService {
           data: {
             orderId,
             type: 'ADDRESS_CHANGED',
-            actorType: 'ADMIN',
+            actorType,
             actorId: adminId,
             reason: dto.reason?.trim() || null,
             metadata: {
@@ -2754,5 +2759,3 @@ export class SupplementOrderService {
   }
 }
 
-import { enforceWaybillLock } from '../shipping/waybill-lock';
-import type { WaybillReceiptGuardService } from '../shipping/waybill-receipt-guard.service';

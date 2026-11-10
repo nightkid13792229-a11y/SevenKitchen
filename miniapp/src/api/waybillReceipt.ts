@@ -29,6 +29,8 @@ export interface ReceiptConflict {
 export interface ReceiptPayload {
   documentType: 'waybill_receipt' | 'other';
   carrierCode: string | null;
+  /** 归一后的快递公司名；认不出是哪家时为 null */
+  carrierName: string | null;
   trackingNumber: string | null;
   shippingFee: number | null;
   recipientName: string | null;

@@ -814,6 +814,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { CARRIERS } from '../../constants/carriers'
 import { onShareAppMessage } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import {
@@ -1062,14 +1063,9 @@ const settlementRequestId = ref('')
 const addressFormMode = ref<'create' | 'edit'>('create')
 const editingAddressId = ref('')
 const addressRegionValue = ref<string[]>([])
-const carriers = [
-  { name: '顺丰速运', code: 'SF' },
-  { name: '京东物流', code: 'JD' },
-  { name: '圆通速递', code: 'YTO' },
-  { name: '中通快递', code: 'ZTO' },
-  { name: '韵达速递', code: 'YD' },
-  { name: 'EMS', code: 'EMS' },
-]
+// 承运商清单统一到 constants/carriers.ts（2026-11-10）：
+// 原先这里只有 6 家、没有申通和邮政包裹，走申通寄的单没法正确记录。
+const carriers = CARRIERS
 const addressForm = ref({
   recipientName: '',
   phone: '',

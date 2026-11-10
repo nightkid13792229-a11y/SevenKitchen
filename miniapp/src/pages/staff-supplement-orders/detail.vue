@@ -316,6 +316,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { CARRIERS } from '../../constants/carriers'
 import { onLoad } from '@dcloudio/uni-app'
 import {
   staffSupplementOrderApi,
@@ -377,14 +378,8 @@ const shipType = ref<'NORMAL' | 'NOT_REQUIRED'>('NORMAL')
 const shipCarrierIndex = ref(0)
 const shipTracking = ref('')
 const shipFee = ref('')
-const carriers = [
-  { name: '顺丰速运', code: 'SF' },
-  { name: '京东物流', code: 'JD' },
-  { name: '圆通速递', code: 'YTO' },
-  { name: '中通快递', code: 'ZTO' },
-  { name: '韵达速递', code: 'YD' },
-  { name: 'EMS', code: 'EMS' },
-]
+// 承运商清单统一到 constants/carriers.ts（2026-11-10）
+const carriers = CARRIERS
 
 const STATUS_TEXT: Record<SupplementOrderStatus, string> = {
   PENDING_PAYMENT: '待确认收款',

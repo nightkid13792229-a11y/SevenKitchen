@@ -104,6 +104,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { CARRIERS } from '../../constants/carriers'
 import { onLoad } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 
@@ -122,16 +123,8 @@ interface PackageState {
   bags: Record<string, number>
 }
 
-const carriers = [
-  { code: 'SF', name: '顺丰速运' },
-  { code: 'YTO', name: '圆通速递' },
-  { code: 'STO', name: '申通快递' },
-  { code: 'ZTO', name: '中通快递' },
-  { code: 'YD', name: '韵达速递' },
-  { code: 'EMS', name: 'EMS' },
-  { code: 'JD', name: '京东快递' },
-  { code: 'POSTB', name: '邮政包裹' },
-]
+// 承运商清单统一到 constants/carriers.ts（2026-11-10）
+const carriers = CARRIERS
 
 const loading = ref(true)
 const submitting = ref(false)

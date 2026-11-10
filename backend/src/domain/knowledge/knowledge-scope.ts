@@ -102,3 +102,42 @@ export function allDocumentsScope(): KnowledgeScope {
     allDocuments: true,
   };
 }
+
+/**
+ * 无疾病信号时的默认检索域（全领域上线计划 Task 2 / §2.1）。
+ *
+ * 全库并库后，"狗一天喝多少水"这类通用问题不该去翻 159 份文档——噪声会
+ * 淹没营养文档。默认只查「基础营养 + 参考库 + CKD」这三类通用营养资料；
+ * 有疾病信号时仍按 `detectQueryDomains` 路由（见 `domain-routing.ts`）。
+ *
+ * `KNOWLEDGE_DEFAULT_DOMAINS` 可覆盖；未审计的域自动跳过（例如参考库
+ * 还没签字时不会把它算进来），至少保留一个已审计域，否则抛错。
+ */
+export const DEFAULT_DOMAIN_IDS: readonly DomainId[] = [
+  'general-nutrition',
+  'reference',
+  'ckd',
+];
+
+export function defaultScope(
+  env: NodeJS.ProcessEnv = process.env,
+): KnowledgeScope {
+  const raw = String(env.KNOWLEDGE_DEFAULT_DOMAINS ?? '').trim();
+  const requested = (raw ? raw.split(',') : [...DEFAULT_DOMAIN_IDS])
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+  const ids: DomainId[] = [];
+  for (const id of requested) {
+    const domain = DOMAINS.find((item) => item.id === id);
+    if (!domain) throw new Error(`未知默认领域: ${id}`);
+    if (!domain.audited) continue;
+    ids.push(domain.id);
+  }
+  if (ids.length === 0) {
+    throw new Error(
+      `默认领域全部未审计：${requested.join('、')}（先完成签字，或改 KNOWLEDGE_DEFAULT_DOMAINS）`,
+    );
+  }
+  return resolveKnowledgeScope(ids);
+}

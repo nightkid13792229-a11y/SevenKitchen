@@ -19,6 +19,9 @@ import type {
   TableView,
 } from '../../../src/application/knowledge-base/source-layer.service';
 
+/** CKD 域的文档白名单长度（随 domain-map 变动，不写死 5）。 */
+const CKD_DOCUMENT_COUNT = resolveKnowledgeScope(['ckd']).documentIds.length;
+
 const CKD_DOCUMENT = 'sacn5-chapters-SACN5-37';
 const NON_CKD_DOCUMENT = 'aaha-AAHA-2010-Nutritional-Assessment-Guidelines';
 
@@ -479,7 +482,7 @@ describe('Agent 工具：知识库检索与打开', () => {
     const options = searchSections.mock.calls[0][1] as {
       documentIds: string[];
     };
-    expect(options.documentIds).toHaveLength(5);
+    expect(options.documentIds).toHaveLength(CKD_DOCUMENT_COUNT);
     expect(options.documentIds).toContain(CKD_DOCUMENT);
     expect((outcome.data as any).status).toBe('no_match');
   });
@@ -749,14 +752,8 @@ describe('Agent 工具：知识库检索与打开', () => {
     expect(citations.records()).toHaveLength(0);
   });
 
-  it('knowledge_scope 只列 CKD 5 份文档', async () => {
-    const ckdDocuments = [
-      'sacn5-chapters-SACN5-37',
-      'iris-IRIS-staging-guidelines-2026',
-      'iris-IRIS-DOG-Treatment-Recommendations-may-2026',
-      'iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g',
-      'aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines',
-    ];
+  it('knowledge_scope 只列 CKD 白名单文档', async () => {
+    const ckdDocuments = [...resolveKnowledgeScope(['ckd']).documentIds];
     const scope = jest.fn().mockResolvedValue({
       documents: ckdDocuments.map((id) => ({
         id,
@@ -768,7 +765,12 @@ describe('Agent 工具：知识库检索与打开', () => {
         tables: 0,
         pageCount: 10,
       })),
-      totals: { documents: 5, sections: 5, paragraphs: 10, tables: 0 },
+      totals: {
+        documents: ckdDocuments.length,
+        sections: ckdDocuments.length,
+        paragraphs: ckdDocuments.length * 2,
+        tables: 0,
+      },
     });
     const outcome = await executeTool(
       'knowledge_scope',
@@ -781,12 +783,14 @@ describe('Agent 工具：知识库检索与打开', () => {
         documentIds: expect.arrayContaining(ckdDocuments),
       }),
     );
-    expect(scope.mock.calls[0][0].documentIds).toHaveLength(5);
+    expect(scope.mock.calls[0][0].documentIds).toHaveLength(
+      CKD_DOCUMENT_COUNT,
+    );
     expect(scope.mock.calls[0][0].documentIds).toEqual(ckdDocuments);
     const data = outcome.data as any;
     expect(data.status).toBe('ok');
-    expect(data.documents).toHaveLength(5);
-    expect(outcome.summary).toContain('5 份文档');
+    expect(data.documents).toHaveLength(CKD_DOCUMENT_COUNT);
+    expect(outcome.summary).toContain(`${CKD_DOCUMENT_COUNT} 份文档`);
   });
 
   it('knowledge_scope 的 sourceId 只允许 CKD 来源', async () => {
@@ -817,7 +821,9 @@ describe('Agent 工具：知识库检索与打开', () => {
         documentIds: expect.arrayContaining([CKD_DOCUMENT]),
       }),
     );
-    expect(scope.mock.calls[0][0].documentIds).toHaveLength(5);
+    expect(scope.mock.calls[0][0].documentIds).toHaveLength(
+      CKD_DOCUMENT_COUNT,
+    );
     expect(outcome.ok).toBe(true);
     expect((outcome.data as any).status).toBe('ok');
   });

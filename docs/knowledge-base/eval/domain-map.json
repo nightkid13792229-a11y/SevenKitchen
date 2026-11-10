@@ -1,0 +1,2167 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-11-10",
+  "generator": "backend/scripts/knowledge-base/propose-domains.ts",
+  "note": "每份文档恰好一个主域 + 可选副域；domain-map 是审计底稿，运行时清单以 knowledge-domains.ts 为准（tests/domain/knowledge/domain-map.spec.ts 保证两者一致）。",
+  "totals": {
+    "documents": 159,
+    "domains": 17
+  },
+  "domains": [
+    {
+      "id": "ckd",
+      "documents": 6,
+      "documentIds": [
+        "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+        "acvim-ACVIM-2015-心血管-肾脏轴疾病",
+        "iris-IRIS-AKI-Grading-2026",
+        "iris-IRIS-CAT-Treatment-Recommendations-2026",
+        "iris-IRIS-DOG-Treatment-Recommendations-may-2026",
+        "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g",
+        "iris-IRIS-staging-guidelines-2026",
+        "sacn5-chapters-SACN5-37"
+      ],
+      "sourceIds": [
+        "AAHA-2021-NUTRITION",
+        "ACVIM-CONSENSUS",
+        "IRIS-CKD-2026",
+        "SACN5"
+      ]
+    },
+    {
+      "id": "general-nutrition",
+      "documents": 45,
+      "documentIds": [
+        "aaha-AAHA-2010-Nutritional-Assessment-Guidelines",
+        "aaha-AAHA-2014-Weight-Management-Guidelines",
+        "aaha-AAHA-2019-Canine-Life-Stage-Guidelines",
+        "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+        "aspca-ASPCA-people-foods-to-avoid",
+        "sacn5-chapters-SACN5-1",
+        "sacn5-chapters-SACN5-10",
+        "sacn5-chapters-SACN5-11",
+        "sacn5-chapters-SACN5-12",
+        "sacn5-chapters-SACN5-13",
+        "sacn5-chapters-SACN5-14",
+        "sacn5-chapters-SACN5-16",
+        "sacn5-chapters-SACN5-17",
+        "sacn5-chapters-SACN5-18",
+        "sacn5-chapters-SACN5-19",
+        "sacn5-chapters-SACN5-20",
+        "sacn5-chapters-SACN5-21",
+        "sacn5-chapters-SACN5-23",
+        "sacn5-chapters-SACN5-24",
+        "sacn5-chapters-SACN5-25",
+        "sacn5-chapters-SACN5-26",
+        "sacn5-chapters-SACN5-27",
+        "sacn5-chapters-SACN5-3",
+        "sacn5-chapters-SACN5-4",
+        "sacn5-chapters-SACN5-5",
+        "sacn5-chapters-SACN5-6",
+        "sacn5-chapters-SACN5-7",
+        "sacn5-chapters-SACN5-8",
+        "sacn5-chapters-SACN5-9",
+        "wsava-nutrition-Body-Condition-Score-Cat-2025",
+        "wsava-nutrition-Body-Condition-Score-Dog-2025",
+        "wsava-nutrition-Calorie-Needs-Healthy-Adult-Cats-2020",
+        "wsava-nutrition-Calorie-Needs-Healthy-Adult-Dogs-2020",
+        "wsava-nutrition-Diet-History-Form",
+        "wsava-nutrition-Feeding-Guide-Hospitalized-Dogs-Cats",
+        "wsava-nutrition-Feeding-Instructions-Monitoring-Chart-Hospit",
+        "wsava-nutrition-Global-Nutritional-Assesment-Guidelines-Chin",
+        "wsava-nutrition-Guide-to-Treats-Cats-2025",
+        "wsava-nutrition-Guide-to-Treats-Dogs-2025",
+        "wsava-nutrition-Implementing-WSAVA-Nutrition-Guidelines",
+        "wsava-nutrition-Interpreting-Food-Labels-2025",
+        "wsava-nutrition-Muscle-Condition-Score-Cat",
+        "wsava-nutrition-Muscle-Condition-Score-Dog",
+        "wsava-nutrition-Nutritional-Assessment-Checklist",
+        "wsava-nutrition-Principles-of-Wellness-2025",
+        "wsava-nutrition-Quick-Tips-Implementing-WSAVA-Nutrition-Guid",
+        "wsava-nutrition-Raw-Meat-Based-Diets-for-Pets-2021",
+        "wsava-nutrition-SOP-for-Use-of-WSAVA-GNC-Toolkits-v4",
+        "wsava-nutrition-Selecting-a-Pet-Food-2021",
+        "wsava-nutrition-WSAVA-Nutrition-Assessment-Guidelines-2011-J",
+        "wsava-position-statements-WSAVA-OneHealth-肥胖预防"
+      ],
+      "sourceIds": [
+        "AAHA-2010-NUTRITION-ASSESSMENT",
+        "AAHA-2014-WEIGHT",
+        "AAHA-2021-NUTRITION",
+        "AAHA-LIFE-STAGE-2019",
+        "ASPCA-POISON",
+        "SACN5",
+        "WSAVA-NUTRITION",
+        "WSAVA-POSITION"
+      ]
+    },
+    {
+      "id": "gi",
+      "documents": 24,
+      "documentIds": [
+        "acvim-ACVIM-2018-胃肠道保护剂合理使用",
+        "acvim-ACVIM-2022-犬慢性肠病-现状综述",
+        "acvim-ACVIM-2023-猫慢性肠病-低级别肿瘤与炎症鉴别",
+        "acvim-ACVIM-2026-慢性肠病诊断与治疗共识",
+        "sacn5-chapters-SACN5-25",
+        "sacn5-chapters-SACN5-26",
+        "sacn5-chapters-SACN5-48",
+        "sacn5-chapters-SACN5-50a",
+        "sacn5-chapters-SACN5-51",
+        "sacn5-chapters-SACN5-52",
+        "sacn5-chapters-SACN5-53",
+        "sacn5-chapters-SACN5-54",
+        "sacn5-chapters-SACN5-55",
+        "sacn5-chapters-SACN5-56",
+        "sacn5-chapters-SACN5-57",
+        "sacn5-chapters-SACN5-58",
+        "sacn5-chapters-SACN5-59",
+        "sacn5-chapters-SACN5-60",
+        "sacn5-chapters-SACN5-61",
+        "sacn5-chapters-SACN5-62",
+        "sacn5-chapters-SACN5-63",
+        "sacn5-chapters-SACN5-64",
+        "sacn5-chapters-SACN5-65",
+        "sacn5-chapters-SACN5-66"
+      ],
+      "sourceIds": [
+        "ACVIM-CONSENSUS",
+        "SACN5"
+      ]
+    },
+    {
+      "id": "pancreatitis",
+      "documents": 2,
+      "documentIds": [
+        "acvim-ACVIM-2021-猫胰腺炎共识",
+        "sacn5-chapters-SACN5-67"
+      ],
+      "sourceIds": [
+        "ACVIM-CONSENSUS",
+        "SACN5"
+      ]
+    },
+    {
+      "id": "oa",
+      "documents": 7,
+      "documentIds": [
+        "aaha-AAHA-2022-Pain-Management-Guidelines",
+        "acvim-ACVIM-2022-犬胸腰段椎间盘突出-诊断与管理",
+        "sacn5-chapters-SACN5-33",
+        "sacn5-chapters-SACN5-34",
+        "wsava-pain-WSAVA-2022疼痛识别评估和治疗指南-中文",
+        "wsava-pain-topic-sheets-Caesarean-section",
+        "wsava-pain-topic-sheets-Cancer-Pain",
+        "wsava-pain-topic-sheets-Degenerative-joint-disease",
+        "wsava-pain-topic-sheets-Pregnant-or-lactating-patients",
+        "wsava-pain-topic-sheets-WSAVA-Global-Pain-Council-Perceived-"
+      ],
+      "sourceIds": [
+        "AAHA-PAIN-2022",
+        "ACVIM-CONSENSUS",
+        "SACN5",
+        "WSAVA-PAIN-2022"
+      ]
+    },
+    {
+      "id": "dermatology",
+      "documents": 4,
+      "documentIds": [
+        "merck-皮肤病维生素与矿物质",
+        "merck-营养性皮肤病",
+        "sacn5-chapters-SACN5-31",
+        "sacn5-chapters-SACN5-32"
+      ],
+      "sourceIds": [
+        "MERCK-DERM",
+        "SACN5"
+      ]
+    },
+    {
+      "id": "endocrinology",
+      "documents": 3,
+      "documentIds": [
+        "aaha-AAHA-2018-Diabetes-Management-Guidelines",
+        "sacn5-chapters-SACN5-27",
+        "sacn5-chapters-SACN5-28",
+        "sacn5-chapters-SACN5-29"
+      ],
+      "sourceIds": [
+        "AAHA-DIABETES-2018",
+        "SACN5"
+      ]
+    },
+    {
+      "id": "urology",
+      "documents": 11,
+      "documentIds": [
+        "acvim-ACVIM-2016-犬猫尿石症治疗与预防共识",
+        "acvim-ACVIM-2024-犬尿失禁诊断与管理",
+        "sacn5-chapters-SACN5-38",
+        "sacn5-chapters-SACN5-39",
+        "sacn5-chapters-SACN5-40",
+        "sacn5-chapters-SACN5-41",
+        "sacn5-chapters-SACN5-42",
+        "sacn5-chapters-SACN5-43",
+        "sacn5-chapters-SACN5-44",
+        "sacn5-chapters-SACN5-45",
+        "sacn5-chapters-SACN5-46"
+      ],
+      "sourceIds": [
+        "ACVIM-CONSENSUS",
+        "SACN5"
+      ]
+    },
+    {
+      "id": "cardiology",
+      "documents": 7,
+      "documentIds": [
+        "acvim-ACVIM-2015-心血管-肾脏轴疾病",
+        "acvim-ACVIM-2018-系统性高血压-识别评估与管理",
+        "acvim-ACVIM-2019-犬MMVD-分期与治疗-官方摘要卡片",
+        "acvim-ACVIM-2019-犬MMVD-诊断与治疗共识全文",
+        "acvim-ACVIM-2020-心肌病分类诊断与管理",
+        "acvim-ACVIM-2020-肺动脉高压",
+        "sacn5-chapters-SACN5-36"
+      ],
+      "sourceIds": [
+        "ACVIM-CONSENSUS",
+        "SACN5"
+      ]
+    },
+    {
+      "id": "hepatology",
+      "documents": 3,
+      "documentIds": [
+        "acvim-ACVIM-2019-犬慢性肝炎诊断与治疗",
+        "merck-肝功能检查",
+        "sacn5-chapters-SACN5-68"
+      ],
+      "sourceIds": [
+        "ACVIM-CONSENSUS",
+        "MERCK-HEPATIC",
+        "SACN5"
+      ]
+    },
+    {
+      "id": "oncology",
+      "documents": 5,
+      "documentIds": [
+        "acvim-ACVIM-2018-细胞毒化疗药物安全使用",
+        "sacn5-chapters-SACN5-30",
+        "wsava-dental-GDC-Oral-Cancer",
+        "wsava-pain-topic-sheets-Cancer-Pain",
+        "wsava-position-statements-WSAVA-微芯片与肿瘤立场声明"
+      ],
+      "sourceIds": [
+        "ACVIM-CONSENSUS",
+        "SACN5",
+        "WSAVA-DENTAL",
+        "WSAVA-PAIN-2022",
+        "WSAVA-POSITION"
+      ]
+    },
+    {
+      "id": "dentistry",
+      "documents": 5,
+      "documentIds": [
+        "aaha-AAHA-2019-Dental-Care-Guidelines",
+        "sacn5-chapters-SACN5-47",
+        "sacn5-chapters-SACN5-49",
+        "wsava-dental-GDC-Oral-Cancer",
+        "wsava-dental-GDC-Toothbrushing-Toolkit-1",
+        "wsava-dental-WSAVA-Global-Dental-Guidelines-JSAPMandarin"
+      ],
+      "sourceIds": [
+        "AAHA-DENTAL-2019",
+        "SACN5",
+        "WSAVA-DENTAL"
+      ]
+    },
+    {
+      "id": "infectious-disease",
+      "documents": 7,
+      "documentIds": [
+        "aaha-AAHA-2022-Canine-Vaccination-Guidelines-2024update",
+        "acvim-ACVIM-2015-治疗性抗菌药使用与耐药性",
+        "acvim-ACVIM-2018-犬猫莱姆病-更新共识",
+        "acvim-ACVIM-2023-犬钩端螺旋体病-更新共识",
+        "cn-regulation-中华人民共和国动物防疫法-全国人大公报版",
+        "cn-regulation-狂犬病防治技术规范-中国动物疫病预防控制中心",
+        "wsava-vaccination-WSAVA-Vaccination-guidelines-2024"
+      ],
+      "sourceIds": [
+        "AAHA-VACC-2022",
+        "ACVIM-CONSENSUS",
+        "CN-EPIDEMIC-LAW",
+        "CN-RABIES-TECH",
+        "WSAVA-VACC-2024"
+      ]
+    },
+    {
+      "id": "reproduction",
+      "documents": 10,
+      "documentIds": [
+        "sacn5-chapters-SACN5-15",
+        "sacn5-chapters-SACN5-16",
+        "sacn5-chapters-SACN5-22",
+        "sacn5-chapters-SACN5-23",
+        "wsava-hereditary-WSAVA-Hereditary-Disease-Committee-Position",
+        "wsava-pain-topic-sheets-Caesarean-section",
+        "wsava-pain-topic-sheets-Pregnant-or-lactating-patients",
+        "wsava-reproduction-Executive-Summary",
+        "wsava-reproduction-J-of-Small-Animal-Practice-2024-Romagnoli",
+        "wsava-reproduction-WSAVA犬猫生殖管理指南-中文版"
+      ],
+      "sourceIds": [
+        "SACN5",
+        "WSAVA-HEREDITARY",
+        "WSAVA-PAIN-2022",
+        "WSAVA-REPRO"
+      ]
+    },
+    {
+      "id": "senior-care",
+      "documents": 5,
+      "documentIds": [
+        "aaha-AAHA-2023-Senior-Care-Guidelines",
+        "aaha-AAHA-2023-Senior-Care-Toolkit",
+        "sacn5-chapters-SACN5-14",
+        "sacn5-chapters-SACN5-21",
+        "sacn5-chapters-SACN5-35"
+      ],
+      "sourceIds": [
+        "AAHA-SENIOR-2023",
+        "SACN5"
+      ]
+    },
+    {
+      "id": "reference",
+      "documents": 6,
+      "documentIds": [
+        "fediaf-FEDIAF-Nutritional-Guidelines-2025-ONLINE",
+        "merck-临床生化",
+        "merck-临床血液学",
+        "nrc-NRC-2006-Nutrient-Requirements-Dogs-Cats",
+        "sacn5-chapters-SACN5-2",
+        "sacn5-chapters-SACN5-69"
+      ],
+      "sourceIds": [
+        "FEDIAF-2025",
+        "MERCK-CLINICAL-BIOCHEM",
+        "MERCK-HEME",
+        "NRC-2006",
+        "SACN5"
+      ]
+    },
+    {
+      "id": "other-clinical",
+      "documents": 9,
+      "documentIds": [
+        "acvim-ACVIM-2015-犬癫痫管理",
+        "acvim-ACVIM-2019-免疫介导性溶血性贫血-治疗",
+        "acvim-ACVIM-2019-免疫介导性溶血性贫血-诊断",
+        "acvim-ACVIM-2024-免疫性血小板减少症-治疗",
+        "acvim-ACVIM-2024-免疫性血小板减少症-诊断",
+        "acvim-ACVIM-2024-癫痫持续状态与集群发作",
+        "wsava-welfare-PWG-福祉提示",
+        "wsava-welfare-WSAVA-Animal-Welfare-Charter-Feb-2020",
+        "wsava-welfare-WSAVA-Animal-Welfare-Guidelines-2018"
+      ],
+      "sourceIds": [
+        "ACVIM-CONSENSUS",
+        "WSAVA-WELFARE"
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "id": "aaha-AAHA-2010-Nutritional-Assessment-Guidelines",
+      "title": "AAHA-2010-Nutritional-Assessment-Guidelines.pdf",
+      "sourceId": "AAHA-2010-NUTRITION-ASSESSMENT",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "AAHA 营养/体重/生命阶段指南"
+    },
+    {
+      "id": "aaha-AAHA-2014-Weight-Management-Guidelines",
+      "title": "AAHA-2014-Weight-Management-Guidelines.pdf",
+      "sourceId": "AAHA-2014-WEIGHT",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "AAHA 营养/体重/生命阶段指南"
+    },
+    {
+      "id": "aaha-AAHA-2018-Diabetes-Management-Guidelines",
+      "title": "AAHA-2018-Diabetes-Management-Guidelines.pdf",
+      "sourceId": "AAHA-DIABETES-2018",
+      "primaryDomain": "endocrinology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "endocrinology"
+      ],
+      "reason": "AAHA 2018 糖尿病管理"
+    },
+    {
+      "id": "aaha-AAHA-2019-Canine-Life-Stage-Guidelines",
+      "title": "AAHA-2019-Canine-Life-Stage-Guidelines.pdf",
+      "sourceId": "AAHA-LIFE-STAGE-2019",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "AAHA 营养/体重/生命阶段指南"
+    },
+    {
+      "id": "aaha-AAHA-2019-Dental-Care-Guidelines",
+      "title": "AAHA-2019-Dental-Care-Guidelines.pdf",
+      "sourceId": "AAHA-DENTAL-2019",
+      "primaryDomain": "dentistry",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "dentistry"
+      ],
+      "reason": "AAHA 2019 牙科护理"
+    },
+    {
+      "id": "aaha-AAHA-2021-Nutrition-and-Weight-Management-Guidelines",
+      "title": "AAHA-2021-Nutrition-and-Weight-Management-Guidelines.pdf",
+      "sourceId": "AAHA-2021-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [
+        "ckd"
+      ],
+      "candidateDomains": [
+        "general-nutrition",
+        "ckd"
+      ],
+      "reason": "AAHA 2021 营养与体重管理（CKD 核心表来源）"
+    },
+    {
+      "id": "aaha-AAHA-2022-Canine-Vaccination-Guidelines-2024update",
+      "title": "AAHA-2022-Canine-Vaccination-Guidelines-2024update.pdf",
+      "sourceId": "AAHA-VACC-2022",
+      "primaryDomain": "infectious-disease",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "infectious-disease"
+      ],
+      "reason": "AAHA 2022 犬免疫"
+    },
+    {
+      "id": "aaha-AAHA-2022-Pain-Management-Guidelines",
+      "title": "AAHA-2022-Pain-Management-Guidelines.pdf",
+      "sourceId": "AAHA-PAIN-2022",
+      "primaryDomain": "oa",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "oa"
+      ],
+      "reason": "AAHA 2022 疼痛管理"
+    },
+    {
+      "id": "aaha-AAHA-2023-Senior-Care-Guidelines",
+      "title": "AAHA-2023-Senior-Care-Guidelines.pdf",
+      "sourceId": "AAHA-SENIOR-2023",
+      "primaryDomain": "senior-care",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "senior-care"
+      ],
+      "reason": "AAHA 2023 老年护理（含工具包）"
+    },
+    {
+      "id": "aaha-AAHA-2023-Senior-Care-Toolkit",
+      "title": "AAHA-2023-Senior-Care-Toolkit.pdf",
+      "sourceId": "AAHA-SENIOR-2023",
+      "primaryDomain": "senior-care",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "senior-care"
+      ],
+      "reason": "AAHA 2023 老年护理（含工具包）"
+    },
+    {
+      "id": "acvim-ACVIM-2015-心血管-肾脏轴疾病",
+      "title": "ACVIM-2015-心血管-肾脏轴疾病.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "cardiology",
+      "secondaryDomains": [
+        "ckd"
+      ],
+      "candidateDomains": [
+        "cardiology",
+        "ckd"
+      ],
+      "reason": "ACVIM 2015 心肾轴疾病"
+    },
+    {
+      "id": "acvim-ACVIM-2015-治疗性抗菌药使用与耐药性",
+      "title": "ACVIM-2015-治疗性抗菌药使用与耐药性.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "infectious-disease",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "infectious-disease"
+      ],
+      "reason": "ACVIM 2015 抗菌药使用与耐药"
+    },
+    {
+      "id": "acvim-ACVIM-2015-犬癫痫管理",
+      "title": "ACVIM-2015-犬癫痫管理.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "other-clinical",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "other-clinical"
+      ],
+      "reason": "ACVIM 2015 犬癫痫（非营养主线）"
+    },
+    {
+      "id": "acvim-ACVIM-2016-犬猫尿石症治疗与预防共识",
+      "title": "ACVIM-2016-犬猫尿石症治疗与预防共识.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "urology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "urology"
+      ],
+      "reason": "ACVIM 2016 尿石症共识"
+    },
+    {
+      "id": "acvim-ACVIM-2018-犬猫莱姆病-更新共识",
+      "title": "ACVIM-2018-犬猫莱姆病-更新共识.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "infectious-disease",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "infectious-disease"
+      ],
+      "reason": "ACVIM 2018 莱姆病"
+    },
+    {
+      "id": "acvim-ACVIM-2018-系统性高血压-识别评估与管理",
+      "title": "ACVIM-2018-系统性高血压-识别评估与管理.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "cardiology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "cardiology"
+      ],
+      "reason": "ACVIM 2018 系统性高血压"
+    },
+    {
+      "id": "acvim-ACVIM-2018-细胞毒化疗药物安全使用",
+      "title": "ACVIM-2018-细胞毒化疗药物安全使用.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "oncology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "oncology"
+      ],
+      "reason": "ACVIM 2018 化疗药物安全"
+    },
+    {
+      "id": "acvim-ACVIM-2018-胃肠道保护剂合理使用",
+      "title": "ACVIM-2018-胃肠道保护剂合理使用.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "ACVIM 2018 胃肠保护剂"
+    },
+    {
+      "id": "acvim-ACVIM-2019-免疫介导性溶血性贫血-治疗",
+      "title": "ACVIM-2019-免疫介导性溶血性贫血-治疗.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "other-clinical",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "other-clinical"
+      ],
+      "reason": "ACVIM 2019 IMHA（非营养主线）"
+    },
+    {
+      "id": "acvim-ACVIM-2019-免疫介导性溶血性贫血-诊断",
+      "title": "ACVIM-2019-免疫介导性溶血性贫血-诊断.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "other-clinical",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "other-clinical"
+      ],
+      "reason": "ACVIM 2019 IMHA（非营养主线）"
+    },
+    {
+      "id": "acvim-ACVIM-2019-犬MMVD-分期与治疗-官方摘要卡片",
+      "title": "ACVIM-2019-犬MMVD-分期与治疗-官方摘要卡片.pdf",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "cardiology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "cardiology"
+      ],
+      "reason": "ACVIM 2019 犬 MMVD"
+    },
+    {
+      "id": "acvim-ACVIM-2019-犬MMVD-诊断与治疗共识全文",
+      "title": "ACVIM-2019-犬MMVD-诊断与治疗共识全文.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "cardiology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "cardiology"
+      ],
+      "reason": "ACVIM 2019 犬 MMVD"
+    },
+    {
+      "id": "acvim-ACVIM-2019-犬慢性肝炎诊断与治疗",
+      "title": "ACVIM-2019-犬慢性肝炎诊断与治疗.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "hepatology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "hepatology"
+      ],
+      "reason": "ACVIM 2019 犬慢性肝炎"
+    },
+    {
+      "id": "acvim-ACVIM-2020-心肌病分类诊断与管理",
+      "title": "ACVIM-2020-心肌病分类诊断与管理.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "cardiology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "cardiology"
+      ],
+      "reason": "ACVIM 2020 心肌病/肺动脉高压"
+    },
+    {
+      "id": "acvim-ACVIM-2020-肺动脉高压",
+      "title": "ACVIM-2020-肺动脉高压.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "cardiology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "cardiology"
+      ],
+      "reason": "ACVIM 2020 心肌病/肺动脉高压"
+    },
+    {
+      "id": "acvim-ACVIM-2021-猫胰腺炎共识",
+      "title": "ACVIM-2021-猫胰腺炎共识.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "pancreatitis",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "pancreatitis"
+      ],
+      "reason": "ACVIM 2021 猫胰腺炎"
+    },
+    {
+      "id": "acvim-ACVIM-2022-犬慢性肠病-现状综述",
+      "title": "ACVIM-2022-犬慢性肠病-现状综述.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "ACVIM 2022 犬慢性肠病"
+    },
+    {
+      "id": "acvim-ACVIM-2022-犬胸腰段椎间盘突出-诊断与管理",
+      "title": "ACVIM-2022-犬胸腰段椎间盘突出-诊断与管理.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "oa",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "oa"
+      ],
+      "reason": "ACVIM 2022 IVDD（疼痛/活动管理）"
+    },
+    {
+      "id": "acvim-ACVIM-2023-犬钩端螺旋体病-更新共识",
+      "title": "ACVIM-2023-犬钩端螺旋体病-更新共识.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "infectious-disease",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "infectious-disease"
+      ],
+      "reason": "ACVIM 2023 钩端螺旋体"
+    },
+    {
+      "id": "acvim-ACVIM-2023-猫慢性肠病-低级别肿瘤与炎症鉴别",
+      "title": "ACVIM-2023-猫慢性肠病-低级别肿瘤与炎症鉴别.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "ACVIM 2023 猫慢性肠病"
+    },
+    {
+      "id": "acvim-ACVIM-2024-免疫性血小板减少症-治疗",
+      "title": "ACVIM-2024-免疫性血小板减少症-治疗.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "other-clinical",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "other-clinical"
+      ],
+      "reason": "ACVIM 2024 ITP（非营养主线）"
+    },
+    {
+      "id": "acvim-ACVIM-2024-免疫性血小板减少症-诊断",
+      "title": "ACVIM-2024-免疫性血小板减少症-诊断.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "other-clinical",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "other-clinical"
+      ],
+      "reason": "ACVIM 2024 ITP（非营养主线）"
+    },
+    {
+      "id": "acvim-ACVIM-2024-犬尿失禁诊断与管理",
+      "title": "ACVIM-2024-犬尿失禁诊断与管理.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "urology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "urology"
+      ],
+      "reason": "ACVIM 2024 犬尿失禁"
+    },
+    {
+      "id": "acvim-ACVIM-2024-癫痫持续状态与集群发作",
+      "title": "ACVIM-2024-癫痫持续状态与集群发作.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "other-clinical",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "other-clinical"
+      ],
+      "reason": "ACVIM 2024 癫痫持续状态（非营养主线）"
+    },
+    {
+      "id": "acvim-ACVIM-2026-慢性肠病诊断与治疗共识",
+      "title": "ACVIM-2026-慢性肠病诊断与治疗共识.xml",
+      "sourceId": "ACVIM-CONSENSUS",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "ACVIM 2026 慢性肠病共识"
+    },
+    {
+      "id": "aspca-ASPCA-people-foods-to-avoid",
+      "title": "ASPCA-people-foods-to-avoid.txt",
+      "sourceId": "ASPCA-POISON",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "ASPCA 应避免的人食（食品安全）"
+    },
+    {
+      "id": "cn-regulation-中华人民共和国动物防疫法-全国人大公报版",
+      "title": "中华人民共和国动物防疫法-全国人大公报版.pdf",
+      "sourceId": "CN-EPIDEMIC-LAW",
+      "primaryDomain": "infectious-disease",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "infectious-disease"
+      ],
+      "reason": "中国动物防疫/狂犬病法规"
+    },
+    {
+      "id": "cn-regulation-狂犬病防治技术规范-中国动物疫病预防控制中心",
+      "title": "狂犬病防治技术规范-中国动物疫病预防控制中心.pdf",
+      "sourceId": "CN-RABIES-TECH",
+      "primaryDomain": "infectious-disease",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "infectious-disease"
+      ],
+      "reason": "中国动物防疫/狂犬病法规"
+    },
+    {
+      "id": "fediaf-FEDIAF-Nutritional-Guidelines-2025-ONLINE",
+      "title": "FEDIAF-Nutritional-Guidelines_2025-ONLINE.pdf",
+      "sourceId": "FEDIAF-2025",
+      "primaryDomain": "reference",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "reference"
+      ],
+      "reason": "FEDIAF 营养指南（法规基线）"
+    },
+    {
+      "id": "iris-IRIS-AKI-Grading-2026",
+      "title": "IRIS-AKI-Grading_2026.pdf",
+      "sourceId": "IRIS-CKD-2026",
+      "primaryDomain": "ckd",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "ckd"
+      ],
+      "reason": "IRIS CKD/AKI 官方文档"
+    },
+    {
+      "id": "iris-IRIS-CAT-Treatment-Recommendations-2026",
+      "title": "IRIS_CAT_Treatment_Recommendations_-2026.pdf",
+      "sourceId": "IRIS-CKD-2026",
+      "primaryDomain": "ckd",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "ckd"
+      ],
+      "reason": "IRIS CKD/AKI 官方文档"
+    },
+    {
+      "id": "iris-IRIS-DOG-Treatment-Recommendations-may-2026",
+      "title": "IRIS-DOG-Treatment_Recommendations_may-2026.pdf",
+      "sourceId": "IRIS-CKD-2026",
+      "primaryDomain": "ckd",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "ckd"
+      ],
+      "reason": "IRIS CKD/AKI 官方文档"
+    },
+    {
+      "id": "iris-IRIS-Pocket-Guide-to-CKD-June-2026-cn6g",
+      "title": "IRIS_Pocket_Guide_to_CKD_June-2026-cn6g.pdf",
+      "sourceId": "IRIS-CKD-2026",
+      "primaryDomain": "ckd",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "ckd"
+      ],
+      "reason": "IRIS CKD/AKI 官方文档"
+    },
+    {
+      "id": "iris-IRIS-staging-guidelines-2026",
+      "title": "IRIS_staging_guidelines-2026.pdf",
+      "sourceId": "IRIS-CKD-2026",
+      "primaryDomain": "ckd",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "ckd"
+      ],
+      "reason": "IRIS CKD/AKI 官方文档"
+    },
+    {
+      "id": "merck-临床生化",
+      "title": "临床生化.txt",
+      "sourceId": "MERCK-CLINICAL-BIOCHEM",
+      "primaryDomain": "reference",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "reference"
+      ],
+      "reason": "MERCK 临床生化（检验参考）"
+    },
+    {
+      "id": "merck-临床血液学",
+      "title": "临床血液学.txt",
+      "sourceId": "MERCK-HEME",
+      "primaryDomain": "reference",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "reference"
+      ],
+      "reason": "MERCK 临床血液学（检验参考）"
+    },
+    {
+      "id": "merck-皮肤病维生素与矿物质",
+      "title": "皮肤病维生素与矿物质.txt",
+      "sourceId": "MERCK-DERM",
+      "primaryDomain": "dermatology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "dermatology"
+      ],
+      "reason": "MERCK 皮肤病/营养性皮肤病"
+    },
+    {
+      "id": "merck-肝功能检查",
+      "title": "肝功能检查.txt",
+      "sourceId": "MERCK-HEPATIC",
+      "primaryDomain": "hepatology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "hepatology"
+      ],
+      "reason": "MERCK 肝功能检查"
+    },
+    {
+      "id": "merck-营养性皮肤病",
+      "title": "营养性皮肤病.txt",
+      "sourceId": "MERCK-DERM",
+      "primaryDomain": "dermatology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "dermatology"
+      ],
+      "reason": "MERCK 皮肤病/营养性皮肤病"
+    },
+    {
+      "id": "nrc-NRC-2006-Nutrient-Requirements-Dogs-Cats",
+      "title": "NRC-2006-Nutrient-Requirements-Dogs-Cats.epub",
+      "sourceId": "NRC-2006",
+      "primaryDomain": "reference",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "reference"
+      ],
+      "reason": "NRC 2006 犬猫营养需求"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-1",
+      "title": "SACN5_1.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-1 患者评估（营养评估流程）"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-10",
+      "title": "SACN5_10.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-10 家庭自制宠物食品"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-11",
+      "title": "SACN5_11.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-11 食品安全"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-12",
+      "title": "SACN5_12.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-12 正常犬饲喂导论"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-13",
+      "title": "SACN5_13.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-13 青年成年犬饲喂"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-14",
+      "title": "SACN5_14.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "senior-care",
+      "secondaryDomains": [
+        "general-nutrition"
+      ],
+      "candidateDomains": [
+        "senior-care",
+        "general-nutrition"
+      ],
+      "reason": "SACN5-14 中老年犬饲喂（与生命阶段重叠）"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-15",
+      "title": "SACN5_15.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "reproduction",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "reproduction"
+      ],
+      "reason": "SACN5-15 繁殖犬饲喂"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-16",
+      "title": "SACN5_16.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "reproduction",
+      "secondaryDomains": [
+        "general-nutrition"
+      ],
+      "candidateDomains": [
+        "reproduction",
+        "general-nutrition"
+      ],
+      "reason": "SACN5-16 新生/孤儿幼犬（出生到断奶）"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-17",
+      "title": "SACN5_17.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-17 幼犬生长饲喂"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-18",
+      "title": "SACN5_18.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-18 工作犬与运动犬饲喂"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-19",
+      "title": "SACN5_19.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-19 猫饲喂导论"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-2",
+      "title": "SACN5_2.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "reference",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "reference"
+      ],
+      "reason": "SACN5-2 循证医学规则（方法学参考）"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-20",
+      "title": "SACN5_20.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-20 青年成年猫饲喂"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-21",
+      "title": "SACN5_21.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "senior-care",
+      "secondaryDomains": [
+        "general-nutrition"
+      ],
+      "candidateDomains": [
+        "senior-care",
+        "general-nutrition"
+      ],
+      "reason": "SACN5-21 中老年猫饲喂（与生命阶段重叠）"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-22",
+      "title": "SACN5_22.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "reproduction",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "reproduction"
+      ],
+      "reason": "SACN5-22 繁殖猫饲喂"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-23",
+      "title": "SACN5_23.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "reproduction",
+      "secondaryDomains": [
+        "general-nutrition"
+      ],
+      "candidateDomains": [
+        "reproduction",
+        "general-nutrition"
+      ],
+      "reason": "SACN5-23 新生/孤儿幼猫（出生到断奶）"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-24",
+      "title": "SACN5_24.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-24 生长期幼猫饲喂"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-25",
+      "title": "SACN5_25.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [
+        "general-nutrition"
+      ],
+      "candidateDomains": [
+        "gi",
+        "general-nutrition"
+      ],
+      "reason": "SACN5-25 重症监护营养与肠内辅助喂养"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-26",
+      "title": "SACN5_26.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [
+        "general-nutrition"
+      ],
+      "candidateDomains": [
+        "gi",
+        "general-nutrition"
+      ],
+      "reason": "SACN5-26 肠外辅助喂养"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-27",
+      "title": "SACN5_27.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [
+        "endocrinology"
+      ],
+      "candidateDomains": [
+        "general-nutrition",
+        "endocrinology"
+      ],
+      "reason": "SACN5-27 肥胖（代谢/体重管理）"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-28",
+      "title": "SACN5_28.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "endocrinology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "endocrinology"
+      ],
+      "reason": "SACN5-28 脂质代谢紊乱（高脂血症）"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-29",
+      "title": "SACN5_29.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "endocrinology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "endocrinology"
+      ],
+      "reason": "SACN5-29 内分泌疾病（糖尿病/甲状腺）"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-3",
+      "title": "SACN5_3.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-3 健康素养与客户依从"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-30",
+      "title": "SACN5_30.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "oncology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "oncology"
+      ],
+      "reason": "SACN5-30 癌症营养"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-31",
+      "title": "SACN5_31.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "dermatology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "dermatology"
+      ],
+      "reason": "SACN5-31 食物不良反应"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-32",
+      "title": "SACN5_32.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "dermatology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "dermatology"
+      ],
+      "reason": "SACN5-32 皮肤与被毛疾病"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-33",
+      "title": "SACN5_33.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "oa",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "oa"
+      ],
+      "reason": "SACN5-33 大型犬幼犬发育性骨科疾病"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-34",
+      "title": "SACN5_34.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "oa",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "oa"
+      ],
+      "reason": "SACN5-34 骨关节炎营养管理"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-35",
+      "title": "SACN5_35.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "senior-care",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "senior-care"
+      ],
+      "reason": "SACN5-35 犬认知功能障碍"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-36",
+      "title": "SACN5_36.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "cardiology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "cardiology"
+      ],
+      "reason": "SACN5-36 心血管疾病营养"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-37",
+      "title": "SACN5_37.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "ckd",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "ckd"
+      ],
+      "reason": "SACN5-37 慢性肾病"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-38",
+      "title": "SACN5_38.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "urology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "urology"
+      ],
+      "reason": "SACN5-38 犬尿石症总论"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-39",
+      "title": "SACN5_39.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "urology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "urology"
+      ],
+      "reason": "SACN5-39 犬嘌呤/尿酸盐结石"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-4",
+      "title": "SACN5_4.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-4 营养基因组学"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-40",
+      "title": "SACN5_40.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "urology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "urology"
+      ],
+      "reason": "SACN5-40 犬草酸钙结石"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-41",
+      "title": "SACN5_41.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "urology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "urology"
+      ],
+      "reason": "SACN5-41 犬磷酸钙结石"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-42",
+      "title": "SACN5_42.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "urology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "urology"
+      ],
+      "reason": "SACN5-42 犬胱氨酸结石"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-43",
+      "title": "SACN5_43.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "urology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "urology"
+      ],
+      "reason": "SACN5-43 犬鸟粪石"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-44",
+      "title": "SACN5_44.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "urology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "urology"
+      ],
+      "reason": "SACN5-44 犬硅石结石"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-45",
+      "title": "SACN5_45.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "urology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "urology"
+      ],
+      "reason": "SACN5-45 犬复合结石"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-46",
+      "title": "SACN5_46.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "urology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "urology"
+      ],
+      "reason": "SACN5-46 猫下泌尿道疾病（FLUTD）"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-47",
+      "title": "SACN5_47.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "dentistry",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "dentistry"
+      ],
+      "reason": "SACN5-47 牙周病"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-48",
+      "title": "SACN5_48.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-48 胃肠与胰腺外分泌疾病导论"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-49",
+      "title": "SACN5_49.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "dentistry",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "dentistry"
+      ],
+      "reason": "SACN5-49 口腔疾病"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-5",
+      "title": "SACN5_5.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-5 水与饮水需求"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-50a",
+      "title": "SACN5_50a.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-50a 咽/食管疾病"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-51",
+      "title": "SACN5_51.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-51 胃病导论"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-52",
+      "title": "SACN5_52.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-52 胃炎与胃十二指肠溃疡"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-53",
+      "title": "SACN5_53.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-53 胃扩张与胃扭转（GDV）"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-54",
+      "title": "SACN5_54.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-54 胃动力与排空障碍"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-55",
+      "title": "SACN5_55.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-55 小肠疾病导论"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-56",
+      "title": "SACN5_56.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-56 急性胃肠炎"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-57",
+      "title": "SACN5_57.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-57 炎症性肠病（IBD）"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-58",
+      "title": "SACN5_58.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-58 蛋白丢失性肠病"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-59",
+      "title": "SACN5_59.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-59 短肠综合征"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-6",
+      "title": "SACN5_6.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-6 矿物质与维生素"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-60",
+      "title": "SACN5_60.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-60 小肠细菌过度生长"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-61",
+      "title": "SACN5_61.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-61 大肠疾病导论"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-62",
+      "title": "SACN5_62.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-62 结肠炎"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-63",
+      "title": "SACN5_63.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-63 肠易激综合征"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-64",
+      "title": "SACN5_64.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-64 便秘/巨结肠"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-65",
+      "title": "SACN5_65.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-65 肠胃胀气"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-66",
+      "title": "SACN5_66.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "gi",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "gi"
+      ],
+      "reason": "SACN5-66 吸收不良"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-67",
+      "title": "SACN5_67.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "pancreatitis",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "pancreatitis"
+      ],
+      "reason": "SACN5-67 胰腺炎"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-68",
+      "title": "SACN5_68.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "hepatology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "hepatology"
+      ],
+      "reason": "SACN5-68 肝胆疾病"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-69",
+      "title": "SACN5_69.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "reference",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "reference"
+      ],
+      "reason": "SACN5-69 药物与营养相互作用（参考资料）"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-7",
+      "title": "SACN5_7.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-7 抗氧化剂"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-8",
+      "title": "SACN5_8.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-8 商业宠物食品形态与细分"
+    },
+    {
+      "id": "sacn5-chapters-SACN5-9",
+      "title": "SACN5_9.pdf",
+      "sourceId": "SACN5",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "SACN5-9 宠物食品标签"
+    },
+    {
+      "id": "wsava-dental-GDC-Oral-Cancer",
+      "title": "GDC-Oral-Cancer.pdf",
+      "sourceId": "WSAVA-DENTAL",
+      "primaryDomain": "oncology",
+      "secondaryDomains": [
+        "dentistry"
+      ],
+      "candidateDomains": [
+        "oncology",
+        "dentistry"
+      ],
+      "reason": "WSAVA 口腔肿瘤"
+    },
+    {
+      "id": "wsava-dental-GDC-Toothbrushing-Toolkit-1",
+      "title": "GDC-Toothbrushing-Toolkit-1.pdf",
+      "sourceId": "WSAVA-DENTAL",
+      "primaryDomain": "dentistry",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "dentistry"
+      ],
+      "reason": "WSAVA 牙科"
+    },
+    {
+      "id": "wsava-dental-WSAVA-Global-Dental-Guidelines-JSAPMandarin",
+      "title": "WSAVA-Global-Dental-Guidelines-JSAPMandarin.pdf",
+      "sourceId": "WSAVA-DENTAL",
+      "primaryDomain": "dentistry",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "dentistry"
+      ],
+      "reason": "WSAVA 牙科"
+    },
+    {
+      "id": "wsava-hereditary-WSAVA-Hereditary-Disease-Committee-Position",
+      "title": "WSAVA-Hereditary-Disease-Committee-Position-Paper-HDC-Edited.pdf",
+      "sourceId": "WSAVA-HEREDITARY",
+      "primaryDomain": "reproduction",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "reproduction"
+      ],
+      "reason": "WSAVA 遗传病与健康育种"
+    },
+    {
+      "id": "wsava-nutrition-Body-Condition-Score-Cat-2025",
+      "title": "Body-Condition-Score-Cat-2025.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Body-Condition-Score-Dog-2025",
+      "title": "Body-Condition-Score-Dog-2025.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Calorie-Needs-Healthy-Adult-Cats-2020",
+      "title": "Calorie-Needs-Healthy-Adult-Cats-2020.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Calorie-Needs-Healthy-Adult-Dogs-2020",
+      "title": "Calorie-Needs-Healthy-Adult-Dogs-2020.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Diet-History-Form",
+      "title": "Diet-History-Form.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Feeding-Guide-Hospitalized-Dogs-Cats",
+      "title": "Feeding-Guide-Hospitalized-Dogs-Cats.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Feeding-Instructions-Monitoring-Chart-Hospit",
+      "title": "Feeding-Instructions-Monitoring-Chart-Hospitalized-Patients.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Global-Nutritional-Assesment-Guidelines-Chin",
+      "title": "Global-Nutritional-Assesment-Guidelines-Chinese.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Guide-to-Treats-Cats-2025",
+      "title": "Guide-to-Treats-Cats-2025.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Guide-to-Treats-Dogs-2025",
+      "title": "Guide-to-Treats-Dogs-2025.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Implementing-WSAVA-Nutrition-Guidelines",
+      "title": "Implementing-WSAVA-Nutrition-Guidelines.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Interpreting-Food-Labels-2025",
+      "title": "Interpreting-Food-Labels-2025.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Muscle-Condition-Score-Cat",
+      "title": "Muscle-Condition-Score-Cat.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Muscle-Condition-Score-Dog",
+      "title": "Muscle-Condition-Score-Dog.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Nutritional-Assessment-Checklist",
+      "title": "Nutritional-Assessment-Checklist.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Principles-of-Wellness-2025",
+      "title": "Principles-of-Wellness-2025.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Quick-Tips-Implementing-WSAVA-Nutrition-Guid",
+      "title": "Quick-Tips-Implementing-WSAVA-Nutrition-Guidelines.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Raw-Meat-Based-Diets-for-Pets-2021",
+      "title": "Raw-Meat-Based-Diets-for-Pets-2021.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-SOP-for-Use-of-WSAVA-GNC-Toolkits-v4",
+      "title": "SOP-for-Use-of-WSAVA-GNC-Toolkits-v4.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-Selecting-a-Pet-Food-2021",
+      "title": "Selecting-a-Pet-Food-2021.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-nutrition-WSAVA-Nutrition-Assessment-Guidelines-2011-J",
+      "title": "WSAVA-Nutrition-Assessment-Guidelines-2011-JSAP.pdf",
+      "sourceId": "WSAVA-NUTRITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 营养工具包"
+    },
+    {
+      "id": "wsava-pain-WSAVA-2022疼痛识别评估和治疗指南-中文",
+      "title": "WSAVA-2022疼痛识别评估和治疗指南-中文.pdf",
+      "sourceId": "WSAVA-PAIN-2022",
+      "primaryDomain": "oa",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "oa"
+      ],
+      "reason": "WSAVA 2022 疼痛指南"
+    },
+    {
+      "id": "wsava-pain-topic-sheets-Caesarean-section",
+      "title": "Caesarean-section.pdf",
+      "sourceId": "WSAVA-PAIN-2022",
+      "primaryDomain": "reproduction",
+      "secondaryDomains": [
+        "oa"
+      ],
+      "candidateDomains": [
+        "reproduction",
+        "oa"
+      ],
+      "reason": "WSAVA 剖宫产疼痛"
+    },
+    {
+      "id": "wsava-pain-topic-sheets-Cancer-Pain",
+      "title": "Cancer-Pain.pdf",
+      "sourceId": "WSAVA-PAIN-2022",
+      "primaryDomain": "oncology",
+      "secondaryDomains": [
+        "oa"
+      ],
+      "candidateDomains": [
+        "oncology",
+        "oa"
+      ],
+      "reason": "WSAVA 癌痛"
+    },
+    {
+      "id": "wsava-pain-topic-sheets-Degenerative-joint-disease",
+      "title": "Degenerative-joint-disease.pdf",
+      "sourceId": "WSAVA-PAIN-2022",
+      "primaryDomain": "oa",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "oa"
+      ],
+      "reason": "WSAVA 退行性关节病疼痛"
+    },
+    {
+      "id": "wsava-pain-topic-sheets-Pregnant-or-lactating-patients",
+      "title": "Pregnant-or-lactating-patients.pdf",
+      "sourceId": "WSAVA-PAIN-2022",
+      "primaryDomain": "reproduction",
+      "secondaryDomains": [
+        "oa"
+      ],
+      "candidateDomains": [
+        "reproduction",
+        "oa"
+      ],
+      "reason": "WSAVA 孕/哺乳期疼痛"
+    },
+    {
+      "id": "wsava-pain-topic-sheets-WSAVA-Global-Pain-Council-Perceived-",
+      "title": "WSAVA-Global-Pain-Council-Perceived-levels-of-pain.pdf",
+      "sourceId": "WSAVA-PAIN-2022",
+      "primaryDomain": "oa",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "oa"
+      ],
+      "reason": "WSAVA 疼痛专题"
+    },
+    {
+      "id": "wsava-position-statements-WSAVA-OneHealth-肥胖预防",
+      "title": "WSAVA-OneHealth-肥胖预防.pdf",
+      "sourceId": "WSAVA-POSITION",
+      "primaryDomain": "general-nutrition",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "general-nutrition"
+      ],
+      "reason": "WSAVA 肥胖预防（One Health）"
+    },
+    {
+      "id": "wsava-position-statements-WSAVA-微芯片与肿瘤立场声明",
+      "title": "WSAVA-微芯片与肿瘤立场声明.pdf",
+      "sourceId": "WSAVA-POSITION",
+      "primaryDomain": "oncology",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "oncology"
+      ],
+      "reason": "WSAVA 立场声明（微芯片与肿瘤）"
+    },
+    {
+      "id": "wsava-reproduction-Executive-Summary",
+      "title": "Executive-Summary.pdf",
+      "sourceId": "WSAVA-REPRO",
+      "primaryDomain": "reproduction",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "reproduction"
+      ],
+      "reason": "WSAVA 生殖管理指南"
+    },
+    {
+      "id": "wsava-reproduction-J-of-Small-Animal-Practice-2024-Romagnoli",
+      "title": "J-of-Small-Animal-Practice-2024-Romagnoli-WSAVA-guidelines-for-the-control-of-reproduction-in-dogs-and-cats.pdf",
+      "sourceId": "WSAVA-REPRO",
+      "primaryDomain": "reproduction",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "reproduction"
+      ],
+      "reason": "WSAVA 生殖管理指南"
+    },
+    {
+      "id": "wsava-reproduction-WSAVA犬猫生殖管理指南-中文版",
+      "title": "WSAVA犬猫生殖管理指南-中文版.pdf",
+      "sourceId": "WSAVA-REPRO",
+      "primaryDomain": "reproduction",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "reproduction"
+      ],
+      "reason": "WSAVA 生殖管理指南"
+    },
+    {
+      "id": "wsava-vaccination-WSAVA-Vaccination-guidelines-2024",
+      "title": "WSAVA-Vaccination-guidelines-2024.pdf",
+      "sourceId": "WSAVA-VACC-2024",
+      "primaryDomain": "infectious-disease",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "infectious-disease"
+      ],
+      "reason": "WSAVA 2024 免疫指南"
+    },
+    {
+      "id": "wsava-welfare-PWG-福祉提示",
+      "title": "PWG-福祉提示.pdf",
+      "sourceId": "WSAVA-WELFARE",
+      "primaryDomain": "other-clinical",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "other-clinical"
+      ],
+      "reason": "WSAVA 动物福利（非营养主线）"
+    },
+    {
+      "id": "wsava-welfare-WSAVA-Animal-Welfare-Charter-Feb-2020",
+      "title": "WSAVA_Animal_Welfare_Charter_Feb-2020.pdf",
+      "sourceId": "WSAVA-WELFARE",
+      "primaryDomain": "other-clinical",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "other-clinical"
+      ],
+      "reason": "WSAVA 动物福利（非营养主线）"
+    },
+    {
+      "id": "wsava-welfare-WSAVA-Animal-Welfare-Guidelines-2018",
+      "title": "WSAVA-Animal-Welfare-Guidelines-2018.pdf",
+      "sourceId": "WSAVA-WELFARE",
+      "primaryDomain": "other-clinical",
+      "secondaryDomains": [],
+      "candidateDomains": [
+        "other-clinical"
+      ],
+      "reason": "WSAVA 动物福利（非营养主线）"
+    }
+  ]
+}

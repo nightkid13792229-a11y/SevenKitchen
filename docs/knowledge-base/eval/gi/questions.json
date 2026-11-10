@@ -1,7 +1,7 @@
 {
   "version": "2026-11-10",
   "domain": "gi",
-  "note": "胃肠域 10 题：ACVIM 2022/2023/2026/2018 + SACN5 57/62。负样本用\"猫糖尿病饮食\"（GI 语料实测 no_match）。",
+  "note": "胃肠域 10 题：ACVIM 2022/2023/2026/2018 + SACN5 57/62。负样本用\"猫糖尿病饮食\"（GI 语料实测 no_match）。 2026-11-10 全库映射后：T0385（SACN5-56 表 56-5「fiber-enhanced 处方粮营养因子」）与 T0391（57-4）同属纤维表证据，随 GI 语料扩容（6→24 份）纳入期望；同时给表题钉本域 documentIds。",
   "questions": [
     {
       "id": "gi-enteropathy-consensus",
@@ -74,7 +74,16 @@
       "category": "table",
       "expectedTables": [
         "T0388",
-        "T0391"
+        "T0391",
+        "T0385"
+      ],
+      "documentIds": [
+        "acvim-ACVIM-2022-犬慢性肠病-现状综述",
+        "acvim-ACVIM-2023-猫慢性肠病-低级别肿瘤与炎症鉴别",
+        "acvim-ACVIM-2026-慢性肠病诊断与治疗共识",
+        "acvim-ACVIM-2018-胃肠道保护剂合理使用",
+        "sacn5-chapters-SACN5-57",
+        "sacn5-chapters-SACN5-56"
       ]
     },
     {

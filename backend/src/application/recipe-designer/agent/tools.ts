@@ -17,6 +17,7 @@ import type {
   TableView,
 } from '../../knowledge-base/source-layer.service';
 import type { KnowledgeScope } from '../../../domain/knowledge/knowledge-scope';
+import { defaultScope } from '../../../domain/knowledge/knowledge-scope';
 import { KNOWLEDGE_DOMAINS } from '../../../domain/knowledge/knowledge-domains';
 import { detectQueryDomains } from '../../../domain/knowledge/domain-routing';
 import { normalizeTopics } from '../../knowledge-base/query-expansion';
@@ -473,7 +474,11 @@ export async function executeTool(
 
         // 查询里出现明确疾病信号（CKD/胰腺炎/关节炎/皮肤病…）时，自动收窄到
         // 对应领域的文档：多域同时开启时，避免"维生素 K 在别的病种里也有"这类串台。
-        const autoDocumentIds = scopeByQueryDomain(query, context.scope);
+        // 没有疾病信号时退到默认营养域（基础营养 + 参考库 + CKD），
+        // 而不是把 16 个域的文档全丢给检索。
+        const autoDocumentIds =
+          scopeByQueryDomain(query, context.scope) ??
+          defaultDocumentsForScope(context.scope);
         const documentIds =
           explicitDocumentIds && explicitDocumentIds.length > 0
             ? explicitDocumentIds
@@ -1148,6 +1153,34 @@ function scopeByQueryDomain(
     }
   }
   return documents.size > 0 ? [...documents] : undefined;
+}
+
+/**
+ * 无疾病信号时的默认文档范围（全领域上线计划 Task 2）。
+ *
+ * - 显式全库范围（`allDocuments`，只有基准/覆盖率脚本会给）：不收窄，
+ *   否则"全库基准"就不是全库了；
+ * - 单域范围：就是运维显式给的范围，也不收窄（审计按域跑就靠这个语义）；
+ * - 多域并库：收窄到「基础营养 + 参考库 + CKD」∩ 当前范围。
+ *
+ * 返回 undefined 表示"不加限制"，交给上层用当前 scope 的白名单。
+ */
+function defaultDocumentsForScope(
+  scope: KnowledgeScope,
+): string[] | undefined {
+  if (scope.allDocuments) return undefined;
+  if (scope.domains.length <= 1) return undefined;
+  let fallback: readonly string[];
+  try {
+    fallback = defaultScope().documentIds;
+  } catch {
+    // 默认域都没审计（例如只配了 CKD 的早期部署）：退回当前范围，不影响检索。
+    return undefined;
+  }
+  const documents = fallback.filter((documentId) =>
+    scope.documentIds.includes(documentId),
+  );
+  return documents.length > 0 ? documents : undefined;
 }
 
 /** 文档是否在当前范围：全库范围放行一切；否则必须在白名单里。 */

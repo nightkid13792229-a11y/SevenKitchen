@@ -28,7 +28,8 @@ describe('detectQueryDomains', () => {
 describe('domainRoutingBoost', () => {
   const CKD_DOC = 'sacn5-chapters-SACN5-37';
   const NUTRITION_DOC = 'aaha-AAHA-2010-Nutritional-Assessment-Guidelines';
-  const UNMAPPED = 'aaha-AAHA-2019-Dental-Care-Guidelines';
+  /** 库里没有、也不在任何域里的文档 id（全库映射后没有真正的“未映射”文档了）。 */
+  const UNMAPPED = 'not-in-library-doc';
 
   it('CKD 查询给 CKD 文档加成', () => {
     expect(domainRoutingBoost('CKD dog phosphorus', CKD_DOC)).toBe(1.4);
@@ -40,6 +41,13 @@ describe('domainRoutingBoost', () => {
 
   it('未映射文档保持中性', () => {
     expect(domainRoutingBoost('CKD dog phosphorus', UNMAPPED)).toBe(1);
+  });
+
+  it('原“未映射”的牙科文档已归入 dentistry，按其他领域降权', () => {
+    expect(detectQueryDomains('CKD dog phosphorus')).toEqual(['ckd']);
+    expect(
+      domainRoutingBoost('CKD dog phosphorus', 'aaha-AAHA-2019-Dental-Care-Guidelines'),
+    ).toBe(0.9);
   });
 
   it('没有领域信号时不干预', () => {

@@ -112,6 +112,7 @@
     "kb:usage": "ts-node -r tsconfig-paths/register scripts/knowledge-base/knowledge-usage-report.ts",
     "kb:seed-eval": "ts-node -r tsconfig-paths/register scripts/knowledge-base/seed-eval-staff.ts",
     "kb:data-check": "ts-node -r tsconfig-paths/register scripts/knowledge-base/data-check.ts",
+    "kb:domains": "ts-node -r tsconfig-paths/register scripts/knowledge-base/propose-domains.ts",
     "kb:bench": "ts-node -r tsconfig-paths/register scripts/knowledge-base/bench-search.ts",
     "kb:coverage": "ts-node -r tsconfig-paths/register scripts/knowledge-base/coverage-check.ts",
     "kb:prod-smoke": "ts-node -r tsconfig-paths/register scripts/knowledge-base/prod-smoke.ts",

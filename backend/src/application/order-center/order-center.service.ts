@@ -90,6 +90,13 @@ export interface OrderCenterItem {
    */
   aftersaleLabel: string | null;
   /**
+   * 退款待审核（2026-11-10）：这单已进售后、且类型是「退款」，
+   * 还在等管理员审批。管理员在列表上要能直接把这类单挑出来，
+   * 否则得挨个点进详情看。口径沿用已下线的旧「后台订单」列表：
+   * 只看鲜食单的 `status = AFTERSALE && aftersaleType = REFUND`。
+   */
+  needsRefundReview: boolean;
+  /**
    * 这道订单的食谱名（2026-10-30）。
    *
    * 卡片主行仍显示食谱名（员工按"要做什么菜"干活）；
@@ -363,6 +370,8 @@ export class OrderCenterService {
               orderNo: true,
               customerId: true,
               status: true,
+              /** 「退款待审核」要判售后类型（2026-11-10） */
+              aftersaleType: true,
               type: true,
               amountTotal: true,
               createdAt: true,
@@ -728,6 +737,9 @@ export class OrderCenterService {
       amount: Number(row.amountTotal ?? 0),
       hasOpenAftersale: row.status === 'AFTERSALE',
       aftersaleLabel: row.status === 'AFTERSALE' ? '售后中' : null,
+      // 退款单要管理员点头才算完（和旧「后台订单」列表同一口径）
+      needsRefundReview:
+        row.status === 'AFTERSALE' && row.aftersaleType === 'REFUND',
       itemId: firstItem?.id ?? null,
       /** 注意：鲜食要看的是 `recipeSnapshot`（下单那一版），不是这条 recipeId */
       recipeId: snapshot?.id ?? null,
@@ -836,6 +848,8 @@ export class OrderCenterService {
     amount: number;
     hasOpenAftersale: boolean;
     aftersaleLabel: string | null;
+    /** 只有鲜食退款单会是 true；其它两类暂不标（口径同旧列表） */
+    needsRefundReview?: boolean;
     isGift?: boolean;
     itemId: string | null;
     recipeId: string | null;
@@ -876,6 +890,7 @@ export class OrderCenterService {
         null,
       hasOpenAftersale: input.hasOpenAftersale,
       aftersaleLabel: input.aftersaleLabel,
+      needsRefundReview: input.needsRefundReview === true,
       itemId: input.itemId,
       recipeId: input.recipeId,
       recipeName: input.recipeName,

@@ -219,6 +219,25 @@ describe('OrderCenterService', () => {
     ).toBe('分装中');
   });
 
+  it('★ 退款待审核：只有鲜食「售后中 + 退款」才标，补发/投诉不标（2026-11-10）', async () => {
+    prisma.order.findMany.mockResolvedValue([
+      foodRow({ id: 'f-refund', status: 'AFTERSALE', aftersaleType: 'REFUND' }),
+      foodRow({ id: 'f-remake', status: 'AFTERSALE', aftersaleType: 'REMAKE' }),
+      foodRow({ id: 'f-normal', status: 'IN_PRODUCTION' }),
+    ]);
+
+    const result = await service.list({ type: 'FOOD', pageSize: 20 });
+    const byId = (id: string) => result.items.find((item) => item.id === id);
+
+    expect(byId('f-refund')?.needsRefundReview).toBe(true);
+    expect(byId('f-remake')?.needsRefundReview).toBe(false);
+    expect(byId('f-normal')?.needsRefundReview).toBe(false);
+    // 查询里必须真的把售后类型带出来，否则上面的判断永远为 false
+    expect(prisma.order.findMany.mock.lastCall?.[0].select.aftersaleType).toBe(
+      true,
+    );
+  });
+
   it('补剂有未完结退款 → 标记退款中', async () => {
     prisma.aftersaleCase.findMany.mockResolvedValue([
       { orderId: 's1', status: 'PROCESSING', requestType: 'REFUND' },

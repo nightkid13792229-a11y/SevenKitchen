@@ -136,6 +136,12 @@
           >
             {{ item.aftersaleLabel }}
           </text>
+          <!-- 退款待审核（2026-11-10）：旧「后台订单」列表下线后把这个词补回来。
+               只给管理员看 —— 退款审批在详情页，员工看到只会问「为什么我不能点」。 -->
+          <text
+            v-if="isAdmin && item.needsRefundReview"
+            class="mini-tag refund-review"
+          >退款待审核</text>
           <text v-if="item.isGift" class="mini-tag gift">赠送</text>
           <text v-if="item.subtypeLabel && item.type === 'FOOD'" class="mini-tag subtype">
             {{ item.subtypeLabel }}
@@ -222,6 +228,11 @@ interface OrderCenterItem {
   hasOpenAftersale: boolean
   /** 售后标签文案；空 = 这单从来没提过售后。已结束的也会出现（2026-10-30） */
   aftersaleLabel: string | null
+  /**
+   * 退款待审核（2026-11-10）：鲜食单进了售后、类型是退款，还在等管理员审批。
+   * 老接口/旧缓存没有这个字段时按 false 处理，标签就不显示。
+   */
+  needsRefundReview?: boolean
   isGift: boolean
   subtypeLabel: string | null
   scheduledDate: string | null
@@ -716,6 +727,8 @@ onShow(() => {
 .mini-tag.aftersale { background: #fdf6ec; color: #b88230; }
 /* 已结束的售后：灰底，跟"还在处理"一眼分开，别抢注意力 */
 .mini-tag.aftersale-closed { background: #f2f3f5; color: #909399; }
+/* 退款待审核（2026-11-10）：比「售后中」的橙色再急一档，管理员一眼能挑出来 */
+.mini-tag.refund-review { background: #fdecea; color: #c0392b; }
 .mini-tag.gift { background: #eaf5ec; color: #2e7d4f; }
 .mini-tag.subtype { background: #f2f3f5; color: #606266; }
 

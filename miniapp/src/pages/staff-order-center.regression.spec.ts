@@ -342,3 +342,22 @@ describe('staff order center · 合并 / 拆分发货入口（2026-11-10）', ()
     expect(start).toContain('leavingForShipment')
   })
 })
+
+/**
+ * 2026-11-10：旧「后台订单」列表下线时，管理员靠这个词挑退款单；
+ * 平移回订单中心，口径不变（鲜食单 + 售后中 + 退款类型）。
+ */
+describe('staff order center · 退款待审核', () => {
+  it('管理员才看得到「退款待审核」，员工看不到', () => {
+    expect(orderCenter).toContain('class="mini-tag refund-review"')
+    expect(orderCenter).toContain('isAdmin && item.needsRefundReview')
+    expect(orderCenter).toContain("const isAdmin = getStoredUser()?.role === 'ADMIN'")
+    expect(orderCenter).toContain('退款待审核')
+    // 标签颜色比「售后中」的橙色更急
+    expect(orderCenter).toContain('.mini-tag.refund-review')
+  })
+
+  it('接口没返回这个字段时按 false 处理，标签不冒出来', () => {
+    expect(orderCenter).toContain('needsRefundReview?: boolean')
+  })
+})

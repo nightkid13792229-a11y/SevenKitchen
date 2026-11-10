@@ -269,3 +269,12 @@ describe('补货模式', () => {
     expect(source).toContain('catalogIngredients');
   });
 });
+
+describe('补货多笔订单', () => {
+  it('loads every draft id and saves each one', () => {
+    expect(source).toContain('options?.ids');
+    expect(source).toContain('listIds.value.map((id) => getOrderImports(id))');
+    expect(source).toContain('listIdsToSave');
+    expect(source).toContain('for (const id of listIdsToSave)');
+  });
+});

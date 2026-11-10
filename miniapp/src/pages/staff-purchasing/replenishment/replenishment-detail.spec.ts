@@ -12,6 +12,13 @@ describe('补货记录详情', () => {
     expect(source).toContain('去报销');
   });
 
+  it('offers edit only before arrival and before reimbursement', () => {
+    expect(source).toContain('canEdit');
+    expect(source).toContain('修改');
+    expect(source).toContain('撤销到货');
+    expect(source).toContain('revokeReplenishmentArrival');
+  });
+
   it('shows arrival and claim as two independent facts', () => {
     expect(source).toContain('arrivalText');
     expect(source).toContain('claimText');

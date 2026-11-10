@@ -6,8 +6,11 @@
       <view class="empty">
         <text class="empty-title">还没有识别记录</text>
         <text class="empty-desc">{{ orderShotHint }}</text>
-        <button class="primary-btn empty-btn" :loading="importing" @tap="pickMore">
+        <button v-if="pageMode !== 'replenishment'" class="primary-btn empty-btn" :loading="importing" @tap="pickMore">
           选择订单截图
+        </button>
+        <button v-else class="primary-btn empty-btn" @tap="goBack">
+          返回补货
         </button>
         <text class="retry-link" @tap="load">重新加载</text>
       </view>
@@ -516,6 +519,7 @@ interface IngredientOption {
 }
 
 const listId = ref('');
+const listIds = ref<string[]>([]);
 const pageMode = ref<'order-demand' | 'replenishment'>('order-demand');
 const catalogIngredients = ref<any[]>([]);
 const loading = ref(true);
@@ -1048,7 +1052,17 @@ function importIssue(item: OrderImportView): string | null {
 const canConfirm = computed(() => blockReason.value === '' && !submitted.value);
 
 onLoad((options: Record<string, string>) => {
-  listId.value = String(options?.id || '');
+  const idsParam = String(options?.ids || '');
+  const singleId = String(options?.id || '');
+  listIds.value = idsParam
+    ? idsParam
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+    : singleId
+      ? [singleId]
+      : [];
+  listId.value = listIds.value[0] || '';
   pageMode.value =
     options?.mode === 'replenishment' ? 'replenishment' : 'order-demand';
   focusLastOnce = options?.focus === 'last';
@@ -1094,6 +1108,37 @@ async function load() {
         }
       })
       .catch(() => undefined);
+  }
+  if (pageMode.value === 'replenishment') {
+    const results = await Promise.allSettled(
+      listIds.value.map((id) => getOrderImports(id)),
+    );
+    let failed = false;
+    const merged: any[] = [];
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        const res: any = result.value;
+        if (res?.code === 0) {
+          merged.push(...(res.data || []));
+        } else {
+          failed = true;
+        }
+      } else {
+        failed = true;
+      }
+    }
+    imports.value = merged.filter((item: any) => item.status === 'DRAFT');
+    if (activeIndex.value >= imports.value.length) activeIndex.value = 0;
+    if (focusLastOnce && imports.value.length > 0) {
+      activeIndex.value = imports.value.length - 1;
+      focusLastOnce = false;
+    }
+    loaded.value = true;
+    if (failed && imports.value.length === 0) {
+      uni.showToast({ title: '加载失败，请重试', icon: 'none' });
+    }
+    loading.value = false;
+    return;
   }
   const settled = await Promise.allSettled([
     getPurchaseListDetail(listId.value),
@@ -1663,11 +1708,26 @@ async function submit() {
   submitting.value = true;
   try {
     if (pageMode.value === 'replenishment') {
-      const saved: any = await saveReplenishmentRecord(listId.value, {});
-      if (saved.code !== 0) throw new Error(saved.message || '保存失败');
+      const listIdsToSave = Array.from(
+        new Set(
+          imports.value
+            .filter((item) => item.status === 'DRAFT')
+            .map((item) => String(item.purchaseListId || ''))
+            .filter(Boolean),
+        ),
+      );
+      let savedCount = 0;
+      for (const id of listIdsToSave) {
+        const saved: any = await saveReplenishmentRecord(id, {});
+        if (saved.code !== 0) throw new Error(saved.message || '保存失败');
+        savedCount += 1;
+      }
       submitted.value = true;
-      uni.showToast({ title: '补货记录已保存', icon: 'success' });
-      setTimeout(() => uni.navigateBack(), 700);
+      uni.showToast({
+        title: `已保存 ${savedCount} 笔补货记录`,
+        icon: 'success',
+      });
+      setTimeout(() => uni.navigateBack(), 800);
       return;
     }
 
@@ -1685,6 +1745,10 @@ async function submit() {
   } catch (error: any) {
     // 失败才解锁；成功时保持锁定，避免返回动画期间重复提交。
     submitting.value = false;
+    // 多笔补货时前几笔可能已经存好：重拉一次，别让重试去重复保存。
+    if (pageMode.value === 'replenishment') {
+      await load();
+    }
     uni.showModal({
       title: '生成失败',
       content: error?.message || '请检查后重试',

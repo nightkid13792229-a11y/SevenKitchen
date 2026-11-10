@@ -1421,3 +1421,31 @@ export function voidReplenishmentRecord(id: string, reason?: string) {
     data: { reason },
   });
 }
+
+export function revokeReplenishmentArrival(id: string) {
+  return request({
+    url: `/staff/purchasing/replenishment/${id}/unarrive`,
+    method: 'POST',
+  });
+}
+
+export function updateReplenishmentRecord(
+  id: string,
+  data: {
+    items?: Array<{
+      itemId: string;
+      quantity: number;
+      unitPrice: number;
+      unit?: string;
+    }>;
+    shippingFee?: number;
+    packagingFee?: number;
+    paidAmount?: number;
+  },
+) {
+  return request({
+    url: `/staff/purchasing/replenishment/${id}`,
+    method: 'PATCH',
+    data,
+  });
+}

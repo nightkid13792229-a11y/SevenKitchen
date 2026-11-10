@@ -258,46 +258,71 @@ const startRecord = async () => {
 
   const chosen: any = await new Promise((resolve) => {
     uni.chooseImage({
-      count: 1,
+      count: 5,
       sizeType: ['compressed'],
       sourceType: ['album', 'camera'],
       success: resolve,
       fail: () => resolve(null),
     });
   });
-  const filePath = chosen?.tempFilePaths?.[0];
-  if (!filePath) {
+  const paths: string[] = chosen?.tempFilePaths || [];
+  if (paths.length === 0) {
     return;
   }
 
   starting.value = true;
   uni.showLoading({ title: '上传中...', mask: true });
+  const draftIds: string[] = [];
+  let failedCount = 0;
   try {
-    const uploaded = await uploadOrderScreenshot(filePath);
-    const draftRes: any = await createReplenishmentDraft();
-    if (draftRes?.code !== 0 || !draftRes.data?.id) {
-      throw new Error(draftRes?.message || '创建补货记录失败');
-    }
-    const draftId = draftRes.data.id;
+    for (let index = 0; index < paths.length; index += 1) {
+      uni.showLoading({
+        title: `上传 ${index + 1}/${paths.length}`,
+        mask: true,
+      });
+      try {
+        const uploaded = await uploadOrderScreenshot(paths[index]);
+        const draftRes: any = await createReplenishmentDraft();
+        if (draftRes?.code !== 0 || !draftRes.data?.id) {
+          throw new Error(draftRes?.message || '创建补货记录失败');
+        }
+        const draftId = draftRes.data.id;
 
-    uni.showLoading({ title: '识别中...', mask: true });
-    const importRes: any = await importOrderScreenshots(
-      draftId,
-      [uploaded.url],
-      [uploaded.key],
-    );
-    if (importRes?.code !== 0) {
-      throw new Error(importRes?.message || '识别失败');
+        uni.showLoading({
+          title: `识别 ${index + 1}/${paths.length}`,
+          mask: true,
+        });
+        const importRes: any = await importOrderScreenshots(
+          draftId,
+          [uploaded.url],
+          [uploaded.key],
+        );
+        if (importRes?.code !== 0) {
+          throw new Error(importRes?.message || '识别失败');
+        }
+        draftIds.push(draftId);
+      } catch (error) {
+        failedCount += 1;
+        console.error('补货截图识别失败', error);
+      }
     }
 
     uni.hideLoading();
+    if (draftIds.length === 0) {
+      uni.showToast({ title: '识别失败，请重试', icon: 'none' });
+      return;
+    }
+    if (failedCount > 0) {
+      uni.showToast({
+        title: `${failedCount} 张没识别成功，其余可继续核对`,
+        icon: 'none',
+      });
+    }
     uni.navigateTo({
-      url: `/pages/staff-purchasing/order-import/review?id=${draftId}&mode=replenishment`,
+      url: `/pages/staff-purchasing/order-import/review?ids=${draftIds.join(',')}&mode=replenishment`,
     });
-  } catch (error: any) {
-    uni.hideLoading();
-    uni.showToast({ title: error?.message || '识别失败，请重试', icon: 'none' });
   } finally {
+    uni.hideLoading();
     starting.value = false;
   }
 };

@@ -138,6 +138,12 @@
         <button v-if="canArrive" class="action-btn primary" :loading="acting" @tap="confirmArrival">
           已到货
         </button>
+        <button v-if="canEdit" class="action-btn" @tap="goEdit">
+          修改
+        </button>
+        <button v-if="canRevokeArrival" class="action-btn" :loading="acting" @tap="revokeArrival">
+          撤销到货
+        </button>
         <button v-if="canReimburse" class="action-btn" @tap="goReimburse">
           去报销
         </button>
@@ -155,6 +161,7 @@ import { onLoad, onShow } from '@dcloudio/uni-app';
 import {
   confirmReplenishmentArrival,
   getReplenishmentRecord,
+  revokeReplenishmentArrival,
   voidReplenishmentRecord,
 } from '../api/purchasing';
 
@@ -258,6 +265,20 @@ const canVoid = computed(
     !record.value.voidedAt &&
     !record.value.reimbursementId,
 );
+const canEdit = computed(
+  () =>
+    !!record.value &&
+    !record.value.arrivedAt &&
+    !record.value.voidedAt &&
+    !record.value.reimbursementId,
+);
+const canRevokeArrival = computed(
+  () =>
+    !!record.value &&
+    !!record.value.arrivedAt &&
+    !record.value.voidedAt &&
+    !record.value.reimbursementId,
+);
 const canReimburse = computed(
   () => !!record.value && !record.value.voidedAt && !record.value.reimbursementId,
 );
@@ -316,6 +337,28 @@ const confirmArrival = () => {
   });
 };
 
+const revokeArrival = () => {
+  uni.showModal({
+    title: '撤销到货',
+    content: '撤销后这批货退回在途，库存会扣回；已经被用掉的货不能撤销。',
+    success: async (res) => {
+      if (!res.confirm) return;
+      await withActing(async () => {
+        try {
+          const response: any = await revokeReplenishmentArrival(recordId.value);
+          if (response?.code !== 0) {
+            throw new Error(response?.message || '撤销失败');
+          }
+          uni.showToast({ title: '已撤销到货', icon: 'success' });
+          await load();
+        } catch (error: any) {
+          uni.showToast({ title: error?.message || '撤销失败', icon: 'none' });
+        }
+      });
+    },
+  });
+};
+
 const voidRecord = () => {
   uni.showModal({
     title: '作废补货记录',
@@ -336,6 +379,12 @@ const voidRecord = () => {
         }
       });
     },
+  });
+};
+
+const goEdit = () => {
+  uni.navigateTo({
+    url: `/pages/staff-purchasing/replenishment/edit?id=${recordId.value}`,
   });
 };
 

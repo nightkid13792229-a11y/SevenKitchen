@@ -211,6 +211,15 @@
           }
         },
         {
+          "path": "replenishment/edit",
+          "style": {
+            "navigationBarTitleText": "修改补货记录",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
+          }
+        },
+        {
           "path": "detail",
           "style": {
             "navigationBarTitleText": "采购清单详情",

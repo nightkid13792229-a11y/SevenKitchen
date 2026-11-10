@@ -11,6 +11,8 @@ describe('补货页', () => {
     expect(source).toContain('记一笔补货');
     expect(source).toContain('createReplenishmentDraft');
     expect(source).toContain('importOrderScreenshots');
+    expect(source).toContain('count: 5');
+    expect(source).toContain('ids=');
     expect(source).not.toContain('开始采购');
   });
 
@@ -24,5 +26,6 @@ describe('补货页', () => {
   it('registers the route in pages.json', () => {
     expect(pagesJson).toContain('"path": "replenishment/index"');
     expect(pagesJson).toContain('"path": "replenishment/detail"');
+    expect(pagesJson).toContain('"path": "replenishment/edit"');
   });
 });

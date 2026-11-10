@@ -1466,18 +1466,22 @@ async function saveFeeEdit() {
     return;
   }
   const paid = parseNumber(form.paidText);
-  if (paid === null || paid <= 0) {
+  // 日采的实付允许继续留空（原来就不强制）；补货必须有实付才能算报销。
+  if (pageMode.value === 'replenishment' && (paid === null || paid <= 0)) {
     uni.showToast({ title: '请填订单实付金额', icon: 'none' });
     return;
   }
 
   feeSaving.value = true;
   try {
-    const res: any = await updateOrderImport(item.id, {
-      paid,
+    const payload: any = {
       shippingFee: shippingResult.value,
       packagingFee: packagingResult.value,
-    });
+    };
+    if (paid !== null && paid > 0) {
+      payload.paid = paid;
+    }
+    const res: any = await updateOrderImport(item.id, payload);
     if (res.code !== 0) throw new Error(res.message || '保存失败');
     closeFeeEdit();
     await load();

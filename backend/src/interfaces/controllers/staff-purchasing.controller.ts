@@ -70,6 +70,7 @@ import {
 import { PurchaseOrderImportService } from '../../application/purchasing/purchase-order-import.service';
 import { ReplenishmentService } from '../../application/purchasing/replenishment.service';
 import type { SaveReplenishmentRecordDto } from '../../application/purchasing/replenishment.service';
+import type { UpdateReplenishmentRecordDto } from '../../application/purchasing/replenishment.service';
 
 @ApiTags('Staff Purchasing')
 @Controller('api/v1/staff/purchasing')
@@ -635,6 +636,24 @@ export class StaffPurchasingController {
     return ApiResponseDto.success(record, '补货记录已保存');
   }
 
+  @Patch('replenishment/:id')
+  @ApiOperation({ summary: '修改补货记录明细与金额（在途、未报销）' })
+  async updateReplenishmentRecord(
+    @Param('id') id: string,
+    @Body() dto: UpdateReplenishmentRecordDto,
+    @UserId() userId: string,
+    @UserRole() role: string,
+  ): Promise<ApiResponseDto<any>> {
+    const record = await this.replenishmentService.updateRecord(
+      id,
+      dto,
+      userId,
+      role,
+    );
+
+    return ApiResponseDto.success(record, '补货记录已更新');
+  }
+
   @Get('replenishment')
   @ApiOperation({ summary: '补货记录列表（到货/报销分开筛选）' })
   async listReplenishmentRecords(
@@ -685,6 +704,22 @@ export class StaffPurchasingController {
     );
 
     return ApiResponseDto.success(result, '已确认到货');
+  }
+
+  @Post('replenishment/:id/unarrive')
+  @ApiOperation({ summary: '撤销到货（退回在途）' })
+  async revokeReplenishmentArrival(
+    @Param('id') id: string,
+    @UserId() userId: string,
+    @UserRole() role: string,
+  ): Promise<ApiResponseDto<any>> {
+    const record = await this.replenishmentService.revokeArrival(
+      id,
+      userId,
+      role,
+    );
+
+    return ApiResponseDto.success(record, '已撤销到货');
   }
 
   @Post('replenishment/:id/void')

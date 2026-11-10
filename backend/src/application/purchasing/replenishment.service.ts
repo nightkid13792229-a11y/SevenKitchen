@@ -29,6 +29,7 @@ import {
   PURCHASE_RECORD_REPOSITORY,
 } from './purchasing.service.tokens';
 import { PurchaseOrderImportService } from './purchase-order-import.service';
+import { weightUnitToBaseRatio } from './purchase-order-weight-units';
 
 const WEIGHT_UNIT_TO_BASE_RATIO: Record<string, number> = {
   斤: 500,
@@ -47,6 +48,18 @@ export interface SaveReplenishmentRecordDto {
   packagingFee?: number;
   /** 预计到货；不传则用识别结果/渠道默认（后续任务） */
   expectedDeliveryAt?: string;
+}
+
+export interface UpdateReplenishmentRecordDto {
+  items?: Array<{
+    itemId: string;
+    quantity: number;
+    unitPrice: number;
+    unit?: string;
+  }>;
+  shippingFee?: number;
+  packagingFee?: number;
+  paidAmount?: number;
 }
 
 export interface ListReplenishmentRecordsParams {
@@ -289,6 +302,191 @@ export class ReplenishmentService {
       createdCount: inbound.createdCount,
       skippedCount: inbound.skippedCount,
     };
+  }
+
+  /**
+   * 保存后改明细：只允许在途、未报销；改完重算订单级金额。
+   * 已到货要先撤销到货；已关联报销单不能再改。
+   */
+  async updateRecord(
+    listId: string,
+    dto: UpdateReplenishmentRecordDto,
+    userId: string,
+    role: string,
+  ): Promise<PurchaseList> {
+    const list = await this.purchaseListRepository.findById(listId);
+    if (!list || list.isDraft) {
+      throw new NotFoundException('补货记录不存在');
+    }
+    if (list.voidedAt) {
+      throw new BadRequestException('补货记录已作废');
+    }
+    this.assertCanOperate(list, userId, role);
+    if (list.reimbursementId) {
+      throw new BadRequestException('已关联报销单，不能修改');
+    }
+    if (list.arrivedAt) {
+      throw new BadRequestException('已到货，请先撤销到货再修改');
+    }
+
+    const items = await this.prisma.purchaseItem.findMany({
+      where: { purchaseListId: listId },
+    });
+    const records = await this.prisma.purchaseRecord.findMany({
+      where: { purchaseListId: listId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    for (const input of dto.items ?? []) {
+      const item = items.find((row) => row.id === input.itemId);
+      if (!item) {
+        throw new BadRequestException('补货明细不存在，请刷新后重试');
+      }
+      const quantity = Number(input.quantity);
+      const unitPrice = Number(input.unitPrice);
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new BadRequestException(
+          `「${item.ingredientName || item.ingredientId}」数量必须大于 0`,
+        );
+      }
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+        throw new BadRequestException(
+          `「${item.ingredientName || item.ingredientId}」单价不能小于 0`,
+        );
+      }
+
+      const record = records.find((row) => row.purchaseItemId === item.id);
+      if (!record) {
+        throw new BadRequestException(
+          `「${item.ingredientName || item.ingredientId}」没有采购记录，不能修改`,
+        );
+      }
+
+      const unit = String(input.unit || item.quantityUnit || '').trim();
+      const weightRatio = weightUnitToBaseRatio(unit);
+      const packageSize =
+        weightRatio ?? Number(record.actualPackageSize ?? 1) ?? 1;
+      const baseQuantity = quantity * packageSize;
+      const amount = round2(quantity * unitPrice);
+
+      await this.prisma.purchaseItem.update({
+        where: { id: item.id },
+        data: {
+          quantityNeeded: quantity,
+          quantityUnit: unit,
+          estimatedCost: amount,
+        },
+      });
+      await this.prisma.purchaseRecord.update({
+        where: { id: record.id },
+        data: {
+          actualQuantity: quantity,
+          actualPackageCount: quantity,
+          actualPackageSize: packageSize,
+          actualPackageUnit: unit,
+          actualBaseQuantity: baseQuantity,
+          actualBaseUnit: record.actualBaseUnit || 'G',
+          actualCost: amount,
+        },
+      });
+
+      item.quantityNeeded = quantity;
+      item.quantityUnit = unit;
+      (item as any).estimatedCost = amount;
+    }
+
+    const itemTotal = round2(
+      items.reduce((sum, item) => sum + Number(item.estimatedCost ?? 0), 0),
+    );
+    const paidAmount = round2(
+      dto.paidAmount ?? Number(list.paidAmount ?? 0),
+    );
+    const shippingFee = round2(
+      dto.shippingFee ?? Number(list.shippingFee ?? 0),
+    );
+    const packagingFee = round2(
+      dto.packagingFee ?? Number(list.packagingFee ?? 0),
+    );
+    if (paidAmount <= 0) {
+      throw new BadRequestException('订单实付必须大于 0');
+    }
+    if (shippingFee < 0 || packagingFee < 0) {
+      throw new BadRequestException('运费/包装费不能为负数');
+    }
+    const personalAmount = round2(Number(list.personalAmount ?? 0));
+    const subtotalAmount = round2(itemTotal + personalAmount);
+    const reimbursementAmount = round2(paidAmount - personalAmount);
+    if (reimbursementAmount < 0) {
+      throw new BadRequestException('个人商品金额不能大于订单实付');
+    }
+
+    list.subtotalAmount = subtotalAmount;
+    list.shippingFee = shippingFee;
+    list.packagingFee = packagingFee;
+    list.paidAmount = paidAmount;
+    list.discountAmount = round2(
+      subtotalAmount + shippingFee + packagingFee - paidAmount,
+    );
+    list.reimbursementAmount = reimbursementAmount;
+    list.totalEstimatedCost = itemTotal;
+    list.updatedAt = new Date();
+
+    return this.purchaseListRepository.save(list);
+  }
+
+  /**
+   * 撤销到货：把已入账的补货记录退回在途。
+   * 未报销、且这批货没有被下游用掉时才允许；用负数冲销流水，不删历史。
+   */
+  async revokeArrival(
+    listId: string,
+    userId: string,
+    role: string,
+  ): Promise<PurchaseList> {
+    const list = await this.purchaseListRepository.findById(listId);
+    if (!list || list.isDraft) {
+      throw new NotFoundException('补货记录不存在');
+    }
+    if (list.voidedAt) {
+      throw new BadRequestException('补货记录已作废');
+    }
+    this.assertCanOperate(list, userId, role);
+    if (list.reimbursementId) {
+      throw new BadRequestException('已关联报销单，不能撤销到货');
+    }
+    if (!list.arrivedAt) {
+      return list;
+    }
+
+    const records =
+      await this.purchaseRecordRepository.findByPurchaseListId(listId);
+    const inboundByIngredient = new Map<string, number>();
+    for (const record of records) {
+      const quantity = Number(record.actualBaseQuantity ?? 0);
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        continue;
+      }
+      inboundByIngredient.set(
+        record.ingredientId,
+        (inboundByIngredient.get(record.ingredientId) ?? 0) + quantity,
+      );
+    }
+    for (const [ingredientId, quantity] of inboundByIngredient) {
+      const balance =
+        await this.inventoryService.getBalanceByIngredient(ingredientId);
+      if (balance < quantity) {
+        throw new BadRequestException(
+          '这批货已经用掉，不能撤销到货；如有差异请走盘点调整',
+        );
+      }
+    }
+
+    await this.inventoryService.reversePurchaseRecordInboundsForPurchaseList(
+      records,
+    );
+    list.arrivedAt = null;
+    list.updatedAt = new Date();
+    return this.purchaseListRepository.save(list);
   }
 
   /**

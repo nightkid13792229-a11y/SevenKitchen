@@ -54,6 +54,10 @@ const createService = (options?: { list?: PurchaseList; records?: any[] }) => {
     inboundFromPurchaseRecords: jest
       .fn()
       .mockResolvedValue({ createdCount: 1, skippedCount: 0 }),
+    getBalanceByIngredient: jest.fn().mockResolvedValue(1500),
+    reversePurchaseRecordInboundsForPurchaseList: jest
+      .fn()
+      .mockResolvedValue({ reversedCount: 1 }),
   };
   const service = new ReplenishmentService(
     repository as any,
@@ -76,6 +80,46 @@ describe('ReplenishmentService · 到货 / 作废 / 列表', () => {
     expect(second.createdCount).toBe(0);
     expect(inventory.inboundFromPurchaseRecords).toHaveBeenCalledTimes(1);
     expect(list.arrivedAt).toBeInstanceOf(Date);
+  });
+
+  it('reverses arrival and returns to in-transit', async () => {
+    const { service, list, inventory } = createService();
+    list.arrivedAt = new Date();
+    inventory.getBalanceByIngredient.mockResolvedValue(1500);
+
+    const result = await service.revokeArrival('rec-1', 'user-1', 'STAFF');
+
+    expect(result.arrivedAt).toBeNull();
+    expect(
+      inventory.reversePurchaseRecordInboundsForPurchaseList,
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to reverse arrival when the goods were already used', async () => {
+    const { service, list, inventory, recordRepository } = createService();
+    list.arrivedAt = new Date();
+    recordRepository.findByPurchaseListId.mockResolvedValue([
+      {
+        id: 'record-1',
+        ingredientId: 'ing-1',
+        actualBaseQuantity: 1500,
+      },
+    ]);
+    inventory.getBalanceByIngredient.mockResolvedValue(100);
+
+    await expect(
+      service.revokeArrival('rec-1', 'user-1', 'STAFF'),
+    ).rejects.toThrow('已经用掉');
+  });
+
+  it('refuses to reverse arrival after reimbursement', async () => {
+    const { service, list } = createService();
+    list.arrivedAt = new Date();
+    list.reimbursementId = 'reimb-1';
+
+    await expect(
+      service.revokeArrival('rec-1', 'user-1', 'STAFF'),
+    ).rejects.toThrow('报销单');
   });
 
   it('rejects voiding an arrived record', async () => {

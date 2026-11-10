@@ -637,6 +637,15 @@
         </view>
 
         <block v-if="shippingType === 'NORMAL'">
+        <!-- 快递存根识别（2026-11-10）：拍一张就填好承运商/单号/运费。
+             结论由后端给：绿 = 核对通过；黄 = 没能核对（要手动确认）；红 = 对不上（不许发）。 -->
+        <WaybillReceiptBlock
+          :view="receiptView"
+          :busy="receiptState === 'recognizing'"
+          :has-image="receiptHasImage"
+          @pick="pickReceipt"
+          @manual="onManualReceipt"
+        />
         <view class="form-item">
           <text class="form-label">物流公司</text>
           <picker
@@ -814,7 +823,15 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { CARRIERS } from '../../constants/carriers'
+import { CARRIERS, carrierIndexOf } from '../../constants/carriers'
+import WaybillReceiptBlock from '../../components/shipping/WaybillReceiptBlock.vue'
+import { buildReceiptView, type ReceiptView } from '../../utils/waybill-receipt-view'
+import {
+  createManualWaybill,
+  recognizeReceipt,
+  uploadReceiptImage,
+  type ReceiptConflict,
+} from '../../api/waybillReceipt'
 import { onShareAppMessage } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import {
@@ -1029,6 +1046,191 @@ const showShippingShareFallback = ref(false)
 const shippedShareOrderId = ref('')
 const shippedShareTitle = ref('SevenKitchen 已发货')
 const shippedShareImage = ref('')
+
+/**
+ * 快递存根识别（2026-11-10）。
+ *
+ * 打包间拍一张存根就能填好三项；但**能不能发货不由这块说了算** ——
+ * 真正的把关在服务端（提交时校验"这个号是对着这单收货人核过的"）。
+ * 这里只负责把状态画对、把值填进去。
+ */
+const receiptState = ref<'idle' | 'recognizing' | 'match' | 'unknown' | 'mismatch' | 'duplicate' | 'failed'>('idle')
+const receiptCarrierName = ref('')
+const receiptTracking = ref('')
+const receiptFee = ref<number | null>(null)
+const receiptConflicts = ref<ReceiptConflict[]>([])
+const receiptDuplicateLabel = ref('')
+const receiptMessage = ref('')
+const receiptHasImage = ref(false)
+/** 员工手动确认过（AI 认不出来 / 没能核对时）；提交前会被后端再验一次 */
+const receiptManualConfirmed = ref(false)
+
+const receiptView = computed<ReceiptView>(() =>
+  buildReceiptView({
+    state: receiptState.value,
+    carrierName: receiptCarrierName.value || null,
+    trackingNumber: trackingNumber.value || receiptTracking.value || null,
+    shippingFee: receiptFee.value,
+    conflicts: receiptConflicts.value,
+    duplicateLabel: receiptDuplicateLabel.value || null,
+    manualConfirmed: receiptManualConfirmed.value,
+    message: receiptMessage.value || null,
+  }),
+)
+
+function resetReceipt() {
+  receiptState.value = 'idle'
+  receiptCarrierName.value = ''
+  receiptTracking.value = ''
+  receiptFee.value = null
+  receiptConflicts.value = []
+  receiptDuplicateLabel.value = ''
+  receiptMessage.value = ''
+  receiptHasImage.value = false
+  receiptManualConfirmed.value = false
+}
+
+/** 存根识别结果 → 表单三项。对不上时**一个都不填**。 */
+function applyReceipt(summary: {
+  carrierName?: string | null
+  carrierCode?: string | null
+  trackingNumber?: string | null
+  shippingFee?: number | null
+}) {
+  if (summary.carrierCode) {
+    selectedCarrierIndex.value = carrierIndexOf(summary.carrierCode)
+  }
+  if (summary.trackingNumber) {
+    trackingNumber.value = summary.trackingNumber
+  }
+  if (typeof summary.shippingFee === 'number') {
+    actualShippingFeeDraft.value = summary.shippingFee.toFixed(2)
+  }
+}
+
+async function recognizeByUrl(imageUrl: string) {
+  if (!order.value?.id) return
+
+  receiptState.value = 'recognizing'
+  receiptMessage.value = ''
+
+  try {
+    const result = await recognizeReceipt({
+      imageUrl,
+      orderIds: [order.value.id],
+    })
+
+    receiptCarrierName.value = result.receipt?.carrierName || ''
+    receiptTracking.value = result.receipt?.trackingNumber || ''
+    receiptFee.value = result.receipt?.shippingFee ?? null
+    receiptConflicts.value = result.match.conflicts || []
+    receiptDuplicateLabel.value = result.match.duplicate?.label || ''
+
+    const status = result.match.status
+    if (status === 'match') {
+      receiptState.value = 'match'
+      applyReceipt({
+        carrierCode: result.receipt?.carrierCode,
+        trackingNumber: result.receipt?.trackingNumber,
+        shippingFee: result.receipt?.shippingFee,
+      })
+      return
+    }
+
+    if (status === 'unknown') {
+      receiptState.value = 'unknown'
+      applyReceipt({
+        carrierCode: result.receipt?.carrierCode,
+        trackingNumber: result.receipt?.trackingNumber,
+        shippingFee: result.receipt?.shippingFee,
+      })
+      return
+    }
+
+    if (status === 'mismatch') {
+      receiptState.value = 'mismatch'
+      return
+    }
+
+    if (status === 'duplicate') {
+      receiptState.value = 'duplicate'
+      return
+    }
+
+    // degraded / not_waybill：认不出来，给手动出口
+    receiptState.value = 'failed'
+    receiptMessage.value =
+      status === 'not_waybill' ? '这张图里没找到运单号' : ''
+  } catch (error: any) {
+    receiptState.value = 'failed'
+    receiptMessage.value = error?.message || '识别失败，可以手动填写'
+  }
+}
+
+async function pickReceipt() {
+  if (receiptState.value === 'recognizing') return
+
+  const chosen: any = await new Promise((resolve) => {
+    uni.chooseImage({
+      count: 1,
+      sizeType: ['compressed'],
+      sourceType: ['camera', 'album'],
+      success: resolve,
+      fail: () => resolve(null),
+    })
+  })
+
+  const filePath = chosen?.tempFilePaths?.[0]
+  if (!filePath) return
+
+  receiptHasImage.value = true
+  receiptState.value = 'recognizing'
+
+  try {
+    const uploaded = await uploadReceiptImage(filePath)
+    await recognizeByUrl(uploaded.url)
+  } catch (error: any) {
+    receiptState.value = 'failed'
+    receiptMessage.value = error?.message || '上传失败，可以手动填写'
+  }
+}
+
+/** AI 认不出来 / 没能核对时，员工手动确认一次（留原因，后端会拒掉真对不上的） */
+function onManualReceipt() {
+  if (!order.value?.id) return
+  const value = String(trackingNumber.value || '').trim()
+  if (!value) {
+    uni.showToast({ title: '先在上面填运单号', icon: 'none' })
+    return
+  }
+
+  uni.showModal({
+    title: '手动确认发货',
+    editable: true,
+    placeholderText: '为什么手动填（例如：存根太糊）',
+    success: async (res) => {
+      if (!res.confirm) return
+      const reason = String(res.content || '').trim()
+      if (!reason) {
+        uni.showToast({ title: '必须写原因', icon: 'none' })
+        return
+      }
+      try {
+        await createManualWaybill({
+          orderIds: [order.value!.id],
+          trackingNumber: value,
+          reason,
+        })
+        receiptManualConfirmed.value = true
+        receiptState.value = receiptHasImage.value ? 'unknown' : 'failed'
+        uni.showToast({ title: '已确认，可以发货', icon: 'success' })
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '提交失败', icon: 'none' })
+      }
+    },
+  })
+}
+
 const shareToken = ref('')
 const shareTokenOrderId = ref('')
 const sharePhotoImageUrl = ref('')
@@ -2230,6 +2432,8 @@ async function shipOrder() {
     typeof order.value.actualShippingFee === 'number'
       ? order.value.actualShippingFee.toFixed(2)
       : ''
+  // 每次打开都是新的一张存根：上一单的识别结果绝不能留到这一单
+  resetReceipt()
   showShippingModal.value = true
 }
 
@@ -2337,6 +2541,11 @@ async function saveShippingFee() {
 }
 
 async function confirmShipping() {
+  // 存根没核对通过就不让点（后端还会再验一次，这里只是别让人白填一屏）
+  if (shippingType.value === 'NORMAL' && !receiptView.value.canShip) {
+    uni.showToast({ title: '先核对快递存根', icon: 'none' })
+    return
+  }
   if (!order.value || isShipping.value) return
 
   const isNoShipping = shippingType.value === 'NOT_REQUIRED'
@@ -2377,6 +2586,8 @@ async function confirmShipping() {
             carrierCode: carriers[selectedCarrierIndex.value].code,
             trackingNumber: tracking,
             actualShippingFee,
+            // 硬锁（2026-11-10）：服务端必须能查到「这个号对着这单收货人核过」
+            enforceWaybillCheck: true,
           },
     })
     if (isNoShipping) {

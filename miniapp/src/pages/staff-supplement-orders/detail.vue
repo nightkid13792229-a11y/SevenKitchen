@@ -237,6 +237,17 @@
         </view>
 
         <block v-if="shipType === 'NORMAL'">
+          <WaybillReceiptBlock
+            :view="receiptView"
+            :busy="receiptState === 'recognizing'"
+            :has-image="receiptHasImage"
+            @pick="pickReceipt"
+            @manual="onManualReceipt"
+          />
+          <view class="addr-link-row">
+            <text class="addr-link" @tap="openAddressEditor">收件人对不上？改收货地址</text>
+          </view>
+
           <text class="form-label">物流公司</text>
           <picker
             mode="selector"
@@ -269,6 +280,46 @@
           {{ submitting ? '提交中…' : '确认发货' }}
         </button>
         <button class="secondary-btn" :disabled="submitting" @tap="closeShip">取消</button>
+      </view>
+    </view>
+
+    <!-- 代改收货地址（2026-11-10）：补剂单原先只能看不能改，硬锁下这是唯一出路 -->
+    <view v-if="addressVisible" class="modal-mask" @tap="closeAddressEditor">
+      <view class="modal-panel" @tap.stop>
+        <view class="modal-title">改收货地址</view>
+
+        <text class="form-label">收件人</text>
+        <input v-model="addressForm.recipientName" class="form-input" :maxlength="50" />
+
+        <text class="form-label">手机号</text>
+        <input v-model="addressForm.phone" class="form-input" :maxlength="30" />
+
+        <text class="form-label">省 / 市 / 区</text>
+        <view class="region-row">
+          <input v-model="addressForm.province" class="form-input region-input" placeholder="省" :maxlength="50" />
+          <input v-model="addressForm.city" class="form-input region-input" placeholder="市" :maxlength="50" />
+          <input v-model="addressForm.district" class="form-input region-input" placeholder="区/县" :maxlength="50" />
+        </view>
+
+        <text class="form-label">详细地址</text>
+        <input v-model="addressForm.detail" class="form-input" :maxlength="120" />
+
+        <text class="form-label">修改原因（必填）</text>
+        <input
+          v-model="addressForm.reason"
+          class="form-input"
+          placeholder="例如：顾客微信说搬家了"
+          :maxlength="200"
+        />
+
+        <text class="ship-hint">
+          只改未发货的单。改完地址后，之前那张存根的核对结果会作废，需要重新上传存根。
+        </text>
+
+        <button class="primary-btn" :disabled="savingAddress" @tap="saveAddressEditor">
+          {{ savingAddress ? '保存中…' : '保存并重新核存根' }}
+        </button>
+        <button class="secondary-btn" :disabled="savingAddress" @tap="closeAddressEditor">取消</button>
       </view>
     </view>
 
@@ -316,7 +367,16 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { CARRIERS } from '../../constants/carriers'
+import { CARRIERS, carrierIndexOf } from '../../constants/carriers'
+import WaybillReceiptBlock from '../../components/shipping/WaybillReceiptBlock.vue'
+import { buildReceiptView, type ReceiptView } from '../../utils/waybill-receipt-view'
+import {
+  createManualWaybill,
+  recognizeReceipt,
+  updateSupplementShippingAddress,
+  uploadReceiptImage,
+  type ReceiptConflict,
+} from '../../api/waybillReceipt'
 import { onLoad } from '@dcloudio/uni-app'
 import {
   staffSupplementOrderApi,
@@ -374,6 +434,257 @@ function canResolve(record: StaffSupplementAftersaleCase) {
 
 /** 发货弹窗状态（2026-10-31） */
 const shipVisible = ref(false)
+
+/**
+ * 快递存根识别 + 代改收货地址（2026-11-10）。
+ *
+ * 补剂单原先在小程序里**只能看地址、不能改**，只有后台网页管理员能改。
+ * 硬锁上线后「存根对不上 → 先改地址 → 再传存根」是唯一出路，
+ * 打包间手上只有手机，所以这里补一个只能改未发货单的小面板（必填原因）。
+ */
+const receiptState = ref<'idle' | 'recognizing' | 'match' | 'unknown' | 'mismatch' | 'duplicate' | 'failed'>('idle')
+const receiptCarrierName = ref('')
+const receiptTracking = ref('')
+const receiptFee = ref<number | null>(null)
+const receiptConflicts = ref<ReceiptConflict[]>([])
+const receiptDuplicateLabel = ref('')
+const receiptMessage = ref('')
+const receiptHasImage = ref(false)
+const receiptManualConfirmed = ref(false)
+
+const addressVisible = ref(false)
+const savingAddress = ref(false)
+const addressForm = ref({
+  recipientName: '',
+  phone: '',
+  province: '',
+  city: '',
+  district: '',
+  detail: '',
+  reason: '',
+})
+
+const receiptView = computed<ReceiptView>(() =>
+  buildReceiptView({
+    state: receiptState.value,
+    carrierName: receiptCarrierName.value || null,
+    trackingNumber: shipTracking.value || receiptTracking.value || null,
+    shippingFee: receiptFee.value,
+    conflicts: receiptConflicts.value,
+    duplicateLabel: receiptDuplicateLabel.value || null,
+    manualConfirmed: receiptManualConfirmed.value,
+    message: receiptMessage.value || null,
+  }),
+)
+
+function resetReceipt() {
+  receiptState.value = 'idle'
+  receiptCarrierName.value = ''
+  receiptTracking.value = ''
+  receiptFee.value = null
+  receiptConflicts.value = []
+  receiptDuplicateLabel.value = ''
+  receiptMessage.value = ''
+  receiptHasImage.value = false
+  receiptManualConfirmed.value = false
+}
+
+function applyReceipt(summary: {
+  carrierCode?: string | null
+  trackingNumber?: string | null
+  shippingFee?: number | null
+}) {
+  if (summary.carrierCode) {
+    shipCarrierIndex.value = carrierIndexOf(summary.carrierCode)
+  }
+  if (summary.trackingNumber) {
+    shipTracking.value = summary.trackingNumber
+  }
+  if (typeof summary.shippingFee === 'number') {
+    shipFee.value = summary.shippingFee.toFixed(2)
+  }
+}
+
+async function recognizeByUrl(imageUrl: string) {
+  if (!orderId.value) return
+
+  receiptState.value = 'recognizing'
+  receiptMessage.value = ''
+
+  try {
+    const result = await recognizeReceipt({ imageUrl, orderIds: [orderId.value] })
+
+    receiptCarrierName.value = result.receipt?.carrierName || ''
+    receiptTracking.value = result.receipt?.trackingNumber || ''
+    receiptFee.value = result.receipt?.shippingFee ?? null
+    receiptConflicts.value = result.match.conflicts || []
+    receiptDuplicateLabel.value = result.match.duplicate?.label || ''
+
+    const status = result.match.status
+    if (status === 'match' || status === 'unknown') {
+      receiptState.value = status
+      applyReceipt({
+        carrierCode: result.receipt?.carrierCode,
+        trackingNumber: result.receipt?.trackingNumber,
+        shippingFee: result.receipt?.shippingFee,
+      })
+      return
+    }
+
+    if (status === 'mismatch') {
+      receiptState.value = 'mismatch'
+      return
+    }
+
+    if (status === 'duplicate') {
+      receiptState.value = 'duplicate'
+      return
+    }
+
+    receiptState.value = 'failed'
+    receiptMessage.value = status === 'not_waybill' ? '这张图里没找到运单号' : ''
+  } catch (error: any) {
+    receiptState.value = 'failed'
+    receiptMessage.value = error?.message || '识别失败，可以手动填写'
+  }
+}
+
+async function pickReceipt() {
+  if (receiptState.value === 'recognizing') return
+
+  const chosen: any = await new Promise((resolve) => {
+    uni.chooseImage({
+      count: 1,
+      sizeType: ['compressed'],
+      sourceType: ['camera', 'album'],
+      success: resolve,
+      fail: () => resolve(null),
+    })
+  })
+
+  const filePath = chosen?.tempFilePaths?.[0]
+  if (!filePath) return
+
+  receiptHasImage.value = true
+  receiptState.value = 'recognizing'
+
+  try {
+    const uploaded = await uploadReceiptImage(filePath)
+    await recognizeByUrl(uploaded.url)
+  } catch (error: any) {
+    receiptState.value = 'failed'
+    receiptMessage.value = error?.message || '上传失败，可以手动填写'
+  }
+}
+
+function onManualReceipt() {
+  if (!orderId.value) return
+  const value = String(shipTracking.value || '').trim()
+  if (!value) {
+    uni.showToast({ title: '先在上面填运单号', icon: 'none' })
+    return
+  }
+
+  uni.showModal({
+    title: '手动确认发货',
+    editable: true,
+    placeholderText: '为什么手动填（例如：存根太糊）',
+    success: async (res) => {
+      if (!res.confirm) return
+      const reason = String(res.content || '').trim()
+      if (!reason) {
+        uni.showToast({ title: '必须写原因', icon: 'none' })
+        return
+      }
+      try {
+        await createManualWaybill({
+          orderIds: [orderId.value],
+          trackingNumber: value,
+          reason,
+        })
+        receiptManualConfirmed.value = true
+        receiptState.value = receiptHasImage.value ? 'unknown' : 'failed'
+        uni.showToast({ title: '已确认，可以发货', icon: 'success' })
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '提交失败', icon: 'none' })
+      }
+    },
+  })
+}
+
+/** 地区串（"上海市 上海市 普陀区"）拆成三段；拆不出来就留给员工改 */
+function splitRegion(region: string) {
+  const parts = String(region || '')
+    .split(/\s+/)
+    .filter(Boolean)
+  return {
+    province: parts[0] || '',
+    city: parts[1] || parts[0] || '',
+    district: parts[2] || '',
+  }
+}
+
+function openAddressEditor() {
+  const current = order.value
+  if (!current) return
+  const region = splitRegion(current.receiverRegion)
+  addressForm.value = {
+    recipientName: current.receiverName || '',
+    phone: current.receiverPhone || '',
+    province: region.province,
+    city: region.city,
+    district: region.district,
+    detail: current.receiverDetail || '',
+    reason: '',
+  }
+  addressVisible.value = true
+}
+
+function closeAddressEditor() {
+  if (savingAddress.value) return
+  addressVisible.value = false
+}
+
+async function saveAddressEditor() {
+  if (savingAddress.value || !orderId.value) return
+  const form = addressForm.value
+  if (
+    !form.recipientName.trim() ||
+    !form.phone.trim() ||
+    !form.province.trim() ||
+    !form.city.trim() ||
+    !form.detail.trim()
+  ) {
+    uni.showToast({ title: '请填完整收货地址', icon: 'none' })
+    return
+  }
+  if (!form.reason.trim()) {
+    uni.showToast({ title: '请写修改原因', icon: 'none' })
+    return
+  }
+
+  savingAddress.value = true
+  try {
+    await updateSupplementShippingAddress(orderId.value, {
+      recipientName: form.recipientName.trim(),
+      phone: form.phone.trim(),
+      province: form.province.trim(),
+      city: form.city.trim(),
+      district: form.district.trim(),
+      detail: form.detail.trim(),
+      reason: form.reason.trim(),
+    })
+    // 地址变了，之前那张存根的核对结果已经作废 —— 逼着重新传
+    resetReceipt()
+    addressVisible.value = false
+    uni.showToast({ title: '地址已改，请重新上传存根', icon: 'none' })
+    await fetchOrder()
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '保存失败', icon: 'none' })
+  } finally {
+    savingAddress.value = false
+  }
+}
 const shipType = ref<'NORMAL' | 'NOT_REQUIRED'>('NORMAL')
 const shipCarrierIndex = ref(0)
 const shipTracking = ref('')
@@ -586,6 +897,7 @@ function handleShip() {
   shipCarrierIndex.value = 0
   shipTracking.value = order.value?.trackingNumber || ''
   shipFee.value = ''
+  resetReceipt()
   shipVisible.value = true
 }
 
@@ -601,6 +913,11 @@ function onShipCarrierChange(event: any) {
 async function confirmShip() {
   if (submitting.value) return
   const isNoShipping = shipType.value === 'NOT_REQUIRED'
+
+  if (!isNoShipping && !receiptView.value.canShip) {
+    uni.showToast({ title: '先核对快递存根', icon: 'none' })
+    return
+  }
 
   let fee: number | undefined
   const tracking = shipTracking.value.trim()
@@ -631,6 +948,8 @@ async function confirmShip() {
           trackingNumber: tracking,
           carrierCode: carriers[shipCarrierIndex.value].code,
           actualShippingFee: fee,
+          // 硬锁（2026-11-10）：服务端必须能查到「这个号对着这单收货人核过」
+          enforceWaybillCheck: true,
         })
 
     if (response.code === 0) {
@@ -1122,4 +1441,11 @@ onLoad((options) => {
 }
 .ship-type-option.active { background: #e8f1ec; color: #1e3a2f; border-color: #1e3a2f; font-weight: 600; }
 .ship-hint { display: block; margin: 20rpx 0; font-size: 24rpx; color: #909399; line-height: 1.6; }
+
+/* 存根块下面的改地址入口（2026-11-10）：小字靠右，不抢主流程 */
+.addr-link-row { display: flex; justify-content: flex-end; margin: 4rpx 0 16rpx; }
+.addr-link { font-size: 23rpx; color: #2b5040; }
+/* 省 / 市 / 区 三个短输入并排 */
+.region-row { display: flex; gap: 10rpx; }
+.region-input { flex: 1; min-width: 0; }
 </style>

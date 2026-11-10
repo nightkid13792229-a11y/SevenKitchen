@@ -45,6 +45,14 @@
           </view>
         </view>
 
+        <WaybillReceiptBlock
+          :view="receiptViewOf(pkg)"
+          :busy="pkg.receipt.state === 'recognizing'"
+          :has-image="pkg.receipt.hasImage"
+          @pick="pickReceiptFor(pIndex)"
+          @manual="onManualReceipt(pIndex)"
+        />
+
         <view class="fields">
           <view class="field">
             <text class="k">快递公司</text>
@@ -104,13 +112,33 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { CARRIERS } from '../../constants/carriers'
+import { CARRIERS, carrierIndexOf } from '../../constants/carriers'
+import WaybillReceiptBlock from '../../components/shipping/WaybillReceiptBlock.vue'
+import { buildReceiptView, type ReceiptView } from '../../utils/waybill-receipt-view'
+import {
+  createManualWaybill,
+  recognizeReceipt,
+  uploadReceiptImage,
+  type ReceiptConflict,
+} from '../../api/waybillReceipt'
 import { onLoad } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 
 interface PlanRow {
   specG: number
   bags: number
+}
+
+interface PackageReceiptState {
+  state: 'idle' | 'recognizing' | 'match' | 'unknown' | 'mismatch' | 'duplicate' | 'failed'
+  carrierName: string
+  trackingNumber: string
+  fee: number | null
+  conflicts: ReceiptConflict[]
+  duplicateLabel: string
+  message: string
+  hasImage: boolean
+  manualConfirmed: boolean
 }
 
 interface PackageState {
@@ -121,6 +149,22 @@ interface PackageState {
   fee: string
   /** rowKey → 这包里装了几袋 */
   bags: Record<string, number>
+  /** 这包的快递存根识别状态（2026-11-10）：一包一张存根，互不影响 */
+  receipt: PackageReceiptState
+}
+
+function emptyReceipt(): PackageReceiptState {
+  return {
+    state: 'idle',
+    carrierName: '',
+    trackingNumber: '',
+    fee: null,
+    conflicts: [],
+    duplicateLabel: '',
+    message: '',
+    hasImage: false,
+    manualConfirmed: false,
+  }
 }
 
 // 承运商清单统一到 constants/carriers.ts（2026-11-10）
@@ -240,6 +284,7 @@ function resetPackages() {
       tracking: '',
       fee: '',
       bags,
+      receipt: emptyReceipt(),
     },
   ]
 }
@@ -249,7 +294,14 @@ function addPackage() {
     uni.showToast({ title: '一票最多 6 个包裹', icon: 'none' })
     return
   }
-  packages.value.push({ carrierIndex: 0, boxIndex: 0, tracking: '', fee: '', bags: {} })
+  packages.value.push({
+    carrierIndex: 0,
+    boxIndex: 0,
+    tracking: '',
+    fee: '',
+    bags: {},
+    receipt: emptyReceipt(),
+  })
 }
 
 function removePackage(index: number) {
@@ -324,6 +376,138 @@ function formatKg(grams: number) {
   return (Number(grams || 0) / 1000).toFixed(2)
 }
 
+/** 这包的存根块该显示什么（文案统一走 utils/waybill-receipt-view） */
+function receiptViewOf(pkg: PackageState): ReceiptView {
+  return buildReceiptView({
+    state: pkg.receipt.state,
+    carrierName: pkg.receipt.carrierName || null,
+    trackingNumber: pkg.tracking || pkg.receipt.trackingNumber || null,
+    shippingFee: pkg.receipt.fee,
+    conflicts: pkg.receipt.conflicts,
+    duplicateLabel: pkg.receipt.duplicateLabel || null,
+    manualConfirmed: pkg.receipt.manualConfirmed,
+    message: pkg.receipt.message || null,
+  })
+}
+
+/** 一票里所有订单：识别时一起传，落库的核对记录能覆盖这一票的每张单 */
+function shipmentOrderIds(): string[] {
+  return Array.from(new Set(rows.value.map((row) => row.orderId)))
+}
+
+async function recognizeFor(index: number, imageUrl: string) {
+  const pkg = packages.value[index]
+  if (!pkg) return
+
+  pkg.receipt.state = 'recognizing'
+  pkg.receipt.message = ''
+
+  try {
+    const result = await recognizeReceipt({
+      imageUrl,
+      orderIds: shipmentOrderIds(),
+    })
+
+    pkg.receipt.carrierName = result.receipt?.carrierName || ''
+    pkg.receipt.trackingNumber = result.receipt?.trackingNumber || ''
+    pkg.receipt.fee = result.receipt?.shippingFee ?? null
+    pkg.receipt.conflicts = result.match.conflicts || []
+    pkg.receipt.duplicateLabel = result.match.duplicate?.label || ''
+
+    const status = result.match.status
+    if (status === 'match' || status === 'unknown') {
+      pkg.receipt.state = status
+      if (result.receipt?.carrierCode) {
+        pkg.carrierIndex = carrierIndexOf(result.receipt.carrierCode)
+      }
+      if (result.receipt?.trackingNumber) {
+        pkg.tracking = result.receipt.trackingNumber
+      }
+      if (typeof result.receipt?.shippingFee === 'number') {
+        pkg.fee = result.receipt.shippingFee.toFixed(2)
+      }
+      return
+    }
+
+    if (status === 'mismatch' || status === 'duplicate') {
+      pkg.receipt.state = status
+      return
+    }
+
+    pkg.receipt.state = 'failed'
+    pkg.receipt.message = status === 'not_waybill' ? '这张图里没找到运单号' : ''
+  } catch (error: any) {
+    pkg.receipt.state = 'failed'
+    pkg.receipt.message = error?.message || '识别失败，可以手动填写'
+  }
+}
+
+async function pickReceiptFor(index: number) {
+  const pkg = packages.value[index]
+  if (!pkg || pkg.receipt.state === 'recognizing') return
+
+  const chosen: any = await new Promise((resolve) => {
+    uni.chooseImage({
+      count: 1,
+      sizeType: ['compressed'],
+      sourceType: ['camera', 'album'],
+      success: resolve,
+      fail: () => resolve(null),
+    })
+  })
+
+  const filePath = chosen?.tempFilePaths?.[0]
+  if (!filePath) return
+
+  pkg.receipt.hasImage = true
+  pkg.receipt.state = 'recognizing'
+
+  try {
+    const uploaded = await uploadReceiptImage(filePath)
+    await recognizeFor(index, uploaded.url)
+  } catch (error: any) {
+    pkg.receipt.state = 'failed'
+    pkg.receipt.message = error?.message || '上传失败，可以手动填写'
+  }
+}
+
+function onManualReceipt(index: number) {
+  const pkg = packages.value[index]
+  if (!pkg) return
+
+  const value = String(pkg.tracking || '').trim()
+  if (!value) {
+    uni.showToast({ title: `先填包裹 ${index + 1} 的单号`, icon: 'none' })
+    return
+  }
+
+  uni.showModal({
+    title: `手动确认包裹 ${index + 1}`,
+    editable: true,
+    placeholderText: '为什么手动填（例如：存根太糊）',
+    success: async (res) => {
+      if (!res.confirm) return
+      const reason = String(res.content || '').trim()
+      if (!reason) {
+        uni.showToast({ title: '必须写原因', icon: 'none' })
+        return
+      }
+      try {
+        await createManualWaybill({
+          orderIds: shipmentOrderIds(),
+          trackingNumber: value,
+          reason,
+        })
+        pkg.receipt.manualConfirmed = true
+        pkg.receipt.state = pkg.receipt.hasImage ? 'unknown' : 'failed'
+        uni.showToast({ title: '已确认，可以发货', icon: 'success' })
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '提交失败', icon: 'none' })
+      }
+    },
+  })
+}
+
 async function submit() {
   if (submitting.value) return
 
@@ -352,9 +536,16 @@ async function submit() {
       uni.showToast({ title: `包裹 ${i + 1} 是空的`, icon: 'none' })
       return
     }
+    // 存根硬锁（2026-11-10）：这一包的号必须是对着这单收货人核过的
+    if (!receiptViewOf(pkg).canShip) {
+      uni.showToast({ title: `包裹 ${i + 1} 的存根还没核对通过`, icon: 'none' })
+      return
+    }
   }
 
   const payload = {
+    // 硬锁：服务端要能查到每个包裹每个号都核过
+    enforceWaybillCheck: true,
     packages: packages.value.map((pkg, index) => ({
       carrierCode: carriers[pkg.carrierIndex].code,
       trackingNumber: pkg.tracking.trim(),

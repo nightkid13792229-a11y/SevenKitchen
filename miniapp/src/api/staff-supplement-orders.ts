@@ -277,6 +277,8 @@ export const staffSupplementOrderApi = {
       trackingNumber?: string;
       carrierCode?: string;
       actualShippingFee?: number;
+      /** 小程序发货要求先验存根（2026-11-10 硬锁） */
+      enforceWaybillCheck?: boolean;
     },
   ) {
     return request<StaffSupplementOrder>({

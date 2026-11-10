@@ -330,7 +330,7 @@
         <text class="fee-gap-line">{{ feeEditPreview }}</text>
 
         <view class="warn-banner small">
-          <text>这两项按整笔订单算，不摊到商品行，也不和个人采购分摊；全额算进这次采购。</text>
+          <text>实付和费用按整笔订单算，不摊到商品行，也不和个人采购分摊；全额算进这次采购。</text>
         </view>
 
         <view class="sheet-actions">

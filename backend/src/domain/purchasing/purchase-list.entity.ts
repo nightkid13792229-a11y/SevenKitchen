@@ -12,6 +12,14 @@ import {
 import { PurchaseItem } from './purchase-item.entity';
 import { InvalidStateTransitionError } from '../common/errors';
 
+const toNullableNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
 export interface PurchaseListConstructor {
   id?: string;
   targetDate: Date;
@@ -33,6 +41,21 @@ export interface PurchaseListConstructor {
   updatedAt?: Date;
   startedAt?: Date;
   completedAt?: Date;
+  /** 补货记录：识别阶段的草稿（无明细、列表不可见） */
+  isDraft?: boolean;
+  orderNo?: string | null;
+  channel?: string | null;
+  orderPlacedAt?: Date | null;
+  expectedDeliveryAt?: Date | null;
+  arrivedAt?: Date | null;
+  subtotalAmount?: number | null;
+  shippingFee?: number | null;
+  packagingFee?: number | null;
+  discountAmount?: number | null;
+  paidAmount?: number | null;
+  personalAmount?: number | null;
+  reimbursementAmount?: number | null;
+  voidedAt?: Date | null;
   items?: PurchaseItem[];
   records?: any[]; // PurchaseRecord array for calculating aggregates
   recordsCount?: number; // Computed field: number of purchase records
@@ -59,6 +82,20 @@ export class PurchaseList {
   public updatedAt: Date;
   public startedAt?: Date;
   public completedAt?: Date;
+  public isDraft: boolean;
+  public orderNo?: string | null;
+  public channel?: string | null;
+  public orderPlacedAt?: Date | null;
+  public expectedDeliveryAt?: Date | null;
+  public arrivedAt?: Date | null;
+  public subtotalAmount?: number | null;
+  public shippingFee?: number | null;
+  public packagingFee?: number | null;
+  public discountAmount?: number | null;
+  public paidAmount?: number | null;
+  public personalAmount?: number | null;
+  public reimbursementAmount?: number | null;
+  public voidedAt?: Date | null;
   public items: PurchaseItem[];
   public recordsCount?: number; // Computed field: number of purchase records
   public totalActualCost?: number; // Computed field: total actual cost from records
@@ -82,6 +119,20 @@ export class PurchaseList {
     this.updatedAt = data.updatedAt || this.createdAt;
     this.startedAt = data.startedAt;
     this.completedAt = data.completedAt;
+    this.isDraft = data.isDraft === true;
+    this.orderNo = data.orderNo ?? null;
+    this.channel = data.channel ?? null;
+    this.orderPlacedAt = data.orderPlacedAt ?? null;
+    this.expectedDeliveryAt = data.expectedDeliveryAt ?? null;
+    this.arrivedAt = data.arrivedAt ?? null;
+    this.subtotalAmount = data.subtotalAmount ?? null;
+    this.shippingFee = data.shippingFee ?? null;
+    this.packagingFee = data.packagingFee ?? null;
+    this.discountAmount = data.discountAmount ?? null;
+    this.paidAmount = data.paidAmount ?? null;
+    this.personalAmount = data.personalAmount ?? null;
+    this.reimbursementAmount = data.reimbursementAmount ?? null;
+    this.voidedAt = data.voidedAt ?? null;
     this.items = data.items || [];
     this.recordsCount = data.recordsCount;
     this.totalActualCost = data.totalActualCost;
@@ -93,18 +144,21 @@ export class PurchaseList {
    * 验证领域不变式
    */
   private validateInvariants(): void {
-    if (this.items.length !== this.itemCount) {
-      throw new Error(
-        `Item count mismatch: expected ${this.itemCount}, got ${this.items.length}`,
-      );
+    // 补货草稿在识别阶段本来就没有明细，允许 0 项；正式记录仍要求明细数一致。
+    if (!this.isDraft) {
+      if (this.items.length !== this.itemCount) {
+        throw new Error(
+          `Item count mismatch: expected ${this.itemCount}, got ${this.items.length}`,
+        );
+      }
+
+      if (this.itemCount <= 0) {
+        throw new Error('Item count must be positive');
+      }
     }
 
     if (this.totalEstimatedCost < 0) {
       throw new Error('Total estimated cost cannot be negative');
-    }
-
-    if (this.itemCount <= 0) {
-      throw new Error('Item count must be positive');
     }
 
     // 订单需求采购单必须有来源订单；但**备货采购单**本来就没有顾客订单，
@@ -229,6 +283,20 @@ export class PurchaseList {
       updatedAt: this.updatedAt,
       startedAt: this.startedAt,
       completedAt: this.completedAt,
+      isDraft: this.isDraft,
+      orderNo: this.orderNo,
+      channel: this.channel,
+      orderPlacedAt: this.orderPlacedAt,
+      expectedDeliveryAt: this.expectedDeliveryAt,
+      arrivedAt: this.arrivedAt,
+      subtotalAmount: this.subtotalAmount,
+      shippingFee: this.shippingFee,
+      packagingFee: this.packagingFee,
+      discountAmount: this.discountAmount,
+      paidAmount: this.paidAmount,
+      personalAmount: this.personalAmount,
+      reimbursementAmount: this.reimbursementAmount,
+      voidedAt: this.voidedAt,
       items: this.items.map((item) => item.toPrisma()),
     };
   }
@@ -268,6 +336,20 @@ export class PurchaseList {
       updatedAt: data.updatedAt,
       startedAt: data.startedAt,
       completedAt: data.completedAt,
+      isDraft: data.isDraft === true,
+      orderNo: data.orderNo ?? null,
+      channel: data.channel ?? null,
+      orderPlacedAt: data.orderPlacedAt ?? null,
+      expectedDeliveryAt: data.expectedDeliveryAt ?? null,
+      arrivedAt: data.arrivedAt ?? null,
+      subtotalAmount: toNullableNumber(data.subtotalAmount),
+      shippingFee: toNullableNumber(data.shippingFee),
+      packagingFee: toNullableNumber(data.packagingFee),
+      discountAmount: toNullableNumber(data.discountAmount),
+      paidAmount: toNullableNumber(data.paidAmount),
+      personalAmount: toNullableNumber(data.personalAmount),
+      reimbursementAmount: toNullableNumber(data.reimbursementAmount),
+      voidedAt: data.voidedAt ?? null,
       items,
       recordsCount,
       totalActualCost,

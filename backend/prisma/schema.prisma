@@ -2490,6 +2490,26 @@ model PurchaseList {
   completedById        String?               @map("completed_by_id") @db.VarChar(36)
   reopenedById         String?               @map("reopened_by_id") @db.VarChar(36)
   startedAt            DateTime?             @map("started_at")
+  /// 补货记录：识别阶段的草稿（无明细、列表不可见）
+  isDraft              Boolean               @default(false) @map("is_draft")
+  /// 补货记录：订单号 / 渠道 / 下单时间（截图快照）
+  orderNo              String?               @map("order_no") @db.VarChar(40)
+  channel              String?               @map("channel") @db.VarChar(30)
+  orderPlacedAt        DateTime?             @map("order_placed_at")
+  /// 补货记录：预计到货 / 实际到货
+  expectedDeliveryAt   DateTime?             @map("expected_delivery_at")
+  arrivedAt            DateTime?             @map("arrived_at")
+  /// 补货记录：订单级金额（实付口径见设计文档 §6.4）
+  subtotalAmount       Decimal?              @map("subtotal_amount") @db.Decimal(10, 2)
+  shippingFee          Decimal?              @map("shipping_fee") @db.Decimal(10, 2)
+  packagingFee         Decimal?              @map("packaging_fee") @db.Decimal(10, 2)
+  discountAmount       Decimal?              @map("discount_amount") @db.Decimal(10, 2)
+  paidAmount           Decimal?              @map("paid_amount") @db.Decimal(10, 2)
+  personalAmount       Decimal?              @map("personal_amount") @db.Decimal(10, 2)
+  /// 补货记录：本次报销金额 = 实付 − 个人；日采为 null
+  reimbursementAmount  Decimal?              @map("reimbursement_amount") @db.Decimal(10, 2)
+  /// 补货记录：作废（取消/退款）
+  voidedAt             DateTime?             @map("voided_at")
   orderDateSnapshot    Json?                 @map("order_date_snapshot")
   items                PurchaseItem[]
   inventoryAllocations InventoryAllocation[]
@@ -2504,6 +2524,8 @@ model PurchaseList {
   @@index([createdById])
   @@index([completedById])
   @@index([sourceTastingPackPlanId])
+  @@index([arrivedAt])
+  @@index([isDraft])
   @@map("purchase_list")
 }
 

@@ -635,6 +635,75 @@ export class StaffPurchasingController {
     return ApiResponseDto.success(record, '补货记录已保存');
   }
 
+  @Get('replenishment')
+  @ApiOperation({ summary: '补货记录列表（到货/报销分开筛选）' })
+  async listReplenishmentRecords(
+    @Query('arrival') arrival?: 'IN_TRANSIT' | 'ARRIVED',
+    @Query('claim') claim?: 'UNSUBMITTED' | 'SUBMITTED' | 'REIMBURSED',
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('includeVoided') includeVoided?: string,
+    @UserId() userId?: string,
+    @UserRole() role?: string,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.replenishmentService.listRecords(
+      {
+        arrival,
+        claim,
+        page: page ? parseInt(page) : undefined,
+        pageSize: pageSize ? parseInt(pageSize) : undefined,
+        includeVoided: includeVoided === 'true',
+      },
+      userId ?? '',
+      role ?? 'STAFF',
+    );
+
+    return ApiResponseDto.success(result, '获取补货记录成功');
+  }
+
+  @Get('replenishment/:id')
+  @ApiOperation({ summary: '补货记录详情' })
+  async getReplenishmentRecord(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any>> {
+    const record = await this.replenishmentService.getRecord(id);
+
+    return ApiResponseDto.success(record, '获取补货记录成功');
+  }
+
+  @Post('replenishment/:id/arrive')
+  @ApiOperation({ summary: '确认到货（整单入库）' })
+  async confirmReplenishmentArrival(
+    @Param('id') id: string,
+    @UserId() userId: string,
+    @UserRole() role: string,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.replenishmentService.confirmArrival(
+      id,
+      userId,
+      role,
+    );
+
+    return ApiResponseDto.success(result, '已确认到货');
+  }
+
+  @Post('replenishment/:id/void')
+  @ApiOperation({ summary: '作废补货记录（取消/退款）' })
+  async voidReplenishmentRecord(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+    @UserId() userId: string,
+    @UserRole() role: string,
+  ): Promise<ApiResponseDto<any>> {
+    const record = await this.replenishmentService.voidRecord(
+      id,
+      userId,
+      role,
+    );
+
+    return ApiResponseDto.success(record, '补货记录已作废');
+  }
+
   @Get('lists')
   @ApiOperation({ summary: '查看采购清单列表' })
   @ApiQuery({

@@ -15,7 +15,9 @@ describe('ReplenishmentService · 草稿', () => {
     const service = new ReplenishmentService(
       repository,
       {} as any,
+      {} as any,
       { confirm: jest.fn() } as any,
+      {} as any,
     );
 
     const saved = await service.createDraft('user-1');

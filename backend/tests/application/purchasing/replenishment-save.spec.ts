@@ -58,12 +58,22 @@ const createService = (options: {
     ingredient: { findUnique: jest.fn() },
   };
   const importService = { confirm: jest.fn().mockResolvedValue({}) };
+  const recordRepository = {
+    findByPurchaseListId: jest.fn().mockResolvedValue([]),
+  };
+  const inventory = {
+    inboundFromPurchaseRecords: jest
+      .fn()
+      .mockResolvedValue({ createdCount: 0, skippedCount: 0 }),
+  };
   const service = new ReplenishmentService(
     repository as any,
+    recordRepository as any,
     prisma,
     importService as any,
+    inventory as any,
   );
-  return { service, repository, prisma, importService };
+  return { service, repository, prisma, importService, recordRepository, inventory };
 };
 
 describe('ReplenishmentService · 保存', () => {

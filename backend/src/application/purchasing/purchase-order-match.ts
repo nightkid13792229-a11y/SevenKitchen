@@ -217,7 +217,7 @@ function pickSku(
         });
       // 名称是身份信号，规格是包装信号：先看名字，再看规格是否对得上。
       // 同名但规格不同的商品同时存在时，必须选规格一致的那个，不能按排序取第一个。
-      const specOk = !specConflict(line.spec, sku.productModel);
+      const specOk = !specConflict(line.spec, skuSpecText(sku));
       return {
         sku,
         nameHit: nameHit || previousHit,
@@ -246,6 +246,12 @@ function pickSku(
  * 为什么不能直接用 specConflict：它把「信息不足」和「不冲突」都返回 false，
  * 于是「同名但规格没写清」会被当成「规格对得上」，静默挂错商品。
  */
+/** 规格匹配优先用包装原文；老数据没有层级时退回 productModel */
+function skuSpecText(sku: ListSkuCandidate): string | null {
+  const printed = String(sku.printedText ?? '').trim();
+  return printed || sku.productModel;
+}
+
 function specMatchScore(
   specText: string | null | undefined,
   skuModel: string | null | undefined,
@@ -328,7 +334,7 @@ function findSkuByExactName(
   const specText = line.spec?.trim() || line.rawName;
   const scored = hits.map((hit) => ({
     ...hit,
-    score: specMatchScore(specText, hit.sku.productModel),
+    score: specMatchScore(specText, skuSpecText(hit.sku)),
   }));
   const exact = scored.filter((hit) => hit.score === 2);
   if (exact.length > 0) {
@@ -407,7 +413,7 @@ export function matchOrderLines(
         if (
           importChannel &&
           aliasSku &&
-          !specConflict(line.spec, aliasSku.productModel)
+          !specConflict(line.spec, skuSpecText(aliasSku))
         ) {
           return {
             ...line,
@@ -482,7 +488,7 @@ export function matchOrderLines(
     const conflict = sku
       ? specConflict(
           exactNameSku ? line.spec?.trim() || line.rawName : line.spec,
-          sku.productModel,
+          skuSpecText(sku),
         )
       : false;
     // 反查出来的同名商品如果证明不了规格一致，就不能自动挂（会按错的净含量折算成本）。
@@ -501,8 +507,8 @@ export function matchOrderLines(
         ? `该渠道（${importChannel}）还没有对应的采购商品，请手动选择或新建`
         : conflict
           ? aliasCandidate
-            ? `上次匹配的商品规格是 ${sku?.productModel ?? '未知'}，与截图不一致，请选择或新建`
-            : `商品规格是 ${sku?.productModel ?? '未知'}，与截图不一致`
+            ? `上次匹配的商品规格是 ${sku ? skuSpecText(sku) : '未知'}，与截图不一致，请选择或新建`
+            : `商品规格是 ${sku ? skuSpecText(sku) : '未知'}，与截图不一致`
           : !sku
             ? '原料对上了，但这道原料还没有采购商品'
             : exactNameUnconfirmed

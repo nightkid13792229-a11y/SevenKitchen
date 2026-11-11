@@ -46,3 +46,11 @@ describe('补货详情 · 信息合并（2026-11-11）', () => {
     expect(source).toContain('amount-value muted');
   });
 });
+
+describe('补货详情 · 包装层级快照（2026-11-12）', () => {
+  it('读取采购记录里的 packagingTextSnapshot，并显示在商品行', () => {
+    expect(source).toContain('packagingTextSnapshot');
+    expect(source).toContain('item.packagingText');
+    expect(source).toContain('class="item-packaging"');
+  });
+});

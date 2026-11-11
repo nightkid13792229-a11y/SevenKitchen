@@ -27,6 +27,10 @@ export interface PurchaseRecordConstructor {
   inboundVersion?: number; // 已入账到第几版（0 = 未入账；撤回不递减）
   actualCost: number; // 实际采购金额（元）
   productModel?: string; // 产品型号（选填）
+  /** 采购当时的包装层级快照（2026-11-12） */
+  packagingSnapshot?: unknown;
+  /** 包装层级的展示文本（如「1 箱 = 4 层 × 30 枚 × 53 克」） */
+  packagingTextSnapshot?: string;
   notes?: string; // 备注信息（选填）
   sourceImportId?: string | null;
   sourceImageKey?: string | null;
@@ -74,6 +78,8 @@ export class PurchaseRecord {
   public inboundVersion: number;
   public actualCost: number; // 实际采购金额（元），两位小数
   public productModel?: string;
+  public packagingSnapshot?: unknown;
+  public packagingTextSnapshot?: string;
   public notes?: string;
   public sourceImportId?: string | null;
   public sourceImageKey?: string | null;
@@ -100,6 +106,8 @@ export class PurchaseRecord {
     this.inboundVersion = data.inboundVersion ?? 0;
     this.actualCost = data.actualCost;
     this.productModel = data.productModel;
+    this.packagingSnapshot = data.packagingSnapshot;
+    this.packagingTextSnapshot = data.packagingTextSnapshot;
     this.notes = data.notes;
     this.sourceImportId = data.sourceImportId ?? null;
     this.sourceImageKey = data.sourceImageKey ?? null;
@@ -276,6 +284,8 @@ export class PurchaseRecord {
       inboundVersion: this.inboundVersion,
       actualCost: this.actualCost,
       productModel: this.productModel || null,
+      packagingSnapshot: (this.packagingSnapshot as any) ?? null,
+      packagingTextSnapshot: this.packagingTextSnapshot || null,
       notes: this.notes || null,
       sourceImportId: this.sourceImportId ?? null,
       sourceImageKey: this.sourceImageKey ?? null,
@@ -317,6 +327,8 @@ export class PurchaseRecord {
       inboundVersion: Number(data.inboundVersion ?? 0),
       actualCost: Number(data.actualCost),
       productModel: data.productModel || undefined,
+      packagingSnapshot: data.packagingSnapshot ?? undefined,
+      packagingTextSnapshot: data.packagingTextSnapshot || undefined,
       notes: data.notes || undefined,
       sourceImportId: data.sourceImportId ?? null,
       sourceImageKey: data.sourceImageKey ?? null,

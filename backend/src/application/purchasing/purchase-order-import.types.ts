@@ -62,6 +62,8 @@ export interface ListSkuCandidate {
   id: string;
   name: string;
   productModel: string | null;
+  /** 包装原文（packaging.printedText）；优先于 productModel 参与规格匹配 */
+  printedText?: string | null;
   purchaseChannel: string | null;
   /** 采购单位 → 基准单位的换算比（件数 × 单件净含量） */
   purchaseToBaseRatio: number | null;

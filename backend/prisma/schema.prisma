@@ -2614,6 +2614,10 @@ model PurchaseRecord {
   inboundVersion     Int          @default(0) @map("inbound_version")
   actualCost         Decimal      @map("actual_cost") @db.Decimal(10, 2)
   productModel       String?      @map("product_model") @db.VarChar(100)
+  /// 采购当时的包装层级快照（2026-11-12）：下单的 SKU 后来改了规格也能追溯
+  packagingSnapshot  Json?        @map("packaging_snapshot")
+  /// 快照的展示文本（如「1 箱 = 4 层 × 30 枚 × 53 克」）
+  packagingTextSnapshot String?   @map("packaging_text_snapshot") @db.VarChar(300)
   notes              String?      @map("notes")
   purchasedAt        DateTime     @default(now()) @map("purchased_at")
   createdAt          DateTime     @default(now()) @map("created_at")

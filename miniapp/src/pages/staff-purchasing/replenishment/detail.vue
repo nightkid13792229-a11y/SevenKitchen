@@ -103,6 +103,9 @@
             <view class="item-main">
               <text class="item-name">{{ item.name }}</text>
               <text class="item-meta">{{ item.meta }}</text>
+              <text v-if="item.packagingText" class="item-packaging">
+                {{ item.packagingText }}
+              </text>
             </view>
             <view class="item-right">
               <text class="item-qty">{{ item.qtyText }}</text>
@@ -359,6 +362,7 @@ const displayItems = computed(() => {
       meta: metaParts.join(' · ') || '未关联采购商品',
       qtyText: `${formatQuantity(item.quantityNeeded)}${unit}`,
       baseText,
+      packagingText: String(matched?.packagingTextSnapshot || ''),
       costText: money(item.estimatedCost),
     };
   });
@@ -373,6 +377,7 @@ const displayItems = computed(() => {
       meta: '仅入库记录',
       qtyText: `${formatQuantity(row.actualBaseQuantity)}${baseUnitLabel(row.actualBaseUnit)}`,
       baseText: '',
+      packagingText: String(row.packagingTextSnapshot || ''),
       costText: money(row.actualCost),
     }));
   return [...rows, ...orphans];
@@ -839,6 +844,12 @@ onShow(() => {
 .item-base {
   font-size: 24rpx;
   color: #6b6653;
+}
+
+.item-packaging {
+  font-size: 24rpx;
+  color: #6b6653;
+  line-height: 1.4;
 }
 
 .item-cost {

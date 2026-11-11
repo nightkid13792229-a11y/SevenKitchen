@@ -50,3 +50,11 @@ describe('补货修改页 · 金额不漂移（2026-11-11）', () => {
     expect(source).toContain('originalUnitPrice');
   });
 });
+
+describe('补货修改页 · 包装层级快照（2026-11-12）', () => {
+  it('从采购记录带出 packagingTextSnapshot，改数量时能看到', () => {
+    expect(source).toContain('packagingTextSnapshot');
+    expect(source).toContain('packagingText');
+    expect(source).toContain('class="item-packaging"');
+  });
+});

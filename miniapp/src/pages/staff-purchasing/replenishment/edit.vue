@@ -26,6 +26,9 @@
             <text class="item-name">{{ item.name }}</text>
             <text class="item-unit">单位：{{ item.unit }}</text>
           </view>
+          <text v-if="item.packagingText" class="item-packaging">
+            {{ item.packagingText }}
+          </text>
           <view class="item-fields">
             <view class="field">
               <text class="field-label">数量</text>
@@ -118,6 +121,7 @@ const items = ref<
     itemId: string;
     name: string;
     unit: string;
+    packagingText: string;
     quantity: string;
     unitPrice: string;
     /** 打开页面时的原值：没改过的行按原总额回写，避免单价四舍五入后金额漂移 */
@@ -180,16 +184,21 @@ const load = async () => {
       return;
     }
     record.value = res.data;
+    const records = Array.isArray(res.data.records) ? res.data.records : [];
     items.value = (res.data.items || []).map((item: any) => {
       const quantity = Number(item.quantityNeeded ?? 0);
       const total = Number(item.estimatedCost ?? 0);
       const quantityText = String(quantity || '');
       const unitPriceText =
         quantity > 0 ? String(Number((total / quantity).toFixed(2))) : '';
+      const record = records.find(
+        (row: any) => row.purchaseItemId === item.id,
+      );
       return {
         itemId: item.id,
         name: item.ingredientName || item.ingredient?.name || '原料',
         unit: item.quantityUnit || item.displayUnit || '',
+        packagingText: String(record?.packagingTextSnapshot || ''),
         quantity: quantityText,
         unitPrice: unitPriceText,
         originalQuantity: quantityText,
@@ -426,6 +435,12 @@ onLoad((options: Record<string, string>) => {
 
 .item-unit {
   font-size: 24rpx;
+  color: #6b6653;
+}
+
+.item-packaging {
+  font-size: 24rpx;
+  line-height: 1.4;
   color: #6b6653;
 }
 

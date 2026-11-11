@@ -10,6 +10,8 @@
 
 **Spec:** `docs/knowledge-base/2026-11-11-kb-v3-design.md`
 
+**Review Record:** `docs/knowledge-base/2026-11-11-kb-v3-plan-review.md`（独立评审：初评 5 个 P0，修订后全部关闭，剩余 P0 无）
+
 ---
 
 ## Global Constraints

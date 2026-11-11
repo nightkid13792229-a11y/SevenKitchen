@@ -10,6 +10,10 @@ const shipDrawerSource = readFileSync(
   resolve(__dirname, '../components/shipping/StaffShipDrawer.vue'),
   'utf8',
 );
+const shipSubmitSource = readFileSync(
+  resolve(__dirname, '../api/ship-submit.ts'),
+  'utf8',
+);
 const ordersApiSource = readFileSync(
   resolve(__dirname, '../api/orders.ts'),
   'utf8',
@@ -83,12 +87,13 @@ describe('staff order mobile operations', () => {
     expect(detailSource).toContain('showShippingModal');
     expect(detailSource).toContain('StaffShipDrawer');
     expect(shipDrawerSource).toContain('confirmShipping');
-    expect(shipDrawerSource).toContain('/admin/orders/${orderId}/ship');
+    // 接口调用 2026-11-11 收到 api/ship-submit.ts：鲜食/补剂各走各的
+    expect(shipSubmitSource).toContain('/admin/orders/${orderId}/ship');
     expect(detailSource).not.toContain('请在电脑端操作发货');
   });
 
   it('syncs WeChat shipping info after mobile staff shipment', () => {
-    expect(shipDrawerSource).toContain('/staff/shipping/orders/${orderId}/wechat-shipping-upload');
+    expect(shipSubmitSource).toContain('/staff/shipping/orders/${orderId}/wechat-shipping-upload');
     expect(shipDrawerSource).toContain('微信发货同步失败');
   });
 
@@ -232,8 +237,11 @@ describe('staff order detail · 状态改版', () => {
     expect(shipDrawerSource).toContain('实际运费（元）');
     expect(shipDrawerSource).toContain("type=\"digit\"");
     // 正常发货必填运费；无需发货走另一条分支
-    expect(shipDrawerSource).toContain('actualShippingFee,');
-    expect(shipDrawerSource).toContain("shippingType: 'NOT_REQUIRED'");
+    expect(shipDrawerSource).toContain('actualShippingFee');
+    // 无需发货：不填单号/运费，也不上报微信
+    expect(shipDrawerSource).toContain("shippingType: isNoShipping ? 'NOT_REQUIRED' : 'NORMAL'");
+    expect(shipSubmitSource).toContain("payload.shippingType === 'NOT_REQUIRED'");
+    expect(shipSubmitSource).toContain("wechat: 'skipped'");
     expect(shipDrawerSource).toContain('发货类型');
   });
 

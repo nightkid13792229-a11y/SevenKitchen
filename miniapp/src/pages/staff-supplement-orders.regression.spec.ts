@@ -250,3 +250,45 @@ describe('工作台补剂订单 · 标签打印页', () => {
     expect(labelsSource).toContain('#a97c33')
   })
 })
+
+/**
+ * 2026-11-11：补剂发货并进和鲜食共用的发货抽屉。
+ * 以前是页面里自己一套弹窗，表单、存根核对、提交都要各自维护。
+ */
+describe('补剂发货 · 共用发货抽屉', () => {
+  const shipDrawerSource = readFileSync(
+    resolve(__dirname, '../components/shipping/StaffShipDrawer.vue'),
+    'utf8',
+  )
+  const shipSubmitSource = readFileSync(
+    resolve(__dirname, '../api/ship-submit.ts'),
+    'utf8',
+  )
+
+  it('详情页用共用抽屉，自己那套发货表单删干净', () => {
+    expect(detailSource).toContain('StaffShipDrawer')
+    expect(detailSource).toContain('kind="supplement"')
+    // 旧弹窗的字段不该再出现在页面里
+    expect(detailSource).not.toContain("'NOT_REQUIRED'>无需发货")
+    expect(detailSource).not.toContain('shipTracking')
+    expect(detailSource).not.toContain('shipCarrierIndex')
+    // 地址仍由页面自己改：抽屉只发信号
+    expect(detailSource).toContain('@fix-address="openAddressEditor"')
+    expect(detailSource).toContain(':address-revision="shipAddressRevision"')
+  })
+
+  it('地址改完会让存根结论作废（改的是同一套核对口径）', () => {
+    expect(detailSource).toContain('shipAddressRevision.value += 1')
+    expect(shipDrawerSource).toContain('() => props.addressRevision')
+    expect(shipDrawerSource).toContain('resetReceiptState(receipt)')
+  })
+
+  it('★ 补剂发货结果里的微信上报状态直接用，不再重复调上报接口', () => {
+    expect(shipSubmitSource).toContain('wechatShippingUpload')
+    expect(shipSubmitSource).toContain("kind === 'supplement'")
+    expect(shipSubmitSource).toContain('staffSupplementOrderApi.ship')
+    // 鲜食仍走自己的发货接口 + 单独上报
+    expect(shipSubmitSource).toContain('/admin/orders/${orderId}/ship')
+    expect(shipSubmitSource).toContain('/staff/shipping/orders/${orderId}/wechat-shipping-upload')
+  })
+})

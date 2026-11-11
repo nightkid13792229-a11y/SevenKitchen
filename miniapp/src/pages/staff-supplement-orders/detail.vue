@@ -217,71 +217,26 @@
       </view>
     </template>
 
-    <!-- 发货弹窗（2026-10-31 与鲜食单统一：发货类型 / 快递公司 / 单号 / 实际运费） -->
-    <view v-if="shipVisible" class="modal-mask" @tap="closeShip">
-      <view class="modal-panel" @tap.stop>
-        <view class="modal-title">填写发货信息</view>
-
-        <text class="form-label">发货类型</text>
-        <view class="ship-type-row">
-          <text
-            class="ship-type-option"
-            :class="{ active: shipType === 'NORMAL' }"
-            @tap="shipType = 'NORMAL'"
-          >正常发货</text>
-          <text
-            class="ship-type-option"
-            :class="{ active: shipType === 'NOT_REQUIRED' }"
-            @tap="shipType = 'NOT_REQUIRED'"
-          >无需发货</text>
-        </view>
-
-        <block v-if="shipType === 'NORMAL'">
-          <WaybillReceiptBlock
-            :view="receiptView"
-            :busy="receipt.state === 'recognizing'"
-            :has-image="receipt.hasImage"
-            @pick="pickReceipt"
-            @manual="onManualReceipt"
-          />
-          <view class="addr-link-row">
-            <text class="addr-link" @tap="openAddressEditor">收件人对不上？改收货地址</text>
-          </view>
-
-          <text class="form-label">物流公司</text>
-          <picker
-            mode="selector"
-            :range="carriers"
-            range-key="name"
-            :value="shipCarrierIndex"
-            @change="onShipCarrierChange"
-          >
-            <view class="form-picker">{{ carriers[shipCarrierIndex].name }}</view>
-          </picker>
-
-          <text class="form-label">物流单号</text>
-          <input v-model="shipTracking" class="form-input" placeholder="请输入物流单号" :maxlength="50" />
-
-          <text class="form-label">实际运费（元）</text>
-          <input
-            v-model="shipFee"
-            class="form-input"
-            type="digit"
-            placeholder="必填，例如 12.50（用于财务统计）"
-            :maxlength="8"
-          />
-        </block>
-
-        <text v-else class="ship-hint">
-          自用单不寄快递：确认后这单直接结案，不产生物流单号。
-        </text>
-
-        <button class="primary-btn" :disabled="submitting" @tap="confirmShip">
-          {{ submitting ? '提交中…' : '确认发货' }}
-        </button>
-        <button class="secondary-btn" :disabled="submitting" @tap="closeShip">取消</button>
-      </view>
-    </view>
+    <!-- 发货抽屉（2026-11-11）：和鲜食单、订单中心共用同一份组件，
+         补剂只是接口与地址来源不同，表单和存根核对完全一致 -->
+    <StaffShipDrawer
+      v-if="order"
+      :visible="shipVisible"
+      :order-id="order.id"
+      :customer-name="order.receiverName"
+      :customer-phone="order.receiverPhone"
+      :dog-summary="order.dogName || ''"
+      :address="shipAddress"
+      :initial-tracking-number="order.trackingNumber || ''"
+      :initial-actual-shipping-fee="null"
+      :initial-carrier-code="order.carrierCode || ''"
+      kind="supplement"
+      :address-revision="shipAddressRevision"
+      allow-address-fix
+      @close="shipVisible = false"
+      @shipped="onShipped"
+      @fix-address="openAddressEditor"
+    />
 
     <!-- 代改收货地址（2026-11-10）：补剂单原先只能看不能改，硬锁下这是唯一出路 -->
     <view v-if="addressVisible" class="modal-mask" @tap="closeAddressEditor">
@@ -366,25 +321,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { CARRIERS, carrierIndexOf } from '../../constants/carriers'
-import WaybillReceiptBlock from '../../components/shipping/WaybillReceiptBlock.vue'
-import {
-  applyRecognizeResult,
-  createReceiptState,
-  markReceiptFailed,
-  markReceiptManualConfirmed,
-  markReceiptPicked,
-  markReceiptRecognizing,
-  receiptViewOf,
-  resetReceiptState,
-} from '../../utils/waybill-receipt-machine'
-import {
-  createManualWaybill,
-  recognizeReceipt,
-  updateSupplementShippingAddress,
-  uploadReceiptImage,
-} from '../../api/waybillReceipt'
+import { computed, ref } from 'vue'
+import StaffShipDrawer from '../../components/shipping/StaffShipDrawer.vue'
+import { updateSupplementShippingAddress } from '../../api/waybillReceipt'
 import { onLoad } from '@dcloudio/uni-app'
 import {
   staffSupplementOrderApi,
@@ -444,14 +383,12 @@ function canResolve(record: StaffSupplementAftersaleCase) {
 const shipVisible = ref(false)
 
 /**
- * 快递存根识别 + 代改收货地址（2026-11-10）。
+ * 代改收货地址（2026-11-10）。
  *
- * 补剂单原先在小程序里**只能看地址、不能改**，只有后台网页管理员能改。
  * 硬锁上线后「存根对不上 → 先改地址 → 再传存根」是唯一出路，
  * 打包间手上只有手机，所以这里补一个只能改未发货单的小面板（必填原因）。
+ * 发货表单本身已经并到共用的 StaffShipDrawer（2026-11-11）。
  */
-const receipt = reactive(createReceiptState())
-
 const addressVisible = ref(false)
 const savingAddress = ref(false)
 const addressForm = ref({
@@ -464,96 +401,23 @@ const addressForm = ref({
   reason: '',
 })
 
-/** 存根块该显示什么，文案统一走 utils/waybill-receipt-view */
-const receiptView = computed(() => receiptViewOf(receipt, shipTracking.value))
+/**
+ * 地址改一次 +1：抽屉收到这个变化就把存根结论清掉 —— 改完地址，
+ * 之前那张存根核对的还是旧地址，必须重新传。
+ */
+const shipAddressRevision = ref(0)
 
-function applyReceipt(summary: {
-  carrierCode?: string | null
-  trackingNumber?: string | null
-  shippingFee?: number | null
-}) {
-  if (summary.carrierCode) {
-    shipCarrierIndex.value = carrierIndexOf(summary.carrierCode)
+/** 补剂单的收货信息是平台字段，拼成抽屉要的形状 */
+const shipAddress = computed(() => {
+  const current = order.value
+  if (!current) return null
+  return {
+    recipientName: current.receiverName || '',
+    phone: current.receiverPhone || '',
+    regionText: current.receiverRegion || '',
+    detailAddress: current.receiverDetail || '',
   }
-  if (summary.trackingNumber) {
-    shipTracking.value = summary.trackingNumber
-  }
-  if (typeof summary.shippingFee === 'number') {
-    shipFee.value = summary.shippingFee.toFixed(2)
-  }
-}
-
-async function recognizeByUrl(imageUrl: string) {
-  if (!orderId.value) return
-
-  markReceiptRecognizing(receipt)
-  try {
-    const result = await recognizeReceipt({ imageUrl, orderIds: [orderId.value] })
-    applyRecognizeResult(receipt, result, applyReceipt)
-  } catch (error: any) {
-    markReceiptFailed(receipt, error?.message || '识别失败，可以手动填写')
-  }
-}
-
-async function pickReceipt() {
-  if (receipt.state === 'recognizing') return
-
-  const chosen: any = await new Promise((resolve) => {
-    uni.chooseImage({
-      count: 1,
-      sizeType: ['compressed'],
-      sourceType: ['camera', 'album'],
-      success: resolve,
-      fail: () => resolve(null),
-    })
-  })
-
-  const filePath = chosen?.tempFilePaths?.[0]
-  if (!filePath) return
-
-  markReceiptPicked(receipt)
-
-  try {
-    const uploaded = await uploadReceiptImage(filePath)
-    await recognizeByUrl(uploaded.url)
-  } catch (error: any) {
-    markReceiptFailed(receipt, error?.message || '上传失败，可以手动填写')
-  }
-}
-
-function onManualReceipt() {
-  if (!orderId.value) return
-  const value = String(shipTracking.value || '').trim()
-  if (!value) {
-    uni.showToast({ title: '先在上面填运单号', icon: 'none' })
-    return
-  }
-
-  uni.showModal({
-    title: '手动确认发货',
-    editable: true,
-    placeholderText: '为什么手动填（例如：存根太糊）',
-    success: async (res) => {
-      if (!res.confirm) return
-      const reason = String(res.content || '').trim()
-      if (!reason) {
-        uni.showToast({ title: '必须写原因', icon: 'none' })
-        return
-      }
-      try {
-        await createManualWaybill({
-          orderIds: [orderId.value],
-          trackingNumber: value,
-          reason,
-        })
-        markReceiptManualConfirmed(receipt, value)
-        uni.showToast({ title: '已确认，可以发货', icon: 'success' })
-      } catch (error: any) {
-        uni.showToast({ title: error?.message || '提交失败', icon: 'none' })
-      }
-    },
-  })
-}
+})
 
 /** 地区串（"上海市 上海市 普陀区"）拆成三段；拆不出来就留给员工改 */
 function splitRegion(region: string) {
@@ -617,8 +481,8 @@ async function saveAddressEditor() {
       detail: form.detail.trim(),
       reason: form.reason.trim(),
     })
-    // 地址变了，之前那张存根的核对结果已经作废 —— 逼着重新传
-    resetReceiptState(receipt)
+    // 地址变了，之前那张存根的核对结果已经作废 —— 抽屉收到这个变化会清空重来
+    shipAddressRevision.value += 1
     addressVisible.value = false
     uni.showToast({ title: '地址已改，请重新上传存根', icon: 'none' })
     await fetchOrder()
@@ -628,13 +492,6 @@ async function saveAddressEditor() {
     savingAddress.value = false
   }
 }
-const shipType = ref<'NORMAL' | 'NOT_REQUIRED'>('NORMAL')
-const shipCarrierIndex = ref(0)
-const shipTracking = ref('')
-const shipFee = ref('')
-// 承运商清单统一到 constants/carriers.ts（2026-11-10）
-const carriers = CARRIERS
-
 const STATUS_TEXT: Record<SupplementOrderStatus, string> = {
   PENDING_PAYMENT: '待确认收款',
   // 补剂没有生产环节：付了钱就能打标签发货（2026-11-02 起也不再录分装）
@@ -836,81 +693,14 @@ async function submitResolve() {
 }
 
 function handleShip() {
-  shipType.value = 'NORMAL'
-  shipCarrierIndex.value = 0
-  shipTracking.value = order.value?.trackingNumber || ''
-  shipFee.value = ''
-  resetReceiptState(receipt)
+  // 表单、存根核对、提交、微信同步都在共用抽屉里；这里只负责打开它
   shipVisible.value = true
 }
 
-function closeShip() {
-  if (submitting.value) return
+/** 抽屉里发完货：关门 + 刷新这单（状态会变成已发货） */
+async function onShipped() {
   shipVisible.value = false
-}
-
-function onShipCarrierChange(event: any) {
-  shipCarrierIndex.value = Number(event?.detail?.value || 0)
-}
-
-async function confirmShip() {
-  if (submitting.value) return
-  const isNoShipping = shipType.value === 'NOT_REQUIRED'
-
-  if (!isNoShipping && !receiptView.value.canShip) {
-    uni.showToast({ title: '先核对快递存根', icon: 'none' })
-    return
-  }
-
-  let fee: number | undefined
-  const tracking = shipTracking.value.trim()
-
-  if (!isNoShipping) {
-    if (tracking.length < 5) {
-      uni.showToast({ title: '请输入有效物流单号', icon: 'none' })
-      return
-    }
-    const feeText = String(shipFee.value || '').trim()
-    if (!feeText) {
-      uni.showToast({ title: '请填写实际运费', icon: 'none' })
-      return
-    }
-    if (!/^\d+(\.\d{1,2})?$/.test(feeText)) {
-      uni.showToast({ title: '运费最多两位小数，例如 12.50', icon: 'none' })
-      return
-    }
-    fee = Number(feeText)
-  }
-
-  submitting.value = true
-  try {
-    const response = isNoShipping
-      ? await staffSupplementOrderApi.ship(orderId.value, { shippingType: 'NOT_REQUIRED' })
-      : await staffSupplementOrderApi.ship(orderId.value, {
-          shippingType: 'NORMAL',
-          trackingNumber: tracking,
-          carrierCode: carriers[shipCarrierIndex.value].code,
-          actualShippingFee: fee,
-          // 硬锁（2026-11-10）：服务端必须能查到「这个号对着这单收货人核过」
-          enforceWaybillCheck: true,
-        })
-
-    if (response.code === 0) {
-      uni.showToast({
-        title: isNoShipping ? '已结案（无需发货）' : '已发货',
-        icon: 'success',
-      })
-      shipVisible.value = false
-      await fetchOrder()
-    } else {
-      uni.showToast({ title: response.message || '发货失败', icon: 'none' })
-    }
-  } catch (error) {
-    console.error('[SupplementOrderDetail] 发货失败:', error)
-    uni.showToast({ title: '发货失败', icon: 'none' })
-  } finally {
-    submitting.value = false
-  }
+  await fetchOrder()
 }
 
 function handleCancel() {

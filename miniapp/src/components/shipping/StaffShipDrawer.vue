@@ -144,7 +144,7 @@ import {
   getOrderAddressRegionText,
   type OrderAddressLike,
 } from '../../utils/order-address'
-import { request } from '../../utils/api'
+import { submitStaffShipment } from '../../api/ship-submit'
 
 const props = withDefaults(
   defineProps<{
@@ -162,6 +162,13 @@ const props = withDefaults(
     coverImageUrl?: string | null
     /** 列表页没有地址编辑能力：点「改收货地址」时交给宿主跳转 */
     allowAddressFix?: boolean
+    /** 鲜食单 / 补剂单：只影响提交走哪个后台接口，表单本身完全一样 */
+    kind?: 'food' | 'supplement'
+    /**
+     * 地址改过一次就 +1。地址变了，之前那张存根的核对结论就作废，
+     * 抽屉要清空重来（补剂详情页改完地址会传这个）。
+     */
+    addressRevision?: number
   }>(),
   {
     customerName: '',
@@ -173,6 +180,8 @@ const props = withDefaults(
     initialCarrierCode: '',
     coverImageUrl: '',
     allowAddressFix: false,
+    kind: 'food',
+    addressRevision: 0,
   },
 )
 
@@ -232,6 +241,14 @@ watch(
     if (open) resetForOrder()
   },
   { immediate: true },
+)
+
+// 地址改过：核对的是旧地址，结论作废，必须重新传存根
+watch(
+  () => props.addressRevision,
+  () => {
+    if (props.visible) resetReceiptState(receipt)
+  },
 )
 
 function handleClose() {
@@ -387,19 +404,12 @@ async function confirmShipping() {
   const carrierName = carriers[selectedCarrierIndex.value].name
   isShipping.value = true
   try {
-    await request({
-      url: `/admin/orders/${orderId}/ship`,
-      method: 'POST',
-      data: isNoShipping
-        ? { shippingType: 'NOT_REQUIRED' }
-        : {
-            shippingType: 'NORMAL',
-            carrierCode: carriers[selectedCarrierIndex.value].code,
-            trackingNumber: tracking,
-            actualShippingFee,
-            // 硬锁（2026-11-10）：服务端必须能查到「这个号对着这单收货人核过」
-            enforceWaybillCheck: true,
-          },
+    // 鲜食 / 补剂走各自的发货接口；正常发货都会顺带把物流上报微信
+    const result = await submitStaffShipment(props.kind, orderId, {
+      shippingType: isNoShipping ? 'NOT_REQUIRED' : 'NORMAL',
+      carrierCode: isNoShipping ? undefined : carriers[selectedCarrierIndex.value].code,
+      trackingNumber: isNoShipping ? undefined : tracking,
+      actualShippingFee: isNoShipping ? undefined : actualShippingFee,
     })
 
     if (isNoShipping) {
@@ -415,23 +425,13 @@ async function confirmShipping() {
       return
     }
 
-    try {
-      await request({
-        url: `/staff/shipping/orders/${orderId}/wechat-shipping-upload`,
-        method: 'POST',
-        suppressErrorToast: true,
-      })
-
-      uni.showToast({
-        title: '发货成功，已同步微信',
-        icon: 'success',
-      })
-    } catch (syncError) {
-      console.error('[StaffShipDrawer] WeChat shipping sync error:', syncError)
-      uni.showToast({
-        title: '发货成功，微信发货同步失败',
-        icon: 'none',
-      })
+    if (result.wechat === 'ok') {
+      uni.showToast({ title: '发货成功，已同步微信', icon: 'success' })
+    } else if (result.wechat === 'failed') {
+      console.error('[StaffShipDrawer] WeChat shipping sync error:', result.wechatMessage)
+      uni.showToast({ title: '发货成功，微信发货同步失败', icon: 'none' })
+    } else {
+      uni.showToast({ title: '发货成功', icon: 'success' })
     }
 
     emit('shipped', {

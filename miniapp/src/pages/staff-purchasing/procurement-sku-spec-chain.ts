@@ -114,3 +114,47 @@ export function needsInnerLayer(input: {
   if (input.linkCount > 0) return false;
   return !input.confirmedSingle;
 }
+
+/**
+ * 单位芯片的可见性（2026-11-11）。
+ *
+ * 和渠道那条规则一模一样（`withSelectedChannel`）：默认只显示前几个，
+ * 但**当前选中的单位必须留在可见区**。否则 AI 填了「份」（排第 7），
+ * 芯片行一个都不亮，员工以为没选，随手点「袋」—— 5000 克就挂到了袋上。
+ */
+export function withSelectedUnit(
+  list: string[] | null | undefined,
+  selected: string | null | undefined,
+  limit = 5,
+): string[] {
+  const head = (Array.isArray(list) ? list : []).slice(0, Math.max(1, limit));
+  const value = typeof selected === 'string' ? selected.trim() : '';
+  if (!value || head.includes(value)) return head;
+  return [value, ...head.slice(0, Math.max(0, limit - 1))];
+}
+
+/**
+ * 进页面时的默认采购单位。
+ *
+ * 只有 AI 明确给出**且**在字典里才预填；否则留空。
+ * 改造前这里写死"有袋就选袋"，于是 AI 读出「提」被静默丢弃后，
+ * 表单看起来像"这个商品本来就是袋装"，账目差 10 倍也没人知道。
+ */
+export function initialPurchaseUnit(
+  draft: { purchaseUnit?: string | null } | null | undefined,
+  allowed: string[] = [],
+): string {
+  const value = typeof draft?.purchaseUnit === 'string' ? draft.purchaseUnit.trim() : '';
+  if (!value) return '';
+  return allowed.includes(value) ? value : '';
+}
+
+/** 这个单位在不在当前可选项里（提交/预填前用） */
+export function isUnitAllowed(
+  options: Array<{ code: string }> | null | undefined,
+  unit: string | null | undefined,
+): boolean {
+  const value = typeof unit === 'string' ? unit.trim() : '';
+  if (!value) return false;
+  return (Array.isArray(options) ? options : []).some((item) => item.code === value);
+}

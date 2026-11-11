@@ -156,9 +156,10 @@
           <view class="field-head">
             <text class="field-label">我买的是</text>
             <text class="req">*</text>
+            <text v-if="aiFilled.purchaseUnit" class="ai-tag">AI 识别</text>
             <text class="field-hint-inline">单价、净含量都按它算</text>
           </view>
-          <view class="chip-row">
+          <view class="chip-row" :class="{ 'chip-row-error': hasError('purchaseUnit') }">
             <view
               v-for="unit in visibleUnits"
               :key="unit"
@@ -172,6 +173,15 @@
               {{ showAllUnits ? '收起' : '更多' }}
             </view>
           </view>
+          <text v-if="purchaseUnitHint" class="chain-warn">
+            AI 读到「{{ purchaseUnitHint }}」，这个单位不在清单里，请在上面选一个最接近的。
+          </text>
+          <text v-else-if="unitOptionsFailed" class="field-hint-inline warn-text">
+            可选项没加载出来，请返回重试；新增单位请找管理员在后台维护。
+          </text>
+          <text v-else-if="hasError('purchaseUnit')" class="error-text">
+            请选一个采购单位（它决定单价和库存怎么算）
+          </text>
         </view>
 
         <view class="field">
@@ -331,14 +341,15 @@ import {
   withSelectedChannel,
 } from '../../utils/purchase-channel';
 import { buildShotView, type ShotState } from './procurement-sku-shot';
-import { MULTIPACK_UNITS } from './procurement-sku-multipack';
 import {
   computeSpecRatio,
   firstIncompleteLinkIndex,
   formatSpecChain,
-  multiplySpecLinks,
+  initialPurchaseUnit,
   isTotalMismatch,
+  multiplySpecLinks,
   needsInnerLayer,
+  withSelectedUnit,
   type SpecLinkInput,
 } from './procurement-sku-spec-chain';
 import {
@@ -354,15 +365,6 @@ const BASE_UNIT_TEXT: Record<string, string> = {
   ML: '毫升',
   PCS: '个',
 };
-
-/**
- * 员工实际"买回来的一整件"是这些包装单位。
- *
- * 白名单里还有 g / kg / 斤 / 两 / 吨 —— 那些是**计量单位**，不是包装：
- * 选了「斤」系统会要求"1 斤 = 多少克"，员工在心里算 500 反而容易错。
- * 所以这里只给包装单位，真正的白名单仍以服务端返回的为准（做交集）。
- */
-const CLERK_UNIT_PRIORITY = ['袋', '箱', '包', '瓶', '盒', '桶', '提', '件', '份', '卷'];
 
 const ingredientId = ref('');
 const ingredientName = ref('');
@@ -394,6 +396,14 @@ const submitting = ref(false);
 const sampleFailed = ref(false);
 
 const allUnits = ref<string[]>([]);
+/** 字典下发的单位（含 kind / multipack），页面用它分组与判断"整件" */
+const unitOptions = ref<
+  Array<{ code: string; kind: 'PACKAGING' | 'MEASUREMENT'; multipack: boolean }>
+>([]);
+/** 可选项加载失败：页面要明说，别让员工对着点不动的保存键发呆 */
+const unitOptionsFailed = ref(false);
+/** AI 读到、但字典里没有的单位原文（用于提示，不写进表单） */
+const purchaseUnitHint = ref('');
 /**
  * 渠道清单（2026-11-05）：唯一来源 = 后台字典 purchase_channel。
  * 以前这里是「历史出现过的写法 + 写死三家 + 自由输入」，
@@ -480,11 +490,21 @@ const hasFormContent = computed(() =>
   ),
 );
 
-/** 只给"包装单位"；服务端白名单里没有的不会出现 */
-const clerkUnits = computed(() => {
-  const fromPriority = CLERK_UNIT_PRIORITY.filter((unit) => allUnits.value.includes(unit));
-  return fromPriority.length >= 3 ? fromPriority : allUnits.value;
-});
+/**
+ * 单位清单（2026-11-11）：唯一来源 = 后台字典 `purchase_unit`（服务端下发）。
+ *
+ * `kind` 分两组：PACKAGING（袋/盒/箱…）默认露出；
+ * MEASUREMENT（斤/公斤/g/ml）收在「更多」的第二组 —— 以前它们被直接藏掉，
+ * AI 读出「斤」时"选中了却看不见、也改不掉"。
+ */
+const packagingUnits = computed(() =>
+  unitOptions.value.filter((item) => item.kind !== 'MEASUREMENT').map((item) => item.code),
+);
+const measurementUnits = computed(() =>
+  unitOptions.value.filter((item) => item.kind === 'MEASUREMENT').map((item) => item.code),
+);
+
+const clerkUnits = computed(() => [...packagingUnits.value, ...measurementUnits.value]);
 
 const visibleChannels = computed(() =>
   showAllChannels.value
@@ -495,7 +515,9 @@ const visibleChannels = computed(() =>
 const hasMoreChannels = computed(() => allChannels.value.length > 6);
 
 const visibleUnits = computed(() =>
-  showAllUnits.value ? clerkUnits.value : clerkUnits.value.slice(0, 5),
+  showAllUnits.value
+    ? clerkUnits.value
+    : withSelectedUnit(clerkUnits.value, form.value.purchaseUnit, 5),
 );
 
 const hasMoreUnits = computed(() => clerkUnits.value.length > 5);
@@ -519,9 +541,17 @@ const innerUnitWord = computed(() => {
 });
 
 /** 箱/桶/提/件一层都没填：必须拦住，不能按 1 件算 */
+const isMultipackUnit = computed(() =>
+  unitOptions.value.some(
+    (item) => item.code === form.value.purchaseUnit && item.multipack,
+  ),
+);
+
 const innerLayerMissing = computed(() =>
   needsInnerLayer({
-    purchaseUnit: form.value.purchaseUnit,
+    // 「整件」由字典标记，而不是页面写死 ['箱','桶','提','件']
+    //（那份写死的表里「提/件」当时根本不在白名单，规则从来没生效过）
+    purchaseUnit: isMultipackUnit.value ? form.value.purchaseUnit : '',
     linkCount: specLinks.value.length,
     confirmedSingle: singleConfirmed.value,
   }),
@@ -604,8 +634,12 @@ const selectChannel = (channel: string) => {
 
 const pickUnit = (unit: string) => {
   form.value.purchaseUnit = unit;
+  purchaseUnitHint.value = '';
   // 换成袋/包/盒这类单件单位后，原来"整箱只有一件"的确认就不作数了
-  if (!MULTIPACK_UNITS.includes(unit)) {
+  const multipack = unitOptions.value.some(
+    (item) => item.code === unit && item.multipack,
+  );
+  if (!multipack) {
     singleConfirmed.value = false;
   }
 };
@@ -690,11 +724,20 @@ onLoad(async (options: Record<string, string>) => {
     if (res?.code === 0 && res.data) {
       baseUnit.value = res.data.baseUnit || baseUnit.value;
       allUnits.value = res.data.purchaseUnits || [];
-      form.value.purchaseUnit = clerkUnits.value.includes('袋')
-        ? '袋'
-        : clerkUnits.value[0] || '';
+      unitOptions.value = Array.isArray(res.data.purchaseUnitOptions)
+        ? res.data.purchaseUnitOptions
+        : allUnits.value.map((code: string) => ({
+            code,
+            kind: 'PACKAGING' as const,
+            multipack: false,
+          }));
+      unitOptionsFailed.value = allUnits.value.length === 0;
+      // 不再默认选中「袋」（2026-11-11）：AI 读出字典外单位时，
+      // 旧的默认值会把 5000 克挂到袋上，员工看不出任何异常。
+      form.value.purchaseUnit = '';
     }
   } catch {
+    unitOptionsFailed.value = true;
     uni.showToast({ title: '加载可选项失败，请重试', icon: 'none' });
   } finally {
     loading.value = false;
@@ -844,9 +887,16 @@ const applyDraft = (draft: any, screenshotUrl: string) => {
     form.value.purchaseChannel = result.patch.purchaseChannel;
     filled.purchaseChannel = true;
   }
-  if (result.patch.purchaseUnit) {
-    pickUnit(result.patch.purchaseUnit);
+  // 只有 AI 给的、且确实在字典里才预填；字典外保留原文提示员工自己选
+  const draftUnit = initialPurchaseUnit(
+    { purchaseUnit: result.patch.purchaseUnit },
+    allUnits.value,
+  );
+  if (draftUnit) {
+    pickUnit(draftUnit);
     filled.purchaseUnit = true;
+  } else if (result.patch.purchaseUnit) {
+    purchaseUnitHint.value = result.patch.purchaseUnit;
   }
   if (result.patch.specLinks) {
     specLinks.value = result.patch.specLinks.map((link) => ({ ...link }));
@@ -869,7 +919,10 @@ const applyDraft = (draft: any, screenshotUrl: string) => {
   singleConfirmed.value =
     typeof draft?.packCount === 'number' &&
     draft.packCount === 1 &&
-    !(Array.isArray(draft?.missing) ? draft.missing : []).includes('packCount');
+    // missing 不是数组时以前后半句恒真 → 一箱 10 捆被存成 1 件（少 10 倍）。
+    // 现在只有"明确给了件数、且明确没缺"才自动确认。
+    Array.isArray(draft?.missing) &&
+    !(draft.missing as string[]).includes('packCount');
 
   if (typeof result.patch.unitPriceText === 'string') {
     unitPriceText.value = result.patch.unitPriceText;
@@ -904,6 +957,22 @@ const handleSubmit = async () => {
       name: snapshot.value.name.trim(),
       purchaseChannel: snapshot.value.purchaseChannel.trim(),
       purchaseUnit: snapshot.value.purchaseUnit,
+      // 层级是唯一事实（2026-11-11）：中间层原样上送，倍数由服务端连乘算出。
+      // 老字段 packCount/netContentPerPack 仍一起带上，服务端兼容期两套都认。
+      packaging: {
+        links: specLinks.value.map((link) => ({
+          count: Number(link.count),
+          unit: String(link.unit || '').trim(),
+        })),
+        amount: Number(snapshot.value.netContentPerPack),
+        amountUnit: baseUnit.value,
+        ...(amountUnitText.value.trim()
+          ? { amountLabel: amountUnitText.value.trim() }
+          : {}),
+        ...(specText.value && !structureEdited.value && !totalMismatch.value
+          ? { printedText: specText.value }
+          : {}),
+      },
       packCount: Number(snapshot.value.packCount),
       netContentPerPack: Number(snapshot.value.netContentPerPack),
       // 没改过规格就把包装原文存进去：订单截图按「1.59kg(30枚)」也能认出同一样货
@@ -1271,6 +1340,14 @@ const handleSubmit = async () => {
   background: #fff;
   border: 1px dashed #c9bd9a;
   color: #8a6b33;
+}
+/* 没选单位时整行标红：以前这一行没有任何错误态，员工只看到一句"还有必填项没填" */
+.chip-row-error {
+  padding: 6px;
+  margin: -6px -6px 8px;
+  border: 1px solid #d8a292;
+  border-radius: 10px;
+  background: #fdf6f3;
 }
 /* 渠道锁死时，别的渠道是「看得见但点不了」，避免以为还能换 */
 .chip.locked {

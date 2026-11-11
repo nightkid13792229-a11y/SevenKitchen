@@ -1033,9 +1033,20 @@ export async function uploadPaymentProofFiles(reimbursementId: string, files: st
 // 采购商品：员工新增（2026-11-01）
 // ==========================================
 
+export interface ProcurementSkuUnitOption {
+  code: string;
+  /** PACKAGING = 包装单位（袋/盒/箱）；MEASUREMENT = 计量单位（斤/公斤/g/ml） */
+  kind: 'PACKAGING' | 'MEASUREMENT';
+  /** 整件单位：一层都没填时要提醒补一层 */
+  multipack: boolean;
+}
+
 export interface ProcurementSkuFormOptions {
   baseUnit: string;
+  /** 旧字段：老页面只认它 */
   purchaseUnits: string[];
+  /** 新结构（2026-11-11）：带分组与"整件"标记 */
+  purchaseUnitOptions?: ProcurementSkuUnitOption[];
 }
 
 export interface ProcurementSkuDraft {
@@ -1068,6 +1079,17 @@ export interface CreateStaffProcurementSkuInput {
   name: string;
   purchaseChannel: string;
   purchaseUnit: string;
+  /**
+   * 包装层级（2026-11-11）：中间层 + 末层，倍数由服务端连乘算出。
+   * 传了它就以它为准；下面两个老字段仍保留兼容。
+   */
+  packaging?: {
+    links: Array<{ count: number; unit: string }>;
+    amount: number;
+    amountUnit: string;
+    amountLabel?: string;
+    printedText?: string;
+  };
   /** 一采购单位里几件（规格链上各计数层的连乘） */
   packCount: number;
   /** 最后一层的数量，单位固定为原料基准单位 */

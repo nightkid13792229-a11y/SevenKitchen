@@ -1452,6 +1452,8 @@ import {
   type CreateTagDto,
 } from '@/api/ingredientTags'
 import { ingredientApi } from '@/api/ingredients'
+import { platformOptionsApi } from '@/api/platformOptions'
+import { legacyPackaging } from '@/utils/packagingDisplay'
 import {
   fetchPublicOptionSet,
   type PublicOptionItem,
@@ -1865,47 +1867,6 @@ const hasActiveProcurementSku = computed(
 const typeCapabilities = computed(() =>
   getIngredientTypeCapabilities(formData.type),
 )
-const PROCUREMENT_PURCHASE_UNITS_BY_BASE_UNIT: Record<BaseUnit, string[]> = {
-  [BaseUnit.G]: [
-    'g',
-    'kg',
-    '斤',
-    '两',
-    '吨',
-    '个',
-    '只',
-    '条',
-    '块',
-    '片',
-    '颗',
-    '粒',
-    '包',
-    '袋',
-    '盒',
-    '箱',
-    '瓶',
-    '桶',
-    '罐',
-    '份',
-  ],
-  [BaseUnit.ML]: ['ml', 'L', '瓶', '桶', '罐', '盒', '箱', '袋', '包'],
-  [BaseUnit.PCS]: [
-    '个',
-    '只',
-    '片',
-    '粒',
-    '颗',
-    '条',
-    '块',
-    '包',
-    '袋',
-    '盒',
-    '箱',
-    '瓶',
-    '罐',
-    '卷',
-  ],
-}
 const formatStaffAddedDate = (value?: string | null) => {
   if (!value) return ''
   const date = new Date(value)
@@ -1913,9 +1874,37 @@ const formatStaffAddedDate = (value?: string | null) => {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
-const procurementPurchaseUnitOptions = computed(
-  () => PROCUREMENT_PURCHASE_UNITS_BY_BASE_UNIT[formData.baseUnit] || [],
-)
+/**
+ * 采购单位选项（2026-11-11）：唯一来源 = 平台选项字典 `purchase_unit`。
+ * 这里以前内联了第三份硬编码清单，和 constants 那份、后端白名单各写一次。
+ */
+const purchaseUnitDict = ref<Array<{ code: string; baseUnits: string[] }>>([])
+
+const loadPurchaseUnitDict = async () => {
+  try {
+    const detail = await platformOptionsApi.getSet('purchase_unit')
+    purchaseUnitDict.value = (detail.items || [])
+      .filter((item) => item.enabled)
+      .map((item) => {
+        const extra = (item.extra || {}) as { baseUnits?: string[] }
+        return {
+          code: item.code,
+          baseUnits: Array.isArray(extra.baseUnits) ? extra.baseUnits : [],
+          sortOrder: item.sortOrder,
+        }
+      })
+      .sort((a: any, b: any) => a.sortOrder - b.sortOrder)
+  } catch {
+    purchaseUnitDict.value = []
+  }
+}
+
+const procurementPurchaseUnitOptions = computed(() => {
+  const baseUnit = String(formData.baseUnit || 'G').toUpperCase()
+  return purchaseUnitDict.value
+    .filter((item) => item.baseUnits.includes(baseUnit))
+    .map((item) => item.code)
+})
 watch(
   () => formData.baseUnit,
   () => {
@@ -3224,7 +3213,13 @@ const saveProcurementSku = async () => {
     purchaseUnit: normalizeProcurementSkuOptionalText(
       procurementForm.purchaseUnit,
     ),
-    purchaseToBaseRatio: procurementForm.purchaseToBaseRatio ?? null,
+    // 层级是唯一事实（2026-11-11）：这里的弹窗只收"单位 + 倍数"，
+    // 就按单层折 —— 与后端 packagingFromLegacy 同口径，倍数不变
+    packaging: legacyPackaging(
+      procurementForm.purchaseToBaseRatio,
+      formData.baseUnit,
+      normalizeProcurementSkuOptionalText(procurementForm.productModel),
+    ),
     currentPurchasePrice: procurementForm.currentPurchasePrice ?? null,
     ...(procurementEditingId.value
       ? {}
@@ -3312,6 +3307,7 @@ onMounted(() => {
   loadIngredients() // ✅ 确保组件加载时获取原料列表
   loadSkuSuggestions()
   loadPurchaseChannelOptions()
+  loadPurchaseUnitDict()
   loadIngredientSkuLists() // FOOD 编辑态才加载 DIY制作单推荐商品和生产/采购SKU
 })
 

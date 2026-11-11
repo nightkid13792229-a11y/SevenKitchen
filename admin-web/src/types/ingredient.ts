@@ -718,6 +718,17 @@ export interface ProcurementSkuForm {
   purchaseChannel?: string | null;
   purchaseUnit?: string | null;
   purchaseToBaseRatio?: number | null;
+  /**
+   * 包装层级（2026-11-11）：中间层 + 末层。
+   * 传了它就以它为准，`purchaseToBaseRatio` 由服务端派生，不能再单独提交。
+   */
+  packaging?: {
+    links: Array<{ count: number; unit: string }>;
+    amount: number;
+    amountUnit: 'G' | 'ML' | 'PCS';
+    amountLabel?: string;
+    printedText?: string;
+  } | null;
   currentPurchasePrice?: number | null;
   openingStock?: number | null;
   notes?: string | null;

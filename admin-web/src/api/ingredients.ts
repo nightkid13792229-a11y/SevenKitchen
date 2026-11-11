@@ -26,6 +26,16 @@ export interface StaffCreatedProcurementSku {
   purchaseChannel: string | null
   purchaseUnit: string | null
   purchaseToBaseRatio: number | null
+  /** 包装层级（2026-11-11）：中间层 + 末层，倍数是它的派生值 */
+  packaging?: {
+    links: Array<{ count: number; unit: string }>
+    amount: number
+    amountUnit: 'G' | 'ML' | 'PCS'
+    amountLabel?: string
+    printedText?: string
+  } | null
+  /** 「1 箱 = 10 捆 × 500 克」 */
+  packagingText?: string | null
   currentPurchasePrice: number | null
   isActive: boolean
   createdById: string | null

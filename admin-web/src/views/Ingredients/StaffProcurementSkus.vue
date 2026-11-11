@@ -54,9 +54,9 @@
       <el-table :data="rows" v-loading="loading" border stripe>
         <el-table-column prop="ingredientName" label="原料" width="130" />
         <el-table-column prop="name" label="新增的采购商品" min-width="200" show-overflow-tooltip />
-        <el-table-column label="规格" min-width="130">
+        <el-table-column label="规格" min-width="180">
           <template #default="{ row }">
-            {{ row.productModel || '—' }}
+            {{ row.packagingText || row.productModel || '—' }}
           </template>
         </el-table-column>
         <el-table-column label="一采购单位 =" min-width="150">
@@ -131,26 +131,75 @@
         <el-form-item label="规格">
           <el-input v-model="editForm.productModel" maxlength="100" />
         </el-form-item>
-        <el-form-item label="采购单位">
+        <el-form-item label="采购单位" required>
           <el-select v-model="editForm.purchaseUnit" style="width: 100%">
             <el-option
               v-for="unit in purchaseUnitOptions"
-              :key="unit"
-              :label="unit"
-              :value="unit"
+              :key="unit.code"
+              :label="unit.code"
+              :value="unit.code"
             />
           </el-select>
         </el-form-item>
-        <el-form-item :label="ratioLabel">
-          <el-input-number
-            v-model="editForm.purchaseToBaseRatio"
-            :min="0"
-            :step="1"
-            style="width: 100%"
-          />
-          <div class="field-hint">
-            1 {{ editForm.purchaseUnit || '采购单位' }} =
-            {{ editForm.purchaseToBaseRatio || 0 }} {{ baseUnitLabel }}（库存按这个换）
+        <el-form-item label="包装层级">
+          <div class="packaging-editor">
+            <div
+              v-for="(link, index) in editForm.links"
+              :key="`link-${index}`"
+              class="packaging-row"
+            >
+              <span class="packaging-prefix">一{{ editForm.purchaseUnit || '件' }} =</span>
+              <el-input-number
+                v-model="link.count"
+                :min="1"
+                :step="1"
+                :precision="0"
+                controls-position="right"
+                style="width: 110px"
+              />
+              <el-input
+                v-model="link.unit"
+                maxlength="4"
+                placeholder="单位（捆/枚/包）"
+                style="width: 150px"
+              />
+              <span class="packaging-times">×</span>
+            </div>
+            <div class="packaging-row">
+              <span class="packaging-prefix">
+                一{{ editForm.purchaseUnit || '件' }} =
+              </span>
+              <el-input-number
+                v-model="editForm.amount"
+                :min="0"
+                :step="1"
+                :precision="3"
+                controls-position="right"
+                style="width: 130px"
+              />
+              <span class="packaging-unit">{{ baseUnitLabel }}</span>
+              <el-button
+                link
+                type="primary"
+                @click="addPackagingLink"
+              >
+                + 再加一层
+              </el-button>
+              <el-button
+                v-if="editForm.links.length > 0"
+                link
+                type="danger"
+                @click="removePackagingLink"
+              >
+                删掉最后一层
+              </el-button>
+            </div>
+            <div class="field-hint">
+              {{ packagingPreview }}
+            </div>
+            <div class="field-hint">
+              换算倍数由层级自动算，不能直接改；库存按它折算。
+            </div>
           </div>
         </el-form-item>
         <el-form-item label="采购渠道">
@@ -208,9 +257,14 @@ import type {
   StaffCreatedProcurementSku
 } from '@/api/ingredients'
 import { BaseUnitLabels } from '@/types/ingredient'
-import { purchaseUnitsForBaseUnit } from '@/constants/procurementPurchaseUnits'
 import { buildStaffSkuQueryParams } from './staffProcurementSkuQuery'
-import { fetchPublicOptionSet } from '@/api/platformOptions'
+import { fetchPublicOptionSet, platformOptionsApi } from '@/api/platformOptions'
+import {
+  formatPackagingText,
+  legacyPackaging,
+  ratioOf,
+  type PackagingSpec
+} from '@/utils/packagingDisplay'
 
 const loading = ref(false)
 const rows = ref<StaffCreatedProcurementSku[]>([])
@@ -309,7 +363,9 @@ const editForm = reactive({
   brand: '',
   productModel: '',
   purchaseUnit: '',
-  purchaseToBaseRatio: 0,
+  /** 包装层级：中间层 + 末层（末层单位恒为原料基准单位） */
+  links: [] as Array<{ count: number; unit: string }>,
+  amount: 0,
   purchaseChannel: '',
   currentPurchasePrice: 0,
   isActive: true
@@ -319,14 +375,81 @@ const baseUnitLabel = computed(
   () => BaseUnitLabels[editing.value?.baseUnit || ''] || ''
 )
 
-const purchaseUnitOptions = computed(() =>
-  purchaseUnitsForBaseUnit(editing.value?.baseUnit)
+const ratioLabel = computed(() => {
+  const unit = baseUnitLabel.value
+  return unit ? `一采购单位等于多少${unit}` : '每件净含量'
+})
+
+/**
+ * 采购单位选项（2026-11-11）：唯一来源 = 平台选项字典 `purchase_unit`。
+ * 以前这里是从 `constants/procurementPurchaseUnits.ts` 抄的一份常量，
+ * 和原料弹窗里的另一份、后端白名单必须"手动保持一致"——那必然漂移。
+ */
+const purchaseUnitDict = ref<
+  Array<{ code: string; baseUnits: string[]; multipack: boolean; sortOrder: number }>
+>([])
+
+const loadPurchaseUnitDict = async () => {
+  try {
+    const detail = await platformOptionsApi.getSet('purchase_unit')
+    purchaseUnitDict.value = (detail.items || [])
+      .filter((item) => item.enabled)
+      .map((item) => {
+        const extra = (item.extra || {}) as {
+          baseUnits?: string[]
+          multipack?: boolean
+        }
+        return {
+          code: item.code,
+          baseUnits: Array.isArray(extra.baseUnits) ? extra.baseUnits : [],
+          multipack: extra.multipack === true,
+          sortOrder: item.sortOrder
+        }
+      })
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+  } catch {
+    purchaseUnitDict.value = []
+  }
+}
+
+const purchaseUnitOptions = computed(() => {
+  const baseUnit = String(editing.value?.baseUnit || 'G').toUpperCase()
+  return purchaseUnitDict.value.filter((item) =>
+    item.baseUnits.includes(baseUnit)
+  )
+})
+
+const baseUnitCode = computed(
+  () => (String(editing.value?.baseUnit || 'G').toUpperCase() as 'G' | 'ML' | 'PCS')
 )
 
-const ratioLabel = computed(() => {
-  const unit = BaseUnitLabels[editing.value?.baseUnit || ''] || ''
-  return unit ? `一采购单位等于多少${unit}` : '换算'
+const packagingSpec = computed<PackagingSpec>(() => ({
+  links: editForm.links.map((link) => ({
+    count: Number(link.count),
+    unit: String(link.unit || '').trim()
+  })),
+  amount: Number(editForm.amount),
+  amountUnit: baseUnitCode.value,
+  ...(editForm.productModel ? { printedText: editForm.productModel } : {})
+}))
+
+const packagingPreview = computed(() => {
+  const text = formatPackagingText(packagingSpec.value, editForm.purchaseUnit)
+  const ratio = ratioOf(packagingSpec.value)
+  return text ? `${text} = ${ratio} ${baseUnitLabel.value}` : '请先填层级'
 })
+
+const addPackagingLink = () => {
+  if (editForm.links.length >= 3) {
+    ElMessage.warning('最多三层（再深就不是包装了）')
+    return
+  }
+  editForm.links.push({ count: 1, unit: '' })
+}
+
+const removePackagingLink = () => {
+  editForm.links.pop()
+}
 
 const openEdit = (row: StaffCreatedProcurementSku) => {
   editing.value = row
@@ -334,7 +457,16 @@ const openEdit = (row: StaffCreatedProcurementSku) => {
   editForm.brand = row.brand || ''
   editForm.productModel = row.productModel || ''
   editForm.purchaseUnit = row.purchaseUnit || ''
-  editForm.purchaseToBaseRatio = row.purchaseToBaseRatio || 0
+  const spec = row.packaging || legacyPackaging(
+    row.purchaseToBaseRatio,
+    row.baseUnit,
+    row.productModel
+  )
+  editForm.links = (spec.links || []).map((link) => ({
+    count: Number(link.count),
+    unit: link.unit
+  }))
+  editForm.amount = Number(spec.amount || 0)
   editForm.purchaseChannel = row.purchaseChannel || ''
   editForm.currentPurchasePrice = row.currentPurchasePrice || 0
   editForm.isActive = row.isActive
@@ -347,7 +479,19 @@ const saveEdit = async () => {
     ElMessage.warning('商品名称不能为空')
     return
   }
-  if (!editForm.purchaseToBaseRatio || editForm.purchaseToBaseRatio <= 0) {
+  if (!editForm.purchaseUnit) {
+    ElMessage.warning('请选择采购单位')
+    return
+  }
+  const incompleteLink = editForm.links.find(
+    (link) => !Number.isFinite(Number(link.count)) || Number(link.count) <= 0 ||
+      !String(link.unit || '').trim()
+  )
+  if (incompleteLink) {
+    ElMessage.warning('每一层都要填数量和单位')
+    return
+  }
+  if (!editForm.amount || editForm.amount <= 0) {
     ElMessage.warning(`${ratioLabel.value}必须大于 0`)
     return
   }
@@ -362,7 +506,15 @@ const saveEdit = async () => {
         brand: editForm.brand.trim() || null,
         productModel: editForm.productModel.trim() || null,
         purchaseUnit: editForm.purchaseUnit || null,
-        purchaseToBaseRatio: editForm.purchaseToBaseRatio,
+        // 层级是唯一事实：倍数由服务端派生，前端不再单独提交
+        packaging: {
+          links: packagingSpec.value.links,
+          amount: packagingSpec.value.amount,
+          amountUnit: baseUnitCode.value,
+          ...(editForm.productModel
+            ? { printedText: editForm.productModel.trim() }
+            : {})
+        },
         purchaseChannel: editForm.purchaseChannel.trim() || null,
         currentPurchasePrice: editForm.currentPurchasePrice,
         isActive: editForm.isActive
@@ -431,6 +583,7 @@ async function loadChannelOptions() {
 onMounted(() => {
   loadIngredientOptions()
   loadChannelOptions()
+  loadPurchaseUnitDict()
   load()
 })
 </script>
@@ -468,5 +621,27 @@ onMounted(() => {
 .empty-hint {
   padding: 24px 0;
   color: #9a9384;
+}
+.packaging-editor {
+  width: 100%;
+}
+.packaging-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.packaging-prefix {
+  font-size: 13px;
+  color: #6b6455;
+}
+.packaging-times {
+  color: #9a9384;
+}
+.packaging-unit {
+  font-size: 13px;
+  color: #6b6455;
+  min-width: 32px;
 }
 </style>

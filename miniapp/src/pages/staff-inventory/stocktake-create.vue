@@ -169,6 +169,8 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 /** 只把改动过的点发上去，避免一次全量提交几百个明细点。 */
 const dirtyPortions = new Set<string>();
 const dirtyLines = new Set<string>();
+/** 正在进行的保存；点“下一步”时先等它落地，避免核对到旧数据。 */
+let inFlight: Promise<boolean> | null = null;
 
 const isOpening = computed(() => stocktakeType.value === 'OPENING');
 
@@ -345,29 +347,42 @@ const tooBigNumber = () =>
   );
 
 const saveNow = async (): Promise<boolean> => {
-  if (!stocktakeId.value || saving.value) return true;
+  if (inFlight) {
+    await inFlight;
+  }
+  if (!stocktakeId.value) return true;
+  if (dirtyPortions.size === 0 && dirtyLines.size === 0) return true;
   if (tooBigNumber()) {
     uni.showToast({ title: '数量只能填数字', icon: 'none' });
     return false;
   }
-  if (dirtyPortions.size === 0 && dirtyLines.size === 0) return true;
-  saving.value = true;
-  try {
-    await saveStocktakeLines(stocktakeId.value, {
-      portions: buildPortionPayload(),
-      lines: buildLinePayload(),
-    });
-    dirtyPortions.clear();
-    dirtyLines.clear();
-    const now = new Date();
-    savedAt.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    return true;
-  } catch (err: any) {
-    uni.showToast({ title: err?.message || '没存上，稍后自动重试', icon: 'none' });
-    return false;
-  } finally {
-    saving.value = false;
-  }
+
+  const task = (async () => {
+    saving.value = true;
+    try {
+      await saveStocktakeLines(stocktakeId.value, {
+        portions: buildPortionPayload(),
+        lines: buildLinePayload(),
+      });
+      dirtyPortions.clear();
+      dirtyLines.clear();
+      const now = new Date();
+      savedAt.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      return true;
+    } catch (err: any) {
+      uni.showToast({
+        title: err?.message || '没存上，稍后自动重试',
+        icon: 'none',
+      });
+      return false;
+    } finally {
+      saving.value = false;
+      inFlight = null;
+    }
+  })();
+
+  inFlight = task;
+  return task;
 };
 
 /** 输入停止 800ms 后自动保存（不是每次按键都发请求）。 */

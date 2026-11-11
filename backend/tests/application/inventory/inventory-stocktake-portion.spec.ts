@@ -159,6 +159,27 @@ describe('InventoryService stocktake portions', () => {
     );
     expect(oilPortions).toHaveLength(1);
     expect(oilPortions[0].procurementSkuId).toBeNull();
+
+    // 明细点里的空商品 ID 不能混进名称查询，否则 Prisma 会报 in: [null]
+    const skuQueryIds = prisma.procurementSku.findMany.mock.calls
+      .map((call: any[]) => call[0]?.where?.id?.in ?? [])
+      .flat();
+    expect(skuQueryIds).not.toContain(null);
+  });
+
+  it('盲盘 DTO 带上盘点类型，前端才知道是期初', async () => {
+    prisma.ingredient.findMany.mockResolvedValue([ingredient()]);
+    prisma.inventoryStocktake.findUnique.mockResolvedValue(
+      stocktake([line()], { type: 'OPENING' }),
+    );
+
+    const draft: any = await service.startStocktake({
+      userId: 'u1',
+      type: 'OPENING',
+    });
+
+    expect(draft.type).toBe('OPENING');
+    expect(draft.lines[0]).not.toHaveProperty('expectedQuantityG');
   });
 
   it('同一原材料的多个明细点汇总成行实盘，差异只算一次', async () => {

@@ -2271,6 +2271,7 @@ export class InventoryService {
   private toBlindStocktakeDto(dto: InventoryStocktakeDto) {
     return {
       id: dto.id,
+      type: dto.type,
       status: dto.status,
       note: dto.note,
       createdBy: dto.createdBy,
@@ -2404,6 +2405,7 @@ export class InventoryService {
               select: {
                 id: true,
                 name: true,
+                type: true,
                 baseUnit: true,
                 unitDisplayLabel: true,
               },
@@ -2507,12 +2509,14 @@ export class InventoryService {
     const procurementSkuIds = Array.from(
       new Set(
         stocktakes.flatMap((stocktake) =>
-          (stocktake.lines || []).flatMap((line: any) => [
-            line.procurementSkuId,
-            ...(line.portions || []).map(
-              (portion: any) => portion.procurementSkuId,
-            ),
-          ]),
+          (stocktake.lines || []).flatMap((line: any) =>
+            [
+              line.procurementSkuId,
+              ...(line.portions || []).map(
+                (portion: any) => portion.procurementSkuId,
+              ),
+            ].filter(Boolean),
+          ),
         ),
       ),
     );

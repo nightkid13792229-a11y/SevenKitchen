@@ -522,7 +522,7 @@ Expected: FAIL（脚本不存在）。
 
 - `fitz.open(path)`；`doc.get_toc()` 返回 `[level, title, page]`：`pageFrom = page`，`pageTo = 下一条的 page - 1`（最后一条到 `pageCount`）；为空时写一条“全文 1..N”；
 - 页文本 `page.get_text("text")`；块用 `page.get_text("dict")["blocks"]`，按行合并成块，保留 bbox；
-- 表：`page.find_tables().tables`，每张表加一个 `kind="table"` 块（bbox 来自 `table.bbox`），不取行列；表题取 bbox 上方最近文本块的首行，只有匹配 `Table|TABLE` 才写入 `caption`，否则 null；
+- 表：`page.find_tables().tables`，每张表加一个 `kind="table"` 块（bbox 来自 `table.bbox`），不取行列；**find_tables 是线检测，borderless 表（如 SACN5 37 的 Table 37-9）可能检测不到，这是已知限制：页图仍在，`read` 仍能看表；不为了出块去猜外框**；表题取 bbox 上方最近文本块的首行，只有匹配 `Table|TABLE` 才写入 `caption`，否则 null；
 - 图：`page.get_images(full=True)` + `page.get_image_rects(xref)`，加 `kind="figure"` 块；图注取 bbox 下方最近文本块首行，只有匹配 `Figure|FIGURE` 才写入 `caption`，否则 null；
 - 块 ID：`{sourceId}-p{pageNo:04d}-b{order:04d}`；页 ID：`{sourceId}-p{pageNo:04d}`；
 - 非 PDF：`.txt` 直读；`.xml`/`.html` 用正则去标签；`.epub` 用 `zipfile` 读 XHTML；按 ~3,000 字切伪页（优先段落/句号边界），`hasTextLayer=true`，`imagePath=null`；`.docx` 等未支持格式明确报错并跳过，不静默漏；
@@ -530,7 +530,7 @@ Expected: FAIL（脚本不存在）。
 - `collection`：默认取归档相对路径的第一段并大写（`sacn5/...` → `SACN5`）；允许 `--collection` 覆盖；
 - `status` 默认 `unknown`（没有可靠来源状态就不猜 current）；`license` 默认 `internal`；`title` 依次取 manifest 说明 / PDF metadata title / 文件名；`publisher` 取 collection；`version`/`publishedYear` 没有可靠来源就留 `null`；
 - checksum：优先用 `manifest.csv` 的 SHA256；没有就计算文件 SHA256；两者都有但不一致 → 报错，不导入；
-- 从归档根目录的 `manifest.csv` 读 `来源ID / 相对路径 / SHA256 / 说明`，用 `来源ID` 作为 `source.id`（保持 `sacn5-chapters-SACN5-37` 这类稳定 ID）；没有 manifest 时才用文件名去扩展名；
+- 从归档根目录的 `manifest.csv` 读 `来源ID / 相对路径 / SHA256 / 说明`；**`source.id` 用 `--ids-from` 文件名（或相对路径去扩展名）的稳定 docId**（如 `sacn5-chapters-SACN5-37`），不要用 manifest 的 `来源ID` —— 后者是归集键，159 行只有 22 个唯一值，照用会让 69 本书撞 id；manifest 的 `来源ID` 只用于 collection/来源归组；
 - `--ids-from docs/knowledge-base/source-layer`：只解析该目录文件名对应的 159 个 docId（跳过 `_stats.json` / `_expected-counts.json` / `_excluded-README.json` 这类下划线文件），跳过 README/MANIFEST/重复文件；默认就用这个白名单，数量不是 159 时先停；
 - 输出一个 `<sourceId>.json`；`--force` 覆盖，否则跳过已存在。
 - `render-page-images.py`：遍历 PDF 页，`page.get_pixmap(dpi=110)`，JPEG 质量 78，写 `<out>/<sourceId>/p0001.jpg`；已存在跳过；

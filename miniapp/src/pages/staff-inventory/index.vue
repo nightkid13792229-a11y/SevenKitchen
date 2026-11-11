@@ -2,16 +2,19 @@
   <view class="page">
     <view class="date-row">
       <text class="date">{{ dateText }} · 截至 {{ asOf }}</text>
-      <text class="last-stocktake" @tap="goRecords">上次盘点 {{ lastStocktakeText }}</text>
+      <view class="records-entry" @tap="goRecords">
+        <text>上次盘点 {{ lastStocktakeText }}</text>
+        <text class="entry-arrow">记录 ›</text>
+      </view>
     </view>
 
     <view
-      v-if="summary.needsReplenishment > 0 || summary.lowStock > 0"
+      v-if="summary.needsReplenishment + summary.lowStock > 0"
       class="warning"
-      @tap="openDrawer('needs')"
+      @tap="goReplenishPage"
     >
       <text class="warning-text">
-        {{ summary.needsReplenishment }} 项需补货 · {{ summary.lowStock }} 项偏低
+        {{ summary.needsReplenishment + summary.lowStock }} 项该补货
       </text>
       <text class="arrow">›</text>
     </view>
@@ -45,8 +48,10 @@
       <button class="retry" @tap="load">重试</button>
     </view>
     <view v-else-if="filteredItems.length === 0" class="state">
-      <text class="state-title">{{ keyword ? '没搜到' : '这里还没有原料' }}</text>
-      <text class="state-hint">换个关键词或筛选看看。</text>
+      <text class="state-title">{{ keyword ? '没搜到' : '这个筛选下没有原料' }}</text>
+      <text class="state-hint">
+        {{ keyword ? '换个关键词试试。' : '换个筛选，或者看全部。' }}
+      </text>
     </view>
 
     <view v-else class="list">
@@ -99,17 +104,26 @@
         </view>
 
         <view class="actions">
-          <button class="btn ghost" @tap="openAdjust(item)">记一笔</button>
-          <button class="btn ghost" @tap="openDrawer('ledger', item)">看流水</button>
-          <button class="btn primary" @tap="goReplenish(item)">去补货</button>
+          <text class="link" @tap="openDrawer('ledger', item)">看流水</text>
+          <text v-if="isNeeds(item)" class="link" @tap="openAdjust(item)">领用/报废</text>
+          <button
+            v-if="isNeeds(item)"
+            class="btn primary"
+            @tap="goReplenish(item)"
+          >
+            去补货
+          </button>
+          <button v-else class="btn ghost" @tap="openAdjust(item)">
+            领用/报废
+          </button>
         </view>
       </view>
     </view>
 
     <view class="bottom">
       <button class="btn ghost" @tap="goStocktake">盘点</button>
-      <button class="btn primary" @tap="openDrawer('needs')">
-        补货清单
+      <button class="btn primary" @tap="goReplenishPage">
+        补货清单 {{ summary.needsReplenishment + summary.lowStock || '' }}
       </button>
     </view>
 
@@ -134,7 +148,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { onShow } from '@dcloudio/uni-app';
+import { onPullDownRefresh, onShow } from '@dcloudio/uni-app';
 import InventoryDrawer from './components/InventoryDrawer.vue';
 import AdjustmentSheet from './components/AdjustmentSheet.vue';
 import {
@@ -147,7 +161,7 @@ const home = ref<InventoryHome | null>(null);
 const loading = ref(true);
 const error = ref('');
 const keyword = ref('');
-const filter = ref<'ALL' | 'NEEDS' | 'LOW' | 'NO_POLICY'>('ALL');
+const filter = ref<'ALL' | 'NEEDS' | 'NO_POLICY'>('ALL');
 const asOf = ref('');
 const drawerVisible = ref(false);
 const drawerTab = ref<'needs' | 'ledger'>('needs');
@@ -182,28 +196,25 @@ const filters = computed(() => [
   { value: 'ALL' as const, label: '全部', count: keywordItems.value.length },
   {
     value: 'NEEDS' as const,
-    label: '需补货',
-    count: summary.value.needsReplenishment,
+    label: '该补货',
+    count: keywordItems.value.filter((item) => isNeeds(item)).length,
   },
-  { value: 'LOW' as const, label: '低库存', count: summary.value.lowStock },
   {
     value: 'NO_POLICY' as const,
-    label: '未设阈值',
-    count: keywordItems.value.filter((item) => item.stockStatus === 'NO_POLICY').length,
+    label: '没设安全线',
+    count: keywordItems.value.filter((item) => item.stockStatus === 'NO_POLICY')
+      .length,
   },
 ]);
 
+const isNeeds = (item: InventoryHomeItem) =>
+  item.stockStatus === 'NEEDS_REPLENISHMENT' ||
+  item.stockStatus === 'LOW_STOCK';
+
 const filteredItems = computed(() =>
   keywordItems.value.filter((item) => {
-    if (filter.value === 'NEEDS' && item.stockStatus !== 'NEEDS_REPLENISHMENT') {
-      return false;
-    }
-    if (filter.value === 'LOW' && item.stockStatus !== 'LOW_STOCK') {
-      return false;
-    }
-    if (filter.value === 'NO_POLICY' && item.stockStatus !== 'NO_POLICY') {
-      return false;
-    }
+    if (filter.value === 'NEEDS') return isNeeds(item);
+    if (filter.value === 'NO_POLICY') return item.stockStatus === 'NO_POLICY';
     return true;
   }),
 );
@@ -251,11 +262,10 @@ const formatTime = (value: string) => {
 };
 
 const badgeText = (item: InventoryHomeItem) => {
-  if (item.currentStock < 0) return '待核实';
-  if (item.stockStatus === 'NEEDS_REPLENISHMENT') return '需补货';
-  if (item.stockStatus === 'LOW_STOCK') return '偏低';
-  if (item.stockStatus === 'NO_POLICY') return '未设阈值';
-  return '充足';
+  if (item.currentStock < 0) return '数量为负';
+  if (isNeeds(item)) return '该补货';
+  if (item.stockStatus === 'NO_POLICY') return '没设安全线';
+  return '够用';
 };
 
 const badgeClass = (item: InventoryHomeItem) => {
@@ -268,13 +278,17 @@ const badgeClass = (item: InventoryHomeItem) => {
 
 const load = async () => {
   if (!home.value) loading.value = true;
-  error.value = '';
   try {
     home.value = await getInventoryHome();
+    error.value = '';
     const now = new Date();
     asOf.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   } catch (err: any) {
-    error.value = err?.message || '请稍后重试';
+    // 刷新失败不清空已有数据，只提示“显示的是哪一刻的”。
+    error.value = home.value ? '' : err?.message || '请稍后重试';
+    if (home.value) {
+      uni.showToast({ title: '没连上，显示的是上次数据', icon: 'none' });
+    }
   } finally {
     loading.value = false;
   }
@@ -284,6 +298,11 @@ onShow(() => {
   load();
 });
 
+onPullDownRefresh(async () => {
+  await load();
+  uni.stopPullDownRefresh();
+});
+
 const openDrawer = (tab: 'needs' | 'ledger', item?: InventoryHomeItem) => {
   drawerTab.value = tab;
   drawerIngredientId.value = item?.id;
@@ -291,12 +310,16 @@ const openDrawer = (tab: 'needs' | 'ledger', item?: InventoryHomeItem) => {
   drawerVisible.value = true;
 };
 
-const goReplenish = (_item: InventoryHomeItem) => {
+const goReplenishPage = () => {
   drawerVisible.value = false;
-  // 补货改版：不再先建计划单，统一到「补货」页传订单截图记账。
   uni.navigateTo({
     url: '/pages/staff-purchasing/replenishment/index',
   });
+};
+
+const goReplenish = (_item: InventoryHomeItem) => {
+  // 2026-11-11：不再单独弹清单，统一进「补货」页（页头会列出缺什么）。
+  goReplenishPage();
 };
 
 const openAdjust = (item?: InventoryHomeItem) => {
@@ -335,10 +358,15 @@ const goStocktake = () => {
   font-size: 24rpx;
   color: #7a8a80;
 }
-.last-stocktake {
+.records-entry {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  min-height: 44rpx;
   font-size: 24rpx;
   color: #4b5b51;
 }
+.entry-arrow { color: #1e3a2f; font-weight: 500; }
 .warning {
   display: flex;
   align-items: center;
@@ -509,9 +537,22 @@ const goStocktake = () => {
   gap: 10rpx;
   margin-top: 18rpx;
 }
+.actions {
+  align-items: center;
+}
 .actions .btn {
+  flex: 0 0 auto;
+  min-width: 200rpx;
+  padding: 0 24rpx;
   font-size: 24rpx;
 }
+.link {
+  margin-right: auto;
+  font-size: 24rpx;
+  color: #5f6f64;
+  padding: 12rpx 12rpx 12rpx 0;
+}
+.link + .link { margin-right: 0; margin-left: 8rpx; }
 .btn {
   flex: 1;
   height: 72rpx;

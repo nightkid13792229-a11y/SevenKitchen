@@ -13,7 +13,9 @@
           {{ skippedCount }} 项未盘 · 差异 {{ varianceCount }} 项
         </text>
         <text v-if="mode === 'preview'" class="sub">
-          小差异自动入账，大差异等管理员复核。
+          {{ isOpening
+            ? '期初盘点：提交后全部按实称入账。'
+            : '提交后：容差内的差异立即入账，超出的等管理员复核。' }}
         </text>
       </view>
 
@@ -33,13 +35,27 @@
             <text class="badge" :class="badgeClass(line)">{{ badgeText(line) }}</text>
           </view>
           <view class="row-nums">
-            <text>账面 {{ fmt(line.expectedQuantityG) }}</text>
+            <text>账面 {{ fmt(line.expectedQuantityG) }}{{ line.stockUnitLabel }}</text>
             <text>
-              实盘 {{ line.countedQuantityG === null ? '未盘' : fmt(line.countedQuantityG) }}
+              实盘 {{ line.countedQuantityG === null ? '未盘' : fmt(line.countedQuantityG) }}{{ line.stockUnitLabel }}
             </text>
             <text :class="deltaClass(line)">
-              差 {{ signed(line.deltaG) }}
+              差 {{ signed(line.deltaG) }}{{ line.stockUnitLabel }}
             </text>
+          </view>
+
+          <view v-if="line.portions && line.portions.length > 1" class="portions">
+            <text
+              v-for="portion in line.portions"
+              :key="portion.id"
+              class="portion"
+            >
+              {{ portionLabel(portion) }} {{ fmt(portion.countedQuantityG) }}{{ line.stockUnitLabel }}
+            </text>
+          </view>
+
+          <view v-if="mode === 'preview'" class="row-actions">
+            <text class="exclude" @tap="excludeLine(line)">不调此项</text>
           </view>
         </view>
       </view>
@@ -62,7 +78,7 @@
           :disabled="submitting"
           @tap="onSubmit"
         >
-          {{ overCount > 0 ? '提交复核' : '提交并入账' }}
+          {{ isOpening ? '提交并入账' : overCount > 0 ? '提交（等复核）' : '提交盘点' }}
         </button>
         <button v-else class="btn primary" @tap="goRecords">返回记录</button>
       </view>
@@ -76,7 +92,9 @@ import { onLoad } from '@dcloudio/uni-app';
 import {
   getStocktake,
   previewStocktake,
+  saveStocktakeLines,
   submitStocktake,
+  type InventoryStocktakePortion,
 } from './api/inventory';
 
 type Line = {
@@ -88,12 +106,14 @@ type Line = {
   deltaG: number | null;
   isCounted: boolean;
   withinTolerance: boolean | null;
+  portions: InventoryStocktakePortion[];
 };
 
 const loading = ref(true);
 const submitting = ref(false);
 const error = ref('');
 const mode = ref<'preview' | 'result'>('result');
+const isOpening = ref(false);
 const stocktakeId = ref('');
 const note = ref('');
 const lines = ref<Line[]>([]);
@@ -162,8 +182,9 @@ const load = async () => {
   error.value = '';
   try {
     if (mode.value === 'preview') {
-      const preview = await previewStocktake(stocktakeId.value, true);
-      lines.value = preview.lines.map((line) => ({
+      const preview: any = await previewStocktake(stocktakeId.value, true);
+      isOpening.value = preview.type === 'OPENING';
+      lines.value = preview.lines.map((line: any) => ({
         ingredientId: line.ingredientId,
         ingredientName: line.ingredientName,
         stockUnitLabel: line.stockUnitLabel,
@@ -172,6 +193,7 @@ const load = async () => {
         deltaG: line.deltaG,
         isCounted: line.isCounted,
         withinTolerance: line.withinTolerance,
+        portions: line.portions || [],
       }));
     } else {
       const detail: any = await getStocktake(stocktakeId.value);
@@ -184,6 +206,7 @@ const load = async () => {
         deltaG: line.deltaG,
         isCounted: line.isCounted,
         withinTolerance: line.withinTolerance,
+        portions: line.portions || [],
       }));
     }
   } catch (err: any) {
@@ -208,13 +231,55 @@ const backToRecords = () => {
   uni.redirectTo({ url: '/pages/staff-inventory/stocktake-records' });
 };
 
+const portionLabel = (portion: InventoryStocktakePortion) => {
+  const name = portion.procurementSkuName || '整件';
+  return portion.locationLabel ? `${name} · ${portion.locationLabel}` : name;
+};
+
+/** 不调此项 = 丢弃这一项的实盘（按未盘处理，不改库存）。 */
+const excludeLine = async (line: Line) => {
+  const confirmed = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '不调此项',
+      content: `「${line.ingredientName}」这次不调整库存，实盘数会丢弃。继续吗？`,
+      confirmText: '不调',
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    });
+  });
+  if (!confirmed) return;
+
+  try {
+    if (line.portions && line.portions.length > 0) {
+      await saveStocktakeLines(stocktakeId.value, {
+        portions: line.portions.map((portion) => ({
+          id: portion.id,
+          countedQuantityG: null,
+        })),
+      });
+    } else {
+      await saveStocktakeLines(stocktakeId.value, {
+        lines: [{ ingredientId: line.ingredientId, countedQuantityG: null }],
+      });
+    }
+    await load();
+  } catch (err: any) {
+    uni.showToast({ title: err?.message || '操作失败', icon: 'none' });
+  }
+};
+
 const onSubmit = async () => {
   if (submitting.value) return;
   submitting.value = true;
   try {
     const result = await submitStocktake(stocktakeId.value, note.value.trim() || undefined);
     uni.showToast({
-      title: result.status === 'APPLIED' ? '已自动入账' : '已提交复核',
+      title:
+        result.status === 'APPLIED'
+          ? isOpening.value
+            ? '期初已入账'
+            : '已自动入账'
+          : '已提交复核',
       icon: 'success',
     });
     setTimeout(backToRecords, 600);
@@ -323,6 +388,29 @@ const goRecords = () => {
   margin-top: 10rpx;
   font-size: 24rpx;
   color: #4b5b51;
+}
+.portions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx 16rpx;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #7a8a80;
+}
+.portion {
+  background: #f4f7f1;
+  border-radius: 8rpx;
+  padding: 2rpx 10rpx;
+}
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6rpx;
+}
+.exclude {
+  font-size: 24rpx;
+  color: #8a5a44;
+  padding: 6rpx 0 0 12rpx;
 }
 .positive {
   color: #1f6b3a;

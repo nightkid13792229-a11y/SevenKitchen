@@ -83,6 +83,16 @@ export interface InventoryLedgerItem {
   createdAt: string;
 }
 
+export interface InventoryStocktakePortion {
+  id: string;
+  lineId: string;
+  procurementSkuId: string | null;
+  procurementSkuName: string | null;
+  locationLabel: string | null;
+  countedQuantityG: number | null;
+  isCounted: boolean;
+}
+
 export interface InventoryStocktakeLineItem {
   id: string;
   ingredientId: string;
@@ -97,10 +107,12 @@ export interface InventoryStocktakeLineItem {
   isCounted: boolean;
   countedAt?: string | null;
   withinTolerance: boolean | null;
+  portions?: InventoryStocktakePortion[];
 }
 
 export interface InventoryStocktakeItem {
   id: string;
+  type?: 'OPENING' | 'ROUTINE';
   status: InventoryStocktakeStatus;
   note: string | null;
   createdBy?: string | null;
@@ -119,6 +131,7 @@ export interface InventoryStocktakeItem {
 
 export interface StocktakeDraftItem {
   id: string;
+  type?: 'OPENING' | 'ROUTINE';
   status: InventoryStocktakeStatus;
   note: string | null;
   createdAt: string;
@@ -133,6 +146,7 @@ export interface StocktakeDraftItem {
     countedQuantityG: number | null;
     isCounted: boolean;
     countedAt?: string | null;
+    portions?: InventoryStocktakePortion[];
   }>;
 }
 
@@ -194,11 +208,11 @@ export function getStocktakeDraft() {
   });
 }
 
-export function startStocktake(note?: string) {
+export function startStocktake(note?: string, type: 'OPENING' | 'ROUTINE' = 'ROUTINE') {
   return requestData<StocktakeDraftItem>({
     url: '/staff/inventory/stocktakes',
     method: 'POST',
-    data: note ? { note } : {},
+    data: { ...(note ? { note } : {}), type },
   });
 }
 
@@ -211,12 +225,37 @@ export function getStocktake(id: string) {
 
 export function saveStocktakeLines(
   id: string,
-  lines: Array<{ ingredientId: string; countedQuantityG: number | null }>,
+  payload: {
+    lines?: Array<{ ingredientId: string; countedQuantityG: number | null }>;
+    portions?: Array<{
+      id: string;
+      countedQuantityG: number | null;
+      remove?: boolean;
+    }>;
+    newPortions?: Array<{
+      lineId: string;
+      procurementSkuId?: string | null;
+      locationLabel?: string | null;
+    }>;
+  },
 ) {
   return requestData<StocktakeDraftItem>({
     url: `/staff/inventory/stocktakes/${id}/lines`,
     method: 'PATCH',
-    data: { lines },
+    data: payload,
+  });
+}
+
+/** 员工端：领用/报废记录 */
+export function getInventoryAdjustments(params?: {
+  limit?: number;
+  pending?: boolean;
+  category?: InventoryAdjustmentCategory;
+}) {
+  return requestData<InventoryAdjustmentItem[]>({
+    url: '/staff/inventory/adjustments',
+    method: 'GET',
+    data: params,
   });
 }
 

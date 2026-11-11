@@ -22,13 +22,24 @@
     <template v-else>
       <view class="top">
         <view class="top-line">
-          <text class="progress-text">已盘 {{ countedCount }} / {{ lines.length }}</text>
+          <text class="progress-text">已盘 {{ countedLines }} / {{ lines.length }}</text>
           <text class="cancel" @tap="onCancel">取消盘点</text>
         </view>
         <view class="bar">
           <view class="bar-fill" :style="{ width: progressPercent + '%' }" />
         </view>
-        <text class="hint">只填实称；留空 = 没盘，不会改库存。</text>
+        <text class="hint">
+          {{ isOpening ? '期初盘点：按实称录入，提交后全部入账。' : '按实称录入；留空 = 没盘，不会改库存。' }}
+        </text>
+      </view>
+
+      <view class="search">
+        <input
+          v-model="keyword"
+          class="search-input"
+          placeholder="搜原料 / 商品"
+          confirm-type="search"
+        />
       </view>
 
       <view class="filters">
@@ -45,37 +56,67 @@
 
       <scroll-view scroll-y class="list">
         <view
-          v-for="(line, index) in visibleLines"
-          :key="line.ingredientId"
+          v-for="line in visibleLines"
+          :key="line.id"
           class="row"
-          :class="{ done: isCounted(line) }"
+          :class="{ done: isLineCounted(line) }"
         >
-          <view class="row-copy">
+          <view class="row-head">
             <text class="name">{{ line.ingredientName }}</text>
             <text class="unit">{{ line.stockUnitLabel }}</text>
+            <text v-if="portionCount(line) > 1" class="line-total">
+              合计 {{ fmt(lineTotal(line)) }}
+            </text>
           </view>
-          <input
-            class="input"
-            type="digit"
-            :value="inputs[line.ingredientId] || ''"
-            :focus="focusIndex === index"
-            confirm-type="next"
-            placeholder="未盘"
-            @input="onInput(line, $event)"
-            @confirm="focusNext(index)"
-          />
-          <text class="check" :class="{ on: isCounted(line) }">
-            {{ isCounted(line) ? '✓' : '' }}
-          </text>
+
+          <view
+            v-for="portion in line.portions || []"
+            :key="portion.id"
+            class="portion"
+          >
+            <text class="p-label">
+              {{ portionLabel(portion) }}
+            </text>
+            <input
+              class="input"
+              type="digit"
+              :value="values[portion.id] || ''"
+              confirm-type="next"
+              placeholder="未盘"
+              @input="onPortionInput(portion, $event)"
+            />
+            <text class="check" :class="{ on: isPortionCounted(portion) }">
+              {{ isPortionCounted(portion) ? '✓' : '' }}
+            </text>
+          </view>
+
+          <view v-if="!line.portions || line.portions.length === 0" class="portion">
+            <text class="p-label">整件</text>
+            <input
+              class="input"
+              type="digit"
+              :value="lineValues[line.id] || ''"
+              confirm-type="next"
+              placeholder="未盘"
+              @input="onLineInput(line, $event)"
+            />
+            <text class="check" :class="{ on: isLineCounted(line) }">
+              {{ isLineCounted(line) ? '✓' : '' }}
+            </text>
+          </view>
+
+          <view class="add" @tap="addPortion(line)">＋ 再记一处（换冰柜 / 批次）</view>
         </view>
 
         <view v-if="visibleLines.length === 0" class="state soft">
-          <text>这个分组里没有原料</text>
+          <text>{{ keyword ? '没搜到' : '这个筛选下没有原料' }}</text>
         </view>
       </scroll-view>
 
+      <view class="autosave">
+        {{ saving ? '保存中…' : `已自动保存 ${savedAt || '—'}` }} · 没填完也能先走
+      </view>
       <view class="bottom">
-        <button class="btn ghost" :loading="saving" @tap="saveDraft()">存草稿</button>
         <button class="btn primary" :loading="saving" @tap="onNext">
           下一步（核对）
         </button>
@@ -85,94 +126,147 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue';
-import { onLoad } from '@dcloudio/uni-app';
+import { computed, ref } from 'vue';
+import { onHide, onLoad, onUnload } from '@dcloudio/uni-app';
 import {
   cancelStocktake,
   getStocktakeDraft,
   previewStocktake,
   saveStocktakeLines,
   startStocktake,
+  type InventoryStocktakePortion,
+  type StocktakeDraftItem,
 } from './api/inventory';
 
 type DraftLine = {
+  id: string;
   ingredientId: string;
   ingredientName: string;
   ingredientType?: string | null;
   stockUnitLabel: string;
   countedQuantityG: number | null;
+  portions: InventoryStocktakePortion[];
 };
 
 const filters = [
   { value: 'ALL', label: '全部' },
-  { value: 'FOOD', label: '食材' },
-  { value: 'SUPPLEMENT', label: '补剂' },
-  { value: 'PACKAGING', label: '包材' },
+  { value: 'TODO', label: '未盘' },
+  { value: 'DONE', label: '已盘' },
 ] as const;
 
 const loading = ref(true);
 const error = ref('');
 const saving = ref(false);
+const savedAt = ref('');
 const stocktakeId = ref('');
+const stocktakeType = ref<'OPENING' | 'ROUTINE'>('ROUTINE');
 const lines = ref<DraftLine[]>([]);
-const inputs = ref<Record<string, string>>({});
+const values = ref<Record<string, string>>({});
+const lineValues = ref<Record<string, string>>({});
+const keyword = ref('');
 const filter = ref<(typeof filters)[number]['value']>('ALL');
-const focusIndex = ref(-1);
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
-const isCounted = (line: DraftLine) =>
-  (inputs.value[line.ingredientId] || '').trim() !== '';
+const isOpening = computed(() => stocktakeType.value === 'OPENING');
 
-const countedCount = computed(
-  () => lines.value.filter((line) => isCounted(line)).length,
+const fmt = (value: number | null | undefined) => {
+  if (value === null || value === undefined) return '—';
+  const number = Number(value);
+  return Number.isInteger(number) ? String(number) : number.toFixed(1);
+};
+
+const isPortionCounted = (portion: InventoryStocktakePortion) =>
+  (values.value[portion.id] || '').trim() !== '';
+
+const isLineCounted = (line: DraftLine) => {
+  if (line.portions && line.portions.length > 0) {
+    return line.portions.some((portion) => isPortionCounted(portion));
+  }
+  return (lineValues.value[line.id] || '').trim() !== '';
+};
+
+const countedLines = computed(
+  () => lines.value.filter((line) => isLineCounted(line)).length,
 );
 
 const progressPercent = computed(() =>
   lines.value.length
-    ? Math.round((countedCount.value / lines.value.length) * 100)
+    ? Math.round((countedLines.value / lines.value.length) * 100)
     : 0,
 );
 
-const visibleLines = computed(() =>
-  filter.value === 'ALL'
-    ? lines.value
-    : lines.value.filter((line) => line.ingredientType === filter.value),
-);
+const portionCount = (line: DraftLine) => (line.portions || []).length;
 
-const hydrate = (draft: any) => {
-  if (!draft?.id) {
-    throw new Error('盘点单没有生成，请重试');
-  }
+const portionLabel = (portion: InventoryStocktakePortion) => {
+  const name = portion.procurementSkuName || '整件';
+  return portion.locationLabel ? `${name} · ${portion.locationLabel}` : name;
+};
+
+const lineTotal = (line: DraftLine) =>
+  (line.portions || []).reduce(
+    (sum, portion) => sum + Number(values.value[portion.id] || 0),
+    0,
+  );
+
+const visibleLines = computed(() => {
+  const term = keyword.value.trim().toLowerCase();
+  return lines.value.filter((line) => {
+    if (filter.value === 'TODO' && isLineCounted(line)) return false;
+    if (filter.value === 'DONE' && !isLineCounted(line)) return false;
+    if (!term) return true;
+    const haystack = [line.ingredientName]
+      .concat((line.portions || []).map((p) => p.procurementSkuName || ''))
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(term);
+  });
+});
+
+const hydrate = (draft: StocktakeDraftItem) => {
+  if (!draft?.id) throw new Error('盘点单没有生成，请重试');
   stocktakeId.value = draft.id;
+  stocktakeType.value = draft.type === 'OPENING' ? 'OPENING' : 'ROUTINE';
   lines.value = (draft.lines || []).map((line: any) => ({
+    id: line.id,
     ingredientId: line.ingredientId,
     ingredientName: line.ingredientName,
     ingredientType: line.ingredientType,
     stockUnitLabel: line.stockUnitLabel,
     countedQuantityG: line.countedQuantityG,
+    portions: line.portions || [],
   }));
-  const nextInputs: Record<string, string> = {};
+
+  const nextValues: Record<string, string> = {};
+  const nextLineValues: Record<string, string> = {};
   for (const line of lines.value) {
-    nextInputs[line.ingredientId] =
-      line.countedQuantityG === null || line.countedQuantityG === undefined
-        ? ''
-        : String(line.countedQuantityG);
+    if (line.portions.length === 0) {
+      nextLineValues[line.id] =
+        line.countedQuantityG === null ? '' : String(line.countedQuantityG);
+      continue;
+    }
+    for (const portion of line.portions) {
+      nextValues[portion.id] =
+        portion.countedQuantityG === null
+          ? ''
+          : String(portion.countedQuantityG);
+    }
   }
-  inputs.value = nextInputs;
+  values.value = nextValues;
+  lineValues.value = nextLineValues;
 };
 
 const bootstrap = async () => {
   loading.value = true;
   error.value = '';
   try {
-    let current = (await getStocktakeDraft()) || (await startStocktake());
-    // 旧版本可能留下 0 行的空草稿：自动取消后重开，避免用户看到空列表。
+    let current = (await getStocktakeDraft()) || (await startStocktake(undefined, stocktakeType.value));
     if (current.lines?.length === 0 && current.id) {
       try {
         await cancelStocktake(current.id);
       } catch {
         // 草稿可能已被取消；继续尝试开新单
       }
-      current = await startStocktake();
+      current = await startStocktake(undefined, stocktakeType.value);
     }
     hydrate(current);
   } catch (err: any) {
@@ -182,65 +276,144 @@ const bootstrap = async () => {
   }
 };
 
-onLoad(() => {
+onLoad((options: any) => {
+  stocktakeType.value = options?.type === 'OPENING' ? 'OPENING' : 'ROUTINE';
   bootstrap();
 });
 
-const onInput = (line: DraftLine, event: any) => {
-  inputs.value = {
-    ...inputs.value,
-    [line.ingredientId]: event?.detail?.value ?? '',
-  };
-};
+onHide(() => {
+  void flushSave();
+});
 
-const focusNext = (index: number) => {
-  focusIndex.value = -1;
-  if (index >= visibleLines.value.length - 1) return;
-  nextTick(() => {
-    focusIndex.value = index + 1;
-  });
-};
+onUnload(() => {
+  void flushSave();
+});
 
-const buildPayload = () =>
-  lines.value.map((line) => {
-    const text = (inputs.value[line.ingredientId] || '').trim();
-    return {
-      ingredientId: line.ingredientId,
-      countedQuantityG: text === '' ? null : Number(text),
-    };
-  });
+const buildPortionPayload = () =>
+  lines.value.flatMap((line) =>
+    (line.portions || []).map((portion) => {
+      const text = (values.value[portion.id] || '').trim();
+      return {
+        id: portion.id,
+        countedQuantityG: text === '' ? null : Number(text),
+      };
+    }),
+  );
 
-const saveDraft = async (silent = false): Promise<boolean> => {
-  if (!stocktakeId.value || saving.value) return false;
+const buildLinePayload = () =>
+  lines.value
+    .filter((line) => (line.portions || []).length === 0)
+    .map((line) => {
+      const text = (lineValues.value[line.id] || '').trim();
+      return {
+        ingredientId: line.ingredientId,
+        countedQuantityG: text === '' ? null : Number(text),
+      };
+    });
+
+const tooBigNumber = () =>
+  Object.values(values.value).some(
+    (text) => text.trim() !== '' && !Number.isFinite(Number(text)),
+  ) ||
+  Object.values(lineValues.value).some(
+    (text) => text.trim() !== '' && !Number.isFinite(Number(text)),
+  );
+
+const saveNow = async (): Promise<boolean> => {
+  if (!stocktakeId.value || saving.value) return true;
+  if (tooBigNumber()) {
+    uni.showToast({ title: '数量只能填数字', icon: 'none' });
+    return false;
+  }
   saving.value = true;
   try {
-    const payload = buildPayload();
-    if (payload.some((line) => line.countedQuantityG !== null && (!Number.isFinite(line.countedQuantityG) || line.countedQuantityG < 0))) {
-      throw new Error('实盘数量必须是非负数字');
-    }
-    await saveStocktakeLines(stocktakeId.value, payload);
-    if (!silent) {
-      uni.showToast({ title: '已存草稿', icon: 'success' });
-    }
+    await saveStocktakeLines(stocktakeId.value, {
+      portions: buildPortionPayload(),
+      lines: buildLinePayload(),
+    });
+    const now = new Date();
+    savedAt.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     return true;
   } catch (err: any) {
-    if (!silent) {
-      uni.showToast({ title: err?.message || '保存失败', icon: 'none' });
-    }
+    uni.showToast({ title: err?.message || '没存上，稍后自动重试', icon: 'none' });
     return false;
   } finally {
     saving.value = false;
   }
 };
 
+/** 输入停止 800ms 后自动保存（不是每次按键都发请求）。 */
+const scheduleSave = () => {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    void saveNow();
+  }, 800);
+};
+
+const flushSave = async () => {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  if (stocktakeId.value) await saveNow();
+};
+
+const onPortionInput = (portion: InventoryStocktakePortion, event: any) => {
+  values.value = {
+    ...values.value,
+    [portion.id]: event?.detail?.value ?? '',
+  };
+  scheduleSave();
+};
+
+const onLineInput = (line: DraftLine, event: any) => {
+  lineValues.value = {
+    ...lineValues.value,
+    [line.id]: event?.detail?.value ?? '',
+  };
+  scheduleSave();
+};
+
+const addPortion = async (line: DraftLine) => {
+  const result = await new Promise<any>((resolve) => {
+    uni.showModal({
+      title: '再记一处',
+      editable: true,
+      placeholderText: '位置或批次，例如 冰柜2（可留空）',
+      success: (res) => resolve(res),
+      fail: () => resolve({}),
+    });
+  });
+  if (!result?.confirm) return;
+
+  const locationLabel = String(result.content || '').trim() || null;
+  const firstPortion = (line.portions || [])[0];
+  await flushSave();
+  try {
+    const draft = await saveStocktakeLines(stocktakeId.value, {
+      newPortions: [
+        {
+          lineId: line.id,
+          procurementSkuId: firstPortion?.procurementSkuId ?? null,
+          locationLabel,
+        },
+      ],
+    });
+    hydrate(draft as any);
+  } catch (err: any) {
+    uni.showToast({ title: err?.message || '加不上，稍后再试', icon: 'none' });
+  }
+};
+
 const onNext = async () => {
   if (saving.value) return;
-  if (countedCount.value === 0) {
+  if (countedLines.value === 0) {
     uni.showToast({ title: '先填至少一项实称', icon: 'none' });
     return;
   }
-  const skipped = lines.value.length - countedCount.value;
-  if (skipped > 0) {
+  const skipped = lines.value.length - countedLines.value;
+  if (skipped > 0 && !isOpening.value) {
     const confirmed = await new Promise<boolean>((resolve) => {
       uni.showModal({
         title: '还有未盘项',
@@ -253,9 +426,9 @@ const onNext = async () => {
     if (!confirmed) return;
   }
 
-  const saved = await saveDraft(true);
+  const saved = await saveNow();
   if (!saved) {
-    uni.showToast({ title: '草稿没保存上，检查网络后重试', icon: 'none' });
+    uni.showToast({ title: '没保存上，检查网络后重试', icon: 'none' });
     return;
   }
   try {
@@ -271,9 +444,7 @@ const onNext = async () => {
 const restart = async () => {
   loading.value = true;
   try {
-    if (stocktakeId.value) {
-      await cancelStocktake(stocktakeId.value);
-    }
+    if (stocktakeId.value) await cancelStocktake(stocktakeId.value);
   } catch {
     // 草稿可能已不存在；继续开新单
   }
@@ -321,118 +492,72 @@ const onCancel = async () => {
   color: #4b5b51;
   font-size: 26rpx;
 }
-.state .btn {
-  flex: none;
-  width: 360rpx;
-}
-.state.soft {
-  padding: 40rpx;
-  color: #7a8a80;
-}
-.state-title {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #1e3a2f;
-}
-.state-hint {
-  text-align: center;
-  line-height: 1.6;
-}
+.state .btn { flex: none; width: 360rpx; }
+.state.soft { padding: 40rpx; color: #7a8a80; }
+.state-title { font-size: 32rpx; font-weight: 600; color: #1e3a2f; }
+.state-hint { text-align: center; line-height: 1.6; }
+
 .top {
   padding: 24rpx 32rpx 16rpx;
   background: #fff;
   border-bottom: 1rpx solid #e8ede7;
 }
-.top-line {
+.top-line { display: flex; align-items: center; justify-content: space-between; }
+.progress-text { font-size: 30rpx; font-weight: 600; color: #1e3a2f; }
+.cancel { font-size: 24rpx; color: #8a5a44; padding: 8rpx 0 8rpx 16rpx; }
+.bar { margin-top: 14rpx; height: 10rpx; border-radius: 999rpx; background: #eef2ec; overflow: hidden; }
+.bar-fill { height: 100%; background: #1e3a2f; transition: width 0.2s ease; }
+.hint { display: block; margin-top: 12rpx; font-size: 24rpx; color: #7a8a80; }
+
+.search { margin: 16rpx 24rpx 0; }
+.search-input {
+  height: 68rpx;
+  padding: 0 24rpx;
+  border-radius: 999rpx;
+  background: #fff;
+  border: 1rpx solid #e8ede7;
+  font-size: 26rpx;
+}
+.filters { display: flex; gap: 16rpx; padding: 16rpx 24rpx 4rpx; }
+.chip {
+  height: 56rpx;
+  padding: 0 26rpx;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-}
-.progress-text {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: #1e3a2f;
-}
-.cancel {
-  font-size: 24rpx;
-  color: #8a5a44;
-}
-.bar {
-  margin-top: 14rpx;
-  height: 10rpx;
-  border-radius: 999rpx;
-  background: #eef2ec;
-  overflow: hidden;
-}
-.bar-fill {
-  height: 100%;
-  background: #1e3a2f;
-  transition: width 0.2s ease;
-}
-.hint {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  color: #7a8a80;
-}
-.filters {
-  display: flex;
-  gap: 16rpx;
-  padding: 20rpx 32rpx 8rpx;
-  background: #fff;
-}
-.chip {
-  padding: 10rpx 28rpx;
-  border-radius: 999rpx;
+  border-radius: 28rpx;
   background: #f1f4ee;
   color: #4b5b51;
   font-size: 24rpx;
 }
-.chip.active {
-  background: #1e3a2f;
-  color: #fbfcf7;
-}
-.list {
-  flex: 1;
-  height: 0;
-  padding: 12rpx 24rpx;
-  box-sizing: border-box;
-}
+.chip.active { background: #1e3a2f; color: #fbfcf7; }
+
+.list { flex: 1; height: 0; padding: 12rpx 24rpx; box-sizing: border-box; }
 .row {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  padding: 20rpx 16rpx;
+  padding: 16rpx 16rpx 8rpx;
   margin-bottom: 10rpx;
   border-radius: 20rpx;
   background: #fff;
   border: 1rpx solid #e8ede7;
 }
-.row.done {
-  border-color: #bcd3c3;
-  background: #f4f8f2;
-}
-.row-copy {
+.row.done { border-color: #bcd3c3; background: #f4f8f2; }
+.row-head { display: flex; align-items: baseline; gap: 8rpx; margin-bottom: 8rpx; }
+.name { font-size: 28rpx; color: #1e3a2f; font-weight: 500; }
+.unit { font-size: 24rpx; color: #7a8a80; }
+.line-total { margin-left: auto; font-size: 24rpx; color: #4b5b51; }
+
+.portion { display: flex; align-items: center; gap: 12rpx; padding: 6rpx 0; }
+.p-label {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
   min-width: 0;
-}
-.name {
-  font-size: 28rpx;
-  color: #1e3a2f;
+  font-size: 24rpx;
+  color: #4b5b51;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.unit {
-  font-size: 24rpx;
-  color: #7a8a80;
-}
 .input {
-  width: 180rpx;
-  height: 64rpx;
+  width: 170rpx;
+  height: 60rpx;
   padding: 0 16rpx;
   border-radius: 12rpx;
   background: #f7f9f5;
@@ -440,16 +565,19 @@ const onCancel = async () => {
   font-size: 28rpx;
   text-align: right;
 }
-.check {
-  width: 36rpx;
-  font-size: 30rpx;
-  color: #1e3a2f;
-  text-align: center;
+.check { width: 30rpx; font-size: 28rpx; color: #1e3a2f; text-align: center; }
+.add {
+  margin-top: 4rpx;
+  padding: 8rpx 0 6rpx;
+  font-size: 24rpx;
+  color: #5f6f64;
 }
+
+.autosave { text-align: center; font-size: 24rpx; color: #7a8a80; padding: 6rpx 0; }
 .bottom {
   display: flex;
   gap: 16rpx;
-  padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
+  padding: 10rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
   background: #fff;
   border-top: 1rpx solid #e8ede7;
 }
@@ -460,12 +588,6 @@ const onCancel = async () => {
   border-radius: 999rpx;
   font-size: 28rpx;
 }
-.btn.ghost {
-  background: #f1f4ee;
-  color: #1e3a2f;
-}
-.btn.primary {
-  background: #1e3a2f;
-  color: #fbfcf7;
-}
+.btn.ghost { background: #f1f4ee; color: #1e3a2f; }
+.btn.primary { background: #1e3a2f; color: #fbfcf7; }
 </style>

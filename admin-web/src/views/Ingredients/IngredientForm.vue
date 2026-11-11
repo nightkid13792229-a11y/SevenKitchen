@@ -265,39 +265,6 @@
       业务策略
     </div>
 
-    <el-form-item
-      v-if="typeCapabilities.showProcurementStrategyEditor"
-      label="采购策略"
-      prop="procurementStrategy"
-    >
-      <el-radio-group v-model="formData.procurementStrategy">
-        <el-radio :value="IngredientProcurementStrategy.DAILY_PURCHASE">
-          {{
-            IngredientProcurementStrategyLabels[
-              IngredientProcurementStrategy.DAILY_PURCHASE
-            ]
-          }}
-        </el-radio>
-        <el-radio :value="IngredientProcurementStrategy.STOCK_REPLENISHMENT">
-          {{
-            IngredientProcurementStrategyLabels[
-              IngredientProcurementStrategy.STOCK_REPLENISHMENT
-            ]
-          }}
-        </el-radio>
-        <el-radio :value="IngredientProcurementStrategy.HYBRID">
-          {{
-            IngredientProcurementStrategyLabels[
-              IngredientProcurementStrategy.HYBRID
-            ]
-          }}
-        </el-radio>
-      </el-radio-group>
-      <span class="hint-text">
-        日采适合当天买当天用；库存补货适合海产、冻品、补剂、包材；混合表示两种采购方式都会发生。
-      </span>
-    </el-form-item>
-
     <!-- 类型特定属性 -->
     <div class="section-title">{{ getTypeSpecificTitle() }}</div>
 
@@ -3355,9 +3322,6 @@ const formRules: FormRules = {
     { min: 2, max: 50, message: '长度在 2 到 50 个字符', trigger: 'blur' },
   ],
   type: [{ required: true, message: '请选择原料类型', trigger: 'change' }],
-  procurementStrategy: [
-    { required: true, message: '请选择采购策略', trigger: 'change' },
-  ],
   baseUnit: [{ required: true, message: '请选择基准单位', trigger: 'change' }],
   weightG: [
     {

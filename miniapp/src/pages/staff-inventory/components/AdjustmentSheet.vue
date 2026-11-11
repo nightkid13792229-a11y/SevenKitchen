@@ -2,10 +2,13 @@
   <view v-if="visible" class="mask" @tap="close">
     <view class="sheet" @tap.stop>
       <view class="sheet-head">
-        <text class="sheet-title">记一笔</text>
-        <text class="close" @tap="close">关闭</text>
+        <text class="sheet-title">领用 / 报废</text>
+        <view class="head-right">
+          <text class="records" @tap="goRecords">记录 ›</text>
+          <text class="close" @tap="close">关闭</text>
+        </view>
       </view>
-      <text class="hint">内部领用免审批；报废满 50 元进待复核。</text>
+      <text class="hint">领用不用批；报废满 50 元要管理员确认。</text>
 
       <scroll-view scroll-y class="body">
         <view class="block">
@@ -249,6 +252,12 @@ const onPickerChange = (event: any) => {
   if (item) selectedId.value = item.id;
 };
 
+const goRecords = () => {
+  if (submitting.value) return;
+  emit('close');
+  uni.navigateTo({ url: '/pages/staff-inventory/adjustments' });
+};
+
 const close = () => {
   if (!submitting.value) emit('close');
 };
@@ -272,7 +281,7 @@ const onSubmit = async () => {
       category: category.value,
       note: note.value.trim() || undefined,
     });
-    uni.showToast({ title: '已记账', icon: 'success' });
+    uni.showToast({ title: '已记上', icon: 'success' });
     emit('submitted');
     emit('close');
   } catch (err: any) {
@@ -315,6 +324,8 @@ const onSubmit = async () => {
   font-weight: 600;
   color: #1e3a2f;
 }
+.head-right { display: flex; align-items: center; gap: 20rpx; }
+.records { font-size: 24rpx; color: #1e3a2f; }
 .close {
   font-size: 24rpx;
   color: #7a8a80;

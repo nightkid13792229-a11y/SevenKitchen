@@ -105,10 +105,10 @@ const statusText = (status: string) =>
 
 const groups = computed(() =>
   [
+    { key: 'DRAFT', title: '进行中', items: items.value.filter((item) => item.status === 'DRAFT') },
     { key: 'SUBMITTED', title: '待复核', items: items.value.filter((item) => item.status === 'SUBMITTED') },
     { key: 'APPLIED', title: '已入账', items: items.value.filter((item) => item.status === 'APPLIED') },
     { key: 'REJECTED', title: '已驳回', items: items.value.filter((item) => item.status === 'REJECTED') },
-    { key: 'DRAFT', title: '进行中', items: items.value.filter((item) => item.status === 'DRAFT') },
   ].filter((group) => group.items.length > 0),
 );
 
@@ -137,6 +137,12 @@ onShow(() => {
 
 const goStart = () => {
   uni.navigateTo({ url: '/pages/staff-inventory/stocktake-create' });
+};
+
+const goOpening = () => {
+  uni.navigateTo({
+    url: '/pages/staff-inventory/stocktake-create?type=OPENING',
+  });
 };
 
 const open = (item: InventoryStocktakeItem) => {
@@ -228,6 +234,11 @@ const restart = () => {
 .total {
   font-size: 24rpx;
   color: #7a8a80;
+}
+.top-actions { display: flex; gap: 12rpx; }
+.start.ghost {
+  background: #eef2ec;
+  color: #1e3a2f;
 }
 .start {
   padding: 8rpx 24rpx;

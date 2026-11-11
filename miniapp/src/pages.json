@@ -91,7 +91,19 @@
         {
           "path": "index",
           "style": {
-            "navigationBarTitleText": "库存管理"
+            "navigationBarTitleText": "库存管理",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "enablePullDownRefresh": true,
+            "backgroundColor": "#FBFCF7"
+          }
+        },
+        {
+          "path": "adjustments",
+          "style": {
+            "navigationBarTitleText": "领用 / 报废记录",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white"
           }
         },
         {

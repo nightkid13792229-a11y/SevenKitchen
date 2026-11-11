@@ -182,6 +182,34 @@ export class StaffInventoryController {
     return ApiResponseDto.success(adjustment, '已记账');
   }
 
+  @Get('adjustments')
+  @ApiOperation({ summary: '员工端：领用/报废记录' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({
+    name: 'pending',
+    required: false,
+    type: Boolean,
+    description: '只看待复核',
+  })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    type: String,
+    enum: ['INTERNAL_USE', 'EXPIRED', 'DAMAGED', 'OTHER'],
+  })
+  async getAdjustments(
+    @Query('limit') limit?: string,
+    @Query('pending') pending?: string,
+    @Query('category') category?: string,
+  ): Promise<ApiResponseDto<any>> {
+    const rows = await this.inventoryService.listAdjustments({
+      limit: limit ? Number(limit) : 50,
+      pending: pending === 'true' || pending === '1',
+      category,
+    });
+    return ApiResponseDto.success(rows);
+  }
+
   @Get('stocktakes/draft')
   @ApiOperation({ summary: '获取当前盘点草稿（没有则 204）' })
   async getDraftStocktake(

@@ -14,17 +14,19 @@ describe('staff inventory stocktake entry (C5)', () => {
     expect(page).not.toContain('差异');
   });
 
-  it('shows progress, draft and next step', () => {
+  it('shows progress, autosave and next step', () => {
     expect(page).toContain('已盘');
     expect(page).toContain('未盘');
-    expect(page).toContain('存草稿');
+    expect(page).toContain('自动保存');
     expect(page).toContain('下一步');
+    expect(page).not.toContain('存草稿');
   });
 
-  it('uses a numeric keyboard that advances to the next row', () => {
+  it('uses a numeric keyboard and supports extra count points', () => {
     expect(page).toContain('type="digit"');
     expect(page).toContain('confirm-type="next"');
-    expect(page).toContain('focusNext');
+    expect(page).toContain('再记一处');
+    expect(page).toContain('newPortions');
   });
 
   it('starts from the server draft and falls back to a new stocktake', () => {
@@ -83,8 +85,8 @@ describe('staff inventory adjustment create (C7)', () => {
     expect(page).toContain('过期报废');
     expect(page).toContain('破损污染');
     expect(page).toContain('其他');
-    expect(page).toContain('免审批');
-    expect(page).toContain('待复核');
+    expect(page).toContain('领用不用批');
+    expect(page).toContain('管理员确认');
   });
 
   it('shows the estimated amount and posts a positive quantity', () => {
@@ -99,28 +101,27 @@ describe('staff inventory home (C8)', () => {
   const drawer = readPage('staff-inventory/components/InventoryDrawer.vue');
   const stockCreate = readPage('staff-purchasing/stock-create.vue');
 
-  it('shows freshness, warning, search and four filters', () => {
+  it('shows freshness, warning, search and three filters', () => {
     expect(page).toContain('截至');
     expect(page).toContain('上次盘点');
-    expect(page).toContain('需补货');
-    expect(page).toContain('偏低');
-    expect(page).toContain('未设阈值');
+    expect(page).toContain('该补货');
+    expect(page).toContain('没设安全线');
     expect(page).toContain('全部');
     expect(page).toContain('搜原料 / 渠道 / 规格');
+    expect(page).not.toContain('快用完');
   });
 
   it('shows last movement, negative-stock flag and both actions', () => {
     expect(page).toContain('lastMovement');
-    expect(page).toContain('待核实');
+    expect(page).toContain('数量为负');
     expect(page).toContain('看流水');
     expect(page).toContain('去补货');
   });
 
-  it('uses the drawer instead of dead navigation', () => {
-    expect(page).toContain('InventoryDrawer');
-    expect(page).toContain("openDrawer('needs')");
-    expect(page).toContain("openDrawer('ledger'");
-    expect(drawer).toContain('缺什么');
+  it('sends users straight to the replenishment page (no needs drawer)', () => {
+    expect(page).toContain('goReplenishPage');
+    expect(page).toContain('/pages/staff-purchasing/replenishment/index');
+    expect(page).not.toContain("openDrawer('needs')");
     expect(drawer).toContain('最近流水');
   });
 

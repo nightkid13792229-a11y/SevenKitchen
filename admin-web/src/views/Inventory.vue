@@ -62,9 +62,7 @@
             </el-table-column>
             <el-table-column label="采购策略" width="120">
               <template #default="{ row }">
-                <el-tag :type="getStrategyTagType(row.procurementStrategy)">
-                  {{ getStrategyText(row.procurementStrategy) }}
-                </el-tag>
+                <span class="muted-text">—</span>
               </template>
             </el-table-column>
             <el-table-column label="当前库存" width="150" align="right">

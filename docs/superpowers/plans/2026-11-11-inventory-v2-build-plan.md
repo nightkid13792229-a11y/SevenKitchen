@@ -137,3 +137,42 @@
 | **B. 全量抵扣** | 采购需求一律抵扣现存/在途（提交 `beb35fb1`） | 期初完成后当天下午 |
 
 分两次只是**发布顺序**，代码和标准都不降；A 不含抵扣改动，B 只是把抵扣那一个提交带上去。
+
+---
+
+## 九、发布记录（2026-11-11 深夜）
+
+**已上线**
+
+| 项 | 值 |
+|---|---|
+| 后端 / 后台 | 提交 `814a66cf`（之后只有小程序改动，未重复部署） |
+| 小程序体验版 | **2026.11.11.21**，提交 `a3633842` |
+| 数据库迁移 | `20261111220000_inventory_stocktake_portion` 已在生产执行 |
+
+**发布前在真机（模拟器）上走查发现并修掉的 4 个问题**
+
+1. 盘点记录页「期初盘点」入口模板未生效 —— 补回。
+2. 补货页跨分包引用导致整页白屏 —— 改为同包调用，并加 `no-cross-subpackage-imports` 守门测试。
+3. 未挂采购商品的原料金额按“每克”算，出现 ¥21903 的离谱数字 —— 无商品不显示金额。
+4. 未保存过时显示“已自动保存 ·”空时间 —— 改为“改动会自动保存”。
+
+**仍然关闭的一项（按计划）**
+
+`beb35fb1`「所有原料一律抵扣现存与在途」在合并时被**回退**（提交 `814a66cf`），
+因为期初之前账是假账，开了会按假账算缺口。
+
+**期初完成后的唯一动作**
+
+```bash
+cd /Users/zhaochen/Documents/SevenKitchen
+bash scripts/session.sh start "开启全量抵扣"
+# 在工位里：
+git revert --no-edit 814a66cf        # 把回退撤销 = 重新开启全量抵扣
+cd backend && npx jest tests/application/inventory tests/application/purchasing --runInBand
+bash scripts/session.sh commit -m "feat(purchasing): 期初完成后开启全量抵扣"
+bash scripts/session.sh merge
+bash backend/scripts/remote_deploy_v2.sh
+```
+
+验收：生成一次采购需求，确认日采品也扣了现存、在途抵了缺口；异常时回退该提交并重新部署。

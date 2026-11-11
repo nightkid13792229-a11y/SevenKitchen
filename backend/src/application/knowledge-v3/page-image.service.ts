@@ -14,7 +14,15 @@ import { PrismaService } from '../../infrastructure/prisma.service';
  * 页图缺失不应让整次 `kb_read` 失败（解析器漏渲一页是常态）。
  */
 
-const DEFAULT_IMAGE_ROOT = 'docs/knowledge-base/page-images';
+/**
+ * 本地开发的默认页图根：`npm run kb:v3:smoke` / `npm test` 的 cwd 是 `backend/`，
+ * 页图在仓库根的 `docs/knowledge-base/page-images`，所以默认要往上一级找。
+ * 生产显式设置 `KB_PAGE_IMAGE_ROOT=/var/lib/sevenkitchen/kb/page-images`，不依赖默认值。
+ */
+const DEFAULT_IMAGE_ROOT = path.resolve(
+  process.cwd(),
+  '../docs/knowledge-base/page-images',
+);
 
 export interface ResolvedPageImage {
   absolutePath: string;

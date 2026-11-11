@@ -52,6 +52,8 @@ interface BenchOutcome {
 interface QuestionContext {
   gateway: KnowledgeGatewayService;
   imageDocumentId: string | null;
+  /** 无文字层文档的页数；1 页的图片型文档不能读 1..2（会 PAGE_OUT_OF_RANGE）。 */
+  imageDocumentPageCount: number | null;
 }
 
 interface Question {
@@ -187,10 +189,14 @@ const QUESTIONS: Question[] = [
     target: 'read 1 次',
     run: async (context, tracker) => {
       const documentId = context.imageDocumentId ?? DOC_ID;
+      const lastPage =
+        context.imageDocumentId === null
+          ? 2
+          : Math.min(2, context.imageDocumentPageCount ?? 1);
       const result = await tracker.call<KbReadResult>('kb_read', {
         documentId,
         pageFrom: 1,
-        pageTo: 2,
+        pageTo: lastPage,
         includeImages: true,
       });
       return {
@@ -276,7 +282,7 @@ async function main(): Promise<void> {
   console.log(`知识库 v3 结构基准：${REFERENCE_NOTE}`);
   console.log(
     `DATABASE_URL=${maskDatabaseUrl(process.env.DATABASE_URL)} KB_PAGE_IMAGE_ROOT=${
-      process.env.KB_PAGE_IMAGE_ROOT ?? '(未设置，用默认 docs/knowledge-base/page-images)'
+      process.env.KB_PAGE_IMAGE_ROOT ?? '(未设置，用默认 ../docs/knowledge-base/page-images，相对 backend cwd)'
     }`,
   );
 
@@ -309,6 +315,7 @@ async function main(): Promise<void> {
     const context: QuestionContext = {
       gateway,
       imageDocumentId: imageDocument?.id ?? null,
+      imageDocumentPageCount: imageDocument?.pageCount ?? null,
     };
 
     for (const question of QUESTIONS) {

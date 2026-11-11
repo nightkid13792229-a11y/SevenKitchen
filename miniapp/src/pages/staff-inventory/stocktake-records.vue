@@ -2,7 +2,7 @@
   <view class="page">
     <view class="top">
       <text class="total">共 {{ items.length }} 次</text>
-      <text class="start" @tap="goStart">盘点</text>
+      <text class="start" @tap="goStart">开始盘点</text>
     </view>
 
     <view class="hint">
@@ -15,7 +15,9 @@
       <text class="retry" @tap="load">重试</text>
     </view>
     <view v-else-if="items.length === 0" class="state">
-      还没有盘点记录。点右上角「盘点」开始。
+      <text class="state-title">还没有盘点记录</text>
+      <text class="state-hint">盘一次，看看账面和实称差多少。</text>
+      <button class="start-btn" @tap="goStart">开始盘点</button>
     </view>
 
     <template v-else>
@@ -254,6 +256,26 @@ const restart = () => {
   text-align: center;
   color: #7a8a80;
   font-size: 26rpx;
+}
+.state-title {
+  display: block;
+  margin-bottom: 8rpx;
+  font-size: 30rpx;
+  color: #1e3a2f;
+}
+.state-hint {
+  display: block;
+  line-height: 1.6;
+}
+.start-btn {
+  margin-top: 24rpx;
+  padding: 0 48rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  border-radius: 999rpx;
+  background: #1e3a2f;
+  color: #fbfcf7;
+  font-size: 28rpx;
 }
 .group {
   margin-top: 24rpx;

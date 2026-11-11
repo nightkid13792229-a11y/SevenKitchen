@@ -107,7 +107,6 @@
     </view>
 
     <view class="bottom">
-      <button class="btn ghost" @tap="openAdjust()">记一笔</button>
       <button class="btn ghost" @tap="goStocktake">盘点</button>
       <button class="btn primary" @tap="openDrawer('needs')">
         补货清单

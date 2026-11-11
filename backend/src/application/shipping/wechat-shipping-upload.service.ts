@@ -100,11 +100,9 @@ export class WechatShippingUploadService {
     });
 
     if (!order) {
-      return {
-        success: false,
-        skipped: true,
-        message: `订单不存在：${orderId}`,
-      };
+      // 鲜食单表里没有 → 可能是补剂单（2026-11-11）：
+      // 补剂发货以前从来没有上报过微信，顾客的货款会一直压在「待发货」。
+      return this.uploadForSupplementOrder(orderId);
     }
 
     if (!isWechatOnlinePaymentMethod(order.paymentMethod)) {
@@ -221,6 +219,140 @@ export class WechatShippingUploadService {
       message: '微信发货信息已上传',
       response,
     };
+  }
+
+  /**
+   * 补剂订单的微信发货信息上报（2026-11-11）。
+   *
+   * 与鲜食同一套规则，差别只有四处：
+   *   · 表是 `supplement_order`，收货信息在下单快照里（没有 address 关系）；
+   *   · 商户单号是**订单号**（下单支付时用的就是 orderNo，不是 id 去横线）；
+   *   · 商品名取补剂行上的 `name`；
+   *   · 补剂没有合并/拆包包裹，永远按一个包裹上报。
+   */
+  async uploadForSupplementOrder(
+    orderId: string,
+  ): Promise<WechatShippingUploadResult> {
+    const order = await this.prisma.supplementOrder.findUnique({
+      where: { id: orderId },
+      include: { user: true, items: true },
+    });
+
+    if (!order) {
+      return {
+        success: false,
+        skipped: true,
+        message: `订单不存在：${orderId}`,
+      };
+    }
+
+    if (!isWechatOnlinePaymentMethod(order.paymentMethod)) {
+      return {
+        success: true,
+        skipped: true,
+        message: '非微信支付订单，无需上传微信发货信息',
+      };
+    }
+
+    if (!order.trackingNumber || !order.carrierCode) {
+      return {
+        success: false,
+        skipped: true,
+        message: '订单缺少物流单号或物流公司，无法上传微信发货信息',
+      };
+    }
+
+    const paymentConfig = await this.prisma.paymentConfig.upsert({
+      where: { id: 'singleton' },
+      create: {},
+      update: {},
+      select: { appId: true, mchId: true },
+    });
+
+    if (!paymentConfig.mchId) {
+      return {
+        success: false,
+        skipped: true,
+        message: '后台支付配置缺少微信支付商户号，无法上传微信发货信息',
+      };
+    }
+
+    const payerOpenid = await this.resolveShippingPayerOpenid(
+      order.userId,
+      paymentConfig.appId,
+      order.user?.wechatOpenid,
+    );
+    if (!payerOpenid) {
+      return {
+        success: false,
+        skipped: true,
+        message: '订单用户缺少微信 openid，无法上传微信发货信息',
+      };
+    }
+
+    const snapshot = (order.shippingAddressSnapshot ?? {}) as Record<
+      string,
+      any
+    >;
+
+    const payload: WechatShippingInfoPayload = {
+      order_key: order.transactionId
+        ? {
+            order_number_type: 2,
+            mchid: paymentConfig.mchId,
+            transaction_id: order.transactionId,
+          }
+        : {
+            order_number_type: 1,
+            mchid: paymentConfig.mchId,
+            // 补剂下单支付用的就是订单号（wechat-payment.service: createSupplementJsapiPayment）
+            out_trade_no: order.orderNo,
+          },
+      logistics_type: 1,
+      delivery_mode: 1,
+      is_all_delivered: true,
+      shipping_list: [
+        {
+          tracking_no: order.trackingNumber,
+          express_company: this.normalizeExpressCompany(order.carrierCode),
+          item_desc: this.buildSupplementItemDesc(order.items),
+          contact: this.buildContact(
+            snapshot.phone || snapshot.receiverPhone || null,
+          ),
+        },
+      ],
+      upload_time: this.formatWechatTimestamp(new Date()),
+      payer: { openid: payerOpenid },
+    };
+
+    const response = await this.wechatService.uploadShippingInfo(
+      payload,
+      paymentConfig.appId || undefined,
+    );
+
+    this.logger.log(
+      `Uploaded WeChat shipping info for supplement order ${order.id}, tracking ${order.trackingNumber}`,
+    );
+
+    return {
+      success: true,
+      message: '微信发货信息已上传',
+      response,
+    };
+  }
+
+  /** 补剂单的商品描述：取补剂行的名字，微信那边只当摘要用 */
+  private buildSupplementItemDesc(
+    items: Array<{ name?: string | null }> | undefined,
+  ) {
+    const names = (items || [])
+      .map((item) => (item?.name || '').trim())
+      .filter(Boolean)
+      .filter((name, index, all) => all.indexOf(name) === index);
+
+    const desc =
+      names.length > 0 ? `补剂 · ${names.join('、')}` : 'SevenKitchen 补剂订单';
+    return desc.slice(0, 120);
   }
 
   /**

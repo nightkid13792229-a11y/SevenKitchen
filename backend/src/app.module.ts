@@ -342,7 +342,6 @@ import { SupplementTargetService } from './application/recipe-designer/supplemen
 import { OrderRecipeDesignService } from './application/recipe-designer/order-recipe-design.service';
 import { OrderRecipeTemplateService } from './application/recipe-designer/order-recipe-template.service';
 import { RecipeCopywritingService } from './application/recipe-designer/recipe-copywriting.service';
-import { KnowledgeBaseService } from './application/recipe-designer/knowledge-base.service';
 import { SourceLayerService } from './application/knowledge-base/source-layer.service';
 import { KnowledgeLibraryService } from './application/knowledge-base/knowledge-library.service';
 import { KnowledgeCatalogService } from './application/knowledge-v3/knowledge-catalog.service';
@@ -950,7 +949,6 @@ validatePrismaConfig();
     NutritionFoodService,
     SupplementLabelExtractionService,
     RecipeCopywritingService,
-    KnowledgeBaseService,
     SourceLayerService,
     KnowledgeLibraryService,
     // 知识库 v3：4 个数据服务 + 3 个动作的边界（本任务只注册，不接 Agent）

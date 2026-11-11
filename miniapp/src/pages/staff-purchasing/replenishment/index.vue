@@ -1,16 +1,15 @@
 <template>
   <view class="replenishment-page">
     <view class="page-head">
-      <text class="page-title">补货</text>
-      <text class="page-subtitle">下单后传订单截图记账；货到了再点「已到货」，库存才增加。</text>
+      <text class="page-subtitle">传订单截图记账；到货点「已到货」才进库存。</text>
     </view>
 
     <view v-if="needs.length > 0" class="needs-card">
       <view class="needs-head" @tap="needsExpanded = !needsExpanded">
         <view class="needs-copy">
-          <text class="needs-title">缺什么 · {{ needs.length }} 项</text>
+          <text class="needs-title">还缺 {{ needs.length }} 项</text>
           <text class="needs-sub">
-            {{ needsCost > 0 ? `约 ¥${money(needsCost)} · ` : '' }}点开看清单
+            {{ needsCost > 0 ? `预计 ¥${money(needsCost)} · ` : '' }}点开看清单
           </text>
         </view>
         <text class="needs-toggle">{{ needsExpanded ? '收起' : '展开' }}</text>
@@ -30,8 +29,12 @@
             </text>
           </text>
         </view>
-        <text v-if="needs.length > 8" class="needs-more">
-          还有 {{ needs.length - 8 }} 项，去库存页看全部
+        <text
+          v-if="needs.length > 8"
+          class="needs-more"
+          @tap.stop="goInventory"
+        >
+          还有 {{ needs.length - 8 }} 项 · 去库存看全部 ›
         </text>
         <view class="needs-actions">
           <text class="needs-copy-btn" @tap="copyNeeds">复制清单</text>
@@ -42,7 +45,7 @@
     <view v-if="inTransitCount > 0" class="in-transit-card" @tap="selectFilter('IN_TRANSIT')">
       <view class="in-transit-copy">
         <text class="in-transit-title">待收货 {{ inTransitCount }} 笔</text>
-        <text class="in-transit-hint">点这里看全部在途，超期的会标红</text>
+        <text class="in-transit-hint">点开看全部 · 超期标红</text>
       </view>
       <text class="in-transit-arrow">›</text>
     </view>
@@ -51,11 +54,11 @@
       {{ starting ? '处理中...' : '记一笔补货' }}
     </button>
 
-    <text class="shot-hint">1 张 = 1 笔订单；同一笔订单请截一张长图</text>
+    <text class="shot-hint">1 张 = 1 笔订单，同一单请截长图</text>
 
     <view class="manual-entry" @tap="startManualRecord">
-      <text class="manual-title">不想传截图？手填一条</text>
-      <text class="manual-hint">不传截图，直接选商品记</text>
+      <text class="manual-title">手填一条</text>
+      <text class="manual-hint">不传截图，直接选商品</text>
     </view>
 
     <view class="filters">
@@ -71,7 +74,7 @@
     </view>
 
     <view v-if="loading && records.length === 0" class="state-card">
-      <text>正在加载补货记录...</text>
+      <text>加载中…</text>
     </view>
 
     <view v-else-if="errorText && records.length === 0" class="state-card">
@@ -103,18 +106,32 @@
 
         <view class="badges">
           <text class="badge arrival" :class="arrivalTone(record)">{{ arrivalText(record) }}</text>
-          <text class="badge claim" :class="claimTone(record)">{{ claimText(record) }}</text>
-          <text v-if="isOverdue(record)" class="badge overdue-badge">已超期 · 预计 {{ formatDate(record.expectedDeliveryAt) }} 到货</text>
+          <text
+            v-if="!record.voidedAt"
+            class="badge claim"
+            :class="claimTone(record)"
+          >{{ claimText(record) }}</text>
+          <text v-if="isOverdue(record)" class="badge overdue-badge">
+            超期 {{ overdueDays(record) }} 天
+          </text>
+          <text v-else-if="showExpected(record)" class="badge expect">
+            预计 {{ formatDate(record.expectedDeliveryAt) }} 到
+          </text>
         </view>
 
         <view class="record-metrics">
-          <text v-if="record.voidedAt" class="metric">已作废 · 不计库存、不报销</text>
+          <text v-if="record.voidedAt" class="metric">不入库 · 不报销</text>
           <template v-else>
             <text class="metric">{{ record.itemCount }} 项</text>
-            <text v-if="record.reimbursementAmount !== null && record.reimbursementAmount !== undefined" class="metric amount">
-              本次报销 ¥{{ formatMoney(record.reimbursementAmount) }}
+            <text
+              v-if="Number(record.personalAmount || 0) > 0"
+              class="metric"
+            >
+              含个人 ¥{{ formatMoney(record.personalAmount) }}
             </text>
-            <text v-else-if="record.paidAmount" class="metric amount">实付 ¥{{ formatMoney(record.paidAmount) }}</text>
+            <text class="metric amount">
+              实付 ¥{{ formatMoney(record.paidAmount ?? record.reimbursementAmount) }}
+            </text>
           </template>
         </view>
       </view>
@@ -131,7 +148,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { onShow } from '@dcloudio/uni-app';
+import { onPullDownRefresh, onShow } from '@dcloudio/uni-app';
 import {
   createManualReplenishmentImport,
   createReplenishmentDraft,
@@ -153,7 +170,7 @@ type FilterValue =
 const filterOptions: Array<{ label: string; value: FilterValue }> = [
   { label: '全部', value: 'ALL' },
   { label: '在途', value: 'IN_TRANSIT' },
-  { label: '待报销', value: 'PENDING_CLAIM' },
+  { label: '未报销', value: 'PENDING_CLAIM' },
   { label: '已报销', value: 'REIMBURSED' },
   { label: '已作废', value: 'VOIDED' },
 ];
@@ -180,7 +197,7 @@ const emptyTitle = computed(() => {
     case 'IN_TRANSIT':
       return '没有在途的补货';
     case 'PENDING_CLAIM':
-      return '没有待报销的补货';
+      return '没有未报销的补货';
     case 'REIMBURSED':
       return '没有已报销的补货';
     case 'VOIDED':
@@ -249,6 +266,34 @@ const isOverdue = (record: ReplenishmentRecordSummary) => {
     0,
   ).getTime();
   return Date.now() >= endOfDay;
+};
+
+const overdueDays = (record: ReplenishmentRecordSummary) => {
+  const expected = new Date(record.expectedDeliveryAt || '');
+  if (Number.isNaN(expected.getTime())) return 0;
+  const endOfDay = new Date(
+    expected.getFullYear(),
+    expected.getMonth(),
+    expected.getDate() + 1,
+    0,
+    0,
+    0,
+    0,
+  ).getTime();
+  return Math.max(1, Math.ceil((Date.now() - endOfDay) / 86400000));
+};
+
+const showExpected = (record: ReplenishmentRecordSummary) =>
+  !record.arrivedAt && !record.voidedAt && !!record.expectedDeliveryAt;
+
+const goInventory = () => {
+  const pages = getCurrentPages();
+  const previous = pages[pages.length - 2] as any;
+  if (previous?.route === 'pages/staff-inventory/index') {
+    uni.navigateBack();
+    return;
+  }
+  uni.navigateTo({ url: '/pages/staff-inventory/index' });
 };
 
 const arrivalText = (record: ReplenishmentRecordSummary) => {
@@ -414,10 +459,10 @@ const startRecord = async () => {
   if (!shotHintShown) {
     const understood = await new Promise<boolean>((resolve) => {
       uni.showModal({
-        title: '1 张 = 1 笔订单',
+        title: '1 张图 = 1 笔订单',
         content:
-          '一次最多传 5 张。同一笔订单请截一张长图，不要分两张传，否则会记成两笔、库存和报销都会翻倍。',
-        confirmText: '知道了，去选图',
+          '最多 5 张。同一笔订单请截长图；分成两张会记成两笔，报销也会翻倍。',
+        confirmText: '去选图',
         success: (res) => resolve(Boolean(res.confirm)),
         fail: () => resolve(false),
       });
@@ -482,14 +527,16 @@ const startRecord = async () => {
       uni.showToast({ title: '识别失败，请重试', icon: 'none' });
       return;
     }
-    if (failedCount > 0) {
-      uni.showToast({
-        title: `${failedCount} 张没识别成功，其余可继续核对`,
-        icon: 'none',
-      });
-    }
     uni.navigateTo({
       url: `/pages/staff-purchasing/order-import/review?ids=${draftIds.join(',')}&mode=replenishment`,
+      success: () => {
+        if (failedCount > 0) {
+          uni.showToast({
+            title: `${failedCount} 张没识别成功，其余可继续核对`,
+            icon: 'none',
+          });
+        }
+      },
     });
   } finally {
     uni.hideLoading();
@@ -526,6 +573,11 @@ const startManualRecord = async () => {
 
 onShow(() => {
   void refresh();
+});
+
+onPullDownRefresh(async () => {
+  await refresh();
+  uni.stopPullDownRefresh();
 });
 </script>
 
@@ -597,14 +649,14 @@ onShow(() => {
 }
 
 .needs-transit {
-  color: #7a8a80;
+  color: #5f6f64;
 }
 
 .needs-more {
   display: block;
   padding: 8rpx 0 0;
   font-size: 24rpx;
-  color: #7a8a80;
+  color: #1e3a2f;
 }
 
 .needs-actions {
@@ -626,14 +678,8 @@ onShow(() => {
   margin-bottom: 24rpx;
 }
 
-.page-title {
-  font-size: 40rpx;
-  font-weight: 800;
-  color: #1e3a2f;
-}
-
 .page-subtitle {
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: #6b6653;
   line-height: 1.6;
 }
@@ -782,8 +828,8 @@ onShow(() => {
 }
 
 .record-order {
-  font-size: 22rpx;
-  color: #8a8472;
+  font-size: 24rpx;
+  color: #6b6653;
 }
 
 .badges {
@@ -795,8 +841,15 @@ onShow(() => {
 .badge {
   padding: 4rpx 14rpx;
   border-radius: 8rpx;
-  font-size: 22rpx;
-  line-height: 1.6;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.badge.expect {
+  padding-left: 0;
+  padding-right: 0;
+  background: transparent;
+  color: #5f6f64;
 }
 
 .badge.in-transit {
@@ -874,8 +927,8 @@ onShow(() => {
 }
 
 .shot-hint {
-  font-size: 22rpx;
-  color: #8a846f;
+  font-size: 24rpx;
+  color: #6b6653;
   text-align: center;
   margin-top: -8rpx;
 }

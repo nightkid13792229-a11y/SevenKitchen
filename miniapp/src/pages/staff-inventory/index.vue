@@ -123,7 +123,7 @@
     <view class="bottom">
       <button class="btn ghost" @tap="goStocktake">盘点</button>
       <button class="btn primary" @tap="goReplenishPage">
-        补货清单 {{ summary.needsReplenishment + summary.lowStock || '' }}
+        去补货 {{ summary.needsReplenishment + summary.lowStock || '' }}
       </button>
     </view>
 

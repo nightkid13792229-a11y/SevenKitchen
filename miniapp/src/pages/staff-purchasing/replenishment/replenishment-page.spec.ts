@@ -37,7 +37,31 @@ describe('补货列表 UX 收口', () => {
     expect(source).toContain("value: 'VOIDED'");
     expect(source).toContain('voidedOnly');
     expect(source).toContain('加载失败');
-    expect(source).toContain('已超期');
+    expect(source).toContain('超期');
     expect(source).toContain('endOfDay');
+  });
+});
+
+describe('补货首页信息层级（2026-11-11）', () => {
+  it('不再重复导航栏的「补货」标题', () => {
+    expect(source).not.toContain('class="page-title"');
+    expect(source).toContain('class="page-subtitle"');
+  });
+
+  it('缺货清单的「去库存看全部」可以直接点', () => {
+    expect(source).toContain('goInventory');
+    expect(source).toContain("url: '/pages/staff-inventory/index'");
+  });
+
+  it('列表直接给实付和超期天数，不再把「本次报销」当主金额', () => {
+    expect(source).toContain('overdueDays');
+    expect(source).toContain('预计');
+    expect(source).toContain('实付');
+    expect(source).not.toContain('本次报销 ¥');
+  });
+
+  it('支持下拉刷新', () => {
+    expect(source).toContain('onPullDownRefresh');
+    expect(pagesJson).toContain('"enablePullDownRefresh": true');
   });
 });

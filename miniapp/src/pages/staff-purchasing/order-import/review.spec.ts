@@ -13,7 +13,7 @@ const summaryBlock = source.slice(
 describe('order import review summary', () => {
   it('uses the reconciled amount in the top banner instead of the booked purchase amount', () => {
     expect(summaryBlock).not.toBe('');
-    expect(summaryBlock).toContain('商品+费用合计');
+    expect(summaryBlock).toContain('明细合计');
     expect(summaryBlock).not.toContain('采购金额');
     expect(summaryBlock).toContain('money(reconcileAmount)');
     expect(summaryBlock).not.toContain('activeSummary.matchedAmount');
@@ -26,7 +26,8 @@ describe('order import review summary', () => {
   });
 
   it('shows 未读到 when the voucher amount was not read, instead of using the subtotal', () => {
-    expect(summaryBlock).toContain('未读到');
+    expect(summaryBlock).toContain('paidText');
+    expect(source).toContain("if (paid === null || paid === undefined) return '未读到';");
     expect(summaryBlock).not.toContain('activeImport.paid ?? activeImport.subtotal');
   });
 
@@ -135,7 +136,7 @@ describe('order import edit sheet · 真机反馈修复（2026-11-05 晚）', ()
   });
 
   it('个人采购打开后，匹配商品那行变成说明文字，也不再能点开', () => {
-    expect(source).toContain('个人采购 · 不生成采购记录');
+    expect(source).toContain('个人采购 · 不报销');
     expect(source).toContain('function openSkuPicker');
     expect(source).toContain('if (editing.value?.isPersonal) return;');
   });
@@ -306,7 +307,24 @@ describe('补货核对 UX 收口', () => {
     expect(source).toContain('deleteOrderImportLine');
     expect(source).toContain('删掉这一行');
     expect(source).toContain('订单信息');
-    expect(source).toContain('本次报销');
+    expect(source).toContain('可报销');
     expect(source).toContain('confirmDuplicateOrderIfAny');
+  });
+});
+
+describe('补货核对页 · 顶部合计可读性（2026-11-11）', () => {
+  it('6 项金额用 3 列网格，标签不再互相压住', () => {
+    expect(source).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
+    expect(source).toContain('white-space: normal');
+  });
+
+  it('待处理为 0 时不再标黄', () => {
+    expect(source).toContain(
+      'activeSummary.unmatched + activeSummary.needsSku > 0',
+    );
+  });
+
+  it('实付没读到时，可报销金额显示「—」而不是 0.00', () => {
+    expect(source).toContain("if (paid === null || paid === undefined) return '—';");
   });
 });

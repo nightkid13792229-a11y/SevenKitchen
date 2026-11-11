@@ -6,12 +6,14 @@
 
     <view v-else-if="errorText" class="state-card">
       <text class="state-title">{{ errorText }}</text>
+      <button class="retry-btn" @tap="load">重试</button>
     </view>
 
     <template v-else-if="record">
       <view v-if="lockedReason" class="notice-card">
         <text>{{ lockedReason }}</text>
       </view>
+      <button v-if="lockedReason" class="back-btn" @tap="goBack">回详情</button>
 
       <view class="section-card">
         <view class="section-head">
@@ -70,6 +72,14 @@
           <input v-model="form.packagingFee" type="digit" class="field-input" :disabled="!!lockedReason" />
         </view>
         <view class="summary-row">
+          <text>商品合计</text>
+          <text>¥{{ goodsTotal }}</text>
+        </view>
+        <view v-if="personalAmount > 0" class="summary-row muted">
+          <text>含个人（不报销）</text>
+          <text>¥{{ money(personalAmount) }}</text>
+        </view>
+        <view class="summary-row total">
           <text>本次报销</text>
           <text class="summary-amount">¥{{ reimbursementAmount }}</text>
         </view>
@@ -110,6 +120,10 @@ const items = ref<
     unit: string;
     quantity: string;
     unitPrice: string;
+    /** 打开页面时的原值：没改过的行按原总额回写，避免单价四舍五入后金额漂移 */
+    originalQuantity: string;
+    originalUnitPrice: string;
+    originalTotal: number;
   }>
 >([]);
 
@@ -121,9 +135,9 @@ const form = ref({
 
 const lockedReason = computed(() => {
   if (!record.value) return '';
-  if (record.value.voidedAt) return '这笔补货已作废，不能修改。';
-  if (record.value.reimbursementId) return '已提交报销，不能修改；等报销单被驳回或撤回后才能改。';
-  if (record.value.arrivedAt) return '已经到货，请先回详情页撤销到货再修改。';
+  if (record.value.voidedAt) return '已作废，不能修改。';
+  if (record.value.reimbursementId) return '已提交报销，驳回或撤回后才能改。';
+  if (record.value.arrivedAt) return '已到货，先撤销到货再改。';
   return '';
 });
 
@@ -143,6 +157,14 @@ const reimbursementAmount = computed(() => {
   return Math.max(paid - personal, 0).toFixed(2);
 });
 
+const personalAmount = computed(() => Number(record.value?.personalAmount ?? 0));
+
+const goodsTotal = computed(() =>
+  items.value
+    .reduce((sum, item) => sum + Number(itemLineTotal(item)), personalAmount.value)
+    .toFixed(2),
+);
+
 const load = async () => {
   if (!recordId.value) {
     loading.value = false;
@@ -161,12 +183,18 @@ const load = async () => {
     items.value = (res.data.items || []).map((item: any) => {
       const quantity = Number(item.quantityNeeded ?? 0);
       const total = Number(item.estimatedCost ?? 0);
+      const quantityText = String(quantity || '');
+      const unitPriceText =
+        quantity > 0 ? String(Number((total / quantity).toFixed(2))) : '';
       return {
         itemId: item.id,
         name: item.ingredientName || item.ingredient?.name || '原料',
         unit: item.quantityUnit || item.displayUnit || '',
-        quantity: String(quantity || ''),
-        unitPrice: quantity > 0 ? String(Number((total / quantity).toFixed(2))) : '',
+        quantity: quantityText,
+        unitPrice: unitPriceText,
+        originalQuantity: quantityText,
+        originalUnitPrice: unitPriceText,
+        originalTotal: total,
       };
     });
     form.value = {
@@ -183,9 +211,17 @@ const load = async () => {
 
 const deleteItem = (item: { itemId: string; name: string }) => {
   if (lockedReason.value) return;
+  if (items.value.length <= 1) {
+    uni.showModal({
+      title: '不能删光',
+      content: '至少留一项；整笔不要了请用作废。',
+      showCancel: false,
+    });
+    return;
+  }
   uni.showModal({
     title: '删掉这一项？',
-    content: `删掉「${item.name}」后，这一项不再计入本次采购，库存也不会增加。`,
+    content: `删掉「${item.name}」后，不再计入报销和库存。`,
     confirmColor: '#b4453a',
     success: async (res) => {
       if (!res.confirm) return;
@@ -197,8 +233,9 @@ const deleteItem = (item: { itemId: string; name: string }) => {
         if (response?.code !== 0) {
           throw new Error(response?.message || '删除失败');
         }
+        // 只移除这一行，不整页重拉：别把其它行还没保存的数量/单价改动冲掉
+        items.value = items.value.filter((row) => row.itemId !== item.itemId);
         uni.showToast({ title: '已删除', icon: 'none' });
-        await load();
       } catch (error: any) {
         uni.showToast({ title: error?.message || '删除失败', icon: 'none' });
       }
@@ -208,13 +245,31 @@ const deleteItem = (item: { itemId: string; name: string }) => {
 
 const save = async () => {
   if (saving.value || lockedReason.value) return;
+  if (items.value.length === 0) {
+    uni.showModal({
+      title: '没有商品',
+      content: '至少留一项；整笔不要了请用作废。',
+      showCancel: false,
+    });
+    return;
+  }
 
-  const payloadItems = items.value.map((item) => ({
-    itemId: item.itemId,
-    quantity: Number(item.quantity),
-    unitPrice: Number(item.unitPrice),
-    unit: item.unit,
-  }));
+  const payloadItems = items.value.map((item) => {
+    const quantity = Number(item.quantity);
+    const untouched =
+      item.quantity === item.originalQuantity &&
+      item.unitPrice === item.originalUnitPrice &&
+      quantity > 0;
+    return {
+      itemId: item.itemId,
+      quantity,
+      // 没改过的行用「原总额 ÷ 数量」回写，避免 12.4633 被显示成 12.46 后总额差几分钱
+      unitPrice: untouched
+        ? item.originalTotal / quantity
+        : Number(item.unitPrice),
+      unit: item.unit,
+    };
+  });
   const invalid = payloadItems.find(
     (item) =>
       !Number.isFinite(item.quantity) ||
@@ -253,6 +308,10 @@ const save = async () => {
   }
 };
 
+const goBack = () => {
+  uni.navigateBack();
+};
+
 onLoad((options: Record<string, string>) => {
   recordId.value = String(options?.id || '');
   void load();
@@ -283,6 +342,26 @@ onLoad((options: Record<string, string>) => {
   font-size: 28rpx;
   font-weight: 700;
   color: #3c3a32;
+}
+
+.retry-btn {
+  width: 200rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  border-radius: 999rpx;
+  background: #1e3a2f;
+  color: #f3eddd;
+  font-size: 26rpx;
+}
+
+.back-btn {
+  height: 80rpx;
+  line-height: 80rpx;
+  border-radius: 16rpx;
+  background: #f1efe5;
+  color: #1e3a2f;
+  font-size: 26rpx;
+  font-weight: 600;
 }
 
 .notice-card {
@@ -316,7 +395,7 @@ onLoad((options: Record<string, string>) => {
 }
 
 .section-count {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #6b6653;
 }
 
@@ -340,13 +419,13 @@ onLoad((options: Record<string, string>) => {
 }
 
 .item-name {
-  font-size: 26rpx;
+  font-size: 28rpx;
   font-weight: 600;
   color: #3c3a32;
 }
 
 .item-unit {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #6b6653;
 }
 
@@ -363,21 +442,21 @@ onLoad((options: Record<string, string>) => {
 }
 
 .field-label {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #6b6653;
 }
 
 .field-input {
-  height: 68rpx;
+  height: 80rpx;
   padding: 0 16rpx;
   border-radius: 10rpx;
   background: #f7f5ec;
-  font-size: 26rpx;
+  font-size: 28rpx;
   color: #3c3a32;
 }
 
 .item-total {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #6b6653;
 }
 
@@ -400,13 +479,24 @@ onLoad((options: Record<string, string>) => {
 }
 
 .summary-row {
-  margin-top: 12rpx;
-  padding-top: 16rpx;
-  border-top: 1rpx solid #f0eee5;
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   font-size: 26rpx;
   color: #3c3a32;
+  padding: 8rpx 0;
+}
+
+.summary-row.muted {
+  font-size: 24rpx;
+  color: #6b6653;
+}
+
+.summary-row.total {
+  margin-top: 8rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #f0eee5;
+  font-weight: 600;
 }
 
 .summary-amount {

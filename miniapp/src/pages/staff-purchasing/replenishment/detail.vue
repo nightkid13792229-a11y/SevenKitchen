@@ -17,7 +17,7 @@
         </view>
         <view class="badges">
           <text class="badge" :class="arrivalTone">{{ arrivalText }}</text>
-          <text class="badge" :class="claimTone">{{ claimText }}</text>
+          <text v-if="!record.voidedAt" class="badge" :class="claimTone">{{ claimText }}</text>
           <text v-if="isOverdue" class="badge overdue">超期未到货</text>
         </view>
         <text class="head-date">下单 {{ formatDateTime(record.orderPlacedAt || record.createdAt) }}</text>
@@ -26,11 +26,12 @@
       <view class="amount-card">
         <view class="amount-main">
           <text class="amount-label">{{ reimbursementLabel }}</text>
-          <text class="amount-value">¥{{ money(record.reimbursementAmount ?? 0) }}</text>
+          <text v-if="record.voidedAt" class="amount-value muted">—</text>
+          <text v-else class="amount-value">¥{{ money(record.reimbursementAmount ?? 0) }}</text>
         </view>
         <view class="amount-rows">
           <view v-if="record.subtotalAmount !== null && record.subtotalAmount !== undefined" class="amount-row muted">
-            <text>商品小计</text>
+            <text>商品合计</text>
             <text>¥{{ money(record.subtotalAmount) }}</text>
           </view>
           <view class="amount-row">
@@ -50,7 +51,7 @@
             <text>¥{{ money(record.packagingFee) }}</text>
           </view>
           <view v-if="Number(record.discountAmount || 0) !== 0" class="amount-row muted">
-            <text>{{ Number(record.discountAmount) > 0 ? '优惠' : '其他费用' }}</text>
+            <text>{{ Number(record.discountAmount) > 0 ? '优惠' : '补差' }}</text>
             <text>{{ Number(record.discountAmount) > 0 ? '-' : '+' }}¥{{ money(Math.abs(Number(record.discountAmount))) }}</text>
           </view>
         </view>
@@ -80,31 +81,33 @@
       </view>
 
       <view v-if="!canOperate" class="lock-note">
-        <text>这笔是 {{ record.createdBy?.nickname || '同事' }} 记的，只有本人或管理员能改；你可以查看。</text>
+        <text>由 {{ record.createdBy?.nickname || '同事' }} 记录，仅本人或管理员可修改。</text>
       </view>
 
       <view class="section-card">
         <view class="section-head">
           <text class="section-title">商品明细</text>
-          <text class="section-count">{{ (record.items || []).length }} 项</text>
+          <text class="section-count">{{ displayItems.length }} 项</text>
         </view>
 
-        <view v-if="(record.items || []).length === 0" class="empty-line">
+        <view v-if="displayItems.length === 0" class="empty-line">
           <text>没有商品明细</text>
         </view>
 
         <view v-else class="item-list">
-          <view v-for="item in record.items" :key="item.id" class="item-row">
+          <view
+            v-for="item in displayItems"
+            :key="item.id"
+            class="item-row"
+          >
             <view class="item-main">
-              <text class="item-name">{{ item.ingredientName || item.ingredient?.name || '原料' }}</text>
-              <text class="item-meta">
-                {{ item.procurementSkuName || item.quantityUnit }}
-                <text v-if="item.productModel"> · {{ item.productModel }}</text>
-              </text>
+              <text class="item-name">{{ item.name }}</text>
+              <text class="item-meta">{{ item.meta }}</text>
             </view>
             <view class="item-right">
-              <text class="item-qty">{{ formatQuantity(item.quantityNeeded) }}{{ item.quantityUnit }}</text>
-              <text class="item-cost">¥{{ money(item.estimatedCost) }}</text>
+              <text class="item-qty">{{ item.qtyText }}</text>
+              <text v-if="item.baseText" class="item-base">{{ item.baseText }}</text>
+              <text class="item-cost">¥{{ item.costText }}</text>
             </view>
           </view>
         </view>
@@ -121,25 +124,8 @@
               <text class="item-name">{{ line.name }}</text>
               <text class="item-meta">{{ line.qty }}{{ line.unit || '' }}</text>
             </view>
-            <text class="item-cost">¥{{ money(line.amount) }}</text>
-          </view>
-        </view>
-      </view>
-
-      <view v-if="(record.records || []).length > 0" class="section-card">
-        <view class="section-head">
-          <text class="section-title">采购记录</text>
-          <text class="section-count">{{ record.records.length }} 条</text>
-        </view>
-        <view class="record-list">
-          <view v-for="item in record.records" :key="item.id" class="record-row">
-            <view class="record-main">
-              <text class="record-name">{{ item.procurementSkuName || item.ingredientName }}</text>
-              <text class="record-meta">{{ item.purchaseChannelName || item.purchaseChannel || '未填渠道' }}</text>
-            </view>
-            <view class="record-right">
-              <text class="record-qty">{{ formatQuantity(item.actualBaseQuantity) }}{{ item.actualBaseUnit || '' }}</text>
-              <text class="record-cost">¥{{ money(item.actualCost) }}</text>
+            <view class="item-right">
+              <text class="item-cost">¥{{ money(line.amount) }}</text>
             </view>
           </view>
         </view>
@@ -163,11 +149,15 @@
       </view>
 
       <view v-if="record.arrivedAt && !record.reimbursementId" class="lock-note">
-        已到货。要改数量/价格，先点「撤销到货」。
+        已到货；改数量或价格需先撤销到货。
+      </view>
+
+      <view v-if="canVoid" class="void-link" @tap="voidRecord">
+        <text>作废这笔记录</text>
       </view>
 
       <view
-        v-if="canArrive || canEdit || canRevokeArrival || canReimburse || canVoid"
+        v-if="canArrive || canEdit || canRevokeArrival || canReimburse"
         class="actions"
       >
         <button v-if="canArrive" class="action-btn primary" :loading="acting" @tap="confirmArrival">
@@ -181,9 +171,6 @@
         </button>
         <button v-if="canReimburse" class="action-btn" @tap="goReimburse">
           去报销
-        </button>
-        <button v-if="canVoid" class="action-btn danger" :loading="acting" @tap="voidRecord">
-          作废
         </button>
       </view>
     </template>
@@ -274,14 +261,18 @@ const arrivalTone = computed(() => {
 
 const claimText = computed(() => {
   if (!record.value) return '';
-  if (record.value.reimbursement?.status === 'REIMBURSED') return '已报销';
+  const status = record.value.reimbursement?.status;
+  if (status === 'REIMBURSED') return '已报销';
+  if (status === 'REJECTED' || status === 'REQUIRES_RESUBMIT') return '待重新提交';
   if (record.value.reimbursementId) return '报销中';
   return '未报销';
 });
 
 const claimTone = computed(() => {
   if (!record.value) return 'muted';
-  if (record.value.reimbursement?.status === 'REIMBURSED') return 'done';
+  const status = record.value.reimbursement?.status;
+  if (status === 'REIMBURSED') return 'done';
+  if (status === 'REJECTED' || status === 'REQUIRES_RESUBMIT') return 'in-transit';
   if (record.value.reimbursementId) return 'pending';
   return 'muted';
 });
@@ -312,12 +303,89 @@ const personalLines = computed(() =>
   ),
 );
 
+const baseUnitLabel = (unit?: string | null) => {
+  const value = String(unit || '').toUpperCase();
+  if (value === 'G') return 'g';
+  if (value === 'ML') return 'ml';
+  if (value === 'PCS') return '件';
+  return unit || '';
+};
+
+const normalizeUnit = (unit?: string | null) => {
+  const text = String(unit || '').trim().toLowerCase();
+  if (text === '克') return 'g';
+  if (text === '毫升') return 'ml';
+  return text;
+};
+
+const recordByItemId = computed(() => {
+  const map = new Map<string, any>();
+  for (const row of record.value?.records || []) {
+    if (row?.purchaseItemId) map.set(row.purchaseItemId, row);
+  }
+  return map;
+});
+
+/**
+ * 商品明细和采购记录是同一批行，合并成一张表：
+ * 主行显示「按商品单位买的量」，第二行只在换算后单位不同时才出现（如 3 斤 → 入库 1500g）。
+ */
+const displayItems = computed(() => {
+  if (!record.value) return [];
+  const rows = (record.value.items || []).map((item: any) => {
+    const matched = recordByItemId.value.get(item.id);
+    const unit = item.quantityUnit || item.displayUnit || '';
+    const baseQuantity = Number(matched?.actualBaseQuantity);
+    const baseUnit = baseUnitLabel(matched?.actualBaseUnit);
+    const baseText =
+      Number.isFinite(baseQuantity) &&
+      baseQuantity > 0 &&
+      baseUnit &&
+      normalizeUnit(baseUnit) !== normalizeUnit(unit)
+        ? `入库 ${formatQuantity(baseQuantity)}${baseUnit}`
+        : '';
+    const metaParts = [item.procurementSkuName, item.productModel].filter(
+      Boolean,
+    );
+    if (
+      metaParts.length === 2 &&
+      String(metaParts[0]).includes(String(metaParts[1]))
+    ) {
+      metaParts.pop();
+    }
+    return {
+      id: item.id,
+      name: item.ingredientName || item.ingredient?.name || '原料',
+      meta: metaParts.join(' · ') || '未关联采购商品',
+      qtyText: `${formatQuantity(item.quantityNeeded)}${unit}`,
+      baseText,
+      costText: money(item.estimatedCost),
+    };
+  });
+  const known = new Set(rows.map((item) => item.id));
+  const orphans = (record.value.records || [])
+    .filter(
+      (row: any) => !row?.purchaseItemId || !known.has(row.purchaseItemId),
+    )
+    .map((row: any) => ({
+      id: row.id,
+      name: row.procurementSkuName || row.ingredientName || '采购记录',
+      meta: '仅入库记录',
+      qtyText: `${formatQuantity(row.actualBaseQuantity)}${baseUnitLabel(row.actualBaseUnit)}`,
+      baseText: '',
+      costText: money(row.actualCost),
+    }));
+  return [...rows, ...orphans];
+});
+
 const reimbursementLabel = computed(() => {
-  if (!record.value) return '本次报销';
+  if (!record.value) return '本次可报销';
   if (record.value.voidedAt) return '不报销';
-  if (record.value.reimbursement?.status === 'REIMBURSED') return '已报销';
+  const status = record.value.reimbursement?.status;
+  if (status === 'REIMBURSED') return '已报销';
+  if (status === 'REJECTED' || status === 'REQUIRES_RESUBMIT') return '待重新提交';
   if (record.value.reimbursementId) return '报销中';
-  return '可报销';
+  return '本次可报销';
 });
 const importShots = computed(() =>
   imports.value.flatMap((item: any) => (Array.isArray(item.imageUrls) ? item.imageUrls : [])),
@@ -394,11 +462,11 @@ const load = async () => {
   }
 };
 
-const withActing = async (task: () => Promise<void>) => {
+const withActing = async (fn: () => Promise<void>) => {
   if (acting.value) return;
   acting.value = true;
   try {
-    await task();
+    await fn();
   } finally {
     acting.value = false;
   }
@@ -567,8 +635,12 @@ onShow(() => {
 }
 
 .head-order {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: rgba(243, 237, 221, 0.7);
+  max-width: 60%;
+  text-align: right;
+  line-height: 1.4;
+  word-break: break-all;
 }
 
 .badges {
@@ -580,7 +652,7 @@ onShow(() => {
 .badge {
   padding: 4rpx 14rpx;
   border-radius: 8rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .badge.in-transit {
@@ -609,7 +681,7 @@ onShow(() => {
 }
 
 .head-date {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: rgba(243, 237, 221, 0.68);
 }
 
@@ -640,6 +712,11 @@ onShow(() => {
   font-size: 44rpx;
   font-weight: 800;
   color: #1e3a2f;
+}
+
+.amount-value.muted {
+  color: #8a8472;
+  font-weight: 700;
 }
 
 .amount-rows {
@@ -704,19 +781,17 @@ onShow(() => {
 }
 
 .section-count {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #6b6653;
 }
 
-.item-list,
-.record-list {
+.item-list {
   display: flex;
   flex-direction: column;
   gap: 16rpx;
 }
 
-.item-row,
-.record-row {
+.item-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -725,35 +800,30 @@ onShow(() => {
   border-bottom: 1rpx solid #f5f3ea;
 }
 
-.item-row:last-child,
-.record-row:last-child {
+.item-row:last-child {
   padding-bottom: 0;
   border-bottom: none;
 }
 
-.item-main,
-.record-main {
+.item-main {
   display: flex;
   flex-direction: column;
   gap: 6rpx;
   min-width: 0;
 }
 
-.item-name,
-.record-name {
+.item-name {
   font-size: 26rpx;
   font-weight: 600;
   color: #3c3a32;
 }
 
-.item-meta,
-.record-meta {
-  font-size: 22rpx;
+.item-meta {
+  font-size: 24rpx;
   color: #6b6653;
 }
 
-.item-right,
-.record-right {
+.item-right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -761,14 +831,17 @@ onShow(() => {
   flex-shrink: 0;
 }
 
-.item-qty,
-.record-qty {
+.item-qty {
   font-size: 24rpx;
   color: #3c3a32;
 }
 
-.item-cost,
-.record-cost {
+.item-base {
+  font-size: 24rpx;
+  color: #6b6653;
+}
+
+.item-cost {
   font-size: 24rpx;
   font-weight: 700;
   color: #1e3a2f;
@@ -833,5 +906,12 @@ onShow(() => {
   font-size: 24rpx;
   color: #6b6653;
   line-height: 1.6;
+}
+
+.void-link {
+  padding: 8rpx 0 4rpx;
+  text-align: center;
+  font-size: 24rpx;
+  color: #a12a26;
 }
 </style>

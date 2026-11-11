@@ -202,7 +202,8 @@
             "navigationBarTitleText": "补货",
             "navigationBarBackgroundColor": "#1E3A2F",
             "navigationBarTextStyle": "white",
-            "backgroundColor": "#FBFCF7"
+            "backgroundColor": "#FBFCF7",
+            "enablePullDownRefresh": true
           }
         },
         {

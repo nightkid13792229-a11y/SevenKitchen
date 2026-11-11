@@ -58,25 +58,25 @@
 
       <view v-if="activeImport" class="summary">
         <view class="summary-cell">
-          <text class="summary-k">订单实付（截图）</text>
-          <text class="summary-v" :class="{ warn: activeImport.paid === null }">{{ activeImport.paid === null ? '未读到' : money(activeImport.paid) }}</text>
+          <text class="summary-k">实付</text>
+          <text class="summary-v" :class="{ warn: activeImport.paid === null }">{{ paidText }}</text>
         </view>
         <view class="summary-cell">
-          <text class="summary-k">商品+费用合计</text>
-          <text class="summary-v">{{ money(reconcileAmount) }}</text>
+          <text class="summary-k">明细合计</text>
+          <text class="summary-v">¥{{ money(reconcileAmount) }}</text>
         </view>
         <view class="summary-cell">
           <text class="summary-k">个人采购</text>
-          <text class="summary-v">{{ money(activeSummary.personalAmount) }}</text>
+          <text class="summary-v">{{ activeSummary.personalAmount > 0 ? '¥' + money(activeSummary.personalAmount) : '—' }}</text>
         </view>
         <view class="summary-cell">
-          <text class="summary-k">本次报销</text>
-          <text class="summary-v">¥{{ reimbursementPreview }}</text>
+          <text class="summary-k">可报销</text>
+          <text class="summary-v">{{ reimbursementPreview }}</text>
         </view>
         <view class="summary-cell">
-          <text class="summary-k">要处理的</text>
-          <text v-if="activeImport && !activeImport.channel" class="summary-v warn">先定渠道</text>
-          <text v-else class="summary-v warn">{{ activeSummary.unmatched + activeSummary.needsSku }} 行</text>
+          <text class="summary-k">待处理</text>
+          <text v-if="!activeImport.channel" class="summary-v warn">先定渠道</text>
+          <text v-else class="summary-v" :class="{ warn: activeSummary.unmatched + activeSummary.needsSku > 0 }">{{ activeSummary.unmatched + activeSummary.needsSku }} 行</text>
         </view>
         <view class="summary-cell">
           <text class="summary-k">差额</text>
@@ -105,17 +105,17 @@
       <view v-if="activeImport && !activeImport.channel" class="channel-gate">
         <text class="channel-gate-title">这笔订单还没确认渠道</text>
         <text class="channel-gate-desc">
-          商品是按渠道匹配的。先选一下在哪买的，系统会把还没动过的行自动重新匹配一遍。
+          商品按渠道匹配；选定后会重新匹配还没改过的行。
         </text>
         <button class="channel-gate-btn" @tap="changeChannel">选在哪买的</button>
         <text v-if="activeImport.aiChannelGuess" class="channel-gate-hint">
           模型看截图写的是「{{ activeImport.aiChannelGuess }}」，但渠道清单里没有这一项。
         </text>
-        <text class="channel-gate-hint">清单里没有你要的渠道？让管理员在后台「平台选项 → 采购渠道」里加。</text>
+        <text class="channel-gate-hint">没有这个渠道？让管理员在后台加。</text>
       </view>
 
       <view v-if="manualMode && activeImport" class="warn-banner">
-        <text class="warn-line">这是手填记录：先选渠道，再点「手动加一行」逐行加商品；填好实付后保存。</text>
+        <text class="warn-line">手填：先选渠道 → 手动加行 → 填实付。</text>
       </view>
 
       <view v-if="activeAllPersonal" class="warn-banner">
@@ -163,7 +163,7 @@
         <view class="fees-head">
           <text class="fees-title">费用</text>
           <text class="fees-action" @tap="openFeeEdit">
-            {{ feesEdited ? '已修改 · 再改 ›' : '改实付 / 费用 ›' }}
+            {{ feesEdited ? '已改 · 再改 ›' : '改金额 ›' }}
           </text>
         </view>
         <view class="fee-row">
@@ -243,7 +243,7 @@
           >
             <text class="field-label">对应商品</text>
             <text v-if="editing.isPersonal" class="field-value muted-text">
-              个人采购 · 不生成采购记录
+              个人采购 · 不报销
             </text>
             <template v-else>
               <text class="field-value" :class="{ warn: !editing.skuName }">
@@ -319,7 +319,7 @@
     <view v-if="orderInfoEditing" class="sheet-mask" @tap="orderInfoEditing = null">
       <view class="sheet" @tap.stop>
         <text class="sheet-title">订单信息</text>
-        <text class="sheet-sub">订单号用来防重复记账；预计到货用来判断超期。</text>
+        <text class="sheet-sub">订单号防重复记账，预计到货用于超期提醒。</text>
         <view class="field">
           <text class="field-label">订单号</text>
           <input
@@ -350,11 +350,11 @@
       <view class="sheet" @tap.stop>
         <text class="sheet-title">数量单位</text>
         <text class="sheet-sub">
-          多少克是按商品自带的换算算的，所以单位要和商品一致（带 ▾ 那格）。
+          克数按商品规格换算；单位要和商品一致。
         </text>
         <text v-if="unitMismatch" class="sheet-warn">
-          这行写的是「{{ editing.unitText }}」，商品是按「{{ editing.skuPurchaseUnit }}」买的，
-          保存时会被拦下：请改回「{{ editing.skuPurchaseUnit }}」，或换一个按「{{ editing.unitText }}」卖的商品。
+          这行写的是「{{ editing.unitText }}」，商品单位是「{{ editing.skuPurchaseUnit }}」；
+          保存会被拦下，改回商品单位或换个商品。
         </text>
         <view class="unit-grid">
           <view
@@ -372,7 +372,7 @@
     <view v-if="feeEditing" class="sheet-mask" @tap="closeFeeEdit">
       <view class="sheet" @tap.stop>
         <text class="sheet-title">实付 / 运费 / 包装费</text>
-        <text class="sheet-sub">{{ feeOriginText }}。读错了可以直接改，留空按没读到处理。</text>
+        <text class="sheet-sub">{{ feeOriginText }}。可直接改，留空算没读到。</text>
 
         <view class="field">
           <text class="field-label">实付</text>
@@ -405,7 +405,7 @@
         <text class="fee-gap-line">{{ feeEditPreview }}</text>
 
         <view class="warn-banner small">
-          <text>实付和费用按整笔订单算，不摊到商品行，也不和个人采购分摊；全额算进这次采购。</text>
+          <text>实付和费用按整单算，不摊到商品行。</text>
         </view>
 
         <view class="sheet-actions">
@@ -800,28 +800,26 @@ const feeCheckText = computed(() => {
   const summary = feeSummary.value;
   if (!item || !summary) return '';
   if (!feeCheckWarn.value) return '';
-  const hasMissing = summary.hasMissingFee;
-  const equation =
-    `商品 ¥${money(summary.lineSum)} + 运费 ¥${money(summary.shipping)} + ` +
-    `包装费 ¥${money(summary.packaging)} = ¥${money(summary.expected)}`;
+  const missing = summary.hasMissingFee;
+  const gap = summary.gap;
 
-  if (summary.gap === null) {
-    return hasMissing
-      ? `运费或包装费还没填（先按 0 算），实付也没读到，请对照原图补全。`
-      : `${equation}；这笔的实付没读到，暂时只能按商品金额核对。`;
+  if (gap === null) {
+    return missing
+      ? '运费或包装费没填（按 0 算），实付也没读到；对照原图补全。'
+      : '实付没读到；先按商品金额核对。';
   }
-  const diff = Math.abs(summary.gap).toFixed(2);
-  if (hasMissing) {
-    if (summary.gap === 0) {
-      return `运费或包装费还没填（先按 0 算）：${equation}，实付刚好等于这个数；确认一下是不是本来就没有。`;
+  const diff = Math.abs(gap).toFixed(2);
+  if (missing) {
+    if (gap === 0) {
+      return '运费或包装费没填（按 0 算），刚好等于实付；确认是不是本来就没有。';
     }
-    return summary.gap > 0
-      ? `运费或包装费还没填（先按 0 算）：${equation}，实付还多 ¥${diff}，点上面两行补一下就平了。`
-      : `运费或包装费还没填（先按 0 算）：${equation}，实付比它还少 ¥${diff}，请对照原图核对。`;
+    return gap > 0
+      ? `运费或包装费没填（按 0 算），实付还多 ¥${diff}；补上就平了。`
+      : `运费或包装费没填（按 0 算），实付还少 ¥${diff}；对照原图核对。`;
   }
-  return summary.gap > 0
-    ? `${equation}，实付 ¥${money(item.paid)} 比它多 ¥${diff}；可能有服务费或没读到的费用，请对照原图确认。`
-    : `${equation}，实付 ¥${money(item.paid)} 比它少 ¥${diff}，请对照原图核对。`;
+  return gap > 0
+    ? `实付比合计多 ¥${diff}，可能有服务费；对照原图确认。`
+    : `实付比合计少 ¥${diff}；对照原图核对。`;
 });
 
 /** 改费用时的实时预览：一眼看到改完还差多少 */
@@ -835,13 +833,13 @@ const feeEditPreview = computed(() => {
   const paid = form.paidText ? parseNumber(form.paidText) : item.paid;
   const expected = round2(summary.lineSum + (shipping ?? 0) + (packaging ?? 0));
   if (paid === null) {
-    return `合计 ¥${money(expected)}（实付没读到，先按这个数核对）`;
+    return `合计 ¥${money(expected)}（实付未读到）`;
   }
   const gap = round2(paid - expected);
   if (Math.abs(gap) <= IMPORT_FEE_TOLERANCE) {
-    return `合计 ¥${money(expected)}，和实付 ¥${money(paid)} 一致`;
+    return `合计 ¥${money(expected)} = 实付 ¥${money(paid)}`;
   }
-  return `合计 ¥${money(expected)}，和实付 ¥${money(paid)} 差 ¥${Math.abs(gap).toFixed(2)}`;
+  return `合计 ¥${money(expected)}，差 ¥${Math.abs(gap).toFixed(2)}`;
 });
 
 /** 这笔订单的渠道：选商品只列这一家的商品（渠道是商品的身份之一） */
@@ -1171,10 +1169,17 @@ const activeAllPersonal = computed(
     activeImport.value.lines.length > 0 &&
     activeImport.value.lines.every((line) => line.isPersonal),
 );
+const paidText = computed(() => {
+  const paid = activeImport.value?.paid;
+  if (paid === null || paid === undefined) return '未读到';
+  return `¥${money(paid)}`;
+});
+
 const reimbursementPreview = computed(() => {
-  const paid = Number(activeImport.value?.paid ?? 0);
+  const paid = activeImport.value?.paid;
+  if (paid === null || paid === undefined) return '—';
   const personal = Number(activeSummary.value?.personalAmount ?? 0);
-  return Math.max(paid - personal, 0).toFixed(2);
+  return `¥${Math.max(Number(paid) - personal, 0).toFixed(2)}`;
 });
 
 const blockReason = computed(() => {
@@ -1191,14 +1196,14 @@ const blockReason = computed(() => {
     return `${label}：${importIssue(blocking)}`;
   }
   if (allPersonal.value) return '全是个人商品，不用记补货';
-  if (matchedLineCount.value === 0) return '这笔还没有可保存的明细';
+  if (matchedLineCount.value === 0) return '还没有可保存的明细';
   if (
     pageMode.value === 'replenishment' &&
     imports.value.some(
       (item) => item.paid === null || Number(item.paid ?? 0) <= 0,
     )
   ) {
-    return '先补这笔的实付';
+    return '先填实付';
   }
   return '';
 });
@@ -1215,8 +1220,8 @@ const amountStateText = computed(() =>
 const footerLabel = computed(() => {
   const count = imports.value.length;
   if (pageMode.value === 'replenishment') {
-    if (count <= 1) return `将保存 ${matchedLineCount.value} 条补货明细`;
-    return `${count} 笔订单 · 共 ${matchedLineCount.value} 条补货明细`;
+    if (count <= 1) return `将保存 ${matchedLineCount.value} 项`;
+    return `${count} 笔 · 共 ${matchedLineCount.value} 项`;
   }
   if (count <= 1) return `将生成 ${matchedLineCount.value} 条采购记录`;
   return `${count} 笔订单 · 共 ${matchedLineCount.value} 条采购记录`;
@@ -1224,7 +1229,7 @@ const footerLabel = computed(() => {
 
 function importIssue(item: OrderImportView): string | null {
   // 渠道没确认时，行级的「待处理」都是假象：确认渠道后会自动重匹配。
-  if (!item.channel) return '先确认渠道';
+  if (!item.channel) return '先定渠道';
   const active = item.lines.filter((line) => !line.isPersonal);
   const pending = item.summary.unmatched + item.summary.needsSku;
   if (pending > 0) return `${pending} 行要处理`;
@@ -2416,30 +2421,33 @@ function emptySummary() {
 }
 
 .summary {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  row-gap: 16rpx;
   background: #1e3a2f;
   border-radius: 24rpx;
-  padding: 16rpx 4rpx;
+  padding: 20rpx 10rpx;
   margin-bottom: 12rpx;
 }
 
 .summary-cell {
-  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 4rpx;
+  padding: 0 10rpx;
 }
 
 .summary-k {
-  font-size: 18rpx;
+  font-size: 20rpx;
+  line-height: 1.3;
   color: #c9cfc0;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .summary-v {
-  font-size: 26rpx;
+  font-size: 28rpx;
   font-weight: 700;
   color: #f7f4e9;
   white-space: nowrap;

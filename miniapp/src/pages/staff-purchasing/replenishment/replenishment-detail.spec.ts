@@ -29,3 +29,20 @@ describe('补货记录详情', () => {
     expect(source).toContain('未报销');
   });
 });
+
+describe('补货详情 · 信息合并（2026-11-11）', () => {
+  it('商品明细和采购记录合成一张表，不再列两遍', () => {
+    expect(source).toContain('displayItems');
+    expect(source).toContain('入库 ');
+    expect(source).not.toContain('section-title">采购记录');
+  });
+
+  it('作废从底部主操作栏移到页面内，避免误触', () => {
+    expect(source).toContain('作废这笔记录');
+    expect(source).not.toContain('class="action-btn danger"');
+  });
+
+  it('作废记录不显示金额', () => {
+    expect(source).toContain('amount-value muted');
+  });
+});

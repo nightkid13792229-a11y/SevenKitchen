@@ -87,7 +87,7 @@
             待收货 {{ replenishmentPending }}
           </text>
         </view>
-        <text class="quick-entry-subtitle">海产、冻品、补剂、包材等提前备货走这里</text>
+        <text class="quick-entry-subtitle">提前备货，到货点一下入库</text>
       </view>
       <text class="quick-entry-arrow">›</text>
     </view>

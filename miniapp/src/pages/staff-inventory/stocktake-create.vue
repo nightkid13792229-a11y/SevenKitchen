@@ -10,6 +10,15 @@
       <button class="btn primary" @tap="bootstrap">重试</button>
     </view>
 
+    <view v-else-if="lines.length === 0" class="state">
+      <text class="state-title">没有可盘点的原料</text>
+      <text class="state-hint">
+        这张盘点单是空的。重新开一张试试；如果还是空，说明库存里还没有原料。
+      </text>
+      <button class="btn primary" @tap="restart">重新开单</button>
+      <button class="btn ghost" @tap="onCancel">取消这张草稿</button>
+    </view>
+
     <template v-else>
       <view class="top">
         <view class="top-line">
@@ -152,8 +161,16 @@ const bootstrap = async () => {
   loading.value = true;
   error.value = '';
   try {
-    const draft = await getStocktakeDraft();
-    const current = draft || (await startStocktake());
+    let current = (await getStocktakeDraft()) || (await startStocktake());
+    // 旧版本可能留下 0 行的空草稿：自动取消后重开，避免用户看到空列表。
+    if (current.lines?.length === 0 && current.id) {
+      try {
+        await cancelStocktake(current.id);
+      } catch {
+        // 草稿可能已被取消；继续尝试开新单
+      }
+      current = await startStocktake();
+    }
     hydrate(current);
   } catch (err: any) {
     error.value = err?.message || '加载失败，请重试';
@@ -248,6 +265,18 @@ const onNext = async () => {
   }
 };
 
+const restart = async () => {
+  loading.value = true;
+  try {
+    if (stocktakeId.value) {
+      await cancelStocktake(stocktakeId.value);
+    }
+  } catch {
+    // 草稿可能已不存在；继续开新单
+  }
+  await bootstrap();
+};
+
 const onCancel = async () => {
   const confirmed = await new Promise<boolean>((resolve) => {
     uni.showModal({
@@ -284,6 +313,10 @@ const onCancel = async () => {
   padding: 48rpx;
   color: #4b5b51;
   font-size: 26rpx;
+}
+.state .btn {
+  flex: none;
+  width: 360rpx;
 }
 .state.soft {
   padding: 40rpx;

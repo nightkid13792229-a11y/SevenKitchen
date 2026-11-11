@@ -25,8 +25,9 @@ describe('staff inventory stocktake entry (C5)', () => {
   it('uses a numeric keyboard and supports extra count points', () => {
     expect(page).toContain('type="digit"');
     expect(page).toContain('confirm-type="next"');
-    expect(page).toContain('再记一处');
     expect(page).toContain('newPortions');
+    expect(page).toContain('设置位置');
+    expect(page).toContain('第 ');
   });
 
   it('starts from the server draft and falls back to a new stocktake', () => {

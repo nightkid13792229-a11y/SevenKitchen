@@ -151,6 +151,8 @@ export interface StocktakePortionDraft {
   /** 已有的点：传 id + 实盘；remove=true 表示删掉这个点 */
   id: string;
   countedQuantityG?: number | null;
+  /** 位置/批次，可选；传了才更新 */
+  locationLabel?: string | null;
   remove?: boolean;
 }
 
@@ -1864,12 +1866,16 @@ export class InventoryService {
           continue;
         }
         const counted = normalizeCounted(draft.countedQuantityG);
+        const data: Record<string, any> = {
+          countedQuantityG: counted,
+          countedAt: counted === null ? null : now,
+        };
+        if (draft.locationLabel !== undefined) {
+          data.locationLabel = draft.locationLabel?.trim() || null;
+        }
         await tx.inventoryStocktakePortion.update({
           where: { id: draft.id },
-          data: {
-            countedQuantityG: counted,
-            countedAt: counted === null ? null : now,
-          },
+          data,
         });
       }
 

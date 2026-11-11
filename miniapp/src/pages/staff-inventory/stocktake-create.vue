@@ -78,10 +78,11 @@
           </view>
 
           <view
-            v-for="portion in line.portions || []"
+            v-for="(portion, index) in line.portions || []"
             :key="portion.id"
-            class="portion"
+            class="portion-block"
           >
+          <view class="portion">
             <text
               class="p-label"
               :class="{ expanded: expanded.has(portion.id) }"
@@ -105,6 +106,14 @@
               {{ isPortionCounted(portion) ? '✓' : '' }}
             </text>
             <text class="add-one" @tap.stop="addPortion(line, portion)">＋</text>
+          </view>
+
+          <view v-if="(line.portions || []).length > 1" class="portion-loc">
+            <text class="loc-no">第 {{ index + 1 }} 处</text>
+            <text class="loc-text" @tap="setLocation(portion, index)">
+              {{ portion.locationLabel || '设置位置（可选）' }}
+            </text>
+          </view>
           </view>
 
           <view v-if="!line.portions || line.portions.length === 0" class="portion">
@@ -486,25 +495,11 @@ const onLineInput = (line: DraftLine, event: any) => {
   scheduleSave();
 };
 
+/** ＋：直接给这个商品再加一处录入，不再弹窗问位置（位置在行下单独设置）。 */
 const addPortion = async (
   line: DraftLine,
   portion?: InventoryStocktakePortion,
 ) => {
-  const context = portion
-    ? portionLabel(line, portion)
-    : lineLabel(line);
-  const result = await new Promise<any>((resolve) => {
-    uni.showModal({
-      title: `再记一处：${context}`,
-      editable: true,
-      placeholderText: '位置或批次，例如 冰柜2（可留空）',
-      success: (res) => resolve(res),
-      fail: () => resolve({}),
-    });
-  });
-  if (!result?.confirm) return;
-
-  const locationLabel = String(result.content || '').trim() || null;
   await flushSave();
   try {
     const draft = await saveStocktakeLines(stocktakeId.value, {
@@ -512,13 +507,49 @@ const addPortion = async (
         {
           lineId: line.id,
           procurementSkuId: portion?.procurementSkuId ?? null,
-          locationLabel,
+          locationLabel: null,
         },
       ],
     });
     hydrate(draft as any);
   } catch (err: any) {
     uni.showToast({ title: err?.message || '加不上，稍后再试', icon: 'none' });
+  }
+};
+
+/** 设置第 N 处的位置（可选，只影响显示与追溯，不影响合计）。 */
+const setLocation = async (portion: InventoryStocktakePortion, index: number) => {
+  const result = await new Promise<any>((resolve) => {
+    uni.showModal({
+      title: `第 ${index + 1} 处在哪里`,
+      editable: true,
+      placeholderText: '例如 冰柜2 / 第二批（可留空）',
+      content: portion.locationLabel || '',
+      confirmText: '保存',
+      success: (res) => resolve(res),
+      fail: () => resolve({}),
+    });
+  });
+  if (!result?.confirm) return;
+
+  const text = String(result.content || '').trim();
+  await flushSave();
+  try {
+    const draft = await saveStocktakeLines(stocktakeId.value, {
+      portions: [
+        {
+          id: portion.id,
+          countedQuantityG:
+            (values.value[portion.id] || '').trim() === ''
+              ? null
+              : Number(values.value[portion.id]),
+          locationLabel: text || null,
+        },
+      ],
+    });
+    hydrate(draft as any);
+  } catch (err: any) {
+    uni.showToast({ title: err?.message || '没存上，稍后重试', icon: 'none' });
   }
 };
 
@@ -669,7 +700,23 @@ const onCancel = async () => {
 }
 .line-total { margin-left: auto; font-size: 24rpx; color: #4b5b51; }
 
+.portion-block { padding: 2rpx 0; }
 .portion { display: flex; align-items: center; gap: 12rpx; padding: 6rpx 0; }
+.portion-loc {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 0 0 8rpx 4rpx;
+  font-size: 22rpx;
+  color: #7a8a80;
+}
+.loc-no {
+  padding: 2rpx 10rpx;
+  border-radius: 8rpx;
+  background: #eef2ec;
+  color: #5f6f64;
+}
+.loc-text { color: #1e3a2f; }
 .p-label {
   flex: 1;
   min-width: 0;

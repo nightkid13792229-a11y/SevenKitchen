@@ -231,7 +231,8 @@ export function saveStocktakeLines(
     lines?: Array<{ ingredientId: string; countedQuantityG: number | null }>;
     portions?: Array<{
       id: string;
-      countedQuantityG: number | null;
+      countedQuantityG?: number | null;
+      locationLabel?: string | null;
       remove?: boolean;
     }>;
     newPortions?: Array<{

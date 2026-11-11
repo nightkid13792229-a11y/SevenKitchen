@@ -14,6 +14,10 @@ const shipSubmitSource = readFileSync(
   resolve(__dirname, '../api/ship-submit.ts'),
   'utf8',
 );
+const shipRecipientSource = readFileSync(
+  resolve(__dirname, '../components/shipping/ShipRecipientSummary.vue'),
+  'utf8',
+);
 const ordersApiSource = readFileSync(
   resolve(__dirname, '../api/orders.ts'),
   'utf8',
@@ -458,27 +462,28 @@ describe('staff order detail · 管理员改预约制作日（2026-11-08）', ()
  */
 describe('staff order detail · 发货弹窗顶部顾客/狗狗/收货地址', () => {
   it('顾客、狗狗、收货三行放在发货类型之前', () => {
-    expect(shipDrawerSource).toContain('class="ship-recipient"');
-    expect(shipDrawerSource).toContain('ship-recipient-label">顾客');
-    expect(shipDrawerSource).toContain('ship-recipient-label">狗狗');
-    expect(shipDrawerSource).toContain('ship-recipient-label">收货');
+    // 2026-11-11：三行汇总抽成组件，合并发货页也用它
+    expect(shipRecipientSource).toContain('class="ship-recipient"');
+    expect(shipRecipientSource).toContain('ship-recipient-label">顾客');
+    expect(shipRecipientSource).toContain('ship-recipient-label">狗狗');
+    expect(shipRecipientSource).toContain('ship-recipient-label">收货');
     // 多只狗怎么拼，仍由详情页算好再传进来
     expect(detailSource).toContain('shipDogSummary');
-    // 位置在「发货类型」前面：一打开弹窗就看得到
-    const recipientAt = shipDrawerSource.indexOf('class="ship-recipient"');
+    // 抽屉里组件挂在这一屏最前面
+    const componentAt = shipDrawerSource.indexOf('<ShipRecipientSummary');
     const shippingTypeAt = shipDrawerSource.indexOf("v-if=\"shippingType === 'NORMAL'\"");
-    expect(recipientAt).toBeGreaterThan(-1);
-    expect(recipientAt).toBeLessThan(shippingTypeAt);
+    expect(componentAt).toBeGreaterThan(-1);
+    expect(componentAt).toBeLessThan(shippingTypeAt);
   });
 
   it('地址一键复制，复用详情页的复制地址逻辑', () => {
-    expect(shipDrawerSource).toContain('class="ship-copy-pill" @tap.stop="copyAddress"');
-    expect(shipDrawerSource).toContain('地址已复制');
+    expect(shipRecipientSource).toContain('class="ship-copy-pill" @tap.stop="copyAddress"');
+    expect(shipRecipientSource).toContain('地址已复制');
     // 复制内容带上收货人和电话，粘到顺丰就能用
-    expect(shipDrawerSource).toContain('buildOrderAddressCopyText');
-    expect(shipDrawerSource).toContain('getOrderAddressPhone');
-    expect(shipDrawerSource).toContain('getOrderAddressRegionText');
-    expect(shipDrawerSource).toContain('getOrderAddressDetail');
+    expect(shipRecipientSource).toContain('buildOrderAddressCopyText');
+    expect(shipRecipientSource).toContain('getOrderAddressPhone');
+    expect(shipRecipientSource).toContain('getOrderAddressRegionText');
+    expect(shipRecipientSource).toContain('getOrderAddressDetail');
   });
 
   it('一单多只狗时并列写出来，不是只显示第一只', () => {
@@ -489,8 +494,8 @@ describe('staff order detail · 发货弹窗顶部顾客/狗狗/收货地址', (
   });
 
   it('没录地址时给提示，不留一个空白的「复制地址」按钮', () => {
-    expect(shipDrawerSource).toContain('未录入收货地址');
-    expect(shipDrawerSource).toContain('v-if="address" class="ship-copy-pill"');
+    expect(shipRecipientSource).toContain('未录入收货地址');
+    expect(shipRecipientSource).toContain('v-if="address" class="ship-copy-pill"');
   });
 });
 

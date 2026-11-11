@@ -8,35 +8,13 @@
 
       <!-- 填单号之前先看清寄给谁、哪只狗、寄到哪（2026-11-10）：
            以前要关掉弹窗回详情页翻地址，再手抄到顺丰下单 -->
-      <view class="ship-recipient">
-        <view class="ship-recipient-row">
-          <text class="ship-recipient-label">顾客</text>
-          <text class="ship-recipient-value">
-            {{ customerName || '未记录顾客' }}
-            <text v-if="customerPhone" class="ship-recipient-sub">{{ customerPhone }}</text>
-          </text>
-        </view>
-        <view class="ship-recipient-row">
-          <text class="ship-recipient-label">狗狗</text>
-          <text class="ship-recipient-value" :class="{ 'ship-recipient-missing': !dogSummary }">
-            {{ dogSummary || '未绑定狗狗' }}
-          </text>
-        </view>
-        <view class="ship-recipient-row">
-          <text class="ship-recipient-label">收货</text>
-          <view class="ship-recipient-address">
-            <block v-if="address">
-              <text class="ship-recipient-value">
-                {{ address.recipientName }}
-                <text class="ship-recipient-sub">{{ addressPhone }}</text>
-              </text>
-              <text class="ship-recipient-detail">{{ addressLine }}</text>
-            </block>
-            <text v-else class="ship-recipient-value ship-recipient-missing">未录入收货地址</text>
-          </view>
-          <text v-if="address" class="ship-copy-pill" @tap.stop="copyAddress">复制地址</text>
-        </view>
-      </view>
+      <!-- 顾客 / 狗狗 / 收货地址：和合并发货页共用同一个组件 -->
+      <ShipRecipientSummary
+        :customer-name="customerName"
+        :customer-phone="customerPhone"
+        :dog-summary="dogSummary"
+        :address="address"
+      />
 
       <view class="form-item">
         <text class="form-label">发货类型</text>
@@ -122,6 +100,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { CARRIERS, carrierIndexOf } from '../../constants/carriers'
 import WaybillReceiptBlock from './WaybillReceiptBlock.vue'
+import ShipRecipientSummary from './ShipRecipientSummary.vue'
 import {
   createManualWaybill,
   recognizeReceipt,
@@ -137,13 +116,8 @@ import {
   receiptViewOf,
   resetReceiptState,
 } from '../../utils/waybill-receipt-machine'
-import {
-  buildOrderAddressCopyText,
-  getOrderAddressDetail,
-  getOrderAddressPhone,
-  getOrderAddressRegionText,
-  type OrderAddressLike,
-} from '../../utils/order-address'
+import { type OrderAddressLike } from '../../utils/order-address'
+import { parseShipFee } from '../../utils/ship-fee'
 import { submitStaffShipment } from '../../api/ship-submit'
 
 const props = withDefaults(
@@ -208,12 +182,6 @@ const actualShippingFeeDraft = ref('')
 const shippingType = ref<'NORMAL' | 'NOT_REQUIRED'>('NORMAL')
 const isShipping = ref(false)
 
-const addressPhone = computed(() => getOrderAddressPhone(props.address))
-const addressLine = computed(
-  () =>
-    `${getOrderAddressRegionText(props.address)} ${getOrderAddressDetail(props.address)}`.trim(),
-)
-
 /**
  * 快递存根识别：状态、结论、手动确认都在这一块。
  * 四项值时一定要和下面对得上（recognizedTrackingNumber / manualConfirmedTracking），
@@ -258,17 +226,6 @@ function handleClose() {
 
 function onCarrierChange(event: any) {
   selectedCarrierIndex.value = Number(event.detail.value || 0)
-}
-
-function copyAddress() {
-  const content = buildOrderAddressCopyText(props.address)
-  if (!content) return
-  uni.setClipboardData({
-    data: content,
-    success: () => {
-      uni.showToast({ title: '地址已复制', icon: 'success' })
-    },
-  })
 }
 
 /** 存根识别结果 → 表单三项。对不上时一个都不填。 */
@@ -388,16 +345,12 @@ async function confirmShipping() {
     }
 
     // 实际运费：必填，最多两位小数（2026-10-31 起不再选填）
-    const feeText = String(actualShippingFeeDraft.value || '').trim()
-    if (!feeText) {
-      uni.showToast({ title: '请填写实际运费', icon: 'none' })
+    const feeResult = parseShipFee(actualShippingFeeDraft.value)
+    if (!feeResult.ok) {
+      uni.showToast({ title: feeResult.error || '请填写实际运费', icon: 'none' })
       return
     }
-    if (!/^\d+(\.\d{1,2})?$/.test(feeText)) {
-      uni.showToast({ title: '运费最多两位小数，例如 12.50', icon: 'none' })
-      return
-    }
-    actualShippingFee = Number(feeText)
+    actualShippingFee = feeResult.value
   }
 
   const orderId = props.orderId
@@ -502,75 +455,6 @@ async function confirmShipping() {
 }
 
 // 顶部：寄给谁、哪只狗、寄到哪（2026-11-10）
-.ship-recipient {
-  margin-bottom: 24rpx;
-  padding: 20rpx 22rpx;
-  border-radius: 14rpx;
-  border: 2rpx solid #e6ecd8;
-  background-color: #f2f5ea;
-}
-
-.ship-recipient-row {
-  display: flex;
-  align-items: flex-start;
-
-  & + .ship-recipient-row {
-    margin-top: 12rpx;
-  }
-}
-
-.ship-recipient-label {
-  flex: 0 0 68rpx;
-  font-size: 24rpx;
-  line-height: 38rpx;
-  color: #6b6653;
-}
-
-.ship-recipient-value {
-  flex: 1;
-  min-width: 0;
-  font-size: 26rpx;
-  line-height: 38rpx;
-  color: #26261f;
-  word-break: break-all;
-}
-
-.ship-recipient-sub {
-  margin-left: 10rpx;
-  font-size: 24rpx;
-  color: #6b6653;
-}
-
-.ship-recipient-address {
-  flex: 1;
-  min-width: 0;
-}
-
-.ship-recipient-detail {
-  display: block;
-  margin-top: 2rpx;
-  font-size: 25rpx;
-  line-height: 36rpx;
-  color: #464b3c;
-  word-break: break-all;
-}
-
-.ship-recipient-missing {
-  color: #b0b4bb;
-}
-
-.ship-copy-pill {
-  flex: none;
-  margin-left: 16rpx;
-  padding: 4rpx 18rpx;
-  border: 2rpx solid #1e3a2f;
-  border-radius: 999rpx;
-  background-color: #ffffff;
-  font-size: 22rpx;
-  line-height: 34rpx;
-  color: #1e3a2f;
-}
-
 .form-item {
   margin-bottom: 24rpx;
 }

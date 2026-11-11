@@ -22,6 +22,15 @@
         </view>
       </view>
 
+      <!-- 寄给谁、寄到哪（2026-11-11）：打包台前先看一眼，不用回列表翻 -->
+      <ShipRecipientSummary
+        v-if="orders.length"
+        :customer-name="shipCustomerName"
+        :customer-phone="shipCustomerPhone"
+        :dog-summary="shipDogSummary"
+        :address="shipAddress"
+      />
+
       <!-- 每个包裹 -->
       <view v-for="(pkg, pIndex) in packages" :key="pIndex" class="pkg-card">
         <view class="pkg-head">
@@ -114,6 +123,9 @@
 import { computed, ref } from 'vue'
 import { CARRIERS, carrierIndexOf } from '../../constants/carriers'
 import WaybillReceiptBlock from '../../components/shipping/WaybillReceiptBlock.vue'
+import ShipRecipientSummary from '../../components/shipping/ShipRecipientSummary.vue'
+import { buildShipDogSummary } from '../../utils/order-ship'
+import { parseShipFee } from '../../utils/ship-fee'
 import { type ReceiptView } from '../../utils/waybill-receipt-view'
 import {
   applyRecognizeResult,
@@ -149,6 +161,35 @@ interface PackageState {
   /** 这包的快递存根识别状态（2026-11-10）：一包一张存根，互不影响 */
   receipt: ReceiptState
 }
+
+/**
+ * 合并 / 拆包的前提是「同一顾客、同一收货地址」，
+ * 所以取第一张单做汇总就够；狗狗按这一票里的狗去重列出。
+ */
+const shipFirstOrder = computed(() => orders.value[0] || null)
+const shipAddress = computed(() => shipFirstOrder.value?.address || null)
+const shipCustomerName = computed(
+  () =>
+    shipFirstOrder.value?.customerName ||
+    shipFirstOrder.value?.customer?.nickname ||
+    shipAddress.value?.recipientName ||
+    '',
+)
+const shipCustomerPhone = computed(
+  () =>
+    shipFirstOrder.value?.customerPhone ||
+    shipFirstOrder.value?.customer?.phone ||
+    shipAddress.value?.phone ||
+    '',
+)
+const shipDogSummary = computed(() => {
+  const items: any[] = []
+  orders.value.forEach((order: any) => {
+    if (Array.isArray(order?.items)) items.push(...order.items)
+    else if (order?.firstItem) items.push(order.firstItem)
+  })
+  return buildShipDogSummary(items)
+})
 
 // 承运商清单统一到 constants/carriers.ts（2026-11-10）
 const carriers = CARRIERS
@@ -481,9 +522,9 @@ async function submit() {
       uni.showToast({ title: `包裹 ${i + 1} 的运单号太短`, icon: 'none' })
       return
     }
-    const feeText = String(pkg.fee || '').trim()
-    if (!/^\d+(\.\d{1,2})?$/.test(feeText)) {
-      uni.showToast({ title: `包裹 ${i + 1} 的运费填一下（两位小数）`, icon: 'none' })
+    const feeResult = parseShipFee(pkg.fee)
+    if (!feeResult.ok) {
+      uni.showToast({ title: `包裹 ${i + 1}：${feeResult.error}`, icon: 'none' })
       return
     }
     const used = Object.values(pkg.bags).some((value) => value > 0)
@@ -504,7 +545,7 @@ async function submit() {
     packages: packages.value.map((pkg, index) => ({
       carrierCode: carriers[pkg.carrierIndex].code,
       trackingNumber: pkg.tracking.trim(),
-      actualShippingFee: Number(pkg.fee),
+      actualShippingFee: parseShipFee(pkg.fee).value,
       boxIngredientId: boxOptions.value[pkg.boxIndex]?.id || undefined,
       items: rows.value
         .filter((row) => (pkg.bags[row.key] || 0) > 0)

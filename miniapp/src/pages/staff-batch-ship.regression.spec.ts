@@ -42,7 +42,7 @@ describe('合并 / 拆包发货', () => {
 
   it('★ 提交打的是「一票发货」接口，带包裹与袋数', () => {
     expect(batchSource).toContain("url: '/admin/order-shipments'");
-    expect(batchSource).toContain('actualShippingFee: Number(pkg.fee)');
+    expect(batchSource).toContain('actualShippingFee: parseShipFee(pkg.fee).value');
     expect(batchSource).toContain('specG: row.specG');
     expect(batchSource).toContain('bags: pkg.bags[row.key]');
   });
@@ -69,3 +69,25 @@ describe('合并 / 拆包发货', () => {
     expect(customerSource).not.toContain('实际运费');
   });
 });
+
+/**
+ * 2026-11-11：发货表单合并第 3 步 —— 合并/拆包页也换用同一套零件。
+ * 页面形态（多包裹、分袋、分摊运费）保持原样，只共用「寄给谁」与运费校验。
+ */
+describe('合并发货页 · 复用发货公共零件', () => {
+  const drawerSource = readFileSync(
+    resolve(root, 'src/components/shipping/StaffShipDrawer.vue'),
+    'utf8',
+  )
+
+  it('顶部显示顾客 / 狗狗 / 收货地址（与发货抽屉同一个组件）', () => {
+    expect(batchSource).toContain('<ShipRecipientSummary')
+    expect(batchSource).toContain(':address="shipAddress"')
+    expect(drawerSource).toContain('<ShipRecipientSummary')
+  })
+
+  it('运费校验走同一份规则（必填 + 两位小数）', () => {
+    expect(batchSource).toContain('parseShipFee(pkg.fee)')
+    expect(drawerSource).toContain('parseShipFee(actualShippingFeeDraft.value)')
+  })
+})

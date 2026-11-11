@@ -347,7 +347,7 @@ async function confirmShipping() {
     // 实际运费：必填，最多两位小数（2026-10-31 起不再选填）
     const feeResult = parseShipFee(actualShippingFeeDraft.value)
     if (!feeResult.ok) {
-      uni.showToast({ title: feeResult.error || '请填写实际运费', icon: 'none' })
+      uni.showToast({ title: feeResult.error, icon: 'none' })
       return
     }
     actualShippingFee = feeResult.value

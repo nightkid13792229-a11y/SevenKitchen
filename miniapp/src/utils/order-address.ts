@@ -71,3 +71,21 @@ export function buildOrderAddressCopyText(
     .filter(Boolean)
     .join(' ');
 }
+
+/**
+ * 把一份地址拍成一行可比较的字符串（2026-11-11）。
+ *
+ * 合并发货时用来判断「这一票是不是同一个收货地址」——
+ * 订单中心勾选只校验了同一顾客，同一个人可能有两个地址。
+ */
+export function orderAddressKey(address?: OrderAddressLike | null): string {
+  if (!address) return '';
+  return [
+    address.recipientName,
+    getOrderAddressPhone(address),
+    getOrderAddressRegionText(address),
+    getOrderAddressDetail(address),
+  ]
+    .filter(Boolean)
+    .join('|');
+}

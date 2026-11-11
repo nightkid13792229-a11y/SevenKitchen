@@ -22,6 +22,11 @@
         </view>
       </view>
 
+      <!-- 同顾客不同地址：后端会拒，这里先说清楚 -->
+      <view v-if="addressMismatch" class="address-warning">
+        这几单的收货地址不一样，不能合并发货。请回订单中心分开选。
+      </view>
+
       <!-- 寄给谁、寄到哪（2026-11-11）：打包台前先看一眼，不用回列表翻 -->
       <ShipRecipientSummary
         v-if="orders.length"
@@ -126,6 +131,7 @@ import WaybillReceiptBlock from '../../components/shipping/WaybillReceiptBlock.v
 import ShipRecipientSummary from '../../components/shipping/ShipRecipientSummary.vue'
 import { buildShipDogSummary } from '../../utils/order-ship'
 import { parseShipFee } from '../../utils/ship-fee'
+import { orderAddressKey } from '../../utils/order-address'
 import { type ReceiptView } from '../../utils/waybill-receipt-view'
 import {
   applyRecognizeResult,
@@ -162,10 +168,32 @@ interface PackageState {
   receipt: ReceiptState
 }
 
+// 承运商清单统一到 constants/carriers.ts（2026-11-10）
 /**
  * 合并 / 拆包的前提是「同一顾客、同一收货地址」，
  * 所以取第一张单做汇总就够；狗狗按这一票里的狗去重列出。
  */
+const carriers = CARRIERS
+
+const loading = ref(true)
+const submitting = ref(false)
+const orders = ref<any[]>([])
+
+/**
+ * 这一票的订单地址是否一致（2026-11-11 验收提出）。
+ *
+ * 订单中心勾选时只校验了「同一顾客」，同一个人可能有两个地址；
+ * 后端要到提交时才拒（"收货地址不同的订单不能合并发货"），
+ * 员工可能已经把货装进箱子了。这里提前拦，并且禁用提交。
+ */
+const addressMismatch = computed(() => {
+  const keys = orders.value
+    .map((order: any) => orderAddressKey(order?.address))
+    .filter(Boolean)
+  if (keys.length < 2) return false
+  return new Set(keys).size > 1
+})
+
 const shipFirstOrder = computed(() => orders.value[0] || null)
 const shipAddress = computed(() => shipFirstOrder.value?.address || null)
 const shipCustomerName = computed(
@@ -191,12 +219,6 @@ const shipDogSummary = computed(() => {
   return buildShipDogSummary(items)
 })
 
-// 承运商清单统一到 constants/carriers.ts（2026-11-10）
-const carriers = CARRIERS
-
-const loading = ref(true)
-const submitting = ref(false)
-const orders = ref<any[]>([])
 const rows = ref<
   Array<{
     key: string
@@ -507,6 +529,12 @@ function onManualReceipt(index: number) {
 async function submit() {
   if (submitting.value) return
 
+  // 同一顾客但不同收货地址：后端会拒，别让员工先把货装完才发现
+  if (addressMismatch.value) {
+    uni.showToast({ title: '这几单收货地址不一样，不能合并发货', icon: 'none' })
+    return
+  }
+
   if (unassignedBags.value > 0) {
     uni.showToast({ title: `还有 ${unassignedBags.value} 袋没装`, icon: 'none' })
     return
@@ -591,6 +619,7 @@ async function submit() {
 .pkg-title { font-size: 28rpx; font-weight: 700; color: #1f2d27; }
 .pkg-head-right { display: flex; align-items: center; gap: 16rpx; }
 .pkg-fee { font-size: 24rpx; color: #2b5040; font-weight: 700; }
+.address-warning { margin: 0 24rpx 16rpx; padding: 16rpx 20rpx; border-radius: 12rpx; background: #fdecea; color: #c0392b; font-size: 24rpx; line-height: 1.5; }
 .pkg-remove { font-size: 22rpx; color: #c0392b; }
 
 .row { display: flex; align-items: center; justify-content: space-between; padding: 14rpx 0; border-bottom: 1rpx dashed #f0f2f0; }

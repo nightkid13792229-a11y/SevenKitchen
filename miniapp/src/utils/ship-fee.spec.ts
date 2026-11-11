@@ -13,6 +13,16 @@ describe('实际运费校验', () => {
     expect(parseShipFee(null)).toEqual({ ok: false, error: '请填写实际运费' });
   });
 
+  it('0 元运费：合法（内部单/包邮），别当成空值', () => {
+    expect(parseShipFee('0')).toEqual({ ok: true, value: 0 });
+    expect(parseShipFee('0.00')).toEqual({ ok: true, value: 0 });
+    expect(parseShipFee(0)).toEqual({ ok: true, value: 0 });
+  });
+
+  it('首尾空格自动忽略', () => {
+    expect(parseShipFee(' 12.50 ')).toEqual({ ok: true, value: 12.5 });
+  });
+
   it('超过两位小数 / 负数 / 乱填：拒绝', () => {
     for (const bad of ['12.345', '-1', '12元', 'abc', '.5']) {
       const result = parseShipFee(bad);

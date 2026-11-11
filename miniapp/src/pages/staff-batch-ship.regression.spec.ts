@@ -86,6 +86,13 @@ describe('合并发货页 · 复用发货公共零件', () => {
     expect(drawerSource).toContain('<ShipRecipientSummary')
   })
 
+  it('★ 同顾客不同地址：页面提前拦住，不让员工先装完再被后台拒', () => {
+    expect(batchSource).toContain('const addressMismatch = computed')
+    expect(batchSource).toContain('orderAddressKey(order?.address)')
+    expect(batchSource).toContain('这几单收货地址不一样，不能合并发货')
+    expect(batchSource).toContain('addressMismatch.value')
+  })
+
   it('运费校验走同一份规则（必填 + 两位小数）', () => {
     expect(batchSource).toContain('parseShipFee(pkg.fee)')
     expect(drawerSource).toContain('parseShipFee(actualShippingFeeDraft.value)')

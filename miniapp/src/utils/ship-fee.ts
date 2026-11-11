@@ -6,13 +6,10 @@
  * 以前三处各写一份正则，合并发货页漏了「必填」的提示口径。
  */
 
-export interface ShipFeeParseResult {
-  ok: boolean;
-  /** ok 时的数值（已四舍五入到分） */
-  value?: number;
-  /** 不 ok 时给员工看的一句话 */
-  error?: string;
-}
+/** 校验通过一定带数值，不通过一定带原因 —— 调用方不用再判 undefined */
+export type ShipFeeParseResult =
+  | { ok: true; value: number }
+  | { ok: false; error: string };
 
 const FEE_PATTERN = /^\d+(\.\d{1,2})?$/;
 

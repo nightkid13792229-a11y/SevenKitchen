@@ -103,9 +103,6 @@
             <view class="ingredient-info">
               <view class="ingredient-top">
                 <text class="ingredient-name">{{ ingredient.name }}</text>
-                <text class="strategy-badge" :class="getStrategyClass(ingredient.procurementStrategy)">
-                  {{ getStrategyLabel(ingredient.procurementStrategy) }}
-                </text>
                 <text class="stock-status-badge" :class="getStockStatusClass(ingredient.stockStatus)">
                   {{ getStockStatusLabel(ingredient.stockStatus) }}
                 </text>

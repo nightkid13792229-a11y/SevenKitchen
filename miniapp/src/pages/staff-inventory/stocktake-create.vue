@@ -166,6 +166,9 @@ const lineValues = ref<Record<string, string>>({});
 const keyword = ref('');
 const filter = ref<(typeof filters)[number]['value']>('ALL');
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+/** 只把改动过的点发上去，避免一次全量提交几百个明细点。 */
+const dirtyPortions = new Set<string>();
+const dirtyLines = new Set<string>();
 
 const isOpening = computed(() => stocktakeType.value === 'OPENING');
 
@@ -253,13 +256,33 @@ const hydrate = (draft: StocktakeDraftItem) => {
   }
   values.value = nextValues;
   lineValues.value = nextLineValues;
+  dirtyPortions.clear();
+  dirtyLines.clear();
 };
 
 const bootstrap = async () => {
   loading.value = true;
   error.value = '';
   try {
-    let current = (await getStocktakeDraft()) || (await startStocktake(undefined, stocktakeType.value));
+    const wantOpening = stocktakeType.value === 'OPENING';
+    let current = await getStocktakeDraft();
+
+    // 想要期初，却拿到一张"日常盘点"的空草稿：取消它，重新开期初单。
+    if (wantOpening && current && current.type !== 'OPENING') {
+      const hasCounted = (current.lines || []).some(
+        (line: any) => line.countedQuantityG !== null,
+      );
+      if (!hasCounted) {
+        try {
+          await cancelStocktake(current.id);
+        } catch {
+          // 草稿可能已被取消
+        }
+        current = null;
+      }
+    }
+
+    current = current || (await startStocktake(undefined, stocktakeType.value));
     if (current.lines?.length === 0 && current.id) {
       try {
         await cancelStocktake(current.id);
@@ -291,7 +314,9 @@ onUnload(() => {
 
 const buildPortionPayload = () =>
   lines.value.flatMap((line) =>
-    (line.portions || []).map((portion) => {
+    (line.portions || [])
+      .filter((portion) => dirtyPortions.has(portion.id))
+      .map((portion) => {
       const text = (values.value[portion.id] || '').trim();
       return {
         id: portion.id,
@@ -302,7 +327,7 @@ const buildPortionPayload = () =>
 
 const buildLinePayload = () =>
   lines.value
-    .filter((line) => (line.portions || []).length === 0)
+    .filter((line) => (line.portions || []).length === 0 && dirtyLines.has(line.id))
     .map((line) => {
       const text = (lineValues.value[line.id] || '').trim();
       return {
@@ -325,12 +350,15 @@ const saveNow = async (): Promise<boolean> => {
     uni.showToast({ title: '数量只能填数字', icon: 'none' });
     return false;
   }
+  if (dirtyPortions.size === 0 && dirtyLines.size === 0) return true;
   saving.value = true;
   try {
     await saveStocktakeLines(stocktakeId.value, {
       portions: buildPortionPayload(),
       lines: buildLinePayload(),
     });
+    dirtyPortions.clear();
+    dirtyLines.clear();
     const now = new Date();
     savedAt.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     return true;
@@ -364,6 +392,7 @@ const onPortionInput = (portion: InventoryStocktakePortion, event: any) => {
     ...values.value,
     [portion.id]: event?.detail?.value ?? '',
   };
+  dirtyPortions.add(portion.id);
   scheduleSave();
 };
 
@@ -372,6 +401,7 @@ const onLineInput = (line: DraftLine, event: any) => {
     ...lineValues.value,
     [line.id]: event?.detail?.value ?? '',
   };
+  dirtyLines.add(line.id);
   scheduleSave();
 };
 

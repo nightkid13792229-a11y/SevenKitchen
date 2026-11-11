@@ -26,6 +26,10 @@ import {
 import { createHash } from 'crypto';
 import sharp from 'sharp';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import {
+  checkQuantityUnitMatches,
+  describeQuantityUnitMismatch,
+} from '../../domain/purchasing/purchase-unit-guard';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import {
   AgentProviderConfigService,
@@ -1050,6 +1054,26 @@ ${list}
             ) {
               throw new BadRequestException(
                 `「${line.rawName}」是按重量/体积买的（${lineUnit}），请改成件数再生成`,
+              );
+            }
+
+            /**
+             * 单位门禁（2026-11-11）：这行写的单位和商品的单位必须一致。
+             *
+             * 以前直接 `数量 × 商品倍数`：截图写「3 份」、商品是「1 箱 = 5000 克」，
+             * 会算成 15000 克 —— 差 10 倍且不报错。认不出就不许乘。
+             */
+            const unitCheck = checkQuantityUnitMatches({
+              lineUnit,
+              skuPurchaseUnit: sku.purchaseUnit,
+            });
+            if (!unitCheck.ok) {
+              throw new BadRequestException(
+                describeQuantityUnitMismatch({
+                  lineName: line.rawName,
+                  lineUnit: lineUnit as string,
+                  skuPurchaseUnit: String(sku.purchaseUnit),
+                }),
               );
             }
 

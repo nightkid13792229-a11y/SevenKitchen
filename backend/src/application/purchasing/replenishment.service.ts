@@ -8,6 +8,10 @@
  */
 
 import {
+  checkQuantityUnitMatches,
+  describeQuantityUnitMismatch,
+} from '../../domain/purchasing/purchase-unit-guard';
+import {
   BadRequestException,
   ForbiddenException,
   Inject,
@@ -371,9 +375,45 @@ export class ReplenishmentService {
       }
 
       const unit = String(input.unit || item.quantityUnit || '').trim();
+
+      /**
+       * 换算口径（2026-11-11）：
+       *
+       * 单位写了「克/公斤」这类计量单位 → 数量就是按它称的重量，直接用它的换算；
+       * 单位是件数（袋/盒/箱…）→ 必须用**商品自己的倍数**。
+       * 以前这里用 `record.actualPackageSize` 兜底，而那个字段在识别导入的记录里
+       * 存的是整条链的倍数、在手工记录里存的是单件规格 —— 两套语义混用一个字段，
+       * 把单位改成「箱」时会把"每件 500 克"当成"每箱 500 克"，静默差 N 倍。
+       */
       const weightRatio = weightUnitToBaseRatio(unit);
+      const sku = item.procurementSkuId
+        ? await this.prisma.procurementSku.findUnique({
+            where: { id: item.procurementSkuId },
+            select: { purchaseUnit: true, purchaseToBaseRatio: true },
+          })
+        : null;
+
+      if (weightRatio === undefined && sku?.purchaseUnit) {
+        const unitCheck = checkQuantityUnitMatches({
+          lineUnit: unit,
+          skuPurchaseUnit: sku.purchaseUnit,
+        });
+        if (!unitCheck.ok) {
+          throw new BadRequestException(
+            describeQuantityUnitMismatch({
+              lineName: item.ingredientName || item.ingredientId,
+              lineUnit: unit,
+              skuPurchaseUnit: sku.purchaseUnit,
+            }),
+          );
+        }
+      }
+
       const packageSize =
-        weightRatio ?? Number(record.actualPackageSize ?? 1) ?? 1;
+        weightRatio ??
+        (sku?.purchaseToBaseRatio && Number(sku.purchaseToBaseRatio) > 0
+          ? Number(sku.purchaseToBaseRatio)
+          : Number(record.actualPackageSize ?? 1) || 1);
       const baseQuantity = quantity * packageSize;
       const amount = round2(quantity * unitPrice);
 

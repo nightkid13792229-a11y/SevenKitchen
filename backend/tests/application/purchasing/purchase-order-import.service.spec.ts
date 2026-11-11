@@ -915,6 +915,9 @@ describe('PurchaseOrderImportService', () => {
         matchConfidence: 'HIGH',
         rawName: '冷鲜 鲜切黄牛后腿肉',
         spec: '约200g',
+        // 2026-11-11：商品是按「盒」买的，这行也必须写「盒」——
+        // 单位不一致会被门禁拦下（这正是本轮修掉的静默 10 倍）
+        unit: '盒',
       });
       prisma.procurementSku.findUnique.mockResolvedValue({
         id: 'sku-beef',

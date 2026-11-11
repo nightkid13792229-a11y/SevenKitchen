@@ -280,7 +280,13 @@
     <view v-if="unitPicking" class="sheet-mask" @tap="unitPicking = false">
       <view class="sheet" @tap.stop>
         <text class="sheet-title">数量单位</text>
-        <text class="sheet-sub">只影响这行怎么显示；多少克是按商品自带的净含量算的。</text>
+        <text class="sheet-sub">
+          多少克是按商品自带的换算算的，所以单位要和商品一致（带 ▾ 那格）。
+        </text>
+        <text v-if="unitMismatch" class="sheet-warn">
+          这行写的是「{{ editing.unitText }}」，商品是按「{{ editing.skuPurchaseUnit }}」买的，
+          生成时会被拦下：请改回「{{ editing.skuPurchaseUnit }}」，或换一个按「{{ editing.unitText }}」卖的商品。
+        </text>
         <view class="unit-grid">
           <view
             v-for="unit in unitOptions"
@@ -547,13 +553,40 @@ const pickerIngredientId = ref('');
 /** 选择器刚关掉的时刻：防那一枪继续穿透到下面的蒙层，把整个抽屉关掉 */
 let pickerClosedAt = 0;
 let sheetOpenedAt = 0;
-const UNIT_OPTIONS = ['袋', '盒', '份', '包', '瓶', '个', '组', '罐'];
-/** 按重量记的原料（基准单位克）额外给斤/公斤/克/两；不用商品净含量折算。 */
+/**
+ * 数量单位（2026-11-11 收口）。
+ *
+ * 以前这里是**第三份**写死的清单（袋/盒/份/包/瓶/个/组/罐），和商品字典、
+ * 后端白名单都不是一套：里面还有谁都没有的「组」，却没有商品真实在用的「箱/桶/提」。
+ * 现在只给两类：
+ *   1. 这行商品自己的采购单位（必须排第一 —— 它就是换算倍数对应的单位）；
+ *   2. 计量单位（斤/公斤/克/两），散装称重时用，换算不依赖商品倍数。
+ */
+const MEASUREMENT_UNITS = ['斤', '公斤', '克', '两'];
 const unitOptions = computed(() => {
+  const skuUnit = String(editing.value?.skuPurchaseUnit || '').trim();
   const baseUnit = String(editing.value?.baseUnit || '').toUpperCase();
-  return baseUnit === 'G'
-    ? [...UNIT_OPTIONS, '斤', '公斤', '克', '两']
-    : UNIT_OPTIONS;
+  const measurement = baseUnit === 'G' ? MEASUREMENT_UNITS : [];
+  const list = skuUnit ? [skuUnit, ...measurement] : measurement;
+  const current = String(editing.value?.unitText || '').trim();
+  // 当前值不在清单里（老数据/导入值）也要显示出来，否则"选中了却看不见"
+  if (current && !list.includes(current)) return [current, ...list];
+  return list;
+});
+
+/**
+ * 这行的数量单位和商品单位是否一致。
+ *
+ * 不一致时**克数根本不成立**（后端会直接把生成拦下来），所以页面不能再显示
+ * 一个看起来很确定的"≈ 15000g"，那等于把错的数字包装成对的。
+ */
+const unitMismatch = computed(() => {
+  const current = editing.value;
+  const lineUnit = String(current?.unitText || '').trim();
+  const skuUnit = String(current?.skuPurchaseUnit || '').trim();
+  if (!current || current.isPersonal || !lineUnit || !skuUnit) return false;
+  if (MEASUREMENT_UNITS.includes(lineUnit)) return false;
+  return lineUnit !== skuUnit;
 });
 /** 渠道清单：唯一来源是后台字典 purchase_channel，页面不写死 */
 const channelOptions = ref<string[]>([]);
@@ -842,6 +875,7 @@ const checkText = computed(() => {
 const gramsText = computed(() => {
   const current = editing.value;
   if (!current || current.isPersonal) return '';
+  if (unitMismatch.value) return '';
   const qty = parseNumber(current.qtyText);
   const ratio = Number(current.skuRatio);
   if (qty === null || !Number.isFinite(ratio) || ratio <= 0) return '';
@@ -1396,6 +1430,8 @@ function openEdit(line: OrderImportLineView) {
     skuName: sku?.name || '',
     skuModel: sku?.productModel || '',
     skuRatio: sku?.purchaseToBaseRatio ?? null,
+    // 商品自己的采购单位（2026-11-11）：单位清单和"是否不符"都以它为准
+    skuPurchaseUnit: sku?.purchaseUnit || '',
     baseUnit: ingredient?.baseUnit || 'G',
     _origSkuId: line.procurementSkuId || '',
     unitOrig: line.unit || '',
@@ -1518,6 +1554,12 @@ function chooseSku(sku: any) {
   editing.value.skuModel = sku.productModel || '';
   editing.value.skuRatio =
     typeof sku.purchaseToBaseRatio === 'number' ? sku.purchaseToBaseRatio : null;
+  editing.value.skuPurchaseUnit = sku.purchaseUnit || '';
+  // 换商品时，如果单位不是计量单位，就跟着商品走 —— 否则"3 份"会挂到"1 盒"上
+  const currentUnit = String(editing.value.unitText || '').trim();
+  if (sku.purchaseUnit && !MEASUREMENT_UNITS.includes(currentUnit)) {
+    editing.value.unitText = sku.purchaseUnit;
+  }
   editing.value.ingredientId = sku.ingredientId;
   editing.value.ingredientName = sku.ingredientName;
   editing.value.baseUnit = sku.baseUnit || 'G';
@@ -2366,6 +2408,16 @@ function emptySummary() {
 .sheet-sub {
   font-size: 21rpx;
   color: #6b6653;
+  line-height: 1.5;
+}
+.sheet-warn {
+  display: block;
+  margin-top: 12rpx;
+  padding: 12rpx 16rpx;
+  font-size: 21rpx;
+  color: #8a4a33;
+  background: #fdf1ea;
+  border-radius: 12rpx;
   line-height: 1.5;
 }
 

@@ -87,6 +87,9 @@
               :class="{ expanded: expanded.has(portion.id) }"
               @tap="toggleLabel(portion)"
             >
+              <text v-if="brandOf(line, portion)" class="p-brand">
+                {{ brandOf(line, portion) }} ·
+              </text>
               {{ portionLabel(line, portion) }}
             </text>
             <input
@@ -110,6 +113,7 @@
               :class="{ expanded: expanded.has(line.id) }"
               @tap="toggleLabel({ id: line.id } as any)"
             >
+              <text v-if="line.brand" class="p-brand">{{ line.brand }} ·</text>
               {{ lineLabel(line) }}
             </text>
             <input
@@ -164,6 +168,7 @@ type DraftLine = {
   ingredientName: string;
   ingredientType?: string | null;
   stockUnitLabel: string;
+  brand?: string | null;
   productModel?: string | null;
   purchaseChannel?: string | null;
   countedQuantityG: number | null;
@@ -234,6 +239,11 @@ const progressPercent = computed(() =>
 
 const portionCount = (line: DraftLine) => (line.portions || []).length;
 
+const brandOf = (
+  line: DraftLine,
+  portion?: InventoryStocktakePortion,
+) => portion?.brand || line.brand || '';
+
 const joinLabel = (...parts: Array<string | null | undefined>) =>
   parts.filter((part) => !!part && String(part).trim() !== '').join(' · ');
 
@@ -290,6 +300,7 @@ const hydrate = (draft: StocktakeDraftItem) => {
     ingredientName: line.ingredientName,
     ingredientType: line.ingredientType,
     stockUnitLabel: line.stockUnitLabel,
+    brand: line.brand,
     productModel: line.productModel,
     purchaseChannel: line.purchaseChannel,
     countedQuantityG: line.countedQuantityG,
@@ -668,6 +679,10 @@ const onCancel = async () => {
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.4;
+}
+.p-brand {
+  color: #1e3a2f;
+  font-weight: 500;
 }
 .p-label.expanded {
   white-space: normal;

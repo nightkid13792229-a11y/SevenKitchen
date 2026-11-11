@@ -88,6 +88,8 @@ export interface InventoryStocktakePortion {
   lineId: string;
   procurementSkuId: string | null;
   procurementSkuName: string | null;
+  brand?: string | null;
+  purchaseChannel?: string | null;
   locationLabel: string | null;
   countedQuantityG: number | null;
   isCounted: boolean;

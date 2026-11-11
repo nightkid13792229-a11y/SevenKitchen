@@ -116,6 +116,8 @@ export interface InventoryStocktakePortionDto {
   lineId: string;
   procurementSkuId: string | null;
   procurementSkuName: string | null;
+  /** 品牌：商品有则用商品的，没有则回退原料档案 */
+  brand: string | null;
   /** 采购渠道：商品有则用商品的，没有则回退原料档案 */
   purchaseChannel: string | null;
   locationLabel: string | null;
@@ -131,7 +133,8 @@ export interface InventoryStocktakeLineDto {
   ingredientName: string;
   ingredientType?: string | null;
   stockUnitLabel: string;
-  /** 原料档案上的规格/渠道：补剂、包材没有商品层，靠它们描述 */
+  /** 原料档案上的品牌/规格/渠道：补剂、包材没有商品层，靠它们描述 */
+  brand?: string | null;
   productModel?: string | null;
   purchaseChannel?: string | null;
   expectedQuantityG: number;
@@ -1986,6 +1989,7 @@ export class InventoryService {
             type: true,
             baseUnit: true,
             unitDisplayLabel: true,
+            brand: true,
             productModel: true,
             purchaseChannel: true,
           },
@@ -2021,6 +2025,7 @@ export class InventoryService {
           line.ingredient?.unitDisplayLabel ||
           line.ingredient?.baseUnit ||
           'G',
+        brand: line.ingredient?.brand ?? null,
         productModel: line.ingredient?.productModel ?? null,
         purchaseChannel: line.ingredient?.purchaseChannel ?? null,
         // 未盘的行不返回账面，避免用「预览一次再退出」绕过盲盘
@@ -2044,6 +2049,11 @@ export class InventoryService {
           procurementSkuName: portion.procurementSkuId
             ? skuNames.get(portion.procurementSkuId)?.name ?? null
             : null,
+          brand: portion.procurementSkuId
+            ? skuNames.get(portion.procurementSkuId)?.brand ??
+              line.ingredient?.brand ??
+              null
+            : line.ingredient?.brand ?? null,
           purchaseChannel: portion.procurementSkuId
             ? skuNames.get(portion.procurementSkuId)?.channel ??
               line.ingredient?.purchaseChannel ??
@@ -2298,6 +2308,7 @@ export class InventoryService {
         ingredientName: line.ingredientName,
         ingredientType: line.ingredientType ?? null,
         stockUnitLabel: line.stockUnitLabel,
+        brand: line.brand ?? null,
         productModel: line.productModel ?? null,
         purchaseChannel: line.purchaseChannel ?? null,
         countedQuantityG: line.countedQuantityG,
@@ -2308,6 +2319,7 @@ export class InventoryService {
           lineId: portion.lineId,
           procurementSkuId: portion.procurementSkuId,
           procurementSkuName: portion.procurementSkuName,
+          brand: portion.brand ?? null,
           purchaseChannel: portion.purchaseChannel ?? null,
           locationLabel: portion.locationLabel,
           countedQuantityG: portion.countedQuantityG,
@@ -2427,6 +2439,9 @@ export class InventoryService {
                 type: true,
                 baseUnit: true,
                 unitDisplayLabel: true,
+                brand: true,
+                productModel: true,
+                purchaseChannel: true,
               },
             },
             portions: {
@@ -2456,6 +2471,7 @@ export class InventoryService {
       ingredientName: line.ingredient?.name ?? line.ingredientId,
       ingredientType: line.ingredient?.type ?? null,
       stockUnitLabel: this.resolveStockUnitLabel(line.ingredient),
+      brand: line.ingredient?.brand ?? null,
       productModel: line.ingredient?.productModel ?? null,
       purchaseChannel: line.ingredient?.purchaseChannel ?? null,
       expectedQuantityG: line.expectedQuantityG,
@@ -2479,6 +2495,7 @@ export class InventoryService {
         lineId: line.id,
         procurementSkuId: portion.procurementSkuId ?? null,
         procurementSkuName: portion.procurementSkuName ?? null,
+        brand: portion.brand ?? null,
         purchaseChannel: portion.purchaseChannel ?? null,
         locationLabel: portion.locationLabel ?? null,
         countedQuantityG: portion.countedQuantityG ?? null,
@@ -2515,17 +2532,28 @@ export class InventoryService {
   /** 批量取采购商品名与采购渠道（明细点用）。 */
   private async loadProcurementSkuNames(
     ids: Array<string | null | undefined>,
-  ): Promise<Map<string, { name: string; channel: string | null }>> {
+  ): Promise<
+    Map<string, { name: string; channel: string | null; brand: string | null }>
+  > {
     const unique = Array.from(new Set(ids.filter(Boolean))) as string[];
     if (unique.length === 0) return new Map();
     const skus = await this.prisma.procurementSku.findMany({
       where: { id: { in: unique } },
-      select: { id: true, name: true, purchaseChannel: true },
+      select: {
+        id: true,
+        name: true,
+        brand: true,
+        purchaseChannel: true,
+      },
     });
     return new Map(
       skus.map((sku) => [
         sku.id,
-        { name: sku.name, channel: sku.purchaseChannel ?? null },
+        {
+          name: sku.name,
+          channel: sku.purchaseChannel ?? null,
+          brand: sku.brand ?? null,
+        },
       ]),
     );
   }
@@ -2561,6 +2589,7 @@ export class InventoryService {
       select: {
         id: true,
         name: true,
+        brand: true,
         purchaseChannel: true,
       },
     });
@@ -2581,6 +2610,11 @@ export class InventoryService {
           procurementSkuName: portion.procurementSkuId
             ? procurementSkuMap.get(portion.procurementSkuId)?.name ?? null
             : null,
+          brand: portion.procurementSkuId
+            ? procurementSkuMap.get(portion.procurementSkuId)?.brand ??
+              line.ingredient?.brand ??
+              null
+            : line.ingredient?.brand ?? null,
           purchaseChannel: portion.procurementSkuId
             ? procurementSkuMap.get(portion.procurementSkuId)?.purchaseChannel ??
               line.purchaseChannel ??

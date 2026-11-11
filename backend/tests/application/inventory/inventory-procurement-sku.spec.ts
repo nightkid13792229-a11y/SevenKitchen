@@ -379,6 +379,7 @@ describe('InventoryService procurement sku traceability', () => {
         select: {
           id: true,
           name: true,
+          brand: true,
           purchaseChannel: true,
         },
       }),

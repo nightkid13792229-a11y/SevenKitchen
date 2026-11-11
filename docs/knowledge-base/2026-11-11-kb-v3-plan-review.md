@@ -65,7 +65,19 @@
 
 ---
 
-## 四、评审边界
+## 四、实施结果（2026-11-12，Task 1–11 完成后）
+
+- 解析：159/159，失败 0（128 PDF + 24 XML + 6 TXT + 1 EPUB）；
+- 入库：`kb_source` 159、`kb_page` 4,183、`kb_block` 48,376、`kb_toc` 604；
+- 页图：2,393 张 / 479 MB（110 dpi q78），未进 git；
+- 冒烟：9/9 PASS（`docs/knowledge-base/eval/kb-v3-smoke.md`）；
+- 结构基准：6/6 OK，1/2/2/1/1/1 次（`docs/knowledge-base/eval/kb-v3-call-benchmark.md`，明确不是模型调用次数）；
+- `npx tsc --noEmit`：332 个既有错误（与当前基线一致，v3 文件 0）；全量 `npm test`：3 个既有失败套件/15 用例，无新增；v3/Agent/补剂定向 71 suites / 1,052 tests 全绿；
+- 结论清零：`assert-no-conclusions.ts` exit 0；`audit-conclusion-tables.ts --after-drop` exit 0，只剩 4 张 `kb_*`。
+
+**结论：计划已按 P0 修订并执行完成；P1 中“类生产机 700/root 验证”仍建议上线前补一次。**
+
+## 五、评审边界
 
 - 评审只读设计与计划，未执行代码、未跑测试、未连生产库；
 - “通过”指计划层面可执行，不代表实现已验收；

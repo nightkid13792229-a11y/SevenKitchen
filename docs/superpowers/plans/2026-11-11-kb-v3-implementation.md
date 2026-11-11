@@ -4,7 +4,7 @@
 
 **Goal:** 把知识库从“节/段/表格 JSON/结论层”的检索模块，重构成“书 → 页 → 块 → 目录”的极简原文服务；只保留 `kb_catalog` / `kb_find` / `kb_read` 三个动作，删除 387 条结论和旧运行时。
 
-**Architecture:** 4 个实体（`kb_source` / `kb_page` / `kb_block` / `kb_toc`）+ 页/块全文索引 + 3 个通用动作。页是原子单位：一次 `read` 返回 3–5 页、表/图块、页图和锚点；结构基准的调用次数靠“一次读多页”下降，不靠加工具、加约束或改提示词；它不是模型调用次数。运行时 0 次模型调用；表格不转录、图片不裁剪，模型直接看页图。
+**Architecture:** 4 个实体（`kb_source` / `kb_page` / `kb_block` / `kb_toc`）+ 页/块全文索引 + 3 个通用动作。页是原子单位：一次 `read` 默认返回 3–5 页（可按预算读整章）、表/图块、页图和锚点；结构基准的调用次数靠“一次读多页”下降，不靠加工具、加约束或改提示词；它不是模型调用次数。运行时 0 次模型调用；表格不转录、图片不裁剪，模型直接看页图。
 
 **Tech Stack:** NestJS + TypeScript + Prisma/PostgreSQL（`tsvector` + `pg_trgm`）+ PyMuPDF（Python 解析/渲染）+ Jest + ts-node。
 
@@ -40,7 +40,7 @@
 3. **预算边界**：单页文本超过 `budgetTokens` 时，至少返回一页 + `nextCursor`，不能返回空页或无限循环；`nextCursor` 必须能继续读完。
 4. **无目录文档**：`doc.get_toc()` 为空时，`kb_catalog` 仍要返回一条“全文 1..N”，`kb_read` 按页码可读。
 5. **中文/空查询/越界**：中文查英文页允许 0 命中，但必须返回 `hits: []` + `searched`，不得出现“未覆盖”；空 query 返回 `INVALID_ARGUMENT`；页码越界返回 `PAGE_OUT_OF_RANGE`。
-6. **删除完整性**：`git grep` 不再命中旧服务/旧工具/387 条结论；健康分析明确返回不可用；`npx tsc --noEmit` 与全量 `npm test` 通过。
+6. **删除完整性**：`git grep` 不再命中旧服务/旧工具/387 条结论；健康分析明确返回不可用；`npx tsc --noEmit` 无新增错误、全量 `npm test` 失败集合与基线一致。
 
 ---
 
@@ -109,7 +109,7 @@ cd backend
 npx tsc --noEmit
 npm test -- tests/application/knowledge-base tests/application/health/health-analysis.service.spec.ts
 ```
-Expected: 记录 `npm test` 基线（3 个既有失败套件/15 个失败用例，见 Global Constraints）与 `npx tsc --noEmit` 的 333 个既有错误；后续只对自己新增的错误/失败负责。
+Expected: 记录 `npm test` 基线（3 个既有失败套件/15 个失败用例，见 Global Constraints）与 `npx tsc --noEmit` 的 332 个既有错误（初始 333，Task 8 后 332）；后续只对自己新增的错误/失败负责。
 
 - [ ] **Step 3: 确认旧知识库没有真实流量**
 
@@ -1274,7 +1274,7 @@ cd backend
 npx ts-node -r tsconfig-paths/register scripts/knowledge-v3/import-page-layer.ts \
   --dir ../docs/knowledge-base/page-layer
 ```
-Expected: 159 份导入；`kb_source` 159、`kb_page` ≈27,000+、`kb_block` 有数据、`kb_toc` 有数据；页图文件存在。
+Expected: 159 份导入；`kb_source` 159、`kb_page` ≈4,000+（27k 是旧段落数，不是页数）、`kb_block` 有数据、`kb_toc` 有数据；页图文件存在。
 
 - [ ] **Step 2: 跑真实库冒烟**
 
@@ -1326,7 +1326,7 @@ npm test
 cd ..
 git status --short
 ```
-Expected: `tsc` **无新增错误**（全仓错误数=基线 333；v3 文件 0 错误）、全量 `npm test` 失败集合=基线 3 个套件/15 用例（不新增）；只包含本任务文件。
+Expected: `tsc` **无新增错误**（全仓错误数=基线 332；v3 文件 0 错误）、全量 `npm test` 失败集合=基线 3 个套件/15 用例（不新增）；只包含本任务文件。
 
 ```bash
 git add docs/knowledge-base/RUNBOOK-kb-v3.md docs/knowledge-base/eval/kb-v3-smoke.md docs/knowledge-base/eval/kb-v3-call-benchmark.md docs/knowledge-base/README.md docs/knowledge-base/2026-11-11-kb-v3-design.md
@@ -1348,17 +1348,16 @@ bash scripts/session.sh commit -m "docs(knowledge): v3 运行手册、冒烟与�
 
 ## 验收清单（执行完逐条打勾）
 
-- [ ] `kb_source` / `kb_page` / `kb_block` / `kb_toc` 四张表存在；旧 `source_*` / `knowledge_citation_anchor` 已 drop；
-- [ ] `git grep` 不再命中 `KnowledgeBaseService` / `KnowledgeLibraryService` / `SourceLayerService` / `search_knowledge_library` / `CitationRegistry`；
-- [ ] 387 条结论代码/审核包/`### 条目` 标题 0 命中；DB 无结论表；健康分析返回 `available:false`；
-- [ ] 只有 `kb_catalog` / `kb_find` / `kb_read` 三个工具定义；
-- [ ] `kb_read` 一次返回 3–5 页 + 表/图块 + 页图 + anchor；预算/游标可续读；
-- [ ] 图片型文档 `text` 可为空，但 `imagePath` 存在、可读；
-- [ ] 负样本返回 `hits: []` + `searched`，无 `no_match` / “未覆盖”；
-- [ ] `npm run kb:v3:smoke` 通过；`npm run kb:v3:bench` 的结构基准（reference caller）已知/未知/表题/整章 ≤ 目标；**不把它冒充模型调用次数**；
-- [ ] `npx tsc --noEmit` 无新增错误（全仓=基线 333；v3 文件 0）；全量 `npm test` 失败集合=基线 3 个套件/15 用例（不新增）；v3/Agent/补剂定向测试全绿；
-- [ ] `npx tsc --noEmit` 通过；全量 `npm test` 通过；
-- [ ] 设计文档与实现一致（如有偏差已回写）。
+- [x] `kb_source` / `kb_page` / `kb_block` / `kb_toc` 四张表存在；旧 `source_*` / `knowledge_citation_anchor` 已 drop；
+- [x] `git grep` 不再命中 `KnowledgeBaseService` / `KnowledgeLibraryService` / `SourceLayerService` / `search_knowledge_library` / `CitationRegistry`；
+- [x] 387 条结论代码/审核包/`### 条目` 标题 0 命中；DB 无结论表；健康分析返回 `available:false`；
+- [x] 只有 `kb_catalog` / `kb_find` / `kb_read` 三个工具定义；
+- [x] `kb_read` 默认一次返回 3–5 页（整章按预算）+ 表/图块 + 页图 + anchor；预算/游标可续读；
+- [x] 图片型文档 `text` 可为空，但 `imagePath` 存在、可读；
+- [x] 负样本返回 `hits: []` + `searched`，无 `no_match` / “未覆盖”；
+- [x] `npm run kb:v3:smoke` 通过；`npm run kb:v3:bench` 的结构基准（reference caller）已知/未知/表题/整章 ≤ 目标；**不把它冒充模型调用次数**；
+- [x] `npx tsc --noEmit` 无新增错误（全仓=基线 332；v3 文件 0）；全量 `npm test` 失败集合=基线 3 个套件/15 用例（不新增）；v3/Agent/补剂定向测试全绿；
+- [x] 设计文档与实现一致（如有偏差已回写）。
 
 ## 工作量估算
 

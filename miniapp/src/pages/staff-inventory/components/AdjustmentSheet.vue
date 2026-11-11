@@ -222,7 +222,7 @@ const reset = () => {
 };
 
 const loadOverview = async () => {
-  if (lockedIngredient.value || overview.value.length > 0) return;
+  if (lockedIngredient.value) return;
   try {
     overview.value = await getInventoryOverview({});
   } catch {

@@ -1,11 +1,17 @@
 <template>
   <view class="page">
     <view class="header">
-      <text class="hint">报废 / 内部领用，约 30 秒。内部领用免审批；报废单笔 ≥50 元进待复核。</text>
+      <text class="hint">报废 / 领用，30 秒记一笔。内部领用免审批；报废满 50 元进待复核。</text>
     </view>
 
     <view class="card">
       <text class="label">原料</text>
+      <input
+        v-model="keyword"
+        class="search-input"
+        placeholder="搜原料"
+        confirm-type="search"
+      />
       <picker
         mode="selector"
         :range="ingredientNames"
@@ -21,6 +27,7 @@
         当前 {{ fmt(selected.currentStock) }} {{ selected.stockUnitLabel }}
         · 约 ¥{{ unitCostText }}/{{ selected.stockUnitLabel }}
       </text>
+      <text v-else class="meta">没有匹配的原料，换个关键词。</text>
     </view>
 
     <view class="card">
@@ -32,8 +39,11 @@
         placeholder="例如 300"
       />
       <text class="meta" v-if="estimatedAmount !== null">
-        按当前单价约 ¥{{ estimatedAmount.toFixed(2) }}
+        约 ¥{{ estimatedAmount.toFixed(2) }}
         <text v-if="estimatedAmount >= 50 && category !== 'INTERNAL_USE'">，会进待复核</text>
+      </text>
+      <text v-if="willGoNegative" class="warn">
+        提交后账面会变成 {{ fmt(negativeAfter) }} {{ selected?.stockUnitLabel }}（待核实）
       </text>
     </view>
 
@@ -70,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import {
   createInventoryAdjustment,
@@ -87,16 +97,31 @@ const categories = [
 ] as const;
 
 const ingredients = ref<InventoryOverviewItem[]>([]);
+const keyword = ref('');
 const ingredientIndex = ref(0);
 const quantityText = ref('');
 const category = ref<InventoryAdjustmentCategory>('INTERNAL_USE');
 const note = ref('');
 const submitting = ref(false);
 
+const filteredIngredients = computed(() => {
+  const term = keyword.value.trim().toLowerCase();
+  if (!term) return ingredients.value;
+  return ingredients.value.filter((item) =>
+    [item.name, item.purchaseChannel]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(term)),
+  );
+});
+
 const ingredientNames = computed(() =>
-  ingredients.value.map((item) => item.name),
+  filteredIngredients.value.map((item) => item.name),
 );
-const selected = computed(() => ingredients.value[ingredientIndex.value]);
+const selected = computed(() => filteredIngredients.value[ingredientIndex.value]);
+
+watch(keyword, () => {
+  ingredientIndex.value = 0;
+});
 
 const fmt = (value: number | null | undefined) => {
   if (value === null || value === undefined) return '-';
@@ -116,6 +141,14 @@ const quantity = computed(() => {
   const value = Number(quantityText.value);
   return Number.isFinite(value) && value > 0 ? value : 0;
 });
+
+const willGoNegative = computed(
+  () => Boolean(selected.value) && quantity.value > Number(selected.value.currentStock),
+);
+
+const negativeAfter = computed(() =>
+  selected.value ? Number(selected.value.currentStock) - quantity.value : 0,
+);
 
 const estimatedAmount = computed(() => {
   const item = selected.value;
@@ -161,7 +194,6 @@ const onSubmit = async () => {
     setTimeout(() => uni.navigateBack(), 500);
   } catch (error: any) {
     uni.showToast({ title: error?.message || '提交失败', icon: 'none' });
-  } finally {
     submitting.value = false;
   }
 };
@@ -196,6 +228,20 @@ const onSubmit = async () => {
   border-radius: 20rpx;
   background: #fff;
   border: 1rpx solid #e8ede7;
+}
+.search-input {
+  height: 64rpx;
+  margin-bottom: 12rpx;
+  padding: 0 18rpx;
+  border-radius: 12rpx;
+  background: #f7f9f5;
+  font-size: 26rpx;
+}
+.warn {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #a33a2a;
 }
 .label {
   display: block;

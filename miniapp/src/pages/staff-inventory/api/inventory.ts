@@ -15,7 +15,10 @@ export type InventorySourceType =
   | 'KITCHEN_TASK'
   | 'PURCHASE_RECORD'
   | 'MANUAL_ADJUSTMENT'
-  | 'STOCKTAKE';
+  | 'STOCKTAKE'
+  | 'PURCHASE_RECORD_REVERSAL'
+  | 'OPENING_BALANCE'
+  | 'PACKAGING_CONSUMPTION';
 export type InventoryStocktakeStatus = 'DRAFT' | 'SUBMITTED' | 'APPLIED' | 'REJECTED';
 
 export interface InventoryOverviewItem {
@@ -94,6 +97,7 @@ export interface InventoryStocktakeItem {
   id: string;
   status: InventoryStocktakeStatus;
   note: string | null;
+  createdBy?: string | null;
   createdAt: string;
   appliedAt: string | null;
   submittedAt?: string | null;
@@ -138,7 +142,7 @@ export interface StocktakePreviewItem {
     ingredientName: string;
     ingredientType?: string | null;
     stockUnitLabel: string;
-    expectedQuantityG: number;
+    expectedQuantityG: number | null;
     countedQuantityG: number | null;
     deltaG: number | null;
     isCounted: boolean;

@@ -1,13 +1,17 @@
 <template>
   <view class="page">
     <view class="date-row">
-      <text class="date">{{ dateText }} · 数据截至 {{ asOf }}</text>
-      <text class="last" @tap="goRecords">上次盘库 {{ lastStocktakeText }}</text>
+      <text class="date">{{ dateText }} · 截至 {{ asOf }}</text>
+      <text class="last-stocktake" @tap="goRecords">上次盘点 {{ lastStocktakeText }}</text>
     </view>
 
-    <view class="warning" @tap="openDrawer('needs')">
+    <view
+      v-if="summary.needsReplenishment > 0 || summary.lowStock > 0"
+      class="warning"
+      @tap="openDrawer('needs')"
+    >
       <text class="warning-text">
-        {{ summary.needsReplenishment }} 项需要补货 · {{ summary.lowStock }} 项低于安全库存
+        {{ summary.needsReplenishment }} 项需补货 · {{ summary.lowStock }} 项偏低
       </text>
       <text class="arrow">›</text>
     </view>
@@ -16,7 +20,7 @@
       <input
         v-model="keyword"
         class="search-input"
-        placeholder="搜原料、渠道、规格"
+        placeholder="搜原料 / 渠道 / 规格"
         confirm-type="search"
       />
     </view>
@@ -41,7 +45,7 @@
       <button class="retry" @tap="load">重试</button>
     </view>
     <view v-else-if="filteredItems.length === 0" class="state">
-      <text class="state-title">{{ keyword ? '没搜到' : '这个分组是空的' }}</text>
+      <text class="state-title">{{ keyword ? '没搜到' : '这里还没有原料' }}</text>
       <text class="state-hint">换个关键词或筛选看看。</text>
     </view>
 
@@ -60,30 +64,25 @@
         <view class="card-main">
           <text class="big">{{ fmt(item.currentStock) }}</text>
           <text class="unit">{{ item.stockUnitLabel }}</text>
-          <view
-            v-if="
-              item.suggestedPurchaseQuantity > 0 ||
-              (item.inTransitBaseQuantity || 0) > 0 ||
-              (item.replenishmentInTransitBaseQuantity || 0) > 0
-            "
-            class="suggest"
-          >
-            <text v-if="(item.inTransitBaseQuantity || 0) > 0">
-              日采待买 {{ fmt(item.inTransitBaseQuantity) }}{{ item.stockUnitLabel }}
+          <view v-if="hasStockHint(item)" class="suggest">
+            <text v-if="totalInTransit(item) > 0">
+              在途 {{ fmt(totalInTransit(item)) }}{{ item.stockUnitLabel }}
             </text>
-            <text v-if="(item.replenishmentInTransitBaseQuantity || 0) > 0">
-              补货在途 {{ fmt(item.replenishmentInTransitBaseQuantity) }}{{ item.stockUnitLabel }}
+            <text v-if="shortageBase(item) > 0">
+              还差 {{ fmt(shortageBase(item)) }}{{ item.stockUnitLabel }}
             </text>
-            <text v-if="(item.availableBaseQuantity || 0) > 0" class="suggest-cost">
-              可用 {{ fmt(item.availableBaseQuantity) }}{{ item.stockUnitLabel }}
+            <text
+              v-if="shortageBase(item) > 0 && shortageCost(item) > 0"
+              class="suggest-cost"
+            >
+              约 ¥{{ fmt(shortageCost(item)) }}
             </text>
-            <text v-if="(item.netShortageQuantity || 0) > 0">
-              还差 {{ fmt(item.netShortageQuantity) }}{{ item.purchaseUnit }}
+            <text
+              v-if="shortageBase(item) <= 0 && totalInTransit(item) > 0"
+              class="suggest-cost"
+            >
+              已覆盖
             </text>
-            <text v-if="(item.netShortageQuantity || 0) > 0" class="suggest-cost">
-              约 ¥{{ fmt(item.netShortageEstimatedCost) }}
-            </text>
-            <text v-else class="suggest-cost">已覆盖</text>
           </view>
         </view>
 
@@ -110,7 +109,7 @@
       <button class="btn ghost" @tap="goAdjust">记一笔</button>
       <button class="btn ghost" @tap="goStocktake">盘点</button>
       <button class="btn primary" @tap="openDrawer('needs')">
-        补货 {{ summary.needsReplenishment }}
+        补货清单
       </button>
     </view>
 
@@ -118,6 +117,7 @@
       :visible="drawerVisible"
       :tab="drawerTab"
       :ingredient-id="drawerIngredientId"
+      :ingredient-name="drawerIngredientName"
       @close="drawerVisible = false"
       @update:tab="drawerTab = $event"
       @go-replenish="goReplenish"
@@ -144,6 +144,7 @@ const asOf = ref('');
 const drawerVisible = ref(false);
 const drawerTab = ref<'needs' | 'ledger'>('needs');
 const drawerIngredientId = ref<string | undefined>(undefined);
+const drawerIngredientName = ref<string | undefined>(undefined);
 
 const summary = computed(
   () =>
@@ -157,8 +158,18 @@ const summary = computed(
 
 const items = computed(() => home.value?.items ?? []);
 
+const keywordItems = computed(() => {
+  const term = keyword.value.trim().toLowerCase();
+  if (!term) return items.value;
+  return items.value.filter((item) =>
+    [item.name, item.purchaseChannel, item.productModel]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(term)),
+  );
+});
+
 const filters = computed(() => [
-  { value: 'ALL' as const, label: '全部', count: items.value.length },
+  { value: 'ALL' as const, label: '全部', count: keywordItems.value.length },
   {
     value: 'NEEDS' as const,
     label: '需补货',
@@ -168,13 +179,12 @@ const filters = computed(() => [
   {
     value: 'NO_POLICY' as const,
     label: '未设阈值',
-    count: summary.value.noPolicy,
+    count: keywordItems.value.filter((item) => item.stockStatus === 'NO_POLICY').length,
   },
 ]);
 
-const filteredItems = computed(() => {
-  const term = keyword.value.trim().toLowerCase();
-  return items.value.filter((item) => {
+const filteredItems = computed(() =>
+  keywordItems.value.filter((item) => {
     if (filter.value === 'NEEDS' && item.stockStatus !== 'NEEDS_REPLENISHMENT') {
       return false;
     }
@@ -184,12 +194,9 @@ const filteredItems = computed(() => {
     if (filter.value === 'NO_POLICY' && item.stockStatus !== 'NO_POLICY') {
       return false;
     }
-    if (!term) return true;
-    return [item.name, item.purchaseChannel, item.productModel]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(term));
-  });
-});
+    return true;
+  }),
+);
 
 const dateText = computed(() => {
   const now = new Date();
@@ -204,6 +211,19 @@ const lastStocktakeText = computed(() => {
   if (Number.isNaN(date.getTime())) return '还没盘过';
   return `${date.getMonth() + 1}/${date.getDate()}`;
 });
+
+const totalInTransit = (item: InventoryHomeItem) =>
+  (item.inTransitBaseQuantity || 0) +
+  (item.replenishmentInTransitBaseQuantity || 0);
+
+const shortageBase = (item: InventoryHomeItem) =>
+  item.netShortageBaseQuantity ?? item.suggestedBaseQuantity ?? 0;
+
+const shortageCost = (item: InventoryHomeItem) =>
+  item.netShortageEstimatedCost ?? item.suggestedEstimatedCost ?? 0;
+
+const hasStockHint = (item: InventoryHomeItem) =>
+  totalInTransit(item) > 0 || shortageBase(item) > 0;
 
 const fmt = (value: number | null | undefined) => {
   if (value === null || value === undefined) return '0';
@@ -222,10 +242,10 @@ const formatTime = (value: string) => {
 
 const badgeText = (item: InventoryHomeItem) => {
   if (item.currentStock < 0) return '待核实';
-  if (item.stockStatus === 'NEEDS_REPLENISHMENT') return '需要补货';
-  if (item.stockStatus === 'LOW_STOCK') return '低于安全';
+  if (item.stockStatus === 'NEEDS_REPLENISHMENT') return '需补货';
+  if (item.stockStatus === 'LOW_STOCK') return '偏低';
   if (item.stockStatus === 'NO_POLICY') return '未设阈值';
-  return '库存充足';
+  return '充足';
 };
 
 const badgeClass = (item: InventoryHomeItem) => {
@@ -237,7 +257,7 @@ const badgeClass = (item: InventoryHomeItem) => {
 };
 
 const load = async () => {
-  loading.value = true;
+  if (!home.value) loading.value = true;
   error.value = '';
   try {
     home.value = await getInventoryHome();
@@ -257,6 +277,7 @@ onShow(() => {
 const openDrawer = (tab: 'needs' | 'ledger', item?: InventoryHomeItem) => {
   drawerTab.value = tab;
   drawerIngredientId.value = item?.id;
+  drawerIngredientName.value = item?.name;
   drawerVisible.value = true;
 };
 
@@ -298,7 +319,7 @@ const goStocktake = () => {
   font-size: 24rpx;
   color: #7a8a80;
 }
-.last {
+.last-stocktake {
   font-size: 24rpx;
   color: #4b5b51;
 }
@@ -440,12 +461,14 @@ const goStocktake = () => {
 }
 .suggest {
   margin-left: auto;
+  max-width: 55%;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4rpx;
+  gap: 2rpx;
   font-size: 24rpx;
   color: #4b5b51;
+  text-align: right;
 }
 .suggest-cost {
   color: #7a8a80;

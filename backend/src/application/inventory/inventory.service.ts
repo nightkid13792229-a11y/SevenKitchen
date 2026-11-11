@@ -130,6 +130,7 @@ export interface InventoryStocktakeLineDto {
 export interface InventoryStocktakeDto {
   id: string;
   status: InventoryStocktakeStatus;
+  createdBy: string | null;
   note: string | null;
   createdAt: string;
   appliedAt: string | null;
@@ -2040,6 +2041,7 @@ export class InventoryService {
       id: dto.id,
       status: dto.status,
       note: dto.note,
+      createdBy: dto.createdBy,
       createdAt: dto.createdAt,
       lineCount: dto.lineCount,
       countedCount: dto.lines.filter((line) => line.isCounted).length,
@@ -2230,6 +2232,7 @@ export class InventoryService {
       id: stocktake.id,
       status: stocktake.status as InventoryStocktakeStatus,
       note: stocktake.note ?? null,
+      createdBy: stocktake.createdBy ?? null,
       createdAt: stocktake.createdAt.toISOString(),
       appliedAt: stocktake.appliedAt?.toISOString() ?? null,
       submittedAt: stocktake.submittedAt?.toISOString() ?? null,

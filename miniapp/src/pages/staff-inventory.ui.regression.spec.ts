@@ -105,13 +105,13 @@ describe('staff inventory home (C8)', () => {
   const stockCreate = readPage('staff-purchasing/stock-create.vue');
 
   it('shows freshness, warning, search and four filters', () => {
-    expect(page).toContain('数据截至');
-    expect(page).toContain('上次盘库');
-    expect(page).toContain('需要补货');
-    expect(page).toContain('低于安全');
+    expect(page).toContain('截至');
+    expect(page).toContain('上次盘点');
+    expect(page).toContain('需补货');
+    expect(page).toContain('偏低');
     expect(page).toContain('未设阈值');
     expect(page).toContain('全部');
-    expect(page).toContain('搜原料、渠道、规格');
+    expect(page).toContain('搜原料 / 渠道 / 规格');
   });
 
   it('shows last movement, negative-stock flag and both actions', () => {

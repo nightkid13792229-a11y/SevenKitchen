@@ -2,7 +2,9 @@
   <view v-if="visible" class="mask" @tap="onClose">
     <view class="sheet" @tap.stop>
       <view class="sheet-head">
-        <text class="sheet-title">库存</text>
+        <text class="sheet-title">
+          {{ tab === 'ledger' ? ingredientName || '最近流水' : '缺什么' }}
+        </text>
         <text class="close" @tap="onClose">关闭</text>
       </view>
 
@@ -24,6 +26,10 @@
       </view>
 
       <view v-if="loading" class="state">加载中…</view>
+      <view v-else-if="error" class="state">
+        <text>{{ error }}</text>
+        <text class="retry" @tap="load">重试</text>
+      </view>
 
       <scroll-view v-else scroll-y class="body">
         <template v-if="tab === 'needs'">
@@ -36,14 +42,16 @@
               <text class="name">{{ item.name }}</text>
               <text class="meta">
                 现存 {{ fmt(item.currentStock) }}{{ item.stockUnitLabel }}
-                <text v-if="(item.inTransitQuantity || 0) > 0">
-                  · 在途 {{ fmt(item.inTransitQuantity) }}{{ item.purchaseUnit }}
+                <text v-if="totalInTransit(item) > 0">
+                  · 在途 {{ fmt(totalInTransit(item)) }}{{ item.stockUnitLabel }}
                 </text>
-                <text v-if="(item.netShortageQuantity || 0) > 0">
-                  · 还差 {{ fmt(item.netShortageQuantity) }}{{ item.purchaseUnit }}
-                  · 约 ¥{{ fmt(item.netShortageEstimatedCost) }}
+                <text v-if="netBase(item) > 0">
+                  · 还差 {{ fmt(netBase(item)) }}{{ item.stockUnitLabel }}
+                  <text v-if="(item.netShortageEstimatedCost || 0) > 0">
+                    · 约 ¥{{ fmt(item.netShortageEstimatedCost) }}
+                  </text>
                 </text>
-                <text v-else> · 已覆盖</text>
+                <text v-else-if="totalInTransit(item) <= 0"> · 库存够</text>
               </text>
             </view>
             <button class="mini" @tap="onGoReplenish(item)">去补货</button>
@@ -90,6 +98,7 @@ const props = defineProps<{
   visible: boolean;
   tab: 'needs' | 'ledger';
   ingredientId?: string;
+  ingredientName?: string;
 }>();
 
 const emit = defineEmits<{
@@ -100,6 +109,7 @@ const emit = defineEmits<{
 
 const tab = ref<'needs' | 'ledger'>(props.tab);
 const loading = ref(false);
+const error = ref('');
 const needs = ref<InventoryOverviewItem[]>([]);
 const ledger = ref<InventoryLedgerItem[]>([]);
 
@@ -111,6 +121,13 @@ const fmt = (value: number | null | undefined) => {
 
 const signed = (value: number) => `${value > 0 ? '+' : ''}${fmt(value)}`;
 
+const totalInTransit = (item: InventoryOverviewItem) =>
+  (item.inTransitBaseQuantity || 0) +
+  (item.replenishmentInTransitBaseQuantity || 0);
+
+const netBase = (item: InventoryOverviewItem) =>
+  item.netShortageBaseQuantity ?? item.suggestedBaseQuantity ?? 0;
+
 const formatTime = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -121,6 +138,7 @@ const formatTime = (value: string) => {
 const load = async () => {
   if (!props.visible) return;
   loading.value = true;
+  error.value = '';
   try {
     if (tab.value === 'needs') {
       needs.value = await getInventoryOverview({
@@ -132,8 +150,8 @@ const load = async () => {
         limit: 50,
       });
     }
-  } catch (error: any) {
-    uni.showToast({ title: error?.message || '加载失败', icon: 'none' });
+  } catch (err: any) {
+    error.value = err?.message || '加载失败，请重试';
   } finally {
     loading.value = false;
   }
@@ -151,7 +169,6 @@ watch(
 const switchTab = (value: 'needs' | 'ledger') => {
   tab.value = value;
   emit('update:tab', value);
-  load();
 };
 
 const onClose = () => emit('close');
@@ -162,7 +179,10 @@ const onGoReplenish = (item: InventoryOverviewItem) =>
 <style scoped>
 .mask {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 50;
   background: rgba(20, 30, 24, 0.45);
   display: flex;
@@ -211,12 +231,18 @@ const onGoReplenish = (item: InventoryOverviewItem) =>
 }
 .body {
   flex: 1;
-  max-height: 58vh;
+  height: 58vh;
 }
 .state {
   padding: 40rpx 0;
   text-align: center;
   color: #7a8a80;
+  font-size: 24rpx;
+}
+.retry {
+  display: block;
+  margin-top: 12rpx;
+  color: #1e3a2f;
   font-size: 24rpx;
 }
 .needs-row {

@@ -19,7 +19,7 @@
         <view class="bar">
           <view class="bar-fill" :style="{ width: progressPercent + '%' }" />
         </view>
-        <text class="hint">只填实称；留空表示没盘，不会调整库存。</text>
+        <text class="hint">只填实称；留空 = 没盘，不会改库存。</text>
       </view>
 
       <view class="filters">
@@ -77,7 +77,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
-import { onLoad, onUnload } from '@dcloudio/uni-app';
+import { onLoad } from '@dcloudio/uni-app';
 import {
   cancelStocktake,
   getStocktakeDraft,
@@ -98,6 +98,7 @@ const filters = [
   { value: 'ALL', label: '全部' },
   { value: 'FOOD', label: '食材' },
   { value: 'SUPPLEMENT', label: '补剂' },
+  { value: 'PACKAGING', label: '包材' },
 ] as const;
 
 const loading = ref(true);
@@ -174,8 +175,9 @@ const onInput = (line: DraftLine, event: any) => {
 
 const focusNext = (index: number) => {
   focusIndex.value = -1;
+  if (index >= visibleLines.value.length - 1) return;
   nextTick(() => {
-    focusIndex.value = Math.min(index + 1, visibleLines.value.length - 1);
+    focusIndex.value = index + 1;
   });
 };
 
@@ -188,8 +190,8 @@ const buildPayload = () =>
     };
   });
 
-const saveDraft = async (silent = false) => {
-  if (!stocktakeId.value || saving.value) return;
+const saveDraft = async (silent = false): Promise<boolean> => {
+  if (!stocktakeId.value || saving.value) return false;
   saving.value = true;
   try {
     const payload = buildPayload();
@@ -200,16 +202,23 @@ const saveDraft = async (silent = false) => {
     if (!silent) {
       uni.showToast({ title: '已存草稿', icon: 'success' });
     }
+    return true;
   } catch (err: any) {
     if (!silent) {
       uni.showToast({ title: err?.message || '保存失败', icon: 'none' });
     }
+    return false;
   } finally {
     saving.value = false;
   }
 };
 
 const onNext = async () => {
+  if (saving.value) return;
+  if (countedCount.value === 0) {
+    uni.showToast({ title: '先填至少一项实称', icon: 'none' });
+    return;
+  }
   const skipped = lines.value.length - countedCount.value;
   if (skipped > 0) {
     const confirmed = await new Promise<boolean>((resolve) => {
@@ -224,10 +233,14 @@ const onNext = async () => {
     if (!confirmed) return;
   }
 
-  await saveDraft(true);
+  const saved = await saveDraft(true);
+  if (!saved) {
+    uni.showToast({ title: '草稿没保存上，检查网络后重试', icon: 'none' });
+    return;
+  }
   try {
     await previewStocktake(stocktakeId.value, skipped > 0);
-    uni.navigateTo({
+    uni.redirectTo({
       url: `/pages/staff-inventory/stocktake-result?id=${stocktakeId.value}&mode=preview`,
     });
   } catch (err: any) {
@@ -247,16 +260,11 @@ const onCancel = async () => {
   if (!confirmed) return;
   try {
     await cancelStocktake(stocktakeId.value);
-  } finally {
     uni.navigateBack();
+  } catch (err: any) {
+    uni.showToast({ title: err?.message || '取消失败，请重试', icon: 'none' });
   }
 };
-
-onUnload(() => {
-  if (stocktakeId.value) {
-    void saveDraft(true);
-  }
-});
 </script>
 
 <style scoped>
@@ -346,6 +354,7 @@ onUnload(() => {
 }
 .list {
   flex: 1;
+  height: 0;
   padding: 12rpx 24rpx;
   box-sizing: border-box;
 }

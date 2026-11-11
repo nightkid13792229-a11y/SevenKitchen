@@ -6,12 +6,16 @@
     </view>
 
     <view class="hint">
-      盘点时只看实称，不显示账面；提交后才看差异。差异 ≤ max(2%, 50) 自动入账，超出才要复核。
+      只填实称，不显示账面；小差异自动入账，大差异等管理员复核。
     </view>
 
-    <view v-if="loading" class="state">加载中…</view>
+    <view v-if="loading && items.length === 0" class="state">加载中…</view>
+    <view v-else-if="error" class="state">
+      <text>{{ error }}</text>
+      <text class="retry" @tap="load">重试</text>
+    </view>
     <view v-else-if="items.length === 0" class="state">
-      还没有盘点记录。想盘的时候点右上角「盘点」。
+      还没有盘点记录。点右上角「盘点」开始。
     </view>
 
     <template v-else>
@@ -37,7 +41,8 @@
           <view class="meta">
             <text>{{ item.lineCount }} 项</text>
             <text v-if="item.status !== 'DRAFT'">差异 {{ item.varianceCount }} 项</text>
-            <text v-else>盘点中</text>
+            <text v-else-if="isMine(item)">盘点中</text>
+            <text v-else>他人盘点中</text>
             <text v-if="item.countedCount !== undefined">
               已盘 {{ item.countedCount }} / {{ item.lineCount }}
             </text>
@@ -81,7 +86,12 @@ import {
 
 const items = ref<InventoryStocktakeItem[]>([]);
 const loading = ref(true);
+const error = ref('');
+const currentUserId =
+  uni.getStorageSync('userId') || getStoredUser()?.id;
 const isAdmin = getStoredUser()?.role === 'ADMIN';
+const isMine = (item: InventoryStocktakeItem) =>
+  !currentUserId || !item.createdBy || item.createdBy === currentUserId;
 
 const statusText = (status: string) =>
   ({
@@ -108,11 +118,12 @@ const formatTime = (value: string) => {
 };
 
 const load = async () => {
-  loading.value = true;
+  if (items.value.length === 0) loading.value = true;
+  error.value = '';
   try {
     items.value = await getInventoryStocktakes({ limit: 30 });
-  } catch (error: any) {
-    uni.showToast({ title: error?.message || '加载失败', icon: 'none' });
+  } catch (err: any) {
+    error.value = err?.message || '加载失败，请重试';
   } finally {
     loading.value = false;
   }
@@ -128,6 +139,13 @@ const goStart = () => {
 
 const open = (item: InventoryStocktakeItem) => {
   if (item.status === 'DRAFT') {
+    if (!isMine(item)) {
+      uni.showToast({
+        title: '这单由其他人盘点中，等对方完成或取消',
+        icon: 'none',
+      });
+      return;
+    }
     uni.navigateTo({ url: '/pages/staff-inventory/stocktake-create' });
     return;
   }
@@ -184,7 +202,7 @@ const reject = async (item: InventoryStocktakeItem) => {
 };
 
 const restart = () => {
-  uni.redirectTo({ url: '/pages/staff-inventory/stocktake-create' });
+  uni.navigateTo({ url: '/pages/staff-inventory/stocktake-create' });
 };
 </script>
 
@@ -224,6 +242,12 @@ const restart = () => {
   color: #4b5b51;
   font-size: 24rpx;
   line-height: 1.6;
+}
+.retry {
+  display: block;
+  margin-top: 12rpx;
+  color: #1e3a2f;
+  font-size: 24rpx;
 }
 .state {
   padding: 80rpx 0;

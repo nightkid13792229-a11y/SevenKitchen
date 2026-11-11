@@ -1,6 +1,10 @@
 <template>
   <view class="page">
     <view v-if="loading" class="state">正在加载盘点结果…</view>
+    <view v-else-if="error" class="state">
+      <text>{{ error }}</text>
+      <text class="retry" @tap="load">重试</text>
+    </view>
 
     <template v-else>
       <view class="summary">
@@ -9,7 +13,7 @@
           {{ skippedCount }} 项未盘 · 差异 {{ varianceCount }} 项
         </text>
         <text v-if="mode === 'preview'" class="sub">
-          提交后容差内自动入账，超出的等管理员复核。
+          小差异自动入账，大差异等管理员复核。
         </text>
       </view>
 
@@ -55,9 +59,10 @@
           v-if="mode === 'preview'"
           class="btn primary"
           :loading="submitting"
+          :disabled="submitting"
           @tap="onSubmit"
         >
-          提交复核
+          {{ overCount > 0 ? '提交复核' : '提交并入账' }}
         </button>
         <button v-else class="btn primary" @tap="goRecords">返回记录</button>
       </view>
@@ -78,7 +83,7 @@ type Line = {
   ingredientId: string;
   ingredientName: string;
   stockUnitLabel: string;
-  expectedQuantityG: number;
+  expectedQuantityG: number | null;
   countedQuantityG: number | null;
   deltaG: number | null;
   isCounted: boolean;
@@ -87,6 +92,7 @@ type Line = {
 
 const loading = ref(true);
 const submitting = ref(false);
+const error = ref('');
 const mode = ref<'preview' | 'result'>('result');
 const stocktakeId = ref('');
 const note = ref('');
@@ -97,6 +103,9 @@ const skippedCount = computed(() => lines.value.length - countedCount.value);
 const varianceCount = computed(
   () => lines.value.filter((line) => line.isCounted && Number(line.deltaG || 0) !== 0).length,
 );
+const overCount = computed(
+  () => lines.value.filter((line) => line.isCounted && line.withinTolerance === false).length,
+);
 
 const groups = computed(() => {
   const over = lines.value.filter((line) => line.isCounted && line.withinTolerance === false);
@@ -105,17 +114,17 @@ const groups = computed(() => {
   return [
     {
       key: 'over',
-      title: mode.value === 'preview' ? '超出容差，需要复核' : '待复核',
+      title: mode.value === 'preview' ? '大差异，待复核' : '待复核',
       lines: over,
     },
     {
       key: 'auto',
-      title: mode.value === 'preview' ? '容差内，提交后自动入账' : '已自动入账',
+      title: mode.value === 'preview' ? '小差异，自动入账' : '已自动入账',
       lines: auto,
     },
     {
       key: 'skipped',
-      title: '未盘（不调整）',
+      title: '未盘',
       lines: skipped,
     },
   ].filter((group) => group.lines.length > 0);
@@ -150,6 +159,7 @@ const deltaClass = (line: Line) => {
 
 const load = async () => {
   loading.value = true;
+  error.value = '';
   try {
     if (mode.value === 'preview') {
       const preview = await previewStocktake(stocktakeId.value, true);
@@ -176,8 +186,8 @@ const load = async () => {
         withinTolerance: line.withinTolerance,
       }));
     }
-  } catch (error: any) {
-    uni.showToast({ title: error?.message || '加载失败', icon: 'none' });
+  } catch (err: any) {
+    error.value = err?.message || '加载失败，请重试';
   } finally {
     loading.value = false;
   }
@@ -187,11 +197,16 @@ onLoad((options: any) => {
   stocktakeId.value = options?.id || '';
   mode.value = options?.mode === 'preview' ? 'preview' : 'result';
   if (!stocktakeId.value) {
-    uni.showToast({ title: '缺少盘点单号', icon: 'none' });
+    loading.value = false;
+    error.value = '缺少盘点单号';
     return;
   }
   load();
 });
+
+const backToRecords = () => {
+  uni.redirectTo({ url: '/pages/staff-inventory/stocktake-records' });
+};
 
 const onSubmit = async () => {
   if (submitting.value) return;
@@ -202,18 +217,15 @@ const onSubmit = async () => {
       title: result.status === 'APPLIED' ? '已自动入账' : '已提交复核',
       icon: 'success',
     });
-    setTimeout(() => {
-      uni.redirectTo({ url: '/pages/staff-inventory/stocktake-records' });
-    }, 600);
-  } catch (error: any) {
-    uni.showToast({ title: error?.message || '提交失败', icon: 'none' });
-  } finally {
+    setTimeout(backToRecords, 600);
+  } catch (err: any) {
+    uni.showToast({ title: err?.message || '提交失败', icon: 'none' });
     submitting.value = false;
   }
 };
 
 const goRecords = () => {
-  uni.redirectTo({ url: '/pages/staff-inventory/stocktake-records' });
+  backToRecords();
 };
 </script>
 
@@ -223,6 +235,12 @@ const goRecords = () => {
   padding: 24rpx 24rpx calc(140rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
   background: #fbfcf7;
+}
+.retry {
+  display: block;
+  margin-top: 12rpx;
+  color: #1e3a2f;
+  font-size: 24rpx;
 }
 .state {
   padding: 80rpx 0;

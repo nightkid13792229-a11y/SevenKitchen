@@ -5,6 +5,38 @@
       <text class="page-subtitle">下单后传订单截图记账；货到了再点「已到货」，库存才增加。</text>
     </view>
 
+    <view v-if="needs.length > 0" class="needs-card">
+      <view class="needs-head" @tap="needsExpanded = !needsExpanded">
+        <view class="needs-copy">
+          <text class="needs-title">缺什么 · {{ needs.length }} 项</text>
+          <text class="needs-sub">约 ¥{{ money(needsCost) }} · 点开看清单</text>
+        </view>
+        <text class="needs-toggle">{{ needsExpanded ? '收起' : '展开' }}</text>
+      </view>
+
+      <view v-if="needsExpanded" class="needs-list">
+        <view
+          v-for="item in needs.slice(0, 8)"
+          :key="item.id"
+          class="needs-row"
+        >
+          <text class="needs-name">{{ item.name }}</text>
+          <text class="needs-meta">
+            还差 {{ fmt(shortageOf(item)) }}{{ item.stockUnitLabel }}
+            <text v-if="totalInTransit(item) > 0" class="needs-transit">
+              · 在途 {{ fmt(totalInTransit(item)) }}{{ item.stockUnitLabel }}
+            </text>
+          </text>
+        </view>
+        <text v-if="needs.length > 8" class="needs-more">
+          还有 {{ needs.length - 8 }} 项，去库存页看全部
+        </text>
+        <view class="needs-actions">
+          <text class="needs-copy-btn" @tap="copyNeeds">复制清单</text>
+        </view>
+      </view>
+    </view>
+
     <view v-if="inTransitCount > 0" class="in-transit-card" @tap="selectFilter('IN_TRANSIT')">
       <view class="in-transit-copy">
         <text class="in-transit-title">待收货 {{ inTransitCount }} 笔</text>
@@ -106,6 +138,10 @@ import {
   uploadOrderScreenshot,
   type ReplenishmentRecordSummary,
 } from '../api/purchasing';
+import {
+  getInventoryOverview,
+  type InventoryOverviewItem,
+} from '../../staff-inventory/api/inventory';
 
 type FilterValue =
   | 'ALL'
@@ -134,6 +170,8 @@ const page = ref(1);
 const pageSize = 20;
 const total = ref(0);
 const inTransitCount = ref(0);
+const needs = ref<InventoryOverviewItem[]>([]);
+const needsExpanded = ref(false);
 
 const hasMore = computed(() => records.value.length < total.value);
 
@@ -301,8 +339,51 @@ const loadInTransitCount = async () => {
   }
 };
 
+const money = (value: number) => Number(value || 0).toFixed(2);
+
+const fmt = (value: number | null | undefined) => {
+  if (value === null || value === undefined) return '0';
+  const number = Number(value);
+  return Number.isInteger(number) ? String(number) : number.toFixed(1);
+};
+
+const shortageOf = (item: InventoryOverviewItem) =>
+  item.netShortageBaseQuantity ?? item.suggestedBaseQuantity ?? 0;
+
+const totalInTransit = (item: InventoryOverviewItem) =>
+  (item.inTransitBaseQuantity || 0) +
+  (item.replenishmentInTransitBaseQuantity || 0);
+
+const needsCost = computed(() =>
+  needs.value.reduce(
+    (sum, item) => sum + Number(item.netShortageEstimatedCost || 0),
+    0,
+  ),
+);
+
+const loadNeeds = async () => {
+  try {
+    needs.value = await getInventoryOverview({ onlyNeedsReplenishment: true });
+  } catch {
+    needs.value = [];
+  }
+};
+
+const copyNeeds = () => {
+  const text = needs.value
+    .map(
+      (item) =>
+        `${item.name} 还差 ${fmt(shortageOf(item))}${item.stockUnitLabel}`,
+    )
+    .join('\n');
+  uni.setClipboardData({
+    data: text,
+    success: () => uni.showToast({ title: '清单已复制', icon: 'success' }),
+  });
+};
+
 const refresh = async () => {
-  await Promise.all([loadRecords(true), loadInTransitCount()]);
+  await Promise.all([loadRecords(true), loadInTransitCount(), loadNeeds()]);
 };
 
 const selectFilter = (value: FilterValue) => {
@@ -454,6 +535,89 @@ onShow(() => {
   min-height: 100vh;
   background: #fbfcf7;
   padding: 24rpx 28rpx 60rpx;
+}
+
+.needs-card {
+  margin-bottom: 20rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 20rpx;
+  background: #fff;
+  border: 1rpx solid #e8ede7;
+}
+
+.needs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.needs-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.needs-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+}
+
+.needs-sub {
+  font-size: 24rpx;
+  color: #5f6f64;
+}
+
+.needs-toggle {
+  font-size: 24rpx;
+  color: #1e3a2f;
+}
+
+.needs-list {
+  margin-top: 12rpx;
+  border-top: 1rpx solid #f1f4ee;
+  padding-top: 8rpx;
+}
+
+.needs-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12rpx;
+  padding: 8rpx 0;
+}
+
+.needs-name {
+  font-size: 26rpx;
+  color: #1e3a2f;
+}
+
+.needs-meta {
+  font-size: 24rpx;
+  color: #5f6f64;
+}
+
+.needs-transit {
+  color: #7a8a80;
+}
+
+.needs-more {
+  display: block;
+  padding: 8rpx 0 0;
+  font-size: 24rpx;
+  color: #7a8a80;
+}
+
+.needs-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8rpx;
+}
+
+.needs-copy-btn {
+  font-size: 24rpx;
+  color: #1e3a2f;
+  padding: 8rpx 0 8rpx 16rpx;
 }
 
 .page-head {

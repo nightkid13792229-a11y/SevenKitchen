@@ -500,6 +500,58 @@ export class ProcurementSkuService {
     );
   }
 
+  /**
+   * 倍数变了以后，如果原料成本是这个商品初始化出来的，就按新倍数重算一次。
+   *
+   * 判断依据是**最近一条成本流水**：只有 `INIT_FROM_SKU` + 指向本商品时才动。
+   * 报销/人工定的成本一律不动 —— 那是真金白银算出来的，不能被后台改层级覆盖。
+   */
+  private async recalculateIngredientCostForRatioChange(params: {
+    skuId: string;
+    ingredientId: string;
+    pricePerPurchaseUnit: number;
+    nextRatio: number;
+  }): Promise<void> {
+    if (!(params.pricePerPurchaseUnit > 0) || !(params.nextRatio > 0)) return;
+
+    const latest = await this.prisma.ingredientPriceHistory.findFirst({
+      where: { ingredientId: params.ingredientId },
+      orderBy: { createdAt: 'desc' },
+      select: { source: true, procurementSkuId: true, newCostPerBaseUnit: true },
+    });
+    if (
+      !latest ||
+      latest.source !== 'INIT_FROM_SKU' ||
+      latest.procurementSkuId !== params.skuId
+    ) {
+      return;
+    }
+
+    const ingredient = await this.prisma.ingredient.findUnique({
+      where: { id: params.ingredientId },
+      select: { currentPricePerPurchaseUnit: true },
+    });
+    if (!ingredient) return;
+
+    const previousCost = Number(ingredient.currentPricePerPurchaseUnit ?? 0);
+    const nextCost =
+      Math.round((params.pricePerPurchaseUnit / params.nextRatio) * 1e6) / 1e6;
+    if (!(nextCost > 0) || Math.abs(previousCost - nextCost) < 1e-9) return;
+
+    await this.prisma.ingredient.update({
+      where: { id: params.ingredientId },
+      data: { currentPricePerPurchaseUnit: nextCost },
+    });
+    await this.costHistory.record({
+      ingredientId: params.ingredientId,
+      oldCost: previousCost,
+      newCost: nextCost,
+      source: 'MANUAL',
+      procurementSkuId: params.skuId,
+      note: '采购商品的包装层级改了，按新换算重算成本',
+    });
+  }
+
   private async initializeIngredientCostFromSku(
     tx: PrismaService | any,
     params: {
@@ -1410,6 +1462,30 @@ export class ProcurementSkuService {
     const updated = shouldRecordManualPriceHistory
       ? await this.prisma.$transaction(runUpdate as any)
       : await runUpdate(this.prisma);
+
+    /**
+     * 改了层级（= 倍数）之后，原料的每克成本要跟着重算（2026-11-11）。
+     *
+     * 以前只在"成本为 0"时初始化：后台把 1 盒从 1500 克改成 2000 克，
+     * 原料成本仍停在旧值，食谱报价跟着错，而且没有任何提示。
+     *
+     * 只在这条原料的成本**确实来自这个商品**时才改（最近一条成本流水是
+     * INIT_FROM_SKU 且指向本商品）—— 报销算出来的加权成本不许被悄悄覆盖。
+     */
+    const previousRatio = Number(existing.purchaseToBaseRatio ?? 0);
+    const nextRatio = Number((updated as ProcurementSkuRecord).purchaseToBaseRatio ?? 0);
+    if (
+      previousRatio > 0 &&
+      nextRatio > 0 &&
+      Math.abs(previousRatio - nextRatio) > 1e-9
+    ) {
+      await this.recalculateIngredientCostForRatioChange({
+        skuId: id,
+        ingredientId: existing.ingredientId,
+        pricePerPurchaseUnit: Number((updated as ProcurementSkuRecord).currentPurchasePrice ?? 0),
+        nextRatio,
+      });
+    }
 
     // 补价也能初始化成本（2026-11-07）：先建商品、后补价是最常见的操作顺序，
     // 如果只在创建时初始化，这条原料的成本会永远停在 0。

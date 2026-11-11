@@ -812,7 +812,14 @@ export class ReplenishmentService {
         ingredientName: sku.ingredient.name,
         type: sku.ingredient.type,
         quantityNeeded: quantity,
-        quantityUnit: unit || sku.purchaseUnit || sku.ingredient.baseUnit,
+        /**
+         * 数量单位（2026-11-11）：商品单位优先，**绝不退回基准单位**。
+         *
+         * 以前这里兜底成「克」：商品没填单位时，页面显示"回补 300 克"，
+         * 而实际数量是按"件"写的 —— 员工照着克数下单，差几百倍。
+         * 连「件」都比「克」安全：至少它还是个件数单位。
+         */
+        quantityUnit: unit || sku.purchaseUnit || '件',
         estimatedCost: amount,
         purchaseChannel:
           channel ?? sku.purchaseChannel ?? sku.ingredient.purchaseChannel,
@@ -821,7 +828,7 @@ export class ReplenishmentService {
           unit ||
           sku.purchaseUnit ||
           sku.ingredient.unitDisplayLabel ||
-          sku.ingredient.baseUnit,
+          '件',
       },
     });
   }

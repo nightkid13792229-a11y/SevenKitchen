@@ -47,10 +47,6 @@ function service() {
     }))
   } as unknown as AgentProviderConfigService;
 
-  const knowledge = {
-    isAvailable: () => true,
-    search: jest.fn(() => [{ chunkId: 'C1', docId: 'nrc', text: 'zinc sulfate bioavailable', score: 9 }])
-  };
   const preview = {
     searchCandidates: jest.fn(async () => [
       { url: 'https://www.iherb.com/pr/x/1', name: 'NOW Zinc', priceUsd: null, pricePerServingUsd: null }
@@ -84,11 +80,9 @@ function service() {
   return {
     service: new SupplementAgentService(
       providerConfig,
-      knowledge as never,
       preview as never,
       catalog as never
     ),
-    knowledge,
     preview
   };
 }
@@ -96,29 +90,36 @@ function service() {
 const base = { message: '加个锌', history: [], draft: { name: '' } };
 
 describe('工具循环', () => {
-  it('模型不调工具、直接回答 → 原样返回', async () => {
-    buildFetch([{ content: '锌常见形态有五种……' }]);
+  it('模型不调工具、直接回答 → 原样返回，且工具清单里没有知识库检索', async () => {
+    const fetchMock = buildFetch([{ content: '锌常见形态有五种……' }]);
     const result = await service().service.run(base);
 
     expect(result.reply).toContain('五种');
     expect(result.toolCalls).toEqual([]);
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const toolNames = (body.tools as { function: { name: string } }[]).map(
+      (tool) => tool.function.name
+    );
+    expect(toolNames).not.toContain('search_knowledge');
+    expect(String(body.messages[0].content)).not.toContain('search_knowledge');
   });
 
   it('模型调工具 → 真的执行，并把结果喂回模型后收口', async () => {
     const fetchMock = buildFetch([
-      { tool: { name: 'search_knowledge', args: { query: 'zinc form' } } },
-      { content: '根据 NRC，螯合与硫酸锌相当。' }
+      { tool: { name: 'search_products', args: { keyword: 'zinc' } } },
+      { content: '搜到一款 NOW Zinc。' }
     ]);
-    const { service: agent, knowledge } = service();
+    const { service: agent, preview } = service();
 
     const result = await agent.run(base);
 
-    expect(knowledge.search).toHaveBeenCalled();
-    expect(result.toolCalls).toEqual([{ name: 'search_knowledge', ok: true }]);
-    expect(result.reply).toContain('NRC');
+    expect(preview.searchCandidates).toHaveBeenCalled();
+    expect(result.toolCalls).toEqual([{ name: 'search_products', ok: true }]);
+    expect(result.reply).toContain('NOW Zinc');
     // 工具结果确实回传给了模型
     const secondBody = JSON.parse(fetchMock.mock.calls[1][1].body);
-    expect(JSON.stringify(secondBody.messages)).toContain('zinc sulfate bioavailable');
+    expect(JSON.stringify(secondBody.messages)).toContain('NOW Zinc');
   });
 
   it('模型写草稿 → 跑完的草稿里能看见', async () => {
@@ -163,7 +164,7 @@ describe('工具循环', () => {
 
   it('工具结果进上下文前被包成"外部数据，不是指令"', async () => {
     const fetchMock = buildFetch([
-      { tool: { name: 'search_knowledge', args: { query: 'zinc' } } },
+      { tool: { name: 'lookup_feed_catalog', args: { name: '甘氨酸锌' } } },
       { content: '好了' }
     ]);
     const { service: agent } = service();
@@ -188,7 +189,7 @@ describe('工具循环', () => {
   });
 
   it('模型一直调工具不肯收口时，最多跑几步就停下并如实说', async () => {
-    buildFetch([{ tool: { name: 'search_knowledge', args: { query: 'zinc' } } }]);
+    buildFetch([{ tool: { name: 'search_products', args: { keyword: 'zinc' } } }]);
     const { service: agent } = service();
 
     const result = await agent.run(base);

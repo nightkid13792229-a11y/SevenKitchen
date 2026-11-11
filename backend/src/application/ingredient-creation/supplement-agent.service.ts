@@ -10,7 +10,6 @@ import {
   type ToolContext
 } from './supplement-tools';
 import type { SupplementDraftRecord } from '../../domain/ingredient/supplement-draft-patch';
-import { KnowledgeSearchService } from '../knowledge/knowledge-search.service';
 import { SupplementLinkPreviewService } from './supplement-link-preview.service';
 import { FeedAdditiveCatalogService } from '../../domain/ingredient/feed-additive-catalog.service';
 
@@ -58,7 +57,6 @@ const MAX_TOKENS = 1600;
 const SYSTEM_PROMPT = `你是宠物鲜食后台的补剂助手，帮管理员把一瓶补剂建成标准原料档案。
 
 ## 你可以用的工具
-- search_knowledge：查本地营养知识库（NRC / FEDIAF / SACN5），返回带出处的原文
 - search_products：搜 iHerb 商品
 - fetch_product：读商品页，拿标签字段和人民币标价
 - lookup_feed_catalog：查《饲料添加剂品种目录》的规范名与适用范围
@@ -66,7 +64,7 @@ const SYSTEM_PROMPT = `你是宠物鲜食后台的补剂助手，帮管理员把
 - ask_user：需要人拍板时提问
 
 ## 几条底线
-- 不确定的事去查（知识库 / 商品页 / 目录），**不要凭空断言**；查不到就说查不到。
+- 不确定的事去查（商品页 / 目录），**不要凭空断言**；查不到就说查不到。
 - 选品的判断顺序是：① 化学形态（对狗安不安全、好不好吸收）② 人用还是犬用 ③ 性价比。顺序不要倒。
 - 算不出价钱就说算不出，**不许拿估计值凑一个推荐**。
 - 下面三条**还没有定稿**，问到就如实说"这条还没定"，不要替人下结论：
@@ -97,7 +95,6 @@ export class SupplementAgentService {
   // 这里必须写**具体类**：Nest 靠运行时类型注入，写成结构类型会被擦成 Object，启动即失败
   constructor(
     private readonly providerConfig: AgentProviderConfigService,
-    private readonly knowledge: KnowledgeSearchService,
     private readonly preview: SupplementLinkPreviewService,
     private readonly catalog: FeedAdditiveCatalogService
   ) {}
@@ -236,7 +233,6 @@ export class SupplementAgentService {
     historyText: string
   ): ToolContext {
     return {
-      knowledge: this.knowledge,
       preview: this.preview,
       catalog: this.catalog,
       draft: { ...draft },

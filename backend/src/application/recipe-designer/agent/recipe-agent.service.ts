@@ -12,7 +12,6 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  Logger,
   NotFoundException,
   type OnModuleInit,
 } from '@nestjs/common';
@@ -31,21 +30,9 @@ import {
 import { RecipeDesignerService } from '../recipe-designer.service';
 import { buildSystemPrompt } from './prompt';
 import { redactDrugDoses } from './dose-redaction';
-import { CitationRegistry, formatTableCitationText } from './citation-registry';
-import {
-  citationGatePassed,
-  judgeAnswer,
-  rewriteAnswer,
-} from './citation-judge';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
-import { KnowledgeLibraryService } from '../../knowledge-base/knowledge-library.service';
-import { SourceLayerService } from '../../knowledge-base/source-layer.service';
 import { AGENT_TOOLS, executeTool } from './tools';
-import {
-  scopeFromEnv,
-  type KnowledgeScope,
-} from '../../../domain/knowledge/knowledge-scope';
 import { assessmentGapSignature } from './assessment-progress';
 import type { RecipeAgentActor } from './agent-types';
 
@@ -68,7 +55,6 @@ const HISTORY_MESSAGES = 30;
 
 @Injectable()
 export class RecipeAgentService implements OnModuleInit {
-  private readonly logger = new Logger(RecipeAgentService.name);
   /** 一个草稿同一时间只允许一次运行。 */
   private readonly active = new Set<string>();
   private readonly stopped = new Set<string>();
@@ -77,8 +63,6 @@ export class RecipeAgentService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly providerConfig: AgentProviderConfigService,
     private readonly designer: RecipeDesignerService,
-    private readonly library: KnowledgeLibraryService,
-    private readonly sourceLayer: SourceLayerService,
   ) {}
 
   /**
@@ -232,7 +216,6 @@ export class RecipeAgentService implements OnModuleInit {
   ): Promise<void> {
     const startedAt = Date.now();
     const config = await this.resolveConfig(flow);
-    const scope = scopeFromEnv();
     const port = new RecipeDraftPort(
       this.designer,
       this.accessFor(actor),
@@ -241,7 +224,6 @@ export class RecipeAgentService implements OnModuleInit {
     const catalog = new RecipeCatalogPort(this.prisma);
 
     const messages = await this.buildMessages(sessionId, message, flow);
-    const citations = await this.loadCitationRegistry(sessionId);
     let toolCalls = 0;
     let lastGapSignature: string | null = null;
     let sameGapCount = 0;
@@ -272,101 +254,8 @@ export class RecipeAgentService implements OnModuleInit {
       const calls = response.toolCalls ?? [];
       if (calls.length === 0) {
         if (response.content) {
-          const firstRedaction = redactDrugDoses(response.content);
-          let finalContent = firstRedaction.text;
-          let doseRedactions = firstRedaction.redactions;
-          let audit = citations.audit(finalContent);
-          const onUsage = (usage: {
-            promptTokens: number;
-            completionTokens: number;
-          }) => {
-            void this.recordUsage(
-              sessionId,
-              usage.promptTokens,
-              usage.completionTokens,
-            );
-          };
-          let semantic = await judgeAnswer({
-            config,
-            answer: finalContent,
-            registry: citations,
-            onUsage,
-          });
-          const beforeUncited = semantic.uncitedClinicalClaims;
-          const beforeUnsupported = semantic.unsupported;
-          const unsupportedClaims = semantic.claims
-            .filter((claim) => claim.verdict === 'unsupported')
-            .map((claim) => ({ claim: claim.claim, reason: claim.reason }));
-          let rewrite: Record<string, unknown> | null = null;
-          if (beforeUncited > 0 || beforeUnsupported > 0) {
-            const rewritten = await rewriteAnswer({
-              config,
-              answer: finalContent,
-              uncited: semantic.uncitedClinical,
-              unsupported: unsupportedClaims,
-              registry: citations,
-              onUsage,
-            });
-            if (
-              rewritten.answer &&
-              rewritten.answer.trim() &&
-              rewritten.answer !== finalContent
-            ) {
-              const rewriteRedaction = redactDrugDoses(rewritten.answer);
-              finalContent = rewriteRedaction.text;
-              doseRedactions += rewriteRedaction.redactions;
-              audit = citations.audit(finalContent);
-              semantic = await judgeAnswer({
-                config,
-                answer: finalContent,
-                registry: citations,
-                onUsage,
-              });
-              rewrite = {
-                attempted: true,
-                changed: true,
-                beforeUncited,
-                afterUncited: semantic.uncitedClinicalClaims,
-                beforeUnsupported,
-                afterUnsupported: semantic.unsupported,
-                error: rewritten.error ?? null,
-              };
-            } else {
-              rewrite = {
-                attempted: true,
-                changed: false,
-                beforeUncited,
-                afterUncited: beforeUncited,
-                beforeUnsupported,
-                afterUnsupported: beforeUnsupported,
-                error: rewritten.error ?? null,
-              };
-            }
-          }
+          const finalContent = redactDrugDoses(response.content).text;
           await this.appendMessage(sessionId, 'ASSISTANT', finalContent);
-          const gate = {
-            mode: 'rewrite',
-            doseRedactions,
-            passed: citationGatePassed({
-              uncitedClinicalClaims: semantic.uncitedClinicalClaims,
-              invalidCitationCount: audit.invalidCitationCount,
-              unsupported: semantic.unsupported,
-              notCheckable: semantic.notCheckable,
-              judgeError: semantic.error,
-              judgedClaims: semantic.judgedClaims,
-              citedClinicalClaims: semantic.citedClinicalClaims,
-            }),
-            uncitedClinicalClaims: semantic.uncitedClinicalClaims,
-            unsupported: semantic.unsupported,
-            partial: semantic.partial,
-            judgedClaims: semantic.judgedClaims,
-            citedClinicalClaims: semantic.citedClinicalClaims,
-            uncitedClinical: semantic.uncitedClinical,
-          };
-          await this.prisma.recipeDesignAgentSession.update({
-            where: { id: sessionId },
-            data: { citationAudit: { ...audit, semantic, gate, rewrite } as any },
-          });
         }
         await this.markWaiting(sessionId);
         return;
@@ -390,12 +279,8 @@ export class RecipeAgentService implements OnModuleInit {
         // 顺序反了会出现"执行记录有、问题没显示"（2026-11-01 实测）。
         let pendingAsk: { question: string; options: string[] } | null = null;
         const outcome = await this.runTool(
-          scope,
           port,
           catalog,
-          this.library,
-          this.sourceLayer,
-          citations,
           call,
           (question, options) => {
             pendingAsk = { question, options };
@@ -464,113 +349,9 @@ export class RecipeAgentService implements OnModuleInit {
     }
   }
 
-  /** 会话级引用登记：从本会话所有检索/打开工具结果恢复 K 号。 */
-  private async loadCitationRegistry(
-    sessionId: string,
-  ): Promise<CitationRegistry> {
-    const registry = new CitationRegistry();
-    const rows = await this.prisma.recipeDesignAgentMessage.findMany({
-      where: {
-        sessionId,
-        role: 'TOOL',
-        toolName: {
-          in: ['search_knowledge_library', 'open_knowledge'],
-        },
-      },
-      orderBy: { seq: 'asc' },
-      select: { toolResult: true },
-    });
-    for (const row of rows) {
-      const data = (row.toolResult as any)?.data;
-      if (!data) continue;
-
-      const passages = [
-        ...(Array.isArray(data.passages) ? data.passages : []),
-        ...(Array.isArray(data.sections)
-          ? data.sections.flatMap((section: any) =>
-              Array.isArray(section?.passages) ? section.passages : [],
-            )
-          : []),
-        ...(Array.isArray(data.section?.paragraphs)
-          ? data.section.paragraphs
-          : []),
-      ];
-      for (const passage of passages) {
-        const citationId = String(passage?.citationId ?? '').trim();
-        const passageId = String(
-          passage?.id ?? passage?.passageId ?? '',
-        ).trim();
-        if (!citationId || !passageId) continue;
-        registry.restore({
-          citationId,
-          recordId: passageId,
-          kind: 'passage',
-          sectionId: passage.sectionId ? String(passage.sectionId) : null,
-          passageId,
-          sourceId: passage.sourceId ?? null,
-          sourceName: passage.sourceName ?? null,
-          documentTitle: passage.documentTitle ?? null,
-          sectionTitle: String(passage.sectionTitle ?? ''),
-          pageStart: passage.pageStart ?? null,
-          text: String(passage.text ?? ''),
-        });
-      }
-
-      // open_knowledge 返回完整 table；search 返回表格摘要（无全文）。
-      const tables = [
-        ...(data.table
-          ? [{ ...data.table, citationId: data.citationId }]
-          : []),
-        ...(Array.isArray(data.tables) ? data.tables : []),
-      ];
-      for (const table of tables) {
-        const citationId = String(table?.citationId ?? '').trim();
-        const tableId = String(table?.tableId ?? table?.id ?? '').trim();
-        if (!citationId || !tableId) continue;
-        let full = table;
-        let text =
-          typeof table.text === 'string' && table.text.trim()
-            ? table.text
-            : '';
-        if (!text) {
-          const opened = await this.sourceLayer
-            .openTable(tableId)
-            .catch(() => null);
-          if (!opened) {
-            this.logger.warn(
-              `引用恢复：表格 ${tableId} 找不到全文，跳过 ${citationId}`,
-            );
-            continue;
-          }
-          full = { ...table, ...opened };
-          text = formatTableCitationText(opened);
-        }
-        registry.restore({
-          citationId,
-          recordId: tableId,
-          kind: 'table',
-          tableId,
-          passageId: tableId,
-          sectionId: table.sectionId ?? null,
-          sourceId: full.sourceId ?? null,
-          sourceName: full.sourceName ?? null,
-          documentTitle: full.documentTitle ?? null,
-          sectionTitle: String(full.caption ?? ''),
-          pageStart: full.pageNo ?? null,
-          text,
-        });
-      }
-    }
-    return registry;
-  }
-
   private async runTool(
-    scope: KnowledgeScope,
     port: RecipeDraftPort,
     catalog: RecipeCatalogPort,
-    library: KnowledgeLibraryService,
-    sourceLayer: SourceLayerService,
-    citations: CitationRegistry,
     call: DeepSeekToolCall,
     onAsk: (question: string, options: string[]) => void,
   ): Promise<{ result: unknown }> {
@@ -583,12 +364,8 @@ export class RecipeAgentService implements OnModuleInit {
       args = {};
     }
     const result = await executeTool(call.function.name, args, {
-      scope,
       port,
       catalog,
-      library,
-      sourceLayer,
-      citations,
       onAsk: (question: string, options: string[]) => onAsk(question, options),
     });
     return { result };

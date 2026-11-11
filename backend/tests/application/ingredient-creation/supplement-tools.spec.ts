@@ -11,12 +11,6 @@ import {
  */
 function context(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
-    knowledge: {
-      isAvailable: async () => true,
-      search: jest.fn(async () => [
-        { chunkId: 'C1', docId: 'nrc', text: 'zinc sulfate is bioavailable', score: 9 }
-      ])
-    },
     preview: {
       searchCandidates: jest.fn(async () => [
         { url: 'https://www.iherb.com/pr/x/1', name: 'NOW Zinc', priceUsd: null, pricePerServingUsd: null }
@@ -50,12 +44,11 @@ function context(overrides: Partial<ToolContext> = {}): ToolContext {
 }
 
 describe('工具箱', () => {
-  it('六个工具都在，且都有描述与参数', () => {
+  it('五个工具都在，且都有描述与参数', () => {
     expect(SUPPLEMENT_TOOLS.map((tool) => tool.name).sort()).toEqual([
       'ask_user',
       'fetch_product',
       'lookup_feed_catalog',
-      'search_knowledge',
       'search_products',
       'write_draft'
     ]);
@@ -64,29 +57,13 @@ describe('工具箱', () => {
       expect(tool.parameters).toBeTruthy();
     }
   });
+
+  it('不再提供知识库检索工具', () => {
+    expect(SUPPLEMENT_TOOLS.map((tool) => tool.name)).not.toContain('search_knowledge');
+  });
 });
 
 describe('执行工具', () => {
-  it('查知识库返回带出处的段落', async () => {
-    const result = await executeSupplementTool('search_knowledge', { query: 'zinc' }, context());
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data).toEqual([
-        expect.objectContaining({ chunkId: 'C1', docId: 'nrc' })
-      ]);
-    }
-  });
-
-  it('知识库不可用时如实报错，不装作查过', async () => {
-    const ctx = context({
-      knowledge: { isAvailable: async () => false, search: jest.fn(async () => []) }
-    });
-    const result = await executeSupplementTool('search_knowledge', { query: 'zinc' }, ctx);
-    expect(result).toEqual(
-      expect.objectContaining({ ok: false, error: expect.stringContaining('不可用') })
-    );
-  });
-
   it('搜商品返回候选', async () => {
     const result = await executeSupplementTool('search_products', { keyword: '甘氨酸锌' }, context());
     expect(result.ok).toBe(true);

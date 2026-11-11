@@ -1,4 +1,3 @@
-import type { KnowledgeSearchService } from '../knowledge/knowledge-search.service';
 import type { SupplementLinkPreviewService } from './supplement-link-preview.service';
 import type { FeedAdditiveCatalogService } from '../../domain/ingredient/feed-additive-catalog.service';
 import {
@@ -22,7 +21,6 @@ export interface ToolDefinition {
 }
 
 export interface ToolContext {
-  knowledge: Pick<KnowledgeSearchService, 'search' | 'isAvailable'>;
   preview: Pick<SupplementLinkPreviewService, 'preview' | 'searchCandidates'>;
   catalog: Pick<FeedAdditiveCatalogService, 'lookup' | 'getSummary'>;
   draft: SupplementDraftRecord;
@@ -38,20 +36,6 @@ export type ToolResult =
   | { ok: false; error: string };
 
 export const SUPPLEMENT_TOOLS: ToolDefinition[] = [
-  {
-    name: 'search_knowledge',
-    description:
-      '检索本地营养知识库（NRC / FEDIAF / SACN5 等权威来源），返回带出处的原文段落。' +
-      '判断某个营养素有哪些形态、对狗的吸收与安全性时用它。查不到就如实说查不到。',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: '检索词，中英文都行' },
-        limit: { type: 'integer', minimum: 1, maximum: 8, description: '最多几条，默认 4' }
-      },
-      required: ['query']
-    }
-  },
   {
     name: 'search_products',
     description: '按关键词搜索 iHerb 上的商品，返回候选（链接 + 名称）。搜不到就返回空。',
@@ -143,15 +127,6 @@ export async function executeSupplementTool(
 ): Promise<ToolResult> {
   try {
     switch (name) {
-      case 'search_knowledge': {
-        const query = asString(args.query, 'query');
-        if (!(await context.knowledge.isAvailable())) {
-          return { ok: false, error: '知识库数据库不可用或为空，请如实告诉用户并改用人工判断' };
-        }
-        const limit = Math.max(1, Math.min(typeof args.limit === 'number' ? args.limit : 4, 8));
-        return { ok: true, data: await context.knowledge.search(query, limit) };
-      }
-
       case 'search_products': {
         const keyword = asString(args.keyword, 'keyword').slice(0, 40);
         const candidates = await context.preview.searchCandidates(keyword);

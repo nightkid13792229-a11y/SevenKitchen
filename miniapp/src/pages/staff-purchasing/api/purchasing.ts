@@ -1412,6 +1412,27 @@ export function saveReplenishmentRecord(
   });
 }
 
+/** 补货页顶部「缺什么」用的库存缺口项（只在主包内引用，不能跨分包导入库存模块）。 */
+export interface InventoryNeedItem {
+  id: string;
+  name: string;
+  stockUnitLabel: string;
+  suggestedBaseQuantity?: number | null;
+  netShortageBaseQuantity?: number | null;
+  netShortageEstimatedCost?: number | null;
+  inTransitBaseQuantity?: number | null;
+  replenishmentInTransitBaseQuantity?: number | null;
+}
+
+export async function listInventoryNeeds(): Promise<InventoryNeedItem[]> {
+  const res: any = await request<InventoryNeedItem[]>({
+    url: '/staff/inventory/overview',
+    method: 'GET',
+    data: { onlyNeedsReplenishment: true },
+  });
+  return Array.isArray(res?.data) ? res.data : [];
+}
+
 export function listReplenishmentRecords(params: {
   arrival?: 'IN_TRANSIT' | 'ARRIVED';
   claim?: 'UNSUBMITTED' | 'SUBMITTED' | 'REIMBURSED';

@@ -135,13 +135,11 @@ import {
   createReplenishmentDraft,
   importOrderScreenshots,
   listReplenishmentRecords,
+  listInventoryNeeds,
   uploadOrderScreenshot,
+  type InventoryNeedItem,
   type ReplenishmentRecordSummary,
 } from '../api/purchasing';
-import {
-  getInventoryOverview,
-  type InventoryOverviewItem,
-} from '../../staff-inventory/api/inventory';
 
 type FilterValue =
   | 'ALL'
@@ -170,7 +168,7 @@ const page = ref(1);
 const pageSize = 20;
 const total = ref(0);
 const inTransitCount = ref(0);
-const needs = ref<InventoryOverviewItem[]>([]);
+const needs = ref<InventoryNeedItem[]>([]);
 const needsExpanded = ref(false);
 
 const hasMore = computed(() => records.value.length < total.value);
@@ -347,10 +345,10 @@ const fmt = (value: number | null | undefined) => {
   return Number.isInteger(number) ? String(number) : number.toFixed(1);
 };
 
-const shortageOf = (item: InventoryOverviewItem) =>
+const shortageOf = (item: InventoryNeedItem) =>
   item.netShortageBaseQuantity ?? item.suggestedBaseQuantity ?? 0;
 
-const totalInTransit = (item: InventoryOverviewItem) =>
+const totalInTransit = (item: InventoryNeedItem) =>
   (item.inTransitBaseQuantity || 0) +
   (item.replenishmentInTransitBaseQuantity || 0);
 
@@ -363,7 +361,7 @@ const needsCost = computed(() =>
 
 const loadNeeds = async () => {
   try {
-    needs.value = await getInventoryOverview({ onlyNeedsReplenishment: true });
+    needs.value = await listInventoryNeeds();
   } catch {
     needs.value = [];
   }

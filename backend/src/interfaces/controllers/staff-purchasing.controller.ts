@@ -190,6 +190,7 @@ export class StaffPurchasingController {
       name: dto.name,
       purchaseChannel: dto.purchaseChannel,
       purchaseUnit: dto.purchaseUnit,
+      packaging: dto.packaging,
       packCount: dto.packCount,
       netContentPerPack: dto.netContentPerPack,
       currentPurchasePrice: dto.currentPurchasePrice,

@@ -1,4 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
+import {
+  packagingFromLegacy,
+  type PackagingSpec,
+} from '../../domain/purchasing/packaging';
 
 /**
  * 建档时携带的那一条采购商品（2026-11-07 硬门禁）。
@@ -31,6 +35,10 @@ export interface CommitProcurementSkuInput {
   sourceScreenshotUrl?: string | null;
   /** 商品名留空时的兜底（原料名） */
   fallbackName?: string;
+  /** 原料的记账单位（G / ML / PCS）：层级末层必须用它（2026-11-11） */
+  baseUnit?: string | null;
+  /** 包装原文（2026-11-11）：AI 建档以前不写规格，订单匹配无从比 */
+  productModel?: string | null;
 }
 
 export interface BuiltCommitProcurementSku {
@@ -38,6 +46,8 @@ export interface BuiltCommitProcurementSku {
   purchaseChannel: string | null;
   purchaseUnit: string;
   purchaseToBaseRatio: number;
+  packaging: PackagingSpec;
+  productModel: string | null;
   currentPurchasePrice: number;
   sourceScreenshotUrl: string | null;
 }
@@ -124,13 +134,21 @@ export function buildCommitProcurementSku(
 
   const name = String(input.name ?? '').trim() || input.fallbackName || '';
 
+  const ratio = round6(Number(input.packCount) * Number(input.netContentPerPack));
+  const productModel = optionalText(input.productModel);
+
   return {
     name,
     purchaseChannel: optionalText(input.purchaseChannel),
     purchaseUnit: String(input.purchaseUnit).trim(),
-    purchaseToBaseRatio: round6(
-      Number(input.packCount) * Number(input.netContentPerPack),
-    ),
+    purchaseToBaseRatio: ratio,
+    // 层级与倍数同源（2026-11-11）：老写法按"只有末层"折，倍数不变
+    packaging: packagingFromLegacy({
+      ratio,
+      baseUnit: input.baseUnit ?? 'G',
+      printedText: productModel,
+    }),
+    productModel,
     currentPurchasePrice: round2(Number(input.currentPurchasePrice)),
     sourceScreenshotUrl: optionalText(input.sourceScreenshotUrl),
   };

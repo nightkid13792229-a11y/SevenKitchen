@@ -1,3 +1,4 @@
+import { packagingFromLegacy } from '../../domain/purchasing/packaging';
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -710,7 +711,12 @@ async function applyFoodProcurementSkus(
 ): Promise<void> {
   for (const sku of manifest.ingredient.procurementSkus ?? []) {
     const procurementSku = await tx.procurementSku.create({
-      data: buildProcurementSkuData(sku, ingredientId),
+      data: buildProcurementSkuData(
+        sku,
+        ingredientId,
+        // 标准原料导入固定按克记账（见 createIngredient 的 baseUnit: 'G'）
+        'G',
+      ),
     });
     result.procurementSkuIds.push(procurementSku.id);
 
@@ -735,7 +741,9 @@ async function applyFoodProcurementSkus(
 function buildProcurementSkuData(
   sku: ProcurementSkuManifest,
   ingredientId: string,
+  baseUnit: string,
 ): Record<string, unknown> {
+  const ratio = Number(sku.purchaseToBaseRatio ?? 0);
   return {
     ingredientId,
     name: sku.name ?? sku.sku,
@@ -744,6 +752,15 @@ function buildProcurementSkuData(
     purchaseChannel: sku.purchaseChannel ?? null,
     purchaseUnit: sku.purchaseUnit ?? null,
     purchaseToBaseRatio: sku.purchaseToBaseRatio ?? null,
+    // 层级与倍数同源（2026-11-11）：导入的商品也要带层级，否则后台没法按层改
+    packaging:
+      ratio > 0
+        ? packagingFromLegacy({
+            ratio,
+            baseUnit,
+            printedText: sku.productModel ?? null,
+          })
+        : null,
     currentPurchasePrice: sku.currentPurchasePrice ?? null,
     referencePurchasePrice: sku.referencePurchasePrice ?? null,
     notes: sku.notes ?? null,

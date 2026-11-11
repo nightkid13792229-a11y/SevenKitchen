@@ -130,6 +130,96 @@ describe('ProcurementSkuService', () => {
     expect(mockPrismaService.procurementSku.create).not.toHaveBeenCalled();
   });
 
+  it('创建时传包装层级：倍数由连乘派生，层级一起落库', async () => {
+    mockPrismaService.ingredient.findUnique.mockResolvedValue({
+      id: 'ing-1',
+      type: 'FOOD',
+      baseUnit: 'G',
+    });
+    mockPrismaService.procurementSku.create.mockImplementation(
+      async ({ data }: any) => ({
+        ...data,
+        id: 'sku-1',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+
+    await service.create('ing-1', {
+      name: '厨房纸 10捆×500克',
+      purchaseUnit: '箱',
+      packaging: {
+        links: [{ count: 10, unit: '捆' }],
+        amount: 500,
+        amountUnit: 'G',
+        printedText: '10捆×500g',
+      },
+    });
+
+    expect(mockPrismaService.procurementSku.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        purchaseUnit: '箱',
+        purchaseToBaseRatio: 5000,
+        packaging: expect.objectContaining({ amount: 500, amountUnit: 'G' }),
+      }),
+    });
+  });
+
+  it('编辑时只传换算倍数（不传层级）→ 拒绝，倍数不许单独改', async () => {
+    mockPrismaService.procurementSku.findUnique.mockResolvedValue({
+      id: 'sku-1',
+      ingredientId: 'ing-1',
+      currentPurchasePrice: null,
+      purchaseUnit: '盒',
+      purchaseToBaseRatio: 1500,
+      productModel: '30枚 1.59kg',
+      packaging: { links: [], amount: 1500, amountUnit: 'G' },
+      ingredient: { id: 'ing-1', type: 'FOOD', baseUnit: 'G' },
+    });
+
+    await expect(
+      service.update('sku-1', { purchaseToBaseRatio: 5000 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(mockPrismaService.procurementSku.update).not.toHaveBeenCalled();
+  });
+
+  it('员工新增时传层级：倍数来自层级，不再用件数 × 净含量', async () => {
+    mockPrismaService.ingredient.findUnique.mockResolvedValue({
+      id: 'ing-1',
+      type: 'FOOD',
+      baseUnit: 'G',
+    });
+    mockPrismaService.procurementSku.findMany.mockResolvedValue([]);
+    mockPrismaService.procurementSku.create.mockImplementation(
+      async ({ data }: any) => ({
+        ...data,
+        id: 'sku-1',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+
+    await service.createFromStaff({
+      ingredientId: 'ing-1',
+      createdById: 'user-1',
+      name: '厨房纸',
+      purchaseChannel: '山姆',
+      purchaseUnit: '提',
+      packaging: {
+        links: [{ count: 10, unit: '卷' }],
+        amount: 50,
+        amountUnit: 'G',
+      },
+    });
+
+    expect(mockPrismaService.procurementSku.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        purchaseUnit: '提',
+        purchaseToBaseRatio: 500,
+      }),
+    });
+  });
+
   it('batchFindActive ignores legacy sortOrder and orders active procurement skus by automatic purchase cost', async () => {
     mockPrismaService.procurementSku.findMany.mockResolvedValue([
       {
@@ -1036,7 +1126,8 @@ describe('ProcurementSkuService', () => {
           createdById: 'user-1',
           name: 'x',
           purchaseChannel: '山姆',
-          purchaseUnit: '提',
+          // 2026-11-11：「提」已进单位字典，这里改用一个字典里确实没有的写法
+          purchaseUnit: '挂',
           packCount: 1,
           netContentPerPack: 100,
         }),

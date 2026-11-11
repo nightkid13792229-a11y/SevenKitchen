@@ -15,14 +15,20 @@ import {
 } from '../purchasing/channel-catalog';
 import { PURCHASE_CHANNEL_SET } from '../platform-options/option-sets.registry';
 import {
-  PURCHASE_UNIT_SEED,
-  PURCHASE_UNIT_SET,
-  parsePurchaseUnitOption,
+  loadPurchaseUnitOptions,
   resolvePurchaseUnitCode,
   unitsForBaseUnit,
   type PurchaseUnitOption,
 } from '../purchasing/purchase-unit-catalog';
 import { perBaseUnitCostOrInfinity } from '../../domain/ingredient/unit-price';
+import {
+  deriveRatio,
+  formatPackaging,
+  packagingFromLegacy,
+  readPackaging,
+  validatePackaging,
+  type PackagingSpec,
+} from '../../domain/purchasing/packaging';
 import { IngredientCostHistoryService } from './ingredient-cost-history.service';
 
 type DecimalLike = {
@@ -38,6 +44,7 @@ type ProcurementSkuRecord = {
   purchaseChannel: string | null;
   purchaseUnit: string | null;
   purchaseToBaseRatio: number | null;
+  packaging?: unknown;
   currentPurchasePrice: DecimalLike | number | null;
   referencePurchasePrice: DecimalLike | number | null;
   referencePricePerPurchaseUnit: DecimalLike | number | null;
@@ -80,6 +87,10 @@ export interface ProcurementSkuSummary {
   purchaseChannel: string | null;
   purchaseUnit: string | null;
   purchaseToBaseRatio: number | null;
+  /** 包装层级（2026-11-11）：中间层 + 末层，倍数是它的派生值 */
+  packaging: PackagingSpec | null;
+  /** 「1 箱 = 10 捆 × 500 克」，列表/详情直接显示这句 */
+  packagingText: string | null;
   currentPurchasePrice: number | null;
   referencePurchasePrice: number | null;
   referencePricePerPurchaseUnit: number | null;
@@ -158,6 +169,11 @@ export interface CreateProcurementSkuDto {
    */
   packCount?: number | null;
   netContentPerPack?: number | null;
+  /**
+   * 包装层级（2026-11-11）：{ links: [{count,unit}], amount, amountUnit, amountLabel?, printedText? }
+   * 传了它就以它为准，换算倍数由它派生 —— 不再接受单独填 `purchaseToBaseRatio`。
+   */
+  packaging?: unknown;
 }
 
 export interface UpdateProcurementSkuDto extends Partial<CreateProcurementSkuDto> {}
@@ -297,6 +313,33 @@ const toNullableNumber = (
   return typeof value === 'number' ? value : value.toNumber();
 };
 
+/**
+ * 读商品上的层级：新数据直接读 `packaging`，老数据（迁移前写入的）用倍数折一条。
+ * 折出来的结果和 `packagingFromLegacy` 同口径，不改变任何金额。
+ */
+const resolveRecordPackaging = (
+  sku: ProcurementSkuRecord,
+): PackagingSpec | null => {
+  const stored = readPackaging((sku as { packaging?: unknown }).packaging);
+  if (stored) return stored;
+  const ratio = Number(sku.purchaseToBaseRatio ?? 0);
+  if (!Number.isFinite(ratio) || ratio <= 0) return null;
+  return packagingFromLegacy({
+    ratio,
+    baseUnit: (sku as { ingredient?: { baseUnit?: string } }).ingredient?.baseUnit ?? 'G',
+    printedText: sku.productModel,
+  });
+};
+
+const summaryPackaging = (sku: ProcurementSkuRecord): PackagingSpec | null =>
+  resolveRecordPackaging(sku);
+
+const summaryPackagingText = (sku: ProcurementSkuRecord): string | null => {
+  const spec = resolveRecordPackaging(sku);
+  if (!spec) return null;
+  return formatPackaging(spec, sku.purchaseUnit ?? '件');
+};
+
 const toSummary = (sku: ProcurementSkuRecord): ProcurementSkuSummary => ({
   id: sku.id,
   ingredientId: sku.ingredientId,
@@ -306,6 +349,8 @@ const toSummary = (sku: ProcurementSkuRecord): ProcurementSkuSummary => ({
   purchaseChannel: sku.purchaseChannel,
   purchaseUnit: sku.purchaseUnit ?? null,
   purchaseToBaseRatio: sku.purchaseToBaseRatio ?? null,
+  packaging: summaryPackaging(sku),
+  packagingText: summaryPackagingText(sku),
   currentPurchasePrice: toNullableNumber(sku.currentPurchasePrice),
   referencePurchasePrice: toNullableNumber(sku.referencePurchasePrice),
   referencePricePerPurchaseUnit: toNullableNumber(
@@ -522,24 +567,7 @@ export class ProcurementSkuService {
    * 字典为空时退回 `PURCHASE_UNIT_SEED`：单测和"migration 之前"的环境不该变成空白选项。
    */
   private async loadPurchaseUnitOptions(): Promise<PurchaseUnitOption[]> {
-    try {
-      const items = await this.prisma.platformOptionItem.findMany({
-        where: { setId: PURCHASE_UNIT_SET, enabled: true },
-        select: { code: true, sortOrder: true, extra: true },
-        orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
-      });
-      const parsed = items
-        .map((item: { code: string; sortOrder: number | null; extra: unknown }) =>
-          parsePurchaseUnitOption(item),
-        )
-        .filter((item): item is PurchaseUnitOption => item !== null);
-      if (parsed.length > 0) {
-        return parsed;
-      }
-    } catch {
-      // 表还没建/连接异常：退回兜底，不要让员工端整页打不开
-    }
-    return PURCHASE_UNIT_SEED;
+    return loadPurchaseUnitOptions(this.prisma as any);
   }
 
   /** 这道原料允许的采购单位（字典 ∩ 基准单位） */
@@ -675,6 +703,85 @@ export class ProcurementSkuService {
     return grouped;
   }
 
+  /**
+   * 统一入口：把"层级 / 件数×净含量 / 裸倍数"三种写法收成一条层级 + 派生倍数。
+   *
+   * 顺序（2026-11-11）：
+   *   1. 有 `packaging` → 校验后用；采购单位必须同时在字典里；
+   *   2. 有 `packCount + netContentPerPack` → 折成 `links: []`、`amount = 乘积`；
+   *   3. 只有裸倍数（仅后台建商品的老写法）→ 同样折成 `links: []`；
+   *   4. 都没有 → 抛「必须填写一件多少克」。
+   *
+   * 为什么裸倍数只允许在建商品时用：编辑时单独改倍数等于绕过层级，
+   * 后台可以把「1 盒 = 1500 克」改成 5000 而规格还写着 30 枚 1.59kg。
+   */
+  private async resolvePackagingForWrite(input: {
+    baseUnit: BaseUnit | string;
+    purchaseUnit?: string | null;
+    packaging?: unknown;
+    packCount?: number | null;
+    netContentPerPack?: number | null;
+    ratio?: number | null;
+    printedText?: string | null;
+    skuName?: string;
+  }): Promise<{
+    packaging: PackagingSpec;
+    ratio: number;
+    purchaseUnit: string | null;
+  }> {
+    const allowed = await this.resolveAllowedPurchaseUnits(input.baseUnit);
+    const rawUnit = normalizeOptionalText(input.purchaseUnit);
+
+    if (input.packaging !== undefined && input.packaging !== null) {
+      const validated = validatePackaging({
+        packaging: input.packaging,
+        purchaseUnit: rawUnit ?? null,
+        baseUnit: input.baseUnit,
+        allowedUnits: allowed.codes,
+      });
+      if (!validated.ok) {
+        throw new BadRequestException(
+          `包装层级不完整或单位不可用（${validated.problems.join(', ')}）。` +
+            `采购单位只能从这些里选：${allowed.codes.join('、')}`,
+        );
+      }
+      return {
+        packaging: {
+          ...validated.spec,
+          ...(input.printedText
+            ? { printedText: String(input.printedText).slice(0, 100) }
+            : {}),
+        },
+        ratio: validated.ratio,
+        purchaseUnit: rawUnit ?? null,
+      };
+    }
+
+    const purchaseUnit = rawUnit
+      ? normalizeOptionalPurchaseUnit(rawUnit, input.baseUnit, allowed.codes) ??
+        null
+      : null;
+
+    const packRatio = this.resolvePurchaseToBaseRatioFromPackFacts({
+      packCount: input.packCount,
+      netContentPerPack: input.netContentPerPack,
+    });
+    const ratio = this.assertSkuRatioPresent(
+      { name: input.skuName ?? '未命名' },
+      packRatio ?? input.ratio ?? null,
+    );
+
+    return {
+      packaging: packagingFromLegacy({
+        ratio,
+        baseUnit: input.baseUnit,
+        printedText: input.printedText ?? null,
+      }),
+      ratio,
+      purchaseUnit,
+    };
+  }
+
   async create(
     ingredientId: string,
     dto: CreateProcurementSkuDto,
@@ -715,15 +822,16 @@ export class ProcurementSkuService {
       throw new BadRequestException('填了期初库存时，换算倍数必须大于 0');
     }
 
-    const computedRatio = this.resolvePurchaseToBaseRatioFromPackFacts(dto);
-    const resolvedRatio = this.assertSkuRatioPresent(
-      { name: dto.name },
-      computedRatio ?? dto.purchaseToBaseRatio ?? null,
-    );
-
-    const allowedUnits = await this.resolveAllowedPurchaseUnits(
-      ingredient!.baseUnit,
-    );
+    const written = await this.resolvePackagingForWrite({
+      baseUnit: ingredient!.baseUnit,
+      purchaseUnit: dto.purchaseUnit,
+      packaging: dto.packaging,
+      packCount: dto.packCount,
+      netContentPerPack: dto.netContentPerPack,
+      ratio: dto.purchaseToBaseRatio,
+      printedText: dto.productModel,
+      skuName: dto.name,
+    });
 
     const data = {
       ingredientId,
@@ -732,13 +840,9 @@ export class ProcurementSkuService {
       productModel: normalizeOptionalText(dto.productModel) ?? null,
       purchaseChannel:
         (await this.resolvePurchaseChannel(dto.purchaseChannel)) ?? null,
-      purchaseUnit:
-        normalizeOptionalPurchaseUnit(
-          dto.purchaseUnit,
-          ingredient!.baseUnit,
-          allowedUnits.codes,
-        ) ?? null,
-      purchaseToBaseRatio: resolvedRatio,
+      purchaseUnit: written.purchaseUnit,
+      purchaseToBaseRatio: written.ratio,
+      packaging: written.packaging as any,
       currentPurchasePrice,
       referencePurchasePrice:
         dto.referencePurchasePrice ??
@@ -872,8 +976,10 @@ export class ProcurementSkuService {
     name: string;
     purchaseChannel: string;
     purchaseUnit: string;
-    packCount: number;
-    netContentPerPack: number;
+    /** 2026-11-11：优先用层级；老版本小程序仍只传 packCount + netContentPerPack */
+    packaging?: unknown;
+    packCount?: number | null;
+    netContentPerPack?: number | null;
     netContentUnitText?: string | null;
     currentPurchasePrice?: number | null;
     brand?: string | null;
@@ -897,23 +1003,29 @@ export class ProcurementSkuService {
       throw new BadRequestException('商品名称不能为空');
     }
 
-    if (!Number.isInteger(input.packCount) || input.packCount <= 0) {
-      throw new BadRequestException('一箱/一袋件数必须是正整数');
+    // 层级优先：只有走老版字段（packCount + 净含量）时才校验这两个数
+    if (input.packaging === undefined || input.packaging === null) {
+      if (!Number.isInteger(input.packCount) || Number(input.packCount) <= 0) {
+        throw new BadRequestException('一箱/一袋件数必须是正整数');
+      }
+      if (
+        !Number.isFinite(Number(input.netContentPerPack)) ||
+        Number(input.netContentPerPack) <= 0
+      ) {
+        throw new BadRequestException('净含量必须大于 0');
+      }
     }
 
-    if (
-      !Number.isFinite(input.netContentPerPack) ||
-      input.netContentPerPack <= 0
-    ) {
-      throw new BadRequestException('净含量必须大于 0');
-    }
-
-    const allowedUnits = await this.resolveAllowedPurchaseUnits(baseUnit);
-    const purchaseUnit = normalizeOptionalPurchaseUnit(
-      input.purchaseUnit,
+    const writtenUnit = await this.resolvePackagingForWrite({
       baseUnit,
-      allowedUnits.codes,
-    );
+      purchaseUnit: input.purchaseUnit,
+      packaging: input.packaging,
+      packCount: input.packCount,
+      netContentPerPack: input.netContentPerPack,
+      printedText: input.productModel,
+      skuName: name,
+    });
+    const purchaseUnit = writtenUnit.purchaseUnit;
     if (!purchaseUnit) {
       throw new BadRequestException('采购单位不能为空');
     }
@@ -967,13 +1079,24 @@ export class ProcurementSkuService {
       },
       orderBy: { createdAt: 'asc' },
     });
+    /**
+     * 判重必须带规格（2026-11-11）。
+     *
+     * 以前只看「名称 + 渠道」：同名同渠道的 20 枚装和 30 枚装会被当成同一个，
+     * 员工建了新规格却拿到旧商品，之后所有折算按旧倍数算（1.5 倍），静默。
+     * 现在倍数也要一致才算重复；规格不同就建新商品。
+     */
     const existing =
       sameName.find(
         (row) =>
           channelMatchKey(
             (row as ProcurementSkuRecord).purchaseChannel,
             channelCatalog.options,
-          ) === channelKey,
+          ) === channelKey &&
+          Math.abs(
+            Number((row as ProcurementSkuRecord).purchaseToBaseRatio ?? 0) -
+              Number(writtenUnit.ratio),
+          ) <= 0.000001,
       ) ?? null;
 
     if (existing) {
@@ -993,12 +1116,14 @@ export class ProcurementSkuService {
       this.assertValidPrice(currentPurchasePrice);
     }
 
-    const purchaseToBaseRatio = input.packCount * input.netContentPerPack;
+    const purchaseToBaseRatio = writtenUnit.ratio;
     const productModel =
       normalizeOptionalText(input.productModel) ??
       composePackSpec({
-        packCount: input.packCount,
-        value: input.netContentPerPack,
+        packCount: Number(input.packCount ?? 1),
+        value: Number(
+          input.netContentPerPack ?? writtenUnit.packaging.amount ?? 1,
+        ),
         unit:
           normalizeOptionalText(input.netContentUnitText) ??
           DEFAULT_NET_CONTENT_UNIT_TEXT[baseUnit] ??
@@ -1013,6 +1138,13 @@ export class ProcurementSkuService {
       purchaseChannel: purchaseChannel ?? null,
       purchaseUnit,
       purchaseToBaseRatio,
+      packaging: (input.packaging
+        ? writtenUnit.packaging
+        : packagingFromLegacy({
+            ratio: purchaseToBaseRatio,
+            baseUnit,
+            printedText: normalizeOptionalText(input.productModel) ?? null,
+          })) as any,
       currentPurchasePrice,
       referencePurchasePrice: null,
       referencePricePerPurchaseUnit: null,
@@ -1104,6 +1236,10 @@ export class ProcurementSkuService {
         id: true,
         ingredientId: true,
         currentPurchasePrice: true,
+        purchaseUnit: true,
+        purchaseToBaseRatio: true,
+        productModel: true,
+        packaging: true,
         ingredient: {
           select: {
             id: true,
@@ -1143,24 +1279,52 @@ export class ProcurementSkuService {
     }
 
 
-    const allowedUnits = await this.resolveAllowedPurchaseUnits(
-      existing.ingredient.baseUnit,
-    );
-    const purchaseUnit = normalizeOptionalPurchaseUnit(
-      dto.purchaseUnit,
-      existing.ingredient.baseUnit,
-      allowedUnits.codes,
-    );
-    if (purchaseUnit !== undefined) {
-      data.purchaseUnit = purchaseUnit;
+    /**
+     * 换算只能从层级来（2026-11-11）。
+     *
+     * 三种写法都归一到层级：传 `packaging` / 传「件数 × 净含量」/ 什么都不传。
+     * 单独传 `purchaseToBaseRatio` 直接拒绝 —— 后台把「1 盒 = 1500 克」改成 5000
+     * 而规格还写着 30 枚 1.59kg，是这次要根治的那类静默错账。
+     */
+    const ratioOnly =
+      dto.purchaseToBaseRatio !== undefined &&
+      dto.packaging === undefined &&
+      (dto.packCount === undefined || dto.packCount === null);
+    if (ratioOnly) {
+      throw new BadRequestException(
+        '换算倍数由包装层级自动算，请在层级里改（一箱 = 几层 × 每件多少）',
+      );
     }
 
-    if (dto.purchaseToBaseRatio !== undefined) {
-      this.assertSkuRatioPresent(
-        { name: dto.name ?? '未命名' },
-        dto.purchaseToBaseRatio,
+    const packagingTouched =
+      (dto.packaging !== undefined && dto.packaging !== null) ||
+      (dto.packCount !== undefined && dto.packCount !== null);
+    if (packagingTouched) {
+      const written = await this.resolvePackagingForWrite({
+        baseUnit: existing.ingredient.baseUnit,
+        purchaseUnit: dto.purchaseUnit ?? existing.purchaseUnit,
+        packaging: dto.packaging ?? readPackaging(existing.packaging) ?? null,
+        packCount: dto.packCount,
+        netContentPerPack: dto.netContentPerPack,
+        ratio: existing.purchaseToBaseRatio,
+        printedText: dto.productModel ?? existing.productModel,
+        skuName: dto.name ?? '未命名',
+      });
+      data.purchaseUnit = written.purchaseUnit;
+      data.purchaseToBaseRatio = written.ratio;
+      data.packaging = written.packaging as any;
+    } else if (dto.purchaseUnit !== undefined) {
+      const allowedUnits = await this.resolveAllowedPurchaseUnits(
+        existing.ingredient.baseUnit,
       );
-      data.purchaseToBaseRatio = dto.purchaseToBaseRatio;
+      const purchaseUnit = normalizeOptionalPurchaseUnit(
+        dto.purchaseUnit,
+        existing.ingredient.baseUnit,
+        allowedUnits.codes,
+      );
+      if (purchaseUnit !== undefined) {
+        data.purchaseUnit = purchaseUnit;
+      }
     }
 
     const nextCurrentPurchasePrice =

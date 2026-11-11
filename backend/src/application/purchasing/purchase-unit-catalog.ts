@@ -195,3 +195,37 @@ export function toPurchaseUnitSeedItem(option: PurchaseUnitOption) {
     },
   };
 }
+
+/**
+ * 读字典（唯一读入口）。
+ *
+ * 传一个只带 `platformOptionItem.findMany` 的客户端即可（PrismaService 或事务客户端），
+ * 这样"服务层 / AI 建档 / 原料导入"三个写入点用的是同一份清单，不会再出现
+ * "一个入口认提、另一个不认"的旧问题。
+ *
+ * 字典为空或表还没建时退回 `PURCHASE_UNIT_SEED`，不让员工端变成空白选项。
+ */
+export async function loadPurchaseUnitOptions(prisma: {
+  platformOptionItem: {
+    findMany: (args: unknown) => Promise<
+      Array<{ code: string; sortOrder?: number | null; extra?: unknown }>
+    >;
+  };
+}): Promise<PurchaseUnitOption[]> {
+  try {
+    const items = await prisma.platformOptionItem.findMany({
+      where: { setId: PURCHASE_UNIT_SET, enabled: true },
+      select: { code: true, sortOrder: true, extra: true },
+      orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+    });
+    const parsed = items
+      .map((item) => parsePurchaseUnitOption(item))
+      .filter((item): item is PurchaseUnitOption => item !== null);
+    if (parsed.length > 0) {
+      return parsed;
+    }
+  } catch {
+    // 表还没建 / 连接异常：退回兜底
+  }
+  return PURCHASE_UNIT_SEED;
+}

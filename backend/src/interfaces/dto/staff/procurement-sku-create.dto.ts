@@ -9,6 +9,7 @@
 import {
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsPositive,
   IsString,
@@ -29,15 +30,25 @@ export class CreateStaffProcurementSkuDto {
   @Length(1, 50)
   purchaseUnit!: string;
 
-  /** 一箱/一袋里有几件（单件商品填 1） */
+  /**
+   * 包装层级（2026-11-11）：{ links: [{count,unit}], amount, amountUnit, amountLabel? }
+   * 传了它就以它为准；老版本小程序仍只传下面的件数 + 净含量。
+   */
+  @IsOptional()
+  @IsObject()
+  packaging?: Record<string, unknown>;
+
+  /** 一箱/一袋里有几件（单件商品填 1）—— 老字段，有 packaging 时可省 */
+  @IsOptional()
   @IsInt()
   @Min(1)
-  packCount!: number;
+  packCount?: number;
 
-  /** 单件净含量，单位固定为这道原料的基准单位 */
+  /** 单件净含量，单位固定为这道原料的基准单位 —— 老字段，有 packaging 时可省 */
+  @IsOptional()
   @IsNumber()
   @IsPositive()
-  netContentPerPack!: number;
+  netContentPerPack?: number;
 
   @IsOptional()
   @IsString()

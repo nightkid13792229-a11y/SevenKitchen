@@ -10,6 +10,11 @@ import type {
   Prisma,
 } from '@prisma/client';
 import { createEmptyNutritionProfile } from '../../domain/ingredient/nutrition-profile.utils';
+import {
+  loadPurchaseUnitOptions,
+  resolvePurchaseUnitCode,
+  unitsForBaseUnit,
+} from '../purchasing/purchase-unit-catalog';
 import { findNutritionField } from '../../domain/ingredient/nutrition-field-catalog';
 import { normalizeLegacyNutritionSourceType } from '../../domain/ingredient/nutrition-source-contract';
 import type { NutritionProfileV2 } from '../../domain/ingredient/types';
@@ -594,6 +599,36 @@ export class IngredientCreationCommitService {
       input.procurementSku?.purchaseChannel ?? null,
     );
 
+    /**
+     * 采购单位必须先归一到字典（2026-11-11）。
+     *
+     * 这条路径是**直写库**的：以前只判"单位非空"，于是 AI 写成「提/枚」也能落库，
+     * 而之后后台任何带单位的编辑都会被服务层 400 卡死 —— 商品从此改不了。
+     */
+    const skuBaseUnit = String(input.ingredient?.baseUnit ?? 'G').toUpperCase();
+    const skuUnits = unitsForBaseUnit(
+      await loadPurchaseUnitOptions(this.prisma as any),
+      skuBaseUnit,
+    );
+    if (input.procurementSku?.purchaseUnit) {
+      const resolvedSkuUnit = resolvePurchaseUnitCode(
+        skuUnits,
+        input.procurementSku.purchaseUnit,
+        skuBaseUnit,
+      );
+      if (!resolvedSkuUnit) {
+        throw new BadRequestException(
+          `采购单位「${input.procurementSku.purchaseUnit}」不在字典里，只能选：${skuUnits
+            .map((item) => item.code)
+            .join('、')}`,
+        );
+      }
+      input.procurementSku = {
+        ...input.procurementSku,
+        purchaseUnit: resolvedSkuUnit,
+      };
+    }
+
     let createdProcurementSkuId: string | null = null;
 
     return this.prisma.$transaction(async (tx) => {
@@ -633,6 +668,7 @@ export class IngredientCreationCommitService {
       const commitSku = buildCommitProcurementSku({
         ...input.procurementSku,
         fallbackName: ingredientName,
+        baseUnit: skuBaseUnit,
       });
       const createdSku = await tx.procurementSku.create({
         data: {
@@ -642,6 +678,9 @@ export class IngredientCreationCommitService {
           purchaseChannel: skuPurchaseChannel,
           purchaseUnit: commitSku.purchaseUnit,
           purchaseToBaseRatio: commitSku.purchaseToBaseRatio,
+          packaging: commitSku.packaging as any,
+          // 2026-11-11：以前这里不写规格，订单截图匹配只能按名字挂，容易挂错包装
+          productModel: commitSku.productModel,
           currentPurchasePrice: commitSku.currentPurchasePrice,
           referencePurchasePrice: null,
           referencePricePerPurchaseUnit: null,

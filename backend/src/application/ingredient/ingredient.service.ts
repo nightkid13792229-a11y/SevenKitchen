@@ -3,10 +3,11 @@
  * Application layer service for Ingredient domain operations
  */
 
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import { Ingredient } from '../../domain/ingredient';
 import { IngredientCostHistoryService } from './ingredient-cost-history.service';
+import { PrismaService } from '../../infrastructure/prisma.service';
 import { wouldWipeExistingPrice } from '../../domain/ingredient/price-gate';
 import {
   IngredientType,
@@ -82,6 +83,12 @@ export class IngredientService {
     @Inject(INGREDIENT_REPOSITORY)
     private readonly ingredientRepository: IngredientRepository,
     private readonly costHistory: IngredientCostHistoryService,
+    /**
+     * 只用来做"有采购商品时不许改记账单位"的守卫（2026-11-11）。
+     * 可选注入：单测和内存仓储模式（没有 Prisma）也能构造。
+     */
+    @Optional()
+    private readonly prisma?: PrismaService,
   ) {}
 
   private resolveBaseUnitDisplayName(
@@ -233,6 +240,30 @@ export class IngredientService {
 
     if (dto.type !== undefined && dto.type !== existing.type) {
       throw new BadRequestException('已创建原料的类型不可修改');
+    }
+
+    /**
+     * 记账单位（克/毫升/个）不能在有采购商品时改（2026-11-11）。
+     *
+     * 商品上的换算倍数都是"一件 = 多少【这个单位】"。把克改成个，
+     * 原来那条「1 箱 = 5000」会当场变成 5000 个 —— 库存和成本整批翻转，
+     * 而且没有任何提示。要改就先停用/删除该原料的采购商品。
+     */
+    if (
+      dto.baseUnit !== undefined &&
+      String(dto.baseUnit) !== String(existing.baseUnit)
+    ) {
+      const activeSkuCount = this.prisma
+        ? await this.prisma.procurementSku.count({
+            where: { ingredientId: id, isActive: true },
+          })
+        : 0;
+      if (activeSkuCount > 0) {
+        throw new BadRequestException(
+          `这道原料还有 ${activeSkuCount} 个在用采购商品，不能改记账单位：` +
+            '请先停用或删除这些商品，再改单位（否则所有商品的换算倍数都会失灵）',
+        );
+      }
     }
 
     const nextType = dto.type !== undefined ? dto.type : existing.type;

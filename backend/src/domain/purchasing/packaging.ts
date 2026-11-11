@@ -185,7 +185,10 @@ export function validatePackaging(input: {
 
   const ratio = deriveRatio(spec);
   if (!Number.isFinite(ratio) || ratio <= 0) {
-    return { ok: false, problems: [...new Set([...problems, 'EMPTY_AMOUNT'])] };
+    return {
+      ok: false,
+      problems: [...new Set<PackagingProblem>([...problems, 'EMPTY_AMOUNT'])],
+    };
   }
 
   return { ok: true, spec, ratio };

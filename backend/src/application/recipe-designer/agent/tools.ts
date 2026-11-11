@@ -1,12 +1,19 @@
 /**
- * 7 个工具（2026-10-31 重建；2026-11-11 移除旧知识库检索/引用工具）。
+ * 10 个工具（2026-10-31 重建；2026-11-11 移除旧知识库检索/引用工具；
+ * 2026-11-12 接入知识库 v3 的 catalog / find / read）。
  *
  * 原则：工具的数量和返回体积，就是模型的"操作规程"。
  * 所以不加"你必须先…"的说明，而是让工具本身只回这一步需要的东西。
  */
 import type { DeepSeekToolDefinition } from '../deepseek-tools-chat';
+import { KnowledgeGatewayService } from '../../knowledge-v3/knowledge-gateway.service';
+import {
+  KNOWLEDGE_TOOL_DEFINITIONS,
+  executeKnowledgeTool,
+} from '../../knowledge-v3/knowledge-v3.tools';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
+import { summarizeKnowledgeOutcome } from './knowledge-tool-bridge';
 import {
   AgentToolError,
   fail,
@@ -171,11 +178,14 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
       },
     },
   },
+  ...KNOWLEDGE_TOOL_DEFINITIONS,
 ];
 
 export interface ToolExecutionContext {
   port: RecipeDraftPort;
   catalog: RecipeCatalogPort;
+  /** 知识库 v3 的 3 个只读动作：catalog / find / read。 */
+  knowledge: KnowledgeGatewayService;
   /** ask 工具把问题交回运行时：运行时暂停并等用户回答。 */
   onAsk: (question: string, options: string[]) => void;
 }
@@ -327,6 +337,20 @@ export async function executeTool(
           : [];
         context.onAsk(question, options);
         return ok({ question, options }, `已向用户提问：${question}`);
+      }
+
+      case 'kb_catalog':
+      case 'kb_find':
+      case 'kb_read': {
+        const outcome = await executeKnowledgeTool(
+          context.knowledge,
+          name,
+          args,
+        );
+        if (!outcome.ok) {
+          return fail(outcome.error.code, outcome.error.message);
+        }
+        return ok(outcome.data, summarizeKnowledgeOutcome(name, outcome));
       }
 
       default:

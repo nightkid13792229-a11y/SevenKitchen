@@ -12,11 +12,13 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   type OnModuleInit,
 } from '@nestjs/common';
 
 import { PrismaService } from '../../../infrastructure/prisma.service';
+import { KnowledgeGatewayService } from '../../knowledge-v3/knowledge-gateway.service';
 import { AgentProviderConfigService } from '../../nutrition-governance/agent-provider-config.service';
 import {
   recipeDesignPurposesForFlow,
@@ -26,6 +28,7 @@ import {
   callDeepSeekTools,
   type DeepSeekToolCall,
   type DeepSeekToolsMessage,
+  type DeepSeekToolsResult,
 } from '../deepseek-tools-chat';
 import { RecipeDesignerService } from '../recipe-designer.service';
 import { buildSystemPrompt } from './prompt';
@@ -34,7 +37,14 @@ import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
 import { AGENT_TOOLS, executeTool } from './tools';
 import { assessmentGapSignature } from './assessment-progress';
-import type { RecipeAgentActor } from './agent-types';
+import type { RecipeAgentActor, ToolOutcome } from './agent-types';
+import {
+  buildKnowledgeImageMessage,
+  hasImageContent,
+  splitReadImages,
+  stripImageContent,
+  type KnowledgePageImage,
+} from './knowledge-tool-bridge';
 
 /**
  * 一次运行最多调多少次工具。
@@ -58,11 +68,13 @@ export class RecipeAgentService implements OnModuleInit {
   /** 一个草稿同一时间只允许一次运行。 */
   private readonly active = new Set<string>();
   private readonly stopped = new Set<string>();
+  private readonly logger = new Logger(RecipeAgentService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly providerConfig: AgentProviderConfigService,
     private readonly designer: RecipeDesignerService,
+    private readonly knowledge: KnowledgeGatewayService,
   ) {}
 
   /**
@@ -223,7 +235,7 @@ export class RecipeAgentService implements OnModuleInit {
     );
     const catalog = new RecipeCatalogPort(this.prisma);
 
-    const messages = await this.buildMessages(sessionId, message, flow);
+    let messages = await this.buildMessages(sessionId, message, flow);
     let toolCalls = 0;
     let lastGapSignature: string | null = null;
     let sameGapCount = 0;
@@ -235,14 +247,31 @@ export class RecipeAgentService implements OnModuleInit {
         return;
       }
 
-      const response = await callDeepSeekTools({
-        baseUrl: config.baseUrl,
-        model: config.model,
-        apiKey: config.apiKey,
-        requestTimeoutMs: config.requestTimeoutMs,
-        messages,
-        tools: AGENT_TOOLS,
-      });
+      const callModel = () =>
+        callDeepSeekTools({
+          baseUrl: config.baseUrl,
+          model: config.model,
+          apiKey: config.apiKey,
+          requestTimeoutMs: config.requestTimeoutMs,
+          messages,
+          tools: AGENT_TOOLS,
+        });
+
+      let response: DeepSeekToolsResult;
+      try {
+        response = await callModel();
+      } catch (error) {
+        if (!hasImageContent(messages)) {
+          throw error;
+        }
+        // 不是所有模型/网关都接受 image_url content。保留页文本，
+        // 去掉页图后重试一次；再失败才交给上层标记运行失败。
+        this.logger.warn(
+          `模型调用失败，去掉页图后重试一次：${(error as Error)?.message ?? String(error)}`,
+        );
+        messages = stripImageContent(messages);
+        response = await callModel();
+      }
 
       await this.recordUsage(
         sessionId,
@@ -278,9 +307,10 @@ export class RecipeAgentService implements OnModuleInit {
         // ask 的问题先攒着，等工具结果落库后再写助手消息：
         // 顺序反了会出现"执行记录有、问题没显示"（2026-11-01 实测）。
         let pendingAsk: { question: string; options: string[] } | null = null;
-        const outcome = await this.runTool(
+        const { outcome, images } = await this.runTool(
           port,
           catalog,
+          this.knowledge,
           call,
           (question, options) => {
             pendingAsk = { question, options };
@@ -288,10 +318,10 @@ export class RecipeAgentService implements OnModuleInit {
         );
         toolCalls += 1;
 
-        await this.recordTool(sessionId, call, outcome.result);
+        await this.recordTool(sessionId, call, outcome);
 
         if (call.function.name === 'assess') {
-          const signature = assessmentGapSignature(outcome.result);
+          const signature = assessmentGapSignature(outcome);
           if (signature === 'compliant') {
             lastGapSignature = null;
             sameGapCount = 0;
@@ -303,8 +333,8 @@ export class RecipeAgentService implements OnModuleInit {
               sameGapCount = 1;
             }
             if (sameGapCount >= MAX_NO_PROGRESS_ASSESSMENTS) {
-              const gaps = Array.isArray((outcome.result as any)?.data?.gaps)
-                ? (outcome.result as any).data.gaps
+              const gaps = Array.isArray((outcome as any)?.data?.gaps)
+                ? (outcome as any).data.gaps
                 : [];
               const gapText = gaps
                 .slice(0, 5)
@@ -333,8 +363,14 @@ export class RecipeAgentService implements OnModuleInit {
         messages.push({
           role: 'tool',
           tool_call_id: call.id,
-          content: JSON.stringify(outcome.result),
+          content: JSON.stringify(outcome),
         });
+
+        // 页图单独作为一条 user 消息紧跟在工具结果后面：文本在工具消息里，
+        // 图片走 image_url content，模型按页号把两者对上。
+        if (images.length > 0) {
+          messages.push(buildKnowledgeImageMessage(images));
+        }
 
         if (pendingAsk) {
           await this.appendMessage(
@@ -352,9 +388,10 @@ export class RecipeAgentService implements OnModuleInit {
   private async runTool(
     port: RecipeDraftPort,
     catalog: RecipeCatalogPort,
+    knowledge: KnowledgeGatewayService,
     call: DeepSeekToolCall,
     onAsk: (question: string, options: string[]) => void,
-  ): Promise<{ result: unknown }> {
+  ): Promise<{ outcome: ToolOutcome; images: KnowledgePageImage[] }> {
     let args: unknown = {};
     try {
       args = call.function.arguments
@@ -363,12 +400,13 @@ export class RecipeAgentService implements OnModuleInit {
     } catch {
       args = {};
     }
-    const result = await executeTool(call.function.name, args, {
+    const outcome = await executeTool(call.function.name, args, {
       port,
       catalog,
+      knowledge,
       onAsk: (question: string, options: string[]) => onAsk(question, options),
     });
-    return { result };
+    return splitReadImages(call.function.name, outcome);
   }
 
   /**

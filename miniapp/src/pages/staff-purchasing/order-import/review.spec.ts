@@ -319,12 +319,41 @@ describe('补货核对页 · 顶部合计可读性（2026-11-11）', () => {
   });
 
   it('待处理为 0 时不再标黄', () => {
-    expect(source).toContain(
-      'activeSummary.unmatched + activeSummary.needsSku > 0',
-    );
+    expect(source).toContain('pendingLineCount > 0');
+    expect(source).toContain('activeUnitMismatchCount');
   });
 
   it('实付没读到时，可报销金额显示「—」而不是 0.00', () => {
     expect(source).toContain("if (paid === null || paid === undefined) return '—';");
+  });
+});
+
+describe('补货核对页 · 真机反馈（2026-11-12）', () => {
+  it('商品名不再单行省略，长名字能看到全', () => {
+    const css = source.slice(
+      source.indexOf('.line-name {'),
+      source.indexOf('.line-spec {'),
+    );
+    expect(css).not.toContain('text-overflow: ellipsis');
+    expect(css).not.toContain('white-space: nowrap');
+    expect(css).toContain('word-break: break-all');
+  });
+
+  it('已签收的订单显示签收时间，不再只写「预计到货 未填」', () => {
+    expect(source).toContain('function orderInfoText');
+    expect(source).toContain('已签收');
+    expect(source).toContain('保存后直接算到货');
+    expect(source).toContain('item.deliveredAt');
+    expect(source).toContain('{{ orderInfoText(activeImport) }}');
+  });
+
+  it('单位对不上时按钮先拦住，不让点了保存才报错', () => {
+    expect(source).toContain('行单位对不上，先改单位');
+    expect(source).toContain('unitMismatch');
+    expect(source).toContain('unitWarningText');
+  });
+
+  it('有单位/规格提示时，把截图规格一起显示出来', () => {
+    expect(source).toContain('截图规格：{{ line.spec }}');
   });
 });

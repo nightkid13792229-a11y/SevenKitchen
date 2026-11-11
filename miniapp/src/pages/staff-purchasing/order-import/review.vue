@@ -76,7 +76,7 @@
         <view class="summary-cell">
           <text class="summary-k">待处理</text>
           <text v-if="!activeImport.channel" class="summary-v warn">先定渠道</text>
-          <text v-else class="summary-v" :class="{ warn: activeSummary.unmatched + activeSummary.needsSku > 0 }">{{ activeSummary.unmatched + activeSummary.needsSku }} 行</text>
+          <text v-else class="summary-v" :class="{ warn: pendingLineCount > 0 }">{{ pendingLineCount }} 行</text>
         </view>
         <view class="summary-cell">
           <text class="summary-k">差额</text>
@@ -92,9 +92,7 @@
       </view>
 
       <view v-if="activeImport" class="order-info-row" @tap="openOrderInfo">
-        <text class="order-info-text">
-          订单号 {{ activeImport.orderNo || '未填' }} · 预计到货 {{ activeImport.expectedDeliveryAt ? formatShortDate(activeImport.expectedDeliveryAt) : '未填' }}
-        </text>
+        <text class="order-info-text">{{ orderInfoText(activeImport) }}</text>
         <text class="order-info-edit">改 ›</text>
       </view>
 
@@ -139,6 +137,9 @@
             <text class="line-meta">
               {{ line.qty ?? '-' }}{{ line.unit || '' }} × ¥{{ money(line.unitPrice) }}
               <text v-if="line.editedByUser" class="edited"> · 已改动</text>
+            </text>
+            <text v-if="lineSpecNotice(line) && line.spec" class="line-spec">
+              截图规格：{{ line.spec }}
             </text>
             <text v-if="lineSpecNotice(line)" class="line-spec-warn">
               {{ lineSpecNotice(line) }}
@@ -1227,12 +1228,38 @@ const footerLabel = computed(() => {
   return `${count} 笔订单 · 共 ${matchedLineCount.value} 条采购记录`;
 });
 
+/** 这单里单位和商品对不上的行（保存必被后端拦，先在页面上算进「待处理」） */
+function unitMismatchLines(item: OrderImportView): OrderImportLineView[] {
+  return item.lines.filter((line) => {
+    if (line.isPersonal || !line.procurementSkuId) return false;
+    const sku = skuOf(line);
+    return Boolean(
+      sku?.purchaseUnit && unitWarningText(line.unit, sku.purchaseUnit),
+    );
+  });
+}
+
+const activeUnitMismatchCount = computed(() =>
+  activeImport.value ? unitMismatchLines(activeImport.value).length : 0,
+);
+
+const pendingLineCount = computed(
+  () =>
+    activeSummary.value.unmatched +
+    activeSummary.value.needsSku +
+    activeUnitMismatchCount.value,
+);
+
 function importIssue(item: OrderImportView): string | null {
   // 渠道没确认时，行级的「待处理」都是假象：确认渠道后会自动重匹配。
   if (!item.channel) return '先定渠道';
-  const active = item.lines.filter((line) => !line.isPersonal);
   const pending = item.summary.unmatched + item.summary.needsSku;
   if (pending > 0) return `${pending} 行要处理`;
+  const unitMismatch = unitMismatchLines(item);
+  if (unitMismatch.length > 0) {
+    return `${unitMismatch.length} 行单位对不上，先改单位`;
+  }
+  const active = item.lines.filter((line) => !line.isPersonal);
   const badQty = active.filter((line) => !line.qty || line.qty <= 0);
   if (badQty.length > 0) return `${badQty.length} 行缺数量`;
   const badAmount = active.filter(
@@ -2255,6 +2282,23 @@ function formatShortDate(value: string | null) {
   return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+/**
+ * 订单信息那一行：已签收的订单优先显示签收时间。
+ *
+ * 已完成的订单没有「预计到货」，只有签收/成交时间；以前只读预计到货，
+ * 页面就会显示「预计到货 未填」，看起来像识别失败。
+ */
+function orderInfoText(item: OrderImportView) {
+  const orderNo = item.orderNo || '未填';
+  if (item.deliveredAt) {
+    return `订单号 ${orderNo} · 已签收 ${formatShortDate(item.deliveredAt)}，保存后直接算到货`;
+  }
+  const expected = item.expectedDeliveryAt
+    ? formatShortDate(item.expectedDeliveryAt)
+    : '未填';
+  return `订单号 ${orderNo} · 预计到货 ${expected}`;
+}
+
 function emptySummary() {
   return {
     total: 0,
@@ -2578,9 +2622,14 @@ function emptySummary() {
 .line-name {
   font-size: 25rpx;
   color: #26261f;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.line-spec {
+  font-size: 20rpx;
+  line-height: 1.4;
+  color: #5b5748;
 }
 
 .line-meta {

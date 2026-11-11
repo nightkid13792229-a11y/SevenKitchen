@@ -84,6 +84,27 @@ export function specWarningText(
   return `截图是 ${lineSpec}，这个商品是 ${skuModel}；生成后克数和单价会按商品规格（${skuModel}）算。`;
 }
 
+const normalizeUnitText = (value: string) =>
+  value.replace(/[\s\u3000]+/g, '').toLowerCase();
+
+/** 常见重量单位换算成「斤」的倍数，只用于给一句换算提示 */
+const WEIGHT_UNIT_TO_JIN: Record<string, number> = {
+  斤: 1,
+  两: 0.1,
+  kg: 2,
+  公斤: 2,
+  千克: 2,
+};
+
+function weightConversionHint(line: string, sku: string): string {
+  const lineJin = WEIGHT_UNIT_TO_JIN[line];
+  const skuJin = WEIGHT_UNIT_TO_JIN[sku];
+  if (!lineJin || !skuJin) return '';
+  const ratio = Number((skuJin / lineJin).toFixed(2));
+  if (ratio === 1) return '';
+  return `（1${sku} = ${ratio}${line}）`;
+}
+
 /**
  * 这行的数量和商品的采购单位对不上时给员工的一句话（2026-11-11）。
  *
@@ -96,6 +117,12 @@ export function unitWarningText(
 ): string | null {
   const line = String(lineUnit ?? '').trim();
   const sku = String(skuUnit ?? '').trim();
-  if (!line || !sku || line === sku) return null;
-  return `这行写的是「${line}」，商品是按「${sku}」卖的：生成/保存时会被拦下，请把单位改成「${sku}」，或换一个按「${line}」卖的商品。`;
+  if (!line || !sku || normalizeUnitText(line) === normalizeUnitText(sku)) {
+    return null;
+  }
+  const hint = weightConversionHint(
+    normalizeUnitText(line),
+    normalizeUnitText(sku),
+  );
+  return `单位对不上：这行是「${line}」，商品按「${sku}」卖${hint}。请先按截图换算好数量再改单位，或换成按「${line}」卖的商品。`;
 }

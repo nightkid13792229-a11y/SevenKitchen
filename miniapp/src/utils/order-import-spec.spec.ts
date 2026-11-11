@@ -52,6 +52,19 @@ describe('unitWarningText：这行的单位和商品的单位', () => {
     const text = unitWarningText('斤', '袋');
     expect(text).toContain('斤');
     expect(text).toContain('袋');
+    expect(text).toContain('数量');
+  });
+
+  it('不只是让改单位，还要先按截图换算数量', () => {
+    const text = unitWarningText('斤', 'kg') || '';
+    expect(text).toContain('单位对不上');
+    expect(text).toContain('换算好数量');
+    expect(text).toContain('1kg = 2斤');
+  });
+
+  it('大小写/空格不同不算单位不符，和后台口径一致', () => {
+    expect(unitWarningText('KG', 'kg')).toBeNull();
+    expect(unitWarningText(' kg ', 'kg')).toBeNull();
   });
 
   it('缺一边时不判断（老数据/商品没填单位）', () => {

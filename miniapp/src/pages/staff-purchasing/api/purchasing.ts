@@ -1228,6 +1228,10 @@ export interface OrderImportView {
   aiChannelGuess?: string | null;
   orderNo: string | null;
   orderTime: string | null;
+  /** 预计到货（AI 读到/员工改的） */
+  expectedDeliveryAt?: string | null;
+  /** 截图明确写了「已签收/已送达」时的签收时间；保存时直接算到货 */
+  deliveredAt?: string | null;
   subtotal: number | null;
   shippingFee: number | null;
   packagingFee: number | null;

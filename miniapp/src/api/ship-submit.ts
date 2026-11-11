@@ -70,7 +70,16 @@ export async function submitStaffShipment(
       }
       return { wechat: upload.skipped ? 'skipped' : 'ok' };
     }
-    // 老版本后台没带这个字段：退回自己补一次上报
+    /**
+     * 后台没带这个字段（老版本 / 降级）：**不许**在这里补一次上报 ——
+     * 补剂单没有「已上报」标记，重复调会用掉微信唯一一次重新发货的机会；
+     * 而且上报接口对查不到的 id 只是返回 skipped 不报错，会变成「假成功」。
+     * 宁可如实说没同步，让员工去后台补。
+     */
+    return {
+      wechat: 'failed',
+      wechatMessage: '后台没有返回微信同步结果，请到网页后台补同步',
+    };
   } else {
     await request({
       url: `/admin/orders/${orderId}/ship`,

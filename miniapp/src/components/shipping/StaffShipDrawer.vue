@@ -429,9 +429,14 @@ async function confirmShipping() {
       uni.showToast({ title: '发货成功，已同步微信', icon: 'success' })
     } else if (result.wechat === 'failed') {
       console.error('[StaffShipDrawer] WeChat shipping sync error:', result.wechatMessage)
-      uni.showToast({ title: '发货成功，微信发货同步失败', icon: 'none' })
+      // 后台给的是能直接照做的原因（缺电话 / 缺 openid / 微信报错），别只写"失败"
+      const reason = String(result.wechatMessage || '').slice(0, 40)
+      uni.showToast({
+        title: reason ? `发货成功，微信未同步：${reason}` : '发货成功，微信发货同步失败',
+        icon: 'none',
+      })
     } else {
-      uni.showToast({ title: '发货成功', icon: 'success' })
+      uni.showToast({ title: '发货成功（无需同步微信）', icon: 'success' })
     }
 
     emit('shipped', {

@@ -1166,13 +1166,7 @@ onLoad((options) => {
   height: 80rpx; line-height: 80rpx; padding: 0 20rpx;
   background: #f6f7f6; border-radius: 10rpx; font-size: 28rpx; color: #303133;
 }
-.ship-type-row { display: flex; gap: 16rpx; }
-.ship-type-option {
-  flex: 1; height: 72rpx; line-height: 72rpx; text-align: center;
-  background: #f5f6f8; color: #606266; font-size: 26rpx;
-  border-radius: 12rpx; border: 2rpx solid transparent;
-}
-.ship-type-option.active { background: #e8f1ec; color: #1e3a2f; border-color: #1e3a2f; font-weight: 600; }
+
 .ship-hint { display: block; margin: 20rpx 0; font-size: 24rpx; color: #909399; line-height: 1.6; }
 
 /* 存根块下面的改地址入口（2026-11-10）：小字靠右，不抢主流程 */

@@ -28,6 +28,18 @@ describe('purchasing API display helpers', () => {
     );
   });
 
+  it('keeps the layered packaging text on SKU options', () => {
+    const option = normalizeProcurementSkuOption({
+      id: 'sku-2',
+      name: '鲜鸡蛋',
+      packagingText: '1 箱 = 4 层 × 30 枚 × 53 克',
+      purchaseUnit: '箱',
+      purchaseToBaseRatio: 6360,
+    });
+
+    expect(option?.packagingText).toBe('1 箱 = 4 层 × 30 枚 × 53 克');
+  });
+
   it('resolves selected SKU brand and reference price metadata on purchase items', () => {
     const item = resolvePurchaseItemDisplay({
       procurementSkuId: 'sku-1',

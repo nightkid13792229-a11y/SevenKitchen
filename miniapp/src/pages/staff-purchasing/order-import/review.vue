@@ -138,6 +138,9 @@
               {{ line.qty ?? '-' }}{{ line.unit || '' }} × ¥{{ money(line.unitPrice) }}
               <text v-if="line.editedByUser" class="edited"> · 已改动</text>
             </text>
+            <text v-if="packagingTextOf(line)" class="line-packaging">
+              商品规格：{{ packagingTextOf(line) }}
+            </text>
             <text v-if="lineSpecNotice(line) && line.spec" class="line-spec">
               截图规格：{{ line.spec }}
             </text>
@@ -254,6 +257,10 @@
               <text class="chev">›</text>
             </template>
           </view>
+
+          <text v-if="!editing.isPersonal && editing.skuPackagingText" class="sheet-sku-packaging">
+            商品规格：{{ editing.skuPackagingText }}
+          </text>
 
           <view v-if="editingSpecWarning" class="spec-warn-box">
             <text class="spec-warn-text">{{ editingSpecWarning }}</text>
@@ -483,6 +490,9 @@
                   {{ extraSpecOf(option.name, option.productModel) }}
                 </text>
               </text>
+              <text v-if="option.packagingText" class="picker-packaging">
+                {{ option.packagingText }}
+              </text>
               <text class="picker-sub">{{ option.ingredientName }}</text>
             </view>
             <text v-if="option.id === editing?.procurementSkuId" class="picker-current">当前</text>
@@ -527,6 +537,9 @@
                   <text v-if="extraSpecOf(option.name, option.productModel)" class="picker-model">
                     {{ extraSpecOf(option.name, option.productModel) }}
                   </text>
+                </text>
+                <text v-if="option.packagingText" class="picker-packaging">
+                  {{ option.packagingText }}
                 </text>
                 <text v-if="option.purchaseChannel" class="picker-sub">{{ option.purchaseChannel }}</text>
               </view>
@@ -607,6 +620,8 @@ interface IngredientOption {
     id: string;
     name: string;
     productModel?: string | null;
+    /** 包装层级原文（2026-11-11）：1 箱 = 4 层 × 30 枚 × 53 克 */
+    packagingText?: string | null;
     purchaseChannel?: string | null;
     purchaseUnit?: string | null;
     purchaseToBaseRatio?: number | null;
@@ -856,6 +871,7 @@ const ingredientOptions = computed<IngredientOption[]>(() => {
               id: item.procurementSkuId,
               name: item.procurementSkuName || item.name,
               productModel: item.productModel || null,
+              packagingText: (item as any).packagingText || null,
               purchaseChannel: item.purchaseChannel || null,
               purchaseUnit: item.purchaseUnit || null,
               purchaseToBaseRatio: item.purchaseToBaseRatio || null,
@@ -885,6 +901,7 @@ const ingredientOptions = computed<IngredientOption[]>(() => {
       id: sku.id as string,
       name: sku.name,
       productModel: sku.productModel,
+      packagingText: sku.packagingText ?? null,
       purchaseChannel: sku.purchaseChannel,
       purchaseUnit: sku.purchaseUnit ?? null,
       purchaseToBaseRatio:
@@ -1115,6 +1132,11 @@ function skuOf(line: OrderImportLineView): any | null {
 
 function skuModelFor(line: OrderImportLineView): string | null {
   return skuOf(line)?.productModel || '';
+}
+
+/** 已匹配商品的包装层级（1 箱 = 4 层 × 30 枚 × 53 克），没有就空 */
+function packagingTextOf(line: OrderImportLineView): string {
+  return String(skuOf(line)?.packagingText || '').trim();
 }
 
 /** 行上直接标出来：不用逐行点开才发现规格/单位对不上 */
@@ -1625,6 +1647,7 @@ async function ensureSkusForIngredient(ingredientId?: string | null) {
           id: sku.id,
           name: sku.name,
           productModel: sku.productModel || null,
+          packagingText: sku.packagingText || null,
           purchaseChannel: sku.purchaseChannel || null,
           purchaseUnit: sku.purchaseUnit || null,
           purchaseToBaseRatio:
@@ -1664,6 +1687,7 @@ async function openEdit(line: OrderImportLineView) {
     ingredientName: ingredient?.ingredientName || '',
     skuName: sku?.name || '',
     skuModel: sku?.productModel || '',
+    skuPackagingText: sku?.packagingText || '',
     skuRatio: sku?.purchaseToBaseRatio ?? null,
     // 商品自己的采购单位（2026-11-11）：单位清单和"是否不符"都以它为准
     skuPurchaseUnit: sku?.purchaseUnit || '',
@@ -1853,6 +1877,7 @@ function chooseSku(sku: any) {
   editing.value.procurementSkuId = sku.id;
   editing.value.skuName = sku.name;
   editing.value.skuModel = sku.productModel || '';
+  editing.value.skuPackagingText = sku.packagingText || '';
   editing.value.skuRatio =
     typeof sku.purchaseToBaseRatio === 'number' ? sku.purchaseToBaseRatio : null;
   editing.value.skuPurchaseUnit = sku.purchaseUnit || '';
@@ -2626,10 +2651,26 @@ function emptySummary() {
   word-break: break-all;
 }
 
-.line-spec {
+.line-spec,
+.line-packaging {
   font-size: 20rpx;
   line-height: 1.4;
   color: #5b5748;
+}
+
+.sheet-sku-packaging {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 21rpx;
+  line-height: 1.4;
+  color: #5b5748;
+}
+
+.picker-packaging {
+  display: block;
+  font-size: 19rpx;
+  line-height: 1.35;
+  color: #6b6653;
 }
 
 .line-meta {

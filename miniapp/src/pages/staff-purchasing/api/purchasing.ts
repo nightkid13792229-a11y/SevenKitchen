@@ -12,6 +12,8 @@ export interface ProcurementSkuOption {
   name: string;
   brand?: string | null;
   productModel?: string | null;
+  /** 包装层级原文，如「1 箱 = 4 层 × 30 枚 × 53 克」（2026-11-11 层级机制） */
+  packagingText?: string | null;
   purchaseChannel?: string | null;
   purchaseUnit?: string | null;
   purchaseToBaseRatio?: number | null;
@@ -87,6 +89,7 @@ export function normalizeProcurementSkuOption(raw: any): ProcurementSkuOption | 
     name,
     brand: normalizeText(raw.brand) || null,
     productModel: normalizeText(raw.productModel) || normalizeText(raw.model) || null,
+    packagingText: normalizeText(raw.packagingText) || null,
     purchaseChannel: normalizeText(raw.purchaseChannel) || normalizeText(raw.channel) || null,
     purchaseUnit: normalizeText(raw.purchaseUnit) || normalizeText(raw.displayUnit) || null,
     purchaseToBaseRatio: toOptionalNumber(raw.purchaseToBaseRatio),

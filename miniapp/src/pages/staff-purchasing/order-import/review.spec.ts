@@ -332,7 +332,7 @@ describe('补货核对页 · 真机反馈（2026-11-12）', () => {
   it('商品名不再单行省略，长名字能看到全', () => {
     const css = source.slice(
       source.indexOf('.line-name {'),
-      source.indexOf('.line-spec {'),
+      source.indexOf('.line-meta {'),
     );
     expect(css).not.toContain('text-overflow: ellipsis');
     expect(css).not.toContain('white-space: nowrap');
@@ -355,5 +355,20 @@ describe('补货核对页 · 真机反馈（2026-11-12）', () => {
 
   it('有单位/规格提示时，把截图规格一起显示出来', () => {
     expect(source).toContain('截图规格：{{ line.spec }}');
+  });
+});
+
+describe('补货核对页 · 包装层级（2026-11-12）', () => {
+  it('SKU 选项带上接口返回的 packagingText', () => {
+    expect(source).toContain('packagingText: sku.packagingText || null');
+    expect(source).toContain('packagingText: sku.packagingText ?? null');
+  });
+
+  it('核对页把匹配商品的包装层级显示出来', () => {
+    expect(source).toContain('function packagingTextOf');
+    expect(source).toContain('商品规格：{{ packagingTextOf(line) }}');
+    expect(source).toContain('option.packagingText');
+    expect(source).toContain('sheet-sku-packaging');
+    expect(source).toContain('editing.skuPackagingText');
   });
 });

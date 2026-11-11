@@ -9,7 +9,9 @@
       <view class="needs-head" @tap="needsExpanded = !needsExpanded">
         <view class="needs-copy">
           <text class="needs-title">缺什么 · {{ needs.length }} 项</text>
-          <text class="needs-sub">约 ¥{{ money(needsCost) }} · 点开看清单</text>
+          <text class="needs-sub">
+            {{ needsCost > 0 ? `约 ¥${money(needsCost)} · ` : '' }}点开看清单
+          </text>
         </view>
         <text class="needs-toggle">{{ needsExpanded ? '收起' : '展开' }}</text>
       </view>
@@ -353,10 +355,9 @@ const totalInTransit = (item: InventoryNeedItem) =>
   (item.replenishmentInTransitBaseQuantity || 0);
 
 const needsCost = computed(() =>
-  needs.value.reduce(
-    (sum, item) => sum + Number(item.netShortageEstimatedCost || 0),
-    0,
-  ),
+  needs.value
+    .filter((item) => !!item.procurementSkuId)
+    .reduce((sum, item) => sum + Number(item.netShortageEstimatedCost || 0), 0),
 );
 
 const loadNeeds = async () => {

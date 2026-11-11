@@ -77,7 +77,7 @@
               还差 {{ fmt(shortageBase(item)) }}{{ item.stockUnitLabel }}
             </text>
             <text
-              v-if="shortageBase(item) > 0 && shortageCost(item) > 0"
+              v-if="shortageBase(item) > 0 && shortageCost(item) > 0 && item.procurementSkuId"
               class="suggest-cost"
             >
               约 ¥{{ fmt(shortageCost(item)) }}

@@ -1417,6 +1417,8 @@ export interface InventoryNeedItem {
   id: string;
   name: string;
   stockUnitLabel: string;
+  procurementSkuId?: string | null;
+  purchaseToBaseRatio?: number | null;
   suggestedBaseQuantity?: number | null;
   netShortageBaseQuantity?: number | null;
   netShortageEstimatedCost?: number | null;

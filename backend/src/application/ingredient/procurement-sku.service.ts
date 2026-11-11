@@ -520,12 +520,22 @@ export class ProcurementSkuService {
     const latest = await this.prisma.ingredientPriceHistory.findFirst({
       where: { ingredientId: params.ingredientId },
       orderBy: { createdAt: 'desc' },
-      select: { source: true, procurementSkuId: true, newCostPerBaseUnit: true },
+      select: {
+        source: true,
+        procurementSkuId: true,
+        newCostPerBaseUnit: true,
+        note: true,
+      },
     });
+    const previousRecalcMarker = '采购商品的包装层级改了';
+    const isOwnPreviousRecalc =
+      (latest as { note?: string | null } | null)?.note?.startsWith(
+        previousRecalcMarker,
+      ) === true;
     if (
       !latest ||
-      latest.source !== 'INIT_FROM_SKU' ||
-      latest.procurementSkuId !== params.skuId
+      latest.procurementSkuId !== params.skuId ||
+      (latest.source !== 'INIT_FROM_SKU' && !isOwnPreviousRecalc)
     ) {
       return;
     }
@@ -623,6 +633,23 @@ export class ProcurementSkuService {
    */
   private async loadPurchaseUnitOptions(): Promise<PurchaseUnitOption[]> {
     return loadPurchaseUnitOptions(this.prisma as any);
+  }
+
+  /**
+   * 校验用的单位归一（2026-11-11 终审修）：
+   * 与"能选什么"分开 —— 历史商品上可能还留着已停用的单位或别名写法（「只」），
+   * 这类值**必须仍能保存**，否则后台一打开旧商品就 400，只能被迫改数据。
+   */
+  private async resolveUnitForValidation(
+    baseUnit: BaseUnit | string,
+    value: string | null | undefined,
+  ): Promise<string | null> {
+    const raw = String(value ?? '').trim();
+    if (!raw) return null;
+    const all = await loadPurchaseUnitOptions(this.prisma as any, {
+      includeDisabled: true,
+    });
+    return resolvePurchaseUnitCode(unitsForBaseUnit(all, String(baseUnit)), raw, String(baseUnit));
   }
 
   /** 这道原料允许的采购单位（字典 ∩ 基准单位） */
@@ -788,9 +815,13 @@ export class ProcurementSkuService {
     const rawUnit = normalizeOptionalText(input.purchaseUnit);
 
     if (input.packaging !== undefined && input.packaging !== null) {
+      // 先归一（别名 / 历史停用项），再做层级校验：否则老商品「只」一保存就 400
+      const normalizedUnit = rawUnit
+        ? (await this.resolveUnitForValidation(input.baseUnit, rawUnit)) ?? rawUnit
+        : null;
       const validated = validatePackaging({
         packaging: input.packaging,
-        purchaseUnit: rawUnit ?? null,
+        purchaseUnit: normalizedUnit,
         baseUnit: input.baseUnit,
         allowedUnits: allowed.codes,
       });
@@ -808,7 +839,7 @@ export class ProcurementSkuService {
             : {}),
         },
         ratio: validated.ratio,
-        purchaseUnit: rawUnit ?? null,
+        purchaseUnit: normalizedUnit,
       };
     }
 
@@ -1363,6 +1394,28 @@ export class ProcurementSkuService {
       throw new BadRequestException(
         '改采购单位时请一起提交包装层级（否则层级还按旧单位在说）',
       );
+    }
+
+    /**
+     * 改了采购单位、层级却一个数都没动 → 拒绝（2026-11-11 终审）。
+     *
+     * 这就是验收第 5 条：把「盒」改成「箱」而倍数照旧，等于"1 盒=500 克"悄悄变成
+     * "1 箱=500 克"，语义差整倍数却不报错。要让员工重新确认每箱里有多少。
+     */
+    if (unitChanged && hasPackaging) {
+      const nextSpec = readPackaging(dto.packaging);
+      const prevSpec = readPackaging(existing.packaging);
+      const sameChain =
+        nextSpec &&
+        prevSpec &&
+        JSON.stringify(nextSpec.links ?? []) === JSON.stringify(prevSpec.links ?? []) &&
+        Math.abs(Number(nextSpec.amount) - Number(prevSpec.amount)) < 1e-9;
+      if (sameChain) {
+        throw new BadRequestException(
+          '改采购单位时请同时核对包装层级（每箱几层 × 每件多少），' +
+            '否则同样的倍数会从「1 盒」变成「1 箱」',
+        );
+      }
     }
 
     if (hasPackaging || hasPackFacts) {

@@ -1262,11 +1262,18 @@
           :min="0.01"
           :precision="2"
           :step="0.01"
+          :disabled="hasLayeredPackaging"
           style="width: 180px"
         />
-        <span class="hint-text" style="margin-left: 8px"
-          >1 个采购单位等于多少 {{ BaseUnitLabels[formData.baseUnit] }}</span
-        >
+        <span class="hint-text" style="margin-left: 8px">
+          <template v-if="hasLayeredPackaging">
+            这个商品是多层包装（{{ layeredPackagingText }}），倍数由层级决定；
+            要改层级请到「员工新增的采购商品」页
+          </template>
+          <template v-else>
+            1 个采购单位等于多少 {{ BaseUnitLabels[formData.baseUnit] }}
+          </template>
+        </span>
       </el-form-item>
       <el-form-item label="当前采购价">
         <el-input-number
@@ -1453,7 +1460,7 @@ import {
 } from '@/api/ingredientTags'
 import { ingredientApi } from '@/api/ingredients'
 import { platformOptionsApi } from '@/api/platformOptions'
-import { legacyPackaging } from '@/utils/packagingDisplay'
+import { formatPackagingText, legacyPackaging } from '@/utils/packagingDisplay'
 import {
   fetchPublicOptionSet,
   type PublicOptionItem,
@@ -1898,6 +1905,15 @@ const loadPurchaseUnitDict = async () => {
     purchaseUnitDict.value = []
   }
 }
+
+const hasLayeredPackaging = computed(
+  () => (procurementForm.packaging?.links?.length ?? 0) > 0,
+)
+const layeredPackagingText = computed(() => {
+  const spec = procurementForm.packaging
+  if (!spec) return ''
+  return formatPackagingText(spec, procurementForm.purchaseUnit)
+})
 
 const procurementPurchaseUnitOptions = computed(() => {
   const baseUnit = String(formData.baseUnit || 'G').toUpperCase()
@@ -2753,6 +2769,14 @@ const procurementForm = reactive({
   purchaseChannel: '',
   purchaseUnit: '',
   purchaseToBaseRatio: undefined as number | undefined,
+  /** 已有的包装层级（2026-11-11）：多层的商品保存时必须原样回传，不能压成单层 */
+  packaging: null as null | {
+    links: Array<{ count: number; unit: string }>
+    amount: number
+    amountUnit: 'G' | 'ML' | 'PCS'
+    amountLabel?: string
+    printedText?: string
+  },
   currentPurchasePrice: undefined as number | undefined,
   openingStock: undefined as number | undefined,
   notes: '',
@@ -3008,6 +3032,8 @@ const openProcurementDialog = (sku?: ProcurementSku) => {
     procurementForm.purchaseChannel = sku.purchaseChannel || ''
     procurementForm.purchaseUnit = sku.purchaseUnit || ''
     procurementForm.purchaseToBaseRatio = sku.purchaseToBaseRatio ?? undefined
+    // 多层的商品必须把原层级带上，否则保存时会被压成"一箱=5000克"
+    procurementForm.packaging = (sku as any).packaging ?? null
     procurementForm.currentPurchasePrice = sku.currentPurchasePrice ?? undefined
     procurementForm.openingStock = undefined
     procurementForm.notes = sku.notes || ''
@@ -3023,6 +3049,7 @@ const openProcurementDialog = (sku?: ProcurementSku) => {
     procurementForm.purchaseChannel = ''
     procurementForm.purchaseUnit = ''
     procurementForm.purchaseToBaseRatio = undefined
+    procurementForm.packaging = null
     procurementForm.currentPurchasePrice = undefined
     procurementForm.openingStock = undefined
     procurementForm.notes = ''
@@ -3213,13 +3240,23 @@ const saveProcurementSku = async () => {
     purchaseUnit: normalizeProcurementSkuOptionalText(
       procurementForm.purchaseUnit,
     ),
-    // 层级是唯一事实（2026-11-11）：这里的弹窗只收"单位 + 倍数"，
-    // 就按单层折 —— 与后端 packagingFromLegacy 同口径，倍数不变
-    packaging: legacyPackaging(
-      procurementForm.purchaseToBaseRatio,
-      formData.baseUnit,
-      normalizeProcurementSkuOptionalText(procurementForm.productModel),
-    ),
+    /**
+     * 层级是唯一事实（2026-11-11，终审修）：
+     * 商品本来就是多层（1 箱 = 10 捆 × 500 克）时，这里必须**原样回传**，
+     * 否则"只改个价"也会把中间层拍平，后台从此只能在单层里改。
+     * 只有单层商品才按"单位 + 倍数"折。
+     */
+    packaging: hasLayeredPackaging.value && procurementForm.packaging
+      ? {
+          ...procurementForm.packaging,
+          printedText:
+            normalizeProcurementSkuOptionalText(procurementForm.productModel) ?? undefined,
+        }
+      : legacyPackaging(
+          procurementForm.purchaseToBaseRatio,
+          formData.baseUnit,
+          normalizeProcurementSkuOptionalText(procurementForm.productModel),
+        ),
     currentPurchasePrice: procurementForm.currentPurchasePrice ?? null,
     ...(procurementEditingId.value
       ? {}

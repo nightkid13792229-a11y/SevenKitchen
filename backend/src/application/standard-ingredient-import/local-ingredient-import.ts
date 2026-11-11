@@ -1,4 +1,10 @@
+import { BadRequestException } from '@nestjs/common';
 import { packagingFromLegacy } from '../../domain/purchasing/packaging';
+import {
+  loadPurchaseUnitOptions,
+  resolvePurchaseUnitCode,
+  unitsForBaseUnit,
+} from '../purchasing/purchase-unit-catalog';
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -709,14 +715,36 @@ async function applyFoodProcurementSkus(
   ingredientId: string,
   result: TransactionResult,
 ): Promise<void> {
+  // 单位也要走字典归一（2026-11-11 终审修）：导入是"写库"路径，
+  // 以前原样落库，导入一个字典外写法之后，后台一编辑就 400。
+  const unitOptions = unitsForBaseUnit(
+    await loadPurchaseUnitOptions(tx as any),
+    'G',
+  );
+
   for (const sku of manifest.ingredient.procurementSkus ?? []) {
+    const rawUnit = String(sku.purchaseUnit ?? '').trim();
+    const resolvedUnit = rawUnit
+      ? resolvePurchaseUnitCode(unitOptions, rawUnit, 'G')
+      : null;
+    if (rawUnit && !resolvedUnit) {
+      throw new BadRequestException(
+        `导入清单里的采购单位「${rawUnit}」不在字典里，只能选：${unitOptions
+          .map((item) => item.code)
+          .join('、')}`,
+      );
+    }
+
     const procurementSku = await tx.procurementSku.create({
-      data: buildProcurementSkuData(
-        sku,
-        ingredientId,
-        // 标准原料导入固定按克记账（见 createIngredient 的 baseUnit: 'G'）
-        'G',
-      ),
+      data: {
+        ...buildProcurementSkuData(
+          sku,
+          ingredientId,
+          // 标准原料导入固定按克记账（见 createIngredient 的 baseUnit: 'G'）
+          'G',
+        ),
+        purchaseUnit: resolvedUnit,
+      },
     });
     result.procurementSkuIds.push(procurementSku.id);
 

@@ -393,7 +393,14 @@ export class ReplenishmentService {
           })
         : null;
 
-      if (weightRatio === undefined && sku?.purchaseUnit) {
+      /**
+       * 挂了商品的行，一律按商品单位说话（2026-11-11 终审修）。
+       *
+       * 以前这里对「克/公斤」直接放行：一条按"箱"买的记录被改成"1 克"，
+       * 就真的按 1 克入账 —— 三条入账路径里唯一不拦、静默错的一条。
+       * 要按重量记，应该用"没有商品的按重量行"，而不是在商品行上换口径。
+       */
+      if (sku?.purchaseUnit) {
         const unitCheck = checkQuantityUnitMatches({
           lineUnit: unit,
           skuPurchaseUnit: sku.purchaseUnit,

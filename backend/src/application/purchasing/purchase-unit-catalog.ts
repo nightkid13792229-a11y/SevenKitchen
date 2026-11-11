@@ -205,16 +205,23 @@ export function toPurchaseUnitSeedItem(option: PurchaseUnitOption) {
  *
  * 字典为空或表还没建时退回 `PURCHASE_UNIT_SEED`，不让员工端变成空白选项。
  */
-export async function loadPurchaseUnitOptions(prisma: {
-  platformOptionItem: {
-    findMany: (args: unknown) => Promise<
-      Array<{ code: string; sortOrder?: number | null; extra?: unknown }>
-    >;
-  };
-}): Promise<PurchaseUnitOption[]> {
+export async function loadPurchaseUnitOptions(
+  prisma: {
+    platformOptionItem: {
+      findMany: (args: unknown) => Promise<
+        Array<{ code: string; sortOrder?: number | null; extra?: unknown }>
+      >;
+    };
+  },
+  options: { includeDisabled?: boolean } = {},
+): Promise<PurchaseUnitOption[]> {
   try {
     const items = await prisma.platformOptionItem.findMany({
-      where: { setId: PURCHASE_UNIT_SET, enabled: true },
+      where: {
+        setId: PURCHASE_UNIT_SET,
+        // 校验历史数据时要连停用项一起认，否则老商品保存即 400
+        ...(options.includeDisabled ? {} : { enabled: true }),
+      },
       select: { code: true, sortOrder: true, extra: true },
       orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
     });

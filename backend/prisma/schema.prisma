@@ -1531,11 +1531,31 @@ model InventoryStocktakeLine {
   countedAt         DateTime?          @map("counted_at")
   stocktake         InventoryStocktake @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
   ingredient        Ingredient         @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  portions          InventoryStocktakePortion[]
 
   @@unique([stocktakeId, ingredientId])
   @@index([ingredientId])
   @@index([procurementSkuId])
   @@map("inventory_stocktake_line")
+}
+
+/// 盘点明细点（2026-11-11）：一个原料行下按商品/位置拆开录入，服务端汇总到行。
+/// 食材按采购商品各一个点；补剂/包材本身即商品，只有一行一个点（sku 为空）。
+/// 同一商品可追加多个点（不同冰柜/批次），行的实盘 = 各点之和。
+model InventoryStocktakePortion {
+  id               String                @id @default(uuid())
+  lineId           String                @map("line_id")
+  procurementSkuId String?               @map("procurement_sku_id") @db.VarChar(36)
+  /// 位置 / 批次，自由文本（如「冰柜 2」「第二批」）
+  locationLabel    String?               @map("location_label") @db.VarChar(100)
+  countedQuantityG Float?                @map("counted_quantity_g")
+  countedAt        DateTime?             @map("counted_at")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  line             InventoryStocktakeLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+
+  @@index([lineId])
+  @@index([procurementSkuId])
+  @@map("inventory_stocktake_portion")
 }
 
 /// 健康信息分享令牌（2026-10-01，第三期）。

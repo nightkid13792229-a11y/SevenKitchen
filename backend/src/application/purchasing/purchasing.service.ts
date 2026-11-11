@@ -854,12 +854,12 @@ export class PurchasingService {
     return Math.ceil((value - Number.EPSILON) * factor) / factor;
   }
 
-  /**
-   * 2026-11-11：所有原料一律抵扣现有库存与在途。
-   * 采购类型不再参与库存算法（日采/补货/混合正在下线）。
-   */
-  private usesInventoryForRequirement(_ingredient: any): boolean {
-    return true;
+  private usesInventoryForRequirement(ingredient: any): boolean {
+    return (
+      ingredient?.procurementStrategy ===
+        IngredientProcurementStrategy.STOCK_REPLENISHMENT ||
+      ingredient?.procurementStrategy === IngredientProcurementStrategy.HYBRID
+    );
   }
 
   private applyInventoryOffset(params: {
@@ -895,12 +895,12 @@ export class PurchasingService {
       Number(params.availability?.availableQuantityG ?? 0),
       0,
     );
-    const inTransitRaw = Number(
-      params.availability?.inTransitQuantityG ?? 0,
-    );
     const inTransit =
-      usesInventory && params.useInTransit && Number.isFinite(inTransitRaw)
-        ? Math.max(inTransitRaw, 0)
+      usesInventory && params.useInTransit
+        ? Math.max(
+            Number(params.availability?.inTransitQuantityG ?? 0),
+            0,
+          )
         : 0;
     const stockDeductedBaseQuantity = usesInventory
       ? this.roundNumber(Math.min(grossBaseQuantity, available), 3)
@@ -973,9 +973,15 @@ export class PurchasingService {
     dateRange?: { start: Date; end: Date },
     excludePurchaseListId?: string,
   ): Promise<PurchaseRequirement[]> {
-    // 2026-11-11：净额下单全量启用（不再按采购类型分组，也不再跑影子对比）。
-    const useNet = true;
-    const shadow = false;
+    const flags = await this.prisma.globalConfig.findUnique({
+      where: { id: 'singleton' },
+      select: {
+        dailyNetOrderingEnabled: true,
+        inventoryNetShadowEnabled: true,
+      },
+    });
+    const useNet = flags?.dailyNetOrderingEnabled === true;
+    const shadow = !useNet && flags?.inventoryNetShadowEnabled === true;
 
     const candidateIds = requirements
       .filter(
@@ -2009,6 +2015,12 @@ export class PurchasingService {
       ingredients.map((ingredient) => ingredient.id),
     );
     const filteredIngredients = ingredients
+      .filter(
+        (ingredient) =>
+          params?.includeDaily !== false ||
+          ingredient.procurementStrategy !==
+            IngredientProcurementStrategy.DAILY_PURCHASE,
+      )
       .filter((ingredient) => !params?.type || ingredient.type === params.type)
       .filter((ingredient) => {
         if (!keywordTerms.length) {
@@ -2262,8 +2274,19 @@ export class PurchasingService {
           SUFFICIENT: 3,
           NO_POLICY: 4,
         };
+        const strategyOrder = {
+          [IngredientProcurementStrategy.STOCK_REPLENISHMENT]: 1,
+          [IngredientProcurementStrategy.HYBRID]: 2,
+          [IngredientProcurementStrategy.DAILY_PURCHASE]: 3,
+        };
         if (statusOrder[left.stockStatus] !== statusOrder[right.stockStatus]) {
           return statusOrder[left.stockStatus] - statusOrder[right.stockStatus];
+        }
+        if (left.procurementStrategy !== right.procurementStrategy) {
+          return (
+            strategyOrder[left.procurementStrategy] -
+            strategyOrder[right.procurementStrategy]
+          );
         }
         if (left.type !== right.type) {
           const typeOrder = { FOOD: 1, SUPPLEMENT: 2, PACKAGING: 3 };

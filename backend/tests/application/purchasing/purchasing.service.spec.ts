@@ -286,7 +286,6 @@ describe('PurchasingService procurement sku separation', () => {
           provide: InventoryService,
           useValue: {
             getBalanceByIngredient: jest.fn(),
-            getAvailabilityByIngredientIds: jest.fn().mockResolvedValue(new Map()),
             inboundFromPurchaseRecords: jest.fn(),
           },
         },
@@ -541,7 +540,6 @@ describe('PurchasingService procurement sku separation', () => {
           provide: InventoryService,
           useValue: {
             getBalanceByIngredient: jest.fn(),
-            getAvailabilityByIngredientIds: jest.fn().mockResolvedValue(new Map()),
             inboundFromPurchaseRecords: jest.fn(),
           },
         },
@@ -655,7 +653,6 @@ describe('PurchasingService procurement sku separation', () => {
           provide: InventoryService,
           useValue: {
             getBalanceByIngredient: jest.fn(),
-            getAvailabilityByIngredientIds: jest.fn().mockResolvedValue(new Map()),
             inboundFromPurchaseRecords: jest.fn(),
           },
         },
@@ -1340,7 +1337,6 @@ describe('PurchasingService procurement sku separation', () => {
           provide: InventoryService,
           useValue: {
             getBalanceByIngredient: jest.fn(),
-            getAvailabilityByIngredientIds: jest.fn().mockResolvedValue(new Map()),
             inboundFromPurchaseRecords: jest.fn(),
           },
         },
@@ -2023,7 +2019,6 @@ describe('PurchasingService procurement sku separation', () => {
           provide: InventoryService,
           useValue: {
             getBalanceByIngredient: jest.fn(),
-            getAvailabilityByIngredientIds: jest.fn().mockResolvedValue(new Map()),
             inboundFromPurchaseRecords: jest.fn(),
           },
         },

@@ -76,8 +76,7 @@ describe('staff inventory stocktake result and records (C6)', () => {
 });
 
 describe('staff inventory adjustment create (C7)', () => {
-  const page = readPage('staff-inventory/adjustment-create.vue');
-  const pagesJson = readFileSync(resolve(__dirname, '../pages.json'), 'utf8');
+  const page = readPage('staff-inventory/components/AdjustmentSheet.vue');
 
   it('offers the four categories and explains approval', () => {
     expect(page).toContain('内部领用');
@@ -92,10 +91,6 @@ describe('staff inventory adjustment create (C7)', () => {
     expect(page).toContain('estimatedAmount');
     expect(page).toContain('createInventoryAdjustment');
     expect(page).toContain('quantity: quantity.value');
-  });
-
-  it('registers the page', () => {
-    expect(pagesJson).toContain('"path": "adjustment-create"');
   });
 });
 

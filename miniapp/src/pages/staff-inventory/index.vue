@@ -99,6 +99,7 @@
         </view>
 
         <view class="actions">
+          <button class="btn ghost" @tap="openAdjust(item)">记一笔</button>
           <button class="btn ghost" @tap="openDrawer('ledger', item)">看流水</button>
           <button class="btn primary" @tap="goReplenish(item)">去补货</button>
         </view>
@@ -106,12 +107,19 @@
     </view>
 
     <view class="bottom">
-      <button class="btn ghost" @tap="goAdjust">记一笔</button>
+      <button class="btn ghost" @tap="openAdjust()">记一笔</button>
       <button class="btn ghost" @tap="goStocktake">盘点</button>
       <button class="btn primary" @tap="openDrawer('needs')">
         补货清单
       </button>
     </view>
+
+    <AdjustmentSheet
+      :visible="adjustVisible"
+      :ingredient="adjustIngredient"
+      @close="adjustVisible = false"
+      @submitted="onAdjustSubmitted"
+    />
 
     <InventoryDrawer
       :visible="drawerVisible"
@@ -129,6 +137,7 @@
 import { computed, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import InventoryDrawer from './components/InventoryDrawer.vue';
+import AdjustmentSheet from './components/AdjustmentSheet.vue';
 import {
   getInventoryHome,
   type InventoryHome,
@@ -145,6 +154,8 @@ const drawerVisible = ref(false);
 const drawerTab = ref<'needs' | 'ledger'>('needs');
 const drawerIngredientId = ref<string | undefined>(undefined);
 const drawerIngredientName = ref<string | undefined>(undefined);
+const adjustVisible = ref(false);
+const adjustIngredient = ref<InventoryHomeItem | null>(null);
 
 const summary = computed(
   () =>
@@ -289,8 +300,14 @@ const goReplenish = (_item: InventoryHomeItem) => {
   });
 };
 
-const goAdjust = () => {
-  uni.navigateTo({ url: '/pages/staff-inventory/adjustment-create' });
+const openAdjust = (item?: InventoryHomeItem) => {
+  adjustIngredient.value = item ?? null;
+  adjustVisible.value = true;
+};
+
+const onAdjustSubmitted = async () => {
+  adjustVisible.value = false;
+  await load();
 };
 
 const goRecords = () => {
@@ -490,8 +507,11 @@ const goStocktake = () => {
 }
 .actions {
   display: flex;
-  gap: 14rpx;
+  gap: 10rpx;
   margin-top: 18rpx;
+}
+.actions .btn {
+  font-size: 24rpx;
 }
 .btn {
   flex: 1;

@@ -34,7 +34,7 @@ const PAGES = [
   'staff-inventory/stocktake-create.vue',
   'staff-inventory/stocktake-records.vue',
   'staff-inventory/stocktake-result.vue',
-  'staff-inventory/adjustment-create.vue',
+  'staff-inventory/components/AdjustmentSheet.vue',
   'staff-inventory/components/InventoryDrawer.vue',
 ];
 

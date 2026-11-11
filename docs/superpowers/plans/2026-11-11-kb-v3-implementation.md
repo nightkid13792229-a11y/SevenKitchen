@@ -516,7 +516,7 @@ Expected: FAIL（脚本不存在）。
 - `status` 默认 `unknown`（没有可靠来源状态就不猜 current）；`license` 默认 `internal`；`title` 依次取 manifest 说明 / PDF metadata title / 文件名；`publisher` 取 collection；`version`/`publishedYear` 没有可靠来源就留 `null`；
 - checksum：优先用 `manifest.csv` 的 SHA256；没有就计算文件 SHA256；两者都有但不一致 → 报错，不导入；
 - 从归档根目录的 `manifest.csv` 读 `来源ID / 相对路径 / SHA256 / 说明`，用 `来源ID` 作为 `source.id`（保持 `sacn5-chapters-SACN5-37` 这类稳定 ID）；没有 manifest 时才用文件名去扩展名；
-- `--ids-from docs/knowledge-base/source-layer`：只解析该目录文件名对应的 159 个 docId，跳过 README/MANIFEST/重复文件；默认就用这个白名单，数量不是 159 时先停；
+- `--ids-from docs/knowledge-base/source-layer`：只解析该目录文件名对应的 159 个 docId（跳过 `_stats.json` / `_expected-counts.json` / `_excluded-README.json` 这类下划线文件），跳过 README/MANIFEST/重复文件；默认就用这个白名单，数量不是 159 时先停；
 - 输出一个 `<sourceId>.json`；`--force` 覆盖，否则跳过已存在。
 - `render-page-images.py`：遍历 PDF 页，`page.get_pixmap(dpi=110)`，JPEG 质量 78，写 `<out>/<sourceId>/p0001.jpg`；已存在跳过；
 - 权限：解析/渲染脚本由有源目录读权限的用户（root/受权组）跑；产出目录 `chown` 给后端运行用户；后端只读 DB + 页图，不直接读 700 源目录。

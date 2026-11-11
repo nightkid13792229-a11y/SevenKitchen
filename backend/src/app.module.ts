@@ -345,6 +345,11 @@ import { RecipeCopywritingService } from './application/recipe-designer/recipe-c
 import { KnowledgeBaseService } from './application/recipe-designer/knowledge-base.service';
 import { SourceLayerService } from './application/knowledge-base/source-layer.service';
 import { KnowledgeLibraryService } from './application/knowledge-base/knowledge-library.service';
+import { KnowledgeCatalogService } from './application/knowledge-v3/knowledge-catalog.service';
+import { KnowledgeFindService } from './application/knowledge-v3/knowledge-find.service';
+import { KnowledgeGatewayService } from './application/knowledge-v3/knowledge-gateway.service';
+import { KnowledgeReadService } from './application/knowledge-v3/knowledge-read.service';
+import { PageImageService } from './application/knowledge-v3/page-image.service';
 import { KnowledgeSourceController } from './interfaces/controllers/knowledge-source.controller';
 import {
   SupplementLabelExtractionService,
@@ -948,6 +953,12 @@ validatePrismaConfig();
     KnowledgeBaseService,
     SourceLayerService,
     KnowledgeLibraryService,
+    // 知识库 v3：4 个数据服务 + 3 个动作的边界（本任务只注册，不接 Agent）
+    KnowledgeCatalogService,
+    KnowledgeFindService,
+    KnowledgeReadService,
+    PageImageService,
+    KnowledgeGatewayService,
     {
       provide: SUPPLEMENT_LABEL_OCR_PROVIDER,
       useClass: TencentCloudSupplementLabelOcrProvider,

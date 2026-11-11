@@ -62,6 +62,8 @@ backend/
     import-page-layer.ts                           # JSON → DB，幂等
     smoke.ts                                       # 真实库冒烟
     benchmark-calls.ts                             # 结构基准：调用次数
+    assert-no-conclusions.ts                       # 仓库内 387 条正文清零硬门禁
+    audit-conclusion-tables.ts                     # DB 结论表/锚点表盘点
   tests/application/knowledge-v3/
     anchors.spec.ts
     page-layer.mapper.spec.ts
@@ -974,6 +976,7 @@ bash scripts/session.sh commit -m "feat(knowledge): 三个通用动作与结构�
 - Delete: `backend/tests/application/recipe-designer/citation-registry.spec.ts`
 - Delete: `backend/tests/application/recipe-designer/citation-judge.spec.ts`
 - Delete: `backend/tests/application/recipe-designer/citation-gate.spec.ts`
+- **不存在的文件不要凭空加**：先跑 Step 1 的 `git grep` 枚举；如果还有 `citation-gate.ts` 或其他 citation helper，把它们补进本清单后再删。
 - Modify: `backend/src/application/ingredient-creation/supplement-agent.service.ts`
 - Modify: `backend/src/application/ingredient-creation/supplement-tools.ts`
 - Modify: `backend/tests/application/ingredient-creation/supplement-agent.service.spec.ts`
@@ -984,7 +987,14 @@ bash scripts/session.sh commit -m "feat(knowledge): 三个通用动作与结构�
 - `ToolExecutionContext` 只保留配方业务依赖（`port`、`catalog`、`onAsk`）；
 - 补剂工具不再含 `search_knowledge`。
 
-- [ ] **Step 1: 写/改失败测试**
+- [ ] **Step 1: 枚举全部 citation 引用并写/改失败测试**
+
+Run:
+```bash
+cd backend
+git grep -n -E "CitationRegistry|citation-judge|citation-gate|formatTableCitationText" -- src tests || true
+```
+Expected: 只命中本任务 Files 里列出的文件；若还有别的 citation helper，补进 Files 再删。
 
 - `agent-tools-library.spec.ts` 删除；
 - 补剂测试删除 `search_knowledge` 用例，并新增：
@@ -1006,7 +1016,7 @@ Expected: FAIL，仍含 `search_knowledge`。
   - `runTool` 不再传 citations/library/sourceLayer/scope。
 - `prompt.ts`：删知识库相关段落（“知识库是图书馆…”“检索时给的 species/stage…”等）；
 - 补剂：删 `KnowledgeSearchService` 注入、`search_knowledge` 定义/case/context 字段；
-- 删除 4 个 citation 文件与 4 个旧测试。
+- 删除 2 个 citation 源文件（`citation-registry.ts`、`citation-judge.ts`）与 3 个测试（`citation-registry.spec.ts`、`citation-judge.spec.ts`、`citation-gate.spec.ts`）；如果 Step 1 枚举出别的 helper，一并删。
 - 注意：`dose-redaction`、`find_food`、`edit_recipe`、`assess` 等业务逻辑不动。
 
 - [ ] **Step 3: 跑测试 + 类型检查**
@@ -1017,7 +1027,12 @@ cd backend
 npm test -- tests/application/ingredient-creation tests/application/recipe-designer
 npx tsc --noEmit
 ```
-Expected: PASS/无类型错误；`git grep -n -E "search_knowledge_library|open_knowledge|knowledge_scope|CitationRegistry|citation-judge" -- src || true` 不再命中。
+Expected: PASS/无类型错误。硬门禁（命中即失败）：
+```bash
+if git grep -n -E "search_knowledge_library|open_knowledge|knowledge_scope|CitationRegistry|citation-judge|citation-gate" -- src tests; then
+  echo "旧 citation/知识接线仍存在"; exit 1;
+fi
+```
 
 - [ ] **Step 4: 提交**
 
@@ -1047,6 +1062,8 @@ bash scripts/session.sh commit -m "refactor(knowledge): 移除旧 Agent/补剂�
 - Delete: `backend/tests/scripts/audit-health-knowledge.spec.ts`
 - Delete: `backend/scripts/audit-health-knowledge.ts`
 - Delete: `backend/scripts/export-knowledge-review-packet.ts`
+- Create: `backend/scripts/knowledge-v3/assert-no-conclusions.ts`
+- Create: `backend/scripts/knowledge-v3/audit-conclusion-tables.ts`
 
 **Interfaces:**
 - `HealthAnalysisService` 变为无依赖的最小服务：
@@ -1118,17 +1135,25 @@ Expected: FAIL（构造函数/返回类型不匹配）。
 - 删除两个审核脚本及其测试；
 - `app.module.ts` 移除 `KnowledgeBaseService` import/provider。
 
-- [ ] **Step 3: 跑测试 + 类型检查**
+- [ ] **Step 3: 跑测试 + 零结论硬门禁**
+
+先实现两个门禁脚本：
+
+- `assert-no-conclusions.ts`：扫描 `docs/knowledge-base/**/*.md`；凡是同时出现“条目 ID（`renal-001` 这类）”和“`^### <id>` 标题”或“`**结论**：` / `**要点**：` / `**注意事项**：`”的文件，视为残留结论正文，退出码 1；允许只有 ID、没有结论正文的历史审计文档。
+- `audit-conclusion-tables.ts`：用 Prisma `information_schema` 列出 `public` 下 `%knowledge%` / `source_%` 表；如果存在 `knowledge_entry` / `knowledge_entries` / `knowledge_conclusion` 之类结论表，退出码 1；`knowledge_citation_anchor` 只打印行数，允许在 Task 10 drop 前存在；`--after-drop` 模式要求 `source_*` / `knowledge_citation_anchor` 全部不存在，只剩 4 张 `kb_*` 表。
 
 Run:
 ```bash
 cd backend
 npm test -- tests/application/health/health-analysis.service.spec.ts
 npx tsc --noEmit
-git grep -n -E "KnowledgeBaseService|knowledge-base/data|KnowledgeEntry|HealthAnalysisCache" -- src tests || true
-grep -R -n -E "^### (immune|lab|clinical|prev|renal|gi|skin|cardio|endo|urolith|ortho|onco|neuro|dental|repro|safe|critical|hemo|growth|senior|weight)-[0-9]{3}" ../docs || true
+npx ts-node -r tsconfig-paths/register scripts/knowledge-v3/assert-no-conclusions.ts
+npx ts-node -r tsconfig-paths/register scripts/knowledge-v3/audit-conclusion-tables.ts
+if git grep -n -E "KnowledgeBaseService|knowledge-base/data|KnowledgeEntry|HealthAnalysisCache" -- src tests; then
+  echo "结论层代码仍有残留"; exit 1;
+fi
 ```
-Expected: PASS/无类型错误；`git grep` 不再命中运行时；docs 审核包标题 0 命中。再跑：
+Expected: PASS/无类型错误；两个门禁脚本退出 0；`git grep` 无命中。再跑：
 ```bash
 npm test -- tests/application/health/staff-dog-health.service.spec.ts
 ```
@@ -1137,7 +1162,7 @@ Expected: PASS（健康标签词表仍可用）。
 - [ ] **Step 4: 提交**
 
 ```bash
-git add -u backend/src/domain/recipe-designer/knowledge-base backend/src/application/recipe-designer/knowledge-base.service.ts docs/knowledge-base/review-packet docs/knowledge-base/aaha2014-review.md backend/src/application/health/health-analysis.service.ts backend/tests/application/health/health-analysis.service.spec.ts backend/tests/application/health/health-analysis-cache.spec.ts backend/src/app.module.ts backend/tests/application/recipe-designer/knowledge-base-structure.spec.ts backend/tests/application/recipe-designer/knowledge-base.service.spec.ts backend/tests/scripts/export-knowledge-review-packet.spec.ts backend/tests/scripts/audit-health-knowledge.spec.ts backend/scripts/audit-health-knowledge.ts backend/scripts/export-knowledge-review-packet.ts
+git add -u backend/src/domain/recipe-designer/knowledge-base backend/src/application/recipe-designer/knowledge-base.service.ts docs/knowledge-base/review-packet docs/knowledge-base/aaha2014-review.md backend/src/application/health/health-analysis.service.ts backend/scripts/knowledge-v3/assert-no-conclusions.ts backend/scripts/knowledge-v3/audit-conclusion-tables.ts backend/tests/application/health/health-analysis.service.spec.ts backend/tests/application/health/health-analysis-cache.spec.ts backend/src/app.module.ts backend/tests/application/recipe-designer/knowledge-base-structure.spec.ts backend/tests/application/recipe-designer/knowledge-base.service.spec.ts backend/tests/scripts/export-knowledge-review-packet.spec.ts backend/tests/scripts/audit-health-knowledge.spec.ts backend/scripts/audit-health-knowledge.ts backend/scripts/export-knowledge-review-packet.ts
 bash scripts/session.sh commit -m "refactor(knowledge): 删除 387 条结论层，健康分析暂停"
 ```
 
@@ -1203,10 +1228,12 @@ Run:
 cd backend
 npx tsc --noEmit
 npm test
-git grep -n -E "source_paragraph|source_section|source_table|source_figure|knowledge_citation_anchor" -- src tests || true
-git grep -n -E "query-expansion|stagePhrases|topicPhrases|detectQueryDomains|CKD_DOCUMENT_IDS|KnowledgeScope|search_knowledge_library|open_knowledge|knowledge_scope|\[K[0-9]" -- src tests || true
+if git grep -n -E "source_paragraph|source_section|source_table|source_figure|knowledge_citation_anchor|KnowledgeLibraryService|SourceLayerService|KnowledgeSearchService|KnowledgeSourceController|search_knowledge_library|open_knowledge|knowledge_scope|query-expansion|stagePhrases|topicPhrases|detectQueryDomains|CKD_DOCUMENT_IDS|\[K[0-9]" -- src tests; then
+  echo "旧知识库概念仍有残留"; exit 1;
+fi
+npx ts-node -r tsconfig-paths/register scripts/knowledge-v3/audit-conclusion-tables.ts --after-drop
 ```
-Expected: `tsc` 通过；全量测试绿；`git grep` 两组都无运行时引用（迁移/SQL 除外）。
+Expected: `tsc` 通过；全量测试绿；硬门禁 0 命中；DB 只剩 4 张 `kb_*` 表，`source_*` / `knowledge_citation_anchor` 已不存在。
 
 - [ ] **Step 4: 提交**
 

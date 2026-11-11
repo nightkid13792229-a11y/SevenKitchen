@@ -181,9 +181,9 @@ describe('PurchasingService inventory allocation calculation', () => {
               'spinach',
               {
                 ingredientId: 'spinach',
-                onHandQuantityG: 900,
+                onHandQuantityG: 0,
                 allocatedQuantityG: 0,
-                availableQuantityG: 900,
+                availableQuantityG: 0,
               },
             ],
           ]),
@@ -356,33 +356,46 @@ describe('PurchasingService inventory allocation calculation', () => {
     );
   });
 
-  it('offsets hybrid ingredients by available stock but leaves daily purchase ingredients untouched', async () => {
-    const { service } = await createService();
+  it('offsets daily purchase ingredients too (all ingredients use inventory)', async () => {
+    const { service } = await createService({
+      availability: new Map([
+        [
+          'beef',
+          {
+            ingredientId: 'beef',
+            onHandQuantityG: 5000,
+            allocatedQuantityG: 1000,
+            availableQuantityG: 4000,
+            inTransitQuantityG: 0,
+          },
+        ],
+        [
+          'spinach',
+          {
+            ingredientId: 'spinach',
+            onHandQuantityG: 900,
+            allocatedQuantityG: 0,
+            availableQuantityG: 900,
+            inTransitQuantityG: 0,
+          },
+        ],
+      ]),
+    });
 
     const result = await service.calculatePurchaseRequirements('2026-04-20');
+    const spinach = result.find((item: any) => item.ingredientId === 'spinach');
 
-    expect(result).toEqual([
+    expect(spinach).toEqual(
       expect.objectContaining({
-        ingredientId: 'beef',
-        grossQuantityNeeded: 3000,
-        stockDeductedQuantity: 3000,
+        grossQuantityNeeded: 600,
+        stockDeductedQuantity: 600,
         quantityNeeded: 0,
         purchaseShortageQuantity: 0,
-        onHandQuantity: 5000,
-        allocatedQuantity: 1000,
-        availableQuantity: 4000,
         usesInventory: true,
       }),
-      expect.objectContaining({
-        ingredientId: 'spinach',
-        grossQuantityNeeded: 600,
-        stockDeductedQuantity: 0,
-        quantityNeeded: 600,
-        purchaseShortageQuantity: 600,
-        usesInventory: false,
-      }),
-    ]);
+    );
   });
+
 
   it('creates a purchase list with stock-covered items for manual audit', async () => {
     const { service, inventoryService } = await createService();

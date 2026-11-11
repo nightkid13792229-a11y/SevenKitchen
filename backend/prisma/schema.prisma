@@ -5735,7 +5735,97 @@ model CoverTrash {
 }
 
 // ---------------------------------------------------------------------------
-// 知识库原文层（2026-11-02）
+// 知识库 v3 页级原文层（2026-11-11）
+//
+// 设计：docs/knowledge-base/2026-11-11-kb-v3-design.md §5。
+// 四个实体：书（kb_source）→ 页（kb_page）→ 块（kb_block）+ 目录（kb_toc）。
+// 页是唯一原子单位：页图 + 文本层 + 版面块 + 目录。
+// 表格不转录、图片不裁剪；全文/trigram 索引是派生结构，在迁移 SQL 里建。
+// 旧 source_* 原文层与结论层由后续任务删除，这里不与之关联。
+// ---------------------------------------------------------------------------
+
+/// 书：一份原文一份档案。id 沿用稳定文档 ID，如 sacn5-chapters-SACN5-37。
+model KbSource {
+  id            String   @id @db.VarChar(120)
+  collection    String   @db.VarChar(40)
+  title         String   @db.VarChar(500)
+  publisher     String?  @db.VarChar(200)
+  version       String?  @db.VarChar(80)
+  publishedYear Int?     @map("published_year")
+  status        String?  @db.VarChar(20)
+  license       String?  @db.VarChar(200)
+  /// 原文 SHA256
+  checksum      String   @db.VarChar(64)
+  archivePath   String   @map("archive_path") @db.VarChar(500)
+  pageCount     Int      @map("page_count")
+  hasTextLayer  Boolean  @default(true) @map("has_text_layer")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  pages KbPage[]
+  toc   KbToc[]
+
+  @@index([collection])
+  @@map("kb_source")
+}
+
+/// 页：一页 = 文本层 + 页图 + 版面块。id = {sourceId}-p{pageNo:4}。
+model KbPage {
+  id              String    @id @db.VarChar(160)
+  sourceId        String    @map("source_id") @db.VarChar(120)
+  pageNo          Int       @map("page_no")
+  text            String    @db.Text
+  charCount       Int       @map("char_count")
+  width           Float?
+  height          Float?
+  /// 相对 KB_PAGE_IMAGE_ROOT；非 PDF / 未渲染为 null
+  imagePath       String?   @map("image_path") @db.VarChar(500)
+  imageRenderedAt DateTime? @map("image_rendered_at")
+
+  source KbSource  @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  blocks KbBlock[]
+
+  @@unique([sourceId, pageNo])
+  @@index([sourceId])
+  @@map("kb_page")
+}
+
+/// 块：标题/正文/表/图/脚注 + bbox。id = {pageId}-b{orderIndex:4}。
+/// 表格只存 bbox 与表题，不转录行列；图片只存 bbox 与图注，不裁剪。
+model KbBlock {
+  id         String  @id @db.VarChar(180)
+  pageId     String  @map("page_id") @db.VarChar(160)
+  /// heading / paragraph / table / figure / footnote
+  kind       String  @db.VarChar(20)
+  bbox       Json
+  text       String? @db.Text
+  caption    String? @db.Text
+  orderIndex Int     @map("order_index")
+
+  page KbPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId])
+  @@map("kb_block")
+}
+
+/// 目录：章 → 页范围。没有目录的文档导入一条“全文 1..N”。
+model KbToc {
+  id         String @id @db.VarChar(180)
+  sourceId   String @map("source_id") @db.VarChar(120)
+  title      String @db.VarChar(500)
+  level      Int    @default(1)
+  pageFrom   Int    @map("page_from")
+  pageTo     Int    @map("page_to")
+  orderIndex Int    @map("order_index")
+
+  source KbSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId])
+  @@map("kb_toc")
+}
+
+// ---------------------------------------------------------------------------
+// 知识库原文层（2026-11-02，待 Task 10 删除）
 //
 // 由 docs/knowledge-base/source-layer/*.json 导入。段落 id 稳定
 //（如 sacn5-chapters-SACN5-40-p00055），知识条目的出处直接引用它。

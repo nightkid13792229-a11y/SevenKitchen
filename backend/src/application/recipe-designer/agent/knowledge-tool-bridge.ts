@@ -116,14 +116,18 @@ export function buildKnowledgeImageMessage(
     role: 'user',
     content: [
       { type: 'text', text: IMAGE_MESSAGE_TEXT },
-      ...images.map(
-        (image): DeepSeekContentPart => ({
+      ...images.flatMap((image): DeepSeekContentPart[] => [
+        {
+          type: 'text',
+          text: `第 p${image.pageNo} 页 ${image.anchor}`,
+        },
+        {
           type: 'image_url',
           image_url: {
             url: `data:${image.mime};base64,${image.base64}`,
           },
-        }),
-      ),
+        },
+      ]),
     ],
   };
 }

@@ -206,12 +206,20 @@ describe('knowledge tool bridge', () => {
         type: 'text',
         text: '（系统注入）以下是刚打开的页图，用于核对上面的页文本。',
       });
-      expect(parts).toHaveLength(3);
+      expect(parts).toHaveLength(5);
       expect(parts[1]).toEqual({
+        type: 'text',
+        text: '第 p17 页 doc-1/p17',
+      });
+      expect(parts[2]).toEqual({
         type: 'image_url',
         image_url: { url: 'data:image/jpeg;base64,/9j/17' },
       });
-      expect(parts[2]).toEqual({
+      expect(parts[3]).toEqual({
+        type: 'text',
+        text: '第 p18 页 doc-1/p18',
+      });
+      expect(parts[4]).toEqual({
         type: 'image_url',
         image_url: { url: 'data:image/jpeg;base64,/9j/18' },
       });

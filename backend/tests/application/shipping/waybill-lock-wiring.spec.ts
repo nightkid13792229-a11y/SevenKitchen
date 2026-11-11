@@ -1,5 +1,8 @@
 import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
-import { enforceWaybillLock } from 'src/application/shipping/waybill-lock';
+import {
+  enforceWaybillLock,
+  shouldEnforceWaybill,
+} from 'src/application/shipping/waybill-lock';
 import { OrderService } from 'src/application/order/order.service';
 import { OrderShipmentService } from 'src/application/shipping/order-shipment.service';
 import { SupplementOrderService } from 'src/application/supplement-shop/supplement-order.service';
@@ -60,6 +63,26 @@ describe('enforceWaybillLock 开关', () => {
         trackingNumber: 'SF1',
       }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('shouldEnforceWaybill（默认强制，管理员可显式跳过）', () => {
+  it('★ 什么都不传 → 要校验（旧版小程序、随手调接口都逃不掉）', () => {
+    expect(shouldEnforceWaybill({}, 'STAFF')).toBe(true);
+    expect(shouldEnforceWaybill(undefined, 'STAFF')).toBe(true);
+    expect(shouldEnforceWaybill({}, 'ADMIN')).toBe(true);
+  });
+
+  it('★ 管理员显式跳过 → 不校验（后台网页那条路）', () => {
+    expect(shouldEnforceWaybill({ skipWaybillCheck: true }, 'ADMIN')).toBe(false);
+  });
+
+  it('★ 员工传了跳过也没用', () => {
+    expect(shouldEnforceWaybill({ skipWaybillCheck: true }, 'STAFF')).toBe(true);
+  });
+
+  it('传了个假值（字符串）不算跳过', () => {
+    expect(shouldEnforceWaybill({ skipWaybillCheck: 'true' }, 'ADMIN')).toBe(true);
   });
 });
 

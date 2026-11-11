@@ -40,6 +40,8 @@ export interface ReceiptViewInput {
   recognizedTrackingNumber?: string | null;
   /** 员工已经手动确认过（AI 认不出来 / 没能核对时） */
   manualConfirmed?: boolean;
+  /** 手动确认的**是哪个单号**：确认完又改号，这次确认就作废 */
+  manualConfirmedTracking?: string | null;
   /** 后端给的补充说明（模型超时等） */
   message?: string | null;
 }
@@ -91,6 +93,17 @@ const buildHints = (input: ReceiptViewInput): string[] => {
 export function buildReceiptView(input: ReceiptViewInput): ReceiptView {
   const { state } = input;
 
+  // 手动确认只对**当时那个单号**有效：确认完又改号，就等于没确认过。
+  // 否则界面上会一直显示"可以发货"，直到提交被服务端打回。
+  const manualStillValid =
+    input.manualConfirmed === true &&
+    (!input.manualConfirmedTracking ||
+      (Boolean(input.trackingNumber) &&
+        sameTracking(
+          input.trackingNumber as string,
+          input.manualConfirmedTracking,
+        )));
+
   if (state === 'idle') {
     return {
       tone: 'neutral',
@@ -123,6 +136,16 @@ export function buildReceiptView(input: ReceiptViewInput): ReceiptView {
         tone: 'warn',
         title: '单号改过了，需要重新核对',
         desc: '存根核对的是原来那个单号，改过号要重新传一张存根（或者手动确认）',
+        canShip: false,
+        canManual: true,
+      };
+    }
+
+    if (!input.trackingNumber) {
+      return {
+        tone: 'warn',
+        title: '还没填运单号',
+        desc: '存根读到的运单号被清空了，请重新上传存根或者补上运单号',
         canShip: false,
         canManual: true,
       };
@@ -168,7 +191,7 @@ export function buildReceiptView(input: ReceiptViewInput): ReceiptView {
   }
 
   if (state === 'unknown') {
-    if (input.manualConfirmed) {
+    if (manualStillValid) {
       return {
         tone: 'warn',
         title: `手动确认过 · ${buildTitle(input)}`,
@@ -190,7 +213,7 @@ export function buildReceiptView(input: ReceiptViewInput): ReceiptView {
   }
 
   // failed：AI 完全认不出来（糊、模型超时、配额用完、不是存根）
-  if (input.manualConfirmed) {
+  if (manualStillValid) {
     return {
       tone: 'warn',
       title: '已手动填写',

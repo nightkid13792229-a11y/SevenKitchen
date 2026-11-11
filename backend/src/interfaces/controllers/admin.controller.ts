@@ -22,6 +22,7 @@ import {
   Inject,
   UseGuards,
   UploadedFile,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -74,6 +75,7 @@ import {
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import { OrderStatus } from '../../domain';
 import { CancelOrderDto } from '../dto/orders/cancel-order.dto';
+import { shouldEnforceWaybill } from '../../application/shipping/waybill-lock';
 import {
   AdminOrderDto,
   OrderDto,
@@ -2215,9 +2217,14 @@ export class AdminController {
       trackingNumber?: string;
       actualShippingFee?: number | string | null;
       shippingType?: 'NORMAL' | 'NOT_REQUIRED';
-      /** 小程序发货要求先验存根（2026-11-10 硬锁）；后台网页不传 */
-      enforceWaybillCheck?: boolean;
+      /**
+       * 硬锁（2026-11-10；2026-11-11 复审后**改成默认强制**）。
+       * 只有管理员在后台网页显式 `skipWaybillCheck: true` 才放行；
+       * 反过来（客户端声明才校验）会给「旧版小程序」和「换个接口直接调」留下口子。
+       */
+      skipWaybillCheck?: boolean;
     },
+    @Req() request?: { user?: { role?: string } },
   ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
     try {
       const shippingType = body.shippingType === 'NOT_REQUIRED' ? 'NOT_REQUIRED' : 'NORMAL';
@@ -2261,7 +2268,7 @@ export class AdminController {
           carrierCode,
           trackingNumber,
           actualShippingFee,
-          enforceWaybillCheck: body.enforceWaybillCheck === true,
+          enforceWaybillCheck: shouldEnforceWaybill(body, request?.user?.role),
         },
         null, // Admin ID not available in current implementation
       );
@@ -2387,6 +2394,7 @@ export class AdminController {
   @ApiResponse({ status: 400, description: 'Invalid request' })
   async createOrderShipment(
     @Body() body: any,
+    @Req() request?: { user?: { role?: string } },
   ): Promise<ApiResponseDto<any>> {
     try {
       if (!this.orderShipmentService) {
@@ -2396,7 +2404,7 @@ export class AdminController {
         {
           packages: Array.isArray(body?.packages) ? body.packages : [],
           note: body?.note ?? null,
-          enforceWaybillCheck: body?.enforceWaybillCheck === true,
+          enforceWaybillCheck: shouldEnforceWaybill(body, request?.user?.role),
         },
         null,
       );

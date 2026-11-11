@@ -126,6 +126,41 @@ describe('存根上传块 · buildReceiptView', () => {
     expect(view.canShip).toBe(true);
   });
 
+  it('★ 手动确认过、但之后又改了单号 → 不能发（确认的是旧号）', () => {
+    const view = buildReceiptView({
+      state: 'failed',
+      trackingNumber: 'SF0999999999999',
+      manualConfirmed: true,
+      manualConfirmedTracking: 'SF0204691009893',
+    });
+
+    expect(view.canShip).toBe(false);
+  });
+
+  it('★ 手动确认过、单号还是那个 → 可以发', () => {
+    const view = buildReceiptView({
+      state: 'failed',
+      trackingNumber: 'SF0204691009893',
+      manualConfirmed: true,
+      manualConfirmedTracking: 'SF0204691009893',
+    });
+
+    expect(view.canShip).toBe(true);
+  });
+
+  it('★ 核对通过但单号被清空 → 不能发（别让人白填一屏再被后端打回）', () => {
+    const view = buildReceiptView({
+      state: 'match',
+      carrierName: '顺丰速运',
+      trackingNumber: '',
+      recognizedTrackingNumber: 'SF0204691009893',
+      shippingFee: 56,
+    });
+
+    expect(view.canShip).toBe(false);
+    expect(view.desc).toContain('运单号');
+  });
+
   it('没读到运费时标题不写金额', () => {
     const view = buildReceiptView({
       state: 'match',

@@ -245,13 +245,15 @@ export class ShipSupplementOrderDto {
   shippingType?: 'NORMAL' | 'NOT_REQUIRED';
 
   /**
-   * 小程序发货要求先验存根（2026-11-10 硬锁）。
-   * 后台网页不传 → 不受锁约束（管理员保留最终裁量权）。
+   * 硬锁（2026-11-10；2026-11-11 复审后**改成默认强制**）。
+   *
+   * 默认一定校验；只有管理员在后台网页显式传 `skipWaybillCheck: true` 才放行。
+   * 反过来（客户端声明才校验）会给「旧版小程序」和「换个接口直接调」留下口子。
    */
-  @ApiPropertyOptional({ description: '要求先校验快递存根（小程序发货用）' })
+  @ApiPropertyOptional({ description: '管理员显式跳过存根校验（后台网页用）' })
   @IsOptional()
   @IsBoolean()
-  enforceWaybillCheck?: boolean;
+  skipWaybillCheck?: boolean;
 
   @ApiPropertyOptional({ description: '快递单号（正常发货必填）' })
   @IsOptional()

@@ -14,7 +14,13 @@
  *   4. 手动填写必须留原因，且**已有对不上的结论时不给手动**（否则硬锁等于没有）。
  */
 
-import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import type { DeepSeekChatOptions } from '../recipe-designer/deepseek-chat';
 import {
   AgentProviderConfigService,
@@ -111,7 +117,9 @@ export class WaybillReceiptService {
     private readonly agentConfig: AgentProviderConfigService,
     @Inject(WAYBILL_RECEIPT_MODEL)
     private readonly model: {
-      callDeepSeekJson(options: DeepSeekChatOptions): Promise<Record<string, unknown>>;
+      callDeepSeekJson(
+        options: DeepSeekChatOptions,
+      ): Promise<Record<string, unknown>>;
     },
   ) {}
 
@@ -120,7 +128,9 @@ export class WaybillReceiptService {
     orderIds: string[];
     userId: string;
   }): Promise<RecognizeResult> {
-    const orderIds = Array.from(new Set((input.orderIds ?? []).filter(Boolean)));
+    const orderIds = Array.from(
+      new Set((input.orderIds ?? []).filter(Boolean)),
+    );
     if (orderIds.length === 0) {
       throw new BadRequestException('缺少订单');
     }
@@ -243,7 +253,12 @@ export class WaybillReceiptService {
     const record = await this.saveRecord({
       orderIds,
       userId: input.userId,
-      status: status === 'match' ? 'MATCH' : status === 'mismatch' ? 'MISMATCH' : 'UNKNOWN',
+      status:
+        status === 'match'
+          ? 'MATCH'
+          : status === 'mismatch'
+            ? 'MISMATCH'
+            : 'UNKNOWN',
       trackingNumber: parsed.trackingNumber,
       carrierCode: parsed.carrierCode,
       receipt: parsed as unknown as Record<string, unknown>,
@@ -275,7 +290,9 @@ export class WaybillReceiptService {
     reason: string;
     userId: string;
   }): Promise<{ id: string }> {
-    const orderIds = Array.from(new Set((input.orderIds ?? []).filter(Boolean)));
+    const orderIds = Array.from(
+      new Set((input.orderIds ?? []).filter(Boolean)),
+    );
     if (orderIds.length === 0) {
       throw new BadRequestException('缺少订单');
     }
@@ -335,7 +352,9 @@ export class WaybillReceiptService {
       degradedReason,
       trackingNumber: receipt?.trackingNumber ?? null,
       carrierCode: receipt?.carrierCode ?? null,
-      receipt: receipt ? (receipt as unknown as Record<string, unknown>) : undefined,
+      receipt: receipt
+        ? (receipt as unknown as Record<string, unknown>)
+        : undefined,
     });
 
     return {
@@ -370,7 +389,8 @@ export class WaybillReceiptService {
   ): Promise<DuplicateOwner | null> {
     const orders = await this.prisma.order.findMany({
       where: {
-        trackingNumber,
+        // 大小写不敏感：员工手填时可能写小写，库里存的是原样
+        trackingNumber: { equals: trackingNumber, mode: 'insensitive' },
         status: { not: 'CANCELLED' },
         id: { notIn: orderIds },
       },
@@ -386,7 +406,7 @@ export class WaybillReceiptService {
 
     const supplements = await this.prisma.supplementOrder.findMany({
       where: {
-        trackingNumber,
+        trackingNumber: { equals: trackingNumber, mode: 'insensitive' },
         status: { not: 'CANCELLED' },
         id: { notIn: orderIds },
       },
@@ -401,7 +421,8 @@ export class WaybillReceiptService {
     }
 
     const packages = await this.prisma.orderShipmentPackage.findMany({
-      where: { trackingNumber },
+      // 已撤销的票不算：撤销后重发同一单，包裹行还留着，拿它查重会永久拦死
+      where: { trackingNumber, shipment: { cancelledAt: null } },
       select: { id: true, shipmentId: true },
       take: 20,
     });
@@ -473,21 +494,32 @@ export class WaybillReceiptService {
     degradedReason?: string;
     manualReason?: string;
   }): Promise<{ id: string }> {
-    const created = await this.prisma.waybillReceiptRecord.create({
-      data: {
-        orderIds: data.orderIds,
-        createdBy: data.userId,
-        status: data.status,
-        trackingNumber: data.trackingNumber ?? null,
-        carrierCode: data.carrierCode ?? null,
-        receipt: (data.receipt ?? undefined) as any,
-        conflicts: (data.conflicts ?? undefined) as any,
-        addressFingerprints: (data.addressFingerprints ?? undefined) as any,
-        degradedReason: data.degradedReason ?? null,
-        manualReason: data.manualReason ?? null,
-      },
-      select: { id: true },
-    });
+    // 这条记录是发货硬锁唯一的凭据：写不进去就等于"这次没验过"，
+    // 后面提交一定被拦。所以要给一句能照做的提示，而不是一个 500。
+    const created = await this.prisma.waybillReceiptRecord
+      .create({
+        data: {
+          orderIds: data.orderIds,
+          createdBy: data.userId,
+          status: data.status,
+          trackingNumber: data.trackingNumber ?? null,
+          carrierCode: data.carrierCode ?? null,
+          receipt: (data.receipt ?? undefined) as any,
+          conflicts: (data.conflicts ?? undefined) as any,
+          addressFingerprints: (data.addressFingerprints ?? undefined) as any,
+          degradedReason: data.degradedReason ?? null,
+          manualReason: data.manualReason ?? null,
+        },
+        select: { id: true },
+      })
+      .catch((error: any) => {
+        this.logger.error(
+          `[WaybillReceipt] 核对记录写入失败：${error?.message ?? 'unknown'}`,
+        );
+        throw new ServiceUnavailableException(
+          '核对结果没保存下来（数据库忙），请重试一次；连续失败请联系管理员',
+        );
+      });
 
     return created as { id: string };
   }

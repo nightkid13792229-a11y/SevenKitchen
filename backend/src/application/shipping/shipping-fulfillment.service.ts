@@ -31,6 +31,9 @@ import {
   ShippingNotificationResult,
   ShippingNotificationService,
 } from './shipping-notification.service';
+import { enforceWaybillLock } from './waybill-lock';
+// ⚠️ 值导入（不是 `import type`）：@Optional 参数的类型要靠 design:paramtypes 暴露给 Nest
+import { WaybillReceiptGuardService } from './waybill-receipt-guard.service';
 
 export interface OrderReadyForShipmentDto {
   id: string;
@@ -71,6 +74,12 @@ export class ShippingFulfillmentService {
     private readonly wechatShippingUploadService: WechatShippingUploadService,
     @Optional()
     private readonly shippingNotificationService?: ShippingNotificationService,
+    /**
+     * 发货硬锁（2026-11-11 复审补）：这个老端点同样能发货，
+     * 不校验就等于给「换个接口调」留了后门。
+     */
+    @Optional()
+    private readonly waybillReceiptGuard?: WaybillReceiptGuardService,
   ) {}
 
   /**
@@ -132,6 +141,13 @@ export class ShippingFulfillmentService {
     }
 
     const fromStatus = order.status;
+
+    // 硬锁：验过存根才允许发（这个老端点没有"跳过"的开关，一律校验）
+    await enforceWaybillLock(this.waybillReceiptGuard, {
+      enabled: true,
+      orderIds: [orderId],
+      trackingNumber: dto.trackingNumber,
+    });
 
     // Mark order as shipped (this will transition status to SHIPPED)
     order.markAsShipped(dto.trackingNumber.trim(), dto.carrierCode.trim());

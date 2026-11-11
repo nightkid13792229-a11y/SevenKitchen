@@ -57,6 +57,7 @@ import {
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { AdminGuard, StaffGuard } from '../guards/role.guard';
+import { shouldEnforceWaybill } from '../../application/shipping/waybill-lock';
 
 /**
  * 补剂商城 · 后台
@@ -357,10 +358,18 @@ export class AdminSupplementShopController {
 
     return ApiResponseDto.success(
       await this.redactForStaff(
-        await this.supplementOrderService.shipOrder(id, dto, {
-          type: request.user?.role === 'ADMIN' ? 'ADMIN' : 'STAFF',
-          id: request.user?.userId ?? null,
-        }),
+        await this.supplementOrderService.shipOrder(
+          id,
+          {
+            ...dto,
+            // 硬锁默认开；只有管理员显式跳过才放行
+            enforceWaybillCheck: shouldEnforceWaybill(dto, request.user?.role),
+          },
+          {
+            type: request.user?.role === 'ADMIN' ? 'ADMIN' : 'STAFF',
+            id: request.user?.userId ?? null,
+          },
+        ),
         request,
       ),
     );

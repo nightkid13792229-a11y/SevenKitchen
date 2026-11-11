@@ -840,6 +840,9 @@ async function submitShip() {
     await supplementOrderApi.ship(current.value!.id, {
       trackingNumber: shipForm.value.trackingNumber.trim(),
       carrierCode: shipForm.value.carrierCode || undefined,
+      // 后台没有「上传快递存根」的入口，这里由管理员显式跳过核对。
+      // 小程序端默认一定校验，只有管理员显式传这个开关才放行（2026-11-11）。
+      skipWaybillCheck: true,
     });
     ElMessage.success('已发货');
     shipVisible.value = false;

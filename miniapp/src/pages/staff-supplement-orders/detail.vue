@@ -451,6 +451,8 @@ const receiptDuplicateLabel = ref('')
 const receiptMessage = ref('')
 const receiptHasImage = ref(false)
 const receiptManualConfirmed = ref(false)
+/** 手动确认的是哪个单号：确认完再改号，这次确认就作废 */
+const receiptManualTracking = ref('')
 
 const addressVisible = ref(false)
 const savingAddress = ref(false)
@@ -468,8 +470,9 @@ const receiptView = computed<ReceiptView>(() =>
   buildReceiptView({
     state: receiptState.value,
     carrierName: receiptCarrierName.value || null,
-    trackingNumber: shipTracking.value || receiptTracking.value || null,
+    trackingNumber: shipTracking.value || null,
     recognizedTrackingNumber: receiptTracking.value || null,
+    manualConfirmedTracking: receiptManualTracking.value || null,
     shippingFee: receiptFee.value,
     conflicts: receiptConflicts.value,
     duplicateLabel: receiptDuplicateLabel.value || null,
@@ -488,6 +491,7 @@ function resetReceipt() {
   receiptMessage.value = ''
   receiptHasImage.value = false
   receiptManualConfirmed.value = false
+  receiptManualTracking.value = ''
 }
 
 function applyReceipt(summary: {
@@ -571,6 +575,8 @@ async function pickReceipt() {
 
   receiptHasImage.value = true
   receiptState.value = 'recognizing'
+  receiptManualConfirmed.value = false
+  receiptManualTracking.value = ''
 
   try {
     const uploaded = await uploadReceiptImage(filePath)
@@ -607,6 +613,7 @@ function onManualReceipt() {
           reason,
         })
         receiptManualConfirmed.value = true
+        receiptManualTracking.value = value
         receiptState.value = receiptHasImage.value ? 'unknown' : 'failed'
         uni.showToast({ title: '已确认，可以发货', icon: 'success' })
       } catch (error: any) {

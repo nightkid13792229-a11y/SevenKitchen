@@ -1068,13 +1068,16 @@ const receiptMessage = ref('')
 const receiptHasImage = ref(false)
 /** 员工手动确认过（AI 认不出来 / 没能核对时）；提交前会被后端再验一次 */
 const receiptManualConfirmed = ref(false)
+/** 手动确认的是哪个单号：确认完再改号，这次确认就作废 */
+const receiptManualTracking = ref('')
 
 const receiptView = computed<ReceiptView>(() =>
   buildReceiptView({
     state: receiptState.value,
     carrierName: receiptCarrierName.value || null,
-    trackingNumber: trackingNumber.value || receiptTracking.value || null,
+    trackingNumber: trackingNumber.value || null,
     recognizedTrackingNumber: receiptTracking.value || null,
+    manualConfirmedTracking: receiptManualTracking.value || null,
     shippingFee: receiptFee.value,
     conflicts: receiptConflicts.value,
     duplicateLabel: receiptDuplicateLabel.value || null,
@@ -1093,6 +1096,7 @@ function resetReceipt() {
   receiptMessage.value = ''
   receiptHasImage.value = false
   receiptManualConfirmed.value = false
+  receiptManualTracking.value = ''
 }
 
 /** 存根识别结果 → 表单三项。对不上时**一个都不填**。 */
@@ -1198,6 +1202,9 @@ async function pickReceipt() {
 
   receiptHasImage.value = true
   receiptState.value = 'recognizing'
+  // 换了图就是重新来过：上一张的"手动确认"不能带过来
+  receiptManualConfirmed.value = false
+  receiptManualTracking.value = ''
 
   try {
     const uploaded = await uploadReceiptImage(filePath)
@@ -1235,6 +1242,7 @@ function onManualReceipt() {
           reason,
         })
         receiptManualConfirmed.value = true
+        receiptManualTracking.value = value
         receiptState.value = receiptHasImage.value ? 'unknown' : 'failed'
         uni.showToast({ title: '已确认，可以发货', icon: 'success' })
       } catch (error: any) {

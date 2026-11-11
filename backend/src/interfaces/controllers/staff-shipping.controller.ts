@@ -256,6 +256,7 @@ export class StaffShippingController {
   }
 
   @Post('orders/:orderId/ship')
+  @UseGuards(AuthGuard, StaffGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark order as shipped with tracking information' })
   @ApiParam({ name: 'orderId', description: 'Order ID' })

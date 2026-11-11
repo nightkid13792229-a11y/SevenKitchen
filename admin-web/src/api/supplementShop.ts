@@ -448,7 +448,12 @@ export const supplementOrderApi = {
 
   ship: (
     id: string,
-    data: { trackingNumber: string; carrierCode?: string },
+    data: {
+      trackingNumber: string;
+      carrierCode?: string;
+      /** 管理员显式跳过存根核对（后台没有上传存根的入口） */
+      skipWaybillCheck?: boolean;
+    },
   ): Promise<SupplementOrder> =>
     api.post(`/admin/supplement-shop/orders/${id}/ship`, data),
 

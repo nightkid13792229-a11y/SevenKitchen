@@ -14,6 +14,22 @@
 import { InternalServerErrorException } from '@nestjs/common';
 import type { WaybillReceiptGuardService } from './waybill-receipt-guard.service';
 
+/**
+ * 这次请求要不要强制核对存根。
+ *
+ * **默认要**。只有管理员在后台网页显式 `skipWaybillCheck: true` 才跳过 ——
+ * 后台那条路上没有上传存根的入口，锁死了管理员就发不出货。
+ *
+ * 为什么不做成"客户端声明才校验"（2026-11-10 第一版就是这么写的，复审推翻了）：
+ * 旧版小程序、或者有人换个接口直接调，都会静默地不受保护。
+ */
+export function shouldEnforceWaybill(
+  body: { skipWaybillCheck?: unknown } | null | undefined,
+  role: string | null | undefined,
+): boolean {
+  return !(body?.skipWaybillCheck === true && role === 'ADMIN');
+}
+
 export interface WaybillLockInput {
   /** 客户端声明要锁（小程序来的发货请求一律 true） */
   enabled: boolean;

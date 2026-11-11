@@ -139,6 +139,8 @@ interface PackageReceiptState {
   message: string
   hasImage: boolean
   manualConfirmed: boolean
+  /** 手动确认的是哪个单号：确认完再改号，这次确认就作废 */
+  manualTracking: string
 }
 
 interface PackageState {
@@ -164,6 +166,7 @@ function emptyReceipt(): PackageReceiptState {
     message: '',
     hasImage: false,
     manualConfirmed: false,
+    manualTracking: '',
   }
 }
 
@@ -465,6 +468,8 @@ async function pickReceiptFor(index: number) {
 
   pkg.receipt.hasImage = true
   pkg.receipt.state = 'recognizing'
+  pkg.receipt.manualConfirmed = false
+  pkg.receipt.manualTracking = ''
 
   try {
     const uploaded = await uploadReceiptImage(filePath)
@@ -503,6 +508,7 @@ function onManualReceipt(index: number) {
           reason,
         })
         pkg.receipt.manualConfirmed = true
+        pkg.receipt.manualTracking = value
         pkg.receipt.state = pkg.receipt.hasImage ? 'unknown' : 'failed'
         uni.showToast({ title: '已确认，可以发货', icon: 'success' })
       } catch (error: any) {

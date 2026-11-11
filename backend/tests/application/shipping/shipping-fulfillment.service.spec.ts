@@ -6,6 +6,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ShippingFulfillmentService } from 'src/shipping-fulfillment.service';
+import { WaybillReceiptGuardService } from 'src/application/shipping/waybill-receipt-guard.service';
 import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from 'src/order/order.service';
 import type { OrderRepository } from 'src/domain/order/order.repository';
 import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
@@ -95,6 +96,12 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
         {
           provide: ShippingNotificationService,
           useValue: mockShippingNotificationService,
+        },
+        // 2026-11-11：这个老发货端点也上了发货硬锁（不校验就等于留后门），
+        // 用例里给一个"永远核对通过"的替身，专注测它自己的行为。
+        {
+          provide: WaybillReceiptGuardService,
+          useValue: { assertVerified: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();

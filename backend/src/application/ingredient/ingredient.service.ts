@@ -512,6 +512,16 @@ export class IngredientService {
 
   /**
    * Delete ingredient
+   *
+   * 删除前先做两件事（2026-11-12）：
+   *
+   * 1. 拦住「还有业务引用」的原料。此前一律直接 delete，数据库报外键错，
+   *    前端只看到一句「删除失败」—— 用户不知道卡在哪。
+   * 2. 解开系统自动建的营养档案。补剂建档时会自动生成一条
+   *    `Supplement label profile <id>` 词条 + 一条映射，而这条映射是 RESTRICT：
+   *    不解开就永远删不掉（线上 175 条原料里 157 条都卡在这里）。
+   *
+   * 只清「自动生成、且只属于这条原料」的词条；人工挑的 USDA/CFCT 词条一根都不动。
    */
   async deleteIngredient(id: string): Promise<void> {
     // Check if ingredient exists
@@ -520,6 +530,117 @@ export class IngredientService {
       throw new NotFoundException(`Ingredient not found: ${id}`);
     }
 
-    await this.ingredientRepository.delete(id);
+    await this.assertNoBusinessReferences(id, ingredient.name);
+    await this.releaseAutoNutritionProfile(id);
+
+    try {
+      await this.ingredientRepository.delete(id);
+    } catch (error) {
+      // 上面已经逐张表查过；这里兜底，避免再把裸的外键错误抛给前端。
+      if (isForeignKeyViolation(error)) {
+        throw new BadRequestException(
+          `「${ingredient.name}」仍被其它数据引用，暂时无法删除。`,
+        );
+      }
+      throw error;
+    }
   }
+
+  /**
+   * 删之前把「还被谁用着」说清楚，别让用户对着「删除失败」猜。
+   */
+  private async assertNoBusinessReferences(
+    id: string,
+    name: string,
+  ): Promise<void> {
+    if (!this.prisma) {
+      return;
+    }
+
+    const [
+      recipeCount,
+      designCount,
+      purchaseCount,
+      alternativeCount,
+      packagingRuleCount,
+    ] = await Promise.all([
+      this.prisma.recipeItem.count({ where: { ingredientId: id } }),
+      this.prisma.designRecipeItem.count({ where: { ingredientId: id } }),
+      this.prisma.purchaseItem.count({ where: { ingredientId: id } }),
+      this.prisma.recipeSupplementAlternative.count({
+        where: { alternativeIngredientId: id },
+      }),
+      this.prisma.supplementPackagingRule.count({ where: { ingredientId: id } }),
+    ]);
+
+    const blockers: string[] = [];
+    if (recipeCount > 0) blockers.push(`${recipeCount} 处配方`);
+    if (designCount > 0) blockers.push(`${designCount} 处配方设计稿`);
+    if (purchaseCount > 0) blockers.push(`${purchaseCount} 条采购记录`);
+    if (alternativeCount > 0) blockers.push(`${alternativeCount} 处补剂替代设置`);
+    if (packagingRuleCount > 0) blockers.push(`${packagingRuleCount} 条补剂包装规则`);
+
+    if (blockers.length > 0) {
+      throw new BadRequestException(
+        `「${name}」还被 ${blockers.join('、')} 引用，不能直接删除：请先处理这些引用。`,
+      );
+    }
+  }
+
+  /**
+   * 摘掉自动生成的营养档案（词条 + 映射）。
+   *
+   * 词条名固定为 `Supplement label profile <ingredientId>`（建档/补数脚本的产物），
+   * 只在这个名字、这条原料、且已经没有其它引用时才删 —— 任何一步对不上就留着，
+   * 宁可在营养库里多一条，也不误删人工维护的数据。
+   */
+  private async releaseAutoNutritionProfile(id: string): Promise<void> {
+    if (!this.prisma) {
+      return;
+    }
+
+    const mappings = await this.prisma.nutritionFoodMapping.findMany({
+      where: { ingredientId: id },
+      select: { nutritionFoodId: true },
+    });
+    if (mappings.length === 0) {
+      return;
+    }
+
+    const nutritionFoodIds = Array.from(
+      new Set(mappings.map((mapping) => mapping.nutritionFoodId)),
+    );
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.nutritionFoodMapping.deleteMany({ where: { ingredientId: id } });
+
+      const orphanProfiles = await tx.nutritionFood.findMany({
+        where: {
+          id: { in: nutritionFoodIds },
+          name: `Supplement label profile ${id}`,
+          mappings: { none: {} },
+          recipeItems: { none: {} },
+          designRecipeItems: { none: {} },
+        },
+        select: { id: true },
+      });
+
+      if (orphanProfiles.length > 0) {
+        await tx.nutritionFood.deleteMany({
+          where: { id: { in: orphanProfiles.map((profile) => profile.id) } },
+        });
+      }
+    });
+  }
+}
+
+/**
+ * Prisma 外键冲突（P2003）。删除接口要把它翻译成人话，而不是 500。
+ */
+function isForeignKeyViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === 'P2003'
+  );
 }

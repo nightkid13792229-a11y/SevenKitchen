@@ -1,3 +1,4 @@
+import { packagingFromLegacy } from '../src/domain/purchasing/packaging';
 import { PrismaClient } from '@prisma/client';
 
 import {
@@ -295,6 +296,15 @@ async function main() {
             ingredientId: ingredient.id,
             ...rest,
             purchaseToBaseRatio: Number(decision.payload.purchaseToBaseRatio),
+            // 2026-11-11：补数据也别漏层级，否则新商品在后台又是"只有倍数"
+            packaging: packagingFromLegacy({
+              ratio: Number(decision.payload.purchaseToBaseRatio),
+              baseUnit: String(ingredient.baseUnit ?? 'G'),
+              printedText:
+                typeof decision.payload.productModel === 'string'
+                  ? decision.payload.productModel
+                  : null,
+            }) as any,
           },
         });
       }

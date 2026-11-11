@@ -291,8 +291,12 @@ ${unitList}`;
     const rawPurchaseUnit = toStringOrNull(raw.purchaseUnit);
     // 只认字典里的单位（含别名归一）。认不出来就当没读到，并把原文留着给页面提示 ——
     // 丢掉原文的话，员工只会看到"单位空着"，永远不知道 AI 其实读到了「提」。
+    // 没有清单可校验时（单测 / 字典读取失败）保持原样：宁可让服务层在保存时拦，
+    // 也不要在识别阶段把单位抹成空 —— 员工会以为 AI 什么都没读到。
     const resolvedUnit = rawPurchaseUnit
-      ? resolvePurchaseUnitCode(unitOptions, rawPurchaseUnit, baseUnit)
+      ? unitOptions.length > 0
+        ? resolvePurchaseUnitCode(unitOptions, rawPurchaseUnit, baseUnit)
+        : rawPurchaseUnit
       : null;
     const purchaseUnit = resolvedUnit;
     const purchaseUnitHint =

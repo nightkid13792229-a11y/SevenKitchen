@@ -193,14 +193,36 @@
           <el-input-number v-model="editForm.sortOrder" :min="0" :max="9999" />
           <span class="form-hint">数字越小越靠前</span>
         </el-form-item>
-        <el-form-item v-if="isChannelSet" label="别名">
+        <el-form-item v-if="isChannelSet || isUnitSet" label="别名">
           <el-input
             v-model="editForm.aliasesText"
             type="textarea"
             :rows="3"
-            placeholder="每行一个，例如：山姆\nSam's Club"
+            placeholder="每行一个，例如：公斤\n千克"
           />
           <span class="form-hint">历史写法与常见简称，AI 识别和旧数据靠它归到这一项</span>
+        </el-form-item>
+        <el-form-item v-if="isUnitSet" label="适用记账单位">
+          <el-checkbox-group v-model="editForm.baseUnits">
+            <el-checkbox
+              v-for="choice in BASE_UNIT_CHOICES"
+              :key="choice.value"
+              :label="choice.value"
+            >
+              {{ choice.label }}
+            </el-checkbox>
+          </el-checkbox-group>
+          <span class="form-hint">这道单位能出现在哪些原料下（按克/毫升/个）</span>
+        </el-form-item>
+        <el-form-item v-if="isUnitSet" label="单位类型">
+          <el-select v-model="editForm.kind" style="width: 100%">
+            <el-option label="包装单位（袋/盒/箱…）" value="PACKAGING" />
+            <el-option label="计量单位（斤/公斤/g/ml）" value="MEASUREMENT" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="isUnitSet" label="整件单位">
+          <el-switch v-model="editForm.multipack" />
+          <span class="form-hint">箱/桶/提/件这类：员工一层都没填时会被提醒补一层</span>
         </el-form-item>
         <el-form-item label="启用">
           <el-switch v-model="editForm.enabled" />
@@ -228,13 +250,33 @@
         <el-form-item label="显示中文">
           <el-input v-model="createForm.label" maxlength="64" />
         </el-form-item>
-        <el-form-item v-if="isChannelSet" label="别名">
+        <el-form-item v-if="isChannelSet || isUnitSet" label="别名">
           <el-input
             v-model="createForm.aliasesText"
             type="textarea"
             :rows="3"
-            placeholder="每行一个，例如：山姆\nSam's Club"
+            placeholder="每行一个，例如：公斤\n千克"
           />
+        </el-form-item>
+        <el-form-item v-if="isUnitSet" label="适用记账单位">
+          <el-checkbox-group v-model="createForm.baseUnits">
+            <el-checkbox
+              v-for="choice in BASE_UNIT_CHOICES"
+              :key="choice.value"
+              :label="choice.value"
+            >
+              {{ choice.label }}
+            </el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+        <el-form-item v-if="isUnitSet" label="单位类型">
+          <el-select v-model="createForm.kind" style="width: 100%">
+            <el-option label="包装单位（袋/盒/箱…）" value="PACKAGING" />
+            <el-option label="计量单位（斤/公斤/g/ml）" value="MEASUREMENT" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="isUnitSet" label="整件单位">
+          <el-switch v-model="createForm.multipack" />
         </el-form-item>
         <el-form-item label="排序">
           <el-input-number v-model="createForm.sortOrder" :min="0" :max="9999" />
@@ -277,6 +319,19 @@ const canAddOrRemove = computed(() => {
 })
 
 const isChannelSet = computed(() => activeCode.value === 'purchase_channel')
+/**
+ * 采购单位（2026-11-11）：和渠道一样，必须能在这里维护 `extra`。
+ *
+ * 不做的话，管理员新增一个「挂」，项上 extra 为空 → 后端解析不出适用基准单位
+ * → 小程序和 AI 都看不到它，"后台加个单位不用发版"就成了空话。
+ */
+const isUnitSet = computed(() => activeCode.value === 'purchase_unit')
+
+const BASE_UNIT_CHOICES = [
+  { value: 'G', label: '按克' },
+  { value: 'ML', label: '按毫升' },
+  { value: 'PCS', label: '按个' }
+]
 
 /** 别名输入框：每行一个，去空、去重 */
 function splitAliases(text: string): string[] {
@@ -291,6 +346,21 @@ function splitAliases(text: string): string[] {
   return result
 }
 
+/** 采购单位的附加参数（后端靠它分组、判"整件"、归一别名） */
+function unitExtra(form: {
+  baseUnits: string[]
+  aliasesText: string
+  multipack: boolean
+  kind: 'PACKAGING' | 'MEASUREMENT'
+}) {
+  return {
+    baseUnits: form.baseUnits.length > 0 ? form.baseUnits : ['G', 'ML', 'PCS'],
+    aliases: splitAliases(form.aliasesText),
+    multipack: form.multipack,
+    kind: form.kind
+  }
+}
+
 const editVisible = ref(false)
 const createVisible = ref(false)
 
@@ -301,14 +371,20 @@ const editForm = reactive({
   tone: '' as string,
   sortOrder: 0,
   enabled: true,
-  aliasesText: ''
+  aliasesText: '',
+  baseUnits: ['G', 'ML', 'PCS'] as string[],
+  multipack: false,
+  kind: 'PACKAGING' as 'PACKAGING' | 'MEASUREMENT'
 })
 
 const createForm = reactive({
   code: '',
   label: '',
   sortOrder: 100,
-  aliasesText: ''
+  aliasesText: '',
+  baseUnits: ['G', 'ML', 'PCS'] as string[],
+  multipack: false,
+  kind: 'PACKAGING' as 'PACKAGING' | 'MEASUREMENT'
 })
 
 async function loadSets() {
@@ -363,6 +439,16 @@ function openEdit(row: AdminPlatformOptionItem) {
     ? ((row.extra as any).aliases as string[])
     : []
   editForm.aliasesText = aliases.join('\n')
+  const extra = (row.extra || {}) as {
+    baseUnits?: string[]
+    multipack?: boolean
+    kind?: 'PACKAGING' | 'MEASUREMENT'
+  }
+  editForm.baseUnits = Array.isArray(extra.baseUnits) && extra.baseUnits.length > 0
+    ? [...extra.baseUnits]
+    : ['G', 'ML', 'PCS']
+  editForm.multipack = extra.multipack === true
+  editForm.kind = extra.kind === 'MEASUREMENT' ? 'MEASUREMENT' : 'PACKAGING'
   editVisible.value = true
 }
 
@@ -381,7 +467,8 @@ async function handleSaveEdit() {
       enabled: editForm.enabled,
       ...(isChannelSet.value && {
         extra: { aliases: splitAliases(editForm.aliasesText) }
-      })
+      }),
+      ...(isUnitSet.value && { extra: unitExtra(editForm) })
     })
     ElMessage.success('已保存，小程序与后台会同时生效')
     editVisible.value = false
@@ -398,6 +485,9 @@ function openCreate() {
   createForm.label = ''
   createForm.sortOrder = 100
   createForm.aliasesText = ''
+  createForm.baseUnits = ['G', 'ML', 'PCS']
+  createForm.multipack = false
+  createForm.kind = 'PACKAGING'
   createVisible.value = true
 }
 
@@ -410,14 +500,17 @@ async function handleCreate() {
   try {
     await platformOptionsApi.createItem(activeCode.value, {
       // 渠道的码就是中文名，不能强制大写（会把 iHerb 变成 IHERB）
-      code: isChannelSet.value
-        ? (createForm.code.trim() || createForm.label.trim())
-        : createForm.code.trim().toUpperCase(),
+      // 单位（和渠道一样）的码是中文原文，不能强制大写，否则 kg 会变成 KG
+      code:
+        isChannelSet.value || isUnitSet.value
+          ? createForm.code.trim() || createForm.label.trim()
+          : createForm.code.trim().toUpperCase(),
       label: createForm.label.trim(),
       sortOrder: createForm.sortOrder,
       ...(isChannelSet.value && {
         extra: { aliases: splitAliases(createForm.aliasesText) }
-      })
+      }),
+      ...(isUnitSet.value && { extra: unitExtra(createForm) })
     })
     ElMessage.success('已新增')
     createVisible.value = false

@@ -253,14 +253,14 @@ export class IngredientService {
       dto.baseUnit !== undefined &&
       String(dto.baseUnit) !== String(existing.baseUnit)
     ) {
-      const activeSkuCount = this.prisma
-        ? await this.prisma.procurementSku.count({
-            where: { ingredientId: id, isActive: true },
-          })
+      // 数**所有**商品（含停用）：否则"停用 → 改单位 → 再启用"可以绕开守卫，
+      // 之后那条商品的层级/倍数语义全错。
+      const skuCount = this.prisma
+        ? await this.prisma.procurementSku.count({ where: { ingredientId: id } })
         : 0;
-      if (activeSkuCount > 0) {
+      if (skuCount > 0) {
         throw new BadRequestException(
-          `这道原料还有 ${activeSkuCount} 个在用采购商品，不能改记账单位：` +
+          `这道原料还有 ${skuCount} 个采购商品（含已停用），不能改记账单位：` +
             '请先停用或删除这些商品，再改单位（否则所有商品的换算倍数都会失灵）',
         );
       }

@@ -144,6 +144,11 @@ export function validatePackaging(input: {
     return { ok: false, problems: [...problems, 'INVALID_SHAPE'] };
   }
 
+  // links 写了但不是数组（例如被写成字符串 "10捆"）→ 直接判非法，
+  // 不能当空数组：那会把 10×500 静默算成 500。
+  if (raw.links !== undefined && raw.links !== null && !Array.isArray(raw.links)) {
+    return { ok: false, problems: [...new Set<PackagingProblem>([...problems, 'BAD_LINK'])] };
+  }
   const rawLinks = Array.isArray(raw.links) ? raw.links : [];
   if (rawLinks.length > MAX_LINKS) {
     problems.push('TOO_MANY_LINKS');
@@ -243,9 +248,18 @@ export function readPackaging(value: unknown): PackagingSpec | null {
   if (!Number.isFinite(amount) || amount <= 0) return null;
   const amountUnit = normalizeBaseUnitText(raw.amountUnit);
   if (!amountUnit) return null;
-  const links = Array.isArray(raw.links)
-    ? raw.links.map(normalizeLink).filter((link): link is PackagingLink => link !== null)
-    : [];
+  // 有坏层就整体判读失败（返回 null，让调用方退回"只有倍数"的老口径）。
+  // 静默丢一层会让展示和后续编辑都少一层，倍数却还是老的 —— 越改越错。
+  if (raw.links !== undefined && raw.links !== null && !Array.isArray(raw.links)) {
+    return null;
+  }
+  const rawLinks = Array.isArray(raw.links) ? raw.links : [];
+  const links: PackagingLink[] = [];
+  for (const item of rawLinks) {
+    const link = normalizeLink(item);
+    if (!link) return null;
+    links.push(link);
+  }
   const amountLabelText = String(raw.amountLabel ?? '').trim();
   const printedText = String(raw.printedText ?? '').trim();
   return {

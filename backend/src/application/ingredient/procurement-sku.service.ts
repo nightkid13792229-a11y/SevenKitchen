@@ -135,6 +135,9 @@ export interface StaffCreatedProcurementSkuView {
   purchaseChannel: string | null;
   purchaseUnit: string | null;
   purchaseToBaseRatio: number | null;
+  /** 包装层级（2026-11-11）：后台编辑要用它，否则一保存就把真实层级拍平 */
+  packaging: PackagingSpec | null;
+  packagingText: string | null;
   currentPurchasePrice: number | null;
   isActive: boolean;
   createdById: string | null;
@@ -809,10 +812,16 @@ export class ProcurementSkuService {
       };
     }
 
+    // 通过字典归一（含别名：公斤→kg、只→个）。以前这里用严格"码相等"，
+    // 于是老数据里的「只」在识别路径能归到「个」、在保存路径却吃 400，两条口径相反。
     const purchaseUnit = rawUnit
-      ? normalizeOptionalPurchaseUnit(rawUnit, input.baseUnit, allowed.codes) ??
-        null
+      ? resolvePurchaseUnitCode(allowed.options, rawUnit, input.baseUnit)
       : null;
+    if (rawUnit && !purchaseUnit) {
+      throw new BadRequestException(
+        `采购单位「${rawUnit}」不在字典里，只能选：${allowed.codes.join('、')}`,
+      );
+    }
 
     const packRatio = this.resolvePurchaseToBaseRatioFromPackFacts({
       packCount: input.packCount,
@@ -864,16 +873,6 @@ export class ProcurementSkuService {
     if (!Number.isFinite(openingStock) || openingStock < 0) {
       throw new BadRequestException('期初库存必须是不小于 0 的数字');
     }
-    if (
-      openingStock > 0 &&
-      !(
-        Number(this.resolvePurchaseToBaseRatioFromPackFacts(dto) ?? 0) > 0 ||
-        Number(dto.purchaseToBaseRatio ?? 0) > 0
-      )
-    ) {
-      throw new BadRequestException('填了期初库存时，换算倍数必须大于 0');
-    }
-
     const written = await this.resolvePackagingForWrite({
       baseUnit: ingredient!.baseUnit,
       purchaseUnit: dto.purchaseUnit,
@@ -884,6 +883,15 @@ export class ProcurementSkuService {
       printedText: dto.productModel,
       skuName: dto.name,
     });
+
+    /**
+     * 期初库存要按**实际落库的倍数**判断（2026-11-11 复核修）：
+     * 原来这里只看 packCount / purchaseToBaseRatio，于是"只填了层级 + 期初库存"
+     * 的新建请求会被误判成"没填换算"直接 400。
+     */
+    if (openingStock > 0 && !(written.ratio > 0)) {
+      throw new BadRequestException('填了期初库存时，换算倍数必须大于 0');
+    }
 
     const data = {
       ingredientId,
@@ -1338,27 +1346,33 @@ export class ProcurementSkuService {
      * 单独传 `purchaseToBaseRatio` 直接拒绝 —— 后台把「1 盒 = 1500 克」改成 5000
      * 而规格还写着 30 枚 1.59kg，是这次要根治的那类静默错账。
      */
-    const ratioOnly =
-      dto.purchaseToBaseRatio !== undefined &&
-      dto.packaging === undefined &&
-      (dto.packCount === undefined || dto.packCount === null);
-    if (ratioOnly) {
+    const hasPackaging = dto.packaging !== undefined && dto.packaging !== null;
+    const hasPackFacts = dto.packCount !== undefined && dto.packCount !== null;
+    const unitChanged =
+      dto.purchaseUnit !== undefined &&
+      String(dto.purchaseUnit ?? '').trim() !== String(existing.purchaseUnit ?? '').trim();
+
+    if (dto.purchaseToBaseRatio !== undefined && !hasPackaging && !hasPackFacts) {
       throw new BadRequestException(
         '换算倍数由包装层级自动算，请在层级里改（一箱 = 几层 × 每件多少）',
       );
     }
 
-    const packagingTouched =
-      (dto.packaging !== undefined && dto.packaging !== null) ||
-      (dto.packCount !== undefined && dto.packCount !== null);
-    if (packagingTouched) {
+    // 只改单位、不给层级：等于"1 箱 = 30 枚 × 53 克"这种自相矛盾的组合，直接拒。
+    if (unitChanged && !hasPackaging && !hasPackFacts) {
+      throw new BadRequestException(
+        '改采购单位时请一起提交包装层级（否则层级还按旧单位在说）',
+      );
+    }
+
+    if (hasPackaging || hasPackFacts) {
       const written = await this.resolvePackagingForWrite({
         baseUnit: existing.ingredient.baseUnit,
         purchaseUnit: dto.purchaseUnit ?? existing.purchaseUnit,
-        packaging: dto.packaging ?? readPackaging(existing.packaging) ?? null,
+        // 有层级用层级；只有"件数 + 净含量"时交给 helper 折叠（不能再拿旧层级顶替）
+        packaging: hasPackaging ? dto.packaging : undefined,
         packCount: dto.packCount,
         netContentPerPack: dto.netContentPerPack,
-        ratio: existing.purchaseToBaseRatio,
         printedText: dto.productModel ?? existing.productModel,
         skuName: dto.name ?? '未命名',
       });
@@ -1369,14 +1383,17 @@ export class ProcurementSkuService {
       const allowedUnits = await this.resolveAllowedPurchaseUnits(
         existing.ingredient.baseUnit,
       );
-      const purchaseUnit = normalizeOptionalPurchaseUnit(
+      const purchaseUnit = resolvePurchaseUnitCode(
+        allowedUnits.options,
         dto.purchaseUnit,
         existing.ingredient.baseUnit,
-        allowedUnits.codes,
       );
-      if (purchaseUnit !== undefined) {
-        data.purchaseUnit = purchaseUnit;
+      if (!purchaseUnit) {
+        throw new BadRequestException(
+          `采购单位「${dto.purchaseUnit}」不在字典里，只能选：${allowedUnits.codes.join('、')}`,
+        );
       }
+      data.purchaseUnit = purchaseUnit;
     }
 
     const nextCurrentPurchasePrice =
@@ -1700,6 +1717,14 @@ export class ProcurementSkuService {
         purchaseChannel: row.purchaseChannel ?? null,
         purchaseUnit: row.purchaseUnit ?? null,
         purchaseToBaseRatio: row.purchaseToBaseRatio ?? null,
+        packaging: resolveRecordPackaging({
+          ...row,
+          ingredient: row.ingredient ?? undefined,
+        } as ProcurementSkuRecord),
+        packagingText: summaryPackagingText({
+          ...row,
+          ingredient: row.ingredient ?? undefined,
+        } as ProcurementSkuRecord),
         currentPurchasePrice: toNullableNumber(row.currentPurchasePrice),
         isActive: row.isActive,
         createdById: row.createdById ?? null,

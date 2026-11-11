@@ -72,7 +72,9 @@ describe('订单截图 · 上传与识别', () => {
     );
 
     expect(stages).toEqual([uploadStageText(1, 2), uploadStageText(2, 2), RECOGNIZE_STAGE_TEXT]);
-    expect(mocks.recognize).toHaveBeenCalledWith('list-1', ['u1', 'u2'], ['k1', 'k2']);
+    expect(mocks.recognize).toHaveBeenCalledWith('list-1', ['u1', 'u2'], ['k1', 'k2'], {
+      suppressErrorToast: true,
+    });
     expect(result).toEqual({ ok: true, count: 2 });
   });
 

@@ -79,3 +79,31 @@ describe('补货首页信息层级（2026-11-11）', () => {
     expect(pagesJson).toContain('"enablePullDownRefresh": true');
   });
 });
+
+describe('补货识别失败提示（2026-11-11 真机）', () => {
+  const startRecord = source.slice(
+    source.indexOf('const startRecord'),
+    source.indexOf('const startManualRecord'),
+  );
+
+  it('先关 loading，再用弹窗说清楚失败原因，不让提示被吞', () => {
+    expect(startRecord).toContain('failureMessage');
+    expect(startRecord).toContain("title: '识别失败'");
+    expect(startRecord).toContain('showModal');
+    expect(startRecord).not.toContain('showToast');
+  });
+
+  it('错误提示交给页面弹窗，请求层不再同时弹 toast', () => {
+    expect(startRecord).toContain('suppressErrorToast: true');
+  });
+
+  it('部分图失败时先说原因，再继续核对成功的那几张', () => {
+    expect(startRecord).toContain('张没识别成功');
+    expect(startRecord).toContain('继续核对');
+    expect(startRecord).toContain('其余 ${draftIds.length} 张可以继续核对');
+  });
+
+  it('多张时告诉员工是第几张出的问题', () => {
+    expect(startRecord).toContain('第 ${index + 1} 张：${reason}');
+  });
+});

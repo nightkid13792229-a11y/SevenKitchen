@@ -465,6 +465,7 @@ const startRecord = async () => {
   uni.showLoading({ title: '上传中...', mask: true });
   const draftIds: string[] = [];
   let failedCount = 0;
+  let failureMessage = '';
   try {
     for (let index = 0; index < paths.length; index += 1) {
       uni.showLoading({
@@ -487,37 +488,55 @@ const startRecord = async () => {
           draftId,
           [uploaded.url],
           [uploaded.key],
+          { suppressErrorToast: true },
         );
         if (importRes?.code !== 0) {
           throw new Error(importRes?.message || '识别失败');
         }
         draftIds.push(draftId);
-      } catch (error) {
+      } catch (error: any) {
         failedCount += 1;
+        if (!failureMessage) {
+          const reason = String(error?.message || '识别失败，请重试');
+          failureMessage =
+            paths.length > 1 ? `第 ${index + 1} 张：${reason}` : reason;
+        }
         console.error('补货截图识别失败', error);
       }
     }
-
-    uni.hideLoading();
-    if (draftIds.length === 0) {
-      uni.showToast({ title: '识别失败，请重试', icon: 'none' });
-      return;
-    }
-    uni.navigateTo({
-      url: `/pages/staff-purchasing/order-import/review?ids=${draftIds.join(',')}&mode=replenishment`,
-      success: () => {
-        if (failedCount > 0) {
-          uni.showToast({
-            title: `${failedCount} 张没识别成功，其余可继续核对`,
-            icon: 'none',
-          });
-        }
-      },
-    });
   } finally {
+    // 先关 loading，再弹说明：反过来的话弹窗/提示会被 hideLoading 一起收掉，
+    // 员工只看到「识别中」然后什么都没发生（2026-11-11 真机踩过）。
     uni.hideLoading();
     starting.value = false;
   }
+
+  if (draftIds.length === 0) {
+    uni.showModal({
+      title: '识别失败',
+      content: failureMessage || '没读到订单，请换一张订单详情截图重试。',
+      showCancel: false,
+      confirmText: '知道了',
+    });
+    return;
+  }
+
+  if (failedCount > 0) {
+    await new Promise<void>((resolve) => {
+      uni.showModal({
+        title: `${failedCount} 张没识别成功`,
+        content: `${failureMessage || '请重试'}\n其余 ${draftIds.length} 张可以继续核对。`,
+        showCancel: false,
+        confirmText: '继续核对',
+        success: () => resolve(),
+        fail: () => resolve(),
+      });
+    });
+  }
+
+  uni.navigateTo({
+    url: `/pages/staff-purchasing/order-import/review?ids=${draftIds.join(',')}&mode=replenishment`,
+  });
 };
 
 const startManualRecord = async () => {

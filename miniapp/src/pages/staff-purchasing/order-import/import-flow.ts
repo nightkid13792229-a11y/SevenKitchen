@@ -83,6 +83,7 @@ export async function importOrderShots(
       purchaseListId,
       uploaded.map((item) => item.url),
       uploaded.map((item) => item.key),
+      { suppressErrorToast: true },
     );
     if (res?.code !== 0) {
       throw new Error(res?.message || '识别失败');

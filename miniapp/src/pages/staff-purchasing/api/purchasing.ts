@@ -1294,6 +1294,7 @@ export function importOrderScreenshots(
   purchaseListId: string,
   imageUrls: string[],
   imageKeys: string[],
+  options?: { suppressErrorToast?: boolean },
 ) {
   return request({
     url: `/staff/purchasing/lists/${purchaseListId}/order-imports`,
@@ -1301,6 +1302,8 @@ export function importOrderScreenshots(
     data: { imageUrls, imageKeys },
     // 识别要调视觉模型，最长约 90 秒；默认 15 秒会先超时，服务端其实还在跑。
     timeout: 120000,
+    // 调用方会先把 loading 关掉、再用弹窗说明原因；这里再弹 toast 会被 loading 吃掉
+    suppressErrorToast: options?.suppressErrorToast,
   });
 }
 

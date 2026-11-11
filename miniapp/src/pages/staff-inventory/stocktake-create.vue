@@ -139,6 +139,9 @@ const visibleLines = computed(() =>
 );
 
 const hydrate = (draft: any) => {
+  if (!draft?.id) {
+    throw new Error('盘点单没有生成，请重试');
+  }
   stocktakeId.value = draft.id;
   lines.value = (draft.lines || []).map((line: any) => ({
     ingredientId: line.ingredientId,
@@ -278,6 +281,10 @@ const restart = async () => {
 };
 
 const onCancel = async () => {
+  if (!stocktakeId.value) {
+    uni.navigateBack();
+    return;
+  }
   const confirmed = await new Promise<boolean>((resolve) => {
     uni.showModal({
       title: '取消盘点',

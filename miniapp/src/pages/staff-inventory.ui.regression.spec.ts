@@ -173,3 +173,13 @@ describe('staff inventory stocktake entry (final)', () => {
     expect(records).toContain('盘点');
   });
 });
+
+describe('inventory API unwraps the response envelope (2026-11-11)', () => {
+  const api = readPage('staff-inventory/api/inventory.ts');
+
+  it('returns data instead of { code, data, message }', () => {
+    expect(api).toContain('function requestData');
+    expect(api).toContain('response.data as T');
+    expect(api).not.toContain('return request<');
+  });
+});

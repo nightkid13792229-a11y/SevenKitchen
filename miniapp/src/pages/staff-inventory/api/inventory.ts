@@ -5,6 +5,12 @@
 
 import { request } from '../../../utils/api';
 
+/** 后端统一返回 { code, data, message }；库存页面直接用 data。 */
+async function requestData<T>(options: any): Promise<T> {
+  const response = await request<T>(options);
+  return response.data as T;
+}
+
 export type InventoryIngredientType = 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
 export type InventoryStockStatus =
   | 'NO_POLICY'
@@ -155,7 +161,7 @@ export function getInventoryOverview(params?: {
   type?: InventoryIngredientType;
   onlyNeedsReplenishment?: boolean;
 }) {
-  return request<InventoryOverviewItem[]>({
+  return requestData<InventoryOverviewItem[]>({
     url: '/staff/inventory/overview',
     method: 'GET',
     data: params,
@@ -166,7 +172,7 @@ export function getInventoryLedger(params?: {
   ingredientId?: string;
   limit?: number;
 }) {
-  return request<InventoryLedgerItem[]>({
+  return requestData<InventoryLedgerItem[]>({
     url: '/staff/inventory/ledger',
     method: 'GET',
     data: params,
@@ -174,7 +180,7 @@ export function getInventoryLedger(params?: {
 }
 
 export function getInventoryStocktakes(params?: { limit?: number }) {
-  return request<InventoryStocktakeItem[]>({
+  return requestData<InventoryStocktakeItem[]>({
     url: '/staff/inventory/stocktakes',
     method: 'GET',
     data: params,
@@ -182,14 +188,14 @@ export function getInventoryStocktakes(params?: { limit?: number }) {
 }
 
 export function getStocktakeDraft() {
-  return request<StocktakeDraftItem | null>({
+  return requestData<StocktakeDraftItem | null>({
     url: '/staff/inventory/stocktakes/draft',
     method: 'GET',
   });
 }
 
 export function startStocktake(note?: string) {
-  return request<StocktakeDraftItem>({
+  return requestData<StocktakeDraftItem>({
     url: '/staff/inventory/stocktakes',
     method: 'POST',
     data: note ? { note } : {},
@@ -197,7 +203,7 @@ export function startStocktake(note?: string) {
 }
 
 export function getStocktake(id: string) {
-  return request<StocktakeDraftItem | InventoryStocktakeItem>({
+  return requestData<StocktakeDraftItem | InventoryStocktakeItem>({
     url: `/staff/inventory/stocktakes/${id}`,
     method: 'GET',
   });
@@ -207,7 +213,7 @@ export function saveStocktakeLines(
   id: string,
   lines: Array<{ ingredientId: string; countedQuantityG: number | null }>,
 ) {
-  return request<StocktakeDraftItem>({
+  return requestData<StocktakeDraftItem>({
     url: `/staff/inventory/stocktakes/${id}/lines`,
     method: 'PATCH',
     data: { lines },
@@ -215,7 +221,7 @@ export function saveStocktakeLines(
 }
 
 export function previewStocktake(id: string, confirmPartial = false) {
-  return request<StocktakePreviewItem>({
+  return requestData<StocktakePreviewItem>({
     url: `/staff/inventory/stocktakes/${id}/preview`,
     method: 'GET',
     data: confirmPartial ? { confirmPartial: 'true' } : {},
@@ -223,7 +229,7 @@ export function previewStocktake(id: string, confirmPartial = false) {
 }
 
 export function submitStocktake(id: string, note?: string) {
-  return request<InventoryStocktakeItem>({
+  return requestData<InventoryStocktakeItem>({
     url: `/staff/inventory/stocktakes/${id}/submit`,
     method: 'POST',
     data: { note },
@@ -231,7 +237,7 @@ export function submitStocktake(id: string, note?: string) {
 }
 
 export function cancelStocktake(id: string) {
-  return request<{ cancelled: boolean }>({
+  return requestData<{ cancelled: boolean }>({
     url: `/staff/inventory/stocktakes/${id}`,
     method: 'DELETE',
   });
@@ -241,7 +247,7 @@ export function reviewStocktake(
   id: string,
   data: { approve: boolean; note?: string },
 ) {
-  return request<InventoryStocktakeItem>({
+  return requestData<InventoryStocktakeItem>({
     url: `/admin/inventory/stocktakes/${id}/review`,
     method: 'POST',
     data,
@@ -273,7 +279,7 @@ export function createInventoryAdjustment(data: {
   category: InventoryAdjustmentCategory;
   note?: string;
 }) {
-  return request<InventoryAdjustmentItem>({
+  return requestData<InventoryAdjustmentItem>({
     url: '/staff/inventory/adjustments',
     method: 'POST',
     data,
@@ -299,7 +305,7 @@ export interface InventoryHome {
 }
 
 export function getInventoryHome() {
-  return request<InventoryHome>({
+  return requestData<InventoryHome>({
     url: '/staff/inventory/home',
     method: 'GET',
   });

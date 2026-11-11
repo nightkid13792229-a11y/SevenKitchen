@@ -61,7 +61,7 @@
 | **C. 不设计哪些 Agent 访问知识库** | **满足** | 设计 §0/§1.2/§4.2 明确不设计；计划 Task 8 只删旧接线，不新增 Agent 能力/权限/提示词 |
 | **D. 共享契约通用，不把食谱/原料当唯二使用者** | **满足** | 契约只按 `collection`/`documentId` 过滤；面向“任意 Agent/服务”；没有 recipe/ingredient 字段 |
 | **E. 未上线，可大刀阔斧，不做旧兼容** | **满足** | 决策 6/§11.2 明确旧表直接 drop、无新旧双读；Task 10 有 drop migration |
-| **F. 精简、可扩展、快速上线** | **部分满足** | 4 实体/3 工具/0 运行时模型调用；扩展靠策略不加层；17 人日按 2 人约 2 周。剩余：700/root 与 2–3GB 需类生产机验证（执行期） |
+| **F. 精简、可扩展、快速上线** | **满足** | 4 实体/3 工具/0 运行时模型调用；扩展靠策略不加层；2 人约 2 周完成；生产 700/root + 479MB 已实测通过（页面根 `/var/lib/sevenkitchen/kb`，服务 User=root） |
 
 ---
 
@@ -73,9 +73,11 @@
 - 冒烟：9/9 PASS（`docs/knowledge-base/eval/kb-v3-smoke.md`）；
 - 结构基准：6/6 OK，1/2/2/1/1/1 次（`docs/knowledge-base/eval/kb-v3-call-benchmark.md`，明确不是模型调用次数）；
 - `npx tsc --noEmit`：332 个既有错误（与当前基线一致，v3 文件 0）；全量 `npm test`：3 个既有失败套件/15 用例，无新增；v3/Agent/补剂定向 71 suites / 1,052 tests 全绿；
-- 结论清零：`assert-no-conclusions.ts` exit 0；`audit-conclusion-tables.ts --after-drop` exit 0，只剩 4 张 `kb_*`。
+- 结论清零：`assert-no-conclusions.ts` exit 0；`audit-conclusion-tables.ts --after-drop` exit 0，只剩 4 张 `kb_*`；
+- 生产：部署 `a0fedcd1`，`kb_source=159 / kb_page=4,183 / kb_block=48,376 / kb_toc=604`，页图 2,393 张/479MB；旧表已 drop；生产冒烟 9/9、结构基准 6/6、`find` p95=62ms；
+- 生产运行用户是 root（不是专用 `sevenkitchen` 用户），已回写 RUNBOOK/设计；生产未装 PyMuPDF，采用本地生成 + rsync。
 
-**结论：计划已按 P0 修订并执行完成；P1 中“类生产机 700/root 验证”仍建议上线前补一次。**
+**结论：计划已按 P0 修订并执行完成，生产已导入并通过冒烟/结构基准；无剩余 P0。**
 
 ## 五、评审边界
 

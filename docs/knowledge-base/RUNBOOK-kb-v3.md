@@ -4,6 +4,9 @@
 > 设计：[2026-11-11-kb-v3-design.md](2026-11-11-kb-v3-design.md)；
 > 实施计划：[2026-11-11-kb-v3-implementation.md](../superpowers/plans/2026-11-11-kb-v3-implementation.md)。
 > 本手册覆盖：依赖、生产路径、首次导入、增量、冒烟、结构基准、回滚、已知限制。
+>
+> **2026-11-12 生产状态**：已按本手册导入 159 份 / 4,183 页 / 48,376 块 / 604 目录，页图 2,393 张 / 479 MB；
+> 生产 `kb:v3:smoke` 9/9 PASS、`kb:v3:bench` 6/6 OK；`KB_PAGE_IMAGE_ROOT=/var/lib/sevenkitchen/kb/page-images`。
 
 ---
 
@@ -21,7 +24,7 @@
 | Python 3 + PyMuPDF（`fitz`） | 解析 PDF、渲染页图 | `python3 -c "import fitz; print(fitz.__doc__)"` |
 | PostgreSQL `pg_trgm` | `kb_find` 的 ILIKE/CJK/表题兜底索引 | 迁移里的 `CREATE EXTENSION IF NOT EXISTS pg_trgm`；数据库账号需有建扩展权限 |
 | 原文归档读权限 | 解析/渲染读取 PDF/XML/TXT/EPUB | 生产归档 `/opt/sevenkitchen/knowledge-sources` 是 `700`、root 属主 → 用 root（或受权组）跑解析/渲染 |
-| 后端运行用户 | 只读数据库 + 页图目录 | 生产为 `sevenkitchen`；产物必须 `chown sevenkitchen:sevenkitchen` |
+| 后端运行用户 | 只读数据库 + 页图目录 | 当前生产 systemd `User=root`（2026-11-12 实测）；产物 root:root 750。若将来改成非 root，再 chown 到该用户 |
 | 磁盘 | 页级 JSON + 页图 | `df -h`，至少留 **6 GB**（设计按 2–3 GB 预估的 2×） |
 
 安装/检查：
@@ -55,9 +58,9 @@ sudo -u postgres psql -d sevenkitchen -c "SELECT extname FROM pg_extension WHERE
 目录权限：
 
 ```bash
-sudo install -d -o sevenkitchen -g sevenkitchen -m 750 /var/lib/sevenkitchen/kb
-sudo install -d -o sevenkitchen -g sevenkitchen -m 750 /var/lib/sevenkitchen/kb/page-layer
-sudo install -d -o sevenkitchen -g sevenkitchen -m 750 /var/lib/sevenkitchen/kb/page-images
+sudo install -d -o root -g root -m 750 /var/lib/sevenkitchen/kb
+sudo install -d -o root -g root -m 750 /var/lib/sevenkitchen/kb/page-layer
+sudo install -d -o root -g root -m 750 /var/lib/sevenkitchen/kb/page-images
 ```
 
 > 本地开发的默认页图根是 **相对 backend cwd 的** `../docs/knowledge-base/page-images`
@@ -66,53 +69,64 @@ sudo install -d -o sevenkitchen -g sevenkitchen -m 750 /var/lib/sevenkitchen/kb/
 
 ---
 
-## 3. 首次导入（一次性 root job）
+## 3. 首次导入
 
-在**部署了本分支代码的目录**（后端工作目录）执行。先做磁盘检查，不足 6 GB 就停：
+先做磁盘检查，不足 6 GB 就停：
 
 ```bash
 df -h /var/lib/sevenkitchen/kb
 # 小于 6 GB 可用 → 停止，先清盘/扩容
 ```
 
-### 3.1 解析（root，读受保护原文）
+### 3.1 生成页级 JSON 与页图（生成端，当前生产做法）
+
+当前生产机**没有装 PyMuPDF**，所以解析/渲染在本地或构建机做，再把产物 rsync 上去。
+在仓库根执行：
 
 ```bash
-cd /opt/sevenkitchen/SevenKitchen
-sudo python3 docs/knowledge-base/tools/build-page-layer.py \
-  --archive /opt/sevenkitchen/knowledge-sources \
-  --out /var/lib/sevenkitchen/kb/page-layer \
-  --force
+cd /Users/zhaochen/Documents/SevenKitchen
+
+python3 docs/knowledge-base/tools/build-page-layer.py \
+  --archive "$HOME/Documents/SevenKitchen-knowledge-sources" \
+  --out docs/knowledge-base/page-layer --force
+
+python3 docs/knowledge-base/tools/render-page-images.py \
+  --archive "$HOME/Documents/SevenKitchen-knowledge-sources" \
+  --layer docs/knowledge-base/page-layer \
+  --out docs/knowledge-base/page-images --dpi 110
 ```
 
-预期：`parsed=159 skipped=0 failed=0`；`page-layer/` 159 个 JSON。
-非 PDF（XML/TXT/EPUB）按 ~3,000 字切伪页，`imagePath=null`。
+预期：`parsed=159 skipped=0 failed=0`；页图 `rendered=2,393`（本机），`page-layer/` 33 MB、`page-images/` 479 MB。
+非 PDF（XML/TXT/EPUB）按 ~3,000 字切伪页，`imagePath=null`；页图是断点续渲，重跑安全。
 
-### 3.2 渲染页图（root）
+> 如果生产机以后装了 PyMuPDF，也可以把同一脚本放到服务器上、以 root 读 `/opt/sevenkitchen/knowledge-sources` 直接生成；
+> 当前不依赖这个路径。
+
+### 3.2 上传到生产
 
 ```bash
-cd /opt/sevenkitchen/SevenKitchen
-sudo python3 docs/knowledge-base/tools/render-page-images.py \
-  --archive /opt/sevenkitchen/knowledge-sources \
-  --layer /var/lib/sevenkitchen/kb/page-layer \
-  --out /var/lib/sevenkitchen/kb/page-images \
-  --dpi 110
+rsync -az docs/knowledge-base/page-layer/ \
+  root@1.14.3.2:/var/lib/sevenkitchen/kb/page-layer/
+rsync -az docs/knowledge-base/page-images/ \
+  root@1.14.3.2:/var/lib/sevenkitchen/kb/page-images/
 ```
 
-预期：`rendered=<PDF 页数> skipped=0 failed=0`（本机 2,393）。
-渲染是断点续渲：已存在的页图跳过；重复跑安全。
+预期：`page-layer` 159 个 JSON；`page-images` 2,393 张 JPG。
 
-### 3.3 交给后端用户
+### 3.3 生产目录权限
+
+当前生产 systemd `User=root`，产物归 root：
 
 ```bash
-sudo chown -R sevenkitchen:sevenkitchen /var/lib/sevenkitchen/kb
+sudo chown -R root:root /var/lib/sevenkitchen/kb
 sudo chmod -R 750 /var/lib/sevenkitchen/kb
 sudo find /var/lib/sevenkitchen/kb -type f -exec chmod 640 {} \;
 ```
 
-最后一行把文件从 750 收窄到 640（目录保持 750），避免同组外可执行/可写。
+最后一行把文件从 750 收窄到 640（目录保持 750）。若将来服务改成非 root 用户，
+把 `root:root` 换成该用户，并确保它只读页图目录。
 
-### 3.4 导入数据库（后端用户）
+### 3.4 导入数据库
 
 ```bash
 cd /opt/sevenkitchen/SevenKitchen/backend
@@ -123,7 +137,23 @@ npx ts-node -r tsconfig-paths/register scripts/knowledge-v3/import-page-layer.ts
 预期：`imported=159 skipped=0 failed=0`。导入按 `sourceId` 整本重建、可重跑；
 每个文件一个事务（大文档 120s 超时），页 200/批、块 1,000/批。
 
-### 3.5 校验
+### 3.5 环境变量与重启
+
+生产 `.env` 必须有：
+
+```text
+KB_PAGE_IMAGE_ROOT=/var/lib/sevenkitchen/kb/page-images
+KB_PAGE_LAYER_DIR=/var/lib/sevenkitchen/kb/page-layer
+```
+
+然后：
+
+```bash
+sudo systemctl restart sevenkitchen-backend
+curl -s http://127.0.0.1:3000/api/v1/health
+```
+
+### 3.6 校验
 
 ```bash
 cd /opt/sevenkitchen/SevenKitchen/backend
@@ -131,43 +161,40 @@ npx ts-node -r tsconfig-paths/register scripts/knowledge-v3/import-page-layer.ts
   --dir /var/lib/sevenkitchen/kb/page-layer --dry-run
 ```
 
-有数据后核对四张表（本机基线：4,183 页 / 48,376 块 / 604 目录 / 159 书）：
+有数据后核对四张表（本机/生产基线：4,183 页 / 48,376 块 / 604 目录 / 159 书）：
 
 ```sql
 SELECT count(*) FROM kb_source;  -- 159
-SELECT count(*) FROM kb_page;    -- 本机 4,183
-SELECT count(*) FROM kb_block;   -- 本机 48,376
-SELECT count(*) FROM kb_toc;     -- 本机 604
+SELECT count(*) FROM kb_page;    -- 4,183
+SELECT count(*) FROM kb_block;   -- 48,376
+SELECT count(*) FROM kb_toc;     -- 604
 ```
 
 也可以直接用 Prisma/psql 只读查询；不要手写 SQL 改库（规则见 `AGENTS.md`）。
 
----
-
 ## 4. 增量：只重做一份文档
 
-原文更新/新增后，只处理该 `sourceId`（= `source-layer/<docId>.json` 的文件名）：
+原文更新/新增后，只处理该 `sourceId`（= `source-layer/<docId>.json` 的文件名）。
+当前生产没有 PyMuPDF，按“本地生成 → rsync 这一份 → 导入”：
 
 ```bash
-# 1) 解析这一份（root）
-sudo python3 docs/knowledge-base/tools/build-page-layer.py \
-  --archive /opt/sevenkitchen/knowledge-sources \
-  --out /var/lib/sevenkitchen/kb/page-layer \
-  --only <sourceId> --force
+# 0) 生成端（仓库根）
+cd /Users/zhaochen/Documents/SevenKitchen
+python3 docs/knowledge-base/tools/build-page-layer.py \
+  --archive "$HOME/Documents/SevenKitchen-knowledge-sources" \
+  --out docs/knowledge-base/page-layer --only <sourceId> --force
+python3 docs/knowledge-base/tools/render-page-images.py \
+  --archive "$HOME/Documents/SevenKitchen-knowledge-sources" \
+  --layer docs/knowledge-base/page-layer \
+  --out docs/knowledge-base/page-images --only <sourceId> --dpi 110
 
-# 2) 只渲染这一份（root）
-sudo python3 docs/knowledge-base/tools/render-page-images.py \
-  --archive /opt/sevenkitchen/knowledge-sources \
-  --layer /var/lib/sevenkitchen/kb/page-layer \
-  --out /var/lib/sevenkitchen/kb/page-images \
-  --only <sourceId> --dpi 110
+# 1) 只上传这一份
+rsync -az docs/knowledge-base/page-layer/<sourceId>.json \
+  root@1.14.3.2:/var/lib/sevenkitchen/kb/page-layer/
+rsync -az docs/knowledge-base/page-images/<sourceId>/ \
+  root@1.14.3.2:/var/lib/sevenkitchen/kb/page-images/<sourceId>/
 
-# 3) chown 这一份产物
-sudo chown -R sevenkitchen:sevenkitchen \
-  /var/lib/sevenkitchen/kb/page-layer/<sourceId>.json \
-  /var/lib/sevenkitchen/kb/page-images/<sourceId>
-
-# 4) 只导入这一份（后端用户）
+# 2) 只导入这一份
 cd /opt/sevenkitchen/SevenKitchen/backend
 npx ts-node -r tsconfig-paths/register scripts/knowledge-v3/import-page-layer.ts \
   --dir /var/lib/sevenkitchen/kb/page-layer --only <sourceId>
@@ -177,6 +204,7 @@ npx ts-node -r tsconfig-paths/register scripts/knowledge-v3/import-page-layer.ts
 再跑上面的步骤。导入是幂等的：同一 `sourceId` 重复导入会先删旧页/块/目录再重建。
 
 > 渲染脚本的 `--only` 只按页级 JSON 的 `sourceId` 匹配；若该文档是非 PDF（无页图），第 2 步会 0 渲染，正常。
+> 如果生产以后装了 PyMuPDF，可把第 0 步换回服务器上以 root 跑（参数同本地，路径用 `/opt/sevenkitchen/knowledge-sources` 与 `/var/lib/...`）。
 
 ---
 

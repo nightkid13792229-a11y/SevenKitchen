@@ -28,7 +28,7 @@
 - **不做旧接口兼容**：旧表、旧服务、旧控制器、旧脚本、旧测试直接删除。
 - **生成物不进 git**：`docs/knowledge-base/page-layer/`、`docs/knowledge-base/page-images/` 加入 `.gitignore`；只提交解析器、导入器、fixture。
 - **测试命令**：`cd backend && npm test -- <path>`；类型检查 `npx tsc --noEmit`。联调期间不要跑 `npm run build`（会删 `dist`，弄死本机后端）。
-- **tsc 基线**：2026-11-11 在干净 `669fb492` 上 `npx tsc --noEmit` 有 **333 个既有错误**；Task 8 删旧 citation 测试后为 **332**。以每个 Task 开始时的当前数为基线；本计划的类型验收 = **新增/改动文件 0 错误**、全仓错误数与基线一致；不要声称“全仓 tsc 绿”。
+- **tsc 基线**：2026-11-11 在干净 `669fb492` 上 `npx tsc --noEmit` 有 **333 个既有错误**；Task 8 删旧 citation 测试后为 **332**；2026-11-12 合并 `origin/main` 后为 **357**（main 新增库存相关 25 个既有错误，v3 仍 0）。以合并后当前数为基线；本计划的类型验收 = **新增/改动文件 0 错误**、全仓错误数与基线一致；不要声称“全仓 tsc 绿”。
 - **测试基线**：2026-11-11 全量 `npm test` 有 **3 个既有失败套件 / 15 个失败用例**（`custom-recipe-aftersale`、`supplement-order`、`standard-ingredient-import`，日期/报价相关），与本计划无关。验收 = **v3 定向测试全绿 + 全量测试失败集合与基线一致（不新增）**；不要声称“全量 npm test 全绿”。
 - **测试不许只有注释**：每个新增 `it` 至少一个 `expect`；TDD 的“先失败”必须看到真实断言失败。
 - **merge 在工位执行**：`bash scripts/session.sh merge` 必须在 worktree 根目录跑。
@@ -1356,7 +1356,7 @@ bash scripts/session.sh commit -m "docs(knowledge): v3 运行手册、冒烟与�
 - [x] 图片型文档 `text` 可为空，但 `imagePath` 存在、可读；
 - [x] 负样本返回 `hits: []` + `searched`，无 `no_match` / “未覆盖”；
 - [x] `npm run kb:v3:smoke` 通过；`npm run kb:v3:bench` 的结构基准（reference caller）已知/未知/表题/整章 ≤ 目标；**不把它冒充模型调用次数**；
-- [x] `npx tsc --noEmit` 无新增错误（全仓=基线 332；v3 文件 0）；全量 `npm test` 失败集合=基线 3 个套件/15 用例（不新增）；v3/Agent/补剂定向测试全绿；
+- [x] `npx tsc --noEmit` 无新增错误（合并 main 后全仓=357；v3 文件 0）；全量 `npm test` 失败集合=基线 3 个套件/15 用例（不新增）；v3/Agent/补剂定向测试全绿；
 - [x] 设计文档与实现一致（如有偏差已回写）。
 
 ## 工作量估算

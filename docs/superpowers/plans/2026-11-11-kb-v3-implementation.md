@@ -28,7 +28,8 @@
 - **不做旧接口兼容**：旧表、旧服务、旧控制器、旧脚本、旧测试直接删除。
 - **生成物不进 git**：`docs/knowledge-base/page-layer/`、`docs/knowledge-base/page-images/` 加入 `.gitignore`；只提交解析器、导入器、fixture。
 - **测试命令**：`cd backend && npm test -- <path>`；类型检查 `npx tsc --noEmit`。联调期间不要跑 `npm run build`（会删 `dist`，弄死本机后端）。
-- **tsc 基线**：2026-11-11 在干净 `669fb492` 上 `npx tsc --noEmit` 有 **333 个既有错误**（主要是旧测试 fixture），不是本计划引入。本计划的类型验收 = **新增/改动文件 0 错误**、全仓错误数与基线一致；不要声称“全仓 tsc 绿”。`npm test` 才是全绿门禁。
+- **tsc 基线**：2026-11-11 在干净 `669fb492` 上 `npx tsc --noEmit` 有 **333 个既有错误**（主要是旧测试 fixture），不是本计划引入。本计划的类型验收 = **新增/改动文件 0 错误**、全仓错误数与基线一致；不要声称“全仓 tsc 绿”。
+- **测试基线**：2026-11-11 全量 `npm test` 有 **3 个既有失败套件 / 15 个失败用例**（`custom-recipe-aftersale`、`supplement-order`、`standard-ingredient-import`，日期/报价相关），与本计划无关。验收 = **v3 定向测试全绿 + 全量测试失败集合与基线一致（不新增）**；不要声称“全量 npm test 全绿”。
 - **测试不许只有注释**：每个新增 `it` 至少一个 `expect`；TDD 的“先失败”必须看到真实断言失败。
 - **merge 在工位执行**：`bash scripts/session.sh merge` 必须在 worktree 根目录跑。
 
@@ -108,7 +109,7 @@ cd backend
 npx tsc --noEmit
 npm test -- tests/application/knowledge-base tests/application/health/health-analysis.service.spec.ts
 ```
-Expected: `npm test` 基线全绿（若个别真实语料测试 skipped，记录原因）；`npx tsc --noEmit` 基线有 333 个既有错误（见 Global Constraints），记录错误数，后续只对自己新增的错误负责。
+Expected: 记录 `npm test` 基线（3 个既有失败套件/15 个失败用例，见 Global Constraints）与 `npx tsc --noEmit` 的 333 个既有错误；后续只对自己新增的错误/失败负责。
 
 - [ ] **Step 3: 确认旧知识库没有真实流量**
 
@@ -1020,7 +1021,7 @@ Expected: FAIL，仍含 `search_knowledge`。
 - `prompt.ts`：删知识库相关段落（“知识库是图书馆…”“检索时给的 species/stage…”等）；
 - 补剂：删 `KnowledgeSearchService` 注入、`search_knowledge` 定义/case/context 字段；
 - 删除 2 个 citation 源文件（`citation-registry.ts`、`citation-judge.ts`）与 3 个测试（`citation-registry.spec.ts`、`citation-judge.spec.ts`、`citation-gate.spec.ts`）；如果 Step 1 枚举出别的 helper，一并删。
-- 注意：`dose-redaction`、`find_food`、`edit_recipe`、`assess` 等业务逻辑不动。
+- 注意：`dose-redaction`、`find_food`、`edit_recipe`、`assess` 等业务逻辑不动；但 `assess.targetOverrides` 依赖 citationId，随引用门禁一起从 Agent 工具移除；`RecipeDraftPort` 的 override 机制保留为死路径（不在本 Task 清理）。
 
 - [ ] **Step 3: 跑测试 + 类型检查**
 
@@ -1030,9 +1031,9 @@ cd backend
 npm test -- tests/application/ingredient-creation tests/application/recipe-designer
 npx tsc --noEmit
 ```
-Expected: PASS/无类型错误。硬门禁（命中即失败）：
+Expected: PASS/无类型错误。硬门禁（命中即失败，只查本任务清掉的调用方；旧 `src/application/knowledge-base/` 与 `tests/application/knowledge-base/` 里的评测脚本引用留到 Task 10 随目录删除）：
 ```bash
-if git grep -n -E "search_knowledge_library|open_knowledge|knowledge_scope|CitationRegistry|citation-judge|citation-gate" -- src tests; then
+if git grep -n -E "search_knowledge_library|open_knowledge|knowledge_scope|CitationRegistry|citation-judge|citation-gate" -- src/application/recipe-designer/agent src/application/ingredient-creation tests/application/recipe-designer tests/application/ingredient-creation; then
   echo "旧 citation/知识接线仍存在"; exit 1;
 fi
 ```
@@ -1324,7 +1325,7 @@ npm test
 cd ..
 git status --short
 ```
-Expected: `tsc` **无新增错误**（全仓错误数=基线 333；v3 文件 0 错误）、全量 `npm test` 绿；只包含本任务文件。
+Expected: `tsc` **无新增错误**（全仓错误数=基线 333；v3 文件 0 错误）、全量 `npm test` 失败集合=基线 3 个套件/15 用例（不新增）；只包含本任务文件。
 
 ```bash
 git add docs/knowledge-base/RUNBOOK-kb-v3.md docs/knowledge-base/eval/kb-v3-smoke.md docs/knowledge-base/eval/kb-v3-call-benchmark.md docs/knowledge-base/README.md docs/knowledge-base/2026-11-11-kb-v3-design.md
@@ -1343,7 +1344,7 @@ bash scripts/session.sh commit -m "docs(knowledge): v3 运行手册、冒烟与�
 - [ ] 图片型文档 `text` 可为空，但 `imagePath` 存在、可读；
 - [ ] 负样本返回 `hits: []` + `searched`，无 `no_match` / “未覆盖”；
 - [ ] `npm run kb:v3:smoke` 通过；`npm run kb:v3:bench` 的结构基准（reference caller）已知/未知/表题/整章 ≤ 目标；**不把它冒充模型调用次数**；
-- [ ] `npx tsc --noEmit` 无新增错误（全仓=基线 333；v3 文件 0）；`npm test` 全绿；
+- [ ] `npx tsc --noEmit` 无新增错误（全仓=基线 333；v3 文件 0）；全量 `npm test` 失败集合=基线 3 个套件/15 用例（不新增）；v3/Agent/补剂定向测试全绿；
 - [ ] `npx tsc --noEmit` 通过；全量 `npm test` 通过；
 - [ ] 设计文档与实现一致（如有偏差已回写）。
 

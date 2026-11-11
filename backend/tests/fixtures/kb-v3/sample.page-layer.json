@@ -1,0 +1,79 @@
+{
+  "source": {
+    "id": "doc-1",
+    "collection": "SACN5",
+    "title": "示例文档（2 页 fixture）",
+    "publisher": "SACN5",
+    "version": null,
+    "publishedYear": null,
+    "status": "unknown",
+    "license": "internal",
+    "checksum": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "archivePath": "sacn5/sample.pdf",
+    "pageCount": 2,
+    "hasTextLayer": true
+  },
+  "pages": [
+    {
+      "pageNo": 1,
+      "text": "第 1 页正文\n表 1：示例表",
+      "charCount": 15,
+      "width": 595.276,
+      "height": 841.89,
+      "imagePath": "doc-1/p0001.jpg",
+      "blocks": [
+        {
+          "id": "doc-1-p0001-b0001",
+          "kind": "paragraph",
+          "bbox": { "x0": 72.024, "y0": 100.519, "x1": 523.276, "y1": 140.203 },
+          "text": "第 1 页正文",
+          "caption": null,
+          "orderIndex": 1
+        },
+        {
+          "id": "doc-1-p0001-b0002",
+          "kind": "table",
+          "bbox": { "x0": 72.024, "y0": 180.512, "x1": 523.276, "y1": 400.75 },
+          "text": null,
+          "caption": "表 1：示例表",
+          "orderIndex": 2
+        }
+      ]
+    },
+    {
+      "pageNo": 2,
+      "text": "第 2 页正文",
+      "width": 595.276,
+      "height": 841.89,
+      "imagePath": "doc-1/p0002.jpg",
+      "blocks": [
+        {
+          "id": "doc-1-p0002-b0001",
+          "kind": "paragraph",
+          "bbox": { "x0": 72.024, "y0": 90.331, "x1": 523.276, "y1": 128.914 },
+          "text": "第 2 页正文",
+          "caption": null,
+          "orderIndex": 1
+        },
+        {
+          "id": "doc-1-p0002-b0002",
+          "kind": "figure",
+          "bbox": { "x0": 100.5, "y0": 200.25, "x1": 495.0, "y1": 500.75 },
+          "text": null,
+          "caption": "图 1：示例图",
+          "orderIndex": 2
+        }
+      ]
+    }
+  ],
+  "toc": [
+    {
+      "id": "doc-1-toc-1",
+      "title": "全文 1..2",
+      "level": 1,
+      "pageFrom": 1,
+      "pageTo": 2,
+      "orderIndex": 1
+    }
+  ]
+}

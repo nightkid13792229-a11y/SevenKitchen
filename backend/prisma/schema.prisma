@@ -1213,6 +1213,9 @@ model ProcurementSku {
   productModel                  String?                   @map("product_model") @db.VarChar(100)
   purchaseChannel               String?                   @map("purchase_channel") @db.VarChar(200)
   purchaseUnit                  String?                   @map("purchase_unit") @db.VarChar(50)
+  /// 包装层级（2026-11-11）：中间层 links + 末层 amount（恒为原料基准单位）。
+  /// 换算倍数由它派生并写入 purchaseToBaseRatio，任何接口不得单独改倍数。
+  packaging                     Json?                     @map("packaging")
   /// 2026-11-07 硬门禁：一个采购单位等于多少基准单位，不允许为空、必须 > 0。
   /// 为空会让采购数量没法折算，只能退回原料档案（食材恒为 1）→「2 盒记成 2 克」。
   purchaseToBaseRatio           Float                     @map("purchase_to_base_ratio")

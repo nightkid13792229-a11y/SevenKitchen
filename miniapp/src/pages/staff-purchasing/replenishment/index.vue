@@ -1,9 +1,5 @@
 <template>
   <view class="replenishment-page">
-    <view class="page-head">
-      <text class="page-subtitle">传订单截图记账；到货点「已到货」才进库存。</text>
-    </view>
-
     <view v-if="needs.length > 0" class="needs-card">
       <view class="needs-head" @tap="needsExpanded = !needsExpanded">
         <view class="needs-copy">
@@ -51,26 +47,22 @@
     </view>
 
     <button class="record-btn" :loading="starting" :disabled="starting" @tap="startRecord">
-      {{ starting ? '处理中...' : '记一笔补货' }}
+      {{ starting ? '处理中...' : 'AI识别采购订单' }}
     </button>
 
-    <text class="shot-hint">1 张 = 1 笔订单，同一单请截长图</text>
-
-    <view class="manual-entry" @tap="startManualRecord">
-      <text class="manual-title">手填一条</text>
-      <text class="manual-hint">不传截图，直接选商品</text>
-    </view>
-
-    <view class="filters">
-      <view
-        v-for="option in filterOptions"
-        :key="option.value"
-        class="filter-chip"
-        :class="{ active: activeFilter === option.value }"
-        @tap="selectFilter(option.value)"
-      >
-        <text>{{ option.label }}</text>
+    <view class="filter-row">
+      <view class="filters">
+        <view
+          v-for="option in filterOptions"
+          :key="option.value"
+          class="filter-chip"
+          :class="{ active: activeFilter === option.value }"
+          @tap="selectFilter(option.value)"
+        >
+          <text>{{ option.label }}</text>
+        </view>
       </view>
+      <button class="manual-btn" @tap="startManualRecord">手动填写</button>
     </view>
 
     <view v-if="loading && records.length === 0" class="state-card">
@@ -181,7 +173,6 @@ const errorText = ref('');
 let loadSeq = 0;
 const starting = ref(false);
 const startingManual = ref(false);
-let shotHintShown = false;
 const activeFilter = ref<FilterValue>('ALL');
 const page = ref(1);
 const pageSize = 20;
@@ -209,7 +200,7 @@ const emptyTitle = computed(() => {
 
 const emptyHint = computed(() =>
   activeFilter.value === 'ALL'
-    ? '下单后点「记一笔补货」，传订单截图就能记。'
+    ? '点上面的「AI识别采购订单」，传截图就能记。'
     : '换个筛选看看。',
 );
 
@@ -456,21 +447,6 @@ const startRecord = async () => {
     return;
   }
 
-  if (!shotHintShown) {
-    const understood = await new Promise<boolean>((resolve) => {
-      uni.showModal({
-        title: '1 张图 = 1 笔订单',
-        content:
-          '最多 5 张。同一笔订单请截长图；分成两张会记成两笔，报销也会翻倍。',
-        confirmText: '去选图',
-        success: (res) => resolve(Boolean(res.confirm)),
-        fail: () => resolve(false),
-      });
-    });
-    if (!understood) return;
-    shotHintShown = true;
-  }
-
   const chosen: any = await new Promise((resolve) => {
     uni.chooseImage({
       count: 5,
@@ -671,19 +647,6 @@ onPullDownRefresh(async () => {
   padding: 8rpx 0 8rpx 16rpx;
 }
 
-.page-head {
-  display: flex;
-  flex-direction: column;
-  gap: 10rpx;
-  margin-bottom: 24rpx;
-}
-
-.page-subtitle {
-  font-size: 26rpx;
-  color: #6b6653;
-  line-height: 1.6;
-}
-
 .in-transit-card {
   display: flex;
   align-items: center;
@@ -729,15 +692,26 @@ onPullDownRefresh(async () => {
   margin-bottom: 24rpx;
 }
 
-.filters {
+.filter-row {
   display: flex;
+  align-items: center;
   gap: 12rpx;
   margin-bottom: 20rpx;
-  flex-wrap: wrap;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  flex: 1;
+  min-width: 0;
 }
 
 .filter-chip {
-  padding: 10rpx 22rpx;
+  flex: none;
+  height: 56rpx;
+  line-height: 56rpx;
+  padding: 0 16rpx;
   border-radius: 999rpx;
   background: #f1efe5;
   border: 1rpx solid transparent;
@@ -746,6 +720,24 @@ onPullDownRefresh(async () => {
 .filter-chip text {
   font-size: 24rpx;
   color: #5b5748;
+}
+
+.manual-btn {
+  flex: none;
+  margin: 0;
+  padding: 0 20rpx;
+  height: 56rpx;
+  line-height: 54rpx;
+  border-radius: 999rpx;
+  background: #f4d58d;
+  border: 1rpx solid #e2c47c;
+  color: #3d3423;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.manual-btn::after {
+  border: none;
 }
 
 .filter-chip.active {
@@ -903,34 +895,6 @@ onPullDownRefresh(async () => {
 .load-more text {
   font-size: 24rpx;
   color: #6b6653;
-}
-
-.manual-entry {
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
-  padding: 18rpx 24rpx;
-  border-radius: 16rpx;
-  background: #f4f1e6;
-  border: 1rpx dashed #cfc8b4;
-}
-
-.manual-title {
-  font-size: 26rpx;
-  font-weight: 600;
-  color: #1e3a2f;
-}
-
-.manual-hint {
-  font-size: 22rpx;
-  color: #6b6653;
-}
-
-.shot-hint {
-  font-size: 24rpx;
-  color: #6b6653;
-  text-align: center;
-  margin-top: -8rpx;
 }
 
 .retry-btn {

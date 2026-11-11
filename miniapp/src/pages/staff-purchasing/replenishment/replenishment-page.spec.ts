@@ -8,7 +8,7 @@ const pagesJson = readFileSync(resolve(__dirname, '../../../pages.json'), 'utf8'
 describe('补货页', () => {
   it('has in-transit entry and record action', () => {
     expect(source).toContain('待收货');
-    expect(source).toContain('记一笔补货');
+    expect(source).toContain('AI识别采购订单');
     expect(source).toContain('createReplenishmentDraft');
     expect(source).toContain('importOrderScreenshots');
     expect(source).toContain('count: 5');
@@ -43,9 +43,23 @@ describe('补货列表 UX 收口', () => {
 });
 
 describe('补货首页信息层级（2026-11-11）', () => {
-  it('不再重复导航栏的「补货」标题', () => {
+  it('不再重复导航栏的「补货」标题，也不留说明段', () => {
     expect(source).not.toContain('class="page-title"');
-    expect(source).toContain('class="page-subtitle"');
+    expect(source).not.toContain('class="page-subtitle"');
+  });
+
+  it('传图不再弹首次确认窗', () => {
+    expect(source).not.toContain('shotHintShown');
+    expect(source).not.toContain("title: '1 张图 = 1 笔订单'");
+  });
+
+  it('手动填写和状态筛选同一行，并在最右边', () => {
+    expect(source).toContain('class="filter-row"');
+    expect(source).toContain('class="manual-btn"');
+    expect(source).toContain('手动填写');
+    expect(source.indexOf('class="filters"')).toBeLessThan(
+      source.indexOf('class="manual-btn"'),
+    );
   });
 
   it('缺货清单的「去库存看全部」可以直接点', () => {

@@ -4,7 +4,7 @@
 
 **Goal:** 把知识库从“节/段/表格 JSON/结论层”的检索模块，重构成“书 → 页 → 块 → 目录”的极简原文服务；只保留 `kb_catalog` / `kb_find` / `kb_read` 三个动作，删除 387 条结论和旧运行时。
 
-**Architecture:** 4 个实体（`kb_source` / `kb_page` / `kb_block` / `kb_toc`）+ 页/块全文索引 + 3 个通用动作。页是原子单位：一次 `read` 返回 3–5 页、表/图块、页图和锚点；调用次数靠“一次读多页”下降，不靠加工具、加约束或改提示词。运行时 0 次模型调用；表格不转录、图片不裁剪，模型直接看页图。
+**Architecture:** 4 个实体（`kb_source` / `kb_page` / `kb_block` / `kb_toc`）+ 页/块全文索引 + 3 个通用动作。页是原子单位：一次 `read` 返回 3–5 页、表/图块、页图和锚点；结构基准的调用次数靠“一次读多页”下降，不靠加工具、加约束或改提示词；它不是模型调用次数。运行时 0 次模型调用；表格不转录、图片不裁剪，模型直接看页图。
 
 **Tech Stack:** NestJS + TypeScript + Prisma/PostgreSQL（`tsvector` + `pg_trgm`）+ PyMuPDF（Python 解析/渲染）+ Jest + ts-node。
 
@@ -36,7 +36,7 @@
 3. **预算边界**：单页文本超过 `budgetTokens` 时，至少返回一页 + `nextCursor`，不能返回空页或无限循环；`nextCursor` 必须能继续读完。
 4. **无目录文档**：`doc.get_toc()` 为空时，`kb_catalog` 仍要返回一条“全文 1..N”，`kb_read` 按页码可读。
 5. **中文/空查询/越界**：中文查英文页允许 0 命中，但必须返回 `hits: []` + `searched`，不得出现“未覆盖”；空 query 返回 `INVALID_ARGUMENT`；页码越界返回 `PAGE_OUT_OF_RANGE`。
-6. **删除完整性**：`rg` 不再命中旧服务/旧工具/387 条结论；健康分析明确返回不可用；`npx tsc --noEmit` 与全量 `npm test` 通过。
+6. **删除完整性**：`git grep` 不再命中旧服务/旧工具/387 条结论；健康分析明确返回不可用；`npx tsc --noEmit` 与全量 `npm test` 通过。
 
 ---
 
@@ -158,6 +158,7 @@ Expected: 只有本计划/设计文档；没有主工作区改动。
 ```ts
 import {
   blockAnchor,
+  parseAnchor,
   decodeReadCursor,
   encodeReadCursor,
   estimateTokens,
@@ -172,6 +173,14 @@ describe('knowledge v3 anchors/cursor', () => {
     expect(blockAnchor('sacn5-chapters-SACN5-37', 22, 3)).toBe(
       'sacn5-chapters-SACN5-37/p22#b0003',
     );
+  });
+
+  it('parses page and block anchors', () => {
+    expect(parseAnchor('doc-1/p22')).toEqual({ documentId: 'doc-1', pageNo: 22 });
+    expect(parseAnchor('doc-1/p22#b0003')).toEqual({
+      documentId: 'doc-1', pageNo: 22, blockOrder: 3,
+    });
+    expect(() => parseAnchor('bad')).toThrow('INVALID_ARGUMENT');
   });
 
   it('round-trips a read cursor', () => {
@@ -192,7 +201,7 @@ describe('knowledge v3 anchors/cursor', () => {
   it('estimates tokens conservatively', () => {
     expect(estimateTokens('')).toBe(0);
     expect(estimateTokens('abcdef')).toBe(2);
-    expect(estimateTokens('中文六个字')).toBe(2);
+    expect(estimateTokens('中文六个字')).toBe(5);
   });
 });
 ```
@@ -240,7 +249,7 @@ export interface KbFindHit {
   pageNo: number;
   chapter: string | null;
   blockId: string | null;
-  kind: 'text' | 'table' | 'figure' | 'heading';
+  kind: 'page' | 'table' | 'figure';
   snippet: string;
   score: number;
   anchor: string;
@@ -270,6 +279,7 @@ export interface KbPage {
   blocks: KbBlock[];
   imagePath: string | null;
   imageMime: 'image/jpeg' | null;
+  imageBase64: string | null;
   anchor: string;
 }
 
@@ -333,7 +343,7 @@ export class KnowledgeToolError extends Error {
 }
 ```
 
-`knowledge-v3.anchors.ts`：按 `sourceId/p{pageNo}`、`sourceId/p{pageNo}#b{order:4}` 生成；cursor 用 `Buffer.from(JSON.stringify(cursor)).toString('base64url')`，解码失败抛 `INVALID_CURSOR`；`estimateTokens = Math.ceil(text.length / 3)`。
+`knowledge-v3.anchors.ts`：按 `sourceId/p{pageNo}`、`sourceId/p{pageNo}#b{order:4}` 生成；`parseAnchor` 用 `^([^/]+)/p(\d+)(?:#b(\d+))?$`，非法抛 `INVALID_ARGUMENT`；cursor 用 `Buffer.from(JSON.stringify(cursor)).toString('base64url')`，解码失败抛 `INVALID_CURSOR`；`estimateTokens`：CJK 字符按 1 token/字，非 CJK 按 1 token/4 字符，向上取整（`cjk + ceil(nonCjk/4)`）；中英混排不会低估。
 
 - [ ] **Step 4: 跑测试，确认通过**
 
@@ -510,7 +520,7 @@ Expected: FAIL（脚本不存在）。
 - 表：`page.find_tables().tables`，每张表加一个 `kind="table"` 块（bbox 来自 `table.bbox`），不取行列；表题取 bbox 上方最近文本块的首行，只有匹配 `Table|TABLE` 才写入 `caption`，否则 null；
 - 图：`page.get_images(full=True)` + `page.get_image_rects(xref)`，加 `kind="figure"` 块；图注取 bbox 下方最近文本块首行，只有匹配 `Figure|FIGURE` 才写入 `caption`，否则 null；
 - 块 ID：`{sourceId}-p{pageNo:04d}-b{order:04d}`；页 ID：`{sourceId}-p{pageNo:04d}`；
-- 非 PDF：`.txt` 直读；`.xml`/`.html` 用正则去标签；`.epub` 用 `zipfile` 读 XHTML；统一成单页，`hasTextLayer=true`，`imagePath=null`；`.docx` 等未支持格式明确报错并跳过，不静默漏；
+- 非 PDF：`.txt` 直读；`.xml`/`.html` 用正则去标签；`.epub` 用 `zipfile` 读 XHTML；按 ~3,000 字切伪页（优先段落/句号边界），`hasTextLayer=true`，`imagePath=null`；`.docx` 等未支持格式明确报错并跳过，不静默漏；
 - PDF 页：`imagePath = "{sourceId}/p{pageNo:04d}.jpg"`（与渲染器输出一致）；渲染器还没跑时文件不存在，`read` 会返回 `null`；
 - `collection`：默认取归档相对路径的第一段并大写（`sacn5/...` → `SACN5`）；允许 `--collection` 覆盖；
 - `status` 默认 `unknown`（没有可靠来源状态就不猜 current）；`license` 默认 `internal`；`title` 依次取 manifest 说明 / PDF metadata title / 文件名；`publisher` 取 collection；`version`/`publishedYear` 没有可靠来源就留 `null`；
@@ -592,7 +602,7 @@ Expected: FAIL，模块不存在。
 
 - `validatePageLayerFile` 校验：source.id、pageCount、pages 数量/页码唯一、blocks id 唯一、toc 页码范围；
 - `mapPageLayerToRows` 生成确定性的页/块/目录行；页 ID 用 `{source.id}-p{pageNo:04d}`，块 ID 用 parser 给的值；
-- 导入脚本：读目录下 `*.json`；每个文件 `prisma.$transaction`：
+- 导入脚本：读目录下 `*.json`；每个文件 `prisma.$transaction(..., { timeout: 120000 })`（5k 块/大文档不能按默认 5s）：
   - `deleteMany({ where: { id: source.id } })`（级联删 pages/blocks/toc）；
   - `create` source；再按 **200 页/批** `createMany` pages（页 ID 是确定性的）；再按 **1,000 块/批** `createMany` blocks；最后 `createMany` toc；不要把一个 5,000 块的大文档一次性嵌套；
   - `--dry-run` 只校验不写；
@@ -630,9 +640,11 @@ bash scripts/session.sh commit -m "feat(knowledge): page-layer 导入与校验"
 class KnowledgeCatalogService {
   constructor(private readonly prisma: PrismaService) {}
   list(collection?: string): Promise<KbSourceSummary[]>;
-  get(documentId: string): Promise<{ source: KbSourceSummary; toc: KbTocEntry[] }>;
+  get(documentId: string): Promise<KbCatalogResult>;
 }
 ```
+- `get` 返回 `{ sources: [source], toc }`，与 `catalog` 工具输出同形状；
+- `documentId` 与 `collection` 同时给时，`documentId` 优先，`collection` 忽略；
 - 找不到 → `KnowledgeToolError('SOURCE_NOT_FOUND')`。
 
 - [ ] **Step 1: 写失败测试**
@@ -665,7 +677,7 @@ Expected: FAIL。
 - [ ] **Step 3: 实现服务**
 
 - `list`：`findMany({ where: collection ? { collection } : undefined, orderBy: [{ collection:'asc' }, { id:'asc' }] })`；
-- `get`：`findUnique({ where:{id}, include:{toc:{orderBy:{orderIndex:'asc'}}} })`；无记录抛错。
+- `get`：`findUnique({ where:{id}, include:{toc:{orderBy:{orderIndex:'asc'}}} })`；返回 `{sources:[source], toc}`；无记录抛错。
 
 - [ ] **Step 4: 跑测试 + 提交**
 
@@ -706,7 +718,7 @@ expect(isCjkQuery('CKD phosphorus')).toBe(false);
 
 const prisma = { $queryRaw: jest.fn().mockResolvedValue([
   { source_id: 'doc-1', page_no: 17, text: 'Table 37-9 phosphorus 0.2-0.5',
-    block_id: null, kind: 'text', score: 0.9 },
+    block_id: null, kind: 'page', score: 0.9 },
 ]), kbSource: { count: jest.fn().mockResolvedValue(8) },
    kbPage: { count: jest.fn().mockResolvedValue(857) } };
 const result = await service.find({ query: 'phosphorus' });
@@ -739,7 +751,7 @@ LIMIT $4
 ```
 - 中文/CJK 兜底：`p.text ILIKE '%' || $1 || '%'`（或 `similarity(p.text,$1) > 0.05`），按 `page_no` 排序；
 - 表/图标题命中：再查 `kb_block`（`kind IN ('table','figure')`，`caption/text ILIKE`），返回 `block_id` 与 `kind`；
-- 合并去重：同一 `source_id + page_no` 只留最高分；总数 ≤ `limit`；
+- 合并去重：同一 `source_id + page_no` 只留最高分；总数 ≤ `limit`；页命中 `kind='page'`，表/图命中 `kind='table'|'figure'`；
 - `snippet`：取命中词前后 160 字；没有命中词取前 160 字；
 - `searched`：按过滤条件 `count` 文档/页；
 - `chapter`：可按 `kb_toc` 页范围反查，查不到给 `null`（不在本任务硬性要求；实现时用一次 `findFirst`）。
@@ -781,7 +793,8 @@ class KnowledgeReadService {
 }
 ```
 - `budgetTokens` 默认 20,000，最大 200,000；`<1` 或非数字 → `INVALID_ARGUMENT`；至少返回 1 页；
-- `includeImages` 默认 true（PDF 页都有图）；`false` 时 `imagePath=null`、`imageMime=null`；
+- `includeImages` 默认 true（PDF 页都有图）；`false` 时 `imagePath=null`、`imageMime=null`、`imageBase64=null`；
+- `imageBase64`：每页读文件转 base64；每次 `read` 最多带 5 张，超过的页只给 `imagePath`；图片不参与 token 预算（只算文本），但要计入响应大小；
 - 页码越界 → `PAGE_OUT_OF_RANGE`；`tocId` 不存在 → `TOC_NOT_FOUND`。
 
 - [ ] **Step 1: 写失败测试**
@@ -802,7 +815,8 @@ const pages = [
 - `read({documentId:'doc-1', pageFrom:1, pageTo:2, budgetTokens:1000})` 返回 1 页 + `nextCursor`；
 - 用 `nextCursor` 再读返回第 2 页；
 - 第 1 页 `anchor === 'doc-1/p1'`，块 `anchor === 'doc-1/p1#b0001'`；
-- `includeImages:false` 时 `imagePath=null`；
+- `includeImages:false` 时 `imagePath=null`、`imageBase64=null`；
+- 有 `imagePath` 时 `imageBase64` 非空（测试可用 1×1 JPEG fixture，断言以 `/9j/` 开头）；
 - 页码 99 → `PAGE_OUT_OF_RANGE`；
 - 无目录文档 `tocId:'missing'` → `TOC_NOT_FOUND`；
 - `PageImageService.resolve('doc-1', 1)` 对 `../` 路径抛错/返回 null，不能逃出 `KB_PAGE_IMAGE_ROOT`。
@@ -817,9 +831,9 @@ Expected: FAIL。
 - 解析范围：`tocId` → 查 `kb_toc`（`toc.sourceId` 必须等于 `documentId`，否则 `TOC_NOT_FOUND`）；否则 `pageFrom/pageTo`；只给 `pageFrom` 时 `pageTo = pageFrom + 4`；都没给时 `1..min(5, pageCount)`；
 - cursor：`decodeReadCursor`，校验 `documentId` 一致；
 - 查询 `kb_page.findMany({ where: { sourceId, pageNo: { gte, lte } }, include:{ blocks:{orderBy:{orderIndex:'asc'}} }, orderBy:{pageNo:'asc'} })`；
-- 预算：逐页累加 `estimateTokens(page.text)`（块文本是页文本的子集，不重复算）；加入当前页后超预算且已有页 → 停；至少 1 页；
+- 预算：逐页累加 `estimateTokens(page.text)`；blocks 只给结构/bbox/caption，不返回重复的块文本；加入当前页后超预算且已有页 → 停；至少 1 页；
 - `nextCursor`：若还有页（`lastPage < endPage`），`encodeReadCursor({documentId, nextPage: lastPage+1, endPage, includeImages, budgetTokens})`；到了 `endPage` 就给 `null`；
-- 页图：`includeImages === false` 跳过；否则 `page.imagePath` 存在时用 `images.resolve()` **只检查文件是否存在**，返回的 `KbPage.imagePath` 仍是相对 `KB_PAGE_IMAGE_ROOT` 的路径；文件不存在则 `null`（不抛错，避免整次读取失败）；
+- 页图：`includeImages === false` 跳过；否则 `page.imagePath` 存在时用 `images.resolve()` 检查文件，`KbPage.imagePath` 保留相对路径，`imageMime='image/jpeg'`；前 5 张读文件转 `imageBase64`，超过 5 张只给路径；文件不存在则 `imagePath=null`（不抛错，避免整次读取失败）；
 - `version`：`source.updatedAt.toISOString()`；
 - 不返回结论/摘要/覆盖判断。
 
@@ -904,28 +918,34 @@ Expected: FAIL。
 - `KnowledgeGatewayService` 注入 `Logger`：每次 `execute` 记录 `{tool, ok, documentId?, pages?, ms}`；不建审计表、不做身份（本次不设计 Agent；传输层以后补）；
 - `.env.example` 加：
 ```text
+# 本地开发
 KB_PAGE_LAYER_DIR=docs/knowledge-base/page-layer
 KB_PAGE_IMAGE_ROOT=docs/knowledge-base/page-images
 KB_SOURCE_ARCHIVE=/Users/zhaochen/Documents/SevenKitchen-knowledge-sources
+# 生产（示例，写在服务器 .env）
+# KB_PAGE_LAYER_DIR=/var/lib/sevenkitchen/kb/page-layer
+# KB_PAGE_IMAGE_ROOT=/var/lib/sevenkitchen/kb/page-images
+# KB_SOURCE_ARCHIVE=/opt/sevenkitchen/knowledge-sources
 ```
 - `smoke.ts`：真实库，依次：
   1. `catalog()` 文档数 ≥159；
   2. `catalog({documentId:'sacn5-chapters-SACN5-37'})` 有 toc；
   3. `find({query:'phosphorus', documentIds:['sacn5-chapters-SACN5-37']})` top 页在 17–22；
-  4. `read({documentId, pageFrom:17, pageTo:21, includeImages:true, budgetTokens:30000})` 返回 5 页、`sacn5-chapters-SACN5-37/p17` 锚点、每页有 `imagePath`；p17 文本包含 `Phosphorus` 或 `Table 37-9`；表块命中则记录，检测漏了不算失败（页图仍在）；
+  4. `read({documentId, pageFrom:17, pageTo:21, includeImages:true, budgetTokens:30000})` 返回 5 页、`sacn5-chapters-SACN5-37/p17` 锚点、每页有 `imagePath` 且前 5 张有 `imageBase64`（以 `/9j/` 开头）；p17 文本包含 `Phosphorus` 或 `Table 37-9`；表块命中则记录，检测漏了不算失败（页图仍在）；
   5. 用 `nextCursor` 继续读不报错；
-  6. `find({query:'"vitamin K"', documentIds:['sacn5-chapters-SACN5-37']})` 返回 `hits: []`，且 JSON 里没有 `no_match`/`未覆盖`；
+  6. 负样本先试 `find({query:'"vitamin K"', documentIds:['sacn5-chapters-SACN5-37']})`；若命中，改用 `biotin` / `chromium` 直到 0 命中，并在报告里记录用了哪个；返回 `hits: []`，且 JSON 里没有 `no_match`/`未覆盖`；
   7. 读一个无文字层文档第 1 页，`text` 可为空、`imagePath` 存在；
-  8. 页码 99999 → `PAGE_OUT_OF_RANGE`。
-  输出 `docs/knowledge-base/eval/kb-v3-smoke.md`。
-- `benchmark-calls.ts`：**只证明接口能力，不证明模型会这样调**；Agent A/B 由调用方另行做。`catalog` 单独记为“会话 setup”，不计入每题；如果每题都调 `catalog`，另加 1 次。固定 6 题：
+  8. 页码 99999 → `PAGE_OUT_OF_RANGE`；
+  9. 对 `find` 连跑 20 次，记录 p50/p95/max，写进报告；p95 < 300ms 才算通过。
+  输出路径用 `git rev-parse --show-toplevel` 定位仓库根，再写 `docs/knowledge-base/eval/kb-v3-smoke.md`（不要按 `cd backend` 的相对路径写，容易落到 `backend/docs`）。
+- `benchmark-calls.ts`：**结构基准，reference caller 不是模型**；脚本必须打印 `reference caller, not model`。它只证明接口能力，不证明模型会这样调；Agent A/B 由调用方另行做（冻结模型/提示词/业务工具，只换 KB）。`catalog` 单独记为“会话 setup”，不计入每题；如果每题都调 `catalog`，另加 1 次。固定 6 题：
   - 已知文档：`read` 1 次；
   - 未知：`find` + `read` 2 次；
   - 表题：`find` + `read` 2 次；
   - 图片型：`read` 1 次；
   - 负样本：`find` 1 次；
   - 整章：`catalog` + `read` 1 次（catalog 不计）。
-  输出 `docs/knowledge-base/eval/kb-v3-call-benchmark.md`，列：题、调用序列、页数、估算 token、首个命中页。
+  输出路径同样用仓库根定位；`docs/knowledge-base/eval/kb-v3-call-benchmark.md`，列：题、调用序列、页数、估算 token、首个命中页、耗时。
 
 - [ ] **Step 4: 跑测试 + 提交**
 
@@ -942,10 +962,80 @@ bash scripts/session.sh commit -m "feat(knowledge): 三个通用动作与结构�
 
 ---
 
-## Task 8: 删除 387 条结论，把健康分析降级为“不可用”
+## Task 8: 移除旧知识库的 Agent/补剂接线与引用门禁
+
+**Files:**
+- Modify: `backend/src/application/recipe-designer/agent/tools.ts`
+- Modify: `backend/src/application/recipe-designer/agent/recipe-agent.service.ts`
+- Modify: `backend/src/application/recipe-designer/agent/prompt.ts`
+- Delete: `backend/src/application/recipe-designer/agent/citation-registry.ts`
+- Delete: `backend/src/application/recipe-designer/agent/citation-judge.ts`
+- Delete: `backend/tests/application/recipe-designer/agent-tools-library.spec.ts`
+- Delete: `backend/tests/application/recipe-designer/citation-registry.spec.ts`
+- Delete: `backend/tests/application/recipe-designer/citation-judge.spec.ts`
+- Delete: `backend/tests/application/recipe-designer/citation-gate.spec.ts`
+- Modify: `backend/src/application/ingredient-creation/supplement-agent.service.ts`
+- Modify: `backend/src/application/ingredient-creation/supplement-tools.ts`
+- Modify: `backend/tests/application/ingredient-creation/supplement-agent.service.spec.ts`
+- Modify: `backend/tests/application/ingredient-creation/supplement-tools.spec.ts`
+
+**Interfaces:**
+- 删除后 `AGENT_TOOLS` 只剩配方业务工具（`read_draft` / `read_taxonomy` / `find_food` / `edit_recipe` / `assess` / `write_copy` / `ask` 等，按当前文件实际保留）；
+- `ToolExecutionContext` 只保留配方业务依赖（`port`、`catalog`、`onAsk`）；
+- 补剂工具不再含 `search_knowledge`。
+
+- [ ] **Step 1: 写/改失败测试**
+
+- `agent-tools-library.spec.ts` 删除；
+- 补剂测试删除 `search_knowledge` 用例，并新增：
+```ts
+expect(SUPPLEMENT_TOOL_DEFINITIONS.map((t) => t.function.name)).not.toContain('search_knowledge');
+```
+- 如果存在 agent 工具数量断言，更新为新数量。
+
+Run: `cd backend && npm test -- tests/application/ingredient-creation`
+Expected: FAIL，仍含 `search_knowledge`。
+
+- [ ] **Step 2: 删除旧接线**
+
+- `tools.ts`：删 3 个 KB 工具定义、3 个 case、KB 类型/import、`scope/library/sourceLayer/citations` 字段；
+- `recipe-agent.service.ts`：
+  - 删 `CitationRegistry`/`citation-judge`/`KnowledgeLibraryService`/`SourceLayerService`/`scopeFromEnv` import 与构造注入；
+  - 删 `loadCitationRegistry`、`citations`、`judgeAnswer`/`rewriteAnswer`/`citationGatePassed` 整段；
+  - 最终回答只做 `redactDrugDoses(response.content).text`，`appendMessage` 后 `markWaiting`；
+  - `runTool` 不再传 citations/library/sourceLayer/scope。
+- `prompt.ts`：删知识库相关段落（“知识库是图书馆…”“检索时给的 species/stage…”等）；
+- 补剂：删 `KnowledgeSearchService` 注入、`search_knowledge` 定义/case/context 字段；
+- 删除 4 个 citation 文件与 4 个旧测试。
+- 注意：`dose-redaction`、`find_food`、`edit_recipe`、`assess` 等业务逻辑不动。
+
+- [ ] **Step 3: 跑测试 + 类型检查**
+
+Run:
+```bash
+cd backend
+npm test -- tests/application/ingredient-creation tests/application/recipe-designer
+npx tsc --noEmit
+```
+Expected: PASS/无类型错误；`git grep -n -E "search_knowledge_library|open_knowledge|knowledge_scope|CitationRegistry|citation-judge" -- src || true` 不再命中。
+
+- [ ] **Step 4: 提交**
+
+```bash
+git add -u backend/src/application/recipe-designer/agent backend/src/application/ingredient-creation backend/tests/application/recipe-designer backend/tests/application/ingredient-creation
+bash scripts/session.sh commit -m "refactor(knowledge): 移除旧 Agent/补剂知识接线与引用门禁"
+```
+
+---
+
+## Task 9: 删除 387 条结论，把健康分析降级为“不可用”
+
+> **顺序要求**：必须先完成 Task 8（清掉 Agent/补剂/citation 对旧知识库的引用），再做本任务；反过来会在中间态编译红。
 
 **Files:**
 - Delete: `backend/src/domain/recipe-designer/knowledge-base/`（**保留 `tag-vocabulary.ts`**，员工端健康标签仍在用；只改注释，不删）
+- Delete: `docs/knowledge-base/review-packet/`（两份审核包，387 条结论全文）
+- Delete: `docs/knowledge-base/aaha2014-review.md`（含结论正文）
 - Delete: `backend/src/application/recipe-designer/knowledge-base.service.ts`
 - Modify: `backend/src/application/health/health-analysis.service.ts`（替换为最小服务）
 - Modify: `backend/tests/application/health/health-analysis.service.spec.ts`（重写）
@@ -1021,6 +1111,7 @@ Expected: FAIL（构造函数/返回类型不匹配）。
 - [ ] **Step 2: 删除结论层，替换健康分析**
 
 - 删除 `backend/src/domain/recipe-designer/knowledge-base/` 下的 387 条数据、类型、登记表；**保留 `tag-vocabulary.ts`**（`staff-dog-health.service.ts` 仍用它做健康标签校验，只把注释里“KnowledgeBaseService 启动校验”改成“员工端健康标签受控词表”）；
+- 删除 `docs/knowledge-base/review-packet/` 两份审核包、`docs/knowledge-base/aaha2014-review.md`；其余 docs 历史分析只允许出现条目 ID，不允许完整结论正文；
 - 删除 `backend/src/application/recipe-designer/knowledge-base.service.ts`；
 - 用上面的最小服务替换 `health-analysis.service.ts`；只保留类型/常量/服务，不再 import Prisma、timeline、agent config、KB；
 - 删除 `health-analysis-cache.spec.ts`；
@@ -1034,9 +1125,10 @@ Run:
 cd backend
 npm test -- tests/application/health/health-analysis.service.spec.ts
 npx tsc --noEmit
-rg "KnowledgeBaseService|knowledge-base/data|KnowledgeEntry|HealthAnalysisCache" src tests
+git grep -n -E "KnowledgeBaseService|knowledge-base/data|KnowledgeEntry|HealthAnalysisCache" -- src tests || true
+grep -R -n -E "^### (immune|lab|clinical|prev|renal|gi|skin|cardio|endo|urolith|ortho|onco|neuro|dental|repro|safe|critical|hemo|growth|senior|weight)-[0-9]{3}" ../docs || true
 ```
-Expected: PASS/无类型错误；`rg` 不再命中运行时。再跑：
+Expected: PASS/无类型错误；`git grep` 不再命中运行时；docs 审核包标题 0 命中。再跑：
 ```bash
 npm test -- tests/application/health/staff-dog-health.service.spec.ts
 ```
@@ -1045,74 +1137,8 @@ Expected: PASS（健康标签词表仍可用）。
 - [ ] **Step 4: 提交**
 
 ```bash
-git add -u backend/src/domain/recipe-designer/knowledge-base backend/src/application/recipe-designer/knowledge-base.service.ts backend/src/application/health/health-analysis.service.ts backend/tests/application/health/health-analysis.service.spec.ts backend/tests/application/health/health-analysis-cache.spec.ts backend/src/app.module.ts backend/tests/application/recipe-designer/knowledge-base-structure.spec.ts backend/tests/application/recipe-designer/knowledge-base.service.spec.ts backend/tests/scripts/export-knowledge-review-packet.spec.ts backend/tests/scripts/audit-health-knowledge.spec.ts backend/scripts/audit-health-knowledge.ts backend/scripts/export-knowledge-review-packet.ts
+git add -u backend/src/domain/recipe-designer/knowledge-base backend/src/application/recipe-designer/knowledge-base.service.ts docs/knowledge-base/review-packet docs/knowledge-base/aaha2014-review.md backend/src/application/health/health-analysis.service.ts backend/tests/application/health/health-analysis.service.spec.ts backend/tests/application/health/health-analysis-cache.spec.ts backend/src/app.module.ts backend/tests/application/recipe-designer/knowledge-base-structure.spec.ts backend/tests/application/recipe-designer/knowledge-base.service.spec.ts backend/tests/scripts/export-knowledge-review-packet.spec.ts backend/tests/scripts/audit-health-knowledge.spec.ts backend/scripts/audit-health-knowledge.ts backend/scripts/export-knowledge-review-packet.ts
 bash scripts/session.sh commit -m "refactor(knowledge): 删除 387 条结论层，健康分析暂停"
-```
-
----
-
-## Task 9: 移除旧知识库的 Agent/补剂接线与引用门禁
-
-**Files:**
-- Modify: `backend/src/application/recipe-designer/agent/tools.ts`
-- Modify: `backend/src/application/recipe-designer/agent/recipe-agent.service.ts`
-- Modify: `backend/src/application/recipe-designer/agent/prompt.ts`
-- Delete: `backend/src/application/recipe-designer/agent/citation-registry.ts`
-- Delete: `backend/src/application/recipe-designer/agent/citation-judge.ts`
-- Delete: `backend/tests/application/recipe-designer/agent-tools-library.spec.ts`
-- Delete: `backend/tests/application/recipe-designer/citation-registry.spec.ts`
-- Delete: `backend/tests/application/recipe-designer/citation-judge.spec.ts`
-- Delete: `backend/tests/application/recipe-designer/citation-gate.spec.ts`
-- Modify: `backend/src/application/ingredient-creation/supplement-agent.service.ts`
-- Modify: `backend/src/application/ingredient-creation/supplement-tools.ts`
-- Modify: `backend/tests/application/ingredient-creation/supplement-agent.service.spec.ts`
-- Modify: `backend/tests/application/ingredient-creation/supplement-tools.spec.ts`
-
-**Interfaces:**
-- 删除后 `AGENT_TOOLS` 只剩配方业务工具（`read_draft` / `read_taxonomy` / `find_food` / `edit_recipe` / `assess` / `write_copy` / `ask` 等，按当前文件实际保留）；
-- `ToolExecutionContext` 只保留配方业务依赖（`port`、`catalog`、`onAsk`）；
-- 补剂工具不再含 `search_knowledge`。
-
-- [ ] **Step 1: 写/改失败测试**
-
-- `agent-tools-library.spec.ts` 删除；
-- 补剂测试删除 `search_knowledge` 用例，并新增：
-```ts
-expect(SUPPLEMENT_TOOL_DEFINITIONS.map((t) => t.function.name)).not.toContain('search_knowledge');
-```
-- 如果存在 agent 工具数量断言，更新为新数量。
-
-Run: `cd backend && npm test -- tests/application/ingredient-creation`
-Expected: FAIL，仍含 `search_knowledge`。
-
-- [ ] **Step 2: 删除旧接线**
-
-- `tools.ts`：删 3 个 KB 工具定义、3 个 case、KB 类型/import、`scope/library/sourceLayer/citations` 字段；
-- `recipe-agent.service.ts`：
-  - 删 `CitationRegistry`/`citation-judge`/`KnowledgeLibraryService`/`SourceLayerService`/`scopeFromEnv` import 与构造注入；
-  - 删 `loadCitationRegistry`、`citations`、`judgeAnswer`/`rewriteAnswer`/`citationGatePassed` 整段；
-  - 最终回答只做 `redactDrugDoses(response.content).text`，`appendMessage` 后 `markWaiting`；
-  - `runTool` 不再传 citations/library/sourceLayer/scope。
-- `prompt.ts`：删知识库相关段落（“知识库是图书馆…”“检索时给的 species/stage…”等）；
-- 补剂：删 `KnowledgeSearchService` 注入、`search_knowledge` 定义/case/context 字段；
-- 删除 4 个 citation 文件与 4 个旧测试。
-- 注意：`dose-redaction`、`find_food`、`edit_recipe`、`assess` 等业务逻辑不动。
-
-- [ ] **Step 3: 跑测试 + 类型检查**
-
-Run:
-```bash
-cd backend
-npm test -- tests/application/ingredient-creation tests/application/recipe-designer
-npx tsc --noEmit
-```
-Expected: PASS/无类型错误；`rg "search_knowledge_library|open_knowledge|knowledge_scope|CitationRegistry|citation-judge" backend/src` 不再命中。
-
-- [ ] **Step 4: 提交**
-
-```bash
-git add -u backend/src/application/recipe-designer/agent backend/src/application/ingredient-creation backend/tests/application/recipe-designer backend/tests/application/ingredient-creation
-bash scripts/session.sh commit -m "refactor(knowledge): 移除旧 Agent/补剂知识接线与引用门禁"
 ```
 
 ---
@@ -1144,7 +1170,7 @@ bash scripts/session.sh commit -m "refactor(knowledge): 移除旧 Agent/补剂�
 Run:
 ```bash
 cd backend
-rg "KnowledgeLibraryService|SourceLayerService|KnowledgeSearchService|KnowledgeSourceController|search_knowledge_library|open_knowledge|knowledge_scope" src tests
+git grep -n -E "KnowledgeLibraryService|SourceLayerService|KnowledgeSearchService|KnowledgeSourceController|search_knowledge_library|open_knowledge|knowledge_scope" -- src tests || true
 ```
 Expected: 只在本任务要删的文件里命中；`src` 中不再有业务代码引用。
 
@@ -1177,9 +1203,10 @@ Run:
 cd backend
 npx tsc --noEmit
 npm test
-rg "source_paragraph|source_section|source_table|source_figure|knowledge_citation_anchor" src tests
+git grep -n -E "source_paragraph|source_section|source_table|source_figure|knowledge_citation_anchor" -- src tests || true
+git grep -n -E "query-expansion|stagePhrases|topicPhrases|detectQueryDomains|CKD_DOCUMENT_IDS|KnowledgeScope|search_knowledge_library|open_knowledge|knowledge_scope|\[K[0-9]" -- src tests || true
 ```
-Expected: `tsc` 通过；全量测试绿；`rg` 无运行时引用（迁移/SQL 除外）。
+Expected: `tsc` 通过；全量测试绿；`git grep` 两组都无运行时引用（迁移/SQL 除外）。
 
 - [ ] **Step 4: 提交**
 
@@ -1233,13 +1260,15 @@ Run:
 cd backend
 npm run kb:v3:bench
 ```
-Expected: `kb-v3-call-benchmark.md` 生成；已知 1 次、未知 2 次、表题 2 次、负样本 1 次、整章 1 次；没有 >3 的项。
+Expected: `kb-v3-call-benchmark.md` 生成；已知 1 次、未知 2 次、表题 2 次、负样本 1 次、整章 1 次；没有 >3 的项。报告标题必须写“结构基准 / reference caller，不是模型调用次数”。
 
 - [ ] **Step 4: 写运行手册 + README 横幅**
 
 `RUNBOOK-kb-v3.md` 至少包含：
 
 - 依赖：PyMuPDF、Postgres `pg_trgm`、原文目录读权限（root/受权组）；解析/渲染产出目录要 `chown` 给后端用户，后端不直接读 `/opt/sevenkitchen/knowledge-sources`；
+- 生产路径：`/var/lib/sevenkitchen/kb/page-layer`、`/var/lib/sevenkitchen/kb/page-images`；用一次性 root job 跑解析/渲染，产物 `chown sevenkitchen:sevenkitchen`、`chmod 750`；
+- 磁盘：预估 2–3 GB，至少留 2×（≥6 GB）；`df -h` 不足就停；
 - 首次导入：解析 → 渲染 → 导入；
 - 增量：`--only <sourceId> --force`；
 - 冒烟：`npm run kb:v3:smoke`；
@@ -1277,13 +1306,13 @@ bash scripts/session.sh commit -m "docs(knowledge): v3 运行手册、冒烟与�
 ## 验收清单（执行完逐条打勾）
 
 - [ ] `kb_source` / `kb_page` / `kb_block` / `kb_toc` 四张表存在；旧 `source_*` / `knowledge_citation_anchor` 已 drop；
-- [ ] `rg` 不再命中 `KnowledgeBaseService` / `KnowledgeLibraryService` / `SourceLayerService` / `search_knowledge_library` / `CitationRegistry`；
-- [ ] 387 条结论数据文件已删除；健康分析返回 `available:false`；
+- [ ] `git grep` 不再命中 `KnowledgeBaseService` / `KnowledgeLibraryService` / `SourceLayerService` / `search_knowledge_library` / `CitationRegistry`；
+- [ ] 387 条结论代码/审核包/`### 条目` 标题 0 命中；DB 无结论表；健康分析返回 `available:false`；
 - [ ] 只有 `kb_catalog` / `kb_find` / `kb_read` 三个工具定义；
 - [ ] `kb_read` 一次返回 3–5 页 + 表/图块 + 页图 + anchor；预算/游标可续读；
 - [ ] 图片型文档 `text` 可为空，但 `imagePath` 存在、可读；
 - [ ] 负样本返回 `hits: []` + `searched`，无 `no_match` / “未覆盖”；
-- [ ] `npm run kb:v3:smoke` 通过；`npm run kb:v3:bench` 的已知/未知/表题/整章调用次数 ≤ 目标；
+- [ ] `npm run kb:v3:smoke` 通过；`npm run kb:v3:bench` 的结构基准（reference caller）已知/未知/表题/整章 ≤ 目标；**不把它冒充模型调用次数**；
 - [ ] `npx tsc --noEmit` 通过；全量 `npm test` 通过；
 - [ ] 设计文档与实现一致（如有偏差已回写）。
 
@@ -1302,4 +1331,4 @@ bash scripts/session.sh commit -m "docs(knowledge): v3 运行手册、冒烟与�
 | 9 | 旧 Agent/补剂接线清理 | 1.5 |
 | 10 | 旧原文层/表/脚本清理 | 1 |
 | 11 | 真实库跑通 + 文档 | 2 |
-| **合计** | | **17 人日**（约 2–3 周，1–2 人） |
+| **合计** | | **17 人日**（2 人约 2 周；1 人约 3.5 周） |

@@ -37,6 +37,7 @@ import {
 } from './purchasing.service.tokens';
 import { PurchaseOrderImportService } from './purchase-order-import.service';
 import { weightUnitToBaseRatio } from './purchase-order-weight-units';
+import { buildStaleDraftWhere } from './replenishment-draft-cleanup';
 
 export interface SaveReplenishmentRecordDto {
   /** 订单实付；不传则用识别结果 */
@@ -862,18 +863,20 @@ export class ReplenishmentService {
   }
 
   /**
-   * 每天清理超过 48 小时没保存的识别草稿，避免废弃草稿、识别行和截图无限堆积。
+   * 每小时清理废弃的补货草稿，避免草稿、识别行和截图无限堆积。
+   *
+   * 两档口径（见 replenishment-draft-cleanup.ts）：
+   *  - 一个字都没填、也没识别出商品的行（空草稿）→ 2 小时就清；
+   *  - 有内容的草稿 → 48 小时兜底。
    * 只删 isDraft 且仍 PENDING 的记录，不碰已保存的补货记录。
+   *
+   * 为什么从「每天 3 点」改成每小时：空草稿是点一下入口就产生的，
+   * 按天清等于它们要在库里挂两天，期间会污染各种统计。
    */
-  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  @Cron(CronExpression.EVERY_HOUR)
   async cleanupStaleDrafts(): Promise<number> {
-    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
     const drafts = await this.prisma.purchaseList.findMany({
-      where: {
-        isDraft: true,
-        status: 'PENDING' as any,
-        createdAt: { lt: cutoff },
-      },
+      where: buildStaleDraftWhere(Date.now()) as any,
       select: { id: true },
     });
     let deleted = 0;

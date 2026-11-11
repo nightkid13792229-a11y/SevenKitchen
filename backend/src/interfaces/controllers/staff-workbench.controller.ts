@@ -78,8 +78,13 @@ export class StaffWorkbenchController {
           },
         },
       }),
+      // 只算用户看得见的待采购单。补货识别/手填留下的草稿（isDraft）对列表不可见，
+      // 算进角标会让做完采购之后还挂着一个假数字（2026-11-11 生产事故）。
       this.prisma.purchaseList.count({
-        where: { status: PurchaseListStatus.PENDING },
+        where: {
+          status: PurchaseListStatus.PENDING,
+          isDraft: false,
+        },
       }),
       this.prisma.packagingUnit.count({
         where: {

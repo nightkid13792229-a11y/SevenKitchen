@@ -579,116 +579,25 @@
       </view>
     </view>
 
-    <view v-if="showShippingModal" class="modal-mask" @tap="closeShippingModal">
-      <view class="modal-panel" @tap.stop>
-        <view class="modal-header">
-          <text class="modal-title">填写发货信息</text>
-          <text class="modal-close" @tap="closeShippingModal">×</text>
-        </view>
-
-        <!-- 填单号之前先看清寄给谁、哪只狗、寄到哪（2026-11-10）：
-             以前要关掉弹窗回详情页翻地址，再手抄到顺丰下单 -->
-        <view class="ship-recipient">
-          <view class="ship-recipient-row">
-            <text class="ship-recipient-label">顾客</text>
-            <text class="ship-recipient-value">
-              {{ orderCustomerName || '未记录顾客' }}
-              <text v-if="orderCustomerPhone" class="ship-recipient-sub">{{ orderCustomerPhone }}</text>
-            </text>
-          </view>
-          <view class="ship-recipient-row">
-            <text class="ship-recipient-label">狗狗</text>
-            <text class="ship-recipient-value" :class="{ 'ship-recipient-missing': !shipDogSummary }">
-              {{ shipDogSummary || '未绑定狗狗' }}
-            </text>
-          </view>
-          <view class="ship-recipient-row">
-            <text class="ship-recipient-label">收货</text>
-            <view class="ship-recipient-address">
-              <block v-if="order.address">
-                <text class="ship-recipient-value">
-                  {{ order.address.recipientName }}
-                  <text class="ship-recipient-sub">{{ getOrderAddressPhone(order.address) }}</text>
-                </text>
-                <text class="ship-recipient-detail">
-                  {{ getOrderAddressRegionText(order.address) }} {{ getOrderAddressDetail(order.address) }}
-                </text>
-              </block>
-              <text v-else class="ship-recipient-value ship-recipient-missing">未录入收货地址</text>
-            </view>
-            <text v-if="order.address" class="ship-copy-pill" @tap.stop="copyFullAddress">复制地址</text>
-          </view>
-        </view>
-
-        <view class="form-item">
-          <text class="form-label">发货类型</text>
-          <view class="ship-type-row">
-            <text
-              class="ship-type-option"
-              :class="{ active: shippingType === 'NORMAL' }"
-              @tap="shippingType = 'NORMAL'"
-            >正常发货</text>
-            <text
-              class="ship-type-option"
-              :class="{ active: shippingType === 'NOT_REQUIRED' }"
-              @tap="shippingType = 'NOT_REQUIRED'"
-            >无需发货</text>
-          </view>
-        </view>
-
-        <block v-if="shippingType === 'NORMAL'">
-        <!-- 快递存根识别（2026-11-10）：拍一张就填好承运商/单号/运费。
-             结论由后端给：绿 = 核对通过；黄 = 没能核对（要手动确认）；红 = 对不上（不许发）。 -->
-        <WaybillReceiptBlock
-          :view="receiptView"
-          :busy="receiptState === 'recognizing'"
-          :has-image="receiptHasImage"
-          @pick="pickReceipt"
-          @manual="onManualReceipt"
-        />
-        <!-- 存根对不上时唯一的正路：先把地址改对，再回来传存根 -->
-        <view class="addr-link-row">
-          <text class="addr-link" @tap="goFixAddress">收件人对不上？改收货地址</text>
-        </view>
-        <view class="form-item">
-          <text class="form-label">物流公司</text>
-          <picker
-            mode="selector"
-            :range="carriers"
-            range-key="name"
-            :value="selectedCarrierIndex"
-            @change="onCarrierChange"
-          >
-            <view class="form-picker">
-              <text>{{ carriers[selectedCarrierIndex].name }}</text>
-              <text class="picker-arrow">▼</text>
-            </view>
-          </picker>
-        </view>
-        <view class="form-item">
-          <text class="form-label">物流单号</text>
-          <input v-model="trackingNumber" class="form-input" placeholder="请输入物流单号" :maxlength="50" />
-        </view>
-        <view class="form-item">
-          <text class="form-label">实际运费（元）</text>
-          <input
-            v-model="actualShippingFeeDraft"
-            class="form-input"
-            type="digit"
-            placeholder="必填，例如 12.50（用于财务统计）"
-            :maxlength="8"
-          />
-        </view>
-        </block>
-
-        <text v-else class="address-lock-hint">
-          自用单不寄快递：确认后这单直接结案，不产生物流单号，也不会给顾客发发货通知。
-        </text>
-        <button class="address-save-btn" :disabled="isShipping" @tap="confirmShipping">
-          {{ isShipping ? '发货中...' : '确认发货' }}
-        </button>
-      </view>
-    </view>
+    <!-- 发货抽屉（2026-11-10 抽成组件）：详情页和订单中心列表共用同一份，
+         免得两套发货流程各自长歪 -->
+    <StaffShipDrawer
+      v-if="order"
+      :visible="showShippingModal"
+      :order-id="order.id"
+      :customer-name="orderCustomerName"
+      :customer-phone="orderCustomerPhone"
+      :dog-summary="shipDogSummary"
+      :address="order.address"
+      :initial-tracking-number="order.trackingNumber || ''"
+      :initial-actual-shipping-fee="typeof order.actualShippingFee === 'number' ? order.actualShippingFee : null"
+      :initial-carrier-code="order.carrierCode || ''"
+      :cover-image-url="order.firstItem?.recipeSnapshot?.coverImageUrl || ''"
+      allow-address-fix
+      @close="showShippingModal = false"
+      @shipped="onShipped"
+      @fix-address="onFixAddress"
+    />
 
     <!-- 改实际运费（2026-11-07）：发货那一刻填错了，只有这里能救 -->
     <view v-if="feeVisible" class="modal-mask" @tap="closeFeePanel">
@@ -827,15 +736,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { CARRIERS, carrierIndexOf } from '../../constants/carriers'
-import WaybillReceiptBlock from '../../components/shipping/WaybillReceiptBlock.vue'
-import { buildReceiptView, type ReceiptView } from '../../utils/waybill-receipt-view'
-import {
-  createManualWaybill,
-  recognizeReceipt,
-  uploadReceiptImage,
-  type ReceiptConflict,
-} from '../../api/waybillReceipt'
+import { CARRIERS } from '../../constants/carriers'
+import StaffShipDrawer from '../../components/shipping/StaffShipDrawer.vue'
+import { buildShipDogSummary } from '../../utils/order-ship'
 import { onShareAppMessage } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import {
@@ -883,7 +786,8 @@ onMounted(() => {
   orderId.value = options.id || ''
   if (!orderId.value) return
 
-  // 订单中心卡片上点了「发货」→ 直接落到这一单并把发货弹窗打开
+  // 2026-11-11 起订单中心改成在列表里直接开发货抽屉了；
+  // 这里保留 `action=ship`，给外部/老链接（比如客服发给员工的链接）用
   const autoShip = options.action === 'ship'
   loadOrderDetail().then(() => {
     if (autoShip && canShip.value) shipOrder()
@@ -1030,228 +934,18 @@ const dogLoading = ref(false)
 const savingAddress = ref(false)
 const switchingDog = ref(false)
 const showShippingModal = ref(false)
-const selectedCarrierIndex = ref(0)
-const trackingNumber = ref('')
-/** 实际运费草稿（元，最多两位小数）；空 = 不记录 */
-const actualShippingFeeDraft = ref('')
 /** 改实际运费（2026-11-07）：发出去之后才发现填错，只能在这里救 */
 const feeVisible = ref(false)
 const feeDraft = ref('')
 const savingFee = ref(false)
-/** 改的是哪个包裹（合并/拆包后，运费挂在包裹上）；空 = 老订单直接改订单）
- */
+/** 改的是哪个包裹（合并/拆包后，运费挂在包裹上）；空 = 老订单直接改订单 */
 const feePackageId = ref('')
 /** 这一单所在的那一票（合并 / 拆包）；老订单为 null */
 const shipment = ref<any>(null)
-/** 发货类型：正常发货 / 无需发货（自用单，2026-10-31） */
-const shippingType = ref<'NORMAL' | 'NOT_REQUIRED'>('NORMAL')
-const isShipping = ref(false)
 const showShippingShareFallback = ref(false)
 const shippedShareOrderId = ref('')
 const shippedShareTitle = ref('SevenKitchen 已发货')
 const shippedShareImage = ref('')
-
-/**
- * 快递存根识别（2026-11-10）。
- *
- * 打包间拍一张存根就能填好三项；但**能不能发货不由这块说了算** ——
- * 真正的把关在服务端（提交时校验"这个号是对着这单收货人核过的"）。
- * 这里只负责把状态画对、把值填进去。
- */
-const receiptState = ref<'idle' | 'recognizing' | 'match' | 'unknown' | 'mismatch' | 'duplicate' | 'failed'>('idle')
-const receiptCarrierName = ref('')
-const receiptTracking = ref('')
-const receiptFee = ref<number | null>(null)
-const receiptConflicts = ref<ReceiptConflict[]>([])
-const receiptDuplicateLabel = ref('')
-const receiptMessage = ref('')
-const receiptHasImage = ref(false)
-/** 员工手动确认过（AI 认不出来 / 没能核对时）；提交前会被后端再验一次 */
-const receiptManualConfirmed = ref(false)
-/** 手动确认的是哪个单号：确认完再改号，这次确认就作废 */
-const receiptManualTracking = ref('')
-
-const receiptView = computed<ReceiptView>(() =>
-  buildReceiptView({
-    state: receiptState.value,
-    carrierName: receiptCarrierName.value || null,
-    trackingNumber: trackingNumber.value || null,
-    recognizedTrackingNumber: receiptTracking.value || null,
-    manualConfirmedTracking: receiptManualTracking.value || null,
-    shippingFee: receiptFee.value,
-    conflicts: receiptConflicts.value,
-    duplicateLabel: receiptDuplicateLabel.value || null,
-    manualConfirmed: receiptManualConfirmed.value,
-    message: receiptMessage.value || null,
-  }),
-)
-
-function resetReceipt() {
-  receiptState.value = 'idle'
-  receiptCarrierName.value = ''
-  receiptTracking.value = ''
-  receiptFee.value = null
-  receiptConflicts.value = []
-  receiptDuplicateLabel.value = ''
-  receiptMessage.value = ''
-  receiptHasImage.value = false
-  receiptManualConfirmed.value = false
-  receiptManualTracking.value = ''
-}
-
-/** 存根识别结果 → 表单三项。对不上时**一个都不填**。 */
-function applyReceipt(summary: {
-  carrierName?: string | null
-  carrierCode?: string | null
-  trackingNumber?: string | null
-  shippingFee?: number | null
-}) {
-  if (summary.carrierCode) {
-    selectedCarrierIndex.value = carrierIndexOf(summary.carrierCode)
-  }
-  if (summary.trackingNumber) {
-    trackingNumber.value = summary.trackingNumber
-  }
-  if (typeof summary.shippingFee === 'number') {
-    actualShippingFeeDraft.value = summary.shippingFee.toFixed(2)
-  }
-}
-
-async function recognizeByUrl(imageUrl: string) {
-  if (!order.value?.id) return
-
-  receiptState.value = 'recognizing'
-  receiptMessage.value = ''
-
-  try {
-    const result = await recognizeReceipt({
-      imageUrl,
-      orderIds: [order.value.id],
-    })
-
-    receiptCarrierName.value = result.receipt?.carrierName || ''
-    receiptTracking.value = result.receipt?.trackingNumber || ''
-    receiptFee.value = result.receipt?.shippingFee ?? null
-    receiptConflicts.value = result.match.conflicts || []
-    receiptDuplicateLabel.value = result.match.duplicate?.label || ''
-
-    const status = result.match.status
-    if (status === 'match') {
-      receiptState.value = 'match'
-      applyReceipt({
-        carrierCode: result.receipt?.carrierCode,
-        trackingNumber: result.receipt?.trackingNumber,
-        shippingFee: result.receipt?.shippingFee,
-      })
-      return
-    }
-
-    if (status === 'unknown') {
-      receiptState.value = 'unknown'
-      applyReceipt({
-        carrierCode: result.receipt?.carrierCode,
-        trackingNumber: result.receipt?.trackingNumber,
-        shippingFee: result.receipt?.shippingFee,
-      })
-      return
-    }
-
-    if (status === 'mismatch') {
-      receiptState.value = 'mismatch'
-      return
-    }
-
-    if (status === 'duplicate') {
-      receiptState.value = 'duplicate'
-      return
-    }
-
-    // degraded / not_waybill：认不出来，给手动出口
-    receiptState.value = 'failed'
-    receiptMessage.value =
-      status === 'not_waybill'
-        ? '这张不是快递存根（没有运单号），换一张或者手动填写'
-        : ''
-  } catch (error: any) {
-    receiptState.value = 'failed'
-    receiptMessage.value = error?.message || '识别失败，可以手动填写'
-  }
-}
-
-/** 关掉发货弹窗、直接打开这单已有的地址面板 */
-function goFixAddress() {
-  showShippingModal.value = false
-  openEditAddressForm()
-}
-
-async function pickReceipt() {
-  if (receiptState.value === 'recognizing') return
-
-  const chosen: any = await new Promise((resolve) => {
-    uni.chooseImage({
-      count: 1,
-      sizeType: ['compressed'],
-      sourceType: ['camera', 'album'],
-      success: resolve,
-      fail: () => resolve(null),
-    })
-  })
-
-  const filePath = chosen?.tempFilePaths?.[0]
-  if (!filePath) return
-
-  receiptHasImage.value = true
-  receiptState.value = 'recognizing'
-  // 换了图就是重新来过：上一张的"手动确认"不能带过来
-  receiptManualConfirmed.value = false
-  receiptManualTracking.value = ''
-
-  try {
-    const uploaded = await uploadReceiptImage(filePath)
-    await recognizeByUrl(uploaded.url)
-  } catch (error: any) {
-    receiptState.value = 'failed'
-    receiptMessage.value = error?.message || '上传失败，可以手动填写'
-  }
-}
-
-/** AI 认不出来 / 没能核对时，员工手动确认一次（留原因，后端会拒掉真对不上的） */
-function onManualReceipt() {
-  if (!order.value?.id) return
-  const value = String(trackingNumber.value || '').trim()
-  if (!value) {
-    uni.showToast({ title: '先在上面填运单号', icon: 'none' })
-    return
-  }
-
-  uni.showModal({
-    title: '手动确认发货',
-    editable: true,
-    placeholderText: '为什么手动填（例如：存根太糊）',
-    success: async (res) => {
-      if (!res.confirm) return
-      const reason = String(res.content || '').trim()
-      if (!reason) {
-        uni.showToast({ title: '必须写原因', icon: 'none' })
-        return
-      }
-      try {
-        await createManualWaybill({
-          orderIds: [order.value!.id],
-          trackingNumber: value,
-          reason,
-        })
-        receiptManualConfirmed.value = true
-        receiptManualTracking.value = value
-        receiptState.value = receiptHasImage.value ? 'unknown' : 'failed'
-        uni.showToast({ title: '已确认，可以发货', icon: 'success' })
-      } catch (error: any) {
-        uni.showToast({ title: error?.message || '提交失败', icon: 'none' })
-      }
-    },
-  })
-}
-
 const shareToken = ref('')
 const shareTokenOrderId = ref('')
 const sharePhotoImageUrl = ref('')
@@ -1730,18 +1424,7 @@ const dogLine = computed(() => {
  * 发货弹窗顶部的那一行「狗狗」：一单可能有多个明细、绑了不同的狗，
  * 寄件时要一次看清寄给谁家的哪几只。
  */
-const shipDogSummary = computed(() => {
-  const seen = new Map<string, any>()
-  orderItems.value.forEach((item) => {
-    const dog: any = item.dog
-    const key = String(dog?.id || dog?.name || '')
-    if (key && !seen.has(key)) seen.set(key, dog)
-  })
-  return Array.from(seen.values())
-    .map((dog) => [dog.name, dog.breedName, dog.weightKg ? `${dog.weightKg}kg` : ''].filter(Boolean).join(' · '))
-    .filter(Boolean)
-    .join('；')
-})
+const shipDogSummary = computed(() => buildShipDogSummary(orderItems.value))
 
 /**
  * 费用明细要算得平：商品 + 运费 = 实收。
@@ -2446,25 +2129,8 @@ async function shipOrder() {
     })
     return
   }
-  selectedCarrierIndex.value = 0
-  shippingType.value = 'NORMAL'
-  trackingNumber.value = order.value.trackingNumber || ''
-  actualShippingFeeDraft.value =
-    typeof order.value.actualShippingFee === 'number'
-      ? order.value.actualShippingFee.toFixed(2)
-      : ''
-  // 每次打开都是新的一张存根：上一单的识别结果绝不能留到这一单
-  resetReceipt()
+  // 表单的初值由抽屉自己按订单带进来；每打开一次都是新的一张存根
   showShippingModal.value = true
-}
-
-function closeShippingModal() {
-  if (isShipping.value) return
-  showShippingModal.value = false
-}
-
-function onCarrierChange(event: any) {
-  selectedCarrierIndex.value = Number(event.detail.value || 0)
 }
 
 /** 拉这一单所在的票（合并 / 拆包），没有就保持 null，走老渲染 */
@@ -2561,95 +2227,31 @@ async function saveShippingFee() {
   }
 }
 
-async function confirmShipping() {
-  // 存根没核对通过就不让点（后端还会再验一次，这里只是别让人白填一屏）
-  if (shippingType.value === 'NORMAL' && !receiptView.value.canShip) {
-    uni.showToast({ title: '先核对快递存根', icon: 'none' })
-    return
-  }
-  if (!order.value || isShipping.value) return
-
-  const isNoShipping = shippingType.value === 'NOT_REQUIRED'
-
-  let tracking = ''
-  let actualShippingFee: number | undefined
-
-  if (!isNoShipping) {
-    tracking = trackingNumber.value.trim()
-    if (tracking.length < 5) {
-      uni.showToast({ title: '请输入有效物流单号', icon: 'none' })
-      return
-    }
-
-    // 实际运费：必填，最多两位小数（2026-10-31 起不再选填）
-    const feeText = String(actualShippingFeeDraft.value || '').trim()
-    if (!feeText) {
-      uni.showToast({ title: '请填写实际运费', icon: 'none' })
-      return
-    }
-    if (!/^\d+(\.\d{1,2})?$/.test(feeText)) {
-      uni.showToast({ title: '运费最多两位小数，例如 12.50', icon: 'none' })
-      return
-    }
-    actualShippingFee = Number(feeText)
-  }
-
-  const orderId = order.value.id
-  isShipping.value = true
-  try {
-    await request({
-      url: `/admin/orders/${orderId}/ship`,
-      method: 'POST',
-      data: isNoShipping
-        ? { shippingType: 'NOT_REQUIRED' }
-        : {
-            shippingType: 'NORMAL',
-            carrierCode: carriers[selectedCarrierIndex.value].code,
-            trackingNumber: tracking,
-            actualShippingFee,
-            // 硬锁（2026-11-10）：服务端必须能查到「这个号对着这单收货人核过」
-            enforceWaybillCheck: true,
-          },
-    })
-    if (isNoShipping) {
-      showShippingModal.value = false
-      uni.showToast({ title: '已结案（无需发货）', icon: 'success' })
-      await loadOrderDetail()
-      return
-    }
-
-    shippedShareOrderId.value = orderId
-    shippedShareTitle.value = `SevenKitchen 已发货｜${carriers[selectedCarrierIndex.value].name} ${tracking}`
-    shippedShareImage.value = order.value.firstItem?.recipeSnapshot?.coverImageUrl || ''
+/**
+ * 抽屉发完货：详情页这边只做两件事 —— 弹出「转发给顾客」兜底 + 刷新订单。
+ * 「发货成功」的提示由抽屉自己弹，别在这里重复一遍。
+ */
+function onShipped(payload: {
+  orderId: string
+  noShipping: boolean
+  carrierName: string
+  trackingNumber: string
+  coverImageUrl: string
+}) {
+  showShippingModal.value = false
+  if (!payload.noShipping) {
+    shippedShareOrderId.value = payload.orderId
+    shippedShareTitle.value = `SevenKitchen 已发货｜${payload.carrierName} ${payload.trackingNumber}`
+    shippedShareImage.value = payload.coverImageUrl || ''
     showShippingShareFallback.value = true
-    try {
-      await request({
-        url: `/staff/shipping/orders/${orderId}/wechat-shipping-upload`,
-        method: 'POST',
-        suppressErrorToast: true,
-      })
-
-      uni.showToast({
-        title: '发货成功，已同步微信',
-        icon: 'success',
-      })
-    } catch (syncError) {
-      console.error('[OrderDetail] WeChat shipping sync error:', syncError)
-      uni.showToast({
-        title: '发货成功，微信发货同步失败',
-        icon: 'none',
-      })
-    }
-    showShippingModal.value = false
-    await loadOrderDetail()
-  } catch (error: any) {
-    uni.showToast({
-      title: error?.message || '发货失败',
-      icon: 'none',
-    })
-  } finally {
-    isShipping.value = false
   }
+  loadOrderDetail()
+}
+
+/** 存根对不上时的出口：关掉抽屉，直接打开这单的地址编辑 */
+function onFixAddress() {
+  showShippingModal.value = false
+  openEditAddressForm()
 }
 
 onShareAppMessage((event: any) => {

@@ -6,8 +6,16 @@ const detailSource = readFileSync(
   resolve(__dirname, 'staff-orders/detail.vue'),
   'utf8',
 );
+const shipDrawerSource = readFileSync(
+  resolve(__dirname, '../components/shipping/StaffShipDrawer.vue'),
+  'utf8',
+);
 const ordersApiSource = readFileSync(
   resolve(__dirname, '../api/orders.ts'),
+  'utf8',
+);
+const orderShipUtilSource = readFileSync(
+  resolve(__dirname, '../utils/order-ship.ts'),
   'utf8',
 );
 const productionDateUtilSource = readFileSync(
@@ -71,15 +79,17 @@ describe('staff order mobile operations', () => {
   });
 
   it('supports shipping directly from staff order detail', () => {
+    // 2026-11-11：抽屉抽成组件后，详情页和列表页用的是同一份
     expect(detailSource).toContain('showShippingModal');
-    expect(detailSource).toContain('confirmShipping');
-    expect(detailSource).toContain('/admin/orders/${orderId}/ship');
+    expect(detailSource).toContain('StaffShipDrawer');
+    expect(shipDrawerSource).toContain('confirmShipping');
+    expect(shipDrawerSource).toContain('/admin/orders/${orderId}/ship');
     expect(detailSource).not.toContain('请在电脑端操作发货');
   });
 
   it('syncs WeChat shipping info after mobile staff shipment', () => {
-    expect(detailSource).toContain('/staff/shipping/orders/${orderId}/wechat-shipping-upload');
-    expect(detailSource).toContain('微信发货同步失败');
+    expect(shipDrawerSource).toContain('/staff/shipping/orders/${orderId}/wechat-shipping-upload');
+    expect(shipDrawerSource).toContain('微信发货同步失败');
   });
 
   it('shows production usage, package plan, and ingredient totals on staff order detail', () => {
@@ -218,13 +228,13 @@ describe('staff order detail · 状态改版', () => {
   });
 
   it('★ 发货弹窗能录实际运费（两位小数），并传给后端', () => {
-    expect(detailSource).toContain('actualShippingFeeDraft');
-    expect(detailSource).toContain('实际运费（元）');
-    expect(detailSource).toContain("type=\"digit\"");
+    expect(shipDrawerSource).toContain('actualShippingFeeDraft');
+    expect(shipDrawerSource).toContain('实际运费（元）');
+    expect(shipDrawerSource).toContain("type=\"digit\"");
     // 正常发货必填运费；无需发货走另一条分支
-    expect(detailSource).toContain('actualShippingFee,');
-    expect(detailSource).toContain("shippingType: 'NOT_REQUIRED'");
-    expect(detailSource).toContain('发货类型');
+    expect(shipDrawerSource).toContain('actualShippingFee,');
+    expect(shipDrawerSource).toContain("shippingType: 'NOT_REQUIRED'");
+    expect(shipDrawerSource).toContain('发货类型');
   });
 
   it('★ 管理员备注开产后不再显示', () => {
@@ -440,38 +450,39 @@ describe('staff order detail · 管理员改预约制作日（2026-11-08）', ()
  */
 describe('staff order detail · 发货弹窗顶部顾客/狗狗/收货地址', () => {
   it('顾客、狗狗、收货三行放在发货类型之前', () => {
-    expect(detailSource).toContain('class="ship-recipient"');
-    expect(detailSource).toContain('ship-recipient-label">顾客');
-    expect(detailSource).toContain('ship-recipient-label">狗狗');
-    expect(detailSource).toContain('ship-recipient-label">收货');
+    expect(shipDrawerSource).toContain('class="ship-recipient"');
+    expect(shipDrawerSource).toContain('ship-recipient-label">顾客');
+    expect(shipDrawerSource).toContain('ship-recipient-label">狗狗');
+    expect(shipDrawerSource).toContain('ship-recipient-label">收货');
+    // 多只狗怎么拼，仍由详情页算好再传进来
     expect(detailSource).toContain('shipDogSummary');
     // 位置在「发货类型」前面：一打开弹窗就看得到
-    const recipientAt = detailSource.indexOf('class="ship-recipient"');
-    const shippingTypeAt = detailSource.indexOf('v-if="shippingType === \'NORMAL\'"');
-    const modalAt = detailSource.indexOf('v-if="showShippingModal"');
-    expect(modalAt).toBeGreaterThan(-1);
-    expect(recipientAt).toBeGreaterThan(modalAt);
+    const recipientAt = shipDrawerSource.indexOf('class="ship-recipient"');
+    const shippingTypeAt = shipDrawerSource.indexOf("v-if=\"shippingType === 'NORMAL'\"");
+    expect(recipientAt).toBeGreaterThan(-1);
     expect(recipientAt).toBeLessThan(shippingTypeAt);
   });
 
   it('地址一键复制，复用详情页的复制地址逻辑', () => {
-    expect(detailSource).toContain('class="ship-copy-pill" @tap.stop="copyFullAddress"');
-    expect(detailSource).toContain('地址已复制');
+    expect(shipDrawerSource).toContain('class="ship-copy-pill" @tap.stop="copyAddress"');
+    expect(shipDrawerSource).toContain('地址已复制');
     // 复制内容带上收货人和电话，粘到顺丰就能用
-    expect(detailSource).toContain('getOrderAddressPhone(address)');
-    expect(detailSource).toContain('getOrderAddressRegionText(address)');
-    expect(detailSource).toContain('getOrderAddressDetail(address)');
+    expect(shipDrawerSource).toContain('buildOrderAddressCopyText');
+    expect(shipDrawerSource).toContain('getOrderAddressPhone');
+    expect(shipDrawerSource).toContain('getOrderAddressRegionText');
+    expect(shipDrawerSource).toContain('getOrderAddressDetail');
   });
 
   it('一单多只狗时并列写出来，不是只显示第一只', () => {
-    expect(detailSource).toContain('const shipDogSummary = computed');
-    expect(detailSource).toContain("if (key && !seen.has(key)) seen.set(key, dog)");
-    expect(detailSource).toContain(".join('；')");
+    // 2026-11-11：拼法抽到 utils，详情页和列表页共用
+    expect(detailSource).toContain('buildShipDogSummary(orderItems.value)');
+    expect(orderShipUtilSource).toContain('if (dog && key && !seen.has(key)) seen.set(key, dog)');
+    expect(orderShipUtilSource).toContain(".join('；')");
   });
 
   it('没录地址时给提示，不留一个空白的「复制地址」按钮', () => {
-    expect(detailSource).toContain('未录入收货地址');
-    expect(detailSource).toContain('v-if="order.address" class="ship-copy-pill"');
+    expect(shipDrawerSource).toContain('未录入收货地址');
+    expect(shipDrawerSource).toContain('v-if="address" class="ship-copy-pill"');
   });
 });
 

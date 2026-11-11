@@ -192,6 +192,25 @@
         去发货
       </button>
     </view>
+
+    <!-- 列表直接发货（2026-11-11 老板要求）：不再跳到详情页，
+         发完留在这一页继续发下一单。抽屉和详情页是同一份组件。 -->
+    <StaffShipDrawer
+      v-if="shipDrawerVisible"
+      :visible="shipDrawerVisible"
+      :order-id="shipOrderData?.id || ''"
+      :customer-name="shipSourceItem?.customerName || ''"
+      :customer-phone="shipSourceItem?.customerPhone || ''"
+      :dog-summary="shipDogSummary"
+      :address="shipOrderData?.address || null"
+      :initial-tracking-number="shipOrderData?.trackingNumber || ''"
+      :initial-actual-shipping-fee="typeof shipOrderData?.actualShippingFee === 'number' ? shipOrderData.actualShippingFee : null"
+      :initial-carrier-code="shipOrderData?.carrierCode || ''"
+      :cover-image-url="shipOrderData?.firstItem?.recipeSnapshot?.coverImageUrl || ''"
+      @close="shipDrawerVisible = false"
+      @shipped="onShipped"
+      @fix-address="onFixAddress"
+    />
   </view>
 </template>
 
@@ -200,6 +219,8 @@ import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import { getStoredUser } from '../../utils/account'
+import StaffShipDrawer from '../../components/shipping/StaffShipDrawer.vue'
+import { buildShipDogSummary } from '../../utils/order-ship'
 
 /** 代客下单只对管理员开放（后端接口同步收口到 AdminGuard） */
 const isAdmin = getStoredUser()?.role === 'ADMIN'
@@ -545,18 +566,88 @@ function startMergeShipment() {
 }
 
 /**
- * 发货不在列表里直接弹窗：餐饮类的发货要选快递公司、要走地址校验，
- * 复制一套必然和详情页对不上。这里直接跳到详情并**自动打开**发货弹窗。
+ * 发货（2026-11-11 改）：鲜食单直接在列表里开抽屉，不再跳详情页 ——
+ * 一天多单发货时，跳进详情再退回来每单都得多点两下。
+ *
+ * 抽屉和详情页用**同一个组件**，所以不会出现两套发货流程；
+ * 收货人/电话对不上时仍然只能去详情页改地址，抽屉里留了入口。
+ *
+ * 补剂单还是走它自己的详情页（补剂有独立的分装/发货流程）。
  */
-function openShip(item: OrderCenterItem) {
+async function openShip(item: OrderCenterItem) {
   if (item.type === 'SUPPLEMENT') {
     uni.navigateTo({
       url: `/pages/staff-supplement-orders/detail?id=${encodeURIComponent(item.id)}&action=ship`,
     })
     return
   }
+  await openShipDrawer(item)
+}
+
+const shipDrawerVisible = ref(false)
+/** 正在拉这一单的详情（防连点，别开两个抽屉） */
+const shipLoading = ref(false)
+/** 抽屉要的是「当前地址」，列表卡片上只有一个地址摘要，所以点开时现拉一次详情 */
+const shipOrderData = ref<any>(null)
+const shipSourceItem = ref<OrderCenterItem | null>(null)
+
+const shipDogSummary = computed(() => {
+  const data = shipOrderData.value
+  const items =
+    data && Array.isArray(data.items) && data.items.length
+      ? data.items
+      : data?.firstItem
+        ? [data.firstItem]
+        : []
+  return buildShipDogSummary(items) || shipSourceItem.value?.dogName || ''
+})
+
+async function openShipDrawer(item: OrderCenterItem) {
+  if (shipLoading.value) return
+  shipLoading.value = true
+  uni.showLoading({ title: '加载中...', mask: true })
+  try {
+    const res = await request({
+      url: `/admin/orders/${encodeURIComponent(item.id)}`,
+      method: 'GET',
+    })
+    const data = res?.data
+    if (!data) {
+      uni.showToast({ title: '订单加载失败，请重试', icon: 'none' })
+      return
+    }
+    const address = data.address
+    if (!address || !(address.phone || address.recipientPhone)) {
+      uni.showToast({ title: '请先补全收货地址和手机号', icon: 'none' })
+      return
+    }
+    shipOrderData.value = data
+    shipSourceItem.value = item
+    shipDrawerVisible.value = true
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '订单加载失败，请重试', icon: 'none' })
+  } finally {
+    shipLoading.value = false
+    uni.hideLoading()
+  }
+}
+
+/** 发完货：关掉抽屉、刷新列表，人还留在订单中心，方便接着发下一单 */
+function onShipped() {
+  shipDrawerVisible.value = false
+  load()
+}
+
+/**
+ * 收件人对不上：地址只能去详情页改（列表没有地址面板）。
+ * 不自动打开发货弹窗 —— 先把地址改对，回来再发。
+ */
+function onFixAddress() {
+  const id = shipOrderData.value?.id || shipSourceItem.value?.id
+  shipDrawerVisible.value = false
+  if (!id) return
   uni.navigateTo({
-    url: `/pages/staff-orders/detail?id=${encodeURIComponent(item.id)}&action=ship`,
+    url: `/pages/staff-orders/detail?id=${encodeURIComponent(id)}`,
   })
 }
 

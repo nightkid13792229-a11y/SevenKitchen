@@ -361,3 +361,39 @@ describe('staff order center · 退款待审核', () => {
     expect(orderCenter).toContain('needsRefundReview?: boolean')
   })
 })
+
+/**
+ * 2026-11-11：老板要求 —— 列表点「发货」别再跳到详情页。
+ * 一天多单时，跳进去再退回来每单多点两下。
+ */
+describe('staff order center · 列表直接发货', () => {
+  it('鲜食单在列表里开抽屉，不再跳详情页', () => {
+    expect(orderCenter).toContain('StaffShipDrawer')
+    expect(orderCenter).toContain('async function openShipDrawer')
+    expect(orderCenter).toContain('shipDrawerVisible.value = true')
+    // 先拉一次当前地址（列表卡片上只有地址摘要）
+    expect(orderCenter).toContain('/admin/orders/${encodeURIComponent(item.id)}')
+    // 老做法「跳详情 + 自动打开弹窗」已删掉
+    expect(orderCenter).not.toContain(
+      '/pages/staff-orders/detail?id=${encodeURIComponent(item.id)}&action=ship',
+    )
+  })
+
+  it('发完货留在列表：关掉抽屉刷新，接着发下一单', () => {
+    expect(orderCenter).toContain('function onShipped()')
+    expect(orderCenter).toContain('shipDrawerVisible.value = false')
+    expect(orderCenter).toContain('load()')
+  })
+
+  it('地址不对时仍去详情页改（列表没有地址面板）', () => {
+    expect(orderCenter).toContain('function onFixAddress()')
+    expect(orderCenter).toContain('/pages/staff-orders/detail?id=')
+    expect(orderCenter).toContain('@fix-address="onFixAddress"')
+  })
+
+  it('补剂单仍走它自己的详情页（分装/发货流程不同）', () => {
+    expect(orderCenter).toContain(
+      '/pages/staff-supplement-orders/detail?id=${encodeURIComponent(item.id)}&action=ship',
+    )
+  })
+})

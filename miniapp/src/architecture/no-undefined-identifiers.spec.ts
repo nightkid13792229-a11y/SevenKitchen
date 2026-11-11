@@ -176,7 +176,13 @@ function collectTemplateLocals(template: string): Set<string> {
 function collectBoundNames(text: string): Set<string> {
   const bound = new Set<string>()
   const add = (raw: string) => {
-    const name = raw.trim().replace(/^\.\.\./, '').split(':')[0].trim()
+    const name = raw
+      .trim()
+      .replace(/^\.\.\./, '')
+      .split(':')[0]
+      .trim()
+      // 可选参数 / 可选属性：`address?: X` 去掉问号才算名字（2026-11-11 补）
+      .replace(/\?$/, '')
     if (/^[A-Za-z_$][\w$]*$/.test(name)) bound.add(name)
   }
 

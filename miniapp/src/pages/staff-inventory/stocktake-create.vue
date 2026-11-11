@@ -114,7 +114,14 @@
       </scroll-view>
 
       <view class="autosave">
-        {{ saving ? '保存中…' : `已自动保存 ${savedAt || '—'}` }} · 没填完也能先走
+        {{
+          saving
+            ? '保存中…'
+            : savedAt
+              ? `已自动保存 ${savedAt}`
+              : '改动会自动保存'
+        }}
+        · 没填完也能先走
       </view>
       <view class="bottom">
         <button class="btn primary" :loading="saving" @tap="onNext">

@@ -31,3 +31,13 @@ describe('补货页', () => {
     expect(pagesJson).toContain('"path": "replenishment/edit"');
   });
 });
+
+describe('补货列表 UX 收口', () => {
+  it('has a voided filter, an error retry, and end-of-day overdue copy', () => {
+    expect(source).toContain("value: 'VOIDED'");
+    expect(source).toContain('voidedOnly');
+    expect(source).toContain('加载失败');
+    expect(source).toContain('已超期');
+    expect(source).toContain('endOfDay');
+  });
+});

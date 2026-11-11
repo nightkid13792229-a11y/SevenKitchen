@@ -55,8 +55,8 @@
       </view>
 
       <view v-if="filteredPurchaseLists.length === 0" class="empty-state">
-        <text class="empty-title">暂无可选采购清单</text>
-        <text class="empty-desc">包材采购请先创建包材补货清单，再回来关联报销。</text>
+        <text class="empty-title">暂无可报销的采购记录</text>
+        <text class="empty-desc">补货记录保存后就会出现在这里；包材采购也走「补货」记一笔。</text>
       </view>
 
       <view v-else class="purchase-list">
@@ -70,10 +70,16 @@
           <view class="purchase-main">
             <view class="purchase-title-row">
               <text class="purchase-kind">{{ getPurchaseListKindLabel(list) }}</text>
-              <text class="purchase-date">{{ formatDate(list.targetDate) }}</text>
+              <text class="purchase-date">{{ formatDate(list.orderPlacedAt || list.targetDate) }}</text>
             </view>
+            <text v-if="list.kind === 'STOCK_REPLENISHMENT'" class="purchase-order">
+              {{ list.channel || '渠道未填' }}<text v-if="list.orderNo"> · #{{ list.orderNo }}</text>
+            </text>
             <text class="purchase-summary">{{ getPurchaseListSummary(list) }}</text>
-            <text class="purchase-meta">{{ list.itemCount || getPurchaseItems(list).length || 0 }} 项 · ¥{{ getPurchaseListAmount(list).toFixed(2) }}</text>
+            <text v-if="list.kind === 'STOCK_REPLENISHMENT'" class="purchase-meta">
+              {{ list.itemCount || getPurchaseItems(list).length || 0 }} 项 · 实付 ¥{{ Number(list.paidAmount || 0).toFixed(2) }} · 本次报销 ¥{{ getPurchaseListAmount(list).toFixed(2) }}
+            </text>
+            <text v-else class="purchase-meta">{{ list.itemCount || getPurchaseItems(list).length || 0 }} 项 · ¥{{ getPurchaseListAmount(list).toFixed(2) }}</text>
           </view>
           <text class="select-state">{{ selectedListIds.includes(list.id) ? '已选' : '选择' }}</text>
         </view>
@@ -111,7 +117,7 @@
       </view>
 
       <view v-if="!hasPackagingLists" class="notice-strip">
-        <text>包材清单会进入采购报销，不放在经营费用里。没有包材清单时，请先到补货里创建包材补货清单。</text>
+        <text>包材采购也走「补货」记一笔，保存后就能在这里报销。</text>
       </view>
 
       <view v-if="voucherEffective !== null" class="voucher-card">
@@ -424,7 +430,7 @@ const visibleSteps = computed(() => {
 const stepSubtitle = computed(() => {
   const copy: Record<ReimbursementFlowStep, string> = {
     TYPE: '先选这次报销属于哪类支出',
-    PURCHASE_DETAILS: '选择一张或多张已完成采购清单',
+    PURCHASE_DETAILS: '选择要报销的采购记录',
     OPERATING_DETAILS: '一次可以添加多项经营费用',
     RECEIPTS: '上传能看清金额和支付时间的凭证',
     CONFIRM: '核对无误后再交给管理员处理',
@@ -568,7 +574,7 @@ const selectLoadedPurchaseList = (purchaseListId: string) => {
 
   if (!loaded) {
     uni.showToast({
-      title: '采购清单暂不可报销，请返回清单重试',
+      title: '这条记录现在不能报销（可能已报销或作废），请回补货列表重新进入',
       icon: 'none',
     });
     return;
@@ -1231,6 +1237,7 @@ const formatDate = (dateStr: string) => {
 }
 
 .type-desc,
+.purchase-order,
 .purchase-summary,
 .purchase-meta,
 .empty-desc,

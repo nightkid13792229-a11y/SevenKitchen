@@ -13,7 +13,7 @@ const summaryBlock = source.slice(
 describe('order import review summary', () => {
   it('uses the reconciled amount in the top banner instead of the booked purchase amount', () => {
     expect(summaryBlock).not.toBe('');
-    expect(summaryBlock).toContain('核对金额');
+    expect(summaryBlock).toContain('商品+费用合计');
     expect(summaryBlock).not.toContain('采购金额');
     expect(summaryBlock).toContain('money(reconcileAmount)');
     expect(summaryBlock).not.toContain('activeSummary.matchedAmount');
@@ -74,7 +74,7 @@ describe('order import edit sheet（2026-11-05 改版）', () => {
     expect(sheetBlock).toContain('class="amount-grid"');
     expect(sheetBlock).toContain('stepQty(-1)');
     expect(sheetBlock).not.toContain('净含量/规格');
-    expect(sheetBlock).toContain('匹配商品');
+    expect(sheetBlock).toContain('对应商品');
   });
 
   it('认不准的行在清单上标「待确认」，不再一律写「已匹配」', () => {
@@ -298,5 +298,15 @@ describe('采购记录必须挂商品', () => {
   it('弹窗里仍然保留新建采购商品入口：散称也要落到商品上', () => {
     expect(source).toContain('新建采购商品');
     expect(source).toContain('goNewSku');
+  });
+});
+
+describe('补货核对 UX 收口', () => {
+  it('deletes a bad line, edits order info, and shows the reimbursement amount', () => {
+    expect(source).toContain('deleteOrderImportLine');
+    expect(source).toContain('删掉这一行');
+    expect(source).toContain('订单信息');
+    expect(source).toContain('本次报销');
+    expect(source).toContain('confirmDuplicateOrderIfAny');
   });
 });

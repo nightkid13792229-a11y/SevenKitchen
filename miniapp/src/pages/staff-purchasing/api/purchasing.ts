@@ -1320,6 +1320,7 @@ export function updateOrderImport(
     shippingFee?: number | null;
     packagingFee?: number | null;
     paid?: number | null;
+    expectedDeliveryAt?: string | null;
   },
 ) {
   return request({
@@ -1417,6 +1418,7 @@ export function listReplenishmentRecords(params: {
   page?: number;
   pageSize?: number;
   includeVoided?: boolean;
+  voidedOnly?: boolean;
 }) {
   return request({
     url: '/staff/purchasing/replenishment',
@@ -1499,5 +1501,45 @@ export function createOrderImportLine(
     url: `/staff/purchasing/order-imports/${importId}/lines`,
     method: 'POST',
     data,
+  });
+}
+
+export function deleteOrderImportLine(importId: string, lineId: string) {
+  return request({
+    url: `/staff/purchasing/order-imports/${importId}/lines/${lineId}`,
+    method: 'DELETE',
+  });
+}
+
+export function deleteReplenishmentItem(recordId: string, itemId: string) {
+  return request({
+    url: `/staff/purchasing/replenishment/${recordId}/items/${itemId}`,
+    method: 'DELETE',
+  });
+}
+
+
+export function getIngredientProcurementSkus(ingredientId: string) {
+  return request({
+    url: `/staff/purchasing/ingredients/${ingredientId}/procurement-skus`,
+    method: 'GET',
+  });
+}
+
+export function findDuplicateReplenishmentOrder(params: {
+  orderNo: string;
+  channel?: string | null;
+  excludeId?: string | null;
+}) {
+  const query = [
+    `orderNo=${encodeURIComponent(params.orderNo)}`,
+    params.channel ? `channel=${encodeURIComponent(params.channel)}` : '',
+    params.excludeId ? `excludeId=${encodeURIComponent(params.excludeId)}` : '',
+  ]
+    .filter(Boolean)
+    .join('&');
+  return request({
+    url: `/staff/purchasing/replenishment/duplicate-order?${query}`,
+    method: 'GET',
   });
 }

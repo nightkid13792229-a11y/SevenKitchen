@@ -77,7 +77,16 @@
 
     <view class="quick-entry-card" @tap="goToStockCreate">
       <view class="quick-entry-copy">
-        <text class="quick-entry-title">补货</text>
+        <view class="quick-entry-title-row">
+          <text class="quick-entry-title">补货</text>
+          <text
+            v-if="replenishmentPending > 0"
+            class="quick-entry-badge"
+            :class="{ overdue: replenishmentOverdue }"
+          >
+            待收货 {{ replenishmentPending }}
+          </text>
+        </view>
         <text class="quick-entry-subtitle">海产、冻品、补剂、包材等提前备货走这里</text>
       </view>
       <text class="quick-entry-arrow">›</text>
@@ -182,6 +191,7 @@ import {
   deletePurchaseList,
   generatePurchaseList,
   getPurchaseLists,
+  listReplenishmentRecords,
   previewPurchaseList,
 } from './api/purchasing';
 
@@ -221,6 +231,8 @@ const statusOptions = [
 const selectedStatus = ref('');
 const purchaseLists = ref<any[]>([]);
 const loading = ref(false);
+const replenishmentPending = ref(0);
+const replenishmentOverdue = ref(false);
 const generating = ref(false);
 const currentPage = ref(1);
 const pageSize = 20;
@@ -867,6 +879,37 @@ const goToDetail = (id: string) => {
   });
 };
 
+const loadReplenishmentBadge = async () => {
+  try {
+    const res: any = await listReplenishmentRecords({
+      arrival: 'IN_TRANSIT',
+      page: 1,
+      pageSize: 50,
+    });
+    if (res?.code === 0) {
+      const list = Array.isArray(res.data?.list) ? res.data.list : [];
+      replenishmentPending.value = Number(res.data?.total || 0);
+      replenishmentOverdue.value = list.some((record: any) => {
+        if (!record.expectedDeliveryAt) return false;
+        const expected = new Date(record.expectedDeliveryAt);
+        if (Number.isNaN(expected.getTime())) return false;
+        const endOfDay = new Date(
+          expected.getFullYear(),
+          expected.getMonth(),
+          expected.getDate() + 1,
+          0,
+          0,
+          0,
+          0,
+        ).getTime();
+        return Date.now() >= endOfDay;
+      });
+    }
+  } catch {
+    // 角标失败不影响主列表
+  }
+};
+
 const goToStockCreate = () => {
   uni.navigateTo({
     url: '/pages/staff-purchasing/replenishment/index',
@@ -973,6 +1016,7 @@ onMounted(() => {
 });
 
 onShow(() => {
+  void loadReplenishmentBadge();
   if (isMounted.value) {
     todayString.value = getLocalDateString();
     loadPurchaseLists(true);
@@ -1537,5 +1581,24 @@ onShow(() => {
 
 .import-metric {
   color: #2f6b4f;
+}
+
+.quick-entry-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.quick-entry-badge {
+  padding: 2rpx 12rpx;
+  border-radius: 999rpx;
+  background: #eef3e8;
+  color: #2f6b4f;
+  font-size: 20rpx;
+}
+
+.quick-entry-badge.overdue {
+  background: #fdecea;
+  color: #a12a26;
 }
 </style>

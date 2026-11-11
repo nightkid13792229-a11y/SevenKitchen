@@ -17,8 +17,10 @@
       {{ starting ? '处理中...' : '记一笔补货' }}
     </button>
 
+    <text class="shot-hint">1 张 = 1 笔订单；同一笔订单请截一张长图</text>
+
     <view class="manual-entry" @tap="startManualRecord">
-      <text class="manual-title">AI 用不了？手填一条</text>
+      <text class="manual-title">不想传截图？手填一条</text>
       <text class="manual-hint">不传截图，直接选商品记</text>
     </view>
 
@@ -38,9 +40,15 @@
       <text>正在加载补货记录...</text>
     </view>
 
+    <view v-else-if="errorText && records.length === 0" class="state-card">
+      <text class="state-title">加载失败</text>
+      <text class="state-hint">{{ errorText }}</text>
+      <button class="retry-btn" @tap="refresh">重试</button>
+    </view>
+
     <view v-else-if="records.length === 0" class="state-card">
-      <text class="state-title">还没有补货记录</text>
-      <text class="state-hint">下单后点「记一笔补货」，传订单截图就能记。</text>
+      <text class="state-title">{{ emptyTitle }}</text>
+      <text class="state-hint">{{ emptyHint }}</text>
     </view>
 
     <view v-else class="record-list">
@@ -62,19 +70,25 @@
         <view class="badges">
           <text class="badge arrival" :class="arrivalTone(record)">{{ arrivalText(record) }}</text>
           <text class="badge claim" :class="claimTone(record)">{{ claimText(record) }}</text>
-          <text v-if="isOverdue(record)" class="badge overdue-badge">预计 {{ formatDate(record.expectedDeliveryAt) }} 到货</text>
+          <text v-if="isOverdue(record)" class="badge overdue-badge">已超期 · 预计 {{ formatDate(record.expectedDeliveryAt) }} 到货</text>
         </view>
 
         <view class="record-metrics">
-          <text class="metric">{{ record.itemCount }} 种商品</text>
-          <text v-if="record.reimbursementAmount !== null && record.reimbursementAmount !== undefined" class="metric amount">
-            本次报销 ¥{{ formatMoney(record.reimbursementAmount) }}
-          </text>
-          <text v-else-if="record.paidAmount" class="metric amount">实付 ¥{{ formatMoney(record.paidAmount) }}</text>
+          <text v-if="record.voidedAt" class="metric">已作废 · 不计库存、不报销</text>
+          <template v-else>
+            <text class="metric">{{ record.itemCount }} 项</text>
+            <text v-if="record.reimbursementAmount !== null && record.reimbursementAmount !== undefined" class="metric amount">
+              本次报销 ¥{{ formatMoney(record.reimbursementAmount) }}
+            </text>
+            <text v-else-if="record.paidAmount" class="metric amount">实付 ¥{{ formatMoney(record.paidAmount) }}</text>
+          </template>
         </view>
       </view>
 
-      <view v-if="hasMore" class="load-more" @tap="loadMore">
+      <view v-if="errorText" class="load-more" @tap="refresh">
+        <text>加载失败，点重试</text>
+      </view>
+      <view v-else-if="hasMore" class="load-more" @tap="loadMore">
         <text>{{ loading ? '加载中...' : '加载更多' }}</text>
       </view>
     </view>
@@ -93,19 +107,28 @@ import {
   type ReplenishmentRecordSummary,
 } from '../api/purchasing';
 
-type FilterValue = 'ALL' | 'IN_TRANSIT' | 'PENDING_CLAIM' | 'REIMBURSED';
+type FilterValue =
+  | 'ALL'
+  | 'IN_TRANSIT'
+  | 'PENDING_CLAIM'
+  | 'REIMBURSED'
+  | 'VOIDED';
 
 const filterOptions: Array<{ label: string; value: FilterValue }> = [
   { label: '全部', value: 'ALL' },
   { label: '在途', value: 'IN_TRANSIT' },
   { label: '待报销', value: 'PENDING_CLAIM' },
   { label: '已报销', value: 'REIMBURSED' },
+  { label: '已作废', value: 'VOIDED' },
 ];
 
 const records = ref<ReplenishmentRecordSummary[]>([]);
 const loading = ref(false);
+const errorText = ref('');
+let loadSeq = 0;
 const starting = ref(false);
 const startingManual = ref(false);
+let shotHintShown = false;
 const activeFilter = ref<FilterValue>('ALL');
 const page = ref(1);
 const pageSize = 20;
@@ -113,6 +136,28 @@ const total = ref(0);
 const inTransitCount = ref(0);
 
 const hasMore = computed(() => records.value.length < total.value);
+
+const emptyTitle = computed(() => {
+  switch (activeFilter.value) {
+    case 'IN_TRANSIT':
+      return '没有在途的补货';
+    case 'PENDING_CLAIM':
+      return '没有待报销的补货';
+    case 'REIMBURSED':
+      return '没有已报销的补货';
+    case 'VOIDED':
+      return '没有已作废的补货';
+    default:
+      return '还没有补货记录';
+  }
+});
+
+const emptyHint = computed(() =>
+  activeFilter.value === 'ALL'
+    ? '下单后点「记一笔补货」，传订单截图就能记。'
+    : '换个筛选看看。',
+);
+
 
 const filterParams = computed(() => {
   switch (activeFilter.value) {
@@ -122,6 +167,8 @@ const filterParams = computed(() => {
       return { claim: 'UNSUBMITTED' as const };
     case 'REIMBURSED':
       return { claim: 'REIMBURSED' as const };
+    case 'VOIDED':
+      return { includeVoided: true, voidedOnly: true };
     default:
       return {};
   }
@@ -151,8 +198,19 @@ const isOverdue = (record: ReplenishmentRecordSummary) => {
   if (record.arrivedAt || record.voidedAt || !record.expectedDeliveryAt) {
     return false;
   }
-  const expected = new Date(record.expectedDeliveryAt).getTime();
-  return Number.isFinite(expected) && Date.now() > expected;
+  const expected = new Date(record.expectedDeliveryAt);
+  if (Number.isNaN(expected.getTime())) return false;
+  // 预计到货是“哪一天”，当天 23:59 之前都不算超期。
+  const endOfDay = new Date(
+    expected.getFullYear(),
+    expected.getMonth(),
+    expected.getDate() + 1,
+    0,
+    0,
+    0,
+    0,
+  ).getTime();
+  return Date.now() >= endOfDay;
 };
 
 const arrivalText = (record: ReplenishmentRecordSummary) => {
@@ -170,6 +228,9 @@ const arrivalTone = (record: ReplenishmentRecordSummary) => {
 };
 
 const claimText = (record: ReplenishmentRecordSummary) => {
+  if (record.voidedAt) {
+    return '不报销';
+  }
   if (record.reimbursementStatus === 'REIMBURSED') {
     return '已报销';
   }
@@ -180,6 +241,9 @@ const claimText = (record: ReplenishmentRecordSummary) => {
 };
 
 const claimTone = (record: ReplenishmentRecordSummary) => {
+  if (record.voidedAt) {
+    return 'muted';
+  }
   if (record.reimbursementStatus === 'REIMBURSED') {
     return 'done';
   }
@@ -190,31 +254,35 @@ const claimTone = (record: ReplenishmentRecordSummary) => {
 };
 
 const loadRecords = async (reset = false) => {
-  if (loading.value) {
-    return;
-  }
+  const seq = ++loadSeq;
   if (reset) {
     page.value = 1;
     records.value = [];
   }
   loading.value = true;
+  errorText.value = '';
   try {
     const res: any = await listReplenishmentRecords({
       ...filterParams.value,
       page: page.value,
       pageSize,
     });
+    if (seq !== loadSeq) return;
     if (res?.code === 0) {
       const list = Array.isArray(res.data?.list) ? res.data.list : [];
       records.value = reset ? list : [...records.value, ...list];
       total.value = Number(res.data?.total || 0);
     } else {
-      uni.showToast({ title: res?.message || '加载失败', icon: 'none' });
+      errorText.value = res?.message || '请检查网络后重试';
     }
   } catch (error: any) {
-    uni.showToast({ title: error?.message || '加载失败', icon: 'none' });
+    if (seq === loadSeq) {
+      errorText.value = error?.message || '请检查网络后重试';
+    }
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) {
+      loading.value = false;
+    }
   }
 };
 
@@ -261,6 +329,21 @@ const goDetail = (id: string) => {
 const startRecord = async () => {
   if (starting.value || startingManual.value) {
     return;
+  }
+
+  if (!shotHintShown) {
+    const understood = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '1 张 = 1 笔订单',
+        content:
+          '一次最多传 5 张。同一笔订单请截一张长图，不要分两张传，否则会记成两笔、库存和报销都会翻倍。',
+        confirmText: '知道了，去选图',
+        success: (res) => resolve(Boolean(res.confirm)),
+        fail: () => resolve(false),
+      });
+    });
+    if (!understood) return;
+    shotHintShown = true;
   }
 
   const chosen: any = await new Promise((resolve) => {
@@ -625,5 +708,23 @@ onShow(() => {
 .manual-hint {
   font-size: 22rpx;
   color: #6b6653;
+}
+
+.shot-hint {
+  font-size: 22rpx;
+  color: #8a846f;
+  text-align: center;
+  margin-top: -8rpx;
+}
+
+.retry-btn {
+  margin-top: 16rpx;
+  padding: 0 36rpx;
+  height: 68rpx;
+  line-height: 68rpx;
+  border-radius: 999rpx;
+  background: #1e3a2f;
+  color: #f3eddd;
+  font-size: 26rpx;
 }
 </style>

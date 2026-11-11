@@ -25,10 +25,14 @@
 
       <view class="amount-card">
         <view class="amount-main">
-          <text class="amount-label">本次报销</text>
+          <text class="amount-label">{{ reimbursementLabel }}</text>
           <text class="amount-value">¥{{ money(record.reimbursementAmount ?? 0) }}</text>
         </view>
         <view class="amount-rows">
+          <view v-if="record.subtotalAmount !== null && record.subtotalAmount !== undefined" class="amount-row muted">
+            <text>商品小计</text>
+            <text>¥{{ money(record.subtotalAmount) }}</text>
+          </view>
           <view class="amount-row">
             <text>订单实付</text>
             <text>¥{{ money(record.paidAmount ?? 0) }}</text>
@@ -46,11 +50,11 @@
             <text>¥{{ money(record.packagingFee) }}</text>
           </view>
           <view v-if="Number(record.discountAmount || 0) !== 0" class="amount-row muted">
-            <text>优惠/调整</text>
-            <text>-¥{{ money(Math.abs(Number(record.discountAmount))) }}</text>
+            <text>{{ Number(record.discountAmount) > 0 ? '优惠' : '其他费用' }}</text>
+            <text>{{ Number(record.discountAmount) > 0 ? '-' : '+' }}¥{{ money(Math.abs(Number(record.discountAmount))) }}</text>
           </view>
         </view>
-        <view v-if="record.reimbursement" class="claim-line" @tap="viewClaim">
+        <view v-if="record.reimbursement && canOperate" class="claim-line" @tap="viewClaim">
           <text>报销单 {{ record.reimbursement.claimNumber }} · {{ claimStatusText(record.reimbursement.status) }}</text>
           <text>›</text>
         </view>
@@ -69,6 +73,14 @@
           <text class="info-label">作废时间</text>
           <text class="info-value">{{ formatDateTime(record.voidedAt) }}</text>
         </view>
+        <view class="info-row">
+          <text class="info-label">记录人</text>
+          <text class="info-value">{{ record.createdBy?.nickname || '同事' }}</text>
+        </view>
+      </view>
+
+      <view v-if="!canOperate" class="lock-note">
+        <text>这笔是 {{ record.createdBy?.nickname || '同事' }} 记的，只有本人或管理员能改；你可以查看。</text>
       </view>
 
       <view class="section-card">
@@ -94,6 +106,22 @@
               <text class="item-qty">{{ formatQuantity(item.quantityNeeded) }}{{ item.quantityUnit }}</text>
               <text class="item-cost">¥{{ money(item.estimatedCost) }}</text>
             </view>
+          </view>
+        </view>
+      </view>
+
+      <view v-if="personalLines.length > 0" class="section-card">
+        <view class="section-head">
+          <text class="section-title">个人商品（不报销）</text>
+          <text class="section-count">{{ personalLines.length }} 项</text>
+        </view>
+        <view class="item-list">
+          <view v-for="line in personalLines" :key="line.id" class="item-row">
+            <view class="item-main">
+              <text class="item-name">{{ line.name }}</text>
+              <text class="item-meta">{{ line.qty }}{{ line.unit || '' }}</text>
+            </view>
+            <text class="item-cost">¥{{ money(line.amount) }}</text>
           </view>
         </view>
       </view>
@@ -134,7 +162,14 @@
         </view>
       </view>
 
-      <view class="actions">
+      <view v-if="record.arrivedAt && !record.reimbursementId" class="lock-note">
+        已到货。要改数量/价格，先点「撤销到货」。
+      </view>
+
+      <view
+        v-if="canArrive || canEdit || canRevokeArrival || canReimburse || canVoid"
+        class="actions"
+      >
         <button v-if="canArrive" class="action-btn primary" :loading="acting" @tap="confirmArrival">
           已到货
         </button>
@@ -158,6 +193,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
+import { getStoredUser } from '../../../utils/account';
 import {
   confirmReplenishmentArrival,
   getReplenishmentRecord,
@@ -209,9 +245,19 @@ const isOverdue = computed(() => {
     return false;
   }
   const expected = record.value.expectedDeliveryAt
-    ? new Date(record.value.expectedDeliveryAt).getTime()
-    : NaN;
-  return Number.isFinite(expected) && Date.now() > expected;
+    ? new Date(record.value.expectedDeliveryAt)
+    : null;
+  if (!expected || Number.isNaN(expected.getTime())) return false;
+  const endOfDay = new Date(
+    expected.getFullYear(),
+    expected.getMonth(),
+    expected.getDate() + 1,
+    0,
+    0,
+    0,
+    0,
+  ).getTime();
+  return Date.now() >= endOfDay;
 });
 
 const arrivalText = computed(() => {
@@ -251,16 +297,53 @@ const claimStatusText = (status?: string | null) => {
 };
 
 const imports = computed(() => (Array.isArray(record.value?.imports) ? record.value.imports : []));
+
+const personalLines = computed(() =>
+  imports.value.flatMap((item: any) =>
+    (Array.isArray(item.lines) ? item.lines : [])
+      .filter((line: any) => line.isPersonal)
+      .map((line: any) => ({
+        id: line.id,
+        name: line.rawName || '个人商品',
+        qty: line.qty ?? '',
+        unit: line.unit || '',
+        amount: line.lineTotal ?? 0,
+      })),
+  ),
+);
+
+const reimbursementLabel = computed(() => {
+  if (!record.value) return '本次报销';
+  if (record.value.voidedAt) return '不报销';
+  if (record.value.reimbursement?.status === 'REIMBURSED') return '已报销';
+  if (record.value.reimbursementId) return '报销中';
+  return '可报销';
+});
 const importShots = computed(() =>
   imports.value.flatMap((item: any) => (Array.isArray(item.imageUrls) ? item.imageUrls : [])),
 );
 
+const storedUser = getStoredUser();
+const currentUserId = String(storedUser?.id || storedUser?.user?.id || '');
+const currentRole = String(
+  storedUser?.role || storedUser?.user?.role || '',
+).toUpperCase();
+const canOperate = computed(
+  () =>
+    !!record.value &&
+    (currentRole === 'ADMIN' || record.value.createdById === currentUserId),
+);
 const canArrive = computed(
-  () => !!record.value && !record.value.arrivedAt && !record.value.voidedAt,
+  () =>
+    !!record.value &&
+    canOperate.value &&
+    !record.value.arrivedAt &&
+    !record.value.voidedAt,
 );
 const canVoid = computed(
   () =>
     !!record.value &&
+    canOperate.value &&
     !record.value.arrivedAt &&
     !record.value.voidedAt &&
     !record.value.reimbursementId,
@@ -268,6 +351,7 @@ const canVoid = computed(
 const canEdit = computed(
   () =>
     !!record.value &&
+    canOperate.value &&
     !record.value.arrivedAt &&
     !record.value.voidedAt &&
     !record.value.reimbursementId,
@@ -275,12 +359,17 @@ const canEdit = computed(
 const canRevokeArrival = computed(
   () =>
     !!record.value &&
+    canOperate.value &&
     !!record.value.arrivedAt &&
     !record.value.voidedAt &&
     !record.value.reimbursementId,
 );
 const canReimburse = computed(
-  () => !!record.value && !record.value.voidedAt && !record.value.reimbursementId,
+  () =>
+    !!record.value &&
+    canOperate.value &&
+    !record.value.voidedAt &&
+    !record.value.reimbursementId,
 );
 
 const load = async () => {
@@ -362,7 +451,7 @@ const revokeArrival = () => {
 const voidRecord = () => {
   uni.showModal({
     title: '作废补货记录',
-    content: '确认取消这笔补货？作废后不再计入在途，也不能报销。',
+    content: '作废这笔补货记录？作废后不能撤销，不会再计入在途，也不能报销。',
     confirmColor: '#b4453a',
     success: async (res) => {
       if (!res.confirm) return;
@@ -734,5 +823,15 @@ onShow(() => {
 .action-btn.danger {
   background: #fdecea;
   color: #a12a26;
+}
+
+.lock-note {
+  padding: 18rpx 24rpx;
+  border-radius: 16rpx;
+  background: #f7f3e8;
+  border: 1rpx solid #e7e3d6;
+  font-size: 24rpx;
+  color: #6b6653;
+  line-height: 1.6;
 }
 </style>

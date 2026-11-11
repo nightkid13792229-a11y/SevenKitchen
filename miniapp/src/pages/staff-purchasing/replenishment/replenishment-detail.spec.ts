@@ -23,6 +23,9 @@ describe('补货记录详情', () => {
     expect(source).toContain('arrivalText');
     expect(source).toContain('claimText');
     expect(source).toContain('报销中');
+    expect(source).toContain('记录人');
+    expect(source).toContain('canOperate');
+    expect(source).toContain('个人商品（不报销）');
     expect(source).toContain('未报销');
   });
 });

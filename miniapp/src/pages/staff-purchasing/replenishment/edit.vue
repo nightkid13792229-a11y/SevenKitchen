@@ -22,7 +22,7 @@
         <view v-for="item in items" :key="item.itemId" class="item-card">
           <view class="item-head">
             <text class="item-name">{{ item.name }}</text>
-            <text class="item-unit">按 {{ item.unit }} 记</text>
+            <text class="item-unit">单位：{{ item.unit }}</text>
           </view>
           <view class="item-fields">
             <view class="field">
@@ -46,7 +46,10 @@
               />
             </view>
           </view>
-          <text class="item-total">小计 ¥{{ itemLineTotal(item) }}</text>
+          <view class="item-foot">
+            <text class="item-total">小计 ¥{{ itemLineTotal(item) }}</text>
+            <text v-if="!lockedReason" class="item-delete" @tap="deleteItem(item)">删掉这一项</text>
+          </view>
         </view>
       </view>
 
@@ -89,6 +92,7 @@
 import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import {
+  deleteReplenishmentItem,
   getReplenishmentRecord,
   updateReplenishmentRecord,
 } from '../api/purchasing';
@@ -118,7 +122,7 @@ const form = ref({
 const lockedReason = computed(() => {
   if (!record.value) return '';
   if (record.value.voidedAt) return '这笔补货已作废，不能修改。';
-  if (record.value.reimbursementId) return '已关联报销单，不能修改。';
+  if (record.value.reimbursementId) return '已提交报销，不能修改；等报销单被驳回或撤回后才能改。';
   if (record.value.arrivedAt) return '已经到货，请先回详情页撤销到货再修改。';
   return '';
 });
@@ -175,6 +179,31 @@ const load = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+const deleteItem = (item: { itemId: string; name: string }) => {
+  if (lockedReason.value) return;
+  uni.showModal({
+    title: '删掉这一项？',
+    content: `删掉「${item.name}」后，这一项不再计入本次采购，库存也不会增加。`,
+    confirmColor: '#b4453a',
+    success: async (res) => {
+      if (!res.confirm) return;
+      try {
+        const response: any = await deleteReplenishmentItem(
+          recordId.value,
+          item.itemId,
+        );
+        if (response?.code !== 0) {
+          throw new Error(response?.message || '删除失败');
+        }
+        uni.showToast({ title: '已删除', icon: 'none' });
+        await load();
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '删除失败', icon: 'none' });
+      }
+    },
+  });
 };
 
 const save = async () => {
@@ -393,5 +422,18 @@ onLoad((options: Record<string, string>) => {
   color: #f3eddd;
   font-size: 30rpx;
   font-weight: 700;
+}
+
+.item-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.item-delete {
+  font-size: 24rpx;
+  color: #b4453a;
+  padding: 4rpx 0;
 }
 </style>

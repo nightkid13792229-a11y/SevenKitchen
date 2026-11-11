@@ -58,11 +58,11 @@
 
       <view v-if="activeImport" class="summary">
         <view class="summary-cell">
-          <text class="summary-k">凭证金额</text>
+          <text class="summary-k">订单实付（截图）</text>
           <text class="summary-v" :class="{ warn: activeImport.paid === null }">{{ activeImport.paid === null ? '未读到' : money(activeImport.paid) }}</text>
         </view>
         <view class="summary-cell">
-          <text class="summary-k">核对金额</text>
+          <text class="summary-k">商品+费用合计</text>
           <text class="summary-v">{{ money(reconcileAmount) }}</text>
         </view>
         <view class="summary-cell">
@@ -70,7 +70,11 @@
           <text class="summary-v">{{ money(activeSummary.personalAmount) }}</text>
         </view>
         <view class="summary-cell">
-          <text class="summary-k">待处理</text>
+          <text class="summary-k">本次报销</text>
+          <text class="summary-v">¥{{ reimbursementPreview }}</text>
+        </view>
+        <view class="summary-cell">
+          <text class="summary-k">要处理的</text>
           <text v-if="activeImport && !activeImport.channel" class="summary-v warn">先定渠道</text>
           <text v-else class="summary-v warn">{{ activeSummary.unmatched + activeSummary.needsSku }} 行</text>
         </view>
@@ -85,6 +89,13 @@
         <text class="meta-channel" :class="{ missing: !activeImport.channel }" @tap="changeChannel">
           {{ activeImport.channel ? '渠道 ' + activeImport.channel : '渠道待确认' }} ›
         </text>
+      </view>
+
+      <view v-if="activeImport" class="order-info-row" @tap="openOrderInfo">
+        <text class="order-info-text">
+          订单号 {{ activeImport.orderNo || '未填' }} · 预计到货 {{ activeImport.expectedDeliveryAt ? formatShortDate(activeImport.expectedDeliveryAt) : '未填' }}
+        </text>
+        <text class="order-info-edit">改 ›</text>
       </view>
 
       <!--
@@ -105,6 +116,11 @@
 
       <view v-if="manualMode && activeImport" class="warn-banner">
         <text class="warn-line">这是手填记录：先选渠道，再点「手动加一行」逐行加商品；填好实付后保存。</text>
+      </view>
+
+      <view v-if="activeAllPersonal" class="warn-banner">
+        <text class="warn-line">这一笔全是个人商品，不用记补货。</text>
+        <text class="warn-action" @tap="discardActive">放弃这一笔 ›</text>
       </view>
 
       <view v-if="activeImport && activeIncompleteNotice" class="warn-banner">
@@ -184,7 +200,7 @@
         </button>
         <!-- 按钮下方一行：左边「放弃」，右边「几笔订单 · 几条记录 + 金额」 -->
         <view class="footer-links">
-          <text class="discard" @tap="discardActive">放弃这笔识别</text>
+          <text class="discard" @tap="discardActive">放弃这一笔</text>
           <view class="footer-total">
             <text class="footer-label">{{ footerLabel }}</text>
             <text class="footer-amount">¥{{ money(matchedAmount) }}</text>
@@ -225,13 +241,13 @@
             :class="{ tap: !editing.isPersonal, muted: editing.isPersonal }"
             @tap="openSkuPicker"
           >
-            <text class="field-label">匹配商品</text>
+            <text class="field-label">对应商品</text>
             <text v-if="editing.isPersonal" class="field-value muted-text">
               个人采购 · 不生成采购记录
             </text>
             <template v-else>
               <text class="field-value" :class="{ warn: !editing.skuName }">
-                {{ editing.skuName || '还没有匹配' }}
+                {{ editing.skuName || '还没选商品' }}
                 <text v-if="editingSpecText" class="field-sub"> · {{ editingSpecText }}</text>
               </text>
               <text class="chev">›</text>
@@ -283,12 +299,50 @@
             </view>
           </view>
 
+          <text
+            v-if="!editing.isNew"
+            class="delete-line"
+            @tap="deleteEditingLine"
+          >
+            删掉这一行
+          </text>
+
           <view class="sheet-actions">
             <button class="ghost-btn" @tap="closeEdit()">取消</button>
             <button class="primary-btn" :loading="saving" @tap="saveEdit">{{ editing?.isNew ? '添加' : '保存' }}</button>
           </view>
         </view>
       </scroll-view>
+    </view>
+
+    <!-- 订单号 / 预计到货 -->
+    <view v-if="orderInfoEditing" class="sheet-mask" @tap="orderInfoEditing = null">
+      <view class="sheet" @tap.stop>
+        <text class="sheet-title">订单信息</text>
+        <text class="sheet-sub">订单号用来防重复记账；预计到货用来判断超期。</text>
+        <view class="field">
+          <text class="field-label">订单号</text>
+          <input
+            v-model="orderInfoEditing.orderNoText"
+            class="field-input"
+            placeholder="选填"
+            maxlength="40"
+          />
+        </view>
+        <view class="field">
+          <text class="field-label">预计到货</text>
+          <input
+            v-model="orderInfoEditing.expectedText"
+            class="field-input"
+            placeholder="YYYY-MM-DD"
+            maxlength="10"
+          />
+        </view>
+        <view class="sheet-actions">
+          <button class="ghost-btn" @tap="orderInfoEditing = null">取消</button>
+          <button class="primary-btn" :loading="orderInfoSaving" @tap="saveOrderInfo">保存</button>
+        </view>
+      </view>
     </view>
 
     <!-- 数量单位 -->
@@ -300,7 +354,7 @@
         </text>
         <text v-if="unitMismatch" class="sheet-warn">
           这行写的是「{{ editing.unitText }}」，商品是按「{{ editing.skuPurchaseUnit }}」买的，
-          生成时会被拦下：请改回「{{ editing.skuPurchaseUnit }}」，或换一个按「{{ editing.unitText }}」卖的商品。
+          保存时会被拦下：请改回「{{ editing.skuPurchaseUnit }}」，或换一个按「{{ editing.unitText }}」卖的商品。
         </text>
         <view class="unit-grid">
           <view
@@ -447,7 +501,7 @@
               :key="ingredient.ingredientId"
               class="cascade-item"
               :class="{ active: ingredient.ingredientId === pickerIngredientId }"
-              @tap="pickerIngredientId = ingredient.ingredientId"
+              @tap="selectPickerIngredient(ingredient.ingredientId)"
             >
               <text class="cascade-name">{{ ingredient.ingredientName }}</text>
               <text class="cascade-count" :class="{ zero: ingredient.skus.length === 0 }">
@@ -504,11 +558,14 @@ import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app';
 import {
   confirmOrderImports,
   discardOrderImport,
+  deleteOrderImportLine,
   extractProcurementSkuOptions,
   getOrderImports,
   getPurchaseChannels,
   getPurchaseListDetail,
   getStockPurchaseIngredients,
+  getIngredientProcurementSkus,
+  findDuplicateReplenishmentOrder,
   createOrderImportLine,
   saveReplenishmentRecord,
   updateOrderImport,
@@ -560,6 +617,8 @@ const listIds = ref<string[]>([]);
 const pageMode = ref<'order-demand' | 'replenishment'>('order-demand');
 const manualMode = ref(false);
 const catalogIngredients = ref<any[]>([]);
+const skuOverrides = ref<Record<string, IngredientOption['skus']>>({});
+const loadingSkuIngredients = new Set<string>();
 const loading = ref(true);
 const loaded = ref(false);
 const submitted = ref(false);
@@ -611,6 +670,11 @@ const channelOptions = ref<string[]>([]);
 const channelPicking = ref(false);
 const saving = ref(false);
 const submitting = ref(false);
+const orderInfoEditing = ref<{
+  orderNoText: string;
+  expectedText: string;
+} | null>(null);
+const orderInfoSaving = ref(false);
 const feeEditing = ref<{
   paidText: string;
   shippingText: string;
@@ -787,7 +851,7 @@ const ingredientOptions = computed<IngredientOption[]>(() => {
   // 补货没有计划清单：从全库原料里选，商品只带「这笔渠道下」的推荐项。
   if (pageMode.value === 'replenishment' && catalogIngredients.value.length > 0) {
     return catalogIngredients.value.map((item) => {
-      const skus = item.procurementSkuId
+      const fallback = item.procurementSkuId
         ? [
             {
               id: item.procurementSkuId,
@@ -799,6 +863,8 @@ const ingredientOptions = computed<IngredientOption[]>(() => {
             },
           ]
         : [];
+      // 打开某原料时按需拉全部商品；否则先用目录里的推荐项占位。
+      const skus = skuOverrides.value[item.id] ?? fallback;
       return {
         ingredientId: item.id,
         ingredientName: item.name,
@@ -921,7 +987,7 @@ const renameHint = computed(() => {
   const trusted =
     current.confidence === 'HIGH' || current.matchSource === 'MANUAL';
   if (!trusted) return '';
-  return `生成时商品名更新为「${name}」`;
+  return `保存时商品名更新为「${name}」`;
 });
 
 /** 选商品弹窗顶部那行小字：截图规格 + 截图金额，用来判断该选哪个包装 */
@@ -1091,8 +1157,28 @@ const matchedLineCount = computed(() =>
 const matchedAmount = computed(() =>
   imports.value.reduce((sum, item) => sum + item.summary.matchedAmount, 0),
 );
+const allPersonal = computed(
+  () =>
+    imports.value.length > 0 &&
+    imports.value.every(
+      (item) =>
+        item.lines.length > 0 && item.lines.every((line) => line.isPersonal),
+    ),
+);
+const activeAllPersonal = computed(
+  () =>
+    !!activeImport.value &&
+    activeImport.value.lines.length > 0 &&
+    activeImport.value.lines.every((line) => line.isPersonal),
+);
+const reimbursementPreview = computed(() => {
+  const paid = Number(activeImport.value?.paid ?? 0);
+  const personal = Number(activeSummary.value?.personalAmount ?? 0);
+  return Math.max(paid - personal, 0).toFixed(2);
+});
+
 const blockReason = computed(() => {
-  if (submitted.value) return '已生成，正在返回';
+  if (submitted.value) return '已保存，正在返回';
   // 先报当前这一单，再报别的单：否则站在盒马这页，按钮却写着「山姆：1 行待处理」
   const blocking = firstBlockedImport(
     activeImport.value,
@@ -1104,7 +1190,8 @@ const blockReason = computed(() => {
     const label = `${who}${blocking.orderTime ? ' ' + formatShortDate(blocking.orderTime) : ''}`;
     return `${label}：${importIssue(blocking)}`;
   }
-  if (matchedLineCount.value === 0) return '还没有可生成的采购记录';
+  if (allPersonal.value) return '全是个人商品，不用记补货';
+  if (matchedLineCount.value === 0) return '这笔还没有可保存的明细';
   if (
     pageMode.value === 'replenishment' &&
     imports.value.some(
@@ -1140,7 +1227,7 @@ function importIssue(item: OrderImportView): string | null {
   if (!item.channel) return '先确认渠道';
   const active = item.lines.filter((line) => !line.isPersonal);
   const pending = item.summary.unmatched + item.summary.needsSku;
-  if (pending > 0) return `${pending} 行待处理`;
+  if (pending > 0) return `${pending} 行要处理`;
   const badQty = active.filter((line) => !line.qty || line.qty <= 0);
   if (badQty.length > 0) return `${badQty.length} 行缺数量`;
   const badAmount = active.filter(
@@ -1150,6 +1237,18 @@ function importIssue(item: OrderImportView): string | null {
   return null;
 }
 const canConfirm = computed(() => blockReason.value === '' && !submitted.value);
+
+function updateUnloadGuard() {
+  const api = (globalThis as any).wx;
+  if (!api) return;
+  if (imports.value.length > 0 && !submitted.value) {
+    api.enableAlertBeforeUnload?.({
+      message: '这一笔还没保存，离开后要重新识别或手填。',
+    });
+  } else {
+    api.disableAlertBeforeUnload?.();
+  }
+}
 
 onLoad((options: Record<string, string>) => {
   const idsParam = String(options?.ids || '');
@@ -1166,6 +1265,11 @@ onLoad((options: Record<string, string>) => {
   pageMode.value =
     options?.mode === 'replenishment' ? 'replenishment' : 'order-demand';
   manualMode.value = options?.manual === '1';
+  if (pageMode.value === 'replenishment') {
+    uni.setNavigationBarTitle({
+      title: manualMode.value ? '手填补货记录' : '核对补货记录',
+    });
+  }
   focusLastOnce = options?.focus === 'last';
   uni.$on('procurement-sku:created', handleSkuCreated);
   void load().finally(() => {
@@ -1189,6 +1293,7 @@ onHide(() => {
 });
 
 onUnload(() => {
+  (globalThis as any).wx?.disableAlertBeforeUnload?.();
   uni.$off('procurement-sku:created', handleSkuCreated);
 });
 
@@ -1229,12 +1334,18 @@ async function load() {
       }
     }
     imports.value = merged.filter((item: any) => item.status === 'DRAFT');
+    for (const item of imports.value) {
+      for (const line of item.lines) {
+        if (line.ingredientId) void ensureSkusForIngredient(line.ingredientId);
+      }
+    }
     if (activeIndex.value >= imports.value.length) activeIndex.value = 0;
     if (focusLastOnce && imports.value.length > 0) {
       activeIndex.value = imports.value.length - 1;
       focusLastOnce = false;
     }
     loaded.value = true;
+    updateUnloadGuard();
     if (failed && imports.value.length === 0) {
       uni.showToast({ title: '加载失败，请重试', icon: 'none' });
     }
@@ -1265,6 +1376,7 @@ async function load() {
         focusLastOnce = false;
       }
       loaded.value = true;
+      updateUnloadGuard();
     } else {
       failed = true;
     }
@@ -1456,10 +1568,56 @@ function stateClass(line: OrderImportLineView) {
 function tabState(item: OrderImportView) {
   const issue = importIssue(item);
   if (issue) return issue;
-  return `可生成 ${item.summary.matched} 条`;
+  return pageMode.value === 'replenishment'
+    ? `可保存 ${item.summary.matched} 项`
+    : `可生成 ${item.summary.matched} 条`;
 }
 
-function openEdit(line: OrderImportLineView) {
+/**
+ * 按需拉某原料的全部采购商品。
+ * 目录接口每个原料只带一个推荐商品；补货改行/加行时必须能看到同一原料的其它规格，
+ * 否则 AI 挂了一个非推荐商品时页面会显示"还没有匹配"，还可能挂错包装倍数。
+ */
+async function ensureSkusForIngredient(ingredientId?: string | null) {
+  if (!ingredientId) return;
+  if (skuOverrides.value[ingredientId] || loadingSkuIngredients.has(ingredientId)) {
+    return;
+  }
+  loadingSkuIngredients.add(ingredientId);
+  try {
+    const res: any = await getIngredientProcurementSkus(ingredientId);
+    if (res?.code === 0 && Array.isArray(res.data)) {
+      const skus = res.data
+        .filter((sku: any) => sku.isActive !== false)
+        .map((sku: any) => ({
+          id: sku.id,
+          name: sku.name,
+          productModel: sku.productModel || null,
+          purchaseChannel: sku.purchaseChannel || null,
+          purchaseUnit: sku.purchaseUnit || null,
+          purchaseToBaseRatio:
+            typeof sku.purchaseToBaseRatio === 'number'
+              ? sku.purchaseToBaseRatio
+              : null,
+        }));
+      skuOverrides.value = { ...skuOverrides.value, [ingredientId]: skus };
+    }
+  } catch {
+    // 拉不到就继续用推荐商品，不阻断改行
+  } finally {
+    loadingSkuIngredients.delete(ingredientId);
+  }
+}
+
+function selectPickerIngredient(ingredientId: string) {
+  pickerIngredientId.value = ingredientId;
+  void ensureSkusForIngredient(ingredientId);
+}
+
+async function openEdit(line: OrderImportLineView) {
+  if (line.ingredientId) {
+    await ensureSkusForIngredient(line.ingredientId);
+  }
   const ingredient = ingredientOptions.value.find(
     (item) => item.ingredientId === line.ingredientId,
   );
@@ -1559,6 +1717,43 @@ function closeFeeEdit() {
  * 保存运费/包装费。允许员工随便改（模型读错是常态），
  * 但保留模型原值并标「已改动」，审核时能对照。
  */
+function openOrderInfo() {
+  const item = activeImport.value;
+  if (!item) return;
+  orderInfoEditing.value = {
+    orderNoText: item.orderNo || '',
+    expectedText: item.expectedDeliveryAt
+      ? String(item.expectedDeliveryAt).slice(0, 10)
+      : '',
+  };
+}
+
+async function saveOrderInfo() {
+  const item = activeImport.value;
+  const form = orderInfoEditing.value;
+  if (!item || !form || orderInfoSaving.value) return;
+  const expected = form.expectedText.trim();
+  if (expected && !/^\d{4}-\d{2}-\d{2}$/.test(expected)) {
+    uni.showToast({ title: '预计到货请填 YYYY-MM-DD', icon: 'none' });
+    return;
+  }
+  orderInfoSaving.value = true;
+  try {
+    const res: any = await updateOrderImport(item.id, {
+      orderNo: form.orderNoText.trim() || null,
+      expectedDeliveryAt: expected || null,
+    });
+    if (res.code !== 0) throw new Error(res.message || '保存失败');
+    orderInfoEditing.value = null;
+    await load();
+    uni.showToast({ title: '已保存', icon: 'none' });
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '保存失败', icon: 'none' });
+  } finally {
+    orderInfoSaving.value = false;
+  }
+}
+
 async function saveFeeEdit() {
   const form = feeEditing.value;
   const item = activeImport.value;
@@ -1613,6 +1808,7 @@ function openSkuPicker() {
   // 打开就停在「这行现在匹配的原料」上：绝大多数时候右边一眼就能找到
   pickerIngredientId.value =
     editing.value?.ingredientId || ingredientOptions.value[0]?.ingredientId || '';
+  void ensureSkusForIngredient(pickerIngredientId.value);
   pickerMode.value = 'sku';
 }
 
@@ -1713,6 +1909,31 @@ function goNewSku() {
       // 广播只回本页：详情页也听着这条广播，不能让它跟着开抽屉
       `&${buildSkuCreateQuery('order-import')}`,
   });
+}
+
+async function deleteEditingLine() {
+  const item = activeImport.value;
+  const line = editing.value;
+  if (!item || !line || line.isNew) return;
+  const confirmed = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '删掉这一行？',
+      content: '删掉后这行不计账，也不会进报销。',
+      confirmColor: '#b4453a',
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    });
+  });
+  if (!confirmed) return;
+  try {
+    const res: any = await deleteOrderImportLine(item.id, line.id);
+    if (res.code !== 0) throw new Error(res.message || '删除失败');
+    closeEdit(true);
+    await load();
+    uni.showToast({ title: '已删除', icon: 'none' });
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '删除失败', icon: 'none' });
+  }
 }
 
 async function saveEdit() {
@@ -1830,8 +2051,8 @@ async function discardActive() {
   if (!activeImport.value) return;
   const confirmed = await new Promise<boolean>((resolve) => {
     uni.showModal({
-      title: '放弃这笔识别？',
-      content: '放弃后草稿会被删除，可以重新上传同一张截图。',
+      title: '放弃这一笔？',
+      content: '放弃后这一笔填的内容会删除，不能恢复；截图还在相册里，可以重新传。',
       confirmText: '放弃',
       success: (res) => resolve(Boolean(res.confirm)),
     });
@@ -1846,6 +2067,34 @@ async function discardActive() {
   }
 }
 
+async function confirmDuplicateOrderIfAny(): Promise<boolean> {
+  if (pageMode.value !== 'replenishment') return true;
+  for (const item of imports.value) {
+    if (item.status !== 'DRAFT' || !item.orderNo) continue;
+    try {
+      const res: any = await findDuplicateReplenishmentOrder({
+        orderNo: item.orderNo,
+        channel: item.channel || null,
+      });
+      if (res?.code !== 0 || !res.data) continue;
+      const confirmed = await new Promise<boolean>((resolve) => {
+        uni.showModal({
+          title: '这笔订单好像记过了',
+          content: `订单号 #${item.orderNo} 已经有一笔补货记录（${res.data.channel || '渠道未填'}）。如果这是同一笔订单，请不要重复记；确定还要再记一笔吗？`,
+          confirmText: '仍然保存',
+          confirmColor: '#b4453a',
+          success: (modal) => resolve(Boolean(modal.confirm)),
+          fail: () => resolve(false),
+        });
+      });
+      if (!confirmed) return false;
+    } catch {
+      // 查重失败不阻断正常保存
+    }
+  }
+  return true;
+}
+
 async function submit() {
   if (!canConfirm.value || submitting.value) return;
   const ids = imports.value.filter((item) => item.status === 'DRAFT').map((item) => item.id);
@@ -1857,7 +2106,7 @@ async function submit() {
     const confirmed = await new Promise<boolean>((resolve) => {
       uni.showModal({
         title: '有商品规格和截图不一致',
-        content: `共 ${specMismatchCount.value} 行：生成后克数和单价会按采购商品的规格算，可能和这单实际付的钱对不上。建议先回详情页新建对应规格的商品。仍要生成吗？`,
+        content: `共 ${specMismatchCount.value} 行：保存后克数和单价会按采购商品的规格算，可能和这单实际付的钱对不上。建议先回详情页新建对应规格的商品。仍要保存吗？`,
         confirmText: '仍然生成',
         confirmColor: '#b4453a',
         success: (res) => resolve(Boolean(res.confirm)),
@@ -1866,6 +2115,9 @@ async function submit() {
     });
     if (!confirmed) return;
   }
+
+  const duplicateConfirmed = await confirmDuplicateOrderIfAny();
+  if (!duplicateConfirmed) return;
 
   submitting.value = true;
   try {
@@ -1897,7 +2149,9 @@ async function submit() {
         }
       }
       if (failures.length > 0) {
-        throw new Error(`${failures.length} 笔没保存成功：${failures[0]}`);
+        throw new Error(
+          `已保存 ${savedCount} 笔，${failures.length} 笔没成功：${failures[0]}`,
+        );
       }
       submitted.value = true;
       const suffix = skippedCount > 0 ? `，跳过 ${skippedCount} 笔个人单` : '';
@@ -1905,12 +2159,13 @@ async function submit() {
         title: `已保存 ${savedCount} 笔补货记录${suffix}`,
         icon: 'success',
       });
+      (globalThis as any).wx?.disableAlertBeforeUnload?.();
       setTimeout(() => uni.navigateBack(), 800);
       return;
     }
 
     const res: any = await confirmOrderImports(ids);
-    if (res.code !== 0) throw new Error(res.message || '生成失败');
+    if (res.code !== 0) throw new Error(res.message || '保存失败');
     submitted.value = true;
     const renamed = Array.isArray(res.data?.renamed) ? res.data.renamed.length : 0;
     uni.showToast({
@@ -1928,7 +2183,7 @@ async function submit() {
       await load();
     }
     uni.showModal({
-      title: '生成失败',
+      title: '保存失败',
       content: error?.message || '请检查后重试',
       showCancel: false,
     });
@@ -3163,5 +3418,38 @@ function emptySummary() {
   font-size: 26rpx;
   color: #1e3a2f;
   background: #fbf9f0;
+}
+
+.delete-line {
+  display: block;
+  margin: 8rpx 0 0;
+  padding: 18rpx;
+  text-align: center;
+  font-size: 26rpx;
+  color: #b4453a;
+}
+
+.warn-action {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #2f6b4f;
+  font-weight: 600;
+}
+
+.order-info-row {
+  margin: 10rpx 28rpx 0;
+  padding: 16rpx 20rpx;
+  border-radius: 12rpx;
+  background: #f7f5ec;
+  display: flex;
+  justify-content: space-between;
+  gap: 16rpx;
+  font-size: 23rpx;
+  color: #5b5748;
+}
+
+.order-info-edit {
+  color: #2f6b4f;
+  flex-shrink: 0;
 }
 </style>

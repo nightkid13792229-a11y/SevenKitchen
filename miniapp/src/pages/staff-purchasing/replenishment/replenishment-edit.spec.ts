@@ -15,6 +15,8 @@ describe('补货记录修改页', () => {
   it('locks editing after arrival or reimbursement', () => {
     expect(source).toContain('lockedReason');
     expect(source).toContain('撤销到货');
-    expect(source).toContain('已关联报销单');
+    expect(source).toContain('已提交报销');
+    expect(source).toContain('deleteReplenishmentItem');
+    expect(source).toContain('删掉这一项');
   });
 });

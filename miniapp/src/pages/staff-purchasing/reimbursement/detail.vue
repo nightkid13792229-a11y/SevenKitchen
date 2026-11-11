@@ -1104,7 +1104,7 @@ const recordSubtitle = (record: any) => {
   return `标准原料：${record.ingredientName}`;
 };
 
-const isManualRecord = (record: any) => !record?.sourceImportId;
+const isManualRecord = (record: any) => !record?.sourceImageKey;
 
 const priceChangeOf = (record: any) => priceChangeMap.value.get(record.id);
 
@@ -1416,7 +1416,7 @@ const summaryAlerts = computed<Array<{ tone: string; text: string }>>(() => {
   if (manualRecordCount.value > 0) {
     alerts.push({
       tone: 'info',
-      text: `${manualRecordCount.value} 条记录没有订单截图，只能人工核对转账记录`,
+      text: `${manualRecordCount.value} 条记录没有订单截图（手填或旧记录），请核对支付凭证/转账记录`,
     });
   }
 

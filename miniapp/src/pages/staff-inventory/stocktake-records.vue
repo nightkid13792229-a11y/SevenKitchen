@@ -1,8 +1,11 @@
 <template>
   <view class="page">
     <view class="top">
-      <text class="total">共 {{ items.length }} 次</text>
-      <text class="start" @tap="goStart">开始盘点</text>
+      <text class="total">共 {{ items.length }} 次（最近 30 次）</text>
+      <view class="top-actions">
+        <text class="start ghost" @tap="goOpening">期初盘点</text>
+        <text class="start" @tap="goStart">日常盘点</text>
+      </view>
     </view>
 
     <view class="hint">

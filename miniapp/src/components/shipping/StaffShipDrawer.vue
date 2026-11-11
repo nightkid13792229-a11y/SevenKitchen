@@ -59,8 +59,8 @@
              结论由后端给：绿 = 核对通过；黄 = 没能核对（要手动确认）；红 = 对不上（不许发）。 -->
         <WaybillReceiptBlock
           :view="receiptView"
-          :busy="receiptState === 'recognizing'"
-          :has-image="receiptHasImage"
+          :busy="receipt.state === 'recognizing'"
+          :has-image="receipt.hasImage"
           @pick="pickReceipt"
           @manual="onManualReceipt"
         />
@@ -119,16 +119,24 @@
  * 谁在把关：**服务端**。这里只负责把表单填清楚；
  * 「这个运单号是不是对着这单收货人核过的」由后端在提交时再验一次。
  */
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { CARRIERS, carrierIndexOf } from '../../constants/carriers'
 import WaybillReceiptBlock from './WaybillReceiptBlock.vue'
-import { buildReceiptView, type ReceiptView } from '../../utils/waybill-receipt-view'
 import {
   createManualWaybill,
   recognizeReceipt,
   uploadReceiptImage,
-  type ReceiptConflict,
 } from '../../api/waybillReceipt'
+import {
+  applyRecognizeResult,
+  createReceiptState,
+  markReceiptFailed,
+  markReceiptManualConfirmed,
+  markReceiptPicked,
+  markReceiptRecognizing,
+  receiptViewOf,
+  resetReceiptState,
+} from '../../utils/waybill-receipt-machine'
 import {
   buildOrderAddressCopyText,
   getOrderAddressDetail,
@@ -202,45 +210,10 @@ const addressLine = computed(
  * 四项值时一定要和下面对得上（recognizedTrackingNumber / manualConfirmedTracking），
  * 否则「确认完再改号」就绕过了核对。
  */
-const receiptState = ref<'idle' | 'recognizing' | 'match' | 'unknown' | 'mismatch' | 'duplicate' | 'failed'>('idle')
-const receiptCarrierName = ref('')
-const receiptTracking = ref('')
-const receiptFee = ref<number | null>(null)
-const receiptConflicts = ref<ReceiptConflict[]>([])
-const receiptDuplicateLabel = ref('')
-const receiptMessage = ref('')
-const receiptHasImage = ref(false)
-const receiptManualConfirmed = ref(false)
-const receiptManualTracking = ref('')
+const receipt = reactive(createReceiptState())
 
-const receiptView = computed<ReceiptView>(() =>
-  buildReceiptView({
-    state: receiptState.value,
-    carrierName: receiptCarrierName.value || null,
-    trackingNumber: trackingNumber.value || null,
-    recognizedTrackingNumber: receiptTracking.value || null,
-    manualConfirmedTracking: receiptManualTracking.value || null,
-    shippingFee: receiptFee.value,
-    conflicts: receiptConflicts.value,
-    duplicateLabel: receiptDuplicateLabel.value || null,
-    manualConfirmed: receiptManualConfirmed.value,
-    message: receiptMessage.value || null,
-  }),
-)
-
-/** 每次打开都是新的一次：上一单的存根结论绝不能留到这一单 */
-function resetReceipt() {
-  receiptState.value = 'idle'
-  receiptCarrierName.value = ''
-  receiptTracking.value = ''
-  receiptFee.value = null
-  receiptConflicts.value = []
-  receiptDuplicateLabel.value = ''
-  receiptMessage.value = ''
-  receiptHasImage.value = false
-  receiptManualConfirmed.value = false
-  receiptManualTracking.value = ''
-}
+/** 存根块该显示什么，文案统一走 utils/waybill-receipt-view */
+const receiptView = computed(() => receiptViewOf(receipt, trackingNumber.value))
 
 function resetForOrder() {
   shippingType.value = 'NORMAL'
@@ -250,7 +223,7 @@ function resetForOrder() {
     typeof props.initialActualShippingFee === 'number'
       ? props.initialActualShippingFee.toFixed(2)
       : ''
-  resetReceipt()
+  resetReceiptState(receipt)
 }
 
 watch(
@@ -302,66 +275,21 @@ function applyReceipt(summary: {
 async function recognizeByUrl(imageUrl: string) {
   if (!props.orderId) return
 
-  receiptState.value = 'recognizing'
-  receiptMessage.value = ''
+  markReceiptRecognizing(receipt)
 
   try {
     const result = await recognizeReceipt({
       imageUrl,
       orderIds: [props.orderId],
     })
-
-    receiptCarrierName.value = result.receipt?.carrierName || ''
-    receiptTracking.value = result.receipt?.trackingNumber || ''
-    receiptFee.value = result.receipt?.shippingFee ?? null
-    receiptConflicts.value = result.match.conflicts || []
-    receiptDuplicateLabel.value = result.match.duplicate?.label || ''
-
-    const status = result.match.status
-    if (status === 'match') {
-      receiptState.value = 'match'
-      applyReceipt({
-        carrierCode: result.receipt?.carrierCode,
-        trackingNumber: result.receipt?.trackingNumber,
-        shippingFee: result.receipt?.shippingFee,
-      })
-      return
-    }
-
-    if (status === 'unknown') {
-      receiptState.value = 'unknown'
-      applyReceipt({
-        carrierCode: result.receipt?.carrierCode,
-        trackingNumber: result.receipt?.trackingNumber,
-        shippingFee: result.receipt?.shippingFee,
-      })
-      return
-    }
-
-    if (status === 'mismatch') {
-      receiptState.value = 'mismatch'
-      return
-    }
-
-    if (status === 'duplicate') {
-      receiptState.value = 'duplicate'
-      return
-    }
-
-    // degraded / not_waybill：认不出来，给手动出口
-    receiptState.value = 'failed'
-    receiptMessage.value =
-      status === 'not_waybill'
-        ? '这张不是快递存根（没有运单号），换一张或者手动填写'
-        : ''
+    applyRecognizeResult(receipt, result, applyReceipt)
   } catch (error: any) {
-    receiptState.value = 'failed'
-    receiptMessage.value = error?.message || '识别失败，可以手动填写'
+    markReceiptFailed(receipt, error?.message || '识别失败，可以手动填写')
   }
 }
 
 async function pickReceipt() {
-  if (receiptState.value === 'recognizing') return
+  if (receipt.state === 'recognizing') return
 
   const chosen: any = await new Promise((resolve) => {
     uni.chooseImage({
@@ -376,18 +304,14 @@ async function pickReceipt() {
   const filePath = chosen?.tempFilePaths?.[0]
   if (!filePath) return
 
-  receiptHasImage.value = true
-  receiptState.value = 'recognizing'
   // 换了图就是重新来过：上一张的「手动确认」不能带过来
-  receiptManualConfirmed.value = false
-  receiptManualTracking.value = ''
+  markReceiptPicked(receipt)
 
   try {
     const uploaded = await uploadReceiptImage(filePath)
     await recognizeByUrl(uploaded.url)
   } catch (error: any) {
-    receiptState.value = 'failed'
-    receiptMessage.value = error?.message || '上传失败，可以手动填写'
+    markReceiptFailed(receipt, error?.message || '上传失败，可以手动填写')
   }
 }
 
@@ -417,9 +341,7 @@ function onManualReceipt() {
           trackingNumber: value,
           reason,
         })
-        receiptManualConfirmed.value = true
-        receiptManualTracking.value = value
-        receiptState.value = receiptHasImage.value ? 'unknown' : 'failed'
+        markReceiptManualConfirmed(receipt, value)
         uni.showToast({ title: '已确认，可以发货', icon: 'success' })
       } catch (error: any) {
         uni.showToast({ title: error?.message || '提交失败', icon: 'none' })

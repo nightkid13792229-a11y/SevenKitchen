@@ -239,8 +239,8 @@
         <block v-if="shipType === 'NORMAL'">
           <WaybillReceiptBlock
             :view="receiptView"
-            :busy="receiptState === 'recognizing'"
-            :has-image="receiptHasImage"
+            :busy="receipt.state === 'recognizing'"
+            :has-image="receipt.hasImage"
             @pick="pickReceipt"
             @manual="onManualReceipt"
           />
@@ -366,16 +366,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { CARRIERS, carrierIndexOf } from '../../constants/carriers'
 import WaybillReceiptBlock from '../../components/shipping/WaybillReceiptBlock.vue'
-import { buildReceiptView, type ReceiptView } from '../../utils/waybill-receipt-view'
+import {
+  applyRecognizeResult,
+  createReceiptState,
+  markReceiptFailed,
+  markReceiptManualConfirmed,
+  markReceiptPicked,
+  markReceiptRecognizing,
+  receiptViewOf,
+  resetReceiptState,
+} from '../../utils/waybill-receipt-machine'
 import {
   createManualWaybill,
   recognizeReceipt,
   updateSupplementShippingAddress,
   uploadReceiptImage,
-  type ReceiptConflict,
 } from '../../api/waybillReceipt'
 import { onLoad } from '@dcloudio/uni-app'
 import {
@@ -442,17 +450,7 @@ const shipVisible = ref(false)
  * 硬锁上线后「存根对不上 → 先改地址 → 再传存根」是唯一出路，
  * 打包间手上只有手机，所以这里补一个只能改未发货单的小面板（必填原因）。
  */
-const receiptState = ref<'idle' | 'recognizing' | 'match' | 'unknown' | 'mismatch' | 'duplicate' | 'failed'>('idle')
-const receiptCarrierName = ref('')
-const receiptTracking = ref('')
-const receiptFee = ref<number | null>(null)
-const receiptConflicts = ref<ReceiptConflict[]>([])
-const receiptDuplicateLabel = ref('')
-const receiptMessage = ref('')
-const receiptHasImage = ref(false)
-const receiptManualConfirmed = ref(false)
-/** 手动确认的是哪个单号：确认完再改号，这次确认就作废 */
-const receiptManualTracking = ref('')
+const receipt = reactive(createReceiptState())
 
 const addressVisible = ref(false)
 const savingAddress = ref(false)
@@ -466,33 +464,8 @@ const addressForm = ref({
   reason: '',
 })
 
-const receiptView = computed<ReceiptView>(() =>
-  buildReceiptView({
-    state: receiptState.value,
-    carrierName: receiptCarrierName.value || null,
-    trackingNumber: shipTracking.value || null,
-    recognizedTrackingNumber: receiptTracking.value || null,
-    manualConfirmedTracking: receiptManualTracking.value || null,
-    shippingFee: receiptFee.value,
-    conflicts: receiptConflicts.value,
-    duplicateLabel: receiptDuplicateLabel.value || null,
-    manualConfirmed: receiptManualConfirmed.value,
-    message: receiptMessage.value || null,
-  }),
-)
-
-function resetReceipt() {
-  receiptState.value = 'idle'
-  receiptCarrierName.value = ''
-  receiptTracking.value = ''
-  receiptFee.value = null
-  receiptConflicts.value = []
-  receiptDuplicateLabel.value = ''
-  receiptMessage.value = ''
-  receiptHasImage.value = false
-  receiptManualConfirmed.value = false
-  receiptManualTracking.value = ''
-}
+/** 存根块该显示什么，文案统一走 utils/waybill-receipt-view */
+const receiptView = computed(() => receiptViewOf(receipt, shipTracking.value))
 
 function applyReceipt(summary: {
   carrierCode?: string | null
@@ -513,52 +486,17 @@ function applyReceipt(summary: {
 async function recognizeByUrl(imageUrl: string) {
   if (!orderId.value) return
 
-  receiptState.value = 'recognizing'
-  receiptMessage.value = ''
-
+  markReceiptRecognizing(receipt)
   try {
     const result = await recognizeReceipt({ imageUrl, orderIds: [orderId.value] })
-
-    receiptCarrierName.value = result.receipt?.carrierName || ''
-    receiptTracking.value = result.receipt?.trackingNumber || ''
-    receiptFee.value = result.receipt?.shippingFee ?? null
-    receiptConflicts.value = result.match.conflicts || []
-    receiptDuplicateLabel.value = result.match.duplicate?.label || ''
-
-    const status = result.match.status
-    if (status === 'match' || status === 'unknown') {
-      receiptState.value = status
-      applyReceipt({
-        carrierCode: result.receipt?.carrierCode,
-        trackingNumber: result.receipt?.trackingNumber,
-        shippingFee: result.receipt?.shippingFee,
-      })
-      return
-    }
-
-    if (status === 'mismatch') {
-      receiptState.value = 'mismatch'
-      return
-    }
-
-    if (status === 'duplicate') {
-      receiptState.value = 'duplicate'
-      return
-    }
-
-    receiptState.value = 'failed'
-    receiptMessage.value =
-      status === 'not_waybill'
-        ? '这张不是快递存根（没有运单号），换一张或者手动填写'
-        : ''
+    applyRecognizeResult(receipt, result, applyReceipt)
   } catch (error: any) {
-    receiptState.value = 'failed'
-    receiptMessage.value = error?.message || '识别失败，可以手动填写'
+    markReceiptFailed(receipt, error?.message || '识别失败，可以手动填写')
   }
 }
 
 async function pickReceipt() {
-  if (receiptState.value === 'recognizing') return
+  if (receipt.state === 'recognizing') return
 
   const chosen: any = await new Promise((resolve) => {
     uni.chooseImage({
@@ -573,17 +511,13 @@ async function pickReceipt() {
   const filePath = chosen?.tempFilePaths?.[0]
   if (!filePath) return
 
-  receiptHasImage.value = true
-  receiptState.value = 'recognizing'
-  receiptManualConfirmed.value = false
-  receiptManualTracking.value = ''
+  markReceiptPicked(receipt)
 
   try {
     const uploaded = await uploadReceiptImage(filePath)
     await recognizeByUrl(uploaded.url)
   } catch (error: any) {
-    receiptState.value = 'failed'
-    receiptMessage.value = error?.message || '上传失败，可以手动填写'
+    markReceiptFailed(receipt, error?.message || '上传失败，可以手动填写')
   }
 }
 
@@ -612,9 +546,7 @@ function onManualReceipt() {
           trackingNumber: value,
           reason,
         })
-        receiptManualConfirmed.value = true
-        receiptManualTracking.value = value
-        receiptState.value = receiptHasImage.value ? 'unknown' : 'failed'
+        markReceiptManualConfirmed(receipt, value)
         uni.showToast({ title: '已确认，可以发货', icon: 'success' })
       } catch (error: any) {
         uni.showToast({ title: error?.message || '提交失败', icon: 'none' })
@@ -686,7 +618,7 @@ async function saveAddressEditor() {
       reason: form.reason.trim(),
     })
     // 地址变了，之前那张存根的核对结果已经作废 —— 逼着重新传
-    resetReceipt()
+    resetReceiptState(receipt)
     addressVisible.value = false
     uni.showToast({ title: '地址已改，请重新上传存根', icon: 'none' })
     await fetchOrder()
@@ -908,7 +840,7 @@ function handleShip() {
   shipCarrierIndex.value = 0
   shipTracking.value = order.value?.trackingNumber || ''
   shipFee.value = ''
-  resetReceipt()
+  resetReceiptState(receipt)
   shipVisible.value = true
 }
 

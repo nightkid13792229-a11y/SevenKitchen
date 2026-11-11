@@ -46,7 +46,7 @@
         </view>
 
         <WaybillReceiptBlock
-          :view="receiptViewOf(pkg)"
+          :view="receiptViewFor(pkg)"
           :busy="pkg.receipt.state === 'recognizing'"
           :has-image="pkg.receipt.hasImage"
           @pick="pickReceiptFor(pIndex)"
@@ -114,7 +114,17 @@
 import { computed, ref } from 'vue'
 import { CARRIERS, carrierIndexOf } from '../../constants/carriers'
 import WaybillReceiptBlock from '../../components/shipping/WaybillReceiptBlock.vue'
-import { buildReceiptView, type ReceiptView } from '../../utils/waybill-receipt-view'
+import { type ReceiptView } from '../../utils/waybill-receipt-view'
+import {
+  applyRecognizeResult,
+  createReceiptState,
+  markReceiptFailed,
+  markReceiptManualConfirmed,
+  markReceiptPicked,
+  markReceiptRecognizing,
+  receiptViewOf,
+  type ReceiptState,
+} from '../../utils/waybill-receipt-machine'
 import {
   createManualWaybill,
   recognizeReceipt,
@@ -129,20 +139,6 @@ interface PlanRow {
   bags: number
 }
 
-interface PackageReceiptState {
-  state: 'idle' | 'recognizing' | 'match' | 'unknown' | 'mismatch' | 'duplicate' | 'failed'
-  carrierName: string
-  trackingNumber: string
-  fee: number | null
-  conflicts: ReceiptConflict[]
-  duplicateLabel: string
-  message: string
-  hasImage: boolean
-  manualConfirmed: boolean
-  /** 手动确认的是哪个单号：确认完再改号，这次确认就作废 */
-  manualTracking: string
-}
-
 interface PackageState {
   carrierIndex: number
   /** 0 = 按重量推荐；1..n = boxOptions 里的箱型 */
@@ -152,22 +148,7 @@ interface PackageState {
   /** rowKey → 这包里装了几袋 */
   bags: Record<string, number>
   /** 这包的快递存根识别状态（2026-11-10）：一包一张存根，互不影响 */
-  receipt: PackageReceiptState
-}
-
-function emptyReceipt(): PackageReceiptState {
-  return {
-    state: 'idle',
-    carrierName: '',
-    trackingNumber: '',
-    fee: null,
-    conflicts: [],
-    duplicateLabel: '',
-    message: '',
-    hasImage: false,
-    manualConfirmed: false,
-    manualTracking: '',
-  }
+  receipt: ReceiptState
 }
 
 // 承运商清单统一到 constants/carriers.ts（2026-11-10）
@@ -287,7 +268,7 @@ function resetPackages() {
       tracking: '',
       fee: '',
       bags,
-      receipt: emptyReceipt(),
+      receipt: createReceiptState(),
     },
   ]
 }
@@ -303,7 +284,7 @@ function addPackage() {
     tracking: '',
     fee: '',
     bags: {},
-    receipt: emptyReceipt(),
+    receipt: createReceiptState(),
   })
 }
 
@@ -380,18 +361,9 @@ function formatKg(grams: number) {
 }
 
 /** 这包的存根块该显示什么（文案统一走 utils/waybill-receipt-view） */
-function receiptViewOf(pkg: PackageState): ReceiptView {
-  return buildReceiptView({
-    state: pkg.receipt.state,
-    carrierName: pkg.receipt.carrierName || null,
-    trackingNumber: pkg.tracking || pkg.receipt.trackingNumber || null,
-    recognizedTrackingNumber: pkg.receipt.trackingNumber || null,
-    shippingFee: pkg.receipt.fee,
-    conflicts: pkg.receipt.conflicts,
-    duplicateLabel: pkg.receipt.duplicateLabel || null,
-    manualConfirmed: pkg.receipt.manualConfirmed,
-    message: pkg.receipt.message || null,
-  })
+/** 这包的存根块该显示什么（文案统一走 utils/waybill-receipt-machine） */
+function receiptViewFor(pkg: PackageState): ReceiptView {
+  return receiptViewOf(pkg.receipt, pkg.tracking || pkg.receipt.trackingNumber)
 }
 
 /** 一票里所有订单：识别时一起传，落库的核对记录能覆盖这一票的每张单 */
@@ -403,49 +375,30 @@ async function recognizeFor(index: number, imageUrl: string) {
   const pkg = packages.value[index]
   if (!pkg) return
 
-  pkg.receipt.state = 'recognizing'
-  pkg.receipt.message = ''
+  markReceiptRecognizing(pkg.receipt)
 
   try {
     const result = await recognizeReceipt({
       imageUrl,
       orderIds: shipmentOrderIds(),
     })
-
-    pkg.receipt.carrierName = result.receipt?.carrierName || ''
-    pkg.receipt.trackingNumber = result.receipt?.trackingNumber || ''
-    pkg.receipt.fee = result.receipt?.shippingFee ?? null
-    pkg.receipt.conflicts = result.match.conflicts || []
-    pkg.receipt.duplicateLabel = result.match.duplicate?.label || ''
-
-    const status = result.match.status
-    if (status === 'match' || status === 'unknown') {
-      pkg.receipt.state = status
-      if (result.receipt?.carrierCode) {
-        pkg.carrierIndex = carrierIndexOf(result.receipt.carrierCode)
+    applyRecognizeResult(pkg.receipt, result, (summary: {
+      carrierCode?: string | null
+      trackingNumber?: string | null
+      shippingFee?: number | null
+    }) => {
+      if (summary.carrierCode) {
+        pkg.carrierIndex = carrierIndexOf(summary.carrierCode)
       }
-      if (result.receipt?.trackingNumber) {
-        pkg.tracking = result.receipt.trackingNumber
+      if (summary.trackingNumber) {
+        pkg.tracking = summary.trackingNumber
       }
-      if (typeof result.receipt?.shippingFee === 'number') {
-        pkg.fee = result.receipt.shippingFee.toFixed(2)
+      if (typeof summary.shippingFee === 'number') {
+        pkg.fee = summary.shippingFee.toFixed(2)
       }
-      return
-    }
-
-    if (status === 'mismatch' || status === 'duplicate') {
-      pkg.receipt.state = status
-      return
-    }
-
-    pkg.receipt.state = 'failed'
-    pkg.receipt.message =
-      status === 'not_waybill'
-        ? '这张不是快递存根（没有运单号），换一张或者手动填写'
-        : ''
+    })
   } catch (error: any) {
-    pkg.receipt.state = 'failed'
-    pkg.receipt.message = error?.message || '识别失败，可以手动填写'
+    markReceiptFailed(pkg.receipt, error?.message || '识别失败，可以手动填写')
   }
 }
 
@@ -466,17 +419,13 @@ async function pickReceiptFor(index: number) {
   const filePath = chosen?.tempFilePaths?.[0]
   if (!filePath) return
 
-  pkg.receipt.hasImage = true
-  pkg.receipt.state = 'recognizing'
-  pkg.receipt.manualConfirmed = false
-  pkg.receipt.manualTracking = ''
+  markReceiptPicked(pkg.receipt)
 
   try {
     const uploaded = await uploadReceiptImage(filePath)
     await recognizeFor(index, uploaded.url)
   } catch (error: any) {
-    pkg.receipt.state = 'failed'
-    pkg.receipt.message = error?.message || '上传失败，可以手动填写'
+    markReceiptFailed(pkg.receipt, error?.message || '上传失败，可以手动填写')
   }
 }
 
@@ -507,9 +456,7 @@ function onManualReceipt(index: number) {
           trackingNumber: value,
           reason,
         })
-        pkg.receipt.manualConfirmed = true
-        pkg.receipt.manualTracking = value
-        pkg.receipt.state = pkg.receipt.hasImage ? 'unknown' : 'failed'
+        markReceiptManualConfirmed(pkg.receipt, value)
         uni.showToast({ title: '已确认，可以发货', icon: 'success' })
       } catch (error: any) {
         uni.showToast({ title: error?.message || '提交失败', icon: 'none' })
@@ -547,7 +494,7 @@ async function submit() {
       return
     }
     // 存根硬锁（2026-11-10）：这一包的号必须是对着这单收货人核过的
-    if (!receiptViewOf(pkg).canShip) {
+    if (!receiptViewFor(pkg).canShip) {
       uni.showToast({ title: `包裹 ${i + 1} 的存根还没核对通过`, icon: 'none' })
       return
     }

@@ -2,6 +2,7 @@
   <view class="page">
     <view class="top">
       <text class="total">共 {{ items.length }} 次</text>
+      <text class="start" @tap="goStart">盘点</text>
     </view>
 
     <view class="hint">
@@ -121,6 +122,10 @@ onShow(() => {
   load();
 });
 
+const goStart = () => {
+  uni.navigateTo({ url: '/pages/staff-inventory/stocktake-create' });
+};
+
 const open = (item: InventoryStocktakeItem) => {
   if (item.status === 'DRAFT') {
     uni.navigateTo({ url: '/pages/staff-inventory/stocktake-create' });
@@ -203,6 +208,13 @@ const restart = () => {
 .total {
   font-size: 24rpx;
   color: #7a8a80;
+}
+.start {
+  padding: 8rpx 24rpx;
+  border-radius: 999rpx;
+  background: #1e3a2f;
+  color: #fbfcf7;
+  font-size: 24rpx;
 }
 .hint {
   margin-top: 16rpx;

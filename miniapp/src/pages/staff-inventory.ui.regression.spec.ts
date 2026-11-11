@@ -166,3 +166,15 @@ describe('staff inventory replenishment entry (2026-11-10)', () => {
     expect(page).not.toContain('stock-create?ingredientId=');
   });
 });
+
+describe('staff inventory stocktake entry (final)', () => {
+  const page = readPage('staff-inventory/index.vue');
+  const records = readPage('staff-inventory/stocktake-records.vue');
+
+  it('has a visible stocktake entry on home and records', () => {
+    expect(page).toContain('goStocktake');
+    expect(page).toContain('盘点');
+    expect(records).toContain('goStart');
+    expect(records).toContain('盘点');
+  });
+});

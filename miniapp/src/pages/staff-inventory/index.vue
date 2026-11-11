@@ -108,8 +108,9 @@
 
     <view class="bottom">
       <button class="btn ghost" @tap="goAdjust">记一笔</button>
+      <button class="btn ghost" @tap="goStocktake">盘点</button>
       <button class="btn primary" @tap="openDrawer('needs')">
-        补货清单 {{ summary.needsReplenishment }}
+        补货 {{ summary.needsReplenishment }}
       </button>
     </view>
 
@@ -273,6 +274,10 @@ const goAdjust = () => {
 
 const goRecords = () => {
   uni.navigateTo({ url: '/pages/staff-inventory/stocktake-records' });
+};
+
+const goStocktake = () => {
+  uni.navigateTo({ url: '/pages/staff-inventory/stocktake-create' });
 };
 </script>
 

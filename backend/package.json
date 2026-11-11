@@ -106,17 +106,6 @@
     "repair:food-ratio-totals": "ts-node -r tsconfig-paths/register scripts/repair-food-ratio-totals.ts",
     "repair:food-ratio-totals:apply": "ts-node -r tsconfig-paths/register scripts/repair-food-ratio-totals.ts --apply",
     "repair:local-recipe-designer-schema": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} prisma db execute --schema prisma/schema.prisma --file prisma/local-repairs/recipe-designer-schema.sql",
-    "kb:eval": "ts-node -r tsconfig-paths/register scripts/knowledge-base/evaluate-library.ts",
-    "kb:eval:all": "ts-node -r tsconfig-paths/register scripts/knowledge-base/evaluate-all.ts",
-    "kb:agent": "ts-node -r tsconfig-paths/register scripts/knowledge-base/agent-eval.ts",
-    "kb:smoke": "ts-node -r tsconfig-paths/register scripts/knowledge-base/evaluate-citation-smoke.ts",
-    "kb:usage": "ts-node -r tsconfig-paths/register scripts/knowledge-base/knowledge-usage-report.ts",
-    "kb:seed-eval": "ts-node -r tsconfig-paths/register scripts/knowledge-base/seed-eval-staff.ts",
-    "kb:data-check": "ts-node -r tsconfig-paths/register scripts/knowledge-base/data-check.ts",
-    "kb:domains": "ts-node -r tsconfig-paths/register scripts/knowledge-base/propose-domains.ts",
-    "kb:bench": "ts-node -r tsconfig-paths/register scripts/knowledge-base/bench-search.ts",
-    "kb:coverage": "ts-node -r tsconfig-paths/register scripts/knowledge-base/coverage-check.ts",
-    "kb:prod-smoke": "ts-node -r tsconfig-paths/register scripts/knowledge-base/prod-smoke.ts",
     "kb:v3:import": "ts-node -r tsconfig-paths/register scripts/knowledge-v3/import-page-layer.ts",
     "kb:v3:smoke": "ts-node -r tsconfig-paths/register scripts/knowledge-v3/smoke.ts",
     "kb:v3:bench": "ts-node -r tsconfig-paths/register scripts/knowledge-v3/benchmark-calls.ts",
@@ -136,8 +125,7 @@
     "audit:supplement-shop-catalog": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-supplement-shop-catalog.ts",
     "audit:nutrition-duplicates": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-nutrition-duplicates.ts",
     "audit:nutrition-coverage": "ts-node -r tsconfig-paths/register scripts/audit-nutrition-coverage.ts",
-    "audit:food-cost-basis": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-food-cost-basis.ts",
-    "kb:sections": "ts-node -r tsconfig-paths/register scripts/knowledge-base/inspect-domain.ts"
+    "audit:food-cost-basis": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-food-cost-basis.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

@@ -226,7 +226,6 @@ import { IngredientCreationController } from './interfaces/controllers/ingredien
 import { IngredientCatalogController } from './interfaces/controllers/ingredient-catalog.controller';
 import { SupplementChatController } from './interfaces/controllers/supplement-chat.controller';
 import { SupplementAgentService } from './application/ingredient-creation/supplement-agent.service';
-import { KnowledgeSearchService } from './application/knowledge/knowledge-search.service';
 import { IngredientCreationAuditService } from './application/ingredient-creation/ingredient-creation-audit.service';
 import { IngredientCreationCandidateService } from './application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationAuthorizeService } from './application/ingredient-creation/ingredient-creation-authorize.service';
@@ -342,14 +341,11 @@ import { SupplementTargetService } from './application/recipe-designer/supplemen
 import { OrderRecipeDesignService } from './application/recipe-designer/order-recipe-design.service';
 import { OrderRecipeTemplateService } from './application/recipe-designer/order-recipe-template.service';
 import { RecipeCopywritingService } from './application/recipe-designer/recipe-copywriting.service';
-import { SourceLayerService } from './application/knowledge-base/source-layer.service';
-import { KnowledgeLibraryService } from './application/knowledge-base/knowledge-library.service';
 import { KnowledgeCatalogService } from './application/knowledge-v3/knowledge-catalog.service';
 import { KnowledgeFindService } from './application/knowledge-v3/knowledge-find.service';
 import { KnowledgeGatewayService } from './application/knowledge-v3/knowledge-gateway.service';
 import { KnowledgeReadService } from './application/knowledge-v3/knowledge-read.service';
 import { PageImageService } from './application/knowledge-v3/page-image.service';
-import { KnowledgeSourceController } from './interfaces/controllers/knowledge-source.controller';
 import {
   SupplementLabelExtractionService,
   SUPPLEMENT_LABEL_OCR_PROVIDER,
@@ -439,7 +435,6 @@ validatePrismaConfig();
     LabelModule,
   ],
   controllers: [
-    KnowledgeSourceController,
     DesignRecipeCoverController,
     AiCoverPreviewController,
     RecipeCoverConfigController,
@@ -949,8 +944,6 @@ validatePrismaConfig();
     NutritionFoodService,
     SupplementLabelExtractionService,
     RecipeCopywritingService,
-    SourceLayerService,
-    KnowledgeLibraryService,
     // 知识库 v3：4 个数据服务 + 3 个动作的边界（本任务只注册，不接 Agent）
     KnowledgeCatalogService,
     KnowledgeFindService,
@@ -1058,7 +1051,6 @@ validatePrismaConfig();
     SupplementLinkPreviewService,
     FeedAdditiveCatalogService,
     SupplementAgentService,
-    KnowledgeSearchService,
     IngredientCreationIntakeService,
     IngredientNameClassifierService,
     IngredientDraftAgentService,

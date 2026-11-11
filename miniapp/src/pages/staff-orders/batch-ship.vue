@@ -129,7 +129,6 @@ import {
   createManualWaybill,
   recognizeReceipt,
   uploadReceiptImage,
-  type ReceiptConflict,
 } from '../../api/waybillReceipt'
 import { onLoad } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
@@ -360,7 +359,6 @@ function formatKg(grams: number) {
   return (Number(grams || 0) / 1000).toFixed(2)
 }
 
-/** 这包的存根块该显示什么（文案统一走 utils/waybill-receipt-view） */
 /** 这包的存根块该显示什么（文案统一走 utils/waybill-receipt-machine） */
 function receiptViewFor(pkg: PackageState): ReceiptView {
   return receiptViewOf(pkg.receipt, pkg.tracking || pkg.receipt.trackingNumber)

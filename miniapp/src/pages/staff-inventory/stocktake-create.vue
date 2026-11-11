@@ -28,9 +28,6 @@
         <view class="bar">
           <view class="bar-fill" :style="{ width: progressPercent + '%' }" />
         </view>
-        <text class="hint">
-          {{ isOpening ? '期初盘点：按实称录入，提交后全部入账。' : '按实称录入；留空 = 没盘，不会改库存。' }}
-        </text>
       </view>
 
       <view class="search">
@@ -54,6 +51,18 @@
         </view>
       </view>
 
+      <view class="filters type-filters">
+        <view
+          v-for="item in typeFilters"
+          :key="item.value"
+          class="chip"
+          :class="{ active: typeFilter === item.value }"
+          @tap="typeFilter = item.value"
+        >
+          {{ item.label }}
+        </view>
+      </view>
+
       <scroll-view scroll-y class="list">
         <view
           v-for="line in visibleLines"
@@ -63,7 +72,6 @@
         >
           <view class="row-head">
             <text class="name">{{ line.ingredientName }}</text>
-            <text class="unit">{{ line.stockUnitLabel }}</text>
             <text v-if="portionCount(line) > 1" class="line-total">
               合计 {{ fmt(lineTotal(line)) }}
             </text>
@@ -74,8 +82,12 @@
             :key="portion.id"
             class="portion"
           >
-            <text class="p-label">
-              {{ portionLabel(portion) }}
+            <text
+              class="p-label"
+              :class="{ expanded: expanded.has(portion.id) }"
+              @tap="toggleLabel(portion)"
+            >
+              {{ portionLabel(line, portion) }}
             </text>
             <input
               class="input"
@@ -85,13 +97,21 @@
               placeholder="未盘"
               @input="onPortionInput(portion, $event)"
             />
+            <text class="unit-inline">{{ line.stockUnitLabel }}</text>
             <text class="check" :class="{ on: isPortionCounted(portion) }">
               {{ isPortionCounted(portion) ? '✓' : '' }}
             </text>
+            <text class="add-one" @tap.stop="addPortion(line, portion)">＋</text>
           </view>
 
           <view v-if="!line.portions || line.portions.length === 0" class="portion">
-            <text class="p-label">整件</text>
+            <text
+              class="p-label"
+              :class="{ expanded: expanded.has(line.id) }"
+              @tap="toggleLabel({ id: line.id } as any)"
+            >
+              {{ lineLabel(line) }}
+            </text>
             <input
               class="input"
               type="digit"
@@ -100,12 +120,12 @@
               placeholder="未盘"
               @input="onLineInput(line, $event)"
             />
+            <text class="unit-inline">{{ line.stockUnitLabel }}</text>
             <text class="check" :class="{ on: isLineCounted(line) }">
               {{ isLineCounted(line) ? '✓' : '' }}
             </text>
+            <text class="add-one" @tap.stop="addPortion(line)">＋</text>
           </view>
-
-          <view class="add" @tap="addPortion(line)">＋ 再记一处（换冰柜 / 批次）</view>
         </view>
 
         <view v-if="visibleLines.length === 0" class="state soft">
@@ -113,15 +133,8 @@
         </view>
       </scroll-view>
 
-      <view class="autosave">
-        {{
-          saving
-            ? '保存中…'
-            : savedAt
-              ? `已自动保存 ${savedAt}`
-              : '改动会自动保存'
-        }}
-        · 没填完也能先走
+      <view v-if="saving || savedAt" class="autosave">
+        {{ saving ? '保存中…' : `已自动保存 ${savedAt}` }}
       </view>
       <view class="bottom">
         <button class="btn primary" :loading="saving" @tap="onNext">
@@ -151,6 +164,8 @@ type DraftLine = {
   ingredientName: string;
   ingredientType?: string | null;
   stockUnitLabel: string;
+  productModel?: string | null;
+  purchaseChannel?: string | null;
   countedQuantityG: number | null;
   portions: InventoryStocktakePortion[];
 };
@@ -159,6 +174,13 @@ const filters = [
   { value: 'ALL', label: '全部' },
   { value: 'TODO', label: '未盘' },
   { value: 'DONE', label: '已盘' },
+] as const;
+
+const typeFilters = [
+  { value: 'ALL', label: '全部类型' },
+  { value: 'FOOD', label: '食材' },
+  { value: 'SUPPLEMENT', label: '补剂' },
+  { value: 'PACKAGING', label: '包材' },
 ] as const;
 
 const loading = ref(true);
@@ -172,6 +194,9 @@ const values = ref<Record<string, string>>({});
 const lineValues = ref<Record<string, string>>({});
 const keyword = ref('');
 const filter = ref<(typeof filters)[number]['value']>('ALL');
+const typeFilter = ref<(typeof typeFilters)[number]['value']>('ALL');
+/** 名称太长时点一下展开（默认单行省略）。 */
+const expanded = ref(new Set<string>());
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 /** 只把改动过的点发上去，避免一次全量提交几百个明细点。 */
 const dirtyPortions = new Set<string>();
@@ -209,9 +234,27 @@ const progressPercent = computed(() =>
 
 const portionCount = (line: DraftLine) => (line.portions || []).length;
 
-const portionLabel = (portion: InventoryStocktakePortion) => {
-  const name = portion.procurementSkuName || '整件';
-  return portion.locationLabel ? `${name} · ${portion.locationLabel}` : name;
+const joinLabel = (...parts: Array<string | null | undefined>) =>
+  parts.filter((part) => !!part && String(part).trim() !== '').join(' · ');
+
+const portionLabel = (line: DraftLine, portion: InventoryStocktakePortion) => {
+  const base = portion.procurementSkuName
+    ? joinLabel(portion.procurementSkuName, portion.purchaseChannel)
+    : lineLabel(line);
+  return portion.locationLabel ? joinLabel(base, portion.locationLabel) : base;
+};
+
+/** 补剂/包材没有商品层：显示规格 + 采购渠道，不再写“整件”。 */
+const lineLabel = (line: DraftLine) => {
+  const parts = joinLabel(line.productModel, line.purchaseChannel);
+  return parts || '规格 / 渠道未填';
+};
+
+const toggleLabel = (item: { id: string }) => {
+  const next = new Set(expanded.value);
+  if (next.has(item.id)) next.delete(item.id);
+  else next.add(item.id);
+  expanded.value = next;
 };
 
 const lineTotal = (line: DraftLine) =>
@@ -223,6 +266,9 @@ const lineTotal = (line: DraftLine) =>
 const visibleLines = computed(() => {
   const term = keyword.value.trim().toLowerCase();
   return lines.value.filter((line) => {
+    if (typeFilter.value !== 'ALL' && line.ingredientType !== typeFilter.value) {
+      return false;
+    }
     if (filter.value === 'TODO' && isLineCounted(line)) return false;
     if (filter.value === 'DONE' && !isLineCounted(line)) return false;
     if (!term) return true;
@@ -244,6 +290,8 @@ const hydrate = (draft: StocktakeDraftItem) => {
     ingredientName: line.ingredientName,
     ingredientType: line.ingredientType,
     stockUnitLabel: line.stockUnitLabel,
+    productModel: line.productModel,
+    purchaseChannel: line.purchaseChannel,
     countedQuantityG: line.countedQuantityG,
     portions: line.portions || [],
   }));
@@ -427,10 +475,16 @@ const onLineInput = (line: DraftLine, event: any) => {
   scheduleSave();
 };
 
-const addPortion = async (line: DraftLine) => {
+const addPortion = async (
+  line: DraftLine,
+  portion?: InventoryStocktakePortion,
+) => {
+  const context = portion
+    ? portionLabel(line, portion)
+    : lineLabel(line);
   const result = await new Promise<any>((resolve) => {
     uni.showModal({
-      title: '再记一处',
+      title: `再记一处：${context}`,
       editable: true,
       placeholderText: '位置或批次，例如 冰柜2（可留空）',
       success: (res) => resolve(res),
@@ -440,14 +494,13 @@ const addPortion = async (line: DraftLine) => {
   if (!result?.confirm) return;
 
   const locationLabel = String(result.content || '').trim() || null;
-  const firstPortion = (line.portions || [])[0];
   await flushSave();
   try {
     const draft = await saveStocktakeLines(stocktakeId.value, {
       newPortions: [
         {
           lineId: line.id,
-          procurementSkuId: firstPortion?.procurementSkuId ?? null,
+          procurementSkuId: portion?.procurementSkuId ?? null,
           locationLabel,
         },
       ],
@@ -571,6 +624,9 @@ const onCancel = async () => {
   font-size: 26rpx;
 }
 .filters { display: flex; gap: 16rpx; padding: 16rpx 24rpx 4rpx; }
+.type-filters { padding-top: 6rpx; }
+.type-filters .chip { background: #fff; border: 1rpx solid #e8ede7; }
+.type-filters .chip.active { background: #1e3a2f; border-color: #1e3a2f; }
 .chip {
   height: 56rpx;
   padding: 0 26rpx;
@@ -594,7 +650,12 @@ const onCancel = async () => {
 .row.done { border-color: #bcd3c3; background: #f4f8f2; }
 .row-head { display: flex; align-items: baseline; gap: 8rpx; margin-bottom: 8rpx; }
 .name { font-size: 28rpx; color: #1e3a2f; font-weight: 500; }
-.unit { font-size: 24rpx; color: #7a8a80; }
+.unit-inline {
+  flex: 0 0 auto;
+  min-width: 30rpx;
+  font-size: 24rpx;
+  color: #7a8a80;
+}
 .line-total { margin-left: auto; font-size: 24rpx; color: #4b5b51; }
 
 .portion { display: flex; align-items: center; gap: 12rpx; padding: 6rpx 0; }
@@ -606,9 +667,14 @@ const onCancel = async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.4;
+}
+.p-label.expanded {
+  white-space: normal;
+  word-break: break-all;
 }
 .input {
-  width: 170rpx;
+  width: 150rpx;
   height: 60rpx;
   padding: 0 16rpx;
   border-radius: 12rpx;
@@ -617,7 +683,15 @@ const onCancel = async () => {
   font-size: 28rpx;
   text-align: right;
 }
-.check { width: 30rpx; font-size: 28rpx; color: #1e3a2f; text-align: center; }
+.check { width: 26rpx; font-size: 28rpx; color: #1e3a2f; text-align: center; }
+.add-one {
+  width: 44rpx;
+  height: 60rpx;
+  line-height: 60rpx;
+  text-align: center;
+  font-size: 30rpx;
+  color: #1e3a2f;
+}
 .add {
   margin-top: 4rpx;
   padding: 8rpx 0 6rpx;

@@ -116,6 +116,8 @@ export interface InventoryStocktakePortionDto {
   lineId: string;
   procurementSkuId: string | null;
   procurementSkuName: string | null;
+  /** 采购渠道：商品有则用商品的，没有则回退原料档案 */
+  purchaseChannel: string | null;
   locationLabel: string | null;
   countedQuantityG: number | null;
   isCounted: boolean;
@@ -129,6 +131,9 @@ export interface InventoryStocktakeLineDto {
   ingredientName: string;
   ingredientType?: string | null;
   stockUnitLabel: string;
+  /** 原料档案上的规格/渠道：补剂、包材没有商品层，靠它们描述 */
+  productModel?: string | null;
+  purchaseChannel?: string | null;
   expectedQuantityG: number;
   countedQuantityG: number | null;
   deltaG: number | null;
@@ -1981,6 +1986,8 @@ export class InventoryService {
             type: true,
             baseUnit: true,
             unitDisplayLabel: true,
+            productModel: true,
+            purchaseChannel: true,
           },
         },
         portions: { orderBy: { createdAt: 'asc' } },
@@ -2014,6 +2021,8 @@ export class InventoryService {
           line.ingredient?.unitDisplayLabel ||
           line.ingredient?.baseUnit ||
           'G',
+        productModel: line.ingredient?.productModel ?? null,
+        purchaseChannel: line.ingredient?.purchaseChannel ?? null,
         // 未盘的行不返回账面，避免用「预览一次再退出」绕过盲盘
         expectedQuantityG:
           counted === null ? null : Number(line.expectedQuantityG),
@@ -2033,8 +2042,13 @@ export class InventoryService {
           lineId: line.id,
           procurementSkuId: portion.procurementSkuId ?? null,
           procurementSkuName: portion.procurementSkuId
-            ? skuNames.get(portion.procurementSkuId) ?? null
+            ? skuNames.get(portion.procurementSkuId)?.name ?? null
             : null,
+          purchaseChannel: portion.procurementSkuId
+            ? skuNames.get(portion.procurementSkuId)?.channel ??
+              line.ingredient?.purchaseChannel ??
+              null
+            : line.ingredient?.purchaseChannel ?? null,
           locationLabel: portion.locationLabel ?? null,
           countedQuantityG:
             portion.countedQuantityG === null
@@ -2284,6 +2298,8 @@ export class InventoryService {
         ingredientName: line.ingredientName,
         ingredientType: line.ingredientType ?? null,
         stockUnitLabel: line.stockUnitLabel,
+        productModel: line.productModel ?? null,
+        purchaseChannel: line.purchaseChannel ?? null,
         countedQuantityG: line.countedQuantityG,
         isCounted: line.isCounted,
         countedAt: line.countedAt,
@@ -2292,6 +2308,7 @@ export class InventoryService {
           lineId: portion.lineId,
           procurementSkuId: portion.procurementSkuId,
           procurementSkuName: portion.procurementSkuName,
+          purchaseChannel: portion.purchaseChannel ?? null,
           locationLabel: portion.locationLabel,
           countedQuantityG: portion.countedQuantityG,
           isCounted: portion.isCounted,
@@ -2371,6 +2388,8 @@ export class InventoryService {
                 type: true,
                 baseUnit: true,
                 unitDisplayLabel: true,
+                productModel: true,
+                purchaseChannel: true,
               },
             },
           },
@@ -2437,6 +2456,8 @@ export class InventoryService {
       ingredientName: line.ingredient?.name ?? line.ingredientId,
       ingredientType: line.ingredient?.type ?? null,
       stockUnitLabel: this.resolveStockUnitLabel(line.ingredient),
+      productModel: line.ingredient?.productModel ?? null,
+      purchaseChannel: line.ingredient?.purchaseChannel ?? null,
       expectedQuantityG: line.expectedQuantityG,
       countedQuantityG: line.countedQuantityG ?? null,
       deltaG: line.deltaG ?? null,
@@ -2458,6 +2479,7 @@ export class InventoryService {
         lineId: line.id,
         procurementSkuId: portion.procurementSkuId ?? null,
         procurementSkuName: portion.procurementSkuName ?? null,
+        purchaseChannel: portion.purchaseChannel ?? null,
         locationLabel: portion.locationLabel ?? null,
         countedQuantityG: portion.countedQuantityG ?? null,
         isCounted:
@@ -2490,17 +2512,22 @@ export class InventoryService {
     };
   }
 
-  /** 批量取采购商品名（明细点用）。 */
+  /** 批量取采购商品名与采购渠道（明细点用）。 */
   private async loadProcurementSkuNames(
     ids: Array<string | null | undefined>,
-  ): Promise<Map<string, string>> {
+  ): Promise<Map<string, { name: string; channel: string | null }>> {
     const unique = Array.from(new Set(ids.filter(Boolean))) as string[];
     if (unique.length === 0) return new Map();
     const skus = await this.prisma.procurementSku.findMany({
       where: { id: { in: unique } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, purchaseChannel: true },
     });
-    return new Map(skus.map((sku) => [sku.id, sku.name]));
+    return new Map(
+      skus.map((sku) => [
+        sku.id,
+        { name: sku.name, channel: sku.purchaseChannel ?? null },
+      ]),
+    );
   }
 
   private async attachProcurementSkuNamesToStocktakes(
@@ -2534,11 +2561,12 @@ export class InventoryService {
       select: {
         id: true,
         name: true,
+        purchaseChannel: true,
       },
     });
 
     const procurementSkuMap = new Map(
-      procurementSkus.map((sku) => [sku.id, sku.name]),
+      procurementSkus.map((sku) => [sku.id, sku]),
     );
 
     return stocktakes.map((stocktake) => ({
@@ -2546,13 +2574,18 @@ export class InventoryService {
       lines: (stocktake.lines || []).map((line: any) => ({
         ...line,
         procurementSkuName: line.procurementSkuId
-          ? procurementSkuMap.get(line.procurementSkuId) ?? null
+          ? procurementSkuMap.get(line.procurementSkuId)?.name ?? null
           : null,
         portions: (line.portions || []).map((portion: any) => ({
           ...portion,
           procurementSkuName: portion.procurementSkuId
-            ? procurementSkuMap.get(portion.procurementSkuId) ?? null
+            ? procurementSkuMap.get(portion.procurementSkuId)?.name ?? null
             : null,
+          purchaseChannel: portion.procurementSkuId
+            ? procurementSkuMap.get(portion.procurementSkuId)?.purchaseChannel ??
+              line.purchaseChannel ??
+              null
+            : line.purchaseChannel ?? null,
         })),
       })),
     }));

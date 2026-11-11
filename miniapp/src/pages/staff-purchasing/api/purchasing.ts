@@ -1055,6 +1055,8 @@ export interface ProcurementSkuDraft {
   productModel: string | null;
   purchaseChannel: string | null;
   purchaseUnit: string | null;
+  /** AI 读到、但不在字典里的单位原文（2026-11-11）；只有这种情况才有值 */
+  purchaseUnitHint?: string | null;
   packCount: number | null;
   netContentPerPack: number | null;
   netContentUnitText: string | null;

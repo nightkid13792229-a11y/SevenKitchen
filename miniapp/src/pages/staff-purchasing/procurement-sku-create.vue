@@ -895,8 +895,8 @@ const applyDraft = (draft: any, screenshotUrl: string) => {
   if (draftUnit) {
     pickUnit(draftUnit);
     filled.purchaseUnit = true;
-  } else if (result.patch.purchaseUnit) {
-    purchaseUnitHint.value = result.patch.purchaseUnit;
+  } else if (result.patch.purchaseUnitHint) {
+    purchaseUnitHint.value = result.patch.purchaseUnitHint;
   }
   if (result.patch.specLinks) {
     specLinks.value = result.patch.specLinks.map((link) => ({ ...link }));

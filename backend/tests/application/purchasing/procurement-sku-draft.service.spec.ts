@@ -56,6 +56,64 @@ describe('ProcurementSkuDraftService', () => {
     });
   });
 
+  it('提示词里带上这道原料允许的采购单位清单', async () => {
+    prisma.ingredient.findUnique.mockResolvedValue({
+      id: 'ing-1',
+      type: 'FOOD',
+      baseUnit: 'G',
+    });
+    model.callDeepSeekJson.mockResolvedValue({ name: 'x' });
+
+    await draft();
+
+    const prompt = model.callDeepSeekJson.mock.calls[0][0].systemPrompt as string;
+    expect(prompt).toContain('采购单位清单');
+    expect(prompt).toContain('袋、箱、包');
+    // 按个记账的单位不该出现在按克记账的清单里
+    expect(prompt).not.toContain('毫升');
+  });
+
+  it('AI 给出字典外的单位 → purchaseUnit 为 null，原文留作提示', async () => {
+    prisma.ingredient.findUnique.mockResolvedValue({
+      id: 'ing-1',
+      type: 'FOOD',
+      baseUnit: 'G',
+    });
+    model.callDeepSeekJson.mockResolvedValue({
+      name: '厨房纸',
+      purchaseUnit: '挂',
+      netContent: { value: 500, unit: 'g' },
+      packCount: 1,
+      purchaseChannel: '沃尔玛',
+    });
+
+    const result = await draft();
+
+    expect(result.purchaseUnit).toBeNull();
+    expect(result.purchaseUnitHint).toBe('挂');
+    expect(result.missing).toContain('purchaseUnit');
+  });
+
+  it('AI 写别名（公斤）→ 归一成 kg', async () => {
+    prisma.ingredient.findUnique.mockResolvedValue({
+      id: 'ing-1',
+      type: 'FOOD',
+      baseUnit: 'G',
+    });
+    model.callDeepSeekJson.mockResolvedValue({
+      name: '糙米',
+      purchaseUnit: '公斤',
+      netContent: { value: 1, unit: 'kg' },
+      packCount: 1,
+      purchaseChannel: '沃尔玛',
+    });
+
+    const result = await draft();
+
+    expect(result.purchaseUnit).toBe('kg');
+    expect(result.purchaseUnitHint).toBeNull();
+  });
+
   it('1kg 归一成 1000 克，packCount=1', async () => {
     prisma.ingredient.findUnique.mockResolvedValue({
       id: 'ing-1',

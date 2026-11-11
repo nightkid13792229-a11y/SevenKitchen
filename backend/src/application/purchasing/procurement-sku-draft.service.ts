@@ -20,6 +20,12 @@ import {
   PURCHASE_REIMBURSEMENT_AGENT_PURPOSE,
 } from '../nutrition-governance/agent-provider-config.service';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import {
+  loadPurchaseUnitOptions,
+  resolvePurchaseUnitCode,
+  unitsForBaseUnit,
+  type PurchaseUnitOption,
+} from './purchase-unit-catalog';
 import { ProcurementSkuDraftQuotaService } from './procurement-sku-draft-quota.service';
 import {
   normalizeNetContentToBaseUnit,
@@ -63,6 +69,8 @@ export interface ProcurementSkuDraft {
   productModel: string | null;
   purchaseChannel: string | null;
   purchaseUnit: string | null;
+  /** AI 读到、但不在字典里的单位原文（如「提」）；页面据此提示员工自己选 */
+  purchaseUnitHint: string | null;
   packCount: number | null;
   netContentPerPack: number | null;
   netContentUnitText: string | null;
@@ -195,12 +203,25 @@ export class ProcurementSkuDraftService {
     // 渠道清单从字典取：员工端「在哪买的」只认这些项，AI 也必须从这里面选。
     const channels = await this.loadChannelOptions();
 
+    /**
+     * 采购单位清单（2026-11-11）：与渠道同样的做法。
+     *
+     * 以前提示词只告诉模型「你要买的这一整件的包装单位，如 盒/袋/箱/瓶」，
+     * 于是模型自由发挥出「提/捆/枚」——前端静默丢弃、后台直接 400。
+     * 现在把这道原料允许的单位原样喂进去，模型只能从这里选。
+     */
+    const unitOptions = unitsForBaseUnit(
+      await loadPurchaseUnitOptions(this.prisma as any),
+      baseUnit,
+    );
+    const unitCodes = unitOptions.map((item) => item.code);
+
     const raw = await this.model.callDeepSeekJson({
       baseUrl: runtime.baseUrl,
       model: runtime.model,
       apiKey: runtime.apiKey,
       requestTimeoutMs: runtime.requestTimeoutMs,
-      systemPrompt: this.buildSystemPrompt(channels),
+      systemPrompt: this.buildSystemPrompt(channels, unitCodes),
       userContent: [
         {
           type: 'text',
@@ -212,7 +233,7 @@ export class ProcurementSkuDraftService {
       extraBody: NO_THINKING,
     });
 
-    return this.toDraft(raw, baseUnit, channels);
+    return this.toDraft(raw, baseUnit, channels, unitOptions);
   }
 
   private async loadChannelOptions(): Promise<ChannelOption[]> {
@@ -230,12 +251,19 @@ export class ProcurementSkuDraftService {
     });
   }
 
-  private buildSystemPrompt(channels: ChannelOption[]): string {
+  private buildSystemPrompt(
+    channels: ChannelOption[],
+    purchaseUnits: string[] = [],
+  ): string {
     const list = channels.map((item) => item.code).join('、');
+    const unitList = purchaseUnits.length > 0 ? purchaseUnits.join('、') : '';
     return `${SYSTEM_PROMPT}
 
 渠道清单（purchaseChannel 只能填这里的原文，或者 null）：
-${list}`;
+${list}
+
+采购单位清单（purchaseUnit 只能填这里的原文；看不出就填 null，不要自己造词）：
+${unitList}`;
   }
 
   /** 把模型原始输出收口成草稿：能归一化的归一化，归一不了的一律 null + missing */
@@ -243,6 +271,7 @@ ${list}`;
     raw: Record<string, unknown>,
     baseUnit: BaseUnitCode,
     channels: ChannelOption[],
+    unitOptions: PurchaseUnitOption[] = [],
   ): ProcurementSkuDraft {
     const productList = (raw as { productList?: unknown }).productList;
 
@@ -259,7 +288,15 @@ ${list}`;
       toStringOrNull(raw.purchaseChannel),
       channels,
     );
-    const purchaseUnit = toStringOrNull(raw.purchaseUnit);
+    const rawPurchaseUnit = toStringOrNull(raw.purchaseUnit);
+    // 只认字典里的单位（含别名归一）。认不出来就当没读到，并把原文留着给页面提示 ——
+    // 丢掉原文的话，员工只会看到"单位空着"，永远不知道 AI 其实读到了「提」。
+    const resolvedUnit = rawPurchaseUnit
+      ? resolvePurchaseUnitCode(unitOptions, rawPurchaseUnit, baseUnit)
+      : null;
+    const purchaseUnit = resolvedUnit;
+    const purchaseUnitHint =
+      rawPurchaseUnit && !resolvedUnit ? rawPurchaseUnit.slice(0, 8) : null;
 
     const missing: string[] = [];
 
@@ -358,6 +395,7 @@ ${list}`;
         clampText(toStringOrNull(raw.productModel), 100) ?? specText,
       purchaseChannel,
       purchaseUnit,
+      purchaseUnitHint,
       packCount,
       netContentPerPack,
       netContentUnitText,

@@ -19,6 +19,8 @@ export interface ApplyDraftPatch {
   name?: string;
   purchaseChannel?: string;
   purchaseUnit?: string;
+  /** AI 读到、但不在字典里的单位原文：页面据此提示员工自己选（2026-11-11） */
+  purchaseUnitHint?: string | null;
   /** 计数层（最后一层基准数量之前的部分），如 [{count:'30',unit:'枚'}] */
   specLinks?: Array<{ count: string; unit: string }>;
   /** 最后一层的数量（基准单位），如 '53'（克） */
@@ -55,9 +57,13 @@ export function applyDraftToForm(
     patch.purchaseChannel = draft.purchaseChannel;
   }
 
-  // 不在白名单里的单位不套用：套了也存不进去，只会让员工在保存时吃一个 400
+  // 不在白名单里的单位不套用：套了也存不进去，只会让员工在保存时吃一个 400。
+  // 但**不能静默丢**（2026-11-11）：原文带到页面上，让员工看到"AI 读到了什么"。
   if (draft.purchaseUnit && options.purchaseUnits.includes(draft.purchaseUnit)) {
     patch.purchaseUnit = draft.purchaseUnit;
+  } else if (draft.purchaseUnit) {
+    patch.purchaseUnitHint =
+      String(draft.purchaseUnitHint || draft.purchaseUnit).slice(0, 8);
   }
 
   const chain = Array.isArray(draft.specChain) ? draft.specChain : [];

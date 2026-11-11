@@ -7,6 +7,7 @@
  *  - 到货是独立动作：只有确认到货才写入库存流水。
  */
 
+import { randomUUID } from 'crypto';
 import {
   checkQuantityUnitMatches,
   describeQuantityUnitMismatch,
@@ -500,6 +501,49 @@ export class ReplenishmentService {
     list.updatedAt = new Date();
 
     return this.purchaseListRepository.save(list);
+  }
+
+  /**
+   * 手填兜底：给草稿挂一条没有截图的识别记录，核对页就能手动加行。
+   * AI 不可用/配额用完时走这里，不阻断记账。
+   */
+  async createManualImport(
+    listId: string,
+    userId: string,
+    role: string,
+  ): Promise<{ id: string }> {
+    const list = await this.purchaseListRepository.findById(listId);
+    if (!list || !list.isDraft) {
+      throw new NotFoundException('补货草稿不存在');
+    }
+    this.assertCanOperate(list, userId, role);
+
+    const existing = await this.prisma.purchaseOrderImport.count({
+      where: {
+        purchaseListId: listId,
+        status: { not: 'DISCARDED' },
+      },
+    });
+    if (existing > 0) {
+      throw new BadRequestException('这笔草稿已经有识别记录，直接编辑即可');
+    }
+
+    const row = await this.prisma.purchaseOrderImport.create({
+      data: {
+        purchaseListId: listId,
+        uploadedById: userId,
+        channel: null,
+        orderTime: new Date(),
+        imageUrls: [],
+        imageKeys: [],
+        imageHash: `manual:${randomUUID()}`,
+        status: 'DRAFT',
+        pageType: 'unknown',
+        rawResult: { manual: true },
+        incomplete: false,
+      },
+    });
+    return { id: row.id };
   }
 
   /**

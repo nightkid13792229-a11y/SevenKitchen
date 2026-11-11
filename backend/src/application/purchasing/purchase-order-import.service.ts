@@ -833,6 +833,106 @@ ${list}
   }
 
   /** 确认：一次性生成采购记录 */
+  /**
+   * 手动加一行（AI 不可用/漏识别时的兜底）。
+   * 只允许在草稿识别记录上操作；原料和商品至少有一个能落到原料。
+   */
+  async addLine(
+    importId: string,
+    dto: {
+      rawName?: string | null;
+      ingredientId?: string | null;
+      procurementSkuId?: string | null;
+      qty: number;
+      unit?: string | null;
+      unitPrice: number;
+      lineTotal?: number | null;
+      isPersonal?: boolean;
+    },
+    userId?: string,
+  ): Promise<any> {
+    const row = await this.prisma.purchaseOrderImport.findUnique({
+      where: { id: importId },
+      select: { id: true, status: true, uploadedById: true },
+    });
+    if (!row) throw new NotFoundException('识别记录不存在');
+    if (row.status !== 'DRAFT') {
+      throw new BadRequestException('已确认的识别记录不能再加行');
+    }
+    if (userId && row.uploadedById !== userId) {
+      throw new BadRequestException('只能修改自己上传的识别记录');
+    }
+
+    const isPersonal = Boolean(dto.isPersonal);
+    const qty = Number(dto.qty);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw new BadRequestException('数量必须大于 0');
+    }
+    const unitPrice = Number(dto.unitPrice);
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      throw new BadRequestException('单价不能小于 0');
+    }
+
+    let ingredientId = dto.ingredientId ?? null;
+    let procurementSkuId = dto.procurementSkuId ?? null;
+    let rawName = String(dto.rawName ?? '').trim();
+
+    if (isPersonal) {
+      ingredientId = null;
+      procurementSkuId = null;
+      rawName = rawName || '个人商品';
+    } else {
+      if (!ingredientId) {
+        throw new BadRequestException('请先选择原料');
+      }
+      const ingredient = await this.prisma.ingredient.findUnique({
+        where: { id: ingredientId },
+        select: { id: true, name: true },
+      });
+      if (!ingredient) throw new BadRequestException('原料不存在');
+      if (procurementSkuId) {
+        const sku = await this.prisma.procurementSku.findUnique({
+          where: { id: procurementSkuId },
+          select: { id: true, name: true, ingredientId: true },
+        });
+        if (!sku || sku.ingredientId !== ingredientId) {
+          throw new BadRequestException('采购商品和原料不匹配，请重新选择');
+        }
+        rawName = rawName || sku.name;
+      } else {
+        rawName = rawName || ingredient.name;
+      }
+    }
+
+    const maxLine = await this.prisma.purchaseOrderImportLine.aggregate({
+      where: { importId },
+      _max: { lineNo: true },
+    });
+    const lineTotal =
+      dto.lineTotal === null || dto.lineTotal === undefined
+        ? round2(qty * unitPrice)
+        : round2(Number(dto.lineTotal));
+
+    return this.prisma.purchaseOrderImportLine.create({
+      data: {
+        importId,
+        lineNo: (maxLine._max.lineNo ?? 0) + 1,
+        rawName: rawName.slice(0, 300),
+        spec: null,
+        qty,
+        unit: dto.unit?.trim() || null,
+        unitPrice,
+        lineTotal,
+        ingredientId,
+        procurementSkuId,
+        matchSource: (isPersonal ? 'PERSONAL' : 'MANUAL') as any,
+        matchConfidence: 'HIGH',
+        isPersonal,
+        editedByUser: true,
+      },
+    });
+  }
+
   async confirm(importIds: string[], userId: string): Promise<any> {
     const ids = Array.from(new Set(importIds || []));
     if (ids.length === 0)

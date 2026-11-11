@@ -64,6 +64,43 @@ export class UpdateOrderImportDto {
   paid?: number | null;
 }
 
+export class CreateOrderImportLineDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  rawName?: string | null;
+
+  @IsOptional()
+  @IsString()
+  ingredientId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  procurementSkuId?: string | null;
+
+  @IsNumber()
+  @Min(0.001)
+  qty!: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  unit?: string | null;
+
+  @IsNumber()
+  @Min(0)
+  unitPrice!: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  lineTotal?: number | null;
+
+  @IsOptional()
+  @IsBoolean()
+  isPersonal?: boolean;
+}
+
 export class UpdateOrderImportLineDto {
   /** 截图里那串商品名：识别错了允许员工直接改（2026-11-05） */
   @IsOptional()

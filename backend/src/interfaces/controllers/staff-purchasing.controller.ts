@@ -63,6 +63,7 @@ import { ProcurementSkuDraftNoticeException } from '../../application/purchasing
 import { CreateStaffProcurementSkuDto } from '../dto/staff/procurement-sku-create.dto';
 import {
   ConfirmOrderImportsDto,
+  CreateOrderImportLineDto,
   ImportOrderScreenshotsDto,
   UpdateOrderImportDto,
   UpdateOrderImportLineDto,
@@ -263,6 +264,19 @@ export class StaffPurchasingController {
   ): Promise<ApiResponseDto<any>> {
     return ApiResponseDto.success(
       await this.purchaseOrderImportService.updateImport(id, dto),
+    );
+  }
+
+  @Post('order-imports/:id/lines')
+  @ApiOperation({ summary: '手动加一行（AI 漏识别/不可用时的兜底）' })
+  async createOrderImportLine(
+    @Param('id') importId: string,
+    @Body() dto: CreateOrderImportLineDto,
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    return ApiResponseDto.success(
+      await this.purchaseOrderImportService.addLine(importId, dto, userId),
+      '已添加',
     );
   }
 
@@ -705,6 +719,19 @@ export class StaffPurchasingController {
     );
 
     return ApiResponseDto.success(result, '已确认到货');
+  }
+
+  @Post('replenishment/drafts/:id/manual-import')
+  @ApiOperation({ summary: '给补货草稿建一条手填识别记录（AI 兜底）' })
+  async createManualReplenishmentImport(
+    @Param('id') id: string,
+    @UserId() userId: string,
+    @UserRole() role: string,
+  ): Promise<ApiResponseDto<any>> {
+    return ApiResponseDto.success(
+      await this.replenishmentService.createManualImport(id, userId, role),
+      '可以手填了',
+    );
   }
 
   @Post('replenishment/:id/unarrive')

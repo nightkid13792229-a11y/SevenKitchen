@@ -72,6 +72,16 @@ describe('InventoryService stocktake review', () => {
         updateMany: jest.fn(),
         deleteMany: jest.fn(),
       },
+      inventoryStocktakePortion: {
+        findMany: jest.fn().mockResolvedValue([]),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+      },
+      procurementSku: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       $transaction: jest.fn(async (callback: any) => callback(prisma)),
     };
 

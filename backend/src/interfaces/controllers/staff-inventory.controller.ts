@@ -194,12 +194,13 @@ export class StaffInventoryController {
   @Post('stocktakes')
   @ApiOperation({ summary: '开始盘点（开单即锁账面）' })
   async startStocktake(
-    @Body() body: { note?: string },
+    @Body() body: { note?: string; type?: 'OPENING' | 'ROUTINE' },
     @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
     const stocktake = await this.inventoryService.startStocktake({
       userId,
       note: body?.note ?? null,
+      type: body?.type === 'OPENING' ? 'OPENING' : 'ROUTINE',
     });
     return ApiResponseDto.success(stocktake, '盘点已开始');
   }
@@ -238,13 +239,27 @@ export class StaffInventoryController {
     @Param('id') id: string,
     @Body()
     body: {
-      lines: Array<{ ingredientId: string; countedQuantityG: number | null }>;
+      lines?: Array<{ ingredientId: string; countedQuantityG: number | null }>;
+      portions?: Array<{
+        id: string;
+        countedQuantityG?: number | null;
+        remove?: boolean;
+      }>;
+      newPortions?: Array<{
+        lineId: string;
+        procurementSkuId?: string | null;
+        locationLabel?: string | null;
+      }>;
     },
     @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
     const stocktake = await this.inventoryService.saveStocktakeLines(
       id,
-      body?.lines ?? [],
+      {
+        lines: body?.lines ?? [],
+        portions: body?.portions ?? [],
+        newPortions: body?.newPortions ?? [],
+      },
       userId,
     );
     return ApiResponseDto.success(stocktake, '已保存');

@@ -111,6 +111,16 @@ export interface CreateInventoryStocktakeDto {
   lines: CreateInventoryStocktakeLineDto[];
 }
 
+export interface InventoryStocktakePortionDto {
+  id: string;
+  lineId: string;
+  procurementSkuId: string | null;
+  procurementSkuName: string | null;
+  locationLabel: string | null;
+  countedQuantityG: number | null;
+  isCounted: boolean;
+}
+
 export interface InventoryStocktakeLineDto {
   id: string;
   ingredientId: string;
@@ -125,10 +135,26 @@ export interface InventoryStocktakeLineDto {
   isCounted: boolean;
   countedAt: string | null;
   withinTolerance: boolean | null;
+  /** 明细点：食材按商品/位置拆开录入；汇总结果写回本行的 countedQuantityG */
+  portions: InventoryStocktakePortionDto[];
+}
+
+export interface StocktakePortionDraft {
+  /** 已有的点：传 id + 实盘；remove=true 表示删掉这个点 */
+  id: string;
+  countedQuantityG?: number | null;
+  remove?: boolean;
+}
+
+export interface StocktakeNewPortionDraft {
+  lineId: string;
+  procurementSkuId?: string | null;
+  locationLabel?: string | null;
 }
 
 export interface InventoryStocktakeDto {
   id: string;
+  type: 'OPENING' | 'ROUTINE';
   status: InventoryStocktakeStatus;
   createdBy: string | null;
   note: string | null;
@@ -1581,7 +1607,12 @@ export class InventoryService {
    * 开一张草稿盘点单：账面在开单时冻结（盲盘 DTO 不含账面/差异）。
    * 全局只允许一张 DRAFT；别人有草稿时 409。
    */
-  async startStocktake(params: { userId: string; note?: string | null }) {
+  async startStocktake(params: {
+    userId: string;
+    note?: string | null;
+    /** OPENING = 期初盘点：不看容差，全部按实盘入账 */
+    type?: 'OPENING' | 'ROUTINE';
+  }) {
     const existing = await this.prisma.inventoryStocktake.findFirst({
       where: { status: 'DRAFT' as any },
       select: { id: true, createdBy: true, createdAt: true },
@@ -1607,30 +1638,77 @@ export class InventoryService {
     );
     const stocktakeId = randomUUID();
     const now = new Date();
+    const type = params.type === 'OPENING' ? 'OPENING' : 'ROUTINE';
+
+    // 食材按采购商品各生成一个明细点；补剂/包材本身即商品，只有一个点。
+    const skus = await this.prisma.procurementSku.findMany({
+      where: {
+        ingredientId: { in: ingredients.map((ingredient) => ingredient.id) },
+        isActive: true,
+      },
+      select: { id: true, ingredientId: true },
+      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+    });
+    const skuMap = new Map<string, string[]>();
+    for (const sku of skus) {
+      const list = skuMap.get(sku.ingredientId) ?? [];
+      list.push(sku.id);
+      skuMap.set(sku.ingredientId, list);
+    }
+
+    const lineRows = ingredients.map((ingredient) => ({
+      id: randomUUID(),
+      stocktakeId,
+      ingredientId: ingredient.id,
+      procurementSkuId: null as string | null,
+      expectedQuantityG: balances.get(ingredient.id) ?? 0,
+      countedQuantityG: null as number | null,
+      deltaG: null as number | null,
+      countedAt: null as Date | null,
+    }));
+    const lineByIngredient = new Map(
+      lineRows.map((line) => [line.ingredientId, line]),
+    );
+    const portionRows = ingredients.flatMap((ingredient) => {
+      const line = lineByIngredient.get(ingredient.id);
+      if (!line) return [];
+      const ingredientSkus =
+        ingredient.type === 'FOOD' ? skuMap.get(ingredient.id) ?? [] : [];
+      if (ingredientSkus.length === 0) {
+        return [
+          {
+            id: randomUUID(),
+            lineId: line.id,
+            procurementSkuId: null as string | null,
+            locationLabel: null as string | null,
+            countedQuantityG: null as number | null,
+            countedAt: null as Date | null,
+          },
+        ];
+      }
+      return ingredientSkus.map((skuId) => ({
+        id: randomUUID(),
+        lineId: line.id,
+        procurementSkuId: skuId as string | null,
+        locationLabel: null as string | null,
+        countedQuantityG: null as number | null,
+        countedAt: null as Date | null,
+      }));
+    });
 
     await this.prisma.$transaction(async (tx) => {
       await tx.inventoryStocktake.create({
         data: {
           id: stocktakeId,
-          type: 'ROUTINE' as any,
+          type: type as any,
           status: 'DRAFT' as any,
           note: params.note ?? null,
           createdBy: params.userId,
           createdAt: now,
         },
       });
-      await tx.inventoryStocktakeLine.createMany({
-        data: ingredients.map((ingredient) => ({
-          id: randomUUID(),
-          stocktakeId,
-          ingredientId: ingredient.id,
-          procurementSkuId: null,
-          expectedQuantityG: balances.get(ingredient.id) ?? 0,
-          countedQuantityG: null,
-          deltaG: null,
-          countedAt: null,
-        })),
-      });
+      await tx.inventoryStocktakeLine.createMany({ data: lineRows });
+      await tx.inventoryStocktakePortion.createMany({ data: portionRows });
     });
 
     return this.toBlindStocktakeDto(await this.getStocktakeById(stocktakeId));
@@ -1697,10 +1775,23 @@ export class InventoryService {
     });
   }
 
-  /** 保存草稿：只改实盘和计数时刻，不动账面。 */
+  /**
+   * 保存草稿：只改实盘和计数时刻，不动账面。
+   * 新协议按"明细点"保存（食材按商品/位置），旧的按原料保存仍兼容。
+   * 有明细点的行，实盘由服务端汇总，行级写入会被拒绝。
+   */
   async saveStocktakeLines(
     id: string,
-    lines: Array<{ ingredientId: string; countedQuantityG: number | null }>,
+    input:
+      | Array<{ ingredientId: string; countedQuantityG: number | null }>
+      | {
+          lines?: Array<{
+            ingredientId: string;
+            countedQuantityG: number | null;
+          }>;
+          portions?: StocktakePortionDraft[];
+          newPortions?: StocktakeNewPortionDraft[];
+        },
     userId: string,
   ) {
     const header = await this.prisma.inventoryStocktake.findUnique({
@@ -1715,34 +1806,141 @@ export class InventoryService {
       throw new ForbiddenException('只能编辑自己开的盘点单');
     }
 
+    const payload = Array.isArray(input) ? { lines: input } : input ?? {};
+    const lineUpdates = payload.lines ?? [];
+    const portionUpdates = payload.portions ?? [];
+    const newPortions = payload.newPortions ?? [];
+
     const existing = await this.prisma.inventoryStocktakeLine.findMany({
       where: { stocktakeId: id },
-      select: { ingredientId: true, expectedQuantityG: true },
+      select: { id: true, ingredientId: true, expectedQuantityG: true },
     });
-    const expectedMap = new Map(
-      existing.map((line) => [line.ingredientId, line.expectedQuantityG]),
+    const lineById = new Map(existing.map((line) => [line.id, line]));
+    const lineByIngredient = new Map(
+      existing.map((line) => [line.ingredientId, line]),
     );
+
+    const existingPortions =
+      await this.prisma.inventoryStocktakePortion.findMany({
+        where: { line: { stocktakeId: id } },
+        select: { id: true, lineId: true },
+      });
+    const portionMap = new Map(
+      existingPortions.map((portion) => [portion.id, portion]),
+    );
+
+    const normalizeCounted = (value: number | null | undefined) => {
+      const counted = value ?? null;
+      if (counted !== null && (!Number.isFinite(counted) || counted < 0)) {
+        throw new BadRequestException(
+          '实盘数量必须是非负数字，或留空表示未盘',
+        );
+      }
+      return counted;
+    };
+
     const now = new Date();
+    const touchedLineIds = new Set<string>();
 
     await this.prisma.$transaction(async (tx) => {
-      for (const line of lines) {
-        const expected = expectedMap.get(line.ingredientId);
-        if (expected === undefined) {
-          throw new BadRequestException(
-            `盘点单里没有原料 ${line.ingredientId}`,
-          );
+      for (const draft of portionUpdates) {
+        const portion = portionMap.get(draft.id);
+        if (!portion) {
+          throw new BadRequestException(`盘点明细点不存在：${draft.id}`);
         }
-        const counted = line.countedQuantityG ?? null;
-        if (counted !== null && (!Number.isFinite(counted) || counted < 0)) {
-          throw new BadRequestException(
-            '实盘数量必须是非负数字，或留空表示未盘',
-          );
+        touchedLineIds.add(portion.lineId);
+        if (draft.remove) {
+          await tx.inventoryStocktakePortion.delete({
+            where: { id: draft.id },
+          });
+          continue;
         }
-        await tx.inventoryStocktakeLine.updateMany({
-          where: { stocktakeId: id, ingredientId: line.ingredientId },
+        const counted = normalizeCounted(draft.countedQuantityG);
+        await tx.inventoryStocktakePortion.update({
+          where: { id: draft.id },
           data: {
             countedQuantityG: counted,
-            deltaG: counted === null ? null : counted - expected,
+            countedAt: counted === null ? null : now,
+          },
+        });
+      }
+
+      for (const draft of newPortions) {
+        const line = lineById.get(draft.lineId);
+        if (!line) {
+          throw new BadRequestException(`盘点行不存在：${draft.lineId}`);
+        }
+        touchedLineIds.add(line.id);
+        await tx.inventoryStocktakePortion.create({
+          data: {
+            id: randomUUID(),
+            lineId: line.id,
+            procurementSkuId: draft.procurementSkuId ?? null,
+            locationLabel: draft.locationLabel?.trim() || null,
+            countedQuantityG: null,
+            countedAt: null,
+          },
+        });
+      }
+
+      for (const update of lineUpdates) {
+        const line = lineByIngredient.get(update.ingredientId);
+        if (!line) {
+          throw new BadRequestException(
+            `盘点单里没有原料 ${update.ingredientId}`,
+          );
+        }
+        if ((existingPortions as any[]).some((p) => p.lineId === line.id)) {
+          throw new BadRequestException(
+            '该原料已按商品/位置拆分录入，请提交明细点而不是原料总数',
+          );
+        }
+        const counted = normalizeCounted(update.countedQuantityG);
+        touchedLineIds.add(line.id);
+        await tx.inventoryStocktakeLine.update({
+          where: { id: line.id },
+          data: {
+            countedQuantityG: counted,
+            deltaG:
+              counted === null
+                ? null
+                : counted - Number(line.expectedQuantityG),
+            countedAt: counted === null ? null : now,
+          },
+        });
+      }
+
+      // 明细点变动后，把行的实盘/差异重新汇总（行级永远等于各点之和）。
+      for (const lineId of touchedLineIds) {
+        const portions = await tx.inventoryStocktakePortion.findMany({
+          where: { lineId },
+          select: { countedQuantityG: true },
+        });
+        if (portions.length === 0) continue;
+        const line = lineById.get(lineId);
+        if (!line) continue;
+        const filled = portions.filter(
+          (portion) => portion.countedQuantityG !== null,
+        );
+        const counted =
+          filled.length === 0
+            ? null
+            : Number(
+                filled
+                  .reduce(
+                    (sum, portion) => sum + Number(portion.countedQuantityG),
+                    0,
+                  )
+                  .toFixed(3),
+              );
+        await tx.inventoryStocktakeLine.update({
+          where: { id: lineId },
+          data: {
+            countedQuantityG: counted,
+            deltaG:
+              counted === null
+                ? null
+                : counted - Number(line.expectedQuantityG),
             countedAt: counted === null ? null : now,
           },
         });
@@ -1763,7 +1961,7 @@ export class InventoryService {
   ) {
     const header = await this.prisma.inventoryStocktake.findUnique({
       where: { id },
-      select: { id: true, status: true, createdBy: true },
+      select: { id: true, status: true, createdBy: true, type: true },
     });
     if (!header) throw new NotFoundException(`Stocktake not found: ${id}`);
     if (header.status !== ('DRAFT' as any)) {
@@ -1785,6 +1983,7 @@ export class InventoryService {
             unitDisplayLabel: true,
           },
         },
+        portions: { orderBy: { createdAt: 'asc' } },
       },
       orderBy: { ingredientId: 'asc' },
     });
@@ -1798,6 +1997,11 @@ export class InventoryService {
       );
     }
 
+    const skuNames = await this.loadProcurementSkuNames(
+      lines.flatMap((line) =>
+        (line.portions || []).map((portion) => portion.procurementSkuId),
+      ),
+    );
     const previewLines = lines.map((line) => {
       const counted = line.countedQuantityG;
       const delta =
@@ -1824,12 +2028,30 @@ export class InventoryService {
                 Number(line.expectedQuantityG),
                 line.ingredient?.baseUnit ?? 'G',
               ),
+        portions: (line.portions || []).map((portion: any) => ({
+          id: portion.id,
+          lineId: line.id,
+          procurementSkuId: portion.procurementSkuId ?? null,
+          procurementSkuName: portion.procurementSkuId
+            ? skuNames.get(portion.procurementSkuId) ?? null
+            : null,
+          locationLabel: portion.locationLabel ?? null,
+          countedQuantityG:
+            portion.countedQuantityG === null
+              ? null
+              : Number(portion.countedQuantityG),
+          isCounted:
+            portion.countedQuantityG !== null &&
+            portion.countedQuantityG !== undefined,
+        })),
       };
     });
 
     return {
       id,
+      type: (header.type ?? 'ROUTINE') as 'OPENING' | 'ROUTINE',
       status: header.status,
+      autoApplyAll: header.type === ('OPENING' as any),
       lines: previewLines,
       countedCount: previewLines.filter((line) => line.isCounted).length,
       skippedCount: skipped,
@@ -1848,7 +2070,7 @@ export class InventoryService {
   async submitStocktake(id: string, userId: string, note?: string | null) {
     const header = await this.prisma.inventoryStocktake.findUnique({
       where: { id },
-      select: { id: true, status: true, createdBy: true },
+      select: { id: true, status: true, createdBy: true, type: true },
     });
     if (!header) throw new NotFoundException(`Stocktake not found: ${id}`);
     if (header.status !== ('DRAFT' as any)) {
@@ -1882,8 +2104,14 @@ export class InventoryService {
         ),
       };
     });
+    // 期初盘点不看容差：全部按实盘入账，不进复核（否则期初会被卡在待复核）。
+    const isOpening = header.type === ('OPENING' as any);
     const overs = evaluated.filter((item) => !item.within);
-    const nextStatus = overs.length > 0 ? 'SUBMITTED' : 'APPLIED';
+    const nextStatus = isOpening
+      ? 'APPLIED'
+      : overs.length > 0
+        ? 'SUBMITTED'
+        : 'APPLIED';
     const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
@@ -1912,13 +2140,17 @@ export class InventoryService {
       }
 
       const ledgerRows = evaluated
-        .filter((item) => item.within && Math.abs(item.delta) > 0.0001)
+        .filter(
+          (item) => (isOpening || item.within) && Math.abs(item.delta) > 0.0001,
+        )
         .map((item) => ({
           id: randomUUID(),
           ingredientId: item.line.ingredientId,
           procurementSkuId: item.line.procurementSkuId ?? null,
           deltaG: item.delta,
-          sourceType: InventorySourceType.STOCKTAKE as any,
+          sourceType: (isOpening
+            ? InventorySourceType.OPENING_BALANCE
+            : InventorySourceType.STOCKTAKE) as any,
           sourceId: id,
           sourceVersion: 1,
           costAmount: null,
@@ -2054,13 +2286,25 @@ export class InventoryService {
         countedQuantityG: line.countedQuantityG,
         isCounted: line.isCounted,
         countedAt: line.countedAt,
+        portions: line.portions.map((portion) => ({
+          id: portion.id,
+          lineId: portion.lineId,
+          procurementSkuId: portion.procurementSkuId,
+          procurementSkuName: portion.procurementSkuName,
+          locationLabel: portion.locationLabel,
+          countedQuantityG: portion.countedQuantityG,
+          isCounted: portion.isCounted,
+        })),
       })),
     };
   }
 
+  /**
+   * 盘点范围：所有原料都参与（2026-11-11 起全部原料记库存，期初盘点必须是全量）。
+   * 排序按上次盘点时间，从未盘过的排前面，其次按类型/名称。
+   */
   private async loadStocktakeScope() {
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const [ingredients, balances, recent, counted] = await Promise.all([
+    const [ingredients, counted] = await Promise.all([
       this.prisma.ingredient.findMany({
         select: {
           id: true,
@@ -2070,15 +2314,6 @@ export class InventoryService {
           unitDisplayLabel: true,
         },
       }),
-      this.prisma.inventoryLedgerEntry.groupBy({
-        by: ['ingredientId'],
-        _sum: { deltaG: true },
-      }),
-      this.prisma.inventoryLedgerEntry.findMany({
-        where: { createdAt: { gte: since } },
-        select: { ingredientId: true },
-        distinct: ['ingredientId'],
-      }),
       this.prisma.inventoryStocktakeLine.groupBy({
         by: ['ingredientId'],
         where: { countedAt: { not: null } },
@@ -2086,13 +2321,6 @@ export class InventoryService {
       }),
     ]);
 
-    const balanceMap = new Map(
-      balances.map((row) => [
-        row.ingredientId,
-        Number(row._sum?.deltaG ?? 0),
-      ]),
-    );
-    const recentSet = new Set(recent.map((row) => row.ingredientId));
     const lastCounted = new Map(
       counted.map((row) => [
         row.ingredientId,
@@ -2108,25 +2336,19 @@ export class InventoryService {
       PACKAGING: 2,
     };
 
-    return ingredients
-      .filter(
-        (ingredient) =>
-          (balanceMap.get(ingredient.id) ?? 0) !== 0 ||
-          recentSet.has(ingredient.id),
-      )
-      .sort((left, right) => {
-        const leftCounted =
-          lastCounted.get(left.id) ?? Number.POSITIVE_INFINITY;
-        const rightCounted =
-          lastCounted.get(right.id) ?? Number.POSITIVE_INFINITY;
-        if (leftCounted !== rightCounted) {
-          return leftCounted - rightCounted;
-        }
-        const rankDiff =
-          (typeRank[left.type] ?? 9) - (typeRank[right.type] ?? 9);
-        if (rankDiff !== 0) return rankDiff;
-        return left.name.localeCompare(right.name, 'zh-CN');
-      });
+    return ingredients.sort((left, right) => {
+      const leftCounted =
+        lastCounted.get(left.id) ?? Number.POSITIVE_INFINITY;
+      const rightCounted =
+        lastCounted.get(right.id) ?? Number.POSITIVE_INFINITY;
+      if (leftCounted !== rightCounted) {
+        return leftCounted - rightCounted;
+      }
+      const rankDiff =
+        (typeRank[left.type] ?? 9) - (typeRank[right.type] ?? 9);
+      if (rankDiff !== 0) return rankDiff;
+      return left.name.localeCompare(right.name, 'zh-CN');
+    });
   }
 
   async listStocktakes(limit = 20): Promise<InventoryStocktakeDto[]> {
@@ -2186,6 +2408,9 @@ export class InventoryService {
                 unitDisplayLabel: true,
               },
             },
+            portions: {
+              orderBy: { createdAt: 'asc' },
+            },
           },
         },
       },
@@ -2226,10 +2451,22 @@ export class InventoryService {
               Number(line.expectedQuantityG ?? 0),
               line.ingredient?.baseUnit ?? 'G',
             ),
+      portions: (line.portions || []).map((portion: any) => ({
+        id: portion.id,
+        lineId: line.id,
+        procurementSkuId: portion.procurementSkuId ?? null,
+        procurementSkuName: portion.procurementSkuName ?? null,
+        locationLabel: portion.locationLabel ?? null,
+        countedQuantityG: portion.countedQuantityG ?? null,
+        isCounted:
+          portion.countedQuantityG !== null &&
+          portion.countedQuantityG !== undefined,
+      })),
     }));
 
     return {
       id: stocktake.id,
+      type: (stocktake.type ?? 'ROUTINE') as 'OPENING' | 'ROUTINE',
       status: stocktake.status as InventoryStocktakeStatus,
       note: stocktake.note ?? null,
       createdBy: stocktake.createdBy ?? null,
@@ -2251,15 +2488,31 @@ export class InventoryService {
     };
   }
 
+  /** 批量取采购商品名（明细点用）。 */
+  private async loadProcurementSkuNames(
+    ids: Array<string | null | undefined>,
+  ): Promise<Map<string, string>> {
+    const unique = Array.from(new Set(ids.filter(Boolean))) as string[];
+    if (unique.length === 0) return new Map();
+    const skus = await this.prisma.procurementSku.findMany({
+      where: { id: { in: unique } },
+      select: { id: true, name: true },
+    });
+    return new Map(skus.map((sku) => [sku.id, sku.name]));
+  }
+
   private async attachProcurementSkuNamesToStocktakes(
     stocktakes: any[],
   ): Promise<any[]> {
     const procurementSkuIds = Array.from(
       new Set(
         stocktakes.flatMap((stocktake) =>
-          (stocktake.lines || [])
-            .map((line: any) => line.procurementSkuId)
-            .filter(Boolean),
+          (stocktake.lines || []).flatMap((line: any) => [
+            line.procurementSkuId,
+            ...(line.portions || []).map(
+              (portion: any) => portion.procurementSkuId,
+            ),
+          ]),
         ),
       ),
     );
@@ -2291,6 +2544,12 @@ export class InventoryService {
         procurementSkuName: line.procurementSkuId
           ? procurementSkuMap.get(line.procurementSkuId) ?? null
           : null,
+        portions: (line.portions || []).map((portion: any) => ({
+          ...portion,
+          procurementSkuName: portion.procurementSkuId
+            ? procurementSkuMap.get(portion.procurementSkuId) ?? null
+            : null,
+        })),
       })),
     }));
   }

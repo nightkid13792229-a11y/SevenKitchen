@@ -269,6 +269,7 @@ export interface KbPage {
   text: string;
   blocks: KbBlock[];
   imagePath: string | null;
+  imageMime: 'image/jpeg' | null;
   anchor: string;
 }
 
@@ -318,7 +319,8 @@ export type KnowledgeToolErrorCode =
   | 'SOURCE_NOT_FOUND'
   | 'PAGE_OUT_OF_RANGE'
   | 'TOC_NOT_FOUND'
-  | 'IMAGE_UNAVAILABLE';
+  | 'IMAGE_UNAVAILABLE'
+  | 'INTERNAL_ERROR';
 
 export class KnowledgeToolError extends Error {
   constructor(
@@ -461,7 +463,7 @@ bash scripts/session.sh commit -m "feat(knowledge): v3 四实体模型与锚点/
   "source": {
     "id": "doc-id", "collection": "SACN5", "title": "…",
     "publisher": "…", "version": "…", "publishedYear": 2010,
-    "status": "current", "license": "internal", "checksum": "sha256",
+    "status": "unknown", "license": "internal", "checksum": "sha256",
     "archivePath": "sacn5/…pdf", "pageCount": 46, "hasTextLayer": true
   },
   "pages": [{
@@ -478,7 +480,7 @@ bash scripts/session.sh commit -m "feat(knowledge): v3 四实体模型与锚点/
            "pageFrom": 1, "pageTo": 46, "orderIndex": 1}]
 }
 ```
-- CLI：`python3 docs/knowledge-base/tools/build-page-layer.py --archive <dir> --out <dir> [--only <docId>] [--force]`
+- CLI：`python3 docs/knowledge-base/tools/build-page-layer.py --archive <dir> --out <dir> [--ids-from <dir>] [--only <docId>] [--force]`
 - `render-page-images.py --archive <dir> --layer <dir> --out <dir> [--only <docId>] [--dpi 110]`
 
 - [ ] **Step 1: 写失败的自检脚本**
@@ -503,18 +505,21 @@ Expected: FAIL（脚本不存在）。
 
 要点：
 
-- `fitz.open(path)`；`doc.get_toc()` 为空时写一条“全文 1..N”；
+- `fitz.open(path)`；`doc.get_toc()` 返回 `[level, title, page]`：`pageFrom = page`，`pageTo = 下一条的 page - 1`（最后一条到 `pageCount`）；为空时写一条“全文 1..N”；
 - 页文本 `page.get_text("text")`；块用 `page.get_text("dict")["blocks"]`，按行合并成块，保留 bbox；
-- 表：`page.find_tables().tables`，每张表加一个 `kind="table"` 块（bbox 来自 `table.bbox`），不取行列；
-- 图：`page.get_images(full=True)` + `page.get_image_rects(xref)`，加 `kind="figure"` 块；
+- 表：`page.find_tables().tables`，每张表加一个 `kind="table"` 块（bbox 来自 `table.bbox`），不取行列；表题取 bbox 上方最近文本块的首行，只有匹配 `Table|TABLE` 才写入 `caption`，否则 null；
+- 图：`page.get_images(full=True)` + `page.get_image_rects(xref)`，加 `kind="figure"` 块；图注取 bbox 下方最近文本块首行，只有匹配 `Figure|FIGURE` 才写入 `caption`，否则 null；
 - 块 ID：`{sourceId}-p{pageNo:04d}-b{order:04d}`；页 ID：`{sourceId}-p{pageNo:04d}`；
-- 非 PDF：读 UTF-8 文本，单页，`hasTextLayer=true`，`imagePath=null`；
+- 非 PDF：`.txt` 直读；`.xml`/`.html` 用正则去标签；`.epub` 用 `zipfile` 读 XHTML；统一成单页，`hasTextLayer=true`，`imagePath=null`；`.docx` 等未支持格式明确报错并跳过，不静默漏；
 - PDF 页：`imagePath = "{sourceId}/p{pageNo:04d}.jpg"`（与渲染器输出一致）；渲染器还没跑时文件不存在，`read` 会返回 `null`；
 - `collection`：默认取归档相对路径的第一段并大写（`sacn5/...` → `SACN5`）；允许 `--collection` 覆盖；
-- `status` 默认 `current`，`license` 默认 `internal`；没有可靠元数据时留 `null`，不猜；
-- checksum：文件 SHA256；
+- `status` 默认 `unknown`（没有可靠来源状态就不猜 current）；`license` 默认 `internal`；`title` 依次取 manifest 说明 / PDF metadata title / 文件名；`publisher` 取 collection；`version`/`publishedYear` 没有可靠来源就留 `null`；
+- checksum：优先用 `manifest.csv` 的 SHA256；没有就计算文件 SHA256；两者都有但不一致 → 报错，不导入；
+- 从归档根目录的 `manifest.csv` 读 `来源ID / 相对路径 / SHA256 / 说明`，用 `来源ID` 作为 `source.id`（保持 `sacn5-chapters-SACN5-37` 这类稳定 ID）；没有 manifest 时才用文件名去扩展名；
+- `--ids-from docs/knowledge-base/source-layer`：只解析该目录文件名对应的 159 个 docId，跳过 README/MANIFEST/重复文件；默认就用这个白名单，数量不是 159 时先停；
 - 输出一个 `<sourceId>.json`；`--force` 覆盖，否则跳过已存在。
-- `render-page-images.py`：遍历 PDF 页，`page.get_pixmap(dpi=110)`，JPEG 质量 78，写 `<out>/<sourceId>/p0001.jpg`；已存在跳过。
+- `render-page-images.py`：遍历 PDF 页，`page.get_pixmap(dpi=110)`，JPEG 质量 78，写 `<out>/<sourceId>/p0001.jpg`；已存在跳过；
+- 权限：解析/渲染脚本由有源目录读权限的用户（root/受权组）跑；产出目录 `chown` 给后端运行用户；后端只读 DB + 页图，不直接读 700 源目录。
 
 - [ ] **Step 3: 跑自检，确认通过**
 
@@ -554,7 +559,12 @@ bash scripts/session.sh commit -m "feat(knowledge): 页级解析与页图渲染"
 
 **Interfaces:**
 - `validatePageLayerFile(raw: unknown): PageLayerFile`，非法时抛 `INVALID_ARGUMENT`；
-- `mapPageLayerToCreate(file: PageLayerFile): Prisma.KbSourceCreateInput`（含 pages/blocks/toc create）；
+- `mapPageLayerToRows(file: PageLayerFile): {
+    source: Prisma.KbSourceCreateInput;
+    pages: Prisma.KbPageCreateManyInput[];
+    blocks: Prisma.KbBlockCreateManyInput[];
+    toc: Prisma.KbTocCreateManyInput[];
+  }`；
 - CLI：`import-page-layer.ts --dir <dir> [--only <id>] [--dry-run]`。
 
 - [ ] **Step 1: 写失败测试**
@@ -581,10 +591,10 @@ Expected: FAIL，模块不存在。
 - [ ] **Step 3: 实现 mapper 与导入脚本**
 
 - `validatePageLayerFile` 校验：source.id、pageCount、pages 数量/页码唯一、blocks id 唯一、toc 页码范围；
-- `mapPageLayerToCreate` 用嵌套 create；
+- `mapPageLayerToRows` 生成确定性的页/块/目录行；页 ID 用 `{source.id}-p{pageNo:04d}`，块 ID 用 parser 给的值；
 - 导入脚本：读目录下 `*.json`；每个文件 `prisma.$transaction`：
   - `deleteMany({ where: { id: source.id } })`（级联删 pages/blocks/toc）；
-  - `create` 嵌套；
+  - `create` source；再按 **200 页/批** `createMany` pages（页 ID 是确定性的）；再按 **1,000 块/批** `createMany` blocks；最后 `createMany` toc；不要把一个 5,000 块的大文档一次性嵌套；
   - `--dry-run` 只校验不写；
   - `--only` 过滤；
   - 失败时打印文件与错误，退出码 1；
@@ -690,7 +700,7 @@ class KnowledgeFindService {
 测试 `makeSnippet`、`isCjkQuery`（从服务文件导出）和服务：
 
 ```ts
-expect(makeSnippet('...CKD phosphorus target...', 'phosphorus')).toContain('phosphorus');
+expect(makeSnippet('...phosphorus 0.2-0.5% DM...', 'phosphorus')).toContain('phosphorus');
 expect(isCjkQuery('犬 磷 目标')).toBe(true);
 expect(isCjkQuery('CKD phosphorus')).toBe(false);
 
@@ -699,7 +709,7 @@ const prisma = { $queryRaw: jest.fn().mockResolvedValue([
     block_id: null, kind: 'text', score: 0.9 },
 ]), kbSource: { count: jest.fn().mockResolvedValue(8) },
    kbPage: { count: jest.fn().mockResolvedValue(857) } };
-const result = await service.find({ query: 'CKD phosphorus target' });
+const result = await service.find({ query: 'phosphorus' });
 expect(result.hits[0]).toMatchObject({ documentId: 'doc-1', pageNo: 17,
   anchor: 'doc-1/p17' });
 expect(result.searched).toEqual({ documents: 8, pages: 857 });
@@ -771,7 +781,7 @@ class KnowledgeReadService {
 }
 ```
 - `budgetTokens` 默认 20,000，最大 200,000；`<1` 或非数字 → `INVALID_ARGUMENT`；至少返回 1 页；
-- `includeImages` 默认 true（PDF 页都有图）；`false` 时 `imagePath=null`；
+- `includeImages` 默认 true（PDF 页都有图）；`false` 时 `imagePath=null`、`imageMime=null`；
 - 页码越界 → `PAGE_OUT_OF_RANGE`；`tocId` 不存在 → `TOC_NOT_FOUND`。
 
 - [ ] **Step 1: 写失败测试**
@@ -804,7 +814,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 实现服务**
 
-- 解析范围：`tocId` → `kb_toc.pageFrom/pageTo`；否则 `pageFrom/pageTo`；只给 `pageFrom` 时 `pageTo = pageFrom + 4`；都没给时 `1..min(5, pageCount)`；
+- 解析范围：`tocId` → 查 `kb_toc`（`toc.sourceId` 必须等于 `documentId`，否则 `TOC_NOT_FOUND`）；否则 `pageFrom/pageTo`；只给 `pageFrom` 时 `pageTo = pageFrom + 4`；都没给时 `1..min(5, pageCount)`；
 - cursor：`decodeReadCursor`，校验 `documentId` 一致；
 - 查询 `kb_page.findMany({ where: { sourceId, pageNo: { gte, lte } }, include:{ blocks:{orderBy:{orderIndex:'asc'}} }, orderBy:{pageNo:'asc'} })`；
 - 预算：逐页累加 `estimateTokens(page.text)`（块文本是页文本的子集，不重复算）；加入当前页后超预算且已有页 → 停；至少 1 页；
@@ -874,10 +884,10 @@ expect(KNOWLEDGE_TOOL_DEFINITIONS.map((t) => t.function.name)).toEqual([
 ]);
 for (const tool of KNOWLEDGE_TOOL_DEFINITIONS) {
   expect(tool.function.parameters).toBeTruthy();
-  expect(tool.function.description).not.toMatch(/结论|摘要|分诊|剂量|疾病—营养素/);
+  expect(tool.function.description).not.toMatch(/返回结论|生成摘要|证据分级|分诊建议|药物剂量/);
 }
 ```
-`gateway.spec.ts`：mock 3 个服务；断言 `execute('kb_find', { query: '' })` 返回 `ok:false` code `INVALID_ARGUMENT`；未知工具返回 `INVALID_ARGUMENT`；`kb_read` 缺 documentId 返回 `INVALID_ARGUMENT`；成功时返回 `ok:true`。
+`gateway.spec.ts`：mock 3 个服务；断言 `execute('kb_find', { query: '' })` 返回 `ok:false` code `INVALID_ARGUMENT`；未知工具返回 `INVALID_ARGUMENT`；`kb_read` 缺 documentId 返回 `INVALID_ARGUMENT`；`kb_find({query:'x', documentIds:[]})` 返回 0 命中而不是全库；成功时返回 `ok:true`。
 
 - [ ] **Step 2: 跑测试，确认失败**
 
@@ -901,14 +911,14 @@ KB_SOURCE_ARCHIVE=/Users/zhaochen/Documents/SevenKitchen-knowledge-sources
 - `smoke.ts`：真实库，依次：
   1. `catalog()` 文档数 ≥159；
   2. `catalog({documentId:'sacn5-chapters-SACN5-37'})` 有 toc；
-  3. `find({query:'CKD dog phosphorus target'})` top 页在 17–22；
-  4. `read({documentId, pageFrom:17, pageTo:21, includeImages:true, budgetTokens:30000})` 返回 5 页、`sacn5-chapters-SACN5-37/p17` 锚点、至少一个 `kind=table` 块、每页有 `imagePath`（PDF 页都有图）；
+  3. `find({query:'phosphorus', documentIds:['sacn5-chapters-SACN5-37']})` top 页在 17–22；
+  4. `read({documentId, pageFrom:17, pageTo:21, includeImages:true, budgetTokens:30000})` 返回 5 页、`sacn5-chapters-SACN5-37/p17` 锚点、每页有 `imagePath`；p17 文本包含 `Phosphorus` 或 `Table 37-9`；表块命中则记录，检测漏了不算失败（页图仍在）；
   5. 用 `nextCursor` 继续读不报错；
-  6. `find({query:'CKD dog vitamin K target'})` 返回 `hits: []`，且 JSON 里没有 `no_match`/`未覆盖`；
+  6. `find({query:'"vitamin K"', documentIds:['sacn5-chapters-SACN5-37']})` 返回 `hits: []`，且 JSON 里没有 `no_match`/`未覆盖`；
   7. 读一个无文字层文档第 1 页，`text` 可为空、`imagePath` 存在；
   8. 页码 99999 → `PAGE_OUT_OF_RANGE`。
   输出 `docs/knowledge-base/eval/kb-v3-smoke.md`。
-- `benchmark-calls.ts`：固定 6 题：
+- `benchmark-calls.ts`：**只证明接口能力，不证明模型会这样调**；Agent A/B 由调用方另行做。`catalog` 单独记为“会话 setup”，不计入每题；如果每题都调 `catalog`，另加 1 次。固定 6 题：
   - 已知文档：`read` 1 次；
   - 未知：`find` + `read` 2 次；
   - 表题：`find` + `read` 2 次；
@@ -935,7 +945,7 @@ bash scripts/session.sh commit -m "feat(knowledge): 三个通用动作与结构�
 ## Task 8: 删除 387 条结论，把健康分析降级为“不可用”
 
 **Files:**
-- Delete: `backend/src/domain/recipe-designer/knowledge-base/`（全部）
+- Delete: `backend/src/domain/recipe-designer/knowledge-base/`（**保留 `tag-vocabulary.ts`**，员工端健康标签仍在用；只改注释，不删）
 - Delete: `backend/src/application/recipe-designer/knowledge-base.service.ts`
 - Modify: `backend/src/application/health/health-analysis.service.ts`（替换为最小服务）
 - Modify: `backend/tests/application/health/health-analysis.service.spec.ts`（重写）
@@ -1010,7 +1020,7 @@ Expected: FAIL（构造函数/返回类型不匹配）。
 
 - [ ] **Step 2: 删除结论层，替换健康分析**
 
-- 删除 `backend/src/domain/recipe-designer/knowledge-base/` 整个目录（387 条数据、类型、登记表、标签词表）；
+- 删除 `backend/src/domain/recipe-designer/knowledge-base/` 下的 387 条数据、类型、登记表；**保留 `tag-vocabulary.ts`**（`staff-dog-health.service.ts` 仍用它做健康标签校验，只把注释里“KnowledgeBaseService 启动校验”改成“员工端健康标签受控词表”）；
 - 删除 `backend/src/application/recipe-designer/knowledge-base.service.ts`；
 - 用上面的最小服务替换 `health-analysis.service.ts`；只保留类型/常量/服务，不再 import Prisma、timeline、agent config、KB；
 - 删除 `health-analysis-cache.spec.ts`；
@@ -1026,7 +1036,11 @@ npm test -- tests/application/health/health-analysis.service.spec.ts
 npx tsc --noEmit
 rg "KnowledgeBaseService|knowledge-base/data|KnowledgeEntry|HealthAnalysisCache" src tests
 ```
-Expected: PASS/无类型错误；`rg` 不再命中运行时。
+Expected: PASS/无类型错误；`rg` 不再命中运行时。再跑：
+```bash
+npm test -- tests/application/health/staff-dog-health.service.spec.ts
+```
+Expected: PASS（健康标签词表仍可用）。
 
 - [ ] **Step 4: 提交**
 
@@ -1108,12 +1122,16 @@ bash scripts/session.sh commit -m "refactor(knowledge): 移除旧 Agent/补剂�
 **Files:**
 - Delete: `backend/src/application/knowledge-base/`（全部）
 - Delete: `backend/src/application/knowledge/knowledge-search.service.ts`
+- Delete: `backend/src/domain/knowledge/`（scope/domains/routing/topic-aliases，旧检索专用）
 - Delete: `backend/src/interfaces/controllers/knowledge-source.controller.ts`
 - Delete: `backend/tests/application/knowledge-base/`（全部）
 - Delete: `backend/tests/application/knowledge/knowledge-search.service.spec.ts`
+- Delete: `backend/tests/domain/knowledge/`（全部）
 - Delete: `backend/scripts/knowledge-base/`（全部）
+- Delete: `backend/scripts/import-knowledge-source-layer.ts`
+- Delete: `docs/knowledge-base/tools/` 下除 `build-page-layer.py` / `render-page-images.py` / `test-build-page-layer.py` 之外的旧解析工具
 - Modify: `backend/src/app.module.ts`
-- Modify: `backend/package.json`（删 `kb:eval` / `kb:smoke` / `kb:usage` 等旧脚本）
+- Modify: `backend/package.json`（删全部旧 `kb:*` 脚本：`kb:eval` / `kb:eval:all` / `kb:agent` / `kb:smoke` / `kb:usage` / `kb:seed-eval` / `kb:data-check` / `kb:domains` / `kb:bench` / `kb:coverage` / `kb:prod-smoke` / `kb:sections`）
 - Modify: `backend/prisma/schema.prisma`（删旧 `SourceDocument` / `SourceSection` / `SourceParagraph` / `SourceTable` / `SourceFigure` / `KnowledgeCitationAnchor`）
 - Create: `backend/prisma/migrations/20261112120000_drop_legacy_kb/migration.sql`
 
@@ -1166,7 +1184,7 @@ Expected: `tsc` 通过；全量测试绿；`rg` 无运行时引用（迁移/SQL 
 - [ ] **Step 4: 提交**
 
 ```bash
-git add -u backend/src/application/knowledge-base backend/src/application/knowledge backend/src/interfaces/controllers/knowledge-source.controller.ts backend/tests/application/knowledge-base backend/tests/application/knowledge backend/scripts/knowledge-base backend/src/app.module.ts backend/package.json backend/prisma/schema.prisma
+git add -u backend/src/application/knowledge-base backend/src/application/knowledge backend/src/domain/knowledge backend/src/interfaces/controllers/knowledge-source.controller.ts backend/tests/application/knowledge-base backend/tests/application/knowledge backend/tests/domain/knowledge backend/scripts/knowledge-base backend/scripts/import-knowledge-source-layer.ts docs/knowledge-base/tools backend/src/app.module.ts backend/package.json backend/prisma/schema.prisma
 git add backend/prisma/migrations/20261112120000_drop_legacy_kb
 bash scripts/session.sh commit -m "refactor(knowledge): 下线旧原文层与 K# 接口"
 ```
@@ -1221,7 +1239,7 @@ Expected: `kb-v3-call-benchmark.md` 生成；已知 1 次、未知 2 次、表�
 
 `RUNBOOK-kb-v3.md` 至少包含：
 
-- 依赖：PyMuPDF、Postgres `pg_trgm`、原文目录读权限；
+- 依赖：PyMuPDF、Postgres `pg_trgm`、原文目录读权限（root/受权组）；解析/渲染产出目录要 `chown` 给后端用户，后端不直接读 `/opt/sevenkitchen/knowledge-sources`；
 - 首次导入：解析 → 渲染 → 导入；
 - 增量：`--only <sourceId> --force`；
 - 冒烟：`npm run kb:v3:smoke`；

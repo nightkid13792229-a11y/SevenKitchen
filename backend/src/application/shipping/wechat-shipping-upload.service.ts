@@ -254,6 +254,14 @@ export class WechatShippingUploadService {
       };
     }
 
+    if (order.paymentStatus && order.paymentStatus !== 'SUCCESS') {
+      return {
+        success: true,
+        skipped: true,
+        message: '订单不是支付成功状态，无需上传微信发货信息',
+      };
+    }
+
     if (!order.trackingNumber || !order.carrierCode) {
       return {
         success: false,
@@ -295,6 +303,22 @@ export class WechatShippingUploadService {
       any
     >;
 
+    /**
+     * 收件电话：快照优先，老数据没存就退回账号手机号。
+     * 微信规定「顺丰」必须有联系方式，没有就直接说明原因跳过，
+     * 别让一条脏数据把发货接口带崩。
+     */
+    const contactPhone =
+      snapshot.phone || snapshot.receiverPhone || order.user?.phone || null;
+    const isSfCarrier = this.normalizeExpressCompany(order.carrierCode) === 'SF';
+    if (isSfCarrier && !contactPhone) {
+      return {
+        success: false,
+        skipped: true,
+        message: '顺丰单缺少收件电话，无法上传微信发货信息',
+      };
+    }
+
     const payload: WechatShippingInfoPayload = {
       order_key: order.transactionId
         ? {
@@ -316,9 +340,7 @@ export class WechatShippingUploadService {
           tracking_no: order.trackingNumber,
           express_company: this.normalizeExpressCompany(order.carrierCode),
           item_desc: this.buildSupplementItemDesc(order.items),
-          contact: this.buildContact(
-            snapshot.phone || snapshot.receiverPhone || null,
-          ),
+          contact: this.buildContact(contactPhone),
         },
       ],
       upload_time: this.formatWechatTimestamp(new Date()),

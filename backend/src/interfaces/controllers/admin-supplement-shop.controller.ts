@@ -29,6 +29,7 @@ import {
 } from '../../application/supplement-shop/supplement-pricing.service';
 import { SupplementOrderService } from '../../application/supplement-shop/supplement-order.service';
 import { SupplementLabelService } from '../../label/supplement-label.service';
+import { WechatShippingUploadService } from '../../application/shipping/wechat-shipping-upload.service';
 import { SupplementSchedulingService } from '../../application/supplement-shop/supplement-scheduling.service';
 import { SupplementAftersaleService } from '../../application/supplement-shop/supplement-aftersale.service';
 import { SupplementNotificationService } from '../../application/supplement-shop/supplement-notification.service';
@@ -84,6 +85,12 @@ export class AdminSupplementShopController {
     private readonly supplementPackagingService?: SupplementPackagingService,
     @Optional()
     private readonly supplementNotificationService?: SupplementNotificationService,
+    /**
+     * 补剂发货后要上报微信（2026-11-11）。可选注入：
+     * 单测不关心微信，没这个 provider 也不能把模块起不来。
+     */
+    @Optional()
+    private readonly wechatShippingUploadService?: WechatShippingUploadService,
   ) {}
 
   // ---------- 上架清单 ----------
@@ -356,23 +363,57 @@ export class AdminSupplementShopController {
       }
     }
 
-    return ApiResponseDto.success(
-      await this.redactForStaff(
-        await this.supplementOrderService.shipOrder(
-          id,
-          {
-            ...dto,
-            // 硬锁默认开；只有管理员显式跳过才放行
-            enforceWaybillCheck: shouldEnforceWaybill(dto, request.user?.role),
-          },
-          {
-            type: request.user?.role === 'ADMIN' ? 'ADMIN' : 'STAFF',
-            id: request.user?.userId ?? null,
-          },
-        ),
-        request,
+    const view = await this.redactForStaff(
+      await this.supplementOrderService.shipOrder(
+        id,
+        {
+          ...dto,
+          // 硬锁默认开；只有管理员显式跳过才放行
+          enforceWaybillCheck: shouldEnforceWaybill(dto, request.user?.role),
+        },
+        {
+          type: request.user?.role === 'ADMIN' ? 'ADMIN' : 'STAFF',
+          id: request.user?.userId ?? null,
+        },
       ),
+      request,
     );
+
+    // 顾客微信里的订单要跟着变成「已发货」，否则货款一直冻在待发货。
+    // 上报失败不影响发货本身，结果原样带回给调用方提示。
+    const wechatShippingUpload = await this.syncWechatShippingAfterShip(
+      id,
+      dto.shippingType,
+    );
+
+    return ApiResponseDto.success({ ...view, wechatShippingUpload });
+  }
+
+  /** 发货后的微信上报：自用单不报；失败只记日志，不把发货搞失败 */
+  private async syncWechatShippingAfterShip(
+    orderId: string,
+    shippingType?: 'NORMAL' | 'NOT_REQUIRED',
+  ): Promise<{ success: boolean; skipped?: boolean; message: string }> {
+    if (!this.wechatShippingUploadService) {
+      return { success: false, skipped: true, message: '微信发货同步未启用' };
+    }
+    if (shippingType === 'NOT_REQUIRED') {
+      return { success: true, skipped: true, message: '无需发货，不上报微信' };
+    }
+    try {
+      const result =
+        await this.wechatShippingUploadService.uploadForOrder(orderId);
+      return {
+        success: result.success,
+        skipped: result.skipped,
+        message: result.message,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error?.message || '微信发货信息上报失败',
+      };
+    }
   }
 
   @Post('orders/:id/complete')

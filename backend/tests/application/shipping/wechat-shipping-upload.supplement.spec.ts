@@ -142,4 +142,50 @@ describe('补剂单微信发货信息上报', () => {
     expect(result.message).toContain('openid');
     expect(wechat.uploadShippingInfo).not.toHaveBeenCalled();
   });
+
+  it('顺丰单没有收件电话：跳过，不调微信（微信规定顺丰必须留联系方式）', async () => {
+    const { service, prisma, wechat } = buildService();
+    prisma.supplementOrder.findUnique.mockResolvedValue(
+      supplementRow({
+        shippingAddressSnapshot: {},
+        user: { id: 'u1', wechatOpenid: 'openid-legacy', phone: null },
+      }),
+    );
+
+    const result = await service.uploadForOrder('sup-1');
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain('顺丰');
+    expect(wechat.uploadShippingInfo).not.toHaveBeenCalled();
+  });
+
+  it('快照没电话时退回账号手机号（非顺丰也能报）', async () => {
+    const { service, prisma, wechat } = buildService();
+    prisma.supplementOrder.findUnique.mockResolvedValue(
+      supplementRow({
+        carrierCode: 'JD',
+        shippingAddressSnapshot: {},
+        user: { id: 'u1', wechatOpenid: 'openid-legacy', phone: '13900002222' },
+      }),
+    );
+
+    await service.uploadForOrder('sup-1');
+
+    const payload = wechat.uploadShippingInfo.mock.calls[0][0];
+    expect(payload.shipping_list[0].contact).toEqual({
+      receiver_contact: '13900002222',
+    });
+  });
+
+  it('不是支付成功的单（退款/取消）：不上报', async () => {
+    const { service, prisma, wechat } = buildService();
+    prisma.supplementOrder.findUnique.mockResolvedValue(
+      supplementRow({ paymentStatus: 'REFUNDED' }),
+    );
+
+    const result = await service.uploadForOrder('sup-1');
+
+    expect(result.skipped).toBe(true);
+    expect(wechat.uploadShippingInfo).not.toHaveBeenCalled();
+  });
 });

@@ -45,6 +45,11 @@ const createService = (options?: { list?: PurchaseList; records?: any[] }) => {
       count: jest.fn().mockResolvedValue(0),
     },
     reimbursement: { findUnique: jest.fn().mockResolvedValue(null) },
+    user: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({ id: 'user-1', nickname: '张三' }),
+    },
   };
   const importService = {
     confirm: jest.fn(),

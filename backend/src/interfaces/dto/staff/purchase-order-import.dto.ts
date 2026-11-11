@@ -62,6 +62,12 @@ export class UpdateOrderImportDto {
   @Min(0)
   @Max(1000000)
   paid?: number | null;
+
+  /** 预计到货（YYYY-MM-DD）；清空传 null */
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  expectedDeliveryAt?: string | null;
 }
 
 export class CreateOrderImportLineDto {

@@ -66,6 +66,7 @@ export interface ListReplenishmentRecordsParams {
   page?: number;
   pageSize?: number;
   includeVoided?: boolean;
+  voidedOnly?: boolean;
 }
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;
@@ -495,6 +496,51 @@ export class ReplenishmentService {
   }
 
   /**
+   * 保存前查同一订单号是否已经记过（只查已保存、未作废的补货记录）。
+   * 图片指纹只能拦同一张图；同一订单的两页截图指纹不同，要靠订单号提醒。
+   */
+  async findDuplicateOrder(params: {
+    orderNo: string;
+    channel?: string | null;
+    excludeId?: string | null;
+  }): Promise<{
+    id: string;
+    channel: string | null;
+    orderPlacedAt: Date | null;
+    paidAmount: number | null;
+  } | null> {
+    const orderNo = String(params.orderNo ?? '').trim();
+    if (!orderNo) return null;
+    const row = await this.prisma.purchaseList.findFirst({
+      where: {
+        kind: 'STOCK_REPLENISHMENT' as any,
+        isDraft: false,
+        voidedAt: null,
+        orderNo,
+        ...(params.channel ? { channel: params.channel } : {}),
+        ...(params.excludeId ? { id: { not: params.excludeId } } : {}),
+      },
+      select: {
+        id: true,
+        channel: true,
+        orderPlacedAt: true,
+        paidAmount: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!row) return null;
+    return {
+      id: row.id,
+      channel: row.channel ?? null,
+      orderPlacedAt: row.orderPlacedAt ?? null,
+      paidAmount:
+        row.paidAmount === null || row.paidAmount === undefined
+          ? null
+          : Number(row.paidAmount),
+    };
+  }
+
+  /**
    * 手填兜底：给草稿挂一条没有截图的识别记录，核对页就能手动加行。
    * AI 不可用/配额用完时走这里，不阻断记账。
    */
@@ -535,6 +581,77 @@ export class ReplenishmentService {
       },
     });
     return { id: row.id };
+  }
+
+  /**
+   * 删掉保存后的一项（在途、未报销）。删完至少还要剩一项；
+   * 整笔都不要了走作废，避免出现 0 项但仍有实付的记录。
+   */
+  async deleteRecordItem(
+    listId: string,
+    itemId: string,
+    userId: string,
+    role: string,
+  ): Promise<PurchaseList> {
+    const list = await this.purchaseListRepository.findById(listId);
+    if (!list || list.isDraft) {
+      throw new NotFoundException('补货记录不存在');
+    }
+    if (list.voidedAt) {
+      throw new BadRequestException('补货记录已作废');
+    }
+    this.assertCanOperate(list, userId, role);
+    if (list.reimbursementId) {
+      throw new BadRequestException('已关联报销单，不能删除');
+    }
+    if (list.arrivedAt) {
+      throw new BadRequestException('已到货，请先撤销到货再删除');
+    }
+
+    const items = await this.prisma.purchaseItem.findMany({
+      where: { purchaseListId: listId },
+      orderBy: { createdAt: 'asc' },
+    });
+    const target = items.find((item) => item.id === itemId);
+    if (!target) {
+      throw new NotFoundException('补货明细不存在');
+    }
+    if (items.length <= 1) {
+      throw new BadRequestException(
+        '只剩这一项了；整笔不要了请用作废，不要逐项删空',
+      );
+    }
+
+    await this.prisma.purchaseRecord.deleteMany({
+      where: { purchaseItemId: itemId },
+    });
+    await this.prisma.purchaseItem.delete({ where: { id: itemId } });
+
+    const remaining = await this.prisma.purchaseItem.findMany({
+      where: { purchaseListId: listId },
+      orderBy: { createdAt: 'asc' },
+    });
+    list.items = remaining.map((row) => PurchaseItem.fromPrisma(row));
+    list.itemCount = list.items.length;
+    const itemTotal = round2(
+      remaining.reduce(
+        (sum, item) => sum + Number(item.estimatedCost ?? 0),
+        0,
+      ),
+    );
+    const personalAmount = round2(Number(list.personalAmount ?? 0));
+    const shippingFee = round2(Number(list.shippingFee ?? 0));
+    const packagingFee = round2(Number(list.packagingFee ?? 0));
+    const paidAmount = round2(Number(list.paidAmount ?? 0));
+    list.totalEstimatedCost = itemTotal;
+    list.subtotalAmount = round2(itemTotal + personalAmount);
+    list.reimbursementAmount = round2(paidAmount - personalAmount);
+    list.discountAmount = round2(
+      list.subtotalAmount + shippingFee + packagingFee - paidAmount,
+    );
+    list.updatedById = userId;
+    list.updatedAt = new Date();
+    return this.purchaseListRepository.save(list);
   }
 
   /**
@@ -642,7 +759,9 @@ export class ReplenishmentService {
       // 老的计划式补货单没有实付金额；新记录一定有，用它把两代数据分开。
       paidAmount: { not: null },
     };
-    if (!params.includeVoided) {
+    if (params.voidedOnly) {
+      where.voidedAt = { not: null };
+    } else if (!params.includeVoided) {
       where.voidedAt = null;
     }
     if (params.arrival === 'IN_TRANSIT') {
@@ -703,7 +822,7 @@ export class ReplenishmentService {
       throw new NotFoundException('补货记录不存在');
     }
 
-    const [records, imports, reimbursement] = await Promise.all([
+    const [records, imports, reimbursement, createdBy] = await Promise.all([
       this.purchaseRecordRepository.findByPurchaseListId(listId),
       this.purchaseOrderImportService.listByPurchaseList(listId),
       list.reimbursementId
@@ -712,6 +831,10 @@ export class ReplenishmentService {
             select: { id: true, claimNumber: true, status: true },
           })
         : Promise.resolve(null),
+      this.prisma.user.findUnique({
+        where: { id: list.createdById },
+        select: { id: true, nickname: true },
+      }),
     ]);
 
     return {
@@ -719,6 +842,7 @@ export class ReplenishmentService {
       records,
       imports,
       reimbursement,
+      createdBy,
     };
   }
 

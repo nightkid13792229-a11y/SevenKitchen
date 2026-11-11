@@ -414,6 +414,7 @@ ${list}
       shippingFee?: number | null;
       packagingFee?: number | null;
       paid?: number | null;
+      expectedDeliveryAt?: string | null;
     },
   ): Promise<any> {
     const current = await this.prisma.purchaseOrderImport.findUnique({
@@ -453,6 +454,17 @@ ${list}
     }
     if (dto.paid !== undefined) {
       data.paid = normalizePaid(dto.paid);
+    }
+    if (dto.expectedDeliveryAt !== undefined) {
+      if (!dto.expectedDeliveryAt) {
+        data.expectedDeliveryAt = null;
+      } else {
+        const expected = new Date(dto.expectedDeliveryAt);
+        if (Number.isNaN(expected.getTime())) {
+          throw new BadRequestException('预计到货日期格式无效');
+        }
+        data.expectedDeliveryAt = expected;
+      }
     }
 
     const updated = await this.prisma.purchaseOrderImport.update({
@@ -912,6 +924,38 @@ ${list}
         editedByUser: true,
       },
     });
+  }
+
+  /** 删掉草稿里的一行（AI 多识别/识别错时的出口）。 */
+  async deleteLine(
+    importId: string,
+    lineId: string,
+    userId?: string,
+  ): Promise<{ id: string }> {
+    const line = await this.prisma.purchaseOrderImportLine.findFirst({
+      where: { id: lineId, importId },
+      include: {
+        import: { select: { status: true, uploadedById: true } },
+      },
+    });
+    if (!line) throw new NotFoundException('识别行不存在');
+    if (line.import.status !== 'DRAFT') {
+      throw new BadRequestException('已确认的识别记录不能再删行');
+    }
+    if (userId && line.import.uploadedById !== userId) {
+      throw new BadRequestException('只能修改自己上传的识别记录');
+    }
+
+    if (line.purchaseItemId) {
+      await this.prisma.purchaseRecord.deleteMany({
+        where: { purchaseItemId: line.purchaseItemId },
+      });
+      await this.prisma.purchaseItem.deleteMany({
+        where: { id: line.purchaseItemId },
+      });
+    }
+    await this.prisma.purchaseOrderImportLine.delete({ where: { id: lineId } });
+    return { id: lineId };
   }
 
   async confirm(importIds: string[], userId: string): Promise<any> {

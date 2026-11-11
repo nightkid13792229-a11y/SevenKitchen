@@ -28,6 +28,8 @@ export interface PurchaseRecordConstructor {
   actualCost: number; // 实际采购金额（元）
   productModel?: string; // 产品型号（选填）
   notes?: string; // 备注信息（选填）
+  sourceImportId?: string | null;
+  sourceImageKey?: string | null;
   purchasedAt?: Date;
   createdAt?: Date;
   updatedAt?: Date;
@@ -73,6 +75,8 @@ export class PurchaseRecord {
   public actualCost: number; // 实际采购金额（元），两位小数
   public productModel?: string;
   public notes?: string;
+  public sourceImportId?: string | null;
+  public sourceImageKey?: string | null;
   public readonly purchasedAt: Date;
   public readonly createdAt: Date;
   public updatedAt: Date;
@@ -97,6 +101,8 @@ export class PurchaseRecord {
     this.actualCost = data.actualCost;
     this.productModel = data.productModel;
     this.notes = data.notes;
+    this.sourceImportId = data.sourceImportId ?? null;
+    this.sourceImageKey = data.sourceImageKey ?? null;
     this.purchasedAt = data.purchasedAt || new Date();
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || this.createdAt;
@@ -271,6 +277,8 @@ export class PurchaseRecord {
       actualCost: this.actualCost,
       productModel: this.productModel || null,
       notes: this.notes || null,
+      sourceImportId: this.sourceImportId ?? null,
+      sourceImageKey: this.sourceImageKey ?? null,
       purchasedAt: this.purchasedAt,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
@@ -310,6 +318,8 @@ export class PurchaseRecord {
       actualCost: Number(data.actualCost),
       productModel: data.productModel || undefined,
       notes: data.notes || undefined,
+      sourceImportId: data.sourceImportId ?? null,
+      sourceImageKey: data.sourceImageKey ?? null,
       purchasedAt: new Date(data.purchasedAt),
       createdAt: new Date(data.createdAt),
       updatedAt: new Date(data.updatedAt),

@@ -178,6 +178,16 @@ export class StaffPurchasingController {
     }
   }
 
+  @Get('ingredients/:ingredientId/procurement-skus')
+  @ApiOperation({ summary: '某原料的全部采购商品（员工改行/加行时选商品）' })
+  async listStaffProcurementSkus(
+    @Param('ingredientId') ingredientId: string,
+  ): Promise<ApiResponseDto<any>> {
+    return ApiResponseDto.success(
+      await this.procurementSkuService.findByIngredientId(ingredientId),
+    );
+  }
+
   @Post('ingredients/:ingredientId/procurement-skus')
   @ApiOperation({ summary: '员工为某道食材新增采购商品（当场生效）' })
   async createStaffProcurementSku(
@@ -306,6 +316,23 @@ export class StaffPurchasingController {
   ): Promise<ApiResponseDto<any>> {
     return ApiResponseDto.success(
       await this.purchaseOrderImportService.confirm(dto.importIds, userId),
+    );
+  }
+
+  @Delete('order-imports/:id/lines/:lineId')
+  @ApiOperation({ summary: '删掉识别草稿里的一行' })
+  async deleteOrderImportLine(
+    @Param('id') importId: string,
+    @Param('lineId') lineId: string,
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    return ApiResponseDto.success(
+      await this.purchaseOrderImportService.deleteLine(
+        importId,
+        lineId,
+        userId,
+      ),
+      '已删除',
     );
   }
 
@@ -669,6 +696,22 @@ export class StaffPurchasingController {
     return ApiResponseDto.success(record, '补货记录已更新');
   }
 
+  @Get('replenishment/duplicate-order')
+  @ApiOperation({ summary: '保存前查同一订单号是否已经记过' })
+  async findDuplicateReplenishmentOrder(
+    @Query('orderNo') orderNo: string,
+    @Query('channel') channel?: string,
+    @Query('excludeId') excludeId?: string,
+  ): Promise<ApiResponseDto<any>> {
+    return ApiResponseDto.success(
+      await this.replenishmentService.findDuplicateOrder({
+        orderNo,
+        channel,
+        excludeId,
+      }),
+    );
+  }
+
   @Get('replenishment')
   @ApiOperation({ summary: '补货记录列表（到货/报销分开筛选）' })
   async listReplenishmentRecords(
@@ -677,6 +720,7 @@ export class StaffPurchasingController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('includeVoided') includeVoided?: string,
+    @Query('voidedOnly') voidedOnly?: string,
     @UserId() userId?: string,
     @UserRole() role?: string,
   ): Promise<ApiResponseDto<any>> {
@@ -687,6 +731,7 @@ export class StaffPurchasingController {
         page: page ? parseInt(page) : undefined,
         pageSize: pageSize ? parseInt(pageSize) : undefined,
         includeVoided: includeVoided === 'true',
+        voidedOnly: voidedOnly === 'true',
       },
       userId ?? '',
       role ?? 'STAFF',
@@ -719,6 +764,25 @@ export class StaffPurchasingController {
     );
 
     return ApiResponseDto.success(result, '已确认到货');
+  }
+
+  @Delete('replenishment/:id/items/:itemId')
+  @ApiOperation({ summary: '删掉补货记录里的一项（在途、未报销）' })
+  async deleteReplenishmentItem(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @UserId() userId: string,
+    @UserRole() role: string,
+  ): Promise<ApiResponseDto<any>> {
+    return ApiResponseDto.success(
+      await this.replenishmentService.deleteRecordItem(
+        id,
+        itemId,
+        userId,
+        role,
+      ),
+      '已删除',
+    );
   }
 
   @Post('replenishment/drafts/:id/manual-import')

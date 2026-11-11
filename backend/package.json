@@ -22,6 +22,7 @@
     "seed:search-governance-aliases": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-search-governance-aliases.ts",
     "seed:ingredient-name-aliases": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-ingredient-name-aliases.ts",
     "seed:platform-options": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-platform-options.ts",
+    "audit:packaging": "ts-node -r tsconfig-paths/register scripts/audit-packaging-consistency.ts",
     "seed:platform-options:apply": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-platform-options.ts --apply",
     "seed:allergen-vocabulary": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-allergen-vocabulary.ts",
     "seed:allergen-vocabulary:apply": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-allergen-vocabulary.ts --apply",

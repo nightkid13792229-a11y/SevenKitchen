@@ -28,6 +28,7 @@
 - **不做旧接口兼容**：旧表、旧服务、旧控制器、旧脚本、旧测试直接删除。
 - **生成物不进 git**：`docs/knowledge-base/page-layer/`、`docs/knowledge-base/page-images/` 加入 `.gitignore`；只提交解析器、导入器、fixture。
 - **测试命令**：`cd backend && npm test -- <path>`；类型检查 `npx tsc --noEmit`。联调期间不要跑 `npm run build`（会删 `dist`，弄死本机后端）。
+- **tsc 基线**：2026-11-11 在干净 `669fb492` 上 `npx tsc --noEmit` 有 **333 个既有错误**（主要是旧测试 fixture），不是本计划引入。本计划的类型验收 = **新增/改动文件 0 错误**、全仓错误数与基线一致；不要声称“全仓 tsc 绿”。`npm test` 才是全绿门禁。
 - **测试不许只有注释**：每个新增 `it` 至少一个 `expect`；TDD 的“先失败”必须看到真实断言失败。
 - **merge 在工位执行**：`bash scripts/session.sh merge` 必须在 worktree 根目录跑。
 
@@ -107,7 +108,7 @@ cd backend
 npx tsc --noEmit
 npm test -- tests/application/knowledge-base tests/application/health/health-analysis.service.spec.ts
 ```
-Expected: 基线全绿（若个别真实语料测试 skipped，记录原因）。把结果贴到执行记录；后续只对自己改红的部分负责。
+Expected: `npm test` 基线全绿（若个别真实语料测试 skipped，记录原因）；`npx tsc --noEmit` 基线有 333 个既有错误（见 Global Constraints），记录错误数，后续只对自己新增的错误负责。
 
 - [ ] **Step 3: 确认旧知识库没有真实流量**
 
@@ -1323,7 +1324,7 @@ npm test
 cd ..
 git status --short
 ```
-Expected: `tsc` 通过、全量测试绿；只包含本任务文件。
+Expected: `tsc` **无新增错误**（全仓错误数=基线 333；v3 文件 0 错误）、全量 `npm test` 绿；只包含本任务文件。
 
 ```bash
 git add docs/knowledge-base/RUNBOOK-kb-v3.md docs/knowledge-base/eval/kb-v3-smoke.md docs/knowledge-base/eval/kb-v3-call-benchmark.md docs/knowledge-base/README.md docs/knowledge-base/2026-11-11-kb-v3-design.md
@@ -1342,6 +1343,7 @@ bash scripts/session.sh commit -m "docs(knowledge): v3 运行手册、冒烟与�
 - [ ] 图片型文档 `text` 可为空，但 `imagePath` 存在、可读；
 - [ ] 负样本返回 `hits: []` + `searched`，无 `no_match` / “未覆盖”；
 - [ ] `npm run kb:v3:smoke` 通过；`npm run kb:v3:bench` 的结构基准（reference caller）已知/未知/表题/整章 ≤ 目标；**不把它冒充模型调用次数**；
+- [ ] `npx tsc --noEmit` 无新增错误（全仓=基线 333；v3 文件 0）；`npm test` 全绿；
 - [ ] `npx tsc --noEmit` 通过；全量 `npm test` 通过；
 - [ ] 设计文档与实现一致（如有偏差已回写）。
 

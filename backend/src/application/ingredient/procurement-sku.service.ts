@@ -14,6 +14,14 @@ import {
   type ChannelOption,
 } from '../purchasing/channel-catalog';
 import { PURCHASE_CHANNEL_SET } from '../platform-options/option-sets.registry';
+import {
+  PURCHASE_UNIT_SEED,
+  PURCHASE_UNIT_SET,
+  parsePurchaseUnitOption,
+  resolvePurchaseUnitCode,
+  unitsForBaseUnit,
+  type PurchaseUnitOption,
+} from '../purchasing/purchase-unit-catalog';
 import { perBaseUnitCostOrInfinity } from '../../domain/ingredient/unit-price';
 import { IngredientCostHistoryService } from './ingredient-cost-history.service';
 
@@ -248,9 +256,16 @@ export const ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT: Record<BaseUnit, string[]> = {
   ],
 };
 
+/**
+ * 采购单位归一 + 白名单校验。
+ *
+ * 2026-11-11：白名单可以从参数传入（来自可维护的单位字典）；
+ * 不传时退回旧的硬编码清单，保证单测与字典尚未灌入的环境行为不变。
+ */
 export const normalizeOptionalPurchaseUnit = (
   value: string | null | undefined,
   baseUnit: BaseUnit | string,
+  allowedUnitsInput?: string[] | null,
 ): string | null | undefined => {
   const normalizedText = normalizeOptionalText(value);
   if (normalizedText === undefined || normalizedText === null) {
@@ -260,7 +275,9 @@ export const normalizeOptionalPurchaseUnit = (
   const canonical =
     PROCUREMENT_UNIT_ALIASES[normalizedText.toLowerCase()] ?? normalizedText;
   const allowedUnits =
-    ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT[baseUnit as BaseUnit] ?? [];
+    allowedUnitsInput && allowedUnitsInput.length > 0
+      ? allowedUnitsInput
+      : ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT[baseUnit as BaseUnit] ?? [];
   if (allowedUnits.includes(canonical)) {
     return canonical;
   }
@@ -499,6 +516,41 @@ export class ProcurementSkuService {
   }
 
   /**
+   * 采购单位字典（2026-11-11）。
+   *
+   * 唯一来源 = 平台选项字典 `purchase_unit`（后台可增删改）。
+   * 字典为空时退回 `PURCHASE_UNIT_SEED`：单测和"migration 之前"的环境不该变成空白选项。
+   */
+  private async loadPurchaseUnitOptions(): Promise<PurchaseUnitOption[]> {
+    try {
+      const items = await this.prisma.platformOptionItem.findMany({
+        where: { setId: PURCHASE_UNIT_SET, enabled: true },
+        select: { code: true, sortOrder: true, extra: true },
+        orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+      });
+      const parsed = items
+        .map((item: { code: string; sortOrder: number | null; extra: unknown }) =>
+          parsePurchaseUnitOption(item),
+        )
+        .filter((item): item is PurchaseUnitOption => item !== null);
+      if (parsed.length > 0) {
+        return parsed;
+      }
+    } catch {
+      // 表还没建/连接异常：退回兜底，不要让员工端整页打不开
+    }
+    return PURCHASE_UNIT_SEED;
+  }
+
+  /** 这道原料允许的采购单位（字典 ∩ 基准单位） */
+  private async resolveAllowedPurchaseUnits(
+    baseUnit: BaseUnit | string,
+  ): Promise<{ options: PurchaseUnitOption[]; codes: string[] }> {
+    const options = unitsForBaseUnit(await this.loadPurchaseUnitOptions(), String(baseUnit));
+    return { options, codes: options.map((option) => option.code) };
+  }
+
+  /**
    * 「在哪买的」只认字典（2026-11-05 第二步）：
    * 能归一到标准项就归一，归不上就拒绝 —— 商品档案是渠道的身份，
    * 这里放过一个错字，以后每一条采购记录都会继承它。
@@ -669,6 +721,10 @@ export class ProcurementSkuService {
       computedRatio ?? dto.purchaseToBaseRatio ?? null,
     );
 
+    const allowedUnits = await this.resolveAllowedPurchaseUnits(
+      ingredient!.baseUnit,
+    );
+
     const data = {
       ingredientId,
       name: dto.name,
@@ -677,8 +733,11 @@ export class ProcurementSkuService {
       purchaseChannel:
         (await this.resolvePurchaseChannel(dto.purchaseChannel)) ?? null,
       purchaseUnit:
-        normalizeOptionalPurchaseUnit(dto.purchaseUnit, ingredient!.baseUnit) ??
-        null,
+        normalizeOptionalPurchaseUnit(
+          dto.purchaseUnit,
+          ingredient!.baseUnit,
+          allowedUnits.codes,
+        ) ?? null,
       purchaseToBaseRatio: resolvedRatio,
       currentPurchasePrice,
       referencePurchasePrice:
@@ -777,6 +836,7 @@ export class ProcurementSkuService {
   async getFormOptions(ingredientId: string): Promise<{
     baseUnit: BaseUnit;
     purchaseUnits: string[];
+    purchaseUnitOptions: PurchaseUnitOption[];
   }> {
     const ingredient = await this.prisma.ingredient.findUnique({
       where: { id: ingredientId },
@@ -785,10 +845,14 @@ export class ProcurementSkuService {
     this.assertFoodIngredientCanOwnProcurementSkus(ingredient);
 
     const baseUnit = ingredient!.baseUnit as BaseUnit;
+    const allowed = await this.resolveAllowedPurchaseUnits(baseUnit);
 
     return {
       baseUnit,
-      purchaseUnits: [...ALLOWED_PURCHASE_UNITS_BY_BASE_UNIT[baseUnit]],
+      // 旧字段保留：老版本小程序只认它
+      purchaseUnits: allowed.codes,
+      // 新结构：员工端据此分组（包装单位 / 计量单位）并判断"整件"
+      purchaseUnitOptions: allowed.options,
     };
   }
 
@@ -844,9 +908,11 @@ export class ProcurementSkuService {
       throw new BadRequestException('净含量必须大于 0');
     }
 
+    const allowedUnits = await this.resolveAllowedPurchaseUnits(baseUnit);
     const purchaseUnit = normalizeOptionalPurchaseUnit(
       input.purchaseUnit,
       baseUnit,
+      allowedUnits.codes,
     );
     if (!purchaseUnit) {
       throw new BadRequestException('采购单位不能为空');
@@ -1077,9 +1143,13 @@ export class ProcurementSkuService {
     }
 
 
+    const allowedUnits = await this.resolveAllowedPurchaseUnits(
+      existing.ingredient.baseUnit,
+    );
     const purchaseUnit = normalizeOptionalPurchaseUnit(
       dto.purchaseUnit,
       existing.ingredient.baseUnit,
+      allowedUnits.codes,
     );
     if (purchaseUnit !== undefined) {
       data.purchaseUnit = purchaseUnit;

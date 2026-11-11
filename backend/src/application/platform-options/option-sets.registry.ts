@@ -1,4 +1,9 @@
 import { CustomRecipeStatus, TargetGoal } from '@prisma/client';
+import {
+  PURCHASE_UNIT_SEED,
+  PURCHASE_UNIT_SET,
+  toPurchaseUnitSeedItem,
+} from '../purchasing/purchase-unit-catalog';
 
 /**
  * 平台选项字典 · **选项集登记表**（2026-10-16，食谱定制重构 批次 1.3）
@@ -100,6 +105,19 @@ export const CUSTOM_RECIPE_REFUND_REASON_SET = 'custom_recipe_refund_reason';
  * code 与 label 都直接用渠道名，保证历史自由文本可以原样迁移。
  */
 export const PURCHASE_CHANNEL_SET = 'purchase_channel';
+
+/**
+ * 采购单位（2026-11-11）。
+ *
+ * 与渠道同一套做法：DATA 类，运营可在「选项字典」里增删改，代码里只留兜底种子。
+ * 每一项的 `extra` 带三件事：适用哪些基准单位（baseUnits）、别名（aliases）、
+ * 是不是整件（multipack，决定员工端要不要逼他补一层）。
+ *
+ * 为什么必须可维护：改造前这份清单在四个地方各写一份（后端常量、后台常量、
+ * 后台原料弹窗、识别结果页），四份内容还不一样 —— 「提/件」被员工端当整件用，
+ * 后端白名单里却没有这两个字。
+ */
+export { PURCHASE_UNIT_SET };
 
 export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
   {
@@ -466,6 +484,15 @@ export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
         extra: { aliases: ['朴朴'] },
       },
     ],
+  },
+
+  {
+    code: PURCHASE_UNIT_SET,
+    name: '采购单位',
+    description:
+      '采购商品的计价单位；按原料基准单位分组，带别名与"整件"标记（2026-11-11）',
+    sourceType: 'DATA',
+    seed: PURCHASE_UNIT_SEED.map(toPurchaseUnitSeedItem),
   },
 ] as const;
 

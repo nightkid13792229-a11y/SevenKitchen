@@ -13,6 +13,8 @@ describe('补货页', () => {
     expect(source).toContain('importOrderScreenshots');
     expect(source).toContain('count: 5');
     expect(source).toContain('ids=');
+    expect(source).toContain('startManualRecord');
+    expect(source).toContain('createManualReplenishmentImport');
     expect(source).not.toContain('开始采购');
   });
 

@@ -278,3 +278,12 @@ describe('补货多笔订单', () => {
     expect(source).toContain('for (const id of listIdsToSave)');
   });
 });
+
+describe('补货手填兜底', () => {
+  it('can add a manual line through the same review sheet', () => {
+    expect(source).toContain('openNewLine');
+    expect(source).toContain('createOrderImportLine');
+    expect(source).toContain('手动加一行');
+    expect(source).toContain('manualMode');
+  });
+});

@@ -103,6 +103,10 @@
         <text class="channel-gate-hint">清单里没有你要的渠道？让管理员在后台「平台选项 → 采购渠道」里加。</text>
       </view>
 
+      <view v-if="manualMode && activeImport" class="warn-banner">
+        <text class="warn-line">这是手填记录：先选渠道，再点「手动加一行」逐行加商品；填好实付后保存。</text>
+      </view>
+
       <view v-if="activeImport && activeIncompleteNotice" class="warn-banner">
         <text class="warn-line">{{ activeIncompleteNotice }}</text>
       </view>
@@ -128,6 +132,14 @@
           <text class="state" :class="stateClass(line)">{{ stateText(line) }}</text>
           <text class="chev">›</text>
         </view>
+      </view>
+
+      <view
+        v-if="activeImport && pageMode === 'replenishment'"
+        class="manual-line-add"
+        @tap="openNewLine"
+      >
+        <text>＋ 手动加一行</text>
       </view>
 
       <!-- 费用：商品小计 + 运费 + 包装费 = 实付（运费/包装费可人工修正） -->
@@ -270,7 +282,7 @@
 
           <view class="sheet-actions">
             <button class="ghost-btn" @tap="closeEdit()">取消</button>
-            <button class="primary-btn" :loading="saving" @tap="saveEdit">保存</button>
+            <button class="primary-btn" :loading="saving" @tap="saveEdit">{{ editing?.isNew ? '添加' : '保存' }}</button>
           </view>
         </view>
       </scroll-view>
@@ -469,6 +481,17 @@
                 在别家买的不要挂到这笔上，重建一个属于这个渠道的商品更准。
               </text>
             </view>
+            <view
+              v-if="pickerIngredientId && canRecordByWeight"
+              class="picker-row"
+              @tap="chooseWeightUnit"
+            >
+              <view class="picker-main">
+                <text class="picker-name">按重量记</text>
+                <text class="picker-sub">不挂商品，按斤/公斤/克记，入库按克算</text>
+              </view>
+              <text class="picker-go">选择</text>
+            </view>
             <view v-if="pickerIngredientId" class="picker-create" @tap="goNewSku">
               <view class="picker-create-main">
                 <text class="picker-create-plus">+</text>
@@ -494,6 +517,7 @@ import {
   getPurchaseChannels,
   getPurchaseListDetail,
   getStockPurchaseIngredients,
+  createOrderImportLine,
   saveReplenishmentRecord,
   updateOrderImport,
   updateOrderImportLine,
@@ -537,6 +561,7 @@ interface IngredientOption {
 const listId = ref('');
 const listIds = ref<string[]>([]);
 const pageMode = ref<'order-demand' | 'replenishment'>('order-demand');
+const manualMode = ref(false);
 const catalogIngredients = ref<any[]>([]);
 const loading = ref(true);
 const loaded = ref(false);
@@ -944,6 +969,16 @@ const pickerSkuOptions = computed(() => {
   }));
 });
 
+/** 可选的「按重量记」只对基准单位是克的原料开放 */
+const pickerIngredient = computed(() =>
+  ingredientOptions.value.find(
+    (item) => item.ingredientId === pickerIngredientId.value,
+  ),
+);
+const canRecordByWeight = computed(
+  () => String(pickerIngredient.value?.baseUnit || '').toUpperCase() === 'G',
+);
+
 /** 选商品列表按关键字过滤（40 多个商品时滑起来太慢，2026-11-05） */
 const filteredSkuOptions = computed(() => {
   const keyword = skuSearch.value.trim().toLowerCase();
@@ -1069,6 +1104,14 @@ const blockReason = computed(() => {
     return `${label}：${importIssue(blocking)}`;
   }
   if (matchedLineCount.value === 0) return '还没有可生成的采购记录';
+  if (
+    pageMode.value === 'replenishment' &&
+    imports.value.some(
+      (item) => item.paid === null || Number(item.paid ?? 0) <= 0,
+    )
+  ) {
+    return '先补这笔的实付';
+  }
   return '';
 });
 
@@ -1121,6 +1164,7 @@ onLoad((options: Record<string, string>) => {
   listId.value = listIds.value[0] || '';
   pageMode.value =
     options?.mode === 'replenishment' ? 'replenishment' : 'order-demand';
+  manualMode.value = options?.manual === '1';
   focusLastOnce = options?.focus === 'last';
   uni.$on('procurement-sku:created', handleSkuCreated);
   void load().finally(() => {
@@ -1444,6 +1488,34 @@ function openEdit(line: OrderImportLineView) {
   };
 }
 
+/** 手填：新开一行，复用同一个行编辑弹窗。 */
+function openNewLine() {
+  if (!activeImport.value) return;
+  openEdit({
+    id: '',
+    rawName: '',
+    spec: null,
+    qty: 1,
+    unit: null,
+    unitPrice: null,
+    lineTotal: null,
+    aiLineTotal: null,
+    ingredientId: null,
+    procurementSkuId: null,
+    isPersonal: false,
+    editedByUser: false,
+    confidence: 'HIGH',
+    matchSource: 'MANUAL',
+    state: 'UNMATCHED',
+    purchaseItemId: null,
+  } as any);
+  editing.value.isNew = true;
+  editing.value._origTotal = null;
+  editing.value.rawNameOrig = '';
+  editing.value._origQtyText = '1';
+  editing.value._origPriceText = '';
+}
+
 /**
  * 关掉弹窗。改过东西又没保存时先问一句（2026-11-05）：
  * 点蒙层就关、改了半天白改，是这类弹窗最容易挨骂的地方。
@@ -1546,6 +1618,22 @@ function openSkuPicker() {
 function closePicker() {
   pickerMode.value = 'none';
   pickerClosedAt = Date.now();
+}
+
+function chooseWeightUnit() {
+  const ingredient = pickerIngredient.value;
+  if (!ingredient || !editing.value) return;
+  editing.value.procurementSkuId = null;
+  editing.value.skuName = '按重量记';
+  editing.value.skuModel = '';
+  editing.value.skuRatio = null;
+  editing.value.ingredientId = ingredient.ingredientId;
+  editing.value.ingredientName = ingredient.ingredientName;
+  editing.value.baseUnit = 'G';
+  editing.value.unitText = '斤';
+  editing.value.isPersonal = false;
+  editing.value.matchSource = 'MANUAL';
+  pickerMode.value = 'none';
 }
 
 function chooseSku(sku: any) {
@@ -1670,29 +1758,40 @@ async function saveEdit() {
     if (!confirmed) return;
   }
 
+  const isNew = Boolean(editing.value.isNew);
   const nameChanged = String(editing.value.rawName || '').trim() !== String(editing.value.rawNameOrig || '').trim();
   saving.value = true;
   try {
-    const res: any = await updateOrderImportLine(
-      activeImport.value.id,
-      editing.value.id,
-      {
-        rawName: String(editing.value.rawName || '').trim(),
-        qty,
-        unit: editing.value.unitText || null,
-        unitPrice: price,
-        lineTotal: editingTotal.value,
-        ingredientId: editing.value.isPersonal ? null : editing.value.ingredientId || null,
-        procurementSkuId: editing.value.isPersonal
-          ? null
-          : editing.value.procurementSkuId || null,
-        isPersonal: editing.value.isPersonal,
-      },
-    );
+    const payload = {
+      rawName: String(editing.value.rawName || '').trim(),
+      qty,
+      unit: editing.value.unitText || null,
+      unitPrice: price,
+      lineTotal: editingTotal.value,
+      ingredientId: editing.value.isPersonal ? null : editing.value.ingredientId || null,
+      procurementSkuId: editing.value.isPersonal
+        ? null
+        : editing.value.procurementSkuId || null,
+      isPersonal: editing.value.isPersonal,
+    };
+    const res: any = isNew
+      ? await createOrderImportLine(activeImport.value.id, payload)
+      : await updateOrderImportLine(
+          activeImport.value.id,
+          editing.value.id,
+          payload,
+        );
     if (res.code !== 0) throw new Error(res.message || '保存失败');
     closeEdit(true);
     await load();
-    uni.showToast({ title: nameChanged ? '已保存，名字已改' : '已保存', icon: 'none' });
+    uni.showToast({
+      title: isNew
+        ? '已添加'
+        : nameChanged
+          ? '已保存，名字已改'
+          : '已保存',
+      icon: 'none',
+    });
   } catch (error: any) {
     uni.showToast({ title: error?.message || '保存失败', icon: 'none' });
   } finally {
@@ -3066,5 +3165,16 @@ function emptySummary() {
   background: #e8f0e6;
   color: #2f6b4f;
   font-weight: 600;
+}
+
+.manual-line-add {
+  margin: 16rpx 28rpx 0;
+  padding: 18rpx;
+  border-radius: 14rpx;
+  border: 1rpx dashed #b9b29d;
+  text-align: center;
+  font-size: 26rpx;
+  color: #1e3a2f;
+  background: #fbf9f0;
 }
 </style>

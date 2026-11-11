@@ -1474,3 +1474,30 @@ export function updateReplenishmentRecord(
     data,
   });
 }
+
+export function createManualReplenishmentImport(draftId: string) {
+  return request({
+    url: `/staff/purchasing/replenishment/drafts/${draftId}/manual-import`,
+    method: 'POST',
+  });
+}
+
+export function createOrderImportLine(
+  importId: string,
+  data: {
+    rawName?: string | null;
+    ingredientId?: string | null;
+    procurementSkuId?: string | null;
+    qty: number;
+    unit?: string | null;
+    unitPrice: number;
+    lineTotal?: number | null;
+    isPersonal?: boolean;
+  },
+) {
+  return request({
+    url: `/staff/purchasing/order-imports/${importId}/lines`,
+    method: 'POST',
+    data,
+  });
+}

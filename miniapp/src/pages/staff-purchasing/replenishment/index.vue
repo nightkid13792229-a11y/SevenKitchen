@@ -17,6 +17,11 @@
       {{ starting ? '处理中...' : '记一笔补货' }}
     </button>
 
+    <view class="manual-entry" @tap="startManualRecord">
+      <text class="manual-title">AI 用不了？手填一条</text>
+      <text class="manual-hint">不传截图，直接选商品记</text>
+    </view>
+
     <view class="filters">
       <view
         v-for="option in filterOptions"
@@ -80,6 +85,7 @@
 import { computed, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import {
+  createManualReplenishmentImport,
   createReplenishmentDraft,
   importOrderScreenshots,
   listReplenishmentRecords,
@@ -99,6 +105,7 @@ const filterOptions: Array<{ label: string; value: FilterValue }> = [
 const records = ref<ReplenishmentRecordSummary[]>([]);
 const loading = ref(false);
 const starting = ref(false);
+const startingManual = ref(false);
 const activeFilter = ref<FilterValue>('ALL');
 const page = ref(1);
 const pageSize = 20;
@@ -252,7 +259,7 @@ const goDetail = (id: string) => {
 };
 
 const startRecord = async () => {
-  if (starting.value) {
+  if (starting.value || startingManual.value) {
     return;
   }
 
@@ -324,6 +331,33 @@ const startRecord = async () => {
   } finally {
     uni.hideLoading();
     starting.value = false;
+  }
+};
+
+const startManualRecord = async () => {
+  if (startingManual.value || starting.value) return;
+  startingManual.value = true;
+  uni.showLoading({ title: '准备手填...', mask: true });
+  try {
+    const draftRes: any = await createReplenishmentDraft();
+    if (draftRes?.code !== 0 || !draftRes.data?.id) {
+      throw new Error(draftRes?.message || '创建补货记录失败');
+    }
+    const manualRes: any = await createManualReplenishmentImport(
+      draftRes.data.id,
+    );
+    if (manualRes?.code !== 0) {
+      throw new Error(manualRes?.message || '创建手填记录失败');
+    }
+    uni.hideLoading();
+    uni.navigateTo({
+      url: `/pages/staff-purchasing/order-import/review?id=${draftRes.data.id}&mode=replenishment&manual=1`,
+    });
+  } catch (error: any) {
+    uni.hideLoading();
+    uni.showToast({ title: error?.message || '创建失败', icon: 'none' });
+  } finally {
+    startingManual.value = false;
   }
 };
 
@@ -569,6 +603,27 @@ onShow(() => {
 
 .load-more text {
   font-size: 24rpx;
+  color: #6b6653;
+}
+
+.manual-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  padding: 18rpx 24rpx;
+  border-radius: 16rpx;
+  background: #f4f1e6;
+  border: 1rpx dashed #cfc8b4;
+}
+
+.manual-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+}
+
+.manual-hint {
+  font-size: 22rpx;
   color: #6b6653;
 }
 </style>

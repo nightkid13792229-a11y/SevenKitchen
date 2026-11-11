@@ -1335,6 +1335,17 @@ bash scripts/session.sh commit -m "docs(knowledge): v3 运行手册、冒烟与�
 
 ---
 
+### Task 11 实施偏差（2026-11-12 实测）
+
+- `kb_page` 实际 **4,183**（128 份 PDF 2,393 页 + 31 份非 PDF 1,790 伪页），不是本 Task 写的 27,000+；
+  27,902 是旧 `source-layer` 的段落数。其余：`kb_block` 48,376、`kb_toc` 604、`kb_source` 159。
+- 页图 2,393 张 / **479 MB**（110 dpi q78），低于 2–3 GB 预估；磁盘仍按 ≥6 GB 留。
+- 冒烟 `find phosphorus` 第一命中 p24（推荐量表词频最高），p17 是章节首页但排第 15；
+  断言改为“前 5 条命中覆盖 17–22 节”，`read p17–21`/5 张 base64 的断言不变。
+- 结构基准 Q4 的唯一无文字层文档只有 1 页，`pageTo` 改为 `min(2, pageCount)`，避免越界。
+- 本地页图默认根改为相对 backend cwd 的 `../docs/knowledge-base/page-images`；生产仍用
+  `KB_PAGE_IMAGE_ROOT=/var/lib/sevenkitchen/kb/page-images`。
+
 ## 验收清单（执行完逐条打勾）
 
 - [ ] `kb_source` / `kb_page` / `kb_block` / `kb_toc` 四张表存在；旧 `source_*` / `knowledge_citation_anchor` 已 drop；

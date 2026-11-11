@@ -60,6 +60,10 @@
         </view>
       </view>
 
+      <view v-if="zeroCount > 0" class="fold-row">
+        {{ zeroCount }} 项盘得正好（无差异），不会产生调整
+      </view>
+
       <view v-if="mode === 'preview'" class="note">
         <textarea
           v-model="note"
@@ -123,6 +127,13 @@ const skippedCount = computed(() => lines.value.length - countedCount.value);
 const varianceCount = computed(
   () => lines.value.filter((line) => line.isCounted && Number(line.deltaG || 0) !== 0).length,
 );
+const zeroCount = computed(
+  () =>
+    lines.value.filter(
+      (line) => line.isCounted && Math.abs(Number(line.deltaG || 0)) === 0,
+    ).length,
+);
+
 const overCount = computed(
   () => lines.value.filter((line) => line.isCounted && line.withinTolerance === false).length,
 );
@@ -419,6 +430,14 @@ const goRecords = () => {
   color: #a33a2a;
 }
 .muted {
+  color: #7a8a80;
+}
+.fold-row {
+  margin-top: 16rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 14rpx;
+  background: #f4f7f1;
+  font-size: 24rpx;
   color: #7a8a80;
 }
 .note {

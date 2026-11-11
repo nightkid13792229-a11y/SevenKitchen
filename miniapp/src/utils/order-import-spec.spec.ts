@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSpecMismatch, specWarningText } from './order-import-spec';
+import { isSpecMismatch, specWarningText, unitWarningText } from './order-import-spec';
 
 describe('isSpecMismatch', () => {
   it('300g/份 的商品挂 500g/份 的订单行 → 规格不符', () => {
@@ -40,5 +40,22 @@ describe('specWarningText', () => {
 
   it('规格一致时不出提示', () => {
     expect(specWarningText('300g/份', '300g/份')).toBeNull();
+  });
+});
+
+describe('unitWarningText：这行的单位和商品的单位', () => {
+  it('两边一致时不给提示', () => {
+    expect(unitWarningText('袋', '袋')).toBeNull();
+  });
+
+  it('写「斤」却挂在「袋」卖的商品上时，说清换算不成立', () => {
+    const text = unitWarningText('斤', '袋');
+    expect(text).toContain('斤');
+    expect(text).toContain('袋');
+  });
+
+  it('缺一边时不判断（老数据/商品没填单位）', () => {
+    expect(unitWarningText('', '袋')).toBeNull();
+    expect(unitWarningText('斤', null)).toBeNull();
   });
 });

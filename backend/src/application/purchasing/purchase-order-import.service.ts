@@ -56,10 +56,6 @@ import type {
   MatchedOrderLine,
   ParsedOrderDraft,
 } from './purchase-order-import.types';
-import {
-  WEIGHT_UNIT_TO_BASE_RATIO,
-  isWeightUnit,
-} from './purchase-order-weight-units';
 
 /** 与商品截图识别共用「采购报销 Agent」配置；未单独配置时回退全局默认 */
 export const PURCHASE_ORDER_IMPORT_PURPOSE =
@@ -91,21 +87,6 @@ const MAX_FEE_AMOUNT = 5000;
 const DAILY_IMPORT_LIMIT_PER_USER = 30;
 /** 全系统每月上限 */
 const MONTHLY_IMPORT_LIMIT_SYSTEM = 3000;
-
-const WEIGHT_OR_VOLUME_UNITS = new Set([
-  'kg',
-  'g',
-  '克',
-  '千克',
-  '公斤',
-  '斤',
-  '两',
-  'ml',
-  '毫升',
-  'l',
-  '升',
-]);
-
 
 interface RecognizedOrder {
   url: string;
@@ -1008,101 +989,6 @@ ${list}
             }
 
             const lineUnit = (line.unit ?? '').trim();
-            // 按重量买的一律按重量记，不要求/不使用采购商品。
-            const weightBaseRatio = lineUnit
-              ? WEIGHT_UNIT_TO_BASE_RATIO[lineUnit.toLowerCase()]
-              : undefined;
-
-            // 补货改版：按斤/公斤/克/两买的，不强制采购商品，直接按重量记。
-            if (weightBaseRatio !== undefined) {
-              const weightItemId =
-                line.purchaseItemId ??
-                (
-                  await tx.purchaseItem.findFirst({
-                    where: {
-                      purchaseListId: row.purchaseListId,
-                      ingredientId: line.ingredientId!,
-                    },
-                    select: { id: true },
-                  })
-                )?.id;
-              if (!weightItemId) {
-                throw new BadRequestException(
-                  `「${line.rawName}」在清单里找不到对应原料`,
-                );
-              }
-              const weightItem = await tx.purchaseItem.findUnique({
-                where: { id: weightItemId },
-                select: {
-                  id: true,
-                  ingredientId: true,
-                  ingredientName: true,
-                  ingredient: {
-                    select: {
-                      name: true,
-                      baseUnit: true,
-                      purchaseChannel: true,
-                    },
-                  },
-                },
-              });
-              if (!weightItem) {
-                throw new BadRequestException(
-                  `「${line.rawName}」在清单里找不到对应原料`,
-                );
-              }
-              if (weightItem.ingredient?.baseUnit !== 'G') {
-                throw new BadRequestException(
-                  `「${line.rawName}」按重量只支持基准单位为克的原料，请改用商品净含量`,
-                );
-              }
-
-              const weightChannelCode =
-                row.channel ||
-                canonicalChannelCode(
-                  weightItem.ingredient?.purchaseChannel ?? null,
-                  channels,
-                ) ||
-                '';
-              const weightChannelName =
-                channels.find((item) => item.code === weightChannelCode)?.label ??
-                weightChannelCode;
-
-              const weightRecord = await tx.purchaseRecord.create({
-                data: {
-                  purchaseListId: row.purchaseListId,
-                  purchaseItemId: weightItem.id,
-                  ingredientId: weightItem.ingredientId,
-                  procurementSkuId: null,
-                  procurementSkuName: line.rawName,
-                  ingredientName:
-                    weightItem.ingredientName ||
-                    weightItem.ingredient?.name ||
-                    line.rawName,
-                  purchaseChannel: weightChannelCode,
-                  purchaseChannelName: weightChannelName,
-                  actualQuantity: qty,
-                  actualPackageCount: qty,
-                  actualPackageSize: 1,
-                  actualPackageUnit: lineUnit,
-                  actualBaseQuantity: qty * weightBaseRatio,
-                  actualBaseUnit: 'G',
-                  actualCost: amount,
-                  productModel: line.spec,
-                  purchasedAt: row.orderTime ?? new Date(),
-                  sourceImportId: row.id,
-                  sourceImportLineId: line.id,
-                  sourceImageKey: row.imageKeys?.[0] ?? null,
-                },
-              });
-
-              await tx.purchaseOrderImportLine.update({
-                where: { id: line.id },
-                data: { purchaseRecordId: weightRecord.id },
-              });
-              createdCount += 1;
-              continue;
-            }
 
             if (!line.procurementSkuId) {
               throw new BadRequestException(
@@ -1146,15 +1032,6 @@ ${list}
             const skuName = renamed?.to ?? sku.name;
             if (renamed) {
               renames.push({ lineId: line.id, ...renamed });
-            }
-
-            if (
-              lineUnit &&
-              WEIGHT_OR_VOLUME_UNITS.has(lineUnit.toLowerCase())
-            ) {
-              throw new BadRequestException(
-                `「${line.rawName}」是按重量/体积买的（${lineUnit}），请改成件数再生成`,
-              );
             }
 
             /**
@@ -1929,12 +1806,7 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
 
     const missingSku = row.lines.filter(
       (line) =>
-        !line.isPersonal &&
-        line.ingredientId &&
-        !line.procurementSkuId &&
-        WEIGHT_UNIT_TO_BASE_RATIO[
-          String(line.unit ?? '').trim().toLowerCase()
-        ] === undefined,
+        !line.isPersonal && line.ingredientId && !line.procurementSkuId,
     );
     if (missingSku.length > 0) {
       throw new BadRequestException(
@@ -2033,16 +1905,13 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
 
   private toLineView(line: any, rawItem?: any): any {
     const ingredientId = line.ingredientId ?? null;
-    const weightUnit = isWeightUnit(line.unit);
     const state = line.isPersonal
       ? 'PERSONAL'
       : !ingredientId
         ? 'UNMATCHED'
-        : weightUnit
-          ? 'MATCHED'
-          : !line.procurementSkuId
-            ? 'NEEDS_SKU'
-            : 'MATCHED';
+        : !line.procurementSkuId
+          ? 'NEEDS_SKU'
+          : 'MATCHED';
     return {
       id: line.id,
       lineNo: line.lineNo,
@@ -2055,7 +1924,7 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
       // 模型当时读到的金额，用于「和原图对照」；员工改过之后 lineTotal 会变。
       aiLineTotal: numOrNull(rawItem?.lineTotal ?? rawItem?.total),
       ingredientId,
-      procurementSkuId: weightUnit ? null : (line.procurementSkuId ?? null),
+      procurementSkuId: line.procurementSkuId ?? null,
       isPersonal: line.isPersonal,
       editedByUser: line.editedByUser,
       confidence: line.matchConfidence ?? 'LOW',

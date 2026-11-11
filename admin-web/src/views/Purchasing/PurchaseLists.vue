@@ -369,7 +369,7 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="采购数量">
+        <el-form-item :label="recordQuantityLabel">
           <el-input-number v-model="recordForm.actualQuantity" :min="0" :precision="2" :step="1" />
         </el-form-item>
         <el-form-item label="实际金额" required>
@@ -650,7 +650,21 @@ async function recalculateCurrentList() {
   }
 }
 
+/** 数量永远是「这条明细的商品采购单位」的个数，标签里写清楚，别让人按克填 */
+const recordQuantityLabel = computed(() => {
+  const unit =
+    recordItem.value?.quantityUnit ||
+    recordItem.value?.displayUnit ||
+    recordItem.value?.procurementSku?.purchaseUnit ||
+    ''
+  return unit ? `采购数量（${unit}）` : '采购数量'
+})
+
 function openRecordDialog(item: PurchaseItem) {
+  if (!item.procurementSkuId) {
+    ElMessage.warning('这条原料还没有采购商品，请先在商品档案里建一个再记录采购')
+    return
+  }
   recordItem.value = item
   recordForm.purchaseChannel = item.purchaseChannel || ''
   recordForm.actualQuantity = Number(item.purchaseShortageQuantity ?? item.quantityNeeded ?? 0)

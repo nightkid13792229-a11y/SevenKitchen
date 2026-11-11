@@ -38,16 +38,6 @@ import {
 import { PurchaseOrderImportService } from './purchase-order-import.service';
 import { weightUnitToBaseRatio } from './purchase-order-weight-units';
 
-const WEIGHT_UNIT_TO_BASE_RATIO: Record<string, number> = {
-  斤: 500,
-  两: 50,
-  克: 1,
-  g: 1,
-  公斤: 1000,
-  千克: 1000,
-  kg: 1000,
-};
-
 export interface SaveReplenishmentRecordDto {
   /** 订单实付；不传则用识别结果 */
   paidAmount?: number;
@@ -399,7 +389,7 @@ export class ReplenishmentService {
        *
        * 以前这里对「克/公斤」直接放行：一条按"箱"买的记录被改成"1 克"，
        * 就真的按 1 克入账 —— 三条入账路径里唯一不拦、静默错的一条。
-       * 要按重量记，应该用"没有商品的按重量行"，而不是在商品行上换口径。
+       * 散称想按斤/克记，就挂一个按斤/克卖的商品，而不是在商品行上换口径。
        */
       if (sku?.purchaseUnit) {
         const unitCheck = checkQuantityUnitMatches({
@@ -778,50 +768,6 @@ export class ReplenishmentService {
       throw new BadRequestException(`「${line.rawName}」没有金额，不能保存`);
     }
 
-    // 按重量买的一律走重量行：即使截图行误挂了商品，也不按商品净含量折算。
-    const weightRatio = WEIGHT_UNIT_TO_BASE_RATIO[unit.toLowerCase()];
-    if (weightRatio !== undefined) {
-      const ingredient = await this.prisma.ingredient.findUnique({
-        where: { id: line.ingredientId },
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          baseUnit: true,
-          unitDisplayLabel: true,
-          purchaseChannel: true,
-        },
-      });
-      if (!ingredient) {
-        throw new BadRequestException(
-          `「${line.rawName}」的原料不存在，请重新选择`,
-        );
-      }
-      if (ingredient.baseUnit !== 'G') {
-        throw new BadRequestException(
-          `「${line.rawName}」按重量只支持基准单位为克的原料，请改用商品净含量`,
-        );
-      }
-
-      return this.prisma.purchaseItem.create({
-        data: {
-          purchaseListId: listId,
-          ingredientId: ingredient.id,
-          procurementSkuId: null,
-          procurementSkuName: null,
-          ingredientName: ingredient.name,
-          type: ingredient.type,
-          quantityNeeded: quantity,
-          quantityUnit: unit,
-          estimatedCost: amount,
-          purchaseChannel: channel ?? ingredient.purchaseChannel,
-          productModel: line.spec ?? null,
-          displayUnit:
-            unit || ingredient.unitDisplayLabel || ingredient.baseUnit,
-        },
-      });
-    }
-
     if (!line.procurementSkuId) {
       throw new BadRequestException(
         `「${line.rawName}」缺少采购商品，请先新建商品`,
@@ -851,6 +797,26 @@ export class ReplenishmentService {
     if (!sku) {
       throw new BadRequestException(
         `「${line.rawName}」的采购商品不存在，请重新选择`,
+      );
+    }
+
+    /**
+     * 单位门禁（2026-11-11，与生成采购记录、到货入库同一口径）。
+     *
+     * 散称商品可以按斤/克卖，但这行写的单位必须就是商品的单位：
+     * 「3 斤」挂到「500g/袋」上，克数只能靠猜，宁可拦住让人改单位或换商品。
+     */
+    const unitCheck = checkQuantityUnitMatches({
+      lineUnit: unit,
+      skuPurchaseUnit: sku.purchaseUnit,
+    });
+    if (!unitCheck.ok) {
+      throw new BadRequestException(
+        describeQuantityUnitMismatch({
+          lineName: line.rawName,
+          lineUnit: unit,
+          skuPurchaseUnit: String(sku.purchaseUnit),
+        }),
       );
     }
 

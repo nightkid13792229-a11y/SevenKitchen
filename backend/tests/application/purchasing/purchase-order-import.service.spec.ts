@@ -286,7 +286,7 @@ describe('PurchaseOrderImportService', () => {
     ).rejects.toThrow('这张截图已经导入过');
   });
 
-  it('按重量的行即使没商品也算匹配', () => {
+  it('按重量的行没有商品，就是待选商品（不再算已匹配）', () => {
     const view = (service as any).toLineView(
       {
         id: 'line-1',
@@ -307,8 +307,33 @@ describe('PurchaseOrderImportService', () => {
       {},
     );
 
-    expect(view.state).toBe('MATCHED');
+    expect(view.state).toBe('NEEDS_SKU');
     expect(view.procurementSkuId).toBeNull();
+  });
+
+  it('按重量的行挂了商品，状态是已匹配，商品不会被抹掉', () => {
+    const view = (service as any).toLineView(
+      {
+        id: 'line-1',
+        lineNo: 1,
+        rawName: '新鲜羊心',
+        spec: '600克',
+        qty: 600,
+        unit: '克',
+        unitPrice: 0.05,
+        lineTotal: 30,
+        ingredientId: 'ing-1',
+        procurementSkuId: 'sku-1',
+        isPersonal: false,
+        editedByUser: false,
+        matchConfidence: 'HIGH',
+        matchSource: 'MANUAL',
+      },
+      {},
+    );
+
+    expect(view.state).toBe('MATCHED');
+    expect(view.procurementSkuId).toBe('sku-1');
   });
 
   it('补货草稿：跨草稿的重复图会被旧草稿导入替换', async () => {
@@ -482,8 +507,7 @@ describe('PurchaseOrderImportService', () => {
     });
   });
 
-  it('按重量买的行（没有采购商品）直接按斤换算成克，不要求 SKU', async () => {
-    // 补货改版：淘宝「新鲜羊心 3斤」这类没有商品档案，也应当能记账。
+  it('按重量买但没有挂商品的行，不能生成采购记录', async () => {
     prisma.purchaseOrderImport.findMany.mockResolvedValue([
       {
         id: 'import-1',
@@ -509,17 +533,51 @@ describe('PurchaseOrderImportService', () => {
         ],
       },
     ]);
-    prisma.purchaseOrderImport.updateMany.mockResolvedValue({ count: 1 });
-    prisma.purchaseItem.findUnique.mockResolvedValue({
-      id: 'item-1',
-      ingredientId: 'ing-1',
-      ingredientName: '羊心',
-      ingredient: {
-        name: '羊心',
-        baseUnit: 'G',
-        purchaseChannel: '淘宝',
+
+    await expect(service.confirm(['import-1'], 'user-1')).rejects.toThrow(
+      /采购商品/,
+    );
+    expect(prisma.purchaseRecord.create).not.toHaveBeenCalled();
+  });
+
+  it('散称挂「按克卖」的商品：600 克入库，金额记在这条商品上', async () => {
+    prisma.purchaseOrderImport.findMany.mockResolvedValue([
+      {
+        id: 'import-1',
+        purchaseListId: 'list-1',
+        status: 'DRAFT',
+        incomplete: false,
+        subtotal: 30,
+        channel: '菜市场',
+        orderTime: null,
+        imageKeys: [],
+        lines: [
+          {
+            id: 'line-1',
+            rawName: '牛肉 600克',
+            isPersonal: false,
+            ingredientId: 'ing-1',
+            procurementSkuId: 'sku-1',
+            purchaseItemId: 'item-1',
+            unit: '克',
+            lineTotal: 30,
+            qty: 600,
+          },
+        ],
       },
+    ]);
+    prisma.purchaseOrderImport.updateMany.mockResolvedValue({ count: 1 });
+    prisma.procurementSku.findUnique.mockResolvedValue({
+      id: 'sku-1',
+      ingredientId: 'ing-1',
+      name: '菜市场牛肉（按克）',
+      productModel: null,
+      purchaseChannel: '菜市场',
+      purchaseUnit: '克',
+      purchaseToBaseRatio: 1,
+      ingredient: { baseUnit: 'G', name: '牛肉', purchaseToBaseRatio: 1 },
     });
+    prisma.purchaseItem.findFirst.mockResolvedValue({ id: 'item-1' });
     prisma.purchaseRecord.create.mockResolvedValue({ id: 'record-1' });
     prisma.purchaseOrderImportLine.update.mockResolvedValue({});
 
@@ -530,14 +588,11 @@ describe('PurchaseOrderImportService', () => {
 
     expect(prisma.purchaseRecord.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        procurementSkuId: null,
-        actualQuantity: 3,
-        actualPackageCount: 3,
-        actualPackageSize: 1,
-        actualPackageUnit: '斤',
-        actualBaseQuantity: 1500,
+        procurementSkuId: 'sku-1',
+        actualQuantity: 600,
+        actualBaseQuantity: 600,
         actualBaseUnit: 'G',
-        actualCost: 37.39,
+        actualCost: 30,
       }),
     });
   });

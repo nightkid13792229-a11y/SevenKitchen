@@ -242,6 +242,9 @@
             <text class="spec-warn-text">{{ editingSpecWarning }}</text>
             <text class="spec-warn-action" @tap="goNewSku">新建这个规格 ›</text>
           </view>
+          <view v-if="editingUnitWarning" class="spec-warn-box">
+            <text class="spec-warn-text">{{ editingUnitWarning }}</text>
+          </view>
           <text v-if="renameHint" class="rename-hint">{{ renameHint }}</text>
 
           <view class="amount-card">
@@ -481,17 +484,6 @@
                 在别家买的不要挂到这笔上，重建一个属于这个渠道的商品更准。
               </text>
             </view>
-            <view
-              v-if="pickerIngredientId && canRecordByWeight"
-              class="picker-row"
-              @tap="chooseWeightUnit"
-            >
-              <view class="picker-main">
-                <text class="picker-name">按重量记</text>
-                <text class="picker-sub">不挂商品，按斤/公斤/克记，入库按克算</text>
-              </view>
-              <text class="picker-go">选择</text>
-            </view>
             <view v-if="pickerIngredientId" class="picker-create" @tap="goNewSku">
               <view class="picker-create-main">
                 <text class="picker-create-plus">+</text>
@@ -531,7 +523,11 @@ import {
 import { orderImportIncompleteNotice } from '../../../utils/order-import-check';
 import { sortPurchaseItemsForDisplay } from '../food-category-order';
 import { firstBlockedImport } from '../../../utils/order-import-block';
-import { isSpecMismatch, specWarningText } from '../../../utils/order-import-spec';
+import {
+  isSpecMismatch,
+  specWarningText,
+  unitWarningText,
+} from '../../../utils/order-import-spec';
 import { keepSkuForChannel } from '../../../utils/purchase-channel';
 import {
   buildSkuCreateQuery,
@@ -554,6 +550,7 @@ interface IngredientOption {
     name: string;
     productModel?: string | null;
     purchaseChannel?: string | null;
+    purchaseUnit?: string | null;
     purchaseToBaseRatio?: number | null;
   }>;
 }
@@ -579,20 +576,17 @@ const pickerIngredientId = ref('');
 let pickerClosedAt = 0;
 let sheetOpenedAt = 0;
 /**
- * 数量单位（2026-11-11 收口）。
+ * 数量单位（2026-11-11 起只有一处来源：采购商品自己的采购单位）。
  *
  * 以前这里是**第三份**写死的清单（袋/盒/份/包/瓶/个/组/罐），和商品字典、
- * 后端白名单都不是一套：里面还有谁都没有的「组」，却没有商品真实在用的「箱/桶/提」。
- * 现在只给两类：
- *   1. 这行商品自己的采购单位（必须排第一 —— 它就是换算倍数对应的单位）；
- *   2. 计量单位（斤/公斤/克/两），散装称重时用，换算不依赖商品倍数。
+ * 后端白名单都不是一套。现在单位必须跟商品走 —— 散称的「斤/克」也是商品单位，
+ * 不是另开一条免商品的路；单位对不上，克数就不成立。
  */
-const MEASUREMENT_UNITS = ['斤', '公斤', '克', '两'];
 const unitOptions = computed(() => {
   const skuUnit = String(editing.value?.skuPurchaseUnit || '').trim();
-  const baseUnit = String(editing.value?.baseUnit || '').toUpperCase();
-  const measurement = baseUnit === 'G' ? MEASUREMENT_UNITS : [];
-  const list = skuUnit ? [skuUnit, ...measurement] : measurement;
+  // 采购记录必须挂商品：单位以商品的采购单位为准。
+  // 散称的「斤/克」不是另开一条免商品的路，而是商品本身就按斤/克卖。
+  const list = skuUnit ? [skuUnit] : [];
   const current = String(editing.value?.unitText || '').trim();
   // 当前值不在清单里（老数据/导入值）也要显示出来，否则"选中了却看不见"
   if (current && !list.includes(current)) return [current, ...list];
@@ -610,7 +604,6 @@ const unitMismatch = computed(() => {
   const lineUnit = String(current?.unitText || '').trim();
   const skuUnit = String(current?.skuPurchaseUnit || '').trim();
   if (!current || current.isPersonal || !lineUnit || !skuUnit) return false;
-  if (MEASUREMENT_UNITS.includes(lineUnit)) return false;
   return lineUnit !== skuUnit;
 });
 /** 渠道清单：唯一来源是后台字典 purchase_channel，页面不写死 */
@@ -801,6 +794,7 @@ const ingredientOptions = computed<IngredientOption[]>(() => {
               name: item.procurementSkuName || item.name,
               productModel: item.productModel || null,
               purchaseChannel: item.purchaseChannel || null,
+              purchaseUnit: item.purchaseUnit || null,
               purchaseToBaseRatio: item.purchaseToBaseRatio || null,
             },
           ]
@@ -827,6 +821,7 @@ const ingredientOptions = computed<IngredientOption[]>(() => {
       name: sku.name,
       productModel: sku.productModel,
       purchaseChannel: sku.purchaseChannel,
+      purchaseUnit: sku.purchaseUnit ?? null,
       purchaseToBaseRatio:
         typeof sku.purchaseToBaseRatio === 'number' ? sku.purchaseToBaseRatio : null,
     }));
@@ -969,16 +964,6 @@ const pickerSkuOptions = computed(() => {
   }));
 });
 
-/** 可选的「按重量记」只对基准单位是克的原料开放 */
-const pickerIngredient = computed(() =>
-  ingredientOptions.value.find(
-    (item) => item.ingredientId === pickerIngredientId.value,
-  ),
-);
-const canRecordByWeight = computed(
-  () => String(pickerIngredient.value?.baseUnit || '').toUpperCase() === 'G',
-);
-
 /** 选商品列表按关键字过滤（40 多个商品时滑起来太慢，2026-11-05） */
 const filteredSkuOptions = computed(() => {
   const keyword = skuSearch.value.trim().toLowerCase();
@@ -1049,20 +1034,36 @@ const editingSpecWarning = computed(() => {
   return specWarningText(current.spec, current.skuModel);
 });
 
-function skuModelFor(line: OrderImportLineView): string | null {
+/** 单位和商品对不上：数量按哪个单位算都说不清，必须在生成前看见 */
+const editingUnitWarning = computed(() => {
+  const current = editing.value;
+  if (!current || current.isPersonal || !current.procurementSkuId) return null;
+  return unitWarningText(current.unitText, current.skuPurchaseUnit);
+});
+
+function skuOf(line: OrderImportLineView): any | null {
   const ingredient = ingredientOptions.value.find(
     (item) => item.ingredientId === line.ingredientId,
   );
-  const sku = ingredient?.skus.find((item) => item.id === line.procurementSkuId);
-  return sku?.productModel || '';
+  return ingredient?.skus.find((item) => item.id === line.procurementSkuId) ?? null;
 }
 
-/** 行上直接标出来：不用逐行点开才发现规格不符 */
+function skuModelFor(line: OrderImportLineView): string | null {
+  return skuOf(line)?.productModel || '';
+}
+
+/** 行上直接标出来：不用逐行点开才发现规格/单位对不上 */
 function lineSpecNotice(line: OrderImportLineView): string {
   if (!line.procurementSkuId) return '';
-  const skuModel = skuModelFor(line);
-  if (!isSpecMismatch(line.spec, skuModel)) return '';
-  return `规格不符：商品 ${skuModel} ≠ 截图 ${line.spec}`;
+  const sku = skuOf(line);
+  const skuModel = sku?.productModel || '';
+  const notices: string[] = [];
+  if (isSpecMismatch(line.spec, skuModel)) {
+    notices.push(`规格不符：商品 ${skuModel} ≠ 截图 ${line.spec}`);
+  }
+  const unitNotice = unitWarningText(line.unit, sku?.purchaseUnit);
+  if (unitNotice) notices.push(unitNotice);
+  return notices.join(' ');
 }
 
 /** 本次要生成的所有行里，有多少行商品规格与截图对不上 */
@@ -1620,22 +1621,6 @@ function closePicker() {
   pickerClosedAt = Date.now();
 }
 
-function chooseWeightUnit() {
-  const ingredient = pickerIngredient.value;
-  if (!ingredient || !editing.value) return;
-  editing.value.procurementSkuId = null;
-  editing.value.skuName = '按重量记';
-  editing.value.skuModel = '';
-  editing.value.skuRatio = null;
-  editing.value.ingredientId = ingredient.ingredientId;
-  editing.value.ingredientName = ingredient.ingredientName;
-  editing.value.baseUnit = 'G';
-  editing.value.unitText = '斤';
-  editing.value.isPersonal = false;
-  editing.value.matchSource = 'MANUAL';
-  pickerMode.value = 'none';
-}
-
 function chooseSku(sku: any) {
   editing.value.procurementSkuId = sku.id;
   editing.value.skuName = sku.name;
@@ -1643,9 +1628,11 @@ function chooseSku(sku: any) {
   editing.value.skuRatio =
     typeof sku.purchaseToBaseRatio === 'number' ? sku.purchaseToBaseRatio : null;
   editing.value.skuPurchaseUnit = sku.purchaseUnit || '';
-  // 换商品时，如果单位不是计量单位，就跟着商品走 —— 否则"3 份"会挂到"1 盒"上
+  // 单位必须和商品一致（散称商品也一样）。但**不静默改**已有单位：
+  // 「3 斤」挂到「按克卖」的商品上改成「3 克」会差 500 倍，
+  // 只补空值，对不上的交给页面提示 + 生成时的单位门禁。
   const currentUnit = String(editing.value.unitText || '').trim();
-  if (sku.purchaseUnit && !MEASUREMENT_UNITS.includes(currentUnit)) {
+  if (sku.purchaseUnit && !currentUnit) {
     editing.value.unitText = sku.purchaseUnit;
   }
   editing.value.ingredientId = sku.ingredientId;

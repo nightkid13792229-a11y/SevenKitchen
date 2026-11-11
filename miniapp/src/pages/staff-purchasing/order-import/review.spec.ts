@@ -287,3 +287,16 @@ describe('补货手填兜底', () => {
     expect(source).toContain('manualMode');
   });
 });
+
+describe('采购记录必须挂商品', () => {
+  it('核对页不再提供「按重量记」这种免商品入口', () => {
+    expect(source).not.toContain('按重量记');
+    expect(source).not.toContain('canRecordByWeight');
+    expect(source).not.toContain('chooseWeightUnit');
+  });
+
+  it('弹窗里仍然保留新建采购商品入口：散称也要落到商品上', () => {
+    expect(source).toContain('新建采购商品');
+    expect(source).toContain('goNewSku');
+  });
+});

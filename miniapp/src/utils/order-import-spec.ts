@@ -83,3 +83,19 @@ export function specWarningText(
   if (!isSpecMismatch(lineSpec, skuModel)) return null;
   return `截图是 ${lineSpec}，这个商品是 ${skuModel}；生成后克数和单价会按商品规格（${skuModel}）算。`;
 }
+
+/**
+ * 这行的数量和商品的采购单位对不上时给员工的一句话（2026-11-11）。
+ *
+ * 采购记录必须挂商品，数量就是「商品的采购单位」个数：写「3 斤」却挂在
+ * 「500g/袋」的商品上，克数只能靠猜，生成时后端会直接拦下。
+ */
+export function unitWarningText(
+  lineUnit: string | null | undefined,
+  skuUnit: string | null | undefined,
+): string | null {
+  const line = String(lineUnit ?? '').trim();
+  const sku = String(skuUnit ?? '').trim();
+  if (!line || !sku || line === sku) return null;
+  return `这行写的是「${line}」，商品是按「${sku}」卖的：生成/保存时会被拦下，请把单位改成「${sku}」，或换一个按「${line}」卖的商品。`;
+}

@@ -140,7 +140,7 @@ describe('ReplenishmentService · 保存', () => {
     expect(repository.save).toHaveBeenCalledTimes(1);
   });
 
-  it('creates a weight item without a procurement SKU', async () => {
+  it('按重量买但没有挂商品的行，保存时被拦住', async () => {
     const draft = createDraft();
     const importRow = createImport([
       {
@@ -159,6 +159,33 @@ describe('ReplenishmentService · 保存', () => {
     importRow.subtotal = 37.39;
     importRow.packagingFee = 0;
     importRow.paid = 37.39;
+    const { service, prisma } = createService({ draft, importRow });
+
+    await expect(service.saveRecord('draft-1', {}, 'user-1')).rejects.toThrow(
+      /缺少采购商品/,
+    );
+    expect(prisma.purchaseItem.create).not.toHaveBeenCalled();
+  });
+
+  it('散称挂「按克卖」的商品：明细按 600 克记，商品一起落库', async () => {
+    const draft = createDraft();
+    const importRow = createImport([
+      {
+        id: 'line-1',
+        rawName: '牛肉 600克',
+        spec: '600克',
+        qty: 600,
+        unit: '克',
+        lineTotal: 60,
+        isPersonal: false,
+        ingredientId: 'ing-2',
+        procurementSkuId: 'sku-2',
+        purchaseItemId: null,
+      },
+    ]);
+    importRow.subtotal = 60;
+    importRow.packagingFee = 0;
+    importRow.paid = 60;
     const { service, prisma } = createService({
       draft,
       importRow,
@@ -167,36 +194,85 @@ describe('ReplenishmentService · 保存', () => {
           id: 'item-2',
           purchaseListId: 'draft-1',
           ingredientId: 'ing-2',
-          procurementSkuId: null,
-          ingredientName: '羊心',
+          procurementSkuId: 'sku-2',
+          ingredientName: '牛肉',
           type: 'FOOD',
-          quantityNeeded: 3,
-          quantityUnit: '斤',
-          estimatedCost: 37.39,
+          quantityNeeded: 600,
+          quantityUnit: '克',
+          estimatedCost: 60,
         },
       ],
     });
-    prisma.ingredient.findUnique.mockResolvedValue({
-      id: 'ing-2',
-      name: '羊心',
-      type: 'FOOD',
-      baseUnit: 'G',
-      unitDisplayLabel: '斤',
-      purchaseChannel: '淘宝',
+    prisma.procurementSku.findUnique.mockResolvedValue({
+      id: 'sku-2',
+      name: '菜市场牛肉（按克）',
+      productModel: null,
+      purchaseChannel: '菜市场',
+      purchaseUnit: '克',
+      ingredient: {
+        id: 'ing-2',
+        name: '牛肉',
+        type: 'FOOD',
+        baseUnit: 'G',
+        unitDisplayLabel: '克',
+        purchaseChannel: '菜市场',
+      },
     });
 
     const saved = await service.saveRecord('draft-1', {}, 'user-1');
 
     expect(prisma.purchaseItem.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        procurementSkuId: null,
-        quantityUnit: '斤',
-        quantityNeeded: 3,
-        estimatedCost: 37.39,
+        procurementSkuId: 'sku-2',
+        quantityUnit: '克',
+        quantityNeeded: 600,
+        estimatedCost: 60,
       }),
     });
     expect(saved.itemCount).toBe(1);
-    expect(saved.reimbursementAmount).toBe(37.39);
+    expect(saved.reimbursementAmount).toBe(60);
+  });
+
+  it('这行写的单位和商品的单位对不上时，保存时被拦住', async () => {
+    const draft = createDraft();
+    const importRow = createImport([
+      {
+        id: 'line-1',
+        rawName: '新鲜羊心 3斤',
+        spec: '3斤',
+        qty: 3,
+        unit: '斤',
+        lineTotal: 37.39,
+        isPersonal: false,
+        ingredientId: 'ing-2',
+        procurementSkuId: 'sku-2',
+        purchaseItemId: null,
+      },
+    ]);
+    importRow.subtotal = 37.39;
+    importRow.packagingFee = 0;
+    importRow.paid = 37.39;
+    const { service, prisma } = createService({ draft, importRow });
+    prisma.procurementSku.findUnique.mockResolvedValue({
+      id: 'sku-2',
+      name: '羊心 500g/袋',
+      productModel: '500g/袋',
+      purchaseChannel: '淘宝',
+      purchaseUnit: '袋',
+      ingredient: {
+        id: 'ing-2',
+        name: '羊心',
+        type: 'FOOD',
+        baseUnit: 'G',
+        unitDisplayLabel: '袋',
+        purchaseChannel: '淘宝',
+      },
+    });
+
+    await expect(service.saveRecord('draft-1', {}, 'user-1')).rejects.toThrow(
+      /这行写的是/,
+    );
+    expect(prisma.purchaseItem.create).not.toHaveBeenCalled();
   });
 
   it('excludes personal lines from the reimbursement amount', async () => {

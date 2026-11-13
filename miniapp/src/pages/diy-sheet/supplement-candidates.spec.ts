@@ -99,6 +99,36 @@ describe('DIY supplement candidate rows', () => {
     })
   })
 
+  it('gives a view-product entry when there is exactly one candidate', () => {
+    // 2026-11-13：没有等价组、也没有食谱级备选时，候选就是原料自己一个。
+    // 这种行以前完全没有商品入口，顾客点不开品牌/规格/购买链接。
+    const rows = buildSupplementRows([
+      item({
+        source: 'DEFAULT_ONLY',
+        group: null,
+        candidates: [
+          {
+            ingredientId: 'ing-caco3',
+            name: '碳酸钙粉',
+            brand: 'NOW FOODS',
+            productModel: '600mg钙/1.7克',
+            displayUnit: 'g',
+            physicalForm: 'POWDER',
+            isDefault: true,
+            selectable: true,
+            dosage: dosage(9.3)
+          }
+        ]
+      })
+    ])
+
+    expect(rows[0]).toMatchObject({
+      choiceLabel: '查看商品 〉',
+      canSwitch: false,
+      hasSpecDetail: true
+    })
+  })
+
   it('restores the customer selection by ingredient id', () => {
     const rows = buildSupplementRows(
       [item()],
@@ -155,7 +185,10 @@ describe('DIY supplement candidate rows', () => {
       ingredientId: 'ing-caco3',
       purchasable: false,
       productionOnly: true,
-      selectionSource: 'DEFAULT'
+      selectionSource: 'DEFAULT',
+      // 候选 0 个：没有可看的商品，入口保持不显示（不暴露空弹窗）
+      choiceLabel: '',
+      canSwitch: false
     })
   })
 

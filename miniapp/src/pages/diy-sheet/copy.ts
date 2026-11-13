@@ -45,6 +45,25 @@ export function formatRecommendationActionLabel(count?: number): string {
   return `可更换 ${count}项 〉`
 }
 
+/**
+ * 补剂「产品」列的小徽章文案（三态）。
+ *
+ * 2026-11-13 补齐「只有 1 个候选」这一态：以前只在 ≥2 时给「换一个」，
+ * 单个候选直接留空 → 徽章不渲染 → 顾客没有任何入口能看商品详情。
+ * 而绝大多数补剂就是这一态（没有等价组、也没有食谱级备选时，候选只有原料自己）。
+ *
+ * 0 个候选：不显示（仅生产用补剂，没有可看的商品，也不该弹空窗）；
+ * 1 个候选：查看商品 〉（进去看品牌/规格/图/购买渠道，能「去购买」）；
+ * ≥2 个候选：换一个（词短，补剂列只有四等分宽，长文案会挤到隔壁格）。
+ */
+export function formatSupplementChoiceLabel(count?: number): string {
+  if (!count || count < 1) {
+    return ''
+  }
+
+  return count === 1 ? '查看商品 〉' : '换一个'
+}
+
 export function formatSelectedProductDisplayText(product?: any, fallbackName?: string | null): string {
   const parts = [product?.brand, product?.productModel]
     .map(value => String(value || '').trim())

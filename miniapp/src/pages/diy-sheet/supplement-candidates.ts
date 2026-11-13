@@ -5,6 +5,8 @@
  * 不再根据 nutritionProfile 自己算浓度/克数。
  */
 
+import { formatSupplementChoiceLabel } from './copy';
+
 export interface ServerSupplementTarget {
   fieldPath: string;
   label: string;
@@ -151,6 +153,7 @@ export function buildSupplementRows(
     )
     .map((item) => {
       const { candidate, index } = resolveSelectedCandidate(item, selections);
+      const candidateCount = (item.candidates || []).length;
       const dosage = candidate?.dosage ?? item.defaultIngredient.dosage;
       const fallback =
         dosage.status === 'NO_TARGETS'
@@ -197,8 +200,7 @@ export function buildSupplementRows(
         selectedProductDisplayText: candidate
           ? productText(candidate)
           : productText({ name: item.defaultIngredient.name }),
-        choiceLabel:
-          (item.candidates || []).length > 1 ? '换一个' : '',
+        choiceLabel: formatSupplementChoiceLabel(candidateCount),
         hasSpecDetail: candidate
           ? Boolean(
               candidate.brand ||
@@ -207,7 +209,7 @@ export function buildSupplementRows(
                 candidate.imageUrl,
             )
           : false,
-        canSwitch: (item.candidates || []).length > 1,
+        canSwitch: candidateCount > 1,
         unavailableReason: item.unavailableReason,
         group: item.group,
         groupName: item.group?.name ?? null,

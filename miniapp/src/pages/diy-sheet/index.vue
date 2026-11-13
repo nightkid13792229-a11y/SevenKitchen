@@ -2705,6 +2705,14 @@ onShareTimeline(() => {
   text-align: center;
 }
 
+/*
+  2026-11-13：补剂列的徽章（「查看商品 〉」/「换一个」）只有半行高，手机上不好点。
+  只放大补剂表的点击区域，食材列保持原样。
+*/
+.supplement-table .recommend-badge {
+  padding: 10rpx 20rpx;
+}
+
 .no-data {
   padding: 60rpx 0;
   text-align: center;

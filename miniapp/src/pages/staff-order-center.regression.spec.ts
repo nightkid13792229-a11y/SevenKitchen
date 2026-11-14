@@ -149,19 +149,28 @@ describe('staff order center · 食谱 / 狗狗入口', () => {
     expect(orderCenter).toContain('@tap.stop="openDog(item)"')
   })
 
-  it('★ 三类卡片都显示顾客姓名和狗狗名，但手机号仍不显示', () => {
+  it('★ 三类卡片都显示姓名和狗狗名（不再带「顾客/狗狗」前缀），鲜食再带分装规格', () => {
     expect(orderCenter).toContain('v-if="item.recipeName"')
     expect(orderCenter).toContain('{{ item.recipeName }}')
     // 2026-11-02：不再只限鲜食，补剂/定制卡片也显示这一行
-    expect(orderCenter).toContain('v-if="item.customerName || item.dogName"')
+    expect(orderCenter).toContain(
+      'v-if="item.customerName || item.dogName || foodSpecLabel(item)"',
+    )
     expect(orderCenter).not.toContain(
       `v-if="item.type === 'FOOD' && (item.customerName || item.dogName)"`,
     )
     expect(orderCenter).toContain('{{ item.customerName }}')
     expect(orderCenter).toContain('{{ item.dogName }}')
-    expect(orderCenter).toContain('顾客 ')
-    expect(orderCenter).toContain('狗狗 ')
+    // 2026-11-14 老板要求：只显示字段内容，不再写「顾客 / 狗狗」两个词
+    expect(orderCenter).not.toContain('顾客 {{')
+    expect(orderCenter).not.toContain('狗狗 {{')
     expect(orderCenter).not.toContain('item.customerPhone')
+  })
+
+  it('★ 鲜食卡片带分装规格「4袋×250g」，定制/补剂不显示', () => {
+    expect(orderCenter).toContain('formatOrderPackageSpec')
+    expect(orderCenter).toContain("if (item.type !== 'FOOD') return ''")
+    expect(orderCenter).toContain('{{ foodSpecLabel(item) }}')
   })
 
   it('★ 卡片上只留下单时间，并且用小字说明是「下单时间」', () => {

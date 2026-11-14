@@ -122,6 +122,17 @@ describe('staff order mobile operations', () => {
     expect(ordersApiSource).toContain('updateOrderItemPackagePlan');
   });
 
+  it('★ 商品与用量里能直接打开该食谱的最新版（2026-11-14）', () => {
+    expect(detailSource).toContain('最新版 ›')
+    expect(detailSource).toContain('latestRecipeEntryVisible')
+    expect(detailSource).toContain('openLatestRecipe')
+    // 只按食谱业务编号打开；不带 dogId（会按生命阶段换到同系列另一版），
+    // 也不带 orderId（那是定制单「交付冻结版」的用法）
+    expect(detailSource).toContain(
+      'url: `/pages/recipe-detail/index?recipeId=${encodeURIComponent(recipeId)}`',
+    )
+  });
+
   it('shows and shares preparation photos from staff order detail', () => {
     expect(detailSource).toContain('备餐图');
     expect(detailSource).toContain('productionPhotos');

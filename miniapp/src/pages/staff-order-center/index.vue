@@ -116,11 +116,21 @@
           <text class="recipe-name">{{ item.recipeName }}</text>
         </view>
 
-        <!-- 三类卡片：顾客姓名 + 狗狗名，现场认单用；缺哪项就只显示另一项 -->
-        <view v-if="item.customerName || item.dogName" class="order-people">
-          <text v-if="item.customerName" class="person">顾客 {{ item.customerName }}</text>
+        <!-- 三类卡片：姓名 + 狗狗名，现场认单用；缺哪项就只显示另一项。
+             2026-11-14 老板要求：不再写「顾客 / 狗狗」前缀，只显示内容；
+             鲜食卡片再补一段分装规格（袋数 × 每袋克重），
+             员工在列表上就能对上要装几袋、每袋多少克。 -->
+        <view
+          v-if="item.customerName || item.dogName || foodSpecLabel(item)"
+          class="order-people"
+        >
+          <text v-if="item.customerName" class="person">{{ item.customerName }}</text>
           <text v-if="item.customerName && item.dogName" class="person-sep">·</text>
-          <text v-if="item.dogName" class="person">狗狗 {{ item.dogName }}</text>
+          <text v-if="item.dogName" class="person">{{ item.dogName }}</text>
+          <template v-if="foodSpecLabel(item)">
+            <text v-if="item.customerName || item.dogName" class="person-sep">·</text>
+            <text class="person spec">{{ foodSpecLabel(item) }}</text>
+          </template>
         </view>
 
         <view class="tags-row">
@@ -221,6 +231,7 @@ import { request } from '../../utils/api'
 import { getStoredUser } from '../../utils/account'
 import StaffShipDrawer from '../../components/shipping/StaffShipDrawer.vue'
 import { buildShipDogSummary } from '../../utils/order-ship'
+import { formatOrderPackageSpec } from '../../utils/order-package-spec'
 
 /** 代客下单只对管理员开放（后端接口同步收口到 AdminGuard） */
 const isAdmin = getStoredUser()?.role === 'ADMIN'
@@ -263,6 +274,14 @@ interface OrderCenterItem {
   recipeId: string | null
   /** 可打开的狗狗档案；空 = 这单没关联狗 */
   dogId: string | null
+  /**
+   * 鲜食分装规格（2026-11-14）：卡片「姓名 · 狗狗」这一行后面显示的
+   * `4袋×250g` 就靠这三个字段。定制 / 补剂没有分装，恒为 null。
+   */
+  packageCount: number | null
+  packageSpecG: number | null
+  /** 多组分装（优先）；空 = 老订单只存了单组规格 */
+  packagePlan: Array<{ packageSpecG: number; packageCount: number }> | null
 }
 
 const TYPE_META: Record<string, { label: string; className: string }> = {
@@ -379,6 +398,18 @@ function typeLabel(value: string) {
 /** 颜色类名：后端若冒出没见过的类型，这里回落成空串，不要整页崩掉 */
 function typeClass(value: string) {
   return TYPE_META[value]?.className || ''
+}
+
+/**
+ * 鲜食卡片上的分装规格（2026-11-14）：`4袋×250g`。
+ *
+ * 只有鲜食有分装这回事；定制 / 补剂直接返回空串，这一行只显示姓名和狗狗。
+ * 老订单没有 packagePlan，用 packageCount / packageSpecG 兜底；
+ * 两样都缺就不显示，绝不写「0袋×0g」。
+ */
+function foodSpecLabel(item: OrderCenterItem) {
+  if (item.type !== 'FOOD') return ''
+  return formatOrderPackageSpec(item)
 }
 
 function formatTime(value: string) {
@@ -808,9 +839,12 @@ onShow(() => {
 
 .order-main { display: flex; align-items: baseline; margin-top: 16rpx; }
 .recipe-name { font-size: 29rpx; font-weight: 600; color: #1e3a2f; }
-/* 鲜食卡片上的顾客/狗狗：小字一行，别抢食谱名的注意力 */
+/* 三类卡片上的姓名 / 狗狗名：小字一行，别抢食谱名的注意力；
+   鲜食后面再接一段分装规格（2026-11-14） */
 .order-people { display: flex; align-items: center; flex-wrap: wrap; margin-top: 8rpx; }
 .person { font-size: 22rpx; color: #606266; }
+/* 分装规格：比姓名稍深一点，扫单时能先看到袋数和克重 */
+.person.spec { color: #2b5040; font-weight: 600; }
 .person-sep { margin: 0 10rpx; color: #c0c4cc; font-size: 22rpx; }
 
 .tags-row { display: flex; flex-wrap: wrap; margin-top: 10rpx; }

@@ -119,6 +119,17 @@ export interface OrderCenterItem {
   dogId: string | null;
   /** 狗狗名（2026-11-02）：鲜食卡片上和顾客名一起显示 */
   dogName: string | null;
+  /**
+   * 鲜食分装规格（2026-11-14）：卡片在「顾客 · 狗狗」这一行后面补
+   * 「4袋×250g」，让员工在列表上就能对上要装几袋、每袋多少克。
+   *
+   * 只有鲜食单有；定制 / 补剂恒为 null，前端据此不显示。
+   * `packagePlan` 是多组分装（优先用它），为空时退回单组的
+   * `packageCount / packageSpecG`（老订单只有这两个字段）。
+   */
+  packageCount: number | null;
+  packageSpecG: number | null;
+  packagePlan: Array<{ packageSpecG: number; packageCount: number }> | null;
 }
 
 const GROUP_LABELS: Record<UnifiedStatusGroup, string> = {
@@ -391,7 +402,15 @@ export class OrderCenterService {
               items: {
                 // dogId 也带上：订单级 dogId 理论上够用，但订单项这一份才是
                 // 「这道食谱是给哪只狗的」，两边不一致时以订单项为准
-                select: { id: true, dogId: true, recipeSnapshot: true },
+                select: {
+                  id: true,
+                  dogId: true,
+                  recipeSnapshot: true,
+                  // 卡片上的分装规格（2026-11-14）：袋数 × 每袋克重
+                  packageCount: true,
+                  packageSpecG: true,
+                  packagePlan: true,
+                },
                 take: 1,
               },
             },
@@ -747,6 +766,17 @@ export class OrderCenterService {
       recipeName: snapshot?.name ?? null,
       dogId: row.dogId ?? firstItem?.dogId ?? null,
       dogName: row.dog?.name ?? null,
+      /**
+       * 卡片上的分装规格（2026-11-14）：一单一项，取订单项那一份。
+       * `packagePlan` 可能是 Prisma Json，原样透传，前端统一做容错/格式化。
+       */
+      packageCount: firstItem?.packageCount ?? null,
+      packageSpecG: firstItem?.packageSpecG ?? null,
+      packagePlan:
+        (firstItem?.packagePlan as Array<{
+          packageSpecG: number;
+          packageCount: number;
+        }> | null) ?? null,
     });
   }
 
@@ -856,6 +886,10 @@ export class OrderCenterService {
     recipeName: string | null;
     dogId: string | null;
     dogName: string | null;
+    /** 只有鲜食单会传；定制 / 补剂不传，返回 null（2026-11-14） */
+    packageCount?: number | null;
+    packageSpecG?: number | null;
+    packagePlan?: Array<{ packageSpecG: number; packageCount: number }> | null;
   }): OrderCenterItem {
     const user = input.users.get(input.userId);
     const address = (input.row.shippingAddressSnapshot ?? {}) as Record<
@@ -896,6 +930,9 @@ export class OrderCenterService {
       recipeName: input.recipeName,
       dogId: input.dogId,
       dogName: input.dogName,
+      packageCount: input.packageCount ?? null,
+      packageSpecG: input.packageSpecG ?? null,
+      packagePlan: input.packagePlan ?? null,
     };
   }
 

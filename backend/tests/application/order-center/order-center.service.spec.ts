@@ -16,7 +16,15 @@ function foodRow(overrides: any = {}) {
     shippingAddressSnapshot: null,
     dogId: 'd1',
     dog: { name: '旺财' },
-    items: [{ id: 'f1-item', recipeSnapshot: { id: 'r1', name: '鸡肉餐' } }],
+    items: [
+      {
+        id: 'f1-item',
+        recipeSnapshot: { id: 'r1', name: '鸡肉餐' },
+        packageCount: 4,
+        packageSpecG: 250,
+        packagePlan: [{ packageSpecG: 250, packageCount: 4 }],
+      },
+    ],
     ...overrides,
   };
 }
@@ -104,6 +112,31 @@ describe('OrderCenterService', () => {
     expect(result.items[1].customerName).toBe('张三');
   });
 
+  it('★ 鲜食读模型带分装规格（卡片显示「4袋×250g」），其余两类为 null', async () => {
+    const result = await service.list({ pageSize: 20 });
+
+    const food = result.items.find((item) => item.type === 'FOOD');
+    expect(food?.packageCount).toBe(4);
+    expect(food?.packageSpecG).toBe(250);
+    expect(food?.packagePlan).toEqual([{ packageSpecG: 250, packageCount: 4 }]);
+
+    // 定制 / 补剂没有分装这回事，必须是 null，前端据此不显示规格
+    const supplement = result.items.find((item) => item.type === 'SUPPLEMENT');
+    expect(supplement?.packagePlan).toBeNull();
+    expect(supplement?.packageCount).toBeNull();
+  });
+
+  it('鲜食查询把分装字段一起 select（否则卡片拿不到规格）', async () => {
+    await service.list({ type: 'FOOD', pageSize: 20 });
+
+    const itemsSelect = prisma.order.findMany.mock.calls[0][0].select.items;
+    expect(itemsSelect.select).toMatchObject({
+      packageCount: true,
+      packageSpecG: true,
+      packagePlan: true,
+    });
+  });
+
   it('★ 待发货 + 关键词：状态和关键词各占一个 AND 分支，count 与列表同口径', async () => {
     await service.list({
       type: 'FOOD',
@@ -117,10 +150,7 @@ describe('OrderCenterService', () => {
 
     expect(listWhere.AND).toHaveLength(2);
     expect(listWhere.AND[0]).toEqual({
-      OR: [
-        { status: 'FREEZING' },
-        { status: 'PAID', type: 'TASTING_PACK' },
-      ],
+      OR: [{ status: 'FREEZING' }, { status: 'PAID', type: 'TASTING_PACK' }],
     });
     // 分页总数必须和列表完全同条件，否则会出现“第 2 页是空的”
     expect(countWhere).toEqual(listWhere);

@@ -165,7 +165,18 @@
         <view class="card-title">商品与用量</view>
         <view class="product">
           <view class="product-info">
-            <text class="product-name">{{ firstOrderItem.recipeSnapshot?.name || '自定义食谱' }}</text>
+            <!-- 订单存的是下单那一版；旁边给一个去「最新版」的入口，
+                 员工核对后来改了什么不用再翻食谱管理（2026-11-14） -->
+            <view class="product-name-row">
+              <text class="product-name">{{ firstOrderItem.recipeSnapshot?.name || '自定义食谱' }}</text>
+              <text
+                v-if="latestRecipeEntryVisible(firstOrderItem)"
+                class="latest-recipe-link"
+                @tap.stop="openLatestRecipe(firstOrderItem)"
+              >
+                最新版 ›
+              </text>
+            </view>
             <view class="product-for">
               <text>{{ dogLine }}</text>
             </view>
@@ -195,7 +206,16 @@
 
         <view v-if="orderItems.length > 1" class="usage-list">
         <view v-for="item in orderItems" :key="item.id || item.recipeSnapshot?.id" class="usage-item">
-          <text class="usage-item-title">{{ item.recipeSnapshot?.name || '自定义食谱' }}</text>
+          <view class="usage-item-head">
+            <text class="usage-item-title">{{ item.recipeSnapshot?.name || '自定义食谱' }}</text>
+            <text
+              v-if="latestRecipeEntryVisible(item)"
+              class="latest-recipe-link"
+              @tap.stop="openLatestRecipe(item)"
+            >
+              最新版 ›
+            </text>
+          </view>
           <text class="usage-item-meta">
             {{ item.dog?.name || '未绑定狗狗' }} · {{ formatGrams(item.quantityG) }} · {{ formatPackagePlan(item) }}
           </text>
@@ -2320,6 +2340,31 @@ async function saveAmountAdjustment() {
   }
 }
 
+/**
+ * 「最新版 ›」入口（2026-11-14）。
+ *
+ * 订单项里冻的是**下单那一版**的食谱快照；老板 / 营养师后来改过配方时，
+ * 员工要能直接翻到这道食谱的当前版本核对，不用再去食谱管理里搜。
+ *
+ * 特意**不传 dogId**：带了 dogId，后端会按狗狗的生命阶段切到同系列的
+ * 另一版，打开的就不一定是这单这道食谱了；不带才落在该食谱自身的最新版。
+ */
+function latestRecipeId(item: OrderItemDetail | null | undefined): string {
+  return String(item?.recipeSnapshot?.id || '').trim()
+}
+
+function latestRecipeEntryVisible(item: OrderItemDetail | null | undefined): boolean {
+  return Boolean(latestRecipeId(item))
+}
+
+function openLatestRecipe(item: OrderItemDetail | null | undefined) {
+  const recipeId = latestRecipeId(item)
+  if (!recipeId) return
+  uni.navigateTo({
+    url: `/pages/recipe-detail/index?recipeId=${encodeURIComponent(recipeId)}`,
+  })
+}
+
 function getPackageRows(item: OrderItemDetail): OrderPackagePlanItem[] {
   if (Array.isArray(item.packagePlan) && item.packagePlan.length > 0) {
     return item.packagePlan.map((row) => ({
@@ -3748,9 +3793,13 @@ async function saveAddressForm() {
   background: linear-gradient(135deg, #d8e6d9, #b7cfba); color: #1e3a2f; font-size: 32rpx;
 }
 .product-info { flex: 1; min-width: 0; }
+.product-name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10rpx; }
 .product-name { font-size: 30rpx; font-weight: 600; color: #1f2d27; }
 .product-for { display: flex; align-items: center; gap: 12rpx; margin-top: 8rpx; font-size: 22rpx; color: #909399; }
-.product-link { padding: 0 12rpx; border-radius: 16rpx; background: #eef2ef; color: #2b5040; font-size: 20rpx; }
+/* 「最新版 ›」：跟食谱名同一行的浅色小胶囊，不抢主体信息 */
+.latest-recipe-link { flex: none; padding: 2rpx 14rpx; border-radius: 16rpx; background: #eef2ef; color: #2b5040; font-size: 20rpx; line-height: 1.7; }
+/* 一单多道食谱时，标题和入口左右分开 */
+.usage-item-head { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; }
 .specs { display: flex; flex-wrap: wrap; gap: 10rpx; margin-top: 12rpx; }
 .spec { padding: 4rpx 14rpx; border-radius: 10rpx; background: #f4f6f5; color: #5a6560; font-size: 20rpx; }
 

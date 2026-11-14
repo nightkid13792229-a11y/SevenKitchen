@@ -22,6 +22,9 @@ export type NoSaleReason = (typeof NO_SALE_REASONS)[number]['value']
 /** 等价组选「暂不归组」时的占位值（与「还没选」的 null 区分开） */
 export const GROUP_SKIPPED = '__SKIP__'
 
+/** 不上架原因存进 `properties` 的键（schema 里没有独立列，2026-11-14） */
+export const NO_SALE_REASON_PROPERTY_KEY = 'no_sale_reason'
+
 export interface LaunchDecisions {
   diy: boolean | null
   procurement: boolean | null
@@ -44,9 +47,6 @@ export interface LaunchEvaluationInput {
   issues: LaunchIssueLike[]
   hasPurchaseLink: boolean
   diyEnabled: boolean
-  /** null = 未归组 */
-  groupStatus: string | null
-  groupMembers: number
 }
 
 export interface LaunchEvaluation {
@@ -67,8 +67,14 @@ export function missingDecisions(decisions: LaunchDecisions): string[] {
   return missing
 }
 
+/**
+ * 结论卡。**只读后端 issues**，不自己判断组是否生效——
+ * 组的审核状态、成员数、浓度/单位是否匹配，后端都已经写成
+ * `EQUIVALENCE_*` 的 WARN，这里重复判断就会出现两套口径。
+ */
 export function evaluateLaunch(input: LaunchEvaluationInput): LaunchEvaluation {
-  const errors = (input.issues || []).filter((issue) => issue.level === 'ERROR')
+  const issues = input.issues || []
+  const errors = issues.filter((issue) => issue.level === 'ERROR')
 
   if (!input.retailEnabled) {
     return {
@@ -91,12 +97,10 @@ export function evaluateLaunch(input: LaunchEvaluationInput): LaunchEvaluation {
   if (input.diyEnabled && !input.hasPurchaseLink) {
     warnings.push('已上架，但没填购买链接：详情里没有「去购买」')
   }
-  if (!input.groupStatus) {
-    warnings.push('未归等价组：缺货时无法替换成同营养的其他产品')
-  } else if (input.groupStatus !== 'APPROVED') {
-    warnings.push('所在等价组未审核通过：不参与替换')
-  } else if (input.groupMembers <= 1) {
-    warnings.push('所在等价组只有 1 个成员：不参与替换')
+  for (const issue of issues) {
+    if (issue.level === 'WARN' && issue.code.startsWith('EQUIVALENCE_')) {
+      warnings.push(issue.message)
+    }
   }
 
   return {
@@ -106,19 +110,29 @@ export function evaluateLaunch(input: LaunchEvaluationInput): LaunchEvaluation {
 }
 
 /**
- * 制作单预览文案——必须与小程序真实展示一致：
- * 上不了架、或一个候选都没有的行，都是「仅生产，不可购买」。
+ * 制作单预览文案——与小程序**实际展示**对齐：
+ *   · 没开 DIY 的补剂根本不会出现在制作单上；
+ *   · 上不了架、或一个候选都没有的行，都是「仅生产，不可购买」；
+ *   · 有 1 个候选 → 「查看商品 〉」；多个候选 → 「换一个」（小程序口径）。
+ *
+ * 这里**不推算候选数**：候选还要过每个成员的 diy/上架/形态/单位/浓度，
+ * 猜一个数字写出来只会误导。组能生效时按「多个候选」处理。
  */
 export function describeSheetPreview(input: {
+  diyEnabled: boolean
   retailEnabled: boolean
   hasError: boolean
-  candidateCount: number
+  /** 组已审核、成员 ≥2、且后端没有报 EQUIVALENCE_* 问题 */
+  groupEffective: boolean
 }): string {
-  if (!input.retailEnabled || input.hasError || input.candidateCount <= 0) {
+  if (!input.diyEnabled) {
+    return '不出现在制作单'
+  }
+  if (!input.retailEnabled || input.hasError) {
     return '仅生产，不可购买'
   }
-  if (input.candidateCount === 1) {
-    return '查看商品 〉'
+  if (input.groupEffective) {
+    return '换一个'
   }
-  return `可更换 ${input.candidateCount}项 〉`
+  return '查看商品 〉'
 }

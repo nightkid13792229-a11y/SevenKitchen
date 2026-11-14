@@ -1,5 +1,8 @@
 <template>
-  <div class="supplement-workbench">
+  <div
+    class="supplement-workbench"
+    :class="{ 'supplement-workbench--with-launch': !!saved }"
+  >
     <!-- 最左：对话。说的每一句都会真的落到右边表单上 -->
     <SupplementChat class="wb-chat" :draft="agentDraft" @apply-draft="applyAgentDraft" />
 
@@ -304,10 +307,18 @@
           确认可用
         </el-button>
       </div>
-
-      <!-- 第 4 步：落地配置（2026-11-14）——写完才展开，四段必须表态 -->
-      <LaunchConfigStep v-if="saved" :ingredient-id="saved.ingredientId" />
     </section>
+
+    <!--
+      第 4 步：落地配置（2026-11-14）——写完才展开，四段必须表态。
+      刻意放在三栏之外、占满整行：三栏容器是固定高度 + overflow:hidden，
+      塞进去会把右边档案栏压扁、下面内容被裁掉（2026-11-14 复审 Critical）。
+    -->
+    <LaunchConfigStep
+      v-if="saved"
+      class="wb-launch"
+      :ingredient-id="saved.ingredientId"
+    />
 
     <el-drawer v-model="compareOpen" title="比一比候选" size="760px">
       <SupplementCompare @use="adoptCandidate" />
@@ -701,10 +712,35 @@ async function confirm(): Promise<void> {
   min-height: 620px;
 }
 
+/*
+  第 4 步占满整行（2026-11-14 复审修复）。
+  容器本身改成 auto 才能长出第四行；三栏各自保留原来的高度，
+  否则它们会被拉伸到与第 4 步同高、出现大片空白。
+*/
+.supplement-workbench--with-launch {
+  height: auto;
+}
+.supplement-workbench--with-launch .wb-chat,
+.supplement-workbench--with-launch .wb-evidence,
+.supplement-workbench--with-launch .wb-archive {
+  height: calc(100vh - 220px);
+  min-height: 620px;
+}
+.wb-launch {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
 @media (max-width: 1280px) {
   .supplement-workbench {
     grid-template-columns: minmax(0, 1fr);
     height: auto;
+  }
+  .supplement-workbench--with-launch .wb-chat,
+  .supplement-workbench--with-launch .wb-evidence,
+  .supplement-workbench--with-launch .wb-archive {
+    height: auto;
+    min-height: 0;
   }
 }
 .wb-chat {

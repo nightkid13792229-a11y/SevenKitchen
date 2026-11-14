@@ -4,11 +4,13 @@
       <div>
         <h3>第 4 步 · 落地配置</h3>
         <p class="launch-step__desc">
-          四段都要表态（参与 / 不参与），不能空着。这里调用的是补剂商品目录、原料档案、
+          四段都要明确（参与 / 不参与），不能空着。这里调用的是补剂商品目录、原料档案、
           等价组三个既有入口，规则与那些页面完全一致。
         </p>
       </div>
-      <span class="launch-step__progress">{{ confirmedCount }}/4 段已确认</span>
+      <span class="launch-step__progress">
+        {{ missing.length ? `还差：${missing.join('、')}` : '四段都已明确' }}
+      </span>
     </header>
 
     <el-alert
@@ -46,6 +48,7 @@
             placeholder="必须选一个"
             style="width: 300px"
             size="small"
+            @change="saveNoSaleReason"
           >
             <el-option
               v-for="reason in NO_SALE_REASONS"
@@ -54,6 +57,7 @@
               :value="reason.value"
             />
           </el-select>
+          <span class="launch-seg__hint">会记在这条原料档案里，别人能看到</span>
         </div>
       </div>
 
@@ -69,9 +73,7 @@
         <div class="launch-seg__row">
           <span class="launch-seg__label">用于 DIY 推荐</span>
           <el-switch v-model="diyForm.enabled" />
-          <span class="launch-seg__hint">
-            关闭后这条补剂不会出现在制作单候选里
-          </span>
+          <span class="launch-seg__hint">关闭后这条补剂不会出现在制作单候选里</span>
         </div>
 
         <template v-if="diyForm.enabled">
@@ -116,7 +118,13 @@
         </template>
 
         <div class="launch-seg__actions">
-          <el-button size="small" type="primary" :loading="savingDiy" @click="saveDiy">
+          <el-button
+            size="small"
+            type="primary"
+            :loading="savingDiy"
+            :disabled="!dataReady"
+            @click="saveDiy"
+          >
             保存本段并确认
           </el-button>
         </div>
@@ -138,9 +146,7 @@
         <div class="launch-seg__row">
           <span class="launch-seg__label">用于采购 / 生产</span>
           <el-switch v-model="procForm.enabled" />
-          <span class="launch-seg__hint">
-            关闭后，下单时不会把它当作生产实际采购的原料
-          </span>
+          <span class="launch-seg__hint">关闭后，下单时不会把它当作生产实际采购的原料</span>
         </div>
 
         <div v-if="row" class="launch-seg__row">
@@ -152,7 +158,13 @@
         </div>
 
         <div class="launch-seg__actions">
-          <el-button size="small" type="primary" :loading="savingProc" @click="saveProcurement">
+          <el-button
+            size="small"
+            type="primary"
+            :loading="savingProc"
+            :disabled="!dataReady"
+            @click="saveProcurement"
+          >
             保存本段并确认
           </el-button>
         </div>
@@ -170,16 +182,10 @@
         <div v-if="recommendations.length" class="launch-seg__row launch-recos">
           <span class="launch-seg__label">AI 推荐</span>
           <div class="launch-recos__list">
-            <div
-              v-for="item in recommendations"
-              :key="item.groupId"
-              class="launch-reco"
-            >
+            <div v-for="item in recommendations" :key="item.groupId" class="launch-reco">
               <b>{{ item.name }}</b>
               <span class="launch-reco__reason">{{ item.reason }}</span>
-              <el-button text size="small" @click="groupChoice = item.groupId">
-                采用
-              </el-button>
+              <el-button text size="small" @click="groupChoice = item.groupId">采用</el-button>
             </div>
           </div>
         </div>
@@ -190,15 +196,15 @@
             :model-value="groupChoice"
             placeholder="选择等价组，或暂不归组"
             size="small"
-            style="width: 360px"
+            style="width: 420px"
             @update:model-value="(value: any) => (groupChoice = value)"
           >
             <el-option :value="GROUP_SKIPPED" label="暂不归组（缺货时无法替换）" />
             <el-option
-              v-for="group in groups"
+              v-for="group in selectableGroups"
               :key="group.id"
               :value="group.id"
-              :label="`${group.name}（${statusLabel(group.status)} · ${group.memberCount} 个成员）`"
+              :label="`${group.name}（${group.nutrientLabel} · ${statusLabel(group.status)} · ${group.memberCount} 个成员）`"
             />
           </el-select>
         </div>
@@ -206,7 +212,13 @@
         <p v-if="selectedGroupHint" class="launch-seg__warn">{{ selectedGroupHint }}</p>
 
         <div class="launch-seg__actions">
-          <el-button size="small" type="primary" :loading="savingGroup" @click="saveGroup">
+          <el-button
+            size="small"
+            type="primary"
+            :loading="savingGroup"
+            :disabled="!dataReady"
+            @click="saveGroup"
+          >
             保存本段并确认
           </el-button>
         </div>
@@ -216,9 +228,7 @@
       <div class="launch-verdict" :class="`launch-verdict--${verdict.level.toLowerCase()}`">
         <div class="launch-verdict__head">
           <b>{{ verdictTitle }}</b>
-          <span v-if="missing.length" class="launch-verdict__missing">
-            还差：{{ missing.join('、') }}
-          </span>
+          <span class="launch-verdict__note">依据：后端「数据体检」结果</span>
         </div>
         <ul v-if="verdict.reasons.length" class="launch-verdict__reasons">
           <li v-for="reason in verdict.reasons" :key="reason">{{ reason }}</li>
@@ -227,7 +237,7 @@
         <div class="launch-preview">
           <span class="launch-preview__label">制作单里会显示</span>
           <span class="launch-preview__value">{{ previewText }}</span>
-          <span class="launch-preview__note">（按当前配置估算）</span>
+          <span class="launch-preview__note">（按已保存的配置估算）</span>
         </div>
       </div>
     </div>
@@ -235,37 +245,32 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   supplementShopApi,
   type SupplementCatalogItem,
   type UpdateSupplementCatalogItemDto,
 } from '@/api/supplementShop'
-import { supplementEquivalenceApi, type EquivalenceGroupSummary } from '@/api/supplementEquivalence'
+import {
+  supplementEquivalenceApi,
+  type EquivalenceGroupSummary,
+} from '@/api/supplementEquivalence'
 import { ingredientApi } from '@/api/ingredients'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
+import { getApiErrorMessage, toastApiError } from '@/utils/apiError'
 import SupplementArchivePanel from './SupplementArchivePanel.vue'
 import { mergeIngredientProperties } from './mergeIngredientProperties'
 import {
   GROUP_SKIPPED,
+  NO_SALE_REASON_PROPERTY_KEY,
   NO_SALE_REASONS,
   describeSheetPreview,
   evaluateLaunch,
   missingDecisions,
   type LaunchDecisions,
+  type NoSaleReason,
 } from './launchConfigState'
-
-type CatalogRow = SupplementCatalogItem & {
-  equivalenceGroup?: {
-    id: string
-    code: string
-    name: string
-    status: string
-    isActive: boolean
-    memberCount: number
-  } | null
-}
 
 const props = defineProps<{ ingredientId: string }>()
 
@@ -279,14 +284,16 @@ const LINK_PLATFORMS = [
 
 const loading = ref(false)
 const loadError = ref('')
-const row = ref<CatalogRow | null>(null)
+const row = ref<SupplementCatalogItem | null>(null)
 const ingredient = ref<any>(null)
 const groups = ref<EquivalenceGroupSummary[]>([])
+const equivalenceEnabled = ref(true)
 
 const savingArchive = ref(false)
 const savingDiy = ref(false)
 const savingProc = ref(false)
 const savingGroup = ref(false)
+const fetchingPreview = ref(false)
 
 const decisions = reactive<LaunchDecisions>({
   diy: null,
@@ -297,52 +304,69 @@ const decisions = reactive<LaunchDecisions>({
 })
 
 const groupChoice = ref<string>('')
-const recommendations = ref<
-  Array<{ groupId: string; name: string; reason: string }>
->([])
-const fetchingPreview = ref(false)
+const recommendations = ref<Array<{ groupId: string; name: string; reason: string }>>([])
 const aiSuggestion = ref('')
-const diyForm = reactive({
-  enabled: true,
-  platform: 'IHERB',
-  linkUrl: '',
-  imageUrl: '',
-})
+const diyForm = reactive({ enabled: true, platform: 'IHERB', linkUrl: '', imageUrl: '' })
 const procForm = reactive({ enabled: true })
 
-function errorMessage(error: unknown, fallback: string): string {
-  const anyError = error as any
-  return anyError?.response?.data?.message || anyError?.message || fallback
+let disposed = false
+onBeforeUnmount(() => {
+  disposed = true
+})
+
+/** 档案和原料详情都到齐才允许保存（否则合并 properties 会清掉原值） */
+const dataReady = computed(() => Boolean(row.value && ingredient.value))
+
+function savedProperties(): Record<string, any> {
+  return (ingredient.value?.properties || {}) as Record<string, any>
+}
+
+function currentGroupId(): string {
+  return row.value?.equivalenceGroup?.id || ''
 }
 
 async function load() {
   loading.value = true
   loadError.value = ''
   try {
-    const [catalog, detail, groupList] = await Promise.all([
+    const [catalog, detail, groupList, config] = await Promise.all([
       supplementShopApi.catalog(),
       ingredientApi.getDetail(props.ingredientId),
       supplementEquivalenceApi.listGroups({ pageSize: 200 }),
+      supplementShopApi.getConfig().catch(() => null),
     ])
+    if (disposed) return
 
-    row.value = (catalog.items.find((item) => item.id === props.ingredientId) as CatalogRow) || null
+    row.value = catalog.items.find((item) => item.id === props.ingredientId) || null
     ingredient.value = detail
     groups.value = groupList.items || []
+    equivalenceEnabled.value = config?.equivalenceEnabled !== false
 
-    const properties = (detail?.properties || {}) as Record<string, any>
+    const properties = savedProperties()
     diyForm.enabled = detail?.diyEnabled !== false
     procForm.enabled = detail?.procurementEnabled !== false
     diyForm.platform = properties?.purchase_link?.platform || 'IHERB'
     diyForm.linkUrl = properties?.purchase_link?.url || ''
     diyForm.imageUrl = properties?.image_url || ''
 
-    const currentGroupId = row.value?.equivalenceGroup?.id || ''
-    groupChoice.value = currentGroupId
+    // 四段按**已落库的真实值**回填，不再从 null 开始假装「0/4 已确认」
+    decisions.diy = detail?.diyEnabled !== false
+    decisions.procurement = detail?.procurementEnabled !== false
+    decisions.retail = row.value?.supplementRetailEnabled === true
+    decisions.group = currentGroupId() || null
+    decisions.noSaleReason =
+      (properties?.[NO_SALE_REASON_PROPERTY_KEY] as NoSaleReason | undefined) || null
+    groupChoice.value = currentGroupId()
+
+    if (!row.value) {
+      loadError.value = '在补剂上架清单里没找到这条补剂，请刷新后重试'
+    }
 
     // AI 推荐只做建议；失败不影响页面（退化为手动选组）
     void supplementEquivalenceApi
       .recommend(props.ingredientId)
       .then((result) => {
+        if (disposed) return
         recommendations.value = (result?.candidates || []).map((item) => ({
           groupId: item.groupId,
           name: item.name,
@@ -350,45 +374,70 @@ async function load() {
         }))
       })
       .catch(() => {
-        recommendations.value = []
+        if (!disposed) recommendations.value = []
       })
-
-    if (!row.value) {
-      loadError.value = '在补剂上架清单里没找到这条补剂，请刷新后重试'
-    }
   } catch (error) {
-    loadError.value = errorMessage(error, '落地配置加载失败')
+    if (!disposed) loadError.value = getApiErrorMessage(error, '落地配置加载失败')
   } finally {
-    loading.value = false
+    if (!disposed) loading.value = false
+  }
+}
+
+async function persistNoSaleReason(reason: NoSaleReason | null) {
+  if (!dataReady.value) return
+  const properties = mergeIngredientProperties(savedProperties(), {
+    [NO_SALE_REASON_PROPERTY_KEY]: reason,
+  })
+  await ingredientApi.update(props.ingredientId, { properties } as any)
+  ingredient.value = { ...(ingredient.value || {}), properties }
+}
+
+async function saveNoSaleReason() {
+  try {
+    await persistNoSaleReason(decisions.noSaleReason)
+    ElMessage.success('不上架原因已保存')
+  } catch (error) {
+    toastApiError(error, '原因保存失败', (message) => ElMessage.error(message))
   }
 }
 
 async function saveArchive(patch: UpdateSupplementCatalogItemDto) {
-  if (!row.value) return
+  if (!row.value) {
+    ElMessage.warning('数据还没加载成功，先点重试')
+    return
+  }
   savingArchive.value = true
   try {
     const updated = await supplementShopApi.updateItem(row.value.id, patch)
-    row.value = updated as CatalogRow
+    if (disposed) return
+    row.value = updated
     decisions.retail = updated.supplementRetailEnabled === true
-    if (decisions.retail) decisions.noSaleReason = null
+    if (decisions.retail) {
+      decisions.noSaleReason = null
+      await persistNoSaleReason(null)
+    }
     ElMessage.success(decisions.retail ? '已上架' : '已保存（未上架）')
   } catch (error) {
-    // 后端会回滚上架开关：把行状态刷新成真实值
+    // 后端在「上架但档案有 ERROR」时会回滚开关：必须把界面刷新成真实值
     await load()
-    ElMessage.error(errorMessage(error, '保存失败'))
+    if (disposed) return
+    toastApiError(error, '保存失败', (message) => ElMessage.error(message))
   } finally {
     savingArchive.value = false
   }
 }
 
 async function saveDiy() {
+  if (!dataReady.value) {
+    ElMessage.warning('数据还没加载成功，先点重试')
+    return
+  }
   savingDiy.value = true
   try {
-    const existing = (ingredient.value?.properties || {}) as Record<string, unknown>
     const purchaseLink = diyForm.linkUrl.trim()
       ? { platform: diyForm.platform, url: diyForm.linkUrl.trim() }
       : null
-    const properties = mergeIngredientProperties(existing, {
+    const properties = mergeIngredientProperties(savedProperties(), {
       purchase_link: purchaseLink,
       image_url: diyForm.imageUrl.trim() || null,
     })
@@ -398,27 +447,37 @@ async function saveDiy() {
       properties,
     } as any)
 
+    if (disposed) return
     decisions.diy = diyForm.enabled
-    ingredient.value = { ...(ingredient.value || {}), diyEnabled: diyForm.enabled, properties }
+    ingredient.value = {
+      ...(ingredient.value || {}),
+      diyEnabled: diyForm.enabled,
+      properties,
+    }
     ElMessage.success('DIY 配置已保存')
   } catch (error) {
-    ElMessage.error(errorMessage(error, '保存失败'))
+    toastApiError(error, '保存失败', (message) => ElMessage.error(message))
   } finally {
     savingDiy.value = false
   }
 }
 
 async function saveProcurement() {
+  if (!dataReady.value) {
+    ElMessage.warning('数据还没加载成功，先点重试')
+    return
+  }
   savingProc.value = true
   try {
     await ingredientApi.update(props.ingredientId, {
       procurementEnabled: procForm.enabled,
-    } as any)
+    })
+    if (disposed) return
     decisions.procurement = procForm.enabled
     ingredient.value = { ...(ingredient.value || {}), procurementEnabled: procForm.enabled }
     ElMessage.success('采购配置已保存')
   } catch (error) {
-    ElMessage.error(errorMessage(error, '保存失败'))
+    toastApiError(error, '保存失败', (message) => ElMessage.error(message))
   } finally {
     savingProc.value = false
   }
@@ -434,6 +493,7 @@ async function fetchFromLink() {
   aiSuggestion.value = ''
   try {
     const preview = await ingredientCreationApi.previewSupplementLink(url)
+    if (disposed) return
     const bits: string[] = []
     if (preview.imageUrl) {
       diyForm.imageUrl = preview.imageUrl
@@ -445,23 +505,46 @@ async function fetchFromLink() {
     if (preview.productModel) bits.push(`规格：${preview.productModel}`)
     aiSuggestion.value = bits.join(' · ')
   } catch (error) {
-    aiSuggestion.value = errorMessage(error, '这个链接读不出来，可以手动填')
+    if (!disposed) {
+      aiSuggestion.value = getApiErrorMessage(error, '这个链接读不出来，可以手动填')
+    }
   } finally {
-    fetchingPreview.value = false
+    if (!disposed) fetchingPreview.value = false
   }
 }
 
 async function saveGroup() {
+  if (!dataReady.value) {
+    ElMessage.warning('数据还没加载成功，先点重试')
+    return
+  }
   if (!groupChoice.value) {
     ElMessage.warning('请选择等价组，或选「暂不归组」')
     return
   }
+
+  const target = groups.value.find((item) => item.id === groupChoice.value)
+  if (groupChoice.value !== GROUP_SKIPPED && target) {
+    if (target.status === 'APPROVED') {
+      try {
+        await ElMessageBox.confirm(
+          `「${target.name}」现在已经审核通过。加入新成员会把它打回「待审核」，` +
+            '组内其他补剂也会暂时不参与替换，需要重新审核。确定加入吗？',
+          '加入已审核的组',
+          { type: 'warning', confirmButtonText: '仍然加入', cancelButtonText: '取消' },
+        )
+      } catch {
+        return
+      }
+    }
+  }
+
   savingGroup.value = true
   try {
-    const currentGroupId = row.value?.equivalenceGroup?.id || ''
+    const previousGroupId = currentGroupId()
     if (groupChoice.value === GROUP_SKIPPED) {
-      if (currentGroupId) {
-        await supplementEquivalenceApi.removeMember(currentGroupId, props.ingredientId)
+      if (previousGroupId) {
+        await supplementEquivalenceApi.removeMember(previousGroupId, props.ingredientId)
       }
       decisions.group = GROUP_SKIPPED
     } else {
@@ -469,26 +552,30 @@ async function saveGroup() {
       decisions.group = groupChoice.value
     }
     await load()
+    if (disposed) return
     ElMessage.success('等价组已保存')
   } catch (error) {
-    ElMessage.error(errorMessage(error, '保存失败'))
+    toastApiError(error, '保存失败', (message) => ElMessage.error(message))
   } finally {
     savingGroup.value = false
   }
 }
 
-const confirmedCount = computed(() => 4 - missingDecisions(decisions).filter((key) => key !== '不上架原因').length)
-
 const missing = computed(() => missingDecisions(decisions))
+
+const issues = computed(() => row.value?.issues || [])
+
+const selectableGroups = computed(() =>
+  groups.value.filter((group) => group.status !== 'DISABLED'),
+)
 
 const verdict = computed(() =>
   evaluateLaunch({
     retailEnabled: row.value?.supplementRetailEnabled === true,
-    issues: row.value?.issues || [],
-    hasPurchaseLink: Boolean(diyForm.linkUrl.trim()),
-    diyEnabled: diyForm.enabled,
-    groupStatus: row.value?.equivalenceGroup?.status ?? null,
-    groupMembers: row.value?.equivalenceGroup?.memberCount ?? 0,
+    issues: issues.value,
+    // 用**已保存**的值，避免「输入框里刚敲了链接」就把结论改成没问题
+    hasPurchaseLink: Boolean(savedProperties()?.purchase_link?.url),
+    diyEnabled: ingredient.value?.diyEnabled !== false,
   }),
 )
 
@@ -498,18 +585,22 @@ const verdictTitle = computed(() => {
   return '❌ 现在买不到'
 })
 
-const previewText = computed(() => {
-  const hasError = (row.value?.issues || []).some((issue) => issue.level === 'ERROR')
-  const retail = row.value?.supplementRetailEnabled === true
-  const group = row.value?.equivalenceGroup
-  const candidateCount =
-    !retail || hasError
-      ? 0
-      : group && group.status === 'APPROVED' && group.memberCount >= 2
-        ? group.memberCount
-        : 1
-  return describeSheetPreview({ retailEnabled: retail, hasError, candidateCount })
+const groupEffective = computed(() => {
+  if (!equivalenceEnabled.value || !row.value?.equivalenceGroup) return false
+  // 后端只要组不生效就会写 EQUIVALENCE_* 的 WARN，这里不另判一套
+  return !issues.value.some(
+    (issue) => issue.level === 'WARN' && issue.code.startsWith('EQUIVALENCE_'),
+  )
 })
+
+const previewText = computed(() =>
+  describeSheetPreview({
+    diyEnabled: ingredient.value?.diyEnabled !== false,
+    retailEnabled: row.value?.supplementRetailEnabled === true,
+    hasError: issues.value.some((issue) => issue.level === 'ERROR'),
+    groupEffective: groupEffective.value,
+  }),
+)
 
 const groupChip = computed(() => {
   if (decisions.group === GROUP_SKIPPED) return '暂不归组'
@@ -521,6 +612,10 @@ const selectedGroupHint = computed(() => {
   if (groupChoice.value === GROUP_SKIPPED || !groupChoice.value) return ''
   const group = groups.value.find((item) => item.id === groupChoice.value)
   if (!group) return ''
+  const recommended = recommendations.value.find((item) => item.groupId === group.id)
+  if (recommended && /单位不一致|不参与替换/.test(recommended.reason)) {
+    return recommended.reason
+  }
   if (group.status !== 'APPROVED') {
     return `「${group.name}」还没审核通过：已归组，但暂不参与替换`
   }
@@ -613,24 +708,6 @@ onMounted(load)
   font-size: 13px;
   color: #303133;
 }
-.launch-seg__ai {
-  font-size: 12px;
-  color: #409eff;
-}
-.launch-recos__list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.launch-reco {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-}
-.launch-reco__reason {
-  color: #909399;
-}
 .launch-seg__warn {
   margin: 0 0 10px;
   font-size: 12px;
@@ -665,9 +742,9 @@ onMounted(load)
   justify-content: space-between;
   gap: 12px;
 }
-.launch-verdict__missing {
+.launch-verdict__note {
   font-size: 12px;
-  color: #e6a23c;
+  color: #909399;
 }
 .launch-verdict__reasons {
   margin: 8px 0 0;
@@ -692,5 +769,23 @@ onMounted(load)
   margin-left: 8px;
   font-size: 12px;
   color: #c0c4cc;
+}
+.launch-seg__ai {
+  font-size: 12px;
+  color: #409eff;
+}
+.launch-recos__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.launch-reco {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.launch-reco__reason {
+  color: #909399;
 }
 </style>

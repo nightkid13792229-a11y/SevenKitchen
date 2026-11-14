@@ -88,10 +88,10 @@
       </el-form-item>
     </el-form>
 
-    <div v-if="item.issues.length" class="archive-issues">
+    <div v-if="(item.issues || []).length" class="archive-issues">
       <span class="archive-issues__title">数据体检</span>
       <el-tooltip
-        v-for="issue in item.issues"
+        v-for="issue in item.issues || []"
         :key="issue.code + issue.message"
         :content="issue.message"
         placement="top"

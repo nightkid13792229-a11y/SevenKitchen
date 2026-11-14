@@ -46,6 +46,15 @@ export interface SupplementCatalogItem {
   producible: boolean;
   issues: SupplementCatalogIssue[];
   readyToSell: boolean;
+  /** 所在等价组（后端本来就返回，2026-11-14 补进类型） */
+  equivalenceGroup: {
+    id: string;
+    code: string;
+    name: string;
+    status: string;
+    isActive: boolean;
+    memberCount: number;
+  } | null;
 }
 
 export interface SupplementCatalogSummary {

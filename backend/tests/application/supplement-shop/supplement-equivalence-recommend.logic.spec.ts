@@ -22,20 +22,22 @@ function candidate(
 }
 
 describe('等价组推荐 · 原因文案', () => {
-  it('单位一致 + 已审核 + 多成员 → 可以直接用', () => {
-    expect(describeRecommendation(candidate())).toContain('可以直接用');
+  it('单位一致 + 已审核 → 说清「加入后要重新审核」，不说可以直接用', () => {
+    const text = describeRecommendation(candidate());
+    expect(text).toContain('重新审核');
+    expect(text).not.toContain('可以直接用');
   });
 
-  it('草稿组 → 明说加入也不参与替换', () => {
+  it('草稿组 → 明说加入后要审核通过才参与替换', () => {
     const text = describeRecommendation(candidate({ status: 'DRAFT' }));
     expect(text).toContain('草稿');
-    expect(text).toContain('不参与替换');
+    expect(text).toContain('审核');
   });
 
-  it('单成员 → 明说只有 1 个成员', () => {
-    expect(describeRecommendation(candidate({ memberCount: 1 }))).toContain(
-      '只有 1 个成员',
-    );
+  it('单成员 → 说明加入后就是 2 个成员，但仍要审核', () => {
+    const text = describeRecommendation(candidate({ memberCount: 1 }));
+    expect(text).toContain('2 个成员');
+    expect(text).toContain('审核');
   });
 
   it('单位不一致 → 指出组要求与档案实际单位', () => {
@@ -49,7 +51,7 @@ describe('等价组推荐 · 原因文案', () => {
 });
 
 describe('等价组推荐 · 排序', () => {
-  it('能真正参与替换的排最前，其余按状态与成员数', () => {
+  it('已审核 + 单位一致的排最前（单成员也算：加入即凑够 2 人）', () => {
     const ranked = sortRecommendations([
       candidate({ groupId: 'draft', name: 'D', status: 'DRAFT' }),
       candidate({ groupId: 'single', name: 'S', memberCount: 1 }),
@@ -61,9 +63,9 @@ describe('等价组推荐 · 排序', () => {
     expect(ranked.map((item) => item.groupId)).toEqual([
       'big',
       'tiny',
-      'bad-unit',
       'single',
       'draft',
+      'bad-unit',
     ]);
   });
 

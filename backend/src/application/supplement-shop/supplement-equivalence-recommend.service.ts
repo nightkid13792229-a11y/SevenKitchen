@@ -24,6 +24,8 @@ export class SupplementEquivalenceRecommendService {
   async recommend(ingredientId: string): Promise<{
     ingredientId: string;
     ingredientName: string;
+    /** 补剂商城的等价组总开关；关着时，任何推荐都不会真正参与替换 */
+    equivalenceEnabled: boolean;
     candidates: Array<RecommendationCandidate & { reason: string }>;
   }> {
     const ingredient = await this.prisma.ingredient.findUnique({
@@ -40,12 +42,18 @@ export class SupplementEquivalenceRecommendService {
       },
     });
 
-    if (!ingredient || ingredient.type !== 'SUPPLEMENT') {
-      throw new NotFoundException('补剂原料不存在');
+    if (!ingredient) {
+      throw new NotFoundException('原料不存在');
+    }
+    if (ingredient.type !== 'SUPPLEMENT') {
+      throw new NotFoundException('这条原料不是补剂，不适用等价组推荐');
     }
 
-    const groups = await this.prisma.supplementEquivalenceGroup.findMany({
-      where: { isActive: true },
+    const [groups, config] = await Promise.all([
+      this.prisma.supplementEquivalenceGroup.findMany({
+      where: { isActive: true, status: { not: 'DISABLED' } },
+      take: 200,
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       select: {
         id: true,
         code: true,
@@ -56,7 +64,12 @@ export class SupplementEquivalenceRecommendService {
         nutrientUnit: true,
         _count: { select: { ingredients: true } },
       },
-    });
+      }),
+      this.prisma.supplementShopConfig.findUnique({
+        where: { id: 'singleton' },
+        select: { equivalenceEnabled: true },
+      }),
+    ]);
 
     const candidates: RecommendationCandidate[] = [];
     for (const group of groups) {
@@ -84,6 +97,8 @@ export class SupplementEquivalenceRecommendService {
         nutrientUnit: group.nutrientUnit,
         actualUnit:
           resolution.status === 'UNIT_MISMATCH' ? resolution.actualUnit : null,
+        mismatchReason:
+          resolution.status === 'UNIT_MISMATCH' ? resolution.reason : null,
       });
     }
 
@@ -92,6 +107,7 @@ export class SupplementEquivalenceRecommendService {
     return {
       ingredientId: ingredient.id,
       ingredientName: ingredient.name,
+      equivalenceEnabled: config?.equivalenceEnabled === true,
       candidates: ranked.map((candidate) => ({
         ...candidate,
         reason: describeRecommendation(candidate),

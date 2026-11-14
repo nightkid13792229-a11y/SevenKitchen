@@ -64,61 +64,108 @@ export interface SupplementLinkPreview {
   labelText: string | null;
 }
 
-/** 标题里能认出来的品牌（只在标题开头匹配，避免把正文里的词当品牌）。 */
-const KNOWN_BRANDS = [
-  'NOW FOODS',
-  "NATURE'S WAY",
-  'NATURES WAY',
-  'SOLGAR',
-  'JARROW FORMULAS',
-  'JARROW',
-  'KAL',
-  'SWANSON',
-  'NUTRICOLOGY',
-  'CALIFORNIA GOLD NUTRITION',
-  "DOCTOR'S BEST",
-  'LIFE EXTENSION',
-  'THORNE',
-  'GARDEN OF LIFE',
-  "PURITAN'S PRIDE",
-  '21ST CENTURY',
-  "MEMBER'S MARK",
-  'CARLSON',
-  'NORDIC NATURALS',
+/**
+ * 标题里能认出来的品牌。`match` 用于匹配（大写前缀 + 词边界），
+ * `label` 是写回档案的规范写法（与库里现有品牌风格一致，不全大写）。
+ */
+const KNOWN_BRANDS: Array<{ match: string; label: string }> = [
+  { match: 'NOW FOODS', label: 'NOW Foods' },
+  { match: "NATURE'S WAY", label: "Nature's Way" },
+  { match: 'NATURES WAY', label: 'Natures Way' },
+  { match: 'SOLGAR', label: 'Solgar' },
+  { match: 'JARROW FORMULAS', label: 'Jarrow Formulas' },
+  { match: 'JARROW', label: 'Jarrow' },
+  { match: 'KAL', label: 'KAL' },
+  { match: 'SWANSON', label: 'Swanson' },
+  { match: 'NUTRICOLOGY', label: 'Nutricology' },
+  { match: 'CALIFORNIA GOLD NUTRITION', label: 'California Gold Nutrition' },
+  { match: "DOCTOR'S BEST", label: "Doctor's Best" },
+  { match: 'LIFE EXTENSION', label: 'Life Extension' },
+  { match: 'THORNE', label: 'Thorne' },
+  { match: 'GARDEN OF LIFE', label: 'Garden of Life' },
+  { match: "PURITAN'S PRIDE", label: "Puritan's Pride" },
+  { match: '21ST CENTURY', label: '21st Century' },
+  { match: "MEMBER'S MARK", label: "Member's Mark" },
+  { match: 'CARLSON', label: 'Carlson' },
+  { match: 'NORDIC NATURALS', label: 'Nordic Naturals' },
 ];
+
+/** 只允许这些图床上的图（主图会写进档案、给小程序展示）。 */
+const IMAGE_HOST_ALLOWLIST = [
+  'images-iherb.com',
+  'cloudinary.com',
+  'img.sevenkitchen.cloud',
+];
+
+/** 这些路径说明不是商品图（评价图、用户图、图标、横幅）。 */
+const IMAGE_PATH_BLACKLIST =
+  /logo|icon|sprite|banner|avatar|flag|badge|star|rating|review|comment|user|profile/i;
 
 /**
  * 商品主图：只认页面上看起来像「商品图」的 markdown 图片。
  *
- * 抓取通道返回的是 markdown，不是 HTML，所以拿不到 og:image；
- * 页面上也没有可靠的 meta 时，这里**宁可不给**，也不拿 logo/banner 凑数。
+ * 抓取通道返回的是 markdown，不是 HTML，所以拿不到 og:image。
+ * 四条硬约束（2026-11-14 复审后加）：
+ *   1. 只收 https；
+ *   2. 只认白名单图床（iHerb / Cloudinary / 自有 CDN）；
+ *   3. 路径里带 review / user / logo 这类词的一律跳过；
+ *   4. 取不到就返回 null，**不拿 banner 凑数**。
  */
 export function extractProductImage(text: string): string | null {
   const matches = [...text.matchAll(/!\[[^\]]*\]\((https?:\/\/[^)\s]+)/g)];
   for (const match of matches) {
-    const url = match[1];
-    if (/logo|icon|sprite|banner|avatar|flag|badge|star|rating/i.test(url)) {
+    let url: URL;
+    try {
+      url = new URL(match[1]);
+    } catch {
       continue;
     }
-    if (/images-iherb|cloudinary|product|productimage/i.test(url)) {
-      return url;
+    if (url.protocol !== 'https:') {
+      continue;
     }
+    const host = url.hostname.toLowerCase();
+    const allowed = IMAGE_HOST_ALLOWLIST.some(
+      (domain) => host === domain || host.endsWith(`.${domain}`),
+    );
+    if (!allowed) {
+      continue;
+    }
+    if (IMAGE_PATH_BLACKLIST.test(url.pathname)) {
+      continue;
+    }
+    return url.toString();
   }
   return null;
 }
 
-/** 从商品标题开头认品牌；认不出返回 null。 */
+/** 从商品标题开头认品牌（要求词边界，避免 Kalaya 被认成 KAL）；认不出返回 null。 */
 export function extractBrandFromTitle(title: string | null | undefined): string | null {
   const text = String(title || '').trim();
   if (!text) {
     return null;
   }
   const upper = text.toUpperCase();
-  const hit = KNOWN_BRANDS.find((brand) => upper.startsWith(brand));
-  return hit || null;
+  for (const brand of KNOWN_BRANDS) {
+    if (!upper.startsWith(brand.match)) {
+      continue;
+    }
+    const next = upper.slice(brand.match.length, brand.match.length + 1);
+    if (next && /[A-Z]/.test(next)) {
+      continue;
+    }
+    return brand.label;
+  }
+  return null;
 }
 
-/** 从商品标题里认规格（计数 + 单位），取最后一个匹配；认不出返回 null。 */
+/**
+ * 从商品标题里认规格。
+ *
+ * 规则（2026-11-14 复审后加）：
+ *   · **计数单位优先**（片/粒/胶囊/Tablets…），取最后一个；
+ *   · 没有计数单位时才看重量（g/oz/ml/克），且数字必须 ≥ 10，
+ *     否则 `1 g` 这种剂量会被当成规格。
+ */
 export function extractProductModelFromTitle(
   title: string | null | undefined,
 ): string | null {
@@ -126,17 +173,36 @@ export function extractProductModelFromTitle(
   if (!text) {
     return null;
   }
-  const pattern =
-    /(\d[\d,.]*)\s*(tablets?|capsules?|veg(?:gie)?\s*capsules?|softgels?|gummies|count|片|粒|胶囊|克|g|oz|ml|fl\s*oz)(?![A-Za-z0-9])/gi;
-  let last: RegExpExecArray | null = null;
-  for (const match of text.matchAll(pattern)) {
-    last = match as unknown as RegExpExecArray;
-  }
-  if (!last) {
+
+  const countPattern =
+    /(\d[\d,.]*)\s*(tablets?|capsules?|veg(?:gie)?\s*capsules?|softgels?|gummies|count|servings?|片|粒|胶囊)(?![A-Za-z0-9])/gi;
+  const weightPattern =
+    /(\d[\d,.]*)\s*(克|g|oz|ml|fl\s*oz)(?![A-Za-z0-9])/gi;
+
+  const lastMatch = (pattern: RegExp) => {
+    let last: RegExpExecArray | null = null;
+    for (const match of text.matchAll(pattern)) {
+      last = match as unknown as RegExpExecArray;
+    }
+    return last;
+  };
+
+  const countMatch = lastMatch(countPattern);
+  const chosen = countMatch || lastMatch(weightPattern);
+  if (!chosen) {
     return null;
   }
-  const amount = last[1].replace(/,/g, '');
-  const unit = last[2].replace(/\s+/g, ' ');
+
+  const amount = Number(chosen[1].replace(/,/g, ''));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+  // 重量类：太小的是剂量，不是包装规格
+  if (!countMatch && amount < 10) {
+    return null;
+  }
+
+  const unit = chosen[2].replace(/\s+/g, ' ');
   return `${amount} ${unit}`;
 }
 

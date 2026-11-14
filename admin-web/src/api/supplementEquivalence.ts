@@ -177,6 +177,8 @@ export const supplementEquivalenceApi = {
   recommend: (ingredientId: string): Promise<{
     ingredientId: string;
     ingredientName: string;
+    /** 补剂商城等价组总开关；关着时推荐不会真正生效 */
+    equivalenceEnabled: boolean;
     candidates: Array<{
       groupId: string;
       code: string;
@@ -187,6 +189,7 @@ export const supplementEquivalenceApi = {
       nutrientLabel: string;
       nutrientUnit: string;
       actualUnit?: string | null;
+      mismatchReason?: string | null;
       reason: string;
     }>;
   }> =>

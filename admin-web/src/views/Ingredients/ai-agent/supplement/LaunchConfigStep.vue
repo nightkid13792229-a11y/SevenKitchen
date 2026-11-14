@@ -115,15 +115,50 @@
             <el-button
               size="small"
               :loading="fetchingPreview"
-              :disabled="!diyForm.linkUrl.trim()"
+              :disabled="!diyForm.linkUrl.trim() || !canFetchFromLink"
               @click="fetchFromLink"
             >
               从链接抓取
             </el-button>
+            <span v-if="!canFetchFromLink" class="launch-seg__hint">
+              目前只支持 iHerb 链接抓取
+            </span>
           </div>
-          <div v-if="aiSuggestion" class="launch-seg__row">
-            <span class="launch-seg__label">AI 建议</span>
-            <span class="launch-seg__ai">{{ aiSuggestion }}</span>
+
+          <div v-if="fetchError" class="launch-seg__row">
+            <span class="launch-seg__label">抓取结果</span>
+            <span class="launch-seg__warn">{{ fetchError }}</span>
+          </div>
+
+          <div
+            v-if="fetchedImage || fetchedBrand || fetchedModel"
+            class="launch-seg__row launch-ai"
+          >
+            <span class="launch-seg__label">抓取结果</span>
+            <div class="launch-ai__list">
+              <div v-if="fetchedImage" class="launch-ai__line">
+                <span>主图已抓到（采用后会转存到我们自己的图床）</span>
+                <el-button text size="small" :loading="adoptingImage" @click="adoptImage">
+                  采用
+                </el-button>
+                <el-button text size="small" @click="fetchedImage = null">忽略</el-button>
+              </div>
+              <div v-if="fetchedBrand" class="launch-ai__line">
+                <span>品牌：{{ fetchedBrand }}</span>
+                <el-button text size="small" @click="adoptBrand">采用</el-button>
+                <el-button text size="small" @click="fetchedBrand = null">忽略</el-button>
+              </div>
+              <div v-if="fetchedModel" class="launch-ai__line">
+                <span>规格：{{ fetchedModel }}</span>
+                <el-button text size="small" @click="adoptModel">采用</el-button>
+                <el-button text size="small" @click="fetchedModel = null">忽略</el-button>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="previousImageUrl !== null" class="launch-seg__row">
+            <span class="launch-seg__label"></span>
+            <el-button text size="small" @click="undoImage">撤销上次采用的主图</el-button>
           </div>
         </template>
 
@@ -195,7 +230,7 @@
             <div v-for="item in recommendations" :key="item.groupId" class="launch-reco">
               <b>{{ item.name }}</b>
               <span class="launch-reco__reason">{{ item.reason }}</span>
-              <el-button text size="small" @click="groupChoice = item.groupId">采用</el-button>
+              <el-button text size="small" @click="applyRecommendation(item)">采用</el-button>
             </div>
           </div>
         </div>
@@ -297,7 +332,8 @@ const loadError = ref('')
 const row = ref<SupplementCatalogItem | null>(null)
 const ingredient = ref<any>(null)
 const groups = ref<EquivalenceGroupSummary[]>([])
-const equivalenceEnabled = ref(true)
+// 商城配置没读到时按「关」处理：宁可少说能换，也不要高估
+const equivalenceEnabled = ref(false)
 const markupMultiplier = ref<number | null>(null)
 
 const savingArchive = ref(false)
@@ -316,7 +352,30 @@ const decisions = reactive<LaunchDecisions>({
 
 const groupChoice = ref<string>('')
 const recommendations = ref<Array<{ groupId: string; name: string; reason: string }>>([])
-const aiSuggestion = ref('')
+const fetchingResult = reactive({
+  image: null as string | null,
+  brand: null as string | null,
+  model: null as string | null,
+  error: '',
+})
+const adoptingImage = ref(false)
+const previousImageUrl = ref<string | null>(null)
+
+const fetchedImage = computed({
+  get: () => fetchingResult.image,
+  set: (value: string | null) => (fetchingResult.image = value),
+})
+const fetchedBrand = computed({
+  get: () => fetchingResult.brand,
+  set: (value: string | null) => (fetchingResult.brand = value),
+})
+const fetchedModel = computed({
+  get: () => fetchingResult.model,
+  set: (value: string | null) => (fetchingResult.model = value),
+})
+const fetchError = computed(() => fetchingResult.error)
+
+const canFetchFromLink = computed(() => diyForm.platform === 'IHERB')
 const diyForm = reactive({ enabled: true, platform: 'IHERB', linkUrl: '', imageUrl: '' })
 const procForm = reactive({ enabled: true })
 
@@ -382,6 +441,9 @@ async function load() {
       .recommend(props.ingredientId)
       .then((result) => {
         if (disposed) return
+        if (typeof result?.equivalenceEnabled === 'boolean') {
+          equivalenceEnabled.value = result.equivalenceEnabled
+        }
         recommendations.value = (result?.candidates || []).map((item) => ({
           groupId: item.groupId,
           name: item.name,
@@ -504,28 +566,98 @@ async function fetchFromLink() {
     ElMessage.warning('先在上一行填商品链接')
     return
   }
+  if (!canFetchFromLink.value) {
+    ElMessage.warning('目前只支持 iHerb 链接自动抓取，其他平台请手动填')
+    return
+  }
   fetchingPreview.value = true
-  aiSuggestion.value = ''
+  fetchingResult.image = null
+  fetchingResult.brand = null
+  fetchingResult.model = null
+  fetchingResult.error = ''
   try {
     const preview = await ingredientCreationApi.previewSupplementLink(url)
     if (disposed) return
-    const bits: string[] = []
-    if (preview.imageUrl) {
-      diyForm.imageUrl = preview.imageUrl
-      bits.push('已抓取主图')
-    } else {
-      bits.push('没抓到主图，请手动上传')
+    fetchingResult.image = preview.imageUrl || null
+    fetchingResult.brand = preview.brand || null
+    fetchingResult.model = preview.productModel || null
+    if (!preview.imageUrl && !preview.brand && !preview.productModel) {
+      fetchingResult.error = '这个链接没读出可用的品牌/规格/主图，请手动填'
     }
-    if (preview.brand) bits.push(`品牌：${preview.brand}`)
-    if (preview.productModel) bits.push(`规格：${preview.productModel}`)
-    aiSuggestion.value = bits.join(' · ')
   } catch (error) {
     if (!disposed) {
-      aiSuggestion.value = getApiErrorMessage(error, '这个链接读不出来，可以手动填')
+      fetchingResult.error = getApiErrorMessage(error, '这个链接读不出来，可以手动填')
     }
   } finally {
     if (!disposed) fetchingPreview.value = false
   }
+}
+
+/** 采用抓到的图：先转存到我们自己的图床，再写进表单（可撤销） */
+async function adoptImage() {
+  if (!fetchedImage.value) return
+  adoptingImage.value = true
+  try {
+    const response = await fetch(fetchedImage.value)
+    if (!response.ok) throw new Error('download failed')
+    const blob = await response.blob()
+    const file = new File([blob], 'ai-diy-image.jpg', {
+      type: blob.type || 'image/jpeg',
+    })
+    const uploaded: any = await ingredientApi.uploadIngredientDiyImage(file)
+    const url = uploaded?.url || uploaded?.data?.url || ''
+    if (!url) throw new Error('upload failed')
+    previousImageUrl.value = diyForm.imageUrl
+    diyForm.imageUrl = url
+    fetchedImage.value = null
+    ElMessage.success('主图已转存并填入，保存本段后生效')
+  } catch {
+    ElMessage.error('这张图没法自动转存，请手动上传')
+  } finally {
+    adoptingImage.value = false
+  }
+}
+
+function undoImage() {
+  diyForm.imageUrl = previousImageUrl.value ?? ''
+  previousImageUrl.value = null
+}
+
+async function adoptBrand() {
+  if (!fetchedBrand.value) return
+  try {
+    await ingredientApi.update(props.ingredientId, { brand: fetchedBrand.value })
+    if (disposed) return
+    if (row.value) row.value = { ...row.value, brand: fetchedBrand.value }
+    ingredient.value = { ...(ingredient.value || {}), brand: fetchedBrand.value }
+    fetchedBrand.value = null
+    ElMessage.success('品牌已写入档案')
+  } catch (error) {
+    toastApiError(error, '品牌写入失败', (message) => ElMessage.error(message))
+  }
+}
+
+async function adoptModel() {
+  if (!fetchedModel.value) return
+  try {
+    await ingredientApi.update(props.ingredientId, { productModel: fetchedModel.value })
+    if (disposed) return
+    if (row.value) row.value = { ...row.value, productModel: fetchedModel.value }
+    ingredient.value = { ...(ingredient.value || {}), productModel: fetchedModel.value }
+    fetchedModel.value = null
+    ElMessage.success('规格已写入档案')
+  } catch (error) {
+    toastApiError(error, '规格写入失败', (message) => ElMessage.error(message))
+  }
+}
+
+/** 采用 AI 推荐的组：先确认它真的在可选列表里（列表可能被截断/已停用） */
+function applyRecommendation(item: { groupId: string; name: string }) {
+  if (!selectableGroups.value.some((group) => group.id === item.groupId)) {
+    ElMessage.warning('这个组当前不可选（可能已停用或列表已截断），请手动选组')
+    return
+  }
+  groupChoice.value = item.groupId
 }
 
 async function saveGroup() {
@@ -796,6 +928,17 @@ onMounted(load)
 .launch-seg__ai {
   font-size: 12px;
   color: #409eff;
+}
+.launch-ai__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.launch-ai__line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
 }
 .launch-recos__list {
   display: flex;

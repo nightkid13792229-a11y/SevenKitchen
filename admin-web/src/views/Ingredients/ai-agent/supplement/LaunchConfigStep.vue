@@ -100,9 +100,18 @@
               placeholder="图片地址（用于制作单弹窗展示，可不填）"
               style="width: 360px"
             />
-            <span class="launch-seg__hint">
-              P2 会支持从商品链接自动抓取
-            </span>
+            <el-button
+              size="small"
+              :loading="fetchingPreview"
+              :disabled="!diyForm.linkUrl.trim()"
+              @click="fetchFromLink"
+            >
+              从链接抓取
+            </el-button>
+          </div>
+          <div v-if="aiSuggestion" class="launch-seg__row">
+            <span class="launch-seg__label">AI 建议</span>
+            <span class="launch-seg__ai">{{ aiSuggestion }}</span>
           </div>
         </template>
 
@@ -156,6 +165,23 @@
           <el-tag :type="decisions.group === null ? 'info' : 'success'" size="small" effect="plain">
             {{ decisions.group === null ? '待确认' : groupChip }}
           </el-tag>
+        </div>
+
+        <div v-if="recommendations.length" class="launch-seg__row launch-recos">
+          <span class="launch-seg__label">AI 推荐</span>
+          <div class="launch-recos__list">
+            <div
+              v-for="item in recommendations"
+              :key="item.groupId"
+              class="launch-reco"
+            >
+              <b>{{ item.name }}</b>
+              <span class="launch-reco__reason">{{ item.reason }}</span>
+              <el-button text size="small" @click="groupChoice = item.groupId">
+                采用
+              </el-button>
+            </div>
+          </div>
         </div>
 
         <div class="launch-seg__row">
@@ -218,6 +244,7 @@ import {
 } from '@/api/supplementShop'
 import { supplementEquivalenceApi, type EquivalenceGroupSummary } from '@/api/supplementEquivalence'
 import { ingredientApi } from '@/api/ingredients'
+import { ingredientCreationApi } from '@/api/ingredientCreation'
 import SupplementArchivePanel from './SupplementArchivePanel.vue'
 import { mergeIngredientProperties } from './mergeIngredientProperties'
 import {
@@ -270,6 +297,11 @@ const decisions = reactive<LaunchDecisions>({
 })
 
 const groupChoice = ref<string>('')
+const recommendations = ref<
+  Array<{ groupId: string; name: string; reason: string }>
+>([])
+const fetchingPreview = ref(false)
+const aiSuggestion = ref('')
 const diyForm = reactive({
   enabled: true,
   platform: 'IHERB',
@@ -306,6 +338,20 @@ async function load() {
 
     const currentGroupId = row.value?.equivalenceGroup?.id || ''
     groupChoice.value = currentGroupId
+
+    // AI 推荐只做建议；失败不影响页面（退化为手动选组）
+    void supplementEquivalenceApi
+      .recommend(props.ingredientId)
+      .then((result) => {
+        recommendations.value = (result?.candidates || []).map((item) => ({
+          groupId: item.groupId,
+          name: item.name,
+          reason: item.reason,
+        }))
+      })
+      .catch(() => {
+        recommendations.value = []
+      })
 
     if (!row.value) {
       loadError.value = '在补剂上架清单里没找到这条补剂，请刷新后重试'
@@ -375,6 +421,33 @@ async function saveProcurement() {
     ElMessage.error(errorMessage(error, '保存失败'))
   } finally {
     savingProc.value = false
+  }
+}
+
+async function fetchFromLink() {
+  const url = diyForm.linkUrl.trim()
+  if (!url) {
+    ElMessage.warning('先在上一行填商品链接')
+    return
+  }
+  fetchingPreview.value = true
+  aiSuggestion.value = ''
+  try {
+    const preview = await ingredientCreationApi.previewSupplementLink(url)
+    const bits: string[] = []
+    if (preview.imageUrl) {
+      diyForm.imageUrl = preview.imageUrl
+      bits.push('已抓取主图')
+    } else {
+      bits.push('没抓到主图，请手动上传')
+    }
+    if (preview.brand) bits.push(`品牌：${preview.brand}`)
+    if (preview.productModel) bits.push(`规格：${preview.productModel}`)
+    aiSuggestion.value = bits.join(' · ')
+  } catch (error) {
+    aiSuggestion.value = errorMessage(error, '这个链接读不出来，可以手动填')
+  } finally {
+    fetchingPreview.value = false
   }
 }
 
@@ -539,6 +612,24 @@ onMounted(load)
 .launch-seg__value {
   font-size: 13px;
   color: #303133;
+}
+.launch-seg__ai {
+  font-size: 12px;
+  color: #409eff;
+}
+.launch-recos__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.launch-reco {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.launch-reco__reason {
+  color: #909399;
 }
 .launch-seg__warn {
   margin: 0 0 10px;

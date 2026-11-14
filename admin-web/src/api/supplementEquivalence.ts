@@ -173,6 +173,27 @@ export const supplementEquivalenceApi = {
       groupId,
     }),
 
+  /** 按营养素推荐可加入的等价组（只推荐，不写库） */
+  recommend: (ingredientId: string): Promise<{
+    ingredientId: string;
+    ingredientName: string;
+    candidates: Array<{
+      groupId: string;
+      code: string;
+      name: string;
+      status: EquivalenceGroupStatus;
+      memberCount: number;
+      sameUnit: boolean;
+      nutrientLabel: string;
+      nutrientUnit: string;
+      actualUnit?: string | null;
+      reason: string;
+    }>;
+  }> =>
+    api.get('/admin/supplement-equivalence/recommend', {
+      params: { ingredientId },
+    }),
+
   summary: (): Promise<{
     total: number;
     approved: number;

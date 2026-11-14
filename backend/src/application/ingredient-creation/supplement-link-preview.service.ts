@@ -51,11 +51,93 @@ export interface SupplementLinkPreview {
   /** 页面上的人民币标价（从 cn.iherb.com 抓到）；读不到就是 null */
   pagePriceCny: number | null;
   productName: string | null;
+  /** 从商品标题里认出来的品牌；认不出就是 null（不猜） */
+  brand: string | null;
+  /** 从商品标题里认出来的规格，如「100 Tablets」；认不出就是 null */
+  productModel: string | null;
+  /** 商品主图（只用于 DIY 弹窗展示）；抓不到就是 null */
+  imageUrl: string | null;
   servingUnitsPerDose: number | null;
   nutrients: LinkPreviewNutrient[];
   /** 有数值但认不出名字的行，原样返回让人补 */
   unrecognized: string[];
   labelText: string | null;
+}
+
+/** 标题里能认出来的品牌（只在标题开头匹配，避免把正文里的词当品牌）。 */
+const KNOWN_BRANDS = [
+  'NOW FOODS',
+  "NATURE'S WAY",
+  'NATURES WAY',
+  'SOLGAR',
+  'JARROW FORMULAS',
+  'JARROW',
+  'KAL',
+  'SWANSON',
+  'NUTRICOLOGY',
+  'CALIFORNIA GOLD NUTRITION',
+  "DOCTOR'S BEST",
+  'LIFE EXTENSION',
+  'THORNE',
+  'GARDEN OF LIFE',
+  "PURITAN'S PRIDE",
+  '21ST CENTURY',
+  "MEMBER'S MARK",
+  'CARLSON',
+  'NORDIC NATURALS',
+];
+
+/**
+ * 商品主图：只认页面上看起来像「商品图」的 markdown 图片。
+ *
+ * 抓取通道返回的是 markdown，不是 HTML，所以拿不到 og:image；
+ * 页面上也没有可靠的 meta 时，这里**宁可不给**，也不拿 logo/banner 凑数。
+ */
+export function extractProductImage(text: string): string | null {
+  const matches = [...text.matchAll(/!\[[^\]]*\]\((https?:\/\/[^)\s]+)/g)];
+  for (const match of matches) {
+    const url = match[1];
+    if (/logo|icon|sprite|banner|avatar|flag|badge|star|rating/i.test(url)) {
+      continue;
+    }
+    if (/images-iherb|cloudinary|product|productimage/i.test(url)) {
+      return url;
+    }
+  }
+  return null;
+}
+
+/** 从商品标题开头认品牌；认不出返回 null。 */
+export function extractBrandFromTitle(title: string | null | undefined): string | null {
+  const text = String(title || '').trim();
+  if (!text) {
+    return null;
+  }
+  const upper = text.toUpperCase();
+  const hit = KNOWN_BRANDS.find((brand) => upper.startsWith(brand));
+  return hit || null;
+}
+
+/** 从商品标题里认规格（计数 + 单位），取最后一个匹配；认不出返回 null。 */
+export function extractProductModelFromTitle(
+  title: string | null | undefined,
+): string | null {
+  const text = String(title || '').trim();
+  if (!text) {
+    return null;
+  }
+  const pattern =
+    /(\d[\d,.]*)\s*(tablets?|capsules?|veg(?:gie)?\s*capsules?|softgels?|gummies|count|片|粒|胶囊|克|g|oz|ml|fl\s*oz)(?![A-Za-z0-9])/gi;
+  let last: RegExpExecArray | null = null;
+  for (const match of text.matchAll(pattern)) {
+    last = match as unknown as RegExpExecArray;
+  }
+  if (!last) {
+    return null;
+  }
+  const amount = last[1].replace(/,/g, '');
+  const unit = last[2].replace(/\s+/g, ' ');
+  return `${amount} ${unit}`;
 }
 
 @Injectable()
@@ -67,10 +149,14 @@ export class SupplementLinkPreviewService {
     const text = await this.fetchThroughProxy(target);
 
     const parsed = parseSupplementLabel(text);
+    const productName = this.extractProductName(text);
     return {
       productUrl: target.toString(),
       pagePriceCny: this.extractPriceCny(text),
-      productName: this.extractProductName(text),
+      productName,
+      brand: extractBrandFromTitle(productName),
+      productModel: extractProductModelFromTitle(productName),
+      imageUrl: extractProductImage(text),
       servingUnitsPerDose: extractServingUnits(text),
       nutrients: parsed.nutrients.map(
         (nutrient: ParsedNutrient): LinkPreviewNutrient => ({

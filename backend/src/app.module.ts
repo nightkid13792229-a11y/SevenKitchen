@@ -306,6 +306,7 @@ import { SupplementShopConfigService } from './application/supplement-shop/suppl
 import { SupplementDosageService } from './application/supplement-shop/supplement-dosage.service';
 import { SupplementEquivalenceService } from './application/supplement-shop/supplement-equivalence.service';
 import { SupplementCandidateService } from './application/supplement-shop/supplement-candidate.service';
+import { SupplementEquivalenceRecommendService } from './application/supplement-shop/supplement-equivalence-recommend.service';
 import { SupplementPricingService } from './application/supplement-shop/supplement-pricing.service';
 import { BusinessCalendarService } from './application/supplement-shop/business-calendar.service';
 import { SupplementSchedulingService } from './application/supplement-shop/supplement-scheduling.service';
@@ -1012,6 +1013,7 @@ validatePrismaConfig();
     SupplementDosageService,
     SupplementEquivalenceService,
     SupplementCandidateService,
+    SupplementEquivalenceRecommendService,
     TastingPackConfigService,
     TastingPackPricingService,
     TastingPackService,

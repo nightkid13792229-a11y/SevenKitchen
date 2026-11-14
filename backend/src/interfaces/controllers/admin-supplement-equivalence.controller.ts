@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -15,6 +16,7 @@ import {
   type EquivalenceGroupStatus,
   type UpsertEquivalenceGroupInput,
 } from '../../application/supplement-shop/supplement-equivalence.service';
+import { SupplementEquivalenceRecommendService } from '../../application/supplement-shop/supplement-equivalence-recommend.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
@@ -32,6 +34,7 @@ import { AdminGuard, StaffGuard } from '../guards/role.guard';
 export class AdminSupplementEquivalenceController {
   constructor(
     private readonly equivalenceService: SupplementEquivalenceService,
+    private readonly recommendService: SupplementEquivalenceRecommendService,
   ) {}
 
   private operator(user: RequestUser) {
@@ -154,6 +157,16 @@ export class AdminSupplementEquivalenceController {
   ) {
     await this.equivalenceService.removeGroup(id, this.operator(user));
     return ApiResponseDto.success({ deleted: true });
+  }
+
+  @Get('recommend')
+  @ApiOperation({ summary: '按营养素推荐可加入的等价组（只推荐，不写库）' })
+  async recommend(@Query('ingredientId') ingredientId?: string) {
+    const id = String(ingredientId || '').trim();
+    if (!id) {
+      throw new BadRequestException('缺少 ingredientId');
+    }
+    return ApiResponseDto.success(await this.recommendService.recommend(id));
   }
 
   @Get('ungrouped')

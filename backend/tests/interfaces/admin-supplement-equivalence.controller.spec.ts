@@ -18,14 +18,25 @@ function buildServiceMock() {
   };
 }
 
+function buildRecommendMock() {
+  return {
+    recommend: jest.fn().mockResolvedValue({ candidates: [] }),
+  };
+}
+
 describe('AdminSupplementEquivalenceController', () => {
   const user = { userId: 'admin-1', customerId: 'admin-1', role: 'ADMIN' };
   let service: ReturnType<typeof buildServiceMock>;
+  let recommendService: ReturnType<typeof buildRecommendMock>;
   let controller: AdminSupplementEquivalenceController;
 
   beforeEach(() => {
     service = buildServiceMock();
-    controller = new AdminSupplementEquivalenceController(service as any);
+    recommendService = buildRecommendMock();
+    controller = new AdminSupplementEquivalenceController(
+      service as any,
+      recommendService as any,
+    );
   });
 
   it('uses the current user as the audit operator', async () => {
@@ -82,4 +93,13 @@ describe('AdminSupplementEquivalenceController', () => {
       ) ?? [];
     expect(deleteGuards).toContain(AdminGuard);
   });
+  it('recommend 必须带 ingredientId，并调用推荐服务', async () => {
+    await expect(controller.recommend(undefined)).rejects.toThrow(
+      '缺少 ingredientId',
+    );
+
+    await controller.recommend('ing-1');
+    expect(recommendService.recommend).toHaveBeenCalledWith('ing-1');
+  });
+
 });

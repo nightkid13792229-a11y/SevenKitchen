@@ -663,6 +663,12 @@ export interface SupplementLinkPreviewDto {
   /** 页面上的人民币标价；读不到是 null */
   pagePriceCny?: number | null
   productName: string | null
+  /** 从商品标题认出来的品牌；认不出是 null */
+  brand?: string | null
+  /** 从商品标题认出来的规格，如「100 Tablets」；认不出是 null */
+  productModel?: string | null
+  /** 商品主图（DIY 弹窗展示用）；抓不到是 null */
+  imageUrl?: string | null
   servingUnitsPerDose: number | null
   nutrients: SupplementLinkPreviewNutrientDto[]
   unrecognized: string[]

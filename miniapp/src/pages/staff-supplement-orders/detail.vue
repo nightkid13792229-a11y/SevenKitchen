@@ -626,10 +626,10 @@ function openResolve(
 ) {
   resolveCase.value = record
   resolveAction.value = action
-  // 退款默认带出申请金额；管理员能看到的订单实付作为兜底
+  // 退款默认带出订单实付；申请退款金额员工端看不到（后端已对 STAFF 脱敏），别再读那个字段
   resolveAmount.value =
     action === 'REFUND'
-      ? String(record.refundAmount ?? order.value?.amountTotal ?? '')
+      ? String(order.value?.amountTotal ?? '')
       : ''
   resolveNote.value = ''
   resolveVisible.value = true

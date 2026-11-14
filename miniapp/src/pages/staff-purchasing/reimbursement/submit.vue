@@ -208,6 +208,13 @@
         <text class="section-title">上传支付凭证</text>
         <text class="section-total">{{ receiptCount }} 张</text>
       </view>
+      <!--
+        2026-11-14：重新提交时凭证是锁死的（防止绕过审核），
+        但原来一句话都不说，员工会以为页面卡住了 —— 明确告诉他们去哪儿改。
+      -->
+      <view v-if="resubmitId" class="notice-strip">
+        <text>重新提交时凭证不能在此修改，请到报销详情页的「凭证管理」里调整。</text>
+      </view>
       <view class="photo-grid">
         <view
           v-for="(photo, index) in orderShotPhotos"

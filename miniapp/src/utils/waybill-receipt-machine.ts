@@ -114,7 +114,7 @@ export function markReceiptFailed(
 export function applyRecognizeResult(
   target: ReceiptState,
   result: RecognizeResultLike,
-  apply: ReceiptFormApply,
+  applyForm: ReceiptFormApply,
 ): ReceiptUiState {
   const receipt = result.receipt ?? null;
   target.carrierName = receipt?.carrierName || '';
@@ -127,7 +127,7 @@ export function applyRecognizeResult(
 
   if (status === 'match' || status === 'unknown') {
     target.state = status;
-    apply({
+    applyForm({
       carrierCode: receipt?.carrierCode,
       trackingNumber: receipt?.trackingNumber,
       shippingFee: receipt?.shippingFee,

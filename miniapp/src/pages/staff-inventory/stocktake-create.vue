@@ -707,7 +707,8 @@ const onCancel = async () => {
   align-items: center;
   gap: 10rpx;
   padding: 0 0 8rpx 4rpx;
-  font-size: 22rpx;
+  /* 2026-11-14：22rpx 低于员工端最小字号（24rpx），提一档 */
+  font-size: 24rpx;
   color: #7a8a80;
 }
 .loc-no {

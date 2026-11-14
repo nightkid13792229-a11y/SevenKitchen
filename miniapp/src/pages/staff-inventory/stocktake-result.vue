@@ -438,7 +438,8 @@ const goRecords = () => {
   border-radius: 14rpx;
   background: #f4f7f1;
   font-size: 24rpx;
-  color: #7a8a80;
+  /* 2026-11-14：原来的 #7a8a80 在这块浅底上对比度只有 3.36（标准 4.5），调深一档 */
+  color: #66735c;
 }
 .note {
   margin-top: 24rpx;

@@ -195,6 +195,28 @@ export function findUnresolvedRefAccesses(code: string): string[] {
     add(m.index!, [m[1]])
   }
 
+  /**
+   * for…of / for…in 的循环变量（2026-11-14 补）。
+   *
+   * `for (const result of results) { … result.value }` 里的 result 是循环内的局部绑定，
+   * `result.value` 是 PromiseSettledResult 的字段，不是 ref；
+   * 以前不认识这一种，于是补剂订单导入页被误报成"访问了不存在的 ref"。
+   */
+  for (const m of clean.matchAll(
+    /\bfor\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s+(?:of|in)\b/g,
+  )) {
+    // 循环变量只在循环体里有效：先找到 for 头的右括号，再找循环体的花括号。
+    // 单语句循环（没有花括号）退回外层，宁可少报也不要多报。
+    let depth = 1
+    let k = m.index! + m[0].length
+    for (; k < clean.length && depth > 0; k++) {
+      if (clean[k] === '(') depth++
+      else if (clean[k] === ')') depth--
+    }
+    const braced = /^\s*\{/.exec(clean.slice(k))
+    add(braced ? k + braced[0].length : m.index!, [m[1]])
+  }
+
   const resolves = (name: string, pos: number): boolean => {
     let scope = pos < owner.length ? owner[pos] : MODULE
     for (;;) {
@@ -242,6 +264,18 @@ describe('小程序 ref 作用域完整性', () => {
     expect(findUnresolvedRefAccesses('const foo = ref(1)\nconst b = computed(() => foo.value)')).toEqual([])
     // 正例：import 进来的 ref
     expect(findUnresolvedRefAccesses("import { x } from './x'\nconst y = x.value")).toEqual([])
+    // 正例：for…of 的循环变量是局部绑定，`result.value` 是返回值的字段
+    expect(
+      findUnresolvedRefAccesses(
+        'for (const result of results) { if (result.value) { return result } }',
+      ),
+    ).toEqual([])
+    // 反例：循环变量只在循环内有效，循环外访问仍要报
+    expect(
+      findUnresolvedRefAccesses(
+        'for (const result of results) { }\nconst x = result.value',
+      ),
+    ).toEqual(['第 2 行 result.value'])
     // 反例：同名的局部变量在别的函数里，不算数
     expect(
       findUnresolvedRefAccesses('const a = computed(() => foo.value)\nfunction f() { const foo = ref(1); return foo.value }'),

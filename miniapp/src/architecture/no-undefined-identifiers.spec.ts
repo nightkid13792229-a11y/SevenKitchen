@@ -270,13 +270,20 @@ function collectCalled(
 ): Map<string, number> {
   const called = new Map<string, number>()
 
-  const record = (name: string, index: number, form: 'call' | 'access') => {
+  const record = (name: string, index: number) => {
     if (BUILTINS.has(name) || defined.has(name) || locals.has(name)) return
     /*
-     * ② 点号访问这一路：**局部绑定过的名字**直接放行 ✓ ——
-     * 它已经"有定义"了（就在这一行上面绑的 ✓），只是不在顶层 defined 里 ✓。
+     * 局部绑定过的名字放行 ✓ —— 它已经"有定义"了（就在这一行上面绑的 ✓），
+     * 只是不在顶层 defined 里 ✓。
+     *
+     * ⚠️ 2026-11-14 补：**直接调用**这一路也要放行 ✗→✓。
+     *    函数参数常常就是回调（`applyForm({...})` / `onDone()`），
+     *    它当然不是"文件里定义过的函数" ✓，但它是调用方传进来的 ✓。
+     *    以前只给点号访问放行 ✗，于是报销运单状态机里那个 `apply` 参数
+     *    被误报成"调用了却没定义" ✗ —— 换个参数名也照样报 ✓，
+     *    说明是守卫的洞，不是代码的问题 ✓。
      */
-    if (form === 'access' && boundNames.has(name)) return
+    if (boundNames.has(name)) return
     const before = text.slice(Math.max(0, index - 1), index)
     if (before === '.' || before === "'" || before === '"' || before === '`') return
     /*
@@ -293,7 +300,7 @@ function collectCalled(
 
   // ① 直接调用：名字(
   for (const m of text.matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)) {
-    record(m[1], m.index, 'call')
+    record(m[1], m.index)
   }
   // ② 点号访问：名字.
   for (const m of text.matchAll(/([A-Za-z_$][\w$]*)\./g)) {
@@ -314,7 +321,7 @@ function collectCalled(
      */
     const after = text.slice(m.index + m[1].length, m.index + m[1].length + 6);
     if (STATIC_FILE_EXTENSIONS.test(after)) continue;
-    record(m[1], m.index, 'access')
+    record(m[1], m.index)
   }
   return called
 }

@@ -30,18 +30,27 @@ const normalize = (value: unknown): string =>
  * 这行的数量单位能不能按商品的倍数折算。
  *
  * - 商品没有采购单位：放行（老数据；调用方会退回"只有倍数"的口径）；
- * - 这行没写单位：放行（调用方按商品单位理解）；
+ * - 这行没写单位：商品按单件包装卖（份/盒/袋…）才放行，按商品单位理解；
+ *   商品按整件卖（箱/提/桶/组/件）时拒绝 —— 「1箱」和「1件」差一层，
+ *   以前放行会把「买了 1 件」静默算成「1 箱」（2026-11-14 加）。
  * - 两边写法一致（忽略大小写/空格）：放行；
  * - 其余：拒绝。
  */
 export function checkQuantityUnitMatches(input: {
   lineUnit: string | null | undefined;
   skuPurchaseUnit: string | null | undefined;
+  /** 商品的采购单位是不是整件单位（箱/提/桶/组/件） */
+  skuUnitIsMultipack?: boolean;
 }): PurchaseUnitCheck {
   const lineUnit = normalize(input.lineUnit);
   const skuUnit = normalize(input.skuPurchaseUnit);
 
-  if (!skuUnit || !lineUnit) return { ok: true };
+  if (!skuUnit) return { ok: true };
+  if (!lineUnit) {
+    return input.skuUnitIsMultipack
+      ? { ok: false, reason: 'UNIT_MISSING' }
+      : { ok: true };
+  }
   if (lineUnit === skuUnit) return { ok: true };
   return { ok: false, reason: 'UNIT_NOT_MATCH' };
 }
@@ -56,5 +65,16 @@ export function describeQuantityUnitMismatch(input: {
     `「${input.lineName}」这行写的是「${input.lineUnit}」，` +
     `商品是按「${input.skuPurchaseUnit}」买的：` +
     `请把单位改成「${input.skuPurchaseUnit}」，或换一个按「${input.lineUnit}」卖的商品`
+  );
+}
+
+/** 这行没写单位、商品又是整件：让员工先确认买的是几箱/几提 */
+export function describeQuantityUnitMissing(input: {
+  lineName: string;
+  skuPurchaseUnit: string;
+}): string {
+  return (
+    `「${input.lineName}」这行没写按什么卖，商品是按「${input.skuPurchaseUnit}」买的：` +
+    `请先把数量单位填成「${input.skuPurchaseUnit}」，确认买几${input.skuPurchaseUnit}再生成`
   );
 }

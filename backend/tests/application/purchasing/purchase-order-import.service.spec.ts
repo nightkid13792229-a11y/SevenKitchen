@@ -848,6 +848,112 @@ describe('PurchaseOrderImportService', () => {
     );
   });
 
+  it('行上还是识别留下的「件」时，生成前自动换成商品的「份」并回写', async () => {
+    prisma.purchaseOrderImport.findMany.mockResolvedValue([
+      {
+        id: 'import-3',
+        purchaseListId: 'list-1',
+        status: 'DRAFT',
+        incomplete: false,
+        subtotal: 7.99,
+        channel: '沃尔玛',
+        orderTime: null,
+        imageKeys: [],
+        lines: [
+          {
+            id: 'line-3',
+            rawName: '【霜打菜分外甜】紫甘蓝 700g',
+            isPersonal: false,
+            ingredientId: 'ing-cabbage',
+            procurementSkuId: 'sku-cabbage',
+            purchaseItemId: 'item-cabbage',
+            lineTotal: 7.99,
+            qty: 1,
+            // 2026-11-14 真机：截图只写「700g」，识别按老提示词写了「件」
+            unit: '件',
+            spec: '700g',
+          },
+        ],
+      },
+    ]);
+    prisma.purchaseOrderImport.updateMany.mockResolvedValue({ count: 1 });
+    prisma.procurementSku.findUnique.mockResolvedValue({
+      id: 'sku-cabbage',
+      ingredientId: 'ing-cabbage',
+      name: '紫甘蓝 700g',
+      purchaseChannel: '沃尔玛',
+      purchaseUnit: '份',
+      purchaseToBaseRatio: 700,
+      ingredient: { baseUnit: 'G', name: '紫甘蓝', purchaseToBaseRatio: 1 },
+    });
+    prisma.purchaseItem.findFirst.mockResolvedValue({ id: 'item-cabbage' });
+    prisma.purchaseRecord.create.mockResolvedValue({ id: 'record-3' });
+    prisma.purchaseOrderImportLine.update.mockResolvedValue({});
+
+    await service.confirm(['import-3'], 'user-1');
+
+    // 占位单位被换成商品单位，草稿也一起回写
+    expect(prisma.purchaseOrderImportLine.update).toHaveBeenCalledWith({
+      where: { id: 'line-3' },
+      data: { unit: '份' },
+    });
+    expect(prisma.purchaseRecord.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          actualPackageCount: 1,
+          actualPackageSize: 700,
+          actualBaseQuantity: 700,
+        }),
+      }),
+    );
+  });
+
+  it('行上没写单位、商品按「箱」卖 → 生成被拒，先确认单位', async () => {
+    prisma.purchaseOrderImport.findMany.mockResolvedValue([
+      {
+        id: 'import-4',
+        purchaseListId: 'list-1',
+        status: 'DRAFT',
+        incomplete: false,
+        subtotal: 99,
+        channel: '沃尔玛',
+        orderTime: null,
+        imageKeys: [],
+        lines: [
+          {
+            id: 'line-4',
+            rawName: '整箱牛奶 24瓶',
+            isPersonal: false,
+            ingredientId: 'ing-milk',
+            procurementSkuId: 'sku-milk',
+            purchaseItemId: 'item-milk',
+            lineTotal: 99,
+            qty: 1,
+            unit: null,
+            spec: '24×330ml',
+          },
+        ],
+      },
+    ]);
+    prisma.purchaseOrderImport.updateMany.mockResolvedValue({ count: 1 });
+    prisma.procurementSku.findUnique.mockResolvedValue({
+      id: 'sku-milk',
+      ingredientId: 'ing-milk',
+      name: '整箱牛奶',
+      purchaseChannel: '沃尔玛',
+      purchaseUnit: '箱',
+      purchaseToBaseRatio: 7920,
+      ingredient: { baseUnit: 'G', name: '牛奶', purchaseToBaseRatio: 1 },
+    });
+    prisma.purchaseItem.findFirst.mockResolvedValue({ id: 'item-milk' });
+    prisma.purchaseOrderImportLine.update.mockResolvedValue({});
+
+    await expect(service.confirm(['import-4'], 'user-1')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(prisma.purchaseRecord.create).not.toHaveBeenCalled();
+  });
+
   describe('生成采购记录时同步商品名（2026-11-05）', () => {
     const primeConfirm = (line: Record<string, unknown>) => {
       prisma.purchaseOrderImport.findMany.mockResolvedValue([
@@ -1299,6 +1405,72 @@ describe('PurchaseOrderImportService', () => {
       expect(data.ingredientId).toBe('ing-9');
       expect(data.purchaseItemId).toBeNull();
       expect(data.isPersonal).toBe(false);
+    });
+
+    it('挂上按「份」卖的商品时，识别留下的「件」自动换成「份」', async () => {
+      prisma.purchaseOrderImportLine.findFirst.mockResolvedValue({
+        id: 'line-1',
+        importId: 'import-1',
+        ingredientId: 'ing-1',
+        procurementSkuId: null,
+        qty: 1,
+        unit: '件',
+        unitPrice: 7.99,
+        lineTotal: 7.99,
+        import: {
+          status: 'DRAFT',
+          purchaseListId: 'list-1',
+          channel: '沃尔玛',
+        },
+      });
+      prisma.procurementSku.findFirst.mockResolvedValue({
+        id: 'sku-cabbage',
+        name: '紫甘蓝 700g',
+        purchaseChannel: '沃尔玛',
+        purchaseUnit: '份',
+      });
+
+      await service.updateLine({
+        importId: 'import-1',
+        lineId: 'line-1',
+        dto: { procurementSkuId: 'sku-cabbage', unit: '件' },
+      });
+
+      const data = prisma.purchaseOrderImportLine.update.mock.calls[0][0].data;
+      expect(data.unit).toBe('份');
+    });
+
+    it('员工写的是真实单位（斤）时不动，交给门禁提示', async () => {
+      prisma.purchaseOrderImportLine.findFirst.mockResolvedValue({
+        id: 'line-1',
+        importId: 'import-1',
+        ingredientId: 'ing-1',
+        procurementSkuId: null,
+        qty: 3,
+        unit: '斤',
+        unitPrice: 12,
+        lineTotal: 36,
+        import: {
+          status: 'DRAFT',
+          purchaseListId: 'list-1',
+          channel: '沃尔玛',
+        },
+      });
+      prisma.procurementSku.findFirst.mockResolvedValue({
+        id: 'sku-kg',
+        name: '羊心 1kg',
+        purchaseChannel: '沃尔玛',
+        purchaseUnit: 'kg',
+      });
+
+      await service.updateLine({
+        importId: 'import-1',
+        lineId: 'line-1',
+        dto: { procurementSkuId: 'sku-kg', unit: '斤' },
+      });
+
+      const data = prisma.purchaseOrderImportLine.update.mock.calls[0][0].data;
+      expect(data.unit).toBe('斤');
     });
 
     it('可以改单位（重量行改成件数）', async () => {

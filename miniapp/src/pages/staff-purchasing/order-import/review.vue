@@ -284,7 +284,7 @@
                     placeholder="1"
                   />
                   <view class="step-btn" hover-class="step-btn-hover" @tap="stepQty(1)">+</view>
-                  <text class="unit-chip" @tap="openUnitPicker">{{ editing.unitText || '件' }} ▾</text>
+                  <text class="unit-chip" @tap="openUnitPicker">{{ editing.unitText || '待定' }} ▾</text>
                 </view>
               </view>
               <view class="amount-cell">
@@ -360,10 +360,7 @@
         <text class="sheet-sub">
           克数按商品规格换算；单位要和商品一致。
         </text>
-        <text v-if="unitMismatch" class="sheet-warn">
-          这行写的是「{{ editing.unitText }}」，商品单位是「{{ editing.skuPurchaseUnit }}」；
-          保存会被拦下，改回商品单位或换个商品。
-        </text>
+        <text v-if="unitMismatch" class="sheet-warn">{{ unitMismatchText }}</text>
         <view class="unit-grid">
           <view
             v-for="unit in unitOptions"
@@ -663,8 +660,10 @@ const unitOptions = computed(() => {
   // 散称的「斤/克」不是另开一条免商品的路，而是商品本身就按斤/克卖。
   const list = skuUnit ? [skuUnit] : [];
   const current = String(editing.value?.unitText || '').trim();
-  // 当前值不在清单里（老数据/导入值）也要显示出来，否则"选中了却看不见"
-  if (current && !list.includes(current)) return [current, ...list];
+  // 「件」是识别时的占位，不是可选项：只列商品真正的单位。
+  if (current && current !== '件' && !list.includes(current)) {
+    return [current, ...list];
+  }
   return list;
 });
 
@@ -680,6 +679,24 @@ const unitMismatch = computed(() => {
   const skuUnit = String(current?.skuPurchaseUnit || '').trim();
   if (!current || current.isPersonal || !lineUnit || !skuUnit) return false;
   return lineUnit !== skuUnit;
+});
+
+/** 「件」/空 = 识别时没定单位；保存时后端会按商品单位落库，不拦人 */
+const unitPlaceholder = computed(() => {
+  const current = String(editing.value?.unitText || '').trim();
+  return current === '' || current === '件';
+});
+
+const unitMismatchText = computed(() => {
+  if (!unitMismatch.value) return '';
+  const skuUnit = String(editing.value?.skuPurchaseUnit || '').trim();
+  if (unitPlaceholder.value) {
+    return `这行识别时没定按什么卖，保存时按商品的「${skuUnit}」记；也可以直接选它。`;
+  }
+  return (
+    `这行写的是「${editing.value?.unitText}」，商品单位是「${skuUnit}」；` +
+    '保存会被拦下，改回商品单位或换个商品。'
+  );
 });
 /** 渠道清单：唯一来源是后台字典 purchase_channel，页面不写死 */
 const channelOptions = ref<string[]>([]);
@@ -1946,6 +1963,11 @@ function alignToReceipt() {
  */
 function openUnitPicker() {
   if (editing.value?.isPersonal) return;
+  // 单位只有一处来源（商品的采购单位）：还没选商品时没有可选项
+  if (unitOptions.value.length === 0) {
+    uni.showToast({ title: '先选商品，单位跟着商品走', icon: 'none' });
+    return;
+  }
   unitPicking.value = true;
 }
 

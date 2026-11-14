@@ -29,6 +29,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import {
   checkQuantityUnitMatches,
   describeQuantityUnitMismatch,
+  describeQuantityUnitMissing,
 } from '../../domain/purchasing/purchase-unit-guard';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import {
@@ -49,7 +50,15 @@ import {
   type ChannelOption,
 } from './channel-catalog';
 import { buildOrderImportSystemPrompt } from './order-import-prompt';
-import { loadPurchaseUnitOptions } from './purchase-unit-catalog';
+import {
+  isMultipackUnit,
+  loadPurchaseUnitOptions,
+  type PurchaseUnitOption,
+} from './purchase-unit-catalog';
+import {
+  isPlaceholderLineUnit,
+  resolveLineUnitFromSku,
+} from './purchase-line-unit';
 import {
   formatPackaging,
   type PackagingSpec,
@@ -153,6 +162,8 @@ export class PurchaseOrderImportService {
 
     const candidates = await this.buildCandidates(input.purchaseListId);
     const channels = await this.loadChannelOptions();
+    // 单位字典：占位单位（空/件）要靠它判断商品的单位能不能跟（整件不跟）
+    const unitOptions = await loadPurchaseUnitOptions(this.prisma as any);
     const recognized: RecognizedOrder[] = [];
 
     /**
@@ -273,6 +284,9 @@ export class PurchaseOrderImportService {
           );
         }
       }
+
+      // 识别只给规格，单位由匹配上的商品定：占位单位（空/件）直接跟随商品。
+      matched = this.adoptSkuUnits(matched, candidates, unitOptions);
 
       recognized.push({
         url,
@@ -508,6 +522,7 @@ export class PurchaseOrderImportService {
 
     const candidates = await this.buildCandidates(current.purchaseListId);
     if (candidates.length === 0) return;
+    const unitOptions = await loadPurchaseUnitOptions(this.prisma as any);
 
     const aliases = await this.prisma.purchaseOrderMatchAlias.findMany({
       select: {
@@ -541,13 +556,17 @@ export class PurchaseOrderImportService {
         Boolean(hint.ingredientId),
       );
 
-    const matched = matchOrderLines(
-      parsed,
+    const matched = this.adoptSkuUnits(
+      matchOrderLines(
+        parsed,
+        candidates,
+        channel,
+        channels,
+        applicableAliases,
+        hints,
+      ),
       candidates,
-      channel,
-      channels,
-      applicableAliases,
-      hints,
+      unitOptions,
     );
 
     await this.prisma.$transaction(async (tx) => {
@@ -559,6 +578,10 @@ export class PurchaseOrderImportService {
             purchaseItemId: line.purchaseItemId,
             procurementSkuId: line.procurementSkuId,
             matchConfidence: line.confidence,
+            // 换渠道后挂了别的商品，占位单位跟着新商品走（整件不跟，保持原样）
+            ...(isPlaceholderLineUnit(targets[index].unit) && line.unit
+              ? { unit: line.unit }
+              : {}),
           },
         });
       }
@@ -699,6 +722,7 @@ export class PurchaseOrderImportService {
       }
     }
 
+    let selectedSkuUnit: string | null | undefined;
     if (dto.procurementSkuId !== undefined) {
       if (dto.procurementSkuId) {
         const ingredientId =
@@ -708,7 +732,12 @@ export class PurchaseOrderImportService {
         }
         const sku = await this.prisma.procurementSku.findFirst({
           where: { id: dto.procurementSkuId, ingredientId, isActive: true },
-          select: { id: true, name: true, purchaseChannel: true },
+          select: {
+            id: true,
+            name: true,
+            purchaseChannel: true,
+            purchaseUnit: true,
+          },
         });
         if (!sku) {
           throw new BadRequestException('这个采购商品不属于所选原料');
@@ -734,8 +763,42 @@ export class PurchaseOrderImportService {
         data.procurementSkuId = dto.procurementSkuId;
         data.isPersonal = false;
         data.matchSource = 'MANUAL';
+        selectedSkuUnit = sku.purchaseUnit ?? null;
       } else {
         data.procurementSkuId = null;
+      }
+    }
+
+    /**
+     * 占位单位（空/件）跟随商品的采购单位（2026-11-14）。
+     *
+     * 员工挂商品/新建商品时，行上常常还是识别留下的「1件」；不跟着改，
+     * 页面就一直报「单位对不上」，还得再点一次单位。真实单位（斤/份…）不动。
+     */
+    const effectiveUnit =
+      dto.unit !== undefined ? (data.unit as string | null) : line.unit;
+    const skuIdForUnit =
+      dto.procurementSkuId !== undefined
+        ? dto.procurementSkuId
+        : data.procurementSkuId !== undefined
+          ? (data.procurementSkuId as string | null)
+          : line.procurementSkuId;
+    if (skuIdForUnit && isPlaceholderLineUnit(effectiveUnit)) {
+      let skuUnit = selectedSkuUnit;
+      if (skuUnit === undefined) {
+        const currentSku = await this.prisma.procurementSku.findUnique({
+          where: { id: skuIdForUnit },
+          select: { purchaseUnit: true },
+        });
+        skuUnit = currentSku?.purchaseUnit ?? null;
+      }
+      if (skuUnit) {
+        const resolvedUnit = resolveLineUnitFromSku({
+          lineUnit: effectiveUnit,
+          skuPurchaseUnit: skuUnit,
+          unitOptions: await loadPurchaseUnitOptions(this.prisma as any),
+        });
+        if (resolvedUnit) data.unit = resolvedUnit;
       }
     }
 
@@ -831,6 +894,7 @@ export class PurchaseOrderImportService {
     let ingredientId = dto.ingredientId ?? null;
     let procurementSkuId = dto.procurementSkuId ?? null;
     let rawName = String(dto.rawName ?? '').trim();
+    let unit = dto.unit?.trim() || null;
 
     if (isPersonal) {
       ingredientId = null;
@@ -848,12 +912,23 @@ export class PurchaseOrderImportService {
       if (procurementSkuId) {
         const sku = await this.prisma.procurementSku.findUnique({
           where: { id: procurementSkuId },
-          select: { id: true, name: true, ingredientId: true },
+          select: {
+            id: true,
+            name: true,
+            ingredientId: true,
+            purchaseUnit: true,
+          },
         });
         if (!sku || sku.ingredientId !== ingredientId) {
           throw new BadRequestException('采购商品和原料不匹配，请重新选择');
         }
         rawName = rawName || sku.name;
+        // 手填没写单位时跟着商品走（整件单位不跟，交给生成时的门禁）
+        unit = resolveLineUnitFromSku({
+          lineUnit: unit,
+          skuPurchaseUnit: sku.purchaseUnit,
+          unitOptions: await loadPurchaseUnitOptions(this.prisma as any),
+        });
       } else {
         rawName = rawName || ingredient.name;
       }
@@ -875,7 +950,7 @@ export class PurchaseOrderImportService {
         rawName: rawName.slice(0, 300),
         spec: null,
         qty,
-        unit: dto.unit?.trim() || null,
+        unit,
         unitPrice,
         lineTotal,
         ingredientId,
@@ -946,6 +1021,7 @@ export class PurchaseOrderImportService {
     }
 
     const channels = await this.loadChannelOptions();
+    const unitOptions = await loadPurchaseUnitOptions(this.prisma as any);
     for (const row of imports) {
       if (row.status !== 'DRAFT') {
         throw new BadRequestException('有识别记录已经确认过了，请刷新后重试');
@@ -994,8 +1070,6 @@ export class PurchaseOrderImportService {
               );
             }
 
-            const lineUnit = (line.unit ?? '').trim();
-
             if (!line.procurementSkuId) {
               throw new BadRequestException(
                 `「${line.rawName}」缺少采购商品，请先新建商品`,
@@ -1029,6 +1103,26 @@ export class PurchaseOrderImportService {
               );
             }
 
+            /**
+             * 占位单位（空/件）在生成时跟随商品单位（2026-11-14）。
+             *
+             * 老草稿里行上还留着识别时的「件」，直接生成会被门禁拦住；
+             * 这里对「单件包装」的商品自动落成商品单位并回写，员工不用逐行手改。
+             * 商品按整件卖（箱/提…）时不跟，下面门禁会要求员工先写清楚。
+             */
+            const resolvedUnit = resolveLineUnitFromSku({
+              lineUnit: line.unit,
+              skuPurchaseUnit: sku.purchaseUnit,
+              unitOptions,
+            });
+            const lineUnit = (resolvedUnit ?? '').trim();
+            if (resolvedUnit && resolvedUnit !== line.unit) {
+              await tx.purchaseOrderImportLine.update({
+                where: { id: line.id },
+                data: { unit: resolvedUnit },
+              });
+            }
+
             // 名字对齐：把这行的截图叫法写成商品名（认不准的行不动）。
             // 先改名再记账，记录里存的才是新名字。
             const renamed = await this.syncLineSkuName(tx, {
@@ -1050,14 +1144,23 @@ export class PurchaseOrderImportService {
             const unitCheck = checkQuantityUnitMatches({
               lineUnit,
               skuPurchaseUnit: sku.purchaseUnit,
+              skuUnitIsMultipack: isMultipackUnit(
+                unitOptions,
+                sku.purchaseUnit,
+              ),
             });
             if (!unitCheck.ok) {
               throw new BadRequestException(
-                describeQuantityUnitMismatch({
-                  lineName: line.rawName,
-                  lineUnit: lineUnit as string,
-                  skuPurchaseUnit: String(sku.purchaseUnit),
-                }),
+                unitCheck.reason === 'UNIT_MISSING'
+                  ? describeQuantityUnitMissing({
+                      lineName: line.rawName,
+                      skuPurchaseUnit: String(sku.purchaseUnit),
+                    })
+                  : describeQuantityUnitMismatch({
+                      lineName: line.rawName,
+                      lineUnit: lineUnit as string,
+                      skuPurchaseUnit: String(sku.purchaseUnit),
+                    }),
               );
             }
 
@@ -1624,6 +1727,36 @@ ingredient 必须是“允许的原料”里的原文；不确定时 ingredient 
         `今天的识别次数不够用（每天 ${DAILY_IMPORT_LIMIT_PER_USER} 次），请少传几张或手动录入`,
       );
     }
+  }
+
+  /**
+   * 占位单位（空/件）跟随匹配上的商品单位（2026-11-14）。
+   *
+   * 只在「这行还没定单位」时动手：真实单位（斤/份/盒…）原样保留。
+   * 商品按整件卖（箱/提/组/件）时不跟 —— 截图「2件」不是「2箱」。
+   */
+  private adoptSkuUnits(
+    lines: MatchedOrderLine[],
+    candidates: ListItemCandidate[],
+    unitOptions: PurchaseUnitOption[],
+  ): MatchedOrderLine[] {
+    if (lines.length === 0) return lines;
+    const skuUnitById = new Map<string, string | null>();
+    for (const item of candidates) {
+      for (const sku of item.skus) {
+        skuUnitById.set(sku.id, sku.purchaseUnit ?? null);
+      }
+    }
+    return lines.map((line) => ({
+      ...line,
+      unit: resolveLineUnitFromSku({
+        lineUnit: line.unit,
+        skuPurchaseUnit: line.procurementSkuId
+          ? skuUnitById.get(line.procurementSkuId) ?? null
+          : null,
+        unitOptions,
+      }),
+    }));
   }
 
   private async buildCandidates(

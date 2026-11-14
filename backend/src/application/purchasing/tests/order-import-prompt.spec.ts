@@ -25,7 +25,10 @@ describe('订单识别提示词 · 单位与规格分层（2026-11-12）', () =>
     expect(prompt).toContain('4斤;原切羊里脊羊菲力');
     expect(prompt).toContain('qty=1');
     expect(prompt).toContain('不要写成 qty=4、unit="斤"');
-    expect(prompt).toContain('unit="件"');
+    // 2026-11-14：认不出包装时不再写「件」占位，交 null 让商品定单位
+    expect(prompt).toContain('unit=null');
+    expect(prompt).not.toContain('unit="件"');
+    expect(prompt).toContain('份/盒/袋/箱');
   });
 
   it('散称按重量买时，数量单位仍按字典 code', () => {

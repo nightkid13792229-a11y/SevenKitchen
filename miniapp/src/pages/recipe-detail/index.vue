@@ -408,6 +408,10 @@ import DogContextPanel from '@/components/dog/DogContextPanel.vue'
 import LifeStageVersionSheet from '@/components/recipe/LifeStageVersionSheet.vue'
 import { resolveLifeStageUiState } from '@/utils/life-stage-ui'
 import { useDogSelection } from '@/composables/useDogSelection'
+import {
+  resolveInitialDogId,
+  resolveRecipeDetailDogId,
+} from '@/utils/recipe-detail-pin'
 
 // 模块级变量，存储当前食谱信息
 let currentRecipeName = ''
@@ -607,6 +611,14 @@ const recipeId = ref('')
 const shareToken = ref('')
 /** 定制单号：带值时只看交付记录冻结的那一版（员工端入口用） */
 const pinnedOrderId = ref('')
+/**
+ * 锁版模式（2026-11-15）：员工从鲜食订单点「最新版」进来时为 true。
+ *
+ * 首屏不认账号里已选的狗，按「无狗」取这道食谱本身；否则后端会按狗的
+ * 生命阶段换到同系列另一版，看到的就不是订单这道食谱了。
+ * 狗列表照常展示，员工手动点某只狗后仍可按该狗重新匹配。
+ */
+const pinRecipe = ref(false)
 const dogId = ref<string | null>(null)
 /**
  * 选狗状态（2026-10-18 收进 composable）。
@@ -900,14 +912,24 @@ onMounted(async () => {
   shareToken.value = currentPage.options?.shareToken || ''
   pinnedOrderId.value = currentPage.options?.orderId || ''
   initialDogId.value = currentPage.options?.dogId || ''
+  // 2026-11-15：员工「看最新版」入口带的锁版标记
+  pinRecipe.value = currentPage.options?.pinRecipe === '1'
   hasToken.value = Boolean(uni.getStorageSync('token'))
 
-  dogId.value = initialDogId.value || uni.getStorageSync('dogId') || null
+  dogId.value = resolveInitialDogId({
+    pinRecipe: pinRecipe.value,
+    urlDogId: initialDogId.value,
+    storedDogId: uni.getStorageSync('dogId'),
+  })
 
   if (recipeId.value) {
     // 2026-11-02：先定狗再取菜谱，避免首屏先按"无狗"渲染一版再跳
     await loadDogsForDetail()
-    if (!dogs.value.length) {
+    /**
+     * 锁版模式下列表加载完也不会自动选狗（见 loadDogsForDetail），
+     * 所以这里要显式补一次「无狗」请求，才能真正打开这道食谱本身。
+     */
+    if (!dogs.value.length || (pinRecipe.value && !selectedDogId.value)) {
       loadRecipeDetail()
     }
   }
@@ -951,7 +973,11 @@ function loadRecipeDetail() {
   if (pinnedOrderId.value) {
     data.orderId = pinnedOrderId.value
   }
-  const activeDogId = selectedDogId.value || dogId.value
+  const activeDogId = resolveRecipeDetailDogId({
+    pinRecipe: pinRecipe.value,
+    selectedDogId: selectedDogId.value,
+    dogId: dogId.value,
+  })
   if (activeDogId) {
     data.dogId = activeDogId
   }
@@ -1099,6 +1125,24 @@ async function loadDogsForDetail() {
       dogsLoaded.value = true
       dogsLoadFailed.value = false
       if (dogs.value.length > 0) {
+        /**
+         * 锁版模式（2026-11-15）：列表照常铺出来，但不自动选狗、不写
+         * storage —— 首屏那次「无狗」请求由 onMounted 负责，这样打开的
+         * 才是订单这道食谱本身。只有用户手动点过某只狗，才带着它重新请求。
+         */
+        if (pinRecipe.value) {
+          const stillExists = dogs.value.some(
+            (dog) => dog.id === selectedDogId.value,
+          )
+          if (selectedDogId.value && stillExists) {
+            dogId.value = selectedDogId.value
+            loadRecipeDetail()
+          } else if (selectedDogId.value) {
+            // 之前选的狗被删了：回到锁版状态，别拿一个不存在的 id 请求
+            selectedDogId.value = ''
+          }
+          return
+        }
         selectedDogId.value = initialDogId.value || dogId.value || uni.getStorageSync('dogId') || dogs.value[0].id
         if (!dogs.value.some((dog) => dog.id === selectedDogId.value)) {
           selectedDogId.value = dogs.value[0].id

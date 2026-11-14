@@ -173,6 +173,11 @@ describe('staff order center · 食谱 / 狗狗入口', () => {
     expect(orderCenter).toContain('{{ foodSpecLabel(item) }}')
   })
 
+  it('★ 试吃装规格写成「共12袋×250g」（总袋数，别读成一道菜）', () => {
+    expect(orderCenter).toContain("item.subtypeLabel === '试吃装'")
+    expect(orderCenter).toContain('totalPrefix')
+  })
+
   it('★ 卡片上只留下单时间，并且用小字说明是「下单时间」', () => {
     expect(orderCenter).toContain('class="time-label"')
     expect(orderCenter).toContain('下单时间')

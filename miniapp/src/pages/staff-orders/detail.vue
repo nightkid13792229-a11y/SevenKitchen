@@ -2351,9 +2351,9 @@ async function saveAmountAdjustment() {
  * 点进 /recipes/:id 必然 404；试吃装本身也是「一套几道菜」，没有单道食谱。
  * 判断收在 `resolveLatestRecipeId` 里，`isTastingPack` 作为订单级的兜底。
  *
- * 注意：入口本身不带 dogId，但食谱详情页会用账号已选的狗（或 dogs[0]）
- * 兜底并重新请求，同系列多生命阶段时可能展示另一版 —— 这是目标页的
- * 既有行为，要强制锁死「这道食谱最新版」需要目标页支持 pin 参数。
+ * 入口带 `pinRecipe=1`（2026-11-15）：目标页会跳过账号里已选的狗，
+ * 首屏按「无狗」请求，打开的才是这单这道食谱的最新版；员工想按某只狗
+ * 看时，在目标页手动点狗即可。
  */
 function latestRecipeId(item: OrderItemDetail | null | undefined): string {
   return resolveLatestRecipeId(item?.recipeSnapshot, {
@@ -2369,7 +2369,7 @@ function openLatestRecipe(item: OrderItemDetail | null | undefined) {
   const recipeId = latestRecipeId(item)
   if (!recipeId) return
   uni.navigateTo({
-    url: `/pages/recipe-detail/index?recipeId=${encodeURIComponent(recipeId)}`,
+    url: `/pages/recipe-detail/index?recipeId=${encodeURIComponent(recipeId)}&pinRecipe=1`,
   })
 }
 

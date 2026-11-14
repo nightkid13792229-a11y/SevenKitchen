@@ -41,6 +41,16 @@ describe('formatOrderPackageSpec', () => {
     expect(formatOrderPackageSpec({ packagePlan: [] })).toBe('')
   })
 
+  it('★ 试吃装加「共」前缀，说明是整套总袋数；空数据仍返回空串', () => {
+    expect(
+      formatOrderPackageSpec(
+        { packagePlan: [{ packageSpecG: 250, packageCount: 12 }] },
+        { totalPrefix: true },
+      ),
+    ).toBe('共12袋×250g')
+    expect(formatOrderPackageSpec({}, { totalPrefix: true })).toBe('')
+  })
+
   it('normalize 保留顺序并转成整数', () => {
     expect(
       normalizeOrderPackagePlan({

@@ -126,9 +126,10 @@ describe('staff order mobile operations', () => {
     expect(detailSource).toContain('最新版 ›')
     expect(detailSource).toContain('latestRecipeEntryVisible')
     expect(detailSource).toContain('openLatestRecipe')
-    // 只按食谱业务编号打开；URL 不带 dogId，也不带 orderId（那是定制单「交付冻结版」的用法）
+    // 只按食谱业务编号打开；URL 不带 dogId，也不带 orderId（那是定制单「交付冻结版」的用法）；
+    // 2026-11-15：带 pinRecipe=1，目标页首屏不认账号里的狗，锁死这道食谱最新版
     expect(detailSource).toContain(
-      'url: `/pages/recipe-detail/index?recipeId=${encodeURIComponent(recipeId)}`',
+      'url: `/pages/recipe-detail/index?recipeId=${encodeURIComponent(recipeId)}&pinRecipe=1`',
     )
   });
 

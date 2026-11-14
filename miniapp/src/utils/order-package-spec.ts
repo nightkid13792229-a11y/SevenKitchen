@@ -53,11 +53,18 @@ export function normalizeOrderPackagePlan(
 /**
  * `4袋×250g`；多组用中文逗号连接：`4袋×250g，2袋×500g`。
  * 没有可用的分装数据时返回空串 —— 调用方据此整段不显示，不要写「0袋×0g」。
+ *
+ * `totalPrefix`：试吃装是「所有菜 × 所有套」的总袋数，加「共」避免被读成
+ * 一道菜的袋数（2026-11-15）；普通鲜食不加。
  */
 export function formatOrderPackageSpec(
   source: OrderPackagePlanSource | null | undefined,
+  options: { totalPrefix?: boolean } = {},
 ): string {
-  return normalizeOrderPackagePlan(source)
+  const rows = normalizeOrderPackagePlan(source);
+  if (rows.length === 0) return '';
+  const spec = rows
     .map((row) => `${row.packageCount}袋×${row.packageSpecG}g`)
     .join('，');
+  return options.totalPrefix ? `共${spec}` : spec;
 }

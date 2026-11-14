@@ -380,7 +380,10 @@ describe('recipe detail nutrition report regressions', () => {
 
     expect(source).toContain("const initialDogId = ref('')")
     expect(mountedSource).toContain("initialDogId.value = currentPage.options?.dogId || ''")
-    expect(mountedSource).toContain("dogId.value = initialDogId.value || uni.getStorageSync('dogId') || null")
+    // 2026-11-15：初始化收进 resolveInitialDogId（优先级 URL > storage；锁版直接 null）
+    expect(mountedSource).toContain('resolveInitialDogId({')
+    expect(mountedSource).toContain('urlDogId: initialDogId.value')
+    expect(loadRecipeDetailSource).toContain('resolveRecipeDetailDogId({')
     expect(loadRecipeDetailSource).toContain('const matchedDogId = res.data.lifeStageMatch?.dogId || res.data.lifeStageMatch?.matchedDogId')
     expect(loadRecipeDetailSource).toContain('syncSelectedDogFromMatch(matchedDogId)')
     expect(loadDogsSource).toContain('initialDogId.value || dogId.value || uni.getStorageSync(\'dogId\') || dogs.value[0].id')
@@ -558,3 +561,21 @@ describe('recipe detail reference price copy', () => {
     );
   });
 });
+describe('recipe detail · pinRecipe 锁版入口（2026-11-15）', () => {
+  const source = readFileSync(
+    resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+    'utf-8',
+  )
+
+  it('识别 pinRecipe=1', () => {
+    expect(source).toContain("currentPage.options?.pinRecipe === '1'")
+  })
+
+  it('锁版时首次不用账号里的狗，请求也不带 dogId', () => {
+    expect(source).toContain('resolveInitialDogId')
+    expect(source).toContain('resolveRecipeDetailDogId')
+    // 狗列表加载后不自动选狗；onMounted 补一次「无狗」请求
+    expect(source).toContain('if (pinRecipe.value) {')
+    expect(source).toContain('pinRecipe.value && !selectedDogId.value')
+  })
+})

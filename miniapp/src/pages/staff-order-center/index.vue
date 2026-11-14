@@ -406,10 +406,15 @@ function typeClass(value: string) {
  * 只有鲜食有分装这回事；定制 / 补剂直接返回空串，这一行只显示姓名和狗狗。
  * 老订单没有 packagePlan，用 packageCount / packageSpecG 兜底；
  * 两样都缺就不显示，绝不写「0袋×0g」。
+ *
+ * 试吃装（2026-11-15）：它的袋数是「所有菜 × 所有套」的总数，
+ * 写成「共12袋×250g」，避免被读成一道菜装 12 袋。
  */
 function foodSpecLabel(item: OrderCenterItem) {
   if (item.type !== 'FOOD') return ''
-  return formatOrderPackageSpec(item)
+  return formatOrderPackageSpec(item, {
+    totalPrefix: item.subtypeLabel === '试吃装',
+  })
 }
 
 function formatTime(value: string) {

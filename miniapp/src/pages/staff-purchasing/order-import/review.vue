@@ -1292,10 +1292,20 @@ function importIssue(item: OrderImportView): string | null {
 }
 const canConfirm = computed(() => blockReason.value === '' && !submitted.value);
 
+/**
+ * 「离开前提醒」的开关（2026-11-14 老板真机反馈后收紧）。
+ *
+ * ⚠️ 这个提醒是装给**当时屏幕上那一页**的，不是装给「本页」的：
+ * 本页被别的页压着时（点「新建商品」进了新增采购商品页）它还在跑 load()，
+ * 跑完又装一次提醒 —— 于是提醒被装到了新增采购商品页上，
+ * 那边保存完自动退回时被拦下，弹「这一笔还没保存」，
+ * 可东西明明刚存好（老板在真机上碰到的就是这个）。
+ * 所以只在这页真的显示着的时候才装；被盖住就先撤掉，回来再装。
+ */
 function updateUnloadGuard() {
   const api = (globalThis as any).wx;
   if (!api) return;
-  if (imports.value.length > 0 && !submitted.value) {
+  if (pageVisible && imports.value.length > 0 && !submitted.value) {
     api.enableAlertBeforeUnload?.({
       message: '这一笔还没保存，离开后要重新识别或手填。',
     });
@@ -1333,6 +1343,8 @@ onLoad((options: Record<string, string>) => {
 
 onShow(() => {
   pageVisible = true;
+  // 回到这一页立刻把提醒装回来：别等 load() 回来，中间那几秒点返回就没人拦了
+  updateUnloadGuard();
   if (loadedOnce) void load();
   if (pendingSkuToast) {
     const text = pendingSkuToast;
@@ -1344,6 +1356,9 @@ onShow(() => {
 
 onHide(() => {
   pageVisible = false;
+  // 被别的页盖住（去了新建商品页）就先撤掉提醒：
+  // 不然背后的 load() 会把提醒装到上面那一页去（2026-11-14）
+  updateUnloadGuard();
 });
 
 onUnload(() => {
@@ -2231,6 +2246,8 @@ async function submit() {
         : `已生成 ${res.data?.createdCount ?? ''} 条记录`,
       icon: 'success',
     });
+    // 存好了就别再拦自己：提醒只是给"还没存"准备的（2026-11-14）
+    (globalThis as any).wx?.disableAlertBeforeUnload?.();
     setTimeout(() => uni.navigateBack(), 700);
   } catch (error: any) {
     // 失败才解锁；成功时保持锁定，避免返回动画期间重复提交。

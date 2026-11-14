@@ -372,3 +372,53 @@ describe('补货核对页 · 包装层级（2026-11-12）', () => {
     expect(source).toContain('editing.skuPackagingText');
   });
 });
+
+/**
+ * 2026-11-14 老板真机反馈：AI 识别后点「新建商品」，在新商品页点保存，
+ * 会弹「这一笔还没保存，离开后要重新识别或手填」——可东西刚存好。
+ *
+ * 根因：这个离开提醒是装给**当时屏幕上那一页**的。本页被新商品页压着的时候，
+ * load() 跑到最后又装一次提醒，就装到了新商品页上，那边保存完自动退回时被拦下。
+ */
+describe('识别结果页 · 离开提醒只装在自己这页（2026-11-14）', () => {
+  it('本页被别的页盖住时不装提醒，免得装到新增采购商品页上', () => {
+    const guard = source.slice(
+      source.indexOf('function updateUnloadGuard'),
+      source.indexOf('onLoad((options: Record<string, string>) => {'),
+    );
+    expect(guard).not.toBe('');
+    expect(guard).toContain('pageVisible');
+    expect(guard).toContain(
+      'pageVisible && imports.value.length > 0 && !submitted.value',
+    );
+  });
+
+  it('被盖住（去了新建商品页）就先把提醒撤掉', () => {
+    const hideBlock = source.slice(
+      source.indexOf('onHide(() => {'),
+      source.indexOf('onUnload(() => {'),
+    );
+    expect(hideBlock).toContain('pageVisible = false');
+    expect(hideBlock).toContain('updateUnloadGuard()');
+  });
+
+  it('回到这页立刻装回来，不等数据拉完', () => {
+    const showBlock = source.slice(
+      source.indexOf('onShow(() => {'),
+      source.indexOf('onHide(() => {'),
+    );
+    expect(showBlock).toContain('updateUnloadGuard()');
+    expect(showBlock.indexOf('updateUnloadGuard()')).toBeLessThan(
+      showBlock.indexOf('void load()'),
+    );
+  });
+
+  it('日采保存成功后自动返回前先撤掉提醒，不拦自己', () => {
+    const saved = source.slice(
+      source.indexOf('const res: any = await confirmOrderImports(ids)'),
+      source.indexOf('setTimeout(() => uni.navigateBack(), 700)'),
+    );
+    expect(saved).not.toBe('');
+    expect(saved).toContain('disableAlertBeforeUnload');
+  });
+});

@@ -60,6 +60,21 @@ export interface SupplementPlanRecommendedProduct {
   displayUnit: string | null;
 }
 
+export interface SupplementDiyOption {
+  ingredientId: string;
+  name: string;
+  brand: string | null;
+  productModel: string | null;
+  displayUnit: string;
+  unit: string;
+  amount: number | null;
+  available: boolean;
+  unavailableReason: string | null;
+  isDefault: boolean;
+  purchaseLink: unknown;
+  imageUrl: string | null;
+}
+
 export interface SupplementPlanItem {
   recipeItemId: string;
   sourceIngredientId: string;
@@ -69,6 +84,8 @@ export interface SupplementPlanItem {
   sortOrder: number;
   reference: SupplementPlanReference;
   recommendedProducts: SupplementPlanRecommendedProduct[];
+  /** 顾客自购候选（等价组里开了「允许 DIY 推荐」的成员；有没有链接都列） */
+  diyPool: SupplementDiyOption[];
   repackPool: SupplementRepackOption[];
 }
 
@@ -121,6 +138,106 @@ export class SupplementPlanService {
       status: dosage.status,
       targets: dosage.targets,
     };
+  }
+
+  /**
+   * 自购池（2026-11-15）：等价组里开了「允许 DIY 推荐」的成员。
+   * 不要求我们上架、也不要求有购买链接——顾客可以照品牌/型号自己去搜；
+   * 有链接才显示「去购买」，没有链接只展示商品信息。
+   */
+  buildDiyPool(input: {
+    reference: any;
+    group: any;
+    legacyAlternatives?: any[];
+    equivalenceEnabled: boolean;
+    targets: SupplementTargetInput[];
+    totalWeightG: number;
+    fallbackAmount?: number | null;
+  }): SupplementDiyOption[] {
+    const groupUsable = Boolean(
+      input.equivalenceEnabled &&
+        input.group &&
+        input.group.status === 'APPROVED' &&
+        input.group.isActive !== false &&
+        Array.isArray(input.group.ingredients) &&
+        input.group.ingredients.length >= 2,
+    );
+    const legacy = (input.legacyAlternatives ?? []).filter(
+      (candidate) => candidate?.id && candidate.id !== input.reference?.id,
+    );
+    const members: any[] = groupUsable
+      ? [...input.group.ingredients].sort((left, right) => {
+          const [leftPriority, leftName] = memberSortKey(left);
+          const [rightPriority, rightName] = memberSortKey(right);
+          return leftPriority - rightPriority || leftName.localeCompare(rightName);
+        })
+      : [input.reference, ...legacy];
+
+    const seen = new Set<string>();
+    const entries: Array<{
+      option: SupplementDiyOption;
+      priority: number;
+      isReference: boolean;
+    }> = [];
+
+    for (const member of members) {
+      if (!member?.id || seen.has(member.id)) continue;
+      seen.add(member.id);
+      if (member.type !== 'SUPPLEMENT') continue;
+      if (member.diyEnabled !== true) continue;
+
+      const isReference = member.id === input.reference?.id;
+      const fallback =
+        isReference && Number(input.fallbackAmount) > 0
+          ? Number(input.fallbackAmount)
+          : null;
+      const dosage = this.dosage.computeDosage({
+        ingredient: member,
+        targets: input.targets,
+        totalWeightG: input.totalWeightG,
+      });
+      const reason = this.repackUnavailableReason(member, dosage, fallback);
+      const properties = (member.properties ?? {}) as Record<string, any>;
+      entries.push({
+        priority: Number(member.equivalencePriority ?? 0),
+        isReference,
+        option: {
+          ingredientId: member.id,
+          name: member.name,
+          brand: member.brand ?? null,
+          productModel: member.productModel ?? null,
+          displayUnit: dosage.unit,
+          unit: dosage.unit,
+          amount: reason
+            ? null
+            : dosage.status === 'NO_TARGETS'
+              ? fallback
+              : dosage.amount,
+          available: !reason,
+          unavailableReason: reason,
+          isDefault: false,
+          purchaseLink: properties.purchase_link ?? null,
+          imageUrl:
+            typeof properties.image_url === 'string'
+              ? properties.image_url
+              : null,
+        },
+      });
+    }
+
+    entries.sort(
+      (left, right) =>
+        Number(right.option.available) - Number(left.option.available) ||
+        Number(right.isReference) - Number(left.isReference) ||
+        left.priority - right.priority ||
+        left.option.name.localeCompare(right.option.name),
+    );
+    const options = entries.map((entry) => entry.option);
+    const defaultOption = options.find((option) => option.available) ?? options[0];
+    for (const option of options) {
+      option.isDefault = option === defaultOption;
+    }
+    return options;
   }
 
   /**
@@ -420,6 +537,15 @@ export class SupplementPlanService {
             ingredient,
             recommendedByIngredient[ingredient.id] ?? [],
           ),
+          diyPool: this.buildDiyPool({
+            reference: ingredient,
+            group,
+            legacyAlternatives,
+            equivalenceEnabled,
+            targets,
+            totalWeightG: input.totalWeightG,
+            fallbackAmount,
+          }),
           repackPool: this.buildRepackPool({
             reference: ingredient,
             group,

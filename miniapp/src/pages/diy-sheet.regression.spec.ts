@@ -334,7 +334,8 @@ describe('diy sheet layout regressions', () => {
     expect(source).not.toContain('function getFoodRecommendationDisplayText')
     expect(source).not.toContain('function getSupplementSpecDisplayText')
     expect(source).not.toContain('formatSupplementChoiceLabel')
-    expect(source).toContain('row.recommendedProducts')
+    expect(source).toContain('row.diyPool')
+    expect(source).toContain('buildSupplementPurchaseLines(supplementPlan.value)')
   })
 
   it('does not fall back to standard ingredient fields for food selected products', () => {

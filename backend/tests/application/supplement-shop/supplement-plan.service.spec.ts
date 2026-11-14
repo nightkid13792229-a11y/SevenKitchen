@@ -573,3 +573,49 @@ describe('SupplementPlanService · DIY 推荐商品兜底', () => {
     ]);
   });
 });
+
+
+describe('SupplementPlanService.buildDiyPool', () => {
+  it('组内开了 DIY 推荐的成员都进池，不看是否上架', () => {
+    const service = createService();
+    const pool = service.buildDiyPool({
+      reference: powder(),
+      group: group([
+        powder(),
+        capsule({ supplementRetailEnabled: false }),
+        iodineK({ diyEnabled: false }),
+      ]),
+      equivalenceEnabled: true,
+      targets: TARGETS as any,
+      totalWeightG: 1232,
+    });
+
+    expect(pool.map((option) => option.ingredientId)).toEqual([
+      'kelp-powder',
+      'kelp-capsule',
+    ]);
+    expect(pool[0].isDefault).toBe(true);
+  });
+
+  it('没链接的产品也出现，只是 purchaseLink 为空', () => {
+    const service = createService();
+    const pool = service.buildDiyPool({
+      reference: powder(),
+      group: group([
+        powder({ properties: {} }),
+        capsule({
+          properties: {
+            purchase_link: { platform: 'JD', url: '13:/xxx' },
+          },
+        }),
+      ]),
+      equivalenceEnabled: true,
+      targets: TARGETS as any,
+      totalWeightG: 1232,
+    });
+
+    expect(pool).toHaveLength(2);
+    expect(pool[0].purchaseLink).toBeNull();
+    expect(pool[1].purchaseLink).toEqual({ platform: 'JD', url: '13:/xxx' });
+  });
+});

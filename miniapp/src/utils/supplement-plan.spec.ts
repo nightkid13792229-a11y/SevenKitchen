@@ -1,11 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildSupplementPlanRows,
-  buildSupplementPurchaseLines,
-  resolveRowState,
-} from './supplement-plan'
+import { buildSupplementPlanRows, buildSupplementPurchaseLines } from './supplement-plan'
 
-function option(overrides: Record<string, any> = {}) {
+function diyOption(overrides: Record<string, any> = {}) {
+  return {
+    ingredientId: 'kelp-powder',
+    name: '海藻粉',
+    brand: 'NOW FOODS',
+    productModel: '450mcg碘/平勺',
+    displayUnit: '平勺',
+    unit: '平勺',
+    amount: 1.709,
+    available: true,
+    unavailableReason: null,
+    isDefault: true,
+    purchaseLink: null,
+    imageUrl: null,
+    ...overrides,
+  }
+}
+
+function repackOption(overrides: Record<string, any> = {}) {
   return {
     ingredientId: 'kelp-capsule',
     name: '海带粉胶囊',
@@ -49,120 +63,104 @@ function item(overrides: Record<string, any> = {}) {
       ],
     },
     recommendedProducts: [],
-    repackPool: [option()],
+    diyPool: [diyOption()],
+    repackPool: [repackOption()],
     ...overrides,
   }
 }
 
-describe('resolveRowState', () => {
-  it('池子为空 → 仅生产', () => {
-    expect(resolveRowState([])).toBe('PRODUCTION_ONLY')
+describe('buildSupplementPlanRows · 自购口径', () => {
+  it('名称列用目标营养素，不用原料名', () => {
+    const rows = buildSupplementPlanRows({ items: [item()] })
+    expect(rows[0].name).toBe('碘')
   })
 
-  it('池子有货但都不可用 → 暂不可购买', () => {
-    expect(resolveRowState([option({ available: false })])).toBe(
-      'TEMP_UNAVAILABLE',
-    )
-  })
-
-  it('有可用产品 → 可分装', () => {
-    expect(resolveRowState([option()])).toBe('REPACK')
-  })
-})
-
-describe('buildSupplementPlanRows', () => {
-  it('池子为空时显示参考产品与参考用量', () => {
-    const rows = buildSupplementPlanRows({ items: [item({ repackPool: [] })] })
-    expect(rows[0]).toMatchObject({
-      state: 'PRODUCTION_ONLY',
-      referenceText: 'NOW FOODS / 450mcg碘/平勺',
-      amount: 1.709,
-      unit: '平勺',
-    })
-  })
-
-  it('默认选中 isDefault，选中后可放进购买行', () => {
+  it('产品列与用量都跟着选中的自购款走', () => {
     const rows = buildSupplementPlanRows({
       items: [
         item({
-          repackPool: [
-            option({ ingredientId: 'a', isDefault: false }),
-            option({ ingredientId: 'b', isDefault: true }),
+          diyPool: [
+            diyOption({ ingredientId: 'a', isDefault: true }),
+            diyOption({
+              ingredientId: 'b',
+              name: '海带片',
+              brand: 'NOW FOODS',
+              productModel: '150mcg碘/片',
+              displayUnit: '片',
+              unit: '片',
+              amount: 5.13,
+              isDefault: false,
+            }),
           ],
         }),
       ],
     })
 
-    expect(rows[0].ingredientId).toBe('b')
-    // 制作单展示仍然按参考产品（海藻粉 1.709 平勺），不跟着分装款走
+    expect(rows[0].ingredientId).toBe('a')
     expect(rows[0].amount).toBe(1.709)
-    expect(rows[0].unit).toBe('平勺')
-    expect(buildSupplementPurchaseLines(rows)).toEqual([
+
+    const switched = buildSupplementPlanRows(
+      { items: [item({ diyPool: [diyOption({ ingredientId: 'a' }), diyOption({ ingredientId: 'b', amount: 5.13 })] })] },
+      { 'item-1': 'b' },
+    )
+    expect(switched[0].ingredientId).toBe('b')
+    expect(switched[0].amount).toBe(5.13)
+  })
+
+  it('没链接的自购款也出现，只是 purchaseLink 为空', () => {
+    const rows = buildSupplementPlanRows({
+      items: [
+        item({
+          diyPool: [
+            diyOption({ ingredientId: 'a', purchaseLink: null }),
+            diyOption({ ingredientId: 'b', purchaseLink: { url: '13:/x' } }),
+          ],
+        }),
+      ],
+    })
+
+    expect(rows[0].diyPool).toHaveLength(2)
+    expect(rows[0].diyPool[0].purchaseLink).toBeNull()
+  })
+
+  it('自购池为空时回退参考产品的名称与用量', () => {
+    const rows = buildSupplementPlanRows({ items: [item({ diyPool: [] })] })
+    expect(rows[0].hasDiyOptions).toBe(false)
+    expect(rows[0].amount).toBe(1.709)
+    expect(rows[0].productText).toBe('NOW FOODS / 450mcg碘/平勺')
+  })
+})
+
+describe('buildSupplementPurchaseLines · 预分装口径', () => {
+  it('预分装清单取预分装池默认款，与制作单的自购选择无关', () => {
+    const plan = {
+      items: [
+        item({
+          diyPool: [
+            diyOption({ ingredientId: 'self-a', name: '海藻粉', amount: 1.709 }),
+          ],
+          repackPool: [repackOption()],
+        }),
+      ],
+    }
+    const rows = buildSupplementPlanRows(plan, { 'item-1': 'self-a' })
+    expect(rows[0].ingredientId).toBe('self-a')
+
+    expect(buildSupplementPurchaseLines(plan)).toEqual([
       {
         recipeItemId: 'item-1',
-        ingredientId: 'b',
-        name: '海藻粉',
+        ingredientId: 'kelp-capsule',
+        name: '碘',
         unit: '粒',
         specText: 'NOW FOODS / 325mcg碘/粒',
       },
     ])
   })
 
-  it('保存过的选择仍然有效，但下架后回落到默认', () => {
-    const rows = buildSupplementPlanRows(
-      {
-        items: [
-          item({
-            repackPool: [
-              option({ ingredientId: 'a', isDefault: true }),
-              option({ ingredientId: 'b', isDefault: false }),
-            ],
-          }),
-        ],
-      },
-      { 'item-1': 'b' },
-    )
-    expect(rows[0].ingredientId).toBe('b')
-
-    const fallback = buildSupplementPlanRows(
-      {
-        items: [
-          item({
-            repackPool: [
-              option({ ingredientId: 'a', isDefault: true }),
-              option({ ingredientId: 'b', isDefault: false, available: false }),
-            ],
-          }),
-        ],
-      },
-      { 'item-1': 'b' },
-    )
-    expect(fallback[0].ingredientId).toBe('a')
-  })
-
-  it('暂不可购买的行不进入购买行', () => {
-    const rows = buildSupplementPlanRows({
-      items: [item({ repackPool: [option({ available: false })] })],
-    })
-    expect(rows[0].state).toBe('TEMP_UNAVAILABLE')
-    expect(buildSupplementPurchaseLines(rows)).toEqual([])
-  })
-})
-
-
-describe('参考产品优先', () => {
-  it('参考产品已上架且可用时，默认就是参考产品', () => {
-    const rows = buildSupplementPlanRows({
-      items: [
-        item({
-          repackPool: [
-            option({ ingredientId: 'kelp-powder', name: '海藻粉', isDefault: true }),
-            option({ ingredientId: 'kelp-capsule', isDefault: false }),
-          ],
-        }),
-      ],
-    })
-
-    expect(rows[0].ingredientId).toBe('kelp-powder')
+  it('没有可售款的补剂不进预分装清单', () => {
+    const plan = {
+      items: [item({ repackPool: [repackOption({ available: false, amount: null })] })],
+    }
+    expect(buildSupplementPurchaseLines(plan)).toEqual([])
   })
 })

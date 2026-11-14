@@ -149,14 +149,6 @@
             <view v-for="(item, idx) in supplementItemsDetailed" :key="'supp-' + idx" class="table-row supplement-table">
               <view class="row-item product-col">
                 <text>{{ item.name }}</text>
-                <text
-                  v-if="item.state === 'PRODUCTION_ONLY'"
-                  class="production-only-tag"
-                >仅生产，不单独出售</text>
-                <text
-                  v-else-if="item.state === 'TEMP_UNAVAILABLE'"
-                  class="production-only-tag"
-                >暂不可购买</text>
               </view>
               <view
                 v-if="item.hasSpecDetail"
@@ -185,9 +177,7 @@
               </view>
             </view>
           </view>
-          <view v-if="supplementItemsDetailed.some((item: any) => item.state !== 'REPACK')" class="production-only-note">
-            <text>标「仅生产」的补剂只用于我们的鲜食生产；标「暂不可购买」的是档案还没补齐。</text>
-          </view>
+
         </view>
 
         <!-- 补剂购买引导（2026-10-24）：不想全买，可以只买本次制作的一次性预分装补剂 -->
@@ -413,10 +403,10 @@
                     <text class="rp-card-field-label">形态</text>
                     <text class="rp-card-field-value">{{ supplementFormLabel(rp.physicalForm) }}</text>
                   </view>
-                  <view v-if="rp.dosage && rp.dosage.amount !== null" class="rp-card-field">
+                  <view v-if="rp.amount !== null && rp.amount !== undefined" class="rp-card-field">
                     <text class="rp-card-field-label">换算用量</text>
                     <text class="rp-card-field-value">
-                      {{ formatSupplementAmountWithDisplayUnit(rp.dosage.amount, rp.displayUnit, rp.displayUnit) }}
+                      {{ formatSupplementAmountWithDisplayUnit(rp.amount, rp.unit || rp.displayUnit, rp.displayUnit) }}
                     </text>
                   </view>
                   <view v-if="getSpecPurchaseChannelDisplay(rp)" class="rp-card-field">
@@ -452,7 +442,6 @@
                       @tap.stop="handlePurchase(rp.purchaseLink, rp.name)"
                     >去购买</button>
                     <button
-                      v-if="currentSpec.type !== 'SUPPLEMENT'"
                       class="btn-confirm-select"
                       @tap.stop="confirmProductSelection(rpIdx)"
                     >确认选择</button>
@@ -864,7 +853,9 @@ const makingPurchaseFacts = computed(() => {
 const canBuySupplements = computed(
   () =>
     supplementShopEnabled.value &&
-    supplementItemsDetailed.value.some((item: any) => item.purchasable !== false)
+    (supplementPlan.value?.items || []).some((item) =>
+      (item.repackPool || []).some((option) => option.available)
+    )
 )
 
 const ingredientDetails = computed(() => {
@@ -1048,7 +1039,11 @@ const supplementItemsDetailed = computed(() => {
     supplementPlan.value,
     savedSupplementSelections.value
   ).map((row) => {
-    const recommended = row.recommendedProducts || []
+    // 自购候选：等价组里开了「允许 DIY 推荐」的成员，有没有链接都列
+    const options = row.diyPool || []
+    const selectedIndex = options.findIndex(
+      (option) => option.ingredientId === row.selectedDiyIngredientId
+    )
     return {
       ...row,
       amountStr: formatSupplementAmountWithDisplayUnit(
@@ -1056,14 +1051,13 @@ const supplementItemsDetailed = computed(() => {
         row.unit,
         row.displayUnit
       ),
-      allRecommendedProducts: recommended,
-      selectedRPIndex: 0,
-      recommendedSpecPrintText: row.referenceText,
-      selectedProductDisplayText: row.referenceText,
-      hasSpecDetail: recommended.length > 0,
+      allRecommendedProducts: options,
+      selectedRPIndex: selectedIndex >= 0 ? selectedIndex : 0,
+      recommendedSpecPrintText: row.productText,
+      selectedProductDisplayText: row.productText,
+      hasSpecDetail: options.length > 0,
       supplementTargets: row.targets,
-      choiceLabel: formatRecommendationActionLabel(recommended.length),
-      purchasable: row.state === 'REPACK',
+      choiceLabel: formatRecommendationActionLabel(options.length),
       type: 'SUPPLEMENT',
       properties: {}
     }
@@ -1256,7 +1250,8 @@ function goFinishedFood() {
  */
 async function handleBuySupplements() {
   // 只带“选了哪个原料”，用量由后端按配方重算（2026-10-26）
-  const lines = buildSupplementPurchaseLines(supplementItemsDetailed.value)
+  // 预分装清单由服务端口径决定，与制作单上顾客自购的选择无关
+  const lines = buildSupplementPurchaseLines(supplementPlan.value)
 
   if (lines.length === 0) {
     uni.showToast({ title: '暂无可购买的补剂', icon: 'none' })
@@ -1990,7 +1985,9 @@ function showSpecModal(item: any) {
   // 补剂只有 1 个推荐商品时，弹窗必须显示那件推荐商品本身，
   // 不能拿预分装款的品牌/规格去拼一个不存在的组合。
   const firstRecommended =
-    item?.type === 'SUPPLEMENT' ? item.allRecommendedProducts?.[0] : null
+    item?.type === 'SUPPLEMENT' && item.allRecommendedProducts?.length === 1
+      ? item.allRecommendedProducts[0]
+      : null
   currentSpec.value = firstRecommended
     ? {
         ...item,
@@ -2076,8 +2073,19 @@ function confirmRecommendedProductSelection() {
   }
 
   const key = modalSelectionKey.value
-  // 补剂：顾客不选我们生产/分装用哪款，这里只关窗，不落任何选择
   if (currentSpec.value?.type === 'SUPPLEMENT') {
+    const option =
+      currentSpec.value?.allRecommendedProducts?.[modalSelectedRpIndex.value]
+    if (!option) {
+      closeSpecModal()
+      return
+    }
+    // 记的是顾客自己想买的那款，不影响我们分装/生产
+    savedSupplementSelections.value = {
+      ...savedSupplementSelections.value,
+      [key]: option.ingredientId
+    }
+    void autoSaveDiySheet()
     closeSpecModal()
     return
   }

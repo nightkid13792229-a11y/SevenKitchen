@@ -161,6 +161,7 @@ export class SupplementPlanService {
     const entries: Array<{
       option: SupplementRepackOption;
       priority: number;
+      isReference: boolean;
     }> = [];
 
     for (const member of members) {
@@ -175,11 +176,17 @@ export class SupplementPlanService {
         targets: input.targets,
         totalWeightG: input.totalWeightG,
       });
+      // 没有营养目标的克数兜底只对参考产品成立：其他成员的浓度/单位不同，
+      // 把参考的克数套到「粒/片」上会算错量和价。
+      const isReference = member.id === input.reference?.id;
       const fallback =
-        Number(input.fallbackAmount) > 0 ? Number(input.fallbackAmount) : null;
+        isReference && Number(input.fallbackAmount) > 0
+          ? Number(input.fallbackAmount)
+          : null;
       const reason = this.repackUnavailableReason(member, dosage, fallback);
       entries.push({
         priority: Number(member.equivalencePriority ?? 0),
+        isReference,
         option: {
           ingredientId: member.id,
           name: member.name,
@@ -203,6 +210,7 @@ export class SupplementPlanService {
     entries.sort(
       (left, right) =>
         Number(right.option.available) - Number(left.option.available) ||
+        Number(right.isReference) - Number(left.isReference) ||
         left.priority - right.priority ||
         left.option.name.localeCompare(right.option.name),
     );
@@ -330,7 +338,8 @@ export class SupplementPlanService {
     });
 
     if (!recipe) {
-      throw new NotFoundException('食谱不存在');
+      // 冻结版本不存在 = 食谱已发布新版，顾客需要刷新制作单
+      throw new BadRequestException('食谱已更新，请刷新制作单');
     }
 
     const supplementItems = recipe.items.filter(
@@ -428,6 +437,76 @@ export class SupplementPlanService {
             totalWeightG: input.totalWeightG,
             fallbackAmount,
           }),
+        };
+      }),
+    };
+  }
+
+  /**
+   * 旧版小程序兼容（一个版本周期）：把新计划映射成旧候选结构。
+   * 内容按新口径（预分装池）重算，旧版仍能显示和下单。
+   */
+  toLegacyCandidates(plan: SupplementPlanResponse): {
+    totalWeightG: number;
+    weightSource: string;
+    items: any[];
+  } {
+    return {
+      totalWeightG: plan.totalWeightG,
+      weightSource: plan.weightSource,
+      items: plan.items.map((item) => {
+        const available = item.repackPool.filter((option) => option.available);
+        return {
+          recipeItemId: item.recipeItemId,
+          sourceIngredientId: item.sourceIngredientId,
+          source: 'EQUIVALENCE_GROUP',
+          group: null,
+          defaultIngredient: {
+            ingredientId: item.reference.ingredientId,
+            name: item.reference.name,
+            displayUnit: item.reference.displayUnit,
+            physicalForm: null,
+            diyEnabled: true,
+            supplementRetailEnabled: available.length > 0,
+            selectable: available.length > 0,
+            unavailableReason: null,
+            dosage: {
+              status: item.reference.status,
+              amount: item.reference.amount,
+              unit: item.reference.unit,
+              targets: item.reference.targets,
+              concentrations: [],
+              missingFieldPaths: [],
+            },
+          },
+          candidates: available.map((option) => ({
+            ingredientId: option.ingredientId,
+            name: option.name,
+            brand: option.brand,
+            productModel: option.productModel,
+            purchaseChannel: null,
+            purchaseLink: null,
+            imageUrl: null,
+            physicalForm: null,
+            displayUnit: option.displayUnit,
+            isDefault: option.isDefault,
+            selectable: true,
+            unavailableReason: null,
+            dosage: {
+              status: 'OK',
+              amount: option.amount,
+              unit: option.unit,
+              targets: item.reference.targets,
+              concentrations: option.concentrations,
+              missingFieldPaths: [],
+            },
+          })),
+          fallbackAmount: null,
+          unavailableReason:
+            available.length > 0 ? null : '暂时买不到，找 Seven爸爸',
+          preparationMethod: item.preparationMethod,
+          addTimingLabel: item.addTimingLabel,
+          sortOrder: item.sortOrder,
         };
       }),
     };

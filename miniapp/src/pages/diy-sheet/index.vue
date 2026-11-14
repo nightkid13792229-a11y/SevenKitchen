@@ -468,6 +468,7 @@
                   @tap.stop="handlePurchase(rp.purchaseLink, rp.name)"
                 >去购买</button>
                 <button
+                  v-if="currentSpec.type !== 'SUPPLEMENT'"
                   class="btn-confirm-select"
                   @tap.stop="confirmProductSelection(rpIdx)"
                 >确认选择</button>
@@ -1061,6 +1062,7 @@ const supplementItemsDetailed = computed(() => {
       recommendedSpecPrintText: row.referenceText,
       selectedProductDisplayText: row.referenceText,
       hasSpecDetail: recommended.length > 0,
+      supplementTargets: row.targets,
       choiceLabel: formatRecommendationActionLabel(recommended.length),
       purchasable: row.state === 'REPACK',
       type: 'SUPPLEMENT',
@@ -1986,7 +1988,20 @@ const shareTitle = computed(() => {
 
 // 规格弹窗控制
 function showSpecModal(item: any) {
-  currentSpec.value = item
+  // 补剂只有 1 个推荐商品时，弹窗必须显示那件推荐商品本身，
+  // 不能拿预分装款的品牌/规格去拼一个不存在的组合。
+  const firstRecommended =
+    item?.type === 'SUPPLEMENT' ? item.allRecommendedProducts?.[0] : null
+  currentSpec.value = firstRecommended
+    ? {
+        ...item,
+        name: firstRecommended.name,
+        brand: firstRecommended.brand || '-',
+        productModel: firstRecommended.productModel,
+        purchaseLink: firstRecommended.purchaseLink,
+        imageUrl: firstRecommended.imageUrl
+      }
+    : item
   modalSelectionKey.value = item.selectionKey || item.ingredientId || ''
   modalSelectedRpIndex.value = selectedRpIndexMap.value[modalSelectionKey.value] ?? 0
   showSpec.value = true

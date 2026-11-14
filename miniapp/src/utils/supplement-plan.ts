@@ -80,9 +80,20 @@ export interface SupplementPlanRow {
   brand: string
   productModel?: string
   referenceText: string
+  /** 制作单展示用量：永远按参考产品算，不跟着预分装款走 */
   amount: number
   unit: string
   displayUnit: string
+  /** 预分装那一款自己的用量/单位（下单前参考） */
+  repackAmount: number
+  repackDisplayUnit: string
+  /** 参考产品的营养目标（营养信息弹窗/打印用） */
+  targets: Array<{
+    fieldPath: string
+    label: string
+    unit: string
+    targetValuePerKg: number
+  }>
   state: SupplementRowState
   recommendedProducts: SupplementRecommendedProduct[]
   repackPool: SupplementRepackOption[]
@@ -148,7 +159,6 @@ export function buildSupplementPlanRows(
     .map((item) => {
       const state = resolveRowState(item.repackPool)
       const selected = pickDefaultOption(item, selections)
-      const amount = selected?.amount ?? item.reference.amount ?? 0
       return {
         recipeItemId: item.recipeItemId,
         ingredientId: selected?.ingredientId ?? item.reference.ingredientId,
@@ -157,9 +167,14 @@ export function buildSupplementPlanRows(
         brand: selected?.brand || '-',
         productModel: selected?.productModel || undefined,
         referenceText: productText(item.reference),
-        amount,
-        unit: selected?.unit || item.reference.unit,
-        displayUnit: selected?.displayUnit || item.reference.displayUnit,
+        // 制作单这一行讲的是「这份配方按哪款产品算」，必须用参考产品的量和单位；
+        // 预分装款只在下单行里用（两款浓度不同，混用会补错量）。
+        amount: item.reference.amount ?? 0,
+        unit: item.reference.unit,
+        displayUnit: item.reference.displayUnit,
+        repackAmount: selected?.amount ?? 0,
+        repackDisplayUnit: selected?.displayUnit || '',
+        targets: item.reference.targets || [],
         state,
         recommendedProducts: item.recommendedProducts || [],
         repackPool: item.repackPool || [],
@@ -179,7 +194,7 @@ export function buildSupplementPurchaseLines(
   rows: SupplementPlanRow[],
 ): SupplementPurchaseLine[] {
   return rows
-    .filter((row) => row.state === 'REPACK' && row.amount > 0)
+    .filter((row) => row.state === 'REPACK' && row.repackAmount > 0)
     .map((row) => {
       const selected = row.repackPool.find(
         (option) => option.ingredientId === row.ingredientId,
@@ -189,7 +204,7 @@ export function buildSupplementPurchaseLines(
         recipeItemId: row.recipeItemId,
         ingredientId: row.ingredientId,
         name: row.name,
-        unit: row.displayUnit,
+        unit: row.repackDisplayUnit || row.displayUnit,
         specText: specText && specText !== row.name ? specText : '',
       }
     })

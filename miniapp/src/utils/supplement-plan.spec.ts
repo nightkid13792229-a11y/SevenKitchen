@@ -94,6 +94,9 @@ describe('buildSupplementPlanRows', () => {
     })
 
     expect(rows[0].ingredientId).toBe('b')
+    // 制作单展示仍然按参考产品（海藻粉 1.709 平勺），不跟着分装款走
+    expect(rows[0].amount).toBe(1.709)
+    expect(rows[0].unit).toBe('平勺')
     expect(buildSupplementPurchaseLines(rows)).toEqual([
       {
         recipeItemId: 'item-1',
@@ -143,5 +146,23 @@ describe('buildSupplementPlanRows', () => {
     })
     expect(rows[0].state).toBe('TEMP_UNAVAILABLE')
     expect(buildSupplementPurchaseLines(rows)).toEqual([])
+  })
+})
+
+
+describe('参考产品优先', () => {
+  it('参考产品已上架且可用时，默认就是参考产品', () => {
+    const rows = buildSupplementPlanRows({
+      items: [
+        item({
+          repackPool: [
+            option({ ingredientId: 'kelp-powder', name: '海藻粉', isDefault: true }),
+            option({ ingredientId: 'kelp-capsule', isDefault: false }),
+          ],
+        }),
+      ],
+    })
+
+    expect(rows[0].ingredientId).toBe('kelp-powder')
   })
 })

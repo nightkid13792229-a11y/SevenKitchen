@@ -326,3 +326,132 @@ describe('SupplementPlanService.resolveForRecipeRequest', () => {
     );
   });
 });
+
+
+describe('SupplementPlanService · 参考优先与兜底口径', () => {
+  it('参考产品已上架且可用时，默认落在参考产品（不看优先级/名称）', () => {
+    const service = createService();
+    const pool = service.buildRepackPool({
+      reference: powder({ supplementRetailEnabled: true }),
+      group: group([
+        capsule({ equivalencePriority: -1 }),
+        powder({ supplementRetailEnabled: true }),
+      ]),
+      equivalenceEnabled: true,
+      targets: TARGETS as any,
+      totalWeightG: 1232,
+    });
+
+    expect(pool[0].ingredientId).toBe('kelp-powder');
+    expect(pool[0].isDefault).toBe(true);
+  });
+
+  it('没有营养目标时，克数兜底只给参考产品，不给粒/片成员', () => {
+    const service = createService();
+    const pool = service.buildRepackPool({
+      reference: powder({ supplementRetailEnabled: true }),
+      group: group([
+        powder({ supplementRetailEnabled: true }),
+        capsule({ supplementRetailEnabled: true }),
+      ]),
+      equivalenceEnabled: true,
+      targets: [],
+      totalWeightG: 1232,
+      fallbackAmount: 6.2,
+    });
+
+    const powderOption = pool.find((o) => o.ingredientId === 'kelp-powder')!;
+    const capsuleOption = pool.find((o) => o.ingredientId === 'kelp-capsule')!;
+    expect(powderOption).toMatchObject({ available: true, amount: 6.2 });
+    expect(capsuleOption.available).toBe(false);
+    expect(capsuleOption.unavailableReason).toContain('没有营养目标');
+  });
+
+  it('冻结版本不存在时提示刷新制作单', async () => {
+    const prisma: any = {
+      recipe: { findUnique: jest.fn().mockResolvedValue(null) },
+      supplementShopConfig: { findUnique: jest.fn().mockResolvedValue({ equivalenceEnabled: false }) },
+      supplementEquivalenceGroup: { findMany: jest.fn().mockResolvedValue([]) },
+      recommendedProduct: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = createService(prisma);
+
+    await expect(
+      service.resolveForRecipeRequest({
+        recipeId: 'recipe-1',
+        recipeVersion: 3,
+        totalWeightG: 1232,
+      }),
+    ).rejects.toThrow('食谱已更新，请刷新制作单');
+  });
+
+  it('旧接口映射：候选=预分装池，且结构对旧版可用', () => {
+    const service = createService();
+    const plan = {
+      totalWeightG: 1232,
+      weightSource: 'QUERY' as const,
+      recipeVersion: 6,
+      items: [
+        {
+          recipeItemId: 'item-1',
+          sourceIngredientId: 'kelp-powder',
+          name: '海藻粉',
+          preparationMethod: null,
+          addTimingLabel: null,
+          sortOrder: 0,
+          reference: {
+            ingredientId: 'kelp-powder',
+            name: '海藻粉',
+            brand: 'NOW FOODS',
+            productModel: '450mcg碘/平勺',
+            displayUnit: '平勺',
+            amount: 1.709,
+            unit: '平勺',
+            status: 'OK',
+            targets: TARGETS as any,
+          },
+          recommendedProducts: [],
+          repackPool: [
+            {
+              ingredientId: 'kelp-capsule',
+              name: '海带粉胶囊',
+              brand: 'NOW FOODS',
+              productModel: '325mcg碘/粒',
+              displayUnit: '粒',
+              unit: '粒',
+              amount: 2.366,
+              available: true,
+              unavailableReason: null,
+              isDefault: true,
+              concentrations: [],
+            },
+            {
+              ingredientId: 'kelp-sheet',
+              name: '海带片',
+              brand: null,
+              productModel: null,
+              displayUnit: '片',
+              unit: '片',
+              amount: null,
+              available: false,
+              unavailableReason: '缺少配方目标的有效成分浓度',
+              isDefault: false,
+              concentrations: [],
+            },
+          ],
+        },
+      ],
+    };
+
+    const legacy = service.toLegacyCandidates(plan as any);
+
+    expect(legacy.items[0].candidates.map((item: any) => item.ingredientId)).toEqual([
+      'kelp-capsule',
+    ]);
+    expect(legacy.items[0].defaultIngredient).toMatchObject({
+      ingredientId: 'kelp-powder',
+      selectable: true,
+    });
+    expect(legacy.items[0].unavailableReason).toBeNull();
+  });
+});

@@ -2088,14 +2088,17 @@ export class RecipesController {
       throw new BadRequestException('缺少这批食物的总重，无法计算补剂用量');
     }
 
+    // 旧接口保留一个版本周期，但内容按新口径（预分装池）重算
+    const plan = await this.supplementPlanService.resolveForRecipeRequest({
+      recipeId: id,
+      recipeVersion: recipe.version,
+      totalWeightG,
+      diySheetId,
+      userId: this.getRequestUser(req)?.customerId ||
+        this.getRequestUser(req)?.userId,
+    });
     return ApiResponseDto.success(
-      await this.supplementCandidateService.resolveForRecipe({
-        recipeBusinessId: id,
-        recipeVersion: recipe.version,
-        totalWeightG,
-        weightSource,
-        audience: 'CUSTOMER',
-      }),
+      this.supplementPlanService.toLegacyCandidates(plan),
     );
   }
 

@@ -120,6 +120,9 @@
           <view class="line-main">
             <text class="line-name">{{ line.name }}</text>
             <text v-if="line.specText" class="line-extra">{{ line.specText }}</text>
+            <text v-if="lineShippingNote(line)" class="line-shipping">
+              {{ lineShippingNote(line) }}
+            </text>
             <text
               v-if="lineRepackOptions(line).length > 1"
               class="line-switch"
@@ -139,6 +142,10 @@
           </text>
           <text v-else class="line-packed line-packed-disabled">—</text>
         </view>
+
+        <text v-if="productionOnlyCount > 0" class="production-only-note">
+          本单有 {{ productionOnlyCount }} 项补剂仅用于生产，不单独出售。
+        </text>
 
         <!-- 袋数：贴在清单下方，只保留 1/2/3 -->
         <view v-if="selectableLines.length > 0" class="portion-block">
@@ -586,6 +593,35 @@ function lineRepackOptions(line: any): SupplementRepackOption[] {
   ])
   return options[0]?.options || []
 }
+
+function planItemFor(line: any) {
+  return (supplementPlan.value?.items || []).find(
+    (item) => item.recipeItemId === line.recipeItemId
+  )
+}
+
+/** 分装寄送的款和配方参考款不同时，下单前说清楚 */
+function lineShippingNote(line: any): string {
+  const item = planItemFor(line)
+  if (!item) return ''
+  const selected = item.repackPool.find(
+    (option) => option.ingredientId === line.ingredientId
+  )
+  if (!selected) return ''
+  if (selected.ingredientId === item.reference.ingredientId) return ''
+  const spec = [selected.brand, selected.productModel]
+    .map((value) => String(value || '').trim())
+    .filter((value) => value && value !== '-')
+    .join(' / ')
+  return `分装寄送：${selected.name}${spec ? ` ${spec}` : ''}`
+}
+
+/** 这一单有几项补剂只用于生产、不单独出售 */
+const productionOnlyCount = computed(() => {
+  const planItems = supplementPlan.value?.items || []
+  if (planItems.length === 0) return 0
+  return Math.max(planItems.length - lines.value.length, 0)
+})
 
 function switchLineProduct(line: any) {
   const options = lineRepackOptions(line)
@@ -1185,6 +1221,19 @@ function readErrorMessage(error: unknown): string {
   margin-top: 6rpx;
   font-size: 22rpx;
   color: #909399;
+}
+
+.line-shipping {
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  color: #8a6b33;
+}
+
+.production-only-note {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #8a8578;
 }
 
 .line-switch {

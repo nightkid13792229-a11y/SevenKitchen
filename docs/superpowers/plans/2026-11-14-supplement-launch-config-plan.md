@@ -448,3 +448,30 @@
 **未做（记录在案）**
 - M8 原料列表（Ingredients/index.vue）没有同步角标；本次只做补剂上架清单。
 - 真实浏览器点击验收仍未做（三轮都只到静态与单测层面）。
+
+### 遗留问题收尾（2026-11-15）
+
+把之前记录在案的 6 项一次性补齐：
+
+1. **刷新后第 4 步消失** → `SupplementWorkbench` 用 `sessionStorage`
+   （`supplement-workbench-saved-v1`）记住刚写入的那条，挂载时恢复；
+   第 4 步头部新增「不是这条？清除」，清掉内存与 sessionStorage。
+2. **四段折叠 + 一次保存** → 每段标题可点折叠，「全部展开/收起」；
+   底部「一次保存四段」逐段执行（用 `applyArchive/applyDiy/applyProcurement/applyGroup`
+   四个抛错函数），失败不阻塞其它段，最后汇总「已保存 N 段 / M 段失败」。
+3. **组内排序** → 后端新增 `PATCH /admin/supplement-equivalence/groups/:id/members/:ingredientId`
+   （只改 `equivalencePriority`，**不把已审核组打回草稿**，写 `MEMBER_PRIORITY` 审计）；
+   补剂上架清单返回 `equivalencePriority`；第 4 步可直接改排序。
+4. **「去补」跳转** → 结论卡每条原因后加「去补」，按关键词映射到四段
+   （`reasonTarget` 纯函数 + 3 条测试），展开对应段、滚动并高亮 1.6 秒。
+5. **原料列表角标** → `Ingredients/index.vue` 复用上架清单同一套判定
+   （`isNotLaunched`），补剂行显示「落地配置未完成」。
+6. **`assertProxyDelivered` 从未调用** → 抽成纯函数 `evaluateProxyDelivery`
+   并在抓取后调用（Warning 行 / Final URL 跨站都判失败），补 4 条测试。
+
+**浏览器验收**：用 `vite preview` 起本地产物 + Playwright 打开真实构建，
+应用正常跳转 `/login`，**控制台 0 错误**。带登录态的端到端点验仍需老板账号，
+本次没有伪造登录态。
+
+**自检**：admin-web 110 文件 / 1184 条全过；后端相关 53 套件通过
+（`supplement-order.service.spec.ts` 8 条为历史基线红，未变化）；两端构建通过。

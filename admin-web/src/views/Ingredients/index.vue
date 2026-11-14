@@ -243,6 +243,15 @@
                 <el-tag :type="row.procurementEnabled ? 'success' : 'info'" size="small">
                   生产/采购 {{ row.procurementEnabled ? '启用' : '关闭' }}
                 </el-tag>
+                <el-tag
+                  v-if="supplementNotLaunched.has(row.id)"
+                  type="danger"
+                  size="small"
+                  effect="plain"
+                  title="补剂上架清单里还有未补齐/未上架/等价组没生效"
+                >
+                  落地配置未完成
+                </el-tag>
               </template>
               <template v-else>
                 <el-tag :type="row.procurementEnabled ? 'success' : 'info'" size="small">
@@ -508,6 +517,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
 import { Plus, Search, Refresh, MagicStick, List } from '@element-plus/icons-vue'
 import { ingredientApi } from '@/api/ingredients'
+import { supplementShopApi } from '@/api/supplementShop'
+import { isNotLaunched } from '@/views/SupplementShop/catalog-listing'
 import {
   IngredientType,
   IngredientProcurementStrategy,
@@ -681,10 +692,32 @@ const filteredData = computed(() => {
 })
 
 // Methods
+
+/**
+ * 补剂「落地配置」是否完成（2026-11-15 遗留）。
+ * 原料列表本身没有体检数据，这里一次性拉补剂上架清单，
+ * 复用上架清单的同一套判定（已上架 + 无 ERROR + 等价组没问题）。
+ */
+const supplementNotLaunched = ref<Set<string>>(new Set())
+
+async function loadSupplementAttention() {
+  try {
+    const catalog = await supplementShopApi.catalog()
+    supplementNotLaunched.value = new Set(
+      (catalog.items || [])
+        .filter((item) => isNotLaunched(item))
+        .map((item) => item.id),
+    )
+  } catch {
+    supplementNotLaunched.value = new Set()
+  }
+}
+
 const loadData = async () => {
   loading.value = true
   try {
     ingredients.value = await ingredientApi.list()
+    void loadSupplementAttention()
   } catch (error: any) {
     ElMessage.error(error.message || '加载失败')
   } finally {

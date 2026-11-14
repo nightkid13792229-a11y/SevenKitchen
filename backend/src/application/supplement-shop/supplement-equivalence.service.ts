@@ -612,6 +612,61 @@ export class SupplementEquivalenceService {
     return this.getById(id);
   }
 
+  /**
+   * 设置组内排序（2026-11-14 复审遗留）：0 最前，制作单默认选排序最前的可买成员。
+   * 只改排序、不动成员：**不把已审核组打回草稿**（不算成员变更）。
+   */
+  async setMemberPriority(
+    id: string,
+    ingredientId: string,
+    priority: number,
+    operator: EquivalenceOperator,
+  ): Promise<any> {
+    const value = Number(priority);
+    if (!Number.isInteger(value) || value < 0 || value > 999) {
+      throw new BadRequestException('组内排序必须是 0~999 的整数');
+    }
+
+    const group = await this.prisma.supplementEquivalenceGroup.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!group) {
+      throw new NotFoundException('等价组不存在');
+    }
+
+    const member = await this.prisma.ingredient.findFirst({
+      where: { id: ingredientId, equivalenceGroupId: id },
+      select: { id: true, name: true, equivalencePriority: true },
+    });
+    if (!member) {
+      throw new NotFoundException('这条原料不在该组里');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.ingredient.update({
+        where: { id: ingredientId },
+        data: { equivalencePriority: value },
+      });
+      await tx.supplementEquivalenceGroupAudit.create({
+        data: {
+          groupId: id,
+          action: 'MEMBER_PRIORITY',
+          changes: {
+            ingredientId,
+            name: member.name,
+            from: member.equivalencePriority,
+            to: value,
+          } as Prisma.InputJsonValue,
+          operatorId: operator.id,
+          operatorName: operator.name ?? operator.id,
+        },
+      });
+    });
+
+    return this.getById(id);
+  }
+
   async removeMember(
     id: string,
     ingredientId: string,

@@ -206,6 +206,50 @@ export function extractProductModelFromTitle(
   return `${amount} ${unit}`;
 }
 
+/**
+ * 判断抓取通道到底有没有把「目标页」交回来（2026-11-15 从私有方法抽成纯函数）。
+ *
+ * 通道对目标页 404 / 需要登录也回 200，只在正文头部写 `Warning: ...` 或
+ * `Final URL: ...`。不认这两行，就会把一张空表当成"读到了"。
+ */
+export function evaluateProxyDelivery(
+  body: string,
+  requestedHost: string,
+): { ok: true } | { ok: false; reason: string } {
+  const header = String(body || '').slice(0, 2000);
+
+  const warning = header.match(/^Warning:\s*(.+)$/im);
+  if (warning) {
+    return {
+      ok: false,
+      reason: `这个链接读不出来：${warning[1].trim()}。可以换成手动填`,
+    };
+  }
+
+  const finalUrl = header.match(/^Final URL:\s*(\S+)/im);
+  if (!finalUrl) {
+    return { ok: true };
+  }
+
+  const strip = (host: string) => host.toLowerCase().replace(/^www\./, '');
+  let finalHost = '';
+  try {
+    finalHost = strip(new URL(finalUrl[1]).hostname);
+  } catch {
+    finalHost = '';
+  }
+  const requested = strip(requestedHost);
+  const sameSite =
+    finalHost === requested || finalHost.endsWith(`.${requested}`);
+  if (!sameSite) {
+    return {
+      ok: false,
+      reason: '这个链接跳到了别的页面（多半是要登录或已下架），读不到标签，请手动填',
+    };
+  }
+  return { ok: true };
+}
+
 @Injectable()
 export class SupplementLinkPreviewService {
   constructor(private readonly providerConfig: AgentProviderConfigService) {}
@@ -408,6 +452,8 @@ export class SupplementLinkPreviewService {
       if (!content.trim()) {
         throw new BadRequestException('这个链接读不到内容，可以换成手动填');
       }
+      // 抓取通道对 404 / 登录墙也回 200，只在头部写 Warning/Final URL（2026-11-15 接上）
+      this.assertProxyDelivered(content, target);
       return content.slice(0, MAX_BODY_CHARS);
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -435,36 +481,12 @@ export class SupplementLinkPreviewService {
 
   /**
    * 抓取通道对"目标页 404 / 需要登录"也回 200，只在头部写一行 Warning/Final URL。
-   * 不认这两行的话，站长会看到"读到了"，拿到的却是一张空表。
+   * 判定逻辑见 `evaluateProxyDelivery`（纯函数，可单测）。
    */
   private assertProxyDelivered(body: string, target: URL): void {
-    const header = body.slice(0, 2000);
-
-    const warning = header.match(/^Warning:\s*(.+)$/im);
-    if (warning) {
-      throw new BadRequestException(
-        `这个链接读不出来：${warning[1].trim()}。可以换成手动填`
-      );
-    }
-
-    const finalUrl = header.match(/^Final URL:\s*(\S+)/im);
-    if (finalUrl) {
-      const strip = (host: string) => host.toLowerCase().replace(/^www\./, '');
-      let finalHost = '';
-      try {
-        finalHost = strip(new URL(finalUrl[1]).hostname);
-      } catch {
-        finalHost = '';
-      }
-      // 只认「同一个站点」：`item.taobao.com` 跳到 `login.taobao.com` 也是同一域名，
-      // 但那是登录墙，读到的不是商品页，必须拒。
-      const requestedHost = strip(target.hostname);
-      const sameSite = finalHost === requestedHost || finalHost.endsWith(`.${requestedHost}`);
-      if (!sameSite) {
-        throw new BadRequestException(
-          '这个链接跳到了别的页面（多半是要登录或已下架），读不到标签，请手动填'
-        );
-      }
+    const result = evaluateProxyDelivery(body, target.hostname);
+    if (!result.ok) {
+      throw new BadRequestException(result.reason);
     }
   }
 

@@ -1,4 +1,5 @@
 import {
+  evaluateProxyDelivery,
   extractBrandFromTitle,
   extractProductImage,
   extractProductModelFromTitle,
@@ -97,5 +98,39 @@ describe('补剂链接预览 · 规格', () => {
     expect(extractProductModelFromTitle('NOW Foods, Bone Meal, 340 g')).toBe(
       '340 g',
     );
+  });
+});
+
+describe('补剂链接预览 · 抓取通道到底交给了谁', () => {
+  it('没有 Warning / Final URL → 认为正常', () => {
+    expect(evaluateProxyDelivery('# 标题\n正文', 'www.iherb.com')).toEqual({
+      ok: true,
+    });
+  });
+
+  it('Warning 行 → 读不出来（原样带原因）', () => {
+    const result = evaluateProxyDelivery(
+      'Warning: Target page returned 404\n正文',
+      'www.iherb.com',
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain('404');
+  });
+
+  it('Final URL 跳到同站点子域 → 仍然算同一页', () => {
+    expect(
+      evaluateProxyDelivery(
+        'Final URL: https://cn.iherb.com/pr/1\n正文',
+        'www.iherb.com',
+      ),
+    ).toEqual({ ok: true });
+  });
+
+  it('Final URL 跳到别的站点（登录墙/下架）→ 拒绝', () => {
+    const result = evaluateProxyDelivery(
+      'Final URL: https://login.example.com/auth\n正文',
+      'www.iherb.com',
+    );
+    expect(result.ok).toBe(false);
   });
 });

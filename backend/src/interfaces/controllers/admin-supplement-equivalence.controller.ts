@@ -132,6 +132,24 @@ export class AdminSupplementEquivalenceController {
     );
   }
 
+  @Patch('groups/:id/members/:ingredientId')
+  @ApiOperation({ summary: '设置组内排序（0 最前；不改成员、不重置审核状态）' })
+  async setMemberPriority(
+    @Param('id') id: string,
+    @Param('ingredientId') ingredientId: string,
+    @Body() body: { priority: number },
+    @CurrentUser() user: RequestUser,
+  ) {
+    return ApiResponseDto.success(
+      await this.equivalenceService.setMemberPriority(
+        id,
+        ingredientId,
+        body?.priority,
+        this.operator(user),
+      ),
+    );
+  }
+
   @Delete('groups/:id/members/:ingredientId')
   @ApiOperation({ summary: '把原料移出等价组' })
   async removeMember(

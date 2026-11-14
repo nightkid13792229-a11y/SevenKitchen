@@ -178,15 +178,22 @@ const toggleRow = computed(() => ({
   issues: props.item.issues || [],
 }))
 
-function submit() {
-  emit('save', {
+function buildPatch(): UpdateSupplementCatalogItemDto {
+  return {
     physicalForm: (form.physicalForm as any) ?? null,
     shelfLifeMonths: form.shelfLifeMonths,
     storageCondition: form.storageCondition?.trim() || null,
     isOilBased: form.isOilBased,
     supplementRetailEnabled: form.supplementRetailEnabled,
-  })
+  }
 }
+
+function submit() {
+  emit('save', buildPatch())
+}
+
+/** 供「保存全部四段」读取当前表单值 */
+defineExpose({ buildPatch })
 </script>
 
 <style scoped>

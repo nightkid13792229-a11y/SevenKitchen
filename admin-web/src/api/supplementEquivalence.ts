@@ -150,6 +150,16 @@ export const supplementEquivalenceApi = {
       ingredientIds,
     }),
 
+  /** 设置组内排序（0 最前；不改成员、不重置审核状态） */
+  setMemberPriority: (
+    id: string,
+    ingredientId: string,
+    priority: number,
+  ): Promise<EquivalenceGroupDetail> =>
+    api.patch(`/admin/supplement-equivalence/groups/${id}/members/${ingredientId}`, {
+      priority,
+    }),
+
   removeMember: (
     id: string,
     ingredientId: string,

@@ -8,9 +8,15 @@
           等价组三个既有入口，规则与那些页面完全一致。
         </p>
       </div>
-      <span class="launch-step__progress">
-        {{ missing.length ? `还差：${missing.join('、')}` : '四段都已明确' }}
-      </span>
+      <div class="launch-step__tools">
+        <span class="launch-step__progress">
+          {{ missing.length ? `还差：${missing.join('、')}` : '四段都已明确' }}
+        </span>
+        <el-button text size="small" @click="toggleAll">
+          {{ allOpen ? '全部收起' : '全部展开' }}
+        </el-button>
+        <el-button text size="small" @click="emit('close')">不是这条？清除</el-button>
+      </div>
     </header>
 
     <el-alert
@@ -26,16 +32,19 @@
 
     <div v-loading="loading" class="launch-step__body">
       <!-- ① 商品档案 / 商城上架 -->
-      <div class="launch-seg" :class="{ 'launch-seg--done': decisions.retail !== null }">
+      <div class="launch-seg" :ref="(el: any) => setSegRef('archive', el)" :class="{ 'launch-seg--highlight': highlight === 'archive', 'launch-seg--done': decisions.retail !== null }">
         <div class="launch-seg__head">
-          <b>① 商品档案 / 商城上架</b>
+          <b @click="toggle('archive')" class="launch-seg__title">① 商品档案 / 商城上架</b>
+          <span class="launch-seg__chevron" @click="toggle('archive')">{{ open.archive ? '收起' : '展开' }}</span>
           <el-tag :type="decisions.retail === null ? 'info' : 'success'" size="small" effect="plain">
             {{ decisions.retail === null ? '待确认' : decisions.retail ? '已上架' : '仅生产' }}
           </el-tag>
         </div>
 
+        <div v-show="open.archive" class="launch-seg__body">
         <SupplementArchivePanel
           v-if="row"
+          ref="archiveRef"
           :item="row"
           :saving="savingArchive"
           @save="saveArchive"
@@ -69,17 +78,20 @@
           </el-select>
           <span class="launch-seg__hint">会记在这条原料档案里，别人能看到</span>
         </div>
+        </div>
       </div>
 
       <!-- ② DIY 推荐 -->
-      <div class="launch-seg" :class="{ 'launch-seg--done': decisions.diy !== null }">
+      <div class="launch-seg" :ref="(el: any) => setSegRef('diy', el)" :class="{ 'launch-seg--highlight': highlight === 'diy', 'launch-seg--done': decisions.diy !== null }">
         <div class="launch-seg__head">
-          <b>② DIY 推荐</b>
+          <b @click="toggle('diy')" class="launch-seg__title">② DIY 推荐</b>
+          <span class="launch-seg__chevron" @click="toggle('diy')">{{ open.diy ? '收起' : '展开' }}</span>
           <el-tag :type="decisions.diy === null ? 'info' : 'success'" size="small" effect="plain">
             {{ decisions.diy === null ? '待确认' : decisions.diy ? '参与' : '不参与' }}
           </el-tag>
         </div>
 
+        <div v-show="open.diy" class="launch-seg__body">
         <div class="launch-seg__row">
           <span class="launch-seg__label">用于 DIY 推荐</span>
           <el-switch v-model="diyForm.enabled" />
@@ -173,12 +185,14 @@
             保存本段并确认
           </el-button>
         </div>
+        </div>
       </div>
 
       <!-- ③ 生产采购 -->
-      <div class="launch-seg" :class="{ 'launch-seg--done': decisions.procurement !== null }">
+      <div class="launch-seg" :ref="(el: any) => setSegRef('procurement', el)" :class="{ 'launch-seg--highlight': highlight === 'procurement', 'launch-seg--done': decisions.procurement !== null }">
         <div class="launch-seg__head">
-          <b>③ 生产采购</b>
+          <b @click="toggle('procurement')" class="launch-seg__title">③ 生产采购</b>
+          <span class="launch-seg__chevron" @click="toggle('procurement')">{{ open.procurement ? '收起' : '展开' }}</span>
           <el-tag
             :type="decisions.procurement === null ? 'info' : 'success'"
             size="small"
@@ -188,6 +202,7 @@
           </el-tag>
         </div>
 
+        <div v-show="open.procurement" class="launch-seg__body">
         <div class="launch-seg__row">
           <span class="launch-seg__label">用于采购 / 生产</span>
           <el-switch v-model="procForm.enabled" />
@@ -213,17 +228,20 @@
             保存本段并确认
           </el-button>
         </div>
+        </div>
       </div>
 
       <!-- ④ 等价组 -->
-      <div class="launch-seg" :class="{ 'launch-seg--done': decisions.group !== null }">
+      <div class="launch-seg" :ref="(el: any) => setSegRef('group', el)" :class="{ 'launch-seg--highlight': highlight === 'group', 'launch-seg--done': decisions.group !== null }">
         <div class="launch-seg__head">
-          <b>④ 等价组</b>
+          <b @click="toggle('group')" class="launch-seg__title">④ 等价组</b>
+          <span class="launch-seg__chevron" @click="toggle('group')">{{ open.group ? '收起' : '展开' }}</span>
           <el-tag :type="decisions.group === null ? 'info' : 'success'" size="small" effect="plain">
             {{ decisions.group === null ? '待确认' : groupChip }}
           </el-tag>
         </div>
 
+        <div v-show="open.group" class="launch-seg__body">
         <div v-if="recommendations.length" class="launch-seg__row launch-recos">
           <span class="launch-seg__label">AI 推荐</span>
           <div class="launch-recos__list">
@@ -256,6 +274,22 @@
 
         <p v-if="selectedGroupHint" class="launch-seg__warn">{{ selectedGroupHint }}</p>
 
+        <div v-if="row?.equivalenceGroup" class="launch-seg__row">
+          <span class="launch-seg__label">组内排序</span>
+          <el-input-number
+            v-model="groupPriority"
+            :min="0"
+            :max="999"
+            :controls="false"
+            size="small"
+            style="width: 120px"
+          />
+          <el-button size="small" :loading="savingPriority" @click="saveGroupPriority">
+            保存排序
+          </el-button>
+          <span class="launch-seg__hint">0 最前；制作单默认选排序最前的可买成员</span>
+        </div>
+
         <div class="launch-seg__actions">
           <el-button
             size="small"
@@ -269,6 +303,15 @@
         </div>
       </div>
 
+      <div class="launch-actions">
+        <span class="launch-actions__hint">
+          {{ missing.length ? `还差：${missing.join('、')}` : '四段都已明确' }}
+        </span>
+        <el-button :loading="savingAll" :disabled="!dataReady" @click="saveAll">
+          一次保存四段
+        </el-button>
+      </div>
+
       <!-- 结论 -->
       <div class="launch-verdict" :class="`launch-verdict--${verdict.level.toLowerCase()}`">
         <div class="launch-verdict__head">
@@ -276,7 +319,12 @@
           <span class="launch-verdict__note">依据：后端「数据体检」结果</span>
         </div>
         <ul v-if="verdict.reasons.length" class="launch-verdict__reasons">
-          <li v-for="reason in verdict.reasons" :key="reason">{{ reason }}</li>
+          <li v-for="reason in verdict.reasons" :key="reason">
+            <span>{{ reason }}</span>
+            <el-button text size="small" @click="gotoSegment(reasonTarget(reason))">
+              去补
+            </el-button>
+          </li>
         </ul>
 
         <div class="launch-preview">
@@ -284,13 +332,14 @@
           <span class="launch-preview__value">{{ previewText }}</span>
           <span class="launch-preview__note">（按已保存的配置估算）</span>
         </div>
+        </div>
       </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   supplementShopApi,
@@ -313,11 +362,15 @@ import {
   describeSheetPreview,
   evaluateLaunch,
   missingDecisions,
+  reasonTarget,
+  type LaunchSegment,
   type LaunchDecisions,
   type NoSaleReason,
 } from './launchConfigState'
 
 const props = defineProps<{ ingredientId: string }>()
+
+const emit = defineEmits<{ (event: 'close'): void }>()
 
 const LINK_PLATFORMS = [
   { value: 'TAOBAO', label: '淘宝/天猫' },
@@ -340,7 +393,17 @@ const savingArchive = ref(false)
 const savingDiy = ref(false)
 const savingProc = ref(false)
 const savingGroup = ref(false)
+const savingPriority = ref(false)
+const savingAll = ref(false)
 const fetchingPreview = ref(false)
+const groupPriority = ref(0)
+
+// 折叠（2026-11-15 遗留）：四段默认展开，可单独折叠
+const open = reactive({ archive: true, diy: true, procurement: true, group: true })
+const allOpen = computed(() => Object.values(open).every(Boolean))
+const highlight = ref<LaunchSegment | ''>('')
+const segRefs: Record<string, HTMLElement | null> = {}
+const archiveRef = ref<{ buildPatch?: () => UpdateSupplementCatalogItemDto } | null>(null)
 
 const decisions = reactive<LaunchDecisions>({
   diy: null,
@@ -501,33 +564,36 @@ async function saveArchive(patch: UpdateSupplementCatalogItemDto) {
   }
 }
 
-async function saveDiy() {
+async function applyDiy(): Promise<void> {
   if (!dataReady.value) {
-    ElMessage.warning('数据还没加载成功，先点重试')
-    return
+    throw new Error('数据还没加载成功')
   }
+  const purchaseLink = diyForm.linkUrl.trim()
+    ? { platform: diyForm.platform, url: diyForm.linkUrl.trim() }
+    : null
+  const properties = mergeIngredientProperties(savedProperties(), {
+    purchase_link: purchaseLink,
+    image_url: diyForm.imageUrl.trim() || null,
+  })
+
+  await ingredientApi.update(props.ingredientId, {
+    diyEnabled: diyForm.enabled,
+    properties,
+  } as any)
+
+  if (disposed) return
+  decisions.diy = diyForm.enabled
+  ingredient.value = {
+    ...(ingredient.value || {}),
+    diyEnabled: diyForm.enabled,
+    properties,
+  }
+}
+
+async function saveDiy() {
   savingDiy.value = true
   try {
-    const purchaseLink = diyForm.linkUrl.trim()
-      ? { platform: diyForm.platform, url: diyForm.linkUrl.trim() }
-      : null
-    const properties = mergeIngredientProperties(savedProperties(), {
-      purchase_link: purchaseLink,
-      image_url: diyForm.imageUrl.trim() || null,
-    })
-
-    await ingredientApi.update(props.ingredientId, {
-      diyEnabled: diyForm.enabled,
-      properties,
-    } as any)
-
-    if (disposed) return
-    decisions.diy = diyForm.enabled
-    ingredient.value = {
-      ...(ingredient.value || {}),
-      diyEnabled: diyForm.enabled,
-      properties,
-    }
+    await applyDiy()
     ElMessage.success('DIY 配置已保存')
   } catch (error) {
     toastApiError(error, '保存失败', (message) => ElMessage.error(message))
@@ -536,19 +602,22 @@ async function saveDiy() {
   }
 }
 
-async function saveProcurement() {
+async function applyProcurement(): Promise<void> {
   if (!dataReady.value) {
-    ElMessage.warning('数据还没加载成功，先点重试')
-    return
+    throw new Error('数据还没加载成功')
   }
+  await ingredientApi.update(props.ingredientId, {
+    procurementEnabled: procForm.enabled,
+  })
+  if (disposed) return
+  decisions.procurement = procForm.enabled
+  ingredient.value = { ...(ingredient.value || {}), procurementEnabled: procForm.enabled }
+}
+
+async function saveProcurement() {
   savingProc.value = true
   try {
-    await ingredientApi.update(props.ingredientId, {
-      procurementEnabled: procForm.enabled,
-    })
-    if (disposed) return
-    decisions.procurement = procForm.enabled
-    ingredient.value = { ...(ingredient.value || {}), procurementEnabled: procForm.enabled }
+    await applyProcurement()
     ElMessage.success('采购配置已保存')
   } catch (error) {
     toastApiError(error, '保存失败', (message) => ElMessage.error(message))
@@ -657,51 +726,163 @@ function applyRecommendation(item: { groupId: string; name: string }) {
   groupChoice.value = item.groupId
 }
 
-async function saveGroup() {
+async function applyGroup(): Promise<boolean> {
   if (!dataReady.value) {
-    ElMessage.warning('数据还没加载成功，先点重试')
-    return
+    throw new Error('数据还没加载成功')
   }
   if (!groupChoice.value) {
-    ElMessage.warning('请选择等价组，或选「暂不归组」')
-    return
+    throw new Error('请选择等价组，或选「暂不归组」')
   }
 
   const target = groups.value.find((item) => item.id === groupChoice.value)
-  if (groupChoice.value !== GROUP_SKIPPED && target) {
-    if (target.status === 'APPROVED') {
-      try {
-        await ElMessageBox.confirm(
-          `「${target.name}」现在已经审核通过。加入新成员会把它打回「待审核」，` +
-            '组内其他补剂也会暂时不参与替换，需要重新审核。确定加入吗？',
-          '加入已审核的组',
-          { type: 'warning', confirmButtonText: '仍然加入', cancelButtonText: '取消' },
-        )
-      } catch {
-        return
-      }
+  if (groupChoice.value !== GROUP_SKIPPED && target?.status === 'APPROVED') {
+    try {
+      await ElMessageBox.confirm(
+        `「${target.name}」现在已经审核通过。加入新成员会把它打回「待审核」，` +
+          '组内其他补剂也会暂时不参与替换，需要重新审核。确定加入吗？',
+        '加入已审核的组',
+        { type: 'warning', confirmButtonText: '仍然加入', cancelButtonText: '取消' },
+      )
+    } catch {
+      return false
     }
   }
 
+  const previousGroupId = currentGroupId()
+  if (groupChoice.value === GROUP_SKIPPED) {
+    if (previousGroupId) {
+      await supplementEquivalenceApi.removeMember(previousGroupId, props.ingredientId)
+    }
+    decisions.group = GROUP_SKIPPED
+  } else {
+    await supplementEquivalenceApi.assign([props.ingredientId], groupChoice.value)
+    decisions.group = groupChoice.value
+  }
+  await load()
+  return true
+}
+
+async function saveGroup() {
   savingGroup.value = true
   try {
-    const previousGroupId = currentGroupId()
-    if (groupChoice.value === GROUP_SKIPPED) {
-      if (previousGroupId) {
-        await supplementEquivalenceApi.removeMember(previousGroupId, props.ingredientId)
-      }
-      decisions.group = GROUP_SKIPPED
-    } else {
-      await supplementEquivalenceApi.assign([props.ingredientId], groupChoice.value)
-      decisions.group = groupChoice.value
-    }
-    await load()
-    if (disposed) return
-    ElMessage.success('等价组已保存')
+    const ok = await applyGroup()
+    if (ok) ElMessage.success('等价组已保存')
   } catch (error) {
     toastApiError(error, '保存失败', (message) => ElMessage.error(message))
   } finally {
     savingGroup.value = false
+  }
+}
+
+/** 组内排序（2026-11-15 遗留）：只改排序，不重置审核状态 */
+async function saveGroupPriority() {
+  const group = row.value?.equivalenceGroup
+  if (!group) {
+    ElMessage.warning('先归组，才能设置组内排序')
+    return
+  }
+  savingPriority.value = true
+  try {
+    await supplementEquivalenceApi.setMemberPriority(
+      group.id,
+      props.ingredientId,
+      groupPriority.value,
+    )
+    await load()
+    ElMessage.success('组内排序已保存')
+  } catch (error) {
+    toastApiError(error, '排序保存失败', (message) => ElMessage.error(message))
+  } finally {
+    savingPriority.value = false
+  }
+}
+
+function toggle(key: LaunchSegment) {
+  open[key] = !open[key]
+}
+
+function toggleAll() {
+  const next = !allOpen.value
+  ;(Object.keys(open) as LaunchSegment[]).forEach((key) => {
+    open[key] = next
+  })
+}
+
+function setSegRef(key: LaunchSegment, el: any) {
+  segRefs[key] = (el as HTMLElement) || null
+}
+
+/** 结论卡「去补」：展开对应段并滚过去高亮一下 */
+async function gotoSegment(target: LaunchSegment) {
+  open[target] = true
+  await nextTick()
+  segRefs[target]?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+  highlight.value = target
+  window.setTimeout(() => {
+    if (highlight.value === target) highlight.value = ''
+  }, 1600)
+}
+
+/** 一次保存四段：逐段执行，失败的段不阻塞其它段 */
+async function saveAll() {
+  if (!dataReady.value) {
+    ElMessage.warning('数据还没加载成功，先点重试')
+    return
+  }
+  savingAll.value = true
+  let saved = 0
+  let failed = 0
+
+  try {
+    const patch = archiveRef.value?.buildPatch?.()
+    if (patch && row.value) {
+      const updated = await supplementShopApi.updateItem(row.value.id, patch)
+      row.value = updated
+      decisions.retail = updated.supplementRetailEnabled === true
+      if (decisions.retail) {
+        decisions.noSaleReason = null
+        await persistNoSaleReason(null)
+      }
+      saved += 1
+    }
+  } catch (error) {
+    failed += 1
+    toastApiError(error, '商品档案保存失败', (message) => ElMessage.error(message))
+  }
+
+  try {
+    await applyDiy()
+    saved += 1
+  } catch (error) {
+    failed += 1
+    toastApiError(error, 'DIY 配置保存失败', (message) => ElMessage.error(message))
+  }
+
+  try {
+    await applyProcurement()
+    saved += 1
+  } catch (error) {
+    failed += 1
+    toastApiError(error, '采购配置保存失败', (message) => ElMessage.error(message))
+  }
+
+  try {
+    const targetGroup = groupChoice.value
+    if (targetGroup && targetGroup !== (currentGroupId() || GROUP_SKIPPED)) {
+      const ok = await applyGroup()
+      if (ok) saved += 1
+    }
+  } catch (error) {
+    failed += 1
+    toastApiError(error, '等价组保存失败', (message) => ElMessage.error(message))
+  }
+
+  await load()
+  savingAll.value = false
+  if (failed > 0) {
+    ElMessage.warning(`已保存 ${saved} 段，${failed} 段没保存成功，看上面的提示`)
+  } else {
+    ElMessage.success(`已保存 ${saved} 段配置`)
   }
 }
 
@@ -840,6 +1021,38 @@ onMounted(load)
   font-size: 12px;
   color: #909399;
   line-height: 1.6;
+}
+.launch-step__tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.launch-seg__title {
+  cursor: pointer;
+}
+.launch-seg__chevron {
+  font-size: 12px;
+  color: #909399;
+  cursor: pointer;
+  margin-right: 4px;
+}
+.launch-seg__body {
+  margin-top: 2px;
+}
+.launch-seg--highlight {
+  box-shadow: 0 0 0 2px #409eff;
+}
+.launch-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin: 4px 0 14px;
+}
+.launch-actions__hint {
+  font-size: 12px;
+  color: #e6a23c;
 }
 .launch-step__progress {
   flex: none;

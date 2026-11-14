@@ -136,3 +136,20 @@ export function describeSheetPreview(input: {
   }
   return '查看商品 〉'
 }
+
+/** 「去补」跳到哪一段（2026-11-15 复审遗留）。 */
+export type LaunchSegment = 'archive' | 'diy' | 'procurement' | 'group'
+
+/**
+ * 把结论卡里的一句话映射到要补的那一段。
+ * 只按文案里的关键词判断，不做业务判断（业务结论仍来自后端 issues）。
+ */
+export function reasonTarget(text: string): LaunchSegment {
+  const value = String(text || '')
+  if (/等价组|替换|审核|成员|组内/.test(value)) return 'group'
+  if (/购买链接|DIY|抓取/.test(value)) return 'diy'
+  // 「未上架」这句里也带「生产」二字，必须先判档案段
+  if (/未上架|上架|保质期|形态|液体|单位|单价/.test(value)) return 'archive'
+  if (/采购|生产/.test(value)) return 'procurement'
+  return 'archive'
+}

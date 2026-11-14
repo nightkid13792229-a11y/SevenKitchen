@@ -368,7 +368,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import SupplementCompare from './SupplementCompare.vue'
@@ -404,6 +404,52 @@ const saving = ref(false)
 const confirming = ref(false)
 const errorText = ref('')
 const saved = ref<{ ingredientId: string; nutritionFoodId: string; evidenceId: string } | null>(null)
+
+/**
+ * 第 4 步在刷新后要能恢复（2026-11-15 遗留）。
+ * `saved` 只存在组件内存里，刷新就没了，只剩上架清单能改。
+ * 用 sessionStorage 记住"这次会话里刚写入的那条"，关掉标签页就清。
+ */
+const SAVED_STORAGE_KEY = 'supplement-workbench-saved-v1'
+
+function restoreSaved() {
+  try {
+    const raw = sessionStorage.getItem(SAVED_STORAGE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed.ingredientId === 'string' && parsed.ingredientId) {
+      saved.value = parsed
+    }
+  } catch {
+    // 存的东西坏了就当没有
+  }
+}
+
+function clearSaved() {
+  saved.value = null
+  confirmed.value = false
+  try {
+    sessionStorage.removeItem(SAVED_STORAGE_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+watch(
+  saved,
+  (value) => {
+    try {
+      if (value?.ingredientId) {
+        sessionStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(value))
+      } else {
+        sessionStorage.removeItem(SAVED_STORAGE_KEY)
+      }
+    } catch {
+      // sessionStorage 不可用就只影响刷新恢复
+    }
+  },
+  { deep: false },
+)
 const confirmed = ref(false)
 const pending = ref<PendingSupplementArchiveDto[]>([])
 const pendingOpen = ref(false)
@@ -474,6 +520,7 @@ const perUnitPreview = (fieldPath: string): string => {
 }
 
 onMounted(() => {
+  restoreSaved()
   void refreshPending()
 })
 

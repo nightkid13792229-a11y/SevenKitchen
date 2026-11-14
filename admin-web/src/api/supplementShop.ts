@@ -22,6 +22,8 @@ export interface SupplementCatalogItem {
   name: string;
   /** 建档时间（ISO）；用于「新建 7 天仍未配好」的角标。读不到时是空串 */
   createdAt: string;
+  /** 组内排序（0 最前）；没归组时是 0 */
+  equivalencePriority: number;
   brand: string | null;
   productModel: string | null;
   purchaseChannel: string | null;

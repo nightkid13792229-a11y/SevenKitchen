@@ -11,6 +11,7 @@ function buildServiceMock() {
     changeStatus: jest.fn().mockResolvedValue({ id: 'g1' }),
     addMembers: jest.fn().mockResolvedValue({ id: 'g1' }),
     removeMember: jest.fn().mockResolvedValue({ id: 'g1' }),
+    setMemberPriority: jest.fn().mockResolvedValue({ id: 'g1' }),
     removeGroup: jest.fn().mockResolvedValue(undefined),
     listUngrouped: jest.fn().mockResolvedValue([]),
     assign: jest.fn().mockResolvedValue({ moved: 1, skipped: 0 }),
@@ -93,6 +94,14 @@ describe('AdminSupplementEquivalenceController', () => {
       ) ?? [];
     expect(deleteGuards).toContain(AdminGuard);
   });
+  it('设置组内排序会带上操作人', async () => {
+    await controller.setMemberPriority('g1', 'ing-1', { priority: 3 }, user);
+    expect(service.setMemberPriority).toHaveBeenCalledWith('g1', 'ing-1', 3, {
+      id: 'admin-1',
+      name: 'admin-1',
+    });
+  });
+
   it('recommend 必须带 ingredientId，并调用推荐服务', async () => {
     await expect(controller.recommend(undefined)).rejects.toThrow(
       '缺少 ingredientId',

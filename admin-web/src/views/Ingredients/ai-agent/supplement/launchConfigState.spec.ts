@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   GROUP_SKIPPED,
+  reasonTarget,
   describeSheetPreview,
   evaluateLaunch,
   missingDecisions,
@@ -169,5 +170,25 @@ describe('落地配置 · 制作单预览文案', () => {
         groupEffective: false,
       }),
     ).toBe('查看商品 〉')
+  })
+})
+
+describe('落地配置 · 「去补」跳到哪一段', () => {
+  it('未上架 / 缺保质期 → 商品档案', () => {
+    expect(reasonTarget('未上架：制作单里只会显示「仅生产，不可购买」')).toBe(
+      'archive',
+    )
+    expect(reasonTarget('未填写原厂保质期，无法计算分装后有效期')).toBe('archive')
+  })
+
+  it('缺购买链接 → DIY 段', () => {
+    expect(reasonTarget('已上架，但没填购买链接：详情里没有「去购买」')).toBe('diy')
+  })
+
+  it('等价组问题 → 等价组段', () => {
+    expect(reasonTarget('未归等价组：缺货时无法替换成同营养的其他产品')).toBe(
+      'group',
+    )
+    expect(reasonTarget('所在等价组未审核通过：不参与替换')).toBe('group')
   })
 })

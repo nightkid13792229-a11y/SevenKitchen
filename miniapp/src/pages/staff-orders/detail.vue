@@ -759,6 +759,7 @@ import { ref, computed, onMounted } from 'vue'
 import { CARRIERS } from '../../constants/carriers'
 import StaffShipDrawer from '../../components/shipping/StaffShipDrawer.vue'
 import { buildShipDogSummary } from '../../utils/order-ship'
+import { resolveLatestRecipeId } from '../../utils/order-recipe-link'
 import { onShareAppMessage } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import {
@@ -2341,16 +2342,23 @@ async function saveAmountAdjustment() {
 }
 
 /**
- * 「最新版 ›」入口（2026-11-14）。
+ * 「最新版 ›」入口（2026-11-14，2026-11-15 修试吃装 404）。
  *
  * 订单项里冻的是**下单那一版**的食谱快照；老板 / 营养师后来改过配方时，
  * 员工要能直接翻到这道食谱的当前版本核对，不用再去食谱管理里搜。
  *
- * 特意**不传 dogId**：带了 dogId，后端会按狗狗的生命阶段切到同系列的
- * 另一版，打开的就不一定是这单这道食谱了；不带才落在该食谱自身的最新版。
+ * 但**试吃装不能给这个入口**：它的快照 `id` 是商品 ID，不是食谱编号，
+ * 点进 /recipes/:id 必然 404；试吃装本身也是「一套几道菜」，没有单道食谱。
+ * 判断收在 `resolveLatestRecipeId` 里，`isTastingPack` 作为订单级的兜底。
+ *
+ * 注意：入口本身不带 dogId，但食谱详情页会用账号已选的狗（或 dogs[0]）
+ * 兜底并重新请求，同系列多生命阶段时可能展示另一版 —— 这是目标页的
+ * 既有行为，要强制锁死「这道食谱最新版」需要目标页支持 pin 参数。
  */
 function latestRecipeId(item: OrderItemDetail | null | undefined): string {
-  return String(item?.recipeSnapshot?.id || '').trim()
+  return resolveLatestRecipeId(item?.recipeSnapshot, {
+    tastingPackOrder: isTastingPack.value,
+  })
 }
 
 function latestRecipeEntryVisible(item: OrderItemDetail | null | undefined): boolean {

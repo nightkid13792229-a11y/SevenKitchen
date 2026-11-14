@@ -40,6 +40,10 @@
         <div class="summary-value">{{ summary.noPrice }}</div>
         <div class="summary-label">进货价为 0</div>
       </el-card>
+      <el-card shadow="never" class="summary-card highlight-error">
+        <div class="summary-value">{{ newlyNeedsAttentionCount }}</div>
+        <div class="summary-label">新建 7 天未配好</div>
+      </el-card>
     </div>
 
     <el-card shadow="never">
@@ -57,6 +61,7 @@
           <el-option label="档案可售卖（不含库存）" value="READY" />
           <el-option label="被食谱引用过" value="USED" />
           <el-option label="可用于生产" value="PRODUCIBLE" />
+          <el-option label="新建 7 天未配好" value="NEW" />
         </el-select>
         <span class="toolbar-tip">共 {{ filteredItems.length }} 条</span>
       </div>
@@ -80,6 +85,15 @@
             >
               {{ row.name }}
             </el-button>
+            <el-tag
+              v-if="isNewlyNeedsAttention(row)"
+              type="warning"
+              size="small"
+              effect="plain"
+              class="issue-tag"
+            >
+              新建待配
+            </el-tag>
             <div class="cell-sub">{{ row.brand || '无品牌' }} · {{ row.productModel || '无规格' }}</div>
           </template>
         </el-table-column>
@@ -291,7 +305,9 @@ const summary = ref<SupplementCatalogSummary>({
   noPrice: 0,
 });
 const keyword = ref('');
-const filter = ref<'ALL' | 'BLOCKED' | 'ENABLED' | 'READY' | 'USED' | 'PRODUCIBLE'>(
+const filter = ref<
+  'ALL' | 'BLOCKED' | 'ENABLED' | 'READY' | 'USED' | 'PRODUCIBLE' | 'NEW'
+>(
   'ALL',
 );
 const savingIds = ref(new Set<string>());
@@ -338,6 +354,22 @@ function formLabel(code: string | null): string {
   return PHYSICAL_FORM_LABELS[code as keyof typeof PHYSICAL_FORM_LABELS] ?? code;
 }
 
+/** 新建 7 天内还没配好（没上架或没归组）——提醒别让补剂"白添加" */
+const NEW_SUPPLEMENT_WINDOW_DAYS = 7
+
+function isNewlyNeedsAttention(item: any): boolean {
+  if (!item?.createdAt) return false
+  const createdAt = new Date(item.createdAt).getTime()
+  if (!Number.isFinite(createdAt)) return false
+  const days = (Date.now() - createdAt) / (1000 * 60 * 60 * 24)
+  if (days > NEW_SUPPLEMENT_WINDOW_DAYS) return false
+  return !item.supplementRetailEnabled || !item.equivalenceGroup
+}
+
+const newlyNeedsAttentionCount = computed(
+  () => items.value.filter((item) => isNewlyNeedsAttention(item)).length,
+)
+
 const filteredItems = computed(() => {
   const kw = keyword.value.trim().toLowerCase();
   return items.value.filter((item) => {
@@ -357,6 +389,8 @@ const filteredItems = computed(() => {
         return item.recipeReferenceCount > 0;
       case 'PRODUCIBLE':
         return item.producible;
+      case 'NEW':
+        return isNewlyNeedsAttention(item);
       default:
         return true;
     }

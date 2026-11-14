@@ -41,6 +41,8 @@ export interface SupplementCatalogIssue {
 export interface SupplementCatalogItem {
   id: string;
   name: string;
+  /** 建档时间（ISO）；用于「新建 7 天仍未配好」的角标 */
+  createdAt: string | null;
   brand: string | null;
   productModel: string | null;
   purchaseChannel: string | null;
@@ -150,6 +152,7 @@ export class SupplementCatalogService {
       select: {
         id: true,
         name: true,
+        createdAt: true,
         brand: true,
         productModel: true,
         purchaseChannel: true,
@@ -421,6 +424,7 @@ export class SupplementCatalogService {
       shelfLifeMonths: number | null;
       storageCondition: string | null;
       openedShelfLifeDays: number | null;
+      createdAt: Date | string;
       properties: unknown;
       nutritionProfile: unknown;
       equivalenceGroupId: string | null;
@@ -584,6 +588,9 @@ export class SupplementCatalogService {
     return {
       id: ingredient.id,
       name: ingredient.name,
+      createdAt: ingredient.createdAt
+        ? new Date(ingredient.createdAt).toISOString()
+        : null,
       brand: ingredient.brand,
       productModel: ingredient.productModel,
       purchaseChannel: ingredient.purchaseChannel,

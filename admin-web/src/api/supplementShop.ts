@@ -20,6 +20,8 @@ export interface SupplementCatalogIssue {
 export interface SupplementCatalogItem {
   id: string;
   name: string;
+  /** 建档时间（ISO）；用于「新建 7 天仍未配好」的角标 */
+  createdAt: string | null;
   brand: string | null;
   productModel: string | null;
   purchaseChannel: string | null;

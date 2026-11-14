@@ -41,6 +41,16 @@
           @save="saveArchive"
         />
 
+        <div v-if="referencePrice !== null" class="launch-seg__row">
+          <span class="launch-seg__label">参考售价</span>
+          <span class="launch-seg__value">
+            ¥{{ referencePrice }} / {{ row?.displayUnit }}
+          </span>
+          <span class="launch-seg__hint">
+            进货成本 × {{ markupMultiplier }}，不含运费与服务费；最终价以下单页为准
+          </span>
+        </div>
+
         <div v-if="decisions.retail === false" class="launch-seg__row">
           <span class="launch-seg__label">不上架原因</span>
           <el-select
@@ -288,6 +298,7 @@ const row = ref<SupplementCatalogItem | null>(null)
 const ingredient = ref<any>(null)
 const groups = ref<EquivalenceGroupSummary[]>([])
 const equivalenceEnabled = ref(true)
+const markupMultiplier = ref<number | null>(null)
 
 const savingArchive = ref(false)
 const savingDiy = ref(false)
@@ -341,6 +352,10 @@ async function load() {
     ingredient.value = detail
     groups.value = groupList.items || []
     equivalenceEnabled.value = config?.equivalenceEnabled !== false
+    markupMultiplier.value =
+      typeof config?.markupMultiplier === 'number' && config.markupMultiplier > 0
+        ? config.markupMultiplier
+        : null
 
     const properties = savedProperties()
     diyForm.enabled = detail?.diyEnabled !== false
@@ -583,6 +598,14 @@ const verdictTitle = computed(() => {
   if (verdict.value.level === 'READY') return '✅ 顾客可以买'
   if (verdict.value.level === 'WARN') return '⚠️ 能买，但有需要补的'
   return '❌ 现在买不到'
+})
+
+/** 参考售价：只用「单位成本 × 加价倍率」，不含运费/服务费（P3） */
+const referencePrice = computed(() => {
+  const cost = row.value?.unitCost
+  const markup = markupMultiplier.value
+  if (typeof cost !== 'number' || !Number.isFinite(cost) || !markup) return null
+  return Math.round(cost * markup * 100) / 100
 })
 
 const groupEffective = computed(() => {

@@ -1008,7 +1008,23 @@ const handleImageError = (index: number) => {
   uni.showToast({ title: '图片加载失败', icon: 'none' });
 };
 
+/** 提交失败时用弹窗说完整（toast 只有两行，后端说明常被截断） */
+const showSubmitError = (message: string) => {
+  uni.showModal({
+    title: '提交失败',
+    content: message,
+    showCancel: false,
+    confirmText: '知道了',
+  });
+};
+
 const submitReimbursement = async () => {
+  // 连点保护：按钮的 disabled 要等一次渲染才生效，第二次点击仍可能再发一次请求，
+  // 第一笔已建单、第二笔就会撞「已提交过报销」（2026-11-14）。
+  if (submitting.value) {
+    return;
+  }
+
   const validation = validateCurrentStep();
   if (!validation.ok) {
     uni.showToast({ title: validation.message || '请补充信息', icon: 'none' });
@@ -1077,10 +1093,10 @@ const submitReimbursement = async () => {
       return;
     }
 
-    uni.showToast({ title: res.message || '提交失败', icon: 'none' });
+    showSubmitError(res.message || '提交失败，请稍后重试');
   } catch (error: any) {
     console.error('提交报销申请失败', error);
-    uni.showToast({ title: error.message || '提交失败', icon: 'none' });
+    showSubmitError(error.message || '提交失败，请稍后重试');
   } finally {
     submitting.value = false;
   }

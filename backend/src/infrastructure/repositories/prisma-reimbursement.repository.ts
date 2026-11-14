@@ -147,8 +147,9 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
 
   async saveWithPurchaseListReplacement(
     reimbursement: Reimbursement,
+    client?: unknown,
   ): Promise<Reimbursement> {
-    return this.prisma.$transaction(async (tx) => {
+    const run = async (tx: any) => {
       const saved = await this.upsertReimbursement(tx, reimbursement);
       const selectedListIds = reimbursement.purchaseLists.map(
         (list) => list.id,
@@ -179,6 +180,16 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
       }
 
       return this.findCompleteReimbursement(tx, saved.id);
+    };
+
+    // 允许调用方把「换清单 + 同步价格」放进同一个事务（2026-11-14）
+    if (client) {
+      return run(client);
+    }
+
+    return this.prisma.$transaction((tx) => run(tx), {
+      timeout: 20000,
+      maxWait: 10000,
     });
   }
 

@@ -237,14 +237,14 @@ export class ReimbursementService {
       // 验证采购清单状态
       if (list.status !== PurchaseListStatus.COMPLETED) {
         throw new BadRequestException(
-          `采购清单 ${listId} 未完成，当前状态：${list.status}`,
+          '这张采购清单还没确认采购完成，请先回到清单点「确认采购完成」再报销',
         );
       }
 
       // 作废的补货记录（取消/退款）不能再报销。
       if (list.voidedAt) {
         throw new BadRequestException(
-          `采购清单 ${listId} 已作废，不能报销`,
+          '这张采购清单已作废（取消/退款），不能再报销',
         );
       }
 
@@ -254,8 +254,16 @@ export class ReimbursementService {
         list.reimbursementId &&
         list.reimbursementId !== allowedReimbursementId
       ) {
+        // 2026-11-14：原来只抛出清单 UUID，前端提示被截断后只剩一串编号，
+        // 看不出是「已经交过了」。这里带上报销单号，告诉用户下一步去哪。
+        const linked = await this.reimbursementRepository.findById(
+          list.reimbursementId,
+        );
+        const claimNumber = linked?.claimNumber
+          ? `（单号 ${linked.claimNumber}）`
+          : '';
         throw new BadRequestException(
-          `采购清单 ${listId} 已关联到报销单 ${list.reimbursementId}`,
+          `这张采购清单已经提交过报销${claimNumber}，不用再交一次；要改金额，请先到「我的报销」里处理那张单`,
         );
       }
 
@@ -430,16 +438,38 @@ export class ReimbursementService {
       customFees: normalizedCustomFees,
     });
 
-    // 保存报销单
-    const saved = await this.reimbursementRepository.save(reimbursement);
+    // 保存报销单 + 生成价格变更放在同一个事务里（2026-11-14 修）：
+    // 旧实现先存单、再同步价格，同步失败会留下一张「单子建了、价格没同步」的半成品，
+    // 用户重试又撞「已关联到报销单」，前后都走不通。
+    const saved = await this.prisma.$transaction(
+      async (tx) => {
+        const savedReimbursement = await this.reimbursementRepository.save(
+          reimbursement,
+          tx,
+        );
+        await this.ingredientPricingService.syncPendingChangesForReimbursement(
+          savedReimbursement.id,
+          purchaseListIds,
+          tx,
+        );
+        return savedReimbursement;
+      },
+      { timeout: 20000, maxWait: 10000 },
+    );
 
-    await this.ingredientPricingService.syncPendingChangesForReimbursement(
-      saved.id,
-      purchaseListIds,
-    );
-    await this.ingredientPricingService.autoApproveEligibleChangesForReimbursement(
-      saved.id,
-    );
+    // 自动定价只影响「够不够格自动生效」，失败时变更仍留在待审核里等人工放行，
+    // 不能让它把一笔已经建好的报销单报成失败。
+    try {
+      await this.ingredientPricingService.autoApproveEligibleChangesForReimbursement(
+        saved.id,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Auto-approve price changes failed for reimbursement ${saved.id}: ${
+          (error as Error)?.message
+        }`,
+      );
+    }
 
     await this.recordReviewEvent(this.prisma, {
       reimbursementId: saved.id,
@@ -722,19 +752,35 @@ export class ReimbursementService {
       reviewedBy: undefined,
     });
 
-    // 保存报销单
-    const saved =
-      await this.reimbursementRepository.saveWithPurchaseListReplacement(
-        updated,
-      );
+    // 重新提交同样把「换清单 + 同步价格」放进一个事务，理由同 submitReimbursement。
+    const saved = await this.prisma.$transaction(
+      async (tx) => {
+        const savedReimbursement =
+          await this.reimbursementRepository.saveWithPurchaseListReplacement(
+            updated,
+            tx,
+          );
+        await this.ingredientPricingService.syncPendingChangesForReimbursement(
+          savedReimbursement.id,
+          purchaseListIds,
+          tx,
+        );
+        return savedReimbursement;
+      },
+      { timeout: 20000, maxWait: 10000 },
+    );
 
-    await this.ingredientPricingService.syncPendingChangesForReimbursement(
-      saved.id,
-      purchaseListIds,
-    );
-    await this.ingredientPricingService.autoApproveEligibleChangesForReimbursement(
-      saved.id,
-    );
+    try {
+      await this.ingredientPricingService.autoApproveEligibleChangesForReimbursement(
+        saved.id,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Auto-approve price changes failed for reimbursement ${saved.id}: ${
+          (error as Error)?.message
+        }`,
+      );
+    }
 
     await this.recordReviewEvent(this.prisma, {
       reimbursementId: saved.id,

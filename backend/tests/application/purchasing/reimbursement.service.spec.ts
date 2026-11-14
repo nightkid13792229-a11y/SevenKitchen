@@ -896,11 +896,17 @@ describe('ReimbursementService', () => {
         id: 'reimbursement-1',
         purchaseLists: [selectedPurchaseList],
       }),
+      // 2026-11-14：换清单和同步价格现在放进同一个事务，事务客户端要一起传下去
+      expect.anything(),
     );
     expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
     expect(
       mockIngredientPricingService.syncPendingChangesForReimbursement,
-    ).toHaveBeenCalledWith('reimbursement-1', ['purchase-list-2']);
+    ).toHaveBeenCalledWith(
+      'reimbursement-1',
+      ['purchase-list-2'],
+      expect.anything(),
+    );
   });
 
   it('shows the current purchase against every historical price, same ingredient and same sku', async () => {

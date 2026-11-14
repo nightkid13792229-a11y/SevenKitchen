@@ -18,6 +18,8 @@ export interface ReimbursementRepository {
    */
   saveWithPurchaseListReplacement(
     reimbursement: Reimbursement,
+    /** 传了事务客户端就复用它，便于把价格同步并进同一个事务（2026-11-14） */
+    client?: unknown,
   ): Promise<Reimbursement>;
 
   /**

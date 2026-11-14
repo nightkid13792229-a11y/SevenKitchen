@@ -148,15 +148,9 @@ export class IngredientPricingService {
   async syncPendingChangesForReimbursement(
     reimbursementId: string,
     purchaseListIds: string[],
+    client?: TransactionClientLike,
   ): Promise<IngredientPriceChangeView[]> {
-    await this.prisma.ingredientPriceChange.deleteMany({
-      where: {
-        reimbursementId,
-        status: {
-          in: ['PENDING', 'REJECTED'],
-        },
-      },
-    });
+    const db = (client as PrismaService | undefined) ?? this.prisma;
 
     const purchaseRecords = (
       await Promise.all(
@@ -165,6 +159,27 @@ export class IngredientPricingService {
         ),
       )
     ).flat();
+
+    // 先清掉这批采购明细名下尚未生效的价格变更（2026-11-14 修）：
+    // `ingredient_price_change.purchase_record_id` 是全局唯一键，一条采购明细只能挂一条。
+    // 旧逻辑只按「当前报销单」删，被驳回那张单留下的 REJECTED 行会一直占着位置，
+    // 同一张清单改完重提时 createMany 直接撞唯一约束（BX202611140002 就是这么失败的）。
+    // 所以改成按「采购明细」清：当前单自己的 PENDING/REJECTED，加上别处遗留的 REJECTED。
+    await db.ingredientPriceChange.deleteMany({
+      where: {
+        ...(purchaseRecords.length > 0
+          ? {
+              purchaseRecordId: {
+                in: purchaseRecords.map((record) => record.id),
+              },
+            }
+          : { reimbursementId }),
+        status: {
+          in: ['PENDING', 'REJECTED'],
+        },
+        OR: [{ reimbursementId }, { status: 'REJECTED' }],
+      },
+    });
 
     if (purchaseRecords.length === 0) {
       return [];
@@ -231,7 +246,7 @@ export class IngredientPricingService {
       return [];
     }
 
-    await this.prisma.ingredientPriceChange.createMany({
+    await db.ingredientPriceChange.createMany({
       data: changeRows,
     });
 
@@ -239,7 +254,7 @@ export class IngredientPricingService {
       `Created ${changeRows.length} pending ingredient price changes for reimbursement ${reimbursementId}`,
     );
 
-    return this.getPriceChangesForReimbursement(reimbursementId);
+    return this.getPriceChangesForReimbursement(reimbursementId, client);
   }
 
   async autoApproveEligibleChangesForReimbursement(
@@ -645,8 +660,10 @@ export class IngredientPricingService {
 
   async getPriceChangesForReimbursement(
     reimbursementId: string,
+    client?: TransactionClientLike,
   ): Promise<IngredientPriceChangeView[]> {
-    const rows = (await this.prisma.ingredientPriceChange.findMany({
+    const db = (client as PrismaService | undefined) ?? this.prisma;
+    const rows = (await db.ingredientPriceChange.findMany({
       where: { reimbursementId },
       include: {
         ingredient: {

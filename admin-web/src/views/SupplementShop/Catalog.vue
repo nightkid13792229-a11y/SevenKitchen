@@ -224,14 +224,14 @@
         <el-table-column label="上架" width="110" align="center" fixed="right">
           <template #default="{ row }">
             <el-tooltip
-              :disabled="row.readyToSell || !row.issues.some((i: any) => i.level === 'ERROR')"
+              :disabled="!showListingBlockedHint(row)"
               content="档案未补齐，无法上架"
               placement="top"
             >
               <span>
                 <el-switch
                   :model-value="row.supplementRetailEnabled"
-                  :disabled="!row.readyToSell"
+                  :disabled="!canToggleListing(row)"
                   :loading="savingIds.has(row.id)"
                   @update:model-value="(value: any) => save(row, { supplementRetailEnabled: value })"
                 />
@@ -275,6 +275,7 @@ import {
 import { ingredientApi } from '@/api/ingredients';
 import type { Ingredient, IngredientForm } from '@/types/ingredient';
 import IngredientFormComponent from '@/views/Ingredients/IngredientForm.vue';
+import { canToggleListing, showListingBlockedHint } from './catalog-listing';
 
 const loading = ref(false);
 const applying = ref(false);

@@ -88,6 +88,14 @@
             <div class="wb-field">
               <label>原料名称</label>
               <el-input v-model="draft.name" placeholder="如：鱼油（Omega-3）" />
+              <p class="wb-field__hint" :class="{ 'wb-field__hint--warn': !!nameFormWord }">
+                <template v-if="nameFormWord">
+                  名称结尾的“{{ nameFormWord }}”是产品剂型，建议只写物质名（如：鱼油胶囊 → 鱼油）；剂型在右侧“物理形态”里选。
+                </template>
+                <template v-else>
+                  只写物质名，不要带胶囊、片、滴剂这类剂型；剂型在右侧“物理形态”里选。
+                </template>
+              </p>
             </div>
             <div class="wb-field">
               <label>单位展示名</label>
@@ -369,7 +377,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import SupplementCompare from './SupplementCompare.vue'
 import SupplementChat from './SupplementChat.vue'
@@ -388,6 +396,7 @@ import {
   computePerUnit,
   emptySupplementDraft,
   findMissingHumanFields,
+  findSupplementFormWord,
   patchFromPreview,
   toCreatePayload,
   toGateInput,
@@ -468,6 +477,7 @@ const aiFieldCount = computed(
   () => SUPPLEMENT_CARD_FIELDS.filter((field) => field.owner === 'AI').length
 )
 const missingHuman = computed(() => findMissingHumanFields(draft))
+const nameFormWord = computed(() => findSupplementFormWord(draft.name))
 const gateReport = computed(() => evaluateSupplementGates(toGateInput(draft)))
 const canSubmit = computed(
   () => !!toCreatePayload(draft) && gateReport.value.passed && !saving.value && !saved.value
@@ -711,6 +721,23 @@ async function submit(): Promise<void> {
   if (!payload) {
     return
   }
+  const formWord = findSupplementFormWord(payload.name)
+  if (formWord) {
+    const suggested = payload.name.trim().slice(0, -formWord.length).trim()
+    try {
+      await ElMessageBox.confirm(
+        `名称结尾的“${formWord}”是产品剂型。建议改成“${suggested}”，剂型在右侧“物理形态”里选。`,
+        '名称里带了剂型词',
+        {
+          confirmButtonText: '仍然保存',
+          cancelButtonText: '返回修改',
+          type: 'warning'
+        }
+      )
+    } catch {
+      return
+    }
+  }
   saving.value = true
   errorText.value = ''
   try {
@@ -888,6 +915,9 @@ async function confirm(): Promise<void> {
 .wb-field__hint {
   font-size: 11px;
   color: #9aa2ab;
+}
+.wb-field__hint--warn {
+  color: #e6a23c;
 }
 .wb-split {
   display: flex;

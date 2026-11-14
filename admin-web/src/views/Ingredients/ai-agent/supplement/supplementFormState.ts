@@ -134,6 +134,37 @@ export function findMissingHumanFields(draft: SupplementDraftValue): string[] {
   return missing
 }
 
+/**
+ * 剂型词：名称里出现这些，说明写的是"产品"而不是"物质"。
+ *
+ * 只认**结尾**，避免误伤"菊粉/骨粉"这类物料本名；"粉"不单独算剂型，
+ * 因为补剂原料里"粉"经常就是物料名的一部分。
+ */
+const SUPPLEMENT_FORM_SUFFIXES = [
+  '软胶囊',
+  '胶囊',
+  '胶丸',
+  '咀嚼片',
+  '含片',
+  '泡腾片',
+  '片剂',
+  '片',
+  '滴剂',
+  '颗粒',
+  '冲剂',
+  '口服液',
+  '粉剂'
+]
+
+/** 名称结尾带剂型词时返回那个词，否则返回 null。 */
+export function findSupplementFormWord(name: string | null | undefined): string | null {
+  const normalized = String(name ?? '').replace(/\s+/g, '')
+  if (!normalized) {
+    return null
+  }
+  return SUPPLEMENT_FORM_SUFFIXES.find((suffix) => normalized.endsWith(suffix)) ?? null
+}
+
 export function toCreatePayload(
   draft: SupplementDraftValue
 ): CreateSupplementIngredientPayload | null {

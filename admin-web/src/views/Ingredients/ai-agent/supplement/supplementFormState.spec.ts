@@ -6,6 +6,7 @@ import {
 import {
   computePerUnit,
   emptySupplementDraft,
+  findSupplementFormWord,
   patchFromPreview,
   toCreatePayload,
   toGateInput
@@ -164,5 +165,29 @@ describe('链接读出来的初稿 → 表单', () => {
   it('页面没给每份几粒时不动表单里的值，不默认成 1', () => {
     const { patch } = patchFromPreview({ ...preview, servingUnitsPerDose: null })
     expect(patch.servingUnitsPerDose).toBeUndefined()
+  })
+})
+
+describe('名称不带剂型词', () => {
+  it.each([
+    ['鱼油胶囊', '胶囊'],
+    ['海带粉 软胶囊', '软胶囊'],
+    ['维生素D3滴剂', '滴剂'],
+    ['葡萄糖酸锌片', '片'],
+    ['牛磺酸颗粒', '颗粒']
+  ])('%s 会被认出来：%s', (name, word) => {
+    expect(findSupplementFormWord(name)).toBe(word)
+  })
+
+  it.each(['鱼油', '复合B族维生素', '菊粉', '骨粉', '鸡蛋壳粉', '洋车前子壳粉'])(
+    '%s 不含结尾剂型词',
+    (name) => {
+      expect(findSupplementFormWord(name)).toBeNull()
+    }
+  )
+
+  it('空名称不报', () => {
+    expect(findSupplementFormWord('')).toBeNull()
+    expect(findSupplementFormWord(null)).toBeNull()
   })
 })

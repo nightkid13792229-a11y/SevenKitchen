@@ -1,70 +1,95 @@
 import { describe, expect, it } from 'vitest'
-import { canToggleListing, showListingBlockedHint } from './catalog-listing'
+import {
+  ATTENTION_WINDOW_DAYS,
+  isNotLaunched,
+  isRecentlyCreatedNotReady,
+  needsAttention,
+} from './catalog-listing'
 
-/**
- * 补剂上架开关的规则（2026-11-14）。
- *
- * 现场问题：`上架清单` 里「上架」那一列的开关，对**还没上架**的补剂是灰的 ——
- * 因为当时把「能不能点」绑成了「是否已上架」，
- * 于是只能关、不能开，形成一个死循环，运营没法逐条上架。
- */
-describe('补剂上架清单 · 上架开关能否点', () => {
-  it('还没上架、档案没有问题 → 能点（这是这次要修的主场景）', () => {
+const DAY = 24 * 60 * 60 * 1000
+const NOW = new Date('2026-11-14T12:00:00Z').getTime()
+
+function row(overrides: Record<string, any> = {}) {
+  return {
+    createdAt: new Date(NOW - DAY).toISOString(),
+    supplementRetailEnabled: true,
+    issues: [] as Array<{ level: string; code: string }>,
+    ...overrides,
+  }
+}
+
+describe('补剂上架清单 · 「配好了没」口径', () => {
+  it('已上架、无 ERROR、组也正常 → 配好了', () => {
+    expect(isNotLaunched(row())).toBe(false)
+  })
+
+  it('未上架 → 没配好', () => {
+    expect(isNotLaunched(row({ supplementRetailEnabled: false }))).toBe(true)
+  })
+
+  it('已上架但有 ERROR → 没配好（不能只看开关）', () => {
     expect(
-      canToggleListing({ supplementRetailEnabled: false, issues: [] }),
+      isNotLaunched(row({ issues: [{ level: 'ERROR', code: 'SHELF_LIFE_MISSING' }] })),
     ).toBe(true)
   })
 
-  it('还没上架、但有红色问题（缺价/缺形态/液体…）→ 不能点', () => {
+  it('已上架但等价组有问题 → 没配好（与「等价组」列口径一致）', () => {
     expect(
-      canToggleListing({
-        supplementRetailEnabled: false,
-        issues: [{ level: 'ERROR' }, { level: 'WARN' }],
-      }),
+      isNotLaunched(row({ issues: [{ level: 'WARN', code: 'EQUIVALENCE_UNGROUPED' }] })),
+    ).toBe(true)
+    expect(
+      isNotLaunched(row({ issues: [{ level: 'WARN', code: 'EQUIVALENCE_SINGLETON' }] })),
+    ).toBe(true)
+  })
+
+  it('与组无关的 WARN（同名重复）不影响', () => {
+    expect(
+      isNotLaunched(row({ issues: [{ level: 'WARN', code: 'DUPLICATE_NAME' }] })),
     ).toBe(false)
-  })
-
-  it('还没上架、只有黄色提醒（同名/未归组…）→ 仍然能点', () => {
-    expect(
-      canToggleListing({
-        supplementRetailEnabled: false,
-        issues: [{ level: 'WARN' }],
-      }),
-    ).toBe(true)
-  })
-
-  it('已经上架的，即使档案后来出了问题也能点（要能下架）', () => {
-    expect(
-      canToggleListing({
-        supplementRetailEnabled: true,
-        issues: [{ level: 'ERROR' }],
-      }),
-    ).toBe(true)
   })
 })
 
-describe('补剂上架清单 · 「档案未补齐，无法上架」提示', () => {
-  it('没上架且有红色问题 → 显示提示', () => {
+describe('补剂上架清单 · 新建 7 天待配勾选', () => {
+  it('窗口是 7 天', () => {
+    expect(ATTENTION_WINDOW_DAYS).toBe(7)
+  })
+
+  it('1 天前建的、还没上架 → 勾中', () => {
+    expect(isRecentlyCreatedNotReady(row({ supplementRetailEnabled: false }), NOW)).toBe(true)
+  })
+
+  it('第 7 天边界仍算（含当天）', () => {
+    const createdAt = new Date(NOW - 7 * DAY).toISOString()
     expect(
-      showListingBlockedHint({
-        supplementRetailEnabled: false,
-        issues: [{ level: 'ERROR' }],
-      }),
+      isRecentlyCreatedNotReady(row({ createdAt, supplementRetailEnabled: false }), NOW),
     ).toBe(true)
   })
 
-  it('没上架但没有红色问题 → 不提示', () => {
+  it('第 8 天 → 不再提醒', () => {
+    const createdAt = new Date(NOW - 8 * DAY).toISOString()
     expect(
-      showListingBlockedHint({ supplementRetailEnabled: false, issues: [] }),
+      isRecentlyCreatedNotReady(row({ createdAt, supplementRetailEnabled: false }), NOW),
     ).toBe(false)
   })
 
-  it('已经上架的 → 不提示', () => {
+  it('老档案没上架也不打扰新建提醒（但常驻「未配好」仍然算）', () => {
+    const createdAt = new Date(NOW - 400 * DAY).toISOString()
+    const old = row({ createdAt, supplementRetailEnabled: false })
+    expect(isRecentlyCreatedNotReady(old, NOW)).toBe(false)
+    expect(isNotLaunched(old)).toBe(true)
+  })
+
+  it('未来时间（系统时钟不准）不算新建', () => {
+    const createdAt = new Date(NOW + DAY).toISOString()
     expect(
-      showListingBlockedHint({
-        supplementRetailEnabled: true,
-        issues: [{ level: 'ERROR' }],
-      }),
+      isRecentlyCreatedNotReady(row({ createdAt, supplementRetailEnabled: false }), NOW),
     ).toBe(false)
+  })
+
+  it('没有 createdAt 的老数据不崩、也不算新建', () => {
+    expect(
+      isRecentlyCreatedNotReady(row({ createdAt: null, supplementRetailEnabled: false }), NOW),
+    ).toBe(false)
+    expect(needsAttention(row({ createdAt: null }), NOW)).toBe(false)
   })
 })

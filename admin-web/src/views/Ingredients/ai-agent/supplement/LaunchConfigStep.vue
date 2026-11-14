@@ -44,10 +44,10 @@
         <div v-if="referencePrice !== null" class="launch-seg__row">
           <span class="launch-seg__label">参考售价</span>
           <span class="launch-seg__value">
-            ¥{{ referencePrice }} / {{ row?.displayUnit }}
+            {{ formatPrice(referencePrice) }} / {{ row?.displayUnit }}
           </span>
           <span class="launch-seg__hint">
-            进货成本 × {{ markupMultiplier }}，不含运费与服务费；最终价以下单页为准
+            按当前定价规则试算 1 {{ row?.displayUnit }} 的售价（含圆整，不含包材/服务费/运费）；最终价以下单页为准
           </span>
         </div>
 
@@ -334,7 +334,7 @@ const ingredient = ref<any>(null)
 const groups = ref<EquivalenceGroupSummary[]>([])
 // 商城配置没读到时按「关」处理：宁可少说能换，也不要高估
 const equivalenceEnabled = ref(false)
-const markupMultiplier = ref<number | null>(null)
+const referencePrice = ref<number | null>(null)
 
 const savingArchive = ref(false)
 const savingDiy = ref(false)
@@ -410,11 +410,8 @@ async function load() {
     row.value = catalog.items.find((item) => item.id === props.ingredientId) || null
     ingredient.value = detail
     groups.value = groupList.items || []
-    equivalenceEnabled.value = config?.equivalenceEnabled !== false
-    markupMultiplier.value =
-      typeof config?.markupMultiplier === 'number' && config.markupMultiplier > 0
-        ? config.markupMultiplier
-        : null
+    equivalenceEnabled.value = config?.equivalenceEnabled === true
+    void loadReferencePrice(row.value)
 
     const properties = savedProperties()
     diyForm.enabled = detail?.diyEnabled !== false
@@ -732,13 +729,37 @@ const verdictTitle = computed(() => {
   return '❌ 现在买不到'
 })
 
-/** 参考售价：只用「单位成本 × 加价倍率」，不含运费/服务费（P3） */
-const referencePrice = computed(() => {
-  const cost = row.value?.unitCost
-  const markup = markupMultiplier.value
-  if (typeof cost !== 'number' || !Number.isFinite(cost) || !markup) return null
-  return Math.round(cost * markup * 100) / 100
-})
+/**
+ * 参考售价：调后端同一个定价服务试算「1 个展示单位」，
+ * 不在前端自己乘倍率——圆整规则/服务费口径只有一处（2026-11-14 复审）。
+ */
+async function loadReferencePrice(item: SupplementCatalogItem | null) {
+  referencePrice.value = null
+  if (!item || typeof item.unitCost !== 'number' || !Number.isFinite(item.unitCost)) {
+    return
+  }
+  if (!item.physicalForm) return
+  try {
+    const quote = await supplementShopApi.quotePreview({
+      lines: [
+        {
+          ingredientId: item.id,
+          name: item.name,
+          unit: item.displayUnit,
+          amount: 1,
+          unitCost: item.unitCost,
+          physicalForm: item.physicalForm as any,
+        },
+      ],
+    })
+    if (disposed) return
+    const price = quote?.lines?.[0]?.price
+    referencePrice.value =
+      typeof price === 'number' && Number.isFinite(price) ? price : null
+  } catch {
+    if (!disposed) referencePrice.value = null
+  }
+}
 
 const groupEffective = computed(() => {
   if (!equivalenceEnabled.value || !row.value?.equivalenceGroup) return false
@@ -779,6 +800,12 @@ const selectedGroupHint = computed(() => {
   }
   return ''
 })
+
+function formatPrice(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return '—'
+  if (value > 0 && value < 0.01) return '< ¥0.01'
+  return `¥${value.toFixed(2)}`
+}
 
 function statusLabel(status: string): string {
   if (status === 'APPROVED') return '已审核'

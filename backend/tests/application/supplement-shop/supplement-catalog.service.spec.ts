@@ -7,6 +7,7 @@ import { PrismaService } from '../../../src/infrastructure/prisma.service';
 interface IngredientFixture {
   id: string;
   name: string;
+  createdAt?: Date | string;
   type: string;
   brand: string | null;
   productModel: string | null;
@@ -29,6 +30,7 @@ function buildFixtures(): IngredientFixture[] {
     {
       id: 'kelp',
       name: '海藻粉',
+      createdAt: new Date('2026-11-01T00:00:00Z'),
       type: 'SUPPLEMENT',
       brand: 'NOW FOODS',
       productModel: '227g/瓶，450mcg碘/平勺，2522平勺/瓶',
@@ -198,6 +200,7 @@ describe('SupplementCatalogService', () => {
     mockPrismaService.recipeItem.groupBy.mockResolvedValue([]);
 
     const result = await service.listCatalog();
+    expect(result.items[0].createdAt).toBe('2026-11-01T00:00:00.000Z');
     const codes = result.items[0].issues.map((issue) => issue.code);
 
     expect(codes).toContain('EQUIVALENCE_GROUP_SINGLETON');

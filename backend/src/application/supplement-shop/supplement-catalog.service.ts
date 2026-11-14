@@ -41,8 +41,8 @@ export interface SupplementCatalogIssue {
 export interface SupplementCatalogItem {
   id: string;
   name: string;
-  /** 建档时间（ISO）；用于「新建 7 天仍未配好」的角标 */
-  createdAt: string | null;
+  /** 建档时间（ISO）；用于「新建 7 天仍未配好」的角标。读不到时给空串 */
+  createdAt: string;
   brand: string | null;
   productModel: string | null;
   purchaseChannel: string | null;
@@ -133,6 +133,14 @@ const PHYSICAL_FORM_CODES: IngredientPhysicalFormCode[] = [
   'CAPSULE',
   'LIQUID',
 ];
+
+function toIsoString(value: unknown): string {
+  const date = value ? new Date(value as string | Date) : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    return '';
+  }
+  return date.toISOString();
+}
 
 @Injectable()
 export class SupplementCatalogService {
@@ -588,9 +596,7 @@ export class SupplementCatalogService {
     return {
       id: ingredient.id,
       name: ingredient.name,
-      createdAt: ingredient.createdAt
-        ? new Date(ingredient.createdAt).toISOString()
-        : null,
+      createdAt: toIsoString(ingredient.createdAt),
       brand: ingredient.brand,
       productModel: ingredient.productModel,
       purchaseChannel: ingredient.purchaseChannel,

@@ -40,9 +40,25 @@
         <div class="summary-value">{{ summary.noPrice }}</div>
         <div class="summary-label">进货价为 0</div>
       </el-card>
-      <el-card shadow="never" class="summary-card highlight-error">
+      <el-card
+        shadow="never"
+        class="summary-card highlight-error"
+        style="cursor: pointer"
+        title="点击只看这些"
+        @click="filter = 'NEW'"
+      >
         <div class="summary-value">{{ newlyNeedsAttentionCount }}</div>
         <div class="summary-label">新建 7 天未配好</div>
+      </el-card>
+      <el-card
+        shadow="never"
+        class="summary-card"
+        style="cursor: pointer"
+        title="点击只看这些（不限新建时间）"
+        @click="filter = 'UNREADY'"
+      >
+        <div class="summary-value">{{ notLaunchedCount }}</div>
+        <div class="summary-label">累计未配好（不限 7 天）</div>
       </el-card>
     </div>
 
@@ -62,6 +78,7 @@
           <el-option label="被食谱引用过" value="USED" />
           <el-option label="可用于生产" value="PRODUCIBLE" />
           <el-option label="新建 7 天未配好" value="NEW" />
+          <el-option label="未配好（不限 7 天）" value="UNREADY" />
         </el-select>
         <span class="toolbar-tip">共 {{ filteredItems.length }} 条</span>
       </div>
@@ -86,7 +103,7 @@
               {{ row.name }}
             </el-button>
             <el-tag
-              v-if="isNewlyNeedsAttention(row)"
+              v-if="isRecentlyCreatedNotReady(row)"
               type="warning"
               size="small"
               effect="plain"
@@ -279,6 +296,10 @@
 import { computed, onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
+  isNotLaunched,
+  isRecentlyCreatedNotReady,
+} from './catalog-listing';
+import {
   ISSUE_LABELS,
   PHYSICAL_FORM_LABELS,
   supplementShopApi,
@@ -306,7 +327,14 @@ const summary = ref<SupplementCatalogSummary>({
 });
 const keyword = ref('');
 const filter = ref<
-  'ALL' | 'BLOCKED' | 'ENABLED' | 'READY' | 'USED' | 'PRODUCIBLE' | 'NEW'
+  | 'ALL'
+  | 'BLOCKED'
+  | 'ENABLED'
+  | 'READY'
+  | 'USED'
+  | 'PRODUCIBLE'
+  | 'NEW'
+  | 'UNREADY'
 >(
   'ALL',
 );
@@ -354,20 +382,12 @@ function formLabel(code: string | null): string {
   return PHYSICAL_FORM_LABELS[code as keyof typeof PHYSICAL_FORM_LABELS] ?? code;
 }
 
-/** 新建 7 天内还没配好（没上架或没归组）——提醒别让补剂"白添加" */
-const NEW_SUPPLEMENT_WINDOW_DAYS = 7
-
-function isNewlyNeedsAttention(item: any): boolean {
-  if (!item?.createdAt) return false
-  const createdAt = new Date(item.createdAt).getTime()
-  if (!Number.isFinite(createdAt)) return false
-  const days = (Date.now() - createdAt) / (1000 * 60 * 60 * 24)
-  if (days > NEW_SUPPLEMENT_WINDOW_DAYS) return false
-  return !item.supplementRetailEnabled || !item.equivalenceGroup
-}
-
 const newlyNeedsAttentionCount = computed(
-  () => items.value.filter((item) => isNewlyNeedsAttention(item)).length,
+  () => items.value.filter((item) => isRecentlyCreatedNotReady(item)).length,
+)
+
+const notLaunchedCount = computed(
+  () => items.value.filter((item) => isNotLaunched(item)).length,
 )
 
 const filteredItems = computed(() => {
@@ -390,7 +410,9 @@ const filteredItems = computed(() => {
       case 'PRODUCIBLE':
         return item.producible;
       case 'NEW':
-        return isNewlyNeedsAttention(item);
+        return isRecentlyCreatedNotReady(item);
+      case 'UNREADY':
+        return isNotLaunched(item);
       default:
         return true;
     }

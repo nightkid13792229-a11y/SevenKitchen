@@ -37,6 +37,7 @@ import {
   SupplementCandidateService,
   type SupplementCandidateItem,
 } from './supplement-candidate.service';
+import { SupplementPlanService } from './supplement-plan.service';
 import { computeSheetTotalWeightG } from './supplement-sheet-weight.util';
 import { perBaseUnitCost } from '../../domain/ingredient/unit-price';
 import {
@@ -299,6 +300,9 @@ export class SupplementOrderService {
     /** 发货硬锁（2026-11-10）：小程序来的发货要求先验存根；缺失时 fail closed */
     @Optional()
     private readonly waybillReceiptGuard?: WaybillReceiptGuardService,
+    /** 三口径拆分后的计划解析（2026-11-15）：放在最后，避免挪动既有参数位 */
+    @Optional()
+    private readonly supplementPlanService?: SupplementPlanService,
   ) {}
 
   /**
@@ -2117,7 +2121,7 @@ export class SupplementOrderService {
     if (!request.diySheetId) {
       throw new BadRequestException('新协议必须带制作单 ID');
     }
-    if (!this.candidateService) {
+    if (!this.supplementPlanService) {
       throw new BadRequestException('补剂候选服务未启用');
     }
 
@@ -2158,15 +2162,13 @@ export class SupplementOrderService {
       recipeVersion = latest.version;
     }
 
-    const resolved = await this.candidateService.resolveForRecipe({
-      recipeBusinessId: sheet.recipeId,
+    const plan = await this.supplementPlanService.resolveForRecipeRequest({
+      recipeId: sheet.recipeId,
       recipeVersion,
       totalWeightG,
-      weightSource: 'DIY_SHEET',
-      audience: 'CUSTOMER',
     });
     const itemMap = new Map(
-      resolved.items.map((item) => [item.recipeItemId, item]),
+      plan.items.map((item) => [item.recipeItemId, item]),
     );
     const byIngredient = new Map<string, any[]>();
     const lines: Array<{ ingredientId: string; amount: number }> = [];
@@ -2179,43 +2181,32 @@ export class SupplementOrderService {
         throw new BadRequestException('食谱已更新，请刷新制作单');
       }
 
-      const candidate = item.candidates.find(
-        (option) => option.ingredientId === line.ingredientId,
+      const option = this.supplementPlanService.pickRepackOption(
+        item.repackPool,
+        line.ingredientId,
       );
-
-      let amount: number | null = candidate?.dosage.amount ?? null;
-      let dosage = candidate?.dosage;
-      let selectionSource:
-        | 'EQUIVALENCE_GROUP'
-        | 'RECIPE_ALTERNATIVE'
-        | 'DEFAULT'
-        | 'RATIO' = 'DEFAULT';
-
-      if (candidate) {
-        selectionSource =
-          candidate.ingredientId === item.sourceIngredientId
-            ? 'DEFAULT'
-            : item.source === 'EQUIVALENCE_GROUP'
-              ? 'EQUIVALENCE_GROUP'
-              : 'RECIPE_ALTERNATIVE';
-      } else if (
-        line.ingredientId === item.sourceIngredientId &&
-        item.fallbackAmount !== null
-      ) {
-        amount = item.fallbackAmount;
-        dosage = item.defaultIngredient.dosage;
-        selectionSource = 'RATIO';
-      } else {
+      if (!option) {
+        throw new BadRequestException('补剂已下架，请刷新制作单');
+      }
+      if (!option.available) {
         throw new BadRequestException(
-          item.unavailableReason ?? '该补剂已调整，请刷新制作单',
+          option.unavailableReason ?? '该补剂暂不可购买，请联系客服',
         );
       }
 
+      const amount = option.amount;
       if (amount === null || !Number.isFinite(amount) || amount <= 0) {
         throw new BadRequestException(
-          `「${item.defaultIngredient.name}」用量暂不可算，请联系客服`,
+          `「${option.name}」用量暂不可算，请联系客服`,
         );
       }
+
+      const selectionSource =
+        option.ingredientId === item.sourceIngredientId
+          ? item.reference.targets.length === 0
+            ? 'RATIO'
+            : 'DEFAULT'
+          : 'REPACK';
 
       lines.push({ ingredientId: line.ingredientId, amount });
 
@@ -2224,12 +2215,12 @@ export class SupplementOrderService {
         recipeItemId: item.recipeItemId,
         sourceIngredientId: item.sourceIngredientId,
         selectionSource,
-        group: item.group,
-        targets: dosage?.targets ?? [],
-        concentrations: dosage?.concentrations ?? [],
+        group: null,
+        targets: item.reference.targets,
+        concentrations: option.concentrations,
         calculatedAmount: amount,
         submittedAmount: line.amount ?? null,
-        unit: dosage?.unit ?? item.defaultIngredient.displayUnit,
+        unit: option.unit,
       });
       byIngredient.set(line.ingredientId, bucket);
     }

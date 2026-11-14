@@ -69,6 +69,7 @@ import { DiySheetService } from '../../application/recipe/diy-sheet.service';
 import { RecipeService } from '../../application/recipe/recipe.service';
 import { CustomRecipeDeliveryService } from '../../application/custom-recipe/custom-recipe-delivery.service';
 import { SupplementCandidateService } from '../../application/supplement-shop/supplement-candidate.service';
+import { SupplementPlanService } from '../../application/supplement-shop/supplement-plan.service';
 import { computeSheetTotalWeightG } from '../../application/supplement-shop/supplement-sheet-weight.util';
 import { OrderService } from '../../application/order/order.service';
 import {
@@ -128,6 +129,7 @@ export class RecipesController {
     private readonly allergenVocabulary: AllergenVocabularyService,
     private readonly deliveryService: CustomRecipeDeliveryService,
     private readonly supplementCandidateService: SupplementCandidateService,
+    private readonly supplementPlanService: SupplementPlanService,
     private readonly recipeCoverImageService: RecipeCoverImageService,
     private readonly recipeService: RecipeService,
   ) {}
@@ -2093,6 +2095,48 @@ export class RecipesController {
         totalWeightG,
         weightSource,
         audience: 'CUSTOMER',
+      }),
+    );
+  }
+
+  @Get(':id/supplement-plan')
+  @ApiOperation({ summary: '补剂计划：参考产品 / 预分装池 / DIY 推荐商品' })
+  @ApiQuery({
+    name: 'totalWeightG',
+    required: false,
+    description: '这批食物总重（g）；没有制作单时必填',
+  })
+  @ApiQuery({ name: 'diySheetId', required: false, description: '制作单 ID' })
+  @ApiQuery({ name: 'orderId', required: false, description: '定制订单号' })
+  @ApiQuery({ name: 'shareToken', required: false })
+  async getSupplementPlan(
+    @Param('id') id: string,
+    @Query('totalWeightG') totalWeightGRaw?: string,
+    @Query('diySheetId') diySheetId?: string,
+    @Query('orderId') orderId?: string,
+    @Query('shareToken') shareToken?: string,
+    @Req() req?: any,
+  ): Promise<ApiResponseDto<unknown>> {
+    const recipe = await this.getAccessibleRecipe(id, shareToken, req, orderId);
+    if (!recipe) {
+      throw new NotFoundException('Recipe not found');
+    }
+
+    const totalWeightG = Number(totalWeightGRaw);
+    if (!diySheetId && (!Number.isFinite(totalWeightG) || totalWeightG <= 0)) {
+      throw new BadRequestException('缺少这批食物的总重，无法计算补剂用量');
+    }
+
+    const user = this.getRequestUser(req);
+    const userId = user?.customerId || user?.userId;
+
+    return ApiResponseDto.success(
+      await this.supplementPlanService.resolveForRecipeRequest({
+        recipeId: id,
+        recipeVersion: recipe.version,
+        totalWeightG,
+        diySheetId,
+        userId,
       }),
     );
   }

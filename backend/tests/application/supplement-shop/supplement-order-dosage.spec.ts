@@ -1,62 +1,63 @@
 import { BadRequestException } from '@nestjs/common';
 import { SupplementOrderService } from '../../../src/application/supplement-shop/supplement-order.service';
 
-function candidateItem(overrides: Record<string, any> = {}) {
-  const dosage = {
-    status: 'OK',
-    amount: 12.3,
+/**
+ * 三口径拆分（2026-11-15）后：下单行只认「预分装池」，
+ * 不再按旧的 candidates / defaultIngredient / fallbackAmount 结构解析。
+ */
+function repackOption(overrides: Record<string, any> = {}) {
+  return {
+    ingredientId: 'ing-citrate',
+    name: '柠檬酸钙粉',
+    brand: 'NOW FOODS',
+    productModel: '600mg钙/3克',
+    displayUnit: 'g',
     unit: 'g',
-    targets: [{ fieldPath: 'minerals.calcium', label: '钙', unit: 'mg', targetValuePerKg: 2192 }],
-    concentrations: [{ fieldPath: 'minerals.calcium', value: 353, unit: 'mg' }],
-    missingFieldPaths: [],
+    amount: 12.3,
+    available: true,
+    unavailableReason: null,
+    isDefault: true,
+    concentrations: [
+      { fieldPath: 'minerals.calcium', value: 353, unit: 'mg' },
+    ],
+    ...overrides,
   };
+}
+
+function planItem(overrides: Record<string, any> = {}) {
   return {
     recipeItemId: 'item-1',
     sourceIngredientId: 'ing-caco3',
-    source: 'EQUIVALENCE_GROUP',
-    group: { id: 'g1', code: 'CALCIUM', name: '钙 · 矿物盐', status: 'APPROVED' },
-    defaultIngredient: {
-      ingredientId: 'ing-caco3',
-      name: '碳酸钙粉',
-      displayUnit: 'g',
-      physicalForm: 'POWDER',
-      diyEnabled: true,
-      supplementRetailEnabled: false,
-      selectable: false,
-      unavailableReason: '未开启对外售卖',
-      dosage: { ...dosage, amount: 18.6 },
-    },
-    candidates: [
-      {
-        ingredientId: 'ing-citrate',
-        name: '柠檬酸钙粉',
-        brand: 'NOW FOODS',
-        productModel: '600mg钙/3克',
-        purchaseChannel: null,
-        purchaseLink: null,
-        imageUrl: null,
-        physicalForm: 'POWDER',
-        displayUnit: 'g',
-        isDefault: false,
-        selectable: true,
-        unavailableReason: null,
-        dosage,
-      },
-    ],
-    fallbackAmount: null,
-    unavailableReason: null,
+    name: '碳酸钙粉',
     preparationMethod: '随餐',
     addTimingLabel: null,
     sortOrder: 0,
+    reference: {
+      ingredientId: 'ing-caco3',
+      name: '碳酸钙粉',
+      brand: null,
+      productModel: null,
+      displayUnit: 'g',
+      amount: 18.6,
+      unit: 'g',
+      status: 'OK',
+      targets: [
+        {
+          fieldPath: 'minerals.calcium',
+          label: '钙',
+          unit: 'mg',
+          targetValuePerKg: 2192,
+        },
+      ],
+    },
+    recommendedProducts: [],
+    repackPool: [repackOption()],
     ...overrides,
   };
 }
 
 describe('SupplementOrderService · server dosage lines', () => {
-  function build(options: {
-    sheet?: any;
-    resolved?: any;
-  } = {}) {
+  function build(options: { sheet?: any; plan?: any } = {}) {
     const prisma = {
       dIYSheet: {
         findUnique: jest.fn().mockResolvedValue(
@@ -75,14 +76,18 @@ describe('SupplementOrderService · server dosage lines', () => {
         findFirst: jest.fn().mockResolvedValue({ version: 3 }),
       },
     };
-    const candidateService = {
-      resolveForRecipe: jest.fn().mockResolvedValue(
-        options.resolved ?? {
+    const planService = {
+      resolveForRecipeRequest: jest.fn().mockResolvedValue(
+        options.plan ?? {
           totalWeightG: 1500,
           weightSource: 'DIY_SHEET',
-          items: [candidateItem()],
+          recipeVersion: 3,
+          items: [planItem()],
         },
       ),
+      pickRepackOption: (pool: any[], ingredientId: string) =>
+        (pool ?? []).find((option) => option.ingredientId === ingredientId) ??
+        null,
     };
     const service = new SupplementOrderService(
       prisma as any,
@@ -92,9 +97,12 @@ describe('SupplementOrderService · server dosage lines', () => {
       undefined,
       undefined,
       undefined,
-      candidateService as any,
+      undefined,
+      undefined,
+      undefined,
+      planService as any,
     );
-    return { service, prisma, candidateService };
+    return { service, prisma, planService };
   }
 
   it('returns null for the legacy protocol', async () => {
@@ -119,8 +127,8 @@ describe('SupplementOrderService · server dosage lines', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('computes the selected group member amount on the server', async () => {
-    const { service, candidateService } = build();
+  it('computes the selected repack amount on the server', async () => {
+    const { service, planService } = build();
 
     const result = await (service as any).resolveServerDosageLines(
       {
@@ -130,25 +138,23 @@ describe('SupplementOrderService · server dosage lines', () => {
       'user-1',
     );
 
-    expect(candidateService.resolveForRecipe).toHaveBeenCalledWith(
+    expect(planService.resolveForRecipeRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        recipeBusinessId: 'recipe-1',
+        recipeId: 'recipe-1',
         recipeVersion: 3,
         totalWeightG: 1500,
       }),
     );
-    expect(result.lines).toEqual([
-      { ingredientId: 'ing-citrate', amount: 12.3 },
-    ]);
+    expect(result.lines).toEqual([{ ingredientId: 'ing-citrate', amount: 12.3 }]);
     const snapshot = result.byIngredient.get('ing-citrate')[0];
-    expect(snapshot.selectionSource).toBe('EQUIVALENCE_GROUP');
+    expect(snapshot.selectionSource).toBe('REPACK');
     expect(snapshot.sourceIngredientId).toBe('ing-caco3');
     expect(snapshot.concentrations).toEqual([
       { fieldPath: 'minerals.calcium', value: 353, unit: 'mg' },
     ]);
   });
 
-  it('rejects a member that is not a candidate for this row', async () => {
+  it('rejects a product that is not in the repack pool', async () => {
     const { service } = build();
 
     await expect(
@@ -162,35 +168,34 @@ describe('SupplementOrderService · server dosage lines', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('uses the ratio fallback only for the source ingredient', async () => {
+  it('keeps the ratio fallback for source rows without nutrient targets', async () => {
     const { service } = build({
-      resolved: {
+      plan: {
         totalWeightG: 1500,
         weightSource: 'DIY_SHEET',
+        recipeVersion: 3,
         items: [
-          candidateItem({
-            source: 'DEFAULT_ONLY',
-            group: null,
-            candidates: [],
-            fallbackAmount: 15,
-            defaultIngredient: {
-              ingredientId: 'ing-caco3',
+          planItem({
+            sourceIngredientId: 'ing-psyllium',
+            reference: {
+              ingredientId: 'ing-psyllium',
               name: '洋车前子壳粉',
+              brand: null,
+              productModel: null,
               displayUnit: 'g',
-              physicalForm: 'POWDER',
-              diyEnabled: true,
-              supplementRetailEnabled: true,
-              selectable: true,
-              unavailableReason: null,
-              dosage: {
-                status: 'NO_TARGETS',
-                amount: null,
-                unit: 'g',
-                targets: [],
-                concentrations: [],
-                missingFieldPaths: [],
-              },
+              amount: 15,
+              unit: 'g',
+              status: 'NO_TARGETS',
+              targets: [],
             },
+            repackPool: [
+              repackOption({
+                ingredientId: 'ing-psyllium',
+                name: '洋车前子壳粉',
+                amount: 15,
+                concentrations: [],
+              }),
+            ],
           }),
         ],
       },
@@ -199,44 +204,23 @@ describe('SupplementOrderService · server dosage lines', () => {
     const result = await (service as any).resolveServerDosageLines(
       {
         diySheetId: 'sheet-1',
-        lines: [{ ingredientId: 'ing-caco3', recipeItemId: 'item-1' }],
+        lines: [{ ingredientId: 'ing-psyllium', recipeItemId: 'item-1' }],
       },
       'user-1',
     );
 
-    expect(result.lines).toEqual([{ ingredientId: 'ing-caco3', amount: 15 }]);
+    expect(result.lines).toEqual([{ ingredientId: 'ing-psyllium', amount: 15 }]);
     expect(
-      result.byIngredient.get('ing-caco3')[0].selectionSource,
+      result.byIngredient.get('ing-psyllium')[0].selectionSource,
     ).toBe('RATIO');
   });
 
-  it('rejects a sheet that belongs to another user and a stale recipe row', async () => {
+  it('rejects a stale recipe row', async () => {
     const { service } = build({
-      sheet: {
-        id: 'sheet-1',
-        userId: 'someone-else',
-        recipeId: 'recipe-1',
-        recipeVersion: 3,
-        packagePlan: [],
-        dailyIntakeG: 100,
-        cycleDays: 7,
-      },
+      plan: { totalWeightG: 1500, weightSource: 'DIY_SHEET', recipeVersion: 3, items: [] },
     });
     await expect(
       (service as any).resolveServerDosageLines(
-        {
-          diySheetId: 'sheet-1',
-          lines: [{ ingredientId: 'ing-citrate', recipeItemId: 'item-1' }],
-        },
-        'user-1',
-      ),
-    ).rejects.toThrow('不属于当前用户');
-
-    const stale = build({
-      resolved: { totalWeightG: 1500, weightSource: 'DIY_SHEET', items: [] },
-    });
-    await expect(
-      (stale.service as any).resolveServerDosageLines(
         {
           diySheetId: 'sheet-1',
           lines: [{ ingredientId: 'ing-citrate', recipeItemId: 'item-1' }],

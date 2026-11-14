@@ -525,8 +525,8 @@ describe('diy sheet layout regressions', () => {
     expect(source).toContain('item.netAmountStr')
     expect(source).toContain('item.recommendedPrintText')
     // 目标补充量 排在 制作单总量 之前
-    expect(source).toContain("['补剂名称', '产品 / 规格', '目标补充量', '制作单总量']")
-    expect(source).not.toContain("['补剂名称', '已选商品 / 规格', '添加总量', '目标补充量']")
+    expect(source).toContain("['目标营养素', '产品 / 规格', '目标补充量', '制作单总量']")
+    expect(source).not.toContain("['目标营养素', '已选商品 / 规格', '添加总量', '目标补充量']")
     expect(source).toContain('builder.drawSupplementNotice(')
     expect(source).toContain('营养补充剂的制作单总量与产品严格匹配')
     expect(source).not.toContain('drawImportantTipsSection')

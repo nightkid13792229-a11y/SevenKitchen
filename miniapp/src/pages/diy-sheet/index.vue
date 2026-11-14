@@ -141,7 +141,7 @@
           <view class="ingredient-category-title">营养补充剂</view>
           <view class="ingredient-table">
             <view class="table-header supplement-table">
-              <text class="header-item product-col">补剂名称</text>
+              <text class="header-item product-col">目标营养素</text>
               <text class="header-item brand-col">{{ DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL }}</text>
               <text class="header-item timing-col">建议添加时机</text>
               <text class="header-item dosage-col">制作单总量</text>
@@ -549,7 +549,7 @@
         </view>
         <view class="spec-body">
           <view class="spec-row">
-            <text class="spec-label">补剂名称：</text>
+            <text class="spec-label">目标营养素：</text>
             <text class="spec-value">{{ currentNutritionInfo.name }}</text>
           </view>
           <view class="spec-row">
@@ -1732,7 +1732,7 @@ async function handlePrint() {
         ])
 
         builder.drawTable(
-          ['补剂名称', '产品 / 规格', '目标补充量', '制作单总量'],
+          ['目标营养素', '产品 / 规格', '目标补充量', '制作单总量'],
           supplementRows,
           {
             colWidths: [180, 490, 250, 200],
@@ -2986,6 +2986,10 @@ onShareTimeline(() => {
   background-color: #fbfcf7;
   border-radius: 16rpx;
   overflow: hidden;
+  /* 商品多于 3 个时整块会超出屏幕：限高 + 让内容区自己滚，头尾固定 */
+  display: flex;
+  flex-direction: column;
+  max-height: 82vh;
 }
 
 .spec-header {
@@ -2994,6 +2998,7 @@ onShareTimeline(() => {
   justify-content: space-between;
   padding: 24rpx;
   border-bottom: 1rpx solid #e5e8d4;
+  flex-shrink: 0;
 }
 
 .spec-title {
@@ -3010,6 +3015,10 @@ onShareTimeline(() => {
 
 .spec-body {
   padding: 24rpx;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .spec-row {

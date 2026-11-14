@@ -380,21 +380,13 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
     };
   }
 
-  async countByDate(date: string): Promise<number> {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    return this.prisma.reimbursement.count({
-      where: {
-        createdAt: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
-      },
+  async findClaimNumbersByPrefix(prefix: string): Promise<string[]> {
+    const rows = await this.prisma.reimbursement.findMany({
+      where: { claimNumber: { startsWith: prefix } },
+      select: { claimNumber: true },
     });
+
+    return rows.map((row) => row.claimNumber);
   }
 
   async findByReviewedBy(reviewedById: string): Promise<Reimbursement[]> {

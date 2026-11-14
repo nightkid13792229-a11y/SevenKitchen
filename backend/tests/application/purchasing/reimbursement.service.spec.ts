@@ -28,7 +28,7 @@ describe('ReimbursementService', () => {
 
   const mockReimbursementRepository = {
     findById: jest.fn(),
-    countByDate: jest.fn(),
+    findClaimNumbersByPrefix: jest.fn().mockResolvedValue([]),
     save: jest.fn(),
     saveWithPurchaseListReplacement: jest.fn(),
   } as any;

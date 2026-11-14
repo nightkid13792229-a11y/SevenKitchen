@@ -10,7 +10,7 @@ import {
 describe('ReimbursementService — 凭证金额与费用归属（2026-11-04）', () => {
   const repo: any = {
     save: jest.fn(),
-    countByDate: jest.fn(),
+    findClaimNumbersByPrefix: jest.fn().mockResolvedValue([]),
     findById: jest.fn(),
   };
   const listRepo: any = { findById: jest.fn() };
@@ -65,7 +65,7 @@ describe('ReimbursementService — 凭证金额与费用归属（2026-11-04）',
   beforeEach(() => {
     jest.clearAllMocks();
     listRepo.findById.mockResolvedValue(dailyList);
-    repo.countByDate.mockResolvedValue(0);
+    repo.findClaimNumbersByPrefix.mockResolvedValue([]);
     repo.save.mockImplementation(async (entity: any) => entity);
     pricing.syncPendingChangesForReimbursement.mockResolvedValue([]);
     pricing.autoApproveEligibleChangesForReimbursement.mockResolvedValue([]);

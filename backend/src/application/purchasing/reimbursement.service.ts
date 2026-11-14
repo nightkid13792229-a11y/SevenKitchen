@@ -33,6 +33,7 @@ import {
 } from '../../domain/purchasing';
 import { isWithinRevertWindow } from '../../domain/purchasing/reimbursement-review-window';
 import { resolvePurchaseRecordBaseQuantity } from '../../domain/ingredient/unit-price';
+import { TimezoneUtil } from '../../utils/timezone.util';
 
 export interface SubmitReimbursementDto {
   purchaseListIds?: string[];
@@ -169,21 +170,43 @@ export class ReimbursementService {
   /**
    * 生成报销单号
    * 格式: BX + YYYYMMDD + 4位流水号
-   * 示例: BX20260110001
+   * 示例: BX202601100001
+   *
+   * 2026-11-14 事故：原来按「当天已有几张 + 1」编号，用户删掉当天较早的一张后
+   * 计数倒退，重交时又生成一个已在用的单号，撞唯一约束。
+   * 现在改成「当天用过的最大流水号 + 1」；日期也统一按上海日历日，
+   * 避免凌晨 0-8 点提交时单号写成前一天。
    */
-  async generateClaimNumber(): Promise<string> {
-    const now = new Date();
-    // ISO格式日期用于查询 (YYYY-MM-DD)
-    const isoDate = now.toISOString().slice(0, 10);
-    // 无横杠格式用于单号 (YYYYMMDD)
-    const dateString = isoDate.replace(/-/g, '');
+  async generateClaimNumber(now: Date = new Date()): Promise<string> {
+    const dateString = TimezoneUtil.shanghaiDateKey(now).replace(/-/g, '');
     const prefix = `BX${dateString}`;
 
-    // 查询今天已有的报销单数量
-    const count = await this.reimbursementRepository.countByDate(isoDate);
-    const sequence = String(count + 1).padStart(4, '0');
+    const used = await this.reimbursementRepository.findClaimNumbersByPrefix(
+      prefix,
+    );
+    const maxSequence = used.reduce((max, claimNumber) => {
+      const suffix = claimNumber.slice(prefix.length);
+      if (!/^\d+$/.test(suffix)) return max;
+      return Math.max(max, Number(suffix));
+    }, 0);
 
-    return `${prefix}${sequence}`;
+    return `${prefix}${String(maxSequence + 1).padStart(4, '0')}`;
+  }
+
+  /**
+   * 撞号时自动换号重提（两个人同时提交会算出同一个流水号）。
+   * 只对 claim_number 唯一约束重试，其他错误照常抛出。
+   */
+  private isClaimNumberConflict(error: unknown): boolean {
+    const err = error as { code?: string; meta?: { target?: unknown } };
+    if (err?.code !== 'P2002') return false;
+
+    const target = err.meta?.target;
+    const fields = Array.isArray(target)
+      ? target.map((field) => String(field))
+      : [String(target ?? '')];
+
+    return fields.some((field) => field.includes('claim_number'));
   }
 
   private async prepareReimbursementSubmission(
@@ -415,47 +438,77 @@ export class ReimbursementService {
       `Submitting reimbursement for ${purchaseListIds.length} purchase lists by user ${submittedById}`,
     );
 
-    // 生成报销单号
-    const claimNumber = await this.generateClaimNumber();
-
-    // 创建报销单
-    const reimbursement = new Reimbursement({
-      claimNumber,
-      status: ReimbursementStatus.PENDING_REVIEW,
-      totalActualCost: dto.totalActualCost,
-      totalEstimatedCost,
-      receiptUrls: dto.receiptUrls,
-      receiptKeys,
-      voucherAmount: voucherAmount ?? undefined,
-      differenceAmount: differenceAmount ?? undefined,
-      differenceNote: dto.differenceNote?.trim() || undefined,
-      submittedById,
-      submittedAt: new Date(),
-      purchaseLists,
-      // 新增字段
-      platformShippingFee: dto.platformShippingFee,
-      platformPackagingFee: dto.platformPackagingFee,
-      customFees: normalizedCustomFees,
-    });
-
-    // 保存报销单 + 生成价格变更放在同一个事务里（2026-11-14 修）：
+    // 建单 + 生成价格变更放在同一个事务里（2026-11-14 修）：
     // 旧实现先存单、再同步价格，同步失败会留下一张「单子建了、价格没同步」的半成品，
     // 用户重试又撞「已关联到报销单」，前后都走不通。
-    const saved = await this.prisma.$transaction(
-      async (tx) => {
-        const savedReimbursement = await this.reimbursementRepository.save(
-          reimbursement,
-          tx,
+    //
+    // 单号撞车（两个人同时提交、或当天删过单）时整笔回滚换号重来，
+    // 最多 3 次；其他错误直接抛给上层。
+    const MAX_CLAIM_NUMBER_ATTEMPTS = 3;
+    let saved: Reimbursement | null = null;
+    let claimNumber = '';
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= MAX_CLAIM_NUMBER_ATTEMPTS; attempt += 1) {
+      claimNumber = await this.generateClaimNumber();
+
+      const reimbursement = new Reimbursement({
+        claimNumber,
+        status: ReimbursementStatus.PENDING_REVIEW,
+        totalActualCost: dto.totalActualCost,
+        totalEstimatedCost,
+        receiptUrls: dto.receiptUrls,
+        receiptKeys,
+        voucherAmount: voucherAmount ?? undefined,
+        differenceAmount: differenceAmount ?? undefined,
+        differenceNote: dto.differenceNote?.trim() || undefined,
+        submittedById,
+        submittedAt: new Date(),
+        purchaseLists,
+        // 新增字段
+        platformShippingFee: dto.platformShippingFee,
+        platformPackagingFee: dto.platformPackagingFee,
+        customFees: normalizedCustomFees,
+      });
+
+      try {
+        saved = await this.prisma.$transaction(
+          async (tx) => {
+            const savedReimbursement = await this.reimbursementRepository.save(
+              reimbursement,
+              tx,
+            );
+            await this.ingredientPricingService.syncPendingChangesForReimbursement(
+              savedReimbursement.id,
+              purchaseListIds,
+              tx,
+            );
+            return savedReimbursement;
+          },
+          { timeout: 20000, maxWait: 10000 },
         );
-        await this.ingredientPricingService.syncPendingChangesForReimbursement(
-          savedReimbursement.id,
-          purchaseListIds,
-          tx,
-        );
-        return savedReimbursement;
-      },
-      { timeout: 20000, maxWait: 10000 },
-    );
+        break;
+      } catch (error) {
+        lastError = error;
+        if (
+          !saved &&
+          attempt < MAX_CLAIM_NUMBER_ATTEMPTS &&
+          this.isClaimNumberConflict(error)
+        ) {
+          this.logger.warn(
+            `Claim number ${claimNumber} already taken, retrying (attempt ${attempt}/${MAX_CLAIM_NUMBER_ATTEMPTS})`,
+          );
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    if (!saved) {
+      throw lastError instanceof Error
+        ? lastError
+        : new Error('报销单创建失败，请重试');
+    }
 
     // 自动定价只影响「够不够格自动生效」，失败时变更仍留在待审核里等人工放行，
     // 不能让它把一笔已经建好的报销单报成失败。
@@ -474,7 +527,7 @@ export class ReimbursementService {
     await this.recordReviewEvent(this.prisma, {
       reimbursementId: saved.id,
       action: 'SUBMIT',
-      actorId: reimbursement.submittedById,
+      actorId: submittedById,
       toStatus: saved.status,
     });
 

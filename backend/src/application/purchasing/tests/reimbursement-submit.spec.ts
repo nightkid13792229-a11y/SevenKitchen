@@ -39,7 +39,7 @@ function buildService(listOverrides: Record<string, any> = {}) {
   const reimbursementRepository: any = {
     save: jest.fn(async (reimbursement: any) => reimbursement),
     findById: jest.fn().mockResolvedValue(null),
-    countByDate: jest.fn().mockResolvedValue(0),
+    findClaimNumbersByPrefix: jest.fn().mockResolvedValue([]),
   };
   const purchaseListRepository: any = {
     findById: jest.fn().mockResolvedValue(list),

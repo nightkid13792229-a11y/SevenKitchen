@@ -55,9 +55,13 @@ export interface ReimbursementRepository {
   }): Promise<{ list: Reimbursement[]; total: number }>;
 
   /**
-   * 统计指定日期的报销单数量
+   * 列出某天已用过的报销单号（按单号前缀匹配）。
+   *
+   * 用于生成流水号：必须看「当天用过的最大号」，不能看「当天还剩几张」——
+   * 删掉中间或最早的一张会让计数倒退，重新生成已存在的单号撞唯一约束
+   * （2026-11-14 事故）。
    */
-  countByDate(date: string): Promise<number>;
+  findClaimNumbersByPrefix(prefix: string): Promise<string[]>;
 
   /**
    * 根据审核人查找报销单

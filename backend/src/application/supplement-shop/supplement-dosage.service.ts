@@ -32,10 +32,29 @@ export interface SupplementDosageResult {
   missingFieldPaths: string[];
 }
 
-type ConcentrationResolution =
+/**
+ * 浓度解析失败的原因，用来把审核拦截翻成人话（2026-11-14）。
+ *
+ * 以前只回 `actualUnit`，界面上只剩一句"单位与组不一致（g）"——
+ * 实际可能是三种完全不同的毛病，改法也不一样：
+ *
+ *   · UNIT_LABEL            档案按 g 记，组里写 mg（改单位就好）
+ *   · BASIS_BASE_MISMATCH   档案按"每 100 克"标，库存按"粒"计（缺换算依据）
+ *   · MISSING_SERVING_WEIGHT 档案按"每份"标、库存按克计，但没填每份克重
+ */
+export type ConcentrationMismatchReason =
+  | 'UNIT_LABEL'
+  | 'BASIS_BASE_MISMATCH'
+  | 'MISSING_SERVING_WEIGHT';
+
+export type ConcentrationResolution =
   | { status: 'OK'; value: number; unit: string }
   | { status: 'MISSING' }
-  | { status: 'UNIT_MISMATCH'; actualUnit: string };
+  | {
+      status: 'UNIT_MISMATCH';
+      actualUnit: string;
+      reason: ConcentrationMismatchReason;
+    };
 
 const UNIT_ALIASES: Record<string, string> = {
   μg: 'μg',
@@ -364,6 +383,7 @@ export class SupplementDosageService {
           return {
             status: 'UNIT_MISMATCH',
             actualUnit: resolveDisplayUnit(input.ingredient),
+            reason: 'MISSING_SERVING_WEIGHT',
           };
         }
         return this.matchUnit(
@@ -377,6 +397,7 @@ export class SupplementDosageService {
         return {
           status: 'UNIT_MISMATCH',
           actualUnit: resolveDisplayUnit(input.ingredient),
+          reason: 'BASIS_BASE_MISMATCH',
         };
       }
     }
@@ -394,7 +415,7 @@ export class SupplementDosageService {
     const expectedUnit = normalizeSupplementUnit(target.unit);
 
     if (expectedUnit && actualUnit && expectedUnit !== actualUnit) {
-      return { status: 'UNIT_MISMATCH', actualUnit };
+      return { status: 'UNIT_MISMATCH', actualUnit, reason: 'UNIT_LABEL' };
     }
 
     return {

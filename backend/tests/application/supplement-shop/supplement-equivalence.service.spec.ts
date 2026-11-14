@@ -312,6 +312,45 @@ describe('SupplementEquivalenceService', () => {
     ).rejects.toThrow('编码应为');
   });
 
+  it('takes label and unit from the nutrition catalog, not from the form', async () => {
+    const group = await service.create(
+      groupInput({
+        code: 'TAURINE',
+        name: '牛磺酸',
+        nutrientKey: 'aminoAcids.taurine',
+        nutrientLabel: '牛磺酸',
+        // 导入时被写错的单位：目录里牛磺酸是 g
+        nutrientUnit: 'mg',
+      }),
+      operator,
+    );
+
+    expect(group.nutrientLabel).toBe('牛磺酸');
+    expect(group.nutrientUnit).toBe('g');
+
+    const updated = await service.update(
+      group.id,
+      { nutrientUnit: 'mg' },
+      operator,
+    );
+    expect(updated.nutrientUnit).toBe('g');
+  });
+
+  it('still lets custom nutrients keep their own name and unit', async () => {
+    const group = await service.create(
+      groupInput({
+        code: 'CUSTOM_GLUCOSAMINE',
+        nutrientKey: 'custom:氨糖',
+        nutrientLabel: '氨糖',
+        nutrientUnit: 'mg',
+      }),
+      operator,
+    );
+
+    expect(group.nutrientKey).toBe('custom:氨糖');
+    expect(group.nutrientUnit).toBe('mg');
+  });
+
   it('approves only after evidence and healthy members are present', async () => {
     const group = await service.create(groupInput(), operator);
     await service.addMembers(
@@ -363,7 +402,7 @@ describe('SupplementEquivalenceService', () => {
     await service.changeStatus(second.id, 'PENDING_REVIEW', operator);
     await expect(
       service.changeStatus(second.id, 'APPROVED', operator),
-    ).rejects.toThrow('单位与组不一致');
+    ).rejects.toThrow('没填每份克重');
   });
 
   it('reverts an approved group to draft when it is edited', async () => {
@@ -480,5 +519,48 @@ describe('equivalence group pure rules', () => {
     expect(errors[0]).toContain('分组依据');
     expect(errors[1]).toContain('甲');
     expect(errors[2]).toContain('乙');
+  });
+
+  // 2026-11-14：只说"单位与组不一致（g）"没法照着改，得说清是谁的、改哪边
+  it('spells out both units when the group unit and the profile unit differ', () => {
+    const errors = buildApprovalErrors({
+      group: {
+        nutrientKey: 'aminoAcids.taurine',
+        nutrientLabel: '牛磺酸',
+        nutrientUnit: 'mg',
+        evidenceUrls: ['https://example.com/nrc-2006'],
+      },
+      members: [{ name: '牛磺酸胶囊' }],
+      resolve: () => ({
+        status: 'UNIT_MISMATCH',
+        actualUnit: 'g',
+        reason: 'UNIT_LABEL',
+      }),
+    });
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('牛磺酸胶囊');
+    expect(errors[0]).toContain('组里写的是 mg');
+    expect(errors[0]).toContain('档案按 g 记');
+  });
+
+  it('names the counting unit when the basis cannot be converted', () => {
+    const errors = buildApprovalErrors({
+      group: {
+        nutrientKey: 'derived.epaDha',
+        nutrientLabel: 'EPA + DHA',
+        nutrientUnit: 'mg',
+        evidenceUrls: ['https://example.com/nrc-2006'],
+      },
+      members: [{ name: '藻油' }],
+      resolve: () => ({
+        status: 'UNIT_MISMATCH',
+        actualUnit: '粒',
+        reason: 'BASIS_BASE_MISMATCH',
+      }),
+    });
+
+    expect(errors[0]).toContain('藻油');
+    expect(errors[0]).toContain('库存按「粒」计');
   });
 });

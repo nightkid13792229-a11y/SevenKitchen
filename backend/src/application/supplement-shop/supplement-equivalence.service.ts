@@ -9,6 +9,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import {
   SupplementDosageService,
   normalizeCustomNutrientName,
+  type ConcentrationMismatchReason,
 } from './supplement-dosage.service';
 
 export type EquivalenceOperator = {
@@ -91,7 +92,11 @@ export function buildApprovalErrors(input: {
   resolve: (member: any) =>
     | { status: 'OK' }
     | { status: 'MISSING' }
-    | { status: 'UNIT_MISMATCH'; actualUnit?: string };
+    | {
+        status: 'UNIT_MISMATCH';
+        actualUnit?: string;
+        reason?: ConcentrationMismatchReason;
+      };
 }): string[] {
   const errors: string[] = [];
 
@@ -110,7 +115,13 @@ export function buildApprovalErrors(input: {
     const resolved = input.resolve(member);
     if (resolved.status === 'UNIT_MISMATCH') {
       errors.push(
-        `${member.name} 的${input.group.nutrientLabel}单位与组不一致（${resolved.actualUnit || '未知单位'}）`,
+        describeUnitMismatch({
+          memberName: member.name,
+          nutrientLabel: input.group.nutrientLabel,
+          groupUnit: input.group.nutrientUnit,
+          actualUnit: resolved.actualUnit,
+          reason: resolved.reason,
+        }),
       );
     } else if (resolved.status !== 'OK') {
       errors.push(
@@ -120,6 +131,46 @@ export function buildApprovalErrors(input: {
   }
 
   return errors;
+}
+
+/**
+ * 把"单位对不上"翻成能照着动手的话（2026-11-14）。
+ *
+ * 只写一个括号里的单位时，人看到"单位与组不一致（g）"根本不知道是谁的 g、
+ * 应该把哪边改成什么。三种原因分开说。
+ */
+function describeUnitMismatch(input: {
+  memberName: string;
+  nutrientLabel: string;
+  groupUnit: string;
+  actualUnit?: string;
+  reason?: ConcentrationMismatchReason;
+}): string {
+  const actual = input.actualUnit || '未知单位';
+
+  if (input.reason === 'MISSING_SERVING_WEIGHT') {
+    return (
+      `${input.memberName} 的${input.nutrientLabel}是按「每份」标注的，` +
+      `但库存按克计，档案里没填每份克重，没法换算（需要补每份多少克）`
+    );
+  }
+
+  if (input.reason === 'BASIS_BASE_MISMATCH') {
+    return (
+      `${input.memberName} 的${input.nutrientLabel}标注口径和库存计量单位对不上：` +
+      `库存按「${actual}」计，营养档案不是按这个口径标的，没法换算`
+    );
+  }
+
+  if (input.reason === 'UNIT_LABEL') {
+    return (
+      `${input.memberName} 的${input.nutrientLabel}单位与组不一致：` +
+      `组里写的是 ${input.groupUnit}，档案按 ${actual} 记`
+    );
+  }
+
+  // 没带原因时退回老文案，兼容旧调用方（例如单测里直接 mock 的 resolve）
+  return `${input.memberName} 的${input.nutrientLabel}单位与组不一致（${actual}）`;
 }
 
 @Injectable()
@@ -319,17 +370,33 @@ export class SupplementEquivalenceService {
     const data: Record<string, unknown> = {};
     if (input.code !== undefined) data.code = input.code.trim().toUpperCase();
     if (input.name !== undefined) data.name = input.name.trim();
-    if (input.nutrientKey !== undefined) {
-      data.nutrientKey = input.nutrientKey.trim();
-      data.nutrientLabel =
-        input.nutrientLabel?.trim() || input.nutrientKey.trim();
-      data.nutrientUnit = input.nutrientUnit?.trim() || '';
-    } else {
-      if (input.nutrientLabel !== undefined) {
-        data.nutrientLabel = input.nutrientLabel.trim();
-      }
-      if (input.nutrientUnit !== undefined) {
-        data.nutrientUnit = input.nutrientUnit.trim();
+    if (
+      input.nutrientKey !== undefined ||
+      input.nutrientLabel !== undefined ||
+      input.nutrientUnit !== undefined
+    ) {
+      const nextKey =
+        input.nutrientKey !== undefined
+          ? String(input.nutrientKey).trim()
+          : String(current.nutrientKey);
+
+      if (isCustomEquivalenceKey(nextKey)) {
+        data.nutrientKey = nextKey;
+        data.nutrientLabel =
+          input.nutrientLabel?.trim() || String(current.nutrientLabel);
+        data.nutrientUnit =
+          input.nutrientUnit?.trim() || String(current.nutrientUnit);
+      } else {
+        // 标准营养素：名称和单位按目录落库，忽略前端传值（防止单位被带偏）。
+        const field = findAnyNutritionField(nextKey);
+        if (!field) {
+          throw new BadRequestException(
+            `营养素 ${nextKey} 不在营养字段目录中`,
+          );
+        }
+        data.nutrientKey = nextKey;
+        data.nutrientLabel = field.label;
+        data.nutrientUnit = field.unit;
       }
     }
     if (input.formCategory !== undefined) {
@@ -833,10 +900,36 @@ export class SupplementEquivalenceService {
           `自定义成分的编码应为 ${expectedKey}`,
         );
       }
+
+      const customLabel = String(input.nutrientLabel ?? '').trim();
+      const customUnit = String(input.nutrientUnit ?? '').trim();
+      if (!customLabel || !customUnit) {
+        throw new BadRequestException('营养素名称和单位不能为空');
+      }
+
+      return {
+        code,
+        name,
+        nutrientKey,
+        nutrientLabel: customLabel,
+        nutrientUnit: customUnit,
+        formCategory: input.formCategory?.trim() || null,
+        description: input.description?.trim() || null,
+        rationale: input.rationale?.trim() || null,
+        evidenceSummary: input.evidenceSummary?.trim() || null,
+        evidenceUrls: (input.evidenceUrls ?? [])
+          .map((item) => String(item ?? '').trim())
+          .filter(Boolean),
+        sortOrder: Number(input.sortOrder) || 0,
+      };
     }
 
-    const nutrientLabel = String(input.nutrientLabel ?? '').trim();
-    const nutrientUnit = String(input.nutrientUnit ?? '').trim();
+    // 标准营养素：名称和单位一律取营养字段目录（单一真源），不采信前端传值。
+    // 2026-11-14：牛磺酸组曾因导入时写成 mg、目录是 g，审核时才炸「单位与组不一致」；
+    // 这里直接按目录落库，存进去的就不可能与系统口径分叉。
+    const field = findAnyNutritionField(nutrientKey);
+    const nutrientLabel = field?.label ?? '';
+    const nutrientUnit = field?.unit ?? '';
     if (!nutrientLabel || !nutrientUnit) {
       throw new BadRequestException('营养素名称和单位不能为空');
     }

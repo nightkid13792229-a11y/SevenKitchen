@@ -333,12 +333,79 @@ describe('SupplementDosageService', () => {
     expect(result.status).toBe('UNIT_MISMATCH');
   });
 
+  // 2026-11-14：三种"单位对不上"要能分开（界面上原来是同一句"单位与组不一致（g）"）
+  it('tells a unit-label mismatch apart from a basis mismatch', () => {
+    const unitLabel = service.resolveConcentration(
+      ingredient({
+        baseUnit: 'G',
+        unitDisplayLabel: 'g',
+        // 牛磺酸：目录按 g 记，组里写 mg
+        nutritionProfile: profile({ aminoAcids: { taurine: 1 } }),
+      }),
+      {
+        fieldPath: 'aminoAcids.taurine',
+        label: '牛磺酸',
+        unit: 'mg',
+        targetValuePerKg: 1,
+      },
+    );
+    expect(unitLabel).toMatchObject({
+      status: 'UNIT_MISMATCH',
+      actualUnit: 'g',
+      reason: 'UNIT_LABEL',
+    });
+
+    // 藻油：档案按"每 1 克"标，库存按"粒"计
+    const basis = service.resolveConcentration(
+      ingredient({
+        baseUnit: 'PCS',
+        unitDisplayLabel: '粒',
+        nutritionProfile: profile({ fattyAcids: { dha: 400 } }),
+      }),
+      {
+        fieldPath: 'derived.epaDha',
+        label: 'EPA + DHA',
+        unit: 'mg',
+        targetValuePerKg: 1,
+      },
+    );
+    expect(basis).toMatchObject({
+      status: 'UNIT_MISMATCH',
+      reason: 'BASIS_BASE_MISMATCH',
+    });
+  });
+
+  it('flags the missing serving weight instead of blaming the unit', () => {
+    const resolution = service.resolveConcentration(
+      ingredient({
+        baseUnit: 'G',
+        unitDisplayLabel: 'g',
+        nutritionProfile: profile({
+          meta: { rawBasisType: 'PER_SERVING' },
+          minerals: { calcium: 500 },
+        }),
+      }),
+      {
+        fieldPath: 'minerals.calcium',
+        label: '钙',
+        unit: 'mg',
+        targetValuePerKg: 1000,
+      },
+    );
+
+    expect(resolution).toMatchObject({
+      status: 'UNIT_MISMATCH',
+      reason: 'MISSING_SERVING_WEIGHT',
+    });
+  });
+
   it('returns NO_TARGETS when the recipe has no supplement targets', () => {
     const result = service.computeDosage({
       ingredient: ingredient(),
       targets: [],
       totalWeightG: 1000,
     });
+
 
     expect(result.status).toBe('NO_TARGETS');
     expect(result.amount).toBeNull();

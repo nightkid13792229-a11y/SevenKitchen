@@ -523,6 +523,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { toastApiError } from '@/utils/apiError';
 import { Plus, Search } from '@element-plus/icons-vue';
 import {
   DERIVED_NUTRITION_FIELD_CATALOG,
@@ -759,7 +760,7 @@ async function loadSummary() {
   try {
     Object.assign(summary, await supplementEquivalenceApi.summary());
   } catch (error: any) {
-    ElMessage.error(error?.message || '读取统计失败');
+    toastApiError(error, '读取统计失败', (message) => ElMessage.error(message));
   }
 }
 
@@ -775,7 +776,7 @@ async function loadGroups() {
     groups.value = result.items;
     pagination.total = result.total;
   } catch (error: any) {
-    ElMessage.error(error?.message || '读取等价组失败');
+    toastApiError(error, '读取等价组失败', (message) => ElMessage.error(message));
   } finally {
     loading.value = false;
   }
@@ -797,7 +798,7 @@ async function loadUngrouped() {
       ungroupedKeyword.value || undefined,
     );
   } catch (error: any) {
-    ElMessage.error(error?.message || '读取未分组原料失败');
+    toastApiError(error, '读取未分组原料失败', (message) => ElMessage.error(message));
   } finally {
     ungroupedLoading.value = false;
   }
@@ -864,7 +865,7 @@ async function openEdit(id: string) {
     form.sortOrder = group.sortOrder;
     formVisible.value = true;
   } catch (error: any) {
-    ElMessage.error(error?.message || '读取组详情失败');
+    toastApiError(error, '读取组详情失败', (message) => ElMessage.error(message));
   }
 }
 
@@ -919,7 +920,7 @@ async function handleSave() {
       await openDetail(form.id);
     }
   } catch (error: any) {
-    ElMessage.error(error?.message || '保存失败');
+    toastApiError(error, '保存失败', (message) => ElMessage.error(message));
   } finally {
     saving.value = false;
   }
@@ -932,7 +933,7 @@ async function openDetail(id: string) {
   try {
     detail.value = await supplementEquivalenceApi.getGroup(id);
   } catch (error: any) {
-    ElMessage.error(error?.message || '读取组详情失败');
+    toastApiError(error, '读取组详情失败', (message) => ElMessage.error(message));
     detailVisible.value = false;
   } finally {
     detailLoading.value = false;
@@ -951,7 +952,7 @@ async function handleSubmit(row: { id: string }) {
     await reload();
     await refreshDetail(row.id);
   } catch (error: any) {
-    ElMessage.error(error?.message || '提交失败');
+    toastApiError(error, '提交失败', (message) => ElMessage.error(message));
   }
 }
 
@@ -978,7 +979,7 @@ async function handleApprove(row: { id: string }, note?: string) {
     await reload();
     await refreshDetail(row.id);
   } catch (error: any) {
-    ElMessage.error(error?.message || '审核失败');
+    toastApiError(error, '审核失败', (message) => ElMessage.error(message));
   }
 }
 
@@ -1003,7 +1004,7 @@ async function handleReject(row: { id: string }) {
     await refreshDetail(row.id);
   } catch (error: any) {
     if (error === 'cancel') return;
-    ElMessage.error(error?.message || '驳回失败');
+    toastApiError(error, '驳回失败', (message) => ElMessage.error(message));
   }
 }
 
@@ -1020,7 +1021,7 @@ async function handleDisable(row: { id: string }) {
     await refreshDetail(row.id);
   } catch (error: any) {
     if (error === 'cancel') return;
-    ElMessage.error(error?.message || '停用失败');
+    toastApiError(error, '停用失败', (message) => ElMessage.error(message));
   }
 }
 
@@ -1031,7 +1032,7 @@ async function handleEnable(row: { id: string }) {
     await reload();
     await refreshDetail(row.id);
   } catch (error: any) {
-    ElMessage.error(error?.message || '操作失败');
+    toastApiError(error, '操作失败', (message) => ElMessage.error(message));
   }
 }
 
@@ -1046,7 +1047,7 @@ async function handleAddMembers() {
     ElMessage.success('已加入');
     await reload();
   } catch (error: any) {
-    ElMessage.error(error?.message || '加入失败');
+    toastApiError(error, '加入失败', (message) => ElMessage.error(message));
   }
 }
 
@@ -1066,7 +1067,7 @@ async function handleRemoveMember(member: { id: string; name: string }) {
     await reload();
   } catch (error: any) {
     if (error === 'cancel') return;
-    ElMessage.error(error?.message || '移出失败');
+    toastApiError(error, '移出失败', (message) => ElMessage.error(message));
   }
 }
 
@@ -1083,7 +1084,7 @@ async function handleAssign() {
     ungroupedSelection.value = [];
     await reload();
   } catch (error: any) {
-    ElMessage.error(error?.message || '归组失败');
+    toastApiError(error, '归组失败', (message) => ElMessage.error(message));
   }
 }
 

@@ -149,7 +149,15 @@
             <view v-for="(item, idx) in supplementItemsDetailed" :key="'supp-' + idx" class="table-row supplement-table">
               <view class="row-item product-col">
                 <text>{{ item.name }}</text>
-                <text v-if="item.purchasable === false" class="production-only-tag">仅生产，不可购买</text>
+                <text
+                  v-if="item.state === 'PRODUCTION_ONLY'"
+                  class="production-only-tag"
+                >仅生产，不单独出售</text>
+                <text
+                  v-else-if="item.state === 'TEMP_UNAVAILABLE'"
+                  class="production-only-tag"
+                >暂不可购买</text>
+                <text v-else class="production-only-tag">可分装</text>
               </view>
               <view
                 v-if="item.hasSpecDetail"
@@ -178,8 +186,8 @@
               </view>
             </view>
           </view>
-          <view v-if="supplementItemsDetailed.some((item: any) => item.purchasable === false)" class="production-only-note">
-            <text>部分补剂仅用于生产，不会进入补剂购买单。</text>
+          <view v-if="supplementItemsDetailed.some((item: any) => item.state !== 'REPACK')" class="production-only-note">
+            <text>标「仅生产」的补剂只用于我们的鲜食生产；标「暂不可购买」的是档案还没补齐。</text>
           </view>
         </view>
 
@@ -445,6 +453,7 @@
                       @tap.stop="handlePurchase(rp.purchaseLink, rp.name)"
                     >去购买</button>
                     <button
+                      v-if="currentSpec.type !== 'SUPPLEMENT'"
                       class="btn-confirm-select"
                       @tap.stop="confirmProductSelection(rpIdx)"
                     >确认选择</button>
@@ -511,7 +520,11 @@
                 >
                   去购买
                 </button>
-                <button class="btn-confirm-select" @tap="confirmSingleProductSelection">
+                <button
+                  v-if="currentSpec.type !== 'SUPPLEMENT'"
+                  class="btn-confirm-select"
+                  @tap="confirmSingleProductSelection"
+                >
                   确认选择
                 </button>
               </view>
@@ -526,7 +539,11 @@
             >
               去购买
             </button>
-            <button class="btn-confirm-select" @tap="confirmSingleProductSelection">
+            <button
+              v-if="currentSpec.type !== 'SUPPLEMENT'"
+              class="btn-confirm-select"
+              @tap="confirmSingleProductSelection"
+            >
               确认选择
             </button>
           </view>
@@ -641,12 +658,11 @@ import {
   formatSupplementTargets
 } from '../../utils/supplement-nutrients'
 import {
+  buildSupplementPlanRows,
   buildSupplementPurchaseLines,
-  buildSupplementRows,
-  buildSupplementSelections,
   selectionsFromSaved,
-  type ServerCandidateItem
-} from './supplement-candidates'
+  type SupplementPlanResponse
+} from '../../utils/supplement-plan'
 import {
   DIY_SHEET_FOOD_RECOMMENDATION_LABEL,
   DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL,
@@ -746,10 +762,8 @@ const currentEquipmentDetail = ref<any>(null)
 
 // 每个原料当前选中的推荐产品索引 { ingredientId: index }
 const selectedRpIndexMap = ref<Record<string, number>>({})
-/** 服务端算好的补剂候选（新协议） */
-const supplementCandidateItems = ref<ServerCandidateItem[]>([])
-/** 每条补剂当前选中的原料：recipeItemId -> ingredientId */
-const selectedSupplementIngredientMap = ref<Record<string, string>>({})
+/** 服务端补剂计划：参考产品 + 预分装池 + 推荐商品（2026-11-15） */
+const supplementPlan = ref<SupplementPlanResponse | null>(null)
 /** 制作单存档里恢复出来的选择 */
 const savedSupplementSelections = ref<Record<string, string>>({})
 const supplementCandidateError = ref(false)
@@ -1030,23 +1044,29 @@ const foodItemsDetailed = computed(() => {
 //
 // 2026-10-26 起候选与用量都来自服务端；这里只做展示行映射，不再自己算浓度。
 const supplementItemsDetailed = computed(() => {
-  return buildSupplementRows(
-    supplementCandidateItems.value,
-    selectedSupplementIngredientMap.value
-  ).map((row) => ({
-    ...row,
-    amountStr: formatSupplementAmountWithDisplayUnit(
-      row.amount,
-      row.unit,
-      row.displayUnit
-    ),
-    allRecommendedProducts: row.candidates,
-    selectedRPIndex: row.selectedCandidateIndex,
-    recommendedSpecPrintText: row.selectedProductDisplayText,
-    selectedProductDisplayText: row.selectedProductDisplayText,
-    type: 'SUPPLEMENT',
-    properties: {}
-  }))
+  return buildSupplementPlanRows(
+    supplementPlan.value,
+    savedSupplementSelections.value
+  ).map((row) => {
+    const recommended = row.recommendedProducts || []
+    return {
+      ...row,
+      amountStr: formatSupplementAmountWithDisplayUnit(
+        row.amount,
+        row.unit,
+        row.displayUnit
+      ),
+      allRecommendedProducts: recommended,
+      selectedRPIndex: 0,
+      recommendedSpecPrintText: row.referenceText,
+      selectedProductDisplayText: row.referenceText,
+      hasSpecDetail: recommended.length > 0,
+      choiceLabel: formatRecommendationActionLabel(recommended.length),
+      purchasable: row.state === 'REPACK',
+      type: 'SUPPLEMENT',
+      properties: {}
+    }
+  })
 })
 
 /**
@@ -1341,8 +1361,13 @@ async function loadData() {
 async function autoSaveDiySheet(): Promise<string> {
   try {
     const selections =
-      supplementCandidateItems.value.length > 0
-        ? buildSupplementSelections(supplementItemsDetailed.value)
+      supplementItemsDetailed.value.length > 0
+        ? supplementItemsDetailed.value.map((row: any) => ({
+            recipeItemId: row.recipeItemId,
+            ingredientId: row.ingredientId,
+            amount: row.amount,
+            unit: row.displayUnit
+          }))
         : undefined
     const res: any = await request({
       url: '/user/diy-sheets',
@@ -1384,7 +1409,7 @@ async function loadSupplementCandidates(sheetId?: string) {
   if (!recipeId.value) return
   try {
     const res: any = await request({
-      url: `/recipes/${recipeId.value}/supplement-candidates`,
+      url: `/recipes/${recipeId.value}/supplement-plan`,
       method: 'GET',
       data: {
         ...(sheetId ? { diySheetId: sheetId } : {}),
@@ -1396,9 +1421,8 @@ async function loadSupplementCandidates(sheetId?: string) {
       }
     })
     if (res.code === 0 && Array.isArray(res.data?.items)) {
-      supplementCandidateItems.value = res.data.items
+      supplementPlan.value = res.data
       supplementCandidateError.value = false
-      restoreSupplementSelections()
     } else {
       supplementCandidateError.value = true
     }
@@ -1409,24 +1433,9 @@ async function loadSupplementCandidates(sheetId?: string) {
 }
 
 /** 恢复顾客上次选的原料（只认仍在候选里的 ingredientId） */
+/** 存档里的选择直接交给 buildSupplementPlanRows 过滤（下架自动回落默认） */
 function restoreSupplementSelections() {
-  const saved = savedSupplementSelections.value
-  if (!saved || Object.keys(saved).length === 0) return
-  const next = { ...selectedSupplementIngredientMap.value }
-  const indexes = { ...selectedRpIndexMap.value }
-  for (const item of supplementCandidateItems.value) {
-    const wanted = saved[item.recipeItemId]
-    if (!wanted) continue
-    const index = item.candidates.findIndex(
-      (candidate) => candidate.ingredientId === wanted
-    )
-    if (index >= 0) {
-      next[item.recipeItemId] = wanted
-      indexes[item.recipeItemId] = index
-    }
-  }
-  selectedSupplementIngredientMap.value = next
-  selectedRpIndexMap.value = indexes
+  // 选择集已在 savedSupplementSelections 里，计算行时按池子过滤
 }
 
 function retrySupplementCandidates() {
@@ -2053,18 +2062,12 @@ function confirmRecommendedProductSelection() {
   }
 
   const key = modalSelectionKey.value
-  selectedRpIndexMap.value[key] = modalSelectedRpIndex.value
-  const candidateItem = supplementCandidateItems.value.find(
-    (item) => item.recipeItemId === key
-  )
-  const chosen = candidateItem?.candidates[modalSelectedRpIndex.value]
-  if (chosen) {
-    selectedSupplementIngredientMap.value = {
-      ...selectedSupplementIngredientMap.value,
-      [key]: chosen.ingredientId
-    }
-    void autoSaveDiySheet()
+  // 补剂：顾客不选我们生产/分装用哪款，这里只关窗，不落任何选择
+  if (currentSpec.value?.type === 'SUPPLEMENT') {
+    closeSpecModal()
+    return
   }
+  selectedRpIndexMap.value[key] = modalSelectedRpIndex.value
   closeSpecModal()
 }
 

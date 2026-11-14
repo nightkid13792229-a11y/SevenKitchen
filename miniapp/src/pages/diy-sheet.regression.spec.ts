@@ -314,7 +314,7 @@ describe('diy sheet layout regressions', () => {
     )
 
     expect(source).toContain('selectedProductDisplayText')
-    expect(source).toContain('buildSupplementRows(')
+    expect(source).toContain('buildSupplementPlanRows(')
     expect(source).toContain('buildSupplementPurchaseLines(')
     expect(source).toContain('formatRecommendationActionLabel(')
     expect(source).toContain('choiceLabel')
@@ -333,6 +333,8 @@ describe('diy sheet layout regressions', () => {
     expect(source).not.toContain('点击查看')
     expect(source).not.toContain('function getFoodRecommendationDisplayText')
     expect(source).not.toContain('function getSupplementSpecDisplayText')
+    expect(source).not.toContain('formatSupplementChoiceLabel')
+    expect(source).toContain('row.recommendedProducts')
   })
 
   it('does not fall back to standard ingredient fields for food selected products', () => {
@@ -347,7 +349,7 @@ describe('diy sheet layout regressions', () => {
     expect(foodBlock).toContain('const purchaseLink = selectedRp?.purchaseLink || undefined')
     expect(foodBlock).toContain('productModel: selectedRp?.productModel')
     expect(foodBlock).toContain('purchaseChannel: selectedRp?.purchaseChannel')
-    expect(source).toContain('buildSupplementRows(')
+    expect(source).toContain('buildSupplementPlanRows(')
   })
 
   it('passes food recommended product images into the single-product detail modal', () => {

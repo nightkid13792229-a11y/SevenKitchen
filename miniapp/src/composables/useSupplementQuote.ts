@@ -241,6 +241,38 @@ export function useSupplementQuote(
     await requestQuote(selectedIds.value)
   }
 
+  /**
+   * 换一款（2026-11-15）：只在下单前换同组已上架产品。
+   * 保持这一行原来的勾选状态，然后重新报价；提交后不允许再改。
+   */
+  async function replaceLine(currentId: string, next: SeedLine): Promise<void> {
+    const index = lines.value.findIndex((line) => line.ingredientId === currentId)
+    if (index < 0) return
+    const wasSelected = selectedIds.value.includes(currentId)
+    const nextLines = [...lines.value]
+    nextLines[index] = {
+      ...next,
+      name: next.name || '补剂',
+      unit: next.unit || '',
+      amount: Number(next.amount) || 0,
+      packedAmount: 0,
+    }
+    lines.value = nextLines
+    selectedIds.value = wasSelected
+      ? Array.from(
+          new Set(
+            selectedIds.value
+              .filter((id) => id !== currentId)
+              .concat(next.ingredientId),
+          ),
+        )
+      : selectedIds.value.filter((id) => id !== currentId)
+    confirmedIds = confirmedIds
+      .filter((id) => id !== currentId)
+      .concat(wasSelected ? [next.ingredientId] : [])
+    await requestQuote(selectedIds.value)
+  }
+
   async function toggleLine(ingredientId: string): Promise<void> {
     const line = lines.value.find((item) => item.ingredientId === ingredientId)
     if (!line || line.unavailableReason) return
@@ -287,6 +319,7 @@ export function useSupplementQuote(
     isAmountReady,
     canSubmit,
     load,
+    replaceLine,
     toggleLine,
     toggleAll,
     setPortion,

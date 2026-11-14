@@ -120,6 +120,11 @@
           <view class="line-main">
             <text class="line-name">{{ line.name }}</text>
             <text v-if="line.specText" class="line-extra">{{ line.specText }}</text>
+            <text
+              v-if="lineRepackOptions(line).length > 1"
+              class="line-switch"
+              @tap.stop="switchLineProduct(line)"
+            >换一款</text>
             <text v-if="line.unavailableReason" class="line-warn">
               暂不可购买：{{ line.unavailableReason }}
             </text>
@@ -343,11 +348,17 @@ import {
   quoteSupplements,
   readSupplementPurchaseDraft,
   saveSupplementPurchaseDraft,
+  fetchSupplementPlan,
   type SupplementOrder,
   type SupplementPurchaseDraft
 } from '../../api/supplements'
 import { runSupplementPayment } from '../../utils/supplement-payment'
 import { fetchMyDiySheets, updateDiySheetPlan, type DIYSheetSummary } from '../../api/diy-sheets'
+import { buildPurchaseLineOptions } from './line-options'
+import type {
+  SupplementPlanResponse,
+  SupplementRepackOption
+} from '../../utils/supplement-plan'
 import { usePackagePlan } from '../../composables/usePackagePlan'
 import { inferPackagePlanMode } from '../../utils/package-plan-mode'
 import QuickCyclePackagePlan from '../../components/package-plan/QuickCyclePackagePlan.vue'
@@ -370,6 +381,8 @@ interface Address {
 }
 
 const draft = ref<SupplementPurchaseDraft | null>(null)
+/** 预分装计划（只用于「换一款」的选项，不参与价格计算） */
+const supplementPlan = ref<SupplementPlanResponse | null>(null)
 const addresses = ref<Address[]>([])
 const selectedAddressId = ref('')
 const initializing = ref(true)
@@ -441,6 +454,7 @@ const {
   isAmountReady,
   canSubmit: quoteCanSubmit,
   load,
+  replaceLine,
   toggleLine,
   toggleAll,
   setPortion,
@@ -543,10 +557,75 @@ async function initialize() {
   ])
   try {
     await load(buildSeedLines())
+    void loadRepackOptions()
   } finally {
     initializing.value = false
   }
   await sideTasks
+}
+
+async function loadRepackOptions() {
+  const recipeId = draft.value?.recipeId
+  const diySheetId = draft.value?.diySheetId
+  if (!recipeId || !diySheetId) return
+  try {
+    const res: any = await fetchSupplementPlan(recipeId, { diySheetId })
+    if (res.code === 0 && res.data?.items) {
+      supplementPlan.value = res.data
+    }
+  } catch (error) {
+    // 换款是增强项，失败不影响下单
+    console.warn('[SupplementOrder] 加载可换款产品失败:', error)
+  }
+}
+
+/** 每一行还能换哪些已上架产品（>1 才显示「换一款」） */
+function lineRepackOptions(line: any): SupplementRepackOption[] {
+  const options = buildPurchaseLineOptions(supplementPlan.value, [
+    { recipeItemId: line.recipeItemId, ingredientId: line.ingredientId }
+  ])
+  return options[0]?.options || []
+}
+
+function switchLineProduct(line: any) {
+  const options = lineRepackOptions(line)
+  if (options.length <= 1) return
+  uni.showActionSheet({
+    itemList: options.map(
+      (option) => `${option.name} ${option.brand || ''} ${option.productModel || ''}`.trim()
+    ),
+    success: ({ tapIndex }) => {
+      const target = options[tapIndex]
+      if (!target || target.ingredientId === line.ingredientId) return
+      void applyLineProduct(line, target)
+    }
+  })
+}
+
+async function applyLineProduct(line: any, option: SupplementRepackOption) {
+  const spec = [option.brand, option.productModel]
+    .map((value) => String(value || '').trim())
+    .filter((value) => value && value !== '-')
+    .join(' / ')
+  const nextLine = {
+    recipeItemId: line.recipeItemId,
+    ingredientId: option.ingredientId,
+    amount: option.amount ?? line.amount,
+    name: option.name,
+    unit: option.displayUnit || option.unit || line.unit,
+    specText: spec && spec !== option.name ? spec : ''
+  }
+
+  await replaceLine(line.ingredientId, nextLine)
+
+  if (draft.value) {
+    draft.value.lines = (draft.value.lines || []).map((item) =>
+      item.recipeItemId === nextLine.recipeItemId && item.ingredientId === line.ingredientId
+        ? { ...item, ...nextLine }
+        : item
+    )
+    saveSupplementPurchaseDraft(draft.value)
+  }
 }
 
 function buildSeedLines(): SeedLine[] {
@@ -1106,6 +1185,16 @@ function readErrorMessage(error: unknown): string {
   margin-top: 6rpx;
   font-size: 22rpx;
   color: #909399;
+}
+
+.line-switch {
+  align-self: flex-start;
+  margin-top: 4rpx;
+  padding: 4rpx 14rpx;
+  border: 1rpx solid #d9c9a3;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: #8a6b33;
 }
 
 .line-warn {

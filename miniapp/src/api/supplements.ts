@@ -525,3 +525,18 @@ export function readSupplementPurchaseDraft(): SupplementPurchaseDraft | null {
 export function clearSupplementPurchaseDraft() {
   uni.removeStorageSync(DRAFT_STORAGE_KEY)
 }
+
+/**
+ * 补剂三口径（2026-11-15）：参考产品 / 预分装池 / DIY 推荐商品。
+ * 带 diySheetId 时按制作单冻结的食谱版本解析。
+ */
+export function fetchSupplementPlan(
+  recipeId: string,
+  params: { totalWeightG?: number; diySheetId?: string } = {},
+) {
+  return request<any>({
+    url: `/recipes/${recipeId}/supplement-plan`,
+    method: 'GET',
+    data: params,
+  })
+}

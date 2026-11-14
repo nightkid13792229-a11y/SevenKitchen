@@ -304,6 +304,9 @@
           确认可用
         </el-button>
       </div>
+
+      <!-- 第 4 步：落地配置（2026-11-14）——写完才展开，四段必须表态 -->
+      <LaunchConfigStep v-if="saved" :ingredient-id="saved.ingredientId" />
     </section>
 
     <el-drawer v-model="compareOpen" title="比一比候选" size="760px">
@@ -369,6 +372,7 @@ import { supplementUsageUnitOptions, supplementNutrientGroups } from '@/constant
 import { applyAgentDraft as applyAgentDraftPayload } from './agentDraftApply'
 import { SUPPLEMENT_CARD_FIELDS } from '@/constants/supplementCardFields'
 import { evaluateSupplementGates } from './supplementGates'
+import LaunchConfigStep from './LaunchConfigStep.vue'
 import {
   computePerUnit,
   emptySupplementDraft,

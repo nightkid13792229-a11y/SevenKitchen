@@ -290,3 +290,31 @@
 - [ ] 结论卡与上架清单、制作单预览三处口径一致。
 - [ ] 后台全量测试与构建通过。
 - [ ] 不新增 SKU 层、不新增图片要求（Review 时逐条对照方案 §1.2）。
+
+---
+
+## 执行记录
+
+### P1 · 集中 + 体检 + 预览（2026-11-14）
+
+**已完成：** Task 1 / 3 / 4 / 5 / 6 / 7。
+
+**调整（Task 2）：** 原计划让上架清单改用新面板组件。实际执行时发现两者布局不同
+（列表是表格单元格、第 4 步是表单），把表格单元格塞进表单组件会给现网页面引入回归风险。
+改为：**复用规则、不共用布局**——
+- `admin-web/src/views/SupplementShop/catalog-listing.ts` 的 `canToggleListing` / `showListingBlockedHint`
+  同时被上架清单与新面板使用（同一份判定）；
+- 新面板 `SupplementArchivePanel.vue` 只服务第 4 步，字段与接口和上架清单完全一致。
+
+**新增文件：**
+- `admin-web/src/views/Ingredients/ai-agent/supplement/launchConfigState.ts`（+ spec，16 条）
+- `admin-web/src/views/Ingredients/ai-agent/supplement/mergeIngredientProperties.ts`（+ spec，5 条）
+- `admin-web/src/views/Ingredients/ai-agent/supplement/SupplementArchivePanel.vue`
+- `admin-web/src/views/Ingredients/ai-agent/supplement/LaunchConfigStep.vue`
+
+**修改文件：**
+- `SupplementWorkbench.vue`（写入成功后渲染第 4 步）
+
+**自检：** `npx vitest run` 110 个文件 / 1176 条全过；`npm run build`（含 vue-tsc）通过。
+
+**未覆盖：** 真实浏览器点击验收（需老板或后续审查环节覆盖）。

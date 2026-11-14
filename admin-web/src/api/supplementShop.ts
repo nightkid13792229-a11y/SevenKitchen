@@ -41,12 +41,14 @@ export interface SupplementCatalogItem {
   isOilBased: boolean;
   suggestedOilBased: boolean;
   supplementRetailEnabled: boolean;
+  /** 是否用于生产（成品鲜食）；与上架相互独立 */
+  procurementEnabled: boolean;
   shelfLifeMonths: number | null;
   suggestedShelfLifeMonths: number | null;
   storageCondition: string | null;
   openedShelfLifeDays: number | null;
   recipeReferenceCount: number;
-  /** 是否可用于生产（能出现在 DIY 制作单上，或被食谱引用） */
+  /** 是否在食谱/DIY 里出现（开了 DIY 推荐或被食谱引用），不是生产开关 */
   producible: boolean;
   issues: SupplementCatalogIssue[];
   readyToSell: boolean;

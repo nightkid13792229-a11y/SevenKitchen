@@ -67,6 +67,8 @@ export interface SupplementCatalogItem {
   /** 按名称推断是否油性，供后台一键预填 */
   suggestedOilBased: boolean;
   supplementRetailEnabled: boolean;
+  /** 是否用于生产（成品鲜食）；与上架相互独立 */
+  procurementEnabled: boolean;
   shelfLifeMonths: number | null;
   /** 按品牌通用保质期给出的建议值，供后台一键预填 */
   suggestedShelfLifeMonths: number | null;
@@ -74,7 +76,7 @@ export interface SupplementCatalogItem {
   openedShelfLifeDays: number | null;
   /** 被多少个食谱引用（用于判断上架优先级） */
   recipeReferenceCount: number;
-  /** 是否可用于生产：能出现在 DIY 制作单上，或被食谱引用 */
+  /** 是否在食谱/DIY 里出现（口径：开了 DIY 推荐或被食谱引用；不是生产开关） */
   producible: boolean;
   issues: SupplementCatalogIssue[];
   /** 已上架 且 无 ERROR 级问题 */
@@ -176,6 +178,7 @@ export class SupplementCatalogService {
         isOilBased: true,
         diyEnabled: true,
         supplementRetailEnabled: true,
+        procurementEnabled: true,
         shelfLifeMonths: true,
         storageCondition: true,
         openedShelfLifeDays: true,
@@ -432,6 +435,7 @@ export class SupplementCatalogService {
       isOilBased: boolean;
       diyEnabled: boolean;
       supplementRetailEnabled: boolean;
+      procurementEnabled: boolean;
       shelfLifeMonths: number | null;
       storageCondition: string | null;
       openedShelfLifeDays: number | null;
@@ -618,6 +622,7 @@ export class SupplementCatalogService {
       isOilBased: ingredient.isOilBased === true,
       suggestedOilBased: this.suggestOilBased(ingredient.name),
       supplementRetailEnabled: ingredient.supplementRetailEnabled,
+      procurementEnabled: ingredient.procurementEnabled,
       shelfLifeMonths: ingredient.shelfLifeMonths,
       suggestedShelfLifeMonths,
       storageCondition: ingredient.storageCondition,

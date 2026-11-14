@@ -76,7 +76,7 @@
           <el-option label="已上架" value="ENABLED" />
           <el-option label="档案可售卖（不含库存）" value="READY" />
           <el-option label="被食谱引用过" value="USED" />
-          <el-option label="可用于生产" value="PRODUCIBLE" />
+          <el-option label="在食谱中" value="PRODUCIBLE" />
           <el-option label="新建 7 天未配好" value="NEW" />
           <el-option label="未配好（不限 7 天）" value="UNREADY" />
         </el-select>
@@ -198,12 +198,26 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="可生产" width="90" align="center">
+        <el-table-column label="在食谱中" width="100" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.producible" type="success" size="small" effect="plain">
-              可生产
+              在食谱
             </el-tag>
             <span v-else class="cell-sub">未启用</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="生产" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag
+              v-if="row.procurementEnabled"
+              type="warning"
+              size="small"
+              effect="plain"
+            >
+              开
+            </el-tag>
+            <span v-else class="cell-sub">关</span>
           </template>
         </el-table-column>
 

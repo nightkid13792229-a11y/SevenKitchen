@@ -401,6 +401,12 @@
           <el-descriptions-item label="审核时间">{{ formatTime(detail.reviewedAt) }}</el-descriptions-item>
           <el-descriptions-item label="审核说明">{{ detail.reviewNote || '-' }}</el-descriptions-item>
           <el-descriptions-item label="引用食谱">{{ detail.usedByRecipeCount }} 道</el-descriptions-item>
+          <el-descriptions-item label="生产池（成品鲜食）" :span="2">
+            {{ poolSummary.production.length ? poolSummary.production.join('、') : '—' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="预分装池（已上架）" :span="2">
+            {{ poolSummary.repack.length ? poolSummary.repack.join('、') : '—' }}
+          </el-descriptions-item>
           <el-descriptions-item label="依据链接" :span="2">
             <div v-if="(detail.evidenceUrls || []).length === 0" class="muted">未填写（不能通过审核）</div>
             <ul v-else class="evidence-list">
@@ -522,6 +528,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
+import { summarizePools } from './pool-summary'
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { toastApiError } from '@/utils/apiError';
 import { Plus, Search } from '@element-plus/icons-vue';
@@ -565,6 +572,9 @@ const assignGroupId = ref('');
 
 const detailVisible = ref(false);
 const detail = ref<EquivalenceGroupDetail | null>(null);
+
+/** 两个口径的成员，避免运营再把「可生产」当成「已上架」 */
+const poolSummary = computed(() => summarizePools(detail.value?.members || []))
 const memberToAdd = ref<string[]>([]);
 
 const formVisible = ref(false);

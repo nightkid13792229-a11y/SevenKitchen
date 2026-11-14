@@ -37,6 +37,8 @@ export interface EquivalenceGroupMember {
   currentPricePerPurchaseUnit: string | number;
   supplementRetailEnabled: boolean;
   diyEnabled: boolean;
+  /** 是否用于成品鲜食生产（2026-11-15 三口径拆分） */
+  procurementEnabled: boolean;
   equivalencePriority: number;
   concentration: { value: number; unit: string } | null;
   concentrationStatus: 'OK' | 'MISSING' | 'UNIT_MISMATCH';

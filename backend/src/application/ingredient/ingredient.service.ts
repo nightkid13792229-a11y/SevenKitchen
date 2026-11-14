@@ -91,6 +91,52 @@ export class IngredientService {
     private readonly prisma?: PrismaService,
   ) {}
 
+  /**
+   * 生产门禁（2026-11-15）：同一等价组最多 2 个产品同时开生产。
+   * 允许 2 个是为了覆盖「换料过渡期」；超过 2 个说明有人手滑开了并不在用的产品。
+   */
+  private async assertProductionPoolLimitOnEnable(input: {
+    ingredientId: string;
+    previousEnabled: boolean;
+    nextEnabled: boolean;
+  }): Promise<void> {
+    if (input.nextEnabled !== true || input.previousEnabled === true) return;
+    if (!this.prisma) return;
+
+    const current = await this.prisma.ingredient.findUnique({
+      where: { id: input.ingredientId },
+      select: { equivalenceGroupId: true },
+    });
+    if (!current?.equivalenceGroupId) return;
+
+    await this.assertProductionPoolLimit(
+      current.equivalenceGroupId,
+      input.ingredientId,
+    );
+  }
+
+  private async assertProductionPoolLimit(
+    groupId: string,
+    selfId: string,
+  ): Promise<void> {
+    if (!this.prisma) return;
+    const enabled = await this.prisma.ingredient.findMany({
+      where: {
+        equivalenceGroupId: groupId,
+        id: { not: selfId },
+        procurementEnabled: true,
+      },
+      select: { name: true },
+    });
+    if (enabled.length >= 2) {
+      throw new BadRequestException(
+        `同一等价组最多允许 2 个产品同时用于生产，请先关闭不用的一个：${enabled
+          .map((item) => item.name)
+          .join('、')}`,
+      );
+    }
+  }
+
   private resolveBaseUnitDisplayName(
     dto: Pick<UpdateIngredientDto, 'baseUnitDisplayName' | 'unitDisplayLabel'>,
     fallback: string | null = null,
@@ -316,6 +362,15 @@ export class IngredientService {
     // 已经有价格的原料，不允许被改成 0（要停用请关采购 / DIY 开关）。
     // 食材的采购换算恒为 1（成本口径 = 每基准单位），别处不要试图改它。
     this.assertFoodPurchaseRatioInvariant(nextType, nextPurchaseToBaseRatio);
+
+    await this.assertProductionPoolLimitOnEnable({
+      ingredientId: existing.id,
+      previousEnabled: existing.procurementEnabled,
+      nextEnabled:
+        dto.procurementEnabled !== undefined
+          ? dto.procurementEnabled
+          : existing.procurementEnabled,
+    });
 
     this.assertPriceNotWipedToZero({
       ingredientName: existing.name,

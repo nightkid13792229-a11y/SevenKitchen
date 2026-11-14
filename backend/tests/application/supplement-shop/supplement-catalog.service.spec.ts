@@ -19,6 +19,7 @@ interface IngredientFixture {
   currentPricePerPurchaseUnit: number;
   physicalForm: string | null;
   supplementRetailEnabled: boolean;
+  procurementEnabled?: boolean;
   shelfLifeMonths: number | null;
   storageCondition: string | null;
   openedShelfLifeDays: number | null;
@@ -42,6 +43,7 @@ function buildFixtures(): IngredientFixture[] {
       currentPricePerPurchaseUnit: 89.41,
       physicalForm: null,
       supplementRetailEnabled: false,
+      procurementEnabled: true,
       shelfLifeMonths: null,
       storageCondition: null,
       openedShelfLifeDays: null,
@@ -306,5 +308,32 @@ describe('SupplementCatalogService', () => {
     await expect(
       service.updateCatalogItem('kelp', { shelfLifeMonths: 2.5 }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+
+describe('SupplementCatalogService · 三口径展示', () => {
+  it('回传生产开关，且与上架状态分开', async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        SupplementCatalogService,
+        SupplementDosageService,
+        {
+          provide: PrismaService,
+          useValue: {
+            ingredient: { findMany: jest.fn().mockResolvedValue(buildFixtures()) },
+            recipeItem: { groupBy: jest.fn().mockResolvedValue([]) },
+            supplementEquivalenceGroup: { findMany: jest.fn().mockResolvedValue([]) },
+          },
+        },
+      ],
+    }).compile();
+    const service = module.get(SupplementCatalogService);
+
+    const result = await service.listCatalog();
+    const kelp = result.items.find((item) => item.id === 'kelp')!;
+
+    expect(kelp.procurementEnabled).toBe(true);
+    expect(kelp.supplementRetailEnabled).toBe(false);
   });
 });

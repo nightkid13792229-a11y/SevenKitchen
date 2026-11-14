@@ -14,7 +14,7 @@
           按系统建议预填空白项
         </el-button>
         <el-button type="primary" :loading="enablingAll" @click="handleEnableAll">
-          一键上架全部可生产补剂
+          一键上架全部「在食谱中」的补剂
         </el-button>
       </div>
     </div>
@@ -484,7 +484,7 @@ function onStorageBlur(row: SupplementCatalogItem, event: Event) {
 async function handleEnableAll() {
   try {
     await ElMessageBox.confirm(
-      '会把所有「可用于生产」的补剂自动补齐档案并全部上架（已经上架的不受影响）。没有进货价、算不出售价的会单独列出来给你处理。是否继续？',
+      '会把所有「在食谱中」的补剂自动补齐档案并全部上架（已经上架的不受影响）。没有进货价、算不出售价的会单独列出来给你处理。是否继续？',
       '一键上架确认',
       { type: 'warning', confirmButtonText: '开始上架', cancelButtonText: '取消' },
     );

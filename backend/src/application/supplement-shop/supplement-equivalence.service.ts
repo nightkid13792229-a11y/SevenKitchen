@@ -59,6 +59,7 @@ const GROUP_MEMBER_SELECT = {
   currentPricePerPurchaseUnit: true,
   supplementRetailEnabled: true,
   diyEnabled: true,
+  procurementEnabled: true,
   properties: true,
   nutritionProfile: true,
   equivalencePriority: true,
@@ -446,6 +447,36 @@ export class SupplementEquivalenceService {
     return this.getById(id);
   }
 
+  /**
+   * 生产门禁（2026-11-15）：同一等价组最多 2 个产品同时开生产。
+   *
+   * 为什么放在这里：只拦「原料编辑」那条路不够——后台可以先把产品开生产，
+   * 再通过归组/批量归组挪进一个已有 2 个生产开的组，审批也不看这个口径，
+   * 于是能合法造出 3 个生产开的已批准组。三个入口都过同一道检查。
+   */
+  private async assertProductionLimit(
+    groupId: string,
+    incoming: Array<{ id: string; name?: string; procurementEnabled?: boolean | null }> = [],
+  ): Promise<void> {
+    const existing = await this.prisma.ingredient.findMany({
+      where: { equivalenceGroupId: groupId, procurementEnabled: true },
+      select: { id: true, name: true },
+    });
+    const existingIds = new Set(existing.map((member) => member.id));
+    const extra = (incoming ?? []).filter(
+      (member) =>
+        member?.procurementEnabled === true && !existingIds.has(member.id),
+    );
+    const total = existing.length + extra.length;
+    if (total <= 2) return;
+    throw new BadRequestException(
+      `同一等价组最多允许 2 个产品同时用于生产，请先关闭不用的一个：${[
+        ...existing.map((member) => member.name),
+        ...extra.map((member) => member.name || member.id),
+      ].join('、')}`,
+    );
+  }
+
   async changeStatus(
     id: string,
     status: EquivalenceGroupStatus,
@@ -469,6 +500,7 @@ export class SupplementEquivalenceService {
     }
 
     if (status === 'APPROVED') {
+      await this.assertProductionLimit(id, group.ingredients as any);
       const errors = buildApprovalErrors({
         group,
         members: group.ingredients,
@@ -544,6 +576,7 @@ export class SupplementEquivalenceService {
         name: true,
         type: true,
         equivalenceGroupId: true,
+        procurementEnabled: true,
       },
     });
     if (ingredients.length !== uniqueIds.length) {
@@ -575,6 +608,8 @@ export class SupplementEquivalenceService {
     const toAdd = ingredients.filter(
       (ingredient) => ingredient.equivalenceGroupId !== id,
     );
+
+    await this.assertProductionLimit(id, toAdd as any);
 
     await this.prisma.$transaction(async (tx) => {
       if (toAdd.length > 0) {
@@ -793,7 +828,13 @@ export class SupplementEquivalenceService {
 
     const ingredients = await this.prisma.ingredient.findMany({
       where: { id: { in: uniqueIds } },
-      select: { id: true, name: true, type: true, equivalenceGroupId: true },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        equivalenceGroupId: true,
+        procurementEnabled: true,
+      },
     });
     if (ingredients.length !== uniqueIds.length) {
       throw new BadRequestException('部分原料不存在');
@@ -810,6 +851,8 @@ export class SupplementEquivalenceService {
     const toMove = ingredients.filter(
       (ingredient) => ingredient.equivalenceGroupId !== groupId,
     );
+
+    await this.assertProductionLimit(groupId, toMove as any);
     const skipped = ingredients.length - toMove.length;
     const oldGroupIds = Array.from(
       new Set(

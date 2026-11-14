@@ -157,7 +157,6 @@
                   v-else-if="item.state === 'TEMP_UNAVAILABLE'"
                   class="production-only-tag"
                 >暂不可购买</text>
-                <text v-else class="production-only-tag">可分装</text>
               </view>
               <view
                 v-if="item.hasSpecDetail"

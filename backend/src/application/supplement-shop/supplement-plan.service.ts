@@ -416,17 +416,9 @@ export class SupplementPlanService {
             input.totalWeightG,
             fallbackAmount,
           ),
-          recommendedProducts: (recommendedByIngredient[ingredient.id] ?? []).map(
-            (product) => ({
-              id: product.id,
-              name: product.name,
-              brand: product.brand ?? null,
-              productModel: product.productModel ?? null,
-              purchaseChannel: product.purchaseChannel ?? null,
-              purchaseLink: product.purchaseLink ?? null,
-              imageUrl: product.imageUrl ?? null,
-              displayUnit: product.displayUnit ?? null,
-            }),
+          recommendedProducts: this.buildRecommendedProducts(
+            ingredient,
+            recommendedByIngredient[ingredient.id] ?? [],
           ),
           repackPool: this.buildRepackPool({
             reference: ingredient,
@@ -440,6 +432,58 @@ export class SupplementPlanService {
         };
       }),
     };
+  }
+
+  /**
+   * DIY 推荐商品（2026-11-15）：
+   *   · 后台配了「DIY制作单推荐商品」→ 用配好的（可多个，顾客自己挑）；
+   *   · 没配、但原料档案里有购买链接 → 用原料本身兜底成 1 个，别让入口凭空消失；
+   *   · 两者都没有 → 空数组，页面不显示入口（没有链接的入口等于死路）。
+   */
+  private buildRecommendedProducts(
+    ingredient: any,
+    configured: Array<{
+      id: string;
+      name: string;
+      brand?: string | null;
+      productModel?: string | null;
+      purchaseChannel?: string | null;
+      purchaseLink?: unknown;
+      imageUrl?: string | null;
+      displayUnit?: string | null;
+    }>,
+  ): SupplementPlanRecommendedProduct[] {
+    if (configured.length > 0) {
+      return configured.map((product) => ({
+        id: product.id,
+        name: product.name,
+        brand: product.brand ?? null,
+        productModel: product.productModel ?? null,
+        purchaseChannel: product.purchaseChannel ?? null,
+        purchaseLink: product.purchaseLink ?? null,
+        imageUrl: product.imageUrl ?? null,
+        displayUnit: product.displayUnit ?? null,
+      }));
+    }
+
+    const properties = (ingredient?.properties ?? {}) as Record<string, any>;
+    const link = properties.purchase_link;
+    const url = typeof link?.url === 'string' ? link.url.trim() : '';
+    if (!url) return [];
+
+    return [
+      {
+        id: `ingredient-link-${ingredient.id}`,
+        name: ingredient.name,
+        brand: ingredient.brand ?? null,
+        productModel: ingredient.productModel ?? null,
+        purchaseChannel: ingredient.purchaseChannel ?? null,
+        purchaseLink: link,
+        imageUrl:
+          typeof properties.image_url === 'string' ? properties.image_url : null,
+        displayUnit: ingredient.unitDisplayLabel ?? null,
+      },
+    ];
   }
 
   /**

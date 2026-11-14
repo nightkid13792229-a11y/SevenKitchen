@@ -455,3 +455,121 @@ describe('SupplementPlanService · 参考优先与兜底口径', () => {
     expect(legacy.items[0].unavailableReason).toBeNull();
   });
 });
+
+
+describe('SupplementPlanService · DIY 推荐商品兜底', () => {
+  function recipeRowWith(ingredient: any) {
+    return {
+      recipeId: 'recipe-1',
+      version: 6,
+      items: [
+        {
+          id: 'item-1',
+          sortOrder: 0,
+          preparationMethod: null,
+          supplementTargets: TARGETS,
+          ingredient,
+          supplementAlternatives: [],
+        },
+      ],
+    };
+  }
+
+  it('没配推荐商品、但档案里有购买链接时，用原料兜底成 1 个', async () => {
+    const prisma: any = {
+      dIYSheet: { findUnique: jest.fn() },
+      recipe: {
+        findUnique: jest.fn().mockResolvedValue(
+          recipeRowWith(
+            powder({
+              purchaseChannel: '京东',
+              properties: {
+                purchase_link: {
+                  platform: 'JD',
+                  url: 'https://item.jd.com/1.html',
+                },
+              },
+            }),
+          ),
+        ),
+      },
+      supplementShopConfig: { findUnique: jest.fn().mockResolvedValue({ equivalenceEnabled: true }) },
+      supplementEquivalenceGroup: { findMany: jest.fn().mockResolvedValue([]) },
+      recommendedProduct: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = createService(prisma);
+
+    const plan = await service.resolveForRecipeRequest({
+      recipeId: 'recipe-1',
+      recipeVersion: 6,
+      totalWeightG: 1232,
+    });
+
+    expect(plan.items[0].recommendedProducts).toHaveLength(1);
+    expect(plan.items[0].recommendedProducts[0]).toMatchObject({
+      id: 'ingredient-link-kelp-powder',
+      name: '海藻粉',
+      purchaseLink: { platform: 'JD', url: 'https://item.jd.com/1.html' },
+    });
+  });
+
+  it('没配推荐商品、也没有购买链接时给空数组（页面不出入口）', async () => {
+    const prisma: any = {
+      dIYSheet: { findUnique: jest.fn() },
+      recipe: { findUnique: jest.fn().mockResolvedValue(recipeRowWith(powder())) },
+      supplementShopConfig: { findUnique: jest.fn().mockResolvedValue({ equivalenceEnabled: true }) },
+      supplementEquivalenceGroup: { findMany: jest.fn().mockResolvedValue([]) },
+      recommendedProduct: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = createService(prisma);
+
+    const plan = await service.resolveForRecipeRequest({
+      recipeId: 'recipe-1',
+      recipeVersion: 6,
+      totalWeightG: 1232,
+    });
+
+    expect(plan.items[0].recommendedProducts).toEqual([]);
+  });
+
+  it('配了推荐商品时优先用配好的，不再兜底', async () => {
+    const prisma: any = {
+      dIYSheet: { findUnique: jest.fn() },
+      recipe: {
+        findUnique: jest.fn().mockResolvedValue(
+          recipeRowWith(
+            powder({ properties: { purchase_link: { url: 'https://fallback' } } }),
+          ),
+        ),
+      },
+      supplementShopConfig: { findUnique: jest.fn().mockResolvedValue({ equivalenceEnabled: true }) },
+      supplementEquivalenceGroup: { findMany: jest.fn().mockResolvedValue([]) },
+      recommendedProduct: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'rp-1',
+            ingredientId: 'kelp-powder',
+            name: 'NOW 海藻粉 227g',
+            brand: 'NOW FOODS',
+            productModel: '227g/瓶',
+            purchaseChannel: '天猫',
+            purchaseLink: { url: 'https://taobao' },
+            imageUrl: null,
+            displayUnit: '瓶',
+          },
+        ]),
+      },
+    };
+    const service = createService(prisma);
+
+    const plan = await service.resolveForRecipeRequest({
+      recipeId: 'recipe-1',
+      recipeVersion: 6,
+      totalWeightG: 1232,
+    });
+
+    expect(plan.items[0].recommendedProducts.map((item) => item.id)).toEqual([
+      'rp-1',
+    ]);
+  });
+});

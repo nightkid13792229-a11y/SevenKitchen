@@ -132,6 +132,13 @@ const SUPPLEMENT_NAME_TARGET_MAPPING: Record<
   海藻粉: SUPPLEMENT_TARGET_FIELDS.iodine,
   海带粉: SUPPLEMENT_TARGET_FIELDS.iodine,
   海带片: SUPPLEMENT_TARGET_FIELDS.iodine,
+  // 2026-11-15 补剂名称去掉剂型词后，按纯物质名也能认出目标营养素
+  葡萄糖酸锌: SUPPLEMENT_TARGET_FIELDS.zinc,
+  双甘氨酸亚铁: SUPPLEMENT_TARGET_FIELDS.iron,
+  双甘氨酸铜: SUPPLEMENT_TARGET_FIELDS.copper,
+  胆碱: SUPPLEMENT_TARGET_FIELDS.choline,
+  牛磺酸: SUPPLEMENT_TARGET_FIELDS.taurine,
+  // 旧名字保留：历史草稿/历史订单快照里可能还是旧写法
   葡萄糖酸锌片: SUPPLEMENT_TARGET_FIELDS.zinc,
   锌片: SUPPLEMENT_TARGET_FIELDS.zinc,
   双甘氨酸亚铁胶囊: SUPPLEMENT_TARGET_FIELDS.iron,

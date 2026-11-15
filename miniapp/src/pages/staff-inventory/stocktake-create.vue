@@ -102,9 +102,6 @@
               @input="onPortionInput(portion, $event)"
             />
             <text class="unit-inline">{{ line.stockUnitLabel }}</text>
-            <text class="check" :class="{ on: isPortionCounted(portion) }">
-              {{ isPortionCounted(portion) ? '✓' : '' }}
-            </text>
             <text class="add-one" @tap.stop="addPortion(line, portion)">＋</text>
           </view>
 
@@ -134,9 +131,6 @@
               @input="onLineInput(line, $event)"
             />
             <text class="unit-inline">{{ line.stockUnitLabel }}</text>
-            <text class="check" :class="{ on: isLineCounted(line) }">
-              {{ isLineCounted(line) ? '✓' : '' }}
-            </text>
             <text class="add-one" @tap.stop="addPortion(line)">＋</text>
           </view>
         </view>
@@ -746,7 +740,6 @@ const onCancel = async () => {
   font-size: 28rpx;
   text-align: right;
 }
-.check { width: 26rpx; font-size: 28rpx; color: #1e3a2f; text-align: center; }
 .add-one {
   width: 44rpx;
   height: 60rpx;

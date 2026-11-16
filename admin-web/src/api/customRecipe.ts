@@ -572,6 +572,30 @@ export interface CreateAssistedOrderPayload {
   payment: AssistedOrderPayment
 }
 
+/**
+ * 这只狗上一次的定制需求（只读回放）。
+ *
+ * 来源：`GET /admin/custom-recipe/dogs/:dogId/last-intake`
+ * —— 取这只狗最近一单（已关单不算）的问卷快照。
+ * 页面负责按当前配置校正（份数上限、主蛋白数量），后端只回放原值。
+ */
+export interface DogLastIntake {
+  /** 业务编号（CR 开头） */
+  orderId: string
+  /** 那一单的创建时间（ISO） */
+  orderCreatedAt: string
+  targetGoal: string
+  recipeQuantity: number
+  requestedProteinCodes: string[]
+  allergyStatus: string
+  allergyText: string | null
+  currentFoodMain: string | null
+  currentFoodOther: string | null
+  changeReasons: string[]
+  stomachConditions: string[]
+  additionalNotes: string | null
+}
+
 /** 代客下单成功后的摘要 */
 export interface AssistedOrderResult {
   id: string
@@ -815,6 +839,17 @@ export const customRecipeApi = {
     )) as { sets?: CustomRecipeIntakeOptionSets }
     return data?.sets ?? {}
   },
+
+  /**
+   * 这只狗上一次的定制需求（仅管理员；没有历史时 intake=null）。
+   *
+   * 代客下单页选完狗狗就调它：有历史就带入表单并提示来源，
+   * 没有就保持空白，员工照常从零填。
+   */
+  getDogLastIntake: (dogId: string) =>
+    api.get<{ intake: DogLastIntake | null }>(
+      `${BASE}/dogs/${encodeURIComponent(dogId)}/last-intake`,
+    ),
 
   /**
    * 后台代客下单（仅管理员）。

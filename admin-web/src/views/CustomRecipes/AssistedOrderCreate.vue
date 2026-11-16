@@ -67,7 +67,16 @@
             这是内部账号，不是真实顾客，仅用于测试。
           </div>
         </div>
-        <el-button plain @click="resetSelection">重新选择</el-button>
+        <div class="identity-actions">
+          <el-button
+            v-if="selectedIdentity.dogId"
+            plain
+            @click="openDogArchive"
+          >
+            查看档案
+          </el-button>
+          <el-button plain @click="resetSelection">重新选择</el-button>
+        </div>
       </div>
 
       <el-radio-group v-model="customerMode" class="mode-row" @change="handleCustomerModeChange">
@@ -244,6 +253,35 @@
           <span class="section-hint">与顾客自助单同一套问卷，带 * 为必填</span>
         </div>
       </template>
+
+      <!--
+        「已带入上次答案」提示条（2026-11-16）。
+        自动带入如果不说明来源，员工会以为是自己填的或系统猜的；
+        旁边必须给「清空重填」，否则想从头填一遍还得逐个删。
+      -->
+      <el-alert
+        v-if="intakePrefill"
+        type="info"
+        :closable="false"
+        show-icon
+        class="intake-prefill"
+      >
+        <template #title>
+          已带入 {{ intakePrefill.dateText }} 那一单的答案
+          <span class="intake-prefill__order">（{{ intakePrefill.orderId }}）</span>
+          ，可直接修改
+        </template>
+        <div class="intake-prefill__body">
+          <span>
+            份数和主蛋白已按当前规则校正<span v-if="intakePrefill.proteinCleared">
+              ；上次的主蛋白数量与本次份数对不上，已清空，请重新选择</span>。
+            过敏、肠胃这类会变的信息，请跟顾客确认一下。
+          </span>
+          <el-button link type="primary" @click="clearIntakePrefill">
+            清空重填
+          </el-button>
+        </div>
+      </el-alert>
 
       <el-alert
         v-if="intakeOptionsError"
@@ -570,6 +608,16 @@
       </el-button>
     </div>
 
+    <!--
+      狗狗档案抽屉（2026-11-16）：下单时不离开页面也能看过敏、病史、
+      最近就诊/体检和报告原件（含过敏检测报告）。
+    -->
+    <DogArchiveDrawer
+      v-model="archiveVisible"
+      :dog-id="archiveDogId"
+      :dog-name="archiveDogName"
+    />
+
     <!-- 新建代客客户 -->
     <el-dialog v-model="guestDialogVisible" title="新建代客客户" width="480px">
       <el-form ref="guestFormRef" :model="guestForm" :rules="guestRules" label-width="90px">
@@ -742,6 +790,7 @@ import type {
   GuestCustomerSearchItem,
 } from '@/api/customRecipe'
 import { dogApi } from '@/api/dogs'
+import DogArchiveDrawer from './DogArchiveDrawer.vue'
 import {
   ActivityLevel,
   ActivityLevelLabels,
@@ -769,8 +818,10 @@ import {
   formatDiscountRate,
   formatDogAge,
   formatDogWeight,
+  formatIntakeOrderDate,
   formatMoney,
   getGiftReasonLabel,
+  normalizeLastIntake,
   getPaymentValidationError,
   requiresInternalConfirmation,
   shouldSyncActualAmount,
@@ -778,6 +829,7 @@ import {
 import type {
   AssistedCustomerDogCard,
   AssistedDogSummary,
+  AssistedIntakeDraft,
   AssistedOrderFormState,
   ProteinChoiceMode,
 } from '@/utils/assistedOrder'
@@ -883,6 +935,33 @@ const form = reactive<AssistedOrderFormState>({
 })
 
 const proteinMode = ref<ProteinChoiceMode>('DIETITIAN')
+
+/**
+ * 「已带入上次答案」提示条（2026-11-16）。
+ *
+ * 只在真的带入成功时才有值：没历史的狗保持 null，页面与以前完全一样。
+ * `proteinCleared` 用来解释"为什么主蛋白是空的"—— 不说明的话，
+ * 员工会以为自己漏填了。
+ */
+const intakePrefill = ref<{
+  orderId: string
+  dateText: string
+  proteinCleared: boolean
+} | null>(null)
+/** 防止切换狗狗后旧请求的答案覆盖新狗狗的表单 */
+let intakeRequestSeq = 0
+/**
+ * 已经为哪只狗读过「上次答案」。
+ *
+ * 同一只狗再点一次（列表刷新、误点）时不再重读，
+ * 否则会把员工刚改过的内容用旧答案覆盖掉 —— 清空重填之后也一样。
+ */
+const intakeLoadedForDog = ref('')
+
+/** 狗狗档案抽屉 */
+const archiveVisible = ref(false)
+const archiveDogId = ref('')
+const archiveDogName = ref('')
 
 const intakeOptionSets = ref<CustomRecipeIntakeOptionSets>({})
 const intakeOptionsError = ref('')
@@ -1035,7 +1114,9 @@ async function selectCustomerDog(
   }
   selectedDog.value = { ...dog }
   form.customerId = card.customerId
+  const changed = form.dogId !== dog.id
   form.dogId = dog.id
+  handleDogSelected(dog.id, changed)
 }
 
 function selectGuestCustomer(item: GuestCustomerSearchItem) {
@@ -1051,6 +1132,7 @@ function selectGuestCustomer(item: GuestCustomerSearchItem) {
   selectedDog.value = null
   form.customerId = item.id
   form.dogId = ''
+  resetIntakeState()
   void loadDogs()
 }
 
@@ -1061,6 +1143,7 @@ function resetSelection() {
   form.dogId = ''
   dogs.value = []
   dogsError.value = ''
+  resetIntakeState()
 }
 
 function handleCustomerModeChange() {
@@ -1104,6 +1187,7 @@ async function loadDogs() {
 
 function selectGuestDog(dog: DogProfile) {
   // 只认 dog.id：狗名可能重复，绝不能按名字匹配
+  const changed = form.dogId !== dog.id
   selectedDog.value = {
     id: dog.id,
     name: dog.name,
@@ -1112,6 +1196,7 @@ function selectGuestDog(dog: DogProfile) {
     weightText: formatDogWeight(dog.currentWeightKg),
   }
   form.dogId = dog.id
+  handleDogSelected(dog.id, changed)
 }
 
 function ageText(birthday?: string | null) {
@@ -1120,6 +1205,132 @@ function ageText(birthday?: string | null) {
 
 function weightText(weight?: number | null) {
   return formatDogWeight(weight)
+}
+
+// ===== 上次定制需求带入（2026-11-16）=====
+
+/**
+ * 清空第 2 步问卷。
+ *
+ * 只清「定制需求」，不动顾客、狗狗和收款信息 ——
+ * 换狗时清空的是上一只狗的答案，不是员工刚填的收款方式。
+ */
+function resetIntakeFields() {
+  form.targetGoal = ''
+  form.recipeQuantity = 1
+  form.requestedProteinCodes = []
+  proteinMode.value = 'DIETITIAN'
+  form.allergyStatus = ''
+  form.allergyText = ''
+  form.currentFoodMain = ''
+  form.currentFoodOther = ''
+  form.changeReasons = []
+  form.stomachConditions = []
+  form.additionalNotes = ''
+}
+
+/** 清空带入状态：请求序号 +1，让飞行中的请求作废 */
+function resetIntakeState() {
+  intakeRequestSeq += 1
+  intakePrefill.value = null
+  intakeLoadedForDog.value = ''
+  resetIntakeFields()
+}
+
+function applyIntakeDraft(draft: AssistedIntakeDraft) {
+  form.targetGoal = draft.targetGoal
+  form.recipeQuantity = draft.recipeQuantity
+  form.requestedProteinCodes = [...draft.requestedProteinCodes]
+  proteinMode.value = draft.proteinMode
+  form.allergyStatus = draft.allergyStatus
+  form.allergyText = draft.allergyText
+  form.currentFoodMain = draft.currentFoodMain
+  form.currentFoodOther = draft.currentFoodOther
+  form.changeReasons = [...draft.changeReasons]
+  form.stomachConditions = [...draft.stomachConditions]
+  form.additionalNotes = draft.additionalNotes
+}
+
+/**
+ * 读这只狗上一次的定制需求并带入。
+ *
+ * 失败一律静默：带入是"少填一遍"的加速，**不能拦住下单**。
+ * 选项字典还没加载时（页面刚打开就点狗）不传白名单，
+ * 否则会把所有 code 当"已下线"全过滤掉。
+ */
+async function loadLastIntake(dogId: string) {
+  const seq = ++intakeRequestSeq
+  try {
+    const result = await customRecipeApi.getDogLastIntake(dogId)
+    // 期间换了狗 / 又点了一次 → 这份结果作废
+    if (seq !== intakeRequestSeq || form.dogId !== dogId) return
+
+    const intake = result?.intake ?? null
+    intakeLoadedForDog.value = dogId
+    if (!intake) {
+      intakePrefill.value = null
+      return
+    }
+
+    const foodCodes = currentFoodOptions.value.map((option) => option.code)
+    const reasonCodes = changeReasonOptions.value.map((option) => option.code)
+    const stomachCodes = stomachOptions.value.map((option) => option.code)
+    const draft = normalizeLastIntake(intake, {
+      maxQuantity: maxQuantity.value,
+      allowedCurrentFoods: foodCodes.length ? foodCodes : undefined,
+      allowedChangeReasons: reasonCodes.length ? reasonCodes : undefined,
+      allowedStomach: stomachCodes.length ? stomachCodes : undefined,
+    })
+    if (!draft) {
+      intakePrefill.value = null
+      return
+    }
+
+    applyIntakeDraft(draft)
+    intakePrefill.value = {
+      orderId: intake.orderId,
+      dateText: formatIntakeOrderDate(intake.orderCreatedAt),
+      proteinCleared: draft.proteinCleared,
+    }
+  } catch {
+    // 静默：页面保持空白，员工照常从零填
+    if (seq === intakeRequestSeq) {
+      intakePrefill.value = null
+    }
+  }
+}
+
+/**
+ * 选中一只狗之后的统一处理。
+ *
+ * 换狗必须先清空上一只狗的答案再读 —— 否则会出现
+ * 「A 的过敏 + B 的肠胃」这种拼出来的脏表单。
+ * 同一只狗再点一次（比如列表刷新）不清空，避免抹掉员工刚改的内容。
+ */
+function handleDogSelected(dogId: string, changed: boolean) {
+  if (changed) {
+    resetIntakeState()
+  } else if (intakeLoadedForDog.value === dogId) {
+    // 同一只狗：答案已经读过，不覆盖员工改过的内容
+    return
+  }
+  void loadLastIntake(dogId)
+}
+
+/** 清空重填：保留顾客与狗狗，只把问卷恢复成空白 */
+function clearIntakePrefill() {
+  intakeRequestSeq += 1
+  intakeLoadedForDog.value = form.dogId
+  resetIntakeFields()
+  intakePrefill.value = null
+}
+
+function openDogArchive() {
+  const dog = selectedIdentity.value
+  if (!dog?.dogId) return
+  archiveDogId.value = dog.dogId
+  archiveDogName.value = dog.dogName
+  archiveVisible.value = true
 }
 
 // ===== 选项字典 / 报价 =====
@@ -1562,6 +1773,31 @@ onMounted(async () => {
   margin-top: 4px;
   line-height: 1.5;
 }
+/* 「已带入上次答案」提示条（2026-11-16） */
+.intake-prefill {
+  margin-bottom: 16px;
+}
+
+.intake-prefill__order {
+  color: #909399;
+  font-weight: 400;
+}
+
+.intake-prefill__body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.identity-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .selected-identity {
   display: flex;
   align-items: flex-start;

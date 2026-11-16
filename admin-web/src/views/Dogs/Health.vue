@@ -86,6 +86,52 @@
       </div>
     </el-card>
 
+    <!--
+      过敏检测报告（2026-11-16）。
+      顾客在小程序里传的过敏报告，此前后台只有"就诊/体检"两处附件，
+      这份最关键的证据一直看不到 —— 员工只能看顾客手打的一行字。
+    -->
+    <el-card
+      v-if="(overview?.allergyReports || []).length"
+      shadow="never"
+      class="section-card"
+    >
+      <template #header>
+        <div class="section-head">
+          <span>过敏检测报告（{{ overview.allergyReports.length }}）</span>
+          <span class="section-head__hint">
+            顾客自己上传的报告；结论照抄报告原文，不代表已经确诊
+          </span>
+        </div>
+      </template>
+
+      <div class="allergy-reports">
+        <div
+          v-for="report in overview.allergyReports"
+          :key="report.id"
+          class="allergy-report"
+        >
+          <div class="allergy-report__head">
+            <el-tag size="small" type="danger" effect="plain">过敏检测</el-tag>
+            <span class="allergy-report__date">{{ report.testDate || "日期未填" }}</span>
+            <span class="allergy-report__inst">{{ report.institution || "机构未填" }}</span>
+          </div>
+          <div class="allergy-report__summary">{{ report.summary || "未填写结论" }}</div>
+          <div v-if="report.attachments?.length" class="allergy-report__files">
+            <el-image
+              v-for="(url, index) in report.attachments"
+              :key="url"
+              :src="url"
+              :preview-src-list="report.attachments"
+              :initial-index="index"
+              fit="cover"
+              class="attachment__img"
+            />
+          </div>
+        </div>
+      </div>
+    </el-card>
+
     <!-- 第 23 条：报告原件 -->
     <el-card shadow="never" class="section-card">
       <template #header>
@@ -110,8 +156,8 @@
             class="attachment__img"
           />
           <div class="attachment__meta">
-            <el-tag size="small" :type="item.source === 'visit' ? 'warning' : 'success'">
-              {{ item.source === "visit" ? "就诊" : "体检" }}
+            <el-tag size="small" :type="attachmentSourceTagType(item.source)">
+              {{ attachmentSourceLabel(item.source) }}
             </el-tag>
             <span class="attachment__date">{{ item.recordDate }}</span>
             <span class="attachment__label">{{ item.recordLabel }}</span>
@@ -269,6 +315,24 @@ const overview = ref<any>(null);
 
 const overrides = ref<HealthTagOverrides>({ added: [], removed: [] });
 const tagToAdd = ref("");
+
+/** 报告原件来源 → 中文（就诊 / 体检 / 过敏检测） */
+function attachmentSourceLabel(source: unknown): string {
+  const value = String(source || "");
+  if (value === "visit") return "就诊";
+  if (value === "allergy") return "过敏检测";
+  return "体检";
+}
+
+/** 报告原件来源 → 标签颜色 */
+function attachmentSourceTagType(
+  source: unknown,
+): "warning" | "danger" | "success" {
+  const value = String(source || "");
+  if (value === "visit") return "warning";
+  if (value === "allergy") return "danger";
+  return "success";
+}
 
 const attachmentUrls = computed(() =>
   (overview.value?.attachments || []).map((item: any) => item.url),
@@ -446,6 +510,48 @@ watch(dogId, load);
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
+}
+
+/* 过敏检测报告（2026-11-16）：按报告分组，附件与"报告原件"同一套缩略图样式 */
+.allergy-reports {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.allergy-report {
+  padding: 12px 14px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fffaf9;
+}
+
+.allergy-report__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.allergy-report__inst {
+  color: #606266;
+}
+
+.allergy-report__date {
+  color: #909399;
+}
+
+.allergy-report__summary {
+  margin-top: 6px;
+  font-size: 14px;
+  color: #303133;
+}
+
+.allergy-report__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .attachment {

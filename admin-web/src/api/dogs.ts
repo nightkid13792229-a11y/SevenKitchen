@@ -145,9 +145,16 @@ export const dogApi = {
      营养师端：独立页面看某只狗的完整健康分析、报告原件、健康标签纠错，
      以及"哪些狗的健康信息最近被改过"。 */
 
-  /** 某只狗的完整健康档案（含 AI 分析、报告原件、健康标签） */
-  getHealthOverview: (id: string): Promise<any> => {
-    return api.get(`/admin/dogs/${id}/health-overview`)
+  /**
+   * 某只狗的完整健康档案（含 AI 分析、报告原件、健康标签）。
+   *
+   * `includeAnalysis=false` 时不跑 AI 分析：大模型要十几秒，
+   * 代客下单的「看档案」抽屉只读记录，必须秒开。
+   */
+  getHealthOverview: (id: string, includeAnalysis = true): Promise<any> => {
+    return api.get(`/admin/dogs/${id}/health-overview`, {
+      params: includeAnalysis ? undefined : { includeAnalysis: '0' },
+    })
   },
 
   /** 修正健康标签：派生标签 − removed + added */

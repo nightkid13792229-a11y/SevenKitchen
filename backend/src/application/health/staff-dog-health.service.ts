@@ -52,12 +52,29 @@ const ACTIVE_ORDER_STATUSES = ['PAID', 'IN_PROGRESS'];
 /** 报告原件在健康档案里的归类 */
 export interface StaffAttachmentItem {
   /** 来自哪条记录 */
-  source: 'visit' | 'checkup';
+  source: 'visit' | 'checkup' | 'allergy';
   recordId: string;
   recordDate: string;
   recordLabel: string;
   /** 顾客自己上传的报告图片地址 */
   url: string;
+}
+
+/**
+ * 顾客上传的过敏检测报告（2026-11-16）。
+ *
+ * 为什么单独列出来而不是只塞进 attachments：
+ * 员工看档案时关心的是"哪家医院、什么时候测的、结论写了什么"，
+ * 一堆散图看不出这些。附件仍然进 attachments（点开看大图），
+ * 报告本体在这里按报告分组展示。
+ */
+export interface StaffAllergyReportItem {
+  id: string;
+  testDate: string | null;
+  testMethod: string;
+  institution: string | null;
+  summary: string | null;
+  attachments: string[];
 }
 
 export interface StaffHealthOverview {
@@ -90,8 +107,10 @@ export interface StaffHealthOverview {
   weight: any;
   diet: { preferredFoods: string; pickyFoods: string };
   dietPreferences: { liked: string[]; disliked: string[] };
-  /** 顾客上传的报告原件（老板第 23 条） */
+  /** 顾客上传的报告原件（老板第 23 条；2026-11-16 起含过敏报告） */
   attachments: StaffAttachmentItem[];
+  /** 顾客上传的过敏检测报告（含报告本体信息与原件） */
+  allergyReports: StaffAllergyReportItem[];
   /** 系统从病历里派生的领域标签 */
   derivedTags: string[];
   /** 人工修正 */
@@ -140,6 +159,9 @@ export class StaffDogHealthService {
         medicalRecords: { orderBy: { visitDate: 'desc' } },
         checkupRecords: { orderBy: { checkupDate: 'desc' } },
         allergyRecords: { orderBy: { createdAt: 'desc' } },
+        allergyReports: {
+          orderBy: [{ testDate: 'desc' }, { createdAt: 'desc' }],
+        },
         vaccineRecords: { orderBy: { vaccinationDate: 'desc' } },
         weightRecords: { orderBy: { recordDate: 'desc' }, take: 30 },
         dietPreferences: { orderBy: { createdAt: 'asc' } },
@@ -187,6 +209,41 @@ export class StaffDogHealthService {
           recordId: record.id,
           recordDate: toDateText(record.checkupDate),
           recordLabel: record.checkupType || '体检',
+          url,
+        });
+      }
+    }
+
+    /**
+     * 过敏检测报告（2026-11-16）。
+     *
+     * 顾客在小程序传的这份报告是过敏红线的第一手证据 ——
+     * 此前后台只能看到顾客手打的一行"过敏食物"，看不到报告原件。
+     * `?? []` 是给老数据/单测 mock 兜底：缺字段不能让整个档案打不开。
+     */
+    const allergyReports: StaffAllergyReportItem[] = (
+      (dog as any).allergyReports ?? []
+    ).map((report: any) => {
+      const urls: string[] = Array.isArray(report.attachments)
+        ? report.attachments
+        : [];
+      return {
+        id: report.id,
+        testDate: report.testDate ? toDateText(report.testDate) : null,
+        testMethod: report.testMethod ?? 'UNKNOWN',
+        institution: report.institution ?? null,
+        summary: report.summary ?? null,
+        attachments: urls,
+      };
+    });
+
+    for (const report of allergyReports) {
+      for (const url of report.attachments) {
+        attachments.push({
+          source: 'allergy',
+          recordId: report.id,
+          recordDate: report.testDate ?? '',
+          recordLabel: report.summary || report.institution || '过敏检测',
           url,
         });
       }
@@ -257,6 +314,7 @@ export class StaffDogHealthService {
           .map((item) => item.foodName),
       },
       attachments,
+      allergyReports,
       derivedTags,
       tagOverrides,
       effectiveTags,

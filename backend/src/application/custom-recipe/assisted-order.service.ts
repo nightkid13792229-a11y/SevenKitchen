@@ -140,6 +140,29 @@ export interface AssistedOrderResult {
   healthSync: { synced: boolean; reason?: string };
 }
 
+/**
+ * 上次定制需求快照（只读回放，不含份数/主蛋白的校正）。
+ *
+ * 字段名与表单一一对应，页面拿到后按当前配置裁剪（份数上限、
+ * 主蛋白数量必须等于份数）再填入表单。
+ */
+export interface AssistedLastIntake {
+  /** 业务编号（CR 开头），提示条上给员工核对用 */
+  orderId: string;
+  /** 那一单的创建时间（ISO） */
+  orderCreatedAt: string;
+  targetGoal: string;
+  recipeQuantity: number;
+  requestedProteinCodes: string[];
+  allergyStatus: string;
+  allergyText: string | null;
+  currentFoodMain: string | null;
+  currentFoodOther: string | null;
+  changeReasons: string[];
+  stomachConditions: string[];
+  additionalNotes: string | null;
+}
+
 /** 金额统一舍入到分（与报价服务同一口径） */
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -603,6 +626,83 @@ export class AssistedOrderService {
       externalRef,
       // 一致时即使填了原因也不落库：避免报表把「已按报价收款」标成改价
       overrideReason: amount === payableAmount ? null : overrideReason,
+    };
+  }
+
+  /**
+   * 这只狗上一次的定制需求（2026-11-16）。
+   *
+   * 同一只狗回头下单时，健康方向、过敏、现在喂什么、肠胃情况多数没变。
+   * 此前页面每次都从空白开始，员工要么重问一遍、要么凭印象瞎填 ——
+   * 营养师拿到的资料反而比顾客自己填的更差。
+   *
+   * 这里**只读回放** `custom_recipe_order` 里最近一单的快照：
+   *   · 不新开"狗狗需求档案"表 —— 订单本身就是最可信的历史；
+   *   · 不回写任何订单/档案；
+   *   · 已关单（CANCELLED）不当模板，避免把作废单的答案带出来；
+   *   · 有没有历史由调用方判断（intake=null 表示第一次下单）。
+   *
+   * 份数/主蛋白的冲突（比如上次 3 种蛋白、这次只能买 1 份）
+   * 由**页面**按当前配置校正，后端不替页面做业务裁剪。
+   */
+  async getLastIntake(
+    rawDogId: string,
+  ): Promise<{ intake: AssistedLastIntake | null }> {
+    const dogId = this.normalizeOptional(rawDogId);
+    if (!dogId) {
+      throw new BadRequestException('请选择狗狗');
+    }
+
+    // 狗不存在时明确报错：静默返回 null 会让页面以为"这只狗没填过"
+    const dog = await this.prisma.dog.findUnique({
+      where: { id: dogId },
+      select: { id: true },
+    });
+    if (!dog) {
+      throw new NotFoundException('爱犬不存在');
+    }
+
+    const last = await this.prisma.customRecipeOrder.findFirst({
+      where: {
+        dogId,
+        status: { not: CustomRecipeStatus.CANCELLED },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        orderId: true,
+        createdAt: true,
+        targetGoal: true,
+        recipeQuantity: true,
+        requestedProteinCodes: true,
+        allergyStatus: true,
+        allergyText: true,
+        currentFoodMain: true,
+        currentFoodOther: true,
+        changeReasons: true,
+        stomachConditions: true,
+        additionalNotes: true,
+      },
+    });
+
+    if (!last) {
+      return { intake: null };
+    }
+
+    return {
+      intake: {
+        orderId: last.orderId,
+        orderCreatedAt: last.createdAt.toISOString(),
+        targetGoal: last.targetGoal,
+        recipeQuantity: last.recipeQuantity,
+        requestedProteinCodes: last.requestedProteinCodes ?? [],
+        allergyStatus: last.allergyStatus,
+        allergyText: last.allergyText ?? null,
+        currentFoodMain: last.currentFoodMain ?? null,
+        currentFoodOther: last.currentFoodOther ?? null,
+        changeReasons: last.changeReasons ?? [],
+        stomachConditions: last.stomachConditions ?? [],
+        additionalNotes: last.additionalNotes ?? null,
+      },
     };
   }
 

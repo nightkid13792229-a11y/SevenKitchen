@@ -12,6 +12,7 @@ import type {
   AssistedGiftReason,
   AssistedPaymentChannel,
   CreateAssistedOrderPayload,
+  DogLastIntake,
 } from '@/api/customRecipe'
 import { calculateAge } from '@/types/dog'
 import { isInternalCustomerRole } from '@/utils/customerRole'
@@ -109,6 +110,141 @@ export interface AssistedOrderFormState {
     externalRef: string
     overrideReason: string
   }
+}
+
+/**
+ * 「上次定制需求」按当前配置校正后、可以直接填进表单的一组值。
+ *
+ * 为什么要有这一层：后端回放的是**那一单的原值**，而这一次的配置可能已经变了
+ * （多份开关关闭、选项字典下线、主蛋白数量必须等于份数）。
+ * 直接把原值塞进表单，员工看到的是一个必然提交失败的页面。
+ */
+export interface AssistedIntakeDraft {
+  targetGoal: string
+  recipeQuantity: number
+  requestedProteinCodes: string[]
+  proteinMode: ProteinChoiceMode
+  allergyStatus: AssistedAllergyAnswer
+  allergyText: string
+  currentFoodMain: string
+  currentFoodOther: string
+  changeReasons: string[]
+  stomachConditions: string[]
+  additionalNotes: string
+  /** 上次选了主蛋白，但数量与本次份数对不上，于是被清空 */
+  proteinCleared: boolean
+}
+
+export interface IntakePrefillOptions {
+  /** 当前允许的最多份数（多份开关关闭时为 1） */
+  maxQuantity: number
+  /** 允许的健康方向；不传按代客三档 */
+  allowedGoals?: readonly string[]
+  /** 当前喂食选项的 code；不传 = 不校验（字典还没加载） */
+  allowedCurrentFoods?: readonly string[]
+  allowedChangeReasons?: readonly string[]
+  allowedStomach?: readonly string[]
+}
+
+function trimText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+/** 只保留字典里还存在的 code（去空、去重、保序） */
+function keepKnownCodes(
+  raw: unknown,
+  allowed: readonly string[] | undefined,
+): string[] {
+  if (!Array.isArray(raw)) return []
+  const codes = raw
+    .map((item) => trimText(item))
+    .filter((item) => item.length > 0)
+  const deduped = Array.from(new Set(codes))
+  if (!allowed) return deduped
+  return deduped.filter((code) => allowed.includes(code))
+}
+
+/**
+ * 把「上次那一单的答案」校正成本次表单能用的值。
+ *
+ * null = 这只狗没有可带入的历史（页面不显示提示条）。
+ *
+ * 校正口径见 `assistedIntakePrefill.spec.ts`：份数上限、主蛋白数量、
+ * 下线选项、过敏状态这四类必须在页面外算清楚 —— 它们都是"填进去等于害人"的情况。
+ */
+export function normalizeLastIntake(
+  intake: DogLastIntake | null | undefined,
+  options: IntakePrefillOptions,
+): AssistedIntakeDraft | null {
+  if (!intake) return null
+
+  const maxQuantity = Math.max(1, Math.floor(Number(options.maxQuantity) || 1))
+  const rawQuantity = Math.floor(Number(intake.recipeQuantity))
+  const recipeQuantity = Math.min(
+    maxQuantity,
+    Number.isFinite(rawQuantity) && rawQuantity >= 1 ? rawQuantity : 1,
+  )
+
+  const allowedGoals =
+    options.allowedGoals ?? (ASSISTED_TARGET_GOAL_CODES as readonly string[])
+  const targetGoal = allowedGoals.includes(trimText(intake.targetGoal))
+    ? trimText(intake.targetGoal)
+    : ''
+
+  const proteinCodes = keepKnownCodes(
+    intake.requestedProteinCodes,
+    PROTEIN_OPTIONS.map((option) => option.code),
+  )
+  // 主蛋白数量必须恰好等于份数；对不上就清空，让员工重新选或改回营养师配
+  const proteinMatchesQuantity =
+    proteinCodes.length > 0 && proteinCodes.length === recipeQuantity
+
+  const allergyStatus: AssistedAllergyAnswer =
+    intake.allergyStatus === 'HAS_ALLERGY'
+      ? 'HAS_ALLERGY'
+      : intake.allergyStatus === 'NO_ALLERGY'
+        ? 'NO_ALLERGY'
+        : ''
+
+  const currentFoodRaw = trimText(intake.currentFoodMain)
+  const currentFoodAllowed =
+    !options.allowedCurrentFoods ||
+    options.allowedCurrentFoods.includes(currentFoodRaw)
+  const currentFoodMain =
+    currentFoodAllowed && currentFoodRaw ? currentFoodRaw : ''
+
+  return {
+    targetGoal,
+    recipeQuantity,
+    requestedProteinCodes: proteinMatchesQuantity ? proteinCodes : [],
+    proteinMode: proteinMatchesQuantity ? 'SELF' : 'DIETITIAN',
+    allergyStatus,
+    // 只有明确「有过敏」才保留原文：NO_ALLERGY / UNKNOWN 带着旧文本会被误读成过敏
+    allergyText:
+      allergyStatus === 'HAS_ALLERGY' ? trimText(intake.allergyText) : '',
+    currentFoodMain,
+    currentFoodOther:
+      currentFoodMain === 'OTHER' ? trimText(intake.currentFoodOther) : '',
+    changeReasons: keepKnownCodes(
+      intake.changeReasons,
+      options.allowedChangeReasons,
+    ),
+    stomachConditions: keepKnownCodes(
+      intake.stomachConditions,
+      options.allowedStomach,
+    ),
+    additionalNotes: trimText(intake.additionalNotes),
+    proteinCleared: proteinCodes.length > 0 && !proteinMatchesQuantity,
+  }
+}
+
+/** 提示条上的来源日期：「11 月 2 日」；非法时间返回空串 */
+export function formatIntakeOrderDate(iso: unknown): string {
+  const text = trimText(iso)
+  if (!text) return ''
+  const date = new Date(text)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getMonth() + 1} 月 ${date.getDate()} 日`
 }
 
 export interface AssistedOrderValidationOptions {

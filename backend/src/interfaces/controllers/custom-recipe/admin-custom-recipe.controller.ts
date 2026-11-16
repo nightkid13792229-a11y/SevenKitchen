@@ -321,6 +321,26 @@ export class AdminCustomRecipeController {
   }
 
   /**
+   * 代客下单页：这只狗上一次的定制需求（2026-11-16）。
+   *
+   * 老板原话：「定制需求如果之前这只狗狗填过，那在这里可以快速呈现/加载吗？
+   * 不然每一次都要填一遍？」—— 答案本来就存在历史订单里，这里只读回放。
+   *
+   * 仅管理员：代客下单入口本身只对管理员开放，历史答案里有顾客健康信息。
+   * 无历史单返回 `intake: null`，页面据此不显示"已带入"提示。
+   */
+  @Get('dogs/:dogId/last-intake')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: '这只狗上一次的定制需求（代客下单带入）' })
+  async getDogLastIntake(@Param('dogId') dogId: string) {
+    if (!this.assistedOrderService) {
+      throw new ServiceUnavailableException('代客下单服务暂不可用');
+    }
+    const result = await this.assistedOrderService.getLastIntake(dogId);
+    return ApiResponseDto.success(result);
+  }
+
+  /**
    * Get all custom recipe orders (admin only)
    */
   @Get('orders')

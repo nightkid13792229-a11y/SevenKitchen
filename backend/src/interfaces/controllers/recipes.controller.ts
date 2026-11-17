@@ -2122,8 +2122,9 @@ export class RecipesController {
     }
 
     // 旧接口保留一个版本周期，但内容按新口径（预分装池）重算
+    // 用解析后的业务编号（不含已合并别名），否则旧链接会拿到「(旧编号, 新版本)」这种不存在的组合
     const plan = await this.supplementPlanService.resolveForRecipeRequest({
-      recipeId: id,
+      recipeId: recipe.id,
       recipeVersion: recipe.version,
       totalWeightG,
       diySheetId,
@@ -2168,7 +2169,8 @@ export class RecipesController {
 
     return ApiResponseDto.success(
       await this.supplementPlanService.resolveForRecipeRequest({
-        recipeId: id,
+        // 用解析后的业务编号：旧链接带的是已合并编号，直接查一定对不上
+        recipeId: recipe.id,
         recipeVersion: recipe.version,
         totalWeightG,
         diySheetId,

@@ -32,6 +32,7 @@ function makeIntake(overrides: Partial<DogLastIntake> = {}): DogLastIntake {
     requestedProteinCodes: [],
     allergyStatus: 'HAS_ALLERGY',
     allergyText: '鸡肉、牛肉',
+    allergies: [],
     currentFoodMain: 'COMMERCIAL_DRY',
     currentFoodOther: null,
     changeReasons: ['HEALTHIER'],
@@ -120,7 +121,9 @@ describe('带入上次定制需求 · 归一化', () => {
     })
   })
 
-  it('★ 已下线的主蛋白 code 被丢掉', () => {
+  it('★ 有 code 已下线时不能"过滤后刚好对得上"就当成上次的选择', () => {
+    // 上次 2 个 code、份数 1；过滤掉下线的 SALMON 后剩 1 个 —— 数量刚好相等，
+    // 但那不是上次的选择结果，必须清空让人重选。
     const draft = normalizeLastIntake(
       makeIntake({
         recipeQuantity: 1,
@@ -130,9 +133,57 @@ describe('带入上次定制需求 · 归一化', () => {
     )
 
     expect(draft).toMatchObject({
-      proteinMode: 'SELF',
-      requestedProteinCodes: ['CHICKEN'],
+      proteinMode: 'DIETITIAN',
+      requestedProteinCodes: [],
+      proteinCleared: true,
     })
+  })
+
+  it('★ 唯一一个 code 已下线时也清空并标记', () => {
+    const draft = normalizeLastIntake(
+      makeIntake({
+        recipeQuantity: 1,
+        requestedProteinCodes: ['SALMON'],
+      }),
+      { maxQuantity: 5 },
+    )
+
+    expect(draft).toMatchObject({
+      proteinMode: 'DIETITIAN',
+      requestedProteinCodes: [],
+      proteinCleared: true,
+    })
+  })
+
+  it('★ 老订单只有结构化过敏原（文本为 null）时用数组兜底', () => {
+    // 顾客自助下单只要档案里有过敏记录，订单就只存 allergies、文本为 null。
+    // 不兜底的话员工会看到"有过敏"但文本框是空的，提交直接被挡住。
+    const draft = normalizeLastIntake(
+      makeIntake({
+        allergyStatus: 'HAS_ALLERGY',
+        allergyText: null,
+        allergies: ['鸡肉', '牛肉'],
+      }),
+      { maxQuantity: 5 },
+    )
+
+    expect(draft).toMatchObject({
+      allergyStatus: 'HAS_ALLERGY',
+      allergyText: '鸡肉、牛肉',
+    })
+  })
+
+  it('★ 文本和数组都有时以文本为准（文本是顾客原话）', () => {
+    const draft = normalizeLastIntake(
+      makeIntake({
+        allergyStatus: 'HAS_ALLERGY',
+        allergyText: '吃鸡胸肉会挠',
+        allergies: ['鸡肉'],
+      }),
+      { maxQuantity: 5 },
+    )
+
+    expect(draft?.allergyText).toBe('吃鸡胸肉会挠')
   })
 
   it('★ 明确「没有过敏」时不保留上次的过敏原文', () => {

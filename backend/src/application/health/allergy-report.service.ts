@@ -159,7 +159,7 @@ export class AllergyReportService {
           testMethod: report.testMethod,
           institution: report.institution,
           summary: report.summary,
-          attachments: await this.signAttachments(
+          attachments: await this.signStoredAttachments(
             report.attachments ?? [],
             report.sourceKey,
           ),
@@ -185,7 +185,7 @@ export class AllergyReportService {
 
     return {
       ...report,
-      attachments: await this.signAttachments(
+      attachments: await this.signStoredAttachments(
         report.attachments ?? [],
         report.sourceKey,
       ),
@@ -215,7 +215,14 @@ export class AllergyReportService {
    *     `attachmentKeys` 取回原始 key 再签发，不依赖已失效的 token；
    *   · 实在找不到 key 才退回原 URL（旧公开 URL 仍能直接打开）。
    */
-  private async signAttachments(
+  /**
+   * 报告附件 → 可访问的短时地址。
+   *
+   * 公开出来是给**员工端健康档案/代客下单抽屉**用的（2026-11-17）：
+   * 那两个入口也要展示过敏报告原件，不能各自再写一份签发逻辑 ——
+   * 里面还有"老报告按 sourceKey 恢复 key"这段历史兼容，重复实现必然分叉。
+   */
+  async signStoredAttachments(
     urls: string[],
     sourceKey?: string | null,
   ): Promise<string[]> {

@@ -88,6 +88,7 @@ describe('代客下单 · 上次定制需求', () => {
           requestedProteinCodes: ['CHICKEN', 'DUCK'],
           allergyStatus: 'HAS_ALLERGY',
           allergyText: '鸡肉、牛肉',
+          allergies: [],
           currentFoodMain: 'COMMERCIAL_DRY',
           currentFoodOther: null,
           changeReasons: ['HEALTHIER'],
@@ -108,12 +109,48 @@ describe('代客下单 · 上次定制需求', () => {
       requestedProteinCodes: ['CHICKEN', 'DUCK'],
       allergyStatus: 'HAS_ALLERGY',
       allergyText: '鸡肉、牛肉',
+      allergies: [],
       currentFoodMain: 'COMMERCIAL_DRY',
       currentFoodOther: null,
       changeReasons: ['HEALTHIER'],
       stomachConditions: ['SOFT_STOOL'],
       additionalNotes: '不吃硬的',
     });
+  });
+
+  it('★ 只有结构化过敏原（allergyText 为 null）时也要回放出来', async () => {
+    const prisma = createPrisma({
+      customRecipeOrder: {
+        findFirst: jest.fn().mockResolvedValue({
+          orderId: 'CR20261105001',
+          createdAt: new Date('2026-11-05T02:00:00.000Z'),
+          targetGoal: 'MAINTAIN',
+          recipeQuantity: 1,
+          requestedProteinCodes: [],
+          allergyStatus: 'HAS_ALLERGY',
+          allergyText: null,
+          allergies: ['鸡肉', '牛肉'],
+          currentFoodMain: 'COMMERCIAL_DRY',
+          currentFoodOther: null,
+          changeReasons: [],
+          stomachConditions: [],
+          additionalNotes: null,
+        }),
+      },
+    });
+    const service = buildService(prisma);
+
+    const result = await service.getLastIntake('dog-1');
+
+    expect(result.intake).toMatchObject({
+      allergyStatus: 'HAS_ALLERGY',
+      allergyText: null,
+      allergies: ['鸡肉', '牛肉'],
+    });
+    // 查询必须真的去取这一列，否则页面拿不到数组
+    expect(
+      prisma.customRecipeOrder.findFirst.mock.calls[0][0].select.allergies,
+    ).toBe(true);
   });
 
   it('★ 空 dogId 直接拒绝，不去查库', async () => {

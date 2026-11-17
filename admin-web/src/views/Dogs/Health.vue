@@ -118,15 +118,25 @@
           </div>
           <div class="allergy-report__summary">{{ report.summary || "未填写结论" }}</div>
           <div v-if="report.attachments?.length" class="allergy-report__files">
-            <el-image
-              v-for="(url, index) in report.attachments"
-              :key="url"
-              :src="url"
-              :preview-src-list="report.attachments"
-              :initial-index="index"
-              fit="cover"
-              class="attachment__img"
-            />
+            <template v-for="url in report.attachments" :key="url">
+              <el-image
+                v-if="isImageAttachment(url)"
+                :src="url"
+                :preview-src-list="imagesOf(report.attachments)"
+                :initial-index="imagesOf(report.attachments).indexOf(url)"
+                fit="cover"
+                class="attachment__img"
+              />
+              <a
+                v-else
+                class="attachment-file"
+                :href="url"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {{ attachmentKindLabel(attachmentKind(url)) }} · 打开原件
+              </a>
+            </template>
           </div>
         </div>
       </div>
@@ -149,12 +159,22 @@
           class="attachment"
         >
           <el-image
+            v-if="isImageAttachment(item.url)"
             :src="item.url"
             :preview-src-list="attachmentUrls"
-            :initial-index="index"
+            :initial-index="attachmentUrls.indexOf(item.url)"
             fit="cover"
             class="attachment__img"
           />
+          <a
+            v-else
+            class="attachment-file"
+            :href="item.url"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {{ attachmentKindLabel(attachmentKind(item.url)) }} · 打开原件
+          </a>
           <div class="attachment__meta">
             <el-tag size="small" :type="attachmentSourceTagType(item.source)">
               {{ attachmentSourceLabel(item.source) }}
@@ -212,10 +232,14 @@
 
       <div class="record-block">
         <div class="record-block__title">过敏</div>
-        <div v-if="!overview?.allergies?.length" class="record-empty">无</div>
+        <div v-if="!overview?.allergies?.length && !overview?.dog?.allergyFoods" class="record-empty">无</div>
         <el-tag v-for="item in overview?.allergies || []" :key="item.allergen" type="danger" class="allergy-tag">
           {{ item.allergen }}
         </el-tag>
+        <!-- 员工在档案里手填的那份（与顾客结构化记录并存，只显示一套会漏） -->
+        <div v-if="overview?.dog?.allergyFoods" class="manual-allergy">
+          档案里记录的过敏食物：{{ overview.dog.allergyFoods }}
+        </div>
       </div>
 
       <div class="record-block">
@@ -286,6 +310,11 @@ import { useRoute } from "vue-router";
 import { ElMessage } from "element-plus";
 import { dogApi } from "@/api/dogs";
 import {
+  attachmentKind,
+  attachmentKindLabel,
+  isImageAttachment,
+} from "@/utils/attachment";
+import {
   applyAddHealthTag,
   applyRemoveAddedHealthTag,
   applyRemoveHealthTag,
@@ -335,8 +364,17 @@ function attachmentSourceTagType(
 }
 
 const attachmentUrls = computed(() =>
-  (overview.value?.attachments || []).map((item: any) => item.url),
+  (overview.value?.attachments || [])
+    .filter((item: any) => isImageAttachment(item.url))
+    .map((item: any) => item.url),
 );
+
+/** 一组附件里能走图片预览的那些（PDF/Word 不进预览列表） */
+function imagesOf(urls: unknown): string[] {
+  return (Array.isArray(urls) ? urls : []).filter((url) =>
+    isImageAttachment(url),
+  );
+}
 
 /** 可加的标签：词表里已有、且当前派生结果里没有的 */
 const addableTags = computed(() =>
@@ -513,6 +551,31 @@ watch(dogId, load);
 }
 
 /* 过敏检测报告（2026-11-16）：按报告分组，附件与"报告原件"同一套缩略图样式 */
+.attachment-file {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 150px;
+  height: 40px;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  color: #409eff;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.attachment-file:hover {
+  border-color: #409eff;
+  background: #ecf5ff;
+}
+
+.manual-allergy {
+  width: 100%;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #b88230;
+}
+
 .allergy-reports {
   display: flex;
   flex-direction: column;

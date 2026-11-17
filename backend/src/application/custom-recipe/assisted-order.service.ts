@@ -156,6 +156,15 @@ export interface AssistedLastIntake {
   requestedProteinCodes: string[];
   allergyStatus: string;
   allergyText: string | null;
+  /**
+   * 结构化过敏原（2026-11-17）。
+   *
+   * 顾客自助下单只要档案里有过敏记录/扫出过敏原，订单就只存这个数组、
+   * `allergyText` 为 null（见 custom-recipe.service 的"订单只保留一份快照"）。
+   * 只回放文本的话，最常见的"有过敏的回头狗"带入后文本是空的，
+   * 员工必须先手打一遍才能提交 —— 等于这个功能对它没生效。
+   */
+  allergies: string[];
   currentFoodMain: string | null;
   currentFoodOther: string | null;
   changeReasons: string[];
@@ -676,6 +685,7 @@ export class AssistedOrderService {
         requestedProteinCodes: true,
         allergyStatus: true,
         allergyText: true,
+        allergies: true,
         currentFoodMain: true,
         currentFoodOther: true,
         changeReasons: true,
@@ -697,6 +707,7 @@ export class AssistedOrderService {
         requestedProteinCodes: last.requestedProteinCodes ?? [],
         allergyStatus: last.allergyStatus,
         allergyText: last.allergyText ?? null,
+        allergies: last.allergies ?? [],
         currentFoodMain: last.currentFoodMain ?? null,
         currentFoodOther: last.currentFoodOther ?? null,
         changeReasons: last.changeReasons ?? [],

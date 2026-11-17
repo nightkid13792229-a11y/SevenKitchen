@@ -589,6 +589,11 @@ export interface DogLastIntake {
   requestedProteinCodes: string[]
   allergyStatus: string
   allergyText: string | null
+  /**
+   * 结构化过敏原（老订单常见形态：只存数组、文本为 null）。
+   * 页面必须用它兜底，否则"有过敏的回头狗"带入后文本是空的。
+   */
+  allergies: string[]
   currentFoodMain: string | null
   currentFoodOther: string | null
   changeReasons: string[]
@@ -849,6 +854,8 @@ export const customRecipeApi = {
   getDogLastIntake: (dogId: string) =>
     api.get<{ intake: DogLastIntake | null }>(
       `${BASE}/dogs/${encodeURIComponent(dogId)}/last-intake`,
+      // 旁路请求：失败就不带入，由页面静默降级，不弹全局错误
+      { silent: true },
     ),
 
   /**

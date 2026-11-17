@@ -191,13 +191,31 @@ export function normalizeLastIntake(
     ? trimText(intake.targetGoal)
     : ''
 
+  /**
+   * 主蛋白：**先按"上次实际选了几个"判断**，再看过滤后还剩几个。
+   *
+   * 为什么不在过滤后再比数量：历史数据里"2 个 code、份数 1"，
+   * 如果其中一个 code 已下线，过滤后刚好剩 1 个，就会误判成"数量对得上"
+   * 而填进一个其实不是上次选择的结果。宁可清空让员工重选。
+   */
+  const rawProteinCodes = Array.from(
+    new Set(
+      (Array.isArray(intake.requestedProteinCodes)
+        ? intake.requestedProteinCodes
+        : []
+      )
+        .map((item) => trimText(item))
+        .filter((item) => item.length > 0),
+    ),
+  )
   const proteinCodes = keepKnownCodes(
-    intake.requestedProteinCodes,
+    rawProteinCodes,
     PROTEIN_OPTIONS.map((option) => option.code),
   )
-  // 主蛋白数量必须恰好等于份数；对不上就清空，让员工重新选或改回营养师配
   const proteinMatchesQuantity =
-    proteinCodes.length > 0 && proteinCodes.length === recipeQuantity
+    rawProteinCodes.length > 0 &&
+    rawProteinCodes.length === recipeQuantity &&
+    proteinCodes.length === recipeQuantity
 
   const allergyStatus: AssistedAllergyAnswer =
     intake.allergyStatus === 'HAS_ALLERGY'
@@ -220,8 +238,18 @@ export function normalizeLastIntake(
     proteinMode: proteinMatchesQuantity ? 'SELF' : 'DIETITIAN',
     allergyStatus,
     // 只有明确「有过敏」才保留原文：NO_ALLERGY / UNKNOWN 带着旧文本会被误读成过敏
+    /**
+     * 过敏原文：老订单常见"只有结构化数组、文本为 null"（下单时二选一存）。
+     * 只回放文本会让员工看到"有过敏"但要求他手打才能提交 —— 用数组兜底。
+     */
     allergyText:
-      allergyStatus === 'HAS_ALLERGY' ? trimText(intake.allergyText) : '',
+      allergyStatus === 'HAS_ALLERGY'
+        ? trimText(intake.allergyText) ||
+          (Array.isArray(intake.allergies) ? intake.allergies : [])
+            .map((item) => trimText(item))
+            .filter((item) => item.length > 0)
+            .join('、')
+        : '',
     currentFoodMain,
     currentFoodOther:
       currentFoodMain === 'OTHER' ? trimText(intake.currentFoodOther) : '',
@@ -234,7 +262,7 @@ export function normalizeLastIntake(
       options.allowedStomach,
     ),
     additionalNotes: trimText(intake.additionalNotes),
-    proteinCleared: proteinCodes.length > 0 && !proteinMatchesQuantity,
+    proteinCleared: rawProteinCodes.length > 0 && !proteinMatchesQuantity,
   }
 }
 

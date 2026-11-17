@@ -267,14 +267,19 @@
         class="intake-prefill"
       >
         <template #title>
-          已带入 {{ intakePrefill.dateText }} 那一单的答案
+          <template v-if="intakePrefill.dateText">
+            已带入 {{ intakePrefill.dateText }} 那一单的答案
+          </template>
+          <template v-else>已带入上次那一单的答案</template>
           <span class="intake-prefill__order">（{{ intakePrefill.orderId }}）</span>
           ，可直接修改
         </template>
         <div class="intake-prefill__body">
           <span>
-            份数和主蛋白已按当前规则校正<span v-if="intakePrefill.proteinCleared">
-              ；上次的主蛋白数量与本次份数对不上，已清空，请重新选择</span>。
+            <template v-if="intakePrefill.adjusted">
+              份数/主蛋白已按当前规则校正<span v-if="intakePrefill.proteinCleared">
+                ：上次的主蛋白数量与本次份数对不上，已清空，请重新选择</span>。
+            </template>
             过敏、肠胃这类会变的信息，请跟顾客确认一下。
           </span>
           <el-button link type="primary" @click="clearIntakePrefill">
@@ -946,6 +951,8 @@ const proteinMode = ref<ProteinChoiceMode>('DIETITIAN')
 const intakePrefill = ref<{
   orderId: string
   dateText: string
+  /** 是否真的按当前规则改过份数/主蛋白（没改就别说"已校正"） */
+  adjusted: boolean
   proteinCleared: boolean
 } | null>(null)
 /** 防止切换狗狗后旧请求的答案覆盖新狗狗的表单 */
@@ -957,6 +964,8 @@ let intakeRequestSeq = 0
  * 否则会把员工刚改过的内容用旧答案覆盖掉 —— 清空重填之后也一样。
  */
 const intakeLoadedForDog = ref('')
+/** 正在读哪只狗（同一只狗的请求还在飞时，不再重复发） */
+let intakeLoadingForDog = ''
 
 /** 狗狗档案抽屉 */
 const archiveVisible = ref(false)
@@ -1174,6 +1183,8 @@ async function loadDogs() {
     } else {
       form.dogId = ''
       selectedDog.value = null
+      // 狗没了，上一只狗的答案和"已带入"提示也必须一起清掉
+      resetIntakeState()
     }
     customer.dogCount = dogs.value.length
   } catch (error) {
@@ -1260,6 +1271,7 @@ function applyIntakeDraft(draft: AssistedIntakeDraft) {
  */
 async function loadLastIntake(dogId: string) {
   const seq = ++intakeRequestSeq
+  intakeLoadingForDog = dogId
   try {
     const result = await customRecipeApi.getDogLastIntake(dogId)
     // 期间换了狗 / 又点了一次 → 这份结果作废
@@ -1290,12 +1302,19 @@ async function loadLastIntake(dogId: string) {
     intakePrefill.value = {
       orderId: intake.orderId,
       dateText: formatIntakeOrderDate(intake.orderCreatedAt),
+      adjusted:
+        draft.proteinCleared ||
+        draft.recipeQuantity !== Number(intake.recipeQuantity),
       proteinCleared: draft.proteinCleared,
     }
   } catch {
-    // 静默：页面保持空白，员工照常从零填
+    // 静默：请求本身带 silent，拦截器不弹错；页面保持空白，员工照常从零填
     if (seq === intakeRequestSeq) {
       intakePrefill.value = null
+    }
+  } finally {
+    if (seq === intakeRequestSeq) {
+      intakeLoadingForDog = ''
     }
   }
 }
@@ -1310,8 +1329,11 @@ async function loadLastIntake(dogId: string) {
 function handleDogSelected(dogId: string, changed: boolean) {
   if (changed) {
     resetIntakeState()
-  } else if (intakeLoadedForDog.value === dogId) {
-    // 同一只狗：答案已经读过，不覆盖员工改过的内容
+  } else if (
+    intakeLoadedForDog.value === dogId ||
+    intakeLoadingForDog === dogId
+  ) {
+    // 同一只狗：已经读过 / 正在读 → 不再发请求，避免覆盖员工刚改的内容
     return
   }
   void loadLastIntake(dogId)
@@ -1442,6 +1464,16 @@ watch(
 watch(maxQuantity, (max) => {
   if (form.recipeQuantity > max) {
     form.recipeQuantity = max
+  }
+  /**
+   * 配置读回来后上限可能从 5 变成 1：份数被压下来了，但主蛋白还挂着
+   * "上次选了 3 种" —— 表单从此必然提交失败。这里跟着清空，让员工重选。
+   */
+  if (
+    proteinMode.value === 'SELF' &&
+    form.requestedProteinCodes.length !== form.recipeQuantity
+  ) {
+    form.requestedProteinCodes = []
   }
 })
 

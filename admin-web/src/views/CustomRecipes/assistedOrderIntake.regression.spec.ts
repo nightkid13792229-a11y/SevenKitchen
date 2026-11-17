@@ -19,6 +19,8 @@ import page from './AssistedOrderCreate.vue?raw'
 import drawer from './DogArchiveDrawer.vue?raw'
 import apiSource from '@/api/customRecipe.ts?raw'
 import dogsApiSource from '@/api/dogs.ts?raw'
+import healthPage from '@/views/Dogs/Health.vue?raw'
+import apiClientSource from '@/api/index.ts?raw'
 
 function stripComments(source: string): string {
   return source
@@ -31,6 +33,8 @@ const cleanPage = stripComments(page)
 const cleanDrawer = stripComments(drawer)
 const cleanApi = stripComments(apiSource)
 const cleanDogsApi = stripComments(dogsApiSource)
+const cleanHealth = stripComments(healthPage)
+const cleanApiClient = stripComments(apiClientSource)
 
 describe('带入上次定制需求 · 接线', () => {
   it('★ 选完狗狗就去读这只狗上一单的答案', () => {
@@ -89,6 +93,13 @@ describe('带入上次定制需求 · 接线', () => {
     expect(cleanPage).toContain('if (!intake) {')
   })
 
+  it('★ 旁路请求失败不弹全局错误（silent）', () => {
+    expect(cleanApi).toContain('{ silent: true }')
+    // 不静默时拦截器照旧弹提示
+    expect(cleanApiClient).toContain('isSilent(response.config)')
+    expect(cleanApiClient).toContain('isSilent(error.config)')
+  })
+
   it('★ 接口地址与后端一致', () => {
     expect(cleanApi).toContain('`${BASE}/dogs/${encodeURIComponent(dogId)}/last-intake`')
     expect(cleanApi).toContain('getDogLastIntake')
@@ -105,7 +116,7 @@ describe('狗狗档案抽屉 · 接线', () => {
   })
 
   it('★ 抽屉不跑 AI 分析（要秒开）', () => {
-    expect(cleanDrawer).toContain('dogApi.getHealthOverview(props.dogId, false)')
+    expect(cleanDrawer).toContain('dogApi.getHealthOverview(dogId, false)')
     expect(cleanDogsApi).toContain('includeAnalysis ? undefined : { includeAnalysis: \'0\' }')
   })
 
@@ -139,5 +150,31 @@ describe('狗狗档案抽屉 · 接线', () => {
     expect(cleanDrawer).toContain('props.dogId')
     expect(cleanDrawer).toContain('void load()')
     expect(cleanDrawer).toContain('加载狗狗档案失败')
+  })
+
+  it('★ 换狗/关掉重开时，旧请求不能覆盖新狗的档案', () => {
+    // 请求序号 + 狗 ID 双重校验
+    expect(cleanDrawer).toContain('const seq = ++requestSeq')
+    expect(cleanDrawer).toContain('if (seq !== requestSeq || props.dogId !== dogId) return')
+    // 换狗先把旧内容清掉，不能让人看到上一只狗的过敏/病史
+    expect(cleanDrawer).toContain('overview.value = null')
+    // 打开与换狗合成一个 watcher，避免同一 tick 发两次请求
+    expect(cleanDrawer).toContain('watch(')
+    expect(cleanDrawer).toContain('[() => props.modelValue, () => props.dogId]')
+  })
+
+  it('★ 过敏要同时显示结构化记录与档案里手填的过敏食物', () => {
+    expect(cleanDrawer).toContain('overview.dog?.allergyFoods')
+    expect(cleanDrawer).toContain('档案里记录的过敏食物')
+  })
+
+  it('★ PDF/Word 报告不能用图片预览（会显示空白）', () => {
+    expect(cleanDrawer).toContain('isImageAttachment(url)')
+    expect(cleanDrawer).toContain('class="attachment-file"')
+    expect(cleanDrawer).toContain('attachmentKindLabel(attachmentKind(url))')
+    expect(cleanDrawer).toContain('rel="noopener noreferrer"')
+    // 完整档案页同样处理
+    expect(cleanHealth).toContain('isImageAttachment(url)')
+    expect(cleanHealth).toContain('class="attachment-file"')
   })
 })

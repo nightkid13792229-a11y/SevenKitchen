@@ -65,7 +65,20 @@
               {{ item.allergen }}
             </el-tag>
           </div>
-          <div v-else class="dog-archive__empty">还没有过敏记录</div>
+          <div v-else-if="!overview.dog?.allergyFoods" class="dog-archive__empty">
+            还没有过敏记录
+          </div>
+
+          <!--
+            档案里员工手填的过敏食物（2026-11-17）。
+            与顾客填的结构化记录是两套并存的数据；只显示其中一套，
+            抽屉会在"记录为空、但员工写过鸡肉牛肉"时显示"还没有过敏记录"，
+            直接把员工引到"不过敏"的错误结论上。
+          -->
+          <div v-if="overview.dog?.allergyFoods" class="dog-archive__manual-allergy">
+            <span class="dog-archive__manual-label">档案里记录的过敏食物</span>
+            <span>{{ overview.dog.allergyFoods }}</span>
+          </div>
 
           <div class="dog-archive__sub-title">
             过敏检测报告（{{ allergyReports.length }}）
@@ -89,15 +102,25 @@
                 {{ report.summary || "未填写结论" }}
               </div>
               <div v-if="report.attachments?.length" class="allergy-report__files">
-                <el-image
-                  v-for="(url, index) in report.attachments"
-                  :key="url"
-                  :src="url"
-                  :preview-src-list="report.attachments"
-                  :initial-index="index"
-                  fit="cover"
-                  class="attachment-thumb"
-                />
+                <template v-for="url in report.attachments" :key="url">
+                  <el-image
+                    v-if="isImageAttachment(url)"
+                    :src="url"
+                    :preview-src-list="imagesOf(report.attachments)"
+                    :initial-index="imagesOf(report.attachments).indexOf(url)"
+                    fit="cover"
+                    class="attachment-thumb"
+                  />
+                  <a
+                    v-else
+                    class="attachment-file"
+                    :href="url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {{ attachmentKindLabel(attachmentKind(url)) }} · 打开原件
+                  </a>
+                </template>
               </div>
             </div>
           </div>
@@ -181,12 +204,22 @@
               class="attachment"
             >
               <el-image
+                v-if="isImageAttachment(item.url)"
                 :src="item.url"
                 :preview-src-list="attachmentUrls"
-                :initial-index="index"
+                :initial-index="attachmentUrls.indexOf(item.url)"
                 fit="cover"
                 class="attachment-thumb"
               />
+              <a
+                v-else
+                class="attachment-file"
+                :href="item.url"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {{ attachmentKindLabel(attachmentKind(item.url)) }} · 打开原件
+              </a>
               <div class="attachment__meta">
                 <el-tag size="small" :type="sourceTagType(item.source)">
                   {{ sourceLabel(item.source) }}
@@ -227,6 +260,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { dogApi } from '@/api/dogs'
+import {
+  attachmentKind,
+  attachmentKindLabel,
+  isImageAttachment,
+} from '@/utils/attachment'
 
 /**
  * 代客下单 · 狗狗档案抽屉（2026-11-16）
@@ -264,8 +302,15 @@ const drawerTitle = computed(() =>
 const allergyReports = computed<any[]>(() => overview.value?.allergyReports || [])
 const attachments = computed<any[]>(() => overview.value?.attachments || [])
 const attachmentUrls = computed(() =>
-  attachments.value.map((item: any) => item.url),
+  attachments.value.filter((item: any) => isImageAttachment(item.url)).map((item: any) => item.url),
 )
+
+/** 一组附件里可以走图片预览的那些（PDF/Word 不进预览列表） */
+function imagesOf(urls: unknown): string[] {
+  return (Array.isArray(urls) ? urls : []).filter((url) =>
+    isImageAttachment(url),
+  )
+}
 
 function sourceLabel(source: unknown): string {
   const value = String(source || '')
@@ -281,41 +326,63 @@ function sourceTagType(source: unknown): 'warning' | 'danger' | 'success' {
   return 'success'
 }
 
+/** 请求序号：换狗/关掉重开时，旧响应不能覆盖新狗的档案 */
+let requestSeq = 0
+
 async function load() {
-  if (!props.dogId) return
+  const dogId = props.dogId
+  if (!dogId) return
+
+  const seq = ++requestSeq
   loading.value = true
   loadError.value = ''
+  /**
+   * 先清空：换狗时如果继续显示上一只狗的过敏/病史（哪怕遮罩还在），
+   * 员工扫一眼就会把它当成新狗的资料 —— 医疗信息看错狗是真的会出事。
+   */
+  overview.value = null
+
   try {
     // includeAnalysis=false：抽屉要秒开，AI 分析留给完整档案页
-    overview.value = await dogApi.getHealthOverview(props.dogId, false)
+    const data = await dogApi.getHealthOverview(dogId, false)
+    if (seq !== requestSeq || props.dogId !== dogId) return
+    overview.value = data
   } catch (error: any) {
+    if (seq !== requestSeq || props.dogId !== dogId) return
     overview.value = null
     loadError.value = error?.message || '加载狗狗档案失败，请重试'
   } finally {
-    loading.value = false
+    if (seq === requestSeq) {
+      loading.value = false
+    }
   }
 }
 
 function openFullArchive() {
   if (!props.dogId) return
-  window.open(`/dogs/${encodeURIComponent(props.dogId)}/health`, '_blank')
+  window.open(
+    `/dogs/${encodeURIComponent(props.dogId)}/health`,
+    '_blank',
+    'noopener',
+  )
 }
 
+/**
+ * 打开 或 换狗 → 都重新读。
+ *
+ * 合成一个 watcher 的原因：`openDogArchive` 会先改 dogId 再改 visible，
+ * 两个独立 watcher 会在同一 tick 各触发一次（同一只狗读两遍），
+ * 而且在"开着抽屉直接换狗"时两次请求的先后没有保证。
+ */
 watch(
-  () => props.modelValue,
-  (visible) => {
-    if (visible) {
+  [() => props.modelValue, () => props.dogId],
+  ([visible]) => {
+    if (visible && props.dogId) {
       void load()
     }
-  },
-)
-
-// 抽屉开着时切换狗狗：必须重新读，不能显示上一只狗的档案
-watch(
-  () => props.dogId,
-  () => {
-    if (props.modelValue) {
-      void load()
+    if (!visible) {
+      // 关掉就作废飞行中的请求，避免关掉后又被旧响应改回内容
+      requestSeq += 1
     }
   },
 )
@@ -375,6 +442,41 @@ watch(
 .dog-archive__empty {
   font-size: 13px;
   color: #909399;
+}
+
+.dog-archive__manual-allergy {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #fdf6ec;
+  font-size: 13px;
+  color: #b88230;
+}
+
+.dog-archive__manual-label {
+  color: #909399;
+  flex-shrink: 0;
+}
+
+.attachment-file {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 150px;
+  height: 40px;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  color: #409eff;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.attachment-file:hover {
+  border-color: #409eff;
+  background: #ecf5ff;
 }
 
 .allergy-tags {

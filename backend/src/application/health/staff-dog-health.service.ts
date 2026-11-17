@@ -2,10 +2,12 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { HealthTimelineService } from './health-timeline.service';
 import { HealthAnalysisService } from './health-analysis.service';
+import { AllergyReportService } from './allergy-report.service';
 import {
   deriveKnowledgeTags,
   parseHealthTagOverrides,
@@ -96,6 +98,14 @@ export interface StaffHealthOverview {
     activityLevelLabel: string | null;
     preferredFoods: string;
     pickyFoods: string;
+    /**
+     * 员工在档案里手填的过敏食物（自由文本，2026-11-17）。
+     *
+     * 与顾客填的结构化 `allergyRecords` 是**两套并存**的数据，
+     * 只展示其中一套都会漏（见 `utils/customRecipe.ts` 的同一口径）。
+     * 代客下单抽屉要用它，否则会出现"记录里没有 = 不过敏"的反向误导。
+     */
+    allergyFoods: string;
     medicalHistory: string;
   };
   counts: Record<string, number>;
@@ -132,6 +142,16 @@ export class StaffDogHealthService {
     private readonly prisma: PrismaService,
     private readonly timelineService: HealthTimelineService,
     private readonly analysisService: HealthAnalysisService,
+    /**
+     * 过敏报告的附件存的是 **COS key**（私有目录），读取时必须重新签发。
+     *
+     * 复用 AllergyReportService 的签发逻辑而不是自己再写一份：
+     * 里面还有"老报告按 sourceKey 从订单草稿恢复 key"的兼容，
+     * 两处分叉就会出现"顾客能看、员工看不到"。
+     * Optional 只为兼容单测直接 new（不传时退回原始值，不炸）。
+     */
+    @Optional()
+    private readonly allergyReportService?: AllergyReportService,
   ) {}
 
   /**
@@ -161,6 +181,17 @@ export class StaffDogHealthService {
         allergyRecords: { orderBy: { createdAt: 'desc' } },
         allergyReports: {
           orderBy: [{ testDate: 'desc' }, { createdAt: 'desc' }],
+          // 只取展示需要的列：ocrText 最长 2 万字，整行取回来纯属浪费
+          select: {
+            id: true,
+            testDate: true,
+            testMethod: true,
+            institution: true,
+            summary: true,
+            attachments: true,
+            sourceKey: true,
+            createdAt: true,
+          },
         },
         vaccineRecords: { orderBy: { vaccinationDate: 'desc' } },
         weightRecords: { orderBy: { recordDate: 'desc' }, take: 30 },
@@ -221,21 +252,29 @@ export class StaffDogHealthService {
      * 此前后台只能看到顾客手打的一行"过敏食物"，看不到报告原件。
      * `?? []` 是给老数据/单测 mock 兜底：缺字段不能让整个档案打不开。
      */
-    const allergyReports: StaffAllergyReportItem[] = (
-      (dog as any).allergyReports ?? []
-    ).map((report: any) => {
-      const urls: string[] = Array.isArray(report.attachments)
-        ? report.attachments
-        : [];
-      return {
-        id: report.id,
-        testDate: report.testDate ? toDateText(report.testDate) : null,
-        testMethod: report.testMethod ?? 'UNKNOWN',
-        institution: report.institution ?? null,
-        summary: report.summary ?? null,
-        attachments: urls,
-      };
-    });
+    const rawReports: any[] = (dog as any).allergyReports ?? [];
+    const allergyReports: StaffAllergyReportItem[] = await Promise.all(
+      rawReports.map(async (report: any) => {
+        const urls: string[] = Array.isArray(report.attachments)
+          ? report.attachments.map((item: unknown) => String(item || ''))
+          : [];
+        // 存的是 COS key / 老代理地址：直接塞进 <img> 一定是破图
+        const signed = this.allergyReportService
+          ? await this.allergyReportService.signStoredAttachments(
+              urls,
+              report.sourceKey,
+            )
+          : urls;
+        return {
+          id: report.id,
+          testDate: report.testDate ? toDateText(report.testDate) : null,
+          testMethod: report.testMethod ?? 'UNKNOWN',
+          institution: report.institution ?? null,
+          summary: report.summary ?? null,
+          attachments: signed,
+        };
+      }),
+    );
 
     for (const report of allergyReports) {
       for (const url of report.attachments) {
@@ -288,6 +327,7 @@ export class StaffDogHealthService {
         activityLevelLabel: ACTIVITY_LEVEL_LABELS[dog.activityLevel] ?? null,
         preferredFoods: dog.preferredFoods || '',
         pickyFoods: dog.pickyFoods || '',
+        allergyFoods: dog.allergyFoods || '',
         medicalHistory: dog.medicalHistory || '',
       },
       counts: {

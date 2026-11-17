@@ -22,7 +22,7 @@ describe('AllergyReportService · 历史报告附件恢复', () => {
     } as any;
     const service = new AllergyReportService(prisma, {} as any, cos);
 
-    const urls = await (service as any).signAttachments(
+    const urls = await (service as any).signStoredAttachments(
       [
         'https://api.sevenkitchen.cloud/api/v1/media/sensitive/dead-token?ext=jpg',
       ],

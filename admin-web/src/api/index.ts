@@ -14,6 +14,21 @@ interface ApiResponse<T = any> {
   data: T
 }
 
+/**
+ * 请求配置。
+ *
+ * `silent` = 失败不要弹全局错误提示（2026-11-17）。
+ * 有些调用是"锦上添花"的旁路请求（比如代客下单页读上次答案），
+ * 失败时页面自己会静默降级；拦截器再弹一条红条，员工会以为是下单出错。
+ */
+export interface RequestConfig extends AxiosRequestConfig {
+  silent?: boolean
+}
+
+function isSilent(config: unknown): boolean {
+  return Boolean((config as RequestConfig | undefined)?.silent)
+}
+
 // Create axios instance
 const http = axios.create({
   baseURL,
@@ -74,7 +89,9 @@ http.interceptors.response.use(
     if (res.code === 0) {
       return res.data
     } else {
-      ElMessage.error(res.message || '请求失败')
+      if (!isSilent(response.config)) {
+        ElMessage.error(res.message || '请求失败')
+      }
       const businessError = new Error(res.message || '请求失败')
       // 标记"拦截器已经弹过提示"：页面 catch 里据此避免同一句话弹两遍
       // （后端给的原因以拦截器这条为准）
@@ -84,7 +101,7 @@ http.interceptors.response.use(
   },
   (error) => {
     // Don't show error message for 401 (already handled by auth interceptor)
-    if (error.response?.status !== 401) {
+    if (error.response?.status !== 401 && !isSilent(error.config)) {
       ElMessage.error(error.response?.data?.message || error.message || '网络错误')
     }
 
@@ -100,8 +117,6 @@ http.interceptors.response.use(
     return Promise.reject(error)
   }
 )
-
-type RequestConfig = AxiosRequestConfig
 
 export const api = {
   request<T = any>(config: RequestConfig): Promise<T> {

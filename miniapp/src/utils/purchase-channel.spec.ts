@@ -148,3 +148,25 @@ describe('新建采购商品 · 已选/锁定的渠道必须可见（2026-11-07�
     expect(withSelectedChannel(many, null, 6)).toEqual(many.slice(0, 6));
   });
 });
+
+/**
+ * 2026-11-18 审核回归：手填搜「猪心」搜不到的直接原因。
+ * 线上猪心的推荐商品是沃尔玛 300g/盒；农贸市场只有一条散称。
+ * 旧抽屉只把推荐项放进候选，再按农贸市场过滤后就变成 0 个。
+ * 现在会把该原料的全部商品拉出来再过滤，这里锁住渠道隔离本身。
+ */
+describe('猪心的渠道隔离（2026-11-18）', () => {
+  const pigHeart = [
+    { id: 'w1', name: '猪心', productModel: '300g/盒', purchaseChannel: '沃尔玛' },
+    { id: 'w2', name: '【鲜宰】猪心 约300g/盒', productModel: '约300g/盒', purchaseChannel: '沃尔玛' },
+    { id: 'm1', name: '猪心', productModel: '散称', purchaseChannel: '农贸市场' },
+  ];
+
+  it('农贸市场只留散称那一条', () => {
+    expect(keepSkuForChannel(pigHeart, '农贸市场').map((sku) => sku.id)).toEqual(['m1']);
+  });
+
+  it('沃尔玛两条都在，不会混进农贸市场', () => {
+    expect(keepSkuForChannel(pigHeart, '沃尔玛').map((sku) => sku.id)).toEqual(['w1', 'w2']);
+  });
+});

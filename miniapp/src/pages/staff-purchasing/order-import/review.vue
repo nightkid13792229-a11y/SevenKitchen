@@ -101,6 +101,7 @@
             <text v-if="manualReimbursement === null" class="manual-money-v muted">—</text>
             <text v-else class="manual-money-v reimburse">¥{{ money(manualReimbursement) }}</text>
           </view>
+          <text v-if="manualFeeGapText" class="manual-money-note">{{ manualFeeGapText }}</text>
         </view>
 
         <text class="manual-discard" @tap="discardActive">放弃这次填写</text>
@@ -110,6 +111,7 @@
         <text class="empty-title">这笔手填记录没找到</text>
         <text class="empty-desc">可能已经保存或放弃，回补货页看看。</text>
         <button class="primary-btn empty-btn" @tap="goBack">返回补货</button>
+        <text class="retry-link" @tap="load">重新加载</text>
       </view>
 
       <view v-if="activeImport" class="manual-footer">
@@ -222,10 +224,6 @@
           模型看截图写的是「{{ activeImport.aiChannelGuess }}」，但渠道清单里没有这一项。
         </text>
         <text class="channel-gate-hint">没有这个渠道？让管理员在后台加。</text>
-      </view>
-
-      <view v-if="manualMode && activeImport" class="warn-banner">
-        <text class="warn-line">手填：先选渠道 → 手动加行 → 填实付。</text>
       </view>
 
       <view v-if="activeAllPersonal" class="warn-banner">
@@ -597,7 +595,7 @@
         <!-- 搜了字：平铺结果，一屏看完 -->
         <scroll-view v-if="skuSearch" scroll-y class="picker-list">
           <view v-if="searchSkuLoading" class="picker-row">
-            <text class="picker-sub">正在加载商品…</text>
+            <text class="picker-sub">正在加载原料/商品…</text>
           </view>
           <view
             v-for="option in filteredSkuOptions"
@@ -634,6 +632,10 @@
               @tap.stop="goNewSkuForIngredient(ingredient.ingredientId)"
             >新建</text>
           </view>
+          <view v-if="catalogError && ingredientOptions.length === 0" class="picker-row">
+            <text class="picker-sub">原料没加载出来：{{ catalogError }}</text>
+            <text class="picker-go" @tap.stop="loadCatalog">重试</text>
+          </view>
           <view v-if="searchNoResult" class="picker-row">
             <text class="picker-sub">
               没找到「{{ skuSearch }}」；原料库里没有这个原料，或者商品没加载出来，检查网络后再试。
@@ -655,6 +657,13 @@
         <!-- 没搜字：左边原料、右边商品 -->
         <view v-else class="cascade">
           <scroll-view scroll-y class="cascade-left" :scroll-into-view="pickerIngredientAnchor">
+            <view v-if="catalogLoading && pickerIngredients.length === 0" class="cascade-empty">
+              <text>正在加载原料…</text>
+            </view>
+            <view v-else-if="catalogError && pickerIngredients.length === 0" class="cascade-empty">
+              <text>原料没加载出来</text>
+              <text class="cascade-empty-hint" @tap="loadCatalog">点这里重试</text>
+            </view>
             <view
               v-for="ingredient in pickerIngredients"
               :id="'ing-' + ingredient.ingredientId"
@@ -791,6 +800,11 @@ const manualMode = ref(false);
 /** 手填：加第一项时先把渠道问清楚，选完直接接着加 */
 const pendingAddAfterChannel = ref(false);
 const catalogIngredients = ref<any[]>([]);
+/** 原料目录加载状态：抽屉里要能区分「正在加载」和「真的没有」 */
+const catalogLoading = ref(false);
+const catalogError = ref('');
+/** 搜索 debounce 期间也算加载中，别先闪「没找到」 */
+const searchPending = ref(false);
 const skuOverrides = ref<Record<string, IngredientOption['skus']>>({});
 const loadingSkuIngredients = new Set<string>();
 /** 正在拉某原料全部商品的原料 id（给选商品抽屉显示「正在加载」，不用假空态） */
@@ -1031,7 +1045,9 @@ const feeEditPreview = computed(() => {
   const paid = form.paidText ? parseNumber(form.paidText) : item.paid;
   const expected = round2(summary.lineSum + (shipping ?? 0) + (packaging ?? 0));
   if (paid === null) {
-    return `合计 ¥${money(expected)}（实付未读到）`;
+    return manualMode.value
+      ? `合计 ¥${money(expected)}（实付还没填）`
+      : `合计 ¥${money(expected)}（实付未读到）`;
   }
   const gap = round2(paid - expected);
   if (Math.abs(gap) <= IMPORT_FEE_TOLERANCE) {
@@ -1244,13 +1260,23 @@ const filteredSkuOptions = computed(() => {
   );
 });
 
-/** 正在拉当前原料的全部商品：右栏先显示「正在加载」，别先给「没有商品」 */
-const pickerIngredientLoading = computed(() =>
-  loadingSkuIds.value.includes(pickerIngredientId.value),
-);
+/** 正在拉当前原料的全部商品：只有补货/手填才需要，日采的候选来自清单本身 */
+const pickerIngredientLoading = computed(() => {
+  if (pageMode.value !== 'replenishment') return false;
+  if (!loadingSkuIds.value.includes(pickerIngredientId.value)) return false;
+  const ingredient = ingredientOptions.value.find(
+    (item) => item.ingredientId === pickerIngredientId.value,
+  );
+  return !ingredient || !ingredient.loaded;
+});
 
-/** 搜索时只要有一个原料在拉商品，就先显示加载中 */
-const searchSkuLoading = computed(() => loadingSkuIds.value.length > 0);
+/** 搜索中：debounce、原料目录加载、单原料商品加载，任一都算 */
+const searchSkuLoading = computed(
+  () =>
+    searchPending.value ||
+    catalogLoading.value ||
+    loadingSkuIds.value.length > 0,
+);
 
 /**
  * 搜到的原料、本渠道一个商品都没有：给「新建」出口，而不是「没搜到」。
@@ -1270,6 +1296,8 @@ const searchEmptyIngredients = computed(() => {
 const searchNoResult = computed(() => {
   const keyword = skuSearch.value.trim().toLowerCase();
   if (!keyword || searchSkuLoading.value) return false;
+  // 原料目录没加载出来时，不能下「没找到」的结论，页面会给重试
+  if (catalogError.value && ingredientOptions.value.length === 0) return false;
   return (
     filteredSkuOptions.value.length === 0 &&
     searchEmptyIngredients.value.length === 0
@@ -1280,21 +1308,37 @@ const searchNoResult = computed(() => {
  * 搜原料名：把命中的原料的全部商品拉出来再过滤。
  * 以前只搜「已经装进抽屉的推荐商品」，某个原料的推荐项在别的渠道时，
  * 搜「猪心」什么都搜不到；现在至少命中原料就先拉这个原料的商品。
+ *
+ * 日采（order-demand）不跑这里：它的候选就是清单里的商品，本地过滤即可。
  */
-let searchTimer: ReturnType<typeof setTimeout> | null = null;
-watch(skuSearch, (value) => {
-  if (searchTimer) clearTimeout(searchTimer);
-  const keyword = value.trim().toLowerCase();
-  if (!keyword) return;
-  searchTimer = setTimeout(() => {
+async function runSkuSearch(rawKeyword: string) {
+  const keyword = rawKeyword.trim().toLowerCase();
+  if (!keyword) {
+    searchPending.value = false;
+    return;
+  }
+  if (pageMode.value !== 'replenishment') {
+    searchPending.value = false;
+    return;
+  }
+  if (catalogLoading.value) {
+    searchPending.value = true;
+    return;
+  }
+  if (catalogError.value && ingredientOptions.value.length === 0) {
+    searchPending.value = false;
+    return;
+  }
+  searchPending.value = true;
+  try {
     const matches = ingredientOptions.value
       .filter((item) => item.ingredientName.toLowerCase().includes(keyword))
       .slice(0, 5);
     if (matches.length > 0) {
       pickerIngredientId.value = matches[0].ingredientId;
-      for (const item of matches) {
-        void ensureSkusForIngredient(item.ingredientId);
-      }
+      await Promise.all(
+        matches.map((item) => ensureSkusForIngredient(item.ingredientId)),
+      );
       return;
     }
     // 搜的是商品名：命中已加载的商品时，把它的原料也拉全，能看到同原料的其它规格
@@ -1305,8 +1349,30 @@ watch(skuSearch, (value) => {
     );
     if (skuMatch?.ingredientId) {
       pickerIngredientId.value = skuMatch.ingredientId;
-      void ensureSkusForIngredient(skuMatch.ingredientId);
+      await ensureSkusForIngredient(skuMatch.ingredientId);
     }
+  } finally {
+    searchPending.value = false;
+  }
+}
+
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+watch(skuSearch, (value) => {
+  if (searchTimer) clearTimeout(searchTimer);
+  const keyword = value.trim();
+  if (!keyword) {
+    searchPending.value = false;
+    return;
+  }
+  // 日采的候选就在清单里，本地过滤；不要为它发请求、也不要显示加载态
+  if (pageMode.value !== 'replenishment') {
+    searchPending.value = false;
+    return;
+  }
+  // 打字当下就算「搜索中」，别让 250ms 的 debounce 先闪一句「没找到」
+  searchPending.value = true;
+  searchTimer = setTimeout(() => {
+    void runSkuSearch(keyword);
   }, 250);
 });
 
@@ -1591,6 +1657,28 @@ const manualFeeText = computed(() => {
   return parts.length > 0 ? parts.join(' · ') : '没填（选填）';
 });
 
+/**
+ * 实付和「商品合计 + 运费 + 包装费」的差额。
+ * 手填允许抹零/优惠/临时加价，但不能静默；给一句提示让人确认。
+ */
+const manualFeeGap = computed(() => {
+  if (manualPaid.value === null) return null;
+  const item = activeImport.value;
+  const shipping = Number(item?.shippingFee || 0);
+  const packaging = Number(item?.packagingFee || 0);
+  return round2(
+    manualPaid.value - (manualGoodsTotal.value + shipping + packaging),
+  );
+});
+
+const manualFeeGapText = computed(() => {
+  const gap = manualFeeGap.value;
+  if (gap === null || Math.abs(gap) <= 0.01) return '';
+  return gap > 0
+    ? `实付比「商品合计 + 运费/包装费」多 ¥${money(gap)}，可能是优惠或抹零；确认无误再保存。`
+    : `实付比「商品合计 + 运费/包装费」少 ¥${money(Math.abs(gap))}，可能是优惠或抹零；确认无误再保存。`;
+});
+
 const manualSaveReason = computed(() => {
   const missing: string[] = [];
   if (!activeImport.value?.channel) missing.push('在哪买的');
@@ -1621,7 +1709,14 @@ const manualHasInput = computed(() => {
     Number(item.shippingFee || 0) > 0 ||
     Number(item.packagingFee || 0) > 0 ||
     // 抽屉里正在加/改的那一行也算：别让员工打了半行字，返回时没人提醒
-    Boolean(editing.value && editDirty.value)
+    Boolean(editing.value && editDirty.value) ||
+    // 费用弹层里已经输入、还没点保存的金额也算
+    Boolean(
+      feeEditing.value &&
+        (feeEditing.value.paidText ||
+          feeEditing.value.shippingText ||
+          feeEditing.value.packagingText),
+    )
   );
 });
 
@@ -1673,7 +1768,8 @@ async function onManualDateChange(event: any) {
   const value = String(event?.detail?.value || '').trim();
   const item = activeImport.value;
   if (!item || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
-  if (value === manualOrderDate.value) return;
+  // 记录本身就是今天且已有 orderTime 时不用写；orderTime 为空时要补写，不能只靠显示默认今天
+  if (value === manualOrderDate.value && item.orderTime) return;
   try {
     uni.showLoading({ title: '保存日期...', mask: true });
     // 后端的 parseOrderTime 对纯日期会得到 Invalid Date；补中午时间，按本地日期落库。
@@ -1704,6 +1800,15 @@ function manualAddLine() {
 watch(editDirty, () => {
   if (manualMode.value) updateUnloadGuard();
 });
+
+// 费用弹层里输入了实付/运费/包装费、还没保存时，也要拦一下
+watch(
+  feeEditing,
+  () => {
+    if (manualMode.value) updateUnloadGuard();
+  },
+  { deep: true },
+);
 
 /**
  * 「离开前提醒」的开关（2026-11-14 老板真机反馈后收紧）。
@@ -1747,6 +1852,8 @@ onLoad((options: Record<string, string>) => {
   pageMode.value =
     options?.mode === 'replenishment' ? 'replenishment' : 'order-demand';
   manualMode.value = options?.manual === '1';
+  // 手填只可能是补货：深链只带 manual=1 时也强制走补货保存，不能落到日采的确认接口
+  if (manualMode.value) pageMode.value = 'replenishment';
   if (pageMode.value === 'replenishment') {
     uni.setNavigationBarTitle({
       title: manualMode.value ? '手填补货记录' : '核对补货记录',
@@ -1788,6 +1895,41 @@ onUnload(() => {
   uni.$off('procurement-sku:created', handleSkuCreated);
 });
 
+/** 原料目录：补货/手填选商品的前提；失败要能看见并重试，不能静默空着 */
+async function loadCatalog() {
+  if (catalogLoading.value) return;
+  catalogLoading.value = true;
+  catalogError.value = '';
+  try {
+    const res: any = await getStockPurchaseIngredients({});
+    if (res?.code === 0 && Array.isArray(res.data)) {
+      catalogIngredients.value = res.data;
+    } else {
+      throw new Error(res?.message || '原料没加载出来');
+    }
+  } catch (error: any) {
+    catalogError.value = error?.message || '原料没加载出来';
+  } finally {
+    catalogLoading.value = false;
+    if (pickerMode.value === 'sku') {
+      // 抽屉是在目录回来之前打开的：自动落到第一个原料，别让右边一直空着
+      if (!skuSearch.value.trim() && !pickerIngredientId.value) {
+        const first = ingredientOptions.value[0];
+        if (first) {
+          pickerIngredientId.value = first.ingredientId;
+          if (pageMode.value === 'replenishment') {
+            void ensureSkusForIngredient(first.ingredientId);
+          }
+        }
+      }
+      // 目录回来时如果用户还在搜，重跑一次，别把「没找到」留在屏幕上
+      if (skuSearch.value.trim()) {
+        void runSkuSearch(skuSearch.value);
+      }
+    }
+  }
+}
+
 async function load() {
   if (!listId.value) {
     // 没带清单 id（旧链接/手滑进来）：直接给空状态，别一直转圈
@@ -1797,14 +1939,12 @@ async function load() {
   }
   if (imports.value.length === 0) loading.value = true;
   if (channelOptions.value.length === 0) void loadChannelOptions();
-  if (pageMode.value === 'replenishment' && catalogIngredients.value.length === 0) {
-    getStockPurchaseIngredients({})
-      .then((res: any) => {
-        if (res?.code === 0 && Array.isArray(res.data)) {
-          catalogIngredients.value = res.data;
-        }
-      })
-      .catch(() => undefined);
+  if (
+    pageMode.value === 'replenishment' &&
+    catalogIngredients.value.length === 0 &&
+    !catalogError.value
+  ) {
+    void loadCatalog();
   }
   if (pageMode.value === 'replenishment') {
     const results = await Promise.allSettled(
@@ -2139,7 +2279,14 @@ async function ensureSkusForIngredient(ingredientId?: string | null) {
               ? sku.purchaseToBaseRatio
               : null,
         }));
-      skuOverrides.value = { ...skuOverrides.value, [ingredientId]: skus };
+      // 和已有缓存合并：新建商品回来时可能已经补过一条，别让慢请求把它覆盖掉
+      const previous = skuOverrides.value[ingredientId] || [];
+      const merged = new Map(previous.map((item) => [item.id, item]));
+      for (const row of skus) merged.set(row.id, row);
+      skuOverrides.value = {
+        ...skuOverrides.value,
+        [ingredientId]: [...merged.values()],
+      };
     }
   } catch {
     // 拉不到就继续用推荐商品，不阻断改行
@@ -2151,11 +2298,14 @@ async function ensureSkusForIngredient(ingredientId?: string | null) {
 
 function selectPickerIngredient(ingredientId: string) {
   pickerIngredientId.value = ingredientId;
-  void ensureSkusForIngredient(ingredientId);
+  if (pageMode.value === 'replenishment') {
+    void ensureSkusForIngredient(ingredientId);
+  }
 }
 
 async function openEdit(line: OrderImportLineView) {
-  if (line.ingredientId) {
+  // 日采的 SKU 已经在清单里；只有补货/手填的目录需要按原料补全
+  if (line.ingredientId && pageMode.value === 'replenishment') {
     await ensureSkusForIngredient(line.ingredientId);
   }
   const ingredient = ingredientOptions.value.find(
@@ -2170,7 +2320,7 @@ async function openEdit(line: OrderImportLineView) {
     unitText: line.unit || '',
     priceText: line.unitPrice === null ? '' : money(line.unitPrice),
     ingredientName: ingredient?.ingredientName || '',
-    skuName: sku?.name || line.rawName || '',
+    skuName: sku?.name || (manualMode.value ? line.rawName : '') || '',
     skuModel: sku?.productModel || '',
     skuPackagingText: sku?.packagingText || '',
     skuRatio: sku?.purchaseToBaseRatio ?? null,
@@ -2355,7 +2505,10 @@ function openSkuPicker() {
   // 打开就停在「这行现在匹配的原料」上：绝大多数时候右边一眼就能找到
   pickerIngredientId.value =
     editing.value?.ingredientId || ingredientOptions.value[0]?.ingredientId || '';
-  void ensureSkusForIngredient(pickerIngredientId.value);
+  // 日采（order-demand）的候选已经全在清单里，不必也不该再拉一遍商品
+  if (pageMode.value === 'replenishment') {
+    void ensureSkusForIngredient(pickerIngredientId.value);
+  }
   pickerMode.value = 'sku';
 }
 
@@ -2925,7 +3078,7 @@ function emptySummary() {
   gap: 16rpx;
   padding: 16rpx 0;
   border-bottom: 1rpx dashed #f1eee2;
-  min-height: 44rpx;
+  min-height: 88rpx;
 }
 
 .manual-row:last-child {
@@ -2986,13 +3139,14 @@ function emptySummary() {
 
 .manual-card-count {
   font-size: 24rpx;
-  color: #8a8574;
+  color: #6b6653;
 }
 
 .manual-card-edit {
   font-size: 24rpx;
   color: #2f6b4f;
   font-weight: 600;
+  padding: 10rpx 0 10rpx 20rpx;
 }
 
 .manual-empty {
@@ -3012,7 +3166,7 @@ function emptySummary() {
 
 .manual-empty-hint {
   font-size: 24rpx;
-  color: #8a8574;
+  color: #6b6653;
 }
 
 .manual-item {
@@ -3044,7 +3198,7 @@ function emptySummary() {
 
 .manual-item-meta {
   font-size: 24rpx;
-  color: #8a8574;
+  color: #6b6653;
   line-height: 1.45;
   word-break: break-all;
 }
@@ -3065,13 +3219,13 @@ function emptySummary() {
 
 .manual-item-calc {
   font-size: 24rpx;
-  color: #8a8574;
+  color: #6b6653;
   white-space: nowrap;
 }
 
 .manual-add {
   margin-top: 14rpx;
-  height: 80rpx;
+  height: 88rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3089,6 +3243,7 @@ function emptySummary() {
   justify-content: space-between;
   gap: 16rpx;
   padding: 12rpx 0;
+  min-height: 80rpx;
   border-bottom: 1rpx dashed #f1eee2;
   font-size: 26rpx;
 }
@@ -3109,7 +3264,7 @@ function emptySummary() {
 
 .manual-money-v.muted {
   font-size: 24rpx;
-  color: #8a8574;
+  color: #6b6653;
   font-weight: 500;
 }
 
@@ -3130,12 +3285,24 @@ function emptySummary() {
   color: #2f6b4f;
 }
 
+.manual-money-note {
+  display: block;
+  margin-top: 12rpx;
+  padding: 10rpx 12rpx;
+  border-radius: 10rpx;
+  background: #fff8e6;
+  border: 1rpx solid #f0dca8;
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #8a5b00;
+}
+
 .manual-discard {
   display: block;
   text-align: center;
-  padding: 18rpx 0 8rpx;
+  padding: 24rpx 0;
   font-size: 24rpx;
-  color: #8a8574;
+  color: #6b6653;
 }
 
 .manual-footer {
@@ -3180,7 +3347,7 @@ function emptySummary() {
   display: block;
   text-align: center;
   font-size: 24rpx;
-  color: #8a8574;
+  color: #6b6653;
   line-height: 1.45;
   margin-top: 8rpx;
 }

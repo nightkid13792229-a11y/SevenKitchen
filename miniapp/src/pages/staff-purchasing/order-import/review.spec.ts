@@ -519,3 +519,70 @@ describe('手填页收口（2026-11-18）', () => {
     expect(source).toContain("'这次手填还没保存，离开后填写的内容会丢掉。'");
   });
 });
+
+/**
+ * 独立审核后的二轮修复（2026-11-18）：
+ * - 原料目录加载中/失败要有可见状态和重试，不能静默空着；
+ * - 日采（order-demand）不要被补货的 ensure/加载态影响；
+ * - AI 未匹配行不能拿截图原文伪装已选商品；
+ * - 费用弹层里没保存的金额也要进离开提醒；
+ * - 手填实付和商品合计差异要提示，不能静默。
+ */
+describe('手填页审核修复（2026-11-18 二轮）', () => {
+  it('原料目录有加载/失败态和重试，搜索延时期间不先报没找到', () => {
+    expect(source).toContain('const catalogLoading = ref(false)');
+    expect(source).toContain('const catalogError = ref');
+    expect(source).toContain('const searchPending = ref(false)');
+    expect(source).toContain('async function loadCatalog');
+    expect(source).toContain('void loadCatalog()');
+    expect(source).toContain('runSkuSearch');
+    expect(source).toContain('正在加载原料…');
+    expect(source).toContain('原料没加载出来');
+    expect(source).toContain('点这里重试');
+  });
+
+  it('日采不再被补货的 ensure/加载态盖住', () => {
+    // 右栏加载态只对补货生效
+    expect(source).toContain("if (pageMode.value !== 'replenishment') return false;");
+    // 打开抽屉、点原料、改行都不再给日采发商品请求
+    expect(source).toContain("if (pageMode.value === 'replenishment') {\n    void ensureSkusForIngredient(pickerIngredientId.value);");
+    expect(source).toContain("if (pageMode.value === 'replenishment') {\n    void ensureSkusForIngredient(ingredientId);");
+    expect(source).toContain("line.ingredientId && pageMode.value === 'replenishment'");
+  });
+
+  it('AI 未匹配行不再拿截图原文冒充已选商品', () => {
+    expect(source).toContain(
+      "skuName: sku?.name || (manualMode.value ? line.rawName : '') || ''",
+    );
+  });
+
+  it('费用弹层里没保存的金额也进离开提醒', () => {
+    expect(source).toContain('feeEditing.value &&');
+    expect(source).toContain('watch(\n  feeEditing,');
+    expect(source).toContain('watch(');
+  });
+
+  it('手填实付和商品合计差异有提示；费用预览说「实付还没填」', () => {
+    expect(source).toContain('manualFeeGapText');
+    expect(source).toContain('manual-money-note');
+    expect(source).toContain('实付还没填');
+  });
+
+  it('手填深链强制走补货；orderTime 为空时选今天也会补写', () => {
+    expect(source).toContain(
+      "if (manualMode.value) pageMode.value = 'replenishment';",
+    );
+    expect(source).toContain(
+      'value === manualOrderDate.value && item.orderTime',
+    );
+    // 旧的手填提示条已死，删掉
+    expect(source).not.toContain('手填：先选渠道');
+  });
+
+  it('手填次要文字用更深的颜色，正文和按钮触控高度不小于 40px', () => {
+    expect(source).toContain('.manual-item-meta {\n  font-size: 24rpx;\n  color: #6b6653;');
+    expect(source).toContain('.manual-money-row {\n  display: flex;');
+    expect(source).toContain('min-height: 80rpx;');
+    expect(source).toContain('min-height: 88rpx;');
+  });
+});

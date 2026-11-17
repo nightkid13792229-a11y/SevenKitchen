@@ -1367,6 +1367,15 @@ async function loadData() {
  * 幂等操作：后端会检查是否已存在相同的 user+recipe+dog 组合
  */
 async function autoSaveDiySheet(): Promise<string> {
+  /**
+   * 食谱没加载成功就不要存（2026-11-17）。
+   *
+   * 编号失效/被合并时客户端只剩 URL 里那个旧编号，硬存会写出一张
+   * 「没名字、0 行清单」的空制作单，污染「我的制作单」列表。
+   * 后端也会挡（食谱必须存在），这里先挡一道，省一次必然失败的请求。
+   */
+  if (!recipe.value?.id) return ''
+
   try {
     const selections =
       supplementItemsDetailed.value.length > 0
@@ -1932,6 +1941,11 @@ function handleSaveMenu() {
 }
 
 async function handleSave() {
+  if (!recipe.value?.id) {
+    uni.showToast({ title: '食谱还没加载好，请稍后重试', icon: 'none' })
+    return
+  }
+
   uni.showLoading({ title: '保存中...' })
 
   try {

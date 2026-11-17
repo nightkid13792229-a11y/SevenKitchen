@@ -833,4 +833,23 @@ describe('DIY制作单 · 2026-10-24 第二轮', () => {
     expect(recipeLoadAt).toBeGreaterThan(-1)
     expect(priceLoadAt).toBeGreaterThan(recipeLoadAt)
   })
+
+  /**
+   * 2026-11-17：合并重复食谱编号后，旧编号会查不到食谱。
+   * 客户端当时只剩 URL 里的旧编号，硬存会写出一张「无名称、0 行清单」的空制作单
+   * （当天在线上真实发生过一张）。食谱没加载成功时必须跳过保存。
+   */
+  it('食谱没加载成功时不保存制作单', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+
+    const autoSaveAt = page.indexOf('async function autoSaveDiySheet')
+    const autoSaveGuardAt = page.indexOf("if (!recipe.value?.id) return ''")
+    expect(autoSaveGuardAt).toBeGreaterThan(autoSaveAt)
+    // 手动保存也要挡，并给一句人话提示
+    expect(page).toContain("if (!recipe.value?.id) {")
+    expect(page).toContain('食谱还没加载好，请稍后重试')
+  })
 })

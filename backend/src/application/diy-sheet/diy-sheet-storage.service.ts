@@ -26,6 +26,22 @@ export class DIYSheetStorageService {
     userId: string,
     dto: CreateDIYSheetDto,
   ): Promise<DIYSheetResponseDto> {
+    /**
+     * 食谱必须真实存在（2026-11-17）。
+     *
+     * 为什么加：页面在食谱详情取不到时仍会走到自动保存，客户端手上只有 URL 里的编号，
+     * 于是存出一张 `recipe_name` 为空、采购清单为 0 行的空单；合并历史重复食谱编号后，
+     * 老链接 / 老页面带的旧编号正好会踩到这里（当天就存出过一张）。
+     * 宁可让保存失败（页面本来也是"加载食谱失败"），也不要污染制作单列表。
+     */
+    const recipe = await this.prisma.recipe.findFirst({
+      where: { recipeId: dto.recipeId },
+      select: { recipeId: true },
+    });
+    if (!recipe) {
+      throw new BadRequestException('食谱不存在或已下架');
+    }
+
     // 验证狗狗是否存在
     const dog = await this.prisma.user.findUnique({
       where: { id: userId },

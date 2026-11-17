@@ -21,9 +21,14 @@ describe('DIYSheetStorageService package plans', () => {
     productionSteps: '分装后冷冻保存',
   } as any;
 
-  function createPrismaMock(existingSheet: any = null) {
+  function createPrismaMock(existingSheet: any = null, recipeExists = true) {
     const now = new Date('2026-06-13T00:00:00.000Z');
     return {
+      recipe: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue(recipeExists ? { recipeId: baseDto.recipeId } : null),
+      },
       user: {
         findUnique: jest.fn().mockResolvedValue({
           dogs: [{ id: 'dog-1', name: '七七' }],
@@ -49,6 +54,30 @@ describe('DIYSheetStorageService package plans', () => {
       },
     } as any;
   }
+
+  it('食谱不存在时拒绝保存，不存出空制作单', async () => {
+    const prisma = createPrismaMock(null, false);
+    const service = new DIYSheetStorageService(prisma);
+
+    await expect(
+      service.create('user-1', { ...baseDto, recipeId: 'deleted-recipe' }),
+    ).rejects.toThrow('食谱不存在或已下架');
+    expect(prisma.dIYSheet.create).not.toHaveBeenCalled();
+  });
+
+  it('食谱存在时照常保存（校验不误伤正常流程）', async () => {
+    const prisma = createPrismaMock();
+    const service = new DIYSheetStorageService(prisma);
+
+    await service.create('user-1', baseDto);
+
+    expect(prisma.recipe.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { recipeId: baseDto.recipeId },
+      }),
+    );
+    expect(prisma.dIYSheet.create).toHaveBeenCalled();
+  });
 
   it('persists packagePlan when creating a DIY sheet and returns it to the client', async () => {
     const prisma = createPrismaMock();

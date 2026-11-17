@@ -77,20 +77,37 @@ function service() {
     }))
   };
 
+  const knowledge = {
+    execute: jest.fn(async () => ({
+      ok: true as const,
+      data: {
+        hits: [
+          {
+            documentId: 'nrc-NRC-2006-Nutrient-Requirements-Dogs-Cats',
+            pageNo: 339,
+            snippet: 'Iron oxide and carbonate demonstrate negligible bioavailability'
+          }
+        ]
+      }
+    }))
+  };
+
   return {
     service: new SupplementAgentService(
       providerConfig,
+      knowledge as never,
       preview as never,
       catalog as never
     ),
-    preview
+    preview,
+    knowledge
   };
 }
 
 const base = { message: '加个锌', history: [], draft: { name: '' } };
 
 describe('工具循环', () => {
-  it('模型不调工具、直接回答 → 原样返回，且工具清单里没有知识库检索', async () => {
+  it('模型不调工具、直接回答 → 原样返回；工具清单里有知识库三个动作', async () => {
     const fetchMock = buildFetch([{ content: '锌常见形态有五种……' }]);
     const result = await service().service.run(base);
 
@@ -101,8 +118,38 @@ describe('工具循环', () => {
     const toolNames = (body.tools as { function: { name: string } }[]).map(
       (tool) => tool.function.name
     );
+    expect(toolNames).toEqual(expect.arrayContaining(['kb_catalog', 'kb_find', 'kb_read']));
     expect(toolNames).not.toContain('search_knowledge');
-    expect(String(body.messages[0].content)).not.toContain('search_knowledge');
+  });
+
+  it('提示词只交代知识库与引用要求，不写我们自己的选品规则', async () => {
+    const fetchMock = buildFetch([{ content: '好' }]);
+    await service().service.run(base);
+
+    const prompt = String(JSON.parse(fetchMock.mock.calls[0][1].body).messages[0].content);
+    expect(prompt).toContain('知识库');
+    expect(prompt).toContain('原文');
+    expect(prompt).toContain('页码');
+    expect(prompt).toContain('知识库没查到');
+    // 这几句是上一版里我们替模型下的结论，必须消失。
+    expect(prompt).not.toContain('判断顺序');
+    expect(prompt).not.toContain('螯合形态是否一定优于离子型');
+    expect(prompt).not.toContain('哪几类补剂允许破例');
+  });
+
+  it('调知识库 → 原文能回到模型手里', async () => {
+    const fetchMock = buildFetch([
+      { tool: { name: 'kb_find', args: { query: 'iron absorption' } } },
+      { content: 'NRC 第 339 页说……' }
+    ]);
+    const { service: agent, knowledge } = service();
+
+    const result = await agent.run(base);
+
+    expect(knowledge.execute).toHaveBeenCalledWith('kb_find', { query: 'iron absorption' });
+    expect(result.toolCalls).toEqual([{ name: 'kb_find', ok: true }]);
+    const secondBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(JSON.stringify(secondBody.messages)).toContain('negligible bioavailability');
   });
 
   it('模型调工具 → 真的执行，并把结果喂回模型后收口', async () => {
@@ -194,8 +241,44 @@ describe('工具循环', () => {
 
     const result = await agent.run(base);
 
-    expect(result.toolCalls.length).toBeLessThanOrEqual(4);
-    expect(result.reply).toContain('停在这里');
+    expect(result.toolCalls.length).toBeLessThanOrEqual(14);
+    expect(result.reply).toContain('停下');
+  });
+
+  it('一步里给的 tool_call 太多时，多出来的也要回一条 tool 消息', async () => {
+    // 模型端要求：发出去的 tool_calls 必须逐个有 tool 回复，否则下一轮 400。
+    let index = 0;
+    global.fetch = jest.fn(async () => {
+      index += 1;
+      const calls =
+        index === 1
+          ? Array.from({ length: 7 }, (_, i) => ({
+              id: `call-${i}`,
+              function: { name: 'kb_find', arguments: JSON.stringify({ query: `q${i}` }) }
+            }))
+          : [];
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [
+            calls.length
+              ? { message: { content: null, tool_calls: calls } }
+              : { message: { content: '收口了' } }
+          ]
+        })
+      };
+    }) as unknown as typeof fetch;
+
+    const { service: agent } = service();
+    await agent.run(base);
+
+    const secondBody = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+    const toolMessages = (secondBody.messages as { role: string }[]).filter(
+      (message) => message.role === 'tool'
+    );
+    // 7 个调用全部有回复（5 个执行 + 2 个"到上限了"）
+    expect(toolMessages).toHaveLength(7);
   });
 
   it('跑了几步之后模型挂了 → 保住已填的字段，如实说明断在哪', async () => {

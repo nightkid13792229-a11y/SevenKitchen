@@ -134,7 +134,9 @@ export const KNOWLEDGE_TOOL_DEFINITIONS: KnowledgeToolDefinition[] = [
  * 未知名字也由网关包成 `{ ok: false, error }`，这里不抛。
  */
 export async function executeKnowledgeTool(
-  gateway: KnowledgeGatewayService,
+  // 只要 execute 一个方法：调用方（各 Agent 的 ToolContext）不必绑死整个网关，
+  // 测试里也就能用一个 stub 顶上去。
+  gateway: Pick<KnowledgeGatewayService, 'execute'>,
   name: string,
   rawArgs: unknown,
 ): Promise<KnowledgeToolResult<unknown>> {

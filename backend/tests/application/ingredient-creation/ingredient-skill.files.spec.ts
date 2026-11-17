@@ -18,7 +18,6 @@ describe('IngredientSkillService · 仓库里的真实技能文件', () => {
       'core',
       'name-expansion',
       'record-selection',
-      'supplement-selection',
     ]);
     for (const skill of skills) {
       expect(skill.description.length).toBeGreaterThan(0);

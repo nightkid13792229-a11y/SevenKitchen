@@ -11,6 +11,23 @@ import {
  */
 function context(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
+    knowledge: {
+      execute: jest.fn(async (name: string) => {
+        if (name === 'kb_read') {
+          return {
+            ok: true,
+            data: {
+              documentId: 'nrc-NRC-2006',
+              pages: [{ pageNo: 339, text: 'Iron oxide and carbonate demonstrate negligible bioavailability.' }]
+            }
+          };
+        }
+        return {
+          ok: true,
+          data: { hits: [{ documentId: 'nrc-NRC-2006', pageNo: 339, snippet: 'Iron oxide…' }] }
+        };
+      })
+    } as unknown as ToolContext['knowledge'],
     preview: {
       searchCandidates: jest.fn(async () => [
         { url: 'https://www.iherb.com/pr/x/1', name: 'NOW Zinc', priceUsd: null, pricePerServingUsd: null }
@@ -58,12 +75,47 @@ describe('工具箱', () => {
     }
   });
 
-  it('不再提供知识库检索工具', () => {
+  it('知识库走 kb_* 三个只读动作，不再有一个"检索并总结"的 search_knowledge', () => {
     expect(SUPPLEMENT_TOOLS.map((tool) => tool.name)).not.toContain('search_knowledge');
+    // 目录的描述必须写清"只用于填表"，它不再是选品门禁。
+    const catalog = SUPPLEMENT_TOOLS.find((tool) => tool.name === 'lookup_feed_catalog');
+    expect(catalog?.description).toContain('只用于填');
+    expect(catalog?.description).toContain('不是选品依据');
   });
 });
 
 describe('执行工具', () => {
+  it('kb_find / kb_read 直接转给知识库网关，原样返回原文', async () => {
+    const ctx = context();
+    const found = await executeSupplementTool('kb_find', { query: 'iron absorption' }, ctx);
+    expect(found.ok).toBe(true);
+
+    const read = await executeSupplementTool('kb_read', { documentId: 'nrc-NRC-2006', pageFrom: 339 }, ctx);
+    expect(read.ok).toBe(true);
+    if (read.ok) {
+      expect(JSON.stringify(read.data)).toContain('negligible bioavailability');
+    }
+    // 页图会把 base64 塞爆上下文：补剂 Agent 强制关掉，并把读页预算压小。
+    const [, readArgs] = (ctx.knowledge.execute as jest.Mock).mock.calls.find(
+      ([name]) => name === 'kb_read'
+    );
+    expect(readArgs).toEqual(expect.objectContaining({ includeImages: false }));
+    expect(readArgs.budgetTokens).toBeLessThanOrEqual(6000);
+  });
+
+  it('知识库报错时如实返回，不崩', async () => {
+    const ctx = context({
+      knowledge: {
+        execute: jest.fn(async () => ({
+          ok: false as const,
+          error: { code: 'KB_UNAVAILABLE', message: '知识库不可用' }
+        }))
+      } as unknown as ToolContext['knowledge']
+    });
+    const result = await executeSupplementTool('kb_find', { query: 'iron' }, ctx);
+    expect(result).toEqual({ ok: false, error: '知识库不可用' });
+  });
+
   it('搜商品返回候选', async () => {
     const result = await executeSupplementTool('search_products', { keyword: '甘氨酸锌' }, context());
     expect(result.ok).toBe(true);

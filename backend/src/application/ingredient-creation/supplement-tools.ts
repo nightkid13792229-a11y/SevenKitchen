@@ -5,12 +5,17 @@ import {
   describeNutrientUnits,
   type SupplementDraftRecord
 } from '../../domain/ingredient/supplement-draft-patch';
+import type { KnowledgeGatewayService } from '../knowledge-v3/knowledge-gateway.service';
+import { executeKnowledgeTool } from '../knowledge-v3/knowledge-v3.tools';
 
 /**
  * 补剂 Agent 的工具箱。
  *
- * 这里只定义"模型能做什么"，**不规定它怎么做**：给不给形态分析、先搜商品还是先查资料，
+ * 这里只定义"模型能做什么"，**不规定它怎么做**：先查知识库还是先搜商品、读哪一页，
  * 都由模型自己决定。工具本身的职责是老实执行并把结果/失败如实带回去。
+ *
+ * 判断依据只有知识库（`kb_*` 三个工具，返回原文，不给结论）。我们不写"选品规则"：
+ * 规则一旦写死，就等于替模型下结论，还会和原文打架。
  *
  * 唯一刻意做成"拦"的是 `ask_user`：模型卡住时应当停下来问人，而不是编一个答案。
  */
@@ -21,6 +26,8 @@ export interface ToolDefinition {
 }
 
 export interface ToolContext {
+  /** 知识库 v3 的 3 个只读动作：列文档 / 检索页 / 读原文。判断依据全在这里。 */
+  knowledge: Pick<KnowledgeGatewayService, 'execute'>;
   preview: Pick<SupplementLinkPreviewService, 'preview' | 'searchCandidates'>;
   catalog: Pick<FeedAdditiveCatalogService, 'lookup' | 'getSummary'>;
   draft: SupplementDraftRecord;
@@ -61,8 +68,9 @@ export const SUPPLEMENT_TOOLS: ToolDefinition[] = [
   {
     name: 'lookup_feed_catalog',
     description:
-      '查询《饲料添加剂品种目录》：给定名字查规范写法与适用范围（是否含犬）。' +
-      '只用于标签名称，不是选品门禁。',
+      '查《饲料添加剂品种目录》的规范写法与适用范围。' +
+      '**只用于填档案里的「规范名 / 来源说明」两格**，不是选品依据：' +
+      '目录只回答"这个名字在目录里怎么写"，不回答"哪种形态对狗更好、能不能用"。',
     parameters: {
       type: 'object',
       properties: {
@@ -127,6 +135,28 @@ export async function executeSupplementTool(
 ): Promise<ToolResult> {
   try {
     switch (name) {
+      // 知识库的三个动作直接转给网关，不做二次包装：
+      // 返回的必须是原文（页码 + 文本），任何"总结"都会变成我们自己下的结论。
+      case 'kb_catalog':
+      case 'kb_find':
+      case 'kb_read': {
+        // 补剂 Agent 只读文本：页图会以 base64 塞进上下文，几页就把窗口吃光。
+        // 读页预算也压一压，够它拿到结论所需的段落即可。
+        const kbArgs =
+          name === 'kb_read'
+            ? {
+                ...args,
+                includeImages: false,
+                budgetTokens: Math.min(Number(args.budgetTokens) || 4000, 6000)
+              }
+            : args;
+        const outcome = await executeKnowledgeTool(context.knowledge, name, kbArgs);
+        if (!outcome.ok) {
+          return { ok: false, error: outcome.error.message };
+        }
+        return { ok: true, data: outcome.data };
+      }
+
       case 'search_products': {
         const keyword = asString(args.keyword, 'keyword').slice(0, 40);
         const candidates = await context.preview.searchCandidates(keyword);

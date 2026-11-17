@@ -13,6 +13,7 @@ import {
   SupplementTargetInput,
 } from './supplement-dosage.service';
 import { computeSheetTotalWeightG } from './supplement-sheet-weight.util';
+import { RecipeStatus } from '../../domain/recipe/enums';
 
 /**
  * 补剂三口径：参考产品 / 预分装产品 / DIY 推荐商品（2026-11-15）。
@@ -441,6 +442,7 @@ export class SupplementPlanService {
         recipeId: input.recipeId,
         recipeVersion,
         locked: versionLocked,
+        sheetId: input.diySheetId,
       }),
       totalWeightG,
       weightSource,
@@ -455,6 +457,7 @@ export class SupplementPlanService {
     recipeId: string;
     recipeVersion: number;
     locked: boolean;
+    sheetId?: string;
   }): Promise<number> {
     const requested = Number(input.recipeVersion);
     const usable =
@@ -474,17 +477,30 @@ export class SupplementPlanService {
       throw new BadRequestException('食谱已更新，请刷新制作单');
     }
 
-    const latest = await this.prisma.recipe.findFirst({
-      where: { recipeId: input.recipeId },
+    /**
+     * 兜底优先「最新已发布版」：还没发布的草稿不该被算成顾客的补剂用量。
+     * 只有连一个已发布版都没有（数据异常）时才退到最新版，并留下 warn。
+     */
+    const latestPublished = await this.prisma.recipe.findFirst({
+      where: { recipeId: input.recipeId, status: RecipeStatus.PUBLIC },
       orderBy: { version: 'desc' },
       select: { version: true },
     });
+    const latest =
+      latestPublished ??
+      (await this.prisma.recipe.findFirst({
+        where: { recipeId: input.recipeId },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      }));
     if (!latest) {
       throw new BadRequestException('食谱已更新，请刷新制作单');
     }
 
     this.logger.warn(
-      `[SupplementPlan] 制作单锚定的版本不存在，改按最新版解析：recipeId=${input.recipeId} requested=${input.recipeVersion} latest=${latest.version}`,
+      `[SupplementPlan] ${
+        input.sheetId ? `制作单 ${input.sheetId} 锚定的` : '请求的'
+      }食谱版本不存在，改按${latestPublished ? '最新已发布版' : '最新版（没有已发布版）'}解析：recipeId=${input.recipeId} requested=${input.recipeVersion} latest=${latest.version}`,
     );
     return Number(latest.version);
   }

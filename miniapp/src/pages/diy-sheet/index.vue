@@ -1245,12 +1245,13 @@ function handleSupplementStatusRetry() {
  * 带业务食谱编号 + 这只狗 —— 成品页不用再让顾客选一次。
  */
 function goFinishedFood() {
-  if (!recipeId.value) {
+  // 用解析后的编号：入口可能带着已合并的旧编号，成品页按编号取食谱会扑空
+  if (!effectiveRecipeId.value) {
     uni.showToast({ title: '缺少食谱编号', icon: 'none' })
     return
   }
   uni.navigateTo({
-    url: buildFinishedFoodOrderUrl(recipeId.value, dogId.value)
+    url: buildFinishedFoodOrderUrl(effectiveRecipeId.value, dogId.value)
   })
 }
 
@@ -1389,6 +1390,8 @@ async function autoSaveDiySheet(): Promise<string> {
     const res: any = await request({
       url: '/user/diy-sheets',
       method: 'POST',
+      // 自动保存是后台动作，失败不要弹 toast（旧编号/网络抖动时顾客会莫名看到红字）
+      suppressErrorToast: true,
       data: {
         recipeId: effectiveRecipeId.value,
         recipeName: recipe.value.name,
@@ -1942,7 +1945,7 @@ function handleSaveMenu() {
 
 async function handleSave() {
   if (!recipe.value?.id) {
-    uni.showToast({ title: '食谱还没加载好，请稍后重试', icon: 'none' })
+    uni.showToast({ title: '食谱没加载出来，请从食谱列表重新打开', icon: 'none' })
     return
   }
 

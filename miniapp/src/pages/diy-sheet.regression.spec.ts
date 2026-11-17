@@ -850,6 +850,16 @@ describe('DIY制作单 · 2026-10-24 第二轮', () => {
     expect(autoSaveGuardAt).toBeGreaterThan(autoSaveAt)
     // 手动保存也要挡，并给一句人话提示
     expect(page).toContain("if (!recipe.value?.id) {")
-    expect(page).toContain('食谱还没加载好，请稍后重试')
+    expect(page).toContain('食谱没加载出来，请从食谱列表重新打开')
+  })
+
+  it('「订购成品」也用解析后的编号（入口带旧编号时不跳 404 成品页）', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+
+    expect(page).toContain('buildFinishedFoodOrderUrl(effectiveRecipeId.value')
+    expect(page).not.toContain('buildFinishedFoodOrderUrl(recipeId.value')
   })
 })

@@ -57,6 +57,7 @@ import {
   selectLatestPublishedSeriesLifeStageVersions,
   SERIES_LIFE_STAGE_LABELS,
 } from '../../domain/recipe/recipe-series';
+import { resolveMergedRecipeId } from '../../domain/recipe/merged-recipe-id-alias';
 import { resolveDogProfileStage } from '../../domain/dog/dog-stage.service';
 import { splitAllergyKeywords } from '../../domain/dog/allergy-keywords';
 import {
@@ -215,6 +216,22 @@ export class RecipesController {
       select: { id: true },
     });
     return Boolean(visibleRecipe);
+  }
+
+  /** 该食谱「最新已发布」的那一版；没有已发布版（或系列不对外）时返回 null。 */
+  private async findLatestPublishedRecipe(
+    recipeId: string,
+  ): Promise<Recipe | null> {
+    const latestPublished = await this.prisma.recipe.findFirst({
+      where: { recipeId, status: RecipeStatus.PUBLIC },
+      orderBy: { version: 'desc' },
+      select: { version: true },
+    });
+    if (!latestPublished) return null;
+    return this.recipeRepository.findByIdAndVersion(
+      recipeId,
+      latestPublished.version,
+    );
   }
 
   private async hasRestrictedRecipeAccess(
@@ -660,11 +677,13 @@ export class RecipesController {
   }
 
   private async getAccessibleRecipe(
-    id: string,
+    rawId: string,
     shareToken?: string,
     req?: any,
     orderNo?: string | null,
   ): Promise<Recipe | null> {
+    // 合并掉的旧编号（2026-11-17）先换成正式编号
+    const id = resolveMergedRecipeId(rawId);
     /**
      * 交付版本锁定（2026-10-24 · 定制交付页重构）。
      *
@@ -710,6 +729,18 @@ export class RecipesController {
 
     if (await this.isPublicRecipeVisible(recipe)) {
       return recipe;
+    }
+
+    /**
+     * 最新版是草稿时（后台改了配方还没发布），顾客该看到的是「最新已发布的那一版」。
+     *
+     * 详情页原本靠系列解析兜底，补剂接口没有这条路，会直接 404 —— 顾客看到
+     * 「补剂候选暂时获取失败」（2026-11-17 审查发现，线上 44 张制作单受影响）。
+     * 这里统一退回该食谱最新已发布版，所有入口口径一致。
+     */
+    const published = await this.findLatestPublishedRecipe(id);
+    if (published && (await this.isPublicRecipeVisible(published))) {
+      return published;
     }
 
     if (recipe.status === RecipeStatus.PRIVATE_CUSTOM) {
@@ -1303,7 +1334,9 @@ export class RecipesController {
     return null;
   }
 
-  private async loadPublicSeriesRecipes(id: string): Promise<any[]> {
+  private async loadPublicSeriesRecipes(rawId: string): Promise<any[]> {
+    // 合并掉的旧编号（2026-11-17）先换成正式编号，老链接才不会 404
+    const id = resolveMergedRecipeId(rawId);
     const candidates = await this.prisma.recipe.findMany({
       where: this.buildPublicRecipeWhere({
         OR: [{ seriesId: id }, { recipeId: id }],

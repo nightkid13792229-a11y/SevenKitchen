@@ -2162,10 +2162,16 @@ export class SupplementOrderService {
       recipeVersion = latest.version;
     }
 
+    /**
+     * 带上 diySheetId（2026-11-17 审查）：补剂计划里的「已下单冻结就不许换版」
+     * 只有认得出这张制作单才生效。报价 / 下单以前只传编号和版本，冻结单锚定的版本行
+     * 一旦缺失，这里会静默换到最新版重算，跟制作单页面的结论正好相反。
+     */
     const plan = await this.supplementPlanService.resolveForRecipeRequest({
       recipeId: sheet.recipeId,
       recipeVersion,
       totalWeightG,
+      diySheetId: sheet.id,
     });
     const itemMap = new Map(
       plan.items.map((item) => [item.recipeItemId, item]),

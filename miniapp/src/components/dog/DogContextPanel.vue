@@ -58,7 +58,7 @@
       <view :class="panel ? 'dog-panel' : 'dog-plain'">
         <scroll-view
           scroll-x
-          scroll-with-animation
+          :scroll-with-animation="scrollWithAnimation"
           class="dog-scroll"
           :scroll-into-view="scrollAnchor"
         >
@@ -106,7 +106,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 
 /**
@@ -168,9 +168,35 @@ const selectedDog = computed(
   () => props.dogs.find((dog) => dog.id === props.selectedId) || null,
 )
 
-/** 狗多时把选中的那只滑到可见位置（成品页原来不会，选了看不见） */
-const scrollAnchor = computed(() =>
-  props.selectedId ? `dog-chip-${props.selectedId}` : '',
+/**
+ * 狗多时把选中的那只滑到可见位置（成品页原来不会，选了看不见）。
+ *
+ * 2026-11-18：改成"先清空、等这一帧画完再赋值"。
+ * 原因是两种时机靠一个计算值覆盖不了：
+ *   ① 进页面时面板还在骨架态（scroll-view 根本不存在），选中项却已经在加载途中定好了，
+ *      scroll-view 一创建属性就已经是目标值 —— 有些基础库只在"值发生变化"时才滚动；
+ *   ② 后面用户自己点狗，值确实会变，但不需要动画地"整条飞过去"。
+ * 所以：列表真正可滚动之后（state 变 ready）再给一次变化，首屏定位不做动画。
+ */
+const scrollAnchor = ref('')
+const scrollWithAnimation = ref(false)
+let anchorPositioned = false
+
+watch(
+  () => [props.state === 'ready' ? props.selectedId : '', props.dogs.length] as const,
+  ([selectedId]) => {
+    const target = selectedId ? `dog-chip-${selectedId}` : ''
+    scrollAnchor.value = ''
+    if (!target) return
+    // flush 之后再赋值：此时 scroll-view 与胶囊已经渲染出来，这一下才算"值变化"
+    nextTick(() => {
+      scrollAnchor.value = target
+      // 首屏定位不动画（34 只狗时 3900px 的滑行会像闪屏），之后的切换才滑
+      scrollWithAnimation.value = anchorPositioned
+      anchorPositioned = true
+    })
+  },
+  { immediate: true },
 )
 
 const showFacts = computed(() => props.facts === 'full' && Boolean(selectedDog.value))

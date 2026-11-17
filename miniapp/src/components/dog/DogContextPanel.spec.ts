@@ -101,8 +101,15 @@ describe('DogContextPanel · 狗狗选择面板', () => {
 
   it('★ 选中项自动滑进可视区（狗多时也能看见自己选的）', () => {
     expect(template).toContain('scroll-into-view')
-    expect(source).toContain('dog-chip-${props.selectedId}')
-    expect(source).toContain('scroll-with-animation')
+    expect(template).toContain(':scroll-with-animation="scrollWithAnimation"')
+    expect(source).toContain('dog-chip-${selectedId}')
+    // 2026-11-18：骨架态里没有 scroll-view，首屏的选中项却在列表出现前就定好了 ——
+    // 只给一个计算值不够（部分基础库只在"值变化"时滚动），要在可滚动之后再补一次赋值
+    expect(source).toContain('const scrollAnchor = ref(')
+    expect(source).toContain('nextTick(')
+    expect(source).toContain("props.state === 'ready'")
+    // 首屏定位不动画（几十只狗时 3900px 的滑行像闪屏），用户自己点击才滑
+    expect(source).toContain('scrollWithAnimation.value = anchorPositioned')
   })
 
   it('★ 六个格子是读数不是按钮：没有底色、没有圆角、用竖线分隔', () => {

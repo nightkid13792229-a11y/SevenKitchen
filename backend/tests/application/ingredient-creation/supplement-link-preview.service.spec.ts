@@ -157,3 +157,61 @@ describe('搜候选', () => {
     );
   });
 });
+
+describe('读营养标签（搜索通道）', () => {
+  const CONTENT = `# Thorne, 双甘氨酸铁
+¥107.89
+## Supplement facts
+
+Serving Size: One Capsule
+One Capsule Contains | %DV
+Iron (as Ferrochel® Ferrous Bisglycinate Chelate) | 25 mg | 139%
+
+### 有人问：糖尿病人能吃吗
+
+能。`;
+
+  it('按 slug 反查同一件商品，截出标签段，砍掉后面的评价问答', async () => {
+    const { service, fetchMock } = build(() => ({
+      results: [
+        { url: 'https://www.iherb.com/pr/other/999', summary: '无关页面' },
+        {
+          url: 'https://www.iherb.com/pr/thorne-iron-bisglycinate-60-capsules/52838',
+          summary: CONTENT
+        }
+      ]
+    }));
+
+    const result = await service.readLabelText(
+      'https://www.iherb.com/pr/thorne-iron-bisglycinate-60-capsules/52838'
+    );
+
+    expect(result.labelText).toContain('Ferrous Bisglycinate Chelate');
+    expect(result.labelText).toContain('25 mg');
+    expect(result.labelText).not.toContain('糖尿病人');
+    expect(result.matchedUrl).toContain('/52838');
+    // 走的是 search 且要求带正文
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(fetchMock.mock.calls[0][0]).toContain('/tools/search');
+    expect(body.need_content).toBe(true);
+    expect(String(body.query)).toContain('thorne-iron-bisglycinate-60-capsules');
+  });
+
+  it('搜索结果里没有标签段 → 返回 null，不编', async () => {
+    const { service } = build(() => ({
+      results: [{ url: 'https://www.iherb.com/pr/x/52838', summary: '只有价格和简介' }]
+    }));
+
+    const result = await service.readLabelText('https://www.iherb.com/pr/x/52838');
+
+    expect(result.labelText).toBeNull();
+  });
+
+  it('非白名单域名直接拒绝（和读页面同一条规则）', async () => {
+    const { service } = build(() => ({ results: [] }));
+
+    await expect(service.readLabelText('https://example.com/pr/x/1')).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+  });
+});

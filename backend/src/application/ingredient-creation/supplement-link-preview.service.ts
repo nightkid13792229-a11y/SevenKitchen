@@ -282,6 +282,103 @@ export class SupplementLinkPreviewService {
   }
 
   /**
+   * 营养标签正文（Supplement facts / 营养成分表）。
+   *
+   * 为什么不能只靠 `preview()`：抓取通道（/tools/fetch）回的是**抽过正文**的版本，
+   * iHerb 的标签表根本不在里面（2026-11-18 实测：3102 字里只有价格、每次用量，
+   * nutrients 全空，也没有任何图片链接可拿去 OCR）。
+   * 而搜索通道（/tools/search + need_content）回的是搜索引擎缓存的整页正文，
+   * 标签表就在里面。所以这里按商品 slug 反查同一件商品，取它的标签那一段。
+   *
+   * 读不到就返回 null：有的商品的标签只做在图片里，这时候不能编。
+   */
+  async readLabelText(
+    url: string
+  ): Promise<{ productUrl: string; matchedUrl: string | null; labelText: string | null }> {
+    const target = this.assertAllowed(url);
+    const identity = target.pathname.match(/\/pr\/([^/]+)\/(\d+)/);
+    const slug = identity?.[1] ?? '';
+    const productId = identity?.[2] ?? '';
+    if (!slug && !productId) {
+      return { productUrl: target.toString(), matchedUrl: null, labelText: null };
+    }
+
+    const runtime = await this.loadRuntime();
+    const queries = [
+      slug ? `site:iherb.com ${slug}` : `site:iherb.com ${productId}`,
+      // 第二次换成"编号 + iherb"：slug 太长时搜索引擎会飘到别的站
+      `iherb ${productId} supplement facts`
+    ];
+
+    for (const query of queries) {
+      const results = await this.searchWithContent(runtime, query);
+      const sameProduct = results.filter((item) =>
+        productId ? item.url.includes(`/${productId}`) : true
+      );
+      for (const item of sameProduct.length > 0 ? sameProduct : results) {
+        const section = this.sectionFromContent(item.summary);
+        if (section) {
+          return {
+            productUrl: target.toString(),
+            matchedUrl: item.url,
+            labelText: section
+          };
+        }
+      }
+    }
+
+    return { productUrl: target.toString(), matchedUrl: null, labelText: null };
+  }
+
+  /** 搜索通道：只要「链接 + 整页正文」，标签段从正文里截。 */
+  private async searchWithContent(
+    runtime: DeepSeekRuntimeConfig,
+    query: string
+  ): Promise<{ url: string; summary: string }[]> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${runtime.baseUrl.replace(/\/+$/, '')}/tools/search`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${runtime.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query, count: 6, need_content: true })
+      });
+      if (!response.ok) {
+        return [];
+      }
+      const payload = (await response.json()) as {
+        results?: { url?: unknown; summary?: unknown }[];
+      };
+      return (Array.isArray(payload.results) ? payload.results : [])
+        .filter((item) => typeof item.url === 'string' && item.url.includes('iherb.com/'))
+        .map((item) => ({
+          url: String(item.url),
+          summary: typeof item.summary === 'string' ? item.summary : ''
+        }));
+    } catch {
+      return [];
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** 从整页正文里截标签段；截到下一个 `###` 小标题为止，别把评价问答也带回去。 */
+  private sectionFromContent(content: string): string | null {
+    const match = /(supplement\s*facts|营养成分)/i.exec(content);
+    if (!match || match.index === undefined) {
+      return null;
+    }
+    const rest = content.slice(match.index);
+    const end = rest.search(/\n#{1,3}\s/);
+    const section = (end > 0 ? rest.slice(0, end) : rest).trim();
+    return section.length > 20 ? section.slice(0, LABEL_TEXT_LIMIT) : null;
+  }
+
+  /**
    * 按关键词去 iHerb 搜一圈，把候选捞出来。
    *
    * 只捞「链接 + 名字 + 标价」——成分表要逐个商品页去读（`preview`），

@@ -32,6 +32,11 @@ function context(overrides: Partial<ToolContext> = {}): ToolContext {
       searchCandidates: jest.fn(async () => [
         { url: 'https://www.iherb.com/pr/x/1', name: 'NOW Zinc', priceUsd: null, pricePerServingUsd: null }
       ]),
+      readLabelText: jest.fn(async (url: string) => ({
+        productUrl: url,
+        matchedUrl: 'https://www.iherb.com/pr/x/1',
+        labelText: 'Supplement facts\nServing Size: One Capsule\nIron (as Ferrous Bisglycinate) | 25 mg'
+      })),
       preview: jest.fn(async (url: string) => ({
         productUrl: url,
         pagePriceCny: 92.79,
@@ -66,6 +71,7 @@ describe('工具箱', () => {
       'ask_user',
       'fetch_product',
       'lookup_feed_catalog',
+      'read_product_label',
       'search_products',
       'write_draft'
     ]);
@@ -130,6 +136,41 @@ describe('执行工具', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data).toEqual(expect.objectContaining({ pagePriceCny: 92.79 }));
+    }
+  });
+
+  it('读营养标签：把标签正文带回来（页面抽取漏掉表的时候用）', async () => {
+    const ctx = context();
+    const result = await executeSupplementTool(
+      'read_product_label',
+      { url: 'https://www.iherb.com/pr/x/1' },
+      ctx
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(JSON.stringify(result.data)).toContain('25 mg');
+    }
+  });
+
+  it('标签读不到时给的是"读不到"的说明，不是编一个数', async () => {
+    const ctx = context({
+      preview: {
+        ...context().preview,
+        readLabelText: jest.fn(async () => ({
+          productUrl: 'https://www.iherb.com/pr/x/1',
+          matchedUrl: null,
+          labelText: null
+        }))
+      } as unknown as ToolContext['preview']
+    });
+    const result = await executeSupplementTool(
+      'read_product_label',
+      { url: 'https://www.iherb.com/pr/x/1' },
+      ctx
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(JSON.stringify(result.data)).toContain('读不到');
     }
   });
 

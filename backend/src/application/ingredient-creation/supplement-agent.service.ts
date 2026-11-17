@@ -47,12 +47,13 @@ export interface SupplementAgentResult {
   question: { question: string; options: string[] } | null;
 }
 
-const MAX_STEPS = 8;
-const MAX_CALLS_PER_STEP = 5;
-const MAX_TOOL_CALLS_PER_RUN = 14;
+const MAX_STEPS = 12;
+const MAX_CALLS_PER_STEP = 6;
+const MAX_TOOL_CALLS_PER_RUN = 30;
 const TIMEOUT_MS = 25_000;
 /** 一次对话的总预算：超了就收口，不让页面端等到超时 */
-const TOTAL_BUDGET_MS = 120_000;
+/** 后台把这轮放到 30 次工具调用，总预算跟着放宽；仍要小于页面端 190 秒的超时。 */
+const TOTAL_BUDGET_MS = 170_000;
 const TOOL_RESULT_LIMIT = 8000;
 /** 知识库一页原文比商品页大得多，单独给一个上限，否则引文会被截断。 */
 const KNOWLEDGE_RESULT_LIMIT = 20_000;
@@ -87,7 +88,11 @@ const SYSTEM_PROMPT = `你是宠物鲜食后台的补剂助手，帮管理员把
 - kb_read：按页读原文（引用从这里照抄）
 - kb_catalog：列文档 / 看某本文档的目录
 - search_products：搜 iHerb 商品
-- fetch_product：读商品页，拿标签字段和人民币标价
+- fetch_product：读商品页，拿价格和能解析出来的字段
+- read_product_label：读商品页的**营养标签正文**（每份几粒、每份各营养素）
+
+商品页的正文抽取经常漏掉标签表（标签在图里）。fetch_product 的 nutrients 是空的时候，
+用 read_product_label 再读一次；**仍然读不到就如实说，别拿商品标题里的“25 mg”凑**。
 - lookup_feed_catalog：查《饲料添加剂品种目录》的规范写法与来源说明
 - write_draft：把字段写进档案草稿
 - ask_user：需要人拍板时提问
@@ -97,7 +102,6 @@ const SYSTEM_PROMPT = `你是宠物鲜食后台的补剂助手，帮管理员把
 - **目录只管填表**：lookup_feed_catalog 只用来填档案里的「规范名 / 来源说明」两格。
   它不是选品依据——目录里有没有这个名字，都不能作为"这款能不能用、好不好"的结论。
   查不到规范名就写"标签名字待人工确认"，不要因此把商品淘汰，也不要编一个近似名。
-- **我们只收人用零售装**（分装零售）。饲料级、兽用、无零售包装的买不了、也上不了架。
 
 ## 其他规矩
 

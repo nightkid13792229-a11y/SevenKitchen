@@ -51,6 +51,11 @@ function service() {
     searchCandidates: jest.fn(async () => [
       { url: 'https://www.iherb.com/pr/x/1', name: 'NOW Zinc', priceUsd: null, pricePerServingUsd: null }
     ]),
+    readLabelText: jest.fn(async (url: string) => ({
+      productUrl: url,
+      matchedUrl: url,
+      labelText: 'Supplement facts\nServing Size: One Capsule\nIron (as Ferrous Bisglycinate) | 25 mg'
+    })),
     preview: jest.fn(async (url: string) => {
       if (!url.includes('iherb.com')) {
         throw new Error('这个网站还不支持自动读');
@@ -135,6 +140,8 @@ describe('工具循环', () => {
     expect(prompt).not.toContain('判断顺序');
     expect(prompt).not.toContain('螯合形态是否一定优于离子型');
     expect(prompt).not.toContain('哪几类补剂允许破例');
+    // 业务边界也按老板 2026-11-18 的话删掉了。
+    expect(prompt).not.toContain('只收人用零售装');
   });
 
   it('调知识库 → 原文能回到模型手里', async () => {
@@ -241,7 +248,7 @@ describe('工具循环', () => {
 
     const result = await agent.run(base);
 
-    expect(result.toolCalls.length).toBeLessThanOrEqual(14);
+    expect(result.toolCalls.length).toBeLessThanOrEqual(30);
     expect(result.reply).toContain('停下');
   });
 

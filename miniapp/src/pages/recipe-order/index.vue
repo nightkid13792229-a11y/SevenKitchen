@@ -639,6 +639,15 @@ interface OverheadCostDetail {
 type CookingMethod = 'RAW' | 'COOKED'
 
 const recipeId = ref('')
+/**
+ * 2026-11-17：私密/定制食谱的分享凭证。
+ *
+ * 凭证只从 URL 传入，不落本地存储 —— 它代表"这一次分享的访问权"，
+ * 混进全局缓存会让后续打开别的私密食谱也误带旧凭证。
+ * 本页的 GET /recipes/:id 必须原样带回后端，否则私密食谱一律是
+ * 「Recipe not found」，顾客看到的是"页面加载失败"。
+ */
+const shareToken = ref('')
 const selectedLifeStage = ref('')
 const manualLifeStage = ref('')
 const versionSheetVisible = ref(false)
@@ -1130,6 +1139,7 @@ onMounted(async () => {
   loadProductExplanationMediaConfig()
 
   recipeId.value = currentPage.options?.recipeId || ''
+  shareToken.value = currentPage.options?.shareToken || ''
   selectedLifeStage.value = currentPage.options?.lifeStage || ''
   manualLifeStage.value = currentPage.options?.lifeStage || ''
   previousLifeStage.value = currentPage.options?.previousLifeStage || ''
@@ -1274,6 +1284,10 @@ async function loadRecipeDetail() {
     data.manual = manualLifeStage.value ? 'true' : 'false'
     if (selectedDogId.value) {
       data.dogId = selectedDogId.value
+    }
+    // 私密/定制食谱：分享凭证跟着每一次详情请求走，后端据此放行
+    if (shareToken.value) {
+      data.shareToken = shareToken.value
     }
     const res = await request({
       url: `/recipes/${recipeId.value}`,

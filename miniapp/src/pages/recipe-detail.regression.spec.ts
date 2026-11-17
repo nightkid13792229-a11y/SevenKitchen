@@ -578,4 +578,20 @@ describe('recipe detail · pinRecipe 锁版入口（2026-11-15）', () => {
     expect(source).toContain('if (pinRecipe.value) {')
     expect(source).toContain('pinRecipe.value && !selectedDogId.value')
   })
+
+  it('passes the share token from the detail page into the finished-food order route', () => {
+    /**
+     * 2026-11-17：私密/定制食谱的分享凭证必须跟到「订购成品」页。
+     * 只在详情页有凭证时顾客能看，一点订购就变成"查无此食谱"。
+     */
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const orderRoute = source.match(/function buildOrderRoute\(\): string \{[\s\S]*?\n}\n/)?.[0] || ''
+    expect(orderRoute).toContain('shareToken.value')
+    expect(orderRoute).toContain('encodeURIComponent(shareToken.value)')
+    expect(orderRoute.indexOf('shareToken'))
+      .toBeLessThan(orderRoute.indexOf('/pages/recipe-order/index'))
+  })
 })

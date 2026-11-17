@@ -1265,6 +1265,16 @@ function buildOrderRoute(): string {
   if (selectedDogId.value) {
     query.push(`dogId=${encodeURIComponent(selectedDogId.value)}`)
   }
+  /**
+   * 2026-11-17：私密/定制食谱的分享凭证必须跟到订购页。
+   *
+   * 凭证只在前端 URL 里流转，后端按它放行私密食谱；少带一次，
+   * 订购页的 GET /recipes/:id 就会被判定「查无此食谱」——
+   * 顾客看到的是"页面加载失败"，而不是权限提示。
+   */
+  if (shareToken.value) {
+    query.push(`shareToken=${encodeURIComponent(shareToken.value)}`)
+  }
   if (selectedManualLifeStage.value) {
     query.push(`lifeStage=${encodeURIComponent(selectedManualLifeStage.value)}`)
     query.push('manual=true')

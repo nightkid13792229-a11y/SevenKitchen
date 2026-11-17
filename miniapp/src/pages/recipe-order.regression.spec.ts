@@ -619,4 +619,16 @@ describe('recipe-order phase one UI contract', () => {
       submit.indexOf('/pages/checkout/index'),
     )
   });
+
+  it('carries the private-recipe share token into the order-page detail request', () => {
+    // 2026-11-17：私密/定制食谱只有带凭证才能被顾客打开。
+    // 凭证在详情页 → 订购页这条链上丢过一次，表现是"页面加载失败"。
+    const loadRecipeDetailSource =
+      source.match(/async function loadRecipeDetail\(\) \{[\s\S]*?\n}\n/)?.[0] || ''
+    expect(source).toContain("const shareToken = ref('')")
+    expect(source).toContain("shareToken.value = currentPage.options?.shareToken || ''")
+    expect(loadRecipeDetailSource).toContain('data.shareToken = shareToken.value')
+    expect(loadRecipeDetailSource.indexOf('if (shareToken.value) {'))
+      .toBeLessThan(loadRecipeDetailSource.indexOf('url: `/recipes/${recipeId.value}`'))
+  });
 });

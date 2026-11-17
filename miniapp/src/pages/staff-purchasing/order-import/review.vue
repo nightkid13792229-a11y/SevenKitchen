@@ -3043,7 +3043,7 @@ function emptySummary() {
 }
 
 .manual-item-meta {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #8a8574;
   line-height: 1.45;
   word-break: break-all;
@@ -3064,7 +3064,7 @@ function emptySummary() {
 }
 
 .manual-item-calc {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #8a8574;
   white-space: nowrap;
 }
@@ -3150,7 +3150,7 @@ function emptySummary() {
 .manual-reason {
   display: block;
   text-align: center;
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: #b4453a;
   line-height: 1.4;
   margin-bottom: 8rpx;
@@ -3179,7 +3179,7 @@ function emptySummary() {
 .manual-helper {
   display: block;
   text-align: center;
-  font-size: 20rpx;
+  font-size: 24rpx;
   color: #8a8574;
   line-height: 1.45;
   margin-top: 8rpx;

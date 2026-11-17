@@ -36,9 +36,10 @@ describe('recipe diy regressions', () => {
     // 来源提示条已按 2026-10-24 要求拿掉；版本锁仍靠 orderId
     expect(source).not.toContain('custom-source-banner')
     expect(source).not.toContain('来自你的定制食谱')
-    // 选中的爱犬排第一位（列表顺序仍由本页决定；滚到选中项在共享组件里）
-    expect(source).toContain('const orderedDogs = computed')
-    expect(source).toContain(':dogs="orderedDogs"')
+    // 2026-11-18：不再把选中的狗挪到第一位（手机微信重排后选中边框不重画，
+    // 看起来像"选来选去还是默认那只"）；滚到选中项由共享组件负责。
+    expect(source).not.toContain('const orderedDogs = computed')
+    expect(source).toContain(':dogs="dogs"')
   })
 
   it('renders the shared version bar and lets the customer switch versions', () => {
@@ -168,7 +169,7 @@ describe('recipe diy regressions', () => {
 
     // 2026-11-07：狗狗选择器与成品订购页共用同一个组件（不再是两页各写一份）
     expect(templateSource).toContain('<DogContextPanel');
-    expect(templateSource).toContain(':dogs="orderedDogs"');
+    expect(templateSource).toContain(':dogs="dogs"');
     expect(templateSource).toContain(':selected-id="selectedDogId"');
     expect(templateSource).toContain(':state="dogPanelState"');
     expect(templateSource).toContain(':daily-intake-g="displayDailyIntakeG"');

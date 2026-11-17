@@ -58,7 +58,7 @@
       <!-- 选狗 + 六项读数：三页共用一个组件（2026-11-07） -->
       <view class="dog-feeding-content">
         <DogContextPanel
-          :dogs="orderedDogs"
+          :dogs="dogs"
           :selected-id="selectedDogId"
           :state="dogPanelState"
           :daily-intake-g="displayDailyIntakeG"
@@ -314,18 +314,17 @@ const {
 } = useDogSelection<Dog>()
 
 /**
- * 选中的爱犬排第一位（2026-10-24 老板定）。
+ * 狗狗列表**不再重排**（2026-11-18 老板定，改掉 2026-10-24 的"选中排第一位"）。
  *
- * 横向选择器里狗一多，选中的那只可能滚在屏幕外；
- * 把它放到最前面，再配合 scroll-into-view，选中后一定在最左边。
+ * 2026-10-24 曾把选中的那只挪到最前面，好让它在横向选择器里一定看得见。
+ * 但老板 2026-11-17 在手机上发现：点另一只狗后，列表重排了、下面的
+ * 年龄/体重/饭量、生命阶段条也都换成新狗了，**只有那颗胶囊的"选中"边框没重画**，
+ * 边框还留在进页面时默认那只狗身上 —— 看起来就像"不管选哪只，选中的还是默认那只"。
+ *
+ * 现在顺序固定用接口原顺序，选中项靠共享组件里的 scroll-into-view 滑到可见位置：
+ * "选中那只一定看得见"的效果不变，但不再靠重排，也就没有这个重绘问题。
+ * 成品订购页一直用的就是原顺序，两页因此也一致了。
  */
-const orderedDogs = computed(() => {
-  const selectedId = selectedDogId.value
-  if (!selectedId) return dogs.value
-  const selected = dogs.value.find((dog) => dog.id === selectedId)
-  if (!selected) return dogs.value
-  return [selected, ...dogs.value.filter((dog) => dog.id !== selected.id)]
-})
 
 // 列表加载失败与「没有档案」是两件事：失败时若显示"暂无档案"会诱导重复建档
 const dogsLoadFailed = ref(false)

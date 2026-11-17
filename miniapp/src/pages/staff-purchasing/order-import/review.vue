@@ -1,11 +1,11 @@
 <template>
-  <view class="review-page">
+  <view class="review-page" :class="{ 'manual-review': manualMode }">
     <view v-if="loading" class="loading">加载中...</view>
 
     <template v-else-if="loaded && imports.length === 0">
       <view class="empty">
-        <text class="empty-title">还没有识别记录</text>
-        <text class="empty-desc">{{ orderShotHint }}</text>
+        <text class="empty-title">{{ manualMode ? '这笔手填记录没找到' : '还没有识别记录' }}</text>
+        <text class="empty-desc">{{ manualMode ? '可能已经保存或放弃，回补货页看看。' : orderShotHint }}</text>
         <button v-if="pageMode !== 'replenishment'" class="primary-btn empty-btn" :loading="importing" @tap="pickMore">
           选择订单截图
         </button>
@@ -16,6 +16,118 @@
       </view>
     </template>
 
+    <!-- 手填：只回答三个问题（2026-11-18） -->
+    <template v-else-if="manualMode">
+      <view v-if="activeImport" class="manual-page">
+        <view class="manual-card">
+          <view class="manual-row" @tap="changeChannel">
+            <text class="manual-label">在哪买的</text>
+            <view class="manual-value">
+              <text v-if="activeImport.channel" class="manual-tag">{{ activeImport.channel }}</text>
+              <text v-else class="manual-missing">选一个</text>
+              <text class="manual-chev">›</text>
+            </view>
+          </view>
+          <picker
+            mode="date"
+            :value="manualOrderDate"
+            :end="manualToday"
+            @change="onManualDateChange"
+          >
+            <view class="manual-row">
+              <text class="manual-label">哪天买的</text>
+              <view class="manual-value">
+                <text>{{ manualOrderDateLabel }}</text>
+                <text class="manual-chev">›</text>
+              </view>
+            </view>
+          </picker>
+        </view>
+
+        <view class="manual-card">
+          <view class="manual-card-head">
+            <text class="manual-card-title">买了什么</text>
+            <text class="manual-card-count">{{ manualLines.length }} 项</text>
+          </view>
+
+          <view v-if="manualLines.length === 0" class="manual-empty">
+            <text class="manual-empty-title">还没有商品</text>
+            <text class="manual-empty-hint">{{ activeImport.channel ? '点下面加第一项' : '先选在哪买的，再加第一项' }}</text>
+          </view>
+
+          <view
+            v-for="line in manualLines"
+            :key="line.id"
+            class="manual-item"
+            @tap="openEdit(line)"
+          >
+            <view class="manual-item-main">
+              <text class="manual-item-name">{{ line.rawName }}</text>
+              <text class="manual-item-meta">{{ manualLineMeta(line) }}</text>
+            </view>
+            <view class="manual-item-right">
+              <text class="manual-item-amount">¥{{ money(line.lineTotal) }}</text>
+              <text class="manual-item-calc">
+                {{ formatQuantity(line.qty) }}{{ line.unit || '' }} × ¥{{ money(line.unitPrice) }}
+              </text>
+            </view>
+          </view>
+
+          <view class="manual-add" @tap="manualAddLine">
+            <text>{{ manualLines.length === 0 ? '＋ 加第一项' : '＋ 再加一项' }}</text>
+          </view>
+        </view>
+
+        <view class="manual-card">
+          <view class="manual-card-head">
+            <text class="manual-card-title">花了多少</text>
+            <text class="manual-card-edit" @tap="openFeeEdit">填 / 改 ›</text>
+          </view>
+          <view class="manual-money-row">
+            <text class="manual-money-k">商品合计</text>
+            <text class="manual-money-v">¥{{ money(manualGoodsTotal) }}</text>
+          </view>
+          <view class="manual-money-row" @tap="openFeeEdit">
+            <text class="manual-money-k">实付</text>
+            <text v-if="manualPaid === null" class="manual-money-v missing">还没填 ›</text>
+            <text v-else class="manual-money-v">¥{{ money(manualPaid) }}</text>
+          </view>
+          <view class="manual-money-row" @tap="openFeeEdit">
+            <text class="manual-money-k">运费 / 包装费</text>
+            <text class="manual-money-v muted">{{ manualFeeText }}</text>
+          </view>
+          <view class="manual-money-row total">
+            <text class="manual-money-k">可报销</text>
+            <text v-if="manualReimbursement === null" class="manual-money-v muted">—</text>
+            <text v-else class="manual-money-v reimburse">¥{{ money(manualReimbursement) }}</text>
+          </view>
+        </view>
+
+        <text class="manual-discard" @tap="discardActive">放弃这次填写</text>
+      </view>
+
+      <view v-else class="empty">
+        <text class="empty-title">这笔手填记录没找到</text>
+        <text class="empty-desc">可能已经保存或放弃，回补货页看看。</text>
+        <button class="primary-btn empty-btn" @tap="goBack">返回补货</button>
+      </view>
+
+      <view v-if="activeImport" class="manual-footer">
+        <text v-if="manualReasonText" class="manual-reason">{{ manualReasonText }}</text>
+        <button
+          class="manual-save"
+          :class="{ disabled: !manualCanSave || submitting }"
+          :disabled="!manualCanSave || submitting"
+          :loading="submitting"
+          @tap="submit"
+        >
+          保存补货记录
+        </button>
+        <text class="manual-helper">保存后先进「在途」，到货点「已到货」才进库存。</text>
+      </view>
+    </template>
+
+    <!-- AI 核对（保持原样） -->
     <template v-else>
       <view class="tabs-row">
         <scroll-view scroll-x class="tabs" :show-scrollbar="false">
@@ -219,7 +331,13 @@
         <view class="sheet sheet-inner">
           <view class="sheet-grab"></view>
 
-          <view class="sheet-head">
+          <view v-if="manualMode" class="sheet-head manual-sheet-head">
+            <text class="sheet-title">{{ editing?.isNew ? '加一项' : '改这一项' }}</text>
+            <text class="sheet-sub">
+              {{ editing?.isNew ? '先选商品，再填数量和单价' : '改完点保存' }}
+            </text>
+          </view>
+          <view v-else class="sheet-head">
             <input
               v-model="editing.rawName"
               class="name-input"
@@ -262,14 +380,14 @@
             商品规格：{{ editing.skuPackagingText }}
           </text>
 
-          <view v-if="editingSpecWarning" class="spec-warn-box">
+          <view v-if="!manualMode && editingSpecWarning" class="spec-warn-box">
             <text class="spec-warn-text">{{ editingSpecWarning }}</text>
             <text class="spec-warn-action" @tap="goNewSku">新建这个规格 ›</text>
           </view>
-          <view v-if="editingUnitWarning" class="spec-warn-box">
+          <view v-if="!manualMode && editingUnitWarning" class="spec-warn-box">
             <text class="spec-warn-text">{{ editingUnitWarning }}</text>
           </view>
-          <text v-if="renameHint" class="rename-hint">{{ renameHint }}</text>
+          <text v-if="!manualMode && renameHint" class="rename-hint">{{ renameHint }}</text>
 
           <view class="amount-card">
             <view class="amount-grid">
@@ -377,7 +495,9 @@
     <view v-if="feeEditing" class="sheet-mask" @tap="closeFeeEdit">
       <view class="sheet" @tap.stop>
         <text class="sheet-title">实付 / 运费 / 包装费</text>
-        <text class="sheet-sub">{{ feeOriginText }}。可直接改，留空算没读到。</text>
+        <text class="sheet-sub">
+          {{ manualMode ? '实付按实际支付填；运费/包装费没有就留空。' : feeOriginText + '。可直接改，留空算没读到。' }}
+        </text>
 
         <view class="field">
           <text class="field-label">实付</text>
@@ -424,7 +544,9 @@
     <view v-if="channelPicking" class="sheet-mask" @tap="closeChannelPicker">
       <view class="sheet" @tap.stop>
         <text class="sheet-title">这笔是在哪买的？</text>
-        <text class="sheet-sub">渠道决定自动匹配哪一家的采购商品；清单由管理员在后台维护。</text>
+        <text class="sheet-sub">
+          {{ manualMode ? '选完就继续加商品；清单由管理员在后台维护。' : '渠道决定自动匹配哪一家的采购商品；清单由管理员在后台维护。' }}
+        </text>
         <scroll-view scroll-y class="picker-list">
           <view
             v-for="channel in channelOptions"
@@ -453,7 +575,7 @@
         <!-- 正在给哪一行选：截图里那串字 + 截图规格/金额，免得弹出来就忘了在配什么 -->
         <view class="picker-context">
           <view class="picker-context-head">
-            <text class="picker-context-label">正在匹配</text>
+            <text class="picker-context-label">{{ manualMode ? '正在给这一项选商品' : '正在匹配' }}</text>
             <text class="picker-context-name">{{ editing?.rawName || '这一行' }}</text>
           </view>
           <text v-if="pickerContextMeta" class="picker-context-meta">{{ pickerContextMeta }}</text>
@@ -466,7 +588,7 @@
           <input
             v-model="skuSearch"
             class="picker-search"
-            placeholder="也可以直接搜商品名"
+            placeholder="搜原料或商品名"
             confirm-type="search"
           />
           <text v-if="skuSearch" class="picker-search-clear" @tap="skuSearch = ''">清空</text>
@@ -474,6 +596,9 @@
 
         <!-- 搜了字：平铺结果，一屏看完 -->
         <scroll-view v-if="skuSearch" scroll-y class="picker-list">
+          <view v-if="searchSkuLoading" class="picker-row">
+            <text class="picker-sub">正在加载商品…</text>
+          </view>
           <view
             v-for="option in filteredSkuOptions"
             :key="option.id"
@@ -495,8 +620,35 @@
             <text v-if="option.id === editing?.procurementSkuId" class="picker-current">当前</text>
             <text v-else class="picker-go">选择</text>
           </view>
-          <view v-if="filteredSkuOptions.length === 0" class="picker-row">
-            <text class="picker-sub">没搜到这个商品</text>
+          <view
+            v-for="ingredient in searchEmptyIngredients"
+            :key="'empty-' + ingredient.ingredientId"
+            class="picker-row"
+          >
+            <view class="picker-main">
+              <text class="picker-name">{{ ingredient.ingredientName }}</text>
+              <text class="picker-sub">这个渠道下还没有商品</text>
+            </view>
+            <text
+              class="picker-go"
+              @tap.stop="goNewSkuForIngredient(ingredient.ingredientId)"
+            >新建</text>
+          </view>
+          <view v-if="searchNoResult" class="picker-row">
+            <text class="picker-sub">
+              没找到「{{ skuSearch }}」；原料库里没有这个原料，或者商品没加载出来，检查网络后再试。
+            </text>
+          </view>
+          <view
+            v-if="pickerIngredientId && !searchNoResult && !searchSkuLoading"
+            class="picker-create"
+            @tap="goNewSku"
+          >
+            <view class="picker-create-main">
+              <text class="picker-create-plus">+</text>
+              <text class="picker-create-name">新建采购商品</text>
+            </view>
+            <text class="picker-create-go">去新建 ›</text>
           </view>
         </scroll-view>
 
@@ -512,8 +664,8 @@
               @tap="selectPickerIngredient(ingredient.ingredientId)"
             >
               <text class="cascade-name">{{ ingredient.ingredientName }}</text>
-              <text class="cascade-count" :class="{ zero: ingredient.skus.length === 0 }">
-                {{ ingredient.skus.length }}
+              <text class="cascade-count" :class="{ zero: ingredient.loaded && ingredient.skus.length === 0 }">
+                {{ ingredient.loaded ? ingredient.skus.length : '…' }}
               </text>
             </view>
           </scroll-view>
@@ -522,40 +674,45 @@
             <view v-if="!pickerIngredientId" class="cascade-empty">
               <text>左边选一个原料</text>
             </view>
-            <view
-              v-for="option in pickerSkuOptions"
-              :key="option.id"
-              class="picker-row"
-              @tap="chooseSku(option)"
-            >
-              <view class="picker-main">
-                <text class="picker-name">
-                  {{ option.name }}
-                  <text v-if="extraSpecOf(option.name, option.productModel)" class="picker-model">
-                    {{ extraSpecOf(option.name, option.productModel) }}
+            <view v-else-if="pickerIngredientLoading" class="cascade-empty">
+              <text>正在加载商品…</text>
+            </view>
+            <template v-else>
+              <view
+                v-for="option in pickerSkuOptions"
+                :key="option.id"
+                class="picker-row"
+                @tap="chooseSku(option)"
+              >
+                <view class="picker-main">
+                  <text class="picker-name">
+                    {{ option.name }}
+                    <text v-if="extraSpecOf(option.name, option.productModel)" class="picker-model">
+                      {{ extraSpecOf(option.name, option.productModel) }}
+                    </text>
                   </text>
-                </text>
-                <text v-if="option.packagingText" class="picker-packaging">
-                  {{ option.packagingText }}
-                </text>
-                <text v-if="option.purchaseChannel" class="picker-sub">{{ option.purchaseChannel }}</text>
+                  <text v-if="option.packagingText" class="picker-packaging">
+                    {{ option.packagingText }}
+                  </text>
+                  <text v-if="option.purchaseChannel" class="picker-sub">{{ option.purchaseChannel }}</text>
+                </view>
+                <text v-if="option.id === editing?.procurementSkuId" class="picker-current">当前</text>
+                <text v-else class="picker-go">选择</text>
               </view>
-              <text v-if="option.id === editing?.procurementSkuId" class="picker-current">当前</text>
-              <text v-else class="picker-go">选择</text>
-            </view>
-            <view v-if="pickerIngredientId && pickerSkuOptions.length === 0" class="cascade-empty">
-              <text>「{{ pickerOrderChannel }}」这个渠道下还没有采购商品</text>
-              <text class="cascade-empty-hint">
-                在别家买的不要挂到这笔上，重建一个属于这个渠道的商品更准。
-              </text>
-            </view>
-            <view v-if="pickerIngredientId" class="picker-create" @tap="goNewSku">
-              <view class="picker-create-main">
-                <text class="picker-create-plus">+</text>
-                <text class="picker-create-name">新建采购商品</text>
+              <view v-if="pickerSkuOptions.length === 0" class="cascade-empty">
+                <text>「{{ pickerOrderChannel }}」这个渠道下还没有采购商品</text>
+                <text class="cascade-empty-hint">
+                  在别家买的不要挂到这笔上，重建一个属于这个渠道的商品更准。
+                </text>
               </view>
-              <text class="picker-create-go">去新建 ›</text>
-            </view>
+              <view v-if="pickerIngredientId" class="picker-create" @tap="goNewSku">
+                <view class="picker-create-main">
+                  <text class="picker-create-plus">+</text>
+                  <text class="picker-create-name">新建采购商品</text>
+                </view>
+                <text class="picker-create-go">去新建 ›</text>
+              </view>
+            </template>
           </scroll-view>
         </view>
       </view>
@@ -564,7 +721,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app';
 import {
   confirmOrderImports,
@@ -613,6 +770,8 @@ interface IngredientOption {
   ingredientId: string;
   ingredientName: string;
   baseUnit: string;
+  /** 这个原料的采购商品是否已经全量拉过（没拉过时列表上的数字是推荐项的，不能当真） */
+  loaded: boolean;
   skus: Array<{
     id: string;
     name: string;
@@ -629,9 +788,13 @@ const listId = ref('');
 const listIds = ref<string[]>([]);
 const pageMode = ref<'order-demand' | 'replenishment'>('order-demand');
 const manualMode = ref(false);
+/** 手填：加第一项时先把渠道问清楚，选完直接接着加 */
+const pendingAddAfterChannel = ref(false);
 const catalogIngredients = ref<any[]>([]);
 const skuOverrides = ref<Record<string, IngredientOption['skus']>>({});
 const loadingSkuIngredients = new Set<string>();
+/** 正在拉某原料全部商品的原料 id（给选商品抽屉显示「正在加载」，不用假空态） */
+const loadingSkuIds = ref<string[]>([]);
 const loading = ref(true);
 const loaded = ref(false);
 const submitted = ref(false);
@@ -731,7 +894,9 @@ interface PendingSkuMatch {
     ingredientId: string;
     name: string;
     productModel?: string | null;
+    packagingText?: string | null;
     purchaseChannel?: string | null;
+    purchaseUnit?: string | null;
     purchaseToBaseRatio?: number | null;
   };
 }
@@ -901,6 +1066,8 @@ const ingredientOptions = computed<IngredientOption[]>(() => {
         ingredientId: item.id,
         ingredientName: item.name,
         baseUnit: item.baseUnit,
+        // 没拉过全量时 fallback 只有一个推荐项，数字不能当真实商品数显示
+        loaded: Boolean(skuOverrides.value[item.id]),
         skus: keepSkuForChannel(skus, pickerOrderChannel.value),
       };
     });
@@ -928,6 +1095,8 @@ const ingredientOptions = computed<IngredientOption[]>(() => {
       ingredientId,
       ingredientName: item.ingredientName || item.ingredient?.name || '原料',
       baseUnit: item.ingredientBaseUnit || item.baseUnit || 'G',
+      // 日采清单里带的商品就是这一单的全部候选，不存在“还没拉”的情况
+      loaded: true,
       // 2026-11-06：每道原料下只留**这笔订单这个渠道**的采购商品。
       // 渠道是商品的身份之一（同一件东西在盒马和山姆是两个商品，包装/规格/价格都不同），
       // 以前把所有渠道的商品平铺出来，盒马的单子里混着农贸市场、山姆、沃尔玛，
@@ -1044,6 +1213,7 @@ const pickerIngredients = computed(() =>
   ingredientOptions.value.map((ingredient) => ({
     ingredientId: ingredient.ingredientId,
     ingredientName: ingredient.ingredientName,
+    loaded: ingredient.loaded,
     skus: ingredient.skus,
   })),
 );
@@ -1072,6 +1242,72 @@ const filteredSkuOptions = computed(() => {
       .filter(Boolean)
       .some((text) => String(text).toLowerCase().includes(keyword)),
   );
+});
+
+/** 正在拉当前原料的全部商品：右栏先显示「正在加载」，别先给「没有商品」 */
+const pickerIngredientLoading = computed(() =>
+  loadingSkuIds.value.includes(pickerIngredientId.value),
+);
+
+/** 搜索时只要有一个原料在拉商品，就先显示加载中 */
+const searchSkuLoading = computed(() => loadingSkuIds.value.length > 0);
+
+/**
+ * 搜到的原料、本渠道一个商品都没有：给「新建」出口，而不是「没搜到」。
+ * 只认已经拉过全量的原料 —— 没拉过时 skus 可能只是推荐项，不能据此判空。
+ */
+const searchEmptyIngredients = computed(() => {
+  const keyword = skuSearch.value.trim().toLowerCase();
+  if (!keyword) return [];
+  return ingredientOptions.value.filter(
+    (ingredient) =>
+      ingredient.loaded &&
+      ingredient.ingredientName.toLowerCase().includes(keyword) &&
+      ingredient.skus.length === 0,
+  );
+});
+
+const searchNoResult = computed(() => {
+  const keyword = skuSearch.value.trim().toLowerCase();
+  if (!keyword || searchSkuLoading.value) return false;
+  return (
+    filteredSkuOptions.value.length === 0 &&
+    searchEmptyIngredients.value.length === 0
+  );
+});
+
+/**
+ * 搜原料名：把命中的原料的全部商品拉出来再过滤。
+ * 以前只搜「已经装进抽屉的推荐商品」，某个原料的推荐项在别的渠道时，
+ * 搜「猪心」什么都搜不到；现在至少命中原料就先拉这个原料的商品。
+ */
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+watch(skuSearch, (value) => {
+  if (searchTimer) clearTimeout(searchTimer);
+  const keyword = value.trim().toLowerCase();
+  if (!keyword) return;
+  searchTimer = setTimeout(() => {
+    const matches = ingredientOptions.value
+      .filter((item) => item.ingredientName.toLowerCase().includes(keyword))
+      .slice(0, 5);
+    if (matches.length > 0) {
+      pickerIngredientId.value = matches[0].ingredientId;
+      for (const item of matches) {
+        void ensureSkusForIngredient(item.ingredientId);
+      }
+      return;
+    }
+    // 搜的是商品名：命中已加载的商品时，把它的原料也拉全，能看到同原料的其它规格
+    const skuMatch = skuPickerOptions.value.find((option) =>
+      [option.name, option.productModel, option.purchaseChannel]
+        .filter(Boolean)
+        .some((text) => String(text).toLowerCase().includes(keyword)),
+    );
+    if (skuMatch?.ingredientId) {
+      pickerIngredientId.value = skuMatch.ingredientId;
+      void ensureSkusForIngredient(skuMatch.ingredientId);
+    }
+  }, 250);
 });
 
 /** 名字超过 12 个字就缩一号字，尽量一行看全 */
@@ -1309,6 +1545,166 @@ function importIssue(item: OrderImportView): string | null {
 }
 const canConfirm = computed(() => blockReason.value === '' && !submitted.value);
 
+/* ---------------- 手填页（2026-11-18 收口） ---------------- */
+
+/** 手填只记公司采购：个人采购不在这页出现，也不参与金额。 */
+const manualLines = computed(() =>
+  (activeImport.value?.lines || []).filter((line) => !line.isPersonal),
+);
+
+const manualGoodsTotal = computed(() =>
+  round2(
+    manualLines.value.reduce(
+      (sum, line) => sum + (Number(line.lineTotal) || 0),
+      0,
+    ),
+  ),
+);
+
+const manualPaid = computed(() => {
+  const value = activeImport.value?.paid;
+  if (value === null || value === undefined) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+});
+
+/**
+ * 手填不再提供个人采购；可报销就是实付。
+ * 历史草稿里若还留着个人行，仍然按「实付 − 个人」算，和保存后的记录口径一致。
+ */
+const manualReimbursement = computed(() => {
+  if (manualPaid.value === null) return null;
+  const personal = Number(activeSummary.value?.personalAmount || 0);
+  return round2(Math.max(manualPaid.value - personal, 0));
+});
+
+const manualFeeText = computed(() => {
+  const item = activeImport.value;
+  if (!item) return '没填（选填）';
+  const parts: string[] = [];
+  if (item.shippingFee !== null && item.shippingFee !== undefined) {
+    parts.push(`运费 ¥${money(item.shippingFee)}`);
+  }
+  if (item.packagingFee !== null && item.packagingFee !== undefined) {
+    parts.push(`包装 ¥${money(item.packagingFee)}`);
+  }
+  return parts.length > 0 ? parts.join(' · ') : '没填（选填）';
+});
+
+const manualSaveReason = computed(() => {
+  const missing: string[] = [];
+  if (!activeImport.value?.channel) missing.push('在哪买的');
+  if (manualLines.value.length === 0) missing.push('第一项商品');
+  if (manualPaid.value === null || manualPaid.value <= 0) missing.push('实付');
+  return missing.length > 0 ? `还差：${missing.join('、')}` : '';
+});
+
+/** 手填的拦截原因只看手填自己的条件；兜底显示后端/页面已有的拦截原因。 */
+const manualReasonText = computed(
+  () => manualSaveReason.value || (canConfirm.value ? '' : blockReason.value),
+);
+
+const manualCanSave = computed(
+  () =>
+    manualSaveReason.value === '' &&
+    canConfirm.value &&
+    !submitting.value,
+);
+
+/** 空白手填页不装离开提醒：只在真的填了商品/金额时才拦。 */
+const manualHasInput = computed(() => {
+  const item = activeImport.value;
+  if (!item) return false;
+  return (
+    (item.lines || []).length > 0 ||
+    Number(item.paid || 0) > 0 ||
+    Number(item.shippingFee || 0) > 0 ||
+    Number(item.packagingFee || 0) > 0 ||
+    // 抽屉里正在加/改的那一行也算：别让员工打了半行字，返回时没人提醒
+    Boolean(editing.value && editDirty.value)
+  );
+});
+
+const manualToday = computed(() => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate(),
+  ).padStart(2, '0')}`;
+});
+
+/** 下单日期按本地时区取，不能用 ISO 的 UTC 日期（凌晨会差一天）。 */
+const manualOrderDate = computed(() => {
+  const value = activeImport.value?.orderTime;
+  if (!value) return manualToday.value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return manualToday.value;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`;
+});
+
+function formatManualDate(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+const manualOrderDateLabel = computed(() => {
+  const text = manualOrderDate.value;
+  const label = formatManualDate(text);
+  return text === manualToday.value ? `今天 · ${label}` : label;
+});
+
+function formatQuantity(value: unknown) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '0';
+  return String(Number(number.toFixed(3)));
+}
+
+function manualLineMeta(line: OrderImportLineView) {
+  const model = String(skuModelFor(line) || '').trim();
+  const packaging = packagingTextOf(line).trim();
+  const parts = [model, packaging].filter(Boolean);
+  if (parts.length === 2 && parts[1].includes(parts[0])) return parts[1];
+  return parts.length > 0 ? parts.join(' · ') : '采购商品';
+}
+
+async function onManualDateChange(event: any) {
+  const value = String(event?.detail?.value || '').trim();
+  const item = activeImport.value;
+  if (!item || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+  if (value === manualOrderDate.value) return;
+  try {
+    uni.showLoading({ title: '保存日期...', mask: true });
+    // 后端的 parseOrderTime 对纯日期会得到 Invalid Date；补中午时间，按本地日期落库。
+    const res: any = await updateOrderImport(item.id, {
+      orderTime: `${value} 12:00`,
+    });
+    if (res?.code !== 0) throw new Error(res?.message || '日期没保存上');
+    await load();
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '日期没保存上', icon: 'none' });
+  } finally {
+    uni.hideLoading();
+  }
+}
+
+/** 手填第一项：渠道是选商品的前提，先把渠道问清楚，选完直接接着加。 */
+function manualAddLine() {
+  if (!activeImport.value) return;
+  if (!activeImport.value.channel) {
+    pendingAddAfterChannel.value = true;
+    void changeChannel();
+    return;
+  }
+  openNewLine();
+}
+
+// 抽屉里一改东西就把离开提醒装上：不然新行打了一半、点系统返回会静默丢掉
+watch(editDirty, () => {
+  if (manualMode.value) updateUnloadGuard();
+});
+
 /**
  * 「离开前提醒」的开关（2026-11-14 老板真机反馈后收紧）。
  *
@@ -1322,9 +1718,14 @@ const canConfirm = computed(() => blockReason.value === '' && !submitted.value);
 function updateUnloadGuard() {
   const api = (globalThis as any).wx;
   if (!api) return;
-  if (pageVisible && imports.value.length > 0 && !submitted.value) {
+  const hasContent = manualMode.value
+    ? manualHasInput.value
+    : imports.value.length > 0;
+  if (pageVisible && hasContent && !submitted.value) {
     api.enableAlertBeforeUnload?.({
-      message: '这一笔还没保存，离开后要重新识别或手填。',
+      message: manualMode.value
+        ? '这次手填还没保存，离开后填写的内容会丢掉。'
+        : '这一笔还没保存，离开后要重新识别或手填。',
     });
   } else {
     api.disableAlertBeforeUnload?.();
@@ -1379,6 +1780,10 @@ onHide(() => {
 });
 
 onUnload(() => {
+  if (searchTimer) {
+    clearTimeout(searchTimer);
+    searchTimer = null;
+  }
   (globalThis as any).wx?.disableAlertBeforeUnload?.();
   uni.$off('procurement-sku:created', handleSkuCreated);
 });
@@ -1475,10 +1880,50 @@ async function load() {
   loading.value = false;
 }
 
+/**
+ * 新建商品回来：把这个商品补进原料的商品缓存。
+ * 之前缓存里只有旧商品，刚建的那条不在列表里 —— 回到页面打开抽屉还是搜不到。
+ */
+function mergeSkuOverride(sku: any) {
+  const ingredientId = String(sku?.ingredientId || '');
+  if (!ingredientId || !sku?.id) return;
+  const current = skuOverrides.value[ingredientId];
+  if (!current) return; // 没拉过全量时，下一次 ensure 会把它一起带回来
+  const mapped = {
+    id: sku.id,
+    name: sku.name,
+    productModel: sku.productModel || null,
+    packagingText: sku.packagingText || null,
+    purchaseChannel: sku.purchaseChannel || null,
+    purchaseUnit: sku.purchaseUnit || null,
+    purchaseToBaseRatio:
+      typeof sku.purchaseToBaseRatio === 'number'
+        ? sku.purchaseToBaseRatio
+        : null,
+  };
+  skuOverrides.value = {
+    ...skuOverrides.value,
+    [ingredientId]: [
+      ...current.filter((item) => item.id !== mapped.id),
+      mapped,
+    ],
+  };
+}
+
 function handleSkuCreated(payload: any) {
   // 只认本页发起的「新增商品」：别处新建商品时不必重拉本页
   if (!isSkuCreatedFor(payload, 'order-import')) return;
   const sku = payload?.sku;
+  if (sku?.ingredientId) mergeSkuOverride(sku);
+
+  // 手填的新行还没有行号：不能走「按行匹配」那条路，
+  // 直接把刚建的商品选到当前这个还没保存的新行上。
+  if (editing.value?.isNew && sku?.id) {
+    selectSkuOnEditing(sku);
+    notifySkuMatch('已选上刚新建的商品，补齐数量/单价再添加');
+    return;
+  }
+
   const lineId = String(payload?.lineId || newSkuFromLineId || '');
   if (sku?.id && sku?.ingredientId && lineId) {
     pendingSkuMatch.value = { lineId, sku };
@@ -1560,6 +2005,12 @@ async function applyPendingSkuMatch() {
       payload.qty = qty;
       payload.unitPrice = price;
       if (editing.value.unitText) payload.unit = editing.value.unitText;
+    }
+
+    if (manualMode.value) {
+      // 手填换商品时名字和单位都跟新商品走，避免保存时把商品档案改名 / 单位对不上
+      payload.rawName = pending.sku.name;
+      if (pending.sku.purchaseUnit) payload.unit = pending.sku.purchaseUnit;
     }
 
     const res: any = await updateOrderImportLine(owner.id, pending.lineId, payload);
@@ -1670,6 +2121,7 @@ async function ensureSkusForIngredient(ingredientId?: string | null) {
     return;
   }
   loadingSkuIngredients.add(ingredientId);
+  loadingSkuIds.value = [...loadingSkuIds.value, ingredientId];
   try {
     const res: any = await getIngredientProcurementSkus(ingredientId);
     if (res?.code === 0 && Array.isArray(res.data)) {
@@ -1693,6 +2145,7 @@ async function ensureSkusForIngredient(ingredientId?: string | null) {
     // 拉不到就继续用推荐商品，不阻断改行
   } finally {
     loadingSkuIngredients.delete(ingredientId);
+    loadingSkuIds.value = loadingSkuIds.value.filter((id) => id !== ingredientId);
   }
 }
 
@@ -1717,7 +2170,7 @@ async function openEdit(line: OrderImportLineView) {
     unitText: line.unit || '',
     priceText: line.unitPrice === null ? '' : money(line.unitPrice),
     ingredientName: ingredient?.ingredientName || '',
-    skuName: sku?.name || '',
+    skuName: sku?.name || line.rawName || '',
     skuModel: sku?.productModel || '',
     skuPackagingText: sku?.packagingText || '',
     skuRatio: sku?.purchaseToBaseRatio ?? null,
@@ -1728,7 +2181,10 @@ async function openEdit(line: OrderImportLineView) {
     unitOrig: line.unit || '',
     isPersonalOrig: Boolean(line.isPersonal),
     // 截图上的小计：不再让人手改，只拿来对账（2026-11-05）
-    _origTotal: line.aiLineTotal ?? line.lineTotal ?? null,
+    // 手填没有截图：别把行小计当成「截图小计」，否则弹窗会写「与截图小计一致」
+    _origTotal: manualMode.value
+      ? null
+      : line.aiLineTotal ?? line.lineTotal ?? null,
     _origQtyText: line.qty === null ? '' : String(line.qty),
     // 跟输入框里的格式保持一致（价格按两位小数显示），否则一打开就算「已改动」
     _origPriceText: line.unitPrice === null ? '' : money(line.unitPrice),
@@ -1889,7 +2345,10 @@ function openSkuPicker() {
   if (editing.value?.isPersonal) return;
   // 商品是按渠道列的：这笔还没定渠道时先别让人挑商品（页面顶部有渠道门禁）
   if (!pickerOrderChannel.value) {
-    uni.showToast({ title: '先选这笔订单的渠道', icon: 'none' });
+    uni.showToast({
+      title: manualMode.value ? '先选在哪买的' : '先选这笔订单的渠道',
+      icon: 'none',
+    });
     return;
   }
   skuSearch.value = '';
@@ -1916,9 +2375,16 @@ function chooseSku(sku: any) {
   // 单位必须和商品一致（散称商品也一样）。但**不静默改**已有单位：
   // 「3 斤」挂到「按克卖」的商品上改成「3 克」会差 500 倍，
   // 只补空值，对不上的交给页面提示 + 生成时的单位门禁。
-  const currentUnit = String(editing.value.unitText || '').trim();
-  if (sku.purchaseUnit && !currentUnit) {
-    editing.value.unitText = sku.purchaseUnit;
+  if (manualMode.value) {
+    // 手填的名字/单位都跟着商品走：页面不让改名字，避免保存时把商品档案改名；
+    // 换商品时单位也跟着换，否则「斤」挂到按 kg 卖的商品上会差倍数。
+    editing.value.rawName = sku.name;
+    editing.value.unitText = sku.purchaseUnit || editing.value.unitText || '';
+  } else {
+    const currentUnit = String(editing.value.unitText || '').trim();
+    if (sku.purchaseUnit && !currentUnit) {
+      editing.value.unitText = sku.purchaseUnit;
+    }
   }
   editing.value.ingredientId = sku.ingredientId;
   editing.value.ingredientName = sku.ingredientName;
@@ -1963,6 +2429,11 @@ function alignToReceipt() {
  */
 function openUnitPicker() {
   if (editing.value?.isPersonal) return;
+  // 手填的单位必须跟着采购商品：不让人在这里另选一个单位，避免「斤」挂到按 kg 卖的商品上
+  if (manualMode.value) {
+    uni.showToast({ title: '单位跟着采购商品走', icon: 'none' });
+    return;
+  }
   // 单位只有一处来源（商品的采购单位）：还没选商品时没有可选项
   if (unitOptions.value.length === 0) {
     uni.showToast({ title: '先选商品，单位跟着商品走', icon: 'none' });
@@ -1974,6 +2445,12 @@ function openUnitPicker() {
 function chooseUnit(unit: string) {
   if (editing.value) editing.value.unitText = unit;
   unitPicking.value = false;
+}
+
+/** 搜索结果里某个原料「本渠道没有商品」时，直接拿这个原料去新建。 */
+function goNewSkuForIngredient(ingredientId: string) {
+  pickerIngredientId.value = ingredientId;
+  goNewSku();
 }
 
 function goNewSku() {
@@ -2044,9 +2521,16 @@ async function saveEdit() {
     return;
   }
 
+  // 手填必须挂采购商品：名字、单位、克数都跟着商品走，没商品就没法记账。
+  // 后端也会拦（请先选择原料），这里先拦一次，别让人填完才看到失败。
+  if (manualMode.value && !editing.value.procurementSkuId) {
+    uni.showToast({ title: '先选采购商品', icon: 'none' });
+    return;
+  }
+
   // 规格对不上不硬拦，但必须让员工确认一次：
   // 生成后克数是按商品规格算的，差 300g/500g 会直接抬高折合单价。
-  if (editingSpecWarning.value) {
+  if (!manualMode.value && editingSpecWarning.value) {
     const confirmed = await new Promise<boolean>((resolve) => {
       uni.showModal({
         title: '规格和截图不一致',
@@ -2061,11 +2545,17 @@ async function saveEdit() {
   }
 
   const isNew = Boolean(editing.value.isNew);
-  const nameChanged = String(editing.value.rawName || '').trim() !== String(editing.value.rawNameOrig || '').trim();
+  const nameChanged =
+    !manualMode.value &&
+    String(editing.value.rawName || '').trim() !==
+      String(editing.value.rawNameOrig || '').trim();
   saving.value = true;
   try {
     const payload = {
-      rawName: String(editing.value.rawName || '').trim(),
+      // 手填的名字就是采购商品名：不允许页面上改，避免保存时把商品档案改名。
+      rawName: manualMode.value
+        ? String(editing.value.skuName || editing.value.rawName || '').trim()
+        : String(editing.value.rawName || '').trim(),
       qty,
       unit: editing.value.unitText || null,
       unitPrice: price,
@@ -2074,7 +2564,7 @@ async function saveEdit() {
       procurementSkuId: editing.value.isPersonal
         ? null
         : editing.value.procurementSkuId || null,
-      isPersonal: editing.value.isPersonal,
+      isPersonal: manualMode.value ? false : editing.value.isPersonal,
     };
     const res: any = isNew
       ? await createOrderImportLine(activeImport.value.id, payload)
@@ -2103,12 +2593,23 @@ async function saveEdit() {
 
 async function changeChannel() {
   if (!activeImport.value) return;
+  // 手填已经加了商品：渠道换了，商品还是旧渠道的，保存后渠道和商品会对不上。
+  // 手填的量很小，先让人删掉再换，比事后改数据安全。
+  if (manualMode.value && (activeImport.value.lines || []).length > 0) {
+    uni.showModal({
+      title: '渠道不能直接改',
+      content: '这笔已经加了商品。要换渠道，请先删掉这些项，或者放弃这次重新记。',
+      showCancel: false,
+    });
+    return;
+  }
   if (channelOptions.value.length === 0) await loadChannelOptions();
   channelPicking.value = true;
 }
 
 function closeChannelPicker() {
   channelPicking.value = false;
+  pendingAddAfterChannel.value = false;
 }
 
 /**
@@ -2119,12 +2620,24 @@ async function chooseChannel(channel: string) {
   const current = activeImport.value;
   if (!current) return;
   channelPicking.value = false;
-  if (current.channel === channel) return;
+  if (current.channel === channel) {
+    // 手填：加第一项时点开渠道又选了当前渠道，选完也要继续加商品
+    if (manualMode.value && pendingAddAfterChannel.value) {
+      pendingAddAfterChannel.value = false;
+      openNewLine();
+    }
+    return;
+  }
   try {
     const res: any = await updateOrderImport(current.id, { channel });
     if (res.code !== 0) throw new Error(res.message || '保存失败');
     await load();
+    if (manualMode.value && pendingAddAfterChannel.value) {
+      pendingAddAfterChannel.value = false;
+      openNewLine();
+    }
   } catch (error: any) {
+    pendingAddAfterChannel.value = false;
     uni.showToast({ title: error?.message || '保存失败', icon: 'none' });
   }
 }
@@ -2145,8 +2658,10 @@ async function discardActive() {
   if (!activeImport.value) return;
   const confirmed = await new Promise<boolean>((resolve) => {
     uni.showModal({
-      title: '放弃这一笔？',
-      content: '放弃后这一笔填的内容会删除，不能恢复；截图还在相册里，可以重新传。',
+      title: manualMode.value ? '放弃这次填写？' : '放弃这一笔？',
+      content: manualMode.value
+        ? '放弃后这一笔填的内容会删除，不能恢复。'
+        : '放弃后这一笔填的内容会删除，不能恢复；截图还在相册里，可以重新传。',
       confirmText: '放弃',
       success: (res) => resolve(Boolean(res.confirm)),
     });
@@ -2382,6 +2897,298 @@ function emptySummary() {
   background: #f3eddd;
   padding: 20rpx 24rpx 300rpx;
   box-sizing: border-box;
+}
+
+/* ---------- 手填页（2026-11-18 收口） ---------- */
+.review-page.manual-review {
+  background: #fbfcf7;
+  padding-bottom: 280rpx;
+}
+
+.manual-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.manual-card {
+  background: #ffffff;
+  border: 1rpx solid #e7e3d6;
+  border-radius: 20rpx;
+  padding: 20rpx 24rpx;
+}
+
+.manual-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 16rpx 0;
+  border-bottom: 1rpx dashed #f1eee2;
+  min-height: 44rpx;
+}
+
+.manual-row:last-child {
+  border-bottom: none;
+}
+
+.manual-label {
+  font-size: 26rpx;
+  color: #6b6653;
+  flex: none;
+}
+
+.manual-value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8rpx;
+  min-width: 0;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+  text-align: right;
+}
+
+.manual-missing {
+  color: #b4453a;
+  font-weight: 700;
+}
+
+.manual-chev {
+  color: #b9b2a0;
+  font-size: 28rpx;
+  line-height: 1;
+}
+
+.manual-tag {
+  background: #e8f0e9;
+  color: #1e3a2f;
+  border-radius: 6rpx;
+  padding: 4rpx 12rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.manual-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 6rpx;
+}
+
+.manual-card-title {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #1e3a2f;
+}
+
+.manual-card-count {
+  font-size: 24rpx;
+  color: #8a8574;
+}
+
+.manual-card-edit {
+  font-size: 24rpx;
+  color: #2f6b4f;
+  font-weight: 600;
+}
+
+.manual-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  padding: 30rpx 0 18rpx;
+  text-align: center;
+}
+
+.manual-empty-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #3c3a32;
+}
+
+.manual-empty-hint {
+  font-size: 24rpx;
+  color: #8a8574;
+}
+
+.manual-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid #f4f1e7;
+}
+
+.manual-item:last-of-type {
+  border-bottom: none;
+}
+
+.manual-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  min-width: 0;
+}
+
+.manual-item-name {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+  word-break: break-all;
+}
+
+.manual-item-meta {
+  font-size: 22rpx;
+  color: #8a8574;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.manual-item-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6rpx;
+  flex: none;
+}
+
+.manual-item-amount {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #1e3a2f;
+}
+
+.manual-item-calc {
+  font-size: 22rpx;
+  color: #8a8574;
+  white-space: nowrap;
+}
+
+.manual-add {
+  margin-top: 14rpx;
+  height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx dashed #c9c1ad;
+  border-radius: 14rpx;
+  background: #fbf9f0;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.manual-money-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 12rpx 0;
+  border-bottom: 1rpx dashed #f1eee2;
+  font-size: 26rpx;
+}
+
+.manual-money-row:last-child {
+  border-bottom: none;
+}
+
+.manual-money-k {
+  color: #6b6653;
+}
+
+.manual-money-v {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.manual-money-v.muted {
+  font-size: 24rpx;
+  color: #8a8574;
+  font-weight: 500;
+}
+
+.manual-money-v.missing {
+  font-size: 24rpx;
+  color: #b4453a;
+  font-weight: 600;
+}
+
+.manual-money-row.total .manual-money-k {
+  font-weight: 600;
+  color: #1e3a2f;
+}
+
+.manual-money-v.reimburse {
+  font-size: 34rpx;
+  font-weight: 800;
+  color: #2f6b4f;
+}
+
+.manual-discard {
+  display: block;
+  text-align: center;
+  padding: 18rpx 0 8rpx;
+  font-size: 24rpx;
+  color: #8a8574;
+}
+
+.manual-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 16rpx 28rpx calc(16rpx + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, #fbfcf7 72%, rgba(251, 252, 247, 0));
+}
+
+.manual-reason {
+  display: block;
+  text-align: center;
+  font-size: 22rpx;
+  color: #b4453a;
+  line-height: 1.4;
+  margin-bottom: 8rpx;
+}
+
+.manual-save {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  border-radius: 20rpx;
+  background: #1e3a2f;
+  color: #f7f4e9;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.manual-save::after {
+  border: none;
+}
+
+.manual-save.disabled {
+  background: #dfe3d8;
+  color: #98a094;
+}
+
+.manual-helper {
+  display: block;
+  text-align: center;
+  font-size: 20rpx;
+  color: #8a8574;
+  line-height: 1.45;
+  margin-top: 8rpx;
+}
+
+.manual-sheet-head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4rpx;
 }
 
 .loading,

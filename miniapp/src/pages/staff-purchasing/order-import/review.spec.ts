@@ -202,7 +202,9 @@ describe('选商品抽屉只列这笔订单渠道的商品（2026-11-06）', () 
 
   it('订单还没确认渠道时不打开抽屉，先让人定渠道', () => {
     // 渠道是商品匹配的门禁：没渠道就不知道筛哪一家
-    expect(source).toContain("title: '先选这笔订单的渠道'");
+    expect(source).toContain("'先选这笔订单的渠道'");
+    // 手填模式说人话：先选在哪买的
+    expect(source).toContain("'先选在哪买的'");
   });
 
   it('抽屉顶部写明这笔是哪个渠道，不靠人猜', () => {
@@ -389,8 +391,10 @@ describe('识别结果页 · 离开提醒只装在自己这页（2026-11-14）',
     expect(guard).not.toBe('');
     expect(guard).toContain('pageVisible');
     expect(guard).toContain(
-      'pageVisible && imports.value.length > 0 && !submitted.value',
+      'pageVisible && hasContent && !submitted.value',
     );
+    // 手填只在真填过商品/金额时才拦；空白页不弹
+    expect(guard).toContain('manualHasInput.value');
   });
 
   it('被盖住（去了新建商品页）就先把提醒撤掉', () => {
@@ -420,5 +424,98 @@ describe('识别结果页 · 离开提醒只装在自己这页（2026-11-14）',
     );
     expect(saved).not.toBe('');
     expect(saved).toContain('disableAlertBeforeUnload');
+  });
+});
+
+/**
+ * 2026-11-18 收口：手填不是 AI 核对页换个标题。
+ * - 手填没有个人采购、没有订单号、没有截图/未读到/已改动；
+ * - 新增采购商品复用现有页面，只加「回来挂到这一行」；
+ * - 搜原料名要能搜到，本渠道没有商品时给「新建」而不是「没搜到」。
+ */
+describe('手填页收口（2026-11-18）', () => {
+  const manualBlock = source.slice(
+    source.indexOf('<!-- 手填：只回答三个问题'),
+    source.indexOf('<!-- AI 核对（保持原样） -->'),
+  );
+
+  it('是一个独立的三块模板，不是 AI 页换标题', () => {
+    expect(manualBlock).not.toBe('');
+    expect(manualBlock).toContain('class="manual-page"');
+    expect(manualBlock).toContain('在哪买的');
+    expect(manualBlock).toContain('买了什么');
+    expect(manualBlock).toContain('花了多少');
+    expect(manualBlock).toContain('＋ 加第一项');
+    expect(manualBlock).toContain('保存补货记录');
+    expect(manualBlock).toContain('放弃这次填写');
+  });
+
+  it('手填不再出现个人采购 / 订单号 / 截图 / 未读到 / 已改动', () => {
+    expect(manualBlock).not.toContain('个人采购');
+    expect(manualBlock).not.toContain('订单号');
+    expect(manualBlock).not.toContain('截图');
+    expect(manualBlock).not.toContain('未读到');
+    expect(manualBlock).not.toContain('已改动');
+  });
+
+  it('订单号去掉，但下单日期和运费/包装费保留', () => {
+    expect(manualBlock).toContain('哪天买的');
+    expect(manualBlock).toContain('onManualDateChange');
+    expect(manualBlock).toContain('运费 / 包装费');
+    expect(source).toContain('orderTime:');
+    expect(source).toContain('12:00');
+  });
+
+  it('加一项弹窗手填只保留商品/数量/单价，名字和单位跟着商品', () => {
+    expect(source).toContain(
+      '<view v-if="manualMode" class="sheet-head manual-sheet-head">',
+    );
+    expect(source).toContain(
+      '<view v-if="manualMode" class="sheet-head manual-sheet-head">\n            <text class="sheet-title">',
+    );
+    // 个人采购开关只在 AI 分支里
+    expect(source).toContain('<view v-else class="sheet-head">');
+    expect(source).toContain('editing.value.rawName = sku.name');
+    expect(source).toContain('单位跟着采购商品走');
+    expect(source).toContain('manualMode.value && !editing.value.procurementSkuId');
+    expect(source).toContain("title: '先选采购商品'");
+  });
+
+  it('搜原料名能搜到：命中原料先把它的全部商品拉出来，再按渠道过滤', () => {
+    expect(source).toContain('watch(skuSearch');
+    expect(source).toContain('ensureSkusForIngredient(item.ingredientId)');
+    expect(source).toContain('searchEmptyIngredients');
+    expect(source).toContain('searchNoResult');
+    expect(source).toContain('正在加载商品…');
+    expect(source).toContain('loadingSkuIds');
+    expect(source).toContain('goNewSkuForIngredient');
+    expect(source).toContain('这个渠道下还没有商品');
+  });
+
+  it('加载中不先给「没有商品」：右栏和搜索都有加载态', () => {
+    expect(source).toContain('pickerIngredientLoading');
+    expect(source).toContain('searchSkuLoading');
+    expect(source).toContain('v-else-if="pickerIngredientLoading"');
+  });
+
+  it('新增采购商品复用现有页面，只补「回来挂到这一行」', () => {
+    // 只从现有页面返回，不在这里新画一个新建页
+    expect(source).not.toContain('新建采购商品页');
+    expect(source).toContain('mergeSkuOverride');
+    expect(source).toContain('editing.value?.isNew && sku?.id');
+    expect(source).toContain('已选上刚新建的商品，补齐数量/单价再添加');
+    // 现有页面本身没有新增路由/新表单
+    expect(source).toContain('buildSkuCreateQuery(\'order-import\')');
+  });
+
+  it('先选渠道再加第一项：选完直接接着加', () => {
+    expect(source).toContain('pendingAddAfterChannel');
+    expect(source).toContain('选完就继续加商品');
+    expect(source).toContain('manualAddLine');
+  });
+
+  it('空白手填页不再拦「还没保存」', () => {
+    expect(source).toContain('manualHasInput');
+    expect(source).toContain("'这次手填还没保存，离开后填写的内容会丢掉。'");
   });
 });

@@ -283,6 +283,80 @@ describe('SupplementPlanService.resolveForRecipeRequest', () => {
     ).rejects.toThrow('制作单不属于当前用户');
   });
 
+  it('制作单锚定的版本不存在且未冻结时，退到该食谱最新版继续算（不再整块失败）', async () => {
+    const prisma: any = {
+      dIYSheet: {
+        findUnique: jest.fn().mockResolvedValue({
+          userId: 'u1',
+          recipeVersion: 5,
+          packagePlan: [{ packageSpecG: 88, packageCount: 14 }],
+          snapshot: null,
+        }),
+      },
+      recipe: {
+        findUnique: jest
+          .fn()
+          // ① 精确版本 (recipe-1, 5) 不存在
+          .mockResolvedValueOnce(null)
+          // ② 兜底到第 4 版后按它解析
+          .mockResolvedValueOnce({ ...recipeRow(), version: 4 }),
+        findFirst: jest.fn().mockResolvedValue({ version: 4 }),
+      },
+      supplementShopConfig: { findUnique: jest.fn().mockResolvedValue({ equivalenceEnabled: true }) },
+      supplementEquivalenceGroup: { findMany: jest.fn().mockResolvedValue([]) },
+      recommendedProduct: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = createService(prisma);
+
+    const plan = await service.resolveForRecipeRequest({
+      recipeId: 'recipe-1',
+      recipeVersion: 5,
+      totalWeightG: 1232,
+      diySheetId: 'sheet-1',
+      userId: 'u1',
+    });
+
+    expect(plan.recipeVersion).toBe(4);
+    expect(prisma.recipe.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { recipeId: 'recipe-1' },
+        orderBy: { version: 'desc' },
+      }),
+    );
+  });
+
+  it('已冻结的制作单版本对不上仍要求精确命中，不拿最新版顶替', async () => {
+    const prisma: any = {
+      dIYSheet: {
+        findUnique: jest.fn().mockResolvedValue({
+          userId: 'u1',
+          recipeVersion: 5,
+          packagePlan: [{ packageSpecG: 88, packageCount: 14 }],
+          snapshot: { recipeVersion: 5 },
+        }),
+      },
+      recipe: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn(),
+      },
+      supplementShopConfig: { findUnique: jest.fn() },
+      supplementEquivalenceGroup: { findMany: jest.fn() },
+      recommendedProduct: { findMany: jest.fn() },
+    };
+    const service = createService(prisma);
+
+    await expect(
+      service.resolveForRecipeRequest({
+        recipeId: 'recipe-1',
+        recipeVersion: 5,
+        totalWeightG: 1232,
+        diySheetId: 'sheet-1',
+        userId: 'u1',
+      }),
+    ).rejects.toThrow('食谱已更新，请刷新制作单');
+    expect(prisma.recipe.findFirst).not.toHaveBeenCalled();
+  });
+
   it('推荐商品按参考产品批量取，且只回传启用项', async () => {
     const prisma: any = {
       dIYSheet: { findUnique: jest.fn() },
@@ -369,7 +443,11 @@ describe('SupplementPlanService · 参考优先与兜底口径', () => {
 
   it('冻结版本不存在时提示刷新制作单', async () => {
     const prisma: any = {
-      recipe: { findUnique: jest.fn().mockResolvedValue(null) },
+      // 精确版本、以及"该食谱的最新版"都不存在 → 仍旧报刷新
+      recipe: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       supplementShopConfig: { findUnique: jest.fn().mockResolvedValue({ equivalenceEnabled: false }) },
       supplementEquivalenceGroup: { findMany: jest.fn().mockResolvedValue([]) },
       recommendedProduct: { findMany: jest.fn().mockResolvedValue([]) },

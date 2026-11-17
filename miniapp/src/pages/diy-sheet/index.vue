@@ -669,6 +669,16 @@ import {
 // 页面参数
 const recipeId = ref('')
 /**
+ * 服务端实际解析出来的食谱编号（2026-11-17）。
+ *
+ * 为什么不能直接用 URL 里的 recipeId：入口里带的可能是历史编号（同名食谱被导入过多次、
+ * 系列合并后编号换过）。食谱详情会按系列/生命阶段解析到**另一份编号**，于是页面显示的
+ * 是 A 版食谱、制作单和补剂计划却拿 B 号去查 —— 版本对不上，补剂整块消失。
+ * 因此「存制作单、取补剂计划、下单草稿」统一用这一份解析后的编号。
+ */
+const resolvedRecipeId = ref('')
+const effectiveRecipeId = computed(() => resolvedRecipeId.value || recipeId.value)
+/**
  * 定制订单号（2026-10-24）：从定制食谱进来时带着，
  * 取食谱与生成补剂草稿都按交付那一版；橱窗 DIY 为空，行为不变。
  */
@@ -1268,7 +1278,7 @@ async function handleBuySupplements() {
 
   saveSupplementPurchaseDraft({
     lines,
-    recipeId: recipeId.value,
+    recipeId: effectiveRecipeId.value,
     recipeName: recipe.value && recipe.value.name,
     dogId: dogId.value,
     dogName: dog.value && dog.value.name,
@@ -1327,9 +1337,11 @@ async function loadData() {
     // 先加载健康标签映射
     await loadHealthTagMapping()
 
-    // 并行加载食谱详情、价格预览、狗狗信息和设备推荐
+    // 食谱详情决定「到底是哪一份食谱」：先拿到它，后面算价、存单、取补剂都用同一个编号
+    await loadRecipe()
+
+    // 并行加载价格预览、狗狗信息和设备推荐
     await Promise.all([
-      loadRecipe(),
       loadPricePreview(),
       loadDog(),
       loadEquipmentRecommendations()
@@ -1369,7 +1381,7 @@ async function autoSaveDiySheet(): Promise<string> {
       url: '/user/diy-sheets',
       method: 'POST',
       data: {
-        recipeId: recipeId.value,
+        recipeId: effectiveRecipeId.value,
         recipeName: recipe.value.name,
         dogId: dogId.value,
         perMealG: perMealG.value,
@@ -1402,10 +1414,10 @@ async function autoSaveDiySheet(): Promise<string> {
  * 候选、换算用量都在后端算；失败时降级为“只有原原料”，不阻塞制作单。
  */
 async function loadSupplementCandidates(sheetId?: string) {
-  if (!recipeId.value) return
+  if (!effectiveRecipeId.value) return
   try {
     const res: any = await request({
-      url: `/recipes/${recipeId.value}/supplement-plan`,
+      url: `/recipes/${effectiveRecipeId.value}/supplement-plan`,
       method: 'GET',
       data: {
         ...(sheetId ? { diySheetId: sheetId } : {}),
@@ -1452,6 +1464,8 @@ async function loadRecipe() {
 
     if (res.code === 0 && res.data) {
       recipe.value = res.data
+      // 详情会按系列/生命阶段解析到真正的食谱编号；后续存单、算价、取补剂都用它
+      resolvedRecipeId.value = String(res.data.id || '')
       console.log('[DIYSheet] 食谱加载成功:', res.data)
     }
   } catch (error) {
@@ -1523,7 +1537,7 @@ async function loadPricePreview() {
         type: 'FRESH_FOOD',
         pricingPurpose: 'DIY_SHEET',
         items: [{
-          recipeId: recipeId.value,
+          recipeId: effectiveRecipeId.value,
           quantityG: totalG,
           packageCount: pkgCount,
           packageSpecG: pkgSpecG,
@@ -1923,7 +1937,7 @@ async function handleSave() {
   try {
     // 收集数据
     const sheetData = {
-      recipeId: recipeId.value,
+      recipeId: effectiveRecipeId.value,
       recipeName: recipe.value.name,
       dogId: dogId.value,
       perMealG: perMealG.value,

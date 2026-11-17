@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
@@ -105,6 +106,8 @@ function memberSortKey(ingredient: any): [number, string] {
 
 @Injectable()
 export class SupplementPlanService {
+  private readonly logger = new Logger(SupplementPlanService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly dosage: SupplementDosageService,
@@ -380,7 +383,16 @@ export class SupplementPlanService {
     return null;
   }
 
-  /** 带制作单的入口：版本、总重都以制作单冻结的值为准。 */
+  /**
+   * 带制作单的入口：版本、总重都以制作单冻结的值为准。
+   *
+   * 版本锚点容错（2026-11-17）：制作单里存的「食谱编号 + 版本」会失效——
+   * 同名食谱历史上被导入过多次（同一个名字对应好几个 recipeId），
+   * 详情页按系列解析到 A 的第 5 版、制作单却存着 B 的编号，于是 (B, 5) 查不到，
+   * 整块补剂直接消失（顾客看到「补剂候选暂时获取失败」）。
+   * 已冻结（下过单）的制作单仍要求精确命中，避免动到已下单的内容；
+   * 未冻结的制作单退到该食谱最新版本，保证页面能出来。
+   */
   async resolveForRecipeRequest(input: {
     recipeId: string;
     recipeVersion: number;
@@ -391,6 +403,8 @@ export class SupplementPlanService {
     let totalWeightG = Number(input.totalWeightG);
     let weightSource: 'DIY_SHEET' | 'QUERY' = 'QUERY';
     let recipeVersion = Number(input.recipeVersion);
+    /** 已冻结的制作单：版本锚点必须精确命中，不许换版 */
+    let versionLocked = false;
 
     if (input.diySheetId) {
       const sheet = await this.prisma.dIYSheet.findUnique({
@@ -401,6 +415,7 @@ export class SupplementPlanService {
           packagePlan: true,
           dailyIntakeG: true,
           cycleDays: true,
+          snapshot: true,
         },
       });
       if (!sheet) {
@@ -417,14 +432,61 @@ export class SupplementPlanService {
       if (Number(sheet.recipeVersion) > 0) {
         recipeVersion = Number(sheet.recipeVersion);
       }
+      versionLocked = Boolean(sheet.snapshot);
     }
 
     return this.resolveForRecipe({
       recipeBusinessId: input.recipeId,
-      recipeVersion,
+      recipeVersion: await this.resolveExistingVersion({
+        recipeId: input.recipeId,
+        recipeVersion,
+        locked: versionLocked,
+      }),
       totalWeightG,
       weightSource,
     });
+  }
+
+  /**
+   * 把「食谱 + 版本」落到一条真实存在的食谱记录上。
+   * 精确命中就用原来的版本；查不到时按调用方的锁定要求决定报错还是退最新版。
+   */
+  private async resolveExistingVersion(input: {
+    recipeId: string;
+    recipeVersion: number;
+    locked: boolean;
+  }): Promise<number> {
+    const requested = Number(input.recipeVersion);
+    const usable =
+      Number.isFinite(requested) && requested > 0 ? requested : null;
+
+    if (usable !== null) {
+      const exact = await this.prisma.recipe.findUnique({
+        where: {
+          recipeId_version: { recipeId: input.recipeId, version: usable },
+        },
+        select: { version: true },
+      });
+      if (exact) return usable;
+    }
+
+    if (input.locked) {
+      throw new BadRequestException('食谱已更新，请刷新制作单');
+    }
+
+    const latest = await this.prisma.recipe.findFirst({
+      where: { recipeId: input.recipeId },
+      orderBy: { version: 'desc' },
+      select: { version: true },
+    });
+    if (!latest) {
+      throw new BadRequestException('食谱已更新，请刷新制作单');
+    }
+
+    this.logger.warn(
+      `[SupplementPlan] 制作单锚定的版本不存在，改按最新版解析：recipeId=${input.recipeId} requested=${input.recipeVersion} latest=${latest.version}`,
+    );
+    return Number(latest.version);
   }
 
   async resolveForRecipe(input: {

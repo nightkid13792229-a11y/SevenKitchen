@@ -804,4 +804,33 @@ describe('DIY制作单 · 2026-10-24 第二轮', () => {
     expect(storageAt).toBeGreaterThan(-1)
     expect(finishedAt).toBeLessThan(storageAt)
   })
+
+  /**
+   * 2026-11-17 顾客反馈：补剂候选整块不显示。
+   *
+   * 根因是入口带的食谱编号是历史旧号，详情按系列解析到了另一份编号，
+   * 制作单却存着「旧编号 + 新版本」，补剂接口查不到这个组合 → 400。
+   * 往后存单、算价、取补剂计划必须统一用详情解析出来的那份编号。
+   */
+  it('补剂计划 / 制作单 / 算价统一使用详情解析出来的食谱编号', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+
+    expect(page).toContain('const resolvedRecipeId = ref(')
+    expect(page).toContain(
+      'const effectiveRecipeId = computed(() => resolvedRecipeId.value || recipeId.value)',
+    )
+    expect(page).toContain('resolvedRecipeId.value = String(res.data.id || ')
+    expect(page).toContain('url: `/recipes/${effectiveRecipeId.value}/supplement-plan`')
+    // 存单（自动 + 手动）与下单草稿都用同一个编号
+    expect(page).toContain('recipeId: effectiveRecipeId.value,')
+    expect(page).not.toContain('recipeId: recipeId.value,')
+    // 先拿到详情再算价，避免价格预览按旧编号取到另一版
+    const recipeLoadAt = page.indexOf('await loadRecipe()')
+    const priceLoadAt = page.indexOf('      loadPricePreview(),')
+    expect(recipeLoadAt).toBeGreaterThan(-1)
+    expect(priceLoadAt).toBeGreaterThan(recipeLoadAt)
+  })
 })

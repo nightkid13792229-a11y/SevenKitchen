@@ -12,6 +12,7 @@ import { RecipeCoverVisualBriefService } from './recipe-cover-visual-brief.servi
 import {
   buildRecipeCoverPrompt,
   type RecipeCoverIngredient,
+  type RecipeCoverSupplement,
 } from './recipe-cover-prompt';
 import {
   buildCoverPrompt,
@@ -50,6 +51,8 @@ export interface GenerateRecipeCoverInput {
   foodNames?: string[];
   /** 系列 / 定制封面的完整食材数据（名字 / 部位状态预处理 / 占比） */
   ingredients?: RecipeCoverIngredient[];
+  /** 补剂（可选）：只在边缘小碟里表现粉/胶囊/油，不出现品牌包装 */
+  supplements?: RecipeCoverSupplement[];
   /**
    * 工具取数：写提示词的服务在模型调用 `get_recipe_ingredients` 时才取。
    * 草稿 / 系列各自绑定自己的取数逻辑（权限、阶段优先级仍在后端）。
@@ -215,12 +218,12 @@ export class RecipeCoverImageService {
         : null;
       const skeleton = job.variant
         ? getCoverSkeleton(job.variant.skeleton)
-        : getCoverSkeleton('RING');
+        : getCoverSkeleton('HERO_ARC');
       return {
         url,
-        preset: job.variant?.preset ?? 'CREAM_STONE',
+        preset: job.variant?.preset ?? 'STONE_WARM',
         presetLabel: preset?.label ?? '默认',
-        skeleton: job.variant?.skeleton ?? 'RING',
+        skeleton: job.variant?.skeleton ?? 'HERO_ARC',
         skeletonLabel: skeleton.label,
       };
     });
@@ -267,6 +270,7 @@ export class RecipeCoverImageService {
       variant,
       prompt: buildCoverPrompt({
         ingredients,
+        supplements: input.supplements ?? [],
         forms,
         preset: getCoverPreset(variant.preset),
         skeleton: getCoverSkeleton(variant.skeleton),

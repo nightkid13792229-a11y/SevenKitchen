@@ -31,12 +31,12 @@ const ingredients = [
 ];
 
 const expectedToolResult = [
-  '鸡胸（去骨）',
-  '牛肝（去油、打碎、充分搅拌）',
+  '鸡胸',
+  '牛肝',
   '大米',
-  '红薯（去皮）',
-  '火麻籽（火麻仁、去壳）',
-  '食用盐（充分搅拌）',
+  '红薯',
+  '火麻籽',
+  '食用盐',
   '南美对虾虾仁',
 ].join('\n');
 
@@ -171,7 +171,7 @@ describe('RecipeCoverVisualBriefService · 工具取食材 + 形态说明', () =
     );
   });
 
-  it('工具结果只给名称和处理方式：不给占比，熟/生/干只保留切割部位信息', async () => {
+  it('工具结果只给名称：不带预处理、不带占比', async () => {
     mockToolFlow();
     const { service } = createService();
 
@@ -181,8 +181,12 @@ describe('RecipeCoverVisualBriefService · 工具取食材 + 形态说明', () =
     const toolMessage = secondCall.messages[3];
     expect(toolMessage.content).toBe(expectedToolResult);
     expect(toolMessage.content).not.toMatch(/\d/);
-    expect(toolMessage.content).not.toContain('熟');
-    expect(toolMessage.content).not.toContain('生/');
+    expect(toolMessage.content).not.toContain('去骨');
+    expect(toolMessage.content).not.toContain('去油');
+    expect(toolMessage.content).not.toContain('去皮');
+    expect(toolMessage.content).not.toContain('去壳');
+    expect(toolMessage.content).not.toContain('打碎');
+    expect(toolMessage.content).not.toContain('搅拌');
     expect(toolMessage.content).not.toContain('22.5');
   });
 

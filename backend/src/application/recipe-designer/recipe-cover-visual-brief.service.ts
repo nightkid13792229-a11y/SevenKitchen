@@ -21,7 +21,7 @@ const INGREDIENT_TOOL: DeepSeekToolDefinition = {
   type: 'function',
   function: {
     name: INGREDIENT_TOOL_NAME,
-    description: '返回当前食谱的食材，每行一种；括号里是处理方式。',
+    description: '返回当前食谱的食材名称，每行一种。',
     parameters: {
       type: 'object',
       properties: {},
@@ -30,30 +30,19 @@ const INGREDIENT_TOOL: DeepSeekToolDefinition = {
   },
 };
 
-/** 封面要一律画生的：这些状态词从工具结果里去掉，只保留切割/部位信息 */
-const RAW_STATE_TOKENS = new Set([
-  '生',
-  '熟',
-  '干',
-  '生重',
-  '熟重',
-  '干重',
-  '煮熟',
-  '蒸熟',
-  '烤',
-  '煎',
-  '炸',
-]);
-
 /**
- * 让 DeepSeek 当「食物造型师」（2026-11-07 结构化版）
+ * 让 DeepSeek 当「食物造型师」（2026-11-18 编辑摄影版）
  *
- * 模型只负责一件事：给每样食材写一句「形态说明」（整块/切片/堆成小堆……）。
+ * 模型只负责一件事：给每样食材写一句「封面形态」（整块/大块/整条/整颗……）。
+ *
+ * 2026-11-18 老板定：封面只表现食材的自然原始形态，**不读食谱的预处理字段**。
+ * 工具结果只给食材名称，模型看不到「去皮/去骨/打碎/煮熟」，
+ * 就不会把封面画成生产切配图。
+ *
  * 摆在哪、台面是什么、光线怎么打，全部由 `cover-style.ts` 的模板固定，
  * 这样同一套规则下的输出才稳定、可回归，也不会每张都换一个风格。
  *
- * 返回 `名称 → 形态` 的映射；解析失败时返回空对象，调用方会退回
- * 「处理方式 + 自然形态」，保证不会因为模型话术变化就生成不了封面。
+ * 返回 `名称 → 形态` 的映射；解析失败时返回空对象，调用方会按名称兜底。
  */
 @Injectable()
 export class RecipeCoverVisualBriefService {
@@ -120,20 +109,16 @@ export class RecipeCoverVisualBriefService {
     }
 
     const ingredients = await loadIngredients();
-    const rows = ingredients
-      .map((item) => ({
-        name: String(item?.name ?? '').trim(),
-        preparationMethod: String(item?.preparationMethod ?? '').trim(),
-      }))
-      .filter((item) => Boolean(item.name));
+    const names = ingredients
+      .map((item) => String(item?.name ?? '').trim())
+      .filter(Boolean);
 
-    if (rows.length === 0) {
+    if (names.length === 0) {
       throw new BadRequestException('这个食谱没有可用于生成封面的食材');
     }
 
-    const toolResult = rows
-      .map((row) => formatIngredientLine(row.name, row.preparationMethod))
-      .join('\n');
+    // 只给名称：不把「去皮/去骨/打碎/煮熟」交给模型，封面只画自然原始形态
+    const toolResult = names.join('\n');
 
     const messages: DeepSeekToolsMessage[] = [
       ...baseMessages,
@@ -173,20 +158,17 @@ export class RecipeCoverVisualBriefService {
       );
     }
 
-    const forms = parseForms(
-      second.content,
-      rows.map((row) => row.name),
-    );
+    const forms = parseForms(second.content, names);
     const filled = Object.keys(forms).length;
     this.logUsage(first.usage, second.usage);
     this.logger.log(
-      `[cover-forms] ${filled}/${rows.length} 项：${JSON.stringify(forms)}`,
+      `[cover-forms] ${filled}/${names.length} 项：${JSON.stringify(forms)}`,
     );
 
     if (filled === 0) {
-      // 不阻断：调用方会用「处理方式」兜底
+      // 不阻断：调用方会按食材名称给自然形态兜底
       this.logger.warn(
-        '[cover-forms] 模型没有按「名称｜形态」返回，改用处理方式兜底',
+        '[cover-forms] 模型没有按「名称｜形态」返回，改用名称兜底',
       );
     }
     return forms;
@@ -215,24 +197,6 @@ export class RecipeCoverVisualBriefService {
       `[cover-tokens] prompt=${promptTokens} completion=${completionTokens}`,
     );
   }
-}
-
-/**
- * 工具结果用自然的一行一种：名称（处理方式）。
- * 不带占比、不带数字；熟/生/干等状态词去掉，封面一律画生的。
- */
-function formatIngredientLine(name: string, preparation: string): string {
-  const cleaned = cleanPreparation(preparation);
-  return cleaned ? `${name}（${cleaned}）` : name;
-}
-
-function cleanPreparation(value: string): string {
-  return String(value ?? '')
-    .split(/[\/、]/)
-    .map((token) => token.trim())
-    .filter(Boolean)
-    .filter((token) => !RAW_STATE_TOKENS.has(token))
-    .join('、');
 }
 
 /**

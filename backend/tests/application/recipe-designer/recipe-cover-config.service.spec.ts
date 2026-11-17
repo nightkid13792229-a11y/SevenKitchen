@@ -21,7 +21,9 @@ describe('RecipeCoverConfigService', () => {
     prisma.recipeCoverConfig.findUnique.mockResolvedValue(null);
     const prompt = await service.getPromptTemplate();
     expect(prompt).toContain('get_recipe_ingredients');
-    expect(prompt).toContain('形态说明');
+    expect(prompt).toContain('自然、原始、完整形态');
+    expect(prompt).toContain('不要看食谱里的预处理字段');
+    expect(prompt).toContain('整块/大块');
     expect(prompt).toContain('不要写：摆放位置');
     expect(prompt).toBe(DEFAULT_RECIPE_COVER_PROMPT);
   });
@@ -39,6 +41,17 @@ describe('RecipeCoverConfigService', () => {
     prisma.recipeCoverConfig.findUnique.mockResolvedValue({
       promptTemplate:
         'You are a commercial food photographer. Put duck heart, duck gizzard and duck liver on three separate small dishes. Broccoli is a tree-like green head.',
+    });
+
+    await expect(service.getPromptTemplate()).resolves.toBe(
+      DEFAULT_RECIPE_COVER_PROMPT,
+    );
+  });
+
+  it('线上残留的 2026-11-07 旧默认也自动回退到新版', async () => {
+    prisma.recipeCoverConfig.findUnique.mockResolvedValue({
+      promptTemplate:
+        '你是高端鲜食狗粮品牌的商业食物摄影师兼食物造型师。\n然后为每一种食材写一句「形态说明」。',
     });
 
     await expect(service.getPromptTemplate()).resolves.toBe(

@@ -368,3 +368,68 @@ describe('SeriesCoverImageService', () => {
 
 
 });
+
+describe('SeriesCoverImageService · 补剂点缀', () => {
+  const prisma = {
+    recipeSeries: { findUnique: jest.fn(), update: jest.fn() },
+    recipe: { count: jest.fn(), findFirst: jest.fn() },
+    designRecipe: { findMany: jest.fn() },
+  };
+  const coverImageService = {
+    isAvailable: jest.fn(),
+    generate: jest.fn(),
+  };
+  let service: SeriesCoverImageService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma.recipeSeries.findUnique.mockResolvedValue(series());
+    prisma.recipe.count.mockResolvedValue(0);
+    prisma.recipe.findFirst.mockResolvedValue(null);
+    prisma.recipeSeries.update.mockResolvedValue(series());
+    coverImageService.isAvailable.mockResolvedValue(true);
+    coverImageService.generate.mockResolvedValue({
+      url: 'https://cos.example.com/ai.jpg',
+      provider: 'ARK',
+      model: 'doubao-seedream-5-0-pro-260628',
+    });
+    service = new SeriesCoverImageService(
+      prisma as any,
+      coverImageService as any,
+    );
+  });
+
+  it('补剂单独取、按克数排序；食材清单仍只算 FOOD', async () => {
+    prisma.designRecipe.findMany.mockResolvedValue([
+      draft('HIGH_ACTIVITY_ADULT', [
+        item({
+          weightG: 100,
+          ratioPercent: 70,
+          ingredient: { name: '鸡胸', type: 'FOOD' },
+        }),
+        item({
+          weightG: 2,
+          ratioPercent: null,
+          ingredient: { name: '海藻粉', type: 'SUPPLEMENT' },
+        }),
+        item({
+          weightG: 5,
+          ratioPercent: null,
+          ingredient: { name: '鸡蛋壳粉', type: 'SUPPLEMENT' },
+        }),
+      ]),
+    ]);
+
+    await service.generateForSeries('series-1');
+
+    expect(coverImageService.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ingredients: [expect.objectContaining({ name: '鸡胸' })],
+        supplements: [
+          { name: '鸡蛋壳粉', weightG: 5 },
+          { name: '海藻粉', weightG: 2 },
+        ],
+      }),
+    );
+  });
+});

@@ -4,7 +4,10 @@ import {
   RecipeCoverImageService,
   type RecipeCoverCandidate,
 } from './recipe-cover-image.service';
-import type { RecipeCoverIngredient } from './recipe-cover-prompt';
+import type {
+  RecipeCoverIngredient,
+  RecipeCoverSupplement,
+} from './recipe-cover-prompt';
 import { RecipeDesignerService } from './recipe-designer.service';
 
 type RecipeDesignerAccessInput = Parameters<
@@ -56,6 +59,7 @@ export class DesignRecipeCoverImageService {
     const generated = await this.coverImageService.generate({
       recipeName: String((draft as any)?.name ?? '定制食谱'),
       ingredients,
+      supplements: this.extractSupplements(items),
       // 模型调用 get_recipe_ingredients 时才把这份草稿的食材交给它
       loadIngredients: async () => ingredients,
       layout: 'COVER_16_9',
@@ -67,6 +71,41 @@ export class DesignRecipeCoverImageService {
       ...generated,
       foodNames: ingredients.map((item) => item.name),
     };
+  }
+
+  /**
+   * 补剂只用来决定画面边缘小碟里放什么状态（粉/胶囊/片/油），
+   * 不出现品牌包装。按克数取最显眼的几只，最多 4 个。
+   */
+  private extractSupplements(items: DraftItemLike[]): RecipeCoverSupplement[] {
+    const merged = new Map<string, { name: string; weight: number }>();
+
+    for (const item of items) {
+      const type = String(item?.ingredient?.type ?? '').toUpperCase();
+      if (type !== 'SUPPLEMENT') continue;
+      const name = String(item?.ingredient?.name ?? '').trim();
+      if (!name || name === '水') continue;
+
+      const weight =
+        Number(item?.weightG) > 0
+          ? Number(item.weightG)
+          : Number(item?.ratioPercent) > 0
+            ? Number(item.ratioPercent)
+            : 0;
+      if (!Number.isFinite(weight) || weight <= 0) continue;
+
+      const existing = merged.get(name);
+      if (existing) {
+        existing.weight += weight;
+      } else {
+        merged.set(name, { name, weight });
+      }
+    }
+
+    return [...merged.values()]
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 4)
+      .map((row) => ({ name: row.name, weightG: row.weight }));
   }
 
   private extractIngredients(items: DraftItemLike[]): RecipeCoverIngredient[] {

@@ -6,6 +6,17 @@ export interface RecipeCoverIngredient {
   ratioPercent?: number | null;
 }
 
+/**
+ * 补剂（2026-11-18）：封面里不再出现品牌包装/瓶子，
+ * 只用「小碟/小勺里的粉、胶囊、片、油」表现它存在。
+ */
+export interface RecipeCoverSupplement {
+  name: string;
+  /** 用量（用于选最显眼的 3 个；没有占比时用克数） */
+  weightG?: number | null;
+  ratioPercent?: number | null;
+}
+
 export interface BuildRecipeCoverPromptInput {
   /** 仅用于日志/兼容旧入口；不再写进提示词，避免模型画标题 */
   recipeName?: string;

@@ -24,7 +24,7 @@ describe('DesignRecipeCoverImageService', () => {
     });
   });
 
-  it('只取 FOOD、排除补剂/水、同名同预处理合并、占比归一化', async () => {
+  it('食材只取 FOOD、补剂单独取；水排除、同名同预处理合并、占比归一化', async () => {
     recipeDesignerService.getDraft.mockResolvedValue({
       name: '定制鸭肉',
       items: [
@@ -51,6 +51,8 @@ describe('DesignRecipeCoverImageService', () => {
       { name: '鸭胸', preparationMethod: '生', ratioPercent: 75 },
       { name: '南瓜', preparationMethod: '生', ratioPercent: 25 },
     ]);
+    // 补剂不进「食材」清单，只作为边缘小碟的状态提示
+    expect(call.supplements).toEqual([{ name: '钙粉', weightG: 5 }]);
     expect(result.foodNames).toEqual(['鸭胸', '南瓜']);
     expect(result.url).toContain('/recipes/covers/custom.jpg');
   });

@@ -124,12 +124,13 @@ describe('RecipeCoverImageService · Seedream', () => {
     expect(body.prompt).toContain(
       '画面中必须且只能出现以下 1 种食材，不要添加清单以外的任何食材：鸭胸。',
     );
-    // 品牌层固定：正俯拍 + 安全区 + 负面词
-    expect(body.prompt).toContain('正俯拍 90° 垂直向下');
-    expect(body.prompt).toContain('四边各留 10% 的空白');
+    // 品牌层固定：斜角 + 安全区 + 负面词
+    expect(body.prompt).toContain('斜上方 45–55°');
+    expect(body.prompt).not.toContain('正俯拍 90° 垂直向下');
+    expect(body.prompt).toContain('不要被画面边缘裁切');
     expect(body.prompt).toContain('不要熟食');
     // 形态来自文本模型
-    expect(body.prompt).toContain('鸭胸：两块并排平放，鸭皮朝上，划十字纹');
+    expect(body.prompt).toContain('鸭胸 — 两块并排平放，鸭皮朝上，划十字纹');
 
     expect(imageOptimizationService.optimizeForUpload).toHaveBeenCalledWith(
       Buffer.from([1, 2, 3]),
@@ -194,8 +195,9 @@ describe('RecipeCoverImageService · Seedream', () => {
     expect(new Set(prompts).size).toBe(3);
     for (const prompt of prompts) {
       expect(prompt).toContain('牛霖、南瓜');
-      expect(prompt).toContain('正俯拍 90° 垂直向下');
-      expect(prompt).toContain('四边各留 10% 的空白');
+      expect(prompt).toContain('斜上方 45–55°');
+      expect(prompt).not.toContain('正俯拍 90° 垂直向下');
+      expect(prompt).toContain('不要被画面边缘裁切');
     }
   });
 

@@ -16,7 +16,10 @@ import {
   RecipeCoverImageService,
   type RecipeCoverCandidate,
 } from './recipe-cover-image.service';
-import type { RecipeCoverIngredient } from './recipe-cover-prompt';
+import type {
+  RecipeCoverIngredient,
+  RecipeCoverSupplement,
+} from './recipe-cover-prompt';
 import { parseSeriesReleaseDraft } from '../../domain/recipe-designer/series-release-draft';
 
 /**
@@ -159,6 +162,7 @@ export class SeriesCoverImageService {
       recipeName,
       foodNames,
       ingredients: source.ingredients,
+      supplements: source.supplements,
       // 模型调用 get_recipe_ingredients 时才把该阶段的食材交给它
       loadIngredients: async () => source.ingredients,
       layout: 'COVER_16_9',
@@ -201,6 +205,7 @@ export class SeriesCoverImageService {
   private async loadCoverIngredients(seriesId: string): Promise<{
     stageCode: string | null;
     ingredients: RecipeCoverIngredient[];
+    supplements: RecipeCoverSupplement[];
   }> {
     const drafts = await this.prisma.designRecipe.findMany({
       where: { seriesId },
@@ -234,30 +239,27 @@ export class SeriesCoverImageService {
     // 1) 阶段优先级：设计草稿（同一阶段多份时按 updatedAt desc）
     for (const stage of STAGE_PRIORITY) {
       for (const draft of draftsByStage.get(stage) ?? []) {
-        const ingredients = this.extractIngredients(draft.items);
-        if (ingredients.length > 0) {
-          return { stageCode: stage, ingredients };
+        const source = this.extractCoverSource(draft.items);
+        if (source.ingredients.length > 0) {
+          return { stageCode: stage, ...source };
         }
       }
     }
 
     // 2) 阶段优先级：已发布 / 草稿状态的食谱（老系列可能没有设计草稿）
     for (const stage of STAGE_PRIORITY) {
-      const ingredients = await this.loadStageRecipeIngredients(
-        seriesId,
-        stage,
-      );
-      if (ingredients.length > 0) {
-        return { stageCode: stage, ingredients };
+      const source = await this.loadStageRecipeIngredients(seriesId, stage);
+      if (source.ingredients.length > 0) {
+        return { stageCode: stage, ...source };
       }
     }
 
     // 3) 四个优先阶段都没有：退回最近一份有食材的草稿（任何阶段）
     for (const draft of drafts) {
-      const ingredients = this.extractIngredients(draft.items);
-      if (ingredients.length > 0) {
+      const source = this.extractCoverSource(draft.items);
+      if (source.ingredients.length > 0) {
         const stage = String(draft.seriesLifeStage ?? '').trim();
-        return { stageCode: stage || null, ingredients };
+        return { stageCode: stage || null, ...source };
       }
     }
 
@@ -282,22 +284,25 @@ export class SeriesCoverImageService {
       },
     });
     if (recipe) {
-      const ingredients = this.extractIngredients(recipe.items);
-      if (ingredients.length > 0) {
+      const source = this.extractCoverSource(recipe.items);
+      if (source.ingredients.length > 0) {
         return {
           stageCode: String(recipe.seriesLifeStage ?? '').trim() || null,
-          ingredients,
+          ...source,
         };
       }
     }
 
-    return { stageCode: null, ingredients: [] };
+    return { stageCode: null, ingredients: [], supplements: [] };
   }
 
   private async loadStageRecipeIngredients(
     seriesId: string,
     stage: string,
-  ): Promise<RecipeCoverIngredient[]> {
+  ): Promise<{
+    ingredients: RecipeCoverIngredient[];
+    supplements: RecipeCoverSupplement[];
+  }> {
     const recipe = await this.prisma.recipe.findFirst({
       where: {
         seriesId,
@@ -317,7 +322,55 @@ export class SeriesCoverImageService {
         },
       },
     });
-    return recipe ? this.extractIngredients(recipe.items) : [];
+    return recipe
+      ? this.extractCoverSource(recipe.items)
+      : { ingredients: [], supplements: [] };
+  }
+
+  private extractCoverSource(items: CoverItemLike[]): {
+    ingredients: RecipeCoverIngredient[];
+    supplements: RecipeCoverSupplement[];
+  } {
+    return {
+      ingredients: this.extractIngredients(items),
+      supplements: this.extractSupplements(items),
+    };
+  }
+
+  /**
+   * 补剂只用来决定画面边缘小碟里放什么状态（粉/胶囊/片/油），
+   * 不出现品牌包装。按克数取最显眼的几只，最多 4 个。
+   */
+  private extractSupplements(
+    items: CoverItemLike[],
+  ): RecipeCoverSupplement[] {
+    const merged = new Map<string, { name: string; weight: number }>();
+
+    for (const item of items) {
+      if (item.ingredient?.type !== IngredientType.SUPPLEMENT) continue;
+      const name = String(item.ingredient?.name ?? '').trim();
+      if (!name) continue;
+
+      const weight =
+        Number(item.weightG ?? item.exampleWeight) > 0
+          ? Number(item.weightG ?? item.exampleWeight)
+          : Number(item.ratioPercent) > 0
+            ? Number(item.ratioPercent)
+            : 0;
+      if (!Number.isFinite(weight) || weight <= 0) continue;
+
+      const existing = merged.get(name);
+      if (existing) {
+        existing.weight += weight;
+      } else {
+        merged.set(name, { name, weight });
+      }
+    }
+
+    return [...merged.values()]
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 4)
+      .map((row) => ({ name: row.name, weightG: row.weight }));
   }
 
   /**

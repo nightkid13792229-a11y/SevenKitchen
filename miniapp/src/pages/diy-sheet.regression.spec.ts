@@ -862,4 +862,41 @@ describe('DIY制作单 · 2026-10-24 第二轮', () => {
     expect(page).toContain('buildFinishedFoodOrderUrl(effectiveRecipeId.value')
     expect(page).not.toContain('buildFinishedFoodOrderUrl(recipeId.value')
   })
+
+  /**
+   * 2026-11-18 顾客反馈：制作单里的补剂「好像没有办法换」。
+   *
+   * 三个断点，缺一个都换不成：
+   * 1. 选择要按「行」的编号存（recipeItemId）。补剂行原来没带 selectionKey，
+   *    弹窗退回用「当前产品编号」当键，存进去永远读不出来，换完还是原来那款。
+   * 2. 弹窗里每张商品卡都要有「确认选择」。原来只有「有图」那套布局把它藏了，
+   *    于是同一个弹窗里有的卡能确认、有的卡不能 —— 能不能换取决于有没有商品图。
+   * 3. 入口不能只有产品名旁边那颗小徽章：产品名所在的整格都该能点开选择弹窗。
+   */
+  it('补剂换款：按行保存选择、每张卡都能确认、产品格整块可点', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+    const templateSource = page.slice(0, page.indexOf('<script setup'))
+
+    // 1. 补剂行带上「行」选择键，并告诉弹窗当前选的是第几款
+    const supplementBlock = page.match(
+      /const supplementItemsDetailed = computed\(\(\) => \{[\s\S]*?\n\}\)\n/,
+    )?.[0] || ''
+    expect(supplementBlock).toContain('selectionKey: row.recipeItemId')
+    expect(supplementBlock).toContain('selectedRPIndex:')
+
+    const showSpecFn = page.match(/function showSpecModal\(item: any\) \{[\s\S]*?\n\}\n/)?.[0] || ''
+    expect(showSpecFn).toContain('item.selectedRPIndex')
+
+    // 2. 四套按钮布局（多商品/单商品 × 无图竖排/有图整行）都保留「确认选择」
+    expect(templateSource).not.toContain("currentSpec.type !== 'SUPPLEMENT'")
+    expect((templateSource.match(/class="btn-confirm-select"/g) || []).length).toBe(4)
+
+    // 3. 产品名所在的整格都能打开选择弹窗（徽章只是视觉提示）
+    expect(templateSource).toMatch(
+      /class="row-item (?:recommend-col|brand-col) recommend-choice"\s+@tap\.stop="showSpecModal\(item\)"/,
+    )
+  })
 })

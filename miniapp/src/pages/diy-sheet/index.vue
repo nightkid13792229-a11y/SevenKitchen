@@ -98,6 +98,7 @@
               <view
                 v-if="item.selectedProductDisplayText !== '-' && item.hasSpecDetail"
                 class="row-item recommend-col recommend-choice"
+                @tap.stop="showSpecModal(item)"
               >
                 <text class="recommend-main">{{ item.selectedProductDisplayText }}</text>
                 <text
@@ -153,6 +154,7 @@
               <view
                 v-if="item.hasSpecDetail"
                 class="row-item brand-col recommend-choice"
+                @tap.stop="showSpecModal(item)"
               >
                 <text class="recommend-main">{{ item.selectedProductDisplayText }}</text>
                 <text
@@ -456,7 +458,6 @@
                   @tap.stop="handlePurchase(rp.purchaseLink, rp.name)"
                 >去购买</button>
                 <button
-                  v-if="currentSpec.type !== 'SUPPLEMENT'"
                   class="btn-confirm-select"
                   @tap.stop="confirmProductSelection(rpIdx)"
                 >确认选择</button>
@@ -510,7 +511,6 @@
                   去购买
                 </button>
                 <button
-                  v-if="currentSpec.type !== 'SUPPLEMENT'"
                   class="btn-confirm-select"
                   @tap="confirmSingleProductSelection"
                 >
@@ -529,7 +529,6 @@
               去购买
             </button>
             <button
-              v-if="currentSpec.type !== 'SUPPLEMENT'"
               class="btn-confirm-select"
               @tap="confirmSingleProductSelection"
             >
@@ -1056,6 +1055,9 @@ const supplementItemsDetailed = computed(() => {
     )
     return {
       ...row,
+      // 换款按「行」存（recipeItemId），不能退回落产品编号：
+      // savedSupplementSelections 读的时候也只认 recipeItemId，键错了换完等于没换。
+      selectionKey: row.recipeItemId,
       amountStr: formatSupplementAmountWithDisplayUnit(
         row.amount,
         row.unit,
@@ -2030,7 +2032,12 @@ function showSpecModal(item: any) {
       }
     : item
   modalSelectionKey.value = item.selectionKey || item.ingredientId || ''
-  modalSelectedRpIndex.value = selectedRpIndexMap.value[modalSelectionKey.value] ?? 0
+  // 补剂：行里已经算好了「当前选的是第几款」，直接用它打勾；
+  // 食材：沿用页面内的选择表。原来两者共用一张表，补剂的勾会落在别人头上。
+  modalSelectedRpIndex.value =
+    item.type === 'SUPPLEMENT'
+      ? Number(item.selectedRPIndex ?? 0)
+      : (selectedRpIndexMap.value[modalSelectionKey.value] ?? 0)
   showSpec.value = true
 }
 
@@ -2111,13 +2118,27 @@ function confirmRecommendedProductSelection() {
       closeSpecModal()
       return
     }
+    // 下架的款不能「确认」：否则照样存进去、算表时又回落默认，看起来像没换。
+    if (option.available === false) {
+      uni.showToast({
+        title: option.unavailableReason || '这款暂时买不到，换一款试试',
+        icon: 'none'
+      })
+      return
+    }
     // 记的是顾客自己想买的那款，不影响我们分装/生产
     savedSupplementSelections.value = {
       ...savedSupplementSelections.value,
       [key]: option.ingredientId
     }
     void autoSaveDiySheet()
+    // 换完给一句明确的回执：这张卡点下去确实生效了，不是只打了个勾
+    const switchLabel = String(option.brand || option.name || '').trim()
     closeSpecModal()
+    uni.showToast({
+      title: switchLabel ? `已换成 ${switchLabel}` : '已更换补剂',
+      icon: 'none'
+    })
     return
   }
   selectedRpIndexMap.value[key] = modalSelectedRpIndex.value

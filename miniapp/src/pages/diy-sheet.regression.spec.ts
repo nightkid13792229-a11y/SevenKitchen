@@ -872,6 +872,10 @@ describe('DIY制作单 · 2026-10-24 第二轮', () => {
    * 2. 弹窗里每张商品卡都要有「确认选择」。原来只有「有图」那套布局把它藏了，
    *    于是同一个弹窗里有的卡能确认、有的卡不能 —— 能不能换取决于有没有商品图。
    * 3. 入口不能只有产品名旁边那颗小徽章：产品名所在的整格都该能点开选择弹窗。
+   *
+   * 2026-11-19 审核补齐：断言必须能抓住回退。原来「selectedRPIndex:」和
+   * 「正好 4 颗按钮」两条在旧代码上也成立（恒真），「整格可点」只要求命中一次
+   * （删掉补剂格仍能命中食材格）。
    */
   it('补剂换款：按行保存选择、每张卡都能确认、产品格整块可点', () => {
     const page = readFileSync(
@@ -880,23 +884,71 @@ describe('DIY制作单 · 2026-10-24 第二轮', () => {
     )
     const templateSource = page.slice(0, page.indexOf('<script setup'))
 
-    // 1. 补剂行带上「行」选择键，并告诉弹窗当前选的是第几款
+    // 1. 补剂行带上「行」选择键（读表只认 recipeItemId，键错了换完等于没换）
     const supplementBlock = page.match(
       /const supplementItemsDetailed = computed\(\(\) => \{[\s\S]*?\n\}\)\n/,
     )?.[0] || ''
     expect(supplementBlock).toContain('selectionKey: row.recipeItemId')
-    expect(supplementBlock).toContain('selectedRPIndex:')
 
+    // 2. 弹窗打开时按行里当前选中的那款打勾（旧代码读的是另一张下标表）
     const showSpecFn = page.match(/function showSpecModal\(item: any\) \{[\s\S]*?\n\}\n/)?.[0] || ''
     expect(showSpecFn).toContain('item.selectedRPIndex')
 
-    // 2. 四套按钮布局（多商品/单商品 × 无图竖排/有图整行）都保留「确认选择」
+    // 3. 四颗「确认选择」都不带 v-if：不再按补剂类型/有没有图决定显不显示
     expect(templateSource).not.toContain("currentSpec.type !== 'SUPPLEMENT'")
-    expect((templateSource.match(/class="btn-confirm-select"/g) || []).length).toBe(4)
-
-    // 3. 产品名所在的整格都能打开选择弹窗（徽章只是视觉提示）
-    expect(templateSource).toMatch(
-      /class="row-item (?:recommend-col|brand-col) recommend-choice"\s+@tap\.stop="showSpecModal\(item\)"/,
+    const confirmButtons = (templateSource.match(/<button[\s\S]*?<\/button>/g) || []).filter(
+      (tag) => tag.includes('class="btn-confirm-select"'),
     )
+    expect(confirmButtons).toHaveLength(4)
+    for (const tag of confirmButtons) {
+      expect(tag).not.toContain('v-if')
+    }
+
+    // 4. 食材格和补剂格都能整格点开弹窗（只命中一次 = 补剂入口又没了）
+    const tapCells =
+      templateSource.match(
+        /class="row-item (?:recommend-col|brand-col) recommend-choice"\s+@tap\.stop="showSpecModal\(item\)"/g,
+      ) || []
+    expect(tapCells).toHaveLength(2)
+  })
+
+  /**
+   * 2026-11-19 审核：单商品布局原来只 closeSpecModal()，补剂候选只有 1 个时
+   * 「确认选择」既不保存、也不提示下架原因 —— 等于又一次"点了没反应"。
+   */
+  it('单商品布局的确认也走同一套：下架给提示、能存就保存', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+    const confirmSingleFn =
+      page.match(/function confirmSingleProductSelection\(\)[\s\S]*?\n\}\n/)?.[0] || ''
+
+    expect(confirmSingleFn).toContain('confirmRecommendedProductSelection()')
+    expect(confirmSingleFn).not.toContain('closeSpecModal()')
+  })
+
+  /**
+   * 2026-11-19 审核：下架原因来自后端内部算量（例："展示单位「g」无法与库存
+   * 基准单位 mg 1:1 对应"），不能直接弹给顾客；只打日志，界面给一句人话。
+   */
+  it('下架补剂只给顾客一句人话，内部原因进日志', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+    const confirmFn =
+      page.match(/function confirmRecommendedProductSelection\(\)[\s\S]*?\n\}\n/)?.[0] || ''
+
+    expect(confirmFn).toContain('option.available === false')
+    expect(confirmFn).toContain('console.warn')
+    // 后端原因只能进日志，不能当提示语直接弹给顾客
+    expect(confirmFn).not.toContain('title: option.unavailableReason')
+    expect(confirmFn).toContain('暂时不可选')
+
+    // 弹窗里下架款要有角标，别等点了确认才被拒
+    const templateSource = page.slice(0, page.indexOf('<script setup'))
+    expect(templateSource).toContain('rp-card-unavailable')
+    expect(templateSource).toMatch(/rp-card-unavailable[\s\S]{0,80}暂不可选/)
   })
 })

@@ -73,6 +73,27 @@ export class DIYSheetStorageService {
       // 已冻结：内容没变就复用；内容变了必须新建，不能覆盖旧单
       if (existing.snapshot) {
         if (this.sameFrozenContent(existing, dto, dogName)) {
+          /**
+           * 冻结的是「生产内容」；顾客自购哪一款补剂不影响我们分装/生产，
+           * 所以允许在冻结单上原地更新它。
+           *
+           * 2026-11-19：不这么做的话，换到同浓度的另一个品牌时采购清单
+           * 一字不差 → 判定"内容没变"直接返回旧单，回包里还是旧选择，
+           * 页面刚提示"已换成 X"下一秒就跳回旧款（顾客看到的就是"换不了"）。
+           */
+          if (
+            dto.supplementSelections !== undefined &&
+            stableStringify(existing.supplementSelections ?? null) !==
+              stableStringify(dto.supplementSelections ?? null)
+          ) {
+            const updated = await this.prisma.dIYSheet.update({
+              where: { id: existing.id },
+              data: {
+                supplementSelections: dto.supplementSelections as any,
+              },
+            });
+            return this.toResponseDto(updated);
+          }
           return this.toResponseDto(existing);
         }
       } else {

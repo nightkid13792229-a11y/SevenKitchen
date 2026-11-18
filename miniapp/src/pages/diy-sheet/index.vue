@@ -386,7 +386,11 @@
               @tap="selectRecommendedProduct(modalSelectionKey, rpIdx)"
             >
               <view class="rp-card-header">
-                <text class="rp-card-name">{{ rp.name }}</text>
+                <view class="rp-card-name-row">
+                  <text class="rp-card-name">{{ rp.name }}</text>
+                  <!-- 下架/算不出量的候选：先说清楚，别等顾客点了确认才被拒 -->
+                  <text v-if="rp.available === false" class="rp-card-unavailable">暂不可选</text>
+                </view>
                 <!-- 选中状态：右上角打勾（不再用"已选"文字角标） -->
                 <text v-if="rpIdx === modalSelectedRpIndex" class="rp-card-check">✓</text>
               </view>
@@ -657,6 +661,7 @@ import {
   DIY_SHEET_SPEC_MODAL_TITLE,
   formatFoodSelectedProductDisplayText,
   formatRecommendationActionLabel,
+  formatSelectedProductDisplayText,
   getPurchaseTipByPlatform,
   getSpecRecommendedPurchaseChannelDisplay
 } from './copy'
@@ -2062,9 +2067,9 @@ function confirmProductSelection(rpIndex: number): void {
   confirmRecommendedProductSelection()
 }
 
-/** 单商品/无推荐商品：当前商品就是选中的，确认即关闭 */
+/** 单商品/无推荐商品：也是「确认」——统一走同一套（下架校验、保存、回执） */
 function confirmSingleProductSelection(): void {
-  closeSpecModal()
+  confirmRecommendedProductSelection()
 }
 
 function closeSpecModal() {
@@ -2120,23 +2125,35 @@ function confirmRecommendedProductSelection() {
     }
     // 下架的款不能「确认」：否则照样存进去、算表时又回落默认，看起来像没换。
     if (option.available === false) {
+      // 后端原因（"展示单位 g 无法与库存基准单位 mg 1:1 对应"）是内部算量话术，
+      // 只进日志；顾客看到的是"这款暂时不能选"。
+      console.warn(
+        '[DIYSheet] 补剂候选暂不可选：',
+        option.name,
+        option.unavailableReason || ''
+      )
       uni.showToast({
-        title: option.unavailableReason || '这款暂时买不到，换一款试试',
+        title: '这款暂时不可选，换一款试试',
         icon: 'none'
       })
       return
     }
     // 记的是顾客自己想买的那款，不影响我们分装/生产
+    const switched = option.ingredientId !== currentSpec.value?.ingredientId
     savedSupplementSelections.value = {
       ...savedSupplementSelections.value,
       [key]: option.ingredientId
     }
     void autoSaveDiySheet()
-    // 换完给一句明确的回执：这张卡点下去确实生效了，不是只打了个勾
-    const switchLabel = String(option.brand || option.name || '').trim()
+    // 换完给一句明确的回执：这张卡点下去确实生效了，不是只打了个勾。
+    // 单候选时没有"换"这回事，只说已确认，别骗顾客。
+    const optionLabel = formatSelectedProductDisplayText(
+      option,
+      currentSpec.value?.name
+    )
     closeSpecModal()
     uni.showToast({
-      title: switchLabel ? `已换成 ${switchLabel}` : '已更换补剂',
+      title: switched && optionLabel !== '-' ? `已换成 ${optionLabel}` : '已确认',
       icon: 'none'
     })
     return
@@ -3394,6 +3411,24 @@ onShareTimeline(() => {
   font-size: 28rpx;
   font-weight: bold;
   color: #26261f;
+}
+
+.rp-card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  min-width: 0;
+}
+
+/* 下架/算不出用量的候选：灰底小标签，和选中态（墨绿/金色）区分开 */
+.rp-card-unavailable {
+  font-size: 20rpx;
+  line-height: 1;
+  color: #8a6b33;
+  background-color: #f6efe0;
+  padding: 6rpx 12rpx;
+  border-radius: 10rpx;
+  white-space: nowrap;
 }
 
 .rp-card-active .rp-card-name {

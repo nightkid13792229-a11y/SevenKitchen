@@ -1,22 +1,23 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { AgentProviderConfigService } from '../nutrition-governance/agent-provider-config.service';
+import { INGREDIENT_INTAKE_AGENT_PURPOSE } from './ingredient-creation-intake.service';
 
 /**
  * 标签图识别：把管理员传上来的标签照片读成文字。
  *
- * 为什么不用腾讯云 OCR：2026-11-19 实测账号里那个服务没开通
- * （调用直接回「服务未开通」），补剂包装识别这条老链路因此也是哑的。
- * 而智谱的 Key 我们本来就有（生图在用），它的视觉模型读标签字很准：
- * 同一张 Thorne 标签，glm-4v-flash 6 秒抄回来，连 25 mg / 139% 都对。
+ * 用的是**补剂 Agent 自己那条 DeepSeek 配置**（多模态）：一个模型两件事都干，
+ * 不再需要单独的 OCR 服务（腾讯云那条老链路本来也没开通）。
  *
- * 这里只做"把图上的字抄下来"，不做结构化、不认识营养素——
- * 抄出来的文本交给 Agent，由它按档案字段去判断，和知识库那条路保持同一个分工。
+ * 两个坑记在这里：
+ * 1. 必须 `thinking: disabled`——默认开着思考，1200 个 token 全烧在 reasoning 上，
+ *    content 直接是空的（2026-11-19 实测）；
+ * 2. 只做"把图上的字抄下来"，不做结构化、不认识营养素：抄出来的文本交给 Agent，
+ *    由它按档案字段判断，和知识库那条路保持同一个分工。
  */
 
-/** 读标签用视觉模型；生图那条配置里的 model 是 glm-image，不能拿来用。 */
-const VISION_MODEL = 'glm-4v-flash';
-const VISION_PATH = '/api/paas/v4/chat/completions';
+const CHAT_PATH = '/chat/completions';
 const TIMEOUT_MS = 60_000;
+const MAX_TOKENS = 1200;
 const MAX_TEXT_CHARS = 8000;
 
 const PROMPT = [
@@ -44,12 +45,15 @@ export class SupplementLabelVisionService {
       throw new BadRequestException('标签图必须是 http/https 的图片地址');
     }
 
-    const runtime = await this.providerConfig.getAnyEnabledProviderRuntimeConfig('ZHIPU');
+    const runtime = await this.providerConfig.getEnabledDeepSeekRuntimeConfig({
+      purpose: INGREDIENT_INTAKE_AGENT_PURPOSE,
+      fallbackToDefault: false
+    });
     const base = runtime.baseUrl.replace(/\/+$/, '');
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
-      const response = await fetch(`${base}${VISION_PATH}`, {
+      const response = await fetch(`${base}${CHAT_PATH}`, {
         method: 'POST',
         signal: controller.signal,
         headers: {
@@ -57,8 +61,10 @@ export class SupplementLabelVisionService {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: VISION_MODEL,
+          model: runtime.model,
           temperature: 0,
+          max_tokens: MAX_TOKENS,
+          thinking: { type: 'disabled' },
           messages: [
             {
               role: 'user',
@@ -74,14 +80,23 @@ export class SupplementLabelVisionService {
         throw new BadRequestException(`标签图识别失败（${response.status}），可以换一张更清晰的图`);
       }
       const payload = (await response.json()) as {
-        choices?: { message?: { content?: unknown } }[];
+        choices?: {
+          finish_reason?: string;
+          message?: { content?: unknown };
+        }[];
       };
-      const content = payload.choices?.[0]?.message?.content;
+      const choice = payload.choices?.[0];
+      const content = choice?.message?.content;
       const text = typeof content === 'string' ? content.trim() : '';
       if (!text) {
-        throw new BadRequestException('这张图没读出文字，换一张更清晰、正对镜头的标签图');
+        // content 空基本就是被截断（思考吃掉了预算），如实报，不要返回半截
+        throw new BadRequestException(
+          choice?.finish_reason === 'length'
+            ? '这张图内容太长，没念完；把它裁成「只含标签」的一块再传'
+            : '这张图没读出文字，换一张更清晰、正对镜头的标签图'
+        );
       }
-      return { text: text.slice(0, MAX_TEXT_CHARS), imageUrl: url, model: VISION_MODEL };
+      return { text: text.slice(0, MAX_TEXT_CHARS), imageUrl: url, model: runtime.model };
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;

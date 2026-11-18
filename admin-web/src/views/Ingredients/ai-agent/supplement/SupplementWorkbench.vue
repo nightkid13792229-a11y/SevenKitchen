@@ -37,10 +37,23 @@
 
       <div class="wb-block">
         <label class="wb-label">标签图片地址</label>
-        <el-input
-          v-model="draft.evidence.labelImageUrl"
-          placeholder="上传后的图片地址"
-          clearable
+        <div class="wb-link-row">
+          <el-input
+            v-model="draft.evidence.labelImageUrl"
+            placeholder="上传后的图片地址"
+            clearable
+          />
+          <el-button :loading="uploadingLabel" @click="pickLabelImage">上传标签图</el-button>
+        </div>
+        <p class="wb-label-hint">
+          选好商品后，把标签那面拍照或截图传上来；传好跟 AI 说一声，它会自己识别上面的字。
+        </p>
+        <input
+          ref="labelFileRef"
+          type="file"
+          accept="image/*"
+          style="display: none"
+          @change="onLabelFile"
         />
       </div>
 
@@ -379,6 +392,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
+import { ingredientApi } from '@/api/ingredients'
 import SupplementCompare from './SupplementCompare.vue'
 import SupplementChat from './SupplementChat.vue'
 import { ingredientCatalogApi, type FeedAdditiveMatch } from '@/api/ingredientCatalog'
@@ -406,6 +420,40 @@ import {
 const emit = defineEmits<{
   (event: 'saved', payload: { ingredientId: string; nutritionFoodId: string; evidenceId: string }): void
 }>()
+
+const labelFileRef = ref<HTMLInputElement | null>(null)
+const uploadingLabel = ref(false)
+
+function pickLabelImage(): void {
+  labelFileRef.value?.click()
+}
+
+/** 标签图只做一件事：转存到我们自己的图床，把地址填进草稿，剩下的交给 AI 去识别。 */
+async function onLabelFile(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) {
+    return
+  }
+  uploadingLabel.value = true
+  try {
+    const uploaded = (await ingredientApi.uploadIngredientDiyImage(file)) as unknown as {
+      url?: string
+      data?: { url?: string }
+    }
+    const url = uploaded.url ?? uploaded.data?.url ?? ''
+    if (!url) {
+      throw new Error('upload failed')
+    }
+    draft.evidence.labelImageUrl = url
+    ElMessage.success('标签图已上传，跟 AI 说「传好了」，它就会去识别')
+  } catch {
+    ElMessage.error('这张图没传上去，可以重试或手动粘贴图片地址')
+  } finally {
+    uploadingLabel.value = false
+    input.value = ''
+  }
+}
 
 const draft = reactive<SupplementDraftValue>(emptySupplementDraft())
 const showAllNutrients = ref(false)
@@ -848,6 +896,7 @@ async function confirm(): Promise<void> {
   padding: 10px 12px 0;
 }
 .wb-link-row{display:flex;gap:8px;align-items:center}
+.wb-label-hint{margin:6px 0 0;font-size:11px;color:#8a9099;line-height:1.5}
 .wb-option-note{float:right;font-size:11px;color:#9aa2ab}
 .wb-price-hint{margin:0 0 4px;font-size:11px;color:#8a9099}
 .wb-catalog-hint{margin:4px 0 0;font-size:11px;color:#b26a00;line-height:1.5}

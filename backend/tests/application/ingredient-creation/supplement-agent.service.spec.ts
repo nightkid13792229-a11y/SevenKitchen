@@ -101,6 +101,7 @@ function service() {
     service: new SupplementAgentService(
       providerConfig,
       knowledge as never,
+      { recognizeImage: jest.fn(async () => ({ text: 'SUPPLEMENT FACTS\nIron 25 mg', confidence: 90 })) } as never,
       preview as never,
       catalog as never
     ),
@@ -123,7 +124,7 @@ describe('工具循环', () => {
     const toolNames = (body.tools as { function: { name: string } }[]).map(
       (tool) => tool.function.name
     );
-    expect(toolNames).toEqual(expect.arrayContaining(['kb_catalog', 'kb_find', 'kb_read']));
+    expect(toolNames).toEqual(expect.arrayContaining(['kb_catalog', 'kb_find', 'kb_read', 'read_label_image']));
     expect(toolNames).not.toContain('search_knowledge');
   });
 
@@ -136,6 +137,7 @@ describe('工具循环', () => {
     expect(prompt).toContain('原文');
     expect(prompt).toContain('页码');
     expect(prompt).toContain('知识库没查到');
+    expect(prompt).toContain('标签图片地址');
     // 这几句是上一版里我们替模型下的结论，必须消失。
     expect(prompt).not.toContain('判断顺序');
     expect(prompt).not.toContain('螯合形态是否一定优于离子型');

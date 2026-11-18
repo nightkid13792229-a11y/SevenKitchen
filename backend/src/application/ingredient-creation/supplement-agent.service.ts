@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   AgentProviderConfigService,
   type DeepSeekRuntimeConfig
@@ -13,6 +13,10 @@ import type { SupplementDraftRecord } from '../../domain/ingredient/supplement-d
 import { SupplementLinkPreviewService } from './supplement-link-preview.service';
 import { FeedAdditiveCatalogService } from '../../domain/ingredient/feed-additive-catalog.service';
 import { KnowledgeGatewayService } from '../knowledge-v3/knowledge-gateway.service';
+import {
+  SUPPLEMENT_LABEL_OCR_PROVIDER,
+  type SupplementLabelOcrProvider
+} from '../recipe-designer/supplement-label-extraction.service';
 import { KNOWLEDGE_TOOL_DEFINITIONS } from '../knowledge-v3/knowledge-v3.tools';
 
 /**
@@ -90,9 +94,15 @@ const SYSTEM_PROMPT = `你是宠物鲜食后台的补剂助手，帮管理员把
 - search_products：搜 iHerb 商品
 - fetch_product：读商品页，拿价格和能解析出来的字段
 - read_product_label：读商品页的**营养标签正文**（每份几粒、每份各营养素）
+- read_label_image：识别**管理员上传的标签图**上的字（图在草稿的「标签图片地址」里）
 
 商品页的正文抽取经常漏掉标签表（标签在图里）。fetch_product 的 nutrients 是空的时候，
 用 read_product_label 再读一次；**仍然读不到就如实说，别拿商品标题里的“25 mg”凑**。
+
+**都读不到标签时（这是常态，不要拖到工具用完才说）**：
+1. 把选好的商品链接原样贴给管理员；
+2. 请管理员打开链接、把标签那面拍照/截图，传到右边「标签图片地址」；
+3. 管理员说传好了，你再调 read_label_image 读那张图，按识别出来的原文写 servingNutrients。
 - lookup_feed_catalog：查《饲料添加剂品种目录》的规范写法与来源说明
 - write_draft：把字段写进档案草稿
 - ask_user：需要人拍板时提问
@@ -135,6 +145,8 @@ export class SupplementAgentService {
   constructor(
     private readonly providerConfig: AgentProviderConfigService,
     private readonly knowledge: KnowledgeGatewayService,
+    @Inject(SUPPLEMENT_LABEL_OCR_PROVIDER)
+    private readonly labelOcr: SupplementLabelOcrProvider,
     private readonly preview: SupplementLinkPreviewService,
     private readonly catalog: FeedAdditiveCatalogService
   ) {}
@@ -288,6 +300,7 @@ export class SupplementAgentService {
   ): ToolContext {
     return {
       knowledge: this.knowledge,
+      labelOcr: this.labelOcr,
       preview: this.preview,
       catalog: this.catalog,
       draft: { ...draft },

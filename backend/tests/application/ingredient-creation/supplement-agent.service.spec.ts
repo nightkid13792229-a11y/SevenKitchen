@@ -101,7 +101,7 @@ function service() {
     service: new SupplementAgentService(
       providerConfig,
       knowledge as never,
-      { recognizeImage: jest.fn(async () => ({ text: 'SUPPLEMENT FACTS\nIron 25 mg', confidence: 90 })) } as never,
+      { read: jest.fn(async () => ({ text: 'SUPPLEMENT FACTS\nIron 25 mg', imageUrl: 'https://cos/x.jpg', model: 'glm-4v-flash' })) } as never,
       preview as never,
       catalog as never
     ),

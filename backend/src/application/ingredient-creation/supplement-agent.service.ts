@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   AgentProviderConfigService,
   type DeepSeekRuntimeConfig
@@ -13,10 +13,7 @@ import type { SupplementDraftRecord } from '../../domain/ingredient/supplement-d
 import { SupplementLinkPreviewService } from './supplement-link-preview.service';
 import { FeedAdditiveCatalogService } from '../../domain/ingredient/feed-additive-catalog.service';
 import { KnowledgeGatewayService } from '../knowledge-v3/knowledge-gateway.service';
-import {
-  SUPPLEMENT_LABEL_OCR_PROVIDER,
-  type SupplementLabelOcrProvider
-} from '../recipe-designer/supplement-label-extraction.service';
+import { SupplementLabelVisionService } from './supplement-label-vision.service';
 import { KNOWLEDGE_TOOL_DEFINITIONS } from '../knowledge-v3/knowledge-v3.tools';
 
 /**
@@ -145,8 +142,7 @@ export class SupplementAgentService {
   constructor(
     private readonly providerConfig: AgentProviderConfigService,
     private readonly knowledge: KnowledgeGatewayService,
-    @Inject(SUPPLEMENT_LABEL_OCR_PROVIDER)
-    private readonly labelOcr: SupplementLabelOcrProvider,
+    private readonly labelReader: SupplementLabelVisionService,
     private readonly preview: SupplementLinkPreviewService,
     private readonly catalog: FeedAdditiveCatalogService
   ) {}
@@ -300,7 +296,7 @@ export class SupplementAgentService {
   ): ToolContext {
     return {
       knowledge: this.knowledge,
-      labelOcr: this.labelOcr,
+      labelReader: this.labelReader,
       preview: this.preview,
       catalog: this.catalog,
       draft: { ...draft },

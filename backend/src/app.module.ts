@@ -226,6 +226,7 @@ import { IngredientCreationController } from './interfaces/controllers/ingredien
 import { IngredientCatalogController } from './interfaces/controllers/ingredient-catalog.controller';
 import { SupplementChatController } from './interfaces/controllers/supplement-chat.controller';
 import { SupplementAgentService } from './application/ingredient-creation/supplement-agent.service';
+import { SupplementLabelVisionService } from './application/ingredient-creation/supplement-label-vision.service';
 import { IngredientCreationAuditService } from './application/ingredient-creation/ingredient-creation-audit.service';
 import { IngredientCreationCandidateService } from './application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationAuthorizeService } from './application/ingredient-creation/ingredient-creation-authorize.service';
@@ -1055,6 +1056,7 @@ validatePrismaConfig();
     SupplementLinkPreviewService,
     FeedAdditiveCatalogService,
     SupplementAgentService,
+    SupplementLabelVisionService,
     IngredientCreationIntakeService,
     IngredientNameClassifierService,
     IngredientDraftAgentService,

@@ -28,12 +28,13 @@ function context(overrides: Partial<ToolContext> = {}): ToolContext {
         };
       })
     } as unknown as ToolContext['knowledge'],
-    labelOcr: {
-      recognizeImage: jest.fn(async () => ({
+    labelReader: {
+      read: jest.fn(async () => ({
         text: 'SUPPLEMENT FACTS\nServing Size: One Capsule\nIron (as Ferrous Bisglycinate) 25 mg 139%',
-        confidence: 96
+        imageUrl: 'https://cos/x.jpg',
+        model: 'glm-4v-flash'
       }))
-    } as unknown as ToolContext['labelOcr'],
+    } as unknown as ToolContext['labelReader'],
     preview: {
       searchCandidates: jest.fn(async () => [
         { url: 'https://www.iherb.com/pr/x/1', name: 'NOW Zinc', priceUsd: null, pricePerServingUsd: null }
@@ -189,7 +190,7 @@ describe('执行工具', () => {
     if (result.ok) {
       expect(JSON.stringify(result.data)).toContain('25 mg');
     }
-    expect(ctx.labelOcr.recognizeImage).toHaveBeenCalledWith({ imageUrl: 'https://cos/x.jpg' });
+    expect(ctx.labelReader.read).toHaveBeenCalledWith('https://cos/x.jpg');
   });
 
   it('没上传标签图时说清楚该做什么，不是直接报错', async () => {

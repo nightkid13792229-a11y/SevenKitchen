@@ -551,6 +551,36 @@ export class AgentProviderConfigService {
    * **不回退**。指定的 `purpose` 没配就是没配，直接报清楚 —— 
    * 让管理员去后台把它配上，而不是偷偷用一个不相干的模型顶上。
    */
+  /**
+   * 只按 provider 取一条已启用的配置（不挑 purpose）。
+   *
+   * 用于"这个供应商的 Key 我们已经有、只差没有专门的用途位"的场景：
+   * 标签图识别要的是视觉模型，配置页里没有单独这一项，
+   * 就复用这个供应商已有的那条（目前是智谱生图那条）的 Key。
+   */
+  async getAnyEnabledProviderRuntimeConfig(provider: string): Promise<{
+    purpose: string;
+    baseUrl: string;
+    model: string;
+    apiKey: string;
+    requestTimeoutMs: number;
+  }> {
+    const config = await this.prisma.agentProviderConfig.findFirst({
+      where: { provider, enabled: true, apiKeyEncrypted: { not: null } },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (!config) {
+      throw new BadRequestException(`${provider} 还没有启用中的配置，请到后台 AI 设置里添加`);
+    }
+    return {
+      purpose: config.purpose,
+      baseUrl: config.baseUrl,
+      model: config.model,
+      apiKey: this.decryptApiKey(config.apiKeyEncrypted as string),
+      requestTimeoutMs: config.requestTimeoutMs,
+    };
+  }
+
   async getEnabledProviderRuntimeConfig(input: {
     purpose: string;
     provider: string;

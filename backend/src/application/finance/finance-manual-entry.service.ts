@@ -23,7 +23,9 @@ import { FINANCE_START_DATE } from './finance-period';
  * `[起账日, 今天]`。接口报错稳定，小程序能按第一条错误定位输入框。
  *
  * 落库口径：
- * - `occurredAt` 是 date-only，存「当天上海零点」对应的 UTC 时刻；
+ * - `occurredAt` 是 date-only（`@db.Date`），按 UTC 零点存：Prisma 对 DATE 列
+ *   取 UTC 日期部分，写上海零点（`+08:00`）会退成前一天，11-01 会掉出 11 月区间
+ *   （同类生产事故见 custom-recipe.service.ts 2026-10-19 的注释）；
  * - 支出只写 `category`、收入只写 `incomeCategory`，另一侧留 NULL，
  *   避免明细/汇总两侧各读一个字段时出现双重归类；
  * - 手工收入只允许「其他收入」：其余收入类别由系统按来源自动记录，
@@ -138,7 +140,7 @@ function resolveCategory(
   };
 }
 
-/** 发生日：不早于起账日、不晚于今天；落库为当天上海零点的 UTC 时刻 */
+/** 发生日：不早于起账日、不晚于今天；date-only 列按 UTC 零点落库 */
 function parseOccurredAt(input: unknown): Date {
   let dateOnly: Date;
   try {
@@ -158,7 +160,9 @@ function parseOccurredAt(input: unknown): Date {
     throw new BadRequestException('发生日不能晚于今天');
   }
 
-  return new Date(`${dateKey}T00:00:00+08:00`);
+  // `@db.Date` 取 UTC 日期部分：必须是 `2026-11-05T00:00:00.000Z`，
+  // 不是上海零点（后者等于 UTC 前一天，11-01 会落到 10-31）。
+  return TimezoneUtil.parseDateOnly(dateKey);
 }
 
 /** 校验顺序固定：金额 → 方向 → 类别 → 日期 */
@@ -225,8 +229,10 @@ export class FinanceManualEntryService {
       direction: (input.direction ??
         existing.direction) as ManualEntryDirection,
       amount: input.amount ?? Number(existing.amount),
+      // DATE 列读回来就是 UTC 零点，直接取 UTC 日期部分；
+      // 再走一次上海时区换算会每改一次退一天。
       occurredAt:
-        input.occurredAt ?? TimezoneUtil.shanghaiDateKey(existing.occurredAt),
+        input.occurredAt ?? existing.occurredAt.toISOString().slice(0, 10),
       category:
         input.category !== undefined ? input.category : existing.category,
       incomeCategory:

@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { FinanceManualEntryService } from 'src/application/finance/finance-manual-entry.service';
+import { monthRange } from 'src/application/finance/finance-period';
 import { TimezoneUtil } from 'src/utils/timezone.util';
 
 /**
@@ -15,9 +16,15 @@ const TOMORROW = TimezoneUtil.shanghaiDateKey(
   TimezoneUtil.addDays(TimezoneUtil.toShanghaiDateOnly(new Date()), 1),
 );
 
-/** 上海当天零点（occurredAt 落库形状） */
-const shanghaiMidnight = (dateKey: string): string =>
-  new Date(`${dateKey}T00:00:00+08:00`).toISOString();
+/**
+ * `occurredAt` 落库形状：date-only 列按 UTC 零点存。
+ *
+ * Prisma 对 `@db.Date` 取 UTC 日期部分；写上海零点（`+08:00`）会变成 UTC 前一天，
+ * 11-01 会落到 10-31 从而掉出 11 月区间（同类生产事故见
+ * `custom-recipe.service.ts` 2026-10-19 的注释）。
+ */
+const utcDateOnly = (dateKey: string): string =>
+  new Date(`${dateKey}T00:00:00.000Z`).toISOString();
 
 const makePrisma = (row: any = null) => ({
   financeManualEntry: {
@@ -53,7 +60,7 @@ const existingExpense = (overrides: Record<string, unknown> = {}) => ({
   id: 'm1',
   direction: 'EXPENSE',
   amount: 10,
-  occurredAt: new Date('2026-11-05T00:00:00+08:00'),
+  occurredAt: new Date('2026-11-05T00:00:00.000Z'),
   category: 'EQUIPMENT',
   incomeCategory: null,
   payerType: 'PERSONAL',
@@ -150,7 +157,7 @@ describe('FinanceManualEntryService.create', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('创建时 occurredAt 落库为当天上海零点，支出只写 category', async () => {
+  it('创建时 occurredAt 按 UTC 零点落库，支出只写 category', async () => {
     const prisma: any = makePrisma();
 
     await new FinanceManualEntryService(prisma).create(
@@ -163,7 +170,7 @@ describe('FinanceManualEntryService.create', () => {
     );
 
     const data = prisma.financeManualEntry.create.mock.calls[0][0].data;
-    expect(data.occurredAt.toISOString()).toBe(shanghaiMidnight('2026-11-05'));
+    expect(data.occurredAt.toISOString()).toBe(utcDateOnly('2026-11-05'));
     expect(data.createdById).toBe('u1');
     expect(data.direction).toBe('EXPENSE');
     expect(data.amount).toBe(120.5);
@@ -171,6 +178,24 @@ describe('FinanceManualEntryService.create', () => {
     expect(data.incomeCategory).toBeNull();
     expect(data.note).toBe('买了封口机');
     expect(data.proofKeys).toEqual(['finance/proof-1.jpg']);
+  });
+
+  it('起账日当天的条目落在 11 月区间内（date-only 不得退成 10-31）', async () => {
+    const prisma: any = makePrisma();
+
+    await new FinanceManualEntryService(prisma).create(
+      'u1',
+      expenseInput({ occurredAt: '2026-11-01' }),
+    );
+
+    const occurredAt: Date =
+      prisma.financeManualEntry.create.mock.calls[0][0].data.occurredAt;
+    const { from, to } = monthRange('2026-11');
+    // 读回来必须是 11-01（UTC 零点），否则 10-31 会掉出 11 月区间、
+    // 这笔在收入/支出/明细/月报里全部消失。
+    expect(occurredAt.toISOString()).toBe(utcDateOnly('2026-11-01'));
+    expect(occurredAt.getTime()).toBeGreaterThanOrEqual(from.getTime());
+    expect(occurredAt.getTime()).toBeLessThanOrEqual(to.getTime());
   });
 
   it('创建收入时只写 incomeCategory，付款方缺省为个人', async () => {
@@ -221,6 +246,8 @@ describe('FinanceManualEntryService.update', () => {
     expect(data.amount).toBe(20);
     expect(data.note).toBe('改过');
     expect(data.category).toBe('EQUIPMENT');
+    // 没改日期时原样写回，不能每改一次就退一天
+    expect(data.occurredAt.toISOString()).toBe(utcDateOnly('2026-11-05'));
   });
 
   it('更新时金额仍须大于 0', async () => {

@@ -7,6 +7,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import { CreateExpenseBillDto } from '../../interfaces/dto/finance/create-expense-bill.dto';
 import { RecordExpensePaymentDto } from '../../interfaces/dto/finance/record-expense-payment.dto';
 import { ExpensePayerType } from './expense-template.service';
+import { centsToMoney, toCents } from './finance-expense.service';
 import { monthDateOnlyRange } from './finance-period';
 import { TimezoneUtil } from '../../utils/timezone.util';
 
@@ -22,7 +23,7 @@ export type PayExpenseBillInput = {
 
 const PAYER_TYPES: readonly ExpensePayerType[] = ['COMPANY', 'PERSONAL'];
 
-/** 金额 > 0 且最多两位小数 */
+/** 金额 > 0 且最多两位小数；返回整数分，后续比较/相加只在分上做 */
 function parsePaidAmount(input: unknown): number {
   if (typeof input !== 'number' || !Number.isFinite(input) || input <= 0) {
     throw new BadRequestException('实付金额必须大于 0');
@@ -31,7 +32,10 @@ function parsePaidAmount(input: unknown): number {
   if (Math.abs(cents - input * 100) > 1e-6) {
     throw new BadRequestException('实付金额最多两位小数');
   }
-  return cents / 100;
+  if (cents <= 0) {
+    throw new BadRequestException('实付金额必须大于 0');
+  }
+  return cents;
 }
 
 /**
@@ -215,10 +219,32 @@ export class ExpenseBillService {
       throw new BadRequestException('账单已付清，不能重复付款');
     }
 
-    const billAmount = Number(bill.amount);
-    // 显式传入的金额/日期/付款方先校验，避免无效请求白查一次库。
-    const requestedAmount =
-      input.paidAmount === undefined ? null : parsePaidAmount(input.paidAmount);
+    // 金额一律换成整数分再比较/相加：Decimal(876.54) 直接做浮点减法会得到
+    // 376.53999999999996，尾款永远判成「超额」；分上算完落库前再换回元。
+    const paidBefore = await this.prisma.expenseBillPayment.aggregate({
+      where: { billId },
+      _sum: { paidAmount: true },
+    });
+    const billAmountCents = toCents(bill.amount);
+    const alreadyPaidCents = toCents(paidBefore._sum.paidAmount);
+    const remainingCents = billAmountCents - alreadyPaidCents;
+
+    // 库里累计实付已经够了（历史浮点误差/并发补写都可能造成状态没同步）：
+    // 直接结清，不再走「本次金额必须 > 0」的付款校验。
+    if (remainingCents <= 0) {
+      return this.prisma.expenseBill.update({
+        where: { id: billId },
+        data: {
+          status: 'PAID',
+          amount: centsToMoney(alreadyPaidCents),
+        },
+      });
+    }
+
+    const paidAmountCents =
+      input.paidAmount === undefined
+        ? remainingCents
+        : parsePaidAmount(input.paidAmount);
     const paidAt =
       input.paidAt === undefined
         ? TimezoneUtil.toShanghaiDateOnly(new Date())
@@ -228,25 +254,16 @@ export class ExpenseBillService {
       requestedPayerType ??
       (bill.payerType === 'COMPANY' ? 'COMPANY' : 'PERSONAL');
 
-    // 缺省金额（补齐剩余）和超额校验都依赖「已经付了多少」，先查累计实付。
-    const paidBefore = await this.prisma.expenseBillPayment.aggregate({
-      where: { billId },
-      _sum: { paidAmount: true },
-    });
-    const alreadyPaid = Number(paidBefore._sum.paidAmount ?? 0);
-    const remaining = billAmount - alreadyPaid;
-    const paidAmount = requestedAmount ?? parsePaidAmount(remaining);
-
     // 已部分付的账单，本次不能超过剩余应付；首笔允许按实际金额覆盖模板金额
     //（§6.4：实付可能和模板不同，例如水电），付满后回写 bill.amount。
-    if (alreadyPaid > 0 && paidAmount > remaining) {
+    if (alreadyPaidCents > 0 && paidAmountCents > remainingCents) {
       throw new BadRequestException('本次实付不能超过剩余应付金额');
     }
 
     await this.prisma.expenseBillPayment.create({
       data: {
         billId,
-        paidAmount,
+        paidAmount: centsToMoney(paidAmountCents),
         paidAt,
         paidById: userId,
         paymentMethod: 'OTHER',
@@ -255,14 +272,14 @@ export class ExpenseBillService {
       },
     });
 
-    const totalPaid = alreadyPaid + paidAmount;
-    const isPaidOff = totalPaid >= billAmount;
+    const totalPaidCents = alreadyPaidCents + paidAmountCents;
+    const isPaidOff = totalPaidCents >= billAmountCents;
 
     return this.prisma.expenseBill.update({
       where: { id: billId },
       data: isPaidOff
         ? // 付满时把模板金额改写成累计实付，汇总按实际支出算（§6.4）。
-          { status: 'PAID', amount: totalPaid }
+          { status: 'PAID', amount: centsToMoney(totalPaidCents) }
         : { status: 'PARTIALLY_PAID' },
     });
   }

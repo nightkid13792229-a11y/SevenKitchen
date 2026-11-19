@@ -80,7 +80,8 @@ const makeBillPrisma = () => {
     },
     expenseBillPayment: {
       create: jest.fn().mockResolvedValue({ id: 'payment-1' }),
-      aggregate: jest.fn(),
+      // 默认「还没付过」；需要已付金额的用例再单独 mock
+      aggregate: jest.fn().mockResolvedValue({ _sum: { paidAmount: 0 } }),
     },
   };
   return prisma;
@@ -550,6 +551,119 @@ describe('ExpenseBillService.pay', () => {
       where: { id: 'b1' },
       data: { status: 'PAID', amount: 6000 },
     });
+  });
+
+  it('尾款按整数分补齐：876.54 已付 500 后付 376.54 成功', async () => {
+    const prisma = makeBillPrisma();
+    prisma.expenseBill.findUnique.mockResolvedValue(
+      makeBill({ amount: 876.54 }),
+    );
+    prisma.expenseBillPayment.aggregate.mockResolvedValue({
+      _sum: { paidAmount: '500.00' },
+    });
+    const service = new ExpenseBillService(prisma);
+
+    await service.pay('u1', 'b1', {
+      paidAmount: 376.54,
+      paidAt: '2026-11-05',
+    });
+
+    expect(prisma.expenseBillPayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ paidAmount: 376.54 }),
+    });
+    expect(prisma.expenseBill.update).toHaveBeenCalledWith({
+      where: { id: 'b1' },
+      data: { status: 'PAID', amount: 876.54 },
+    });
+  });
+
+  it('尾款缺省金额也不因浮点误判超额：876.54 已付 500 直接补齐', async () => {
+    const prisma = makeBillPrisma();
+    prisma.expenseBill.findUnique.mockResolvedValue(
+      makeBill({ amount: 876.54 }),
+    );
+    prisma.expenseBillPayment.aggregate.mockResolvedValue({
+      _sum: { paidAmount: '500.00' },
+    });
+    const service = new ExpenseBillService(prisma);
+
+    await service.pay('u1', 'b1', {});
+
+    expect(prisma.expenseBillPayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ paidAmount: 376.54 }),
+    });
+    expect(prisma.expenseBill.update).toHaveBeenCalledWith({
+      where: { id: 'b1' },
+      data: { status: 'PAID', amount: 876.54 },
+    });
+  });
+
+  it('6200.10 已付 0.03 时缺省付 6200.07 后 PAID', async () => {
+    const prisma = makeBillPrisma();
+    prisma.expenseBill.findUnique.mockResolvedValue(
+      makeBill({ amount: 6200.1 }),
+    );
+    prisma.expenseBillPayment.aggregate.mockResolvedValue({
+      _sum: { paidAmount: '0.03' },
+    });
+    const service = new ExpenseBillService(prisma);
+
+    await service.pay('u1', 'b1', {});
+
+    expect(prisma.expenseBillPayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ paidAmount: 6200.07 }),
+    });
+    expect(prisma.expenseBill.update).toHaveBeenCalledWith({
+      where: { id: 'b1' },
+      data: { status: 'PAID', amount: 6200.1 },
+    });
+  });
+
+  it('两笔 0.1 + 0.2 合计精确等于 0.3，不出现浮点尾巴', async () => {
+    const prisma = makeBillPrisma();
+    prisma.expenseBill.findUnique.mockResolvedValue(makeBill({ amount: 0.3 }));
+    prisma.expenseBillPayment.aggregate
+      .mockResolvedValueOnce({ _sum: { paidAmount: 0 } })
+      .mockResolvedValueOnce({ _sum: { paidAmount: '0.1' } });
+    const service = new ExpenseBillService(prisma);
+
+    await service.pay('u1', 'b1', { paidAmount: 0.1, paidAt: '2026-11-05' });
+    await service.pay('u1', 'b1', { paidAmount: 0.2, paidAt: '2026-11-06' });
+
+    expect(prisma.expenseBillPayment.create).toHaveBeenNthCalledWith(1, {
+      data: expect.objectContaining({ paidAmount: 0.1 }),
+    });
+    expect(prisma.expenseBillPayment.create).toHaveBeenNthCalledWith(2, {
+      data: expect.objectContaining({ paidAmount: 0.2 }),
+    });
+    expect(prisma.expenseBill.update).toHaveBeenNthCalledWith(1, {
+      where: { id: 'b1' },
+      data: { status: 'PARTIALLY_PAID' },
+    });
+    expect(prisma.expenseBill.update).toHaveBeenNthCalledWith(2, {
+      where: { id: 'b1' },
+      data: { status: 'PAID', amount: 0.3 },
+    });
+  });
+
+  it('剩余应付 <= 0 时直接置 PAID，不再写付款记录', async () => {
+    const prisma = makeBillPrisma();
+    prisma.expenseBill.findUnique.mockResolvedValue(
+      makeBill({ status: 'PARTIALLY_PAID', amount: 6200.1 }),
+    );
+    prisma.expenseBillPayment.aggregate.mockResolvedValue({
+      _sum: { paidAmount: '6200.10' },
+    });
+    const service = new ExpenseBillService(prisma);
+
+    const result = await service.pay('u1', 'b1', {});
+
+    expect(prisma.expenseBillPayment.create).not.toHaveBeenCalled();
+    expect(prisma.expenseBill.update).toHaveBeenCalledWith({
+      where: { id: 'b1' },
+      data: { status: 'PAID', amount: 6200.1 },
+    });
+    expect(result).toMatchObject({ status: 'PAID' });
   });
 
   it('部分付后再超额付直接 400，不写付款记录', async () => {

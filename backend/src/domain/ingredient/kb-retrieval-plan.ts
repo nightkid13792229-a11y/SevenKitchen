@@ -58,6 +58,9 @@ export interface DroppedPage {
  * 之所以要认这种"首词"形态：`kb_find` 返回的 snippet 是把整页空白折成空格的**单行**文本，
  * 多行判据在真实数据上永远走不到（2026-11-20 复核发现）。
  */
+const INDEX_TITLE_ONLY = /^(index|contents|目\s*录|索\s*引)$/i;
+/** 单行 snippet 里，"Index/Contents"后面还得跟着页码数字才算目录页；
+ *  否则 "Contents of the cell..."、"Index of refraction..." 这类正文会被误杀。 */
 const INDEX_FIRST_LINE = /^(index|contents|目\s*录|索\s*引)(\s|$)/i;
 /** 「1. 某某 …… 12」这种带引导点的条目标志 */
 const INDEX_ENTRY = /^\s*\d+[.、]\s+\S.*[.．·]{2,}\s*\d+\s*$/;
@@ -76,7 +79,10 @@ export function looksLikeIndexPage(text: string): boolean {
   if (lines.length === 0) {
     return false;
   }
-  if (INDEX_FIRST_LINE.test(lines[0])) {
+  if (INDEX_TITLE_ONLY.test(lines[0])) {
+    return true;
+  }
+  if (INDEX_FIRST_LINE.test(lines[0]) && /\d/.test(lines[0])) {
     return true;
   }
   const entryLines = lines.filter((line) => INDEX_ENTRY.test(line)).length;

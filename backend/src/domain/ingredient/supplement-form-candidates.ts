@@ -4,7 +4,7 @@
  * 这里只做纯计算：归一化、判定某条标题是否真在说这个营养素、合并两边。
  * 抓取与模型调用在 application 层。
  */
-import { nutrientEnglishName } from './supplement-nutrients';
+import { nutrientChineseLabel, nutrientEnglishName } from './supplement-nutrients';
 import type { Citation } from './supplement-form-advice';
 
 export type DimensionKey = 'FORM' | 'SOURCE';
@@ -39,19 +39,21 @@ const NUTRIENT_TITLE_ALIASES: Record<string, string[]> = {
   'vitamins.vitaminB2': ['b2', 'riboflavin'],
   'vitamins.vitaminB5': ['b5', 'pantothenic'],
   'vitamins.vitaminB7': ['b7', 'biotin'],
-  'vitamins.vitaminD': ['d3', 'd2', 'cholecalciferol', 'ergocalciferol'],
+  'vitamins.vitaminD': ['vitamind', 'd3', 'd2', 'cholecalciferol', 'ergocalciferol'],
   'vitamins.vitaminA': ['retinol', 'beta carotene'],
   'vitamins.vitaminE': ['tocopherol'],
-  'vitamins.vitaminK': ['k2', 'mk7', 'mk4'],
+  'vitamins.vitaminK': ['vitamink', 'k2', 'mk7', 'mk4'],
   'vitamins.vitaminC': ['ascorbic'],
-  'fattyAcids.epa': ['omega3', 'fishoil', 'epa', 'dha'],
-  'fattyAcids.dha': ['omega3', 'fishoil', 'epa', 'dha'],
+  'fattyAcids.epa': ['omega3', 'fishoil', 'epa', 'dha', '鱼油'],
+  'fattyAcids.dha': ['omega3', 'fishoil', 'epa', 'dha', '鱼油'],
 };
 
 function titleAliases(nutrientKey: string): string[] {
   const english = normalizeTermKey(nutrientEnglishName(nutrientKey));
+  // 中文站标题常常只有中文名（"铜"、"深海鱼油"），只认英文会把整批标题过滤掉
+  const chinese = normalizeTermKey(nutrientChineseLabel(nutrientKey));
   const extras = (NUTRIENT_TITLE_ALIASES[nutrientKey] ?? []).map(normalizeTermKey);
-  return [english, ...extras].filter(Boolean);
+  return [english, chinese, ...extras].filter(Boolean);
 }
 
 export function mentionsNutrient(title: string, nutrientKey: string): boolean {
@@ -223,7 +225,8 @@ function collapseByLabel(rows: DimensionCandidate[]): DimensionCandidate[] {
       continue;
     }
     const evidenced = [existing, row].find((item) => item.status === 'EVIDENCED') ?? existing;
-    const marketCount = (existing.market?.count ?? 0) + (row.market?.count ?? 0);
+    // 用 max 不用 sum：同一份市场数据可能被两条候选各算一次，相加会把"多少商品在用"翻倍
+    const marketCount = Math.max(existing.market?.count ?? 0, row.market?.count ?? 0);
     byLabel.set(bucket, {
       ...evidenced,
       citations: mergeCitations(existing.citations, row.citations),
@@ -251,4 +254,30 @@ function mergeCitations(a: Citation[], b: Citation[]): Citation[] {
     }
   }
   return merged;
+}
+
+
+/**
+ * 结论门：光有原句还不够，那句话得真的在表态。
+ *
+ * 现实里模型会把"活性形式不稳定"判成 AVOID、把"吸收一般"判成 RECOMMENDED。
+ * 这里用最笨的词表拦一道：AVOID 必须是否定句，RECOMMENDED 必须是比较句，
+ * 不满足就降成 NO_EVIDENCE（理由里保留原话，交给人判断）。
+ */
+const NEGATION_WORDS =
+  /(should not|not recommended|not be used|must not|negligible|poorly|avoid|unavailable|insufficient|不宜|不应|不可|不能)/i;
+const COMPARATIVE_WORDS =
+  /(better|preferred|superior|more bioavailable|greater bioavailability|recommended|优于|更好|首选)/i;
+
+export function gateVerdict(
+  verdict: CandidateVerdict,
+  quote: string,
+): { verdict: CandidateVerdict; downgraded: boolean } {
+  if (verdict === 'AVOID' && !NEGATION_WORDS.test(quote)) {
+    return { verdict: 'NO_EVIDENCE', downgraded: true };
+  }
+  if (verdict === 'RECOMMENDED' && !COMPARATIVE_WORDS.test(quote)) {
+    return { verdict: 'NO_EVIDENCE', downgraded: true };
+  }
+  return { verdict, downgraded: false };
 }

@@ -15,7 +15,6 @@ import {
   SupplementLabelIntakeService,
   type LabelIntakeResult,
 } from '../../application/ingredient-creation/supplement-label-intake.service';
-import type { FormAdvice } from '../../domain/ingredient/supplement-form-advice';
 import type { DimensionsAdvice } from '../../application/ingredient-creation/supplement-form-advice.service';
 import {
   rankOffers,
@@ -83,20 +82,9 @@ export class SupplementAgentController {
   @ApiOperation({
     summary: '形态建议：读知识库原文，给出形态档位结论与出处；没有原文的条目不推荐',
   })
-  async adviseForm(
-    @Body() dto: FormAdviceDto,
-  ): Promise<ApiResponseDto<FormAdvice | DimensionsAdvice>> {
-    // 迁移期两套并存：默认走旧的固定四档，前端显式要 dimensions 才走新管线
-    if (dto.mode === 'dimensions') {
-      const advice = await this.formAdvice.adviseDimensions({
-        nutrientKey: dto.nutrientKey,
-        nutrientLabel: dto.nutrientLabel,
-        question: dto.question,
-      });
-      return new ApiResponseDto(0, 'Success', advice);
-    }
-
-    const advice = await this.formAdvice.advise({
+  async adviseForm(@Body() dto: FormAdviceDto): Promise<ApiResponseDto<DimensionsAdvice>> {
+    // 2026-11-20 起只剩维度驱动一种：形态/来源由知识库原文与市场标题长出
+    const advice = await this.formAdvice.adviseDimensions({
       nutrientKey: dto.nutrientKey,
       nutrientLabel: dto.nutrientLabel,
       question: dto.question,

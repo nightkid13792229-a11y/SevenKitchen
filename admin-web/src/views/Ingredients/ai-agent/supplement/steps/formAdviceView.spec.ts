@@ -78,6 +78,32 @@ describe('recommendationText', () => {
     expect(recommendationText(advice())).toBe('建议用：甲钴胺')
   })
 
+  it('来源维度的推荐要标出"（来源）"', () => {
+    const sourceAdvice: SupplementDimensionsAdviceDto = {
+      ...advice(),
+      dimensions: [
+        {
+          key: 'SOURCE',
+          label: '来源',
+          candidates: [
+            {
+              key: 'fishoil',
+              labelZh: '鱼油',
+              dimension: 'SOURCE',
+              status: 'EVIDENCED',
+              citations: [],
+              verdict: 'ACCEPTABLE',
+              reason: 'x',
+              market: null
+            }
+          ]
+        }
+      ],
+      recommendation: { dimensionKey: 'SOURCE', candidateKey: 'fishoil' }
+    }
+    expect(recommendationText(sourceAdvice)).toBe('建议用：鱼油（来源）')
+  })
+
   it('没有推荐时给空串（页面据此显示"请你判断"）', () => {
     expect(recommendationText(advice({ recommendation: null }))).toBe('')
     expect(recommendationText(null)).toBe('')

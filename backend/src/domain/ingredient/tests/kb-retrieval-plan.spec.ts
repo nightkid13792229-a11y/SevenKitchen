@@ -20,6 +20,11 @@ describe('looksLikeIndexPage', () => {
     expect(looksLikeIndexPage('Contents\n1. Introduction 3')).toBe(true);
   });
 
+  it('以 Contents/Index 开头的正文不算索引页（没有页码）', () => {
+    expect(looksLikeIndexPage('Contents of the cell include water and salts.')).toBe(false);
+    expect(looksLikeIndexPage('Index of refraction varies with wavelength.')).toBe(false);
+  });
+
   it('正文页不是索引页', () => {
     expect(
       looksLikeIndexPage('Iron oxide and carbonate demonstrate negligible bioavailability.'),

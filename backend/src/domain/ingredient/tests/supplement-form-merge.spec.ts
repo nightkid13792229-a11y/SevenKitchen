@@ -1,4 +1,10 @@
-import { mergeCandidates, type KbCandidate, type MarketTerm } from '../supplement-form-candidates';
+import {
+  gateVerdict,
+  mentionsNutrient,
+  mergeCandidates,
+  type KbCandidate,
+  type MarketTerm
+} from '../supplement-form-candidates';
 
 function kb(overrides: Partial<KbCandidate> = {}): KbCandidate {
   return {
@@ -69,3 +75,30 @@ describe('mergeCandidates', () => {
     expect(rows.filter((row) => row.key === 'bisglycinate')).toHaveLength(1);
   });
 });
+
+describe('gateVerdict', () => {
+  it('AVOID 必须是否定句，否则降级', () => {
+    expect(gateVerdict('AVOID', 'Oxides of iron should not be used as an iron source').verdict).toBe('AVOID')
+    expect(gateVerdict('AVOID', 'The active form is very unstable').verdict).toBe('NO_EVIDENCE')
+  })
+
+  it('RECOMMENDED 必须是比较句，否则降级', () => {
+    expect(gateVerdict('RECOMMENDED', 'This form is more bioavailable than oxide').verdict).toBe('RECOMMENDED')
+    expect(gateVerdict('RECOMMENDED', 'It is used in supplements').verdict).toBe('NO_EVIDENCE')
+  })
+
+  it('ACCEPTABLE 不受影响', () => {
+    expect(gateVerdict('ACCEPTABLE', 'it is a source of copper').verdict).toBe('ACCEPTABLE')
+  })
+})
+
+describe('中文标题也能认出营养素', () => {
+  it('纯中文标题不再被整体过滤', () => {
+    expect(mentionsNutrient('深海鱼油 1000mg', 'fattyAcids.epa')).toBe(true)
+    expect(mentionsNutrient('维生素B12 甲钴胺 1000mcg', 'vitamins.vitaminB12')).toBe(true)
+  })
+
+  it('维生素 D 不带编号也能命中', () => {
+    expect(mentionsNutrient('Vitamin D 1000 IU', 'vitamins.vitaminD')).toBe(true)
+  })
+})

@@ -11,6 +11,7 @@ import {
   type ReadPage,
 } from '../../domain/ingredient/supplement-kb-form';
 import {
+  gateVerdict,
   normalizeTermKey,
   type CandidateVerdict,
   type DimensionKey,
@@ -68,6 +69,8 @@ export interface KbExtractInput {
   nutrientKey: string;
   nutrientEnglish: string;
   pages: ReadPage[];
+  /** 用户补充的一句话；有就一起给模型看 */
+  question?: string;
 }
 
 @Injectable()
@@ -112,6 +115,7 @@ export class SupplementKbFormService {
         source: 'KB',
       });
       const key = resolved.key || normalizeTermKey(record.surface);
+      const gated = gateVerdict(record.verdict, record.quote);
       const citation = {
         documentId: record.documentId,
         documentName: record.documentId,
@@ -123,20 +127,33 @@ export class SupplementKbFormService {
         if (!existing.citations.some((item) => item.quote === citation.quote)) {
           existing.citations.push(citation);
         }
+        // 两份原文互相打架（一个说可用、一个说不推荐）：不挑一个当定论，降级交给人
+        if (
+          existing.verdict !== 'NO_EVIDENCE' &&
+          gated.verdict !== 'NO_EVIDENCE' &&
+          existing.verdict !== gated.verdict
+        ) {
+          existing.verdict = 'NO_EVIDENCE';
+          existing.reason = `原文之间存在不同说法：${existing.reason}／${record.reason}`;
+          continue;
+        }
         // 有表态的结论优先于"没查到"
-        if (existing.verdict === 'NO_EVIDENCE' && record.verdict !== 'NO_EVIDENCE') {
-          existing.verdict = record.verdict;
+        if (existing.verdict === 'NO_EVIDENCE' && gated.verdict !== 'NO_EVIDENCE') {
+          existing.verdict = gated.verdict;
           existing.reason = record.reason;
         }
         continue;
       }
       merged.set(key, {
         key,
-        labelZh: record.labelZh || cleanSurface(record.surface),
+        // 词典里有人确认过的中文名优先，其次模型这次给的，最后退回英文原词
+        labelZh: resolved.labelZh || record.labelZh || cleanSurface(record.surface),
         dimension: record.dimension,
         citations: [citation],
-        verdict: record.verdict,
-        reason: record.reason,
+        verdict: gated.verdict,
+        reason: gated.downgraded
+          ? `${record.reason}（原文只是提醒，没有明确否定/比较，按无结论处理）`
+          : record.reason,
       });
     }
 
@@ -212,9 +229,12 @@ export class SupplementKbFormService {
               role: 'user',
               content: [
                 `营养素：${input.nutrientEnglish}`,
+                input.question ? `用户补充：${input.question}` : '',
                 '以下是原文片段：',
                 fragments,
-              ].join('\n\n'),
+              ]
+                .filter(Boolean)
+                .join('\n\n'),
             },
           ],
           temperature: 0.1,

@@ -17,7 +17,6 @@ import type {
   SupplementComparisonDto,
   SupplementDimensionsAdviceDto,
   SupplementLabelIntakeDto,
-  SupplementFormAdviceDto,
   SupplementLinkPreviewDto,
   CheckDomain,
   CheckRunView,
@@ -88,18 +87,14 @@ export const ingredientCreationApi = {
   /**
    * 形态建议（维度驱动）：形态/来源由知识库原文与市场标题长出。
    *
-   * 与旧接口同一个路径，靠 `mode: 'dimensions'` 分流；旧的固定四档仍保留在 legacy 模式。
+   * 同一个路径；旧的固定四档已于 2026-11-20 删除。
    */
   supplementFormDimensions: (payload: {
     nutrientKey: string
     nutrientLabel: string
     question?: string
   }): Promise<SupplementDimensionsAdviceDto> =>
-    api.post(
-      '/admin/ingredient-supplement-agent/form-advice',
-      { ...payload, mode: 'dimensions' },
-      { timeout: 180000 }
-    ),
+    api.post('/admin/ingredient-supplement-agent/form-advice', payload, { timeout: 180000 }),
 
   /** 两张图读成档案初稿：正面认规格剂型，标签认 Serving Size 与成分表。 */
   readSupplementLabelImages: (payload: {
@@ -107,14 +102,6 @@ export const ingredientCreationApi = {
     labelImageUrl: string
   }): Promise<SupplementLabelIntakeDto> =>
     api.post('/admin/ingredient-supplement-agent/read-label-images', payload, { timeout: 150000 }),
-
-  /** 形态建议：知识库读原文后给结论 + 出处；没原文的条目会是「证据不足」。 */
-  supplementFormAdvice: (payload: {
-    nutrientKey: string
-    nutrientLabel: string
-    question?: string
-  }): Promise<SupplementFormAdviceDto> =>
-    api.post('/admin/ingredient-supplement-agent/form-advice', payload, { timeout: 120000 }),
 
   /** 按关键词去电商搜候选（只有链接、名字、标价，没有成分表）。 */
   searchSupplementCandidates: (keyword: string): Promise<SupplementCandidateDto[]> =>

@@ -43,13 +43,18 @@ export function verifyAgainstPages(term: RawKbTerm, pages: ReadPage[]): boolean 
     return false;
   }
   const pageText = normalizeTermKey(page.text);
-  const surface = normalizeTermKey(cleanSurface(term.surface));
-  if (!surface || !pageText.includes(surface)) {
+  // 先按原样比，再按清洗后的比：`Copper(II) oxide` 这类带价态的写法，清洗会把括号抹掉
+  const surfaces = [normalizeTermKey(term.surface), normalizeTermKey(cleanSurface(term.surface))]
+    .filter(Boolean);
+  const surface = surfaces.find((item) => pageText.includes(item));
+  if (!surface) {
     return false;
   }
   const quote = normalizeTermKey(term.quote);
-  if (quote.length < 8) {
+  if (quote.length < 8 || !pageText.includes(quote)) {
     return false;
   }
-  return pageText.includes(quote);
+  // 光"词在这页、句在这页"不够：那句原话本身得提到这个词，
+  // 否则 AVOID 可以挂在一句完全无关的句子上（2026-11-20 复核实测）。
+  return quote.includes(surface);
 }

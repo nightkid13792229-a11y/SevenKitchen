@@ -58,7 +58,12 @@ export function recommendationText(advice: SupplementDimensionsAdviceDto | null)
     return ''
   }
   const target = findCandidate(advice, advice.recommendation.candidateKey)
-  return target ? `建议用：${target.labelZh}` : ''
+  if (!target) {
+    return ''
+  }
+  // 来源维度的建议要标出来，否则在"定形态"这一屏会被读成形态建议
+  const suffix = target.dimension === 'SOURCE' ? '（来源）' : ''
+  return `建议用：${target.labelZh}${suffix}`
 }
 
 export function findCandidate(

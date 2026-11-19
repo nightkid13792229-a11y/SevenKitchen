@@ -56,6 +56,8 @@ model Order {
   costSettlements              OrderCostSettlement[]
   settlementAdjustments        OrderSettlementAdjustment[]
   refundRecords                OrderRefundRecord[]
+  /// 线下退款登记（财务口径，微信原路退不在里面）
+  offlineRefunds               OrderOfflineRefund[]
   /// 系统审计（改价 / 代客下单等），与 adminRemark 分开：备注只留人写的内容。
   operationLogs                OrderOperationLog[]
 
@@ -1410,6 +1412,29 @@ model OrderRefundRecord {
   @@map("order_refund_record")
 }
 
+/// 线下退款登记（财务口径）。
+/// 微信原路退在 order_refund_record；线下转账/现金退的钱走这里，
+/// 只做登记不影响支付渠道，作废保留痕迹。
+model OrderOfflineRefund {
+  id          String    @id @default(uuid()) @db.VarChar(36)
+  orderId     String    @map("order_id") @db.VarChar(36)
+  amount      Decimal   @db.Decimal(10, 2)
+  refundedAt  DateTime  @map("refunded_at") @db.Date
+  /// WECHAT | ALIPAY | CASH | OTHER
+  method      String    @db.VarChar(20)
+  note        String?
+  proofKeys   String[]  @default([]) @map("proof_keys")
+  createdById String    @map("created_by_id") @db.VarChar(36)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  voidedAt    DateTime? @map("voided_at")
+  voidReason  String?   @map("void_reason") @db.VarChar(200)
+
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, refundedAt])
+  @@map("order_offline_refund")
+}
+
 model InventoryAllocation {
   id             String                    @id @default(uuid()) @map("id")
   targetDate     DateTime                  @map("target_date")
@@ -2531,6 +2556,9 @@ model PurchaseList {
   personalAmount       Decimal?              @map("personal_amount") @db.Decimal(10, 2)
   /// 补货记录：本次报销金额 = 实付 − 个人；日采为 null
   reimbursementAmount  Decimal?              @map("reimbursement_amount") @db.Decimal(10, 2)
+  /// 付款方：PERSONAL 个人垫付 / COMPANY 公司账户
+  payerType            String                @default("PERSONAL") @map("payer_type") @db.VarChar(10)
+  payerUserId          String?               @map("payer_user_id") @db.VarChar(36)
   /// 补货记录：作废（取消/退款）
   voidedAt             DateTime?             @map("voided_at")
   /// 补货记录：作废人 / 最后修改人 / 到货确认人（操作留痕）
@@ -2690,6 +2718,9 @@ model ExpenseBill {
   dueAt            DateTime               @map("due_at")
   note             String?                @map("note")
   templateId       String?                @map("template_id") @db.VarChar(36)
+  /// 付款方：PERSONAL 个人垫付 / COMPANY 公司账户
+  payerType        String                 @default("PERSONAL") @map("payer_type") @db.VarChar(10)
+  payerUserId      String?                @map("payer_user_id") @db.VarChar(36)
   createdById      String                 @map("created_by_id") @db.VarChar(36)
   createdAt        DateTime               @default(now()) @map("created_at")
   updatedAt        DateTime               @default(now()) @updatedAt @map("updated_at")
@@ -2708,6 +2739,8 @@ model ExpenseBillPayment {
   paidAt           DateTime    @map("paid_at")
   paidById         String      @map("paid_by_id") @db.VarChar(36)
   paymentMethod    String      @map("payment_method") @db.VarChar(50)
+  /// 付款方：PERSONAL 个人垫付 / COMPANY 公司账户
+  payerType        String      @default("PERSONAL") @map("payer_type") @db.VarChar(10)
   paymentProofUrls String[]    @default([]) @map("payment_proof_urls")
   note             String?     @map("note")
   createdAt        DateTime    @default(now()) @map("created_at")
@@ -2738,6 +2771,32 @@ model ExpenseTemplate {
 
   @@index([isActive, interval])
   @@map("expense_template")
+}
+
+/// 手工收支条目（财务「记一笔」）。
+/// 不属于任何业务源表：老板自己填的收入/支出，带上付款方与凭证，可作废不可删。
+model FinanceManualEntry {
+  id             String                  @id @default(uuid()) @db.VarChar(36)
+  /// INCOME | EXPENSE
+  direction      String                  @db.VarChar(10)
+  amount         Decimal                 @db.Decimal(12, 2)
+  occurredAt     DateTime                @map("occurred_at") @db.Date
+  category       FinanceExpenseCategory?
+  incomeCategory String?                 @map("income_category") @db.VarChar(30)
+  payerType      String                  @default("PERSONAL") @map("payer_type") @db.VarChar(10)
+  payerUserId    String?                 @map("payer_user_id") @db.VarChar(36)
+  title          String                  @db.VarChar(200)
+  note           String?
+  proofKeys      String[]                @default([]) @map("proof_keys")
+  createdById    String                  @map("created_by_id") @db.VarChar(36)
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+  voidedAt       DateTime?               @map("voided_at")
+  voidReason     String?                 @map("void_reason") @db.VarChar(200)
+
+  @@index([occurredAt])
+  @@index([direction, occurredAt])
+  @@map("finance_manual_entry")
 }
 
 model IngredientPriceChange {
@@ -3903,6 +3962,11 @@ enum FinanceExpenseCategory {
   ADMINISTRATIVE
   AFTERSALE_LOSS
   OTHER
+  SUPPLEMENT
+  TAX
+  SOCIAL_INSURANCE
+  EQUIPMENT
+  PAYMENT_FEE
 }
 
 enum ExpenseBillStatus {
@@ -3916,6 +3980,7 @@ enum ExpenseBillStatus {
 enum ExpenseTemplateInterval {
   MONTHLY
   YEARLY
+  QUARTERLY
 }
 
 enum IngredientPriceChangeStatus {

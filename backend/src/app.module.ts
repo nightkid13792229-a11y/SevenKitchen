@@ -134,6 +134,7 @@ import {
 import { IngredientPricingService } from './application/ingredient/ingredient-pricing.service';
 import { IngredientPriceAnchorService } from './application/ingredient/ingredient-price-anchor.service';
 import { OrderProcurementDisclosureService } from './application/order/order-procurement-disclosure.service';
+import { OrderOfflineRefundService } from './application/order/order-offline-refund.service';
 import { LabelIngredientInfoService } from './application/ingredient/label-ingredient-info.service';
 import { PrismaIngredientRepository } from './infrastructure/repositories/prisma-ingredient.repository';
 // import { InMemoryIngredientRepository } from './infrastructure/repositories/in-memory-ingredient.repository'; // NOTE: Currently unused
@@ -663,6 +664,7 @@ validatePrismaConfig();
     IngredientPricingService,
     IngredientPriceAnchorService,
     OrderProcurementDisclosureService,
+    OrderOfflineRefundService,
     LabelIngredientInfoService,
     {
       provide: INGREDIENT_REPOSITORY,

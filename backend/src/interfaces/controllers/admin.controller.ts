@@ -63,6 +63,7 @@ import {
   OrderService,
   type StaffOrderAddressInput,
 } from '../../application/order/order.service';
+import { OrderOfflineRefundService } from '../../application/order/order-offline-refund.service';
 import {
   DogService,
   DOG_BREED_REPOSITORY,
@@ -84,6 +85,7 @@ import type { OrderItemDto } from '../dto/orders/order-response.dto';
 import { buildCookingAdviceForOrder } from '../../application/cooking/cooking-time';
 import { InvalidStateTransitionError } from '../../domain/common/errors';
 import { UpdateOrderAdminRemarkDto } from '../dto/orders/admin-order-operations.dto';
+import { RegisterOfflineRefundDto } from '../dto/orders/register-offline-refund.dto';
 import {
   CreateBreedDto,
   UpdateBreedDto,
@@ -152,6 +154,7 @@ export class AdminController {
     private readonly jwtAuthService?: JwtAuthService,
     private readonly orderProcurementDisclosureService?: OrderProcurementDisclosureService,
     private readonly orderShipmentService?: OrderShipmentService,
+    private readonly orderOfflineRefundService?: OrderOfflineRefundService,
   ) {}
 
   private mapNutritionFoodMappings(mappings?: any[]) {
@@ -2629,6 +2632,84 @@ export class AdminController {
       }
       throw error;
     }
+  }
+
+  /**
+   * POST /admin/orders/:orderId/offline-refund - 登记订单线下退款（财务口径）
+   */
+  @Post('orders/:orderId/offline-refund')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({
+    summary:
+      'Register an offline refund of an order (登记线下退款，作为收入减项)',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiBody({ type: RegisterOfflineRefundDto })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Refund registered, returns accumulated refunded amount and remaining',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request, or accumulated refund exceeds paid amount',
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async registerOrderOfflineRefund(
+    @Param('orderId') orderId: string,
+    @Body() dto: RegisterOfflineRefundDto,
+    @UserId() operatorId: string,
+  ): Promise<
+    | ApiResponseDto<{
+        id: string;
+        totalRefunded: number;
+        remaining: number;
+      }>
+    | ApiResponseDto<null>
+  > {
+    try {
+      if (!this.orderOfflineRefundService) {
+        return ApiResponseDto.error(500, '线下退款服务未就绪');
+      }
+      const result = await this.orderOfflineRefundService.register(
+        operatorId,
+        orderId,
+        {
+          amount: dto?.amount,
+          refundedAt: dto?.refundedAt,
+          method: dto?.method,
+          note: dto?.note,
+          proofKeys: dto?.proofKeys,
+        },
+      );
+      return ApiResponseDto.success(result, '退款登记成功');
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * GET /admin/orders/:orderId/offline-refunds - 订单线下退款登记列表
+   */
+  @Get('orders/:orderId/offline-refunds')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({
+    summary: 'List offline refunds of an order (订单线下退款登记，倒序)',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiResponse({ status: 200, description: 'Offline refunds (voided excluded)' })
+  async listOrderOfflineRefunds(
+    @Param('orderId') orderId: string,
+  ): Promise<ApiResponseDto<any[]>> {
+    const rows = (await this.orderOfflineRefundService?.list(orderId)) ?? [];
+    return ApiResponseDto.success(rows);
   }
 
   /**

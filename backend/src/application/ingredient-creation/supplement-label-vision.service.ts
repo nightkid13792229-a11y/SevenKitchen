@@ -39,7 +39,16 @@ export interface SupplementLabelVisionResult {
 export class SupplementLabelVisionService {
   constructor(private readonly providerConfig: AgentProviderConfigService) {}
 
+  /** 标签图：沿用同一套提示词。 */
   async read(imageUrl: string): Promise<SupplementLabelVisionResult> {
+    return this.readWithPrompt(imageUrl, PROMPT);
+  }
+
+  /**
+   * 换提示词读另一张图（例如商品正面：只认品牌/规格/剂型）。
+   * 提示词统一从调用方给，免得这里长出一套"按图类型判断"的分支。
+   */
+  async readWithPrompt(imageUrl: string, prompt: string): Promise<SupplementLabelVisionResult> {
     const url = imageUrl.trim();
     if (!/^https?:\/\//i.test(url)) {
       throw new BadRequestException('标签图必须是 http/https 的图片地址');
@@ -70,7 +79,7 @@ export class SupplementLabelVisionService {
               role: 'user',
               content: [
                 { type: 'image_url', image_url: { url } },
-                { type: 'text', text: PROMPT }
+                { type: 'text', text: prompt }
               ]
             }
           ]

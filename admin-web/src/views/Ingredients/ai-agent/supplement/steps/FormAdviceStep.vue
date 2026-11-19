@@ -137,7 +137,15 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (event: 'chosen', value: { nutrientKey: string; nutrientLabel: string; level: string }): void
+  (
+    event: 'chosen',
+    value: {
+      nutrientKey: string
+      nutrientLabel: string
+      level: string
+      advice: SupplementFormAdviceDto
+    }
+  ): void
 }>()
 
 const nutrientOptions = supplementNutrientGroups.flatMap((group) =>
@@ -192,7 +200,15 @@ function pick(option: SupplementFormOptionDto): void {
     return
   }
   const label = nutrientOptions.find((item) => item.fieldPath === key)?.label ?? key
-  emit('chosen', { nutrientKey: key, nutrientLabel: label, level: option.level })
+  if (!advice.value) {
+    return
+  }
+  emit('chosen', {
+    nutrientKey: key,
+    nutrientLabel: label,
+    level: option.level,
+    advice: advice.value
+  })
 }
 
 function apiErrorMessage(error: unknown, fallback: string): string {

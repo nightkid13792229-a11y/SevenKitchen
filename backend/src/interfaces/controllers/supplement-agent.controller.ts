@@ -6,10 +6,15 @@ import { AdminGuard } from '../guards/role.guard';
 import {
   CompareOffersDto,
   FormAdviceDto,
+  ReadLabelImagesDto,
   type SupplementFormLevel,
 } from '../dto/ingredient-creation/supplement-agent.dto';
 import { SupplementOfferFetcherService } from '../../application/ingredient-creation/supplement-offer-fetcher.service';
 import { SupplementFormAdviceService } from '../../application/ingredient-creation/supplement-form-advice.service';
+import {
+  SupplementLabelIntakeService,
+  type LabelIntakeResult,
+} from '../../application/ingredient-creation/supplement-label-intake.service';
 import type { FormAdvice } from '../../domain/ingredient/supplement-form-advice';
 import {
   rankOffers,
@@ -70,6 +75,7 @@ export class SupplementAgentController {
   constructor(
     private readonly fetcher: SupplementOfferFetcherService,
     private readonly formAdvice: SupplementFormAdviceService,
+    private readonly labelIntake: SupplementLabelIntakeService,
   ) {}
 
   @Post('form-advice')
@@ -83,6 +89,20 @@ export class SupplementAgentController {
       question: dto.question,
     });
     return new ApiResponseDto(0, 'Success', advice);
+  }
+
+  @Post('read-label-images')
+  @ApiOperation({
+    summary: '两张图读成档案初稿：正面认规格剂型，标签认 Serving Size 与成分表',
+  })
+  async readLabelImages(
+    @Body() dto: ReadLabelImagesDto,
+  ): Promise<ApiResponseDto<LabelIntakeResult>> {
+    const result = await this.labelIntake.read({
+      frontImageUrl: dto.frontImageUrl,
+      labelImageUrl: dto.labelImageUrl,
+    });
+    return new ApiResponseDto(0, 'Success', result);
   }
 
   @Post('compare')

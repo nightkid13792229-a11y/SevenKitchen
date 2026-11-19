@@ -61,3 +61,18 @@ export class FormAdviceDto {
   @MaxLength(300)
   question?: string;
 }
+
+
+export class ReadLabelImagesDto {
+  @ApiProperty({ description: '正面图地址（已上传到我们的图床）' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500)
+  frontImageUrl!: string;
+
+  @ApiProperty({ description: '标签（成分表那一面）图地址' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500)
+  labelImageUrl!: string;
+}

@@ -20,8 +20,12 @@ export type SupplementPhysicalForm = 'POWDER' | 'TABLET' | 'CAPSULE' | 'LIQUID';
 export interface CreateSupplementEvidenceInput {
   productUrl?: string | null;
   productName?: string | null;
+  /** 商品正面图（品牌/规格/剂型从这儿抄） */
+  frontImageUrl?: string | null;
   labelImageUrl?: string | null;
   labelText?: string | null;
+  /** 选品快照：形态结论 + 引用 + 比价 + 选中那瓶；原样存，事后复核用 */
+  selection?: unknown;
 }
 
 export interface CreateSupplementIngredientInput {
@@ -71,7 +75,9 @@ export interface SupplementEvidenceView {
   servingUnitsPerDose: number;
   labelText: string | null;
   labelImageUrl: string | null;
+  frontImageUrl: string | null;
   productUrl: string | null;
+  selection: unknown;
 }
 
 export interface PendingSupplementArchiveView {
@@ -200,8 +206,11 @@ export class SupplementIngredientService {
             productUrl: input.evidence.productUrl ?? null,
             productName: input.evidence.productName ?? input.name,
             servingUnitsPerDose: input.servingUnitsPerDose,
+            frontImageUrl: input.evidence.frontImageUrl ?? null,
             labelImageUrl: input.evidence.labelImageUrl ?? null,
             labelText: input.evidence.labelText ?? null,
+            selectionSnapshot:
+              (input.evidence.selection as Prisma.InputJsonValue | undefined) ?? Prisma.JsonNull,
             conversionSnapshot: {
               servingUnitsPerDose: input.servingUnitsPerDose,
               servingNutrients: input.servingNutrients,
@@ -362,7 +371,9 @@ export class SupplementIngredientService {
       servingUnitsPerDose: evidence.servingUnitsPerDose,
       labelText: evidence.labelText,
       labelImageUrl: evidence.labelImageUrl,
-      productUrl: evidence.productUrl
+      frontImageUrl: evidence.frontImageUrl,
+      productUrl: evidence.productUrl,
+      selection: evidence.selectionSnapshot
     };
   }
 

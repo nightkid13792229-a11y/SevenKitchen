@@ -50,6 +50,12 @@ export class SupplementEvidenceDto {
   @MaxLength(200)
   productName?: string;
 
+  @ApiPropertyOptional({ description: '商品正面图地址（2026-11-20 起留档）' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  frontImageUrl?: string;
+
   @ApiPropertyOptional({ description: '标签图片地址' })
   @IsOptional()
   @IsString()
@@ -60,6 +66,13 @@ export class SupplementEvidenceDto {
   @IsOptional()
   @IsString()
   labelText?: string;
+
+  @ApiPropertyOptional({
+    description: '选品快照：形态结论 + 引用 + 比价表 + 选中那瓶（原样存，事后能复核）',
+  })
+  @IsOptional()
+  @IsObject()
+  selection?: Record<string, unknown>;
 }
 
 export class PreviewSupplementLinkDto {
@@ -223,8 +236,10 @@ export function toCreateSupplementInput(
     evidence: {
       productUrl: dto.evidence?.productUrl ?? null,
       productName: dto.evidence?.productName ?? null,
+      frontImageUrl: dto.evidence?.frontImageUrl ?? null,
       labelImageUrl: dto.evidence?.labelImageUrl ?? null,
-      labelText: dto.evidence?.labelText ?? null
+      labelText: dto.evidence?.labelText ?? null,
+      selection: dto.evidence?.selection ?? null
     },
     createdBy
   };

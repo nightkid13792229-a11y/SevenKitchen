@@ -605,8 +605,12 @@ export interface CreateSupplementIngredientPayload {
   evidence: {
     productUrl?: string | null
     productName?: string | null
+    /** 商品正面图（2026-11-20 起留档） */
+    frontImageUrl?: string | null
     labelImageUrl?: string | null
     labelText?: string | null
+    /** 选品快照：形态结论 + 比价 + 选中那瓶（服务端原样存） */
+    selection?: Record<string, unknown> | null
   }
 }
 
@@ -759,4 +763,22 @@ export interface SupplementComparisonDto {
   basis: SupplementPriceBasisDto
   failed: { url: string; name: string; reason: string }[]
   partial: boolean
+}
+
+
+export interface SupplementFrontFieldsDto {
+  brandCandidate: string | null
+  productModel: string | null
+  physicalForm: SupplementPhysicalForm | null
+  unitDisplayLabel: string | null
+}
+
+export interface SupplementLabelIntakeDto {
+  frontText: string
+  labelText: string
+  front: SupplementFrontFieldsDto
+  servingUnitsPerDose: number | null
+  nutrients: SupplementLinkPreviewNutrientDto[]
+  unrecognized: string[]
+  suggestedName: string | null
 }

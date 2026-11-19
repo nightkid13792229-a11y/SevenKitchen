@@ -36,11 +36,16 @@
       @back="backToForm"
     />
 
-    <section v-else-if="state.step === 3" class="flow__panel">
-      <h3>③ 建档</h3>
-      <p class="flow__desc">传正面图和标签图，Agent 把图上的字变成档案。</p>
-      <p class="flow__hint">这一步还在做，先把前面两步跑通。</p>
-    </section>
+    <ArchiveStep
+      v-else-if="state.step === 3"
+      :draft="state.archive"
+      :offer="chosenOffer"
+      :form-level="state.chosenFormLevel"
+      :form-advice="state.formAdvice"
+      @back="backToForm"
+      @saved="onSaved"
+      @go-launch="jump(4)"
+    />
 
     <LaunchConfigStep
       v-else-if="state.step === 4 && state.saved"
@@ -50,11 +55,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type {
   SupplementComparisonDto,
+  SupplementFormAdviceDto,
   SupplementOfferDto
 } from '@/types/ingredientCreation'
+import ArchiveStep from './ArchiveStep.vue'
 import CompareStep from './CompareStep.vue'
 import FormAdviceStep from './FormAdviceStep.vue'
 import LaunchConfigStep from '../LaunchConfigStep.vue'
@@ -83,6 +90,15 @@ const stepDefs: { id: FlowStep; label: string }[] = [
 
 const state = ref<SupplementFlowState>(loadSnapshot() ?? emptyFlowState())
 
+const chosenOffer = computed<SupplementOfferDto | null>(() => {
+  const data = state.value.comparison
+  const url = state.value.chosenOfferUrl
+  if (!data || !url) {
+    return null
+  }
+  return data.offers.find((offer) => offer.url === url) ?? null
+})
+
 function isDone(step: FlowStep): boolean {
   if (step === 1) return !!state.value.chosenFormLevel || !!state.value.formAdvice
   if (step === 2) return !!state.value.chosenOfferUrl
@@ -98,17 +114,23 @@ function onFormChosen(payload: {
   nutrientKey: string
   nutrientLabel: string
   level: string
+  advice: SupplementFormAdviceDto
 }): void {
   state.value = {
     ...state.value,
     nutrientKey: payload.nutrientKey,
     nutrientLabel: payload.nutrientLabel,
     chosenFormLevel: payload.level,
+    formAdvice: payload.advice,
     // 换档位就是换一批货，旧表不能留着
     comparison: null,
     chosenOfferUrl: null
   }
   state.value = goTo(state.value, 2)
+}
+
+function onSaved(result: { ingredientId: string; nutritionFoodId: string; evidenceId: string }): void {
+  state.value = { ...state.value, saved: result }
 }
 
 function setComparison(value: SupplementComparisonDto): void {

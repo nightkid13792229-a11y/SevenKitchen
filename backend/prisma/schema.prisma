@@ -4546,7 +4546,11 @@ model SupplementLabelEvidence {
   /// 标签上「Serving Size」后面那个数：每份几粒
   servingUnitsPerDose Int      @map("serving_units_per_dose")
   labelImageUrl       String?  @map("label_image_url") @db.VarChar(500)
+  /// 商品正面图（2026-11-20 起留档）：品牌/规格/剂型从这儿抄
+  frontImageUrl       String?  @map("front_image_url") @db.VarChar(500)
   labelText           String?  @map("label_text")
+  /// 选品快照：形态结论 + 引用 + 比价表 + 选中那瓶（事后能复核为什么买它）
+  selectionSnapshot   Json?    @map("selection_snapshot")
   /// 折算快照：{ servingUnitsPerDose, perUnitNutrients, unitDisplayLabel }
   conversionSnapshot  Json     @map("conversion_snapshot")
   createdBy           String   @map("created_by")

@@ -15,6 +15,7 @@ import type {
   SupplementCandidateDto,
   SupplementChatReplyDto,
   SupplementComparisonDto,
+  SupplementLabelIntakeDto,
   SupplementFormAdviceDto,
   SupplementLinkPreviewDto,
   CheckDomain,
@@ -82,6 +83,13 @@ export const ingredientCreationApi = {
     limit?: number
   }): Promise<SupplementComparisonDto> =>
     api.post('/admin/ingredient-supplement-agent/compare', payload, { timeout: 120000 }),
+
+  /** 两张图读成档案初稿：正面认规格剂型，标签认 Serving Size 与成分表。 */
+  readSupplementLabelImages: (payload: {
+    frontImageUrl: string
+    labelImageUrl: string
+  }): Promise<SupplementLabelIntakeDto> =>
+    api.post('/admin/ingredient-supplement-agent/read-label-images', payload, { timeout: 150000 }),
 
   /** 形态建议：知识库读原文后给结论 + 出处；没原文的条目会是「证据不足」。 */
   supplementFormAdvice: (payload: {

@@ -17,6 +17,8 @@ import { convertPerUnit } from './supplementGates'
 
 export interface SupplementEvidenceValue {
   productUrl: string
+  /** 商品正面图：写档案时一起留档 */
+  frontImageUrl: string
   labelImageUrl: string
   labelText: string
 }
@@ -69,7 +71,7 @@ export function emptySupplementDraft(): SupplementDraftValue {
     labelNameSource: '',
     servingNutrients: {},
     perUnitOverrides: {},
-    evidence: { productUrl: '', labelImageUrl: '', labelText: '' }
+    evidence: { productUrl: '', frontImageUrl: '', labelImageUrl: '', labelText: '' }
   }
 }
 
@@ -212,6 +214,7 @@ export function toCreatePayload(
     servingNutrients: { ...draft.servingNutrients },
     evidence: {
       productUrl: text(draft.evidence.productUrl),
+      frontImageUrl: text(draft.evidence.frontImageUrl),
       labelImageUrl: text(draft.evidence.labelImageUrl),
       labelText: text(draft.evidence.labelText)
     }
@@ -253,7 +256,10 @@ function convertUnit(value: number, from: string, to: string): number | null {
 }
 
 export interface PreviewPatchResult {
-  patch: Partial<SupplementDraftValue>
+  /** 证据只带「这次读到的」那几格，别整体覆盖（否则会冲掉已上传的图片地址） */
+  patch: Partial<Omit<SupplementDraftValue, 'evidence'>> & {
+    evidence?: Partial<SupplementEvidenceValue>
+  }
   /** 单位对不上、没放进来的行，原样交给界面提示 */
   skipped: string[]
 }
@@ -284,10 +290,8 @@ export function patchFromPreview(
     servingNutrients[nutrient.fieldPath] = converted
   }
 
-  const patch: Partial<SupplementDraftValue> = {
+  const patch: PreviewPatchResult['patch'] = {
     evidence: {
-      productUrl: preview.productUrl,
-      labelImageUrl: '',
       labelText: preview.labelText ?? ''
     },
     servingNutrients

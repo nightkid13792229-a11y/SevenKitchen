@@ -159,7 +159,9 @@ describe('链接读出来的初稿 → 表单', () => {
     expect(patch.servingUnitsPerDose).toBe(4)
     expect(patch.name).toBe('北欧 Naturals 儿童 DHA')
     expect(patch.evidence?.labelText).toBe('Serving Size: 4 Soft Gels')
-    expect(patch.evidence?.productUrl).toBe('https://www.iherb.com/pr/x/1')
+    // 证据只带「这次读到的标签原文」：链接与图片由页面自己保留，
+    // 整体覆盖会把刚上传的正面图/标签图冲掉（2026-11-20）
+    expect(patch.evidence?.productUrl).toBeUndefined()
   })
 
   it('页面没给每份几粒时不动表单里的值，不默认成 1', () => {

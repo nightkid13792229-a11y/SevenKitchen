@@ -227,9 +227,12 @@
             <input
               class="recipe-name-input"
               v-model="recipeNameInput"
-              maxlength="40"
-              placeholder="例如 Star 的鲜食食谱"
+              :maxlength="RECIPE_NAME_MAX_LENGTH"
+              placeholder="例如 豆豆 11/19"
             />
+            <text class="recipe-name-hint">
+              最多 {{ RECIPE_NAME_MAX_LENGTH }} 个字（当前 {{ recipeNameLength }} 字），超了标签印不下
+            </text>
           </view>
         </view>
 
@@ -282,6 +285,12 @@ import {
   type RecipeSeriesStageStatus,
 } from '../../api/recipe-designer'
 import { dogApi } from '../../api/dogs'
+import {
+  RECIPE_NAME_MAX_LENGTH,
+  buildCustomerRecipeDefaultName,
+  countRecipeNameLength,
+  truncateRecipeName,
+} from '../../utils/recipe-name'
 import { getScenarioLabel } from './assessment'
 
 type SeriesListItem = RecipeDesignerSeriesCard | RecipeDesignerCustomerSeriesCard
@@ -374,6 +383,7 @@ const selectedSeriesStatusFilter = ref<'' | RecipeDesignerSeriesStatusFilter>(''
 const selectedDogFilterId = ref('')
 const selectedCreateDogId = ref('')
 const recipeNameInput = ref('')
+const recipeNameLength = computed(() => countRecipeNameLength(recipeNameInput.value))
 
 const scenarioOptions: Array<{ label: string; value: FediafDogScenario }> = [
   { label: FEDIAF_DOG_SCENARIO_LABELS.EARLY_GROWTH_REPRODUCTION, value: 'EARLY_GROWTH_REPRODUCTION' },
@@ -569,9 +579,16 @@ async function createSeries() {
       uni.showToast({ title: '请输入食谱名称', icon: 'none' })
       return
     }
+    if (isCustomerMode.value && countRecipeNameLength(recipeNameInput.value) > RECIPE_NAME_MAX_LENGTH) {
+      uni.showToast({
+        title: `食谱名称最多 ${RECIPE_NAME_MAX_LENGTH} 个字，超了标签印不下`,
+        icon: 'none',
+      })
+      return
+    }
 
     const createPayload = {
-      name: isCustomerMode.value ? recipeNameInput.value.trim() : '未命名食谱',
+      name: isCustomerMode.value ? truncateRecipeName(recipeNameInput.value) : '未命名食谱',
       scenario: newDraftScenario.value,
       ...(isCustomerMode.value ? { dogId: selectedCreateDogId.value } : {}),
     }
@@ -587,7 +604,10 @@ async function createSeries() {
     await loadSeries()
   } catch (error) {
     console.error('[RecipeDesignerList] Failed to create series:', error)
-    uni.showToast({ title: '创建食谱失败', icon: 'none' })
+    // 别把后端的具体原因吞掉：名称超长、未付款订单、入口权限这些
+    // 都要让顾客看见，只弹「创建食谱失败」会让问题看起来像功能坏了。
+    const reason = error instanceof Error ? error.message.trim() : ''
+    uni.showToast({ title: reason || '创建食谱失败', icon: 'none' })
   } finally {
     creating.value = false
   }
@@ -637,10 +657,7 @@ function resolveScenarioForDog(dog: { recipeLifeStage?: string | null } | null |
 }
 
 function buildDefaultRecipeName(dog?: any) {
-  const now = new Date()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  return `${dog?.name || '爱犬'} 的鲜食食谱 ${mm}/${dd}`
+  return buildCustomerRecipeDefaultName(dog?.name)
 }
 
 function getDogScenarioPreview(dog: any) {
@@ -1163,6 +1180,14 @@ function renameSeries(seriesItem: RecipeDesignerSeriesCard) {
         return
       }
       if (nextName === currentName) return
+      // 名称上限跟后端一致（标签只印得下 12 个字），别等接口退回来才说
+      if (countRecipeNameLength(nextName) > RECIPE_NAME_MAX_LENGTH) {
+        uni.showToast({
+          title: `食谱名称最多 ${RECIPE_NAME_MAX_LENGTH} 个字，超了标签印不下`,
+          icon: 'none',
+        })
+        return
+      }
 
       renamingSeriesId.value = seriesItem.id
       try {
@@ -1175,7 +1200,8 @@ function renameSeries(seriesItem: RecipeDesignerSeriesCard) {
         uni.showToast({ title: '已重命名', icon: 'success' })
       } catch (error) {
         console.error('[RecipeDesignerList] Failed to rename series:', error)
-        uni.showToast({ title: '重命名失败', icon: 'none' })
+        const reason = error instanceof Error ? error.message.trim() : ''
+        uni.showToast({ title: reason || '重命名失败', icon: 'none' })
       } finally {
         renamingSeriesId.value = ''
       }
@@ -2057,6 +2083,12 @@ function formatDateTime(value?: string) {
   color: #26261f;
   font-size: 27rpx;
   box-sizing: border-box;
+}
+
+.recipe-name-hint {
+  color: #7a7d6a;
+  font-size: 22rpx;
+  line-height: 1.5;
 }
 
 .scenario-section {

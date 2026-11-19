@@ -273,9 +273,22 @@
               {{ option.label }}
             </view>
           </view>
-          <text v-if="formInterval === 'YEARLY'" class="field-hint">
-            {{ yearlyHint }}
-          </text>
+        </view>
+
+        <view v-if="formInterval === 'YEARLY'" class="field">
+          <text class="field-label">几月（年付）</text>
+          <picker
+            mode="selector"
+            :range="MONTH_LABELS"
+            :value="formMonthIndex"
+            @change="onPickMonthOfYear"
+          >
+            <view class="picker-value">
+              <text class="picker-text">{{ formMonthOfYear }} 月</text>
+              <text class="picker-chevron">›</text>
+            </view>
+          </picker>
+          <text class="field-hint">{{ yearlyHint }}</text>
         </view>
 
         <view class="field">
@@ -354,7 +367,6 @@ import StaffEmptyState from '../../components/staff/StaffEmptyState.vue'
 import StaffStatusBadge from '../../components/staff/StaffStatusBadge.vue'
 import {
   staffFinanceApi,
-  type CreateExpenseTemplatePayload,
   type FinanceExpenseBill,
   type FinanceExpenseBillStatus,
   type FinanceExpenseCategory,
@@ -363,6 +375,11 @@ import {
   type FinanceExpenseTemplate,
 } from '../../api/staff-finance'
 import { getStoredUser } from '../../utils/account'
+import {
+  buildTemplateFormPayload,
+  dueTemplatesForMonth,
+  serviceMonthsForInterval,
+} from './bills-logic'
 
 /** 起账月：之前的月份没有账，月份切换不列出来（也就不会误生成） */
 const FINANCE_START_MONTH = '2026-11'
@@ -431,6 +448,9 @@ const PAYER_OPTIONS: Array<{
 
 /** 几号：1-31，月份没有这一天时后端按月末算 */
 const DAY_LABELS = Array.from({ length: 31 }, (_, index) => `${index + 1} 号`)
+
+/** 年付的月份：1-12，默认当前月，必须选 */
+const MONTH_LABELS = Array.from({ length: 12 }, (_, index) => `${index + 1} 月`)
 
 type StaffBadgeTone = 'pending' | 'done' | 'danger' | 'neutral'
 
@@ -661,8 +681,18 @@ async function generateBills() {
     const created = Number(result?.created) || 0
     if (created > 0) {
       toast(`已生成 ${created} 笔`, 'success')
-    } else {
+    } else if (
+      dueTemplatesForMonth(templates.value, activeMonth.value).length > 0
+    ) {
+      // 有该生成的项目、created 却是 0：说明当月账单之前就生成过了
       toast(isCurrentMonth.value ? '本月都已生成' : '该月都已生成')
+    } else {
+      // 季付不在本季、年付月份不符、没有启用的模板：本来就不该有账单
+      toast(
+        isCurrentMonth.value
+          ? '本月没有需要生成的固定费用'
+          : '该月没有需要生成的固定费用',
+      )
     }
     await loadBills()
   } catch (error) {
@@ -761,21 +791,20 @@ const formInterval = ref<FinanceExpenseInterval>('MONTHLY')
 const formDayIndex = ref(0)
 const formServiceMonthsText = ref('1')
 const formPayerType = ref<FinanceExpensePayerType>('PERSONAL')
+/** 年付月份：1-12，新建时默认当前月，老模板沿用原值 */
+const formMonthOfYear = ref(Number(currentMonth.value.slice(5, 7)))
 const formSubmitting = ref(false)
 
 const formTitle = computed(() =>
   editingTemplate.value ? '编辑固定费用' : '新建固定费用',
 )
 
-/** 年付的月份：老模板沿用原值，新建时用当前选中月份 */
-const yearlyMonth = computed(() => {
-  const saved = Number(editingTemplate.value?.monthOfYear)
-  if (Number.isInteger(saved) && saved >= 1 && saved <= 12) return saved
-  return Number(activeMonth.value.slice(5, 7))
-})
+const formMonthIndex = computed(() =>
+  Math.max(0, Math.min(11, formMonthOfYear.value - 1)),
+)
 
 const yearlyHint = computed(
-  () => `年付：每年 ${yearlyMonth.value} 月生成一张，几号是到期日`,
+  () => `年付：每年 ${formMonthOfYear.value} 月生成一张，几号是到期日`,
 )
 
 function openCreate() {
@@ -787,6 +816,7 @@ function openCreate() {
   formDayIndex.value = 0
   formServiceMonthsText.value = '1'
   formPayerType.value = 'PERSONAL'
+  formMonthOfYear.value = Number(currentMonth.value.slice(5, 7))
   formOpen.value = true
 }
 
@@ -800,11 +830,19 @@ function openEdit(template: FinanceExpenseTemplate) {
   formInterval.value = template.interval
   const day = Number(template.dayOfMonth)
   formDayIndex.value = (Number.isFinite(day) ? Math.min(31, Math.max(1, day)) : 1) - 1
-  formServiceMonthsText.value = String(
-    Number(template.servicePeriodMonths) || 1,
-  )
+  // 月付/季付的服务期就是 1：老数据里若被写成 12（会把房租摊成 1/12），
+  // 打开编辑时就按 1 展示，保存后顺手修正，不动历史账单。
+  formServiceMonthsText.value =
+    template.interval === 'YEARLY'
+      ? String(Number(template.servicePeriodMonths) || 12)
+      : '1'
   formPayerType.value =
     template.payerType === 'COMPANY' ? 'COMPANY' : 'PERSONAL'
+  const savedMonth = Number(template.monthOfYear)
+  formMonthOfYear.value =
+    Number.isInteger(savedMonth) && savedMonth >= 1 && savedMonth <= 12
+      ? savedMonth
+      : Number(currentMonth.value.slice(5, 7))
   formOpen.value = true
 }
 
@@ -835,45 +873,25 @@ function selectFormPayer(value: FinanceExpensePayerType) {
 
 function selectInterval(value: FinanceExpenseInterval) {
   formInterval.value = value
-  // 年付通常是宽带/域名这类一次付一年：默认服务期从 1 换成 12，用户还能改
-  if (value === 'YEARLY' && formServiceMonthsText.value.trim() === '1') {
-    formServiceMonthsText.value = '12'
+  // 年付默认 12；切回月付/季付必须回到 1，否则月租会被按 12 个月平摊
+  formServiceMonthsText.value = serviceMonthsForInterval(
+    value,
+    formServiceMonthsText.value,
+  )
+}
+
+function onPickMonthOfYear(event: any) {
+  const index = Number(event?.detail?.value)
+  if (!Number.isInteger(index) || index < 0 || index >= MONTH_LABELS.length) {
+    return
   }
+  formMonthOfYear.value = index + 1
 }
 
 function onPickDay(event: any) {
   const index = Number(event?.detail?.value)
   if (!Number.isInteger(index) || index < 0 || index >= DAY_LABELS.length) return
   formDayIndex.value = index
-}
-
-/**
- * 组装入参：后端 `titleTemplate` / `payeeName` 必填，但表单不采集——
- * 新建时标题模板用「名称 + 年月」，收款方与名称一致；
- * 编辑时名称没改就沿用原标题，收款方保留后台填的值，不覆盖。
- */
-function buildTemplatePayload(
-  name: string,
-  amount: number,
-  serviceMonths: number,
-): CreateExpenseTemplatePayload {
-  const editing = editingTemplate.value
-  const payload: CreateExpenseTemplatePayload = {
-    name,
-    titleTemplate:
-      editing && editing.name === name
-        ? editing.titleTemplate
-        : `${name} {{year}}年{{month}}月`,
-    category: formCategory.value,
-    payeeName: editing?.payeeName || name,
-    defaultAmount: amount,
-    interval: formInterval.value,
-    dayOfMonth: formDayIndex.value + 1,
-    servicePeriodMonths: serviceMonths,
-    payerType: formPayerType.value,
-  }
-  if (formInterval.value === 'YEARLY') payload.monthOfYear = yearlyMonth.value
-  return payload
 }
 
 async function saveTemplate() {
@@ -899,8 +917,36 @@ async function saveTemplate() {
     toast('服务期月数填 1-120')
     return
   }
+  // 非年付只能是 1（月租按 12 个月平摊会算错钱）；年付必须选到月份
+  if (formInterval.value !== 'YEARLY' && serviceMonths !== 1) {
+    toast('月付/季付的服务期固定为 1；年付才填 12')
+    return
+  }
+  if (formInterval.value === 'YEARLY') {
+    const monthOfYear = Number(formMonthOfYear.value)
+    if (!Number.isInteger(monthOfYear) || monthOfYear < 1 || monthOfYear > 12) {
+      toast('请选择年付的月份')
+      return
+    }
+  }
 
-  const payload = buildTemplatePayload(name, amount.value, serviceMonths)
+  const payload = buildTemplateFormPayload({
+    name,
+    category: formCategory.value,
+    amount: amount.value,
+    interval: formInterval.value,
+    dayOfMonth: formDayIndex.value + 1,
+    servicePeriodMonths: serviceMonths,
+    payerType: formPayerType.value,
+    monthOfYear: formMonthOfYear.value,
+    editing: editingTemplate.value
+      ? {
+          name: editingTemplate.value.name,
+          titleTemplate: editingTemplate.value.titleTemplate,
+          payeeName: editingTemplate.value.payeeName,
+        }
+      : null,
+  })
   formSubmitting.value = true
   try {
     if (editingTemplate.value) {
@@ -1127,12 +1173,12 @@ onShow(() => {
 
 /* 行内按钮：金额区的小动作，保留 72rpx 触控高度 */
 .row-btn {
-  min-height: 72rpx;
+  min-height: 88rpx;
   margin: 0;
   padding: 0 24rpx;
   font-size: $staff-font-caption;
   font-weight: 600;
-  line-height: 72rpx;
+  line-height: 88rpx;
   color: $staff-brand;
   background: $staff-brand-soft;
   border-radius: $staff-radius-pill;
@@ -1144,7 +1190,7 @@ onShow(() => {
 
 .row-done {
   font-size: $staff-font-caption;
-  color: $staff-ink-3;
+  color: $staff-ink-2;
 }
 
 .template-head {

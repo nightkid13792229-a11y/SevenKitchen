@@ -108,6 +108,7 @@ export class InMemoryRecipeRepository implements RecipeRepository {
       ingredientTags: [],
       ingredientGroups: [],
       mainProtein: [],
+      needs: [],
       total: this.recipes.size,
     });
   }

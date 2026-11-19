@@ -62,6 +62,12 @@ export class FilterOptionsDto {
   })
   mainProtein!: FilterOptionDto[];
 
+  @ApiProperty({
+    type: [FilterOptionDto],
+    description: 'Need options (低脂/易消化/单一蛋白), counted by series',
+  })
+  needs!: FilterOptionDto[];
+
   @ApiProperty({ example: 24, description: 'Total recipes count' })
   total!: number;
 }

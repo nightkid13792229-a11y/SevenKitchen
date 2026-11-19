@@ -403,6 +403,29 @@ export class PrismaRecipeRepository implements RecipeRepository {
       );
     }
 
+    // 需求筛选：同一系列的多个阶段版本先并标签，再按「并且」判断。
+    if (options?.needTagIds && options.needTagIds.length > 0) {
+      const requiredTagIds = new Set(options.needTagIds);
+      const tagsBySeries = new Map<string, Set<string>>();
+      for (const recipe of allRecipes) {
+        if (!recipe.seriesId) continue;
+        const set = tagsBySeries.get(recipe.seriesId) ?? new Set<string>();
+        for (const assignment of recipe.healthTagAssignments ?? []) {
+          set.add(assignment.healthTagId);
+        }
+        tagsBySeries.set(recipe.seriesId, set);
+      }
+      filteredRecipes = filteredRecipes.filter((recipe) => {
+        if (!recipe.seriesId) return false;
+        const tags = tagsBySeries.get(recipe.seriesId);
+        if (!tags) return false;
+        for (const tagId of requiredTagIds) {
+          if (!tags.has(tagId)) return false;
+        }
+        return true;
+      });
+    }
+
     const hasLifeStageFilter = Boolean(options?.lifeStages?.length);
 
     const uniqueRecipes = this.groupPublicRecipeRepresentatives(
@@ -597,12 +620,53 @@ export class PrismaRecipeRepository implements RecipeRepository {
           left.label.localeCompare(right.label),
       );
 
+    /**
+     * 需求：低脂 / 易消化 / 单一蛋白，按系列计数。
+     *
+     * 标签是挂在「食谱行」上的（一个系列有多个阶段版本），这里先把每个系列的
+     * 标签并起来，再数「有多少个系列有这个标签」；0 道的不返回。
+     * 顺序固定：低脂、易消化、单一蛋白。
+     */
+    const NEED_TAG_ORDER = ['低脂', '易消化', '单一动物蛋白'] as const;
+    const NEED_TAG_LABELS: Record<string, string> = {
+      低脂: '低脂',
+      易消化: '易消化',
+      单一动物蛋白: '单一蛋白',
+    };
+    const needTagIdByName = new Map(
+      allHealthTags
+        .filter((tag) => (NEED_TAG_ORDER as readonly string[]).includes(tag.name))
+        .map((tag) => [tag.name, tag.id]),
+    );
+    const needTagsBySeries = new Map<string, Set<string>>();
+    for (const recipe of allRecipes) {
+      if (!recipe.seriesId) continue;
+      const set = needTagsBySeries.get(recipe.seriesId) ?? new Set<string>();
+      for (const assignment of recipe.healthTagAssignments ?? []) {
+        set.add(assignment.healthTagId);
+      }
+      needTagsBySeries.set(recipe.seriesId, set);
+    }
+    const needs = NEED_TAG_ORDER.map((name) => {
+      const value = needTagIdByName.get(name);
+      if (!value) return null;
+      let count = 0;
+      for (const tags of needTagsBySeries.values()) {
+        if (tags.has(value)) count += 1;
+      }
+      return { value, label: NEED_TAG_LABELS[name] ?? name, count };
+    }).filter(
+      (option): option is { value: string; label: string; count: number } =>
+        Boolean(option && option.count > 0),
+    );
+
     return {
       lifeStages,
       healthTags,
       ingredientTags,
       ingredientGroups,
       mainProtein,
+      needs,
       total: allRecipes.length,
     };
   }

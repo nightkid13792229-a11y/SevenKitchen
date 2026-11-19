@@ -426,4 +426,88 @@ describe('PrismaRecipeRepository', () => {
       }),
     );
   });
+
+  it('counts needs by series and hides zero-count tags', async () => {
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([
+          publicRecipe({
+            id: 'row-pork-1',
+            seriesId: 'series-pork',
+            healthTagAssignments: [{ healthTagId: 'tag-low-fat' }],
+          }),
+          publicRecipe({
+            id: 'row-pork-2',
+            seriesId: 'series-pork',
+            version: 2,
+            healthTagAssignments: [{ healthTagId: 'tag-easy' }],
+          }),
+          publicRecipe({
+            id: 'row-beef',
+            seriesId: 'series-beef',
+            healthTagAssignments: [{ healthTagId: 'tag-low-fat' }],
+          }),
+        ]),
+      },
+      recipeHealthTag: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'tag-low-fat', name: '低脂', parentId: null },
+          { id: 'tag-easy', name: '易消化', parentId: null },
+          { id: 'tag-single', name: '单一动物蛋白', parentId: 'group-1' },
+        ]),
+      },
+      ingredientTag: { findMany: jest.fn().mockResolvedValue([]) },
+      recipeTaxonomyKind: { findUnique: jest.fn().mockResolvedValue(null) },
+      recipeSeriesTaxonomy: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const repository = new PrismaRecipeRepository(prisma as any);
+    (repository as any).buildIngredientGroups = jest
+      .fn()
+      .mockResolvedValue([]);
+
+    const options = await repository.getFilterOptions();
+
+    // 同一系列两个阶段版本各挂一个标签：按系列各算一次
+    expect(options.needs).toEqual([
+      { value: 'tag-low-fat', label: '低脂', count: 2 },
+      { value: 'tag-easy', label: '易消化', count: 1 },
+    ]);
+  });
+
+  it('filters public recipes by needs with AND semantics', async () => {
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([
+          publicRecipe({
+            id: 'row-pork',
+            seriesId: 'series-pork',
+            healthTagAssignments: [
+              { healthTagId: 'tag-low-fat' },
+              { healthTagId: 'tag-easy' },
+            ],
+          }),
+          publicRecipe({
+            id: 'row-beef',
+            seriesId: 'series-beef',
+            healthTagAssignments: [{ healthTagId: 'tag-low-fat' }],
+          }),
+          publicRecipe({
+            id: 'row-rabbit',
+            seriesId: 'series-rabbit',
+            healthTagAssignments: [{ healthTagId: 'tag-easy' }],
+          }),
+        ]),
+      },
+    };
+    const repository = new PrismaRecipeRepository(prisma as any);
+
+    const result = await repository.findPublicRecipesPaginated({
+      needTagIds: ['tag-low-fat', 'tag-easy'],
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.data[0].seriesId).toBe('series-pork');
+  });
 });

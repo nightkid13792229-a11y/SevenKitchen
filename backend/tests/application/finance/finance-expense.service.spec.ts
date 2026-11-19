@@ -20,16 +20,19 @@ describe('FinanceExpenseService', () => {
       purchaseLists: [
         {
           id: 'p1',
+          kind: 'STOCK_REPLENISHMENT',
+          // 实际形状：小计 900（商品 800 + 个人 100）+ 运费 100 = 实付 1000
           paidAmount: 1000,
           personalAmount: 100,
           subtotalAmount: 900,
           shippingFee: 100,
           packagingFee: 0,
           discountAmount: 0,
-          items: [{ type: 'FOOD', estimatedCost: 900 }],
+          items: [{ type: 'FOOD', estimatedCost: 800 }],
         },
         {
           id: 'p2',
+          kind: 'STOCK_REPLENISHMENT',
           paidAmount: 200,
           personalAmount: 0,
           subtotalAmount: 200,
@@ -45,7 +48,10 @@ describe('FinanceExpenseService', () => {
 
     expect(
       r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount,
-    ).toBe(900);
+    ).toBe(800);
+    expect(
+      r.byCategory.find((c) => c.category === 'LOGISTICS_DELIVERY')!.amount,
+    ).toBe(100);
     expect(
       r.byCategory.find((c) => c.category === 'PACKAGING_SUPPLIES')!.amount,
     ).toBe(200);
@@ -57,6 +63,7 @@ describe('FinanceExpenseService', () => {
       purchaseLists: [
         {
           id: 'p1',
+          kind: 'STOCK_REPLENISHMENT',
           paidAmount: null,
           personalAmount: 0,
           subtotalAmount: 99.99,
@@ -156,6 +163,7 @@ describe('FinanceExpenseService', () => {
       purchaseLists: [
         {
           id: 'p1',
+          kind: 'STOCK_REPLENISHMENT',
           paidAmount: null,
           personalAmount: 0,
           subtotalAmount: 60,
@@ -179,6 +187,170 @@ describe('FinanceExpenseService', () => {
       r.byCategory.find((c) => c.category === 'PACKAGING_SUPPLIES')!.amount,
     ).toBe(18);
     expect(r.total).toBe(90);
+  });
+
+  it('日采单按采购记录实付计入，3 条记录合计 500', async () => {
+    const prisma: any = makePrisma({
+      purchaseLists: [
+        {
+          id: 'd1',
+          kind: 'ORDER_DEMAND',
+          paidAmount: null,
+          personalAmount: 0,
+          subtotalAmount: null,
+          shippingFee: null,
+          packagingFee: null,
+          discountAmount: null,
+          items: [
+            { id: 'i1', type: 'FOOD', estimatedCost: 200 },
+            { id: 'i2', type: 'FOOD', estimatedCost: 200 },
+            { id: 'i3', type: 'FOOD', estimatedCost: 100 },
+          ],
+          records: [
+            {
+              purchaseItemId: 'i1',
+              actualCost: 200,
+              purchasedAt: new Date('2026-11-01T02:00:00Z'),
+            },
+            {
+              purchaseItemId: 'i2',
+              actualCost: 200,
+              purchasedAt: new Date('2026-11-05T02:00:00Z'),
+            },
+            {
+              purchaseItemId: 'i3',
+              actualCost: 100,
+              purchasedAt: new Date('2026-11-10T02:00:00Z'),
+            },
+          ],
+        },
+      ],
+    });
+
+    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+
+    expect(
+      r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount,
+    ).toBe(500);
+    expect(r.total).toBe(500);
+  });
+
+  it('日采单个人消费从商品合计扣减，并按商品类型拆分', async () => {
+    const prisma: any = makePrisma({
+      purchaseLists: [
+        {
+          id: 'd1',
+          kind: 'ORDER_DEMAND',
+          paidAmount: null,
+          personalAmount: 100,
+          subtotalAmount: null,
+          shippingFee: null,
+          packagingFee: null,
+          discountAmount: null,
+          items: [
+            { id: 'i1', type: 'FOOD', estimatedCost: 300 },
+            { id: 'i2', type: 'SUPPLEMENT', estimatedCost: 200 },
+          ],
+          records: [
+            {
+              purchaseItemId: 'i1',
+              actualCost: 300,
+              purchasedAt: new Date('2026-11-05T02:00:00Z'),
+            },
+            {
+              purchaseItemId: 'i2',
+              actualCost: 200,
+              purchasedAt: new Date('2026-11-06T02:00:00Z'),
+            },
+          ],
+        },
+      ],
+    });
+
+    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+
+    expect(
+      r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount,
+    ).toBe(240);
+    expect(r.byCategory.find((c) => c.category === 'SUPPLEMENT')!.amount).toBe(
+      160,
+    );
+    expect(r.total).toBe(400);
+  });
+
+  it('同一张采购单只按 kind 走一条取数路径，不重复计入', async () => {
+    const prisma: any = makePrisma({
+      purchaseLists: [
+        {
+          id: 'd1',
+          kind: 'ORDER_DEMAND',
+          paidAmount: 1000,
+          personalAmount: 0,
+          subtotalAmount: 1000,
+          shippingFee: 0,
+          packagingFee: 0,
+          discountAmount: 0,
+          items: [{ id: 'i1', type: 'FOOD', estimatedCost: 500 }],
+          records: [
+            {
+              purchaseItemId: 'i1',
+              actualCost: 500,
+              purchasedAt: new Date('2026-11-05T02:00:00Z'),
+            },
+          ],
+        },
+        {
+          id: 's1',
+          kind: 'STOCK_REPLENISHMENT',
+          paidAmount: 300,
+          personalAmount: 0,
+          subtotalAmount: 300,
+          shippingFee: 0,
+          packagingFee: 0,
+          discountAmount: 0,
+          items: [{ id: 'i2', type: 'FOOD', estimatedCost: 300 }],
+          records: [
+            {
+              purchaseItemId: 'i2',
+              actualCost: 999,
+              purchasedAt: new Date('2026-11-06T02:00:00Z'),
+            },
+          ],
+        },
+      ],
+    });
+
+    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+
+    expect(
+      r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount,
+    ).toBe(800);
+    expect(r.total).toBe(800);
+  });
+
+  it('补货单仍按实付口径计入', async () => {
+    const prisma: any = makePrisma({
+      purchaseLists: [
+        {
+          id: 'p1',
+          kind: 'STOCK_REPLENISHMENT',
+          paidAmount: 120,
+          personalAmount: 20,
+          subtotalAmount: 120,
+          shippingFee: 0,
+          packagingFee: 0,
+          discountAmount: 0,
+          items: [{ id: 'i1', type: 'FOOD', estimatedCost: 120 }],
+        },
+      ],
+    });
+
+    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+
+    expect(
+      r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount,
+    ).toBe(100);
+    expect(r.total).toBe(100);
   });
 
   it('跨月账单只计入与本期间重叠的月份', async () => {
@@ -245,5 +417,32 @@ describe('FinanceExpenseService', () => {
       ['PAYMENT_FEE', -3],
     ]);
     expect(r.total).toBe(72.5);
+  });
+
+  it('金额相同时按 label 兜底排序，避免顺序不稳定', async () => {
+    const prisma: any = makePrisma({
+      manualEntries: [
+        {
+          id: 'm1',
+          amount: 100,
+          occurredAt: new Date('2026-11-06T02:00:00Z'),
+          category: 'ADMINISTRATIVE',
+        },
+        {
+          id: 'm2',
+          amount: 100,
+          occurredAt: new Date('2026-11-07T02:00:00Z'),
+          category: 'RENT',
+        },
+      ],
+    });
+
+    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+
+    expect(r.byCategory.map((c) => c.category)).toEqual([
+      'RENT',
+      'ADMINISTRATIVE',
+    ]);
+    expect(r.total).toBe(200);
   });
 });

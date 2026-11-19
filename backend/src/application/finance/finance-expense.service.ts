@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { ExpenseBillStatus } from '@prisma/client';
+import type { ExpenseBillStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { TimezoneUtil } from '../../utils/timezone.util';
 import {
@@ -35,12 +35,29 @@ const PURCHASE_ITEM_CATEGORY: Record<string, FinanceExpenseCategory> = {
   PACKAGING: 'PACKAGING_SUPPLIES',
 };
 
+/** 采购取数的最小字段（两种采购单共用一次查询，再按 kind 分流） */
+const PURCHASE_LIST_SELECT = {
+  kind: true,
+  paidAmount: true,
+  personalAmount: true,
+  subtotalAmount: true,
+  shippingFee: true,
+  packagingFee: true,
+  discountAmount: true,
+  items: { select: { id: true, type: true, estimatedCost: true } },
+  records: {
+    select: { purchaseItemId: true, actualCost: true, purchasedAt: true },
+  },
+} satisfies Prisma.PurchaseListSelect;
+
+type PurchaseListRow = Prisma.PurchaseListGetPayload<{
+  select: typeof PURCHASE_LIST_SELECT;
+}>;
+
 /** 采购分摊用的明细行：商品行按类型归并，运费/包装费单独成行 */
 type ExpenseLine = {
   category: FinanceExpenseCategory;
   weightCents: number;
-  /** 非商品行（运费/包装费），个人消费优先从这些行冲减 */
-  isExtra: boolean;
 };
 
 /** Prisma Decimal / null 统一转成整数分，四舍五入到分 */
@@ -141,7 +158,10 @@ export class FinanceExpenseService {
         amount: centsToMoney(cents),
       }))
       .filter((row) => row.amount !== 0)
-      .sort((a, b) => b.amount - a.amount);
+      .sort(
+        (a, b) =>
+          b.amount - a.amount || a.label.localeCompare(b.label, 'zh-CN'),
+      );
 
     return {
       total: centsToMoney(
@@ -152,11 +172,11 @@ export class FinanceExpenseService {
   }
 
   /**
-   * 采购支出：实付 − 个人消费；实付为空时按
-   * `小计 + 运费 + 包装费 − 优惠` 兜底。
+   * 采购支出：两种采购单用同一批排除条件取回，再按 `kind` 分流，
+   * 同一条单只会走一条路，不会把实付和采购记录重复相加。
    *
-   * 商品行按 `type` 的 `estimatedCost` 占比拆到食材/补剂/包材，运费归物流、
-   * 包装费归包材；优惠体现在「实付小于各明细行之和」的差额里，按行占比摊减。
+   * - `STOCK_REPLENISHMENT`：按单据实付，归月用 `orderPlacedAt ?? completedAt ?? createdAt`
+   * - `ORDER_DEMAND`：按 `PurchaseRecord.actualCost` 之和，归月用各记录的 `purchasedAt`
    */
   private async addPurchaseExpenses(
     period: FinancePeriod,
@@ -166,113 +186,158 @@ export class FinanceExpenseService {
       where: {
         isDraft: false,
         voidedAt: null,
-        // 归月用 completedAt ?? createdAt；completedAt 为空时退回 createdAt
         OR: [
-          { completedAt: { gte: period.from, lte: period.to } },
           {
-            completedAt: null,
-            createdAt: { gte: period.from, lte: period.to },
+            kind: 'STOCK_REPLENISHMENT',
+            // 钱一般在下单那天付的，没有下单时间再退回完成/创建时间
+            OR: [
+              { orderPlacedAt: { gte: period.from, lte: period.to } },
+              {
+                orderPlacedAt: null,
+                completedAt: { gte: period.from, lte: period.to },
+              },
+              {
+                orderPlacedAt: null,
+                completedAt: null,
+                createdAt: { gte: period.from, lte: period.to },
+              },
+            ],
+          },
+          {
+            kind: 'ORDER_DEMAND',
+            records: {
+              some: { purchasedAt: { gte: period.from, lte: period.to } },
+            },
           },
         ],
       },
-      select: {
-        paidAmount: true,
-        personalAmount: true,
-        subtotalAmount: true,
-        shippingFee: true,
-        packagingFee: true,
-        discountAmount: true,
-        items: { select: { type: true, estimatedCost: true } },
-      },
+      select: PURCHASE_LIST_SELECT,
     });
 
     for (const list of lists) {
-      const grossCents =
-        list.paidAmount != null
-          ? toCents(list.paidAmount)
-          : toCents(list.subtotalAmount) +
-            toCents(list.shippingFee) +
-            toCents(list.packagingFee) -
-            toCents(list.discountAmount);
-      const personalCents = toCents(list.personalAmount);
-
-      // 四项都缺（且没有实付）时按 0 计，不产生支出行
-      if (grossCents <= 0 || grossCents <= personalCents) continue;
-
-      const itemWeights = new Map<FinanceExpenseCategory, number>();
-      for (const item of list.items) {
-        const category = this.resolvePurchaseItemCategory(item.type);
-        itemWeights.set(
-          category,
-          (itemWeights.get(category) ?? 0) + toCents(item.estimatedCost),
-        );
+      if (list.kind === 'ORDER_DEMAND') {
+        this.addDailyPurchaseExpense(list, period, bucket);
+      } else {
+        this.addReplenishmentExpense(list, bucket);
       }
+    }
+  }
 
-      const lines: ExpenseLine[] = Array.from(itemWeights.entries())
-        .filter(([, weightCents]) => weightCents > 0)
-        .map(([category, weightCents]) => ({
-          category,
-          weightCents,
-          isExtra: false,
-        }));
+  /**
+   * 补货单：金额 = 实付 − 个人消费；实付为空时按
+   * `小计 + 运费 + 包装费 − 优惠` 兜底。
+   *
+   * 可分摊额 base 已扣掉个人消费，再按「商品行 + 实际运费 + 实际包装费」的
+   * 权重整体摊到各行：优惠自然按行占比摊减；个人消费不专项冲减运费/包装费。
+   * base 小于运费与包装费合计时，按权重摊分只会同比例调小，不会出现负数。
+   */
+  private addReplenishmentExpense(
+    list: PurchaseListRow,
+    bucket: Map<FinanceExpenseCategory, number>,
+  ): void {
+    const grossCents =
+      list.paidAmount != null
+        ? toCents(list.paidAmount)
+        : toCents(list.subtotalAmount) +
+          toCents(list.shippingFee) +
+          toCents(list.packagingFee) -
+          toCents(list.discountAmount);
+    const baseCents = grossCents - toCents(list.personalAmount);
 
-      const shippingCents = toCents(list.shippingFee);
-      if (shippingCents > 0) {
-        lines.push({
-          category: 'LOGISTICS_DELIVERY',
-          weightCents: shippingCents,
-          isExtra: true,
-        });
-      }
-      const packagingCents = toCents(list.packagingFee);
-      if (packagingCents > 0) {
-        lines.push({
-          category: 'PACKAGING_SUPPLIES',
-          weightCents: packagingCents,
-          isExtra: true,
-        });
-      }
+    // 四项都缺（且没有实付）时按 0 计，不产生支出行
+    if (grossCents <= 0 || baseCents <= 0) return;
 
-      // 有实付却没有任何明细行：按食材采购兜底，避免金额凭空消失
-      if (lines.length === 0) {
-        lines.push({
-          category: 'RAW_MATERIAL',
-          weightCents: grossCents,
-          isExtra: false,
-        });
-      }
-
-      const shares = allocateCents(
-        grossCents,
-        lines.map((line) => line.weightCents),
+    const itemWeights = new Map<FinanceExpenseCategory, number>();
+    for (const item of list.items) {
+      const category = this.resolvePurchaseItemCategory(item.type);
+      itemWeights.set(
+        category,
+        (itemWeights.get(category) ?? 0) + toCents(item.estimatedCost),
       );
+    }
 
-      // 个人消费先从运费/包装费冲减，不足部分再按占比冲减商品行：
-      // 商品行代表货物本身的成本，个人消费不应改变公司为货物付的钱。
-      let personalLeft = personalCents;
-      for (let i = 0; i < lines.length && personalLeft > 0; i += 1) {
-        if (!lines[i].isExtra) continue;
-        const deduction = Math.min(shares[i], personalLeft);
-        shares[i] -= deduction;
-        personalLeft -= deduction;
-      }
-      if (personalLeft > 0) {
-        const itemIndexes = lines
-          .map((line, index) => (line.isExtra ? -1 : index))
-          .filter((index) => index >= 0);
-        const deductions = allocateCents(
-          personalLeft,
-          itemIndexes.map((index) => shares[index]),
-        );
-        itemIndexes.forEach((index, offset) => {
-          shares[index] -= deductions[offset];
-        });
-      }
+    const lines: ExpenseLine[] = Array.from(itemWeights.entries())
+      .filter(([, weightCents]) => weightCents > 0)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([category, weightCents]) => ({ category, weightCents }));
 
-      lines.forEach((line, index) => {
-        addCents(bucket, line.category, shares[index]);
+    const shippingCents = toCents(list.shippingFee);
+    if (shippingCents > 0) {
+      lines.push({
+        category: 'LOGISTICS_DELIVERY',
+        weightCents: shippingCents,
       });
     }
+    const packagingCents = toCents(list.packagingFee);
+    if (packagingCents > 0) {
+      lines.push({
+        category: 'PACKAGING_SUPPLIES',
+        weightCents: packagingCents,
+      });
+    }
+
+    // 有实付却没有任何明细行：按食材采购兜底，避免金额凭空消失
+    if (lines.length === 0) {
+      lines.push({ category: 'RAW_MATERIAL', weightCents: baseCents });
+    }
+
+    const shares = allocateCents(
+      baseCents,
+      lines.map((line) => line.weightCents),
+    );
+    lines.forEach((line, index) => {
+      addCents(bucket, line.category, shares[index]);
+    });
+  }
+
+  /**
+   * 日采单：订单需求采购只有采购记录、没有单据级实付，
+   * 金额取各条 `PurchaseRecord.actualCost` 之和，按对应商品行的 `type` 归类。
+   *
+   * `PurchaseRecord` 没有作废字段，作废以采购单 `voidedAt` 为准（查询已排除）。
+   */
+  private addDailyPurchaseExpense(
+    list: PurchaseListRow,
+    period: FinancePeriod,
+    bucket: Map<FinanceExpenseCategory, number>,
+  ): void {
+    const itemTypes = new Map(
+      list.items.map((item) => [item.id, item.type] as const),
+    );
+    const categoryCents = new Map<FinanceExpenseCategory, number>();
+
+    for (const record of list.records) {
+      // mock 不执行 where 时兜底过滤；真实查询已下推
+      if (
+        record.purchasedAt.getTime() < period.from.getTime() ||
+        record.purchasedAt.getTime() > period.to.getTime()
+      ) {
+        continue;
+      }
+      const category = this.resolvePurchaseItemCategory(
+        itemTypes.get(record.purchaseItemId),
+      );
+      categoryCents.set(
+        category,
+        (categoryCents.get(category) ?? 0) + toCents(record.actualCost),
+      );
+    }
+
+    const categories = Array.from(categoryCents.entries())
+      .filter(([, cents]) => cents > 0)
+      .sort(([left], [right]) => left.localeCompare(right));
+    const totalCents = categories.reduce((sum, [, cents]) => sum + cents, 0);
+    const baseCents = totalCents - toCents(list.personalAmount);
+
+    if (totalCents <= 0 || baseCents <= 0) return;
+
+    const shares = allocateCents(
+      baseCents,
+      categories.map(([, cents]) => cents),
+    );
+    categories.forEach(([category], index) => {
+      addCents(bucket, category, shares[index]);
+    });
   }
 
   /** 历史日采明细没有 type，按食材处理；未知类型不硬塞进食材 */
@@ -305,6 +370,10 @@ export class FinanceExpenseService {
   /**
    * 固定费用：按服务期月数平均分摊到每个月，取与本期间重叠月份之和。
    * 例如 1200 元、12 个月的账单，任意一个月看到的就是 100 元。
+   *
+   * 说明：这里按 `recognitionStart/End` 触及的自然月数分摊，而不是模板的
+   * `servicePeriodMonths`。模板生成的账单对齐月末，两者目前一致；
+   * 若将来出现月中生效/月中失效的账单，再单独处理（本期不改逻辑）。
    */
   private async addBillExpenses(
     period: FinancePeriod,

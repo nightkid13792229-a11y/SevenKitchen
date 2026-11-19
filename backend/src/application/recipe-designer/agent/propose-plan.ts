@@ -39,8 +39,8 @@ export interface AgentPlanNonNutrientConstraint {
 
 export interface AgentNutritionPlan {
   summary: string;
-  energyKcal: number;
-  mealsPerDay: number;
+  /** 饲喂餐次；属于饲喂安排，不是热量目标。不填也能提交。 */
+  mealsPerDay?: number;
   constraints: AgentPlanConstraint[];
   nonNutrient: AgentPlanNonNutrientConstraint[];
   notes?: string;
@@ -65,7 +65,8 @@ export interface AgentSelection {
 const PROPOSE_PLAN_DESCRIPTION =
   '提交本单营养方案与约束，等用户确认。只在方案确认阶段使用；提交后本次运行暂停。' +
   '约束必须带 key、label、上下限、单位（PERCENT_DM / PER_1000_KCAL / PER_MJ / G_PER_DAY / OTHER）、依据和来源；' +
-  '非营养约束（含水量、禁用食材、工艺等）放 nonNutrient。';
+  '非营养约束（含水量、禁用食材、工艺等）放 nonNutrient。' +
+  '不要写“每日总热量/kcal 目标”；需要控制能量时用 key=energyDensity、unit=KCAL_PER_100G 或 KCAL_PER_KG 的约束。';
 
 const PROPOSE_SELECTION_DESCRIPTION =
   '提交食材与补剂候选，等用户确认。只在选材阶段使用；提交后本次运行暂停。' +
@@ -80,7 +81,6 @@ export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
       type: 'object',
       properties: {
         summary: { type: 'string', description: '给用户看的方案摘要' },
-        energyKcal: { type: 'number', description: '每日目标能量 kcal' },
         mealsPerDay: { type: 'integer', minimum: 1, maximum: 6 },
         constraints: {
           type: 'array',
@@ -132,7 +132,7 @@ export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
         },
         notes: { type: 'string' },
       },
-      required: ['summary', 'energyKcal', 'mealsPerDay', 'constraints'],
+      required: ['summary', 'constraints'],
       additionalProperties: false,
     },
   },
@@ -220,8 +220,7 @@ export function normalizePlan(raw: unknown): AgentNutritionPlan {
 
   return {
     summary,
-    energyKcal,
-    mealsPerDay,
+    ...(mealsPerDay !== undefined ? { mealsPerDay } : {}),
     constraints,
     nonNutrient,
     ...(readOptionalText(input.notes, 2000)
@@ -252,7 +251,7 @@ export function normalizeSelection(raw: unknown): AgentSelection {
 export function summarizePlan(plan: AgentNutritionPlan): string {
   const lines = [
     `【方案待确认】${plan.summary}`,
-    `能量 ${plan.energyKcal} kcal/天，${plan.mealsPerDay} 餐/天。`,
+    ...(plan.mealsPerDay ? [`每日 ${plan.mealsPerDay} 餐。`] : []),
     `约束 ${plan.constraints.length} 条：`,
     ...plan.constraints.map(
       (item) =>

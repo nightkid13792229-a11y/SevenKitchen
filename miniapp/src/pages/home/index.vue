@@ -819,6 +819,7 @@ function syncShelfDraft(): void {
 }
 
 function openShelfSheet(key: ShelfSheetKey): void {
+  uni.showToast({ title: '筛选已点击', icon: 'none', duration: 1200 })
   shelfOpenSheet.value = key
   shelfSearch.value = ''
   syncShelfDraft()

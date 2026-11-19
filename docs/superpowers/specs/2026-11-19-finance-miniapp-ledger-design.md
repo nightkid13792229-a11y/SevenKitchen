@@ -144,7 +144,13 @@
 
 | 来源 | 表/计算 | 计入时点 | 类别 |
 |---|---|---|---|
-| 采购（日采 + 补货） | 采购单实付 `PurchaseList.paidAmount` | 采购单的付款/完成时间 | 按行占比拆分：食材 / 补剂 / 包材；运费→物流、包装→包材 |
+| 采购（日采 + 补货） | 分两条路，见下 | 补货按 `orderPlacedAt`，日采按各记录 `purchasedAt` | 食材 / 补剂 / 包材；运费→物流、包装→包材 |
+
+**采购要分两条路取数（2026-11-19 补）**：只有补货单（`kind = STOCK_REPLENISHMENT`）写了 `paidAmount / subtotalAmount / shippingFee / packagingFee`，按订单买的日采单（`ORDER_DEMAND`）这些字段是空的，只有逐条 `PurchaseRecord.actualCost`。所以：
+
+- **补货单**：实付 − 个人消费，按「商品行 + 运费 + 包装费」的权重摊到各分类；个人消费不得专项冲运费/包装费（否则快递费会被抹成 0）。
+- **日采单**：Σ `PurchaseRecord.actualCost`，按行类型归类；个人消费从商品合计里扣。
+- 同一张单只走一条路，避免重复计算。
 | 真实快递费 | `Order.actualShippingFee` | `shippedAt` | 物流配送 |
 | 固定费用 | `ExpenseBill` | 按费用所属月 | 房租 / 水电 / 宽带 / 工资 / 社保 / 税费 / 服务器 |
 | 支付手续费 | 计算得出（§4.3） | 支付/退款日 | 支付手续费 |

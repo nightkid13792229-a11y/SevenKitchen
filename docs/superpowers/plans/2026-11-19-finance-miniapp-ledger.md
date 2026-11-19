@@ -20,7 +20,7 @@
 - 退款是收入减项，按退款成功日归月，独立成行，不修改历史。
 - 手续费率默认 `0.006`，配置键 `finance.wechatFeeRate`；只对线上支付计算，公式 `(实收 − 已退) × 费率`，四舍五入到分。补剂单、定制食谱单的收费渠道为空时按**线上**处理（历史数据默认微信支付）；线下代客的补剂/定制单误差记在已知限制里。
 - 支出只有五类来源：采购单实付、订单真实快递费、固定费用账单、支付手续费、手工条目。**订单不产生支出。**
-- 采购支出 = `PurchaseList.paidAmount − personalAmount`（`paidAmount` 为空时用 `subtotalAmount + shippingFee + packagingFee − discountAmount` 兜底）；排除 `isDraft`、`voidedAt` 非空。
+- 采购支出分两条路（同一单只走一条）：**补货单**（`kind = STOCK_REPLENISHMENT`）= `paidAmount − personalAmount`，按「商品行 + 运费 + 包装费」权重摊，个人消费不得专项冲运费/包装费（`paidAmount` 为空时用 `subtotalAmount + shippingFee + packagingFee − discountAmount` 兜底）；**日采单**（`ORDER_DEMAND`）= Σ`PurchaseRecord.actualCost`，按行类型归类。排除 `isDraft`、`voidedAt` 非空。
 - 报销单、提现、内部转账**不进财务**。
 - 固定费用按「费用所属月」整月计入；跨月账单按服务期月数平均分摊。月初查「本月至今」也会包含整月固定费用，页面必须有一行说明。
 - 财务接口与页面**仅 ADMIN**；`STAFF` 一律 403。
@@ -368,19 +368,35 @@ const makePrisma = (data: any = {}) => ({
 });
 
 describe('FinanceExpenseService', () => {
-  it('采购按类型分到食材/补剂/包材，并剔除个人消费', async () => {
+  it('补货单按权重摊实付：个人消费只冲商品，不冲运费', async () => {
     const prisma: any = makePrisma({
       purchaseLists: [
-        { id: 'p1', paidAmount: 1000, personalAmount: 100, subtotalAmount: 900, shippingFee: 100, packagingFee: 0, discountAmount: 0,
-          items: [{ type: 'FOOD', estimatedCost: 900 }] },
-        { id: 'p2', paidAmount: 200, personalAmount: 0, subtotalAmount: 200, shippingFee: 0, packagingFee: 0, discountAmount: 0,
+        // 数据形状：subtotal 900 = 商品行 800 + 个人 100；实付 1000 = subtotal 900 + 运费 100
+        { id: 'p1', kind: 'STOCK_REPLENISHMENT', paidAmount: 1000, personalAmount: 100, subtotalAmount: 900, shippingFee: 100, packagingFee: 0, discountAmount: 0,
+          items: [{ type: 'FOOD', estimatedCost: 800 }] },
+        { id: 'p2', kind: 'STOCK_REPLENISHMENT', paidAmount: 200, personalAmount: 0, subtotalAmount: 200, shippingFee: 0, packagingFee: 0, discountAmount: 0,
           items: [{ type: 'PACKAGING', estimatedCost: 200 }] },
       ],
     });
     const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
-    expect(r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount).toBe(900);
+    // 可分摊 900：商品行权重 800、运费权重 100（合计 900）→ 食材 800、物流 100
+    expect(r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount).toBe(800);
+    expect(r.byCategory.find((c) => c.category === 'LOGISTICS_DELIVERY')!.amount).toBe(100);
     expect(r.byCategory.find((c) => c.category === 'PACKAGING_SUPPLIES')!.amount).toBe(200);
     expect(r.total).toBe(1100);
+  });
+
+  it('日采单按采购记录实际成本计入，不与补货口径重复', async () => {
+    const prisma: any = makePrisma({
+      purchaseLists: [
+        { id: 'd1', kind: 'ORDER_DEMAND', paidAmount: null, personalAmount: 0, subtotalAmount: null, shippingFee: null, packagingFee: null, discountAmount: null,
+          items: [{ type: 'FOOD', estimatedCost: 0 }],
+          records: [{ actualCost: 300, purchasedAt: new Date('2026-11-08T02:00:00Z') }, { actualCost: 200, purchasedAt: new Date('2026-11-09T02:00:00Z') }] },
+      ],
+    });
+    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    expect(r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount).toBe(500);
+    expect(r.total).toBe(500);
   });
 
   it('paidAmount 为空时用四项兜底，四舍五入到分', async () => {

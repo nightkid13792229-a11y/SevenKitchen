@@ -89,6 +89,8 @@ export interface FindRecipesOptions {
   healthTags?: string[];
   excludeTags?: string[];
   excludeIngredients?: string[];
+  /** 主蛋白节点（recipe_taxonomy_node.id）；多个节点按「或者」处理 */
+  mainProteinNodeIds?: string[];
   page?: number;
   pageSize?: number;
 }
@@ -118,6 +120,12 @@ export interface FilterOptions {
     count: number;
   }>;
   ingredientGroups: IngredientGroup[];
+  /** 主蛋白：按系列计数，只含 ACTIVE 且 ≥1 道的节点 */
+  mainProtein: Array<{
+    value: string;
+    label: string;
+    count: number;
+  }>;
   total: number;
 }
 

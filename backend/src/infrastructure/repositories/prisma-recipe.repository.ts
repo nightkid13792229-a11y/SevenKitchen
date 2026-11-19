@@ -393,6 +393,16 @@ export class PrismaRecipeRepository implements RecipeRepository {
       });
     }
 
+    // 主蛋白筛选：节点 → 系列 → 菜。按系列过滤，避免同一道菜的不同阶段版本漏进来。
+    if (options?.mainProteinNodeIds && options.mainProteinNodeIds.length > 0) {
+      const allowedSeriesIds = await this.resolveMainProteinSeriesIds(
+        options.mainProteinNodeIds,
+      );
+      filteredRecipes = filteredRecipes.filter(
+        (recipe) => recipe.seriesId && allowedSeriesIds.has(recipe.seriesId),
+      );
+    }
+
     const hasLifeStageFilter = Boolean(options?.lifeStages?.length);
 
     const uniqueRecipes = this.groupPublicRecipeRepresentatives(
@@ -434,6 +444,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
     const allRecipes = await this.prisma.recipe.findMany({
       where: this.buildPublicRecipeWhere(),
       select: {
+        seriesId: true,
         applicableLifeStages: true,
         healthTagAssignments: {
           select: {
@@ -521,11 +532,77 @@ export class PrismaRecipeRepository implements RecipeRepository {
     // Build ingredient groups by CFCT classification
     const ingredientGroups = await this.buildIngredientGroups();
 
+    /**
+     * 主蛋白：按系列计数。
+     *
+     * 为什么不能复用上面 lifeStages 的算法：那个是按「食谱行」数的，
+     * 同一道菜的多个阶段版本会被重复计数（线上曾出现面板 88、列表 27）。
+     * 主蛋白挂在系列上，所以这里先去重 seriesId，再按节点数系列。
+     */
+    const seriesIds = Array.from(
+      new Set(
+        allRecipes
+          .map((recipe) => recipe.seriesId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+    const mainProteinKind =
+      seriesIds.length > 0
+        ? await this.prisma.recipeTaxonomyKind.findUnique({
+            where: { code: 'MAIN_PROTEIN' },
+            select: { id: true },
+          })
+        : null;
+    const mainProteinLinks =
+      mainProteinKind && seriesIds.length > 0
+        ? await this.prisma.recipeSeriesTaxonomy.findMany({
+            where: {
+              kindId: mainProteinKind.id,
+              seriesId: { in: seriesIds },
+            },
+            select: {
+              seriesId: true,
+              node: { select: { id: true, name: true, status: true } },
+            },
+          })
+        : [];
+
+    const mainProteinCounts = new Map<
+      string,
+      { name: string; count: number }
+    >();
+    const seenSeries = new Set<string>();
+    for (const link of mainProteinLinks) {
+      if (!link.node || link.node.status !== 'ACTIVE') continue;
+      if (seenSeries.has(link.seriesId)) continue;
+      seenSeries.add(link.seriesId);
+      const entry = mainProteinCounts.get(link.node.id) ?? {
+        name: link.node.name,
+        count: 0,
+      };
+      entry.count += 1;
+      mainProteinCounts.set(link.node.id, entry);
+    }
+
+    const mainProtein = Array.from(mainProteinCounts.entries())
+      .map(([value, entry]) => ({
+        value,
+        label: this.getMainProteinLabel(entry.name),
+        count: entry.count,
+      }))
+      .filter((option) => option.count > 0)
+      .sort(
+        (left, right) =>
+          right.count - left.count ||
+          left.label.localeCompare(right.label),
+      );
+
     return {
       lifeStages,
       healthTags,
       ingredientTags,
       ingredientGroups,
+      mainProtein,
       total: allRecipes.length,
     };
   }
@@ -698,6 +775,41 @@ export class PrismaRecipeRepository implements RecipeRepository {
       ((recipe.applicableLifeStages as string[] | null) || [])[0] ||
       '';
     return DEFAULT_SHOWCASE_LIFE_STAGE_PRIORITY[stage] ?? 99;
+  }
+
+  /**
+   * 主蛋白节点 → 公开系列 id。
+   *
+   * 只认 MAIN_PROTEIN 这个维度；节点/系列都没有关联时返回空集合，
+   * 调用方会得到空列表（而不是「过滤条件没生效」）。
+   */
+  private async resolveMainProteinSeriesIds(
+    nodeIds: readonly string[],
+  ): Promise<Set<string>> {
+    if (nodeIds.length === 0) return new Set();
+    const kind = await this.prisma.recipeTaxonomyKind.findUnique({
+      where: { code: 'MAIN_PROTEIN' },
+      select: { id: true },
+    });
+    if (!kind) return new Set();
+    const links = await this.prisma.recipeSeriesTaxonomy.findMany({
+      where: { kindId: kind.id, nodeId: { in: [...nodeIds] } },
+      select: { seriesId: true },
+    });
+    return new Set(links.map((link) => link.seriesId));
+  }
+
+  /** 顾客端主蛋白标签：猪 → 猪肉；鱼种保持原名（三文鱼） */
+  private getMainProteinLabel(name: string): string {
+    const fishSpecies = new Set([
+      '三文鱼',
+      '鳕鱼',
+      '青花鱼',
+      '鲈鱼',
+      '沙丁鱼',
+      '龙利鱼',
+    ]);
+    return fishSpecies.has(name) ? name : `${name}肉`;
   }
 
   private getRecipeCreatedAtMs(recipe: RecipeWithItems): number {

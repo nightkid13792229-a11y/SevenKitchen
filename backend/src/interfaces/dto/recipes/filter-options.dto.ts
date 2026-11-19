@@ -56,6 +56,12 @@ export class FilterOptionsDto {
   })
   ingredientGroups!: IngredientGroupDto[];
 
+  @ApiProperty({
+    type: [FilterOptionDto],
+    description: 'Main protein options (series taxonomy), counted by series',
+  })
+  mainProtein!: FilterOptionDto[];
+
   @ApiProperty({ example: 24, description: 'Total recipes count' })
   total!: number;
 }

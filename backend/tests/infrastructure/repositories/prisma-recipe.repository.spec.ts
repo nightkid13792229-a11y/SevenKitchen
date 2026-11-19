@@ -327,4 +327,103 @@ describe('PrismaRecipeRepository', () => {
       ]),
     );
   });
+
+  it('counts main protein by series and hides disabled/zero nodes', async () => {
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([
+          publicRecipe({ seriesId: 'series-pork' }),
+          publicRecipe({
+            id: 'row-pork-2',
+            seriesId: 'series-pork',
+            version: 2,
+          }),
+          publicRecipe({
+            id: 'row-pork-b',
+            seriesId: 'series-pork-b',
+            version: 1,
+          }),
+          publicRecipe({ id: 'row-beef', seriesId: 'series-beef', version: 1 }),
+        ]),
+      },
+      recipeHealthTag: { findMany: jest.fn().mockResolvedValue([]) },
+      ingredientTag: { findMany: jest.fn().mockResolvedValue([]) },
+      recipeTaxonomyKind: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'kind-main' }),
+      },
+      recipeSeriesTaxonomy: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            seriesId: 'series-pork',
+            node: { id: 'n-pork', name: '猪', status: 'ACTIVE' },
+          },
+          {
+            seriesId: 'series-pork-b',
+            node: { id: 'n-pork', name: '猪', status: 'ACTIVE' },
+          },
+          {
+            seriesId: 'series-beef',
+            node: { id: 'n-beef', name: '牛', status: 'ACTIVE' },
+          },
+          {
+            seriesId: 'series-old',
+            node: { id: 'n-old', name: '羊', status: 'DISABLED' },
+          },
+        ]),
+      },
+    };
+    const repository = new PrismaRecipeRepository(prisma as any);
+    (repository as any).buildIngredientGroups = jest
+      .fn()
+      .mockResolvedValue([]);
+
+    const options = await repository.getFilterOptions();
+
+    // 同一系列的多条阶段版本只算一次；停用节点不返回；0 道不返回
+    expect(options.mainProtein).toEqual([
+      { value: 'n-pork', label: '猪肉', count: 2 },
+      { value: 'n-beef', label: '牛肉', count: 1 },
+    ]);
+    expect(
+      prisma.recipeSeriesTaxonomy.findMany.mock.calls[0][0].where.seriesId.in,
+    ).toEqual(
+      expect.arrayContaining([
+        'series-pork',
+        'series-pork-b',
+        'series-beef',
+      ]),
+    );
+  });
+
+  it('filters public recipes by main protein node', async () => {
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([
+          publicRecipe({ id: 'row-pork', seriesId: 'series-pork' }),
+          publicRecipe({ id: 'row-beef', seriesId: 'series-beef' }),
+        ]),
+      },
+      recipeTaxonomyKind: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'kind-main' }),
+      },
+      recipeSeriesTaxonomy: {
+        findMany: jest.fn().mockResolvedValue([{ seriesId: 'series-pork' }]),
+      },
+    };
+    const repository = new PrismaRecipeRepository(prisma as any);
+
+    const result = await repository.findPublicRecipesPaginated({
+      mainProteinNodeIds: ['n-pork'],
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.data[0].seriesId).toBe('series-pork');
+    expect(prisma.recipeSeriesTaxonomy.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { kindId: 'kind-main', nodeId: { in: ['n-pork'] } },
+      }),
+    );
+  });
 });

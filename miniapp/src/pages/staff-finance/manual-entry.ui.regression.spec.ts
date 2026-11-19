@@ -7,6 +7,8 @@ const read = (path: string) => readFileSync(join(__dirname, path), 'utf8');
 const page = read('./manual-entry.vue');
 const api = read('../../api/staff-finance.ts');
 const pagesJson = read('../../pages.json');
+const payloadType =
+  api.match(/export interface CreateManualEntryPayload[\s\S]*?\n\}/)?.[0] || '';
 
 describe('记一笔', () => {
   it('顶部切支出/收入，默认支出', () => {
@@ -90,17 +92,21 @@ describe('记一笔', () => {
     expect(submitBlock).toContain('errorMessage');
   });
 
-  it('v1 不做凭证拍照上传：页面不出现上传相关字样', () => {
-    for (const word of [
-      '上传',
-      '拍照',
-      '凭证',
-      'proofKeys',
-      'chooseImage',
-      'chooseMedia',
-    ]) {
+  it('说明合并进 title，提交不传 note / proofKeys', () => {
+    const payloadBlock =
+      page.match(/function buildPayload[\s\S]*?\n\}/)?.[0] || '';
+    expect(payloadBlock).toContain('title');
+    expect(payloadBlock).not.toContain('note');
+    expect(payloadBlock).not.toContain('proofKeys');
+  });
+
+  it('凭证上传按 v1 决策不提供，但提交类型保留 proofKeys', () => {
+    // spec §5.3：v1 不做凭证照片（拍照上传留到 v1.1），页面不出现拍照/上传字样
+    for (const word of ['拍照', '上传', 'chooseImage', 'chooseMedia']) {
       expect(page).not.toContain(word);
     }
+    // 后端 proofKeys 字段保留：提交类型与 DTO 对齐，以后接上传不用改类型
+    expect(payloadType).toContain('proofKeys?: string[]');
   });
 
   it('API 用 DTO 同名字段 POST /admin/finance/manual-entries', () => {
@@ -108,8 +114,6 @@ describe('记一笔', () => {
     expect(api).toContain("url: '/admin/finance/manual-entries'");
     expect(api).toContain("method: 'POST'");
     // 字段名必须与后端 CreateManualEntryDto 完全一致
-    const payloadType =
-      api.match(/interface CreateManualEntryPayload[\s\S]*?\n\}/)?.[0] || '';
     expect(payloadType).toBeTruthy();
     for (const field of [
       'direction',
@@ -120,6 +124,7 @@ describe('记一笔', () => {
       'payerType',
       'title',
       'note',
+      'proofKeys',
     ]) {
       expect(payloadType).toContain(`${field}`);
     }

@@ -71,8 +71,14 @@ export interface CreateManualEntryPayload {
   payerType?: FinanceEntryPayerType;
   /** 一句话说明（必填，最多 200 字） */
   title: string;
-  /** 备注（选填） */
+  /** 备注（选填，与说明合并后不单独传） */
   note?: string;
+  /**
+   * 凭证照片的 COS key 数组。
+   * v1 不做拍照上传（spec §5.3：v1.1 再接），这里与后端 DTO 对齐先留着，
+   * 以后接上传不用改提交类型；当前页面不传。
+   */
+  proofKeys?: string[];
 }
 
 export interface FinanceDashboardQuery {

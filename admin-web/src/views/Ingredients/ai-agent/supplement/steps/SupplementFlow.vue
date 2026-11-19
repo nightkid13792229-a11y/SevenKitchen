@@ -43,7 +43,7 @@
       :form-level="state.chosenFormLevel"
       :form-advice="state.formAdvice"
       :saved-result="state.saved"
-      @back="backToForm"
+      @back="backToCompare"
       @saved="onSaved"
       @go-launch="jump(4)"
     />
@@ -160,6 +160,11 @@ function pickOffer(offer: SupplementOfferDto): void {
 
 function backToForm(): void {
   state.value = goTo(state.value, 1)
+}
+
+/** 第 3 步的「回去比价」是回第 2 步，不是回第 1 步 */
+function backToCompare(): void {
+  state.value = goTo(state.value, 2)
 }
 
 watch(

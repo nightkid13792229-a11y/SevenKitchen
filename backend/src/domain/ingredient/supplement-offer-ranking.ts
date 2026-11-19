@@ -270,8 +270,9 @@ export function recommendOffer(
   const suffix =
     eligible.length > 1 ? `；同批 ${eligible.length} 瓶里最便宜` : '；同批里只有它算得出单价';
 
+  // 名字由页面单独显示（「建议这瓶：…」），理由里不再重复一遍
   return {
     url: cheapest.url,
-    reason: `${cheapest.name} 每 ${rule.per}${rule.amountUnitLabel} 合 ¥${price}${suffix}`,
+    reason: `每 ${rule.per}${rule.amountUnitLabel} 合 ¥${price}${suffix}`,
   };
 }

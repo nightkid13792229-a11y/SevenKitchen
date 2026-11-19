@@ -143,8 +143,8 @@ describe('recommendOffer', () => {
     );
     const result = recommendOffer(rows, rule);
     expect(result.url).toBe('a');
-    expect(result.reason).toContain('A 牌');
     expect(result.reason).toContain('¥1000.00');
+    expect(result.reason).toContain('最便宜');
   });
 
   it('一瓶都算不出就不推荐，并说清楚', () => {

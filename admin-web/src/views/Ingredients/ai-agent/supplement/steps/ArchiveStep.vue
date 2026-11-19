@@ -490,6 +490,9 @@ function buildSelection(): Record<string, unknown> {
     recommendationReason: props.formAdvice?.recommendationReason ?? null,
     gaps: props.formAdvice?.gaps ?? [],
     formOption: option,
+    // 选的是「没有原文支撑/被判不推荐」的档位时，这里为 true：这是人拍的板
+    humanOverride:
+      !!option && option.verdict !== 'RECOMMENDED' && option.verdict !== 'ACCEPTABLE',
     offer: props.offer,
     chosenAt: new Date().toISOString()
   }

@@ -86,6 +86,21 @@
             >
               用这个档位
             </el-button>
+            <!--
+              没有原文支撑 / 判为不推荐的档位，也不堵死路：
+              老板可能因为买不到货等原因改选，允许"我就要这一档"，但要弹一次确认，
+              选中的事实会原样写进证据快照，事后看得出这是人拍的板。
+            -->
+            <el-button
+              v-else
+              class="advice-card__pick"
+              text
+              size="small"
+              :data-action="`force-${option.level}`"
+              @click="forcePick(option)"
+            >
+              仍用这一档
+            </el-button>
           </div>
 
           <p class="advice-card__reason">{{ option.reason }}</p>
@@ -117,7 +132,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import { supplementNutrientGroups } from '@/constants/supplementNutrients'
 import type {
@@ -192,6 +207,23 @@ async function ask(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+async function forcePick(option: SupplementFormOptionDto): Promise<void> {
+  const warning =
+    option.verdict === 'AVOID'
+      ? `${option.labelZh}在知识库里被判为「不推荐」：${option.reason}。仍要用它建档吗？`
+      : `${option.labelZh}在知识库里没有直接依据。仍要用它建档吗？（这一条会记进档案）`
+  try {
+    await ElMessageBox.confirm(warning, '这一档没有原文支撑', {
+      confirmButtonText: '仍要用',
+      cancelButtonText: '先不用',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  pick(option)
 }
 
 function pick(option: SupplementFormOptionDto): void {

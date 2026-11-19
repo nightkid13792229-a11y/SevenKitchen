@@ -206,7 +206,8 @@ export function toCreatePayload(
     diyEnabled: draft.diyEnabled,
     procurementEnabled: draft.procurementEnabled,
     labelCategory: draft.labelCategory ?? undefined,
-    labelNames: draft.labelNames,
+    // 手输 + 选择可能给出同一个名字，去重后再存
+    labelNames: [...new Set(draft.labelNames.map((name) => name.trim()).filter(Boolean))],
     labelNameSource: text(draft.labelNameSource) ?? undefined,
     tagNames: draft.tagNames,
     servingUnitsPerDose: draft.servingUnitsPerDose,

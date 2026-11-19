@@ -216,9 +216,9 @@ export class FinanceExpenseService {
 
     for (const list of lists) {
       if (list.kind === 'ORDER_DEMAND') {
-        this.addDailyPurchaseExpense(list, period, bucket);
+        this.addPurchaseRecordExpense(list, period, bucket);
       } else {
-        this.addReplenishmentExpense(list, bucket);
+        this.addReplenishmentExpense(list, period, bucket);
       }
     }
   }
@@ -230,9 +230,13 @@ export class FinanceExpenseService {
    * 可分摊额 base 已扣掉个人消费，再按「商品行 + 实际运费 + 实际包装费」的
    * 权重整体摊到各行：优惠自然按行占比摊减；个人消费不专项冲减运费/包装费。
    * base 小于运费与包装费合计时，按权重摊分只会同比例调小，不会出现负数。
+   *
+   * 起账日到补货改版（2026-11-10）之间的备货计划只有采购记录、没有单据级
+   * 实付，实付与四项兜底都拿不到金额时退回按采购记录实际成本计入。
    */
   private addReplenishmentExpense(
     list: PurchaseListRow,
+    period: FinancePeriod,
     bucket: Map<FinanceExpenseCategory, number>,
   ): void {
     const grossCents =
@@ -242,10 +246,17 @@ export class FinanceExpenseService {
           toCents(list.shippingFee) +
           toCents(list.packagingFee) -
           toCents(list.discountAmount);
+
+    // 同一张单只走一条路：拿不到单据金额时退回采购记录，接上后再不重复累加
+    if (grossCents <= 0) {
+      this.addPurchaseRecordExpense(list, period, bucket);
+      return;
+    }
+
     const baseCents = grossCents - toCents(list.personalAmount);
 
-    // 四项都缺（且没有实付）时按 0 计，不产生支出行
-    if (grossCents <= 0 || baseCents <= 0) return;
+    // 个人消费抵掉全部实付时不产生公司支出
+    if (baseCents <= 0) return;
 
     const itemWeights = new Map<FinanceExpenseCategory, number>();
     for (const item of list.items) {
@@ -291,12 +302,13 @@ export class FinanceExpenseService {
   }
 
   /**
-   * 日采单：订单需求采购只有采购记录、没有单据级实付，
-   * 金额取各条 `PurchaseRecord.actualCost` 之和，按对应商品行的 `type` 归类。
+   * 按采购记录取数（日采单，以及缺单据实付的补货单）：
+   * 金额取各条 `PurchaseRecord.actualCost` 之和，按对应商品行的 `type` 归类，
+   * 记录按各自的 `purchasedAt` 归月，个人消费从商品合计里扣。
    *
    * `PurchaseRecord` 没有作废字段，作废以采购单 `voidedAt` 为准（查询已排除）。
    */
-  private addDailyPurchaseExpense(
+  private addPurchaseRecordExpense(
     list: PurchaseListRow,
     period: FinancePeriod,
     bucket: Map<FinanceExpenseCategory, number>,

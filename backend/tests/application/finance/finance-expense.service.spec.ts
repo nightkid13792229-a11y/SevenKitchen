@@ -353,6 +353,46 @@ describe('FinanceExpenseService', () => {
     expect(r.total).toBe(100);
   });
 
+  it('补货单缺实付金额时退回采购记录成本', async () => {
+    const prisma: any = makePrisma({
+      purchaseLists: [
+        {
+          id: 's1',
+          kind: 'STOCK_REPLENISHMENT',
+          paidAmount: null,
+          personalAmount: 0,
+          subtotalAmount: null,
+          shippingFee: null,
+          packagingFee: null,
+          discountAmount: null,
+          items: [
+            { id: 'i1', type: 'FOOD', estimatedCost: 0 },
+            { id: 'i2', type: 'FOOD', estimatedCost: 0 },
+          ],
+          records: [
+            {
+              purchaseItemId: 'i1',
+              actualCost: 150,
+              purchasedAt: new Date('2026-11-03T02:00:00Z'),
+            },
+            {
+              purchaseItemId: 'i2',
+              actualCost: 250,
+              purchasedAt: new Date('2026-11-08T02:00:00Z'),
+            },
+          ],
+        },
+      ],
+    });
+
+    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+
+    expect(
+      r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount,
+    ).toBe(400);
+    expect(r.total).toBe(400);
+  });
+
   it('跨月账单只计入与本期间重叠的月份', async () => {
     const prisma: any = makePrisma({
       bills: [

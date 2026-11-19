@@ -1,8 +1,10 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { FinanceEntriesService } from '../../application/finance/finance-entries.service';
 import { FinanceSummaryService } from '../../application/finance/finance-summary.service';
 import { AuthGuard } from '../auth';
 import { ApiResponseDto } from '../dto/common/response.dto';
+import { FinanceEntriesQueryDto } from '../dto/finance/finance-entries.query.dto';
 import { FinanceRangeQueryDto } from '../dto/finance/finance-range.query.dto';
 import { AdminGuard } from '../guards/role.guard';
 
@@ -19,7 +21,10 @@ import { AdminGuard } from '../guards/role.guard';
 @Controller('api/v1/admin/finance')
 @UseGuards(AuthGuard, AdminGuard)
 export class AdminFinanceV2Controller {
-  constructor(private readonly financeSummaryService: FinanceSummaryService) {}
+  constructor(
+    private readonly financeSummaryService: FinanceSummaryService,
+    private readonly financeEntriesService: FinanceEntriesService,
+  ) {}
 
   /**
    * 财务首页 / 月报汇总：收入、支出、结余、线下待确认收款数。
@@ -37,6 +42,26 @@ export class AdminFinanceV2Controller {
     return ApiResponseDto.success(
       await this.financeSummaryService.getSummary(query),
       'Finance dashboard retrieved successfully',
+    );
+  }
+
+  /**
+   * 收支明细：各来源合并后按时间倒序，内存分页。
+   *
+   * 金额带符号：退款行是负的收入，手续费冲回是负的支出。
+   * 合并后超过 5000 条时截断，`truncated = true`。
+   */
+  @Get('entries')
+  @ApiOperation({ summary: '收支明细（合并各来源 + 手工条目，仅 ADMIN）' })
+  @ApiResponse({
+    status: 200,
+    description: '明细列表、总条数、页码与是否截断',
+  })
+  @ApiResponse({ status: 403, description: '需要管理员权限' })
+  async getEntries(@Query() query: FinanceEntriesQueryDto) {
+    return ApiResponseDto.success(
+      await this.financeEntriesService.list(query),
+      'Finance entries retrieved successfully',
     );
   }
 }

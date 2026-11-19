@@ -73,6 +73,7 @@ import { FinanceFeeRateService } from './application/finance/finance-fee-rate.se
 import { FinanceSummaryService } from './application/finance/finance-summary.service';
 import { FinanceIncomeService } from './application/finance/finance-income.service';
 import { FinanceExpenseService } from './application/finance/finance-expense.service';
+import { FinanceEntriesService } from './application/finance/finance-entries.service';
 import { ExpenseBillService } from './application/finance/expense-bill.service';
 import { FinanceReportService } from './application/finance/finance-report.service';
 import { ExpenseTemplateService } from './application/finance/expense-template.service';
@@ -906,6 +907,7 @@ validatePrismaConfig();
     FinanceSummaryService,
     FinanceIncomeService,
     FinanceExpenseService,
+    FinanceEntriesService,
     // Phase 2: Staff Production Management Service
     StaffProductionService,
     ProductionService,

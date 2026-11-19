@@ -39,6 +39,9 @@ const makePrisma = (data: any = {}) => ({
   orderOfflineRefund: {
     findMany: jest.fn().mockResolvedValue(data.offlineRefunds ?? []),
   },
+  financeManualEntry: {
+    findMany: jest.fn().mockResolvedValue(data.manualIncomes ?? []),
+  },
 });
 
 describe('FinanceIncomeService', () => {
@@ -372,6 +375,29 @@ describe('FinanceIncomeService', () => {
     expect(r.historicalRefundTotal).toBe(60);
     expect(r.netTotal).toBe(-60);
     expect(r.fee).toBe(-0.36);
+  });
+
+  it('手工收入计入净收入，但不计手续费', async () => {
+    const prisma: any = makePrisma({
+      manualIncomes: [
+        {
+          id: 'mi1',
+          amount: 80,
+          occurredAt: utc('2026-11-09T02:00:00Z'),
+          incomeCategory: 'OTHER_INCOME',
+          title: '广告返现',
+          payerType: 'COMPANY',
+        },
+      ],
+    });
+
+    const r = await new FinanceIncomeService(prisma).getIncome(period, 0.006);
+
+    expect(r.manualIncome).toBe(80);
+    expect(r.grossTotal).toBe(80);
+    expect(r.netTotal).toBe(80);
+    // 手工收入没有线上支付渠道，不产生手续费
+    expect(r.fee).toBe(0);
   });
 
   it('把期间与排除条件下推到查询，而不是全表捞回内存过滤', async () => {

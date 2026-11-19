@@ -71,7 +71,10 @@ describe('AdminFinanceV2Controller', () => {
     const summaryService = {
       getSummary: jest.fn().mockResolvedValue(summary),
     };
-    const controller = new AdminFinanceV2Controller(summaryService as any);
+    const controller = new AdminFinanceV2Controller(
+      summaryService as any,
+      {} as any,
+    );
 
     const result = await controller.getDashboard({ month: '2026-11' });
 
@@ -81,5 +84,47 @@ describe('AdminFinanceV2Controller', () => {
     expect(result).toBeInstanceOf(ApiResponseDto);
     expect(result.code).toBe(0);
     expect(result.data).toBe(summary);
+  });
+
+  it('entries 挂在 finance 下、GET 方法，查询参数原样交给明细服务', async () => {
+    expect(
+      Reflect.getMetadata(
+        PATH_METADATA,
+        AdminFinanceV2Controller.prototype.getEntries,
+      ),
+    ).toBe('entries');
+    expect(
+      Reflect.getMetadata(
+        METHOD_METADATA,
+        AdminFinanceV2Controller.prototype.getEntries,
+      ),
+    ).toBe(RequestMethod.GET);
+
+    const page = {
+      items: [],
+      total: 0,
+      page: 2,
+      pageSize: 20,
+      truncated: false,
+    };
+    const entriesService = { list: jest.fn().mockResolvedValue(page) };
+    const controller = new AdminFinanceV2Controller(
+      {} as any,
+      entriesService as any,
+    );
+
+    const query = {
+      month: '2026-11',
+      direction: 'EXPENSE' as const,
+      category: 'EQUIPMENT',
+      page: 2,
+      pageSize: 20,
+    };
+    const result = await controller.getEntries(query);
+
+    expect(entriesService.list).toHaveBeenCalledWith(query);
+    expect(result).toBeInstanceOf(ApiResponseDto);
+    expect(result.code).toBe(0);
+    expect(result.data).toBe(page);
   });
 });

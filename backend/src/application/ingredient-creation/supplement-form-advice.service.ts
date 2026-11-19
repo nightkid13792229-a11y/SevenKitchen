@@ -259,17 +259,9 @@ export class SupplementFormAdviceService {
 
     const gaps: string[] = [...extractionErrors];
 
-    // 复方：不按形态判断，直接去比价（计划 Task 5 Step 2）
-    if (market.compound) {
-      return {
-        nutrientKey,
-        nutrientLabel,
-        dimensions: [],
-        recommendation: null,
-        gaps: [...gaps, '这是复方商品，不按形态判断，直接去比价'],
-        retrieval,
-      };
-    }
+    // 注意：这里**不做**复方短路。搜索是按营养素来的，结果里混着 B 族复合、
+    // 多维矿等复方商品是常态；在这一层按标题判复方会误伤（B12 就被判成复方过一次）。
+    // 复方判定留给建档那一步：标签里认得出两种以上营养素才跳过单价排序。
 
     const merged = mergeCandidates(kbTerms, market.terms);
     const dimensions = groupByDimension(merged);

@@ -28,13 +28,6 @@ import { SupplementFormTermService } from './supplement-form-term.service';
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
 /** 复方判据要用到的"别的营养素"清单；只做粗判，不求全 */
-const OTHER_NUTRIENTS = [
-  'minerals.calcium','minerals.iron','minerals.zinc','minerals.magnesium','minerals.copper',
-  'minerals.selenium','minerals.manganese','minerals.iodine','minerals.potassium',
-  'vitamins.vitaminA','vitamins.vitaminC','vitamins.vitaminD','vitamins.vitaminE',
-  'vitamins.vitaminB1','vitamins.vitaminB2','vitamins.vitaminB3','vitamins.vitaminB5',
-  'vitamins.vitaminB6','vitamins.vitaminB7','vitamins.vitaminB9','vitamins.vitaminB12',
-];
 const SEARCH_LIMIT = 20;
 const TIMEOUT_MS = 90_000;
 const MAX_TOKENS = 1200;
@@ -106,11 +99,11 @@ export class SupplementMarketFormService {
       return { terms: [], compound: false };
     }
 
-    const compound = this.looksCompound(titles, input.nutrientKey);
-    const value: MarketExtractResult = { terms, compound };
+    // 复方不在这一层判（见 pipeline 里的说明）；这里恒为 false，字段保留给调用方
+    const value: MarketExtractResult = { terms, compound: false };
     this.cache.set(input.nutrientKey, { at: Date.now(), value });
     this.logger.log(
-      `[market-form] nutrient=${input.nutrientKey} titles=${titles.length} terms=${terms.length} compound=${compound}`,
+      `[market-form] nutrient=${input.nutrientKey} titles=${titles.length} terms=${terms.length}`,
     );
     return value;
   }
@@ -205,22 +198,6 @@ export class SupplementMarketFormService {
     }
 
     return [...merged.values()];
-  }
-
-  /**
-   * 复方粗判：一半以上的标题都提到"本营养素之外"的另一个营养素，就按复方处理。
-   *
-   * 只做粗判——精确判复方要看标签，那是建档那一步的事。
-   */
-  private looksCompound(titles: string[], nutrientKey: string): boolean {
-    if (titles.length === 0) {
-      return false;
-    }
-    const others = OTHER_NUTRIENTS.filter((key) => key !== nutrientKey);
-    const multi = titles.filter(
-      (title) => others.filter((key) => mentionsNutrient(title, key)).length >= 1,
-    ).length;
-    return multi / titles.length >= 0.5;
   }
 
   private async requestModel(

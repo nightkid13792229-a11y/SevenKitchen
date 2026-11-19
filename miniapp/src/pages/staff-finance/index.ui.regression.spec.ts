@@ -40,7 +40,7 @@ describe('财务首页', () => {
     expect(page).not.toContain('我花了');
   });
 
-  it('固定费用按月份口径说明，为 0 时引导去生成', () => {
+  it('固定费用直接读 dashboard 的 fixedCostTotal，不按类别名认', () => {
     expect(page).toContain('该月已含固定费用');
     expect(page).toContain('本月已含固定费用');
     expect(page).toContain('本月固定费用还没生成');
@@ -48,11 +48,24 @@ describe('财务首页', () => {
     expect(page).toContain('heroCaption');
     // 不能再出现「已含本月固定费用 ¥0」这种和上面「已扣房租工资」打架的写法
     expect(page).not.toContain('已含本月固定费用');
-    // 2026-11-19 起汇总按类别字典出数，没有枚举 code，按种子类别名识别
-    for (const label of ['房租', '水电', '宽带', '工资', '社保', '税费']) {
-      expect(page).toContain(label);
-    }
+
+    // 2026-11-20：后端 dashboard 直接给 expense.fixedCostTotal
+    const fixedFeeBlock =
+      page.match(/const fixedFeeTotal = computed\([\s\S]*?\n\)/)?.[0] || '';
+    expect(fixedFeeBlock).toContain('expense.fixedCostTotal');
+    expect(fixedFeeBlock).not.toContain('byCategory');
+
+    // 按种子类别名匹配的老逻辑必须删掉：改名「房租」→「房租物业」后不能误报「还没生成」
+    expect(page).not.toContain('FIXED_FEE_CATEGORY_LABELS');
+    expect(page).not.toContain('FIXED_FEE_LABEL_SET');
+    expect(page).not.toContain("'水电'");
+    expect(page).not.toContain("'服务器/域名'");
     expect(page).not.toContain('SOCIAL_INSURANCE');
+
+    // API 类型补上字段，字段名与后端一致
+    const expenseSummary =
+      api.match(/export interface FinanceExpenseSummary[\s\S]*?\n\}/)?.[0] || '';
+    expect(expenseSummary).toContain('fixedCostTotal');
   });
 
   it('负结余用深绿底上读得清的浅红警示，并给一句人话', () => {

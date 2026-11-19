@@ -643,12 +643,15 @@ async function loadTemplates() {
 /**
  * 类别字典：模板/账单只给 `categoryId`，名字要在类别表里查。
  *
+ * 必须带 `includeInactive=true`：历史账单里的类别可能已经停用（甚至被合并过），
+ * 只拉启用类别会让这些行显示成「未分类」或旧枚举名，看不出原来是什么费用。
+ *
  * 拉失败不阻断整页（账单金额和日期还能看），只是类别显示「未分类」；
- * 类别选择器自己也会拉一份，两边互不影响。
+ * 类别选择器自己也会拉一份（只拉可选类别），两边互不影响。
  */
 async function loadCategories() {
   try {
-    const rows = await staffFinanceApi.listCategories()
+    const rows = await staffFinanceApi.listCategories(true)
     categories.value = Array.isArray(rows) ? rows : []
   } catch (error) {
     categories.value = []

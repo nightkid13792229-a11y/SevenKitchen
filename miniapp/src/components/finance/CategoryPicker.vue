@@ -66,8 +66,10 @@ import {
  * 候选里没有这个名字时底部出现「＋ 新建『xxx』」，点了就创建并选中 ——
  * 老板不用先去管理页建类别，记账时顺手就把新类别建出来。
  *
- * 只列启用类别；系统类别（食材/补剂/包材/快递/支付手续费）带「系统」小标，
- * 提示它不能停用，但可以改名（管理页做）。
+ * 只列启用且允许选择的类别（后端 `selectable !== false`）；系统类别
+ * （食材/补剂/包材/快递/支付手续费）带「系统」小标，提示它不能停用，但可以改名（管理页做）。
+ * 「其它」是历史兜底类别（`selectable === false`），不出现在候选里，
+ * 但历史记录已经选中它时仍要能显示名字。
  *
  * 类别列表由组件自己加载：记账页和固定费用页各放一个实例，
  * 各自拉一份比让页面透传 props 更不容易漏更新。
@@ -99,7 +101,18 @@ const createError = ref('')
 
 const trimmedKeyword = computed(() => keyword.value.trim())
 
-/** 已选类别名：按 id 找；列表还没回来时留空，显示占位而不是 id */
+/**
+ * 候选类别：后端用 `selectable === false` 标记「其它」这类只供历史数据
+ * 使用的类别，记账时不该让老板再选到它；老后端没有这个字段时视为可选。
+ */
+const selectableOptions = computed(() =>
+  options.value.filter((option) => option.selectable !== false),
+)
+
+/**
+ * 已选类别名：按 id 在**全部**类别里找（不是候选）——
+ * 历史记录选过「其它」时，候选里不展示它，但输入框仍要显示名字。
+ */
 const selectedName = computed(() => {
   const id = String(props.modelValue || '')
   if (!id) return ''
@@ -113,10 +126,10 @@ const selectedName = computed(() => {
 const filteredOptions = computed(() => {
   const keywordLower = trimmedKeyword.value.toLowerCase()
   const matched = keywordLower
-    ? options.value.filter((option) =>
+    ? selectableOptions.value.filter((option) =>
         option.name.toLowerCase().includes(keywordLower),
       )
-    : [...options.value]
+    : [...selectableOptions.value]
   return matched.sort((left, right) => {
     const leftStarts = left.name.toLowerCase().startsWith(keywordLower) ? 0 : 1
     const rightStarts = right.name
@@ -129,7 +142,11 @@ const filteredOptions = computed(() => {
   })
 })
 
-/** 输入的名字不在已有类别里：才给「新建」入口（同名忽略大小写与首尾空格） */
+/**
+ * 输入的名字不在已有类别里：才给「新建」入口（同名忽略大小写与首尾空格）。
+ * 这里查**全部**类别（含「其它」），避免输入一个已有但不可选的名字时
+ * 给出「新建」，点下去后端直接 400 重名。
+ */
 const canCreate = computed(() => {
   const name = trimmedKeyword.value
   if (!name) return false
@@ -199,6 +216,7 @@ async function createAndSelect() {
         id,
         name: savedName,
         isSystem: false,
+        selectable: true,
         isActive: true,
         usageCount: 0,
       },

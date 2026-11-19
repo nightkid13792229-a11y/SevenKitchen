@@ -184,6 +184,26 @@ describe('类别字典', () => {
     expect(categoryPicker).toContain('>系统<')
   })
 
+  it('选择器排除 selectable === false 的类别（「其它」），历史已选仍显示名字', () => {
+    // 候选来自过滤后的 selectableOptions，而不是全量 options
+    const filterBlock =
+      categoryPicker.match(
+        /const selectableOptions = computed\([\s\S]*?\n\}\)/,
+      )?.[0] || ''
+    expect(filterBlock).toContain('option.selectable !== false')
+    const filteredBlock =
+      categoryPicker.match(/const filteredOptions = computed\([\s\S]*?\n\}\)/)?.[0] ||
+      ''
+    expect(filteredBlock).toContain('selectableOptions.value')
+    // 已选名字按 id 在全部类别里查：历史记录选过「其它」也要显示名字
+    const selectedBlock =
+      categoryPicker.match(/const selectedName = computed\([\s\S]*?\n\}\)/)?.[0] ||
+      ''
+    expect(selectedBlock).toContain('options.value.find')
+    // API 类型补上 selectable，与后端 listCategories 返回项一致
+    expect(api).toMatch(/selectable: boolean/)
+  })
+
   it('API 补齐类别五个方法，路径与后端 categories 路由一致', () => {
     expect(api).toContain('listCategories')
     expect(api).toContain('createCategory')
@@ -210,7 +230,7 @@ describe('类别字典', () => {
     expect(categoriesPage).toContain('deactivateCategory')
     // 系统类别（isSystem）不显示停用按钮
     expect(categoriesPage).toContain(
-      'v-if="!category.isSystem && category.isActive"',
+      'v-if="!isSystemCategory(category) && category.isActive"',
     )
     // 改名用弹窗输入
     expect(categoriesPage).toContain('editable: true')
@@ -219,6 +239,34 @@ describe('类别字典', () => {
     expect(categoriesPage).toContain('tag--system')
     expect(categoriesPage).toContain('tag--off')
     expect(categoriesPage).toContain('已停用')
+  })
+
+  it('系统类别和「其它」只允许改名：不出现「合并到」「停用」', () => {
+    // 统一的判定：isSystem，或后端标记 selectable === false（「其它」）
+    expect(categoriesPage).toContain('function isSystemCategory')
+    expect(categoriesPage).toContain('category.selectable === false')
+    expect(categoriesPage).toContain('v-if="isSystemCategory(category)"')
+
+    // 「合并到」只对非系统类别出现
+    const mergeCondition =
+      categoriesPage.match(
+        /v-if="([^"]+)"\s+class="action"\s+@tap="openMerge\(category\)"/,
+      )?.[1] || ''
+    expect(mergeCondition).toBe('!isSystemCategory(category)')
+
+    // 「停用」同样排除系统类别
+    const deactivateCondition =
+      categoriesPage.match(
+        /v-if="([^"]+)"\s+class="action action--quiet"\s+@tap="confirmDeactivate\(category\)"/,
+      )?.[1] || ''
+    expect(deactivateCondition).toBe(
+      '!isSystemCategory(category) && category.isActive',
+    )
+
+    // 系统类别反过来也不能当合并目标（后端对源/目标都拒绝）
+    const targetsBlock =
+      categoriesPage.match(/const mergeTargets = computed\([\s\S]*?\n\)/)?.[0] || ''
+    expect(targetsBlock).toContain('!isSystemCategory(option)')
   })
 
   it('pages.json 注册 categories，标题「费用类别」深绿', () => {

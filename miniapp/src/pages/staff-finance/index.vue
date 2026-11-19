@@ -140,25 +140,6 @@ import { FINANCE_START_MONTH } from '../../constants/finance'
 /** 起账日：早于起账月的月份后端不统计，月份快照也只在起账月之后给 */
 const FINANCE_START_MONTH_NUMBER = Number(FINANCE_START_MONTH.slice(5, 7))
 
-/**
- * 固定费用类别：月初查「本月至今」时收入只算几天、支出却已含整月固定费用，
- * 主卡必须单独把这一笔写出来，老板才不会把月初的亏损当成真亏。
- *
- * 2026-11-19 起汇总按**类别字典**出数（`{categoryId,label,amount}`），
- * 不再有枚举 code，只能按种子类别的名字认——这几个都是种子类别，
- * 改名后这句提示会认不出来（只影响提示，不影响金额与报表）。
- */
-const FIXED_FEE_CATEGORY_LABELS: readonly string[] = [
-  '房租',
-  '水电',
-  '宽带',
-  '服务器/域名',
-  '工资',
-  '社保',
-  '税费',
-]
-const FIXED_FEE_LABEL_SET = new Set<string>(FIXED_FEE_CATEGORY_LABELS)
-
 type MonthChip = { key: string; label: string }
 type SpendBar = { key: string; label: string; amount: number; percent: number }
 
@@ -268,19 +249,18 @@ const balance = computed(() => Number(dashboard.value?.balance) || 0)
 const balanceAbs = computed(() => Math.abs(balance.value))
 const balanceNegative = computed(() => balance.value < 0)
 
-const fixedFeeTotal = computed(() => {
-  const rows = dashboard.value?.expense.byCategory || []
-  const total = rows.reduce(
-    (sum, row) =>
-      FIXED_FEE_LABEL_SET.has(String(row.label || '').trim())
-        ? sum + (Number(row.amount) || 0)
-        : sum,
-    0,
-  )
-  return roundMoney(total)
-})
+/**
+ * 固定费用合计（2026-11-20）：直接用后端汇总里的 `expense.fixedCostTotal`。
+ *
+ * 之前按种子类别名（房租/水电/工资…）从 `byCategory` 里凑，
+ * 老板一改名（「房租」→「房租物业」）这句提示就会误说成「还没生成」。
+ * 老后端没有这个字段时按 0 处理，只影响提示，不影响结余金额。
+ */
+const fixedFeeTotal = computed(() =>
+  roundMoney(Number(dashboard.value?.expense.fixedCostTotal) || 0),
+)
 
-/** 固定费用为 0 时，连「已经扣掉房租、工资、社保」也不能说 */
+/** 固定费用为 0 时，不能说「已经扣掉房租、工资、社保」 */
 const heroCaption = computed(() =>
   fixedFeeTotal.value > 0
     ? '= 收入 − 支出，已经扣掉房租、工资、社保'

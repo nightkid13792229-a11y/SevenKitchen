@@ -155,6 +155,14 @@ describe('固定费用', () => {
     expect(page).toContain('goCategories');
   });
 
+  it('历史账单的类别名也查得到：拉类别带 includeInactive', () => {
+    // 账单可能引用已停用/已合并的类别，只拉启用类别会让历史行显示成空白或旧枚举名
+    const loadBlock =
+      page.match(/async function loadCategories\([\s\S]*?\n\}/)?.[0] || '';
+    expect(loadBlock).toContain('listCategories(true)');
+    expect(loadBlock).not.toContain('listCategories()');
+  });
+
   it('空态：没模板给新建入口，没账单提示先设固定项目并给补生成入口', () => {
     expect(page).toContain('本月还没有固定费用，先设几个固定项目');
     expect(page).toContain('还没有固定费用');

@@ -19,7 +19,7 @@
         <view class="row-main">
           <view class="row-head">
             <text class="row-name">{{ category.name }}</text>
-            <text v-if="category.isSystem" class="tag tag--system">系统</text>
+            <text v-if="isSystemCategory(category)" class="tag tag--system">系统</text>
             <text v-if="!category.isActive" class="tag tag--off">已停用</text>
           </view>
           <text class="row-meta">使用 {{ category.usageCount }} 次</text>
@@ -27,9 +27,15 @@
 
         <view class="row-actions">
           <text class="action" @tap="openRename(category)">改名</text>
-          <text class="action" @tap="openMerge(category)">合并到</text>
           <text
-            v-if="!category.isSystem && category.isActive"
+            v-if="!isSystemCategory(category)"
+            class="action"
+            @tap="openMerge(category)"
+          >
+            合并到
+          </text>
+          <text
+            v-if="!isSystemCategory(category) && category.isActive"
             class="action action--quiet"
             @tap="confirmDeactivate(category)"
           >
@@ -40,7 +46,7 @@
 
       <text v-if="error" class="stale-hint">刷新失败，当前显示的是上次的数据</text>
       <text class="list-hint">
-        系统类别（食材/补剂/包材/快递/支付手续费）不能停用，但可以改名。
+        系统类别（食材/补剂/包材/快递/支付手续费/其它）只能改名，不能合并或停用。
       </text>
     </view>
 
@@ -89,7 +95,10 @@ import { getStoredUser } from '../../utils/account'
  * 入口在「固定费用」页右上角。这里只做三件事：
  * - 改名（系统类别也允许，历史记录跟着变）；
  * - 合并到（历史账单/模板/手工记录一起搬，源类别停用）；
- * - 停用（系统类别不显示停用按钮；删除 = 停用，不物理删）。
+ * - 停用（不物理删）。
+ *
+ * 系统类别（`isSystem`，以及 `selectable === false` 的「其它」）只允许改名：
+ * 合并/停用会让系统内置口径对不上，按钮直接不显示。
  *
  * 新建类别不在这里：记账时「输入即建」，老板不用先来管类别。
  */
@@ -99,10 +108,22 @@ const error = ref('')
 
 const mergeSource = ref<FinanceCategoryOption | null>(null)
 
-/** 合并目标：除自己以外的启用类别（合并到已停用的类别没有意义） */
+/** 系统类别：内置类别，以及后端标记「不可选」的「其它」（只用于历史数据） */
+function isSystemCategory(category: FinanceCategoryOption): boolean {
+  return Boolean(category.isSystem) || category.selectable === false
+}
+
+/**
+ * 合并目标：除自己以外的启用类别（合并到已停用的类别没有意义）。
+ * 系统类别和「其它」也不能当目标：后端会直接 400 拒绝
+ * （自动来源按 code 找系统类别，「其它」给报销映射用）。
+ */
 const mergeTargets = computed(() =>
   categories.value.filter(
-    (option) => option.isActive && option.id !== mergeSource.value?.id,
+    (option) =>
+      option.isActive &&
+      !isSystemCategory(option) &&
+      option.id !== mergeSource.value?.id,
   ),
 )
 

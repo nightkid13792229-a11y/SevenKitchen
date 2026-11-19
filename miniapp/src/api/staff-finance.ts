@@ -30,8 +30,13 @@ async function requestData<T>(options: any): Promise<T> {
 export interface FinanceCategoryOption {
   id: string;
   name: string;
-  /** 系统类别（食材/补剂/包材/快递/支付手续费）：不能停用，可以改名 */
+  /** 系统类别（食材/补剂/包材/快递/支付手续费）：不能合并/停用，可以改名 */
   isSystem: boolean;
+  /**
+   * 能否出现在记账的候选里（后端 2026-11-20 新增）。
+   * 「其它」这类只用于历史数据的类别给 `false`；缺省（老后端）一律视为可选。
+   */
+  selectable: boolean;
   isActive: boolean;
   /** 被账单 / 模板 / 手工条目引用的总条数（管理页展示用） */
   usageCount: number;
@@ -152,6 +157,14 @@ export interface FinanceExpenseCategoryAmount {
 export interface FinanceExpenseSummary {
   total: number;
   byCategory: FinanceExpenseCategoryAmount[];
+  /**
+   * 区间内已生成的固定费用合计（后端 2026-11-20 新增）。
+   *
+   * 首页直接读它，不再按类别名从 `byCategory` 里凑——
+   * 老板把「房租」改名成「房租物业」也不会让这句提示失准。
+   * 老后端没有这个字段时按 0 处理（只是提示不显示，金额口径不受影响）。
+   */
+  fixedCostTotal: number;
 }
 
 export interface FinanceDashboard {

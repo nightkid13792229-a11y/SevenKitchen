@@ -28,6 +28,13 @@ export interface FormOption {
   citations: Citation[];
 }
 
+/** 这次读了哪几页、丢了哪些页：复盘用（2026-11-20 加，铁那次就是因为没有页码查不清） */
+export interface RetrievalSummary {
+  queries: string[];
+  pages: { documentId: string; page: number; score: number }[];
+  dropped: { documentId: string; page: number; reason: string }[];
+}
+
 export interface FormAdvice {
   nutrientKey: string;
   nutrientLabel: string;
@@ -35,6 +42,7 @@ export interface FormAdvice {
   recommendedLevel: FormLevel | null;
   recommendationReason: string;
   gaps: string[];
+  retrieval?: RetrievalSummary;
 }
 
 export const NO_EVIDENCE_PREFIX = '知识库没查到直接依据：';

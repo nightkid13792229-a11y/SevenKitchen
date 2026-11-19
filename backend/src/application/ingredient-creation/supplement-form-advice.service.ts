@@ -17,7 +17,13 @@ import {
   pageKey,
   type FormAdvice,
   type FormLevel,
+  type RetrievalSummary,
 } from '../../domain/ingredient/supplement-form-advice';
+import {
+  planRetrievalPages,
+  type PlannedPage,
+  type RetrievalQueryHits,
+} from '../../domain/ingredient/kb-retrieval-plan';
 import {
   nutrientChineseLabel,
   nutrientEnglishName,
@@ -32,8 +38,11 @@ import {
  * 一条硬规矩：**没有原文就没有结论**。校验在 domain 的 `enforceCitationRule` 里，
  * 这里只负责把它接上。
  */
-const MAX_FIND_QUERIES = 3;
+const MAX_FIND_QUERIES = 4;
 const MAX_READS = 4;
+/** 每条查询至少占 1 页、最多 2 页；同一文档最多 2 页 */
+const PER_QUERY_MAX = 2;
+const PER_DOCUMENT_MAX = 2;
 const PAGE_TEXT_LIMIT = 2200;
 const TIMEOUT_MS = 90_000;
 const MAX_TOKENS = 1800;
@@ -101,8 +110,23 @@ export class SupplementFormAdviceService {
       }
     }
 
-    const hits = await this.findPages(english);
-    if (hits.length === 0) {
+    const hitsByQuery = await this.findPages(english);
+    const planned = planRetrievalPages(hitsByQuery, {
+      totalPages: MAX_READS,
+      perQueryMax: PER_QUERY_MAX,
+      perDocumentMax: PER_DOCUMENT_MAX,
+    });
+    const retrieval: RetrievalSummary = {
+      queries: hitsByQuery.map((item) => item.query),
+      pages: [],
+      dropped: planned.dropped.map((item) => ({
+        documentId: item.documentId,
+        page: item.pageNo,
+        reason: item.reason,
+      })),
+    };
+
+    if (planned.pages.length === 0) {
       this.logger.warn(`[form-advice] 知识库没有命中 nutrient=${nutrientKey}`);
       return {
         nutrientKey,
@@ -111,10 +135,19 @@ export class SupplementFormAdviceService {
         recommendedLevel: null,
         recommendationReason: '知识库里没有检索到相关页，这一项得靠人判断',
         gaps: [`知识库没有检索到「${english}」相关的页`],
+        retrieval,
       };
     }
 
-    const excerpts = await this.readPages(hits);
+    const excerpts = await this.readPages(planned.pages);
+    retrieval.pages = excerpts.map((item) => ({
+      documentId: item.documentId,
+      page: item.page,
+      score:
+        planned.pages.find(
+          (page) => page.documentId === item.documentId && page.pageNo === item.page,
+        )?.score ?? 0,
+    }));
     if (excerpts.length === 0) {
       return {
         nutrientKey,
@@ -123,6 +156,7 @@ export class SupplementFormAdviceService {
         recommendedLevel: null,
         recommendationReason: '检索到了页，但正文没读出来',
         gaps: [`「${english}」命中的页没有可读正文，换一种说法再试`],
+        retrieval,
       };
     }
 
@@ -139,24 +173,32 @@ export class SupplementFormAdviceService {
     const readPages = new Set(excerpts.map((item) => pageKey(item.documentId, item.page)));
     const checked = enforceCitationRule(parsed, readPages, titles);
 
+    // 复盘要用的三样：查了什么、读了哪几页、为什么丢了几页
     this.logger.log(
-      `[form-advice] nutrient=${nutrientKey} pages=${excerpts.length} ` +
+      `[form-advice] nutrient=${nutrientKey} queries=[${retrieval.queries.join(' | ')}] ` +
+        `pages=[${retrieval.pages.map((page) => `${page.documentId}#p${page.page}`).join(', ')}] ` +
+        `dropped=${retrieval.dropped.length} ` +
         `options=${checked.options.length} recommended=${checked.recommendedLevel ?? 'none'}`,
     );
 
-    return checked;
+    return { ...checked, retrieval };
   }
 
-  /** 三条查询：吸收、氧化物、螯合。哪条空都不影响另外两条。 */
-  private async findPages(english: string): Promise<KbFindHit[]> {
+  /**
+   * 四条查询：生物利用度、形态、来源、吸收。
+   *
+   * 保留 `absorption` 但**不再是第一条**——它命中面太宽（胃肠药指南也讲吸收），
+   * 放第一位会把名额占满。
+   */
+  private async findPages(english: string): Promise<RetrievalQueryHits[]> {
     const queries = [
+      `${english} bioavailability`,
+      `${english} form`,
+      `${english} source`,
       `${english} absorption`,
-      `${english} oxide source`,
-      `chelated ${english} source`,
     ].slice(0, MAX_FIND_QUERIES);
 
-    const seen = new Set<string>();
-    const hits: KbFindHit[] = [];
+    const result: RetrievalQueryHits[] = [];
 
     for (const query of queries) {
       const outcome = await executeKnowledgeTool(this.knowledge, 'kb_find', {
@@ -166,31 +208,32 @@ export class SupplementFormAdviceService {
       if (!outcome.ok) {
         continue;
       }
-      for (const hit of (outcome.data as KbFindResult).hits) {
-        const key = pageKey(hit.documentId, hit.pageNo);
-        if (seen.has(key)) {
-          continue;
-        }
-        seen.add(key);
-        hits.push(hit);
-      }
+      result.push({
+        query,
+        hits: (outcome.data as KbFindResult).hits.map((hit) => ({
+          documentId: hit.documentId,
+          pageNo: hit.pageNo,
+          score: hit.score,
+          snippet: hit.snippet,
+        })),
+      });
     }
 
-    return hits.slice(0, MAX_READS);
+    return result;
   }
 
   /** 逐页读原文。读不出来就跳过——不要用 snippet 当原文引用。 */
   private async readPages(
-    hits: KbFindHit[],
+    pages: PlannedPage[],
   ): Promise<{ documentId: string; documentName: string; page: number; text: string }[]> {
     const excerpts: { documentId: string; documentName: string; page: number; text: string }[] =
       [];
 
-    for (const hit of hits.slice(0, MAX_READS)) {
+    for (const planned of pages) {
       const outcome = await executeKnowledgeTool(this.knowledge, 'kb_read', {
-        documentId: hit.documentId,
-        pageFrom: hit.pageNo,
-        pageTo: hit.pageNo,
+        documentId: planned.documentId,
+        pageFrom: planned.pageNo,
+        pageTo: planned.pageNo,
         includeImages: false,
         budgetTokens: 4000,
       });
@@ -203,9 +246,9 @@ export class SupplementFormAdviceService {
         continue;
       }
       excerpts.push({
-        documentId: hit.documentId,
-        documentName: hit.documentId,
-        page: hit.pageNo,
+        documentId: planned.documentId,
+        documentName: planned.documentId,
+        page: planned.pageNo,
         text: text.slice(0, PAGE_TEXT_LIMIT),
       });
     }

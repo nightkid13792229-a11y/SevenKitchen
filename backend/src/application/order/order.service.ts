@@ -97,30 +97,27 @@ import {
 export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
 import { RECIPE_REPOSITORY } from '../dog/dog.service';
 import { WeightGoalPlanService } from '../weight-goal-plan/weight-goal-plan.service';
+import {
+  OFFLINE_PAYMENT_CHANNELS,
+  type OfflinePaymentChannel,
+} from '../finance/finance-categories';
 
 const MAX_ORDER_SEARCH_EXPANSION_TERMS = 8;
 
 /**
- * 线下收款渠道。
+ * 归一化代客下单可选的线下收款渠道。
  *
- * 代客下单一步收款时，钱是员工当面收的：微信/支付宝/其他。
- * 以前统一记成 `OFFLINE`，财务分不清钱进了哪个账户，
- * 所以这里收窄成明确的三个枚举（缺省按下线微信）。
+ * 不传 / null / 空串一律按缺省的线下微信处理（历史前端只传 collected），
+ * 其余值必须落在枚举内 —— 渠道要在**任何写入之前**校验，避免订单先落库、
+ * 再因为渠道非法报 400，前端一重试就多建一张单。
  */
-const OFFLINE_PAYMENT_CHANNELS = [
-  'OFFLINE_WECHAT',
-  'OFFLINE_ALIPAY',
-  'OTHER',
-] as const;
-
-type OfflinePaymentChannel = (typeof OFFLINE_PAYMENT_CHANNELS)[number];
-
-function normalizeOfflinePaymentChannel(
-  channel: string,
+export function normalizeOfflinePaymentChannel(
+  channel: unknown,
 ): OfflinePaymentChannel {
-  const normalized = String(channel || '')
-    .trim()
-    .toUpperCase();
+  if (channel === null || channel === undefined || channel === '') {
+    return 'OFFLINE_WECHAT';
+  }
+  const normalized = String(channel).trim().toUpperCase();
   if (!(OFFLINE_PAYMENT_CHANNELS as readonly string[]).includes(normalized)) {
     throw new BadRequestException(`不支持的线下收款渠道: ${channel}`);
   }

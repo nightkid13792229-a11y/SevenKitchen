@@ -14,7 +14,11 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import { OrderService } from '../../application/order/order.service';
+import {
+  OrderService,
+  normalizeOfflinePaymentChannel,
+} from '../../application/order/order.service';
+import { isOfflinePaymentMethod } from '../../application/finance/finance-categories';
 import { AddressService } from '../../application/address/address.service';
 import { parseProductionDateInput } from '../../application/order/production-date';
 import { getRecipeLifeStageShortLabel } from '../../domain/recipe/enums';
@@ -246,6 +250,13 @@ export class StaffCustomerServiceController {
         return ApiResponseDto.error(400, '请选择收货地址');
       }
 
+      // 渠道必须在任何写入之前校验：非法渠道直接 400，
+      // 否则订单先落库、再报错，前端一重试就会多建一张单。
+      const channel = normalizeOfflinePaymentChannel(
+        body.paymentChannel ?? body.channel,
+      );
+      const collected = body.collected !== false;
+
       const dog = await this.prisma.dog.findUnique({
         where: { id: dogId },
         select: { id: true, ownerId: true },
@@ -356,8 +367,7 @@ export class StaffCustomerServiceController {
 
       // 代客下单默认「当场已收款」（员工当面收钱），只有显式 collected:false
       // 才留成待付款。实收为空时按订单金额记，避免传 undefined 被当成 0。
-      if (body.collected !== false) {
-        const channel = body.paymentChannel ?? body.channel;
+      if (collected) {
         const paidOrder = await this.orderService.confirmOfflinePayment(
           createdOrder.id,
           operatorId,
@@ -367,7 +377,10 @@ export class StaffCustomerServiceController {
         return ApiResponseDto.success(paidOrder);
       }
 
-      return ApiResponseDto.success(createdOrder);
+      // 建单返回的是写库前的 INIT 对象；未收款单已确认成 PENDING_PAYMENT，
+      // 返回前回库刷新，别把过期状态交给页面。
+      const savedOrder = await this.orderService.getOrderById(createdOrder.id);
+      return ApiResponseDto.success(savedOrder ?? createdOrder);
     } catch (error) {
       if (error instanceof NotFoundException) {
         return ApiResponseDto.error(404, error.message);
@@ -760,7 +773,7 @@ export class StaffCustomerServiceController {
       }
 
       const paid = order.paymentStatus === 'SUCCESS' || Boolean(order.paidAt);
-      const offlinePayment = order.paymentMethod === 'OFFLINE' || order.paymentMethod === 'OFFLINE_WECHAT';
+      const offlinePayment = isOfflinePaymentMethod(order.paymentMethod);
       if (paid && !offlinePayment) {
         return ApiResponseDto.error(400, 'Paid online orders cannot be adjusted here');
       }

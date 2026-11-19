@@ -57,13 +57,44 @@ export const MANUAL_INCOME_CATEGORIES: readonly FinanceIncomeCategory[] = [
 export const MANUAL_INCOME_ONLY_MESSAGE =
   '手工收入只记「其他收入」：线上/线下/补剂/定制食谱的收入由系统自动记录';
 
-/** 线下收款方式：钱进个人账户，不产生支付手续费 */
-export const OFFLINE_PAYMENT_METHODS = [
-  'ADMIN',
+/**
+ * 员工代客下单可选的线下收款渠道。
+ * `ADMIN` 是后台手动确认，不是员工能选的收款渠道，所以不在这个列表里。
+ */
+export const OFFLINE_PAYMENT_CHANNELS = [
   'OFFLINE_WECHAT',
   'OFFLINE_ALIPAY',
   'OTHER',
 ] as const;
+
+export type OfflinePaymentChannel = (typeof OFFLINE_PAYMENT_CHANNELS)[number];
+
+/**
+ * 历史上的笼统线下标记。
+ * 2026-11 之前的代客单用 `OFFLINE` 记线下收款，历史数据还在；
+ * 财务/退款/客服改价不能把这些老单当成线上单。
+ */
+export const LEGACY_OFFLINE_PAYMENT_METHOD = 'OFFLINE';
+
+/** 线下收款方式：钱进个人账户，不产生支付手续费 */
+export const OFFLINE_PAYMENT_METHODS = [
+  'ADMIN',
+  ...OFFLINE_PAYMENT_CHANNELS,
+  LEGACY_OFFLINE_PAYMENT_METHOD,
+] as const;
+
+/**
+ * 判断某个支付方式是否算线下收款。
+ * 财务、退款、客服改价共用这一份口径，避免各写一份后漂移。
+ */
+export function isOfflinePaymentMethod(
+  method: string | null | undefined,
+): boolean {
+  return (
+    method != null &&
+    (OFFLINE_PAYMENT_METHODS as readonly string[]).includes(method)
+  );
+}
 
 /** 线上收款方式：钱进公司微信商户号，按费率计手续费 */
 export const ONLINE_PAYMENT_METHODS = ['WECHAT_PAY', 'WECHAT'] as const;

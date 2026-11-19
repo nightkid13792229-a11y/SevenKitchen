@@ -241,6 +241,8 @@ describe('FinanceEntriesService', () => {
       direction: 'EXPENSE',
       categoryId: catId('PAYMENT_FEE'),
       categoryLabel: '支付手续费',
+      // 标题自解释：这是本月合计、且已扣退款（不是「本月应缴手续费」）
+      title: '支付手续费（本月合计，已扣退款）',
       payerAccount: 'MERCHANT',
       amount: -0.6,
       isRefund: false,
@@ -1103,9 +1105,9 @@ describe('FinanceEntriesService', () => {
       (item) => item.sourceType === 'REIMBURSEMENT',
     );
 
-    // 固定费用类别（RENT）由固定费用账单承担，不能在这里再出一行
-    expect(rows).toHaveLength(3);
-    expect(new Set(rows.map((row) => row.id)).size).toBe(3);
+    // 没有对应账单时，房租报销也照常出一行（以前会被静默丢掉）
+    expect(rows).toHaveLength(4);
+    expect(new Set(rows.map((row) => row.id)).size).toBe(4);
     expect(rows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1139,10 +1141,16 @@ describe('FinanceEntriesService', () => {
           amount: 30,
           title: '报销杂费 · 其它',
         }),
+        expect.objectContaining({
+          // 没有同月账单时，房租报销计入（否则这笔钱永远看不到）
+          id: 'rb1:RENT:3',
+          categoryId: catId('RENT'),
+          categoryLabel: '房租',
+          amount: 6000,
+          title: '报销杂费 · 房租',
+        }),
       ]),
     );
-    // 固定费用类别（房租）由账单承担，不会出现在报销杂费行里
-    expect(rows.every((row) => row.categoryId !== catId('RENT'))).toBe(true);
   });
 
   it('报销杂费：明细相加等于支出汇总，且分类金额一致', async () => {
@@ -1438,6 +1446,7 @@ describe('FinanceEntriesService', () => {
       direction: 'EXPENSE',
       categoryId: catId('PAYMENT_FEE'),
       categoryLabel: '支付手续费',
+      title: '支付手续费（本月合计，已扣退款）',
       amount: income.fee,
     });
 
@@ -1456,5 +1465,57 @@ describe('FinanceEntriesService', () => {
         'REIMBURSEMENT',
       ]),
     );
+  });
+
+  it('报销房租被同月账单覆盖时跳过：明细相加仍等于汇总合计', async () => {
+    const prisma: any = makePrisma({
+      bills: [
+        {
+          id: 'b1',
+          billNumber: 'B202611',
+          title: '11 月房租',
+          amount: 6000,
+          categoryId: catId('RENT'),
+          recognitionStart: utc('2026-11-01T00:00:00Z'),
+          recognitionEnd: utc('2026-11-30T00:00:00Z'),
+          payerAccount: 'PERSONAL_BANK',
+        },
+      ],
+      reimbursements: [
+        {
+          id: 'rb1',
+          claimNumber: 'BX202611001',
+          status: 'PENDING_REVIEW',
+          submittedAt: utc('2026-11-05T02:00:00Z'),
+          customFees: [
+            { category: 'RENT', description: '11 月房租', amount: 6000 },
+            { category: 'TOOLS', description: '封口机配件', amount: 25 },
+          ],
+        },
+      ],
+    });
+
+    const expense = await new FinanceExpenseService(prisma).getExpense(
+      period,
+      0,
+    );
+    const entries = await new FinanceEntriesService(prisma).list({
+      month: '2026-11',
+    });
+    const expenseRows = entries.items.filter(
+      (item) => item.direction === 'EXPENSE',
+    );
+
+    // 房租只出现一次（账单 6000），报销里的房租被跳过；工具 25 照常计入
+    expect(expense.total).toBe(6025);
+    expect(sum(expenseRows)).toBe(expense.total);
+    const rentRows = expenseRows.filter(
+      (item) => item.categoryId === catId('RENT'),
+    );
+    expect(rentRows).toHaveLength(1);
+    expect(rentRows[0]).toMatchObject({ sourceType: 'BILL', amount: 6000 });
+    expect(
+      expenseRows.filter((item) => item.sourceType === 'REIMBURSEMENT'),
+    ).toHaveLength(1);
   });
 });

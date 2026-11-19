@@ -205,6 +205,11 @@ export class FinanceCategoryService {
     if (!target) {
       throw new NotFoundException('目标类别不存在');
     }
+    // 目标必须是「能继续接账」的类别：已停用/已合并不行，
+    // 否则记录会被搬进一个记账下拉里选不到、报表里也跟不过去的类别。
+    if (!target.isActive || target.mergedIntoId) {
+      throw new BadRequestException('目标类别已停用或已被合并，不能作为合并目标');
+    }
     // 系统类别不可停用，「合并」会把它停用并迁走记录，等于绕过保护：
     // 自动来源（采购/快递/手续费）按 code 找系统类别，合并后只能落空。
     if (isProtectedCategory(source) || isProtectedCategory(target)) {

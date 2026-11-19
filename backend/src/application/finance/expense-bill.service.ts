@@ -69,8 +69,9 @@ export class ExpenseBillService {
   /**
    * 某月应计固定费用账单（设计文档 §4.7）。
    *
-   * 按「费用所属月」归集：只取 `recognitionStart` 落在该月的账单，
-   * 而不是付款日；跨月账单在支出汇总里按月分摊（见 finance-expense.service）。
+   * 按「与本月有重叠」归集：`recognitionStart <= 月末` 且
+   * `recognitionEnd >= 月初`，与支出分摊口径同源。年付/季付账单在任意
+   * 中间月份都能查到，不会出现「支出有数、账单页找不到」。
    * 草稿与已取消不计应计，直接排除。
    */
   async listForMonth(month: string) {
@@ -78,10 +79,8 @@ export class ExpenseBillService {
 
     return this.prisma.expenseBill.findMany({
       where: {
-        recognitionStart: {
-          gte: range.start,
-          lt: range.endExclusive,
-        },
+        recognitionStart: { lt: range.endExclusive },
+        recognitionEnd: { gte: range.start },
         status: { notIn: ['DRAFT', 'CANCELLED'] },
       },
       include: {

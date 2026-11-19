@@ -330,7 +330,9 @@ export class FinanceEntriesService {
   }
 
   /**
-   * 支付手续费合计一行：金额来自收入侧 `summarizeIncome`，为负数表示退款冲回。
+   * 支付手续费合计一行：金额来自收入侧 `summarizeIncome`。
+   * 标题写明「本月合计，已扣退款」：这是月度净额（退款冲回后），
+   * 不是「本月应缴手续费」，金额为正/为负都正常。
    * 放在期间起点，月视图里沉在最下面，不抢正常流水的第一条。
    * 手续费从微信商户号扣，账户固定 `MERCHANT`。
    */
@@ -353,7 +355,7 @@ export class FinanceEntriesService {
         categoryId: category.categoryId,
         categoryLabel: category.label,
         amount: roundMoney(fee),
-        title: '支付手续费',
+        title: '支付手续费（本月合计，已扣退款）',
         sourceType: 'FEE',
         sourceId: id,
         payerAccount: 'MERCHANT',

@@ -1,6 +1,5 @@
 import { FinanceSummaryService } from 'src/application/finance/finance-summary.service';
 import { monthRange } from 'src/application/finance/finance-period';
-import { OFFLINE_PAYMENT_METHODS } from 'src/application/finance/finance-categories';
 
 /**
  * 汇总服务只做三件事：定期间、把收入与支出相加、数一下线下待确认收款。
@@ -27,12 +26,31 @@ describe('FinanceSummaryService', () => {
     ],
   };
 
+  /**
+   * 假 Prisma `order.count`：按服务下推的 where 过滤订单。
+   * 只实现本服务用到的三个条件，用来验证「哪类订单会被数到」的真实语义，
+   * 而不是只断言 where 的字面形状。
+   */
+  const matchesPendingOrder = (order: any, where: any): boolean => {
+    if (where.paidAt === null && order.paidAt !== null) return false;
+    if (where.cancelledAt === null && order.cancelledAt !== null) return false;
+    const action = where.operationLogs?.some?.action;
+    if (
+      action &&
+      !(order.operationLogs ?? []).some((log: any) => log.action === action)
+    ) {
+      return false;
+    }
+    return true;
+  };
+
   /** 造一个只依赖 mock 的汇总服务，返回各个 mock 供断言调用参数 */
   const makeService = (
     options: {
       income?: typeof income;
       expense?: typeof expense;
       count?: number;
+      orders?: any[];
       feeRate?: number;
     } = {},
   ) => {
@@ -43,7 +61,17 @@ describe('FinanceSummaryService', () => {
       getExpense: jest.fn().mockResolvedValue(options.expense ?? expense),
     };
     const prisma = {
-      order: { count: jest.fn().mockResolvedValue(options.count ?? 0) },
+      order: {
+        count: jest.fn((args: any) =>
+          Promise.resolve(
+            options.orders
+              ? options.orders.filter((order) =>
+                  matchesPendingOrder(order, args?.where),
+                ).length
+              : (options.count ?? 0),
+          ),
+        ),
+      },
     };
     const feeRateService = {
       getFeeRate: jest.fn().mockResolvedValue(options.feeRate ?? 0.006),
@@ -83,13 +111,58 @@ describe('FinanceSummaryService', () => {
     expect(expenseService.getExpense).toHaveBeenCalledWith(period, income.fee);
     expect(feeRateService.getFeeRate).toHaveBeenCalledTimes(1);
 
-    // 待确认 = 线下支付方式 + 未付款 + 未取消
+    // 待确认 = 代客下单 + 未付款 + 未取消；不能再按 paymentMethod 过滤：
+    // 代客单关掉「已收款」时 paymentMethod 就是 null，按它过滤会永远数不到。
     expect(prisma.order.count).toHaveBeenCalledTimes(1);
-    expect(prisma.order.count.mock.calls[0][0].where).toMatchObject({
-      paymentMethod: { in: [...OFFLINE_PAYMENT_METHODS] },
+    expect(prisma.order.count.mock.calls[0][0].where).toEqual({
       paidAt: null,
       cancelledAt: null,
+      operationLogs: { some: { action: 'ASSISTED_ORDER' } },
     });
+  });
+
+  it('代客单未收款会被数到，普通未付款单不会被数到', async () => {
+    const { service } = makeService({
+      orders: [
+        {
+          id: 'assisted-unpaid',
+          // 关掉「已收款」的代客单：paymentMethod 是 null
+          paymentMethod: null,
+          paidAt: null,
+          cancelledAt: null,
+          operationLogs: [{ action: 'ASSISTED_ORDER' }],
+        },
+        {
+          id: 'assisted-paid',
+          paidAt: new Date('2026-11-02T02:00:00Z'),
+          cancelledAt: null,
+          operationLogs: [{ action: 'ASSISTED_ORDER' }],
+        },
+        {
+          id: 'assisted-cancelled',
+          paidAt: null,
+          cancelledAt: new Date('2026-11-03T02:00:00Z'),
+          operationLogs: [{ action: 'ASSISTED_ORDER' }],
+        },
+        {
+          id: 'normal-unpaid',
+          paymentMethod: 'WECHAT_PAY',
+          paidAt: null,
+          cancelledAt: null,
+          operationLogs: [],
+        },
+        {
+          id: 'price-adjust-unpaid',
+          paidAt: null,
+          cancelledAt: null,
+          operationLogs: [{ action: 'PRICE_ADJUST' }],
+        },
+      ],
+    });
+
+    const result = await service.getSummary({ month: '2026-11' });
+
+    expect(result.pendingOfflineConfirmCount).toBe(1);
   });
 
   it('支出大于收入时结余为负，不取绝对值', async () => {

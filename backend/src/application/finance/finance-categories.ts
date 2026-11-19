@@ -102,12 +102,21 @@ export const ONLINE_PAYMENT_METHODS = ['WECHAT_PAY', 'WECHAT'] as const;
 /**
  * 报销单 `customFees[].category` → 类别字典种子名字（2026-11-19 §2.3）。
  *
- * 只收零星支出三项：工具 / 杂物 / 其它。房租、工资、社保、税费、水电由
- * 固定费用账单承担，报销单里再算一遍就是重复计入（明确决策，不是漏配）。
- * 报表按 `code`（TOOLS/SUNDRIES/OTHER）找类别 id，老板改名后仍能命中。
+ * 收两类：
+ * 1. 零星支出：工具 / 杂物 / 其它；
+ * 2. 房租 / 水电 / 工资：以前只认固定费用账单，可老板真会用报销付房租，
+ *    没建账单时这笔钱就永久丢了。现在照常计入，但报表会按
+ *    「费用所属月 + 类别」跟账单去重（同月已有账单就以账单为准，不双算）。
+ *
+ * 社保、税费仍只由固定费用账单承担，报销里的这两类不计入。
+ * 报表按 `code`（TOOLS/SUNDRIES/RENT/UTILITIES/PAYROLL…）找类别 id，
+ * 老板改名后仍能命中。
  */
 export const REIMBURSEMENT_CUSTOM_FEE_CATEGORY_NAMES: Record<string, string> = {
   TOOLS: '工具',
   SUNDRIES: '杂物',
   OTHER: '其它',
+  RENT: '房租',
+  UTILITIES: '水电',
+  PAYROLL: '工资',
 };

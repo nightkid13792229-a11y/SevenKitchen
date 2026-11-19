@@ -293,6 +293,39 @@ describe('FinanceCategoryService.merge', () => {
     expect(prisma.financeCategory.update).not.toHaveBeenCalled();
   });
 
+  it('目标类别已停用时 400，不搬任何记录', async () => {
+    const prisma = makePrisma([
+      category({ id: 'c1', name: '维修' }),
+      category({ id: 'c2', name: '设备工具', isActive: false }),
+    ]);
+
+    await expect(
+      new FinanceCategoryService(prisma).merge('c1', 'c2'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.expenseBill.updateMany).not.toHaveBeenCalled();
+    expect(prisma.expenseTemplate.updateMany).not.toHaveBeenCalled();
+    expect(prisma.financeManualEntry.updateMany).not.toHaveBeenCalled();
+    expect(prisma.financeCategory.update).not.toHaveBeenCalled();
+  });
+
+  it('目标类别已被合并时 400，不搬任何记录', async () => {
+    const prisma = makePrisma([
+      category({ id: 'c1', name: '维修' }),
+      category({
+        id: 'c2',
+        name: '设备工具',
+        isActive: false,
+        mergedIntoId: 'c3',
+      }),
+    ]);
+
+    await expect(
+      new FinanceCategoryService(prisma).merge('c1', 'c2'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.expenseBill.updateMany).not.toHaveBeenCalled();
+    expect(prisma.financeCategory.update).not.toHaveBeenCalled();
+  });
+
   it('目标必须存在且不能是自己', async () => {
     const prisma = makePrisma([category({ id: 'c1' })]);
 

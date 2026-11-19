@@ -666,9 +666,11 @@ export const REIMBURSEMENT_EXPENSE_STATUSES: readonly ReimbursementStatus[] = [
 ];
 
 /**
- * 报销杂费出明细行时的类别解析：`customFees[].category` 的
- * `TOOLS / SUNDRIES / OTHER` 按 `code` 映射到类别字典（工具 / 杂物 / 其它）。
- * 其余类别（房租、工资…）由固定费用账单承担，这里直接跳过。
+ * 报销杂费出明细行时的类别解析：`customFees[].category` 按 `code` 映射到
+ * 类别字典（工具 / 杂物 / 其它 / 房租 / 水电 / 工资）。
+ *
+ * 房租/水电/工资如果同月已经有一张固定费用账单，由账单承担、
+ * 这里跳过该笔报销（见 `loadBilledCategoryMonths`），避免同一笔钱算两次。
  */
 
 /** 报销单取数的最小字段（报销金额已经由采购/账单口径承担，这里只看自定义费） */
@@ -684,6 +686,51 @@ type ReimbursementRow = Prisma.ReimbursementGetPayload<{
   select: typeof REIMBURSEMENT_EXPENSE_SELECT;
 }>;
 
+/** 账单去重只看「覆盖哪几个月 + 哪个类别」 */
+const BILL_CATEGORY_MONTH_SELECT = {
+  categoryId: true,
+  recognitionStart: true,
+  recognitionEnd: true,
+} satisfies Prisma.ExpenseBillSelect;
+
+/** 「费用所属月 + 类别 id」的键：同一月同一类别只认一个来源 */
+function billedCategoryKey(month: string, categoryId: string): string {
+  return `${month}|${categoryId}`;
+}
+
+/**
+ * 期间内固定费用账单已覆盖的「（费用所属月, 类别）」集合。
+ *
+ * 报销里的房租/水电/工资如果同月已有账单，就跳过该笔报销（以账单为准），
+ * 否则同一笔钱会进两次成本。账单按服务期覆盖的**每个月**都登记，
+ * 年付/季付账单在中间月份也能挡住对应的报销。
+ */
+export async function loadBilledCategoryMonths(
+  prisma: ExpensePrisma,
+  period: FinancePeriod,
+): Promise<Set<string>> {
+  const bills = await prisma.expenseBill.findMany({
+    where: {
+      status: { notIn: NON_EXPENSE_BILL_STATUSES },
+      recognitionStart: { lte: period.to },
+      recognitionEnd: { gte: period.from },
+    },
+    select: BILL_CATEGORY_MONTH_SELECT,
+  });
+
+  const covered = new Set<string>();
+  for (const bill of bills) {
+    if (!bill.categoryId) continue;
+    for (const key of monthKeysBetween(
+      bill.recognitionStart,
+      bill.recognitionEnd,
+    )) {
+      covered.add(billedCategoryKey(key, bill.categoryId));
+    }
+  }
+  return covered;
+}
+
 /**
  * `customFees` 是 JSON 字段，历史/手工数据不保证形状；按数组 + 对象兜底，
  * 坏数据跳过而不是让整个财务报表 500。
@@ -698,6 +745,7 @@ function isCustomFeeObject(value: unknown): value is Record<string, unknown> {
  * 金额取 `customFees[].amount`，按 `submittedAt` 归月，付款方是员工个人
  * （报销就是员工先垫的钱）。采购清单、平台运费/包装费都不在这里算：
  * 采购清单走采购支出、平台费用由固定费用账单/采购口径承担，避免同一笔钱两次进成本。
+ * 房租/水电/工资同理：同月已有固定费用账单时，`billedCategoryMonths` 会命中并跳过。
  *
  * 状态与月份在这里再兜一次：真实查询已下推 where，mock/老数据不走查询时
  * 也不能把驳回单或期间外的金额算进来。
@@ -706,6 +754,7 @@ export function buildReimbursementExpenseLines(
   reimbursement: ReimbursementRow,
   period: FinancePeriod,
   categoryLookup?: FinanceCategoryLookup,
+  billedCategoryMonths?: ReadonlySet<string>,
 ): FinanceExpenseLine[] {
   if (!REIMBURSEMENT_EXPENSE_STATUSES.includes(reimbursement.status)) {
     return [];
@@ -736,6 +785,15 @@ export function buildReimbursementExpenseLines(
       const description =
         typeof fee.description === 'string' ? fee.description.trim() : '';
       const category = categoryLookup?.byCode.get(categoryCode);
+      // 同月已有固定费用账单：以账单为准，这笔报销不再计入（防双算）
+      if (
+        category &&
+        billedCategoryMonths?.has(
+          billedCategoryKey(monthKey(reimbursement.submittedAt), category.id),
+        )
+      ) {
+        return null;
+      }
       return {
         // 按 code 找类别 id：报销类别被改名后仍命中同一个类别
         categoryId: category?.id ?? null,
@@ -760,16 +818,25 @@ export async function loadReimbursementExpenseLines(
   period: FinancePeriod,
   categoryLookup?: FinanceCategoryLookup,
 ): Promise<FinanceExpenseLine[]> {
-  const reimbursements = await prisma.reimbursement.findMany({
-    where: {
-      status: { in: [...REIMBURSEMENT_EXPENSE_STATUSES] },
-      submittedAt: { gte: period.from, lte: period.to },
-    },
-    select: REIMBURSEMENT_EXPENSE_SELECT,
-  });
+  // 账单覆盖情况与报销单并行取：报销行要按「同月同类已有账单」去重
+  const [reimbursements, billedCategoryMonths] = await Promise.all([
+    prisma.reimbursement.findMany({
+      where: {
+        status: { in: [...REIMBURSEMENT_EXPENSE_STATUSES] },
+        submittedAt: { gte: period.from, lte: period.to },
+      },
+      select: REIMBURSEMENT_EXPENSE_SELECT,
+    }),
+    loadBilledCategoryMonths(prisma, period),
+  ]);
 
   return reimbursements.flatMap((reimbursement) =>
-    buildReimbursementExpenseLines(reimbursement, period, categoryLookup),
+    buildReimbursementExpenseLines(
+      reimbursement,
+      period,
+      categoryLookup,
+      billedCategoryMonths,
+    ),
   );
 }
 

@@ -551,16 +551,73 @@ describe('FinanceExpenseService', () => {
     expect(r.total).toBe(67.5);
   });
 
-  it('报销单里的房租/工资/社保/税费/水电由固定费用账单承担，不重复计入', async () => {
+  it('没有账单时，报销里的房租/水电/工资照常计入支出（钱不会凭空消失）', async () => {
     const prisma: any = makePrisma({
       reimbursements: [
         reimbursementRow({
           customFees: [
-            { categoryId: catId('RENT'), description: '房租', amount: 6000 },
+            { category: 'RENT', description: '11 月房租', amount: 6000 },
+            { category: 'UTILITIES', description: '水电燃气', amount: 400 },
             { category: 'PAYROLL', description: '工资', amount: 5000 },
+          ],
+        }),
+      ],
+    });
+
+    const r = await makeService(prisma).getExpense(period, 0);
+
+    expect(findCategory(r, 'RENT')).toMatchObject({
+      categoryId: catId('RENT'),
+      label: '房租',
+      amount: 6000,
+    });
+    expect(findCategory(r, 'UTILITIES')).toMatchObject({
+      label: '水电',
+      amount: 400,
+    });
+    expect(findCategory(r, 'PAYROLL')).toMatchObject({
+      label: '工资',
+      amount: 5000,
+    });
+    expect(r.total).toBe(11400);
+  });
+
+  it('同月已有固定费用账单时，同类别的报销跳过（以账单为准，不双算）', async () => {
+    const prisma: any = makePrisma({
+      bills: [
+        {
+          id: 'b1',
+          amount: 6000,
+          categoryId: catId('RENT'),
+          recognitionStart: new Date('2026-11-01T00:00:00Z'),
+          recognitionEnd: new Date('2026-11-30T00:00:00Z'),
+        },
+      ],
+      reimbursements: [
+        reimbursementRow({
+          customFees: [
+            { category: 'RENT', description: '11 月房租', amount: 6000 },
+            { category: 'UTILITIES', description: '水电燃气', amount: 400 },
+          ],
+        }),
+      ],
+    });
+
+    const r = await makeService(prisma).getExpense(period, 0);
+
+    // 房租只认账单那 6000；水电没有账单，报销的 400 仍然计入
+    expect(findCategory(r, 'RENT')).toMatchObject({ amount: 6000 });
+    expect(findCategory(r, 'UTILITIES')).toMatchObject({ amount: 400 });
+    expect(r.total).toBe(6400);
+  });
+
+  it('社保/税费仍由固定费用账单承担，报销里的这两类不计入', async () => {
+    const prisma: any = makePrisma({
+      reimbursements: [
+        reimbursementRow({
+          customFees: [
             { category: 'SOCIAL_INSURANCE', description: '社保', amount: 1200 },
             { category: 'TAX', description: '税费', amount: 300 },
-            { category: 'UTILITIES', description: '水电燃气', amount: 400 },
           ],
         }),
       ],

@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import { OFFLINE_PAYMENT_METHODS } from './finance-categories';
 import { FinanceFeeRateService } from './finance-fee-rate.service';
 import {
   FinanceExpense,
@@ -94,16 +93,18 @@ export class FinanceSummaryService {
   }
 
   /**
-   * 线下待确认收款：选了线下支付方式、但还没登记 `paidAt`、也没取消的订单数。
-   * `cancelledAt` 与 `status` 一起判，兼容历史上只写了其中一个的订单。
+   * 线下收款待确认：**代客下单**、还没登记 `paidAt`、也没取消的订单数。
+   *
+   * 不能按 `paymentMethod ∈ OFFLINE_*` 过滤：代客下单关掉「已收款」时
+   * 订单的 `paymentMethod` 就是 null，恰好把最该提醒的那批单漏掉。
+   * 代客单的身份以审计日志 `ASSISTED_ORDER` 为准。
    */
   private countPendingOfflineConfirm(): Promise<number> {
     return this.prisma.order.count({
       where: {
-        paymentMethod: { in: [...OFFLINE_PAYMENT_METHODS] },
         paidAt: null,
         cancelledAt: null,
-        status: { not: 'CANCELLED' },
+        operationLogs: { some: { action: 'ASSISTED_ORDER' } },
       },
     });
   }

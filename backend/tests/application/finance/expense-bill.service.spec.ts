@@ -552,7 +552,7 @@ describe('ExpenseTemplateService.create / update / deactivate', () => {
 });
 
 describe('ExpenseBillService.listForMonth', () => {
-  it('只取 recognitionStart 落在该月的应计账单（排除草稿/已取消）', async () => {
+  it('取与本月有重叠的应计账单（与支出分摊同源，排除草稿/已取消）', async () => {
     const prisma = makeBillPrisma();
     prisma.expenseBill.findMany.mockResolvedValue([makeBill()]);
     const service = new ExpenseBillService(prisma);
@@ -563,13 +563,37 @@ describe('ExpenseBillService.listForMonth', () => {
     expect(prisma.expenseBill.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          recognitionStart: {
-            gte: utcDateOnly('2026-11-01'),
-            lt: utcDateOnly('2026-12-01'),
-          },
+          recognitionStart: { lt: utcDateOnly('2026-12-01') },
+          recognitionEnd: { gte: utcDateOnly('2026-11-01') },
           status: { notIn: ['DRAFT', 'CANCELLED'] },
         },
         include: expect.objectContaining({ payments: expect.anything() }),
+      }),
+    );
+  });
+
+  it('年付 12 个月的账单，在第 6 个月也能查到', async () => {
+    const prisma = makeBillPrisma();
+    prisma.expenseBill.findMany.mockResolvedValue([
+      makeBill({
+        id: 'b-annual',
+        amount: 1200,
+        recognitionStart: utcDateOnly('2026-01-01'),
+        recognitionEnd: utcDateOnly('2026-12-31'),
+      }),
+    ]);
+    const service = new ExpenseBillService(prisma);
+
+    const result = await service.listForMonth('2026-06');
+
+    // 账单页按「与本月重叠」取，年付账单在任意中间月份都能找到
+    expect(result.map((bill) => bill.id)).toEqual(['b-annual']);
+    expect(prisma.expenseBill.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          recognitionStart: { lt: utcDateOnly('2026-07-01') },
+          recognitionEnd: { gte: utcDateOnly('2026-06-01') },
+        }),
       }),
     );
   });

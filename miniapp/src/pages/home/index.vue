@@ -2584,9 +2584,8 @@ defineOptions({
 
 /* ---------- 固定筛选栏 ---------- */
 .filter-bar {
-  position: sticky;
-  top: 0;
-  z-index: 100;
+  position: relative;
+  z-index: 1;
   background: rgba(240, 243, 233, 0.96);
   padding: 16rpx 28rpx;
   border-bottom: 1rpx solid #e3e6d4;

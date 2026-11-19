@@ -42,7 +42,9 @@ export type DropReason =
   | 'QUERY_LIMIT'
   | 'DOC_LIMIT'
   | 'TOTAL_LIMIT'
-  | 'INDEX_PAGE';
+  | 'INDEX_PAGE'
+  /** 计划读、但正文读不出来（2026-11-20 复核补：以前这种页会凭空消失） */
+  | 'READ_FAILED';
 
 export interface DroppedPage {
   documentId: string;
@@ -50,7 +52,13 @@ export interface DroppedPage {
   reason: DropReason;
 }
 
-const INDEX_FIRST_LINE = /^(index|contents|目\s*录|索\s*引)$/i;
+/**
+ * 首词就是 Index/Contents/目录/索引，且后面还有内容。
+ *
+ * 之所以要认这种"首词"形态：`kb_find` 返回的 snippet 是把整页空白折成空格的**单行**文本，
+ * 多行判据在真实数据上永远走不到（2026-11-20 复核发现）。
+ */
+const INDEX_FIRST_LINE = /^(index|contents|目\s*录|索\s*引)(\s|$)/i;
 /** 「1. 某某 …… 12」这种带引导点的条目标志 */
 const INDEX_ENTRY = /^\s*\d+[.、]\s+\S.*[.．·]{2,}\s*\d+\s*$/;
 
@@ -100,6 +108,18 @@ export function planRetrievalPages(
         continue;
       }
       const key = `${hit.documentId}#${hit.pageNo}`;
+      // 先判索引页再判重复：同一页被两条查询命中时，原因是"索引页"，不是"重复"
+      if (looksLikeIndexPage(hit.snippet)) {
+        if (!seen.has(key)) {
+          dropped.push({
+            documentId: hit.documentId,
+            pageNo: hit.pageNo,
+            reason: 'INDEX_PAGE',
+          });
+          seen.add(key);
+        }
+        continue;
+      }
       if (seen.has(key)) {
         dropped.push({
           documentId: hit.documentId,
@@ -109,14 +129,6 @@ export function planRetrievalPages(
         continue;
       }
       seen.add(key);
-      if (looksLikeIndexPage(hit.snippet)) {
-        dropped.push({
-          documentId: hit.documentId,
-          pageNo: hit.pageNo,
-          reason: 'INDEX_PAGE',
-        });
-        continue;
-      }
       queueByQuery[index].hits.push(hit);
     }
   }
@@ -151,7 +163,9 @@ export function planRetrievalPages(
         continue;
       }
       const usedByDocument = perDocument.get(hit.documentId) ?? 0;
-      if (usedByDocument >= options.perDocumentMax) {
+      // 每条查询的第 1 页不受文档上限限制：否则四条查询都命中同一本书时，
+      // 后面的查询一页都读不到（2026-11-20 复核发现的"饿死"问题）
+      if (usedByQuery > 0 && usedByDocument >= options.perDocumentMax) {
         dropped.push({
           documentId: hit.documentId,
           pageNo: hit.pageNo,

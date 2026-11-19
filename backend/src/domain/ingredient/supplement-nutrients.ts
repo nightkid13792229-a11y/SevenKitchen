@@ -22,6 +22,15 @@ const NUTRIENT_EN: Record<string, string> = {
   'vitamins.vitaminE': 'vitamin e',
   'vitamins.vitaminC': 'vitamin c',
   'vitamins.vitaminK': 'vitamin k2',
+  'vitamins.vitaminB1': 'thiamine',
+  'vitamins.vitaminB2': 'riboflavin',
+  'vitamins.vitaminB3': 'niacin',
+  'vitamins.vitaminB5': 'pantothenic acid',
+  'vitamins.vitaminB6': 'vitamin b6',
+  'vitamins.vitaminB7': 'biotin',
+  'vitamins.vitaminB9': 'folate',
+  'vitamins.vitaminB12': 'vitamin b12',
+  'vitamins.choline': 'choline',
   'fattyAcids.epa': 'omega 3 fish oil',
   'fattyAcids.dha': 'omega 3 fish oil',
   'aminoAcids.lysine': 'lysine',
@@ -49,8 +58,25 @@ const NUTRIENT_ZH: Record<string, string> = {
   'fattyAcids.dha': 'DHA',
 };
 
+/**
+ * 认不出的字段也要能拿去检索：`vitaminB12` → `vitamin b12`。
+ * 不这么拆的话，查出来是 "vitaminB12 bioavailability"，知识库一条都命不中
+ * （2026-11-20 实测：B12 因为没有词条，页数为 0，整屏只剩市场候选）。
+ */
+function humanizeFieldName(raw: string): string {
+  return raw
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Za-z])(\d)/g, '$1 $2')
+    .replace(/(\d)([A-Za-z])/g, '$1 $2')
+    .toLowerCase()
+    .trim();
+}
+
 export function nutrientEnglishName(nutrientKey: string): string {
-  return NUTRIENT_EN[nutrientKey] ?? nutrientKey.split('.').pop() ?? nutrientKey;
+  return (
+    NUTRIENT_EN[nutrientKey] ??
+    humanizeFieldName(nutrientKey.split('.').pop() ?? nutrientKey)
+  );
 }
 
 export function nutrientChineseLabel(nutrientKey: string): string {

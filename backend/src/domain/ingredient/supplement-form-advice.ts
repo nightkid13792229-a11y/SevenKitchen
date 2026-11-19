@@ -8,6 +8,8 @@
  * - 推荐档位被降级 → 不给推荐，交回人判断。
  */
 
+import type { DropReason } from './kb-retrieval-plan';
+
 export type FormLevel = 'ORGANIC_CHELATE' | 'INORGANIC_SALT' | 'OXIDE' | 'OTHER';
 
 export type FormVerdict = 'RECOMMENDED' | 'ACCEPTABLE' | 'AVOID' | 'NO_EVIDENCE';
@@ -32,7 +34,9 @@ export interface FormOption {
 export interface RetrievalSummary {
   queries: string[];
   pages: { documentId: string; page: number; score: number }[];
-  dropped: { documentId: string; page: number; reason: string }[];
+  dropped: { documentId: string; page: number; reason: DropReason }[];
+  /** 检索本身失败的查询（DB 故障/超时），与"没命中"分开报 */
+  failures?: { query: string; error: string }[];
 }
 
 export interface FormAdvice {

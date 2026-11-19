@@ -137,13 +137,34 @@ const MARKET_ONLY_REASON = '知识库没查到依据；市场上有这个说法�
  * 一条硬规矩：**只有市场的候选，verdict 永远是 NO_EVIDENCE**，理由也在这里写死，
  * 免得后面有人顺手给它加个"推荐"。
  */
+/**
+ * 同一个东西在中英文里名字不同：知识库写 `methylcobalamin`，中文站标题写「甲钴胺」。
+ * 只按 key 合并会把同一形态拆成两条（一条有原文、一条"市场有但没依据"）。
+ * 所以这里也按中文名对齐一次。
+ */
+function findMarketMatch(
+  market: MarketTerm[],
+  key: string,
+  labelZh: string,
+): MarketTerm | null {
+  const byKey = market.find((term) => normalizeTermKey(term.key) === key);
+  if (byKey) {
+    return byKey;
+  }
+  const label = normalizeTermKey(labelZh);
+  if (!label) {
+    return null;
+  }
+  return market.find((term) => normalizeTermKey(term.labelZh) === label) ?? null;
+}
+
 export function mergeCandidates(kb: KbCandidate[], market: MarketTerm[]): DimensionCandidate[] {
   const result: DimensionCandidate[] = [];
   const usedMarket = new Set<string>();
 
   for (const item of kb) {
     const key = normalizeTermKey(item.key);
-    const marketHit = market.find((term) => normalizeTermKey(term.key) === key) ?? null;
+    const marketHit = findMarketMatch(market, key, item.labelZh);
     if (marketHit) {
       usedMarket.add(normalizeTermKey(marketHit.key));
     }
@@ -181,5 +202,53 @@ export function mergeCandidates(kb: KbCandidate[], market: MarketTerm[]): Dimens
     });
   }
 
-  return result;
+  return collapseByLabel(result);
+}
+
+/** 中文名一样的两条合成一条：优先保留有原文的那条，引用与市场计数合并。 */
+function collapseByLabel(rows: DimensionCandidate[]): DimensionCandidate[] {
+  const byLabel = new Map<string, DimensionCandidate>();
+  const passthrough: DimensionCandidate[] = [];
+
+  for (const row of rows) {
+    const label = normalizeTermKey(row.labelZh);
+    if (!label) {
+      passthrough.push(row);
+      continue;
+    }
+    const bucket = `${row.dimension}:${label}`;
+    const existing = byLabel.get(bucket);
+    if (!existing) {
+      byLabel.set(bucket, row);
+      continue;
+    }
+    const evidenced = [existing, row].find((item) => item.status === 'EVIDENCED') ?? existing;
+    const marketCount = (existing.market?.count ?? 0) + (row.market?.count ?? 0);
+    byLabel.set(bucket, {
+      ...evidenced,
+      citations: mergeCitations(existing.citations, row.citations),
+      market:
+        marketCount > 0
+          ? {
+              count: marketCount,
+              samples: [...new Set([...(existing.market?.samples ?? []), ...(row.market?.samples ?? [])])].slice(0, 3),
+            }
+          : null,
+    });
+  }
+
+  return [...byLabel.values(), ...passthrough];
+}
+
+function mergeCitations(a: Citation[], b: Citation[]): Citation[] {
+  const seen = new Set(a.map((item) => `${item.documentId}#${item.page}#${item.quote}`));
+  const merged = [...a];
+  for (const item of b) {
+    const key = `${item.documentId}#${item.page}#${item.quote}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(item);
+    }
+  }
+  return merged;
 }

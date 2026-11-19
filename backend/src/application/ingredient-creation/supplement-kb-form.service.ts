@@ -45,7 +45,12 @@ const SYSTEM_PROMPT = `你在读补剂营养素的文献原文片段。请抽出
 1. surface 必须**逐字出现在该页片段里**（可以是一个短语）；
 2. quote 必须是片段里的**原句**，逐字照抄，不要改写、不要拼接、不要翻译；
 3. documentId 与 page 必须来自片段抬头标注，不许自己编；
-4. verdict 只能是 RECOMMENDED / ACCEPTABLE / AVOID / NO_EVIDENCE（文中没表态就 NO_EVIDENCE）；
+4. verdict 只能是 RECOMMENDED / ACCEPTABLE / AVOID / NO_EVIDENCE，且必须严格按文中的措辞：
+   - AVOID：文中**明确否定**它作为该营养素的来源（如 "should not be used"、"negligible bioavailability"）；
+   - ACCEPTABLE：文中把它当作可用的来源/形态描述；
+   - RECOMMENDED：文中**明确表示它优于别的形态**；
+   - NO_EVIDENCE：其余情况，包括"不稳定""数据有限""吸收一般"这类**注意点**——
+     注意点不是否决，写进 reason 里，不要把 verdict 判成 AVOID；
 5. 一个都没有就输出 {"terms":[]}。`;
 
 interface RawTermRecord {

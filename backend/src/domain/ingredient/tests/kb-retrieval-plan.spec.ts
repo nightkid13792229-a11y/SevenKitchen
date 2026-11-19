@@ -26,6 +26,15 @@ describe('looksLikeIndexPage', () => {
     ).toBe(false);
   });
 
+  it('单行（snippet 被折叠过）也能认出索引页', () => {
+    expect(
+      looksLikeIndexPage(
+        'Index AAFCO, 2001 ............ 512 Absorption of iron compounds ... 15',
+      ),
+    ).toBe(true);
+    expect(looksLikeIndexPage('Contents 1. Introduction 3')).toBe(true);
+  });
+
   it('大量“编号+点号”短行也判为索引页', () => {
     const text = [
       '1. AAFCO 2001 .......... 12',
@@ -101,6 +110,30 @@ describe('planRetrievalPages', () => {
     );
     expect(result.pages).toHaveLength(2);
     expect(result.dropped.some((item) => item.reason === 'QUERY_LIMIT')).toBe(true);
+  });
+
+  it('四条查询都落在同一本书时，每查询的首个候选不受文档上限限制', () => {
+    const result = planRetrievalPages(
+      [
+        q('a', [hit('nrc', 10), hit('nrc', 12)]),
+        q('b', [hit('nrc', 11)]),
+        q('c', [hit('nrc', 13)]),
+        q('d', [hit('nrc', 14)]),
+      ],
+      { totalPages: 4, perQueryMax: 2, perDocumentMax: 2 },
+    );
+    expect(result.pages.map((page) => page.pageNo).sort()).toEqual([10, 11, 13, 14]);
+    expect(result.pages).toHaveLength(4);
+  });
+
+  it('同一页重复命中时按索引页优先解释，不记两次 DUPLICATE', () => {
+    const indexHit = { ...hit('docA', 1), snippet: 'Index AAFCO ... 512' };
+    const result = planRetrievalPages(
+      [q('a', [indexHit]), q('b', [indexHit])],
+      { totalPages: 4, perQueryMax: 2, perDocumentMax: 2 },
+    );
+    expect(result.dropped.filter((item) => item.pageNo === 1)).toHaveLength(1);
+    expect(result.dropped[0].reason).toBe('INDEX_PAGE');
   });
 
   it('空输入不抛错', () => {

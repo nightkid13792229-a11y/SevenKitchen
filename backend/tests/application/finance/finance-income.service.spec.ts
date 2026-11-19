@@ -75,6 +75,28 @@ describe('FinanceIncomeService', () => {
     expect(r.fee).toBe(0.6);
   });
 
+  it('历史 OFFLINE 标记按线下计，不收手续费', async () => {
+    // 2026-06 起的旧代客单记的是 'OFFLINE'（钱进个人账户），不能当线上收 6‰
+    const prisma: any = makePrisma({
+      orders: [
+        {
+          id: 'legacy-1',
+          amountTotal: 500,
+          paymentMethod: 'OFFLINE',
+          paidAt: utc('2026-11-03T02:00:00Z'),
+          remakeFromOrderId: null,
+          reshipFromOrderId: null,
+        },
+      ],
+    });
+
+    const r = await new FinanceIncomeService(prisma).getIncome(period, 0.006);
+
+    expect(r.orderOnline).toBe(0);
+    expect(r.orderOffline).toBe(500);
+    expect(r.fee).toBe(0);
+  });
+
   it('排除 0 元单、补发单、重做单与 RESHIP', async () => {
     const prisma: any = makePrisma({
       orders: [

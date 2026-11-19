@@ -107,7 +107,7 @@
 | 定制食谱设计单 | `CustomRecipeOrder` | 支付成功时间 | `actualPaidAmount ?? amount` |
 | 线下收款 | 同上三张表，但 `paymentMethod` 不是线上支付 | 同上 | 实收金额 |
 
-- 线上/线下判定**不能写 `paymentMethod === 'WECHAT_PAY'`**。实际取值至少包括 `WECHAT_PAY`、`WECHAT`（默认值）、`ADMIN`、`OFFLINE_WECHAT`、`RESHIP`。规则：`paymentMethod ∈ {ADMIN, OFFLINE_WECHAT, OFFLINE_ALIPAY, OTHER}` → 线下，其余非空值 → 线上（补剂/定制按各自字段）。
+- 线上/线下判定**不能写 `paymentMethod === 'WECHAT_PAY'`**。实际取值至少包括 `WECHAT_PAY`、`WECHAT`（默认值）、`ADMIN`、`OFFLINE_WECHAT`、`RESHIP`。规则：`paymentMethod ∈ {ADMIN, OFFLINE, OFFLINE_WECHAT, OFFLINE_ALIPAY, OTHER}` → 线下，其余非空值 → 线上（补剂/定制按各自字段）。其中 `OFFLINE` 是 2026-06 起旧代客单的写法（钱进老板个人账户），必须算线下，否则会被多收 6‰ 手续费、还会挡住改价和退款登记。
 - **未付款的订单不算收入。** 判断依据是支付成功时间，不是下单时间。
 - 线下收款必须走代客下单（老板已同意）。
 - **代客下单要一步到位。** 现在代客下单建出来是「待付款」，还得另进订单详情点一次「确认收款」才写 `paidAt`。这一步漏点，钱就消失了——正是老板最怕的事。改为：代客下单表单里「已收款」默认勾选，勾了就直接落成已付单，`paidAt` = 下单时间。
@@ -466,7 +466,7 @@
 | # | 状态 | 说明 |
 |---|---|---|
 | A1 | ✅ 已核实 | 代客下单有两条路径：鲜食代客单落 `Order`（实收写进 `amountTotal`，走 `updateOrderAmount`）；定制食谱设计单落 `CustomRecipeOrder`（实收在 `actualPaidAmount`）。 |
-| A2 | ✅ 已核实 | `Order.paymentMethod` 至少出现 `WECHAT_PAY`、`WECHAT`（默认）、`ADMIN`、`OFFLINE_WECHAT`、`RESHIP`。判定规则见 §4.1。 |
+| A2 | ✅ 已核实 | `Order.paymentMethod` 至少出现 `WECHAT_PAY`、`WECHAT`（默认）、`ADMIN`、`OFFLINE`（2026-06 旧代客单）、`OFFLINE_WECHAT`、`OFFLINE_ALIPAY`、`RESHIP`。判定规则见 §4.1。 |
 | A3 | ✅ 已定 | 鲜食 `Order` 没有线下退款字段；新增 `order_offline_refund` 表，入口在订单详情（§6.6）。|
 | A4 | 待核对 | `SupplementOrder` 的实收是否等于 `amountTotal`（有无改价/优惠差额字段）。 |
 | A5 | 待核对 | 采购行的食材/补剂/包材类型存在 `PurchaseItem.type` 还是采购商品上，历史数据是否都填了；缺失时的兜底规则。 |

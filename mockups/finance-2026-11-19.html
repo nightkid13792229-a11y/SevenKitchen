@@ -1,0 +1,346 @@
+<style>
+  .fz-wrap { display:grid; grid-template-columns:repeat(2, 375px); gap:28px; justify-content:center; align-items:start; }
+  .fz-phone { width:375px; background:#FBFCF7; border-radius:28px; overflow:hidden;
+    box-shadow:0 18px 44px rgba(30,46,36,.18); font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;
+    color:#26261F; }
+  .fz-nav { background:#1E3A2F; color:#F3EDDD; text-align:center; font-size:15px; font-weight:600;
+    padding:14px 0 12px; letter-spacing:.5px; }
+  .fz-body { padding:14px 16px 20px; }
+  .fz-month { display:flex; justify-content:space-between; align-items:baseline; padding:2px 2px 12px; }
+  .fz-month b { font-size:16px; }
+  .fz-month span { font-size:12px; color:#8A8A7E; }
+  .fz-hero { background:#1E3A2F; color:#F3EDDD; border-radius:16px; padding:18px 18px 16px; }
+  .fz-hero .lbl { font-size:12px; color:rgba(243,237,221,.72); }
+  .fz-hero .big { font-size:40px; font-weight:700; letter-spacing:-.5px; margin:2px 0 2px; }
+  .fz-hero .big small { font-size:18px; font-weight:600; margin-right:2px; }
+  .fz-hero .cap { font-size:11.5px; color:rgba(243,237,221,.72); }
+  .fz-hero .split { display:flex; gap:26px; margin-top:14px; padding-top:12px;
+    border-top:1px solid rgba(243,237,221,.18); }
+  .fz-hero .split div { font-size:12px; color:rgba(243,237,221,.72); }
+  .fz-hero .split b { display:block; font-size:17px; color:#F3EDDD; font-weight:600; margin-top:3px; }
+  .fz-card { background:#fff; border-radius:16px; padding:14px 16px; margin-top:12px;
+    box-shadow:0 3px 9px rgba(30,46,36,.05); }
+  .fz-card h4 { margin:0 0 10px; font-size:13px; color:#6B6653; font-weight:600; }
+  .fz-row { display:flex; justify-content:space-between; align-items:center; padding:7px 0; font-size:13.5px; }
+  .fz-row + .fz-row { border-top:1px solid #EEF1E2; }
+  .fz-row .k { color:#26261F; }
+  .fz-row .k em { font-style:normal; color:#8A8A7E; font-size:11.5px; margin-left:6px; }
+  .fz-row .v { font-variant-numeric:tabular-nums; font-weight:600; }
+  .fz-row .v.gold { color:#7A5C28; }
+  .fz-row .v.muted { color:#8A8A7E; font-weight:500; }
+  .fz-alert { display:flex; gap:8px; align-items:center; background:#F6EFE0; color:#7A5C28;
+    border-radius:12px; padding:10px 12px; font-size:12.5px; margin-top:12px; }
+  .fz-alert b { font-weight:700; }
+  .fz-bar { display:flex; align-items:center; gap:8px; padding:5px 0; font-size:12.5px; }
+  .fz-bar .nm { width:52px; color:#6B6653; flex:none; }
+  .fz-bar .tr { flex:1; height:7px; background:#EEF1E2; border-radius:99px; overflow:hidden; }
+  .fz-bar .tr i { display:block; height:100%; background:#1E3A2F; border-radius:99px; }
+  .fz-bar .am { width:62px; text-align:right; color:#26261F; font-variant-numeric:tabular-nums; flex:none; }
+  .fz-actions { display:flex; gap:10px; margin-top:14px; }
+  .fz-btn { flex:1; text-align:center; padding:13px 0; border-radius:12px; font-size:14.5px; font-weight:600; }
+  .fz-btn.primary { background:#1E3A2F; color:#F3EDDD; }
+  .fz-btn.ghost { background:#fff; color:#1E3A2F; border:1px solid #DCE3D2; }
+  .fz-link { text-align:center; font-size:12.5px; color:#6B6653; padding:12px 0 2px; }
+  .fz-chips { display:flex; gap:8px; flex-wrap:wrap; padding:4px 0 2px; }
+  .fz-chip { padding:7px 13px; border-radius:99px; font-size:12.5px; background:#fff; color:#26261F;
+    border:1px solid #E3E8D8; }
+  .fz-chip.on { background:#1E3A2F; color:#F3EDDD; border-color:#1E3A2F; }
+  .fz-item { padding:11px 0; border-bottom:1px solid #EEF1E2; }
+  .fz-item:last-child { border-bottom:0; }
+  .fz-item .l1 { display:flex; justify-content:space-between; font-size:14px; font-weight:600; }
+  .fz-item .l1 .amt { font-variant-numeric:tabular-nums; }
+  .fz-item .l1 .amt.neg { color:#B4453A; }
+  .fz-item .l2 { display:flex; justify-content:space-between; font-size:11.5px; color:#8A8A7E; margin-top:4px; }
+  .fz-tag { display:inline-block; font-size:10.5px; padding:2px 6px; border-radius:5px;
+    background:#EEF2E4; color:#1E3A2F; margin-left:6px; vertical-align:1px; }
+  .fz-tag.warn { background:#F6EFE0; color:#7A5C28; }
+  .fz-tag.red { background:#F8E8E2; color:#B4453A; }
+  .fz-amount { text-align:center; padding:16px 0 6px; }
+  .fz-amount .cur { font-size:20px; color:#6B6653; vertical-align:8px; }
+  .fz-amount .num { font-size:44px; font-weight:700; letter-spacing:-1px; }
+  .fz-field { margin-top:14px; }
+  .fz-field > label { display:block; font-size:12px; color:#8A8A7E; margin-bottom:7px; }
+  .fz-input { background:#fff; border:1px solid #E3E8D8; border-radius:12px; padding:12px 13px;
+    font-size:14px; color:#26261F; }
+  .fz-input.ph { color:#8A8A7E; }
+  .fz-upload { display:flex; gap:9px; }
+  .fz-slot { width:66px; height:66px; border-radius:10px; border:1px dashed #C8D1BA;
+    display:flex; align-items:center; justify-content:center; font-size:11px; color:#8A8A7E;
+    background:#fff; }
+  .fz-split { display:flex; gap:0; background:#fff; border-radius:12px; overflow:hidden;
+    border:1px solid #E3E8D8; }
+  .fz-split div { flex:1; text-align:center; padding:11px 0; font-size:13.5px; color:#6B6653; }
+  .fz-split div.on { background:#1E3A2F; color:#F3EDDD; font-weight:600; }
+  .fz-footnote { text-align:center; font-size:11.5px; color:#8A8A7E; padding:0 20px 6px; }
+  .fz-badge { display:inline-block; font-size:10.5px; padding:2px 7px; border-radius:99px;
+    background:#EEF2E4; color:#1E3A2F; }
+  .fz-badge.done { background:#EEF1E2; color:#6B6653; }
+  .fz-badge.wait { background:#F6EFE0; color:#7A5C28; }
+  .fz-sec { margin-top:14px; }
+  .fz-sec > h4 { font-size:13px; color:#6B6653; margin:0 0 8px 2px; font-weight:600; }
+</style>
+
+<h2>新财务板块 · 小程序原型</h2>
+<p class="subtitle">按员工端现有规范（深绿 #1E3A2F / 米白 / 卡其金）画了四屏，数字是示例。先看结构对不对，样式细节后面再调。</p>
+
+<div class="fz-wrap">
+
+  <!-- 1. 首页 -->
+  <div class="fz-phone">
+    <div class="fz-nav">财务</div>
+    <div class="fz-body">
+      <div class="fz-month">
+        <b>2026 年 11 月 ▾</b>
+        <span>本月至今 · 1–19 日</span>
+      </div>
+
+      <div class="fz-hero">
+        <div class="lbl">这个月到现在，你赚了</div>
+        <div class="big"><small>¥</small>9,300</div>
+        <div class="cap">= 收入 − 支出，已经扣掉房租、工资、社保</div>
+        <div class="split">
+          <div>收入<b>¥38,400</b></div>
+          <div>支出<b>¥29,100</b></div>
+        </div>
+      </div>
+
+      <div class="fz-alert">
+        <span>⚠</span>
+        <span>有 <b>2 笔</b>线下收款还没确认，确认后才算进收入</span>
+      </div>
+
+      <div class="fz-card">
+        <h4>钱花在哪</h4>
+        <div class="fz-bar"><span class="nm">食材</span><span class="tr"><i style="width:44%"></i></span><span class="am">12,800</span></div>
+        <div class="fz-bar"><span class="nm">房租</span><span class="tr"><i style="width:21%"></i></span><span class="am">6,000</span></div>
+        <div class="fz-bar"><span class="nm">工资</span><span class="tr"><i style="width:10%"></i></span><span class="am">3,000</span></div>
+        <div class="fz-bar"><span class="nm">补剂</span><span class="tr"><i style="width:8%"></i></span><span class="am">2,400</span></div>
+        <div class="fz-bar"><span class="nm">快递</span><span class="tr"><i style="width:7%"></i></span><span class="am">2,100</span></div>
+        <div class="fz-bar"><span class="nm">包材</span><span class="tr"><i style="width:7%"></i></span><span class="am">1,900</span></div>
+        <div class="fz-bar"><span class="nm">其他</span><span class="tr"><i style="width:3%"></i></span><span class="am">900</span></div>
+      </div>
+
+      <div class="fz-actions">
+        <div class="fz-btn primary">记一笔</div>
+        <div class="fz-btn ghost">固定费用</div>
+      </div>
+      <div class="fz-link">查看全部收支明细 ›</div>
+    </div>
+  </div>
+
+  <!-- 2. 明细 -->
+  <div class="fz-phone">
+    <div class="fz-nav">收支明细</div>
+    <div class="fz-body">
+      <div class="fz-chips">
+        <span class="fz-chip on">全部</span>
+        <span class="fz-chip">收入</span>
+        <span class="fz-chip">支出</span>
+        <span class="fz-chip">食材</span>
+        <span class="fz-chip">我垫的</span>
+      </div>
+      <div class="fz-card" style="margin-top:10px; padding:4px 16px;">
+        <div class="fz-item">
+          <div class="l1"><span>线上订单 · 鲜食<span class="fz-tag">已付</span></span><span class="amt">+428.00</span></div>
+          <div class="l2"><span>#SK202611190021 · 微信支付</span><span>今天 10:24</span></div>
+        </div>
+        <div class="fz-item">
+          <div class="l1"><span>食材 · 补货</span><span class="amt">−312.60</span></div>
+          <div class="l2"><span>盒马 · 我垫的</span><span>今天 09:12</span></div>
+        </div>
+        <div class="fz-item">
+          <div class="l1"><span>线下收款 · 代客单<span class="fz-tag">线下微信</span></span><span class="amt">+699.00</span></div>
+          <div class="l2"><span>#SK202611180087 · 王女士</span><span>昨天 18:40</span></div>
+        </div>
+        <div class="fz-item">
+          <div class="l1"><span>退款 · 原路退回<span class="fz-tag red">减收入</span></span><span class="amt neg">−158.00</span></div>
+          <div class="l2"><span>#SK202611160035 · 微信原路</span><span>昨天 15:02</span></div>
+        </div>
+        <div class="fz-item">
+          <div class="l1"><span>支付手续费 · 退款冲回</span><span class="amt">+0.95</span></div>
+          <div class="l2"><span>随退款自动记</span><span>昨天 15:02</span></div>
+        </div>
+        <div class="fz-item">
+          <div class="l1"><span>房租 · 11 月</span><span class="amt">−6,000.00</span></div>
+          <div class="l2"><span>固定费用 · 我垫的</span><span>11-17</span></div>
+        </div>
+        <div class="fz-item">
+          <div class="l1"><span>快递 · 顺丰</span><span class="amt">−86.00</span></div>
+          <div class="l2"><span>#SK202611170012 · 实际运费</span><span>11-17</span></div>
+        </div>
+        <div class="fz-item">
+          <div class="l1"><span>设备工具<span class="fz-tag">手工记</span></span><span class="amt">−1,280.00</span></div>
+          <div class="l2"><span>真空封口机 · 公司账户</span><span>11-16</span></div>
+        </div>
+      </div>
+      <div class="fz-footnote" style="padding-top:14px;">每一条点进去都能看到来源单据</div>
+    </div>
+  </div>
+
+  <!-- 3. 记一笔 -->
+  <div class="fz-phone">
+    <div class="fz-nav">记一笔</div>
+    <div class="fz-body">
+      <div class="fz-split">
+        <div class="on">支出</div>
+        <div>收入</div>
+      </div>
+
+      <div class="fz-amount">
+        <span class="cur">¥</span><span class="num">1,280</span>
+      </div>
+      <div class="fz-footnote">点金额可以改，默认今天</div>
+
+      <div class="fz-field">
+        <label>这是什么</label>
+        <div class="fz-chips">
+          <span class="fz-chip on">设备工具</span>
+          <span class="fz-chip">税费</span>
+          <span class="fz-chip">社保</span>
+          <span class="fz-chip">其他</span>
+        </div>
+      </div>
+
+      <div class="fz-field">
+        <label>谁付的钱</label>
+        <div class="fz-split">
+          <div class="on">我个人垫的</div>
+          <div>公司账户</div>
+        </div>
+      </div>
+
+      <div class="fz-field">
+        <label>说明</label>
+        <div class="fz-input">真空封口机</div>
+      </div>
+
+      <div class="fz-field">
+        <label>凭证（可以不传）</label>
+        <div class="fz-upload">
+          <div class="fz-slot">+ 拍照</div>
+          <div class="fz-slot">票据</div>
+        </div>
+      </div>
+
+      <div class="fz-actions">
+        <div class="fz-btn primary">保存</div>
+      </div>
+      <div class="fz-footnote" style="padding-top:10px;">15 秒记完一笔，不用填会计科目</div>
+    </div>
+  </div>
+
+  <!-- 4. 固定费用 -->
+  <div class="fz-phone">
+    <div class="fz-nav">固定费用</div>
+    <div class="fz-body">
+      <div class="fz-card" style="margin-top:0">
+        <h4>11 月 · 3 笔已付，1 笔待付</h4>
+        <div class="fz-row"><span class="k">房租<em>5 号</em></span><span class="v">6,000.00<span class="fz-badge done" style="margin-left:8px">已付</span></span></div>
+        <div class="fz-row"><span class="k">搭档工资<em>10 号</em></span><span class="v">3,000.00<span class="fz-badge done" style="margin-left:8px">已付</span></span></div>
+        <div class="fz-row"><span class="k">社保<em>15 号</em></span><span class="v">600.00<span class="fz-badge done" style="margin-left:8px">已付</span></span></div>
+        <div class="fz-row">
+          <span class="k">宽带<em>20 号</em></span>
+          <span class="v">100.00<span class="fz-badge wait" style="margin-left:8px">待付</span></span>
+        </div>
+      </div>
+
+      <div class="fz-actions" style="margin-top:10px;">
+        <div class="fz-btn primary">宽带 100 元 · 标记已付</div>
+      </div>
+
+      <div class="fz-sec">
+        <h4>我设的固定项目</h4>
+        <div class="fz-card" style="margin-top:0; padding:4px 16px;">
+          <div class="fz-item">
+            <div class="l1"><span>房租</span><span class="amt">6,000 / 月</span></div>
+            <div class="l2"><span>每月 5 号 · 我个人垫付</span><span style="color:#1E3A2F">启用 ›</span></div>
+          </div>
+          <div class="fz-item">
+            <div class="l1"><span>搭档工资</span><span class="amt">3,000 / 月</span></div>
+            <div class="l2"><span>每月 10 号 · 我个人垫付</span><span style="color:#1E3A2F">启用 ›</span></div>
+          </div>
+          <div class="fz-item">
+            <div class="l1"><span>社保</span><span class="amt">600 / 月</span></div>
+            <div class="l2"><span>每月 15 号 · 我个人垫付</span><span style="color:#1E3A2F">启用 ›</span></div>
+          </div>
+          <div class="fz-item">
+            <div class="l1"><span>宽带</span><span class="amt">100 / 月</span></div>
+            <div class="l2"><span>每月 20 号 · 公司账户</span><span style="color:#1E3A2F">启用 ›</span></div>
+          </div>
+          <div class="fz-item">
+            <div class="l1"><span>服务器 / 域名</span><span class="amt">1,200 / 年</span></div>
+            <div class="l2"><span>每年 3 月 · 按月摊 100</span><span style="color:#1E3A2F">启用 ›</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fz-actions">
+        <div class="fz-btn ghost">+ 新建固定费用</div>
+      </div>
+      <div class="fz-footnote" style="padding-top:10px;">金额、日期、停用都由你改，改了只影响以后</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:26px">
+  <h3>另外加的两个小入口</h3>
+  <div class="fz-wrap" style="justify-content:flex-start">
+    <div class="fz-phone" style="width:375px">
+      <div class="fz-nav">订单详情（订单中心里）</div>
+      <div class="fz-body">
+        <div class="fz-card" style="margin-top:0">
+          <div class="fz-row"><span class="k">订单号</span><span class="v" style="font-weight:500">#SK202611180087</span></div>
+          <div class="fz-row"><span class="k">金额</span><span class="v">¥699.00</span></div>
+          <div class="fz-row"><span class="k">收款方式</span><span class="v" style="font-weight:500">线下微信（已收款）</span></div>
+          <div class="fz-row"><span class="k">已登记退款</span><span class="v muted">¥0.00</span></div>
+        </div>
+        <div class="fz-actions">
+          <div class="fz-btn ghost">登记线下退款</div>
+        </div>
+        <div class="fz-footnote" style="padding-top:10px;">只能对线下收款、已付款的订单登记；累计不能超过实收</div>
+      </div>
+    </div>
+
+    <div class="fz-phone" style="width:375px">
+      <div class="fz-nav">月报</div>
+      <div class="fz-body">
+        <div class="fz-month"><b>2026 年 11 月 ▾</b><span>完整月份 · 和上月比</span></div>
+        <div class="fz-hero">
+          <div class="lbl">11 月结余</div>
+          <div class="big"><small>¥</small>9,300</div>
+          <div class="cap">10 月没有数据（从 11 月起账）</div>
+          <div class="split">
+            <div>收入<b>¥38,400</b></div>
+            <div>支出<b>¥29,100</b></div>
+          </div>
+        </div>
+        <div class="fz-card">
+          <h4>收入来源</h4>
+          <div class="fz-row"><span class="k">线上订单</span><span class="v">35,900</span></div>
+          <div class="fz-row"><span class="k">线下收款</span><span class="v">2,900</span></div>
+          <div class="fz-row"><span class="k">退款</span><span class="v">−400</span></div>
+        </div>
+        <div class="fz-link">展开支出明细 ›</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>想请你看这三点</h3>
+  <div class="options">
+    <div class="option" data-choice="a" onclick="toggleSelect(this)">
+      <div class="letter">1</div>
+      <div class="content"><h3>首页那个大数字</h3><p>「这个月到现在，你赚了 ¥9,300」——这是不是你想第一眼看到的？还是你更想先看到「收入」和「支出」两个数？</p></div>
+    </div>
+    <div class="option" data-choice="b" onclick="toggleSelect(this)">
+      <div class="letter">2</div>
+      <div class="content"><h3>首页还缺什么</h3><p>「欠款」那块已经按你说的拿掉了。现在首页只剩：赚了多少、收入和支出、待确认提醒、钱花在哪、两个按钮。会不会还想放点别的？</p></div>
+    </div>
+    <div class="option" data-choice="c" onclick="toggleSelect(this)">
+      <div class="letter">3</div>
+      <div class="content"><h3>记一笔的字段够不够</h3><p>金额、类别、谁付的、说明、拍照。会不会还缺你想要的东西（比如「这笔是给哪个订单的」）？</p></div>
+    </div>
+  </div>
+</div>

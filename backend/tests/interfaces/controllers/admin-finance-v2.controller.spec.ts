@@ -8,6 +8,7 @@ import { AuthGuard } from 'src/interfaces/auth';
 import { AdminGuard } from 'src/interfaces/guards/role.guard';
 import { ApiResponseDto } from 'src/interfaces/dto/common/response.dto';
 import { AdminFinanceV2Controller } from 'src/interfaces/controllers/admin-finance-v2.controller';
+import { TimezoneUtil } from 'src/utils/timezone.util';
 
 /** 造一个最小的 ExecutionContext：只带 `request.user`，够 AdminGuard 判断 */
 const ctx = (role?: string) =>
@@ -75,6 +76,8 @@ describe('AdminFinanceV2Controller', () => {
       summaryService as any,
       {} as any,
       {} as any,
+      {} as any,
+      {} as any,
     );
 
     const result = await controller.getDashboard({ month: '2026-11' });
@@ -112,6 +115,8 @@ describe('AdminFinanceV2Controller', () => {
     const controller = new AdminFinanceV2Controller(
       {} as any,
       entriesService as any,
+      {} as any,
+      {} as any,
       {} as any,
     );
 
@@ -179,6 +184,8 @@ describe('AdminFinanceV2Controller', () => {
       {} as any,
       {} as any,
       manualEntryService as any,
+      {} as any,
+      {} as any,
     );
     const body = {
       direction: 'EXPENSE' as const,
@@ -204,6 +211,8 @@ describe('AdminFinanceV2Controller', () => {
       {} as any,
       {} as any,
       manualEntryService as any,
+      {} as any,
+      {} as any,
     );
 
     await controller.updateManualEntry('u1', 'm1', { amount: 20 });
@@ -213,5 +222,88 @@ describe('AdminFinanceV2Controller', () => {
       amount: 20,
     });
     expect(manualEntryService.void).toHaveBeenCalledWith('u1', 'm1', '录错');
+  });
+});
+
+describe('AdminFinanceV2Controller 固定费用接口', () => {
+  const makeController = (services: Record<string, any> = {}) =>
+    new AdminFinanceV2Controller(
+      services.summary ?? ({} as any),
+      services.entries ?? ({} as any),
+      services.manual ?? ({} as any),
+      services.templates ?? ({} as any),
+      services.bills ?? ({} as any),
+    );
+
+  it('七个路由分别挂在 templates / bills 下', () => {
+    const expected: Array<[keyof AdminFinanceV2Controller, string, number]> = [
+      ['listTemplates', 'templates', RequestMethod.GET],
+      ['createTemplate', 'templates', RequestMethod.POST],
+      ['updateTemplate', 'templates/:id', RequestMethod.PATCH],
+      ['deactivateTemplate', 'templates/:id/deactivate', RequestMethod.POST],
+      ['listBills', 'bills', RequestMethod.GET],
+      ['generateBills', 'bills/generate', RequestMethod.POST],
+      ['payBill', 'bills/:id/pay', RequestMethod.POST],
+    ];
+
+    for (const [handler, path, method] of expected) {
+      expect(
+        Reflect.getMetadata(
+          PATH_METADATA,
+          AdminFinanceV2Controller.prototype[handler],
+        ),
+      ).toBe(path);
+      expect(
+        Reflect.getMetadata(
+          METHOD_METADATA,
+          AdminFinanceV2Controller.prototype[handler],
+        ),
+      ).toBe(method);
+    }
+  });
+
+  it('模板列表含停用项，新建把当前用户与请求体交给模板服务', async () => {
+    const templates = {
+      listTemplates: jest.fn().mockResolvedValue([]),
+      create: jest.fn().mockResolvedValue({ id: 't1' }),
+    };
+    const controller = makeController({ templates });
+
+    await controller.listTemplates();
+    expect(templates.listTemplates).toHaveBeenCalledWith({
+      includeInactive: true,
+    });
+
+    const body = {
+      name: '房租',
+      titleTemplate: '{{month}}月房租',
+      category: 'RENT' as const,
+      payeeName: '房东',
+      defaultAmount: 6000,
+      interval: 'MONTHLY' as const,
+    };
+    const result = await controller.createTemplate('u1', body);
+    expect(templates.create).toHaveBeenCalledWith('u1', body);
+    expect(result.data).toEqual({ id: 't1' });
+  });
+
+  it('补生成缺省本月，付款把账单 id 与实付信息交给账单服务', async () => {
+    const templates = {
+      generateForMonth: jest.fn().mockResolvedValue({ created: 2 }),
+    };
+    const bills = {
+      listForMonth: jest.fn().mockResolvedValue([]),
+      pay: jest.fn().mockResolvedValue({ id: 'b1', status: 'PAID' }),
+    };
+    const controller = makeController({ templates, bills });
+    const month = TimezoneUtil.shanghaiDateKey(new Date()).slice(0, 7);
+
+    await controller.generateBills('u1', {});
+    expect(templates.generateForMonth).toHaveBeenCalledWith(month, 'u1');
+    await controller.listBills();
+    expect(bills.listForMonth).toHaveBeenCalledWith(month);
+
+    await controller.payBill('u1', 'b1', { paidAmount: 6000 });
+    expect(bills.pay).toHaveBeenCalledWith('u1', 'b1', { paidAmount: 6000 });
   });
 });

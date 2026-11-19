@@ -51,9 +51,7 @@ export function resolvePeriod(
   const requestedTo = to ? endOfShanghaiDay(parseDayKey(to)) : nowEnd;
 
   if (requestedTo.getTime() < startFloor.getTime()) {
-    throw new BadRequestException(
-      `起账日（${FINANCE_START_DATE}）之前不统计`,
-    );
+    throw new BadRequestException(`起账日（${FINANCE_START_DATE}）之前不统计`);
   }
   if (requestedFrom.getTime() > requestedTo.getTime()) {
     throw new BadRequestException('开始日期不能晚于结束日期');
@@ -97,5 +95,43 @@ export function monthRange(month: string): FinancePeriod {
   return {
     from: from.getTime() < startFloor.getTime() ? startFloor : from,
     to,
+  };
+}
+
+/**
+ * 某个月的 date-only 区间（UTC 零点）。
+ *
+ * 给 `@db.Date` 字段用：`expense_bill.recognition_start` 存的是 UTC 零点，
+ * 用上海时区的 `monthRange` 去卡边界会把上个月最后一天的旧数据也带进来。
+ * 返回 `[start, endExclusive)`，正好避开月末最后一天 23:59 的边界歧义。
+ */
+export type MonthDateOnlyRange = {
+  monthKey: string;
+  year: number;
+  month: number;
+  /** 该月天数 */
+  daysInMonth: number;
+  /** 该月 1 日 00:00（UTC 零点） */
+  start: Date;
+  /** 下月 1 日 00:00（UTC 零点，开区间上界） */
+  endExclusive: Date;
+};
+
+export function monthDateOnlyRange(month: string): MonthDateOnlyRange {
+  const match = /^(\d{4})-(\d{2})$/.exec((month || '').trim());
+  if (!match) throw new BadRequestException('月份必须是 YYYY-MM');
+  const year = Number(match[1]);
+  const monthNumber = Number(match[2]);
+  if (monthNumber < 1 || monthNumber > 12) {
+    throw new BadRequestException('月份不合法');
+  }
+
+  return {
+    monthKey: `${match[1]}-${match[2]}`,
+    year,
+    month: monthNumber,
+    daysInMonth: new Date(Date.UTC(year, monthNumber, 0)).getUTCDate(),
+    start: new Date(Date.UTC(year, monthNumber - 1, 1)),
+    endExclusive: new Date(Date.UTC(year, monthNumber, 1)),
   };
 }

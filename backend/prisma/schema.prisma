@@ -2762,6 +2762,9 @@ model ExpenseTemplate {
   dayOfMonth          Int?                    @map("day_of_month")
   monthOfYear         Int?                    @map("month_of_year")
   servicePeriodMonths Int                     @default(1) @map("service_period_months")
+  /// 生成账单时的默认付款方：PERSONAL 个人垫付 / COMPANY 公司账户
+  payerType           String                  @default("PERSONAL") @map("payer_type") @db.VarChar(10)
+  payerUserId         String?                 @map("payer_user_id") @db.VarChar(36)
   isActive            Boolean                 @default(true) @map("is_active")
   note                String?                 @map("note")
   createdById         String                  @map("created_by_id") @db.VarChar(36)

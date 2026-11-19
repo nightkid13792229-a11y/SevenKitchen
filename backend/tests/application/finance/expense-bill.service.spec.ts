@@ -1,156 +1,494 @@
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ExpenseBillService } from '../../../src/application/finance/expense-bill.service';
 import { ExpenseTemplateService } from '../../../src/application/finance/expense-template.service';
+import { TimezoneUtil } from '../../../src/utils/timezone.util';
 
-describe('ExpenseBillService', () => {
-  const prisma = {
+/**
+ * 固定费用（设计文档 §4.7 / §5.4 / §6.4）。
+ *
+ * 两条铁律：
+ * 1. `recognitionStart/End` 是 `@db.Date`，一律 UTC 零点——写上海零点会落成前一天；
+ * 2. 同一模板 + 同一费属起始月只生成一张，定时任务重跑、手动补生成都不能重复。
+ */
+
+/** `@db.Date` 落库形状：UTC 零点 */
+const utcDateOnly = (dateKey: string): Date =>
+  new Date(`${dateKey}T00:00:00.000Z`);
+
+/** 一条启用中的模板（只覆盖用例关心的字段） */
+const makeTemplate = (overrides: Record<string, unknown> = {}) => ({
+  id: 't1',
+  name: '房租',
+  titleTemplate: '{{year}}年{{month}}月房租',
+  category: 'RENT',
+  payeeName: '房东',
+  defaultAmount: 6000,
+  interval: 'MONTHLY',
+  dayOfMonth: 5,
+  monthOfYear: null,
+  servicePeriodMonths: 1,
+  payerType: 'PERSONAL',
+  payerUserId: 'u1',
+  isActive: true,
+  note: null,
+  ...overrides,
+});
+
+const makeTemplatePrisma = (
+  templates: any[] = [],
+  existingTemplateIds: string[] = [],
+) => {
+  const prisma: any = {
+    expenseTemplate: {
+      findMany: jest.fn().mockResolvedValue(templates),
+      findUnique: jest.fn().mockResolvedValue(null),
+      create: jest
+        .fn()
+        .mockImplementation(({ data }) => ({ id: 't-new', ...data })),
+      update: jest
+        .fn()
+        .mockImplementation(({ data }) => ({ id: 't1', ...data })),
+    },
     expenseBill: {
-      create: jest.fn(),
+      findMany: jest
+        .fn()
+        .mockResolvedValue(
+          existingTemplateIds.map((templateId) => ({ templateId })),
+        ),
+      createMany: jest
+        .fn()
+        .mockImplementation(({ data }) =>
+          Promise.resolve({ count: data.length }),
+        ),
+    },
+  };
+  return prisma;
+};
+
+const makeBillPrisma = () => {
+  const prisma: any = {
+    expenseBill: {
       findUnique: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+      update: jest
+        .fn()
+        .mockImplementation(({ data }) => ({ id: 'b1', ...data })),
+      create: jest.fn(),
       findUniqueOrThrow: jest.fn(),
-      findFirst: jest.fn(),
-      update: jest.fn(),
-      findMany: jest.fn(),
     },
     expenseBillPayment: {
-      create: jest.fn(),
+      create: jest.fn().mockResolvedValue({ id: 'payment-1' }),
       aggregate: jest.fn(),
     },
-    expenseTemplate: {
-      findMany: jest.fn(),
-    },
-  } as any;
+  };
+  return prisma;
+};
 
-  let service: ExpenseBillService;
+const makeBill = (overrides: Record<string, unknown> = {}) => ({
+  id: 'b1',
+  billNumber: 'FB20261101001',
+  title: '2026年11月房租',
+  category: 'RENT',
+  status: 'PENDING_PAYMENT',
+  payeeName: '房东',
+  amount: 6000,
+  recognitionStart: utcDateOnly('2026-11-01'),
+  recognitionEnd: utcDateOnly('2026-11-30'),
+  dueAt: utcDateOnly('2026-11-05'),
+  templateId: 't1',
+  payerType: 'PERSONAL',
+  payerUserId: 'u1',
+  ...overrides,
+});
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    service = new ExpenseBillService(prisma);
+describe('ExpenseTemplateService.generateForMonth', () => {
+  it('按月模板生成整月账单：UTC 零点、模板金额、标题替换', async () => {
+    const prisma = makeTemplatePrisma([makeTemplate()]);
+    const service = new ExpenseTemplateService(prisma);
+
+    const result = await service.generateForMonth('2026-11');
+
+    expect(result).toEqual({ created: 1 });
+    expect(prisma.expenseBill.createMany).toHaveBeenCalledTimes(1);
+    const rows = prisma.expenseBill.createMany.mock.calls[0][0].data;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      templateId: 't1',
+      title: '2026年11月房租',
+      category: 'RENT',
+      status: 'PENDING_PAYMENT',
+      amount: 6000,
+      payerType: 'PERSONAL',
+      payerUserId: 'u1',
+      createdById: 'system',
+    });
+    expect(rows[0].billNumber).toMatch(/^FB\d{8}/);
+    expect(rows[0].recognitionStart.toISOString()).toBe(
+      '2026-11-01T00:00:00.000Z',
+    );
+    expect(rows[0].recognitionEnd.toISOString()).toBe(
+      '2026-11-30T00:00:00.000Z',
+    );
+    expect(rows[0].dueAt.toISOString()).toBe('2026-11-05T00:00:00.000Z');
   });
 
-  it('creates a company-payable expense bill with recognition window and due date', async () => {
-    prisma.expenseBill.create.mockResolvedValue({
-      id: 'bill-1',
-      billNumber: 'FB20260403001',
-      status: 'PENDING_PAYMENT',
-      title: '2026年4月房租',
-      category: 'RENT',
-      amount: 5000,
-      recognitionStart: new Date('2026-04-01T00:00:00.000Z'),
-      recognitionEnd: new Date('2026-04-30T23:59:59.999Z'),
-      dueAt: new Date('2026-04-05T12:00:00.000Z'),
-    });
+  it('同模板同费属起始月已有账单时跳过，保证幂等', async () => {
+    const prisma = makeTemplatePrisma([makeTemplate()], ['t1']);
+    const service = new ExpenseTemplateService(prisma);
 
-    await expect(
-      service.createBill('admin-1', {
-        title: '2026年4月房租',
-        category: 'RENT',
-        amount: 5000,
-        payeeName: '房东',
-        recognitionStart: '2026-04-01',
-        recognitionEnd: '2026-04-30',
-        dueAt: '2026-04-05T12:00:00.000Z',
+    const result = await service.generateForMonth('2026-11');
+
+    expect(result).toEqual({ created: 0 });
+    expect(prisma.expenseBill.createMany).not.toHaveBeenCalled();
+    // 只查本月（11-01 起、12-01 之前），其他月份的历史账单不影响
+    expect(prisma.expenseBill.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          recognitionStart: {
+            gte: utcDateOnly('2026-11-01'),
+            lt: utcDateOnly('2026-12-01'),
+          },
+        }),
       }),
-    ).resolves.toMatchObject({
-      status: 'PENDING_PAYMENT',
-      category: 'RENT',
-    });
+    );
   });
 
-  it('marks a bill PARTIALLY_PAID and then PAID as payments accumulate', async () => {
-    prisma.expenseBill.findUnique.mockResolvedValue({
-      id: 'bill-1',
-      amount: 5000,
-      status: 'PENDING_PAYMENT',
-      paymentProofUrls: [],
-    });
-    prisma.expenseBill.findUniqueOrThrow.mockResolvedValue({
-      id: 'bill-1',
-      amount: 5000,
-      status: 'PENDING_PAYMENT',
-    });
-    prisma.expenseBillPayment.aggregate
-      .mockResolvedValueOnce({ _sum: { paidAmount: 2000 } })
-      .mockResolvedValueOnce({ _sum: { paidAmount: 5000 } });
-    prisma.expenseBillPayment.create.mockResolvedValue({ id: 'payment-1' });
-    prisma.expenseBill.update
-      .mockResolvedValueOnce({ id: 'bill-1', status: 'PARTIALLY_PAID' })
-      .mockResolvedValueOnce({ id: 'bill-1', status: 'PAID' });
-
-    await service.recordPayment('bill-1', 'admin-1', {
-      paidAmount: 2000,
-      paidAt: '2026-04-05T12:00:00.000Z',
-      paymentMethod: 'BANK_TRANSFER',
-      paymentProofUrls: ['https://cos.example.com/rent-proof-1.jpg'],
+  it('季度模板只在 1/4/7/10 月生成', async () => {
+    const quarterly = makeTemplate({
+      id: 'q1',
+      interval: 'QUARTERLY',
+      titleTemplate: '{{month}}月税费',
+      servicePeriodMonths: 3,
     });
 
+    const november = makeTemplatePrisma([quarterly]);
     await expect(
-      service.recordPayment('bill-1', 'admin-1', {
-        paidAmount: 3000,
-        paidAt: '2026-04-08T12:00:00.000Z',
-        paymentMethod: 'BANK_TRANSFER',
-        paymentProofUrls: ['https://cos.example.com/rent-proof-2.jpg'],
-      }),
-    ).resolves.toMatchObject({ status: 'PAID' });
+      new ExpenseTemplateService(november).generateForMonth('2026-11'),
+    ).resolves.toEqual({ created: 0 });
+    expect(november.expenseBill.createMany).not.toHaveBeenCalled();
+
+    const october = makeTemplatePrisma([quarterly]);
+    await expect(
+      new ExpenseTemplateService(october).generateForMonth('2026-10'),
+    ).resolves.toEqual({ created: 1 });
+    expect(october.expenseBill.createMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('年付模板只在 monthOfYear 指定月生成', async () => {
+    const yearly = makeTemplate({
+      id: 'y1',
+      interval: 'YEARLY',
+      titleTemplate: '{{year}}年域名续费',
+      monthOfYear: 4,
+      servicePeriodMonths: 12,
+    });
+
+    const november = makeTemplatePrisma([yearly]);
+    await expect(
+      new ExpenseTemplateService(november).generateForMonth('2026-11'),
+    ).resolves.toEqual({ created: 0 });
+    expect(november.expenseBill.createMany).not.toHaveBeenCalled();
+
+    const april = makeTemplatePrisma([yearly]);
+    await expect(
+      new ExpenseTemplateService(april).generateForMonth('2026-04'),
+    ).resolves.toEqual({ created: 1 });
+    const row = april.expenseBill.createMany.mock.calls[0][0].data[0];
+    expect(row.title).toBe('2026年域名续费');
+    expect(row.recognitionStart.toISOString()).toBe('2026-04-01T00:00:00.000Z');
+    expect(row.recognitionEnd.toISOString()).toBe('2027-03-31T00:00:00.000Z');
+  });
+
+  it('recognitionEnd 按 servicePeriodMonths 顺延（跨年）', async () => {
+    const prisma = makeTemplatePrisma([
+      makeTemplate({ servicePeriodMonths: 12 }),
+    ]);
+
+    await new ExpenseTemplateService(prisma).generateForMonth('2026-11');
+
+    const row = prisma.expenseBill.createMany.mock.calls[0][0].data[0];
+    expect(row.recognitionStart.toISOString()).toBe('2026-11-01T00:00:00.000Z');
+    expect(row.recognitionEnd.toISOString()).toBe('2027-10-31T00:00:00.000Z');
+  });
+
+  it('只有符合周期的模板会被补生成', async () => {
+    const prisma = makeTemplatePrisma([
+      makeTemplate({ id: 'm1' }),
+      makeTemplate({ id: 'q1', interval: 'QUARTERLY' }),
+    ]);
+
+    await new ExpenseTemplateService(prisma).generateForMonth('2026-11');
+
+    const rows = prisma.expenseBill.createMany.mock.calls[0][0].data;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].templateId).toBe('m1');
+  });
+
+  it('没有启用模板或入参月份不合法时不写库', async () => {
+    const empty = makeTemplatePrisma([]);
+    await expect(
+      new ExpenseTemplateService(empty).generateForMonth('2026-11'),
+    ).resolves.toEqual({ created: 0 });
+    expect(empty.expenseBill.createMany).not.toHaveBeenCalled();
+
+    const prisma = makeTemplatePrisma([makeTemplate()]);
+    await expect(
+      new ExpenseTemplateService(prisma).generateForMonth('2026-13'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      new ExpenseTemplateService(prisma).generateForMonth('2026/11'),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });
 
-describe('ExpenseTemplateService recurring drafts', () => {
-  const prisma = {
-    expenseBill: {
-      create: jest.fn(),
-      findFirst: jest.fn(),
-    },
-    expenseTemplate: {
-      findMany: jest.fn(),
-    },
-  } as any;
+describe('ExpenseTemplateService.create / update / deactivate', () => {
+  it('create 接受季度与付款方，并补默认服务期 1 个月', async () => {
+    const prisma = makeTemplatePrisma([]);
+    const service = new ExpenseTemplateService(prisma);
 
-  let templateService: ExpenseTemplateService;
+    await service.create('u1', {
+      name: '物业费',
+      titleTemplate: '{{month}}月物业费',
+      category: 'ADMINISTRATIVE',
+      payeeName: '物业',
+      defaultAmount: 300,
+      interval: 'QUARTERLY',
+      dayOfMonth: 10,
+      payerType: 'COMPANY',
+    });
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    templateService = new ExpenseTemplateService(prisma);
+    expect(prisma.expenseTemplate.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        createdById: 'u1',
+        interval: 'QUARTERLY',
+        payerType: 'COMPANY',
+        servicePeriodMonths: 1,
+        dayOfMonth: 10,
+      }),
+    });
   });
 
-  it('creates due monthly and yearly expense drafts exactly once', async () => {
-    prisma.expenseTemplate.findMany.mockResolvedValue([
-      {
-        id: 'tpl-rent',
-        name: '房租',
-        titleTemplate: '{{year}}年{{month}}月房租',
-        category: 'RENT',
-        payeeName: '房东',
-        defaultAmount: 5000,
-        interval: 'MONTHLY',
-        dayOfMonth: 1,
-        monthOfYear: null,
-        servicePeriodMonths: 1,
-        isActive: true,
-      },
-      {
-        id: 'tpl-domain',
-        name: '域名续费',
-        titleTemplate: '{{year}}年域名续费',
-        category: 'TECHNICAL_SERVICES',
-        payeeName: '阿里云',
-        defaultAmount: 180,
-        interval: 'YEARLY',
-        dayOfMonth: 3,
-        monthOfYear: 4,
-        servicePeriodMonths: 12,
-        isActive: true,
-      },
-    ]);
-    prisma.expenseBill.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null);
-    prisma.expenseBill.create.mockResolvedValue({ id: 'bill-created' });
+  it('create 拒绝不支持的周期、非法金额和缺 monthOfYear 的年付', async () => {
+    const prisma = makeTemplatePrisma([]);
+    const service = new ExpenseTemplateService(prisma);
+    const base = {
+      name: '房租',
+      titleTemplate: '{{month}}月房租',
+      category: 'RENT' as const,
+      payeeName: '房东',
+      defaultAmount: 6000,
+      interval: 'MONTHLY' as const,
+      dayOfMonth: 5,
+    };
 
     await expect(
-      templateService.generateDueBills(
-        new Date('2026-04-03T02:00:00.000Z'),
-        'system',
-      ),
-    ).resolves.toHaveLength(2);
+      service.create('u1', { ...base, interval: 'WEEKLY' as any }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.create('u1', { ...base, defaultAmount: 0 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.create('u1', { ...base, interval: 'YEARLY' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.expenseTemplate.create).not.toHaveBeenCalled();
+  });
+
+  it('update 合并原值后校验；停用只改 isActive，不动历史账单', async () => {
+    const prisma = makeTemplatePrisma([]);
+    prisma.expenseTemplate.findUnique.mockResolvedValue(makeTemplate());
+    const service = new ExpenseTemplateService(prisma);
+
+    await service.update('u1', 't1', { defaultAmount: 6500 });
+    expect(prisma.expenseTemplate.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 't1' },
+        data: expect.objectContaining({
+          defaultAmount: 6500,
+          interval: 'MONTHLY',
+        }),
+      }),
+    );
+    expect(prisma.expenseBill.createMany).not.toHaveBeenCalled();
+
+    await service.deactivate('u1', 't1');
+    expect(prisma.expenseTemplate.update).toHaveBeenLastCalledWith({
+      where: { id: 't1' },
+      data: { isActive: false },
+    });
+  });
+
+  it('update / deactivate 找不到模板时报 404', async () => {
+    const prisma = makeTemplatePrisma([]);
+    prisma.expenseTemplate.findUnique.mockResolvedValue(null);
+    const service = new ExpenseTemplateService(prisma);
+
+    await expect(service.update('u1', 'nope', {})).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(service.deactivate('u1', 'nope')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+});
+
+describe('ExpenseBillService.listForMonth', () => {
+  it('只取 recognitionStart 落在该月的应计账单（排除草稿/已取消）', async () => {
+    const prisma = makeBillPrisma();
+    prisma.expenseBill.findMany.mockResolvedValue([makeBill()]);
+    const service = new ExpenseBillService(prisma);
+
+    const result = await service.listForMonth('2026-11');
+
+    expect(result).toHaveLength(1);
+    expect(prisma.expenseBill.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          recognitionStart: {
+            gte: utcDateOnly('2026-11-01'),
+            lt: utcDateOnly('2026-12-01'),
+          },
+          status: { notIn: ['DRAFT', 'CANCELLED'] },
+        },
+        include: expect.objectContaining({ payments: expect.anything() }),
+      }),
+    );
+  });
+
+  it('月份格式非法时报 400', async () => {
+    const service = new ExpenseBillService(makeBillPrisma());
+    await expect(service.listForMonth('2026-11-01')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+});
+
+describe('ExpenseBillService.pay', () => {
+  it('部分付：写付款记录（UTC 零点）并置为 PARTIALLY_PAID', async () => {
+    const prisma = makeBillPrisma();
+    prisma.expenseBill.findUnique.mockResolvedValue(makeBill());
+    prisma.expenseBillPayment.aggregate.mockResolvedValue({
+      _sum: { paidAmount: 2000 },
+    });
+    const service = new ExpenseBillService(prisma);
+
+    const result = await service.pay('u1', 'b1', {
+      paidAmount: 2000,
+      paidAt: '2026-11-05',
+    });
+
+    expect(prisma.expenseBillPayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        billId: 'b1',
+        paidAmount: 2000,
+        paidById: 'u1',
+        paidAt: utcDateOnly('2026-11-05'),
+        payerType: 'PERSONAL',
+      }),
+    });
+    expect(prisma.expenseBill.update).toHaveBeenCalledWith({
+      where: { id: 'b1' },
+      data: { status: 'PARTIALLY_PAID' },
+    });
+    expect(result).toMatchObject({ status: 'PARTIALLY_PAID' });
+  });
+
+  it('付满：累计实付达到账单金额后置为 PAID', async () => {
+    const prisma = makeBillPrisma();
+    prisma.expenseBill.findUnique.mockResolvedValue(makeBill());
+    prisma.expenseBillPayment.aggregate.mockResolvedValue({
+      _sum: { paidAmount: 6000 },
+    });
+    const service = new ExpenseBillService(prisma);
+
+    await service.pay('u1', 'b1', {
+      paidAmount: 6000,
+      paidAt: '2026-11-05',
+      payerType: 'COMPANY',
+    });
+
+    expect(prisma.expenseBillPayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ payerType: 'COMPANY' }),
+    });
+    expect(prisma.expenseBill.update).toHaveBeenCalledWith({
+      where: { id: 'b1' },
+      data: { status: 'PAID' },
+    });
+  });
+
+  it('paidAmount 缺省用账单金额，paidAt 缺省用今天（UTC 零点）', async () => {
+    const prisma = makeBillPrisma();
+    prisma.expenseBill.findUnique.mockResolvedValue(makeBill());
+    prisma.expenseBillPayment.aggregate.mockResolvedValue({
+      _sum: { paidAmount: 6000 },
+    });
+    const service = new ExpenseBillService(prisma);
+
+    await service.pay('u1', 'b1', {});
+
+    const expectedPaidAt = TimezoneUtil.toShanghaiDateOnly(new Date());
+    expect(prisma.expenseBillPayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        paidAmount: 6000,
+        paidAt: expectedPaidAt,
+      }),
+    });
+  });
+
+  it('重复付款按累计金额判定状态', async () => {
+    const prisma = makeBillPrisma();
+    prisma.expenseBill.findUnique.mockResolvedValue(makeBill());
+    prisma.expenseBillPayment.aggregate
+      .mockResolvedValueOnce({ _sum: { paidAmount: 2000 } })
+      .mockResolvedValueOnce({ _sum: { paidAmount: 6000 } });
+    const service = new ExpenseBillService(prisma);
+
+    await service.pay('u1', 'b1', { paidAmount: 2000, paidAt: '2026-11-05' });
+    await service.pay('u1', 'b1', { paidAmount: 4000, paidAt: '2026-11-06' });
+
+    expect(prisma.expenseBillPayment.create).toHaveBeenCalledTimes(2);
+    expect(prisma.expenseBill.update).toHaveBeenNthCalledWith(1, {
+      where: { id: 'b1' },
+      data: { status: 'PARTIALLY_PAID' },
+    });
+    expect(prisma.expenseBill.update).toHaveBeenNthCalledWith(2, {
+      where: { id: 'b1' },
+      data: { status: 'PAID' },
+    });
+  });
+
+  it('已取消的账单不能付', async () => {
+    const prisma = makeBillPrisma();
+    prisma.expenseBill.findUnique.mockResolvedValue(
+      makeBill({ status: 'CANCELLED' }),
+    );
+    const service = new ExpenseBillService(prisma);
+
+    await expect(
+      service.pay('u1', 'b1', { paidAmount: 100 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.expenseBillPayment.create).not.toHaveBeenCalled();
+    expect(prisma.expenseBill.update).not.toHaveBeenCalled();
+  });
+
+  it('账单不存在时报 404；金额/日期/付款方非法时报 400', async () => {
+    const prisma = makeBillPrisma();
+    prisma.expenseBill.findUnique.mockResolvedValue(null);
+    const service = new ExpenseBillService(prisma);
+
+    await expect(service.pay('u1', 'nope', {})).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+
+    prisma.expenseBill.findUnique.mockResolvedValue(makeBill());
+    await expect(
+      service.pay('u1', 'b1', { paidAmount: 0 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.pay('u1', 'b1', { paidAt: '11-05' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.pay('u1', 'b1', { payerType: 'OTHER' as any }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.expenseBillPayment.create).not.toHaveBeenCalled();
   });
 });

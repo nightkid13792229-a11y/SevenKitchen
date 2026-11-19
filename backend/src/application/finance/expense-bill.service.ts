@@ -1,7 +1,61 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { CreateExpenseBillDto } from '../../interfaces/dto/finance/create-expense-bill.dto';
 import { RecordExpensePaymentDto } from '../../interfaces/dto/finance/record-expense-payment.dto';
+import { ExpensePayerType } from './expense-template.service';
+import { monthDateOnlyRange } from './finance-period';
+import { TimezoneUtil } from '../../utils/timezone.util';
+
+/** 固定费用账单「标记已付」的入参（设计文档 §5.4） */
+export type PayExpenseBillInput = {
+  /** 本次实付金额；缺省 = 账单金额（水电这类实付和模板不一致时可改） */
+  paidAmount?: number;
+  /** 付款日 YYYY-MM-DD；缺省 = 今天（上海日历日） */
+  paidAt?: string;
+  /** 付款方；缺省继承账单上的 payerType */
+  payerType?: ExpensePayerType;
+};
+
+const PAYER_TYPES: readonly ExpensePayerType[] = ['COMPANY', 'PERSONAL'];
+
+/** 金额 > 0 且最多两位小数 */
+function parsePaidAmount(input: unknown): number {
+  if (typeof input !== 'number' || !Number.isFinite(input) || input <= 0) {
+    throw new BadRequestException('实付金额必须大于 0');
+  }
+  const cents = Math.round(input * 100);
+  if (Math.abs(cents - input * 100) > 1e-6) {
+    throw new BadRequestException('实付金额最多两位小数');
+  }
+  return cents / 100;
+}
+
+/**
+ * 付款日：`paid_at` 按 UTC 零点落库（设计文档 §4.7）。
+ * 接受 `YYYY-MM-DD`；带时间的 ISO 串只取 UTC 日期部分，避免时区漂移。
+ */
+function parsePaidAt(input: unknown): Date {
+  const raw = String(input ?? '').trim();
+  const dateKey = /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : '';
+  if (!dateKey) throw new BadRequestException('付款日必须是 YYYY-MM-DD');
+  try {
+    return TimezoneUtil.parseDateOnly(dateKey);
+  } catch {
+    throw new BadRequestException('付款日必须是 YYYY-MM-DD');
+  }
+}
+
+const normalizePayerType = (input: unknown): ExpensePayerType | null => {
+  if (input === undefined || input === null || input === '') return null;
+  if (!PAYER_TYPES.includes(input as ExpensePayerType)) {
+    throw new BadRequestException('付款方必须是 COMPANY 或 PERSONAL');
+  }
+  return input as ExpensePayerType;
+};
 
 const resolveExpenseBillRange = (range: {
   preset?: 'TODAY' | 'THIS_WEEK' | 'THIS_MONTH';
@@ -111,6 +165,89 @@ export class ExpenseBillService {
         },
       },
       orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
+    });
+  }
+
+  /**
+   * 某月应计固定费用账单（设计文档 §4.7）。
+   *
+   * 按「费用所属月」归集：只取 `recognitionStart` 落在该月的账单，
+   * 而不是付款日；跨月账单在支出汇总里按月分摊（见 finance-expense.service）。
+   * 草稿与已取消不计应计，直接排除。
+   */
+  async listForMonth(month: string) {
+    const range = monthDateOnlyRange(month);
+
+    return this.prisma.expenseBill.findMany({
+      where: {
+        recognitionStart: {
+          gte: range.start,
+          lt: range.endExclusive,
+        },
+        status: { notIn: ['DRAFT', 'CANCELLED'] },
+      },
+      include: {
+        payments: {
+          orderBy: { paidAt: 'desc' },
+        },
+      },
+      orderBy: [{ recognitionStart: 'asc' }, { createdAt: 'desc' }],
+    });
+  }
+
+  /**
+   * 标记已付（可改实付金额、可部分付）。
+   *
+   * - 账单必须存在且未取消；
+   * - 写 `ExpenseBillPayment`（含本次付款方），再按累计实付更新状态：
+   *   未付满 → `PARTIALLY_PAID`，付满/超付 → `PAID`；
+   * - `paidAt` 按 UTC 零点落库，缺省今天（上海日历日）。
+   */
+  async pay(userId: string, billId: string, input: PayExpenseBillInput) {
+    const bill = await this.prisma.expenseBill.findUnique({
+      where: { id: billId },
+    });
+    if (!bill) throw new NotFoundException('账单不存在');
+    if (bill.status === 'CANCELLED') {
+      throw new BadRequestException('已取消的账单不能付款');
+    }
+
+    const paidAmount = parsePaidAmount(
+      input.paidAmount === undefined ? Number(bill.amount) : input.paidAmount,
+    );
+    const paidAt =
+      input.paidAt === undefined
+        ? TimezoneUtil.toShanghaiDateOnly(new Date())
+        : parsePaidAt(input.paidAt);
+    const requestedPayerType = normalizePayerType(input.payerType);
+    const payerType =
+      requestedPayerType ??
+      (bill.payerType === 'COMPANY' ? 'COMPANY' : 'PERSONAL');
+
+    await this.prisma.expenseBillPayment.create({
+      data: {
+        billId,
+        paidAmount,
+        paidAt,
+        paidById: userId,
+        paymentMethod: 'OTHER',
+        payerType,
+        paymentProofUrls: [],
+      },
+    });
+
+    const totalPaid = await this.prisma.expenseBillPayment.aggregate({
+      where: { billId },
+      _sum: { paidAmount: true },
+    });
+    const nextStatus =
+      Number(totalPaid._sum.paidAmount ?? 0) >= Number(bill.amount)
+        ? 'PAID'
+        : 'PARTIALLY_PAID';
+
+    return this.prisma.expenseBill.update({
+      where: { id: billId },
+      data: { status: nextStatus },
     });
   }
 }

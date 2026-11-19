@@ -37,7 +37,9 @@ import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
 import { executeTool } from './tools';
 import {
+  forceProposeToolFor,
   phaseSystemLine,
+  readBudgetForPhase,
   toolsForPhase,
   type AgentPhase,
 } from './phase-policy';
@@ -68,6 +70,11 @@ function positiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
 const MAX_TOOL_CALLS = positiveInt(process.env.AGENT_MAX_TOOL_CALLS, 80);
+/** 方案/选材阶段先收口，避免在检索里把预算烧光。 */
+const PLAN_MAX_TOOL_CALLS = 26;
+const SELECT_MAX_TOOL_CALLS = 26;
+/** 方案/选材阶段单次读页的 token 预算上限（默认 20k 太大）。 */
+const EARLY_PHASE_READ_BUDGET = 12000;
 const MAX_NO_PROGRESS_ASSESSMENTS = 3;
 /** 一次运行最长多久。 */
 const MAX_RUN_MS = positiveInt(process.env.AGENT_MAX_RUN_MS, 6 * 60 * 1000);
@@ -344,6 +351,14 @@ export class RecipeAgentService implements OnModuleInit {
      * 第一轮指定 read_design_context，之后恢复 auto。
      */
     let firstModelCall = true;
+    /** 方案/选材阶段在预算快用完时，强制提交方案/选材。 */
+    let forceProposeTool: 'propose_plan' | 'propose_selection' | null = null;
+    const phaseMaxToolCalls =
+      phase === 'PLAN'
+        ? PLAN_MAX_TOOL_CALLS
+        : phase === 'SELECT'
+          ? SELECT_MAX_TOOL_CALLS
+          : MAX_TOOL_CALLS;
     /** 健康档案附件只在本次运行注入一次，避免模型重读时重复计费。 */
     let designContextImagesInjected = false;
 
@@ -362,7 +377,7 @@ export class RecipeAgentService implements OnModuleInit {
         return;
       }
 
-      const callModel = (forceContextRead: boolean) =>
+      const callModel = (forcedTool: string | null) =>
         callDeepSeekTools({
           baseUrl: config.baseUrl,
           model: config.model,
@@ -370,15 +385,18 @@ export class RecipeAgentService implements OnModuleInit {
           requestTimeoutMs: config.requestTimeoutMs,
           messages,
           tools,
-          toolChoice: forceContextRead
-            ? { type: 'function', function: { name: 'read_design_context' } }
+          toolChoice: forcedTool
+            ? { type: 'function', function: { name: forcedTool } }
             : 'auto',
         });
 
       const isFirstModelCall = firstModelCall;
+      const forcedTool = isFirstModelCall
+        ? 'read_design_context'
+        : forceProposeTool;
       let response: DeepSeekToolsResult;
       try {
-        response = await callModel(isFirstModelCall);
+        response = await callModel(forcedTool);
       } catch (error) {
         if (!hasImageContent(messages)) {
           throw error;
@@ -389,25 +407,29 @@ export class RecipeAgentService implements OnModuleInit {
           `模型调用失败，去掉页图后重试一次：${(error as Error)?.message ?? String(error)}`,
         );
         messages = stripImageContent(messages);
-        response = await callModel(isFirstModelCall);
+        response = await callModel(forcedTool);
       }
 
-      if (isFirstModelCall) {
-        const calledContext = (response.toolCalls ?? []).some(
-          (call) => call.function.name === 'read_design_context',
+      if (forcedTool) {
+        const called = (response.toolCalls ?? []).some(
+          (call) => call.function.name === forcedTool,
         );
-        if (!calledContext) {
-          // 强制失败：再给一次机会；仍不读就终止，避免在不知道档案的情况下设计。
-          this.logger.warn('首轮未调用 read_design_context，重试一次');
-          response = await callModel(true);
+        if (!called) {
+          // 强制失败：再给一次机会；仍不调用就终止。
+          this.logger.warn(`未调用强制工具 ${forcedTool}，重试一次`);
+          response = await callModel(forcedTool);
           const retried = (response.toolCalls ?? []).some(
-            (call) => call.function.name === 'read_design_context',
+            (call) => call.function.name === forcedTool,
           );
           if (!retried) {
-            throw new Error('模型未能读取本单设计上下文');
+            throw new Error(`模型未调用 ${forcedTool}`);
           }
         }
-        firstModelCall = false;
+        if (isFirstModelCall) {
+          firstModelCall = false;
+        } else {
+          forceProposeTool = null;
+        }
       }
 
       await this.recordUsage(
@@ -444,8 +466,11 @@ export class RecipeAgentService implements OnModuleInit {
       const turnContextImages: DesignContextImage[] = [];
 
       for (const call of calls) {
-        if (toolCalls >= MAX_TOOL_CALLS) {
-          await this.fail(sessionId, '超过工具调用上限');
+        if (toolCalls >= phaseMaxToolCalls) {
+          await this.fail(
+            sessionId,
+            `超过${phase === 'PLAN' ? '方案' : phase === 'SELECT' ? '选材' : '设计'}阶段工具调用上限（${phaseMaxToolCalls}）`,
+          );
           return;
         }
         // ask 的问题先攒着，等工具结果落库后再写助手消息：
@@ -456,6 +481,7 @@ export class RecipeAgentService implements OnModuleInit {
           catalog,
           this.knowledge,
           call,
+          phase,
           (question, options) => {
             pendingAsk = { question, options };
           },
@@ -569,6 +595,11 @@ export class RecipeAgentService implements OnModuleInit {
           await this.markWaiting(sessionId);
           return;
         }
+
+        const nextForce = forceProposeToolFor(phase, toolCalls);
+        if (nextForce) {
+          forceProposeTool = nextForce;
+        }
       }
 
       // 全部 tool 消息写完后，再追加图片消息。
@@ -597,6 +628,7 @@ export class RecipeAgentService implements OnModuleInit {
     catalog: RecipeCatalogPort,
     knowledge: KnowledgeGatewayService,
     call: DeepSeekToolCall,
+    phase: AgentPhase,
     onAsk: (question: string, options: string[]) => void,
   ): Promise<{
     outcome: ToolOutcome;
@@ -608,6 +640,21 @@ export class RecipeAgentService implements OnModuleInit {
       args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
     } catch {
       args = {};
+    }
+    // 方案/选材阶段一次读页不要吞太多：默认 20k token 容易把预算烧光。
+    if (
+      phase !== 'DESIGN' &&
+      call.function.name === 'kb_read' &&
+      isRecord(args)
+    ) {
+      const requested = Number((args as Record<string, unknown>).budgetTokens);
+      args = {
+        ...(args as Record<string, unknown>),
+        budgetTokens: readBudgetForPhase(
+          phase,
+          Number.isFinite(requested) ? requested : EARLY_PHASE_READ_BUDGET,
+        ),
+      };
     }
     const outcome = await executeTool(call.function.name, args, {
       port,
@@ -789,4 +836,8 @@ function safeParse(text: string): unknown {
   } catch {
     return null;
   }
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

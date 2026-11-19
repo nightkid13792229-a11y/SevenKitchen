@@ -1,5 +1,7 @@
 import {
+  forceProposeToolFor,
   phaseSystemLine,
+  readBudgetForPhase,
   toolsForPhase,
 } from '../../../src/application/recipe-designer/agent/phase-policy';
 
@@ -47,6 +49,19 @@ describe('recipe agent phase policy', () => {
 
   it('CATALOG keeps the taxonomy tool', () => {
     expect(names('PLAN', 'CATALOG')).toContain('read_taxonomy');
+  });
+
+  it('forces propose after the research threshold', () => {
+    expect(forceProposeToolFor('PLAN', 17)).toBeNull();
+    expect(forceProposeToolFor('PLAN', 18)).toBe('propose_plan');
+    expect(forceProposeToolFor('SELECT', 18)).toBe('propose_selection');
+    expect(forceProposeToolFor('DESIGN', 30)).toBeNull();
+  });
+
+  it('caps read budget before the design phase', () => {
+    expect(readBudgetForPhase('PLAN', 20000)).toBe(12000);
+    expect(readBudgetForPhase('SELECT', 8000)).toBe(8000);
+    expect(readBudgetForPhase('DESIGN', 20000)).toBe(20000);
   });
 
   it('gives the model a phase instruction', () => {

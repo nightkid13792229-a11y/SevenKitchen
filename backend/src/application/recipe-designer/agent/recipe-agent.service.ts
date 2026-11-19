@@ -37,6 +37,7 @@ import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
 import { executeTool } from './tools';
 import {
+  PHASE_TOOL_BUDGET,
   forceProposeToolFor,
   phaseSystemLine,
   toolsForPhase,
@@ -75,8 +76,6 @@ function positiveInt(value: string | undefined, fallback: number): number {
 }
 const MAX_TOOL_CALLS = positiveInt(process.env.AGENT_MAX_TOOL_CALLS, 80);
 /** 方案/选材阶段先收口，避免在检索里把预算烧光。 */
-const PLAN_MAX_TOOL_CALLS = 26;
-const SELECT_MAX_TOOL_CALLS = 26;
 /** 方案/选材阶段单次读页的 token 预算上限（默认 20k 太大）。 */
 const EARLY_PHASE_READ_BUDGET = 12000;
 const MAX_NO_PROGRESS_ASSESSMENTS = 3;
@@ -364,11 +363,7 @@ export class RecipeAgentService implements OnModuleInit {
     let consecutiveZeroHits = 0;
     let zeroHitNudged = false;
     const phaseMaxToolCalls =
-      phase === 'PLAN'
-        ? PLAN_MAX_TOOL_CALLS
-        : phase === 'SELECT'
-          ? SELECT_MAX_TOOL_CALLS
-          : MAX_TOOL_CALLS;
+      phase === 'DESIGN' ? MAX_TOOL_CALLS : PHASE_TOOL_BUDGET[phase];
     /** 健康档案附件只在本次运行注入一次，避免模型重读时重复计费。 */
     let designContextImagesInjected = false;
 

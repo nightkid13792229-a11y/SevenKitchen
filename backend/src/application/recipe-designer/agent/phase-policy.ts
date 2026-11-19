@@ -22,6 +22,12 @@ const READ_TOOLS = new Set([
   'kb_read',
 ]);
 
+/** 方案/选材阶段的工具预算；必须大于下面的强制提交阈值。 */
+export const PHASE_TOOL_BUDGET = {
+  PLAN: 40,
+  SELECT: 40,
+} as const;
+
 const PROPOSE_TOOLS = new Set(['propose_plan', 'propose_selection']);
 const PLAN_TOOLS = new Set([...READ_TOOLS, 'propose_plan']);
 const SELECT_TOOLS = new Set([...READ_TOOLS, 'propose_selection']);
@@ -48,8 +54,10 @@ export function forceProposeToolFor(
   toolCalls: number,
 ): 'propose_plan' | 'propose_selection' | null {
   // 只在资源预算快用尽时兜底，不用来替代“证据够不够”的判断。
-  if (phase === 'PLAN' && toolCalls >= 34) return 'propose_plan';
-  if (phase === 'SELECT' && toolCalls >= 34) return 'propose_selection';
+  if (phase === 'DESIGN') return null;
+  const forceAt = PHASE_TOOL_BUDGET[phase] - 6;
+  if (toolCalls < forceAt) return null;
+  return phase === 'PLAN' ? 'propose_plan' : 'propose_selection';
   return null;
 }
 

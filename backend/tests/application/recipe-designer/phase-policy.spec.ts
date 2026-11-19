@@ -1,4 +1,5 @@
 import {
+  PHASE_TOOL_BUDGET,
   forceProposeToolFor,
   phaseSystemLine,
   toolsForPhase,
@@ -51,9 +52,11 @@ describe('recipe agent phase policy', () => {
   });
 
   it('only forces propose near the resource budget', () => {
-    expect(forceProposeToolFor('PLAN', 33)).toBeNull();
-    expect(forceProposeToolFor('PLAN', 34)).toBe('propose_plan');
-    expect(forceProposeToolFor('SELECT', 34)).toBe('propose_selection');
+    const forceAt = PHASE_TOOL_BUDGET.PLAN - 6;
+    expect(forceAt).toBeLessThan(PHASE_TOOL_BUDGET.PLAN);
+    expect(forceProposeToolFor('PLAN', forceAt - 1)).toBeNull();
+    expect(forceProposeToolFor('PLAN', forceAt)).toBe('propose_plan');
+    expect(forceProposeToolFor('SELECT', forceAt)).toBe('propose_selection');
     expect(forceProposeToolFor('DESIGN', 30)).toBeNull();
   });
 

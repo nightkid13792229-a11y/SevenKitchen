@@ -42,6 +42,7 @@ export type FinanceEntry = {
     | 'PURCHASE'
     | 'SHIPPING'
     | 'BILL'
+    | 'REIMBURSEMENT'
     | 'FEE'
     | 'MANUAL';
   sourceId: string;
@@ -248,10 +249,12 @@ export class FinanceEntriesService {
   }
 
   /**
-   * 明细 id：单行来源直接用表 id；一张单拆成多行（采购按分类、账单按月）时
-   * 加后缀，保证列表 key 唯一、同时间排序也稳定。
+   * 明细 id：单行来源直接用表 id；一张单拆成多行（采购按分类、账单按月、
+   * 报销按自定义费条目）时加后缀，保证列表 key 唯一、同时间排序也稳定。
    */
   private expenseEntryId(line: FinanceExpenseLine): string {
+    // 取数侧已经算好稳定 key 的（如同一张报销单的多笔同类杂费）直接用它
+    if (line.rowId) return line.rowId;
     switch (line.sourceType) {
       case 'PURCHASE':
         return `${line.sourceId}:${line.category}`;

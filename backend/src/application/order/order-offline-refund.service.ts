@@ -8,6 +8,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import { TimezoneUtil } from '../../utils/timezone.util';
 import { OFFLINE_PAYMENT_METHODS } from '../finance/finance-categories';
 import { centsToMoney, toCents } from '../finance/finance-expense.service';
+import { FINANCE_START_DATE } from '../finance/finance-period';
 
 /** 线下退款方式（对应 `order_offline_refund.method`） */
 export const OFFLINE_REFUND_METHODS = [
@@ -190,6 +191,20 @@ export class OrderOfflineRefundService {
 
     const amountCents = parseAmountCents(input?.amount);
     const refundedAt = parseRefundedAt(input?.refundedAt);
+    const refundedAtKey = TimezoneUtil.shanghaiDateKey(refundedAt);
+
+    // 起账日前不统计：早于起账日的退款进了财务也查不到，直接挡在登记口，
+    // 不让它悄悄从报表里消失。
+    if (refundedAtKey < FINANCE_START_DATE) {
+      throw new BadRequestException(
+        `退款日不能早于起账日（${FINANCE_START_DATE}）`,
+      );
+    }
+    // 退款日不能填未来：否则本月支出会提前被未来的退款冲减。
+    if (refundedAtKey > TimezoneUtil.shanghaiDateKey(new Date())) {
+      throw new BadRequestException('退款日不能晚于今天');
+    }
+
     const method = parseMethod(input?.method);
 
     const refundedBefore = await this.prisma.orderOfflineRefund.aggregate({

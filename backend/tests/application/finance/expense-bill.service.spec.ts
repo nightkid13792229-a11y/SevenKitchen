@@ -276,15 +276,37 @@ describe('ExpenseTemplateService.generateForMonth 并发幂等', () => {
     });
   });
 
-  it('并发撞唯一约束（P2002）时按幂等返回 created=0，不抛错', async () => {
+  it.each([
+    [['template_id', 'recognition_start']],
+    [['templateId', 'recognitionStart']],
+  ])(
+    '并发撞「模板+费属起始月」唯一约束（P2002, target=%j）时按幂等返回 created=0，不抛错',
+    async (target) => {
+      const prisma = makeTemplatePrisma([makeTemplate()]);
+      prisma.expenseBill.createMany.mockRejectedValue(
+        Object.assign(new Error('duplicate key'), {
+          code: 'P2002',
+          meta: { target },
+        }),
+      );
+
+      await expect(
+        new ExpenseTemplateService(prisma).generateForMonth('2026-11'),
+      ).resolves.toEqual({ created: 0, dueCount: 1 });
+    },
+  );
+
+  it('账单号撞号（P2002, target=bill_number）必须抛出，不能静默漏账单', async () => {
     const prisma = makeTemplatePrisma([makeTemplate()]);
-    prisma.expenseBill.createMany.mockRejectedValue(
-      Object.assign(new Error('duplicate key'), { code: 'P2002' }),
-    );
+    const conflict = Object.assign(new Error('duplicate key'), {
+      code: 'P2002',
+      meta: { target: ['bill_number'] },
+    });
+    prisma.expenseBill.createMany.mockRejectedValue(conflict);
 
     await expect(
       new ExpenseTemplateService(prisma).generateForMonth('2026-11'),
-    ).resolves.toEqual({ created: 0, dueCount: 1 });
+    ).rejects.toBe(conflict);
   });
 
   it('数据库跳过重复行时 created 以实际写入数为准', async () => {

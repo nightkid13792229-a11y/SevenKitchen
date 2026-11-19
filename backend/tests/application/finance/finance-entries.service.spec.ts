@@ -61,6 +61,9 @@ const makePrisma = (data: any = {}) => ({
       ),
     ),
   },
+  reimbursement: {
+    findMany: jest.fn().mockResolvedValue(data.reimbursements ?? []),
+  },
 });
 
 const round2 = (value: number) =>
@@ -1026,6 +1029,110 @@ describe('FinanceEntriesService', () => {
     expect(onlyIncome.items.map((item) => item.id)).toEqual(['o1']);
   });
 
+  it('报销杂费出明细行：来源、标题、付款方与提交月份', async () => {
+    const prisma: any = makePrisma({
+      reimbursements: [
+        {
+          id: 'rb1',
+          claimNumber: 'BX202611001',
+          status: 'PENDING_REVIEW',
+          submittedAt: utc('2026-11-05T02:00:00Z'),
+          customFees: [
+            { category: 'TOOLS', description: '封口机配件', amount: 25 },
+            { category: 'SUNDRIES', description: '清洁用品', amount: 12.5 },
+            { category: 'OTHER', amount: 30 },
+            { category: 'RENT', description: '房租', amount: 6000 },
+          ],
+        },
+      ],
+    });
+
+    const result = await new FinanceEntriesService(prisma).list({
+      month: '2026-11',
+    });
+    const rows = result.items.filter(
+      (item) => item.sourceType === 'REIMBURSEMENT',
+    );
+
+    // 固定费用类别（RENT）由固定费用账单承担，不能在这里再出一行
+    expect(rows).toHaveLength(3);
+    expect(new Set(rows.map((row) => row.id)).size).toBe(3);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'rb1:TOOLS:0',
+          occurredAt: '2026-11-05T10:00:00.000+08:00',
+          direction: 'EXPENSE',
+          category: 'ADMINISTRATIVE',
+          amount: 25,
+          title: '报销杂费 · 封口机配件',
+          sourceType: 'REIMBURSEMENT',
+          sourceId: 'rb1',
+          sourceNo: 'BX202611001',
+          payerType: 'PERSONAL',
+          isRefund: false,
+          isHistorical: false,
+        }),
+        expect.objectContaining({
+          id: 'rb1:SUNDRIES:1',
+          category: 'OTHER',
+          amount: 12.5,
+          title: '报销杂费 · 清洁用品',
+        }),
+        expect.objectContaining({
+          // 没填描述时退回类别文案
+          id: 'rb1:OTHER:2',
+          category: 'OTHER',
+          amount: 30,
+          title: '报销杂费 · 其他',
+        }),
+      ]),
+    );
+    expect(rows.some((row) => row.category === 'RENT')).toBe(false);
+  });
+
+  it('报销杂费：明细相加等于支出汇总，且分类金额一致', async () => {
+    const prisma: any = makePrisma({
+      reimbursements: [
+        {
+          id: 'rb1',
+          claimNumber: 'BX202611001',
+          status: 'REIMBURSED',
+          submittedAt: utc('2026-11-05T02:00:00Z'),
+          customFees: [
+            { category: 'TOOLS', description: '封口机配件', amount: 25 },
+            { category: 'SUNDRIES', description: '清洁用品', amount: 12.5 },
+            { category: 'OTHER', description: '临时搬运费', amount: 30 },
+          ],
+        },
+      ],
+    });
+
+    const entries = await new FinanceEntriesService(prisma).list({
+      month: '2026-11',
+    });
+    const expense = await new FinanceExpenseService(prisma).getExpense(
+      period,
+      0,
+    );
+
+    const rows = entries.items.filter(
+      (item) =>
+        item.direction === 'EXPENSE' && item.sourceType === 'REIMBURSEMENT',
+    );
+    expect(rows).toHaveLength(3);
+    expect(sum(rows)).toBe(expense.total);
+    expect(expense.total).toBe(67.5);
+    expect(
+      sum(rows.filter((row) => row.category === 'ADMINISTRATIVE')),
+    ).toBe(
+      expense.byCategory.find((c) => c.category === 'ADMINISTRATIVE')!.amount,
+    );
+    expect(sum(rows.filter((row) => row.category === 'OTHER'))).toBe(
+      expense.byCategory.find((c) => c.category === 'OTHER')!.amount,
+    );
+  });
+
   /**
    * 关键回归：同一份数据喂给三个服务，明细相加必须等于汇总。
    * 任何一处改口径（漏一张表、改排除条件、改分摊）都会在这里炸。
@@ -1204,6 +1311,19 @@ describe('FinanceEntriesService', () => {
           payerType: 'PERSONAL',
         },
       ],
+      reimbursements: [
+        {
+          id: 'rb1',
+          claimNumber: 'BX202611001',
+          status: 'PENDING_REVIEW',
+          submittedAt: utc('2026-11-05T02:00:00Z'),
+          customFees: [
+            { category: 'TOOLS', description: '封口机配件', amount: 25 },
+            { category: 'SUNDRIES', description: '清洁用品', amount: 12.5 },
+            { category: 'OTHER', description: '临时搬运费', amount: 30 },
+          ],
+        },
+      ],
       manualIncome: [
         {
           id: 'mi1',
@@ -1241,7 +1361,7 @@ describe('FinanceEntriesService', () => {
       netTotal: 1299,
       fee: 6.29,
     });
-    expect(expense.total).toBe(1042.29);
+    expect(expense.total).toBe(1109.79);
 
     const incomeRows = entries.items.filter(
       (item) => item.direction === 'INCOME',
@@ -1274,6 +1394,7 @@ describe('FinanceEntriesService', () => {
         'BILL',
         'FEE',
         'MANUAL',
+        'REIMBURSEMENT',
       ]),
     );
   });

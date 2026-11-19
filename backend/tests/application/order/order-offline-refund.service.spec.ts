@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { OrderOfflineRefundService } from 'src/application/order/order-offline-refund.service';
+import { TimezoneUtil } from 'src/utils/timezone.util';
 
 const makePrisma = (order: any, refunded: any = 0) => ({
   order: { findUnique: jest.fn().mockResolvedValue(order) },
@@ -143,6 +144,35 @@ describe('OrderOfflineRefundService', () => {
     await expect(
       service.register('u1', 'o1', input({ amount: 100.001 }) as any),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('退款日早于起账日（2026-11-01）时拒绝，不写库', async () => {
+    const prisma: any = makePrisma(offlineOrder);
+    const service = new OrderOfflineRefundService(prisma);
+
+    await expect(
+      service.register('u1', 'o1', input({ refundedAt: '2026-10-31' }) as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.orderOfflineRefund.create).not.toHaveBeenCalled();
+  });
+
+  it('退款日晚于今天时拒绝，不写库', async () => {
+    const todayKey = TimezoneUtil.shanghaiDateKey(new Date());
+    const [year, month, day] = todayKey.split('-').map(Number);
+    const tomorrowKey = new Date(Date.UTC(year, month - 1, day + 1))
+      .toISOString()
+      .slice(0, 10);
+    const prisma: any = makePrisma(offlineOrder);
+    const service = new OrderOfflineRefundService(prisma);
+
+    await expect(
+      service.register(
+        'u1',
+        'o1',
+        input({ refundedAt: tomorrowKey }) as any,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.orderOfflineRefund.create).not.toHaveBeenCalled();
   });
 
   it('列出未作废的登记，按退款日倒序', async () => {

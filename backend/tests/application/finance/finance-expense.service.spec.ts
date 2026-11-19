@@ -12,6 +12,19 @@ const makePrisma = (data: any = {}) => ({
   financeManualEntry: {
     findMany: jest.fn().mockResolvedValue(data.manualEntries ?? []),
   },
+  reimbursement: {
+    findMany: jest.fn().mockResolvedValue(data.reimbursements ?? []),
+  },
+});
+
+/** 报销单：只覆盖支出取数关心的字段 */
+const reimbursementRow = (overrides: Record<string, unknown> = {}) => ({
+  id: 'rb1',
+  claimNumber: 'BX202611001',
+  status: 'PENDING_REVIEW',
+  submittedAt: new Date('2026-11-05T02:00:00Z'),
+  customFees: [],
+  ...overrides,
 });
 
 describe('FinanceExpenseService', () => {
@@ -484,5 +497,108 @@ describe('FinanceExpenseService', () => {
       'ADMINISTRATIVE',
     ]);
     expect(r.total).toBe(200);
+  });
+
+  it('报销单的零星支出计入：TOOLS→行政、SUNDRIES/OTHER→其他', async () => {
+    const prisma: any = makePrisma({
+      reimbursements: [
+        reimbursementRow({
+          customFees: [
+            { category: 'TOOLS', description: '封口机配件', amount: 25 },
+            { category: 'SUNDRIES', description: '清洁用品', amount: 12.5 },
+            { category: 'OTHER', description: '临时搬运费', amount: 30 },
+          ],
+        }),
+      ],
+    });
+
+    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+
+    expect(
+      r.byCategory.find((c) => c.category === 'ADMINISTRATIVE')!.amount,
+    ).toBe(25);
+    expect(r.byCategory.find((c) => c.category === 'OTHER')!.amount).toBe(42.5);
+    expect(r.total).toBe(67.5);
+  });
+
+  it('报销单里的房租/工资/社保/税费/水电由固定费用账单承担，不重复计入', async () => {
+    const prisma: any = makePrisma({
+      reimbursements: [
+        reimbursementRow({
+          customFees: [
+            { category: 'RENT', description: '房租', amount: 6000 },
+            { category: 'PAYROLL', description: '工资', amount: 5000 },
+            { category: 'SOCIAL_INSURANCE', description: '社保', amount: 1200 },
+            { category: 'TAX', description: '税费', amount: 300 },
+            { category: 'UTILITIES', description: '水电燃气', amount: 400 },
+          ],
+        }),
+      ],
+    });
+
+    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+
+    expect(r.byCategory).toEqual([]);
+    expect(r.total).toBe(0);
+  });
+
+  it('驳回、要求重提与零金额的报销单不计入，已报销的计入', async () => {
+    const prisma: any = makePrisma({
+      reimbursements: [
+        reimbursementRow({
+          id: 'rb-rejected',
+          status: 'REJECTED',
+          customFees: [{ category: 'TOOLS', amount: 99 }],
+        }),
+        reimbursementRow({
+          id: 'rb-resubmit',
+          status: 'REQUIRES_RESUBMIT',
+          customFees: [{ category: 'TOOLS', amount: 88 }],
+        }),
+        reimbursementRow({
+          id: 'rb-zero',
+          status: 'PENDING_REVIEW',
+          customFees: [
+            { category: 'TOOLS', amount: 0 },
+            { category: 'SUNDRIES', amount: -5 },
+          ],
+        }),
+        reimbursementRow({
+          id: 'rb-paid',
+          status: 'REIMBURSED',
+          submittedAt: new Date('2026-11-18T02:00:00Z'),
+          customFees: [{ category: 'TOOLS', description: '扳手', amount: 20 }],
+        }),
+      ],
+    });
+
+    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+
+    expect(
+      r.byCategory.find((c) => c.category === 'ADMINISTRATIVE')!.amount,
+    ).toBe(20);
+    expect(r.total).toBe(20);
+  });
+
+  it('报销杂费按 submittedAt 归月，10 月提交的不进 11 月', async () => {
+    const prisma: any = makePrisma({
+      reimbursements: [
+        reimbursementRow({
+          id: 'rb-oct',
+          submittedAt: new Date('2026-10-31T02:00:00Z'),
+          customFees: [{ category: 'SUNDRIES', amount: 66 }],
+        }),
+        reimbursementRow({
+          id: 'rb-nov',
+          submittedAt: new Date('2026-11-01T02:00:00Z'),
+          customFees: [{ category: 'SUNDRIES', amount: 30 }],
+        }),
+      ],
+    });
+
+    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+
+    expect(r.byCategory.find((c) => c.category === 'OTHER')!.amount).toBe(30);
+    expect(r.total).toBe(30);
   });
 });

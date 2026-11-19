@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import type { ExpenseBillStatus, Prisma } from '@prisma/client';
+import type {
+  ExpenseBillStatus,
+  Prisma,
+  ReimbursementStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { TimezoneUtil } from '../../utils/timezone.util';
 import {
@@ -11,7 +15,8 @@ import { FinancePeriod } from './finance-period';
 /**
  * 支出汇总（元）。
  *
- * 只有五个来源：采购单实付、订单真实快递费、固定费用账单、支付手续费、手工支出。
+ * 六个来源：采购单实付、订单真实快递费、固定费用账单、报销单零星支出、
+ * 支付手续费、手工支出。
  * 订单本身不产生支出——食材成本在采购那一步已经花了（设计文档 §4.4）。
  */
 export type FinanceExpenseCategoryAmount = {
@@ -75,10 +80,12 @@ export type FinanceExpenseLine = {
   category: FinanceExpenseCategory;
   /** 金额（整数分，带符号；账单允许负数） */
   amountCents: number;
-  /** 归月日期：采购按下单/采购时间，快递按发货时间，账单按服务月，手工按发生日 */
+  /** 归月日期：采购按下单/采购时间，快递按发货时间，账单按服务月，报销按提交时间，手工按发生日 */
   occurredAt: Date;
-  sourceType: 'PURCHASE' | 'SHIPPING' | 'BILL' | 'MANUAL';
+  sourceType: 'PURCHASE' | 'SHIPPING' | 'BILL' | 'REIMBURSEMENT' | 'MANUAL';
   sourceId: string;
+  /** 明细行的唯一 key（一张单拆成多行且类别相同、时间相同时用；不填则退回 sourceId） */
+  rowId?: string;
   sourceNo?: string;
   /** 人话标题，明细页直接显示 */
   title: string;
@@ -92,7 +99,11 @@ export type FinanceExpenseLine = {
 /** 支出侧取数用到的 Prisma 委托（便于单测直接传 mock） */
 type ExpensePrisma = Pick<
   PrismaService,
-  'purchaseList' | 'order' | 'expenseBill' | 'financeManualEntry'
+  | 'purchaseList'
+  | 'order'
+  | 'expenseBill'
+  | 'reimbursement'
+  | 'financeManualEntry'
 >;
 
 /** 采购分摊用的明细行：商品行按类型归并，运费/包装费单独成行 */
@@ -617,20 +628,169 @@ export async function loadManualExpenseLines(
   return buildManualExpenseLines(entries);
 }
 
+/**
+ * 计入支出的报销单状态。
+ *
+ * 只算「待审核 / 已报销」：待审核的已经发生（人已经垫钱），驳回、要求重提
+ * 的不能计入，否则被驳回的单会一直挂在成本里。
+ */
+export const REIMBURSEMENT_EXPENSE_STATUSES: readonly ReimbursementStatus[] = [
+  'PENDING_REVIEW',
+  'REIMBURSED',
+];
+
+/**
+ * 报销自定义费类别 → 支出分类。**只收零星支出三项**：
+ *
+ * - `TOOLS`（工具）→ 行政费用
+ * - `SUNDRIES`（杂物）→ 其他杂项
+ * - `OTHER`（其他）→ 其他杂项
+ *
+ * `RENT` / `PAYROLL` / `SOCIAL_INSURANCE` / `TAX` / `UTILITIES` 明确排除：
+ * 这些费用由「固定费用账单」（`ExpenseBill`，模板按月生成）承担，报销单里
+ * 再算一遍就是重复计入。这是明确决策（2026-11-19），不是漏配；以后新增
+ * custom fee 类别时，先确认它没有对应的固定费用账单，再加进这张表。
+ */
+export const REIMBURSEMENT_CUSTOM_FEE_CATEGORY_MAP: Record<
+  string,
+  FinanceExpenseCategory
+> = {
+  TOOLS: 'ADMINISTRATIVE',
+  SUNDRIES: 'OTHER',
+  OTHER: 'OTHER',
+};
+
+/** 自定义费类别文案：没填描述时明细标题兜底用 */
+export const REIMBURSEMENT_CUSTOM_FEE_LABELS: Record<string, string> = {
+  TOOLS: '工具',
+  SUNDRIES: '杂物',
+  OTHER: '其他',
+};
+
+/** 报销单取数的最小字段（报销金额已经由采购/账单口径承担，这里只看自定义费） */
+const REIMBURSEMENT_EXPENSE_SELECT = {
+  id: true,
+  claimNumber: true,
+  status: true,
+  submittedAt: true,
+  customFees: true,
+} satisfies Prisma.ReimbursementSelect;
+
+type ReimbursementRow = Prisma.ReimbursementGetPayload<{
+  select: typeof REIMBURSEMENT_EXPENSE_SELECT;
+}>;
+
+/**
+ * `customFees` 是 JSON 字段，历史/手工数据不保证形状；按数组 + 对象兜底，
+ * 坏数据跳过而不是让整个财务报表 500。
+ */
+function isCustomFeeObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * 报销单的零星支出明细行：一条自定义费 = 一行。
+ *
+ * 金额取 `customFees[].amount`，按 `submittedAt` 归月，付款方是员工个人
+ * （报销就是员工先垫的钱）。采购清单、平台运费/包装费都不在这里算：
+ * 采购清单走采购支出、平台费用由固定费用账单/采购口径承担，避免同一笔钱两次进成本。
+ *
+ * 状态与月份在这里再兜一次：真实查询已下推 where，mock/老数据不走查询时
+ * 也不能把驳回单或期间外的金额算进来。
+ */
+export function buildReimbursementExpenseLines(
+  reimbursement: ReimbursementRow,
+  period: FinancePeriod,
+): FinanceExpenseLine[] {
+  if (!REIMBURSEMENT_EXPENSE_STATUSES.includes(reimbursement.status)) {
+    return [];
+  }
+  if (
+    reimbursement.submittedAt.getTime() < period.from.getTime() ||
+    reimbursement.submittedAt.getTime() > period.to.getTime()
+  ) {
+    return [];
+  }
+
+  const customFees = Array.isArray(reimbursement.customFees)
+    ? reimbursement.customFees
+    : [];
+
+  return customFees
+    .map((fee, index): FinanceExpenseLine | null => {
+      if (!isCustomFeeObject(fee)) return null;
+      const categoryCode = String(fee.category ?? '')
+        .trim()
+        .toUpperCase();
+      const category = REIMBURSEMENT_CUSTOM_FEE_CATEGORY_MAP[categoryCode];
+      if (!category) return null;
+      const amountCents = toCents(fee.amount);
+      if (amountCents <= 0) return null;
+
+      const description =
+        typeof fee.description === 'string' ? fee.description.trim() : '';
+      const fallback =
+        REIMBURSEMENT_CUSTOM_FEE_LABELS[categoryCode] ?? categoryCode;
+      return {
+        category,
+        amountCents,
+        occurredAt: reimbursement.submittedAt,
+        sourceType: 'REIMBURSEMENT',
+        sourceId: reimbursement.id,
+        // 同一张报销单可能有多笔同类杂费，只用 category 会撞 id
+        rowId: `${reimbursement.id}:${categoryCode}:${index}`,
+        sourceNo: reimbursement.claimNumber,
+        title: `报销杂费 · ${description || fallback}`,
+        payerType: 'PERSONAL',
+      };
+    })
+    .filter((line): line is FinanceExpenseLine => line !== null);
+}
+
+/** 报销单零星支出：按提交时间落在期间、状态待审核/已报销取数 */
+export async function loadReimbursementExpenseLines(
+  prisma: ExpensePrisma,
+  period: FinancePeriod,
+): Promise<FinanceExpenseLine[]> {
+  const reimbursements = await prisma.reimbursement.findMany({
+    where: {
+      status: { in: [...REIMBURSEMENT_EXPENSE_STATUSES] },
+      submittedAt: { gte: period.from, lte: period.to },
+    },
+    select: REIMBURSEMENT_EXPENSE_SELECT,
+  });
+
+  return reimbursements.flatMap((reimbursement) =>
+    buildReimbursementExpenseLines(reimbursement, period),
+  );
+}
+
 /** 期间内全部支出明细行（不含手续费：手续费由收入侧算好传入） */
 export async function loadExpenseLines(
   prisma: ExpensePrisma,
   period: FinancePeriod,
 ): Promise<FinanceExpenseLine[]> {
-  const [purchaseLines, shippingLines, billLines, manualLines] =
-    await Promise.all([
-      loadPurchaseExpenseLines(prisma, period),
-      loadShippingExpenseLines(prisma, period),
-      loadBillExpenseLines(prisma, period),
-      loadManualExpenseLines(prisma, period),
-    ]);
+  const [
+    purchaseLines,
+    shippingLines,
+    billLines,
+    reimbursementLines,
+    manualLines,
+  ] = await Promise.all([
+    loadPurchaseExpenseLines(prisma, period),
+    loadShippingExpenseLines(prisma, period),
+    loadBillExpenseLines(prisma, period),
+    loadReimbursementExpenseLines(prisma, period),
+    loadManualExpenseLines(prisma, period),
+  ]);
 
-  return [...purchaseLines, ...shippingLines, ...billLines, ...manualLines];
+  return [
+    ...purchaseLines,
+    ...shippingLines,
+    ...billLines,
+    ...reimbursementLines,
+    ...manualLines,
+  ];
 }
 
 /**

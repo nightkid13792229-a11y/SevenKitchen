@@ -221,6 +221,40 @@ function buildTemplateBillNumber(
   return `FB${dateKey.replace(/-/g, '')}${suffix}`;
 }
 
+/**
+ * 从 Prisma P2002 里取出冲突字段。
+ *
+ * `meta.target` 在 PostgreSQL 下是字段名数组；部分驱动/createMany 返回的是
+ * 唯一索引名。两种形状都归一成小写字符串，再按「去掉下划线后是否包含
+ * templateid」判断，`template_id` / `templateId` / 索引名都能命中。
+ */
+function uniqueConflictFields(error: unknown): string[] {
+  const target = (error as { meta?: { target?: unknown } } | null)?.meta
+    ?.target;
+  const raw = Array.isArray(target)
+    ? target
+    : typeof target === 'string'
+      ? [target]
+      : [];
+  return raw
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.toLowerCase());
+}
+
+/**
+ * 是否只撞了「同一模板 + 同一费属起始月」的唯一约束。
+ *
+ * **只有这种冲突才能当成「已经生成过」**：它是并发重跑时的幂等兜底。
+ * 账单号 `bill_number` 撞号等其它唯一约束说明生成链路有问题，必须抛出去，
+ * 否则定时任务会静默少账单、财务对不上账。
+ */
+function isTemplatePeriodConflict(error: unknown): boolean {
+  if ((error as { code?: string } | null)?.code !== 'P2002') return false;
+  return uniqueConflictFields(error).some((field) =>
+    field.replace(/[^a-z0-9]/g, '').includes('templateid'),
+  );
+}
+
 @Injectable()
 export class ExpenseTemplateService {
   constructor(private readonly prisma: PrismaService) {}
@@ -364,9 +398,10 @@ export class ExpenseTemplateService {
       });
       return { created: result.count, dueCount };
     } catch (error) {
-      // 老库/驱动不支持 skipDuplicates 时，唯一键冲突等价于「已经生成过」，
-      // 仍然返回 created=0，不让定时任务或补生成接口报 500。
-      if ((error as { code?: string } | null)?.code === 'P2002') {
+      // 并发竞态只有「(templateId, recognitionStart) 唯一索引」冲突等价于
+      // 「已经生成过」；其它唯一约束（如 bill_number 撞号）必须抛出，
+      // 不能把真正的漏账单吞成 created=0。
+      if (isTemplatePeriodConflict(error)) {
         return { created: 0, dueCount };
       }
       throw error;

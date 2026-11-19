@@ -150,6 +150,95 @@
     </view>
     </view>
 
+        <!-- 食谱列表信息流 -->
+    <view class="recipe-list">
+      <view
+        v-for="recipe in renderedRecipes"
+        :key="recipe.id"
+        class="recipe-card"
+        hover-class="card-hover"
+        :hover-start-time="20"
+        :hover-stay-time="70"
+        @tap="viewRecipe(recipe.id)"
+      >
+        <!-- 封面图容器 - 使用固定高度容器避免布局问题 -->
+        <view class="recipe-cover-wrapper">
+          <image
+            v-if="recipe.displayCoverUrl"
+            class="recipe-cover"
+            :src="recipe.displayCoverUrl"
+            mode="aspectFill"
+            lazy-load
+            @error="handleRecipeCoverError(recipe)"
+          />
+          <view v-else class="recipe-cover placeholder">
+            <text class="placeholder-text">{{ (recipe.name && recipe.name.charAt(0)) || '?' }}</text>
+          </view>
+          <view
+            v-if="recipe.displayCoverUrl && resolveCoverBadgeText(recipe)"
+            class="recipe-cover-badge-gradient"
+          >
+            <text class="recipe-cover-title-badge">{{ resolveCoverBadgeText(recipe) }}</text>
+          </view>
+        </view>
+
+        <!-- 食谱信息 - 使用强制渲染 -->
+        <view class="recipe-info" :id="'info-' + recipe.id">
+          <view class="recipe-name-row">
+            <view class="recipe-name-wrap">
+              <text class="recipe-orderable-badge">可订购</text>
+              <text class="recipe-name">{{ recipe.name || '未命名食谱' }}</text>
+            </view>
+            <view class="recipe-stats">
+              <view class="stat-item">
+                <image class="stat-icon" src="/static/ui-icons/view.png" mode="aspectFit" />
+                <text>{{ formatStatNum(recipe.viewCount) }}</text>
+              </view>
+              <view class="stat-item">
+                <image class="stat-icon" src="/static/ui-icons/favorite.png" mode="aspectFit" />
+                <text>{{ formatStatNum(recipe.favoriteCount) }}</text>
+              </view>
+            </view>
+          </view>
+
+          <!-- 成品参考价 -->
+          <view v-if="referencePriceMap[recipe.id]" class="recipe-order-row">
+            <text class="recipe-price-label">成品参考价</text>
+            <text class="recipe-price-text">约¥{{ formatReferencePrice(referencePriceMap[recipe.id].priceByRecipeId[recipe.id] ?? referencePriceMap[recipe.id].minPricePer100g) }}/100g</text>
+          </view>
+
+          <!-- 主要原料 (前6名) -->
+          <view v-if="recipe.items && recipe.items.length > 0" class="ingredients">
+            <text class="ingredients-label">主要原料：</text>
+            <text class="ingredients-list">
+              {{ recipe.items.map((item: RecipeItem) => item.name).join('、') }}
+            </text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 加载状态 -->
+      <view v-if="loading" class="loading-state">
+        <text>加载中...</text>
+      </view>
+
+      <!-- 没有更多 -->
+      <view v-if="!hasMore && recipes.length > 0" class="no-more">
+        <text>没有更多了</text>
+      </view>
+
+      <!-- 空状态 -->
+      <view v-if="recipes.length === 0 && !loading" class="empty-recipe-state">
+        <view class="empty-ornament" aria-hidden="true">
+          <view class="empty-ornament-inner"></view>
+        </view>
+        <view class="empty-title">暂无食谱</view>
+        <view class="empty-subtitle">当前筛选条件下没有找到食谱</view>
+        <button class="btn-reset" @tap="resetFilters">重置筛选</button>
+      </view>
+    </view>
+
+    <!-- 适用生命阶段筛选抽屉 -->
     <view v-if="shelfOpenSheet" class="sf-mask" @tap="closeShelfSheet">
       <view class="sf-sheet" @tap.stop>
         <view class="sf-handle"></view>
@@ -265,95 +354,6 @@
       </view>
     </view>
 
-    <!-- 食谱列表信息流 -->
-    <view class="recipe-list">
-      <view
-        v-for="recipe in renderedRecipes"
-        :key="recipe.id"
-        class="recipe-card"
-        hover-class="card-hover"
-        :hover-start-time="20"
-        :hover-stay-time="70"
-        @tap="viewRecipe(recipe.id)"
-      >
-        <!-- 封面图容器 - 使用固定高度容器避免布局问题 -->
-        <view class="recipe-cover-wrapper">
-          <image
-            v-if="recipe.displayCoverUrl"
-            class="recipe-cover"
-            :src="recipe.displayCoverUrl"
-            mode="aspectFill"
-            lazy-load
-            @error="handleRecipeCoverError(recipe)"
-          />
-          <view v-else class="recipe-cover placeholder">
-            <text class="placeholder-text">{{ (recipe.name && recipe.name.charAt(0)) || '?' }}</text>
-          </view>
-          <view
-            v-if="recipe.displayCoverUrl && resolveCoverBadgeText(recipe)"
-            class="recipe-cover-badge-gradient"
-          >
-            <text class="recipe-cover-title-badge">{{ resolveCoverBadgeText(recipe) }}</text>
-          </view>
-        </view>
-
-        <!-- 食谱信息 - 使用强制渲染 -->
-        <view class="recipe-info" :id="'info-' + recipe.id">
-          <view class="recipe-name-row">
-            <view class="recipe-name-wrap">
-              <text class="recipe-orderable-badge">可订购</text>
-              <text class="recipe-name">{{ recipe.name || '未命名食谱' }}</text>
-            </view>
-            <view class="recipe-stats">
-              <view class="stat-item">
-                <image class="stat-icon" src="/static/ui-icons/view.png" mode="aspectFit" />
-                <text>{{ formatStatNum(recipe.viewCount) }}</text>
-              </view>
-              <view class="stat-item">
-                <image class="stat-icon" src="/static/ui-icons/favorite.png" mode="aspectFit" />
-                <text>{{ formatStatNum(recipe.favoriteCount) }}</text>
-              </view>
-            </view>
-          </view>
-
-          <!-- 成品参考价 -->
-          <view v-if="referencePriceMap[recipe.id]" class="recipe-order-row">
-            <text class="recipe-price-label">成品参考价</text>
-            <text class="recipe-price-text">约¥{{ formatReferencePrice(referencePriceMap[recipe.id].priceByRecipeId[recipe.id] ?? referencePriceMap[recipe.id].minPricePer100g) }}/100g</text>
-          </view>
-
-          <!-- 主要原料 (前6名) -->
-          <view v-if="recipe.items && recipe.items.length > 0" class="ingredients">
-            <text class="ingredients-label">主要原料：</text>
-            <text class="ingredients-list">
-              {{ recipe.items.map((item: RecipeItem) => item.name).join('、') }}
-            </text>
-          </view>
-        </view>
-      </view>
-
-      <!-- 加载状态 -->
-      <view v-if="loading" class="loading-state">
-        <text>加载中...</text>
-      </view>
-
-      <!-- 没有更多 -->
-      <view v-if="!hasMore && recipes.length > 0" class="no-more">
-        <text>没有更多了</text>
-      </view>
-
-      <!-- 空状态 -->
-      <view v-if="recipes.length === 0 && !loading" class="empty-recipe-state">
-        <view class="empty-ornament" aria-hidden="true">
-          <view class="empty-ornament-inner"></view>
-        </view>
-        <view class="empty-title">暂无食谱</view>
-        <view class="empty-subtitle">当前筛选条件下没有找到食谱</view>
-        <button class="btn-reset" @tap="resetFilters">重置筛选</button>
-      </view>
-    </view>
-
-    <!-- 适用生命阶段筛选抽屉 -->
     <view v-if="showLifeStageDrawer" class="drawer-mask" @tap="cancelLifeStageDrawer">
       <view class="drawer-content" @tap.stop>
         <view class="drawer-header">

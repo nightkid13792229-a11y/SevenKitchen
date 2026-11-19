@@ -25,6 +25,13 @@ import {
   type RetrievalQueryHits,
 } from '../../domain/ingredient/kb-retrieval-plan';
 import {
+  mergeCandidates,
+  type DimensionCandidate,
+  type DimensionKey,
+} from '../../domain/ingredient/supplement-form-candidates';
+import { SupplementKbFormService } from './supplement-kb-form.service';
+import { SupplementMarketFormService } from './supplement-market-form.service';
+import {
   nutrientChineseLabel,
   nutrientEnglishName,
 } from '../../domain/ingredient/supplement-nutrients';
@@ -98,6 +105,8 @@ export class SupplementFormAdviceService {
   constructor(
     private readonly providerConfig: AgentProviderConfigService,
     private readonly knowledge: KnowledgeGatewayService,
+    private readonly kbForms: SupplementKbFormService,
+    private readonly marketForms: SupplementMarketFormService,
   ) {}
 
   async advise(input: AdviseInput): Promise<FormAdvice> {
@@ -322,6 +331,89 @@ export class SupplementFormAdviceService {
     }
   }
 
+  /**
+   * 维度模式：形态/来源的取值由「知识库原文 + 市场标题」长出来，不再按固定四档作答。
+   *
+   * 只有原文提到的才叫有依据；只有市场的标 MARKET_ONLY，永远不给推荐。
+   */
+  async adviseDimensions(input: AdviseInput): Promise<DimensionsAdvice> {
+    const nutrientKey = input.nutrientKey.trim();
+    const nutrientLabel = input.nutrientLabel?.trim() || nutrientChineseLabel(nutrientKey);
+    const english = nutrientEnglishName(nutrientKey);
+
+    const hitsByQuery = await this.findPages(english);
+    const planned = planRetrievalPages(hitsByQuery, {
+      totalPages: MAX_READS,
+      perQueryMax: PER_QUERY_MAX,
+      perDocumentMax: PER_DOCUMENT_MAX,
+    });
+    const retrieval: RetrievalSummary = {
+      queries: hitsByQuery.map((item) => item.query),
+      pages: [],
+      dropped: planned.dropped.map((item) => ({
+        documentId: item.documentId,
+        page: item.pageNo,
+        reason: item.reason,
+      })),
+    };
+
+    const excerpts = await this.readPages(planned.pages);
+    retrieval.pages = excerpts.map((item) => ({
+      documentId: item.documentId,
+      page: item.page,
+      score:
+        planned.pages.find(
+          (page) => page.documentId === item.documentId && page.pageNo === item.page,
+        )?.score ?? 0,
+    }));
+
+    // 两条抽取并行：一条读原文，一条读商品标题
+    const [kbTerms, marketTerms] = await Promise.all([
+      this.kbForms.extract({
+        nutrientKey,
+        nutrientEnglish: english,
+        pages: excerpts.map((item) => ({
+          documentId: item.documentId,
+          page: item.page,
+          text: item.text,
+        })),
+      }),
+      this.marketForms.extract({ nutrientKey, nutrientEnglish: english }),
+    ]);
+
+    const merged = mergeCandidates(kbTerms, marketTerms);
+    const dimensions = groupByDimension(merged);
+    const recommendation = pickRecommendation(dimensions);
+
+    const gaps: string[] = [];
+    if (kbTerms.length === 0) {
+      gaps.push(`知识库里没有提到「${nutrientLabel}」的形态或来源`);
+    }
+    if (marketTerms.length === 0) {
+      gaps.push('市场上没搜到这一类的商品标题，形态清单可能不全');
+    }
+    if (dimensions.length === 0) {
+      gaps.push('两边都没抽到候选，这一项直接进比价');
+    }
+    if (!recommendation && dimensions.length > 0) {
+      gaps.push('知识库里没有给出可用结论，下面都是市场常见说法，请你判断');
+    }
+
+    this.logger.log(
+      `[form-advice:dimensions] nutrient=${nutrientKey} kb=${kbTerms.length} market=${marketTerms.length} ` +
+        `candidates=${merged.length} recommended=${recommendation ? recommendation.candidateKey : 'none'}`,
+    );
+
+    return {
+      nutrientKey,
+      nutrientLabel,
+      dimensions,
+      recommendation,
+      gaps,
+      retrieval,
+    };
+  }
+
   private async loadRuntime(): Promise<DeepSeekRuntimeConfig> {
     return this.providerConfig.getEnabledDeepSeekRuntimeConfig({
       purpose: INGREDIENT_INTAKE_AGENT_PURPOSE,
@@ -396,4 +488,55 @@ function normalizeVerdict(value: unknown): FormAdvice['options'][number]['verdic
     return text;
   }
   return 'NO_EVIDENCE';
+}
+
+
+export interface DimensionGroup {
+  key: DimensionKey;
+  label: string;
+  candidates: DimensionCandidate[];
+}
+
+export interface DimensionsAdvice {
+  nutrientKey: string;
+  nutrientLabel: string;
+  dimensions: DimensionGroup[];
+  recommendation: { dimensionKey: DimensionKey; candidateKey: string } | null;
+  gaps: string[];
+  retrieval?: RetrievalSummary;
+}
+
+const DIMENSION_LABELS: Record<DimensionKey, string> = {
+  FORM: '形态',
+  SOURCE: '来源',
+};
+
+function groupByDimension(candidates: DimensionCandidate[]): DimensionGroup[] {
+  const groups: DimensionGroup[] = [];
+  for (const key of ['FORM', 'SOURCE'] as DimensionKey[]) {
+    const items = candidates.filter((item) => item.dimension === key);
+    if (items.length > 0) {
+      groups.push({ key, label: DIMENSION_LABELS[key], candidates: items });
+    }
+  }
+  return groups;
+}
+
+/** 先看形态、再看来源；有推荐取推荐，没有就取第一个"可用"；都没有就不推荐。 */
+function pickRecommendation(
+  groups: DimensionGroup[],
+): { dimensionKey: DimensionKey; candidateKey: string } | null {
+  for (const group of groups) {
+    const recommended = group.candidates.find((item) => item.verdict === 'RECOMMENDED');
+    if (recommended) {
+      return { dimensionKey: group.key, candidateKey: recommended.key };
+    }
+  }
+  for (const group of groups) {
+    const acceptable = group.candidates.find((item) => item.verdict === 'ACCEPTABLE');
+    if (acceptable) {
+      return { dimensionKey: group.key, candidateKey: acceptable.key };
+    }
+  }
+  return null;
 }

@@ -60,6 +60,16 @@ export class FormAdviceDto {
   @IsString()
   @MaxLength(300)
   question?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'legacy = 旧的固定四档；dimensions = 维度驱动（形态/来源由原文与市场长出）。默认 legacy，迁移期并存',
+    enum: ['legacy', 'dimensions'],
+    default: 'legacy',
+  })
+  @IsOptional()
+  @IsIn(['legacy', 'dimensions'])
+  mode?: 'legacy' | 'dimensions';
 }
 
 

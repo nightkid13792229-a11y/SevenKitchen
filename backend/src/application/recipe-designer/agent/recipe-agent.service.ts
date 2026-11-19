@@ -35,7 +35,12 @@ import { buildSystemPrompt } from './prompt';
 import { redactDrugDoses } from './dose-redaction';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
-import { AGENT_TOOLS, executeTool } from './tools';
+import { executeTool } from './tools';
+import {
+  phaseSystemLine,
+  toolsForPhase,
+  type AgentPhase,
+} from './phase-policy';
 import { assessmentGapSignature } from './assessment-progress';
 import type { RecipeAgentActor, ToolOutcome } from './agent-types';
 import {
@@ -135,6 +140,7 @@ export class RecipeAgentService implements OnModuleInit {
         orderBy: { startedAt: 'desc' },
       });
       let sessionId: string;
+      const phase: AgentPhase = (existing?.phase ?? 'PLAN') as AgentPhase;
       if (existing) {
         // 不因为库里写着 RUNNING 就拒绝：真正的并发由前面的 active 锁保证。
         // 库里残留的 RUNNING 是上次进程被重启留下的，必须能接着用。
@@ -148,6 +154,7 @@ export class RecipeAgentService implements OnModuleInit {
           data: {
             designRecipeId: input.draftId,
             status: 'RUNNING',
+            phase: 'PLAN',
             skillName: 'recipe-design',
             skillVersion: 'v2',
             createdBy: input.actor.userId,
@@ -157,7 +164,14 @@ export class RecipeAgentService implements OnModuleInit {
       }
 
       await this.appendMessage(sessionId, 'USER', input.message);
-      this.launch(sessionId, input.draftId, input.actor, input.message, flow);
+      this.launch(
+        sessionId,
+        input.draftId,
+        input.actor,
+        input.message,
+        flow,
+        phase,
+      );
       launched = true;
       return { sessionId };
     } finally {
@@ -182,6 +196,83 @@ export class RecipeAgentService implements OnModuleInit {
     return { session, messages };
   }
 
+  /**
+   * 方案/选材确认（2026-11-20）。
+   *
+   * 阶段推进由人点按钮触发；CONTINUE 只表示继续讨论，不推进阶段。
+   */
+  async confirmPlan(
+    draftId: string,
+    actor: RecipeAgentActor,
+    decision: 'APPROVE' | 'CONTINUE',
+  ): Promise<{ phase: AgentPhase }> {
+    return this.confirmStage(draftId, actor, 'PLAN', decision);
+  }
+
+  async confirmSelection(
+    draftId: string,
+    actor: RecipeAgentActor,
+    decision: 'APPROVE' | 'CONTINUE',
+  ): Promise<{ phase: AgentPhase }> {
+    return this.confirmStage(draftId, actor, 'SELECT', decision);
+  }
+
+  private async confirmStage(
+    draftId: string,
+    actor: RecipeAgentActor,
+    stage: 'PLAN' | 'SELECT',
+    decision: 'APPROVE' | 'CONTINUE',
+  ): Promise<{ phase: AgentPhase }> {
+    await this.designer.getDraft(draftId, this.accessFor(actor));
+    const session = await this.prisma.recipeDesignAgentSession.findFirst({
+      where: { designRecipeId: draftId },
+      orderBy: { startedAt: 'desc' },
+    });
+    if (!session) {
+      throw new NotFoundException('会话不存在');
+    }
+    const current = session.phase as AgentPhase;
+    if (decision === 'CONTINUE') {
+      await this.prisma.recipeDesignAgentSession.update({
+        where: { id: session.id },
+        data: { status: 'WAITING_USER' },
+      });
+      return { phase: current };
+    }
+    if (stage === 'PLAN') {
+      if (current !== 'PLAN') {
+        throw new BadRequestException('当前不在方案确认阶段');
+      }
+      if (!session.plan) {
+        throw new BadRequestException('还没有提交营养方案');
+      }
+      await this.prisma.recipeDesignAgentSession.update({
+        where: { id: session.id },
+        data: {
+          phase: 'SELECT',
+          planConfirmedAt: new Date(),
+          status: 'WAITING_USER',
+        },
+      });
+      return { phase: 'SELECT' };
+    }
+    if (current !== 'SELECT') {
+      throw new BadRequestException('当前不在选材确认阶段');
+    }
+    if (!session.selection) {
+      throw new BadRequestException('还没有提交选材候选');
+    }
+    await this.prisma.recipeDesignAgentSession.update({
+      where: { id: session.id },
+      data: {
+        phase: 'DESIGN',
+        selectionConfirmedAt: new Date(),
+        status: 'WAITING_USER',
+      },
+    });
+    return { phase: 'DESIGN' };
+  }
+
   /** 人工停止。 */
   async stop(sessionId: string, actor: RecipeAgentActor): Promise<void> {
     const session = await this.prisma.recipeDesignAgentSession.findUnique({
@@ -202,8 +293,9 @@ export class RecipeAgentService implements OnModuleInit {
     actor: RecipeAgentActor,
     message: string,
     flow: RecipeDesignFlow,
+    phase: AgentPhase,
   ): void {
-    void this.run(sessionId, draftId, actor, message, flow)
+    void this.run(sessionId, draftId, actor, message, flow, phase)
       .catch(async (error: unknown) => {
         await this.prisma.recipeDesignAgentSession
           .update({
@@ -228,6 +320,7 @@ export class RecipeAgentService implements OnModuleInit {
     actor: RecipeAgentActor,
     message: string,
     flow: RecipeDesignFlow,
+    phase: AgentPhase,
   ): Promise<void> {
     const startedAt = Date.now();
     const config = await this.resolveConfig(flow);
@@ -237,16 +330,10 @@ export class RecipeAgentService implements OnModuleInit {
       draftId,
     );
     const catalog = new RecipeCatalogPort(this.prisma);
-    /**
-     * 产品线的需求分类工具只对 CATALOG 有意义。
-     * 订单模式暴露它，模型在找不到档案时会拿它当线索乱翻（2026-11-19 实测）。
-     */
-    const tools =
-      flow === 'ORDER'
-        ? AGENT_TOOLS.filter((tool) => tool.function.name !== 'read_taxonomy')
-        : AGENT_TOOLS;
+    // 阶段白名单：PLAN/SELECT 阶段写工具根本不出现在模型面前。
+    const tools = toolsForPhase(phase, flow);
 
-    let messages = await this.buildMessages(sessionId, message);
+    let messages = await this.buildMessages(sessionId, message, phase);
     let toolCalls = 0;
     let lastGapSignature: string | null = null;
     let sameGapCount = 0;
@@ -376,6 +463,40 @@ export class RecipeAgentService implements OnModuleInit {
         toolCalls += 1;
 
         await this.recordTool(sessionId, call, outcome);
+
+        // 方案/选材提交：落库 + 暂停等用户确认。
+        if (call.function.name === 'propose_plan' && outcome.ok) {
+          await this.prisma.recipeDesignAgentSession.update({
+            where: { id: sessionId },
+            data: {
+              plan: outcome.data as never,
+              status: 'WAITING_USER',
+              endedAt: new Date(),
+            },
+          });
+          await this.appendMessage(
+            sessionId,
+            'ASSISTANT',
+            outcome.summary ?? '方案已提交，请确认。',
+          );
+          return;
+        }
+        if (call.function.name === 'propose_selection' && outcome.ok) {
+          await this.prisma.recipeDesignAgentSession.update({
+            where: { id: sessionId },
+            data: {
+              selection: outcome.data as never,
+              status: 'WAITING_USER',
+              endedAt: new Date(),
+            },
+          });
+          await this.appendMessage(
+            sessionId,
+            'ASSISTANT',
+            outcome.summary ?? '选材已提交，请确认。',
+          );
+          return;
+        }
 
         // 读不到档案就不要在没有约束的情况下继续设计。
         if (call.function.name === 'read_design_context' && !outcome.ok) {
@@ -519,6 +640,7 @@ export class RecipeAgentService implements OnModuleInit {
   private async buildMessages(
     sessionId: string,
     currentMessage: string,
+    phase: AgentPhase,
   ): Promise<DeepSeekToolsMessage[]> {
     const rows = await this.prisma.recipeDesignAgentMessage.findMany({
       where: { sessionId, role: { in: ['USER', 'ASSISTANT'] } },
@@ -530,6 +652,7 @@ export class RecipeAgentService implements OnModuleInit {
 
     const messages: DeepSeekToolsMessage[] = [
       { role: 'system', content: buildSystemPrompt() },
+      { role: 'system', content: phaseSystemLine(phase) },
     ];
     for (const row of historyRows) {
       messages.push({

@@ -2,11 +2,11 @@
  * 食谱设计器 API（Web 端）
  * 对应 backend /api/v1/recipe-designer/*
  */
-import api from './index'
+import api from "./index";
 import {
   SERIES_AI_COVER_TIMEOUT_MESSAGE,
   SERIES_AI_COVER_TIMEOUT_MS,
-} from '@/utils/recipeDesigner/seriesAiCover'
+} from "@/utils/recipeDesigner/seriesAiCover";
 import type {
   AssessmentTarget,
   CreateRecipeSeriesPayload,
@@ -37,120 +37,145 @@ import type {
   UpdateDesignRecipeDraftPayload,
   UpdateDesignRecipeProductionStepsPayload,
   UpdateDogDesignNotesPayload,
-  UpdateDraftPresentationPayload
-} from '@/types/recipeDesigner'
+  UpdateDraftPresentationPayload,
+} from "@/types/recipeDesigner";
 
 export interface RecipeDesignerSeriesListQuery {
-  status?: RecipeDesignerSeriesStatusFilter
-  designMode?: 'CATALOG' | 'ORDER'
-  search?: string
-  page?: number
-  pageSize?: number
+  status?: RecipeDesignerSeriesStatusFilter;
+  designMode?: "CATALOG" | "ORDER";
+  search?: string;
+  page?: number;
+  pageSize?: number;
   /** 只看有发布草稿的系列（2026-11-08：下推到后端 where / count） */
-  hasReleaseDraft?: boolean
+  hasReleaseDraft?: boolean;
 }
 
 export interface RecipeDesignerSeriesListResult {
-  items: RecipeDesignerSeriesCard[]
-  page: number
-  pageSize: number
-  hasMore: boolean
+  items: RecipeDesignerSeriesCard[];
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
   /** 总条数（2026-10-30 分页）：旧后端可能没有，前端需要兜底 */
-  total?: number
+  total?: number;
 }
 
 export interface CreateRecipeSeriesStageDraftPayload {
-  scenario: FediafDogScenario
-  sourceDraftId?: string
+  scenario: FediafDogScenario;
+  sourceDraftId?: string;
 }
 
 export interface CopyRecipeSeriesStageIngredientsPayload {
-  sourceLifeStage: string
+  sourceLifeStage: string;
 }
 
 /** 补剂目标营养素写入定义（一个目标只对应一个 fieldPath） */
 export interface RecipeDesignSupplementTargetPayload {
-  fieldPath: string
-  label?: string
-  unit?: string
+  fieldPath: string;
+  label?: string;
+  unit?: string;
   /** 计算缓存；服务端始终按当前配方重新计算，不信任客户端值 */
-  targetValuePerKg?: number
+  targetValuePerKg?: number;
 }
 
 export interface DesignRecipeItemPayload {
-  ingredientId?: string
-  nutritionFoodId: string
-  weightG: number
-  preparationMethod?: string
-  nutrientTargetKey?: string
-  nutrientTargetValue?: number
+  ingredientId?: string;
+  nutritionFoodId: string;
+  weightG: number;
+  preparationMethod?: string;
+  nutrientTargetKey?: string;
+  nutrientTargetValue?: number;
   /** 补剂目标营养素；补剂不传且档案没有默认目标时后端会 400 */
-  supplementTargets?: RecipeDesignSupplementTargetPayload[]
-  sortOrder?: number
-  includeInAssessment?: boolean
+  supplementTargets?: RecipeDesignSupplementTargetPayload[];
+  sortOrder?: number;
+  includeInAssessment?: boolean;
 }
 
 export interface UpdateDesignRecipeItemPayload {
-  weightG?: number
-  preparationMethod?: string | null
-  nutrientTargetKey?: string | null
-  nutrientTargetValue?: number | null
-  supplementTargets?: RecipeDesignSupplementTargetPayload[]
-  sortOrder?: number
-  includeInAssessment?: boolean
+  weightG?: number;
+  preparationMethod?: string | null;
+  nutrientTargetKey?: string | null;
+  nutrientTargetValue?: number | null;
+  supplementTargets?: RecipeDesignSupplementTargetPayload[];
+  sortOrder?: number;
+  includeInAssessment?: boolean;
 }
 
 export interface PublishDesignRecipePayload {
-  name?: string
-  reviewNote?: string
+  name?: string;
+  reviewNote?: string;
 }
 
 export interface IngredientOptionListQuery {
-  search?: string
-  category?: string
-  type?: 'FOOD' | 'SUPPLEMENT'
-  nutrientKey?: string
-  scenario?: FediafDogScenario
-  expressionBasis?: string
-  page?: number
-  pageSize?: number
+  search?: string;
+  category?: string;
+  type?: "FOOD" | "SUPPLEMENT";
+  nutrientKey?: string;
+  scenario?: FediafDogScenario;
+  expressionBasis?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 export interface CreateSupplementOptionPayload {
-  name: string
-  profileName?: string
-  basisType?: SupplementNutritionBasisType
-  usageUnit?: SupplementUsageUnit
-  servingWeightG?: number
-  densityGPerMl?: number
-  nutrients: Record<string, number | string | null | undefined>
+  name: string;
+  profileName?: string;
+  basisType?: SupplementNutritionBasisType;
+  usageUnit?: SupplementUsageUnit;
+  servingWeightG?: number;
+  densityGPerMl?: number;
+  nutrients: Record<string, number | string | null | undefined>;
 }
 
 export const recipeDesignerApi = {
   // 系列
-  listSeries: (query: RecipeDesignerSeriesListQuery = {}): Promise<RecipeDesignerSeriesListResult> =>
-    api.get('/recipe-designer/series', { params: query }),
-  createSeries: (data: CreateRecipeSeriesPayload): Promise<RecipeDesignerSeriesCard> =>
-    api.post('/recipe-designer/series', data),
-  renameSeries: (seriesId: string, data: { name: string }): Promise<RecipeDesignerSeriesCard> =>
+  listSeries: (
+    query: RecipeDesignerSeriesListQuery = {},
+  ): Promise<RecipeDesignerSeriesListResult> =>
+    api.get("/recipe-designer/series", { params: query }),
+  createSeries: (
+    data: CreateRecipeSeriesPayload,
+  ): Promise<RecipeDesignerSeriesCard> =>
+    api.post("/recipe-designer/series", data),
+  renameSeries: (
+    seriesId: string,
+    data: { name: string },
+  ): Promise<RecipeDesignerSeriesCard> =>
     api.patch(`/recipe-designer/series/${seriesId}`, data),
-  deleteSeries: (seriesId: string, data: { confirmName: string; confirmUserVisibleRemoval: boolean }): Promise<void> =>
+  deleteSeries: (
+    seriesId: string,
+    data: { confirmName: string; confirmUserVisibleRemoval: boolean },
+  ): Promise<void> =>
     api.post(`/recipe-designer/series/${seriesId}/delete`, data),
   duplicateSeries: (seriesId: string): Promise<RecipeDesignerSeriesCard> =>
     api.post(`/recipe-designer/series/${seriesId}/duplicate`),
-  duplicateSeriesStage: (seriesId: string, lifeStage: string): Promise<RecipeDesignerSeriesCard> =>
-    api.post(`/recipe-designer/series/${seriesId}/stages/${lifeStage}/duplicate`),
-  createSeriesStageDraft: (seriesId: string, data: CreateRecipeSeriesStageDraftPayload): Promise<DesignRecipeDraftDetail> =>
+  duplicateSeriesStage: (
+    seriesId: string,
+    lifeStage: string,
+  ): Promise<RecipeDesignerSeriesCard> =>
+    api.post(
+      `/recipe-designer/series/${seriesId}/stages/${lifeStage}/duplicate`,
+    ),
+  createSeriesStageDraft: (
+    seriesId: string,
+    data: CreateRecipeSeriesStageDraftPayload,
+  ): Promise<DesignRecipeDraftDetail> =>
     api.post(`/recipe-designer/series/${seriesId}/stage-drafts`, data),
-  setReferenceDog: (seriesId: string, referenceDogId: string | null): Promise<unknown> =>
-    api.patch(`/recipe-designer/series/${seriesId}/reference-dog`, { referenceDogId }),
+  setReferenceDog: (
+    seriesId: string,
+    referenceDogId: string | null,
+  ): Promise<unknown> =>
+    api.patch(`/recipe-designer/series/${seriesId}/reference-dog`, {
+      referenceDogId,
+    }),
   /**
    * 整系列发布门槛：逐阶段状态 + 阻断项 / 提醒项。
    *
    * 只对产品线（CATALOG）系列有效；订单定制系列后端返回 400。
    * 每次打开抽屉、保存设置、发布后都应重新拉取，前端不自行判定能不能发。
    */
-  getSeriesReleaseReadiness: (seriesId: string): Promise<SeriesReleaseReadiness> =>
+  getSeriesReleaseReadiness: (
+    seriesId: string,
+  ): Promise<SeriesReleaseReadiness> =>
     api.get(`/recipe-designer/series/${seriesId}/release-readiness`),
   /**
    * 保存产品线发布草稿（2026-11-08）。
@@ -162,12 +187,11 @@ export const recipeDesignerApi = {
     seriesId: string,
     data: SaveSeriesReleaseDraftPayload,
   ): Promise<{
-    changedFields: SeriesReleaseDraftField[]
-    updatedAt: string | null
-    name: string | null
-    presentation: SeriesReleasePresentation
-  }> =>
-    api.patch(`/recipe-designer/series/${seriesId}/release-draft`, data),
+    changedFields: SeriesReleaseDraftField[];
+    updatedAt: string | null;
+    name: string | null;
+    presentation: SeriesReleasePresentation;
+  }> => api.patch(`/recipe-designer/series/${seriesId}/release-draft`, data),
   /**
    * 发布整条产品线（仅管理员；后端会再次校验门槛与角色）。
    *
@@ -178,9 +202,9 @@ export const recipeDesignerApi = {
     seriesId: string,
     payload: {
       /** @deprecated 2026-11-08 起整版发布，服务层忽略 */
-      stageCodes?: string[]
+      stageCodes?: string[];
       /** 发布前 flush 完保存队列后的草稿时间，服务端据此做 409 并发保护 */
-      expectedDraftUpdatedAt?: string | null
+      expectedDraftUpdatedAt?: string | null;
     } = {},
   ): Promise<SeriesReleaseResult> =>
     api.post(`/recipe-designer/series/${seriesId}/release`, payload),
@@ -201,32 +225,43 @@ export const recipeDesignerApi = {
    */
   generateSeriesAiCover: (
     seriesId: string,
-    variants = 3
+    variants = 3,
   ): Promise<SeriesAiCoverResult> =>
-    api.post(`/admin/recipe-series/${seriesId}/ai-cover`, {}, {
-      params: { variants },
-      timeout: SERIES_AI_COVER_TIMEOUT_MS,
-      timeoutErrorMessage: SERIES_AI_COVER_TIMEOUT_MESSAGE,
-    }),
+    api.post(
+      `/admin/recipe-series/${seriesId}/ai-cover`,
+      {},
+      {
+        params: { variants },
+        timeout: SERIES_AI_COVER_TIMEOUT_MS,
+        timeoutErrorMessage: SERIES_AI_COVER_TIMEOUT_MESSAGE,
+      },
+    ),
 
-  generateDraftAiCover: (draftId: string, variants = 3): Promise<{
-    url: string
-    provider: string
-    model: string
-    foodNames: string[]
-    candidates: AiCoverCandidate[]
+  generateDraftAiCover: (
+    draftId: string,
+    variants = 3,
+  ): Promise<{
+    url: string;
+    provider: string;
+    model: string;
+    foodNames: string[];
+    candidates: AiCoverCandidate[];
   }> =>
-    api.post(`/recipe-designer/drafts/${draftId}/ai-cover`, {}, {
-      params: { variants },
-      timeout: SERIES_AI_COVER_TIMEOUT_MS,
-      timeoutErrorMessage: SERIES_AI_COVER_TIMEOUT_MESSAGE,
-    }),
+    api.post(
+      `/recipe-designer/drafts/${draftId}/ai-cover`,
+      {},
+      {
+        params: { variants },
+        timeout: SERIES_AI_COVER_TIMEOUT_MS,
+        timeoutErrorMessage: SERIES_AI_COVER_TIMEOUT_MESSAGE,
+      },
+    ),
 
   discardAiCoverPreview: (
     url: string,
-    reason: 'PREVIEW_DISCARDED' | 'UPLOAD_DISCARDED' = 'PREVIEW_DISCARDED'
+    reason: "PREVIEW_DISCARDED" | "UPLOAD_DISCARDED" = "PREVIEW_DISCARDED",
   ): Promise<{ trashed: boolean }> =>
-    api.delete('/admin/ai-covers/preview', { data: { url, reason } }),
+    api.delete("/admin/ai-covers/preview", { data: { url, reason } }),
 
   // 草稿
   getDraft: (draftId: string): Promise<DesignRecipeDraftDetail> =>
@@ -252,7 +287,9 @@ export const recipeDesignerApi = {
   ): Promise<DraftPresentationSnapshot> =>
     api.patch(`/recipe-designer/drafts/${draftId}/presentation`, data),
   /** 读取草稿的结构化制作步骤（Task 7：轻量刷新步骤区，不重拉整份草稿） */
-  getDraftProductionSteps: (draftId: string): Promise<DesignRecipeProductionStepsResult> =>
+  getDraftProductionSteps: (
+    draftId: string,
+  ): Promise<DesignRecipeProductionStepsResult> =>
     api.get(`/recipe-designer/drafts/${draftId}/production-steps`),
   /**
    * 上线检查：读取草稿的共享发布门槛（发布 / 加入待提交同一套判断）。
@@ -264,13 +301,17 @@ export const recipeDesignerApi = {
    * 读取草稿最近一次持久化的营养报告（发布口径）。
    * 没有报告时后端返回 200 + `report: null`，不是错误。
    */
-  getDraftNutritionReport: (draftId: string): Promise<DraftNutritionReportEnvelope> =>
+  getDraftNutritionReport: (
+    draftId: string,
+  ): Promise<DraftNutritionReportEnvelope> =>
     api.get(`/recipe-designer/drafts/${draftId}/nutrition-report`),
   /**
    * 生成并持久化草稿的最新营养报告；生成失败后端返回 400。
    * 成功后草稿的 contentRevision 即报告版本，之后修改草稿会让报告过期。
    */
-  generateDraftNutritionReport: (draftId: string): Promise<DraftNutritionReportEnvelope> =>
+  generateDraftNutritionReport: (
+    draftId: string,
+  ): Promise<DraftNutritionReportEnvelope> =>
     api.post(`/recipe-designer/drafts/${draftId}/nutrition-report`),
   /** 整组覆盖保存制作步骤；空数组表示清空 */
   updateDraftProductionSteps: (
@@ -281,18 +322,18 @@ export const recipeDesignerApi = {
   /** 售后改稿：重新打开已交付的一份设计 */
   reopenAftersaleDesign: (
     aftersaleId: string,
-    deliveryItemId?: string
+    deliveryItemId?: string,
   ): Promise<{
-    orderId: string
-    orderUuid: string
-    designId: string
-    seriesId: string
-    draftId: string
-    deliveryItemId: string | null
-    recipeId: string
+    orderId: string;
+    orderUuid: string;
+    designId: string;
+    seriesId: string;
+    draftId: string;
+    deliveryItemId: string | null;
+    recipeId: string;
   }> =>
     api.post(`/recipe-designer/aftersales/${aftersaleId}/reopen-design`, {
-      deliveryItemId
+      deliveryItemId,
     }),
 
   createRevisionDraft: (draftId: string): Promise<unknown> =>
@@ -323,33 +364,38 @@ export const recipeDesignerApi = {
    * 目标值（FEDIAF 标准）由后端按 scenario 取，客户端不用传。
    */
   assessItems: (payload: {
-    scenario: string
+    scenario: string;
     items: Array<{
-      id: string
-      name: string
-      ingredientType?: string | null
-      weightG: number
-      nutritionProfile?: unknown
-    }>
+      id: string;
+      name: string;
+      ingredientType?: string | null;
+      weightG: number;
+      nutritionProfile?: unknown;
+    }>;
   }): Promise<Record<string, unknown>> =>
-    api.post('/recipe-designer/assess-items', payload),
+    api.post("/recipe-designer/assess-items", payload),
 
   assessContributors: (payload: {
-    scenario: string
-    nutrientKey: string
+    scenario: string;
+    nutrientKey: string;
     items: Array<{
-      id: string
-      name: string
-      ingredientType?: string | null
-      weightG: number
-      nutritionProfile?: unknown
-    }>
-  }): Promise<{ nutrientKey: string; contributors: Array<Record<string, unknown>> }> =>
-    api.post('/recipe-designer/assess-contributors', payload),
+      id: string;
+      name: string;
+      ingredientType?: string | null;
+      weightG: number;
+      nutritionProfile?: unknown;
+    }>;
+  }): Promise<{
+    nutrientKey: string;
+    contributors: Array<Record<string, unknown>>;
+  }> => api.post("/recipe-designer/assess-contributors", payload),
 
   assessDraft: (draftId: string): Promise<unknown> =>
     api.post(`/recipe-designer/drafts/${draftId}/assess`),
-  publishDraft: (draftId: string, data?: PublishDesignRecipePayload): Promise<unknown> =>
+  publishDraft: (
+    draftId: string,
+    data?: PublishDesignRecipePayload,
+  ): Promise<unknown> =>
     api.post(`/recipe-designer/drafts/${draftId}/publish`, data ?? {}),
 
   // 本地评估输入
@@ -357,42 +403,58 @@ export const recipeDesignerApi = {
     api.get(`/recipe-designer/drafts/${draftId}/assessment-inputs`),
 
   // 明细项
-  addItem: (draftId: string, data: DesignRecipeItemPayload): Promise<DesignerItem> =>
+  addItem: (
+    draftId: string,
+    data: DesignRecipeItemPayload,
+  ): Promise<DesignerItem> =>
     api.post(`/recipe-designer/drafts/${draftId}/items`, data),
-  updateItem: (itemId: string, data: UpdateDesignRecipeItemPayload): Promise<DesignerItem> =>
+  updateItem: (
+    itemId: string,
+    data: UpdateDesignRecipeItemPayload,
+  ): Promise<DesignerItem> =>
     api.patch(`/recipe-designer/items/${itemId}`, data),
   removeItem: (itemId: string): Promise<void> =>
     api.delete(`/recipe-designer/items/${itemId}`),
-  batchUpdateItemOrder: (order: Array<{ id: string; sortOrder: number }>): Promise<{ updated: number }> =>
-    api.post('/recipe-designer/items/batch-order', { order }),
+  batchUpdateItemOrder: (
+    order: Array<{ id: string; sortOrder: number }>,
+  ): Promise<{ updated: number }> =>
+    api.post("/recipe-designer/items/batch-order", { order }),
 
   // 原料库
-  listIngredientOptions: (query: IngredientOptionListQuery = {}): Promise<IngredientOptionListResponse> =>
-    api.get('/recipe-designer/ingredient-options', { params: query }),
+  listIngredientOptions: (
+    query: IngredientOptionListQuery = {},
+  ): Promise<IngredientOptionListResponse> =>
+    api.get("/recipe-designer/ingredient-options", { params: query }),
   listSupplementOptions: (): Promise<RecipeDesignerIngredientOption[]> =>
-    api.get('/recipe-designer/ingredient-options', { params: { search: '', pageSize: 200 } })
+    api
+      .get("/recipe-designer/ingredient-options", {
+        params: { search: "", pageSize: 200 },
+      })
       .then((res: IngredientOptionListResponse) =>
         (res.supplementData ?? res.data ?? []).filter(
-          (option) => String(option.type).toUpperCase() === 'SUPPLEMENT'
-        )
+          (option) => String(option.type).toUpperCase() === "SUPPLEMENT",
+        ),
       ),
 
   // 补剂库
-  createSupplementOption: (data: CreateSupplementOptionPayload): Promise<unknown> =>
-    api.post('/recipe-designer/supplement-options', data),
-  extractSupplementLabel: (file: File): Promise<SupplementLabelExtractionDraft> => {
-    const formData = new FormData()
-    formData.append('file', file)
-    return api.post('/recipe-designer/supplement-label/extract', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+  createSupplementOption: (
+    data: CreateSupplementOptionPayload,
+  ): Promise<unknown> => api.post("/recipe-designer/supplement-options", data),
+  extractSupplementLabel: (
+    file: File,
+  ): Promise<SupplementLabelExtractionDraft> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.post("/recipe-designer/supplement-label/extract", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
   },
 
   // 爱犬洞察 + AI 建议
   getDogDesignInsight: (
     dogId: string,
     recentDays?: number,
-    draftId?: string
+    draftId?: string,
   ): Promise<DogDesignInsight> =>
     api.get(`/recipe-designer/dogs/${dogId}/design-insight`, {
       params: {
@@ -400,39 +462,116 @@ export const recipeDesignerApi = {
         ...(draftId ? { draftId } : {}),
       },
     }),
-  updateDogDesignNotes: (dogId: string, data: UpdateDogDesignNotesPayload): Promise<unknown> =>
+  updateDogDesignNotes: (
+    dogId: string,
+    data: UpdateDogDesignNotesPayload,
+  ): Promise<unknown> =>
     api.patch(`/recipe-designer/dogs/${dogId}/design-notes`, data),
 
   // AI 食谱设计对话（2026-10-31 重建：极简版）
-  startAgentRun: (draftId: string, message: string): Promise<{ sessionId: string }> =>
+  startAgentRun: (
+    draftId: string,
+    message: string,
+  ): Promise<{ sessionId: string }> =>
     api.post(`/recipe-designer/drafts/${draftId}/agent/runs`, { message }),
   getAgentSession: (
-    draftId: string
+    draftId: string,
   ): Promise<{ session: AgentSession; messages: AgentMessage[] } | null> =>
     api.get(`/recipe-designer/drafts/${draftId}/agent/session`),
   stopAgentRun: (sessionId: string): Promise<void> =>
     api.post(`/recipe-designer/agent/runs/${sessionId}/stop`),
+  confirmAgentPlan: (
+    draftId: string,
+    decision: "APPROVE" | "CONTINUE",
+  ): Promise<{ phase: AgentPhase }> =>
+    api.post(`/recipe-designer/drafts/${draftId}/agent/plan/decision`, {
+      decision,
+    }),
+  confirmAgentSelection: (
+    draftId: string,
+    decision: "APPROVE" | "CONTINUE",
+  ): Promise<{ phase: AgentPhase }> =>
+    api.post(`/recipe-designer/drafts/${draftId}/agent/selection/decision`, {
+      decision,
+    }),
+};
 
+/** AI 食谱设计会话（2026-10-31 极简版；2026-11-20 增加三阶段） */
+export type AgentPhase = "PLAN" | "SELECT" | "DESIGN";
+
+export interface AgentPlanConstraint {
+  key: string;
+  label: string;
+  min: number | null;
+  max: number | null;
+  unit: string;
+  basis: string;
+  source: string;
+  citationId?: string;
+  hard: boolean;
 }
 
-/** AI 食谱设计会话（2026-10-31 极简版） */
+export interface AgentPlanNonNutrient {
+  key: string;
+  label: string;
+  value: string;
+  unit?: string;
+  note?: string;
+  hard: boolean;
+}
+
+export interface AgentNutritionPlan {
+  summary: string;
+  energyKcal: number;
+  mealsPerDay: number;
+  constraints: AgentPlanConstraint[];
+  nonNutrient: AgentPlanNonNutrient[];
+  notes?: string;
+}
+
+export interface AgentSelectionItem {
+  kind: "FOOD" | "SUPPLEMENT";
+  name: string;
+  ingredientId?: string;
+  nutritionFoodId?: string;
+  reason: string;
+  dataStatus: "AVAILABLE" | "MISSING" | "NEEDS_PROFILE";
+}
+
+export interface AgentSelection {
+  summary: string;
+  items: AgentSelectionItem[];
+  notes?: string;
+}
+
 export interface AgentSession {
-  id: string
-  designRecipeId: string
-  status: 'RUNNING' | 'WAITING_USER' | 'COMPLETED' | 'STOPPED' | 'FAILED' | 'INTERRUPTED'
-  stepCount: number
-  promptTokens: number
-  completionTokens: number
-  lastError?: string | null
-  startedAt: string
-  endedAt?: string | null
+  id: string;
+  designRecipeId: string;
+  status:
+    | "RUNNING"
+    | "WAITING_USER"
+    | "COMPLETED"
+    | "STOPPED"
+    | "FAILED"
+    | "INTERRUPTED";
+  phase: AgentPhase;
+  plan?: AgentNutritionPlan | null;
+  planConfirmedAt?: string | null;
+  selection?: AgentSelection | null;
+  selectionConfirmedAt?: string | null;
+  stepCount: number;
+  promptTokens: number;
+  completionTokens: number;
+  lastError?: string | null;
+  startedAt: string;
+  endedAt?: string | null;
 }
 
 export interface AgentMessage {
-  id: string
-  seq: number
-  role: 'USER' | 'ASSISTANT' | 'TOOL'
-  content: string
-  toolName?: string | null
-  createdAt: string
+  id: string;
+  seq: number;
+  role: "USER" | "ASSISTANT" | "TOOL";
+  content: string;
+  toolName?: string | null;
+  createdAt: string;
 }

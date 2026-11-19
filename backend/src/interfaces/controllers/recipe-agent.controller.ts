@@ -14,6 +14,7 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import { StaffGuard } from '../guards/role.guard';
 
 type AgentMessageBody = { message?: string };
+type AgentDecisionBody = { decision?: string };
 
 /**
  * AI 食谱设计 Agent 的内部员工入口（2026-10-31 重建）。
@@ -56,6 +57,42 @@ export class RecipeAgentController {
     );
   }
 
+  @Post('drafts/:draftId/agent/plan/decision')
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: 'Approve or continue the nutrition plan stage' })
+  async confirmPlan(
+    @Param('draftId') draftId: string,
+    @Body() body: AgentDecisionBody,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<{ phase: string }>> {
+    return ApiResponseDto.success(
+      await this.agentService.confirmPlan(
+        draftId,
+        toActor(user),
+        requireDecision(body),
+      ),
+    );
+  }
+
+  @Post('drafts/:draftId/agent/selection/decision')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Approve or continue the ingredient selection stage',
+  })
+  async confirmSelection(
+    @Param('draftId') draftId: string,
+    @Body() body: AgentDecisionBody,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<{ phase: string }>> {
+    return ApiResponseDto.success(
+      await this.agentService.confirmSelection(
+        draftId,
+        toActor(user),
+        requireDecision(body),
+      ),
+    );
+  }
+
   @Post('agent/runs/:sessionId/stop')
   @UseGuards(StaffGuard)
   @ApiOperation({ summary: 'Stop a recipe design agent run' })
@@ -74,6 +111,16 @@ function toActor(user: RequestUser) {
     role: user.role,
     customerId: user.customerId,
   };
+}
+
+function requireDecision(
+  body: AgentDecisionBody | undefined,
+): 'APPROVE' | 'CONTINUE' {
+  const decision = body?.decision;
+  if (decision !== 'APPROVE' && decision !== 'CONTINUE') {
+    throw new BadRequestException('decision 只能是 APPROVE 或 CONTINUE');
+  }
+  return decision;
 }
 
 function requireMessage(body: AgentMessageBody | undefined): string {

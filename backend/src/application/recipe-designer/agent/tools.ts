@@ -17,6 +17,14 @@ import { RecipeCatalogPort } from './catalog-port';
 import { summarizeKnowledgeOutcome } from './knowledge-tool-bridge';
 import { summarizeDesignContext } from './design-context';
 import {
+  PROPOSE_PLAN_TOOL,
+  PROPOSE_SELECTION_TOOL,
+  normalizePlan,
+  normalizeSelection,
+  summarizePlan,
+  summarizeSelection,
+} from './propose-plan';
+import {
   AgentToolError,
   fail,
   ok,
@@ -194,6 +202,8 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
       },
     },
   },
+  PROPOSE_PLAN_TOOL,
+  PROPOSE_SELECTION_TOOL,
   ...KNOWLEDGE_TOOL_DEFINITIONS,
 ];
 
@@ -218,6 +228,16 @@ export async function executeTool(
       case 'read_design_context': {
         const designContext = await context.port.readDesignContext();
         return ok(designContext, summarizeDesignContext(designContext));
+      }
+
+      case 'propose_plan': {
+        const plan = normalizePlan(args);
+        return ok(plan, summarizePlan(plan));
+      }
+
+      case 'propose_selection': {
+        const selection = normalizeSelection(args);
+        return ok(selection, summarizeSelection(selection));
       }
 
       case 'read_draft': {

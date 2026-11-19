@@ -28,8 +28,8 @@ describe('agent tools: knowledge v3', () => {
     };
   });
 
-  it('appends exactly the 3 knowledge tools to the 8 recipe tools', () => {
-    expect(AGENT_TOOLS).toHaveLength(11);
+  it('contains the recipe tools, phase tools and knowledge tools', () => {
+    expect(AGENT_TOOLS).toHaveLength(13);
     expect(AGENT_TOOLS.map((tool) => tool.function.name)).toEqual([
       'read_design_context',
       'read_draft',
@@ -39,6 +39,8 @@ describe('agent tools: knowledge v3', () => {
       'assess',
       'write_copy',
       'ask',
+      'propose_plan',
+      'propose_selection',
       'kb_catalog',
       'kb_find',
       'kb_read',
@@ -73,10 +75,14 @@ describe('agent tools: knowledge v3', () => {
     const readDesignContext = jest.fn().mockResolvedValue(designContext);
     const port = { readDesignContext } as unknown as RecipeDraftPort;
 
-    const result = await executeTool('read_design_context', {}, {
-      ...context,
-      port,
-    });
+    const result = await executeTool(
+      'read_design_context',
+      {},
+      {
+        ...context,
+        port,
+      },
+    );
 
     expect(readDesignContext).toHaveBeenCalledTimes(1);
     expect(result.ok).toBe(true);

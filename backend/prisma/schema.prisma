@@ -5690,6 +5690,15 @@ enum RecipeAgentSessionStatus {
   INTERRUPTED
 }
 
+enum RecipeAgentPhase {
+  /// 只确认营养方案与约束
+  PLAN
+  /// 只确认食材/补剂候选
+  SELECT
+  /// 配方编辑、评估、调整
+  DESIGN
+}
+
 enum RecipeAgentMessageRole {
   USER
   ASSISTANT
@@ -5711,6 +5720,15 @@ model RecipeDesignAgentSession {
   id               String                    @id @default(uuid())
   designRecipeId   String                    @map("design_recipe_id")
   status           RecipeAgentSessionStatus  @default(RUNNING)
+  /// 三阶段：方案确认 / 选材 / 配方编辑（2026-11-20）。
+  /// 默认 DESIGN 是为了兼容旧会话；新建会话由应用显式写 PLAN。
+  phase            RecipeAgentPhase          @default(DESIGN) @map("phase")
+  /// 已提交的营养方案（结构化约束）
+  plan             Json?
+  planConfirmedAt  DateTime?                 @map("plan_confirmed_at")
+  /// 已提交的食材/补剂候选
+  selection        Json?
+  selectionConfirmedAt DateTime?             @map("selection_confirmed_at")
   skillName        String                    @map("skill_name") @db.VarChar(80)
   skillVersion     String                    @map("skill_version") @db.VarChar(40)
   stepCount        Int                       @default(0) @map("step_count")

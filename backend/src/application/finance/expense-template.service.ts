@@ -390,11 +390,13 @@ export class ExpenseTemplateService {
     if (rows.length === 0) return { created: 0, dueCount };
 
     try {
-      // 已有账单的排重靠「先查」，并发竞态由 (templateId, recognitionStart)
-      // 唯一约束兜底：skipDuplicates 让数据库直接跳过撞键的行。
+      // 已有账单的排重靠「先查」；并发竞态由 (templateId, recognitionStart)
+      // 唯一约束兜底。这里**不能**用 skipDuplicates：它会生成不带冲突目标的
+      // `ON CONFLICT DO NOTHING`，bill_number 等其它唯一键撞号也会被数据库
+      // 静默跳过，定时任务就会少账单而没人知道。去掉后整批写入是原子的，
+      // 冲突抛 P2002，由下面的 catch 按冲突字段区分「并发已生成」与真错误。
       const result = await this.prisma.expenseBill.createMany({
         data: rows,
-        skipDuplicates: true,
       });
       return { created: result.count, dueCount };
     } catch (error) {

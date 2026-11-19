@@ -266,13 +266,14 @@ describe('ExpenseTemplateService.generateForMonth', () => {
 });
 
 describe('ExpenseTemplateService.generateForMonth 并发幂等', () => {
-  it('写库时带上 skipDuplicates，唯一约束冲突由数据库兜底', async () => {
+  it('写库时不带 skipDuplicates：唯一冲突不能交给数据库静默跳过', async () => {
     const prisma = makeTemplatePrisma([makeTemplate()]);
     await new ExpenseTemplateService(prisma).generateForMonth('2026-11');
 
+    // skipDuplicates 会生成不带目标的 ON CONFLICT DO NOTHING，
+    // bill_number 撞号也会被静默吞掉；P2002 必须回到 catch 里按 target 判断。
     expect(prisma.expenseBill.createMany).toHaveBeenCalledWith({
       data: expect.any(Array),
-      skipDuplicates: true,
     });
   });
 
@@ -309,7 +310,7 @@ describe('ExpenseTemplateService.generateForMonth 并发幂等', () => {
     ).rejects.toBe(conflict);
   });
 
-  it('数据库跳过重复行时 created 以实际写入数为准', async () => {
+  it('写入条数以 createMany 返回的 count 为准', async () => {
     const prisma = makeTemplatePrisma([makeTemplate()]);
     prisma.expenseBill.createMany.mockResolvedValue({ count: 0 });
 

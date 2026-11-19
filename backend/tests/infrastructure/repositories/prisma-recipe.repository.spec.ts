@@ -510,4 +510,87 @@ describe('PrismaRecipeRepository', () => {
     expect(result.total).toBe(1);
     expect(result.data[0].seriesId).toBe('series-pork');
   });
+
+  it('counts avoid tags by series and rolls up parent tags', async () => {
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([
+          publicRecipe({
+            id: 'row-chicken',
+            seriesId: 'series-chicken',
+            items: [
+              { ingredient: { tags: [{ tagId: 'tag-chicken' }] } },
+            ],
+          }),
+          publicRecipe({
+            id: 'row-fish',
+            seriesId: 'series-fish',
+            items: [{ ingredient: { tags: [{ tagId: 'tag-fish' }] } }],
+          }),
+        ]),
+      },
+      recipeHealthTag: { findMany: jest.fn().mockResolvedValue([]) },
+      ingredientTag: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'tag-meat', name: '肉类', parentId: null },
+          { id: 'tag-chicken', name: '鸡肉', parentId: 'tag-meat' },
+          { id: 'tag-aquatic', name: '水产', parentId: null },
+          { id: 'tag-fish', name: '鱼', parentId: 'tag-aquatic' },
+          { id: 'tag-egg', name: '蛋类', parentId: null },
+        ]),
+      },
+      recipeTaxonomyKind: { findUnique: jest.fn().mockResolvedValue(null) },
+      recipeSeriesTaxonomy: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const repository = new PrismaRecipeRepository(prisma as any);
+    (repository as any).buildIngredientGroups = jest
+      .fn()
+      .mockResolvedValue([]);
+
+    const options = await repository.getFilterOptions();
+
+    const byLabel = new Map(options.avoid.map((o) => [o.label, o.count]));
+    expect(byLabel.get('鸡肉')).toBe(1);
+    expect(byLabel.get('肉类')).toBe(1); // 父标签汇总子标签
+    expect(byLabel.get('鱼')).toBe(1);
+    expect(byLabel.get('水产')).toBe(1);
+    expect(byLabel.has('蛋类')).toBe(false); // 0 道不返回
+  });
+
+  it('excludes whole series when any version contains an avoided tag', async () => {
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([
+          publicRecipe({
+            id: 'row-chicken',
+            seriesId: 'series-chicken',
+            items: [
+              { ingredient: { tags: [{ tagId: 'tag-chicken' }] } },
+            ],
+          }),
+          publicRecipe({
+            id: 'row-fish',
+            seriesId: 'series-fish',
+            items: [{ ingredient: { tags: [{ tagId: 'tag-fish' }] } }],
+          }),
+        ]),
+      },
+      ingredientTag: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'tag-meat', parentId: null },
+          { id: 'tag-chicken', parentId: 'tag-meat' },
+        ]),
+      },
+    };
+    const repository = new PrismaRecipeRepository(prisma as any);
+
+    const result = await repository.findPublicRecipesPaginated({
+      avoidTagIds: ['tag-meat'],
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.data[0].seriesId).toBe('series-fish');
+  });
 });

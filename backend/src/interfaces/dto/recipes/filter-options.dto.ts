@@ -2,7 +2,7 @@
  * Filter Options Response DTO
  */
 
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class FilterOptionDto {
   @ApiProperty({ example: 'PUPPY' })
@@ -13,6 +13,9 @@ export class FilterOptionDto {
 
   @ApiProperty({ example: 12 })
   count!: number;
+
+  @ApiPropertyOptional({ example: 'parent-tag-id', nullable: true })
+  parentId?: string | null;
 }
 
 export class IngredientItemDto {
@@ -67,6 +70,12 @@ export class FilterOptionsDto {
     description: 'Need options (低脂/易消化/单一蛋白), counted by series',
   })
   needs!: FilterOptionDto[];
+
+  @ApiProperty({
+    type: [FilterOptionDto],
+    description: 'Ingredient tags to avoid, counted by series; parent tag rolls up children',
+  })
+  avoid!: FilterOptionDto[];
 
   @ApiProperty({ example: 24, description: 'Total recipes count' })
   total!: number;

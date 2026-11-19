@@ -1013,6 +1013,7 @@ export class RecipesController {
     @Query('excludeIngredients') excludeIngredients?: string,
     @Query('mainProteinNodeIds') mainProteinNodeIds?: string,
     @Query('needTagIds') needTagIds?: string,
+    @Query('avoidTagIds') avoidTagIds?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ): Promise<ApiResponseDto<any>> {
@@ -1033,6 +1034,9 @@ export class RecipesController {
     const needTagIdArray = needTagIds
       ? needTagIds.split(',').filter(Boolean)
       : [];
+    const avoidTagIdArray = avoidTagIds
+      ? avoidTagIds.split(',').filter(Boolean)
+      : [];
 
     // Get paginated recipes
     const paginatedResult =
@@ -1043,6 +1047,7 @@ export class RecipesController {
         excludeIngredients: excludeIngredientArray,
         mainProteinNodeIds: mainProteinNodeIdArray,
         needTagIds: needTagIdArray,
+        avoidTagIds: avoidTagIdArray,
         page: parsedPage,
         pageSize: parsedPageSize,
       });

@@ -93,6 +93,8 @@ export interface FindRecipesOptions {
   mainProteinNodeIds?: string[];
   /** 需求标签（低脂/易消化/单一蛋白）；多个标签按「并且」处理 */
   needTagIds?: string[];
+  /** 要避开的原料标签（父标签自动包含子标签）；含任一的系列整道排除 */
+  avoidTagIds?: string[];
   page?: number;
   pageSize?: number;
 }
@@ -133,6 +135,13 @@ export interface FilterOptions {
     value: string;
     label: string;
     count: number;
+  }>;
+  /** 避开：原料标签（含父标签），按系列计数，0 道不返回 */
+  avoid: Array<{
+    value: string;
+    label: string;
+    count: number;
+    parentId: string | null;
   }>;
   total: number;
 }

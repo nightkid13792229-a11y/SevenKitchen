@@ -426,6 +426,42 @@ export class PrismaRecipeRepository implements RecipeRepository {
       });
     }
 
+    // 避开：父标签展开到子标签；含任一的系列整道排除（含一点也算）。
+    if (options?.avoidTagIds && options.avoidTagIds.length > 0) {
+      const tagRows = await this.prisma.ingredientTag.findMany({
+        select: { id: true, parentId: true },
+      });
+      const children = new Map<string, string[]>();
+      for (const tag of tagRows) {
+        if (!tag.parentId) continue;
+        const list = children.get(tag.parentId) ?? [];
+        list.push(tag.id);
+        children.set(tag.parentId, list);
+      }
+      const expanded = new Set<string>();
+      const stack = [...options.avoidTagIds];
+      while (stack.length > 0) {
+        const current = stack.pop() as string;
+        if (expanded.has(current)) continue;
+        expanded.add(current);
+        stack.push(...(children.get(current) ?? []));
+      }
+      const affectedSeries = new Set<string>();
+      for (const recipe of allRecipes) {
+        if (!recipe.seriesId) continue;
+        const hit = (recipe.items ?? []).some((item) =>
+          (item.ingredient?.tags ?? []).some((assignment) =>
+            expanded.has(assignment.tagId),
+          ),
+        );
+        if (hit) affectedSeries.add(recipe.seriesId);
+      }
+      filteredRecipes = filteredRecipes.filter(
+        (recipe) =>
+          !recipe.seriesId || !affectedSeries.has(recipe.seriesId),
+      );
+    }
+
     const hasLifeStageFilter = Boolean(options?.lifeStages?.length);
 
     const uniqueRecipes = this.groupPublicRecipeRepresentatives(
@@ -474,6 +510,13 @@ export class PrismaRecipeRepository implements RecipeRepository {
             healthTagId: true,
           },
         },
+        items: {
+          select: {
+            ingredient: {
+              select: { tags: { select: { tagId: true } } },
+            },
+          },
+        },
       },
     });
 
@@ -492,6 +535,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
       select: {
         id: true,
         name: true,
+        parentId: true,
       },
       orderBy: { sort: 'asc' },
     });
@@ -660,6 +704,59 @@ export class PrismaRecipeRepository implements RecipeRepository {
         Boolean(option && option.count > 0),
     );
 
+    /**
+     * 避开：原料标签按系列计数。
+     *
+     * 父标签（肉类 / 水产）自动包含子标签；含任一子标签的系列只算一次。
+     * 0 道的不返回；「有机」已删除，不再出现。
+     */
+    const avoidTagsBySeries = new Map<string, Set<string>>();
+    for (const recipe of allRecipes) {
+      if (!recipe.seriesId) continue;
+      const set = avoidTagsBySeries.get(recipe.seriesId) ?? new Set<string>();
+      for (const item of recipe.items ?? []) {
+        for (const assignment of item.ingredient?.tags ?? []) {
+          set.add(assignment.tagId);
+        }
+      }
+      avoidTagsBySeries.set(recipe.seriesId, set);
+    }
+    const tagChildren = new Map<string, string[]>();
+    for (const tag of allTags) {
+      if (!tag.parentId) continue;
+      const list = tagChildren.get(tag.parentId) ?? [];
+      list.push(tag.id);
+      tagChildren.set(tag.parentId, list);
+    }
+    const collectTagIds = (id: string): string[] => {
+      const result: string[] = [];
+      const stack = [id];
+      const seen = new Set<string>();
+      while (stack.length > 0) {
+        const current = stack.pop() as string;
+        if (seen.has(current)) continue;
+        seen.add(current);
+        result.push(current);
+        stack.push(...(tagChildren.get(current) ?? []));
+      }
+      return result;
+    };
+    const avoid = allTags
+      .map((tag) => {
+        const ids = collectTagIds(tag.id);
+        let count = 0;
+        for (const seriesTags of avoidTagsBySeries.values()) {
+          if (ids.some((id) => seriesTags.has(id))) count += 1;
+        }
+        return {
+          value: tag.id,
+          label: tag.name,
+          count,
+          parentId: tag.parentId ?? null,
+        };
+      })
+      .filter((option) => option.count > 0);
+
     return {
       lifeStages,
       healthTags,
@@ -667,6 +764,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
       ingredientGroups,
       mainProtein,
       needs,
+      avoid,
       total: allRecipes.length,
     };
   }

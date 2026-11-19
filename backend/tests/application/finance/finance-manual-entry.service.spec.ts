@@ -119,6 +119,21 @@ describe('FinanceManualEntryService.create', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('手工收入只允许「其他收入」，其他来源类别由系统自动记录', async () => {
+    const service = new FinanceManualEntryService(makePrisma() as any);
+
+    // ONLINE_ORDER / OFFLINE_ORDER / SUPPLEMENT / CUSTOM_RECIPE 都能被系统自动归类，
+    // 手工标成这些类别既不计手续费、又不进订单口径，两边对不上，必须拒绝。
+    await expect(
+      service.create('u1', incomeInput({ incomeCategory: 'ONLINE_ORDER' })),
+    ).rejects.toThrow(/系统自动记录/);
+
+    // 其他收入通过
+    await expect(
+      service.create('u1', incomeInput({ incomeCategory: 'OTHER_INCOME' })),
+    ).resolves.toEqual({ id: 'new' });
+  });
+
   it('发生日早于起账日被拒绝', async () => {
     const service = new FinanceManualEntryService(makePrisma() as any);
 

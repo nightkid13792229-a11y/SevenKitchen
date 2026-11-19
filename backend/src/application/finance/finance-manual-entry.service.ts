@@ -8,6 +8,8 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import { TimezoneUtil } from '../../utils/timezone.util';
 import {
   FINANCE_INCOME_CATEGORY_LABELS,
+  MANUAL_INCOME_CATEGORIES,
+  MANUAL_INCOME_ONLY_MESSAGE,
   FinanceExpenseCategory,
   FinanceIncomeCategory,
 } from './finance-categories';
@@ -24,6 +26,8 @@ import { FINANCE_START_DATE } from './finance-period';
  * - `occurredAt` 是 date-only，存「当天上海零点」对应的 UTC 时刻；
  * - 支出只写 `category`、收入只写 `incomeCategory`，另一侧留 NULL，
  *   避免明细/汇总两侧各读一个字段时出现双重归类；
+ * - 手工收入只允许「其他收入」：其余收入类别由系统按来源自动记录，
+ *   手工标上去会导致手续费与订单口径对不上（§6.2）；
  * - 作废不物理删除：只写 `voidedAt` / `voidReason`，明细查询已按
  *   `voidedAt: null` 排除（见 finance-income / finance-expense 服务）。
  */
@@ -78,6 +82,9 @@ const INCOME_CATEGORY_CODES = new Set<string>(
   Object.keys(FINANCE_INCOME_CATEGORY_LABELS),
 );
 
+/** 手工收入只允许「其他收入」，其余来源由系统按业务表自动记录 */
+const MANUAL_INCOME_CATEGORY_CODES = new Set<string>(MANUAL_INCOME_CATEGORIES);
+
 /** 金额：必须 > 0 且最多两位小数；返回按分取整后的元 */
 function parseAmount(input: unknown): number {
   if (typeof input !== 'number' || !Number.isFinite(input) || input <= 0) {
@@ -121,6 +128,9 @@ function resolveCategory(
   }
   if (!INCOME_CATEGORY_CODES.has(String(incomeCategory))) {
     throw new BadRequestException('收入类别不合法');
+  }
+  if (!MANUAL_INCOME_CATEGORY_CODES.has(String(incomeCategory))) {
+    throw new BadRequestException(MANUAL_INCOME_ONLY_MESSAGE);
   }
   return {
     category: null,

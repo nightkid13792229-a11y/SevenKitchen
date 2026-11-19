@@ -40,8 +40,22 @@ export const FINANCE_INCOME_CATEGORY_LABELS = {
   OTHER_INCOME: '其他收入',
 } as const;
 
-export type FinanceIncomeCategory =
-  keyof typeof FINANCE_INCOME_CATEGORY_LABELS;
+export type FinanceIncomeCategory = keyof typeof FINANCE_INCOME_CATEGORY_LABELS;
+
+/**
+ * 手工收入允许的类别：只有「其他收入」。
+ *
+ * 线上订单/线下订单/补剂/定制食谱的收入由系统按来源自动记录：
+ * 手工条目标成这些类别时，既不会算支付手续费、也不会进订单口径，
+ * 明细和汇总两边就对不上了（设计文档 §6.2）。
+ */
+export const MANUAL_INCOME_CATEGORIES: readonly FinanceIncomeCategory[] = [
+  'OTHER_INCOME',
+];
+
+/** 手工收入填了系统来源类别时的报错文案（服务层与 DTO 共用一份） */
+export const MANUAL_INCOME_ONLY_MESSAGE =
+  '手工收入只记「其他收入」：线上/线下/补剂/定制食谱的收入由系统自动记录';
 
 /** 线下收款方式：钱进个人账户，不产生支付手续费 */
 export const OFFLINE_PAYMENT_METHODS = [

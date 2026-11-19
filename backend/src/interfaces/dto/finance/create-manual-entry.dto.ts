@@ -10,7 +10,10 @@ import {
   Matches,
 } from 'class-validator';
 import { FinanceExpenseCategory as FinanceExpenseCategoryEnum } from '@prisma/client';
-import { FINANCE_INCOME_CATEGORY_LABELS } from '../../../application/finance/finance-categories';
+import {
+  MANUAL_INCOME_CATEGORIES,
+  MANUAL_INCOME_ONLY_MESSAGE,
+} from '../../../application/finance/finance-categories';
 import type {
   FinanceExpenseCategory,
   FinanceIncomeCategory,
@@ -21,7 +24,8 @@ import type {
  *
  * 金额只收正数、最多两位小数；方向由 `direction` 决定。
  * 支出填 `category`（`FinanceExpenseCategory` 枚举内），
- * 收入填 `incomeCategory`（`FINANCE_INCOME_CATEGORY_LABELS` 的 key）。
+ * 收入填 `incomeCategory`，但手工收入只允许 `OTHER_INCOME` ——
+ * 线上/线下/补剂/定制食谱的收入由系统自动记录，手工标上去会和订单、手续费口径对不上。
  * 服务层还会再校验一次，这里的装饰器只负责把明显非法的请求挡在控制器外。
  */
 export class CreateManualEntryDto {
@@ -60,13 +64,14 @@ export class CreateManualEntryDto {
   category?: FinanceExpenseCategory;
 
   @ApiPropertyOptional({
-    description: '收入类别（收入必填；支出不传）',
-    enum: Object.keys(FINANCE_INCOME_CATEGORY_LABELS),
+    description:
+      '收入类别（收入必填；手工只允许 OTHER_INCOME，其余由系统自动记录）',
+    enum: [...MANUAL_INCOME_CATEGORIES],
     example: 'OTHER_INCOME',
   })
   @IsOptional()
-  @IsIn(Object.keys(FINANCE_INCOME_CATEGORY_LABELS), {
-    message: '收入类别不合法',
+  @IsIn([...MANUAL_INCOME_CATEGORIES], {
+    message: MANUAL_INCOME_ONLY_MESSAGE,
   })
   incomeCategory?: FinanceIncomeCategory;
 

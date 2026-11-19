@@ -102,6 +102,35 @@
         </view>
       </view>
 
+      <view class="section">
+        <view class="section-head">
+          <text class="section-title">收款</text>
+        </view>
+        <view class="switch-row">
+          <view class="switch-copy">
+            <text class="switch-label">已收款</text>
+            <text class="switch-hint">
+              {{ collected ? '下单即记已付款，财务立刻算收入' : '先建成待付款单，之后进订单详情确认收款' }}
+            </text>
+          </view>
+          <switch :checked="collected" color="#1e3a2f" @change="onCollectedChange" />
+        </view>
+        <view v-if="collected" class="field-group">
+          <text class="field-label">收款方式</text>
+          <view class="channel-row">
+            <text
+              v-for="option in OFFLINE_PAYMENT_CHANNEL_OPTIONS"
+              :key="option.value"
+              class="channel-chip"
+              :class="{ active: paymentChannel === option.value }"
+              @tap="paymentChannel = option.value"
+            >
+              {{ option.label }}
+            </text>
+          </view>
+        </view>
+      </view>
+
       <view class="notice info">
         无账号顾客没有小程序账号，这单不会给顾客发微信通知；物流和发货时间需要人工告知。
       </view>
@@ -127,6 +156,7 @@ import {
   createAssistedOrder,
   previewAssistedPricing,
   previewPortion,
+  type AssistedOfflinePaymentChannel,
   type AssistedPricing,
   type PortionPreview,
 } from '../../api/staffAssistedOrder'
@@ -166,6 +196,31 @@ const pricingLoading = ref(false)
 const actualAmount = ref('')
 /** 员工是否手动改过实收：没改过就跟最新报价走，改过就不再覆盖 */
 const amountTouched = ref(false)
+
+/**
+ * 收款开关（2026-11-19，设计 §4.1）。
+ *
+ * 默认开：代客下单当场收钱，勾了就直接落成已付单（`paidAt` = 下单时间），
+ * 财务立刻算收入；关掉才留成待付款，避免"漏点确认收款"导致钱消失。
+ */
+const collected = ref(true)
+
+const OFFLINE_PAYMENT_CHANNEL_OPTIONS: Array<{
+  value: AssistedOfflinePaymentChannel
+  label: string
+}> = [
+  { value: 'OFFLINE_WECHAT', label: '微信' },
+  { value: 'OFFLINE_ALIPAY', label: '支付宝' },
+  { value: 'OTHER', label: '其他' },
+]
+
+/** 收款渠道：默认微信，钱都进个人账户，不产生微信手续费 */
+const paymentChannel = ref<AssistedOfflinePaymentChannel>('OFFLINE_WECHAT')
+
+function onCollectedChange(event: any) {
+  collected.value = Boolean(event?.detail?.value)
+}
+
 const adjustReason = ref('')
 const remark = ref('')
 const targetProductionDate = ref('')
@@ -447,6 +502,9 @@ async function submit() {
       addressId: selectedAddressId.value,
       targetProductionDate: targetProductionDate.value || null,
       actualAmount: actual,
+      // 关掉「已收款」时显式传 false；打开时带渠道，后端直接落成已付单
+      collected: collected.value,
+      paymentChannel: collected.value ? paymentChannel.value : undefined,
       amountAdjustReason: adjustReason.value.trim() || undefined,
       remark: remark.value.trim() || undefined,
       recipeSource: ownershipKind.value || undefined,
@@ -502,6 +560,14 @@ async function submit() {
 .amount-row { display: flex; align-items: baseline; justify-content: space-between; padding: 12rpx 0; }
 .amount-label { font-size: 26rpx; color: #6b6653; }
 .amount-value { font-size: 40rpx; font-weight: 800; color: #1e3a2f; }
+
+.switch-row { display: flex; align-items: center; gap: 16rpx; }
+.switch-copy { flex: 1; min-width: 0; }
+.switch-label { display: block; font-size: 28rpx; font-weight: 700; color: #26261f; }
+.switch-hint { display: block; margin-top: 6rpx; font-size: 22rpx; color: #6b6653; line-height: 1.5; }
+.channel-row { display: flex; flex-wrap: wrap; gap: 12rpx; }
+.channel-chip { padding: 10rpx 26rpx; border: 1rpx solid #dfe4d4; border-radius: 999rpx; background: #fbfcf7; font-size: 24rpx; color: #5a6560; }
+.channel-chip.active { border-color: #1e3a2f; background: #e8f1ec; color: #1e3a2f; font-weight: 700; }
 
 .primary-btn { position: fixed; left: 0; right: 0; bottom: 0; margin: 0; height: 100rpx; line-height: 100rpx; border-radius: 0; background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%); color: #f3eddd; font-size: 30rpx; font-weight: 800; }
 </style>

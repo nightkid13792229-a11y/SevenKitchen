@@ -7,19 +7,23 @@ export const reimbursementFlowTypeOptions = [
   {
     value: 'OPERATING',
     label: '经营费用报销',
-    description: '房租、水电、工资/人工、工具、杂物、其它日常支出',
+    description: '水电、工具、杂物、其它日常支出',
   },
 ] as const;
 
 export type ReimbursementFlowType =
   (typeof reimbursementFlowTypeOptions)[number]['value'];
 
+/**
+ * 经营费用报销的可选类别（2026-11-19 收窄）。
+ *
+ * 房租、工资、社保、税费已经移到「财务 → 固定费用」按月自动出账，
+ * 这里不再提供，避免同一笔钱既走报销又走固定费用被扣两次。
+ */
 export const reimbursementCustomFeeCategoryOptions = [
-  { value: 'RENT', label: '房租' },
   { value: 'UTILITIES', label: '水电' },
   { value: 'TOOLS', label: '工具' },
   { value: 'SUNDRIES', label: '杂物' },
-  { value: 'PAYROLL', label: '工资/人工' },
   { value: 'OTHER', label: '其它' },
 ] as const;
 
@@ -58,7 +62,6 @@ export const inferReimbursementCustomFeeCategory = (
   const normalized = `${description || ''}`.trim();
 
   if (!normalized) return undefined;
-  if (normalized.includes('房租')) return 'RENT';
   if (
     normalized.includes('水电') ||
     normalized.includes('水费') ||
@@ -70,14 +73,6 @@ export const inferReimbursementCustomFeeCategory = (
   }
   if (normalized.includes('工具') || normalized.includes('设备')) {
     return 'TOOLS';
-  }
-  if (
-    normalized.includes('工资') ||
-    normalized.includes('薪资') ||
-    normalized.includes('社保') ||
-    normalized.includes('提成')
-  ) {
-    return 'PAYROLL';
   }
   if (
     normalized.includes('杂') ||

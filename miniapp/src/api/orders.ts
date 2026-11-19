@@ -319,6 +319,72 @@ export function confirmOfflinePayment(
   });
 }
 
+/** 线下退款方式（与后端 `order_offline_refund.method` 一致） */
+export type OrderOfflineRefundMethod = 'WECHAT' | 'ALIPAY' | 'CASH' | 'OTHER';
+
+/** 订单详情里展示的一条线下退款登记 */
+export interface OrderOfflineRefund {
+  id: string;
+  amount: number;
+  /** 退款成功日 `YYYY-MM-DD`（财务按这一天归月） */
+  refundedAt: string;
+  method: OrderOfflineRefundMethod | string;
+  note: string | null;
+  proofKeys: string[];
+  createdById: string;
+  createdAt: string;
+}
+
+export interface RegisterOrderOfflineRefundPayload {
+  /** 本次退款金额（元，最多两位小数） */
+  amount: number;
+  /** 退款成功日 `YYYY-MM-DD` */
+  refundedAt: string;
+  method: OrderOfflineRefundMethod;
+  note?: string;
+}
+
+export interface RegisterOrderOfflineRefundResult {
+  id: string;
+  /** 该订单累计已退（含本次） */
+  totalRefunded: number;
+  /** 该订单还可退（实收 − 累计已退） */
+  remaining: number;
+}
+
+/**
+ * 订单的线下退款登记（未作废，按退款日倒序）。
+ *
+ * 只有管理员能读；员工端不展示入口，调用失败静默。
+ */
+export function listOrderOfflineRefunds(orderId: string) {
+  return request<OrderOfflineRefund[]>({
+    url: `/admin/orders/${orderId}/offline-refunds`,
+    method: 'GET',
+    quiet: true,
+    suppressErrorToast: true,
+  });
+}
+
+/**
+ * 登记一笔线下退款（钱从个人微信/支付宝退回顾客，不走微信原路退款）。
+ *
+ * 只适用于「已付款 + 线下收款」的订单；累计退款不能超过实收。
+ * 失败时由调用方原样展示后端 message（这里不自动弹 toast）。
+ */
+export function registerOrderOfflineRefund(
+  orderId: string,
+  payload: RegisterOrderOfflineRefundPayload,
+) {
+  return request<RegisterOrderOfflineRefundResult>({
+    url: `/admin/orders/${orderId}/offline-refund`,
+    method: 'POST',
+    quiet: true,
+    suppressErrorToast: true,
+    data: payload,
+  });
+}
+
 /**
  * 更新订单管理员备注
  */

@@ -495,6 +495,38 @@
         </view>
       </view>
 
+      <!-- 线下退款登记（2026-11-19）：钱从个人账户退回，微信原路退款退不了 -->
+      <view v-if="canRegisterOfflineRefund" class="card offline-refund-card">
+        <view class="card-title">
+          线下退款
+          <text class="card-note">登记后按退款日冲减收入</text>
+        </view>
+        <view class="offline-refund-summary">
+          <text>已登记退款合计 ¥{{ formatAmount(offlineRefundTotal) }}</text>
+          <text class="offline-refund-summary-sep">/ 实收 ¥{{ formatAmount(order.amountTotal) }}</text>
+        </view>
+        <view v-if="loadingOfflineRefunds" class="offline-refund-empty">加载中...</view>
+        <view v-else-if="offlineRefunds.length" class="offline-refund-list">
+          <view
+            v-for="item in offlineRefunds"
+            :key="item.id"
+            class="offline-refund-row"
+          >
+            <text class="offline-refund-date">{{ item.refundedAt }}</text>
+            <text class="offline-refund-method">{{ offlineRefundMethodLabel(item.method) }}</text>
+            <text class="offline-refund-amount">-¥{{ formatAmount(item.amount) }}</text>
+          </view>
+        </view>
+        <view v-else class="offline-refund-empty">还没有登记过线下退款</view>
+        <button
+          class="address-action-btn primary full offline-refund-entry"
+          :disabled="offlineRefundRemaining <= 0"
+          @tap="openOfflineRefundPanel"
+        >
+          {{ offlineRefundRemaining > 0 ? '登记线下退款' : '已退满' }}
+        </button>
+      </view>
+
       <!-- 危险操作：退款不该跟日常动作并排 -->
       <view v-if="canAdminRefund && primaryAction?.key !== 'refund'" class="danger-zone">
         <text class="danger-btn" @tap="adminRefundOrder">退款 / 退差价</text>
@@ -711,6 +743,71 @@
       </view>
     </view>
 
+    <view v-if="offlineRefundVisible" class="modal-mask" @tap="closeOfflineRefundPanel">
+      <view class="modal-panel" @tap.stop>
+        <view class="modal-header">
+          <text class="modal-title">登记线下退款</text>
+          <text class="modal-close" @tap="closeOfflineRefundPanel">×</text>
+        </view>
+        <view class="offline-refund-summary modal-summary">
+          <text>已登记退款合计 ¥{{ formatAmount(offlineRefundTotal) }}</text>
+          <text class="offline-refund-summary-sep">/ 实收 ¥{{ formatAmount(order?.amountTotal) }}</text>
+        </view>
+        <view class="form-item">
+          <text class="form-label">本次退款金额（元）</text>
+          <input
+            class="form-input"
+            v-model="offlineRefundAmount"
+            type="digit"
+            placeholder="请输入本次退款金额"
+          />
+          <text class="address-lock-hint">最多还能退 ¥{{ formatAmount(offlineRefundRemaining) }}</text>
+        </view>
+        <view class="form-item">
+          <text class="form-label">退款日期</text>
+          <picker mode="date" :value="offlineRefundDate" @change="onOfflineRefundDateChange">
+            <view class="form-picker">
+              <text>{{ offlineRefundDate || '请选择退款日期' }}</text>
+              <text class="picker-arrow">›</text>
+            </view>
+          </picker>
+        </view>
+        <view class="form-item">
+          <text class="form-label">退款方式</text>
+          <view class="offline-refund-method-options">
+            <text
+              v-for="option in OFFLINE_REFUND_METHOD_OPTIONS"
+              :key="option.value"
+              class="offline-refund-method-option"
+              :class="{ active: offlineRefundMethod === option.value }"
+              @tap="offlineRefundMethod = option.value"
+            >
+              {{ option.label }}
+            </text>
+          </view>
+        </view>
+        <view class="form-item">
+          <text class="form-label">备注（可留空）</text>
+          <textarea
+            class="form-textarea"
+            v-model="offlineRefundNote"
+            maxlength="200"
+            placeholder="例如：顾客要求退部分餐费"
+          />
+        </view>
+        <text class="address-lock-hint">
+          登记只记账、不改订单状态；要取消订单仍走现有取消流程。线上支付的退款请走「退款 / 退差价」。
+        </text>
+        <button
+          class="address-save-btn"
+          :disabled="savingOfflineRefund"
+          @tap="submitOfflineRefund"
+        >
+          {{ savingOfflineRefund ? '提交中...' : '确认登记' }}
+        </button>
+      </view>
+    </view>
+
     <view v-if="dogSwitcherVisible" class="modal-mask" @tap="closeDogSwitcher">
       <view class="modal-panel" @tap.stop>
         <view class="modal-header">
@@ -770,6 +867,8 @@ import {
   getAdminOrderFinancialSummary,
   listOrderCustomerDogs,
   listOrderCustomerAddresses,
+  listOrderOfflineRefunds,
+  registerOrderOfflineRefund,
   retryWechatRefund,
   switchOrderDog as switchExistingOrderDog,
   updateAdminOrderRemark,
@@ -779,6 +878,8 @@ import {
   updateOrderSettlementAdjustmentStatus,
   updateStaffCustomerServiceAmount,
   type CustomerOrderFinancialSummary,
+  type OrderOfflineRefund,
+  type OrderOfflineRefundMethod,
   type OrderPackagePlanItem,
   type StaffOrderAddress,
   type StaffOrderDog,
@@ -787,6 +888,7 @@ import {
   formatShanghaiDateOnly,
   formatShortDateTime,
   resolveProductionDatePickerState,
+  shanghaiTodayText,
 } from '../../utils/date'
 import { normalizeImageUrl } from '../../utils/config'
 import {
@@ -795,6 +897,31 @@ import {
   describeProductionDateUpdateError,
   formatProductionDateLabel,
 } from '../../utils/order-production-date'
+
+/**
+ * 线下收款方式（与后端 `finance-categories` 的 OFFLINE_PAYMENT_METHODS 同一口径）。
+ *
+ * 不能只判 OFFLINE / OFFLINE_WECHAT：ADMIN（后台手动确认）、OFFLINE_ALIPAY、
+ * OTHER 也都是钱进了个人账户，漏判会让支付宝代客单看不到改价和退款入口。
+ */
+const OFFLINE_PAYMENT_METHODS: readonly string[] = [
+  'ADMIN',
+  'OFFLINE',
+  'OFFLINE_WECHAT',
+  'OFFLINE_ALIPAY',
+  'OTHER',
+]
+
+/** 线下退款方式（对应 `order_offline_refund.method`） */
+const OFFLINE_REFUND_METHOD_OPTIONS: Array<{
+  value: OrderOfflineRefundMethod
+  label: string
+}> = [
+  { value: 'WECHAT', label: '微信' },
+  { value: 'ALIPAY', label: '支付宝' },
+  { value: 'CASH', label: '现金' },
+  { value: 'OTHER', label: '其他' },
+]
 
 // 获取页面参数
 const orderId = ref('')
@@ -987,6 +1114,15 @@ const refundVisible = ref(false)
 const refundAmountDraft = ref('')
 const refundReason = ref('')
 const savingRefund = ref(false)
+/** 线下退款登记（2026-11-19）：钱从个人账户退，微信原路退款接口退不了 */
+const offlineRefundVisible = ref(false)
+const offlineRefundAmount = ref('')
+const offlineRefundDate = ref('')
+const offlineRefundMethod = ref<OrderOfflineRefundMethod>('WECHAT')
+const offlineRefundNote = ref('')
+const offlineRefunds = ref<OrderOfflineRefund[]>([])
+const loadingOfflineRefunds = ref(false)
+const savingOfflineRefund = ref(false)
 /** 成品调整（2026-10-31）：生产结算后的缺口/余量 → 顾客可见的退款/补款记录 */
 const financialSummary = ref<CustomerOrderFinancialSummary | null>(null)
 const loadingFinancialSummary = ref(false)
@@ -1070,7 +1206,7 @@ const canEditPackagePlan = computed(() => {
 const isOfflinePaidOrder = computed(() => {
   if (!order.value) return false
   const paid = order.value.paymentStatus === 'SUCCESS' || Boolean(order.value.paidAt)
-  return paid && ['OFFLINE', 'OFFLINE_WECHAT'].includes(order.value.paymentMethod || '')
+  return paid && OFFLINE_PAYMENT_METHODS.includes(order.value.paymentMethod || '')
 })
 
 const canAdjustAmount = computed(() => {
@@ -1092,6 +1228,30 @@ const canAdminRefund = computed(() => {
 /* ===== 成品调整（2026-10-31）===== */
 /** 员工能录入，只有管理员能标记已处理；钱不在这里动。 */
 const isAdminUser = computed(() => getStoredUser()?.role === 'ADMIN')
+
+/**
+ * 登记线下退款（2026-11-19，设计 §4.2）：仅管理员、仅「线下收款 + 已付款」。
+ *
+ * 线上支付的退款走微信原路退回；线下收的钱在个人账户里，微信接口退不了，
+ * 只能在这里手工登记，财务按登记日冲减收入。
+ */
+const canRegisterOfflineRefund = computed(
+  () => isAdminUser.value && isOfflinePaidOrder.value,
+)
+
+/** 已登记（未作废）退款合计；金额按分四舍五入，避免浮点尾巴 */
+const offlineRefundTotal = computed(
+  () =>
+    Math.round(
+      offlineRefunds.value.reduce((sum, item) => sum + toNumber(item.amount), 0) * 100,
+    ) / 100,
+)
+
+/** 还能退多少：实收 − 已登记，最小 0 */
+const offlineRefundRemaining = computed(() => {
+  const paid = toNumber(order.value?.amountTotal)
+  return Math.max(0, Math.round((paid - offlineRefundTotal.value) * 100) / 100)
+})
 
 /**
  * 管理员改预约制作日（2026-11-08）。
@@ -1583,6 +1743,7 @@ async function loadOrderDetail() {
       void ensureProductionPhotoShareToken()
       void loadOrderFinancialSummary()
       void loadShipment()
+      if (canRegisterOfflineRefund.value) void loadOfflineRefunds()
     }
   } catch (error: any) {
     console.error('[OrderDetail] Load error:', error)
@@ -1612,6 +1773,97 @@ async function loadOrderFinancialSummary() {
     financialSummary.value = null
   } finally {
     loadingFinancialSummary.value = false
+  }
+}
+
+/**
+ * 读订单的线下退款登记（仅管理员 + 线下已付款单会展示的卡片用到）。
+ * 失败按"还没有登记"处理，不影响订单主体信息。
+ */
+async function loadOfflineRefunds() {
+  if (!orderId.value) return
+  loadingOfflineRefunds.value = true
+  try {
+    const response = await listOrderOfflineRefunds(orderId.value)
+    offlineRefunds.value =
+      response.code === 0 && Array.isArray(response.data) ? response.data : []
+  } catch (error) {
+    console.error('[OrderDetail] Offline refunds error:', error)
+    offlineRefunds.value = []
+  } finally {
+    loadingOfflineRefunds.value = false
+  }
+}
+
+function openOfflineRefundPanel() {
+  // 默认把「还能退的钱」全部填上；老板多数情况是退一部分，再自己改小
+  offlineRefundAmount.value = formatAmount(offlineRefundRemaining.value)
+  offlineRefundDate.value = shanghaiTodayText()
+  offlineRefundMethod.value = 'WECHAT'
+  offlineRefundNote.value = ''
+  offlineRefundVisible.value = true
+  void loadOfflineRefunds()
+}
+
+function closeOfflineRefundPanel() {
+  if (savingOfflineRefund.value) return
+  offlineRefundVisible.value = false
+}
+
+function onOfflineRefundDateChange(event: any) {
+  offlineRefundDate.value = String(event?.detail?.value || '')
+}
+
+function offlineRefundMethodLabel(method?: string): string {
+  const matched = OFFLINE_REFUND_METHOD_OPTIONS.find(
+    (option) => option.value === method,
+  )
+  return matched?.label || method || '其他'
+}
+
+async function submitOfflineRefund() {
+  if (savingOfflineRefund.value) return
+
+  const amount = Math.round(Number(offlineRefundAmount.value) * 100) / 100
+  if (!Number.isFinite(amount) || amount <= 0) {
+    uni.showToast({ title: '请输入正确的退款金额', icon: 'none' })
+    return
+  }
+  if (amount > offlineRefundRemaining.value) {
+    uni.showModal({
+      title: '退款金额超过剩余可退',
+      content: `剩余可退 ¥${formatAmount(offlineRefundRemaining.value)}`,
+      showCancel: false,
+    })
+    return
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(offlineRefundDate.value)) {
+    uni.showToast({ title: '请选择退款日期', icon: 'none' })
+    return
+  }
+
+  savingOfflineRefund.value = true
+  try {
+    await registerOrderOfflineRefund(orderId.value, {
+      amount,
+      refundedAt: offlineRefundDate.value,
+      method: offlineRefundMethod.value,
+      note: offlineRefundNote.value.trim() || undefined,
+    })
+    offlineRefundVisible.value = false
+    // 登记会改变「已登记合计 / 剩余」，刷新整页和列表后再提示
+    await loadOrderDetail()
+    uni.showToast({ title: '已登记', icon: 'success' })
+  } catch (error: any) {
+    // 后端校验文案（如「累计退款 X 元超过该单实收 Y 元」）较长，
+    // 用弹窗原样展示，避免 toast 被截断后看不出到底超了多少
+    uni.showModal({
+      title: '登记失败',
+      content: error?.message || '请稍后重试',
+      showCancel: false,
+    })
+  } finally {
+    savingOfflineRefund.value = false
   }
 }
 
@@ -1786,10 +2038,13 @@ function isRefundedOrder(currentOrder: OrderDetail): boolean {
 
 function getPaymentMethod(method?: string): string {
   const methodMap: Record<string, string> = {
-    // 真实枚举（后端存的）：WECHAT_PAY / OFFLINE / OFFLINE_WECHAT
+    // 真实枚举（后端存的）：WECHAT_PAY / ADMIN / OFFLINE / OFFLINE_* / OTHER
     WECHAT_PAY: '微信支付',
+    ADMIN: '线下收款（后台确认）',
     OFFLINE: '线下收款',
     OFFLINE_WECHAT: '线下收款（微信）',
+    OFFLINE_ALIPAY: '线下收款（支付宝）',
+    OTHER: '线下收款（其他）',
     // 历史数据/其它渠道
     WECHAT: '微信支付',
     ALIPAY: '支付宝',
@@ -3874,6 +4129,22 @@ async function saveAddressForm() {
 
 .danger-zone { margin: 32rpx 32rpx 0; padding-top: 24rpx; border-top: 1rpx solid #f0f1f2; text-align: center; }
 .danger-btn { font-size: 24rpx; color: #c0392b; }
+
+/* ===== 线下退款登记（2026-11-19）===== */
+.offline-refund-summary { margin-top: 16rpx; font-size: 22rpx; color: #6b6653; }
+.offline-refund-summary-sep { margin-left: 6rpx; }
+.modal-summary { margin-bottom: 20rpx; padding: 12rpx 16rpx; border-radius: 10rpx; background: #f4f7f2; }
+.offline-refund-list { margin-top: 12rpx; }
+.offline-refund-row { display: flex; align-items: center; gap: 16rpx; padding: 14rpx 0; border-bottom: 1rpx solid #f2f3f5; }
+.offline-refund-row:last-child { border-bottom: none; }
+.offline-refund-date { flex: none; font-size: 22rpx; color: #6b6653; }
+.offline-refund-method { flex: none; padding: 2rpx 12rpx; border-radius: 999rpx; background: #eef2e4; color: #2b5040; font-size: 20rpx; }
+.offline-refund-amount { margin-left: auto; font-size: 26rpx; font-weight: 700; color: #b4553f; }
+.offline-refund-empty { margin-top: 12rpx; font-size: 22rpx; color: #909399; }
+.offline-refund-entry { margin-top: 18rpx; }
+.offline-refund-method-options { display: flex; flex-wrap: wrap; gap: 12rpx; }
+.offline-refund-method-option { padding: 10rpx 24rpx; border: 1rpx solid #dfe4e1; border-radius: 999rpx; font-size: 24rpx; color: #5a6560; }
+.offline-refund-method-option.active { border-color: #1e3a2f; background: #e8f1ec; color: #1e3a2f; font-weight: 600; }
 
 .section-subtitle { display: block; margin-top: 8rpx; font-size: 20rpx; color: #909399; }
 

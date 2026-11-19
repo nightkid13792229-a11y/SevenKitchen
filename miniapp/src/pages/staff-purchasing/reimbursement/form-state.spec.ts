@@ -18,7 +18,7 @@ describe('reimbursement form state', () => {
       platformShippingFee: '12.5',
       platformPackagingFee: '3.5',
       customFees: [
-        { category: 'RENT', description: '6月房租', amount: '200' },
+        { category: 'UTILITIES', description: '6月水电', amount: '200' },
         { category: 'UTILITIES', description: '6月水电', amount: '50' },
       ],
     });
@@ -48,14 +48,14 @@ describe('reimbursement form state', () => {
 
   it('drops blank operating rows and normalizes valid fees', () => {
     const result = normalizeOperatingExpenseFees([
-      { category: 'RENT', description: '', amount: '200' },
+      { category: 'UTILITIES', description: '', amount: '200' },
       { category: 'OTHER', description: '临时停车费', amount: '30.5' },
       { category: 'TOOLS', description: '', amount: '' },
     ]);
 
     expect(result.ok).toBe(true);
     expect(result.fees).toEqual([
-      { category: 'RENT', description: '房租', amount: 200 },
+      { category: 'UTILITIES', description: '水电', amount: 200 },
       { category: 'OTHER', description: '临时停车费', amount: 30.5 },
     ]);
   });
@@ -104,7 +104,7 @@ describe('reimbursement form state', () => {
     });
     assertInvalid('RECEIPTS', '请上传支付凭证', {
       flowType: 'OPERATING',
-      customFees: [{ category: 'RENT', description: '', amount: '200' }],
+      customFees: [{ category: 'UTILITIES', description: '', amount: '200' }],
     });
 
     expect(
@@ -119,7 +119,7 @@ describe('reimbursement form state', () => {
       validateReimbursementStep({
         currentStep: 'OPERATING_DETAILS',
         flowType: 'OPERATING',
-        customFees: [{ category: 'RENT', description: '', amount: '200' }],
+        customFees: [{ category: 'UTILITIES', description: '', amount: '200' }],
       }),
     ).toEqual({ ok: true });
     expect(

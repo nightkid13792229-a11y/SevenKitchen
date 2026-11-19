@@ -72,6 +72,12 @@ export interface AssistedOrderItemPayload {
   dailyIntakeG?: number
 }
 
+/** 员工代客下单可选的线下收款渠道（与后端 OFFLINE_PAYMENT_CHANNELS 一致） */
+export type AssistedOfflinePaymentChannel =
+  | 'OFFLINE_WECHAT'
+  | 'OFFLINE_ALIPAY'
+  | 'OTHER'
+
 export interface CreateAssistedOrderPayload {
   customerId: string
   dogId: string
@@ -79,6 +85,10 @@ export interface CreateAssistedOrderPayload {
   type?: 'FRESH_FOOD'
   targetProductionDate?: string | null
   actualAmount?: number
+  /** 是否当场已收款；不传后端按 true 处理，关掉时显式传 false */
+  collected?: boolean
+  /** 线下收款渠道；collected 为 true 时生效，默认由后端按微信处理 */
+  paymentChannel?: AssistedOfflinePaymentChannel
   amountAdjustReason?: string
   remark?: string
   recipeSource?: string
@@ -185,7 +195,7 @@ export function createGuestDog(customerId: string, payload: Record<string, any>)
   })
 }
 
-/** 下单（线下已收款） */
+/** 下单（默认现场已收款，可显式 collected:false 留成待付款） */
 export function createAssistedOrder(payload: CreateAssistedOrderPayload) {
   return request<Record<string, any>>({
     url: '/staff/customer-service/orders/assisted',

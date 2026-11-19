@@ -4,10 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import {
-  FINANCE_EXPENSE_CATEGORY_LABELS,
-  FinanceExpenseCategory,
-} from './finance-categories';
+import { FinanceExpenseCategory } from './finance-categories';
+import { FinanceAccount, normalizeFinanceAccount } from './finance-accounts';
 import { monthDateOnlyRange } from './finance-period';
 import { TimezoneUtil } from '../../utils/timezone.util';
 
@@ -40,7 +38,8 @@ const PAYER_TYPES: readonly ExpensePayerType[] = ['COMPANY', 'PERSONAL'];
 export type CreateExpenseTemplateInput = {
   name: string;
   titleTemplate: string;
-  category: FinanceExpenseCategory;
+  /** 支出类别 id（类别字典，必填） */
+  categoryId: string;
   payeeName: string;
   defaultAmount: number;
   interval: ExpenseTemplateInterval;
@@ -49,6 +48,8 @@ export type CreateExpenseTemplateInput = {
   servicePeriodMonths?: number;
   payerType?: ExpensePayerType;
   payerUserId?: string | null;
+  /** 默认出账账户；缺省 PERSONAL_BANK（房租/社保这类走卡） */
+  payerAccount?: string | null;
   note?: string | null;
 };
 
@@ -56,7 +57,6 @@ export type CreateExpenseTemplateInput = {
 type NormalizedTemplate = {
   name: string;
   titleTemplate: string;
-  category: FinanceExpenseCategory;
   payeeName: string;
   defaultAmount: number;
   interval: ExpenseTemplateInterval;
@@ -65,12 +65,19 @@ type NormalizedTemplate = {
   servicePeriodMonths: number;
   payerType: ExpensePayerType;
   payerUserId: string | null;
+  payerAccount: FinanceAccount;
   note: string | null;
 };
 
-const EXPENSE_CATEGORY_CODES = new Set<string>(
-  Object.keys(FINANCE_EXPENSE_CATEGORY_LABELS),
-);
+/** 固定费用模板的默认出账账户：房租、社保这类走银行卡（设计文档 §1.2） */
+const DEFAULT_TEMPLATE_PAYER_ACCOUNT: FinanceAccount = 'PERSONAL_BANK';
+
+/** 类别字典里的一行（只取校验/回填需要的字段） */
+type FinanceCategoryRef = {
+  id: string;
+  code: string | null;
+  isActive: boolean;
+};
 
 /** 非空字符串，否则 400 */
 function requireText(value: unknown, field: string): string {
@@ -127,7 +134,7 @@ function normalizeTemplateInput(
   current?: {
     name: string;
     titleTemplate: string;
-    category: string;
+    categoryId: string | null;
     payeeName: string;
     defaultAmount: unknown;
     interval: string;
@@ -136,17 +143,13 @@ function normalizeTemplateInput(
     servicePeriodMonths: number;
     payerType: string;
     payerUserId: string | null;
+    payerAccount: string | null;
     note: string | null;
   },
 ): NormalizedTemplate {
   const interval = parseInterval(
     input.interval ?? current?.interval ?? 'MONTHLY',
   );
-
-  const category = String(input.category ?? current?.category ?? '');
-  if (!EXPENSE_CATEGORY_CODES.has(category)) {
-    throw new BadRequestException('支出类别不合法');
-  }
 
   const monthOfYearInput =
     input.monthOfYear !== undefined
@@ -166,7 +169,6 @@ function normalizeTemplateInput(
       input.titleTemplate ?? current?.titleTemplate,
       '标题模板',
     ),
-    category: category as FinanceExpenseCategory,
     payeeName: requireText(input.payeeName ?? current?.payeeName, '收款方'),
     defaultAmount: parseAmount(
       input.defaultAmount ?? Number(current?.defaultAmount ?? NaN),
@@ -192,8 +194,29 @@ function normalizeTemplateInput(
       input.payerUserId !== undefined
         ? input.payerUserId
         : (current?.payerUserId ?? null),
+    payerAccount: resolvePayerAccount(
+      input.payerAccount !== undefined
+        ? input.payerAccount
+        : (current?.payerAccount ?? null),
+    ),
     note: input.note !== undefined ? input.note : (current?.note ?? null),
   };
+}
+
+/**
+ * 模板账户：空值缺省银行卡（房租/社保），非法值 400。
+ * 注意与手工记账的默认「我的微信」不同：固定费用场景默认走卡。
+ */
+function resolvePayerAccount(value: string | null | undefined): FinanceAccount {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return DEFAULT_TEMPLATE_PAYER_ACCOUNT;
+  }
+  return normalizeFinanceAccount(value);
+}
+
+/** 旧枚举列按类别 code 回填；自建类别没有 code 时兜底 OTHER（旧列非空） */
+function legacyCategoryCode(ref: FinanceCategoryRef): FinanceExpenseCategory {
+  return (ref.code as FinanceExpenseCategory | null) ?? 'OTHER';
 }
 
 /** 该模板在指定月份是否应生成账单 */
@@ -259,11 +282,42 @@ function isTemplatePeriodConflict(error: unknown): boolean {
 export class ExpenseTemplateService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * 支出类别校验：必填、必须存在且启用。
+   * 编辑时沿用库里已有的类别允许它已被停用（停用只影响以后）。
+   */
+  private async resolveCategory(
+    categoryId: unknown,
+    currentCategoryId: string | null,
+  ): Promise<FinanceCategoryRef> {
+    const id = typeof categoryId === 'string' ? categoryId.trim() : '';
+    if (!id) {
+      throw new BadRequestException('支出类别必须选择');
+    }
+    const ref = await this.prisma.financeCategory.findUnique({
+      where: { id },
+    });
+    if (!ref) {
+      throw new BadRequestException('支出类别不合法');
+    }
+    if (!ref.isActive && ref.id !== currentCategoryId) {
+      throw new BadRequestException('支出类别已停用，请重新选择');
+    }
+    return ref;
+  }
+
   /** 新建固定费用模板（后台接口 / 小程序固定费用页共用） */
   async create(userId: string, input: CreateExpenseTemplateInput) {
     const data = normalizeTemplateInput(input);
+    const categoryRef = await this.resolveCategory(input.categoryId, null);
     return this.prisma.expenseTemplate.create({
-      data: { ...data, createdById: userId },
+      data: {
+        ...data,
+        // 新写入走 categoryId；旧枚举列按 code 回填一版兼容
+        categoryId: categoryRef.id,
+        category: legacyCategoryCode(categoryRef),
+        createdById: userId,
+      },
     });
   }
 
@@ -279,7 +333,18 @@ export class ExpenseTemplateService {
     if (!existing) throw new NotFoundException('固定费用模板不存在');
 
     const data = normalizeTemplateInput(input, existing);
-    await this.prisma.expenseTemplate.update({ where: { id }, data });
+    const categoryRef = await this.resolveCategory(
+      input.categoryId !== undefined ? input.categoryId : existing.categoryId,
+      existing.categoryId,
+    );
+    await this.prisma.expenseTemplate.update({
+      where: { id },
+      data: {
+        ...data,
+        categoryId: categoryRef.id,
+        category: legacyCategoryCode(categoryRef),
+      },
+    });
     return { id };
   }
 
@@ -373,6 +438,8 @@ export class ExpenseTemplateService {
           billNumber: buildTemplateBillNumber(dateKey, index, new Date()),
           title,
           category: template.category,
+          // 新账单继承模板的类别 id 与默认账户（旧枚举列继续写，兼容旧读法）
+          categoryId: template.categoryId ?? null,
           status: 'PENDING_PAYMENT' as const,
           payeeName: template.payeeName,
           amount: Number(template.defaultAmount),
@@ -383,6 +450,7 @@ export class ExpenseTemplateService {
           templateId: template.id,
           payerType: template.payerType === 'COMPANY' ? 'COMPANY' : 'PERSONAL',
           payerUserId: template.payerUserId ?? null,
+          payerAccount: template.payerAccount ?? null,
           createdById,
         };
       });

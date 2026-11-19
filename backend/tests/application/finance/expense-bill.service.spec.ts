@@ -23,6 +23,7 @@ const makeTemplate = (overrides: Record<string, unknown> = {}) => ({
   name: '房租',
   titleTemplate: '{{year}}年{{month}}月房租',
   category: 'RENT',
+  categoryId: 'c-rent',
   payeeName: '房东',
   defaultAmount: 6000,
   interval: 'MONTHLY',
@@ -31,16 +32,33 @@ const makeTemplate = (overrides: Record<string, unknown> = {}) => ({
   servicePeriodMonths: 1,
   payerType: 'PERSONAL',
   payerUserId: 'u1',
+  payerAccount: 'PERSONAL_BANK',
   isActive: true,
   note: null,
   ...overrides,
 });
 
+const RENT_CATEGORY = {
+  id: 'c-rent',
+  name: '房租',
+  code: 'RENT',
+  isSystem: false,
+  isActive: true,
+};
+
 const makeTemplatePrisma = (
   templates: any[] = [],
   existingTemplateIds: string[] = [],
+  categories: Record<string, any> = { 'c-rent': RENT_CATEGORY },
 ) => {
   const prisma: any = {
+    financeCategory: {
+      findUnique: jest
+        .fn()
+        .mockImplementation(({ where }) =>
+          Promise.resolve(categories[where.id] ?? null),
+        ),
+    },
     expenseTemplate: {
       findMany: jest.fn().mockResolvedValue(templates),
       findUnique: jest.fn().mockResolvedValue(null),
@@ -92,6 +110,7 @@ const makeBill = (overrides: Record<string, unknown> = {}) => ({
   billNumber: 'FB20261101001',
   title: '2026年11月房租',
   category: 'RENT',
+  categoryId: 'c-rent',
   status: 'PENDING_PAYMENT',
   payeeName: '房东',
   amount: 6000,
@@ -101,6 +120,7 @@ const makeBill = (overrides: Record<string, unknown> = {}) => ({
   templateId: 't1',
   payerType: 'PERSONAL',
   payerUserId: 'u1',
+  payerAccount: 'PERSONAL_BANK',
   ...overrides,
 });
 
@@ -119,6 +139,8 @@ describe('ExpenseTemplateService.generateForMonth', () => {
       templateId: 't1',
       title: '2026年11月房租',
       category: 'RENT',
+      categoryId: 'c-rent',
+      payerAccount: 'PERSONAL_BANK',
       status: 'PENDING_PAYMENT',
       amount: 6000,
       payerType: 'PERSONAL',
@@ -344,12 +366,13 @@ describe('ExpenseTemplateService.create / update / deactivate', () => {
     await service.create('u1', {
       name: '物业费',
       titleTemplate: '{{month}}月物业费',
-      category: 'ADMINISTRATIVE',
+      categoryId: 'c-rent',
       payeeName: '物业',
       defaultAmount: 300,
       interval: 'QUARTERLY',
       dayOfMonth: 10,
       payerType: 'COMPANY',
+      payerAccount: 'PERSONAL_BANK',
     });
 
     expect(prisma.expenseTemplate.create).toHaveBeenCalledWith({
@@ -359,8 +382,73 @@ describe('ExpenseTemplateService.create / update / deactivate', () => {
         payerType: 'COMPANY',
         servicePeriodMonths: 1,
         dayOfMonth: 10,
+        categoryId: 'c-rent',
+        // 旧枚举列按类别字典的 code 回填，兼容读旧列的报表
+        category: 'RENT',
+        payerAccount: 'PERSONAL_BANK',
       }),
     });
+  });
+
+  it('create 缺 categoryId / 类别停用时报 400，不写库', async () => {
+    const missing = makeTemplatePrisma([]);
+    const base = {
+      name: '房租',
+      titleTemplate: '{{month}}月房租',
+      payeeName: '房东',
+      defaultAmount: 6000,
+      interval: 'MONTHLY' as const,
+    };
+
+    await expect(
+      new ExpenseTemplateService(missing).create('u1', base as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(missing.expenseTemplate.create).not.toHaveBeenCalled();
+
+    const inactive = makeTemplatePrisma([], [], {
+      'c-rent': { ...RENT_CATEGORY, isActive: false },
+    });
+    await expect(
+      new ExpenseTemplateService(inactive).create('u1', {
+        ...base,
+        categoryId: 'c-rent',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(inactive.expenseTemplate.create).not.toHaveBeenCalled();
+  });
+
+  it('create 未传 payerAccount 时固定费用默认走银行卡（房租/社保）', async () => {
+    const prisma = makeTemplatePrisma([]);
+
+    await new ExpenseTemplateService(prisma).create('u1', {
+      name: '房租',
+      titleTemplate: '{{month}}月房租',
+      categoryId: 'c-rent',
+      payeeName: '房东',
+      defaultAmount: 6000,
+      interval: 'MONTHLY',
+    });
+
+    expect(prisma.expenseTemplate.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ payerAccount: 'PERSONAL_BANK' }),
+    });
+  });
+
+  it('create 拒绝非法账户（不能静默落默认值）', async () => {
+    const prisma = makeTemplatePrisma([]);
+
+    await expect(
+      new ExpenseTemplateService(prisma).create('u1', {
+        name: '房租',
+        titleTemplate: '{{month}}月房租',
+        categoryId: 'c-rent',
+        payeeName: '房东',
+        defaultAmount: 6000,
+        interval: 'MONTHLY',
+        payerAccount: 'BANK',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.expenseTemplate.create).not.toHaveBeenCalled();
   });
 
   it('create 拒绝不支持的周期、非法金额和缺 monthOfYear 的年付', async () => {
@@ -369,7 +457,7 @@ describe('ExpenseTemplateService.create / update / deactivate', () => {
     const base = {
       name: '房租',
       titleTemplate: '{{month}}月房租',
-      category: 'RENT' as const,
+      categoryId: 'c-rent',
       payeeName: '房东',
       defaultAmount: 6000,
       interval: 'MONTHLY' as const,
@@ -400,6 +488,10 @@ describe('ExpenseTemplateService.create / update / deactivate', () => {
         data: expect.objectContaining({
           defaultAmount: 6500,
           interval: 'MONTHLY',
+          // 没传类别时沿用库里的 categoryId，不会冲成空
+          categoryId: 'c-rent',
+          category: 'RENT',
+          payerAccount: 'PERSONAL_BANK',
         }),
       }),
     );
@@ -773,6 +865,62 @@ describe('ExpenseBillService.pay', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
       service.pay('u1', 'b1', { payerType: 'OTHER' as any }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.expenseBillPayment.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('ExpenseBillService.pay 账户口径', () => {
+  const payingPrisma = (bill: any) => {
+    const prisma = makeBillPrisma();
+    prisma.expenseBill.findUnique.mockResolvedValue(bill);
+    prisma.expenseBillPayment.aggregate.mockResolvedValue({
+      _sum: { paidAmount: 0 },
+    });
+    return prisma;
+  };
+
+  it('显式 payerAccount 透传到付款记录（本次钱从哪个账户出）', async () => {
+    const prisma = payingPrisma(makeBill());
+
+    await new ExpenseBillService(prisma).pay('u1', 'b1', {
+      paidAmount: 100,
+      paidAt: '2026-11-05',
+      payerAccount: 'CASH',
+    });
+
+    expect(prisma.expenseBillPayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ payerAccount: 'CASH' }),
+    });
+  });
+
+  it('缺省取账单上的账户（模板带下来的）', async () => {
+    const prisma = payingPrisma(makeBill({ payerAccount: 'PERSONAL_ALIPAY' }));
+
+    await new ExpenseBillService(prisma).pay('u1', 'b1', {});
+
+    expect(prisma.expenseBillPayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ payerAccount: 'PERSONAL_ALIPAY' }),
+    });
+  });
+
+  it('老账单没有账户时缺省「我的微信」', async () => {
+    const prisma = payingPrisma(makeBill({ payerAccount: null }));
+
+    await new ExpenseBillService(prisma).pay('u1', 'b1', {});
+
+    expect(prisma.expenseBillPayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ payerAccount: 'PERSONAL_WECHAT' }),
+    });
+  });
+
+  it('非法 payerAccount 报 400，不写付款记录', async () => {
+    const prisma = payingPrisma(makeBill());
+
+    await expect(
+      new ExpenseBillService(prisma).pay('u1', 'b1', {
+        payerAccount: 'BANK',
+      }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.expenseBillPayment.create).not.toHaveBeenCalled();
   });

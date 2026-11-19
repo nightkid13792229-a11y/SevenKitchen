@@ -3,7 +3,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { FinanceExpenseCategory as FinanceExpenseCategoryEnum } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { TimezoneUtil } from '../../utils/timezone.util';
 import {
@@ -13,6 +12,7 @@ import {
   FinanceExpenseCategory,
   FinanceIncomeCategory,
 } from './finance-categories';
+import { FinanceAccount, normalizeFinanceAccount } from './finance-accounts';
 import { FINANCE_START_DATE } from './finance-period';
 
 /**
@@ -26,8 +26,11 @@ import { FINANCE_START_DATE } from './finance-period';
  * - `occurredAt` 是 date-only（`@db.Date`），按 UTC 零点存：Prisma 对 DATE 列
  *   取 UTC 日期部分，写上海零点（`+08:00`）会退成前一天，11-01 会掉出 11 月区间
  *   （同类生产事故见 custom-recipe.service.ts 2026-10-19 的注释）；
- * - 支出只写 `category`、收入只写 `incomeCategory`，另一侧留 NULL，
+ * - 支出写 `categoryId`（类别字典，必须是启用类别），旧枚举列 `category`
+ *   按类别 `code` 回填一版兼容；自建类别没有 code，旧列留 NULL；
+ * - 收入只写 `incomeCategory`，支出侧两个类别字段都留 NULL，
  *   避免明细/汇总两侧各读一个字段时出现双重归类；
+ * - `payerAccount` 是「钱从哪个账户进出」，空值缺省「我的微信」，非法值 400；
  * - 手工收入只允许「其他收入」：其余收入类别由系统按来源自动记录，
  *   手工标上去会导致手续费与订单口径对不上（§6.2）；
  * - 作废不物理删除：只写 `voidedAt` / `voidReason`，明细查询已按
@@ -44,12 +47,14 @@ export type CreateManualEntryInput = {
   amount: number;
   /** 发生日（YYYY-MM-DD，上海日历日） */
   occurredAt: string;
-  /** 支出类别；支出必填、收入忽略 */
-  category?: string | null;
+  /** 支出类别 id（类别字典）；支出必填、收入忽略 */
+  categoryId?: string | null;
   /** 收入类别；收入必填、支出忽略 */
   incomeCategory?: string | null;
   payerType?: ManualEntryPayerType;
   payerUserId?: string | null;
+  /** 出账/入账账户；缺省 PERSONAL_WECHAT */
+  payerAccount?: string | null;
   /** 一句话说明（必填，例：封口机） */
   title: string;
   note?: string | null;
@@ -61,23 +66,25 @@ type NormalizedManualEntry = {
   direction: ManualEntryDirection;
   amount: number;
   occurredAt: Date;
+  /** 类别字典引用（支出必填） */
+  categoryId: string | null;
+  /** 旧枚举列：按类别 code 回填一版兼容，自建类别为 NULL */
   category: FinanceExpenseCategory | null;
   incomeCategory: FinanceIncomeCategory | null;
   payerType: ManualEntryPayerType;
   payerUserId: string | null;
+  payerAccount: FinanceAccount;
   title: string;
   note: string | null;
   proofKeys: string[];
 };
 
-/**
- * 支出分类只认 `FinanceExpenseCategory` 枚举内（数据库 enum）的值。
- * 直接取 Prisma 生成的运行时枚举：迁移新增分类并 `prisma generate` 后自动并入，
- * 不会出现「标签表漏加一项就写不进去」的问题。
- */
-const EXPENSE_CATEGORY_CODES = new Set<string>(
-  Object.values(FinanceExpenseCategoryEnum),
-);
+/** 类别字典里的一行（只取校验/回填需要的字段） */
+type FinanceCategoryRef = {
+  id: string;
+  code: string | null;
+  isActive: boolean;
+};
 
 /** 收入分类只认 `FINANCE_INCOME_CATEGORY_LABELS` 的 key（不建 enum，见 §6.2） */
 const INCOME_CATEGORY_CODES = new Set<string>(
@@ -106,25 +113,8 @@ function parseDirection(input: unknown): ManualEntryDirection {
   return input;
 }
 
-/** 按方向校验类别，并把另一侧的类别清空 */
-function resolveCategory(
-  direction: ManualEntryDirection,
-  category: unknown,
-  incomeCategory: unknown,
-): Pick<NormalizedManualEntry, 'category' | 'incomeCategory'> {
-  if (direction === 'EXPENSE') {
-    if (!category) {
-      throw new BadRequestException('支出必须选择类别');
-    }
-    if (!EXPENSE_CATEGORY_CODES.has(String(category))) {
-      throw new BadRequestException('支出类别不合法');
-    }
-    return {
-      category: category as FinanceExpenseCategory,
-      incomeCategory: null,
-    };
-  }
-
+/** 收入类别校验：只认常量表，且手工只允许「其他收入」 */
+function resolveIncomeCategory(incomeCategory: unknown): FinanceIncomeCategory {
   if (!incomeCategory) {
     throw new BadRequestException('收入必须选择收入类别');
   }
@@ -134,10 +124,32 @@ function resolveCategory(
   if (!MANUAL_INCOME_CATEGORY_CODES.has(String(incomeCategory))) {
     throw new BadRequestException(MANUAL_INCOME_ONLY_MESSAGE);
   }
-  return {
-    category: null,
-    incomeCategory: incomeCategory as FinanceIncomeCategory,
-  };
+  return incomeCategory as FinanceIncomeCategory;
+}
+
+/**
+ * 支出类别：必填、必须存在且启用。
+ *
+ * `currentCategoryId` 是编辑时库里的值：沿用一个后来被停用的类别时放行，
+ * 否则一条老记录连备注都改不了（停用/合并只影响以后，不该锁死历史记录）。
+ */
+async function resolveExpenseCategory(
+  prisma: PrismaService,
+  categoryId: unknown,
+  currentCategoryId: string | null,
+): Promise<FinanceCategoryRef> {
+  const id = typeof categoryId === 'string' ? categoryId.trim() : '';
+  if (!id) {
+    throw new BadRequestException('支出必须选择类别');
+  }
+  const ref = await prisma.financeCategory.findUnique({ where: { id } });
+  if (!ref) {
+    throw new BadRequestException('支出类别不合法');
+  }
+  if (!ref.isActive && ref.id !== currentCategoryId) {
+    throw new BadRequestException('支出类别已停用，请重新选择');
+  }
+  return ref;
 }
 
 /** 发生日：不早于起账日、不晚于今天；date-only 列按 UTC 零点落库 */
@@ -165,25 +177,47 @@ function parseOccurredAt(input: unknown): Date {
   return TimezoneUtil.parseDateOnly(dateKey);
 }
 
-/** 校验顺序固定：金额 → 方向 → 类别 → 日期 */
-function normalizeInput(input: CreateManualEntryInput): NormalizedManualEntry {
+/**
+ * 校验顺序固定：金额 → 方向 → 类别 → 日期 → 账户。
+ *
+ * 类别要查库（必须是启用类别），所以整体是异步的。
+ */
+async function normalizeInput(
+  prisma: PrismaService,
+  input: CreateManualEntryInput,
+  current?: { categoryId: string | null },
+): Promise<NormalizedManualEntry> {
   const amount = parseAmount(input.amount);
   const direction = parseDirection(input.direction);
-  const { category, incomeCategory } = resolveCategory(
-    direction,
-    input.category,
-    input.incomeCategory,
-  );
+
+  let categoryId: string | null = null;
+  let category: FinanceExpenseCategory | null = null;
+  let incomeCategory: FinanceIncomeCategory | null = null;
+  if (direction === 'EXPENSE') {
+    const ref = await resolveExpenseCategory(
+      prisma,
+      input.categoryId,
+      current?.categoryId ?? null,
+    );
+    categoryId = ref.id;
+    // 旧枚举列按类别 code 回填；老板自建类别没有 code，旧列留 NULL
+    category = (ref.code as FinanceExpenseCategory | null) ?? null;
+  } else {
+    incomeCategory = resolveIncomeCategory(input.incomeCategory);
+  }
+
   const occurredAt = parseOccurredAt(input.occurredAt);
 
   return {
     direction,
     amount,
     occurredAt,
+    categoryId,
     category,
     incomeCategory,
     payerType: input.payerType === 'COMPANY' ? 'COMPANY' : 'PERSONAL',
     payerUserId: input.payerUserId ?? null,
+    payerAccount: normalizeFinanceAccount(input.payerAccount),
     title: input.title,
     note: input.note ?? null,
     proofKeys: input.proofKeys ?? [],
@@ -198,7 +232,7 @@ export class FinanceManualEntryService {
     userId: string,
     input: CreateManualEntryInput,
   ): Promise<{ id: string }> {
-    const data = normalizeInput(input);
+    const data = await normalizeInput(this.prisma, input);
     const created = await this.prisma.financeManualEntry.create({
       data: { ...data, createdById: userId },
       select: { id: true },
@@ -233,8 +267,8 @@ export class FinanceManualEntryService {
       // 再走一次上海时区换算会每改一次退一天。
       occurredAt:
         input.occurredAt ?? existing.occurredAt.toISOString().slice(0, 10),
-      category:
-        input.category !== undefined ? input.category : existing.category,
+      categoryId:
+        input.categoryId !== undefined ? input.categoryId : existing.categoryId,
       incomeCategory:
         input.incomeCategory !== undefined
           ? input.incomeCategory
@@ -245,12 +279,18 @@ export class FinanceManualEntryService {
         input.payerUserId !== undefined
           ? input.payerUserId
           : existing.payerUserId,
+      payerAccount:
+        input.payerAccount !== undefined
+          ? input.payerAccount
+          : existing.payerAccount,
       title: input.title ?? existing.title,
       note: input.note !== undefined ? input.note : existing.note,
       proofKeys: input.proofKeys ?? existing.proofKeys,
     };
 
-    const data = normalizeInput(merged);
+    const data = await normalizeInput(this.prisma, merged, {
+      categoryId: existing.categoryId,
+    });
     await this.prisma.financeManualEntry.update({
       where: { id },
       data,

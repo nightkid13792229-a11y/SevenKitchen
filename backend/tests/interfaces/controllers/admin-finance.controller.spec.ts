@@ -78,6 +78,7 @@ describe('AdminFinanceController', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
 
     const result = await controller.getDashboard({ month: '2026-11' });
@@ -115,6 +116,7 @@ describe('AdminFinanceController', () => {
     const controller = new AdminFinanceController(
       {} as any,
       entriesService as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -186,12 +188,13 @@ describe('AdminFinanceController', () => {
       manualEntryService as any,
       {} as any,
       {} as any,
+      {} as any,
     );
     const body = {
       direction: 'EXPENSE' as const,
       amount: 399,
       occurredAt: '2026-11-05',
-      category: 'EQUIPMENT' as const,
+      categoryId: 'c-equip',
       title: '封口机',
     };
 
@@ -211,6 +214,7 @@ describe('AdminFinanceController', () => {
       {} as any,
       {} as any,
       manualEntryService as any,
+      {} as any,
       {} as any,
       {} as any,
     );
@@ -233,6 +237,7 @@ describe('AdminFinanceController 固定费用接口', () => {
       services.manual ?? ({} as any),
       services.templates ?? ({} as any),
       services.bills ?? ({} as any),
+      services.categories ?? ({} as any),
     );
 
   it('七个路由分别挂在 templates / bills 下', () => {
@@ -277,7 +282,7 @@ describe('AdminFinanceController 固定费用接口', () => {
     const body = {
       name: '房租',
       titleTemplate: '{{month}}月房租',
-      category: 'RENT' as const,
+      categoryId: 'c-rent',
       payeeName: '房东',
       defaultAmount: 6000,
       interval: 'MONTHLY' as const,
@@ -308,5 +313,92 @@ describe('AdminFinanceController 固定费用接口', () => {
 
     await controller.payBill('u1', 'b1', { paidAmount: 6000 });
     expect(bills.pay).toHaveBeenCalledWith('u1', 'b1', { paidAmount: 6000 });
+  });
+});
+
+describe('AdminFinanceController 类别字典接口', () => {
+  const makeController = (categories: Record<string, any>) =>
+    new AdminFinanceController(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      categories as any,
+    );
+
+  it('五个类别路由分别挂在 categories 下', () => {
+    const expected: Array<[keyof AdminFinanceController, string, number]> = [
+      ['listCategories', 'categories', RequestMethod.GET],
+      ['createCategory', 'categories', RequestMethod.POST],
+      ['renameCategory', 'categories/:id', RequestMethod.PATCH],
+      ['mergeCategory', 'categories/:id/merge', RequestMethod.POST],
+      ['deactivateCategory', 'categories/:id/deactivate', RequestMethod.POST],
+    ];
+
+    for (const [handler, path, method] of expected) {
+      expect(
+        Reflect.getMetadata(
+          PATH_METADATA,
+          AdminFinanceController.prototype[handler],
+        ),
+      ).toBe(path);
+      expect(
+        Reflect.getMetadata(
+          METHOD_METADATA,
+          AdminFinanceController.prototype[handler],
+        ),
+      ).toBe(method);
+    }
+  });
+
+  it('列表默认只给启用类别，includeInactive=true/1 时给全部', async () => {
+    const categories = { list: jest.fn().mockResolvedValue([]) };
+    const controller = makeController(categories);
+
+    await controller.listCategories();
+    expect(categories.list).toHaveBeenLastCalledWith(false);
+
+    await controller.listCategories('true');
+    expect(categories.list).toHaveBeenLastCalledWith(true);
+
+    await controller.listCategories('1');
+    expect(categories.list).toHaveBeenLastCalledWith(true);
+
+    await controller.listCategories('false');
+    expect(categories.list).toHaveBeenLastCalledWith(false);
+  });
+
+  it('新建/改名/合并/停用把参数交给类别服务', async () => {
+    const categories = {
+      create: jest.fn().mockResolvedValue({ id: 'c1', name: '维修' }),
+      rename: jest.fn().mockResolvedValue({ id: 'c1', name: '维修保养' }),
+      merge: jest
+        .fn()
+        .mockResolvedValue({ sourceId: 'c1', targetId: 'c2', moved: 3 }),
+      deactivate: jest.fn().mockResolvedValue({ id: 'c1', isActive: false }),
+    };
+    const controller = makeController(categories);
+
+    expect(
+      (await controller.createCategory('u1', { name: '维修' })).data,
+    ).toEqual({ id: 'c1', name: '维修' });
+    expect(categories.create).toHaveBeenCalledWith('u1', '维修');
+
+    expect(
+      (await controller.renameCategory('c1', { name: '维修保养' })).data,
+    ).toEqual({ id: 'c1', name: '维修保养' });
+    expect(categories.rename).toHaveBeenCalledWith('c1', '维修保养');
+
+    expect(
+      (await controller.mergeCategory('c1', { targetId: 'c2' })).data,
+    ).toEqual({ sourceId: 'c1', targetId: 'c2', moved: 3 });
+    expect(categories.merge).toHaveBeenCalledWith('c1', 'c2');
+
+    expect((await controller.deactivateCategory('c1')).data).toEqual({
+      id: 'c1',
+      isActive: false,
+    });
+    expect(categories.deactivate).toHaveBeenCalledWith('c1');
   });
 });

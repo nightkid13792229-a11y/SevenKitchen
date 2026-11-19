@@ -26,11 +26,26 @@ const TOMORROW = TimezoneUtil.shanghaiDateKey(
 const utcDateOnly = (dateKey: string): string =>
   new Date(`${dateKey}T00:00:00.000Z`).toISOString();
 
-const makePrisma = (row: any = null) => ({
+/** 类别字典里「设备工具」那一行（支出落库会按它回填旧枚举 code） */
+const EQUIPMENT_CATEGORY = {
+  id: 'c-equip',
+  name: '设备工具',
+  code: 'EQUIPMENT',
+  isSystem: false,
+  isActive: true,
+};
+
+const makePrisma = (
+  row: any = null,
+  categoryRef: any = EQUIPMENT_CATEGORY,
+) => ({
   financeManualEntry: {
     create: jest.fn().mockResolvedValue({ id: 'new' }),
     findUnique: jest.fn().mockResolvedValue(row),
     update: jest.fn().mockResolvedValue({ id: 'm1' }),
+  },
+  financeCategory: {
+    findUnique: jest.fn().mockResolvedValue(categoryRef),
   },
 });
 
@@ -40,7 +55,7 @@ const expenseInput = (overrides: Record<string, unknown> = {}) =>
     direction: 'EXPENSE',
     amount: 10,
     occurredAt: '2026-11-05',
-    category: 'EQUIPMENT',
+    categoryId: 'c-equip',
     title: '封口机',
     ...overrides,
   }) as any;
@@ -62,8 +77,10 @@ const existingExpense = (overrides: Record<string, unknown> = {}) => ({
   amount: 10,
   occurredAt: new Date('2026-11-05T00:00:00.000Z'),
   category: 'EQUIPMENT',
+  categoryId: 'c-equip',
   incomeCategory: null,
   payerType: 'PERSONAL',
+  payerAccount: 'PERSONAL_WECHAT',
   payerUserId: null,
   title: '封口机',
   note: null,
@@ -108,22 +125,46 @@ describe('FinanceManualEntryService.create', () => {
     const service = new FinanceManualEntryService(makePrisma() as any);
 
     await expect(
-      service.create('u1', expenseInput({ category: undefined })),
+      service.create('u1', expenseInput({ categoryId: undefined })),
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
       service.create('u1', incomeInput({ incomeCategory: undefined })),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('枚举/常量之外的类别被拒绝', async () => {
+  it('categoryId 不存在或已停用时拒绝 400', async () => {
+    const missing = new FinanceManualEntryService(
+      makePrisma(null, null) as any,
+    );
+    await expect(
+      missing.create('u1', expenseInput({ categoryId: 'nope' })),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    // 已停用（含已合并）的类别不能再被选用
+    const inactive = new FinanceManualEntryService(
+      makePrisma(null, { ...EQUIPMENT_CATEGORY, isActive: false }) as any,
+    );
+    await expect(
+      inactive.create('u1', expenseInput({ categoryId: 'c-equip' })),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('枚举/常量之外的收入类别被拒绝', async () => {
     const service = new FinanceManualEntryService(makePrisma() as any);
 
     await expect(
-      service.create('u1', expenseInput({ category: 'SALARY' })),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    await expect(
       service.create('u1', incomeInput({ incomeCategory: 'BONUS' })),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('payerAccount 非法时报 400，不静默落默认账户', async () => {
+    const prisma: any = makePrisma();
+    const service = new FinanceManualEntryService(prisma);
+
+    await expect(
+      service.create('u1', expenseInput({ payerAccount: 'BANK' })),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.financeManualEntry.create).not.toHaveBeenCalled();
   });
 
   it('手工收入只允许「其他收入」，其他来源类别由系统自动记录', async () => {
@@ -157,7 +198,7 @@ describe('FinanceManualEntryService.create', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('创建时 occurredAt 按 UTC 零点落库，支出只写 category', async () => {
+  it('创建时 occurredAt 按 UTC 零点落库，支出写 categoryId 并按 code 回填旧枚举', async () => {
     const prisma: any = makePrisma();
 
     await new FinanceManualEntryService(prisma).create(
@@ -174,6 +215,7 @@ describe('FinanceManualEntryService.create', () => {
     expect(data.createdById).toBe('u1');
     expect(data.direction).toBe('EXPENSE');
     expect(data.amount).toBe(120.5);
+    expect(data.categoryId).toBe('c-equip');
     expect(data.category).toBe('EQUIPMENT');
     expect(data.incomeCategory).toBeNull();
     expect(data.note).toBe('买了封口机');
@@ -198,15 +240,30 @@ describe('FinanceManualEntryService.create', () => {
     expect(occurredAt.getTime()).toBeLessThanOrEqual(to.getTime());
   });
 
-  it('创建收入时只写 incomeCategory，付款方缺省为个人', async () => {
+  it('创建收入时只写 incomeCategory，不查类别字典；账户缺省「我的微信」', async () => {
     const prisma: any = makePrisma();
 
     await new FinanceManualEntryService(prisma).create('u1', incomeInput());
 
     const data = prisma.financeManualEntry.create.mock.calls[0][0].data;
     expect(data.category).toBeNull();
+    expect(data.categoryId).toBeNull();
     expect(data.incomeCategory).toBe('OTHER_INCOME');
     expect(data.payerType).toBe('PERSONAL');
+    expect(data.payerAccount).toBe('PERSONAL_WECHAT');
+    expect(prisma.financeCategory.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('显式账户原样落库（支出从哪个账户出）', async () => {
+    const prisma: any = makePrisma();
+
+    await new FinanceManualEntryService(prisma).create(
+      'u1',
+      expenseInput({ payerAccount: 'CASH' }),
+    );
+
+    const data = prisma.financeManualEntry.create.mock.calls[0][0].data;
+    expect(data.payerAccount).toBe('CASH');
   });
 });
 
@@ -246,8 +303,42 @@ describe('FinanceManualEntryService.update', () => {
     expect(data.amount).toBe(20);
     expect(data.note).toBe('改过');
     expect(data.category).toBe('EQUIPMENT');
+    expect(data.categoryId).toBe('c-equip');
+    expect(data.payerAccount).toBe('PERSONAL_WECHAT');
     // 没改日期时原样写回，不能每改一次就退一天
     expect(data.occurredAt.toISOString()).toBe(utcDateOnly('2026-11-05'));
+  });
+
+  it('类别后来被停用，仍可修改该条目的其他字段（停用只影响以后）', async () => {
+    const prisma: any = makePrisma(existingExpense(), {
+      ...EQUIPMENT_CATEGORY,
+      isActive: false,
+    });
+
+    await expect(
+      new FinanceManualEntryService(prisma).update('u2', 'm1', {
+        note: '改备注',
+      }),
+    ).resolves.toEqual({ id: 'm1' });
+  });
+
+  it('更新时改账户：合法账户落库，非法账户 400 且不写库', async () => {
+    const prisma: any = makePrisma(existingExpense());
+
+    await new FinanceManualEntryService(prisma).update('u2', 'm1', {
+      payerAccount: 'PERSONAL_ALIPAY',
+    });
+    expect(
+      prisma.financeManualEntry.update.mock.calls[0][0].data.payerAccount,
+    ).toBe('PERSONAL_ALIPAY');
+
+    prisma.financeManualEntry.update.mockClear();
+    await expect(
+      new FinanceManualEntryService(prisma).update('u2', 'm1', {
+        payerAccount: 'ALIPAY',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.financeManualEntry.update).not.toHaveBeenCalled();
   });
 
   it('更新时金额仍须大于 0', async () => {

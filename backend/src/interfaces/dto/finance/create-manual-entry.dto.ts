@@ -9,23 +9,21 @@ import {
   Length,
   Matches,
 } from 'class-validator';
-import { FinanceExpenseCategory as FinanceExpenseCategoryEnum } from '@prisma/client';
 import {
   MANUAL_INCOME_CATEGORIES,
   MANUAL_INCOME_ONLY_MESSAGE,
 } from '../../../application/finance/finance-categories';
-import type {
-  FinanceExpenseCategory,
-  FinanceIncomeCategory,
-} from '../../../application/finance/finance-categories';
+import type { FinanceIncomeCategory } from '../../../application/finance/finance-categories';
+import { FINANCE_ACCOUNT_CODES } from '../../../application/finance/finance-accounts';
 
 /**
  * 「记一笔」手工收支（设计文档 §5.3 / §6.2）。
  *
  * 金额只收正数、最多两位小数；方向由 `direction` 决定。
- * 支出填 `category`（`FinanceExpenseCategory` 枚举内），
- * 收入填 `incomeCategory`，但手工收入只允许 `OTHER_INCOME` ——
- * 线上/线下/补剂/定制食谱的收入由系统自动记录，手工标上去会和订单、手续费口径对不上。
+ * 支出填 `categoryId`（类别字典里的启用类别），收入填 `incomeCategory`，
+ * 但手工收入只允许 `OTHER_INCOME` —— 线上/线下/补剂/定制食谱的收入由系统
+ * 自动记录，手工标上去会和订单、手续费口径对不上。
+ * `payerAccount` 是「钱从哪个账户进出」，缺省「我的微信」。
  * 服务层还会再校验一次，这里的装饰器只负责把明显非法的请求挡在控制器外。
  */
 export class CreateManualEntryDto {
@@ -53,15 +51,22 @@ export class CreateManualEntryDto {
   occurredAt!: string;
 
   @ApiPropertyOptional({
-    description: '支出类别（支出必填；收入不传）',
-    enum: Object.values(FinanceExpenseCategoryEnum),
-    example: 'EQUIPMENT',
+    description: '支出类别 id（类别字典；支出必填、必须启用；收入不传）',
+    example: '3f1c2b4a-0000-0000-0000-000000000000',
   })
   @IsOptional()
-  @IsIn(Object.values(FinanceExpenseCategoryEnum), {
-    message: '支出类别不合法',
+  @IsString()
+  @Length(1, 36)
+  categoryId?: string;
+
+  @ApiPropertyOptional({
+    description: '出账/入账账户；缺省 PERSONAL_WECHAT（我的微信）',
+    enum: [...FINANCE_ACCOUNT_CODES],
+    default: 'PERSONAL_WECHAT',
   })
-  category?: FinanceExpenseCategory;
+  @IsOptional()
+  @IsIn([...FINANCE_ACCOUNT_CODES], { message: '账户不合法' })
+  payerAccount?: string;
 
   @ApiPropertyOptional({
     description:

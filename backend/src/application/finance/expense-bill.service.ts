@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { ExpensePayerType } from './expense-template.service';
+import { normalizeFinanceAccount } from './finance-accounts';
 import { centsToMoney, toCents } from './finance-expense.service';
 import { monthDateOnlyRange } from './finance-period';
 import { TimezoneUtil } from '../../utils/timezone.util';
@@ -17,6 +18,8 @@ export type PayExpenseBillInput = {
   paidAt?: string;
   /** 付款方；缺省继承账单上的 payerType */
   payerType?: ExpensePayerType;
+  /** 本次从哪个账户出（MERCHANT / PERSONAL_WECHAT / ...）；缺省取账单上的账户 */
+  payerAccount?: string | null;
 };
 
 const PAYER_TYPES: readonly ExpensePayerType[] = ['COMPANY', 'PERSONAL'];
@@ -110,6 +113,14 @@ export class ExpenseBillService {
       throw new BadRequestException('账单已付清，不能重复付款');
     }
 
+    // 账户在写任何记录之前校验：非法值不能等到付款记录写了一半才报错。
+    // 缺省取账单上的账户（模板带下来的）；老账单没有账户时缺省「我的微信」。
+    const payerAccount = normalizeFinanceAccount(
+      input.payerAccount !== undefined
+        ? input.payerAccount
+        : (bill.payerAccount ?? null),
+    );
+
     // 金额一律换成整数分再比较/相加：Decimal(876.54) 直接做浮点减法会得到
     // 376.53999999999996，尾款永远判成「超额」；分上算完落库前再换回元。
     const paidBefore = await this.prisma.expenseBillPayment.aggregate({
@@ -159,6 +170,7 @@ export class ExpenseBillService {
         paidById: userId,
         paymentMethod: 'OTHER',
         payerType,
+        payerAccount,
         paymentProofUrls: [],
       },
     });

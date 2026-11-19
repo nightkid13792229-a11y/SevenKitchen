@@ -55,6 +55,8 @@ export interface PurchaseListConstructor {
   paidAmount?: number | null;
   personalAmount?: number | null;
   reimbursementAmount?: number | null;
+  /** 出账账户；缺省 PERSONAL_WECHAT（我的微信） */
+  payerAccount?: string | null;
   voidedAt?: Date | null;
   voidedById?: string | null;
   updatedById?: string | null;
@@ -98,6 +100,8 @@ export class PurchaseList {
   public paidAmount?: number | null;
   public personalAmount?: number | null;
   public reimbursementAmount?: number | null;
+  /** 出账账户（2026-11-19）：MERCHANT / PERSONAL_WECHAT / PERSONAL_ALIPAY / PERSONAL_BANK / CASH */
+  public payerAccount: string;
   public voidedAt?: Date | null;
   public voidedById?: string | null;
   public updatedById?: string | null;
@@ -138,6 +142,9 @@ export class PurchaseList {
     this.paidAmount = data.paidAmount ?? null;
     this.personalAmount = data.personalAmount ?? null;
     this.reimbursementAmount = data.reimbursementAmount ?? null;
+    // 账户化改造（2026-11-19）：补货/采购默认从「我的微信」出账；
+    // 老数据没有账户时也按默认值落库（下一版再做「记住上次用的」）。
+    this.payerAccount = data.payerAccount ?? 'PERSONAL_WECHAT';
     this.voidedAt = data.voidedAt ?? null;
     this.voidedById = data.voidedById ?? null;
     this.updatedById = data.updatedById ?? null;
@@ -305,6 +312,7 @@ export class PurchaseList {
       paidAmount: this.paidAmount,
       personalAmount: this.personalAmount,
       reimbursementAmount: this.reimbursementAmount,
+      payerAccount: this.payerAccount,
       voidedAt: this.voidedAt,
       voidedById: this.voidedById,
       updatedById: this.updatedById,
@@ -361,6 +369,7 @@ export class PurchaseList {
       paidAmount: toNullableNumber(data.paidAmount),
       personalAmount: toNullableNumber(data.personalAmount),
       reimbursementAmount: toNullableNumber(data.reimbursementAmount),
+      payerAccount: data.payerAccount ?? null,
       voidedAt: data.voidedAt ?? null,
       voidedById: data.voidedById ?? null,
       updatedById: data.updatedById ?? null,

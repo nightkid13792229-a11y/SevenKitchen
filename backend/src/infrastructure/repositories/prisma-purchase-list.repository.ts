@@ -206,6 +206,9 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
             paidAmount: data.paidAmount ?? null,
             personalAmount: data.personalAmount ?? null,
             reimbursementAmount: data.reimbursementAmount ?? null,
+            // 账户化改造（2026-11-19）：补货/采购保存时默认「我的微信」；
+            // 实体已兜默认值，这里再兜一次，避免老调用方传 undefined。
+            payerAccount: data.payerAccount ?? 'PERSONAL_WECHAT',
             voidedAt: data.voidedAt ?? null,
             voidedById: data.voidedById ?? null,
             updatedById: data.updatedById ?? null,
@@ -281,6 +284,9 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
             paidAmount: data.paidAmount ?? null,
             personalAmount: data.personalAmount ?? null,
             reimbursementAmount: data.reimbursementAmount ?? null,
+            // 账户化改造（2026-11-19）：补货/采购保存时默认「我的微信」；
+            // 实体已兜默认值，这里再兜一次，避免老调用方传 undefined。
+            payerAccount: data.payerAccount ?? 'PERSONAL_WECHAT',
             voidedAt: data.voidedAt ?? null,
             voidedById: data.voidedById ?? null,
             updatedById: data.updatedById ?? null,

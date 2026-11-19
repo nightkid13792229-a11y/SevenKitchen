@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ExpenseBillService } from '../../application/finance/expense-bill.service';
+import { FinanceCategoryService } from '../../application/finance/finance-category.service';
 import { ExpenseTemplateService } from '../../application/finance/expense-template.service';
 import { FinanceEntriesService } from '../../application/finance/finance-entries.service';
 import { FinanceManualEntryService } from '../../application/finance/finance-manual-entry.service';
@@ -28,6 +29,11 @@ import { FinanceEntriesQueryDto } from '../dto/finance/finance-entries.query.dto
 import { FinanceRangeQueryDto } from '../dto/finance/finance-range.query.dto';
 import { GenerateBillsDto } from '../dto/finance/generate-bills.dto';
 import { PayExpenseBillDto } from '../dto/finance/pay-expense-bill.dto';
+import {
+  CreateFinanceCategoryDto,
+  MergeFinanceCategoryDto,
+  RenameFinanceCategoryDto,
+} from '../dto/finance/finance-category.dto';
 import { AdminGuard } from '../guards/role.guard';
 
 /**
@@ -47,6 +53,7 @@ export class AdminFinanceController {
     private readonly financeManualEntryService: FinanceManualEntryService,
     private readonly expenseTemplateService: ExpenseTemplateService,
     private readonly expenseBillService: ExpenseBillService,
+    private readonly financeCategoryService: FinanceCategoryService,
   ) {}
 
   /**
@@ -138,6 +145,97 @@ export class AdminFinanceController {
     return ApiResponseDto.success(
       await this.financeManualEntryService.void(userId, id, body.reason),
       'Manual entry voided successfully',
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 支出类别字典（设计文档 §2）
+  // ---------------------------------------------------------------------------
+
+  /** 类别列表：默认只给启用类别；管理页传 includeInactive=true 看全部 */
+  @Get('categories')
+  @ApiOperation({ summary: '支出类别列表（含引用数，仅 ADMIN）' })
+  @ApiResponse({
+    status: 200,
+    description: '类别列表（id / name / isSystem / isActive / usageCount）',
+  })
+  @ApiResponse({ status: 403, description: '需要管理员权限' })
+  async listCategories(@Query('includeInactive') includeInactive?: string) {
+    const include = includeInactive === 'true' || includeInactive === '1';
+    return ApiResponseDto.success(
+      await this.financeCategoryService.list(include),
+      'Finance categories retrieved successfully',
+    );
+  }
+
+  /** 新建类别（输入即建）：同名（忽略大小写与首尾空格）拒绝 400 */
+  @Post('categories')
+  @ApiOperation({ summary: '新建支出类别（仅 ADMIN）' })
+  @ApiResponse({ status: 200, description: '新建成功，返回类别 id 与名称' })
+  @ApiResponse({ status: 400, description: '名称为空、超长或重名' })
+  @ApiResponse({ status: 403, description: '需要管理员权限' })
+  async createCategory(
+    @UserId() userId: string,
+    @Body() body: CreateFinanceCategoryDto,
+  ): Promise<ApiResponseDto<{ id: string; name: string }>> {
+    return ApiResponseDto.success(
+      await this.financeCategoryService.create(userId, body.name),
+      'Finance category created successfully',
+    );
+  }
+
+  /** 改名：系统类别也允许；历史记录按 categoryId 自动显示新名字 */
+  @Patch('categories/:id')
+  @ApiOperation({ summary: '类别改名（仅 ADMIN）' })
+  @ApiParam({ name: 'id', description: '类别ID' })
+  @ApiResponse({ status: 200, description: '改名成功' })
+  @ApiResponse({ status: 400, description: '名称为空、超长或重名' })
+  @ApiResponse({ status: 404, description: '类别不存在' })
+  @ApiResponse({ status: 403, description: '需要管理员权限' })
+  async renameCategory(
+    @Param('id') id: string,
+    @Body() body: RenameFinanceCategoryDto,
+  ): Promise<ApiResponseDto<{ id: string; name: string }>> {
+    return ApiResponseDto.success(
+      await this.financeCategoryService.rename(id, body.name),
+      'Finance category renamed successfully',
+    );
+  }
+
+  /** 合并：历史账单/模板/手工条目一起搬到目标类别，返回搬移条数 */
+  @Post('categories/:id/merge')
+  @ApiOperation({ summary: '合并支出类别（仅 ADMIN）' })
+  @ApiParam({ name: 'id', description: '被合并的源类别ID' })
+  @ApiResponse({ status: 200, description: '合并成功，返回搬移条数' })
+  @ApiResponse({ status: 400, description: '目标与源相同或未指定' })
+  @ApiResponse({ status: 404, description: '源类别或目标类别不存在' })
+  @ApiResponse({ status: 403, description: '需要管理员权限' })
+  async mergeCategory(
+    @Param('id') id: string,
+    @Body() body: MergeFinanceCategoryDto,
+  ): Promise<
+    ApiResponseDto<{ sourceId: string; targetId: string; moved: number }>
+  > {
+    return ApiResponseDto.success(
+      await this.financeCategoryService.merge(id, body.targetId),
+      'Finance category merged successfully',
+    );
+  }
+
+  /** 停用（删除 = 停用）：系统类别禁止；已停用的幂等返回 */
+  @Post('categories/:id/deactivate')
+  @ApiOperation({ summary: '停用支出类别（仅 ADMIN）' })
+  @ApiParam({ name: 'id', description: '类别ID' })
+  @ApiResponse({ status: 200, description: '停用成功' })
+  @ApiResponse({ status: 400, description: '系统类别不能停用' })
+  @ApiResponse({ status: 404, description: '类别不存在' })
+  @ApiResponse({ status: 403, description: '需要管理员权限' })
+  async deactivateCategory(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<{ id: string; isActive: false }>> {
+    return ApiResponseDto.success(
+      await this.financeCategoryService.deactivate(id),
+      'Finance category deactivated successfully',
     );
   }
 

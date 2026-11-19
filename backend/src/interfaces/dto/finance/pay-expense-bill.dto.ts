@@ -6,4 +6,6 @@ export class PayExpenseBillDto {
   paidAt?: string;
   /** 付款方；缺省继承账单上的 payerType */
   payerType?: 'COMPANY' | 'PERSONAL';
+  /** 本次从哪个账户出；缺省取账单上的账户 */
+  payerAccount?: string | null;
 }

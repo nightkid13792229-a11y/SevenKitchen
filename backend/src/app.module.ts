@@ -75,6 +75,7 @@ import { FinanceEntriesService } from './application/finance/finance-entries.ser
 import { FinanceManualEntryService } from './application/finance/finance-manual-entry.service';
 import { ExpenseBillService } from './application/finance/expense-bill.service';
 import { ExpenseTemplateService } from './application/finance/expense-template.service';
+import { FinanceCategoryService } from './application/finance/finance-category.service';
 import { FinanceSchedulerService } from './application/scheduler/finance-scheduler.service';
 import { OrderSchedulerService } from './application/scheduler/order-scheduler.service';
 import { SupplementSchedulerService } from './application/scheduler/supplement-scheduler.service';
@@ -906,6 +907,7 @@ validatePrismaConfig();
     FinanceExpenseService,
     FinanceEntriesService,
     FinanceManualEntryService,
+    FinanceCategoryService,
     // Phase 2: Staff Production Management Service
     StaffProductionService,
     ProductionService,

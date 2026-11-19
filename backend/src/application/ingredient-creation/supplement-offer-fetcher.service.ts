@@ -11,6 +11,7 @@ import {
   buildOfferFacts,
   parseUnitsPerBottle,
 } from '../../domain/ingredient/supplement-offer-assembly';
+import { dedupeCandidates } from '../../domain/ingredient/supplement-offer-candidates';
 import {
   resolvePriceBasis,
   type LabelNutrient,
@@ -63,7 +64,12 @@ export class SupplementOfferFetcherService {
 
   async fetchOffers(input: FetchOffersInput): Promise<FetchOffersResult> {
     const rule = resolvePriceBasis(input.nutrientKey);
-    const candidates = await this.preview.searchCandidates(input.keyword, input.limit);
+    // 搜索会把同一件商品以多个链接返回：多要一些，去重后再截到 limit，否则表里是同一瓶重复五次
+    const rawCandidates = await this.preview.searchCandidates(
+      input.keyword,
+      Math.min(input.limit * 3, 20),
+    );
+    const candidates = dedupeCandidates(rawCandidates).slice(0, input.limit);
 
     const offers: OfferFacts[] = [];
     const failed: FetchOffersResult['failed'] = [];

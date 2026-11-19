@@ -116,53 +116,151 @@
         <text class="section-title">食谱橱窗</text>
       </view>
       <text class="recipe-count">共 {{ totalCount }} 道食谱</text>
-      <text v-if="activeFiltersCount > 0" class="clear-all" @tap="clearAllFilters">清除筛选</text>
+      <text v-if="hasShelfFilters" class="clear-all" @tap="resetShelfAll()">清除筛选</text>
     </view>
 
-    <!-- 固定筛选栏 -->
+    <!-- 三筛选：肉类 / 特性 / 避开 -->
     <view class="filter-bar">
-      <view class="filter-buttons">
-        <!-- 适用生命阶段按钮 -->
-        <view
-          :class="['filter-btn', { active: filterState.selectedLifeStages.filter(Boolean).length > 0 }]"
-          @tap="openLifeStageDrawer"
-        >
-          <text class="filter-btn-text">{{ getLifeStageButtonText() }}</text>
-          <text class="dropdown-arrow">▼</text>
-          <text
-            v-if="filterState.selectedLifeStages.filter(Boolean).length > 0"
-            class="remove-icon"
-            @tap.stop="removeLifeStages"
-          >×</text>
+      
+    <view class="sf-bar">
+      <view
+        :class="['sf-pill', { 'is-active': shelfHasSelection('main'), 'is-open': shelfOpenSheet === 'main' }]"
+        @tap="openShelfSheet('main')"
+      >
+        <text class="sf-pill-text">肉类</text>
+        <text class="sf-pill-car">▼</text>
+        <text v-if="shelfSelectionCount('main')" class="sf-pill-count">{{ shelfSelectionCount('main') }}</text>
+      </view>
+      <view
+        :class="['sf-pill', { 'is-active': shelfHasSelection('needs'), 'is-open': shelfOpenSheet === 'needs' }]"
+        @tap="openShelfSheet('needs')"
+      >
+        <text class="sf-pill-text">特性</text>
+        <text class="sf-pill-car">▼</text>
+        <text v-if="shelfSelectionCount('needs')" class="sf-pill-count">{{ shelfSelectionCount('needs') }}</text>
+      </view>
+      <view
+        :class="['sf-pill', { 'is-active': shelfHasSelection('avoid'), 'is-open': shelfOpenSheet === 'avoid' }]"
+        @tap="openShelfSheet('avoid')"
+      >
+        <text class="sf-pill-text">避开</text>
+        <text class="sf-pill-car">▼</text>
+        <text v-if="shelfSelectionCount('avoid')" class="sf-pill-count">{{ shelfSelectionCount('avoid') }}</text>
+      </view>
+    </view>
+    </view>
+
+    <view v-if="shelfOpenSheet" class="sf-mask" @tap="closeShelfSheet">
+      <view class="sf-sheet" @tap.stop>
+        <view class="sf-handle"></view>
+        <view class="sf-head">
+          <text class="sf-title">{{ shelfSheetTitle }}</text>
+          <text class="sf-close" @tap="closeShelfSheet">×</text>
         </view>
 
-        <!-- 健康类型按钮（字典合规化完成前不对顾客展示） -->
-        <view
-          v-if="HEALTH_TAG_FILTER_ENABLED"
-          :class="['filter-btn', { active: filterState.selectedHealthTags.filter(Boolean).length > 0 }]"
-          @tap="openHealthTagsDrawer"
+        <scroll-view
+          scroll-y
+          :class="['sf-body', shelfOpenSheet === 'avoid' ? 'sf-body--tall' : 'sf-body--auto']"
         >
-          <text class="filter-btn-text">{{ getHealthTagsButtonText() }}</text>
-          <text class="dropdown-arrow">▼</text>
-          <text
-            v-if="filterState.selectedHealthTags.filter(Boolean).length > 0"
-            class="remove-icon"
-            @tap.stop="removeHealthTags"
-          >×</text>
-        </view>
+          <!-- 肉类：一次只归一个肉种 -->
+          <view v-if="shelfOpenSheet === 'main'" class="sf-chips">
+            <view
+              v-for="opt in shelfOptions.mainProtein"
+              :key="opt.value"
+              :class="['sf-chip', { 'is-on': shelfDraft.main.includes(opt.value) }]"
+              @tap="toggleShelfMain(opt.value)"
+            >
+              <text>{{ opt.label }}</text>
+              <text class="sf-chip-n">{{ opt.count }}</text>
+            </view>
+            <view v-if="!shelfOptions.mainProtein.length" class="sf-empty">暂无可选</view>
+          </view>
 
-        <!-- 不吃这些按钮 -->
-        <view
-          :class="['filter-btn', { excluded: filterState.excludedIngredients.length > 0 }]"
-          @tap="openExcludedTagsDrawer"
-        >
-          <text class="filter-btn-text">{{ getExcludedTagsButtonText() }}</text>
-          <text class="dropdown-arrow">▼</text>
-          <text
-            v-if="filterState.excludedIngredients.length > 0"
-            class="remove-icon"
-            @tap.stop="removeExcludedTags"
-          >×</text>
+          <!-- 特性：可多选，同时满足 -->
+          <view v-else-if="shelfOpenSheet === 'needs'" class="sf-rows">
+            <view
+              v-for="opt in shelfOptions.needs"
+              :key="opt.value"
+              :class="['sf-row', { 'is-on': shelfDraft.needs.includes(opt.value) }]"
+              @tap="toggleShelfNeed(opt.value)"
+            >
+              <text class="sf-row-label">{{ opt.label }}</text>
+              <text class="sf-row-count">{{ opt.count }} 道</text>
+              <view class="sf-check">
+                <text v-if="shelfDraft.needs.includes(opt.value)">✓</text>
+              </view>
+            </view>
+            <view v-if="!shelfOptions.needs.length" class="sf-empty">暂无可选</view>
+          </view>
+
+          <!-- 避开：原料标签树 -->
+          <view v-else class="sf-avoid">
+            <input
+              v-model="shelfSearch"
+              class="sf-search"
+              placeholder="搜索原料或类别"
+              placeholder-class="sf-search-ph"
+            />
+            <template v-if="!shelfSearch.trim()">
+              <view v-for="group in shelfAvoidGroups" :key="group.value" class="sf-group">
+                <view
+                  :class="[
+                    'sf-group-head',
+                    {
+                      'is-on': shelfDraft.avoid.includes(group.value),
+                      'is-off': group.disabled
+                    }
+                  ]"
+                  @tap="onShelfGroupTap(group)"
+                >
+                  <text class="sf-group-name">{{ group.label }}</text>
+                  <text class="sf-group-count">{{ group.count }} 道</text>
+                  <text v-if="group.disabled" class="sf-group-warn">会避开全部食谱</text>
+                  <view v-else class="sf-check">
+                    <text v-if="shelfDraft.avoid.includes(group.value)">✓</text>
+                  </view>
+                </view>
+                <view v-if="group.children.length" class="sf-chips sf-chips--sub">
+                  <view
+                    v-for="child in group.children"
+                    :key="child.value"
+                    :class="[
+                      'sf-chip',
+                      'sf-chip--sm',
+                      { 'is-on': shelfDraft.avoid.includes(child.value) }
+                    ]"
+                    @tap="toggleShelfAvoid(child.value)"
+                  >
+                    <text>{{ child.label }}</text>
+                    <text class="sf-chip-n">{{ child.count }}</text>
+                  </view>
+                </view>
+                <text v-if="group.disabled && group.children.length" class="sf-group-warn2">
+                  整类选会排除全部 {{ shelfOptions.total }} 道食谱
+                </text>
+              </view>
+            </template>
+            <template v-else>
+              <view
+                v-for="opt in shelfAvoidSearchResults"
+                :key="opt.value"
+                class="sf-row"
+                @tap="toggleShelfAvoid(opt.value)"
+              >
+                <text class="sf-row-label">{{ opt.label }}</text>
+                <text class="sf-row-count">{{ opt.count }} 道</text>
+                <view class="sf-check">
+                  <text v-if="shelfDraft.avoid.includes(opt.value)">✓</text>
+                </view>
+              </view>
+              <view v-if="!shelfAvoidSearchResults.length" class="sf-empty">没有匹配的原料</view>
+            </template>
+          </view>
+        </scroll-view>
+
+        <view class="sf-actions">
+          <view class="sf-btn sf-btn--ghost" @tap="resetShelfDraft">重置</view>
+          <view class="sf-btn sf-btn--primary" @tap="applyShelfDraft">{{ shelfPrimaryText }}</view>
         </view>
       </view>
     </view>
@@ -386,7 +484,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { fetchTastingPacks } from '../../api/tastingPack'
 import { onLoad, onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { AUTH_EXPIRED_EVENT, request, getToken } from '../../utils/api'
@@ -530,6 +628,330 @@ const filterState = ref<FilterState>({
   excludedIngredientTags: [],
   excludedIngredients: []
 })
+const SHELF_FILTER_STORAGE_KEY = 'home_shelf_filters_v1'
+
+interface ShelfFilters {
+  mainProteinNodeIds: string[]
+  needTagIds: string[]
+  avoidTagIds: string[]
+}
+
+function readShelfFilters(): ShelfFilters {
+  try {
+    const saved = uni.getStorageSync(SHELF_FILTER_STORAGE_KEY)
+    if (!saved || typeof saved !== 'object') {
+      return { mainProteinNodeIds: [], needTagIds: [], avoidTagIds: [] }
+    }
+    return {
+      mainProteinNodeIds: Array.isArray(saved.mainProteinNodeIds) ? saved.mainProteinNodeIds : [],
+      needTagIds: Array.isArray(saved.needTagIds) ? saved.needTagIds : [],
+      avoidTagIds: Array.isArray(saved.avoidTagIds) ? saved.avoidTagIds : []
+    }
+  } catch {
+    return { mainProteinNodeIds: [], needTagIds: [], avoidTagIds: [] }
+  }
+}
+
+const newFilters = ref<ShelfFilters>(readShelfFilters())
+const hasShelfFilters = computed(
+  () =>
+    newFilters.value.mainProteinNodeIds.length > 0 ||
+    newFilters.value.needTagIds.length > 0 ||
+    newFilters.value.avoidTagIds.length > 0
+)
+let pendingShelfRefresh = false
+
+type ShelfSheetKey = 'main' | 'needs' | 'avoid'
+
+interface ShelfFilterOption {
+  value: string
+  label: string
+  count: number
+  parentId?: string | null
+}
+
+interface ShelfFilterOptions {
+  mainProtein: ShelfFilterOption[]
+  needs: ShelfFilterOption[]
+  avoid: ShelfFilterOption[]
+  total: number
+}
+
+interface ShelfFilterState {
+  mainProteinNodeIds: string[]
+  needTagIds: string[]
+  avoidTagIds: string[]
+}
+
+interface AvoidGroup extends ShelfFilterOption {
+  children: ShelfFilterOption[]
+  disabled: boolean
+}
+
+
+
+const shelfOptions = reactive<ShelfFilterOptions>({
+  mainProtein: [],
+  needs: [],
+  avoid: [],
+  total: 0
+})
+
+const shelfSelected = reactive<ShelfFilterState>({
+  mainProteinNodeIds: [],
+  needTagIds: [],
+  avoidTagIds: []
+})
+
+const shelfDraft = reactive<ShelfFilterState>({
+  mainProteinNodeIds: [],
+  needTagIds: [],
+  avoidTagIds: []
+})
+
+const shelfOpenSheet = ref<ShelfSheetKey | null>(null)
+const shelfSearch = ref('')
+const shelfPreviewTotal = ref<number | null>(null)
+let shelfPreviewTimer: ReturnType<typeof setTimeout> | null = null
+let shelfPreviewSeq = 0
+
+const shelfSheetTitle = computed(() => {
+  if (shelfOpenSheet.value === 'main') return '肉类'
+  if (shelfOpenSheet.value === 'needs') return '特性'
+  return '要避开什么？'
+})
+
+const shelfPrimaryText = computed(() => {
+  const total = shelfPreviewTotal.value
+  if (total === null) return '查看结果'
+  return shelfOpenSheet.value === 'avoid' ? `还剩 ${total} 道食谱` : `${total} 道食谱`
+})
+
+const shelfAvoidGroups = computed<AvoidGroup[]>(() => {
+  const childrenOf = new Map<string, ShelfFilterOption[]>()
+  for (const tag of shelfOptions.avoid) {
+    if (!tag.parentId) continue
+    const list = childrenOf.get(tag.parentId) || []
+    list.push(tag)
+    childrenOf.set(tag.parentId, list)
+  }
+  const total = shelfOptions.total
+  return shelfOptions.avoid
+    .filter((tag) => !tag.parentId)
+    .map((tag) => {
+      const children = childrenOf.get(tag.value) || []
+      return {
+        ...tag,
+        children,
+        disabled: total > 0 && tag.count >= total
+      }
+    })
+})
+
+const shelfAvoidSearchResults = computed(() => {
+  const keyword = shelfSearch.value.trim()
+  if (!keyword) return []
+  return shelfOptions.avoid.filter((tag) => tag.label.includes(keyword))
+})
+
+function shelfSelectionCount(key: ShelfSheetKey): number {
+  if (key === 'main') return shelfSelected.mainProteinNodeIds.length
+  if (key === 'needs') return shelfSelected.needTagIds.length
+  return shelfSelected.avoidTagIds.length
+}
+
+function shelfHasSelection(key: ShelfSheetKey): boolean {
+  return shelfSelectionCount(key) > 0
+}
+
+function buildShelfParams(filters: ShelfFilterState): Record<string, string> {
+  const params: Record<string, string> = {}
+  if (filters.mainProteinNodeIds.length) {
+    params.mainProteinNodeIds = filters.mainProteinNodeIds.join(',')
+  }
+  if (filters.needTagIds.length) {
+    params.needTagIds = filters.needTagIds.join(',')
+  }
+  if (filters.avoidTagIds.length) {
+    params.avoidTagIds = filters.avoidTagIds.join(',')
+  }
+  return params
+}
+
+function shelfSnapshot(): ShelfFilterState {
+  return {
+    mainProteinNodeIds: [...shelfSelected.mainProteinNodeIds],
+    needTagIds: [...shelfSelected.needTagIds],
+    avoidTagIds: [...shelfSelected.avoidTagIds]
+  }
+}
+
+function persistShelf(): void {
+  try {
+    uni.setStorageSync(SHELF_FILTER_STORAGE_KEY, shelfSnapshot())
+  } catch {
+    // 存储失败不影响筛选
+  }
+}
+
+function restoreShelf(): void {
+  try {
+    const saved = uni.getStorageSync(SHELF_FILTER_STORAGE_KEY)
+    if (!saved || typeof saved !== 'object') return
+    shelfSelected.mainProteinNodeIds = Array.isArray(saved.mainProteinNodeIds)
+      ? saved.mainProteinNodeIds.filter((id: unknown): id is string => typeof id === 'string')
+      : []
+    shelfSelected.needTagIds = Array.isArray(saved.needTagIds)
+      ? saved.needTagIds.filter((id: unknown): id is string => typeof id === 'string')
+      : []
+    shelfSelected.avoidTagIds = Array.isArray(saved.avoidTagIds)
+      ? saved.avoidTagIds.filter((id: unknown): id is string => typeof id === 'string')
+      : []
+  } catch {
+    // 读取失败按未选处理
+  }
+}
+
+function syncShelfDraft(): void {
+  shelfDraft.mainProteinNodeIds = [...shelfSelected.mainProteinNodeIds]
+  shelfDraft.needTagIds = [...shelfSelected.needTagIds]
+  shelfDraft.avoidTagIds = [...shelfSelected.avoidTagIds]
+}
+
+function openShelfSheet(key: ShelfSheetKey): void {
+  shelfOpenSheet.value = key
+  shelfSearch.value = ''
+  syncShelfDraft()
+  shelfPreviewTotal.value = null
+  scheduleShelfPreview()
+}
+
+function closeShelfSheet(): void {
+  shelfOpenSheet.value = null
+  if (shelfPreviewTimer) {
+    clearTimeout(shelfPreviewTimer)
+    shelfPreviewTimer = null
+  }
+}
+
+function toggleShelfMain(value: string): void {
+  shelfDraft.mainProteinNodeIds = shelfDraft.mainProteinNodeIds.includes(value) ? [] : [value]
+  scheduleShelfPreview()
+}
+
+function toggleShelfNeed(value: string): void {
+  const set = new Set(shelfDraft.needTagIds)
+  if (set.has(value)) set.delete(value)
+  else set.add(value)
+  shelfDraft.needTagIds = Array.from(set)
+  scheduleShelfPreview()
+}
+
+function toggleShelfAvoid(value: string): void {
+  const set = new Set(shelfDraft.avoidTagIds)
+  if (set.has(value)) set.delete(value)
+  else set.add(value)
+  shelfDraft.avoidTagIds = Array.from(set)
+  scheduleShelfPreview()
+}
+
+function onShelfGroupTap(group: AvoidGroup): void {
+  if (group.disabled) return
+  toggleShelfAvoid(group.value)
+}
+
+function resetShelfDraft(): void {
+  shelfDraft.mainProteinNodeIds = []
+  shelfDraft.needTagIds = []
+  shelfDraft.avoidTagIds = []
+  scheduleShelfPreview()
+}
+
+function scheduleShelfPreview(): void {
+  if (shelfPreviewTimer) clearTimeout(shelfPreviewTimer)
+  shelfPreviewTimer = setTimeout(() => {
+    void fetchShelfPreview()
+  }, 240)
+}
+
+async function fetchShelfPreview(): Promise<void> {
+  const seq = ++shelfPreviewSeq
+  try {
+    const res: any = await request({
+      url: '/recipes',
+      method: 'GET',
+      data: {
+        ...buildShelfParams(shelfDraft),
+        page: 1,
+        pageSize: 1
+      },
+      quiet: true
+    })
+    if (seq !== shelfPreviewSeq) return
+    shelfPreviewTotal.value = res?.code === 0 ? Number(res.data?.total || 0) : null
+  } catch {
+    if (seq !== shelfPreviewSeq) return
+    shelfPreviewTotal.value = null
+  }
+}
+
+function applyShelfDraft(): void {
+  shelfSelected.mainProteinNodeIds = [...shelfDraft.mainProteinNodeIds]
+  shelfSelected.needTagIds = [...shelfDraft.needTagIds]
+  shelfSelected.avoidTagIds = [...shelfDraft.avoidTagIds]
+  persistShelf()
+  onShelfApply(shelfSnapshot())
+  closeShelfSheet()
+}
+
+function resetShelfAll(): void {
+  shelfSelected.mainProteinNodeIds = []
+  shelfSelected.needTagIds = []
+  shelfSelected.avoidTagIds = []
+  persistShelf()
+  onShelfApply(shelfSnapshot())
+  closeShelfSheet()
+}
+
+async function loadShelfOptions(): Promise<void> {
+  try {
+    const res: any = await request({
+      url: '/recipes/filter-options',
+      method: 'GET',
+      quiet: true
+    })
+    if (res?.code !== 0 || !res.data) return
+    shelfOptions.mainProtein = Array.isArray(res.data.mainProtein) ? res.data.mainProtein : []
+    shelfOptions.needs = Array.isArray(res.data.needs) ? res.data.needs : []
+    shelfOptions.avoid = Array.isArray(res.data.avoid) ? res.data.avoid : []
+    shelfOptions.total = Number(res.data.total || 0)
+  } catch {
+    // 选项加载失败时保持空面板，不阻塞首页
+  }
+}
+
+onMounted(async () => {
+  restoreShelf()
+  await loadShelfOptions()
+})
+
+
+function onShelfApply(filters: ShelfFilters): void {
+  const same =
+    JSON.stringify(filters) ===
+    JSON.stringify({
+      mainProteinNodeIds: newFilters.value.mainProteinNodeIds,
+      needTagIds: newFilters.value.needTagIds,
+      avoidTagIds: newFilters.value.avoidTagIds
+    })
+  if (same) return
+  newFilters.value = filters
+  if (loading.value) {
+    pendingShelfRefresh = true
+    return
+  }
+  refreshRecipesWithFilters()
+}
 const draftFilterState = ref<FilterState>({
   selectedLifeStages: [],
   selectedHealthTags: [],
@@ -1127,17 +1549,14 @@ function loadRecipes(isRefresh = false) {
     pageSize: pageSize
   }
   const requestPage = currentPage.value
-  const selectedLifeStages = filterState.value.selectedLifeStages.filter(Boolean)
-  const selectedHealthTags = filterState.value.selectedHealthTags.filter(Boolean)
-
-  if (selectedLifeStages.length > 0) {
-    params.lifeStages = selectedLifeStages.join(',')
+  if (newFilters.value.mainProteinNodeIds.length > 0) {
+    params.mainProteinNodeIds = newFilters.value.mainProteinNodeIds.join(',')
   }
-  if (HEALTH_TAG_FILTER_ENABLED && selectedHealthTags.length > 0) {
-    params.healthTags = selectedHealthTags.join(',')
+  if (newFilters.value.needTagIds.length > 0) {
+    params.needTagIds = newFilters.value.needTagIds.join(',')
   }
-  if (filterState.value.excludedIngredients.length > 0) {
-    params.excludeIngredients = filterState.value.excludedIngredients.join(',')
+  if (newFilters.value.avoidTagIds.length > 0) {
+    params.avoidTagIds = newFilters.value.avoidTagIds.join(',')
   }
 
   request({
@@ -1199,6 +1618,10 @@ function loadRecipes(isRefresh = false) {
     loading.value = false
     if (isRefresh) {
       uni.stopPullDownRefresh()
+    }
+    if (pendingShelfRefresh) {
+      pendingShelfRefresh = false
+      refreshRecipesWithFilters()
     }
   })
 }
@@ -2778,6 +3201,297 @@ defineOptions({
   border-radius: 30rpx;
   padding: 12rpx 32rpx;
   flex-shrink: 0;
+}
+
+
+.shelf-filter {
+  width: 100%;
+}
+
+.sf-bar {
+  display: flex;
+  gap: 16rpx;
+  padding: 0 0 8rpx;
+}
+
+.sf-pill {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 14rpx 26rpx;
+  background: #fbfcf7;
+  border: 1rpx solid #dfe3ca;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: #6b6653;
+  white-space: nowrap;
+}
+
+.sf-pill.is-active {
+  background: linear-gradient(135deg, #24493a 0%, #1e3a2f 100%);
+  border-color: #1e3a2f;
+  color: #f3eddd;
+  box-shadow: 0 8rpx 20rpx rgba(30, 58, 47, 0.22);
+}
+
+.sf-pill-car {
+  font-size: 18rpx;
+  opacity: 0.65;
+}
+
+.sf-pill-count {
+  min-width: 28rpx;
+  height: 28rpx;
+  padding: 0 8rpx;
+  border-radius: 999rpx;
+  background: #e5b96a;
+  color: #2b2414;
+  font-size: 18rpx;
+  line-height: 28rpx;
+  text-align: center;
+}
+
+.sf-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+  background: rgba(22, 32, 27, 0.48);
+  display: flex;
+  align-items: flex-end;
+}
+
+.sf-sheet {
+  width: 100%;
+  max-height: 84vh;
+  background: #fbfaf4;
+  border-radius: 32rpx 32rpx 0 0;
+  box-shadow: 0 -18rpx 48rpx rgba(25, 34, 28, 0.18);
+  display: flex;
+  flex-direction: column;
+}
+
+.sf-handle {
+  width: 64rpx;
+  height: 8rpx;
+  margin: 16rpx auto 0;
+  border-radius: 999rpx;
+  background: #d8d3c0;
+}
+
+.sf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22rpx 32rpx 12rpx;
+}
+
+.sf-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1f2a24;
+}
+
+.sf-close {
+  font-size: 40rpx;
+  color: #a19b88;
+  padding: 0 4rpx;
+}
+
+.sf-body {
+  padding: 8rpx 32rpx 0;
+  box-sizing: border-box;
+}
+
+.sf-body--auto {
+  max-height: 30vh;
+}
+
+.sf-body--tall {
+  height: 54vh;
+}
+
+.sf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  padding: 8rpx 0 16rpx;
+}
+
+.sf-chip {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 14rpx 22rpx;
+  border-radius: 14rpx;
+  border: 1rpx solid #dfe3ca;
+  background: #f4f6ea;
+  font-size: 25rpx;
+  color: #4d5646;
+}
+
+.sf-chip.is-on {
+  background: #24493a;
+  border-color: #1e3a2f;
+  color: #f3eddd;
+}
+
+.sf-chip--sm {
+  padding: 9rpx 14rpx;
+  font-size: 22rpx;
+}
+
+.sf-chip-n {
+  font-size: 19rpx;
+  color: #8c8a72;
+  font-weight: 600;
+}
+
+.sf-chip.is-on .sf-chip-n {
+  color: #d8e1c8;
+}
+
+.sf-chips--sub {
+  padding: 0 0 12rpx 4rpx;
+}
+
+.sf-rows {
+  padding: 4rpx 0 12rpx;
+}
+
+.sf-row,
+.sf-group-head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid #eee9d9;
+}
+
+.sf-row-label,
+.sf-group-name {
+  font-size: 28rpx;
+  color: #1f2a24;
+  font-weight: 600;
+}
+
+.sf-row-count,
+.sf-group-count {
+  font-size: 22rpx;
+  color: #8c8a72;
+}
+
+.sf-row-count {
+  margin-left: auto;
+}
+
+.sf-row.is-on .sf-row-label {
+  color: #24493a;
+}
+
+.sf-check {
+  width: 34rpx;
+  height: 34rpx;
+  margin-left: auto;
+  border-radius: 50%;
+  border: 1rpx solid #d6d2c1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22rpx;
+  color: #f3eddd;
+}
+
+.sf-row-count + .sf-check {
+  margin-left: 8rpx;
+}
+
+.sf-row.is-on .sf-check,
+.sf-group-head.is-on .sf-check {
+  background: #24493a;
+  border-color: #1e3a2f;
+}
+
+.sf-avoid {
+  padding-bottom: 4rpx;
+}
+
+.sf-search {
+  height: 72rpx;
+  margin: 4rpx 0 8rpx;
+  padding: 0 24rpx;
+  border-radius: 999rpx;
+  background: #f1eee2;
+  font-size: 24rpx;
+  color: #1f2a24;
+}
+
+.sf-search-ph {
+  color: #a7a18d;
+}
+
+.sf-group {
+  border-bottom: 1rpx solid #eee9d9;
+  padding-bottom: 8rpx;
+}
+
+.sf-group-head {
+  border-bottom: 0;
+  padding-bottom: 12rpx;
+}
+
+.sf-group-head.is-off {
+  opacity: 0.55;
+}
+
+.sf-group-warn {
+  margin-left: auto;
+  font-size: 20rpx;
+  color: #b4553f;
+  font-weight: 700;
+}
+
+.sf-group-warn2 {
+  display: block;
+  padding: 0 0 12rpx 4rpx;
+  font-size: 20rpx;
+  color: #b4553f;
+}
+
+.sf-empty {
+  padding: 48rpx 0;
+  text-align: center;
+  font-size: 24rpx;
+  color: #9b9783;
+}
+
+.sf-actions {
+  display: flex;
+  gap: 20rpx;
+  padding: 20rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid #eee9d9;
+}
+
+.sf-btn {
+  flex: 1;
+  height: 88rpx;
+  border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.sf-btn--ghost {
+  background: #f1eee2;
+  color: #5d5a4a;
+}
+
+.sf-btn--primary {
+  flex: 1.7;
+  background: linear-gradient(135deg, #24493a 0%, #1e3a2f 100%);
+  color: #f3eddd;
+  box-shadow: 0 10rpx 24rpx rgba(30, 58, 47, 0.24);
 }
 
 </style>

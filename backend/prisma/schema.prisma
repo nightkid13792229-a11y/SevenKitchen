@@ -33,6 +33,9 @@ model Order {
   cancellationReason           String?                     @map("cancellation_reason")
   cancelledBy                  String?                     @map("cancelled_by")
   paymentMethod                String?                     @map("payment_method")
+  /// 线下代客单收款账户（2026-11-19）：MERCHANT / PERSONAL_WECHAT / PERSONAL_ALIPAY / PERSONAL_BANK / CASH
+  /// 线上支付（微信商户号）不存这个字段，读侧按 MERCHANT 推导。
+  payerAccount                 String?                     @map("payer_account") @db.VarChar(30)
   transactionId                String?                     @map("transaction_id")
   paidAt                       DateTime?                   @map("paid_at")
   paymentStatus                String?                     @map("payment_status")
@@ -93,6 +96,7 @@ model Order {
   @@index([aftersaleType])
   @@index([remakeFromOrderId])
   @@index([reshipFromOrderId])
+  @@index([payerAccount])
   @@map("order")
 }
 
@@ -1421,7 +1425,9 @@ model OrderOfflineRefund {
   amount      Decimal   @db.Decimal(10, 2)
   refundedAt  DateTime  @map("refunded_at") @db.Date
   /// WECHAT | ALIPAY | CASH | OTHER
-  method      String    @db.VarChar(20)
+  method       String    @db.VarChar(20)
+  /// 退款出账账户（2026-11-19）：MERCHANT / PERSONAL_WECHAT / PERSONAL_ALIPAY / PERSONAL_BANK / CASH
+  payerAccount String?   @map("payer_account") @db.VarChar(30)
   note        String?
   proofKeys   String[]  @default([]) @map("proof_keys")
   createdById String    @map("created_by_id") @db.VarChar(36)
@@ -1432,6 +1438,7 @@ model OrderOfflineRefund {
   order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId, refundedAt])
+  @@index([payerAccount])
   @@map("order_offline_refund")
 }
 
@@ -2559,6 +2566,8 @@ model PurchaseList {
   /// 付款方：PERSONAL 个人垫付 / COMPANY 公司账户
   payerType            String                @default("PERSONAL") @map("payer_type") @db.VarChar(10)
   payerUserId          String?               @map("payer_user_id") @db.VarChar(36)
+  /// 出账账户（2026-11-19）：MERCHANT / PERSONAL_WECHAT / PERSONAL_ALIPAY / PERSONAL_BANK / CASH
+  payerAccount         String?               @map("payer_account") @db.VarChar(30)
   /// 补货记录：作废（取消/退款）
   voidedAt             DateTime?             @map("voided_at")
   /// 补货记录：作废人 / 最后修改人 / 到货确认人（操作留痕）
@@ -2581,6 +2590,7 @@ model PurchaseList {
   @@index([sourceTastingPackPlanId])
   @@index([arrivedAt])
   @@index([isDraft])
+  @@index([payerAccount])
   @@map("purchase_list")
 }
 
@@ -2705,11 +2715,45 @@ model Reimbursement {
   @@map("reimbursement")
 }
 
+/// 支出类别字典（2026-11-19 账户化改造，见 docs/superpowers/specs/2026-11-19-finance-accounts-and-categories-design.md）。
+/// 所有支出类别都在这里，不再用 Prisma 枚举写死：
+/// - 记账时「输入即建」，新名字保存后成为类别；
+/// - 记录按 categoryId 关联，改名影响历史显示；
+/// - 删除 = 停用（isActive=false），已用过的类别可合并到 mergedIntoId；
+/// - isSystem=true 的类别（食材/补剂/包材/快递/支付手续费）不可删，只能改名。
+model FinanceCategory {
+  id           String   @id @default(uuid()) @map("id") @db.VarChar(36)
+  name         String   @unique @map("name") @db.VarChar(60)
+  /// 仅用于映射历史枚举值（FinanceExpenseCategory），新建类别为空
+  code         String?  @unique @map("code") @db.VarChar(40)
+  /// 系统类别不可删除（可改名）
+  isSystem     Boolean  @default(false) @map("is_system")
+  isActive     Boolean  @default(true) @map("is_active")
+  sortOrder    Int      @default(0) @map("sort_order")
+  /// 合并目标：被合并的类别指向保留类别，历史记录已迁走
+  mergedIntoId String?  @map("merged_into_id") @db.VarChar(36)
+  /// 老板自建类别时记录操作人；迁移种子行为空
+  createdById  String?  @map("created_by_id") @db.VarChar(36)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  mergedInto       FinanceCategory?    @relation("FinanceCategoryMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom       FinanceCategory[]   @relation("FinanceCategoryMerge")
+  expenseBills     ExpenseBill[]
+  expenseTemplates ExpenseTemplate[]
+  manualEntries    FinanceManualEntry[]
+
+  @@index([isActive, sortOrder])
+  @@map("finance_category")
+}
+
 model ExpenseBill {
   id               String                 @id @default(uuid()) @map("id") @db.VarChar(36)
   billNumber       String                 @unique @map("bill_number") @db.VarChar(24)
   title            String                 @map("title") @db.VarChar(200)
   category         FinanceExpenseCategory @map("category")
+  /// 类别字典引用（2026-11-19 起新写入走这里；旧枚举列保留一版兼容，下一版删）
+  categoryId       String?                @map("category_id") @db.VarChar(36)
   status           ExpenseBillStatus      @default(PENDING_PAYMENT) @map("status")
   payeeName        String                 @map("payee_name") @db.VarChar(120)
   amount           Decimal                @map("amount") @db.Decimal(10, 2)
@@ -2721,14 +2765,19 @@ model ExpenseBill {
   /// 付款方：PERSONAL 个人垫付 / COMPANY 公司账户
   payerType        String                 @default("PERSONAL") @map("payer_type") @db.VarChar(10)
   payerUserId      String?                @map("payer_user_id") @db.VarChar(36)
+  /// 出账账户（2026-11-19）：MERCHANT / PERSONAL_WECHAT / PERSONAL_ALIPAY / PERSONAL_BANK / CASH
+  payerAccount     String?                @map("payer_account") @db.VarChar(30)
   createdById      String                 @map("created_by_id") @db.VarChar(36)
   createdAt        DateTime               @default(now()) @map("created_at")
   updatedAt        DateTime               @default(now()) @updatedAt @map("updated_at")
   payments         ExpenseBillPayment[]
   template         ExpenseTemplate?       @relation(fields: [templateId], references: [id])
+  categoryRef      FinanceCategory?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   /// 生成幂等：同一模板 + 同一费属起始月只能有一张（并发由数据库兜底）
   @@unique([templateId, recognitionStart])
+  @@index([categoryId])
+  @@index([payerAccount])
   @@index([status, dueAt])
   @@index([category, recognitionStart, recognitionEnd])
   @@map("expense_bill")
@@ -2743,6 +2792,8 @@ model ExpenseBillPayment {
   paymentMethod    String      @map("payment_method") @db.VarChar(50)
   /// 付款方：PERSONAL 个人垫付 / COMPANY 公司账户
   payerType        String      @default("PERSONAL") @map("payer_type") @db.VarChar(10)
+  /// 出账账户（2026-11-19），取值同 ExpenseBill.payerAccount
+  payerAccount     String?     @map("payer_account") @db.VarChar(30)
   paymentProofUrls String[]    @default([]) @map("payment_proof_urls")
   note             String?     @map("note")
   createdAt        DateTime    @default(now()) @map("created_at")
@@ -2750,6 +2801,7 @@ model ExpenseBillPayment {
 
   @@index([billId, paidAt])
   @@index([paidAt])
+  @@index([payerAccount])
   @@map("expense_bill_payment")
 }
 
@@ -2758,6 +2810,8 @@ model ExpenseTemplate {
   name                String                  @map("name") @db.VarChar(100)
   titleTemplate       String                  @map("title_template") @db.VarChar(200)
   category            FinanceExpenseCategory  @map("category")
+  /// 类别字典引用（2026-11-19 起新写入走这里；旧枚举列保留一版兼容，下一版删）
+  categoryId          String?                 @map("category_id") @db.VarChar(36)
   payeeName           String                  @map("payee_name") @db.VarChar(120)
   defaultAmount       Decimal                 @map("default_amount") @db.Decimal(10, 2)
   interval            ExpenseTemplateInterval @map("interval")
@@ -2767,14 +2821,19 @@ model ExpenseTemplate {
   /// 生成账单时的默认付款方：PERSONAL 个人垫付 / COMPANY 公司账户
   payerType           String                  @default("PERSONAL") @map("payer_type") @db.VarChar(10)
   payerUserId         String?                 @map("payer_user_id") @db.VarChar(36)
+  /// 默认出账账户（2026-11-19）：MERCHANT / PERSONAL_WECHAT / PERSONAL_ALIPAY / PERSONAL_BANK / CASH
+  payerAccount        String?                 @map("payer_account") @db.VarChar(30)
   isActive            Boolean                 @default(true) @map("is_active")
   note                String?                 @map("note")
   createdById         String                  @map("created_by_id") @db.VarChar(36)
   createdAt           DateTime                @default(now()) @map("created_at")
   updatedAt           DateTime                @default(now()) @updatedAt @map("updated_at")
   bills               ExpenseBill[]
+  categoryRef         FinanceCategory?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([isActive, interval])
+  @@index([categoryId])
+  @@index([payerAccount])
   @@map("expense_template")
 }
 
@@ -2787,9 +2846,13 @@ model FinanceManualEntry {
   amount         Decimal                 @db.Decimal(12, 2)
   occurredAt     DateTime                @map("occurred_at") @db.Date
   category       FinanceExpenseCategory?
+  /// 类别字典引用（2026-11-19 起支出走这里；收入仍用 incomeCategory）
+  categoryId     String?                 @map("category_id") @db.VarChar(36)
   incomeCategory String?                 @map("income_category") @db.VarChar(30)
   payerType      String                  @default("PERSONAL") @map("payer_type") @db.VarChar(10)
   payerUserId    String?                 @map("payer_user_id") @db.VarChar(36)
+  /// 出账/入账账户（2026-11-19），取值同 ExpenseBill.payerAccount
+  payerAccount   String?                 @map("payer_account") @db.VarChar(30)
   title          String                  @db.VarChar(200)
   note           String?
   proofKeys      String[]                @default([]) @map("proof_keys")
@@ -2798,9 +2861,12 @@ model FinanceManualEntry {
   updatedAt      DateTime                @updatedAt @map("updated_at")
   voidedAt       DateTime?               @map("voided_at")
   voidReason     String?                 @map("void_reason") @db.VarChar(200)
+  categoryRef    FinanceCategory?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([occurredAt])
   @@index([direction, occurredAt])
+  @@index([categoryId])
+  @@index([payerAccount])
   @@map("finance_manual_entry")
 }
 

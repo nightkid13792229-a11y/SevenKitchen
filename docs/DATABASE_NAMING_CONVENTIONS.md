@@ -2,7 +2,7 @@
 
 > **唯一真源：`backend/prisma/schema.prisma`。**
 > 本文只讲“命名规则 + 怎么验证”；具体字段不要手抄，直接查 schema 或真实库。
-> 最后核对：2026-11-03（当时 schema 有 151 个 model）。
+> 最后核对：2026-11-19（当时 schema 有 167 个 model）。
 
 ---
 
@@ -162,8 +162,9 @@ SELECT birthday, current_weight_kg FROM dog LIMIT 1;
 | 采购 SKU | `ProcurementSku` | `procurement_sku` |
 | 补剂订单 | `SupplementOrder` | `supplement_order` |
 | 知识库引用锚点 | `KnowledgeCitationAnchor` | `knowledge_citation_anchor` |
+| 财务类别字典 | `FinanceCategory` | `finance_category` |
 
-截至 2026-11-03，schema 共 151 个 model；上表只是跨板块的定位示例，
+截至 2026-11-19，schema 共 167 个 model；上表只是跨板块的定位示例，
 完整清单以 `backend/prisma/schema.prisma` 为准。
 
 ---
@@ -231,6 +232,7 @@ FROM dog;
 
 | 日期 | 版本 | 更新内容 | 作者 |
 |---|---|---|---|
+| 2026-11-19 | 2.1 | 财务类别字典上线：新增 `FinanceCategory` / `finance_category` 示例；核对 model 数 151 → 167 | DSH |
 | 2026-11-03 | 2.0 | 以 schema 为准重写：修正 `birthDate` → `birthday`、Dog 表 `weightKg` → `currentWeightKg`；补新板块表名示例；删掉易过期的逐字段表；改为 DSH/AGENTS.md 约束 | DSH |
 | 2025-12-24 | 1.0 | 创建文档，明确 Prisma 与 PostgreSQL 命名映射规则 | Claude Code |
 

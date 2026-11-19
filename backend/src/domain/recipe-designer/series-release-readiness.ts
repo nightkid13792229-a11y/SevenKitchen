@@ -72,7 +72,8 @@ export type SeriesReleaseBlockerCode =
   | 'NAME_REQUIRED'
   | 'COVER_IMAGE_REQUIRED'
   | 'SELLING_POINT_REQUIRED'
-  | 'TAXONOMY_REQUIRED';
+  | 'TAXONOMY_REQUIRED'
+  | 'HEALTH_TAG_REQUIRED';
 
 /** 只提醒、不阻断的问题（未设置封面角标时封面左下角为空）。 */
 export type SeriesReleaseWarningCode = 'COVER_BADGE_MISSING';
@@ -361,6 +362,22 @@ export const buildSeriesReleaseReadiness = (
   const isProductLine =
     normalizeText(input.designMode).toUpperCase() !== 'ORDER' &&
     businessStatus !== 'PRIVATE_CUSTOM';
+  // 健康标签门禁（2026-11-19）：产品线至少要有一个健康标签，
+  // 顾客端的需求筛选才有东西可筛；定制 / 订单系列不卡。
+  if (isProductLine) {
+    const healthTagIds = normalizeStringList(
+      input.presentation?.targetHealthTags,
+    );
+    if (healthTagIds.length === 0) {
+      blockers.push({
+        code: 'HEALTH_TAG_REQUIRED',
+        scope: 'PRESENTATION',
+        field: 'targetHealthTags',
+        message: '请至少选择一个健康标签后再发布',
+      });
+    }
+  }
+
   if (
     isProductLine &&
     typeof input.taxonomyLinkCount === 'number' &&

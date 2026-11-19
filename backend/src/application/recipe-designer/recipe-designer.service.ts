@@ -4710,6 +4710,44 @@ export class RecipeDesignerService {
         data: presentationData,
       });
 
+      /**
+       * 健康标签同步到关联表（2026-11-19）。
+       *
+       * 顾客端筛选读的是 `recipe_health_tag_assignment`，不是系列上的数组。
+       * 之前发布只把标签写进食谱的旧 JSON 列（已删），筛选一直读不到；
+       * 现在按「草稿 ?? 线上」的生效标签，整体覆盖该系列所有已发布版本。
+       */
+      // 发布后的 PUBLIC 集合 = 本次选中的 DRAFT（马上变 PUBLIC）+ 其它已 PUBLIC 行。
+      // 直接用发布前已经加载好的 sources.recipes 算，避免事务里再查一次。
+      const publishedIds = sources.recipes
+        .filter(
+          (recipe) =>
+            recipe.status === RecipeStatus.PUBLIC ||
+            releaseTargetIds.includes(recipe.id),
+        )
+        .map((recipe) => recipe.id);
+      if (publishedIds.length > 0) {
+        await tx.recipeHealthTagAssignment.deleteMany({
+          where: { recipeId: { in: publishedIds } },
+        });
+        const healthTagIds = [
+          ...new Set(
+            (effective.targetHealthTags ?? []).filter(
+              (tag): tag is string =>
+                typeof tag === 'string' && tag.trim().length > 0,
+            ),
+          ),
+        ];
+        if (healthTagIds.length > 0) {
+          await tx.recipeHealthTagAssignment.createMany({
+            data: publishedIds.flatMap((recipeId) =>
+              healthTagIds.map((healthTagId) => ({ recipeId, healthTagId })),
+            ),
+            skipDuplicates: true,
+          });
+        }
+      }
+
       // 草稿一次性落到系列上，顺手把草稿清空。
       const seriesUpdateData = {
         businessStatus: RecipeSeriesBusinessStatus.PUBLIC,

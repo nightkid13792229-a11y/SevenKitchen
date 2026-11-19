@@ -174,6 +174,34 @@
           />
 
           <div class="sr-field">
+            <label class="sr-field__label">健康标签</label>
+            <div class="sr-field__body">
+              <el-select
+                v-model="tagDraft"
+                multiple
+                filterable
+                clearable
+                collapse-tags
+                collapse-tags-tooltip
+                :loading="healthTagsLoading"
+                placeholder="至少选择一个健康标签"
+                class="sr-select"
+                @change="saveHealthTags"
+              >
+                <el-option
+                  v-for="tag in leafHealthTags"
+                  :key="tag.id"
+                  :label="tag.name"
+                  :value="tag.id"
+                />
+              </el-select>
+              <div class="sr-hint">
+                至少一个才能发布；低脂 / 易消化 / 单一动物蛋白会进「需求」筛选，其它标签只做展示。
+              </div>
+            </div>
+          </div>
+
+          <div class="sr-field">
             <label class="sr-field__label">食谱名称</label>
             <div class="sr-field__body">
               <AiNameField
@@ -368,9 +396,19 @@ const expectedUpdatedAt = ref<string | null>(null)
 const nameDraft = ref('')
 const sellingDraft = ref('')
 const badgeDraft = ref<string[]>([])
+const tagDraft = ref<string[]>([])
 
 const healthTags = ref<RecipeHealthTag[]>([])
 const healthTagsLoading = ref(false)
+/** 只让叶子标签可选：分组标签（原料事实/营养特性…）不作为发布标签 */
+const leafHealthTags = computed(() => {
+  const parentIds = new Set(
+    healthTags.value
+      .map((tag) => tag.parentId)
+      .filter((id): id is string => Boolean(id))
+  )
+  return healthTags.value.filter((tag) => !parentIds.has(tag.id))
+})
 
 /** AI 系列封面（2026-11-08 恢复，采用后写发布草稿） */
 const aiCoverAvailable = ref<boolean | null>(null)
@@ -557,6 +595,9 @@ async function loadReadiness(): Promise<void> {
     badgeDraft.value = result.presentation.coverBadgeIds?.length
       ? [...result.presentation.coverBadgeIds]
       : await resolveBadgeIds(result.presentation.coverBadges)
+    tagDraft.value = Array.isArray(result.presentation.targetHealthTags)
+      ? [...result.presentation.targetHealthTags]
+      : []
   } catch {
     error.value = '系列发布检查加载失败，请稍后重试'
   } finally {
@@ -715,6 +756,12 @@ function saveSellingPoint(): void {
 
 function saveBadges(): void {
   void enqueueDraftPatch({ badgeHealthTagIds: [...badgeDraft.value] }).catch(
+    () => undefined
+  )
+}
+
+function saveHealthTags(): void {
+  void enqueueDraftPatch({ targetHealthTags: [...tagDraft.value] }).catch(
     () => undefined
   )
 }

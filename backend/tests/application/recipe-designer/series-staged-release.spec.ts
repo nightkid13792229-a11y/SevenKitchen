@@ -116,6 +116,10 @@ describe('RecipeDesignerService · staged series release', () => {
     recipeHealthTag: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    recipeHealthTagAssignment: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      createMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     recipeTaxonomyNode: {
       findMany: jest.fn().mockResolvedValue([]),
       count: jest.fn().mockResolvedValue(0),
@@ -422,8 +426,9 @@ describe('RecipeDesignerService · staged series release', () => {
       expect(readiness.blockers.map((blocker) => blocker.code)).toEqual([
         'COVER_IMAGE_REQUIRED',
         'SELLING_POINT_REQUIRED',
+        'HEALTH_TAG_REQUIRED',
       ]);
-      // 目标健康标签不再是发布提醒；只提醒未设置封面角标。
+      // 健康标签是发布门禁（至少一个）；未设置封面角标只提醒。
       expect(readiness.warnings).toEqual([
         expect.objectContaining({
           code: 'COVER_BADGE_MISSING',
@@ -744,6 +749,16 @@ describe('RecipeDesignerService · staged series release', () => {
           sellingPoint: '两种能量一套配方',
         }),
       });
+      expect(prisma.recipeHealthTagAssignment.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.arrayContaining([
+            expect.objectContaining({
+              recipeId: 'recipe-row-adult',
+              healthTagId: 'JOINT',
+            }),
+          ]),
+        }),
+      );
       expect(result).toMatchObject({
         seriesId: 'series-1',
         businessStatus: 'PUBLIC',
@@ -1204,7 +1219,7 @@ describe('RecipeDesignerService · staged series release', () => {
       expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
     });
 
-    it('keeps recipe health tags when the series has none', async () => {
+    it('blocks release when the series has no health tags', async () => {
       mockFirstReleaseSeries();
       prisma.recipeSeries.findUnique.mockResolvedValue(
         seriesRecord({ targetHealthTags: [] }),
@@ -1213,11 +1228,11 @@ describe('RecipeDesignerService · staged series release', () => {
         .mockResolvedValueOnce({ count: 2 })
         .mockResolvedValueOnce({ count: 0 });
 
-      await service.releaseSeries('series-1', ADMIN_ACCESS);
+      await expect(
+        service.releaseSeries('series-1', ADMIN_ACCESS),
+      ).rejects.toThrow(/至少选择一个健康标签/);
 
-      const data = prisma.recipe.updateMany.mock.calls[0][0].data;
-      expect(data.status).toBe('PUBLIC');
-      expect(data).not.toHaveProperty('targetHealthTags');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('refuses to release when the series facade is incomplete', async () => {

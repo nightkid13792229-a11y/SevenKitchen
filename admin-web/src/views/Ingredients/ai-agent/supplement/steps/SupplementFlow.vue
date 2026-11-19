@@ -19,40 +19,11 @@
       </button>
     </nav>
 
-    <!-- 第 1 步：接形态建议（下一个提交补上），这里先给一个能走到比价的最小入口 -->
-    <section v-if="state.step === 1" class="flow__panel">
-      <h3>① 定形态</h3>
-      <p class="flow__desc">
-        选一个营养素，Agent 会去知识库读原文，给出「形态档位 + 结论 + 出处」。
-      </p>
-      <div class="flow__row">
-        <el-select
-          v-model="tempNutrientKey"
-          placeholder="要给狗补什么"
-          filterable
-          style="width: 240px"
-        >
-          <el-option
-            v-for="item in nutrientOptions"
-            :key="item.fieldPath"
-            :label="item.label"
-            :value="item.fieldPath"
-          />
-        </el-select>
-        <el-select v-model="tempFormLevel" placeholder="形态档位" style="width: 200px">
-          <el-option
-            v-for="item in formLevelOptions"
-            :key="item.value"
-            :label="item.label"
-            :value="item.value"
-          />
-        </el-select>
-        <el-button type="primary" :disabled="!tempNutrientKey" @click="startCompare">
-          先比价
-        </el-button>
-      </div>
-      <p class="flow__hint">形态建议接上之后，这一屏会换成「结论 + 出处」的表。</p>
-    </section>
+    <FormAdviceStep
+      v-if="state.step === 1"
+      :initial-nutrient-key="state.nutrientKey"
+      @chosen="onFormChosen"
+    />
 
     <CompareStep
       v-else-if="state.step === 2 && state.nutrientKey"
@@ -80,12 +51,12 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
-import { supplementNutrientGroups } from '@/constants/supplementNutrients'
 import type {
   SupplementComparisonDto,
   SupplementOfferDto
 } from '@/types/ingredientCreation'
 import CompareStep from './CompareStep.vue'
+import FormAdviceStep from './FormAdviceStep.vue'
 import LaunchConfigStep from '../LaunchConfigStep.vue'
 import {
   canEnter,
@@ -110,20 +81,7 @@ const stepDefs: { id: FlowStep; label: string }[] = [
   { id: 4, label: '上架' }
 ]
 
-const formLevelOptions = [
-  { value: 'ORGANIC_CHELATE', label: '有机络合（螯合/氨基酸络合）' },
-  { value: 'INORGANIC_SALT', label: '无机盐（硫酸盐等）' },
-  { value: 'OXIDE', label: '氧化物' },
-  { value: 'OTHER', label: '其它/复合' }
-]
-
-const nutrientOptions = supplementNutrientGroups.flatMap((group) =>
-  group.fields.map((field) => ({ fieldPath: field.fieldPath, label: `${group.title} · ${field.label}` }))
-)
-
 const state = ref<SupplementFlowState>(loadSnapshot() ?? emptyFlowState())
-const tempNutrientKey = ref<string | null>(state.value.nutrientKey)
-const tempFormLevel = ref<string | null>(state.value.chosenFormLevel)
 
 function isDone(step: FlowStep): boolean {
   if (step === 1) return !!state.value.chosenFormLevel || !!state.value.formAdvice
@@ -136,18 +94,19 @@ function jump(step: FlowStep): void {
   state.value = goTo(state.value, step)
 }
 
-function startCompare(): void {
-  const key = tempNutrientKey.value
-  if (!key) {
-    return
-  }
-  const option = nutrientOptions.find((item) => item.fieldPath === key)
+function onFormChosen(payload: {
+  nutrientKey: string
+  nutrientLabel: string
+  level: string
+}): void {
   state.value = {
     ...state.value,
-    nutrientKey: key,
-    nutrientLabel: option?.label ?? key,
-    chosenFormLevel: tempFormLevel.value,
-    comparison: null
+    nutrientKey: payload.nutrientKey,
+    nutrientLabel: payload.nutrientLabel,
+    chosenFormLevel: payload.level,
+    // 换档位就是换一批货，旧表不能留着
+    comparison: null,
+    chosenOfferUrl: null
   }
   state.value = goTo(state.value, 2)
 }

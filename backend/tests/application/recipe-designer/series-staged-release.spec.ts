@@ -1219,6 +1219,40 @@ describe('RecipeDesignerService · staged series release', () => {
       expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
     });
 
+    it('auto-tags low fat and single animal protein when the base recipe qualifies', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({ targetHealthTags: [] }),
+      );
+      prisma.recipe.findMany.mockResolvedValue([
+        recipeRecord({
+          status: 'DRAFT',
+          nutritionDetailedData: {
+            summary: { moisture_pct: 70, fat_dm_pct: 10 },
+          },
+          items: [
+            { ingredient: { name: '鸡胸', type: 'FOOD' } },
+            { ingredient: { name: '糙米', type: 'FOOD' } },
+          ],
+        }),
+      ]);
+      prisma.recipeHealthTag.findMany.mockResolvedValue([
+        { id: 'tag-low-fat', name: '低脂' },
+        { id: 'tag-single-protein', name: '单一动物蛋白' },
+      ]);
+
+      const readiness = await service.getSeriesReleaseReadiness(
+        'series-1',
+        ADMIN_ACCESS,
+      );
+
+      expect(readiness.blockers.map((blocker) => blocker.code)).not.toContain(
+        'HEALTH_TAG_REQUIRED',
+      );
+      expect(readiness.presentation.targetHealthTags).toEqual(
+        expect.arrayContaining(['tag-low-fat', 'tag-single-protein']),
+      );
+    });
+
     it('blocks release when the series has no health tags', async () => {
       mockFirstReleaseSeries();
       prisma.recipeSeries.findUnique.mockResolvedValue(

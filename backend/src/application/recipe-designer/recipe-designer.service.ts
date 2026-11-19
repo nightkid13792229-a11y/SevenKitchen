@@ -300,6 +300,13 @@ const SERIES_RELEASE_RECIPE_SELECT = {
   applicableLifeStages: true,
   createdAt: true,
   updatedAt: true,
+  // 发布时自动打标（低脂 / 单一动物蛋白）需要基准配方的营养与原料
+  nutritionDetailedData: true,
+  items: {
+    select: {
+      ingredient: { select: { name: true, type: true } },
+    },
+  },
 } satisfies Prisma.RecipeSelect;
 
 const SERIES_RELEASE_DESIGN_SELECT = {
@@ -319,6 +326,20 @@ type SeriesReleaseDesignRecord = Prisma.DesignRecipeGetPayload<{
   select: typeof SERIES_RELEASE_DESIGN_SELECT;
 }>;
 
+
+/** 自动打标基准版本：和橱窗默认代表一致（成犬/高活动优先，幼犬最后）。 */
+const SERIES_AUTO_TAG_STAGE_PRIORITY: Record<string, number> = {
+  HIGH_ACTIVITY_ADULT: 0,
+  ADULT: 0,
+  LOW_ACTIVITY_ADULT_OR_SENIOR: 1,
+  SENIOR: 1,
+  REPRODUCTION: 2,
+  PREGNANCY: 2,
+  LACTATION: 2,
+  PUPPY_14_WEEKS_PLUS: 3,
+  PUPPY: 3,
+  PUPPY_UNDER_14_WEEKS: 4,
+};
 type SeriesReleaseResult = {
   seriesId: string;
   name: string;
@@ -4371,11 +4392,20 @@ export class RecipeDesignerService {
         series.releaseDraftUpdatedAt ?? null,
       );
     }
+    const autoTagIds = await this.resolveSeriesAutoHealthTagIds(
+      sources.recipes,
+    );
+    const presentation = this.toSeriesReleasePresentation(draftContext);
+    if (autoTagIds.length > 0) {
+      presentation.targetHealthTags = Array.from(
+        new Set([...(presentation.targetHealthTags ?? []), ...autoTagIds]),
+      );
+    }
     return this.buildSeriesReleaseReadinessForSeries({
       series,
       sources,
       name: draftContext.effective.name,
-      presentation: this.toSeriesReleasePresentation(draftContext),
+      presentation,
       taxonomyLinkCount: draftContext.effective.taxonomy.length,
       releaseDraft: draftContext.changedFields.length
         ? {
@@ -4601,11 +4631,22 @@ export class RecipeDesignerService {
       this.loadSeriesReleaseStageSources(seriesId),
       this.loadSeriesReleaseDraftContext(series),
     ]);
+    const autoTagIds = await this.resolveSeriesAutoHealthTagIds(
+      sources.recipes,
+    );
+    const autoMergedTags = Array.from(
+      new Set([
+        ...(draftContext.effective.targetHealthTags ?? []),
+        ...autoTagIds,
+      ]),
+    );
+    const releasePresentation = this.toSeriesReleasePresentation(draftContext);
+    releasePresentation.targetHealthTags = autoMergedTags;
     const readiness = this.buildSeriesReleaseReadinessForSeries({
       series,
       sources,
       name: draftContext.effective.name,
-      presentation: this.toSeriesReleasePresentation(draftContext),
+      presentation: releasePresentation,
       taxonomyLinkCount: draftContext.effective.taxonomy.length,
       releaseDraft: draftContext.changedFields.length
         ? {
@@ -4682,8 +4723,11 @@ export class RecipeDesignerService {
     // 只在阶段发布时拦，会漏掉所有「之前就绪、这次一起发」的阶段。
     await this.assertSeriesReleaseTargetsHaveCost(releaseTargetIds);
 
-    // 门面按「草稿 ?? 线上」的生效值写，顾客端这次看到的就是它。
-    const effective = draftContext.effective;
+    // 门面按「草稿 ?? 线上」的生效值写；自动标签（低脂/单一蛋白）并入后再落库。
+    const effective = {
+      ...draftContext.effective,
+      targetHealthTags: autoMergedTags,
+    };
     const presentationData = this.buildSeriesPresentationUpdateData({
       coverImageUrl: effective.coverImageUrl,
       coverTitle: effective.coverTitle,
@@ -5009,6 +5053,129 @@ export class RecipeDesignerService {
   }
 
   /** 生效值 → 发布抽屉 / 门槛用的展示资料（角标已是名称）。 */
+
+  /**
+   * 发布时自动打标（2026-11-20）。
+   *
+   * 只算两项，且都是确定性代码、不调用模型：
+   *  · 低脂：按法规湿基脂肪门槛；
+   *  · 单一动物蛋白：整道菜的动物蛋白种类 = 1（鸡蛋算一种，补剂/矿物质不算）。
+   * 易消化仍由运营手动勾选，不在这里自动加。
+   *
+   * 结果和手动标签合并后一起过门禁、一起写关联表。
+   */
+  private async resolveSeriesAutoHealthTagIds(
+    recipes: SeriesReleaseRecipeRecord[],
+  ): Promise<string[]> {
+    const base = this.pickSeriesAutoTagBaseRecipe(recipes);
+    if (!base) return [];
+    const tags = await this.prisma.recipeHealthTag.findMany({
+      where: { name: { in: ['低脂', '单一动物蛋白'] } },
+      select: { id: true, name: true },
+    });
+    const idByName = new Map(tags.map((tag) => [tag.name, tag.id]));
+    const result: string[] = [];
+    const lowFatId = idByName.get('低脂');
+    if (lowFatId && this.passesLowFatClaim(base.nutritionDetailedData)) {
+      result.push(lowFatId);
+    }
+    const singleProteinId = idByName.get('单一动物蛋白');
+    if (singleProteinId && this.isSingleAnimalProtein(base.items)) {
+      result.push(singleProteinId);
+    }
+    return result;
+  }
+
+  /** 取基准配方：成犬/高活动优先，同阶段取最新版本。 */
+  private pickSeriesAutoTagBaseRecipe(
+    recipes: SeriesReleaseRecipeRecord[],
+  ): SeriesReleaseRecipeRecord | undefined {
+    return [...recipes].sort((left, right) => {
+      const leftPriority =
+        SERIES_AUTO_TAG_STAGE_PRIORITY[left.seriesLifeStage ?? ''] ?? 99;
+      const rightPriority =
+        SERIES_AUTO_TAG_STAGE_PRIORITY[right.seriesLifeStage ?? ''] ?? 99;
+      if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+      return (right.version ?? 0) - (left.version ?? 0);
+    })[0];
+  }
+
+  /** 「低脂」法规门槛：湿基脂肪 = 干物质脂肪% × (1 − 水分%)。 */
+  private passesLowFatClaim(nutritionDetailedData: unknown): boolean {
+    const detailed = (nutritionDetailedData as any) || {};
+    const nutrition = detailed.summary || detailed;
+    const moisture = Number(nutrition?.moisture_pct);
+    const fatDm = Number(nutrition?.fat_dm_pct);
+    if (!Number.isFinite(moisture) || !Number.isFinite(fatDm) || moisture <= 0) {
+      return false;
+    }
+    const fatWet = fatDm * (1 - moisture / 100);
+    const limit = moisture < 20 ? 9 : moisture <= 65 ? 7 : 4;
+    return fatWet <= limit;
+  }
+
+  /**
+   * 动物蛋白种类 = 1。
+   *
+   * 只数 FOOD 原料；补剂、维生素、矿物质不算。
+   * 命名规则与「主蛋白」「避开」共用同一套物种识别。
+   */
+  private isSingleAnimalProtein(
+    items: SeriesReleaseRecipeRecord['items'],
+  ): boolean {
+    const species = new Set<string>();
+    for (const item of items ?? []) {
+      const ingredient = item?.ingredient;
+      if (!ingredient?.name) continue;
+      if (ingredient.type && ingredient.type !== 'FOOD') continue;
+      const classified = this.classifyAnimalProteinSpecies(ingredient.name);
+      if (classified) species.add(classified);
+    }
+    return species.size === 1;
+  }
+
+  /** 物种识别：先判蛋/火鸡，避免「鸡蛋」被算成鸡、「火鸡」被算成鸡。 */
+  private classifyAnimalProteinSpecies(name: string): string | null {
+    if (!name) return null;
+    if (
+      name.includes('羊肚菌') ||
+      name.includes('牛磺酸') ||
+      name.includes('鱼腥草')
+    ) {
+      return null;
+    }
+    if (name.includes('蛋')) return '蛋';
+    if (name.includes('火鸡')) return '火鸡';
+    if (name.includes('鸡')) return '鸡';
+    if (name.includes('鸭')) return '鸭';
+    if (name.includes('鹅')) return '鹅';
+    if (name.includes('牛')) return '牛';
+    if (name.includes('猪')) return '猪';
+    if (name.includes('羊')) return '羊';
+    if (name.includes('兔')) return '兔';
+    if (name.includes('鹿')) return '鹿';
+    if (
+      name.includes('三文鱼') ||
+      name.includes('鳕鱼') ||
+      name.includes('青花鱼') ||
+      name.includes('沙丁鱼') ||
+      name.includes('龙利鱼') ||
+      name.includes('鲈鱼') ||
+      name.includes('鱼')
+    ) {
+      return '鱼';
+    }
+    if (
+      name.includes('贝') ||
+      name.includes('虾') ||
+      name.includes('蟹')
+    ) {
+      return '贝类';
+    }
+    if (name.includes('奶')) return '奶';
+    return null;
+  }
+
   private toSeriesReleasePresentation(context: {
     effective: SeriesReleaseDraftPayload;
     changedFields: SeriesReleaseDraftField[];

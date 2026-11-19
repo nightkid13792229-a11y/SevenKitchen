@@ -28,6 +28,7 @@ import {
   nutrientChineseLabel,
   nutrientEnglishName,
 } from '../../domain/ingredient/supplement-nutrients';
+import { extractJsonObject } from '../../domain/ingredient/json-response';
 
 /**
  * 形态建议：查原文 → 让模型按原文下结论 → 把没有原文支撑的结论按下去。
@@ -81,6 +82,8 @@ const SYSTEM_PROMPT = `你是宠物营养知识库的检索员，任务是判断
 7. 不要给剂量、不要给疗程——那超出范围。
 8. **治疗手段不是形态**：铜螯合剂、排铜药、用锌抑制铜吸收这类属于治疗，不要放进 options；
    如果它和用户的问题相关，写进 gaps 说明"这是治疗手段，不是补铜形态的选择依据"。`;
+
+export { extractJsonObject };
 
 export interface AdviseInput {
   nutrientKey: string;
@@ -325,16 +328,6 @@ export class SupplementFormAdviceService {
       fallbackToDefault: false,
     });
   }
-}
-
-/** 模型偶尔会套 ```json 围栏或写两句前言：只取最外层那一对花括号。 */
-export function extractJsonObject(text: string): string {
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error('模型没给出 JSON');
-  }
-  return text.slice(start, end + 1);
 }
 
 export function parseAdvice(

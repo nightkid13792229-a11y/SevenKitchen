@@ -106,6 +106,15 @@
             "backgroundColor": "#FBFCF7",
             "enablePullDownRefresh": false
           }
+        },
+        {
+          "path": "manual-entry",
+          "style": {
+            "navigationBarTitleText": "记一笔",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
+          }
         }
       ]
     },

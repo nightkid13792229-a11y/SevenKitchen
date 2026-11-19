@@ -39,6 +39,42 @@ export type FinanceExpenseCategory =
   | 'EQUIPMENT'
   | 'PAYMENT_FEE';
 
+/**
+ * 收入类别（与后端 `FINANCE_INCOME_CATEGORY_LABELS` 对齐）。
+ * 手工只允许 `OTHER_INCOME`：线上/线下/补剂/定制食谱由系统自动记录，
+ * 手工标上去会和订单、手续费口径对不上（设计文档 §6.2）。
+ */
+export type FinanceIncomeCategory =
+  | 'ONLINE_ORDER'
+  | 'OFFLINE_ORDER'
+  | 'SUPPLEMENT'
+  | 'CUSTOM_RECIPE'
+  | 'REFUND'
+  | 'OTHER_INCOME';
+
+/**
+ * 「记一笔」入参：字段名与后端 `CreateManualEntryDto` 一致。
+ *
+ * 金额只收正数（最多两位小数），方向由 `direction` 决定；
+ * 支出填 `category`、收入填 `incomeCategory`，另一侧不传。
+ */
+export interface CreateManualEntryPayload {
+  direction: FinanceEntryDirection;
+  /** 元、正数、最多两位小数 */
+  amount: number;
+  /** 发生日 `YYYY-MM-DD`（上海日历日，最早 2026-11-01、最晚今天） */
+  occurredAt: string;
+  /** 支出必填（`FinanceExpenseCategory`） */
+  category?: FinanceExpenseCategory;
+  /** 收入必填；手工只允许 `OTHER_INCOME` */
+  incomeCategory?: FinanceIncomeCategory;
+  payerType?: FinanceEntryPayerType;
+  /** 一句话说明（必填，最多 200 字） */
+  title: string;
+  /** 备注（选填） */
+  note?: string;
+}
+
 export interface FinanceDashboardQuery {
   /** `YYYY-MM`，整月；与 from/to 同时传时以后端约定为准（month 优先） */
   month?: string;
@@ -182,6 +218,23 @@ export const staffFinanceApi = {
       url: '/admin/finance/entries',
       method: 'GET',
       data: params,
+      quiet: true,
+      suppressErrorToast: true,
+    });
+  },
+
+  /**
+   * 记一笔：手工登记系统抓不到的支出/收入。
+   *
+   * `POST /api/v1/admin/finance/manual-entries`，成功返回新条目 id。
+   * 错误不在这里弹 toast（`suppressErrorToast`）：记一笔页要把后端 message
+   * 原样 toast 出来，不能吞掉，也不能弹两遍。
+   */
+  createManualEntry(payload: CreateManualEntryPayload) {
+    return requestData<{ id: string }>({
+      url: '/admin/finance/manual-entries',
+      method: 'POST',
+      data: payload,
       quiet: true,
       suppressErrorToast: true,
     });

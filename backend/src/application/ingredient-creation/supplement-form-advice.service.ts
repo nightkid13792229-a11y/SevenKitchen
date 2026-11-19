@@ -69,7 +69,9 @@ const SYSTEM_PROMPT = `你是宠物营养知识库的检索员，任务是判断
 4. 只能引用给你的片段里的 documentId 与 page；不要引用没给你的文档。
 5. 原文之间互相矛盾时，如实把两种说法都写出来，不要挑一个当定论。
 6. recommendedLevel 必须是 options 里判为可用（RECOMMENDED 或 ACCEPTABLE）的那一档；判不出来就给 null。
-7. 不要给剂量、不要给疗程——那超出范围。`;
+7. 不要给剂量、不要给疗程——那超出范围。
+8. **治疗手段不是形态**：铜螯合剂、排铜药、用锌抑制铜吸收这类属于治疗，不要放进 options；
+   如果它和用户的问题相关，写进 gaps 说明"这是治疗手段，不是补铜形态的选择依据"。`;
 
 export interface AdviseInput {
   nutrientKey: string;

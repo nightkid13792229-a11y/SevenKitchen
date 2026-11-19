@@ -48,6 +48,8 @@ describe('staff workbench compact icon grid', () => {
     // 2026-11-07：分装备料并进「生产管理」（里面再分鲜食 / 补剂），
     // 鲜食和补剂同属生产环节，不再各占一个格子。
     expect([...moduleConfig.matchAll(/title: '([^']+)'/g)].map((match) => match[1])).toEqual([
+      // 2026-11-19：财务首页只给 ADMIN，排在工作台第一位
+      '财务',
       '采购管理',
       '生产管理',
       '订单中心',
@@ -63,6 +65,15 @@ describe('staff workbench compact icon grid', () => {
     // 补剂待办不再单独占格子，但红点要挂在生产管理上，否则员工看不到补剂待办
     expect(moduleConfig).toContain("badgeKeys: ['production', 'supplementOrders']")
     expect(source).toContain('moduleBadge(module)')
+  })
+
+  it('财务入口只给 ADMIN 显示', () => {
+    const moduleConfig = source.match(/const workbenchModules[\s\S]*?\n\]\)/)?.[0] || ''
+
+    expect(moduleConfig).toContain("getStoredUser()?.role === 'ADMIN'")
+    expect(moduleConfig).toContain("title: '财务'")
+    expect(moduleConfig).toContain("icon: '/static/ui-icons/reimbursement.png'")
+    expect(source).toContain("url: '/pages/staff-finance/index'")
   })
 
   it('订单中心入口已注册，补剂订单从订单中心仍能进详情', () => {

@@ -30,6 +30,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
+import { getStoredUser } from '../../utils/account'
 import { refreshCurrentTabBar } from '../../utils/tabbar'
 
 const isStaff = ref(false)
@@ -147,6 +148,10 @@ function goToPurchasing() {
   uni.navigateTo({ url: '/pages/staff-purchasing/index' })
 }
 
+function goToFinance() {
+  uni.navigateTo({ url: '/pages/staff-finance/index' })
+}
+
 function goToProduction() {
   uni.navigateTo({ url: '/pages/staff-production/index' })
 }
@@ -193,6 +198,17 @@ function goToOrderCenter() {
  * （诉求 / 原因 / 补发单号）。所以这个入口和那个页面一起撤掉了。
  */
 const workbenchModules = computed<WorkbenchModule[]>(() => [
+  // 财务只给老板（ADMIN）：员工看不到这个入口，后端接口也会 403
+  ...(getStoredUser()?.role === 'ADMIN'
+    ? [
+        {
+          key: 'finance',
+          title: '财务',
+          icon: '/static/ui-icons/reimbursement.png',
+          onTap: goToFinance,
+        },
+      ]
+    : []),
   {
     key: 'purchasing',
     title: '采购管理',

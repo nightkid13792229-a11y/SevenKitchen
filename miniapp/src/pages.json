@@ -86,6 +86,20 @@
       ]
     },
     {
+      "root": "pages/staff-finance",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "财务",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7"
+          }
+        }
+      ]
+    },
+    {
       "root": "pages/staff-inventory",
       "pages": [
         {

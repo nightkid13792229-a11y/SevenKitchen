@@ -3,8 +3,14 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { AdminGuard } from '../guards/role.guard';
-import { CompareOffersDto, type SupplementFormLevel } from '../dto/ingredient-creation/supplement-agent.dto';
+import {
+  CompareOffersDto,
+  FormAdviceDto,
+  type SupplementFormLevel,
+} from '../dto/ingredient-creation/supplement-agent.dto';
 import { SupplementOfferFetcherService } from '../../application/ingredient-creation/supplement-offer-fetcher.service';
+import { SupplementFormAdviceService } from '../../application/ingredient-creation/supplement-form-advice.service';
+import type { FormAdvice } from '../../domain/ingredient/supplement-form-advice';
 import {
   rankOffers,
   recommendOffer,
@@ -61,7 +67,23 @@ export interface CompareOffersView {
 @Controller('api/v1/admin/ingredient-supplement-agent')
 @UseGuards(AuthGuard, AdminGuard)
 export class SupplementAgentController {
-  constructor(private readonly fetcher: SupplementOfferFetcherService) {}
+  constructor(
+    private readonly fetcher: SupplementOfferFetcherService,
+    private readonly formAdvice: SupplementFormAdviceService,
+  ) {}
+
+  @Post('form-advice')
+  @ApiOperation({
+    summary: '形态建议：读知识库原文，给出形态档位结论与出处；没有原文的条目不推荐',
+  })
+  async adviseForm(@Body() dto: FormAdviceDto): Promise<ApiResponseDto<FormAdvice>> {
+    const advice = await this.formAdvice.advise({
+      nutrientKey: dto.nutrientKey,
+      nutrientLabel: dto.nutrientLabel,
+      question: dto.question,
+    });
+    return new ApiResponseDto(0, 'Success', advice);
+  }
 
   @Post('compare')
   @ApiOperation({

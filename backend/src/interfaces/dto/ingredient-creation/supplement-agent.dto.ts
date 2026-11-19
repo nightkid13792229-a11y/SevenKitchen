@@ -40,3 +40,24 @@ export class CompareOffersDto {
   @Max(12)
   limit?: number;
 }
+
+
+export class FormAdviceDto {
+  @ApiProperty({ description: '规范营养字段，如 minerals.copper', example: 'minerals.copper' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  nutrientKey!: string;
+
+  @ApiPropertyOptional({ description: '展示名，如「铜」；不传则服务端按字段推' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  nutrientLabel?: string;
+
+  @ApiPropertyOptional({ description: '一句补充背景（例如「狗肝铜偏高」）' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  question?: string;
+}

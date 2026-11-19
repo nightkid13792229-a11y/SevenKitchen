@@ -56,7 +56,52 @@ describe('buildOfferFacts', () => {
     );
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.reason).toContain('标签里没有铜');
+    expect(result.reason).toContain('没读到铜');
+  });
+
+  it('锌+铜这种两三个成分的复方也算复合配方，不参与单价排序', () => {
+    const result = buildOfferFacts(
+      {
+        url: 'https://cn.iherb.com/pr/x/3',
+        name: '锌/铜 + 益生菌',
+        priceCny: 214,
+        unitsPerBottle: 90,
+        servingUnitsPerDose: 1,
+        nutrients: [
+          { fieldPath: 'minerals.copper', value: 2, unit: 'mg' },
+          { fieldPath: 'minerals.zinc', value: 15, unit: 'mg' },
+        ],
+        formLevel: null,
+      },
+      rule,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.offer.compound).toBe(true);
+    expect(result.offer.amountPerServing).toBeNull();
+  });
+
+  it('鱼油的 EPA + DHA 是同一个口径里的两行，不能算复合', () => {
+    const fishRule = resolvePriceBasis('fattyAcids.epa');
+    const result = buildOfferFacts(
+      {
+        url: 'https://cn.iherb.com/pr/x/4',
+        name: 'Omega-3 Fish Oil',
+        priceCny: 199,
+        unitsPerBottle: 120,
+        servingUnitsPerDose: 2,
+        nutrients: [
+          { fieldPath: 'fattyAcids.epa', value: 650, unit: 'mg' },
+          { fieldPath: 'fattyAcids.dha', value: 450, unit: 'mg' },
+        ],
+        formLevel: null,
+      },
+      fishRule,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.offer.compound).toBe(false);
+    expect(result.offer.amountPerServing).toBe(1100);
   });
 
   it('一瓶十几种营养素的复合配方：标成复合，每份含量留空', () => {

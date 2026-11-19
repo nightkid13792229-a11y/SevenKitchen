@@ -384,7 +384,11 @@ export class SupplementLinkPreviewService {
    * 只捞「链接 + 名字 + 标价」——成分表要逐个商品页去读（`preview`），
    * 搜索页上没有。捞不到就返回空数组，不硬凑。
    */
-  async searchCandidates(keyword: string, limit = 8): Promise<SupplementCandidate[]> {
+  async searchCandidates(
+    keyword: string,
+    limit = 8,
+    site = 'cn.iherb.com',
+  ): Promise<SupplementCandidate[]> {
     const query = keyword.trim();
     if (!query) {
       return [];
@@ -403,8 +407,9 @@ export class SupplementLinkPreviewService {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            // 只搜 iHerb 站内，别把别家的链接混进来
-            query: `site:iherb.com ${query}`,
+            // 只搜 iHerb 站内，别把别家的链接混进来。
+            // 默认限定人民币站：抓价格时一律转到 cn，区域站（pt./ci./sv.）的商品在 cn 常常 404。
+            query: `site:${site} ${query}`,
             count: Math.max(1, Math.min(limit, 20)),
             need_content: false
           })

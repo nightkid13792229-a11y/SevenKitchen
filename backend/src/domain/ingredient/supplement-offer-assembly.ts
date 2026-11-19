@@ -26,8 +26,12 @@ export type OfferAssemblyResult =
   | { ok: true; offer: OfferFacts }
   | { ok: false; url: string; name: string; reason: string };
 
-/** 一瓶里认得出来的营养素超过这个数，就按复合配方处理——比不了「每单位某营养素」的价。 */
-const COMPOUND_MIN_ROWS = 5;
+/**
+ * 复合配方的判据：**除了本次要比的那个营养素，标签上还认得出来别的营养素**。
+ *
+ * 只数"总行数"会漏掉「锌+铜」这种两三个成分的复方（它照样比不了单价），
+ * 又不会误伤鱼油——EPA 与 DHA 都算本次口径里的行，不算"别的"。
+ */
 
 /** 只用于提示文案：认不出的键退化成键名本身。 */
 const NUTRIENT_LABELS: Record<string, string> = {
@@ -80,8 +84,23 @@ export function buildOfferFacts(
   input: OfferAssemblyInput,
   rule: PriceBasisRule,
 ): OfferAssemblyResult {
+  const basisPaths = new Set(rule.fieldPaths);
   const knownKeys = new Set(input.nutrients.map((item) => item.fieldPath));
-  const compound = knownKeys.size >= COMPOUND_MIN_ROWS;
+
+  // 连本次要比的营养素都没有：这不是复方，是找错了商品，按失败报
+  const hasBasis = [...basisPaths].some((path) => knownKeys.has(path));
+  if (!hasBasis) {
+    return {
+      ok: false,
+      url: input.url,
+      name: input.name,
+      reason: `标签正文里没读到${nutrientLabelOf(rule.nutrientKey)}（可能是图片标签，或单位认不出）`,
+    };
+  }
+
+  // 有本营养素、还认得出来别的营养素 → 复方，比不了「每单位某营养素」的价
+  const otherKnown = [...knownKeys].filter((key) => !basisPaths.has(key));
+  const compound = otherKnown.length > 0;
 
   if (compound) {
     return {

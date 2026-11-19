@@ -16,6 +16,7 @@ import {
   resolvePriceBasis,
   type LabelNutrient,
   type OfferFacts,
+  type PriceBasisRule,
 } from '../../domain/ingredient/supplement-offer-ranking';
 
 /**
@@ -64,11 +65,15 @@ export class SupplementOfferFetcherService {
 
   async fetchOffers(input: FetchOffersInput): Promise<FetchOffersResult> {
     const rule = resolvePriceBasis(input.nutrientKey);
-    // 搜索会把同一件商品以多个链接返回：多要一些，去重后再截到 limit，否则表里是同一瓶重复五次
-    const rawCandidates = await this.preview.searchCandidates(
-      input.keyword,
-      Math.min(input.limit * 3, 20),
-    );
+    // 搜索会把同一件商品以多个链接返回：多要一些，去重后再截到 limit，否则表里是同一瓶重复五次。
+    const want = Math.min(input.limit * 3, 20);
+    let rawCandidates = await this.preview.searchCandidates(input.keyword, want, 'cn.iherb.com');
+    // 人民币站货少：不够就再搜一次全站，区域站的商品大概率抓不到价格，但至少让它出现在「没读出来」里
+    if (dedupeCandidates(rawCandidates).length < 3) {
+      rawCandidates = rawCandidates.concat(
+        await this.preview.searchCandidates(input.keyword, want, 'iherb.com'),
+      );
+    }
     const candidates = dedupeCandidates(rawCandidates).slice(0, input.limit);
 
     const offers: OfferFacts[] = [];
@@ -85,7 +90,7 @@ export class SupplementOfferFetcherService {
 
       try {
         const snapshot = await this.withTimeout(
-          this.loadSnapshot(candidate.url, candidate.name),
+          this.loadSnapshot(candidate.url, candidate.name, rule),
           PER_OFFER_TIMEOUT_MS,
         );
         const built = buildOfferFacts(
@@ -123,7 +128,11 @@ export class SupplementOfferFetcherService {
    *
    * 商品页的正文抽取经常漏掉成分表（标签是图），这一步的兜底就是为它准备的。
    */
-  private async loadSnapshot(url: string, fallbackName: string): Promise<CandidateSnapshot> {
+  private async loadSnapshot(
+    url: string,
+    fallbackName: string,
+    rule: PriceBasisRule,
+  ): Promise<CandidateSnapshot> {
     const cached = this.cache.get(url);
     if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
       return cached.value;
@@ -139,15 +148,23 @@ export class SupplementOfferFetcherService {
     }));
     let servingUnitsPerDose = page.servingUnitsPerDose;
 
-    if (nutrients.length === 0) {
+    // 商品页正文经常只有一半：要么没有本次要比的营养素，要么没有 Serving Size。
+    // 这两种都值得再从搜索缓存里把标签正文捞一次，否则明明有标签的商品会被判「算不出」。
+    const hasBasisRow = rule.fieldPaths.some((path) =>
+      nutrients.some((item) => item.fieldPath === path),
+    );
+    const needsLabel = nutrients.length === 0 || !hasBasisRow || servingUnitsPerDose === null;
+    if (needsLabel) {
       const label = await this.preview.readLabelText(url);
       if (label.labelText) {
         const parsed = parseSupplementLabel(label.labelText);
-        nutrients = parsed.nutrients.map((item) => ({
-          fieldPath: item.fieldPath,
-          value: item.value,
-          unit: item.unit,
-        }));
+        if (parsed.nutrients.length > nutrients.length) {
+          nutrients = parsed.nutrients.map((item) => ({
+            fieldPath: item.fieldPath,
+            value: item.value,
+            unit: item.unit,
+          }));
+        }
         servingUnitsPerDose = servingUnitsPerDose ?? extractServingUnits(label.labelText);
       }
     }

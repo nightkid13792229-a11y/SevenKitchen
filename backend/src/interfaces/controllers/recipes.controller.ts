@@ -889,6 +889,7 @@ export class RecipesController {
         createdAt: true,
         updatedAt: true,
         applicableLifeStages: true,
+        healthTagAssignments: { select: { healthTagId: true } },
         isCustomRecipe: true,
         customOrderId: true,
         customerOwnerId: true,

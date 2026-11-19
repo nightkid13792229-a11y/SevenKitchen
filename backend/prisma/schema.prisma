@@ -705,7 +705,6 @@ model Recipe {
   productionStepsJson    Json?                       @map("production_steps_json")
   salesCount             Int                         @default(0) @map("sales_count")
   viewCount              Int                         @default(0) @map("view_count")
-  targetHealthTags       Json                        @default("[]") @map("target_health_tags")
   videoUrl               String?                     @map("video_url")
   designSource           String?                     @map("design_source")
   customOrderId          String?                     @map("custom_order_id")

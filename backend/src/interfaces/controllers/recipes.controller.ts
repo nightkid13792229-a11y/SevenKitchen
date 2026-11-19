@@ -666,7 +666,10 @@ export class RecipesController {
       coverTitle: recipe.coverTitle || undefined,
       seriesId: recipe.seriesId || undefined,
       selectedLifeStage: seriesLifeStage || undefined,
-      targetHealthTags: recipe.targetHealthTags || [],
+      targetHealthTags:
+        recipe.healthTagAssignments?.map(
+          (assignment: any) => assignment.healthTagId,
+        ) ?? [],
       applicableLifeStages: recipe.applicableLifeStages || [],
       items: topIngredients,
       viewCount: recipe.viewCount ?? 0,
@@ -886,7 +889,6 @@ export class RecipesController {
         createdAt: true,
         updatedAt: true,
         applicableLifeStages: true,
-        targetHealthTags: true,
         isCustomRecipe: true,
         customOrderId: true,
         customerOwnerId: true,
@@ -967,7 +969,10 @@ export class RecipesController {
       status: r.status,
       coverImageUrl: r.coverImageUrl?.replace('http://', 'https://'),
       applicableLifeStages: r.applicableLifeStages || [],
-      targetHealthTags: r.targetHealthTags || [],
+      targetHealthTags:
+        r.healthTagAssignments?.map(
+          (assignment: any) => assignment.healthTagId,
+        ) ?? [],
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     }));
@@ -1630,9 +1635,7 @@ export class RecipesController {
       targetHealthTags:
         recipe.healthTagAssignments?.map(
           (assignment: any) => assignment.healthTagId,
-        ) ??
-        recipe.targetHealthTags ??
-        [],
+        ) ?? [],
       applicableLifeStages: recipe.applicableLifeStages ?? [],
       items:
         recipe.items?.map((item: any) => ({

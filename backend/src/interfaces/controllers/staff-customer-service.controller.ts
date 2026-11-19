@@ -85,7 +85,10 @@ function normalizeRecipeOption(recipe: any) {
     sourceLabel: isPrivateCustom ? '专属成品' : '公开成品',
     coverImageUrl: recipe.coverImageUrl?.replace('http://', 'https://') ?? null,
     applicableLifeStages: recipe.applicableLifeStages ?? [],
-    targetHealthTags: recipe.targetHealthTags ?? [],
+    targetHealthTags:
+      recipe.healthTagAssignments?.map(
+        (assignment: { healthTagId: string }) => assignment.healthTagId,
+      ) ?? [],
     energyDensityKcalPerKg: toNumber(recipe.energyDensityKcalPerKg),
     customerOwnerId: recipe.customerOwnerId ?? null,
     customerDogId: recipe.customerDogId ?? null,
@@ -449,7 +452,7 @@ export class StaffCustomerServiceController {
         status: true,
         coverImageUrl: true,
         applicableLifeStages: true,
-        targetHealthTags: true,
+        healthTagAssignments: { select: { healthTagId: true } },
         energyDensityKcalPerKg: true,
         customerOwnerId: true,
         customerDogId: true,

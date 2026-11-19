@@ -721,7 +721,6 @@ describe('RecipeDesignerService · staged series release', () => {
           coverImageUrl: 'https://img.example.com/series-cover.jpg',
           coverTitle: '鸡肉双阶段',
           sellingPoint: '两种能量一套配方',
-          targetHealthTags: ['JOINT'],
         },
       });
       // 其余 PUBLIC 行只刷新门面资料，不再改状态。
@@ -735,7 +734,6 @@ describe('RecipeDesignerService · staged series release', () => {
           coverImageUrl: 'https://img.example.com/series-cover.jpg',
           coverTitle: '鸡肉双阶段',
           sellingPoint: '两种能量一套配方',
-          targetHealthTags: ['JOINT'],
         },
       });
       expect(prisma.recipeSeries.update).toHaveBeenCalledWith({

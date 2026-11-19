@@ -317,7 +317,6 @@ export class FavoritesController {
           description: true,
           energyDensityKcalPerKg: true,
           applicableLifeStages: true,
-          targetHealthTags: true,
         },
       });
 

@@ -5038,10 +5038,6 @@ export class RecipeDesignerService {
       '封面标题',
       RECIPE_PRESENTATION_LIMITS.coverTitle,
     );
-    const targetHealthTags = this.normalizeRecipeStringArray(
-      series.targetHealthTags,
-    );
-
     return {
       coverImageUrl: this.normalizeSeriesReleaseText(
         series.coverImageUrl,
@@ -5053,9 +5049,6 @@ export class RecipeDesignerService {
         RECIPE_PRESENTATION_LIMITS.sellingPoint,
       ),
       ...(coverTitle ? { coverTitle } : {}),
-      ...(targetHealthTags.length > 0
-        ? { targetHealthTags: this.toJsonValue(targetHealthTags) }
-        : {}),
     };
   }
 
@@ -7923,7 +7916,6 @@ export class RecipeDesignerService {
           productionLossRate: await this.resolveProductionLossRate(),
           batchLaborHours: PUBLISHED_RECIPE_BATCH_LABOR_HOURS,
           applicableLifeStages: this.resolvePublishedLifeStages(draft),
-          targetHealthTags: draft.targetHealthTags,
           nutritionDetailedData: this.toJsonValue(
             this.buildPublishedNutritionDetailedData(draft, assessment),
           ),

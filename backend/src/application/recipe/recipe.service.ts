@@ -1375,7 +1375,6 @@ export class RecipeService {
         designSource: dto.designSource,
         nutritionStandard: dto.nutritionStandard,
         nutritionDetailedData: Prisma.JsonNull,
-        targetHealthTags: [] as any, // Keep empty for now, will be migrated
         applicableLifeStages: dto.applicableLifeStages || [],
         productionSteps: dto.productionSteps,
         items: resolvedItems
@@ -1784,7 +1783,6 @@ export class RecipeService {
         designSource: dto.designSource,
         nutritionStandard: dto.nutritionStandard,
         nutritionDetailedData: undefined,
-        targetHealthTags: [] as any, // Keep empty for now
         applicableLifeStages: dto.applicableLifeStages ?? undefined,
         productionSteps: dto.productionSteps,
         items: resolvedItems
@@ -2075,7 +2073,6 @@ export class RecipeService {
         nutritionStandard: recipe.nutritionStandard,
         nutritionDetailedData:
           recipe.nutritionDetailedData as Prisma.InputJsonValue,
-        targetHealthTags: [] as any, // Keep empty for now
         applicableLifeStages:
           recipe.applicableLifeStages as Prisma.InputJsonValue,
         productionSteps: recipe.productionSteps,

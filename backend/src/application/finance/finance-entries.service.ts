@@ -57,6 +57,14 @@ export type FinanceEntriesQuery = {
   month?: string;
   direction?: 'INCOME' | 'EXPENSE';
   category?: string;
+  /**
+   * 按付款方筛选：`PERSONAL` = 「我垫的」。
+   *
+   * 只做**行级**过滤，不动任何口径：已作废的退款记录本来就不出行，
+   * 采购/账单的 0 元占位行仍按原样出现（它自己带 payerType）。
+   * 手续费合计行没有付款方（公司账户扣的），两个值都不会把它带出来。
+   */
+  payerType?: 'COMPANY' | 'PERSONAL';
   page?: number;
   pageSize?: number;
 };
@@ -141,6 +149,9 @@ export class FinanceEntriesService {
     }
     if (query.category) {
       rows = rows.filter((row) => row.entry.category === query.category);
+    }
+    if (query.payerType) {
+      rows = rows.filter((row) => row.entry.payerType === query.payerType);
     }
 
     // 倒序；同一时刻用 id 兜底，保证分页结果稳定

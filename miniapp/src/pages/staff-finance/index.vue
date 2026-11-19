@@ -56,22 +56,30 @@
         <view
           class="hero-amount"
           :class="{ 'hero-amount--negative': balanceNegative }"
+          @tap="goEntries"
         >
           <text v-if="balanceNegative" class="hero-minus">−</text>
           <text class="hero-currency">¥</text>
           <text class="hero-number">{{ formatMoney(balanceAbs) }}</text>
+          <text class="hero-chevron">›</text>
         </view>
         <text v-if="balanceNegative" class="hero-warning">这个月花得比收得多，先看房租和工资那几笔是不是漏录</text>
         <text class="hero-caption">{{ heroCaption }}</text>
 
         <view class="hero-split">
-          <view class="hero-metric">
+          <view class="hero-metric" @tap="goIncomeEntries">
             <text class="hero-metric-label">收入</text>
-            <text class="hero-metric-value">¥{{ formatMoney(incomeTotal) }}</text>
+            <view class="hero-metric-row">
+              <text class="hero-metric-value">¥{{ formatMoney(incomeTotal) }}</text>
+              <text class="hero-metric-arrow">›</text>
+            </view>
           </view>
-          <view class="hero-metric">
+          <view class="hero-metric" @tap="goExpenseEntries">
             <text class="hero-metric-label">支出</text>
-            <text class="hero-metric-value">¥{{ formatMoney(expenseTotal) }}</text>
+            <view class="hero-metric-row">
+              <text class="hero-metric-value">¥{{ formatMoney(expenseTotal) }}</text>
+              <text class="hero-metric-arrow">›</text>
+            </view>
           </view>
         </view>
 
@@ -398,8 +406,26 @@ function goBills() {
   uni.navigateTo({ url: '/pages/staff-finance/bills' })
 }
 
+/** 明细页跳转：跳不过去必须有提示，不能让老板点了没反应 */
+function openEntries(url: string) {
+  uni.navigateTo({
+    url,
+    fail: () => {
+      uni.showToast({ title: '打开失败，请稍后重试', icon: 'none' })
+    },
+  })
+}
+
+function goIncomeEntries() {
+  openEntries('/pages/staff-finance/entries?direction=INCOME')
+}
+
+function goExpenseEntries() {
+  openEntries('/pages/staff-finance/entries?direction=EXPENSE')
+}
+
 function goEntries() {
-  uni.navigateTo({ url: '/pages/staff-finance/entries' })
+  openEntries('/pages/staff-finance/entries')
 }
 
 onShow(() => {
@@ -499,6 +525,7 @@ $staff-danger-on-brand: #f2a79a;
 .hero-amount {
   display: flex;
   align-items: baseline;
+  min-height: 88rpx;
   margin-top: 6rpx;
 }
 
@@ -518,6 +545,13 @@ $staff-danger-on-brand: #f2a79a;
   font-weight: 700;
   letter-spacing: -1rpx;
   font-variant-numeric: tabular-nums;
+}
+
+/* 结余可点：`›` 用深底上的半透明米白，不抢数字 */
+.hero-chevron {
+  margin-left: 10rpx;
+  font-size: $staff-font-body;
+  color: rgba(243, 237, 221, 0.72);
 }
 
 .hero-amount--negative .hero-minus,
@@ -553,6 +587,20 @@ $staff-danger-on-brand: #f2a79a;
 .hero-metric {
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  min-height: 88rpx;
+}
+
+.hero-metric-row {
+  display: flex;
+  align-items: baseline;
+  margin-top: 4rpx;
+}
+
+.hero-metric-arrow {
+  margin-left: 8rpx;
+  font-size: $staff-font-body;
+  color: rgba(243, 237, 221, 0.72);
 }
 
 .hero-metric-label {
@@ -561,7 +609,6 @@ $staff-danger-on-brand: #f2a79a;
 }
 
 .hero-metric-value {
-  margin-top: 4rpx;
   font-size: $staff-font-h2;
   font-weight: 600;
   color: $staff-cream;

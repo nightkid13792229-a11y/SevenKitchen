@@ -26,6 +26,17 @@ export class FinanceEntriesQueryDto extends FinanceRangeQueryDto {
   @IsString()
   category?: string;
 
+  @ApiPropertyOptional({
+    description:
+      '按付款方筛选：COMPANY = 公司账户，PERSONAL = 个人垫付（「我垫的」）',
+    enum: ['COMPANY', 'PERSONAL'],
+  })
+  @IsOptional()
+  @IsIn(['COMPANY', 'PERSONAL'], {
+    message: '付款方必须是 COMPANY 或 PERSONAL',
+  })
+  payerType?: 'COMPANY' | 'PERSONAL';
+
   @ApiPropertyOptional({ description: '页码，从 1 开始', default: 1 })
   @IsOptional()
   @Type(() => Number)

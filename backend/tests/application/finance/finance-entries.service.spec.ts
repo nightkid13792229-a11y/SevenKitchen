@@ -756,6 +756,93 @@ describe('FinanceEntriesService', () => {
     });
   });
 
+  it('payerType 只返回 PERSONAL 的行（「我垫的」）', async () => {
+    const prisma: any = makePrisma({
+      orders: [
+        {
+          id: 'o1',
+          orderNo: 'SK1',
+          amountTotal: 1000,
+          paymentMethod: 'WECHAT_PAY',
+          paidAt: utc('2026-11-02T02:00:00Z'),
+          remakeFromOrderId: null,
+          reshipFromOrderId: null,
+        },
+      ],
+      manualIncome: [
+        {
+          id: 'mi1',
+          amount: 80,
+          occurredAt: utc('2026-11-09T02:00:00Z'),
+          incomeCategory: 'OTHER_INCOME',
+          title: '广告返现',
+          direction: 'INCOME',
+          payerType: 'COMPANY',
+        },
+      ],
+      manualEntries: [
+        {
+          id: 'm-personal',
+          amount: 50,
+          occurredAt: utc('2026-11-01T02:00:00Z'),
+          category: 'EQUIPMENT',
+          title: '封口机',
+          direction: 'EXPENSE',
+          payerType: 'PERSONAL',
+        },
+        {
+          id: 'm-company',
+          amount: 20,
+          occurredAt: utc('2026-11-04T02:00:00Z'),
+          category: 'OTHER',
+          title: '杂项',
+          direction: 'EXPENSE',
+          payerType: 'COMPANY',
+        },
+      ],
+      bills: [
+        {
+          id: 'b1',
+          billNumber: 'B202611',
+          title: '11 月房租',
+          amount: 1200,
+          category: 'RENT',
+          recognitionStart: new Date('2026-11-01T00:00:00Z'),
+          recognitionEnd: new Date('2027-10-31T00:00:00Z'),
+          payerType: 'PERSONAL',
+        },
+      ],
+    });
+
+    const all = await new FinanceEntriesService(prisma).list({
+      month: '2026-11',
+    });
+    const personal = await new FinanceEntriesService(prisma).list({
+      month: '2026-11',
+      payerType: 'PERSONAL',
+    });
+
+    // 不传 payerType 时口径不变：公司账户的行、手续费行都还在
+    expect(all.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining(['o1', 'mi1', 'm-personal', 'm-company']),
+    );
+    expect(all.items.some((item) => item.sourceType === 'FEE')).toBe(true);
+
+    expect(personal.items.map((item) => item.id)).toEqual([
+      'm-personal',
+      'b1:2026-11',
+    ]);
+    expect(personal.items.every((item) => item.payerType === 'PERSONAL')).toBe(
+      true,
+    );
+    // 过滤发生在分页之前，total 也是过滤后的条数
+    expect(personal.total).toBe(2);
+    // 手续费行没有付款方，不该被「我垫的」带出来
+    expect(personal.items.some((item) => item.sourceType === 'FEE')).toBe(
+      false,
+    );
+  });
+
   it('direction 与 category 在分页前过滤', async () => {
     const prisma: any = makePrisma({
       orders: [

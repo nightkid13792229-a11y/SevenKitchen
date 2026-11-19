@@ -96,6 +96,16 @@
             "navigationBarTextStyle": "white",
             "backgroundColor": "#FBFCF7"
           }
+        },
+        {
+          "path": "entries",
+          "style": {
+            "navigationBarTitleText": "收支明细",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7",
+            "enablePullDownRefresh": false
+          }
         }
       ]
     },

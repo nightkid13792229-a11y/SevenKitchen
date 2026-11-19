@@ -94,6 +94,67 @@ export interface FinanceDashboard {
   pendingOfflineConfirmCount: number;
 }
 
+/** 明细行的来源单据类型（与后端的 `FinanceEntry.sourceType` 对齐） */
+export type FinanceEntrySourceType =
+  | 'ORDER'
+  | 'SUPPLEMENT_ORDER'
+  | 'CUSTOM_RECIPE_ORDER'
+  | 'ORDER_REFUND'
+  | 'PURCHASE'
+  | 'SHIPPING'
+  | 'BILL'
+  | 'FEE'
+  | 'MANUAL';
+
+export type FinanceEntryDirection = 'INCOME' | 'EXPENSE';
+export type FinanceEntryPayerType = 'COMPANY' | 'PERSONAL';
+
+/**
+ * 明细行：金额**带符号**——收入为正；退款是负的收入；手续费冲回是负的支出。
+ * UI 只按符号显示，不再自己判断正负。
+ */
+export interface FinanceEntry {
+  id: string;
+  /** 上海时区 ISO 字符串（带 +08:00） */
+  occurredAt: string;
+  direction: FinanceEntryDirection;
+  category: string;
+  label: string;
+  amount: number;
+  title: string;
+  sourceType: FinanceEntrySourceType;
+  sourceId: string;
+  sourceNo?: string;
+  payerType?: FinanceEntryPayerType;
+  isRefund: boolean;
+  isHistorical: boolean;
+}
+
+export interface FinanceEntriesQuery {
+  /** `YYYY-MM`，整月 */
+  month?: string;
+  /** `YYYY-MM-DD` */
+  from?: string;
+  /** `YYYY-MM-DD` */
+  to?: string;
+  direction?: FinanceEntryDirection;
+  /** 收入类别 / 支出分类的 code */
+  category?: string;
+  /** 按付款方筛选：`PERSONAL` 就是「我垫的」 */
+  payerType?: FinanceEntryPayerType;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface FinanceEntriesPage {
+  items: FinanceEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  /** 合并后的行数超过后端上限，已截断（提示缩小日期范围） */
+  truncated: boolean;
+}
+
 export const staffFinanceApi = {
   /**
    * 财务首页 / 月报汇总。
@@ -104,6 +165,21 @@ export const staffFinanceApi = {
   getDashboard(params: FinanceDashboardQuery = {}) {
     return requestData<FinanceDashboard>({
       url: '/admin/finance/dashboard',
+      method: 'GET',
+      data: params,
+      quiet: true,
+      suppressErrorToast: true,
+    });
+  },
+
+  /**
+   * 收支明细：各来源合并后按时间倒序，后端分页（默认每页 50，上限 200）。
+   *
+   * 与首页一致，错误由页面自己展示（骨架 / 错误态 / 触底重试），不弹全局 toast。
+   */
+  listEntries(params: FinanceEntriesQuery = {}) {
+    return requestData<FinanceEntriesPage>({
+      url: '/admin/finance/entries',
       method: 'GET',
       data: params,
       quiet: true,

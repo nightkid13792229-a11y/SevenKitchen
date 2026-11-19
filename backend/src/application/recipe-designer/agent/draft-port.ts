@@ -9,6 +9,7 @@ import { Injectable } from '@nestjs/common';
 import { RecipeDesignerService } from '../recipe-designer.service';
 import { AgentToolError, type RecipeEditOp } from './agent-types';
 import type { AssessmentTargetOverride } from '../../../domain/recipe-designer/types';
+import type { AgentDesignContext } from './design-context.types';
 
 type Access = Parameters<RecipeDesignerService['getDraft']>[1];
 
@@ -31,7 +32,29 @@ export interface DraftSummary {
     isCompliant: boolean;
     revision: number | null;
     stale: boolean;
+    /** 上次评估的缺口；直接读草稿里已存的结果，避免每轮重跑 assess。 */
+    gaps: Array<{
+      key: string;
+      label: string;
+      status: string;
+      value: number | null;
+      min: number | null;
+      max: number | null;
+      unit: string;
+    }>;
+    /** 上次评估命中的过敏/忌口提示。 */
+    warnings: DraftWarning[];
   } | null;
+}
+
+/** 评估里命中的一条过敏或忌口提示。 */
+export interface DraftWarning {
+  itemName: string;
+  allergen: string;
+  level: string;
+  message: string;
+  /** ALLERGY = 医学过敏；AVOID = 本单忌口/不吃。 */
+  kind: 'ALLERGY' | 'AVOID';
 }
 
 /** 一个候选原料的极简投影。 */
@@ -97,6 +120,8 @@ export interface AssessmentSummary {
     allMissing?: boolean;
   }>;
   allergens: string[];
+  /** 命中的过敏/忌口提示（含 item 与原因），比 allergens 名字更有用。 */
+  warnings: DraftWarning[];
 }
 
 @Injectable()
@@ -106,6 +131,14 @@ export class RecipeDraftPort {
     private readonly access: Access,
     private readonly draftId: string,
   ) {}
+
+  /**
+   * 读本单设计上下文：路径、订单、狗狗档案、全部健康记录与附件。
+   * 只按当前草稿的绑定关系取，不接受外部 id。
+   */
+  async readDesignContext(): Promise<AgentDesignContext> {
+    return this.designer.getAgentDesignContext(this.draftId, this.access);
+  }
 
   /** 读草稿摘要：不含营养明细，那些由 assess 给。 */
   async readDraft(): Promise<DraftSummary> {
@@ -129,7 +162,8 @@ export class RecipeDraftPort {
         ? {
             id: draft.series.id,
             name: draft.series.name,
-            designMode: draft.series.designMode === 'ORDER' ? 'ORDER' : 'CATALOG',
+            designMode:
+              draft.series.designMode === 'ORDER' ? 'ORDER' : 'CATALOG',
           }
         : null,
       totalWeightG: Number(draft.totalWeightG ?? 0),
@@ -152,6 +186,7 @@ export class RecipeDraftPort {
               isCompliant: Boolean(draft.isCompliant),
               revision: assessmentRevision,
               stale: assessmentRevision !== draft.contentRevision,
+              ...readStoredAssessment(draft),
             },
     };
   }
@@ -361,21 +396,23 @@ export class RecipeDraftPort {
         const contributors = Array.isArray(entry.contributors)
           ? entry.contributors
           : [];
-        const mappedContributors = contributors.slice(0, 3).map((contributor: any) => ({
-          itemName: String(contributor.itemName ?? ''),
-          amountUnit:
-            typeof contributor.amountUnit === 'string'
-              ? contributor.amountUnit
-              : undefined,
-          ingredientType:
-            typeof contributor.ingredientType === 'string'
-              ? contributor.ingredientType
-              : undefined,
-          amount: toNumber(contributor.amount),
-          unit: String(contributor.unit ?? ''),
-          missing: contributor.missing === true,
-          missingAsZero: contributor.missingAsZero === true,
-        }));
+        const mappedContributors = contributors
+          .slice(0, 3)
+          .map((contributor: any) => ({
+            itemName: String(contributor.itemName ?? ''),
+            amountUnit:
+              typeof contributor.amountUnit === 'string'
+                ? contributor.amountUnit
+                : undefined,
+            ingredientType:
+              typeof contributor.ingredientType === 'string'
+                ? contributor.ingredientType
+                : undefined,
+            amount: toNumber(contributor.amount),
+            unit: String(contributor.unit ?? ''),
+            missing: contributor.missing === true,
+            missingAsZero: contributor.missingAsZero === true,
+          }));
         const deficit =
           status === 'DEFICIENT' && min !== null && value !== null
             ? Math.max(0, min - value)
@@ -413,11 +450,21 @@ export class RecipeDraftPort {
         };
       });
 
-    const allergens = Array.isArray(result?.allergenWarnings)
-      ? result.allergenWarnings.map((warning: any) =>
-          String(warning?.allergenName ?? warning?.name ?? warning),
-        )
+    const warnings: DraftWarning[] = Array.isArray(result?.allergenWarnings)
+      ? result.allergenWarnings
+          .filter(isRecord)
+          .map((warning: any) => ({
+            itemName: String(warning.itemName ?? ''),
+            allergen: String(
+              warning.allergen ?? warning.allergenName ?? warning.name ?? '',
+            ),
+            level: String(warning.level ?? 'WARNING'),
+            message: String(warning.message ?? ''),
+            kind: warning.kind === 'AVOID' ? 'AVOID' : 'ALLERGY',
+          }))
+          .filter((warning: DraftWarning) => Boolean(warning.allergen))
       : [];
+    const allergens = [...new Set(warnings.map((warning) => warning.allergen))];
 
     return {
       isCompliant:
@@ -438,6 +485,7 @@ export class RecipeDraftPort {
       gaps,
       missingData,
       allergens,
+      warnings,
     };
   }
 
@@ -499,6 +547,66 @@ export class RecipeDraftPort {
 function toNumber(value: unknown): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * 从草稿里读上次评估的缺口与提示。
+ *
+ * `assess` 已经把结果原子写回草稿（complianceStatus / assessmentSummary），
+ * 这里只是把它投影出来，避免模型每轮为了看缺口再跑一次评估。
+ */
+function readStoredAssessment(draft: any): {
+  gaps: Array<{
+    key: string;
+    label: string;
+    status: string;
+    value: number | null;
+    min: number | null;
+    max: number | null;
+    unit: string;
+  }>;
+  warnings: DraftWarning[];
+} {
+  const entries = Array.isArray(draft?.complianceStatus)
+    ? draft.complianceStatus
+    : [];
+  const gaps = entries
+    .filter((entry: unknown) => {
+      const status = String((entry as any)?.status ?? '');
+      return status === 'DEFICIENT' || status === 'EXCESS';
+    })
+    .slice(0, 12)
+    .map((entry: any) => ({
+      key: String(entry?.nutrientKey ?? entry?.key ?? ''),
+      label: String(entry?.label ?? entry?.name ?? ''),
+      status: String(entry?.status ?? ''),
+      value: toNumber(entry?.currentValue ?? entry?.value),
+      min: toNumber(entry?.minValue ?? entry?.min),
+      max: toNumber(entry?.maxValue ?? entry?.max),
+      unit: String(entry?.unit ?? ''),
+    }));
+
+  const summary = isRecord(draft?.assessmentSummary)
+    ? draft.assessmentSummary
+    : {};
+  const rawWarnings = Array.isArray(summary.allergenWarnings)
+    ? summary.allergenWarnings
+    : [];
+  const warnings: DraftWarning[] = rawWarnings
+    .filter(isRecord)
+    .map((warning: Record<string, any>) => ({
+      itemName: String(warning.itemName ?? ''),
+      allergen: String(warning.allergen ?? ''),
+      level: String(warning.level ?? 'WARNING'),
+      message: String(warning.message ?? ''),
+      kind: warning.kind === 'AVOID' ? 'AVOID' : 'ALLERGY',
+    }));
+
+  return { gaps, warnings };
 }
 
 function round(value: number): string {

@@ -45,6 +45,11 @@ import {
   stripImageContent,
   type KnowledgePageImage,
 } from './knowledge-tool-bridge';
+import {
+  buildDesignContextImageMessage,
+  splitDesignContextImages,
+  type DesignContextImage,
+} from './design-context-images';
 
 /**
  * 一次运行最多调多少次工具。
@@ -61,7 +66,7 @@ const MAX_NO_PROGRESS_ASSESSMENTS = 3;
 /** 一次运行最长多久。 */
 const MAX_RUN_MS = positiveInt(process.env.AGENT_MAX_RUN_MS, 6 * 60 * 1000);
 /** 回灌给模型的历史条数（只含用户与助手）。 */
-const HISTORY_MESSAGES = 30;
+const HISTORY_MESSAGES = 200;
 
 @Injectable()
 export class RecipeAgentService implements OnModuleInit {
@@ -182,10 +187,7 @@ export class RecipeAgentService implements OnModuleInit {
       where: { id: sessionId },
     });
     if (!session) throw new NotFoundException('会话不存在');
-    await this.designer.getDraft(
-      session.designRecipeId,
-      this.accessFor(actor),
-    );
+    await this.designer.getDraft(session.designRecipeId, this.accessFor(actor));
     this.stopped.add(sessionId);
     await this.prisma.recipeDesignAgentSession.updateMany({
       where: { id: sessionId, status: { in: ['RUNNING', 'WAITING_USER'] } },
@@ -234,11 +236,28 @@ export class RecipeAgentService implements OnModuleInit {
       draftId,
     );
     const catalog = new RecipeCatalogPort(this.prisma);
+    /**
+     * 产品线的需求分类工具只对 CATALOG 有意义。
+     * 订单模式暴露它，模型在找不到档案时会拿它当线索乱翻（2026-11-19 实测）。
+     */
+    const tools =
+      flow === 'ORDER'
+        ? AGENT_TOOLS.filter((tool) => tool.function.name !== 'read_taxonomy')
+        : AGENT_TOOLS;
 
-    let messages = await this.buildMessages(sessionId, message, flow);
+    let messages = await this.buildMessages(sessionId, message);
     let toolCalls = 0;
     let lastGapSignature: string | null = null;
     let sameGapCount = 0;
+    /**
+     * 每次运行的第一轮强制读设计上下文。
+     *
+     * 只靠提示词说“先读”不可靠；工具选择策略是接口能力，
+     * 第一轮指定 read_design_context，之后恢复 auto。
+     */
+    let firstModelCall = true;
+    /** 健康档案附件只在本次运行注入一次，避免模型重读时重复计费。 */
+    let designContextImagesInjected = false;
 
     while (true) {
       if (this.stopped.has(sessionId)) return;
@@ -247,19 +266,23 @@ export class RecipeAgentService implements OnModuleInit {
         return;
       }
 
-      const callModel = () =>
+      const callModel = (forceContextRead: boolean) =>
         callDeepSeekTools({
           baseUrl: config.baseUrl,
           model: config.model,
           apiKey: config.apiKey,
           requestTimeoutMs: config.requestTimeoutMs,
           messages,
-          tools: AGENT_TOOLS,
+          tools,
+          toolChoice: forceContextRead
+            ? { type: 'function', function: { name: 'read_design_context' } }
+            : 'auto',
         });
 
+      const isFirstModelCall = firstModelCall;
       let response: DeepSeekToolsResult;
       try {
-        response = await callModel();
+        response = await callModel(isFirstModelCall);
       } catch (error) {
         if (!hasImageContent(messages)) {
           throw error;
@@ -270,7 +293,25 @@ export class RecipeAgentService implements OnModuleInit {
           `模型调用失败，去掉页图后重试一次：${(error as Error)?.message ?? String(error)}`,
         );
         messages = stripImageContent(messages);
-        response = await callModel();
+        response = await callModel(isFirstModelCall);
+      }
+
+      if (isFirstModelCall) {
+        const calledContext = (response.toolCalls ?? []).some(
+          (call) => call.function.name === 'read_design_context',
+        );
+        if (!calledContext) {
+          // 强制失败：再给一次机会；仍不读就终止，避免在不知道档案的情况下设计。
+          this.logger.warn('首轮未调用 read_design_context，重试一次');
+          response = await callModel(true);
+          const retried = (response.toolCalls ?? []).some(
+            (call) => call.function.name === 'read_design_context',
+          );
+          if (!retried) {
+            throw new Error('模型未能读取本单设计上下文');
+          }
+        }
+        firstModelCall = false;
       }
 
       await this.recordUsage(
@@ -307,7 +348,7 @@ export class RecipeAgentService implements OnModuleInit {
         // ask 的问题先攒着，等工具结果落库后再写助手消息：
         // 顺序反了会出现"执行记录有、问题没显示"（2026-11-01 实测）。
         let pendingAsk: { question: string; options: string[] } | null = null;
-        const { outcome, images } = await this.runTool(
+        const { outcome, images, contextImages } = await this.runTool(
           port,
           catalog,
           this.knowledge,
@@ -319,6 +360,15 @@ export class RecipeAgentService implements OnModuleInit {
         toolCalls += 1;
 
         await this.recordTool(sessionId, call, outcome);
+
+        // 读不到档案就不要在没有约束的情况下继续设计。
+        if (call.function.name === 'read_design_context' && !outcome.ok) {
+          await this.fail(
+            sessionId,
+            `读取本单设计上下文失败：${outcome.error?.message ?? '未知错误'}`,
+          );
+          return;
+        }
 
         if (call.function.name === 'assess') {
           const signature = assessmentGapSignature(outcome);
@@ -371,6 +421,13 @@ export class RecipeAgentService implements OnModuleInit {
         if (images.length > 0) {
           messages.push(buildKnowledgeImageMessage(images));
         }
+        // 健康档案原件单独作为一条 user 消息：模型按标签把图片和记录对上。
+        // 同一次运行只注入一次，避免模型重读上下文时重复计费。
+        if (contextImages.length > 0 && !designContextImagesInjected) {
+          messages.push(buildDesignContextImageMessage(contextImages));
+          designContextImagesInjected = true;
+          this.logger.log(`注入本单健康档案附件 ${contextImages.length} 张`);
+        }
 
         if (pendingAsk) {
           await this.appendMessage(
@@ -391,12 +448,14 @@ export class RecipeAgentService implements OnModuleInit {
     knowledge: KnowledgeGatewayService,
     call: DeepSeekToolCall,
     onAsk: (question: string, options: string[]) => void,
-  ): Promise<{ outcome: ToolOutcome; images: KnowledgePageImage[] }> {
+  ): Promise<{
+    outcome: ToolOutcome;
+    images: KnowledgePageImage[];
+    contextImages: DesignContextImage[];
+  }> {
     let args: unknown = {};
     try {
-      args = call.function.arguments
-        ? JSON.parse(call.function.arguments)
-        : {};
+      args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
     } catch {
       args = {};
     }
@@ -406,41 +465,43 @@ export class RecipeAgentService implements OnModuleInit {
       knowledge,
       onAsk: (question: string, options: string[]) => onAsk(question, options),
     });
-    return splitReadImages(call.function.name, outcome);
+    const readSplit = splitReadImages(call.function.name, outcome);
+    const contextSplit = splitDesignContextImages(
+      call.function.name,
+      readSplit.outcome,
+    );
+    return {
+      outcome: contextSplit.outcome,
+      images: readSplit.images,
+      contextImages: contextSplit.images,
+    };
   }
 
   /**
    * 组装上下文：
-   *   系统提示词（约 200 字）
-   *   本份食谱的目的（会话第一条用户消息，固定置顶）
+   *   系统提示词（角色、边界、硬约束）
    *   最近的历史（只含用户与助手，不含工具结果）
    *   本轮用户输入
+   *
+   * 2026-11-19：去掉“本份食谱的目的”置顶与第三段流程说明。
+   * 目的不该由第一句话钉死，改由首轮 read_design_context + 对话确认；
+   * 流程规则合并进系统提示词。
    */
   private async buildMessages(
     sessionId: string,
     currentMessage: string,
-    flow: RecipeDesignFlow,
   ): Promise<DeepSeekToolsMessage[]> {
     const rows = await this.prisma.recipeDesignAgentMessage.findMany({
       where: { sessionId, role: { in: ['USER', 'ASSISTANT'] } },
       orderBy: { seq: 'asc' },
     });
 
-    const purpose =
-      rows.find((row) => row.role === 'USER')?.content?.trim() ?? null;
     // 最后一条 USER 就是本轮输入，不再重复放进历史。
     const historyRows = rows.slice(0, -1).slice(-HISTORY_MESSAGES);
 
     const messages: DeepSeekToolsMessage[] = [
       { role: 'system', content: buildSystemPrompt() },
     ];
-    if (purpose) {
-      messages.push({
-        role: 'system',
-        content: `本份食谱的目的：${purpose}`,
-      });
-    }
-    messages.push({ role: 'system', content: flowContext(flow) });
     for (const row of historyRows) {
       messages.push({
         role: row.role === 'USER' ? 'user' : 'assistant',
@@ -479,16 +540,11 @@ export class RecipeAgentService implements OnModuleInit {
     result: unknown,
   ): Promise<void> {
     const parsedArgs = safeParse(call.function.arguments);
-    await this.appendMessage(
-      sessionId,
-      'TOOL',
-      JSON.stringify(result),
-      {
-        toolName: call.function.name,
-        toolArgs: parsedArgs,
-        toolResult: result,
-      },
-    );
+    await this.appendMessage(sessionId, 'TOOL', JSON.stringify(result), {
+      toolName: call.function.name,
+      toolArgs: parsedArgs,
+      toolResult: result,
+    });
     await this.prisma.recipeDesignAgentSession.update({
       where: { id: sessionId },
       data: { stepCount: { increment: 1 } },
@@ -551,19 +607,6 @@ export class RecipeAgentService implements OnModuleInit {
         `（原始错误：${(lastError as Error)?.message ?? '未配置'}）`,
     );
   }
-}
-
-/**
- * 按流程注入的一段上下文。
- *
- * 为什么不写进系统提示词：两条流程要的东西不一样。产品线是通用食谱，
- * 问体重/品种就是多余；定制订单则必须读狗狗档案。写死在一处只会互相打架。
- */
-function flowContext(flow: RecipeDesignFlow): string {
-  if (flow === 'ORDER') {
-    return '这是定制订单食谱：按本单狗狗的过敏、忌口与备注设计，过敏是硬约束。';
-  }
-  return '这是产品线的通用食谱：按生命阶段与营养需求设计，不针对具体某只狗。不要询问或假设体重、年龄、品种、病史、过敏。';
 }
 
 function formatAsk(ask: { question: string; options: string[] }): string {

@@ -142,6 +142,12 @@ import {
   type DogDesignInsight,
 } from '../../domain/recipe-designer/dog-design-insight';
 import { splitAllergyKeywords } from '../../domain/dog/allergy-keywords';
+import {
+  extractAvoidTerms,
+  itemMatchesAvoidTerm,
+} from '../../domain/recipe-designer/avoid-terms';
+import { buildAttachmentList } from './agent/design-context';
+import type { AgentDesignContext } from './agent/design-context.types';
 import { AllergenVocabularyService } from '../health/allergen-vocabulary.service';
 import { IngredientPreparationHistoryService } from '../recipe/ingredient-preparation-history.service';
 import { isPreparationRequiredFoodCategory } from '../../domain/recipe-designer/preparation-field.constants';
@@ -749,10 +755,15 @@ type RemovableSupplementWarning = {
 type DraftAllergenWarning = {
   itemId: string;
   itemName: string;
-  /** 命中的过敏原标准名（走词表）或顾客原文（文字兜底） */
+  /** 命中的过敏原标准名（走词表）、顾客原文或忌口词 */
   allergen: string;
-  /** CONFIRMED = 确诊，WARNING = 可疑/待排查 */
+  /** CONFIRMED = 确诊，WARNING = 可疑/待排查/本单忌口 */
   level: 'CONFIRMED' | 'WARNING';
+  /**
+   * ALLERGY = 医学过敏；AVOID = 本单忌口/不吃（备注、忌口列表、医嘱）。
+   * 两者处理方式不同：过敏是医学约束，忌口是顾客要求。
+   */
+  kind?: 'ALLERGY' | 'AVOID';
   message: string;
 };
 
@@ -2500,7 +2511,11 @@ export class RecipeDesignerService {
      * 清掉的 stale 草稿原本也算在 SQL count 里；分页 total 需要减掉，
      * 否则「只看有草稿」会出现第 N 页是空的。
      */
-    if (query.hasReleaseDraft === true && usePagination && draftMarker.cleared > 0) {
+    if (
+      query.hasReleaseDraft === true &&
+      usePagination &&
+      draftMarker.cleared > 0
+    ) {
       total = await this.prisma.recipeSeries.count({ where });
     }
     const hasMore = usePagination ? page * pageSize < total : false;
@@ -4715,7 +4730,10 @@ export class RecipeDesignerService {
         });
       } else {
         const locked = await tx.recipeSeries.updateMany({
-          where: { id: seriesId, releaseDraftUpdatedAt: expectedDraftUpdatedAt },
+          where: {
+            id: seriesId,
+            releaseDraftUpdatedAt: expectedDraftUpdatedAt,
+          },
           data: seriesUpdateData,
         });
         if (locked.count === 0) {
@@ -7264,7 +7282,9 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ): Promise<ClientDesignRecipeAssessmentResult> {
     const draft = await this.getDraft(id, access);
-    const targets = await this.targetProvider.getTargets(draft.fediafDogScenario);
+    const targets = await this.targetProvider.getTargets(
+      draft.fediafDogScenario,
+    );
     const result = await this.assessLoadedDraft(draft, targets);
     const removableSupplementWarnings = this.buildRemovableSupplementWarnings(
       draft,
@@ -7335,23 +7355,16 @@ export class RecipeDesignerService {
           `目标覆盖 ${override.nutrientKey} 的上下限必须是数字或 null`,
         );
       }
-      if (
-        minValue !== null &&
-        maxValue !== null &&
-        minValue > maxValue
-      ) {
+      if (minValue !== null && maxValue !== null && minValue > maxValue) {
         throw new BadRequestException(
           `目标覆盖 ${override.nutrientKey} 的下限不能大于上限`,
         );
       }
       const desiredBasis =
-        override.basis === 'DM'
-          ? 'PER_100G_DRY_MATTER'
-          : 'PER_1000_KCAL_ME';
+        override.basis === 'DM' ? 'PER_100G_DRY_MATTER' : 'PER_1000_KCAL_ME';
       const base =
-        candidates.find(
-          (target) => target.expressionBasis === desiredBasis,
-        ) ?? candidates[0];
+        candidates.find((target) => target.expressionBasis === desiredBasis) ??
+        candidates[0];
       result.push({
         ...base,
         expressionBasis: desiredBasis,
@@ -7416,7 +7429,7 @@ export class RecipeDesignerService {
     draft: DesignRecipeWithItems,
   ): Promise<DraftAllergenWarning[]> {
     const dogId = (draft as { customerDogId?: string | null }).customerDogId;
-    if (!dogId || !this.allergenVocabulary) {
+    if (!dogId) {
       return [];
     }
 
@@ -7427,13 +7440,10 @@ export class RecipeDesignerService {
         allergyRecords: { select: { allergen: true, certainty: true } },
       },
     });
-    if (!dog) {
-      return [];
-    }
 
     const blocking: string[] = [];
     const warning: string[] = [];
-    for (const record of dog.allergyRecords ?? []) {
+    for (const record of dog?.allergyRecords ?? []) {
       const certainty = String(record.certainty || 'SUSPECTED').toUpperCase();
       if (certainty === 'RULED_OUT') continue;
       const terms = splitAllergyKeywords(record.allergen);
@@ -7443,7 +7453,7 @@ export class RecipeDesignerService {
         warning.push(...terms);
       }
     }
-    warning.push(...splitAllergyKeywords(dog.allergyFoods));
+    warning.push(...splitAllergyKeywords(dog?.allergyFoods));
 
     const blockingSet = new Set(blocking);
     const blockingTerms = Array.from(new Set(blocking.filter(Boolean)));
@@ -7451,34 +7461,87 @@ export class RecipeDesignerService {
       new Set(warning.filter((term) => term && !blockingSet.has(term))),
     );
 
-    if (blockingTerms.length === 0 && warningTerms.length === 0) {
-      return [];
-    }
-
     const warnings: DraftAllergenWarning[] = [];
 
-    for (const item of draft.items) {
-      const itemName = this.resolveIngredientDisplayName(item);
-      if (!itemName) continue;
+    // 1) 医学过敏：只认结构化过敏记录 + 档案里的过敏文本。
+    if (this.allergenVocabulary) {
+      for (const item of draft.items) {
+        const itemName = this.resolveIngredientDisplayName(item);
+        if (!itemName) continue;
 
-      for (const [level, terms] of [
-        ['CONFIRMED', blockingTerms],
-        ['WARNING', warningTerms],
-      ] as const) {
-        const hits = await this.allergenVocabulary.matchIngredients({
-          dogAllergens: terms,
-          ingredientNames: [itemName],
-        });
-        for (const hit of hits) {
+        for (const [level, terms] of [
+          ['CONFIRMED', blockingTerms],
+          ['WARNING', warningTerms],
+        ] as const) {
+          const hits = await this.allergenVocabulary.matchIngredients({
+            dogAllergens: terms,
+            ingredientNames: [itemName],
+          });
+          for (const hit of hits) {
+            warnings.push({
+              itemId: item.id,
+              itemName,
+              allergen: hit.allergen,
+              level,
+              kind: 'ALLERGY',
+              message:
+                level === 'CONFIRMED'
+                  ? `「${itemName}」含确诊过敏原「${hit.allergen}」，请确认是否保留`
+                  : `「${itemName}」含需注意的过敏原「${hit.allergen}」（可疑/待排查），请与顾客确认`,
+            });
+          }
+        }
+      }
+    }
+
+    // 2) 本单忌口：订单备注、忌口列表、订单过敏原文、最近一次医嘱。
+    //    这些不是医学过敏，但顾客明确说了“不吃”，必须作为提醒落到配方上。
+    const orderId = (draft as any)?.series?.orderId ?? null;
+    const order = orderId
+      ? await this.prisma.customRecipeOrder.findUnique({
+          where: { id: orderId },
+          select: {
+            allergyText: true,
+            additionalNotes: true,
+            dislikedIngredients: true,
+            allergies: true,
+          },
+        })
+      : null;
+    const latestMedical = await this.prisma.medicalRecord.findFirst({
+      where: { dogId },
+      orderBy: { visitDate: 'desc' },
+      select: { treatment: true },
+    });
+    const avoidTerms = extractAvoidTerms([
+      order?.allergyText,
+      order?.additionalNotes,
+      ...(order?.dislikedIngredients ?? []),
+      ...(order?.allergies ?? []),
+      latestMedical?.treatment,
+    ]);
+
+    if (avoidTerms.length > 0) {
+      const seen = new Set(
+        warnings.map(
+          (item) => `${item.itemId}:${item.allergen}:${item.kind ?? 'ALLERGY'}`,
+        ),
+      );
+      for (const item of draft.items) {
+        const itemName = this.resolveIngredientDisplayName(item);
+        if (!itemName) continue;
+        for (const term of avoidTerms) {
+          if (!itemMatchesAvoidTerm(itemName, term)) continue;
+          const key = `${item.id}:${term}:AVOID`;
+          if (seen.has(key)) continue;
+          seen.add(key);
           warnings.push({
             itemId: item.id,
             itemName,
-            allergen: hit.allergen,
-            level,
-            message:
-              level === 'CONFIRMED'
-                ? `「${itemName}」含确诊过敏原「${hit.allergen}」，请确认是否保留`
-                : `「${itemName}」含需注意的过敏原「${hit.allergen}」（可疑/待排查），请与顾客确认`,
+            allergen: term,
+            level: 'WARNING',
+            kind: 'AVOID',
+            message: `「${itemName}」触及本单忌口「${term}」，请确认是否保留`,
           });
         }
       }
@@ -8436,12 +8499,12 @@ export class RecipeDesignerService {
           item.supplementAlternatives.length > 0
             ? {
                 supplementAlternatives: {
-                  create: (
-                    item.supplementAlternatives as string[]
-                  ).map((alternativeIngredientId, index) => ({
-                    alternativeIngredientId,
-                    sortOrder: index,
-                  })),
+                  create: (item.supplementAlternatives as string[]).map(
+                    (alternativeIngredientId, index) => ({
+                      alternativeIngredientId,
+                      sortOrder: index,
+                    }),
+                  ),
                 },
               }
             : {}),
@@ -8765,10 +8828,7 @@ export class RecipeDesignerService {
 
       result.set(
         item.id,
-        await this.resolvePublishedSupplementTargetsForItem(
-          item,
-          foodWeightG,
-        ),
+        await this.resolvePublishedSupplementTargetsForItem(item, foodWeightG),
       );
     }
 
@@ -9507,8 +9567,7 @@ export class RecipeDesignerService {
      */
     const canonical =
       drafts.find(
-        (item) =>
-          item.seriesLifeStage === RecipeLifeStage.HIGH_ACTIVITY_ADULT,
+        (item) => item.seriesLifeStage === RecipeLifeStage.HIGH_ACTIVITY_ADULT,
       ) ??
       drafts.find((item) => Boolean(item.publishedRecipeId)) ??
       drafts[0];
@@ -9516,7 +9575,9 @@ export class RecipeDesignerService {
 
     const foodItems = draft.items
       .filter((item) => this.isItemIncludedInAssessment(item))
-      .filter((item) => this.resolveIngredientType(item) === IngredientType.FOOD)
+      .filter(
+        (item) => this.resolveIngredientType(item) === IngredientType.FOOD,
+      )
       .map((item) => ({
         name: this.resolveIngredientDisplayName(item),
         ratio: item.ratioPercent ?? null,
@@ -11486,7 +11547,8 @@ export class RecipeDesignerService {
           order.deliveries[0].recipeId === order.recipe?.id
             ? order.deliveries[0]
             : null;
-        const snapshot = batchItem?.contentSnapshot ?? legacyDelivery?.contentSnapshot;
+        const snapshot =
+          batchItem?.contentSnapshot ?? legacyDelivery?.contentSnapshot;
         return {
           ...order,
           deliveredSnapshot: snapshot
@@ -11756,6 +11818,465 @@ export class RecipeDesignerService {
   ): Promise<DogDesignInsight['historyRecipes']> {
     const insight = await this.getDogDesignInsight(dogId, access);
     return insight.historyRecipes ?? [];
+  }
+
+  /**
+   * 本单设计上下文（食谱设计 Agent 的 `read_design_context`，2026-11-19）。
+   *
+   * 解决的问题：Agent 过去只读草稿摘要，摘要里没有订单号、狗狗 id，
+   * 也没有健康档案；模型只能得出“系统里拿不到档案”，转而让用户手抄。
+   *
+   * 这里按**当前草稿的绑定关系**取：草稿 → 系列 → 订单 → 狗狗 →
+   * 全部就诊/体检/过敏/体重记录与附件。不接受外部 dogId/orderId 参数，
+   * 避免模型读错单、读错狗。
+   *
+   * 只做数据搬运：不评审、不判断、不删减矛盾。档案是主人填写/上传的，
+   * 矛盾与缺失原样交给模型和设计师。
+   */
+  async getAgentDesignContext(
+    draftId: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<AgentDesignContext> {
+    const draft = (await this.getDraft(draftId, access)) as any;
+    const series = draft?.series ?? null;
+    const mode: AgentDesignContext['mode'] =
+      series?.designMode === 'ORDER' ? 'ORDER' : 'CATALOG';
+    const customerDogId: string | null = draft?.customerDogId ?? null;
+    const orderRow = series?.orderId
+      ? ((await this.prisma.customRecipeOrder.findUnique({
+          where: { id: series.orderId },
+          select: {
+            id: true,
+            orderId: true,
+            dogId: true,
+            status: true,
+            recipeQuantity: true,
+            targetGoal: true,
+            needsHealthManagement: true,
+            additionalNotes: true,
+            allergies: true,
+            allergyText: true,
+            allergyStatus: true,
+            medicalConditions: true,
+            preferredIngredients: true,
+            dislikedIngredients: true,
+            currentFoodMain: true,
+            currentFoodOther: true,
+            changeReasons: true,
+            changeReasonOther: true,
+            stomachConditions: true,
+            stomachOther: true,
+            requestedProteinCodes: true,
+          },
+        })) as any)
+      : null;
+
+    const order: AgentDesignContext['order'] = orderRow
+      ? {
+          orderNo: orderRow.orderId || orderRow.id,
+          status: String(orderRow.status),
+          quantity: Number(orderRow.recipeQuantity ?? 1),
+          targetGoal: String(orderRow.targetGoal),
+          needsHealthManagement: Boolean(orderRow.needsHealthManagement),
+          notes: orderRow.additionalNotes ?? null,
+          allergies: orderRow.allergies ?? [],
+          allergyText: orderRow.allergyText ?? null,
+          allergyStatus: String(orderRow.allergyStatus),
+          medicalConditions: orderRow.medicalConditions ?? [],
+          preferredIngredients: orderRow.preferredIngredients ?? [],
+          dislikedIngredients: orderRow.dislikedIngredients ?? [],
+          currentFoodMain: orderRow.currentFoodMain ?? null,
+          currentFoodOther: orderRow.currentFoodOther ?? null,
+          changeReasons: (orderRow.changeReasons ?? []).map((value: any) =>
+            String(value),
+          ),
+          changeReasonOther: orderRow.changeReasonOther ?? null,
+          stomachConditions: (orderRow.stomachConditions ?? []).map(
+            (value: any) => String(value),
+          ),
+          stomachOther: orderRow.stomachOther ?? null,
+          requestedProteinCodes: (orderRow.requestedProteinCodes ?? []).map(
+            (value: any) => String(value),
+          ),
+        }
+      : null;
+
+    const missing: string[] = [];
+    let unavailableReason: string | null = null;
+    if (mode === 'ORDER') {
+      if (!series?.orderId) {
+        unavailableReason = '订单定制草稿缺少订单号，请人工核对后再设计。';
+      } else if (!order) {
+        unavailableReason = '订单不存在或已删除，请人工核对后再设计。';
+      }
+    }
+
+    const dogId: string | null = orderRow?.dogId ?? customerDogId;
+    const dogRow =
+      mode === 'ORDER' && dogId
+        ? ((await this.prisma.dog.findUnique({
+            where: { id: dogId },
+            select: {
+              name: true,
+              breedId: true,
+              customBreedName: true,
+              birthday: true,
+              gender: true,
+              isNeutered: true,
+              currentWeightKg: true,
+              weightUpdatedAt: true,
+              bcsScore: true,
+              bcsScoreConfirmedAt: true,
+              activityLevel: true,
+              mealsPerDay: true,
+              medicalHistory: true,
+              allergyFoods: true,
+              pickyFoods: true,
+              preferredFoods: true,
+              healthTagOverrides: true,
+            },
+          })) as any)
+        : null;
+
+    if (mode === 'ORDER') {
+      if (!dogId) {
+        unavailableReason =
+          unavailableReason || '订单没有绑定狗狗，请人工核对后再设计。';
+      } else if (!dogRow) {
+        unavailableReason =
+          unavailableReason || '订单绑定的狗狗档案不存在，请人工核对后再设计。';
+      }
+    }
+
+    const breedRow = dogRow?.breedId
+      ? await this.prisma.dogBreed.findUnique({
+          where: { id: dogRow.breedId },
+          select: { name: true },
+        })
+      : null;
+
+    const dog: AgentDesignContext['dog'] = dogRow
+      ? {
+          name: dogRow.name,
+          breedName: breedRow?.name ?? dogRow.customBreedName ?? null,
+          birthday: toIsoDateText(dogRow.birthday),
+          ageMonths: monthsSince(dogRow.birthday),
+          gender: dogRow.gender ? String(dogRow.gender) : null,
+          neutered: dogRow.isNeutered ?? null,
+          currentWeightKg: Number.isFinite(dogRow.currentWeightKg)
+            ? Number(dogRow.currentWeightKg)
+            : null,
+          weightUpdatedAt: toIsoDateTimeText(dogRow.weightUpdatedAt),
+          bcsScore: dogRow.bcsScore ?? null,
+          bcsScoreConfirmedAt: toIsoDateTimeText(dogRow.bcsScoreConfirmedAt),
+          activityLevel: dogRow.activityLevel
+            ? String(dogRow.activityLevel)
+            : null,
+          mealsPerDay: dogRow.mealsPerDay ?? null,
+          medicalHistory: dogRow.medicalHistory ?? null,
+          allergyFoods: dogRow.allergyFoods ?? null,
+          pickyFoods: dogRow.pickyFoods ?? null,
+          preferredFoods: dogRow.preferredFoods ?? null,
+          healthTagOverrides: dogRow.healthTagOverrides ?? null,
+        }
+      : null;
+
+    const attachments: AgentDesignContext['attachments'] = [];
+    const takeAttachments = (
+      recordType: 'MEDICAL' | 'CHECKUP' | 'ALLERGY',
+      recordId: string,
+      recordDate: string | null,
+      urls: string[] | null | undefined,
+    ): string[] => {
+      const list = buildAttachmentList(
+        recordType,
+        recordId,
+        recordDate,
+        urls,
+      ).map((item) => ({
+        ...item,
+        url: this.resolveAgentAttachmentUrl(item.url),
+      }));
+      attachments.push(...list);
+      return list.map((item) => item.id);
+    };
+
+    const medicalRows =
+      mode === 'ORDER' && dogId
+        ? await this.prisma.medicalRecord.findMany({
+            where: { dogId },
+            orderBy: { visitDate: 'desc' },
+            select: {
+              id: true,
+              visitDate: true,
+              chiefComplaint: true,
+              diagnosis: true,
+              status: true,
+              labValues: true,
+              treatment: true,
+              exams: true,
+              vitals: true,
+              medications: true,
+              followUpDate: true,
+              notes: true,
+              attachments: true,
+            },
+          })
+        : [];
+    const medicalRecords: AgentDesignContext['medicalRecords'] =
+      medicalRows.map((row: any) => {
+        const visitDate = toIsoDateText(row.visitDate);
+        return {
+          id: row.id,
+          visitDate,
+          chiefComplaint: row.chiefComplaint ?? '',
+          diagnosis: row.diagnosis ?? '',
+          status: String(row.status ?? ''),
+          labValues: row.labValues ?? null,
+          treatment: row.treatment ?? null,
+          exams: row.exams ?? null,
+          vitals: row.vitals ?? null,
+          medications: (row.medications ?? []).map((value: any) =>
+            String(value),
+          ),
+          followUpDate: toIsoDateText(row.followUpDate),
+          notes: row.notes ?? null,
+          attachmentIds: takeAttachments(
+            'MEDICAL',
+            row.id,
+            visitDate,
+            row.attachments,
+          ),
+        };
+      });
+
+    const checkupRows =
+      mode === 'ORDER' && dogId
+        ? await this.prisma.checkupRecord.findMany({
+            where: { dogId },
+            orderBy: { checkupDate: 'desc' },
+            select: {
+              id: true,
+              checkupDate: true,
+              checkupType: true,
+              findings: true,
+              labValues: true,
+              recommendations: true,
+              notes: true,
+              attachments: true,
+            },
+          })
+        : [];
+    const checkupRecords: AgentDesignContext['checkupRecords'] =
+      checkupRows.map((row: any) => {
+        const checkupDate = toIsoDateText(row.checkupDate);
+        return {
+          id: row.id,
+          checkupDate,
+          checkupType: row.checkupType ?? '',
+          findings: row.findings ?? null,
+          labValues: row.labValues ?? null,
+          recommendations: row.recommendations ?? null,
+          notes: row.notes ?? null,
+          attachmentIds: takeAttachments(
+            'CHECKUP',
+            row.id,
+            checkupDate,
+            row.attachments,
+          ),
+        };
+      });
+
+    const allergyRows =
+      mode === 'ORDER' && dogId
+        ? await this.prisma.allergyRecord.findMany({
+            where: { dogId },
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              allergen: true,
+              certainty: true,
+              source: true,
+              notes: true,
+              observedAt: true,
+              attachments: true,
+            },
+          })
+        : [];
+    const allergyRecords: AgentDesignContext['allergyRecords'] =
+      allergyRows.map((row: any) => {
+        const observedAt = toIsoDateText(row.observedAt);
+        return {
+          id: row.id,
+          allergen: row.allergen ?? '',
+          certainty: String(row.certainty ?? ''),
+          source: String(row.source ?? ''),
+          notes: row.notes ?? null,
+          observedAt,
+          attachmentIds: takeAttachments(
+            'ALLERGY',
+            row.id,
+            observedAt,
+            row.attachments,
+          ),
+        };
+      });
+
+    const allergyReportRows =
+      mode === 'ORDER' && dogId
+        ? await this.prisma.allergyReport.findMany({
+            where: { dogId },
+            orderBy: { testDate: 'desc' },
+            select: {
+              id: true,
+              testDate: true,
+              testMethod: true,
+              institution: true,
+              summary: true,
+              ocrText: true,
+              attachments: true,
+            },
+          })
+        : [];
+    const allergyReports: AgentDesignContext['allergyReports'] =
+      allergyReportRows.map((row: any) => {
+        const testDate = toIsoDateText(row.testDate);
+        return {
+          id: row.id,
+          testDate,
+          testMethod: String(row.testMethod ?? ''),
+          institution: row.institution ?? null,
+          summary: row.summary ?? null,
+          ocrText: row.ocrText ?? null,
+          attachmentIds: takeAttachments(
+            'ALLERGY',
+            row.id,
+            testDate,
+            row.attachments,
+          ),
+        };
+      });
+
+    const weightRows =
+      mode === 'ORDER' && dogId
+        ? await this.prisma.weightRecord.findMany({
+            where: { dogId },
+            orderBy: { recordDate: 'desc' },
+            select: { recordDate: true, weightKg: true, note: true },
+          })
+        : [];
+    const weightRecords: AgentDesignContext['weightRecords'] = weightRows.map(
+      (row: any) => ({
+        recordDate: toIsoDateText(row.recordDate),
+        weightKg: Number(row.weightKg ?? 0),
+        note: row.note ?? null,
+      }),
+    );
+
+    const weightPlanRow =
+      mode === 'ORDER' && dogId
+        ? ((await this.prisma.weightGoalPlan.findFirst({
+            where: {
+              dogId,
+              status: { in: ['ACTIVE', 'PAUSED', 'MAINTENANCE'] as any },
+            },
+            orderBy: { startDate: 'desc' },
+            select: {
+              direction: true,
+              status: true,
+              startWeightKg: true,
+              startBcsScore: true,
+              targetWeightKg: true,
+              currentKcal: true,
+              floorKcal: true,
+              ceilingKcal: true,
+              startDate: true,
+              estimatedGoalDate: true,
+            },
+          })) as any)
+        : null;
+    const weightGoalPlan: AgentDesignContext['weightGoalPlan'] = weightPlanRow
+      ? {
+          direction: String(weightPlanRow.direction),
+          status: String(weightPlanRow.status),
+          startWeightKg: Number(weightPlanRow.startWeightKg ?? 0),
+          startBcsScore: Number(weightPlanRow.startBcsScore ?? 0),
+          targetWeightKg: Number(weightPlanRow.targetWeightKg ?? 0),
+          currentKcal: Number(weightPlanRow.currentKcal ?? 0),
+          floorKcal: Number(weightPlanRow.floorKcal ?? 0),
+          ceilingKcal: Number(weightPlanRow.ceilingKcal ?? 0),
+          startDate: toIsoDateText(weightPlanRow.startDate),
+          estimatedGoalDate: toIsoDateText(weightPlanRow.estimatedGoalDate),
+        }
+      : null;
+
+    const dietRows =
+      mode === 'ORDER' && dogId
+        ? await this.prisma.dogDietPreference.findMany({
+            where: { dogId },
+            select: { kind: true, foodName: true },
+          })
+        : [];
+    const dietPreferences = {
+      liked: dietRows
+        .filter((row: any) => String(row.kind) === 'LIKED')
+        .map((row: any) => String(row.foodName)),
+      disliked: dietRows
+        .filter((row: any) => String(row.kind) === 'DISLIKED')
+        .map((row: any) => String(row.foodName)),
+    };
+
+    if (mode === 'ORDER') {
+      if (medicalRecords.length === 0) missing.push('就诊记录');
+      if (checkupRecords.length === 0) missing.push('体检记录');
+      if (allergyRecords.length === 0 && allergyReports.length === 0)
+        missing.push('过敏记录');
+      if (weightRecords.length === 0) missing.push('体重记录');
+    }
+
+    return {
+      mode,
+      order,
+      dog,
+      medicalRecords,
+      checkupRecords,
+      allergyRecords,
+      allergyReports,
+      weightRecords,
+      weightGoalPlan,
+      dietPreferences,
+      attachments,
+      counts: {
+        medicalRecords: medicalRecords.length,
+        checkupRecords: checkupRecords.length,
+        allergyRecords: allergyRecords.length,
+        allergyReports: allergyReports.length,
+        weightRecords: weightRecords.length,
+        attachments: attachments.length,
+        images: attachments.filter((item) => item.kind === 'IMAGE').length,
+      },
+      missing,
+      unavailableReason,
+    };
+  }
+
+  /**
+   * 给 Agent 的原件地址：完整 URL 直接用；COS key 换成短时签名 URL。
+   *
+   * 为什么不一律签名：老数据里已经存了公开 URL，重复签名只会多一层参数；
+   * 新数据/历史 key 则必须签名，否则模型拿到的是一串无法下载的对象 key。
+   */
+  private resolveAgentAttachmentUrl(url: string): string {
+    if (/^https?:\/\//i.test(url)) {
+      return url;
+    }
+    const cosService = this.cosService as
+      | { getSensitiveMediaUrl?: (value: string) => string }
+      | undefined;
+    if (cosService && typeof cosService.getSensitiveMediaUrl === 'function') {
+      return cosService.getSensitiveMediaUrl(url) || url;
+    }
+    return url;
   }
 
   /**
@@ -12303,4 +12824,37 @@ export function parseHealthTagOverrides(value: unknown): {
     added: toStringList(source.added),
     removed: toStringList(source.removed),
   };
+}
+
+/** 统一成 yyyy-mm-dd；空值返回 null。 */
+function toIsoDateText(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+/** 统一成完整 ISO 时间；空值返回 null。 */
+function toIsoDateTimeText(
+  value: Date | string | null | undefined,
+): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+/** 生日 → 月龄（按自然月，未到生日当天不算一个月）。 */
+function monthsSince(
+  birthday: Date | string | null | undefined,
+): number | null {
+  if (!birthday) return null;
+  const date = birthday instanceof Date ? birthday : new Date(birthday);
+  if (Number.isNaN(date.getTime())) return null;
+  const now = new Date();
+  let months =
+    (now.getFullYear() - date.getFullYear()) * 12 +
+    (now.getMonth() - date.getMonth());
+  if (now.getDate() < date.getDate()) months -= 1;
+  return Math.max(0, months);
 }

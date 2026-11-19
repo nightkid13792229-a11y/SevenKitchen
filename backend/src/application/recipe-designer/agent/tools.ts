@@ -1,6 +1,7 @@
 /**
- * 10 个工具（2026-10-31 重建；2026-11-11 移除旧知识库检索/引用工具；
- * 2026-11-12 接入知识库 v3 的 catalog / find / read）。
+ * 11 个工具（2026-10-31 重建；2026-11-11 移除旧知识库检索/引用工具；
+ * 2026-11-12 接入知识库 v3 的 catalog / find / read；
+ * 2026-11-19 增加 read_design_context，首轮强制调用）。
  *
  * 原则：工具的数量和返回体积，就是模型的"操作规程"。
  * 所以不加"你必须先…"的说明，而是让工具本身只回这一步需要的东西。
@@ -14,6 +15,7 @@ import {
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
 import { summarizeKnowledgeOutcome } from './knowledge-tool-bridge';
+import { summarizeDesignContext } from './design-context';
 import {
   AgentToolError,
   fail,
@@ -33,9 +35,18 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'read_design_context',
+      description:
+        '读本单设计上下文：设计路径（产品线/订单定制）、订单问卷、狗狗档案、全部就诊/体检/过敏/体重记录与附件。每次开始设计前先读。只读当前草稿绑定的订单与狗狗，不接受 dogId/orderId 参数。',
+      parameters: NO_ARGS,
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'read_draft',
       description:
-        '读当前草稿：名称、阶段、现有原料与克数、上次评估是否最新。需要看现有配方或阶段时读；草稿是空的就不用读。',
+        '读当前草稿：名称、阶段、现有原料与克数、上次评估是否最新、上次评估的缺口与过敏/忌口提示。第一步先读；即使新建草稿也要读，用来确认是否为空。',
       parameters: NO_ARGS,
     },
   },
@@ -79,10 +90,15 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
       parameters: {
         type: 'object',
         properties: {
-          search: { type: 'string', description: '关键词，如「鸭肉」「南瓜」；按营养素找时可只传 nutrientKey' },
+          search: {
+            type: 'string',
+            description:
+              '关键词，如「鸭肉」「南瓜」；按营养素找时可只传 nutrientKey',
+          },
           nutrientKey: {
             type: 'string',
-            description: '可选：按营养素找，如 magnesium / iron / zinc / iodine / chloride / vitaminD',
+            description:
+              '可选：按营养素找，如 magnesium / iron / zinc / iodine / chloride / vitaminD',
           },
           limit: { type: 'integer', minimum: 1, maximum: 20 },
         },
@@ -199,6 +215,11 @@ export async function executeTool(
 
   try {
     switch (name) {
+      case 'read_design_context': {
+        const designContext = await context.port.readDesignContext();
+        return ok(designContext, summarizeDesignContext(designContext));
+      }
+
       case 'read_draft': {
         const summary = await context.port.readDraft();
         return ok(summary, summarizeDraft(summary));
@@ -219,9 +240,7 @@ export async function executeTool(
         const search =
           typeof args.search === 'string' ? args.search.trim() : '';
         const nutrientKey =
-          typeof args.nutrientKey === 'string'
-            ? args.nutrientKey.trim()
-            : '';
+          typeof args.nutrientKey === 'string' ? args.nutrientKey.trim() : '';
         if (!search && !nutrientKey) {
           return fail('INVALID_ARGUMENT', 'search 或 nutrientKey 至少给一个');
         }
@@ -323,7 +342,9 @@ export async function executeTool(
         });
         return ok(
           changed,
-          changed.length === 0 ? '没有需要写的内容' : `已写：${changed.join('、')}`,
+          changed.length === 0
+            ? '没有需要写的内容'
+            : `已写：${changed.join('、')}`,
         );
       }
 
@@ -333,7 +354,9 @@ export async function executeTool(
           return fail('INVALID_ARGUMENT', 'question 不能为空');
         }
         const options = Array.isArray(args.options)
-          ? args.options.filter((item): item is string => typeof item === 'string')
+          ? args.options.filter(
+              (item): item is string => typeof item === 'string',
+            )
           : [];
         context.onAsk(question, options);
         return ok({ question, options }, `已向用户提问：${question}`);
@@ -436,7 +459,9 @@ function summarizeTaxonomy(result: unknown): string {
       0,
     );
     return `${value.kinds.length} 个分类，共挂 ${totalSeries} 道：${value.kinds
-      .map((kind) => `${kind.name} ${kind.nodeCount} 节点/${kind.seriesCount} 道`)
+      .map(
+        (kind) => `${kind.name} ${kind.nodeCount} 节点/${kind.seriesCount} 道`,
+      )
       .join('；')}`;
   }
   if ((value as { matches?: unknown[] }).matches) {
@@ -459,14 +484,19 @@ function summarizeDraft(summary: {
   itemCount: number;
   totalWeightG: number;
   scenario: string;
-  lastAssessment: { isCompliant: boolean; stale: boolean } | null;
+  lastAssessment: {
+    isCompliant: boolean;
+    stale: boolean;
+    gaps?: Array<{ label: string }>;
+  } | null;
 }): string {
-  const assessment = summary.lastAssessment
-    ? summary.lastAssessment.stale
+  const stored = summary.lastAssessment;
+  const assessment = stored
+    ? stored.stale
       ? '上次评估已过期'
-      : summary.lastAssessment.isCompliant
+      : stored.isCompliant
         ? '上次评估达标'
-        : '上次评估未达标'
+        : `上次评估未达标${stored.gaps?.length ? `（缺口 ${stored.gaps.length} 项，见 lastAssessment.gaps）` : ''}`
     : '还没评估过';
   return `${summary.name || '未命名'}：${summary.scenario}，${summary.itemCount} 项原料、共 ${Math.round(
     summary.totalWeightG,
@@ -491,6 +521,7 @@ function summarizeAssessment(summary: {
     totalItemCount: number;
   }>;
   allergens: string[];
+  warnings?: Array<{ allergen: string; kind: 'ALLERGY' | 'AVOID' }>;
 }): string {
   const parts = [
     summary.isCompliant ? '达标' : '未达标',
@@ -501,16 +532,13 @@ function summarizeAssessment(summary: {
       `主要缺口：${summary.gaps
         .map((gap) => {
           const unit = gap.unit ? ` ${gap.unit}` : '';
-          const actual =
-            gap.value == null ? '未知' : `${gap.value}${unit}`;
+          const actual = gap.value == null ? '未知' : `${gap.value}${unit}`;
           const target =
             gap.min == null && gap.max == null
               ? ''
               : `（目标 ${gap.min ?? '?'}–${gap.max ?? '?'}${unit}）`;
           const deficit =
-            gap.deficit == null
-              ? ''
-              : `，还差 ${gap.deficit}${unit}`;
+            gap.deficit == null ? '' : `，还差 ${gap.deficit}${unit}`;
           const dose = gap.doseGuidance ? `；${gap.doseGuidance}` : '';
           return `${gap.label} ${actual}${target}${deficit}${dose}`;
         })
@@ -527,7 +555,28 @@ function summarizeAssessment(summary: {
         .join('、')}`,
     );
   }
-  if (summary.allergens.length > 0) {
+  if (summary.warnings && summary.warnings.length > 0) {
+    const allergyHits = [
+      ...new Set(
+        summary.warnings
+          .filter((warning) => warning.kind !== 'AVOID')
+          .map((warning) => warning.allergen),
+      ),
+    ];
+    const avoidHits = [
+      ...new Set(
+        summary.warnings
+          .filter((warning) => warning.kind === 'AVOID')
+          .map((warning) => warning.allergen),
+      ),
+    ];
+    if (allergyHits.length > 0) {
+      parts.push(`⚠ 命中过敏原：${allergyHits.join('、')}`);
+    }
+    if (avoidHits.length > 0) {
+      parts.push(`⚠ 触及本单忌口：${avoidHits.join('、')}`);
+    }
+  } else if (summary.allergens.length > 0) {
     parts.push(`⚠ 命中过敏原：${summary.allergens.join('、')}`);
   }
   return parts.join('；');

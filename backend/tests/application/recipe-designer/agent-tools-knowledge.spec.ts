@@ -28,9 +28,10 @@ describe('agent tools: knowledge v3', () => {
     };
   });
 
-  it('appends exactly the 3 knowledge tools to the 7 recipe tools', () => {
-    expect(AGENT_TOOLS).toHaveLength(10);
+  it('appends exactly the 3 knowledge tools to the 8 recipe tools', () => {
+    expect(AGENT_TOOLS).toHaveLength(11);
     expect(AGENT_TOOLS.map((tool) => tool.function.name)).toEqual([
+      'read_design_context',
       'read_draft',
       'read_taxonomy',
       'find_food',
@@ -42,6 +43,45 @@ describe('agent tools: knowledge v3', () => {
       'kb_find',
       'kb_read',
     ]);
+  });
+
+  it('reads the design context through the draft port', async () => {
+    const designContext = {
+      mode: 'CATALOG',
+      order: null,
+      dog: null,
+      medicalRecords: [],
+      checkupRecords: [],
+      allergyRecords: [],
+      allergyReports: [],
+      weightRecords: [],
+      weightGoalPlan: null,
+      dietPreferences: { liked: [], disliked: [] },
+      attachments: [],
+      counts: {
+        medicalRecords: 0,
+        checkupRecords: 0,
+        allergyRecords: 0,
+        allergyReports: 0,
+        weightRecords: 0,
+        attachments: 0,
+        images: 0,
+      },
+      missing: [],
+      unavailableReason: null,
+    };
+    const readDesignContext = jest.fn().mockResolvedValue(designContext);
+    const port = { readDesignContext } as unknown as RecipeDraftPort;
+
+    const result = await executeTool('read_design_context', {}, {
+      ...context,
+      port,
+    });
+
+    expect(readDesignContext).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(true);
+    expect(result.data).toEqual(designContext);
+    expect(result.summary).toContain('产品线设计');
   });
 
   it('maps a successful kb_find to ok(data, summary)', async () => {

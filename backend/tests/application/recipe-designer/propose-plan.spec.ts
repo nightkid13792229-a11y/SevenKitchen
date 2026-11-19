@@ -6,7 +6,6 @@ import {
 
 const plan = {
   summary: '低脂维持，控钠',
-  energyKcal: 213,
   mealsPerDay: 3,
   constraints: [
     {
@@ -37,9 +36,11 @@ const plan = {
 };
 
 describe('propose_plan normalization', () => {
-  it('normalizes a valid plan and keeps citation/source', () => {
+  it('normalizes a valid plan without a daily calorie target', () => {
     const normalized = normalizePlan(plan);
 
+    expect(normalized).not.toHaveProperty('energyKcal');
+    expect(normalized.mealsPerDay).toBe(3);
     expect(normalized.constraints).toHaveLength(2);
     expect(normalized.constraints[0]).toMatchObject({
       key: 'fat',
@@ -51,10 +52,27 @@ describe('propose_plan normalization', () => {
     expect(summarizePlan(normalized)).toContain('方案待确认');
   });
 
+  it('accepts an energy-density constraint instead of total calories', () => {
+    const normalized = normalizePlan({
+      summary: '减重期控制能量密度',
+      constraints: [
+        {
+          key: 'energyDensity',
+          label: '能量密度',
+          max: 120,
+          unit: 'KCAL_PER_100G',
+          source: 'Vet plan',
+          hard: true,
+        },
+      ],
+    });
+    expect(normalized.constraints[0].unit).toBe('KCAL_PER_100G');
+  });
+
   it('rejects an empty constraint list', () => {
-    expect(() =>
-      normalizePlan({ ...plan, constraints: [] }),
-    ).toThrow('constraints 不能为空');
+    expect(() => normalizePlan({ ...plan, constraints: [] })).toThrow(
+      'constraints 不能为空',
+    );
   });
 
   it('rejects a constraint whose min is greater than max', () => {

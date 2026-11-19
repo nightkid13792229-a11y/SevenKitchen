@@ -178,12 +178,14 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
 export function normalizePlan(raw: unknown): AgentNutritionPlan {
   const input = isRecord(raw) ? raw : {};
   const summary = readText(input.summary, 'summary', 4000);
-  const energyKcal = Number(input.energyKcal);
-  if (!Number.isFinite(energyKcal) || energyKcal <= 0) {
-    throw new AgentToolError('INVALID_ARGUMENT', 'energyKcal 必须是正数');
-  }
-  const mealsPerDay = Number(input.mealsPerDay);
-  if (!Number.isInteger(mealsPerDay) || mealsPerDay < 1 || mealsPerDay > 6) {
+  const mealsPerDay =
+    input.mealsPerDay === undefined || input.mealsPerDay === null
+      ? undefined
+      : Number(input.mealsPerDay);
+  if (
+    mealsPerDay !== undefined &&
+    (!Number.isInteger(mealsPerDay) || mealsPerDay < 1 || mealsPerDay > 6)
+  ) {
     throw new AgentToolError(
       'INVALID_ARGUMENT',
       'mealsPerDay 必须是 1–6 的整数',

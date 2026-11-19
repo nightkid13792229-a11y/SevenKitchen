@@ -56,11 +56,8 @@
       <div v-if="session?.phase === 'PLAN' && session.plan" class="agent-plan">
         <div class="agent-plan__title">营养方案（待确认）</div>
         <div class="agent-plan__summary">{{ session.plan.summary }}</div>
-        <div class="agent-plan__meta">
-          目标能量 {{ session.plan.energyKcal }} kcal/天，{{
-            session.plan.mealsPerDay
-          }}
-          餐/天
+        <div v-if="session.plan.mealsPerDay" class="agent-plan__meta">
+          每日 {{ session.plan.mealsPerDay }} 餐
         </div>
         <table class="agent-plan__table">
           <thead>

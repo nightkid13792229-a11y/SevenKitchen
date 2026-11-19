@@ -36,6 +36,24 @@ describe('plan synthesis fallback context', () => {
     expect(digest).toContain('粗蛋白 ≥18% DM');
   });
 
+  it('puts key clinical pages before unrelated pages and lists what was read', () => {
+    const digest = buildEvidenceDigest([
+      toolMessage({
+        documentId: 'misc-doc',
+        pages: [{ pageNo: 1, text: 'general feeding notes' }],
+      }),
+      toolMessage({
+        documentId: 'sacn5-chapters-SACN5-67',
+        pages: [{ pageNo: 5, text: '犬胰腺炎 脂肪 ≤15% DM，蛋白 15–30% DM' }],
+      }),
+    ]);
+
+    expect(digest).toContain('本次读过的文档/页码');
+    expect(digest.indexOf('【sacn5-chapters-SACN5-67 p5】')).toBeLessThan(
+      digest.indexOf('【misc-doc p1】'),
+    );
+  });
+
   it('deduplicates the same page and respects the char cap', () => {
     const page = {
       documentId: 'doc',

@@ -24,8 +24,8 @@ const READ_TOOLS = new Set([
 
 /** 方案/选材阶段的工具预算；必须大于下面的强制提交阈值。 */
 export const PHASE_TOOL_BUDGET = {
-  PLAN: 40,
-  SELECT: 40,
+  PLAN: 60,
+  SELECT: 60,
 } as const;
 
 const PROPOSE_TOOLS = new Set(['propose_plan', 'propose_selection']);
@@ -64,7 +64,7 @@ export function forceProposeToolFor(
 /** 给模型的一段阶段说明；很短，不重复系统提示词里的规则。 */
 export function phaseSystemLine(phase: AgentPhase): string {
   if (phase === 'PLAN') {
-    return '当前阶段：方案确认。只读档案和知识库，产出营养方案与可执行约束；用 propose_plan 提交，等用户确认。不要改配方。0 命中就换词或换文档，不要重复原查询；每类约束找到一处来源即可，证据不足的标待确认；方案优先于穷尽检索。方案阶段不查药物/补剂的 mg/kg 剂量。';
+    return '当前阶段：方案确认。只读档案和知识库，产出营养方案与可执行约束；用 propose_plan 提交，等用户确认。不要改配方。方案只写营养约束，不算每日总热量；需要控制能量时用 energyDensity 约束（KCAL_PER_100G 或 KCAL_PER_KG）。0 命中就换词或换文档，不要重复原查询；每类约束找到一处来源即可，证据不足的标待确认；方案优先于穷尽检索。方案阶段不查药物/补剂的 mg/kg 剂量。';
   }
   if (phase === 'SELECT') {
     return '当前阶段：选材。基于已确认的方案提出食材与补剂候选；用 propose_selection 提交，等用户确认。补剂只用原料库；库外食材标 MISSING。不要改配方。0 命中就换词或换文档，不要重复原查询。';

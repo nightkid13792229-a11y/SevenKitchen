@@ -522,8 +522,7 @@ export interface AgentPlanNonNutrient {
 
 export interface AgentNutritionPlan {
   summary: string;
-  energyKcal: number;
-  mealsPerDay: number;
+  mealsPerDay?: number;
   constraints: AgentPlanConstraint[];
   nonNutrient: AgentPlanNonNutrient[];
   notes?: string;

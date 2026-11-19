@@ -523,6 +523,7 @@ export class RecipeAgentService implements OnModuleInit {
       /** 零命中提示/强制提问要等本轮全部 tool 消息写完再插，避免破坏协议。 */
       let pendingZeroHitNudge: string | null = null;
       let pendingForceAsk = false;
+      let pendingProposeRepair: string | null = null;
 
       for (const call of calls) {
         if (toolCalls >= phaseMaxToolCalls) {
@@ -588,6 +589,16 @@ export class RecipeAgentService implements OnModuleInit {
         toolCalls += 1;
 
         await this.recordTool(sessionId, call, outcome);
+
+        if (
+          (call.function.name === 'propose_plan' ||
+            call.function.name === 'propose_selection') &&
+          !outcome.ok
+        ) {
+          pendingProposeRepair =
+            `${call.function.name} 校验失败：只修正被指出的字段/约束，其余保持不变；` +
+            '无法确定的约束删掉，或给一个大致边界并在 basis 写「待确认」。不要重新检索。';
+        }
 
         // 方案/选材提交：落库 + 暂停等用户确认。
         if (call.function.name === 'propose_plan' && outcome.ok) {
@@ -723,6 +734,9 @@ export class RecipeAgentService implements OnModuleInit {
       // 全部 tool 消息写完后，再追加零命中提示/图片消息。
       if (pendingZeroHitNudge) {
         messages.push({ role: 'system', content: pendingZeroHitNudge });
+      }
+      if (pendingProposeRepair) {
+        messages.push({ role: 'system', content: pendingProposeRepair });
       }
       if (pendingForceAsk) {
         forceAsk = true;

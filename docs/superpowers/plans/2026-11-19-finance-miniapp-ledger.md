@@ -1,5 +1,7 @@
 # 财务模块重做（小程序端）Implementation Plan
 
+> 状态：已实现，见 commit 范围（`origin/main..8f32e761`）。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在小程序里给老板一本能看懂、能核对的经营账：打开就看到本月至今的收入、支出、结余，所有收支都有出处，固定费用自动生成。

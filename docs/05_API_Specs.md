@@ -87,8 +87,36 @@ curl -s http://127.0.0.1:3011/api/docs-json > /tmp/sevenkitchen-openapi.json
 | 补剂 | `/supplements`、`/supplement-orders`、`/supplement-aftersales`、`/admin/supplement-shop`、`/admin/supplement-equivalence` | 补剂商品、订单、售后、等价组 |
 | 原料 / 知识库 | `/knowledge-source`、`/admin/ingredient-creation`、`/admin/ingredient-suggestions`、`/admin/ingredients` | 知识来源、原料创建/建议、批量替换 |
 | 员工工作台 / 客服 | `/staff/workbench`、`/staff/customer-service`、`/customer-service`、`/admin/customer-service` | 员工工作台、客服会话 |
-| 运营 / 分析 / 配置 | `/admin`、`/admin/global-config`、`/global-config`、`/admin/platform-config`、`/platform-config`、`/admin/options`、`/admin/search-governance`、`/admin/finance`、`/analytics/*`、`/admin/analytics/*` | 后台配置、搜索治理、财务、分析 |
+| 运营 / 分析 / 配置 | `/admin`、`/admin/global-config`、`/global-config`、`/admin/platform-config`、`/platform-config`、`/admin/options`、`/admin/search-governance`、`/admin/finance`、`/analytics/*`、`/admin/analytics/*` | 后台配置、搜索治理、财务（仅管理员，入口在小程序）、分析 |
 | 其他 | `/labels`、`/recommended-products`、`/admin/ai-covers`、`/admin/tasting-pack`、`/tasting-packs`、`/admin/recipe-taxonomy`、`/admin/recipe-series` | 标签、推荐商品、AI 封面、试吃装、食谱分类/系列 |
+
+### 3.1 财务接口（2026-11-19 重做，全部仅管理员）
+
+财务只在小程序端使用（走 ADMIN 身份），**后台 admin-web 的财务页面与旧接口已下线**。
+旧的 `overview / expense-analysis / contribution-analysis / alerts / expense-bills` 接口已删除，
+不要按旧文档或旧前端代码调用。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/v1/admin/finance/dashboard` | 汇总（首页/月报：收入、支出、结余、分类汇总、线下待确认收款） |
+| GET | `/api/v1/admin/finance/entries` | 收支明细；支持 `from` / `to` / `month` / `direction` / `category` / `payerType` / `page` / `pageSize` |
+| POST | `/api/v1/admin/finance/manual-entries` | 记一笔（手工收入/支出） |
+| PATCH | `/api/v1/admin/finance/manual-entries/:id` | 修改手工条目 |
+| POST | `/api/v1/admin/finance/manual-entries/:id/void` | 作废手工条目 |
+| GET | `/api/v1/admin/finance/templates` | 固定费用模板列表 |
+| POST | `/api/v1/admin/finance/templates` | 新建固定费用模板 |
+| PATCH | `/api/v1/admin/finance/templates/:id` | 修改模板 |
+| POST | `/api/v1/admin/finance/templates/:id/deactivate` | 停用模板（只影响以后） |
+| GET | `/api/v1/admin/finance/bills?month=YYYY-MM` | 指定月份的固定费用账单（含已付/待付） |
+| POST | `/api/v1/admin/finance/bills/:id/pay` | 标记已付（可改本次实付金额与付款方） |
+| POST | `/api/v1/admin/finance/bills/generate` | 补生成指定月份账单（幂等） |
+| POST | `/api/v1/admin/orders/:orderId/offline-refund` | 订单登记线下退款（计入收入减项） |
+| GET | `/api/v1/admin/orders/:orderId/offline-refunds` | 该订单已登记的线下退款列表 |
+
+- **全部标注「仅管理员」**：`STAFF` 调用一律 403；小程序里搭档账号看不到财务入口。
+- 汇总与明细共用同一批取数逻辑，保证「收入 − 支出 = 结余」并能逐条对上明细。
+- 起账日 `2026-11-01`，早于该日的区间会被裁剪或拒绝；金额单位一律为两位小数 `number`。
+- 字段、请求体与响应示例以 Swagger（`admin-finance` 标签）为准。
 
 ---
 

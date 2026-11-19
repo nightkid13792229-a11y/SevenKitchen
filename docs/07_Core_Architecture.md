@@ -58,7 +58,7 @@
 | 补剂 | `application/supplement-shop`、`interfaces/controllers/supplement-*`、`admin-supplement-*` | 补剂商品、订单、售后、等价组 |
 | 定制食谱 | `application/custom-recipe`、`interfaces/controllers/custom-recipe` | 定制需求、报价、订单、交付、退款 |
 | 知识库 | `knowledge-source`、`docs/knowledge-base` | 原文层、来源登记、证据政策、引用锚点 |
-| 财务 | `application/finance`、`admin-finance` | 报销、账单、财务报表、预警 |
+| 财务 | `application/finance`、`miniapp/src/pages/staff-finance` | 小程序端收支账本、固定费用、手工记账；**仅管理员**；后台财务已下线（2026-11-19） |
 | 客服 / 消息 | `customer-service`、`customer-message` | 客服会话、站内消息、订阅消息 |
 | 分析 | `analytics`、`admin/analytics` | 漏斗、档案分析、经营看板 |
 | 配置 / 平台 | `global-config`、`platform-config`、`platform-options` | 全局配置、平台选项、搜索治理 |

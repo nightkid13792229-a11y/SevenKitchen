@@ -22,14 +22,17 @@
     <FormAdviceStep
       v-if="state.step === 1"
       :initial-nutrient-key="state.nutrientKey"
+      @loaded="onAdviceLoaded"
       @chosen="onFormChosen"
+      @skip="onSkipToCompare"
     />
 
     <CompareStep
       v-else-if="state.step === 2 && state.nutrientKey"
       :nutrient-key="state.nutrientKey"
       :nutrient-label="state.nutrientLabel"
-      :form-level="state.chosenFormLevel ?? ''"
+      :form-level="effectiveForm(state)?.candidateKey ?? ''"
+      :form-keyword="effectiveForm(state)?.labelZh ?? ''"
       :comparison="state.comparison"
       @update:comparison="setComparison"
       @chosen="pickOffer"
@@ -40,7 +43,8 @@
       v-else-if="state.step === 3"
       :draft="state.archive"
       :offer="chosenOffer"
-      :form-level="state.chosenFormLevel"
+      :form-level="effectiveForm(state)?.labelZh ?? ''"
+      :chosen-form="effectiveForm(state)"
       :form-advice="state.formAdvice"
       :saved-result="state.saved"
       @back="backToCompare"
@@ -60,7 +64,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import type {
   SupplementComparisonDto,
-  SupplementFormAdviceDto,
+  SupplementDimensionsAdviceDto,
   SupplementOfferDto
 } from '@/types/ingredientCreation'
 import ArchiveStep from './ArchiveStep.vue'
@@ -69,10 +73,12 @@ import FormAdviceStep from './FormAdviceStep.vue'
 import LaunchConfigStep from '../LaunchConfigStep.vue'
 import {
   canEnter,
+  effectiveForm,
   emptyFlowState,
   goTo,
   loadSnapshot,
   saveSnapshot,
+  type ChosenForm,
   type FlowStep,
   type SupplementFlowState
 } from './supplementFlowState'
@@ -102,7 +108,7 @@ const chosenOffer = computed<SupplementOfferDto | null>(() => {
 })
 
 function isDone(step: FlowStep): boolean {
-  if (step === 1) return !!state.value.chosenFormLevel || !!state.value.formAdvice
+  if (step === 1) return !!state.value.chosenForm || !!state.value.formAdvice
   if (step === 2) return !!state.value.chosenOfferUrl
   if (step === 3) return !!state.value.saved
   return false
@@ -112,23 +118,24 @@ function jump(step: FlowStep): void {
   state.value = goTo(state.value, step)
 }
 
-function onFormChosen(payload: {
-  nutrientKey: string
-  nutrientLabel: string
-  level: string
-  advice: SupplementFormAdviceDto
-}): void {
+function onAdviceLoaded(advice: SupplementDimensionsAdviceDto): void {
+  state.value = { ...state.value, formAdvice: advice }
+}
+
+function onFormChosen(payload: ChosenForm): void {
   state.value = {
     ...state.value,
-    nutrientKey: payload.nutrientKey,
-    nutrientLabel: payload.nutrientLabel,
-    chosenFormLevel: payload.level,
-    formAdvice: payload.advice,
-    // 换档位就是换一批货，旧表不能留着
+    chosenForm: payload,
+    // 换形态就是换一批货，旧表不能留着
     comparison: null,
     chosenOfferUrl: null
   }
   state.value = goTo(state.value, 2)
+}
+
+/** 这一类没有形态可问：直接进比价，不逼着人点一个假选项 */
+function onSkipToCompare(): void {
+  state.value = goTo({ ...state.value, chosenForm: null }, 2)
 }
 
 function onSaved(result: { ingredientId: string; nutritionFoodId: string; evidenceId: string }): void {

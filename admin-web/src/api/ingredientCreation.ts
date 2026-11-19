@@ -15,6 +15,7 @@ import type {
   SupplementCandidateDto,
   SupplementChatReplyDto,
   SupplementComparisonDto,
+  SupplementDimensionsAdviceDto,
   SupplementLabelIntakeDto,
   SupplementFormAdviceDto,
   SupplementLinkPreviewDto,
@@ -83,6 +84,22 @@ export const ingredientCreationApi = {
     limit?: number
   }): Promise<SupplementComparisonDto> =>
     api.post('/admin/ingredient-supplement-agent/compare', payload, { timeout: 120000 }),
+
+  /**
+   * 形态建议（维度驱动）：形态/来源由知识库原文与市场标题长出。
+   *
+   * 与旧接口同一个路径，靠 `mode: 'dimensions'` 分流；旧的固定四档仍保留在 legacy 模式。
+   */
+  supplementFormDimensions: (payload: {
+    nutrientKey: string
+    nutrientLabel: string
+    question?: string
+  }): Promise<SupplementDimensionsAdviceDto> =>
+    api.post(
+      '/admin/ingredient-supplement-agent/form-advice',
+      { ...payload, mode: 'dimensions' },
+      { timeout: 180000 }
+    ),
 
   /** 两张图读成档案初稿：正面认规格剂型，标签认 Serving Size 与成分表。 */
   readSupplementLabelImages: (payload: {

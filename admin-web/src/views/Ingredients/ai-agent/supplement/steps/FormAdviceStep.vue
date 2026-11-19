@@ -4,8 +4,8 @@
       <div>
         <h3>① 定形态</h3>
         <p class="advice-step__desc">
-          选一个营养素，Agent 去知识库读原文，给出「形态档位 + 结论 + 出处」。
-          没有原文支撑的档位只会标「证据不足」，不会给推荐。
+          选一个营养素，Agent 去知识库读原文、去商品标题看市场，给出这一类的形态与来源。
+          <b>标「有原文」的才有依据</b>；只标「无依据」的是市场常见说法，得你自己判断。
         </p>
       </div>
     </header>
@@ -49,82 +49,114 @@
 
     <div v-loading="loading" class="advice-step__body">
       <template v-if="advice">
-        <div
-          v-if="advice.recommendedLevel"
-          class="advice-step__verdict"
-          data-testid="advice-verdict"
-        >
-          <b>建议用：{{ recommendedLabel }}</b>
-          <span class="advice-step__verdict-reason">{{ advice.recommendationReason }}</span>
-        </div>
-        <div v-else class="advice-step__verdict advice-step__verdict--none">
-          <b>这一项没有足够原文支撑，请你判断</b>
-          <span class="advice-step__verdict-reason">{{ advice.recommendationReason }}</span>
+        <!-- 没有维度可问：不硬凑，直接去比价 -->
+        <div v-if="isEmptyAdvice(advice)" class="advice-step__empty" data-testid="advice-empty">
+          <b>这一类不按形态判断</b>
+          <p>{{ advice.gaps[0] || '知识库与市场都没给出可比的形态，直接去比价即可' }}</p>
+          <el-button type="primary" size="small" data-action="skip-to-compare" @click="emit('skip')">
+            去比价
+          </el-button>
         </div>
 
-        <article
-          v-for="option in advice.options"
-          :key="option.level"
-          class="advice-card"
-          :class="{ 'advice-card--muted': !metaOf(option).pickable }"
-        >
-          <div class="advice-card__head">
-            <b>{{ option.labelZh }}</b>
-            <el-tag :type="metaOf(option).type" size="small" effect="plain">
-              {{ metaOf(option).label }}
-            </el-tag>
-            <span v-if="option.examples.length > 0" class="advice-card__examples">
-              例：{{ option.examples.join('、') }}
+        <template v-else>
+          <div
+            v-if="advice.recommendation"
+            class="advice-step__verdict"
+            data-testid="advice-verdict"
+          >
+            <b>{{ recommendationText(advice) }}</b>
+            <span class="advice-step__verdict-reason">
+              {{ recommendedCandidate?.reason }}
             </span>
-            <el-button
-              v-if="metaOf(option).pickable"
-              class="advice-card__pick"
-              type="primary"
-              size="small"
-              :data-action="`pick-${option.level}`"
-              @click="pick(option)"
-            >
-              用这个档位
-            </el-button>
-            <!--
-              没有原文支撑 / 判为不推荐的档位，也不堵死路：
-              老板可能因为买不到货等原因改选，允许"我就要这一档"，但要弹一次确认，
-              选中的事实会原样写进证据快照，事后看得出这是人拍的板。
-            -->
-            <el-button
-              v-else
-              class="advice-card__pick"
-              text
-              size="small"
-              :data-action="`force-${option.level}`"
-              @click="forcePick(option)"
-            >
-              仍用这一档
-            </el-button>
+          </div>
+          <div v-else class="advice-step__verdict advice-step__verdict--none">
+            <b>知识库里没有可用结论，请你判断</b>
+            <span class="advice-step__verdict-reason">下面都是市场常见说法，没有原文支撑</span>
           </div>
 
-          <p class="advice-card__reason">{{ option.reason }}</p>
+          <section v-for="group in advice.dimensions" :key="group.key" class="dimension">
+            <p class="dimension__title">
+              {{ group.label }} · 共 {{ group.candidates.length }} 种
+            </p>
 
-          <details v-if="citationsOf(option).length > 0" class="advice-card__cites">
-            <summary>出处 {{ citationsOf(option).length }} 条</summary>
-            <blockquote
-              v-for="(citation, index) in citationsOf(option)"
-              :key="index"
-              class="advice-card__quote"
+            <article
+              v-for="candidate in group.candidates"
+              :key="candidate.key"
+              class="advice-card"
+              :class="{ 'advice-card--muted': !statusMeta(candidate.status).recommendable }"
             >
-              <span class="advice-card__quote-src">{{ citationText(citation) }}</span>
-              <span class="advice-card__quote-text">“{{ citation.quote }}”</span>
-            </blockquote>
-          </details>
-          <p v-else class="advice-card__nocite">没有原文，不构成推荐</p>
-        </article>
+              <div class="advice-card__head">
+                <b>{{ candidate.labelZh }}</b>
+                <el-tag :type="statusMeta(candidate.status).type" size="small" effect="plain">
+                  {{ statusMeta(candidate.status).label }}
+                </el-tag>
+                <el-tag
+                  v-if="candidate.status === 'EVIDENCED'"
+                  :type="verdictMeta(candidate.verdict).type"
+                  size="small"
+                  effect="plain"
+                >
+                  {{ verdictMeta(candidate.verdict).label }}
+                </el-tag>
+                <span v-if="candidate.market" class="advice-card__market">
+                  {{ candidate.market.count }} 个商品在用这个说法
+                </span>
+                <el-button
+                  v-if="statusMeta(candidate.status).recommendable"
+                  class="advice-card__pick"
+                  type="primary"
+                  size="small"
+                  :data-action="`pick-${candidate.key}`"
+                  @click="pick(candidate)"
+                >
+                  用这个
+                </el-button>
+                <el-button
+                  v-else
+                  class="advice-card__pick"
+                  text
+                  size="small"
+                  :data-action="`force-${candidate.key}`"
+                  @click="forcePick(candidate)"
+                >
+                  仍用这一档
+                </el-button>
+              </div>
 
-        <div v-if="advice.gaps.length > 0" class="advice-step__gaps">
-          <p class="advice-step__gaps-title">知识库没覆盖到的：</p>
-          <p v-for="(gap, index) in advice.gaps" :key="index" class="advice-step__gap">
-            · {{ gap }}
-          </p>
-        </div>
+              <p class="advice-card__reason">{{ candidate.reason }}</p>
+
+              <details v-if="citationsOf(candidate).length > 0" class="advice-card__cites">
+                <summary>出处 {{ citationsOf(candidate).length }} 条</summary>
+                <blockquote
+                  v-for="(citation, index) in citationsOf(candidate)"
+                  :key="index"
+                  class="advice-card__quote"
+                >
+                  <span class="advice-card__quote-src">{{ citationText(citation) }}</span>
+                  <span class="advice-card__quote-text">“{{ citation.quote }}”</span>
+                </blockquote>
+              </details>
+              <p v-else class="advice-card__nocite">没有原文，不构成推荐</p>
+            </article>
+          </section>
+
+          <div v-if="advice.gaps.length > 0" class="advice-step__gaps">
+            <p class="advice-step__gaps-title">没覆盖到的：</p>
+            <p v-for="(gap, index) in advice.gaps" :key="index" class="advice-step__gap">
+              · {{ gap }}
+            </p>
+          </div>
+
+          <details v-if="advice.retrieval" class="advice-step__retrieval">
+            <summary>这次读了哪几页（{{ advice.retrieval.pages.length }} 页）</summary>
+            <p v-for="page in advice.retrieval.pages" :key="`${page.documentId}-${page.page}`">
+              · {{ page.documentId }} 第 {{ page.page }} 页
+            </p>
+            <p v-if="advice.retrieval.queries.length > 0" class="advice-step__queries">
+              查询：{{ advice.retrieval.queries.join(' / ') }}
+            </p>
+          </details>
+        </template>
       </template>
     </div>
   </section>
@@ -136,16 +168,24 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import { supplementNutrientGroups } from '@/constants/supplementNutrients'
 import type {
-  SupplementFormAdviceDto,
-  SupplementFormOptionDto
+  SupplementDimensionCandidateDto,
+  SupplementDimensionsAdviceDto
 } from '@/types/ingredientCreation'
-import { citationText, citationsOf, verdictMeta } from './formAdviceView'
+import {
+  citationsOf,
+  citationText,
+  isEmptyAdvice,
+  recommendationText,
+  statusMeta,
+  verdictMeta
+} from './formAdviceView'
 
 /**
- * 第 1 步：定形态。
+ * 第 1 步：定形态（维度驱动）。
  *
- * 页面不做营养判断：结论、理由、出处都来自后端；这里只负责把
- * 「有原文的」和「没原文的」分成两种样子，别让人把猜的当成查到的。
+ * 页面不做营养判断：候选、状态、理由、出处都来自后端。
+ * 这里只把「有原文」和「市场有但没依据」分成两种样子，
+ * 别让人把猜的当成查到的。
  */
 const props = defineProps<{
   initialNutrientKey?: string | null
@@ -155,12 +195,14 @@ const emit = defineEmits<{
   (
     event: 'chosen',
     value: {
-      nutrientKey: string
-      nutrientLabel: string
-      level: string
-      advice: SupplementFormAdviceDto
+      dimensionKey: 'FORM' | 'SOURCE'
+      candidateKey: string
+      labelZh: string
+      status: 'EVIDENCED' | 'MARKET_ONLY'
     }
   ): void
+  (event: 'skip'): void
+  (event: 'loaded', value: SupplementDimensionsAdviceDto): void
 }>()
 
 const nutrientOptions = supplementNutrientGroups.flatMap((group) =>
@@ -174,16 +216,19 @@ const nutrientKey = ref<string | null>(props.initialNutrientKey ?? null)
 const question = ref('')
 const loading = ref(false)
 const errorText = ref('')
-const advice = ref<SupplementFormAdviceDto | null>(null)
+const advice = ref<SupplementDimensionsAdviceDto | null>(null)
 
-const recommendedLabel = computed(() => {
-  const level = advice.value?.recommendedLevel
-  return advice.value?.options.find((option) => option.level === level)?.labelZh ?? level ?? ''
+const recommendedCandidate = computed(() => {
+  const target = advice.value?.recommendation
+  if (!target) {
+    return null
+  }
+  return (
+    advice.value?.dimensions
+      .flatMap((group) => group.candidates)
+      .find((item) => item.key === target.candidateKey) ?? null
+  )
 })
-
-function metaOf(option: SupplementFormOptionDto) {
-  return verdictMeta(option.verdict)
-}
 
 async function ask(): Promise<void> {
   const key = nutrientKey.value
@@ -194,13 +239,14 @@ async function ask(): Promise<void> {
   errorText.value = ''
   try {
     const label = nutrientOptions.find((item) => item.fieldPath === key)?.label ?? key
-    advice.value = await ingredientCreationApi.supplementFormAdvice({
+    advice.value = await ingredientCreationApi.supplementFormDimensions({
       nutrientKey: key,
       nutrientLabel: label,
       question: question.value.trim() || undefined
     })
-    if (advice.value.options.length === 0) {
-      ElMessage.info('知识库里没查到相关的页，换个营养素试试')
+    emit('loaded', advice.value)
+    if (advice.value.dimensions.length === 0) {
+      ElMessage.info('这一类没有可比的形态，直接去比价')
     }
   } catch (error) {
     errorText.value = apiErrorMessage(error, '这次没查成，稍后再试')
@@ -209,37 +255,31 @@ async function ask(): Promise<void> {
   }
 }
 
-async function forcePick(option: SupplementFormOptionDto): Promise<void> {
-  const warning =
-    option.verdict === 'AVOID'
-      ? `${option.labelZh}在知识库里被判为「不推荐」：${option.reason}。仍要用它建档吗？`
-      : `${option.labelZh}在知识库里没有直接依据。仍要用它建档吗？（这一条会记进档案）`
+/**
+ * 市场有、库里没依据的候选也允许用，但要弹一次确认。
+ *
+ * 理由：老板可能因为"只有这瓶买得到"改选，软件不该把他堵死；
+ * 选中的事实（status）会写进档案快照，事后看得出这是人拍的板。
+ */
+async function forcePick(candidate: SupplementDimensionCandidateDto): Promise<void> {
   try {
-    await ElMessageBox.confirm(warning, '这一档没有原文支撑', {
-      confirmButtonText: '仍要用',
-      cancelButtonText: '先不用',
-      type: 'warning'
-    })
+    await ElMessageBox.confirm(
+      `${candidate.labelZh} 在知识库里没有原文依据（${candidate.reason}）。仍要用它建档吗？`,
+      '这一档没有原文支撑',
+      { confirmButtonText: '仍要用', cancelButtonText: '先不用', type: 'warning' }
+    )
   } catch {
     return
   }
-  pick(option)
+  pick(candidate)
 }
 
-function pick(option: SupplementFormOptionDto): void {
-  const key = nutrientKey.value
-  if (!key) {
-    return
-  }
-  const label = nutrientOptions.find((item) => item.fieldPath === key)?.label ?? key
-  if (!advice.value) {
-    return
-  }
+function pick(candidate: SupplementDimensionCandidateDto): void {
   emit('chosen', {
-    nutrientKey: key,
-    nutrientLabel: label,
-    level: option.level,
-    advice: advice.value
+    dimensionKey: candidate.dimension,
+    candidateKey: candidate.key,
+    labelZh: candidate.labelZh,
+    status: candidate.status
   })
 }
 
@@ -303,6 +343,26 @@ onMounted(() => {
   background: #fff6e8;
   border-color: #f0d9a8;
 }
+.advice-step__empty {
+  border: 1px dashed #dfe3e8;
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 13px;
+  color: #5b6470;
+}
+.advice-step__empty p {
+  margin: 6px 0 12px;
+  font-size: 12px;
+  color: #8a9099;
+}
+.dimension {
+  margin-bottom: 12px;
+}
+.dimension__title {
+  margin: 8px 0 6px;
+  font-size: 12px;
+  color: #8a9099;
+}
 .advice-card {
   border: 1px solid #eef0f3;
   border-radius: 8px;
@@ -318,7 +378,7 @@ onMounted(() => {
   gap: 8px;
   flex-wrap: wrap;
 }
-.advice-card__examples {
+.advice-card__market {
   font-size: 11.5px;
   color: #9aa2ab;
 }
@@ -373,5 +433,19 @@ onMounted(() => {
 .advice-step__gap {
   margin: 0;
   line-height: 1.6;
+}
+.advice-step__retrieval {
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: #8a9099;
+}
+.advice-step__retrieval summary {
+  cursor: pointer;
+}
+.advice-step__retrieval p {
+  margin: 2px 0;
+}
+.advice-step__queries {
+  color: #9aa2ab;
 }
 </style>

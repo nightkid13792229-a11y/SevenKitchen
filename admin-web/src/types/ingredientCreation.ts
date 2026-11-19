@@ -782,3 +782,42 @@ export interface SupplementLabelIntakeDto {
   unrecognized: string[]
   suggestedName: string | null
 }
+
+/* ------------------------------------------------------------------ *
+ * 维度驱动（2026-11-20）：形态/来源的取值由知识库原文与市场标题长出
+ * ------------------------------------------------------------------ */
+
+export type SupplementDimensionKey = 'FORM' | 'SOURCE'
+
+export interface SupplementDimensionCandidateDto {
+  key: string
+  labelZh: string
+  dimension: SupplementDimensionKey
+  status: 'EVIDENCED' | 'MARKET_ONLY'
+  citations: SupplementCitationDto[]
+  verdict: SupplementFormVerdict
+  reason: string
+  market: { count: number; samples: string[] } | null
+}
+
+export interface SupplementDimensionGroupDto {
+  key: SupplementDimensionKey
+  label: string
+  candidates: SupplementDimensionCandidateDto[]
+}
+
+export interface SupplementRetrievalDto {
+  queries: string[]
+  pages: { documentId: string; page: number; score: number }[]
+  dropped: { documentId: string; page: number; reason: string }[]
+  failures?: { query: string; error: string }[]
+}
+
+export interface SupplementDimensionsAdviceDto {
+  nutrientKey: string
+  nutrientLabel: string
+  dimensions: SupplementDimensionGroupDto[]
+  recommendation: { dimensionKey: SupplementDimensionKey; candidateKey: string } | null
+  gaps: string[]
+  retrieval?: SupplementRetrievalDto
+}

@@ -6,6 +6,7 @@ import {
   FLOW_STORAGE_KEY,
   canEnter,
   clearSnapshot,
+  effectiveForm,
   emptyFlowState,
   goTo,
   loadSnapshot,
@@ -13,7 +14,7 @@ import {
   type SimpleStorage,
   type SupplementFlowState
 } from './supplementFlowState'
-import type { SupplementFormAdviceDto } from '@/types/ingredientCreation'
+import type { SupplementDimensionsAdviceDto } from '@/types/ingredientCreation'
 
 function memoryStorage(): SimpleStorage & { dump: Map<string, string> } {
   const dump = new Map<string, string>()
@@ -30,12 +31,28 @@ function memoryStorage(): SimpleStorage & { dump: Map<string, string> } {
 }
 
 function withAdvice(): SupplementFlowState {
-  const advice: SupplementFormAdviceDto = {
+  const advice: SupplementDimensionsAdviceDto = {
     nutrientKey: 'minerals.copper',
     nutrientLabel: '铜',
-    options: [],
-    recommendedLevel: 'ORGANIC_CHELATE',
-    recommendationReason: '测试',
+    dimensions: [
+      {
+        key: 'FORM',
+        label: '形态',
+        candidates: [
+          {
+            key: 'coppersulfate',
+            labelZh: '硫酸铜',
+            dimension: 'FORM',
+            status: 'EVIDENCED',
+            citations: [],
+            verdict: 'ACCEPTABLE',
+            reason: '测试',
+            market: null
+          }
+        ]
+      }
+    ],
+    recommendation: { dimensionKey: 'FORM', candidateKey: 'coppersulfate' },
     gaps: []
   }
   return { ...emptyFlowState(), formAdvice: advice }
@@ -45,6 +62,10 @@ describe('canEnter', () => {
   it('没有形态结论，不能进第 2 步', () => {
     expect(canEnter(emptyFlowState(), 2)).toBe(false)
     expect(canEnter(withAdvice(), 2)).toBe(true)
+  })
+
+  it('推荐但没点过，也能进第 2 步（推荐即默认选中）', () => {
+    expect(effectiveForm(withAdvice())?.candidateKey).toBe('coppersulfate')
   })
 
   it('没有选中商品，不能进第 3 步', () => {
@@ -75,7 +96,7 @@ describe('快照', () => {
     const state = { ...withAdvice(), step: 2 as const }
     saveSnapshot(state, storage)
     expect(loadSnapshot(storage)?.step).toBe(2)
-    expect(loadSnapshot(storage)?.formAdvice?.recommendedLevel).toBe('ORGANIC_CHELATE')
+    expect(loadSnapshot(storage)?.formAdvice?.recommendation?.candidateKey).toBe('coppersulfate')
   })
 
   it('坏数据当没有', () => {

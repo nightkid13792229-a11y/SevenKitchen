@@ -23,9 +23,15 @@ export class CompareOffersDto {
   @MaxLength(120)
   nutrientKey!: string;
 
-  @ApiProperty({ enum: SUPPLEMENT_FORM_LEVELS, description: '这次选定的形态档位' })
-  @IsIn(SUPPLEMENT_FORM_LEVELS as unknown as string[])
-  formLevel!: SupplementFormLevel;
+  @ApiProperty({
+    description:
+      '这次选定的形态：可以是旧的四档枚举，也可以是维度模式里抽出来的候选键（如 bisglycinate）',
+    example: 'bisglycinate',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(60)
+  formLevel!: string;
 
   @ApiPropertyOptional({ description: '搜索词；不传则按营养素 + 档位组词', example: 'copper chelate' })
   @IsOptional()

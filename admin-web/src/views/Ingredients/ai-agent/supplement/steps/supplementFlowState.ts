@@ -8,7 +8,7 @@
  */
 import type {
   SupplementComparisonDto,
-  SupplementFormAdviceDto
+  SupplementDimensionsAdviceDto
 } from '@/types/ingredientCreation'
 import { emptySupplementDraft, type SupplementDraftValue } from '../supplementFormState'
 
@@ -20,12 +20,20 @@ export interface SupplementSavedResult {
   evidenceId: string
 }
 
+/** 人选定的形态/来源候选（维度驱动） */
+export interface ChosenForm {
+  dimensionKey: 'FORM' | 'SOURCE'
+  candidateKey: string
+  labelZh: string
+  status: 'EVIDENCED' | 'MARKET_ONLY'
+}
+
 export interface SupplementFlowState {
   step: FlowStep
   nutrientKey: string | null
   nutrientLabel: string
-  formAdvice: SupplementFormAdviceDto | null
-  chosenFormLevel: string | null
+  formAdvice: SupplementDimensionsAdviceDto | null
+  chosenForm: ChosenForm | null
   comparison: SupplementComparisonDto | null
   chosenOfferUrl: string | null
   archive: SupplementDraftValue
@@ -46,7 +54,7 @@ export function emptyFlowState(): SupplementFlowState {
     nutrientKey: null,
     nutrientLabel: '',
     formAdvice: null,
-    chosenFormLevel: null,
+    chosenForm: null,
     comparison: null,
     chosenOfferUrl: null,
     archive: emptySupplementDraft(),
@@ -54,9 +62,27 @@ export function emptyFlowState(): SupplementFlowState {
   }
 }
 
-/** 选定的形态档位：人点过的优先，其次是模型推荐的。 */
-export function effectiveFormLevel(state: SupplementFlowState): string | null {
-  return state.chosenFormLevel ?? state.formAdvice?.recommendedLevel ?? null
+/** 选定的形态候选：人点过的优先；没点过但有推荐时，用推荐那条。 */
+export function effectiveForm(state: SupplementFlowState): ChosenForm | null {
+  if (state.chosenForm) {
+    return state.chosenForm
+  }
+  const recommendation = state.formAdvice?.recommendation
+  if (!recommendation) {
+    return null
+  }
+  for (const group of state.formAdvice?.dimensions ?? []) {
+    const hit = group.candidates.find((item) => item.key === recommendation.candidateKey)
+    if (hit) {
+      return {
+        dimensionKey: hit.dimension,
+        candidateKey: hit.key,
+        labelZh: hit.labelZh,
+        status: hit.status
+      }
+    }
+  }
+  return null
 }
 
 export function canEnter(state: SupplementFlowState, step: FlowStep): boolean {
@@ -64,7 +90,7 @@ export function canEnter(state: SupplementFlowState, step: FlowStep): boolean {
     case 1:
       return true
     case 2:
-      return !!effectiveFormLevel(state)
+      return !!effectiveForm(state)
     case 3:
       return !!state.chosenOfferUrl
     case 4:

@@ -147,8 +147,9 @@ export class SupplementAgentController {
   }
 }
 
-function buildKeyword(nutrientKey: string, formLevel: SupplementFormLevel): string {
+function buildKeyword(nutrientKey: string, formLevel: string): string {
   const nutrient = NUTRIENT_EN[nutrientKey] ?? nutrientKey.split('.').pop() ?? nutrientKey;
-  const form = FORM_LEVEL_EN[formLevel];
+  // 维度模式传进来的是候选键（bisglycinate / 硫酸铜），认识的直接拼，不认识的就只搜营养素
+  const form = FORM_LEVEL_EN[formLevel as SupplementFormLevel];
   return form ? `${nutrient} ${form}` : nutrient;
 }

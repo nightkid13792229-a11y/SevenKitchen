@@ -271,9 +271,10 @@ import { ingredientApi, nutritionFoodApi } from '@/api/ingredients'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import { supplementNutrientGroups, supplementUsageUnitOptions } from '@/constants/supplementNutrients'
 import type {
-  SupplementFormAdviceDto,
+  SupplementDimensionsAdviceDto,
   SupplementOfferDto
 } from '@/types/ingredientCreation'
+import type { ChosenForm } from './supplementFlowState'
 import {
   computePerUnit,
   findMissingHumanFields,
@@ -294,8 +295,9 @@ import { evaluateSupplementGates } from '../supplementGates'
 const props = defineProps<{
   draft: SupplementDraftValue
   offer: SupplementOfferDto | null
-  formLevel: string | null
-  formAdvice: SupplementFormAdviceDto | null
+  /** 第 1 步选定的形态候选 */
+  chosenForm: ChosenForm | null
+  formAdvice: SupplementDimensionsAdviceDto | null
   /** 父级记着的写入结果：返回这一步时不要再让人重复写一遍 */
   savedResult?: { ingredientId: string; nutritionFoodId: string; evidenceId: string } | null
 }>()
@@ -482,17 +484,20 @@ async function readImages(): Promise<void> {
  * 只存"当时看到的"，不存推断；事后复核时能一路对回原文与比价表。
  */
 function buildSelection(): Record<string, unknown> {
-  const option = props.formAdvice?.options.find((item) => item.level === props.formLevel) ?? null
+  const candidate =
+    props.formAdvice?.dimensions
+      .flatMap((group) => group.candidates)
+      .find((item) => item.key === props.chosenForm?.candidateKey) ?? null
   return {
-    formLevel: props.formLevel,
+    dimensionKey: props.chosenForm?.dimensionKey ?? null,
+    candidateKey: props.chosenForm?.candidateKey ?? null,
+    candidateLabel: props.chosenForm?.labelZh ?? null,
+    // 「市场有、库里没依据」的选择要留下来：这是人拍的板
+    humanOverride: !!props.chosenForm && props.chosenForm.status !== 'EVIDENCED',
     nutrientKey: props.formAdvice?.nutrientKey ?? null,
     nutrientLabel: props.formAdvice?.nutrientLabel ?? null,
-    recommendationReason: props.formAdvice?.recommendationReason ?? null,
     gaps: props.formAdvice?.gaps ?? [],
-    formOption: option,
-    // 选的是「没有原文支撑/被判不推荐」的档位时，这里为 true：这是人拍的板
-    humanOverride:
-      !!option && option.verdict !== 'RECOMMENDED' && option.verdict !== 'ACCEPTABLE',
+    formCandidate: candidate,
     offer: props.offer,
     chosenAt: new Date().toISOString()
   }

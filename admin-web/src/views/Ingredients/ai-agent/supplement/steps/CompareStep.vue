@@ -94,6 +94,8 @@ const props = defineProps<{
   nutrientKey: string
   nutrientLabel: string
   formLevel: string
+  /** 维度模式下用中文候选名当搜索词（iHerb 中文站按中文更好搜） */
+  formKeyword?: string
   comparison: SupplementComparisonDto | null
 }>()
 
@@ -123,6 +125,7 @@ async function load(): Promise<void> {
     const data = await ingredientCreationApi.compareSupplementOffers({
       nutrientKey: props.nutrientKey,
       formLevel: props.formLevel,
+      keyword: props.formKeyword?.trim() || undefined,
       limit: 8
     })
     emit('update:comparison', data)

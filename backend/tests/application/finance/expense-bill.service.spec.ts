@@ -434,6 +434,39 @@ describe('ExpenseTemplateService.create / update / deactivate', () => {
     });
   });
 
+  it('「工具」「杂物」类别建模板：不抛，旧枚举列兜底 OTHER', async () => {
+    // 旧列 category 是必填枚举；TOOLS / SUNDRIES 不在枚举里，
+    // 直接回填会触发 Prisma 校验失败 500，所以统一兜底 OTHER。
+    for (const [code, name] of [
+      ['TOOLS', '工具'],
+      ['SUNDRIES', '杂物'],
+    ] as const) {
+      const categoryId = `c-${code}`;
+      const prisma = makeTemplatePrisma([], [], {
+        [categoryId]: {
+          id: categoryId,
+          name,
+          code,
+          isSystem: false,
+          isActive: true,
+        },
+      });
+
+      await new ExpenseTemplateService(prisma).create('u1', {
+        name,
+        titleTemplate: `${name}采购`,
+        categoryId,
+        payeeName: '杂货铺',
+        defaultAmount: 50,
+        interval: 'MONTHLY',
+      } as any);
+
+      const data = prisma.expenseTemplate.create.mock.calls[0][0].data;
+      expect(data.categoryId).toBe(categoryId);
+      expect(data.category).toBe('OTHER');
+    }
+  });
+
   it('create 拒绝非法账户（不能静默落默认值）', async () => {
     const prisma = makeTemplatePrisma([]);
 

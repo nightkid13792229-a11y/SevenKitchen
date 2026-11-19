@@ -409,6 +409,45 @@ describe('FinanceExpenseService', () => {
     expect(r.total).toBe(100);
   });
 
+  it('fixedCostTotal = 本期固定费用账单分摊之和，类别改名不影响', async () => {
+    const make = (rentName: string) =>
+      makePrisma({
+        categories: categoryRows({ RENT: { name: rentName } }),
+        bills: [
+          {
+            id: 'b1',
+            amount: 1200,
+            categoryId: catId('RENT'),
+            recognitionStart: new Date('2026-11-01T00:00:00Z'),
+            recognitionEnd: new Date('2027-01-31T00:00:00Z'),
+          },
+        ],
+        // 手工条目也挂在同一类别上：固定费用合计只认账单，不按类别兜
+        manualEntries: [
+          {
+            id: 'm1',
+            amount: 50,
+            categoryId: catId('RENT'),
+            occurredAt: new Date('2026-11-03T00:00:00Z'),
+            title: '房租押金补差',
+            payerAccount: 'PERSONAL_WECHAT',
+          },
+        ],
+      });
+
+    const before = await makeService(make('房租')).getExpense(period, 0);
+    const after = await makeService(make('店铺租金')).getExpense(period, 0);
+
+    // 账单 1200 分 3 个月 = 每月 400；老板改名前后都必须是 400
+    expect(before).toMatchObject({ total: 450, fixedCostTotal: 400 });
+    expect(after).toMatchObject({ total: 450, fixedCostTotal: 400 });
+    // 改名只影响展示名字，金额与固定费用合计不变
+    expect(findCategory(after, 'RENT')).toMatchObject({
+      label: '店铺租金',
+      amount: 450,
+    });
+  });
+
   it('快递费为空的订单不产生支出', async () => {
     const prisma: any = makePrisma({
       orders: [

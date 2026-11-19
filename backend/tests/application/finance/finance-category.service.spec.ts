@@ -90,6 +90,7 @@ describe('FinanceCategoryService.list', () => {
         name: '房租',
         isSystem: false,
         isActive: true,
+        selectable: true,
         usageCount: 6,
       },
       {
@@ -97,11 +98,29 @@ describe('FinanceCategoryService.list', () => {
         name: '食材',
         isSystem: true,
         isActive: true,
+        selectable: true,
         usageCount: 0,
       },
     ]);
     expect(prisma.financeCategory.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { isActive: true } }),
+    );
+  });
+
+  it('「其它」（code=OTHER）selectable=false，记账选择器不会列出来', async () => {
+    const prisma = makePrisma([
+      category({ id: 'c1' }),
+      category({ id: 'c-other', name: '其它', code: 'OTHER' }),
+    ]);
+
+    const rows = await new FinanceCategoryService(prisma).list();
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'c1', selectable: true }),
+        // 保留在库里给报销映射用，但不作为记账选项
+        expect.objectContaining({ id: 'c-other', selectable: false }),
+      ]),
     );
   });
 
@@ -238,6 +257,42 @@ describe('FinanceCategoryService.merge', () => {
     });
   });
 
+  it('源或目标是系统类别时 400，不搬任何记录', async () => {
+    const prisma = makePrisma([
+      category({
+        id: 'c-sys',
+        name: '食材',
+        code: 'RAW_MATERIAL',
+        isSystem: true,
+      }),
+      category({ id: 'c2', name: '维修' }),
+    ]);
+    const service = new FinanceCategoryService(prisma);
+
+    await expect(service.merge('c-sys', 'c2')).rejects.toThrow(
+      '系统类别不能合并',
+    );
+    await expect(service.merge('c2', 'c-sys')).rejects.toThrow(
+      '系统类别不能合并',
+    );
+    expect(prisma.expenseBill.updateMany).not.toHaveBeenCalled();
+    expect(prisma.expenseTemplate.updateMany).not.toHaveBeenCalled();
+    expect(prisma.financeManualEntry.updateMany).not.toHaveBeenCalled();
+    expect(prisma.financeCategory.update).not.toHaveBeenCalled();
+  });
+
+  it('「其它」也不能合并（合并会把它停用，等于绕过系统类别保护）', async () => {
+    const prisma = makePrisma([
+      category({ id: 'c-other', name: '其它', code: 'OTHER' }),
+      category({ id: 'c2', name: '维修' }),
+    ]);
+
+    await expect(
+      new FinanceCategoryService(prisma).merge('c-other', 'c2'),
+    ).rejects.toThrow('系统类别不能合并');
+    expect(prisma.financeCategory.update).not.toHaveBeenCalled();
+  });
+
   it('目标必须存在且不能是自己', async () => {
     const prisma = makePrisma([category({ id: 'c1' })]);
 
@@ -261,6 +316,17 @@ describe('FinanceCategoryService.deactivate', () => {
     await expect(
       new FinanceCategoryService(prisma).deactivate('c2'),
     ).rejects.toThrow('系统类别不能停用');
+    expect(prisma.financeCategory.update).not.toHaveBeenCalled();
+  });
+
+  it('「其它」当作系统类别：停用被拒（报销映射还要用）', async () => {
+    const prisma = makePrisma([
+      category({ id: 'c-other', name: '其它', code: 'OTHER' }),
+    ]);
+
+    await expect(
+      new FinanceCategoryService(prisma).deactivate('c-other'),
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.financeCategory.update).not.toHaveBeenCalled();
   });
 
@@ -356,5 +422,31 @@ describe('FinanceCategoryService.ensureByName', () => {
     expect(first).toEqual({ id: 'c-new', name: '工具' });
     expect(second).toEqual({ id: 'c-new', name: '工具' });
     expect(prisma.financeCategory.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('FinanceCategoryService.loadExpenseLookup', () => {
+  it('合并后的类别：byCode 跟到目标（报表自动来源不会挂在已合并类别上）', async () => {
+    const prisma = makePrisma([
+      category({
+        id: 'c-tools',
+        name: '工具',
+        code: 'TOOLS',
+        isActive: false,
+        mergedIntoId: 'c-equip',
+      }),
+      category({ id: 'c-equip', name: '设备工具', code: 'EQUIPMENT' }),
+    ]);
+
+    const lookup = await new FinanceCategoryService(prisma).loadExpenseLookup();
+
+    expect(lookup.byCode.get('TOOLS')).toMatchObject({
+      id: 'c-equip',
+      name: '设备工具',
+    });
+    // 查表要把合并字段一起读出来，否则跟随逻辑拿不到 isActive/mergedIntoId
+    expect(prisma.financeCategory.findMany).toHaveBeenCalledWith({
+      select: expect.objectContaining({ isActive: true, mergedIntoId: true }),
+    });
   });
 });

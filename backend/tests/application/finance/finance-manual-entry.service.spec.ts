@@ -222,6 +222,35 @@ describe('FinanceManualEntryService.create', () => {
     expect(data.proofKeys).toEqual(['finance/proof-1.jpg']);
   });
 
+  it('「工具」「杂物」类别建条目：不抛，旧枚举列留 NULL', async () => {
+    // 类别字典允许 code 长成 TOOLS / SUNDRIES（报销杂费映射用），
+    // 它们不在 Prisma 的 FinanceExpenseCategory 里，直接回填旧列会 500。
+    for (const [code, name] of [
+      ['TOOLS', '工具'],
+      ['SUNDRIES', '杂物'],
+    ] as const) {
+      const prisma: any = makePrisma(null, {
+        id: `c-${code}`,
+        name,
+        code,
+        isSystem: false,
+        isActive: true,
+      });
+
+      await expect(
+        new FinanceManualEntryService(prisma).create(
+          'u1',
+          expenseInput({ categoryId: `c-${code}` }),
+        ),
+      ).resolves.toEqual({ id: 'new' });
+
+      const data = prisma.financeManualEntry.create.mock.calls[0][0].data;
+      expect(data.categoryId).toBe(`c-${code}`);
+      // 手工条目的旧列可空：枚举外 code 一律留 NULL
+      expect(data.category).toBeNull();
+    }
+  });
+
   it('起账日当天的条目落在 11 月区间内（date-only 不得退成 10-31）', async () => {
     const prisma: any = makePrisma();
 

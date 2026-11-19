@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import { FinanceExpenseCategory } from './finance-categories';
+import { toLegacyExpenseCategoryOrOther } from './finance-legacy-category';
 import { FinanceAccount, normalizeFinanceAccount } from './finance-accounts';
 import { monthDateOnlyRange } from './finance-period';
 import { TimezoneUtil } from '../../utils/timezone.util';
@@ -214,11 +214,6 @@ function resolvePayerAccount(value: string | null | undefined): FinanceAccount {
   return normalizeFinanceAccount(value);
 }
 
-/** 旧枚举列按类别 code 回填；自建类别没有 code 时兜底 OTHER（旧列非空） */
-function legacyCategoryCode(ref: FinanceCategoryRef): FinanceExpenseCategory {
-  return (ref.code as FinanceExpenseCategory | null) ?? 'OTHER';
-}
-
 /** 该模板在指定月份是否应生成账单 */
 function isTemplateDueInMonth(
   template: { interval: string; monthOfYear: number | null },
@@ -315,7 +310,7 @@ export class ExpenseTemplateService {
         ...data,
         // 新写入走 categoryId；旧枚举列按 code 回填一版兼容
         categoryId: categoryRef.id,
-        category: legacyCategoryCode(categoryRef),
+        category: toLegacyExpenseCategoryOrOther(categoryRef.code),
         createdById: userId,
       },
     });
@@ -342,7 +337,7 @@ export class ExpenseTemplateService {
       data: {
         ...data,
         categoryId: categoryRef.id,
-        category: legacyCategoryCode(categoryRef),
+        category: toLegacyExpenseCategoryOrOther(categoryRef.code),
       },
     });
     return { id };
@@ -437,7 +432,8 @@ export class ExpenseTemplateService {
         return {
           billNumber: buildTemplateBillNumber(dateKey, index, new Date()),
           title,
-          category: template.category,
+          // 旧列必填：模板旧列已是枚举值，仍走白名单兜底（防历史脏数据）
+          category: toLegacyExpenseCategoryOrOther(template.category),
           // 新账单继承模板的类别 id 与默认账户（旧枚举列继续写，兼容旧读法）
           categoryId: template.categoryId ?? null,
           status: 'PENDING_PAYMENT' as const,

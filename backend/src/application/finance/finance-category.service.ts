@@ -32,7 +32,28 @@ export type FinanceCategoryView = {
   isActive: boolean;
   /** 被账单 / 模板 / 手工条目引用的总条数（三处分别 count 后相加） */
   usageCount: number;
+  /**
+   * 记账选择器是否可选。
+   * 「其它」（code=OTHER）保留在库里给报销映射用，但记账没有「其他」选项。
+   */
+  selectable: boolean;
 };
+
+/** 报销杂费映射用的「其它」code：等同系统类别，不能停用/合并 */
+const OTHER_CATEGORY_CODE = 'OTHER';
+
+/**
+ * 受保护的类别：系统类别 + 「其它」。
+ *
+ * 「其它」不是 `isSystem`（迁移里只是普通种子），但报销单的 `OTHER` 杂费
+ * 按 code 映射到它，停用或合并会让映射失效、历史金额掉进「未分类」。
+ */
+function isProtectedCategory(row: {
+  isSystem: boolean;
+  code: string | null;
+}): boolean {
+  return row.isSystem || row.code === OTHER_CATEGORY_CODE;
+}
 
 function parseCategoryName(input: unknown): string {
   const name = typeof input === 'string' ? input.trim() : '';
@@ -86,6 +107,7 @@ export class FinanceCategoryService {
           isSystem: row.isSystem,
           isActive: row.isActive,
           usageCount: billCount + templateCount + manualCount,
+          selectable: row.code !== OTHER_CATEGORY_CODE,
         };
       }),
     );
@@ -101,7 +123,15 @@ export class FinanceCategoryService {
    */
   async loadExpenseLookup(): Promise<FinanceCategoryLookup> {
     const rows = await this.prisma.financeCategory.findMany({
-      select: { id: true, name: true, code: true },
+      // isActive / mergedIntoId 供 byCode 跟随合并目标；不读会漏掉合并结果
+      // isActive / mergedIntoId 供 byCode 跟随合并目标；不读会漏掉合并结果
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        isActive: true,
+        mergedIntoId: true,
+      },
     });
     const lookup = buildFinanceCategoryLookup(rows);
 
@@ -175,6 +205,11 @@ export class FinanceCategoryService {
     if (!target) {
       throw new NotFoundException('目标类别不存在');
     }
+    // 系统类别不可停用，「合并」会把它停用并迁走记录，等于绕过保护：
+    // 自动来源（采购/快递/手续费）按 code 找系统类别，合并后只能落空。
+    if (isProtectedCategory(source) || isProtectedCategory(target)) {
+      throw new BadRequestException('系统类别不能合并');
+    }
 
     // 三张表搬移 + 源类别停用放在同一个事务里：中途失败不能留下
     // 「记录搬了一半、源类别还启用」的半成品。
@@ -216,7 +251,7 @@ export class FinanceCategoryService {
     if (!existing) {
       throw new NotFoundException('类别不存在');
     }
-    if (existing.isSystem) {
+    if (isProtectedCategory(existing)) {
       throw new BadRequestException('系统类别不能停用');
     }
     if (existing.isActive) {

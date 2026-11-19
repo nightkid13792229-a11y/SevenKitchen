@@ -35,6 +35,12 @@ export type FinanceExpenseCategoryAmount = {
 
 export type FinanceExpense = {
   total: number;
+  /**
+   * 本期固定费用账单的分摊合计（当月应计）。
+   * 直接从 `ExpenseBill` 的分摊行算，不按类别名字兜：老板把「房租」
+   * 改名后首页仍能判断「固定费用已经生成」，不会掉进「还没生成」。
+   */
+  fixedCostTotal: number;
   byCategory: FinanceExpenseCategoryAmount[];
 };
 
@@ -851,10 +857,17 @@ export class FinanceExpenseService {
           b.amount - a.amount || a.label.localeCompare(b.label, 'zh-CN'),
       );
 
+    // 固定费用合计只认账单来源的行（已按服务期分摊到本期间），
+    // 与类别叫什么无关；手工/采购/报销/手续费都不计入。
+    const fixedCostCents = lines
+      .filter((line) => line.sourceType === 'BILL')
+      .reduce((sum, line) => sum + line.amountCents, 0);
+
     return {
       total: centsToMoney(
         Array.from(bucket.values()).reduce((sum, row) => sum + row.cents, 0),
       ),
+      fixedCostTotal: centsToMoney(fixedCostCents),
       byCategory,
     };
   }

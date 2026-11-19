@@ -157,7 +157,8 @@ export class AdminFinanceController {
   @ApiOperation({ summary: '支出类别列表（含引用数，仅 ADMIN）' })
   @ApiResponse({
     status: 200,
-    description: '类别列表（id / name / isSystem / isActive / usageCount）',
+    description:
+        '类别列表（id / name / isSystem / isActive / usageCount / selectable；「其它」selectable=false）',
   })
   @ApiResponse({ status: 403, description: '需要管理员权限' })
   async listCategories(@Query('includeInactive') includeInactive?: string) {
@@ -207,7 +208,10 @@ export class AdminFinanceController {
   @ApiOperation({ summary: '合并支出类别（仅 ADMIN）' })
   @ApiParam({ name: 'id', description: '被合并的源类别ID' })
   @ApiResponse({ status: 200, description: '合并成功，返回搬移条数' })
-  @ApiResponse({ status: 400, description: '目标与源相同或未指定' })
+  @ApiResponse({
+    status: 400,
+    description: '目标与源相同或未指定；系统类别不能合并',
+  })
   @ApiResponse({ status: 404, description: '源类别或目标类别不存在' })
   @ApiResponse({ status: 403, description: '需要管理员权限' })
   async mergeCategory(

@@ -21,6 +21,7 @@ describe('FinanceSummaryService', () => {
   };
   const expense = {
     total: 700,
+    fixedCostTotal: 300,
     byCategory: [
       { categoryId: 'cat-RAW_MATERIAL', label: '食材', amount: 700 },
     ],
@@ -69,6 +70,8 @@ describe('FinanceSummaryService', () => {
     const result = await service.getSummary({ month: '2026-11' });
 
     expect(result.balance).toBe(300);
+    // 固定费用合计由支出服务算好，汇总原样透出
+    expect(result.expense).toMatchObject({ fixedCostTotal: 300 });
     expect(result.pendingOfflineConfirmCount).toBe(2);
     // 接口里的日期带 +08:00，前端不用再猜时区
     expect(result.range.from).toBe('2026-11-01T00:00:00.000+08:00');
@@ -102,7 +105,7 @@ describe('FinanceSummaryService', () => {
         netTotal: 100,
         fee: 0.6,
       },
-      expense: { total: 500, byCategory: [] },
+      expense: { total: 500, fixedCostTotal: 0, byCategory: [] },
     });
 
     const result = await service.getSummary({ month: '2026-11' });

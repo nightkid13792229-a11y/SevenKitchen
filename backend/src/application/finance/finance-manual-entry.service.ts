@@ -13,6 +13,7 @@ import {
   FinanceIncomeCategory,
 } from './finance-categories';
 import { FinanceAccount, normalizeFinanceAccount } from './finance-accounts';
+import { toLegacyExpenseCategory } from './finance-legacy-category';
 import { FINANCE_START_DATE } from './finance-period';
 
 /**
@@ -200,8 +201,8 @@ async function normalizeInput(
       current?.categoryId ?? null,
     );
     categoryId = ref.id;
-    // 旧枚举列按类别 code 回填；老板自建类别没有 code，旧列留 NULL
-    category = (ref.code as FinanceExpenseCategory | null) ?? null;
+    // 旧枚举列只回填 Prisma 枚举真实值；自建类别 / TOOLS / SUNDRIES 留 NULL
+    category = toLegacyExpenseCategory(ref.code);
   } else {
     incomeCategory = resolveIncomeCategory(input.incomeCategory);
   }

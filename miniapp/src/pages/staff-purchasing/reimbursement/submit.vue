@@ -32,7 +32,7 @@
         </view>
       </view>
       <view class="notice-strip">
-        <text>买了食材、补剂、包材，走采购报销；水电、工具、杂物等日常支出，走经营费用报销。</text>
+        <text>买了食材、补剂、包材，走采购报销；工具、杂物等日常支出，走经营费用报销。</text>
       </view>
     </view>
 
@@ -148,7 +148,7 @@
       </view>
 
       <view class="notice-strip">
-        <text>房租、工资、社保、税费请到『财务 → 固定费用』里设，不在这里报。</text>
+        <text>水电、房租、工资、社保、税费请到『财务 → 固定费用』里设，不在这里报。</text>
       </view>
 
       <view class="category-row">
@@ -193,12 +193,12 @@
             v-if="isLegacyReimbursementCustomFeeCategory(fee.category)"
             class="legacy-fee-note"
           >
-            历史类别「{{ getReimbursementCustomFeeCategoryLabel(fee.category) }}」只读保留，提交时原样带回；新报请选水电/工具/杂物/其它。
+            历史类别「{{ getReimbursementCustomFeeCategoryLabel(fee.category) }}」只读保留，提交时原样带回；新报请选工具/杂物/其它。
           </text>
           <input
             v-model="fee.description"
             class="text-input"
-            placeholder="说明，例如 6月水电、临时工具"
+            placeholder="说明，例如 6月工具、临时杂物"
           />
           <view class="money-input">
             <text>¥</text>
@@ -392,7 +392,7 @@ import {
 } from './form-state';
 
 interface CustomFee {
-  /** 新单只会有四项；历史单的房租/工资原样保留，提交时不能丢 */
+  /** 新单只会有三项；历史单的房租/水电/工资原样保留，提交时不能丢 */
   category?: ReimbursementCustomFeeCategoryForDisplay;
   description: string;
   amount: string;
@@ -417,7 +417,7 @@ const packagingTouched = ref(false);
 /** 打开的是已存在的报销单：金额以存下来的为准，不按识别结果重填 */
 const restoredFromDraft = ref(false);
 const customFees = ref<CustomFee[]>([
-  { category: 'UTILITIES', description: '', amount: '' },
+  { category: 'TOOLS', description: '', amount: '' },
 ]);
 const submitting = ref(false);
 const flowType = ref<ReimbursementFlowType | ''>('');
@@ -672,7 +672,7 @@ const loadExistingReimbursement = async (id: string) => {
             description: fee.description || '',
             amount: fee.amount?.toString() || '',
           }))
-        : [{ category: 'UTILITIES', description: '', amount: '' }];
+        : [{ category: 'TOOLS', description: '', amount: '' }];
     receiptUrls.value = Array.isArray(data.receiptUrls)
       ? data.receiptUrls.map((url: string, index: number) => ({
           url,
@@ -692,7 +692,7 @@ const loadExistingReimbursement = async (id: string) => {
 const selectFlowType = (type: ReimbursementFlowType) => {
   flowType.value = type;
   if (type === 'OPERATING' && customFees.value.length === 0) {
-    customFees.value = [{ category: 'UTILITIES', description: '', amount: '' }];
+    customFees.value = [{ category: 'TOOLS', description: '', amount: '' }];
   }
 };
 

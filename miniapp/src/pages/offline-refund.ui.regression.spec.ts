@@ -30,7 +30,7 @@ import {
  * 1. 订单详情管理员可见「登记线下退款」，线下判定用完整集合；
  * 2. 退款金额默认剩余、超额前端拦下，退款日限制在起账日~今天；
  * 3. 代客下单「已收款」默认开、可关，关掉显式传 collected: false；
- * 4. 报销新增只有水电/工具/杂物/其它，历史房租/工资只读保留不改写。
+ * 4. 报销新增只有工具/杂物/其它，历史房租/工资/水电只读保留不改写。
  */
 const readPage = (relativePath: string) =>
   readFileSync(join(__dirname, relativePath), 'utf8')
@@ -142,8 +142,8 @@ describe('代客下单 · 已收款开关', () => {
 })
 
 describe('报销 · 自定义费用收窄', () => {
-  it('新增选项只有水电/工具/杂物/其它，房租工资不可选', () => {
-    const expected = ['UTILITIES', 'TOOLS', 'SUNDRIES', 'OTHER']
+  it('新增选项只有工具/杂物/其它，房租工资水电不可选', () => {
+    const expected = ['TOOLS', 'SUNDRIES', 'OTHER']
     expect(reimbursementCustomFeeCategoryOptions.map((item) => item.value)).toEqual(
       expected,
     )
@@ -153,15 +153,20 @@ describe('报销 · 自定义费用收窄', () => {
     )
     expect(isReimbursementCustomFeeCategory('RENT')).toBe(false)
     expect(isReimbursementCustomFeeCategory('PAYROLL')).toBe(false)
+    // 水电已经归固定费用账单管，报销里不能再选，否则两边重复
+    expect(isReimbursementCustomFeeCategory('UTILITIES')).toBe(false)
   })
 
-  it('历史房租/工资只读回显，标签还在，但不进新增选项', () => {
+  it('历史房租/工资/水电只读回显，标签还在，但不进新增选项', () => {
     expect(isLegacyReimbursementCustomFeeCategory('RENT')).toBe(true)
     expect(isLegacyReimbursementCustomFeeCategory('PAYROLL')).toBe(true)
+    expect(isLegacyReimbursementCustomFeeCategory('UTILITIES')).toBe(true)
     expect(getReimbursementCustomFeeCategoryLabel('RENT')).toBe('房租')
     expect(getReimbursementCustomFeeCategoryLabel('PAYROLL')).toBe('工资/人工')
+    expect(getReimbursementCustomFeeCategoryLabel('UTILITIES')).toBe('水电')
     expect(reimbursementConstantsSource).not.toContain("{ value: 'RENT'")
     expect(reimbursementConstantsSource).not.toContain("{ value: 'PAYROLL'")
+    expect(reimbursementConstantsSource).not.toContain("{ value: 'UTILITIES'")
     expect(reimbursementSubmitSource).not.toContain("category: 'RENT'")
     expect(reimbursementSubmitSource).toContain('历史类别')
   })
@@ -173,10 +178,17 @@ describe('报销 · 自定义费用收窄', () => {
     expect(
       resolveReimbursementCustomFeeCategoryForEdit('PAYROLL', '6月工资'),
     ).toBe('PAYROLL')
+    // 水电也是历史类别，老单重提交不能改成别的
+    expect(
+      resolveReimbursementCustomFeeCategoryForEdit('UTILITIES', '6月水电'),
+    ).toBe('UTILITIES')
     // 老数据缺 category 时才按描述兜底
     expect(resolveReimbursementCustomFeeCategoryForEdit(undefined, '6月房租')).toBe(
       'RENT',
     )
+    expect(
+      resolveReimbursementCustomFeeCategoryForEdit(undefined, '6月水电'),
+    ).toBe('UTILITIES')
     expect(resolveReimbursementCustomFeeCategoryForEdit(undefined, '')).toBe(
       'OTHER',
     )
@@ -185,8 +197,11 @@ describe('报销 · 自定义费用收窄', () => {
     )
   })
 
-  it('默认费用项是水电，并提示房租工资去固定费用报', () => {
-    expect(reimbursementSubmitSource).toContain("category: 'UTILITIES'")
-    expect(reimbursementSubmitSource).toContain('固定费用')
+  it('默认费用项是工具，并提示水电房租工资去固定费用', () => {
+    expect(reimbursementSubmitSource).toContain("category: 'TOOLS'")
+    expect(reimbursementSubmitSource).not.toContain("category: 'UTILITIES'")
+    expect(reimbursementSubmitSource).toContain(
+      '水电、房租、工资、社保、税费请到『财务 → 固定费用』里设',
+    )
   })
 })

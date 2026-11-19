@@ -83,6 +83,10 @@
           </view>
         </view>
 
+        <text v-if="historicalRefundTotal > 0" class="hero-refund">
+          其中历史订单退款 ¥{{ formatMoney(historicalRefundTotal) }}（起账日前的单）
+        </text>
+
         <text v-if="compareText" class="hero-compare">{{ compareText }}</text>
         <text v-if="fixedFeeTotal > 0" class="hero-note">{{ fixedFeeCopy }}</text>
         <text v-else class="hero-note hero-note--link" @tap="goBills">本月固定费用还没生成 ›</text>
@@ -252,6 +256,10 @@ const heroLabel = computed(() =>
 )
 
 const incomeTotal = computed(() => Number(dashboard.value?.income.netTotal) || 0)
+/** 起账日前的订单退款：已经含在收入净额里，单独列出来，免得以为当月白干 */
+const historicalRefundTotal = computed(
+  () => Number(dashboard.value?.income.historicalRefundTotal) || 0,
+)
 const expenseTotal = computed(() => Number(dashboard.value?.expense.total) || 0)
 const balance = computed(() => Number(dashboard.value?.balance) || 0)
 const balanceAbs = computed(() => Math.abs(balance.value))
@@ -461,6 +469,10 @@ onShow(() => {
    这里取浅红，对 #1E3A2F 的对比度 6.3:1（正文级别）。 */
 $staff-danger-on-brand: #f2a79a;
 
+/* 深绿底上的金色：$staff-gold-ink (#7A5C28) 对 #1E3A2F 只有 2:1，
+   同样另取浅金，对 #1E3A2F 的对比度 7.2:1（正文级别）。 */
+$staff-gold-on-brand: #e3c27e;
+
 .page {
   box-sizing: border-box;
   min-height: 100vh;
@@ -630,6 +642,16 @@ $staff-danger-on-brand: #f2a79a;
   font-size: $staff-font-caption;
   font-weight: 600;
   color: $staff-cream;
+}
+
+/* 历史订单退款：小号金色，金额也在这里，不抢主数字 */
+.hero-refund {
+  display: block;
+  margin-top: 12rpx;
+  font-size: $staff-font-caption;
+  line-height: 1.5;
+  color: $staff-gold-on-brand;
+  font-variant-numeric: tabular-nums;
 }
 
 .hero-note {

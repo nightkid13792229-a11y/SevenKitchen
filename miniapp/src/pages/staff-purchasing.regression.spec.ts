@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import {
+  reimbursementCustomFeeCategoryOptions as reimbursementCategoryOptions,
+} from './staff-purchasing/constants/reimbursement';
+import {
+  reimbursementCustomFeeCategoryOptions as rootReimbursementCategoryOptions,
+} from '../constants/reimbursement';
 
 const readPage = (path: string) => readFileSync(resolve(__dirname, path), 'utf8');
 
@@ -206,6 +212,24 @@ describe('staff reimbursement employee flow', () => {
     expect(reimbursementSubmitSource).toContain('包材');
     expect(reimbursementSubmitSource).toContain('包材清单');
     expect(reimbursementConstantsSource).not.toContain("{ value: 'PACKAGING'");
+  });
+
+  it('narrows operating categories and sends water/rent/payroll to fixed bills', () => {
+    const expected = ['TOOLS', 'SUNDRIES', 'OTHER'];
+    expect(reimbursementCategoryOptions.map((option) => option.value)).toEqual(
+      expected,
+    );
+    expect(
+      rootReimbursementCategoryOptions.map((option) => option.value),
+    ).toEqual(expected);
+    // 水电和房租/工资一样只做历史只读，不能再从新增入口选
+    expect(reimbursementConstantsSource).not.toContain("{ value: 'UTILITIES'");
+    expect(reimbursementConstantsSource).not.toContain("{ value: 'RENT'");
+    expect(reimbursementConstantsSource).not.toContain("{ value: 'PAYROLL'");
+    expect(reimbursementSubmitSource).not.toContain("category: 'UTILITIES'");
+    expect(reimbursementSubmitSource).toContain(
+      '水电、房租、工资、社保、税费请到『财务 → 固定费用』里设',
+    );
   });
 
   it('makes multi-item operating expenses and confirmation explicit', () => {

@@ -36,7 +36,7 @@ export interface OperatingExpenseFeeInput {
 }
 
 export interface NormalizedOperatingExpenseFee {
-  /** 新类别只有水电/工具/杂物/其它；老单的房租/工资原样保留，只读回传 */
+  /** 新类别只有工具/杂物/其它；老单的房租/水电/工资原样保留，只读回传 */
   category: ReimbursementCustomFeeCategoryForDisplay;
   description: string;
   amount: number;

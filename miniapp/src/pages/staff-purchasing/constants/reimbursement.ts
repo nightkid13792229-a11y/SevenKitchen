@@ -7,7 +7,7 @@ export const reimbursementFlowTypeOptions = [
   {
     value: 'OPERATING',
     label: '经营费用报销',
-    description: '水电、工具、杂物、其它日常支出',
+    description: '工具、杂物、其它日常支出',
   },
 ] as const;
 
@@ -17,11 +17,10 @@ export type ReimbursementFlowType =
 /**
  * 经营费用报销的可选类别（2026-11-19 收窄）。
  *
- * 房租、工资、社保、税费已经移到「财务 → 固定费用」按月自动出账，
+ * 房租、水电、工资、社保、税费已经移到「财务 → 固定费用」按月自动出账，
  * 这里不再提供，避免同一笔钱既走报销又走固定费用被扣两次。
  */
 export const reimbursementCustomFeeCategoryOptions = [
-  { value: 'UTILITIES', label: '水电' },
   { value: 'TOOLS', label: '工具' },
   { value: 'SUNDRIES', label: '杂物' },
   { value: 'OTHER', label: '其它' },
@@ -31,7 +30,7 @@ export type ReimbursementCustomFeeCategory =
   (typeof reimbursementCustomFeeCategoryOptions)[number]['value'];
 
 /**
- * 历史类别：2026-11-19 之前的老报销单里可能还有房租/工资。
+ * 历史类别：2026-11-19 之前的老报销单里可能还有房租/工资/水电。
  *
  * 只用于**只读回显**（详情、列表、编辑回填），不参与新增选项；
  * 编辑老单时原样保留回传，不能因为下拉里没有就改写成「其它」。
@@ -39,12 +38,13 @@ export type ReimbursementCustomFeeCategory =
 export const LEGACY_REIMBURSEMENT_CUSTOM_FEE_CATEGORIES = [
   'RENT',
   'PAYROLL',
+  'UTILITIES',
 ] as const;
 
 export type LegacyReimbursementCustomFeeCategory =
   (typeof LEGACY_REIMBURSEMENT_CUSTOM_FEE_CATEGORIES)[number];
 
-/** 展示 / 编辑回填时可能遇到的类别（新增只允许前四个） */
+/** 展示 / 编辑回填时可能遇到的类别（新增只允许上述三项） */
 export type ReimbursementCustomFeeCategoryForDisplay =
   | ReimbursementCustomFeeCategory
   | LegacyReimbursementCustomFeeCategory;
@@ -64,6 +64,7 @@ const legacyReimbursementCustomFeeCategoryLabelMap: Record<
 > = {
   RENT: '房租',
   PAYROLL: '工资/人工',
+  UTILITIES: '水电',
 };
 
 export const isReimbursementCustomFeeCategory = (
@@ -107,7 +108,7 @@ export const getReimbursementCustomFeeCategoryLabel = (
 /**
  * 按描述猜类别。
  *
- * 房租/工资的猜测只服务历史数据回填，新增入口不提供这两项；
+ * 房租/水电/工资的猜测只服务历史数据回填，新增入口不提供这三项；
  * 猜不出返回 undefined，由调用方落到「其它」。
  */
 export const inferReimbursementCustomFeeCategory = (

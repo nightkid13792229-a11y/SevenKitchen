@@ -73,6 +73,22 @@ describe('财务首页', () => {
     expect(chipRule).toContain('padding: 0 28rpx');
   });
 
+  it('历史订单退款单独列示，为 0 时不显示', () => {
+    expect(page).toContain('historicalRefundTotal');
+    expect(page).toContain('v-if="historicalRefundTotal > 0"');
+    expect(page).toContain('其中历史订单退款');
+    expect(page).toContain('¥{{ formatMoney(historicalRefundTotal) }}');
+    expect(page).toContain('（起账日前的单）');
+
+    // 深绿主卡上的金色：$staff-gold-ink 对 #1E3A2F 只有 2:1，
+    // 按警示红的先例另取浅金，小号文字必须 ≥ 4.5:1
+    const refundGold = page.match(
+      /\$staff-gold-on-brand:\s*(#[0-9a-fA-F]{6})/,
+    )?.[1];
+    expect(refundGold).toBeTruthy();
+    expect(contrast(refundGold!, '#1e3a2f')).toBeGreaterThanOrEqual(4.5);
+  });
+
   it('有待确认线下收款的提醒入口', () => {
     expect(page).toContain('线下收款待确认');
     expect(page).toContain('pendingOfflineConfirmCount');

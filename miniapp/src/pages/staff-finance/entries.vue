@@ -14,6 +14,13 @@
       </view>
       <view
         class="filter-chip"
+        :class="{ 'filter-chip--on': !!monthParam }"
+        @tap="toggleMonthPanel"
+      >
+        月份 · {{ monthChipLabel }}
+      </view>
+      <view
+        class="filter-chip"
         :class="{ 'filter-chip--on': !!selectedCategory }"
         @tap="toggleCategoryPanel"
       >
@@ -22,6 +29,25 @@
       <text v-if="!loading && entries.length > 0" class="filters-count">
         共 {{ total }} 笔
       </text>
+    </view>
+
+    <view v-if="monthPanelOpen" class="month-panel">
+      <view
+        class="month-chip"
+        :class="{ 'month-chip--on': !monthParam }"
+        @tap="selectMonth('')"
+      >
+        本月
+      </view>
+      <view
+        v-for="chip in recentMonthChips"
+        :key="chip.key"
+        class="month-chip"
+        :class="{ 'month-chip--on': monthParam === chip.key }"
+        @tap="selectMonth(chip.key)"
+      >
+        {{ chip.label }}
+      </view>
     </view>
 
     <view v-if="categoryPanelOpen" class="category-panel">
@@ -86,7 +112,16 @@
               {{ payerLabel(entry) }}
             </text>
           </view>
-          <text class="entry-title">{{ entryTitle(entry) }}</text>
+          <view class="entry-title-row">
+            <text class="entry-title">{{ entryTitle(entry) }}</text>
+            <!-- 退款对应的订单付款早于起账日：标题后单独标「历史单」，别和当月退款混在一起 -->
+            <text
+              v-if="entry.isRefund && entry.isHistorical"
+              class="entry-historical"
+            >
+              历史单
+            </text>
+          </view>
         </view>
         <text
           class="entry-amount"
@@ -124,6 +159,7 @@ import {
   type FinanceEntrySourceType,
 } from '../../api/staff-finance'
 import { getStoredUser } from '../../utils/account'
+import { FINANCE_START_MONTH } from '../../constants/finance'
 
 /** 每页条数：后台上限 200，这里取 20，一屏能看到 3–4 条又不至于一次拉太多 */
 const PAGE_SIZE = 20
@@ -233,6 +269,32 @@ const activeFilter = ref<FilterKey>('ALL')
  */
 const monthParam = ref('')
 
+/** 月份面板是否展开；和类别面板互斥，避免两个面板叠在一起 */
+const monthPanelOpen = ref(false)
+
+/**
+ * 可选整月：最近三个月，往后裁到起账月（2026-11）。
+ * 与财务首页的月份 chip 同一口径；2026-11 打开时只有「11 月」一个整月。
+ */
+const recentMonthChips = computed<Array<{ key: string; label: string }>>(() => {
+  const today = shanghaiToday()
+  const chips: Array<{ key: string; label: string }> = []
+  for (let offset = 0; offset < 3; offset += 1) {
+    const date = new Date(Date.UTC(today.year, today.month - 1 - offset, 1))
+    const key = `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}`
+    if (key < FINANCE_START_MONTH) continue
+    chips.push({ key, label: `${Number(key.slice(5, 7))} 月` })
+  }
+  return chips
+})
+
+/** 默认「本月」= 本月至今；选了整月就显示那个月 */
+const monthChipLabel = computed(() =>
+  monthParam.value
+    ? `${Number(monthParam.value.slice(5, 7))} 月`
+    : '本月',
+)
+
 const entries = ref<FinanceEntry[]>([])
 const total = ref(0)
 const truncated = ref(false)
@@ -298,8 +360,22 @@ function collectCategories(items: FinanceEntry[]) {
   }))
 }
 
+function toggleMonthPanel() {
+  monthPanelOpen.value = !monthPanelOpen.value
+  if (monthPanelOpen.value) categoryPanelOpen.value = false
+}
+
+/** 切月份必须重置分页：不清空的话第 2 页会拼到新月份的列表后面 */
+function selectMonth(value: string) {
+  monthPanelOpen.value = false
+  if (monthParam.value === value) return
+  monthParam.value = value
+  load({ reset: true })
+}
+
 function toggleCategoryPanel() {
   categoryPanelOpen.value = !categoryPanelOpen.value
+  if (categoryPanelOpen.value) monthPanelOpen.value = false
 }
 
 function selectCategory(value: string) {
@@ -492,7 +568,8 @@ onReachBottom(() => {
   color: $staff-ink-2;
 }
 
-.category-panel {
+.category-panel,
+.month-panel {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -504,7 +581,8 @@ onReachBottom(() => {
   border-radius: $staff-radius-card;
 }
 
-.category-chip {
+.category-chip,
+.month-chip {
   display: inline-flex;
   align-items: center;
   min-height: 88rpx;
@@ -516,7 +594,8 @@ onReachBottom(() => {
   border-radius: $staff-radius-pill;
 }
 
-.category-chip--on {
+.category-chip--on,
+.month-chip--on {
   font-weight: 600;
   color: $staff-cream;
   background: $staff-brand;
@@ -596,13 +675,29 @@ onReachBottom(() => {
   background: $staff-gold-soft;
 }
 
-.entry-title {
-  display: block;
+.entry-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12rpx;
   margin-top: 8rpx;
+}
+
+.entry-title {
   font-size: $staff-font-h2;
   font-weight: 600;
   line-height: 1.4;
   color: $staff-ink;
+}
+
+/* 历史单：金色小标签，和红色的「退款」区分开，别误以为当月退款 */
+.entry-historical {
+  flex: none;
+  padding: 2rpx 12rpx;
+  font-size: $staff-font-caption;
+  color: $staff-gold-ink;
+  background: $staff-gold-soft;
+  border-radius: $staff-radius-pill;
 }
 
 .entry-amount {

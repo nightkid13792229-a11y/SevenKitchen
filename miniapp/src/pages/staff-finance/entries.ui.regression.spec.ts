@@ -109,6 +109,34 @@ describe('收支明细', () => {
     expect(page).toContain('new Date(Date.UTC(year, month, 0))');
   });
 
+  it('月份 chip 默认本月，可切最近三个月并重置分页', () => {
+    expect(page).toContain('月份 ·');
+    expect(page).toContain('本月');
+    expect(page).toContain('monthChipLabel');
+    expect(page).toContain('monthPanelOpen');
+    expect(page).toContain('recentMonthChips');
+    // 最近三个月必须裁到起账月，不能选到 2026-11 之前
+    expect(page).toContain('FINANCE_START_MONTH');
+    expect(page).toContain('selectMonth');
+
+    const selectBlock = page.match(/function selectMonth[\s\S]*?\n\}/)?.[0] || '';
+    expect(selectBlock).toContain('monthParam.value = value');
+    expect(selectBlock).toContain('load({ reset: true })');
+    // 月份面板和类别面板互斥，不能叠在一起
+    expect(page).toContain('if (monthPanelOpen.value) categoryPanelOpen.value = false');
+    expect(page).toContain('if (categoryPanelOpen.value) monthPanelOpen.value = false');
+  });
+
+  it('历史订单退款行在标题后标「历史单」', () => {
+    expect(page).toContain('entry.isRefund && entry.isHistorical');
+    expect(page).toContain('历史单');
+    expect(page).toContain('entry-historical');
+    expect(page).toContain('entry-title-row');
+    // 金色小标签，和红色「退款」区分开
+    expect(page).toContain('$staff-gold-ink');
+    expect(page).toContain('$staff-gold-soft');
+  });
+
   it('有类别筛选，从列表聚合类别并带 category 请求', () => {
     expect(page).toContain('类别');
     expect(page).toContain('全部类别');

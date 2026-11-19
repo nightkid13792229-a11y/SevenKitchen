@@ -4,7 +4,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import { CreateExpenseTemplateDto } from '../../interfaces/dto/finance/create-expense-template.dto';
 import {
   FINANCE_EXPENSE_CATEGORY_LABELS,
   FinanceExpenseCategory,
@@ -225,16 +224,6 @@ function buildTemplateBillNumber(
 @Injectable()
 export class ExpenseTemplateService {
   constructor(private readonly prisma: PrismaService) {}
-
-  /** 旧后台接口沿用：原样落库（不做新校验，避免改变旧行为） */
-  createTemplate(createdById: string, dto: CreateExpenseTemplateDto) {
-    return this.prisma.expenseTemplate.create({
-      data: {
-        ...dto,
-        createdById,
-      },
-    });
-  }
 
   /** 新建固定费用模板（后台接口 / 小程序固定费用页共用） */
   async create(userId: string, input: CreateExpenseTemplateInput) {

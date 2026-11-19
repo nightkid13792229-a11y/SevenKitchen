@@ -10,7 +10,6 @@ import { AddressesController } from './interfaces/controllers/addresses.controll
 import { AuthController } from './interfaces/controllers/auth.controller';
 import { AdminController } from './interfaces/controllers/admin.controller';
 import { AdminFinanceController } from './interfaces/controllers/admin-finance.controller';
-import { AdminFinanceV2Controller } from './interfaces/controllers/admin-finance-v2.controller';
 import { ShippingController } from './interfaces/controllers/shipping.controller';
 import { UsersController } from './interfaces/controllers/users.controller';
 import { StaffKitchenController } from './interfaces/controllers/staff-kitchen.controller';
@@ -68,7 +67,6 @@ import { CustomRecipeConfigService } from './application/custom-recipe/custom-re
 import { CustomRecipePricingService } from './application/custom-recipe/custom-recipe-pricing.service';
 import { GuestCustomerService } from './application/custom-recipe/guest-customer.service';
 import { AssistedOrderService } from './application/custom-recipe/assisted-order.service';
-import { FinanceAlertService } from './application/finance/finance-alert.service';
 import { FinanceFeeRateService } from './application/finance/finance-fee-rate.service';
 import { FinanceSummaryService } from './application/finance/finance-summary.service';
 import { FinanceIncomeService } from './application/finance/finance-income.service';
@@ -76,7 +74,6 @@ import { FinanceExpenseService } from './application/finance/finance-expense.ser
 import { FinanceEntriesService } from './application/finance/finance-entries.service';
 import { FinanceManualEntryService } from './application/finance/finance-manual-entry.service';
 import { ExpenseBillService } from './application/finance/expense-bill.service';
-import { FinanceReportService } from './application/finance/finance-report.service';
 import { ExpenseTemplateService } from './application/finance/expense-template.service';
 import { FinanceSchedulerService } from './application/scheduler/finance-scheduler.service';
 import { OrderSchedulerService } from './application/scheduler/order-scheduler.service';
@@ -475,9 +472,6 @@ validatePrismaConfig();
      */
     StaffDogHealthController,
     AdminController,
-    // V2 先注册：它与旧控制器共用 admin/finance 前缀，
-    // 先注册的 handler 才不会被旧路由遮住（Task 16 会删掉旧控制器）。
-    AdminFinanceV2Controller,
     AdminFinanceController,
     ShippingController,
     StaffKitchenController,
@@ -906,8 +900,6 @@ validatePrismaConfig();
     ReplenishmentService,
     ExpenseBillService,
     ExpenseTemplateService,
-    FinanceReportService,
-    FinanceAlertService,
     FinanceFeeRateService,
     FinanceSummaryService,
     FinanceIncomeService,

@@ -387,28 +387,6 @@ const routes: RouteRecordRaw[] = [
         component: () => import("@/views/Purchasing/ReimbursementDetail.vue"),
         meta: { title: "报销单详情" },
       },
-      {
-        path: "finance",
-        name: "FinanceCenter",
-        component: () => import("@/views/Finance/index.vue"),
-        meta: { title: "财务" },
-      },
-      {
-        path: "finance/overview",
-        redirect: redirectTo("/finance", { tab: "overview" }),
-      },
-      {
-        path: "finance/expense-bills",
-        redirect: redirectTo("/finance", { tab: "expense-bills" }),
-      },
-      {
-        path: "finance/expense-analysis",
-        redirect: redirectTo("/finance", { tab: "expense-analysis" }),
-      },
-      {
-        path: "finance/contribution-analysis",
-        redirect: redirectTo("/finance", { tab: "contribution" }),
-      },
 
       /* ---------------- 设置 ---------------- */
       {

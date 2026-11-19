@@ -284,9 +284,6 @@ export { userApi } from './users'
 // Re-export purchasing API
 export { purchasingApi } from './purchasing'
 
-// Re-export finance API
-export { financeApi } from './finance'
-
 // Re-export nutrition governance API
 export { nutritionGovernanceApi } from './nutritionGovernance'
 

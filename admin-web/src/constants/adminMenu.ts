@@ -294,14 +294,6 @@ export const adminMenuGroups: AdminMenuGroup[] = [
         badgeKeys: ['reimbursement'],
         aliases: ['/purchasing/reimbursements/'],
       },
-      {
-        key: 'finance',
-        label: '财务',
-        path: '/finance',
-        icon: Money,
-        keywords: ['财务', '费用', '经营贡献', '收款', '付款'],
-        aliases: ['/finance/'],
-      },
     ],
   },
   {

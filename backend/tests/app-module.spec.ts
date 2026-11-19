@@ -5,7 +5,6 @@ import { MODULE_METADATA } from '@nestjs/common/constants';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
 import { AdminFinanceController } from '../src/interfaces/controllers/admin-finance.controller';
-import { AdminFinanceV2Controller } from '../src/interfaces/controllers/admin-finance-v2.controller';
 
 /**
  * 启动自检。
@@ -27,17 +26,15 @@ describe('AppModule 装配', () => {
   });
 });
 
-describe('财务控制器注册顺序', () => {
-  it('V2 先于旧控制器注册，/admin/finance/templates 命中仅 ADMIN 的 V2', () => {
+describe('财务控制器注册', () => {
+  it('只注册一个 ADMIN 财务控制器', () => {
     const controllers = Reflect.getMetadata(
       MODULE_METADATA.CONTROLLERS,
       AppModule,
     ) as Function[];
 
-    const v2Index = controllers.indexOf(AdminFinanceV2Controller);
-    const oldIndex = controllers.indexOf(AdminFinanceController);
-    expect(v2Index).toBeGreaterThanOrEqual(0);
-    expect(oldIndex).toBeGreaterThanOrEqual(0);
-    expect(v2Index).toBeLessThan(oldIndex);
+    expect(
+      controllers.filter((controller) => controller === AdminFinanceController),
+    ).toHaveLength(1);
   });
 });

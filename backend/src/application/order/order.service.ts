@@ -101,6 +101,7 @@ import {
   OFFLINE_PAYMENT_CHANNELS,
   type OfflinePaymentChannel,
 } from '../finance/finance-categories';
+import { normalizeFinanceAccount } from '../finance/finance-accounts';
 
 const MAX_ORDER_SEARCH_EXPANSION_TERMS = 8;
 
@@ -3393,8 +3394,11 @@ export class OrderService {
     adminId: string,
     actualAmount?: number,
     channel: OfflinePaymentChannel = 'OFFLINE_WECHAT',
+    account?: string | null,
   ): Promise<Order> {
     const paymentMethod = normalizeOfflinePaymentChannel(channel);
+    // 账户和渠道一样，必须在任何写入之前校验：非法值报 400 时订单还没落库。
+    const payerAccount = normalizeFinanceAccount(account);
 
     // 1. Load and validate order
     const order = await this.orderRepository.findById(orderId);
@@ -3422,6 +3426,7 @@ export class OrderService {
     // 4. Record payment (sets paymentStatus, paidAt, transactionId, paymentMethod, and transitions to PAID)
     const fromStatus = order.status;
     order.recordPayment(paymentMethod, transactionId);
+    order.payerAccount = payerAccount;
     const savedOrder = await this.orderRepository.save(order);
 
     // 5. Log status transition with payment metadata

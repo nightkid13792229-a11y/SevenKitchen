@@ -180,6 +180,7 @@ describe('StaffCustomerServiceController customer and dog workflows', () => {
       'staff-1',
       118,
       'OFFLINE_WECHAT',
+      'PERSONAL_WECHAT',
     );
     expect(result.code).toBe(0);
     expect(result.data).toMatchObject({

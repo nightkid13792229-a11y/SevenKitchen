@@ -148,6 +148,43 @@ describe('代客下单一步收款', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(orderRepository.save).not.toHaveBeenCalled();
     });
+
+    it('写入指定的收款账户', async () => {
+      const { service } = createService(pendingOrder());
+
+      const saved = await service.confirmOfflinePayment(
+        'order-1',
+        'u1',
+        699,
+        'OFFLINE_ALIPAY',
+        'CASH',
+      );
+
+      expect(saved.payerAccount).toBe('CASH');
+    });
+
+    it('不传账户时按我的微信落库', async () => {
+      const { service } = createService(pendingOrder());
+
+      const saved = await service.confirmOfflinePayment('order-1', 'u1', 699);
+
+      expect(saved.payerAccount).toBe('PERSONAL_WECHAT');
+    });
+
+    it('账户非法直接拒绝，且不落库', async () => {
+      const { service, orderRepository } = createService(pendingOrder());
+
+      await expect(
+        service.confirmOfflinePayment(
+          'order-1',
+          'u1',
+          699,
+          'OFFLINE_WECHAT',
+          'PAYPAL' as any,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(orderRepository.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('代客下单控制器', () => {
@@ -225,6 +262,40 @@ describe('代客下单一步收款', () => {
       expect(orderService.updateOrderAmount).not.toHaveBeenCalled();
       expect(orderService.confirmOfflinePayment).not.toHaveBeenCalled();
       expect(prisma.orderOperationLog.create).not.toHaveBeenCalled();
+    });
+
+    it('非法收款账户在建单之前返回 400，一次写入都没有', async () => {
+      const { controller, prisma, orderService } = createController();
+
+      const result = await (controller as any).createAssistedOrder(
+        assistedPayload({ paymentAccount: 'PAYPAL' }),
+        staff,
+      );
+
+      expect(result.code).toBe(400);
+      expect(orderService.createOrderDraft).not.toHaveBeenCalled();
+      expect(orderService.confirmOrder).not.toHaveBeenCalled();
+      expect(orderService.updateOrderAmount).not.toHaveBeenCalled();
+      expect(orderService.confirmOfflinePayment).not.toHaveBeenCalled();
+      expect(prisma.orderOperationLog.create).not.toHaveBeenCalled();
+    });
+
+    it('把选择的收款账户传给确认收款', async () => {
+      const { controller, orderService } = createController();
+
+      const result = await (controller as any).createAssistedOrder(
+        assistedPayload({ paymentAccount: 'PERSONAL_ALIPAY' }),
+        staff,
+      );
+
+      expect(result.code).toBe(0);
+      expect(orderService.confirmOfflinePayment).toHaveBeenCalledWith(
+        'order-1',
+        'staff-1',
+        699,
+        'OFFLINE_WECHAT',
+        'PERSONAL_ALIPAY',
+      );
     });
 
     it('collected:false 返回库里的最新状态，而不是建单时的 INIT', async () => {

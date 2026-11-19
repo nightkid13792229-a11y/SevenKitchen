@@ -119,6 +119,7 @@ export class PrismaOrderRepository implements OrderRepository {
             cancelledBy: order.cancelledBy ?? null,
             // Phase 8.17: Payment transaction tracking
             paymentMethod: order.paymentMethod ?? null,
+            payerAccount: order.payerAccount ?? null,
             transactionId: order.transactionId ?? null,
             paidAt: order.paidAt ?? null,
             paymentStatus: order.paymentStatus ?? null,
@@ -202,6 +203,7 @@ export class PrismaOrderRepository implements OrderRepository {
           cancelledBy: order.cancelledBy ?? null,
           // Phase 8.17: Payment transaction tracking (must be updated when payment is processed)
           paymentMethod: order.paymentMethod ?? null,
+          payerAccount: order.payerAccount ?? null,
           transactionId: order.transactionId ?? null,
           paidAt: order.paidAt ?? null,
           paymentStatus: order.paymentStatus ?? null,
@@ -285,7 +287,7 @@ export class PrismaOrderRepository implements OrderRepository {
       ? this.deserializePricingSnapshot(record.pricingBreakdownSnapshot as any)
       : undefined;
 
-    return new Order(
+    const order = new Order(
       record.id,
       record.customerId,
       record.status as OrderStatus,
@@ -350,6 +352,9 @@ export class PrismaOrderRepository implements OrderRepository {
       (record as any).remakeFromOrderId ?? null,
       (record as any).reshipFromOrderId ?? null,
     );
+    // 不放进构造参数：历史调用点按位置传参，新增位置参数会错位。
+    order.payerAccount = (record as any).payerAccount ?? null;
+    return order;
   }
 
   private serializePricingSnapshot(snapshot: PricingBreakdownSnapshot): any {

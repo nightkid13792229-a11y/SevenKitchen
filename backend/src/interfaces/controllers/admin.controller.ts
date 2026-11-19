@@ -2679,6 +2679,7 @@ export class AdminController {
           amount: dto?.amount,
           refundedAt: dto?.refundedAt,
           method: dto?.method,
+          payerAccount: dto?.payerAccount,
           note: dto?.note,
           proofKeys: dto?.proofKeys,
         },

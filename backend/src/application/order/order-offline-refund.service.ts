@@ -7,6 +7,10 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { TimezoneUtil } from '../../utils/timezone.util';
 import { OFFLINE_PAYMENT_METHODS } from '../finance/finance-categories';
+import {
+  normalizeFinanceAccount,
+  resolveFinanceAccount,
+} from '../finance/finance-accounts';
 import { centsToMoney, toCents } from '../finance/finance-expense.service';
 import { FINANCE_START_DATE } from '../finance/finance-period';
 
@@ -32,6 +36,13 @@ export type RegisterOfflineRefundInput = {
   /** 退款日 `YYYY-MM-DD` */
   refundedAt: string;
   method: OfflineRefundMethod;
+  /**
+   * 退款出账账户（五个账户 code）。
+   *
+   * 不填时沿用该订单的收款账户（`Order.payerAccount`），再缺省「我的微信」；
+   * 填了但不是合法账户直接 400，不能静默落成默认值。
+   */
+  payerAccount?: string | null;
   note?: string;
   /** 退款凭证（COS key） */
   proofKeys?: string[];
@@ -80,6 +91,7 @@ const ORDER_REFUND_CHECK_SELECT = {
   amountTotal: true,
   paidAt: true,
   paymentMethod: true,
+  payerAccount: true,
 } satisfies Prisma.OrderSelect;
 
 type OrderRefundCheckRow = Prisma.OrderGetPayload<{
@@ -207,6 +219,15 @@ export class OrderOfflineRefundService {
 
     const method = parseMethod(input?.method);
 
+    // 账户在写库之前校验：非法值直接 400，不会先登记再报错。
+    const rawPayerAccount =
+      input?.payerAccount === undefined || input?.payerAccount === null
+        ? ''
+        : String(input.payerAccount).trim();
+    const payerAccount = rawPayerAccount
+      ? normalizeFinanceAccount(rawPayerAccount)
+      : resolveFinanceAccount(order.payerAccount);
+
     const refundedBefore = await this.prisma.orderOfflineRefund.aggregate({
       where: { orderId, voidedAt: null },
       _sum: { amount: true },
@@ -231,6 +252,7 @@ export class OrderOfflineRefundService {
         amount: centsToMoney(amountCents),
         refundedAt,
         method,
+        payerAccount,
         note: note ? note : null,
         proofKeys: parseProofKeys(input?.proofKeys),
         createdById: operatorId,

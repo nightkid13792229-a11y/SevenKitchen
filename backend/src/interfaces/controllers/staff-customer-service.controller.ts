@@ -19,6 +19,7 @@ import {
   normalizeOfflinePaymentChannel,
 } from '../../application/order/order.service';
 import { isOfflinePaymentMethod } from '../../application/finance/finance-categories';
+import { normalizeFinanceAccount } from '../../application/finance/finance-accounts';
 import { AddressService } from '../../application/address/address.service';
 import { parseProductionDateInput } from '../../application/order/production-date';
 import { getRecipeLifeStageShortLabel } from '../../domain/recipe/enums';
@@ -255,6 +256,8 @@ export class StaffCustomerServiceController {
       const channel = normalizeOfflinePaymentChannel(
         body.paymentChannel ?? body.channel,
       );
+      // 收款账户同样是「先校验后落库」：非法账户直接 400，不留下半张单。
+      const paymentAccount = normalizeFinanceAccount(body.paymentAccount);
       const collected = body.collected !== false;
 
       const dog = await this.prisma.dog.findUnique({
@@ -373,6 +376,7 @@ export class StaffCustomerServiceController {
           operatorId,
           actualAmount ?? toNumber(createdOrder.amountTotal),
           channel,
+          paymentAccount,
         );
         return ApiResponseDto.success(paidOrder);
       }

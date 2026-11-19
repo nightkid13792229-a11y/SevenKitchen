@@ -9,6 +9,7 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { FINANCE_ACCOUNT_CODES } from '../../../application/finance/finance-accounts';
 
 /** 线下退款方式（与 `order_offline_refund.method` 一致） */
 export const OFFLINE_REFUND_METHOD_VALUES = [
@@ -50,6 +51,15 @@ export class RegisterOfflineRefundDto {
     message: '退款方式必须是 WECHAT / ALIPAY / CASH / OTHER',
   })
   method!: (typeof OFFLINE_REFUND_METHOD_VALUES)[number];
+
+  @ApiPropertyOptional({
+    description: '退款出账账户；不填沿用该订单收款账户，再缺省「我的微信」',
+    enum: [...FINANCE_ACCOUNT_CODES],
+    example: 'PERSONAL_WECHAT',
+  })
+  @IsOptional()
+  @IsIn([...FINANCE_ACCOUNT_CODES], { message: '账户不合法' })
+  payerAccount?: (typeof FINANCE_ACCOUNT_CODES)[number];
 
   @ApiPropertyOptional({
     description: '备注',

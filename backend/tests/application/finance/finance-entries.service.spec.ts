@@ -968,6 +968,11 @@ describe('FinanceEntriesService', () => {
         .filter((item) => item.isRefund)
         .map((row) => [row.id, row.payerAccount]),
     );
+    const refundLabels = new Map(
+      all.items
+        .filter((item) => item.isRefund)
+        .map((row) => [row.id, row.payerAccountLabel]),
+    );
 
     // 线下代客单收款用订单上登记的账户（没有才缺省「我的微信」）
     expect(all.items.find((item) => item.id === 'o-offline')).toMatchObject({
@@ -978,6 +983,7 @@ describe('FinanceEntriesService', () => {
 
     expect(refundAccount.get('refund:r1')).toBe('MERCHANT');
     expect(refundAccount.get('refund:offline:orf1')).toBe('PERSONAL_ALIPAY');
+    expect(refundLabels.get('refund:offline:orf1')).toBe('我的支付宝');
     expect(refundAccount.get('refund:supplement:s-refund-legacy')).toBe(
       'PERSONAL_WECHAT',
     );

@@ -113,11 +113,20 @@ export class Order {
   }
 
   /**
+   * 线下代客单收款账户（2026-11-19）。
+   *
+   * 只有线下收款才存这个字段；线上支付的钱固定进微信商户号，
+   * 读侧按 `MERCHANT` 推导（见 `FINANCE_INCOME_ACCOUNT`）。
+   * 不放进构造参数：历史调用点都是按位置传参，新增位置参数会错位。
+   */
+  public payerAccount: string | null = null;
+
+  /**
    * Create Order entity from database data without validation
    * Used when loading orders that may have been manually adjusted (e.g., admin amount changes)
    */
   static fromPrismaData(data: any, items: OrderItem[] = []): Order {
-    return new Order(
+    const order = new Order(
       data.id,
       data.customerId,
       data.status,
@@ -159,6 +168,8 @@ export class Order {
       data.reshipFromOrderId ?? null,
       Boolean(data.noShippingRequired),
     );
+    order.payerAccount = data.payerAccount ?? null;
+    return order;
   }
 
   /**

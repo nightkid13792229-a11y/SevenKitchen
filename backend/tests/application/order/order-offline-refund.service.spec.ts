@@ -128,6 +128,57 @@ describe('OrderOfflineRefundService', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it('未指定退款账户时沿用订单收款账户', async () => {
+    const prisma: any = makePrisma({ ...offlineOrder, payerAccount: 'CASH' });
+    const service = new OrderOfflineRefundService(prisma);
+
+    await service.register('u1', 'o1', input() as any);
+
+    expect(prisma.order.findUnique).toHaveBeenCalledWith({
+      where: { id: 'o1' },
+      select: expect.objectContaining({ payerAccount: true }),
+    });
+    expect(prisma.orderOfflineRefund.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ payerAccount: 'CASH' }),
+    });
+  });
+
+  it('订单没有收款账户时退款账户缺省我的微信', async () => {
+    const prisma: any = makePrisma({ ...offlineOrder, payerAccount: null });
+    const service = new OrderOfflineRefundService(prisma);
+
+    await service.register('u1', 'o1', input() as any);
+
+    expect(prisma.orderOfflineRefund.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ payerAccount: 'PERSONAL_WECHAT' }),
+    });
+  });
+
+  it('写入指定的退款账户', async () => {
+    const prisma: any = makePrisma({ ...offlineOrder, payerAccount: 'CASH' });
+    const service = new OrderOfflineRefundService(prisma);
+
+    await service.register(
+      'u1',
+      'o1',
+      input({ payerAccount: 'PERSONAL_ALIPAY' }) as any,
+    );
+
+    expect(prisma.orderOfflineRefund.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ payerAccount: 'PERSONAL_ALIPAY' }),
+    });
+  });
+
+  it('退款账户非法返回 400 且不写库', async () => {
+    const prisma: any = makePrisma({ ...offlineOrder, payerAccount: 'CASH' });
+    const service = new OrderOfflineRefundService(prisma);
+
+    await expect(
+      service.register('u1', 'o1', input({ payerAccount: 'PAYPAL' }) as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.orderOfflineRefund.create).not.toHaveBeenCalled();
+  });
+
   it('退款金额必须大于 0', async () => {
     const prisma: any = makePrisma(offlineOrder);
     const service = new OrderOfflineRefundService(prisma);

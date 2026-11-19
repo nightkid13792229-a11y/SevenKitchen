@@ -1,9 +1,25 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { FinanceEntriesService } from '../../application/finance/finance-entries.service';
+import { FinanceManualEntryService } from '../../application/finance/finance-manual-entry.service';
 import { FinanceSummaryService } from '../../application/finance/finance-summary.service';
 import { AuthGuard } from '../auth';
+import { UserId } from '../auth/user.decorator';
 import { ApiResponseDto } from '../dto/common/response.dto';
+import {
+  CreateManualEntryDto,
+  UpdateManualEntryDto,
+  VoidManualEntryDto,
+} from '../dto/finance/create-manual-entry.dto';
 import { FinanceEntriesQueryDto } from '../dto/finance/finance-entries.query.dto';
 import { FinanceRangeQueryDto } from '../dto/finance/finance-range.query.dto';
 import { AdminGuard } from '../guards/role.guard';
@@ -24,6 +40,7 @@ export class AdminFinanceV2Controller {
   constructor(
     private readonly financeSummaryService: FinanceSummaryService,
     private readonly financeEntriesService: FinanceEntriesService,
+    private readonly financeManualEntryService: FinanceManualEntryService,
   ) {}
 
   /**
@@ -62,6 +79,59 @@ export class AdminFinanceV2Controller {
     return ApiResponseDto.success(
       await this.financeEntriesService.list(query),
       'Finance entries retrieved successfully',
+    );
+  }
+
+  /** 记一笔：手工登记系统抓不到的收入/支出（设备、税费、零星收入等） */
+  @Post('manual-entries')
+  @ApiOperation({ summary: '记一笔（手工收入/支出，仅 ADMIN）' })
+  @ApiResponse({ status: 200, description: '新建成功，返回条目 id' })
+  @ApiResponse({ status: 400, description: '金额/方向/类别/发生日不合法' })
+  @ApiResponse({ status: 403, description: '需要管理员权限' })
+  async createManualEntry(
+    @UserId() userId: string,
+    @Body() body: CreateManualEntryDto,
+  ): Promise<ApiResponseDto<{ id: string }>> {
+    return ApiResponseDto.success(
+      await this.financeManualEntryService.create(userId, body),
+      'Manual entry created successfully',
+    );
+  }
+
+  /** 改一笔：已作废的条目不允许修改 */
+  @Patch('manual-entries/:id')
+  @ApiOperation({ summary: '修改手工条目（仅 ADMIN）' })
+  @ApiParam({ name: 'id', description: '手工条目ID' })
+  @ApiResponse({ status: 200, description: '修改成功，返回条目 id' })
+  @ApiResponse({ status: 400, description: '入参不合法或条目已作废' })
+  @ApiResponse({ status: 404, description: '手工条目不存在' })
+  @ApiResponse({ status: 403, description: '需要管理员权限' })
+  async updateManualEntry(
+    @UserId() userId: string,
+    @Param('id') id: string,
+    @Body() body: UpdateManualEntryDto,
+  ): Promise<ApiResponseDto<{ id: string }>> {
+    return ApiResponseDto.success(
+      await this.financeManualEntryService.update(userId, id, body),
+      'Manual entry updated successfully',
+    );
+  }
+
+  /** 作废：保留记录并标灰，不物理删除 */
+  @Post('manual-entries/:id/void')
+  @ApiOperation({ summary: '作废手工条目（仅 ADMIN）' })
+  @ApiParam({ name: 'id', description: '手工条目ID' })
+  @ApiResponse({ status: 200, description: '作废成功，返回条目 id' })
+  @ApiResponse({ status: 404, description: '手工条目不存在或已作废' })
+  @ApiResponse({ status: 403, description: '需要管理员权限' })
+  async voidManualEntry(
+    @UserId() userId: string,
+    @Param('id') id: string,
+    @Body() body: VoidManualEntryDto,
+  ): Promise<ApiResponseDto<{ id: string }>> {
+    return ApiResponseDto.success(
+      await this.financeManualEntryService.void(userId, id, body.reason),
+      'Manual entry voided successfully',
     );
   }
 }

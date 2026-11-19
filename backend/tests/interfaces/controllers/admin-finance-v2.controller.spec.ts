@@ -74,6 +74,7 @@ describe('AdminFinanceV2Controller', () => {
     const controller = new AdminFinanceV2Controller(
       summaryService as any,
       {} as any,
+      {} as any,
     );
 
     const result = await controller.getDashboard({ month: '2026-11' });
@@ -111,6 +112,7 @@ describe('AdminFinanceV2Controller', () => {
     const controller = new AdminFinanceV2Controller(
       {} as any,
       entriesService as any,
+      {} as any,
     );
 
     const query = {
@@ -126,5 +128,90 @@ describe('AdminFinanceV2Controller', () => {
     expect(result).toBeInstanceOf(ApiResponseDto);
     expect(result.code).toBe(0);
     expect(result.data).toBe(page);
+  });
+
+  it('记一笔、改一笔、作废三个接口挂在 manual-entries 下', () => {
+    expect(
+      Reflect.getMetadata(
+        PATH_METADATA,
+        AdminFinanceV2Controller.prototype.createManualEntry,
+      ),
+    ).toBe('manual-entries');
+    expect(
+      Reflect.getMetadata(
+        METHOD_METADATA,
+        AdminFinanceV2Controller.prototype.createManualEntry,
+      ),
+    ).toBe(RequestMethod.POST);
+
+    expect(
+      Reflect.getMetadata(
+        PATH_METADATA,
+        AdminFinanceV2Controller.prototype.updateManualEntry,
+      ),
+    ).toBe('manual-entries/:id');
+    expect(
+      Reflect.getMetadata(
+        METHOD_METADATA,
+        AdminFinanceV2Controller.prototype.updateManualEntry,
+      ),
+    ).toBe(RequestMethod.PATCH);
+
+    expect(
+      Reflect.getMetadata(
+        PATH_METADATA,
+        AdminFinanceV2Controller.prototype.voidManualEntry,
+      ),
+    ).toBe('manual-entries/:id/void');
+    expect(
+      Reflect.getMetadata(
+        METHOD_METADATA,
+        AdminFinanceV2Controller.prototype.voidManualEntry,
+      ),
+    ).toBe(RequestMethod.POST);
+  });
+
+  it('记一笔把当前用户和请求体交给手工条目服务', async () => {
+    const manualEntryService = {
+      create: jest.fn().mockResolvedValue({ id: 'm1' }),
+    };
+    const controller = new AdminFinanceV2Controller(
+      {} as any,
+      {} as any,
+      manualEntryService as any,
+    );
+    const body = {
+      direction: 'EXPENSE' as const,
+      amount: 399,
+      occurredAt: '2026-11-05',
+      category: 'EQUIPMENT' as const,
+      title: '封口机',
+    };
+
+    const result = await controller.createManualEntry('u1', body);
+
+    expect(manualEntryService.create).toHaveBeenCalledWith('u1', body);
+    expect(result).toBeInstanceOf(ApiResponseDto);
+    expect(result.data).toEqual({ id: 'm1' });
+  });
+
+  it('改一笔传 id，作废传 id 与原因', async () => {
+    const manualEntryService = {
+      update: jest.fn().mockResolvedValue({ id: 'm1' }),
+      void: jest.fn().mockResolvedValue({ id: 'm1' }),
+    };
+    const controller = new AdminFinanceV2Controller(
+      {} as any,
+      {} as any,
+      manualEntryService as any,
+    );
+
+    await controller.updateManualEntry('u1', 'm1', { amount: 20 });
+    await controller.voidManualEntry('u1', 'm1', { reason: '录错' });
+
+    expect(manualEntryService.update).toHaveBeenCalledWith('u1', 'm1', {
+      amount: 20,
+    });
+    expect(manualEntryService.void).toHaveBeenCalledWith('u1', 'm1', '录错');
   });
 });

@@ -42,6 +42,7 @@
       :offer="chosenOffer"
       :form-level="state.chosenFormLevel"
       :form-advice="state.formAdvice"
+      :saved-result="state.saved"
       @back="backToForm"
       @saved="onSaved"
       @go-launch="jump(4)"
@@ -50,6 +51,7 @@
     <LaunchConfigStep
       v-else-if="state.step === 4 && state.saved"
       :ingredient-id="state.saved.ingredientId"
+      @close="onLaunchClear"
     />
   </div>
 </template>
@@ -131,6 +133,11 @@ function onFormChosen(payload: {
 
 function onSaved(result: { ingredientId: string; nutritionFoodId: string; evidenceId: string }): void {
   state.value = { ...state.value, saved: result }
+}
+
+/** 「不是这条？清除」：把刚写入的结果放掉，回到第 3 步重来 */
+function onLaunchClear(): void {
+  state.value = { ...state.value, saved: null, step: 3 }
 }
 
 function setComparison(value: SupplementComparisonDto): void {

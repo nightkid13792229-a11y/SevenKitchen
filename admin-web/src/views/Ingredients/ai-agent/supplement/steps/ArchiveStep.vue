@@ -296,6 +296,8 @@ const props = defineProps<{
   offer: SupplementOfferDto | null
   formLevel: string | null
   formAdvice: SupplementFormAdviceDto | null
+  /** 父级记着的写入结果：返回这一步时不要再让人重复写一遍 */
+  savedResult?: { ingredientId: string; nutritionFoodId: string; evidenceId: string } | null
 }>()
 
 const emit = defineEmits<{
@@ -317,7 +319,9 @@ const saving = ref(false)
 const confirming = ref(false)
 const confirmed = ref(false)
 const errorText = ref('')
-const saved = ref<{ ingredientId: string; nutritionFoodId: string; evidenceId: string } | null>(null)
+const saved = ref<{ ingredientId: string; nutritionFoodId: string; evidenceId: string } | null>(
+  props.savedResult ?? null
+)
 
 const unitOptions = supplementUsageUnitOptions
 const tagSuggestions = ['矿物质', '维生素', '油脂类', '关节', '益生菌', '膳食纤维']

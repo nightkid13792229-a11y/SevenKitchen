@@ -48,6 +48,11 @@ import {
   findQueryKey,
   nextZeroHitStreak,
 } from './research-guard';
+import {
+  buildEvidenceDigest,
+  buildPlanSynthesisMessages,
+} from './plan-synthesis';
+import { PROPOSE_PLAN_TOOL } from './propose-plan';
 import { assessmentGapSignature } from './assessment-progress';
 import { fail, type RecipeAgentActor, type ToolOutcome } from './agent-types';
 import {
@@ -362,6 +367,8 @@ export class RecipeAgentService implements OnModuleInit {
     const zeroHitQueries = new Set<string>();
     let consecutiveZeroHits = 0;
     let zeroHitNudged = false;
+    /** 首次读到的本单档案，强制提交方案时作为干净上下文的一部分。 */
+    let designContextJson: string | null = null;
     const phaseMaxToolCalls =
       phase === 'DESIGN' ? MAX_TOOL_CALLS : PHASE_TOOL_BUDGET[phase];
     /** 健康档案附件只在本次运行注入一次，避免模型重读时重复计费。 */
@@ -429,7 +436,47 @@ export class RecipeAgentService implements OnModuleInit {
             (call) => call.function.name === forcedTool,
           );
           if (!retried) {
-            throw new Error(`模型未调用 ${forcedTool}`);
+            if (forcedTool === 'propose_plan') {
+              // 历史里全是 tool_calls 时，模型会无视 tool_choice 继续调 kb_find。
+              // 换一份“档案 + 证据摘录”的干净上下文，再强制一次。
+              const fallback = await this.callPlanSynthesis({
+                sessionId,
+                config,
+                phase,
+                userMessage: message,
+                designContextJson,
+                messages,
+              });
+              if (fallback) {
+                response = fallback;
+              } else {
+                await this.appendMessage(
+                  sessionId,
+                  'ASSISTANT',
+                  '方案还没整理好，我先停在这里。请回复“继续整理方案”，或指出要先查的点。',
+                );
+                await this.markWaiting(sessionId);
+                return;
+              }
+            } else if (forcedTool === 'ask') {
+              await this.appendMessage(
+                sessionId,
+                'ASSISTANT',
+                '连续检索没有结果，我先停在这里。请换一个关键词、指定文档，或告诉我下一步。',
+              );
+              await this.markWaiting(sessionId);
+              return;
+            } else if (forcedTool === 'propose_selection') {
+              await this.appendMessage(
+                sessionId,
+                'ASSISTANT',
+                '选材还没整理好，我先停在这里。请回复“继续整理选材”，或指出要先确认的食材。',
+              );
+              await this.markWaiting(sessionId);
+              return;
+            } else {
+              throw new Error(`模型未调用 ${forcedTool}`);
+            }
           }
         }
         if (isFirstModelCall) {
@@ -515,6 +562,9 @@ export class RecipeAgentService implements OnModuleInit {
           outcome = result.outcome;
           images = result.images;
           contextImages = result.contextImages;
+          if (call.function.name === 'read_design_context' && outcome.ok) {
+            designContextJson = JSON.stringify(outcome.data).slice(0, 20000);
+          }
 
           if (call.function.name === 'kb_find') {
             const hits = countFindHits(outcome);
@@ -694,6 +744,65 @@ export class RecipeAgentService implements OnModuleInit {
           `注入本单健康档案附件 ${uniqueContextImages.length} 张`,
         );
       }
+    }
+  }
+
+  /**
+   * 强制提交方案失败时的兜底：用“档案 + 证据摘录 + 只给 propose_plan”的
+   * 干净上下文再要一次。历史里全是 tool_calls 时，模型会无视 tool_choice。
+   */
+  private async callPlanSynthesis(input: {
+    sessionId: string;
+    config: {
+      baseUrl: string;
+      model: string;
+      apiKey: string;
+      requestTimeoutMs: number;
+    };
+    phase: AgentPhase;
+    userMessage: string;
+    designContextJson: string | null;
+    messages: DeepSeekToolsMessage[];
+  }): Promise<DeepSeekToolsResult | null> {
+    try {
+      const response = await callDeepSeekTools({
+        baseUrl: input.config.baseUrl,
+        model: input.config.model,
+        apiKey: input.config.apiKey,
+        requestTimeoutMs: input.config.requestTimeoutMs,
+        messages: buildPlanSynthesisMessages({
+          systemPrompt: buildSystemPrompt(),
+          phaseLine: phaseSystemLine(input.phase),
+          userMessage: input.userMessage,
+          designContextJson: input.designContextJson,
+          evidenceDigest: buildEvidenceDigest(input.messages),
+        }),
+        tools: [PROPOSE_PLAN_TOOL],
+        toolChoice: {
+          type: 'function',
+          function: { name: 'propose_plan' },
+        },
+        thinking: 'disabled',
+        temperature: 0.2,
+      });
+      await this.recordUsage(
+        input.sessionId,
+        response.usage?.promptTokens ?? 0,
+        response.usage?.completionTokens ?? 0,
+      );
+      const called = (response.toolCalls ?? []).some(
+        (call) => call.function.name === 'propose_plan',
+      );
+      if (!called) {
+        this.logger.warn('方案合成兜底仍未调用 propose_plan');
+        return null;
+      }
+      return response;
+    } catch (error) {
+      this.logger.warn(
+        `方案合成兜底失败：${(error as Error)?.message ?? String(error)}`,
+      );
+      return null;
     }
   }
 

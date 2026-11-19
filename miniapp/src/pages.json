@@ -115,6 +115,16 @@
             "navigationBarTextStyle": "white",
             "backgroundColor": "#FBFCF7"
           }
+        },
+        {
+          "path": "bills",
+          "style": {
+            "navigationBarTitleText": "固定费用",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7",
+            "enablePullDownRefresh": false
+          }
         }
       ]
     },

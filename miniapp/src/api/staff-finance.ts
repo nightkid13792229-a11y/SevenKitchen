@@ -197,6 +197,127 @@ export interface FinanceEntriesPage {
   truncated: boolean;
 }
 
+/**
+ * 固定费用周期：每月 / 每季 / 每年（与后端 `ExpenseTemplateInterval` 对齐）。
+ * 季付由后端固定在 1/4/7/10 月生成，页面上不需要再选月份。
+ */
+export type FinanceExpenseInterval = 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+
+/** 固定费用付款方：PERSONAL = 我个人垫的；COMPANY = 公司账户 */
+export type FinanceExpensePayerType = FinanceEntryPayerType;
+
+/**
+ * 固定费用模板（`GET /admin/finance/templates`，含已停用）。
+ *
+ * 后端直接返回 Prisma 记录：`defaultAmount` 是 Decimal，JSON 里会变成字符串，
+ * 页面统一用 `Number(...)` 转，不要当成 number 直接相加。
+ */
+export interface FinanceExpenseTemplate {
+  id: string;
+  name: string;
+  /** 账单标题模板，支持 {{year}} / {{month}} 占位 */
+  titleTemplate: string;
+  category: FinanceExpenseCategory;
+  payeeName: string;
+  /** 默认金额（元），Decimal 序列化后可能是字符串 */
+  defaultAmount: number | string;
+  interval: FinanceExpenseInterval;
+  /** 每月几号应付（1-31），老数据可能为空 */
+  dayOfMonth: number | null;
+  /** 年付模板的月份（1-12），月付/季付为空 */
+  monthOfYear: number | null;
+  /** 服务期月数：年付宽带填 12，账单按月分摊 */
+  servicePeriodMonths: number;
+  payerType: FinanceExpensePayerType;
+  payerUserId?: string | null;
+  isActive: boolean;
+  note?: string | null;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * 新建/编辑模板入参：字段名与后端 `CreateExpenseTemplateDto` 一致。
+ *
+ * 小程序表单只采集名称/类别/金额/周期/几号/服务期/付款方，
+ * `titleTemplate` 与 `payeeName` 由页面补默认值（后端必填）。
+ */
+export interface CreateExpenseTemplatePayload {
+  name: string;
+  /** 账单标题模板 */
+  titleTemplate: string;
+  category: FinanceExpenseCategory;
+  /** 收款方 */
+  payeeName: string;
+  /** 元，正数、最多两位小数 */
+  defaultAmount: number;
+  interval: FinanceExpenseInterval;
+  /** 每月几号应付（1-31） */
+  dayOfMonth: number;
+  /** 年付必填（1-12）；月付/季付不传 */
+  monthOfYear?: number;
+  /** 服务期月数（1-120），默认 1 */
+  servicePeriodMonths: number;
+  payerType: FinanceExpensePayerType;
+}
+
+export type UpdateExpenseTemplatePayload =
+  Partial<CreateExpenseTemplatePayload>;
+
+/** 账单状态：后端列表已排除草稿/已取消，正常只会出现前三种 */
+export type FinanceExpenseBillStatus =
+  | 'PENDING_PAYMENT'
+  | 'PARTIALLY_PAID'
+  | 'PAID'
+  | 'DRAFT'
+  | 'CANCELLED';
+
+/** 账单上的一笔付款记录（标记已付时写入） */
+export interface FinanceExpenseBillPayment {
+  id: string;
+  paidAmount: number | string;
+  paidAt: string;
+  payerType?: FinanceExpensePayerType;
+}
+
+/**
+ * 固定费用账单（`GET /admin/finance/bills?month=YYYY-MM`）。
+ *
+ * `amount` 付满后会被后端改写成累计实付，所以「剩余应付」必须用
+ * `amount − payments 合计` 现算，不能只看状态。
+ */
+export interface FinanceExpenseBill {
+  id: string;
+  billNumber: string;
+  title: string;
+  category: FinanceExpenseCategory;
+  status: FinanceExpenseBillStatus;
+  payeeName: string;
+  /** 账单金额（元），Decimal 序列化后可能是字符串 */
+  amount: number | string;
+  recognitionStart: string;
+  recognitionEnd: string;
+  dueAt: string;
+  note?: string | null;
+  templateId?: string | null;
+  payerType: FinanceExpensePayerType;
+  payments: FinanceExpenseBillPayment[];
+}
+
+/**
+ * 标记已付入参（与后端 `PayExpenseBillDto` 对齐）。
+ *
+ * `paidAmount` 缺省 = 剩余应付；`paidAt` 缺省 = 今天（上海日历日）；
+ * `payerType` 缺省继承账单上的付款方。
+ */
+export interface PayExpenseBillPayload {
+  paidAmount?: number;
+  /** `YYYY-MM-DD` */
+  paidAt?: string;
+  payerType?: FinanceExpensePayerType;
+}
+
 export const staffFinanceApi = {
   /**
    * 财务首页 / 月报汇总。
@@ -241,6 +362,82 @@ export const staffFinanceApi = {
       url: '/admin/finance/manual-entries',
       method: 'POST',
       data: payload,
+      quiet: true,
+      suppressErrorToast: true,
+    });
+  },
+
+  /** 固定费用模板列表：停用的也返回，页面要展示启用状态 */
+  listTemplates() {
+    return requestData<FinanceExpenseTemplate[]>({
+      url: '/admin/finance/templates',
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    });
+  },
+
+  /** 新建固定费用模板；成功返回落库后的模板 */
+  createTemplate(payload: CreateExpenseTemplatePayload) {
+    return requestData<FinanceExpenseTemplate>({
+      url: '/admin/finance/templates',
+      method: 'POST',
+      data: payload,
+      quiet: true,
+      suppressErrorToast: true,
+    });
+  },
+
+  /** 编辑模板：只影响以后生成的账单，不改历史账单 */
+  updateTemplate(id: string, payload: UpdateExpenseTemplatePayload) {
+    return requestData<{ id: string }>({
+      url: `/admin/finance/templates/${id}`,
+      method: 'PATCH',
+      data: payload,
+      quiet: true,
+      suppressErrorToast: true,
+    });
+  },
+
+  /** 停用模板：只影响以后，不动已生成的历史账单 */
+  deactivateTemplate(id: string) {
+    return requestData<{ id: string }>({
+      url: `/admin/finance/templates/${id}/deactivate`,
+      method: 'POST',
+      data: {},
+      quiet: true,
+      suppressErrorToast: true,
+    });
+  },
+
+  /** 某月应计固定费用账单；不传 month = 后端按本月处理 */
+  listBills(month?: string) {
+    return requestData<FinanceExpenseBill[]>({
+      url: '/admin/finance/bills',
+      method: 'GET',
+      data: month ? { month } : {},
+      quiet: true,
+      suppressErrorToast: true,
+    });
+  },
+
+  /** 标记已付（可改实付金额、可部分付），返回账单最新状态 */
+  payBill(id: string, payload: PayExpenseBillPayload) {
+    return requestData<FinanceExpenseBill>({
+      url: `/admin/finance/bills/${id}/pay`,
+      method: 'POST',
+      data: payload,
+      quiet: true,
+      suppressErrorToast: true,
+    });
+  },
+
+  /** 补生成某月固定费用账单（幂等）；不传 month = 本月 */
+  generateBills(month?: string) {
+    return requestData<{ created: number }>({
+      url: '/admin/finance/bills/generate',
+      method: 'POST',
+      data: month ? { month } : {},
       quiet: true,
       suppressErrorToast: true,
     });

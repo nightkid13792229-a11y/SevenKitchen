@@ -231,9 +231,8 @@ const paymentChannel = ref<AssistedOfflinePaymentChannel>('OFFLINE_WECHAT')
  * 收到哪个账户（2026-11-19 账户化，设计文档 §1.2）。
  *
  * 默认带出上次用的账户，选择后 AccountPicker 自己会记住。
- * ⚠️ 后端 `CreateAssistedOrderDTO` 目前**没有**账户字段（`payment` 里只有
- * collected/channel/amount），所以这个值本期只选不传 —— 传了也会被忽略，
- * 后端补上 `payerAccount` 后把 `paymentAccount.value` 加进提交参数即可。
+ * 提交时是 **body 顶层** `paymentAccount`（不放在 payment 里）：后端先校验
+ * 账户再落库，非法值 400、不留半张单；缺省由后端落「我的微信」。
  */
 const paymentAccount = ref<FinanceAccountCode>(getLastAccount())
 
@@ -525,6 +524,8 @@ async function submit() {
       // 关掉「已收款」时显式传 false；打开时带渠道，后端直接落成已付单
       collected: collected.value,
       paymentChannel: collected.value ? paymentChannel.value : undefined,
+      // 已收款才记账户：没收到钱就谈不上「收到哪个账户」
+      paymentAccount: collected.value ? paymentAccount.value : undefined,
       amountAdjustReason: adjustReason.value.trim() || undefined,
       remark: remark.value.trim() || undefined,
       recipeSource: ownershipKind.value || undefined,

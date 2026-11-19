@@ -4,6 +4,7 @@
  */
 
 import { request } from '../utils/api';
+import type { FinanceAccountCode } from '../utils/finance-account';
 
 export interface WechatPaymentResult {
   provider: 'WECHAT_PAY';
@@ -341,6 +342,8 @@ export interface RegisterOrderOfflineRefundPayload {
   /** 退款成功日 `YYYY-MM-DD` */
   refundedAt: string;
   method: OrderOfflineRefundMethod;
+  /** 钱从哪个账户退出去（五个账户 code）；缺省沿用订单的收款账户 */
+  payerAccount?: FinanceAccountCode;
   note?: string;
 }
 

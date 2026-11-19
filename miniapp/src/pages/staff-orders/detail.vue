@@ -1135,10 +1135,8 @@ const offlineRefundMethod = ref<OrderOfflineRefundMethod>('WECHAT')
 /**
  * 钱从哪个账户退出去（2026-11-19 账户化）。
  *
- * ⚠️ 后端 `RegisterOfflineRefundDto` 目前没有 `payerAccount`（表里已有
- * `order_offline_refund.payer_account` 列，接口还没接），所以本期只选不传；
- * 后端补上字段后把 `payerAccount: offlineRefundAccount.value` 加进
- * `registerOrderOfflineRefund` 的参数即可。
+ * 提交 `payerAccount`（后端可选，缺省沿用该订单的收款账户）：
+ * 退款和收款记在同一个账户上，对账时才能看出这个账户的净流水。
  */
 const offlineRefundAccount = ref<FinanceAccountCode>(getLastAccount())
 const offlineRefundNote = ref('')
@@ -1877,6 +1875,7 @@ async function submitOfflineRefund() {
       amount,
       refundedAt: offlineRefundDate.value,
       method: offlineRefundMethod.value,
+      payerAccount: offlineRefundAccount.value,
       note: offlineRefundNote.value.trim() || undefined,
     })
     offlineRefundVisible.value = false

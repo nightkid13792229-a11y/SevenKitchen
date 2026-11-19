@@ -126,19 +126,34 @@ describe('财务账户', () => {
     expect(orderDetail).toContain('offlineRefundAccount')
   })
 
-  it('后端还没接账户字段的两处：只选不传，不假装提交了', () => {
-    // 代客下单 DTO 目前只有 collected/channel/amount
+  it('代客收款与线下退款都把账户真的提交了', () => {
+    // 代客下单：账户是 body 顶层 paymentAccount（已收款时才带）
     const confirmSubmit = confirmPage.match(/async function submit[\s\S]*?\n\}/)?.[0] || ''
     expect(confirmSubmit).toContain('paymentChannel')
-    expect(confirmSubmit).not.toContain('paymentAccount:')
-    expect(confirmPage).toContain('本期只选不传')
-
-    // 线下退款 DTO 还没有 payerAccount
+    expect(confirmSubmit).toContain(
+      'paymentAccount: collected.value ? paymentAccount.value : undefined',
+    )
+    // 线下退款：payerAccount 跟着退款金额一起提交
     const refundSubmit =
       orderDetail.match(/async function submitOfflineRefund[\s\S]*?\n\}/)?.[0] || ''
     expect(refundSubmit).toContain('registerOrderOfflineRefund')
-    expect(refundSubmit).not.toContain('payerAccount:')
-    expect(orderDetail).toContain('本期只选不传')
+    expect(refundSubmit).toContain('payerAccount: offlineRefundAccount.value')
+    // 注释里不能再写「后端还没有字段」
+    expect(confirmPage).not.toContain('本期只选不传')
+    expect(orderDetail).not.toContain('本期只选不传')
+  })
+
+  it('API 类型补上 paymentAccount / payerAccount，字段名与后端一致', () => {
+    const assistedApi = read('../../api/staffAssistedOrder.ts')
+    expect(assistedApi).toContain('paymentAccount?: FinanceAccountCode')
+    expect(assistedApi).toContain('FinanceAccountCode')
+
+    const ordersApi = read('../../api/orders.ts')
+    const refundPayload =
+      ordersApi.match(
+        /export interface RegisterOrderOfflineRefundPayload[\s\S]*?\n\}/,
+      )?.[0] || ''
+    expect(refundPayload).toContain('payerAccount?: FinanceAccountCode')
   })
 })
 

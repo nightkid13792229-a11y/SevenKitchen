@@ -1,4 +1,5 @@
 import { request } from '../utils/api'
+import type { FinanceAccountCode } from '../utils/finance-account'
 
 /**
  * 订单中心 · 代客下单（成品鲜食）专用接口。
@@ -89,6 +90,12 @@ export interface CreateAssistedOrderPayload {
   collected?: boolean
   /** 线下收款渠道；collected 为 true 时生效，默认由后端按微信处理 */
   paymentChannel?: AssistedOfflinePaymentChannel
+  /**
+   * 收到哪个账户（2026-11-19 账户化）。**顶层字段**，不在 payment 里：
+   * 后端 `POST /staff-customer-service/orders/assisted` 读 `body.paymentAccount`，
+   * 非法值 400 且零写入；缺省由后端落「我的微信」。
+   */
+  paymentAccount?: FinanceAccountCode
   amountAdjustReason?: string
   remark?: string
   recipeSource?: string

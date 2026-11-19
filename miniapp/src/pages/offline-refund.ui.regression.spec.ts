@@ -121,6 +121,14 @@ describe('订单详情 · 登记线下退款', () => {
     expect(detailSource).toContain('已登记退款合计')
     expect(detailSource).toContain('offlineRefundMethodLabel')
   })
+
+  it('登记退款时把「退到哪个账户」随请求提交（payerAccount）', () => {
+    // 2026-11-19 账户化：后端 DTO 已收 payerAccount，缺省沿用订单收款账户
+    expect(detailSource).toContain('退到哪个账户')
+    const submitBlock =
+      detailSource.match(/async function submitOfflineRefund[\s\S]*?\n\}/)?.[0] || ''
+    expect(submitBlock).toContain('payerAccount: offlineRefundAccount.value')
+  })
 })
 
 describe('代客下单 · 已收款开关', () => {
@@ -137,6 +145,16 @@ describe('代客下单 · 已收款开关', () => {
     expect(confirmSource).toContain('collected: collected.value')
     expect(confirmSource).toContain(
       'collected.value ? paymentChannel.value : undefined',
+    )
+  })
+
+  it('已收款时提交顶层 paymentAccount（收到哪个账户）', () => {
+    expect(confirmSource).toContain('收到哪个账户')
+    const submitBlock =
+      confirmSource.match(/async function submit[\s\S]*?\n\}/)?.[0] || ''
+    // 账户是 body 顶层字段，不在 payment 里；没收到钱就不带
+    expect(submitBlock).toContain(
+      'paymentAccount: collected.value ? paymentAccount.value : undefined',
     )
   })
 })

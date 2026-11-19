@@ -27,8 +27,12 @@ export class FinanceEntriesQueryDto extends FinanceRangeQueryDto {
   category?: string;
 
   @ApiPropertyOptional({
-    description:
+    description: [
       '按付款方筛选：COMPANY = 公司账户，PERSONAL = 个人垫付（「我垫的」）',
+      '口径：线上收款（公司微信商户号）= COMPANY，线下收款（含 OFFLINE 老标记）= PERSONAL；',
+      '退款行沿用原单付款方（线上原路退回 = COMPANY，线下退款登记 = PERSONAL）；',
+      '快递费行固定 COMPANY（公司付给快递）；手续费合计行没有付款方，不参与该筛选。',
+    ].join(''),
     enum: ['COMPANY', 'PERSONAL'],
   })
   @IsOptional()

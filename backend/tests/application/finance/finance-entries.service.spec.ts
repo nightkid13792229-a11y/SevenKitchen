@@ -843,6 +843,140 @@ describe('FinanceEntriesService', () => {
     );
   });
 
+  it('退款沿用原单付款方、快递费记公司，按付款方筛选不漏行', async () => {
+    const prisma: any = makePrisma({
+      orders: [
+        {
+          id: 'o-online',
+          orderNo: 'SK1',
+          amountTotal: 1000,
+          paymentMethod: 'WECHAT_PAY',
+          paidAt: utc('2026-11-02T02:00:00Z'),
+          remakeFromOrderId: null,
+          reshipFromOrderId: null,
+        },
+        {
+          id: 'o-offline',
+          orderNo: 'SK2',
+          amountTotal: 300,
+          paymentMethod: 'OFFLINE_WECHAT',
+          paidAt: utc('2026-11-02T03:00:00Z'),
+          remakeFromOrderId: null,
+          reshipFromOrderId: null,
+        },
+      ],
+      // 线上原路退回：钱从公司商户号出
+      orderRefunds: [
+        {
+          id: 'r1',
+          amount: 100,
+          success: true,
+          successTime: utc('2026-11-03T02:00:00Z'),
+          order: {
+            id: 'o-online',
+            orderNo: 'SK1',
+            paidAt: utc('2026-11-02T02:00:00Z'),
+          },
+        },
+      ],
+      // 线下退款登记：钱退给个人
+      offlineRefunds: [
+        {
+          id: 'orf1',
+          amount: 50,
+          voidedAt: null,
+          refundedAt: utc('2026-11-04T02:00:00Z'),
+          order: {
+            id: 'o-offline',
+            orderNo: 'SK2',
+            paidAt: utc('2026-11-02T03:00:00Z'),
+          },
+        },
+      ],
+      shippingOrders: [
+        {
+          id: 'o-ship',
+          orderNo: 'SK3',
+          actualShippingFee: 86,
+          shippedAt: utc('2026-11-05T02:00:00Z'),
+        },
+      ],
+      supplements: [],
+      supplementRefunds: [
+        {
+          // 2026-11 之前的老标记：线下收款
+          id: 's-refund-legacy',
+          orderNo: 'SP0',
+          refundAmount: 40,
+          refundedAt: utc('2026-11-06T02:00:00Z'),
+          paidAt: utc('2026-10-10T02:00:00Z'),
+          paymentMethod: 'OFFLINE',
+        },
+        {
+          id: 's-refund-online',
+          orderNo: 'SP1',
+          refundAmount: 30,
+          refundedAt: utc('2026-11-07T02:00:00Z'),
+          paidAt: utc('2026-11-01T02:00:00Z'),
+          paymentMethod: 'WECHAT_PAY',
+        },
+      ],
+    });
+
+    const all = await new FinanceEntriesService(prisma).list({
+      month: '2026-11',
+    });
+    const refundPayer = new Map(
+      all.items.filter((item) => item.isRefund).map((row) => [row.id, row.payerType]),
+    );
+
+    expect(refundPayer.get('refund:r1')).toBe('COMPANY');
+    expect(refundPayer.get('refund:offline:orf1')).toBe('PERSONAL');
+    expect(refundPayer.get('refund:supplement:s-refund-legacy')).toBe('PERSONAL');
+    expect(refundPayer.get('refund:supplement:s-refund-online')).toBe('COMPANY');
+
+    const shippingRows = all.items.filter((item) => item.sourceType === 'SHIPPING');
+    expect(shippingRows).toHaveLength(1);
+    expect(shippingRows[0]).toMatchObject({
+      id: 'o-ship:shipping',
+      direction: 'EXPENSE',
+      amount: 86,
+      payerType: 'COMPANY',
+    });
+
+    // 「我垫的」：线下单本身 + 它的退款都要在，线上退款和快递费不能混进来
+    const personal = await new FinanceEntriesService(prisma).list({
+      month: '2026-11',
+      payerType: 'PERSONAL',
+    });
+    expect(personal.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining([
+        'o-offline',
+        'refund:offline:orf1',
+        'refund:supplement:s-refund-legacy',
+      ]),
+    );
+    expect(personal.items.some((item) => item.id === 'refund:r1')).toBe(false);
+    expect(personal.items.some((item) => item.sourceType === 'SHIPPING')).toBe(
+      false,
+    );
+
+    const company = await new FinanceEntriesService(prisma).list({
+      month: '2026-11',
+      payerType: 'COMPANY',
+    });
+    expect(company.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining([
+        'o-online',
+        'refund:r1',
+        'refund:supplement:s-refund-online',
+      ]),
+    );
+    expect(company.items.some((item) => item.sourceType === 'SHIPPING')).toBe(
+      true,
+    );
+  });
+
   it('direction 与 category 在分页前过滤', async () => {
     const prisma: any = makePrisma({
       orders: [

@@ -90,6 +90,40 @@ describe('收支明细', () => {
     expect(page).toContain('pageSize');
     expect(page).toContain('没有更多了');
     expect(page).toContain('加载中');
+    // 没有下一页的判断看后端最后一批是否给满，去重后不会永远「还能加载」
+    expect(page).toContain('lastBatchSize');
+  });
+
+  it('分页按 id 去重，不会出现重复行', () => {
+    expect(page).toContain('seen.has(item.id)');
+    expect(page).toContain('entries.value.slice()');
+  });
+
+  it('按月份取数，并在顶部写明区间', () => {
+    // 首页月报点进来带 month，明细必须按整月请求
+    expect(page).toContain('monthParam');
+    expect(page).toContain('month: monthParam.value');
+    expect(page).toContain('periodLabel');
+    expect(page).toContain('本月至今');
+    // 末一天按真实月份算，不是写死 30 日
+    expect(page).toContain('new Date(Date.UTC(year, month, 0))');
+  });
+
+  it('有类别筛选，从列表聚合类别并带 category 请求', () => {
+    expect(page).toContain('类别');
+    expect(page).toContain('全部类别');
+    expect(page).toContain('categoryOptions');
+    expect(page).toContain('selectedCategory');
+    expect(page).toContain('collectCategories');
+    expect(page).toContain('category: selectedCategory.value');
+  });
+
+  it('每行写明付款方：我垫的 / 公司账户', () => {
+    expect(page).toContain('payerLabel');
+    expect(page).toContain('我垫的');
+    expect(page).toContain('公司账户');
+    expect(page).toContain('entry.payerType');
+    expect(page).toContain('entry-payer--personal');
   });
 
   it('空态一句话 + 回财务首页', () => {
@@ -113,11 +147,18 @@ describe('收支明细', () => {
   });
 
   it('首页三个大数可点，带 query 进明细', () => {
-    expect(home).toContain('entries?direction=INCOME');
-    expect(home).toContain('entries?direction=EXPENSE');
-    // 结余点进去是全部
+    // 收入/支出带 direction；结余不带，进去就是全部
+    expect(home).toContain("openEntries('INCOME')");
+    expect(home).toContain("openEntries('EXPENSE')");
     expect(home).toContain("goEntries()");
     expect(home).toContain('uni.navigateTo');
+
+    // 完整月份必须把 month 一起带上，否则明细和首页月报对不上
+    const openBlock = home.match(/function openEntries[\s\S]*?\n\}/)?.[0] || '';
+    expect(openBlock).toContain('isFullMonth.value');
+    expect(openBlock).toContain('month=${activeView.value}');
+    expect(openBlock).toContain('direction=${direction}');
+    expect(openBlock).toContain('/pages/staff-finance/entries${query}');
   });
 
   it('分包注册 entries，导航标题「收支明细」深绿', () => {

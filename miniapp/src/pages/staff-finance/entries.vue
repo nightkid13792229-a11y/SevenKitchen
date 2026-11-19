@@ -1,5 +1,7 @@
 <template>
   <view class="page">
+    <text class="range-hint">{{ periodLabel }}</text>
+
     <view class="filters">
       <view
         v-for="chip in filterChips"
@@ -10,8 +12,37 @@
       >
         {{ chip.label }}
       </view>
+      <view
+        class="filter-chip"
+        :class="{ 'filter-chip--on': !!selectedCategory }"
+        @tap="toggleCategoryPanel"
+      >
+        {{ categoryChipLabel }}
+      </view>
       <text v-if="!loading && entries.length > 0" class="filters-count">
         共 {{ total }} 笔
+      </text>
+    </view>
+
+    <view v-if="categoryPanelOpen" class="category-panel">
+      <view
+        class="category-chip"
+        :class="{ 'category-chip--on': !selectedCategory }"
+        @tap="selectCategory('')"
+      >
+        全部类别
+      </view>
+      <view
+        v-for="option in categoryOptions"
+        :key="option.value"
+        class="category-chip"
+        :class="{ 'category-chip--on': selectedCategory === option.value }"
+        @tap="selectCategory(option.value)"
+      >
+        {{ option.label }}
+      </view>
+      <text v-if="categoryOptions.length === 0" class="category-empty">
+        这段时间还没有可选的类别
       </text>
     </view>
 
@@ -47,6 +78,13 @@
             <text class="entry-date">{{ formatDate(entry.occurredAt) }}</text>
             <text v-if="entry.label !== '退款'" class="entry-tag">{{ entry.label }}</text>
             <text v-if="entry.isRefund" class="entry-refund">退款</text>
+            <text
+              v-if="payerLabel(entry)"
+              class="entry-payer"
+              :class="{ 'entry-payer--personal': entry.payerType === 'PERSONAL' }"
+            >
+              {{ payerLabel(entry) }}
+            </text>
           </view>
           <text class="entry-title">{{ entryTitle(entry) }}</text>
         </view>
@@ -163,14 +201,36 @@ function amountNegative(entry: FinanceEntry): boolean {
   return entry.isRefund || Number(entry.amount) < 0
 }
 
+/** 每行都写清「钱从谁口袋出/进」：个人垫付 / 公司账户 */
+function payerLabel(entry: FinanceEntry): string {
+  if (entry.payerType === 'PERSONAL') return '我垫的'
+  if (entry.payerType === 'COMPANY') return '公司账户'
+  return ''
+}
+
 function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message
   const errMsg = (error as { errMsg?: string } | null)?.errMsg
   return typeof errMsg === 'string' && errMsg ? errMsg : '请稍后重试'
 }
 
+const pad2 = (value: number) => String(value).padStart(2, '0')
+
+/** 按上海时区取今天，避免设备时区不是 +08:00 时月初串月 */
+function shanghaiToday() {
+  const shifted = new Date(Date.now() + 8 * 60 * 60 * 1000)
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  }
+}
+
 const activeFilter = ref<FilterKey>('ALL')
-/** 从首页月报点进来时带上月份；缺省 = 本月至今（与首页默认口径一致） */
+/**
+ * 区间：首页完整月份点进来会带 `?month=YYYY-MM`，这里就按整月取数；
+ * 不带月份 = 本月至今，与首页默认口径一致。
+ */
 const monthParam = ref('')
 
 const entries = ref<FinanceEntry[]>([])
@@ -180,14 +240,74 @@ const page = ref(1)
 const loading = ref(true)
 const loadingMore = ref(false)
 const error = ref('')
+/** 最近一次成功返回的原始条数：少于 PAGE_SIZE 说明后端已经没有下一页 */
+const lastBatchSize = ref(0)
 
 let requestSeq = 0
 
-const hasMore = computed(() => entries.value.length < total.value)
+const hasMore = computed(
+  () =>
+    entries.value.length < total.value && lastBatchSize.value === PAGE_SIZE,
+)
 
 const periodQuery = computed<FinanceEntriesQuery>(() =>
   monthParam.value ? { month: monthParam.value } : {},
 )
+
+/**
+ * 顶部区间文案：从月报点进来必须能看到「这是哪一段」，
+ * 否则数字和首页对不上时，用户根本不知道自己看的是哪个月。
+ */
+const periodLabel = computed(() => {
+  if (monthParam.value) {
+    const [year, month] = monthParam.value.split('-').map(Number)
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+    return `${monthParam.value}-01 ~ ${monthParam.value}-${pad2(lastDay)}`
+  }
+  const today = shanghaiToday()
+  const prefix = `${today.year}-${pad2(today.month)}`
+  return `本月至今 · ${prefix}-01 ~ ${prefix}-${pad2(today.day)}`
+})
+
+/** 类别筛选：从已加载的明细里聚合，选中的类别即使翻页后消失也保留在选项里 */
+const categoryOptions = ref<Array<{ value: string; label: string }>>([])
+const selectedCategory = ref('')
+const categoryPanelOpen = ref(false)
+
+const categoryChipLabel = computed(() => {
+  if (!selectedCategory.value) return '类别'
+  const match = categoryOptions.value.find(
+    (option) => option.value === selectedCategory.value,
+  )
+  return `类别 · ${match ? match.label : selectedCategory.value}`
+})
+
+function collectCategories(items: FinanceEntry[]) {
+  if (items.length === 0) return
+  const known = new Map(
+    categoryOptions.value.map((option) => [option.value, option.label]),
+  )
+  for (const item of items) {
+    const value = String(item.category || '').trim()
+    if (!value || known.has(value)) continue
+    known.set(value, String(item.label || '').trim() || value)
+  }
+  categoryOptions.value = Array.from(known.entries()).map(([value, label]) => ({
+    value,
+    label,
+  }))
+}
+
+function toggleCategoryPanel() {
+  categoryPanelOpen.value = !categoryPanelOpen.value
+}
+
+function selectCategory(value: string) {
+  categoryPanelOpen.value = false
+  if (selectedCategory.value === value) return
+  selectedCategory.value = value
+  load({ reset: true })
+}
 
 function filterQuery(filter: FilterKey): FinanceEntriesQuery {
   if (filter === 'INCOME') return { direction: 'INCOME' }
@@ -203,6 +323,7 @@ async function load(options: { reset?: boolean } = {}) {
     entries.value = []
     total.value = 0
     truncated.value = false
+    lastBatchSize.value = 0
   }
   error.value = ''
   loading.value = page.value === 1 && entries.value.length === 0
@@ -215,12 +336,23 @@ async function load(options: { reset?: boolean } = {}) {
     const result = await staffFinanceApi.listEntries({
       ...periodQuery.value,
       ...filterQuery(activeFilter.value),
+      ...(selectedCategory.value ? { category: selectedCategory.value } : {}),
       page: requestPage,
       pageSize: PAGE_SIZE,
     })
     if (seq !== requestSeq) return
     const items = Array.isArray(result?.items) ? result.items : []
-    entries.value = requestPage === 1 ? items : [...entries.value, ...items]
+    lastBatchSize.value = items.length
+    collectCategories(items)
+    // 按 id 去重再拼接：翻页期间数据有变动时，宁可少一条也不要重复行 / 错乱的分页
+    const merged = requestPage === 1 ? [] : entries.value.slice()
+    const seen = new Set(merged.map((item) => item.id))
+    for (const item of items) {
+      if (!item?.id || seen.has(item.id)) continue
+      seen.add(item.id)
+      merged.push(item)
+    }
+    entries.value = merged
     total.value = Number(result?.total) || 0
     truncated.value = Boolean(result?.truncated)
   } catch (err) {
@@ -319,6 +451,15 @@ onReachBottom(() => {
   background: $staff-bg;
 }
 
+/* 当前区间：从月报点进来要一眼看出看的是哪一段 */
+.range-hint {
+  display: block;
+  margin: 0 4rpx 12rpx;
+  font-size: $staff-font-caption;
+  color: $staff-ink-2;
+  font-variant-numeric: tabular-nums;
+}
+
 .filters {
   display: flex;
   flex-wrap: wrap;
@@ -347,6 +488,43 @@ onReachBottom(() => {
 
 .filters-count {
   margin-left: 4rpx;
+  font-size: $staff-font-caption;
+  color: $staff-ink-2;
+}
+
+.category-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 12rpx;
+  padding: 16rpx 20rpx;
+  background: $staff-surface;
+  border: 1rpx solid $staff-line;
+  border-radius: $staff-radius-card;
+}
+
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 88rpx;
+  padding: 0 24rpx;
+  font-size: $staff-font-caption;
+  color: $staff-ink;
+  background: $staff-bg;
+  border: 1rpx solid $staff-line-strong;
+  border-radius: $staff-radius-pill;
+}
+
+.category-chip--on {
+  font-weight: 600;
+  color: $staff-cream;
+  background: $staff-brand;
+  border-color: $staff-brand;
+}
+
+.category-empty {
+  padding: 8rpx 4rpx;
   font-size: $staff-font-caption;
   color: $staff-ink-2;
 }
@@ -402,6 +580,20 @@ onReachBottom(() => {
   color: $staff-danger;
   background: $staff-danger-soft;
   border-radius: $staff-radius-pill;
+}
+
+/* 付款方：公司账户用中性灰，个人垫付用金色提醒（以后要还/要报销） */
+.entry-payer {
+  padding: 2rpx 12rpx;
+  font-size: $staff-font-caption;
+  color: $staff-ink-2;
+  background: $staff-line;
+  border-radius: $staff-radius-pill;
+}
+
+.entry-payer--personal {
+  color: $staff-gold-ink;
+  background: $staff-gold-soft;
 }
 
 .entry-title {

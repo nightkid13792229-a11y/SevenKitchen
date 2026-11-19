@@ -82,6 +82,10 @@ export type FinanceExpenseLine = {
   sourceNo?: string;
   /** 人话标题，明细页直接显示 */
   title: string;
+  /**
+   * 付款方：采购/账单按单据上登记的付款方；快递费固定 `COMPANY`
+   * （运费是公司付给快递的，不是员工垫的）。
+   */
   payerType?: 'COMPANY' | 'PERSONAL';
 };
 
@@ -469,6 +473,8 @@ export async function loadShippingExpenseLines(
         sourceId: order.id,
         sourceNo: orderNo,
         title: orderNo ? `订单快递费 ${orderNo}` : '订单快递费',
+        // 运费是公司账户付给快递的，不是员工垫付
+        payerType: 'COMPANY',
       };
     })
     .filter((line) => line.amountCents !== 0);

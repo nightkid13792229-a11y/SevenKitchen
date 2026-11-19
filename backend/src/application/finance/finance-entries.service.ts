@@ -62,7 +62,9 @@ export type FinanceEntriesQuery = {
    *
    * 只做**行级**过滤，不动任何口径：已作废的退款记录本来就不出行，
    * 采购/账单的 0 元占位行仍按原样出现（它自己带 payerType）。
-   * 手续费合计行没有付款方（公司账户扣的），两个值都不会把它带出来。
+   * `payerType` 由收入/支出明细行自带：退款沿用原单（线上→COMPANY，
+   * 线下→PERSONAL），快递费固定 COMPANY；手续费合计行没有付款方
+   * （公司账户扣的），两个值都不会把它带出来。
    */
   payerType?: 'COMPANY' | 'PERSONAL';
   page?: number;

@@ -406,10 +406,19 @@ function goBills() {
   uni.navigateTo({ url: '/pages/staff-finance/bills' })
 }
 
-/** 明细页跳转：跳不过去必须有提示，不能让老板点了没反应 */
-function openEntries(url: string) {
+/**
+ * 明细页跳转。跳不过去必须有提示，不能让老板点了没反应。
+ *
+ * 完整月份时把 `month` 一起带上：否则从月报点进明细会按「本月至今」重新取数，
+ * 跟首页上的数字对不上。本月至今不带月份，明细页也按本月至今取，口径一致。
+ */
+function openEntries(direction?: 'INCOME' | 'EXPENSE') {
+  const params: string[] = []
+  if (direction) params.push(`direction=${direction}`)
+  if (isFullMonth.value) params.push(`month=${activeView.value}`)
+  const query = params.length > 0 ? `?${params.join('&')}` : ''
   uni.navigateTo({
-    url,
+    url: `/pages/staff-finance/entries${query}`,
     fail: () => {
       uni.showToast({ title: '打开失败，请稍后重试', icon: 'none' })
     },
@@ -417,15 +426,15 @@ function openEntries(url: string) {
 }
 
 function goIncomeEntries() {
-  openEntries('/pages/staff-finance/entries?direction=INCOME')
+  openEntries('INCOME')
 }
 
 function goExpenseEntries() {
-  openEntries('/pages/staff-finance/entries?direction=EXPENSE')
+  openEntries('EXPENSE')
 }
 
 function goEntries() {
-  openEntries('/pages/staff-finance/entries')
+  openEntries()
 }
 
 onShow(() => {

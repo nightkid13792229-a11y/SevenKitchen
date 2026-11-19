@@ -57,6 +57,10 @@ export type FinanceIncomeLine = {
   sourceNo?: string;
   /** 明细页标题；只对手工收入由录入人填写，其余来源由明细服务按类型生成 */
   title?: string;
+  /**
+   * 付款方：线上收款（公司商户号）= `COMPANY`，线下收款（个人账户）= `PERSONAL`。
+   * 退款行沿用原单：线上原路退回 → `COMPANY`，线下退款登记 → `PERSONAL`。
+   */
   payerType?: 'COMPANY' | 'PERSONAL';
   isRefund: boolean;
   isHistorical: boolean;
@@ -258,6 +262,12 @@ function incomeLine(input: {
   };
 }
 
+/**
+ * 退款行：金额为负，付款方**沿用原单**——退款是从同一个口袋里退回去的。
+ *
+ * 线上原路退回（微信商户号）→ `COMPANY`；线下退款登记 → `PERSONAL`。
+ * 不写这一层的话，明细按付款方筛选会把退款静默漏掉。
+ */
 function refundLine(input: {
   amount: number;
   occurredAt: Date;
@@ -265,6 +275,7 @@ function refundLine(input: {
   sourceId: string;
   rowId: string;
   sourceNo?: string | null;
+  payerType: 'COMPANY' | 'PERSONAL';
   isOnline: boolean;
   isHistorical: boolean;
 }): FinanceIncomeLine {
@@ -276,6 +287,7 @@ function refundLine(input: {
     sourceId: input.sourceId,
     rowId: input.rowId,
     sourceNo: input.sourceNo ?? undefined,
+    payerType: input.payerType,
     isRefund: true,
     isHistorical: input.isHistorical,
     isOnline: input.isOnline,
@@ -407,6 +419,8 @@ export function buildOrderRefundLines(
         sourceId: row.order?.id ?? row.id,
         rowId: `refund:${row.id}`,
         sourceNo: row.order?.orderNo,
+        // 微信原路退回，钱从公司商户号出
+        payerType: 'COMPANY',
         isOnline: true,
         isHistorical: isHistoricalPaidAt(row.order?.paidAt),
       }),
@@ -428,6 +442,8 @@ export function buildOfflineRefundLines(
         sourceId: row.order?.id ?? row.id,
         rowId: `refund:offline:${row.id}`,
         sourceNo: row.order?.orderNo,
+        // 线下收款的钱在个人账户，退款也从个人账户出
+        payerType: 'PERSONAL',
         isOnline: false,
         isHistorical: isHistoricalPaidAt(row.order?.paidAt),
       }),
@@ -442,6 +458,8 @@ export function buildSupplementRefundLines(
   for (const row of rows) {
     const amount = toAmount(row.refundAmount);
     if (amount <= 0) continue;
+    // 沿用原单付款渠道：线上→公司，线下→个人
+    const online = !isOfflinePayment(row.paymentMethod);
     lines.push(
       refundLine({
         amount,
@@ -450,7 +468,8 @@ export function buildSupplementRefundLines(
         sourceId: row.id,
         rowId: `refund:supplement:${row.id}`,
         sourceNo: row.orderNo,
-        isOnline: !isOfflinePayment(row.paymentMethod),
+        payerType: online ? 'COMPANY' : 'PERSONAL',
+        isOnline: online,
         isHistorical: isHistoricalPaidAt(row.paidAt),
       }),
     );
@@ -474,6 +493,7 @@ export function buildCustomRecipeRefundLines(
         sourceId: row.orderId,
         rowId: `refund:online:${row.id}`,
         sourceNo: row.orderId,
+        payerType: 'COMPANY',
         isOnline: true,
         isHistorical: isHistoricalPaidAt(row.paymentConfirmedAt),
       }),
@@ -498,6 +518,7 @@ export function buildCustomRecipeOfflineRefundLines(
         sourceId: row.orderId,
         rowId: `refund:offline:${row.id}`,
         sourceNo: row.orderId,
+        payerType: 'PERSONAL',
         isOnline: false,
         isHistorical: isHistoricalPaidAt(row.paymentConfirmedAt),
       }),

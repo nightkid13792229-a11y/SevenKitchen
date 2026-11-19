@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { OFFLINE_PAYMENT_METHODS } from './finance-categories';
-import { FinanceConfigService } from './finance-config.service';
+import { FinanceFeeRateService } from './finance-fee-rate.service';
 import {
   FinanceExpense,
   FinanceExpenseService,
@@ -47,7 +47,7 @@ function roundMoney(value: number): number {
  *
  * 收入与支出各自的口径完全交给 Task 3/4 的服务，本服务只负责：
  * 1. 定期间（月 → `monthRange`，否则 `resolvePeriod`）；
- * 2. 取费率算收入，再把收入侧算出的手续费传给支出；
+ * 2. 取固定费率算收入，再把收入侧算出的手续费传给支出；
  * 3. 两数相减得到结余，并统计线下待确认收款。
  */
 @Injectable()
@@ -56,7 +56,7 @@ export class FinanceSummaryService {
     private readonly incomeService: FinanceIncomeService,
     private readonly expenseService: FinanceExpenseService,
     private readonly prisma: PrismaService,
-    private readonly configService: FinanceConfigService,
+    private readonly feeRateService: FinanceFeeRateService,
   ) {}
 
   async getSummary(
@@ -64,7 +64,7 @@ export class FinanceSummaryService {
     now: Date = new Date(),
   ): Promise<FinanceSummary> {
     const period = this.resolveQueryPeriod(query, now);
-    const feeRate = await this.configService.getFeeRate();
+    const feeRate = await this.feeRateService.getFeeRate();
 
     // 待确认收款与收入聚合互不依赖，并行取数
     const [income, pendingOfflineConfirmCount] = await Promise.all([

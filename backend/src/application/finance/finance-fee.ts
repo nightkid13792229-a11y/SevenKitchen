@@ -5,7 +5,7 @@
  * 四舍五入到分。退款时微信按比例退回已收手续费，所以全额退款后为负数。
  */
 
-/** 默认手续费率 6‰；实际取值以配置项 `finance.wechatFeeRate` 为准 */
+/** 手续费按传入费率计算；v1 由 `FinanceFeeRateService` 固定返回 0.006 */
 export const DEFAULT_WECHAT_FEE_RATE = 0.006;
 
 /** 金额转分，避免浮点误差进到四舍五入 */

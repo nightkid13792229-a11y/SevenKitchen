@@ -69,7 +69,7 @@ import { CustomRecipePricingService } from './application/custom-recipe/custom-r
 import { GuestCustomerService } from './application/custom-recipe/guest-customer.service';
 import { AssistedOrderService } from './application/custom-recipe/assisted-order.service';
 import { FinanceAlertService } from './application/finance/finance-alert.service';
-import { FinanceConfigService } from './application/finance/finance-config.service';
+import { FinanceFeeRateService } from './application/finance/finance-fee-rate.service';
 import { FinanceSummaryService } from './application/finance/finance-summary.service';
 import { FinanceIncomeService } from './application/finance/finance-income.service';
 import { FinanceExpenseService } from './application/finance/finance-expense.service';
@@ -902,7 +902,7 @@ validatePrismaConfig();
     ExpenseTemplateService,
     FinanceReportService,
     FinanceAlertService,
-    FinanceConfigService,
+    FinanceFeeRateService,
     FinanceSummaryService,
     FinanceIncomeService,
     FinanceExpenseService,

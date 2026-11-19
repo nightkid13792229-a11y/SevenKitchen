@@ -44,7 +44,7 @@ describe('FinanceSummaryService', () => {
     const prisma = {
       order: { count: jest.fn().mockResolvedValue(options.count ?? 0) },
     };
-    const configService = {
+    const feeRateService = {
       getFeeRate: jest.fn().mockResolvedValue(options.feeRate ?? 0.006),
     };
 
@@ -53,17 +53,17 @@ describe('FinanceSummaryService', () => {
         incomeService as any,
         expenseService as any,
         prisma as any,
-        configService as any,
+        feeRateService as any,
       ),
       incomeService,
       expenseService,
       prisma,
-      configService,
+      feeRateService,
     };
   };
 
   it('结余 = 收入净额 − 支出合计；待确认收款按线下未付款单数统计', async () => {
-    const { service, incomeService, expenseService, prisma, configService } =
+    const { service, incomeService, expenseService, prisma, feeRateService } =
       makeService({ count: 2 });
 
     const result = await service.getSummary({ month: '2026-11' });
@@ -74,11 +74,11 @@ describe('FinanceSummaryService', () => {
     expect(result.range.from).toBe('2026-11-01T00:00:00.000+08:00');
     expect(result.range.to).toBe('2026-11-30T23:59:59.999+08:00');
 
-    // 期间只解析一次，收入/支出拿到的是同一个区间；费率来自配置，手续费再传给支出
+    // 期间只解析一次，收入/支出拿到的是同一个区间；费率由费率服务给出，手续费再传给支出
     const period = monthRange('2026-11');
     expect(incomeService.getIncome).toHaveBeenCalledWith(period, 0.006);
     expect(expenseService.getExpense).toHaveBeenCalledWith(period, income.fee);
-    expect(configService.getFeeRate).toHaveBeenCalledTimes(1);
+    expect(feeRateService.getFeeRate).toHaveBeenCalledTimes(1);
 
     // 待确认 = 线下支付方式 + 未付款 + 未取消
     expect(prisma.order.count).toHaveBeenCalledTimes(1);

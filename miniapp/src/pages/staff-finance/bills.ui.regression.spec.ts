@@ -54,8 +54,18 @@ describe('固定费用', () => {
     expect(page).toContain('公司账户');
     // 确认后调 payBill 并刷新账单
     expect(page).toContain('payBill');
-    expect(page).toContain("toast('已标记已付'");
+    // 付款只改状态：toast 要说清支出不变，别让老板以为没反应
+    expect(page).toContain('已标记为已付（支出不变，按月份已计入）');
     expect(page).toContain('loadBills()');
+  });
+
+  it('待付区说明固定费用按所属月份整月计入，付款不影响当月支出', () => {
+    expect(page).toContain('按所属月份整月计入');
+    expect(page).toContain('哪天付款都不影响当月支出');
+    // 小字：24rpx（$staff-font-caption）+ ink-2
+    const hint = page.match(/\.card-hint\s*\{[^}]*\}/)?.[0] || '';
+    expect(hint).toContain('font-size: $staff-font-caption');
+    expect(hint).toContain('color: $staff-ink-2');
   });
 
   it('补生成本月：0 笔提示本月都已生成，N 笔提示已生成 N 笔', () => {

@@ -29,6 +29,9 @@
         </view>
         <text class="card-action" @tap="generateBills">{{ generateLabel }}</text>
       </view>
+      <text class="card-hint">
+        固定费用按所属月份整月计入，哪天付款都不影响当月支出
+      </text>
 
       <view v-if="billsLoading && bills.length === 0" class="skeleton">
         <view v-for="n in 3" :key="n" class="sk-row"></view>
@@ -766,7 +769,8 @@ async function confirmPay() {
       payerType: payPayerType.value,
     })
     payTarget.value = null
-    toast('已标记已付', 'success')
+    // 固定费用生成时已整月计入支出：点「已付」只改状态、不加金额，必须说清楚
+    toast('已标记为已付（支出不变，按月份已计入）')
     await loadBills()
   } catch (error) {
     toast(errorMessage(error))
@@ -1102,6 +1106,15 @@ onShow(() => {
   font-size: $staff-font-caption;
   color: $staff-ink-2;
   font-variant-numeric: tabular-nums;
+}
+
+/* 固定费用口径说明：按所属月整月计入，付款只改状态 */
+.card-hint {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $staff-font-caption;
+  line-height: 1.5;
+  color: $staff-ink-2;
 }
 
 /* 文字动作：88rpx 高保证触控，右侧不留白靠负 margin 对齐卡片边 */

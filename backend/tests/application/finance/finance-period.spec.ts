@@ -16,27 +16,30 @@ describe('finance-period', () => {
     );
   });
 
-  it('早于起账日的区间被裁到起账日', () => {
+  it('整段早于起账日直接报错，不返回空点', () => {
+    expect(() =>
+      resolvePeriod('2026-10-01', '2026-10-31', sh('2026-11-05T10:00:00')),
+    ).toThrow(BadRequestException);
+  });
+
+  it('跨起账日的区间：起点抬到起账日，终点保留', () => {
     const p = resolvePeriod(
-      '2026-10-01',
-      '2026-10-31',
-      sh('2026-11-05T10:00:00'),
+      '2026-10-15',
+      '2026-11-05',
+      sh('2026-11-10T10:00:00'),
     );
     expect(p.from.toISOString()).toBe(
       sh(FINANCE_START_DATE + 'T00:00:00').toISOString(),
+    );
+    expect(p.to.toISOString()).toBe(
+      sh('2026-11-05T23:59:59.999').toISOString(),
     );
   });
 
-  it('整段早于起账日时不会倒挂：from 为起账日且不晚于 to', () => {
-    const p = resolvePeriod(
-      '2026-10-01',
-      '2026-10-31',
-      sh('2026-11-05T10:00:00'),
-    );
-    expect(p.from.toISOString()).toBe(
-      sh(FINANCE_START_DATE + 'T00:00:00').toISOString(),
-    );
-    expect(p.from.getTime()).toBeLessThanOrEqual(p.to.getTime());
+  it('开始日期晚于结束日期时报错，不静默造区间', () => {
+    expect(() =>
+      resolvePeriod('2026-12-01', '2026-11-30', sh('2026-12-05T10:00:00')),
+    ).toThrow(BadRequestException);
   });
 
   it('起账日之前的月份直接报错，不返回倒挂区间', () => {

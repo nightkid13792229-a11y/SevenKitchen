@@ -31,9 +31,11 @@ function parseDayKey(input: string): string {
 
 /**
  * 解析查询区间；缺省为「本月 1 日 ~ 今天」。
- * 两端都裁进 [起账日, 今天结束]（上海时间）：`from` 早于起账日时抬到起账日，
- * `to` 晚于今天时收到今天结束。裁完仍倒挂时（例如 from 晚于 to），把 `to`
- * 设为 `from` 当天结束，保证永远不出现 from > to。
+ *
+ * - `from` 早于起账日时抬到起账日；`to` 晚于今天时收到今天结束。
+ * - 整段落在起账日之前：直接报错（起账日之前不统计），不返回空区间——
+ *   否则闭区间查询会把 11-01 零点整的那一刻数据带进「查 10 月」的结果里。
+ * - 反向输入（from 晚于 to）：报错，不静默造区间。
  */
 export function resolvePeriod(
   from?: string,
@@ -42,22 +44,29 @@ export function resolvePeriod(
 ): FinancePeriod {
   const startFloor = startOfShanghaiDay(FINANCE_START_DATE);
   const nowEnd = endOfShanghaiDay(TimezoneUtil.shanghaiDateKey(now));
-  const clamp = (time: number) =>
-    Math.min(Math.max(time, startFloor.getTime()), nowEnd.getTime());
 
   const requestedFrom = from
     ? startOfShanghaiDay(parseDayKey(from))
     : TimezoneUtil.startOfShanghaiMonth(now);
   const requestedTo = to ? endOfShanghaiDay(parseDayKey(to)) : nowEnd;
 
-  const clampedFrom = clamp(requestedFrom.getTime());
-  const clampedTo = clamp(requestedTo.getTime());
-  const resolvedTo =
-    clampedTo < clampedFrom
-      ? endOfShanghaiDay(TimezoneUtil.shanghaiDateKey(new Date(clampedFrom)))
-      : clampedTo;
+  if (requestedTo.getTime() < startFloor.getTime()) {
+    throw new BadRequestException(
+      `起账日（${FINANCE_START_DATE}）之前不统计`,
+    );
+  }
+  if (requestedFrom.getTime() > requestedTo.getTime()) {
+    throw new BadRequestException('开始日期不能晚于结束日期');
+  }
 
-  return { from: new Date(clampedFrom), to: new Date(resolvedTo) };
+  const upperBound = Math.max(nowEnd.getTime(), startFloor.getTime());
+  const clamp = (time: number) =>
+    Math.min(Math.max(time, startFloor.getTime()), upperBound);
+
+  return {
+    from: new Date(clamp(requestedFrom.getTime())),
+    to: new Date(clamp(requestedTo.getTime())),
+  };
 }
 
 /**

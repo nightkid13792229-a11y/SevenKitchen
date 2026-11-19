@@ -113,6 +113,13 @@
             </text>
           </view>
           <view class="entry-title-row">
+            <!-- 报销杂费单独标出来：和订单收入/退款一眼区分 -->
+            <text
+              v-if="entry.sourceType === 'REIMBURSEMENT'"
+              class="entry-reimbursement"
+            >
+              报销杂费
+            </text>
             <text class="entry-title">{{ entryTitle(entry) }}</text>
             <!-- 退款对应的订单付款早于起账日：标题后单独标「历史单」，别和当月退款混在一起 -->
             <text
@@ -187,6 +194,8 @@ const SOURCE_ROUTES: Partial<Record<FinanceEntrySourceType, string>> = {
   // 线上退款行也是指回原订单
   ORDER_REFUND: '/pages/staff-order-center/index',
   PURCHASE: '/pages/staff-purchasing/index',
+  // 报销杂费：详情页参数是 id（报销单 id），不是 claimNumber（只用于展示）
+  REIMBURSEMENT: '/pages/staff-purchasing/reimbursement/detail',
 }
 
 /** 不跳的来源都给一句人话，别让用户点了没反应 */
@@ -460,8 +469,22 @@ function loadMore() {
   load()
 }
 
+/**
+ * 拼来源页地址。
+ *
+ * 报销杂费要带报销单 id 才能打开详情；后端明细里 `sourceId` 就是报销单 id，
+ * `sourceNo` 是给人看的单号。缺 id 时返回空串，交给通用 toast 兜底。
+ */
+function sourceUrl(entry: FinanceEntry): string {
+  const base = SOURCE_ROUTES[entry.sourceType]
+  if (!base) return ''
+  if (entry.sourceType !== 'REIMBURSEMENT') return base
+  const sourceId = String(entry.sourceId || '').trim()
+  return sourceId ? `${base}?id=${encodeURIComponent(sourceId)}` : ''
+}
+
 function openSource(entry: FinanceEntry) {
-  const url = SOURCE_ROUTES[entry.sourceType]
+  const url = sourceUrl(entry)
   if (!url) {
     uni.showToast({
       title: SOURCE_HINTS[entry.sourceType] || '这类账目暂时没有对应的单据页面',
@@ -697,6 +720,16 @@ onReachBottom(() => {
   font-size: $staff-font-caption;
   color: $staff-gold-ink;
   background: $staff-gold-soft;
+  border-radius: $staff-radius-pill;
+}
+
+/* 报销杂费：标题前的绿色来源标签 */
+.entry-reimbursement {
+  flex: none;
+  padding: 2rpx 12rpx;
+  font-size: $staff-font-caption;
+  color: $staff-brand;
+  background: $staff-brand-soft;
   border-radius: $staff-radius-pill;
 }
 

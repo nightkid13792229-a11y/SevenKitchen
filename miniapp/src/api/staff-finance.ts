@@ -145,6 +145,7 @@ export type FinanceEntrySourceType =
   | 'PURCHASE'
   | 'SHIPPING'
   | 'BILL'
+  | 'REIMBURSEMENT'
   | 'FEE'
   | 'MANUAL';
 

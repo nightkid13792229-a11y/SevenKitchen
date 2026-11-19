@@ -83,6 +83,17 @@ describe('收支明细', () => {
     expect(navBlock).toContain('uni.showToast');
   });
 
+  it('报销杂费行有「报销杂费」标签，并能打开报销详情', () => {
+    // 后端明细已经会返回报销杂费行，来源类型不能漏
+    expect(api).toContain("'REIMBURSEMENT'");
+    expect(page).toContain("entry.sourceType === 'REIMBURSEMENT'");
+    expect(page).toContain('报销杂费');
+    expect(page).toContain('/pages/staff-purchasing/reimbursement/detail');
+    // 详情页参数是 id（报销单 id），不是 claimNumber
+    expect(page).toContain('?id=${encodeURIComponent(sourceId)}');
+    expect(page).toContain('entry.sourceId');
+  });
+
   it('触底加载更多，到底提示没有更多了', () => {
     expect(page).toContain('onReachBottom');
     expect(page).toContain('loadMore');

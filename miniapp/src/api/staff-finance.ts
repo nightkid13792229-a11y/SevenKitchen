@@ -432,9 +432,14 @@ export const staffFinanceApi = {
     });
   },
 
-  /** 补生成某月固定费用账单（幂等）；不传 month = 本月 */
+  /**
+   * 补生成某月固定费用账单（幂等）；不传 month = 本月。
+   *
+   * `created` 是本次新建数，`dueCount` 是该月按周期应有的总数：
+   * created=0 且 dueCount>0 = 都已生成；dueCount=0 = 本来就没有要生成的。
+   */
   generateBills(month?: string) {
-    return requestData<{ created: number }>({
+    return requestData<{ created: number; dueCount: number }>({
       url: '/admin/finance/bills/generate',
       method: 'POST',
       data: month ? { month } : {},

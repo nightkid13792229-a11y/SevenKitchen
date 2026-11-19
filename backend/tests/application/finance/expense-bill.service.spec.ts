@@ -111,7 +111,7 @@ describe('ExpenseTemplateService.generateForMonth', () => {
 
     const result = await service.generateForMonth('2026-11');
 
-    expect(result).toEqual({ created: 1 });
+    expect(result).toEqual({ created: 1, dueCount: 1 });
     expect(prisma.expenseBill.createMany).toHaveBeenCalledTimes(1);
     const rows = prisma.expenseBill.createMany.mock.calls[0][0].data;
     expect(rows).toHaveLength(1);
@@ -141,7 +141,7 @@ describe('ExpenseTemplateService.generateForMonth', () => {
 
     const result = await service.generateForMonth('2026-11');
 
-    expect(result).toEqual({ created: 0 });
+    expect(result).toEqual({ created: 0, dueCount: 1 });
     expect(prisma.expenseBill.createMany).not.toHaveBeenCalled();
     // 只查本月（11-01 起、12-01 之前），其他月份的历史账单不影响
     expect(prisma.expenseBill.findMany).toHaveBeenCalledWith(
@@ -156,6 +156,27 @@ describe('ExpenseTemplateService.generateForMonth', () => {
     );
   });
 
+  it('dueCount 统计该月所有到期模板，已生成过的也计入（页面据此提示「都已生成」）', async () => {
+    const monthly = makeTemplate({ id: 'm1' });
+    const quarterly = makeTemplate({
+      id: 'q1',
+      interval: 'QUARTERLY',
+      servicePeriodMonths: 3,
+    });
+    // 10 月：月付 + 季付都到期，其中月付已经生成过
+    const prisma = makeTemplatePrisma([monthly, quarterly], ['m1']);
+
+    const result = await new ExpenseTemplateService(prisma).generateForMonth(
+      '2026-10',
+    );
+
+    expect(result).toEqual({ created: 1, dueCount: 2 });
+    const rows = prisma.expenseBill.createMany.mock.calls[0][0].data;
+    expect(rows.map((row: { templateId: string }) => row.templateId)).toEqual([
+      'q1',
+    ]);
+  });
+
   it('季度模板只在 1/4/7/10 月生成', async () => {
     const quarterly = makeTemplate({
       id: 'q1',
@@ -167,13 +188,13 @@ describe('ExpenseTemplateService.generateForMonth', () => {
     const november = makeTemplatePrisma([quarterly]);
     await expect(
       new ExpenseTemplateService(november).generateForMonth('2026-11'),
-    ).resolves.toEqual({ created: 0 });
+    ).resolves.toEqual({ created: 0, dueCount: 0 });
     expect(november.expenseBill.createMany).not.toHaveBeenCalled();
 
     const october = makeTemplatePrisma([quarterly]);
     await expect(
       new ExpenseTemplateService(october).generateForMonth('2026-10'),
-    ).resolves.toEqual({ created: 1 });
+    ).resolves.toEqual({ created: 1, dueCount: 1 });
     expect(october.expenseBill.createMany).toHaveBeenCalledTimes(1);
   });
 
@@ -189,13 +210,13 @@ describe('ExpenseTemplateService.generateForMonth', () => {
     const november = makeTemplatePrisma([yearly]);
     await expect(
       new ExpenseTemplateService(november).generateForMonth('2026-11'),
-    ).resolves.toEqual({ created: 0 });
+    ).resolves.toEqual({ created: 0, dueCount: 0 });
     expect(november.expenseBill.createMany).not.toHaveBeenCalled();
 
     const april = makeTemplatePrisma([yearly]);
     await expect(
       new ExpenseTemplateService(april).generateForMonth('2026-04'),
-    ).resolves.toEqual({ created: 1 });
+    ).resolves.toEqual({ created: 1, dueCount: 1 });
     const row = april.expenseBill.createMany.mock.calls[0][0].data[0];
     expect(row.title).toBe('2026年域名续费');
     expect(row.recognitionStart.toISOString()).toBe('2026-04-01T00:00:00.000Z');
@@ -231,7 +252,7 @@ describe('ExpenseTemplateService.generateForMonth', () => {
     const empty = makeTemplatePrisma([]);
     await expect(
       new ExpenseTemplateService(empty).generateForMonth('2026-11'),
-    ).resolves.toEqual({ created: 0 });
+    ).resolves.toEqual({ created: 0, dueCount: 0 });
     expect(empty.expenseBill.createMany).not.toHaveBeenCalled();
 
     const prisma = makeTemplatePrisma([makeTemplate()]);
@@ -263,7 +284,7 @@ describe('ExpenseTemplateService.generateForMonth 并发幂等', () => {
 
     await expect(
       new ExpenseTemplateService(prisma).generateForMonth('2026-11'),
-    ).resolves.toEqual({ created: 0 });
+    ).resolves.toEqual({ created: 0, dueCount: 1 });
   });
 
   it('数据库跳过重复行时 created 以实际写入数为准', async () => {
@@ -272,7 +293,7 @@ describe('ExpenseTemplateService.generateForMonth 并发幂等', () => {
 
     await expect(
       new ExpenseTemplateService(prisma).generateForMonth('2026-11'),
-    ).resolves.toEqual({ created: 0 });
+    ).resolves.toEqual({ created: 0, dueCount: 1 });
   });
 
   it('ExpenseBill 对 (templateId, recognitionStart) 有唯一约束（迁移存在）', () => {

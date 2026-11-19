@@ -289,7 +289,9 @@ describe('AdminFinanceV2Controller 固定费用接口', () => {
 
   it('补生成缺省本月，付款把账单 id 与实付信息交给账单服务', async () => {
     const templates = {
-      generateForMonth: jest.fn().mockResolvedValue({ created: 2 }),
+      generateForMonth: jest
+        .fn()
+        .mockResolvedValue({ created: 2, dueCount: 3 }),
     };
     const bills = {
       listForMonth: jest.fn().mockResolvedValue([]),
@@ -298,8 +300,9 @@ describe('AdminFinanceV2Controller 固定费用接口', () => {
     const controller = makeController({ templates, bills });
     const month = TimezoneUtil.shanghaiDateKey(new Date()).slice(0, 7);
 
-    await controller.generateBills('u1', {});
+    const generated = await controller.generateBills('u1', {});
     expect(templates.generateForMonth).toHaveBeenCalledWith(month, 'u1');
+    expect(generated.data).toEqual({ created: 2, dueCount: 3 });
     await controller.listBills();
     expect(bills.listForMonth).toHaveBeenCalledWith(month);
 

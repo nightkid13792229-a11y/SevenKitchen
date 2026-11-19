@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { FinanceExpenseInterval } from '../../api/staff-finance';
 import {
   buildTemplateFormPayload,
-  dueTemplatesForMonth,
+  serviceMonthsForEdit,
   serviceMonthsForInterval,
 } from './bills-logic';
 
@@ -15,12 +14,6 @@ const logic = read('./bills-logic.ts');
 const api = read('../../api/staff-finance.ts');
 const pagesJson = read('../../pages.json');
 
-type DueTemplateRow = {
-  id: string;
-  isActive: boolean;
-  interval: FinanceExpenseInterval;
-  monthOfYear: number | null;
-};
 
 /** 从页面里截出某个函数的实现，避免整页 toContain 误判 */
 const fnBlock = (name: string) =>
@@ -115,13 +108,15 @@ describe('固定费用', () => {
     expect(page).not.toContain('删除');
   });
 
-  it('新建固定费用表单：类别用后端枚举中文标签，服务期默认 1、年付填 12', () => {
+  it('新建固定费用表单：类别用后端枚举中文标签，服务期默认 1、年付 12、季付 3', () => {
     expect(page).toContain('新建固定费用');
     expect(page).toContain('服务期月数');
     expect(page).toContain("formServiceMonthsText = ref('1')");
-    // 年付默认 12 的规则在纯逻辑模块里（可执行断言，见下面用例）
+    // 默认值与区间夹取在纯逻辑模块里（可执行断言，见下面用例）
     expect(page).toContain('serviceMonthsForInterval');
-    expect(logic).toContain("return currentText.trim() === '1' ? '12' : currentText");
+    expect(page).toContain('serviceMonthsForEdit');
+    expect(logic).toContain("if (!valid || parsed === 1) return '12'");
+    expect(logic).toContain("return interval === 'QUARTERLY' ? '3' : '12'");
     // 类别值必须是后端 FinanceExpenseCategory 的枚举 code，中文照抄后端标签
     const labels: Array<[string, string]> = [
       ['RENT', '房租'],
@@ -152,7 +147,9 @@ describe('固定费用', () => {
     // 再切回「每月」→ 必须复位 1（否则 5000 房租会被按 12 个月摊成 416）
     monthsText = serviceMonthsForInterval('MONTHLY', monthsText);
     expect(monthsText).toBe('1');
-    expect(serviceMonthsForInterval('QUARTERLY', '12')).toBe('1');
+    // 季付不跟着变成 1：默认 3 个月
+    expect(serviceMonthsForInterval('QUARTERLY', '12')).toBe('3');
+    expect(serviceMonthsForInterval('QUARTERLY', '1')).toBe('3');
 
     const payload = buildTemplateFormPayload({
       name: '房租',
@@ -165,7 +162,7 @@ describe('固定费用', () => {
       editing: null,
     });
     expect(payload.servicePeriodMonths).toBe(1);
-    // 就算调用方手误传 12，月付/季付也会被强制回 1
+    // 就算调用方手误传 12，月付也会被强制回 1
     expect(
       buildTemplateFormPayload({
         name: '房租',
@@ -216,36 +213,44 @@ describe('固定费用', () => {
     expect(monthly.monthOfYear).toBeUndefined();
   });
 
-  it('补生成 0 笔时区分「都已生成」和「本月没有需要生成的」', () => {
-    const templates: DueTemplateRow[] = [
-      { id: 'rent', isActive: true, interval: 'MONTHLY', monthOfYear: null },
-      { id: 'tax', isActive: true, interval: 'QUARTERLY', monthOfYear: null },
-      { id: 'broadband', isActive: true, interval: 'YEARLY', monthOfYear: 3 },
-      { id: 'off', isActive: false, interval: 'MONTHLY', monthOfYear: null },
-    ];
-    // 11 月：只有月付房租该生成
-    expect(dueTemplatesForMonth(templates, '2026-11').map((row) => row.id)).toEqual([
-      'rent',
-    ]);
-    // 12 月：季付税费不在 1/4/7/10，仍只有房租
-    expect(dueTemplatesForMonth(templates, '2026-12').map((row) => row.id)).toEqual([
-      'rent',
-    ]);
-    // 3 月：房租 + 年付宽带
-    expect(dueTemplatesForMonth(templates, '2027-03').map((row) => row.id)).toEqual([
-      'rent',
-      'broadband',
-    ]);
-    // 没有启用的模板 → 空；页面据此提示「没有需要生成」而不是骗人说都已生成
-    expect(
-      dueTemplatesForMonth(
-        [{ id: 'off', isActive: false, interval: 'MONTHLY', monthOfYear: null }],
-        '2026-11',
-      ),
-    ).toEqual([]);
-    expect(page).toContain('dueTemplatesForMonth(templates.value, activeMonth.value)');
+  it('季付默认 3、允许 1-3；编辑 QUARTERLY+3 往返保存仍是 3', () => {
+    // 切到季付：默认 3；填过 2 的保留；超出 3 的收敛到 3
+    expect(serviceMonthsForInterval('QUARTERLY', '1')).toBe('3');
+    expect(serviceMonthsForInterval('QUARTERLY', '2')).toBe('2');
+    expect(serviceMonthsForInterval('QUARTERLY', '5')).toBe('3');
+
+    // 打开编辑：沿用库里原值，不要把 3 强改成 1
+    const opened = serviceMonthsForEdit('QUARTERLY', 3);
+    expect(opened).toBe('3');
+    // 不改字段直接保存：提交值仍是 3
+    const payload = buildTemplateFormPayload({
+      name: '季税费',
+      category: 'TAX',
+      amount: 900,
+      interval: 'QUARTERLY',
+      dayOfMonth: 10,
+      servicePeriodMonths: Number(opened),
+      payerType: 'COMPANY',
+      editing: null,
+    });
+    expect(payload.servicePeriodMonths).toBe(3);
+
+    // 月付才归 1；季付/年付老数据原样带出，不静默改写
+    expect(serviceMonthsForEdit('MONTHLY', 12)).toBe('1');
+    expect(serviceMonthsForEdit('QUARTERLY', 12)).toBe('12');
+    expect(serviceMonthsForEdit('YEARLY', 12)).toBe('12');
+  });
+
+  it('补生成用后端 dueCount 区分「都已生成」和「没有需要生成的」', () => {
+    // 周期规则只在后端算一份：页面按 dueCount 判断，不再复刻
+    expect(api).toContain('dueCount: number');
+    expect(page).toContain('result?.dueCount');
+    expect(page).toContain('dueCount > 0');
     expect(page).toContain('本月没有需要生成的固定费用');
     expect(page).toContain('该月没有需要生成的固定费用');
+    expect(page).not.toContain('dueTemplatesForMonth');
+    expect(logic).not.toContain('dueTemplatesForMonth');
+    expect(logic).not.toContain('(monthNumber - 1) % 3');
   });
 
   it('行内按钮 88rpx 触控，「已付清」用 ink-2 不用 ink-3', () => {

@@ -230,13 +230,16 @@ export class AdminFinanceV2Controller {
   /** 补生成指定月份（缺省本月）的固定费用账单；幂等，重复调用不重复生成 */
   @Post('bills/generate')
   @ApiOperation({ summary: '补生成固定费用账单（仅 ADMIN）' })
-  @ApiResponse({ status: 200, description: '本次新建的账单数' })
+  @ApiResponse({
+    status: 200,
+    description: '本次新建的账单数与当月到期模板数（dueCount）',
+  })
   @ApiResponse({ status: 400, description: '月份格式不合法' })
   @ApiResponse({ status: 403, description: '需要管理员权限' })
   async generateBills(
     @UserId() userId: string,
     @Body() body: GenerateBillsDto,
-  ): Promise<ApiResponseDto<{ created: number }>> {
+  ): Promise<ApiResponseDto<{ created: number; dueCount: number }>> {
     const target =
       body?.month || TimezoneUtil.shanghaiDateKey(new Date()).slice(0, 7);
     return ApiResponseDto.success(

@@ -285,11 +285,17 @@ export class ExpenseTemplateService {
    * 为指定月份补生成固定费用账单（幂等）。
    *
    * `month` 形如 `2026-11`；重复调用、定时任务重跑都只会在第一次写库。
+   *
+   * 返回值：
+   * - `created`：本次真正新建的账单数；
+   * - `dueCount`：该月按周期「应有」的账单数（含已经生成过的）。
+   *   补生成接口用它区分「都已生成」（created=0、dueCount>0）和
+   *   「本来就没有要生成的」（dueCount=0），页面不能一律说「都已生成」。
    */
   async generateForMonth(
     month: string,
     createdById = 'system',
-  ): Promise<{ created: number }> {
+  ): Promise<{ created: number; dueCount: number }> {
     const range = monthDateOnlyRange(month);
     const templates = await this.prisma.expenseTemplate.findMany({
       where: { isActive: true },
@@ -298,7 +304,8 @@ export class ExpenseTemplateService {
     const dueTemplates = templates.filter((template) =>
       isTemplateDueInMonth(template, range.month),
     );
-    if (dueTemplates.length === 0) return { created: 0 };
+    const dueCount = dueTemplates.length;
+    if (dueCount === 0) return { created: 0, dueCount: 0 };
 
     const existing = await this.prisma.expenseBill.findMany({
       where: {
@@ -357,7 +364,7 @@ export class ExpenseTemplateService {
         };
       });
 
-    if (rows.length === 0) return { created: 0 };
+    if (rows.length === 0) return { created: 0, dueCount };
 
     try {
       // 已有账单的排重靠「先查」，并发竞态由 (templateId, recognitionStart)
@@ -366,12 +373,12 @@ export class ExpenseTemplateService {
         data: rows,
         skipDuplicates: true,
       });
-      return { created: result.count };
+      return { created: result.count, dueCount };
     } catch (error) {
       // 老库/驱动不支持 skipDuplicates 时，唯一键冲突等价于「已经生成过」，
       // 仍然返回 created=0，不让定时任务或补生成接口报 500。
       if ((error as { code?: string } | null)?.code === 'P2002') {
-        return { created: 0 };
+        return { created: 0, dueCount };
       }
       throw error;
     }

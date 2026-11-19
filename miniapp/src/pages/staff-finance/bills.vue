@@ -316,9 +316,7 @@
             maxlength="3"
             @input="onServiceMonthsInput"
           />
-          <text class="field-hint">
-            默认 1；年付宽带这类一次付一年的填 12，账单按月分摊
-          </text>
+          <text class="field-hint">{{ serviceMonthsHint }}</text>
         </view>
 
         <view class="field">
@@ -377,7 +375,7 @@ import {
 import { getStoredUser } from '../../utils/account'
 import {
   buildTemplateFormPayload,
-  dueTemplatesForMonth,
+  serviceMonthsForEdit,
   serviceMonthsForInterval,
 } from './bills-logic'
 
@@ -679,15 +677,14 @@ async function generateBills() {
   try {
     const result = await staffFinanceApi.generateBills(activeMonth.value)
     const created = Number(result?.created) || 0
+    // dueCount 由后端按生成规则统计（季付月份、年付月份、启用状态都算好了）：
+    // 有到期但 created=0 = 之前都生成过；dueCount=0 = 本来就没有要生成的。
+    const dueCount = Number(result?.dueCount) || 0
     if (created > 0) {
       toast(`已生成 ${created} 笔`, 'success')
-    } else if (
-      dueTemplatesForMonth(templates.value, activeMonth.value).length > 0
-    ) {
-      // 有该生成的项目、created 却是 0：说明当月账单之前就生成过了
+    } else if (dueCount > 0) {
       toast(isCurrentMonth.value ? '本月都已生成' : '该月都已生成')
     } else {
-      // 季付不在本季、年付月份不符、没有启用的模板：本来就不该有账单
       toast(
         isCurrentMonth.value
           ? '本月没有需要生成的固定费用'
@@ -807,6 +804,14 @@ const yearlyHint = computed(
   () => `年付：每年 ${formMonthOfYear.value} 月生成一张，几号是到期日`,
 )
 
+const serviceMonthsHint = computed(() => {
+  if (formInterval.value === 'MONTHLY') return '月付固定 1 个月'
+  if (formInterval.value === 'QUARTERLY') {
+    return '季付默认 3 个月（1–3），账单按月分摊'
+  }
+  return '年付宽带这类一次付一年的填 12，账单按月分摊'
+})
+
 function openCreate() {
   editingTemplate.value = null
   formName.value = ''
@@ -830,12 +835,12 @@ function openEdit(template: FinanceExpenseTemplate) {
   formInterval.value = template.interval
   const day = Number(template.dayOfMonth)
   formDayIndex.value = (Number.isFinite(day) ? Math.min(31, Math.max(1, day)) : 1) - 1
-  // 月付/季付的服务期就是 1：老数据里若被写成 12（会把房租摊成 1/12），
-  // 打开编辑时就按 1 展示，保存后顺手修正，不动历史账单。
-  formServiceMonthsText.value =
-    template.interval === 'YEARLY'
-      ? String(Number(template.servicePeriodMonths) || 12)
-      : '1'
+  // 季付 3 个月、年付 12 个月都是合法用法：编辑时沿用库里原值，不强改；
+  // 只有月付固定 1（老数据若被写成 12，展示成 1，保存后顺手修正）。
+  formServiceMonthsText.value = serviceMonthsForEdit(
+    template.interval,
+    template.servicePeriodMonths,
+  )
   formPayerType.value =
     template.payerType === 'COMPANY' ? 'COMPANY' : 'PERSONAL'
   const savedMonth = Number(template.monthOfYear)
@@ -872,6 +877,8 @@ function selectFormPayer(value: FinanceExpensePayerType) {
 }
 
 function selectInterval(value: FinanceExpenseInterval) {
+  // 点已选中的周期不重算服务期，避免编辑季付模板时误把原值冲掉
+  if (formInterval.value === value) return
   formInterval.value = value
   // 年付默认 12；切回月付/季付必须回到 1，否则月租会被按 12 个月平摊
   formServiceMonthsText.value = serviceMonthsForInterval(
@@ -917,9 +924,9 @@ async function saveTemplate() {
     toast('服务期月数填 1-120')
     return
   }
-  // 非年付只能是 1（月租按 12 个月平摊会算错钱）；年付必须选到月份
-  if (formInterval.value !== 'YEARLY' && serviceMonths !== 1) {
-    toast('月付/季付的服务期固定为 1；年付才填 12')
+  // 月付只能是 1（月租按 12 个月平摊会算错钱）；季付/年付按填的值提交
+  if (formInterval.value === 'MONTHLY' && serviceMonths !== 1) {
+    toast('月付的服务期固定为 1 个月；季付填 3、年付填 12')
     return
   }
   if (formInterval.value === 'YEARLY') {
@@ -1171,7 +1178,7 @@ onShow(() => {
   gap: 10rpx;
 }
 
-/* 行内按钮：金额区的小动作，保留 72rpx 触控高度 */
+/* 行内按钮：金额区的小动作，按员工端规范保留 88rpx 触控高度 */
 .row-btn {
   min-height: 88rpx;
   margin: 0;

@@ -4561,6 +4561,31 @@ model SupplementLabelEvidence {
   @@map("supplement_label_evidence")
 }
 
+/// 补剂形态词典（2026-11-20）：把「bisglycinate / 甘氨酸盐 / Glycinate」这类不同写法并成一个键。
+/// 自动抽出来的词先落成 NEEDS_REVIEW，人工确认后才算准；认错了改一次就沉淀下来。
+model SupplementFormTerm {
+  id           String    @id @default(uuid())
+  /// FORM | SOURCE
+  dimension    String    @db.VarChar(16)
+  canonicalKey String    @map("canonical_key") @db.VarChar(120)
+  labelZh      String?   @map("label_zh") @db.VarChar(120)
+  labelEn      String?   @map("label_en") @db.VarChar(120)
+  aliases      String[]  @default([])
+  /// 限定适用于哪些营养素；空数组表示通用
+  nutrientKeys String[]  @map("nutrient_keys")
+  /// AUTO | NEEDS_REVIEW | CONFIRMED
+  status       String    @default("AUTO") @db.VarChar(16)
+  /// KB | MARKET | MANUAL
+  source       String    @default("MARKET") @db.VarChar(16)
+  reviewedBy   String?   @map("reviewed_by")
+  reviewedAt   DateTime? @map("reviewed_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@unique([dimension, canonicalKey])
+  @@index([status])
+  @@map("supplement_form_term")
+}
+
 /// 设计配方 - 配方设计工作台
 model DesignRecipe {
   id                     String                        @id @default(uuid()) @map("id")

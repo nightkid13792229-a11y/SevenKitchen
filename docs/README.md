@@ -20,6 +20,7 @@
 | [通知矩阵](notification-matrix.md) | 订阅消息/站内消息规则 |
 | [时区处理](TIMEZONE_HANDLING.md) | 时间口径 |
 | [补剂用量口径](supplement-amount-rules.md) | 补剂损耗/添加量规则 |
+| [补剂 AI 三步](superpowers/specs/2026-11-20-supplement-ai-three-steps-design.md) | 补剂线：定形态 / 比价 / 两张图建档 + 第 4 步落地的口径 |
 | [原料批量替换](ingredient-batch-replace.md) | 后台批量替换行为 |
 | [员工端 UI 规范](员工端UI规范.md) | 员工端一页纸规范 |
 | [部署与 SSH](ops/deploy-and-ssh.md) | 生产部署、日志、回滚 |

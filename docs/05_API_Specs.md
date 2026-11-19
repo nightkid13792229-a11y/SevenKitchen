@@ -85,7 +85,7 @@ curl -s http://127.0.0.1:3011/api/docs-json > /tmp/sevenkitchen-openapi.json
 | 订单 / 支付 / 售后 | `/orders`、`/payments/wechat`、`/aftersales`、`/admin/orders`、`/admin/order-center` | 下单、支付、售后、订单中心 |
 | 生产 / 采购 / 库存 / 物流 | `/staff/kitchen`、`/staff/production`、`/staff/purchasing`、`/staff/inventory`、`/staff/shipping`、`/shipping`、`/admin/purchasing`、`/admin/procurement-skus`、`/admin/shipping-templates` | 厨房、生产、采购、库存、发货 |
 | 补剂 | `/supplements`、`/supplement-orders`、`/supplement-aftersales`、`/admin/supplement-shop`、`/admin/supplement-equivalence` | 补剂商品、订单、售后、等价组 |
-| 原料 / 知识库 | `/knowledge-source`、`/admin/ingredient-creation`、`/admin/ingredient-suggestions`、`/admin/ingredients` | 知识来源、原料创建/建议、批量替换 |
+| 原料 / 知识库 | `/knowledge-source`、`/admin/ingredient-creation`、`/admin/ingredient-supplement-agent`、`/admin/ingredient-suggestions`、`/admin/ingredients` | 知识来源、原料创建/建议、补剂三步（形态建议/比价/读图）、批量替换 |
 | 员工工作台 / 客服 | `/staff/workbench`、`/staff/customer-service`、`/customer-service`、`/admin/customer-service` | 员工工作台、客服会话 |
 | 运营 / 分析 / 配置 | `/admin`、`/admin/global-config`、`/global-config`、`/admin/platform-config`、`/platform-config`、`/admin/options`、`/admin/search-governance`、`/admin/finance`、`/analytics/*`、`/admin/analytics/*` | 后台配置、搜索治理、财务（仅管理员，入口在小程序）、分析 |
 | 其他 | `/labels`、`/recommended-products`、`/admin/ai-covers`、`/admin/tasting-pack`、`/tasting-packs`、`/admin/recipe-taxonomy`、`/admin/recipe-series` | 标签、推荐商品、AI 封面、试吃装、食谱分类/系列 |

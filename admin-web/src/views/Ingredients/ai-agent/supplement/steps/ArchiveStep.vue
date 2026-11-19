@@ -267,9 +267,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ingredientApi } from '@/api/ingredients'
+import { ingredientApi, nutritionFoodApi } from '@/api/ingredients'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
-import { nutritionFoodApi } from '@/api/ingredients'
 import { supplementNutrientGroups, supplementUsageUnitOptions } from '@/constants/supplementNutrients'
 import type {
   SupplementFormAdviceDto,

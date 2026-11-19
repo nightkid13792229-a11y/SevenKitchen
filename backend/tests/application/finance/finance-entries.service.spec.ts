@@ -2,6 +2,7 @@ import { FinanceEntriesService } from 'src/application/finance/finance-entries.s
 import { FinanceExpenseService } from 'src/application/finance/finance-expense.service';
 import { FinanceIncomeService } from 'src/application/finance/finance-income.service';
 import { monthRange } from 'src/application/finance/finance-period';
+import { catId, financeCategoryMock } from './finance-category.fixture';
 
 const period = monthRange('2026-11');
 
@@ -13,6 +14,7 @@ const utc = (iso: string) => new Date(iso);
  * 否则「同一张表被两个口径查两次」会拿到同一批数据、把一致性测试测成假的。
  */
 const makePrisma = (data: any = {}) => ({
+  financeCategory: financeCategoryMock(data.categories),
   order: {
     findMany: jest.fn((args: any) =>
       Promise.resolve(
@@ -103,10 +105,10 @@ describe('FinanceEntriesService', () => {
           id: 'm1',
           amount: 50,
           occurredAt: utc('2026-11-01T02:00:00Z'),
-          category: 'EQUIPMENT',
+          categoryId: catId('EQUIPMENT'),
           title: '封口机',
           direction: 'EXPENSE',
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_WECHAT',
         },
       ],
     });
@@ -124,7 +126,8 @@ describe('FinanceEntriesService', () => {
     expect(result.items[0]).toMatchObject({
       id: 'refund:offline:r1',
       direction: 'INCOME',
-      category: 'REFUND',
+      categoryId: null,
+      categoryLabel: '退款',
       amount: -100,
       isRefund: true,
       isHistorical: false,
@@ -134,19 +137,23 @@ describe('FinanceEntriesService', () => {
     });
     expect(result.items[1]).toMatchObject({
       direction: 'INCOME',
-      category: 'OFFLINE_ORDER',
+      categoryId: null,
+      categoryLabel: '线下订单',
       amount: 300,
       isRefund: false,
       sourceType: 'ORDER',
       sourceNo: 'SK1',
-      payerType: 'PERSONAL',
+      payerAccount: 'PERSONAL_WECHAT',
+      payerAccountLabel: '我的微信',
     });
     expect(result.items[2]).toMatchObject({
       direction: 'EXPENSE',
-      category: 'EQUIPMENT',
+      categoryId: catId('EQUIPMENT'),
+      categoryLabel: '设备工具',
       amount: 50,
       sourceType: 'MANUAL',
-      payerType: 'PERSONAL',
+      payerAccount: 'PERSONAL_WECHAT',
+      payerAccountLabel: '我的微信',
     });
     expect(result.items).toHaveLength(3);
   });
@@ -157,10 +164,10 @@ describe('FinanceEntriesService', () => {
         id: `m${n}`,
         amount: n,
         occurredAt: utc(`2026-11-0${n}T02:00:00Z`),
-        category: 'OTHER',
+        categoryId: catId('OTHER'),
         title: `t${n}`,
         direction: 'EXPENSE',
-        payerType: 'PERSONAL',
+        payerAccount: 'PERSONAL_WECHAT',
       })),
     });
 
@@ -182,10 +189,10 @@ describe('FinanceEntriesService', () => {
       id: `m${index}`,
       amount: 1,
       occurredAt: new Date(Date.UTC(2026, 10, 1) + index * 1000),
-      category: 'OTHER',
+      categoryId: catId('OTHER'),
       title: `t${index}`,
       direction: 'EXPENSE',
-      payerType: 'PERSONAL',
+      payerAccount: 'PERSONAL_WECHAT',
     }));
     const prisma: any = makePrisma({ manualEntries });
 
@@ -232,7 +239,9 @@ describe('FinanceEntriesService', () => {
     const feeRow = result.items.find((item) => item.sourceType === 'FEE');
     expect(feeRow).toMatchObject({
       direction: 'EXPENSE',
-      category: 'PAYMENT_FEE',
+      categoryId: catId('PAYMENT_FEE'),
+      categoryLabel: '支付手续费',
+      payerAccount: 'MERCHANT',
       amount: -0.6,
       isRefund: false,
     });
@@ -336,7 +345,14 @@ describe('FinanceEntriesService', () => {
     ).toEqual(
       expect.arrayContaining([
         ['ORDER', 'refund:offline:orf1', 'o1', 'SK1', -30, true],
-        ['SUPPLEMENT_ORDER', 'refund:supplement:s-old', 's-old', 'SP9', -60, true],
+        [
+          'SUPPLEMENT_ORDER',
+          'refund:supplement:s-old',
+          's-old',
+          'SP9',
+          -60,
+          true,
+        ],
         [
           'CUSTOM_RECIPE_ORDER',
           'refund:offline:cr-uuid-1',
@@ -463,7 +479,7 @@ describe('FinanceEntriesService', () => {
           shippingFee: 0,
           packagingFee: 50,
           discountAmount: 0,
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_WECHAT',
           orderPlacedAt: utc('2026-11-07T02:00:00Z'),
           completedAt: null,
           createdAt: utc('2026-11-07T02:00:00Z'),
@@ -541,7 +557,7 @@ describe('FinanceEntriesService', () => {
           shippingFee: null,
           packagingFee: null,
           discountAmount: null,
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_WECHAT',
           orderPlacedAt: utc('2026-11-07T02:00:00Z'),
           completedAt: null,
           createdAt: utc('2026-11-07T02:00:00Z'),
@@ -560,7 +576,7 @@ describe('FinanceEntriesService', () => {
           shippingFee: null,
           packagingFee: null,
           discountAmount: null,
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_WECHAT',
           orderPlacedAt: null,
           completedAt: null,
           createdAt: utc('2026-10-05T02:00:00Z'),
@@ -592,7 +608,8 @@ describe('FinanceEntriesService', () => {
     const replenishment = result.items.find((item) => item.id === 'p1:OTHER');
     expect(replenishment).toMatchObject({
       direction: 'EXPENSE',
-      category: 'OTHER',
+      categoryId: catId('OTHER'),
+      categoryLabel: '其它',
       amount: 0,
       sourceType: 'PURCHASE',
       sourceNo: 'BH1',
@@ -600,9 +617,7 @@ describe('FinanceEntriesService', () => {
     expect(replenishment!.title).toContain('金额缺失');
 
     // 期间内的最近采购记录日期，而不是期间外的 createdAt
-    expect(
-      result.items.find((item) => item.id === 'p2:OTHER'),
-    ).toMatchObject({
+    expect(result.items.find((item) => item.id === 'p2:OTHER')).toMatchObject({
       amount: 0,
       occurredAt: '2026-11-10T10:00:00.000+08:00',
     });
@@ -618,7 +633,7 @@ describe('FinanceEntriesService', () => {
           incomeCategory: 'OTHER_INCOME',
           title: '广告返现',
           direction: 'INCOME',
-          payerType: 'COMPANY',
+          payerAccount: 'CASH',
         },
       ],
     });
@@ -633,10 +648,12 @@ describe('FinanceEntriesService', () => {
 
     expect(entries.items.find((item) => item.id === 'mi1')).toMatchObject({
       direction: 'INCOME',
-      category: 'OTHER_INCOME',
+      categoryId: null,
+      categoryLabel: '其他收入',
       amount: 80,
       sourceType: 'MANUAL',
-      payerType: 'COMPANY',
+      payerAccount: 'CASH',
+      payerAccountLabel: '现金',
     });
     expect(income.manualIncome).toBe(80);
     expect(income.netTotal).toBe(80);
@@ -658,7 +675,7 @@ describe('FinanceEntriesService', () => {
           shippingFee: 50,
           packagingFee: 50,
           discountAmount: 0,
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_WECHAT',
           orderPlacedAt: utc('2026-11-07T02:00:00Z'),
           completedAt: null,
           createdAt: utc('2026-11-07T02:00:00Z'),
@@ -675,7 +692,7 @@ describe('FinanceEntriesService', () => {
           shippingFee: null,
           packagingFee: null,
           discountAmount: null,
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_WECHAT',
           orderPlacedAt: null,
           completedAt: null,
           createdAt: utc('2026-11-10T02:00:00Z'),
@@ -713,14 +730,14 @@ describe('FinanceEntriesService', () => {
       (item) => item.sourceType === 'PURCHASE',
     );
     expect(
-      purchaseRows.map((row) => [row.category, row.amount]).sort(),
+      purchaseRows.map((row) => [row.categoryId, row.amount]).sort(),
     ).toEqual(
       [
-        ['RAW_MATERIAL', 300],
-        ['LOGISTICS_DELIVERY', 50],
-        ['PACKAGING_SUPPLIES', 50],
-        ['RAW_MATERIAL', 100],
-        ['SUPPLEMENT', 200],
+        [catId('RAW_MATERIAL'), 300],
+        [catId('LOGISTICS_DELIVERY'), 50],
+        [catId('PACKAGING_SUPPLIES'), 50],
+        [catId('RAW_MATERIAL'), 100],
+        [catId('SUPPLEMENT'), 200],
       ].sort(),
     );
     expect(sum(purchaseRows)).toBe(expense.total);
@@ -734,10 +751,10 @@ describe('FinanceEntriesService', () => {
           billNumber: 'B202611',
           title: '11 月房租',
           amount: 1200,
-          category: 'RENT',
+          categoryId: catId('RENT'),
           recognitionStart: new Date('2026-11-01T00:00:00Z'),
           recognitionEnd: new Date('2027-10-31T00:00:00Z'),
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_BANK',
         },
       ],
     });
@@ -750,16 +767,18 @@ describe('FinanceEntriesService', () => {
     expect(result.items[0]).toMatchObject({
       id: 'b1:2026-11',
       direction: 'EXPENSE',
-      category: 'RENT',
+      categoryId: catId('RENT'),
+      categoryLabel: '房租',
       amount: 100,
       sourceType: 'BILL',
       sourceNo: 'B202611',
-      payerType: 'PERSONAL',
+      payerAccount: 'PERSONAL_BANK',
+      payerAccountLabel: '我的银行卡',
       occurredAt: '2026-11-01T00:00:00.000+08:00',
     });
   });
 
-  it('payerType 只返回 PERSONAL 的行（「我垫的」）', async () => {
+  it('account 只返回指定账户的行（按账户筛，不再有「我垫的」）', async () => {
     const prisma: any = makePrisma({
       orders: [
         {
@@ -780,27 +799,27 @@ describe('FinanceEntriesService', () => {
           incomeCategory: 'OTHER_INCOME',
           title: '广告返现',
           direction: 'INCOME',
-          payerType: 'COMPANY',
+          payerAccount: 'CASH',
         },
       ],
       manualEntries: [
         {
-          id: 'm-personal',
+          id: 'm-wechat',
           amount: 50,
           occurredAt: utc('2026-11-01T02:00:00Z'),
-          category: 'EQUIPMENT',
+          categoryId: catId('EQUIPMENT'),
           title: '封口机',
           direction: 'EXPENSE',
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_WECHAT',
         },
         {
-          id: 'm-company',
+          id: 'm-alipay',
           amount: 20,
           occurredAt: utc('2026-11-04T02:00:00Z'),
-          category: 'OTHER',
+          categoryId: catId('OTHER'),
           title: '杂项',
           direction: 'EXPENSE',
-          payerType: 'COMPANY',
+          payerAccount: 'PERSONAL_ALIPAY',
         },
       ],
       bills: [
@@ -809,10 +828,10 @@ describe('FinanceEntriesService', () => {
           billNumber: 'B202611',
           title: '11 月房租',
           amount: 1200,
-          category: 'RENT',
+          categoryId: catId('RENT'),
           recognitionStart: new Date('2026-11-01T00:00:00Z'),
           recognitionEnd: new Date('2027-10-31T00:00:00Z'),
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_BANK',
         },
       ],
     });
@@ -820,33 +839,46 @@ describe('FinanceEntriesService', () => {
     const all = await new FinanceEntriesService(prisma).list({
       month: '2026-11',
     });
-    const personal = await new FinanceEntriesService(prisma).list({
+    const alipay = await new FinanceEntriesService(prisma).list({
       month: '2026-11',
-      payerType: 'PERSONAL',
+      account: 'PERSONAL_ALIPAY',
+    });
+    const merchant = await new FinanceEntriesService(prisma).list({
+      month: '2026-11',
+      account: 'MERCHANT',
     });
 
-    // 不传 payerType 时口径不变：公司账户的行、手续费行都还在
+    // 不传 account 时所有行都在（口径不变）
     expect(all.items.map((item) => item.id)).toEqual(
-      expect.arrayContaining(['o1', 'mi1', 'm-personal', 'm-company']),
+      expect.arrayContaining([
+        'o1',
+        'mi1',
+        'm-wechat',
+        'm-alipay',
+        'b1:2026-11',
+      ]),
     );
-    expect(all.items.some((item) => item.sourceType === 'FEE')).toBe(true);
-
-    expect(personal.items.map((item) => item.id)).toEqual([
-      'm-personal',
-      'b1:2026-11',
-    ]);
-    expect(personal.items.every((item) => item.payerType === 'PERSONAL')).toBe(
+    expect(all.items.every((item) => item.payerAccountLabel.length > 0)).toBe(
       true,
     );
+
+    expect(alipay.items.map((item) => item.id)).toEqual(['m-alipay']);
+    expect(alipay.items[0]).toMatchObject({
+      payerAccount: 'PERSONAL_ALIPAY',
+      payerAccountLabel: '我的支付宝',
+    });
     // 过滤发生在分页之前，total 也是过滤后的条数
-    expect(personal.total).toBe(2);
-    // 手续费行没有付款方，不该被「我垫的」带出来
-    expect(personal.items.some((item) => item.sourceType === 'FEE')).toBe(
-      false,
+    expect(alipay.total).toBe(1);
+
+    // 线上收款与手续费都归「微信商户号」
+    expect(merchant.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining(['o1']),
     );
+    expect(merchant.items.some((item) => item.sourceType === 'FEE')).toBe(true);
+    expect(merchant.items.some((item) => item.id === 'b1:2026-11')).toBe(false);
   });
 
-  it('退款沿用原单付款方、快递费记公司，按付款方筛选不漏行', async () => {
+  it('退款沿用原单账户、快递费从商户号出，按账户筛选不漏行', async () => {
     const prisma: any = makePrisma({
       orders: [
         {
@@ -866,9 +898,10 @@ describe('FinanceEntriesService', () => {
           paidAt: utc('2026-11-02T03:00:00Z'),
           remakeFromOrderId: null,
           reshipFromOrderId: null,
+          payerAccount: 'CASH',
         },
       ],
-      // 线上原路退回：钱从公司商户号出
+      // 线上原路退回：钱从微信商户号出
       orderRefunds: [
         {
           id: 'r1',
@@ -882,13 +915,14 @@ describe('FinanceEntriesService', () => {
           },
         },
       ],
-      // 线下退款登记：钱退给个人
+      // 线下退款登记：从登记的账户退出去（不是订单收款账户）
       offlineRefunds: [
         {
           id: 'orf1',
           amount: 50,
           voidedAt: null,
           refundedAt: utc('2026-11-04T02:00:00Z'),
+          payerAccount: 'PERSONAL_ALIPAY',
           order: {
             id: 'o-offline',
             orderNo: 'SK2',
@@ -907,7 +941,7 @@ describe('FinanceEntriesService', () => {
       supplements: [],
       supplementRefunds: [
         {
-          // 2026-11 之前的老标记：线下收款
+          // 2026-11 之前的老标记：线下收款 → 默认「我的微信」
           id: 's-refund-legacy',
           orderNo: 'SP0',
           refundAmount: 40,
@@ -929,55 +963,64 @@ describe('FinanceEntriesService', () => {
     const all = await new FinanceEntriesService(prisma).list({
       month: '2026-11',
     });
-    const refundPayer = new Map(
-      all.items.filter((item) => item.isRefund).map((row) => [row.id, row.payerType]),
+    const refundAccount = new Map(
+      all.items
+        .filter((item) => item.isRefund)
+        .map((row) => [row.id, row.payerAccount]),
     );
 
-    expect(refundPayer.get('refund:r1')).toBe('COMPANY');
-    expect(refundPayer.get('refund:offline:orf1')).toBe('PERSONAL');
-    expect(refundPayer.get('refund:supplement:s-refund-legacy')).toBe('PERSONAL');
-    expect(refundPayer.get('refund:supplement:s-refund-online')).toBe('COMPANY');
+    // 线下代客单收款用订单上登记的账户（没有才缺省「我的微信」）
+    expect(all.items.find((item) => item.id === 'o-offline')).toMatchObject({
+      categoryLabel: '线下订单',
+      payerAccount: 'CASH',
+      payerAccountLabel: '现金',
+    });
 
-    const shippingRows = all.items.filter((item) => item.sourceType === 'SHIPPING');
+    expect(refundAccount.get('refund:r1')).toBe('MERCHANT');
+    expect(refundAccount.get('refund:offline:orf1')).toBe('PERSONAL_ALIPAY');
+    expect(refundAccount.get('refund:supplement:s-refund-legacy')).toBe(
+      'PERSONAL_WECHAT',
+    );
+    expect(refundAccount.get('refund:supplement:s-refund-online')).toBe(
+      'MERCHANT',
+    );
+
+    const shippingRows = all.items.filter(
+      (item) => item.sourceType === 'SHIPPING',
+    );
     expect(shippingRows).toHaveLength(1);
     expect(shippingRows[0]).toMatchObject({
       id: 'o-ship:shipping',
       direction: 'EXPENSE',
       amount: 86,
-      payerType: 'COMPANY',
+      payerAccount: 'MERCHANT',
+      payerAccountLabel: '微信商户号',
     });
 
-    // 「我垫的」：线下单本身 + 它的退款都要在，线上退款和快递费不能混进来
-    const personal = await new FinanceEntriesService(prisma).list({
+    // 按支付宝筛：只有那笔线下退款（订单本身收在现金）
+    const alipay = await new FinanceEntriesService(prisma).list({
       month: '2026-11',
-      payerType: 'PERSONAL',
+      account: 'PERSONAL_ALIPAY',
     });
-    expect(personal.items.map((item) => item.id)).toEqual(
-      expect.arrayContaining([
-        'o-offline',
-        'refund:offline:orf1',
-        'refund:supplement:s-refund-legacy',
-      ]),
-    );
-    expect(personal.items.some((item) => item.id === 'refund:r1')).toBe(false);
-    expect(personal.items.some((item) => item.sourceType === 'SHIPPING')).toBe(
-      false,
-    );
+    expect(alipay.items.map((item) => item.id)).toEqual([
+      'refund:offline:orf1',
+    ]);
 
-    const company = await new FinanceEntriesService(prisma).list({
+    const merchant = await new FinanceEntriesService(prisma).list({
       month: '2026-11',
-      payerType: 'COMPANY',
+      account: 'MERCHANT',
     });
-    expect(company.items.map((item) => item.id)).toEqual(
+    expect(merchant.items.map((item) => item.id)).toEqual(
       expect.arrayContaining([
         'o-online',
         'refund:r1',
         'refund:supplement:s-refund-online',
       ]),
     );
-    expect(company.items.some((item) => item.sourceType === 'SHIPPING')).toBe(
+    expect(merchant.items.some((item) => item.sourceType === 'SHIPPING')).toBe(
       true,
     );
+    expect(merchant.items.some((item) => item.id === 'o-offline')).toBe(false);
   });
 
   it('direction 与 category 在分页前过滤', async () => {
@@ -998,26 +1041,26 @@ describe('FinanceEntriesService', () => {
           id: 'm1',
           amount: 50,
           occurredAt: utc('2026-11-01T02:00:00Z'),
-          category: 'EQUIPMENT',
+          categoryId: catId('EQUIPMENT'),
           title: '封口机',
           direction: 'EXPENSE',
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_WECHAT',
         },
         {
           id: 'm2',
           amount: 20,
           occurredAt: utc('2026-11-04T02:00:00Z'),
-          category: 'OTHER',
+          categoryId: catId('OTHER'),
           title: '杂项',
           direction: 'EXPENSE',
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_WECHAT',
         },
       ],
     });
 
     const onlyEquipment = await new FinanceEntriesService(prisma).list({
       month: '2026-11',
-      category: 'EQUIPMENT',
+      category: catId('EQUIPMENT'),
     });
     expect(onlyEquipment.items.map((item) => item.id)).toEqual(['m1']);
     expect(onlyEquipment.total).toBe(1);
@@ -1029,7 +1072,7 @@ describe('FinanceEntriesService', () => {
     expect(onlyIncome.items.map((item) => item.id)).toEqual(['o1']);
   });
 
-  it('报销杂费出明细行：来源、标题、付款方与提交月份', async () => {
+  it('报销杂费出明细行：类别字典、标题、账户与提交月份', async () => {
     const prisma: any = makePrisma({
       reimbursements: [
         {
@@ -1063,32 +1106,37 @@ describe('FinanceEntriesService', () => {
           id: 'rb1:TOOLS:0',
           occurredAt: '2026-11-05T10:00:00.000+08:00',
           direction: 'EXPENSE',
-          category: 'ADMINISTRATIVE',
+          categoryId: catId('TOOLS'),
+          categoryLabel: '工具',
           amount: 25,
           title: '报销杂费 · 封口机配件',
           sourceType: 'REIMBURSEMENT',
           sourceId: 'rb1',
           sourceNo: 'BX202611001',
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_WECHAT',
+          payerAccountLabel: '我的微信',
           isRefund: false,
           isHistorical: false,
         }),
         expect.objectContaining({
           id: 'rb1:SUNDRIES:1',
-          category: 'OTHER',
+          categoryId: catId('SUNDRIES'),
+          categoryLabel: '杂物',
           amount: 12.5,
           title: '报销杂费 · 清洁用品',
         }),
         expect.objectContaining({
           // 没填描述时退回类别文案
           id: 'rb1:OTHER:2',
-          category: 'OTHER',
+          categoryId: catId('OTHER'),
+          categoryLabel: '其它',
           amount: 30,
-          title: '报销杂费 · 其他',
+          title: '报销杂费 · 其它',
         }),
       ]),
     );
-    expect(rows.some((row) => row.category === 'RENT')).toBe(false);
+    // 固定费用类别（房租）由账单承担，不会出现在报销杂费行里
+    expect(rows.every((row) => row.categoryId !== catId('RENT'))).toBe(true);
   });
 
   it('报销杂费：明细相加等于支出汇总，且分类金额一致', async () => {
@@ -1123,13 +1171,17 @@ describe('FinanceEntriesService', () => {
     expect(rows).toHaveLength(3);
     expect(sum(rows)).toBe(expense.total);
     expect(expense.total).toBe(67.5);
-    expect(
-      sum(rows.filter((row) => row.category === 'ADMINISTRATIVE')),
-    ).toBe(
-      expense.byCategory.find((c) => c.category === 'ADMINISTRATIVE')!.amount,
+    expect(sum(rows.filter((row) => row.categoryId === catId('TOOLS')))).toBe(
+      expense.byCategory.find((c) => c.categoryId === catId('TOOLS'))!.amount,
     );
-    expect(sum(rows.filter((row) => row.category === 'OTHER'))).toBe(
-      expense.byCategory.find((c) => c.category === 'OTHER')!.amount,
+    expect(
+      sum(rows.filter((row) => row.categoryId === catId('SUNDRIES'))),
+    ).toBe(
+      expense.byCategory.find((c) => c.categoryId === catId('SUNDRIES'))!
+        .amount,
+    );
+    expect(sum(rows.filter((row) => row.categoryId === catId('OTHER')))).toBe(
+      expense.byCategory.find((c) => c.categoryId === catId('OTHER'))!.amount,
     );
   });
 
@@ -1241,7 +1293,7 @@ describe('FinanceEntriesService', () => {
           shippingFee: 50,
           packagingFee: 50,
           discountAmount: 0,
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_WECHAT',
           orderPlacedAt: utc('2026-11-07T02:00:00Z'),
           completedAt: null,
           createdAt: utc('2026-11-07T02:00:00Z'),
@@ -1258,7 +1310,7 @@ describe('FinanceEntriesService', () => {
           shippingFee: null,
           packagingFee: null,
           discountAmount: null,
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_WECHAT',
           orderPlacedAt: null,
           completedAt: null,
           createdAt: utc('2026-11-10T02:00:00Z'),
@@ -1294,10 +1346,10 @@ describe('FinanceEntriesService', () => {
           billNumber: 'B202611',
           title: '11 月房租',
           amount: 1200,
-          category: 'RENT',
+          categoryId: catId('RENT'),
           recognitionStart: new Date('2026-11-01T00:00:00Z'),
           recognitionEnd: new Date('2027-10-31T00:00:00Z'),
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_BANK',
         },
       ],
       manualEntries: [
@@ -1305,10 +1357,10 @@ describe('FinanceEntriesService', () => {
           id: 'm1',
           amount: 50,
           occurredAt: utc('2026-11-06T02:00:00Z'),
-          category: 'EQUIPMENT',
+          categoryId: catId('EQUIPMENT'),
           title: '封口机',
           direction: 'EXPENSE',
-          payerType: 'PERSONAL',
+          payerAccount: 'PERSONAL_WECHAT',
         },
       ],
       reimbursements: [
@@ -1332,7 +1384,7 @@ describe('FinanceEntriesService', () => {
           incomeCategory: 'OTHER_INCOME',
           title: '广告返现',
           direction: 'INCOME',
-          payerType: 'COMPANY',
+          payerAccount: 'CASH',
         },
       ],
     });
@@ -1378,7 +1430,8 @@ describe('FinanceEntriesService', () => {
     expect(feeRows).toHaveLength(1);
     expect(feeRows[0]).toMatchObject({
       direction: 'EXPENSE',
-      category: 'PAYMENT_FEE',
+      categoryId: catId('PAYMENT_FEE'),
+      categoryLabel: '支付手续费',
       amount: income.fee,
     });
 

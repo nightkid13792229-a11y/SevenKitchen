@@ -7,9 +7,15 @@ import type {
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { TimezoneUtil } from '../../utils/timezone.util';
 import {
-  FINANCE_EXPENSE_CATEGORY_LABELS,
   FinanceExpenseCategory,
+  REIMBURSEMENT_CUSTOM_FEE_CATEGORY_NAMES,
 } from './finance-categories';
+import { FinanceAccount, resolveFinanceAccount } from './finance-accounts';
+import {
+  FinanceCategoryLookup,
+  resolveLineCategory,
+} from './finance-category-lookup';
+import { FinanceCategoryService } from './finance-category.service';
 import { FinancePeriod } from './finance-period';
 
 /**
@@ -20,7 +26,9 @@ import { FinancePeriod } from './finance-period';
  * 订单本身不产生支出——食材成本在采购那一步已经花了（设计文档 §4.4）。
  */
 export type FinanceExpenseCategoryAmount = {
-  category: FinanceExpenseCategory;
+  /** 类别字典 id；自动来源按 code 映射到系统类别，找不到时为 null（未分类） */
+  categoryId: string | null;
+  /** 类别**当前名字**（老板改名后历史一起变） */
   label: string;
   amount: number;
 };
@@ -51,6 +59,7 @@ export const PURCHASE_LIST_SELECT = {
   orderPlacedAt: true,
   completedAt: true,
   createdAt: true,
+  payerAccount: true,
   payerType: true,
   paidAmount: true,
   personalAmount: true,
@@ -76,8 +85,13 @@ export type PurchaseListRow = Prisma.PurchaseListGetPayload<{
  * 不靠两套代码各算一遍再对账。
  */
 export type FinanceExpenseLine = {
-  /** 支出分类（同时是明细行的 category） */
-  category: FinanceExpenseCategory;
+  /**
+   * 自动来源的系统类别 code（采购行 / 快递 / 手续费）。
+   * 汇总与明细都按 code 找类别 id，系统类别改名后仍能命中。
+   */
+  categoryCode?: string | null;
+  /** 用户录入的类别字典 id（账单 / 手工 / 报销） */
+  categoryId?: string | null;
   /** 金额（整数分，带符号；账单允许负数） */
   amountCents: number;
   /** 归月日期：采购按下单/采购时间，快递按发货时间，账单按服务月，报销按提交时间，手工按发生日 */
@@ -89,11 +103,8 @@ export type FinanceExpenseLine = {
   sourceNo?: string;
   /** 人话标题，明细页直接显示 */
   title: string;
-  /**
-   * 付款方：采购/账单按单据上登记的付款方；快递费固定 `COMPANY`
-   * （运费是公司付给快递的，不是员工垫的）。
-   */
-  payerType?: 'COMPANY' | 'PERSONAL';
+  /** 出账账户（五个账户 code）：采购/账单/手工按单据上登记的账户 */
+  payerAccount: FinanceAccount;
 };
 
 /** 支出侧取数用到的 Prisma 委托（便于单测直接传 mock） */
@@ -173,13 +184,24 @@ export function allocateCents(totalCents: number, weights: number[]): number[] {
   return shares;
 }
 
-function addCents(
-  bucket: Map<FinanceExpenseCategory, number>,
-  category: FinanceExpenseCategory,
+/** 汇总桶：按类别字典 id 分组，同时记住这类别的当前名字 */
+type CategoryBucket = { label: string; cents: number };
+
+function addCategoryCents(
+  bucket: Map<string | null, CategoryBucket>,
+  category: { categoryId: string | null; label: string },
   cents: number,
 ): void {
   if (cents === 0) return;
-  bucket.set(category, (bucket.get(category) ?? 0) + cents);
+  const existing = bucket.get(category.categoryId);
+  if (existing) {
+    existing.cents += cents;
+    return;
+  }
+  bucket.set(category.categoryId, {
+    label: category.label,
+    cents,
+  });
 }
 
 /** 补货采购的归月日期：下单日 → 完成日 → 创建日（与查询条件同序） */
@@ -199,14 +221,18 @@ function purchaseLine(
   occurredAt: Date,
 ): FinanceExpenseLine {
   return {
-    category,
+    categoryCode: category,
     amountCents,
     occurredAt,
     sourceType: 'PURCHASE',
     sourceId: list.id,
     sourceNo: list.orderNo ?? undefined,
     title: purchaseTitle(list),
-    payerType: list.payerType === 'COMPANY' ? 'COMPANY' : 'PERSONAL',
+    // 新数据看 payerAccount；老数据没有账户时按旧 payerType 推导
+    payerAccount: resolveFinanceAccount(
+      list.payerAccount,
+      list.payerType === 'COMPANY' ? 'MERCHANT' : 'PERSONAL_WECHAT',
+    ),
   };
 }
 
@@ -222,7 +248,7 @@ function resolvePurchaseItemCategory(
 /**
  * 金额、采购记录都拿不到的非草稿采购单：仍出一行 0 元占位，
  * 标题写明「金额缺失」，让老板能在明细里发现并补录（设计文档 Review Focus #4）。
- * 汇总侧 `addCents` 会跳过 0 元，所以不影响支出合计。
+ * 汇总侧 `addCategoryCents` 会跳过 0 元，所以不影响支出合计。
  */
 function missingAmountPurchaseLine(
   list: PurchaseListRow,
@@ -477,15 +503,15 @@ export async function loadShippingExpenseLines(
     .map((order): FinanceExpenseLine => {
       const orderNo = order.orderNo ?? undefined;
       return {
-        category: 'LOGISTICS_DELIVERY',
+        categoryCode: 'LOGISTICS_DELIVERY',
         amountCents: toCents(order.actualShippingFee),
         occurredAt: order.shippedAt as Date,
         sourceType: 'SHIPPING',
         sourceId: order.id,
         sourceNo: orderNo,
         title: orderNo ? `订单快递费 ${orderNo}` : '订单快递费',
-        // 运费是公司账户付给快递的，不是员工垫付
-        payerType: 'COMPANY',
+        // 运费从微信商户号付给快递（不是员工垫付）
+        payerAccount: 'MERCHANT',
       };
     })
     .filter((line) => line.amountCents !== 0);
@@ -497,10 +523,10 @@ const EXPENSE_BILL_SELECT = {
   billNumber: true,
   title: true,
   amount: true,
-  category: true,
+  categoryId: true,
   recognitionStart: true,
   recognitionEnd: true,
-  payerType: true,
+  payerAccount: true,
 } satisfies Prisma.ExpenseBillSelect;
 
 type ExpenseBillRow = Prisma.ExpenseBillGetPayload<{
@@ -536,7 +562,7 @@ export function buildBillExpenseLines(
     const monthStart = startOfShanghaiMonth(key);
     return [
       {
-        category: bill.category,
+        categoryId: bill.categoryId,
         amountCents: sign * share,
         occurredAt:
           monthStart.getTime() < period.from.getTime()
@@ -546,10 +572,7 @@ export function buildBillExpenseLines(
         sourceId: bill.id,
         sourceNo: bill.billNumber,
         title: bill.title,
-        payerType:
-          bill.payerType === 'COMPANY'
-            ? ('COMPANY' as const)
-            : ('PERSONAL' as const),
+        payerAccount: resolveFinanceAccount(bill.payerAccount),
       },
     ];
   });
@@ -576,10 +599,10 @@ export async function loadBillExpenseLines(
 const MANUAL_EXPENSE_SELECT = {
   id: true,
   amount: true,
-  category: true,
+  categoryId: true,
   occurredAt: true,
   title: true,
-  payerType: true,
+  payerAccount: true,
 } satisfies Prisma.FinanceManualEntrySelect;
 
 type ManualEntryRow = Prisma.FinanceManualEntryGetPayload<{
@@ -601,16 +624,13 @@ export function buildManualExpenseLines(
   return entries
     .map(
       (entry): FinanceExpenseLine => ({
-        category: entry.category ?? 'OTHER',
+        categoryId: entry.categoryId,
         amountCents: toCents(entry.amount),
         occurredAt: entry.occurredAt,
         sourceType: 'MANUAL',
         sourceId: entry.id,
         title: entry.title,
-        payerType:
-          entry.payerType === 'COMPANY'
-            ? ('COMPANY' as const)
-            : ('PERSONAL' as const),
+        payerAccount: resolveFinanceAccount(entry.payerAccount),
       }),
     )
     .filter((line) => line.amountCents !== 0);
@@ -640,32 +660,10 @@ export const REIMBURSEMENT_EXPENSE_STATUSES: readonly ReimbursementStatus[] = [
 ];
 
 /**
- * 报销自定义费类别 → 支出分类。**只收零星支出三项**：
- *
- * - `TOOLS`（工具）→ 行政费用
- * - `SUNDRIES`（杂物）→ 其他杂项
- * - `OTHER`（其他）→ 其他杂项
- *
- * `RENT` / `PAYROLL` / `SOCIAL_INSURANCE` / `TAX` / `UTILITIES` 明确排除：
- * 这些费用由「固定费用账单」（`ExpenseBill`，模板按月生成）承担，报销单里
- * 再算一遍就是重复计入。这是明确决策（2026-11-19），不是漏配；以后新增
- * custom fee 类别时，先确认它没有对应的固定费用账单，再加进这张表。
+ * 报销杂费出明细行时的类别解析：`customFees[].category` 的
+ * `TOOLS / SUNDRIES / OTHER` 按 `code` 映射到类别字典（工具 / 杂物 / 其它）。
+ * 其余类别（房租、工资…）由固定费用账单承担，这里直接跳过。
  */
-export const REIMBURSEMENT_CUSTOM_FEE_CATEGORY_MAP: Record<
-  string,
-  FinanceExpenseCategory
-> = {
-  TOOLS: 'ADMINISTRATIVE',
-  SUNDRIES: 'OTHER',
-  OTHER: 'OTHER',
-};
-
-/** 自定义费类别文案：没填描述时明细标题兜底用 */
-export const REIMBURSEMENT_CUSTOM_FEE_LABELS: Record<string, string> = {
-  TOOLS: '工具',
-  SUNDRIES: '杂物',
-  OTHER: '其他',
-};
 
 /** 报销单取数的最小字段（报销金额已经由采购/账单口径承担，这里只看自定义费） */
 const REIMBURSEMENT_EXPENSE_SELECT = {
@@ -701,6 +699,7 @@ function isCustomFeeObject(value: unknown): value is Record<string, unknown> {
 export function buildReimbursementExpenseLines(
   reimbursement: ReimbursementRow,
   period: FinancePeriod,
+  categoryLookup?: FinanceCategoryLookup,
 ): FinanceExpenseLine[] {
   if (!REIMBURSEMENT_EXPENSE_STATUSES.includes(reimbursement.status)) {
     return [];
@@ -722,26 +721,28 @@ export function buildReimbursementExpenseLines(
       const categoryCode = String(fee.category ?? '')
         .trim()
         .toUpperCase();
-      const category = REIMBURSEMENT_CUSTOM_FEE_CATEGORY_MAP[categoryCode];
-      if (!category) return null;
+      const categoryName =
+        REIMBURSEMENT_CUSTOM_FEE_CATEGORY_NAMES[categoryCode];
+      if (!categoryName) return null;
       const amountCents = toCents(fee.amount);
       if (amountCents <= 0) return null;
 
       const description =
         typeof fee.description === 'string' ? fee.description.trim() : '';
-      const fallback =
-        REIMBURSEMENT_CUSTOM_FEE_LABELS[categoryCode] ?? categoryCode;
+      const category = categoryLookup?.byCode.get(categoryCode);
       return {
-        category,
+        // 按 code 找类别 id：报销类别被改名后仍命中同一个类别
+        categoryId: category?.id ?? null,
         amountCents,
         occurredAt: reimbursement.submittedAt,
         sourceType: 'REIMBURSEMENT',
         sourceId: reimbursement.id,
-        // 同一张报销单可能有多笔同类杂费，只用 category 会撞 id
+        // 同一张报销单可能有多笔同类杂费，只用类别会撞 id
         rowId: `${reimbursement.id}:${categoryCode}:${index}`,
         sourceNo: reimbursement.claimNumber,
-        title: `报销杂费 · ${description || fallback}`,
-        payerType: 'PERSONAL',
+        title: `报销杂费 · ${description || category?.name || categoryName}`,
+        // 报销就是员工先垫的钱，默认从「我的微信」出
+        payerAccount: 'PERSONAL_WECHAT',
       };
     })
     .filter((line): line is FinanceExpenseLine => line !== null);
@@ -751,6 +752,7 @@ export function buildReimbursementExpenseLines(
 export async function loadReimbursementExpenseLines(
   prisma: ExpensePrisma,
   period: FinancePeriod,
+  categoryLookup?: FinanceCategoryLookup,
 ): Promise<FinanceExpenseLine[]> {
   const reimbursements = await prisma.reimbursement.findMany({
     where: {
@@ -761,7 +763,7 @@ export async function loadReimbursementExpenseLines(
   });
 
   return reimbursements.flatMap((reimbursement) =>
-    buildReimbursementExpenseLines(reimbursement, period),
+    buildReimbursementExpenseLines(reimbursement, period, categoryLookup),
   );
 }
 
@@ -769,6 +771,7 @@ export async function loadReimbursementExpenseLines(
 export async function loadExpenseLines(
   prisma: ExpensePrisma,
   period: FinancePeriod,
+  categoryLookup?: FinanceCategoryLookup,
 ): Promise<FinanceExpenseLine[]> {
   const [
     purchaseLines,
@@ -780,7 +783,7 @@ export async function loadExpenseLines(
     loadPurchaseExpenseLines(prisma, period),
     loadShippingExpenseLines(prisma, period),
     loadBillExpenseLines(prisma, period),
-    loadReimbursementExpenseLines(prisma, period),
+    loadReimbursementExpenseLines(prisma, period, categoryLookup),
     loadManualExpenseLines(prisma, period),
   ]);
 
@@ -802,27 +805,45 @@ export async function loadExpenseLines(
  */
 @Injectable()
 export class FinanceExpenseService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly categoryService: FinanceCategoryService;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    categoryService?: FinanceCategoryService,
+  ) {
+    this.categoryService =
+      categoryService ?? new FinanceCategoryService(prisma);
+  }
 
   async getExpense(
     period: FinancePeriod,
     fee: number,
   ): Promise<FinanceExpense> {
-    const bucket = new Map<FinanceExpenseCategory, number>();
+    // 类别字典整表读一次：自动来源按 code 找系统类别，用户录入的行按 id 分组
+    const categoryLookup = await this.categoryService.loadExpenseLookup();
+    const bucket = new Map<string | null, CategoryBucket>();
 
-    const lines = await loadExpenseLines(this.prisma, period);
+    const lines = await loadExpenseLines(this.prisma, period, categoryLookup);
     for (const line of lines) {
-      addCents(bucket, line.category, line.amountCents);
+      addCategoryCents(
+        bucket,
+        resolveLineCategory(line, categoryLookup),
+        line.amountCents,
+      );
     }
 
-    // 支付手续费由收入侧算好后传进来，可以为负（退款冲回）
-    addCents(bucket, 'PAYMENT_FEE', toCents(fee));
+    // 支付手续费由收入侧算好后传进来，可以为负（退款冲回）；归系统类别「支付手续费」
+    addCategoryCents(
+      bucket,
+      resolveLineCategory({ categoryCode: 'PAYMENT_FEE' }, categoryLookup),
+      toCents(fee),
+    );
 
     const byCategory = Array.from(bucket.entries())
-      .map(([category, cents]) => ({
-        category,
-        label: FINANCE_EXPENSE_CATEGORY_LABELS[category] ?? category,
-        amount: centsToMoney(cents),
+      .map(([categoryId, row]) => ({
+        categoryId,
+        label: row.label,
+        amount: centsToMoney(row.cents),
       }))
       .filter((row) => row.amount !== 0)
       .sort(
@@ -832,7 +853,7 @@ export class FinanceExpenseService {
 
     return {
       total: centsToMoney(
-        Array.from(bucket.values()).reduce((sum, cents) => sum + cents, 0),
+        Array.from(bucket.values()).reduce((sum, row) => sum + row.cents, 0),
       ),
       byCategory,
     };

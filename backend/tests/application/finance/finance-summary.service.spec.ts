@@ -22,7 +22,7 @@ describe('FinanceSummaryService', () => {
   const expense = {
     total: 700,
     byCategory: [
-      { category: 'RAW_MATERIAL' as const, label: '原料采购', amount: 700 },
+      { categoryId: 'cat-RAW_MATERIAL', label: '食材', amount: 700 },
     ],
   };
 

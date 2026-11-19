@@ -4,6 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { REIMBURSEMENT_CUSTOM_FEE_CATEGORY_NAMES } from './finance-categories';
+import {
+  FinanceCategoryLookup,
+  buildFinanceCategoryLookup,
+} from './finance-category-lookup';
 
 /**
  * 支出类别字典服务（2026-11-19 账户化 + 可编辑类别，设计文档 §2）。
@@ -84,6 +89,33 @@ export class FinanceCategoryService {
         };
       }),
     );
+  }
+
+  /**
+   * 报表用的类别查找表：整表读入内存，再确保报销杂费的三个类别存在。
+   *
+   * - 整表读（含停用/已合并）而不是 `where isActive`：历史记录引用停用类别时
+   *   仍要显示它的名字，不能变成「未分类」；
+   * - 报销杂费 `TOOLS/SUNDRIES/OTHER` 先按 code 命中（改名不影响归属），
+   *   种子缺失时才 `ensureByName` 补建 —— 读接口正常不会写库。
+   */
+  async loadExpenseLookup(): Promise<FinanceCategoryLookup> {
+    const rows = await this.prisma.financeCategory.findMany({
+      select: { id: true, name: true, code: true },
+    });
+    const lookup = buildFinanceCategoryLookup(rows);
+
+    for (const [code, name] of Object.entries(
+      REIMBURSEMENT_CUSTOM_FEE_CATEGORY_NAMES,
+    )) {
+      if (lookup.byCode.has(code)) continue;
+      const ensured = await this.ensureByName(name, code);
+      const option = { id: ensured.id, name: ensured.name, code };
+      lookup.byId.set(option.id, option);
+      lookup.byCode.set(code, option);
+      lookup.byName.set(option.name.trim().toLowerCase(), option);
+    }
+    return lookup;
   }
 
   /** 新建自建类别（输入即建）：trim、1–60 字、同名拒绝 */

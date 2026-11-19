@@ -98,3 +98,16 @@ export function isOfflinePaymentMethod(
 
 /** 线上收款方式：钱进公司微信商户号，按费率计手续费 */
 export const ONLINE_PAYMENT_METHODS = ['WECHAT_PAY', 'WECHAT'] as const;
+
+/**
+ * 报销单 `customFees[].category` → 类别字典种子名字（2026-11-19 §2.3）。
+ *
+ * 只收零星支出三项：工具 / 杂物 / 其它。房租、工资、社保、税费、水电由
+ * 固定费用账单承担，报销单里再算一遍就是重复计入（明确决策，不是漏配）。
+ * 报表按 `code`（TOOLS/SUNDRIES/OTHER）找类别 id，老板改名后仍能命中。
+ */
+export const REIMBURSEMENT_CUSTOM_FEE_CATEGORY_NAMES: Record<string, string> = {
+  TOOLS: '工具',
+  SUNDRIES: '杂物',
+  OTHER: '其它',
+};

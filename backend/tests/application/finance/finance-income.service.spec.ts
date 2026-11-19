@@ -408,7 +408,7 @@ describe('FinanceIncomeService', () => {
           occurredAt: utc('2026-11-09T02:00:00Z'),
           incomeCategory: 'OTHER_INCOME',
           title: '广告返现',
-          payerType: 'COMPANY',
+          payerAccount: 'CASH',
         },
       ],
     });

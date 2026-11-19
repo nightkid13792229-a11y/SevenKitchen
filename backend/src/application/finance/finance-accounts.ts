@@ -62,3 +62,17 @@ export function normalizeFinanceAccount(
   }
   return code;
 }
+
+/**
+ * 读库时的账户归一：未知/空值落回默认账户，**不抛错**。
+ *
+ * 写入口用 `normalizeFinanceAccount`（非法值 400）；读历史数据时数据库里可能
+ * 还有迁移前留下的空值，报表不能因为一条老数据整页报错。
+ */
+export function resolveFinanceAccount(
+  value: string | null | undefined,
+  fallback: FinanceAccount = DEFAULT_FINANCE_ACCOUNT,
+): FinanceAccount {
+  const code = typeof value === 'string' ? value.trim() : '';
+  return isFinanceAccount(code) ? code : fallback;
+}

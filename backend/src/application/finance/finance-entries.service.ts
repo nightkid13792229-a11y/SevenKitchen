@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { TimezoneUtil } from '../../utils/timezone.util';
+import { FINANCE_ACCOUNTS, FinanceAccount } from './finance-accounts';
+import { FINANCE_INCOME_CATEGORY_LABELS } from './finance-categories';
 import {
-  FINANCE_EXPENSE_CATEGORY_LABELS,
-  FINANCE_INCOME_CATEGORY_LABELS,
-} from './finance-categories';
+  FinanceCategoryLookup,
+  resolveLineCategory,
+} from './finance-category-lookup';
+import { FinanceCategoryService } from './finance-category.service';
 import {
   FinanceExpenseLine,
   centsToMoney,
@@ -24,14 +27,22 @@ import { FinancePeriod, monthRange, resolvePeriod } from './finance-period';
  *
  * 金额是**带符号**的：收入为正；退款行 `direction = 'INCOME'`、金额为负；
  * 手续费冲回行 `direction = 'EXPENSE'`、金额为负。UI 只按符号显示，不再二次判断。
+ *
+ * 类别与账户都直接给**显示名**（`categoryLabel` / `payerAccountLabel`），
+ * 小程序不用再维护一份 code → 中文的映射：
+ * - 支出类别来自类别字典（改名后历史一起变），`categoryId` 可用于筛选；
+ * - 收入类别是系统固定文案（线上订单/退款…），没有字典 id，`categoryId = null`；
+ * - 账户固定五个（微信商户号/我的微信/支付宝/银行卡/现金）。
  */
 export type FinanceEntry = {
   id: string;
   /** 上海时区 ISO 字符串（带 +08:00），与汇总接口的 range 一致 */
   occurredAt: string;
   direction: 'INCOME' | 'EXPENSE';
-  category: string;
-  label: string;
+  /** 支出类别字典 id；收入类别没有字典 id（固定 null） */
+  categoryId: string | null;
+  /** 可直接展示的类别名 */
+  categoryLabel: string;
   amount: number;
   title: string;
   sourceType:
@@ -47,7 +58,10 @@ export type FinanceEntry = {
     | 'MANUAL';
   sourceId: string;
   sourceNo?: string;
-  payerType?: 'COMPANY' | 'PERSONAL';
+  /** 收款/付款账户（五个账户 code） */
+  payerAccount: FinanceAccount;
+  /** 账户显示名，明细直接展示 */
+  payerAccountLabel: string;
   isRefund: boolean;
   isHistorical: boolean;
 };
@@ -57,17 +71,15 @@ export type FinanceEntriesQuery = {
   to?: string;
   month?: string;
   direction?: 'INCOME' | 'EXPENSE';
+  /** 按类别字典 id 筛支出（收入类别没有字典 id，不会被这个条件命中） */
   category?: string;
   /**
-   * 按付款方筛选：`PERSONAL` = 「我垫的」。
+   * 按账户筛选（五个账户 code，设计文档 §1.2）。
    *
    * 只做**行级**过滤，不动任何口径：已作废的退款记录本来就不出行，
-   * 采购/账单的 0 元占位行仍按原样出现（它自己带 payerType）。
-   * `payerType` 由收入/支出明细行自带：退款沿用原单（线上→COMPANY，
-   * 线下→PERSONAL），快递费固定 COMPANY；手续费合计行没有付款方
-   * （公司账户扣的），两个值都不会把它带出来。
+   * 采购/账单的 0 元占位行仍按原样出现（它自己带账户）。
    */
-  payerType?: 'COMPANY' | 'PERSONAL';
+  account?: FinanceAccount;
   page?: number;
   pageSize?: number;
 };
@@ -109,6 +121,11 @@ function normalizePositiveInt(value: unknown, fallback: number): number {
   return truncated >= 1 ? truncated : fallback;
 }
 
+/** 账户 code → 显示名（明细直接展示） */
+function accountLabel(account: FinanceAccount): string {
+  return FINANCE_ACCOUNTS[account];
+}
+
 /**
  * 收支明细：把收入与支出的**同一批行**（`loadIncomeLines` / `loadExpenseLines`）
  * 映射成统一的行结构，合并后倒序排序、内存分页。
@@ -116,13 +133,22 @@ function normalizePositiveInt(value: unknown, fallback: number): number {
  * 不重新实现任何口径：取数、排除条件、采购分摊、退款归属月份全部复用
  * 汇总服务的函数；手续费也由 `summarizeIncome` 算出的 `fee` 生成一行，
  * 所以「明细相加 = 汇总」是构造上成立的，跨服务一致性测试再兜一次底。
+ *
+ * 类别/账户解析与汇总共用同一份 `FinanceCategoryLookup`：
+ * 自动来源按 `code` 找系统类别，用户录入的行按 `categoryId` 分组，两边不会分叉。
  */
 @Injectable()
 export class FinanceEntriesService {
+  private readonly categoryService: FinanceCategoryService;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly feeRateService?: FinanceFeeRateService,
-  ) {}
+    categoryService?: FinanceCategoryService,
+  ) {
+    this.categoryService =
+      categoryService ?? new FinanceCategoryService(prisma);
+  }
 
   async list(query: FinanceEntriesQuery = {}): Promise<FinanceEntriesPage> {
     const period = this.resolveQueryPeriod(query);
@@ -130,31 +156,33 @@ export class FinanceEntriesService {
       ? await this.feeRateService.getFeeRate()
       : DEFAULT_WECHAT_FEE_RATE;
 
+    // 类别字典先读：支出行（尤其报销杂费）要用它把 code 解析成类别 id
+    const categoryLookup = await this.categoryService.loadExpenseLookup();
     const [incomeLines, expenseLines] = await Promise.all([
       loadIncomeLines(this.prisma, period),
-      loadExpenseLines(this.prisma, period),
+      loadExpenseLines(this.prisma, period, categoryLookup),
     ]);
 
     const fee = summarizeIncome(incomeLines, feeRate).fee;
 
     let rows: DatedEntry[] = [
       ...incomeLines.map((line) => this.toIncomeEntry(line)),
-      ...expenseLines.map((line) => this.toExpenseEntry(line)),
+      ...expenseLines.map((line) => this.toExpenseEntry(line, categoryLookup)),
     ];
 
     // 手续费合计一行；为 0 时不出现（与支出汇总的「0 不进分类」一致）
     if (fee !== 0) {
-      rows.push(this.buildFeeEntry(fee, period));
+      rows.push(this.buildFeeEntry(fee, period, categoryLookup));
     }
 
     if (query.direction) {
       rows = rows.filter((row) => row.entry.direction === query.direction);
     }
     if (query.category) {
-      rows = rows.filter((row) => row.entry.category === query.category);
+      rows = rows.filter((row) => row.entry.categoryId === query.category);
     }
-    if (query.payerType) {
-      rows = rows.filter((row) => row.entry.payerType === query.payerType);
+    if (query.account) {
+      rows = rows.filter((row) => row.entry.payerAccount === query.account);
     }
 
     // 倒序；同一时刻用 id 兜底，保证分页结果稳定
@@ -232,8 +260,9 @@ export class FinanceEntriesService {
         id: this.incomeEntryId(line),
         occurredAt: toShanghaiIso(line.occurredAt),
         direction: 'INCOME',
-        category: line.category,
-        label:
+        // 收入类别是系统固定文案，不建类别字典，也就没有 id
+        categoryId: null,
+        categoryLabel:
           FINANCE_INCOME_CATEGORY_LABELS[line.category] ??
           String(line.category),
         amount: roundMoney(line.amount),
@@ -241,7 +270,8 @@ export class FinanceEntriesService {
         sourceType: line.sourceType,
         sourceId: line.sourceId,
         sourceNo: line.sourceNo,
-        payerType: line.payerType,
+        payerAccount: line.payerAccount,
+        payerAccountLabel: accountLabel(line.payerAccount),
         isRefund: line.isRefund,
         isHistorical: line.isHistorical,
       },
@@ -257,7 +287,8 @@ export class FinanceEntriesService {
     if (line.rowId) return line.rowId;
     switch (line.sourceType) {
       case 'PURCHASE':
-        return `${line.sourceId}:${line.category}`;
+        // 自动来源按系统类别 code 出 id（老板改名不影响行 key）
+        return `${line.sourceId}:${line.categoryCode ?? line.categoryId ?? 'OTHER'}`;
       case 'SHIPPING':
         return `${line.sourceId}:shipping`;
       case 'BILL': {
@@ -272,23 +303,26 @@ export class FinanceEntriesService {
     }
   }
 
-  private toExpenseEntry(line: FinanceExpenseLine): DatedEntry {
+  private toExpenseEntry(
+    line: FinanceExpenseLine,
+    categoryLookup: FinanceCategoryLookup,
+  ): DatedEntry {
+    const category = resolveLineCategory(line, categoryLookup);
     return {
       occurredAt: line.occurredAt,
       entry: {
         id: this.expenseEntryId(line),
         occurredAt: toShanghaiIso(line.occurredAt),
         direction: 'EXPENSE',
-        category: line.category,
-        label:
-          FINANCE_EXPENSE_CATEGORY_LABELS[line.category] ??
-          String(line.category),
+        categoryId: category.categoryId,
+        categoryLabel: category.label,
         amount: centsToMoney(line.amountCents),
         title: line.title,
         sourceType: line.sourceType,
         sourceId: line.sourceId,
         sourceNo: line.sourceNo,
-        payerType: line.payerType,
+        payerAccount: line.payerAccount,
+        payerAccountLabel: accountLabel(line.payerAccount),
         isRefund: false,
         isHistorical: false,
       },
@@ -298,21 +332,32 @@ export class FinanceEntriesService {
   /**
    * 支付手续费合计一行：金额来自收入侧 `summarizeIncome`，为负数表示退款冲回。
    * 放在期间起点，月视图里沉在最下面，不抢正常流水的第一条。
+   * 手续费从微信商户号扣，账户固定 `MERCHANT`。
    */
-  private buildFeeEntry(fee: number, period: FinancePeriod): DatedEntry {
+  private buildFeeEntry(
+    fee: number,
+    period: FinancePeriod,
+    categoryLookup: FinanceCategoryLookup,
+  ): DatedEntry {
     const id = `fee:${period.from.toISOString()}`;
+    const category = resolveLineCategory(
+      { categoryCode: 'PAYMENT_FEE' },
+      categoryLookup,
+    );
     return {
       occurredAt: period.from,
       entry: {
         id,
         occurredAt: toShanghaiIso(period.from),
         direction: 'EXPENSE',
-        category: 'PAYMENT_FEE',
-        label: FINANCE_EXPENSE_CATEGORY_LABELS.PAYMENT_FEE,
+        categoryId: category.categoryId,
+        categoryLabel: category.label,
         amount: roundMoney(fee),
         title: '支付手续费',
         sourceType: 'FEE',
         sourceId: id,
+        payerAccount: 'MERCHANT',
+        payerAccountLabel: accountLabel('MERCHANT'),
         isRefund: false,
         isHistorical: false,
       },

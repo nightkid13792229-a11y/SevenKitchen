@@ -2,6 +2,12 @@ import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
+  FinanceAccount,
+  DEFAULT_FINANCE_ACCOUNT,
+  FINANCE_INCOME_ACCOUNT,
+  resolveFinanceAccount,
+} from './finance-accounts';
+import {
   FinanceIncomeCategory,
   OFFLINE_PAYMENT_METHODS,
 } from './finance-categories';
@@ -58,10 +64,11 @@ export type FinanceIncomeLine = {
   /** 明细页标题；只对手工收入由录入人填写，其余来源由明细服务按类型生成 */
   title?: string;
   /**
-   * 付款方：线上收款（公司商户号）= `COMPANY`，线下收款（个人账户）= `PERSONAL`。
-   * 退款行沿用原单：线上原路退回 → `COMPANY`，线下退款登记 → `PERSONAL`。
+   * 收款/退款账户（五个账户 code）：线上收款固定 `MERCHANT`；
+   * 线下收款取订单登记的账户，没登记时缺省「我的微信」；
+   * 退款行沿用原渠道：线上原路退回 → `MERCHANT`，线下退款登记 → 登记的账户。
    */
-  payerType?: 'COMPANY' | 'PERSONAL';
+  payerAccount: FinanceAccount;
   isRefund: boolean;
   isHistorical: boolean;
   /** 线上收款（微信商户号），只有线上部分计手续费 */
@@ -126,6 +133,7 @@ const ORDER_INCOME_SELECT = {
   amountTotal: true,
   paymentMethod: true,
   paidAt: true,
+  payerAccount: true,
   remakeFromOrderId: true,
   reshipFromOrderId: true,
 } satisfies Prisma.OrderSelect;
@@ -177,6 +185,7 @@ const OFFLINE_REFUND_SELECT = {
   amount: true,
   voidedAt: true,
   refundedAt: true,
+  payerAccount: true,
   order: { select: { id: true, orderNo: true, paidAt: true } },
 } satisfies Prisma.OrderOfflineRefundSelect;
 
@@ -227,7 +236,7 @@ const MANUAL_INCOME_SELECT = {
   occurredAt: true,
   incomeCategory: true,
   title: true,
-  payerType: true,
+  payerAccount: true,
 } satisfies Prisma.FinanceManualEntrySelect;
 
 type ManualIncomeRow = Prisma.FinanceManualEntryGetPayload<{
@@ -243,7 +252,7 @@ function incomeLine(input: {
   rowId?: string;
   sourceNo?: string | null;
   title?: string;
-  payerType?: 'COMPANY' | 'PERSONAL';
+  payerAccount: FinanceAccount;
   isOnline: boolean;
 }): FinanceIncomeLine {
   return {
@@ -255,7 +264,7 @@ function incomeLine(input: {
     rowId: input.rowId ?? input.sourceId,
     sourceNo: input.sourceNo ?? undefined,
     title: input.title,
-    payerType: input.payerType,
+    payerAccount: input.payerAccount,
     isRefund: false,
     isHistorical: false,
     isOnline: input.isOnline,
@@ -263,10 +272,10 @@ function incomeLine(input: {
 }
 
 /**
- * 退款行：金额为负，付款方**沿用原单**——退款是从同一个口袋里退回去的。
+ * 退款行：金额为负，账户**沿用原渠道**——退款是从同一个口袋里退回去的。
  *
- * 线上原路退回（微信商户号）→ `COMPANY`；线下退款登记 → `PERSONAL`。
- * 不写这一层的话，明细按付款方筛选会把退款静默漏掉。
+ * 线上原路退回（微信商户号）→ `MERCHANT`；线下退款登记 → 登记账户。
+ * 不写这一层的话，明细按账户筛选会把退款静默漏掉。
  */
 function refundLine(input: {
   amount: number;
@@ -275,7 +284,7 @@ function refundLine(input: {
   sourceId: string;
   rowId: string;
   sourceNo?: string | null;
-  payerType: 'COMPANY' | 'PERSONAL';
+  payerAccount: FinanceAccount;
   isOnline: boolean;
   isHistorical: boolean;
 }): FinanceIncomeLine {
@@ -287,7 +296,7 @@ function refundLine(input: {
     sourceId: input.sourceId,
     rowId: input.rowId,
     sourceNo: input.sourceNo ?? undefined,
-    payerType: input.payerType,
+    payerAccount: input.payerAccount,
     isRefund: true,
     isHistorical: input.isHistorical,
     isOnline: input.isOnline,
@@ -315,7 +324,9 @@ export function buildOrderIncomeLines(
         sourceType: 'ORDER',
         sourceId: order.id,
         sourceNo: order.orderNo,
-        payerType: online ? 'COMPANY' : 'PERSONAL',
+        payerAccount: online
+          ? FINANCE_INCOME_ACCOUNT
+          : resolveFinanceAccount(order.payerAccount),
         isOnline: online,
       }),
     );
@@ -342,7 +353,8 @@ export function buildSupplementIncomeLines(
         sourceType: 'SUPPLEMENT_ORDER',
         sourceId: row.id,
         sourceNo: row.orderNo,
-        payerType: online ? 'COMPANY' : 'PERSONAL',
+        // 补剂单没有账户字段：线上落商户号，线下按渠道推「我的微信」
+        payerAccount: online ? FINANCE_INCOME_ACCOUNT : DEFAULT_FINANCE_ACCOUNT,
         isOnline: online,
       }),
     );
@@ -370,7 +382,8 @@ export function buildCustomRecipeIncomeLines(
         sourceId: row.orderId,
         rowId: row.id,
         sourceNo: row.orderId,
-        payerType: online ? 'COMPANY' : 'PERSONAL',
+        // 定制食谱同样没有账户字段：线上落商户号，线下按渠道推「我的微信」
+        payerAccount: online ? FINANCE_INCOME_ACCOUNT : DEFAULT_FINANCE_ACCOUNT,
         isOnline: online,
       }),
     );
@@ -396,7 +409,7 @@ export function buildManualIncomeLines(
         sourceType: 'MANUAL',
         sourceId: row.id,
         title: row.title,
-        payerType: row.payerType === 'COMPANY' ? 'COMPANY' : 'PERSONAL',
+        payerAccount: resolveFinanceAccount(row.payerAccount),
         isOnline: false,
       }),
     );
@@ -419,8 +432,8 @@ export function buildOrderRefundLines(
         sourceId: row.order?.id ?? row.id,
         rowId: `refund:${row.id}`,
         sourceNo: row.order?.orderNo,
-        // 微信原路退回，钱从公司商户号出
-        payerType: 'COMPANY',
+        // 微信原路退回，钱从微信商户号出
+        payerAccount: FINANCE_INCOME_ACCOUNT,
         isOnline: true,
         isHistorical: isHistoricalPaidAt(row.order?.paidAt),
       }),
@@ -442,8 +455,8 @@ export function buildOfflineRefundLines(
         sourceId: row.order?.id ?? row.id,
         rowId: `refund:offline:${row.id}`,
         sourceNo: row.order?.orderNo,
-        // 线下收款的钱在个人账户，退款也从个人账户出
-        payerType: 'PERSONAL',
+        // 线下退款从登记的那个账户出（没登记时缺省「我的微信」）
+        payerAccount: resolveFinanceAccount(row.payerAccount),
         isOnline: false,
         isHistorical: isHistoricalPaidAt(row.order?.paidAt),
       }),
@@ -468,7 +481,7 @@ export function buildSupplementRefundLines(
         sourceId: row.id,
         rowId: `refund:supplement:${row.id}`,
         sourceNo: row.orderNo,
-        payerType: online ? 'COMPANY' : 'PERSONAL',
+        payerAccount: online ? FINANCE_INCOME_ACCOUNT : DEFAULT_FINANCE_ACCOUNT,
         isOnline: online,
         isHistorical: isHistoricalPaidAt(row.paidAt),
       }),
@@ -493,7 +506,7 @@ export function buildCustomRecipeRefundLines(
         sourceId: row.orderId,
         rowId: `refund:online:${row.id}`,
         sourceNo: row.orderId,
-        payerType: 'COMPANY',
+        payerAccount: FINANCE_INCOME_ACCOUNT,
         isOnline: true,
         isHistorical: isHistoricalPaidAt(row.paymentConfirmedAt),
       }),
@@ -518,7 +531,8 @@ export function buildCustomRecipeOfflineRefundLines(
         sourceId: row.orderId,
         rowId: `refund:offline:${row.id}`,
         sourceNo: row.orderId,
-        payerType: 'PERSONAL',
+        // 定制食谱线下退款按渠道推「我的微信」（本期不加账户字段）
+        payerAccount: DEFAULT_FINANCE_ACCOUNT,
         isOnline: false,
         isHistorical: isHistoricalPaidAt(row.paymentConfirmedAt),
       }),

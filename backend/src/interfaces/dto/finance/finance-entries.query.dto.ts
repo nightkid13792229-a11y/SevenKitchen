@@ -1,6 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Min, Max } from 'class-validator';
+import { FINANCE_ACCOUNT_CODES } from '../../../application/finance/finance-accounts';
+import type { FinanceAccount } from '../../../application/finance/finance-accounts';
 import { FinanceRangeQueryDto } from './finance-range.query.dto';
 
 /**
@@ -19,8 +21,8 @@ export class FinanceEntriesQueryDto extends FinanceRangeQueryDto {
   direction?: 'INCOME' | 'EXPENSE';
 
   @ApiPropertyOptional({
-    description: '按类别筛选（收入类别或支出分类的 code）',
-    example: 'EQUIPMENT',
+    description: '按支出类别字典 id 筛选（收入类别没有字典 id）',
+    example: '6f1c2a4e-...',
   })
   @IsOptional()
   @IsString()
@@ -28,18 +30,17 @@ export class FinanceEntriesQueryDto extends FinanceRangeQueryDto {
 
   @ApiPropertyOptional({
     description: [
-      '按付款方筛选：COMPANY = 公司账户，PERSONAL = 个人垫付（「我垫的」）',
-      '口径：线上收款（公司微信商户号）= COMPANY，线下收款（含 OFFLINE 老标记）= PERSONAL；',
-      '退款行沿用原单付款方（线上原路退回 = COMPANY，线下退款登记 = PERSONAL）；',
-      '快递费行固定 COMPANY（公司付给快递）；手续费合计行没有付款方，不参与该筛选。',
+      '按账户筛选（五个固定账户）：MERCHANT=微信商户号，PERSONAL_WECHAT=我的微信，',
+      'PERSONAL_ALIPAY=我的支付宝，PERSONAL_BANK=我的银行卡，CASH=现金。',
+      '口径：线上收款/手续费固定 MERCHANT；线下收款按订单登记的账户；',
+      '线下退款按退款登记账户；补剂/定制食谱线下按渠道推「我的微信」。',
     ].join(''),
-    enum: ['COMPANY', 'PERSONAL'],
+    enum: FINANCE_ACCOUNT_CODES,
+    example: 'PERSONAL_ALIPAY',
   })
   @IsOptional()
-  @IsIn(['COMPANY', 'PERSONAL'], {
-    message: '付款方必须是 COMPANY 或 PERSONAL',
-  })
-  payerType?: 'COMPANY' | 'PERSONAL';
+  @IsIn([...FINANCE_ACCOUNT_CODES], { message: '账户不合法' })
+  account?: FinanceAccount;
 
   @ApiPropertyOptional({ description: '页码，从 1 开始', default: 1 })
   @IsOptional()

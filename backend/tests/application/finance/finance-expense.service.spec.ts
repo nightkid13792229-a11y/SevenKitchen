@@ -1,9 +1,23 @@
+import { FinanceCategoryService } from 'src/application/finance/finance-category.service';
 import { FinanceExpenseService } from 'src/application/finance/finance-expense.service';
 import { monthRange } from 'src/application/finance/finance-period';
+import {
+  catId,
+  categoryRows,
+  financeCategoryMock,
+} from './finance-category.fixture';
 
 const period = monthRange('2026-11');
 
+/** 支出汇总按类别字典 id 分组，断言用 fixture 的稳定 id */
+const makeService = (prisma: any) =>
+  new FinanceExpenseService(prisma, new FinanceCategoryService(prisma));
+
+const findCategory = (r: any, code: string) =>
+  r.byCategory.find((c: any) => c.categoryId === catId(code));
+
 const makePrisma = (data: any = {}) => ({
+  financeCategory: financeCategoryMock(data.categories),
   purchaseList: {
     findMany: jest.fn().mockResolvedValue(data.purchaseLists ?? []),
   },
@@ -57,17 +71,11 @@ describe('FinanceExpenseService', () => {
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
-    expect(
-      r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount,
-    ).toBe(800);
-    expect(
-      r.byCategory.find((c) => c.category === 'LOGISTICS_DELIVERY')!.amount,
-    ).toBe(100);
-    expect(
-      r.byCategory.find((c) => c.category === 'PACKAGING_SUPPLIES')!.amount,
-    ).toBe(200);
+    expect(findCategory(r, 'RAW_MATERIAL')!.amount).toBe(800);
+    expect(findCategory(r, 'LOGISTICS_DELIVERY')!.amount).toBe(100);
+    expect(findCategory(r, 'PACKAGING_SUPPLIES')!.amount).toBe(200);
     expect(r.total).toBe(1100);
   });
 
@@ -88,7 +96,7 @@ describe('FinanceExpenseService', () => {
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
     expect(r.total).toBe(100);
   });
@@ -104,11 +112,9 @@ describe('FinanceExpenseService', () => {
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
-    expect(
-      r.byCategory.find((c) => c.category === 'LOGISTICS_DELIVERY')!.amount,
-    ).toBe(86);
+    expect(findCategory(r, 'LOGISTICS_DELIVERY')!.amount).toBe(86);
   });
 
   it('跨月账单按服务期平均分摊，本月只摊应得部分', async () => {
@@ -117,28 +123,24 @@ describe('FinanceExpenseService', () => {
         {
           id: 'b1',
           amount: 1200,
-          category: 'NETWORK_COMMUNICATION',
+          categoryId: catId('NETWORK_COMMUNICATION'),
           recognitionStart: new Date('2026-11-01T00:00:00Z'),
           recognitionEnd: new Date('2027-10-31T00:00:00Z'),
         },
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
-    expect(
-      r.byCategory.find((c) => c.category === 'NETWORK_COMMUNICATION')!.amount,
-    ).toBe(100);
+    expect(findCategory(r, 'NETWORK_COMMUNICATION')!.amount).toBe(100);
   });
 
   it('手续费作为一类支出合并，可为负', async () => {
     const prisma: any = makePrisma({});
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, -3);
+    const r = await makeService(prisma).getExpense(period, -3);
 
-    expect(r.byCategory.find((c) => c.category === 'PAYMENT_FEE')!.amount).toBe(
-      -3,
-    );
+    expect(findCategory(r, 'PAYMENT_FEE')!.amount).toBe(-3);
   });
 
   it('结果按金额倒序，合计等于分类相加', async () => {
@@ -155,16 +157,16 @@ describe('FinanceExpenseService', () => {
           id: 'm1',
           amount: 99,
           occurredAt: new Date('2026-11-06T02:00:00Z'),
-          category: 'EQUIPMENT',
+          categoryId: catId('EQUIPMENT'),
         },
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
-    expect(r.byCategory.map((c) => c.category)).toEqual([
-      'EQUIPMENT',
-      'LOGISTICS_DELIVERY',
+    expect(r.byCategory.map((c) => c.categoryId)).toEqual([
+      catId('EQUIPMENT'),
+      catId('LOGISTICS_DELIVERY'),
     ]);
     expect(r.total).toBe(
       Number(r.byCategory.reduce((s, c) => s + c.amount, 0).toFixed(2)),
@@ -188,17 +190,11 @@ describe('FinanceExpenseService', () => {
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
-    expect(
-      r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount,
-    ).toBe(54);
-    expect(
-      r.byCategory.find((c) => c.category === 'LOGISTICS_DELIVERY')!.amount,
-    ).toBe(18);
-    expect(
-      r.byCategory.find((c) => c.category === 'PACKAGING_SUPPLIES')!.amount,
-    ).toBe(18);
+    expect(findCategory(r, 'RAW_MATERIAL')!.amount).toBe(54);
+    expect(findCategory(r, 'LOGISTICS_DELIVERY')!.amount).toBe(18);
+    expect(findCategory(r, 'PACKAGING_SUPPLIES')!.amount).toBe(18);
     expect(r.total).toBe(90);
   });
 
@@ -240,11 +236,9 @@ describe('FinanceExpenseService', () => {
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
-    expect(
-      r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount,
-    ).toBe(500);
+    expect(findCategory(r, 'RAW_MATERIAL')!.amount).toBe(500);
     expect(r.total).toBe(500);
   });
 
@@ -280,14 +274,10 @@ describe('FinanceExpenseService', () => {
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
-    expect(
-      r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount,
-    ).toBe(240);
-    expect(r.byCategory.find((c) => c.category === 'SUPPLEMENT')!.amount).toBe(
-      160,
-    );
+    expect(findCategory(r, 'RAW_MATERIAL')!.amount).toBe(240);
+    expect(findCategory(r, 'SUPPLEMENT')!.amount).toBe(160);
     expect(r.total).toBe(400);
   });
 
@@ -333,11 +323,9 @@ describe('FinanceExpenseService', () => {
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
-    expect(
-      r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount,
-    ).toBe(800);
+    expect(findCategory(r, 'RAW_MATERIAL')!.amount).toBe(800);
     expect(r.total).toBe(800);
   });
 
@@ -358,11 +346,9 @@ describe('FinanceExpenseService', () => {
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
-    expect(
-      r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount,
-    ).toBe(100);
+    expect(findCategory(r, 'RAW_MATERIAL')!.amount).toBe(100);
     expect(r.total).toBe(100);
   });
 
@@ -398,11 +384,9 @@ describe('FinanceExpenseService', () => {
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
-    expect(
-      r.byCategory.find((c) => c.category === 'RAW_MATERIAL')!.amount,
-    ).toBe(400);
+    expect(findCategory(r, 'RAW_MATERIAL')!.amount).toBe(400);
     expect(r.total).toBe(400);
   });
 
@@ -412,19 +396,16 @@ describe('FinanceExpenseService', () => {
         {
           id: 'b1',
           amount: 300,
-          category: 'RENT',
+          categoryId: catId('RENT'),
           recognitionStart: new Date('2026-11-01T00:00:00Z'),
           recognitionEnd: new Date('2027-01-31T00:00:00Z'),
         },
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(
-      monthRange('2026-12'),
-      0,
-    );
+    const r = await makeService(prisma).getExpense(monthRange('2026-12'), 0);
 
-    expect(r.byCategory.find((c) => c.category === 'RENT')!.amount).toBe(100);
+    expect(findCategory(r, 'RENT')!.amount).toBe(100);
     expect(r.total).toBe(100);
   });
 
@@ -439,7 +420,7 @@ describe('FinanceExpenseService', () => {
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
     expect(r.byCategory).toEqual([]);
     expect(r.total).toBe(0);
@@ -452,22 +433,22 @@ describe('FinanceExpenseService', () => {
           id: 'm1',
           amount: 50,
           occurredAt: new Date('2026-11-06T02:00:00Z'),
-          category: 'EQUIPMENT',
+          categoryId: catId('EQUIPMENT'),
         },
         {
           id: 'm2',
           amount: 25.5,
           occurredAt: new Date('2026-11-07T02:00:00Z'),
-          category: 'EQUIPMENT',
+          categoryId: catId('EQUIPMENT'),
         },
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, -3);
+    const r = await makeService(prisma).getExpense(period, -3);
 
-    expect(r.byCategory.map((c) => [c.category, c.amount])).toEqual([
-      ['EQUIPMENT', 75.5],
-      ['PAYMENT_FEE', -3],
+    expect(r.byCategory.map((c) => [c.categoryId, c.amount])).toEqual([
+      [catId('EQUIPMENT'), 75.5],
+      [catId('PAYMENT_FEE'), -3],
     ]);
     expect(r.total).toBe(72.5);
   });
@@ -479,27 +460,28 @@ describe('FinanceExpenseService', () => {
           id: 'm1',
           amount: 100,
           occurredAt: new Date('2026-11-06T02:00:00Z'),
-          category: 'ADMINISTRATIVE',
+          categoryId: catId('ADMINISTRATIVE'),
         },
         {
           id: 'm2',
           amount: 100,
           occurredAt: new Date('2026-11-07T02:00:00Z'),
-          category: 'RENT',
+          categoryId: catId('RENT'),
         },
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
-    expect(r.byCategory.map((c) => c.category)).toEqual([
-      'RENT',
-      'ADMINISTRATIVE',
+    // 金额相同按类别名兜底：「房租」排在「行政费用」前
+    expect(r.byCategory.map((c) => c.categoryId)).toEqual([
+      catId('RENT'),
+      catId('ADMINISTRATIVE'),
     ]);
     expect(r.total).toBe(200);
   });
 
-  it('报销单的零星支出计入：TOOLS→行政、SUNDRIES/OTHER→其他', async () => {
+  it('报销杂费映射到类别字典：TOOLS→工具、SUNDRIES→杂物、OTHER→其它', async () => {
     const prisma: any = makePrisma({
       reimbursements: [
         reimbursementRow({
@@ -512,12 +494,21 @@ describe('FinanceExpenseService', () => {
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
-    expect(
-      r.byCategory.find((c) => c.category === 'ADMINISTRATIVE')!.amount,
-    ).toBe(25);
-    expect(r.byCategory.find((c) => c.category === 'OTHER')!.amount).toBe(42.5);
+    expect(findCategory(r, 'TOOLS')).toMatchObject({
+      categoryId: catId('TOOLS'),
+      label: '工具',
+      amount: 25,
+    });
+    expect(findCategory(r, 'SUNDRIES')).toMatchObject({
+      label: '杂物',
+      amount: 12.5,
+    });
+    expect(findCategory(r, 'OTHER')).toMatchObject({
+      label: '其它',
+      amount: 30,
+    });
     expect(r.total).toBe(67.5);
   });
 
@@ -526,7 +517,7 @@ describe('FinanceExpenseService', () => {
       reimbursements: [
         reimbursementRow({
           customFees: [
-            { category: 'RENT', description: '房租', amount: 6000 },
+            { categoryId: catId('RENT'), description: '房租', amount: 6000 },
             { category: 'PAYROLL', description: '工资', amount: 5000 },
             { category: 'SOCIAL_INSURANCE', description: '社保', amount: 1200 },
             { category: 'TAX', description: '税费', amount: 300 },
@@ -536,7 +527,7 @@ describe('FinanceExpenseService', () => {
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
     expect(r.byCategory).toEqual([]);
     expect(r.total).toBe(0);
@@ -572,11 +563,10 @@ describe('FinanceExpenseService', () => {
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
-    expect(
-      r.byCategory.find((c) => c.category === 'ADMINISTRATIVE')!.amount,
-    ).toBe(20);
+    // 报销杂费 TOOLS 现在进「工具」类别（不是旧的行政费用）
+    expect(findCategory(r, 'TOOLS')!.amount).toBe(20);
     expect(r.total).toBe(20);
   });
 
@@ -596,9 +586,95 @@ describe('FinanceExpenseService', () => {
       ],
     });
 
-    const r = await new FinanceExpenseService(prisma).getExpense(period, 0);
+    const r = await makeService(prisma).getExpense(period, 0);
 
-    expect(r.byCategory.find((c) => c.category === 'OTHER')!.amount).toBe(30);
+    expect(findCategory(r, 'SUNDRIES')!.amount).toBe(30);
     expect(r.total).toBe(30);
+  });
+
+  it('系统类别按 code 命中：老板把「食材」改名后，报表用新名字、id 不变', async () => {
+    const prisma: any = makePrisma({
+      categories: categoryRows({
+        RAW_MATERIAL: { name: '食材原料' },
+      }),
+      purchaseLists: [
+        {
+          id: 'p1',
+          kind: 'STOCK_REPLENISHMENT',
+          paidAmount: 120,
+          personalAmount: 0,
+          subtotalAmount: 120,
+          shippingFee: 0,
+          packagingFee: 0,
+          discountAmount: 0,
+          items: [{ type: 'FOOD', estimatedCost: 120 }],
+        },
+      ],
+    });
+
+    const r = await makeService(prisma).getExpense(period, 0);
+
+    expect(r.byCategory).toEqual([
+      { categoryId: catId('RAW_MATERIAL'), label: '食材原料', amount: 120 },
+    ]);
+  });
+
+  it('用户录入的类别按 categoryId 分组：同一 id 合并、label 取类别当前名字', async () => {
+    const prisma: any = makePrisma({
+      categories: categoryRows({
+        EQUIPMENT: { name: '设备工具（改名）' },
+      }),
+      manualEntries: [
+        {
+          id: 'm1',
+          amount: 50,
+          occurredAt: new Date('2026-11-06T02:00:00Z'),
+          categoryId: catId('EQUIPMENT'),
+        },
+        {
+          id: 'm2',
+          amount: 25.5,
+          occurredAt: new Date('2026-11-07T02:00:00Z'),
+          categoryId: catId('EQUIPMENT'),
+        },
+        {
+          id: 'm3',
+          amount: 10,
+          occurredAt: new Date('2026-11-08T02:00:00Z'),
+          categoryId: catId('RENT'),
+        },
+      ],
+    });
+
+    const r = await makeService(prisma).getExpense(period, 0);
+
+    expect(r.byCategory).toEqual([
+      {
+        categoryId: catId('EQUIPMENT'),
+        label: '设备工具（改名）',
+        amount: 75.5,
+      },
+      { categoryId: catId('RENT'), label: '房租', amount: 10 },
+    ]);
+  });
+
+  it('没有类别引用的支出归入「未分类」，不丢金额', async () => {
+    const prisma: any = makePrisma({
+      manualEntries: [
+        {
+          id: 'm1',
+          amount: 9.9,
+          occurredAt: new Date('2026-11-06T02:00:00Z'),
+          categoryId: null,
+        },
+      ],
+    });
+
+    const r = await makeService(prisma).getExpense(period, 0);
+
+    expect(r.byCategory).toEqual([
+      { categoryId: null, label: '未分类', amount: 9.9 },
+    ]);
+    expect(r.total).toBe(9.9);
   });
 });

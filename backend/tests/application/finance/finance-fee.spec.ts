@@ -9,9 +9,8 @@ describe('finance-fee', () => {
     expect(computeFeeAmount(0, 500, 0.006)).toBe(-3));
   it('四舍五入到分', () =>
     expect(computeFeeAmount(428, 0, 0.006)).toBe(2.57));
-  it('同一单两次部分退款，冲回之和等于全额退款的手续费', () => {
-    const a = computeFeeAmount(0, 200, 0.006);
-    const b = computeFeeAmount(0, 300, 0.006);
-    expect(Number((a + b).toFixed(2))).toBe(computeFeeAmount(0, 500, 0.006));
+  it('正负对称：按绝对值四舍五入（按笔取整，允许与整单合计差 1 分）', () => {
+    expect(computeFeeAmount(82.5, 0, 0.006)).toBe(0.5);
+    expect(computeFeeAmount(0, 82.5, 0.006)).toBe(-0.5);
   });
 });

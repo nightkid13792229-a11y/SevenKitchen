@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { TimezoneUtil } from '../../utils/timezone.util';
 
 /**
@@ -30,7 +31,9 @@ function parseDayKey(input: string): string {
 
 /**
  * 解析查询区间；缺省为「本月 1 日 ~ 今天」。
- * `from` 早于起账日时裁到起账日；`to` 缺省为今天结束（上海时间 23:59:59.999）。
+ * 两端都裁进 [起账日, 今天结束]（上海时间）：`from` 早于起账日时抬到起账日，
+ * `to` 晚于今天时收到今天结束。裁完仍倒挂时（例如 from 晚于 to），把 `to`
+ * 设为 `from` 当天结束，保证永远不出现 from > to。
  */
 export function resolvePeriod(
   from?: string,
@@ -38,39 +41,52 @@ export function resolvePeriod(
   now: Date = new Date(),
 ): FinancePeriod {
   const startFloor = startOfShanghaiDay(FINANCE_START_DATE);
-  const defaultFrom = TimezoneUtil.startOfShanghaiMonth(now);
-  const resolvedFrom = from
-    ? startOfShanghaiDay(parseDayKey(from))
-    : defaultFrom;
-  const resolvedTo = to
-    ? endOfShanghaiDay(parseDayKey(to))
-    : endOfShanghaiDay(TimezoneUtil.shanghaiDateKey(now));
+  const nowEnd = endOfShanghaiDay(TimezoneUtil.shanghaiDateKey(now));
+  const clamp = (time: number) =>
+    Math.min(Math.max(time, startFloor.getTime()), nowEnd.getTime());
 
-  return {
-    from: new Date(Math.max(resolvedFrom.getTime(), startFloor.getTime())),
-    to: resolvedTo,
-  };
+  const requestedFrom = from
+    ? startOfShanghaiDay(parseDayKey(from))
+    : TimezoneUtil.startOfShanghaiMonth(now);
+  const requestedTo = to ? endOfShanghaiDay(parseDayKey(to)) : nowEnd;
+
+  const clampedFrom = clamp(requestedFrom.getTime());
+  const clampedTo = clamp(requestedTo.getTime());
+  const resolvedTo =
+    clampedTo < clampedFrom
+      ? endOfShanghaiDay(TimezoneUtil.shanghaiDateKey(new Date(clampedFrom)))
+      : clampedTo;
+
+  return { from: new Date(clampedFrom), to: new Date(resolvedTo) };
 }
 
 /**
  * 某个月（`YYYY-MM`）的整月区间：1 日 00:00 ~ 月末 23:59:59.999（上海时间）。
- * 早于起账日的月份把 `from` 裁到起账日。
+ * 起账日之前的月份没有可统计的数据，直接报错而不是返回倒挂区间。
  */
 export function monthRange(month: string): FinancePeriod {
   const match = /^(\d{4})-(\d{2})$/.exec((month || '').trim());
-  if (!match) throw new Error('月份必须是 YYYY-MM');
+  if (!match) throw new BadRequestException('月份必须是 YYYY-MM');
   const year = Number(match[1]);
   const monthNumber = Number(match[2]);
-  if (monthNumber < 1 || monthNumber > 12) throw new Error('月份不合法');
+  if (monthNumber < 1 || monthNumber > 12) {
+    throw new BadRequestException('月份不合法');
+  }
 
   const prefix = `${match[1]}-${match[2]}`;
   // Date.UTC 的 day=0 是上个月最后一天，正好得到本月天数
   const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
   const startFloor = startOfShanghaiDay(FINANCE_START_DATE);
-  const from = startOfShanghaiDay(`${prefix}-01`);
+  const to = endOfShanghaiDay(`${prefix}-${String(lastDay).padStart(2, '0')}`);
+  if (to.getTime() < startFloor.getTime()) {
+    throw new BadRequestException(
+      `起账日（${FINANCE_START_DATE}）之前的月份不统计`,
+    );
+  }
 
+  const from = startOfShanghaiDay(`${prefix}-01`);
   return {
     from: from.getTime() < startFloor.getTime() ? startFloor : from,
-    to: endOfShanghaiDay(`${prefix}-${String(lastDay).padStart(2, '0')}`),
+    to,
   };
 }

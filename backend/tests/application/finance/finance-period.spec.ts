@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import {
   resolvePeriod,
   monthRange,
@@ -24,6 +25,22 @@ describe('finance-period', () => {
     expect(p.from.toISOString()).toBe(
       sh(FINANCE_START_DATE + 'T00:00:00').toISOString(),
     );
+  });
+
+  it('整段早于起账日时不会倒挂：from 为起账日且不晚于 to', () => {
+    const p = resolvePeriod(
+      '2026-10-01',
+      '2026-10-31',
+      sh('2026-11-05T10:00:00'),
+    );
+    expect(p.from.toISOString()).toBe(
+      sh(FINANCE_START_DATE + 'T00:00:00').toISOString(),
+    );
+    expect(p.from.getTime()).toBeLessThanOrEqual(p.to.getTime());
+  });
+
+  it('起账日之前的月份直接报错，不返回倒挂区间', () => {
+    expect(() => monthRange('2026-10')).toThrow(BadRequestException);
   });
 
   it('指定月份返回整月边界', () => {

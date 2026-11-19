@@ -14,7 +14,16 @@ function toCents(amount: number): number {
 }
 
 /**
+ * 四舍五入到整数，负数按绝对值取整再带符号（half away from zero），
+ * 避免 JS `Math.round` 对负数「向 +∞ 舍入」导致退款/收款手续费不对称。
+ */
+function roundHalfAwayFromZero(value: number): number {
+  return value < 0 ? -Math.round(-value) : Math.round(value);
+}
+
+/**
  * 计算手续费（元）：正数表示支出，负数表示退款时退回的手续费。
+ * 每笔独立取整到分，所以多次部分退款之和可能比整单一次退款差 1 分。
  * @param paid 实收金额（元）
  * @param refunded 已退金额（元）
  * @param rate 费率，如 0.006
@@ -25,5 +34,5 @@ export function computeFeeAmount(
   rate: number,
 ): number {
   const netCents = toCents(paid) - toCents(refunded);
-  return Math.round(netCents * rate) / 100;
+  return roundHalfAwayFromZero(netCents * rate) / 100;
 }

@@ -25,6 +25,7 @@
 - 固定费用按「费用所属月」整月计入；跨月账单按服务期月数平均分摊。月初查「本月至今」也会包含整月固定费用，页面必须有一行说明。
 - 财务接口与页面**仅 ADMIN**；`STAFF` 一律 403。
 - 金额单位：数据库 `Decimal`，接口一律返回 `number`（两位小数）。
+- **`@db.Date` 字段一律写 UTC 零点**（`TimezoneUtil.parseDateOnly('YYYY-MM-DD')`）。写上海零点会落成前一天，11-01 的记录会掉到 10-31 并从 11 月账里消失（2026-10-19 生产事故同款）。涉及：`FinanceManualEntry.occurredAt`、`OrderOfflineRefund.refundedAt`、`ExpenseBill.recognitionStart/End`。
 - 小程序 UI 沿用 `docs/员工端UI规范.md`：主色 `#1E3A2F`、底色 `#FBFCF7`、卡片 `#FFFFFF`、分隔线 `#EEF1E2`、次要文字 `#6B6653`、警示 `#B08D4F`/`#F6EFE0`、危险 `#B4453A`。
 
 ## Review Focus

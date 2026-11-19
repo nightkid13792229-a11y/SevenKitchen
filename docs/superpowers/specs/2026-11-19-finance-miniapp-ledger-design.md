@@ -342,7 +342,7 @@
 | note | 备注 |
 | proof_keys | 凭证（可选） |
 | created_by_id / created_at | 操作人、时间 |
-| voided_at / void_reason | 登记错了可作废，不物理删 |
+| voided_at / void_reason | 预留作废字段（读侧已排除）；**v1 不做作废入口**，登记错了先按负数补登，v1.1 再给入口 |
 
 - 校验：同一订单累计（未作废）退款金额 ≤ 该单实收金额。
 - 与 `OrderRefundRecord`（微信原路退回）分开两张表，互不影响；财务统计时两者都作为收入减项。

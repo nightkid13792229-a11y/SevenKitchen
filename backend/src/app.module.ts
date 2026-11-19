@@ -474,8 +474,10 @@ validatePrismaConfig();
      */
     StaffDogHealthController,
     AdminController,
-    AdminFinanceController,
+    // V2 先注册：它与旧控制器共用 admin/finance 前缀，
+    // 先注册的 handler 才不会被旧路由遮住（Task 16 会删掉旧控制器）。
     AdminFinanceV2Controller,
+    AdminFinanceController,
     ShippingController,
     StaffKitchenController,
     StaffShippingController,

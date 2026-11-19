@@ -359,8 +359,22 @@ export class ExpenseTemplateService {
 
     if (rows.length === 0) return { created: 0 };
 
-    const result = await this.prisma.expenseBill.createMany({ data: rows });
-    return { created: result.count };
+    try {
+      // 已有账单的排重靠「先查」，并发竞态由 (templateId, recognitionStart)
+      // 唯一约束兜底：skipDuplicates 让数据库直接跳过撞键的行。
+      const result = await this.prisma.expenseBill.createMany({
+        data: rows,
+        skipDuplicates: true,
+      });
+      return { created: result.count };
+    } catch (error) {
+      // 老库/驱动不支持 skipDuplicates 时，唯一键冲突等价于「已经生成过」，
+      // 仍然返回 created=0，不让定时任务或补生成接口报 500。
+      if ((error as { code?: string } | null)?.code === 'P2002') {
+        return { created: 0 };
+      }
+      throw error;
+    }
   }
 
   /**

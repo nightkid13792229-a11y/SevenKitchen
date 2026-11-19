@@ -1,6 +1,5 @@
 import { Test } from '@nestjs/testing';
 import { ExpenseBillService } from '../../../src/application/finance/expense-bill.service';
-import { ExpenseTemplateService } from '../../../src/application/finance/expense-template.service';
 import { FinanceAlertService } from '../../../src/application/finance/finance-alert.service';
 import { FinanceReportService } from '../../../src/application/finance/finance-report.service';
 import { AuthGuard } from '../../../src/interfaces/auth';
@@ -18,10 +17,6 @@ describe('AdminFinanceController', () => {
             recordPayment: jest.fn(),
             listBills: jest.fn(),
           },
-        },
-        {
-          provide: ExpenseTemplateService,
-          useValue: { createTemplate: jest.fn(), listTemplates: jest.fn() },
         },
         {
           provide: FinanceReportService,
@@ -48,5 +43,14 @@ describe('AdminFinanceController', () => {
     expect(typeof controller.recordExpensePayment).toBe('function');
     expect(typeof controller.getExpenseAnalysis).toBe('function');
     expect(typeof controller.getContributionAnalysis).toBe('function');
+  });
+
+  it('不再暴露 templates 路由：模板读写统一由 V2 控制器（仅 ADMIN）负责', () => {
+    expect(
+      (AdminFinanceController.prototype as any).listTemplates,
+    ).toBeUndefined();
+    expect(
+      (AdminFinanceController.prototype as any).createTemplate,
+    ).toBeUndefined();
   });
 });

@@ -211,10 +211,14 @@ export class ExpenseBillService {
     if (bill.status === 'CANCELLED') {
       throw new BadRequestException('已取消的账单不能付款');
     }
+    if (bill.status === 'PAID') {
+      throw new BadRequestException('账单已付清，不能重复付款');
+    }
 
-    const paidAmount = parsePaidAmount(
-      input.paidAmount === undefined ? Number(bill.amount) : input.paidAmount,
-    );
+    const billAmount = Number(bill.amount);
+    // 显式传入的金额/日期/付款方先校验，避免无效请求白查一次库。
+    const requestedAmount =
+      input.paidAmount === undefined ? null : parsePaidAmount(input.paidAmount);
     const paidAt =
       input.paidAt === undefined
         ? TimezoneUtil.toShanghaiDateOnly(new Date())
@@ -223,6 +227,21 @@ export class ExpenseBillService {
     const payerType =
       requestedPayerType ??
       (bill.payerType === 'COMPANY' ? 'COMPANY' : 'PERSONAL');
+
+    // 缺省金额（补齐剩余）和超额校验都依赖「已经付了多少」，先查累计实付。
+    const paidBefore = await this.prisma.expenseBillPayment.aggregate({
+      where: { billId },
+      _sum: { paidAmount: true },
+    });
+    const alreadyPaid = Number(paidBefore._sum.paidAmount ?? 0);
+    const remaining = billAmount - alreadyPaid;
+    const paidAmount = requestedAmount ?? parsePaidAmount(remaining);
+
+    // 已部分付的账单，本次不能超过剩余应付；首笔允许按实际金额覆盖模板金额
+    //（§6.4：实付可能和模板不同，例如水电），付满后回写 bill.amount。
+    if (alreadyPaid > 0 && paidAmount > remaining) {
+      throw new BadRequestException('本次实付不能超过剩余应付金额');
+    }
 
     await this.prisma.expenseBillPayment.create({
       data: {
@@ -236,18 +255,15 @@ export class ExpenseBillService {
       },
     });
 
-    const totalPaid = await this.prisma.expenseBillPayment.aggregate({
-      where: { billId },
-      _sum: { paidAmount: true },
-    });
-    const nextStatus =
-      Number(totalPaid._sum.paidAmount ?? 0) >= Number(bill.amount)
-        ? 'PAID'
-        : 'PARTIALLY_PAID';
+    const totalPaid = alreadyPaid + paidAmount;
+    const isPaidOff = totalPaid >= billAmount;
 
     return this.prisma.expenseBill.update({
       where: { id: billId },
-      data: { status: nextStatus },
+      data: isPaidOff
+        ? // 付满时把模板金额改写成累计实付，汇总按实际支出算（§6.4）。
+          { status: 'PAID', amount: totalPaid }
+        : { status: 'PARTIALLY_PAID' },
     });
   }
 }

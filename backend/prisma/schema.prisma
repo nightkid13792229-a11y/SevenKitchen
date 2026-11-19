@@ -2727,6 +2727,8 @@ model ExpenseBill {
   payments         ExpenseBillPayment[]
   template         ExpenseTemplate?       @relation(fields: [templateId], references: [id])
 
+  /// 生成幂等：同一模板 + 同一费属起始月只能有一张（并发由数据库兜底）
+  @@unique([templateId, recognitionStart])
   @@index([status, dueAt])
   @@index([category, recognitionStart, recognitionEnd])
   @@map("expense_bill")

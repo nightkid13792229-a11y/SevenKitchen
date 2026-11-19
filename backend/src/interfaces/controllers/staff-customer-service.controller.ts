@@ -298,6 +298,9 @@ export class StaffCustomerServiceController {
         }
       }
 
+      // 操作人兜底：正常请求一定有 CurrentUser；万一缺失也按 admin 记，
+      // 不能用空 id 去拼线下收款流水号。
+      const operatorId = user?.userId || 'admin';
       const actor = user.role === 'ADMIN' ? 'admin' : 'staff';
       const createdOrder = await this.orderService.createOrderDraft({
         customerId,
@@ -312,7 +315,7 @@ export class StaffCustomerServiceController {
         addressId,
       });
 
-      await this.orderService.confirmOrder(createdOrder.id, actor, user.userId);
+      await this.orderService.confirmOrder(createdOrder.id, actor, operatorId);
 
       if (actualAmount !== undefined) {
         await this.orderService.updateOrderAmount(createdOrder.id, actualAmount);
@@ -320,7 +323,7 @@ export class StaffCustomerServiceController {
 
       const auditLine = [
         `[代客下单] ${new Date().toISOString()}`,
-        `操作人:${user.userId}`,
+        `操作人:${operatorId}`,
         `客户:${customerId}`,
         `狗狗:${dogId}`,
         actualAmount !== undefined
@@ -337,7 +340,7 @@ export class StaffCustomerServiceController {
         data: {
           orderId: createdOrder.id,
           action: 'ASSISTED_ORDER',
-          operatorId: user.userId,
+          operatorId,
           reason: body.remark ? String(body.remark).trim() : null,
           rawText: auditLine,
         },
@@ -351,16 +354,20 @@ export class StaffCustomerServiceController {
         );
       }
 
-      const transactionId = `OFFLINE_${Date.now()}_${user.userId.slice(0, 8)}`;
-      const paidOrder = await this.orderService.processPayment(
-        createdOrder.id,
-        'OFFLINE',
-        actor,
-        user.userId,
-        transactionId,
-      );
+      // 代客下单默认「当场已收款」（员工当面收钱），只有显式 collected:false
+      // 才留成待付款。实收为空时按订单金额记，避免传 undefined 被当成 0。
+      if (body.collected !== false) {
+        const channel = body.paymentChannel ?? body.channel;
+        const paidOrder = await this.orderService.confirmOfflinePayment(
+          createdOrder.id,
+          operatorId,
+          actualAmount ?? toNumber(createdOrder.amountTotal),
+          channel,
+        );
+        return ApiResponseDto.success(paidOrder);
+      }
 
-      return ApiResponseDto.success(paidOrder);
+      return ApiResponseDto.success(createdOrder);
     } catch (error) {
       if (error instanceof NotFoundException) {
         return ApiResponseDto.error(404, error.message);

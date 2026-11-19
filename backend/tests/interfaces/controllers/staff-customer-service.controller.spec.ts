@@ -37,7 +37,7 @@ describe('StaffCustomerServiceController customer and dog workflows', () => {
       confirmOrder: jest.fn(),
       updateOrderAmount: jest.fn(),
       updateAdminRemark: jest.fn(),
-      processPayment: jest.fn(),
+      confirmOfflinePayment: jest.fn(),
       listDogFinishedFoodHistory: jest.fn(),
       previewPricing: jest.fn().mockResolvedValue({
         amountProduct: 108,
@@ -129,10 +129,10 @@ describe('StaffCustomerServiceController customer and dog workflows', () => {
       id: 'order-1',
       adminRemark: '[代客下单]',
     });
-    orderService.processPayment.mockResolvedValue({
+    orderService.confirmOfflinePayment.mockResolvedValue({
       id: 'order-1',
       status: 'PAID',
-      paymentMethod: 'OFFLINE',
+      paymentMethod: 'OFFLINE_WECHAT',
       amountTotal: 118,
     });
 
@@ -175,18 +175,17 @@ describe('StaffCustomerServiceController customer and dog workflows', () => {
       'order-1',
       118,
     );
-    expect(orderService.processPayment).toHaveBeenCalledWith(
+    expect(orderService.confirmOfflinePayment).toHaveBeenCalledWith(
       'order-1',
-      'OFFLINE',
-      'staff',
       'staff-1',
-      expect.stringContaining('OFFLINE_'),
+      118,
+      undefined,
     );
     expect(result.code).toBe(0);
     expect(result.data).toMatchObject({
       id: 'order-1',
       status: 'PAID',
-      paymentMethod: 'OFFLINE',
+      paymentMethod: 'OFFLINE_WECHAT',
     });
   });
 

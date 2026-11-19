@@ -100,6 +100,33 @@ import { WeightGoalPlanService } from '../weight-goal-plan/weight-goal-plan.serv
 
 const MAX_ORDER_SEARCH_EXPANSION_TERMS = 8;
 
+/**
+ * 线下收款渠道。
+ *
+ * 代客下单一步收款时，钱是员工当面收的：微信/支付宝/其他。
+ * 以前统一记成 `OFFLINE`，财务分不清钱进了哪个账户，
+ * 所以这里收窄成明确的三个枚举（缺省按下线微信）。
+ */
+const OFFLINE_PAYMENT_CHANNELS = [
+  'OFFLINE_WECHAT',
+  'OFFLINE_ALIPAY',
+  'OTHER',
+] as const;
+
+type OfflinePaymentChannel = (typeof OFFLINE_PAYMENT_CHANNELS)[number];
+
+function normalizeOfflinePaymentChannel(
+  channel: string,
+): OfflinePaymentChannel {
+  const normalized = String(channel || '')
+    .trim()
+    .toUpperCase();
+  if (!(OFFLINE_PAYMENT_CHANNELS as readonly string[]).includes(normalized)) {
+    throw new BadRequestException(`不支持的线下收款渠道: ${channel}`);
+  }
+  return normalized as OfflinePaymentChannel;
+}
+
 const ORDER_STATUS_SEARCH_LABELS: Record<OrderStatus, string[]> = {
   [OrderStatus.INIT]: ['INIT', '待确认'],
   [OrderStatus.PENDING_PAYMENT]: [
@@ -3361,13 +3388,17 @@ export class OrderService {
    * @param orderId Order ID
    * @param adminId Admin user ID
    * @param actualAmount Actual payment amount received (optional, for recording discrepancies)
+   * @param channel Offline payment channel (defaults to OFFLINE_WECHAT)
    * @returns Updated order with payment tracking fields set
    */
   async confirmOfflinePayment(
     orderId: string,
     adminId: string,
     actualAmount?: number,
+    channel: OfflinePaymentChannel = 'OFFLINE_WECHAT',
   ): Promise<Order> {
+    const paymentMethod = normalizeOfflinePaymentChannel(channel);
+
     // 1. Load and validate order
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
@@ -3393,7 +3424,7 @@ export class OrderService {
 
     // 4. Record payment (sets paymentStatus, paidAt, transactionId, paymentMethod, and transitions to PAID)
     const fromStatus = order.status;
-    order.recordPayment('OFFLINE_WECHAT', transactionId);
+    order.recordPayment(paymentMethod, transactionId);
     const savedOrder = await this.orderRepository.save(order);
 
     // 5. Log status transition with payment metadata
@@ -3404,7 +3435,7 @@ export class OrderService {
       'admin',
       adminId,
       {
-        paymentMethod: 'OFFLINE_WECHAT',
+        paymentMethod,
         transactionId,
         actualAmount,
         note,

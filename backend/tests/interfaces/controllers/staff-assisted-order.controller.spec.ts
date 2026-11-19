@@ -57,7 +57,9 @@ function buildOrderService() {
     confirmOrder: jest.fn().mockResolvedValue({ id: 'order-1' }),
     updateOrderAmount: jest.fn().mockResolvedValue({ id: 'order-1' }),
     updateAdminRemark: jest.fn().mockResolvedValue({ id: 'order-1' }),
-    processPayment: jest.fn().mockResolvedValue({ id: 'order-1' }),
+    confirmOfflinePayment: jest
+      .fn()
+      .mockResolvedValue({ id: 'order-1', status: 'PAID' }),
   };
 }
 

@@ -40,7 +40,11 @@ const AVOID_TERMS = [
 const TERM_EXCLUSIONS: Record<string, string[]> = {
   牛: ['牛磺酸', '牛奶'],
   乳: ['乳化'],
+  鸡: ['鸡蛋壳粉', '蛋壳粉'],
   蛋: [
+    '鸡蛋壳粉',
+    '蛋壳粉',
+    '蛋氨酸',
     '蛋白质',
     '粗蛋白',
     '高蛋白',
@@ -61,6 +65,39 @@ export function itemMatchesAvoidTerm(itemName: string, term: string): boolean {
   return scrubbed.includes(term);
 }
 
+/**
+ * 只保留“否定/禁止”的句子。
+ *
+ * 病历医嘱常见写法是“不吃牛羊鸡肉和鸡蛋，多吃兔、猪里脊、鱼肉”：
+ * 前半句是忌口，后半句是**推荐**。整段一起抽词会把兔/猪/鱼也当成忌口，
+ * 于是评估对正确的蛋白源误报警（2026-11-19 线上实测）。
+ */
+function negativeClauses(text: string): string {
+  const clauses = text
+    .split(/[，,。；;\n\r]+/)
+    .map((clause) => clause.trim())
+    .filter(Boolean);
+
+  const negative: string[] = [];
+  for (const clause of clauses) {
+    const positive = /多吃|可以吃|能吃|建议吃|推荐吃|宜吃|可食/.exec(clause);
+    if (positive) {
+      const before = clause.slice(0, positive.index);
+      if (NEGATIVE_MARKERS.test(before)) {
+        negative.push(before);
+      }
+      continue;
+    }
+    if (NEGATIVE_MARKERS.test(clause)) {
+      negative.push(clause);
+    }
+  }
+  return negative.join('\n');
+}
+
+const NEGATIVE_MARKERS =
+  /不吃|不能吃|不要吃|不该吃|不喝|不喂|停喂|禁喂|忌口|禁食|避免|不宜|禁用|过敏/;
+
 /** 从多段文本里抽出清单里出现的忌口词（去重，保持清单顺序）。 */
 export function extractAvoidTerms(
   texts: ReadonlyArray<string | null | undefined>,
@@ -73,8 +110,11 @@ export function extractAvoidTerms(
     .join('\n');
   if (!text) return [];
 
+  const scoped = negativeClauses(text);
+  if (!scoped) return [];
+
   return AVOID_TERMS.filter((term) => {
-    let scrubbed = text;
+    let scrubbed = scoped;
     for (const exclusion of TERM_EXCLUSIONS[term] ?? []) {
       scrubbed = scrubbed.split(exclusion).join('');
     }

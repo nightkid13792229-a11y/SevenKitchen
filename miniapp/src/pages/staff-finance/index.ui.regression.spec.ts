@@ -4,6 +4,30 @@ import { join } from 'node:path';
 
 const read = (path: string) => readFileSync(join(__dirname, path), 'utf8');
 
+const luminance = (hex: string) => {
+  const value = hex.replace('#', '');
+  const full =
+    value.length === 3
+      ? value
+          .split('')
+          .map((char) => char + char)
+          .join('')
+      : value;
+  const [r, g, b] = [0, 2, 4].map(
+    (offset) => parseInt(full.slice(offset, offset + 2), 16) / 255,
+  );
+  const channel = (c: number) =>
+    c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+};
+
+const contrast = (foreground: string, background: string) => {
+  const a = luminance(foreground);
+  const b = luminance(background);
+  const [light, dark] = a > b ? [a, b] : [b, a];
+  return (light + 0.05) / (dark + 0.05);
+};
+
 describe('财务首页', () => {
   const page = read('./index.vue');
   const api = read('../../api/staff-finance.ts');
@@ -16,12 +40,37 @@ describe('财务首页', () => {
     expect(page).not.toContain('我花了');
   });
 
-  it('有固定费用整月计入的说明', () => {
-    expect(page).toContain('已含本月固定费用');
+  it('固定费用按月份口径说明，为 0 时引导去生成', () => {
+    expect(page).toContain('该月已含固定费用');
+    expect(page).toContain('本月已含固定费用');
+    expect(page).toContain('本月固定费用还没生成');
+    expect(page).toContain('= 收入 − 支出，固定费用还没生成');
+    expect(page).toContain('heroCaption');
+    // 不能再出现「已含本月固定费用 ¥0」这种和上面「已扣房租工资」打架的写法
+    expect(page).not.toContain('已含本月固定费用');
     expect(page).toContain('RENT');
     expect(page).toContain('PAYROLL');
     expect(page).toContain('SOCIAL_INSURANCE');
     expect(page).toContain('TAX');
+  });
+
+  it('负结余用深绿底上读得清的浅红警示，并给一句人话', () => {
+    expect(page).toContain('balanceNegative');
+    expect(page).toContain('hero-amount--negative');
+    expect(page).toContain('这个月花得比收得多，先看房租和工资那几笔是不是漏录');
+
+    const warningRed = page.match(
+      /\$staff-danger-on-brand:\s*(#[0-9a-fA-F]{6})/,
+    )?.[1];
+    expect(warningRed).toBeTruthy();
+    // 深绿主卡 #1E3A2F 上的浅红，正文级别必须 ≥ 4.5:1
+    expect(contrast(warningRed!, '#1e3a2f')).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('月份 chip 触控高度达到员工端规范的 88rpx', () => {
+    const chipRule = page.match(/\.chip\s*\{[^}]*\}/)?.[0] || '';
+    expect(chipRule).toContain('min-height: 88rpx');
+    expect(chipRule).toContain('padding: 0 28rpx');
   });
 
   it('有待确认线下收款的提醒入口', () => {
@@ -60,6 +109,20 @@ describe('财务首页', () => {
     expect(page).toContain('skeleton');
   });
 
+  it('非 ADMIN 直接输地址先拦下，不发请求', () => {
+    expect(page).toContain("getStoredUser()?.role !== 'ADMIN'");
+    expect(page).toContain('权限不足');
+    expect(page).toContain('navigateBack');
+    expect(page).toContain("url: '/pages/staff-workbench/index'");
+
+    const onShowBlock = page.match(/onShow\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || '';
+    expect(onShowBlock).toContain('getStoredUser()');
+    expect(onShowBlock).toContain('load()');
+    expect(
+      onShowBlock.indexOf("getStoredUser()?.role !== 'ADMIN'"),
+    ).toBeLessThan(onShowBlock.indexOf('load()'));
+  });
+
   it('API 层封装 dashboard 并解包统一响应', () => {
     expect(api).toContain('staffFinanceApi');
     expect(api).toContain('getDashboard');
@@ -75,7 +138,8 @@ describe('财务首页', () => {
   it('工作台财务入口只给 ADMIN 显示', () => {
     expect(workbench).toContain("getStoredUser()?.role === 'ADMIN'");
     expect(workbench).toContain("title: '财务'");
-    expect(workbench).toContain("icon: '/static/ui-icons/reimbursement.png'");
+    // 财务不再和报销共用 reimbursement 图标
+    expect(workbench).toContain("icon: '/static/ui-icons/orders.png'");
     expect(workbench).toContain("url: '/pages/staff-finance/index'");
   });
 });

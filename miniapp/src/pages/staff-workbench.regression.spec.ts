@@ -72,7 +72,8 @@ describe('staff workbench compact icon grid', () => {
 
     expect(moduleConfig).toContain("getStoredUser()?.role === 'ADMIN'")
     expect(moduleConfig).toContain("title: '财务'")
-    expect(moduleConfig).toContain("icon: '/static/ui-icons/reimbursement.png'")
+    // 财务不再和报销共用 reimbursement 图标
+    expect(moduleConfig).toContain("icon: '/static/ui-icons/orders.png'")
     expect(source).toContain("url: '/pages/staff-finance/index'")
   })
 

@@ -53,12 +53,16 @@
     <template v-else-if="dashboard">
       <view class="hero">
         <text class="hero-label">{{ heroLabel }}</text>
-        <view class="hero-amount">
+        <view
+          class="hero-amount"
+          :class="{ 'hero-amount--negative': balanceNegative }"
+        >
           <text v-if="balanceNegative" class="hero-minus">−</text>
           <text class="hero-currency">¥</text>
           <text class="hero-number">{{ formatMoney(balanceAbs) }}</text>
         </view>
-        <text class="hero-caption">= 收入 − 支出，已经扣掉房租、工资、社保</text>
+        <text v-if="balanceNegative" class="hero-warning">这个月花得比收得多，先看房租和工资那几笔是不是漏录</text>
+        <text class="hero-caption">{{ heroCaption }}</text>
 
         <view class="hero-split">
           <view class="hero-metric">
@@ -72,7 +76,8 @@
         </view>
 
         <text v-if="compareText" class="hero-compare">{{ compareText }}</text>
-        <text class="hero-note">已含本月固定费用 ¥{{ formatMoney(fixedFeeTotal) }}</text>
+        <text v-if="fixedFeeTotal > 0" class="hero-note">{{ fixedFeeCopy }}</text>
+        <text v-else class="hero-note hero-note--link" @tap="goBills">本月固定费用还没生成 ›</text>
       </view>
 
       <view
@@ -118,6 +123,7 @@ import {
   type FinanceDashboard,
   type FinanceExpenseCategory,
 } from '../../api/staff-finance'
+import { getStoredUser } from '../../utils/account'
 
 /** 起账日：早于 2026-11 的月份后端不统计，月份快照也只在起账月之后给 */
 const FINANCE_START_MONTH = '2026-11'
@@ -253,6 +259,25 @@ const fixedFeeTotal = computed(() => {
   return roundMoney(total)
 })
 
+/** 固定费用为 0 时，连「已经扣掉房租、工资、社保」也不能说 */
+const heroCaption = computed(() =>
+  fixedFeeTotal.value > 0
+    ? '= 收入 − 支出，已经扣掉房租、工资、社保'
+    : '= 收入 − 支出，固定费用还没生成',
+)
+
+/**
+ * 固定费用的说明必须跟「已经扣掉房租、工资、社保」对得上：
+ * 完整月份写「该月」，本月至今写「本月」；为 0 时不再说「已含 ¥0」，
+ * 改成引导去「固定费用」页生成（Task 14 的页面）。
+ */
+const fixedFeeCopy = computed(() => {
+  const amount = formatMoney(fixedFeeTotal.value)
+  return isFullMonth.value
+    ? `该月已含固定费用 ¥${amount}`
+    : `本月已含固定费用 ¥${amount}`
+})
+
 const pendingOfflineCount = computed(
   () => Number(dashboard.value?.pendingOfflineConfirmCount) || 0,
 )
@@ -378,12 +403,28 @@ function goEntries() {
 }
 
 onShow(() => {
+  // 员工直接输地址进来时先拦下，连请求都不发（后端也会 403，但不要停在错误页）
+  if (getStoredUser()?.role !== 'ADMIN') {
+    uni.showToast({ title: '权限不足', icon: 'none' })
+    setTimeout(() => {
+      uni.navigateBack({
+        fail: () => {
+          uni.reLaunch({ url: '/pages/staff-workbench/index' })
+        },
+      })
+    }, 600)
+    return
+  }
   load()
 })
 </script>
 
 <style scoped lang="scss">
 @import '../../styles/staff-tokens.scss';
+
+/* 深绿底上的警示红：$staff-danger (#B4453A) 在深底上读不清，
+   这里取浅红，对 #1E3A2F 的对比度 6.3:1（正文级别）。 */
+$staff-danger-on-brand: #f2a79a;
 
 .page {
   box-sizing: border-box;
@@ -420,8 +461,8 @@ onShow(() => {
 .chip {
   display: inline-flex;
   align-items: center;
-  min-height: 72rpx;
-  padding: 0 24rpx;
+  min-height: 88rpx;
+  padding: 0 28rpx;
   font-size: $staff-font-sub;
   color: $staff-ink;
   background: $staff-surface;
@@ -479,6 +520,20 @@ onShow(() => {
   font-variant-numeric: tabular-nums;
 }
 
+.hero-amount--negative .hero-minus,
+.hero-amount--negative .hero-currency,
+.hero-amount--negative .hero-number {
+  color: $staff-danger-on-brand;
+}
+
+.hero-warning {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $staff-font-caption;
+  line-height: 1.5;
+  color: $staff-danger-on-brand;
+}
+
 .hero-caption {
   display: block;
   margin-top: 4rpx;
@@ -527,6 +582,11 @@ onShow(() => {
   font-size: $staff-font-caption;
   line-height: 1.5;
   color: rgba(243, 237, 221, 0.72);
+}
+
+.hero-note--link {
+  color: $staff-cream;
+  text-decoration: underline;
 }
 
 .pending-alert {

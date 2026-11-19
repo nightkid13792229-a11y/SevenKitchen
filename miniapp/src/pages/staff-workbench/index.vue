@@ -204,7 +204,8 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
         {
           key: 'finance',
           title: '财务',
-          icon: '/static/ui-icons/reimbursement.png',
+          // 报销图标已被「报销管理」占用；财务用「清单」图标，和收支账本语义更近
+          icon: '/static/ui-icons/orders.png',
           onTap: goToFinance,
         },
       ]

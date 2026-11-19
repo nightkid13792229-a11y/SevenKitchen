@@ -48,10 +48,11 @@ describe('财务首页', () => {
     expect(page).toContain('heroCaption');
     // 不能再出现「已含本月固定费用 ¥0」这种和上面「已扣房租工资」打架的写法
     expect(page).not.toContain('已含本月固定费用');
-    expect(page).toContain('RENT');
-    expect(page).toContain('PAYROLL');
-    expect(page).toContain('SOCIAL_INSURANCE');
-    expect(page).toContain('TAX');
+    // 2026-11-19 起汇总按类别字典出数，没有枚举 code，按种子类别名识别
+    for (const label of ['房租', '水电', '宽带', '工资', '社保', '税费']) {
+      expect(page).toContain(label);
+    }
+    expect(page).not.toContain('SOCIAL_INSURANCE');
   });
 
   it('负结余用深绿底上读得清的浅红警示，并给一句人话', () => {
@@ -96,10 +97,28 @@ describe('财务首页', () => {
     expect(page).toContain('/pages/staff-order-center/index');
   });
 
-  it('有钱花在哪和最多 7 类的合并规则', () => {
+  it('钱花在哪：按金额取前 7 类，其余合并成一条「其他」', () => {
     expect(page).toContain('钱花在哪');
     expect(page).toContain('categories.length > 7');
+    // 前 7 类保留，第 8 类起合并（「其他」只是显示层聚合，不是记账类别）
+    expect(page).toContain('categories.slice(0, 7)');
+    expect(page).toContain('categories.slice(7)');
     expect(page).toContain('OTHER_MERGED');
+    expect(page).toContain("label: '其他'");
+  });
+
+  it('汇总元素是 {categoryId,label,amount}，不再读枚举 code', () => {
+    const bars = page.match(/const spendBars[\s\S]*?\n\}\)/)?.[0] || '';
+    expect(bars).toContain('row.categoryId');
+    expect(bars).toContain('row.label');
+    expect(bars).not.toContain('key: row.category,');
+    const api = read('../../api/staff-finance.ts');
+    const amountType =
+      api.match(/export interface FinanceExpenseCategoryAmount[\s\S]*?\n\}/)?.[0] ||
+      '';
+    for (const field of ['categoryId', 'label', 'amount']) {
+      expect(amountType).toContain(field);
+    }
   });
 
   it('有记一笔与固定费用两个入口', () => {

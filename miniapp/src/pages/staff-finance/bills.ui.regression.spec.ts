@@ -44,19 +44,24 @@ describe('固定费用', () => {
     }
   });
 
-  it('标记已付弹层可改实付金额、可选付款方，默认剩余应付', () => {
+  it('标记已付弹层可改实付金额、可选账户，默认剩余应付与账单账户', () => {
     expect(page).toContain('标记已付');
     expect(page).toContain('剩余应付');
     // 默认填剩余应付
     expect(page).toContain('remainingOf(bill).toFixed(2)');
-    // 付款方只有这两种说法
-    expect(page).toContain('我个人垫的');
-    expect(page).toContain('公司账户');
+    // 2026-11-19：付款方换成「从哪个账户出」，默认账单上的账户
+    expect(page).toContain('从哪个账户出');
+    expect(page).toContain('payPayerAccount');
+    const openPayBlock = page.match(/function openPay[\s\S]*?\n\}/)?.[0] || '';
+    expect(openPayBlock).toContain('bill.payerAccount');
+    expect(openPayBlock).toContain('getLastAccount()');
     // 确认后调 payBill 并刷新账单
     expect(page).toContain('payBill');
+    expect(page).toContain('payerAccount: payPayerAccount.value');
     // 付款只改状态：toast 要说清支出不变，别让老板以为没反应
     expect(page).toContain('已标记为已付（支出不变，按月份已计入）');
     expect(page).toContain('loadBills()');
+    expect(page).not.toContain('我个人垫的');
   });
 
   it('待付区说明固定费用按所属月份整月计入，付款不影响当月支出', () => {
@@ -77,11 +82,12 @@ describe('固定费用', () => {
     expect(page).toContain('该月都已生成');
   });
 
-  it('我设的固定项目：周期/几号/付款方/启用状态都露出来', () => {
+  it('我设的固定项目：周期/几号/账户/启用状态都露出来', () => {
     expect(page).toContain('我设的固定项目');
     expect(page).toContain('intervalLabel(template.interval)');
     expect(page).toContain('dayLabel(template.dayOfMonth)');
-    expect(page).toContain('payerLabel(template.payerType)');
+    // 每行显示账户（房租/社保这类走卡）
+    expect(page).toContain('accountLabel(template.payerAccount)');
     expect(page).toContain("template.isActive ? '启用' : '已停用'");
     // 三种周期文案
     for (const label of ['每月', '每季', '每年']) {
@@ -95,14 +101,17 @@ describe('固定费用', () => {
     expect(page).toContain('保存');
     for (const field of [
       'formName',
-      'formCategory',
+      'formCategoryId',
       'formAmountText',
       'formInterval',
       'formDayIndex',
-      'formPayerType',
+      'formPayerAccount',
     ]) {
       expect(page).toContain(field);
     }
+    // 类别和账户都走选择器组件，不再是一排写死的 chips
+    expect(page).toContain('CategoryPicker');
+    expect(page).toContain('AccountPicker');
     // 编辑时用 PATCH，新建用 POST，都不做物理清除
     expect(page).toContain('updateTemplate');
     expect(page).toContain('createTemplate');
@@ -121,7 +130,7 @@ describe('固定费用', () => {
     expect(page).not.toContain('删除');
   });
 
-  it('新建固定费用表单：类别用后端枚举中文标签，服务期默认 1、年付 12、季付 3', () => {
+  it('新建固定费用表单：类别走字典、账户默认银行卡，服务期默认 1、年付 12、季付 3', () => {
     expect(page).toContain('新建固定费用');
     expect(page).toContain('服务期月数');
     expect(page).toContain("formServiceMonthsText = ref('1')");
@@ -130,19 +139,20 @@ describe('固定费用', () => {
     expect(page).toContain('serviceMonthsForEdit');
     expect(logic).toContain("if (!valid || parsed === 1) return '12'");
     expect(logic).toContain("return interval === 'QUARTERLY' ? '3' : '12'");
-    // 类别值必须是后端 FinanceExpenseCategory 的枚举 code，中文照抄后端标签
-    const labels: Array<[string, string]> = [
-      ['RENT', '房租'],
-      ['UTILITIES', '水电燃气'],
-      ['NETWORK_COMMUNICATION', '宽带通信'],
-      ['PAYROLL', '工资'],
-      ['SOCIAL_INSURANCE', '社保'],
-      ['TAX', '税费'],
-      ['TECHNICAL_SERVICES', '服务器/域名/证书/备案'],
-    ];
-    for (const [code, label] of labels) {
-      expect(page).toContain(`${code}: '${label}'`);
-    }
+    // 类别不再写死枚举：表单用类别字典选择器，提交 categoryId
+    expect(page).toContain('formCategoryId');
+    expect(page).toContain('categoryId: formCategoryId.value');
+    expect(page).toContain('请选择类别');
+    expect(page).not.toContain('CATEGORY_OPTIONS');
+    // 出账账户：默认「我的银行卡」（没有上次记录时）
+    expect(page).toContain("getLastAccount('PERSONAL_BANK')");
+    expect(page).toContain('payerAccount: formPayerAccount.value');
+  });
+
+  it('固定费用页右上角能进「费用类别」管理页', () => {
+    expect(page).toContain('费用类别');
+    expect(page).toContain('/pages/staff-finance/categories');
+    expect(page).toContain('goCategories');
   });
 
   it('空态：没模板给新建入口，没账单提示先设固定项目并给补生成入口', () => {
@@ -166,12 +176,12 @@ describe('固定费用', () => {
 
     const payload = buildTemplateFormPayload({
       name: '房租',
-      category: 'RENT',
+      categoryId: 'cat-rent',
       amount: 5000,
       interval: 'MONTHLY',
       dayOfMonth: 1,
       servicePeriodMonths: Number(monthsText),
-      payerType: 'PERSONAL',
+      payerAccount: 'PERSONAL_BANK',
       editing: null,
     });
     expect(payload.servicePeriodMonths).toBe(1);
@@ -179,12 +189,12 @@ describe('固定费用', () => {
     expect(
       buildTemplateFormPayload({
         name: '房租',
-        category: 'RENT',
+        categoryId: 'cat-rent',
         amount: 5000,
         interval: 'MONTHLY',
         dayOfMonth: 1,
         servicePeriodMonths: 12,
-        payerType: 'PERSONAL',
+        payerAccount: 'PERSONAL_BANK',
         editing: null,
       }).servicePeriodMonths,
     ).toBe(1);
@@ -199,12 +209,12 @@ describe('固定费用', () => {
 
     const yearly = buildTemplateFormPayload({
       name: '宽带',
-      category: 'NETWORK_COMMUNICATION',
+      categoryId: 'cat-network',
       amount: 1200,
       interval: 'YEARLY',
       dayOfMonth: 15,
       servicePeriodMonths: 12,
-      payerType: 'COMPANY',
+      payerAccount: 'PERSONAL_WECHAT',
       monthOfYear: 3,
       editing: null,
     });
@@ -214,12 +224,12 @@ describe('固定费用', () => {
     // 月付/季付不带 monthOfYear，后端按每月/每季规则生成
     const monthly = buildTemplateFormPayload({
       name: '房租',
-      category: 'RENT',
+      categoryId: 'cat-rent',
       amount: 5000,
       interval: 'MONTHLY',
       dayOfMonth: 1,
       servicePeriodMonths: 1,
-      payerType: 'PERSONAL',
+      payerAccount: 'PERSONAL_BANK',
       monthOfYear: 3,
       editing: null,
     });
@@ -238,12 +248,12 @@ describe('固定费用', () => {
     // 不改字段直接保存：提交值仍是 3
     const payload = buildTemplateFormPayload({
       name: '季税费',
-      category: 'TAX',
+      categoryId: 'cat-tax',
       amount: 900,
       interval: 'QUARTERLY',
       dayOfMonth: 10,
       servicePeriodMonths: Number(opened),
-      payerType: 'COMPANY',
+      payerAccount: 'PERSONAL_BANK',
       editing: null,
     });
     expect(payload.servicePeriodMonths).toBe(3);
@@ -299,17 +309,19 @@ describe('固定费用', () => {
     for (const field of [
       'name',
       'titleTemplate',
-      'category',
+      'categoryId',
       'payeeName',
       'defaultAmount',
       'interval',
       'dayOfMonth',
       'monthOfYear',
       'servicePeriodMonths',
-      'payerType',
+      'payerAccount',
     ]) {
       expect(payloadType).toContain(field);
     }
+    // 旧枚举/付款方字段不再上送（后端保留一版，页面不该再用）
+    expect(payloadType).not.toContain('payerType');
     // 页面自己 toast 后端 message，API 层不再弹一遍
     expect(api).toContain('suppressErrorToast: true');
   });

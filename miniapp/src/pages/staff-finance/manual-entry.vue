@@ -56,16 +56,14 @@
 
     <view class="card">
       <text class="card-title">类别</text>
-      <view class="chips">
-        <view
-          v-for="option in categoryOptions"
-          :key="option.value"
-          class="chip"
-          :class="{ 'chip--on': selectedCategory === option.value }"
-          @tap="selectCategory(option.value)"
-        >
-          {{ option.label }}
-        </view>
+      <!-- 支出走类别字典：输入即建，下次自己就在候选里 -->
+      <CategoryPicker
+        v-if="direction === 'EXPENSE'"
+        v-model="expenseCategoryId"
+        placeholder="选一个类别，或输入新名字"
+      />
+      <view v-else class="chips">
+        <view class="chip chip--on">其他收入</view>
       </view>
       <text v-if="direction === 'INCOME'" class="card-hint">
         线上/线下/补剂/定制食谱的收入由系统自动记录
@@ -73,18 +71,9 @@
     </view>
 
     <view class="card">
-      <text class="card-title">付款方</text>
-      <view class="chips">
-        <view
-          v-for="option in PAYER_OPTIONS"
-          :key="option.value"
-          class="chip"
-          :class="{ 'chip--on': payerType === option.value }"
-          @tap="selectPayer(option.value)"
-        >
-          {{ option.label }}
-        </view>
-      </view>
+      <!-- 支出口径是「钱从哪个账户出」，收入是「钱进哪个账户」 -->
+      <text class="card-title">{{ direction === 'EXPENSE' ? '从哪个账户出' : '钱进哪个账户' }}</text>
+      <AccountPicker v-model="payerAccount" />
     </view>
 
     <view class="card">
@@ -111,42 +100,22 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
+import CategoryPicker from '../../components/finance/CategoryPicker.vue'
+import AccountPicker from '../../components/finance/AccountPicker.vue'
 import {
   staffFinanceApi,
   type CreateManualEntryPayload,
-  type FinanceExpenseCategory,
 } from '../../api/staff-finance'
 import { getStoredUser } from '../../utils/account'
+import {
+  getLastAccount,
+  type FinanceAccountCode,
+} from '../../utils/finance-account'
 import { FINANCE_START_DATE } from '../../constants/finance'
 
-/** 类别记住上次选择（设计文档 §5.3）：只记支出，收入永远只有一项 */
-const CATEGORY_STORAGE_KEY = 'staff-finance:manual-entry-category'
 const TITLE_MAX_LENGTH = 200
 
 type Direction = 'INCOME' | 'EXPENSE'
-type PayerType = 'PERSONAL' | 'COMPANY'
-type CategoryOption = { value: string; label: string }
-
-/**
- * 支出类别只给这四个中文短词：老板记账只要「能对上账」，
- * 不需要看懂会计科目（值必须与后端 FinanceExpenseCategory 枚举一致）。
- */
-const EXPENSE_CATEGORIES: CategoryOption[] = [
-  { value: 'EQUIPMENT', label: '设备工具' },
-  { value: 'TAX', label: '税费' },
-  { value: 'SOCIAL_INSURANCE', label: '社保' },
-  { value: 'OTHER', label: '其他' },
-]
-
-/** 手工收入只有「其他收入」：线上/线下/补剂/定制食谱由系统按来源自动记录 */
-const INCOME_CATEGORIES: CategoryOption[] = [
-  { value: 'OTHER_INCOME', label: '其他收入' },
-]
-
-const PAYER_OPTIONS: Array<{ value: PayerType; label: string }> = [
-  { value: 'PERSONAL', label: '我个人垫的' },
-  { value: 'COMPANY', label: '公司账户' },
-]
 
 const pad2 = (value: number) => String(value).padStart(2, '0')
 
@@ -175,59 +144,22 @@ const amountText = ref('')
 /** 打开页面直接弹金额键盘：15 秒内记完 */
 const amountFocus = ref(true)
 const occurredAt = ref(defaultDateKey())
-const payerType = ref<PayerType>('PERSONAL')
+/** 账户记住上次用的（五处共用 `finance:lastAccount`） */
+const payerAccount = ref<FinanceAccountCode>(getLastAccount())
 const title = ref('')
 const submitting = ref(false)
 
-const expenseCategory = ref<FinanceExpenseCategory>('EQUIPMENT')
-const selectedCategory = computed(() =>
-  direction.value === 'EXPENSE' ? expenseCategory.value : 'OTHER_INCOME',
-)
-const categoryOptions = computed(() =>
-  direction.value === 'EXPENSE' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES,
-)
+/** 支出类别 id（类别字典）；收入不选类别，固定「其他收入」 */
+const expenseCategoryId = ref('')
+
 const isToday = computed(() => occurredAt.value === todayKey.value)
 const dateLabel = computed(() =>
   isToday.value ? `${occurredAt.value}（今天）` : occurredAt.value,
 )
 
-/** 上次选的支出类别：从 storage 恢复，只接受仍然存在的四个短词 */
-function restoreExpenseCategory() {
-  try {
-    const saved = String(uni.getStorageSync(CATEGORY_STORAGE_KEY) || '')
-    if (EXPENSE_CATEGORIES.some((option) => option.value === saved)) {
-      expenseCategory.value = saved as FinanceExpenseCategory
-    }
-  } catch {
-    // 读不到就按默认「设备工具」，不阻断记账
-  }
-}
-
-function rememberExpenseCategory(value: string) {
-  try {
-    uni.setStorageSync(CATEGORY_STORAGE_KEY, value)
-  } catch {
-    // 存不下也不影响本次记账
-  }
-}
-
-restoreExpenseCategory()
-
 function selectDirection(next: Direction) {
   if (direction.value === next) return
   direction.value = next
-}
-
-function selectCategory(value: string) {
-  // 收入只有「其他收入」一项，点它不改变任何东西
-  if (direction.value !== 'EXPENSE') return
-  if (!EXPENSE_CATEGORIES.some((option) => option.value === value)) return
-  expenseCategory.value = value as FinanceExpenseCategory
-  rememberExpenseCategory(value)
-}
-
-function selectPayer(value: PayerType) {
-  payerType.value = value
 }
 
 function focusAmount() {
@@ -272,6 +204,10 @@ function parseAmount(): { value: number } | { error: string } {
 function validationMessage(): string {
   const amount = parseAmount()
   if ('error' in amount) return amount.error
+  // 类别必须显式选：默认不替老板猜，猜错类别报表就得重记
+  if (direction.value === 'EXPENSE' && !expenseCategoryId.value) {
+    return '请选择类别'
+  }
   if (!title.value.trim()) return '请写一句说明'
   return ''
 }
@@ -281,12 +217,12 @@ function buildPayload(amount: number): CreateManualEntryPayload {
     direction: direction.value,
     amount,
     occurredAt: occurredAt.value,
-    payerType: payerType.value,
+    payerAccount: payerAccount.value,
     title: title.value.trim(),
   }
-  // 支出只传 category，收入只传 incomeCategory：另一侧留空，避免双重归类
+  // 支出只传 categoryId，收入只传 incomeCategory：另一侧留空，避免双重归类
   if (direction.value === 'EXPENSE') {
-    payload.category = expenseCategory.value
+    payload.categoryId = expenseCategoryId.value
   } else {
     payload.incomeCategory = 'OTHER_INCOME'
   }

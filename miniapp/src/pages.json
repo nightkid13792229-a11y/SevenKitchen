@@ -125,6 +125,16 @@
             "backgroundColor": "#FBFCF7",
             "enablePullDownRefresh": false
           }
+        },
+        {
+          "path": "categories",
+          "style": {
+            "navigationBarTitleText": "费用类别",
+            "navigationBarBackgroundColor": "#1E3A2F",
+            "navigationBarTextStyle": "white",
+            "backgroundColor": "#FBFCF7",
+            "enablePullDownRefresh": false
+          }
         }
       ]
     },

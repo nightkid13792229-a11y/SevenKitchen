@@ -796,6 +796,11 @@
           </view>
         </view>
         <view class="form-item">
+          <text class="form-label">退到哪个账户</text>
+          <!-- 账户记住上次用的（与记一笔、代客下单共用同一个 storage） -->
+          <AccountPicker v-model="offlineRefundAccount" />
+        </view>
+        <view class="form-item">
           <text class="form-label">备注（可留空）</text>
           <textarea
             class="form-textarea"
@@ -865,6 +870,7 @@ import { ref, computed, onMounted } from 'vue'
 import { CARRIERS } from '../../constants/carriers'
 import { FINANCE_START_DATE, isOfflinePaymentMethod } from '../../constants/finance'
 import StaffShipDrawer from '../../components/shipping/StaffShipDrawer.vue'
+import AccountPicker from '../../components/finance/AccountPicker.vue'
 import { buildShipDogSummary } from '../../utils/order-ship'
 import { resolveLatestRecipeId } from '../../utils/order-recipe-link'
 import { onShareAppMessage } from '@dcloudio/uni-app'
@@ -901,6 +907,10 @@ import {
   shanghaiTodayText,
 } from '../../utils/date'
 import { normalizeImageUrl } from '../../utils/config'
+import {
+  getLastAccount,
+  type FinanceAccountCode,
+} from '../../utils/finance-account'
 import {
   canAdminEditOrderProductionDate,
   checkProductionDateSelection,
@@ -1122,6 +1132,15 @@ const offlineRefundVisible = ref(false)
 const offlineRefundAmount = ref('')
 const offlineRefundDate = ref('')
 const offlineRefundMethod = ref<OrderOfflineRefundMethod>('WECHAT')
+/**
+ * 钱从哪个账户退出去（2026-11-19 账户化）。
+ *
+ * ⚠️ 后端 `RegisterOfflineRefundDto` 目前没有 `payerAccount`（表里已有
+ * `order_offline_refund.payer_account` 列，接口还没接），所以本期只选不传；
+ * 后端补上字段后把 `payerAccount: offlineRefundAccount.value` 加进
+ * `registerOrderOfflineRefund` 的参数即可。
+ */
+const offlineRefundAccount = ref<FinanceAccountCode>(getLastAccount())
 const offlineRefundNote = ref('')
 const offlineRefunds = ref<OrderOfflineRefund[]>([])
 const loadingOfflineRefunds = ref(false)
@@ -1807,6 +1826,7 @@ async function openOfflineRefundPanel() {
   )
   offlineRefundDate.value = shanghaiTodayText()
   offlineRefundMethod.value = 'WECHAT'
+  offlineRefundAccount.value = getLastAccount()
   offlineRefundNote.value = ''
   offlineRefundVisible.value = true
 }

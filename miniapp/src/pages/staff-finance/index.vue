@@ -133,7 +133,6 @@ import { onShow } from '@dcloudio/uni-app'
 import {
   staffFinanceApi,
   type FinanceDashboard,
-  type FinanceExpenseCategory,
 } from '../../api/staff-finance'
 import { getStoredUser } from '../../utils/account'
 import { FINANCE_START_MONTH } from '../../constants/finance'
@@ -142,19 +141,23 @@ import { FINANCE_START_MONTH } from '../../constants/finance'
 const FINANCE_START_MONTH_NUMBER = Number(FINANCE_START_MONTH.slice(5, 7))
 
 /**
- * 固定费用分类：月初查「本月至今」时收入只算几天、支出却已含整月固定费用，
+ * 固定费用类别：月初查「本月至今」时收入只算几天、支出却已含整月固定费用，
  * 主卡必须单独把这一笔写出来，老板才不会把月初的亏损当成真亏。
+ *
+ * 2026-11-19 起汇总按**类别字典**出数（`{categoryId,label,amount}`），
+ * 不再有枚举 code，只能按种子类别的名字认——这几个都是种子类别，
+ * 改名后这句提示会认不出来（只影响提示，不影响金额与报表）。
  */
-const FIXED_FEE_CATEGORIES: readonly FinanceExpenseCategory[] = [
-  'RENT',
-  'UTILITIES',
-  'NETWORK_COMMUNICATION',
-  'TECHNICAL_SERVICES',
-  'PAYROLL',
-  'SOCIAL_INSURANCE',
-  'TAX',
+const FIXED_FEE_CATEGORY_LABELS: readonly string[] = [
+  '房租',
+  '水电',
+  '宽带',
+  '服务器/域名',
+  '工资',
+  '社保',
+  '税费',
 ]
-const FIXED_FEE_CATEGORY_SET = new Set<string>(FIXED_FEE_CATEGORIES)
+const FIXED_FEE_LABEL_SET = new Set<string>(FIXED_FEE_CATEGORY_LABELS)
 
 type MonthChip = { key: string; label: string }
 type SpendBar = { key: string; label: string; amount: number; percent: number }
@@ -269,7 +272,9 @@ const fixedFeeTotal = computed(() => {
   const rows = dashboard.value?.expense.byCategory || []
   const total = rows.reduce(
     (sum, row) =>
-      FIXED_FEE_CATEGORY_SET.has(row.category) ? sum + (Number(row.amount) || 0) : sum,
+      FIXED_FEE_LABEL_SET.has(String(row.label || '').trim())
+        ? sum + (Number(row.amount) || 0)
+        : sum,
     0,
   )
   return roundMoney(total)
@@ -313,7 +318,10 @@ const compareText = computed(() => {
   return `比上月 ${sign}¥${formatMoney(Math.abs(diff))}`
 })
 
-/** 最多 7 行：前 6 类按金额降序，其余合并成「其他」 */
+/**
+ * 「钱花在哪」：按金额降序取前 7 类，其余合并成一条「其他」——
+ * 「其他」只是显示层聚合，记账时没有这个类别（设计文档 §2.4）。
+ */
 const spendBars = computed<SpendBar[]>(() => {
   const expense = dashboard.value?.expense
   if (!expense) return []
@@ -321,8 +329,9 @@ const spendBars = computed<SpendBar[]>(() => {
   const categories = (expense.byCategory || [])
     .filter((row) => Number(row.amount) > 0)
     .map((row) => ({
-      key: row.category,
-      label: row.label || row.category,
+      // 类别字典 id 是稳定 key；没有 id 的老数据退到名字
+      key: String(row.categoryId || row.label || 'UNCATEGORIZED'),
+      label: row.label || '未分类',
       amount: Number(row.amount) || 0,
     }))
     .sort((left, right) => right.amount - left.amount)
@@ -331,9 +340,9 @@ const spendBars = computed<SpendBar[]>(() => {
 
   let rows = categories
   if (categories.length > 7) {
-    rows = categories.slice(0, 6)
+    rows = categories.slice(0, 7)
     const restAmount = roundMoney(
-      categories.slice(6).reduce((sum, row) => sum + row.amount, 0),
+      categories.slice(7).reduce((sum, row) => sum + row.amount, 0),
     )
     const existingOther = rows.find((row) => row.label === '其他')
     if (existingOther) {

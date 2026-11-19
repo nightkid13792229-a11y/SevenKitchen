@@ -1,9 +1,8 @@
 import type {
   CreateExpenseTemplatePayload,
-  FinanceExpenseCategory,
   FinanceExpenseInterval,
-  FinanceExpensePayerType,
 } from '../../api/staff-finance'
+import type { FinanceAccountCode } from '../../utils/finance-account'
 
 /**
  * 固定费用页的纯逻辑（不碰 uni API），给页面和回归测试共用。
@@ -14,14 +13,16 @@ import type {
 
 export type TemplateFormState = {
   name: string
-  category: FinanceExpenseCategory
+  /** 支出类别字典 id（2026-11-19 起不再用枚举 code） */
+  categoryId: string
   /** 元，已校验过 > 0、最多两位小数 */
   amount: number
   interval: FinanceExpenseInterval
   /** 1-31 */
   dayOfMonth: number
   servicePeriodMonths: number
-  payerType: FinanceExpensePayerType
+  /** 默认出账账户（房租/社保这类走银行卡） */
+  payerAccount: FinanceAccountCode
   /** 年付的月份（1-12）；非年付忽略 */
   monthOfYear?: number
   /** 编辑时用于沿用原标题/收款方；新建传 null */
@@ -98,14 +99,14 @@ export function buildTemplateFormPayload(
       editing && editing.name === form.name
         ? editing.titleTemplate
         : `${form.name} {{year}}年{{month}}月`,
-    category: form.category,
+    categoryId: form.categoryId,
     payeeName: editing?.payeeName || form.name,
     defaultAmount: form.amount,
     interval: form.interval,
     dayOfMonth: form.dayOfMonth,
     servicePeriodMonths:
       form.interval === 'MONTHLY' ? 1 : form.servicePeriodMonths,
-    payerType: form.payerType,
+    payerAccount: form.payerAccount,
   }
   if (form.interval === 'YEARLY') payload.monthOfYear = form.monthOfYear
   return payload

@@ -129,6 +129,11 @@
             </text>
           </view>
         </view>
+        <view v-if="collected" class="field-group">
+          <text class="field-label">收到哪个账户</text>
+          <!-- 账户会记住上次用的；渠道（微信/支付宝/其他）与账户分开记 -->
+          <AccountPicker v-model="paymentAccount" />
+        </view>
       </view>
 
       <view class="notice info">
@@ -160,6 +165,11 @@ import {
   type AssistedPricing,
   type PortionPreview,
 } from '../../api/staffAssistedOrder'
+import AccountPicker from '../../components/finance/AccountPicker.vue'
+import {
+  getLastAccount,
+  type FinanceAccountCode,
+} from '../../utils/finance-account'
 import {
   MIN_ASSISTED_ORDER_G,
   needsAmountAdjustReason,
@@ -216,6 +226,16 @@ const OFFLINE_PAYMENT_CHANNEL_OPTIONS: Array<{
 
 /** 收款渠道：默认微信，钱都进个人账户，不产生微信手续费 */
 const paymentChannel = ref<AssistedOfflinePaymentChannel>('OFFLINE_WECHAT')
+
+/**
+ * 收到哪个账户（2026-11-19 账户化，设计文档 §1.2）。
+ *
+ * 默认带出上次用的账户，选择后 AccountPicker 自己会记住。
+ * ⚠️ 后端 `CreateAssistedOrderDTO` 目前**没有**账户字段（`payment` 里只有
+ * collected/channel/amount），所以这个值本期只选不传 —— 传了也会被忽略，
+ * 后端补上 `payerAccount` 后把 `paymentAccount.value` 加进提交参数即可。
+ */
+const paymentAccount = ref<FinanceAccountCode>(getLastAccount())
 
 function onCollectedChange(event: any) {
   collected.value = Boolean(event?.detail?.value)

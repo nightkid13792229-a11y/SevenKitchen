@@ -44,19 +44,28 @@ describe('记一笔', () => {
     expect(page).toContain('shanghaiTodayKey');
   });
 
-  it('支出类别是中文短词，不是会计科目', () => {
-    for (const label of ['设备工具', '税费', '社保', '其他']) {
-      expect(page).toContain(label);
-    }
-    // 中文短词对应后端 FinanceExpenseCategory 枚举
-    for (const code of [
-      "'EQUIPMENT'",
-      "'TAX'",
-      "'SOCIAL_INSURANCE'",
-      "'OTHER'",
-    ]) {
-      expect(page).toContain(code);
-    }
+  it('支出类别走类别字典（输入即建），不再写死四个短词', () => {
+    // 2026-11-19：类别是可编辑字典，页面只挂选择器，中文名由后端类别表给
+    expect(page).toContain('CategoryPicker');
+    expect(page).toContain('expenseCategoryId');
+    expect(page).toContain('payload.categoryId = expenseCategoryId.value');
+    // 没选类别不能保存：不替老板猜，猜错报表要重记
+    expect(page).toContain('请选择类别');
+    const validation = page.match(/function validationMessage[\s\S]*?\n\}/)?.[0] || '';
+    expect(validation).toContain('expenseCategoryId.value');
+    // 旧的写死枚举必须清掉，否则新类别永远选不到
+    expect(page).not.toContain('EQUIPMENT');
+    expect(page).not.toContain('SOCIAL_INSURANCE');
+  });
+
+  it('类别选择器能输入即建，并标出系统类别', () => {
+    const picker = read('../../components/finance/CategoryPicker.vue');
+    expect(picker).toContain('＋ 新建');
+    expect(picker).toContain('createCategory');
+    expect(picker).toContain('listCategories');
+    expect(picker).toContain('系统');
+    expect(picker).toContain('canCreate');
+    expect(picker).toContain('filteredOptions');
   });
 
   it('收入只给「其他收入」，并说明其余由系统自动记录', () => {
@@ -67,12 +76,37 @@ describe('记一笔', () => {
     expect(page).toContain('线上/线下/补剂/定制食谱');
   });
 
-  it('付款方：我个人垫的 / 公司账户，默认个人', () => {
-    expect(page).toContain('我个人垫的');
-    expect(page).toContain('公司账户');
-    expect(page).toMatch(
-      /payerType\s*=\s*ref[^(]*\(\s*'PERSONAL'\s*\)/,
-    );
+  it('「谁付的钱」改成「从哪个账户出」，默认记住上次用的账户', () => {
+    expect(page).toContain('从哪个账户出');
+    expect(page).toContain('AccountPicker');
+    // 打开页面就用上次的账户，收入也记账户
+    expect(page).toContain('getLastAccount()');
+    expect(page).toContain('payerAccount: payerAccount.value');
+    // 旧的「公司/个人垫付」概念必须消失
+    expect(page).not.toContain('我个人垫的');
+    expect(page).not.toContain('公司账户');
+    expect(page).not.toContain('payerType');
+  });
+
+  it('账户选择器是五个账户，选中态深绿，并写回 storage', () => {
+    const picker = read('../../components/finance/AccountPicker.vue');
+    const accountUtil = read('../../utils/finance-account.ts');
+    for (const label of [
+      '微信商户号',
+      '我的微信',
+      '我的支付宝',
+      '我的银行卡',
+      '现金',
+    ]) {
+      expect(accountUtil).toContain(label);
+    }
+    expect(accountUtil).toContain("'finance:lastAccount'");
+    expect(accountUtil).toContain('PERSONAL_WECHAT');
+    expect(picker).toContain('setLastAccount');
+    expect(picker).toContain('FINANCE_ACCOUNTS');
+    // 选中态：深绿底 + 米白字（员工端规范的分段筛选）
+    expect(picker).toContain('$staff-brand');
+    expect(picker).toContain('$staff-cream');
   });
 
   it('说明必填、最多 200 字', () => {
@@ -116,21 +150,23 @@ describe('记一笔', () => {
     expect(api).toContain('createManualEntry');
     expect(api).toContain("url: '/admin/finance/manual-entries'");
     expect(api).toContain("method: 'POST'");
-    // 字段名必须与后端 CreateManualEntryDto 完全一致
+    // 字段名必须与后端 CreateManualEntryDto 完全一致：类别用 id、账户用 payerAccount
     expect(payloadType).toBeTruthy();
     for (const field of [
       'direction',
       'amount',
       'occurredAt',
-      'category',
+      'categoryId',
       'incomeCategory',
-      'payerType',
+      'payerAccount',
       'title',
       'note',
       'proofKeys',
     ]) {
       expect(payloadType).toContain(`${field}`);
     }
+    // 不存在的旧字段不能留着（传了后端也不认）
+    expect(payloadType).not.toContain('payerType');
     // 保存页自己 toast 后端 message，API 层不能再弹一遍
     expect(api).toContain('suppressErrorToast: true');
   });

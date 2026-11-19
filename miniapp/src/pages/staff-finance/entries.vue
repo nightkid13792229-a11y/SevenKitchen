@@ -31,6 +31,17 @@
       </text>
     </view>
 
+    <!-- 账户筛选（2026-11-19）：取代个人/公司垫付，钱从哪个账户进出一眼可查 -->
+    <view class="account-filter">
+      <text class="account-filter-label">账户</text>
+      <AccountPicker
+        :model-value="selectedAccount"
+        allow-all
+        :remember="false"
+        @update:model-value="selectAccount"
+      />
+    </view>
+
     <view v-if="monthPanelOpen" class="month-panel">
       <view
         class="month-chip"
@@ -102,14 +113,16 @@
         <view class="entry-main">
           <view class="entry-head">
             <text class="entry-date">{{ formatDate(entry.occurredAt) }}</text>
-            <text v-if="entry.label !== '退款'" class="entry-tag">{{ entry.label }}</text>
-            <text v-if="entry.isRefund" class="entry-refund">退款</text>
             <text
-              v-if="payerLabel(entry)"
-              class="entry-payer"
-              :class="{ 'entry-payer--personal': entry.payerType === 'PERSONAL' }"
+              v-if="entry.categoryLabel && entry.categoryLabel !== '退款'"
+              class="entry-tag"
             >
-              {{ payerLabel(entry) }}
+              {{ entry.categoryLabel }}
+            </text>
+            <text v-if="entry.isRefund" class="entry-refund">退款</text>
+            <!-- 每行写明钱从哪个账户进/出：五个账户的显示名由后端给 -->
+            <text v-if="entry.payerAccountLabel" class="entry-account">
+              {{ entry.payerAccountLabel }}
             </text>
           </view>
           <view class="entry-title-row">
@@ -159,25 +172,29 @@
 import { computed, ref } from 'vue'
 import { onLoad, onReachBottom, onShow } from '@dcloudio/uni-app'
 import StaffEmptyState from '../../components/staff/StaffEmptyState.vue'
+import AccountPicker from '../../components/finance/AccountPicker.vue'
 import {
   staffFinanceApi,
   type FinanceEntry,
   type FinanceEntriesQuery,
   type FinanceEntrySourceType,
 } from '../../api/staff-finance'
+import {
+  isFinanceAccountCode,
+  type FinanceAccountCode,
+} from '../../utils/finance-account'
 import { getStoredUser } from '../../utils/account'
 import { FINANCE_START_MONTH } from '../../constants/finance'
 
 /** 每页条数：后台上限 200，这里取 20，一屏能看到 3–4 条又不至于一次拉太多 */
 const PAGE_SIZE = 20
 
-type FilterKey = 'ALL' | 'INCOME' | 'EXPENSE' | 'PERSONAL'
+type FilterKey = 'ALL' | 'INCOME' | 'EXPENSE'
 
 const filterChips: Array<{ key: FilterKey; label: string }> = [
   { key: 'ALL', label: '全部' },
   { key: 'INCOME', label: '收入' },
   { key: 'EXPENSE', label: '支出' },
-  { key: 'PERSONAL', label: '我垫的' },
 ]
 
 /**
@@ -244,13 +261,6 @@ function amountSign(entry: FinanceEntry): string {
 
 function amountNegative(entry: FinanceEntry): boolean {
   return entry.isRefund || Number(entry.amount) < 0
-}
-
-/** 每行都写清「钱从谁口袋出/进」：个人垫付 / 公司账户 */
-function payerLabel(entry: FinanceEntry): string {
-  if (entry.payerType === 'PERSONAL') return '我垫的'
-  if (entry.payerType === 'COMPANY') return '公司账户'
-  return ''
 }
 
 function errorMessage(error: unknown): string {
@@ -340,10 +350,13 @@ const periodLabel = computed(() => {
   return `本月至今 · ${prefix}-01 ~ ${prefix}-${pad2(today.day)}`
 })
 
-/** 类别筛选：从已加载的明细里聚合，选中的类别即使翻页后消失也保留在选项里 */
+/** 类别筛选：从已加载的明细里聚合（按类别字典 id），选中的类别翻页后消失也保留 */
 const categoryOptions = ref<Array<{ value: string; label: string }>>([])
 const selectedCategory = ref('')
 const categoryPanelOpen = ref(false)
+
+/** 账户筛选：'' = 全部账户；其余走后端 `account` 参数（只做行级过滤） */
+const selectedAccount = ref<'' | FinanceAccountCode>('')
 
 const categoryChipLabel = computed(() => {
   if (!selectedCategory.value) return '类别'
@@ -359,9 +372,10 @@ function collectCategories(items: FinanceEntry[]) {
     categoryOptions.value.map((option) => [option.value, option.label]),
   )
   for (const item of items) {
-    const value = String(item.category || '').trim()
+    // 收入类别没有字典 id，不进支出类别筛选（否则会把收入类别也列出来）
+    const value = String(item.categoryId || '').trim()
     if (!value || known.has(value)) continue
-    known.set(value, String(item.label || '').trim() || value)
+    known.set(value, String(item.categoryLabel || '').trim() || value)
   }
   categoryOptions.value = Array.from(known.entries()).map(([value, label]) => ({
     value,
@@ -394,11 +408,17 @@ function selectCategory(value: string) {
   load({ reset: true })
 }
 
+/** 切账户：'' = 全部账户；不清空列表就翻页会拼到新筛选后面 */
+function selectAccount(value: string) {
+  const next = isFinanceAccountCode(value) ? value : ''
+  if (selectedAccount.value === next) return
+  selectedAccount.value = next
+  load({ reset: true })
+}
+
 function filterQuery(filter: FilterKey): FinanceEntriesQuery {
   if (filter === 'INCOME') return { direction: 'INCOME' }
   if (filter === 'EXPENSE') return { direction: 'EXPENSE' }
-  // 「我垫的」= 付款方是个人的明细行，不改后端任何口径
-  if (filter === 'PERSONAL') return { payerType: 'PERSONAL' }
   return {}
 }
 
@@ -422,6 +442,7 @@ async function load(options: { reset?: boolean } = {}) {
       ...periodQuery.value,
       ...filterQuery(activeFilter.value),
       ...(selectedCategory.value ? { category: selectedCategory.value } : {}),
+      ...(selectedAccount.value ? { account: selectedAccount.value } : {}),
       page: requestPage,
       pageSize: PAGE_SIZE,
     })
@@ -510,10 +531,12 @@ function goHome() {
 
 onLoad((options: any) => {
   const direction = String(options?.direction || '').toUpperCase()
-  const payerType = String(options?.payerType || '').toUpperCase()
   if (direction === 'INCOME') activeFilter.value = 'INCOME'
   else if (direction === 'EXPENSE') activeFilter.value = 'EXPENSE'
-  else if (payerType === 'PERSONAL') activeFilter.value = 'PERSONAL'
+
+  // 从别处带账户进来（例如以后按账户看某类支出）
+  const account = String(options?.account || '').toUpperCase()
+  if (isFinanceAccountCode(account)) selectedAccount.value = account
 
   const month = String(options?.month || '')
   monthParam.value = /^\d{4}-\d{2}$/.test(month) ? month : ''
@@ -684,18 +707,28 @@ onReachBottom(() => {
   border-radius: $staff-radius-pill;
 }
 
-/* 付款方：公司账户用中性灰，个人垫付用金色提醒（以后要还/要报销） */
-.entry-payer {
+/* 账户筛选：标签 + 五账户 chips，换行不横向滚动 */
+.account-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 12rpx;
+}
+
+.account-filter-label {
+  flex: none;
+  font-size: $staff-font-caption;
+  color: $staff-ink-2;
+}
+
+/* 账户徽标：中性灰底深字，金额才是主角 */
+.entry-account {
   padding: 2rpx 12rpx;
   font-size: $staff-font-caption;
   color: $staff-ink-2;
   background: $staff-line;
   border-radius: $staff-radius-pill;
-}
-
-.entry-payer--personal {
-  color: $staff-gold-ink;
-  background: $staff-gold-soft;
 }
 
 .entry-title-row {

@@ -3,7 +3,11 @@
     <!-- 月份切换：默认本月，可回看最近三个月（起账月之前没有账，不列） -->
     <view class="month-row">
       <text class="month-title">{{ monthTitle }}</text>
-      <text class="month-hint">{{ isCurrentMonth ? '本月' : '历史月份' }}</text>
+      <view class="month-side">
+        <text class="month-hint">{{ isCurrentMonth ? '本月' : '历史月份' }}</text>
+        <!-- 类别字典管理入口：改名 / 合并 / 停用都在这里进 -->
+        <text class="category-link" @tap="goCategories">费用类别 ›</text>
+      </view>
     </view>
 
     <view class="month-chips">
@@ -57,8 +61,8 @@
           <view class="bill-main">
             <text class="bill-title">{{ bill.title }}</text>
             <text class="bill-meta">
-              {{ categoryLabel(bill.category) }} · ¥{{ formatMoney(bill.amount) }} ·
-              {{ dayLabel(bill.dueAt) }} · {{ payerLabel(bill.payerType) }}
+              {{ categoryName(bill.categoryId, bill.category) }} · ¥{{ formatMoney(bill.amount) }} ·
+              {{ dayLabel(bill.dueAt) }} · {{ accountLabel(bill.payerAccount) }}
             </text>
             <text v-if="partialText(bill)" class="bill-partial">
               {{ partialText(bill) }}
@@ -135,8 +139,9 @@
               </text>
             </view>
             <text class="template-meta">
-              {{ categoryLabel(template.category) }} · {{ intervalLabel(template.interval) }} ·
-              {{ dayLabel(template.dayOfMonth) }} · {{ payerLabel(template.payerType) }}
+              {{ categoryName(template.categoryId, template.category) }} ·
+              {{ intervalLabel(template.interval) }} ·
+              {{ dayLabel(template.dayOfMonth) }} · {{ accountLabel(template.payerAccount) }}
             </text>
           </view>
           <view class="template-side">
@@ -159,7 +164,7 @@
     <button class="primary-btn" @tap="openCreate">＋ 新建固定费用</button>
   </StaffBottomBar>
 
-  <!-- 标记已付：默认剩余应付，可改本次实付与付款方 -->
+  <!-- 标记已付：默认剩余应付，可改本次实付与出账账户 -->
   <view v-if="payTarget" class="mask" @tap="closePay">
     <view class="sheet" @tap.stop>
       <view class="sheet-head">
@@ -191,18 +196,9 @@
         </view>
 
         <view class="field">
-          <text class="field-label">付款方</text>
-          <view class="chips">
-            <view
-              v-for="option in PAYER_OPTIONS"
-              :key="option.value"
-              class="chip"
-              :class="{ 'chip--on': payPayerType === option.value }"
-              @tap="selectPayPayer(option.value)"
-            >
-              {{ option.label }}
-            </view>
-          </view>
+          <text class="field-label">从哪个账户出</text>
+          <AccountPicker v-model="payPayerAccount" />
+          <text class="field-hint">默认账单上的账户；这次换了卡就从这里改</text>
         </view>
       </view>
 
@@ -235,17 +231,12 @@
 
         <view class="field">
           <text class="field-label">类别</text>
-          <view class="chips">
-            <view
-              v-for="option in CATEGORY_OPTIONS"
-              :key="option.value"
-              class="chip"
-              :class="{ 'chip--on': formCategory === option.value }"
-              @tap="selectCategory(option.value)"
-            >
-              {{ option.label }}
-            </view>
-          </view>
+          <!-- 类别字典：输入即建，新类别下次就在候选里 -->
+          <CategoryPicker
+            v-model="formCategoryId"
+            placeholder="选一个类别，或输入新名字"
+            @created="loadCategories"
+          />
         </view>
 
         <view class="field">
@@ -323,18 +314,9 @@
         </view>
 
         <view class="field">
-          <text class="field-label">付款方</text>
-          <view class="chips">
-            <view
-              v-for="option in PAYER_OPTIONS"
-              :key="option.value"
-              class="chip"
-              :class="{ 'chip--on': formPayerType === option.value }"
-              @tap="selectFormPayer(option.value)"
-            >
-              {{ option.label }}
-            </view>
-          </view>
+          <text class="field-label">从哪个账户出</text>
+          <AccountPicker v-model="formPayerAccount" />
+          <text class="field-hint">房租、社保这类走卡的默认「我的银行卡」</text>
         </view>
 
         <view v-if="editingTemplate" class="field">
@@ -366,16 +348,24 @@ import { onShow } from '@dcloudio/uni-app'
 import StaffBottomBar from '../../components/staff/StaffBottomBar.vue'
 import StaffEmptyState from '../../components/staff/StaffEmptyState.vue'
 import StaffStatusBadge from '../../components/staff/StaffStatusBadge.vue'
+import AccountPicker from '../../components/finance/AccountPicker.vue'
+import CategoryPicker from '../../components/finance/CategoryPicker.vue'
 import {
   staffFinanceApi,
+  type FinanceCategoryOption,
   type FinanceExpenseBill,
   type FinanceExpenseBillStatus,
   type FinanceExpenseCategory,
   type FinanceExpenseInterval,
-  type FinanceExpensePayerType,
   type FinanceExpenseTemplate,
 } from '../../api/staff-finance'
 import { getStoredUser } from '../../utils/account'
+import {
+  financeAccountLabel,
+  getLastAccount,
+  isFinanceAccountCode,
+  type FinanceAccountCode,
+} from '../../utils/finance-account'
 import { FINANCE_START_MONTH } from '../../constants/finance'
 import {
   buildTemplateFormPayload,
@@ -385,8 +375,14 @@ import {
 
 /** 起账月来自公共常量：之前的月份没有账，月份切换不列出来（也就不会误生成） */
 
-/** 与后端 `FINANCE_EXPENSE_CATEGORY_LABELS` 一一对应（值是真源，中文照抄） */
-const CATEGORY_LABELS: Record<FinanceExpenseCategory, string> = {
+/**
+ * 旧枚举 → 中文（只给历史数据兜底）。
+ *
+ * 2026-11-19 起类别走字典 `categoryId`，名字以后端类别表为准；
+ * 但老账单/老模板可能只有旧枚举列（迁移时已回填 id，理论上用不到），
+ * 留着这张表是为了万一回填漏行时不至于把英文 code 直接丢给老板看。
+ */
+const LEGACY_CATEGORY_LABELS: Record<FinanceExpenseCategory, string> = {
   RAW_MATERIAL: '原料采购',
   PACKAGING_SUPPLIES: '包材耗材',
   PAYROLL: '工资',
@@ -405,25 +401,6 @@ const CATEGORY_LABELS: Record<FinanceExpenseCategory, string> = {
   PAYMENT_FEE: '支付手续费',
 }
 
-/** 固定费用常用的几类；其余类别只用于展示老模板，不在新建表单里出现 */
-const FIXED_FEE_CATEGORIES: readonly FinanceExpenseCategory[] = [
-  'RENT',
-  'UTILITIES',
-  'NETWORK_COMMUNICATION',
-  'PAYROLL',
-  'SOCIAL_INSURANCE',
-  'TAX',
-  'TECHNICAL_SERVICES',
-  'ADMINISTRATIVE',
-  'LOGISTICS_DELIVERY',
-  'OTHER',
-]
-
-const CATEGORY_OPTIONS = FIXED_FEE_CATEGORIES.map((value) => ({
-  value,
-  label: CATEGORY_LABELS[value],
-}))
-
 const INTERVAL_LABELS: Record<FinanceExpenseInterval, string> = {
   MONTHLY: '每月',
   QUARTERLY: '每季',
@@ -437,14 +414,6 @@ const INTERVAL_OPTIONS: Array<{
   { value: 'MONTHLY', label: INTERVAL_LABELS.MONTHLY },
   { value: 'QUARTERLY', label: INTERVAL_LABELS.QUARTERLY },
   { value: 'YEARLY', label: INTERVAL_LABELS.YEARLY },
-]
-
-const PAYER_OPTIONS: Array<{
-  value: FinanceExpensePayerType
-  label: string
-}> = [
-  { value: 'PERSONAL', label: '我个人垫的' },
-  { value: 'COMPANY', label: '公司账户' },
 ]
 
 /** 几号：1-31，月份没有这一天时后端按月末算 */
@@ -507,10 +476,24 @@ function dayLabel(value: string | number | null | undefined): string {
   return `${Math.min(Math.floor(day), 31)} 号`
 }
 
-function categoryLabel(value: string): string {
-  return (
-    CATEGORY_LABELS[value as FinanceExpenseCategory] || CATEGORY_LABELS.OTHER
-  )
+/**
+ * 类别显示名：优先按字典 id 查（改名后历史一起变），
+ * 老数据没有 id 时退回旧枚举中文，再不行给「未分类」。
+ */
+function categoryName(
+  categoryId: string | null | undefined,
+  legacyCategory?: string | null,
+): string {
+  const id = String(categoryId || '').trim()
+  if (id) {
+    const matched = categories.value.find((option) => option.id === id)
+    if (matched) return matched.name
+  }
+  const legacy = String(legacyCategory || '').trim()
+  if (legacy && LEGACY_CATEGORY_LABELS[legacy as FinanceExpenseCategory]) {
+    return LEGACY_CATEGORY_LABELS[legacy as FinanceExpenseCategory]
+  }
+  return '未分类'
 }
 
 function intervalLabel(value: string): string {
@@ -520,8 +503,12 @@ function intervalLabel(value: string): string {
   )
 }
 
-function payerLabel(value: string | null | undefined): string {
-  return value === 'COMPANY' ? '公司账户' : '我个人垫的'
+/**
+ * 账户显示名：后端模板/账单给的是裸 code（`payerAccount`）。
+ * 老数据为空时显示「未记录」，不替它猜一个账户（猜错对账更麻烦）。
+ */
+function accountLabel(value: string | null | undefined): string {
+  return isFinanceAccountCode(value) ? financeAccountLabel(value) : '未记录'
 }
 
 function statusLabel(status: FinanceExpenseBillStatus): string {
@@ -582,6 +569,8 @@ const billsEmptyHint = computed(() =>
 
 const bills = ref<FinanceExpenseBill[]>([])
 const templates = ref<FinanceExpenseTemplate[]>([])
+/** 类别字典（id → 名字），账单/模板只存 id */
+const categories = ref<FinanceCategoryOption[]>([])
 const billsLoading = ref(true)
 const templatesLoading = ref(true)
 const billsError = ref('')
@@ -651,6 +640,30 @@ async function loadTemplates() {
   }
 }
 
+/**
+ * 类别字典：模板/账单只给 `categoryId`，名字要在类别表里查。
+ *
+ * 拉失败不阻断整页（账单金额和日期还能看），只是类别显示「未分类」；
+ * 类别选择器自己也会拉一份，两边互不影响。
+ */
+async function loadCategories() {
+  try {
+    const rows = await staffFinanceApi.listCategories()
+    categories.value = Array.isArray(rows) ? rows : []
+  } catch (error) {
+    categories.value = []
+  }
+}
+
+function goCategories() {
+  uni.navigateTo({
+    url: '/pages/staff-finance/categories',
+    fail: () => {
+      toast('打开失败，请稍后重试')
+    },
+  })
+}
+
 async function loadBills() {
   const seq = ++billsSeq
   billsLoading.value = true
@@ -716,20 +729,22 @@ function onBillsEmptyAction() {
 
 const payTarget = ref<FinanceExpenseBill | null>(null)
 const payAmountText = ref('')
-const payPayerType = ref<FinanceExpensePayerType>('PERSONAL')
+/** 本次从哪个账户出：默认账单上的账户，老账单没有就沿用上次用的 */
+const payPayerAccount = ref<FinanceAccountCode>(getLastAccount())
 const paying = ref(false)
 
 const payRemaining = computed(() =>
   payTarget.value ? remainingOf(payTarget.value) : 0,
 )
 
-/** 默认填剩余应付；付款方继承账单（账单又从模板继承） */
+/** 默认填剩余应付；账户继承账单（账单又从模板继承） */
 function openPay(bill: FinanceExpenseBill) {
   if (bill.status === 'PAID') return
   payTarget.value = bill
   payAmountText.value = remainingOf(bill).toFixed(2)
-  payPayerType.value =
-    bill.payerType === 'COMPANY' ? 'COMPANY' : 'PERSONAL'
+  payPayerAccount.value = isFinanceAccountCode(bill.payerAccount)
+    ? bill.payerAccount
+    : getLastAccount()
 }
 
 function closePay() {
@@ -739,10 +754,6 @@ function closePay() {
 
 function onPayAmountInput(event: any) {
   payAmountText.value = String(event?.detail?.value ?? '')
-}
-
-function selectPayPayer(value: FinanceExpensePayerType) {
-  payPayerType.value = value
 }
 
 async function confirmPay() {
@@ -766,7 +777,7 @@ async function confirmPay() {
   try {
     await staffFinanceApi.payBill(bill.id, {
       paidAmount: amount.value,
-      payerType: payPayerType.value,
+      payerAccount: payPayerAccount.value,
     })
     payTarget.value = null
     // 固定费用生成时已整月计入支出：点「已付」只改状态、不加金额，必须说清楚
@@ -786,12 +797,19 @@ async function confirmPay() {
 const formOpen = ref(false)
 const editingTemplate = ref<FinanceExpenseTemplate | null>(null)
 const formName = ref('')
-const formCategory = ref<FinanceExpenseCategory>('RENT')
+/** 支出类别字典 id：新建空白，必须显式选（不替老板猜类别） */
+const formCategoryId = ref('')
 const formAmountText = ref('')
 const formInterval = ref<FinanceExpenseInterval>('MONTHLY')
 const formDayIndex = ref(0)
 const formServiceMonthsText = ref('1')
-const formPayerType = ref<FinanceExpensePayerType>('PERSONAL')
+/**
+ * 默认出账账户：新建优先用上次用的账户，没有记录时按设计文档 §1.2
+ * 缺省「我的银行卡」（房租/社保这类走卡）。
+ */
+const formPayerAccount = ref<FinanceAccountCode>(
+  getLastAccount('PERSONAL_BANK'),
+)
 /** 年付月份：1-12，新建时默认当前月，老模板沿用原值 */
 const formMonthOfYear = ref(Number(currentMonth.value.slice(5, 7)))
 const formSubmitting = ref(false)
@@ -819,12 +837,12 @@ const serviceMonthsHint = computed(() => {
 function openCreate() {
   editingTemplate.value = null
   formName.value = ''
-  formCategory.value = 'RENT'
+  formCategoryId.value = ''
   formAmountText.value = ''
   formInterval.value = 'MONTHLY'
   formDayIndex.value = 0
   formServiceMonthsText.value = '1'
-  formPayerType.value = 'PERSONAL'
+  formPayerAccount.value = getLastAccount('PERSONAL_BANK')
   formMonthOfYear.value = Number(currentMonth.value.slice(5, 7))
   formOpen.value = true
 }
@@ -832,7 +850,7 @@ function openCreate() {
 function openEdit(template: FinanceExpenseTemplate) {
   editingTemplate.value = template
   formName.value = template.name
-  formCategory.value = template.category
+  formCategoryId.value = String(template.categoryId || '')
   formAmountText.value = String(
     roundMoney(Number(template.defaultAmount) || 0) || '',
   )
@@ -845,8 +863,9 @@ function openEdit(template: FinanceExpenseTemplate) {
     template.interval,
     template.servicePeriodMonths,
   )
-  formPayerType.value =
-    template.payerType === 'COMPANY' ? 'COMPANY' : 'PERSONAL'
+  formPayerAccount.value = isFinanceAccountCode(template.payerAccount)
+    ? template.payerAccount
+    : getLastAccount('PERSONAL_BANK')
   const savedMonth = Number(template.monthOfYear)
   formMonthOfYear.value =
     Number.isInteger(savedMonth) && savedMonth >= 1 && savedMonth <= 12
@@ -870,14 +889,6 @@ function onFormAmountInput(event: any) {
 
 function onServiceMonthsInput(event: any) {
   formServiceMonthsText.value = String(event?.detail?.value ?? '')
-}
-
-function selectCategory(value: FinanceExpenseCategory) {
-  formCategory.value = value
-}
-
-function selectFormPayer(value: FinanceExpensePayerType) {
-  formPayerType.value = value
 }
 
 function selectInterval(value: FinanceExpenseInterval) {
@@ -918,6 +929,11 @@ async function saveTemplate() {
     toast(amount.error)
     return
   }
+  // 类别必须显式选：默认不替老板猜，猜错报表就得重记
+  if (!formCategoryId.value) {
+    toast('请选择类别')
+    return
+  }
   const monthsText = formServiceMonthsText.value.trim()
   if (!/^\d+$/.test(monthsText)) {
     toast('服务期月数填整数，最多 120')
@@ -943,12 +959,12 @@ async function saveTemplate() {
 
   const payload = buildTemplateFormPayload({
     name,
-    category: formCategory.value,
+    categoryId: formCategoryId.value,
     amount: amount.value,
     interval: formInterval.value,
     dayOfMonth: formDayIndex.value + 1,
     servicePeriodMonths: serviceMonths,
-    payerType: formPayerType.value,
+    payerAccount: formPayerAccount.value,
     monthOfYear: formMonthOfYear.value,
     editing: editingTemplate.value
       ? {
@@ -968,7 +984,7 @@ async function saveTemplate() {
       toast('已新建，可补生成账单', 'success')
     }
     formOpen.value = false
-    await Promise.all([loadTemplates(), loadBills()])
+    await Promise.all([loadTemplates(), loadBills(), loadCategories()])
   } catch (error) {
     toast(errorMessage(error))
   } finally {
@@ -1018,6 +1034,7 @@ onShow(() => {
   syncCurrentMonth()
   loadTemplates()
   loadBills()
+  loadCategories()
 })
 </script>
 
@@ -1044,9 +1061,25 @@ onShow(() => {
   color: $staff-ink;
 }
 
+.month-side {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
 .month-hint {
   font-size: $staff-font-caption;
   color: $staff-ink-2;
+}
+
+/* 右上角「费用类别」：88rpx 触控高度，文字型动作左右留白 */
+.category-link {
+  min-height: 88rpx;
+  padding: 0 4rpx;
+  font-size: $staff-font-sub;
+  font-weight: 600;
+  line-height: 88rpx;
+  color: $staff-brand;
 }
 
 .month-chips {

@@ -35,15 +35,31 @@ describe('收支明细', () => {
   const pagesJson = read('../../pages.json');
   const tokenSource = read('../../styles/staff-tokens.scss');
 
-  it('有四个筛选：全部/收入/支出/我垫的', () => {
-    for (const text of ['全部', '收入', '支出', '我垫的']) {
+  it('方向筛选：全部/收入/支出；「我垫的」已换成账户筛选', () => {
+    for (const text of ['全部', '收入', '支出']) {
       expect(page).toContain(text);
     }
-    // 我垫的 = 付款方是个人
-    expect(page).toContain("payerType: 'PERSONAL'");
     // 收入/支出走 direction，不另造后端没有的参数
     expect(page).toContain("direction: 'INCOME'");
     expect(page).toContain("direction: 'EXPENSE'");
+    // 2026-11-19：会计概念「我垫的」下线，改成「钱从哪个账户进出」
+    expect(page).not.toContain('我垫的');
+    expect(page).not.toContain('payerType');
+  });
+
+  it('按账户筛：全部 + 五个账户，带 account 参数并重置分页', () => {
+    expect(page).toContain('AccountPicker');
+    expect(page).toContain('selectedAccount');
+    expect(page).toContain('account: selectedAccount.value');
+    // 筛选不写「上次用的账户」，否则筛一下明细就把记账默认值改了
+    expect(page).toContain(':remember="false"');
+    expect(page).toContain('allow-all');
+    // 切账户必须重置分页，否则第 2 页会拼到新筛选后面
+    const selectBlock =
+      page.match(/function selectAccount[\s\S]*?\n\}/)?.[0] || '';
+    expect(selectBlock).toContain('load({ reset: true })');
+    // 非法账户（深链手改参数）当「全部」处理
+    expect(selectBlock).toContain('isFinanceAccountCode');
   });
 
   it('退款显示为红色负数并带「退款」标记', () => {
@@ -148,21 +164,24 @@ describe('收支明细', () => {
     expect(page).toContain('$staff-gold-soft');
   });
 
-  it('有类别筛选，从列表聚合类别并带 category 请求', () => {
+  it('有类别筛选，按类别字典 id 聚合并带 category 请求', () => {
     expect(page).toContain('类别');
     expect(page).toContain('全部类别');
     expect(page).toContain('categoryOptions');
     expect(page).toContain('selectedCategory');
     expect(page).toContain('collectCategories');
     expect(page).toContain('category: selectedCategory.value');
+    // 收入类别没有字典 id，不能混进支出类别筛选
+    expect(page).toContain('item.categoryId');
   });
 
-  it('每行写明付款方：我垫的 / 公司账户', () => {
-    expect(page).toContain('payerLabel');
-    expect(page).toContain('我垫的');
-    expect(page).toContain('公司账户');
-    expect(page).toContain('entry.payerType');
-    expect(page).toContain('entry-payer--personal');
+  it('每行写明账户名与类别名（都用后端给的显示名）', () => {
+    expect(page).toContain('entry.payerAccountLabel');
+    expect(page).toContain('entry-account');
+    expect(page).toContain('entry.categoryLabel');
+    // 类别标签跟着类别字典改名走，页面不再自己维护 code → 中文
+    expect(page).not.toContain('CATEGORY_LABELS');
+    expect(page).not.toContain('公司账户');
   });
 
   it('空态一句话 + 回财务首页', () => {
@@ -174,15 +193,27 @@ describe('收支明细', () => {
   it('金额带正负，日期和类别标签都在一行里', () => {
     expect(page).toContain('formatMoney');
     expect(page).toContain('occurredAt');
-    expect(page).toContain('entry.label');
+    expect(page).toContain('entry.categoryLabel');
     expect(page).toContain('formatDate');
   });
 
-  it('API 层封装 listEntries 并支持付款方筛选', () => {
+  it('API 层封装 listEntries 并支持账户筛选', () => {
     expect(api).toContain('listEntries');
     expect(api).toContain("url: '/admin/finance/entries'");
     expect(api).toContain('FinanceEntriesPage');
-    expect(api).toContain('payerType');
+    // 后端筛选参数是 account（不再是 payerType）
+    expect(api).toContain('account?: FinanceAccountCode');
+    // 明细行的字段与新后端一致
+    const entryType =
+      api.match(/export interface FinanceEntry \{[\s\S]*?\n\}/)?.[0] || '';
+    for (const field of [
+      'categoryId',
+      'categoryLabel',
+      'payerAccount',
+      'payerAccountLabel',
+    ]) {
+      expect(entryType).toContain(field);
+    }
   });
 
   it('首页三个大数可点，带 query 进明细', () => {

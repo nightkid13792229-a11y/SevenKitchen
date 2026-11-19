@@ -23,9 +23,11 @@ describe('AI 添加原料 · 线路闸门', () => {
     expect(page).toContain('这次添加的是哪一类原料')
   })
 
-  it('选补剂落到对照屏，而不是偷偷按食材跑', () => {
-    // 2026-11-07 起补剂线开放：这里是补剂自己的工作台，不是食材那套
-    expect(page).toContain('<SupplementWorkbench />')
+  it('选补剂落到补剂工作台，而不是偷偷按食材跑', () => {
+    // 2026-11-20 起补剂线分两版：`?v=2` 走三步新流程，旧对照屏留一版做灰度；
+    // 两版都是补剂自己的界面，不是食材那套
+    expect(page).toContain('<SupplementFlow v-if="supplementV2" />')
+    expect(page).toContain('<SupplementWorkbench v-else />')
     expect(page).not.toContain('补剂线还没开放')
     // 入口卡上也不能再挂着「暂未开放」——否则没人会点进来
     expect(page).not.toContain('暂未开放')

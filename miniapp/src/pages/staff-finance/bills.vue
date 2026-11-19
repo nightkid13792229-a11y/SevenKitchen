@@ -330,7 +330,7 @@
           </text>
           <button
             v-if="editingTemplate.isActive"
-            class="danger-btn"
+            class="deactivate-btn"
             @tap="deactivateEditing"
           >
             停用
@@ -927,7 +927,7 @@ function deactivateEditing() {
     title: '停用固定费用',
     content: '停用只影响以后：不再生成新账单，已经生成的账单和历史记录都不变。',
     confirmText: '停用',
-    confirmColor: '#B4453A',
+    confirmColor: '#1E3A2F',
     success: async (res) => {
       if (!res.confirm) return
       formSubmitting.value = true
@@ -1442,20 +1442,20 @@ onShow(() => {
   color: $staff-ink-3;
 }
 
-/* 停用：浅红底 + 深红字，只用在「停用」这一个动作上 */
-.danger-btn {
+/* 停用：中性次要动作，红色不用于此类设置（UI 规范 §1） */
+.deactivate-btn {
   min-height: 88rpx;
   margin: 16rpx 0 0;
   font-size: $staff-font-body;
   font-weight: 600;
   line-height: 88rpx;
-  color: $staff-danger;
-  background: $staff-danger-soft;
-  border: 1rpx solid #eccfc6;
+  color: $staff-ink-2;
+  background: $staff-surface;
+  border: 1rpx solid $staff-line-strong;
   border-radius: $staff-radius-control;
 }
 
-.danger-btn::after {
+.deactivate-btn::after {
   border: none;
 }
 </style>

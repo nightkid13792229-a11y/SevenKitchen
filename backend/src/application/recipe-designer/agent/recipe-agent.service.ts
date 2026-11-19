@@ -50,6 +50,7 @@ import {
   splitDesignContextImages,
   type DesignContextImage,
 } from './design-context-images';
+import { findToolMessageOrderViolation } from './message-order';
 
 /**
  * 一次运行最多调多少次工具。
@@ -266,6 +267,14 @@ export class RecipeAgentService implements OnModuleInit {
         return;
       }
 
+      // 调模型前先检查工具消息顺序：assistant(tool_calls) 后必须紧跟全部 tool 消息。
+      // 图片消息一律排在本轮所有 tool 消息之后，否则供应商会直接判 400。
+      const orderViolation = findToolMessageOrderViolation(messages);
+      if (orderViolation) {
+        await this.fail(sessionId, `消息顺序错误：${orderViolation}`);
+        return;
+      }
+
       const callModel = (forceContextRead: boolean) =>
         callDeepSeekTools({
           baseUrl: config.baseUrl,
@@ -339,6 +348,13 @@ export class RecipeAgentService implements OnModuleInit {
       if (response.content) {
         await this.appendMessage(sessionId, 'ASSISTANT', response.content);
       }
+
+      // 本轮所有调用的图片先收集，等全部 tool 消息写完后统一追加。
+      // 原因：assistant(tool_calls) 之后必须紧跟**全部** tool 消息；
+      // 在中间插一条 user 图片消息，下一轮请求会被供应商判 400
+      //（2026-11-19 线上两次实测：kb_read 与 kb_find 并行时触发）。
+      const turnImages: KnowledgePageImage[] = [];
+      const turnContextImages: DesignContextImage[] = [];
 
       for (const call of calls) {
         if (toolCalls >= MAX_TOOL_CALLS) {
@@ -416,17 +432,11 @@ export class RecipeAgentService implements OnModuleInit {
           content: JSON.stringify(outcome),
         });
 
-        // 页图单独作为一条 user 消息紧跟在工具结果后面：文本在工具消息里，
-        // 图片走 image_url content，模型按页号把两者对上。
         if (images.length > 0) {
-          messages.push(buildKnowledgeImageMessage(images));
+          turnImages.push(...images);
         }
-        // 健康档案原件单独作为一条 user 消息：模型按标签把图片和记录对上。
-        // 同一次运行只注入一次，避免模型重读上下文时重复计费。
-        if (contextImages.length > 0 && !designContextImagesInjected) {
-          messages.push(buildDesignContextImageMessage(contextImages));
-          designContextImagesInjected = true;
-          this.logger.log(`注入本单健康档案附件 ${contextImages.length} 张`);
+        if (contextImages.length > 0) {
+          turnContextImages.push(...contextImages);
         }
 
         if (pendingAsk) {
@@ -438,6 +448,25 @@ export class RecipeAgentService implements OnModuleInit {
           await this.markWaiting(sessionId);
           return;
         }
+      }
+
+      // 全部 tool 消息写完后，再追加图片消息。
+      if (turnImages.length > 0) {
+        messages.push(
+          buildKnowledgeImageMessage(dedupeKnowledgeImages(turnImages)),
+        );
+      }
+      if (turnContextImages.length > 0 && !designContextImagesInjected) {
+        const uniqueContextImages = [
+          ...new Map(
+            turnContextImages.map((image) => [image.url, image]),
+          ).values(),
+        ];
+        messages.push(buildDesignContextImageMessage(uniqueContextImages));
+        designContextImagesInjected = true;
+        this.logger.log(
+          `注入本单健康档案附件 ${uniqueContextImages.length} 张`,
+        );
       }
     }
   }
@@ -607,6 +636,21 @@ export class RecipeAgentService implements OnModuleInit {
         `（原始错误：${(lastError as Error)?.message ?? '未配置'}）`,
     );
   }
+}
+
+/**
+ * 同一轮里可能并行读同一页两次；按锚点/页码去重，避免重复注入同一张图。
+ */
+function dedupeKnowledgeImages(
+  images: KnowledgePageImage[],
+): KnowledgePageImage[] {
+  const seen = new Set<string>();
+  return images.filter((image) => {
+    const key = image.anchor || `p${image.pageNo}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function formatAsk(ask: { question: string; options: string[] }): string {

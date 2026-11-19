@@ -144,6 +144,7 @@ type SupplementIncomeRow = Prisma.SupplementOrderGetPayload<{
 
 const CUSTOM_RECIPE_INCOME_SELECT = {
   id: true,
+  orderId: true,
   amount: true,
   actualPaidAmount: true,
   paymentChannel: true,
@@ -194,6 +195,7 @@ type SupplementRefundRow = Prisma.SupplementOrderGetPayload<{
 
 const CUSTOM_RECIPE_REFUND_SELECT = {
   id: true,
+  orderId: true,
   refundAmount: true,
   refundedAt: true,
   paymentConfirmedAt: true,
@@ -205,6 +207,7 @@ type CustomRecipeRefundRow = Prisma.CustomRecipeOrderGetPayload<{
 
 const CUSTOM_RECIPE_OFFLINE_REFUND_SELECT = {
   id: true,
+  orderId: true,
   offlineRefundAmount: true,
   offlineRefundedAt: true,
   paymentConfirmedAt: true,
@@ -233,6 +236,7 @@ function incomeLine(input: {
   occurredAt: Date;
   sourceType: FinanceIncomeLine['sourceType'];
   sourceId: string;
+  rowId?: string;
   sourceNo?: string | null;
   title?: string;
   payerType?: 'COMPANY' | 'PERSONAL';
@@ -244,6 +248,7 @@ function incomeLine(input: {
     occurredAt: input.occurredAt,
     sourceType: input.sourceType,
     sourceId: input.sourceId,
+    rowId: input.rowId ?? input.sourceId,
     sourceNo: input.sourceNo ?? undefined,
     title: input.title,
     payerType: input.payerType,
@@ -350,7 +355,9 @@ export function buildCustomRecipeIncomeLines(
         amount,
         occurredAt: row.paymentConfirmedAt,
         sourceType: 'CUSTOM_RECIPE_ORDER',
-        sourceId: row.id,
+        sourceId: row.orderId,
+        rowId: row.id,
+        sourceNo: row.orderId,
         payerType: online ? 'COMPANY' : 'PERSONAL',
         isOnline: online,
       }),
@@ -464,8 +471,9 @@ export function buildCustomRecipeRefundLines(
         amount,
         occurredAt: row.refundedAt as Date,
         sourceType: 'CUSTOM_RECIPE_ORDER',
-        sourceId: row.id,
+        sourceId: row.orderId,
         rowId: `refund:online:${row.id}`,
+        sourceNo: row.orderId,
         isOnline: true,
         isHistorical: isHistoricalPaidAt(row.paymentConfirmedAt),
       }),
@@ -487,8 +495,9 @@ export function buildCustomRecipeOfflineRefundLines(
         amount,
         occurredAt: row.offlineRefundedAt as Date,
         sourceType: 'CUSTOM_RECIPE_ORDER',
-        sourceId: row.id,
+        sourceId: row.orderId,
         rowId: `refund:offline:${row.id}`,
+        sourceNo: row.orderId,
         isOnline: false,
         isHistorical: isHistoricalPaidAt(row.paymentConfirmedAt),
       }),

@@ -306,7 +306,8 @@ describe('FinanceEntriesService', () => {
       ],
       customRecipeOfflineRefunds: [
         {
-          id: 'c1',
+          id: 'cr-uuid-1',
+          orderId: 'CR20261108001',
           offlineRefundAmount: 200,
           offlineRefundedAt: utc('2026-11-08T03:00:00Z'),
           paymentConfirmedAt: utc('2026-11-03T03:00:00Z'),
@@ -333,7 +334,14 @@ describe('FinanceEntriesService', () => {
       expect.arrayContaining([
         ['ORDER', 'refund:offline:orf1', 'o1', 'SK1', -30, true],
         ['SUPPLEMENT_ORDER', 'refund:supplement:s-old', 's-old', 'SP9', -60, true],
-        ['CUSTOM_RECIPE_ORDER', 'refund:offline:c1', 'c1', undefined, -200, false],
+        [
+          'CUSTOM_RECIPE_ORDER',
+          'refund:offline:cr-uuid-1',
+          'CR20261108001',
+          'CR20261108001',
+          -200,
+          false,
+        ],
       ]),
     );
     // 线下退款是收入减项，不产生手续费行
@@ -378,7 +386,8 @@ describe('FinanceEntriesService', () => {
       ],
       customRecipeRefunds: [
         {
-          id: 'c1',
+          id: 'cr-uuid-2',
+          orderId: 'CR20261107001',
           refundAmount: 40,
           refundedAt: utc('2026-11-07T02:00:00Z'),
           paymentConfirmedAt: utc('2026-11-05T02:00:00Z'),
@@ -403,7 +412,13 @@ describe('FinanceEntriesService', () => {
       expect.arrayContaining([
         ['refund:r1', 'ORDER', 'o1', 'SK1', -100],
         ['refund:supplement:s1', 'SUPPLEMENT_ORDER', 's1', 'SP1', -50],
-        ['refund:online:c1', 'CUSTOM_RECIPE_ORDER', 'c1', undefined, -40],
+        [
+          'refund:online:cr-uuid-2',
+          'CUSTOM_RECIPE_ORDER',
+          'CR20261107001',
+          'CR20261107001',
+          -40,
+        ],
       ]),
     );
   });
@@ -459,7 +474,8 @@ describe('FinanceEntriesService', () => {
       ],
       customRecipes: [
         {
-          id: 'c1',
+          id: 'cr-uuid-3',
+          orderId: 'CR20261104001',
           amount: 100,
           actualPaidAmount: 100,
           paymentChannel: 'OFFLINE_WECHAT',
@@ -469,7 +485,8 @@ describe('FinanceEntriesService', () => {
       ],
       customRecipeRefunds: [
         {
-          id: 'c1',
+          id: 'cr-uuid-3',
+          orderId: 'CR20261104001',
           refundAmount: 40,
           refundedAt: utc('2026-11-05T02:00:00Z'),
           paymentConfirmedAt: utc('2026-11-04T02:00:00Z'),
@@ -477,7 +494,8 @@ describe('FinanceEntriesService', () => {
       ],
       customRecipeOfflineRefunds: [
         {
-          id: 'c1',
+          id: 'cr-uuid-3',
+          orderId: 'CR20261104001',
           offlineRefundAmount: 30,
           offlineRefundedAt: utc('2026-11-06T02:00:00Z'),
           paymentConfirmedAt: utc('2026-11-04T02:00:00Z'),
@@ -499,7 +517,11 @@ describe('FinanceEntriesService', () => {
     expect(packagingRows[0].amount).toBe(150);
 
     expect(ids).toEqual(
-      expect.arrayContaining(['refund:online:c1', 'refund:offline:c1']),
+      expect.arrayContaining([
+        'cr-uuid-3',
+        'refund:online:cr-uuid-3',
+        'refund:offline:cr-uuid-3',
+      ]),
     );
   });
 
@@ -523,6 +545,32 @@ describe('FinanceEntriesService', () => {
           items: [],
           records: [],
         },
+        {
+          // 日采单的采购单日期在期间外，但期间内有一条 0 元采购记录：
+          // 占位行必须落在期间内（用记录的最近日期），否则明细里看不到
+          id: 'p2',
+          kind: 'ORDER_DEMAND',
+          orderNo: null,
+          paidAmount: null,
+          personalAmount: null,
+          subtotalAmount: null,
+          shippingFee: null,
+          packagingFee: null,
+          discountAmount: null,
+          payerType: 'PERSONAL',
+          orderPlacedAt: null,
+          completedAt: null,
+          createdAt: utc('2026-10-05T02:00:00Z'),
+          items: [],
+          records: [
+            {
+              id: 'pr1',
+              purchaseItemId: 'pi-x',
+              actualCost: 0,
+              purchasedAt: utc('2026-11-10T02:00:00Z'),
+            },
+          ],
+        },
       ],
     });
 
@@ -537,16 +585,24 @@ describe('FinanceEntriesService', () => {
     expect(expense.total).toBe(0);
     expect(expense.byCategory).toEqual([]);
 
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0]).toMatchObject({
-      id: 'p1:OTHER',
+    expect(result.items).toHaveLength(2);
+    const replenishment = result.items.find((item) => item.id === 'p1:OTHER');
+    expect(replenishment).toMatchObject({
       direction: 'EXPENSE',
       category: 'OTHER',
       amount: 0,
       sourceType: 'PURCHASE',
       sourceNo: 'BH1',
     });
-    expect(result.items[0].title).toContain('金额缺失');
+    expect(replenishment!.title).toContain('金额缺失');
+
+    // 期间内的最近采购记录日期，而不是期间外的 createdAt
+    expect(
+      result.items.find((item) => item.id === 'p2:OTHER'),
+    ).toMatchObject({
+      amount: 0,
+      occurredAt: '2026-11-10T10:00:00.000+08:00',
+    });
   });
 
   it('手工收入进入明细并计入收入净额', async () => {
@@ -804,7 +860,8 @@ describe('FinanceEntriesService', () => {
       ],
       customRecipes: [
         {
-          id: 'c1',
+          id: 'c-uuid-4',
+          orderId: 'CR20261104002',
           amount: 300,
           actualPaidAmount: 299,
           paymentChannel: 'WECHAT_ONLINE',
@@ -814,7 +871,8 @@ describe('FinanceEntriesService', () => {
       ],
       customRecipeRefunds: [
         {
-          id: 'c1',
+          id: 'c-uuid-4',
+          orderId: 'CR20261104002',
           refundAmount: 50,
           refundedAt: utc('2026-11-08T03:00:00Z'),
           paymentConfirmedAt: utc('2026-11-04T03:00:00Z'),

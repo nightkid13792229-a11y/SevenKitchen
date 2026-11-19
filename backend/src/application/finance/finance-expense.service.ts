@@ -209,12 +209,35 @@ function resolvePurchaseItemCategory(
  * 标题写明「金额缺失」，让老板能在明细里发现并补录（设计文档 Review Focus #4）。
  * 汇总侧 `addCents` 会跳过 0 元，所以不影响支出合计。
  */
-function missingAmountPurchaseLine(list: PurchaseListRow): FinanceExpenseLine {
+function missingAmountPurchaseLine(
+  list: PurchaseListRow,
+  period: FinancePeriod,
+): FinanceExpenseLine {
   const category =
     list.items.length > 0
       ? resolvePurchaseItemCategory(list.items[0].type)
       : 'OTHER';
-  const line = purchaseLine(list, category, 0, purchaseOccurredAt(list));
+
+  // 归月日期优先用期间内的采购记录（日采单的单据日期可能在期间外），
+  // 没有记录再用采购单自己的日期，保证占位行落在本次查询区间里。
+  let latestRecordAt: Date | undefined;
+  for (const record of list.records) {
+    if (
+      record.purchasedAt.getTime() < period.from.getTime() ||
+      record.purchasedAt.getTime() > period.to.getTime()
+    ) {
+      continue;
+    }
+    if (
+      !latestRecordAt ||
+      record.purchasedAt.getTime() > latestRecordAt.getTime()
+    ) {
+      latestRecordAt = record.purchasedAt;
+    }
+  }
+  const occurredAt = latestRecordAt ?? purchaseOccurredAt(list);
+
+  const line = purchaseLine(list, category, 0, occurredAt);
   return { ...line, title: `${line.title}（金额缺失，请补录）` };
 }
 
@@ -245,7 +268,7 @@ export function buildPurchaseExpenseLines(
     const recordLines = buildPurchaseRecordLines(list, period);
     return recordLines.length > 0
       ? recordLines
-      : [missingAmountPurchaseLine(list)];
+      : [missingAmountPurchaseLine(list, period)];
   }
 
   const baseCents = grossCents - toCents(list.personalAmount);

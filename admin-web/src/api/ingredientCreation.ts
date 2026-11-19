@@ -14,6 +14,8 @@ import type {
   SupplementEvidenceDto,
   SupplementCandidateDto,
   SupplementChatReplyDto,
+  SupplementComparisonDto,
+  SupplementFormAdviceDto,
   SupplementLinkPreviewDto,
   CheckDomain,
   CheckRunView,
@@ -67,6 +69,27 @@ export const ingredientCreationApi = {
   }): Promise<SupplementChatReplyDto> =>
     // 一次对话可能要调好几轮工具（读商品页每轮可达 25s），默认 30s 必然超时
     api.post('/admin/ingredient-supplement-chat/respond', payload, { timeout: 190000 }),
+
+  /**
+   * 补剂比价：一轮抓 iHerb 的商品，算每 1000 单位有效成分的价，排序并给推荐。
+   *
+   * 整表硬上限 75 秒，调用方要留够余量。
+   */
+  compareSupplementOffers: (payload: {
+    nutrientKey: string
+    formLevel: string
+    keyword?: string
+    limit?: number
+  }): Promise<SupplementComparisonDto> =>
+    api.post('/admin/ingredient-supplement-agent/compare', payload, { timeout: 120000 }),
+
+  /** 形态建议：知识库读原文后给结论 + 出处；没原文的条目会是「证据不足」。 */
+  supplementFormAdvice: (payload: {
+    nutrientKey: string
+    nutrientLabel: string
+    question?: string
+  }): Promise<SupplementFormAdviceDto> =>
+    api.post('/admin/ingredient-supplement-agent/form-advice', payload, { timeout: 120000 }),
 
   /** 按关键词去电商搜候选（只有链接、名字、标价，没有成分表）。 */
   searchSupplementCandidates: (keyword: string): Promise<SupplementCandidateDto[]> =>

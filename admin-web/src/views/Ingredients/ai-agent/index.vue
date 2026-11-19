@@ -56,7 +56,8 @@
 
     <!-- 补剂线：左证据、右档案，一屏里填完；AI 读链接是后续阶段 -->
     <div v-else-if="line === 'SUPPLEMENT'" class="supplement-pane">
-      <SupplementWorkbench />
+      <SupplementFlow v-if="supplementV2" />
+      <SupplementWorkbench v-else />
     </div>
 
     <div v-else class="ai-agent-layout">
@@ -1335,6 +1336,7 @@ import {
   type LineEntryState
 } from './lineEntry'
 import SupplementWorkbench from './supplement/SupplementWorkbench.vue'
+import SupplementFlow from './supplement/steps/SupplementFlow.vue'
 import type {
   AuthorizeBlockedReason,
   AuthorizeResult,
@@ -1433,6 +1435,9 @@ const route = useRoute()
 const router = useRouter()
 const isAdmin = useIsAdmin()
 const userStore = useUserStore()
+
+/** 补剂三步（2026-11-20）：`?v=2` 走新流程，旧页面留一版做灰度。 */
+const supplementV2 = computed(() => route.query.v === '2')
 
 const pageRef = ref<HTMLElement | null>(null)
 const inputText = ref('')

@@ -681,3 +681,82 @@ export interface CreateSupplementIngredientResultDto {
   nutritionFoodStatus: 'PENDING'
   evidenceId: string
 }
+
+/* ------------------------------------------------------------------ *
+ * 补剂三步（2026-11-20）：形态建议 / 比价 / 图建档
+ * ------------------------------------------------------------------ */
+
+/** 形态档位：只到档位，不到具体盐名（知识库没有具体盐名的原文）。 */
+export type SupplementFormLevel = 'ORGANIC_CHELATE' | 'INORGANIC_SALT' | 'OXIDE' | 'OTHER'
+
+/**
+ * 结论。`NO_EVIDENCE` 是承重墙：没有原文支撑的结论一律落在这里，
+ * 页面上不许给它「推荐」的样式。
+ */
+export type SupplementFormVerdict = 'RECOMMENDED' | 'ACCEPTABLE' | 'AVOID' | 'NO_EVIDENCE'
+
+export interface SupplementCitationDto {
+  documentId: string
+  documentName: string
+  page: number
+  quote: string
+}
+
+export interface SupplementFormOptionDto {
+  level: SupplementFormLevel
+  labelZh: string
+  examples: string[]
+  verdict: SupplementFormVerdict
+  reason: string
+  citations: SupplementCitationDto[]
+}
+
+export interface SupplementFormAdviceDto {
+  nutrientKey: string
+  nutrientLabel: string
+  options: SupplementFormOptionDto[]
+  recommendedLevel: SupplementFormLevel | null
+  recommendationReason: string
+  gaps: string[]
+}
+
+export type SupplementOfferMissingDto =
+  | 'PRICE'
+  | 'UNITS_PER_BOTTLE'
+  | 'SERVING_UNITS'
+  | 'AMOUNT'
+  | 'COMPOUND_PRODUCT'
+
+export interface SupplementOfferDto {
+  url: string
+  name: string
+  priceCny: number | null
+  unitsPerBottle: number | null
+  servingUnitsPerDose: number | null
+  amountPerServing: number | null
+  formLevel: string | null
+  compound: boolean
+  servingsPerBottle: number | null
+  pricePerServing: number | null
+  pricePerThousand: number | null
+  missing: SupplementOfferMissingDto[]
+  sameForm: boolean
+}
+
+export interface SupplementPriceBasisDto {
+  nutrientKey: string
+  unit: 'MG' | 'IU' | 'CFU'
+  per: number
+  basisLabel: string
+  amountUnitLabel: string
+  fieldPaths: string[]
+}
+
+export interface SupplementComparisonDto {
+  offers: SupplementOfferDto[]
+  recommendedUrl: string | null
+  reason: string
+  basis: SupplementPriceBasisDto
+  failed: { url: string; name: string; reason: string }[]
+  partial: boolean
+}

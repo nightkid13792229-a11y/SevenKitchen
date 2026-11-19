@@ -1,7 +1,6 @@
 import {
   forceProposeToolFor,
   phaseSystemLine,
-  readBudgetForPhase,
   toolsForPhase,
 } from '../../../src/application/recipe-designer/agent/phase-policy';
 
@@ -51,21 +50,16 @@ describe('recipe agent phase policy', () => {
     expect(names('PLAN', 'CATALOG')).toContain('read_taxonomy');
   });
 
-  it('forces propose after the research threshold', () => {
-    expect(forceProposeToolFor('PLAN', 17)).toBeNull();
-    expect(forceProposeToolFor('PLAN', 18)).toBe('propose_plan');
-    expect(forceProposeToolFor('SELECT', 18)).toBe('propose_selection');
+  it('only forces propose near the resource budget', () => {
+    expect(forceProposeToolFor('PLAN', 33)).toBeNull();
+    expect(forceProposeToolFor('PLAN', 34)).toBe('propose_plan');
+    expect(forceProposeToolFor('SELECT', 34)).toBe('propose_selection');
     expect(forceProposeToolFor('DESIGN', 30)).toBeNull();
-  });
-
-  it('caps read budget before the design phase', () => {
-    expect(readBudgetForPhase('PLAN', 20000)).toBe(12000);
-    expect(readBudgetForPhase('SELECT', 8000)).toBe(8000);
-    expect(readBudgetForPhase('DESIGN', 20000)).toBe(20000);
   });
 
   it('gives the model a phase instruction', () => {
     expect(phaseSystemLine('PLAN')).toContain('不要改配方');
+    expect(phaseSystemLine('PLAN')).toContain('0 命中就换词');
     expect(phaseSystemLine('SELECT')).toContain('不要改配方');
     expect(phaseSystemLine('DESIGN')).toContain('配方编辑');
   });

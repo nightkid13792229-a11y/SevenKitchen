@@ -47,27 +47,19 @@ export function forceProposeToolFor(
   phase: AgentPhase,
   toolCalls: number,
 ): 'propose_plan' | 'propose_selection' | null {
-  if (phase === 'PLAN' && toolCalls >= 18) return 'propose_plan';
-  if (phase === 'SELECT' && toolCalls >= 18) return 'propose_selection';
+  // 只在资源预算快用尽时兜底，不用来替代“证据够不够”的判断。
+  if (phase === 'PLAN' && toolCalls >= 34) return 'propose_plan';
+  if (phase === 'SELECT' && toolCalls >= 34) return 'propose_selection';
   return null;
-}
-
-/** 方案/选材阶段单次读页的 token 预算上限。 */
-export function readBudgetForPhase(
-  phase: AgentPhase,
-  requested: number,
-): number {
-  if (phase === 'DESIGN') return requested;
-  return Math.min(requested, 12000);
 }
 
 /** 给模型的一段阶段说明；很短，不重复系统提示词里的规则。 */
 export function phaseSystemLine(phase: AgentPhase): string {
   if (phase === 'PLAN') {
-    return '当前阶段：方案确认。只读档案和知识库，产出营养方案与可执行约束；用 propose_plan 提交，等用户确认。不要改配方。每类约束找到一处来源即可；最多查 10 次、读 8 页；到 18 次工具调用必须先提交方案，查不到的标待确认。';
+    return '当前阶段：方案确认。只读档案和知识库，产出营养方案与可执行约束；用 propose_plan 提交，等用户确认。不要改配方。0 命中就换词或换文档，不要重复原查询；每类约束找到一处来源即可，证据不足的标待确认；方案优先于穷尽检索。方案阶段不查药物/补剂的 mg/kg 剂量。';
   }
   if (phase === 'SELECT') {
-    return '当前阶段：选材。基于已确认的方案提出食材与补剂候选；用 propose_selection 提交，等用户确认。补剂只用原料库；库外食材标 MISSING。不要改配方。最多查 10 次；到 18 次工具调用必须先提交候选。';
+    return '当前阶段：选材。基于已确认的方案提出食材与补剂候选；用 propose_selection 提交，等用户确认。补剂只用原料库；库外食材标 MISSING。不要改配方。0 命中就换词或换文档，不要重复原查询。';
   }
   return '当前阶段：配方编辑。按已确认的方案和选材编辑配方、跑评估、修缺口。';
 }

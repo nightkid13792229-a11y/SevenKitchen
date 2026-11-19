@@ -39,12 +39,16 @@ import { executeTool } from './tools';
 import {
   forceProposeToolFor,
   phaseSystemLine,
-  readBudgetForPhase,
   toolsForPhase,
   type AgentPhase,
 } from './phase-policy';
+import {
+  countFindHits,
+  findQueryKey,
+  nextZeroHitStreak,
+} from './research-guard';
 import { assessmentGapSignature } from './assessment-progress';
-import type { RecipeAgentActor, ToolOutcome } from './agent-types';
+import { fail, type RecipeAgentActor, type ToolOutcome } from './agent-types';
 import {
   buildKnowledgeImageMessage,
   hasImageContent,
@@ -353,6 +357,12 @@ export class RecipeAgentService implements OnModuleInit {
     let firstModelCall = true;
     /** 方案/选材阶段在预算快用完时，强制提交方案/选材。 */
     let forceProposeTool: 'propose_plan' | 'propose_selection' | null = null;
+    /** 连续 0 命中到 5 次时，强制先问用户，而不是硬交方案。 */
+    let forceAsk = false;
+    /** 已经 0 命中的查询 key：同一条不再执行。 */
+    const zeroHitQueries = new Set<string>();
+    let consecutiveZeroHits = 0;
+    let zeroHitNudged = false;
     const phaseMaxToolCalls =
       phase === 'PLAN'
         ? PLAN_MAX_TOOL_CALLS
@@ -393,7 +403,9 @@ export class RecipeAgentService implements OnModuleInit {
       const isFirstModelCall = firstModelCall;
       const forcedTool = isFirstModelCall
         ? 'read_design_context'
-        : forceProposeTool;
+        : forceAsk
+          ? 'ask'
+          : forceProposeTool;
       let response: DeepSeekToolsResult;
       try {
         response = await callModel(forcedTool);
@@ -427,6 +439,8 @@ export class RecipeAgentService implements OnModuleInit {
         }
         if (isFirstModelCall) {
           firstModelCall = false;
+        } else if (forcedTool === 'ask') {
+          forceAsk = false;
         } else {
           forceProposeTool = null;
         }
@@ -464,6 +478,9 @@ export class RecipeAgentService implements OnModuleInit {
       //（2026-11-19 线上两次实测：kb_read 与 kb_find 并行时触发）。
       const turnImages: KnowledgePageImage[] = [];
       const turnContextImages: DesignContextImage[] = [];
+      /** 零命中提示/强制提问要等本轮全部 tool 消息写完再插，避免破坏协议。 */
+      let pendingZeroHitNudge: string | null = null;
+      let pendingForceAsk = false;
 
       for (const call of calls) {
         if (toolCalls >= phaseMaxToolCalls) {
@@ -476,16 +493,53 @@ export class RecipeAgentService implements OnModuleInit {
         // ask 的问题先攒着，等工具结果落库后再写助手消息：
         // 顺序反了会出现"执行记录有、问题没显示"（2026-11-01 实测）。
         let pendingAsk: { question: string; options: string[] } | null = null;
-        const { outcome, images, contextImages } = await this.runTool(
-          port,
-          catalog,
-          this.knowledge,
-          call,
-          phase,
-          (question, options) => {
-            pendingAsk = { question, options };
-          },
-        );
+        const parsedArgs = safeParse(call.function.arguments);
+        const findKey =
+          call.function.name === 'kb_find' ? findQueryKey(parsedArgs) : null;
+        let outcome: ToolOutcome;
+        let images: KnowledgePageImage[] = [];
+        let contextImages: DesignContextImage[] = [];
+
+        if (findKey && zeroHitQueries.has(findKey)) {
+          // 同一条查询已经 0 命中过：不再打后端，直接让模型换词。
+          outcome = fail(
+            'DUPLICATE_ZERO_HIT_QUERY',
+            '这条查询之前 0 命中；请换更宽的词、去掉剂量/单位，或换文档，不要重复原查询。',
+          );
+          consecutiveZeroHits += 1;
+        } else {
+          const result = await this.runTool(
+            port,
+            catalog,
+            this.knowledge,
+            call,
+            (question, options) => {
+              pendingAsk = { question, options };
+            },
+          );
+          outcome = result.outcome;
+          images = result.images;
+          contextImages = result.contextImages;
+
+          if (call.function.name === 'kb_find') {
+            const hits = countFindHits(outcome);
+            if (findKey && hits !== null) {
+              consecutiveZeroHits = nextZeroHitStreak(
+                consecutiveZeroHits,
+                hits,
+              );
+              if (hits === 0) {
+                zeroHitQueries.add(findKey);
+              } else {
+                zeroHitNudged = false;
+              }
+            }
+          } else if (call.function.name === 'kb_read' && outcome.ok) {
+            // 读到页说明有进展，连续 0 命中计数归零。
+            consecutiveZeroHits = 0;
+            zeroHitNudged = false;
+          }
+        }
         toolCalls += 1;
 
         await this.recordTool(sessionId, call, outcome);
@@ -596,13 +650,38 @@ export class RecipeAgentService implements OnModuleInit {
           return;
         }
 
+        if (
+          call.function.name === 'kb_find' &&
+          consecutiveZeroHits >= 3 &&
+          !zeroHitNudged
+        ) {
+          pendingZeroHitNudge =
+            '连续 3 次检索 0 命中：换更宽的词、去掉剂量/单位，或换文档；不要重复原查询。';
+          zeroHitNudged = true;
+        }
+        if (
+          consecutiveZeroHits >= 5 &&
+          (phase === 'PLAN' || phase === 'SELECT')
+        ) {
+          pendingZeroHitNudge =
+            '连续 5 次检索 0 命中：请把已经查到的内容和缺口告诉用户，并询问下一步；不要编造。';
+          pendingForceAsk = true;
+          consecutiveZeroHits = 0;
+        }
+
         const nextForce = forceProposeToolFor(phase, toolCalls);
         if (nextForce) {
           forceProposeTool = nextForce;
         }
       }
 
-      // 全部 tool 消息写完后，再追加图片消息。
+      // 全部 tool 消息写完后，再追加零命中提示/图片消息。
+      if (pendingZeroHitNudge) {
+        messages.push({ role: 'system', content: pendingZeroHitNudge });
+      }
+      if (pendingForceAsk) {
+        forceAsk = true;
+      }
       if (turnImages.length > 0) {
         messages.push(
           buildKnowledgeImageMessage(dedupeKnowledgeImages(turnImages)),
@@ -628,7 +707,6 @@ export class RecipeAgentService implements OnModuleInit {
     catalog: RecipeCatalogPort,
     knowledge: KnowledgeGatewayService,
     call: DeepSeekToolCall,
-    phase: AgentPhase,
     onAsk: (question: string, options: string[]) => void,
   ): Promise<{
     outcome: ToolOutcome;
@@ -640,21 +718,6 @@ export class RecipeAgentService implements OnModuleInit {
       args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
     } catch {
       args = {};
-    }
-    // 方案/选材阶段一次读页不要吞太多：默认 20k token 容易把预算烧光。
-    if (
-      phase !== 'DESIGN' &&
-      call.function.name === 'kb_read' &&
-      isRecord(args)
-    ) {
-      const requested = Number((args as Record<string, unknown>).budgetTokens);
-      args = {
-        ...(args as Record<string, unknown>),
-        budgetTokens: readBudgetForPhase(
-          phase,
-          Number.isFinite(requested) ? requested : EARLY_PHASE_READ_BUDGET,
-        ),
-      };
     }
     const outcome = await executeTool(call.function.name, args, {
       port,

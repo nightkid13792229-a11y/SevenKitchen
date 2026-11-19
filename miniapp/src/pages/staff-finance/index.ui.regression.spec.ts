@@ -44,7 +44,9 @@ describe('财务首页', () => {
     expect(page).toContain('该月已含固定费用');
     expect(page).toContain('本月已含固定费用');
     expect(page).toContain('本月固定费用还没生成');
-    expect(page).toContain('= 收入 − 支出，固定费用还没生成');
+    // 口径只写一行：固定费用有没有生成，交给下面那行「已含/还没生成」说
+    expect(page).toContain('= 收入 − 支出');
+    expect(page).not.toContain('已经扣掉房租、工资、社保');
     expect(page).toContain('heroCaption');
     // 不能再出现「已含本月固定费用 ¥0」这种和上面「已扣房租工资」打架的写法
     expect(page).not.toContain('已含本月固定费用');
@@ -71,7 +73,7 @@ describe('财务首页', () => {
   it('负结余用深绿底上读得清的浅红警示，并给一句人话', () => {
     expect(page).toContain('balanceNegative');
     expect(page).toContain('hero-amount--negative');
-    expect(page).toContain('这个月花得比收得多，先看房租和工资那几笔是不是漏录');
+    expect(page).toContain('这个月支出大于收入');
 
     const warningRed = page.match(
       /\$staff-danger-on-brand:\s*(#[0-9a-fA-F]{6})/,
@@ -90,9 +92,8 @@ describe('财务首页', () => {
   it('历史订单退款单独列示，为 0 时不显示', () => {
     expect(page).toContain('historicalRefundTotal');
     expect(page).toContain('v-if="historicalRefundTotal > 0"');
-    expect(page).toContain('其中历史订单退款');
+    expect(page).toContain('含历史订单退款');
     expect(page).toContain('¥{{ formatMoney(historicalRefundTotal) }}');
-    expect(page).toContain('（起账日前的单）');
 
     // 深绿主卡上的金色：$staff-gold-ink 对 #1E3A2F 只有 2:1，
     // 按警示红的先例另取浅金，小号文字必须 ≥ 4.5:1

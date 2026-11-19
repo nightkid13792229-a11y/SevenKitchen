@@ -149,9 +149,7 @@
             <text class="template-chevron">›</text>
           </view>
         </view>
-        <text class="list-hint">
-          点一项可以改名称、类别、金额、周期、几号和付款方；停用只影响以后，不改历史账单
-        </text>
+        <text class="list-hint">停用后不再生成新账单，可随时启用</text>
       </template>
 
       <text v-if="templatesError && templates.length > 0" class="stale-hint">
@@ -190,15 +188,12 @@
               @input="onPayAmountInput"
             />
           </view>
-          <text class="field-hint">
-            默认是剩余应付；水电这类实付和模板不一样时直接改
-          </text>
+          <text class="field-hint">默认剩余应付，水电实付不同就改</text>
         </view>
 
         <view class="field">
           <text class="field-label">从哪个账户出</text>
           <AccountPicker v-model="payPayerAccount" />
-          <text class="field-hint">默认账单上的账户；这次换了卡就从这里改</text>
         </view>
       </view>
 
@@ -298,7 +293,7 @@
               <text class="picker-chevron">›</text>
             </view>
           </picker>
-          <text class="field-hint">到期日按这个日子生成；月份没有这一天时按月末算</text>
+          <text class="field-hint">月份没有这一天时按月末算</text>
         </view>
 
         <view class="field">
@@ -316,13 +311,12 @@
         <view class="field">
           <text class="field-label">从哪个账户出</text>
           <AccountPicker v-model="formPayerAccount" />
-          <text class="field-hint">房租、社保这类走卡的默认「我的银行卡」</text>
         </view>
 
         <view v-if="editingTemplate" class="field">
-          <text class="field-label">停用</text>
+          <text class="field-label">{{ editingTemplate.isActive ? '停用' : '启用' }}</text>
           <text class="field-hint">
-            停用只影响以后：不再生成新账单，已经生成的账单和历史记录都不变。
+            {{ editingTemplate.isActive ? '只影响以后，已生成的账单不变' : '已停用，不会生成新账单' }}
           </text>
           <button
             v-if="editingTemplate.isActive"
@@ -331,7 +325,7 @@
           >
             停用
           </button>
-          <text v-else class="field-hint">这个固定项目已停用。</text>
+          <button v-else class="activate-btn" @tap="activateEditing">启用</button>
         </view>
       </view>
 
@@ -556,15 +550,13 @@ const generateLabel = computed(() =>
 )
 
 const billsEmptyTitle = computed(() =>
-  isCurrentMonth.value
-    ? '本月还没有固定费用，先设几个固定项目'
-    : '该月还没有固定费用',
+  isCurrentMonth.value ? '本月还没有固定费用' : '该月还没有固定费用',
 )
 
 const billsEmptyHint = computed(() =>
   templates.value.length === 0
-    ? '先建几个每月都要付的项目，回来自动按月出账单'
-    : '点「补生成」把该月的账单补出来；已经生成过不会重复',
+    ? '建一次，之后自动按月出账单'
+    : '点「补生成」补出该月账单，不会重复',
 )
 
 const bills = ref<FinanceExpenseBill[]>([])
@@ -784,7 +776,7 @@ async function confirmPay() {
     })
     payTarget.value = null
     // 固定费用生成时已整月计入支出：点「已付」只改状态、不加金额，必须说清楚
-    toast('已标记为已付（支出不变，按月份已计入）')
+    toast('已付清，支出不变（已按月计入）')
     await loadBills()
   } catch (error) {
     toast(errorMessage(error))
@@ -826,15 +818,13 @@ const formMonthIndex = computed(() =>
 )
 
 const yearlyHint = computed(
-  () => `年付：每年 ${formMonthOfYear.value} 月生成一张，几号是到期日`,
+  () => `每年 ${formMonthOfYear.value} 月生成一张，几号是到期日`,
 )
 
 const serviceMonthsHint = computed(() => {
   if (formInterval.value === 'MONTHLY') return '月付固定 1 个月'
-  if (formInterval.value === 'QUARTERLY') {
-    return '季付默认 3 个月（1–3），账单按月分摊'
-  }
-  return '年付宽带这类一次付一年的填 12，账单按月分摊'
+  if (formInterval.value === 'QUARTERLY') return '季付 3 个月，账单按月分摊'
+  return '一次付一年填 12，账单按月分摊'
 })
 
 function openCreate() {
@@ -984,7 +974,7 @@ async function saveTemplate() {
       toast('已保存', 'success')
     } else {
       await staffFinanceApi.createTemplate(payload)
-      toast('已新建，可补生成账单', 'success')
+      toast('已新建', 'success')
     }
     formOpen.value = false
     await Promise.all([loadTemplates(), loadBills(), loadCategories()])
@@ -1001,7 +991,7 @@ function deactivateEditing() {
   if (!template || formSubmitting.value) return
   uni.showModal({
     title: '停用固定费用',
-    content: '停用只影响以后：不再生成新账单，已经生成的账单和历史记录都不变。',
+    content: '只影响以后，已生成的账单不变。',
     confirmText: '停用',
     confirmColor: '#1E3A2F',
     success: async (res) => {
@@ -1019,6 +1009,23 @@ function deactivateEditing() {
       }
     },
   })
+}
+
+/** 启用：可撤销的恢复动作，不用二次确认；不补生成历史账单 */
+async function activateEditing() {
+  const template = editingTemplate.value
+  if (!template || formSubmitting.value) return
+  formSubmitting.value = true
+  try {
+    await staffFinanceApi.activateTemplate(template.id)
+    formOpen.value = false
+    toast('已启用', 'success')
+    await Promise.all([loadTemplates(), loadBills()])
+  } catch (error) {
+    toast(errorMessage(error))
+  } finally {
+    formSubmitting.value = false
+  }
 }
 
 onShow(() => {
@@ -1558,6 +1565,22 @@ onShow(() => {
 }
 
 .deactivate-btn::after {
+  border: none;
+}
+
+/* 启用：正向恢复动作，用品牌绿实心，和「停用」的中性描边区分 */
+.activate-btn {
+  min-height: 88rpx;
+  margin: 16rpx 0 0;
+  font-size: $staff-font-body;
+  font-weight: 600;
+  line-height: 88rpx;
+  color: $staff-cream;
+  background: $staff-brand;
+  border-radius: $staff-radius-control;
+}
+
+.activate-btn::after {
   border: none;
 }
 </style>

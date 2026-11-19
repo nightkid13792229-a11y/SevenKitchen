@@ -357,6 +357,20 @@ export class ExpenseTemplateService {
     return { id };
   }
 
+  /** 启用：停用后想恢复，只改 isActive，不补生成历史账单 */
+  async activate(_userId: string, id: string): Promise<{ id: string }> {
+    const existing = await this.prisma.expenseTemplate.findUnique({
+      where: { id },
+    });
+    if (!existing) throw new NotFoundException('固定费用模板不存在');
+
+    await this.prisma.expenseTemplate.update({
+      where: { id },
+      data: { isActive: true },
+    });
+    return { id };
+  }
+
   listTemplates(options: { includeInactive?: boolean } = {}) {
     return this.prisma.expenseTemplate.findMany({
       where: options.includeInactive ? {} : { isActive: true },

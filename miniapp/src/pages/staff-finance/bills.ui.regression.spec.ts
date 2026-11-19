@@ -59,7 +59,7 @@ describe('固定费用', () => {
     expect(page).toContain('payBill');
     expect(page).toContain('payerAccount: payPayerAccount.value');
     // 付款只改状态：toast 要说清支出不变，别让老板以为没反应
-    expect(page).toContain('已标记为已付（支出不变，按月份已计入）');
+    expect(page).toContain('已付清，支出不变（已按月计入）');
     expect(page).toContain('loadBills()');
     expect(page).not.toContain('我个人垫的');
   });
@@ -123,9 +123,8 @@ describe('固定费用', () => {
     expect(page).toContain('deactivateTemplate');
     expect(page).toContain('uni.showModal');
     const modal = page.match(/uni\.showModal\(\{[\s\S]*?\n  \}\)/)?.[0] || '';
-    expect(modal).toContain('停用只影响以后');
-    expect(modal).toContain('不再生成新账单');
-    expect(modal).toContain('历史记录都不变');
+    expect(modal).toContain('只影响以后');
+    expect(modal).toContain('已生成的账单不变');
     // 停用只改 isActive，页面不提供硬删
     expect(page).not.toContain('删除');
   });
@@ -164,7 +163,8 @@ describe('固定费用', () => {
   });
 
   it('空态：没模板给新建入口，没账单提示先设固定项目并给补生成入口', () => {
-    expect(page).toContain('本月还没有固定费用，先设几个固定项目');
+    expect(page).toContain('本月还没有固定费用');
+    expect(page).toContain('该月还没有固定费用');
     expect(page).toContain('还没有固定费用');
     expect(page).toContain('onBillsEmptyAction');
     // 没模板时引导新建，有模板时引导补生成
@@ -292,12 +292,24 @@ describe('固定费用', () => {
     expect(rowDone).not.toContain('$staff-ink-3');
   });
 
-  it('API 层补齐七个固定费用方法，路径与后端一致', () => {
+  it('停用后能在同一个抽屉里重新启用', () => {
+    // 已停用时给「启用」按钮，不再是死路一条
+    expect(page).toContain('activateEditing');
+    expect(page).toContain('activateTemplate');
+    expect(page).toContain('已停用，不会生成新账单');
+    const activateBlock = fnBlock('activateEditing');
+    expect(activateBlock).toContain('activateTemplate(template.id)');
+    expect(activateBlock).toContain("toast('已启用', 'success')");
+    expect(activateBlock).toContain('loadTemplates()');
+  });
+
+  it('API 层补齐八个固定费用方法，路径与后端一致', () => {
     for (const method of [
       'listTemplates',
       'createTemplate',
       'updateTemplate',
       'deactivateTemplate',
+      'activateTemplate',
       'listBills',
       'payBill',
       'generateBills',
@@ -307,6 +319,7 @@ describe('固定费用', () => {
     expect(api).toContain("url: '/admin/finance/templates'");
     expect(api).toContain('url: `/admin/finance/templates/${id}`');
     expect(api).toContain('url: `/admin/finance/templates/${id}/deactivate`');
+    expect(api).toContain('url: `/admin/finance/templates/${id}/activate`');
     expect(api).toContain("url: '/admin/finance/bills'");
     expect(api).toContain('url: `/admin/finance/bills/${id}/pay`');
     expect(api).toContain("url: '/admin/finance/bills/generate'");

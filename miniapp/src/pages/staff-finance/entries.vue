@@ -98,7 +98,7 @@
       card
       icon="🧾"
       title="这段时间还没有收支记录"
-      hint="订单收入、采购支出、退款都会记在这里；换个筛选或回首页看看汇总"
+      hint="订单收入、采购支出、退款都会记在这里"
       action-text="回财务首页"
       @action="goHome"
     />
@@ -162,7 +162,7 @@
       </view>
 
       <text v-if="truncated" class="truncate-hint">
-        明细太多，只显示最近的 5000 条，缩小日期范围能看全
+        只显示最近 5000 条，缩小范围能看全
       </text>
     </view>
   </view>
@@ -219,9 +219,9 @@ const SOURCE_ROUTES: Partial<Record<FinanceEntrySourceType, string>> = {
 const SOURCE_HINTS: Partial<Record<FinanceEntrySourceType, string>> = {
   CUSTOM_RECIPE_ORDER: '定制食谱订单暂时不能在员工端打开',
   BILL: '固定费用在「固定费用」页按账单管理',
-  MANUAL: '这笔是手工记的，没有来源单据',
-  FEE: '支付手续费由系统按订单汇总，没有单独单据',
-  SHIPPING: '快递费记在对应的订单里，明细这里只做汇总',
+  MANUAL: '手工记的，没有来源单据',
+  FEE: '手续费按订单汇总，没有单独单据',
+  SHIPPING: '快递费记在对应订单里',
 }
 
 /** 统一金额格式：千分位，整数不带 .00，有分则保留两位 */

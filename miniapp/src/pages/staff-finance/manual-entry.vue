@@ -32,7 +32,6 @@
           @blur="onAmountBlur"
         />
       </view>
-      <text class="amount-hint">点金额可以改，默认今天</text>
     </view>
 
     <view class="card">
@@ -361,13 +360,6 @@ onShow(() => {
   font-size: $staff-font-metric;
   font-weight: 700;
   color: $staff-ink-3;
-}
-
-.amount-hint {
-  display: block;
-  margin-top: 4rpx;
-  font-size: $staff-font-caption;
-  color: $staff-ink-2;
 }
 
 .card {

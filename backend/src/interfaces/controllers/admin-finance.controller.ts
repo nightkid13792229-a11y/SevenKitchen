@@ -312,6 +312,23 @@ export class AdminFinanceController {
     );
   }
 
+  /** 启用模板：停用后恢复，只影响以后，不补生成历史账单 */
+  @Post('templates/:id/activate')
+  @ApiOperation({ summary: '启用固定费用模板（仅 ADMIN）' })
+  @ApiParam({ name: 'id', description: '模板ID' })
+  @ApiResponse({ status: 200, description: '启用成功' })
+  @ApiResponse({ status: 404, description: '模板不存在' })
+  @ApiResponse({ status: 403, description: '需要管理员权限' })
+  async activateTemplate(
+    @UserId() userId: string,
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<{ id: string }>> {
+    return ApiResponseDto.success(
+      await this.expenseTemplateService.activate(userId, id),
+      'Expense template activated successfully',
+    );
+  }
+
   /** 某月应计固定费用账单（含已付/待付状态与付款方） */
   @Get('bills')
   @ApiOperation({ summary: '某月应计固定费用账单（仅 ADMIN）' })

@@ -467,6 +467,17 @@ export const staffFinanceApi = {
     });
   },
 
+  /** 启用模板：停用后恢复，只影响以后，不补生成历史账单 */
+  activateTemplate(id: string) {
+    return requestData<{ id: string }>({
+      url: `/admin/finance/templates/${id}/activate`,
+      method: 'POST',
+      data: {},
+      quiet: true,
+      suppressErrorToast: true,
+    });
+  },
+
   /**
    * 支出类别列表（默认只给启用类别；管理页传 true 才看到停用/已合并的）。
    *

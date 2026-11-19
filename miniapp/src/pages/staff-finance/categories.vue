@@ -1,8 +1,6 @@
 <template>
   <view class="page">
-    <text class="page-hint">
-      改名会影响历史记录（记录跟着类别走）；删除 = 停用，已经用过的类别建议「合并到」别的类别，历史记录一起搬过去。
-    </text>
+    <text class="page-hint">改名会同步历史记录；没有删除，用过的类别可以「合并到」别的类别。</text>
 
     <view v-if="loading && categories.length === 0" class="skeleton">
       <view v-for="n in 5" :key="n" class="sk-row"></view>
@@ -45,9 +43,7 @@
       </view>
 
       <text v-if="error" class="stale-hint">刷新失败，当前显示的是上次的数据</text>
-      <text class="list-hint">
-        系统类别（食材/补剂/包材/快递/支付手续费/其它）只能改名，不能合并或停用。
-      </text>
+      <text class="list-hint">系统类别只能改名</text>
     </view>
 
     <!-- 合并到：选一个目标类别，源类别的历史记录一起搬过去 -->
@@ -57,9 +53,7 @@
           <text class="sheet-title">把「{{ mergeSource.name }}」合并到</text>
           <text class="sheet-close" @tap="closeMerge">关闭</text>
         </view>
-        <text class="sheet-hint">
-          合并后这条类别停用，它的账单/模板/手工记录全部改成目标类别，报表也合并。
-        </text>
+        <text class="sheet-hint">合并后这条类别停用，账单、模板和记录都转到目标类别。</text>
 
         <scroll-view class="sheet-body" scroll-y>
           <view
@@ -215,7 +209,7 @@ function confirmMerge(target: FinanceCategoryOption) {
 function confirmDeactivate(category: FinanceCategoryOption) {
   uni.showModal({
     title: '停用类别',
-    content: `「${category.name}」不再出现在记账选项里，历史记录不变。已经用过的类别建议用「合并到」。`,
+    content: `「${category.name}」不再出现在记账选项里，历史记录不变。`,
     confirmText: '停用',
     confirmColor: '#1E3A2F',
     success: async (res) => {

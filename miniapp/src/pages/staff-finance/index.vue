@@ -63,7 +63,7 @@
           <text class="hero-number">{{ formatMoney(balanceAbs) }}</text>
           <text class="hero-chevron">›</text>
         </view>
-        <text v-if="balanceNegative" class="hero-warning">这个月花得比收得多，先看房租和工资那几笔是不是漏录</text>
+        <text v-if="balanceNegative" class="hero-warning">这个月支出大于收入</text>
         <text class="hero-caption">{{ heroCaption }}</text>
 
         <view class="hero-split">
@@ -84,7 +84,7 @@
         </view>
 
         <text v-if="historicalRefundTotal > 0" class="hero-refund">
-          其中历史订单退款 ¥{{ formatMoney(historicalRefundTotal) }}（起账日前的单）
+          含历史订单退款 ¥{{ formatMoney(historicalRefundTotal) }}
         </text>
 
         <text v-if="compareText" class="hero-compare">{{ compareText }}</text>
@@ -260,16 +260,11 @@ const fixedFeeTotal = computed(() =>
   roundMoney(Number(dashboard.value?.expense.fixedCostTotal) || 0),
 )
 
-/** 固定费用为 0 时，不能说「已经扣掉房租、工资、社保」 */
-const heroCaption = computed(() =>
-  fixedFeeTotal.value > 0
-    ? '= 收入 − 支出，已经扣掉房租、工资、社保'
-    : '= 收入 − 支出，固定费用还没生成',
-)
+/** 结余口径：固定费用有没有生成，由下面那行「已含/还没生成」说 */
+const heroCaption = computed(() => '= 收入 − 支出')
 
 /**
- * 固定费用的说明必须跟「已经扣掉房租、工资、社保」对得上：
- * 完整月份写「该月」，本月至今写「本月」；为 0 时不再说「已含 ¥0」，
+ * 固定费用说明：完整月份写「该月」，本月至今写「本月」；为 0 时不再说「已含 ¥0」，
  * 改成引导去「固定费用」页生成（Task 14 的页面）。
  */
 const fixedFeeCopy = computed(() => {

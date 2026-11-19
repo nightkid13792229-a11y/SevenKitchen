@@ -107,6 +107,7 @@ curl -s http://127.0.0.1:3011/api/docs-json > /tmp/sevenkitchen-openapi.json
 | POST | `/api/v1/admin/finance/templates` | 新建固定费用模板 |
 | PATCH | `/api/v1/admin/finance/templates/:id` | 修改模板 |
 | POST | `/api/v1/admin/finance/templates/:id/deactivate` | 停用模板（只影响以后） |
+| POST | `/api/v1/admin/finance/templates/:id/activate` | 重新启用模板（只影响以后） |
 | GET | `/api/v1/admin/finance/bills?month=YYYY-MM` | 指定月份的固定费用账单（含已付/待付） |
 | POST | `/api/v1/admin/finance/bills/:id/pay` | 标记已付（可改本次实付金额与付款方） |
 | POST | `/api/v1/admin/finance/bills/generate` | 补生成指定月份账单（幂等） |

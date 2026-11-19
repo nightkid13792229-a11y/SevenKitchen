@@ -25,8 +25,8 @@ describe('记一笔', () => {
     expect(page).toContain('type="digit"');
     expect(page).toContain('amountFocus');
     expect(page).toContain('amount-input');
-    // 老板明确要求的提示语
-    expect(page).toContain('点金额可以改，默认今天');
+    // 自明提示已删：金额卡片本身就是可点的输入区
+    expect(page).not.toContain('点金额可以改');
     // 保存前校验：空、非正数、超过两位小数都拦下
     expect(page).toContain('请输入金额');
     expect(page).toContain('金额必须大于 0');

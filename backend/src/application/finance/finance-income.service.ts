@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { OFFLINE_PAYMENT_METHODS } from './finance-categories';
 import { computeFeeAmount } from './finance-fee';
@@ -30,6 +31,19 @@ const OFFLINE_METHODS: readonly string[] = OFFLINE_PAYMENT_METHODS;
 const FINANCE_START_AT = new Date(
   `${FINANCE_START_DATE}T00:00:00+08:00`,
 ).getTime();
+
+/**
+ * 订单收入口径的排除条件（Task 4/6 的明细取数复用同一份，避免各写一份漂移）：
+ * 0 元单、RESHIP（补发/赠送）、重做单（remakeFromOrderId）、补发单
+ * （reshipFromOrderId）都不进收入。
+ */
+export const FINANCE_ORDER_INCOME_FILTER: Prisma.OrderWhereInput = {
+  amountTotal: { gt: 0 },
+  remakeFromOrderId: null,
+  reshipFromOrderId: null,
+  // null 的历史数据按正常单处理（SQL 的 NOT 条件会漏掉 NULL）
+  OR: [{ paymentMethod: null }, { paymentMethod: { not: 'RESHIP' } }],
+};
 
 function isOfflinePayment(method: string | null | undefined): boolean {
   return method != null && OFFLINE_METHODS.includes(method);
@@ -71,6 +85,8 @@ export class FinanceIncomeService {
       orderRefunds,
       offlineRefunds,
       supplementRefunds,
+      customRecipeRefunds,
+      customRecipeOfflineRefunds,
     ] = await Promise.all([
       this.loadOrders(period),
       this.loadSupplements(period),
@@ -78,6 +94,8 @@ export class FinanceIncomeService {
       this.loadOrderRefunds(period),
       this.loadOfflineRefunds(period),
       this.loadSupplementRefunds(period),
+      this.loadCustomRecipeRefunds(period),
+      this.loadCustomRecipeOfflineRefunds(period),
     ]);
 
     let orderOnline = 0;
@@ -158,6 +176,27 @@ export class FinanceIncomeService {
       }
     }
 
+    for (const refund of customRecipeRefunds) {
+      const amount = toAmount(refund.refundAmount);
+      if (amount <= 0) continue;
+      refundTotal += amount;
+      // 定制食谱线上退款走微信原路退回，手续费按比例冲回
+      onlineRefunded += amount;
+      if (isHistoricalPaidAt(refund.paymentConfirmedAt)) {
+        historicalRefundTotal += amount;
+      }
+    }
+
+    for (const refund of customRecipeOfflineRefunds) {
+      const amount = toAmount(refund.offlineRefundAmount);
+      if (amount <= 0) continue;
+      refundTotal += amount;
+      // 线下退款没有撤销微信支付，不冲回手续费
+      if (isHistoricalPaidAt(refund.paymentConfirmedAt)) {
+        historicalRefundTotal += amount;
+      }
+    }
+
     orderOnline = roundMoney(orderOnline);
     orderOffline = roundMoney(orderOffline);
     supplement = roundMoney(supplement);
@@ -191,11 +230,7 @@ export class FinanceIncomeService {
     return this.prisma.order.findMany({
       where: {
         paidAt: { gte: period.from, lte: period.to },
-        amountTotal: { gt: 0 },
-        remakeFromOrderId: null,
-        reshipFromOrderId: null,
-        // 补发/赠送单不计收入；null 的历史数据按正常单处理（不能因为 NOT 丢掉）
-        OR: [{ paymentMethod: null }, { paymentMethod: { not: 'RESHIP' } }],
+        ...FINANCE_ORDER_INCOME_FILTER,
       },
       select: {
         amountTotal: true,
@@ -279,6 +314,32 @@ export class FinanceIncomeService {
         refundAmount: true,
         paidAt: true,
         paymentMethod: true,
+      },
+    });
+  }
+
+  private loadCustomRecipeRefunds(period: FinancePeriod) {
+    return this.prisma.customRecipeOrder.findMany({
+      where: {
+        refundedAt: { gte: period.from, lte: period.to },
+        refundAmount: { gt: 0 },
+      },
+      select: {
+        refundAmount: true,
+        paymentConfirmedAt: true,
+      },
+    });
+  }
+
+  private loadCustomRecipeOfflineRefunds(period: FinancePeriod) {
+    return this.prisma.customRecipeOrder.findMany({
+      where: {
+        offlineRefundedAt: { gte: period.from, lte: period.to },
+        offlineRefundAmount: { gt: 0 },
+      },
+      select: {
+        offlineRefundAmount: true,
+        paymentConfirmedAt: true,
       },
     });
   }

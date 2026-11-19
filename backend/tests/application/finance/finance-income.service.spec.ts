@@ -22,7 +22,16 @@ const makePrisma = (data: any = {}) => ({
     ),
   },
   customRecipeOrder: {
-    findMany: jest.fn().mockResolvedValue(data.customRecipes ?? []),
+    findMany: jest.fn((args: any) => {
+      const where = args?.where ?? {};
+      if (where.refundedAt) {
+        return Promise.resolve(data.customRefunds ?? []);
+      }
+      if (where.offlineRefundedAt) {
+        return Promise.resolve(data.customOfflineRefunds ?? []);
+      }
+      return Promise.resolve(data.customRecipes ?? []);
+    }),
   },
   orderRefundRecord: {
     findMany: jest.fn().mockResolvedValue(data.orderRefunds ?? []),
@@ -261,6 +270,87 @@ describe('FinanceIncomeService', () => {
     expect(r.fee).toBe(1.8);
   });
 
+  it('定制食谱线上退款冲减收入，并冲回对应手续费', async () => {
+    const prisma: any = makePrisma({
+      customRecipes: [
+        {
+          id: 'c1',
+          amount: 299,
+          actualPaidAmount: 299,
+          isGift: false,
+          paymentChannel: 'WECHAT_ONLINE',
+          paymentConfirmedAt: utc('2026-11-03T03:00:00Z'),
+        },
+      ],
+      customRefunds: [
+        {
+          refundAmount: 299,
+          refundedAt: utc('2026-11-08T03:00:00Z'),
+          paymentConfirmedAt: utc('2026-11-03T03:00:00Z'),
+        },
+      ],
+    });
+
+    const r = await new FinanceIncomeService(prisma).getIncome(period, 0.006);
+
+    expect(r.customRecipe).toBe(299);
+    expect(r.refundTotal).toBe(299);
+    expect(r.netTotal).toBe(0);
+    // 全额退款后线上实收与退款轧差为 0，手续费也应归零（未冲回会得到 1.79）
+    expect(r.fee).toBe(0);
+  });
+
+  it('定制食谱线下退款只减收入，不冲回手续费', async () => {
+    const prisma: any = makePrisma({
+      customRecipes: [
+        {
+          id: 'c1',
+          amount: 600,
+          actualPaidAmount: 600,
+          isGift: false,
+          paymentChannel: 'WECHAT_ONLINE',
+          paymentConfirmedAt: utc('2026-11-03T03:00:00Z'),
+        },
+      ],
+      customOfflineRefunds: [
+        {
+          offlineRefundAmount: 200,
+          offlineRefundedAt: utc('2026-11-08T03:00:00Z'),
+          paymentConfirmedAt: utc('2026-11-03T03:00:00Z'),
+        },
+      ],
+    });
+
+    const r = await new FinanceIncomeService(prisma).getIncome(period, 0.006);
+
+    expect(r.customRecipe).toBe(600);
+    expect(r.refundTotal).toBe(200);
+    expect(r.netTotal).toBe(400);
+    // 线下退款没有撤销微信支付：手续费仍是 600 × 0.006 = 3.6（误冲回会变成 2.4）
+    expect(r.fee).toBe(3.6);
+  });
+
+  it('起账日前的定制食谱单在 11 月退款，计入历史订单退款', async () => {
+    const prisma: any = makePrisma({
+      customRecipes: [],
+      customRefunds: [
+        {
+          refundAmount: 300,
+          refundedAt: utc('2026-11-09T03:00:00Z'),
+          paymentConfirmedAt: utc('2026-10-20T03:00:00Z'),
+        },
+      ],
+    });
+
+    const r = await new FinanceIncomeService(prisma).getIncome(period, 0.006);
+
+    expect(r.customRecipe).toBe(0);
+    expect(r.refundTotal).toBe(300);
+    expect(r.historicalRefundTotal).toBe(300);
+    expect(r.netTotal).toBe(-300);
+    expect(r.fee).toBe(-1.8);
+  });
+
   it('补剂历史订单退款单独归集，并按线上退款冲回手续费', async () => {
     const prisma: any = makePrisma({
       supplements: [],
@@ -315,6 +405,18 @@ describe('FinanceIncomeService', () => {
     ).toMatchObject({
       paymentConfirmedAt: { gte: period.from, lte: period.to },
       isGift: false,
+    });
+    expect(
+      prisma.customRecipeOrder.findMany.mock.calls[1][0].where,
+    ).toMatchObject({
+      refundedAt: { gte: period.from, lte: period.to },
+      refundAmount: { gt: 0 },
+    });
+    expect(
+      prisma.customRecipeOrder.findMany.mock.calls[2][0].where,
+    ).toMatchObject({
+      offlineRefundedAt: { gte: period.from, lte: period.to },
+      offlineRefundAmount: { gt: 0 },
     });
     expect(
       prisma.orderRefundRecord.findMany.mock.calls[0][0].where,

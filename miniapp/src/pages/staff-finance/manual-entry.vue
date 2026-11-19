@@ -117,9 +117,8 @@ import {
   type FinanceExpenseCategory,
 } from '../../api/staff-finance'
 import { getStoredUser } from '../../utils/account'
+import { FINANCE_START_DATE } from '../../constants/finance'
 
-/** 起账日：后端拒绝早于这一天的发生日，picker 也按它裁剪 */
-const FINANCE_START_DATE = '2026-11-01'
 /** 类别记住上次选择（设计文档 §5.3）：只记支出，收入永远只有一项 */
 const CATEGORY_STORAGE_KEY = 'staff-finance:manual-entry-category'
 const TITLE_MAX_LENGTH = 200

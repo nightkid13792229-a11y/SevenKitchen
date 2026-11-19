@@ -132,9 +132,9 @@ import {
   type FinanceExpenseCategory,
 } from '../../api/staff-finance'
 import { getStoredUser } from '../../utils/account'
+import { FINANCE_START_MONTH } from '../../constants/finance'
 
-/** 起账日：早于 2026-11 的月份后端不统计，月份快照也只在起账月之后给 */
-const FINANCE_START_MONTH = '2026-11'
+/** 起账日：早于起账月的月份后端不统计，月份快照也只在起账月之后给 */
 const FINANCE_START_MONTH_NUMBER = Number(FINANCE_START_MONTH.slice(5, 7))
 
 /**

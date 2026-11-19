@@ -1,7 +1,8 @@
 import {
   getReimbursementCustomFeeCategoryLabel,
+  isLegacyReimbursementCustomFeeCategory,
   isReimbursementCustomFeeCategory,
-  type ReimbursementCustomFeeCategory,
+  type ReimbursementCustomFeeCategoryForDisplay,
 } from '../constants/reimbursement';
 
 export type ReimbursementFlowType = 'PURCHASE' | 'OPERATING';
@@ -35,7 +36,8 @@ export interface OperatingExpenseFeeInput {
 }
 
 export interface NormalizedOperatingExpenseFee {
-  category: ReimbursementCustomFeeCategory;
+  /** 新类别只有水电/工具/杂物/其它；老单的房租/工资原样保留，只读回传 */
+  category: ReimbursementCustomFeeCategoryForDisplay;
   description: string;
   amount: number;
 }
@@ -101,9 +103,12 @@ export const normalizeOperatingExpenseFees = (
       };
     }
 
-    const category = isReimbursementCustomFeeCategory(fee.category)
-      ? fee.category
-      : 'OTHER';
+    // 老单的 RENT/PAYROLL 不能改写成 OTHER，否则重提交会篡改历史类别
+    const category =
+      isReimbursementCustomFeeCategory(fee.category) ||
+      isLegacyReimbursementCustomFeeCategory(fee.category)
+        ? fee.category
+        : 'OTHER';
 
     if (category === 'OTHER' && !description) {
       return {

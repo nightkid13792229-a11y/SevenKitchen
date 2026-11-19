@@ -10,6 +10,7 @@ import {
 const read = (path: string) => readFileSync(join(__dirname, path), 'utf8');
 
 const page = read('./bills.vue');
+const financeConstants = read('../../constants/finance.ts');
 const logic = read('./bills-logic.ts');
 const api = read('../../api/staff-finance.ts');
 const pagesJson = read('../../pages.json');
@@ -27,7 +28,9 @@ describe('固定费用', () => {
     expect(page).toMatch(/activeMonth\s*=\s*ref\(currentMonth\.value\)/);
     // 最近三个月：offset 0/1/2 往前推
     expect(page).toContain('offset < 3');
-    expect(page).toContain("'2026-11'");
+    // 起账月从公共常量来，不在页面里各写一遍
+    expect(page).toContain('FINANCE_START_MONTH');
+    expect(financeConstants).toContain("FINANCE_START_DATE = '2026-11-01'");
   });
 
   it('本月待付：名称、金额、几号、状态齐全', () => {

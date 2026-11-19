@@ -189,6 +189,12 @@
               <text>{{ option.label }}</text>
             </view>
           </view>
+          <text
+            v-if="isLegacyReimbursementCustomFeeCategory(fee.category)"
+            class="legacy-fee-note"
+          >
+            历史类别「{{ getReimbursementCustomFeeCategoryLabel(fee.category) }}」只读保留，提交时原样带回；新报请选水电/工具/杂物/其它。
+          </text>
           <input
             v-model="fee.description"
             class="text-input"
@@ -368,11 +374,12 @@ import {
 import { sumImportFees } from '../../../utils/order-import-fees';
 import {
   getReimbursementCustomFeeCategoryLabel,
-  inferReimbursementCustomFeeCategory,
-  isReimbursementCustomFeeCategory,
+  isLegacyReimbursementCustomFeeCategory,
   reimbursementCustomFeeCategoryOptions,
   reimbursementFlowTypeOptions,
+  resolveReimbursementCustomFeeCategoryForEdit,
   type ReimbursementCustomFeeCategory,
+  type ReimbursementCustomFeeCategoryForDisplay,
 } from '../constants/reimbursement';
 import {
   calculateReimbursementTotal,
@@ -385,7 +392,8 @@ import {
 } from './form-state';
 
 interface CustomFee {
-  category?: ReimbursementCustomFeeCategory;
+  /** 新单只会有四项；历史单的房租/工资原样保留，提交时不能丢 */
+  category?: ReimbursementCustomFeeCategoryForDisplay;
   description: string;
   amount: string;
 }
@@ -655,13 +663,12 @@ const loadExistingReimbursement = async (id: string) => {
     customFees.value =
       Array.isArray(data.customFees) && data.customFees.length > 0
         ? data.customFees.map((fee: any) => ({
-            // 房租/工资等已被移出可选类别；老单据里残留的分类不能直接带回去
-            category:
-              (isReimbursementCustomFeeCategory(fee.category)
-                ? fee.category
-                : undefined) ||
-              inferReimbursementCustomFeeCategory(fee.description) ||
-              'OTHER',
+            // 老单的 RENT/PAYROLL 原样保留；只有缺类别时才按描述推断。
+            // 不能因为新增选项里没有房租/工资，就把历史类别改写成「其它」。
+            category: resolveReimbursementCustomFeeCategoryForEdit(
+              fee.category,
+              fee.description,
+            ),
             description: fee.description || '',
             amount: fee.amount?.toString() || '',
           }))
@@ -1330,6 +1337,18 @@ const formatDate = (dateStr: string) => {
 .category-row.compact {
   flex-wrap: wrap;
   overflow: visible;
+}
+
+/* 老单据的房租/工资类别：只展示原文，不参与新增选项 */
+.legacy-fee-note {
+  display: block;
+  margin: -8rpx 0 14rpx;
+  padding: 10rpx 14rpx;
+  border-radius: 8rpx;
+  background-color: #f6efe0;
+  color: #7a5c28;
+  font-size: 22rpx;
+  line-height: 1.5;
 }
 
 .purchase-title-row,

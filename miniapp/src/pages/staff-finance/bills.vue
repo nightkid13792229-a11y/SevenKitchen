@@ -373,14 +373,14 @@ import {
   type FinanceExpenseTemplate,
 } from '../../api/staff-finance'
 import { getStoredUser } from '../../utils/account'
+import { FINANCE_START_MONTH } from '../../constants/finance'
 import {
   buildTemplateFormPayload,
   serviceMonthsForEdit,
   serviceMonthsForInterval,
 } from './bills-logic'
 
-/** 起账月：之前的月份没有账，月份切换不列出来（也就不会误生成） */
-const FINANCE_START_MONTH = '2026-11'
+/** 起账月来自公共常量：之前的月份没有账，月份切换不列出来（也就不会误生成） */
 
 /** 与后端 `FINANCE_EXPENSE_CATEGORY_LABELS` 一一对应（值是真源，中文照抄） */
 const CATEGORY_LABELS: Record<FinanceExpenseCategory, string> = {

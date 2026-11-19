@@ -60,6 +60,20 @@ describe('reimbursement form state', () => {
     ]);
   });
 
+  it('keeps legacy rent/payroll categories when editing old reimbursements', () => {
+    const result = normalizeOperatingExpenseFees([
+      { category: 'RENT', description: '', amount: '200' },
+      { category: 'PAYROLL', description: '6月工资', amount: '100' },
+    ]);
+
+    expect(result.ok).toBe(true);
+    // 老类别原样保留，不能因为新增选项里没有就改写成 OTHER
+    expect(result.fees).toEqual([
+      { category: 'RENT', description: '房租', amount: 200 },
+      { category: 'PAYROLL', description: '6月工资', amount: 100 },
+    ]);
+  });
+
   it('rejects invalid operating fee rows', () => {
     expect(
       normalizeOperatingExpenseFees([

@@ -765,12 +765,21 @@
         </view>
         <view class="form-item">
           <text class="form-label">退款日期</text>
-          <picker mode="date" :value="offlineRefundDate" @change="onOfflineRefundDateChange">
+          <picker
+            mode="date"
+            :value="offlineRefundDate"
+            :start="FINANCE_START_DATE"
+            :end="offlineRefundMaxDate"
+            @change="onOfflineRefundDateChange"
+          >
             <view class="form-picker">
               <text>{{ offlineRefundDate || '请选择退款日期' }}</text>
               <text class="picker-arrow">›</text>
             </view>
           </picker>
+          <text class="address-lock-hint">
+            可选范围：{{ FINANCE_START_DATE }} ~ {{ offlineRefundMaxDate }}（起账日之前的退款不进账）
+          </text>
         </view>
         <view class="form-item">
           <text class="form-label">退款方式</text>
@@ -854,6 +863,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { CARRIERS } from '../../constants/carriers'
+import { FINANCE_START_DATE, isOfflinePaymentMethod } from '../../constants/finance'
 import StaffShipDrawer from '../../components/shipping/StaffShipDrawer.vue'
 import { buildShipDogSummary } from '../../utils/order-ship'
 import { resolveLatestRecipeId } from '../../utils/order-recipe-link'
@@ -897,20 +907,13 @@ import {
   describeProductionDateUpdateError,
   formatProductionDateLabel,
 } from '../../utils/order-production-date'
-
-/**
- * 线下收款方式（与后端 `finance-categories` 的 OFFLINE_PAYMENT_METHODS 同一口径）。
- *
- * 不能只判 OFFLINE / OFFLINE_WECHAT：ADMIN（后台手动确认）、OFFLINE_ALIPAY、
- * OTHER 也都是钱进了个人账户，漏判会让支付宝代客单看不到改价和退款入口。
- */
-const OFFLINE_PAYMENT_METHODS: readonly string[] = [
-  'ADMIN',
-  'OFFLINE',
-  'OFFLINE_WECHAT',
-  'OFFLINE_ALIPAY',
-  'OTHER',
-]
+import {
+  resolveOfflineRefundDefaultAmount,
+  resolveOfflineRefundRemaining,
+  sumOfflineRefundAmounts,
+  validateOfflineRefundAmount,
+  validateOfflineRefundDate,
+} from '../../utils/offline-refund'
 
 /** 线下退款方式（对应 `order_offline_refund.method`） */
 const OFFLINE_REFUND_METHOD_OPTIONS: Array<{
@@ -1206,7 +1209,7 @@ const canEditPackagePlan = computed(() => {
 const isOfflinePaidOrder = computed(() => {
   if (!order.value) return false
   const paid = order.value.paymentStatus === 'SUCCESS' || Boolean(order.value.paidAt)
-  return paid && OFFLINE_PAYMENT_METHODS.includes(order.value.paymentMethod || '')
+  return paid && isOfflinePaymentMethod(order.value.paymentMethod)
 })
 
 const canAdjustAmount = computed(() => {
@@ -1240,18 +1243,17 @@ const canRegisterOfflineRefund = computed(
 )
 
 /** 已登记（未作废）退款合计；金额按分四舍五入，避免浮点尾巴 */
-const offlineRefundTotal = computed(
-  () =>
-    Math.round(
-      offlineRefunds.value.reduce((sum, item) => sum + toNumber(item.amount), 0) * 100,
-    ) / 100,
+const offlineRefundTotal = computed(() =>
+  sumOfflineRefundAmounts(offlineRefunds.value),
 )
 
 /** 还能退多少：实收 − 已登记，最小 0 */
-const offlineRefundRemaining = computed(() => {
-  const paid = toNumber(order.value?.amountTotal)
-  return Math.max(0, Math.round((paid - offlineRefundTotal.value) * 100) / 100)
-})
+const offlineRefundRemaining = computed(() =>
+  resolveOfflineRefundRemaining(order.value?.amountTotal, offlineRefundTotal.value),
+)
+
+/** 退款日期上限：今天（上海时区）；下限是公共常量 FINANCE_START_DATE */
+const offlineRefundMaxDate = computed(() => shanghaiTodayText())
 
 /**
  * 管理员改预约制作日（2026-11-08）。
@@ -1743,7 +1745,7 @@ async function loadOrderDetail() {
       void ensureProductionPhotoShareToken()
       void loadOrderFinancialSummary()
       void loadShipment()
-      if (canRegisterOfflineRefund.value) void loadOfflineRefunds()
+      if (canRegisterOfflineRefund.value) await loadOfflineRefunds()
     }
   } catch (error: any) {
     console.error('[OrderDetail] Load error:', error)
@@ -1795,14 +1797,18 @@ async function loadOfflineRefunds() {
   }
 }
 
-function openOfflineRefundPanel() {
-  // 默认把「还能退的钱」全部填上；老板多数情况是退一部分，再自己改小
-  offlineRefundAmount.value = formatAmount(offlineRefundRemaining.value)
+async function openOfflineRefundPanel() {
+  // 先把最新的「已登记合计」拉回来，再算默认金额：不能用上一屏的旧数，
+  // 否则刚退完一笔再打开，默认金额会多出已经退掉的那部分
+  await loadOfflineRefunds()
+  offlineRefundAmount.value = resolveOfflineRefundDefaultAmount(
+    order.value?.amountTotal,
+    offlineRefundTotal.value,
+  )
   offlineRefundDate.value = shanghaiTodayText()
   offlineRefundMethod.value = 'WECHAT'
   offlineRefundNote.value = ''
   offlineRefundVisible.value = true
-  void loadOfflineRefunds()
 }
 
 function closeOfflineRefundPanel() {
@@ -1811,7 +1817,10 @@ function closeOfflineRefundPanel() {
 }
 
 function onOfflineRefundDateChange(event: any) {
-  offlineRefundDate.value = String(event?.detail?.value || '')
+  const value = String(event?.detail?.value || '')
+  // picker 已经按 start/end 裁剪，这里再兜一层：选中越界日期就当没选
+  if (!validateOfflineRefundDate(value, offlineRefundMaxDate.value).ok) return
+  offlineRefundDate.value = value
 }
 
 function offlineRefundMethodLabel(method?: string): string {
@@ -1824,23 +1833,23 @@ function offlineRefundMethodLabel(method?: string): string {
 async function submitOfflineRefund() {
   if (savingOfflineRefund.value) return
 
-  const amount = Math.round(Number(offlineRefundAmount.value) * 100) / 100
-  if (!Number.isFinite(amount) || amount <= 0) {
-    uni.showToast({ title: '请输入正确的退款金额', icon: 'none' })
+  const amountCheck = validateOfflineRefundAmount(
+    offlineRefundAmount.value,
+    offlineRefundRemaining.value,
+  )
+  if (!amountCheck.ok) {
+    uni.showToast({ title: amountCheck.message, icon: 'none' })
     return
   }
-  if (amount > offlineRefundRemaining.value) {
-    uni.showModal({
-      title: '退款金额超过剩余可退',
-      content: `剩余可退 ¥${formatAmount(offlineRefundRemaining.value)}`,
-      showCancel: false,
-    })
+  const dateCheck = validateOfflineRefundDate(
+    offlineRefundDate.value,
+    offlineRefundMaxDate.value,
+  )
+  if (!dateCheck.ok) {
+    uni.showToast({ title: dateCheck.message, icon: 'none' })
     return
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(offlineRefundDate.value)) {
-    uni.showToast({ title: '请选择退款日期', icon: 'none' })
-    return
-  }
+  const amount = amountCheck.amount
 
   savingOfflineRefund.value = true
   try {

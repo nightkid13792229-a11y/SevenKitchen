@@ -5,6 +5,7 @@ import { join } from 'node:path';
 const read = (path: string) => readFileSync(join(__dirname, path), 'utf8');
 
 const page = read('./manual-entry.vue');
+const financeConstants = read('../../constants/finance.ts');
 const api = read('../../api/staff-finance.ts');
 const pagesJson = read('../../pages.json');
 const payloadType =
@@ -32,8 +33,10 @@ describe('记一笔', () => {
     expect(page).toContain('金额最多两位小数');
   });
 
-  it('日期默认今天，可改，范围 2026-11-01 ~ 今天', () => {
-    expect(page).toContain('2026-11-01');
+  it('日期默认今天，可改，范围起账日 ~ 今天', () => {
+    // 起账日抽到公共常量，页面引用它，不在每个页面各写一遍日期
+    expect(page).toContain('FINANCE_START_DATE');
+    expect(financeConstants).toContain("FINANCE_START_DATE = '2026-11-01'");
     expect(page).toContain('mode="date"');
     expect(page).toContain(':start="minDate"');
     expect(page).toContain(':end="maxDate"');

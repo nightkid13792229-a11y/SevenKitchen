@@ -7,7 +7,6 @@ import {
   CompareOffersDto,
   FormAdviceDto,
   ReadLabelImagesDto,
-  type SupplementFormLevel,
 } from '../dto/ingredient-creation/supplement-agent.dto';
 import { SupplementOfferFetcherService } from '../../application/ingredient-creation/supplement-offer-fetcher.service';
 import { SupplementFormAdviceService } from '../../application/ingredient-creation/supplement-form-advice.service';
@@ -43,13 +42,6 @@ const NUTRIENT_EN: Record<string, string> = {
   'vitamins.vitaminC': 'vitamin c',
   'fattyAcids.epa': 'omega 3 fish oil',
   'fattyAcids.dha': 'omega 3 fish oil',
-};
-
-const FORM_LEVEL_EN: Record<SupplementFormLevel, string> = {
-  ORGANIC_CHELATE: 'chelate',
-  INORGANIC_SALT: 'sulfate',
-  OXIDE: 'oxide',
-  OTHER: '',
 };
 
 export interface CompareOffersView {
@@ -112,7 +104,7 @@ export class SupplementAgentController {
   })
   async compare(@Body() dto: CompareOffersDto): Promise<ApiResponseDto<CompareOffersView>> {
     const rule = resolvePriceBasis(dto.nutrientKey);
-    const keyword = dto.keyword?.trim() || buildKeyword(dto.nutrientKey, dto.formLevel);
+    const keyword = dto.keyword?.trim() || buildKeyword(dto.nutrientKey);
 
     const fetched = await this.fetcher.fetchOffers({
       keyword,
@@ -121,7 +113,8 @@ export class SupplementAgentController {
       formLevel: dto.formLevel,
     });
 
-    const offers = rankOffers(fetched.offers, dto.formLevel);
+    // 没选形态（空表直接比价）时按 null 处理：不做同档分组，全部参与比价
+    const offers = rankOffers(fetched.offers, dto.formLevel ?? null);
     const recommendation = recommendOffer(offers, rule);
 
     return new ApiResponseDto(0, 'Success', {
@@ -135,9 +128,7 @@ export class SupplementAgentController {
   }
 }
 
-function buildKeyword(nutrientKey: string, formLevel: string): string {
-  const nutrient = NUTRIENT_EN[nutrientKey] ?? nutrientKey.split('.').pop() ?? nutrientKey;
-  // 维度模式传进来的是候选键（bisglycinate / 硫酸铜），认识的直接拼，不认识的就只搜营养素
-  const form = FORM_LEVEL_EN[formLevel as SupplementFormLevel];
-  return form ? `${nutrient} ${form}` : nutrient;
+function buildKeyword(nutrientKey: string): string {
+  // 搜索词只拼营养素：具体形态由前端用候选的中文名当 keyword 传进来（中文站更好搜）
+  return NUTRIENT_EN[nutrientKey] ?? nutrientKey.split('.').pop() ?? nutrientKey;
 }

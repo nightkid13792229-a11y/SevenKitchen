@@ -29,6 +29,23 @@ export function statusMeta(status: string): StatusMeta {
   return STATUS_META[status] ?? (STATUS_META.MARKET_ONLY as StatusMeta)
 }
 
+/**
+ * 能不能给"用这个"主按钮。
+ *
+ * 只有「有原文 + 结论是推荐/可用」才算正常选择；
+ * 「有原文但判为不推荐 / 没结论」必须走「仍用这一档」+ 确认，否则
+ * 页面会出现"红标不推荐 + 蓝色主按钮"的怪组合，快照也看不出是人硬选的。
+ */
+export function canPick(candidate: {
+  status: string
+  verdict: SupplementFormVerdict
+}): boolean {
+  return (
+    candidate.status === 'EVIDENCED' &&
+    (candidate.verdict === 'RECOMMENDED' || candidate.verdict === 'ACCEPTABLE')
+  )
+}
+
 const VERDICT_LABELS: Record<SupplementFormVerdict, { label: string; type: TagType }> = {
   RECOMMENDED: { label: '推荐', type: 'success' },
   ACCEPTABLE: { label: '可用', type: 'info' },

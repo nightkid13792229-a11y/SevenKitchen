@@ -4,7 +4,8 @@
       <div>
         <h3>② 比价</h3>
         <p class="compare-step__desc">
-          同一档形态里，按「每 1000 单位有效成分多少钱」排；算不出的排在后面并写明缺哪一格。
+          按「每 1000 单位有效成分多少钱」排；算不出的排在后面并写明缺哪一格。
+          形态不同的商品会一起列出——中文站搜不到「硫酸铜」这种精确词，看标签确认。
         </p>
       </div>
       <div class="compare-step__actions">
@@ -124,8 +125,10 @@ async function load(): Promise<void> {
   try {
     const data = await ingredientCreationApi.compareSupplementOffers({
       nutrientKey: props.nutrientKey,
-      formLevel: props.formLevel,
-      keyword: props.formKeyword?.trim() || undefined,
+      // 没选形态（空表直接比价）时不传，后端按"不做同档分组"处理
+      ...(props.formLevel ? { formLevel: props.formLevel } : {}),
+      // 不用候选的中文名当搜索词：中文站搜「硫酸铜」会返回一堆多维片，
+      // 搜索统一按营养素（后端用英文名），形态只记在档案快照里
       limit: 8
     })
     emit('update:comparison', data)

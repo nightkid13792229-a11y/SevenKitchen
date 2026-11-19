@@ -1,20 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
-
-/**
- * 补剂的形态档位。
- *
- * **只到档位，不到具体盐名**：知识库里 `bisglycinate` / `proteinate` 各 0 段，
- * 让模型点名具体盐等于让它编。档位与 `docs/superpowers/specs/2026-11-20-*.md` §4.5 一致。
- */
-export const SUPPLEMENT_FORM_LEVELS = [
-  'ORGANIC_CHELATE',
-  'INORGANIC_SALT',
-  'OXIDE',
-  'OTHER',
-] as const;
-
-export type SupplementFormLevel = (typeof SUPPLEMENT_FORM_LEVELS)[number];
+import { IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class CompareOffersDto {
   @ApiProperty({ description: '规范营养字段，如 minerals.copper', example: 'minerals.copper' })
@@ -23,15 +8,15 @@ export class CompareOffersDto {
   @MaxLength(120)
   nutrientKey!: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description:
-      '这次选定的形态：可以是旧的四档枚举，也可以是维度模式里抽出来的候选键（如 bisglycinate）',
+      '这次选定的形态候选键（如 bisglycinate）。没有形态可问时可以不带——此时不做同档分组',
     example: 'bisglycinate',
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(60)
-  formLevel!: string;
+  formLevel?: string;
 
   @ApiPropertyOptional({ description: '搜索词；不传则按营养素 + 档位组词', example: 'copper chelate' })
   @IsOptional()

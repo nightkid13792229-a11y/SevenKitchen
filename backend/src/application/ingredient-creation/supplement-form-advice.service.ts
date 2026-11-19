@@ -1,9 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  AgentProviderConfigService,
-  type DeepSeekRuntimeConfig,
-} from '../nutrition-governance/agent-provider-config.service';
-import { INGREDIENT_INTAKE_AGENT_PURPOSE } from './ingredient-creation-intake.service';
 import { KnowledgeGatewayService } from '../knowledge-v3/knowledge-gateway.service';
 import { executeKnowledgeTool } from '../knowledge-v3/knowledge-v3.tools';
 import type {
@@ -38,8 +33,8 @@ import {
  * 这是**固定管线**，不是自由 Agent：查什么、读几页、按什么结构输出，都由这里定。
  * 模型只做一件它擅长的事——读英文原文，判断哪一档对狗更合适。
  *
- * 一条硬规矩：**没有原文就没有结论**。校验在 domain 的 `enforceCitationRule` 里，
- * 这里只负责把它接上。
+ * 一条硬规矩：**没有原文就没有结论**。校验在 `verifyAgainstPages`（逐字）
+ * 与 `gateVerdict`（原句得真的在表态）里，这里只负责把它们接上。
  */
 const MAX_FIND_QUERIES = 4;
 const MAX_READS = 4;
@@ -59,7 +54,6 @@ export class SupplementFormAdviceService {
   private readonly logger = new Logger(SupplementFormAdviceService.name);
 
   constructor(
-    private readonly providerConfig: AgentProviderConfigService,
     private readonly knowledge: KnowledgeGatewayService,
     private readonly kbForms: SupplementKbFormService,
     private readonly marketForms: SupplementMarketFormService,
@@ -225,6 +219,9 @@ export class SupplementFormAdviceService {
     const retrieval = await this.collectPages(english);
     this.logRetrieval('dimensions', nutrientKey, retrieval);
 
+    // 出处要写人能看懂的书名，不能把 nrc-NRC-2006-... 这种内部 id 甩给老板
+    const titles = await this.loadDocumentTitles();
+
     // 两条抽取各自兜底：一边挂了不能把整屏带崩
     let kbTerms: KbCandidate[] = [];
     let market: { terms: MarketTerm[]; compound: boolean } = { terms: [], compound: false };
@@ -235,6 +232,7 @@ export class SupplementFormAdviceService {
         nutrientKey,
         nutrientEnglish: english,
         question,
+        titles,
         pages: retrieval.excerpts.map((item) => ({
           documentId: item.documentId,
           page: item.page,
@@ -280,7 +278,12 @@ export class SupplementFormAdviceService {
       gaps.push('两边都没抽到候选，这一项直接进比价');
     }
     if (!recommendation && dimensions.length > 0) {
-      gaps.push('知识库里没有给出可用结论，下面都是市场常见说法，请你判断');
+      const allMarketOnly = merged.every((item) => item.status === 'MARKET_ONLY');
+      gaps.push(
+        allMarketOnly
+          ? '知识库里没有依据，下面都是市场常见说法，请你判断'
+          : '有原文，但没有给出可用结论，请你判断',
+      );
     }
 
     this.logger.log(
@@ -294,15 +297,21 @@ export class SupplementFormAdviceService {
       dimensions,
       recommendation,
       gaps,
-      retrieval,
+      // 只回"读了哪几页"；整页正文不能随响应回到前端（会话快照会把它存下来）
+      retrieval: stripExcerpts(retrieval),
     };
   }
 
-  private async loadRuntime(): Promise<DeepSeekRuntimeConfig> {
-    return this.providerConfig.getEnabledDeepSeekRuntimeConfig({
-      purpose: INGREDIENT_INTAKE_AGENT_PURPOSE,
-      fallbackToDefault: false,
-    });
+  /** 知识库目录：documentId → 书名。拿不到就算了，出处回退显示 id。 */
+  private async loadDocumentTitles(): Promise<Map<string, string>> {
+    const titles = new Map<string, string>();
+    const catalog = await executeKnowledgeTool(this.knowledge, 'kb_catalog', {});
+    if (catalog.ok) {
+      for (const source of (catalog.data as KbCatalogResult).sources) {
+        titles.set(source.id, source.title);
+      }
+    }
+    return titles;
   }
 }
 

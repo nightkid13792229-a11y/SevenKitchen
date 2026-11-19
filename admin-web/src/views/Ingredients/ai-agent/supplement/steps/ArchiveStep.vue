@@ -484,16 +484,21 @@ async function readImages(): Promise<void> {
  * 只存"当时看到的"，不存推断；事后复核时能一路对回原文与比价表。
  */
 function buildSelection(): Record<string, unknown> {
+  const dimensions = props.formAdvice?.dimensions ?? []
   const candidate =
-    props.formAdvice?.dimensions
-      .flatMap((group) => group.candidates)
-      .find((item) => item.key === props.chosenForm?.candidateKey) ?? null
+    dimensions.flatMap((group) => group.candidates).find(
+      (item) => item.key === props.chosenForm?.candidateKey
+    ) ?? null
   return {
     dimensionKey: props.chosenForm?.dimensionKey ?? null,
     candidateKey: props.chosenForm?.candidateKey ?? null,
     candidateLabel: props.chosenForm?.labelZh ?? null,
-    // 「市场有、库里没依据」的选择要留下来：这是人拍的板
-    humanOverride: !!props.chosenForm && props.chosenForm.status !== 'EVIDENCED',
+    // 人硬选的情形都算覆盖：市场有但没依据，或有原文但结论是"不推荐/无结论"
+    humanOverride:
+      !!props.chosenForm &&
+      (props.chosenForm.status !== 'EVIDENCED' ||
+        (props.chosenForm.verdict !== 'RECOMMENDED' &&
+          props.chosenForm.verdict !== 'ACCEPTABLE')),
     nutrientKey: props.formAdvice?.nutrientKey ?? null,
     nutrientLabel: props.formAdvice?.nutrientLabel ?? null,
     gaps: props.formAdvice?.gaps ?? [],

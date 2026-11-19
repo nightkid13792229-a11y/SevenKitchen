@@ -70,8 +70,10 @@
             </span>
           </div>
           <div v-else class="advice-step__verdict advice-step__verdict--none">
-            <b>知识库里没有可用结论，请你判断</b>
-            <span class="advice-step__verdict-reason">下面都是市场常见说法，没有原文支撑</span>
+            <b>{{ allMarketOnly ? '知识库里没有依据，请你判断' : '有原文，但没给出可用结论' }}</b>
+            <span class="advice-step__verdict-reason">
+              {{ allMarketOnly ? '下面都是市场常见说法，没有原文支撑' : '下面的结论需要你自己判断' }}
+            </span>
           </div>
 
           <section v-for="group in advice.dimensions" :key="group.key" class="dimension">
@@ -101,8 +103,9 @@
                 <span v-if="candidate.market" class="advice-card__market">
                   {{ candidate.market.count }} 个商品在用这个说法
                 </span>
+                <span v-else class="advice-card__market">市场上没见到这个说法</span>
                 <el-button
-                  v-if="statusMeta(candidate.status).recommendable"
+                  v-if="canPick(candidate)"
                   class="advice-card__pick"
                   type="primary"
                   size="small"
@@ -172,6 +175,7 @@ import type {
   SupplementDimensionsAdviceDto
 } from '@/types/ingredientCreation'
 import {
+  canPick,
   citationsOf,
   citationText,
   isEmptyAdvice,
@@ -199,6 +203,7 @@ const emit = defineEmits<{
       candidateKey: string
       labelZh: string
       status: 'EVIDENCED' | 'MARKET_ONLY'
+      verdict: 'RECOMMENDED' | 'ACCEPTABLE' | 'AVOID' | 'NO_EVIDENCE'
     }
   ): void
   (event: 'skip'): void
@@ -217,6 +222,13 @@ const question = ref('')
 const loading = ref(false)
 const errorText = ref('')
 const advice = ref<SupplementDimensionsAdviceDto | null>(null)
+
+const allMarketOnly = computed(
+  () =>
+    (advice.value?.dimensions ?? []).every((group) =>
+      group.candidates.every((item) => item.status === 'MARKET_ONLY')
+    ) && (advice.value?.dimensions.length ?? 0) > 0
+)
 
 const recommendedCandidate = computed(() => {
   const target = advice.value?.recommendation
@@ -246,7 +258,7 @@ async function ask(): Promise<void> {
     })
     emit('loaded', advice.value)
     if (advice.value.dimensions.length === 0) {
-      ElMessage.info('这一类没有可比的形态，直接去比价')
+      ElMessage.info('这次没抽到可比的形态，可以直接去比价')
     }
   } catch (error) {
     errorText.value = apiErrorMessage(error, '这次没查成，稍后再试')
@@ -279,7 +291,8 @@ function pick(candidate: SupplementDimensionCandidateDto): void {
     dimensionKey: candidate.dimension,
     candidateKey: candidate.key,
     labelZh: candidate.labelZh,
-    status: candidate.status
+    status: candidate.status,
+    verdict: candidate.verdict
   })
 }
 

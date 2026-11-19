@@ -78,7 +78,8 @@ export const ingredientCreationApi = {
    */
   compareSupplementOffers: (payload: {
     nutrientKey: string
-    formLevel: string
+    /** 没有形态可问时可以不传：后端不做同档分组 */
+    formLevel?: string
     keyword?: string
     limit?: number
   }): Promise<SupplementComparisonDto> =>

@@ -37,7 +37,7 @@ export interface FetchOffersInput {
   keyword: string;
   limit: number;
   nutrientKey: string;
-  /** 本次选定的形态档位；只用于给每行打标记，不用于过滤 */
+  /** 本次选定的形态候选；没选就是 null（空表直接比价），不做同档标记 */
   formLevel?: string | null;
 }
 

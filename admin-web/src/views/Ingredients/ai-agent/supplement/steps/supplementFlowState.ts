@@ -26,6 +26,8 @@ export interface ChosenForm {
   candidateKey: string
   labelZh: string
   status: 'EVIDENCED' | 'MARKET_ONLY'
+  /** 这一档的结论；AVOID/无结论被人硬选时，快照要记成人工覆盖 */
+  verdict: 'RECOMMENDED' | 'ACCEPTABLE' | 'AVOID' | 'NO_EVIDENCE'
 }
 
 export interface SupplementFlowState {
@@ -34,13 +36,15 @@ export interface SupplementFlowState {
   nutrientLabel: string
   formAdvice: SupplementDimensionsAdviceDto | null
   chosenForm: ChosenForm | null
+  /** 这一类没有形态可问时置 true：第 2 步放行，但没有任何形态锚点 */
+  formSkipped: boolean
   comparison: SupplementComparisonDto | null
   chosenOfferUrl: string | null
   archive: SupplementDraftValue
   saved: SupplementSavedResult | null
 }
 
-export const FLOW_STORAGE_KEY = 'supplement-flow-v2'
+export const FLOW_STORAGE_KEY = 'supplement-flow-v3'
 
 export interface SimpleStorage {
   getItem(key: string): string | null
@@ -55,6 +59,7 @@ export function emptyFlowState(): SupplementFlowState {
     nutrientLabel: '',
     formAdvice: null,
     chosenForm: null,
+    formSkipped: false,
     comparison: null,
     chosenOfferUrl: null,
     archive: emptySupplementDraft(),
@@ -78,7 +83,8 @@ export function effectiveForm(state: SupplementFlowState): ChosenForm | null {
         dimensionKey: hit.dimension,
         candidateKey: hit.key,
         labelZh: hit.labelZh,
-        status: hit.status
+        status: hit.status,
+        verdict: hit.verdict
       }
     }
   }
@@ -90,7 +96,7 @@ export function canEnter(state: SupplementFlowState, step: FlowStep): boolean {
     case 1:
       return true
     case 2:
-      return !!effectiveForm(state)
+      return state.formSkipped || !!effectiveForm(state)
     case 3:
       return !!state.chosenOfferUrl
     case 4:
@@ -149,10 +155,22 @@ export function loadSnapshot(storage?: SimpleStorage): SupplementFlowState | nul
     if (step !== 1 && step !== 2 && step !== 3 && step !== 4) {
       return null
     }
-    // 老快照可能缺字段：以空状态为底，只覆盖有的
+    // 老快照可能缺字段：以空状态为底，只覆盖有的。
+    // 形态建议的结构在 v3 变过（options → dimensions），旧的直接丢掉回第 1 步，
+    // 否则第 3 步提交时会对 undefined 调 flatMap（2026-11-20 复核）。
+    const advice = parsed.formAdvice
+    const adviceValid =
+      advice === null ||
+      advice === undefined ||
+      Array.isArray((advice as { dimensions?: unknown }).dimensions)
+
     return {
       ...emptyFlowState(),
       ...parsed,
+      step: adviceValid ? (parsed.step as FlowStep) : 1,
+      formAdvice: adviceValid ? (advice ?? null) : null,
+      chosenForm: adviceValid ? (parsed.chosenForm ?? null) : null,
+      formSkipped: adviceValid ? !!parsed.formSkipped : false,
       archive: {
         ...emptySupplementDraft(),
         ...(parsed.archive ?? {})

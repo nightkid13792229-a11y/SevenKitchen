@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  canPick,
   citationsOf,
   citationText,
   isEmptyAdvice,
@@ -63,6 +64,22 @@ describe('statusMeta', () => {
 
   it('认不出的状态按最保守的算', () => {
     expect(statusMeta('SOMETHING').recommendable).toBe(false)
+  })
+})
+
+describe('canPick', () => {
+  it('有原文且结论是推荐/可用，才给主按钮', () => {
+    expect(canPick({ status: 'EVIDENCED', verdict: 'RECOMMENDED' })).toBe(true)
+    expect(canPick({ status: 'EVIDENCED', verdict: 'ACCEPTABLE' })).toBe(true)
+  })
+
+  it('有原文但判为不推荐/无结论，走"仍用这一档"', () => {
+    expect(canPick({ status: 'EVIDENCED', verdict: 'AVOID' })).toBe(false)
+    expect(canPick({ status: 'EVIDENCED', verdict: 'NO_EVIDENCE' })).toBe(false)
+  })
+
+  it('市场独有的永远不给主按钮', () => {
+    expect(canPick({ status: 'MARKET_ONLY', verdict: 'NO_EVIDENCE' })).toBe(false)
   })
 })
 

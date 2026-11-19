@@ -119,13 +119,25 @@ function jump(step: FlowStep): void {
 }
 
 function onAdviceLoaded(advice: SupplementDimensionsAdviceDto): void {
-  state.value = { ...state.value, formAdvice: advice }
+  // nutrientKey 必须在这里写进状态：第 2 步的渲染条件是 `state.nutrientKey`，
+  // 只存 formAdvice 的话，选完形态页面会停在步骤条上（2026-11-20 复核阻塞项）
+  state.value = {
+    ...state.value,
+    nutrientKey: advice.nutrientKey,
+    nutrientLabel: advice.nutrientLabel,
+    formAdvice: advice,
+    chosenForm: null,
+    formSkipped: false,
+    comparison: null,
+    chosenOfferUrl: null
+  }
 }
 
 function onFormChosen(payload: ChosenForm): void {
   state.value = {
     ...state.value,
     chosenForm: payload,
+    formSkipped: false,
     // 换形态就是换一批货，旧表不能留着
     comparison: null,
     chosenOfferUrl: null
@@ -135,7 +147,8 @@ function onFormChosen(payload: ChosenForm): void {
 
 /** 这一类没有形态可问：直接进比价，不逼着人点一个假选项 */
 function onSkipToCompare(): void {
-  state.value = goTo({ ...state.value, chosenForm: null }, 2)
+  // 没有形态可问：记住"跳过了"，否则 canEnter(2) 会把人锁在第 1 步
+  state.value = goTo({ ...state.value, chosenForm: null, formSkipped: true }, 2)
 }
 
 function onSaved(result: { ingredientId: string; nutritionFoodId: string; evidenceId: string }): void {

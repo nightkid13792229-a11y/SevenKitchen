@@ -68,6 +68,11 @@ describe('canEnter', () => {
     expect(effectiveForm(withAdvice())?.candidateKey).toBe('coppersulfate')
   })
 
+  it('跳过形态（空表直接比价）也能进第 2 步', () => {
+    const state = { ...emptyFlowState(), formSkipped: true }
+    expect(canEnter(state, 2)).toBe(true)
+  })
+
   it('没有选中商品，不能进第 3 步', () => {
     expect(canEnter(withAdvice(), 3)).toBe(false)
     expect(canEnter({ ...withAdvice(), chosenOfferUrl: 'u' }, 3)).toBe(true)
@@ -113,6 +118,23 @@ describe('快照', () => {
     const restored = loadSnapshot(storage)
     expect(restored?.nutrientLabel).toBe('锌')
     expect(restored?.archive.servingNutrients).toEqual({})
+  })
+
+  it('旧的固定四档快照（没有 dimensions）直接丢掉回第 1 步', () => {
+    const storage = memoryStorage()
+    storage.setItem(
+      FLOW_STORAGE_KEY,
+      JSON.stringify({
+        step: 3,
+        nutrientLabel: '铜',
+        formAdvice: { options: [{ level: 'OXIDE' }], recommendedLevel: 'OXIDE' },
+        chosenForm: { candidateKey: 'x' }
+      })
+    )
+    const restored = loadSnapshot(storage)
+    expect(restored?.step).toBe(1)
+    expect(restored?.formAdvice).toBeNull()
+    expect(restored?.chosenForm).toBeNull()
   })
 
   it('清除后读不到', () => {

@@ -71,6 +71,8 @@ export interface KbExtractInput {
   pages: ReadPage[];
   /** 用户补充的一句话；有就一起给模型看 */
   question?: string;
+  /** documentId → 书名；出处用得上 */
+  titles?: Map<string, string>;
 }
 
 @Injectable()
@@ -118,7 +120,7 @@ export class SupplementKbFormService {
       const gated = gateVerdict(record.verdict, record.quote);
       const citation = {
         documentId: record.documentId,
-        documentName: record.documentId,
+        documentName: input.titles?.get(record.documentId) ?? record.documentId,
         page: record.page,
         quote: record.quote,
       };

@@ -174,29 +174,36 @@ export class FinanceEntriesService {
     return resolvePeriod(query?.from, query?.to);
   }
 
-  /** 来源表 id 直接当明细 id；同一张单既收入又退款时用后缀区分 */
+  /**
+   * 来源表 id 直接当明细 id；退款行用 `rowId`（退款记录 id 加渠道前缀），
+   * 保证同一张单的「收款 + 多笔退款」各自有唯一的行 key。
+   */
   private incomeEntryId(line: FinanceIncomeLine): string {
-    if (
-      line.isRefund &&
-      (line.sourceType === 'SUPPLEMENT_ORDER' ||
-        line.sourceType === 'CUSTOM_RECIPE_ORDER')
-    ) {
-      return `${line.sourceId}:refund`;
-    }
-    return line.sourceId;
+    return line.rowId ?? line.sourceId;
   }
 
   private incomeTitle(line: FinanceIncomeLine): string {
     const no = line.sourceNo ? ` ${line.sourceNo}` : '';
+    if (line.isRefund) {
+      switch (line.sourceType) {
+        case 'ORDER':
+          return line.isHistorical ? `历史订单退款${no}` : `订单退款${no}`;
+        case 'SUPPLEMENT_ORDER':
+          return `补剂退款${no}`;
+        case 'CUSTOM_RECIPE_ORDER':
+          return '定制食谱退款';
+        default:
+          return '退款';
+      }
+    }
+
     switch (line.sourceType) {
       case 'ORDER':
         return `订单收入${no}`;
       case 'SUPPLEMENT_ORDER':
-        return line.isRefund ? `补剂退款${no}` : `补剂订单${no}`;
+        return `补剂订单${no}`;
       case 'CUSTOM_RECIPE_ORDER':
-        return line.isRefund ? '定制食谱退款' : '定制食谱订单';
-      case 'ORDER_REFUND':
-        return line.isHistorical ? `历史订单退款${no}` : `订单退款${no}`;
+        return '定制食谱订单';
       case 'MANUAL':
         return line.title ?? '手工收入';
       default:

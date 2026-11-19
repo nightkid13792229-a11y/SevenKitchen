@@ -112,15 +112,20 @@ describe('FinanceEntriesService', () => {
       month: '2026-11',
     });
 
-    expect(result.items.map((item) => item.id)).toEqual(['r1', 'o1', 'm1']);
+    expect(result.items.map((item) => item.id)).toEqual([
+      'refund:offline:r1',
+      'o1',
+      'm1',
+    ]);
 
     expect(result.items[0]).toMatchObject({
+      id: 'refund:offline:r1',
       direction: 'INCOME',
       category: 'REFUND',
       amount: -100,
       isRefund: true,
       isHistorical: false,
-      sourceType: 'ORDER_REFUND',
+      sourceType: 'ORDER',
       sourceNo: 'SK1',
       occurredAt: '2026-11-03T10:00:00.000+08:00',
     });
@@ -282,6 +287,7 @@ describe('FinanceEntriesService', () => {
           voidedAt: null,
           refundedAt: utc('2026-11-05T03:00:00Z'),
           order: {
+            id: 'o1',
             orderNo: 'SK1',
             paidAt: utc('2026-10-20T02:00:00Z'),
           },
@@ -318,18 +324,229 @@ describe('FinanceEntriesService', () => {
       refundRows.map((row) => [
         row.sourceType,
         row.id,
+        row.sourceId,
+        row.sourceNo,
         row.amount,
         row.isHistorical,
       ]),
     ).toEqual(
       expect.arrayContaining([
-        ['ORDER_REFUND', 'orf1', -30, true],
-        ['SUPPLEMENT_ORDER', 's-old:refund', -60, true],
-        ['CUSTOM_RECIPE_ORDER', 'c1:refund', -200, false],
+        ['ORDER', 'refund:offline:orf1', 'o1', 'SK1', -30, true],
+        ['SUPPLEMENT_ORDER', 'refund:supplement:s-old', 's-old', 'SP9', -60, true],
+        ['CUSTOM_RECIPE_ORDER', 'refund:offline:c1', 'c1', undefined, -200, false],
       ]),
     );
     // 线下退款是收入减项，不产生手续费行
     expect(result.items.some((item) => item.sourceType === 'FEE')).toBe(false);
+  });
+
+  it('线上退款行也指回各自订单，可跳详情', async () => {
+    const prisma: any = makePrisma({
+      orders: [
+        {
+          id: 'o1',
+          orderNo: 'SK1',
+          amountTotal: 1000,
+          paymentMethod: 'WECHAT_PAY',
+          paidAt: utc('2026-11-02T02:00:00Z'),
+          remakeFromOrderId: null,
+          reshipFromOrderId: null,
+        },
+      ],
+      orderRefunds: [
+        {
+          id: 'r1',
+          amount: 100,
+          success: true,
+          successTime: utc('2026-11-03T02:00:00Z'),
+          order: {
+            id: 'o1',
+            orderNo: 'SK1',
+            paidAt: utc('2026-11-02T02:00:00Z'),
+          },
+        },
+      ],
+      supplementRefunds: [
+        {
+          id: 's1',
+          orderNo: 'SP1',
+          refundAmount: 50,
+          refundedAt: utc('2026-11-06T02:00:00Z'),
+          paidAt: utc('2026-11-04T02:00:00Z'),
+          paymentMethod: 'WECHAT_PAY',
+        },
+      ],
+      customRecipeRefunds: [
+        {
+          id: 'c1',
+          refundAmount: 40,
+          refundedAt: utc('2026-11-07T02:00:00Z'),
+          paymentConfirmedAt: utc('2026-11-05T02:00:00Z'),
+        },
+      ],
+    });
+
+    const result = await new FinanceEntriesService(prisma).list({
+      month: '2026-11',
+    });
+    const refundRows = result.items.filter((item) => item.isRefund);
+
+    expect(
+      refundRows.map((row) => [
+        row.id,
+        row.sourceType,
+        row.sourceId,
+        row.sourceNo,
+        row.amount,
+      ]),
+    ).toEqual(
+      expect.arrayContaining([
+        ['refund:r1', 'ORDER', 'o1', 'SK1', -100],
+        ['refund:supplement:s1', 'SUPPLEMENT_ORDER', 's1', 'SP1', -50],
+        ['refund:online:c1', 'CUSTOM_RECIPE_ORDER', 'c1', undefined, -40],
+      ]),
+    );
+  });
+
+  it('明细 id 唯一：同类别采购合并，不同退款渠道分行', async () => {
+    const prisma: any = makePrisma({
+      orders: [
+        {
+          id: 'o1',
+          orderNo: 'SK1',
+          amountTotal: 300,
+          paymentMethod: 'OFFLINE_WECHAT',
+          paidAt: utc('2026-11-02T02:00:00Z'),
+          remakeFromOrderId: null,
+          reshipFromOrderId: null,
+        },
+      ],
+      orderRefunds: [
+        {
+          id: 'r1',
+          amount: 100,
+          success: true,
+          successTime: utc('2026-11-03T02:00:00Z'),
+          order: {
+            id: 'o1',
+            orderNo: 'SK1',
+            paidAt: utc('2026-11-02T02:00:00Z'),
+          },
+        },
+      ],
+      purchaseLists: [
+        {
+          id: 'p1',
+          kind: 'STOCK_REPLENISHMENT',
+          orderNo: 'BH1',
+          paidAmount: 250,
+          personalAmount: 0,
+          subtotalAmount: 250,
+          shippingFee: 0,
+          packagingFee: 50,
+          discountAmount: 0,
+          payerType: 'PERSONAL',
+          orderPlacedAt: utc('2026-11-07T02:00:00Z'),
+          completedAt: null,
+          createdAt: utc('2026-11-07T02:00:00Z'),
+          // 包材商品行与包装费同属 PACKAGING_SUPPLIES，必须合并成一行
+          items: [
+            { id: 'pi1', type: 'FOOD', estimatedCost: 100 },
+            { id: 'pi2', type: 'PACKAGING', estimatedCost: 100 },
+          ],
+          records: [],
+        },
+      ],
+      customRecipes: [
+        {
+          id: 'c1',
+          amount: 100,
+          actualPaidAmount: 100,
+          paymentChannel: 'OFFLINE_WECHAT',
+          paymentConfirmedAt: utc('2026-11-04T02:00:00Z'),
+          isGift: false,
+        },
+      ],
+      customRecipeRefunds: [
+        {
+          id: 'c1',
+          refundAmount: 40,
+          refundedAt: utc('2026-11-05T02:00:00Z'),
+          paymentConfirmedAt: utc('2026-11-04T02:00:00Z'),
+        },
+      ],
+      customRecipeOfflineRefunds: [
+        {
+          id: 'c1',
+          offlineRefundAmount: 30,
+          offlineRefundedAt: utc('2026-11-06T02:00:00Z'),
+          paymentConfirmedAt: utc('2026-11-04T02:00:00Z'),
+        },
+      ],
+    });
+
+    const result = await new FinanceEntriesService(prisma).list({
+      month: '2026-11',
+    });
+
+    const ids = result.items.map((item) => item.id);
+    expect(new Set(ids).size).toBe(ids.length);
+
+    const packagingRows = result.items.filter(
+      (item) => item.id === 'p1:PACKAGING_SUPPLIES',
+    );
+    expect(packagingRows).toHaveLength(1);
+    expect(packagingRows[0].amount).toBe(150);
+
+    expect(ids).toEqual(
+      expect.arrayContaining(['refund:online:c1', 'refund:offline:c1']),
+    );
+  });
+
+  it('金额与采购记录都缺的采购单仍出一行 0 元提示，不静默消失', async () => {
+    const prisma: any = makePrisma({
+      purchaseLists: [
+        {
+          id: 'p1',
+          kind: 'STOCK_REPLENISHMENT',
+          orderNo: 'BH1',
+          paidAmount: null,
+          personalAmount: null,
+          subtotalAmount: null,
+          shippingFee: null,
+          packagingFee: null,
+          discountAmount: null,
+          payerType: 'PERSONAL',
+          orderPlacedAt: utc('2026-11-07T02:00:00Z'),
+          completedAt: null,
+          createdAt: utc('2026-11-07T02:00:00Z'),
+          items: [],
+          records: [],
+        },
+      ],
+    });
+
+    const result = await new FinanceEntriesService(prisma).list({
+      month: '2026-11',
+    });
+    const expense = await new FinanceExpenseService(prisma).getExpense(
+      period,
+      0,
+    );
+
+    expect(expense.total).toBe(0);
+    expect(expense.byCategory).toEqual([]);
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: 'p1:OTHER',
+      direction: 'EXPENSE',
+      category: 'OTHER',
+      amount: 0,
+      sourceType: 'PURCHASE',
+      sourceNo: 'BH1',
+    });
+    expect(result.items[0].title).toContain('金额缺失');
   });
 
   it('手工收入进入明细并计入收入净额', async () => {
@@ -773,7 +990,6 @@ describe('FinanceEntriesService', () => {
         'ORDER',
         'SUPPLEMENT_ORDER',
         'CUSTOM_RECIPE_ORDER',
-        'ORDER_REFUND',
         'PURCHASE',
         'SHIPPING',
         'BILL',

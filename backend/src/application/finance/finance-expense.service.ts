@@ -205,12 +205,29 @@ function resolvePurchaseItemCategory(
 }
 
 /**
+ * 金额、采购记录都拿不到的非草稿采购单：仍出一行 0 元占位，
+ * 标题写明「金额缺失」，让老板能在明细里发现并补录（设计文档 Review Focus #4）。
+ * 汇总侧 `addCents` 会跳过 0 元，所以不影响支出合计。
+ */
+function missingAmountPurchaseLine(list: PurchaseListRow): FinanceExpenseLine {
+  const category =
+    list.items.length > 0
+      ? resolvePurchaseItemCategory(list.items[0].type)
+      : 'OTHER';
+  const line = purchaseLine(list, category, 0, purchaseOccurredAt(list));
+  return { ...line, title: `${line.title}（金额缺失，请补录）` };
+}
+
+/**
  * 采购支出明细行：两种采购单按 kind 分流，同一张单只走一条路。
  *
  * - `STOCK_REPLENISHMENT`：`实付 − 个人消费` 按「商品行 + 运费 + 包装费」权重摊；
  *   实付为空时用 `小计 + 运费 + 包装费 − 优惠` 兜底；
  * - `ORDER_DEMAND`（以及拿不到单据金额的补货单）：按 `PurchaseRecord.actualCost`
  *   之和，按商品行类型归类，个人消费从合计里按权重摊减。
+ *
+ * 同一类别的多笔金额（例如包材商品行 + 包装费）合并成一行：
+ * 明细的 id 是「单据 id + 类别」，同一来源同一类别必须只有一个行 key。
  */
 export function buildPurchaseExpenseLines(
   list: PurchaseListRow,
@@ -224,11 +241,11 @@ export function buildPurchaseExpenseLines(
         toCents(list.packagingFee) -
         toCents(list.discountAmount);
 
-  if (grossCents <= 0) {
-    return buildPurchaseRecordLines(list, period);
-  }
-  if (list.kind === 'ORDER_DEMAND') {
-    return buildPurchaseRecordLines(list, period);
+  if (grossCents <= 0 || list.kind === 'ORDER_DEMAND') {
+    const recordLines = buildPurchaseRecordLines(list, period);
+    return recordLines.length > 0
+      ? recordLines
+      : [missingAmountPurchaseLine(list)];
   }
 
   const baseCents = grossCents - toCents(list.personalAmount);
@@ -275,10 +292,18 @@ export function buildPurchaseExpenseLines(
     baseCents,
     lines.map((line) => line.weightCents),
   );
-  return lines
-    .map((line, index) =>
-      purchaseLine(list, line.category, shares[index], occurredAt),
-    )
+
+  // 包材商品行与包装费同属 PACKAGING_SUPPLIES，必须合并成一行（id 才不会重复）
+  const mergedCents = new Map<FinanceExpenseCategory, number>();
+  lines.forEach((line, index) => {
+    mergedCents.set(
+      line.category,
+      (mergedCents.get(line.category) ?? 0) + shares[index],
+    );
+  });
+
+  return Array.from(mergedCents.entries())
+    .map(([category, cents]) => purchaseLine(list, category, cents, occurredAt))
     .filter((line) => line.amountCents !== 0);
 }
 

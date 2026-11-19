@@ -52,6 +52,8 @@ export type FinanceIncomeLine = {
     | 'ORDER_REFUND'
     | 'MANUAL';
   sourceId: string;
+  /** 明细行的唯一 key（退款行用；不填则退回 sourceId） */
+  rowId?: string;
   sourceNo?: string;
   /** 明细页标题；只对手工收入由录入人填写，其余来源由明细服务按类型生成 */
   title?: string;
@@ -158,7 +160,7 @@ const ORDER_REFUND_SELECT = {
   amount: true,
   success: true,
   successTime: true,
-  order: { select: { orderNo: true, paidAt: true } },
+  order: { select: { id: true, orderNo: true, paidAt: true } },
 } satisfies Prisma.OrderRefundRecordSelect;
 
 type OrderRefundRow = Prisma.OrderRefundRecordGetPayload<{
@@ -170,7 +172,7 @@ const OFFLINE_REFUND_SELECT = {
   amount: true,
   voidedAt: true,
   refundedAt: true,
-  order: { select: { orderNo: true, paidAt: true } },
+  order: { select: { id: true, orderNo: true, paidAt: true } },
 } satisfies Prisma.OrderOfflineRefundSelect;
 
 type OfflineRefundRow = Prisma.OrderOfflineRefundGetPayload<{
@@ -256,6 +258,7 @@ function refundLine(input: {
   occurredAt: Date;
   sourceType: FinanceIncomeLine['sourceType'];
   sourceId: string;
+  rowId: string;
   sourceNo?: string | null;
   isOnline: boolean;
   isHistorical: boolean;
@@ -266,6 +269,7 @@ function refundLine(input: {
     occurredAt: input.occurredAt,
     sourceType: input.sourceType,
     sourceId: input.sourceId,
+    rowId: input.rowId,
     sourceNo: input.sourceNo ?? undefined,
     isRefund: true,
     isHistorical: input.isHistorical,
@@ -392,8 +396,9 @@ export function buildOrderRefundLines(
       refundLine({
         amount: toAmount(row.amount),
         occurredAt: row.successTime as Date,
-        sourceType: 'ORDER_REFUND',
-        sourceId: row.id,
+        sourceType: 'ORDER',
+        sourceId: row.order?.id ?? row.id,
+        rowId: `refund:${row.id}`,
         sourceNo: row.order?.orderNo,
         isOnline: true,
         isHistorical: isHistoricalPaidAt(row.order?.paidAt),
@@ -412,8 +417,9 @@ export function buildOfflineRefundLines(
       refundLine({
         amount: toAmount(row.amount),
         occurredAt: row.refundedAt,
-        sourceType: 'ORDER_REFUND',
-        sourceId: row.id,
+        sourceType: 'ORDER',
+        sourceId: row.order?.id ?? row.id,
+        rowId: `refund:offline:${row.id}`,
         sourceNo: row.order?.orderNo,
         isOnline: false,
         isHistorical: isHistoricalPaidAt(row.order?.paidAt),
@@ -435,6 +441,7 @@ export function buildSupplementRefundLines(
         occurredAt: row.refundedAt as Date,
         sourceType: 'SUPPLEMENT_ORDER',
         sourceId: row.id,
+        rowId: `refund:supplement:${row.id}`,
         sourceNo: row.orderNo,
         isOnline: !isOfflinePayment(row.paymentMethod),
         isHistorical: isHistoricalPaidAt(row.paidAt),
@@ -458,6 +465,7 @@ export function buildCustomRecipeRefundLines(
         occurredAt: row.refundedAt as Date,
         sourceType: 'CUSTOM_RECIPE_ORDER',
         sourceId: row.id,
+        rowId: `refund:online:${row.id}`,
         isOnline: true,
         isHistorical: isHistoricalPaidAt(row.paymentConfirmedAt),
       }),
@@ -480,6 +488,7 @@ export function buildCustomRecipeOfflineRefundLines(
         occurredAt: row.offlineRefundedAt as Date,
         sourceType: 'CUSTOM_RECIPE_ORDER',
         sourceId: row.id,
+        rowId: `refund:offline:${row.id}`,
         isOnline: false,
         isHistorical: isHistoricalPaidAt(row.paymentConfirmedAt),
       }),

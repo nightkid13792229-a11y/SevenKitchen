@@ -233,41 +233,41 @@ describe('propose_selection normalization', () => {
     {
       kind: 'FOOD',
       name: '猪里脊',
-      foodCategory: '肉类',
+      foodCategory: '畜肉类及制品',
       ingredientId: 'ing-1',
       reason: '低脂蛋白',
     },
     {
       kind: 'FOOD',
       name: '兔里脊',
-      foodCategory: '肉类',
+      foodCategory: '畜肉类及制品',
       ingredientId: 'ing-2',
       reason: '低脂蛋白',
     },
     {
       kind: 'FOOD',
       name: '大米',
-      foodCategory: '谷类',
+      foodCategory: '谷类及制品',
       ingredientId: 'ing-3',
       reason: '低脂碳水',
     },
     {
       kind: 'FOOD',
       name: '小米',
-      foodCategory: '谷类',
+      foodCategory: '谷类及制品',
       ingredientId: 'ing-4',
       reason: '碳水轮换',
     },
     {
       kind: 'FOOD',
       name: '鹿肉',
-      foodCategory: '肉类',
+      foodCategory: '畜肉类及制品',
       reason: '库外非常见蛋白',
     },
     {
       kind: 'FOOD',
       name: '鸭肉',
-      foodCategory: '肉类',
+      foodCategory: '畜肉类及制品',
       reason: '库外非常见蛋白',
     },
   ];
@@ -281,7 +281,19 @@ describe('propose_selection normalization', () => {
     expect(normalized.items).toHaveLength(6);
     expect(normalized.items[0].dataStatus).toBe('AVAILABLE');
     expect(normalized.items[4].dataStatus).toBe('MISSING');
-    expect(normalized.items[0].foodCategory).toBe('肉类');
+    expect(normalized.items[0].foodCategory).toBe('畜肉类及制品');
+  });
+
+  it('rejects a simplified category that is not one of the 15 CFCT classes', () => {
+    expect(() =>
+      normalizeSelection({
+        summary: '简化分类',
+        items: baseItems.map((item) => ({
+          ...item,
+          foodCategory: '肉类',
+        })),
+      }),
+    ).toThrow('CFCT 固定 15 类');
   });
 
   it('rejects supplements in the selection stage', () => {
@@ -298,11 +310,11 @@ describe('propose_selection normalization', () => {
       normalizeSelection({
         summary: '单候选',
         items: [
-          ...baseItems.filter((item) => item.foodCategory !== '谷类'),
+          ...baseItems.filter((item) => item.foodCategory !== '谷类及制品'),
           {
             kind: 'FOOD',
             name: '燕麦',
-            foodCategory: '谷类',
+            foodCategory: '谷类及制品',
             ingredientId: 'ing-5',
             reason: '碳水',
           },

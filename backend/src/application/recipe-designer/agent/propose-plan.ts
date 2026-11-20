@@ -11,6 +11,10 @@
  */
 import type { DeepSeekToolDefinition } from '../deepseek-tools-chat';
 import { AgentToolError } from './agent-types';
+import {
+  CFCT_CLASS_PROMPT,
+  CFCT_CLASS_SET,
+} from '../../../domain/recipe-designer/cfct-classes';
 
 export interface AgentPlanConstraint {
   key: string;
@@ -87,7 +91,7 @@ const PROPOSE_SELECTION_DESCRIPTION =
   '提交食材候选，等用户确认。只在选材阶段使用；提交后本次运行暂停。' +
   '选材阶段只列食材，不要列补剂：补剂要等食谱评估出营养缺口后，在配方编辑阶段再补。' +
   '按营养与忌口自由选食材，不要查原料库，也不要填写库 ID；提交后系统会按名称自动匹配原料库，没匹配到才标库外。' +
-  '按 CFCT 食材类型分组，每个类型至少 2 个候选。' +
+  `按 CFCT 固定 15 类分组（${CFCT_CLASS_PROMPT}），每个适用类型至少 2 个候选；不适用的类型跳过并在 notes 说明。` +
   '严禁把方案忌口食材（牛、羊、鸡、鸡蛋及其制品）列为候选，也不要为了凑类型去列禁忌食材；不适用的类型跳过并在 notes 说明。';
 
 export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
@@ -185,7 +189,24 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
               name: { type: 'string' },
               foodCategory: {
                 type: 'string',
-                description: 'CFCT 食材类型，如 肉类/水产/谷类/薯类/蔬菜/水果',
+                enum: [
+                  '谷类及制品',
+                  '薯类及制品',
+                  '干豆类及制品',
+                  '蔬菜类及制品',
+                  '菌藻类',
+                  '水果类及制品',
+                  '坚果种子类',
+                  '畜肉类及制品',
+                  '禽肉类及制品',
+                  '乳类及制品',
+                  '蛋类及制品',
+                  '水产类',
+                  '油脂类',
+                  '调味品类',
+                  '其他',
+                ],
+                description: 'CFCT 固定 15 类原词，不能用简化分组',
               },
               reason: { type: 'string' },
             },
@@ -473,6 +494,12 @@ function normalizeSelectionItem(
     `items[${index}].foodCategory`,
     40,
   );
+  if (!CFCT_CLASS_SET.has(foodCategory)) {
+    throw new AgentToolError(
+      'INVALID_ARGUMENT',
+      `foodCategory 必须是 CFCT 固定 15 类之一：${CFCT_CLASS_PROMPT}`,
+    );
+  }
   const reason = readText(input.reason, `items[${index}].reason`, 1000);
   const ingredientId = readOptionalText(input.ingredientId, 80);
   const nutritionFoodId = readOptionalText(input.nutritionFoodId, 80);

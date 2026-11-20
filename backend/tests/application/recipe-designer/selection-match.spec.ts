@@ -20,14 +20,14 @@ describe('selection name matching', () => {
         {
           kind: 'FOOD' as const,
           name: '猪里脊（生）',
-          foodCategory: '肉类',
+          foodCategory: '畜肉类及制品',
           reason: 'x',
           dataStatus: 'MISSING' as const,
         },
         {
           kind: 'FOOD' as const,
           name: '鸵鸟肉',
-          foodCategory: '肉类',
+          foodCategory: '畜肉类及制品',
           reason: 'x',
           dataStatus: 'MISSING' as const,
         },
@@ -52,7 +52,7 @@ describe('selection name matching', () => {
         {
           kind: 'FOOD' as const,
           name: '兔肉（去皮去脂）',
-          foodCategory: '肉类',
+          foodCategory: '畜肉类及制品',
           reason: 'x',
           dataStatus: 'MISSING' as const,
         },
@@ -74,7 +74,7 @@ describe('selection name matching', () => {
         {
           kind: 'FOOD' as const,
           name: '鱼油',
-          foodCategory: '油脂',
+          foodCategory: '油脂类',
           reason: 'x',
           dataStatus: 'MISSING' as const,
         },

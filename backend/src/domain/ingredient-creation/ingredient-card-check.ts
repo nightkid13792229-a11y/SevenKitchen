@@ -35,6 +35,7 @@ export const INGREDIENT_CARD_RULES: readonly {
 }[] = [
   { code: 'NAME_REQUIRED', level: 'blocking' },
   { code: 'NAME_DUPLICATE', level: 'blocking' },
+  { code: 'TAGS_REQUIRED', level: 'blocking' },
   { code: 'BASE_UNIT_INVALID', level: 'blocking' },
   { code: 'UNIT_LABEL_REQUIRED', level: 'blocking' },
   { code: 'CFCT_REQUIRED', level: 'blocking' },
@@ -71,6 +72,7 @@ const FIELDS_WITH_OWN_REQUIRED_CHECKS: ReadonlySet<IngredientCardFieldKey> =
     'procurementStrategy',
     'labelCategory',
     'labelNames',
+    'tags',
     'densityGPerMl',
     'edibleYieldPercent',
     // 备注已从原料/SKU 表单移除，不再计入「没填完」。
@@ -124,6 +126,18 @@ function isDuplicateName(
   return existingNames.some(
     (existing) => normalizeName(existing) === normalized,
   );
+}
+
+/** 标签数组归一：只留非空字符串，去首尾空白；脏数据按空处理。 */
+function normalizeTagValues(values: unknown): string[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return values
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 /** `null` / `undefined` / 纯空白字符串都算空；数字 0 是有值。 */
@@ -230,6 +244,30 @@ export function runIngredientCardCheck(
       message: `名称「${ingredient.name.trim()}」与已有原料重名（忽略首尾空白、连续空白与大小写），后续采购和配方会分不清是哪一种。`,
       fieldPath: cell('name'),
       suggestion: '在名称里加上部位或规格（如「冷冻三文鱼 带皮」）以便区分。',
+    });
+  }
+
+  // 标签分类是首页「避开」筛选的唯一依据：没有标签，含这道原料的食谱
+  // 在顾客选「避开鸡肉 / 内脏 / 谷物」时不会被排除，所以必须阻断。
+  // 同时要求 tagIds 非空：名称只是页面展示，真正写关联表的是 id。
+  const tagNames = normalizeTagValues(ingredient.tags);
+  const tagIds = normalizeTagValues(ingredient.tagIds);
+  if (tagNames.length === 0) {
+    items.push({
+      code: 'TAGS_REQUIRED',
+      message:
+        '标签分类为空：这一项决定原料能不能被首页「避开」筛选识别（例如避开鸡肉、内脏、谷物），空着上线会让含它的食谱在顾客忌口时漏过去。',
+      fieldPath: cell('tags'),
+      suggestion:
+        '至少选一个已有标签（如鸡肉、内脏、谷物）；同类原料挂到标签树对应的组下。',
+    });
+  } else if (tagIds.length === 0) {
+    items.push({
+      code: 'TAGS_REQUIRED',
+      message:
+        '标签分类没有关联到标签库：页面上有标签名，但没有写入任何标签关联，上线后同样不会被「避开」筛选识别。',
+      fieldPath: cell('tags'),
+      suggestion: '在原料卡里重新选择一次标签并保存，再跑核验。',
     });
   }
 

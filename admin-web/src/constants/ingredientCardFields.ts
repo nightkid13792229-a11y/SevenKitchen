@@ -103,6 +103,7 @@ const CARD_FIELD_DEFINITIONS = [
     label: '标签分类',
     stage: 'CREATABLE',
     valueType: 'tags',
+    hint: '至少一个，决定首页「避开」筛选',
   },
   // MEASURE 计量与形态
   {

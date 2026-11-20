@@ -5,7 +5,7 @@ import {
 } from 'src/domain/ingredient-creation/ingredient-card-check';
 import { INGREDIENT_CARD_FIELDS } from 'src/domain/ingredient-creation/ingredient-card-fields';
 
-/** 干净草稿：填 9 个必填项，其余字段都留空。 */
+/** 干净草稿：填 10 个必填项，其余字段都留空。 */
 const base: IngredientDraft = {
   name: '冷冻三文鱼',
   type: 'FOOD',
@@ -16,6 +16,8 @@ const base: IngredientDraft = {
   edibleYieldRate: 0.95,
   labelCategory: 'FEED_MATERIAL',
   labelNames: ['三文鱼'],
+  tags: ['水产'],
+  tagIds: ['tag-water'],
 };
 
 const check = (
@@ -28,7 +30,7 @@ const codes = (
   existingNames: readonly string[] = [],
 ) => check(ingredient, existingNames).map((item) => item.code);
 
-/** 有必填校验的 9 项，不计入完整度提醒。 */
+/** 有必填校验的 10 项，不计入完整度提醒。 */
 const REQUIRED_FIELD_KEYS: ReadonlySet<string> = new Set([
   'name',
   'type',
@@ -39,6 +41,7 @@ const REQUIRED_FIELD_KEYS: ReadonlySet<string> = new Set([
   'edibleYieldPercent',
   'labelCategory',
   'labelNames',
+  'tags',
 ]);
 
 /** 枚举字段给合法值，其余按类型给一个非空值：完整度只看「有没有值」。 */
@@ -64,6 +67,8 @@ function filledDraft(): Record<string, unknown> {
     edibleYieldRate: 0.95,
     labelCategory: 'FEED_MATERIAL',
     labelNames: ['鹌鹑肉'],
+    tags: ['禽肉'],
+    tagIds: ['tag-poultry'],
   };
   for (const field of INGREDIENT_CARD_FIELDS) {
     if (field.stage !== 'CREATABLE' || REQUIRED_FIELD_KEYS.has(field.key)) {
@@ -98,7 +103,7 @@ describe('runIngredientCardCheck', () => {
     expect(warnings[0].fieldPath).toBeUndefined();
     expect(warnings[0].message).toMatch(/还有 \d+ 项没填/);
     expect(warnings[0].message).toBe(
-      '还有 4 项没填：标签分类、单个重量(克)、主要营养价值、名称依据',
+      '还有 3 项没填：单个重量(克)、主要营养价值、名称依据',
     );
     expect(warnings[0].suggestion).toBe('这些不是阻断项，补不补由你定');
     expect(
@@ -172,6 +177,26 @@ describe('runIngredientCardCheck', () => {
 
   it('名字不同不报重名', () => {
     expect(codes(base, ['冷冻鳕鱼'])).not.toContain('NAME_DUPLICATE');
+  });
+
+  it('标签分类至少挂一个标签，空着阻断', () => {
+    for (const tags of [[], ['  '], undefined, null] as never[]) {
+      const items = check({ ...base, tags: tags as never });
+
+      expect(items.map((item) => item.code)).toContain('TAGS_REQUIRED');
+      expect(
+        items.find((item) => item.code === 'TAGS_REQUIRED')?.fieldPath,
+      ).toBe('ingredient.tags');
+    }
+    expect(codes(base)).not.toContain('TAGS_REQUIRED');
+  });
+
+  it('标签分类有名字但没有关联到标签库时同样阻断', () => {
+    expect(codes({ ...base, tagIds: [] })).toContain('TAGS_REQUIRED');
+    expect(codes({ ...base, tagIds: ['  '] })).toContain('TAGS_REQUIRED');
+    expect(codes({ ...base, tags: ['  '], tagIds: ['tag-water'] })).toContain(
+      'TAGS_REQUIRED',
+    );
   });
 
   it('基本单位只能是 G / ML / PCS', () => {
@@ -313,6 +338,7 @@ describe('runIngredientCardCheck', () => {
 
     expect(codes(messy)).toEqual([
       'NAME_REQUIRED',
+      'TAGS_REQUIRED',
       'BASE_UNIT_INVALID',
       'UNIT_LABEL_REQUIRED',
       'CFCT_REQUIRED',
@@ -350,6 +376,7 @@ describe('runIngredientCardCheck', () => {
     expect(INGREDIENT_CARD_RULES.map((rule) => rule.code)).toEqual([
       'NAME_REQUIRED',
       'NAME_DUPLICATE',
+      'TAGS_REQUIRED',
       'BASE_UNIT_INVALID',
       'UNIT_LABEL_REQUIRED',
       'CFCT_REQUIRED',
@@ -364,6 +391,7 @@ describe('runIngredientCardCheck', () => {
     expect(INGREDIENT_CARD_RULES).toEqual([
       { code: 'NAME_REQUIRED', level: 'blocking' },
       { code: 'NAME_DUPLICATE', level: 'blocking' },
+      { code: 'TAGS_REQUIRED', level: 'blocking' },
       { code: 'BASE_UNIT_INVALID', level: 'blocking' },
       { code: 'UNIT_LABEL_REQUIRED', level: 'blocking' },
       { code: 'CFCT_REQUIRED', level: 'blocking' },

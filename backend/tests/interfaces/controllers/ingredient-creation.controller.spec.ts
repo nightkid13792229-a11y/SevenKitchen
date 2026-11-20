@@ -637,7 +637,7 @@ describe('IngredientCreationController', () => {
         draftId: 'draft-1',
         domain: 'INGREDIENT',
         trigger: 'USER',
-        rulesVersion: 'ingredient-card-v3',
+        rulesVersion: 'ingredient-card-v4',
         payloadHash: 'hash-1',
         result: { blocking: [], exceptionable: [], warnings: [] },
         counts: { blocking: 0, exceptionable: 0, warning: 0 },

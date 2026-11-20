@@ -85,6 +85,8 @@ export function buildSelectionSynthesisMessages(input: {
     content:
       '请直接调用 propose_selection 提交食材候选。只列 FOOD，不要列补剂；' +
       `按 CFCT 固定 15 类（${CFCT_CLASS_PROMPT}）分组，每个适用类型至少 2 个候选；` +
+      '15 类是词表，不是必须每类都填：不适用/凑不出 2 个安全食材的放 skippedCategories 写原因；' +
+      '不要用补剂、水、加工品、高脂坚果或高碘海藻凑数。' +
       '按营养与忌口自由选，不要因为库里有没有而限制候选；提交后系统会按名称匹配原料库。' +
       '严禁列方案忌口食材（牛、羊、鸡、鸡蛋及其制品），也不要为了凑类型去列禁忌食材；' +
       '不适用或禁忌的类型直接跳过，并在 notes 说明。不要继续检索，不要调用其他工具。',

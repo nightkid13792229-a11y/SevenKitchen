@@ -542,6 +542,7 @@ export interface AgentSelectionItem {
 export interface AgentSelection {
   summary: string;
   items: AgentSelectionItem[];
+  skippedCategories?: Array<{ category: string; reason: string }>;
   notes?: string;
 }
 

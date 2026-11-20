@@ -71,6 +71,8 @@ export interface AgentSelectionItem {
 export interface AgentSelection {
   summary: string;
   items: AgentSelectionItem[];
+  /** 15 类里没有列的类型及原因，供选材卡覆盖表展示。 */
+  skippedCategories?: Array<{ category: string; reason: string }>;
   notes?: string;
 }
 
@@ -91,8 +93,10 @@ const PROPOSE_SELECTION_DESCRIPTION =
   '提交食材候选，等用户确认。只在选材阶段使用；提交后本次运行暂停。' +
   '选材阶段只列食材，不要列补剂：补剂要等食谱评估出营养缺口后，在配方编辑阶段再补。' +
   '按营养与忌口自由选食材，不要查原料库，也不要填写库 ID；提交后系统会按名称自动匹配原料库，没匹配到才标库外。' +
-  `按 CFCT 固定 15 类分组（${CFCT_CLASS_PROMPT}），每个适用类型至少 2 个候选；不适用的类型跳过并在 notes 说明。` +
-  '严禁把方案忌口食材（牛、羊、鸡、鸡蛋及其制品）列为候选，也不要为了凑类型去列禁忌食材；不适用的类型跳过并在 notes 说明。';
+  `按 CFCT 固定 15 类分组（${CFCT_CLASS_PROMPT}），每个适用类型至少 2 个候选。` +
+  '15 类是词表，不是必须每类都填：不适用/凑不出 2 个安全食材的类型，放进 skippedCategories 写原因；' +
+  '不要用补剂、水、加工品、高脂坚果或高碘海藻凑数。' +
+  '严禁把方案忌口食材（牛、羊、鸡、鸡蛋及其制品）列为候选，也不要为了凑类型去列禁忌食材。';
 
 export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
   type: 'function',
@@ -214,6 +218,37 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
             additionalProperties: false,
           },
         },
+        skippedCategories: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              category: {
+                type: 'string',
+                enum: [
+                  '谷类及制品',
+                  '薯类及制品',
+                  '干豆类及制品',
+                  '蔬菜类及制品',
+                  '菌藻类',
+                  '水果类及制品',
+                  '坚果种子类',
+                  '畜肉类及制品',
+                  '禽肉类及制品',
+                  '乳类及制品',
+                  '蛋类及制品',
+                  '水产类',
+                  '油脂类',
+                  '调味品类',
+                  '其他',
+                ],
+              },
+              reason: { type: 'string' },
+            },
+            required: ['category', 'reason'],
+            additionalProperties: false,
+          },
+        },
         notes: { type: 'string' },
       },
       required: ['summary', 'items'],
@@ -312,9 +347,35 @@ export function normalizeSelection(raw: unknown): AgentSelection {
       `食材类型「${singleton[0]}」至少要有 2 个候选；请补足后再提交`,
     );
   }
+  const rawSkipped = Array.isArray(input.skippedCategories)
+    ? input.skippedCategories
+    : [];
+  const skippedCategories: Array<{ category: string; reason: string }> = [];
+  for (const [index, entry] of rawSkipped.entries()) {
+    if (!isRecord(entry)) continue;
+    const category = readText(
+      entry.category,
+      `skippedCategories[${index}].category`,
+      40,
+    );
+    if (!CFCT_CLASS_SET.has(category)) {
+      throw new AgentToolError(
+        'INVALID_ARGUMENT',
+        `skippedCategories[${index}].category 必须是 CFCT 固定 15 类之一`,
+      );
+    }
+    if (skippedCategories.some((item) => item.category === category)) {
+      continue;
+    }
+    skippedCategories.push({
+      category,
+      reason: readText(entry.reason, `skippedCategories[${index}].reason`, 500),
+    });
+  }
   return {
     summary,
     items,
+    ...(skippedCategories.length > 0 ? { skippedCategories } : {}),
     ...(readOptionalText(input.notes, 2000)
       ? { notes: readOptionalText(input.notes, 2000)! }
       : {}),

@@ -216,6 +216,7 @@ import {
   type AgentMessage,
   type AgentSession,
 } from "@/api/recipeDesigner";
+import { CFCT_CLASS_OPTIONS } from "@/types/ingredient";
 
 const props = defineProps<{ modelValue: boolean; draftId: string }>();
 const emit = defineEmits<{
@@ -235,6 +236,22 @@ const selectionFoodItems = computed(() =>
   (session.value?.selection?.items ?? []).filter(
     (item) => item.kind === "FOOD",
   ),
+);
+const cfctCoverage = computed(() =>
+  CFCT_CLASS_OPTIONS.map((category) => {
+    const count = selectionFoodItems.value.filter(
+      (item) => item.foodCategory === category,
+    ).length;
+    const skipped = session.value?.selection?.skippedCategories?.find(
+      (item) => item.category === category,
+    )?.reason;
+    return {
+      category,
+      count,
+      reason:
+        skipped || (count >= 2 ? "已覆盖" : count === 1 ? "不足2个" : "未列"),
+    };
+  }),
 );
 /** 方案/选材已经用卡片展示，旧的摘要文字隐藏，避免重复。 */
 const visibleMessages = computed(() =>
@@ -505,6 +522,11 @@ watch(
   color: #909399;
   margin: -2px 0 8px;
   line-height: 1.5;
+}
+.agent-plan__coverage-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 8px 0 4px;
 }
 .agent-plan__table {
   width: 100%;

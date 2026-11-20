@@ -62,6 +62,8 @@ export interface FoodCandidate {
   ingredientId: string;
   nutritionFoodId: string;
   name: string;
+  /** FOOD / SUPPLEMENT；选材阶段只能留下 FOOD。 */
+  type?: string | null;
   category: string | null;
   preparationState: string | null;
   isPrimary: boolean;
@@ -221,6 +223,7 @@ export class RecipeDraftPort {
         ingredientId: String(row.id),
         nutritionFoodId: String(primary.nutritionFoodId),
         name: String(row.name ?? primary.displayNameZh ?? ''),
+        type: row.type ?? null,
         category: row.category ?? primary.category ?? null,
         preparationState: primary.preparationStateLabel ?? null,
         isPrimary: Boolean(primary.isPrimary),

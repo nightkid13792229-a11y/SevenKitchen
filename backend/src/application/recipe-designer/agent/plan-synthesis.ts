@@ -183,7 +183,7 @@ export function buildPlanSynthesisMessages(input: {
     content:
       '请直接调用 propose_plan 提交方案。summary 和 rationale 只写营养方案，不复述年龄/体重/品种/BCS/性别/检验值/用药名称；' +
       '理由与建议写 rationale。constraints 只放疾病特异性、或比 FEDIAF 2025 默认评估更严的那一侧；' +
-      '默认下限、通用蛋白/脂肪/钙磷等上下限不要重复写。非数值约束放 nonNutrient，用文案。' +
+      '默认下限、通用蛋白/脂肪/钙磷等上下限不要重复写。非数值约束放 nonNutrient，用文案；nonNutrient 要覆盖会限制食材选择的质地/纤维/产气、忌口/过敏、工艺/形态、餐次，需要低渣时写清避免豆类/粗纤维/菌藻等。' +
       'MAINTAIN 不要列 energyDensity；钠只有比 FEDIAF 上限 0.55 g/1000 kcal 更严才列；' +
       '胰腺炎与肿瘤蛋白冲突时以胰腺炎安全为先，蛋白上限不超过 30% DM，30–45% 只写理由并标待确认。' +
       '不要计算每日总热量；如果确实需要控制能量，用 key=energyDensity、unit=KCAL_PER_100G 或 KCAL_PER_KG 的约束。' +

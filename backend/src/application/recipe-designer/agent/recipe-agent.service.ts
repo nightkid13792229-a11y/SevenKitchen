@@ -52,7 +52,11 @@ import {
   buildEvidenceDigest,
   buildPlanSynthesisMessages,
 } from './plan-synthesis';
-import { PROPOSE_PLAN_TOOL } from './propose-plan';
+import {
+  buildFoodCandidateDigest,
+  buildSelectionSynthesisMessages,
+} from './selection-synthesis';
+import { PROPOSE_PLAN_TOOL, PROPOSE_SELECTION_TOOL } from './propose-plan';
 import { assessmentGapSignature } from './assessment-progress';
 import { fail, type RecipeAgentActor, type ToolOutcome } from './agent-types';
 import {
@@ -485,13 +489,26 @@ export class RecipeAgentService implements OnModuleInit {
               await this.markWaiting(sessionId);
               return;
             } else if (forcedTool === 'propose_selection') {
-              await this.appendMessage(
+              // 与方案阶段同理：长工具历史会让模型无视 tool_choice。
+              const fallback = await this.callSelectionSynthesis({
                 sessionId,
-                'ASSISTANT',
-                '选材还没整理好，我先停在这里。请回复“继续整理选材”，或指出要先确认的食材。',
-              );
-              await this.markWaiting(sessionId);
-              return;
+                config,
+                phase,
+                userMessage: message,
+                designContextJson,
+                messages,
+              });
+              if (fallback) {
+                response = fallback;
+              } else {
+                await this.appendMessage(
+                  sessionId,
+                  'ASSISTANT',
+                  '选材还没整理好，我先停在这里。请回复“继续整理选材”，或指出要先确认的食材。',
+                );
+                await this.markWaiting(sessionId);
+                return;
+              }
             } else {
               throw new Error(`模型未调用 ${forcedTool}`);
             }
@@ -829,6 +846,71 @@ export class RecipeAgentService implements OnModuleInit {
     } catch (error) {
       this.logger.warn(
         `方案合成兜底失败：${(error as Error)?.message ?? String(error)}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * 强制提交选材失败时的兜底：用“已确认方案 + 档案 + find_food 候选摘录”
+   * 的干净上下文，只给 propose_selection，避免模型继续检索。
+   */
+  private async callSelectionSynthesis(input: {
+    sessionId: string;
+    config: {
+      baseUrl: string;
+      model: string;
+      apiKey: string;
+      requestTimeoutMs: number;
+    };
+    phase: AgentPhase;
+    userMessage: string;
+    designContextJson: string | null;
+    messages: DeepSeekToolsMessage[];
+  }): Promise<DeepSeekToolsResult | null> {
+    try {
+      const session = await this.prisma.recipeDesignAgentSession.findUnique({
+        where: { id: input.sessionId },
+        select: { plan: true },
+      });
+      if (!session?.plan) return null;
+      const response = await callDeepSeekTools({
+        baseUrl: input.config.baseUrl,
+        model: input.config.model,
+        apiKey: input.config.apiKey,
+        requestTimeoutMs: input.config.requestTimeoutMs,
+        messages: buildSelectionSynthesisMessages({
+          systemPrompt: buildSystemPrompt(),
+          phaseLine: phaseSystemLine(input.phase),
+          userMessage: input.userMessage,
+          planJson: JSON.stringify(session.plan),
+          designContextJson: input.designContextJson,
+          candidateDigest: buildFoodCandidateDigest(input.messages),
+        }),
+        tools: [PROPOSE_SELECTION_TOOL],
+        toolChoice: {
+          type: 'function',
+          function: { name: 'propose_selection' },
+        },
+        thinking: 'disabled',
+        temperature: 0.2,
+      });
+      await this.recordUsage(
+        input.sessionId,
+        response.usage?.promptTokens ?? 0,
+        response.usage?.completionTokens ?? 0,
+      );
+      const called = (response.toolCalls ?? []).some(
+        (call) => call.function.name === 'propose_selection',
+      );
+      if (!called) {
+        this.logger.warn('选材合成兜底仍未调用 propose_selection');
+        return null;
+      }
+      return response;
+    } catch (error) {
+      this.logger.warn(
+        `选材合成兜底失败：${(error as Error)?.message ?? String(error)}`,
       );
       return null;
     }

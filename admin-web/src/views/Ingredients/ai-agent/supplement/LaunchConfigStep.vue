@@ -489,6 +489,16 @@ async function load() {
           name: item.name,
           reason: item.reason,
         }))
+
+        // 有明确推荐、且还没归组时直接选上——人只需要确认或换一个
+        const top = recommendations.value[0]
+        if (top && !groupChoice.value) {
+          const pickable = selectableGroups.value.some((group) => group.id === top.groupId)
+          if (pickable) {
+            groupChoice.value = top.groupId
+            autoGroupHint.value = `已按 AI 推荐选好「${top.name}」，要换就选别的组`
+          }
+        }
       })
       .catch(() => {
         if (!disposed) recommendations.value = []

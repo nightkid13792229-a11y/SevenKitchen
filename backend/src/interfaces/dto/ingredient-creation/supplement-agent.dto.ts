@@ -1,5 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsArray,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class CompareOffersDto {
   @ApiProperty({ description: '规范营养字段，如 minerals.copper', example: 'minerals.copper' })
@@ -9,14 +18,22 @@ export class CompareOffersDto {
   nutrientKey!: string;
 
   @ApiPropertyOptional({
-    description:
-      '这次选定的形态候选键（如 bisglycinate）。没有形态可问时可以不带——此时不做同档分组',
-    example: 'bisglycinate',
+    description: '这次选定的形态正名（如「甘氨酸铜」）。不带表示没有形态可问，不做同档分组',
+    example: '甘氨酸铜',
   })
   @IsOptional()
   @IsString()
   @MaxLength(60)
-  formLevel?: string;
+  formLabel?: string;
+
+  @ApiPropertyOptional({
+    description: '形态的别称（双甘氨酸铜、甘氨酸螯合铜…），用来判断每一瓶是不是同一档',
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  formAliases?: string[];
 
   @ApiPropertyOptional({ description: '搜索词；不传则按营养素 + 档位组词', example: 'copper chelate' })
   @IsOptional()

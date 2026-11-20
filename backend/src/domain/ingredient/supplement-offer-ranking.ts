@@ -253,26 +253,40 @@ export function recommendOffer(
   ranked: RankedOffer[],
   rule: PriceBasisRule,
 ): { url: string | null; reason: string } {
-  const eligible = ranked.filter(
-    (row) =>
-      row.sameForm && row.pricePerThousand !== null && !row.missing.includes('COMPOUND_PRODUCT'),
+  const priced = ranked.filter(
+    (row) => row.pricePerThousand !== null && !row.missing.includes('COMPOUND_PRODUCT'),
   );
-
-  if (eligible.length === 0) {
+  if (priced.length === 0) {
     return { url: null, reason: '这些商品都比不出单价，先核对价格或标签，别按估计值选' };
   }
 
-  const cheapest = eligible.reduce((best, row) =>
-    (row.pricePerThousand as number) < (best.pricePerThousand as number) ? row : best,
-  );
+  const sameForm = priced.filter((row) => row.sameForm);
+  const cheapest = (rows: RankedOffer[]) =>
+    rows.reduce((best, row) =>
+      (row.pricePerThousand as number) < (best.pricePerThousand as number) ? row : best,
+    );
 
-  const price = (cheapest.pricePerThousand as number).toFixed(2);
-  const suffix =
-    eligible.length > 1 ? `；同批 ${eligible.length} 瓶里最便宜` : '；同批里只有它算得出单价';
+  if (sameForm.length > 0) {
+    const best = cheapest(sameForm);
+    const price = (best.pricePerThousand as number).toFixed(2);
+    const suffix = sameForm.length > 1 ? `；同形态 ${sameForm.length} 瓶里最便宜` : '；同形态里只有它算得出单价';
+    return {
+      url: best.url,
+      reason: `每 ${rule.per}${rule.amountUnitLabel} 合 ¥${price}${suffix}`,
+    };
+  }
 
-  // 名字由页面单独显示（「建议这瓶：…」），理由里不再重复一遍
+  // 一瓶都没在标题里写明形态：不假装知道，但价格还是能比
+  const best = cheapest(priced);
+  const price = (best.pricePerThousand as number).toFixed(2);
+  const lead =
+    priced.length === 1
+      ? '这批商品的标题都没写形态，而且只有它算得出单价（'
+      : '这批商品的标题都没写形态，无法确认哪瓶是同一档；同营养素里每 ' +
+        `${rule.per}${rule.amountUnitLabel} 最便宜的是它（`;
   return {
-    url: cheapest.url,
-    reason: `每 ${rule.per}${rule.amountUnitLabel} 合 ¥${price}${suffix}`,
+    url: best.url,
+    reason:
+      `${lead}¥${price}），形态请点开标签核对`,
   };
 }

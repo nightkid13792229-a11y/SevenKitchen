@@ -165,3 +165,31 @@ describe('recommendOffer', () => {
     expect(recommendOffer(rows, rule).url).toBe('same');
   });
 });
+
+describe('recommendOffer · 标题没写形态时', () => {
+  const rule = resolvePriceBasis('minerals.copper');
+
+  it('没有同形态的，退到同营养素最便宜，并说明形态未确认', () => {
+    const rows = rankOffers(
+      [
+        offer({ url: 'a', name: '铜 3mg', priceCny: 60, formLevel: null }),
+        offer({ url: 'b', name: '铜 2mg', priceCny: 240, formLevel: null }),
+      ],
+      '硫酸铜',
+    );
+    const result = recommendOffer(rows, rule);
+    expect(result.url).toBe('a');
+    expect(result.reason).toContain('标题都没写形态');
+  })
+
+  it('有同形态的，仍然只推荐同形态', () => {
+    const rows = rankOffers(
+      [
+        offer({ url: 'same', name: '硫酸铜 2mg', priceCny: 200, formLevel: '硫酸铜' }),
+        offer({ url: 'other', name: '铜 3mg', priceCny: 10, formLevel: null }),
+      ],
+      '硫酸铜',
+    );
+    expect(recommendOffer(rows, rule).url).toBe('same');
+  })
+})

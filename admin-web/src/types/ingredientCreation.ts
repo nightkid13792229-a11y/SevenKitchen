@@ -761,6 +761,8 @@ export interface SupplementDimensionCandidateDto {
   verdict: SupplementFormVerdict
   reason: string
   market: { count: number; samples: string[] } | null
+  /** 同一条形态的其他叫法（双甘氨酸铜、甘氨酸螯合铜…） */
+  alsoKnownAs?: string[]
 }
 
 export interface SupplementDimensionGroupDto {

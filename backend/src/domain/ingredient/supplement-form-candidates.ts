@@ -129,6 +129,8 @@ export interface DimensionCandidate {
   verdict: CandidateVerdict;
   reason: string;
   market: { count: number; samples: string[] } | null;
+  /** 同一条形态的其他叫法（双甘氨酸铜、甘氨酸螯合铜…） */
+  alsoKnownAs?: string[];
 }
 
 const MARKET_ONLY_REASON = '知识库没查到依据；市场上有这个说法，买之前请自己判断';

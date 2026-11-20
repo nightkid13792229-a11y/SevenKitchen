@@ -31,8 +31,8 @@
       v-else-if="state.step === 2 && state.nutrientKey"
       :nutrient-key="state.nutrientKey"
       :nutrient-label="state.nutrientLabel"
-      :form-level="effectiveForm(state)?.candidateKey ?? ''"
-      :form-keyword="effectiveForm(state)?.labelZh ?? ''"
+      :form-label="effectiveForm(state)?.labelZh ?? ''"
+      :form-aliases="chosenAliases"
       :comparison="state.comparison"
       @update:comparison="setComparison"
       @chosen="pickOffer"
@@ -97,6 +97,18 @@ const stepDefs: { id: FlowStep; label: string }[] = [
 ]
 
 const state = ref<SupplementFlowState>(loadSnapshot() ?? emptyFlowState())
+
+/** 选中的那个形态还有哪些别称（双甘氨酸铜…），比价时用来认同一档 */
+const chosenAliases = computed<string[]>(() => {
+  const chosen = effectiveForm(state.value)
+  if (!chosen) {
+    return []
+  }
+  const candidate = state.value.formAdvice?.dimensions
+    .flatMap((group) => group.candidates)
+    .find((item) => item.key === chosen.candidateKey)
+  return candidate?.alsoKnownAs ?? []
+})
 
 const chosenOffer = computed<SupplementOfferDto | null>(() => {
   const data = state.value.comparison

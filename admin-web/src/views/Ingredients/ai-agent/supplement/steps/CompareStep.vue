@@ -33,7 +33,9 @@
             <template #default="{ row }">
               <a :href="row.url" target="_blank" rel="noreferrer">{{ row.name }}</a>
               <el-tag v-if="row.recommended" size="small" type="success" effect="plain">推荐</el-tag>
-              <el-tag v-if="!row.sameForm" size="small" type="info" effect="plain">形态不同档</el-tag>
+              <el-tag v-if="hasSameForm && !row.sameForm" size="small" type="info" effect="plain">
+                形态不同档
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="unitsPerBottle" label="每瓶" width="90" />
@@ -94,9 +96,10 @@ import { basisHeader, toRowViews } from './compareRows'
 const props = defineProps<{
   nutrientKey: string
   nutrientLabel: string
-  formLevel: string
-  /** 维度模式下用中文候选名当搜索词（iHerb 中文站按中文更好搜） */
-  formKeyword?: string
+  /** 选定的形态正名；空表示没有形态可问 */
+  formLabel?: string
+  /** 形态的别称：用来判断每一瓶是不是同一档 */
+  formAliases?: string[]
   comparison: SupplementComparisonDto | null
 }>()
 
@@ -111,6 +114,9 @@ const errorText = ref('')
 const comparison = computed(() => props.comparison)
 const rows = computed(() => (props.comparison ? toRowViews(props.comparison) : []))
 const basisText = computed(() => (props.comparison ? basisHeader(props.comparison.basis) : ''))
+
+/** 有任意一瓶认出了形态，才值得给别的商品打"形态不同"；一瓶都没写形态时打标签只会误导 */
+const hasSameForm = computed(() => rows.value.some((row) => row.sameForm))
 const recommendation = computed(() => {
   const data = props.comparison
   if (!data?.recommendedUrl) {
@@ -126,7 +132,9 @@ async function load(): Promise<void> {
     const data = await ingredientCreationApi.compareSupplementOffers({
       nutrientKey: props.nutrientKey,
       // 没选形态（空表直接比价）时不传，后端按"不做同档分组"处理
-      ...(props.formLevel ? { formLevel: props.formLevel } : {}),
+      ...(props.formLabel
+        ? { formLabel: props.formLabel, formAliases: props.formAliases ?? [] }
+        : {}),
       // 不用候选的中文名当搜索词：中文站搜「硫酸铜」会返回一堆多维片，
       // 搜索统一按营养素（后端用英文名），形态只记在档案快照里
       limit: 8

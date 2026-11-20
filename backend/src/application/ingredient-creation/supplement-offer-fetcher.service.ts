@@ -12,6 +12,7 @@ import {
   parseUnitsPerBottle,
 } from '../../domain/ingredient/supplement-offer-assembly';
 import { dedupeCandidates } from '../../domain/ingredient/supplement-offer-candidates';
+import { matchesForm } from '../../domain/ingredient/supplement-form-match';
 import {
   resolvePriceBasis,
   type LabelNutrient,
@@ -37,8 +38,10 @@ export interface FetchOffersInput {
   keyword: string;
   limit: number;
   nutrientKey: string;
-  /** 本次选定的形态候选；没选就是 null（空表直接比价），不做同档标记 */
-  formLevel?: string | null;
+  /** 本次选定的形态正名（人看的那个名字）；没选就是 null */
+  formLabel?: string | null;
+  /** 正名 + 别称：用来判断每一瓶是不是这一种形态 */
+  formAliases?: string[];
 }
 
 export interface FetchOffersResult {
@@ -94,9 +97,16 @@ export class SupplementOfferFetcherService {
           PER_OFFER_TIMEOUT_MS,
         );
         const built = buildOfferFacts(
-          { ...snapshot, formLevel: input.formLevel ?? null },
+          { ...snapshot, formLevel: null },
           rule,
         );
+        if (built.ok) {
+          // 逐瓶判断形态：标题里有这个形态的名字才算"同一档"
+          const matched =
+            !!input.formLabel &&
+            matchesForm(snapshot.name, input.formAliases ?? [input.formLabel]);
+          built.offer.formLevel = matched ? input.formLabel ?? null : null;
+        }
         if (built.ok) {
           offers.push(built.offer);
         } else {

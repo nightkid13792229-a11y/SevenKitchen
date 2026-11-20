@@ -100,6 +100,9 @@
                 >
                   {{ verdictMeta(candidate.verdict).label }}
                 </el-tag>
+                <span v-if="candidate.alsoKnownAs && candidate.alsoKnownAs.length > 0" class="advice-card__alias">
+                  也叫：{{ candidate.alsoKnownAs.join('、') }}
+                </span>
                 <span v-if="candidate.market" class="advice-card__market">
                   {{ candidate.market.count }} 个商品在用这个说法
                 </span>
@@ -390,6 +393,10 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+.advice-card__alias {
+  font-size: 11.5px;
+  color: #9aa2ab;
 }
 .advice-card__market {
   font-size: 11.5px;

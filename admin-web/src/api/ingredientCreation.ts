@@ -68,8 +68,10 @@ export const ingredientCreationApi = {
    */
   compareSupplementOffers: (payload: {
     nutrientKey: string
-    /** 没有形态可问时可以不传：后端不做同档分组 */
-    formLevel?: string
+    /** 选定的形态正名；没有形态可问时不传，后端不做同档分组 */
+    formLabel?: string
+    /** 形态的别称：用来判断每一瓶是不是同一档 */
+    formAliases?: string[]
     keyword?: string
     limit?: number
   }): Promise<SupplementComparisonDto> =>

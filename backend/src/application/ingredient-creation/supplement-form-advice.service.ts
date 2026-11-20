@@ -13,6 +13,7 @@ import {
   type PlannedPage,
   type RetrievalQueryHits,
 } from '../../domain/ingredient/kb-retrieval-plan';
+import { mergeSynonymCandidates } from '../../domain/ingredient/supplement-form-synonym';
 import {
   mergeCandidates,
   type DimensionCandidate,
@@ -261,7 +262,12 @@ export class SupplementFormAdviceService {
     // 多维矿等复方商品是常态；在这一层按标题判复方会误伤（B12 就被判成复方过一次）。
     // 复方判定留给建档那一步：标签里认得出两种以上营养素才跳过单价排序。
 
-    const merged = mergeCandidates(kbTerms, market.terms);
+    // 同一形态的不同叫法先并成一条（甘氨酸铜/双甘氨酸铜/甘氨酸螯合铜），
+    // 泛称（螯合铜、生物活性铜）直接丢掉——它们不是一种具体形态
+    const merged = mergeSynonymCandidates(
+      mergeCandidates(kbTerms, market.terms),
+      nutrientLabel,
+    );
     const dimensions = groupByDimension(merged);
     const recommendation = pickRecommendation(dimensions);
 

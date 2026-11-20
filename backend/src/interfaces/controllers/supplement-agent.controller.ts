@@ -110,11 +110,12 @@ export class SupplementAgentController {
       keyword,
       limit: dto.limit ?? 8,
       nutrientKey: dto.nutrientKey,
-      formLevel: dto.formLevel,
+      formLabel: dto.formLabel ?? null,
+      formAliases: dto.formAliases ?? [],
     });
 
     // 没选形态（空表直接比价）时按 null 处理：不做同档分组，全部参与比价
-    const offers = rankOffers(fetched.offers, dto.formLevel ?? null);
+    const offers = rankOffers(fetched.offers, dto.formLabel ?? null);
     const recommendation = recommendOffer(offers, rule);
 
     return new ApiResponseDto(0, 'Success', {

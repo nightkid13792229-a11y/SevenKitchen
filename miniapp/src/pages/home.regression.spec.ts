@@ -351,9 +351,17 @@ describe('home runtime regressions', () => {
 
     // 后台标签叫「调味」，顾客端显示为「香料」
     expect(source).toContain("调味: '香料'")
-    // 没有子标签的分类给示例；内脏按需求给「肝、肾、心」
-    expect(source).toContain("内脏: ['肝', '肾', '心']")
+    // 示例必须来自真实原料库；内脏用库里真实存在的猪肝/鸡心/鸭胗
+    expect(source).toContain("内脏: ['猪肝', '鸡心', '鸭胗']")
+    expect(source).toContain("调味: ['丁香粉', '姜黄粉']")
     expect(source).toContain('const examples = children.length')
+    // 这些是上一版凭经验编的、原料库里不存在的例子，不得再回来
+    for (const fabricated of [
+      '八角', '桂皮', '香叶', '香蕉', '海带', '木耳',
+      '鱼油', '鸡油', '鸭蛋', '鹌鹑蛋', '核桃', '黄豆', '南瓜子',
+    ]) {
+      expect(source).not.toContain(fabricated)
+    }
     expect(template).toContain('{{ group.displayLabel }}')
     expect(template).toContain("如：{{ group.examples.join('、') }}")
   })

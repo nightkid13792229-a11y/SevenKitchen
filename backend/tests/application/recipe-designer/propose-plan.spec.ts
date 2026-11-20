@@ -272,6 +272,18 @@ describe('propose_selection normalization', () => {
     },
   ];
 
+  it('marks confirmed only when the user explicitly confirmed the list', () => {
+    const plain = normalizeSelection({ summary: 'x', items: baseItems });
+    expect(plain.confirmed).toBeUndefined();
+
+    const confirmed = normalizeSelection({
+      summary: 'x',
+      items: baseItems,
+      confirmed: true,
+    });
+    expect(confirmed.confirmed).toBe(true);
+  });
+
   it('keeps library foods and marks outside foods as MISSING', () => {
     const normalized = normalizeSelection({
       summary: '按 CFCT 类型给候选',

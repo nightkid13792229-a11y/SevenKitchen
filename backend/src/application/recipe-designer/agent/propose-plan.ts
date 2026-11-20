@@ -71,6 +71,8 @@ export interface AgentSelectionItem {
 export interface AgentSelection {
   summary: string;
   items: AgentSelectionItem[];
+  /** 用户明确最终确认清单时为 true；由服务端转成 phase=DESIGN，不落库。 */
+  confirmed?: boolean;
   /** 15 类里没有列的类型及原因，供选材卡覆盖表展示。 */
   skippedCategories?: Array<{ category: string; reason: string }>;
   notes?: string;
@@ -97,6 +99,8 @@ const PROPOSE_SELECTION_DESCRIPTION =
   '按营养与忌口自由选食材，不要查原料库，也不要填写库 ID；提交后系统会按名称自动匹配原料库，没匹配到才标库外。' +
   `按 CFCT 固定 15 类分组（${CFCT_CLASS_PROMPT}），每个适用类型至少 2 个候选。` +
   '选材前先逐条读已确认方案（含 nonNutrient），任何候选违反一条就淘汰；方案约束优先级最高，不要按疾病名做选材特判。' +
+  '只有用户明确说“最终确认/就按这份清单/确认选材”时才把 confirmed 设为 true；此时只列用户确认的食材，不要补替代候选；' +
+  '如果确认清单与方案硬约束冲突，先指出冲突并询问，不要把 confirmed 设为 true。' +
   '15 类是词表，不是必须每类都填：只在合格食材里分组，每个适用类型至少 2 个；凑不出就放进 skippedCategories，写清违反的是哪条方案约束；' +
   '不要用补剂、水、加工品、高脂坚果或高碘海藻凑数。' +
   '严禁把方案忌口食材（牛、羊、鸡、鸡蛋及其制品）列为候选，也不要为了凑类型去列禁忌食材。';
@@ -220,6 +224,11 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
             required: ['kind', 'name', 'foodCategory', 'reason'],
             additionalProperties: false,
           },
+        },
+        confirmed: {
+          type: 'boolean',
+          description:
+            '用户明确最终确认这份清单时 true；会直接进入配方编辑阶段',
         },
         skippedCategories: {
           type: 'array',
@@ -378,6 +387,7 @@ export function normalizeSelection(raw: unknown): AgentSelection {
   return {
     summary,
     items,
+    ...(input.confirmed === true ? { confirmed: true } : {}),
     ...(skippedCategories.length > 0 ? { skippedCategories } : {}),
     ...(readOptionalText(input.notes, 2000)
       ? { notes: readOptionalText(input.notes, 2000)! }

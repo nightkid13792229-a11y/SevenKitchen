@@ -678,14 +678,28 @@ export class RecipeAgentService implements OnModuleInit {
           return;
         }
         if (call.function.name === 'propose_selection' && outcome.ok) {
+          const selection = outcome.data as AgentSelection;
+          const confirmed = selection.confirmed === true;
+          const { confirmed: _confirmed, ...persisted } = selection;
           await this.prisma.recipeDesignAgentSession.update({
             where: { id: sessionId },
             data: {
-              selection: outcome.data as never,
+              selection: persisted as never,
+              phase: confirmed ? 'DESIGN' : 'SELECT',
+              selectionConfirmedAt: confirmed ? new Date() : null,
               status: 'WAITING_USER',
               endedAt: new Date(),
             },
           });
+          if (confirmed) {
+            await this.start({
+              draftId,
+              actor,
+              silent: true,
+              message:
+                '选材已确认。请进入配方编辑阶段：读取当前草稿，按已确认方案与选材编辑配方，并调用评估验证；不要改动已确认的方案约束。',
+            });
+          }
           return;
         }
 

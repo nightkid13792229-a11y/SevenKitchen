@@ -9,13 +9,9 @@
             跑完一轮后右侧出现「原料档案 / 营养档案」，你核对、改完，
             两页各跑一次核验，才能授权写入正式库。
           </template>
-          <template v-else-if="supplementV2">
+          <template v-else>
             三步走完就建档：先定形态（知识库给结论和出处），再比价（按每 1000 单位有效成分多少钱），
             最后传正面图和标签图；写入后要「确认可用」，这条补剂才会进配方。
-          </template>
-          <template v-else>
-            左边说一句话（要补什么、选第几个、改每份几粒），右边照着商品标签建档案；
-            写入后要先「确认可用」，这条补剂才会进配方。
           </template>
         </p>
       </div>
@@ -58,10 +54,9 @@
       </el-card>
     </div>
 
-    <!-- 补剂线：左证据、右档案，一屏里填完；AI 读链接是后续阶段 -->
+    <!-- 补剂线：三步（定形态 → 比价 → 建档），旧的三栏页 2026-11-20 下线 -->
     <div v-else-if="line === 'SUPPLEMENT'" class="supplement-pane">
-      <SupplementFlow v-if="supplementV2" />
-      <SupplementWorkbench v-else />
+      <SupplementFlow />
     </div>
 
     <div v-else class="ai-agent-layout">
@@ -1339,7 +1334,6 @@ import {
   type IngredientLine,
   type LineEntryState
 } from './lineEntry'
-import SupplementWorkbench from './supplement/SupplementWorkbench.vue'
 import SupplementFlow from './supplement/steps/SupplementFlow.vue'
 import type {
   AuthorizeBlockedReason,
@@ -1439,9 +1433,6 @@ const route = useRoute()
 const router = useRouter()
 const isAdmin = useIsAdmin()
 const userStore = useUserStore()
-
-/** 补剂三步（2026-11-20）：`?v=2` 走新流程，旧页面留一版做灰度。 */
-const supplementV2 = computed(() => route.query.v === '2')
 
 const pageRef = ref<HTMLElement | null>(null)
 const inputText = ref('')

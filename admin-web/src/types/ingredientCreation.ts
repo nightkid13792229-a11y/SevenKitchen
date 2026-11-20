@@ -646,22 +646,6 @@ export interface SupplementCandidateDto {
   pricePerServingUsd: number | null
 }
 
-export type SupplementChatActionDto =
-  | { type: 'SEARCH_CANDIDATES'; keyword: string }
-  | { type: 'READ_LINK'; url: string }
-  | { type: 'PICK_CANDIDATE'; index: number }
-  | { type: 'SET_FIELD'; field: 'servingUnitsPerDose'; value: number }
-
-export interface SupplementChatReplyDto {
-  reply: string
-  /** 跑完后草稿的样子（模型可能用 write_draft 写过） */
-  draft: Record<string, unknown>
-  /** 真正写进草稿的字段路径；前端只按这个清单回写 */
-  applied: string[]
-  /** 模型用 ask_user 提的问题 */
-  question: { question: string; options: string[] } | null
-}
-
 export interface SupplementLinkPreviewDto {
   productUrl: string
   /** 页面上的人民币标价；读不到是 null */

@@ -13,7 +13,6 @@ import type {
   PendingSupplementArchiveDto,
   SupplementEvidenceDto,
   SupplementCandidateDto,
-  SupplementChatReplyDto,
   SupplementComparisonDto,
   SupplementDimensionsAdviceDto,
   SupplementLabelIntakeDto,
@@ -61,15 +60,6 @@ export const ingredientCreationApi = {
     payload: CreateSupplementIngredientPayload
   ): Promise<CreateSupplementIngredientResultDto> =>
     api.post(`${BASE}/supplements`, payload),
-
-  /** 补剂对话：把一句话翻译成回复 + 要执行的动作。 */
-  supplementChat: (payload: {
-    message: string
-    draft: Record<string, unknown>
-    history?: { role: 'user' | 'assistant'; text: string }[]
-  }): Promise<SupplementChatReplyDto> =>
-    // 一次对话可能要调好几轮工具（读商品页每轮可达 25s），默认 30s 必然超时
-    api.post('/admin/ingredient-supplement-chat/respond', payload, { timeout: 190000 }),
 
   /**
    * 补剂比价：一轮抓 iHerb 的商品，算每 1000 单位有效成分的价，排序并给推荐。

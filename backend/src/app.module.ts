@@ -230,9 +230,7 @@ import { NutritionGovernanceController } from './interfaces/controllers/nutritio
 import { NutritionGovernanceService } from './application/nutrition-governance/nutrition-governance.service';
 import { IngredientCreationController } from './interfaces/controllers/ingredient-creation.controller';
 import { IngredientCatalogController } from './interfaces/controllers/ingredient-catalog.controller';
-import { SupplementChatController } from './interfaces/controllers/supplement-chat.controller';
 import { SupplementAgentController } from './interfaces/controllers/supplement-agent.controller';
-import { SupplementAgentService } from './application/ingredient-creation/supplement-agent.service';
 import { SupplementOfferFetcherService } from './application/ingredient-creation/supplement-offer-fetcher.service';
 import { SupplementFormAdviceService } from './application/ingredient-creation/supplement-form-advice.service';
 import { SupplementLabelIntakeService } from './application/ingredient-creation/supplement-label-intake.service';
@@ -520,7 +518,6 @@ validatePrismaConfig();
     NutritionGovernanceController,
     IngredientCreationController,
     IngredientCatalogController,
-    SupplementChatController,
     SupplementAgentController,
     SearchGovernanceController,
     RecommendedProductController,
@@ -1075,7 +1072,6 @@ validatePrismaConfig();
     SupplementIngredientService,
     SupplementLinkPreviewService,
     FeedAdditiveCatalogService,
-    SupplementAgentService,
     SupplementOfferFetcherService,
     SupplementFormAdviceService,
     SupplementLabelIntakeService,

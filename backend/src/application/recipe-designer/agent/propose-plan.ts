@@ -73,6 +73,9 @@ const PROPOSE_PLAN_DESCRIPTION =
   'constraints 只放疾病特异性、或比 FEDIAF 2025 默认评估更严的数值上下限（例如心脏病控钠）；' +
   '营养评估已经覆盖的通用蛋白/脂肪/钙磷等上下限不要重复写。每条带 key、label、单位、依据和来源。' +
   '非数值约束（禁用食材、工艺、餐次等）放 nonNutrient，文案形式。' +
+  'MAINTAIN 目标不要列 energyDensity；只有减重/增重/特殊能量需求才列，并给出真正有约束力的上限。' +
+  '钠只有在比 FEDIAF 2025 上限 0.55 g/1000 kcal 更严时才列；与默认相同不要列。' +
+  '蛋白在胰腺炎与肿瘤冲突时以胰腺炎安全为先；肿瘤高蛋白目标标待确认，不要设成硬下限。' +
   '不要写“每日总热量/kcal 目标”；需要控制能量时用 key=energyDensity、unit=KCAL_PER_100G 或 KCAL_PER_KG 的约束。';
 
 const PROPOSE_SELECTION_DESCRIPTION =
@@ -215,9 +218,15 @@ export function normalizePlan(raw: unknown): AgentNutritionPlan {
   if (rawConstraints.length === 0) {
     throw new AgentToolError('INVALID_ARGUMENT', 'constraints 不能为空');
   }
-  const constraints = rawConstraints.map((entry, index) =>
-    normalizeConstraint(entry, index),
-  );
+  const constraints = rawConstraints
+    .map((entry, index) => normalizeConstraint(entry, index))
+    .filter((constraint) => !isDefaultAssessmentConstraint(constraint));
+  if (constraints.length === 0) {
+    throw new AgentToolError(
+      'INVALID_ARGUMENT',
+      'constraints 不能为空（只列疾病特异性/比默认评估更严的约束）',
+    );
+  }
   for (const constraint of constraints) {
     if (
       constraint.min !== null &&
@@ -331,6 +340,24 @@ function normalizeConstraint(
       : {}),
     hard: input.hard !== false,
   };
+}
+
+/** 营养评估已覆盖的通用上下限，不需要在方案表格里重复。 */
+function isDefaultAssessmentConstraint(
+  constraint: AgentPlanConstraint,
+): boolean {
+  if (constraint.key === 'sodium' && constraint.unit === 'PER_1000_KCAL') {
+    return constraint.max === null || constraint.max >= 0.55;
+  }
+  if (constraint.key === 'energyDensity') {
+    if (constraint.unit === 'KCAL_PER_KG') {
+      return constraint.max === null || constraint.max >= 4000;
+    }
+    if (constraint.unit === 'KCAL_PER_100G') {
+      return constraint.max === null || constraint.max >= 400;
+    }
+  }
+  return false;
 }
 
 function normalizeNonNutrient(

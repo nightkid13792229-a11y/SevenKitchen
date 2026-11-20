@@ -75,6 +75,76 @@ describe('propose_plan normalization', () => {
     expect(normalized.constraints[0].unit).toBe('KCAL_PER_100G');
   });
 
+  it('drops the generic FEDIAF sodium range but keeps a stricter cardiac target', () => {
+    const fat = plan.constraints[0];
+    const generic = normalizePlan({
+      summary: '心脏病',
+      constraints: [
+        fat,
+        {
+          key: 'sodium',
+          label: '钠',
+          min: 0.25,
+          max: 0.55,
+          unit: 'PER_1000_KCAL',
+          source: 'FEDIAF 2025',
+          hard: true,
+        },
+      ],
+    });
+    expect(generic.constraints.map((c) => c.key)).toEqual(['fat']);
+
+    const stricter = normalizePlan({
+      summary: '心脏病',
+      constraints: [
+        {
+          key: 'sodium',
+          label: '钠',
+          min: 0.25,
+          max: 0.4,
+          unit: 'PER_1000_KCAL',
+          source: 'SACN5',
+          hard: true,
+        },
+      ],
+    });
+    expect(stricter.constraints[0].max).toBe(0.4);
+  });
+
+  it('drops a non-restrictive energy density but keeps a real cap', () => {
+    const fat = plan.constraints[0];
+    const generic = normalizePlan({
+      summary: '维持',
+      constraints: [
+        fat,
+        {
+          key: 'energyDensity',
+          label: '能量密度',
+          max: 4000,
+          unit: 'KCAL_PER_KG',
+          source: 'SACN5',
+          hard: true,
+        },
+      ],
+    });
+    expect(generic.constraints.map((c) => c.key)).toEqual(['fat']);
+
+    const stricter = normalizePlan({
+      summary: '减重',
+      constraints: [
+        {
+          key: 'energyDensity',
+          label: '能量密度',
+          max: 3500,
+          unit: 'KCAL_PER_KG',
+          source: 'Vet plan',
+          hard: true,
+        },
+      ],
+    });
+    expect(stricter.constraints[0].max).toBe(3500);
+  });
+
   it('rejects an empty constraint list', () => {
     expect(() => normalizePlan({ ...plan, constraints: [] })).toThrow(
       'constraints 不能为空',

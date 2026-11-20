@@ -56,7 +56,14 @@ import {
   buildFoodCandidateDigest,
   buildSelectionSynthesisMessages,
 } from './selection-synthesis';
-import { PROPOSE_PLAN_TOOL, PROPOSE_SELECTION_TOOL } from './propose-plan';
+import {
+  PROPOSE_PLAN_TOOL,
+  PROPOSE_SELECTION_TOOL,
+  summarizeSelection,
+  type AgentNutritionPlan,
+  type AgentSelection,
+} from './propose-plan';
+import { filterSelectionByPlan } from './selection-policy';
 import { assessmentGapSignature } from './assessment-progress';
 import { fail, type RecipeAgentActor, type ToolOutcome } from './agent-types';
 import {
@@ -626,6 +633,23 @@ export class RecipeAgentService implements OnModuleInit {
             consecutiveZeroHits = 0;
             zeroHitNudged = false;
           }
+        }
+        if (call.function.name === 'propose_selection' && outcome.ok) {
+          const planRow = await this.prisma.recipeDesignAgentSession.findUnique(
+            {
+              where: { id: sessionId },
+              select: { plan: true },
+            },
+          );
+          const filtered = filterSelectionByPlan(
+            outcome.data as AgentSelection,
+            planRow?.plan as AgentNutritionPlan | null,
+          );
+          outcome = {
+            ...outcome,
+            data: filtered,
+            summary: summarizeSelection(filtered),
+          };
         }
         toolCalls += 1;
 

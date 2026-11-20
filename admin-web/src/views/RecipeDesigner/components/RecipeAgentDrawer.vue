@@ -119,7 +119,7 @@
           <div class="agent-plan__hint">
             {{
               session.planConfirmedAt
-                ? "方案已确认；选材阶段会在这里继续。"
+                ? "方案已确认，正在进入选材阶段…"
                 : "确认后进入选材阶段；有问题请直接回复要改的地方。"
             }}
           </div>

@@ -134,6 +134,8 @@ export class RecipeAgentService implements OnModuleInit {
     draftId: string;
     actor: RecipeAgentActor;
     message: string;
+    /** 阶段确认后的自动续跑：内部指令，不写进用户消息。 */
+    silent?: boolean;
   }): Promise<{ sessionId: string }> {
     if (this.active.has(input.draftId)) {
       throw new ConflictException('这个草稿已经有一个 AI 运行');
@@ -178,7 +180,9 @@ export class RecipeAgentService implements OnModuleInit {
         sessionId = session.id;
       }
 
-      await this.appendMessage(sessionId, 'USER', input.message);
+      if (!input.silent) {
+        await this.appendMessage(sessionId, 'USER', input.message);
+      }
       this.launch(
         sessionId,
         input.draftId,
@@ -269,6 +273,13 @@ export class RecipeAgentService implements OnModuleInit {
           status: 'WAITING_USER',
         },
       });
+      await this.start({
+        draftId,
+        actor,
+        silent: true,
+        message:
+          '方案已确认。请进入选材阶段：基于已确认方案提出食材与补剂候选；补剂只能来自原料库，库外食材标 MISSING；用 propose_selection 提交。',
+      });
       return { phase: 'SELECT' };
     }
     if (current !== 'SELECT') {
@@ -284,6 +295,13 @@ export class RecipeAgentService implements OnModuleInit {
         selectionConfirmedAt: new Date(),
         status: 'WAITING_USER',
       },
+    });
+    await this.start({
+      draftId,
+      actor,
+      silent: true,
+      message:
+        '选材已确认。请进入配方编辑阶段：读取当前草稿，按已确认方案与选材编辑配方，并调用评估验证；不要改动已确认的方案约束。',
     });
     return { phase: 'DESIGN' };
   }
@@ -871,13 +889,39 @@ export class RecipeAgentService implements OnModuleInit {
       orderBy: { seq: 'asc' },
     });
 
-    // 最后一条 USER 就是本轮输入，不再重复放进历史。
-    const historyRows = rows.slice(0, -1).slice(-HISTORY_MESSAGES);
+    // 普通输入的最后一条 USER 就是本轮输入，不重复放进历史；
+    // 阶段确认后的 silent 续跑没有写 USER，历史要完整保留。
+    const lastRow = rows[rows.length - 1];
+    const historyRows =
+      lastRow?.role === 'USER' && lastRow.content === currentMessage
+        ? rows.slice(0, -1).slice(-HISTORY_MESSAGES)
+        : rows.slice(-HISTORY_MESSAGES);
 
     const messages: DeepSeekToolsMessage[] = [
       { role: 'system', content: buildSystemPrompt() },
       { role: 'system', content: phaseSystemLine(phase) },
     ];
+    const confirmed = await this.prisma.recipeDesignAgentSession.findUnique({
+      where: { id: sessionId },
+      select: {
+        plan: true,
+        planConfirmedAt: true,
+        selection: true,
+        selectionConfirmedAt: true,
+      },
+    });
+    if (confirmed?.plan && confirmed.planConfirmedAt) {
+      messages.push({
+        role: 'system',
+        content: `已确认营养方案（JSON）：\n${JSON.stringify(confirmed.plan)}`,
+      });
+    }
+    if (confirmed?.selection && confirmed.selectionConfirmedAt) {
+      messages.push({
+        role: 'system',
+        content: `已确认选材（JSON）：\n${JSON.stringify(confirmed.selection)}`,
+      });
+    }
     for (const row of historyRows) {
       messages.push({
         role: row.role === 'USER' ? 'user' : 'assistant',

@@ -13,6 +13,8 @@ describe('RecipeAgentService confirm stages', () => {
         update: jest.fn().mockResolvedValue({}),
       },
     };
+    service.active = new Set<string>();
+    service.start = jest.fn().mockResolvedValue({ sessionId: 's1' });
     return service as RecipeAgentService;
   }
 
@@ -38,6 +40,9 @@ describe('RecipeAgentService confirm stages', () => {
         data: expect.objectContaining({ phase: 'SELECT' }),
       }),
     );
+    expect((service as any).start).toHaveBeenCalledWith(
+      expect.objectContaining({ silent: true, draftId: 'draft-1' }),
+    );
   });
 
   it('keeps the current phase on CONTINUE', async () => {
@@ -62,6 +67,7 @@ describe('RecipeAgentService confirm stages', () => {
         data: expect.objectContaining({ phase: 'SELECT' }),
       }),
     );
+    expect((service as any).start).not.toHaveBeenCalled();
   });
 
   it('refuses to approve PLAN without a submitted plan', async () => {

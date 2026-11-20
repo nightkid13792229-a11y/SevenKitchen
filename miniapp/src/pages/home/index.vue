@@ -615,6 +615,7 @@ const visibleRecipesCount = ref(pageSize)
 
 
 let recipeRenderRevealTimer: ReturnType<typeof setTimeout> | null = null
+let recipeLoadTimeout: ReturnType<typeof setTimeout> | null = null
 let staleRecipeCoverRevealTimer: ReturnType<typeof setTimeout> | null = null
 let customerServiceRouteHandled = false
 
@@ -1173,6 +1174,8 @@ onUnmounted(() => {
 
 // 页面显示时重新检查登录状态（解决switchTab后不更新的问题）
 onShow(() => {
+  // 从后台/其它页面回到首页时，筛选弹层不应保持打开
+  shelfOpenSheet.value = null
   // 从未读页返回时铃铛红点要立刻变（失败静默给 0）
   void refreshUnreadMessages();
   refreshCurrentTabBar()
@@ -1557,6 +1560,13 @@ function loadRecipes(isRefresh = false) {
   }
 
   loading.value = true
+  if (recipeLoadTimeout) clearTimeout(recipeLoadTimeout)
+  recipeLoadTimeout = setTimeout(() => {
+    if (loading.value) {
+      loading.value = false
+      uni.showToast({ title: '加载超时，请下拉刷新', icon: 'none' })
+    }
+  }, 12000)
 
   // 如果是刷新，重置页码
   if (isRefresh) {
@@ -1635,6 +1645,10 @@ function loadRecipes(isRefresh = false) {
       icon: 'none'
     })
   }).finally(() => {
+    if (recipeLoadTimeout) {
+      clearTimeout(recipeLoadTimeout)
+      recipeLoadTimeout = null
+    }
     loading.value = false
     if (isRefresh) {
       uni.stopPullDownRefresh()

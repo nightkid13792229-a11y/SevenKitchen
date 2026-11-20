@@ -532,6 +532,7 @@ export interface AgentNutritionPlan {
 export interface AgentSelectionItem {
   kind: "FOOD" | "SUPPLEMENT";
   name: string;
+  foodCategory?: string;
   ingredientId?: string;
   nutritionFoodId?: string;
   reason: string;

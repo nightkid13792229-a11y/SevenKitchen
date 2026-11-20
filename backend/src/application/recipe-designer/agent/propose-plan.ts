@@ -52,8 +52,11 @@ export interface AgentNutritionPlan {
 }
 
 export interface AgentSelectionItem {
+  /** 选材阶段只允许 FOOD；SUPPLEMENT 兼容旧数据展示。 */
   kind: 'FOOD' | 'SUPPLEMENT';
   name: string;
+  /** CFCT 食材类型，如 肉类/水产/谷类/薯类/蔬菜/水果。 */
+  foodCategory?: string;
   ingredientId?: string;
   nutritionFoodId?: string;
   reason: string;
@@ -81,8 +84,10 @@ const PROPOSE_PLAN_DESCRIPTION =
   '不要写“每日总热量/kcal 目标”；需要控制能量时用 key=energyDensity、unit=KCAL_PER_100G 或 KCAL_PER_KG 的约束。';
 
 const PROPOSE_SELECTION_DESCRIPTION =
-  '提交食材与补剂候选，等用户确认。只在选材阶段使用；提交后本次运行暂停。' +
-  '补剂必须来自现有原料库并带 ingredientId 或 nutritionFoodId；库外食材标 MISSING，等用户新增原料后再进入配方编辑。';
+  '提交食材候选，等用户确认。只在选材阶段使用；提交后本次运行暂停。' +
+  '选材阶段只列食材，不要列补剂：补剂要等食谱评估出营养缺口后，在配方编辑阶段再补。' +
+  '按 CFCT 食材类型分组，每个类型至少 2 个候选；先列原料库中可用的，再列至少 2 个库外/非常见食材候选（标 MISSING），供用户筛选。' +
+  '不要只从原料库里挑，也不要因为库外食材暂时没有档案就不列。';
 
 export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
   type: 'function',
@@ -175,8 +180,12 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
           items: {
             type: 'object',
             properties: {
-              kind: { type: 'string', enum: ['FOOD', 'SUPPLEMENT'] },
+              kind: { type: 'string', enum: ['FOOD'] },
               name: { type: 'string' },
+              foodCategory: {
+                type: 'string',
+                description: 'CFCT 食材类型，如 肉类/水产/谷类/薯类/蔬菜/水果',
+              },
               ingredientId: { type: 'string' },
               nutritionFoodId: { type: 'string' },
               reason: { type: 'string' },
@@ -185,7 +194,7 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
                 enum: ['AVAILABLE', 'MISSING', 'NEEDS_PROFILE'],
               },
             },
-            required: ['kind', 'name', 'reason'],
+            required: ['kind', 'name', 'foodCategory', 'reason'],
             additionalProperties: false,
           },
         },
@@ -275,6 +284,24 @@ export function normalizeSelection(raw: unknown): AgentSelection {
   const items = rawItems.map((entry, index) =>
     normalizeSelectionItem(entry, index),
   );
+  const byCategory = new Map<string, number>();
+  for (const item of items) {
+    const category = item.foodCategory ?? '未分类';
+    byCategory.set(category, (byCategory.get(category) ?? 0) + 1);
+  }
+  const singleton = [...byCategory.entries()].find(([, count]) => count < 2);
+  if (singleton) {
+    throw new AgentToolError(
+      'INVALID_ARGUMENT',
+      `食材类型「${singleton[0]}」至少要有 2 个候选；请补足后再提交`,
+    );
+  }
+  if (items.filter((item) => item.dataStatus === 'MISSING').length < 2) {
+    throw new AgentToolError(
+      'INVALID_ARGUMENT',
+      '至少要有 2 个库外/非常见食材候选（dataStatus=MISSING），用于保证多样性',
+    );
+  }
   return {
     summary,
     items,
@@ -311,9 +338,9 @@ export function summarizeSelection(selection: AgentSelection): string {
     `候选 ${selection.items.length} 项：`,
     ...selection.items.map(
       (item) =>
-        `- ${item.kind === 'FOOD' ? '食材' : '补剂'}「${item.name}」：${item.reason}（${dataStatusLabel(item.dataStatus)}）`,
+        `- [${item.foodCategory ?? '食材'}]「${item.name}」：${item.reason}（${dataStatusLabel(item.dataStatus)}）`,
     ),
-    '确认后进入配方编辑阶段；库外食材需要先新增原料。',
+    '确认后进入配方编辑阶段；库外食材需要先新增原料。补剂不在选材阶段选，等配方评估出缺口后再补。',
   ];
   return lines.join('\n');
 }
@@ -444,17 +471,22 @@ function normalizeSelectionItem(
   index: number,
 ): AgentSelectionItem {
   const input = isRecord(entry) ? entry : {};
-  const kind = input.kind === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD';
+  if (input.kind === 'SUPPLEMENT') {
+    throw new AgentToolError(
+      'INVALID_ARGUMENT',
+      '选材阶段只列食材；补剂要等配方评估出缺口后，在配方编辑阶段再补',
+    );
+  }
+  const kind = 'FOOD';
   const name = readText(input.name, `items[${index}].name`, 120);
+  const foodCategory = readText(
+    input.foodCategory,
+    `items[${index}].foodCategory`,
+    40,
+  );
   const reason = readText(input.reason, `items[${index}].reason`, 1000);
   const ingredientId = readOptionalText(input.ingredientId, 80);
   const nutritionFoodId = readOptionalText(input.nutritionFoodId, 80);
-  if (kind === 'SUPPLEMENT' && !ingredientId && !nutritionFoodId) {
-    throw new AgentToolError(
-      'INVALID_ARGUMENT',
-      `补剂「${name}」必须来自原料库，并带 ingredientId 或 nutritionFoodId`,
-    );
-  }
   const dataStatus =
     input.dataStatus === 'MISSING' || input.dataStatus === 'NEEDS_PROFILE'
       ? input.dataStatus
@@ -464,6 +496,7 @@ function normalizeSelectionItem(
   return {
     kind,
     name,
+    foodCategory,
     reason,
     ...(ingredientId ? { ingredientId } : {}),
     ...(nutritionFoodId ? { nutritionFoodId } : {}),

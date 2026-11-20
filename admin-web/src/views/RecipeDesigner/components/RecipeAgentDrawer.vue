@@ -142,8 +142,8 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(item, index) in session.selection.items" :key="index">
-                <td>{{ item.kind === "FOOD" ? "食材" : "补剂" }}</td>
+              <tr v-for="(item, index) in selectionFoodItems" :key="index">
+                <td>{{ item.foodCategory || "未分类" }}</td>
                 <td>{{ item.name }}</td>
                 <td>{{ item.reason }}</td>
                 <td>{{ dataStatusLabel(item.dataStatus) }}</td>
@@ -230,6 +230,12 @@ const visible = computed({
 
 const session = ref<AgentSession | null>(null);
 const messages = ref<AgentMessage[]>([]);
+/** 旧选材可能含补剂；选材卡只展示食材。 */
+const selectionFoodItems = computed(() =>
+  (session.value?.selection?.items ?? []).filter(
+    (item) => item.kind === "FOOD",
+  ),
+);
 /** 方案/选材已经用卡片展示，旧的摘要文字隐藏，避免重复。 */
 const visibleMessages = computed(() =>
   messages.value.filter(

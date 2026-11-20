@@ -229,30 +229,96 @@ describe('propose_plan normalization', () => {
 });
 
 describe('propose_selection normalization', () => {
-  it('marks a food without ids as MISSING and keeps supplements with ids', () => {
+  const baseItems = [
+    {
+      kind: 'FOOD',
+      name: '猪里脊',
+      foodCategory: '肉类',
+      ingredientId: 'ing-1',
+      reason: '低脂蛋白',
+    },
+    {
+      kind: 'FOOD',
+      name: '兔里脊',
+      foodCategory: '肉类',
+      ingredientId: 'ing-2',
+      reason: '低脂蛋白',
+    },
+    {
+      kind: 'FOOD',
+      name: '大米',
+      foodCategory: '谷类',
+      ingredientId: 'ing-3',
+      reason: '低脂碳水',
+    },
+    {
+      kind: 'FOOD',
+      name: '小米',
+      foodCategory: '谷类',
+      ingredientId: 'ing-4',
+      reason: '碳水轮换',
+    },
+    {
+      kind: 'FOOD',
+      name: '鹿肉',
+      foodCategory: '肉类',
+      reason: '库外非常见蛋白',
+    },
+    {
+      kind: 'FOOD',
+      name: '鸭肉',
+      foodCategory: '肉类',
+      reason: '库外非常见蛋白',
+    },
+  ];
+
+  it('keeps library foods and marks outside foods as MISSING', () => {
     const normalized = normalizeSelection({
-      summary: '主蛋白兔/猪，补剂用库内',
-      items: [
-        { kind: 'FOOD', name: '鹿肉', reason: '低脂红肉' },
-        {
-          kind: 'SUPPLEMENT',
-          name: '鱼油',
-          ingredientId: 'ing-1',
-          reason: 'EPA/DHA',
-        },
-      ],
+      summary: '按 CFCT 类型给候选',
+      items: baseItems,
     });
 
-    expect(normalized.items[0].dataStatus).toBe('MISSING');
-    expect(normalized.items[1].dataStatus).toBe('AVAILABLE');
+    expect(normalized.items).toHaveLength(6);
+    expect(normalized.items[0].dataStatus).toBe('AVAILABLE');
+    expect(normalized.items[4].dataStatus).toBe('MISSING');
+    expect(normalized.items[0].foodCategory).toBe('肉类');
   });
 
-  it('rejects a supplement without a library id', () => {
+  it('rejects supplements in the selection stage', () => {
     expect(() =>
       normalizeSelection({
         summary: '补剂',
         items: [{ kind: 'SUPPLEMENT', name: '鱼油', reason: 'EPA' }],
       }),
-    ).toThrow('必须来自原料库');
+    ).toThrow('选材阶段只列食材');
+  });
+
+  it('requires at least two candidates per category', () => {
+    expect(() =>
+      normalizeSelection({
+        summary: '单候选',
+        items: [
+          ...baseItems.filter((item) => item.foodCategory !== '谷类'),
+          {
+            kind: 'FOOD',
+            name: '燕麦',
+            foodCategory: '谷类',
+            ingredientId: 'ing-5',
+            reason: '碳水',
+          },
+        ],
+      }),
+    ).toThrow('至少要有 2 个候选');
+  });
+
+  it('requires at least two outside-library candidates', () => {
+    expect(() =>
+      normalizeSelection({
+        summary: '全库内',
+        items: baseItems.filter(
+          (item) => item.name !== '鹿肉' && item.name !== '鸭肉',
+        ),
+      }),
+    ).toThrow('至少要有 2 个库外');
   });
 });

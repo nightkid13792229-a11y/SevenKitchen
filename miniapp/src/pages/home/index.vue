@@ -263,6 +263,7 @@
               <text class="sf-chip-n">{{ opt.count }}</text>
             </view>
             <view v-if="shelfOptionsLoading" class="sf-empty">加载中…</view>
+            <view v-else-if="shelfOptionsError" class="sf-empty" @tap="loadShelfOptions">加载失败，点此重试</view>
             <view v-else-if="!shelfOptions.mainProtein.length" class="sf-empty">暂无可选</view>
           </view>
 
@@ -281,12 +282,14 @@
               </view>
             </view>
             <view v-if="shelfOptionsLoading" class="sf-empty">加载中…</view>
+            <view v-else-if="shelfOptionsError" class="sf-empty" @tap="loadShelfOptions">加载失败，点此重试</view>
             <view v-else-if="!shelfOptions.needs.length" class="sf-empty">暂无可选</view>
           </view>
 
           <!-- 避开：原料标签树 -->
           <view v-else class="sf-avoid">
             <view v-if="shelfOptionsLoading" class="sf-empty">加载中…</view>
+            <view v-else-if="shelfOptionsError" class="sf-empty" @tap="loadShelfOptions">加载失败，点此重试</view>
             <input
               v-model="shelfSearch"
               class="sf-search"
@@ -716,6 +719,7 @@ const shelfOpenSheet = ref<ShelfSheetKey | null>(null)
 const shelfSearch = ref('')
 const shelfPreviewTotal = ref<number | null>(null)
 const shelfOptionsLoading = ref(false)
+const shelfOptionsError = ref(false)
 let shelfPreviewTimer: ReturnType<typeof setTimeout> | null = null
 let shelfPreviewSeq = 0
 
@@ -922,19 +926,25 @@ function resetShelfAll(): void {
 
 async function loadShelfOptions(): Promise<void> {
   shelfOptionsLoading.value = true
+  shelfOptionsError.value = false
   try {
-    const res: any = await request({
-      url: '/recipes/filter-options',
-      method: 'GET',
-      quiet: true
-    })
+    const res: any = await Promise.race([
+      request({
+        url: '/recipes/filter-options',
+        method: 'GET',
+        quiet: true
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('filter-options timeout')), 8000)
+      )
+    ])
     if (res?.code !== 0 || !res.data) return
     shelfOptions.mainProtein = Array.isArray(res.data.mainProtein) ? res.data.mainProtein : []
     shelfOptions.needs = Array.isArray(res.data.needs) ? res.data.needs : []
     shelfOptions.avoid = Array.isArray(res.data.avoid) ? res.data.avoid : []
     shelfOptions.total = Number(res.data.total || 0)
   } catch {
-    // 选项加载失败时保持空面板，不阻塞首页
+    shelfOptionsError.value = true
   } finally {
     shelfOptionsLoading.value = false
   }
@@ -3481,7 +3491,7 @@ defineOptions({
 .sf-actions {
   display: flex;
   gap: 20rpx;
-  padding: 20rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
+  padding: 20rpx 32rpx calc(160rpx + env(safe-area-inset-bottom));
   border-top: 1rpx solid #eee9d9;
 }
 

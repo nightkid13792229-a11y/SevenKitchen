@@ -239,7 +239,7 @@
     </view>
 
     <!-- 适用生命阶段筛选抽屉 -->
-    <view v-if="shelfOpenSheet" class="drawer-mask sf-mask" @tap="closeShelfSheet">
+    <view v-show="shelfOpenSheet" class="drawer-mask sf-mask" @tap="closeShelfSheet">
       <view class="drawer-content sf-sheet" @tap.stop>
         <view class="sf-handle"></view>
         <view class="sf-head">
@@ -820,6 +820,7 @@ function syncShelfDraft(): void {
 
 function openShelfSheet(key: ShelfSheetKey): void {
   shelfOpenSheet.value = key
+  uni.showModal({ title: '弹层状态', content: String(shelfOpenSheet.value), showCancel: false })
   shelfSearch.value = ''
   syncShelfDraft()
   shelfPreviewTotal.value = null

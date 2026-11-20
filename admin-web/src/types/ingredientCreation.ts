@@ -709,6 +709,18 @@ export interface SupplementLabelIntakeDto {
     matches: SupplementCatalogMatchDto[]
     suggestion: SupplementCatalogMatchDto | null
   }
+  /** 产品规格（人看的写法：180粒/瓶，18mg铁/粒） */
+  packSpec: string | null
+  /** 从原文里抠出的价格（模型没给也能有） */
+  detectedPriceCny: number | null
+  /** 这次识别的诊断：哪一步没成、为什么空着 */
+  diagnostics: {
+    frontChars: number
+    labelChars: number
+    analysisOk: boolean
+    dropped: { field: string; reason: string; value: string }[]
+    notes: string[]
+  }
   /** 模型对档案的判断（已过校验）；模型没给出时为 null */
   analysis: SupplementAnalysisDto | null
 }

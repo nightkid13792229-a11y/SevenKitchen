@@ -28,6 +28,18 @@ Other ingredients: rice flour`;
     ]);
   });
 
+  it('markdown 列表星号不会被当成脚注（线上踩过）', () => {
+    const text = `*   **Supplement Facts**
+*   Serving Size 1 Capsule
+*   Amount Per Serving
+*   % Daily Value
+*   Iron 18 mg 100%
+*   (from Ferrochel® ferrous bisglycinate chelate)`;
+    expect(parseSupplementLabel(text).nutrients).toEqual([
+      { fieldPath: 'minerals.iron', value: 18, unit: 'mg', rawName: 'Iron' },
+    ]);
+  });
+
   it('中文标签与中文单位', () => {
     const text = `营养成分表
 每份 1 粒

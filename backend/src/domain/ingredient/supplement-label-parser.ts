@@ -230,6 +230,13 @@ export function parseSupplementLabel(text: string): ParsedLabel {
       continue
     }
 
+    // 视觉模型常把标签写成 markdown 列表（`*   Iron 18 mg 100%`）。
+    // 这种「列表星号」不是脚注，先剥掉再解析——否则第一行就被当成脚注、整块丢失。
+    const isListBullet = /^[-*•·]\s+\S/.test(rawLine)
+    if (isListBullet) {
+      lines[index] = rawLine.replace(/^[-*•·]\s+/, '').trim()
+    }
+
     // markdown 表格行：| Iron | 18 mg | 100% |
     if (rawLine.startsWith('|')) {
       const cells = rawLine
@@ -259,10 +266,10 @@ export function parseSupplementLabel(text: string): ParsedLabel {
     const line = lines[index].trim()
     // 先把 markdown 的加粗标记拿掉，否则表头 `**Amount Per Serving…` 会被当成脚注
     const plain = line.replace(/\*\*/g, '').trim()
-    // 脚注：单个 * 开头，或 `**Percent Daily…` 这种加粗脚注，或 † ♢
-    const leadingStars = line.match(/^\*+/)?.[0] ?? '';
+    // 脚注：单个 * 开头（且不是列表项），或 `**Percent Daily…` 这种加粗脚注，或 † ♢
+    const leadingStars = isListBullet ? '' : (line.match(/^\*+/)?.[0] ?? '');
     const isFootnote =
-      leadingStars === '*' ||
+      (!isListBullet && leadingStars === '*') ||
       /^\*{1,2}\s*(percent daily|daily value)/i.test(line) ||
       /^[†♢‡]/.test(line);
     if (isFootnote) {

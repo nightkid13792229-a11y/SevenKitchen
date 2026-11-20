@@ -97,6 +97,7 @@
         >
           重新读
         </el-button>
+        <p v-for="note in diagnosticNotes" :key="note" class="upload-card__warn">{{ note }}</p>
         <p v-if="droppedHints.length > 0" class="upload-card__warn">
           有 {{ droppedHints.length }} 条判断没过校验，已留空：{{ droppedHints.map((item) => item.reason).join('；') }}
         </p>
@@ -411,6 +412,7 @@ const readDone = ref(false)
 const skipped = ref<string[]>([])
 const catalogCandidates = ref<{ name: string; dogAllowed: boolean }[]>([])
 const droppedHints = ref<{ field: string; reason: string; value: string }[]>([])
+const diagnosticNotes = ref<string[]>([])
 const showAll = ref(false)
 const saving = ref(false)
 const confirming = ref(false)
@@ -631,14 +633,19 @@ function applyAnalysis(result: SupplementLabelIntakeDto): void {
   }
   setIf('name', analysis.name)
   setIf('brand', analysis.brand)
-  setIf('productModel', analysis.productModel)
+  // 规格统一在下面用 packSpec 覆盖，这里不直接用模型抄的标题
   setIf('purchaseChannel', analysis.purchaseChannel)
   setIf('baseUnit', analysis.baseUnit)
   setIf('unitDisplayLabel', analysis.unitDisplayLabel)
   setIf('physicalForm', analysis.physicalForm)
   setIf('servingUnitsPerDose', analysis.servingUnitsPerDose)
-  if (analysis.priceCny !== null) {
-    draft.currentPricePerPurchaseUnit = analysis.priceCny
+  // 规格用人看的写法（180粒/瓶，18mg铁/粒），不用模型抄的页面标题
+  if (result.packSpec) {
+    draft.productModel = result.packSpec
+  }
+  const price = analysis.priceCny ?? result.detectedPriceCny
+  if (price !== null) {
+    draft.currentPricePerPurchaseUnit = price
   }
   if (analysis.labelCategory) {
     draft.labelCategory = analysis.labelCategory
@@ -652,7 +659,7 @@ function applyAnalysis(result: SupplementLabelIntakeDto): void {
   if (analysis.addTiming) {
     draft.addTiming = analysis.addTiming
   }
-  droppedHints.value = analysis.dropped ?? []
+  droppedHints.value = result.diagnostics?.dropped ?? analysis.dropped ?? []
 }
 
 /**
@@ -739,6 +746,7 @@ async function readImages(): Promise<void> {
       dogAllowed: item.dogAllowed
     }))
     readDone.value = true
+    diagnosticNotes.value = result.diagnostics?.notes ?? []
     ElMessage.success('读完了，核对一下数字')
   } catch (error) {
     errorText.value = apiErrorMessage(error, '这两张图没读成，可以重试或手填')

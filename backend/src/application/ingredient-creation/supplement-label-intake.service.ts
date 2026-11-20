@@ -25,6 +25,11 @@ import {
   type AnalysisOutcome,
 } from '../../domain/ingredient/supplement-label-analysis';
 import { listSupplementTargetFields } from '../../domain/ingredient/nutrition-field-catalog';
+import {
+  buildPackSpec,
+  extractPriceCny,
+  inferLabelCategory,
+} from '../../domain/ingredient/supplement-archive-derive';
 
 /**
  * 两张图 → 档案初稿。
@@ -35,11 +40,12 @@ import { listSupplementTargetFields } from '../../domain/ingredient/nutrition-fi
  */
 
 const FRONT_PROMPT = [
-  '这是一瓶补剂的正面包装照片。把上面的印刷文字**原样抄下来**，按行输出。',
+  '这是一瓶补剂的商品页截图或正面包装照片。把上面的文字**原样抄下来**，按行输出。',
   '要求：',
   '1. 依次包含：品牌、产品名、规格（例如 120 Softgels / 250 Tablets）、剂型；',
-  '2. 不要判断、不要翻译、不要补充图上没有的内容；',
-  '3. 看不清的字用「?」标出来。',
+  '2. **价格**：页面上出现的人民币价格原样抄下来（例如「¥77.02 已含税」），没有就写「无价格」；',
+  '3. **平台**：这是哪个网站/App 的页面（例如 iHerb、淘宝、京东），看得出来就写一行「平台：xxx」；',
+  '4. 不要判断、不要翻译、不要补充图上没有的内容；看不清的字用「?」标出来。',
 ].join('\n');
 
 export interface LabelIntakeResult {
@@ -60,6 +66,18 @@ export interface LabelIntakeResult {
   saltNameZh: string | null;
   /** 《饲料添加剂品种目录》里可能的规范名：suggestion 只在能确定时给 */
   catalog: { query: string; matches: CatalogMatch[]; suggestion: CatalogMatch | null };
+  /** 产品规格（人看的写法：180粒/瓶，18mg铁/粒）；读不出瓶规就是 null */
+  packSpec: string | null;
+  /** 从原文里抠出来的价格（模型没给也能有） */
+  detectedPriceCny: number | null;
+  /** 这次识别的诊断：哪一步没成、为什么某些字段空着 */
+  diagnostics: {
+    frontChars: number;
+    labelChars: number;
+    analysisOk: boolean;
+    dropped: { field: string; reason: string; value: string }[];
+    notes: string[];
+  };
   /** 模型对档案的判断（名称/基准单位/渠道/价格/标签类型…），已过代码校验 */
   analysis: (AnalysisOutcome['result'] & { dropped: AnalysisOutcome['dropped'] }) | null;
 }
@@ -81,6 +99,24 @@ export function parseCountFromTitle(productModel: string | null): number | null 
   const value = Number(match[1].replace(/,/g, '')) * (unit === 'kg' ? 1000 : 1);
   return Number.isFinite(value) && value > 0 ? value : null;
 }
+
+/** 模型没给判断、但规则能补出标签类型时用的空壳 */
+const EMPTY_ANALYSIS: AnalysisOutcome['result'] = {
+  name: null,
+  brand: null,
+  productModel: null,
+  priceCny: null,
+  purchaseChannel: null,
+  baseUnit: null,
+  unitDisplayLabel: null,
+  physicalForm: null,
+  servingUnitsPerDose: null,
+  nutrients: [],
+  labelCategory: null,
+  labelNames: [],
+  tagNames: [],
+  addTiming: null,
+};
 
 @Injectable()
 export class SupplementLabelIntakeService {
@@ -131,6 +167,11 @@ export class SupplementLabelIntakeService {
         `serving=${servingUnitsPerDose ?? 'none'}`,
     );
 
+    const materialMatches = [
+      ...this.materialCatalog.findMentioned(`${frontText}\n${labelText}`, 5),
+      ...(suggestedName ? this.materialCatalog.lookup(suggestedName, 5) : []),
+    ].filter((entry, index, list) => list.findIndex((item) => item.name === entry.name) === index);
+
     // 模型判断：名称要写化学形态、基准单位看剂型、渠道/价格从图上找、
     // 标签类型（添加剂 vs 原料）按目录性质定。失败就退回人工，不影响识别结果。
     const allowedFieldPaths = listSupplementTargetFields().map((field) => field.fieldPath);
@@ -142,14 +183,10 @@ export class SupplementLabelIntakeService {
         dogAllowed: entry.dogAllowed,
       })),
       // 原料目录：先在原文里找已有条目（「鱼油」这种），再按营养素名查一轮
-      materialNames: [
-        ...this.materialCatalog.findMentioned(`${frontText}\n${labelText}`, 5),
-        ...(suggestedName ? this.materialCatalog.lookup(suggestedName, 5) : []),
-      ]
-        .filter(
-          (entry, index, list) => list.findIndex((item) => item.name === entry.name) === index
-        )
-        .map((entry) => ({ name: entry.name, category: entry.category })),
+      materialNames: materialMatches.map((entry) => ({
+        name: entry.name,
+        category: entry.category,
+      })),
       nutrientLabel: suggestedName,
       saltNameZh: detectSaltNameZh(labelText),
       parsedNutrients: parsed.nutrients,
@@ -158,6 +195,46 @@ export class SupplementLabelIntakeService {
       allowedTags: ['矿物质', '维生素', '脂肪酸', '氨基酸', '基础营养'],
       allowedAddTimings: ['BEFORE_MIXING', 'BEFORE_MEAL'],
     });
+
+    // —— 能算的不让模型猜 ——
+    const nutrientForSpec = parsed.nutrients[0]
+      ? {
+          label: nutrientChineseLabel(parsed.nutrients[0].fieldPath),
+          amount: parsed.nutrients[0].value,
+          unit: parsed.nutrients[0].unit,
+        }
+      : null;
+    const unitLabel =
+      analysis?.result.unitDisplayLabel ??
+      (frontFields.physicalForm === 'POWDER' ? 'g' : frontFields.physicalForm === 'LIQUID' ? 'ml' : '粒');
+    const packSpec = buildPackSpec({
+      perBottleUnits: parseCountFromTitle(frontFields.productModel),
+      unitLabel,
+      nutrients: nutrientForSpec ? [nutrientForSpec] : [],
+    });
+
+    const detectedPriceCny =
+      analysis?.result.priceCny ?? extractPriceCny(`${frontText}\n${labelText}`);
+
+    const labelCategory = inferLabelCategory({
+      modelSaid: analysis?.result.labelCategory ?? null,
+      additiveMatched: catalogMatches.length > 0,
+      materialMatched: materialMatches.length > 0,
+    });
+
+    const notes: string[] = [];
+    if (!analysis) {
+      notes.push('模型没给出结构化判断（可能超时），下面按原文能读到的先填');
+    }
+    if (!packSpec) {
+      notes.push('正面图里没读出「一瓶多少粒/多少克」，产品规格留空');
+    }
+    if (detectedPriceCny === null) {
+      notes.push('两张图上都没找到价格，采购价留空');
+    }
+    if (labelCategory === null) {
+      notes.push('两本目录都没对上，标签类型留空');
+    }
 
     return {
       frontText,
@@ -174,8 +251,21 @@ export class SupplementLabelIntakeService {
         matches: catalogMatches,
         suggestion: catalogSuggestion,
       },
+      packSpec,
+      detectedPriceCny,
+      diagnostics: {
+        frontChars: frontText.length,
+        labelChars: labelText.length,
+        analysisOk: !!analysis,
+        dropped: analysis?.dropped ?? [],
+        notes,
+      },
       // 拍平：前端只关心"结论 + 被挡下来的原因"
-      analysis: analysis ? { ...analysis.result, dropped: analysis.dropped } : null,
+      analysis: analysis
+        ? { ...analysis.result, labelCategory, dropped: analysis.dropped }
+        : labelCategory
+          ? { ...EMPTY_ANALYSIS, labelCategory, dropped: [] }
+          : null,
     };
   }
 

@@ -37,7 +37,15 @@
     </div>
 
     <div class="archive-step__uploads">
-      <div class="upload-card">
+      <div
+        class="upload-card"
+        :class="{ 'upload-card--active': activeSlot === 'front' }"
+        tabindex="0"
+        data-slot="front"
+        @click="activate('front')"
+        @dragover.prevent
+        @drop.prevent="onDrop('front', $event)"
+      >
         <p class="upload-card__title">正面图</p>
         <el-image
           v-if="draft.evidence.frontImageUrl"
@@ -46,11 +54,19 @@
           fit="cover"
           class="upload-card__thumb"
         />
-        <el-button size="small" :loading="uploadingFront" @click="pickFront">选择正面图</el-button>
+        <el-button size="small" :loading="uploadingFront" @click.stop="pickFront">选择正面图</el-button>
         <input ref="frontInput" type="file" accept="image/*" hidden @change="onFrontFile" />
       </div>
 
-      <div class="upload-card">
+      <div
+        class="upload-card"
+        :class="{ 'upload-card--active': activeSlot === 'label' }"
+        tabindex="0"
+        data-slot="label"
+        @click="activate('label')"
+        @dragover.prevent
+        @drop.prevent="onDrop('label', $event)"
+      >
         <p class="upload-card__title">标签图</p>
         <el-image
           v-if="draft.evidence.labelImageUrl"
@@ -59,7 +75,7 @@
           fit="cover"
           class="upload-card__thumb"
         />
-        <el-button size="small" :loading="uploadingLabel" @click="pickLabel">选择标签图</el-button>
+        <el-button size="small" :loading="uploadingLabel" @click.stop="pickLabel">选择标签图</el-button>
         <input ref="labelInput" type="file" accept="image/*" hidden @change="onLabelFile" />
       </div>
 
@@ -70,7 +86,9 @@
           读到 {{ Object.keys(draft.servingNutrients).length }} 个营养素、每份
           {{ draft.servingUnitsPerDose ?? '?' }} {{ draft.unitDisplayLabel }}
         </p>
-        <p v-else class="upload-card__note">两张都传好后会自动读，也可以点「重新读」</p>
+        <p v-else class="upload-card__note">
+          点一下左边任一框，再按 ⌘V 直接粘贴截图（也可以拖图片进来）
+        </p>
         <el-button
           size="small"
           :loading="reading"
@@ -287,7 +305,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ingredientApi, nutritionFoodApi } from '@/api/ingredients'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
@@ -328,6 +346,7 @@ const selectionNote = computed({
   get: () => props.selectionNote,
   set: (value: string) => emit('update:selectionNote', value)
 })
+const activeSlot = ref<'front' | 'label' | null>(null)
 const frontInput = ref<HTMLInputElement | null>(null)
 const labelInput = ref<HTMLInputElement | null>(null)
 const uploadingFront = ref(false)
@@ -341,6 +360,14 @@ const confirming = ref(false)
 const confirmed = ref(false)
 const errorText = ref('')
 const helpTextVisible = ref(false)
+
+onMounted(() => {
+  window.addEventListener('paste', onPaste)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('paste', onPaste)
+})
 const saved = ref<{ ingredientId: string; nutritionFoodId: string; evidenceId: string } | null>(
   props.savedResult ?? null
 )
@@ -396,25 +423,96 @@ async function upload(file: File): Promise<string | null> {
   return uploaded.url ?? uploaded.data?.url ?? null
 }
 
-async function onFrontFile(event: Event): Promise<void> {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) {
+function activate(slot: 'front' | 'label'): void {
+  activeSlot.value = slot
+}
+
+/**
+ * 上传一张图到指定位置。
+ *
+ * 三个入口共用：点按钮选文件、直接 ⌘V 粘贴截图、把图片拖进来。
+ */
+async function acceptImage(slot: 'front' | 'label', file: File): Promise<void> {
+  if (!file.type.startsWith('image/')) {
+    ElMessage.warning('这不是图片文件')
     return
   }
-  uploadingFront.value = true
+  if (slot === 'front') {
+    uploadingFront.value = true
+  } else {
+    uploadingLabel.value = true
+  }
   try {
     const url = await upload(file)
     if (!url) {
       throw new Error('no url')
     }
-    draft.evidence.frontImageUrl = url
+    if (slot === 'front') {
+      draft.evidence.frontImageUrl = url
+    } else {
+      draft.evidence.labelImageUrl = url
+    }
+    activeSlot.value = null
     await maybeRead()
   } catch {
     ElMessage.error('这张图没传上去，重试一次')
   } finally {
     uploadingFront.value = false
+    uploadingLabel.value = false
+  }
+}
+
+/** 粘贴时贴到哪一格：刚点过的那格 → 空的正面 → 空的标签 → 正面 */
+function pasteTarget(): 'front' | 'label' {
+  if (activeSlot.value) {
+    return activeSlot.value
+  }
+  if (!draft.evidence.frontImageUrl) {
+    return 'front'
+  }
+  if (!draft.evidence.labelImageUrl) {
+    return 'label'
+  }
+  return 'front'
+}
+
+/**
+ * 粘贴截图。
+ *
+ * 在输入框里粘贴文字不受影响：只处理剪贴板里带图片、且焦点不在文本框上的情况。
+ */
+async function onPaste(event: ClipboardEvent): Promise<void> {
+  const target = event.target as HTMLElement | null
+  if (
+    target &&
+    (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+  ) {
+    return
+  }
+  const items = Array.from(event.clipboardData?.items ?? [])
+  const imageItem = items.find((item) => item.kind === 'file' && item.type.startsWith('image/'))
+  const file = imageItem?.getAsFile()
+  if (!file) {
+    return
+  }
+  event.preventDefault()
+  await acceptImage(pasteTarget(), file)
+}
+
+async function onDrop(slot: 'front' | 'label', event: DragEvent): Promise<void> {
+  const file = event.dataTransfer?.files?.[0]
+  if (!file) {
+    return
+  }
+  await acceptImage(slot, file)
+}
+
+async function onFrontFile(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (file) {
+    await acceptImage('front', file)
   }
 }
 
@@ -422,21 +520,8 @@ async function onLabelFile(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  if (!file) {
-    return
-  }
-  uploadingLabel.value = true
-  try {
-    const url = await upload(file)
-    if (!url) {
-      throw new Error('no url')
-    }
-    draft.evidence.labelImageUrl = url
-    await maybeRead()
-  } catch {
-    ElMessage.error('这张图没传上去，重试一次')
-  } finally {
-    uploadingLabel.value = false
+  if (file) {
+    await acceptImage('label', file)
   }
 }
 
@@ -622,6 +707,13 @@ function apiErrorMessage(error: unknown, fallback: string): string {
   flex-direction: column;
   gap: 8px;
   align-items: flex-start;
+}
+.upload-card--active {
+  border-color: #3370ff;
+  box-shadow: 0 0 0 2px rgba(51, 112, 255, 0.12);
+}
+.upload-card:focus {
+  outline: none;
 }
 .upload-card__title {
   margin: 0;

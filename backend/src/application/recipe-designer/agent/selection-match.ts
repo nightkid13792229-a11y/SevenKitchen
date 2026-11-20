@@ -24,7 +24,7 @@ export async function matchSelectionToLibrary(
     let candidates = cache.get(key);
     if (!candidates) {
       try {
-        candidates = await findFoods({ search: item.name, limit: 8 });
+        candidates = await findFoods({ search: key || item.name, limit: 8 });
       } catch {
         candidates = [];
       }
@@ -68,11 +68,22 @@ function pickBestCandidate(
   return best[0].candidate;
 }
 
+const NAME_ALIASES: Record<string, string[]> = {
+  兔肉: ['兔里脊'],
+  鳕鱼: ['鳕鱼颈背肉', '狭鳕鱼柳'],
+  鱼肉: ['鳕鱼颈背肉', '狭鳕鱼柳'],
+  燕麦: ['燕麦', '燕麦米'],
+};
+
 function matchScore(target: string, candidate: string): number {
   if (!target || !candidate) return 0;
   if (target === candidate) return 3;
   if (candidate.startsWith(target) || target.startsWith(candidate)) return 2;
   if (candidate.includes(target) || target.includes(candidate)) return 1;
+  for (const alias of NAME_ALIASES[target] ?? []) {
+    if (candidate === alias) return 3;
+    if (candidate.startsWith(alias) || alias.startsWith(candidate)) return 2;
+  }
   return 0;
 }
 

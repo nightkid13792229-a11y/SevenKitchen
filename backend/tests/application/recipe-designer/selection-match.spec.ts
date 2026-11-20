@@ -45,6 +45,28 @@ describe('selection name matching', () => {
     expect(matched.items[1].dataStatus).toBe('MISSING');
   });
 
+  it('matches common aliases like 兔肉 → 兔里脊', async () => {
+    const selection = {
+      summary: 'x',
+      items: [
+        {
+          kind: 'FOOD' as const,
+          name: '兔肉（去皮去脂）',
+          foodCategory: '肉类',
+          reason: 'x',
+          dataStatus: 'MISSING' as const,
+        },
+      ],
+    };
+    const matched = await matchSelectionToLibrary(selection, async () => [
+      candidate('兔里脊', 'rabbit'),
+    ]);
+    expect(matched.items[0]).toMatchObject({
+      ingredientId: 'rabbit',
+      dataStatus: 'AVAILABLE',
+    });
+  });
+
   it('uses the primary candidate when several names are equally close', async () => {
     const selection = {
       summary: 'x',

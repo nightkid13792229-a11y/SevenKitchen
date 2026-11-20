@@ -44,112 +44,123 @@
             <span class="agent-who">{{
               message.role === "USER" ? "我" : "AI"
             }}</span>
-            <div class="agent-bubble">{{ message.content }}</div>
+            <div class="agent-bubble">
+              {{ formatMessageContent(message.content) }}
+            </div>
           </template>
         </div>
-      </div>
 
-      <div v-if="session?.lastError" class="agent-error">
-        {{ session.lastError }}
-      </div>
+        <div v-if="session?.lastError" class="agent-error">
+          {{ session.lastError }}
+        </div>
 
-      <div v-if="session?.phase === 'PLAN' && session.plan" class="agent-plan">
-        <div class="agent-plan__title">营养方案（待确认）</div>
-        <div class="agent-plan__summary">{{ session.plan.summary }}</div>
-        <div v-if="session.plan.rationale" class="agent-plan__rationale">
-          <div class="agent-plan__rationale-title">理由与建议</div>
-          <div>{{ session.plan.rationale }}</div>
+        <div
+          v-if="session?.phase === 'PLAN' && session.plan"
+          ref="planRef"
+          class="agent-plan"
+        >
+          <div class="agent-plan__title">营养方案（待确认）</div>
+          <div class="agent-plan__summary">{{ session.plan.summary }}</div>
+          <div v-if="session.plan.mealsPerDay" class="agent-plan__meta">
+            每日 {{ session.plan.mealsPerDay }} 餐
+          </div>
+          <table class="agent-plan__table">
+            <thead>
+              <tr>
+                <th>约束</th>
+                <th>范围</th>
+                <th>单位</th>
+                <th>依据</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in session.plan.constraints" :key="item.key">
+                <td>{{ item.label }}</td>
+                <td>{{ formatRange(item.min, item.max) }}</td>
+                <td>{{ item.unit }}</td>
+                <td>
+                  {{ item.source }}{{ item.basis ? ` · ${item.basis}` : "" }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="agent-plan__table-note">
+            仅列疾病特异性、或比 FEDIAF 2025
+            默认评估更严的约束；通用项以营养评估为准。
+          </div>
+          <div v-if="session.plan.rationale" class="agent-plan__rationale">
+            <div class="agent-plan__rationale-title">理由与建议</div>
+            <div>{{ session.plan.rationale }}</div>
+          </div>
+          <div
+            v-if="session.plan.nonNutrient?.length"
+            class="agent-plan__notes"
+          >
+            <div v-for="item in session.plan.nonNutrient" :key="item.key">
+              {{ item.label }}：{{ item.value }}{{ item.unit || "" }}
+            </div>
+          </div>
+          <div class="agent-plan__actions">
+            <el-button
+              size="small"
+              type="primary"
+              :loading="deciding"
+              @click="decidePlan('APPROVE')"
+              >确认方案，进入选材</el-button
+            >
+            <el-button
+              size="small"
+              :loading="deciding"
+              @click="decidePlan('CONTINUE')"
+              >继续讨论</el-button
+            >
+          </div>
+          <div class="agent-plan__hint">确认后发一条消息，进入选材阶段。</div>
         </div>
-        <div v-if="session.plan.mealsPerDay" class="agent-plan__meta">
-          每日 {{ session.plan.mealsPerDay }} 餐
-        </div>
-        <table class="agent-plan__table">
-          <thead>
-            <tr>
-              <th>约束</th>
-              <th>范围</th>
-              <th>单位</th>
-              <th>依据</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in session.plan.constraints" :key="item.key">
-              <td>{{ item.label }}</td>
-              <td>{{ formatRange(item.min, item.max) }}</td>
-              <td>{{ item.unit }}</td>
-              <td>
-                {{ item.source }}{{ item.basis ? ` · ${item.basis}` : "" }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="agent-plan__table-note">
-          仅列疾病特异性、或比 FEDIAF 2025
-          默认评估更严的约束；通用项以营养评估为准。
-        </div>
-        <div v-if="session.plan.nonNutrient?.length" class="agent-plan__notes">
-          <div v-for="item in session.plan.nonNutrient" :key="item.key">
-            {{ item.label }}：{{ item.value }}{{ item.unit || "" }}
+
+        <div
+          v-if="session?.phase === 'SELECT' && session.selection"
+          class="agent-plan"
+        >
+          <div class="agent-plan__title">选材候选（待确认）</div>
+          <div class="agent-plan__summary">{{ session.selection.summary }}</div>
+          <table class="agent-plan__table">
+            <thead>
+              <tr>
+                <th>类型</th>
+                <th>名称</th>
+                <th>理由</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(item, index) in session.selection.items" :key="index">
+                <td>{{ item.kind === "FOOD" ? "食材" : "补剂" }}</td>
+                <td>{{ item.name }}</td>
+                <td>{{ item.reason }}</td>
+                <td>{{ dataStatusLabel(item.dataStatus) }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="agent-plan__actions">
+            <el-button
+              size="small"
+              type="primary"
+              :loading="deciding"
+              @click="decideSelection('APPROVE')"
+              >确认选材，开始设计</el-button
+            >
+            <el-button
+              size="small"
+              :loading="deciding"
+              @click="decideSelection('CONTINUE')"
+              >继续讨论</el-button
+            >
+          </div>
+          <div class="agent-plan__hint">
+            确认后发一条消息，进入配方编辑阶段。
           </div>
         </div>
-        <div class="agent-plan__actions">
-          <el-button
-            size="small"
-            type="primary"
-            :loading="deciding"
-            @click="decidePlan('APPROVE')"
-            >确认方案，进入选材</el-button
-          >
-          <el-button
-            size="small"
-            :loading="deciding"
-            @click="decidePlan('CONTINUE')"
-            >继续讨论</el-button
-          >
-        </div>
-        <div class="agent-plan__hint">确认后发一条消息，进入选材阶段。</div>
-      </div>
-
-      <div
-        v-if="session?.phase === 'SELECT' && session.selection"
-        class="agent-plan"
-      >
-        <div class="agent-plan__title">选材候选（待确认）</div>
-        <div class="agent-plan__summary">{{ session.selection.summary }}</div>
-        <table class="agent-plan__table">
-          <thead>
-            <tr>
-              <th>类型</th>
-              <th>名称</th>
-              <th>理由</th>
-              <th>状态</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(item, index) in session.selection.items" :key="index">
-              <td>{{ item.kind === "FOOD" ? "食材" : "补剂" }}</td>
-              <td>{{ item.name }}</td>
-              <td>{{ item.reason }}</td>
-              <td>{{ dataStatusLabel(item.dataStatus) }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="agent-plan__actions">
-          <el-button
-            size="small"
-            type="primary"
-            :loading="deciding"
-            @click="decideSelection('APPROVE')"
-            >确认选材，开始设计</el-button
-          >
-          <el-button
-            size="small"
-            :loading="deciding"
-            @click="decideSelection('CONTINUE')"
-            >继续讨论</el-button
-          >
-        </div>
-        <div class="agent-plan__hint">确认后发一条消息，进入配方编辑阶段。</div>
       </div>
 
       <div class="agent-compose">
@@ -216,6 +227,8 @@ const sending = ref(false);
 const deciding = ref(false);
 const loading = ref(false);
 const scrollRef = ref<HTMLElement | null>(null);
+const planRef = ref<HTMLElement | null>(null);
+const previousPlanSummary = ref<string | null>(null);
 let timer: number | null = null;
 let lastEditMessageId: string | null = null;
 const previousStatus = ref<string | null>(null);
@@ -251,7 +264,12 @@ async function loadSession() {
   session.value = result?.session ?? null;
   messages.value = result?.messages ?? [];
   await nextTick();
-  scrollToBottom();
+  if (session.value?.phase === "PLAN" && session.value.plan && planRef.value) {
+    // 方案卡在消息流末尾；滚到卡片顶部，先看到数值约束表。
+    planRef.value.scrollIntoView({ block: "start" });
+  } else {
+    scrollToBottom();
+  }
   syncTimer();
 
   // Agent 改了草稿后，编辑器右侧的原料/总重不会自动更新；
@@ -343,6 +361,11 @@ function handleOpen() {
 function scrollToBottom() {
   const element = scrollRef.value;
   if (element) element.scrollTop = element.scrollHeight;
+}
+
+function formatMessageContent(content: string) {
+  // 旧消息里写的是“上方”，但方案卡实际在消息流末尾；统一改成中性说法。
+  return content.replace("见上方方案卡表格", "见方案卡表格");
 }
 
 watch(

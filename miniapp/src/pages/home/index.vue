@@ -239,8 +239,8 @@
     </view>
 
     <!-- 适用生命阶段筛选抽屉 -->
-    <view v-if="shelfOpenSheet" class="sf-mask" @tap="closeShelfSheet">
-      <view class="sf-sheet" @tap.stop>
+    <view v-if="shelfOpenSheet" class="drawer-mask sf-mask" @tap="closeShelfSheet">
+      <view class="drawer-content sf-sheet" @tap.stop>
         <view class="sf-handle"></view>
         <view class="sf-head">
           <text class="sf-title">{{ shelfSheetTitle }}</text>

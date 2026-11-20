@@ -238,8 +238,10 @@
       </view>
     </view>
 
-    <!-- 适用生命阶段筛选抽屉 -->
-    <view v-show="shelfOpenSheet" class="sf-mask" @tap="closeShelfSheet">
+    <!-- 食谱橱窗筛选弹层：必须用 v-if 挂载。
+         v-show 在小程序里编译成 hidden，而 .sf-mask 自己设了 display:flex，
+         会盖掉 hidden 的 display:none，导致弹层一进首页就常驻、关不掉。 -->
+    <view v-if="shelfOpenSheet" class="sf-mask" @tap="closeShelfSheet">
       <view class="sf-sheet" @tap.stop>
         <view class="sf-handle"></view>
         <view class="sf-head">
@@ -256,7 +258,7 @@
             <view
               v-for="opt in shelfOptions.mainProtein"
               :key="opt.value"
-              :class="['sf-chip', { 'is-on': shelfDraft.main.includes(opt.value) }]"
+              :class="['sf-chip', { 'is-on': shelfDraft.mainProteinNodeIds.includes(opt.value) }]"
               @tap="toggleShelfMain(opt.value)"
             >
               <text>{{ opt.label }}</text>
@@ -272,13 +274,13 @@
             <view
               v-for="opt in shelfOptions.needs"
               :key="opt.value"
-              :class="['sf-row', { 'is-on': shelfDraft.needs.includes(opt.value) }]"
+              :class="['sf-row', { 'is-on': shelfDraft.needTagIds.includes(opt.value) }]"
               @tap="toggleShelfNeed(opt.value)"
             >
               <text class="sf-row-label">{{ opt.label }}</text>
               <text class="sf-row-count">{{ opt.count }} 道</text>
               <view class="sf-check">
-                <text v-if="shelfDraft.needs.includes(opt.value)">✓</text>
+                <text v-if="shelfDraft.needTagIds.includes(opt.value)">✓</text>
               </view>
             </view>
             <view v-if="shelfOptionsLoading" class="sf-empty">加载中…</view>
@@ -302,7 +304,7 @@
                   :class="[
                     'sf-group-head',
                     {
-                      'is-on': shelfDraft.avoid.includes(group.value),
+                      'is-on': shelfDraft.avoidTagIds.includes(group.value),
                       'is-off': group.disabled
                     }
                   ]"
@@ -312,7 +314,7 @@
                   <text class="sf-group-count">{{ group.count }} 道</text>
                   <text v-if="group.disabled" class="sf-group-warn">会避开全部食谱</text>
                   <view v-else class="sf-check">
-                    <text v-if="shelfDraft.avoid.includes(group.value)">✓</text>
+                    <text v-if="shelfDraft.avoidTagIds.includes(group.value)">✓</text>
                   </view>
                 </view>
                 <view v-if="group.children.length" class="sf-chips sf-chips--sub">
@@ -322,7 +324,7 @@
                     :class="[
                       'sf-chip',
                       'sf-chip--sm',
-                      { 'is-on': shelfDraft.avoid.includes(child.value) }
+                      { 'is-on': shelfDraft.avoidTagIds.includes(child.value) }
                     ]"
                     @tap="toggleShelfAvoid(child.value)"
                   >
@@ -345,7 +347,7 @@
                 <text class="sf-row-label">{{ opt.label }}</text>
                 <text class="sf-row-count">{{ opt.count }} 道</text>
                 <view class="sf-check">
-                  <text v-if="shelfDraft.avoid.includes(opt.value)">✓</text>
+                  <text v-if="shelfDraft.avoidTagIds.includes(opt.value)">✓</text>
                 </view>
               </view>
               <view v-if="!shelfAvoidSearchResults.length" class="sf-empty">没有匹配的原料</view>

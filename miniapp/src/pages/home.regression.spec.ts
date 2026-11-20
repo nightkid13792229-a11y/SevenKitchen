@@ -265,6 +265,38 @@ describe('home runtime regressions', () => {
     expect(source).toContain('filterState.value.excludedIngredients = [...draftFilterState.value.excludedIngredients]')
   })
 
+  it('mounts the showcase filter sheet on demand instead of leaving a flex overlay visible', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+    const sheetTag = source.match(/<view[^>]*class="sf-mask"[^>]*>/)?.[0] ?? ''
+
+    // v-show 在小程序里编译成 hidden，而 .sf-mask 自己的 display:flex 会盖掉 hidden
+    // 的 display:none，于是弹层在首页一打开就常驻、点 X / 遮罩也关不掉。
+    expect(sheetTag).toContain('v-if="shelfOpenSheet"')
+    expect(sheetTag).not.toContain('v-show')
+    expect(source).not.toContain('v-show="shelfOpenSheet"')
+    // 打开 / 关闭 / 回到首页这三条路径都要能把状态收回 null
+    expect(source).toContain('shelfOpenSheet.value = key')
+    expect(source).toContain('shelfOpenSheet.value = null')
+  })
+
+  it('binds the showcase sheet chips to the real shelf draft fields', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+    const template = source.slice(0, source.indexOf('<script setup'))
+
+    // shelfDraft 的字段是 mainProteinNodeIds / needTagIds / avoidTagIds。
+    // 模板里写成 main / needs / avoid 会让选项一渲染就 undefined.includes 崩掉。
+    expect(template).not.toMatch(/shelfDraft\.(main|needs|avoid)\./)
+    expect(template).toContain('shelfDraft.mainProteinNodeIds.includes')
+    expect(template).toContain('shelfDraft.needTagIds.includes')
+    expect(template).toContain('shelfDraft.avoidTagIds.includes')
+  })
+
   it('renders dog profile previews as compact chips with name and weight', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),

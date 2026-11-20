@@ -328,6 +328,39 @@ describe('home runtime regressions', () => {
     expect(source).toContain('return shelfOptionLabels(shelfOptions.needs, ids)')
   })
 
+  it('wires the sheet close paths to closeShelfSheet', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+    const template = source.slice(0, source.indexOf('<script setup'))
+
+    expect(template).toContain('class="sf-mask" @tap="closeShelfSheet"')
+    expect(template).toContain('class="sf-close" @tap="closeShelfSheet"')
+    expect(template).toContain('@tap="applyShelfDraft"')
+    expect(source).toContain('applyShelfDraft(): void')
+    expect(source).toContain('closeShelfSheet()')
+  })
+
+  it('resets the new shelf filters from the empty-state reset button', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+    const resetStart = source.indexOf('function clearAllFilters()')
+    expect(resetStart).toBeGreaterThan(-1)
+    const resetBlock = source.slice(resetStart, resetStart + 900)
+
+    // 空状态里的「重置筛选」必须同时清掉橱窗三筛选，
+    // 否则筛选结果为 0 时点它没有任何反应。
+    expect(resetBlock).toContain('shelfSelected.mainProteinNodeIds = []')
+    expect(resetBlock).toContain('shelfSelected.needTagIds = []')
+    expect(resetBlock).toContain('shelfSelected.avoidTagIds = []')
+    expect(resetBlock).toContain('persistShelf()')
+    expect(resetBlock).toContain('newFilters.value = shelfSnapshot()')
+    expect(resetBlock).toContain('refreshRecipesWithFilters()')
+  })
+
   it('drops the avoid search box because the ingredient list is short', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),

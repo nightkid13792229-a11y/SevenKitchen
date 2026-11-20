@@ -1926,7 +1926,7 @@ function openExcludedTagsDrawer() {
   )
 }
 
-// 清除所有筛选
+// 清除所有筛选（含橱窗三筛选）
 function clearAllFilters() {
   filterState.value = {
     selectedLifeStages: [],
@@ -1935,6 +1935,13 @@ function clearAllFilters() {
     excludedIngredients: []
   }
   syncDraftFilterState()
+  // 空状态里的「重置筛选」必须也把橱窗筛选清掉，否则 0 结果时点了没反应
+  shelfSelected.mainProteinNodeIds = []
+  shelfSelected.needTagIds = []
+  shelfSelected.avoidTagIds = []
+  persistShelf()
+  newFilters.value = shelfSnapshot()
+  closeShelfSheet()
   refreshRecipesWithFilters()
 }
 
@@ -2610,10 +2617,11 @@ defineOptions({
 
 /* ---------- 固定筛选栏 ---------- */
 .filter-bar {
+  position: -webkit-sticky;
   position: sticky;
   top: 0;
   z-index: 20;
-  background: rgba(240, 243, 233, 0.97);
+  background: #f0f3e9;
   padding: 16rpx 28rpx;
   border-bottom: 1rpx solid #e3e6d4;
   display: flex;

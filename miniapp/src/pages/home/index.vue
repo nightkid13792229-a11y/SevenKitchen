@@ -239,8 +239,8 @@
     </view>
 
     <!-- 适用生命阶段筛选抽屉 -->
-    <view v-show="shelfOpenSheet" class="drawer-mask sf-mask" @tap="closeShelfSheet">
-      <view class="drawer-content sf-sheet" @tap.stop>
+    <view v-show="shelfOpenSheet" class="sf-mask" @tap="closeShelfSheet">
+      <view class="sf-sheet" @tap.stop>
         <view class="sf-handle"></view>
         <view class="sf-head">
           <text class="sf-title">{{ shelfSheetTitle }}</text>
@@ -262,7 +262,8 @@
               <text>{{ opt.label }}</text>
               <text class="sf-chip-n">{{ opt.count }}</text>
             </view>
-            <view v-if="!shelfOptions.mainProtein.length" class="sf-empty">暂无可选</view>
+            <view v-if="shelfOptionsLoading" class="sf-empty">加载中…</view>
+            <view v-else-if="!shelfOptions.mainProtein.length" class="sf-empty">暂无可选</view>
           </view>
 
           <!-- 特性：可多选，同时满足 -->
@@ -279,11 +280,13 @@
                 <text v-if="shelfDraft.needs.includes(opt.value)">✓</text>
               </view>
             </view>
-            <view v-if="!shelfOptions.needs.length" class="sf-empty">暂无可选</view>
+            <view v-if="shelfOptionsLoading" class="sf-empty">加载中…</view>
+            <view v-else-if="!shelfOptions.needs.length" class="sf-empty">暂无可选</view>
           </view>
 
           <!-- 避开：原料标签树 -->
           <view v-else class="sf-avoid">
+            <view v-if="shelfOptionsLoading" class="sf-empty">加载中…</view>
             <input
               v-model="shelfSearch"
               class="sf-search"
@@ -712,6 +715,7 @@ const shelfDraft = reactive<ShelfFilterState>({
 const shelfOpenSheet = ref<ShelfSheetKey | null>(null)
 const shelfSearch = ref('')
 const shelfPreviewTotal = ref<number | null>(null)
+const shelfOptionsLoading = ref(false)
 let shelfPreviewTimer: ReturnType<typeof setTimeout> | null = null
 let shelfPreviewSeq = 0
 
@@ -820,7 +824,9 @@ function syncShelfDraft(): void {
 
 function openShelfSheet(key: ShelfSheetKey): void {
   shelfOpenSheet.value = key
-  uni.showModal({ title: '弹层状态', content: String(shelfOpenSheet.value), showCancel: false })
+  if (!shelfOptions.mainProtein.length && !shelfOptions.needs.length && !shelfOptions.avoid.length) {
+    void loadShelfOptions()
+  }
   shelfSearch.value = ''
   syncShelfDraft()
   shelfPreviewTotal.value = null
@@ -915,6 +921,7 @@ function resetShelfAll(): void {
 }
 
 async function loadShelfOptions(): Promise<void> {
+  shelfOptionsLoading.value = true
   try {
     const res: any = await request({
       url: '/recipes/filter-options',
@@ -928,6 +935,8 @@ async function loadShelfOptions(): Promise<void> {
     shelfOptions.total = Number(res.data.total || 0)
   } catch {
     // 选项加载失败时保持空面板，不阻塞首页
+  } finally {
+    shelfOptionsLoading.value = false
   }
 }
 

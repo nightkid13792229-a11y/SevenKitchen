@@ -6,7 +6,8 @@ import { AGENT_TOOLS } from './tools';
  *
  * 硬闸不靠提示词：阶段不对，写工具根本不出现在模型面前。
  *   PLAN   → 只读 + ask + propose_plan
- *   SELECT → 只读 + find_food + ask + propose_selection
+ *   SELECT → 只读（不含 find_food）+ ask + propose_selection
+ *            选食材先按营养/忌口，库里有没有由后端提交后匹配，避免被库存牵着走。
  *   DESIGN → 全部
  */
 export type AgentPhase = 'PLAN' | 'SELECT' | 'DESIGN';
@@ -31,6 +32,8 @@ export const PHASE_TOOL_BUDGET = {
 const PROPOSE_TOOLS = new Set(['propose_plan', 'propose_selection']);
 const PLAN_TOOLS = new Set([...READ_TOOLS, 'propose_plan']);
 const SELECT_TOOLS = new Set([...READ_TOOLS, 'propose_selection']);
+// 选材阶段不让模型查原料库：先自由选食材，提交后由后端按名称匹配。
+SELECT_TOOLS.delete('find_food');
 
 export function toolsForPhase(
   phase: AgentPhase,
@@ -67,7 +70,7 @@ export function phaseSystemLine(phase: AgentPhase): string {
     return '当前阶段：方案确认。只读档案和知识库，产出营养方案与可执行约束；用 propose_plan 提交，等用户确认。不要改配方。方案摘要和理由都只写营养方案，不复述年龄/体重/品种/BCS/性别/检验值/用药名称（编辑器已展示）；数值约束只列疾病特异性/比 FEDIAF 2025 默认评估更严的那一侧，默认下限不重复写，通用项以营养评估为准；非数值约束用文案写在 nonNutrient。MAINTAIN 不要列能量密度；钠只有比 FEDIAF 上限 0.55 g/1000 kcal 更严才列；胰腺炎与肿瘤蛋白冲突时以胰腺炎安全为先，蛋白上限不超过 30% DM，30–45% 只写理由并标待确认。不要算每日总热量；需要控制能量时用 energyDensity 约束（KCAL_PER_100G 或 KCAL_PER_KG）。0 命中就换词或换文档，不要重复原查询；每类约束找到一处来源即可，证据不足的标待确认；方案优先于穷尽检索。方案阶段不查药物/补剂的 mg/kg 剂量。';
   }
   if (phase === 'SELECT') {
-    return '当前阶段：选材。只列食材，不要列补剂：补剂要等配方评估出营养缺口后，在配方编辑阶段再补。按 CFCT 食材类型分组，每个类型至少 2 个候选；先列原料库可用项，再列至少 2 个库外/非常见食材候选（标 MISSING），供用户筛选；不要只从原料库里挑。严禁把方案忌口食材（牛、羊、鸡、鸡蛋及其制品）列为候选，也不要为了凑类型去列禁忌食材；不适用的类型跳过并在 notes 说明。用 propose_selection 提交，等用户确认。不要改配方。0 命中就换词或换文档，不要重复原查询。';
+    return '当前阶段：选材。只列食材，不要列补剂：补剂要等配方评估出营养缺口后，在配方编辑阶段再补。按营养与忌口自由选食材，不要查原料库（本阶段没有 find_food）；库里有没有由系统提交后自动匹配，没匹配到才标库外。按 CFCT 食材类型分组，每个类型至少 2 个候选；严禁把方案忌口食材（牛、羊、鸡、鸡蛋及其制品）列为候选，也不要为了凑类型去列禁忌食材；不适用的类型跳过并在 notes 说明。用 propose_selection 提交，等用户确认。不要改配方。0 命中就换词或换文档，不要重复原查询。';
   }
   return '当前阶段：配方编辑。按已确认的方案和选材编辑配方、跑评估、修缺口。补剂只在 assess 显示明确营养缺口后，再按缺口从原料库查找并添加；不要在食材还没评估前先加补剂。';
 }

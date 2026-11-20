@@ -311,14 +311,16 @@ describe('propose_selection normalization', () => {
     ).toThrow('至少要有 2 个候选');
   });
 
-  it('requires at least two outside-library candidates', () => {
-    expect(() =>
-      normalizeSelection({
-        summary: '全库内',
-        items: baseItems.filter(
-          (item) => item.name !== '鹿肉' && item.name !== '鸭肉',
-        ),
-      }),
-    ).toThrow('至少要有 2 个库外');
+  it('does not require outside-library candidates', () => {
+    const normalized = normalizeSelection({
+      summary: '全库内',
+      items: baseItems.filter(
+        (item) => item.name !== '鹿肉' && item.name !== '鸭肉',
+      ),
+    });
+    expect(normalized.items).toHaveLength(4);
+    expect(
+      normalized.items.every((item) => item.dataStatus === 'AVAILABLE'),
+    ).toBe(true);
   });
 });

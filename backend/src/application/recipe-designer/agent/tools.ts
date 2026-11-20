@@ -24,6 +24,7 @@ import {
   summarizePlan,
   summarizeSelection,
 } from './propose-plan';
+import { matchSelectionToLibrary } from './selection-match';
 import {
   AgentToolError,
   fail,
@@ -237,7 +238,10 @@ export async function executeTool(
 
       case 'propose_selection': {
         const selection = normalizeSelection(args);
-        return ok(selection, summarizeSelection(selection));
+        const matched = await matchSelectionToLibrary(selection, (input) =>
+          context.port.findFoods(input),
+        );
+        return ok(matched, summarizeSelection(matched));
       }
 
       case 'read_draft': {

@@ -51,6 +51,6 @@ describe('selection synthesis fallback context', () => {
     expect(text).toContain('已确认营养方案');
     expect(text).toContain('find_food');
     expect(text).toContain('只列 FOOD，不要列补剂');
-    expect(text).toContain('至少 2 个库外');
+    expect(text).toContain('系统会按名称匹配原料库');
   });
 });

@@ -86,8 +86,8 @@ const PROPOSE_PLAN_DESCRIPTION =
 const PROPOSE_SELECTION_DESCRIPTION =
   '提交食材候选，等用户确认。只在选材阶段使用；提交后本次运行暂停。' +
   '选材阶段只列食材，不要列补剂：补剂要等食谱评估出营养缺口后，在配方编辑阶段再补。' +
-  '按 CFCT 食材类型分组，每个类型至少 2 个候选；先列原料库中可用的，再列至少 2 个库外/非常见食材候选（标 MISSING），供用户筛选。' +
-  '不要只从原料库里挑，也不要因为库外食材暂时没有档案就不列。' +
+  '按营养与忌口自由选食材，不要查原料库，也不要填写库 ID；提交后系统会按名称自动匹配原料库，没匹配到才标库外。' +
+  '按 CFCT 食材类型分组，每个类型至少 2 个候选。' +
   '严禁把方案忌口食材（牛、羊、鸡、鸡蛋及其制品）列为候选，也不要为了凑类型去列禁忌食材；不适用的类型跳过并在 notes 说明。';
 
 export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
@@ -187,13 +187,7 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
                 type: 'string',
                 description: 'CFCT 食材类型，如 肉类/水产/谷类/薯类/蔬菜/水果',
               },
-              ingredientId: { type: 'string' },
-              nutritionFoodId: { type: 'string' },
               reason: { type: 'string' },
-              dataStatus: {
-                type: 'string',
-                enum: ['AVAILABLE', 'MISSING', 'NEEDS_PROFILE'],
-              },
             },
             required: ['kind', 'name', 'foodCategory', 'reason'],
             additionalProperties: false,
@@ -295,12 +289,6 @@ export function normalizeSelection(raw: unknown): AgentSelection {
     throw new AgentToolError(
       'INVALID_ARGUMENT',
       `食材类型「${singleton[0]}」至少要有 2 个候选；请补足后再提交`,
-    );
-  }
-  if (items.filter((item) => item.dataStatus === 'MISSING').length < 2) {
-    throw new AgentToolError(
-      'INVALID_ARGUMENT',
-      '至少要有 2 个库外/非常见食材候选（dataStatus=MISSING），用于保证多样性',
     );
   }
   return {

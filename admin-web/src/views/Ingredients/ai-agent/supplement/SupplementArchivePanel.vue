@@ -1,5 +1,8 @@
 <template>
   <div class="archive-panel">
+    <p v-if="props.dirty && (item.issues || []).length > 0" class="archive-dirty">
+      下面这些体检项是按<strong>已保存的数据</strong>算的；你刚填的还没保存，点底部「全部保存并确认」后才会消失。
+    </p>
     <el-form label-width="120px" size="small" @submit.prevent>
       <el-form-item label="物理形态">
         <el-select
@@ -126,6 +129,8 @@ import {
 const props = defineProps<{
   item: SupplementCatalogItem
   saving?: boolean
+  /** 表单里还有没保存的改动——体检结果是按"已保存的数据"算的 */
+  dirty?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -195,6 +200,14 @@ defineExpose({ buildPatch })
 <style scoped>
 .archive-panel {
   padding: 4px 0 0;
+}
+.archive-dirty {
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: #fdf6ec;
+  color: #b88230;
+  font-size: 12px;
 }
 .archive-hint {
   margin-left: 12px;

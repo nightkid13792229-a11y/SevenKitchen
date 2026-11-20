@@ -47,6 +47,7 @@
           ref="archiveRef"
           :item="row"
           :saving="savingArchive"
+          :dirty="hasUnsavedChanges"
           @save="saveArchive"
         />
 
@@ -281,7 +282,9 @@
 
       <div class="launch-actions">
         <span class="launch-actions__hint">
-          {{ missing.length ? `还差：${missing.join('、')}` : '四段都已明确' }}
+          <b v-if="hasUnsavedChanges" class="launch-actions__dirty">有未保存的修改</b>
+          <template v-else>已全部保存</template>
+          <template v-if="missing.length"> · 还差：{{ missing.join('、') }}</template>
         </span>
         <el-button type="primary" :loading="savingAll" :disabled="!dataReady" @click="saveAll">
           全部保存并确认
@@ -393,6 +396,25 @@ const groupChoice = ref<string>('')
 const autoGroupHint = ref('')
 const shopConfig = ref<{ markupMultiplier?: number; priceRoundingMode?: string } | null>(null)
 const uploadingImage = ref(false)
+/** 载入或保存时的表单指纹；和现在的比，就知道有没有没存的东西 */
+const savedFingerprint = ref('')
+
+function currentFingerprint(): string {
+  return JSON.stringify([
+    archiveRef.value?.buildPatch?.() ?? null,
+    diyForm,
+    procForm,
+    groupChoice.value
+  ])
+}
+
+const hasUnsavedChanges = computed(
+  () => savedFingerprint.value !== '' && currentFingerprint() !== savedFingerprint.value
+)
+
+function markSaved(): void {
+  savedFingerprint.value = currentFingerprint()
+}
 const imageInput = ref<HTMLInputElement | null>(null)
 const recommendations = ref<Array<{ groupId: string; name: string; reason: string }>>([])
 const fetchingResult = reactive({
@@ -506,7 +528,11 @@ async function load() {
   } catch (error) {
     if (!disposed) loadError.value = getApiErrorMessage(error, '落地配置加载失败')
   } finally {
-    if (!disposed) loading.value = false
+    if (!disposed) {
+      loading.value = false
+      await nextTick()
+      markSaved()
+    }
   }
 }
 
@@ -919,6 +945,8 @@ async function saveAll() {
   }
 
   await load()
+  await nextTick()
+  markSaved()
   savingAll.value = false
   if (failed > 0) {
     ElMessage.warning(`已保存 ${saved} 段，${failed} 段没保存成功，看上面的提示`)
@@ -1137,6 +1165,9 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   gap: 12px;
   margin: 4px 0 14px;
+}
+.launch-actions__dirty {
+  color: #e6a23c;
 }
 .launch-actions__hint {
   font-size: 12px;

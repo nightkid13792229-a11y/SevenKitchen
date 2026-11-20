@@ -510,7 +510,13 @@ export class RecipeAgentService implements OnModuleInit {
         content: response.content ?? null,
         tool_calls: calls,
       });
-      if (response.content) {
+      // 方案/选材以卡片呈现；同一轮的说明文字不再写入消息，避免和卡片重复。
+      const hasCardProposal = calls.some(
+        (call) =>
+          call.function.name === 'propose_plan' ||
+          call.function.name === 'propose_selection',
+      );
+      if (response.content && !hasCardProposal) {
         await this.appendMessage(sessionId, 'ASSISTANT', response.content);
       }
 
@@ -610,11 +616,6 @@ export class RecipeAgentService implements OnModuleInit {
               endedAt: new Date(),
             },
           });
-          await this.appendMessage(
-            sessionId,
-            'ASSISTANT',
-            outcome.summary ?? '方案已提交，请确认。',
-          );
           return;
         }
         if (call.function.name === 'propose_selection' && outcome.ok) {
@@ -626,11 +627,6 @@ export class RecipeAgentService implements OnModuleInit {
               endedAt: new Date(),
             },
           });
-          await this.appendMessage(
-            sessionId,
-            'ASSISTANT',
-            outcome.summary ?? '选材已提交，请确认。',
-          );
           return;
         }
 

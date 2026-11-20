@@ -100,7 +100,10 @@
               {{ item.label }}：{{ item.value }}{{ item.unit || "" }}
             </div>
           </div>
-          <div class="agent-plan__actions">
+          <div
+            v-if="session.phase === 'PLAN' && !session.planConfirmedAt"
+            class="agent-plan__actions"
+          >
             <el-button
               size="small"
               type="primary"
@@ -115,14 +118,21 @@
               >继续讨论</el-button
             >
           </div>
-          <div class="agent-plan__hint">确认后发一条消息，进入选材阶段。</div>
+          <div class="agent-plan__hint">
+            {{
+              session.planConfirmedAt
+                ? "方案已确认；选材阶段会在这里继续。"
+                : "确认后进入选材阶段；有问题请直接回复要改的地方。"
+            }}
+          </div>
         </div>
 
-        <div
-          v-if="session?.phase === 'SELECT' && session.selection"
-          class="agent-plan"
-        >
-          <div class="agent-plan__title">选材候选（待确认）</div>
+        <div v-if="session?.selection" class="agent-plan">
+          <div class="agent-plan__title">
+            选材候选{{
+              session.selectionConfirmedAt ? "（已确认）" : "（待确认）"
+            }}
+          </div>
           <div class="agent-plan__summary">{{ session.selection.summary }}</div>
           <table class="agent-plan__table">
             <thead>

@@ -145,6 +145,64 @@ describe('propose_plan normalization', () => {
     expect(stricter.constraints[0].max).toBe(3500);
   });
 
+  it('keeps only the disease-specific side of fat/protein', () => {
+    const normalized = normalizePlan({
+      summary: '胰腺炎低脂',
+      constraints: [
+        {
+          key: 'fat',
+          label: '脂肪',
+          min: 5.5,
+          max: 12,
+          unit: 'PERCENT_DM',
+          source: 'SACN5',
+          hard: true,
+        },
+        {
+          key: 'protein',
+          label: '蛋白',
+          min: 21,
+          max: 30,
+          unit: 'PERCENT_DM',
+          source: 'SACN5',
+          hard: true,
+        },
+      ],
+    });
+    expect(normalized.constraints).toEqual([
+      expect.objectContaining({ key: 'fat', min: null, max: 12 }),
+      expect.objectContaining({ key: 'protein', min: null, max: 30 }),
+    ]);
+  });
+
+  it('drops constraints that exactly match the default assessment', () => {
+    expect(() =>
+      normalizePlan({
+        summary: '通用维持',
+        constraints: [
+          {
+            key: 'calcium',
+            label: '钙',
+            min: 0.5,
+            max: 2.5,
+            unit: 'PERCENT_DM',
+            source: 'FEDIAF 2025',
+            hard: true,
+          },
+          {
+            key: 'phosphorus',
+            label: '磷',
+            min: 0.4,
+            max: 1.6,
+            unit: 'PERCENT_DM',
+            source: 'FEDIAF 2025',
+            hard: true,
+          },
+        ],
+      }),
+    ).toThrow('只列疾病特异性');
+  });
+
   it('rejects an empty constraint list', () => {
     expect(() => normalizePlan({ ...plan, constraints: [] })).toThrow(
       'constraints 不能为空',

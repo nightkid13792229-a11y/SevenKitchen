@@ -73,9 +73,11 @@ const PROPOSE_PLAN_DESCRIPTION =
   'constraints 只放疾病特异性、或比 FEDIAF 2025 默认评估更严的数值上下限（例如心脏病控钠）；' +
   '营养评估已经覆盖的通用蛋白/脂肪/钙磷等上下限不要重复写。每条带 key、label、单位、依据和来源。' +
   '非数值约束（禁用食材、工艺、餐次等）放 nonNutrient，文案形式。' +
+  'summary 和 rationale 都不要复述档案：年龄、体重、品种、BCS、性别、检验值、用药名称；疾病名可以写。' +
+  '只列比 FEDIAF 2025 默认评估更严的那一侧；默认下限不要写，表格只保留疾病特异性边界。' +
   'MAINTAIN 目标不要列 energyDensity；只有减重/增重/特殊能量需求才列，并给出真正有约束力的上限。' +
   '钠只有在比 FEDIAF 2025 上限 0.55 g/1000 kcal 更严时才列；与默认相同不要列。' +
-  '蛋白在胰腺炎与肿瘤冲突时以胰腺炎安全为先；肿瘤高蛋白目标标待确认，不要设成硬下限。' +
+  '胰腺炎与肿瘤蛋白目标冲突时以胰腺炎安全为先：蛋白上限不超过 30% DM；30–45% DM 只写进 rationale 标待确认，不要作为硬约束。' +
   '不要写“每日总热量/kcal 目标”；需要控制能量时用 key=energyDensity、unit=KCAL_PER_100G 或 KCAL_PER_KG 的约束。';
 
 const PROPOSE_SELECTION_DESCRIPTION =
@@ -220,7 +222,11 @@ export function normalizePlan(raw: unknown): AgentNutritionPlan {
   }
   const constraints = rawConstraints
     .map((entry, index) => normalizeConstraint(entry, index))
-    .filter((constraint) => !isDefaultAssessmentConstraint(constraint));
+    .filter((constraint) => !isDefaultAssessmentConstraint(constraint))
+    .map(stripAssessmentDefaultBounds)
+    .filter(
+      (constraint): constraint is AgentPlanConstraint => constraint !== null,
+    );
   if (constraints.length === 0) {
     throw new AgentToolError(
       'INVALID_ARGUMENT',
@@ -342,7 +348,7 @@ function normalizeConstraint(
   };
 }
 
-/** 营养评估已覆盖的通用上下限，不需要在方案表格里重复。 */
+/** 去掉与 FEDIAF 默认评估完全相同的通用约束；只保留疾病特异性边界。 */
 function isDefaultAssessmentConstraint(
   constraint: AgentPlanConstraint,
 ): boolean {
@@ -357,7 +363,61 @@ function isDefaultAssessmentConstraint(
       return constraint.max === null || constraint.max >= 400;
     }
   }
+  if (
+    constraint.key === 'calcium' &&
+    constraint.min === 0.5 &&
+    constraint.max === 2.5
+  ) {
+    return true;
+  }
+  if (
+    constraint.key === 'phosphorus' &&
+    constraint.min === 0.4 &&
+    constraint.max === 1.6
+  ) {
+    return true;
+  }
+  if (
+    constraint.key === 'caPRatio' &&
+    constraint.min === 1 &&
+    constraint.max === 2
+  ) {
+    return true;
+  }
+  if (
+    constraint.key === 'linoleicAcid' &&
+    constraint.min === 1.32 &&
+    constraint.max === null
+  ) {
+    return true;
+  }
   return false;
+}
+
+/**
+ * 默认下限是营养评估负责的，不重复写；只保留疾病特异性的那一侧。
+ * 例：脂肪 5.5–12 → 只留 max 12；蛋白 21–30 → 只留 max 30。
+ */
+function stripAssessmentDefaultBounds(
+  constraint: AgentPlanConstraint,
+): AgentPlanConstraint | null {
+  if (constraint.key === 'fat') {
+    if (constraint.max === null) {
+      return constraint.min === 5.5 ? null : constraint;
+    }
+    if (constraint.min === 5.5) {
+      return { ...constraint, min: null };
+    }
+  }
+  if (constraint.key === 'protein') {
+    if (constraint.max === null) {
+      return constraint.min === 18 || constraint.min === 21 ? null : constraint;
+    }
+    if (constraint.min === 18 || constraint.min === 21) {
+      return { ...constraint, min: null };
+    }
+  }
+  return constraint;
 }
 
 function normalizeNonNutrient(

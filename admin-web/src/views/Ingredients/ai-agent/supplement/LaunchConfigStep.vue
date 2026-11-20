@@ -263,21 +263,67 @@
         <p v-if="autoGroupHint" class="launch-seg__hint">{{ autoGroupHint }}</p>
         <p v-if="selectedGroupHint" class="launch-seg__warn">{{ selectedGroupHint }}</p>
 
-        <div v-if="row?.equivalenceGroup" class="launch-seg__row">
-          <span class="launch-seg__label">组内排序</span>
-          <el-input-number
-            v-model="groupPriority"
-            :min="0"
-            :max="999"
-            :controls="false"
+        <!-- 组状态与审核：加人会打回待审核，就在这一屏直接审 -->
+        <div v-if="groupDetail" class="launch-seg__row launch-group">
+          <span class="launch-seg__label">组状态</span>
+          <el-tag
             size="small"
-            style="width: 120px"
-          />
-          <el-button size="small" :loading="savingPriority" @click="saveGroupPriority">
-            保存排序
+            effect="plain"
+            :type="groupDetail.status === 'APPROVED' ? 'success' : 'warning'"
+          >
+            {{ statusLabel(groupDetail.status) }}
+          </el-tag>
+          <el-button
+            v-if="groupDetail.status !== 'APPROVED'"
+            type="primary"
+            size="small"
+            :loading="reviewingGroup"
+            @click="approveCurrentGroup"
+          >
+            审核通过本组
           </el-button>
-          <span class="launch-seg__hint">0 最前；制作单默认选排序最前的可买成员</span>
+          <span v-else class="launch-seg__hint">已审核通过，组内可互相替换</span>
+          <span v-if="groupDetail.status !== 'APPROVED'" class="launch-seg__hint">
+            加入新成员会打回待审核，这次可以直接在这里通过
+          </span>
         </div>
+
+        <!-- 组内排序：0 最前，制作单默认选最前且有货的 -->
+        <div v-if="groupDetail && groupDetail.members.length > 1" class="launch-seg__row launch-group">
+          <span class="launch-seg__label">组内排序</span>
+          <div class="launch-members">
+            <div
+              v-for="(member, index) in sortMembers(groupDetail.members)"
+              :key="member.id"
+              class="launch-member"
+              :class="{ 'launch-member--self': member.id === ingredientId }"
+            >
+              <span class="launch-member__index">{{ index + 1 }}</span>
+              <span class="launch-member__name">{{ member.name }}</span>
+              <span v-if="member.id === ingredientId" class="launch-member__tag">本条</span>
+              <el-button
+                text
+                size="small"
+                :disabled="index === 0 || reorderingGroup"
+                @click="moveMember(index, -1)"
+              >
+                上移
+              </el-button>
+              <el-button
+                text
+                size="small"
+                :disabled="index === sortMembers(groupDetail.members).length - 1 || reorderingGroup"
+                @click="moveMember(index, 1)"
+              >
+                下移
+              </el-button>
+            </div>
+          </div>
+        </div>
+
+        <p v-if="groupDetail && groupDetail.members.length > 1" class="launch-seg__hint">
+          制作单默认选排在最前、且有货的那瓶
+        </p>
       </div>
 
       <div class="launch-actions">
@@ -318,7 +364,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   supplementShopApi,
@@ -327,6 +373,7 @@ import {
 } from '@/api/supplementShop'
 import {
   supplementEquivalenceApi,
+  type EquivalenceGroupDetail,
   type EquivalenceGroupSummary,
 } from '@/api/supplementEquivalence'
 import { ingredientApi } from '@/api/ingredients'
@@ -372,10 +419,8 @@ const savingArchive = ref(false)
 const savingDiy = ref(false)
 const savingProc = ref(false)
 const savingGroup = ref(false)
-const savingPriority = ref(false)
 const savingAll = ref(false)
 const fetchingPreview = ref(false)
-const groupPriority = ref(0)
 
 // 折叠（2026-11-15 遗留）：四段默认展开，可单独折叠
 const open = reactive({ archive: true, diy: true, procurement: true, group: true })
@@ -396,6 +441,10 @@ const groupChoice = ref<string>('')
 const autoGroupHint = ref('')
 const shopConfig = ref<{ markupMultiplier?: number; priceRoundingMode?: string } | null>(null)
 const uploadingImage = ref(false)
+const groupDetail = ref<EquivalenceGroupDetail | null>(null)
+const loadingGroupDetail = ref(false)
+const reviewingGroup = ref(false)
+const reorderingGroup = ref(false)
 /** 载入或保存时的表单指纹；和现在的比，就知道有没有没存的东西 */
 const savedFingerprint = ref('')
 
@@ -785,6 +834,84 @@ async function onPasteImage(event: ClipboardEvent): Promise<void> {
   await uploadImageFile(file)
 }
 
+/** 选中哪个组，就把它的成员和审核状态拉出来——审核和排序都在这一屏做 */
+async function loadGroupDetail(groupId: string): Promise<void> {
+  if (!groupId || groupId === GROUP_SKIPPED) {
+    groupDetail.value = null
+    return
+  }
+  loadingGroupDetail.value = true
+  try {
+    groupDetail.value = await supplementEquivalenceApi.getGroup(groupId)
+  } catch {
+    groupDetail.value = null
+  } finally {
+    loadingGroupDetail.value = false
+  }
+}
+
+watch(groupChoice, (value) => {
+  void loadGroupDetail(value)
+})
+
+/** 直接在这一页审核通过，不用跳去等价组管理页 */
+async function approveCurrentGroup(): Promise<void> {
+  const group = groupDetail.value
+  if (!group) return
+  try {
+    await ElMessageBox.confirm(
+      `审核通过「${group.name}」后，组内成员会立即参与缺货替换。确定通过吗？`,
+      '审核等价组',
+      { type: 'warning', confirmButtonText: '通过', cancelButtonText: '再看看' },
+    )
+  } catch {
+    return
+  }
+  reviewingGroup.value = true
+  try {
+    groupDetail.value = await supplementEquivalenceApi.reviewGroup(group.id, {
+      status: 'APPROVED',
+    })
+    await load()
+    ElMessage.success('等价组已审核通过')
+  } catch (error) {
+    toastApiError(error, '审核失败', (message) => ElMessage.error(message))
+  } finally {
+    reviewingGroup.value = false
+  }
+}
+
+/**
+ * 组内排序：0 最前。这里用「上移/下移」改相邻两位的优先级，
+ * 比让人记数字靠谱。
+ */
+async function moveMember(index: number, direction: -1 | 1): Promise<void> {
+  const group = groupDetail.value
+  if (!group) return
+  const members = sortMembers(group.members)
+  const target = index + direction
+  if (target < 0 || target >= members.length) return
+
+  reorderingGroup.value = true
+  try {
+    const current = members[index]
+    const neighbour = members[target]
+    if (!current || !neighbour) return
+    await supplementEquivalenceApi.setMemberPriority(group.id, current.id, neighbour.equivalencePriority)
+    await supplementEquivalenceApi.setMemberPriority(group.id, neighbour.id, current.equivalencePriority)
+    groupDetail.value = await supplementEquivalenceApi.getGroup(group.id)
+    await load()
+  } catch (error) {
+    toastApiError(error, '排序没保存成功', (message) => ElMessage.error(message))
+  } finally {
+    reorderingGroup.value = false
+  }
+}
+
+function sortMembers(members: EquivalenceGroupDetail['members']) {
+  return [...members].sort((a, b) => a.equivalencePriority - b.equivalencePriority)
+}
+
 function applyRecommendation(item: { groupId: string; name: string }) {
   if (!selectableGroups.value.some((group) => group.id === item.groupId)) {
     ElMessage.warning('这个组当前不可选（可能已停用或列表已截断），请手动选组')
@@ -842,27 +969,6 @@ async function saveGroup() {
 }
 
 /** 组内排序（2026-11-15 遗留）：只改排序，不重置审核状态 */
-async function saveGroupPriority() {
-  const group = row.value?.equivalenceGroup
-  if (!group) {
-    ElMessage.warning('先归组，才能设置组内排序')
-    return
-  }
-  savingPriority.value = true
-  try {
-    await supplementEquivalenceApi.setMemberPriority(
-      group.id,
-      props.ingredientId,
-      groupPriority.value,
-    )
-    await load()
-    ElMessage.success('组内排序已保存')
-  } catch (error) {
-    toastApiError(error, '排序保存失败', (message) => ElMessage.error(message))
-  } finally {
-    savingPriority.value = false
-  }
-}
 
 function toggle(key: LaunchSegment) {
   open[key] = !open[key]
@@ -1226,6 +1332,31 @@ onBeforeUnmount(() => {
   margin: 0 0 10px;
   font-size: 12px;
   color: #e6a23c;
+}
+.launch-members {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.launch-member {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+.launch-member--self .launch-member__name {
+  font-weight: 600;
+}
+.launch-member__index {
+  width: 18px;
+  text-align: right;
+  color: #909399;
+}
+.launch-member__tag {
+  padding: 0 6px;
+  border-radius: 3px;
+  background: #ecf5ff;
+  color: #3370ff;
 }
 .launch-seg__actions {
   display: flex;

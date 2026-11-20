@@ -23,13 +23,13 @@
     <div class="agent-body">
       <div ref="scrollRef" class="agent-messages" v-loading="loading">
         <el-empty
-          v-if="!loading && messages.length === 0"
+          v-if="!loading && visibleMessages.length === 0"
           :image-size="64"
           description="告诉它这份食谱是做什么的，它自己取数、自己评估。"
         />
 
         <div
-          v-for="message in messages"
+          v-for="message in visibleMessages"
           :key="message.id"
           class="agent-row"
           :class="`agent-row--${message.role.toLowerCase()}`"
@@ -222,6 +222,17 @@ const visible = computed({
 
 const session = ref<AgentSession | null>(null);
 const messages = ref<AgentMessage[]>([]);
+/** 方案/选材已经用卡片展示，旧的摘要文字隐藏，避免重复。 */
+const visibleMessages = computed(() =>
+  messages.value.filter(
+    (message) =>
+      !(
+        message.role === "ASSISTANT" &&
+        (message.content.startsWith("【方案待确认】") ||
+          message.content.startsWith("【选材待确认】"))
+      ),
+  ),
+);
 const input = ref("");
 const sending = ref(false);
 const deciding = ref(false);

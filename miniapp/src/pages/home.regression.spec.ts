@@ -297,6 +297,50 @@ describe('home runtime regressions', () => {
     expect(template).toContain('shelfDraft.avoidTagIds.includes')
   })
 
+  it('keeps the showcase filter bar sticky and lets main protein be multi-select', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toMatch(/\.filter-bar\s*\{[^}]*position:\s*sticky/)
+    expect(source).toMatch(/\.filter-bar\s*\{[^}]*top:\s*0/)
+    expect(source).toContain('const set = new Set(shelfDraft.mainProteinNodeIds)')
+    expect(source).not.toContain(
+      'shelfDraft.mainProteinNodeIds.includes(value) ? [] : [value]',
+    )
+  })
+
+  it('shows selected names on the meat/need pills and keeps only the avoid count', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+    const template = source.slice(0, source.indexOf('<script setup'))
+
+    expect(template).toContain('{{ mainProteinPillText }}')
+    expect(template).toContain('{{ needsPillText }}')
+    expect(template).toContain('v-if="shelfSelectionCount(\'avoid\')" class="sf-pill-count"')
+    // 肉类 / 特性用名称表达已选，不再挂数字角标
+    expect(template).not.toContain("shelfSelectionCount('main')")
+    expect(template).not.toContain("shelfSelectionCount('needs')")
+    expect(source).toContain('return shelfOptionLabels(shelfOptions.mainProtein, ids)')
+    expect(source).toContain('return shelfOptionLabels(shelfOptions.needs, ids)')
+  })
+
+  it('drops the avoid search box because the ingredient list is short', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+    const template = source.slice(0, source.indexOf('<script setup'))
+
+    expect(template).not.toContain('sf-search')
+    expect(template).not.toContain('搜索原料或类别')
+    expect(source).not.toContain('shelfSearch')
+    expect(source).not.toContain('shelfAvoidSearchResults')
+  })
+
   it('renders dog profile previews as compact chips with name and weight', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),

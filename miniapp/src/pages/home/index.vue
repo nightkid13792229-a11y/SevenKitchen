@@ -127,17 +127,15 @@
         :class="['sf-pill', { 'is-active': shelfHasSelection('main'), 'is-open': shelfOpenSheet === 'main' }]"
         @tap="openShelfSheet('main')"
       >
-        <text class="sf-pill-text">肉类</text>
+        <text class="sf-pill-text">{{ mainProteinPillText }}</text>
         <text class="sf-pill-car">▼</text>
-        <text v-if="shelfSelectionCount('main')" class="sf-pill-count">{{ shelfSelectionCount('main') }}</text>
       </view>
       <view
         :class="['sf-pill', { 'is-active': shelfHasSelection('needs'), 'is-open': shelfOpenSheet === 'needs' }]"
         @tap="openShelfSheet('needs')"
       >
-        <text class="sf-pill-text">特性</text>
+        <text class="sf-pill-text">{{ needsPillText }}</text>
         <text class="sf-pill-car">▼</text>
-        <text v-if="shelfSelectionCount('needs')" class="sf-pill-count">{{ shelfSelectionCount('needs') }}</text>
       </view>
       <view
         :class="['sf-pill', { 'is-active': shelfHasSelection('avoid'), 'is-open': shelfOpenSheet === 'avoid' }]"
@@ -253,7 +251,7 @@
           scroll-y
           :class="['sf-body', shelfOpenSheet === 'avoid' ? 'sf-body--tall' : 'sf-body--auto']"
         >
-          <!-- 肉类：一次只归一个肉种 -->
+          <!-- 肉类：可多选，命中所选任一肉种即可 -->
           <view v-if="shelfOpenSheet === 'main'" class="sf-chips">
             <view
               v-for="opt in shelfOptions.mainProtein"
@@ -292,14 +290,7 @@
           <view v-else class="sf-avoid">
             <view v-if="shelfOptionsLoading" class="sf-empty">加载中…</view>
             <view v-else-if="shelfOptionsError" class="sf-empty" @tap="loadShelfOptions">加载失败，点此重试</view>
-            <input
-              v-model="shelfSearch"
-              class="sf-search"
-              placeholder="搜索原料或类别"
-              placeholder-class="sf-search-ph"
-            />
-            <template v-if="!shelfSearch.trim()">
-              <view v-for="group in shelfAvoidGroups" :key="group.value" class="sf-group">
+            <view v-for="group in shelfAvoidGroups" :key="group.value" class="sf-group">
                 <view
                   :class="[
                     'sf-group-head',
@@ -336,22 +327,6 @@
                   整类选会排除全部 {{ shelfOptions.total }} 道食谱
                 </text>
               </view>
-            </template>
-            <template v-else>
-              <view
-                v-for="opt in shelfAvoidSearchResults"
-                :key="opt.value"
-                class="sf-row"
-                @tap="toggleShelfAvoid(opt.value)"
-              >
-                <text class="sf-row-label">{{ opt.label }}</text>
-                <text class="sf-row-count">{{ opt.count }} 道</text>
-                <view class="sf-check">
-                  <text v-if="shelfDraft.avoidTagIds.includes(opt.value)">✓</text>
-                </view>
-              </view>
-              <view v-if="!shelfAvoidSearchResults.length" class="sf-empty">没有匹配的原料</view>
-            </template>
           </view>
         </scroll-view>
 
@@ -719,7 +694,6 @@ const shelfDraft = reactive<ShelfFilterState>({
 })
 
 const shelfOpenSheet = ref<ShelfSheetKey | null>(null)
-const shelfSearch = ref('')
 const shelfPreviewTotal = ref<number | null>(null)
 const shelfOptionsLoading = ref(false)
 const shelfOptionsError = ref(false)
@@ -736,6 +710,26 @@ const shelfPrimaryText = computed(() => {
   const total = shelfPreviewTotal.value
   if (total === null) return '查看结果'
   return shelfOpenSheet.value === 'avoid' ? `还剩 ${total} 道食谱` : `${total} 道食谱`
+})
+
+function shelfOptionLabels(options: ShelfFilterOption[], ids: string[]): string {
+  return ids
+    .map((id) => options.find((opt) => opt.value === id)?.label)
+    .filter((label): label is string => Boolean(label))
+    .join('、')
+}
+
+// 肉类 / 特性支持多选：按钮直接显示已选名称，未选时保持原按钮名。
+const mainProteinPillText = computed(() => {
+  const ids = shelfSelected.mainProteinNodeIds
+  if (!ids.length) return '肉类'
+  return shelfOptionLabels(shelfOptions.mainProtein, ids) || `已选 ${ids.length} 项`
+})
+
+const needsPillText = computed(() => {
+  const ids = shelfSelected.needTagIds
+  if (!ids.length) return '特性'
+  return shelfOptionLabels(shelfOptions.needs, ids) || `已选 ${ids.length} 项`
 })
 
 const shelfAvoidGroups = computed<AvoidGroup[]>(() => {
@@ -757,12 +751,6 @@ const shelfAvoidGroups = computed<AvoidGroup[]>(() => {
         disabled: total > 0 && tag.count >= total
       }
     })
-})
-
-const shelfAvoidSearchResults = computed(() => {
-  const keyword = shelfSearch.value.trim()
-  if (!keyword) return []
-  return shelfOptions.avoid.filter((tag) => tag.label.includes(keyword))
 })
 
 function shelfSelectionCount(key: ShelfSheetKey): number {
@@ -834,7 +822,6 @@ function openShelfSheet(key: ShelfSheetKey): void {
   if (!shelfOptions.mainProtein.length && !shelfOptions.needs.length && !shelfOptions.avoid.length) {
     void loadShelfOptions()
   }
-  shelfSearch.value = ''
   syncShelfDraft()
   shelfPreviewTotal.value = null
   scheduleShelfPreview()
@@ -849,7 +836,10 @@ function closeShelfSheet(): void {
 }
 
 function toggleShelfMain(value: string): void {
-  shelfDraft.mainProteinNodeIds = shelfDraft.mainProteinNodeIds.includes(value) ? [] : [value]
+  const set = new Set(shelfDraft.mainProteinNodeIds)
+  if (set.has(value)) set.delete(value)
+  else set.add(value)
+  shelfDraft.mainProteinNodeIds = Array.from(set)
   scheduleShelfPreview()
 }
 
@@ -2620,9 +2610,10 @@ defineOptions({
 
 /* ---------- 固定筛选栏 ---------- */
 .filter-bar {
-  position: relative;
-  z-index: 1;
-  background: rgba(240, 243, 233, 0.96);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(240, 243, 233, 0.97);
   padding: 16rpx 28rpx;
   border-bottom: 1rpx solid #e3e6d4;
   display: flex;
@@ -3245,6 +3236,7 @@ defineOptions({
 
 .sf-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 16rpx;
   padding: 0 0 8rpx;
 }
@@ -3259,6 +3251,15 @@ defineOptions({
   border-radius: 999rpx;
   font-size: 26rpx;
   color: #6b6653;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.sf-pill-text {
+  display: block;
+  max-width: 420rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -3453,20 +3454,6 @@ defineOptions({
 
 .sf-avoid {
   padding-bottom: 4rpx;
-}
-
-.sf-search {
-  height: 72rpx;
-  margin: 4rpx 0 8rpx;
-  padding: 0 24rpx;
-  border-radius: 999rpx;
-  background: #f1eee2;
-  font-size: 24rpx;
-  color: #1f2a24;
-}
-
-.sf-search-ph {
-  color: #a7a18d;
 }
 
 .sf-group {

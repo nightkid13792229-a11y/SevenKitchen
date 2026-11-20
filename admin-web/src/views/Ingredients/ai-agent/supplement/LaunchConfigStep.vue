@@ -953,6 +953,10 @@ async function approveCurrentGroup(): Promise<void> {
   }
   reviewingGroup.value = true
   try {
+    // 状态机只允许 DRAFT → PENDING_REVIEW → APPROVED，草稿要先提交审核
+    if (groupDetail.value?.status === 'DRAFT') {
+      await supplementEquivalenceApi.submitGroup(group.id)
+    }
     groupDetail.value = await supplementEquivalenceApi.reviewGroup(group.id, {
       status: 'APPROVED',
     })
@@ -976,13 +980,22 @@ async function moveMember(index: number, direction: -1 | 1): Promise<void> {
   const target = index + direction
   if (target < 0 || target >= members.length) return
 
+  const current = members[index]
+  const neighbour = members[target]
+  if (!current || !neighbour) return
+
   reorderingGroup.value = true
   try {
-    const current = members[index]
-    const neighbour = members[target]
-    if (!current || !neighbour) return
-    await supplementEquivalenceApi.setMemberPriority(group.id, current.id, neighbour.equivalencePriority)
-    await supplementEquivalenceApi.setMemberPriority(group.id, neighbour.id, current.equivalencePriority)
+    // 直接重排成 0,1,2…：原来"交换优先级"在两人都是 0 时等于没换
+    const reordered = [...members]
+    reordered[index] = neighbour
+    reordered[target] = current
+    for (let i = 0; i < reordered.length; i += 1) {
+      const member = reordered[i]
+      if (member && member.equivalencePriority !== i) {
+        await supplementEquivalenceApi.setMemberPriority(group.id, member.id, i)
+      }
+    }
     groupDetail.value = await supplementEquivalenceApi.getGroup(group.id)
     await load()
   } catch (error) {

@@ -6,6 +6,7 @@ import {
 
 const plan = {
   summary: '低脂维持，控钠',
+  rationale: '胰腺炎优先控脂；心脏病在默认评估上进一步限钠。',
   mealsPerDay: 3,
   constraints: [
     {
@@ -48,8 +49,13 @@ describe('propose_plan normalization', () => {
       max: 10,
       citationId: 'sacn5-chapters-SACN5-67/p5',
     });
+    expect(normalized.rationale).toContain('胰腺炎优先控脂');
     expect(normalized.nonNutrient[0].key).toBe('moisture');
-    expect(summarizePlan(normalized)).toContain('方案待确认');
+    const summary = summarizePlan(normalized);
+    expect(summary).toContain('方案待确认');
+    expect(summary).toContain('理由与建议');
+    expect(summary).toContain('见上方方案卡表格');
+    expect(summary).not.toContain('- 脂肪');
   });
 
   it('accepts an energy-density constraint instead of total calories', () => {

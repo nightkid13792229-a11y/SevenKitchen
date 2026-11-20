@@ -38,10 +38,15 @@ export interface AgentPlanNonNutrientConstraint {
 }
 
 export interface AgentNutritionPlan {
+  /** 方案定位，简短；不要复述档案里的年龄/体重/品种/BCS。 */
   summary: string;
+  /** 方案制定的理由与建议；纯文本。 */
+  rationale?: string;
   /** 饲喂餐次；属于饲喂安排，不是热量目标。不填也能提交。 */
   mealsPerDay?: number;
+  /** 只放疾病特异性/比默认评估更严的数值约束；通用项不要放。 */
   constraints: AgentPlanConstraint[];
+  /** 非数值约束，文案形式，展示在约束表格后面。 */
   nonNutrient: AgentPlanNonNutrientConstraint[];
   notes?: string;
 }
@@ -64,8 +69,10 @@ export interface AgentSelection {
 
 const PROPOSE_PLAN_DESCRIPTION =
   '提交本单营养方案与约束，等用户确认。只在方案确认阶段使用；提交后本次运行暂停。' +
-  '约束必须带 key、label、上下限、单位（PERCENT_DM / PER_1000_KCAL / PER_MJ / G_PER_DAY / OTHER）、依据和来源；' +
-  '非营养约束（含水量、禁用食材、工艺等）放 nonNutrient。' +
+  'summary 只写方案定位，不要复述年龄/体重/品种/BCS（编辑器已经展示）；理由与建议写 rationale。' +
+  'constraints 只放疾病特异性、或比 FEDIAF 2025 默认评估更严的数值上下限（例如心脏病控钠）；' +
+  '营养评估已经覆盖的通用蛋白/脂肪/钙磷等上下限不要重复写。每条带 key、label、单位、依据和来源。' +
+  '非数值约束（禁用食材、工艺、餐次等）放 nonNutrient，文案形式。' +
   '不要写“每日总热量/kcal 目标”；需要控制能量时用 key=energyDensity、unit=KCAL_PER_100G 或 KCAL_PER_KG 的约束。';
 
 const PROPOSE_SELECTION_DESCRIPTION =
@@ -80,11 +87,20 @@ export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        summary: { type: 'string', description: '给用户看的方案摘要' },
+        summary: {
+          type: 'string',
+          description: '方案定位；不要复述年龄/体重/品种/BCS',
+        },
+        rationale: {
+          type: 'string',
+          description: '方案制定的理由与建议；纯文本',
+        },
         mealsPerDay: { type: 'integer', minimum: 1, maximum: 6 },
         constraints: {
           type: 'array',
           minItems: 1,
+          description:
+            '只放疾病特异性/比 FEDIAF 2025 默认评估更严的数值约束；通用项不要放',
           items: {
             type: 'object',
             properties: {
@@ -116,6 +132,7 @@ export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
         },
         nonNutrient: {
           type: 'array',
+          description: '非数值约束，文案形式，展示在表格后面',
           items: {
             type: 'object',
             properties: {
@@ -178,6 +195,7 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
 export function normalizePlan(raw: unknown): AgentNutritionPlan {
   const input = isRecord(raw) ? raw : {};
   const summary = readText(input.summary, 'summary', 4000);
+  const rationale = readOptionalText(input.rationale, 6000);
   const mealsPerDay =
     input.mealsPerDay === undefined || input.mealsPerDay === null
       ? undefined
@@ -222,6 +240,7 @@ export function normalizePlan(raw: unknown): AgentNutritionPlan {
 
   return {
     summary,
+    ...(rationale ? { rationale } : {}),
     ...(mealsPerDay !== undefined ? { mealsPerDay } : {}),
     constraints,
     nonNutrient,
@@ -251,17 +270,18 @@ export function normalizeSelection(raw: unknown): AgentSelection {
 }
 
 export function summarizePlan(plan: AgentNutritionPlan): string {
-  const lines = [
-    `【方案待确认】${plan.summary}`,
-    ...(plan.mealsPerDay ? [`每日 ${plan.mealsPerDay} 餐。`] : []),
-    `约束 ${plan.constraints.length} 条：`,
-    ...plan.constraints.map(
-      (item) =>
-        `- ${item.label}（${item.key}）：${formatRange(item.min, item.max)} ${item.unit}；${item.source}${item.basis ? ` · ${item.basis}` : ''}`,
-    ),
-  ];
+  const lines = [`【方案待确认】${plan.summary}`];
+  if (plan.rationale) {
+    lines.push('理由与建议：', plan.rationale);
+  }
+  if (plan.mealsPerDay) {
+    lines.push(`每日 ${plan.mealsPerDay} 餐。`);
+  }
+  lines.push(
+    `数值约束 ${plan.constraints.length} 条，见上方方案卡表格（仅列疾病特异性/比默认评估更严的项；通用项以营养评估为准）。`,
+  );
   if (plan.nonNutrient.length > 0) {
-    lines.push('非营养约束：');
+    lines.push('非数值约束：');
     for (const item of plan.nonNutrient) {
       lines.push(`- ${item.label}：${item.value}${item.unit ?? ''}`);
     }

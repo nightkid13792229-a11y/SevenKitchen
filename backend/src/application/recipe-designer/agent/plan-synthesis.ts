@@ -181,8 +181,9 @@ export function buildPlanSynthesisMessages(input: {
   messages.push({
     role: 'user',
     content:
-      '请直接调用 propose_plan 提交方案。已经查到、可以确定的约束写清 min/max/unit/source；' +
-      '查不到或不确定的约束把边界写 null，并在 basis 写「待确认」。' +
+      '请直接调用 propose_plan 提交方案。summary 只写方案定位，不复述年龄/体重/品种/BCS；' +
+      '理由与建议写 rationale。constraints 只放疾病特异性、或比 FEDIAF 2025 默认评估更严的数值约束；' +
+      '通用蛋白/脂肪/钙磷等上下限不要重复写。非数值约束放 nonNutrient，用文案。' +
       '不要计算每日总热量；如果确实需要控制能量，用 key=energyDensity、unit=KCAL_PER_100G 或 KCAL_PER_KG 的约束。' +
       '不要继续检索，不要调用其他工具。',
   });

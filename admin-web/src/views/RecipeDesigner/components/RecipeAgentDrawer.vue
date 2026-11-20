@@ -56,6 +56,10 @@
       <div v-if="session?.phase === 'PLAN' && session.plan" class="agent-plan">
         <div class="agent-plan__title">营养方案（待确认）</div>
         <div class="agent-plan__summary">{{ session.plan.summary }}</div>
+        <div v-if="session.plan.rationale" class="agent-plan__rationale">
+          <div class="agent-plan__rationale-title">理由与建议</div>
+          <div>{{ session.plan.rationale }}</div>
+        </div>
         <div v-if="session.plan.mealsPerDay" class="agent-plan__meta">
           每日 {{ session.plan.mealsPerDay }} 餐
         </div>
@@ -79,6 +83,10 @@
             </tr>
           </tbody>
         </table>
+        <div class="agent-plan__table-note">
+          仅列疾病特异性、或比 FEDIAF 2025
+          默认评估更严的约束；通用项以营养评估为准。
+        </div>
         <div v-if="session.plan.nonNutrient?.length" class="agent-plan__notes">
           <div v-for="item in session.plan.nonNutrient" :key="item.key">
             {{ item.label }}：{{ item.value }}{{ item.unit || "" }}
@@ -432,6 +440,23 @@ watch(
   font-size: 12px;
   color: #606266;
   margin-bottom: 8px;
+}
+.agent-plan__rationale {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #303133;
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+}
+.agent-plan__rationale-title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.agent-plan__table-note {
+  font-size: 12px;
+  color: #909399;
+  margin: -2px 0 8px;
+  line-height: 1.5;
 }
 .agent-plan__table {
   width: 100%;

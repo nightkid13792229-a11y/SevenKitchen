@@ -127,7 +127,7 @@
 
         <div v-if="session?.selection" class="agent-plan">
           <div class="agent-plan__title">
-            选材候选{{
+            食材候选{{
               session.selectionConfirmedAt ? "（已确认）" : "（待确认）"
             }}
           </div>
@@ -135,7 +135,7 @@
           <table class="agent-plan__table">
             <thead>
               <tr>
-                <th>类型</th>
+                <th>食材类型</th>
                 <th>名称</th>
                 <th>理由</th>
                 <th>状态</th>
@@ -150,7 +150,30 @@
               </tr>
             </tbody>
           </table>
-          <div class="agent-plan__actions">
+          <div class="agent-plan__table-note">
+            只列食材；补剂等配方评估出营养缺口后，在配方编辑阶段再补。
+          </div>
+          <div class="agent-plan__coverage-title">CFCT 15 类覆盖</div>
+          <table class="agent-plan__table agent-plan__coverage-table">
+            <thead>
+              <tr>
+                <th>类型</th>
+                <th>候选数</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in cfctCoverage" :key="row.category">
+                <td>{{ row.category }}</td>
+                <td>{{ row.count }}</td>
+                <td>{{ row.reason }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div
+            v-if="session.phase === 'SELECT' && !session.selectionConfirmedAt"
+            class="agent-plan__actions"
+          >
             <el-button
               size="small"
               type="primary"
@@ -166,7 +189,11 @@
             >
           </div>
           <div class="agent-plan__hint">
-            确认后发一条消息，进入配方编辑阶段。
+            {{
+              session.selectionConfirmedAt
+                ? "选材已确认，正在进入配方编辑阶段…"
+                : "确认后进入配方编辑阶段。"
+            }}
           </div>
         </div>
       </div>
